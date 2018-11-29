@@ -1,0 +1,8 @@
+- execute "make" & "make install" to install libICA
+- libICA is instaled in /usr/local per default. You can change the destination
+  by editing the INSTALL_PREFIX variable in the Makefile.
+- The example program (fastICA) is compiled but not installed. 
+- If you will try the program without installing libICA (no "make install"),
+  execute the following command to make the dynamic linking work:
+
+export LD_LIBRARY_PATH=.

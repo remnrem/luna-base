@@ -1,0 +1,6 @@
+
+gcc -O2 -c matrix.c
+gcc -O2 -c svdcmp.c 
+gcc -O2 -c libICA.c
+g++ -O2 -c ica.cpp 
+g++ -o test ica.o libICA.o matrix.o svdcmp.o
