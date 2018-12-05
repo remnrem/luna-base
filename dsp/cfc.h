@@ -28,7 +28,7 @@ struct edf_t;
 struct param_t;
 
 #include <vector>
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 namespace dsptools 
 {  

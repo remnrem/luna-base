@@ -21,10 +21,10 @@
 //    --------------------------------------------------------------------
 
 #include "spectral.h"
-#include "../edf/edf.h"
-#include "../db/db.h"
-#include "../fftw/fftwrap.h"
-#include "../dsp/mse.h"
+#include "edf/edf.h"
+#include "db/db.h"
+#include "fftw/fftwrap.h"
+#include "dsp/mse.h"
 
 extern writer_t writer;
 

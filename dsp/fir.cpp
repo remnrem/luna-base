@@ -22,9 +22,9 @@
 
 
 #include "fir.h"
-#include "../helper/helper.h"
-#include "../fftw/fftwrap.h"
-#include "../db/db.h"
+#include "helper/helper.h"
+#include "fftw/fftwrap.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

@@ -22,9 +22,9 @@
 
 #include "intervals.h"
 
-#include "../helper/helper.h"
-#include "../edf/edf.h"
-#include "../defs/defs.h"
+#include "helper/helper.h"
+#include "edf/edf.h"
+#include "defs/defs.h"
 
 #include <fstream>
 #include <string>

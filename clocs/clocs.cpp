@@ -1,6 +1,6 @@
 #include "clocs.h"
-#include "../helper/helper.h"
-#include "../edf/edf.h"
+#include "helper/helper.h"
+#include "edf/edf.h"
 #include "legendre_polynomial.h"
 
 #include <fstream>

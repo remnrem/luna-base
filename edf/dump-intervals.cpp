@@ -20,9 +20,9 @@
 //
 //    --------------------------------------------------------------------
 
-#include "../edf/edf.h"
-#include "../defs/defs.h"
-#include "../intervals/intervals.h"
+#include "edf/edf.h"
+#include "defs/defs.h"
+#include "intervals/intervals.h"
 
 
 void dump_intervals( const std::string & ints , 

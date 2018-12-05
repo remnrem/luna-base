@@ -38,8 +38,8 @@
 #include "emd.h"
 #include "spline.h"
 
-#include "../miscmath/miscmath.h"
-#include "../helper/helper.h"
+#include "miscmath/miscmath.h"
+#include "helper/helper.h"
 
 #include <iostream>
 #include <set>

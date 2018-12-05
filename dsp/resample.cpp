@@ -26,9 +26,9 @@
 
 #include "samplerate.h"
 
-#include "../edf/edf.h"
-#include "../main.h"
-#include "../helper/helper.h"
+#include "edf/edf.h"
+#include "main.h"
+#include "helper/helper.h"
 
 std::vector<double> dsptools::resample( const std::vector<double> * d , 
 					int sr1 , int sr2 )

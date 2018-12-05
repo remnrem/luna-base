@@ -26,8 +26,8 @@
 #include <cmath>
 #include <complex>
 
-#include "../miscmath/miscmath.h"
-#include "../fftw/fftwrap.h"
+#include "miscmath/miscmath.h"
+#include "fftw/fftwrap.h"
 
 std::vector<dcomp> CWT::wavelet( const int fi )
 {

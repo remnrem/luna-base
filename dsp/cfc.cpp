@@ -24,11 +24,11 @@
 #include "cfc.h"
 #include <cmath>
 
-#include "../edf/edf.h"
+#include "edf/edf.h"
 #include "hilbert.h"
-#include "../stats/matrix.h"
-#include "../stats/glm.h"
-#include "../db/db.h"
+#include "stats/matrix.h"
+#include "stats/glm.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

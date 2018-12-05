@@ -23,11 +23,11 @@
 
 #include "pac.h"
 #include <iostream>
-#include "../cwt/cwt.h"
-#include "../miscmath/crandom.h"
-#include "../edf/edf.h"
-#include "../db/db.h"
-#include "../main.h"
+#include "cwt/cwt.h"
+#include "miscmath/crandom.h"
+#include "edf/edf.h"
+#include "db/db.h"
+#include "main.h"
 
 extern writer_t writer;
 

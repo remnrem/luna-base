@@ -23,13 +23,13 @@
 
 #include "slow-waves.h"
 
-#include "../dsp/fir.h"
-#include "../dsp/hilbert.h"
-#include "../miscmath/miscmath.h"
-#include "../edf/edf.h"
-#include "../cwt/cwt.h"
-#include "../db/db.h"
-#include "../miscmath/crandom.h"
+#include "dsp/fir.h"
+#include "dsp/hilbert.h"
+#include "miscmath/miscmath.h"
+#include "edf/edf.h"
+#include "cwt/cwt.h"
+#include "db/db.h"
+#include "miscmath/crandom.h"
 
 extern writer_t writer;
 

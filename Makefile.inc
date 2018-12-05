@@ -1,8 +1,7 @@
 
-#CXX = g++ -pedantic
-CXX = clang++
-CXXFLAGS = -O2 -I.. -I/usr/local/include -std=c++0x -Wno-logical-op-parentheses -Wno-deprecated-register -Wall
-CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DT_LINUX
+CXX = g++
+CXXFLAGS = -O2 -I. -I.. -I/usr/local/include -std=c++0x -Wno-logical-op-parentheses -Wno-deprecated-register -fPIC
+CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DT_LINUX -fPIC
 
 LD = g++ 
 LDLAGS = -L/usr/local/lib

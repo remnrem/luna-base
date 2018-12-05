@@ -27,8 +27,8 @@
 struct edf_t;
 struct param_t;
 
-#include "../ica/ica.h"
-#include "../ica/matrix.h"
+#include "ica/ica.h"
+#include "ica/ica_matrix.h"
 
 namespace dsptools {
 

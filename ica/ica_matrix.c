@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "matrix.h"
+#include "ica_matrix.h"
 
 #define min(a,b) ((a<b) ? a : b)
 #define abs(x) ((x)<0 ? -(x) : (x))

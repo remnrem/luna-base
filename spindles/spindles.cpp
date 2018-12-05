@@ -27,18 +27,18 @@
 #include "mspindles.h"
 #include "plot-spindles.h"
 
-#include "../edf/edf.h"
-#include "../main.h"
+#include "edf/edf.h"
+#include "main.h"
 
-#include "../cwt/cwt.h"
-#include "../fftw/fftwrap.h"
-#include "../miscmath/miscmath.h"
-#include "../artifacts/artifacts.h"
-#include "../dsp/fir.h"
-#include "../dsp/hilbert.h"
-#include "../dsp/slow-waves.h"
-#include "../defs/defs.h"
-#include "../db/db.h"
+#include "cwt/cwt.h"
+#include "fftw/fftwrap.h"
+#include "miscmath/miscmath.h"
+#include "artifacts/artifacts.h"
+#include "dsp/fir.h"
+#include "dsp/hilbert.h"
+#include "dsp/slow-waves.h"
+#include "defs/defs.h"
+#include "db/db.h"
 
 // output
 extern writer_t writer;

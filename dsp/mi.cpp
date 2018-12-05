@@ -20,11 +20,11 @@
 //
 //    --------------------------------------------------------------------
 
-#include "../helper/helper.h"
-#include "../miscmath/miscmath.h"
-#include "../miscmath/crandom.h"
-#include "../edf/edf.h"
-#include "../db/db.h"
+#include "helper/helper.h"
+#include "miscmath/miscmath.h"
+#include "miscmath/crandom.h"
+#include "edf/edf.h"
+#include "db/db.h"
 
 #include <cmath>
 

@@ -23,9 +23,9 @@
 #ifndef __CWT_H__
 #define __CWT_H__
 
-#include "../miscmath/miscmath.h"
-#include "../helper/helper.h"
-#include "../defs/defs.h"
+#include "miscmath/miscmath.h"
+#include "helper/helper.h"
+#include "defs/defs.h"
 
 #include <vector>
 #include <cmath>

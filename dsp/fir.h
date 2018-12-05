@@ -27,8 +27,8 @@
 #include <complex>
 
 #include "fftw3.h"
-#include "../edf/edf.h"
-#include "../eval.h"
+#include "edf/edf.h"
+#include "eval.h"
 
 
 

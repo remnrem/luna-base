@@ -12,8 +12,8 @@ struct obs_t {
   bool operator<( const obs_t & rhs ) const { if ( indiv == rhs.indiv ) return obs < rhs.obs; return indiv < rhs.indiv; } 
 };
 
-#include "../helper/helper.h"
-#include "../miscmath/crandom.h"
+#include "helper/helper.h"
+#include "miscmath/crandom.h"
 
 int main(int argc, char ** argv)
 {

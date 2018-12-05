@@ -24,7 +24,7 @@
 #define __MATRIX_H__
 
 #include <vector>
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 namespace Data { 
 

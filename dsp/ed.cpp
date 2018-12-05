@@ -21,9 +21,9 @@
 //    --------------------------------------------------------------------
 
 #include "ed.h"
-#include "../edf/edf.h"
-#include "../main.h"
-#include "../db/db.h"
+#include "edf/edf.h"
+#include "main.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

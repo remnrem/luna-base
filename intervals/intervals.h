@@ -23,7 +23,7 @@
 #ifndef __INTERVALS_H__
 #define __INTERVALS_H__
 
-#include "../defs/defs.h"
+#include "defs/defs.h"
 
 #include <stdint.h>
 

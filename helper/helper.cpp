@@ -22,8 +22,8 @@
 
 #include "helper.h"
 
-#include "../defs/defs.h"
-#include "../intervals/intervals.h"
+#include "defs/defs.h"
+#include "intervals/intervals.h"
 
 #include <cmath>
 #include <cstdio>

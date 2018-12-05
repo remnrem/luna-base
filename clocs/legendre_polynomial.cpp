@@ -29,7 +29,7 @@
 #include <iomanip>
 #include <iostream>
 
-#include "../dsp/r8lib.h"
+#include "dsp/r8lib.h"
 
 using namespace std;
 

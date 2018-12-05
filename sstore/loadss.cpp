@@ -1,6 +1,6 @@
 #include "sstore.h"
 #include <iostream>
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 //
 // loadss, a simple loader for a sstore_t 

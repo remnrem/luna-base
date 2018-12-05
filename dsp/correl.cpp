@@ -1,9 +1,9 @@
 
 #include <string>
-#include "../miscmath/miscmath.h"
-#include "../edf/edf.h"
-#include "../db/db.h"
-#include "../dsp/resample.h"
+#include "miscmath/miscmath.h"
+#include "edf/edf.h"
+#include "db/db.h"
+#include "dsp/resample.h"
 
 #include "correl.h"
 

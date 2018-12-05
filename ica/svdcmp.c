@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 #include <math.h>
-#include "matrix.h"
+#include "ica_matrix.h"
 
 #define true  1
 #define false 0

@@ -22,9 +22,9 @@
 
 #include "slice.h"
 #include "helper/helper.h"
-#include "../timeline/timeline.h"
-#include "../fftw/fftwrap.h"
-#include "../defs/defs.h"
+#include "timeline/timeline.h"
+#include "fftw/fftwrap.h"
+#include "defs/defs.h"
 
 mslice_t::mslice_t( edf_t & edf , 
 		    const signal_list_t & signals , 

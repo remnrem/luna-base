@@ -32,10 +32,10 @@
 #include <map>
 #include <complex>
 
-#include "../helper/helper.h"
-#include "../miscmath/miscmath.h"
-#include "../defs/defs.h"
-#include "../dsp/coherence.h"
+#include "helper/helper.h"
+#include "miscmath/miscmath.h"
+#include "defs/defs.h"
+#include "dsp/coherence.h"
 
 struct edf_t;
 

@@ -25,10 +25,10 @@
 
 #include <iostream>
 #include <iomanip>
-#include "../intervals/intervals.h"
-#include "../annot/annot.h"
-#include "../helper/helper.h"
-#include "../defs/defs.h"
+#include "intervals/intervals.h"
+#include "annot/annot.h"
+#include "helper/helper.h"
+#include "defs/defs.h"
 
 struct edf_t;
 struct timeline_t;

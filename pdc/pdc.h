@@ -27,8 +27,8 @@
 #include <vector>
 #include <map>
 #include <set>
-#include "../helper/helper.h"
-#include "../edf/edf.h"
+#include "helper/helper.h"
+#include "edf/edf.h"
 
 struct pdc_obs_t { 
 	       

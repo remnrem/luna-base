@@ -25,7 +25,7 @@
 #include <set>
 #include <string>
 #include <vector>
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 struct row_t
 {
