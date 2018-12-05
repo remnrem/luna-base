@@ -261,8 +261,8 @@ class coherence_t {
 		bool average_adj = false , 
 		bool detrend = false , 
 		bool zerocenter = false )		
-    : x(x), y(y) , segment_sec(segment_sec) , overlap_sec(overlap_sec),
-    Fs(Fs), window(W), average_adj(average_adj) , detrend(detrend) , zerocenter(zerocenter)
+    :  segment_sec(segment_sec) , overlap_sec(overlap_sec),
+    Fs(Fs), window(W), average_adj(average_adj) , detrend(detrend) , zerocenter(zerocenter) , x(x), y(y) 
   {
     
     if ( x.size() != y.size() ) 
@@ -305,24 +305,29 @@ class coherence_t {
   } 
 
   double segment_sec, overlap_sec;
-  int Fs;
+
+
   
   int total_points;
   int noverlap_segments;
   int segment_points;
   int noverlap_points1, noverlap_points2;
   int segment_increment_points;
+
+  int Fs;
   
   coh_t res;
   
  private:
+
+  window_function_t window;
   
   bool detrend;
   bool zerocenter;
-  bool average_adj;
-  int N;
 
-  window_function_t window;
+  bool average_adj;
+
+  int N;
 
   const std::vector<double> & x;
   const std::vector<double> & y;  

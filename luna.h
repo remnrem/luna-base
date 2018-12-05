@@ -20,29 +20,63 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#ifndef __LUNA_H__
+#define __LUNA_H__
 
-#include "spectral_norm.h"
-#include "cfc.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
+#include "eval.h" 
+
+#include "defs/defs.h"
+
+#include "helper/helper.h"
+
+#include "helper/xml-parser.h"
+
+#include "tinyxml/tinyxml.h"
+
+#include "tinyxml/xmlreader.h"
+
+#include "stats/cluster.h"
+
+#include "miscmath/miscmath.h"
+
+#include "stats/glm.h"
+
+#include "edf/edf.h"
+
+#include "timeline/timeline.h"
+
+#include "annot/annot.h"
+
+#include "dsp/dsp.h"
+
+#include "fftw/fftwrap.h"
+
+#include "ica/ica.h"
+
+#include "spindles/spindles.h"
+
+#include "spindles/spectral.h"
+
+#include "artifacts/artifacts.h"
+
+#include "cwt/cwt.h"
+
+#include "pdc/pdc.h"
+
+#include "staging/staging.h"
+
+#include "clocs/topo.h"
+
+#include "db/db.h"
+
+#include "sstore/sstore.h"
+
+#include "graphics/graphics.h"
+
+#include <thread>
+#include <iostream>
+#include <unistd.h>
+#include <dirent.h>
 
 
 #endif

@@ -5,7 +5,7 @@ artifacts intervals fftw cwt defs zfile stats graphics staging 	\
 db ica clocs pdc sstore
 
 EXE	= luna
-OBJS	= main.o 
+OBJS	= main.o globals.o eval.o
 
 OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
 libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
@@ -20,7 +20,7 @@ LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper \
 
 all : $(EXE) utils
 
-$(EXE) : main.o $(OBJLIBS)
+$(EXE) : main.o globals.o eval.o $(OBJLIBS)
 	$(ECHO) $(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 	$(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 

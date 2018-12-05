@@ -28,7 +28,7 @@
 
 #include "fftw3.h"
 #include "../edf/edf.h"
-#include "../main.h"
+#include "../eval.h"
 
 
 

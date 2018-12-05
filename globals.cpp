@@ -20,29 +20,19 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
 
-#include "spectral_norm.h"
-#include "cfc.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
+#include "luna.h"
 
+globals global;
 
-#endif
+writer_t writer;
+
+std::set<std::string>              cmd_t::commands;
+std::string                        cmd_t::input = "";
+std::string                        cmd_t::cmdline_cmds = "";
+std::string                        cmd_t::stout_file = "";
+bool                               cmd_t::append_stout_file = false;
+std::map<std::string,std::string>  cmd_t::vars;
+std::set<std::string>              cmd_t::signallist;
+std::map<std::string,std::string>  cmd_t::label_aliases;
+std::map<std::string,std::vector<std::string> >  cmd_t::primary_alias;

@@ -33,7 +33,7 @@
 #include "../helper/helper.h"
 #include "../db/db.h"
 
-writer_t writer;
+extern writer_t writer;
 
 struct options_t {
   bool print_empty_rows; // -e 

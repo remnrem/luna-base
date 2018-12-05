@@ -30,7 +30,7 @@
 #include <cstring>
 #include <fstream>
 
-globals global;
+extern globals global;
 
 int main(int argc , char ** argv )
 {

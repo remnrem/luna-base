@@ -46,8 +46,8 @@ std::vector<double> legendre( const int N , double x )
   
   for (int M=0;M<=N;M++)
     {
-      double ans[ NP1 ];
-      double * pl = ans;      
+      std::vector<double> ans( NP1 );
+      double * pl = &(ans)[0];      
       pl = pm_polynomial_value( 1 , N , M , &x );
       
       // return last elemnt
@@ -72,8 +72,8 @@ std::vector<std::vector<double> > legendre( const int N , const std::vector<doub
   
   for (int M=0;M<=N;M++)
     {
-      double ans[ MM * NP1 ];
-      double * pl = ans;      
+      std::vector<double> ans( MM * NP1 );
+      double * pl = &(ans)[0];      
       pl = pm_polynomial_value( MM , N , M , px );
       // skip to last set
       pl += MM*N;

@@ -30,7 +30,7 @@
 #include <stdint.h>
 
 #include "../helper/helper.h"
-#include "../main.h"
+#include "../eval.h"
 
 typedef std::complex<double> dcomp;
 
@@ -131,6 +131,9 @@ struct globals
   // in CGI mode, set this to T
   static bool silent;
 
+  // is in R mode
+  static bool Rmode;
+
   // generic global parameters
   static param_t param;
 
@@ -139,6 +142,12 @@ struct globals
   // global functions: primary initiation of all globals
   void init_defs();
   
+  // modes
+  void api();
+
+  void R();
+
+
   // default annotation folder (i.e. added to each record in sample-list implicitly)
   static std::string annot_folder;
   

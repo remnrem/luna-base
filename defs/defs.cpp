@@ -22,9 +22,12 @@
 
 #include "defs.h"
 #include "miscmath/crandom.h"
-#include "../main.h"
+#include "../eval.h"
+#include "../db/db.h"
 
 #include <iostream>
+
+extern writer_t writer;
 
 std::string globals::version;
 std::string globals::date;
@@ -62,6 +65,7 @@ param_t globals::param;
 void (*globals::bail_function) ( const std::string & );
 
 bool globals::silent; 
+bool globals::Rmode;
 
 std::string globals::epoch_strat;
 std::string globals::time_strat;
@@ -75,6 +79,18 @@ std::string globals::count_strat;
 std::string globals::sample_strat;
 
 std::string & globals::SQLITE_SCRATCH_FOLDER() { static std::string s = ""; return s; }
+
+void globals::api()
+{
+  silent = true;
+  writer.nodb();
+}
+
+void globals::R()
+{
+  Rmode = true;
+  api();
+}
 
 void globals::init_defs()
 {

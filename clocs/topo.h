@@ -11,8 +11,9 @@
 struct chid_t { 
   chid_t(int n) : n(n) , label("") { } 
   chid_t() { } 
-  std::string label;
   int n;
+  std::string label;
+
   bool operator<( const chid_t & rhs ) const { return n < rhs.n; } 
 };
 

@@ -3,29 +3,29 @@ include ../Makefile.inc
 # set all executables to be placed in parent directory
 
 DESTRAT = ../destrat
-DESTRAT_OBJS = reader.o
+DESTRAT_OBJS = reader.o ../globals.o
 DESTRAT_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb
 
-TSPICKER = ../tspicker
-TSPICKER_OBJS = tspicker.o
-TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath
+TSPICKER = ../tspicker 
+TSPICKER_OBJS = tspicker.o ../globals.o
+TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb
 
-INTERSECT = ../intersect
-INTERSECT_OBJS = list-intersection.o
-INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals
+INTERSECT = ../intersect 
+INTERSECT_OBJS = list-intersection.o ../globals.o
+INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals -ldb
 
 all : $(DESTRAT) $(TSPICKER) $(INTERSECT)
 
-$(DESTRAT) : reader.o
+$(DESTRAT) : reader.o ../globals.o
 	$(ECHO) $(LD) $(LDFLAGS) -o $(DESTRAT) $(DESTRAT_OBJS) $(DESTRAT_LIBS)
 	$(LD) $(LDFLAGS) -o $(DESTRAT) $(DESTRAT_OBJS) $(DESTRAT_LIBS)
 	
 
-$(TSPICKER) : tspicker.o
+$(TSPICKER) : tspicker.o ../globals.o
 	$(ECHO) $(LD) $(LDFLAGS) -o $(TSPICKER) $(TSPICKER_OBJS) $(TSPICKER_LIBS)
 	$(LD) $(LDFLAGS) -o $(TSPICKER) $(TSPICKER_OBJS) $(TSPICKER_LIBS)
 
-$(INTERSECT) : list-intersection.o
+$(INTERSECT) : list-intersection.o ../globals.o
 	$(ECHO) $(LD) $(LDFLAGS) -o $(INTERSECT) $(INTERSECT_OBJS) $(INTERSECT_LIBS)
 	$(LD) $(LDFLAGS) -o $(INTERSECT) $(INTERSECT_OBJS) $(INTERSECT_LIBS)
 
