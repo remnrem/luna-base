@@ -26,7 +26,7 @@
 #include "timeline/timeline.h"
 #include "miscmath/miscmath.h"
 
-#include "../defs/defs.h"
+#include "defs/defs.h"
 
 FFT::FFT( int N , int Fs , fft_t type , window_function_t window )
   : N(N) , Fs(Fs), type(type), window(window), in(NULL), out(NULL), p(NULL)

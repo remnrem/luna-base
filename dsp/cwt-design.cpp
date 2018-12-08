@@ -22,9 +22,9 @@
 
 
 #include "cwt-design.h"
-#include "../cwt/cwt.h"
-#include "../fftw/fftwrap.h"
-#include "../db/db.h"
+#include "cwt/cwt.h"
+#include "fftw/fftwrap.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

@@ -22,8 +22,8 @@
 
 
 #include "reduce.h"
-#include "../miscmath/miscmath.h"
-#include "../helper/helper.h"
+#include "miscmath/miscmath.h"
+#include "helper/helper.h"
 
 #include <iostream>
 #include <cmath>

@@ -22,10 +22,10 @@
 //    --------------------------------------------------------------------
 
 #include "timeline.h"
-#include "../edf/edf.h"
-#include "../defs/defs.h"
-#include "../db/db.h"
-#include "../miscmath/crandom.h"
+#include "edf/edf.h"
+#include "defs/defs.h"
+#include "db/db.h"
+#include "miscmath/crandom.h"
 
 extern writer_t writer;
 

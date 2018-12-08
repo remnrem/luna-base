@@ -26,9 +26,9 @@
 #include <iostream>
 #include <cmath>
 #include <set>
-#include "../miscmath/miscmath.h"
-#include "../dsp/resample.h"
-#include "../db/db.h"
+#include "miscmath/miscmath.h"
+#include "dsp/resample.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

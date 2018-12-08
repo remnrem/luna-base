@@ -45,9 +45,9 @@ struct edf_t;
 
 // events can have artibitrary real and textual key-value pairs attached
 
-#include "../intervals/intervals.h"
-#include "../miscmath/miscmath.h"
-#include "../helper/helper.h"
+#include "intervals/intervals.h"
+#include "miscmath/miscmath.h"
+#include "helper/helper.h"
 
 enum etype_t { EVT_BOOL , EVT_INT , EVT_DBL , EVT_TXT };
 

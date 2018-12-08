@@ -1,6 +1,6 @@
 #include "topo.h"
-#include "../helper/helper.h"
-#include "../dsp/interpolate.h"
+#include "helper/helper.h"
+#include "dsp/interpolate.h"
 
 #include <fstream>
 #include <locale>

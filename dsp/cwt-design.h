@@ -27,8 +27,8 @@
 #include <complex>
 
 #include "fftw3.h"
-#include "../helper/helper.h"
-#include "../eval.h"
+#include "helper/helper.h"
+#include "eval.h"
 
 namespace dsptools 
 { 

@@ -5,8 +5,8 @@
 #include <map>
 #include <vector>
 
-#include "../stats/matrix.h"
-#include "../edf/edf.h"
+#include "stats/matrix.h"
+#include "edf/edf.h"
 
 struct chid_t { 
   chid_t(int n) : n(n) , label("") { } 

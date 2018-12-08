@@ -22,7 +22,7 @@
  */
 
 #include <vector>
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 #ifndef __FISHER_H__
 #define __FISHER_H__

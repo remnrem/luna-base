@@ -26,9 +26,9 @@
 #include "slice.h"
 #include "tal.h"
 
-#include "../clocs/clocs.h"
-#include "../helper/helper.h"
-#include "../timeline/timeline.h"
+#include "clocs/clocs.h"
+#include "helper/helper.h"
+#include "timeline/timeline.h"
 
 #include <iostream>
 #include <vector>

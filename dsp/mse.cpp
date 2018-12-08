@@ -23,7 +23,7 @@
 
 #include "mse.h"
 
-#include "../miscmath/miscmath.h"
+#include "miscmath/miscmath.h"
 
   
 #include <iostream>

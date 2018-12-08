@@ -20,7 +20,7 @@
 //    --------------------------------------------------------------------
 
 #include "sstore.h"
-#include "../db/sqlwrap.h"
+#include "db/sqlwrap.h"
 
 
 sstore_t::sstore_t( const std::string & f ) 

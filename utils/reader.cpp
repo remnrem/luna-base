@@ -29,9 +29,9 @@
 #include <sstream>
 #include <cstring>
 
-#include "../defs/defs.h"
-#include "../helper/helper.h"
-#include "../db/db.h"
+#include "defs/defs.h"
+#include "helper/helper.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

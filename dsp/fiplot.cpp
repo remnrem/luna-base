@@ -1,7 +1,7 @@
 #include "fiplot.h"
-#include "../miscmath/miscmath.h"
-#include "../cwt/cwt.h"
-#include "../fftw/fftwrap.h"
+#include "miscmath/miscmath.h"
+#include "cwt/cwt.h"
+#include "fftw/fftwrap.h"
 
 extern writer_t writer;
 

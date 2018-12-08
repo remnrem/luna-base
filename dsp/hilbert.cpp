@@ -22,10 +22,10 @@
 
 #include "hilbert.h"
 
-#include "../fftw/fftwrap.h"
-#include "../miscmath/miscmath.h"
-#include "../dsp/fir.h"
-#include "../defs/defs.h"
+#include "fftw/fftwrap.h"
+#include "miscmath/miscmath.h"
+#include "dsp/fir.h"
+#include "defs/defs.h"
 
 #include <iostream>
 #include <cmath>

@@ -23,10 +23,10 @@
 #ifndef __SSTORE_H__
 #define __SSTORE_H__
 
-#include "../db/sqlwrap.h"
+#include "db/sqlwrap.h"
 #include <string>
 #include <set>
-#include "../intervals/intervals.h"
+#include "intervals/intervals.h"
 
 struct sstore_key_t {
   std::string id;

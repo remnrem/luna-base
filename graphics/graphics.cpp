@@ -25,7 +25,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <setjmp.h>
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 // Fonts
 

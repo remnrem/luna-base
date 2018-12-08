@@ -25,7 +25,7 @@
 
 #include "sqlwrap.h"
 #include <string>
-#include "../intervals/intervals.h"
+#include "intervals/intervals.h"
 
 
 class writer_t;

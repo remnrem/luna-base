@@ -21,11 +21,11 @@
 //    --------------------------------------------------------------------
 
 #include "annot.h"
-#include "../main.h"
-#include "../edf/edf.h"
-#include "../helper/helper.h"
-#include "../defs/defs.h"
-#include "../tinyxml/xmlreader.h"
+#include "main.h"
+#include "edf/edf.h"
+#include "helper/helper.h"
+#include "defs/defs.h"
+#include "tinyxml/xmlreader.h"
 
 #include <string>
 #include <fstream>

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "libICA.h"
-#include "matrix.h"
+#include "ica_matrix.h"
 #include "svdcmp.h"
 
 

@@ -1,8 +1,8 @@
 #ifndef __POLARITY_H__
 #define __POLARITY_H__
 
-#include "../edf/edf.h"
-#include "../intervals/intervals.h"
+#include "edf/edf.h"
+#include "intervals/intervals.h"
 #include <vector>
 
 

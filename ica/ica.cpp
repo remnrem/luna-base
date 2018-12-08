@@ -23,10 +23,10 @@
 
 #include "ica.h"
 
-#include "../edf/edf.h"
-#include "../helper/helper.h"
-#include "../main.h"
-#include "../db/db.h"
+#include "edf/edf.h"
+#include "helper/helper.h"
+#include "main.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

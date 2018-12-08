@@ -23,7 +23,7 @@
 #define __LEGENDRE_H__
 
 #include <vector>
-#include "../stats/matrix.h"
+#include "stats/matrix.h"
 
 std::vector<std::vector<double> > legendre( const int , const std::vector<double> & );
 std::vector<double> legendre( const int N , double x );

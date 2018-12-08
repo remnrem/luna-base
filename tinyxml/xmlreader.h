@@ -24,7 +24,7 @@
 #define __XMLREADER_H__
 
 #include "tinyxml.h"
-#include "../helper/helper.h"
+#include "helper/helper.h"
 #include <string>
 #include <vector>
 #include <map>

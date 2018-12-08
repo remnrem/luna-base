@@ -1,7 +1,7 @@
 #ifndef __XML_PARSER_H__
 #define __XML_PARSER_H__
 
-#include "../tinyxml/tinyxml.h"
+#include "tinyxml/tinyxml.h"
 
 // wrapper around TinyXML
 

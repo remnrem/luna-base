@@ -23,8 +23,8 @@
 #ifndef __INTERPOLATE_H__
 #define __INTERPOLATE_H__
 
-#include "../helper/helper.h"
-#include "../stats/statistics.h"
+#include "helper/helper.h"
+#include "stats/statistics.h"
 
 struct edf_t;
 struct param_t;

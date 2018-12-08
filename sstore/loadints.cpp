@@ -1,6 +1,6 @@
 #include "sstore.h"
 #include <iostream>
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 //
 // loadints, a really simple interval loader for a sstore_t 

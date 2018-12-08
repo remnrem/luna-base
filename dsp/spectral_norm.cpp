@@ -23,7 +23,7 @@
 
 #include "spectral_norm.h"
 #include <string>
-#include "../edf/edf.h"
+#include "edf/edf.h"
 
 // implements https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2235870/
 

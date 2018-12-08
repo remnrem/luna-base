@@ -21,7 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "statistics.h"
-#include "../helper/helper.h"
+#include "helper/helper.h"
 #include "matrix.h"
 #include "dcdflib.h"
 #include "ipmpar.h"

@@ -5,7 +5,7 @@
 #include <string>
 #include "cdflib.h"
 #include "dcdflib.h"
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 /*
 -----------------------------------------------------------------------

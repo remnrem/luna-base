@@ -23,8 +23,8 @@
 
 #include "spindles.h"
 #include "mspindles.h"
-#include "../edf/edf.h"
-#include "../db/db.h"
+#include "edf/edf.h"
+#include "db/db.h"
 
 extern writer_t writer;
 

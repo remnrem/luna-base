@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "../stats/matrix.h"
+#include "stats/matrix.h"
 
 // solution
 struct cluster_solution_t { 

@@ -22,8 +22,8 @@
 
 #include "defs.h"
 #include "miscmath/crandom.h"
-#include "../eval.h"
-#include "../db/db.h"
+#include "eval.h"
+#include "db/db.h"
 
 #include <iostream>
 

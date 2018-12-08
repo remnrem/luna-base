@@ -22,10 +22,10 @@
 
 #include "coherence.h"
 #include "resample.h"
-#include "../edf/edf.h"
-#include "../main.h"
-#include "../db/db.h"
-#include "../fftw/fftwrap.h"
+#include "edf/edf.h"
+#include "main.h"
+#include "db/db.h"
+#include "fftw/fftwrap.h"
 
 // Coherence code from : https://www.physionet.org/physiotools/wfdb/psd/coherence.c
 

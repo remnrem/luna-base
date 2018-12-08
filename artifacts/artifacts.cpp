@@ -22,17 +22,17 @@
 
 #include "artifacts.h"
 
-#include "../edf/edf.h"
-#include "../helper/helper.h"
-#include "../main.h"
-#include "../db/db.h"
+#include "edf/edf.h"
+#include "helper/helper.h"
+#include "main.h"
+#include "db/db.h"
 
-#include "../dsp/resample.h"
-#include "../dsp/mse.h"
-#include "../dsp/lzw.h"
+#include "dsp/resample.h"
+#include "dsp/mse.h"
+#include "dsp/lzw.h"
 
-#include "../miscmath/miscmath.h"
-#include "../fftw/fftwrap.h"
+#include "miscmath/miscmath.h"
+#include "fftw/fftwrap.h"
 
 #include <iostream>
 #include <fstream>

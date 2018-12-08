@@ -21,10 +21,10 @@
 //    --------------------------------------------------------------------
 
 #include "pdc.h"
-#include "../helper/helper.h"
-#include "../edf/edf.h"
-#include "../dsp/resample.h"
-#include "../stats/cluster.h"
+#include "helper/helper.h"
+#include "edf/edf.h"
+#include "dsp/resample.h"
+#include "stats/cluster.h"
 #include <vector>
 #include <map>
 

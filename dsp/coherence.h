@@ -27,7 +27,7 @@ struct edf_t;
 struct param_t;
 
 #include <vector>
-#include "../intervals/intervals.h"
+#include "intervals/intervals.h"
 
 struct coh_t
 {

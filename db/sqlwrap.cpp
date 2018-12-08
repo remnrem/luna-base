@@ -23,8 +23,8 @@
 
 #include "sqlwrap.h"
 #include "sqlite3.h"
-#include "../helper/helper.h"
-#include "../defs/defs.h"
+#include "helper/helper.h"
+#include "defs/defs.h"
 
 bool SQL::open(std::string n)
 {

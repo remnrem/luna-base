@@ -21,9 +21,9 @@
 //    --------------------------------------------------------------------
 
 
-#include "../graphics/graphics.h"
-#include "../edf/edf.h"
-#include "../cwt/cwt.h"
+#include "graphics/graphics.h"
+#include "edf/edf.h"
+#include "cwt/cwt.h"
 #include "spindles.h"
 #include "mspindles.h"
 

@@ -21,8 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "miscmath.h"
-#include "../helper/helper.h"
-#include "../stats/statistics.h"
+#include "helper/helper.h"
+#include "stats/statistics.h"
 
 #include <cmath>
 #include <vector>

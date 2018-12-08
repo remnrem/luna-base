@@ -24,14 +24,14 @@
 
 
 extern "C" {
-#include "matrix.h"
+#include "ica_matrix.h"
 #include "svdcmp.h"
 #include "libICA.h"
 }
 
 #include <vector>
 
-#include "../helper/helper.h"
+#include "helper/helper.h"
 
 // Notes
 // https://en.wikipedia.org/wiki/FastICA

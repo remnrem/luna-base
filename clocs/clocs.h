@@ -5,9 +5,9 @@
 #include <map>
 #include <vector>
 
-#include "../helper/helper.h"
-#include "../stats/statistics.h"
-#include "../edf/edf.h"
+#include "helper/helper.h"
+#include "stats/statistics.h"
+#include "edf/edf.h"
 
 struct edf_t;
 struct cart_t;

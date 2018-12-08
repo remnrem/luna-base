@@ -1,9 +1,9 @@
 #include "polarity.h"
 
-#include "../dsp/fir.h"
-#include "../fftw/fftwrap.h"
-#include "../db/db.h"
-#include "../dsp/hilbert.h"
+#include "dsp/fir.h"
+#include "fftw/fftwrap.h"
+#include "db/db.h"
+#include "dsp/hilbert.h"
 
 #include <map>
 

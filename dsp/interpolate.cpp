@@ -21,12 +21,12 @@
 //    --------------------------------------------------------------------
 
 #include "interpolate.h"
-#include "../edf/edf.h"
-#include "../clocs/clocs.h"
-#include "../clocs/topo.h"
+#include "edf/edf.h"
+#include "clocs/clocs.h"
+#include "clocs/topo.h"
 
-#include "../main.h"
-#include "../db/db.h"
+#include "main.h"
+#include "db/db.h"
 #include "pwl_interp_2d_scattered.h"
 
 

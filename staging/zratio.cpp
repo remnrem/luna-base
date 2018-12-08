@@ -23,11 +23,11 @@
 
 #include "staging.h"
 
-#include "../edf/edf.h"
-#include "../helper/helper.h"
-#include "../main.h"
-#include "../miscmath/miscmath.h"
-#include "../fftw/fftwrap.h"
+#include "edf/edf.h"
+#include "helper/helper.h"
+#include "main.h"
+#include "miscmath/miscmath.h"
+#include "fftw/fftwrap.h"
 
 #include <iostream>
 #include <string>

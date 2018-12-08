@@ -23,9 +23,9 @@
 
 #include "ecgsuppression.h"
 #include "resample.h"
-#include "../edf/edf.h"
-#include "../main.h"
-#include "../db/db.h"
+#include "edf/edf.h"
+#include "main.h"
+#include "db/db.h"
 #include "fir.h"
 
 #include <iomanip>

@@ -24,7 +24,7 @@
 #ifndef __SPECTRAL_H__
 #define __SPECTRAL_H__
 
-#include "../annot/annot.h"
+#include "annot/annot.h"
 
 struct edf_t;
 struct param_t;

@@ -29,8 +29,8 @@
 #include <complex>
 #include <stdint.h>
 
-#include "../helper/helper.h"
-#include "../eval.h"
+#include "helper/helper.h"
+#include "eval.h"
 
 typedef std::complex<double> dcomp;
 

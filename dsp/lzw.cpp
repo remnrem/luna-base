@@ -26,9 +26,9 @@
 #include <map>
 #include <iostream>
 
-#include "../helper/helper.h"
-#include "../miscmath/miscmath.h"
-#include "../stats/statistics.h"
+#include "helper/helper.h"
+#include "miscmath/miscmath.h"
+#include "stats/statistics.h"
 
 coarse_t::coarse_t( const std::vector< std::vector<double> > & d , const int nbins , const int nsmooth )  
 {

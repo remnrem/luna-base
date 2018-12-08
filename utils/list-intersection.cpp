@@ -20,8 +20,8 @@
 //
 //    --------------------------------------------------------------------
 
-#include "../intervals/intervals.cpp"
-#include "../helper/helper.h"
+#include "intervals/intervals.cpp"
+#include "helper/helper.h"
 
 #include <iostream>
 #include <map>

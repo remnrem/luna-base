@@ -24,7 +24,7 @@
 #ifndef __SLOW_WAVES_H__
 #define __SLOW_WAVES_H__
 
-#include "../intervals/intervals.h"
+#include "intervals/intervals.h"
 
 #include <vector>
 #include <iostream>

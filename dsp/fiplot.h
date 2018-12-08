@@ -4,9 +4,9 @@
 #include <vector>
 #include <map>
 
-#include "../edf/edf.h"
+#include "edf/edf.h"
 #include <string>
-#include "../db/db.h"
+#include "db/db.h"
 
 
 void fiplot_wrapper( edf_t & edf , const param_t & param );

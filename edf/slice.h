@@ -24,8 +24,8 @@
 #define __SLICE_H__
 
 #include "edf.h"
-#include "../intervals/intervals.h"
-#include "../stats/matrix.h"
+#include "intervals/intervals.h"
+#include "stats/matrix.h"
 #include <stdint.h>
 #include <vector>
 #include <string>
