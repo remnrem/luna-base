@@ -189,7 +189,9 @@ double MiscMath::median( const std::vector<double> & x )
 
 double MiscMath::iqr( const std::vector<double> & x )
 {
-  auto quartiles = MiscMath::quantile<double>( x , { 0.25, 0.75 } );  
+  std::vector<double> q(2);
+  q[0] = 0.25; q[1] = 0.75;
+  std::vector<double> quartiles = MiscMath::quantile<double>( x , q );
   return quartiles[1] - quartiles[0];
 }
 

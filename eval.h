@@ -451,6 +451,7 @@ void proc_filter_design_cmdline();
 void proc_cwt_design_cmdline();
 void proc_psd( edf_t & , param_t & );
 void proc_1overf_norm( edf_t & , param_t & );
+void proc_tv_denoise( edf_t & , param_t & );
 
 void proc_fiplot( edf_t & , param_t & );
 void proc_mi( edf_t & , param_t & );

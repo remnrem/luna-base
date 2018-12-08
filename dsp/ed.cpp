@@ -38,6 +38,7 @@ void dsptools::elec_distance( edf_t & edf , param_t & param )
 {
   
   std::string signal_label = param.requires( "signal" );
+  
   signal_list_t signals = edf.header.signal_list( signal_label );  
 
   // drop annot channels
@@ -57,90 +58,76 @@ void dsptools::elec_distance( edf_t & edf , param_t & param )
 	Helper::halt( "requires all signals to have similar sampling rate" );      
     }
   
-
+  
   //
   // Step through each epoch/channel
   //
   
-//   int ne = edf.timeline.first_epoch();
+  int ne = edf.timeline.first_epoch();
   
-//   std::vector<std::vector<std::vector<double> > > ED( ns );
-  
-//   while ( 1 ) 
-//     {
-      
-//       int epoch = edf.timeline.next_epoch();      
+  std::vector<std::vector<std::vector<double> > > ED( ne );
+
+  std::vector<double> EDmedian;
+
+  while ( 1 ) 
+     {
+
+       int epoch = edf.timeline.next_epoch();      
+
+       if ( epoch == -1 ) break;
+
+       interval_t interval = edf.timeline.epoch( epoch );
        
-//       if ( epoch == -1 ) break;
-      
-//       interval_t interval = edf.timeline.epoch( epoch );
-      
-//       mslice_t mslice( edf , signals , interval );
-      
-//       Data::Matrix<double> D = mslice.extract();
- 
-//       Data::Matrix<double> ED( ns , ns );
+       mslice_t mslice( edf , signals , interval );
 
-//       //
-//       // consider each channel pair
-//       //
-      
-//       for (int s1=0;s1<ns;s1++)
-// 	for (int s2=s1;s2<ns;s2++)
-// 	  {
-// 	    if ( s1==s2 ) continue;
-	    
-// 	    const int nr = D.dim1();
-// 	    Data::Vector<double> ed( nr );
-// 	    for (int i=0;i<nr;i++) ed[i] = D(i,s1) - D(i,s2);
-// 	    double _ED = Statistics::variance( ed );
-// 	    ED(s1,s2) = _ED;
-// 	  }
+       Data::Matrix<double> D = mslice.extract();
+       
+       //
+       // consider each channel pair
+       //
 
-//       //
-//       // Next epoch, so store the ch x ch matrix
-//       //
-      
-//       epochED.push_back( ED );
-      
-//     }
+       std::vector<std::vector<double> > & eED = ED[ epoch ];
+       
+       eED.resize( ns );
+       
+       for (int s1=0;s1<ns;s1++)
+	 {
+	   
+	   for (int s2=s1;s2<ns;s2++)
+	     {
+	       if ( s1==s2 ) continue;
+	       
+	       const int nr = D.dim1();
+	       Data::Vector<double> ed( nr );
+	       for (int i=0;i<nr;i++) ed[i] = D(i,s1) - D(i,s2);
+	       double _ED = Statistics::variance( ed );
+	       eED[s1].push_back( _ED );
+	       EDmedian.push_back( _ED );
+	     }
+	 }
+     }
+
+
+
+
+  //
+  // Scaling factor = 100/median
+  //
+
+  double fac = 100 / MiscMath::median( EDmedian );
+  
+  EDmedian.clear();
+  
+  for (int e=0;e<ne;e++)
+    for (int s1=0;s1<ns;s1++)
+      for (int s2=s1+1;s2<ns;s2++)
+	ED[e][s1][s2] *= fac ; 
 
   
-//   //
-//   // Scale by the median
-//   //
-
-//   Data::Matrix<double> m(ns,ns);
-
-//   const int ne = epochED.size();
-  
-//   for (int s1=0;s1<ns;s1++)
-//     for (int s2=s1;s2<ns;s2++)
-//       {
-// 	if ( s1==s2 ) continue;
-	
-// 	std::vector<double> x;
-// 	for (int 
-	  
-//       writer.unlevel( globals::signal_strat );
-      
-//     }
-//   writer.unepoch();
-  
+  //
+  //
+  //
 
 
-
-//       writer.epoch( edf.timeline.display_epoch( epoch ) );
-
-// 	    // write
-// 	    // writer.level( signals.label(s) , globals::signal_strat );
-// 	    // 	  writer.value( "R" , r ); 
-//       writer.unlevel( globals::signal_strat );
-      
-//     }
-//   writer.unepoch();
-
-  
-// }
 
 }

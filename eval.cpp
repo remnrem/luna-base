@@ -273,6 +273,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );
       else if ( is( c, "FILTER-DESIGN" )) proc_filter_design( edf, param(c) );
       //	  else if ( is( c, "LEGACY-FILTER" )) proc_filter_legacy( edf, param(c) );
+      else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
       
       else if ( is( c, "COVAR" ) )        proc_covar( edf, param(c) );
       else if ( is( c, "PSD" ) )          proc_psd( edf, param(c) );	  
@@ -473,6 +474,12 @@ void proc_filter_design_cmdline()
 
   dsptools::design_fir( param );
   
+}
+
+// TV   total variation 1D denoising
+void proc_tv_denoise( edf_t & edf , param_t & param )
+{
+  dsptools::tv( edf , param );
 }
 
 

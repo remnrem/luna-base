@@ -20,30 +20,33 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#ifndef __TV_H__
+#define __TV_H__
 
-#include "spectral_norm.h"
-#include "tv.h"
-#include "cfc.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
+#include "../intervals/intervals.h"
 
+struct edf_t;
+struct param_t;
+
+#include <vector>
+#include <stdint.h>
+
+namespace dsptools 
+{  
+  
+  // ultimate wrapper
+  void tv( edf_t & , param_t & );
+  
+  std::vector<double> TV1D_denoise_copy(const std::vector<double> & input, const double lambda);
+
+  void TV1D_denoise(std::vector<double> & input, const double lambda);
+  
+  // alternate method, also w/ sparsity + smoothness
+  void fused_lasso(double* input, double* output, const int width, const double lambda, const double mu);
+
+
+  std::vector<double> tv( const std::vector<double> & );
+		  
+}
 
 #endif

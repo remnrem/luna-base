@@ -7,7 +7,7 @@ OBJLIBS	 = ../libdsp.a
 OBJS = mi.o resample.o coherence.o pac.o ecgsuppression.o hilbert.o	\
 slow-waves.o emd.o mse.o cfc.o lzw.o reduce.o fir.o fiplot.o ed.o	\
 interpolate.o correl.o conv.o polarity.o spectral_norm.o cwt-design.o 	\
-r8lib.o pwl_interp_2d_scattered.o
+r8lib.o pwl_interp_2d_scattered.o tv.o
 
 all : $(OBJLIBS)
 
