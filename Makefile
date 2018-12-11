@@ -5,6 +5,7 @@ artifacts intervals fftw cwt defs zfile stats graphics staging 	\
 db ica clocs pdc sstore
 
 EXE	= luna
+LUNALIB = libluna.so
 OBJS	= main.o globals.o eval.o
 
 OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
@@ -18,11 +19,15 @@ LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper \
  -ltinyxml -lcwt -lclocs -lpdc -lzfile -lstats -lgraphics -ldb -lsstore \
  -lfftw3 -lhpdf -lpng -lsamplerate -lz
 
-all : $(EXE) utils
+all : $(EXE) $(LUNALIB) utils
 
 $(EXE) : main.o globals.o eval.o $(OBJLIBS)
 	$(ECHO) $(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 	$(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
+
+$(LUNALIB) : globals.o eval.o $(OBJLIBS)
+	$(ECHO) "building libluna.so..."
+	$(CXX) -shared -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
 
 libedf.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)

@@ -303,7 +303,7 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
   byte_t * q0 = q;
 
   // Read start of header into the buffer
-  fread( q , 1, hdrSz , file);
+  size_t rdsz = fread( q , 1, hdrSz , file);
 
   std::set<int> channels;
   
@@ -379,8 +379,8 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
   byte_t * p = new byte_t[ hdrSz * ns_all ]; 
   byte_t * p0 = p;
 
-  fread( p , 1, hdrSz * ns_all , file);      
-
+  rdsz = fread( p , 1, hdrSz * ns_all , file);      
+  
   // for each of 'ns_all' signals
   
   ns = 0; // actual number of important signals
@@ -613,7 +613,7 @@ bool edf_record_t::read( FILE * file , int r )
   byte_t * p0 = p;
 
   // and read it
-  fread( p , 1, edf->record_size , edf->file );
+  size_t rdsz = fread( p , 1, edf->record_size , edf->file );
 
 
   // which signals/channels do we actually want to read?
@@ -2538,7 +2538,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
   byte_t * p0 = p;
 
   // and read only time-track (all of it)
-  fread( p , 1, ttsize , file );
+  size_t rdsz = fread( p , 1, ttsize , file );
   
   std::string tt( ttsize , '\x00' );
   int e = 0;
