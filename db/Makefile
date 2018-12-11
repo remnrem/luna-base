@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libdb.a
-OBJS	 = sqlite3.o db.o sqlwrap.o
+OBJS	 = sqlite3.o db.o retval.o sqlwrap.o
 
 all : $(OBJLIBS)
 

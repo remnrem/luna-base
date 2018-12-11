@@ -7,8 +7,8 @@ LD = g++
 LDLAGS = -L/usr/local/lib
 
 # if dependencies are installed locally, denote here
-#CXXFLAGS += -I/Users/shaun/src/luna-depends/depends/include
-#LDFLAGS += -L/Users/shaun/src/luna-depends/depends/lib
+CXXFLAGS += -I/Users/shaun/src/luna-depends/depends/include
+LDFLAGS += -L/Users/shaun/src/luna-depends/depends/lib
 
 export CFLAGS
 export CXXFLAGS
