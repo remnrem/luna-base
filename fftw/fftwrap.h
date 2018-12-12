@@ -172,8 +172,8 @@ class PWELCH
 	 int noverlap_segments , 
 	 window_function_t W = WINDOW_TUKEY50 , 
 	 bool average_adj = false ) 
-   : data(data) , M(M) , noverlap_segments(noverlap_segments) , 
-    Fs(Fs), window(W), average_adj(average_adj) 
+   : data(data) , Fs(Fs) , M(M) , noverlap_segments(noverlap_segments) , 
+     window(W), average_adj(average_adj) 
   {
 
     // calculate implied overlap in actual data-points
@@ -262,7 +262,7 @@ class coherence_t {
 		bool detrend = false , 
 		bool zerocenter = false )		
     :  segment_sec(segment_sec) , overlap_sec(overlap_sec),
-    Fs(Fs), window(W), average_adj(average_adj) , detrend(detrend) , zerocenter(zerocenter) , x(x), y(y) 
+    Fs(Fs), window(W), detrend(detrend) , zerocenter(zerocenter) , average_adj(average_adj) ,  x(x), y(y) 
   {
     
     if ( x.size() != y.size() ) 

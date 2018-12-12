@@ -38,7 +38,7 @@ void attach_annot( edf_t & edf , const std::string & astr );
 // Helper to parse command syntax
 //
 
-class param_t
+struct param_t
 {
 
  public:

@@ -36,7 +36,7 @@ struct attr_t;
 class XML
 {
 
-  friend class element_t;
+  friend struct element_t;
 
  public:
   
@@ -89,7 +89,7 @@ struct element_t
   friend class XML;
 
   element_t( const std::string & name , element_t * parent = NULL )
-  : name(name) , parent(parent) , value("") 
+  : parent(parent) , name(name) , value("") 
   {
     if ( parent ) parent->child.push_back( this );
   }

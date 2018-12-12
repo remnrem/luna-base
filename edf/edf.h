@@ -298,11 +298,11 @@ struct edf_header_t
 
 
 
-class edf_record_t
+struct edf_record_t
 {
 
-  friend class edf_header_t;
-  friend class edf_t;
+  friend struct edf_header_t;
+  friend struct edf_t;
   
   //
   // contains all samples for all signals for a single
@@ -375,8 +375,8 @@ class edf_record_t
 struct edf_t
 {
   
-  friend class edf_header_t;
-  friend class edf_record_t;
+  friend struct edf_header_t;
+  friend struct edf_record_t;
   
 public:
 

@@ -170,7 +170,7 @@ struct hypnogram_t
 //  4) (?todo: non-epoch based masks)
 
 
-class timeline_t 
+struct timeline_t 
 {
   
   friend struct hypnogram_t;

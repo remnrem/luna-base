@@ -183,7 +183,7 @@ struct feature_t
   } 
 
   feature_t( const interval_t & i , const std::string & s , const std::string & l ) 
-  : feature(i),  signal(s), label(l) 
+  : feature(i),  label(l) , signal(s) 
   { 
     has_value = false;
     has_colour = false;

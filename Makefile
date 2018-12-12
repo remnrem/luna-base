@@ -26,8 +26,15 @@ $(EXE) : main.o globals.o eval.o $(OBJLIBS)
 	$(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 
 $(LUNALIB) : globals.o eval.o $(OBJLIBS)
+
+ifeq ($(ARCH),MAC)
+	$(ECHO) "building libluna.dylib..."
+	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a -lz -lfftw3 -lhpdf -lsamplerate
+else
 	$(ECHO) "building libluna.so..."
-	$(CXX) -shared -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
+	$(LD) -shared     -fPIC $(LDFLAGS) -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
+endif
+
 
 libedf.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)

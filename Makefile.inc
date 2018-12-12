@@ -1,14 +1,20 @@
 
+# ARCH is LINUX or MAC
+ARCH=MAC
+
+# if dependencies are installed locally, denote here, otherwise set these to blank
+#DEP_INCLUDES =
+#DEP_LIB = 
+
+DEP_INCLUDES = -I/Users/shaun/src/luna-depends/depends/include
+DEP_LIB = -L/Users/shaun/src/luna-depends/depends/lib
+
 CXX = g++
-CXXFLAGS = -O2 -I. -I.. -I/usr/local/include -std=c++0x -Wno-logical-op-parentheses -Wno-deprecated-register -fPIC
+CXXFLAGS = -O2 -I. -I.. -I/usr/local/include $(DEP_INCLUDES) -std=c++0x -Wno-logical-op-parentheses -Wno-deprecated-register -fPIC
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DT_LINUX -fPIC
 
 LD = g++ 
-LDLAGS = -L/usr/local/lib
-
-# if dependencies are installed locally, denote here
-CXXFLAGS += -I/Users/shaun/src/luna-depends/depends/include
-LDFLAGS += -L/Users/shaun/src/luna-depends/depends/lib
+LDFLAGS = $(DEP_LIB) -L/usr/local/lib 
 
 export CFLAGS
 export CXXFLAGS

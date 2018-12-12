@@ -173,7 +173,7 @@ struct clocktime_t
   // assume from hours, fractional
   clocktime_t( double ); 
   
-  clocktime_t( int h, int m, int s ) : h(h), m(m), s(s), valid(true) 
+  clocktime_t( int h, int m, int s ) : valid(true) , h(h), m(m), s(s) 
   { 
     if ( h < 0 || m < 0 || s < 0 ) valid = false;
     if ( h > 23 || m > 59 || s > 59 ) valid = false;
@@ -238,8 +238,8 @@ struct clocktime_t
     // -ve means THIS happens before
     // +ve means THIS happens afterwards
     
-    double hrs = hours();
-    double hrs2 = t.hours();
+/*     double hrs = hours(); */
+/*     double hrs2 = t.hours(); */
     
     std::cerr << "**warning:: clocktime_t::difference() not implemented\n";
     return 0;

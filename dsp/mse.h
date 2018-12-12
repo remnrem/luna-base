@@ -46,12 +46,12 @@ struct mse_t
 	 const int scale_step = 1 ,
 	 const int m = 2 , 
 	 const double r = 0.15)
-  : scale_min(scale_min) , 
-    scale_max(scale_max) , 
-    scale_step(scale_step) , 
-    m(m) , 
-    r(r) 
-  {   }
+  :     m(m) , 
+        r(r) ,
+        scale_min(scale_min) , 
+        scale_max(scale_max) , 
+        scale_step(scale_step)  
+    {   }
   
   std::map<int,double> calc( const std::vector<double> & d );
   

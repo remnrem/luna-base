@@ -57,10 +57,11 @@ struct cfc_t
   bool glm();
   
 private:
-  
+
+  std::vector<double> d;  
   double a1, a2, b1, b2;
   double sr;
-  std::vector<double> d;
+
   
   // output
 public:  

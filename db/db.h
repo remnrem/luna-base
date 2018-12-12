@@ -297,8 +297,8 @@ struct value_t
   value_t( int d ) : numeric(true) , missing(false) , d(d) { } 
   value_t() : missing(true) { } 
 
-  bool missing;
   bool numeric;
+  bool missing;
   double d;
   std::string s;
 
