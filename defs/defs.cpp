@@ -100,7 +100,7 @@ void globals::init_defs()
   //
   
   version = "v0.2";
-  date    = "3-Apr-2018";
+  date    = "12-Dec-2018";
   
   //
   // Set up RNG
