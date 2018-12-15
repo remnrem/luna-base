@@ -24,10 +24,13 @@
 #include "miscmath/crandom.h"
 #include "eval.h"
 #include "db/db.h"
+#include "helper/logger.h"
 
 #include <iostream>
 
 extern writer_t writer;
+
+extern logger_t logger;
 
 std::string globals::version;
 std::string globals::date;
@@ -101,7 +104,7 @@ void globals::init_defs()
   
   version = "v0.2";
   date    = "12-Dec-2018";
-  
+
   //
   // Set up RNG
   //

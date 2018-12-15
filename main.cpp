@@ -28,6 +28,8 @@ extern globals global;
 
 extern writer_t writer;
 
+extern logger_t logger;
+
 int main(int argc , char ** argv )
 {
   
@@ -168,11 +170,11 @@ int main(int argc , char ** argv )
 			  std::string xid = tok[0];
 			  globals::excludes.insert( xid );
 			}
-		      std::cerr << "excluding " << globals::excludes.size() 
-				<< " individuals from " << xfile << "\n";
+		      logger << "excluding " << globals::excludes.size() 
+			     << " individuals from " << xfile << std::endl;
 		      XIN.close();
 		    }
-		  else std::cerr << "**warning: exclude file " << xfile << " does not exist\n";
+		  else logger << "**warning: exclude file " << xfile << " does not exist" << std::endl;
 		}
 	      else if ( tok[0][0] == '-' )
 		{
@@ -263,11 +265,11 @@ int main(int argc , char ** argv )
 			      std::string xid = tok[0];
 			      globals::excludes.insert( xid );
 			    }
-			  std::cerr << "excluding " << globals::excludes.size() 
-				    << " individuals from " << xfile << "\n";
+			  logger << "excluding " << globals::excludes.size() 
+				 << " individuals from " << xfile << std::endl;
 			  XIN.close();
 			}
-		      else std::cerr << "** warning: exclude file " << xfile << " does not exist\n";
+		      else logger << "** warning: exclude file " << xfile << " does not exist" << std::endl;
 		    }
 		  else // ... or just a variable?
 		    {		  
@@ -321,8 +323,11 @@ int main(int argc , char ** argv )
   
   else if ( argc < 2 || ( isatty(STDIN_FILENO) || argc != 1 ) )  
     {
-      std::cerr << "luna version " << globals::version << "; " << globals::date 
-		<< "\nusage: luna [sample-list|EDF] [n1] [n2] [signal=s1,s2] [v1=val1] [@parameter-file] < command-file\n" ;
+      logger << "luna version " << globals::version << "; " << globals::date
+	     << std::endl
+	     << "usage: luna [sample-list|EDF] [n1] [n2] [signal=s1,s2] [v1=val1] [@parameter-file] < command-file"
+	     << std::endl;
+
       std::exit(1);
     }
 
@@ -343,7 +348,7 @@ int main(int argc , char ** argv )
   else 
     writer.nodb();
   
-
+  
   //
   // specify types for common stratifiers
   //
@@ -442,9 +447,9 @@ int main(int argc , char ** argv )
   // wrap up
   //
 
-  std::cerr << "...processed " << processed << " command(s), ";
-  if ( failed == 0 ) std::cerr << " all of which passed\n";
-  else std::cerr << failed << " of which failed\n";
+  logger << "...processed " << processed << " command(s), ";
+  if ( failed == 0 ) logger << " all of which passed" << std::endl;
+  else logger << failed << " of which failed" << std::endl;
 
   exit(0);
   
@@ -554,7 +559,7 @@ void process_edfs( cmd_t & cmd )
           
       if ( globals::excludes.find( rootname ) != globals::excludes.end() )
 	{
-	  std::cerr << "\nskipping EDF " << rootname << "\n";
+	  logger << "\nskipping EDF " << rootname << std::endl;
 	  ++processed;
 	  continue; // to the next EDF in the list
 	}
@@ -565,8 +570,9 @@ void process_edfs( cmd_t & cmd )
       //
 
       
-      std::cerr << "\nProcessing EDF " << rootname 
-		<< " [ #" << processed+1 << " ]\n";
+      logger << std::endl
+	     << "Processing EDF " << rootname 
+	     << " [ #" << processed+1 << " ]std::endl";
       
       
       //
@@ -625,7 +631,7 @@ void process_edfs( cmd_t & cmd )
 	  ++actual;
 	  writer.commit();
 	  if ( single_edf ) break;
-	  std::cerr << "  skipping any other commands\n"; 
+	  logger << "  skipping any other commands" << std::endl; 
 	  continue;
 	}
       
@@ -665,8 +671,8 @@ void process_edfs( cmd_t & cmd )
 
 	  globals::problem = true;
 
-	  std::cerr << "**warning: problem loading " 
-		    << edffile << ", skipping...\n";
+	  logger << "**warning: problem loading " 
+		 << edffile << ", skipping..." << std::endl;
 
 	  writer.commit();
 
@@ -758,7 +764,9 @@ void process_edfs( cmd_t & cmd )
   // All done
   //
 
-  std::cerr << "\n...processed " << actual << " EDFs, done.\n";
+  logger << std::endl
+	 << "...processed " << actual << " EDFs, done."
+	 << std::endl;
 
 }
 
@@ -925,9 +933,9 @@ void proc_dummy()
   //   }
   // H1.close();
 
-  std::cerr << "read " << x.size() << " x values\n";
-  //  std::cerr << "read " << h.size() << " h values\n";
-
+  logger << "read " << x.size() << " x values" << std::endl;
+  //  logger << "read " << h.size() << " h values\n";
+  
   
   int kaiserWindowLength;
   double beta;
@@ -952,7 +960,7 @@ void proc_dummy()
   
   for (int tt=0;tt<10;tt++)
     {
-      std::cerr << "tt + " << tt << "\n";
+      logger << "tt + " << tt << "\n";
 
       fir_impl_t ft( fc );      
       std::vector<double> ff1 = ft.filter( &x );
@@ -1018,7 +1026,7 @@ void proc_dummy()
 //       if ( std::cin.eof() ) break;
 //       x.push_back(t);
 //     }
-//   std::cerr << "read " << x.size() << " values\n";
+//   logger << "read " << x.size() << " values\n";
 
    while ( ! std::cin.eof() ) 
      {
@@ -1027,7 +1035,7 @@ void proc_dummy()
        if ( std::cin.eof() ) break;
        x.push_back(t);
      }
-   std::cerr << "read " << x.size() << " values\n";
+   logger << "read " << x.size() << " values\n";
 
 
 //   std::exit(1);
@@ -1129,12 +1137,12 @@ void proc_dummy()
 //   double thf;
 //   double empirical_threshold = MiscMath::threshold( x , 0.1 , 20 , 0.1 , &thf, &tvals );
 
-//   std::cerr << "et = " << empirical_threshold << "\n";
+//   logger << "et = " << empirical_threshold << "\n";
 
 //   std::map<double,double>::const_iterator tt = tvals.begin();
 //   while ( tt != tvals.end() ) 
 //     {
-//       std::cerr << tt->first << "\t" 
+//       logger << tt->first << "\t" 
 // 		<< tt->second << "\n";
 //       ++tt;
 //     }
@@ -1181,7 +1189,7 @@ void proc_dummy()
 	  if ( std::cin.eof() ) break;
 	  x.push_back(t);
 	}
-      std::cerr << "read " << x.size() << " values\n";
+      logger << "read " << x.size() << " values\n";
     }
 
   if ( 0 ) 
@@ -1313,7 +1321,7 @@ struct cmdsyn_t
 
     ss << name << "\t" << desc << "\n";
 
-    if ( req.size() > 0 ) std::cerr << "  required: \n";
+    if ( req.size() > 0 ) logger << "  required: \n";
     std::map<std::string,std::string>::const_iterator ii = req.begin();
     while( ii != req.end() )
       {
@@ -1322,7 +1330,7 @@ struct cmdsyn_t
 	++ii;
       }
 
-    if ( opt.size() > 0 ) std::cerr << "  optional: \n";
+    if ( opt.size() > 0 ) logger << "  optional: \n";
     ii = opt.begin();
     while( ii != opt.end() )
       {

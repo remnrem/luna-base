@@ -27,6 +27,8 @@ globals global;
 
 writer_t writer;
 
+logger_t logger("luna");
+
 std::set<std::string>              cmd_t::commands;
 std::string                        cmd_t::input = "";
 std::string                        cmd_t::cmdline_cmds = "";

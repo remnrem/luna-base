@@ -29,6 +29,8 @@
 
 #include "helper/helper.h"
 
+#include "helper/logger.h"
+
 #include "helper/xml-parser.h"
 
 #include "tinyxml/tinyxml.h"
