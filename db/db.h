@@ -24,6 +24,7 @@
 #define __LOCDB_H__
 
 #include "sqlwrap.h"
+#include "retval.h"
 #include <string>
 #include "intervals/intervals.h"
 
@@ -517,11 +518,12 @@ class writer_t
   // database
   //
 
-  writer_t() { dbless = true; }
+  writer_t() { dbless = true; retval = NULL; } 
  
   bool attach( const std::string & filename , bool readonly = false )
   {
-    dbless = false;
+
+    dbless = false; retval = NULL;
 
     db.attach( filename , readonly );
 
@@ -544,7 +546,18 @@ class writer_t
     // in an in-memory DB to store factor information, etc, but then set to 'dbless' 
     attach( ":memory:" );
     dbless = true; 
+    retval = NULL;
   } 
+  
+  void use_retval( retval_t * r ) 
+  { 
+    // in an in-memory DB to store factor information, etc, but then set to write to a retval 
+    attach( ":memory:" );
+    dbless = false;  // still set this as true
+    retval = r;
+  } 
+  
+  
   
   std::string name() const { return dbless ? "." : db.name(); } 
   
@@ -586,8 +599,6 @@ class writer_t
   
   bool numeric_factor( const std::string & fac_name )
   {
-
-    //if ( dbless ) return false;
     if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
       {
 	factor_t factor = db.insert_factor( fac_name , 1 );  // 1 -> numeric factor
@@ -599,7 +610,6 @@ class writer_t
   
   bool string_factor( const std::string & fac_name )
   {
-    //if ( dbless ) return false;
     if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
       {
 	factor_t factor = db.insert_factor( fac_name , 0 ); // 0 -> string factor  
@@ -611,7 +621,6 @@ class writer_t
 
   bool var( const std::string & var_name , const std::string & var_label )
   {
-    //if ( dbless ) return false;
     // use 'command.var' as the unique identifier
     std::string var_key = curr_command.cmd_name + ":" + var_name;
     if ( variables_idmap.find( var_key ) == variables_idmap.end() )
@@ -632,8 +641,6 @@ class writer_t
   
   bool cmd( const std::string & cmd_name , const int cmd_number , const std::string & param )
   {
-    
-    //if ( dbless ) return false;
     
     // use 'command.number' as unqiue identifier
     
@@ -659,7 +666,6 @@ class writer_t
 
   bool id( const std::string & indiv_name , const std::string & file_name )
   {
-    //if ( dbless ) return false;
     if ( individuals_idmap.find( indiv_name ) != individuals_idmap.end() )
       curr_indiv = individuals[ individuals_idmap[ indiv_name ] ];
     else
@@ -675,7 +681,6 @@ class writer_t
   
   bool tag( const std::string & lvl_name , const std::string & fac_name )
   {
-    //if ( dbless ) return false;
 
     if      ( fac_name == "." ) unlevel();
     else if ( lvl_name == "." ) unlevel( fac_name );
@@ -691,20 +696,16 @@ class writer_t
   // Current factor
   bool level( const int level_name , const std::string & factor_name )
   {
-    //if ( dbless ) return false;
     return level( Helper::int2str( level_name ) , factor_name );
   }
 
   bool level( const double level_name , const std::string & factor_name )
   {
-    //if ( dbless ) return false;
     return level( Helper::dbl2str( level_name ) , factor_name );
   }
   
   bool level( const std::string & level_name , const std::string & factor_name )
   {
-
-    //if ( dbless ) return false;
 
     // add factor (as string by default) if it doesn't already exist
     if ( factors_idmap.find( factor_name ) == factors_idmap.end() ) 
@@ -736,8 +737,6 @@ class writer_t
   
   bool unlevel( const std::string & factor_name )
   {
-    //if ( dbless ) return false;
-    
     // drop 'factor_name' from current stratification (curr_strata)
 
     // never added / no need to drop
@@ -751,8 +750,6 @@ class writer_t
   
   bool unlevel() 
   {
-    //if ( dbless ) return false;
-
     // set curr_strata to 'empty' 
     curr_strata.clear();
     return true;
@@ -760,8 +757,6 @@ class writer_t
   
   int get_strata_id( const strata_t & s )
   {
-    //if ( dbless ) return -1;
-
     // when being set up, we always enter a first 'default' baseline
     // stratum this has level code of '0'
     
@@ -784,8 +779,6 @@ class writer_t
   
   bool epoch( const int e )
   {
-
-    //if ( dbless ) return false;
 
     if ( e == -1 ) 
       {
@@ -818,8 +811,6 @@ class writer_t
   bool interval( const interval_t & interval )
   {
     
-    //if ( dbless ) return false;
-
     if ( interval.start == 0 && interval.stop == 0 )
       {
 	curr_timepoint.timeless();
@@ -851,7 +842,6 @@ class writer_t
   
   bool timeless() 
   {
-    //if ( dbless ) return false;
     unlevel( globals::epoch_strat );
     unlevel( globals::time_strat );    
     // set to timeless
@@ -864,14 +854,24 @@ class writer_t
   //
 
   bool value( const std::string & var_name , double d , const std::string & desc = "" )
-  {
-    if ( dbless ) return to_stdout( var_name , value_t( d ) ) ;
+  {    
+    if ( retval != NULL ) return to_retval( var_name , d );
+    else if ( dbless ) return to_stdout( var_name , value_t( d ) ) ;
     if ( desc != "" ) var( var_name , desc );
     return value( var_name , value_t( d ) ) ;
   }
 
+  /* bool value( const std::string & var_name , int i , const std::string & desc = "" ) */
+  /* { */
+  /*   if ( retval != NULL ) return to_retval( var_name , i ); */
+  /*   else if ( dbless ) return to_stdout( var_name , value_t( i ) ) ; */
+  /*   if ( desc != "" ) var( var_name , desc ); */
+  /*   return value( var_name , value_t( i ) ) ; */
+  /* } */
+
   bool value( const std::string & var_name , const std::string & s , const std::string & desc = "" )
   {
+    if ( retval != NULL ) return to_retval( var_name , s );
     if ( dbless ) return to_stdout( var_name , value_t( s ) ); 
     if ( desc != "" ) var( var_name , desc );
     return value( var_name , value_t( s ) ) ;
@@ -879,6 +879,7 @@ class writer_t
   
   bool missing_value( const std::string & var_name , const std::string & desc = "" )
   {
+    if ( retval != NULL ) return to_retval( var_name ); // missing value 
     if ( dbless ) return to_stdout( var_name , value_t() ); 
     if ( desc != "" ) var( var_name , desc );
     return value( var_name , value_t() );
@@ -886,6 +887,9 @@ class writer_t
 
   bool value( const std::string & var_name , const value_t & x )
   {
+
+    // this should never be called in retval mode, but just in case... 
+    if ( retval != NULL ) Helper::halt( "internal error in value(), should not get here" );
 
     if ( dbless ) return to_stdout( var_name , x );
 
@@ -934,6 +938,64 @@ class writer_t
   }
 
   
+  
+  bool to_retval( const std::string & var_name , double d )
+  {
+
+    retval->add( retval_cmd_t( curr_command.cmd_name ) , 
+		 retval_factor_t( curr_strata , curr_timepoint ) ,
+		 retval_var_t( var_name ) , 
+		 retval_strata_t( curr_strata , curr_timepoint ) ,
+		 d );
+    
+    return true;
+  }
+
+
+  bool to_retval( const std::string & var_name , int i )
+  {
+
+    retval->add( retval_cmd_t( curr_command.cmd_name ) , 
+		 retval_factor_t( curr_strata , curr_timepoint ) ,
+		 retval_var_t( var_name ) , 
+		 retval_strata_t( curr_strata , curr_timepoint ) ,
+		 i);
+
+    return true;
+  }
+
+
+bool to_retval( const std::string & var_name , const std::string & s  )
+{
+  
+  retval->add( retval_cmd_t( curr_command.cmd_name ) ,
+	       retval_factor_t( curr_strata , curr_timepoint ) ,
+	       retval_var_t( var_name ) , 
+	       retval_strata_t( curr_strata , curr_timepoint ) ,
+	       s );
+  
+    return true;
+  }
+
+
+  bool to_retval( const std::string & var_name )
+  {
+    // use special string code for missing data 'NA' 
+    retval->add( retval_cmd_t( curr_command.cmd_name ) ,
+		 retval_factor_t( curr_strata , curr_timepoint ) ,
+		 retval_var_t( var_name ) ,
+		 retval_strata_t( curr_strata , curr_timepoint ) ,
+		 "NA" );
+    
+    return true;
+  }
+
+
+
+
+
+
+  
   //
   // readers
   //
@@ -976,10 +1038,14 @@ class writer_t
   
   StratOutDBase db; 
   
-  // do not write to a DB
+  // write to std::cout, instead of to a DB
 
   bool dbless;
 
+  // write to a retval_t, instead of a DB
+
+  retval_t * retval;
+  
   // Used when reading (do we need this??)
   
   // primary data-store:  indiv -> strat -> timepoint -> cmd -> variable -> value 

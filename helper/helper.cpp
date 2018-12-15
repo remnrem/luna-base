@@ -201,6 +201,19 @@ std::string Helper::stringize( const std::vector<std::string> & d)
   return r;
 }
 
+std::string Helper::stringize( const std::set<std::string> & d , const std::string & delim )
+{
+  std::stringstream ss;
+  std::set<std::string>::const_iterator dd = d.begin();
+  while ( dd != d.end() )
+    {
+      if ( dd != d.begin() ) ss << delim;
+      ss << *dd;
+      ++dd;
+    }
+  return ss.str();
+}
+
 std::string Helper::trim( const std::string & s , const char c , const char d )
 {
   int first_nonspace = 0;

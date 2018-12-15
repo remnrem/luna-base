@@ -1,6 +1,6 @@
 
 # ARCH is LINUX or MAC
-ARCH=MAC
+ARCH=LINUX
 
 # if dependencies are installed locally, denote here, otherwise set these to blank
 #DEP_INCLUDES =

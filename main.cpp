@@ -771,6 +771,36 @@ void process_edfs( cmd_t & cmd )
 void proc_dummy()
 {
 
+  std::string edf_file2 = "/home/shaun/Dropbox/my-sleep/Purcell06072016.edf";  
+  edf_t edf2; 
+  edf2.attach( edf_file2 , "id-007" );
+  
+    
+  retval_t ret;
+  writer.nodb();
+  writer.use_retval( &ret );
+
+  // evaluate a command
+  cmd_t cmd( "EPOCH & SPINDLES method=wavelet fc=13" );
+
+  cmd.eval( edf2 ); 
+
+  ret.dump();
+
+  std::exit(0);
+  
+  // retval_strata_t s;
+  // s.add( retval_factor_level_t( "F" , 11 ) ) ;
+  // s.add( retval_factor_level_t( "SS" , "N2" ) ) ;
+  // s.add( retval_factor_level_t( "B" , 12.4 ) ) ; 
+
+  // ret.add( retval_cmd_t("c1") , retval_var_t("v1") , s , 22 );
+  // ret.add( retval_cmd_t("c2") , retval_var_t("v1") , s , 22.2 );
+  // ret.add( retval_cmd_t("c2") , retval_var_t("v2") , s , 22.5 );
+  // ret.dump();
+  
+  std::exit(1);
+  
   Data::Matrix<double> D( 10 , 10 );
   for (int i=0;i<10;i++) 
     for (int j=0;j<10;j++) 

@@ -2725,9 +2725,10 @@ bool edf_t::validate( param_t & param )
       writer.var( "MEDIAN" , "Signal median" );
       writer.var( "SD"   , "Signal SD" );
       writer.var( "RMS"  , "Signal RMS" );
-	  	  
-      writer.value( "MIN"  , min  );
+
       writer.value( "MAX"  , max  );
+      writer.value( "MIN"  , min  );
+      
       writer.value( "MEAN" , mean );
       if ( calc_median ) 
 	writer.value( "MEDIAN" , median );
@@ -2816,9 +2817,10 @@ bool edf_t::validate( param_t & param )
 	  //
 	  
 	  writer.epoch( timeline.display_epoch( epoch ) );
-	  
-	  writer.value( "MIN"  , min  );
+
 	  writer.value( "MAX"  , max  );
+	  writer.value( "MIN"  , min  );
+
 	  writer.value( "MEAN" , mean );
 	  if ( calc_median ) 
 	    writer.value( "MEDIAN" , median );

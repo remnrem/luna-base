@@ -2,7 +2,7 @@ include Makefile.inc
 
 DIRS = edf tinyxml helper timeline annot dsp miscmath spindles	\
 artifacts intervals fftw cwt defs zfile stats graphics staging 	\
-db ica clocs pdc sstore
+db ica clocs pdc sstore dsp/mtm
 
 EXE	= luna
 LUNALIB = libluna.so
@@ -12,12 +12,12 @@ OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
 libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
 libintervals.a libfftwrap.a libcwt.a libzfile.a libstats.a		\
 libgraphics.a libstaging.a libdb.a libica.a libclocs.a libpdc.a		\
-libsstore.a
+libsstore.a libmtm.a
 
-LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper \
- -ltimeline -lstaging -lfftwrap -ldsp -lmiscmath -lintervals \
- -ltinyxml -lcwt -lclocs -lpdc -lzfile -lstats -lgraphics -ldb -lsstore \
- -lfftw3 -lhpdf -lpng -lsamplerate -lz
+LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper	\
+-ltimeline -lstaging -lfftwrap -ldsp -lmtm -lmiscmath -lintervals	\
+-ltinyxml -lcwt -lclocs -lpdc -lzfile -lstats -lgraphics -ldb		\
+-lsstore -lfftw3 -lhpdf -lpng -lsamplerate -lz
 
 all : $(EXE) $(LUNALIB) utils
 
@@ -75,6 +75,10 @@ libfftwrap.a : force_look
 libdsp.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)
 	cd dsp; $(MAKE) $(MFLAGS)
+
+libmtm.a : force_look
+	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)
+	cd dsp/mtm; $(MAKE) $(MFLAGS)
 
 libcwt.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)

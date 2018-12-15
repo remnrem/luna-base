@@ -5,36 +5,167 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <sstream>
+
+#include "helper/helper.h"
+
+struct retval_cmd_t;
+struct retval_var_t;
+struct retval_factor_t;
+struct retval_strata_t;
+struct retval_value_t;
+
+struct strata_t;
+struct timepoint_t;
+
+typedef std::map<retval_cmd_t, std::map<retval_factor_t,std::map<retval_var_t, std::map<retval_strata_t, retval_value_t > > > > retval_data_t;
 
 // when working with Luna via an API or through R, this structure
-// provides a way to return results from multiple commands for
-// a single dataset (i.e. edf/individual)
+// provides a way to return results from multiple commands for a
+// single dataset (i.e. edf/individual)
 
-// it is designed to be a plug-in for writer, 
-// i.e. writer.var() and writer.value(), writer.level(), 
-// writer.unlevel(), and writer.epoch()
+// it is designed to be a plug-in for writer, i.e. writer.var() and
+// writer.value(), writer.level(), writer.unlevel(), and
+// writer.epoch()
 
-// hopefully this will become a better, more light-weight 
-// replacement for destrat
+// this may become a better, more light-weight replacement for destrat
 
-struct retval_t { 
+
+//   retval_t
+//     retval_cmd_t  e.g. SPINDELS
+//       retval_factors_t   e.g. which 'table'   "F CH"
+//         retval_var_t     e.g. DENS
+//           retval_strata_t --> value   e.g. F=11, CH=C3, DENS=2.22
+
+
+struct retval_cmd_t {
+  retval_cmd_t( const std::string & n ) : name(n) { } 
+  std::string name;
+  std::set<retval_var_t> vars;  
+  bool operator< ( const retval_cmd_t & rhs ) const { return name < rhs.name; }
+};
+
+
+struct retval_value_t {
   
-  // cmd --> {table/strata} --> { data-table }  
-  //        
-  // data-table , i.e. long format
-  //    STRATUM1 STRATUM2 ...  VAR  VALUE 
+  retval_value_t() { is_dbl = is_int = is_str = false; } 
+  retval_value_t( double d ) :              is_dbl(true) , is_int(false), is_str(false), d(d)  { i=0; s="";  }
+  retval_value_t( int i ) :                 is_dbl(false), is_int(true),  is_str(false), i(i)  { d=0; s=""; }
+  retval_value_t( const std::string & s ) : is_dbl(false), is_int(false), is_str(true),  s(s)  { d=0; i=0; } 
 
-  // strata must be unique 
+  bool is_dbl, is_int, is_str;
+  
+  double d;
+  std::string s;
+  int i;
+
+  std::string print() const {
+    std::stringstream ss;
+    if      ( is_dbl ) ss << "(d)"<<d;
+    else if ( is_int ) ss << "(i)"<<i;
+    else if ( is_str ) ss << "(s)"<<s;
+    else ss << ".";
+    return ss.str();    
+  }
+  
+};
+
+struct retval_var_t {
+
+  retval_var_t( const std::string & n ) : name(n)
+  {
+    // assume int unless otherwise receive
+    has_double = has_string = false;
+  }
+  
+  std::string name;
+
+  // track type as populated
+  bool has_string;
+  bool has_double;
+
+  bool is_string() const { return has_string; }
+  bool is_double() const { return has_double && ! has_string; }
+  bool is_int() const { return ! ( has_double || has_string ); }
+
+  char type() const {
+    if ( is_string() ) return 'S';
+    if ( is_double() ) return 'D';
+    return 'I';
+  }
+    
+  bool operator< ( const retval_var_t & rhs ) const
+  {
+    return name < rhs.name;
+  }
 
 };
 
-struct retval_strata_t { 
+
+struct retval_t { 
+
+  // core datastore
+  retval_data_t data;
+
+  // track variable types
+  std::set<std::string> var_has_strings, var_has_doubles;
   
-  std::set<std::string> factors;
+  // to stdout
+  void dump();
   
-  bool operator< (const retval_strata_t & rhs ) const { 
+  // add a double
+  void add( const retval_cmd_t & cmd ,
+	    const retval_factor_t & fac ,
+	    const retval_var_t & var ,
+	    const retval_strata_t & stratum ,
+	    const double x )
+  {
+    var_has_doubles.insert( var.name );
+    data[cmd][fac][var][stratum] = retval_value_t( x );
+  }
+  
+  void add( const retval_cmd_t & cmd ,
+	    const retval_factor_t & fac ,
+	    const retval_var_t & var ,
+	    const retval_strata_t & stratum ,
+	    int  x )
+  {
+    data[cmd][fac][var][stratum] = retval_value_t( x );
+  }
+  
+  void add( const retval_cmd_t & cmd ,
+	    const retval_factor_t & fac ,
+	    const retval_var_t & var ,
+	    const retval_strata_t & stratum ,
+	    const std::string & x )
+  {  
+    var_has_strings.insert( var.name );
+    data[cmd][fac][var][stratum] = retval_value_t( x );
+  }
+    
+};
+
+
+
+struct retval_factor_t {
+  
+  retval_factor_t( const strata_t & s , const timepoint_t & tp );
+  
+  std::set<std::string> factors; // i.e. just factor names, not levels.
+  // i.e. these specify which 'virtual table' we are looking at
+  //  e.g.   F
+  //         F CH
+  //         F CH E
+
+  void add( const std::string & f ) { factors.insert( f ); } 
+
+  std::string print() const { return Helper::stringize( factors ); } 
+  
+  bool operator< ( const retval_factor_t & rhs ) const
+  {
     if ( factors.size() < rhs.factors.size() ) return true;
     if ( factors.size() > rhs.factors.size() ) return false;
+    
     std::set<std::string>::const_iterator ii = factors.begin();
     std::set<std::string>::const_iterator jj = rhs.factors.begin();
     while ( ii != factors.end() ) 
@@ -50,27 +181,111 @@ struct retval_strata_t {
 
 };
 
-struct retval_dblvar_t { 
-  std::string var;
-  double value;
-};
+struct retval_factor_level_t {
 
-struct retval_intvar_t { 
-  std::string var;
-  int value;
-};
+  // null
+  retval_factor_level_t() { is_str = is_int = is_dbl = false; }
 
-struct retval_strvar_t { 
-  std::string var;
-  std::string value;
-};
+  retval_factor_level_t( const std::string & f , const std::string & s )
+  { factor = f ; is_str = true ; is_int = false ; is_dbl = false; str_level = s; }
 
-struct retval_data_t { 
+  retval_factor_level_t( const std::string & f , int i )
+  { factor = f ; is_int = true ; is_str = false ; is_dbl = false; int_level = i; }
+
+  retval_factor_level_t( const std::string & f , double d )
+  { factor = f ; is_dbl = true ; is_str = false ; is_int = false; dbl_level = d; }
+		        
+  std::string factor;
+
+  // ensure correct sorting
+  bool        is_str, is_int, is_dbl;
+
+  std::string str_level;
+  int         int_level;
+  double      dbl_level;
   
-  std::map<retval_strata_t,retval_dblvar_t> dbl_data; 
-  std::map<retval_strata_t,retval_intvar_t> int_data; 
-  std::map<retval_strata_t,retval_strvar_t> str_data; 
+  std::string print() const
+  {
+    std::stringstream ss;
+    if      ( is_str ) ss << factor << "=" << str_level;
+    else if ( is_int ) ss << factor << "=" << int_level;
+    else if ( is_dbl ) ss << factor << "=" << dbl_level;
+    else ss << ".";
+    return ss.str();
+  }
+  
+  bool operator< ( const retval_factor_level_t & rhs ) const {
+
+    if ( factor < rhs.factor ) return true;
+    if ( factor > rhs.factor ) return false;
+    
+    if ( is_str ) return str_level < rhs.str_level;
+    if ( is_int ) return int_level < rhs.int_level;
+    if ( is_dbl ) return dbl_level < rhs.dbl_level;
+
+    // empty / should not occur
+    return false;
+  }
+    
+};
+
+
+
+struct retval_strata_t { 
+
+  // set of text key=value pairs, e.g. 
+  // e.g. SS=N2, F=11,
+  
+  retval_strata_t( strata_t & strata , timepoint_t & tp );
+  
+  std::set<retval_factor_level_t> factors;
+
+  retval_factor_level_t find( const std::string & f ) const
+  {
+    std::set<retval_factor_level_t>::const_iterator ff = factors.begin();
+    while ( ff != factors.end() )
+      {
+	if ( ff->factor == f ) return *ff;
+	++ff;
+      }
+    return retval_factor_level_t();
+  }
+
+  
+  void add( const retval_factor_level_t & fl ) { factors.insert( fl ) ; } 
+
+  std::string print() const
+  {
+    std::stringstream ss;
+    std::set<retval_factor_level_t>::const_iterator ff = factors.begin();
+    while ( ff != factors.end() )
+      {
+	if ( ff != factors.begin() ) ss << ";";
+	ss << ff->print();
+	++ff;
+      }
+    return ss.str();
+  }
+  
+  
+  bool operator< (const retval_strata_t & rhs ) const { 
+    if ( factors.size() < rhs.factors.size() ) return true;
+    if ( factors.size() > rhs.factors.size() ) return false;
+    std::set<retval_factor_level_t>::const_iterator ii = factors.begin();
+    std::set<retval_factor_level_t>::const_iterator jj = rhs.factors.begin();
+    while ( ii != factors.end() ) 
+      {
+	if ( *ii < *jj ) return true;
+	if ( *jj < *ii ) return false;
+	++ii;
+	++jj;
+      }
+
+    return false;
+  }
 
 };
+
+
 
 #endif

@@ -20,64 +20,17 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __LUNA_H__
-#define __LUNA_H__
-
-#include "eval.h" 
-
-#include "defs/defs.h"
-
-#include "helper/helper.h"
-
-#include "helper/xml-parser.h"
-
-#include "tinyxml/tinyxml.h"
-
-#include "tinyxml/xmlreader.h"
-
-#include "stats/cluster.h"
-
-#include "miscmath/miscmath.h"
-
-#include "stats/glm.h"
+#include "mtm.h"
 
 #include "edf/edf.h"
 
-#include "timeline/timeline.h"
+mtm_t::mtm_t( const int t)
+{
+  //
+}
 
-#include "annot/annot.h"
+void mtm_t::apply( const std::vector<double> * d )
+{
+  //
+}
 
-#include "dsp/dsp.h"
-
-#include "fftw/fftwrap.h"
-
-#include "ica/ica.h"
-
-#include "spindles/spindles.h"
-
-#include "spindles/spectral.h"
-
-#include "artifacts/artifacts.h"
-
-#include "cwt/cwt.h"
-
-#include "pdc/pdc.h"
-
-#include "staging/staging.h"
-
-#include "clocs/topo.h"
-
-#include "db/db.h"
-#include "db/retval.h"
-
-#include "sstore/sstore.h"
-
-#include "graphics/graphics.h"
-
-#include <thread>
-#include <iostream>
-#include <unistd.h>
-#include <dirent.h>
-
-
-#endif

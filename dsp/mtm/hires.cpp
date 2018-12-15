@@ -20,64 +20,43 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __LUNA_H__
-#define __LUNA_H__
+// All mtm functions are adapted code from: Lees, J. M. and J. Park
+// (1995): Multiple-taper spectral analysis: A stand-alone
+// C-subroutine: Computers & Geology: 21, 199-236.
 
-#include "eval.h" 
+#include "mtm.h"
 
-#include "defs/defs.h"
+#include <cstdio>
+#include <cmath>
 
-#include "helper/helper.h"
+#include "nrutil.h"
 
-#include "helper/xml-parser.h"
+int hires(double *sqr_spec,  double *el, int nwin, int num_freq, double *ares)
+{
+  int             i, j, k, kpoint;
+  float           a;
 
-#include "tinyxml/tinyxml.h"
-
-#include "tinyxml/xmlreader.h"
-
-#include "stats/cluster.h"
-
-#include "miscmath/miscmath.h"
-
-#include "stats/glm.h"
-
-#include "edf/edf.h"
-
-#include "timeline/timeline.h"
-
-#include "annot/annot.h"
-
-#include "dsp/dsp.h"
-
-#include "fftw/fftwrap.h"
-
-#include "ica/ica.h"
-
-#include "spindles/spindles.h"
-
-#include "spindles/spectral.h"
-
-#include "artifacts/artifacts.h"
-
-#include "cwt/cwt.h"
-
-#include "pdc/pdc.h"
-
-#include "staging/staging.h"
-
-#include "clocs/topo.h"
-
-#include "db/db.h"
-#include "db/retval.h"
-
-#include "sstore/sstore.h"
-
-#include "graphics/graphics.h"
-
-#include <thread>
-#include <iostream>
-#include <unistd.h>
-#include <dirent.h>
+  for (j = 0; j < num_freq; j++)
+    ares[j] = 0.;
+  
+  for (i = 0; i < nwin; i++) {
+    k = i * num_freq;
+    a = 1. / (el[i] * nwin);
+    for (j = 0; j < num_freq; j++) {
+      kpoint = j + k;
+      ares[j] = ares[j] +
+	a * ( sqr_spec[kpoint] );
+    }
+  }
+  
+  for (j = 0; j < num_freq; j++) {
+    if(ares[j]>0.0) 
+      ares[j] = sqrt(ares[j]);
+    else printf("sqrt problem in hires pos=%d %f\n", j, ares[j]);
+  }
+  
+  return 1;
+}      
 
 
-#endif
+

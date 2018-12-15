@@ -118,7 +118,7 @@ std::string strata_t::print() const
   std::string rstr = ss.str();
   if ( rstr == "" ) return ".";
   return ss.str();
-}    
+}
 
 
 bool StratOutDBase::attach( const std::string & n , bool readonly )

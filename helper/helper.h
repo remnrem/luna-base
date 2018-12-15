@@ -28,6 +28,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <set>
 #include <algorithm> 
 #include <functional> 
 #include <cctype>
@@ -112,6 +113,7 @@ namespace Helper
   std::string dbl2str_fixed(double n, int ch );
   std::string brief( const std::string & , int l = 40);
   std::string stringize( const std::vector<std::string> & );
+  std::string stringize( const std::set<std::string> & , const std::string & delim = "," );
   std::string trim( const std::string & s , const char c = ' ' , const char d = ' ' );
   std::string format( const std::string & , int indent = 10 , int width = 60, bool no_initial_indent = true );
 
