@@ -68,6 +68,8 @@ namespace Helper
     int b = s[s.size()-1] == '"' ? 1 : 0 ;
     return s.substr(a,s.size()-a-b);
   }
+
+  std::string sanitize( const std::string & );
   
   std::string search_replace( const std::string & , char a , char b );
   

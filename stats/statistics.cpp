@@ -1917,7 +1917,7 @@ double Statistics::factrl(int n)
   static int ntop=4;
   static double a[33]={1.0,1.0,2.0,6.0,24.0}; // Fill in table only as required.
   int j;
-  if (n < 0) { std::cerr << "exit1\n"; }
+  if (n < 0) { Helper::halt( "bad input to factrl()" ); }
   if (n > 32 ) return exp(gammln(n+1));
   while (ntop<n) { 
     j=ntop++;

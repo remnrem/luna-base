@@ -31,7 +31,7 @@
 
 #include "nrutil.h"
 
-int hires(double *sqr_spec,  double *el, int nwin, int num_freq, double *ares)
+int mtm::hires(double *sqr_spec,  double *el, int nwin, int num_freq, double *ares)
 {
   int             i, j, k, kpoint;
   float           a;

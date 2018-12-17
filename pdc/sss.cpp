@@ -29,8 +29,10 @@
 #include "miscmath/miscmath.h"
 #include "dsp/resample.h"
 #include "db/db.h"
+#include "helper/logger.h"
 
 extern writer_t writer;
+extern logger_t logger;
 
 void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )
 {
@@ -81,7 +83,7 @@ void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )
 
   if ( ns == 0 ) Helper::halt( "no signals specified" );
 
-  std::cerr << " using " << ns << " signals for SSS\n";
+  logger << " using " << ns << " signals for SSS\n";
   
   
   std::map<std::string,std::string> chmap;
@@ -337,7 +339,7 @@ void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )
   
   if ( out_pd ) OUT1.close();
   
-  std::cerr << " scanned " << cnt << " epochs, extracted " << targets.size() << " time-series\n";
+  logger << " scanned " << cnt << " epochs, extracted " << targets.size() << " time-series\n";
 
   
   //
@@ -382,7 +384,7 @@ void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )
 	  ++ii;
 	}
      
-      std::cerr << " S1 \n";
+      logger << " S1 \n";
 
       //
       // Normalize & get group-level matches

@@ -260,7 +260,6 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
   //
   
   const int nsegs = segment_start.size();
-  std::cerr << "nsegs = " << nsegs << "\n";
 
   for (int s=0;s<nsegs;s++)
     {

@@ -27,7 +27,7 @@
 #include "dsp/mse.h"
 
 extern writer_t writer;
-
+extern logger_t logger;
 
 annot_t * spectral_power( edf_t & edf , 
 			  const std::string & signal_label , 
@@ -236,10 +236,10 @@ annot_t * spectral_power( edf_t & edf ,
 					  / (double)( segment_points - noverlap_points ) );
 	   
 	   
-// 	    std::cerr << "total_points = " << total_points << "\n";
-// 	    std::cerr << "nooverlap_segments = " << noverlap_segments << "\n";
-// 	    std::cerr << "noverlap_points = " << noverlap_points << "\n";
-// 	    std::cerr << "segment_points = " << segment_points << "\n";
+// 	    logger << "total_points = " << total_points << "\n";
+// 	    logger << "nooverlap_segments = " << noverlap_segments << "\n";
+// 	    logger << "noverlap_points = " << noverlap_points << "\n";
+// 	    logger << "segment_points = " << segment_points << "\n";
 	   
 // 	   PWELCH pwelch( *d , 
 // 			  Fs[s] , 
@@ -433,7 +433,7 @@ annot_t * spectral_power( edf_t & edf ,
 	   
 	 }
        else
-	 std::cerr << " *** warning:: skipped a segment: different NFFT/internal problem ... \n";
+	 logger << " *** warning:: skipped a segment: different NFFT/internal problem ... \n";
        
        if ( epoch_level_output )
 	 writer.unlevel( globals::signal_strat );

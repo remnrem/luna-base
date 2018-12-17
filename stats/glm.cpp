@@ -27,6 +27,10 @@
 #include <cmath>
 #include <iostream>
 
+#include "helper/logger.h"
+
+extern logger_t logger;
+
 //
 // Pre-processing steps (standardization; checking for multi-collinearity)
 //
@@ -890,7 +894,7 @@ double GLM::linear_hypothesis( Data::Matrix<double> & H, Data::Vector<double> & 
   
   if ( ! okay ) 
     {
-      std::cerr << "** problem inverting in linear_hypothesis()\n";
+      logger << "** problem inverting in linear_hypothesis()\n";
       valid( false );
       return 0;
     }

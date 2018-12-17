@@ -22,8 +22,11 @@
 
 
 #include "helper/helper.h"
+#include "helper/logger.h"
 #include "edf.h"
 #include "main.h"
+
+extern logger_t logger;
 
 //
 // MASK : apply a mask to zero-out parts of the signal
@@ -32,11 +35,11 @@
 void proc_mask( edf_t & edf , param_t & param )
 {
 
-//   std::cerr << " currently, mask mode set to: ";
+//   logger << " currently, mask mode set to: ";
 //   int mm = edf.timeline.epoch_mask_mode();
-//   if ( mm == 0 ) std::cerr << " mask (default)\n";
-//   else if ( mm == 1 ) std::cerr << " unmask\n";
-//   else if ( mm == 2 ) std::cerr << " force\n";
+//   if ( mm == 0 ) logger << " mask (default)\n";
+//   else if ( mm == 1 ) logger << " unmask\n";
+//   else if ( mm == 2 ) logger << " force\n";
   
   if ( ! edf.timeline.epoched() ) 
     Helper::halt( "no EPOCHs set, cannot apply an epoch mask" );
@@ -109,7 +112,7 @@ void proc_mask( edf_t & edf , param_t & param )
   if ( mask_mode > -1 ) 
     {
       edf.timeline.set_epoch_mask_mode( mask_mode );  
-      std::cerr << " set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
+      logger << " set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
     }
   
 
@@ -348,7 +351,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	      edf.timeline.annotate_epochs( alabel_str , annot_label , ss );
 	    }
 	  
-	  std::cerr << " set flag annotation for [" << annot_label << "], labeled as [" << alabel_str << "]\n";
+	  logger << " set flag annotation for [" << annot_label << "], labeled as [" << alabel_str << "]\n";
 	}      
             
     }

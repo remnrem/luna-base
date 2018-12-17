@@ -109,11 +109,11 @@ bool ica_t::proc( mat pX , int rows , int cols , int compc )
    if ( ns < 2 ) return;
    
    const int sr = edf.header.sampling_freq( signals(0) );
-   std::cerr << "ns = " << ns << " st = " << sr << "\n";
+   std::cout << "ns = " << ns << " st = " << sr << "\n";
    
    for (int i=1;i<ns;i++)
      {
-       std::cerr << "sr2 = " << edf.header.sampling_freq( signals(i) )  << "\t"
+       std::cout << "sr2 = " << edf.header.sampling_freq( signals(i) )  << "\t"
 		 << edf.header.label[ signals(i) ] << "\n";
        
        if ( edf.header.sampling_freq( signals(i) ) != sr ) 
@@ -168,25 +168,25 @@ bool ica_t::proc( mat pX , int rows , int cols , int compc )
    // W : compc x compc
    // S : as original data
 
-   std::cerr << "K\n";
+   std::cout << "K\n";
    for (int i=0;i<cols;i++)
      {
-       for (int j=0;j<compc;j++) std::cerr << "\t" << ica.K[i][j];
-       std::cerr << "\n\n";
+       for (int j=0;j<compc;j++) std::cout << "\t" << ica.K[i][j];
+       std::cout << "\n\n";
      }
 
-   std::cerr << "W\n";
+   std::cout << "W\n";
    for (int i=0;i<compc;i++)
      {
-       for (int j=0;j<compc;j++) std::cerr << "\t" << ica.W[i][j];
-       std::cerr << "\n\n";
+       for (int j=0;j<compc;j++) std::cout << "\t" << ica.W[i][j];
+       std::cout << "\n\n";
      }
 
-   std::cerr << "A\n";
+   std::cout << "A\n";
    for (int i=0;i<compc;i++)
      {
-       for (int j=0;j<compc;j++) std::cerr << "\t" << ica.A[i][j];
-       std::cerr << "\n\n";
+       for (int j=0;j<compc;j++) std::cout << "\t" << ica.A[i][j];
+       std::cout << "\n\n";
      }
 
 

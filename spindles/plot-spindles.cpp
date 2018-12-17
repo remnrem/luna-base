@@ -169,8 +169,6 @@ void draw_spindles( edf_t & edf ,
       
       const int npoints = d.size();
 
-      //      std::cerr << "got " << npoints << " for slice, expecting " << interval.duration() * globals::tp_duration << "\n";
-      
       // signal min/max 
       double min, max;
       MiscMath::minmax( d , &min , &max );
@@ -306,8 +304,6 @@ void draw_spindles( edf_t & edf ,
 
       const int Fs = edf.header.sampling_freq( s );      
       const uint64_t period = 1.0/(double)Fs * globals::tp_1sec;      
-      
-      //      std::cerr << "Fs = " << Fs << " and period " << period << "\n";
       
       pdf.set_color( "green" );
       pdf.set_line_width( 0.1 );      

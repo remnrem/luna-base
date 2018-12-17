@@ -23,6 +23,7 @@
 
 #include "luna.h"
 
+extern logger_t logger;
 
 // ----------------------------------------------------------------------------------------
 //
@@ -149,23 +150,34 @@ bool cmd_t::read( const std::string * str , bool silent )
 
   // summary
 
-  if ( ! globals::silent ) 
+  logger << "-------------------------------------------------------------------\n";
+  logger << "input(s): " << input << "\n";
+  logger << "output  : " << writer.name() << "\n";
+  
+  if ( signallist.size() > 0 )
     {
-      std::cerr << "-------------------------------------------------------------------\n";
-      std::cerr << "EDF source: " << input << "\n";
-      std::cerr << "Output DB : " << writer.name() << "\n";
+      logger << "signals :";
       for (std::set<std::string>::iterator s=signallist.begin();
 	   s!=signallist.end();s++) 
-	std::cerr << "signals: " << *s << "\n";
-      for (int i=0;i<cmds.size();i++)
-	{
-	  std::cerr << " c" << i+1 
-		    << "\t" << cmds[i] << "\t"
-		    << params[i].dump("","|") 
-		    << "\n";
-	}
-      std::cerr << "-------------------------------------------------------------------\n";
+	logger << " " << *s ;
+      logger << "\n";
     }
+  
+  for (int i=0;i<cmds.size();i++)
+    {
+      if ( i==0 ) 
+	logger << "commands: ";
+      else
+	logger << "        : ";
+      
+      logger << "c" << i+1 
+	     << "\t" << cmds[i] << "\t"
+	     << params[i].dump("","|") 
+	     << "\n";
+    }
+  
+  //      logger << "-------------------------------------------------------------------\n";
+
 
   return true;
 }
@@ -218,8 +230,8 @@ bool cmd_t::eval( edf_t & edf )
       // Print command
       //
 
-      if ( ! globals::silent ) 
-	std::cerr << " CMD #" << c+1 << ": " << cmd(c) << "\n";
+      logger << "...................................................................\n"
+	     << " CMD #" << c+1 << ": " << cmd(c) << "\n";
       
       writer.cmd( cmd(c) , c+1 , param(c).dump( "" , " " ) );
       
@@ -277,6 +289,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "COVAR" ) )        proc_covar( edf, param(c) );
       else if ( is( c, "PSD" ) )          proc_psd( edf, param(c) );	  
+      else if ( is( c, "MTM" ) )          proc_mtm( edf, param(c) );
       else if ( is( c, "1FNORM" ) )       proc_1overf_norm( edf, param(c) );
       
       else if ( is( c, "FIP" ) )          proc_fiplot( edf , param(c) );
@@ -317,8 +330,7 @@ bool cmd_t::eval( edf_t & edf )
       
       if ( globals::problem ) 
 	{
-	  if ( ! globals::silent ) 
-	    std::cerr << "**warning: the PROBLEM flag was set, skipping to next EDF...\n";
+	  logger << "**warning: the PROBLEM flag was set, skipping to next EDF...\n";
 
 	  return false;
 	}
@@ -358,8 +370,7 @@ void proc_summaries( const std::string & edffile , const std::string & rootname 
   bool okay = edf.attach( edffile , rootname , inp_signals );
 
   if ( ! okay ) 
-    if ( ! globals::silent ) 
-      std::cerr << "Problem: " << rootname << " reading EDF " << edffile << "\n";    
+    logger << "Problem: " << rootname << " reading EDF " << edffile << "\n";    
   
   // terse HEADER summary
   if ( v_mode == 1 ) edf.terse_summary() ;
@@ -380,10 +391,9 @@ void proc_summaries( const std::string & edffile , const std::string & rootname 
 
 void proc_summaries( edf_t & edf , param_t & param )
 {
-  if ( ! globals::silent ) 
-    std::cout << "EDF filename   : " << edf.filename << "\n" 
-	      << edf.header.summary() << "\n"
-	      << "----------------------------------------------------------------\n\n";
+  std::cout << "EDF filename   : " << edf.filename << "\n" 
+	    << edf.header.summary() << "\n"
+	    << "----------------------------------------------------------------\n\n";
 }
 
 
@@ -527,6 +537,13 @@ void proc_psd( edf_t & edf , param_t & param )
   annot_t * power = spectral_power( edf , signal , param );  
 }
 
+// MTM : calculate MTM 
+
+void proc_mtm( edf_t & edf , param_t & param )	  
+{  
+  mtm::wrapper( edf , param );
+}
+
 // 1FNORM : normalization of signals for the 1/f trend
 
 void proc_1overf_norm( edf_t & edf , param_t & param )	  
@@ -552,10 +569,8 @@ void set_tag( const std::string & t )
 {
   globals::current_tag = t ; 
 
-  if ( ! globals::silent ) 
-    if ( t != "." ) 
-      if ( ! globals::silent ) 
-	std::cerr << " setting analysis tag to [" << globals::current_tag << "]\n";
+  if ( t != "." ) 
+    logger << " setting analysis tag to [" << globals::current_tag << "]\n";
 
   if ( t == "." ) writer.tag( "." , "." );
   else
@@ -570,9 +585,8 @@ void set_tag( const std::string & t )
 
 void proc_anon( edf_t & edf , param_t & param )
 {
-  if ( ! globals::silent ) 
-    std::cerr << " setting subject ID, start time/date to null ('.') for EDF " 
-	      << edf.filename << "\n";
+  logger << " setting subject ID, start time/date to null ('.') for EDF " 
+	 << edf.filename << "\n";
   
   edf.header.patient_id = ".";
   edf.header.starttime = ".";
@@ -734,8 +748,7 @@ void proc_write( edf_t & edf , param_t & param )
 	  std::string file = param.value("sample-list");
 
 	  // open/append
-	  if ( ! globals::silent ) 
-	    std::cerr << " appending " << filename << " to sample-list " << file << "\n";
+	  logger << " appending " << filename << " to sample-list " << file << "\n";
 	  
 	  std::ofstream FL( file.c_str() , std::ios_base::app );
 	  FL << edf.id << "\t"
@@ -759,8 +772,7 @@ void proc_write( edf_t & edf , param_t & param )
   bool saved = edf.write( filename );
 
   if ( saved ) 
-    if ( ! globals::silent ) 
-      std::cerr << " saved new EDF, " << filename << "\n";
+    logger << " saved new EDF, " << filename << "\n";
 
 }
 
@@ -793,20 +805,19 @@ void proc_epoch( edf_t & edf , param_t & param )
 
   int ne = edf.timeline.set_epoch( dur , inc );  
 
-  if ( ! globals::silent ) 
-    std::cerr << " set epochs, length " << dur << " (step " << inc << "), " << ne << " epochs\n";
+  logger << " set epochs, length " << dur << " (step " << inc << "), " << ne << " epochs\n";
   
   if ( param.has("require") )
     {
       int r = param.requires_int( "require" );
       if ( ne < r ) 
 	{
-	  if ( ! globals::silent ) 
-	    std::cout << "EPOCH-PROBLEM\t"
-		      << edf.id << "\t"
-		      << "[" << globals::current_tag << "]\t"
-		      << "required=" << r << "\t"
-		      << "observed=" << ne << "\n";
+	  
+	  logger << "EPOCH-PROBLEM\t"
+		 << edf.id << "\t"
+		 << "[" << globals::current_tag << "]\t"
+		 << "required=" << r << "\t"
+		 << "observed=" << ne << "\n";
 	  globals::problem = true;
 	}
     }
@@ -842,15 +853,13 @@ void proc_epoch_mask( edf_t & edf , param_t & param )
       if ( param.has( "ifnot" ) ) Helper::halt( "both if & ifnot specified" );
       vars = param.strset( "if" );
       onelabel = param.value("if");
-      if ( ! globals::silent ) 
-	std::cerr << " masking epochs that match " << onelabel << "\n";
+      logger << " masking epochs that match " << onelabel << "\n";
     }
   else if ( param.has( "ifnot" ) ) 
     {
       vars = param.strset( "ifnot" );
       onelabel = param.value("ifnot");
-      if ( ! globals::silent ) 
-	std::cerr << " masking epochs that do not match " << onelabel << "\n";
+      logger << " masking epochs that do not match " << onelabel << "\n";
     }
   else
     Helper::halt( "no if/ifnot specified" );
@@ -895,8 +904,7 @@ void proc_file_annot( edf_t & edf , param_t & param )
       a.push_back( x );      
     }
   IN1.close();
-  if ( ! globals::silent ) 
-    std::cerr << " read " << a.size() << " epoch/annotations from " << f << "\n";
+  logger << " read " << a.size() << " epoch/annotations from " << f << "\n";
   edf.timeline.annotate_epochs( a );
   
 }
@@ -933,8 +941,7 @@ void proc_list_annots( const std::string & edffile ,
   bool okay = edf.attach( edffile , rootname , &inp_signals );
 
   if ( ! okay ) 
-    if ( ! globals::silent ) 
-      std::cerr << "Problem: " << rootname << " reading EDF " << edffile << "\n";
+    logger << "Problem: " << rootname << " reading EDF " << edffile << "\n";
 
   for (int i=2;i<tok.size();i++) 
     edf.populate_alist( tok[i] );	 
@@ -1190,7 +1197,7 @@ void proc_drop_signals( edf_t & edf , param_t & param )
       if ( edf.header.has_signal( *dd ) )
 	{	  	  
 	  int s = edf.header.signal( *dd );
-	  //std::cerr << "  dropping " << *dd << "\n";
+	  //logger << "  dropping " << *dd << "\n";
 	  edf.drop_signal( s );	  
 	}
 	++dd;
@@ -1225,8 +1232,7 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
     }
   IN1.close();
 
-  if ( ! globals::silent ) 
-    std::cerr << " read " << intervals.size() << " from " << filename << "\n";
+  logger << " read " << intervals.size() << " from " << filename << "\n";
   
   edf.slicer( intervals , param , extract );
   
@@ -1253,13 +1259,11 @@ void proc_rerecord( edf_t & edf , param_t & param )
 {
   double rs = param.requires_dbl( "dur" ); 
 
-  if ( ! globals::silent ) 
-    std::cerr << " altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
+    logger << " altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
   
   edf.reset_record_size( rs );
 
-  if ( ! globals::silent ) 
-    std::cerr << " now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF\n";
+    logger << " now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF\n";
 
   proc_write( edf , param );
   globals::problem = true;
@@ -1318,9 +1322,8 @@ void attach_annot( edf_t & edf , const std::string & astr )
       
       if ( annot_file == "" ) 
 	{
-	  if ( ! globals::silent ) 
-	    std::cerr << " no instances of annotation [" 
-		      << astr << "] for " << edf.id << "\n";		  
+	  logger << " no instances of annotation [" 
+		 << astr << "] for " << edf.id << "\n";		  
 	}
       else
 	{

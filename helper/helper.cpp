@@ -42,6 +42,34 @@ std::string Helper::toupper( const std::string & s )
   return j;
 }
 
+
+std::string Helper::sanitize( const std::string & s )
+{
+  std::string j = s;
+  for (int i=0;i<j.size();i++)
+    {
+      if ( j[i] == '-' ) j[i] = '_';
+      if ( j[i] == '+' ) j[i] = '_';
+      if ( j[i] == ' ' ) j[i] = '_';
+      if ( j[i] == '/' ) j[i] = '_';
+      if ( j[i] == '\\' ) j[i] = '_';
+      if ( j[i] == '*' ) j[i] = '_';
+      if ( j[i] == '<' ) j[i] = '_';
+      if ( j[i] == '>' ) j[i] = '_';
+      if ( j[i] == '=' ) j[i] = '_';
+      if ( j[i] == '&' ) j[i] = '_';
+      if ( j[i] == '^' ) j[i] = '_';
+      if ( j[i] == '!' ) j[i] = '_';
+      if ( j[i] == '@' ) j[i] = '_';
+      if ( j[i] == '#' ) j[i] = '_';
+      if ( j[i] == '$' ) j[i] = '_';
+      if ( j[i] == '%' ) j[i] = '_';
+      if ( j[i] == '(' ) j[i] = '_';
+      if ( j[i] == ')' ) j[i] = '_';
+    }
+  return j;  
+}
+
 std::string Helper::search_replace( const std::string & s , char a , char b )
 {
   std::string j = s;

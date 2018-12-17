@@ -43,6 +43,8 @@ sleep_stage_label_t globals::sleep_stage;
 sleep_stage_label_lookup_t globals::sleep_stage_labels;
 
 char globals::folder_delimiter;
+std::string globals::project_path;
+
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
 bool globals::skip_edf_annots;
@@ -246,6 +248,8 @@ void globals::init_defs()
   // Misc.
   //
 
+  project_path = "";
+  
   folder_delimiter = '/';
   
   skip_edf_annots = false;

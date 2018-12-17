@@ -9,10 +9,7 @@
 
 #include "nrutil.h"
 
-#define NRANSI
-
 int get_pow_2(int inum);
-
 double get_cos_taper(int n, int k, double percent);
 
 void do_mtap_spec(double *data, int npoints, int kind,

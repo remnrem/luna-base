@@ -26,6 +26,8 @@
 
 #include "mtm.h"
 
+#include <iostream>
+
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>
@@ -171,25 +173,21 @@ double  mtm::scale_trace_RMS(double x[], int lx)
 double  mtm::remove_mean(double x[], int lx)
 {
   
-  int k;
-  double mean;
+  double mean = 0.;
+  if( lx < 2 ) return mean;
   
-  mean = 0.;
-  if(lx < 2 ) return mean;
-  
-  for( k=0; k<lx; k++)
+  for( int k=0; k<lx; k++)
     {
       mean += x[k];
     }
   
   mean = mean/ (double)lx;
   
-  for( k=0; k<lx; k++)
+  for( int k=0; k<lx; k++)
     {
       x[k] = x[k] - mean;
     }
-  
-  /*fprintf(stderr,"MEAN = %20.10f\n",mean);*/
+
   return  mean;
 }
 

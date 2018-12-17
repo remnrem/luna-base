@@ -28,10 +28,13 @@
 #include "intervals/intervals.h"
 #include "annot/annot.h"
 #include "helper/helper.h"
+#include "helper/logger.h"
 #include "defs/defs.h"
 
 struct edf_t;
 struct timeline_t;
+
+extern logger_t logger;
 
 //
 // General class to represent a hypnogram and perform calculations on it
@@ -428,7 +431,7 @@ struct timeline_t
     mask_set = b;  // i.e. if b==T, equivalent to masking all entries
     mask.resize( epochs.size() , b );
     if ( epoched() )
-      std::cerr << " reset all " << epochs.size() << " epochs to be " << ( b ? "masked" : "included" ) << "\n";
+      logger << " reset all " << epochs.size() << " epochs to be " << ( b ? "masked" : "included" ) << "\n";
   }
   
   bool is_epoch_mask_set() const { return mask_set; }
@@ -539,7 +542,7 @@ struct timeline_t
   void clear_epoch_annotations() 
   {
     if ( eannots.size() > 0 ) 
-      std::cerr << " clearing all epoch-annotations\n";
+      logger << " clearing all epoch-annotations\n";
     eannots.clear();
   }
 

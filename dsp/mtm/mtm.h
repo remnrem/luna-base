@@ -32,16 +32,45 @@ struct param_t;
 
 struct mtm_t
 {
-  mtm_t( const int );
-  void apply( const std::vector<double> * );
-
+  
+  mtm_t( const int npi = 3 , const int nwin = 5 );
+  
+  void apply( const std::vector<double> * , const int );
+  
   // structure to house results
+
+      // MTM parameters
+
+  // number of pi-prolate functions (default = 3)
+  int npi; 
+
+  // the number of summing windows, nwin (default = 5)
+  int nwin;
+
+  // kind of analysis
+  int kind;  // default 1  hires
+             // 2 adwait
+             // naive periodogram
+
+  int inorm; // 1 standard ; 2 other
+
+  // p. 335, Percival and Walden, choose 
+
+  // npi=2,3,4 some small integer
+  // W = npi/(num_points*dt);
+  // or num_points*W = npi/dt ;
+  // K < 2*num_points*W*dt
+  //  nwin = 0...K-1
+
+  
 };
 
 
 namespace mtm
 {  
 
+  void wrapper( edf_t & edf , param_t & param );
+  
   int adwait(double *sqr_spec,
 	     double *dcf,
 	     double *el,

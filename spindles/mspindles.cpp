@@ -26,8 +26,10 @@
 #include "edf/edf.h"
 #include "db/db.h"
 
-extern writer_t writer;
+#include "helper/logger.h"
 
+extern writer_t writer;
+extern logger_t logger;
 
 void mspindles_t::add( const std::vector<spindle_t> & s , int fs , uint64_t len , int fc , int c , const std::string & label )
 {
@@ -231,7 +233,7 @@ void mspindles_t::output( const signal_list_t & signals )
   clocktime_t starttime( edf->header.starttime );
   if ( ! starttime.valid ) 
     {
-      std::cerr << " ** could not find valid start-time in EDF header **\n";
+      logger << " ** could not find valid start-time in EDF header **\n";
       hms = false;
     }
 
@@ -304,7 +306,7 @@ void mspindles_t::plot( const std::string & fname )
   // Create plots for the merged spindle set?
   //
   
-  // std::cerr << " writing PDF of f-merged spindle traces to " << fname << "\n";	      
+  // logger << " writing PDF of f-merged spindle traces to " << fname << "\n";	      
   
   // std::vector<spindle_t> mspindles_tp; // need to make a time-points
   
@@ -639,7 +641,7 @@ void OLD_FFT_INTERSECTION()
   // uint64_t last_sp;
   // uint64_t first_sp;
   
-  // //      std::cerr << "DET: have " << all_spindles.size() << " initial total spindles\n";
+  // //      logger << "DET: have " << all_spindles.size() << " initial total spindles\n";
 
   // std::set<feature_t>::const_iterator ss = all_spindles.begin();
   // while ( ss != all_spindles.end() )
@@ -748,7 +750,7 @@ void OLD_FFT_INTERSECTION()
   //     // Dump each
   //     //
       
-  //     std::cerr << " found " << all_unique_spindles.size() << " " << flags.size() << " uniq spins\n";
+  //     logger << " found " << all_unique_spindles.size() << " " << flags.size() << " uniq spins\n";
 
   //     std::set<std::string> all_flags;
   //     for (int i=0;i<flags.size();i++)

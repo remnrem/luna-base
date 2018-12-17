@@ -28,6 +28,7 @@
 #include "miscmath/crandom.h"
 
 extern writer_t writer;
+extern logger_t logger;
 
 #include <set>
 
@@ -206,7 +207,7 @@ void timeline_t::restructure( const std::set<int> & keep )
 
   // reset epochs (but retain epoch-level annotations)
   reset_epochs();
-  std::cerr << " retaining " << num_epochs() << " epochs\n";
+  logger << " retaining " << num_epochs() << " epochs\n";
 }
 
 
@@ -244,7 +245,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
   if ( edf->header.continuous )
     {
       
-      //      std::cerr << "EDF cont , " << n_samples_per_record << " is n sampl per rec\n";
+      //      logger << "EDF cont , " << n_samples_per_record << " is n sampl per rec\n";
       
       uint64_t start_record = interval.start / edf->header.record_duration_tp;
       uint64_t start_offset = interval.start % edf->header.record_duration_tp;
@@ -270,7 +271,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
   else
     {
 
-      //      std::cerr << "Discont EDF cont , " << n_samples_per_record << " is n sampl per rec\n";
+      //      logger << "Discont EDF cont , " << n_samples_per_record << " is n sampl per rec\n";
       
       //
       // For a discontinuous EDF+ we need to search 
@@ -638,9 +639,9 @@ void timeline_t::apply_empty_epoch_mask( const std::string & label , bool includ
       
     }
   
-  std::cerr << " based on " << label << " " << cnt_basic_match << " epochs match; ";
-  std::cerr << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " based on " << label << " " << cnt_basic_match << " epochs match; ";
+  logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
@@ -756,9 +757,9 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
       
     }
   
-  std::cerr << " based on " << a->name << " " << cnt_basic_match << " epochs match; ";
-  std::cerr << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " based on " << a->name << " " << cnt_basic_match << " epochs match; ";
+  logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
@@ -974,9 +975,9 @@ void timeline_t::flip_epoch_mask()
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
   
-  std::cerr << " flipped all epoch masks; ";
-  std::cerr << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " flipped all epoch masks; ";
+  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
 }
 
@@ -1036,9 +1037,9 @@ void timeline_t::select_epoch_randomly( int n )
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
 
-  std::cerr << " randomly selected up to " << n << " epochs; ";
-  std::cerr << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " randomly selected up to " << n << " epochs; ";
+  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 }
 
 
@@ -1072,9 +1073,9 @@ void timeline_t::select_epoch_range( int a , int b )
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
 
-  std::cerr << " selecting epochs from " << a << " to " << b << "; ";
-  std::cerr << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " selecting epochs from " << a << " to " << b << "; ";
+  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
 }
 
@@ -1109,9 +1110,9 @@ void timeline_t::select_epoch_first( int n )
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
 
-  std::cerr << " selecting up to " << n << " epochs for start; ";
-  std::cerr << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " selecting up to " << n << " epochs for start; ";
+  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 }
 
 
@@ -1172,9 +1173,9 @@ void timeline_t::select_epoch_within_run( const std::string & str , int b )
       
     }
   
-  std::cerr << " based on " << str << " with " << b << " flanking epochs, ";
-  std::cerr << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " based on " << str << " with " << b << " flanking epochs, ";
+  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
 }
 
@@ -1207,9 +1208,9 @@ void timeline_t::select_epoch_until_isnot( const std::string & str )
 
     }
 
-  std::cerr << " based on " << str << " leading epochs, ";
-  std::cerr << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " based on " << str << " leading epochs, ";
+  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
 }
 
@@ -1382,7 +1383,7 @@ void timeline_t::dumpmask()
 
   first_epoch();
   
-  std::cerr << " dumping MASK\n";
+  logger << " dumping MASK\n";
 
   while ( 1 ) 
     {
@@ -1507,13 +1508,13 @@ void timeline_t::load_mask( const std::string & f , bool exclude )
   
   if ( ! Helper::fileExists( f ) ) Helper::halt( "could not find " + f );
   
-  std::cerr << " attaching mask file " << f << "\n";
+  logger << " attaching mask file " << f << "\n";
   
-  std::cerr << " currently, mask mode set to: ";
+  logger << " currently, mask mode set to: ";
   int mm = epoch_mask_mode();
-  if ( mm == 0 ) std::cerr << " mask (default)\n";
-  else if ( mm == 1 ) std::cerr << " unmask\n";
-  else if ( mm == 2 ) std::cerr << " force\n";
+  if ( mm == 0 ) logger << " mask (default)\n";
+  else if ( mm == 1 ) logger << " unmask\n";
+  else if ( mm == 2 ) logger << " force\n";
 
   
   // load
@@ -1545,7 +1546,7 @@ void timeline_t::load_mask( const std::string & f , bool exclude )
 
       if ( e > cnt_total )
 	{
-	  std::cerr << e << " masks read, for " << cnt_total << " existing epochs\n";
+	  logger << e << " masks read, for " << cnt_total << " existing epochs\n";
 	  Helper::halt( "too many epochs specified in " + f );	
 	}
     }
@@ -1553,11 +1554,11 @@ void timeline_t::load_mask( const std::string & f , bool exclude )
   
   FIN.close();
 
-  std::cerr << " processed " << e
+  logger << " processed " << e
 	    << " lines, with "
 	    << cnt_mask0 << " masked epochs\n";
 
-  std::cerr << " changed mask for " << cnt_mask1
+  logger << " changed mask for " << cnt_mask1
 	    << " of " << cnt_total << " epochs\n";
 
   return;
@@ -1578,13 +1579,13 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
   
   if ( ! Helper::fileExists( f ) ) Helper::halt( "could not find " + f );
   
-  std::cerr << " reading intervals to " << ( exclude ? " exclude" : "retain" ) << " from " << f << "\n";
+  logger << " reading intervals to " << ( exclude ? " exclude" : "retain" ) << " from " << f << "\n";
   
-  std::cerr << " currently, mask mode set to: ";
+  logger << " currently, mask mode set to: ";
   int mm = epoch_mask_mode();
-  if      ( mm == 0 ) std::cerr << " mask (default)\n";
-  else if ( mm == 1 ) std::cerr << " unmask\n";
-  else if ( mm == 2 ) std::cerr << " force\n";
+  if      ( mm == 0 ) logger << " mask (default)\n";
+  else if ( mm == 1 ) logger << " unmask\n";
+  else if ( mm == 2 ) logger << " force\n";
   
   // load
   std::ifstream FIN( f.c_str() , std::ios::in );
@@ -1616,7 +1617,7 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
   
   FIN.close();
 
-  std::cerr << " processed " << cnt << " " << intervals.size() << " intervals\n";
+  logger << " processed " << cnt << " " << intervals.size() << " intervals\n";
 
 
   //
@@ -1698,9 +1699,9 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
       
     }
   
-  std::cerr << " based on " << onelabel << " " << cnt_basic_match << " epochs match; ";
-  std::cerr << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  std::cerr << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " based on " << onelabel << " " << cnt_basic_match << " epochs match; ";
+  logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
@@ -2972,10 +2973,10 @@ void dummy_hypno()
       else if ( s == "R"  ) h.stages.push_back( REM );
       else if ( s == "L"  ) h.stages.push_back( LIGHTS_ON );
       else if ( s == "?"  ) h.stages.push_back( UNKNOWN );
-      else std::cerr << "did not recognize " << s << "\n";
+      else logger << "did not recognize " << s << "\n";
     }
 
-  std::cerr << "read " << h.stages.size() << "\n";
+  logger << "read " << h.stages.size() << "\n";
 
   edf.header.starttime = "10:00:00";
   
@@ -3018,11 +3019,11 @@ void timeline_t::list_all_annotations( const param_t & param )
   if ( param.has( "all" ) ) keep_mode = 1;
   if ( param.has( "start" ) ) keep_mode = 2;  
   
-  std::cerr << " keeping annotations based on ";
-  if ( keep_mode == 0 ) std::cerr << "any overlap with";
-  else if ( keep_mode == 1 ) std::cerr << "complete (all) overlap with";
-  else if ( keep_mode == 1 ) std::cerr << "starting in";
-  std::cerr << " an unmasked region\n";
+  logger << " keeping annotations based on ";
+  if ( keep_mode == 0 ) logger << "any overlap with";
+  else if ( keep_mode == 1 ) logger << "complete (all) overlap with";
+  else if ( keep_mode == 1 ) logger << "starting in";
+  logger << " an unmasked region\n";
   
   bool show_masked = param.has("show-masked");
 

@@ -33,9 +33,12 @@
 #include <complex>
 
 #include "helper/helper.h"
+#include "helper/logger.h"
 #include "miscmath/miscmath.h"
 #include "defs/defs.h"
 #include "dsp/coherence.h"
+
+extern logger_t logger;
 
 struct edf_t;
 

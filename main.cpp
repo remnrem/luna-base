@@ -105,7 +105,7 @@ int main(int argc , char ** argv )
       //   @variable-file 
       //   key=value
       //   signals=S1,S2,...
-      //   --flag
+      //   --flag  ( added minus fist '-' to globals::param
       //   exclude={file}
       //   -o  output db
       //   -a  output db  { as above, except append } 
@@ -144,6 +144,13 @@ int main(int argc , char ** argv )
 		    globals::skip_edf_annots = true;
 		}
 	      
+	      // project path
+	      else if ( Helper::iequals( tok[0] , "path" ) )
+		{
+		  globals::param.add( "path" , tok[1] );
+		}
+
+
 	      // signal alias?
 	      else if ( Helper::iequals( tok[0] , "alias" ) )
 		{
@@ -241,6 +248,12 @@ int main(int argc , char ** argv )
 			globals::skip_edf_annots = true;
 		    }
 		  
+		  // project path
+		  else if ( Helper::iequals( tok[0] , "path" ) )
+		    {
+		      globals::param.add( "path" , tok[1] );
+		    }
+
 		  // default annot folder?
 		  else if ( Helper::iequals( tok[0] , "annots" ) ) 
 		    {
@@ -485,6 +498,30 @@ void process_edfs( cmd_t & cmd )
   if ( ! single_edf ) 
     EDFLIST.open( cmd.data().c_str() , std::ios::in );
 
+  //
+  // Do we have a search path for EDFs and ANNOTs?
+  //
+
+  bool has_project_path = globals::param.has( "path" );
+
+  if ( has_project_path )
+    {
+
+      if ( single_edf ) Helper::halt( "cannot specify project path in single EDF mode" );
+      
+      globals::project_path = globals::param.value( "path" );
+
+      // does this folder exist?
+      if ( ! Helper::fileExists( globals::project_path ) )
+	Helper::halt( "could not find project path , " + globals::project_path );
+      
+      if ( globals::project_path[ globals::project_path.size() - 1 ] != globals::folder_delimiter )
+	globals::project_path = globals::project_path + globals::folder_delimiter ; 
+      
+      logger << "path    : " << globals::project_path << std::endl;
+                 
+    }
+  
 
   //
   // Start iterating through it
@@ -533,7 +570,17 @@ void process_edfs( cmd_t & cmd )
 	  tok = Helper::parse( line , "\t" );      
 	  if ( tok.size() < 2 ) 
 	    Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
+
+	  // add in project path?
+
+	  if ( has_project_path )
+	    {
+	      for (int t=1;t<tok.size();t++)
+		tok[t] = globals::project_path + tok[t];
+	    }
 	  
+	  // extract main items (ID, signal EDF)
+
 	  rootname = tok[0];
 	  edffile  = tok[1];
 	  
@@ -570,9 +617,9 @@ void process_edfs( cmd_t & cmd )
       //
 
       
-      logger << std::endl
-	     << "Processing EDF " << rootname 
-	     << " [ #" << processed+1 << " ]std::endl";
+      logger  << "___________________________________________________________________\n"
+	      << "Processing: " << rootname 
+	      << " [ #" << processed+1 << " ]" << std::endl;
       
       
       //

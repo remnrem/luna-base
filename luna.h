@@ -51,6 +51,8 @@
 
 #include "dsp/dsp.h"
 
+#include "dsp/mtm/mtm.h"
+
 #include "fftw/fftwrap.h"
 
 #include "ica/ica.h"

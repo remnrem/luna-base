@@ -69,8 +69,8 @@ pdf_t::pdf_t()
 {
 
   pdf = HPDF_New(error_handler, NULL);
-  if ( ! pdf ) { std::cerr << "cannot open PDF\n"; std::exit(1); } 
-  if (setjmp(env)) { HPDF_Free(pdf); std::cerr << "problem, bailing...\n"; std::exit(1); } 
+  if ( ! pdf ) { Helper::halt( "cannot open PDF" ); }
+  if (setjmp(env)) { HPDF_Free(pdf); Helper::halt( "problem in pdf_t(), bailing..."); }
 
   /* set compression mode */
   HPDF_SetCompressionMode (pdf, HPDF_COMP_ALL);
@@ -122,7 +122,6 @@ int pdf_t::add_page( int nx , int ny )
   height = HPDF_Page_GetHeight (page);
   width = HPDF_Page_GetWidth (page);
 
-  //  std::cerr << "h,w = " << width << " and " << height << "\n";
   // Font
 
   font = HPDF_GetFont (pdf, "Helvetica", NULL);
@@ -311,7 +310,7 @@ void pdf_t::rectangle( double lx ,double ly , double ux, double uy )
   float rect_width = upr_x - lwr_x;
   float rect_height = upr_y - lwr_y;
 
-  //  std::cerr << "rect " << lwr_x << ","<< lwr_y << "  to  " << upr_x << "," << upr_y << "\n";
+  //  std::cout << "rect " << lwr_x << ","<< lwr_y << "  to  " << upr_x << "," << upr_y << "\n";
 
   HPDF_STATUS st = HPDF_Page_Rectangle( page , lwr_x , lwr_y , rect_width , rect_height );
   

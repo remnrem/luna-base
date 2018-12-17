@@ -96,6 +96,8 @@ struct globals
   
   static char folder_delimiter;
 
+  static std::string project_path; 
+  
   static bool skip_edf_annots;
 
   static std::string indiv_wildcard;
