@@ -2644,7 +2644,7 @@ void edf_t::rescale( const int s , const std::string & sc )
 
 
 
-bool edf_t::validate( param_t & param )
+bool edf_t::basic_stats( param_t & param )
 {
   
   // Run through each record

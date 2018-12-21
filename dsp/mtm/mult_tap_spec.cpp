@@ -29,6 +29,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <iostream>
 
 #define ABS(a) ((a) < (0) ? -(a) : (a))
 
@@ -106,8 +107,6 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
   double         *lambda, *tapers;
   long            len, longlen;
   double          *xt;
-  FILE           *fopen(), *inf, *tap_file;
-  FILE            *dof_file;
   
   int             logg;
   int             nn;
@@ -137,12 +136,6 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
      tapers =  matrix of slepian tapers, packed in a 1D double array    
   */
   
-  
-  /*fprintf(stderr, "From do_mtap_spec:  npoints=%d kind=%d nwin=%d npi=%f inorm=%d dt=%f klen=%d\n",npoints, kind, nwin, npi, inorm, dt, klen );
-    for(i=0; i< npoints; i++)
-    fprintf(stderr, "%d %e\n",i, data[i]);
-  */
-  
   lambda = dvector((long)0, (long)nwin);
   tapsum=dvector((long)0,(long)nwin);
   len_taps = npoints * nwin;
@@ -152,26 +145,31 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
   num_freq_tap = num_freqs*nwin;
   
   
-  
-  /* get a slepian taper  */
+  //
+  // calculate Slepian tapers
+  //
   
   k = multitap(npoints, nwin, lambda,  npi, tapers, tapsum);
 
-#if 0
-  
-  tap_file = fopen("taper_file", "w");
-  /* print out tapers for curiosity  */
-  for(i=0; i<npoints; i++){
-    for(j=0; j<nwin; j++)fprintf(tap_file,"%15.10f ",tapers[i+j*npoints]);
-    fprintf(tap_file,"\n");
-  }
-  fclose(tap_file);
 
-#endif
+  // display tapers
+  if ( 0 ) 
+    {  
+      for(i=0; i<npoints; i++)
+	{
+	  std::cout << "t"<<i;
+	  for(j=0; j<nwin; j++) std::cout << "\t" << tapers[i+j*npoints];
+	  std::cout << "\n";
+	}
+        
+      for(j=0; j<nwin; j++) 
+	{
+	  std::cout << "LAMBDA " << j+1 << "\t" << lambda[j] << "\n";
+	}
+      
+    }
 
 
-  
-  
   /* choose normalization based on inorm flag  */
   
   anrm = 1.;
@@ -264,94 +262,109 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
   
   free_vector(b, (long)0, (long)npoints);
   fv = vector((long)0,(long) num_freqs);
+
+
   
-  /* choice of hi-res or adaptive weighting for spectra    */
+  //
+  // Hi-res or adaptive weighting for spectra
+  //
   
-  switch (kind) {
+  
+  switch (kind) 
+    {
+      //
+      // hi-res
+      //
 
-    // hi-res
-
-  case 1:
-    
-    hires(sqr_spec,  lambda, nwin, num_freqs, amu);
-    get_F_values(ReSpec, ImSpec, num_freqs, nwin, fv, tapsum);
-    
-    for (i = 0; i < num_freqs; i++) {
-      ospec[i] =amu[i];
-      dof[i] = nwin-1;
-      Fvalues[i] = fv[i];
-    }
-    
-    break;
-
-    // adaptive weighting for spectra
-
-  case 2:
-    
-    /* get avar = variance*/
-    
-    n1 = 0;
-    n2 = npoints;
-    
-    avar = 0.0;
-    
-    for (i = n1; i < n2; i++)
-      avar += (data[i]) * (data[i]);
-    
-    
-    switch (inorm) {
-    case 0:
-      avar = avar / npoints;
-      break;
-      
     case 1:
-      avar = avar / (npoints * npoints);
+      
+      hires(sqr_spec,  lambda, nwin, num_freqs, amu);
+      get_F_values(ReSpec, ImSpec, num_freqs, nwin, fv, tapsum);
+      
+      for (i = 0; i < num_freqs; i++) 
+	{
+	  ospec[i] =amu[i];
+	  dof[i] = nwin-1;
+	  Fvalues[i] = fv[i];
+	}
+      
+      
+
       break;
+
+      //
+      // adaptive weighting for spectra
+      //
       
     case 2:
-      avar = avar * dt * dt;
-      break;
       
-    case 3:
+      /* get avar = variance*/
       
-      avar = avar / npoints;
-      break;
+      n1 = 0;
+      n2 = npoints;
       
-    default:
+      avar = 0.0;
+      
+      for (i = n1; i < n2; i++)
+	avar += (data[i]) * (data[i]);
+      
+      
+      switch (inorm) {
+      case 0:
+	avar = avar / npoints;
+	break;
+	
+      case 1:
+	avar = avar / (npoints * npoints);
+	break;
+	
+      case 2:
+	avar = avar * dt * dt;
+	break;
+	
+      case 3:
+	
+	avar = avar / npoints;
+	break;
+	
+      default:
+	break;
+      }
+      
+      
+      dcf = dvector((long)0,(long) num_freq_tap);
+      degf = dvector((long)0,(long) num_freqs);
+      
+      adwait(sqr_spec, dcf, lambda, nwin, num_freqs, amu, degf, avar);
+      
+      get_F_values(ReSpec, ImSpec, num_freqs, nwin, fv, tapsum);
+    
+      /* rap up   */
+      
+      for (i = 0; i < num_freqs; i++) {
+	ospec[i] =amu[i];
+	dof[i] = degf[i];
+	Fvalues[i] = fv[i];
+      }
+    
+      
+      free_dvector(dcf,(long)0,(long) num_freq_tap);
+      free_dvector(degf,(long)0,(long) num_freqs);
+      free_vector(fv,(long)0,(long) num_freqs);
+      
+      
       break;
     }
-    
-        
-
-    dcf = dvector((long)0,(long) num_freq_tap);
-    degf = dvector((long)0,(long) num_freqs);
-
-    adwait(sqr_spec, dcf, lambda, nwin, num_freqs, amu, degf, avar);
-    
-    get_F_values(ReSpec, ImSpec, num_freqs, nwin, fv, tapsum);
-    
-    /* rap up   */
-    
-    for (i = 0; i < num_freqs; i++) {
-      ospec[i] =amu[i];
-      dof[i] = degf[i];
-      Fvalues[i] = fv[i];
-    }
-    
-    
-    free_dvector(dcf,(long)0,(long) num_freq_tap);
-    free_dvector(degf,(long)0,(long) num_freqs);
-    free_vector(fv,(long)0,(long) num_freqs);
-    
-    
-    break;
-  }
   
-  /*  free up memory and return  */
+
+  //
+  // Free up memory, return...
+  //
   
   free_dvector(amu,(long)0,(long) num_freqs);  
   
   free_dvector(sqr_spec, (long)0,(long) num_freq_tap);
+
   free_dvector(ReSpec, (long)0,(long) num_freq_tap);
   
   free_dvector(ImSpec, (long)0,(long) num_freq_tap);
@@ -359,6 +372,7 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
   free_dvector(lambda,(long) 0,(long) nwin);
   
   free_dvector(tapers,(long) 0, (long)len_taps);
+
   free_dvector(tapsum,(long) 0, (long)nwin);
   
 }

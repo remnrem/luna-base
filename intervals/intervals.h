@@ -80,7 +80,10 @@ struct interval_t
   
   uint64_t stop;
 
+  
   double start_sec() const { return start/(double)globals::tp_1sec; }
+
+  double mid_sec() const { return mid()/(double)globals::tp_1sec; }
 
   double stop_sec() const { return stop/(double)globals::tp_1sec; }
 

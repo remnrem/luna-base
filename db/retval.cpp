@@ -88,7 +88,7 @@ void retval_t::dump()
       
       const retval_cmd_t & cmd = cc->first;
       
-      std::cout << "considering command " << cmd.name << "\n";
+      //std::cout << "considering command " << cmd.name << "\n";
 
       // factors/tables for this command
       

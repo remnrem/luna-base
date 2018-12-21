@@ -26,6 +26,8 @@
 
 #include "mtm.h"
 
+#include <iostream>
+
 #include <cstdio>
 #include <cmath>
 
@@ -91,6 +93,8 @@ int  mtm::multitap(int num_points, int nwin, double *lam, double npi, double *ta
   ww = (double) (anpi) / an;	/* this corresponds to P&W's W value  */
   cs = cos(TWOPI * ww);
   
+  //  std::cerr << "P&W W value = " << ww << "\n";
+
   ell = dvector((long) 0, (long) nwin);
   
   diag = dvector((long) 0, (long) num_points);

@@ -363,8 +363,7 @@ class cmd_t
 
   bool error;
   bool will_quit;
-  
-    
+      
   std::vector<std::string> cmds;
   std::vector<param_t>     params;
   std::vector<param_t>     original_params;
@@ -397,15 +396,14 @@ class cmd_t
 // Primary commands
 //
 
-void proc_summaries( const std::string & , const std::string & , int , cmd_t & , param_t & param );
 void proc_summaries( edf_t & , param_t & );
+void proc_headers( edf_t & , param_t & );
+void proc_validate( edf_t & , param_t & );
 void proc_desc( edf_t & , param_t & );
 
-void proc_validate( edf_t & , param_t & );
-void proc_list_annots( const std::string & edffile , const std::string & rootname , const std::vector<std::string> & );
+void proc_stats( edf_t & , param_t & );
+void proc_list_annots( edf_t & , param_t & );
 void proc_list_all_annots( edf_t & , param_t & );
-
-
 
 void proc_tag( param_t & );
 void set_tag( const std::string & t = "." );

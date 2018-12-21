@@ -150,7 +150,6 @@ bool cmd_t::read( const std::string * str , bool silent )
 
   // summary
 
-  logger << "-------------------------------------------------------------------\n";
   logger << "input(s): " << input << "\n";
   logger << "output  : " << writer.name() << "\n";
   
@@ -242,8 +241,11 @@ bool cmd_t::eval( edf_t & edf )
       
       if      ( is( c, "WRITE" ) )        proc_write( edf, param(c) );
       else if ( is( c, "SUMMARY" ) )      proc_summaries( edf , param(c) );
+      else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
+      
+
       else if ( is( c, "DESC" ) )         proc_desc( edf , param(c) );
-      else if ( is( c, "STATS" ) )        proc_validate( edf , param(c) );
+      else if ( is( c, "STATS" ) )        proc_stats( edf , param(c) );
       
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
       else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
@@ -262,7 +264,10 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );
       else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );
       else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) );
+
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
+      else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) );
+
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
       else if ( is( c, "RESTRUCTURE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
@@ -353,37 +358,12 @@ bool cmd_t::eval( edf_t & edf )
 // ----------------------------------------------------------------------------------------
 //
 
-//
-// HEADERS  (vmode 1) : print headers
-// VALIDATE (vmode 2) : validate entire EDF
-//
 
+// HEADERS : summarize EDF files
 
-void proc_summaries( const std::string & edffile , const std::string & rootname , 
-		     int v_mode , cmd_t & cmd , param_t & param )
+void proc_headers( edf_t & edf , param_t & param )
 {
-
-  const std::set<std::string> * inp_signals = NULL;      
-  if ( cmd.signals().size() > 0 ) inp_signals = &cmd.signals();
-  edf_t edf;  
-  
-  bool okay = edf.attach( edffile , rootname , inp_signals );
-
-  if ( ! okay ) 
-    logger << "Problem: " << rootname << " reading EDF " << edffile << "\n";    
-  
-  // terse HEADER summary
-  if ( v_mode == 1 ) edf.terse_summary() ;
-  
-  // or a full VALIDATE query?
-  if ( v_mode == 2 ) 
-    {
-      bool result = edf.validate( param );
-      // std::cout << rootname << "\t"
-      // 		<< "VALIDATION\t"
-      // 		<< ( result ? "OKAY" : "PROBLEM" ) << "\n";
-            
-    }
+  edf.terse_summary();
 }
 
 
@@ -406,9 +386,9 @@ void proc_desc( edf_t & edf , param_t & param )
 
 // STATS : get basic stats for an EDF
 
-void proc_validate( edf_t & edf , param_t & param )
+void proc_stats( edf_t & edf , param_t & param )
 {
-  edf.validate( param );
+  edf.basic_stats( param );
 }
 
 // RMS/SIGSTATS : calculate root-mean square for signals 
@@ -781,6 +761,7 @@ void proc_write( edf_t & edf , param_t & param )
 
 void proc_epoch( edf_t & edf , param_t & param )
 {
+
   double dur = 0 , inc = 0;
 
   // default = 30 seconds, non-overlapping
@@ -803,10 +784,49 @@ void proc_epoch( edf_t & edf , param_t & param )
       else inc = dur;
     }
 
-  int ne = edf.timeline.set_epoch( dur , inc );  
 
-  logger << " set epochs, length " << dur << " (step " << inc << "), " << ne << " epochs\n";
+  //
+  // basic log info
+  //
+
   
+  int ne = edf.timeline.set_epoch( dur , inc );  
+  
+  logger << " set epochs, length " << dur << " (step " << inc << "), " << ne << " epochs\n";
+
+  //
+  // writer to db
+  //
+  
+  edf.timeline.first_epoch();
+
+  while ( 1 ) 
+    {
+      
+      int epoch = edf.timeline.next_epoch();      
+		  
+      if ( epoch == -1 ) break;
+              
+      interval_t interval = edf.timeline.epoch( epoch );
+      
+      //      std::cout << "epoch " << epoch << "\t" << interval.as_string() << "\n";
+
+      writer.epoch( edf.timeline.display_epoch( epoch ) );
+
+      writer.value( "INTERVAL" , interval.as_string() );      
+      writer.value( "START" , interval.start_sec() );
+      writer.value( "MID"   , interval.mid_sec() );
+      writer.value( "STOP" , interval.stop_sec() );
+		  
+    }
+  
+  writer.unepoch();
+
+
+  //
+  // any constraints on the min. number of epochs required? 
+  //
+
   if ( param.has("require") )
     {
       int r = param.requires_int( "require" );
@@ -927,36 +947,20 @@ void proc_dump_mask( edf_t & edf , param_t & param )
 }
 
 
-// COUNT/LIST-ANNOTS : show all annotations for the EDF
 
-void proc_list_annots( const std::string & edffile , 
-		       const std::string & rootname,
-		       const std::vector<std::string> & tok )
+
+
+// COUNT-ANNOTS : show all annotations for the EDF
+
+void proc_list_annots( edf_t & edf , param_t & param )
 {
-
-  const std::set<std::string> inp_signals;
   
-  edf_t edf;  
-
-  bool okay = edf.attach( edffile , rootname , &inp_signals );
-
-  if ( ! okay ) 
-    logger << "Problem: " << rootname << " reading EDF " << edffile << "\n";
-
-  for (int i=2;i<tok.size();i++) 
-    edf.populate_alist( tok[i] );	 
-
-  writer.var( "ANNOT_N" , "Number of occurrences of an annotation" );
+  // we can assume this is already done?
+  //   for (int i=2;i<tok.size();i++) 
+  //     edf.populate_alist( tok[i] );	 
   
-  std::set<std::string> anames = edf.available_annotations();
-  std::set<std::string>::const_iterator ii = anames.begin();
-  while ( ii != anames.end() ) 
-    {
-      // annot as 'level'
-      writer.level( *ii , globals::annot_strat );
-      writer.value( "ANNOT_N" , edf.aoccur[*ii] );
-      ++ii;
-    }
+  summarize_annotations( edf , param );
+  
 }
 
 

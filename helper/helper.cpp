@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "helper.h"
+#include "logger.h"
 
 #include "defs/defs.h"
 #include "intervals/intervals.h"
@@ -34,6 +35,7 @@
 
 #include <wordexp.h>
 
+extern logger_t logger;
 
 std::string Helper::toupper( const std::string & s )
 {
@@ -102,18 +104,22 @@ bool Helper::file_extension( const std::string & f, const std::string & ext )
 
 void Helper::halt( const std::string & msg )
 {
+  
   // some other code handles the exit, e.g. if running under luna-web?
   if ( globals::bail_function != NULL ) 
     globals::bail_function( msg );
   
-  // generic bail function
+  // switch logger off , i.e. as we don't want close-out msg
+  logger.off();
+
+  // generic bail function (not using logger)
   std::cerr << "error : " << msg << "\n";   
   std::exit(1);
 }
 
 void Helper::warn( const std::string & msg )
 {
-  std::cerr << "WARNING : " << msg << "\n";
+  logger.warning( msg );
 }
 
 void Helper::debug( const std::string & msg )
