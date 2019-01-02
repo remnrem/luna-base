@@ -46,9 +46,15 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   bool spectrum = param.has( "spectrum" );
   bool epoch_spectrum = param.has( "epoch-spectrum" );
 
+
+
   // MTM parameters
-  int npi = param.has( "npi" ) ? param.requires_int( "npi" ) : 3 ;
-  int nwin = param.has( "nwin" ) ? param.requires_int( "nwin" ) : 5 ;
+  int npi = param.has( "nw" ) ? param.requires_int( "nw" ) : 3 ;
+  int nwin = param.has( "t" ) ? param.requires_int( "t" ) : 2*npi-1 ;
+  
+  double max_f = param.has( "max" ) ?  param.requires_dbl( "max" ) : 30;
+  double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 1 ;
+  
     
   edf.timeline.first_epoch();
 
@@ -72,8 +78,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
        interval_t interval = edf.timeline.epoch( epoch );
        
        // stratify output by epoch?
-       if ( epoch_level_output )
-	 writer.epoch( edf.timeline.display_epoch( epoch ) );
+       writer.epoch( edf.timeline.display_epoch( epoch ) );
        
        //
        // Get each signal
@@ -93,8 +98,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	   // Stratify output by channel
 	   //
 	   
-	   if ( epoch_level_output )
-	     writer.level( signals.label(s) , globals::signal_strat );
+	   writer.level( signals.label(s) , globals::signal_strat );
 
 	   //
 	   // Get data
@@ -104,16 +108,56 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	   
 	   const std::vector<double> * d = slice.pdata();	   
 	   
-	   // call MTM
+	   // call MTM (
 	   
-	   mtm_t mtm( 3 , 5 );
-
+	   mtm_t mtm( 4 , 7 );
+	   
+	   mtm.kind = 2 ; // adaptive weights;
+	   mtm.inorm = 3 ; // 1/N weights
+	   
 	   mtm.apply( d , Fs[s] );
 	   
+	   
+	   if ( wid_f > 0 ) 
+	     {
+
+	       // 1 Hz bins
+	       mtm.bin( wid_f , max_f , Fs[s] );
+	       
+	       //output
+	       
+	       for ( int i = 0 ; i < mtm.bfa.size() ; i++ ) 
+		 {
+		   writer.level( Helper::dbl2str( mtm.bfa[i] ) + "-" + Helper::dbl2str( mtm.bfb[i] ) ,  globals::freq_strat  );
+		   writer.value( "MIDF" , ( mtm.bfa[i] + mtm.bfb[i] ) / 2.0 );
+		   writer.value( "MTM" , mtm.bspec[i] );
+		 }
+	       writer.unlevel( globals::freq_strat );
+	       
+	     }
+
+	   else
+	     {
+	       
+	       for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+		 {
+		   if ( mtm.f[i] <= max_f ) 
+		     {
+		       writer.level( mtm.f[i] , globals::freq_strat  );
+		       writer.value( "MTM" , mtm.spec[i] );
+		     }
+		 }
+	       writer.unlevel( globals::freq_strat );
+
+	     }
+
 	 } // next signal
        
+       writer.unlevel( globals::signal_strat );
+
      } // next epoch
 
+  writer.unepoch();
 }
 
 
@@ -125,7 +169,156 @@ mtm_t::mtm_t( const int npi , const int nwin ) : npi(npi) , nwin(nwin)
   inorm = 1;
 }
 
+void mtm_t::bin( double w , double mx_f , double fs )
+{
+
+  if ( f.size() < 2 ) return;
+
+  bfa.clear();
+  bfb.clear();  
+  bspec.clear();
+  
+  int num_freqs = f.size();
+  
+  // check this is the same...
+  double df = f[1] - f[0];
+  // as 2*nyquist/klen;
+
+  int freqwin = (int) ( w / df) ;      
+
+//   std::cout << "w = " << w << " " << df << "\n";
+
+//   std::cout << "freqwin = " << freqwin << "\n";
+
+//   std::cout << "in bin() " << f.size() << " " << spec.size() << " " << num_freqs << "\n";
+
+  // note ... start at 1, but record bfa[0]... i.e.  lwr < f << upr
+
+  for (int i = 1; i < num_freqs ; i += freqwin)
+    {
+
+      double tem = 0.0;
+      int k = 0;
+      
+      for (int j = i ; j < i + freqwin - 1 ; j++) 
+	{
+	  if (j > 0 && j < num_freqs - 1) 
+	    {	      
+	      if ( f[j] <= mx_f )
+		{
+		  tem += spec[j];
+		  k++;
+		}
+	    }
+	}  
+      
+      //      std::cout << "f[i] " << f[i] << " " << f[i+k] << "\n";
+      
+      if ( k > 0 ) 
+	{	  
+	  bspec.push_back( tem/(double)k );
+	  bfa.push_back( f[i-1] );
+	  bfb.push_back( f[i+k] );
+	}
+
+    }      
+     
+  
+}
+
+void mtm_t::smooth( double w , double fs )
+{
+    
+  int num_freqs = f.size();
+
+  // check this is the same...
+  double df = f[1] - f[0];
+  // as 2*nyquist/klen;
+  std::cout << "df = " << df << "\n";
+  int freqwin = (int) ( w / df) /2 ;      
+  
+  for (int i = 0; i < num_freqs ; i++)
+    {
+      double tem = 0.0;
+      int k = 0;
+      for (int j = i - freqwin; j <= i + freqwin; j++) {
+	if (j > 0 && j < num_freqs - 1) {
+	  tem += spec[j];
+	  k++;
+	}
+      }      
+      if(k>0) { spec[i] = tem/(double)k; } // else spec[i] = spec[i];       
+    }
+
+}
+
+
 void mtm_t::apply( const std::vector<double> * d , const int fs )
+{
+
+  std::vector<double> d2 = *d;
+  
+  double * data = (double*)&d2[0];
+  
+  // Fs is samples per second
+  
+  double dt = 1.0/(double)fs;
+  
+  int num_points = d->size();
+
+  double fWidth =  npi/((double)num_points*dt);
+  
+  //  std::cout << "fWidth = " << fWidth << "\n";
+
+  int K = (int) 2*num_points*fWidth*dt;
+  
+  double nyquist = 0.5/dt;
+  
+  int klen = mtm::get_pow_2( num_points );
+
+  double df = 2*nyquist/klen;  
+
+  int num_freqs = 1+klen/2;
+  
+  int npoints = num_points;
+
+  int k = 1;
+
+  // mean-center
+
+  double mean = mtm::remove_mean( data, npoints ); 
+  
+  spec.resize( klen ,  0 );  
+  
+  std::vector<double> dof( klen );
+  std::vector<double> Fvalues( klen );
+  
+  mtm::do_mtap_spec(&(data)[0], npoints, kind,  nwin,  npi, inorm, dt,
+		    &(spec)[0], &(dof)[0], &(Fvalues)[0], klen);
+
+  // shrink to positive spectrum 
+  spec.resize( num_freqs );
+
+  f.resize( num_freqs , 0 );
+
+  for (int i = 0; i < num_freqs; i++)
+    {
+      
+      f[i] = df*i;
+      
+//       std::cout << i << "\t" 
+// 		<< f[i] << "\t" 
+// 		<< spec[i] << "\t"
+// 		<< 10*log10(spec[i]) << "\n";
+      
+    }
+    
+
+}
+
+
+
+void mtm_t::apply2( const std::vector<double> * d , const int fs )
 {
 
   std::vector<double> d2 = *d;
@@ -152,7 +345,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
   
   int klen = mtm::get_pow_2( num_points );
 
-  std::cout << "klen = " << klen << "\n";
+  //  std::cout << "klen = " << klen << "\n";
 
   int num_freqs = 1+klen/2;
   
@@ -160,8 +353,11 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
 
   int k = 1;
 
-  double mean = mtm::remove_mean( data, npoints ); 
-    
+  if ( 0 ) 
+    {
+      double mean = mtm::remove_mean( data, npoints ); 
+    }
+
   //
   // simple (naive) periodogram
   //
@@ -181,8 +377,10 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
       
       if ( i < 10 || i > num_points - 10 ) 
 	std::cout << i << "\t" << vwin <<  "\t" << dtemp[i] << "\t" << data[i] << "\n" ;
-  }
+    }
   
+
+
   double anrm = num_points;
   
   switch (inorm)
@@ -213,7 +411,6 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
 
   mtm::zero_pad(&(dtemp)[0], num_points, klen);
 
-  // hmm, check this.. pointer to before?
   int isign = 1;
   mtm::jrealft(&(dtemp)[0]-1, (unsigned long) klen, isign);
   
@@ -228,6 +425,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
 
   int freqwin = (int) ( fWidth/df) /2 ;      
   
+
 #if 1
 
   // smooth the periodogram 
@@ -245,13 +443,14 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
 	}
       }
       
-      if(k>0) { dtemp[i] = tem/(double)k; } else  dtemp[i] =naive_spec[i]; 
+      if(k>0) { dtemp[i] = tem/(double)k; } else  dtemp[i] = naive_spec[i]; 
       
     }
   
   /*for (i = 1; i < num_freqs - 1; i++) naive_spec[i] = dtemp[i];*/
-
+  
 #endif
+
 
   
   for (int i = 0; i < num_freqs ; i++)
@@ -274,7 +473,9 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
   std::vector<double> spec( klen );
   std::vector<double> dof( klen );
   std::vector<double> Fvalues( klen );
-  
+
+  std::cout << "\n\nentering MTM\n\n";
+
   mtm::do_mtap_spec(&(data)[0], npoints, kind,  nwin,  npi, inorm, dt,
 		    &(spec)[0], &(dof)[0], &(Fvalues)[0], klen);
 
@@ -285,9 +486,14 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
       
       double frq1 =  df*i;
       
-      std::cout << i << "\t" << frq1 << "\t" << spec[i] << "\t" << naive_spec[i] << "\t"
-		<< dtemp[i] << "\t" << dof[i] << "\t"
-		<< Fvalues[i] << "\n";
+      std::cout << i << "\t" 
+		<< frq1 << "\t" 
+		<< spec[i] << "\t"
+		<< 10*log10(spec[i]) << "\n";
+		
+// 		<< "\t" << naive_spec[i] << "\t"
+// 		<< dtemp[i] << "\t" << dof[i] << "\t"
+// 		<< Fvalues[i] << "\n";
       
     }
   

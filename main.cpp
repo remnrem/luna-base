@@ -38,7 +38,14 @@ int main(int argc , char ** argv )
   //
 
   global.init_defs();
-  
+
+
+  //
+  // banner
+  //
+
+  logger.banner( globals::version , globals::date );
+
 
   //
   // special command-line driven functions that do not involve iterating through a sample list
@@ -51,12 +58,18 @@ int main(int argc , char ** argv )
   //
   // parse command line
   //
-  
+
   if ( argc == 2 && strcmp( argv[1] ,"-d" ) == 0 )
     { 
       proc_dummy(); 
       exit(0); 
     } 
+  else if ( argc == 3 && strcmp( argv[1] , "--validate" ) == 0 ) 
+    {
+      // 1: sample-list or EDF
+      // 2: --validate 
+      Helper::halt( "--validate not implemented... ");
+    }
   else if ( argc == 3 && strcmp( argv[1] , "--xml" ) == 0 )
     {
       annot_t::dumpxml( argv[2] , false );
@@ -336,11 +349,10 @@ int main(int argc , char ** argv )
   
   else if ( argc < 2 || ( isatty(STDIN_FILENO) || argc != 1 ) )  
     {
-      logger << "luna version " << globals::version << "; " << globals::date
-	     << std::endl
-	     << "usage: luna [sample-list|EDF] [n1] [n2] [signal=s1,s2] [v1=val1] [@parameter-file] < command-file"
-	     << std::endl;
 
+      logger << "usage: luna [sample-list|EDF] [n1] [n2] [signal=s1,s2] [v1=val1] [@parameter-file] < command-file"
+	     << std::endl;
+      logger.off();
       std::exit(1);
     }
 
@@ -409,20 +421,21 @@ int main(int argc , char ** argv )
 
     }
 
-
+  
   //
   // iterate through the primary sample-list
   //
   
   int processed = 0, failed = 0;
   int actually_processed = 0;
-
-  while ( ! std::cin.eof() )
+  
+  while ( ! std::cin.eof()  )
     {
-      cmd_t cmd; // scans STDIN for next command
+      
+      cmd_t cmd ; // else scans STDIN for next command
       
       if ( cmd.empty() ) break; 
-      
+
       ++processed;
 
       if ( ! cmd.valid() )
@@ -642,54 +655,37 @@ void process_edfs( cmd_t & cmd )
 
       
       //
-      // Handle 'EDF-validation' commands separately
+      // Handle  luna --validate {edf|sample-list} separaetely (NOT IMPLEMENTED YET)
       //
-      // That is for some commands, we do not want to attach the EDF
-      // yet; i.e. note, this means that any other commands on the
-      // same line will be ignored; these only operate on the EDFs, so
-      // and on all signals, so no need to attach annotations, or
-      // process signals to extract, etc
-      //
-      
-      bool validation_only = false;
-      
-      for (int c=0;c<cmd.num_cmds();c++)
-	{
+
+//       if ( globals::validation_mode )
+// 	{
 	  
-	  if ( cmd.is( c,"HEADERS" ) )   
-	    { 
-	      writer.cmd( cmd.cmd(c) , c+1 , cmd.param(c).dump( "" , " " ) );
-	      validation_only = true; 
-	      proc_summaries( edffile , rootname , 1 , cmd , cmd.param(c) ); 
-	    }
-	  else if ( cmd.is( c, "COUNT-ANNOTS" ) )
-	    {
-	      writer.cmd( cmd.cmd(c) , c+1 , cmd.param(c).dump( "" , " " ) );
-	      validation_only = true; 
-	      proc_list_annots( edffile , rootname , tok );
-	    }
-	}
-      
-      // skip to next EDF if any commands were 'validation' commands
-      
-      if ( validation_only ) 
-	{
-	  ++processed;
-	  ++actual;
-	  writer.commit();
-	  if ( single_edf ) break;
-	  logger << "  skipping any other commands" << std::endl; 
-	  continue;
-	}
-      
-      
+// 	  writer.cmd( "VALIDATE" , 1 , "" );
 
-      
-      //
-      // Otherwise, assume one or more full commands
-      //
+// 	  // test: can we attach this EDF?
+// 	  edf_t edf;  
+	  
+// 	  bool okay = edf.attach( edffile , rootname );
 
+// 	  if ( ! okay ) logger.warning( "could not attach " + edffile );
+	  
+// 	  writer.value( "VALID" , (int)okay );
+	  
+// 	  // note that we've done this
+// 	  ++processed;
+// 	  ++actual;
 
+// 	  writer.commit();
+
+// 	  if ( single_edf ) break;
+	  
+// 	  // go to next EDF
+// 	  continue;
+	  
+// 	}
+
+	  
       //
       // Unset 'problem' flag (i.e. for bailing for this individual)
       //
@@ -825,6 +821,91 @@ void process_edfs( cmd_t & cmd )
 
 void proc_dummy()
 {
+
+  std::vector<double> dx;
+  while ( ! std::cin.eof() ) 
+    {
+      double dxx;
+      std::cin >> dxx;
+      if ( std::cin.eof() ) break;
+      dx.push_back( dxx );
+    }
+  std::cout << "read " << dx.size() << " points\n";
+
+  // nw = 4, i.e. 2*4-1 = 7 tapers
+  // 1 window ??
+
+//   mtm_t::mtm_t( const int npi , const int nwin ) : npi(npi) , nwin(nwin)
+//   {
+
+//     kind = 1;
+//     inorm = 1;
+//   }
+
+  // P number of points 
+  // W bandwidth 
+  // W = P/N
+  // P = NW  , ... 4 
+ 
+  // N = 512, i.e. 
+  // or 320?  i.e. length of sequence
+  // P = NW
+  // 
+
+  //         npi , nwin 
+  //          P     # tapers (should be max 2P-1)
+  //          P=NW
+  mtm_t mtm(   4 , 7 );
+
+  //  mtm.inorm = 0; // normalization factor
+  //   mtm.kind = 1; // 1 or 2 (weights)
+
+  // adaptive weights and 1/N normalization 
+  // seems to give similar results to ML pmtm
+  
+  // weights
+  // 1 hi-res, 2 adaptive, 3 none
+
+  mtm.kind = 2 ; 
+
+  //normalization 1/N
+  mtm.inorm = 3 ; 
+
+  // inorm               norm
+  // 0  1 (none)      -> 1
+  // 1  N             -> 1/N^2
+  // 2  1/dt          -> dt^2
+  // 3  sqrt(N)       -> 1/N
+  
+  // norm = 1/(W^2)
+
+  mtm.apply( &dx , 1024 );
+
+  
+
+  //
+  // standard
+  //
+
+//   int index_length = dx.size();
+//   int my_Fs = 1024;
+//   int index_start = 0;
+  
+
+//   FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
+
+//   fftseg.apply( &(dx[index_start]) , index_length );
+
+//   int my_N = fftseg.cutoff;
+//   for (int f=0;f<my_N;f++)
+//     {
+//       std::cout << f << "\t" << fftseg.frq[f] << "\t" << fftseg.X[f] << "\n";
+//    }
+  
+  
+    
+  std::exit(1);
+
 
   std::string edf_file2 = "/home/shaun/Dropbox/my-sleep/Purcell06072016.edf";  
   edf_t edf2; 

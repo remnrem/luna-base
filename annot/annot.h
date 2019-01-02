@@ -175,6 +175,11 @@ enum ANNOTATION
   };
 
 
+struct edf_t;
+struct param_t;
+
+void summarize_annotations( edf_t & edf , param_t & param );
+
 
 typedef std::vector<const event_t*> evt_table_t;
 typedef std::map<interval_t,std::vector<const event_t*> > interval_evt_map_t;
@@ -182,6 +187,7 @@ typedef std::map<interval_t,std::vector<const event_t*> > interval_evt_map_t;
 
 class annot_t
 {
+
   friend struct timeline_t;
   friend struct annotation_set_t;
 
@@ -190,6 +196,7 @@ class annot_t
   std::map<ANNOTATION,std::string> type_name;
  
  private: 
+
  annot_t() { set_type_names(); } 
 
  annot_t( const std::string & n ) 

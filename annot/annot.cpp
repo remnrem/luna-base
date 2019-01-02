@@ -26,17 +26,37 @@
 #include "helper/helper.h"
 #include "defs/defs.h"
 #include "tinyxml/xmlreader.h"
+#include "db/db.h"
 
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
 
+extern writer_t writer;
+
 std::ostream & operator<<( std::ostream & out , const event_t & e )
 {
   out << e.label;
   if ( e.has_value ) out << "=" << e.double_value();  
   return out;
+}
+
+
+void summarize_annotations( edf_t & edf , param_t & param )
+{
+  
+  writer.var( "ANNOT_N" , "Number of occurrences of an annotation" );
+  
+  std::set<std::string> anames = edf.available_annotations();
+  std::set<std::string>::const_iterator ii = anames.begin();
+  while ( ii != anames.end() ) 
+    {
+      // annot as 'level'
+      writer.level( *ii , globals::annot_strat );
+      writer.value( "ANNOT_N" , edf.aoccur[*ii] );
+      ++ii;
+    }
 }
 
 

@@ -1,13 +1,13 @@
 
 # ARCH is LINUX or MAC
-ARCH=LINUX
+ARCH=MAC
 
 # if dependencies are installed locally, denote here, otherwise set these to blank
-#DEP_INCLUDES =
-#DEP_LIB = 
+DEP_INCLUDES =
+DEP_LIB = 
 
-DEP_INCLUDES = -I/Users/shaun/src/luna-depends/depends/include
-DEP_LIB = -L/Users/shaun/src/luna-depends/depends/lib
+#DEP_INCLUDES = -I/Users/shaun/src/luna-depends/include
+#DEP_LIB = -L/Users/shaun/src/luna-depends/lib
 
 CXX = g++
 CXXFLAGS = -O2 -I. -I.. -I/usr/local/include $(DEP_INCLUDES) -std=c++0x -Wno-logical-op-parentheses -Wno-deprecated-register -fPIC

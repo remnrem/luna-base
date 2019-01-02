@@ -99,7 +99,7 @@ struct globals
   static std::string project_path; 
   
   static bool skip_edf_annots;
-
+  
   static std::string indiv_wildcard;
 
   static std::string current_tag;

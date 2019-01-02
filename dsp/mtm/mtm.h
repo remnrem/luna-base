@@ -36,23 +36,25 @@ struct mtm_t
   mtm_t( const int npi = 3 , const int nwin = 5 );
   
   void apply( const std::vector<double> * , const int );
+
+  void apply2( const std::vector<double> * , const int );
   
   // structure to house results
 
-      // MTM parameters
+  // MTM parameters
 
-  // number of pi-prolate functions (default = 3)
+  // number of pi-prolate functions (default = 3) 
   int npi; 
 
-  // the number of summing windows, nwin (default = 5)
+  // the number of summing windows, nwin (default = 5) i.e. as 3*2-1 = 5 
   int nwin;
 
   // kind of analysis
   int kind;  // default 1  hires
-             // 2 adwait
+             // 2 adwait               (use this...)
              // naive periodogram
 
-  int inorm; // 1 standard ; 2 other
+  int inorm; // 1 standard ; 2 other, use 3 = 1/N weighting
 
   // p. 335, Percival and Walden, choose 
 
@@ -62,6 +64,19 @@ struct mtm_t
   // K < 2*num_points*W*dt
   //  nwin = 0...K-1
 
+  void bin( double w , double , double );
+
+  // hold results here
+  std::vector<double> f;
+  std::vector<double> spec;
+
+  void smooth( double w , double );
+  
+  // binned spectra
+
+  std::vector<double> bfa, bfb;
+  std::vector<double> bspec;
+  
   
 };
 

@@ -567,7 +567,7 @@ public:
   
   bool read_records( int r , int r2 );
 
-  bool validate( param_t & );
+  bool basic_stats( param_t & );
 
   //
   // EDF vs EDF+

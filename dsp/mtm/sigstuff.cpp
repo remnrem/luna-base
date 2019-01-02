@@ -33,7 +33,12 @@
 #include <cstdlib>
 
 #include <string>
+
+#if defined(__MACH__)
+#include <stdlib.h>
+#else 
 #include <malloc.h>
+#endif
 
 #define PI 3.141592654
 #define ABS(a) ((a) < (0) ? -(a) : (a))

@@ -60,10 +60,11 @@ struct retval_value_t {
   int i;
 
   std::string print() const {
+    if ( is_str ) return s;
+
     std::stringstream ss;
-    if      ( is_dbl ) ss << "(d)"<<d;
-    else if ( is_int ) ss << "(i)"<<i;
-    else if ( is_str ) ss << "(s)"<<s;
+    if      ( is_dbl ) ss  <<d;
+    else if ( is_int ) ss  <<i;    
     else ss << ".";
     return ss.str();    
   }

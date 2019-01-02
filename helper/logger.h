@@ -36,18 +36,24 @@
 
 using std::chrono::system_clock;
 
+#include "defs/defs.h"
+
+
 class logger_t
 {
 
  private:
 
+  const std::string _log_header;
+
   std::ostream& _out_stream;
   
   bool         _next_is_begin;
-  
-  const std::string _log_header;
+ 
+  bool         is_off;
 
   using endl_type = std::ostream&(std::ostream&);
+
 
   //This is the key: std::endl is a template function, and this is the
   //signature of that function (For std::ostream).
@@ -73,14 +79,40 @@ class logger_t
 		    << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")		  
 		    << std::endl;
       
+      is_off = false;
+      
     }
 
+  void flush() { _out_stream.flush(); } 
 
+  void off() { flush(); is_off = true; } 
 
+  void banner( const std::string & v , const std::string & bd ) 
+  {
+
+    if ( is_off || globals::silent ) return;
+
+    // initialize log with this message
+    
+    auto now        = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t( now ); 
+    auto now_tm     = std::localtime( &now_time_t ); 
+    
+    _out_stream << "===================================================================" << std::endl
+		<< _log_header
+		<< " | " << v << ", " << bd 
+		<< " | starting process "
+		<< std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")		  
+		<< std::endl
+		<< "===================================================================" << std::endl;
+  }
+  
+  
+  
   ~logger_t()
     {
       
-      // initialize log with this message
+      if ( is_off || globals::silent ) return;
       
       auto now        = std::chrono::system_clock::now();
       auto now_time_t = std::chrono::system_clock::to_time_t( now ); 
@@ -94,14 +126,20 @@ class logger_t
 		    << std::endl
 		    << "==================================================================="
 		    << std::endl;
-      
+
     }
 
+  void warning( const std::string & msg )
+  {
+    if ( is_off ) return ;
+    _out_stream << " ** warning: " << msg << " ** " << std::endl;
+  }
   
-  
+
   // Overload for std::endl only:
   logger_t& operator<<(endl_type endl)
     {       
+      if ( is_off ) return *this;
       _next_is_begin = true; 
 
       if ( ! globals::silent ) 
@@ -115,34 +153,10 @@ class logger_t
   template<typename T>           
     logger_t& operator<< (const T& data) 
     {
+      if ( is_off ) return *this;      
 
       if ( ! globals::silent ) 
 	_out_stream << data;
-      
-
-      /* auto now        = std::chrono::system_clock::now(); */
-      /* auto now_time_t = std::chrono::system_clock::to_time_t( now ); //Uhhg, C APIs... */
-      /* auto now_tm     = std::localtime( &now_time_t ); //More uhhg, C style...  */
-
-      /* auto t = std::time(nullptr); */
-      /* auto tm = *std::localtime(&t); */
-
-      /* << "(" */
-      /* << ( now_tm->tm_hour < 10 ? "0" : "" ) << now_tm->tm_hour << ":" */
-      /* << ( now_tm->tm_min < 10 ? "0" : "" ) << now_tm->tm_min << ":" */
-      /* << ( now_tm->tm_sec < 10 ? "0" : "" ) << now_tm->tm_sec << "): " */
-
-      
-      /* if( _next_is_begin ) */
-      /* 	_out_stream << _log_header */
-      /* 		    << " (" */
-      /* 		    << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S") */
-      /* 		    << "): " */
-      /* 		    << data; */
-      /* else */
-      /* 	_out_stream << data; */
-      
-      /* _next_is_begin = false; */
 
       return *this;
 
