@@ -108,6 +108,8 @@ namespace Helper
   void warn( const std::string & msg );
   void debug( const std::string & msg );
   bool realnum(double d);
+  bool similar( double a, double b , double EPS = 1e-6 );
+  
   std::string int2str(int n);  
   std::string int2str(long n);
   std::string int2str(uint64_t n);
@@ -120,6 +122,7 @@ namespace Helper
   std::string trim( const std::string & s , const char c = ' ' , const char d = ' ' );
   std::string format( const std::string & , int indent = 10 , int width = 60, bool no_initial_indent = true );
 
+  
   bool str2dbl(const std::string & , double * ); 
   bool str2int(const std::string & , int * ); 
   bool str2int64(const std::string & , uint64_t * ); 

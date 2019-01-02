@@ -50,7 +50,7 @@ struct hypnogram_t
   void construct( timeline_t * t , const std::vector<std::string> & s );
   void construct( timeline_t * t , const std::string sslabel = "SleepStage" );
   void calc_stats();
-  void output();
+  void output( const bool verbose );
 
   // special case, if analysing a hypnogram with no EDF
   void fudge( double es, int ne );

@@ -73,7 +73,7 @@ bool annot_t::load( const std::string & f )
   
   if ( Helper::file_extension( f , "xml" ) ) 
     {
-      std::cerr << "Problem :: " << f << " is an XML file... should already have been loaded...\n";
+      Helper::halt( f + " is an XML file, and so should already have been loaded" );
       return false;
     }
   
@@ -84,7 +84,7 @@ bool annot_t::load( const std::string & f )
 
   if ( Helper::file_extension( f , "ftr" ) ) 
     {
-      std::cerr << "Problem :: " << f << " is an FTR file... should already have been loaded...\n";
+      Helper::halt( f + " is an FTR file... should already have been loaded" );
       return false;
     }
   
@@ -93,7 +93,7 @@ bool annot_t::load( const std::string & f )
   // Original .annot file format
   //
       
-  std::cerr << " attaching annotation file " << f << "\n";
+  logger << " attaching annotation file " << f << "\n";
 
   //
   // record filename
@@ -310,7 +310,7 @@ bool annot_t::load( const std::string & f )
 		  e = new bool_event_t ( label , value );
 		}
 	      else
-		std::cerr << "could not read undefined type from annotation file\n";
+		logger << "could not read undefined type from annotation file\n";
 
 	      if ( e ) 
 		{
@@ -325,8 +325,8 @@ bool annot_t::load( const std::string & f )
       
     } // next line
 
-  std::cerr << " processed " << line_count << " lines\n";
-
+  logger << " processed " << line_count << " lines\n";
+  
   FIN.close();
   
   if ( type.size() != cols.size() ) 
@@ -341,7 +341,7 @@ int annot_t::load_features( const std::string & f )
 
   // set basic values for this annotation type, then add events/features  
 
-  std::cerr << " attaching feature-list file " << f << "\n";
+  logger << " attaching feature-list file " << f << "\n";
   
   std::ifstream FIN( f.c_str() , std::ios::in );
   
@@ -419,7 +419,7 @@ int annot_t::load_features( const std::string & f )
     } // next line
   
   
-  std::cerr << " processed " << line_count << " lines\n";
+  logger << " processed " << line_count << " lines\n";
   
   FIN.close();
   
@@ -530,7 +530,7 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
   
   if ( epoch_sec == -1 ) 
     {
-      std::cerr << "**warning, did not find EpochLength in XML, defaulting to 30 seconds**\n";
+      Helper::warn( "did not find EpochLength in XML, defaulting to 30 seconds" );
       epoch_sec = 30;
     }
 
@@ -687,7 +687,8 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 {
 
-  std::cerr << "  reading annotations from " << filename << "\n";
+  logger << "  reading annotations from " << filename << "\n";
+  
   XML xml( filename );
 
   if ( ! xml.valid() ) Helper::halt( "invalid annotaiton file: " + filename );
@@ -829,8 +830,6 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       const std::vector<interval_t> & aints = ii->second;
       const std::vector<event_t*> & aevts  = evts[ ii->first ];
       
-      //      std::cerr << "Scored Event Concept [" << ii->first << "], with " << aints.size() << " entries\n";
-      
       // map annotations to this file
       edf->alist[ ii->first ] = filename;
       edf->aoccur[ ii->first ] += aints.size();
@@ -875,7 +874,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	       canonical_label->value != "" && 
 	       label->value != canonical_label->value )
 	    {
-	      std::cerr << "  changing " << label->value << " to canonical label " << canonical_label->value << "\n";
+	      logger << "  changing " << label->value << " to canonical label " << canonical_label->value << "\n";
 	      edf->header.rename_channel( label->value , canonical_label->value );
 	      cmd_t::signal_alias( canonical_label->value + "|" + label->value ); // include this????
 	    }

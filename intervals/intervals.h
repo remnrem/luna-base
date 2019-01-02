@@ -190,10 +190,14 @@ struct feature_t
     colour = "";
     value = 0;
   } 
-  
-  interval_t  feature;
-  interval_t  window;
 
+  // actual feature size
+  interval_t  feature;
+
+  // optionally, a bounding interval,
+  // i.e. to define 'near overlap' 
+  interval_t  window;
+  
   std::string label;
   std::string signal;  
 

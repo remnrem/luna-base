@@ -253,7 +253,8 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "TIME-TRACK" ) )   proc_timetrack( edf, param(c) );
       
-      else if ( is( c, "STAGE" ) || is( c, "HYPNO" ) ) proc_sleep_stage( edf , param(c) );
+      else if ( is( c, "STAGE" ) )        proc_sleep_stage( edf , param(c) , false );
+      else if ( is( c, "HYPNO" ) )        proc_sleep_stage( edf , param(c) , true );
       
       else if ( is( c, "TSLIB" ) )        pdc_t::construct_tslib( edf , param(c) );
       else if ( is( c, "SSS" ) )          pdc_t::simple_sleep_scorer( edf , param(c) );
@@ -991,36 +992,23 @@ void proc_record_dump( edf_t & edf , param_t & param )
   edf.record_dumper();
 }
 
-// STAGE : set sleep stage labels
 
-void proc_sleep_stage( edf_t & edf , param_t & param )
+// STAGE : set and display sleep stage labels (verbose = F)
+// HYPNO : verbose report on sleep STAGES     (verbose = F)
+
+void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 {
+  
+  std::string wake   = param.has( "W" )  ? param.value("W")  : "" ; 
+  std::string nrem1  = param.has( "N1" ) ? param.value("N1") : "" ; 
+  std::string nrem2  = param.has( "N2" ) ? param.value("N2") : "" ; 
+  std::string nrem3  = param.has( "N3" ) ? param.value("N3") : "" ; 
+  std::string nrem4  = param.has( "N4" ) ? param.value("N4") : "" ; 
+  std::string rem    = param.has( "R" )  ? param.value("R")  : "" ; 
+  std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
 
-//   std::string wake   = "W";
-//   std::string nrem1  = "N1";
-//   std::string nrem2  = "N2";
-//   std::string nrem3  = "N3";
-//   std::string nrem4  = "N4";
-//   std::string rem    = "R";
-//   std::string misc   = "?";
-  
-  std::string wake   = "";
-  std::string nrem1  = "";
-  std::string nrem2  = "";
-  std::string nrem3  = "";
-  std::string nrem4  = "";
-  std::string rem    = "";
-  std::string misc   = "";
-  
-  if ( param.has( "W" ) ) wake = param.value("W");
-  if ( param.has( "N1" ) ) nrem1 = param.value("N1");
-  if ( param.has( "N2" ) ) nrem2 = param.value("N2");
-  if ( param.has( "N3" ) ) nrem3 = param.value("N3");
-  if ( param.has( "N4" ) ) nrem4 = param.value("N4");
-  if ( param.has( "R" ) ) rem = param.value("R");
-  if ( param.has( "?" ) ) misc = param.value("?");
+  // either read these from a file, or display
 
-  
   if ( param.has( "file" ) )
     {
       std::vector<std::string> ss = Helper::file2strvector( param.value( "file" ) );
@@ -1033,7 +1021,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param )
     }
 
   // and output...
-  edf.timeline.hypnogram.output();
+  edf.timeline.hypnogram.output( verbose );
 
 }
 

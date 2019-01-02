@@ -422,7 +422,7 @@ void proc_dump( edf_t & , param_t & );
 void proc_dump_mask( edf_t & , param_t & );
 void proc_file_mask( edf_t & , param_t & );
 void proc_file_annot( edf_t & , param_t & );
-void proc_sleep_stage( edf_t & , param_t & );
+void proc_sleep_stage( edf_t & , param_t & , bool verbose = false );
 
 void proc_record_dump( edf_t & , param_t & );
 void proc_intervals( param_t & , const std::string & );

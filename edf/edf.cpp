@@ -1693,7 +1693,7 @@ bool edf_t::populate_alist( const std::string & f )
   
   bool feature_list_mode = Helper::file_extension( f , "ftr" );
   
-  //  std::cout << "pop alist [" << f << "]\n";
+  //std::cout << "pop alist [" << f << "]\n";
 
   //
   // For XML files, we have to parse everything, so do this just once and store
@@ -1711,6 +1711,7 @@ bool edf_t::populate_alist( const std::string & f )
   
   if ( feature_list_mode )
     {
+            
       std::vector<std::string> tok = Helper::parse( f , "/" );
       std::string file_name = tok[ tok.size()-1];	
     
@@ -1722,12 +1723,15 @@ bool edf_t::populate_alist( const std::string & f )
       
       std::string id_name = file_name.substr(3,pos-3);
 
-      if ( id_name != id ) return false;
-
+      if ( id_name != id )
+	{
+	  Helper::warn( ".ftr file id_{ID} does not match EDF ID : [" + id_name + "] vs [" + id + "]" );
+	  return false;
+	}
+      
       std::string feature_name = file_name.substr( pos+9 , file_name.size() - 4 - pos - 9 );
       
-      if ( ! globals::silent ) 
-	std::cerr << " extracting [" << feature_name << "] for [" << id_name << "] from " << f << "\n";
+      logger  << " extracting [" << feature_name << "] for [" << id_name << "] from " << f << "\n";
       
       // create and load annotation
       

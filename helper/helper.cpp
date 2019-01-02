@@ -132,6 +132,12 @@ bool Helper::realnum(double d)
 }
 
 
+bool Helper::similar( double a, double b , double EPS )
+{
+  return fabs( a - b ) < EPS ;
+}
+
+
 std::string Helper::int2str(int n)
 {
   std::ostringstream s2( std::stringstream::out );

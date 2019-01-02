@@ -32,6 +32,8 @@
 #include <string>
 #include <iomanip>
 
+#include "defs/defs.h"
+
 using std::chrono::system_clock;
 
 class logger_t
@@ -62,13 +64,14 @@ class logger_t
       // initialize log with this message
       
       auto now        = std::chrono::system_clock::now();
-      auto now_time_t = std::chrono::system_clock::to_time_t( now ); //Uhhg, C APIs...
-      auto now_tm     = std::localtime( &now_time_t ); //More uhhg, C style... 
-      
-      _out_stream << _log_header
-		  << " | starting process "
- 		  << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")		  
-		  << std::endl;
+      auto now_time_t = std::chrono::system_clock::to_time_t( now ); 
+      auto now_tm     = std::localtime( &now_time_t ); 
+
+      if ( ! globals::silent ) 
+	_out_stream << _log_header
+		    << " | starting process "
+		    << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")		  
+		    << std::endl;
       
     }
 
@@ -80,13 +83,17 @@ class logger_t
       // initialize log with this message
       
       auto now        = std::chrono::system_clock::now();
-      auto now_time_t = std::chrono::system_clock::to_time_t( now ); //Uhhg, C APIs...
-      auto now_tm     = std::localtime( &now_time_t ); //More uhhg, C style... 
-      
-      _out_stream << _log_header
-		  << " | finishing process "
-		  << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")		  
-		  << std::endl;
+      auto now_time_t = std::chrono::system_clock::to_time_t( now ); 
+      auto now_tm     = std::localtime( &now_time_t ); 
+
+      if ( ! globals::silent ) 
+	_out_stream << "-------------------------------------------------------------------"
+		    << std::endl 
+		    << "+++ luna | finishing process "
+		    << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")
+		    << std::endl
+		    << "==================================================================="
+		    << std::endl;
       
     }
 
@@ -96,7 +103,10 @@ class logger_t
   logger_t& operator<<(endl_type endl)
     {       
       _next_is_begin = true; 
-      _out_stream << endl; 
+
+      if ( ! globals::silent ) 
+	_out_stream << endl; 
+
       return *this; 
     }
   
@@ -106,10 +116,9 @@ class logger_t
     logger_t& operator<< (const T& data) 
     {
 
-      // simply copy data 
-
-      _out_stream << data;
-
+      if ( ! globals::silent ) 
+	_out_stream << data;
+      
 
       /* auto now        = std::chrono::system_clock::now(); */
       /* auto now_time_t = std::chrono::system_clock::to_time_t( now ); //Uhhg, C APIs... */

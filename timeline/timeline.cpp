@@ -158,9 +158,6 @@ bool timeline_t::spans_epoch_boundary( const interval_t & interval ) const
   // if the interval is discontinuous, it must, by definition span a boundary, 
   // as all epochs must be continuous
   
-  //xxx  
-
-
   return false;
 }
 
@@ -2670,136 +2667,139 @@ void hypnogram_t::calc_stats()
 
 }
 
-void hypnogram_t::output()
+void hypnogram_t::output( const bool verbose )
 {
-  
+
+  // currently, this routine is hard-coded to assume 30-second epochs,
+  // so for now flag if this is not the case (we can fix downstream)
+
+
+  if ( ! Helper::similar( timeline->epoch_length() , 30 , 0.001 ) ) 
+    Helper::halt( "requires 30-second epochs to be set currently" );
+
   
   //
-  // Per individual level output
-  //
-  
-  writer.var( "LIGHTS_OUT"  , "Lights out time [0,24)" );
-  writer.var( "SLEEP_ONSET" , "Sleep onset time [0,24)" );
-  writer.var( "SLEEP_MIDPOINT" , "Sleep mid-point time [0,24)" );
-  writer.var( "FINAL_WAKE" , "Final wake time [0,24)" );
-  writer.var( "LIGHTS_ON" , "Lights on time [0,24)" );
-
-  writer.var( "NREMC" , "Number of NREM cycles" );
-  writer.var( "NREMC_MINS" , "Average NREM cycle duration (mins)" );
-
-  writer.var( "TIB" , "Time in Bed (hours): LIGHTS_OUT --> LIGHTS_ON" );
-  writer.var( "TST" , "Total Sleep Time (hours): SLEEP_ONSET --> FINAL_WAKE" );
-  writer.var( "TPST" , "Total persistent Sleep Time (hours): PERSISTENT_SLEEP_ONSET --> FINAL_WAKE" );
-
-  writer.var( "TWT" , "Total Wake Time (hours): all WAKE" );
-  writer.var( "WASO" , "Wake After Sleep Onset (hours)" );
-
-  writer.var( "SLP_LAT" , "Sleep latency" );
-  writer.var( "PER_SLP_LAT" , "Persistent sleep latency" );
-
-  writer.var( "SLP_EFF" , "Sleep efficiency: LIGHTS_OUT --> LIGHTS_ON" );
-  writer.var( "SLP_MAIN_EFF" , "Sleep maintainence efficiency" );
-  writer.var( "SLP_EFF2" , "Sleep efficiency: SLEEP_ONSET --> FINAL_WAKE" );
-
-  writer.var( "REM_LAT" , "REM latency (from SLEEP_ONSET)" );
-
-  writer.var( "PCT_N1" , "Proportion of sleep that is N1" );
-  writer.var( "PCT_N2" , "Proportion of sleep that is N2" );
-  writer.var( "PCT_N3" , "Proportion of sleep that is N3" );
-  writer.var( "PCT_N4" , "Proportion of sleep that is N4" );
-  writer.var( "PCT_REM" , "Proportion of sleep that is REM" );
-
-  writer.var( "MINS_N1" , "Proportion of sleep that is N1" );
-  writer.var( "MINS_N2" , "Proportion of sleep that is N2" );
-  writer.var( "MINS_N3" , "Proportion of sleep that is N3" );
-  writer.var( "MINS_N4" , "Proportion of sleep that is N4" );
-  writer.var( "MINS_REM" , "Proportion of sleep that is REM" );
-
-  // values
-  writer.value(  "LIGHTS_OUT" , clock_lights_out.as_numeric_string() );
-  writer.value(  "SLEEP_ONSET" , clock_sleep_onset.as_numeric_string() );
-  writer.value(  "SLEEP_MIDPOINT" , clock_sleep_midpoint.as_numeric_string() );
-  writer.value(  "FINAL_WAKE" , clock_wake_time.as_numeric_string() );
-  writer.value(  "LIGHTS_ON" , clock_lights_on.as_numeric_string() );
-
-  writer.value(  "NREMC" , num_nremc );
-  writer.value(  "NREMC_MINS" , nremc_mean_duration );
-
-  writer.value( "TIB" , TIB );
-  writer.value( "TST" , TST );
-  writer.value( "TPST" , TpST );
-  writer.value( "TWT" , TWT );
-  writer.value( "WASO" , WASO );
-
-  writer.value( "SLP_LAT" , slp_lat );
-  writer.value( "PER_SLP_LAT" , per_slp_lat );
-
-  writer.value( "SLP_EFF" , slp_eff_pct );
-  writer.value( "SLP_MAIN_EFF" , slp_main_pct );
-  writer.value( "SLP_EFF2" , slp_eff2_pct );
-  
-  if ( mins_rem > 0 )
-    writer.value( "REM_LAT" , rem_lat_mins );
-
-  writer.value( "PCT_N1" , pct_n1 );
-  writer.value( "PCT_N2" , pct_n2 );
-  writer.value( "PCT_N3" , pct_n3 );
-  writer.value( "PCT_N4" , pct_n4 );
-  writer.value( "PCT_REM" , pct_rem);
-
-  writer.value( "MINS_N1" , mins_n1 );
-  writer.value( "MINS_N2" , mins_n2 );
-  writer.value( "MINS_N3" , mins_n3 );
-  writer.value( "MINS_N4" , mins_n4 );
-  writer.value( "MINS_REM" , mins_rem);
-
-
-  //
-  // Cycle-specific output
+  // Per individual level output (VERBOSE MODE ONLY)
   //
 
-  
-  writer.var( "NREMC_START" , "NREM cycle start epoch" );
-  writer.var( "NREMC_NREM_MINS" , "NREM cycle NREM duration (mins)" );
-  writer.var( "NREMC_REM_MINS" , "NREM cycle REM duration (mins)" );
-  writer.var( "NREMC_OTHER_MINS" , "NREM cycle other duration (mins)" );
-  writer.var( "NREMC_MINS" , "NREM cycle total duration (mins)" );
-
-  std::map<int,double>::iterator cc = nremc_duration.begin();
-  while ( cc != nremc_duration.end() )
+  if ( verbose )
     {
-      writer.level( cc->first , globals::cycle_strat );
+      writer.var( "LIGHTS_OUT"  , "Lights out time [0,24)" );
+      writer.var( "SLEEP_ONSET" , "Sleep onset time [0,24)" );
+      writer.var( "SLEEP_MIDPOINT" , "Sleep mid-point time [0,24)" );
+      writer.var( "FINAL_WAKE" , "Final wake time [0,24)" );
+      writer.var( "LIGHTS_ON" , "Lights on time [0,24)" );
+      
+      writer.var( "NREMC" , "Number of NREM cycles" );
+      writer.var( "NREMC_MINS" , "Average NREM cycle duration (mins)" );
+      
+      writer.var( "TIB" , "Time in Bed (hours): LIGHTS_OUT --> LIGHTS_ON" );
+      writer.var( "TST" , "Total Sleep Time (hours): SLEEP_ONSET --> FINAL_WAKE" );
+      writer.var( "TPST" , "Total persistent Sleep Time (hours): PERSISTENT_SLEEP_ONSET --> FINAL_WAKE" );
+      
+      writer.var( "TWT" , "Total Wake Time (hours): all WAKE" );
+      writer.var( "WASO" , "Wake After Sleep Onset (hours)" );
+      
+      writer.var( "SLP_LAT" , "Sleep latency" );
+      writer.var( "PER_SLP_LAT" , "Persistent sleep latency" );
+      
+      writer.var( "SLP_EFF" , "Sleep efficiency: LIGHTS_OUT --> LIGHTS_ON" );
+      writer.var( "SLP_MAIN_EFF" , "Sleep maintainence efficiency" );
+      writer.var( "SLP_EFF2" , "Sleep efficiency: SLEEP_ONSET --> FINAL_WAKE" );
 
-      writer.value(  "NREMC_START" , nremc_start_epoch[ cc->first ] );
-      writer.value(  "NREMC_NREM_MINS" , nremc_nrem_duration[ cc->first ] );
-      writer.value(  "NREMC_REM_MINS" , nremc_rem_duration[ cc->first ] );
-      writer.value(  "NREMC_OTHER_MINS" , cc->second - nremc_nrem_duration[ cc->first ] - nremc_rem_duration[ cc->first ] );
-      writer.value( "NREMC_MINS" , cc->second );
+      writer.var( "REM_LAT" , "REM latency (from SLEEP_ONSET)" );
+      
+      writer.var( "PCT_N1" , "Proportion of sleep that is N1" );
+      writer.var( "PCT_N2" , "Proportion of sleep that is N2" );
+      writer.var( "PCT_N3" , "Proportion of sleep that is N3" );
+      writer.var( "PCT_N4" , "Proportion of sleep that is N4" );
+      writer.var( "PCT_REM" , "Proportion of sleep that is REM" );
+      
+      writer.var( "MINS_N1" , "Proportion of sleep that is N1" );
+      writer.var( "MINS_N2" , "Proportion of sleep that is N2" );
+      writer.var( "MINS_N3" , "Proportion of sleep that is N3" );
+      writer.var( "MINS_N4" , "Proportion of sleep that is N4" );
+      writer.var( "MINS_REM" , "Proportion of sleep that is REM" );
+      
+      // values
+      writer.value(  "LIGHTS_OUT" , clock_lights_out.as_numeric_string() );
+      writer.value(  "SLEEP_ONSET" , clock_sleep_onset.as_numeric_string() );
+      writer.value(  "SLEEP_MIDPOINT" , clock_sleep_midpoint.as_numeric_string() );
+      writer.value(  "FINAL_WAKE" , clock_wake_time.as_numeric_string() );
+      writer.value(  "LIGHTS_ON" , clock_lights_on.as_numeric_string() );
+      
+      writer.value(  "NREMC" , num_nremc );
+      writer.value(  "NREMC_MINS" , nremc_mean_duration );
+      
+      writer.value( "TIB" , TIB );
+      writer.value( "TST" , TST );
+      writer.value( "TPST" , TpST );
+      writer.value( "TWT" , TWT );
+      writer.value( "WASO" , WASO );
+      
+      writer.value( "SLP_LAT" , slp_lat );
+      writer.value( "PER_SLP_LAT" , per_slp_lat );
+      
+      writer.value( "SLP_EFF" , slp_eff_pct );
+      writer.value( "SLP_MAIN_EFF" , slp_main_pct );
+      writer.value( "SLP_EFF2" , slp_eff2_pct );
+      
+      if ( mins_rem > 0 )
+	writer.value( "REM_LAT" , rem_lat_mins );
+      
+      writer.value( "PCT_N1" , pct_n1 );
+      writer.value( "PCT_N2" , pct_n2 );
+      writer.value( "PCT_N3" , pct_n3 );
+      writer.value( "PCT_N4" , pct_n4 );
+      writer.value( "PCT_REM" , pct_rem);
+      
+      writer.value( "MINS_N1" , mins_n1 );
+      writer.value( "MINS_N2" , mins_n2 );
+      writer.value( "MINS_N3" , mins_n3 );
+      writer.value( "MINS_N4" , mins_n4 );
+      writer.value( "MINS_REM" , mins_rem);
 
-      ++cc;
     }
   
-  writer.unlevel( globals::cycle_strat );
+  //
+  // Cycle-specific output (verbose mode only)
+  //
+
+  if ( verbose ) 
+    {
+      
+      writer.var( "NREMC_START" , "NREM cycle start epoch" );
+      writer.var( "NREMC_NREM_MINS" , "NREM cycle NREM duration (mins)" );
+      writer.var( "NREMC_REM_MINS" , "NREM cycle REM duration (mins)" );
+      writer.var( "NREMC_OTHER_MINS" , "NREM cycle other duration (mins)" );
+      writer.var( "NREMC_MINS" , "NREM cycle total duration (mins)" );
+      
+      std::map<int,double>::iterator cc = nremc_duration.begin();
+      while ( cc != nremc_duration.end() )
+	{
+	  writer.level( cc->first , globals::cycle_strat );
+	  
+	  writer.value(  "NREMC_START" , nremc_start_epoch[ cc->first ] );
+	  writer.value(  "NREMC_NREM_MINS" , nremc_nrem_duration[ cc->first ] );
+	  writer.value(  "NREMC_REM_MINS" , nremc_rem_duration[ cc->first ] );
+	  writer.value(  "NREMC_OTHER_MINS" , cc->second - nremc_nrem_duration[ cc->first ] - nremc_rem_duration[ cc->first ] );
+	  writer.value( "NREMC_MINS" , cc->second );
+	  
+	  ++cc;
+	}
+      
+      writer.unlevel( globals::cycle_strat );
 
 
+    }
+
+  
   //
   // Per epoch level output
   //
 
-  // Outputs
-  // Per epoch, we have
-  //   a) stage
-  //   b) elapsed time
-  //   c) elapsed sleep
-  //   d) period number
-  //   e) N2 measure of direction
-  
-  // epoch size (in minutes)
-  const double epoch_mins = timeline->epoch_length() / 60.0 ; 
-  const int ne = timeline->num_total_epochs();
-  
-  double elapsed_n1 = 0 , elapsed_n2 = 0 , elapsed_n34 = 0 , elapsed_rem = 0;
-  double elapsed_sleep = 0 , elapsed_wake = 0 , elapsed_waso = 0 ;
+
+  // stage information and time only in non-verbose mode
 
   std::map<sleep_stage_t,int> stagen;
   stagen[ WAKE ] = 1;
@@ -2813,14 +2813,67 @@ void hypnogram_t::output()
   stagen[ ARTIFACT ] = 2;
   stagen[ LIGHTS_ON ] = 2;
 
-  // header
-
   writer.var( "MINS" , "Elapsed time since start of recording (minutes)" );
   writer.var( "CLOCK_TIME" , "Clock time (hh:mm:ss)" );
-  writer.var( "CLOCK_HOURS" , "Clock time [0,24) hours" );
+
   writer.var( "STAGE" , "Sleep stage, string label" );
   writer.var( "STAGE_N" , "Sleep stage, numeric encoding" );
 
+  // epoch size (in minutes)
+  const double epoch_mins = timeline->epoch_length() / 60.0 ; 
+  const int ne = timeline->num_total_epochs();
+
+  clocktime_t epoch_time( clock_lights_out );
+
+  clocktime_t epoch_duration( "00:00:30" );
+
+  // output
+  for (int e=0;e<ne;e++)
+    {
+      
+      // epoch-level stratification
+      writer.epoch( timeline->display_epoch( e ) );
+            
+      writer.value( "MINS" ,  e * epoch_mins );
+      writer.value( "CLOCK_TIME" , epoch_time.as_string() );      
+      if ( verbose ) 
+	writer.value( "CLOCK_HOURS" ,  epoch_time.as_numeric_string() );
+      
+      // next epoch...
+      epoch_time.advance( epoch_duration );           
+      
+      // stages
+      writer.value( "STAGE" , globals::stage( stages[e] ) );
+      writer.value( "STAGE_N" , stagen[ stages[e] ] );
+    }
+
+  writer.unepoch();
+
+  
+  //
+  // ... otherwise, the rest of this function is verbose mode only
+  //
+  
+  if ( ! verbose ) return;
+
+
+  
+  // Outputs
+  // Per epoch, we have
+  //   a) stage (done above)
+  //   b) elapsed time
+  //   c) elapsed sleep
+  //   d) period number
+  //   e) N2 measure of direction
+  
+  
+  double elapsed_n1 = 0 , elapsed_n2 = 0 , elapsed_n34 = 0 , elapsed_rem = 0;
+  double elapsed_sleep = 0 , elapsed_wake = 0 , elapsed_waso = 0 ;
+
+  
+  // header
+
+  writer.var( "CLOCK_HOURS" , "Clock time [0,24) hours" );
         
   writer.var( "E_WAKE" , "Elapsed wake (mins)" );
   writer.var( "E_WASO" , "Elapsed WASO (mins)" );
@@ -2860,10 +2913,7 @@ void hypnogram_t::output()
 
   writer.var ("N2_WGT" , "Score for descending/ascending N2 epochs (-1 to +1)" );
 
-
   
-  clocktime_t epoch_time( clock_lights_out );
-  clocktime_t epoch_duration( "00:00:30" );
   
   // output
   for (int e=0;e<ne;e++)
@@ -2872,17 +2922,6 @@ void hypnogram_t::output()
       // epoch-level stratification
       writer.epoch( timeline->display_epoch( e ) );
       
-      writer.value( "MINS" ,  e * epoch_mins );
-      writer.value( "CLOCK_TIME" , epoch_time.as_string() );
-      writer.value( "CLOCK_HOURS" ,  epoch_time.as_numeric_string() );
-      
-      // next epoch...
-      epoch_time.advance( epoch_duration );           
-      
-      // stages
-      writer.value( "STAGE" , globals::stage( stages[e] ) );
-      writer.value( "STAGE_N" , stagen[ stages[e] ] );
-
       // stage stats
       writer.value( "E_WAKE" , elapsed_wake );
       writer.value( "E_WASO" , elapsed_waso );
@@ -2890,8 +2929,7 @@ void hypnogram_t::output()
       writer.value( "E_N1" , elapsed_n1 );
       writer.value( "E_N2" , elapsed_n2 );
       writer.value( "E_N3" , elapsed_n34 );
-      writer.value( "E_REM" , elapsed_rem );
-		  
+      writer.value( "E_REM" , elapsed_rem );		  
 
       // and as percentages
       writer.value( "PCT_E_SLEEP" , TST>0 ? elapsed_sleep / TST : 0 );
@@ -2985,7 +3023,7 @@ void dummy_hypno()
   h.fudge( 30 , h.stages.size() );
 
   h.calc_stats();
-  h.output();
+  h.output( true ); // verbose mode == T 
 
 }
 
