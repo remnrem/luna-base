@@ -97,6 +97,8 @@ struct globals
   static char folder_delimiter;
 
   static std::string project_path; 
+
+  static bool assume_pm_starttime;
   
   static bool skip_edf_annots;
   

@@ -715,8 +715,8 @@ bool Helper::add_clocktime( int *h , int *m , int *s , uint64_t a , int * msec )
   fmins  -= floor(fhours) * 60 ;
   fsec   -= floor(fhours) * 3600 + floor(fmins) * 60;
   
-  // loop around the clock
-  if ( fhours > 12 ) fhours -= 12;
+  // loop around the (24-hr) clock
+  if ( fhours > 24 ) fhours -= 24;
   
   *h = floor(fhours);
   *m = floor(fmins);

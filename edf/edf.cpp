@@ -314,7 +314,25 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
   starttime      = edf_t::get_string( &q , 8 );
   nbytes_header  = edf_t::get_int( &q , 8 );  
   reserved       = edf_t::get_bytes( &q , 44 );
-    
+
+  //
+  // ensure starttime is in the PM, i.e. 07:00 --> 19:00
+  // unless we've otherwise been instructed to respect
+  // AM start-times (assume-pm-start=0)
+  //
+  
+  if ( globals::assume_pm_starttime )
+    {
+      clocktime_t st( starttime );
+      if ( st.valid ) 
+	{
+	  if      ( st.h < 12 )  st.h += 12;
+	  else if ( st.h == 12 ) st.h = 0; 
+	  starttime = st.as_string();
+	}
+    }
+
+  
   // EDF+C  continuous EDF 
   // EDF+D  discontinuous EDF+
   

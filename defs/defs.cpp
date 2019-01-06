@@ -45,6 +45,8 @@ sleep_stage_label_lookup_t globals::sleep_stage_labels;
 char globals::folder_delimiter;
 std::string globals::project_path;
 
+bool globals::assume_pm_starttime;
+
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
 bool globals::skip_edf_annots;
@@ -262,6 +264,8 @@ void globals::init_defs()
   sample_list_max = -1;
   sample_list_id = "";
 
+  assume_pm_starttime = true;
+  
   problem = false;
   
   edf_timetrack_label = "_TT";

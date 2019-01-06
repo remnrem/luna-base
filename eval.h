@@ -238,6 +238,8 @@ class cmd_t
     cmdline_cmds.append( c + " " );
   }
   
+  static void parse_special( const std::string & s , const std::string & delim );
+  
   // by default (str == NULL) read from command line arguments, 
   // then from STDIN;  otherwise, parse the commands in the 
   // text string 

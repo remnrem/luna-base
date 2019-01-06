@@ -1328,3 +1328,114 @@ void attach_annot( edf_t & edf , const std::string & astr )
     }
 }
 
+
+void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
+{
+
+  // add signals?
+  if ( Helper::iequals( tok0 , "signal" ) || Helper::iequals( tok0 , "signals" ) )
+    {		  
+      std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );		        
+      for (int s=0;s<tok2.size();s++) 
+	cmd_t::signallist.insert(Helper::unquote(tok2[s]));		  
+      return;
+    }
+  
+
+  // default annot folder
+  else if ( Helper::iequals( tok0 , "annots" ) ) 
+    {
+      if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
+	globals::annot_folder = tok1 + "/";
+      else
+	globals::annot_folder = tok1;		      
+      return;
+    }
+
+  
+  // signal alias?
+  if ( Helper::iequals( tok0 , "alias" ) )
+    {
+      cmd_t::signal_alias( tok1 );
+      return;
+    }
+
+  
+  // do not read EDF annotations
+  if ( Helper::iequals( tok0 , "force-edf" ) )
+    {
+      if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
+	globals::skip_edf_annots = true;
+      return;
+    }
+  
+  // project path
+  if ( Helper::iequals( tok0 , "path" ) )
+    {
+      globals::param.add( "path" , tok1 );
+      return;
+    }
+  
+  // do not force PM start-time
+  if ( Helper::iequals( tok0 , "assume-pm-start" ) )
+    {
+      if ( tok1 == "0"
+	   || Helper::iequals( tok1 , "n" )
+	   || Helper::iequals( tok1 , "no" ) )
+	globals::assume_pm_starttime = false; 
+      return;
+    }
+  
+  // signal alias?
+  if ( Helper::iequals( tok0 , "alias" ) )
+    {
+      cmd_t::signal_alias( tok1 );
+      return;
+    }
+  
+  // exclude individuals?
+  if ( Helper::iequals( tok0 , "exclude" ) )
+    {
+      
+      std::string xfile = Helper::expand( tok1 );
+      
+      if ( Helper::fileExists( xfile ) ) 
+	{
+	  std::ifstream XIN( xfile.c_str() , std::ios::in );
+	  while ( !XIN.eof() ) 
+	    {
+	      // format: ID {white-space} any notes (ignored)
+	      std::string line2;
+	      std::getline( XIN , line2);
+	      if ( XIN.eof() || line2 == "" ) continue;
+	      std::vector<std::string> tok = Helper::parse( line2 , "\t " );
+	      if ( tok.size() == 0 ) continue;			      
+	      std::string xid = tok0;
+	      globals::excludes.insert( xid );
+	    }
+	  logger << "excluding " << globals::excludes.size() 
+		 << " individuals from " << xfile << std::endl;
+	  XIN.close();
+	}
+      else logger << "**warning: exclude file " << xfile << " does not exist" << std::endl;
+
+      return;
+    }
+
+
+  // not sure if/where this is used now
+  
+  if ( tok0[0] == '-' )
+    {
+      globals::param.add( tok0.substr(1) , tok1 );
+      return;
+    }
+
+  
+  // else a standard variable
+
+  cmd_t::vars[ tok0 ] = tok1;
+
+  
+}
+

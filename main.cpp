@@ -20,6 +20,8 @@
 //
 //    --------------------------------------------------------------------
 
+
+
 #include "luna.h"
 
 #include "main.h"
@@ -29,6 +31,9 @@ extern globals global;
 extern writer_t writer;
 
 extern logger_t logger;
+
+
+
 
 int main(int argc , char ** argv )
 {
@@ -48,7 +53,8 @@ int main(int argc , char ** argv )
 
 
   //
-  // special command-line driven functions that do not involve iterating through a sample list
+  // special command-line driven functions that do not involve
+  // iterating through a sample list
   //
 
   bool cmdline_proc_fir_design = false;
@@ -120,91 +126,32 @@ int main(int argc , char ** argv )
       //   signals=S1,S2,...
       //   --flag  ( added minus fist '-' to globals::param
       //   exclude={file}
+
       //   -o  output db
       //   -a  output db  { as above, except append } 
       //   -s  { rest of line is script }
 
-
       // comma-separated strings (-->signals)
       // a single number or range (n, n-m)
       // var=value
-
+      
       int specified = 0;
-
+      
       for (int i=2;i<argc;i++)
 	{
+	  
 	  std::vector<std::string> tok = 
 	    Helper::quoted_parse( argv[i] , "=" );
+
+	  // is this a special variable, e.g. path=, alias=, signal=, etc
 	  
 	  if ( tok.size() == 2 ) 
 	    {
-	      // add signals?
-	      if ( Helper::iequals( tok[0] , "signal" ) 
-		   || Helper::iequals( tok[0] , "signals" ) )
-		{		  
-		  
-		  std::vector<std::string> tok2 
-		    = Helper::quoted_parse( tok[1] , "," );		  
-		  
-		  for (int s=0;s<tok2.size();s++) 
-		    cmd_t::signallist.insert(Helper::unquote(tok2[s]));		  
-		}
-
-	      // do not read EDF annotations
-	      else if ( Helper::iequals( tok[0] , "force-edf" ) )
-		{
-		  if ( tok[1] == "1" || tok[1] == "Y" || tok[1] == "y" )
-		    globals::skip_edf_annots = true;
-		}
-	      
-	      // project path
-	      else if ( Helper::iequals( tok[0] , "path" ) )
-		{
-		  globals::param.add( "path" , tok[1] );
-		}
-
-
-	      // signal alias?
-	      else if ( Helper::iequals( tok[0] , "alias" ) )
-		{
-		  cmd_t::signal_alias( tok[1] );
-		}
-	      
-	      // exclude individuals?
-	      else if ( Helper::iequals( tok[0] , "exclude" ) )
-		{
-
-		  std::string xfile = Helper::expand( tok[1] );
-
-		  if ( Helper::fileExists( xfile ) ) 
-		    {
-		      std::ifstream XIN( xfile.c_str() , std::ios::in );
-		      while ( !XIN.eof() ) 
-			{
-			  // format: ID {white-space} any notes (ignored)
-			  std::string line2;
-			  std::getline( XIN , line2);
-			  if ( XIN.eof() || line2 == "" ) continue;
-			  std::vector<std::string> tok = Helper::parse( line2 , "\t " );
-			  if ( tok.size() == 0 ) continue;			      
-			  std::string xid = tok[0];
-			  globals::excludes.insert( xid );
-			}
-		      logger << "excluding " << globals::excludes.size() 
-			     << " individuals from " << xfile << std::endl;
-		      XIN.close();
-		    }
-		  else logger << "**warning: exclude file " << xfile << " does not exist" << std::endl;
-		}
-	      else if ( tok[0][0] == '-' )
-		{
-		  globals::param.add( tok[0].substr(1) , tok[1] );
-		}
-	      else // a standard variable
-		{		  
-		  cmd_t::vars[ tok[0] ] = tok[1];
-		}
+	      cmd_t::parse_special( tok[0] , tok[1] ); 	      
 	    }
+	  
+	  // specify database for output
+	  
 	  else if ( Helper::iequals( tok[0] , "-o" ) || Helper::iequals( tok[0] , "-a" ) )
 	    {
 	      // next arg will be DB
@@ -212,96 +159,53 @@ int main(int argc , char ** argv )
 	      cmd_t::stout_file = argv[ ++i ];
 	      if ( Helper::iequals( tok[0] , "-a" ) ) cmd_t::append_stout_file = true;
 	    }
+	  
+	  
+	  // luna-script from command line
+	  
 	  else if ( Helper::iequals( tok[0] , "-s" ) )
 	    {
 	      // rest of args will be cmd script
 	      for (int j=i+1;j<argc;j++) cmd_t::add_cmdline_cmd( argv[j] );
 	      break;		
 	    }
+	  
+	  
 	  else if ( argv[i][0] == '-' )
 	    {
 	      std::string f = argv[i];	      
 	      globals::param.add( f.substr(1) );
 	    }
+
+	  
+	  // param file
+	  
 	  else if ( argv[i][0] == '@' )
 	    {
+
 	      // an 'include' 
 	      std::string filename = argv[i];
+	      
 	      // expand() expands out any ~/ notation to full path
 	      filename = Helper::expand( filename.substr(1).c_str() );
 	      if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not open " + filename );
+	      
 	      std::ifstream INC( filename , std::ios::in );
 	      if ( INC.bad() ) Helper::halt("could not open file: " + filename );
 	      while ( ! INC.eof() )
 		{
+
 		  std::string line;
 		  std::getline( INC , line);
 		  if ( INC.eof() || line == "" ) continue;
+		  
 		  std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
 		  if ( tok.size() != 2 ) Helper::halt("badly formatted line in " + filename );
 		  
-		  // a signal?
-		  if ( Helper::iequals( tok[0] , "signal" ) || Helper::iequals( tok[0] , "signals" ) )
-		    {		  
-		      std::vector<std::string> tok2 = Helper::quoted_parse( tok[1] , "," );		  
-		      for (int s=0;s<tok2.size();s++) 
-			cmd_t::signallist.insert(Helper::unquote(tok2[s]));					  
-		    }
-		  
-		  // signal alias?
-		  else if ( Helper::iequals( tok[0] , "alias" ) )
-		    {
-		      cmd_t::signal_alias( tok[1] );
-		    }
+		  cmd_t::parse_special( tok[0] , tok[1] );		  
 
-		  // skip EDF Annotations channels
-		  else if ( Helper::iequals( tok[0] , "force-edf" ) )
-		    {
-		      if ( tok[1] == "1" || tok[1] == "Y" || tok[1] == "y" ) 
-			globals::skip_edf_annots = true;
-		    }
-		  
-		  // project path
-		  else if ( Helper::iequals( tok[0] , "path" ) )
-		    {
-		      globals::param.add( "path" , tok[1] );
-		    }
-
-		  // default annot folder?
-		  else if ( Helper::iequals( tok[0] , "annots" ) ) 
-		    {
-		      if ( tok[1][ tok[1].size() - 1 ] != globals::folder_delimiter )
-			globals::annot_folder = tok[1] + "/";
-		      else
-			globals::annot_folder = tok[1];		      
-		    }
-		  else if ( Helper::iequals( tok[0] , "exclude" ) )
-		    {
-		      std::string xfile = Helper::expand( tok[1] );
-		      if ( Helper::fileExists( xfile ) ) 
-			{
-			  std::ifstream XIN( xfile.c_str() , std::ios::in );
-			  while ( !XIN.eof() ) 
-			    {
-			      std::string line2;
-			      std::getline( XIN , line2);
-			      if ( XIN.eof() || line2 == "" ) continue;
-			      std::vector<std::string> tok = Helper::parse( line2 , "\t " );
-			      if ( tok.size() == 0 ) continue;			      
-			      std::string xid = tok[0];
-			      globals::excludes.insert( xid );
-			    }
-			  logger << "excluding " << globals::excludes.size() 
-				 << " individuals from " << xfile << std::endl;
-			  XIN.close();
-			}
-		      else logger << "** warning: exclude file " << xfile << " does not exist" << std::endl;
-		    }
-		  else // ... or just a variable?
-		    {		  
-		      cmd_t::vars[ tok[0] ] = tok[1];	  
-		    }
 		}
+	     	      
 	      INC.close();
 	    }
 	  else
