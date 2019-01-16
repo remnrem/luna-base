@@ -44,6 +44,30 @@ int main(int argc , char ** argv )
 
   global.init_defs();
 
+  
+  //
+  // Some initial options (called prior to the main banner, etc)
+  //
+  
+  if ( argc == 2 && strcmp( argv[1] ,"-d" ) == 0 )
+    { 
+      global.api();
+      proc_dummy(); 
+      exit(0); 
+    } 
+  else if ( argc == 3 && strcmp( argv[1] , "--validate" ) == 0 ) 
+    {
+      // 1: sample-list or EDF
+      // 2: --validate 
+      Helper::halt( "--validate not implemented... ");
+    }
+  else if ( argc == 3 && strcmp( argv[1] , "--xml" ) == 0 )
+    {
+      global.api();
+      annot_t::dumpxml( argv[2] , false );
+      std::exit(0);
+    }
+
 
   //
   // banner
@@ -65,28 +89,7 @@ int main(int argc , char ** argv )
   // parse command line
   //
 
-  if ( argc == 2 && strcmp( argv[1] ,"-d" ) == 0 )
-    { 
-      proc_dummy(); 
-      exit(0); 
-    } 
-  else if ( argc == 3 && strcmp( argv[1] , "--validate" ) == 0 ) 
-    {
-      // 1: sample-list or EDF
-      // 2: --validate 
-      Helper::halt( "--validate not implemented... ");
-    }
-  else if ( argc == 3 && strcmp( argv[1] , "--xml" ) == 0 )
-    {
-      annot_t::dumpxml( argv[2] , false );
-      std::exit(0);
-    }
-  else if ( argc == 3 && strcmp( argv[1] , "--xml-dump" ) == 0 )
-    {
-      annot_t::dumpxml( argv[2] , true );
-      std::exit(0);
-    }  
-  else if ( argc == 2 && strcmp( argv[1] , "--pdlib" ) == 0 ) 
+  if ( argc == 2 && strcmp( argv[1] , "--pdlib" ) == 0 ) 
     {
       param_t param = build_param_from_cmdline();
       writer.nodb();
@@ -286,6 +289,9 @@ int main(int argc , char ** argv )
   writer.numeric_factor( globals::freq_strat );
   writer.numeric_factor( globals::cycle_strat );
   writer.string_factor( globals::band_strat );
+  writer.string_factor( globals::annot_strat );
+  writer.string_factor( globals::annot_instance_strat );
+  writer.string_factor( globals::annot_meta_strat );
   writer.string_factor( globals::signal_strat );
   writer.string_factor( globals::stage_strat );
   writer.numeric_factor( globals::count_strat );
@@ -377,7 +383,7 @@ int main(int argc , char ** argv )
   // wrap up
   //
 
-  logger << "...processed " << processed << " command(s), ";
+  logger << "...processed " << processed << " command set(s), ";
   if ( failed == 0 ) logger << " all of which passed" << std::endl;
   else logger << failed << " of which failed" << std::endl;
 
@@ -488,12 +494,16 @@ void process_edfs( cmd_t & cmd )
 	  if ( tok.size() < 2 ) 
 	    Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
 
-	  // add in project path?
+	  // add in project path to relative paths?
+	  // (but keep absolute paths as they are)
 
 	  if ( has_project_path )
 	    {
 	      for (int t=1;t<tok.size();t++)
-		tok[t] = globals::project_path + tok[t];
+		{
+		  if ( tok[t][0] != globals::folder_delimiter )
+		    tok[t] = globals::project_path + tok[t];
+		}
 	    }
 	  
 	  // extract main items (ID, signal EDF)
@@ -520,7 +530,7 @@ void process_edfs( cmd_t & cmd )
       //
       // File in exclude list?
       //
-          
+
       if ( globals::excludes.find( rootname ) != globals::excludes.end() )
 	{
 	  logger << "\nskipping EDF " << rootname << std::endl;
@@ -534,7 +544,7 @@ void process_edfs( cmd_t & cmd )
       //
 
       
-      logger  << "___________________________________________________________________\n"
+      logger  << "\n___________________________________________________________________\n"
 	      << "Processing: " << rootname 
 	      << " [ #" << processed+1 << " ]" << std::endl;
       
@@ -620,7 +630,7 @@ void process_edfs( cmd_t & cmd )
 
 	  logger << "**warning: problem loading " 
 		 << edffile << ", skipping..." << std::endl;
-
+	  
 	  writer.commit();
 
 	  continue;
@@ -647,11 +657,14 @@ void process_edfs( cmd_t & cmd )
 		      while ((ent = readdir (dir)) != NULL)
 			{
 			  std::string fname = ent->d_name;
-			  
-			  // only feature lists
+			  //std::cerr << " fname [" << fname << "]\n";
+			  // only annot files (.xml, .ftr, .annot)
  			  if ( Helper::file_extension( fname , "ftr" ) ||
- 			       Helper::file_extension( fname , "xml" ) )
-			    edf.populate_alist( tok[i] + fname );	 			   
+ 			       Helper::file_extension( fname , "xml" ) ||
+			       Helper::file_extension( fname , "annot" ) )
+			    {
+			      edf.load_annotations( tok[i] + fname );	 			   
+			    }
 			}
 		      closedir (dir);
 		    }
@@ -660,12 +673,49 @@ void process_edfs( cmd_t & cmd )
 		}
 	      else
 		{
-		  edf.populate_alist( tok[i] );	 
+		  edf.load_annotations( tok[i] );	 
 		}
 	      
 	    }
+
+	  
+	  //
+	  // Now, all annotations (except EPOCH-ANNOT) are attached and can be reported on
+	  //
+	  
+	  std::vector<std::string> names = edf.timeline.annotations.names();
+	  
+	  if ( names.size() > 0 ) logger << "\n annotations:\n";
+
+	  for (int a = 0 ; a < names.size() ; a++ )
+	    {
+	      
+	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      
+	      if ( annot == NULL ) Helper::halt( "internal problem in list_all_annotations()" );
+	      
+	      const int num_events = annot->num_interval_events();
+	      const int nf = annot->types.size();
+	      
+	      logger << "  [" << names[a] << "] " 
+		     << num_events << " event(s)";
+	      
+	      if ( nf > 1 )
+		{
+		  logger << ", " << nf << " field(s):";
+		  std::map<std::string,globals::atype_t>::const_iterator aa = annot->types.begin();
+		  while ( aa != annot->types.end() )
+		    {
+		      logger << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
+		      ++aa;
+		    }
+		}
+	      
+	      logger << " (from " << annot->file << ")\n";
+	      
+	    }
 	}
-      
+
 	    
       //
       // Evaluate all commands
@@ -712,6 +762,8 @@ void process_edfs( cmd_t & cmd )
   //
 
   logger << std::endl
+	 << "___________________________________________________________________"
+	 << std::endl
 	 << "...processed " << actual << " EDFs, done."
 	 << std::endl;
 
@@ -726,6 +778,12 @@ void process_edfs( cmd_t & cmd )
 void proc_dummy()
 {
 
+  
+  std::cout << "annot " << nsrr_t::remap( "Stage 4 sleep|4" ) << "\n";
+
+  std::exit(0);
+
+  
   std::vector<double> dx;
   while ( ! std::cin.eof() ) 
     {

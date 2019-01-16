@@ -129,7 +129,6 @@ reduce_t::reduce_t( const std::vector<double> & x , int np )
 
 
 
-
 reduce_t::reduce_t( const std::vector<double> * x , 
 		    const std::vector<uint64_t> * t , uint64_t a , uint64_t b , int np )
 {

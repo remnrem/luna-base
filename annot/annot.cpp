@@ -35,10 +35,106 @@
 
 extern writer_t writer;
 
-std::ostream & operator<<( std::ostream & out , const event_t & e )
+extern globals global;
+
+
+void annot_t::wipe()
 {
-  out << e.label;
-  if ( e.has_value ) out << "=" << e.double_value();  
+  std::set<instance_t *>::iterator ii = all_instances.begin();
+  while ( ii != all_instances.end() )
+    {	 
+      if ( *ii != NULL ) 
+	delete *ii;
+      ++ii;
+    }    
+  all_instances.clear();
+}
+
+
+instance_t * annot_t::add( const std::string & id , const interval_t & interval )
+{
+  
+  instance_t * instance = new instance_t ;
+  
+  // track (for clean-up)
+  all_instances.insert( instance );
+  
+  interval_events[ instance_idx_t( interval , id ) ] = instance; 
+  
+  return instance; 
+  
+}
+
+globals::atype_t instance_t::type( const std::string & s ) const 
+{
+  std::map<std::string,avar_t*>::const_iterator ii = data.find( s );
+  if ( ii == data.end() ) return globals::A_NULL_T;  
+  return ii->second->atype();
+}
+
+void instance_t::check( const std::string & name )
+{
+  std::map<std::string,avar_t*>::iterator dd = data.find( name );
+  if ( dd == data.end() ) return;
+  if ( dd->second == NULL ) return; // flag, so no storage set
+  tracker.erase( dd->second ); // otherwise, need to clear old storage
+  data.erase( dd );  // and erase from list
+  return;
+}
+
+void instance_t::set( const std::string & name ) 
+{
+  check( name );
+  avar_t * a = new flag_avar_t ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set( const std::string & name , const int i ) 
+{
+  check( name );
+  avar_t * a = new int_avar_t( i ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set( const std::string & name , const std::string & s ) 
+{
+  check( name );
+  avar_t * a = new text_avar_t( s ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set( const std::string & name , const bool b )
+{
+  check( name );
+  avar_t * a = new bool_avar_t( b ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set( const std::string & name , const double d )
+{
+  check( name );
+  avar_t * a = new double_avar_t( d ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+instance_t::~instance_t()
+{
+  std::set<avar_t *>::iterator ii = tracker.begin();
+  while ( ii != tracker.end() )
+    {	 
+      delete *ii;
+      ++ii;
+    }
+}  
+
+std::ostream & operator<<( std::ostream & out , const avar_t & a )
+{
+  out << a.text_value();
   return out;
 }
 
@@ -48,64 +144,44 @@ void summarize_annotations( edf_t & edf , param_t & param )
   
   writer.var( "ANNOT_N" , "Number of occurrences of an annotation" );
   
-  std::set<std::string> anames = edf.available_annotations();
-  std::set<std::string>::const_iterator ii = anames.begin();
-  while ( ii != anames.end() ) 
+  std::map<std::string,int>::const_iterator ii = edf.aoccur.begin();
+  while ( ii != edf.aoccur.end() ) 
     {
       // annot as 'level'
-      writer.level( *ii , globals::annot_strat );
-      writer.value( "ANNOT_N" , edf.aoccur[*ii] );
+      writer.level( ii->first , globals::annot_strat );
+      writer.value( "ANNOT_N" , ii->second );
       ++ii;
     }
 }
 
 
-// annotation format
-// sets of intervals in MSEC 
-// tab separated, one event / epoch per line
-
-// Need to define EPOCH if E is used below
-// EPOCHS are always specified as base-1
-
-// NAME
-// DESC
-// EPOCH   LENGTH (sec)    OVERLAP (INCREMENT)
-
-// col 1 :  I / E    ( 
-// start \t
 
 
-bool annot_t::load( const std::string & f )
+
+bool annot_t::load( const std::string & f , edf_t & parent_edf )
 {
 
-  reset();
-
+  //
+  // static annot_t function, which will create multiple annot_t for each new 'name'
+  // encountered
+  //
+  
   // 
-  // Check file exists
+  // Check file exists and is of the correct type
   //
   
-  if ( ! Helper::fileExists(f) ) return false;
-  
-  
-  //
-  // XML files -- these should already have been loaded separately
-  //
-  
+  if ( ! Helper::fileExists(f) ) return -1;
+
   if ( Helper::file_extension( f , "xml" ) ) 
     {
-      Helper::halt( f + " is an XML file, and so should already have been loaded" );
-      return false;
+      Helper::halt( f + " is an XML file... should already have been loaded (internal error)" );
+      return -1;
     }
   
-  
-  //
-  // .ftr file
-  //
-
   if ( Helper::file_extension( f , "ftr" ) ) 
     {
-      Helper::halt( f + " is an FTR file... should already have been loaded" );
-      return false;
+      Helper::halt( f + " is an FTR file... should already have been loaded (internal error)" );
+      return -1;
     }
   
   
@@ -113,23 +189,47 @@ bool annot_t::load( const std::string & f )
   // Original .annot file format
   //
       
-  logger << " attaching annotation file " << f << "\n";
+  // logger << " attaching annotation file " << f << "\n";
 
   //
   // record filename
   //
 
-  file = f ;
   
+    
   std::ifstream FIN( f.c_str() , std::ios::in );
 
-  // if EPOCHS are specified in the command
-  uint64_t epoch_length_tp;
-  uint64_t epoch_overlap_tp;
+  
+  // New annotation format
+  
+  // header with # character
+  
+  // types: int, str, dbl, bool
+  // [txt] [str] 
+  // [dbl] [num]
+  // [int] 
+  // [yn] [bool]
+  // [.] none
+  
+  // # name1 | description | col1(int) col2(str) col3(dbl) 
+  // # name2 | description | col1(str)
+  // # name3 | description                              [ just means a bool ] 
+  
+  // then rows are either interval or epoch-based 
+  
+  // name  id1  sec1  sec2  { vars }
+  // name  id   e30:1       { vars } 
+  
+  // for now, assume e:1   means 30-second epoch, no overlap  [ hard-code this ] 
+  
   bool epoched = false;
 
   int line_count = 0;
 
+  std::map<std::string,annot_t*> annot_map;
+  
+  std::map<annot_t*,std::vector<std::string> > cols;
+    
   while ( ! FIN.eof() )
     {
       
@@ -137,119 +237,198 @@ bool annot_t::load( const std::string & f )
       std::string line;      
       std::getline( FIN , line );      
       if ( FIN.eof() || line == "" ) continue;
+      
+      //
+      // header or data row?
+      //
 
-      std::vector<std::string> tok = Helper::parse( line , "\t" );
-      const int n = tok.size();
-      if ( n == 0 ) continue;
-      
-      uint64_t epoch = 0;
-      interval_t interval;
-      
-      if ( tok[0] == "NAME" )
+   
+      if ( line[0] == '#' ) 
 	{
-	  //name = tok[1];+ "["+f+"]";
-	  name = tok[1];
-	}
-      else if ( tok[0] == "TYPE" )
-	{
-	  type.clear();
-	  for (int j=1;j<tok.size();j++) 
+	  
+	  // skip initial # here
+	  std::vector<std::string> tok = Helper::parse( line.substr(1) , "|" );
+	  
+	  if ( tok.size() < 1 || tok.size() > 3 ) Helper::halt( "bad header for format\n" + line );
+
+	  //
+	  // Get the name and ID 
+	  //
+
+	  std::string name = Helper::trim( tok[0] );
+	  
+	  //
+	  // skip this annotation
+	  //
+
+	  if ( globals::specified_annots.size() > 0 && 
+	       globals::specified_annots.find( name ) == globals::specified_annots.end() ) 
+	    continue;
+	    
+	  
+	  //
+	  // otherwise, create the annotation if it doesn't exist
+	  //
+
+	  annot_t * a = parent_edf.timeline.annotations.add( name );
+
+
+	  //
+	  // store a temporary lookup table
+	  //
+
+	  annot_map[ name ] = a;
+	  
+	  //
+	  // Other details
+	  //
+	  
+	  a->description = tok.size() >= 2 ? tok[1] : name ; 
+	  
+	  a->file = f;
+	  
+	  a->types.clear();
+	  
+	  // columns specified
+	  if ( tok.size() == 3 ) 
 	    {
-	      ANNOTATION t;
-	      if      ( tok[j].substr(0,1) == "S" ) t = ATYPE_SLEEP_STAGE;
-	      else if ( tok[j].substr(0,1) == "Q" ) t = ATYPE_QUANTITATIVE;
-	      else if ( tok[j].substr(0,1) == "B" ) t = ATYPE_BINARY;
-	      else if ( tok[j].substr(0,1) == "T" ) t = ATYPE_TEXTUAL;
-	      else if ( tok[j].substr(0,1) == "C" ) t = ATYPE_COLCAT;
-	      else if ( tok[j].substr(0,1) == "I" ) t = ATYPE_INTEGER;
-	      else if ( tok[j].substr(0,1) == "M" ) t = ATYPE_MASK;
-	      else t = ATYPE_UNKNOWN;
-	      
-	      if ( t == ATYPE_UNKNOWN )		   
-		Helper::halt( "unsupported annotation type" );
-	      
-	      type.push_back(t);
+	      std::vector<std::string> type_tok = Helper::parse( tok[2] , " \t" );
+	      for (int j=0;j<type_tok.size();j++)
+		{
+		  std::vector<std::string> type_tok2 = Helper::parse( type_tok[j] , "[(" );
+		  if ( type_tok2.size() > 2 ) Helper::halt( "bad type '" + type_tok[j] + "'" );
+		  
+		  // column name
+		  const std::string var_name = type_tok2[0] ;
+		  
+		  // track order of columns for this annotation 
+		  cols[a].push_back( var_name );
+
+		  // type		  
+		  globals::atype_t t = globals::A_NULL_T;
+		  
+		  if ( type_tok2.size() == 1 ) 
+		    t = globals::A_FLAG_T;
+		  else
+		    {
+		      char c = type_tok2[1][ type_tok2[1].size() - 1 ] ;
+		      if ( c != ']' && c != ')' ) Helper::halt( "bad type '" + type_tok[j] + "' -> " + c );
+		      std::string tstr  = type_tok2[1].substr( 0 , type_tok2[1].size() - 1 );
+		      
+		      if ( globals::name_type.find( tstr ) != globals::name_type.end() )
+			t = globals::name_type[ tstr ];
+
+		    }
+		  
+		  if ( t == globals::A_NULL_T )
+		    Helper::halt( "unsupported annotation type from\n" + line );
+
+		  a->types[ var_name ] = t ; 
+		  
+		} // next column for this annotation
+
 	    }
-	}
-      else if ( tok[0] == "DESC" )
-	{
-	  description = tok[1];
-	}
-      else if ( tok[0] == "RANGES" )
-	{
-	  if ( cols.size() == 0 ) 
-	    Helper::halt( "no COLS specified before RANGES" );
-	  if ( tok.size() != 3 ) 
-	    Helper::halt( "incorrect # of RANGES values, expecting RANGES min max" );
-	  has_range = true;
-	  if ( ! Helper::str2dbl( tok[1] , &min ) ) 
-	    Helper::halt( "bad numeric value in RANGES" );
-	  if ( ! Helper::str2dbl( tok[2] , &max ) ) 
-	    Helper::halt( "bad numeric value in RANGES" );	      
-	}
-      else if ( tok[0] == "COLS" )
-	{	  
-	  for (int j=1;j<tok.size();j++) cols.push_back( tok[j] );
-	}
-      else if ( tok[0] == "EPOCH" )
-	{
-	  // EPOCH LENGTH OVERLAP
-	  if ( n != 3 ) Helper::halt("invalid EPOCH line");
-	  epoched = true;
-	  double a,b;
-	  Helper::str2dbl( tok[1] , &a );
-	  Helper::str2dbl( tok[2] , &b );
-	  if ( a <= 0 || b <= 0 ) Helper::halt( "bad EPOCH specs" );
-	  epoch_length_tp = a * globals::tp_1sec;
-	  epoch_overlap_tp = b * globals::tp_1sec;
+	  
 	}
 
-      
-      //
-      // Data row ('E' or 'I')
-      //
-      
-      if ( tok[0] == "E" || tok[0] == "I" ) 
-	{
-	  
-	  bool eline = tok[0] == "E";
-	  
-	  if ( cols.size() == 0 ) Helper::halt( "no COLS specified" );
 
+      //
+      // otherwise, assume this is a data row
+      //
+
+      else 
+	{
+
+	  // data-rows are tab-delimited
+	  
+	  std::vector<std::string> tok = Helper::parse( line , "\t" );
+	  
+	  if ( tok.size() == 0 ) continue; 
+	  
+	  // was this annotation specified? 
+	  
+	  std::map<std::string,annot_t*>::iterator aa = annot_map.find( tok[0] );
+	  
+	  if ( aa == annot_map.end() ) 
+	    Helper::halt( "annotation " + tok[0] + " not in header of " + f );
+	  
+	  annot_t * a = aa->second; 			
+	  
+	  std::string id = tok[1];
+
+	  // epoch or interval? 
+
+	  if ( tok.size() < 3 ) Helper::halt( "bad line format, need at least 3 cols:\n" + line );
+	  
+	  bool eline = tok[2][0] == 'e' ;
+	  
+	  // expected # of cols
+	  
+	  const int expected = 2 + ( eline ? 1 : 2 ) + a->types.size() ; 
+	  
+	  if ( tok.size() != expected ) 
+	    Helper::halt( "bad line format: saw " + Helper::int2str( (int)tok.size() ) + " cols but expecting " 
+			  + Helper::int2str( expected) + " for " + a->name + "\n" + line );
+	  
+	  
 	  interval_t interval;
 	  
 	  if ( eline )
 	    {
 	      
-	      if ( ! epoched ) Helper::halt( "no EPOCH defined" );
-
-	      // E  epoch-number  #cols
-	      if ( n != cols.size() + 2 ) Helper::halt( "invalid E line" );
+	      // 2 e:1        assumes 30
+	      // 3 e:30:1     assumes no overlap
+	      // 4 e:15:5:4   specifies all
 	      
-	      if ( ! Helper::str2int64( tok[1] , &epoch ) ) 
-		Helper::halt( "invalid E line, based epoch number" );
+	      std::vector<std::string> tok2 = Helper::parse( tok[2] , ":" );
+	      
+	      if ( tok2.size() < 2 || tok2.size() > 4 ) 
+		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+	      
+	      if ( tok2[0] != "e" ) 
+		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+	      
+	      int epoch_length = 30 ;
+	      int epoch_increment = 30;
+	      int epoch;
+	      
+	      if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
+		Helper::halt( "invalid epoch: " + tok[2] );
 	      
 	      if ( epoch == 0 ) 
 		Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
+
+	      if ( tok2.size() >= 3 ) 
+		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
+		  Helper::halt( "invalid epoch length:  " + tok[2] );
+
+	      if ( tok2.size() == 4  ) 
+		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
+		  Helper::halt( "invalid epoch increment:  " + tok[2] );
+
+	      uint64_t epoch_length_tp = epoch_length * globals::tp_1sec;
+	      
+	      uint64_t epoch_increment_tp = epoch_increment * globals::tp_1sec;
 	      
 	      // set interval from current line
-	      interval.start = epoch_overlap_tp * (epoch-1);
-	      interval.stop  = interval.start + epoch_length_tp - 1;
+	      // last point is defined as point *past* end of interval
+	      
+	      interval.start = epoch_increment_tp * (epoch-1);
+	      interval.stop  = interval.start + epoch_length_tp;
+
+	      //interval.stop  = interval.start + epoch_length_tp - 1;
 	      
 	    }
 	  else // an INTERVAL
 	    {
 	      
-	      // I  start stop   #cols
-	      if ( n != cols.size() + 3 ) Helper::halt( "invalid I line" );
-	      
-	      // Read as seconds -- convert internally
+	      // read as seconds and convert to uint64_t 
 	      double dbl_start = 0 , dbl_stop = 0;
-
-	      if ( ! Helper::str2dbl( tok[1] , &dbl_start ) )
+	      
+	      if ( ! Helper::str2dbl( tok[2] , &dbl_start ) )
 		Helper::halt( "invalid interval: " + line );
 	      
-	      if ( ! Helper::str2dbl( tok[2] , &dbl_stop ) ) 
+	      if ( ! Helper::str2dbl( tok[3] , &dbl_stop ) ) 
 		Helper::halt( "invalid interval: " + line );
 	      
 	      interval.start = globals::tp_1sec * dbl_start;
@@ -264,104 +443,95 @@ bool annot_t::load( const std::string & f )
 	  
 	  
 	  //
-	  // Now process values 
+	  // for a FLAG for this annotation (with same name as primary annotaton)
 	  //
+	  
+	  instance_t * instance = a->add( id , interval );
+	  
+	  
+	  // track how many annotations we add
+	  parent_edf.aoccur[ a->name ]++;
+	  
+	  
+	  const int n = tok.size();
+	          
 
-	  for (int j = (eline ? 2 : 3 ) ;j<n; j++)
+	  //
+	  // Also add any other columns (as separate events under this same annotation)
+	  //
+	  
+	  for (int j = (eline ? 3 : 4 ) ;j<n; j++)
 	    {
-	      
-	      const int idx = j - (eline ? 2 : 3 );
-	      
-	      if ( idx >= type.size() || idx >= cols.size() )
-		Helper::halt( "problem with annotation file" );
-	      
-	      ANNOTATION t = type[idx];
 
-	      const std::string & label = cols[idx];
+	      const int idx = j - (eline ? 3 : 4 );
 	      
-	      event_t * e = NULL;
+	      const std::string & label = cols[a][idx];	      
+
+	      globals::atype_t t = a->types[label];
 	      
-	      if ( t == ATYPE_BINARY )
+	      if ( t == globals::A_FLAG_T ) 
+		{
+		  instance->set( label );
+		}
+	      
+	      else if ( t == globals::A_BOOL_T )
 		{
 		  bool value = ! ( tok[j] == "0" || tok[j] == "F" || tok[j] == "." );
-		  e = new bool_event_t( label , value );
+		  instance->set( label , value );
 		}
-
-	      else if ( t == ATYPE_INTEGER )
+	      
+	      else if ( t == globals::A_INT_T )
 		{
 		  int value = 0;
 		  if ( ! Helper::str2int( tok[j] , &value ) )
 		    Helper::halt( "invalid E line, bad numeric value" );
-		  e = new int_event_t( label ,  value );
+		  instance->set( label , value );
 		}
 
-	      else if ( t == ATYPE_SLEEP_STAGE )
-		{
-		  int value = globals::stage( tok[j] );
-// 		  if ( ! Helper::str2int( tok[j] , &value ) )
-// 		    Helper::halt( "invalid E line, bad numeric value" );
-		  std::cout << "adding " << value << " for " << tok[j] << "\n";
-		  e = new int_event_t( label , value );
-		}
-	      
-	      else if ( t == ATYPE_QUANTITATIVE )
+	      else if ( t == globals::A_DBL_T )
 		{
 		  double value = 0;
-
+		  
 		  if ( Helper::str2dbl( tok[j] , &value ) )		    
-		    e = new double_event_t( label , value );
+		    instance->set( label , value );
 		  else
 		    if ( tok[j] != "." && tok[j] != "NA" ) 
-		      Helper::halt( "invalid E line, bad numeric value" );
+		      Helper::halt( "invalid E line, bad numeric value" );		  
 		}
-	      else if ( t == ATYPE_MASK )
+
+	      else if ( t == globals::A_TXT_T )
 		{
-		  bool value = tok[j] == "1";
-		  e = new bool_event_t ( label , value );
+		  instance->set( label , tok[j] );
 		}
-	      else if ( t == ATYPE_TEXTUAL || t == ATYPE_COLCAT )
-		{
-		  e = new text_event_t ( label , tok[j] );
-		}
-	      
-	      else if ( t == ATYPE_BINARY ) 
-		{
-		  bool value = tok[j] == "1";
-		  e = new bool_event_t ( label , value );
-		}
+
 	      else
-		logger << "could not read undefined type from annotation file\n";
+		logger << "could not read undefined type from annotation file for " << label << "\n";
 
-	      if ( e ) 
-		{
-		  add( interval , e );
-		  delete e; // remove temporary event
-		}
-
+	      
+// 	      // track how many annotations we add
+// 	      parent_edf.aoccur[ a->name + ":" + label ]++;
+	      
 	    }
-
+	  
 	  ++line_count;
 	}
       
     } // next line
 
-  logger << " processed " << line_count << " lines\n";
+  //  logger << "  processed " << line_count << " lines\n";
   
   FIN.close();
   
-  if ( type.size() != cols.size() ) 
-    Helper::halt( "incorrectly specified annot file: COLS not equal TYPE" );
-
-  return true;
+  return line_count;
 }
 
 
 int annot_t::load_features( const std::string & f )
 {
-
+  
   // set basic values for this annotation type, then add events/features  
 
-  logger << " attaching feature-list file " << f << "\n";
+  //logger << " attaching feature-list file " << f << "\n";
   
   std::ifstream FIN( f.c_str() , std::ios::in );
   
@@ -416,30 +586,38 @@ int annot_t::load_features( const std::string & f )
 	}
 
       //
-      // Create annotation, with 'features' as metadata
-      //
-      
-      event_t * e = new bool_event_t( feature.label , true );
-
-      //
-      // copy metadata
-      //
-      
-      e->metadata = feature.data;
-      
-      //
       // Add this interval
       //
 	  
-      add( feature.feature , e );
+      instance_t * instance = add( feature.label , feature.feature );
       
-      delete e; // remove temporary event
-    
+      //
+      // and append meta-data
+      //
+      
+      instance->add( feature.data );
+      
+      //
+      // and add the type information in too  (even though not every instance may have all types)
+      //
+      
+      std::map<std::string,std::string>::const_iterator ss = feature.data.begin();
+      while ( ss != feature.data.end() ) 
+	{
+	  types[ ss->first ] = globals::A_TXT_T;
+	  ++ss;
+	}
+      
+      //
+      // row count
+      //
+      
       ++line_count;
+
     } // next line
   
   
-  logger << " processed " << line_count << " lines\n";
+  //  logger << "  processed " << line_count << " lines\n";
   
   FIN.close();
   
@@ -452,22 +630,19 @@ bool annot_t::save( const std::string & t)
 {
 
   std::ofstream FOUT( t.c_str() , std::ios::out );
-  
-  FOUT << "NAME" << "\t" << name << "\n"
-       << "DESC" << "\t" << description << "\n";
-  
-  FOUT << "COLS";
-  for (int i=0;i<cols.size();i++) FOUT << "\t" << cols[i];
-  FOUT << "\n";
-  
-  FOUT << "TYPE";
-  for (int i=0;i<type.size();i++) FOUT << "\t" << type_name[type[i]];
-  FOUT << "\n";
-  
-  if ( has_range )
-    FOUT << "RANGES" << "\t" << min << "\t" << max << "\n";
-  
 
+  FOUT << "# "
+       << name << " | "
+       << description ;
+
+  std::map<std::string,globals::atype_t>::const_iterator aa = types.begin();
+  while ( aa != types.end() )
+    {
+      if ( aa == types.begin() ) FOUT << " |";
+      FOUT << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
+      ++aa;
+    }
+  
   FOUT << std::fixed << std::setprecision(4);
   
   //
@@ -475,29 +650,29 @@ bool annot_t::save( const std::string & t)
   //
   
   
-
-  interval_evt_map_t::const_iterator ii = interval_events.begin();
+  annot_map_t::const_iterator ii = interval_events.begin();
   while ( ii != interval_events.end() )
     {
-
-      const interval_t & interval = ii->first;
       
-      FOUT << "I" << "\t"
-	   << interval.start/(double)globals::tp_1sec << "\t" 
-	   << interval.stop/(double)globals::tp_1sec;
+      const instance_idx_t & instance_idx = ii->first;
+      const instance_t * instance = ii->second;
       
-      evt_table_t::const_iterator ti = ii->second.begin();
-      while ( ti != ii->second.end() )
+      FOUT << name << "\t"
+	   << instance_idx.id << "\t"
+	   << instance_idx.interval.start/(double)globals::tp_1sec << "\t" 
+	   << instance_idx.interval.stop/(double)globals::tp_1sec; 
+      
+      std::map<std::string,avar_t*>::const_iterator ti = instance->data.begin();
+      while ( ti != instance->data.end() )
 	{
-	  const event_t * evt = *ti;
-	  FOUT << "\t" << evt->text_value();
+	  FOUT << "\t" << ti->second->text_value();
 	  ++ti;
 	}
+
       FOUT << "\n";
       ++ii;
     }
   
-
   FOUT.close();
   return true;
 }  
@@ -707,7 +882,7 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 {
 
-  logger << "  reading annotations from " << filename << "\n";
+  //  logger << "  reading XML annotations from " << filename << "\n";
   
   XML xml( filename );
 
@@ -725,6 +900,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
   
   std::vector<element_t*> scored = xml.children( "ScoredEvents" );
   
+
   //
   // NSRR format:
   //
@@ -743,12 +919,91 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
   // children elements 'SleepStage' == integer
   // ASSUME these are 30-s epochs, starting at 0
   
-  // Create a separate annot_t for each type of EventConcept
-  std::map<std::string,std::vector<event_t*> > evts;
-  std::map<std::string,std::vector<interval_t> > ints;
+
+  //
+  // First pass through all 'ScoredEvent's,, creating each annotation
+  //
+
+  std::set<std::string> added;
   
   for (int i=0;i<scored.size();i++)
     {
+      
+      element_t * e = scored[i];
+      
+      if ( ! Helper::iequals( e->name , "ScoredEvent" ) ) continue;
+      
+      element_t * concept  = (*e)( EventConcept );
+      if ( concept == NULL ) concept = (*e)( "name" );
+      
+      if ( concept == NULL ) continue;
+      
+      // skip this..
+      if ( concept->value == "Recording Start Time" ) continue;
+      
+      // are we checking whether to add this file or no? 
+      if ( globals::specified_annots.size() > 0 && 
+	   globals::specified_annots.find( concept->value ) == globals::specified_annots.end() ) continue;
+      
+      // already found?
+      if ( added.find( concept->value ) != added.end() ) continue;
+
+      // otherwise, add
+      annot_t * a = edf->timeline.annotations.add( concept->value );
+      a->description = "XML-derived";
+      a->file = filename;
+      added.insert( concept->value );
+    }
+
+  //
+  // Profusion-formatted sleep-stages?
+  //
+  
+  if ( profusion_format )
+    {
+      
+      std::vector<element_t*> scored = xml.children( "SleepStages" );
+      
+      for (int i=0;i<scored.size();i++)
+	{
+	  element_t * e = scored[i];
+
+	  if ( e->name != "SleepStage" ) continue;
+	  
+	  std::string ss = "Unscored";
+	  if      ( e->value == "0" ) ss = "Wake";
+	  else if ( e->value == "1" ) ss = "NREM1";
+	  else if ( e->value == "2" ) ss = "NREM2";
+	  else if ( e->value == "3" ) ss = "NREM3";
+	  else if ( e->value == "4" ) ss = "NREM4";
+	  else if ( e->value == "5" ) ss = "REM";	 
+	  
+	  // are we checking whether to add this file or no? 
+	  
+	  if ( globals::specified_annots.size() > 0 && 
+	       globals::specified_annots.find( ss ) == globals::specified_annots.end() ) continue;
+	  
+	  // already found?
+	  if ( added.find( ss ) != added.end() ) continue;
+	  
+	  // otherwise, add
+	  annot_t * a = edf->timeline.annotations.add( ss );
+	  a->description = "XML-derived";
+	  a->file = filename;
+	  added.insert( ss );
+	  
+	}
+    }
+
+
+  
+  //
+  // Back through, adding instances now we've added all annotations
+  //
+
+  for (int i=0;i<scored.size();i++)
+    {
+      
       element_t * e = scored[i];
       
       if ( ! Helper::iequals( e->name , "ScoredEvent" ) ) continue;
@@ -756,22 +1011,23 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       element_t * concept  = (*e)( EventConcept );
       if ( concept == NULL ) concept = (*e)( "name" );
 
+      // skip if we are not interested in this element
+      if ( added.find( concept->value ) == added.end() ) continue;
+      
       element_t * start    = (*e)("Start" );
       if ( start == NULL ) start = (*e)( "time" );
 
       element_t * duration = (*e)("Duration" );
       element_t * notes    = (*e)("Notes" );
 
-      if ( concept  == NULL ) std::cout << "concept NULL\n";
-      if ( start    == NULL ) std::cout << "start   NULL\n";
-      if ( duration == NULL ) std::cout << "duration NULL\n";
-
+//       if ( concept  == NULL ) std::cout << "concept NULL\n";
+//       if ( start    == NULL ) std::cout << "start   NULL\n";
+//       if ( duration == NULL ) std::cout << "duration NULL\n";
+      
       if ( concept == NULL || start == NULL || duration == NULL ) continue;
       
-      // skip this..
-      if ( concept->value == "Recording Start Time" ) continue;
+      // otherwise, add 
 
-      event_t * evt = new text_event_t( concept->value , notes ? notes->value : "1" ) ;
       double start_sec, duration_sec;
       if ( ! Helper::str2dbl( start->value , &start_sec ) ) Helper::halt( "bad value in annotation" );
       if ( ! Helper::str2dbl( duration->value , &duration_sec ) ) Helper::halt( "bad value in annotation" );
@@ -783,8 +1039,16 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       interval_t interval( start_tp , stop_tp );
       
-      evts[ concept->value ].push_back( evt );
-      ints[ concept->value ].push_back( interval );
+      annot_t * a = edf->timeline.annotations.add( concept->value );
+      
+      instance_t * instance = a->add( concept->value , interval );      
+      
+      // any notes?  set as TXT, otherwise it will be listed as a FLAG
+      if ( notes ) 
+	instance->set( concept->value , notes->value ); 
+      else
+	instance->set( concept->value );
+      
     }
   
   //
@@ -793,6 +1057,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
   
   if ( profusion_format )
     {
+  
       std::vector<element_t*> scored = xml.children( "SleepStages" );
       
       int start_sec = 0;
@@ -813,8 +1078,13 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  else if ( e->value == "3" ) ss = "NREM3";
 	  else if ( e->value == "4" ) ss = "NREM4";
 	  else if ( e->value == "5" ) ss = "REM";	 
+
+
+	  // skip if we are not interested in this element
 	  
-	  event_t * evt = new text_event_t( ss , "1" );
+	  if ( added.find( ss ) == added.end() ) continue;
+	  
+	  // otherwise, add
 
 	  uint64_t start_tp = start_sec * globals::tp_1sec;
 	  uint64_t stop_tp  = start_tp + (uint64_t)( epoch_sec * globals::tp_1sec ) - 1LLU ;
@@ -823,52 +1093,26 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  start_sec += epoch_sec;
 	  
 	  interval_t interval( start_tp , stop_tp );	  
-	  evts[ ss ].push_back( evt );
-	  ints[ ss ].push_back( interval );
+
+
+	  
+	  annot_t * a = edf->timeline.annotations.add( ss );
+	  
+	  instance_t * instance = a->add( ss , interval );      
+      
+	  instance->set( ss );
+	  
 	}
-      
-      
-    }
-
-  //
-  // Add to annotation
-  //
-
-  std::map<std::string,std::vector<interval_t> >::iterator ii = ints.begin();
-  while ( ii != ints.end() ) 
-    {
-      
-      annot_t * a = edf->timeline.annotations.add( ii->first );
-      
-      // always qualifies as single TEXTUAL event
-      a->description = "XML-derived";
-      a->type.resize(1);
-      a->type[0] = ATYPE_TEXTUAL;
-      a->cols.resize(1);
-      a->cols[0] = ".";
-      
-      const std::vector<interval_t> & aints = ii->second;
-      const std::vector<event_t*> & aevts  = evts[ ii->first ];
-      
-      // map annotations to this file
-      edf->alist[ ii->first ] = filename;
-      edf->aoccur[ ii->first ] += aints.size();
-      
-      for (int j=0;j<aints.size();j++)
-	{	  
-	  a->add( aints[j] , aevts[j] );
-	  delete aevts[j];
-	}
-
-      ++ii;
+            
     }
 
 
+
   //
-  // Misc. text code: have signal descriptions
+  // Misc. test code: have signal descriptions in XMLs
   //
 
-  if ( true )
+  if ( false )
     {
       std::vector<element_t*> signals = xml.children( "Signals" );
 
@@ -941,22 +1185,23 @@ bool annot_t::savexml( const std::string & f )
 
 
 
-interval_evt_map_t annot_t::extract( const interval_t & window ) 
+annot_map_t annot_t::extract( const interval_t & window ) 
 {
-
+  
   //
   // Fetch all annotations that overlap this window
+  // where overlap is defined as region A to B-1 for interval_t(A,B)
   //
-  
-  interval_evt_map_t r; 
+
+  annot_map_t r; 
   
   // need to implement a better search... but for now just use brute force... :-(
   
-  interval_evt_map_t::const_iterator ii = interval_events.begin();
+  annot_map_t::const_iterator ii = interval_events.begin();
   while ( ii != interval_events.end() )
     {
-      const interval_t & a = ii->first;
-      if ( a.overlaps( window ) ) r[ a ] = ii->second;
+      const interval_t & a = ii->first.interval;
+      if ( a.overlaps( window ) ) r[ ii->first ] = ii->second;
       else if ( a.is_after( window ) ) break;
       ++ii;
     }
@@ -1045,9 +1290,12 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 					 const std::string & a_other )
 {
 
+  //
   // already made?
+  //
+  
   if ( find( "SleepStage" ) != NULL ) return false; 
-
+  
   std::string dwake, dn1, dn2, dn3, dn4, drem, dother;
   
   std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
@@ -1055,8 +1303,6 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
     {
       const std::string & s = ii->first;
       
-      //      std::cout << "s = " << s << "\n";
-
       sleep_stage_t ss = globals::stage( s );
       
       if      ( ss == WAKE ) dwake = s;
@@ -1070,6 +1316,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 
       ++ii;
     }
+
 
   //
   // find annotations
@@ -1091,94 +1338,89 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
     return false;
   
   annot_t * ss = add( "SleepStage" );
-  ss->type.push_back( ATYPE_SLEEP_STAGE );
-  ss->cols.push_back( "SleepStage" );
   ss->description = "SleepStage";
   
   if ( wake ) 
     {
-      interval_evt_map_t & events = wake->interval_events;
-      interval_evt_map_t::const_iterator ee = events.begin();
+      annot_map_t & events = wake->interval_events;
+      annot_map_t::const_iterator ee = events.begin();
       while ( ee != events.end() )
 	{	  
-	  event_t * e = new text_event_t( "W" , globals::stage( WAKE ) );
-	  ss->add( ee->first , e );
+	  instance_t * instance = ss->add( globals::stage( WAKE ) , ee->first.interval );
 	  ++ee;
 	}
     }
 
+
   if ( n1 ) 
     {
-      interval_evt_map_t & events = n1->interval_events;
-      interval_evt_map_t::const_iterator ee = events.begin();
+      annot_map_t & events = n1->interval_events;
+      annot_map_t::const_iterator ee = events.begin();
       while ( ee != events.end() )
 	{	  
-	  event_t * e = new text_event_t( "N1" , globals::stage( NREM1 ) );
-	  ss->add( ee->first , e );
+	  instance_t * instance = ss->add( globals::stage( NREM1 ) , ee->first.interval );
 	  ++ee;
 	}
     }
 
   if ( n2 ) 
     {
-      interval_evt_map_t & events = n2->interval_events;
-      interval_evt_map_t::const_iterator ee = events.begin();
+      annot_map_t & events = n2->interval_events;
+      annot_map_t::const_iterator ee = events.begin();
       while ( ee != events.end() )
 	{	  
-	  event_t * e = new text_event_t( "N2" , globals::stage( NREM2 ) );
-	  ss->add( ee->first , e );
+	  instance_t * instance = ss->add( globals::stage( NREM2 ) , ee->first.interval );
 	  ++ee;
 	}
     }
-  
+
   if ( n3 ) 
     {
-      interval_evt_map_t & events = n3->interval_events;
-      interval_evt_map_t::const_iterator ee = events.begin();
+      annot_map_t & events = n3->interval_events;
+      annot_map_t::const_iterator ee = events.begin();
       while ( ee != events.end() )
 	{	  
-	  event_t * e = new text_event_t( "N3" , globals::stage( NREM3 ) );
-	  ss->add( ee->first , e );
+	  instance_t * instance = ss->add( globals::stage( NREM3 ) , ee->first.interval );
+	  ++ee;
+	}
+    }
+
+
+  if ( n4 ) 
+    {
+      annot_map_t & events = n4->interval_events;
+      annot_map_t::const_iterator ee = events.begin();
+      while ( ee != events.end() )
+	{	  
+	  instance_t * instance = ss->add( globals::stage( NREM4 ) , ee->first.interval );
 	  ++ee;
 	}
     }
   
-  if ( n4 ) 
-    {
-      interval_evt_map_t & events = n4->interval_events;
-      interval_evt_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  event_t * e = new text_event_t( "N4" , globals::stage( NREM4 ) );
-	  ss->add( ee->first , e );
-	  ++ee;
-	}
-    }
 
   if ( rem ) 
     {
-      interval_evt_map_t & events = rem->interval_events;
-      interval_evt_map_t::const_iterator ee = events.begin();
+      annot_map_t & events = rem->interval_events;
+      annot_map_t::const_iterator ee = events.begin();
       while ( ee != events.end() )
 	{	  
-	  event_t * e = new text_event_t( "R" , globals::stage( REM ) );
-	  ss->add( ee->first , e );
+	  instance_t * instance = ss->add( globals::stage( REM ) , ee->first.interval );
 	  ++ee;
 	}
     }
+
 
   if ( other ) 
     {
-      interval_evt_map_t & events = other->interval_events;
-      interval_evt_map_t::const_iterator ee = events.begin();
+      annot_map_t & events = other->interval_events;
+      annot_map_t::const_iterator ee = events.begin();
       while ( ee != events.end() )
 	{	  
-	  event_t * e = new text_event_t( "?" , globals::stage( UNKNOWN ) );
-	  ss->add( ee->first , e );
+	  instance_t * instance = ss->add( globals::stage( UNKNOWN ) , ee->first.interval );
 	  ++ee;
 	}
     }
-
+  
   return true;
   
 }
@@ -1187,14 +1429,14 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 uint64_t annot_t::minimum_tp() const
 {
   if ( interval_events.size() == 0 ) return 0;
-  return interval_events.begin()->first.start;
+  return interval_events.begin()->first.interval.start;
 }
 
 
 uint64_t annot_t::maximum_tp() const
 {
   if ( interval_events.size() == 0 ) return 0;
-  return (--interval_events.end())->first.stop;
+  return (--interval_events.end())->first.interval.stop;
 }
 
 

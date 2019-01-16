@@ -66,21 +66,7 @@ class logger_t
 	  std::ostream& out_stream = std::cerr)
    : _log_header( log_header ) , _out_stream( out_stream ) , _next_is_begin( true )
     {
-
-      // initialize log with this message
-      
-      auto now        = std::chrono::system_clock::now();
-      auto now_time_t = std::chrono::system_clock::to_time_t( now ); 
-      auto now_tm     = std::localtime( &now_time_t ); 
-
-      if ( ! globals::silent ) 
-	_out_stream << _log_header
-		    << " | starting process "
-		    << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")		  
-		    << std::endl;
-      
-      is_off = false;
-      
+      is_off = false;      
     }
 
   void flush() { _out_stream.flush(); } 

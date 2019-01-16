@@ -209,27 +209,12 @@ bool cmd_t::eval( edf_t & edf )
       if ( ! param(c).has( "signal" ) )
 	param(c).add( "signal" , signal_string() );
       
-      //
-      // Attach any new annotations (e.g. sleep stages, etc) to
-      // the timeline if requested; these will persist as long as
-      // the EDF lasts
-      //
-      
-      std::set<std::string> required_annotations = param(c).strset( "annot" , "," );
-      std::set<std::string>::const_iterator ai = required_annotations.begin();	  
-      
-      while ( ai != required_annotations.end() )
-	{
-	  attach_annot( edf , *ai );
-	  ++ai;
-	}
-      
-      
+
       //
       // Print command
       //
 
-      logger << "...................................................................\n"
+      logger << " ..................................................................\n"
 	     << " CMD #" << c+1 << ": " << cmd(c) << "\n";
       
       writer.cmd( cmd(c) , c+1 , param(c).dump( "" , " " ) );
@@ -288,8 +273,10 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EPOCH-MASK" ) )   proc_epoch_mask( edf, param(c) );
       
       
-      else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );
+      else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );      
       else if ( is( c, "FILTER-DESIGN" )) proc_filter_design( edf, param(c) );
+      else if ( is( c, "CWT-DESIGN" ) )   proc_cwt_design( edf , param(c) );
+
       //	  else if ( is( c, "LEGACY-FILTER" )) proc_filter_legacy( edf, param(c) );
       else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
       
@@ -500,6 +487,13 @@ void proc_cwt_design_cmdline()
 void proc_filter_design( edf_t & edf , param_t & param )	  
 {
   dsptools::design_fir( param );
+}
+
+// CWT-DESIGN : CWT design
+
+void proc_cwt_design( edf_t & edf , param_t & param )	  
+{
+  dsptools::design_cwt( param );
 }
 
 
@@ -766,24 +760,42 @@ void proc_epoch( edf_t & edf , param_t & param )
   double dur = 0 , inc = 0;
 
   // default = 30 seconds, non-overlapping
-  if ( ! param.has( "epoch" ) )
+  if ( ! ( param.has( "len" ) || param.has( "epoch" ) ) )
     {
       dur = 30; inc = 30;
     }
   else
     {
-      std::string p = param.requires( "epoch" );
-      std::vector<std::string> tok = Helper::parse( p , "," );
-      if ( tok.size() > 2 || tok.size() < 1 ) Helper::halt( "expcting epoch=length{,increment}" );
       
-      if ( ! Helper::str2dbl( tok[0] , &dur ) ) Helper::halt( "invalid epoch length" );
-      if ( tok.size() == 2 ) 
+      if ( param.has( "epoch" ) )
 	{
-	  if ( ! Helper::str2dbl( tok[1] , &inc ) ) 
-	    Helper::halt( "invalid epoch increment" );
+	  std::string p = param.requires( "epoch" );
+	  std::vector<std::string> tok = Helper::parse( p , "," );
+	  if ( tok.size() > 2 || tok.size() < 1 ) Helper::halt( "expcting epoch=length{,increment}" );
+	  
+	  if ( ! Helper::str2dbl( tok[0] , &dur ) ) Helper::halt( "invalid epoch length" );
+	  if ( tok.size() == 2 ) 
+	    {
+	      if ( ! Helper::str2dbl( tok[1] , &inc ) ) 
+		Helper::halt( "invalid epoch increment" );
+	    }
+	  else inc = dur;
 	}
-      else inc = dur;
+      
+      else if ( param.has( "len" ) ) 
+	{
+	  
+	  dur = param.requires_dbl( "len" );
+	  
+	  if ( param.has( "inc" ) ) 
+	    inc = param.requires_dbl( "inc" );
+	  else 
+	    inc = dur;
+
+	}
+
     }
+
 
 
   //
@@ -894,6 +906,7 @@ void proc_epoch_mask( edf_t & edf , param_t & param )
 void proc_file_annot( edf_t & edf , param_t & param )
 { 
   std::string f = param.requires( "file" );
+
   std::vector<std::string> a;
   
   std::map<std::string,std::string> recodes;
@@ -925,7 +938,9 @@ void proc_file_annot( edf_t & edf , param_t & param )
       a.push_back( x );      
     }
   IN1.close();
+
   logger << " read " << a.size() << " epoch/annotations from " << f << "\n";
+
   edf.timeline.annotate_epochs( a );
   
 }
@@ -955,13 +970,7 @@ void proc_dump_mask( edf_t & edf , param_t & param )
 
 void proc_list_annots( edf_t & edf , param_t & param )
 {
-  
-  // we can assume this is already done?
-  //   for (int i=2;i<tok.size();i++) 
-  //     edf.populate_alist( tok[i] );	 
-  
   summarize_annotations( edf , param );
-  
 }
 
 
@@ -993,7 +1002,7 @@ void proc_restructure( edf_t & edf , param_t & param )
 void proc_record_dump( edf_t & edf , param_t & param )
 {
   edf.add_continuous_time_track();  
-  edf.record_dumper();
+  edf.record_dumper( param );
 }
 
 
@@ -1292,45 +1301,54 @@ void proc_flip( edf_t & edf , param_t & param  )
 // Helper functions
 //
 	      
-void attach_annot( edf_t & edf , const std::string & astr )
-{
+// void attach_annot( edf_t & edf , const std::string & astr )
+// {
   
-  // annotation is either 
+//   // are we checking whether to add this file or no? 
   
-  // 1) in memory (and may or may not be in a file,
-  // i.e. just created)
+//   if ( globals::specified_annots.size() > 0 && 
+//        globals::specified_annots.find( astr ) == globals::specified_annots.end() ) return;
+
+//   // otherwise, annotation is either 
   
-  annot_t * a = edf.timeline.annotations( astr );
-	      
-  // 2) or, not in memory but can be retrieved from a file
+//   // 1) in memory (and may or may not be in a file,
+//   // i.e. just created)
   
-  if ( a == NULL )
-    {
+//   annot_t * a = edf.timeline.annotations( astr );
+  
+//   // 2) or, not in memory but can be retrieved from a file
+  
+//   if ( a == NULL )
+//     {
       
-      // search for file for any 'required' annotation
-      // (e.g. annot=stages,spindles)
+//       // search for file for any 'required' annotation
+//       // (e.g. annot=stages,spindles)
       
-      std::string annot_file = edf.annotation_file( astr );
+//       std::string annot_file = edf.annotation_file( astr );
       
-      if ( annot_file == "" ) 
-	{
-	  logger << " no instances of annotation [" 
-		 << astr << "] for " << edf.id << "\n";		  
-	}
-      else
-	{
-	  // add to list and load in data (note, if XML, load() does nothing
-	  // as all XML annotations are always added earlier
-	  
-	  a = edf.timeline.annotations.add( astr );
-	  a->load( annot_file );
-	}
-    }
-}
+//       if ( annot_file == "" ) 
+// 	{
+// 	  logger << " no instances of annotation [" 
+// 		 << astr << "] for " << edf.id << "\n";		  
+// 	}
+//       else
+// 	{
+// 	  // add to list and load in data (note, if XML, load() does nothing
+// 	  // as all XML annotations are always added earlier
+	  	  
+// 	  bool okay = annot_t::load( annot_file , edf );
+
+// 	  if ( ! okay ) Helper::halt( "problem loading " + annot_file );
+	  		  
+// 	}
+//     }
+// }
 
 
 void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 {
+  
+  std::cout << "is " << tok0 << "\n";
 
   // add signals?
   if ( Helper::iequals( tok0 , "signal" ) || Helper::iequals( tok0 , "signals" ) )
@@ -1343,7 +1361,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   
 
   // default annot folder
-  else if ( Helper::iequals( tok0 , "annots" ) ) 
+  else if ( Helper::iequals( tok0 , "annots-folder" ) ) 
     {
       if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
 	globals::annot_folder = tok1 + "/";
@@ -1352,6 +1370,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+
+  // specified annots (only load these)
+  else if ( Helper::iequals( tok0 , "annots" ) ) 
+    {
+      param_t dummy;     
+      dummy.add( "dummy" , tok1 );
+      globals::specified_annots = dummy.strset( "dummy" , "," );      
+      return;
+    }
   
   // signal alias?
   if ( Helper::iequals( tok0 , "alias" ) )
@@ -1362,13 +1389,21 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   
   // do not read EDF annotations
-  if ( Helper::iequals( tok0 , "force-edf" ) )
+  if ( Helper::iequals( tok0 , "skip-annots" ) )
     {
       if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
 	globals::skip_edf_annots = true;
       return;
     }
-  
+
+  // do not read FTR files 
+  if ( Helper::iequals( tok0 , "ftr" ) )
+    {
+      globals::read_ftr = Helper::yesno( tok1 );
+      return;
+    }
+
+	
   // project path
   if ( Helper::iequals( tok0 , "path" ) )
     {
@@ -1408,9 +1443,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	      std::string line2;
 	      std::getline( XIN , line2);
 	      if ( XIN.eof() || line2 == "" ) continue;
-	      std::vector<std::string> tok = Helper::parse( line2 , "\t " );
-	      if ( tok.size() == 0 ) continue;			      
-	      std::string xid = tok0;
+	      std::vector<std::string> tok2 = Helper::parse( line2 , "\t " );
+	      if ( tok2.size() == 0 ) continue;			      
+	      std::string xid = tok2[0];
 	      globals::excludes.insert( xid );
 	    }
 	  logger << "excluding " << globals::excludes.size() 

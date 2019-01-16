@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libannot.a
-OBJS	 = annot.o
+OBJS	 = annot.o nsrr-remap.o
 
 all : $(OBJLIBS)
 

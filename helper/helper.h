@@ -71,6 +71,8 @@ namespace Helper
 
   std::string sanitize( const std::string & );
   
+  bool yesno( const std::string & );
+  
   std::string search_replace( const std::string & , char a , char b );
   
   void swap_in_variables( std::string * , const std::map<std::string,std::string> & );

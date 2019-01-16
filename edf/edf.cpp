@@ -30,7 +30,7 @@
 #include <fstream>
 
 extern writer_t writer;
-
+extern logger_t logger;
 
 void writestring( const std::string & s , int n , FILE * file )
 {
@@ -83,8 +83,7 @@ double edf_t::get_double( byte_t ** p , int sz )
   
   if ( ! Helper::from_string<double>( t , s , std::dec ) ) 
     {     
-      if ( ! globals::silent ) 
-	std::cerr << "returning -1: [" << s << "] is not a valid real number\n";
+      logger << "returning -1: [" << s << "] is not a valid real number\n";
       return -1;
     }
   return t;
@@ -362,8 +361,7 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
   // check whether we are forcing EDF format
   if ( globals::skip_edf_annots )
     {
-      if ( ! globals::silent ) 
-	std::cerr << " forcing read as EDF\n";
+      logger << " forcing read as EDF\n";
       edfplus = false;
       continuous = true;
     }
@@ -468,8 +466,7 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
 	  if ( annotation && ! edfplus ) 
 	    {
 	      //Helper::halt( "file must be EDF+ to support annotations" );
-	      if ( ! globals::silent ) 
-		std::cerr << " detected an annotation channel in EDF: will treat as EDF+\n";
+	      logger << " detected an annotation channel in EDF: will treat as EDF+\n";
 	      edfplus = true;
 	    }
 	  
@@ -809,8 +806,7 @@ bool edf_t::attach( const std::string & f ,
   if ( ( file = fopen( filename.c_str() , "rb" ) ) == NULL )
     {      
       file = NULL;
-      if ( ! globals::silent ) 
-	std::cerr << " PROBLEM: could not open specified EDF: " << filename << "\n";
+      logger << " PROBLEM: could not open specified EDF: " << filename << "\n";
       globals::problem = true;
       return false;
     }
@@ -824,8 +820,7 @@ bool edf_t::attach( const std::string & f ,
   
   if ( fileSize < 256 ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << " PROBLEM: corrupt EDF, file < header size (256 bytes): " << filename << "\n";
+      logger << " PROBLEM: corrupt EDF, file < header size (256 bytes): " << filename << "\n";
       globals::problem = true;
       return false;
     }
@@ -850,8 +845,7 @@ bool edf_t::attach( const std::string & f ,
       if ( !header.continuous ) 
 	Helper::halt( "EDF+D with no time track" );
 
-      if ( ! globals::silent ) 
-	std::cerr << " EDF+ [" << filename << "] did not contain any time-track: adding...\n";
+      logger << " EDF+ [" << filename << "] did not contain any time-track: adding...\n";
 
       add_continuous_time_track();
 
@@ -896,17 +890,15 @@ bool edf_t::attach( const std::string & f ,
   // Output some basic information
   //
 
-  if ( ! globals::silent ) 
-    {
-      std::cerr << " total duration " << Helper::timestring( timeline.total_duration_tp ) 
-		<< ", with last time-point at " << Helper::timestring( ++timeline.last_time_point_tp ) << "\n";
-      std::cerr << " " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
-      std::cerr << " " << header.ns << " (of " << header.ns_all << ") signals selected ";
-      std::cerr << "in " << ( header.edfplus ? "an EDF+" : "a standard EDF" ) << " file:" ;
-      for (int s=0;s<header.ns;s++) 
-	std::cerr << ( s % 8 == 0 ? "\n  " : " | " ) << header.label[s]; 
-      std::cerr << "\n";
-    }
+  logger << " total duration " << Helper::timestring( timeline.total_duration_tp ) 
+	    << ", with last time-point at " << Helper::timestring( ++timeline.last_time_point_tp ) << "\n";
+  logger << " " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
+
+  logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
+  logger << "in " << ( header.edfplus ? "an EDF+" : "a standard EDF" ) << " file:" ;
+  for (int s=0;s<header.ns;s++) 
+    logger << ( s % 8 == 0 ? "\n  " : " | " ) << header.label[s]; 
+  logger << "\n";
 
   return true;
 
@@ -971,8 +963,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   
   if ( ! okay ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << " ** warning ... null record set found... ** \n";
+      logger << " ** warning ... null record set found... ** \n";
       return ret; // ie empty
     }
 
@@ -1037,8 +1028,8 @@ bool edf_header_t::write( FILE * file )
   
   // For now, we can only write a EDF+C (i.e. standard EDF, not EDF plus)
 
-  if ( edfplus && ! globals::silent ) 
-    std::cerr << " ** warning... can only write as standard EDF (not EDF+) currently... **\n";
+  if ( edfplus )
+    logger << " ** warning... can only write as standard EDF (not EDF+) currently... **\n";
 
   // regarding the nbytes_header variable, although we don't really
   // use it, still ensure that it is properly set (i.e. we may have
@@ -1152,8 +1143,7 @@ bool edf_t::write( const std::string & f )
 
   if ( ( outfile = fopen( filename.c_str() , "wb" ) ) == NULL )      
     {
-      if ( ! globals::silent ) 
-	std::cerr << " ** could not open " << filename << " for writing **\n";
+      logger << " ** could not open " << filename << " for writing **\n";
       return false;
     }
 
@@ -1250,8 +1240,7 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   
   if ( ndata == 0 ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << " **empty EDF, not going to add channel " << label << " **\n";
+      logger << " **empty EDF, not going to add channel " << label << " **\n";
       return;
     }
 
@@ -1474,7 +1463,7 @@ void edf_t::reset_record_size( const double new_record_duration )
 	{
 
 	  const int n = header.n_samples[s];
-	  //	  std::cerr << "i to n " << n << " becomes " << new_nsamples[s] << "\n";
+
 	  for (int i = 0 ; i < n ; i++ )
 	    {
 	      
@@ -1602,15 +1591,12 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
   const int ns = signals.size();
   const int nr = refs.size();
 
-  if ( ! globals::silent ) 
-    {
-      std::cerr << " referencing";
-      for (int s=0;s<ns;s++) std::cerr << " " << header.label[ signals(s) ];
-      std::cerr << " with respect to";
-      if ( nr > 1 ) std::cerr << " the average of";
-      for (int r=0;r<nr;r++) std::cerr << " " << header.label[ refs(r) ];
-      std::cerr << "\n";
-    }
+  logger << " referencing";
+  for (int s=0;s<ns;s++) logger << " " << header.label[ signals(s) ];
+  logger << " with respect to";
+  if ( nr > 1 ) logger << " the average of";
+  for (int r=0;r<nr;r++) logger << " " << header.label[ refs(r) ];
+  logger << "\n";
 
   // check SR for all channels  
   int np = header.n_samples[ signals(0) ];
@@ -1693,17 +1679,16 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
 }
 
 
-bool edf_t::populate_alist( const std::string & f )
+bool edf_t::load_annotations( const std::string & f )
 {
-  
+    
   //
   // peek into each annotation file just to get a list of the
   // available annoations, do not load at this point
   //
   
   // Allow wildcards
-
-  
+    
   if ( ! Helper::fileExists( f ) ) 
     Helper::halt( "annotation file " + f + " does not exist for EDF " + filename );
   
@@ -1711,8 +1696,6 @@ bool edf_t::populate_alist( const std::string & f )
   
   bool feature_list_mode = Helper::file_extension( f , "ftr" );
   
-  //std::cout << "pop alist [" << f << "]\n";
-
   //
   // For XML files, we have to parse everything, so do this just once and store
   //
@@ -1724,10 +1707,10 @@ bool edf_t::populate_alist( const std::string & f )
     }
   
   //
-  // For feature lists, load now
+  // For feature lists, load now (unless FTR is turned off)
   //
   
-  if ( feature_list_mode )
+  if ( feature_list_mode && globals::read_ftr )
     {
             
       std::vector<std::string> tok = Helper::parse( f , "/" );
@@ -1748,61 +1731,33 @@ bool edf_t::populate_alist( const std::string & f )
 	}
       
       std::string feature_name = file_name.substr( pos+9 , file_name.size() - 4 - pos - 9 );
+  
+      // are we checking whether to add this file or no? 
       
-      logger  << " extracting [" << feature_name << "] for [" << id_name << "] from " << f << "\n";
+      if ( globals::specified_annots.size() > 0 && 
+	   globals::specified_annots.find( feature_name ) == globals::specified_annots.end() ) return false;
       
       // create and load annotation
       
       annot_t * a = timeline.annotations.add( feature_name );
       
-      // always qualifies as single TEXTUAL event
       a->name = feature_name;
       a->description = "feature-list";
-      a->type.resize(1);
-      a->type[0] = ATYPE_TEXTUAL;
-      a->cols.resize(1);
-      a->cols[0] = ".";
-
-      // map annotations to this file
-      alist[ feature_name ] = f;
-      flist[f] = feature_name;
+      a->file = file_name;
 
       // load features, and track how many
-      aoccur[ feature_name ] = a->load_features( f );
+      aoccur[ feature_name ] = a->load_features( f  );
       
       return true;
     }
 
 
   //
-  // For basic text annotation files, only peek at first few lines
+  // For .annot files, we now load them completely here too
   //
   
-  std::ifstream FIN( f.c_str(), std::ios::in );
+  return annot_t::load( f , *this );
   
-  if ( FIN.bad() ) Helper::halt( "annotation file " + f + " cannot be read for EDF " + filename );
-  
-  while ( ! FIN.eof()  ) 
-    {
-      std::string line;      
-      std::getline( FIN , line );      
-      if ( FIN.eof() ) continue;
-      if ( line == "" ) continue;
-      std::vector<std::string> tok = Helper::parse( line , "\t" );
-      const int n = tok.size();
-      if ( n == 0 ) continue;
-      if ( Helper::iequals( tok[0] , "NAME" ) )
-	{	  
-	  if ( tok.size() != 2 ) Helper::halt( "problem with NAME format in " + f );
-	  alist[ tok[1] ] = f;
-	  flist[ f ] = tok[1];
-	  //std::cout << "adding a/flist <" << tok[1] << ">  <" << f << ">\n";	
-	}
-      // if we hit actual data, drop-out
-      if ( Helper::iequals( tok[0] , "E" ) || Helper::iequals( tok[0] , "I" ) ) break;
-    }
-  FIN.close();
-  return true;
 }
 
 
@@ -1811,8 +1766,7 @@ int  edf_header_t::signal( const std::string & s )
   signal_list_t slist = signal_list(s);
   if ( slist.size() != 1 ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << " ** could not find signal [" << s << "] of " << label2header.size() << " signals **\n";
+      logger << " ** could not find signal [" << s << "] of " << label2header.size() << " signals **\n";
       return -1;
     }  
   return slist(0);
@@ -2059,8 +2013,7 @@ bool edf_t::restructure()
   // We now will have a discontinuous EDF+
   //
 
-  if ( ! globals::silent )   
-    std::cerr << " restructuring as an EDF+ : ";
+  logger << " restructuring as an EDF+ : ";
   
   set_edfplus();
 
@@ -2143,12 +2096,10 @@ bool edf_t::restructure()
   if ( records.size() == 0 ) globals::problem = true;
     
 
-  if ( ! globals::silent ) 
-    std::cerr << "keeping " 
-	      << records.size() << " records of " 
-	      << copy.size() << ", resetting mask\n";
-
-
+  logger << "keeping " 
+	 << records.size() << " records of " 
+	 << copy.size() << ", resetting mask\n";
+  
   writer.value( "NR1" , copy.size() );
   writer.value( "NR2" , records.size() );
   
@@ -2205,15 +2156,13 @@ void edf_t::copy_signal( const std::string & from_label , const std::string & to
   
   if ( s1 == -1 ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << "**error** could not find signal " << from_label << "\n";
+      logger << "**error** could not find signal " << from_label << "\n";
       return;
     }
 
   if ( header.has_signal( to_label ) ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << "**error** to-signal already exists in copy_signal()\n";
+      logger << "**error** to-signal already exists in copy_signal()\n";
       return;
     }
 
@@ -2621,8 +2570,7 @@ void edf_t::rescale( const int s , const std::string & sc )
   if ( ! ( rescale_from_mV_to_uV || rescale_from_uV_to_mV 
 	   || rescale_from_V_to_uV || rescale_from_V_to_mV ) ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << " no rescaling needed\n";
+      logger << " no rescaling needed\n";
       return;
     }
 
@@ -2651,15 +2599,13 @@ void edf_t::rescale( const int s , const std::string & sc )
   // update headers
   if ( rescale_from_mV_to_uV || rescale_from_V_to_uV ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << " rescaled " << header.label[s] << " to uV\n";
+      logger << " rescaled " << header.label[s] << " to uV\n";
       header.phys_dimension[s] = "uV";     
     }
   
   if ( rescale_from_uV_to_mV || rescale_from_V_to_mV ) 
     {
-      if ( ! globals::silent ) 
-	std::cerr << " rescaled " << header.label[s] << " to mV\n";
+      logger << " rescaled " << header.label[s] << " to mV\n";
       header.phys_dimension[s] = "mV";
     }
 }
@@ -2767,8 +2713,7 @@ bool edf_t::basic_stats( param_t & param )
       
       double t_min = 0 , t_max = 0;
       
-      if ( ! globals::silent ) 
-	std::cerr << " processing " << header.label[ signals(s) ] << " ...\n";
+      logger << " processing " << header.label[ signals(s) ] << " ...\n";
 
       
       //

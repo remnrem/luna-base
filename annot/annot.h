@@ -32,7 +32,6 @@
 
 #include <iostream>
 
-struct edf_t;
 
 // a single 'annotation' (that has to be attached to a 'timeline' and
 // therefore a single EDF)
@@ -49,261 +48,353 @@ struct edf_t;
 #include "miscmath/miscmath.h"
 #include "helper/helper.h"
 
-enum etype_t { EVT_BOOL , EVT_INT , EVT_DBL , EVT_TXT };
 
-class event_t
+// annotation_set_t  is the top-level set of annotations
+
+// annot_t    a single coherent annot class (e.g. one FTR)
+//    has interval_t --> set of avar_t map 
+
+// a_instance_t is an instance of an annotation 
+//   has an id (may or may not be unique) 
+//   has map of var -> a_data_t 
+
+//   annot_t : interval_t->ainst_t : set of avar_t : 
+
+//
+// for one instance of an annotation, a particular instance is uniquely defined by an 
+// interval and an ID
+//
+
+struct instance_idx_t;
+struct instance_t;
+struct avar_t;
+struct edf_t;
+
+typedef std::map<instance_idx_t,instance_t*> annot_map_t;
+typedef std::map<std::string,avar_t*> instance_table_t;
+
+struct annot_t
 {
- public:
-  event_t() { }
-  event_t( const std::string & label ) : label(label) { }  
+  
+  friend struct timeline_t;
 
-  virtual ~event_t() { } ;  // virtual destructor for ABC
+  friend struct annotation_set_t;
   
-  std::string label;
-  bool        has_value;
-  std::map<std::string,std::string> metadata;
   
-  virtual bool       bool_value() const = 0;
-  virtual int        int_value() const = 0;
-  virtual double     double_value() const = 0;
-  virtual std::string text_value() const = 0;
-  virtual etype_t    event_type() const = 0;
-  
-  virtual event_t *  clone() const = 0;
-  
-  bool operator<( const event_t & rhs ) const
-  {
-    // simple sorting only on label here
-    return label < rhs.label ;
-  }    
 
-  friend std::ostream & operator<<( std::ostream & out , const event_t & e );
+  //
+  // Main data members
+  //
+
+  std::string name;
+
+  std::string file;
+
+  std::string description;
+
+  // info on types must be specified, so we know how to encode an
+  // event (instance of the annotation with fields)
+  
+  std::map<std::string, globals::atype_t> types;
+  
+  // main data store
+  
+  annot_map_t interval_events;
+  
+  // for clean-up
+
+  std::set<instance_t*> all_instances;
+
+
+
+  //
+  // Constructor/destructor
+  //
+
+  annot_t( const std::string & n )  : name(n) 
+  { 
+    file = description = "";
+    types.clear();
+  }
+  
+
+ ~annot_t() 
+   {
+     wipe();
+   }
+
+
+  //
+  // Primary loaders/savers
+  //
+
+  static bool load( const std::string & , edf_t & edf );  
+  
+  int  load_features( const std::string & );    
+  
+  static bool loadxml( const std::string & , edf_t * );
+
+  bool save( const std::string & );  
+  
+  bool savexml( const std::string & );  
+  
+  static void dumpxml( const std::string & , bool );
+
+  int num_interval_events() const { return interval_events.size(); } 
+
+  
+  //
+  // key function to add a new instance to this annotation
+  //
+  
+  instance_t * add( const std::string & id , const interval_t & interval );
+   
+  uint64_t minimum_tp() const;  
+  
+  uint64_t maximum_tp() const;
+
+
+  //
+  // main output function: return pointers to all annotations in a given window
+  //
+  
+  annot_map_t extract( const interval_t & window );
+  
+  
+ private:
+
+  void wipe();
+  
+  void reset()
+  {        
+    name = "";
+    file = "";
+    description = "";
+    types.clear();
+    interval_events.clear();
+    wipe();
+  }
+
 
 };
 
-class bool_event_t : public event_t 
+
+
+
+
+struct instance_idx_t { 
+  
+  instance_idx_t( const interval_t & i , const std::string & s ) : interval(i) , id(s) { } 
+  
+  interval_t  interval;
+  
+  std::string id;
+
+  bool operator< ( const instance_idx_t & rhs ) const 
+  {
+    if ( interval < rhs.interval ) return true;
+    if ( interval > rhs.interval ) return false;
+    return id < rhs.id;
+  }
+
+};
+
+
+
+struct instance_t {   
+  
+  // an instance then has 0 or more variable/value pairs
+  
+  std::map<std::string,avar_t*> data;
+  
+  // for clean-up
+  
+  std::set<avar_t*> tracker;
+
+
+  //
+  // In/out functions
+  //
+
+  //
+  // return the type of the stored variable
+  //
+
+  globals::atype_t type( const std::string & s ) const;
+  
+  avar_t * find( const std::string & name ) 
+  { 
+    std::map<std::string,avar_t*>::iterator aa = data.find( name );
+    if ( aa == data.end() ) return NULL;
+    return aa->second;
+  } 
+  
+  void check( const std::string & name );
+  
+  // add flag 
+  void set( const std::string & name );
+  
+  // add integer 
+  void set( const std::string & name , const int i );
+
+  // add string
+  void set( const std::string & name , const std::string & s );
+
+  // add bool
+  void set( const std::string & name , const bool b );
+  
+  // add double
+  void set( const std::string & name , const double d );
+
+  // convenience function to add FTR metadate (i.e. str->str key/value pairs)
+  void add( const std::map<std::string,std::string> & d )
+  {
+    std::map<std::string,std::string>::const_iterator ii = d.begin();
+    while ( ii != d.end() )
+      {
+	set( ii->first , ii->second );
+	++ii;
+      }
+  }
+
+  //
+  // Misc helper functions
+  //
+  
+  // the instance controls adding data-points, so it is also responsible for clean-up
+  ~instance_t();
+
+
+
+};
+
+
+
+struct avar_t
+{
+  
+  // abstract base class for variable -> value mapping
+  // avar_t belong to ainst_t, instances of a particular annotation
+  
+  virtual ~avar_t() { } ;  // virtual destructor for ABC
+  
+  virtual bool        bool_value() const = 0;
+  virtual int         int_value() const = 0;
+  virtual double      double_value() const = 0;
+  virtual std::string text_value() const = 0;
+  virtual globals::atype_t     atype() const = 0;  
+  virtual avar_t *    clone() const = 0;
+  
+  bool has_value;
+  
+  bool is_missing() const { return ! has_value; } 
+  
+  friend std::ostream & operator<<( std::ostream & out , const avar_t & e );
+  
+};
+
+
+struct flag_avar_t : public avar_t 
 {
  public:
-  bool_event_t( const std::string & l , bool b ) { set(l,b); }
-  ~bool_event_t() { } 
-  bool_event_t *  clone() const { return new bool_event_t(*this); }
+  flag_avar_t() { }  // empty
+  ~flag_avar_t() { } 
+  flag_avar_t *  clone() const { return new flag_avar_t(*this); }
+  void set() { has_value=true; }
+  bool bool_value() const { return true; } 
+  int int_value() const { return 1; }
+  double double_value() const { return 1; } 
+  std::string text_value() const { return "1"; } 
+  globals::atype_t atype() const { return globals::A_FLAG_T; }  
+};
+
+
+struct bool_avar_t : public avar_t 
+{
+ public:
+  bool_avar_t( bool b ) { set(b); }
+  ~bool_avar_t() { } 
+  bool_avar_t *  clone() const { return new bool_avar_t(*this); }
   bool value;
-  void set( const std::string & l , bool b ) { has_value=true; label=l; value=b; } 
+  void set( bool b ) { has_value=true; value=b; } 
   bool bool_value() const { return value; }
   int int_value() const { return value; }
   double double_value() const { return value; }
   std::string text_value() const { return has_value ? ( value ? "1" : "0" ) : "." ; } 
-  etype_t event_type() const { return EVT_BOOL; }
+  globals::atype_t atype() const { return globals::A_BOOL_T; }
   
 };
 
-class int_event_t : public event_t 
+
+struct int_avar_t : public avar_t 
 {
  public:
-  int_event_t( const std::string & l , int i ) { set(l,i); }
-  ~int_event_t() { } 
-  int_event_t *  clone() const { return new int_event_t(*this); }
+  int_avar_t( int i ) { set(i); }
+  ~int_avar_t() { } 
+  int_avar_t *  clone() const { return new int_avar_t(*this); }
   int value;
-  void set( const std::string & l , int i ) { has_value=true; label=l; value=i; } 
+  void set( int i ) { has_value=true; value=i; } 
   bool bool_value() const { return value!=0; }
   int int_value() const { return value; }
   double double_value() const { return value; }
   std::string text_value() const { return has_value ? Helper::int2str( value ) : "."; } 
-  etype_t event_type() const { return EVT_INT; }
+  globals::atype_t atype() const { return globals::A_INT_T; }
   
 };
 
-class double_event_t : public event_t
+struct double_avar_t : public avar_t
 {
  public:
-  double_event_t( const std::string & l , double d ) { set(l,d); }
-  ~double_event_t() { } 
-  double_event_t *  clone() const { return new double_event_t(*this); }
+  double_avar_t( double d ) { set(d); }
+  ~double_avar_t() { } 
+  double_avar_t *  clone() const { return new double_avar_t(*this); }
   double value;
-  void set( const std::string & l , double d ) { has_value=true; label=l; value=d; } 
-  bool bool_value() const { return value!=0; } // ignore floating-point issue
+  void set( double d ) { has_value=true; value=d; } 
+  bool bool_value() const { return value!=0; } // ignores floating-point issues...
   int int_value() const { return value; }
   double double_value() const { return value; }
   std::string text_value() const { return has_value ? Helper::dbl2str( value ) : "."; } 
-  etype_t event_type() const { return EVT_DBL; }
+  globals::atype_t atype() const { return globals::A_DBL_T; }
   
 };
 
-class text_event_t : public event_t 
+struct text_avar_t : public avar_t 
 {
  public:
-  text_event_t( const std::string & l , const std::string & t ) { set(l,t); }
-  ~text_event_t() { } 
-  text_event_t *  clone() const { return new text_event_t(*this); }
+  text_avar_t( const std::string & t ) { set(t); }
+  ~text_avar_t() { } 
+  text_avar_t *  clone() const { return new text_avar_t(*this); }
   std::string value;
-  void set( const std::string & l , const std::string & t ) 
-  { has_value=true; label=l; value=t; } 
+  void set( const std::string & t ) { has_value=true; value=t; } 
   bool bool_value() const { return value!="0" && value != "F" ; }
-
   int int_value() const 
   { 
+    if ( ! has_value ) return 0;
     int i=0;
-    if ( Helper::str2int( value , &i ) ) return 0;
+    if ( ! Helper::str2int( value , &i ) ) return 0;
     return i;
-  }
-  
+  }  
   double double_value() const 
   { 
+    if ( ! has_value ) return 0;
     double d = 0;
-    if ( Helper::str2dbl( value , &d ) ) return 0;
+    if ( ! Helper::str2dbl( value , &d ) ) return 0;
     return d;
   }
 
   std::string text_value() const { return has_value ? value : "."; } 
-  etype_t event_type() const { return EVT_TXT; }
-  
+  globals::atype_t atype() const { return globals::A_TXT_T; }  
 };
 
 
 struct annotation_set_t;
-
-enum ANNOTATION
-  {
-    ATYPE_UNKNOWN ,     // not allowed
-    ATYPE_BINARY ,
-    ATYPE_INTEGER , 
-    ATYPE_QUANTITATIVE ,
-    ATYPE_TEXTUAL ,     
-    ATYPE_COLCAT ,       // colour categories
-    ATYPE_SLEEP_STAGE ,  // special case of INTEGER
-    ATYPE_MASK
-  };
-
-
 struct edf_t;
 struct param_t;
 
 void summarize_annotations( edf_t & edf , param_t & param );
 
 
-typedef std::vector<const event_t*> evt_table_t;
-typedef std::map<interval_t,std::vector<const event_t*> > interval_evt_map_t;
 
-
-class annot_t
-{
-
-  friend struct timeline_t;
-  friend struct annotation_set_t;
-
- public:
-  
-  std::map<ANNOTATION,std::string> type_name;
- 
- private: 
-
- annot_t() { set_type_names(); } 
-
- annot_t( const std::string & n ) 
-   : name(n) 
-  { 
-    file="";
-    cols.clear();
-    type.clear();
-    min = 0;
-    max = 0;
-    has_range = false;
-    set_type_names(); 
- }
-
- public:
-
- ~annot_t() 
-   {
-     std::set<event_t *>::iterator ii = all_events.begin();
-     while ( ii != all_events.end() )
-       {	 
-	 delete *ii;
-	 ++ii;
-       }
-   }
- 
-  bool load( const std::string & );  
-  int  load_features( const std::string & );    
-  bool save( const std::string & );  
-  
-  static bool loadxml( const std::string & , edf_t * );
-  bool savexml( const std::string & );  
-  static void dumpxml( const std::string & , bool );
-  
-  void set_description( const std::string & d ) { description = d; } 
-  void add_col( const std::string & c ) { cols.push_back(c); }
-  void add_col( const std::string & c , ANNOTATION t ) 
-  { cols.push_back(c); type.push_back(t);}
-
-  void add( interval_t interval , const event_t * e ) 
-  {
-    event_t * ne = e->clone();
-    interval_events[ interval ].push_back( ne );
-    all_events.insert( (event_t*)ne );
-  }
-
-  int num_interval_events() const { return interval_events.size(); } 
-  
-  void set_type_names()
-  { 
-    type_name[ ATYPE_UNKNOWN ]      = ".";
-    type_name[ ATYPE_BINARY ]       = "BINARY";
-    type_name[ ATYPE_INTEGER ]      = "INTEGER";
-    type_name[ ATYPE_SLEEP_STAGE ]  = "SLEEP_STAGE";
-    type_name[ ATYPE_TEXTUAL ]      = "TEXTUAL";
-    type_name[ ATYPE_MASK ]         = "MASK";
-    type_name[ ATYPE_QUANTITATIVE ] = "QUANTITATIVE";
-  }
-
-  std::string type_string(const int f ) const { return type_name.find( type[f] )->second; } 
-
-  uint64_t minimum_tp() const;  
-  uint64_t maximum_tp() const;
-
-  interval_evt_map_t extract( const interval_t & window );
-
-  std::string                              name;
-  std::string                              file;
-  std::string                              description;
-
-  std::vector<std::string>                 cols;
-  std::vector<ANNOTATION>                  type;
-
-  //
-  // optionally, a RANGE specified for this annotation
-  // (can be used in plotting, etc)
-  //
-
-  bool has_range;
-  double min;
-  double max;
-  
-  bool univariate() const { return cols.size() == 0; }
-  bool multivariate() const { return cols.size() > 1; }
-
-  
-  
-
- private:
-
-  interval_evt_map_t  interval_events;
-
-  // just used to clean up 
-  std::set<event_t*> all_events;
-
-  void reset()
-  {        
-    name = "";
-    file = "";
-    description = "";
-    cols.clear();
-    has_range = false;
-    min = max = 0;
-    interval_events.clear();
-  }
-
-};
 
 
 struct annotation_set_t
@@ -364,20 +455,6 @@ struct annotation_set_t
     return n;
   }
   
-  std::vector<std::string> display_names() const 
-  {
-    // return actual names in the file, i.e. not the handle (map key) 
-    // which is often the file name, if the .annot was loaded in...
-    std::vector<std::string> n;
-    std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
-    while ( ii != annots.end() )
-      {
-	n.push_back( ii->second->name );
-	++ii;
-      }
-    return n;
-  }
-
 
   // Attempt to create a single SLEEP STAGE annotation from multiple
   // other annotations

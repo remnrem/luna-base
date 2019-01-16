@@ -25,6 +25,8 @@
 #include "eval.h"
 #include "db/db.h"
 #include "helper/logger.h"
+#include "annot/annot.h"
+#include "annot/nsrr-remap.h"
 
 #include <iostream>
 
@@ -36,6 +38,13 @@ std::string globals::version;
 std::string globals::date;
 
 std::string globals::annot_folder;
+bool globals::read_ftr;
+std::set<std::string> globals::specified_annots;
+bool globals::remap_nsrr_annots;
+
+std::map<globals::atype_t,std::string> globals::type_name;
+std::map<std::string,globals::atype_t> globals::name_type;
+
 
 std::map<frequency_band_t,freq_range_t> globals::freq_band;
 
@@ -82,6 +91,8 @@ std::string globals::stage_strat;
 std::string globals::cycle_strat;
 std::string globals::band_strat;
 std::string globals::annot_strat;
+std::string globals::annot_instance_strat;
+std::string globals::annot_meta_strat;
 std::string globals::count_strat;
 std::string globals::sample_strat;
 
@@ -124,10 +135,33 @@ void globals::init_defs()
   silent = false;
   
   //
-  // Annotations
+  // Annotation folder
   //
   
   annot_folder = "";
+
+
+  
+  
+  //
+  // Requested to load specific annotations only?
+  //
+
+  specified_annots.clear();
+  
+  //
+  // Automatically remap NSRR annotations (nsrr-remap=Y)
+  //
+
+  remap_nsrr_annots = true;
+
+  nsrr_t::init();
+
+  //
+  // By default, read and extract all FTR; if this is a pain, can be turned off (ftr=0)
+  //
+  
+  read_ftr = true;
   
   //
   // Frequency bands req. bins as defined Manoach et al. (2014) (Table 4)
@@ -150,18 +184,18 @@ void globals::init_defs()
   
 
   //
-  // Sleep stage encoding (as per SHHS)
+  // Primary sleep stage encoding 
   //
-
-  sleep_stage[ WAKE  ]    = "Wake";
-  sleep_stage[ LIGHTS_ON ] = "LightsOn";
-  sleep_stage[ NREM1 ]    = "NREM1";
-  sleep_stage[ NREM2 ]    = "NREM2";
-  sleep_stage[ NREM3 ]    = "NREM3";
-  sleep_stage[ NREM4 ]    = "NREM4";
-  sleep_stage[ REM   ]    = "REM";
-  sleep_stage[ MOVEMENT ] = "Movement";
-  sleep_stage[ UNKNOWN ]  = "Unknown";
+  
+  sleep_stage[ WAKE  ]     = "W";
+  sleep_stage[ LIGHTS_ON ] = "L";
+  sleep_stage[ NREM1 ]     = "N1";
+  sleep_stage[ NREM2 ]     = "N2";
+  sleep_stage[ NREM3 ]     = "N3";
+  sleep_stage[ NREM4 ]     = "NREM4";
+  sleep_stage[ REM   ]     = "R";
+  sleep_stage[ MOVEMENT ]  = "M";
+  sleep_stage[ UNKNOWN ]   = "?";
 
 
   //
@@ -195,7 +229,6 @@ void globals::init_defs()
   sleep_stage_labels[ "Unsure|Unsure" ]   = UNKNOWN;
 
   // Basic
-
   sleep_stage_labels[ "Wake" ]     = WAKE;  
   sleep_stage_labels[ "NREM1" ]    = NREM1;  
   sleep_stage_labels[ "NREM2" ]    = NREM2;  
@@ -207,7 +240,6 @@ void globals::init_defs()
   sleep_stage_labels[ "L" ] = LIGHTS_ON;
 
   // minimal 
-
   sleep_stage_labels[ "W" ]     = WAKE;  
   sleep_stage_labels[ "N1" ]    = NREM1;  
   sleep_stage_labels[ "N2" ]    = NREM2;  
@@ -241,6 +273,8 @@ void globals::init_defs()
   cycle_strat  = "C";
   band_strat   = "B";
   annot_strat  = "ANN";
+  annot_instance_strat  = "INST";
+  annot_meta_strat  = "META";
   count_strat  = "N";
   epoch_strat  = "E";
   time_strat   = "T";
@@ -271,7 +305,33 @@ void globals::init_defs()
   edf_timetrack_label = "_TT";
   edf_timetrack_size = 15; // i.e. up to 30 chars
 
+  //
+  // Annot types
+  //
 
+  type_name[ A_NULL_T ] = "NULL";
+  type_name[ A_TXT_T ] = "TXT";
+  type_name[ A_INT_T ] = "INT";
+  type_name[ A_DBL_T ] = "NUM";
+  type_name[ A_BOOL_T ] = "BOOL";
+  type_name[ A_FLAG_T ] = "FLAG";
+
+  name_type[ "TXT" ] = A_TXT_T;
+  name_type[ "txt" ] = A_TXT_T;
+
+  name_type[ "INT" ] = A_INT_T; 
+  name_type[ "int" ] = A_INT_T; 
+
+  name_type[ "NUM" ] = A_DBL_T; 
+  name_type[ "num" ] = A_DBL_T; 
+
+  name_type[ "BOOL" ] = A_BOOL_T; 
+  name_type[ "bool" ] = A_BOOL_T; 
+  name_type[ "YN" ] = A_BOOL_T; 
+  name_type[ "yn" ] = A_BOOL_T; 
+
+  name_type[ "FLAG" ] = A_FLAG_T; 
+  name_type[ "flag" ] = A_FLAG_T; 
 
 }
 

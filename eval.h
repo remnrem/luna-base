@@ -32,7 +32,7 @@
 
 struct edf_t;
 
-void attach_annot( edf_t & edf , const std::string & astr );
+//void attach_annot( edf_t & edf , const std::string & astr );
 
 //
 // Helper to parse command syntax
@@ -448,6 +448,7 @@ void proc_filter( edf_t & , param_t & );
 void proc_filter_legacy( edf_t & , param_t & );
 void proc_filter_design( edf_t & , param_t & );
 void proc_filter_design_cmdline();
+void proc_cwt_design( edf_t & , param_t & );
 void proc_cwt_design_cmdline();
 void proc_psd( edf_t & , param_t & );
 void proc_mtm( edf_t & , param_t & );

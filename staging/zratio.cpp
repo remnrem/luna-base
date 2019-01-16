@@ -28,9 +28,12 @@
 #include "main.h"
 #include "miscmath/miscmath.h"
 #include "fftw/fftwrap.h"
+#include "db/db.h"
 
 #include <iostream>
 #include <string>
+
+extern writer_t writer;
 
 void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 {
@@ -74,7 +77,7 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
     Helper::halt( "require 30-second epochs initially" );
   
   int ne = edf.timeline.set_epoch( 2 , 2 ); 
-
+  
 
   //
   // Loop over signals
@@ -86,13 +89,18 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
       // only consider data tracks
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
 
+      // stratify output by signal
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      
       // Set first epoch
       
       edf.timeline.first_epoch();
 
       zr2.clear();
       zr30.clear();
-      
+
+
       //
       // for each each epoch 
       //
@@ -103,6 +111,8 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 	  int epoch = edf.timeline.next_epoch();      
 	  
 	  if ( epoch == -1 ) break;
+	  
+	  writer.level( epoch , "E2" );
 	  
 	  interval_t interval = edf.timeline.epoch( epoch );
 	  
@@ -122,6 +132,7 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 
 	  for (int f=0;f<N;f++)
 	    {
+	      //std::cout << "zr\t det " << f << "\t" << fft.frq[f] << "\t" << fft.X[f] << "\n";
 	      if ( fft.frq[f] >= zr_delta.first && fft.frq[f] < zr_delta.second ) delta += fft.X[f];
 	      if ( fft.frq[f] >= zr_theta.first && fft.frq[f] < zr_theta.second ) theta += fft.X[f];
 	      if ( fft.frq[f] >= zr_alpha.first && fft.frq[f] < zr_alpha.second ) alpha += fft.X[f];
@@ -138,13 +149,21 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 // 	  alpha = log( alpha );
 // 	  beta = log( beta );
 
+	  // calculate z-ratio, catching flat/clipped signals
+	  
+	  double denom =  delta + theta + alpha + beta ;
+	  
+	  double zr = denom > 0 ? ( ( delta + theta ) - ( alpha + beta ) ) / ( delta + theta + alpha + beta ) : -9;
 
-	  double zr = ( ( delta + theta ) - ( alpha + beta ) ) / ( delta + theta + alpha + beta );	  
-	  std::cout << "zr\t" << zr << "\t" << delta << "\t" << theta << "\t" << alpha << "\t" << beta << "\n";
-
+	  if ( zr >= -1 ) 
+	    writer.value( "ZR2" , zr );
+	  
 	  zr2.push_back( zr );
 	  
 	} // next epoch
+      
+      
+      writer.unlevel( "E2" );
       
       //
       // compile into 30-second level stats epoch 
@@ -158,6 +177,7 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 	  int elast = ec2 + 15 >= e2max ? e2max - 1 : ec2 + 15 - 1 ;
 	  int nbins = elast - ec2 + 1;
 	  
+	  // TODO... need to check for -9 bad values and skip those. 
 	  
 	  // Zpage : average of the majority
 	  if ( false )
@@ -199,16 +219,18 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 
       for (int epoch = 0 ; epoch < zr30.size() ; epoch++)
 	{
-	  std::cout << "ZR\t"
-		    << edf.id << "\t"
-		    << "[" << globals::current_tag << "]\t"
-		    << signals.label(s) << "\t"
-		    << epoch+1 << "\t"
-		    << zr30[ epoch ] << "\n";
-	}
 
-    } // next signal
-  
+	  writer.level( epoch + 1 , "E30" );
+	  
+	  writer.value( "ZR30" , zr30[ epoch ] );
+	  
+	}
+      
+      writer.unlevel( "E30" );
+      
+      } // next signal
+	
+	writer.unlevel( globals::signal_strat );
    
   //
   // reset epochs

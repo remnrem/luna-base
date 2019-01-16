@@ -49,6 +49,8 @@
 
 #include "annot/annot.h"
 
+#include "annot/nsrr-remap.h"
+
 #include "dsp/dsp.h"
 
 #include "dsp/mtm/mtm.h"

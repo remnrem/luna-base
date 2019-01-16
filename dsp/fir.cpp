@@ -641,10 +641,25 @@ int fir_t::outputFFT(const std::string & label, const std::vector<double> & wind
 
   writer.level( label , "FIR" );
 
-
+  
+  
+  //
+  // Filter coefficients
+  //
+  
+  writer.numeric_factor( "TAP" );
+  
+  for (int i=0;i<window.size();i++)
+    {
+      writer.level( i , "TAP" );
+      writer.value( "W" , window[i] );
+    }
+  writer.unlevel( "TAP" );
+  
   //
   // Impulse response
   //
+
   // 2 window second around filter size
   double sz = window.size() / (double)sampFreq + 2 ;
   fir_impl_t fir_impl ( window );

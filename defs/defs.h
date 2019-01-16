@@ -101,7 +101,26 @@ struct globals
   static bool assume_pm_starttime;
   
   static bool skip_edf_annots;
+
+  static bool remap_nsrr_annots;
+
+  //
+  // Annotation types stored here statically
+  //
   
+  enum atype_t { A_NULL_T ,  // i.e. not found
+		 A_FLAG_T , 
+		 A_BOOL_T , 
+		 A_INT_T , 
+		 A_DBL_T , 
+		 A_TXT_T };
+  
+  static std::map<atype_t,std::string> type_name;
+
+  static std::map<std::string,atype_t> name_type;
+  
+  static bool read_ftr;
+
   static std::string indiv_wildcard;
 
   static std::string current_tag;
@@ -120,7 +139,9 @@ struct globals
   static std::string stage_strat;
   static std::string cycle_strat;
   static std::string band_strat;
-  static std::string annot_strat;
+  static std::string annot_strat;          // annot class
+  static std::string annot_instance_strat; // annot instance ID
+  static std::string annot_meta_strat;     // annot instance meta variable label
   static std::string count_strat;
   static std::string sample_strat;
 
@@ -155,6 +176,9 @@ struct globals
   // default annotation folder (i.e. added to each record in sample-list implicitly)
   static std::string annot_folder;
   
+  // specified annots
+  static std::set<std::string> specified_annots;
+
   // helper functions to pull out global values
   static std::string band( frequency_band_t b );
 

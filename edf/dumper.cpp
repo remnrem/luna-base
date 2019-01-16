@@ -33,8 +33,15 @@ extern writer_t writer;
 
 extern annotation_set_t annotations;
 
-void edf_t::record_dumper( )
+void edf_t::record_dumper( param_t & param )
 {
+
+  bool show_signals = true;
+  bool show_annots  = true;
+  
+  if ( param.has( "no-signals" ) ) show_signals = false; 
+  if ( param.has( "no-annots" ) ) show_annots = false;
+
 
   //
   // Annotations present? (i.e. already loaded)
@@ -58,132 +65,124 @@ void edf_t::record_dumper( )
       //
       // Get annotations
       //
-
-      std::cout << "Generic Annotatons-----------------------\n";
-
-      std::map<std::string,std::set<std::string> > atxt;
-
-      for (int a=0;a<annots.size();a++)
-	{
-	  	 
-	  annot_t * annot = timeline.annotations( annots[a] );
-	  
-	  interval_evt_map_t events = annot->extract( interval );
-	  
-	  // collapse
-	  
-	  interval_evt_map_t::const_iterator ii = events.begin();
-	  while ( ii != events.end() )
-	    {	      
-	      evt_table_t::const_iterator jj = ii->second.begin();
-	      while ( jj != ii->second.end() )
-		{
-		  const event_t * event = *jj;		  
-		  atxt[ event->label ].insert( event->text_value() );
-		  ++jj;
-		}
-	      ++ii;
-	    }
-	}
-
-      //
-      // display
-      //
-
       
-      std::map<std::string,std::set<std::string> >::iterator ai = atxt.begin();
-      while ( ai != atxt.end() )
+      if ( show_annots ) 
 	{
-	  if ( ai == atxt.begin() ) std::cout << "epoch-ann:"; else std::cout << ";";
-	  std::cout << ai->first << "=";
+	  std::cout << "Generic Annotatons-----------------------\n";
 	  
-	  std::set<std::string>::iterator si = ai->second.begin();
-	  while ( si != ai->second.end() )
+	  for (int a=0;a<annots.size();a++)
 	    {
-	      if ( si != ai->second.begin() ) std::cout << ",";
-	      std::cout << *si;
-	      ++si;
+	      
+	      annot_t * annot = timeline.annotations( annots[a] );
+	      
+	      annot_map_t events = annot->extract( interval );
+	      
+	      annot_map_t::const_iterator ii = events.begin();
+	      while ( ii != events.end() )
+		{	      
+		  
+		  const instance_idx_t & instance_idx = ii->first;
+		  const instance_t * instance = ii->second;
+		  
+		  std::cout << annot->name << "\t" 
+			    << instance_idx.id << "\t"
+			    << instance_idx.interval.as_string() ;
+		  
+		  instance_table_t::const_iterator jj = instance->data.begin();
+		  while ( jj != instance->data.end() )
+		    {
+		      std::cout << "\t" << jj->first 
+				<< "[" << globals::type_name[ jj->second->atype() ] << "]="
+				<< jj->second->text_value();
+		      ++jj;
+		    }
+
+		  std::cout << "\n";
+		  ++ii;
+		}
 	    }
-	  ++ai;
-	  std::cout << "\n";
+	  
+	  //
+	  // EDF annotations
+	  //
+	  
+	  std::cout << "EDF Annotations--------------------------\n";
+	  
+	  for ( int s = 0 ; s < header.ns; s ++ )
+	    {
+	      
+	      if ( header.is_annotation_channel( s ) )
+		{	      
+		  
+		  tal_t t = tal( s , r );
+		  
+		  std::cout << "Signal " << s+1 << " " 
+			    << header.label[s] << "\n"
+			    << t << "\n\n";
+		  
+		}
+	      
+	      
+	    } // next signal
+	  
 	}
-      
 
-      //
-      // EDF annotations
-      //
-
-      std::cout << "EDF Annotations--------------------------\n";
-
-      for ( int s = 0 ; s < header.ns; s ++ )
-	{
-	  
-	  if ( header.is_annotation_channel( s ) )
-	    {	      
-	      
-	      tal_t t = tal( s , r );
-	      
-	      std::cout << "Signal " << s+1 << " " 
-			<< header.label[s] << "\n"
-			<< t << "\n\n";
-	      
-	    }
-	  	  
-	  
-	} // next signal
-      
       //
       // Get data 
       //
 
-
-      std::cout << "Data signals-----------------------------\n";
-
-      for ( int s = 0 ; s < header.ns; s ++ )
+      if ( show_signals ) 
 	{
+
+	  std::cout << "Data signals-----------------------------\n";
 	  
-	  std::cout << "s = " << s << "\n";
-
-	  if ( header.is_data_channel( s ) )
+	  for ( int s = 0 ; s < header.ns; s ++ )
 	    {
-
-	      std::cout << "interval = " << interval << "\n";
 	      
-	      slice_t data( *this , s , interval );
+	      std::cout << "s = " << s << "\n";
 	      
-	      const std::vector<double> * d = data.pdata();
-	      
-	      const std::vector<uint64_t> * tp = data.ptimepoints();
-	      
-	      const int n = d->size(); 
-	      
-	      std::cout.precision(8);
-	      
-	      for (int i=0;i<n;i++)
-		{	      
+	      if ( header.is_data_channel( s ) )
+		{
 		  
-		  uint64_t sec = (*tp)[i] / globals::tp_1sec;
-		  uint64_t rem = (*tp)[i] - ( sec * globals::tp_1sec );
-		  double   rem2 = (double)rem / (double) globals::tp_1sec ;
-		  double   sec2 = (double)sec + rem2;
+		  std::cout << "interval = " << interval << "\n";
 		  
-		  std::cout << "RECORD-DUMP" << "\t" 
-			    << header.label[s] << "\t"
-			    << "rec=" << r << "\t"
-			    << (i+1) << "/" << n << "\t"
-			    << "tp=" << (*tp)[i] << "\t"
-			    << "sec=" << (*tp)[i] * globals::tp_duration << "\t"
-			    << sec << "\t"
-			    << rem << "\t"
-			    << rem2 << "\t"
-			    << sec2 << "\t"
-			    << (*d)[i] << "\n";
+		  slice_t data( *this , s , interval );
+		  
+		  const std::vector<double> * d = data.pdata();
+		  
+		  const std::vector<uint64_t> * tp = data.ptimepoints();
+		  
+		  const int n = d->size(); 
+		  
+		  std::cout.precision(8);
+		  
+		  for (int i=0;i<n;i++)
+		    {	      
+		      
+		      uint64_t sec = (*tp)[i] / globals::tp_1sec;
+		      uint64_t rem = (*tp)[i] - ( sec * globals::tp_1sec );
+		      double   rem2 = (double)rem / (double) globals::tp_1sec ;
+		      double   sec2 = (double)sec + rem2;
+		      
+		      std::cout << "RECORD-DUMP" << "\t" 
+				<< header.label[s] << "\t"
+				<< "rec=" << r << "\t"
+				<< (i+1) << "/" << n << "\t"
+				<< "tp=" << (*tp)[i] << "\t"
+				<< "sec=" << (*tp)[i] * globals::tp_duration << "\t"
+				<< sec << "\t"
+				<< rem << "\t"
+				<< rem2 << "\t"
+				<< sec2 << "\t"
+				<< (*d)[i] << "\n";
+		    }
 		}
-	    }
-	} // next signal
-      
-      r = timeline.next_record( r );
+	    } // next signal
+	  
+	}
 
+      r = timeline.next_record( r );
+      
     } // next record
   
 }
@@ -271,18 +270,24 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
 	      
 	      annot_t * annot = timeline.annotations( annots[a] );
 	      
-	      interval_evt_map_t events = annot->extract( interval );
+	      annot_map_t events = annot->extract( interval );
 	      
 	      // collapse
 	      
-	      interval_evt_map_t::const_iterator ii = events.begin();
+	      annot_map_t::const_iterator ii = events.begin();
 	      while ( ii != events.end() )
 		{	      
-		  evt_table_t::const_iterator jj = ii->second.begin();
-		  while ( jj != ii->second.end() )
+
+		  const instance_idx_t & instance_idx = ii->first;
+		  const instance_t * instance = ii->second;
+		  
+		  instance_table_t::const_iterator jj = instance->data.begin();
+		  while ( jj != instance->data.end() )
 		    {
-		      const event_t * event = *jj;		  
-		      atxt[ event->label ].insert( event->text_value() );
+		      if (  jj->second == NULL ) 
+			atxt[ jj->first ].insert( "." );
+		      else
+			atxt[ jj->first ].insert( jj->second->text_value() );
 		      ++jj;
 		    }
 		  ++ii;
@@ -507,26 +512,33 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 
 	  annot_t * annot = timeline.annotations( annots[a] );
 
-	  interval_evt_map_t events = annot->extract( interval );
+	  annot_map_t events = annot->extract( interval );
 	  
 	  // collapse
 	  
-	  interval_evt_map_t::const_iterator ii = events.begin();
+	  annot_map_t::const_iterator ii = events.begin();
 	  while ( ii != events.end() )
-	    {	      
-	      evt_table_t::const_iterator jj = ii->second.begin();
-	      while ( jj != ii->second.end() )
-		{
-	
-		  const event_t * event = *jj;
+	    {	 
 
-		  atxt[ event->label ].insert( event->text_value() );
+	      const instance_idx_t & instance_idx = ii->first;
+	      const instance_t * instance = ii->second;
+
+	      instance_table_t::const_iterator jj = instance->data.begin();
+	      while ( jj != instance->data.end() )
+		{
+		  
+		  std::string s = ".";
+		  
+		  if (  jj->second != NULL ) 
+		    s = jj->second->text_value() ;
+
+		  atxt[ jj->first ].insert( s );
 		  
 		  if ( show_times )
 		    {		      
-		      std::string & t = atimes[ event->label ][ event->text_value() ];
-		      if ( t == "" ) t = ii->first.as_string() ;
-		      else t += "," + ii->first.as_string() ;
+		      std::string & t = atimes[ jj->first ][ s ];
+		      if ( t == "" ) t = ii->first.interval.as_string() ;
+		      else t += "," + ii->first.interval.as_string() ;
 		    }
 
 		  ++jj;
@@ -798,7 +810,7 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
 		      continue;
 		    }
 
-		  interval_evt_map_t events = annot->extract( interval );
+		  annot_map_t events = annot->extract( interval );
 		  
 		  bool has_annot = events.size() ;
 		  
@@ -972,7 +984,7 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
 		    std::cout << "\t0";
 		  else
 		    {
-		      interval_evt_map_t events = annotlist[a]->extract( interval2 );
+		      annot_map_t events = annotlist[a]->extract( interval2 );
 		      bool has_annot = events.size() ;		      
 		      std::cout << "\t" << ( has_annot ? 1 : 0 ) ;
 		    }		      

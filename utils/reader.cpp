@@ -29,11 +29,14 @@
 #include <sstream>
 #include <cstring>
 
-#include "defs/defs.h"
-#include "helper/helper.h"
-#include "db/db.h"
+#include "luna.h"
+
+// #include "defs/defs.h"
+// #include "helper/helper.h"
+// #include "db/db.h"
 
 extern writer_t writer;
+extern globals global;
 
 struct options_t {
   bool print_empty_rows; // -e 
@@ -249,6 +252,9 @@ struct reqvar_t {
 int main(int argc , char ** argv )
 {
   
+  // turn off logging
+  global.api();
+
 
   if ( argc < 2 ) 
     Helper::halt( "usage: destrat stout.db {-f|-d|-s|-v|-i|-r|-c|-n|-e}" );
@@ -259,15 +265,17 @@ int main(int argc , char ** argv )
 
   char mode = 'D';
 
-  run_summary = true;
+  run_summary = false; // dump by default, unless '-x'
+
   run_dictionary = false;
+
   
   std::set<std::string> args_rvar, args_cvar, args_ind, args_var;
 
   for (int i=1;i<argc;i++)
     {
 
-      if      ( strcmp( argv[i] , "-x" ) == 0 ) { run_summary = false; mode = '0'; }
+      if      ( strcmp( argv[i] , "-x" ) == 0 ) { run_summary = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-l" ) == 0 ) { run_summary = false; options.long_format = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-d" ) == 0 ) { run_dictionary = true; mode = '0'; }
       

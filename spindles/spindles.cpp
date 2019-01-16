@@ -223,16 +223,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   //
   // Set up annotation 
   //
-  
-  annot_t * a = edf.timeline.annotations.add( "wavelet-spindles" );
-  a->set_description( "Wavelet spindle detector" );
+
   std::string sp_label = "spindles";
-  a->add_col( sp_label , ATYPE_TEXTUAL );
-  
-  annot_t * a2 = edf.timeline.annotations.add( "pre-wavelet-spindles" );
-  a2->set_description( "Wavelet spindle detector (pre)" );
+  annot_t * a = edf.timeline.annotations.add( sp_label );
+  a->description = "Wavelet spindle detector";
+
   std::string sp_label2 = "pre-spindles";
-  a2->add_col( sp_label2 , ATYPE_TEXTUAL );
+  annot_t * a2 = edf.timeline.annotations.add( sp_label2 );
+  a2->description = "Wavelet spindle detector (pre)" ;
+
 
 
   //
@@ -1621,18 +1620,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  
 	  for (int i=0;i<spindles.size();i++)
 	    {
-	      text_event_t e( sp_label , signals.label(s) );
-	      a->add( spindles[i].tp , &e );
+	      a->add( signals.label(s) , spindles[i].tp );
 	    }
 	  
 	  // more verbose recording?
 	  if ( add_channels ) 
 	    {
 	      for (int i=0;i<spindles1.size();i++)
-		{
-		  text_event_t e( "pre-"+sp_label , signals.label(s) );
-		  a2->add( spindles1[i] , &e );
-		}
+		a2->add(  signals.label(s) , spindles1[i] );
 	    }
 
 	  //
@@ -2619,9 +2614,8 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
   // Annotations to save
   //
   
-  annot_t * a = edf.timeline.annotations.add( "spindles" );
-  a->set_description( "Martin et al. spindle calls" );
-  a->add_col( "spindle" , ATYPE_BINARY );
+  annot_t * a = edf.timeline.annotations.add( "spindles-v2" );
+  a->description = "Martin et al. spindles" ;
   
 
   //
@@ -2782,9 +2776,7 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
       while ( ii != spindles.end() )
 	{	  
 	  const interval_t & spindle = ii->tp;
-	  
-	  bool_event_t e( signals.label(s) , true );
-	  a->add( spindle , &e );      	  	  
+	  a->add(  signals.label(s)  , spindle );      	  	  
 	  ++ii;
 	}
 

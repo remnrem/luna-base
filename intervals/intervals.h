@@ -31,6 +31,11 @@
 #include <ostream>
 #include <set>
 
+
+//
+// n.b. intervals are defined from the start (inclusive) to one point past the end 
+//
+
 struct interval_t
 {
   
@@ -42,18 +47,18 @@ struct interval_t
   
   bool empty() const { return start == 0 && stop == 0; } 
   
-  uint64_t duration() const { return stop - start + 1; } 
-
-  uint64_t duration_excl() const { return stop - start ; } 
+  uint64_t duration() const { return stop - start ; } 
   
-  double duration_sec() const { return ( stop - start + 1 ) / (double)globals::tp_1sec; } 
-
-  double duration_sec_excl() const { return ( stop - start ) / (double)globals::tp_1sec; } 
-
+  double duration_sec() const { return ( stop - start ) / (double)globals::tp_1sec; } 
+  
+  // convenience output functions, i.e. for exact 30-second epoch
+  uint64_t duration_plus1() const { return stop - start + 1 ; }   
+  double duration_sec_plus1() const { return ( stop - start + 1 ) / (double)globals::tp_1sec; } 
+  
   void set_leftright( uint64_t l , uint64_t r ) 
   {
     start = l;
-    stop  = r;
+    stop  = r; // assumes this is 1 past the end already
     if ( start > stop ) 
       {
 	uint64_t t = stop;
@@ -66,7 +71,7 @@ struct interval_t
   {    
     uint64_t w2 = w * 0.5;
     start = w2 > c ? 0 : c - w2 ;
-    stop  = c + w2 ;
+    stop  = c + w2 + 1 ; // on point past the end...
   }
   
   void expand( uint64_t w )
@@ -86,7 +91,7 @@ struct interval_t
   double mid_sec() const { return mid()/(double)globals::tp_1sec; }
 
   double stop_sec() const { return stop/(double)globals::tp_1sec; }
-
+  
   bool operator<( const interval_t & rhs ) const 
   {
     if ( start == rhs.start ) return stop < rhs.stop;
@@ -102,7 +107,8 @@ struct interval_t
 
   bool overlaps( const interval_t & b ) const 
   {
-    return start <= b.stop && stop >= b.start;
+    // note: window defined as start .. (stop-1)
+    return start <= (b.stop-1) && (stop-1) >= b.start;
   }
 
   double prop_overlap( const interval_t & b ) const 
@@ -116,8 +122,8 @@ struct interval_t
     uint64_t min_stop = stop < b.stop ? stop  : b.stop ;
     uint64_t max_stop = stop < b.stop ? b.stop : stop ; 
     
-    uint64_t o_intersection = min_stop - max_start + 1;
-    uint64_t o_union        = max_stop - min_start + 1;
+    uint64_t o_intersection = min_stop - max_start ;
+    uint64_t o_union        = max_stop - min_start ;
     
     double metric = o_intersection / (double)o_union;	      
     
@@ -127,27 +133,31 @@ struct interval_t
 
   bool is_after( const interval_t & b ) const 
   {
-    return start > b.stop;
+    // as stop is 1-point after the end, use <=
+    return start >= b.stop;
   }
-
+  
   bool is_before( const interval_t & b ) const 
   {
-    return stop < b.start;
+    // as stop is 1-point after the end, use <=
+    return stop <= b.start;
   }
 
   bool is_completely_spanned_by( const interval_t & b ) const
-  {
+  {    
     return b.start <= start && b.stop >= stop;
   }
   
   bool contains( const uint64_t & tp ) const
   {
-    return tp >= start && tp <= stop;
+    // note: stop is 1 past the end
+    return tp >= start && tp < stop;
   }
   
   uint64_t mid() const
   {
-    return start + ( stop - start ) / (uint64_t)2;
+    // as stop one past end, wind back here to get mid-point
+    return start + ( stop - 1 - start ) / (uint64_t)2;
   }
 
   std::string as_string() const 

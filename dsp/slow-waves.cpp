@@ -334,7 +334,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	writer.value( "START" , w.interval_tp.start );
 	writer.value( "STOP"  , w.interval_tp.stop );
 	
-	writer.value( "DUR"  , w.interval_tp.duration_sec_excl() );
+	writer.value( "DUR"  , w.interval_tp.duration_sec() );
 	
 	writer.value( "UP_AMP" , w.up_amplitude );
 	writer.value( "DOWN_AMP" , w.down_amplitude );
@@ -544,7 +544,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
       interval_t swint( tp[ zc[i-1] ] , tp[ zc[i] ] - 1 ); 
 
-      const double t = swint.duration_sec_excl();
+      const double t = swint.duration_sec();
       
       // duration criteria on whole wave? 
 
@@ -613,14 +613,14 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 	  if ( use_alternate_neg2pos_zc ) // negative half wave is mid -- stop
 	    {	      
 	      interval_t hwint( w.zero_crossing_tp , tp[ zc[i] ] - 1 );
-	      const double t = hwint.duration_sec_excl();
+	      const double t = hwint.duration_sec();
 	      // duration criteria on negative half-wave?
 	      if ( t < t_neg_lwr || t > t_neg_upr ) continue;
 	    }
 	  else // or (DEFAULT) : negative half-wave is start to mid
 	    {
 	      interval_t hwint( tp[ zc[i-1] ] , w.zero_crossing_tp - 1 );
-	      const double t = hwint.duration_sec_excl();
+	      const double t = hwint.duration_sec();
 	      // duration criteria on negative half-wave?
 	      if ( t < t_neg_lwr || t > t_neg_upr ) continue;
 	    }

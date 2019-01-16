@@ -671,12 +671,17 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
   // If 'values' is NULL, then we just use bool_value() for a binary mask
   bool binary_mask = values == NULL;
   mask_set = true;
+
+  if ( ! binary_mask ) 
+    Helper::halt( "internal error: values-mask not yet implemented..." ) ;
   
   const int ne = epochs.size();
   
-  // Note: we do not clear the mask here, as we want to allow multiple
+  //
+  // We do not clear the mask here, as we want to allow multiple
   // filters to be added on top of oneanther
-  
+  //
+
   int cnt_mask_set = 0;
   int cnt_mask_unset = 0;
   int cnt_unchanged = 0;
@@ -686,45 +691,14 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
   for (int e=0;e<ne;e++)
     {
 
-      bool matches = false;
-      
       interval_t interval = epoch( e );
       
-      interval_evt_map_t events = a->extract( interval );
-      
-      interval_evt_map_t::const_iterator ii = events.begin();
-            
-      while ( ii != events.end() )
-   	{
-	  
-	  evt_table_t::const_iterator jj = ii->second.begin();
-   	  
-	  while ( jj != ii->second.end() )
-   	    {	      
-	      
-	      const event_t * event = *jj;
-	      
-   	      if ( binary_mask )
-   		{		  
-		  if ( event->bool_value() ) 
-		    {
-		      matches = true; 		      
-		    }
-   		}
-   	      else 
-   		{
-		  bool has_value = values->find( event->text_value() ) != values->end();
-		  if ( has_value ) 
-		    {		      
-		      matches = true;
-		    }
-		}
-	      ++jj;
-   	    }	  
-   	  ++ii;	   
-   	}
+      annot_map_t events = a->extract( interval );
+
+      bool matches =  events.size() > 0 ;
       
       // count basic matches
+
       if ( matches ) ++cnt_basic_match;
       
       // set new potential mask, depending on match_mode
@@ -1223,17 +1197,10 @@ void timeline_t::annotate_epochs( const std::string & label ,
   // Take information from the annot_t class, and make a simple per-epoch annotation  
   //
   
-  
   // this can be performed after a restructure, but (total) # of epochs must match the file exactly
   
-//   if ( has_epoch_mapping() ) 
-//     {
-//       Helper::halt( "cannot attach epoch-annotations after RESTRUCTUREing the EDF" );
-//     }
-  
-
   //
-  // Get things that we want to display; from an ANNOT-EPOCHS command, 
+  // Get things that we want to display; from an EPOCH-ANNOT-EPOCHS command, 
   // all options are keys;  the key is the display name; the value is the 
   // mask-style option, e.g.   nrem2=SRO::Stage2Sleep[1] 
   //  label=annot_label[values]  
@@ -1287,29 +1254,27 @@ void timeline_t::annotate_epochs( const std::string & label ,
       
       if ( annot == NULL ) continue;
 
-      interval_evt_map_t events = annot->extract( interval );
+      annot_map_t events = annot->extract( interval );
       
       // search for a matching value (at least one)
       
-      interval_evt_map_t::const_iterator ii = events.begin();
+      annot_map_t::const_iterator ii = events.begin();
       while ( ii != events.end() )
 	{	
 	  
-	  evt_table_t::const_iterator jj = ii->second.begin();
-	  while ( jj != ii->second.end() )
+	  const instance_idx_t & instance_idx = ii->first;
+	  const instance_t * instance = ii->second;
+
+	  if ( values.find( instance_idx.id ) != values.end() )
 	    {
-	      const event_t * event = *jj;
-	      
-	      if ( values.find( event->text_value() ) != values.end() )
-		{
-		  eannots[ label ][ e ] = true;
-		  break;
-		}	      
-	      ++jj;
-	    }
+	      eannots[ label ][ e ] = true;
+	      break;
+	    }	      
+	  
 	  ++ii;
+	  
 	}
-      
+
     } // next epoch
 }
 
@@ -1348,8 +1313,8 @@ void timeline_t::mask2annot( const std::string & path , const std::string & tag 
   std::string filename = path2 + tag + "-" + edf->id + ".annot"; 
   
   annot_t * a = annotations.add( tag );
-  a->set_description( tag + " mask" );
-  a->add_col( tag , ATYPE_MASK );
+  a->description = tag + "-mask" ;  
+  a->types[ "M" ] = globals::A_BOOL_T;
   
   const int ne = mask.size();
   
@@ -1357,15 +1322,15 @@ void timeline_t::mask2annot( const std::string & path , const std::string & tag 
     {
       if ( mask[e] )
 	{
-	  bool_event_t m( tag , mask[e] );
-	  a->add( epoch(e) , &m );
+	  instance_t * instance = a->add( tag , epoch(e) );
+	  instance->set( "M" , true );
 	}
     }
 
   a->save( filename );
 
-  // this will also retain the annotaiton 'tag', so it can be used 
-  // downstream by explicitly requesting the 'tag' annotation even if 
+  // this will also retain the annotatiton 'tag', so it can be used
+  // downstream by explicitly requesting the 'tag' annotation even if
   // the mask changes (i.e. rather than delete the annotation here)
   
 }
@@ -1375,8 +1340,8 @@ void timeline_t::mask2annot( const std::string & path , const std::string & tag 
 void timeline_t::dumpmask()
 {
 
-  // no mask set?
-  if ( ! mask_set ) return;
+  // no mask set: means all clear so display that
+  //if ( ! mask_set ) return;
 
   first_epoch();
   
@@ -1395,7 +1360,7 @@ void timeline_t::dumpmask()
       writer.var( "INTERVAL" , "Epoch time start/stop" );
       writer.var( "MASK" , "Is masked? (1=Y)" );
       writer.value( "INTERVAL" , interval.as_string() );
-      writer.value( "MASK" , mask[e] );
+      writer.value( "MASK" , mask_set ? mask[e] : false );
 
     }
 
@@ -3058,21 +3023,16 @@ void timeline_t::list_all_annotations( const param_t & param )
   if ( param.has( "start" ) ) keep_mode = 2;  
   
   logger << " keeping annotations based on ";
-  if ( keep_mode == 0 ) logger << "any overlap with";
+  if ( keep_mode == 0 )      logger << "any overlap with";
   else if ( keep_mode == 1 ) logger << "complete (all) overlap with";
-  else if ( keep_mode == 1 ) logger << "starting in";
+  else if ( keep_mode == 2 ) logger << "starting in";
   logger << " an unmasked region\n";
   
   bool show_masked = param.has("show-masked");
 
+  // annotation names
 
-  // 'handle' (could be file name)
   std::vector<std::string> names = annotations.names();
-
-  // 'display' name
-  std::vector<std::string> display_names = annotations.display_names();
-  
-  
 
   //
   // Per epoch summary of all annotations
@@ -3091,7 +3051,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  if ( e == -1 ) break;
 	  
 	  writer.epoch( display_epoch( e ) );
-	  
+
 	  interval_t interval = epoch( e );
 	  
 	  // get each annotations
@@ -3101,39 +3061,42 @@ void timeline_t::list_all_annotations( const param_t & param )
 	      annot_t * annot = annotations.find( names[a] );
 
 	      // get overlapping annotations for this epoch
-	      interval_evt_map_t events = annot->extract( interval );
+	      annot_map_t events = annot->extract( interval );
 
 	      // list
-	      interval_evt_map_t::const_iterator ii = events.begin();
+	      annot_map_t::const_iterator ii = events.begin();
 	      while ( ii != events.end() )
 		{	  
-		  const interval_t & interval = ii->first;
 		  
-		  std::vector<const event_t*>::const_iterator ee = ii->second.begin();
-		  while ( ee != ii->second.end() )
-		    {	      
-		      const event_t * event = *ee;	      	      
-		      
-		      bool is_masked = false;
+		  const instance_idx_t & instance_idx = ii->first;
 
-		      if      ( keep_mode == 0 ) is_masked = interval_overlaps_unmasked_region( ii->first );
-		      else if ( keep_mode == 1 ) is_masked = interval_is_completely_unmasked( ii->first );
-		      else if ( keep_mode == 2 ) is_masked = ! interval_start_is_masked( ii->first ) ;
-		      
-		      // skip?
-		      if ( is_masked && ! show_masked ) { ++ee; continue; } 
-		      
-		      // else display
-		     		      		      
-		      writer.value( "EMASK" , masked( e ) );
-		      writer.value( "INTERVAL" , ii->first.as_string() );
-		      writer.value( "AMASK" , is_masked );
-		      writer.value( "LABEL" , event->label );
-				
-		      ++ee;
-		    }
+		  const instance_t * instance = ii->second;
+
+		  const interval_t & interval = instance_idx.interval;
+		  
+		  bool is_masked = false;
+		  
+		  // keep if any part of A overlaps any unmasked region
+		  if      ( keep_mode == 0 ) is_masked = ! interval_overlaps_unmasked_region( interval );
+		  
+		  // ...or, only if entire A is in unmasked region
+		  else if ( keep_mode == 1 ) is_masked = ! interval_is_completely_unmasked( interval );
+		  
+		  // ...or, if start of A is in an unmasked region
+		  else if ( keep_mode == 2 ) is_masked = interval_start_is_masked( interval ) ;
+		  
+		  // skip?
+		  if ( is_masked && ! show_masked ) {  continue; } 
+		  
+		  // else display
+				      
+		  writer.value( "EMASK" , masked( e ) );
+		  writer.value( "INTERVAL" , interval.as_string() );
+		  writer.value( "AMASK" , is_masked );
+		  writer.value( "LABEL" , instance_idx.id );
+		  
 		  ++ii;
-		}	      
+		}      
 	    }
 	}
       
@@ -3151,10 +3114,16 @@ void timeline_t::list_all_annotations( const param_t & param )
 
   
   // sort by time, collapse across events
-  std::map<interval_t,std::set<const event_t*> > events;
+  std::map<instance_idx_t,const instance_t*> events;
   
+  // class
   std::map<std::string,int> counts;
   std::map<std::string,double> dur;
+  
+  // class x inst
+  std::map<std::string,std::map<std::string,int> > counts2;
+  std::map<std::string,std::map<std::string,double> > dur2;
+  
   
   // iterate over each annotation
   for (int a = 0 ; a < names.size() ; a++ ) 
@@ -3166,19 +3135,18 @@ void timeline_t::list_all_annotations( const param_t & param )
 
       const int num_events = annot->num_interval_events();
       
-      if ( 0 ) 
+      if ( 1 ) 
 	{
-	  std::cout << names[a] << "\t" << display_names[a]<< "\n";
+	  std::cout << names[a] << "\n";
 	  std::cout << " ne = " << num_events << "\n";
 	  std::cout << " file = " << annot->file << "\n";
 	  
-	  const int nf = annot->cols.size();
-	  std::cout << " fields = " << annot->cols.size() << "\n";
-	  for (int f = 0 ; f < nf ; f++ ) 
-	    std::cout << " " << annot->type_string(f) ;
-	  std::cout << "\n";
-	  
-	  std::cout << "has range " << ( annot->has_range ? "Y" : "N" ) << "\n";
+	  const int nf = annot->types.size();
+	  std::cout << " fields = " << nf << "\n";
+// 	  for (int f = 0 ; f < nf ; f++ ) 
+// 	    std::cout << " " << annot->type_string(f) ;
+	  std::cout << "\n";	  
+
 	}
 
       
@@ -3186,83 +3154,104 @@ void timeline_t::list_all_annotations( const param_t & param )
       // iterator over interval/event map
       //
 
-      interval_evt_map_t::const_iterator ii = annot->interval_events.begin();
+      annot_map_t::const_iterator ii = annot->interval_events.begin();
       while ( ii != annot->interval_events.end() )
 	{	  
-	  const interval_t & interval = ii->first;
+
+	  const instance_idx_t & instance_idx = ii->first;
+	  const instance_t * instance = ii->second;
 	  
 	  bool keep_this = false;
 	  
-	  if      ( keep_mode == 0 ) keep_this = interval_overlaps_unmasked_region( ii->first );
-	  else if ( keep_mode == 1 ) keep_this = interval_is_completely_unmasked( ii->first );
-	  else if ( keep_mode == 2 ) keep_this = ! interval_start_is_masked( ii->first ) ;
+	  if      ( keep_mode == 0 ) keep_this = interval_overlaps_unmasked_region( instance_idx.interval );
+	  else if ( keep_mode == 1 ) keep_this = interval_is_completely_unmasked( instance_idx.interval );
+	  else if ( keep_mode == 2 ) keep_this = ! interval_start_is_masked( instance_idx.interval ) ;
 	  
 	  if ( keep_this )
 	    {      
+	      events[ instance_idx ] = instance ; 
 	      
-	      std::vector<const event_t*>::const_iterator ee = ii->second.begin();
-	      while ( ee != ii->second.end() )
-		{	      
-		  const event_t * event = *ee;	      	      		  
-		  // record
-		  events[ interval ].insert( event );	      
-		  counts[ event->label ]++;
-		  dur[ event->label ] += ii->first.duration_sec();
-		  ++ee;
-		}
+	      counts[ annot->name ]++;
+	      counts2[ annot->name ][ instance_idx.id ] ++;
 	      
+	      dur[ annot->name ] += instance_idx.interval.duration_sec(); 	      
+	      dur2[ annot->name ][ instance_idx.id ] += instance_idx.interval.duration_sec(); 	      
 	    }
+	      
 	  
 	  ++ii;
 	}
     }
 
+
   // now print all by time point
-  std::map<interval_t,std::set<const event_t*> >::const_iterator aa = events.begin();
+  std::map<instance_idx_t,const instance_t*>::const_iterator aa = events.begin();
   while ( aa != events.end() )
     {
+      
+      const instance_idx_t & instance_idx = aa->first;
+      
+      const interval_t & interval = instance_idx.interval;
+      
       // stratify output by interval
-      writer.interval( aa->first );
-      writer.value( "SEC" , aa->first.as_string() );
+      
+      writer.interval( interval );
 
-      std::set<const event_t*>::const_iterator ee = aa->second.begin();
-      while ( ee != aa->second.end() )
+      writer.level( instance_idx.id , globals::annot_strat );
+      
+      writer.value( "SEC" , interval.as_string() );
+
+//       if ( event->event_type() != EVT_CORE )
+      writer.value(  "VAR" , "**TODO**" );
+      
+      if ( show_masked ) 
 	{
 	  
-	  writer.value( "ANNOT" , (*ee)->label );
+	  bool start_masked = interval_start_is_masked( interval ) ; 
+	  bool some_masked = interval_overlaps_masked_region( interval );
+	  bool all_masked = interval_is_completely_masked( interval );
+	  bool some_unmasked = interval_overlaps_unmasked_region( interval );
+	  bool all_unmasked = interval_is_completely_unmasked( interval );
 	  
-	  if ( show_masked ) 
-	    {
-
-	      bool start_masked = interval_start_is_masked( aa->first ) ; 
-	      bool some_masked = interval_overlaps_masked_region( aa->first );
-	      bool all_masked = interval_is_completely_masked( aa->first );
-	      bool some_unmasked = interval_overlaps_unmasked_region( aa->first );
-	      bool all_unmasked = interval_is_completely_unmasked( aa->first );
-
-	      writer.value( "START_MASKED" , start_masked );
-	      writer.value( "SOME_MASKED" , some_masked );
-	      writer.value( "ALL_MASKED" , all_masked );
-	      writer.value( "SOME_UNMASKED" , some_unmasked );
-	      writer.value( "ALL_UNMASKED" , all_unmasked );
-	    }
-	  
-	  //	  std::cout << aa->first.start_sec() << "-" << aa->first.stop_sec() << "\t" <<  << "\n";
-	  ++ee;
+	  writer.value( "START_MASKED" , start_masked );
+	  writer.value( "SOME_MASKED" , some_masked );
+	  writer.value( "ALL_MASKED" , all_masked );
+	  writer.value( "SOME_UNMASKED" , some_unmasked );
+	  writer.value( "ALL_UNMASKED" , all_unmasked );
 	}
+      
+      writer.unlevel( globals::annot_strat );
+      
       ++aa;
       
-    }  
+    }
   writer.uninterval();
 
 
-  // final counts, durations
+  // final counts, durations by class
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() ) 
     {
+      std::cout << "writing " << cc->first << "\n"; 
+
       writer.level( cc->first , globals::annot_strat );
       writer.value( "COUNT" , cc->second );      
       writer.value( "DUR" , dur[ cc->first ] );
+      
+      std::cout << "count = " << cc->second << "\n";
+      std::cout << "dur = " << dur[ cc->first ]  << "\n";
+
+      
+      std::map<std::string,int>::const_iterator dd = counts2[ cc->first ].begin();
+      while ( dd != counts2[ cc->first ].end() )
+	{
+	  writer.level( dd->first , globals::annot_instance_strat );	  
+	  writer.value( "COUNT" , dd->second );      
+	  writer.value( "DUR" , dur2[ cc->first ][ dd->first ] );
+	  ++dd;
+	}
+      writer.unlevel( globals::annot_instance_strat );
+
       ++cc;
     }
   writer.unlevel( globals::annot_strat );

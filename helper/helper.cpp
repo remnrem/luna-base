@@ -576,7 +576,12 @@ bool Helper::imatch(const std::string& a, const std::string& b)
   return true;
 }
 
-
+bool Helper::yesno( const std::string & s )
+{
+  if ( s.size() == 0 ) return false; // empty == NO
+  if ( s[0] == '0' || s[0] == 'n' || s[0] == 'N' ) return false;
+  return true;
+}
 
 clocktime_t::clocktime_t( const std::string & t )
 {  

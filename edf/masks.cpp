@@ -267,8 +267,8 @@ void proc_mask( edf_t & edf , param_t & param )
 	  std::vector<std::string> imask_val = Helper::parse( im[1] , "," );
 	  const std::string annot_label = Helper::unquote( im[0] );
 	  
-	  attach_annot( edf , annot_label );      
 	  annot_t * annot = edf.timeline.annotations( annot_label );
+	  
 	  if ( annot == NULL ) 
 	    { 
 	      // does not have mask -- 
@@ -276,11 +276,6 @@ void proc_mask( edf_t & edf , param_t & param )
 	      continue; // do nothing
 	    }
 
-	  // TMP -- ignore values
-	  // std::set<std::string> ss;
-	  // for (int v=0;v<imask_val.size();v++) ss.insert( imask_val[v] );
-	  // edf.timeline.apply_epoch_include_mask( annot , &ss );
-	  
 	  edf.timeline.apply_epoch_include_mask( annot );
 	}
     }
@@ -302,7 +297,6 @@ void proc_mask( edf_t & edf , param_t & param )
 	  std::vector<std::string> xmask_val = Helper::parse( xm[1] , "," );
 	  const std::string annot_label = Helper::unquote( xm[0] );
 	  
-	  attach_annot( edf , annot_label );      
 	  annot_t * annot = edf.timeline.annotations( annot_label );
 
 	  if ( annot == NULL ) 
@@ -310,6 +304,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	      edf.timeline.apply_empty_epoch_mask( annot_label , false );
 	      continue; 
 	    }
+
 	  // IGNORE values
 	  // std::set<std::string> ss;
 	  // for (int v=0;v<xmask_val.size();v++) ss.insert( xmask_val[v] );      
@@ -338,10 +333,8 @@ void proc_mask( edf_t & edf , param_t & param )
 	  std::vector<std::string> amask_val = Helper::parse( am[1] , "," );
 	  const std::string annot_label = Helper::unquote( am[0] );
 	  
-	  attach_annot( edf , annot_label );      
-	  
 	  annot_t * annot = edf.timeline.annotations( annot_label );
-      
+	  
 	  if ( annot == NULL ) 
 	    edf.timeline.annotate_epochs( alabel_str , false );
 	  else

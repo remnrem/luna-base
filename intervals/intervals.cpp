@@ -150,7 +150,7 @@ int interval_t::intersect( const std::set<interval_t> & a,
       else
 	{
 	  // does this next one overlap?
-	  if ( wb.start < last )
+	  if ( wb.start < last ) // yes
 	    {
 	      pool.insert( *bb );
 	      if ( wb.stop > last ) last = wb.stop;

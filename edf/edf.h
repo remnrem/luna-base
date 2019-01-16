@@ -410,8 +410,8 @@ public:
   // Annotations
   //
 
-  std::map<std::string,std::string> alist; // map annoations -> annotation files (but do not load)
-  std::map<std::string,std::string> flist; // annotation files -> annoation name 
+/*   std::map<std::string,std::string> alist; // map annoations -> annotation files (but do not load) */
+/*   std::map<std::string,std::string> flist; // annotation files -> annoation name  */
 
   std::map<std::string,int> aoccur;        // map annoations -> # of occurences
 
@@ -462,7 +462,7 @@ public:
 
   void data_dumper( const std::string & , const param_t & );
   
-  void record_dumper( );
+  void record_dumper( param_t & param );
 
   void data_epoch_dumper( param_t & param , std::set<std::string> * = NULL );
 
@@ -553,8 +553,6 @@ public:
     file = NULL;
     header.init();
     records.clear();    
-    alist.clear();
-    flist.clear();
     inp_signals_n.clear();
   }
   
@@ -589,26 +587,26 @@ public:
   // Annotations
   //
 
-  bool populate_alist( const std::string & f );
+  bool load_annotations( const std::string & f );
   
-  std::string annotation_file( const std::string & f ) 
-  {
-    if ( alist.find(f) != alist.end() ) return alist.find(f)->second;
-    return "";
-  }
+/*   std::string annotation_file( const std::string & f )  */
+/*   { */
+/*     if ( alist.find(f) != alist.end() ) return alist.find(f)->second; */
+/*     return ""; */
+/*   } */
   
-  bool available_annotation( const std::string & a ) 
-  {
-    return alist.find( a ) != alist.end();
-  }
+/*   bool available_annotation( const std::string & a )  */
+/*   { */
+/*     return alist.find( a ) != alist.end(); */
+/*   } */
 
-  std::set<std::string> available_annotations() 
-  {
-    std::set<std::string> r;
-    std::map<std::string,std::string>::iterator ii = alist.begin();
-    while ( ii != alist.end() ) { r.insert( ii->first ); ++ii; }
-    return r;
-  }
+/*   std::set<std::string> available_annotations()  */
+/*   { */
+/*     std::set<std::string> r; */
+/*     std::map<std::string,std::string>::iterator ii = alist.begin(); */
+/*     while ( ii != alist.end() ) { r.insert( ii->first ); ++ii; } */
+/*     return r; */
+/*   } */
 
 
   //

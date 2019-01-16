@@ -308,6 +308,8 @@ struct timeline_t
   
   int set_epoch(const double s, const double o ) 
   { 
+    if ( s <= 0 || o < 0 ) Helper::halt( "cannot specify negative epoch durations/increments");
+
     clear_epoch_annotations();
     epoch_length_tp = s * globals::tp_1sec;
     epoch_overlap_tp = o * globals::tp_1sec;

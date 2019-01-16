@@ -211,14 +211,15 @@ annot_t * brunner_artifact_detection( edf_t & edf ,
   
 
   annot_t * a = edf.timeline.annotations.add( "Brunner" );
-  a->set_description( "Brunner et al (1996) automatic artifact detection" );
-  a->add_col( "Brunner" , ATYPE_BINARY );
+
+//   a->set_description( "Brunner et al (1996) automatic artifact detection" );
+//   a->add_col( "Brunner" , ATYPE_BINARY );
   
-  for (int epoch=0;epoch<reject.size();epoch++)
-    {
-      bool_event_t event( "brunner" , reject[ epoch ] );
-      a->add( edf.timeline.epoch( epoch ) , &event );
-    }
+//   for (int epoch=0;epoch<reject.size();epoch++)
+//     {
+//       bool_event_t event( "brunner" , reject[ epoch ] );
+//       a->add( edf.timeline.epoch( epoch ) , &event );
+//     }
   
   return a;
 }
@@ -464,7 +465,7 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
   
   annot_t * a = edf.timeline.annotations.add( "Buckelmuller" );
   
-  a->set_description( "Buckelmuller et al (2006) automatic artifact detection" );
+  a->description = "Buckelmuller et al (2006) automatic artifact detection" ;
   
   for (int s=0;s<ns;s++)
     {
@@ -473,8 +474,7 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
       //
       
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
-
-      a->add_col( "Bucklelmuller:"+signals.label(s) , ATYPE_BINARY );
+      
     }
 
   for (int e=0;e<ne;e++)
@@ -485,9 +485,9 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 	  double bfac = beta[s][e] / beta_average[s][e];
 	  
 	  bool reject =  dfac > delta_threshold || bfac > beta_threshold;
-	  bool_event_t event( "buckelmuller:"+signals.label(s) , reject );
-	  
-	  a->add( edf.timeline.epoch(e) , &event );
+
+	  if ( reject ) 
+	    a->add( "buckelmuller:" + signals.label(s)  , edf.timeline.epoch(e) );
 	}
     }
   
