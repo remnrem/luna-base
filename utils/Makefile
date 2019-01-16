@@ -4,22 +4,22 @@ include ../Makefile.inc
 
 DESTRAT = ../destrat
 DESTRAT_OBJS = reader.o ../globals.o
-DESTRAT_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb
+DESTRAT_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lannot
 
 TSPICKER = ../tspicker 
 TSPICKER_OBJS = tspicker.o ../globals.o
-TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb
+TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lannot
 
 INTERSECT = ../intersect 
 INTERSECT_OBJS = list-intersection.o ../globals.o
-INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals -ldb
+INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals -ldb -lannot
 
 all : $(DESTRAT) $(TSPICKER) $(INTERSECT)
 
 $(DESTRAT) : reader.o ../globals.o
 	$(ECHO) $(LD) $(LDFLAGS) -o $(DESTRAT) $(DESTRAT_OBJS) $(DESTRAT_LIBS)
 	$(LD) $(LDFLAGS) -o $(DESTRAT) $(DESTRAT_OBJS) $(DESTRAT_LIBS)
-	
+
 
 $(TSPICKER) : tspicker.o ../globals.o
 	$(ECHO) $(LD) $(LDFLAGS) -o $(TSPICKER) $(TSPICKER_OBJS) $(TSPICKER_LIBS)

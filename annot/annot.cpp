@@ -27,6 +27,7 @@
 #include "defs/defs.h"
 #include "tinyxml/xmlreader.h"
 #include "db/db.h"
+#include "nsrr-remap.h"
 
 #include <string>
 #include <fstream>
@@ -344,8 +345,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  std::vector<std::string> tok = Helper::parse( line , "\t" );
 	  
 	  if ( tok.size() == 0 ) continue; 
+
+	  // are we skipping this annotation anyway?
+
+	  if ( globals::specified_annots.size() > 0 && 
+	       globals::specified_annots.find( tok[0] ) == globals::specified_annots.end() ) 
+	    continue;
 	  
-	  // was this annotation specified? 
+	  // was this annotation specified in the header? 
 	  
 	  std::map<std::string,annot_t*>::iterator aa = annot_map.find( tok[0] );
 	  
@@ -940,6 +947,10 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       // skip this..
       if ( concept->value == "Recording Start Time" ) continue;
+
+      // NSRR remap?
+      if ( globals::remap_nsrr_annots )
+	concept->value = nsrr_t::remap( concept->value );
       
       // are we checking whether to add this file or no? 
       if ( globals::specified_annots.size() > 0 && 

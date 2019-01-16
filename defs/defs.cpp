@@ -309,12 +309,12 @@ void globals::init_defs()
   // Annot types
   //
 
-  type_name[ A_NULL_T ] = "NULL";
-  type_name[ A_TXT_T ] = "TXT";
-  type_name[ A_INT_T ] = "INT";
-  type_name[ A_DBL_T ] = "NUM";
-  type_name[ A_BOOL_T ] = "BOOL";
-  type_name[ A_FLAG_T ] = "FLAG";
+  type_name[ A_NULL_T ] = "null";
+  type_name[ A_TXT_T ] = "txt";
+  type_name[ A_INT_T ] = "int";
+  type_name[ A_DBL_T ] = "num";
+  type_name[ A_BOOL_T ] = "bool";
+  type_name[ A_FLAG_T ] = "flag";
 
   name_type[ "TXT" ] = A_TXT_T;
   name_type[ "txt" ] = A_TXT_T;

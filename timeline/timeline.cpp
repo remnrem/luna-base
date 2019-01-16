@@ -3135,7 +3135,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 
       const int num_events = annot->num_interval_events();
       
-      if ( 1 ) 
+      if ( 0 ) 
 	{
 	  std::cout << names[a] << "\n";
 	  std::cout << " ne = " << num_events << "\n";
@@ -3232,16 +3232,15 @@ void timeline_t::list_all_annotations( const param_t & param )
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() ) 
     {
-      std::cout << "writing " << cc->first << "\n"; 
+      //      std::cout << "writing " << cc->first << "\n"; 
 
       writer.level( cc->first , globals::annot_strat );
       writer.value( "COUNT" , cc->second );      
       writer.value( "DUR" , dur[ cc->first ] );
       
-      std::cout << "count = " << cc->second << "\n";
-      std::cout << "dur = " << dur[ cc->first ]  << "\n";
+      // std::cout << "count = " << cc->second << "\n";
+      // std::cout << "dur = " << dur[ cc->first ]  << "\n";
 
-      
       std::map<std::string,int>::const_iterator dd = counts2[ cc->first ].begin();
       while ( dd != counts2[ cc->first ].end() )
 	{

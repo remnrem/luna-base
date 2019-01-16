@@ -698,20 +698,22 @@ void process_edfs( cmd_t & cmd )
 	      const int nf = annot->types.size();
 	      
 	      logger << "  [" << names[a] << "] " 
-		     << num_events << " event(s)";
-	      
+		     << num_events << " event(s)"
+		     << " (from " << annot->file << ")\n";
+
 	      if ( nf > 1 )
 		{
-		  logger << ", " << nf << " field(s):";
+		  logger << "   w/ " << nf << " field(s):";
 		  std::map<std::string,globals::atype_t>::const_iterator aa = annot->types.begin();
 		  while ( aa != annot->types.end() )
 		    {
 		      logger << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
 		      ++aa;
 		    }
+		  logger << "\n";
 		}
 	      
-	      logger << " (from " << annot->file << ")\n";
+	      
 	      
 	    }
 	}
