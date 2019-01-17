@@ -161,7 +161,7 @@ namespace Helper
 
 
   // given a clock time and an interval, get an output-friendly timestamp (x2)
-  bool hhmmss( const clocktime_t & ct , const interval_t & interval , std::string * t1 , std::string * t2 );
+  bool hhmmss( const clocktime_t & ct , const interval_t & interval , std::string * t1 , std::string * t2 , const int dp = 4 );
 
   
 }

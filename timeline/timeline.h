@@ -207,9 +207,10 @@ struct timeline_t
 
   uint64_t  total_duration_tp;
   
-  // Final timepoint; for EDF+ w/ gaps, then
+  // Final accessible timepoint (0-base) 
+  // for EDF+ w/ gaps, then
   // total_duration_tp <= last_time_point_tp + 1 
-
+  
   uint64_t  last_time_point_tp;
   
   //
@@ -248,7 +249,8 @@ struct timeline_t
 
   uint64_t timepoint( int r , int s = 0 , int nsamples = 0 ) const;
 
-  uint64_t endpoint( int r ) const;
+
+  //  uint64_t endpoint( int r ) const;
 
 
   //
@@ -562,6 +564,12 @@ struct timeline_t
       return r;
     }
   
+  // does annotation 'k' exist at all? 
+  
+  bool epoch_annotation(const std::string & k ) const
+  {
+    return eannots.find( k ) != eannots.end() ;
+  }
 
   // does EPOCH 'e' contain annotation 'k'?
 

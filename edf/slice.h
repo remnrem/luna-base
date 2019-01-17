@@ -74,7 +74,8 @@ class slice_t
   
   interval_t duration() const 
   { 
-    return interval_t( time_points[0] , time_points[ time_points.size()-1 ] );
+    // interval is 1-past end of interval
+    return interval_t( time_points[0] , time_points[ time_points.size()-1 ] + 1LLU );
   }
 
  private:

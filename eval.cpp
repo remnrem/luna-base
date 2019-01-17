@@ -266,7 +266,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c ,"SLICE" ) )        proc_slice( edf , param(c) , 1 );
       
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
-      else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) );
+      else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
       
       else if ( is( c, "EPOCH-ANNOT" ) )  proc_file_annot( edf , param(c) );
@@ -597,33 +597,8 @@ void proc_epoch_dump( edf_t & edf , param_t & param )
 // MATRIX 
 
 void proc_epoch_matrix( edf_t & edf , param_t & param )
-{
-  std::set<std::string> * annots = NULL;
-  if ( param.has( "annot" ) )
-    {
-      annots = new std::set<std::string>;
-      *annots = param.strset( "annot" ); // parse comma-delim list
-    }
-  if ( param.has("all-annots") )
-    {
-      std::vector<std::string> Xannots = edf.timeline.annotations.names();
-      if ( Xannots.size() > 0 ) 
-	{
-	  annots = new std::set<std::string>;
-	  for (int i=0;i<Xannots.size();i++) annots->insert( Xannots[i] ) ;	  
-	}
-
-      // TODO: clarify epoch annotations versus generic annotations 
-      //  std::set<std::string> epoch_annotations = edf.timeline.epoch_annotations();
-      //  std::set<std::string>::const_iterator ii = epoch_annotations.begin();
-      //  while ( ii != epoch_annotations.end() ) { std::cout << "S " << *ii << "\n"; ++ii; } 
-
-    }
-  
-  edf.epoch_matrix_dumper( param , annots );
-  
-  if ( annots != NULL) delete annots;
-
+{  
+  edf.epoch_matrix_dumper( param );
 }
 
 
@@ -1372,7 +1347,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
 
   // specified annots (only load these)
-  else if ( Helper::iequals( tok0 , "annots" ) ) 
+  else if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
     {
       param_t dummy;     
       dummy.add( "dummy" , tok1 );

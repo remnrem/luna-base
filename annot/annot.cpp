@@ -60,10 +60,23 @@ instance_t * annot_t::add( const std::string & id , const interval_t & interval 
   // track (for clean-up)
   all_instances.insert( instance );
   
-  interval_events[ instance_idx_t( interval , id ) ] = instance; 
+  interval_events[ instance_idx_t( this , interval , id ) ] = instance; 
   
   return instance; 
   
+}
+
+std::string instance_t::print( const std::string & delim ) const
+{
+  std::stringstream ss;
+  std::map<std::string,avar_t*>::const_iterator dd = data.begin();
+  while ( dd != data.end() )
+    {
+      if ( dd != data.begin() ) ss << delim;
+      ss << dd->first << "=" << dd->second->text_value();
+      ++dd;
+    }
+  return ss.str();
 }
 
 globals::atype_t instance_t::type( const std::string & s ) const 
@@ -342,7 +355,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  // data-rows are tab-delimited
 	  
-	  std::vector<std::string> tok = Helper::parse( line , "\t" );
+	  std::vector<std::string> tok = Helper::parse( line , " \t" );
 	  
 	  if ( tok.size() == 0 ) continue; 
 
@@ -363,15 +376,19 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  std::string id = tok[1];
 
-	  // epoch or interval? 
-
+	  // epoch (single or range) or an interval (range)? 
+	  
 	  if ( tok.size() < 3 ) Helper::halt( "bad line format, need at least 3 cols:\n" + line );
 	  
 	  bool eline = tok[2][0] == 'e' ;
 	  
-	  // expected # of cols
+	  bool erange = tok.size() >= 4 && tok[3][0] == 'e'; 
 	  
-	  const int expected = 2 + ( eline ? 1 : 2 ) + a->types.size() ; 
+	  bool esingle = eline && ! erange;
+	  
+	  // expected # of cols
+
+	  const int expected = 2 + ( esingle ? 1 : 2 ) + a->types.size() ; 
 	  
 	  if ( tok.size() != expected ) 
 	    Helper::halt( "bad line format: saw " + Helper::int2str( (int)tok.size() ) + " cols but expecting " 
@@ -393,7 +410,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
 	      
 	      if ( tok2[0] != "e" ) 
-		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
 	      
 	      int epoch_length = 30 ;
 	      int epoch_increment = 30;
@@ -422,8 +439,51 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      
 	      interval.start = epoch_increment_tp * (epoch-1);
 	      interval.stop  = interval.start + epoch_length_tp;
+	      
+	      //
+	      // A second epoch ?   in this case, overwrite interval.stop from above
+	      //
+	      
+	      if ( erange ) 
+		{
+		    
 
-	      //interval.stop  = interval.start + epoch_length_tp - 1;
+		  std::vector<std::string> tok2 = Helper::parse( tok[3] , ":" );
+		  
+		  if ( tok2.size() < 2 || tok2.size() > 4 ) 
+		    Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+		  
+		  if ( tok2[0] != "e" ) 
+		    Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
+		  
+		  int epoch;
+		  
+		  if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
+		    Helper::halt( "invalid epoch: " + tok[2] );
+		  
+		  if ( epoch == 0 ) 
+		    Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
+		  
+		  if ( tok2.size() >= 3 ) 
+		    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
+		      Helper::halt( "invalid epoch length:  " + tok[2] );
+		  
+		  if ( tok2.size() == 4  ) 
+		    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
+		      Helper::halt( "invalid epoch increment:  " + tok[2] );
+		  
+		  uint64_t epoch_length_tp = epoch_length * globals::tp_1sec;
+		  
+		  uint64_t epoch_increment_tp = epoch_increment * globals::tp_1sec;
+		  
+		  
+		  // set interval from current line
+		  // last point is defined as point *past* end of interval
+		  
+		  uint64_t start_of_last_epoch = epoch_increment_tp * (epoch-1);
+		  interval.stop  = start_of_last_epoch + epoch_length_tp;
+		  
+		}	      
 	      
 	    }
 	  else // an INTERVAL
@@ -440,13 +500,20 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      
 	      interval.start = globals::tp_1sec * dbl_start;
 	      interval.stop  = globals::tp_1sec * dbl_stop;	      
-	      
-	      //	      std::cout << "reading " << interval.start << " - " << interval.stop << "\n";
-	      
-	      if ( interval.start > interval.stop )
-		Helper::halt( "invalid interval: " + line );
-	      
+	      	      
 	    }
+
+
+	  if ( interval.stop == interval.start ) ++interval.stop;
+	  
+	  // the final point is interpreted as one past the end
+	  // i.e. 0 30   means up to 30
+	  // but a special case: for a single point specified,  1.00 1.00 
+	  // rather than have this as illegal, assume the user meant a 
+	  // 1-time-unit point; so advance the STOP by 1 unit
+	  
+	  if ( interval.start > interval.stop )
+	    Helper::halt( "invalid interval: " + line );
 	  
 	  
 	  //
@@ -467,10 +534,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Also add any other columns (as separate events under this same annotation)
 	  //
 	  
-	  for (int j = (eline ? 3 : 4 ) ;j<n; j++)
+	  for (int j = (esingle ? 3 : 4 ) ;j<n; j++)
 	    {
 
-	      const int idx = j - (eline ? 3 : 4 );
+	      const int idx = j - (esingle ? 3 : 4 );
 	      
 	      const std::string & label = cols[a][idx];	      
 
@@ -785,7 +852,12 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 	    Helper::halt( "bad value in annotation" );
 	  stop_sec = start_sec + duration_sec;
 	  start_tp = globals::tp_1sec * start_sec; 
-	  stop_tp = start_tp + (uint64_t)( globals::tp_1sec * duration_sec ) - 1LLU ; 
+	  stop_tp = start_tp + (uint64_t)( globals::tp_1sec * duration_sec ) ; 
+	  
+	  // in case duration was 0, make this a 1-time-unit event
+	  if ( start_tp == stop_tp ) ++stop_tp;
+
+	  //stop_tp = start_tp + (uint64_t)( globals::tp_1sec * duration_sec ) - 1LLU ; 
 	  
 	}
 
@@ -819,7 +891,7 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
   //
     
   // Profusion: under 'SleepStages', with children 'SleepStage' which comprises an integer value
-  // 0  Wake
+  // 0  wake
   // 1  NREM1
   // 2  NREM2
   // 3  NREM3
@@ -843,16 +915,19 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 	  if ( e->name != "SleepStage" ) continue;
 	  
 	  std::string stg = "Unscored";
-	  if      ( e->value == "0" ) stg = "Wake";
+	  if      ( e->value == "0" ) stg = "wake";
 	  else if ( e->value == "1" ) stg = "NREM1";
 	  else if ( e->value == "2" ) stg = "NREM2";
 	  else if ( e->value == "3" ) stg = "NREM3";
 	  else if ( e->value == "4" ) stg = "NREM4";
 	  else if ( e->value == "5" ) stg = "REM";	 
 	 
-	  interval_t interval( (uint64_t)(seconds * globals::tp_1sec ) , 
-			       (uint64_t)(( seconds + epoch_sec ) * globals::tp_1sec - 1LLU ) );
+// 	  interval_t interval( (uint64_t)(seconds * globals::tp_1sec ) , 
+// 			       (uint64_t)(( seconds + epoch_sec ) * globals::tp_1sec - 1LLU ) );
  
+	  interval_t interval( (uint64_t)(seconds * globals::tp_1sec ) , 
+			       (uint64_t)(( seconds + epoch_sec ) * globals::tp_1sec ) );
+
 	  std::stringstream ss;      
 	  ss << seconds << " - " << seconds + epoch_sec << "\t"
 	     << "(" << epoch_sec << " secs)\t"
@@ -893,7 +968,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
   
   XML xml( filename );
 
-  if ( ! xml.valid() ) Helper::halt( "invalid annotaiton file: " + filename );
+  if ( ! xml.valid() ) Helper::halt( "invalid annotation file: " + filename );
   
   // Determine format: Profusion or NSRR ? 
 
@@ -982,7 +1057,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  if ( e->name != "SleepStage" ) continue;
 	  
 	  std::string ss = "Unscored";
-	  if      ( e->value == "0" ) ss = "Wake";
+	  if      ( e->value == "0" ) ss = "wake";
 	  else if ( e->value == "1" ) ss = "NREM1";
 	  else if ( e->value == "2" ) ss = "NREM2";
 	  else if ( e->value == "3" ) ss = "NREM3";
@@ -1025,16 +1100,12 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       // skip if we are not interested in this element
       if ( added.find( concept->value ) == added.end() ) continue;
       
-      element_t * start    = (*e)("Start" );
+      element_t * start    = (*e)( "Start" );
       if ( start == NULL ) start = (*e)( "time" );
 
-      element_t * duration = (*e)("Duration" );
-      element_t * notes    = (*e)("Notes" );
+      element_t * duration = (*e)( "Duration" );
+      element_t * notes    = (*e)( "Notes" );
 
-//       if ( concept  == NULL ) std::cout << "concept NULL\n";
-//       if ( start    == NULL ) std::cout << "start   NULL\n";
-//       if ( duration == NULL ) std::cout << "duration NULL\n";
-      
       if ( concept == NULL || start == NULL || duration == NULL ) continue;
       
       // otherwise, add 
@@ -1044,21 +1115,29 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       if ( ! Helper::str2dbl( duration->value , &duration_sec ) ) Helper::halt( "bad value in annotation" );
 
       uint64_t start_tp = start_sec * globals::tp_1sec;
+
+//       uint64_t stop_tp  = duration_sec > 0 
+// 	? start_tp + (uint64_t)( duration_sec * globals::tp_1sec ) - 1LLU 
+// 	: start_tp;
+
+      // stop is defined as 1 unit past the end of the interval
       uint64_t stop_tp  = duration_sec > 0 
-	? start_tp + (uint64_t)( duration_sec * globals::tp_1sec ) - 1LLU 
-	: start_tp;
-      
+	? start_tp + (uint64_t)( duration_sec * globals::tp_1sec ) 
+	: start_tp + 1LLU ;
+
       interval_t interval( start_tp , stop_tp );
       
       annot_t * a = edf->timeline.annotations.add( concept->value );
       
       instance_t * instance = a->add( concept->value , interval );      
       
+      //      if ( notes ) std::cout << " HAS NOTES!!! " << concept->value << "\n";
+
       // any notes?  set as TXT, otherwise it will be listed as a FLAG
       if ( notes ) 
-	instance->set( concept->value , notes->value ); 
-      else
-	instance->set( concept->value );
+	instance->set( concept->value , notes->value );  
+//       else
+// 	instance->set( concept->value ); 
       
     }
   
@@ -1083,7 +1162,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  if ( e->name != "SleepStage" ) continue;
 	  
 	  std::string ss = "Unscored";
-	  if      ( e->value == "0" ) ss = "Wake";
+	  if      ( e->value == "0" ) ss = "wake";
 	  else if ( e->value == "1" ) ss = "NREM1";
 	  else if ( e->value == "2" ) ss = "NREM2";
 	  else if ( e->value == "3" ) ss = "NREM3";
@@ -1104,8 +1183,6 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  start_sec += epoch_sec;
 	  
 	  interval_t interval( start_tp , stop_tp );	  
-
-
 	  
 	  annot_t * a = edf->timeline.annotations.add( ss );
 	  
@@ -1206,7 +1283,8 @@ annot_map_t annot_t::extract( const interval_t & window )
 
   annot_map_t r; 
   
-  // need to implement a better search... but for now just use brute force... :-(
+  // urghhh... need to implement a much better search... 
+  // but for now just use brute force... :-(
   
   annot_map_t::const_iterator ii = interval_events.begin();
   while ( ii != interval_events.end() )
@@ -1451,4 +1529,14 @@ uint64_t annot_t::maximum_tp() const
 }
 
 
-
+std::set<std::string> annot_t::instance_ids() const
+{
+  std::set<std::string> r;
+  annot_map_t::const_iterator ii = interval_events.begin();
+  while ( ii != interval_events.end() )
+    {
+      r.insert( ii->first.id );
+      ++ii;
+    }
+  return r;
+}

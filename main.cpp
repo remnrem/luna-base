@@ -700,7 +700,28 @@ void process_edfs( cmd_t & cmd )
 	      logger << "  [" << names[a] << "] " 
 		     << num_events << " event(s)"
 		     << " (from " << annot->file << ")\n";
+	      
+	      // list instance IDs (up to 8) if multiple or differnt from annot name
+	      
+	      std::set<std::string> instance_ids = annot->instance_ids();
 
+	      if ( instance_ids.size() > 1 || *instance_ids.begin()  != names[a] )
+		{
+		  logger << "   " << instance_ids.size() << " instance IDs: ";
+		  std::set<std::string>::const_iterator ii = instance_ids.begin();
+		  int icnt = 0 ; 
+		  while ( ii != instance_ids.end() )
+		    {
+		      logger << " " << *ii ;
+		      ++icnt;
+		      if ( icnt > 8 ) { logger << " ..." ; break;  }
+		      ++ii;		  
+		    }
+		  logger << "\n";
+		}
+
+	      // lists meta-data
+	      
 	      if ( nf > 1 )
 		{
 		  logger << "   w/ " << nf << " field(s):";

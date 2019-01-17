@@ -51,10 +51,6 @@ struct interval_t
   
   double duration_sec() const { return ( stop - start ) / (double)globals::tp_1sec; } 
   
-  // convenience output functions, i.e. for exact 30-second epoch
-  uint64_t duration_plus1() const { return stop - start + 1 ; }   
-  double duration_sec_plus1() const { return ( stop - start + 1 ) / (double)globals::tp_1sec; } 
-  
   void set_leftright( uint64_t l , uint64_t r ) 
   {
     start = l;
@@ -63,7 +59,7 @@ struct interval_t
       {
 	uint64_t t = stop;
 	stop = start;
-	start = t;	
+	start = t; 
       } 
   }
   
@@ -156,8 +152,7 @@ struct interval_t
   
   uint64_t mid() const
   {
-    // as stop one past end, wind back here to get mid-point
-    return start + ( stop - 1 - start ) / (uint64_t)2;
+    return start + ( stop - start ) / (uint64_t)2;
   }
 
   std::string as_string() const 
@@ -180,7 +175,7 @@ struct interval_t
 			std::set<interval_t> * onlya,
 			std::set<interval_t> * onlyb, 
 			double th = 0.5 , uint64_t win = 0 );
-			
+  
   
 };
 

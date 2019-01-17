@@ -466,7 +466,7 @@ public:
 
   void data_epoch_dumper( param_t & param , std::set<std::string> * = NULL );
 
-  void epoch_matrix_dumper( param_t & param , std::set<std::string> * = NULL );
+  void epoch_matrix_dumper( param_t & param );
 
   // redundant
   void reference_and_scale( const int s , const int r , double rescale = 1 ); // perform single channel referencing

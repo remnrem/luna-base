@@ -925,17 +925,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   // ensure we are within bounds
   //
   
-  // std::cerr << "start, stop = " << start << "\t" << stop  << "\n";
-  // std::cerr << timeline.total_duration_tp << "\n";
-  // std::cerr << timeline.last_time_point_tp << "\n";
-  
-  // Final timepoint; for EDF+ w/ gaps, then                                                                                                                
-  // total_duration_tp <= last_time_point_tp + 1                                                                                                             
-
-  uint64_t  last_time_point_tp;
-  
-  if ( stop >= timeline.last_time_point_tp )
-    stop = timeline.last_time_point_tp;      
+  if ( stop > timeline.last_time_point_tp + 1 )
+    stop = timeline.last_time_point_tp + 1 ;      
   
   //
   // Figure out which records are being requested 
@@ -948,28 +939,30 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 
   const uint64_t n_samples_per_record = header.n_samples[signal];
   
-  // std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
-  // std::cerr << "FR " << n_samples_per_record << "\n";
-
-  
+//   std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
+//   std::cerr << "FR " << n_samples_per_record << "\n";
+ 
   int start_record, stop_record;
   int start_sample, stop_sample;
-  
+
+  //  std::cerr << "looking for " << start << " to " << stop << "\n";
+
   bool okay = timeline.interval2records( interval_t( start , stop ) , 
 					 n_samples_per_record , 
 					 &start_record, &start_sample , 
 					 &stop_record, &stop_sample );
-
   
+  
+//   std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
+//   std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
+
   if ( ! okay ) 
     {
       logger << " ** warning ... null record set found... ** \n";
       return ret; // ie empty
     }
 
-
-  // std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
-  // std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
+  
   
   
   // Ensure that these records are loaded into memory

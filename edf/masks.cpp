@@ -35,6 +35,7 @@ extern logger_t logger;
 void proc_mask( edf_t & edf , param_t & param )
 {
 
+
 //   logger << " currently, mask mode set to: ";
 //   int mm = edf.timeline.epoch_mask_mode();
 //   if ( mm == 0 ) logger << " mask (default)\n";
@@ -239,18 +240,18 @@ void proc_mask( edf_t & edf , param_t & param )
   // nb. these now mutually exclusive
   bool has_imask = match_mode == 1 ;
   bool has_xmask = match_mode == 0 ;
-  
+ 
+  std::string imask_str = has_imask ? condition : "";
+  std::string xmask_str = has_xmask ? condition : "" ;
+
   // add epoch-level 'annotations' instead of masking
   bool has_amask = param.has( "flag" );
   bool has_alabels = param.has( "label" );
-
   if ( has_amask != has_alabels ) 
     Helper::halt( "need to specify both flag and labels together" );
-  
-  std::string imask_str = has_imask ? condition : "";
-  std::string xmask_str = has_xmask ? condition : "" ;
   std::string amask_str = has_amask ? param.value( "flag" ) : "" ;
   std::string alabel_str = has_alabels ? param.value( "label" ) : "" ;
+  
   
   //
   // MASK include [ if ]
@@ -261,10 +262,14 @@ void proc_mask( edf_t & edf , param_t & param )
       std::vector<std::string> im0 = Helper::parse( imask_str , "," );      
       for (int i=0;i<im0.size();i++)
 	{
+	  // is a value specified?
+	  bool has_values = false;
+
 	  std::vector<std::string> im = Helper::parse( im0[i] , "[]" );
-	  if ( im.size() == 1 ) im.push_back("1");
-	  if ( im.size() != 2 ) Helper::halt( "incorrectly specified include[value]" );
-	  std::vector<std::string> imask_val = Helper::parse( im[1] , "," );
+	  if      ( im.size() == 1 ) im.clear(); // i.e. null
+	  else if ( im.size() != 2 ) Helper::halt( "incorrectly specified include[value]" );
+	  else    has_values = true;
+	  
 	  const std::string annot_label = Helper::unquote( im[0] );
 	  
 	  annot_t * annot = edf.timeline.annotations( annot_label );
@@ -274,9 +279,21 @@ void proc_mask( edf_t & edf , param_t & param )
 	      // does not have mask -- 
 	      edf.timeline.apply_empty_epoch_mask( annot_label , true );
 	      continue; // do nothing
+	    }	  
+	  
+	  // do we have values? 
+	  if ( has_values )
+	    {
+	      std::vector<std::string> imask_val = Helper::parse( im[1] , "|" );
+	      std::set<std::string> ss;
+	      for (int v=0;v<imask_val.size();v++) ss.insert( imask_val[v] );      
+	      edf.timeline.apply_epoch_include_mask( annot , &ss );
 	    }
-
-	  edf.timeline.apply_epoch_include_mask( annot );
+	  else
+	    {	      
+	      edf.timeline.apply_epoch_include_mask( annot );
+	    }
+	  
 	}
     }
   
@@ -291,10 +308,12 @@ void proc_mask( edf_t & edf , param_t & param )
       if ( xm0.size() > 1 ) Helper::halt( "cannot specify multiple annotations with an 'ifnot' mask" );
       for (int i=0;i<xm0.size();i++)
 	{
+	  bool has_values = false;
 	  std::vector<std::string> xm = Helper::parse( xm0[i] , "[]" );
-	  if ( xm.size() == 1 ) xm.push_back("1");
-	  if ( xm.size() != 2 ) Helper::halt( "incorrectly specified exclude[value]" );
-	  std::vector<std::string> xmask_val = Helper::parse( xm[1] , "," );
+	  if      ( xm.size() == 1 ) xm.clear();
+	  else if ( xm.size() != 2 ) Helper::halt( "incorrectly specified exclude[value]" );
+	  else    has_values = true;
+	  
 	  const std::string annot_label = Helper::unquote( xm[0] );
 	  
 	  annot_t * annot = edf.timeline.annotations( annot_label );
@@ -305,12 +324,19 @@ void proc_mask( edf_t & edf , param_t & param )
 	      continue; 
 	    }
 
-	  // IGNORE values
-	  // std::set<std::string> ss;
-	  // for (int v=0;v<xmask_val.size();v++) ss.insert( xmask_val[v] );      
-	  // edf.timeline.apply_epoch_exclude_mask( annot , &ss );
+	  // do we have values? 
+	  if ( has_values )
+	    {
+	      std::vector<std::string> xmask_val = Helper::parse( xm[1] , "|" );
+	      std::set<std::string> ss;
+	      for (int v=0;v<xmask_val.size();v++) ss.insert( xmask_val[v] );      
+	      edf.timeline.apply_epoch_exclude_mask( annot , &ss );
+	    }
+	  else
+	    {	      
+	      edf.timeline.apply_epoch_exclude_mask( annot );
+	    }
 
-	  edf.timeline.apply_epoch_exclude_mask( annot );
 	}
     }
   
@@ -321,6 +347,11 @@ void proc_mask( edf_t & edf , param_t & param )
   
   if ( has_amask )
     {
+      
+      Helper::halt( "no curently supported...") ;
+      
+      // this may be okay, but a) not sure of the use-case and b) need to check etc 
+      // so for now, make unavailable
 
       std::vector<std::string> am0 = Helper::parse( amask_str , "," );      
       for (int i=0;i<am0.size();i++)

@@ -40,8 +40,6 @@ bool is_wake( sleep_stage_t s ) { return s == WAKE; }
 bool is_sleep( sleep_stage_t s ) { return s == NREM1 || s == NREM2 || s == NREM3 || s == NREM4 || s == REM ; } 
 
 
-
-
 // helper function: check if there is a discontinuity in a timeline
 bool timeline_t::discontinuity( const std::vector<uint64_t> & t , int sr , int sp1, int sp2  )
 {
@@ -230,10 +228,20 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 {
   
-  //  std::cout << "i2r: interval = " << interval << "\n";
+  //   std::cout << "i2r: interval = " << interval << "\n";
 
-  if ( interval.start == interval.stop ) return false;
+  //
+  // Note: here we want to find records/samples that are inclusive w.r.t. the interval
+  // so change coding of stop being 1 unit past the end below
+  //
+
+  if ( interval.stop == 0 ) 
+    Helper::halt( "internal error in timeline()" );
+
+  uint64_t stop_tp = interval.stop - 1LLU;
   
+  if ( interval.start >= stop_tp ) return false;
+
   //
   // For a continuous timeline, given time-points can
   // straightforwardly calculate record/sample
@@ -242,8 +250,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
   if ( edf->header.continuous )
     {
       
-      //      logger << "EDF cont , " << n_samples_per_record << " is n sampl per rec\n";
-      
+      // get initial records/samples
+
       uint64_t start_record = interval.start / edf->header.record_duration_tp;
       uint64_t start_offset = interval.start % edf->header.record_duration_tp;
       uint64_t start_sample = 
@@ -251,12 +259,17 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       if ( start_sample >= n_samples_per_record ) start_sample = (uint64_t)n_samples_per_record - 1LLU; 
       
-      uint64_t stop_record = interval.stop / edf->header.record_duration_tp;
-      uint64_t stop_offset = interval.stop % edf->header.record_duration_tp;
+      
+      // get final records/samples
+      
+      uint64_t stop_record = stop_tp / edf->header.record_duration_tp;
+      uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
       uint64_t stop_sample = 
 	( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ;
 
       if ( stop_sample >= n_samples_per_record ) stop_sample = n_samples_per_record - 1LLU;
+      
+      // pass back to calling function
       
       *start_rec = (int)start_record;
       *start_smp = (int)start_sample;
@@ -268,8 +281,6 @@ bool timeline_t::interval2records( const interval_t & interval ,
   else
     {
 
-      //      logger << "Discont EDF cont , " << n_samples_per_record << " is n sampl per rec\n";
-      
       //
       // For a discontinuous EDF+ we need to search 
       // explicitly across record timepoints
@@ -338,12 +349,12 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  if ( start_sample >= n_samples_per_record ) start_sample = n_samples_per_record - 1LLU; 
 	  *start_smp = (int)start_sample;
 	}
-
+      
       //
       // for upper bound, find the record whose end is equal/greater *greater* 
       // 
       
-      std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( interval.stop ); 
+      std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( stop_tp ); 
       
       //
       // this should have return one past the one we are looking for 
@@ -357,13 +368,13 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // get samples within (as above)      
       uint64_t previous_rec_start = upr->first;
       uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1;
-      in_gap = ! ( interval.stop >= previous_rec_start && interval.stop <= previous_rec_end );
+      in_gap = ! ( stop_tp >= previous_rec_start && stop_tp <= previous_rec_end );
       
       if ( in_gap )
 	*stop_smp = n_samples_per_record - 1; // set to last point
       else
 	{	  
-	  uint64_t stop_offset = interval.stop % edf->header.record_duration_tp;
+	  uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
 	  uint64_t stop_sample = 
 	    ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ;
 	  if ( stop_sample >= n_samples_per_record ) stop_sample = n_samples_per_record - 1LLU;
@@ -390,20 +401,20 @@ bool timeline_t::interval2records( const interval_t & interval ,
 int timeline_t::calc_epochs()
 {
 
-
   // EPOCHS have to be in the oringal time-series units (i.e. that
   // correspond to the CONTINUOUS EDF). In the case of a DISCONTINUOUS
   // EDF, we require that epochs are of the specified time on the
   // /reduced/ time-scale (i.e. nominally, the interval may have >
   // than specified epoch length, i.e. if it contains a gap...)
   
-  // also populate the rec2epoch and epoch2rec mappings
+  // we'll also populate the rec2epoch and epoch2rec mappings
   
   epochs.clear();
   
   mask.clear();
-
+  
   rec2epoch.clear();
+  
   epoch2rec.clear();
 
   if ( edf->header.continuous )
@@ -414,26 +425,30 @@ int timeline_t::calc_epochs()
       while ( 1 ) 
 	{
 	  
-	  // get end of interval
+	  // get end of interval: for this purpose (of finding records)
+	  // we set last point of 
 	  uint64_t end = s + epoch_length_tp - 1LLU;
 	  
-	  // done? [ skip any final epochs that do not fit into the frame ] 
-	  if ( end > total_duration_tp ) break;
+	  // done? [ skip any final epochs that do not fit into the frame ] 	  
+	  if ( end >= total_duration_tp ) break;
 	  
-	  // add to list
-	  interval_t interval( s , end );
+	  // add to list, but with end as +1 past end
+	  interval_t interval( s , end + 1LLU );
 	  epochs.push_back( interval );
+
+	  // find matching records (within interval)
+	  interval_t search_interval( s , end );
 	  
-	  // maked rocords in this epoch
-	  int start_record = interval.start / edf->header.record_duration_tp;  
-	  int stop_record = interval.stop / edf->header.record_duration_tp;
+	  // maked records in this epoch
+	  int start_record = search_interval.start / edf->header.record_duration_tp;  
+	  int stop_record = search_interval.stop / edf->header.record_duration_tp;
 	  int e = epochs.size()-1;
 	  for (int r=start_record; r<=stop_record; r++) 
 	    {
 	      epoch2rec[ e ].insert( r );
 	      rec2epoch[ r ].insert( e );
 	    }
-
+	  
 	  // shift to next interval
 	  s += epoch_overlap_tp;
 	}
@@ -448,10 +463,12 @@ int timeline_t::calc_epochs()
 
       // 1) No overlapping epochs allowed (can fix)
       // (nb. 'overlap' better interpreted as 'increment')
+
       if ( epoch_overlap_tp != epoch_length_tp ) 
 	Helper::halt( "cannot have overlapping epochs with EDF+D" );
 
       // 2) Epoch length must be >= record length
+
       if ( epoch_length_tp < edf->header.record_duration_tp )
 	Helper::halt( "epoch length must be greater or equal to record length" );
 
@@ -481,9 +498,12 @@ int timeline_t::calc_epochs()
 	      
 	      uint64_t estop = rec_start + ( epoch_length_tp - curr - 1LLU );
 	      
-	      // add to list
+	      // add to list of epochs
+	      interval_t saved_interval( estart , estop + 1LLU );
+	      epochs.push_back( saved_interval );
+	      
+	      
 	      interval_t interval( estart , estop );
-	      epochs.push_back( interval );
 	      
 	      // record mappings
 	      rec2epoch[r].insert(e);
@@ -543,12 +563,14 @@ int timeline_t::calc_epochs()
 
 interval_t timeline_t::wholetrace() const
 {  
-  return interval_t( 0 , last_time_point_tp );
+  // end is defined as 1 past the last time point
+  return interval_t( 0 , last_time_point_tp + 1LLU );
 }
 
 
 void timeline_t::apply_empty_epoch_mask( const std::string & label , bool include )
 {
+  
   // this is requested if the annotation is missing
   // i.e. returns match == F for every epoch; treat as specified by include and mask_mode
 
@@ -569,45 +591,6 @@ void timeline_t::apply_empty_epoch_mask( const std::string & label , bool includ
     {
       
       bool matches = false;
-      
-//       interval_t interval = epoch( e );
-      
-//       interval_evt_map_t events = a->extract( interval );
-      
-//       interval_evt_map_t::const_iterator ii = events.begin();
-            
-//       while ( ii != events.end() )
-//    	{
-	  
-// 	  evt_table_t::const_iterator jj = ii->second.begin();
-   	  
-// 	  while ( jj != ii->second.end() )
-//    	    {	      
-	      
-// 	      const event_t * event = *jj;
-	      
-//    	      if ( binary_mask )
-//    		{		  
-// 		  if ( event->bool_value() ) 
-// 		    {
-// 		      matches = true; 		      
-// 		    }
-//    		}
-//    	      else 
-//    		{
-// 		  bool has_value = values->find( event->text_value() ) != values->end();
-// 		  if ( has_value ) 
-// 		    {		      
-// 		      matches = true;
-// 		    }
-// 		}
-// 	      ++jj;
-//    	    }	  
-//    	  ++ii;	   
-//    	}
-      
-//       // count basic matches
-//       if ( matches ) ++cnt_basic_match;
       
       // set new potential mask, depending on match_mode
       
@@ -666,15 +649,16 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
 {
   
   // include T/F   means whether a 'match' means having (T) versus not-having (F) the annotation
+  
   // mask_mode will already have been set
   
-  // If 'values' is NULL, then we just use bool_value() for a binary mask
-  bool binary_mask = values == NULL;
+  // if 'values' is NULL, then we just use presence of an annotation,
+  // rather than looking at the instance ID
+  
+  bool value_mask = values != NULL;
+  
   mask_set = true;
 
-  if ( ! binary_mask ) 
-    Helper::halt( "internal error: values-mask not yet implemented..." ) ;
-  
   const int ne = epochs.size();
   
   //
@@ -694,9 +678,29 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
       interval_t interval = epoch( e );
       
       annot_map_t events = a->extract( interval );
-
-      bool matches =  events.size() > 0 ;
       
+      bool matches = false;
+      
+      if ( value_mask ) 
+	{
+	  // do any of the instance IDs match any of the values?
+	  annot_map_t::const_iterator ii = events.begin();
+	  while ( ii != events.end() )
+	    {		  
+	      const instance_idx_t & instance_idx = ii->first;	      
+	      if ( values->find( instance_idx.id ) != values->end() )
+		{
+		  matches = true;
+		  break;
+		}
+	      ++ii;
+	    }
+	}
+      else 
+	{	  
+	  matches = events.size() > 0 ;
+	}
+
       // count basic matches
 
       if ( matches ) ++cnt_basic_match;
@@ -728,7 +732,8 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
       
     }
   
-  logger << " based on " << a->name << " " << cnt_basic_match << " epochs match; ";
+  logger << " based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values ) + "]" : "" )  
+	 << " " << cnt_basic_match << " epochs match; ";
   logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
   logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
@@ -1292,13 +1297,14 @@ uint64_t timeline_t::timepoint( int r , int s , int nsamples ) const
   return rr->second + x;
 }
 
-uint64_t timeline_t::endpoint( int r ) const
-{
-  // note -- not using rec2tp_end here (which is probably redundant in any case)
-  std::map<int,uint64_t>::const_iterator rr = rec2tp.find(r);
-  if ( rr == rec2tp.end() ) return 0;  
-  return rr->second + edf->header.record_duration_tp - 1;
-}
+
+// uint64_t timeline_t::endpoint( int r ) const
+// {
+//   // note -- not using rec2tp_end here (which is probably redundant in any case)
+//   std::map<int,uint64_t>::const_iterator rr = rec2tp.find(r);
+//   if ( rr == rec2tp.end() ) return 0;  
+//   return rr->second + edf->header.record_duration_tp - 1;
+// }
 
 
 void timeline_t::mask2annot( const std::string & path , const std::string & tag ) 
@@ -1532,6 +1538,10 @@ void timeline_t::load_mask( const std::string & f , bool exclude )
 
 void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
 {
+
+  
+  Helper::halt( "not supported" );
+
   // assume format  time1   time2    { meta-data ....  ignored }
 
   // if +time1 +time2  implies an offset from start of record
@@ -1605,7 +1615,6 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
   // if 'ifnot', can only specify a single 
   if ( labels.size() > 1 && ! include ) Helper::halt( "can only specify a single mask for 'ifnot'");
 
-  // If 'values' is NULL, then we just use bool_value() for a binary mask
   mask_set = true;
   
   const int ne = epochs.size();
@@ -3193,16 +3202,22 @@ void timeline_t::list_all_annotations( const param_t & param )
       
       const interval_t & interval = instance_idx.interval;
       
+      const instance_t * instance = aa->second;
+      
       // stratify output by interval
       
       writer.interval( interval );
-
-      writer.level( instance_idx.id , globals::annot_strat );
       
-      writer.value( "SEC" , interval.as_string() );
+      writer.level( instance_idx.parent->name , globals::annot_strat );
+      
+      writer.level( instance_idx.id , globals::annot_instance_strat );	  
 
-//       if ( event->event_type() != EVT_CORE )
-      writer.value(  "VAR" , "**TODO**" );
+      writer.value( "START" , interval.start_sec() );
+      
+      writer.value( "STOP" , interval.stop_sec() );
+      
+      if ( ! instance->empty() ) 
+	writer.value(  "VAL" , instance->print() );
       
       if ( show_masked ) 
 	{

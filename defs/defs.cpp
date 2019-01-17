@@ -229,7 +229,7 @@ void globals::init_defs()
   sleep_stage_labels[ "Unsure|Unsure" ]   = UNKNOWN;
 
   // Basic
-  sleep_stage_labels[ "Wake" ]     = WAKE;  
+  sleep_stage_labels[ "wake" ]     = WAKE;  
   sleep_stage_labels[ "NREM1" ]    = NREM1;  
   sleep_stage_labels[ "NREM2" ]    = NREM2;  
   sleep_stage_labels[ "NREM3" ]    = NREM3;  

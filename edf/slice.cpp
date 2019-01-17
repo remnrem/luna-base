@@ -83,7 +83,9 @@ slice_t::slice_t( edf_t & edf ,
   
   const uint64_t duration = interval.duration();
   
+  //
   // use fixed channel/signal sampling rate (i.e. array can be ragged)
+  //
 
   data = edf.fixedrate_signal( interval.start , 
 			       interval.stop , 
@@ -151,7 +153,7 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
   uint64_t mx = timeline.last_time_point_tp - total_window_tp;
   while ( ii0 != intervals1.end() )
     {
-      if ( ii0->start > total_window_tp && ii0->stop < mx ) intervals0.insert( *ii0 );
+      if ( ii0->start > total_window_tp && ii0->stop <= mx ) intervals0.insert( *ii0 );
       //else std::cout << "dropping " << ii0->start << " " << ii0->stop << "\n";
       ++ii0;
     }

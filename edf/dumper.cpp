@@ -635,24 +635,72 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 
 
 
-void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selected_annots )
+void edf_t::epoch_matrix_dumper( param_t & param )
 {
   
-  // dump output to STDOUT rather than a DB;  3 rows per subject
+  //
+  // requires output to a specific file
+  //
+  
+  std::string filename = param.requires( "file" );
+  
+  std::ofstream OUT( filename.c_str() , std::ios::out );
 
+
+  //
+  // Set up annotations: both interval and epoch level
+  //
+  
+  bool show_annots = param.has( "annot" );
+  
+  std::map<std::string,int> atype; // 0 not found, 1 interval, 2 epoch
+   
+  int na_int = 0 , na_epoch = 0 , na = 0;
+  
+  if ( show_annots ) 
+    {
+      
+      std::vector<std::string> a = param.strvector( "annot" ); // expects comma-delimited list
+      
+      for (int i=0;i<a.size();i++)
+	{
+	  
+	  if ( timeline.annotations( a[i] ) != NULL ) // is this an interval annotation? 
+	    { atype[ a[i] ] = 1; ++na_int; } 
+	  else if ( timeline.epoch_annotation( a[i] ) ) // or an epoch-annotation?
+	    { atype[ a[i] ] = 2; ++na_epoch; } 
+	  else
+	    atype[ a[i] ] = 0;
+	  
+	}
+      
+      na = na_int + na_epoch;
+      
+    }
+  
+  
+  
+  //
+  // Standard format (header row, then columns)
+  // 
+  
+  // Standard output is header row: ID epoch elapsed-time(sec) annot1 annot2 ... signal1 signal2 signal3 ... 
+  // and then tab-delimited entries below, each line is a single data point.
+  
+  
   // ID, # epochs, # epoch length (sec) , sample rate, # annotations , 
   // ID, ne, len, fs, na, ns 
   // na * ne : { all annots ( grouped by epoch ) ... }    
   // ns * ne * len*fs : { all signal points (grouped by signal, then epoch, then time-point } 
   
-  std::cerr << " dumping  " << timeline.num_epochs() << " unmasked epochs in matrix-format to stdout\n";
-  
-  // Standard output is header row: ID epoch elapsed-time(sec) annot1 annot2 ... signal1 signal2 signal3 ... 
-  // and then tab-delimited entries below, each line is a single data point.
 
-  // An alternate format is used for reading into R for subsequent processing, making this easier by 
+  //
+  // Alternate output format
+  //
+  //
+  // For use with reading into R for subsequent processing, making this easier by 
   // splitting elements into spearate rows: 
-
+  
   // I  ID  #epochs  #length-of-epoch-seconds  SR  #annots  #signals
   // SL signal labels
   // EL epoch labels
@@ -660,14 +708,17 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
 
   //  epoch level annotations:
   // A { epoch 1, bool for each annot } { epoch 2, bool for each annot per datapoint }
-
+  
   //  raw signals, ordered by signal #
   // S { signal1 alldatapoints } { signal2 all datapoints } ...
-
-
-  bool alternative_format = param.has( "format2" );
   
- 
+  bool alternative_format = param.has( "format2" );
+
+  std::cerr << " dumping  " << timeline.num_epochs() << " unmasked epochs in " 
+	    << ( alternative_format ? "alternative" : "standard" ) 
+	    << " matrix-format to stdout\n";  
+
+  
   //
   // Get signals
   //  
@@ -677,9 +728,14 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
   signal_list_t signals = header.signal_list( signal_label );  
   
   const int ns = signals.size();
+  
 
-  if ( ns == 0 ) return;
+  //
+  // requires at least one signal
+  //
 
+  if ( ns == 0 ) Helper::halt( "no signals specified for MATRIX" );
+  
 
   //
   // Check FS for all signals
@@ -690,14 +746,10 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
   for (int s=1; s<ns; s++) 
     {
       if ( header.sampling_freq( signals(s) ) != fs ) 
-	Helper::halt( "EPOCH-MATRIX requires uniform sampling rate across signals" ); 
+	Helper::halt( "MATRIX requires uniform sampling rate across signals" ); 
     }
   
       
-  //
-  // Which annotations are present? (i.e. already loaded)
-  //
-  
   
   //
   // Point to first epoch
@@ -707,16 +759,7 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
 
   const int ne = timeline.num_epochs();
 
-  //
-  // Set up epoch annotations
-  //
   
-  std::set<std::string> epoch_annotations = timeline.epoch_annotations();
-  
-  bool has_epoch_annotations = epoch_annotations.size() > 0 ;
-   
-  const int na = selected_annots == NULL ? 0 : selected_annots->size();
-
 
   if ( alternative_format )
     {
@@ -725,112 +768,113 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
       // Output
       //
       
-      std::cout << "I" << "\t" 
-		<< id << "\t" 
-		<< ne << "\t"
-		<< timeline.epoch_length() << "\t"
-		<< fs << "\t"
-		<< na << "\t"
-		<< ns << "\n";
+      OUT << "I" << "\t" 
+	  << id << "\t" 
+	  << ne << "\t"
+	  << timeline.epoch_length() << "\t"
+	  << fs << "\t"
+	  << na << "\t"
+	  << ns << "\n";
       
-      //
-      // Signal labels
-      //
-      
-      std::cout << "SL";
-      for (int s = 0 ; s < ns ; s++ )
-	std::cout << "\t" << header.label[ signals(s) ] ;
-      std::cout << "\n";
 
       //
       // Epoch labels
       //
       
-      std::cout << "EL";
+      OUT << "E";
       timeline.first_epoch();       
       while ( 1 ) 
 	{
 	  int epoch = timeline.next_epoch();	   
 	  if ( epoch == -1 ) break;
-	  std::cout << "\t" << timeline.display_epoch( epoch ) ;
+	  OUT << "\t" << timeline.display_epoch( epoch ) ;
 	}
-      std::cout << "\n";
+      OUT << "\n";
       
 
+
       //
-      // Output annotations 
+      // Output annotations (at the epoch level)
       //
       
-      if ( selected_annots != NULL )
+      if ( show_annots )
 	{
 	  
-	  std::vector<std::string> annots = timeline.annotations.names();
+	  // each row is a single annotation
 	  
-	  std::cout << "AH";
-	  
-	  std::set<std::string>::const_iterator aa = selected_annots->begin();
-	  while ( aa != selected_annots->end() )
-	    {
-	      std::cout << "\t" << *aa;
-	      ++aa;
-	    }
-	  std::cout << "\nA";
-	  
-	  timeline.first_epoch();       
-  
-	  while ( 1 ) 
+	  std::map<std::string,int>::const_iterator aa = atype.begin();
+	  while ( aa != atype.end() )
 	    {
 	      
-	      //
-	      // Get next epoch
-	      //
+	      OUT << "A" << "\t" 
+		  << aa->first ;
+
+
+	      timeline.first_epoch();       
 	      
-	      int epoch = timeline.next_epoch();
-	   
-	      if ( epoch == -1 ) break;
-	   
-	      interval_t interval = timeline.epoch( epoch );
-	   
-	      //
-	      // Annotations
-	      //
-	      
-	      std::set<std::string>::const_iterator aa = selected_annots->begin();
-	      while ( aa != selected_annots->end() )
+	      while ( 1 ) 
 		{
 		  
-		  //std::cout << "annots[a] = " << annots[a] << "\n";
+		  //
+		  // Get next epoch
+		  //
 		  
-		  annot_t * annot = timeline.annotations( *aa );
+		  int epoch = timeline.next_epoch();
 		  
-		  if ( annot == NULL ) 
+		  if ( epoch == -1 ) break;
+
+		  // no annotation: all 0
+
+		  if ( aa->second == 0 ) 
 		    {
-		      std::cout << "\t" << 0;
-		      ++aa;
+		      OUT << "\t0";
 		      continue;
 		    }
+		  
+		  // interval annotation?
 
-		  annot_map_t events = annot->extract( interval );
+		  if ( aa->second == 1 ) 
+		    {
+		      
+		      interval_t interval = timeline.epoch( epoch );
+		      
+		      annot_t * annot = timeline.annotations( aa->first );
+		      
+		      annot_map_t events = annot->extract( interval );
+		      
+		      bool has_annot = events.size() ;
+		      
+		      OUT << "\t" << ( has_annot ? 1 : 0 ) ;
+		    }
 		  
-		  bool has_annot = events.size() ;
+		  // epoch annotation
 		  
-		  std::cout << "\t" << ( has_annot ? 1 : 0 ) ;
+		  if ( aa->second == 2 ) 
+		    {
+		      OUT << "\t" << ( timeline.epoch_annotation( aa->first , epoch ) ? 1 : 0 ) ;
+		    }
 		  
-		  ++aa;
-		}
+
+		} // next epoch
 	      
-	      // next epoch
+
+	      OUT << "\n";
+
+	      ++aa;
 	    }
-	  std::cout << "\n";
+	 	  
+	  
 	}
       
+     
 
+      
       //
       // Output signals
       //
       
-      std::cout << "S";
-   
+      
+      
  
       //
       // For each signal
@@ -839,8 +883,12 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
       for (int s = 0 ; s < ns ; s++ )
 	{	  
 	  
+	  
+	  OUT << "S" << "\t"	  
+	      << header.label[ signals(s) ] ;
+
 	  timeline.first_epoch();
-       
+	  
 	  while ( 1 ) 
 	    {
 	      
@@ -855,20 +903,28 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
 	      interval_t interval = timeline.epoch( epoch );
 	      
 	      slice_t slice( *this , signals(s) , interval );
+	      
 	      const std::vector<double> * signal = slice.pdata();
+
 	      const int np = signal->size();
-	      for (int i=0;i<np;i++) std::cout << "\t" << (*signal)[i];	  
+
+	      for (int i=0;i<np;i++) OUT << "\t" << (*signal)[i];	  
 	      
 	    } // Next epoch           
+
+	  OUT << "\n";
 	  
 	} // Next signal
       
       // all done
-      std::cout << "\n";
+
+      
+      OUT.close();
 
       return;
       
     }
+
 
   
   //
@@ -880,46 +936,40 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
   // Header
   //
 
-  bool include_hms = param.has("hms");
+  bool include_hms = param.has( "hms" ) || param.has( "hms2" );
+  bool include_hms2 = param.has( "hms2" );
 
-  std::cout << "ID\tE\tT";
+  OUT << "ID\tE\tS\tSP\tT";
   
-  if ( include_hms ) std::cout << "\tHMS";
+  if ( include_hms ) OUT << "\tHMS";
   
   clocktime_t starttime( header.starttime );
+
   bool invalid_hms = ! starttime.valid;
   
- 
-  // Annots
 
-  // annots we actually have for this EDF and so should be checked
-  // if NULL, means this annot is not present
-  std::vector<annot_t*> annotlist;  
-
-  if ( selected_annots != NULL )
+  //
+  // Annots header
+  //
+  
+  if ( show_annots ) 
     {
-      std::set<std::string>::const_iterator aa = selected_annots->begin();
-      while ( aa != selected_annots->end() )
+      std::map<std::string,int>::const_iterator aa = atype.begin();
+      while ( aa != atype.end() )
 	{
-	  // header
-	  std::cout << "\t" << *aa;
-	  
-	  // track
-	  annot_t * annot = timeline.annotations( *aa );
-	  annotlist.push_back( annot ); // NULL if annot not present
-	  
+	  OUT << "\t" << aa->first;
 	  ++aa;
-	}	    
+	}      
     }
   
 
-  // Signals
+  // Signals header
   for (int s = 0 ; s < ns ; s++ )
-    std::cout << "\t" << header.label[ signals(s) ] ;
+    OUT << "\t" << header.label[ signals(s) ] ;
   
-  std::cout << "\n";
+  OUT << "\n";
 
- 
+
     
   //
   // Iterate over epochs, display  
@@ -936,6 +986,7 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
       // get all signals for this epoch
       
       interval_t interval = timeline.epoch( epoch );
+
       std::vector<std::vector<double> > sigdat( ns );
       
       // track time-points, ie. may be a discontinuous file
@@ -949,7 +1000,7 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
 	  if ( s== 0 ) tp = *slice.ptimepoints();
 	}
       
-      // now iterate over all time-points
+      // now iterate over all time-points (rows)
       
       const int np = sigdat[0].size();
       
@@ -957,53 +1008,79 @@ void edf_t::epoch_matrix_dumper( param_t & param , std::set<std::string> * selec
 	{
 	  
 	  double tp_sec = tp[t] / (double)globals::tp_1sec; 
+
+	  double tp_sec_past_estart = ( tp[t] - interval.start) / (double)globals::tp_1sec; 
 	  
 	  // output rows
-	  std::cout << id << "\t"
-		    << timeline.display_epoch( epoch ) << "\t"
-		    << tp_sec ;
-
+	  OUT << id << "\t"
+	      << timeline.display_epoch( epoch ) << "\t"	    
+	      << floor( tp_sec ) << "\t"
+	      << t - fs * floor( tp_sec_past_estart )  << "\t"	  
+	      << tp_sec;
+	  
 	  if ( include_hms )
 	    {
 	      clocktime_t present = starttime;
-	      present.advance( tp_sec / 3600.0 );
-	      std::cout << "\t" << present.as_string();
+	      
+	      if ( include_hms2 ) 
+		{
+		  interval_t now( tp[t] , tp[t]+1LLU );
+		  std::string t1, t2;
+		  if ( Helper::hhmmss( present , now , &t1,&t2 , 5 ) ) 
+		    OUT << "\t" << t1;
+		  else
+		    OUT << "\t.";
+		}
+	      else
+		{
+		  present.advance( tp_sec / 3600.0 );
+		  OUT << "\t" << present.as_string();
+		}
 	    }
 
 	  // annots
-	  
-	  if ( selected_annots != NULL )
+
+	  if ( show_annots )
 	    {
 	      
-	      // get exact point
-	      interval_t interval2 = interval_t( tp[t] , tp[t] );
-	      
-	      for (int a=0;a<annotlist.size();a++)
+	      std::map<std::string,int>::const_iterator aa = atype.begin();
+	      while ( aa != atype.end() )
 		{
-		  if ( annotlist[a] == NULL ) 
-		    std::cout << "\t0";
-		  else
-		    {
-		      annot_map_t events = annotlist[a]->extract( interval2 );
-		      bool has_annot = events.size() ;		      
-		      std::cout << "\t" << ( has_annot ? 1 : 0 ) ;
-		    }		      
-		} // next annot
-	    } 
 
+		  if ( aa->second == 0 ) 
+		    OUT << "\t0";
+		  else if ( aa->second == 1 ) 
+		    {		  
+		      // get exact point
+		      interval_t interval2 = interval_t( tp[t] , tp[t] + 1LLU );
+		      annot_t * annot = timeline.annotations( aa->first );
+		      annot_map_t events = annot->extract( interval2 );
+		      bool has_annot = events.size() ;
+		      OUT << "\t" << ( has_annot ? 1 : 0 ) ;
+		    }
+		  else if ( aa->second == 2 ) 
+		    OUT << "\t" << ( timeline.epoch_annotation( aa->first , epoch ) ? 1 : 0 ) ;		  
+		  
+		  ++aa;
+		}
+	      
+	    } 
+	  
 	  
 	  // signals
-	  for (int s=0;s<ns;s++) std::cout << "\t" << sigdat[s][t];
-
+	  for (int s=0;s<ns;s++) OUT << "\t" << sigdat[s][t];
 	  
 	  // done, next row/time-point
-	  std::cout << "\n";
-
+	  OUT << "\n";	  
 	  
 	} // next time-point
       
     } // next epoch
   
   
+  OUT.close();
+  
+  return;
+
 }
 

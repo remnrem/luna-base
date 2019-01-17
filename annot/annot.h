@@ -105,7 +105,7 @@ struct annot_t
 
   std::set<instance_t*> all_instances;
 
-
+  
 
   //
   // Constructor/destructor
@@ -161,6 +161,8 @@ struct annot_t
   annot_map_t extract( const interval_t & window );
   
   
+  std::set<std::string> instance_ids() const;
+
  private:
 
   void wipe();
@@ -184,8 +186,13 @@ struct annot_t
 
 struct instance_idx_t { 
   
-  instance_idx_t( const interval_t & i , const std::string & s ) : interval(i) , id(s) { } 
+  instance_idx_t( const annot_t * p , 
+		  const interval_t & i , 
+		  const std::string & s ) 
+  : parent(p) , interval(i) , id(s) { } 
   
+  const annot_t *   parent;
+
   interval_t  interval;
   
   std::string id;
@@ -194,6 +201,8 @@ struct instance_idx_t {
   {
     if ( interval < rhs.interval ) return true;
     if ( interval > rhs.interval ) return false;
+    if ( parent->name < rhs.parent->name ) return true;
+    if ( parent->name > rhs.parent->name ) return false;
     return id < rhs.id;
   }
 
@@ -202,7 +211,7 @@ struct instance_idx_t {
 
 
 struct instance_t {   
-  
+
   // an instance then has 0 or more variable/value pairs
   
   std::map<std::string,avar_t*> data;
@@ -228,6 +237,8 @@ struct instance_t {
     if ( aa == data.end() ) return NULL;
     return aa->second;
   } 
+  
+  bool empty() const { return data.size() == 0; } 
   
   void check( const std::string & name );
   
@@ -257,6 +268,8 @@ struct instance_t {
       }
   }
 
+  std::string print( const std::string & delim = "," ) const;
+  
   //
   // Misc helper functions
   //
@@ -300,11 +313,11 @@ struct flag_avar_t : public avar_t
   flag_avar_t() { }  // empty
   ~flag_avar_t() { } 
   flag_avar_t *  clone() const { return new flag_avar_t(*this); }
-  void set() { has_value=true; }
+  void set() { has_value=false; }
   bool bool_value() const { return true; } 
   int int_value() const { return 1; }
   double double_value() const { return 1; } 
-  std::string text_value() const { return "1"; } 
+  std::string text_value() const { return "."; } 
   globals::atype_t atype() const { return globals::A_FLAG_T; }  
 };
 

@@ -802,7 +802,7 @@ std::vector<std::string> Helper::file2strvector( const std::string & filename )
 }
 
 
-bool Helper::hhmmss( const clocktime_t & ct , const interval_t & interval , std::string * t1 , std::string * t2 )
+bool Helper::hhmmss( const clocktime_t & ct , const interval_t & interval , std::string * t1 , std::string * t2 , const int dp )
 {
   *t1 = ".";
   *t2 = ".";
@@ -813,13 +813,14 @@ bool Helper::hhmmss( const clocktime_t & ct , const interval_t & interval , std:
   // add down to 1/100th of a second                                                                                                                                               
   double tp1_extra = tp1_sec - (long)tp1_sec;
   
-  double tp2_sec =  interval.stop / (double)globals::tp_1sec;
+  // rewind stop by 1 unit
+  double tp2_sec =  (interval.stop-1LLU) / (double)globals::tp_1sec;
   clocktime_t present2 = ct;
   present2.advance( tp2_sec / 3600.0 );
   double tp2_extra = tp2_sec - (long)tp2_sec;
   
-  *t1 = present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) ;
-  *t2 = present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) ;
+  *t1 = present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , dp  ).substr(1) ;
+  *t2 = present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , dp  ).substr(1) ;
   
   return true;
 }
