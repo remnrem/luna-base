@@ -129,6 +129,12 @@ struct annot_t
   //
 
   static bool load( const std::string & , edf_t & edf );  
+
+  static bool map_epoch_annotations( edf_t & parent_edf , 
+				     const std::vector<std::string> & e , 
+				     const std::string & filename , 
+				     uint64_t elen , 
+				     uint64_t einc );
   
   int  load_features( const std::string & );    
   

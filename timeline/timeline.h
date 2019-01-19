@@ -327,6 +327,12 @@ struct timeline_t
   double epoch_overlap() const 
   { return (double)epoch_overlap_tp / globals::tp_1sec; }
   
+  double epoch_len_tp() const 
+  { return epoch_length_tp ; }
+  
+  double epoch_inc_tp() const 
+  { return epoch_overlap_tp ; } 
+
   int calc_epochs();
   
   int first_epoch()  
@@ -416,7 +422,7 @@ struct timeline_t
   void select_epoch_first( int n );
 
   // mask range of epochs from a to b inclusive
-  void select_epoch_range( int a , int b );
+  void select_epoch_range( int a , int b , bool include );
   
   // flip all values of current epoch mask
   void flip_epoch_mask();
@@ -443,6 +449,7 @@ struct timeline_t
   int  set_epoch_mask( const int e , const bool b = true ) 
   {
     mask_set = true;
+
     if (e < 0 || e >= mask.size() ) Helper::halt( "internal error setting mask" );
     
     bool original = mask[e];

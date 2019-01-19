@@ -732,7 +732,7 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
       
     }
   
-  logger << " based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values ) + "]" : "" )  
+  logger << " based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values , "|" ) + "]" : "" )  
 	 << " " << cnt_basic_match << " epochs match; ";
   logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
   logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
@@ -927,6 +927,7 @@ bool timeline_t::masked_epoch( int e ) const
 // i.e. to /include/ artifactual epochs only
 void timeline_t::flip_epoch_mask()
 {
+
   if ( ! mask_set ) return;
 
   const int ne = epochs.size();
@@ -936,24 +937,19 @@ void timeline_t::flip_epoch_mask()
   int cnt_unchanged = 0;
   int cnt_now_unmasked = 0;
   
-  // flip all
+  // flip all (i.e. every epoch will change)
   for (int e=0;e<ne;e++)
     {
       
-      bool current = mask[e];
+      mask[e] = ! mask[e];
       
-      int mc = set_epoch_mask( e , ! current );
-      
-      if ( mc == +1 ) ++cnt_mask_set;
-      else if ( mc == -1 ) ++cnt_mask_unset;
-      else ++cnt_unchanged;
-      
-      if ( ! mask[e] ) ++cnt_now_unmasked;
+      if ( mask[e] ) ++cnt_mask_set;
+      else ++cnt_mask_unset;
+
     }
   
-  logger << " flipped all epoch masks; ";
-  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " flipped all epoch masks\n";
+  logger << " total of " << cnt_mask_unset << " of " << epochs.size() << " retained for analysis\n";
 
 }
 
@@ -1019,10 +1015,18 @@ void timeline_t::select_epoch_randomly( int n )
 }
 
 
-// other masks: select epochs from 'a' to 'b' inclusive
-void timeline_t::select_epoch_range( int a , int b )
+// other masks: select epochs from 'a' to 'b' inclusive (include=T)
+// otherwise do the opposite
+void timeline_t::select_epoch_range( int a , int b , bool include )
 {
-  
+
+  if ( a > b ) 
+    {
+      int tmp = b;
+      b = a;
+      a = tmp;
+    }
+
   mask_set = true;
 
   const int ne = epochs.size();
@@ -1037,8 +1041,12 @@ void timeline_t::select_epoch_range( int a , int b )
     {
       // use base-1 coding of epochs
       const int epoch = e+1;
+
+      bool match = include ? 
+	epoch < a || epoch > b : 
+	epoch >= a && epoch <= b ;
       
-      if ( epoch < a || epoch > b )
+      if ( match ) 
 	{
 	  int mc = set_epoch_mask( e , true );
 	  if ( mc == +1 ) ++cnt_mask_set;
@@ -1049,11 +1057,16 @@ void timeline_t::select_epoch_range( int a , int b )
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
 
-  logger << " selecting epochs from " << a << " to " << b << "; ";
+  if ( include )
+    logger << " selecting epochs from " << a << " to " << b << "; ";
+  else
+    logger << " masking epochs from " << a << " to " << b << "; ";
   logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
   logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
 
 }
+
+
 
 
 // other masks : select up to 'n' epochs from the start of the record
@@ -1361,12 +1374,13 @@ void timeline_t::dumpmask()
       if ( e == -1 ) break;
       
       interval_t interval = epoch( e );
-      
+
+      // EPOCH_INTERVAL will already have been output by the EPOCH command
       writer.epoch( display_epoch( e ) );
-      writer.var( "INTERVAL" , "Epoch time start/stop" );
-      writer.var( "MASK" , "Is masked? (1=Y)" );
-      writer.value( "INTERVAL" , interval.as_string() );
-      writer.value( "MASK" , mask_set ? mask[e] : false );
+      //      writer.var(   "INTERVAL" , "Epoch time start/stop" );
+      writer.var(   "EPOCH_MASK" ,      "Is masked? (1=Y)" );
+      //      writer.value( "INTERVAL" , interval.as_string() );
+      writer.value( "EPOCH_MASK" , mask_set ? mask[e] : false );
 
     }
 
@@ -3098,14 +3112,19 @@ void timeline_t::list_all_annotations( const param_t & param )
 		  if ( is_masked && ! show_masked ) {  continue; } 
 		  
 		  // else display
-				      
-		  writer.value( "EMASK" , masked( e ) );
-		  writer.value( "INTERVAL" , interval.as_string() );
-		  writer.value( "AMASK" , is_masked );
-		  writer.value( "LABEL" , instance_idx.id );
+		  writer.level( instance_idx.id , "ANN_INST" );
+		  writer.level( interval.as_string() , "ANN_INTERVAL" );
+
+		  writer.value( "EPOCH_MASK" , masked( e ) );
+		  writer.value( "ANN_MASK" , is_masked );
+		  
 		  
 		  ++ii;
 		}      
+
+	      writer.unlevel( "ANN_INTERVAL" );
+	      writer.unlevel( "ANN_INST" );
+
 	    }
 	}
       
@@ -3212,12 +3231,12 @@ void timeline_t::list_all_annotations( const param_t & param )
       
       writer.level( instance_idx.id , globals::annot_instance_strat );	  
 
-      writer.value( "START" , interval.start_sec() );
+      writer.value( "ANN_START" , interval.start_sec() );
       
-      writer.value( "STOP" , interval.stop_sec() );
+      writer.value( "ANN_STOP" , interval.stop_sec() );
       
       if ( ! instance->empty() ) 
-	writer.value(  "VAL" , instance->print() );
+	writer.value(  "ANN_VAL" , instance->print() );
       
       if ( show_masked ) 
 	{
@@ -3228,11 +3247,11 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  bool some_unmasked = interval_overlaps_unmasked_region( interval );
 	  bool all_unmasked = interval_is_completely_unmasked( interval );
 	  
-	  writer.value( "START_MASKED" , start_masked );
-	  writer.value( "SOME_MASKED" , some_masked );
-	  writer.value( "ALL_MASKED" , all_masked );
-	  writer.value( "SOME_UNMASKED" , some_unmasked );
-	  writer.value( "ALL_UNMASKED" , all_unmasked );
+	  writer.value( "ANN_START_MASKED"  , start_masked );
+	  writer.value( "ANN_SOME_MASKED"   , some_masked );
+	  writer.value( "ANN_ALL_MASKED"    , all_masked );
+	  writer.value( "ANN_SOME_UNMASKED" , some_unmasked );
+	  writer.value( "ANN_ALL_UNMASKED"  , all_unmasked );
 	}
       
       writer.unlevel( globals::annot_strat );

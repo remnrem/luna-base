@@ -169,6 +169,137 @@ void summarize_annotations( edf_t & edf , param_t & param )
 }
 
 
+bool annot_t::map_epoch_annotations(   edf_t & parent_edf , 
+				       const std::vector<std::string> & ann , 
+				       const std::string & filename , 
+				       uint64_t elen , 
+				       uint64_t einc )
+{
+
+
+  // static function that will create multiple annotations (one per class label)
+  
+  // we do not check for epoch size in EDF here (i.e. as this may be before it is loaded)
+  // in that case, we should assume 30-second, non-overlapping epochs
+  
+  bool unepoched = elen == 0 ;
+  
+  if ( unepoched )  
+    {
+      elen = 30 * globals::tp_1sec;
+      einc = 30 * globals::tp_1sec;      
+    }
+
+  // because we otherwise might have a discontinuous EDF, we need to look up the proper epoch 
+  // intervals below , if epoched 
+
+  
+  //
+  // map of all labels/annot classes to be added
+  //
+
+  std::map<std::string,annot_t*> amap;
+
+  for (int e=0;e<ann.size();e++) 
+    {
+     
+      //
+      // skip this annotation?
+      //
+      
+      if ( globals::specified_annots.size() > 0 && 
+	   globals::specified_annots.find( ann[e] ) == globals::specified_annots.end() ) 
+	continue;
+      
+      //
+      // otherwise, creete the new annotation class
+      //
+      
+      annot_t * a = parent_edf.timeline.annotations.add( ann[e] );
+
+      amap[ ann[e] ] = a;
+      
+      a->description = ann[e];
+      
+      a->file = filename ;
+      
+      a->types.clear();
+  
+    }
+  
+    
+  //
+  // Populate intervals
+  //
+
+  if ( unepoched ) 
+    {
+
+      for ( int e = 0 ; e < ann.size() ; e++ )
+	{
+	  
+	  if ( amap.find( ann[e] ) != amap.end() )
+	    {
+	      
+	      interval_t interval( e * elen , e * elen + einc );
+	      
+	      annot_t * a = amap[ ann[e] ];
+	      
+	      instance_t * instance = a->add( ann[e] , interval );
+	      
+	      // track how many annotations we add
+	      parent_edf.aoccur[ a->name ]++;
+	      
+	    }
+	  
+	} // next epoch 
+      
+    }
+  else
+    {
+
+      // but if we do already have an in-memory EDF, which might be
+      // discontinuous, we need to use the timeline to get the 
+      // proper interval for the e'th epoch
+      
+      parent_edf.timeline.first_epoch();
+      
+      std::vector<int> epoch_counts;
+
+      int e = 0;
+
+      while ( 1 ) 
+	{
+
+	  int epoch = parent_edf.timeline.next_epoch();      
+	  
+	  if ( epoch == -1 ) break;
+          
+	  if ( e >= ann.size() ) Helper::halt( "internal error map_epoch_annot()" );
+
+	  interval_t interval = parent_edf.timeline.epoch( epoch );
+	  
+	  annot_t * a = amap[ ann[e] ];
+	  
+	  instance_t * instance = a->add( ann[e] , interval );
+	  
+	  // track how many annotations we add
+	  parent_edf.aoccur[ a->name ]++;
+	  
+	  // next row in file
+	  ++e;
+
+	}
+
+    }
+
+  
+  //
+  // all done
+  //
+  
+  return true;
+}
 
 
 
@@ -183,7 +314,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // 
   // Check file exists and is of the correct type
   //
-  
+
   if ( ! Helper::fileExists(f) ) return -1;
 
   if ( Helper::file_extension( f , "xml" ) ) 
@@ -198,23 +329,44 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       return -1;
     }
   
+
+  //
+  // A simple epoch annotation file?
+  //
   
-  //
-  // Original .annot file format
-  //
+  if ( Helper::file_extension( f , "eannot" ) ) 
+    {
+      std::vector<std::string> a;
       
-  // logger << " attaching annotation file " << f << "\n";
+      std::ifstream IN1( f.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  std::string x;
+	  std::getline( IN1 , x );
+	  if ( IN1.eof() ) break;
+	  if ( x == "" ) continue;
+	  a.push_back( x );      
+	}
+      IN1.close();
+
+      annot_t::map_epoch_annotations( parent_edf , 
+				      a , 
+				      f , 
+				      parent_edf.timeline.epoch_len_tp() , 
+				      parent_edf.timeline.epoch_inc_tp() );
+      
+      
+      return true;
+      
+    }
+
 
   //
-  // record filename
+  // Otherwise, this is an .annot file   
   //
 
   
-    
   std::ifstream FIN( f.c_str() , std::ios::in );
-
-  
-  // New annotation format
   
   // header with # character
   
@@ -232,12 +384,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // then rows are either interval or epoch-based 
   
   // name  id1  sec1  sec2  { vars }
-  // name  id   e30:1       { vars } 
+  // name  id   e:1   {e:2} { vars } 
   
-  // for now, assume e:1   means 30-second epoch, no overlap  [ hard-code this ] 
-  
-  bool epoched = false;
+  // assume e:1   means 30-second epoch, no overlap  [ hard-code this ] 
+  // e:1:20 is first of a 20-second epoch
+  // e:1:20:10 is similar, but w/ epoch overlap of 10 seconds (10=increment)
 
+  bool epoched = false;
+  
   int line_count = 0;
 
   std::map<std::string,annot_t*> annot_map;
@@ -255,7 +409,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       //
       // header or data row?
       //
-
    
       if ( line[0] == '#' ) 
 	{
@@ -550,8 +703,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      
 	      else if ( t == globals::A_BOOL_T )
 		{
-		  bool value = ! ( tok[j] == "0" || tok[j] == "F" || tok[j] == "." );
-		  instance->set( label , value );
+		  if ( tok[j] != "." )
+		    {
+		      bool value = Helper::yesno( tok[j] );
+		      instance->set( label , value );
+		    }
 		}
 	      
 	      else if ( t == globals::A_INT_T )

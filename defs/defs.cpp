@@ -272,7 +272,7 @@ void globals::init_defs()
   stage_strat  = "S";
   cycle_strat  = "C";
   band_strat   = "B";
-  annot_strat  = "ANN";
+  annot_strat  = "ANNOT";
   annot_instance_strat  = "INST";
   annot_meta_strat  = "META";
   count_strat  = "N";

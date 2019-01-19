@@ -661,6 +661,7 @@ void process_edfs( cmd_t & cmd )
 			  // only annot files (.xml, .ftr, .annot)
  			  if ( Helper::file_extension( fname , "ftr" ) ||
  			       Helper::file_extension( fname , "xml" ) ||
+			       Helper::file_extension( fname , "eannot" ) ||
 			       Helper::file_extension( fname , "annot" ) )
 			    {
 			      edf.load_annotations( tok[i] + fname );	 			   
@@ -705,19 +706,22 @@ void process_edfs( cmd_t & cmd )
 	      
 	      std::set<std::string> instance_ids = annot->instance_ids();
 
-	      if ( instance_ids.size() > 1 || *instance_ids.begin()  != names[a] )
+	      if ( instance_ids.size() > 0 ) 
 		{
-		  logger << "   " << instance_ids.size() << " instance IDs: ";
-		  std::set<std::string>::const_iterator ii = instance_ids.begin();
-		  int icnt = 0 ; 
-		  while ( ii != instance_ids.end() )
+		  if ( ! ( instance_ids.size() == 1 && ( *instance_ids.begin()  == names[a] || *instance_ids.begin() == "." ) ) )
 		    {
-		      logger << " " << *ii ;
-		      ++icnt;
-		      if ( icnt > 8 ) { logger << " ..." ; break;  }
-		      ++ii;		  
+		      logger << "   " << instance_ids.size() << " instance IDs: ";
+		      std::set<std::string>::const_iterator ii = instance_ids.begin();
+		      int icnt = 0 ; 
+		      while ( ii != instance_ids.end() )
+			{
+			  logger << " " << *ii ;
+			  ++icnt;
+			  if ( icnt > 8 ) { logger << " ..." ; break;  }
+			  ++ii;		  
+			}
+		      logger << "\n";
 		    }
-		  logger << "\n";
 		}
 
 	      // lists meta-data

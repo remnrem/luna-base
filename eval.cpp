@@ -207,7 +207,7 @@ bool cmd_t::eval( edf_t & edf )
       //
       
       if ( ! param(c).has( "signal" ) )
-	param(c).add( "signal" , signal_string() );
+	param(c).add_hidden( "signal" , signal_string() );
       
 
       //
@@ -217,7 +217,12 @@ bool cmd_t::eval( edf_t & edf )
       logger << " ..................................................................\n"
 	     << " CMD #" << c+1 << ": " << cmd(c) << "\n";
       
+      
       writer.cmd( cmd(c) , c+1 , param(c).dump( "" , " " ) );
+
+      // use strata to keep track of tables by commands
+
+      writer.level( cmd(c) , "_" + cmd(c) );
       
       
       //
@@ -328,7 +333,9 @@ bool cmd_t::eval( edf_t & edf )
 	  return false;
 	}
          
-      
+     
+      writer.unlevel( "_" + cmd(c) );
+
     } // next command
   
 
@@ -537,7 +544,16 @@ void proc_fiplot( edf_t & edf , param_t & param )
 
 void proc_tag( param_t & param )
 {
-  set_tag( param.requires( "tag" ) );
+  // either TAG tag=lvl/fac
+  // or just TAG lvl/fac 
+
+  if ( ! param.single() ) Helper::halt( "TAG requires a single argument" );
+
+  if ( param.has( "tag" ) )
+    set_tag( param.value( "tag" ) );
+  else 
+    set_tag( param.single_value() );
+  
 }
 
 void set_tag( const std::string & t ) 
@@ -551,8 +567,8 @@ void set_tag( const std::string & t )
   else
     {
       std::vector<std::string> tok = Helper::parse( globals::current_tag , "/" );
-      if ( tok.size() != 2 ) Helper::halt( "TAG format should be level/factor" );
-      writer.tag( tok[0] , tok[1] );
+      if ( tok.size() != 2 ) Helper::halt( "TAG format should be factor/level" );
+      writer.tag( tok[1] , tok[0] );
     }
 }
 
@@ -801,10 +817,10 @@ void proc_epoch( edf_t & edf , param_t & param )
 
       writer.epoch( edf.timeline.display_epoch( epoch ) );
 
-      writer.value( "INTERVAL" , interval.as_string() );      
-      writer.value( "START" , interval.start_sec() );
-      writer.value( "MID"   , interval.mid_sec() );
-      writer.value( "STOP" , interval.stop_sec() );
+      writer.value( "EPOCH_INTERVAL" , interval.as_string() );      
+      writer.value( "EPOCH_START" , interval.start_sec() );
+      writer.value( "EPOCH_MID"   , interval.mid_sec() );
+      writer.value( "EPOCH_STOP" , interval.stop_sec() );
 		  
     }
   
@@ -849,10 +865,14 @@ void proc_file_mask( edf_t & edf , param_t & param )
     edf.timeline.load_mask( f , exclude );
 }
 
+
 // EPOCH-MASK  : based on epoch-annotations, apply mask
 
 void proc_epoch_mask( edf_t & edf , param_t & param )
 {
+  
+  // COMMAND NOT SUPPORTED
+
   std::set<std::string> vars;
   std::string onelabel;
   
@@ -876,10 +896,12 @@ void proc_epoch_mask( edf_t & edf , param_t & param )
 
 }
 
-// EPOCH-ANNOT : directly apply epoch-level annotations
+// EPOCH-ANNOT : directly apply epoch-level annotations from the command line
+// with recodes
 
 void proc_file_annot( edf_t & edf , param_t & param )
 { 
+  
   std::string f = param.requires( "file" );
 
   std::vector<std::string> a;
@@ -888,17 +910,23 @@ void proc_file_annot( edf_t & edf , param_t & param )
   if ( param.has( "recode" ) )
     {
       std::vector<std::string> tok = Helper::quoted_parse( param.value( "recode" ) , "," );
+
       for (int i=0;i<tok.size();i++)
 	{
 	  std::vector<std::string> tok2 = Helper::quoted_parse( tok[i] , "=" );
-	  if ( tok2.size() == 2 ) 
-	    recodes[ Helper::unquote( tok2[1] ) ] = Helper::unquote( tok2[0] );
+	  if ( tok2.size() == 2 )
+	    {
+	      logger << "  remapping from " << tok2[0] << " to " << tok2[1] << "\n";
+	      recodes[ Helper::unquote( tok2[0] ) ] = Helper::unquote( tok2[1] );
+	    }
 	  else
 	    Helper::halt( "bad format for " + tok[i] );
 	}
     }
   
   if ( ! Helper::fileExists( f ) ) Helper::halt( "could not find " + f );
+  
+  std::set<std::string> amap;
 
   std::ifstream IN1( f.c_str() , std::ios::in );
   while ( ! IN1.eof() )
@@ -906,17 +934,38 @@ void proc_file_annot( edf_t & edf , param_t & param )
       std::string x;
       std::getline( IN1 , x );
       if ( IN1.eof() ) break;
+      if ( x == "" ) continue;
       if ( recodes.find(x) != recodes.end() ) 
-	{
+	{	  
 	  x = recodes[x];
 	}
       a.push_back( x );      
+      amap.insert( x );
     }
   IN1.close();
+  
+  logger << " mapping " << amap.size() << " distinct epoch-annotations (" << a.size() << " in total) from " << f << "\n";
 
-  logger << " read " << a.size() << " epoch/annotations from " << f << "\n";
 
-  edf.timeline.annotate_epochs( a );
+  //
+  // Check correct number of epochs
+  //
+  
+  if ( a.size() != edf.timeline.num_total_epochs() ) 
+    Helper::halt( "epoch annotation file " + f + " contains " 
+		  + Helper::int2str( (int)a.size() ) + " epochs but expecting " 
+		  + Helper::int2str( edf.timeline.num_total_epochs() ) );
+
+
+  //
+  // create and store proper annotation events
+  //
+  
+  annot_t::map_epoch_annotations( edf , 
+				  a , 
+				  f , 
+				  edf.timeline.epoch_len_tp() , 
+				  edf.timeline.epoch_inc_tp() );
   
 }
 
@@ -1323,8 +1372,6 @@ void proc_flip( edf_t & edf , param_t & param  )
 void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 {
   
-  std::cout << "is " << tok0 << "\n";
-
   // add signals?
   if ( Helper::iequals( tok0 , "signal" ) || Helper::iequals( tok0 , "signals" ) )
     {		  

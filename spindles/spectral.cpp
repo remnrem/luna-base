@@ -581,8 +581,6 @@ annot_t * spectral_power( edf_t & edf ,
       
     } // summary for next signal
   
-  //  writer.unlevel();
-  
   // redundant, ignore this for now...
   annot_t * a = edf.timeline.annotations.add( "Sigma power" );  
   return a;

@@ -578,8 +578,10 @@ bool Helper::imatch(const std::string& a, const std::string& b)
 
 bool Helper::yesno( const std::string & s )
 {
+  // 0 no NO n N F f false FALSE 
+  // versus all else 
   if ( s.size() == 0 ) return false; // empty == NO
-  if ( s[0] == '0' || s[0] == 'n' || s[0] == 'N' ) return false;
+  if ( s[0] == '0' || s[0] == 'n' || s[0] == 'N' || s[0] == 'f' || s[0] == 'F' ) return false;
   return true;
 }
 

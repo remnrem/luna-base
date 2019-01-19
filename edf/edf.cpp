@@ -232,8 +232,6 @@ void edf_t::description() const
 void edf_t::terse_summary() const
 {
   
-  writer.unlevel();
-
   // variable definitions
   writer.var( "NS" , "Number of signals" );
   writer.var( "NR" , "Number of records" ); 

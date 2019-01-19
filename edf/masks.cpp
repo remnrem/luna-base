@@ -35,12 +35,15 @@ extern logger_t logger;
 void proc_mask( edf_t & edf , param_t & param )
 {
 
+  //
+  // How keep things safe, we only allow a single parmeter for a MASK command
+  //
 
-//   logger << " currently, mask mode set to: ";
-//   int mm = edf.timeline.epoch_mask_mode();
-//   if ( mm == 0 ) logger << " mask (default)\n";
-//   else if ( mm == 1 ) logger << " unmask\n";
-//   else if ( mm == 2 ) logger << " force\n";
+  // single() takes into account 'hidden' params (i.e. signal)
+
+  if ( ! param.single() ) 
+    Helper::halt( "MASK commands can only take a single parameter" );
+
   
   if ( ! edf.timeline.epoched() ) 
     Helper::halt( "no EPOCHs set, cannot apply an epoch mask" );
@@ -173,16 +176,32 @@ void proc_mask( edf_t & edf , param_t & param )
       if ( val.size() == 1 ) 
 	{
 	  if ( val[0] < 1 ) Helper::halt( "epoch value must be >= 1" );
-	  edf.timeline.select_epoch_range( val[0] , val[0] );
+	  edf.timeline.select_epoch_range( val[0] , val[0] , true );
       	}
       else 
 	{
 	  if ( val.size() != 2 ) Helper::halt("epoch=a-b");
 	  if ( val[0] > val[1] ) Helper::halt("epoch=a-b requires a <= b");
-	  edf.timeline.select_epoch_range( val[0] , val[1] );
+	  edf.timeline.select_epoch_range( val[0] , val[1] , true );
 	}
     }
   
+  if ( param.has( "mask-epoch" ) )
+    {
+      std::vector<int> val = param.intvector( "mask-epoch" , "-" );
+      if ( val.size() == 1 ) 
+	{
+	  if ( val[0] < 1 ) Helper::halt( "mask-epoch value must be >= 1" );
+	  edf.timeline.select_epoch_range( val[0] , val[0] , false );
+      	}
+      else 
+	{
+	  if ( val.size() != 2 ) Helper::halt("mask-epoch=a-b");
+	  if ( val[0] > val[1] ) Helper::halt("mask-epoch=a-b requires a <= b");
+	  edf.timeline.select_epoch_range( val[0] , val[1] , false );
+	}
+    }
+
   if ( param.has( "flanked" ) )
     {
       std::vector<std::string> val = param.strvector( "flanked" );
@@ -204,7 +223,7 @@ void proc_mask( edf_t & edf , param_t & param )
       t2 -= globals::tp_duration;
       int epoch1 = 1 + floor( t1 / edf.timeline.epoch_length() );
       int epoch2 = 1 + floor( t2 / edf.timeline.epoch_length() );
-      edf.timeline.select_epoch_range( epoch1 , epoch2 );      
+      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );      
     }
 
   if ( param.has( "hms" ) ) 
@@ -229,7 +248,7 @@ void proc_mask( edf_t & edf , param_t & param )
       
       if ( epoch1 > epoch2 ) Helper::halt( "misspecified hms times: implies start after end" );
 
-      edf.timeline.select_epoch_range( epoch1 , epoch2 );      
+      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );      
     }
 
 
@@ -260,14 +279,22 @@ void proc_mask( edf_t & edf , param_t & param )
   if ( has_imask )
     {
       std::vector<std::string> im0 = Helper::parse( imask_str , "," );      
+
+      // if MASK if=A,B does not work, i.e. in force mode, this is the 
+      // same as saying MASK if=B
+ 
+      if ( im0.size() > 1 && mask_mode == 2 ) 
+	Helper::halt( "cannot specify multiple annotations with an 'if' mask" );
+      
       for (int i=0;i<im0.size();i++)
 	{
 	  // is a value specified?
 	  bool has_values = false;
-
+	  
 	  std::vector<std::string> im = Helper::parse( im0[i] , "[]" );
 	  if      ( im.size() == 1 ) im.clear(); // i.e. null
-	  else if ( im.size() != 2 ) Helper::halt( "incorrectly specified include[value]" );
+	  else if ( im.size() != 2 ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
+	  else if ( im0[i][im0[i].size()-1] != ']' ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
 	  else    has_values = true;
 	  
 	  const std::string annot_label = Helper::unquote( im[0] );
@@ -311,7 +338,8 @@ void proc_mask( edf_t & edf , param_t & param )
 	  bool has_values = false;
 	  std::vector<std::string> xm = Helper::parse( xm0[i] , "[]" );
 	  if      ( xm.size() == 1 ) xm.clear();
-	  else if ( xm.size() != 2 ) Helper::halt( "incorrectly specified exclude[value]" );
+	  else if ( xm.size() != 2 ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
+	  else if ( xm0[i][xm0[i].size()-1] != ']' ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
 	  else    has_values = true;
 	  
 	  const std::string annot_label = Helper::unquote( xm[0] );

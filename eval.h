@@ -43,7 +43,26 @@ struct param_t
 
  public:
   
-  void add( const std::string & option , const std::string & value = "" ) { opt[ option ] = value; }  
+  void add( const std::string & option , const std::string & value = "" ) 
+  {
+
+    if ( opt.find( option ) != opt.end() ) 
+      Helper::halt( option + " parameter specified twice, only one value would be retained" );
+
+    opt[ option ] = value; 
+  }  
+
+  void add_hidden( const std::string & option , const std::string & value = "" ) 
+  {
+    add( option , value );
+    hidden.insert( option );
+  }
+
+  int size() const 
+  { 
+    // handle hidden things...
+    return opt.size() - hidden.size();
+  }
   
   void parse( const std::string & s )
   {
@@ -79,7 +98,7 @@ struct param_t
 
   }
 
-  void clear() { opt.clear(); } 
+  void clear() { opt.clear(); hidden.clear(); } 
   
   bool has(const std::string & s ) const { return opt.find(s) != opt.end(); } 
 
@@ -103,11 +122,22 @@ struct param_t
   
   std::string value( const std::string & s ) const { return has(s) ? opt.find(s)->second : "" ; }
   
-  bool single() const { return opt.size() == 1; }
+  bool single() const { return size() == 1; }
   
   std::string single_value() const 
-    { if ( ! single() ) Helper::halt( "no single value" ); return opt.begin()->first; }
+    { 
+      if ( ! single() ) Helper::halt( "no single value" ); 
 
+      std::map<std::string,std::string>::const_iterator ii = opt.begin();
+      
+      while ( ii != opt.end() ) 
+	{
+	  if ( hidden.find( ii->first ) == hidden.end() ) return ii->first;
+	  ++ii;
+	}
+      return ""; // should not happen
+    }
+  
   std::string requires( const std::string & s ) const
     {
       if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
@@ -213,6 +243,11 @@ struct param_t
  private:
 
   std::map<std::string,std::string> opt;
+
+  // these are stored in opt[] but should not 
+  // count in the conut of # of parameters, etc()
+
+  std::set<std::string> hidden; // i.e. 'signal=...' 
 
 };
 

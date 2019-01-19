@@ -133,7 +133,6 @@ std::map<std::string,std::string> strata2col_label; // i.e. as indexed in val[][
 std::map<std::string,std::string> strata2row_label;
 std::map<std::string,std::map<std::string,std::string> > row2fac2level;   // o_row ID --> fac / lvl
 
-
 //
 // Functions and structs
 //
@@ -270,27 +269,50 @@ int main(int argc , char ** argv )
   run_dictionary = false;
 
   
-  std::set<std::string> args_rvar, args_cvar, args_ind, args_var;
+  std::string cmd_spec = "."; // which luna command, if taking output from -r/-c , i.e. we need a -s too ('statement') 
 
+  bool any_opt = false; // either -x, -l, -d or -r/-c : otherwise do summary
+
+  std::set<std::string> args_rvar, args_cvar, args_ind, args_var;
+  
   for (int i=1;i<argc;i++)
     {
 
-      if      ( strcmp( argv[i] , "-x" ) == 0 ) { run_summary = true; mode = '0'; }
-      else if ( strcmp( argv[i] , "-l" ) == 0 ) { run_summary = false; options.long_format = true; mode = '0'; }
-      else if ( strcmp( argv[i] , "-d" ) == 0 ) { run_dictionary = true; mode = '0'; }
+      if      ( strcmp( argv[i] , "-x" ) == 0 ) { run_summary = true; any_opt = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "-l" ) == 0 ) { run_summary = false; any_opt = true; options.long_format = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "-d" ) == 0 ) { run_dictionary = true; any_opt = true; mode = '0'; }
       
       else if ( strcmp( argv[i] , "-n" ) == 0 ) { options.print_cmd_name = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-e" ) == 0 ) { options.print_empty_rows = true; mode = '0'; }
 
       else if ( strcmp( argv[i] , "-f" ) == 0 ) mode = 'D'; // database
-      else if ( strcmp( argv[i] , "-r" ) == 0 ) mode = 'R'; // row-stratifier
-      else if ( strcmp( argv[i] , "-c" ) == 0 ) mode = 'C'; // col-stratifier
+      else if ( strcmp( argv[i] , "-s" ) == 0 ) { any_opt = true; mode = 'S'; } // luna statement
+      else if ( strcmp( argv[i] , "-r" ) == 0 ) { any_opt = true; mode = 'R'; } // row-stratifier
+      else if ( strcmp( argv[i] , "-c" ) == 0 ) { any_opt = true; mode = 'C'; } // col-stratifier
+      
       else if ( strcmp( argv[i] , "-v" ) == 0 ) mode = 'V'; // variable name
       else if ( strcmp( argv[i] , "-i" ) == 0 ) mode = 'I'; // individual name
       else if ( strcmp( argv[i] , "-p" ) == 0 ) mode = 'P'; // set precision
             
       else // assume a variable name
 	{
+	  
+	  // check it is not a command, e.g. [STATS]
+	  std::string s = argv[i] ;
+	  if ( s[0] == '[' && s[ s.size()-1 ] == ']' )
+	    {
+	      if ( cmd_spec != "." ) Helper::halt( "cannot specify more than one [command] or -s command" );
+
+	      std::string cmd_factor = "_" + s.substr(1,s.size()-2);
+	      
+	      if ( args_rvar.find( cmd_factor ) != args_rvar.end() ) 
+		Helper::halt( "cannot have factor as both row and col stratifier " + std::string( cmd_factor ) );
+	      args_rvar.insert( cmd_factor );
+	      cmd_spec = cmd_factor;
+
+	      mode = '0';
+
+	    }
 	  
 	  if ( mode == 'D' ) 
 	    {
@@ -311,6 +333,21 @@ int main(int argc , char ** argv )
 	      args_cvar.insert( argv[i] );
 	    }
 	  
+	  else if ( mode == 'S' ) 
+	    {
+	      if ( cmd_spec != "." ) Helper::halt( "cannot specify more than one [command] or -s command" );
+
+	      // preprend w/ underscore to indicate this 'factor' is 
+	      // in fact a command string
+	      std::string cmd_factor = "_" + std::string(argv[i]); 
+	      
+	      if ( args_rvar.find( cmd_factor ) != args_rvar.end() ) 
+		Helper::halt( "cannot have factor as both row and col stratifier " + std::string( cmd_factor ) );
+	      args_rvar.insert( cmd_factor );
+	      cmd_spec = cmd_factor;
+
+	    }
+
 	  else if ( mode == 'V' ) 
 	    {
 	      vars.insert( reqvar_t( argv[i] ) );
@@ -331,7 +368,16 @@ int main(int argc , char ** argv )
 	}      
     }
   
-
+  
+  //
+  // No options is same as '-x'
+  //
+  
+  if ( ! any_opt )
+    {
+      run_summary = true; 
+      mode = '0';
+    }
 
   //
   // Check that DB were connected
@@ -359,7 +405,7 @@ int main(int argc , char ** argv )
   std::set<reqvar_t> all_vars;
 
   std::cerr << "attaching databases";
-
+  
   for (int d=0;d<databases.size();d++)
     {
       std::cerr << ".";
@@ -453,7 +499,10 @@ int main(int argc , char ** argv )
 	  std::vector<std::string> tok = Helper::parse( *rr , "/" );
 	  std::string s = tok[0];
 	  if ( writer.factors_idmap.find( s ) == writer.factors_idmap.end() && s != "E" && s != "T" ) 
-	    Helper::halt( "could not find factor " + s );
+	    {
+	      if ( s[0] == '_' ) s = "[" + s.substr(1) + "] (command)"; 
+	      Helper::halt( "could not find factor " + s );
+	    }
 	  rvars.insert( request_t( *rr  ) );	  
 	  ++rr;
 	}
@@ -464,11 +513,13 @@ int main(int argc , char ** argv )
 	  std::vector<std::string> tok = Helper::parse( *cc , "/" );
 	  std::string s = tok[0];
 	  if ( writer.factors_idmap.find( s ) == writer.factors_idmap.end() && s != "E" && s != "T" ) 
-	    Helper::halt( "could not find factor " + s );
+	    {
+	      if ( s[0] == '_' ) s = "[" + s.substr(1) + "] (command)"; 
+	      Helper::halt( "could not find factor " + s );
+	    }
 	  cvars.insert( request_t( *cc ) );	  
 	  ++cc;
 	}
-
 
 
       //
@@ -506,6 +557,14 @@ int main(int argc , char ** argv )
       
 
       //
+      // Check a command has been specified, if one is needed
+      //
+      
+       if ( (!run_summary) && cmd_spec == "." ) 
+	 std::cerr << "*** warning: this may be an old DB, but note that for newer STOUT databases you'll need to add -s {statement} ***\n";
+      
+
+      //
       // identify which rows we are interested in
       //
       
@@ -533,11 +592,11 @@ int main(int argc , char ** argv )
       // generate output
       //
 
-      if ( run_summary ) summary();
-      else extract(); // continue populating 'val' 
+      if ( run_summary ) 
+	summary();
+      else 
+	extract(); // continue populating 'val' 
       
-
-
       //
       // Done, move to the next DB      
       //
@@ -650,11 +709,13 @@ fstrata_t fmatch;
 void pre_summary()
 {
 
+  std::cerr << "--------------------------------------------------------------------------------\n";
   std::cerr << writer.name() << ": ";
   std::cerr << writer.num_commands() << " command(s), ";
   std::cerr << writer.num_individuals() << " individual(s), ";
   std::cerr << writer.num_variables() << " variable(s), ";
   std::cerr << writer.num_values() << " values\n";
+  std::cerr << "--------------------------------------------------------------------------------\n";
 
   //
   // Commands
@@ -670,6 +731,8 @@ void pre_summary()
 		<< cc->second.cmd_parameters << "\n";
       ++cc;
     }
+
+  std::cerr << "--------------------------------------------------------------------------------\n";
 
 }
 
@@ -870,7 +933,8 @@ void get_matching_strata()
       std::map<fstrata_t,int>::const_iterator ff = fstrata.begin();
       while ( ff != fstrata.end() ) 
 	{	  
-	  	  
+	  
+	  
 	  // get variable names
 	  std::set<std::string> vars;
 	  std::set<int> strata_ids = fstrata2strata_id[ ff->first ];
@@ -892,6 +956,8 @@ void get_matching_strata()
 	      ++ii;
 	    }
 	  
+	  // strata groups -- and expecting one "_COMMAND" strata
+
 	  // baseline, handle separaetly
 	  if ( ff->first.factors.size() == 0 )
 	    {
@@ -916,41 +982,77 @@ void get_matching_strata()
 		  ++ff; continue;
 		}
 
-	      std::cerr << "  <default> : 1 level : " ;
+	      std::cerr << "  " 
+			<< std::left << std::setw( 14 ) << "[ n/a ]" 
+			<< std::left << std::setw( 20 ) << ": ." 
+			<< std::left << std::setw( 16 ) << ": ."
+			<< ":";
 	    }
 
-	  // strata group
+	  // display strata group
+	  
 	  if ( ff->first.factors.size() > 0 ) 
 	    {
 	      bool has_tp = false;
 	      std::cerr << "  " ;	      
+	      std::string msg = "[ n/a ]";
+	      
+	      // first show _COMMAND strata if present
 	      std::set<factor_t>::const_iterator gg = ff->first.factors.begin();
 	      while ( gg != ff->first.factors.end() )
 		{
-		  if ( gg != ff->first.factors.begin() ) std::cerr << " "; 	      
-		  std::cerr << gg->factor_name ;	     
+		  if ( gg->factor_name[0] == '_' ) 
+		    { 
+		      msg = "[" + gg->factor_name.substr(1) + "]";		      
+		    } 
+		  ++gg;
+		}
+	      
+	      std::cerr << std::left << std::setw(14) << msg;
+	      
+	      // then show normal strata
+	      msg = ":";
+	      gg = ff->first.factors.begin();
+	      while ( gg != ff->first.factors.end() )
+		{
+		  if ( gg->factor_name[0] == '_' ) { ++gg; continue; }
+		  msg += " " + gg->factor_name ;
 		  if ( gg->factor_name == "E" || gg->factor_name == "T" ) has_tp = true;
 		  ++gg;
 		}
 	      
+	      if ( msg == ":" ) msg += " .";
+
+	      std::cerr << std::left << std::setw(20) << msg;
+	      
 	      if ( has_tp ) 
-		std::cerr << " : (...) : ";
+		std::cerr << std::left << std::setw(16) << ": (...)" << ":";
 	      else
-		std::cerr << " : " << ff->second << " level(s) : ";
+		{
+		  std::string msg = ": " + Helper::int2str(ff->second) + " level(s)";
+		  std::cerr << std::left << std::setw(16) << msg << ":";
+		}
 	      
 	    }
 	  
+	  int w = 0;
 	  std::set<std::string>::const_iterator vv = vars.begin();
 	  while ( vv != vars.end() )
 	    {
 	      std::cerr << " " << *vv;
+	      w += 1 + vv->size();
+	      if ( w > 50 ) 
+		{
+		  std::cout << "\n" << std::setw(1+16+20+16) << " ";
+		  w = 0;
+		}
 	      ++vv;
 	    }
 	  
 	  // if ( ff->first.epoch ) { if ( ff->first.factors.size() > 0 ) { std::cerr << " x "; } std::cerr << "E"; } 
 	  // if ( ff->first.interval ) { if ( ff->first.factors.size() > 0 ) { std::cerr << " x "; } std::cerr << "T"; } 
 	  
-	  std::cerr << "\n";
+	  std::cerr << "\n\n";
 	  ++ff;
 	}
 
@@ -1294,14 +1396,19 @@ void extract()
 	      // col or row specific factors?
 	      if ( cfacs.find( fac ) != cfacs.end() )
 		{
-		  if ( clab.size() > 0 ) clab += ".";
-		  clab += fac + "." + lvl;
+		  if ( fac[0] != '_' ) 
+		    { 
+		      if ( clab.size() > 0 ) clab += ".";
+		      clab += fac + "." + lvl;
+		    }
 		}
 	      else
 		{
+		  
 		  if ( rlab.size() > 0 ) rlab += ".";
 		  rlab += fac + "." + lvl;
 		  rlabs[ fac ] = lvl;
+
 		}
 	      
 	      ++ll;
@@ -1424,7 +1531,8 @@ void display()
   std::set<std::string>::const_iterator ff = rfacs.begin();
   while ( ff != rfacs.end() )
     {
-      std::cout << "\t" << *ff ;
+      if ( (*ff)[0] != '_' )  // skip command strata
+	std::cout << "\t" << *ff ;
       ++ff;
     }
   
@@ -1598,7 +1706,10 @@ void display()
 	      std::map<std::string,std::string>::iterator ff = fac2lvl.begin();
 	      while ( ff != fac2lvl.end() )
 		{
-		  std::cout << "\t" << ff->second; // display level-value for this row-strata
+		  if ( ff->first[0] != '_' ) 
+		    {
+		      std::cout << "\t" << ff->second; // display level-value for this row-strata
+		    }
 		  ++ff;
 		}
 	      
