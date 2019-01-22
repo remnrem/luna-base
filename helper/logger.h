@@ -32,12 +32,9 @@
 #include <string>
 #include <iomanip>
 
-#include "defs/defs.h"
-
 using std::chrono::system_clock;
 
 #include "defs/defs.h"
-
 
 class logger_t
 {

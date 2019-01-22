@@ -29,8 +29,7 @@
 #include <complex>
 #include <stdint.h>
 
-#include "helper/helper.h"
-#include "eval.h"
+struct param_t; 
 
 typedef std::complex<double> dcomp;
 
@@ -113,7 +112,11 @@ struct globals
 		 A_BOOL_T , 
 		 A_INT_T , 
 		 A_DBL_T , 
-		 A_TXT_T };
+		 A_TXT_T , 
+		 A_BOOLVEC_T , 
+		 A_INTVEC_T , 
+		 A_DBLVEC_T , 
+		 A_TXTVEC_T };
   
   static std::map<atype_t,std::string> type_name;
 

@@ -243,10 +243,7 @@ struct feature_t
     return ss.str();
   }
 
-  std::string as_string( const std::string & delim = "|" ) const
-  {
-    return label + delim + signal + delim  + feature.as_string() + ( has_value ? ( delim + Helper::dbl2str( value ) ) : "" ) ;  
-  }
+  std::string as_string( const std::string & delim = "|" ) const;
 
   bool operator<( const feature_t & rhs ) const
   {

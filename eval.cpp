@@ -21,9 +21,408 @@
 //    --------------------------------------------------------------------
 
 
-#include "luna.h"
+#include "eval.h"
+
+#include "helper/logger.h"
+
+#include "helper/helper.h"
+
+#include "db/db.h"
 
 extern logger_t logger;
+
+extern writer_t writer;
+
+
+//
+// for calls
+//
+
+#include "pdc/pdc.h"
+
+//
+// param_t 
+//
+
+void param_t::add( const std::string & option , const std::string & value ) 
+{
+  
+  if ( opt.find( option ) != opt.end() ) 
+    Helper::halt( option + " parameter specified twice, only one value would be retained" );
+  
+    opt[ option ] = value; 
+}  
+
+
+void param_t::add_hidden( const std::string & option , const std::string & value ) 
+{
+  add( option , value );
+  hidden.insert( option );
+}
+
+int param_t::size() const 
+{ 
+  // handle hidden things...
+  return opt.size() - hidden.size();
+}
+
+void param_t::parse( const std::string & s )
+{
+  std::vector<std::string> tok = Helper::quoted_parse( s , "=" );
+  if ( tok.size() == 2 )     add( tok[0] , tok[1] );
+  else if ( tok.size() == 1 ) add( tok[0] , "T" );
+  else // ignore subsequent '=' signs in 'value'  (i.e. key=value=2  is 'okay', means "value=2" is set to 'key')
+    {
+      std::string v = tok[1];
+      for (int i=2;i<tok.size();i++) v += "=" + tok[i];
+      add( tok[0] , v );
+    }
+}
+
+void param_t::update( const std::string & id , const std::string & wc )
+{
+  // replace all instances of 'globals::indiv_wildcard' with 'id'
+  // for all values
+  std::map<std::string,std::string>::iterator ii = opt.begin();
+  while ( ii != opt.end() ) 
+    {
+      std::string v = ii->second;
+      bool changed = false;
+      while ( v.find( wc ) != std::string::npos )
+	{
+	  int p = v.find( wc );
+	  v = v.substr( 0 , p ) + id + v.substr(p+1);
+	  changed = true;
+	}
+      if ( changed ) ii->second = v;
+      ++ii;
+    }
+  
+}
+
+void param_t::clear() 
+{ 
+  opt.clear(); 
+  hidden.clear(); 
+} 
+  
+bool param_t::has(const std::string & s ) const 
+{ 
+  return opt.find(s) != opt.end(); 
+} 
+
+std::string param_t::match( const std::string & s ) 
+{
+  std::string ms = "";
+  int m = 0;
+  std::map<std::string,std::string>::iterator ii = opt.begin();
+  while ( ii != opt.end() )
+    {
+      if ( ii->first.substr( 0, s.size() ) == s ) 
+	{
+	  ms = ii->first;
+	  ++m;
+	}
+      ++ii;
+    }
+  if ( m == 1 ) return ms;
+  return "";
+}
+
+std::string param_t::value( const std::string & s ) const 
+{ 
+  return has(s) ? opt.find(s)->second : "" ; 
+}
+
+bool param_t::single() const 
+{ 
+  return size() == 1; 
+}
+
+std::string param_t::single_value() const 
+{ 
+  if ( ! single() ) Helper::halt( "no single value" ); 
+  
+  std::map<std::string,std::string>::const_iterator ii = opt.begin();
+      
+  while ( ii != opt.end() ) 
+    {
+      if ( hidden.find( ii->first ) == hidden.end() ) return ii->first;
+      ++ii;
+    }
+  return ""; // should not happen
+}
+
+std::string param_t::requires( const std::string & s ) const
+{
+  if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
+  return value(s);
+}
+
+int param_t::requires_int( const std::string & s ) const
+{
+  if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
+  int r;
+  if ( ! Helper::str2int( value(s) , &r ) ) 
+    Helper::halt( "command requires parameter " + s + " to have an integer value" );
+  return r;
+}
+
+double param_t::requires_dbl( const std::string & s ) const
+{
+  if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
+  double r;
+  if ( ! Helper::str2dbl( value(s) , &r ) ) 
+    Helper::halt( "command requires parameter " + s + " to have a numeric value" );
+  return r;
+}
+
+std::string param_t::dump( const std::string & indent , const std::string & delim ) const
+{
+  std::map<std::string,std::string>::const_iterator ii = opt.begin();
+  int sz = opt.size();
+  int cnt = 1;
+  std::stringstream ss;
+  while ( ii != opt.end() ) 
+    {
+      if ( cnt == sz )
+	ss << indent << ii->first << "=" << ii->second; 
+      else
+	ss << indent << ii->first << "=" << ii->second << delim; 
+      ++cnt;
+      ++ii;
+    }
+  return ss.str();
+}
+
+std::set<std::string> param_t::strset( const std::string & k , const std::string delim ) const
+{
+  std::set<std::string> s;
+  if ( ! has(k) ) return s;
+  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
+  for (int i=0;i<tok.size();i++) s.insert( Helper::unquote( tok[i]) );
+  return s;
+}
+
+std::vector<std::string> param_t::strvector( const std::string & k , const std::string delim ) const
+{
+  std::vector<std::string> s;
+  if ( ! has(k) ) return s;
+  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
+  for (int i=0;i<tok.size();i++) s.push_back( Helper::unquote( tok[i]) );
+  return s;
+}
+
+std::vector<double> param_t::dblvector( const std::string & k , const std::string delim ) const
+{
+  std::vector<double> s;
+  if ( ! has(k) ) return s;
+  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
+  for (int i=0;i<tok.size();i++) 
+    {
+      std::string str = Helper::unquote( tok[i]);
+      double d = 0;
+      if ( ! Helper::str2dbl( str , &d ) ) Helper::halt( "Option " + k + " requires a double value(s)" );
+      s.push_back(d); 
+    }
+  return s;
+}
+
+std::vector<int> param_t::intvector( const std::string & k , const std::string delim ) const
+{
+  std::vector<int> s;
+  if ( ! has(k) ) return s;
+  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
+  for (int i=0;i<tok.size();i++) 
+    {
+      std::string str = Helper::unquote( tok[i]);
+      int d = 0;
+      if ( ! Helper::str2int( str , &d ) ) Helper::halt( "Option " + k + " requires an integer value(s)" );
+      s.push_back(d);
+    }
+  return s;
+}
+
+
+std::set<std::string> param_t::keys() const
+{
+  std::set<std::string> s;
+  std::map<std::string,std::string>::const_iterator ii = opt.begin();
+  while ( ii != opt.end() )
+    {
+      s.insert( ii->first );
+      ++ii;
+    }
+  return s;
+}
+
+
+
+//
+// cmd_t
+//
+
+
+cmd_t::cmd_t() 
+{
+  reset();
+  error = ! read();
+}
+
+cmd_t::cmd_t( const std::string & str ) 
+{
+  reset();
+  error = ! read( &str , true ); 
+}
+
+void cmd_t::add_cmdline_cmd( const std::string & c ) 
+{
+  cmdline_cmds.append( c + " " );
+}
+
+void cmd_t::reset() 
+{
+  cmds.clear();
+  params.clear();
+  line = "";
+  error = false;
+  will_quit = false;
+}
+
+bool cmd_t::empty() const 
+{ 
+  return will_quit; 
+}
+
+bool cmd_t::valid() const 
+{    
+  if ( error ) return false;
+  /* for (int c=0;c<cmds.size();c++) */
+  /*   if ( commands.find( cmds[c] ) == commands.end() ) return false; */
+  return true;
+}
+
+bool cmd_t::badline() const 
+{ 
+  return error; 
+} 
+
+std::string cmd_t::offending() const 
+{ 
+  return ( error ? line : "" ); 
+}
+
+int cmd_t::num_cmds() const 
+{ 
+  return cmds.size(); 
+}
+
+std::string cmd_t::cmd(const int i) 
+{ 
+    return cmds[i]; 
+}
+
+param_t & cmd_t::param(const int i) 
+{ 
+  return params[i]; 
+}
+
+bool cmd_t::process_edfs() const
+{
+  // all commands process EDFs, /except/ the following
+  if ( cmds.size() == 1 
+       && ( cmds[0] == "" 
+	    || cmds[0] == "." 
+	    || Helper::iequals( cmds[0] , "DUMMY" ) 
+	    || Helper::iequals( cmds[0] , "INTERVALS" )
+	    ) )
+    return false;
+  return true;    
+}
+
+bool cmd_t::is( const int n , const std::string & s ) const
+{
+  if ( n < 0 || n >= cmds.size() ) Helper::halt( "bad command number" );
+  return Helper::iequals( cmds[n] , s );
+}
+  
+std::string cmd_t::data() const 
+{ 
+  return input; 
+} 
+
+bool cmd_t::quit() const 
+{ 
+  return will_quit; 
+}
+
+  
+void cmd_t::quit(bool b) 
+{ 
+  will_quit = b; 
+}
+
+
+void cmd_t::signal_alias( const std::string & s )
+{
+  // format canonical|alias1|alias2 , etc.
+  std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
+  if ( tok.size() < 2 ) Helper::halt( "bad format for signal alias:  canonical|alias 1|alias 2" );
+  const std::string primary = Helper::unquote( tok[0] );
+  for (int j=1;j<tok.size();j++) 
+    {
+      label_aliases[ Helper::unquote( tok[j] ) ] = primary;
+      primary_alias[ primary ].push_back( Helper::unquote( tok[j] ) );
+    }
+  
+}
+
+
+const std::set<std::string> & cmd_t::signals() 
+{ 
+  return signallist; 
+}
+  
+void cmd_t::clear_signals() 
+{ 
+  signallist.clear(); 
+}
+
+std::string cmd_t::signal_string() 
+{
+  
+  if ( signallist.size() == 0 ) return "*"; // i.e. all signals
+  
+  std::stringstream ss;
+  std::set<std::string>::iterator ii = signallist.begin();
+  while ( ii != signallist.end() )
+    {
+      if ( ii != signallist.begin() ) ss << ",";
+      ss << *ii;	  
+      ++ii;
+    }
+  return ss.str();
+}
+  
+
+void cmd_t::populate_commands() 
+{
+  commands.insert( "VALIDATE" );
+  commands.insert( "HEADERS" );
+  commands.insert( "SUMMARY" );
+  commands.insert( "PSD" );
+  commands.insert( "SPINDLES" );
+  commands.insert( "RMS" );
+  commands.insert( "MASK" );
+  commands.insert( "CWT" );
+  commands.insert( "RESCALE" );
+  commands.insert( "DUMP" );
+  commands.insert( "DUMP-MASK" );
+  commands.insert( "DUMMY" );
+  commands.insert( "ARTIFACTS" );
+  commands.insert( "TIME-TRACK" );
+}
+
 
 // ----------------------------------------------------------------------------------------
 //

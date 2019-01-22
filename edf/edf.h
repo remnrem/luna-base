@@ -26,6 +26,8 @@
 #include "slice.h"
 #include "tal.h"
 
+#include "eval.h"
+
 #include "clocs/clocs.h"
 #include "helper/helper.h"
 #include "timeline/timeline.h"
@@ -71,44 +73,7 @@ struct signal_list_t
 
   void clear() { signals.clear(); signal_labels.clear(); }
   
-  static bool match( const std::set<std::string> * inp_signals , std::string * l , const std::set<std::string> & slabels )
-  {
-
-    // exact match? (i.e. no "|" alternatives specified)
-    if ( inp_signals->find(*l) != inp_signals->end() ) return true; 
-
-    // as an alias?
-    if ( cmd_t::label_aliases.find( *l ) != cmd_t::label_aliases.end() )
-      {
-	*l = cmd_t::label_aliases[ *l ];
-	return inp_signals->find(*l) != inp_signals->end() ;
-      }
-
-    // subset match (i.e. one of x|y|z)
-    // if both 'x' and 'y' exist, always pick 'x' first
-    
-    std::set<std::string>::const_iterator ii = inp_signals->begin();
-    while ( ii != inp_signals->end() )
-      {
-	std::vector<std::string> tok = Helper::parse( *ii , "|" );
-	for (int i=0;i<tok.size();i++) 
-	  {
-	    
-	    // if gone preferred value exists in some other slot, then this is not a match
-	    // i.e. only include one selection, the preferred one
-	    if ( i>0 && slabels.find( tok[0] ) != slabels.end() )  break; 
-	    
-	    if ( *l == tok[i] ) 
-	      {
-		// swap in 'preferred' name
-		if ( i>0 ) *l = tok[0];
-		return true;
-	      }
-	  }
-	++ii;
-      }    
-    return false;
-  }
+  static bool match( const std::set<std::string> * inp_signals , std::string * l , const std::set<std::string> & slabels );
 
 };
 

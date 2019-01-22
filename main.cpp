@@ -20,11 +20,14 @@
 //
 //    --------------------------------------------------------------------
 
+#include "helper/token.h"
 
+#include "helper/token-eval.h"
 
 #include "luna.h"
 
 #include "main.h"
+
 
 extern globals global;
 
@@ -91,7 +94,8 @@ int main(int argc , char ** argv )
 
   if ( argc == 2 && strcmp( argv[1] , "--pdlib" ) == 0 ) 
     {
-      param_t param = build_param_from_cmdline();
+      param_t param;
+      build_param_from_cmdline( &param );
       writer.nodb();
       writer.begin();      
       writer.id( "." , "." );
@@ -804,9 +808,24 @@ void process_edfs( cmd_t & cmd )
 
 void proc_dummy()
 {
-
   
-  std::cout << "annot " << nsrr_t::remap( "Stage 4 sleep|4" ) << "\n";
+  std::string expr;
+
+  std::getline( std::cin , expr );
+  
+  Eval tok;
+
+  tok.parse( expr );
+  
+  bool result = tok.evaluate();
+  
+  std::cout << "result = " << result << "\n";
+  
+  std::exit(1);
+  
+  
+  
+  //std::cout << "annot " << nsrr_t::remap( "Stage 4 sleep|4" ) << "\n";
 
   std::exit(0);
 
@@ -1603,10 +1622,8 @@ void list_cmds()
   
 }
 
-param_t build_param_from_cmdline()
+void build_param_from_cmdline( param_t * param )
 {
-
-  param_t param;
   
   while ( ! std::cin.eof() )
     {
@@ -1614,8 +1631,7 @@ param_t build_param_from_cmdline()
       std::cin >> x;      
       if ( std::cin.eof() ) break;
       if ( x == "" ) continue;
-      param.parse( x ); 
+      param->parse( x ); 
     }
-  return param;
 }
 

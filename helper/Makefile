@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libhelper.a
-OBJS	 = helper.o
+OBJS	 = helper.o token.o token-eval.o
 
 all : $(OBJLIBS)
 

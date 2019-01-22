@@ -29,6 +29,8 @@
 
 #include "helper/helper.h"
 
+#include "helper/token-eval.h"
+
 #include "helper/logger.h"
 
 #include "helper/xml-parser.h"
@@ -74,6 +76,7 @@
 #include "clocs/topo.h"
 
 #include "db/db.h"
+
 #include "db/retval.h"
 
 #include "sstore/sstore.h"

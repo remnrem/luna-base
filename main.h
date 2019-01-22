@@ -21,8 +21,8 @@
 //    --------------------------------------------------------------------
 
 
-#ifndef __PSGTOOLS_H__
-#define __PSGTOOLS_H__
+#ifndef __PSGTOOLS_MAIN_H__
+#define __PSGTOOLS_MAIN_H__
 
 #include <string>
 #include <map>
@@ -31,15 +31,13 @@
 #include <iostream>
 
 class param_t;
-class edf_t;
 class cmd_t;
 
 void proc_dummy();
 void process_edfs(cmd_t&);
 void list_cmds();
 
-param_t build_param_from_cmdline();
-
+void build_param_from_cmdline( param_t * );
 
 
 #endif
