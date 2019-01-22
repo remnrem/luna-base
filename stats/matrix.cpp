@@ -23,6 +23,40 @@
 #include "matrix.h"
 #include "statistics.h"
 #include <sstream>
+#include "helper/helper.h"
+
+
+template<class T> void Data::Matrix<T>::cbind( const Data::Matrix<T> & rhs )
+{
+  if ( nrow != rhs.dim1() ) 
+    Helper::halt( "cbind() for matrices with unequal number of rows" );
+  for (int c=0; c<rhs.dim2(); c++)
+    add_col( rhs.col(c) );
+}
+    
+template<class T> void Data::Matrix<T>::add_row( const Vector<T> & r ) 
+{ 
+  if ( r.size() != ncol ) 
+    { 
+      if ( nrow == 0 ) { ncol = r.size(); resize(0,r.size()); }
+      else { Helper::warn("bad row addition"); return; }
+    }
+  
+  for( int i=0; i<ncol; i++ ) data[i].push_back( r[i] );
+  ++nrow;
+}
+
+template<class T> void Data::Matrix<T>::add_row( const std::vector<T> & r ) 
+{ 
+  if ( r.size() != ncol ) 
+    {
+      if ( nrow == 0 ) { ncol = r.size(); resize(0,r.size()); }
+      else { Helper::warn("bad row addition"); return; }
+    }
+  
+  for( int i=0; i<ncol; i++ ) data[i].push_back( r[i] );
+  ++nrow;
+}
 
 template<class T> Data::Vector<T> Data::Vector<T>::operator*( const Data::Matrix<T> & rhs ) const
 {

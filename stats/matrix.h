@@ -24,7 +24,7 @@
 #define __MATRIX_H__
 
 #include <vector>
-#include "helper/helper.h"
+#include <string>
 
 namespace Data { 
 
@@ -159,39 +159,12 @@ namespace Data {
       data.push_back( Vector<T>(r) ); ++ncol; 
     }
     
-
-    void cbind( const Data::Matrix<T> & rhs )
-    {
-      if ( nrow != rhs.dim1() ) 
-	Helper::halt( "cbind() for matrices with unequal number of rows" );
-      for (int c=0; c<rhs.dim2(); c++)
-	add_col( rhs.col(c) );
-    }
+    void cbind( const Data::Matrix<T> & rhs );
     
-    void add_row( const Vector<T> & r ) 
-    { 
-      if ( r.size() != ncol ) 
-	{ 
-	  if ( nrow == 0 ) { ncol = r.size(); resize(0,r.size()); }
-	  else { Helper::warn("bad row addition"); return; }
-	}
+    void add_row( const Vector<T> & r ) ;
 
-      for( int i=0; i<ncol; i++ ) data[i].push_back( r[i] );
-      ++nrow;
-    }
-
-    void add_row( const std::vector<T> & r ) 
-    { 
-      if ( r.size() != ncol ) 
-	{
-	  if ( nrow == 0 ) { ncol = r.size(); resize(0,r.size()); }
-	  else { Helper::warn("bad row addition"); return; }
-	}
-
-      for( int i=0; i<ncol; i++ ) data[i].push_back( r[i] );
-      ++nrow;
-    }
-    
+    void add_row( const std::vector<T> & r );
+      
     void set_row_mask( int r , const bool b = true ) 
     { 
       if ( r >= 0 && r < nrow ) row_mask[r] = b;

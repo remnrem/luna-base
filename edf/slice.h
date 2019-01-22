@@ -23,12 +23,11 @@
 #ifndef __SLICE_H__
 #define __SLICE_H__
 
-#include "edf.h"
-#include "intervals/intervals.h"
-#include "stats/matrix.h"
 #include <stdint.h>
 #include <vector>
 #include <string>
+
+#include "stats/matrix.h"
 
 struct signal_list_t;
 struct interval_t;
@@ -72,11 +71,7 @@ class slice_t
     return data.size(); 
   }
   
-  interval_t duration() const 
-  { 
-    // interval is 1-past end of interval
-    return interval_t( time_points[0] , time_points[ time_points.size()-1 ] + 1LLU );
-  }
+  interval_t duration() const ;
 
  private:
 
@@ -116,20 +111,7 @@ class mslice_t {
   std::vector<slice_t*> channel;
   std::vector<std::string> labels; 
 
-  Data::Matrix<double> extract()
-    {
-      const int nr = channel[0]->size(); 
-      const int nc = channel.size();
-      
-      Data::Matrix<double> d;
-      for (int c=0;c<nc;c++)
-	{
-	  if ( nr != channel[c]->size() ) 
-	    Helper::halt( "internal error in mslice, SRs different" );
-	  d.add_col( *channel[c]->pdata() );
-	}
-      return d;
-    }
+  Data::Matrix<double> extract();
 
   int size() const { return channel.size(); } 
 

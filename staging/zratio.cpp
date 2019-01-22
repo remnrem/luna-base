@@ -24,8 +24,9 @@
 #include "staging.h"
 
 #include "edf/edf.h"
+#include "edf/slice.h"
 #include "helper/helper.h"
-#include "main.h"
+#include "eval.h"
 #include "miscmath/miscmath.h"
 #include "fftw/fftwrap.h"
 #include "db/db.h"
@@ -33,7 +34,12 @@
 #include <iostream>
 #include <string>
 
+#include "helper/helper.h"
+#include "helper/logger.h"
+
 extern writer_t writer;
+
+extern logger_t logger;
 
 void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 {

@@ -26,8 +26,7 @@
 
 #include <string>
 
-#include "annot/annot.h"
-
+struct annot_t;
 struct edf_t;
 struct param_t;
 

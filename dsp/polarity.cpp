@@ -1,13 +1,44 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
 #include "polarity.h"
 
 #include "dsp/fir.h"
 #include "fftw/fftwrap.h"
-#include "db/db.h"
 #include "dsp/hilbert.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
+#include "eval.h"
+#include "db/db.h"
+
+#include "edf/edf.h"
+#include "edf/slice.h"
 
 #include <map>
 
 extern writer_t writer;
+
+extern logger_t logger;
 
 void dsptools::polarity( edf_t & edf , const param_t & param )
 {
@@ -57,7 +88,7 @@ void dsptools::polarity( edf_t & edf , const param_t & param )
   bool ht_mode = param.has( "ht" );
 
 
-  std::cerr << " running polarity checks, th=" << th << " for " << f_lwr << "-" << f_upr << "Hz\n";
+  logger << " running polarity checks, th=" << th << " for " << f_lwr << "-" << f_upr << "Hz\n";
   
   //
   // Check each signal (assuming it is EEG, filtered for NREM sleep)
@@ -456,7 +487,7 @@ void dsptools::polarity_check( const std::vector<double> & x0 , const std::vecto
 		  
 		}
 	      
-	      //	      std::cerr << " edata " << edata.size() << " " << up.size() << " " << down.size() << "\n";
+	      //	      logger << " edata " << edata.size() << " " << up.size() << " " << down.size() << "\n";
 	      
 	    }
 	  else

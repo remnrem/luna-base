@@ -29,9 +29,7 @@
 #include <string>
 #include <map>
 #include <set>
-
 #include <iostream>
-
 
 // a single 'annotation' (that has to be attached to a 'timeline' and
 // therefore a single EDF)

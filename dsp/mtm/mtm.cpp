@@ -23,7 +23,11 @@
 #include "mtm.h"
 
 #include "edf/edf.h"
+#include "edf/slice.h"
+#include "eval.h"
+
 #include "db/db.h"
+#include "helper/helper.h"
 #include "helper/logger.h"
 #include "nrutil.h"
 

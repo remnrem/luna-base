@@ -24,10 +24,14 @@
 #ifndef __SPINDLES_H__
 #define __SPINDLES_H__
 
-#include "annot/annot.h"
-
 struct edf_t;
 struct param_t;
+struct annot_t;
+struct clocktime_t;
+
+#include "intervals/intervals.h"
+#include <vector>
+
 
 struct spindle_t
 {

@@ -23,8 +23,12 @@
 #include "artifacts.h"
 
 #include "edf/edf.h"
+#include "edf/slice.h"
+#include "annot/annot.h"
+
 #include "helper/helper.h"
-#include "main.h"
+#include "helper/logger.h"
+#include "eval.h"
 #include "db/db.h"
 
 #include "dsp/resample.h"
@@ -38,6 +42,8 @@
 #include <fstream>
 
 extern writer_t writer;
+
+extern logger_t logger;
 
 annot_t * brunner_artifact_detection( edf_t & edf , 
 				      const std::string & signal_label , 
@@ -436,7 +442,7 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 	}
 
       if ( set_mask )
-	std::cerr << " masked " << total << " of " << ne << " epochs, altering " << altered << "\n";
+	logger << " masked " << total << " of " << ne << " epochs, altering " << altered << "\n";
       
       // # masked (i.e. actually), # masked, # total
       // altered , 
@@ -529,7 +535,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       if ( param.has( "tr-epoch" ) ) tr_epoch_sec = param.requires_dbl( "tr-epoch" );
       if ( param.has( "tr-d" ) ) tr_d = param.requires_int( "tr-d" );
       if ( param.has( "tr-smooth" ) ) tr_epoch_smooth = param.requires_int( "tr-smooth" );
-      std::cerr << " calculating turning rate: d="<< tr_d << " for " << tr_epoch_sec << "sec epochs, smoothed over " << tr_epoch_smooth << " epochs\n";
+      logger << " calculating turning rate: d="<< tr_d << " for " << tr_epoch_sec << "sec epochs, smoothed over " << tr_epoch_smooth << " epochs\n";
     }
 
 
@@ -870,7 +876,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      double upr_mob = mean_mob + th[o] * sd_mob;
 	      double upr_cmp = mean_cmp + th[o] * sd_cmp;
 	      
-	      std::cerr << " RMS/Hjorth filtering " << edf.header.label[ signals(s) ] << ", threshold +/-" << th[o] << " SDs";
+	      logger << " RMS/Hjorth filtering " << edf.header.label[ signals(s) ] << ", threshold +/-" << th[o] << " SDs";
 	      
 	      const int ne = e_epoch[s].size();
 	      
@@ -929,7 +935,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		  
 		} // next epoch	  
 	      
-	      std::cerr << ": removed " << total_this_iteration << " of " << act_rms.size() << " epochs of iteration " << o+1 << "\n";
+	      logger << ": removed " << total_this_iteration << " of " << act_rms.size() << " epochs of iteration " << o+1 << "\n";
 
 	    } // next outlier iteration
 	  
@@ -949,7 +955,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      writer.unepoch();
 	    }
 	  
-	  std::cerr << " Overall, masked " << total << " of " << ne << " epochs ("
+	  logger << " Overall, masked " << total << " of " << ne << " epochs ("
 		    << "RMS:" << cnt_rms << ", "
 		    << "CLP:" << cnt_clp << ", "
 		    << "ACT:" << cnt_act << ", "
@@ -988,7 +994,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // how many units (in # of sub-epoch units);  +1 means includes self
 	  int winsize = 1 + tr_epoch_smooth / tr_epoch_sec ; 
 
-	  std::cerr << "sz = " << e_tr[s].size() << " " << winsize << "\n";
+	  logger << "sz = " << e_tr[s].size() << " " << winsize << "\n";
 	  e_tr[s] = MiscMath::moving_average( e_tr[s] , winsize );
 
 	  // output
@@ -1094,7 +1100,7 @@ void  mse_per_epoch( edf_t & edf , param_t & param )
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
 
 
-      std::cerr << " estimating MSE for " << signals.label(s) << "\n";
+      logger << " estimating MSE for " << signals.label(s) << "\n";
       
       //
       // output stratifier
@@ -1401,7 +1407,7 @@ void    spike_signal( edf_t & edf , int s1 , int s2 , double wgt , const std::st
 
   if ( Fs1 != Fs2 ) 
   {
-    std::cerr << "Note: resampling " << label2 << " to " << Fs1 << " to match " << label1 << "\n";
+    logger << "Note: resampling " << label2 << " to " << Fs1 << " to match " << label1 << "\n";
     dsptools::resample_channel( edf, s2 , Fs1 );
   }
 

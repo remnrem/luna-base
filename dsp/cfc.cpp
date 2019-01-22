@@ -28,10 +28,31 @@
 #include "hilbert.h"
 #include "stats/matrix.h"
 #include "stats/glm.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
 #include "db/db.h"
+#include "eval.h"
+
+#include "edf/slice.h"
 
 extern writer_t writer;
 
+extern logger_t logger;
+
+
+cfc_t::cfc_t( const std::vector<double> & d , 
+	      const double a1,
+	      const double a2,
+	      const double b1,
+	      const double b2 , 
+	      const double sr )
+  : d(d), a1(a1), a2(a2), b1(b1), b2(b2), sr(sr) 
+{ 
+  if ( a2 <= a1 ) Helper::halt("cfc: invalid lower frequency band");
+  if ( b2 <= b1 ) Helper::halt("cfc: invalid upper frequency band");
+  if ( a2 >= b1 ) Helper::halt("cfc: invalid lower/upper frequency band combination");
+}
 
 void dsptools::cfc( edf_t & edf , param_t & param )
 {
@@ -99,7 +120,7 @@ void dsptools::cfc( edf_t & edf , param_t & param )
   for (int s=0;s<ns;s++)
     {
       
-      std::cerr << " glm method CFC (" << level << ") for " << signals.label(s) << "\n";
+      logger << " glm method CFC (" << level << ") for " << signals.label(s) << "\n";
    
       //
       // Output stratifier

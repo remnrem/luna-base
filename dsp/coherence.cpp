@@ -21,16 +21,21 @@
 //    --------------------------------------------------------------------
 
 #include "coherence.h"
+
 #include "resample.h"
 #include "edf/edf.h"
-#include "main.h"
+#include "edf/slice.h"
+#include "eval.h"
 #include "db/db.h"
 #include "fftw/fftwrap.h"
+#include "helper/logger.h"
+#include "helper/helper.h"
 
 // Coherence code from : https://www.physionet.org/physiotools/wfdb/psd/coherence.c
 
-
 extern writer_t writer;
+
+extern logger_t logger;
 
 #include <cmath>
 
@@ -63,9 +68,9 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 	  
 	  if ( edf.header.sampling_freq( signals(s) ) != sr ) 
 	    {
-	      std::cerr << "resampling channel " << signals.label(s) 
-			<< " from " << edf.header.sampling_freq( signals(s) )
-			<< " to " << sr << "\n";
+	      logger << "resampling channel " << signals.label(s) 
+		     << " from " << edf.header.sampling_freq( signals(s) )
+		     << " to " << sr << "\n";
 	      resample_channel( edf, signals(s) , sr );
 	    }
 	}

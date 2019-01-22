@@ -20,17 +20,18 @@
 //
 //    --------------------------------------------------------------------
 
+#ifndef __LUNA_DSP_FIR_H__
+#define __LUNA_DSP_FIR_H__
+
 #include <vector>
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>
 #include <complex>
 
-#include "fftw3.h"
-#include "edf/edf.h"
-#include "eval.h"
+struct param_t;
 
-
+struct edf_t;
 
 // https://ptolemy.eecs.berkeley.edu/eecs20/week12/implementation.html
 
@@ -41,25 +42,10 @@ struct fir_impl_t {
   std::vector<double> coefs;
   int count;
   
-  fir_impl_t( const std::vector<double> & coefs_ ) 
-  {
-    count = 0;
-    length = coefs_.size();
-    coefs = coefs_;
-    delayLine.resize( length );
-    
-    // expecting a linear-phase FIR with odd number of coefficients
-    if ( coefs.size() % 2 != 1 ) Helper::halt( "expecting odd number of taps in FIR" );
-    int del = ( coefs.size() - 1 ) / 2 ;
-    
-    double checksum = 0;
-    for (int i=0;i<del;i++)
-      checksum += fabs( coefs[i] - coefs[ coefs.size() - 1 - i ] );
-    if ( checksum > 1e-8 ) Helper::halt( "problem in filter" );
-    
-  }
+  fir_impl_t( const std::vector<double> & coefs_ ); 
   
   std::vector<double> filter( const std::vector<double> * x );
+
   std::vector<double> fft_filter( const std::vector<double> * x );
   
   double getOutputSample(double inputSample) 
@@ -146,4 +132,6 @@ namespace dsptools
   
 }
 
+
+#endif
 

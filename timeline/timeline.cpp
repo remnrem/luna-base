@@ -22,15 +22,22 @@
 //    --------------------------------------------------------------------
 
 #include "timeline.h"
+
 #include "edf/edf.h"
 #include "defs/defs.h"
 #include "db/db.h"
 #include "miscmath/crandom.h"
+#include "eval.h"
+#include "intervals/intervals.h"
+#include "annot/annot.h"
+#include "helper/helper.h"
+#include "helper/logger.h"
+
 
 extern writer_t writer;
+
 extern logger_t logger;
 
-#include <set>
 
 bool is_rem( sleep_stage_t s ) { return s == REM; } 
 bool is_nrem( sleep_stage_t s ) { return s == NREM1 || s == NREM2 || s == NREM3 || s == NREM4; } 
@@ -567,6 +574,54 @@ interval_t timeline_t::wholetrace() const
   return interval_t( 0 , last_time_point_tp + 1LLU );
 }
 
+
+void timeline_t::clear_epoch_mask( bool b )
+{
+  mask.clear();
+  mask_set = b;  // i.e. if b==T, equivalent to masking all entries
+  mask.resize( epochs.size() , b );
+  if ( epoched() )
+    logger << " reset all " << epochs.size() << " epochs to be " << ( b ? "masked" : "included" ) << "\n";
+}
+
+int timeline_t::set_epoch_mask( const int e , const bool b ) 
+{
+  mask_set = true;
+  
+  if (e < 0 || e >= mask.size() ) Helper::halt( "internal error setting mask" );
+  
+  bool original = mask[e];
+  
+  // implement mask mode
+  // only mask
+  if      ( mask_mode == 0 ) 
+    {
+      if ( (!original) && b ) mask[e] = true;  // default
+    }
+  else if ( mask_mode == 1 ) // 'unmask' --> only unmask
+    {
+      if ( original && (!b) ) mask[e] = false;
+    }
+  else if ( mask_mode == 2 ) // 'force' --> set either way
+    {
+      mask[e] = b ; // force (default)   
+    }
+  
+  // teturn 0 if no change;
+  // return +1 if set a mask (N->Y)
+  // return -1 if freed a mask (Y->N)
+  
+  if ( original == mask[e] ) return 0;
+  return mask[e] ? 1 : -1 ;     
+}
+
+
+void timeline_t::clear_epoch_annotations()
+{
+  if ( eannots.size() > 0 ) 
+    logger << " clearing all epoch-annotations\n";
+  eannots.clear();
+}
 
 void timeline_t::apply_empty_epoch_mask( const std::string & label , bool include )
 {

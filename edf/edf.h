@@ -23,14 +23,8 @@
 #ifndef __PSGLIB_EDF_H__
 #define __PSGLIB_EDF_H__
 
-#include "slice.h"
-#include "tal.h"
-
-#include "eval.h"
-
-#include "clocs/clocs.h"
-#include "helper/helper.h"
 #include "timeline/timeline.h"
+#include "tal.h"
 
 #include <iostream>
 #include <vector>
@@ -42,6 +36,8 @@
 typedef unsigned char byte_t;
 
 struct param_t;
+
+struct edf_t;
 
 struct signal_list_t
 {
@@ -75,6 +71,7 @@ struct signal_list_t
   
   static bool match( const std::set<std::string> * inp_signals , std::string * l , const std::set<std::string> & slabels );
 
+  
 };
 
 

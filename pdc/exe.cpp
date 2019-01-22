@@ -21,12 +21,20 @@
 //    --------------------------------------------------------------------
 
 #include "pdc.h"
+
 #include "helper/helper.h"
+#include "helper/logger.h"
+#include "eval.h"
 #include "edf/edf.h"
+#include "edf/slice.h"
 #include "dsp/resample.h"
 #include "stats/cluster.h"
+
 #include <vector>
 #include <map>
+
+
+extern logger_t logger;
 
 
 void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
@@ -199,7 +207,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	}
       OUT1.close();
 
-      std::cerr << " output distance matrix for " << ne
+      logger << " output distance matrix for " << ne
 		<< " epochs (" << ns << " signals) to " << outfile << "\n";
     }
 
@@ -227,6 +235,6 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 
   O1.close();
   
-  std::cerr << " written epoch-level clustering to " << cluster_file << "\n";
+  logger << " written epoch-level clustering to " << cluster_file << "\n";
 
 }

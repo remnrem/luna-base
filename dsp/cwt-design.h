@@ -20,6 +20,9 @@
 //
 //    --------------------------------------------------------------------
 
+#ifndef __CWT_DESIGN_H__
+#define __CWT_DESIGN_H__
+
 #include <vector>
 #include <cstdio>
 #include <cmath>
@@ -35,3 +38,5 @@ namespace dsptools
   void design_cwt( param_t & param );  
 } 
 
+
+#endif

@@ -1,10 +1,45 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
 #include "fiplot.h"
+
 #include "miscmath/miscmath.h"
 #include "cwt/cwt.h"
 #include "fftw/fftwrap.h"
 
+#include "edf/edf.h"
+#include "edf/slice.h"
+#include "miscmath/miscmath.h"
+
+#include <string>
+#include "db/db.h"
+#include "eval.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
+
 extern writer_t writer;
 
+extern logger_t logger;
 
 void fiplot_wrapper( edf_t & edf , const param_t & param )
 {
@@ -88,6 +123,25 @@ void fiplot_wrapper( edf_t & edf , const param_t & param )
 
 }
 
+
+void fiplot_t::set_f( double lwr , double upr , double inc , bool logspace ) 
+{
+  
+  frqs.clear();
+  
+  f_lwr = lwr;
+  f_upr = upr;
+  f_inc = inc; // # of inc if logspace == T
+    
+  if ( ! logspace )
+    {
+      for (double f = f_lwr ; f <= f_upr ; f += f_inc ) frqs.push_back( f );
+    }
+  else
+    {
+      frqs = MiscMath::logspace( f_lwr , f_upr , f_inc );
+    }
+}
 
 
 void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t> * tp , const int fs )
@@ -196,12 +250,12 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  
 	  all_seconds += length * globals::tp_duration ; 
 
-	  //std::cerr << "seg length " << length * globals::tp_duration << "\t";
+	  //logger << "seg length " << length * globals::tp_duration << "\t";
 
-	  //	  std::cerr << required_tp * globals::tp_duration << "\n";
+	  //	  logger << required_tp * globals::tp_duration << "\n";
 	  if ( length < required_tp ) 
 	    {
-	      //std::cerr << " not long enough...\n";
+	      //logger << " not long enough...\n";
 	      for (int j=first_idx;j<=i;j++) disc[j] = true;
 	    }
 	  else
@@ -210,7 +264,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	}
     }
   
-  std::cerr << "including " << ( included_seconds / all_seconds ) * 100 << "% of " << all_seconds << "\n";
+  logger << "including " << ( included_seconds / all_seconds ) * 100 << "% of " << all_seconds << "\n";
   
   // normalize
   std::vector<double> x( n , 0 );
@@ -302,12 +356,12 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       if ( cycles ) t *= fc;
       
       
-//       std::cerr << "t = " << t << "\t"
+//       logger << "t = " << t << "\t"
 // 		<< ff->i << ".." << ff->j << " " << dt << "\t";
       
       // outside of range? 
-      // if ( t < t_lwr ) std::cerr << "below\n";
-      // else if ( t >= t_upr )  std::cerr << "above\n";
+      // if ( t < t_lwr ) logger << "below\n";
+      // else if ( t >= t_upr )  logger << "above\n";
 
       if ( t >= t_lwr && t < t_upr )
 	{
@@ -316,7 +370,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  
 	  double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  
 	  
-	  //	  std::cerr << "bin = " << bin << " " << tbin << "\n";
+	  //	  logger << "bin = " << bin << " " << tbin << "\n";
 	  
 	  // add value to bin
 	  double add = 0;
@@ -324,7 +378,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  for (int i= ff->i ; i <= ff->j ; i++ ) 
 	    {
 	      double part = ff->h - used[i];
-	      //std::cerr << "  i " << i << " " << x[i] << " " << used[i] << " " << part << "\n";
+	      //logger << "  i " << i << " " << x[i] << " " << used[i] << " " << part << "\n";
 	      add += part;
 	      used[i] += part;	      
 	      ++amt;

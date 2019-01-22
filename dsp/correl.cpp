@@ -1,11 +1,46 @@
 
-#include <string>
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
+
+#include "correl.h"
+
 #include "miscmath/miscmath.h"
+
 #include "edf/edf.h"
+#include "edf/slice.h"
+#include "eval.h"
+
+#include "stats/statistics.h"
+
 #include "db/db.h"
 #include "dsp/resample.h"
 
-#include "correl.h"
+#include "helper/helper.h"
+#include "helper/logger.h"
+
+#include <string>
+
+
+extern logger_t logger;
 
 extern writer_t writer;
    
@@ -35,9 +70,9 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	  
 	  if ( edf.header.sampling_freq( signals(s) ) != sr ) 
 	    {
-	      std::cerr << "resampling channel " << signals.label(s) 
-			<< " from " << edf.header.sampling_freq( signals(s) )
-			<< " to " << sr << "\n";
+	      logger << "resampling channel " << signals.label(s) 
+		     << " from " << edf.header.sampling_freq( signals(s) )
+		     << " to " << sr << "\n";
 	      resample_channel( edf, signals(s) , sr );
 	    }
 	}

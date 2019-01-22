@@ -20,15 +20,17 @@
 //
 //    --------------------------------------------------------------------
 
-// TODO make cleaner separation of excluded spindles (e.g. based on Q threshold)
-// and downstream processing; i.e. remove them from main list
 
 #include "spindles.h"
 #include "mspindles.h"
 #include "plot-spindles.h"
 
 #include "edf/edf.h"
-#include "main.h"
+#include "edf/slice.h"
+#include "eval.h"
+
+#include "annot/annot.h"
+#include "intervals/intervals.h"
 
 #include "cwt/cwt.h"
 #include "fftw/fftwrap.h"
@@ -39,7 +41,9 @@
 #include "dsp/slow-waves.h"
 #include "defs/defs.h"
 #include "db/db.h"
+
 #include "helper/logger.h"
+#include "helper/helper.h"
 
 // output
 extern writer_t writer;

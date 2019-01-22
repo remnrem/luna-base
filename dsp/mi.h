@@ -33,27 +33,13 @@ struct mi_t
 
   mi_t() { } 
 
-  mi_t( const std::vector<double> & a , const std::vector<double> & b )
-  {    
-    eps = 1e-60;
-    if ( b.size() != a.size() ) Helper::halt("unequal sequence length in MI");
-    n = a.size();
-    da = a; db = b;    
-  }
+  mi_t( const std::vector<double> & a , const std::vector<double> & b );
   
   // use previous calculated bins (i.e. done on whole datasets
   // so that same grid can be used per epoch
   
   void force_thresholds( const std::vector<double> & _tha, 
-			 const std::vector<double> & _thb )     
-  {
-    if ( _tha.size() != _thb.size() ) Helper::halt("problem in mi_t::force_thresholds()");
-    tha = _tha;
-    thb = _thb;
-    nbins = tha.size();     
-    bin_data();
-  }
-    
+			 const std::vector<double> & _thb );
 
 
   // bin rule : 1 = FD, 2 = Scott, 3 = Sturges

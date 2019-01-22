@@ -21,9 +21,10 @@
 //    --------------------------------------------------------------------
 
 #include "annot.h"
-#include "main.h"
+#include "eval.h"
 #include "edf/edf.h"
 #include "helper/helper.h"
+#include "helper/logger.h"
 #include "defs/defs.h"
 #include "tinyxml/xmlreader.h"
 #include "db/db.h"
@@ -35,6 +36,8 @@
 #include <iomanip>
 
 extern writer_t writer;
+
+extern logger_t logger;
 
 extern globals global;
 

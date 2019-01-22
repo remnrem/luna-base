@@ -25,16 +25,20 @@
 
 #include <iostream>
 #include <iomanip>
-#include "intervals/intervals.h"
-#include "annot/annot.h"
+#include <vector>
+#include <string>
+#include <set>
+#include <map>
+
 #include "helper/helper.h"
-#include "helper/logger.h"
 #include "defs/defs.h"
+#include "annot/annot.h"
 
 struct edf_t;
+
 struct timeline_t;
 
-extern logger_t logger;
+struct interval_t;
 
 //
 // General class to represent a hypnogram and perform calculations on it
@@ -435,48 +439,11 @@ struct timeline_t
   
   void apply_epoch_mask( annot_t * a , std::set<std::string> * values , bool include );
   
-  void clear_epoch_mask( bool b = false ) 
-  {
-    mask.clear();
-    mask_set = b;  // i.e. if b==T, equivalent to masking all entries
-    mask.resize( epochs.size() , b );
-    if ( epoched() )
-      logger << " reset all " << epochs.size() << " epochs to be " << ( b ? "masked" : "included" ) << "\n";
-  }
+  void clear_epoch_mask( bool b = false );
   
   bool is_epoch_mask_set() const { return mask_set; }
 
-  int  set_epoch_mask( const int e , const bool b = true ) 
-  {
-    mask_set = true;
-
-    if (e < 0 || e >= mask.size() ) Helper::halt( "internal error setting mask" );
-    
-    bool original = mask[e];
-
-    // implement mask mode
-    // only mask
-    if      ( mask_mode == 0 ) 
-      {
-	if ( (!original) && b ) mask[e] = true;  // default
-      }
-    else if ( mask_mode == 1 ) // 'unmask' --> only unmask
-      {
-	if ( original && (!b) ) mask[e] = false;
-      }
-    else if ( mask_mode == 2 ) // 'force' --> set either way
-      {
-	mask[e] = b ; // force (default)   
-      }
-    
-    // teturn 0 if no change;
-    // return +1 if set a mask (N->Y)
-    // return -1 if freed a mask (Y->N)
-
-    if ( original == mask[e] ) return 0;
-    return mask[e] ? 1 : -1 ;     
-  }
-  
+  int  set_epoch_mask( const int e , const bool b = true );
 
   void set_epoch_mask_mode( const int m ) 
   {
@@ -491,6 +458,7 @@ struct timeline_t
   }
 
   void mask2annot( const std::string & path , const std::string & tag );
+
   void dumpmask();
 
 
@@ -533,7 +501,7 @@ struct timeline_t
   // i.e. typically used for 'stage' information
 
   void annotate_epochs( const std::string & label , 
-			const std::string & annot_label , 
+  			        const std::string & annot_label , 
 			const std::set<std::string> & values );
   
   void annotate_epochs( const std::string & label , bool b )
@@ -550,26 +518,21 @@ struct timeline_t
     for (int i=0;i<s.size();i++) eannots[ s[i] ][ i ] = true; 
   }
   
-  void clear_epoch_annotations() 
-  {
-    if ( eannots.size() > 0 ) 
-      logger << " clearing all epoch-annotations\n";
-    eannots.clear();
-  }
+  void clear_epoch_annotations();
 
   // Return all epoch annotations
-
+  
   std::set<std::string> epoch_annotations() const
-    {
-      std::set<std::string> r;
-      std::map<std::string,std::map<int,bool> >::const_iterator ii = eannots.begin();
-      while ( ii != eannots.end() )
-	{
-	  r.insert( ii->first );
-	  ++ii;
-	}
-      return r;
-    }
+  {
+    std::set<std::string> r;
+    std::map<std::string,std::map<int,bool> >::const_iterator ii = eannots.begin();
+    while ( ii != eannots.end() )
+      {
+	r.insert( ii->first );
+	++ii;
+      }
+    return r;
+  }
   
   // does annotation 'k' exist at all? 
   
@@ -633,9 +596,6 @@ struct timeline_t
       if ( ! has_epoch_mapping() ) return e+1;
       if ( epoch_curr2orig.find(e) == epoch_curr2orig.end() ) return -1;
       return epoch_curr2orig.find(e)->second + 1 ;
-/*       std::stringstream ss; */
-/*       ss << std::setfill('0') << std::setw(6) << epoch_curr2orig.find(e)->second + 1 ; */
-/*       return ss.str(); */
     }
 
 

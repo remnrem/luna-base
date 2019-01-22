@@ -23,10 +23,9 @@
 #ifndef __ECGSUPPRESS_H__
 #define __ECGSUPPRESS_H__
 
-#include "intervals/intervals.h"
-
 struct edf_t;
 struct param_t;
+struct interval_t;
 
 #include <vector>
 #include <stdint.h>

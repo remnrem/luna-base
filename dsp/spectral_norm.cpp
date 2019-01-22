@@ -20,10 +20,19 @@
 //
 //    --------------------------------------------------------------------
 
-
 #include "spectral_norm.h"
+
 #include <string>
+
 #include "edf/edf.h"
+#include "edf/slice.h"
+
+#include "eval.h"
+
+#include "helper/logger.h"
+
+extern logger_t logger;
+
 
 // implements https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2235870/
 
@@ -40,7 +49,7 @@ void dsptools::norm_1overf( edf_t & edf , param_t & param )
       
       const double fs = edf.header.sampling_freq( signals(s) ) ; 
       
-      std::cerr << "  1/f normalizing " <<  signals.label(s)  << "(Fs=" << fs << ")\n";
+      logger << "  1/f normalizing " <<  signals.label(s)  << "(Fs=" << fs << ")\n";
 
       // get data 
 

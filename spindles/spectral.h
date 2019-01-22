@@ -24,10 +24,10 @@
 #ifndef __SPECTRAL_H__
 #define __SPECTRAL_H__
 
-#include "annot/annot.h"
-
+struct annot_t;
 struct edf_t;
 struct param_t;
+#include <string>
 
 annot_t * spectral_power( edf_t & , const std::string & label , param_t & );
 

@@ -21,9 +21,15 @@
 //    --------------------------------------------------------------------
 
 #include "edf/edf.h"
+#include "edf/slice.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
+
 #include "defs/defs.h"
 #include "intervals/intervals.h"
 
+extern logger_t logger;
 
 void dump_intervals( const std::string & ints , 
 		     const std::string & edfs )
@@ -174,7 +180,7 @@ void dump_intervals( const std::string & ints ,
       
       if ( ! okay ) 
 	{
-	  std::cerr << "problem loading " << edffile << ", skipping...\n";
+	  logger << "problem loading " << edffile << ", skipping...\n";
 	  continue;
 	}
       
@@ -228,7 +234,7 @@ void dump_intervals( const std::string & ints ,
 	      ++rec;
 	      
 	      // done
-	      std::cerr << "processed : " << indiv << ", " << f+1 << " features\n";
+	      logger << "processed : " << indiv << ", " << f+1 << " features\n";
 	    }
 	}
 

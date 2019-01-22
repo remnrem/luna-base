@@ -22,9 +22,15 @@
 
 #include "spectral.h"
 #include "edf/edf.h"
+#include "edf/slice.h"
+#include "eval.h"
+#include "annot/annot.h"
+#include "helper/helper.h"
+#include "helper/logger.h"
 #include "db/db.h"
 #include "fftw/fftwrap.h"
 #include "dsp/mse.h"
+
 
 extern writer_t writer;
 extern logger_t logger;

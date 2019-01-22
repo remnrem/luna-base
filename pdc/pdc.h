@@ -27,8 +27,13 @@
 #include <vector>
 #include <map>
 #include <set>
+
 #include "helper/helper.h"
-#include "edf/edf.h"
+#include "stats/matrix.h"
+
+struct edf_t;
+
+struct param_t;
 
 struct pdc_obs_t { 
 	       

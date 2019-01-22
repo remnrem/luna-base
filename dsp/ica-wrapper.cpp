@@ -24,10 +24,13 @@
 
 #include "edf/edf.h"
 #include "helper/helper.h"
-#include "main.h"
+#include "helper/logger.h"
+#include "eval.h"
 #include "db/db.h"
 
 extern writer_t writer;
+
+extern logger_t logger;
 
 void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 {
@@ -42,10 +45,10 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   if ( ns < 2 ) return;
   
   const int sr = edf.header.sampling_freq( signals(0) );
-  std::cerr << "st = " << sr << "\n";
+  logger << "st = " << sr << "\n";
   for (int i=1;i<ns;i++)
     {
-      std::cerr << "s2 = " <<  edf.header.sampling_freq( signals(i) ) << "\n";
+      logger << "s2 = " <<  edf.header.sampling_freq( signals(i) ) << "\n";
       if ( edf.header.sampling_freq( signals(i) ) != sr ) 
 	Helper::halt( "all signals must have similar SR for ICA" );
     }
@@ -97,25 +100,25 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   // W : compc x compc
   // S : as original data
 
-  std::cerr << "K\n";
+  logger << "K\n";
   for (int i=0;i<cols;i++)
     {
-      for (int j=0;j<compc;j++) std::cerr << "\t" << ica.K[i][j];
-      std::cerr << "\n\n";
+      for (int j=0;j<compc;j++) logger << "\t" << ica.K[i][j];
+      logger << "\n\n";
     }
 
-  std::cerr << "W\n";
+  logger << "W\n";
   for (int i=0;i<compc;i++)
     {
-      for (int j=0;j<compc;j++) std::cerr << "\t" << ica.W[i][j];
-      std::cerr << "\n\n";
+      for (int j=0;j<compc;j++) logger << "\t" << ica.W[i][j];
+      logger << "\n\n";
     }
   
-  std::cerr << "A\n";
+  logger << "A\n";
   for (int i=0;i<compc;i++)
     {
-      for (int j=0;j<compc;j++) std::cerr << "\t" << ica.A[i][j];
-      std::cerr << "\n\n";
+      for (int j=0;j<compc;j++) logger << "\t" << ica.A[i][j];
+      logger << "\n\n";
     }
 
 

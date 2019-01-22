@@ -20,17 +20,44 @@
 //
 //    --------------------------------------------------------------------
 
+#include "mi.h"
+
 #include "helper/helper.h"
+#include "eval.h"
 #include "miscmath/miscmath.h"
 #include "miscmath/crandom.h"
 #include "edf/edf.h"
+#include "edf/slice.h"
 #include "db/db.h"
 
 #include <cmath>
 
-#include "mi.h"
+
 
 extern writer_t writer;
+
+
+mi_t::mi_t( const std::vector<double> & a , const std::vector<double> & b )
+{    
+  eps = 1e-60;
+  if ( b.size() != a.size() ) Helper::halt("unequal sequence length in MI");
+  n = a.size();
+  da = a; db = b;    
+}
+
+// use previous calculated bins (i.e. done on whole datasets
+// so that same grid can be used per epoch
+
+void mi_t::force_thresholds( const std::vector<double> & _tha, 
+			     const std::vector<double> & _thb )     
+{
+  if ( _tha.size() != _thb.size() ) Helper::halt("problem in mi_t::force_thresholds()");
+  tha = _tha;
+  thb = _thb;
+  nbins = tha.size();     
+  bin_data();
+}
+
 
 void dsptools::compute_mi( edf_t & edf , param_t & param )
 {

@@ -26,9 +26,14 @@
 
 #include "samplerate.h"
 
+#include "eval.h"
 #include "edf/edf.h"
-#include "main.h"
+#include "edf/slice.h"
+
 #include "helper/helper.h"
+#include "helper/logger.h"
+
+extern logger_t logger;
 
 std::vector<double> dsptools::resample( const std::vector<double> * d , 
 					int sr1 , int sr2 )
@@ -61,7 +66,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
   // problem?
   if ( r ) 
     {
-      std::cerr << src_strerror ( r ) << "\n";
+      logger << src_strerror ( r ) << "\n";
       Helper::halt( "problem in resample()" );
     }
   
@@ -92,7 +97,7 @@ void dsptools::resample_channel( edf_t & edf , const int s , const int nsr )
   // Ouput
   //
 
-  std::cerr << " resampling channel " << edf.header.label[ s ] << " from sample rate " << Fs << " to " << nsr << "\n";
+  logger << " resampling channel " << edf.header.label[ s ] << " from sample rate " << Fs << " to " << nsr << "\n";
   
   //
   // Pull entire signals out

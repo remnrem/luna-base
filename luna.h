@@ -31,6 +31,8 @@
 
 #include "helper/token-eval.h"
 
+#include "helper/token.h"
+
 #include "helper/logger.h"
 
 #include "helper/xml-parser.h"
@@ -74,6 +76,8 @@
 #include "staging/staging.h"
 
 #include "clocs/topo.h"
+
+#include "clocs/clocs.h"
 
 #include "db/db.h"
 

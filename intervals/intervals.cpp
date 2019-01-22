@@ -39,7 +39,7 @@ std::ostream & operator<<( std::ostream & out , const interval_t & rhs )
   return out;
 }
 
-std::string interval_t::as_string( const std::string & delim = "|" ) const
+std::string feature_t::as_string( const std::string & delim ) const
 {
   return label + delim + signal + delim  + feature.as_string() + ( has_value ? ( delim + Helper::dbl2str( value ) ) : "" ) ;  
 }

@@ -22,16 +22,25 @@
 
 
 #include "pdc.h"
+
 #include <string>
 #include <iostream>
 #include <cmath>
 #include <set>
+
+#include "eval.h"
+
+#include "edf/edf.h"
+#include "edf/slice.h"
+
 #include "miscmath/miscmath.h"
 #include "dsp/resample.h"
+
 #include "db/db.h"
 #include "helper/logger.h"
 
 extern writer_t writer;
+
 extern logger_t logger;
 
 void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )

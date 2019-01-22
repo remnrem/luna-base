@@ -22,18 +22,23 @@
 
 
 #include "ecgsuppression.h"
+
 #include "resample.h"
 #include "edf/edf.h"
-#include "main.h"
-#include "db/db.h"
+#include "edf/slice.h"
 #include "fir.h"
 
-#include <iomanip>
+#include "eval.h"
+#include "helper/helper.h"
+#include "helper/logger.h"
+#include "db/db.h"
 
+#include <iomanip>
 #include <cmath>
 
 extern writer_t writer;
 
+extern logger_t logger;
 
 // assumes broad range of 'normal' sleeping heart beat is 40-100 
 
@@ -163,7 +168,7 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ;
   if ( sr == 0 ) sr = edf.header.sampling_freq( signals(0) ) ;
   
-  std::cerr << " setting SR to " << sr << "\n";
+  logger << " setting SR to " << sr << "\n";
   
   //
   // ECG channel
@@ -173,7 +178,7 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   int ecg_n = edf.header.signal( ecg_label );
   if ( ecg_n == -1 ) 
     {
-      std::cerr << "could not find ECG (label " << ecg_label << "), skipping ECG suppression\n";
+      logger << "could not find ECG (label " << ecg_label << "), skipping ECG suppression\n";
       return;
     }
 
@@ -187,7 +192,7 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
 
       if ( edf.header.sampling_freq( signals(s) ) != sr ) 
 	{
-	  std::cerr << " resampling channel " << signals.label(s) 
+	  logger << " resampling channel " << signals.label(s) 
 		    << " from " << edf.header.sampling_freq( signals(s) )
 		    << " to " << sr << "\n";
 	  resample_channel( edf, signals(s) , sr );
@@ -197,7 +202,7 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   // and for ECG...
   if ( edf.header.sampling_freq( ecg_n ) != sr ) 
     {
-      std::cerr << " resampling channel " << signals.label(ecg_n) 
+      logger << " resampling channel " << signals.label(ecg_n) 
 		<< " from " << edf.header.sampling_freq( ecg_n )
 		<< " to " << sr << "\n";
       resample_channel( edf, ecg_n , sr );
@@ -434,7 +439,7 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
 
       if ( ! nosuppression )
 	{
-	  std::cerr << " updating ECG-corrected signal " << signals.label(s) << "\n";
+	  logger << " updating ECG-corrected signal " << signals.label(s) << "\n";
 	  edf.update_signal( signals(s) , &nsig );      
 	}
     }
@@ -681,7 +686,7 @@ void dsptools::bpm( edf_t & edf , param_t & param )
   int ecg_n = edf.header.signal( ecg_label );
   if ( ecg_n == -1 ) 
     {
-      std::cerr << "could not find ECG (label " << ecg_label << "), skipping ECG suppression\n";     
+      logger << "could not find ECG (label " << ecg_label << "), skipping ECG suppression\n";     
       return;
     }
 

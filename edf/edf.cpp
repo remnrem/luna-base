@@ -23,8 +23,15 @@
 #include "edf.h"
 #include "defs/defs.h"
 #include "helper/helper.h"
+#include "helper/logger.h"
 #include "miscmath/miscmath.h"
 #include "db/db.h"
+
+#include "slice.h"
+#include "tal.h"
+#include "eval.h"
+#include "clocs/clocs.h"
+#include "timeline/timeline.h"
 
 #include <iostream>
 #include <fstream>
@@ -2870,7 +2877,9 @@ bool edf_t::basic_stats( param_t & param )
 
 
 
-bool edf_t::match( const std::set<std::string> * inp_signals , std::string * l , const std::set<std::string> & slabels )
+bool signal_list_t::match( const std::set<std::string> * inp_signals ,
+			   std::string * l ,
+			   const std::set<std::string> & slabels )
 {
     
   // exact match? (i.e. no "|" alternatives specified)

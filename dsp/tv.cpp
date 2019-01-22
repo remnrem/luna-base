@@ -21,10 +21,15 @@
 //    --------------------------------------------------------------------
 
 #include "tv.h"
+
 #include "edf/edf.h"
+#include "edf/slice.h"
+#include "eval.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
 
 #include <vector>
-
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>

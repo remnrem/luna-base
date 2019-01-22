@@ -23,11 +23,11 @@
 #ifndef __COH_H__
 #define __COH_H__
 
+#include <vector>
+
 struct edf_t;
 struct param_t;
-
-#include <vector>
-#include "intervals/intervals.h"
+struct interval_t;
 
 struct coh_t
 {

@@ -22,7 +22,11 @@
 
 
 #include "graphics/graphics.h"
+
 #include "edf/edf.h"
+#include "edf/slice.h"
+#include "eval.h"
+
 #include "cwt/cwt.h"
 #include "spindles.h"
 #include "mspindles.h"

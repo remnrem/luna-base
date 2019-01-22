@@ -22,7 +22,11 @@
 
 #include "ed.h"
 #include "edf/edf.h"
-#include "main.h"
+#include "edf/slice.h"
+#include "stats/matrix.h"
+#include "stats/statistics.h"
+
+#include "eval.h"
 #include "db/db.h"
 
 extern writer_t writer;

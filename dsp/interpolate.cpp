@@ -21,14 +21,22 @@
 //    --------------------------------------------------------------------
 
 #include "interpolate.h"
+
 #include "edf/edf.h"
+#include "edf/slice.h"
+
 #include "clocs/clocs.h"
 #include "clocs/topo.h"
-
-#include "main.h"
-#include "db/db.h"
+#include "stats/statistics.h"
 #include "pwl_interp_2d_scattered.h"
 
+#include "eval.h"
+#include "db/db.h"
+#include "helper/helper.h"
+#include "helper/logger.h"
+
+
+extern logger_t logger;
 
 extern writer_t writer;
 
@@ -78,7 +86,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
   std::vector<std::vector<int> > good_channels;
   
   if ( ! globals::silent ) 
-    std::cerr << " generating leave-one-out G matrices for " << signals.size() << " signals\n";
+    logger << " generating leave-one-out G matrices for " << signals.size() << " signals\n";
   
   for (int s=0;s<ns;s++)
     {
@@ -129,7 +137,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
   int ne = edf.timeline.first_epoch();
 
   if ( ! globals::silent ) 
-    std::cerr << " now iterating through " << ne << " epochs\n";
+    logger << " now iterating through " << ne << " epochs\n";
 	
   while ( 1 ) 
     {
@@ -160,7 +168,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
 	  Data::Matrix<double> I = clocs.interpolate( D , _good_channels , _invG, _Gi );
 	  
 	  // calculate error 
-// 	  std::cerr << "X " << s << "\t" 
+// 	  logger << "X " << s << "\t" 
 // 		    << signals.label(s) << "\t" ;
 	  
 // 	  double error = 0;

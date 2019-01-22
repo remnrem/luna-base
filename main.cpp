@@ -813,10 +813,8 @@ void proc_dummy()
 
   std::getline( std::cin , expr );
   
-  Eval tok;
+  Eval tok( expr );
 
-  tok.parse( expr );
-  
   bool result = tok.evaluate();
   
   std::cout << "result = " << result << "\n";

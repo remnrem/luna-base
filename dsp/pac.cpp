@@ -22,12 +22,16 @@
 
 
 #include "pac.h"
-#include <iostream>
+#include "eval.h"
+
 #include "cwt/cwt.h"
 #include "miscmath/crandom.h"
 #include "edf/edf.h"
+#include "edf/slice.h"
 #include "db/db.h"
-#include "main.h"
+#include "helper/helper.h"
+
+#include <iostream>
 
 extern writer_t writer;
 

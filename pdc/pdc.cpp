@@ -22,15 +22,24 @@
 
 
 #include "pdc.h"
+
+#include "helper/logger.h"
+#include "db/db.h"
+#include "eval.h"
+#include "edf/edf.h"
+#include "edf/slice.h"
+#include "dsp/resample.h"
+
 #include <string>
 #include <iostream>
 #include <cmath>
 #include <set>
-#include "miscmath/miscmath.h"
-#include "dsp/resample.h"
-#include "db/db.h"
+
+
 
 extern writer_t writer;
+
+extern logger_t logger;
 
 int pdc_t::m = 5;
 int pdc_t::t = 1;
@@ -114,7 +123,7 @@ void pdc_t::construct_tslib( edf_t & edf , param_t & param )
       
       if ( edf.header.sampling_freq( signals(s) ) != sr ) 
 	{
-	  std::cerr << "resampling channel " << signals.label(s) 
+	  logger << "resampling channel " << signals.label(s) 
 		    << " from " << edf.header.sampling_freq( signals(s) )
 		    << " to " << sr << "\n";
 	  dsptools::resample_channel( edf, signals(s) , sr );
@@ -200,7 +209,7 @@ void pdc_t::construct_tslib( edf_t & edf , param_t & param )
       
     }
   
-  std::cerr << " output " << cnt << " epochs for " << ns << " signals to TS-lib " << outfile << "\n";
+  logger << " output " << cnt << " epochs for " << ns << " signals to TS-lib " << outfile << "\n";
 
   OUT1.close();
 
@@ -297,7 +306,7 @@ void pdc_t::construct_pdlib( param_t & param )
   
   std::string outfile = param.requires( "pd-lib" );
   
-  std::cerr << "building " << outfile << " from " 
+  logger << "building " << outfile << " from " 
 	    << infile << ", with m=" <<m << " and t=" << t << "\n";
     
 
@@ -367,7 +376,7 @@ void pdc_t::construct_pdlib( param_t & param )
 
   OUT.close();
   
-  std::cerr << " done.\n";
+  logger << " done.\n";
 }
 
 
@@ -384,7 +393,7 @@ void pdc_t::read_tslib( const std::string & tslib )
   
   std::ifstream IN( tslib.c_str() , std::ios::in );
   
-  std::cerr << " reading ts-lib " << tslib << "\n";
+  logger << " reading ts-lib " << tslib << "\n";
   
   std::map<std::string,int> label_count;
 
@@ -484,11 +493,11 @@ void pdc_t::read_tslib( const std::string & tslib )
   
   IN.close();
  
-  std::cerr << " scanned " << cnt << " segments and read " << obs.size() << " observations\n";
+  logger << " scanned " << cnt << " segments and read " << obs.size() << " observations\n";
   std::map<std::string,int>::const_iterator ii = label_count.begin();
   while ( ii != label_count.end() ) 
     {
-      std::cerr << "  " << ii->first << "\t" << ii->second << "\n";
+      logger << "  " << ii->first << "\t" << ii->second << "\n";
       ++ii;
     }
 
@@ -517,7 +526,7 @@ void pdc_t::read_pdlib( const std::string & pdlib , const std::set<std::string> 
   
   std::ifstream IN( pdlib.c_str() , std::ios::in );
   
-  std::cerr << " reading pd-lib " << pdlib << "\n";
+  logger << " reading pd-lib " << pdlib << "\n";
   
   std::map<std::string,int> label_count;
   
@@ -632,11 +641,11 @@ void pdc_t::read_pdlib( const std::string & pdlib , const std::set<std::string> 
   
   IN.close();
   
-  std::cerr << " scanned " << cnt << " lines and read " << obs.size() << " observations\n";
+  logger << " scanned " << cnt << " lines and read " << obs.size() << " observations\n";
   std::map<std::string,int>::const_iterator ii = label_count.begin();
   while ( ii != label_count.end() ) 
     {
-      std::cerr << "  " << ii->first << "\t" << ii->second << "\n";
+      logger << "  " << ii->first << "\t" << ii->second << "\n";
       ++ii;
     }
 
@@ -726,8 +735,8 @@ void pdc_t::test()
   
   for (int i=0;i<10;i++)
     {
-      for (int j=0;j<10;j++) std::cerr << "\t" << D[i][j];
-      std::cerr << "\n";
+      for (int j=0;j<10;j++) logger << "\t" << D[i][j];
+      logger << "\n";
     }
     
   return;  
@@ -743,7 +752,7 @@ Data::Matrix<double> pdc_t::all_by_all()
 
   const int N = obs.size();
 
-  std::cerr << " calculating " << N << "-by-" << N << " distance matrix\n";
+  logger << " calculating " << N << "-by-" << N << " distance matrix\n";
 
   if ( N == 0 ) Helper::halt("internal error: PD not encoded in pdc_t");
 
@@ -763,7 +772,7 @@ Data::Matrix<double> pdc_t::all_by_all()
 
 void pdc_t::encode_ts()
 {  
-  std::cerr << " encoding with m="<<m << ", t=" << t << "\n";  
+  logger << " encoding with m="<<m << ", t=" << t << "\n";  
   // encode each observation in PD space
   const int N = obs.size();
   for (int i=0;i<N;i++) obs[i].encode( m , t );
@@ -838,7 +847,7 @@ void pdc_t::entropy_heuristic( int m_min , int m_max , int t_min , int t_max , b
   writer.value( "PDC_OPT_M" , m );
   writer.value( "PDC_OPT_T" , t );
   
-  std::cerr << " based on min entropy, setting m = " << m << ", t = " << t << "\n";
+  logger << " based on min entropy, setting m = " << m << ", t = " << t << "\n";
   
   //
   // As above, but stratify by label
@@ -847,7 +856,7 @@ void pdc_t::entropy_heuristic( int m_min , int m_max , int t_min , int t_max , b
   if ( by_cat && labels.size() > 1 ) 
     {
       
-      std::cerr << " additionally, stratifying by " << labels.size() << " distinct labels\n";
+      logger << " additionally, stratifying by " << labels.size() << " distinct labels\n";
       
       std::set<std::string>::const_iterator ii = labels.begin();
       while ( ii != labels.end() )
@@ -1001,11 +1010,11 @@ void pdc_t::channel_check()
 
     }
 
-  std::cerr << " of " << N << " observations, following breakdown by available channels:\n";
+  logger << " of " << N << " observations, following breakdown by available channels:\n";
   std::map<std::string,int>::const_iterator cc = chs.begin();
   while ( cc != chs.end() )
     {
-      std::cerr << " " << cc->second << "\t" << cc->first << "\n";
+      logger << " " << cc->second << "\t" << cc->first << "\n";
       ++cc;
     }
     

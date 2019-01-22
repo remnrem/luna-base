@@ -21,11 +21,12 @@
 //    --------------------------------------------------------------------
 
 #include "edf.h"
+#include "slice.h"
 #include "tal.h"
 
 #include "annot/annot.h"
 #include "helper/helper.h"
-#include "main.h"
+#include "eval.h"
 #include "defs/defs.h"
 #include "db/db.h"
 

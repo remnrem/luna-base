@@ -21,10 +21,24 @@
 //    --------------------------------------------------------------------
 
 #include "slice.h"
+
 #include "helper/helper.h"
+#include "helper/logger.h"
+#include "eval.h"
+
 #include "timeline/timeline.h"
 #include "fftw/fftwrap.h"
 #include "defs/defs.h"
+#include "edf.h"
+#include "intervals/intervals.h"
+
+
+
+interval_t slice_t::duration() const 
+{ 
+  // interval is 1-past end of interval
+  return interval_t( time_points[0] , time_points[ time_points.size()-1 ] + 1LLU );
+}
 
 mslice_t::mslice_t( edf_t & edf , 
 		    const signal_list_t & signals , 
@@ -519,4 +533,21 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
     }
   
   
+}
+
+
+
+Data::Matrix<double> mslice_t::extract()
+{
+  const int nr = channel[0]->size(); 
+  const int nc = channel.size();
+  
+  Data::Matrix<double> d;
+  for (int c=0;c<nc;c++)
+    {
+      if ( nr != channel[c]->size() ) 
+	Helper::halt( "internal error in mslice, SRs different" );
+      d.add_col( *channel[c]->pdata() );
+    }
+  return d;
 }

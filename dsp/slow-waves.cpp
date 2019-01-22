@@ -27,12 +27,18 @@
 #include "dsp/hilbert.h"
 #include "miscmath/miscmath.h"
 #include "edf/edf.h"
+#include "edf/slice.h"
 #include "cwt/cwt.h"
 #include "db/db.h"
 #include "miscmath/crandom.h"
+#include "eval.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
 
 extern writer_t writer;
 
+extern logger_t logger;
 
 double slow_waves_t::nearest( const int i , int * sw_idx  ) const
 {
@@ -201,11 +207,11 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       
       const int ns2 = signals2.size();
       
-      std::cerr << " averaging " << label2 << " based on time-locked averaging to SO ";
-      if ( position == -1 ) std::cerr << "negative peak";
-      else if ( position == 0 ) std::cerr << "onset";
-      else if ( position == 1 ) std::cerr << "positive peak";
-      std::cerr << ", within window of +/-" << twin << " seconds\n";
+      logger << " averaging " << label2 << " based on time-locked averaging to SO ";
+      if ( position == -1 ) logger << "negative peak";
+      else if ( position == 0 ) logger << "onset";
+      else if ( position == 1 ) logger << "positive peak";
+      logger << ", within window of +/-" << twin << " seconds\n";
 
 
       for (int i=0;i<ns2;i++)
@@ -475,26 +481,26 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // track total signal duration
   signal_duration_sec = unfiltered.size() / (double)sr ; 
 
-  std::cerr << " detecting slow waves: " << f_lwr << "-" << f_upr << "Hz, ";
+  logger << " detecting slow waves: " << f_lwr << "-" << f_upr << "Hz, ";
   
-  if ( t_lwr > 0 ) std::cerr << " duration " << t_lwr << "-" << t_upr << "s;"; 
-  if ( t_neg_lwr > 0 ) std::cerr << " negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << ";";
-  std::cerr << "\n";
+  if ( t_lwr > 0 ) logger << " duration " << t_lwr << "-" << t_upr << "s;"; 
+  if ( t_neg_lwr > 0 ) logger << " negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << ";";
+  logger << "\n";
 
-  if ( thr > 0 ) std::cerr << " relative threshold "<< thr ;
-  if ( uV_neg < 0 ) std::cerr << " absolute threshold based on " 
+  if ( thr > 0 ) logger << " relative threshold "<< thr ;
+  if ( uV_neg < 0 ) logger << " absolute threshold based on " 
 			      << uV_neg << " uV for negative peak, " 
 			      << uV_p2p << " peak-to-peak";
-  std::cerr << "\n";
+  logger << "\n";
   if ( type == SO_FULL ) 
-    std::cerr << " full waves, based on consecutive "  
+    logger << " full waves, based on consecutive "  
 	      << ( use_alternate_neg2pos_zc ? "negative-to-positive" : "positive-to-negative" ) << " zero-crossings\n";
   else if ( type == SO_HALF ) 
-    std::cerr << " all half waves\n";
+    logger << " all half waves\n";
   else if ( type == SO_NEGATIVE_HALF ) 
-    std::cerr << " all negative half waves\n";
+    logger << " all negative half waves\n";
   else if ( type == SO_POSITIVE_HALF ) 
-    std::cerr << " all positive half waves\n";
+    logger << " all positive half waves\n";
     
   //
   // Band-pass filter for slow waves
@@ -526,7 +532,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // # of putative SOs
   int cnt = 0;  
 
-  std::cerr << " " << zc.size() << " zero crossings ";
+  logger << " " << zc.size() << " zero crossings ";
   
   // putative waves
   std::vector<slow_wave_t> waves; 
@@ -646,7 +652,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     }
   else
     {
-      std::cerr << "using median...\n";
+      logger << "using median...\n";
       avg_x = MiscMath::median( tmp_x );
       avg_yminusx = MiscMath::median( tmp_yminusx );
     }
@@ -669,7 +675,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       slow_wave_t & w = waves[i];
       
       bool accepted = true;
-      //std::cerr << "thr " << w.down_amplitude  << " " << th_x << " " << uV_neg << " " << w.down_amplitude  << " " << uV_p2p << " " <<w.up_amplitude - w.down_amplitude << "\n";
+      //logger << "thr " << w.down_amplitude  << " " << th_x << " " << uV_neg << " " << w.down_amplitude  << " " << uV_p2p << " " <<w.up_amplitude - w.down_amplitude << "\n";
       if ( thr > 0 && w.down_amplitude > th_x ) accepted = false; // i.e. negative value, should be more neg.
       if ( thr > 0 && w.up_amplitude - w.down_amplitude < th_yminusx ) accepted = false; // pos threshold
       if ( uV_neg < 0 && w.down_amplitude > uV_neg ) accepted = false;
@@ -728,9 +734,9 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   median_slope_n1 = acc_slope_n1.size() > 0 ? MiscMath::median( acc_slope_n1 ) : 0 ; 
   median_slope_n2 = acc_slope_n2.size() > 0 ? MiscMath::median( acc_slope_n2 ) : 0 ; 
     
-  std::cerr << ", of which " << sw.size() << " slow waves met criteria";
-  if ( thr > 0 ) std::cerr << " (based on sw thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
-  std::cerr << "\n";
+  logger << ", of which " << sw.size() << " slow waves met criteria";
+  if ( thr > 0 ) logger << " (based on sw thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
+  logger << "\n";
 
   return sw.size();
 }
@@ -739,7 +745,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 void slow_waves_t::phase_slow_waves()
 {
   
-  std::cerr << " running Hilbert transform\n";
+  logger << " running Hilbert transform\n";
   
   const int n = filtered.size();
 
@@ -897,7 +903,7 @@ std::vector<double> slow_waves_t::time_locked_averaging( const std::vector<doubl
 	{
 	  int offset = CRandom::rand( 3 - 6 * sr );
 	  centre += offset;
-	  std::cerr << "offset = " << offset << "\n";
+	  logger << "offset = " << offset << "\n";
 	}
 
       
@@ -938,7 +944,7 @@ std::vector<double> slow_waves_t::time_locked_averaging( const std::vector<doubl
 void slow_waves_t::time_locked_spectral_analysis( edf_t & edf , const std::vector<double> * sig , double sr, double window_sec )
 {
 
-  std::cerr << " time-locked analysis of slow waves\n";
+  logger << " time-locked analysis of slow waves\n";
 
   if ( sw.size() == 0 ) return;
   
@@ -973,8 +979,8 @@ void slow_waves_t::time_locked_spectral_analysis( edf_t & edf , const std::vecto
   for (int i=0;i<sw.size();i++)
     {
       
-      std::cerr << " considering slow wave " << i+1 << " of " << sw.size() << "\n";
-      //    std::cerr << " npoints = " << npoints_total << "\n";
+      logger << " considering slow wave " << i+1 << " of " << sw.size() << "\n";
+      //    logger << " npoints = " << npoints_total << "\n";
       
       // analysis window may be zero-padded but will always be this fixed size
       std::vector<double> x( npoints_total , 0 );
@@ -1058,7 +1064,7 @@ void slow_waves_t::time_locked_spectral_analysis( edf_t & edf , const std::vecto
   // get means
   //
   
-  std::cerr << sigcnt.size() << " " << sigmean.size() << " " << npoints << " " << npoints_total << "\n";
+  logger << sigcnt.size() << " " << sigmean.size() << " " << npoints << " " << npoints_total << "\n";
   for (int j=0;j<npoints;j++)
     {
       sigmean[j] /= (double)sigcnt[j];

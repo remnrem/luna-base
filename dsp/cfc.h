@@ -28,7 +28,6 @@ struct edf_t;
 struct param_t;
 
 #include <vector>
-#include "helper/helper.h"
 
 namespace dsptools 
 {  
@@ -46,13 +45,7 @@ struct cfc_t
 	 const double a2,
 	 const double b1,
 	 const double b2 , 
-	 const double sr )
-  : d(d), a1(a1), a2(a2), b1(b1), b2(b2), sr(sr) 
-  { 
-    if ( a2 <= a1 ) Helper::halt("cfc: invalid lower frequency band");
-    if ( b2 <= b1 ) Helper::halt("cfc: invalid upper frequency band");
-    if ( a2 >= b1 ) Helper::halt("cfc: invalid lower/upper frequency band combination");
-  }
+	 const double sr );
 
   bool glm();
   

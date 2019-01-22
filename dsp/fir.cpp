@@ -22,11 +22,39 @@
 
 
 #include "fir.h"
+
 #include "helper/helper.h"
+#include "helper/logger.h"
 #include "fftw/fftwrap.h"
 #include "db/db.h"
+#include "eval.h"
+
+#include "edf/slice.h"
+#include "edf/edf.h"
+
+extern logger_t logger;
 
 extern writer_t writer;
+
+
+fir_impl_t::fir_impl_t( const std::vector<double> & coefs_ ) 
+{
+  count = 0;
+  length = coefs_.size();
+  coefs = coefs_;
+  delayLine.resize( length );
+  
+  // expecting a linear-phase FIR with odd number of coefficients
+  if ( coefs.size() % 2 != 1 ) Helper::halt( "expecting odd number of taps in FIR" );
+  int del = ( coefs.size() - 1 ) / 2 ;
+  
+  double checksum = 0;
+  for (int i=0;i<del;i++)
+    checksum += fabs( coefs[i] - coefs[ coefs.size() - 1 - i ] );
+  if ( checksum > 1e-8 ) Helper::halt( "problem in filter" );
+  
+}
+
 
 void dsptools::design_fir( param_t & param )
 {

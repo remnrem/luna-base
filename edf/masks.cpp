@@ -24,7 +24,7 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "edf.h"
-#include "main.h"
+#include "eval.h"
 
 extern logger_t logger;
 

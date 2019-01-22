@@ -1,16 +1,35 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
 #ifndef __FIPLOT_H__
 #define __FIPLOT_H__
 
 #include <vector>
 #include <map>
 
-#include "edf/edf.h"
-#include <string>
-#include "db/db.h"
-
+struct edf_t;
+struct param_t;
 
 void fiplot_wrapper( edf_t & edf , const param_t & param );
-
 
 struct fipair_t 
 { 
@@ -62,24 +81,7 @@ struct fiplot_t
     cycles = cyc;
   }
 
-  void set_f( double lwr , double upr , double inc , bool logspace ) 
-  {
-    
-    frqs.clear();
-
-    f_lwr = lwr;
-    f_upr = upr;
-    f_inc = inc; // # of inc if logspace == T
-    
-    if ( ! logspace )
-      {
-	for (double f = f_lwr ; f <= f_upr ; f += f_inc ) frqs.push_back( f );
-      }
-    else
-      {
-	frqs = MiscMath::logspace( f_lwr , f_upr , f_inc );
-      }
-  }
+  void set_f( double lwr , double upr , double inc , bool logspace ) ;
 
   void proc( const std::vector<double> & x , 
 	     const std::vector<uint64_t> * tp , 

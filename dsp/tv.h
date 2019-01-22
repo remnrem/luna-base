@@ -23,8 +23,6 @@
 #ifndef __TV_H__
 #define __TV_H__
 
-#include "../intervals/intervals.h"
-
 struct edf_t;
 struct param_t;
 
