@@ -182,6 +182,27 @@ struct annot_t
   }
 
 
+  // helper functions 
+  
+public:
+
+  static std::vector<bool> as_bool_vec( const std::vector<int> & x ) ; 
+  static std::vector<bool> as_bool_vec( const std::vector<double> & x ) ;
+  static std::vector<bool> as_bool_vec( const std::vector<std::string> & x ) ; 
+
+  static std::vector<int> as_int_vec( const std::vector<bool> & x ) ;
+  static std::vector<int> as_int_vec( const std::vector<double> & x ) ;
+  static std::vector<int> as_int_vec( const std::vector<std::string> & x ) ;
+
+  static std::vector<double> as_dbl_vec( const std::vector<bool> & x ) ;
+  static std::vector<double> as_dbl_vec( const std::vector<int> & x ) ;
+  static std::vector<double> as_dbl_vec( const std::vector<std::string> & x ) ;
+
+  static std::vector<std::string> as_txt_vec( const std::vector<bool> & x ) ;
+  static std::vector<std::string> as_txt_vec( const std::vector<int> & x ) ;
+  static std::vector<std::string> as_txt_vec( const std::vector<double> & x ) ;
+
+
 };
 
 
@@ -261,6 +282,18 @@ struct instance_t {
   // add double
   void set( const std::string & name , const double d );
 
+  // add integer vec
+  void set( const std::string & name , const std::vector<int> &  i );
+
+  // add string vec
+  void set( const std::string & name , const std::vector<std::string> & s );
+
+  // add bool vec
+  void set( const std::string & name , const std::vector<bool> & b );
+  
+  // add double vec
+  void set( const std::string & name , const std::vector<double> & d );
+
   // convenience function to add FTR metadate (i.e. str->str key/value pairs)
   void add( const std::map<std::string,std::string> & d )
   {
@@ -272,13 +305,14 @@ struct instance_t {
       }
   }
 
-  std::string print( const std::string & delim = "," ) const;
+  std::string print( const std::string & delim = ";" , const std::string & prelim = "" ) const;
   
   //
   // Misc helper functions
   //
   
   // the instance controls adding data-points, so it is also responsible for clean-up
+
   ~instance_t();
 
 
@@ -286,6 +320,11 @@ struct instance_t {
 };
 
 
+
+
+//
+// Generic 'value' class
+//
 
 struct avar_t
 {
@@ -299,7 +338,18 @@ struct avar_t
   virtual int         int_value() const = 0;
   virtual double      double_value() const = 0;
   virtual std::string text_value() const = 0;
+
+  virtual std::vector<bool>        bool_vector() const = 0;
+  virtual std::vector<int>         int_vector() const = 0;
+  virtual std::vector<double>      double_vector() const = 0;
+  virtual std::vector<std::string> text_vector() const = 0;
+
   virtual globals::atype_t     atype() const = 0;  
+  
+  virtual bool is_vector() const = 0 ; 
+
+  virtual int  size() const = 0 ; 
+  
   virtual avar_t *    clone() const = 0;
   
   bool has_value;
@@ -318,13 +368,26 @@ struct flag_avar_t : public avar_t
   ~flag_avar_t() { } 
   flag_avar_t *  clone() const { return new flag_avar_t(*this); }
   void set() { has_value=false; }
+
   bool bool_value() const { return true; } 
   int int_value() const { return 1; }
   double double_value() const { return 1; } 
   std::string text_value() const { return "."; } 
+
+  std::vector<bool>        bool_vector()   const { return std::vector<bool>(0); } 
+  std::vector<int>         int_vector()    const { return std::vector<int>(0); } 
+  std::vector<double>      double_vector() const { return std::vector<double>(0); } 
+  std::vector<std::string> text_vector()   const { return std::vector<std::string>(0); } 
+  bool is_vector() const { return false; } 
+  int size() const { return 0; } 
+
   globals::atype_t atype() const { return globals::A_FLAG_T; }  
 };
 
+
+//
+// Scalars
+//
 
 struct bool_avar_t : public avar_t 
 {
@@ -337,8 +400,15 @@ struct bool_avar_t : public avar_t
   bool bool_value() const { return value; }
   int int_value() const { return value; }
   double double_value() const { return value; }
-  std::string text_value() const { return has_value ? ( value ? "1" : "0" ) : "." ; } 
+  std::string text_value() const { return has_value ? ( value ? "true" : "false" ) : "." ; } 
   globals::atype_t atype() const { return globals::A_BOOL_T; }
+
+  std::vector<bool>        bool_vector()   const { return std::vector<bool>(1,bool_value()); } 
+  std::vector<int>         int_vector()    const { return std::vector<int>(1,int_value()); } 
+  std::vector<double>      double_vector() const { return std::vector<double>(1,double_value()); } 
+  std::vector<std::string> text_vector()   const { return std::vector<std::string>(1,text_value()); } 
+  bool is_vector() const { return false; } 
+  int size() const { return 1; } 
   
 };
 
@@ -356,6 +426,13 @@ struct int_avar_t : public avar_t
   double double_value() const { return value; }
   std::string text_value() const { return has_value ? Helper::int2str( value ) : "."; } 
   globals::atype_t atype() const { return globals::A_INT_T; }
+
+  std::vector<bool>        bool_vector()   const { return std::vector<bool>(1,bool_value()); } 
+  std::vector<int>         int_vector()    const { return std::vector<int>(1,int_value()); } 
+  std::vector<double>      double_vector() const { return std::vector<double>(1,double_value()); } 
+  std::vector<std::string> text_vector()   const { return std::vector<std::string>(1,text_value()); } 
+  bool is_vector() const { return false; } 
+  int size() const { return 1; } 
   
 };
 
@@ -372,6 +449,13 @@ struct double_avar_t : public avar_t
   double double_value() const { return value; }
   std::string text_value() const { return has_value ? Helper::dbl2str( value ) : "."; } 
   globals::atype_t atype() const { return globals::A_DBL_T; }
+
+  std::vector<bool>        bool_vector()   const { return std::vector<bool>(1,bool_value()); } 
+  std::vector<int>         int_vector()    const { return std::vector<int>(1,int_value()); } 
+  std::vector<double>      double_vector() const { return std::vector<double>(1,double_value()); } 
+  std::vector<std::string> text_vector()   const { return std::vector<std::string>(1,text_value()); } 
+  bool is_vector() const { return false; } 
+  int size() const { return 1; } 
   
 };
 
@@ -383,7 +467,7 @@ struct text_avar_t : public avar_t
   text_avar_t *  clone() const { return new text_avar_t(*this); }
   std::string value;
   void set( const std::string & t ) { has_value=true; value=t; } 
-  bool bool_value() const { return value!="0" && value != "F" ; }
+  bool bool_value() const { return value!="0" && value != "false" ; }
   int int_value() const 
   { 
     if ( ! has_value ) return 0;
@@ -401,7 +485,128 @@ struct text_avar_t : public avar_t
 
   std::string text_value() const { return has_value ? value : "."; } 
   globals::atype_t atype() const { return globals::A_TXT_T; }  
+
+  std::vector<bool>        bool_vector()   const { return std::vector<bool>(1,bool_value()); } 
+  std::vector<int>         int_vector()    const { return std::vector<int>(1,int_value()); } 
+  std::vector<double>      double_vector() const { return std::vector<double>(1,double_value()); } 
+  std::vector<std::string> text_vector()   const { return std::vector<std::string>(1,text_value()); } 
+  bool is_vector() const { return false; } 
+  int size() const { return 1; } 
+
 };
+
+
+//
+// Vectors
+//
+
+struct boolvec_avar_t : public avar_t 
+{
+ public:
+  boolvec_avar_t( const std::vector<bool> & b ) { set(b); }
+  ~boolvec_avar_t() { } 
+  boolvec_avar_t *  clone() const { return new boolvec_avar_t(*this); }
+  std::vector<bool> value;
+  void set( const std::vector<bool> & b ) { has_value=true; value=b; } 
+
+  bool bool_value() const { return value.size() > 0 ; }
+  int int_value() const { return value.size(); }
+  double double_value() const { return value.size(); }
+  std::string text_value() const { return Helper::int2str( (int)value.size() ); }
+  
+  globals::atype_t atype() const { return globals::A_BOOLVEC_T; }
+  
+  std::vector<bool>        bool_vector()   const { return value; } 
+  std::vector<int>         int_vector()    const { return annot_t::as_int_vec( value ); } 
+  std::vector<double>      double_vector() const { return annot_t::as_dbl_vec( value ); }
+  std::vector<std::string> text_vector()   const { return annot_t::as_txt_vec( value ); }
+  bool is_vector() const { return true; } 
+  int size() const { return value.size(); } 
+  
+};
+
+
+struct intvec_avar_t : public avar_t 
+{
+ public:
+  intvec_avar_t( const std::vector<int> & i ) { set(i); }
+  ~intvec_avar_t() { } 
+  intvec_avar_t *  clone() const { return new intvec_avar_t(*this); }
+  std::vector<int> value;
+  void set( const std::vector<int> & i ) { has_value=true; value=i; } 
+
+  bool bool_value() const { return value.size() > 0 ; }
+  int int_value() const { return value.size(); }
+  double double_value() const { return value.size(); }
+  std::string text_value() const { return Helper::int2str( (int)value.size() ); }
+  
+  globals::atype_t atype() const { return globals::A_INTVEC_T; }
+  
+  std::vector<bool>        bool_vector()   const { return annot_t::as_bool_vec( value ); } 
+  std::vector<int>         int_vector()    const { return value ; } 
+  std::vector<double>      double_vector() const { return annot_t::as_dbl_vec( value ); }
+  std::vector<std::string> text_vector()   const { return annot_t::as_txt_vec( value ); }
+  bool is_vector() const { return true; } 
+  int size() const { return value.size(); } 
+
+};
+
+struct doublevec_avar_t : public avar_t
+{
+ public:
+  doublevec_avar_t( const std::vector<double> & d ) { set(d); }
+  ~doublevec_avar_t() { } 
+  doublevec_avar_t *  clone() const { return new doublevec_avar_t(*this); }
+  std::vector<double> value;
+  void set( const std::vector<double> & d ) { has_value=true; value=d; } 
+
+  bool bool_value() const { return value.size() > 0 ; }
+  int int_value() const { return value.size(); }
+  double double_value() const { return value.size(); }
+  std::string text_value() const { return Helper::int2str( (int)value.size() ); }
+  
+  globals::atype_t atype() const { return globals::A_DBLVEC_T; }
+  
+  std::vector<bool>        bool_vector()   const { return annot_t::as_bool_vec( value ); } 
+  std::vector<int>         int_vector()    const { return annot_t::as_int_vec( value ); } 
+  std::vector<double>      double_vector() const { return value ; }
+  std::vector<std::string> text_vector()   const { return annot_t::as_txt_vec( value ); }
+  bool is_vector() const { return true; } 
+  int size() const { return value.size(); } 
+  
+};
+
+struct textvec_avar_t : public avar_t 
+{
+ public:
+  textvec_avar_t( const std::vector<std::string> & t ) { set(t); }
+  ~textvec_avar_t() { } 
+  textvec_avar_t *  clone() const { return new textvec_avar_t(*this); }
+  std::vector<std::string> value;
+  void set( const std::vector<std::string> & t ) { has_value=true; value=t; } 
+
+  bool bool_value() const { return value.size() > 0 ; }
+  int int_value() const { return value.size(); }
+  double double_value() const { return value.size(); }
+  std::string text_value() const { return Helper::int2str( (int)value.size() ); }
+  
+  globals::atype_t atype() const { return globals::A_TXTVEC_T; }
+  
+  std::vector<bool>        bool_vector()   const { return annot_t::as_bool_vec( value ); } 
+  std::vector<int>         int_vector()    const { return annot_t::as_int_vec( value ); } 
+  std::vector<double>      double_vector() const { return annot_t::as_dbl_vec( value ); }
+  std::vector<std::string> text_vector()   const { return value; }
+
+  bool is_vector() const { return true; } 
+  int size() const { return value.size(); } 
+
+};
+
+
+
+
+
+
 
 
 struct annotation_set_t;

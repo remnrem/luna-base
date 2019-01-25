@@ -33,6 +33,9 @@
 #include <vector>
 
 struct instance_t;
+struct instance_idx_t;
+
+typedef std::map<instance_idx_t,instance_t*> annot_map_t;
 
 struct Eval {
     
@@ -59,19 +62,15 @@ struct Eval {
   
   bool parse( const std::string & input );
 
-/*   void bind( SampleVariant & svar , bool reset = true ); */
-/*   void bind( SampleVariant & svar , SampleVariant & gvar , bool reset = true ); */
-/*   void bind( Variant & var , bool reset = true ); */
-/*   template<class T> void assign_to( MetaInformation<T> & m ); */
-/*   template<class T> void bind( MetaInformation<T> & m , bool reset = true ); */
-
   void assign_to( instance_t & m );
 
-  void bind( instance_t & m , bool reset = true );
-
+  void bind( const std::map<std::string,annot_map_t> & inputs , 
+	     instance_t * outputs , 
+	     instance_t * accumulator = NULL , 
+	     const std::set<std::string> * global_vars = NULL , 
+	     bool reset = true );
+  
   void bind( const Token * );
-
-  //  Token eval_gfunc( const std::string & , int gmode );
 
   bool evaluate();
     

@@ -121,6 +121,33 @@ std::string strata_t::print() const
 }
 
 
+std::string strata_t::print_nocmd() const
+{
+  if ( levels.size() == 0 ) return ".";
+
+  std::stringstream ss;
+  std::map<factor_t,level_t>::const_iterator aa = levels.begin();
+  bool printed = false;
+  while ( aa != levels.end() )
+    {
+      // skip if epoch/time-point
+      if ( aa->first.factor_name == globals::epoch_strat || 
+	   aa->first.factor_name == globals::time_strat ) { ++aa; continue; }  
+      
+      // skip commands
+      if ( aa->first.factor_name[0] == '_' ) { ++aa; continue; } 
+
+      if ( printed ) ss << ";";
+      ss << aa->first.factor_name << "/" << aa->second.level_name ; 
+      printed = true;
+      ++aa;
+    }
+  std::string rstr = ss.str();
+  if ( rstr == "" ) return ".";
+  return ss.str();
+}
+
+
 bool StratOutDBase::attach( const std::string & n , bool readonly )
 {
   

@@ -234,25 +234,19 @@ bool Helper::str2int64(const std::string & s , uint64_t * i)
   return from_string<uint64_t>(*i,s,std::dec);
 }
 
-std::string Helper::stringize( const std::vector<std::string> & d)
-{
-  std::string r;
-  for (int i=0;i<d.size();i++) r += ( i ? " " + d[i] : d[i] );
-  return r;
-}
 
-std::string Helper::stringize( const std::set<std::string> & d , const std::string & delim )
-{
-  std::stringstream ss;
-  std::set<std::string>::const_iterator dd = d.begin();
-  while ( dd != d.end() )
-    {
-      if ( dd != d.begin() ) ss << delim;
-      ss << *dd;
-      ++dd;
-    }
-  return ss.str();
-}
+// std::string Helper::stringize( const std::set<std::string> & d , const std::string & delim )
+// {
+//   std::stringstream ss;
+//   std::set<std::string>::const_iterator dd = d.begin();
+//   while ( dd != d.end() )
+//     {
+//       if ( dd != d.begin() ) ss << delim;
+//       ss << *dd;
+//       ++dd;
+//     }
+//   return ss.str();
+// }
 
 std::string Helper::trim( const std::string & s , const char c , const char d )
 {

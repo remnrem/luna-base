@@ -173,7 +173,8 @@ struct level_t;
     std::string factor_level_string() const;
     int matches( const std::set<int> & cvars , const std::set<int> & rvars );
     std::string print() const;
-
+    std::string print_nocmd() const; // skip if factor starts w/ _
+  
     bool drop( int factor_id )
     {            
       std::map<factor_t,level_t> levels_copy = levels;
@@ -925,7 +926,7 @@ class writer_t
 	      << curr_command.cmd_name ;
     
     if ( curr_strata.empty() ) std::cout << "\t.";
-    else std::cout << "\t" << curr_strata.print() ;
+    else std::cout << "\t" << curr_strata.print_nocmd() ;
     
     if ( curr_timepoint.none() ) std::cout << "\t.";
     else std::cout << "\t" << curr_timepoint.print();

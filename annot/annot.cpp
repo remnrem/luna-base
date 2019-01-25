@@ -29,6 +29,7 @@
 #include "tinyxml/xmlreader.h"
 #include "db/db.h"
 #include "nsrr-remap.h"
+#include "helper/token-eval.h"
 
 #include <string>
 #include <fstream>
@@ -69,16 +70,35 @@ instance_t * annot_t::add( const std::string & id , const interval_t & interval 
   
 }
 
-std::string instance_t::print( const std::string & delim ) const
+std::string instance_t::print( const std::string & delim , const std::string & prelim ) const
 {
   std::stringstream ss;
+
   std::map<std::string,avar_t*>::const_iterator dd = data.begin();
   while ( dd != data.end() )
     {
+      
       if ( dd != data.begin() ) ss << delim;
-      ss << dd->first << "=" << dd->second->text_value();
+
+      ss << prelim;
+      
+      if ( dd->second == NULL )
+	ss << dd->first;
+      else if ( dd->second->atype() == globals::A_BOOLVEC_T )
+	ss << dd->first << "=" << Helper::stringize( dd->second->text_vector() , "," ) ;
+      else if ( dd->second->atype() == globals::A_INTVEC_T )
+	ss << dd->first << "=" << Helper::stringize( dd->second->int_vector() , "," ) ;
+      else if ( dd->second->atype() == globals::A_DBLVEC_T )
+	ss << dd->first << "=" << Helper::stringize( dd->second->double_vector() , "," ) ;
+      else if ( dd->second->atype() == globals::A_TXTVEC_T )
+	ss << dd->first << "=" << Helper::stringize( dd->second->text_vector() , "," ) ;
+
+      else
+ 	ss << dd->first << "=" << dd->second->text_value();
       ++dd;
+
     }
+
   return ss.str();
 }
 
@@ -91,11 +111,26 @@ globals::atype_t instance_t::type( const std::string & s ) const
 
 void instance_t::check( const std::string & name )
 {
+
   std::map<std::string,avar_t*>::iterator dd = data.find( name );
+
   if ( dd == data.end() ) return;
-  if ( dd->second == NULL ) return; // flag, so no storage set
-  tracker.erase( dd->second ); // otherwise, need to clear old storage
-  data.erase( dd );  // and erase from list
+
+  if ( dd->second == NULL ) return;  // flag, so no storage set
+  
+  // erase actual storage...
+  delete dd->second; 
+
+  // erase place in the tracker
+  std::set<avar_t*>::iterator ff = tracker.find( dd->second );
+  if ( ff != tracker.end() )
+    tracker.erase( tracker.find( dd->second ) ); 
+  else 
+    Helper::halt( "internal error in instance_t::check()... avar_t not tracked" );
+  
+  // and erase from this data map instance
+  data.erase( dd );  
+  
   return;
 }
 
@@ -138,6 +173,42 @@ void instance_t::set( const std::string & name , const double d )
   tracker.insert( a );
   data[ name ] = a;    
 }
+
+
+// vectors
+void instance_t::set( const std::string & name , const std::vector<int> &  i ) 
+{
+  check( name );
+  avar_t * a = new intvec_avar_t( i ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set( const std::string & name , const std::vector<std::string> & s ) 
+{
+  check( name );
+  avar_t * a = new textvec_avar_t( s ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set( const std::string & name , const std::vector<bool> & b )
+{
+  check( name );
+  avar_t * a = new boolvec_avar_t( b ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set( const std::string & name , const std::vector<double> & d )
+{
+  check( name );
+  avar_t * a = new doublevec_avar_t( d ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+
 
 instance_t::~instance_t()
 {
@@ -708,6 +779,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		{
 		  if ( tok[j] != "." )
 		    {
+		      // accepts F and T as well as long forms (false, true)
 		      bool value = Helper::yesno( tok[j] );
 		      instance->set( label , value );
 		    }
@@ -736,6 +808,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		{
 		  instance->set( label , tok[j] );
 		}
+	      
+	      //
+	      // TODO.. add vector readers
+	      //
+
 
 	      else
 		logger << "could not read undefined type from annotation file for " << label << "\n";
@@ -1117,7 +1194,6 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
       ++ii;
     }
  
-
 }
 
 bool annot_t::loadxml( const std::string & filename , edf_t * edf )
@@ -1698,4 +1774,231 @@ std::set<std::string> annot_t::instance_ids() const
       ++ii;
     }
   return r;
+}
+
+
+
+//
+// Silly helper functions...
+//
+
+std::vector<bool> annot_t::as_bool_vec( const std::vector<int> & x ) { 
+  std::vector<bool> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = (bool)x[i];
+  return y;
+} 
+
+std::vector<bool> annot_t::as_bool_vec( const std::vector<double> & x ) { 
+  std::vector<bool> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = (bool)x[i];
+  return y;
+} 
+
+std::vector<bool> annot_t::as_bool_vec( const std::vector<std::string> & x ) { 
+  std::vector<bool> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = Helper::yesno( x[i] );
+  return y;
+} 
+
+
+// to int
+std::vector<int> annot_t::as_int_vec( const std::vector<bool> & x ) { 
+  std::vector<int> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = (int)x[i];
+  return y;
+} 
+
+std::vector<int> annot_t::as_int_vec( const std::vector<double> & x ) { 
+  std::vector<int> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = (int)round(x[i]);
+  return y;
+} 
+
+std::vector<int> annot_t::as_int_vec( const std::vector<std::string> & x ) { 
+  std::vector<int> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = (int)Helper::yesno( x[i] );
+  return y;
+} 
+
+// to dbl
+std::vector<double> annot_t::as_dbl_vec( const std::vector<bool> & x ) { 
+  std::vector<double> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = x[i];
+  return y;
+} 
+
+std::vector<double> annot_t::as_dbl_vec( const std::vector<int> & x ) { 
+  std::vector<double> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = x[i];
+  return y;
+} 
+
+std::vector<double> annot_t::as_dbl_vec( const std::vector<std::string> & x ) { 
+  std::vector<double> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = Helper::yesno( x[i] );
+  return y;
+} 
+
+// to txt
+std::vector<std::string> annot_t::as_txt_vec( const std::vector<bool> & x ) { 
+  std::vector<std::string> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = x[i] ? "true" : "false" ;
+  return y;
+} 
+
+std::vector<std::string> annot_t::as_txt_vec( const std::vector<int> & x ) { 
+  std::vector<std::string> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = x[i] == 0 ? "false" : "true" ;
+  return y;
+} 
+
+std::vector<std::string> annot_t::as_txt_vec( const std::vector<double> & x ) { 
+  std::vector<std::string> y( x.size() );
+  for (int i=0;i<x.size();i++) y[i] = x[i] == 0 ? "false" : "true" ;
+  return y;
+} 
+
+
+
+//
+// Implement the EVAL command
+//
+
+
+void proc_eval( edf_t & edf , param_t & param )
+{
+  
+  // expects a single parameter: 
+  //   annot=name
+  //   expr=# expression #
+  //   globals=J,K,L
+  
+  
+  std::string new_annot_class = param.requires( "annot" );
+  
+  std::string expression = Helper::unquote( param.requires( "expr" ) , '#' );
+   
+  std::set<std::string> acc_vars;
+  if ( param.has( "globals" ) ) acc_vars = param.strset( "globals" );
+  
+  logger << "  evaluating expression           : " << expression << "\n";
+  logger << "  derived values annotation class : " << new_annot_class << " (and " << new_annot_class << "_global)\n";
+
+  
+  //
+  // Get all existing annotations
+  //
+  
+  std::vector<std::string> names = edf.timeline.annotations.names();
+
+
+  //
+  // Create/attach new annotation class, which will have multiple
+  // epoch-level instances 
+  //
+  
+  annot_t * new_annot = edf.timeline.annotations.add( new_annot_class );
+  
+
+  // 
+  // Make global annotation an entirely separate class of annotation
+  //
+  
+  annot_t * global_annot = edf.timeline.annotations.add( new_annot_class + "_global" );
+  
+  instance_t * accumulator = global_annot->add( "." , edf.timeline.wholetrace() );
+  
+  //
+  // We need to initialize any global variables that will appear in the main expression
+  // Assume these are all floats for now, and will have the form _var 
+  //
+  
+  std::set<std::string>::const_iterator ii = acc_vars.begin();
+  while ( ii != acc_vars.end() ) 
+    {
+      accumulator->set( *ii , 0 );
+      ++ii;
+    }
+   
+  //
+  // Iterate over epochs
+  //
+
+  edf.timeline.first_epoch();
+  
+  int acc_total = 0 , acc_retval = 0 , acc_valid = 0; 
+
+  while ( 1 ) 
+    {
+
+      // consider _ALL_ epochs
+      
+      int e = edf.timeline.next_epoch_ignoring_mask() ;
+      
+      if ( e == -1 ) break;
+      
+      interval_t interval = edf.timeline.epoch( e );
+	  
+      std::map<std::string,annot_map_t> inputs;
+
+      // get each annotations
+      for (int a=0;a<names.size();a++)
+	{
+	  
+	  annot_t * annot = edf.timeline.annotations.find( names[a] );
+	  
+	  // get overlapping annotations for this epoch
+	  annot_map_t events = annot->extract( interval );
+	  
+	  // store
+	  inputs[ names[a] ] = events;
+	}
+      
+      // create a new instance for the output variables
+      instance_t * new_instance = new_annot->add( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval );
+      
+      //
+      // evaluate the expression
+      //
+
+      Eval tok( expression );
+      
+      tok.bind( inputs , new_instance , accumulator , &acc_vars );
+      
+      bool is_valid = tok.evaluate();
+      
+      bool retval;
+      
+      if ( ! tok.value( retval ) ) is_valid = false;
+
+      //
+      // Output
+      //
+  
+      acc_total++;
+
+      acc_valid += is_valid;
+
+      if ( acc_valid ) 
+	acc_retval += retval;
+
+      // next epoch
+    } 
+  
+
+  //
+  // show accumulator output in log
+  //
+
+  logger << "  evaluated expressions/epochs  " 
+	 << acc_total << " ("
+	 << acc_valid << " valid, " 
+	 << acc_retval << " true)\n";
+  logger << "  global variables (if any):\n" << accumulator->print( "\n" , "\t" ) ;
+  
+  logger << "\n";
+
+  // all done 
+  return;
+  
 }

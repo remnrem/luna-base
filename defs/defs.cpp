@@ -38,6 +38,8 @@ std::string globals::version;
 std::string globals::date;
 
 std::string globals::annot_folder;
+std::vector<std::string> globals::annot_files;
+
 bool globals::read_ftr;
 std::set<std::string> globals::specified_annots;
 bool globals::remap_nsrr_annots;
@@ -140,7 +142,7 @@ void globals::init_defs()
   
   annot_folder = "";
 
-
+  annot_files.clear();
   
   
   //
@@ -310,11 +312,24 @@ void globals::init_defs()
   //
 
   type_name[ A_NULL_T ] = "null";
+  type_name[ A_FLAG_T ] = "flag";
+
   type_name[ A_TXT_T ] = "txt";
   type_name[ A_INT_T ] = "int";
   type_name[ A_DBL_T ] = "num";
   type_name[ A_BOOL_T ] = "bool";
-  type_name[ A_FLAG_T ] = "flag";
+
+  type_name[ A_TXTVEC_T ] = "txtvec";
+  type_name[ A_INTVEC_T ] = "intvec";
+  type_name[ A_DBLVEC_T ] = "numvec";
+  type_name[ A_BOOLVEC_T ] = "boolvec";
+
+  // flags (i.e. no value)
+
+  name_type[ "FLAG" ] = A_FLAG_T; 
+  name_type[ "flag" ] = A_FLAG_T; 
+
+  // scalars 
 
   name_type[ "TXT" ] = A_TXT_T;
   name_type[ "txt" ] = A_TXT_T;
@@ -330,8 +345,22 @@ void globals::init_defs()
   name_type[ "YN" ] = A_BOOL_T; 
   name_type[ "yn" ] = A_BOOL_T; 
 
-  name_type[ "FLAG" ] = A_FLAG_T; 
-  name_type[ "flag" ] = A_FLAG_T; 
+
+  // vectors
+
+  name_type[ "TXTVEC" ] = A_TXTVEC_T;
+  name_type[ "txtvec" ] = A_TXTVEC_T;
+
+  name_type[ "INTVEC" ] = A_INTVEC_T; 
+  name_type[ "intvec" ] = A_INTVEC_T; 
+
+  name_type[ "NUMVEC" ] = A_DBLVEC_T; 
+  name_type[ "numvec" ] = A_DBLVEC_T; 
+
+  name_type[ "BOOLVEC" ] = A_BOOLVEC_T; 
+  name_type[ "boolvec" ] = A_BOOLVEC_T; 
+  name_type[ "YNVEC" ] = A_BOOLVEC_T; 
+  name_type[ "ynvec" ] = A_BOOLVEC_T; 
 
 }
 

@@ -44,6 +44,7 @@ struct options_t {
   bool long_format;      // -l
   double prec; // -p 
   bool full;   // -f
+  bool show_progress; // -
   options_t() 
     :
     print_empty_rows( false ) , 

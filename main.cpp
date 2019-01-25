@@ -36,8 +36,6 @@ extern writer_t writer;
 extern logger_t logger;
 
 
-
-
 int main(int argc , char ** argv )
 {
   
@@ -58,6 +56,13 @@ int main(int argc , char ** argv )
       proc_dummy(); 
       exit(0); 
     } 
+  else if ( argc == 2 && strcmp( argv[1] , "--eval" ) == 0 ) 
+    {
+      // simple test evaluation of expressions from the command line
+      global.api();
+      proc_eval_tester(); 
+      exit(0);       
+    }
   else if ( argc == 3 && strcmp( argv[1] , "--validate" ) == 0 ) 
     {
       // 1: sample-list or EDF
@@ -70,7 +75,6 @@ int main(int argc , char ** argv )
       annot_t::dumpxml( argv[2] , false );
       std::exit(0);
     }
-
 
   //
   // banner
@@ -529,6 +533,10 @@ void process_edfs( cmd_t & cmd )
 	{
 	  edffile = cmd.data();
 	  rootname = edffile;
+
+	  tok.resize(2);
+	  tok[0] = rootname;
+	  tok[1] = edffile;
 	}
 
       //
@@ -562,7 +570,7 @@ void process_edfs( cmd_t & cmd )
       
       writer.id( rootname , edffile );
       
-      
+    
 
       //
       // Update any indiv-wildcards in the command list
@@ -639,14 +647,30 @@ void process_edfs( cmd_t & cmd )
 
 	  continue;
 	}
+      
+      
+      //
+      // Add additional annotations? 
+      //
 
+      for (int i=0;i<globals::annot_files.size();i++)
+	{
+	  // if absolute path given, add in as in  /home/joe/etc
+
+	  if ( globals::annot_files[i][0] == globals::folder_delimiter ) 
+	    tok.push_back( globals::annot_files[i] );
+	  else  // projecyt path may be "" if not set; but if set, will end in /
+	    tok.push_back( globals::project_path + globals::annot_files[i] );
+	}
+    
           
       //
-      // Attach annotations (not loaded, just store list of available ones)
+      // Attach annotations.  (run for single_edf mode, as we may have added an annotation file as above)
       //
       
-      if ( ! single_edf ) 
-	{
+//       if ( ! single_edf ) 
+// 	{
+	  
 	  for (int i=2;i<tok.size();i++) 
 	    {
 	      if ( tok[i][ tok[i].size() - 1 ] == '/' ) 
@@ -703,7 +727,7 @@ void process_edfs( cmd_t & cmd )
 	      const int nf = annot->types.size();
 	      
 	      logger << "  [" << names[a] << "] " 
-		     << num_events << " event(s)"
+		     << num_events << " instance(s)"
 		     << " (from " << annot->file << ")\n";
 	      
 	      // list instance IDs (up to 8) if multiple or differnt from annot name
@@ -728,6 +752,7 @@ void process_edfs( cmd_t & cmd )
 		    }
 		}
 
+
 	      // lists meta-data
 	      
 	      if ( nf > 1 )
@@ -745,7 +770,9 @@ void process_edfs( cmd_t & cmd )
 	      
 	      
 	    }
-	}
+
+
+	  //	} // end of single-EDF check 
 
 	    
       //
@@ -802,6 +829,37 @@ void process_edfs( cmd_t & cmd )
 
 
 
+// EVAL expresions
+
+void proc_eval_tester()
+{
+
+  // read a single line
+  std::string expr;
+  std::getline( std::cin , expr );
+
+  std::map<std::string,annot_map_t> inputs;
+
+  instance_t out;
+  
+  Eval tok( expr );
+
+  tok.bind( inputs , &out );
+
+  bool is_valid = tok.evaluate();
+  
+  bool retval;
+  
+  if ( ! tok.value( retval ) ) is_valid = false;
+
+  std::cout << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
+  std::cout << "return value                 : " << tok.result() << "\n";
+  std::cout << "return value (as T/F)        : " << ( retval ? "true" : "false" ) << "\n";
+  std::cout << "assigned meta-data           : " << out.print() << "\n";  
+  std::exit(1);
+
+}
+
 
 
 // DUMMY : a generic placeholder/scratchpad for templating new things
@@ -813,11 +871,64 @@ void proc_dummy()
 
   std::getline( std::cin , expr );
   
+
+  std::map<std::string,annot_map_t> inputs;
+
+  annot_map_t amap1, amap2;
+
+  std::vector<int> ints(3);
+  ints[0] = 637; ints[1] = 87; ints[3] = -23;
+
+
+  instance_t in1;
+  in1.set( "v1" , 10.0 );
+  in1.set( "v2" , std::string("A") );
+  in1.set( "v3" , true );
+
+  instance_t in2;
+  in2.set( "v1" , 92.1 );
+  in2.set( "v2" , std::string( "B" ) );
+  in2.set( "v3" , true );
+
+  instance_t in3;
+  in3.set( "v1" , 108.5 );
+  in3.set( "v2" , std::string( "C" ) );
+  in3.set( "v3" , false );
+
+  annot_t annot1( "a1" );
+  
+  amap1[ instance_idx_t( &annot1 , interval_t(0,100) , "inst1" ) ] = &in1;
+  amap1[ instance_idx_t( &annot1 , interval_t(200,300) , "inst2" ) ] = &in2;
+  amap1[ instance_idx_t( &annot1 , interval_t(200,300) , "inst3" ) ] = &in3;
+
+//   amap2[ instance_idx_t( &annot2 , interval_t(0,100) , "." ) ] = &in3;
+//   amap2[ instance_idx_t( &annot2 , interval_t(200,300) , "." ) ] = &in4;
+
+  // collate all annotations
+  inputs[ "a1" ] = amap1;
+  //  inputs[ "annot2" ] = amap2;
+  
+  instance_t out;
+  
   Eval tok( expr );
 
-  bool result = tok.evaluate();
+  tok.bind( inputs , &out );
+
+
+  bool is_valid = tok.evaluate();
   
-  std::cout << "result = " << result << "\n";
+  bool retval; 
+  
+  bool is_valid2 = tok.value( retval );
+  
+  std::cout << "\n\n\n";
+  std::cout << "valid " << is_valid << "\t" << is_valid2 << "\n";
+  std::cout << "value  = " << retval << "\n";
+  std::cout << "result = " << tok.result() << "\n";
+
+  std::cout << "\n\n\n";
+  
+  std::cout << "out : " << out.print() << "\n";
   
   std::exit(1);
   

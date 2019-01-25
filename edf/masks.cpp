@@ -141,7 +141,34 @@ void proc_mask( edf_t & edf , param_t & param )
       return;
     }
   
+
+  //
+  // Eval expression masks
+  //
   
+  if ( param.has( "expr" ) ) 
+    {
+      // force, mask_mode == 2 
+      edf.timeline.apply_eval_mask( param.value( "expr" ) ,  2 ) ; 
+      return;
+   }
+
+  if ( param.has( "mask" ) )
+    {
+      // mask, mask_mode == 0 
+      edf.timeline.apply_eval_mask( param.value( "mask" ) , 0 ) ; 
+      return;      
+    }
+  
+  if ( param.has( "unmask" ) )
+    {
+      // unmask , mask_mode == 1 
+      // i.e. if true, unmask
+      edf.timeline.apply_eval_mask( param.value( "unmask" ) , 1 ) ; 
+      return;            
+    }
+  
+
   //
   // 'Special' masks
   //

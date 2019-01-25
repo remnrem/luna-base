@@ -23,6 +23,7 @@
 
 #include "nsrr-remap.h"
 #include "defs/defs.h"
+#include "eval.h"
 
 // annotation map
 std::map<std::string,std::string> nsrr_t::amap;
@@ -44,6 +45,40 @@ std::string nsrr_t::remap( const std::string & a )
 void nsrr_t::init() 
 {
 
+  //
+  // auto-populated variables -- note these are defined here even if nsrr-remap mode if 
+  // later turned off.  not a problem, as the variables will be overwritten by anything specified on
+  // the command line, this will not yet have been parsed
+  //
+  
+  cmd_t::vars[ "arousal" ] = "arousal_standard,arousal_spontaneous,arousal_external,arousal_respiratory, arousal_plm,arousal_chesire";
+  
+  cmd_t::vars[ "apnea" ] = "apnea_obstructive,apnea_central,apnea_mixed,hypopnea";
+  
+  cmd_t::vars[ "artifact" ] 
+    = "artifact_respiratory,artifact_proximal_pH,artifact_distal_pH, artifact_blood_pressure,artifact_TcCO2,artifact_SpO2,artifact_EtCO2";
+  
+  cmd_t::vars[ "arrhythmia" ] = "bradycardia,tachycardia,tachycardia_narrowcomplex";
+	       
+  cmd_t::vars[ "plm" ] = "plm_left,plm_right";
+  
+  cmd_t::vars[ "n1" ] = "NREM1";
+  
+  cmd_t::vars[ "n2" ] = "NREM2";
+  
+  cmd_t::vars[ "n3" ] = "NREM3,NREM4";
+  
+  cmd_t::vars[ "rem" ] = "REM";
+  
+  cmd_t::vars[ "wake" ] = "wake";
+  
+  cmd_t::vars[ "sleep" ] = "NREM1,NREM2,NREM3,NREM4,REM";
+  
+  
+  //
+  // actual remapping terms
+  //
+  
   amap[ "Arousal ()" ] = "arousal";
   amap[ "Arousal|Arousal ()" ] = "arousal";
   amap[ "Arousal|Arousal (Arousal)" ] = "arousal";
@@ -138,20 +173,20 @@ void nsrr_t::init()
 
   amap[ "Respiratory artifact" ] = "artifact_respiratory";
       
-  amap[ "Proximal pH artifact" ] = "artifact_proximal_ph";
+  amap[ "Proximal pH artifact" ] = "artifact_proximal_pH";
 
-  amap[ "Distal pH artifact" ] = "artifact_distal_ph";
+  amap[ "Distal pH artifact" ] = "artifact_distal_pH";
 
   amap[ "Blood pressure artifact" ] = "artifact_blood_pressure";
   
-  amap[ "TcCO2 artifact" ] = "artifact_tcco2" ;       
+  amap[ "TcCO2 artifact" ] = "artifact_TcCO2" ;       
   
-  amap[ "SpO2 artifact" ] = "artifact_spo2";
+  amap[ "SpO2 artifact" ] = "artifact_SpO2";
      
-  amap[ "SpO2 artifact|SpO2 artifact" ] = "artifact_spo2";
+  amap[ "SpO2 artifact|SpO2 artifact" ] = "artifact_SpO2";
 
-  amap[ "EtCO2 artifact" ] = "artifact_etco2";
-  amap[ "EtCO2 artifact|EtCO2 artifact" ] = "artifact_etco2";
+  amap[ "EtCO2 artifact" ] = "artifact_EtCO2";
+  amap[ "EtCO2 artifact|EtCO2 artifact" ] = "artifact_EtCO2";
       
   // respiratory
 

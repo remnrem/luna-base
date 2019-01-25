@@ -62,9 +62,9 @@ namespace Helper
     return ltrim(rtrim(s));
   }
 
-  static inline std::string unquote(const std::string &s) {
-    int a = s[0] == '"' ? 1 : 0;
-    int b = s[s.size()-1] == '"' ? 1 : 0 ;
+  static inline std::string unquote(const std::string &s , const char q2 = '"' ) {
+    int a = ( s[0] == '"' || s[0] == q2 ) ? 1 : 0;
+    int b = ( s[s.size()-1] == '"' || s[s.size()-1] == q2 ) ? 1 : 0 ;
     return s.substr(a,s.size()-a-b);
   }
 
@@ -118,8 +118,25 @@ namespace Helper
   std::string dbl2str(double n, int dp);  
   std::string dbl2str_fixed(double n, int ch );
   std::string brief( const std::string & , int l = 40);
-  std::string stringize( const std::vector<std::string> & );
-  std::string stringize( const std::set<std::string> & , const std::string & delim = "," );
+/*   std::string stringize( const std::vector<std::string> & ); */
+/*   std::string stringize( const std::set<std::string> & , const std::string & delim = "," ); */
+
+  template<typename T> 
+    std::string stringize( const T & t , const std::string & delim = "," )
+    {
+      std::stringstream ss;
+      
+      typename T::const_iterator tt = t.begin();
+      while ( tt != t.end() )
+	{
+	  if ( tt != t.begin() ) ss << delim;
+	  ss << *tt;
+	  ++tt;
+	}
+      return ss.str();
+    }
+  
+  
   std::string trim( const std::string & s , const char c = ' ' , const char d = ' ' );
   std::string format( const std::string & , int indent = 10 , int width = 60, bool no_initial_indent = true );
 
@@ -138,7 +155,7 @@ namespace Helper
     }
 
   std::vector<std::string> parse(const std::string & item, const std::string & s = " \t\n" , bool empty = false );
-  std::vector<std::string> quoted_parse(const std::string & item , const std::string & s , const char q = '"' , const char q2 = '"' , bool empty = false );
+  std::vector<std::string> quoted_parse(const std::string & item , const std::string & s , const char q = '"' , const char q2 = '#' , bool empty = false );
 
   std::vector<std::string> char_split( const std::string & s , const char c , bool empty );
   std::vector<std::string> char_split( const std::string & s , const char c , const char c2 , bool empty );

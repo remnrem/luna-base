@@ -222,6 +222,7 @@ void proc_epoch_dump( edf_t & , param_t & );
 void proc_epoch_matrix( edf_t & , param_t & );
 void proc_epoch_mask( edf_t & , param_t & );
 void proc_mask( edf_t & , param_t & );
+void proc_eval( edf_t & , param_t & );
 void proc_epoch( edf_t & , param_t & );
 void proc_slice( edf_t & , param_t & , int );
 

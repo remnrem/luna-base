@@ -32,7 +32,7 @@
 #include "annot/annot.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
-
+#include "helper/token-eval.h"
 
 extern writer_t writer;
 
@@ -673,10 +673,12 @@ void timeline_t::apply_empty_epoch_mask( const std::string & label , bool includ
       if ( !mask[e] ) ++cnt_now_unmasked;
       
     }
-  
+
   logger << " based on " << label << " " << cnt_basic_match << " epochs match; ";
-  logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << cnt_mask_set << " newly masked, "   
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
@@ -789,8 +791,11 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
   
   logger << " based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values , "|" ) + "]" : "" )  
 	 << " " << cnt_basic_match << " epochs match; ";
-  logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+
+  logger << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
@@ -1004,7 +1009,7 @@ void timeline_t::flip_epoch_mask()
     }
   
   logger << " flipped all epoch masks\n";
-  logger << " total of " << cnt_mask_unset << " of " << epochs.size() << " retained for analysis\n";
+  logger << " total of " << cnt_mask_unset << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -1065,8 +1070,12 @@ void timeline_t::select_epoch_randomly( int n )
     }
 
   logger << " randomly selected up to " << n << " epochs; ";
-  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+
+  logger << cnt_mask_set << " newly masked " 
+	 << cnt_mask_unset << " unmasked and " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+
 }
 
 
@@ -1116,8 +1125,11 @@ void timeline_t::select_epoch_range( int a , int b , bool include )
     logger << " selecting epochs from " << a << " to " << b << "; ";
   else
     logger << " masking epochs from " << a << " to " << b << "; ";
-  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+
+  logger << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -1155,8 +1167,10 @@ void timeline_t::select_epoch_first( int n )
     }
 
   logger << " selecting up to " << n << " epochs for start; ";
-  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << cnt_mask_set << " newly masked, "  
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 }
 
 
@@ -1217,9 +1231,11 @@ void timeline_t::select_epoch_within_run( const std::string & str , int b )
       
     }
   
-  logger << " based on " << str << " with " << b << " flanking epochs, ";
-  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " based on " << str << " with " << b << " flanking epochs; ";
+  logger << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -1252,9 +1268,12 @@ void timeline_t::select_epoch_until_isnot( const std::string & str )
 
     }
 
-  logger << " based on " << str << " leading epochs, ";
-  logger << " masked " << cnt_mask_set << " epochs; unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+  logger << " based on " << str << " leading epochs; ";
+
+  logger << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -1740,8 +1759,11 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
     }
   
   logger << " based on " << onelabel << " " << cnt_basic_match << " epochs match; ";
-  logger << " newly masked " << cnt_mask_set << " epochs, unmasked " << cnt_mask_unset << " and left " << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained for analysis\n";
+
+  logger << cnt_mask_set << " newly masked, "   
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
@@ -3137,7 +3159,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 	    {
 	      
 	      annot_t * annot = annotations.find( names[a] );
-
+	      
 	      // get overlapping annotations for this epoch
 	      annot_map_t events = annot->extract( interval );
 
@@ -3167,18 +3189,18 @@ void timeline_t::list_all_annotations( const param_t & param )
 		  if ( is_masked && ! show_masked ) {  continue; } 
 		  
 		  // else display
-		  writer.level( instance_idx.id , "ANN_INST" );
-		  writer.level( interval.as_string() , "ANN_INTERVAL" );
+		  writer.level( instance_idx.id , "INST" );
+		  writer.level( interval.as_string() , "INTERVAL" );
 
 		  writer.value( "EPOCH_MASK" , masked( e ) );
-		  writer.value( "ANN_MASK" , is_masked );
+		  writer.value( "ANNOT_MASK" , is_masked );
 		  
 		  
 		  ++ii;
 		}      
 
-	      writer.unlevel( "ANN_INTERVAL" );
-	      writer.unlevel( "ANN_INST" );
+	      writer.unlevel( "INTERVAL" );
+	      writer.unlevel( "INST" );
 
 	    }
 	}
@@ -3279,19 +3301,19 @@ void timeline_t::list_all_annotations( const param_t & param )
       const instance_t * instance = aa->second;
       
       // stratify output by interval
-      
+    
       writer.interval( interval );
       
       writer.level( instance_idx.parent->name , globals::annot_strat );
       
       writer.level( instance_idx.id , globals::annot_instance_strat );	  
 
-      writer.value( "ANN_START" , interval.start_sec() );
+      writer.value( "START" , interval.start_sec() );
       
-      writer.value( "ANN_STOP" , interval.stop_sec() );
+      writer.value( "STOP" , interval.stop_sec() );
       
       if ( ! instance->empty() ) 
-	writer.value(  "ANN_VAL" , instance->print() );
+	writer.value(  "VAL" , instance->print() );
       
       if ( show_masked ) 
 	{
@@ -3302,11 +3324,11 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  bool some_unmasked = interval_overlaps_unmasked_region( interval );
 	  bool all_unmasked = interval_is_completely_unmasked( interval );
 	  
-	  writer.value( "ANN_START_MASKED"  , start_masked );
-	  writer.value( "ANN_SOME_MASKED"   , some_masked );
-	  writer.value( "ANN_ALL_MASKED"    , all_masked );
-	  writer.value( "ANN_SOME_UNMASKED" , some_unmasked );
-	  writer.value( "ANN_ALL_UNMASKED"  , all_unmasked );
+	  writer.value( "START_MASKED"  , start_masked );
+	  writer.value( "SOME_MASKED"   , some_masked );
+	  writer.value( "ALL_MASKED"    , all_masked );
+	  writer.value( "SOME_UNMASKED" , some_unmasked );
+	  writer.value( "ALL_UNMASKED"  , all_unmasked );
 	}
       
       writer.unlevel( globals::annot_strat );
@@ -3317,19 +3339,17 @@ void timeline_t::list_all_annotations( const param_t & param )
   writer.uninterval();
 
 
+  //
   // final counts, durations by class
+  //
+  
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() ) 
     {
-      //      std::cout << "writing " << cc->first << "\n"; 
-
       writer.level( cc->first , globals::annot_strat );
       writer.value( "COUNT" , cc->second );      
       writer.value( "DUR" , dur[ cc->first ] );
       
-      // std::cout << "count = " << cc->second << "\n";
-      // std::cout << "dur = " << dur[ cc->first ]  << "\n";
-
       std::map<std::string,int>::const_iterator dd = counts2[ cc->first ].begin();
       while ( dd != counts2[ cc->first ].end() )
 	{
@@ -3344,3 +3364,174 @@ void timeline_t::list_all_annotations( const param_t & param )
     }
   writer.unlevel( globals::annot_strat );
 }
+
+
+// eval-based mask
+void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
+{
+
+  // mask_mode   0   mask
+  //             1   unmask
+  //             2   force  (mask & unmask) 
+  
+
+  //
+  // allow both " and # quoting of EVAL expressions
+  //
+
+  std::string expression = Helper::trim( Helper::unquote( str , '#' ) );
+  
+
+  //
+  // Get all existing annotations (overkill...)
+  //
+  
+  std::vector<std::string> names = annotations.names();
+
+  //
+  // Keep track of changes
+  //
+  
+  mask_set = true;
+
+  const int ne = epochs.size();
+  
+  //
+  // We do not clear the mask here, as we want to allow multiple
+  // filters to be added on top of oneanther
+  //
+
+  int cnt_mask_set = 0;
+  int cnt_mask_unset = 0;
+  int cnt_unchanged = 0;
+  int cnt_now_unmasked = 0;
+  int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
+
+  
+  //
+  // Iterate over epochs
+  //
+
+  first_epoch();
+  
+  int acc_total = 0 , acc_retval = 0 , acc_valid = 0; 
+  
+  while ( 1 ) 
+    {
+      
+      int e = next_epoch_ignoring_mask() ;
+      
+      if ( e == -1 ) break;
+      
+      interval_t interval = epoch( e );
+	  
+      std::map<std::string,annot_map_t> inputs;
+      
+      // get each annotations
+      for (int a=0;a<names.size();a++)
+	{
+	  
+	  annot_t * annot = annotations.find( names[a] );
+	  
+	  // get overlapping annotations for this epoch
+	  annot_map_t events = annot->extract( interval );
+	  
+	  // store
+	  inputs[ names[a] ] = events;
+	}
+
+      //
+      // create a dummy new instance for the output variables (not saved)
+      //
+      
+      instance_t dummy;
+      
+      //
+      // evaluate the expression
+      //
+
+      Eval tok( expression );
+      
+      tok.bind( inputs , &dummy );
+      
+      bool is_valid = tok.evaluate();
+      
+      bool matches;
+      
+      if ( ! tok.value( matches ) ) is_valid = false;
+      
+      //
+      // A match must be a valid value
+      //
+      
+      if ( ! is_valid ) matches = false;
+
+      
+      //
+      // apply mask (or not)
+      //
+      
+      acc_total++;
+
+      acc_valid += is_valid;
+
+      
+      // count basic matches
+
+      if ( matches ) ++cnt_basic_match;
+      
+      // set new potential mask, depending on match_mode
+      
+      bool new_mask = mask[e];
+
+      if      ( mask_mode == 0 ) new_mask = matches;   // mask
+      else if ( mask_mode == 1 ) new_mask = !matches;  // unmask
+      else if ( mask_mode == 2 ) new_mask = matches ;  // mask/unmask
+      
+      int mc = set_epoch_mask( e , new_mask );
+      
+      if      ( mc == +1 ) ++cnt_mask_set;
+      else if ( mc == -1 ) ++cnt_mask_unset;
+      else                 ++cnt_unchanged;
+      
+      if ( !mask[e] ) ++cnt_now_unmasked;
+      
+      
+      // next epoch
+    } 
+  
+  
+  logger << " based on eval expression [" << expression << "]\n"
+	 << "  " << cnt_basic_match << " epochs match; " 
+	 << cnt_mask_set << " newly masked, "
+	 << cnt_mask_unset << " unmasked, "
+	 << cnt_unchanged << " unchanged\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+
+  
+  // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
+  
+  writer.level( expression , "EPOCH_MASK" );
+  
+  writer.var( "N_MATCHES"    , "Number of matching epochs" );
+  writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
+  writer.var( "N_MASK_UNSET" , "Number of epochs newly unmasked" );
+  writer.var( "N_UNCHANGED"  , "Number of epochs unchanged by this mask" );
+  writer.var( "N_RETAINED"   , "Number of epochs retained for analysis" );
+  writer.var( "N_TOTAL"      , "Total number of epochs" );
+
+  writer.value( "N_MATCHES"    , cnt_basic_match  );
+  writer.value( "N_MASK_SET"   , cnt_mask_set     );
+  writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
+  writer.value( "N_UNCHANGED"  , cnt_unchanged    );
+  writer.value( "N_RETAINED"   , cnt_now_unmasked );
+  writer.value( "N_TOTAL"      , epochs.size()    );
+
+  writer.unlevel( "EPOCH_MASK" );
+
+
+  // all done 
+  return;
+
+}
+

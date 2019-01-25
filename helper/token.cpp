@@ -39,9 +39,18 @@
 // for now, vector x scalar comparisons do not allow for type conversion
 
 
-void TokenFunctions::attach( instance_t & m )
+void TokenFunctions::attach( instance_t * m )
 { 
-  meta = &m; 
+  meta = m; 
+  accumulator = NULL;
+  global_vars = NULL;
+}
+
+void TokenFunctions::attach( instance_t * m , instance_t * a , const std::set<std::string> * gv )
+{ 
+  meta = m;   
+  accumulator = a;
+  global_vars = gv;
 }
 
 void Token::set()
@@ -138,87 +147,83 @@ void Token::variable( const std::string & mf )
 
 void Token::init()
 {
+  
+  tok_map[ "*" ]  = MULTIPLY_OPERATOR;
+  //  tok_map[ "^" ]  = POWER_OPERATOR;
+  tok_map[ "/" ]  = DIVIDE_OPERATOR;
+  tok_map[ "%" ]  = MOD_OPERATOR;
+  tok_map[ "%%" ] = MOD_OPERATOR;
+  tok_map[ "+" ]  = ADD_OPERATOR;
+  tok_map[ "-" ]  = SUBTRACT_OPERATOR;
+  tok_map[ "&&" ] = AND_OPERATOR;
+  tok_map[ "&" ]  = AND_OPERATOR;
+  tok_map[ "||" ] = OR_OPERATOR;
+  tok_map[ "|" ]  = OR_OPERATOR;
+  tok_map[ "=" ]  = ASSIGNMENT_OPERATOR;
+  tok_map[ "==" ] = EQUAL_OPERATOR;
+  tok_map[ "!=" ] = UNEQUAL_OPERATOR;
+  tok_map[ "!" ]  = NOT_OPERATOR;
+  tok_map[ "~" ]  = NOT_OPERATOR;
+  tok_map[ ">" ]  = GREATER_THAN_OPERATOR;
+  tok_map[ ">=" ] = GREATER_THAN_OR_EQUAL_OPERATOR;
+  tok_map[ "<" ]  = LESS_THAN_OPERATOR;
+  tok_map[ "<=" ] = LESS_THAN_OR_EQUAL_OPERATOR;
+  
+  
+  //
+  // Reverse mapping
+  //  
+  
+  std::map<std::string,Token::tok_type>::iterator i = tok_map.begin();
+  while ( i != tok_map.end() ) 
+    {
+      tok_unmap[ i->second ] = i->first;
+      ++i;
+    }
+  
+  
+  //
+  // Token function map
+  //
+  
+  fn_map[ "if" ]     = 1;  // number of args
+  fn_map[ "ifnot" ]  = 1;  // complement of if()
+  fn_map[ "sqrt" ]   = 1;  // square-root
+  fn_map[ "sqr"  ]   = 1;  // X^2
+  fn_map[ "log"  ]   = 1;
+  fn_map[ "log10"]   = 1;
+  fn_map[ "exp"  ]   = 1;
+  fn_map[ "pow"  ]   = 2;  // X^N    
+  fn_map[ "ifelse" ] = 3;  // ifelse( cond , T , F )
+  
+  // vector functions
+  
+  fn_map[ "element" ] = 2;  // element(Y,i)      extract element 'i' from vector 'Y'
+  fn_map[ "length" ]  = 1;  // length(Y)   length of Y
+  fn_map[ "size" ]    = 1;  // size(Y)   length of Y
+  fn_map[ "min" ]     = 1;  // min(Y)      minimum element in Y
+  fn_map[ "max" ]     = 1;  // max(Y)      max elenebt in Y
+  fn_map[ "sum" ]     = 1;  // sum(Y)      sum of elements in Y
+  fn_map[ "mean" ]    = 1;  // mean(Y)     mean of elements in Y
+  fn_map[ "sort" ]    = 1;  // sort(Y)     returns sorted vector Y (asc.)
+  
+  // vector creation 
+  
+  fn_map[ "num_func" ]    = -1;  // num( 1,0,1 ) -- floating point vector --> num(3,1,0,1)
+  fn_map[ "int_func" ]    = -1;  // int( 1,0,1 )  ints
+  fn_map[ "txt_func" ]    = -1;  // txt( '1','0','1' )  strings
+  fn_map[ "bool_func" ]   = -1;  // bool( 1,0,1 )  bools
+  
 
-    tok_map[ "*" ]  = MULTIPLY_OPERATOR;
-    tok_map[ "^" ]  = POWER_OPERATOR;
-    tok_map[ "/" ]  = DIVIDE_OPERATOR;
-    tok_map[ "%" ]  = MOD_OPERATOR;
-    tok_map[ "%%" ] = MOD_OPERATOR;
-    tok_map[ "+" ]  = ADD_OPERATOR;
-    tok_map[ "-" ]  = SUBTRACT_OPERATOR;
-    tok_map[ "&&" ] = AND_OPERATOR;
-    tok_map[ "&" ]  = AND_OPERATOR;
-    tok_map[ "||" ] = OR_OPERATOR;
-    tok_map[ "|" ]  = OR_OPERATOR;
-    tok_map[ "=" ]  = ASSIGNMENT_OPERATOR;
-    tok_map[ "==" ] = EQUAL_OPERATOR;
-    tok_map[ "!=" ] = UNEQUAL_OPERATOR;
-    tok_map[ "!" ]  = NOT_OPERATOR;
-    tok_map[ "~" ]  = NOT_OPERATOR;
-    tok_map[ ">" ]  = GREATER_THAN_OPERATOR;
-    tok_map[ ">=" ] = GREATER_THAN_OR_EQUAL_OPERATOR;
-    tok_map[ "<" ]  = LESS_THAN_OPERATOR;
-    tok_map[ "<=" ] = LESS_THAN_OR_EQUAL_OPERATOR;
+  // misc
 
+  fn_map[ "any" ]      = 1;   // any( expr1 )              returns BOOL , countif(x,T)>0
+  fn_map[ "all" ]      = 1;   // all( expr1 )              returns BOOL , countif(x,T) == size(x)
+  fn_map[ "contains" ] = 2;   // contains( expr1 , expr )  returns BOOL , countif(x,y)>0
+  fn_map[ "countif" ]  = 2;   // countif( expr1, expr2 )   returns INT,  for # of elements in expr1 that match expr2
+  fn_map[ "c" ]        = 2;   // c( expr1, expr2 )         concatenate similar types 
 
-    //
-    // Reverse mapping
-    //  
-    
-    std::map<std::string,Token::tok_type>::iterator i = tok_map.begin();
-    while ( i != tok_map.end() ) 
-      {
-	tok_unmap[ i->second ] = i->first;
-	++i;
-      }
-    
-
-    //
-    // Token function map
-    //
-    
-    fn_map[ "set"  ]   = 1;  // number of args
-    fn_map[ "sqrt" ]   = 1;  // square-root
-    fn_map[ "sqr"  ]   = 1;  // X^2
-    fn_map[ "log"  ]   = 1;
-    fn_map[ "log10"]   = 1;
-    fn_map[ "exp"  ]   = 1;
-    fn_map[ "pow"  ]   = 2;  // X^N    
-    fn_map[ "ifelse" ] = 3;  // ifelse( cond , T , F )
-
-    fn_map[ "n" ]      = 0;  // number of people in file
-    fn_map[ "g" ]      = 1;  // extract genotype meta-field
-
-    // vector functions
-
-    fn_map[ "element" ] = 2;  // element(Y,i)      extract element 'i' from vector 'Y'
-    fn_map[ "length" ]  = 1;  // length(Y)   length of Y
-    fn_map[ "min" ]     = 1;  // min(Y)      minimum element in Y
-    fn_map[ "max" ]     = 1;  // max(Y)      max elenebt in Y
-    fn_map[ "sum" ]     = 1;  // sum(Y)      sum of elements in Y
-    fn_map[ "mean" ]    = 1;  // mean(Y)     mean of elements in Y
-    fn_map[ "sort" ]    = 1;  // sort(Y)     returns sorted vector Y (asc.)
-
-    // vector creation 
-
-    fn_map[ "vec_func" ]    = -1;  // vec( 1,0,1 ) -- floating point vector --> vec(3,1,0,1)
-    fn_map[ "int_func" ]    = -1;  // int( 1,0,1 )  ints
-    fn_map[ "str_func" ]    = -1;  // str( 1,0,1 )  strings
-    fn_map[ "bool_func" ]   = -1;  // bool( 1,0,1 )  bools
-
-    // genotype-vector extraction
-//     fn_map[ "g_func" ]      = 1;  // g( DP < 10 ) -- internally --> g( 'DP < 10' )
-//     fn_map[ "gf_func"]      = 1;  // as above
-//     fn_map[ "gs_func"]      = 1;  // as above
-//     fn_map[ "n" ]           = 0;
-    
-    // phenotype extraction
-//     fn_map[ "p_func" ]      = 1; // p(X) returns (or assigns to) phenotype X
-    
-    // here 'x' can be a complex expression, where has( Y < 2 ) 
-    fn_map[ "any" ]    = 2;   // any( expr )    T/F if Y contains 1+ element matching 'x'
-    fn_map[ "count" ]  = 2;   // count( expr )  return int of # of matches
-    
+  
 }
 
 
@@ -942,13 +947,22 @@ Token Token::operator+(const Token & rhs) const
   if ( is_int() ) 
     {
       if ( rhs.is_int() ) return Token( ival + rhs.ival );
+      if ( rhs.is_bool() ) return Token( ival + rhs.bval );
       if ( rhs.is_float() ) return Token( ival + rhs.fval );
     }
 
   if ( is_float() ) 
     {
       if ( rhs.is_int() ) return Token( fval + rhs.ival );
+      if ( rhs.is_bool() ) return Token( fval + rhs.bval );
       if ( rhs.is_float() ) return Token( fval + rhs.fval );
+    }
+
+  if ( is_bool() ) 
+    {
+      if ( rhs.is_int() ) return Token( bval + rhs.ival );
+      if ( rhs.is_bool() ) return Token( (int)bval + (int)rhs.bval );
+      if ( rhs.is_float() ) return Token( bval + rhs.fval );
     }
 
   if ( is_string() ) // concatenate
@@ -1070,13 +1084,22 @@ Token Token::operator-(const Token & rhs) const
   if ( is_int() ) 
     {
       if ( rhs.is_int()   ) return Token( ival - rhs.ival );
+      if ( rhs.is_bool()  ) return Token( ival - rhs.bval );
       if ( rhs.is_float() ) return Token( ival - rhs.fval );
     }
 
   if ( is_float() ) 
     {
       if ( rhs.is_int()   ) return Token( fval - rhs.ival );
+      if ( rhs.is_bool()  ) return Token( fval - rhs.bval );
       if ( rhs.is_float() ) return Token( fval - rhs.fval );
+    }
+
+  if ( is_bool() ) 
+    {
+      if ( rhs.is_int()   ) return Token( bval - rhs.ival );
+      if ( rhs.is_bool()  ) return Token( (int)bval - (int)rhs.bval );
+      if ( rhs.is_float() ) return Token( bval - rhs.fval );
     }
 
   return Token();
@@ -1211,7 +1234,7 @@ Token Token::operator*(const Token & rhs) const
       return Token( ans );            
     }
 
-  // scalar + scalar
+  // scalar * scalar
 
   if ( is_int() ) 
     {
@@ -1239,6 +1262,8 @@ Token Token::operator*(const Token & rhs) const
 
 Token Token::operator^(const Token & rhs) const
 {
+  Helper::halt("^ operator not supported, use pow() or sqr()" );
+
   if ( rhs.is_vector() ) Helper::halt( "not allowed vector expression 'x' ^ vector" );
 
   // vector ^ scalar
@@ -1362,7 +1387,7 @@ Token Token::operator/(const Token & rhs) const
       else if ( is_bool() )  for (int i=0; i<sz; i++) ans[i] = (double)bval / rhs.fvec[i];
       return Token( ans );            
     }
-
+  
   else if ( is_bool_vector() )
     {
       const int sz = size();
@@ -1389,11 +1414,11 @@ Token Token::operator/(const Token & rhs) const
       if ( rhs.is_float() ) return Token( fval / rhs.fval );
     }
 
-  if ( is_bool() ) 
-    {
-      if ( rhs.is_int()   ) return Token( bval / (double)rhs.ival );
-      if ( rhs.is_float() ) return Token( bval / rhs.fval );
-    }
+   if ( is_bool() ) 
+     {
+       if ( rhs.is_int()   ) return Token( bval / (double)rhs.ival );
+       if ( rhs.is_float() ) return Token( bval / rhs.fval );
+     }
 
   return Token();
 
@@ -1732,7 +1757,7 @@ Token Token::operator&&(const Token & rhs) const
   
   // TODO: Note -- currently no vector x scalar implementataion....
   
-  // lazy evaluation of RHS
+  // 'lazy evaluation' of RHS
   if ( is_bool() && !bval ) return Token( false );
   if ( is_int() && !ival ) return Token( false );
   
@@ -1886,7 +1911,7 @@ std::string Token::as_string() const
 
   if ( ttype == INT ) ss << ival;
   else if ( ttype == FLOAT ) ss << fval;
-  else if ( ttype == BOOL ) ss << ( bval ? "T" : "F" );
+  else if ( ttype == BOOL ) ss << ( bval ? "true" : "false" );
   else if ( ttype == STRING_VECTOR )
     {
       for (int i=0;i<svec.size();i++) 
@@ -1905,7 +1930,7 @@ std::string Token::as_string() const
   else if ( ttype == BOOL_VECTOR )
     {
       for (int i=0;i<bvec.size();i++) 
-	ss << ( i ? "," : "" ) << ( bvec[i] ? "T" : "F" );
+	ss << ( i ? "," : "" ) << ( bvec[i] ? "true" : "false" );
     }
   else 
     ss << ".";
@@ -1925,13 +1950,13 @@ bool Token::as_bool() const
   if      ( ttype == BOOL )   return bval;    
   else if ( ttype == INT )    return ival;
   else if ( ttype == FLOAT )  return fval;
-  else if ( ttype == STRING ) return !( sval == "" || sval == "." || sval == "0" || sval == "F" || sval == "f" || sval == "false" || sval == "FALSE" ) ;
+  else if ( ttype == STRING ) return !( sval == "" || sval == "." || sval == "0" || sval == "false" || sval == "FALSE" ) ;
 
   else if ( ttype == BOOL_VECTOR )  for (int i=0;i<bvec.size(); i++) { if ( bvec[i] ) return true; } 
   else if ( ttype == INT_VECTOR )   for (int i=0;i<ivec.size(); i++) { if ( ivec[i] ) return true; }
   else if ( ttype == FLOAT_VECTOR ) for (int i=0;i<fvec.size(); i++) { if ( fvec[i] ) return true; }
   else if ( ttype == STRING_VECTOR ) 
-    for (int i=0;i<svec.size(); i++) { if ( ! ( svec[i] == "." || svec[i] == "" || sval == "0" || sval == "F" || sval == "f" || sval == "false" || sval == "FALSE") ) return true; }
+    for (int i=0;i<svec.size(); i++) { if ( ! ( svec[i] == "." || svec[i] == "" || sval == "0" || sval == "false" || sval == "FALSE") ) return true; }
 
   return false;
 }
@@ -1940,7 +1965,8 @@ bool Token::as_bool() const
 
 int Token::int_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return 0;
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );
   if ( ttype == INT_VECTOR ) return ivec[i];
   if ( ttype == INT ) return ival;
   return 0;      
@@ -1948,7 +1974,8 @@ int Token::int_element(const int i) const
 
 double Token::float_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return 0;
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );
   if ( ttype == FLOAT_VECTOR ) return fvec[i];
   if ( ttype == FLOAT ) return fval;
   return 0;      
@@ -1957,7 +1984,8 @@ double Token::float_element(const int i) const
 
 std::string Token::string_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return ".";
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );
   if ( ttype == STRING_VECTOR ) return svec[i];
   if ( ttype == STRING ) return sval;
   return ".";      
@@ -1965,7 +1993,8 @@ std::string Token::string_element(const int i) const
 
 bool Token::bool_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return false;
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );
   if ( ttype == BOOL_VECTOR ) return bvec[i];
   if ( ttype == BOOL ) return bval;
   return false;  
@@ -1975,7 +2004,8 @@ bool Token::bool_element(const int i) const
 
 int Token::as_int_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return 0;
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );  
   if ( ttype == INT_VECTOR ) return ivec[i];
   if ( ttype == INT ) return ival;
   if ( ttype == FLOAT_VECTOR ) return (int)fvec[i];
@@ -1987,7 +2017,8 @@ int Token::as_int_element(const int i) const
 
 double Token::as_float_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return 0;
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );  
   if ( ttype == FLOAT_VECTOR ) return fvec[i];
   if ( ttype == FLOAT ) return fval;
   if ( ttype == INT_VECTOR ) return ivec[i];
@@ -2000,7 +2031,9 @@ double Token::as_float_element(const int i) const
 
 std::string Token::as_string_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return ".";
+
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );  
 
   if ( ttype == STRING_VECTOR ) return svec[i];
   if ( ttype == STRING ) return sval;
@@ -2011,20 +2044,21 @@ std::string Token::as_string_element(const int i) const
   if ( ttype == FLOAT_VECTOR ) return Helper::dbl2str( fvec[i] );
   if ( ttype == FLOAT ) return Helper::dbl2str( fval );
 
-  if ( ttype == BOOL_VECTOR ) return bvec[i] ? "T" : "F" ; 
-  if ( ttype == BOOL ) return bval ? "T" : "F" ; 
+  if ( ttype == BOOL_VECTOR ) return bvec[i] ? "true" : "false" ; 
+  if ( ttype == BOOL ) return bval ? "true" : "false" ; 
 
   return ".";      
 }
 
 bool Token::string2bool( const std::string & sval ) const
 { 
-  return !( sval == "" || sval == "." || sval == "0" || sval == "F" || sval == "f" || sval == "false" || sval == "FALSE" ) ; 
+  return !( sval == "" || sval == "." || sval == "0" || sval == "false" || sval == "FALSE" ) ; 
 }
   
 bool Token::as_bool_element(const int i) const
 {
-  if ( i < 0 || i > size() ) return false;
+  if ( i < 0 || i > size() ) 
+    Helper::halt( "out of range for " + name() + " (" + Helper::int2str(i+1) + " of " + Helper::int2str(size() ) +")" );
   if ( ttype == BOOL_VECTOR ) return bvec[i];
   if ( ttype == BOOL ) return bval;
   if ( ttype == INT_VECTOR ) return ivec[i];
@@ -2162,6 +2196,11 @@ Token TokenFunctions::fn_set( const Token & tok ) const
     return tok.is_set();
 } 
 
+Token TokenFunctions::fn_notset( const Token & tok ) const
+{
+    return ! tok.is_set();
+} 
+
 Token TokenFunctions::fn_sqrt( const Token & tok ) const
 {
   if ( tok.is_int() ) return Token( sqrt( tok.as_int() ) );
@@ -2254,6 +2293,9 @@ Token TokenFunctions::fn_ifelse( const Token & cond , const Token & opt1 , const
   
   // cond ? opt1 : opt2
 
+  // cond == T --> opt1
+  // cond == F --> opt2
+
   // condition must evaluate to a scalar boolean, or be easily converted
   // no automatic conversion of vector conditions
   
@@ -2267,7 +2309,7 @@ Token TokenFunctions::fn_ifelse( const Token & cond , const Token & opt1 , const
     }  
 
   // opt1 and opt2 must have the same type, or be easily converted
-  
+
   if ( opt1.type() == opt2.type() ) 
     {
       return b ? opt1 : opt2 ;
@@ -2315,13 +2357,21 @@ Token TokenFunctions::fn_vec_any( const Token & tok1 , const Token & tok2 ) cons
   return Token( fn_vec_count( tok1 , tok2 ) > 0 );  
 }
 
+Token TokenFunctions::fn_vec_any( const Token & tok1 ) const
+{
+  return Token( fn_vec_count( tok1 , Token( true ) ) > 0 );  
+}
+
+Token TokenFunctions::fn_vec_all( const Token & tok1 ) const
+{
+  return Token( fn_vec_count( tok1 , Token( true ) ) == tok1.size() );  
+}
 
 Token TokenFunctions::fn_vec_count( const Token & tok1 , const Token & tok2 ) const
 {
   return fn_vec_sum( tok1 == tok2 );
-  return Token();  
+  //  return Token();  
 }
-
 
 Token TokenFunctions::fn_vec_sum( const Token & tok ) const
 {
@@ -2359,6 +2409,87 @@ Token TokenFunctions::fn_vec_sum( const Token & tok ) const
   return Token();
        
 }
+
+  
+
+Token TokenFunctions::fn_vec_cat( const Token & tok1 , const Token & tok2 ) const
+{
+  
+  Token::tok_type mode ; 
+  
+  if ( ( tok1.type() == Token::INT || tok1.type() == Token::INT_VECTOR ) )
+    {
+      if ( ! ( tok2.type() == Token::INT || tok2.type() == Token::INT_VECTOR ) ) 
+	Helper::halt( "can only concatenate similar types" );
+      else 
+	mode = Token::INT_VECTOR;
+    }
+  
+  if ( ( tok1.type() == Token::FLOAT || tok1.type() == Token::FLOAT_VECTOR ) ) 
+    {
+      if ( ! ( tok2.type() == Token::FLOAT || tok2.type() == Token::FLOAT_VECTOR ) ) 
+	Helper::halt( "can only concatenate similar types" );
+      else 
+	mode = Token::FLOAT_VECTOR;
+    }
+
+  if ( ( tok1.type() == Token::STRING || tok1.type() == Token::STRING_VECTOR ) )
+    {
+      if ( ! ( tok2.type() == Token::STRING || tok2.type() == Token::STRING_VECTOR ) ) 
+	Helper::halt( "can only concatenate similar types" );
+      else 
+	mode = Token::STRING_VECTOR;
+    }
+
+  if ( ( tok1.type() == Token::BOOL || tok1.type() == Token::BOOL_VECTOR ) )
+    {
+      if ( ! ( tok2.type() == Token::BOOL || tok2.type() == Token::BOOL_VECTOR ) ) 
+	Helper::halt( "can only concatenate similar types" );
+      else
+	mode = Token::BOOL_VECTOR;
+    }
+
+  if ( mode == Token::INT_VECTOR )
+    {
+      std::vector<int> res1 = tok1.as_int_vector();
+      std::vector<int> res2 = tok2.as_int_vector();
+      for (int i=0;i<res2.size();i++) res1.push_back( res2[i] );
+      Token tok( res1 );
+      return tok;
+    }
+
+  if ( mode == Token::FLOAT_VECTOR )
+    {
+      std::vector<double> res1 = tok1.as_float_vector();
+      std::vector<double> res2 = tok2.as_float_vector();
+      for (int i=0;i<res2.size();i++) res1.push_back( res2[i] );
+      Token tok( res1 );
+      return tok;
+    }
+
+  if ( mode == Token::STRING_VECTOR )
+    {
+      std::vector<std::string> res1 = tok1.as_string_vector();
+      std::vector<std::string> res2 = tok2.as_string_vector();
+      for (int i=0;i<res2.size();i++) res1.push_back( res2[i] );
+      Token tok( res1 );
+      return tok;
+    }
+
+  if ( mode == Token::BOOL_VECTOR )
+    {
+      std::vector<bool> res1 = tok1.as_bool_vector();
+      std::vector<bool> res2 = tok2.as_bool_vector();
+      for (int i=0;i<res2.size();i++) res1.push_back( res2[i] );
+      Token tok( res1 );
+      return tok;
+    }
+
+  // undefined
+  return Token();
+
+}
+
 
 Token TokenFunctions::fn_vec_mean( const Token & tok1 ) const
 {
@@ -2415,7 +2546,9 @@ Token TokenFunctions::fn_vec_extract( const Token & tok , const Token & idx ) co
       int i = idx.as_int();
       
       // subscript out of range? (1-based)
-      if ( i < 1 || i > tok.size() ) return Token();
+      if ( i < 1 || i > tok.size() ) 
+	Helper::halt( "out of range for " + tok.name() + " (" + Helper::int2str(i) + " of " + Helper::int2str(tok.size() ) +")" );
+      //return Token();
       
       // if scalar, return whole thing (i.e. could only have been x[0] so pointless)
       if ( ! tok.is_vector() ) return tok;
@@ -2437,7 +2570,7 @@ Token TokenFunctions::fn_vec_extract( const Token & tok , const Token & idx ) co
     {
       
       Token::tok_type ttype = tok.type();
-
+      
       if ( ttype == Token::INT_VECTOR ) 
 	{
 	  std::vector<int> ans;
@@ -2470,33 +2603,37 @@ Token TokenFunctions::fn_vec_extract( const Token & tok , const Token & idx ) co
   
   if ( idx.is_bool_vector() )
     {
+  
       // here require that length of index matches (no cycling, as per R)
-      if ( idx.size() != tok.size() ) return Token();
-
+      if ( idx.size() != tok.size() ) 
+	Helper::halt( "boolean index vector should be of similar size to matching vector " 
+		      + tok.name() + " " + Helper::int2str( idx.size() ) );
+      
       Token::tok_type ttype = tok.type();
       
       if ( ttype == Token::INT_VECTOR ) 
 	{
 	  std::vector<int> ans;
-	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i-1) ) ans.push_back( tok.int_element(i-1) );
+	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i) ) ans.push_back( tok.int_element(i) );
 	  return Token(ans);
 	}
       else if ( ttype == Token::FLOAT_VECTOR )
 	{
 	  std::vector<double> ans;
-	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i-1) ) ans.push_back( tok.float_element(i-1) );
+	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i) ) ans.push_back( tok.float_element(i) );
 	  return Token(ans);
 	}
       else if ( ttype == Token::STRING_VECTOR )
 	{
 	  std::vector<std::string> ans;
-	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i-1) ) ans.push_back( tok.string_element(i-1) );
+	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i) ) ans.push_back( tok.string_element(i) );
 	  return Token(ans);
 	}
       else if ( ttype == Token::BOOL_VECTOR )
 	{
+	  
 	  std::vector<bool> ans;
-	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i-1) ) ans.push_back( tok.bool_element(i-1) );
+	  for (int i=0;i<idx.size();i++) if ( idx.bool_element(i) ) ans.push_back( tok.bool_element(i) );
 	  return Token(ans);
 	}
       return Token();
@@ -2553,7 +2690,7 @@ Token TokenFunctions::fn_vec_new_int( const std::vector<Token> & tok ) const
   std::vector<int> d;
   for (int i=tok.size()-1; i >= 0 ; i-- ) 
     for (int j=0;j<tok[i].size();j++) 
-      d.push_back( tok[i].as_int_element(j) );
+      d.push_back( tok[i].as_int_element(j) );      
   return Token( d );
 }
 
@@ -2579,32 +2716,28 @@ Token TokenFunctions::fn_vec_new_bool( const std::vector<Token> & tok ) const
 }
 
 
-// Token TokenFunctions::fn_vec_g( const Token & tok , Eval * e ) const
-// {
-//   if ( ! tok.is_string() ) return Token();
-//   return e->eval_gfunc( tok.as_string() , 1 );
-// }
-
-// Token TokenFunctions::fn_vec_gnull( const Token & tok , Eval * e ) const
-// {
-//   if ( ! tok.is_string() ) return Token();
-//   return e->eval_gfunc( tok.as_string() , 0 );
-// }
-
-// Token TokenFunctions::fn_vec_gset( const Token & tok , Eval * e ) const
-// {
-//   if ( ! tok.is_string() ) return Token();
-//   return e->eval_gfunc( tok.as_string() , 2 );
-// }
-
 Token TokenFunctions::fn_assign( Token & lhs , const Token & rhs )
 {
-  if ( ! meta ) return Token();
+
+  // assignment is either to the 'local' or 'global' (e.g. accumulator) instance
   
+  // global variables, if being used, need to start with an underscore to distinguish them
+  // also, the variable must already exist (i.e. have been initialized with EVAL globals=X,Y,Z for example
+  
+
+  bool global = accumulator != NULL && global_vars->find( lhs.name() ) != global_vars->end() ;
+  
+  instance_t * m = global ? accumulator : meta ; 
+  
+  if ( ! m ) return Token();
+  
+  // still check that we already found a global var, i.e. is initialized
+  if ( global && m->find( lhs.name() ) == NULL ) Helper::halt( "internal error: did not initialize global variable " + lhs.name() ); 
+
   bool b;
   if ( rhs.is_bool(&b) )
     {      
-      meta->set( lhs.name() , b );
+      m->set( lhs.name() , b );
       lhs.set( b );
       return Token( true );
     }
@@ -2612,7 +2745,7 @@ Token TokenFunctions::fn_assign( Token & lhs , const Token & rhs )
   int i;
   if ( rhs.is_int(&i) )
     {      
-      meta->set( lhs.name() , i );
+      m->set( lhs.name() , i );
       lhs.set( i );
       return Token( true );
     }
@@ -2621,7 +2754,7 @@ Token TokenFunctions::fn_assign( Token & lhs , const Token & rhs )
   double f;
   if ( rhs.is_float(&f) ) 
     {
-      meta->set( lhs.name() , f );
+      m->set( lhs.name() , f );
       lhs.set( f );
       return Token( true );
     }
@@ -2629,48 +2762,43 @@ Token TokenFunctions::fn_assign( Token & lhs , const Token & rhs )
   std::string s;
   if ( rhs.is_string(&s) )
     {
-      meta->set( lhs.name() , s );
+      m->set( lhs.name() , s );
       lhs.set( s );
       return Token( true );
     }
   
-  // NO VECTORS FOR NOW
-  //  ADD TO INSTANCE_T -------
-
-//   std::vector<double> fv;
-//   if ( rhs.is_float_vector(&fv) ) 
-//     {
-//       meta->set( lhs.name() , fv );
-//       lhs.set( fv );
-//       return Token( true );
-//     }
+  std::vector<double> fv;
+  if ( rhs.is_float_vector(&fv) ) 
+    {
+      m->set( lhs.name() , fv );
+      lhs.set( fv );
+      return Token( true );
+    }
   
-//   std::vector<bool> bv;
-//   if ( rhs.is_bool_vector(&bv) )
-//     {      
-//       meta->set( lhs.name() , bv );
-//       lhs.set( bv );
-//       return Token( true );
-//     }
+  std::vector<bool> bv;
+  if ( rhs.is_bool_vector(&bv) )
+    {      
+      m->set( lhs.name() , bv );
+      lhs.set( bv );
+      return Token( true );
+    }
   
-//   std::vector<int> iv;
-//   if ( rhs.is_int_vector(&iv) )
-//     {                  
-//       meta->set( lhs.name() , iv );
-//       lhs.set( iv );
-//       return Token( true );
-//     }
+  std::vector<int> iv;
+  if ( rhs.is_int_vector(&iv) )
+    {                  
+      m->set( lhs.name() , iv );
+      lhs.set( iv );
+      return Token( true );
+    }
   
-      
-//   std::vector<std::string> sv;
-//   if ( rhs.is_string_vector(&sv) )
-//     {
-//       meta->set( lhs.name() , sv );
-//       lhs.set( sv );
-//       return Token( true );
-//     }
   
-  // TMP-----  PUT THE ABOVE BACK IN
+  std::vector<std::string> sv;
+  if ( rhs.is_string_vector(&sv) )
+    {
+      m->set( lhs.name() , sv );
+      lhs.set( sv );
+      return Token( true );
+    }     
   
   return Token( true );  
 } 

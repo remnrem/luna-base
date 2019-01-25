@@ -50,8 +50,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   bool spectrum = param.has( "spectrum" );
   bool epoch_spectrum = param.has( "epoch-spectrum" );
 
-
-
+  
   // MTM parameters
   int npi = param.has( "nw" ) ? param.requires_int( "nw" ) : 3 ;
   int nwin = param.has( "t" ) ? param.requires_int( "t" ) : 2*npi-1 ;
@@ -59,7 +58,97 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   double max_f = param.has( "max" ) ?  param.requires_dbl( "max" ) : 30;
   double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 1 ;
   
-    
+  //
+  // Whole signal analyses
+  //
+
+
+  interval_t interval = edf.timeline.wholetrace();
+       
+  //
+  // Get each signal
+  //
+  
+  for (int s = 0 ; s < ns; s++ )
+    {
+      
+      //
+      // only consider data tracks
+      //
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) )
+	continue;
+      
+      //
+      // Stratify output by channel
+      //
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      
+      //
+      // Get data
+      //
+      
+      slice_t slice( edf , signals(s) , interval );
+      
+      const std::vector<double> * d = slice.pdata();	   
+      
+      // call MTM
+      
+      mtm_t mtm( npi , nwin );
+      
+      mtm.kind = 2 ; // adaptive weights;
+      mtm.inorm = 3 ; // 1/N weights
+      
+      mtm.apply( d , Fs[s] );
+	   	   
+      if ( wid_f > 0 )
+	{
+
+	  // 1 Hz bins
+	  mtm.bin( wid_f , max_f , Fs[s] );
+	  
+	  // output
+	  for ( int i = 0 ; i < mtm.bfa.size() ; i++ ) 
+	    {
+	      writer.level( Helper::dbl2str( mtm.bfa[i] ) + "-" + Helper::dbl2str( mtm.bfb[i] ) ,  globals::freq_strat  );
+	      writer.value( "MIDF" , ( mtm.bfa[i] + mtm.bfb[i] ) / 2.0 );
+	      writer.value( "MTM" , mtm.bspec[i] );
+	    }
+	  writer.unlevel( globals::freq_strat );
+	  
+	}
+      
+      // otherwise, original entire spectrum
+      else
+	{
+	  
+	  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+	    {
+	      if ( mtm.f[i] <= max_f ) 
+		{
+		  writer.level( mtm.f[i] , globals::freq_strat  );
+		  writer.value( "MTM" , mtm.spec[i] );
+		}
+	    }
+	  writer.unlevel( globals::freq_strat );
+	  
+	}
+      
+    } // next signal
+       
+  writer.unlevel( globals::signal_strat );
+  
+  
+  //
+  // Epoch-wise analyses
+  //
+  
+
+  if ( ! ( epoch_level_output || epoch_spectrum ) ) 
+    return;
+
+  
   edf.timeline.first_epoch();
 
   
@@ -112,7 +201,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	   
 	   const std::vector<double> * d = slice.pdata();	   
 	   
-	   // call MTM (
+	   // call MTM
 	   
 	   mtm_t mtm( 4 , 7 );
 	   
@@ -128,7 +217,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	       // 1 Hz bins
 	       mtm.bin( wid_f , max_f , Fs[s] );
 	       
-	       //output
+	       // output
 	       
 	       for ( int i = 0 ; i < mtm.bfa.size() ; i++ ) 
 		 {
@@ -162,6 +251,15 @@ void mtm::wrapper( edf_t & edf , param_t & param )
      } // next epoch
 
   writer.unepoch();
+
+  
+  
+  //
+  // Whole signal MTM
+  //
+
+  
+
 }
 
 

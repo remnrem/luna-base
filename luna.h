@@ -47,11 +47,11 @@
 
 #include "stats/glm.h"
 
+#include "annot/annot.h"
+
 #include "edf/edf.h"
 
 #include "timeline/timeline.h"
-
-#include "annot/annot.h"
 
 #include "annot/nsrr-remap.h"
 

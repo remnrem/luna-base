@@ -26,24 +26,11 @@
 
 #include "luna.h"
 
-// #include "edf/edf.h"
-
-// #include "helper/logger.h"
-
-// #include "helper/helper.h"
-
-// #include "db/db.h"
 
 extern logger_t logger;
 
 extern writer_t writer;
 
-
-//
-// for calls
-//
-
-#include "pdc/pdc.h"
 
 //
 // param_t 
@@ -443,29 +430,33 @@ void cmd_t::replace_wildcards( const std::string & id )
 }
 
 
+
 bool cmd_t::read( const std::string * str , bool silent )
 {
   
   bool cmdline_mode = str == NULL;   
-
+  
   if ( std::cin.eof() && cmdline_mode ) return false;
   
   if ( (!cmdline_mode) && str->size() == 0 ) return false;
-
+  
   reset();
   
   // CMD param=1 p=1,2,3 f=true out=o1 & CMD2 etc ; 
   
   // EITHER read from std::cin, 
   // OR          from -s command line
-  // OR          from a string
-
+  // OR          from a string (e.g. lunaR)
+  
+  // Commands are delimited by & symbols (i.e. multi-line statements allowed)
+  
   std::istringstream allinput;
-
-  if ( ! cmdline_mode ) // read from 'str' 
+  
+  if ( ! cmdline_mode ) // read from 'str', such as R interface
     {
-      // split by lines
-      std::vector<std::string> tok = Helper::parse( *str , "\n" );
+      
+      // split by commands ('&' symbols), but allowing for & witin eval expressions 
+      std::vector<std::string> tok = Helper::quoted_parse( *str , "&" );
       
       std::stringstream ss;
       
@@ -478,6 +469,8 @@ bool cmd_t::read( const std::string * str , bool silent )
       allinput.str( ss.str() );
 
     }
+
+  // read from std::cin
   else if ( cmd_t::cmdline_cmds == "" )
     {
       std::stringstream ss;
@@ -488,31 +481,74 @@ bool cmd_t::read( const std::string * str , bool silent )
 	  std::getline( std::cin , s , '\n' );
 	  if ( std::cin.eof() ) break;
 	  if ( s == "" ) continue;	  
-	  if ( ! first_cmd ) ss << " & ";
-	  ss << s ;
-	  first_cmd = false; 
-	}      
+	  
+	  // is this a continuation line?
+	  bool continuation = s[0] == ' ' || s[0] == '\t';
+
+	  // only read up to a % comment, although this may be quoted
+	  if ( s.find( "%" ) != std::string::npos ) 
+	    {
+	      bool inquote = false;
+	      int comment_start = -1;
+	      for (int i=0;i<s.size();i++)
+		{
+		  if ( s[i] == '"' || s[i] == '#' ) inquote = ! inquote;
+		  if ( s[i] == '%' && ! inquote ) { comment_start = i; break; }
+		}
+	      
+	      // remove comment
+	      if ( comment_start != -1 )
+		s = s.substr( 0 , comment_start );
+	    }
+
+	  // trim leading/trailing whitespace
+	  s = Helper::ltrim( s );
+	  s = Helper::rtrim( s );
+
+	  // anything left to add?
+	  if ( s.size() > 0 ) 
+	    {
+	      if ( ! continuation ) 
+		{
+		  if ( ! first_cmd ) ss << " & ";		  
+		  first_cmd = false;
+		}
+	      else 
+		{
+		  ss << " "; // spacer
+		}	      
+	      // add actual non-empty command
+	      ss << s ;	      
+	    }
+
+	}
+
       allinput.str( ss.str() );
     }
 
+  // read from -s string
   else 
     allinput.str( cmd_t::cmdline_cmds );
       
-  //std::cout << "allinput [" << allinput.str() << "]\n";
-
-  // read up to the ';'
-  //  std::getline( std::cin , line , ';' );
-  std::getline( allinput , line , ';' );
+  // take everything
+  line = allinput.str();
   
+  // change any '&' (back) to '\n', unless they are quoted (" or #)
+  bool inquote = false;
+  for (int i=0;i<line.size();i++) 
+    {
+      if ( line[i] == '#' || line[i] == '"' ) inquote = ! inquote;
+      else if ( line[i] == '&' ) 
+	{
+	  if ( ! inquote ) line[i] = '\n';
+	}
+    }
 
-  // change any '&' to '\n'
-  for (int i=0;i<line.size();i++) if ( line[i] == '&' ) line[i] = '\n';
-
-  // skip comments between commands if line starts with '#' (or '\n')
+  // skip comments between commands if line starts with '%' (or '\n')
   bool recheck = true;
   while (recheck)
     {     
-      if ( line[0] == '#' || line[0] == '\n' ) 
+      if ( line[0] == '%' || line[0] == '\n' ) 
 	{
 	  line = line.substr( line.find("\n")+1);
 	}
@@ -532,15 +568,7 @@ bool cmd_t::read( const std::string * str , bool silent )
 
   // command(s)
   for (int c=0;c<tok.size();c++)
-    {
-
-      // all done?
-      // if ( Helper::iequals( tok[c] , "QUIT" ) ) 
-      // 	{
-      // 	  quit( true );
-      // 	  return false;
-      // 	}
-      
+    {      
       std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
       if ( ctok.size() < 1 ) return false;
       cmds.push_back( ctok[0] );
@@ -548,7 +576,7 @@ bool cmd_t::read( const std::string * str , bool silent )
       for (int j=1;j<ctok.size();j++) param.parse( ctok[j] );
       params.push_back( param );
     }
-
+  
   // make a copy of the 'orginal' params
   original_params = params;
 
@@ -579,8 +607,6 @@ bool cmd_t::read( const std::string * str , bool silent )
 	     << "\n";
     }
   
-  //      logger << "-------------------------------------------------------------------\n";
-
 
   return true;
 }
@@ -674,6 +700,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c ,"EPOCH" ) )        proc_epoch( edf, param(c) );
       else if ( is( c ,"SLICE" ) )        proc_slice( edf , param(c) , 1 );
       
+      else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
       else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
@@ -1206,29 +1233,34 @@ void proc_epoch( edf_t & edf , param_t & param )
   // writer to db
   //
   
-  edf.timeline.first_epoch();
-
-  while ( 1 ) 
+  if ( param.has( "verbose" ) )
     {
       
-      int epoch = edf.timeline.next_epoch();      
-		  
-      if ( epoch == -1 ) break;
-              
-      interval_t interval = edf.timeline.epoch( epoch );
+      edf.timeline.first_epoch();
       
-      //      std::cout << "epoch " << epoch << "\t" << interval.as_string() << "\n";
-
-      writer.epoch( edf.timeline.display_epoch( epoch ) );
-
-      writer.value( "EPOCH_INTERVAL" , interval.as_string() );      
-      writer.value( "EPOCH_START" , interval.start_sec() );
-      writer.value( "EPOCH_MID"   , interval.mid_sec() );
-      writer.value( "EPOCH_STOP" , interval.stop_sec() );
+      while ( 1 ) 
+	{
+	  
+	  int epoch = edf.timeline.next_epoch();      
+	  
+	  if ( epoch == -1 ) break;
+	  
+	  interval_t interval = edf.timeline.epoch( epoch );
+	  
+	  //      std::cout << "epoch " << epoch << "\t" << interval.as_string() << "\n";
+	  
+	  writer.epoch( edf.timeline.display_epoch( epoch ) );
+	  
+	  writer.value( "EPOCH_INTERVAL" , interval.as_string() );      
+	  writer.value( "EPOCH_START" , interval.start_sec() );
+	  writer.value( "EPOCH_MID"   , interval.mid_sec() );
+	  writer.value( "EPOCH_STOP" , interval.stop_sec() );
 		  
-    }
+	}
   
-  writer.unepoch();
+      writer.unepoch();
+      
+    }
 
 
   //
@@ -1239,13 +1271,11 @@ void proc_epoch( edf_t & edf , param_t & param )
     {
       int r = param.requires_int( "require" );
       if ( ne < r ) 
-	{
-	  
-	  logger << "EPOCH-PROBLEM\t"
-		 << edf.id << "\t"
-		 << "[" << globals::current_tag << "]\t"
+	{	  
+	  logger << " ** warning for "  
+		 << edf.id << " when setting EPOCH: "
 		 << "required=" << r << "\t"
-		 << "observed=" << ne << "\n";
+		 << "but observed=" << ne << "\n";
 	  globals::problem = true;
 	}
     }
@@ -1787,12 +1817,25 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   
 
   // default annot folder
-  else if ( Helper::iequals( tok0 , "annots-folder" ) ) 
+  else if ( Helper::iequals( tok0 , "annot-folder" ) ||
+	    Helper::iequals( tok0 , "annots-folder" ) ) 
     {
       if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
 	globals::annot_folder = tok1 + "/";
       else
 	globals::annot_folder = tok1;		      
+      return;
+    }
+
+
+  // additional annot files to add from the command line
+  // i.e. so we don't have to edit the sample-list
+  else if ( Helper::iequals( tok0 , "annots-file" ) ||
+	    Helper::iequals( tok0 , "annots-files" ) ||
+	    Helper::iequals( tok0 , "annot-file" ) ||
+	    Helper::iequals( tok0 , "annot-files" ) )
+    {
+      globals::annot_files = Helper::parse( tok1 , "," );
       return;
     }
 

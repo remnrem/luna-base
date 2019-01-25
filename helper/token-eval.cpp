@@ -43,13 +43,6 @@ void Eval::init()
   
   errs = "";
 
-  // vector creation functions
-//   gdef[ "int" ] = 1;
-//   gdef[ "bool" ] = 1;
-//   gdef[ "vec" ] = 1;
-//   gdef[ "str" ] = 1;
-
-
 }
 
 bool Eval::get_token( std::string & input ,  Token & tok )
@@ -229,13 +222,13 @@ bool Eval::get_token( std::string & input ,  Token & tok )
     }
 
   // otherwise, assume a variable that start: a-z, A-Z or _
-  // or a variable name is ends in "("
+  // or a function name if ends in "("
   
   else if ( ( c >= "a" && c <= "z" ) || 
 	    ( c >= "A" && c <= "Z" ) ||
 	    c == "_" ) 
     {
-      
+            
       // Is this a function?
       bool isfn = false;
 
@@ -266,22 +259,22 @@ bool Eval::get_token( std::string & input ,  Token & tok )
       
       if ( isfn )
 	{
-	  
+	
 	  // does this look like a valid function name?
 	  std::map<std::string,int>::iterator f = 
 	    Token::fn_map.find( c );
-	  	  
+	  
 	  if ( f == Token::fn_map.end() ) 
-	    return false;
+	    Helper::halt( "did not recognize function " + c + "()" );
 	  
 	  // store function token
 	  tok.function( c );	    
 	}
-      else if ( c == "T" || c == "true" )
+      else if ( c == "true" )
 	{
 	  tok.set( true );
 	}
-      else if ( c == "F" || c == "false" )
+      else if ( c == "false" )
 	{
 	  tok.set( false );
 	}
@@ -373,7 +366,9 @@ unsigned int Eval::op_arg_count( const Token & tok )
 {
 
   Token::tok_type t = tok.type();
-  
+
+  //  std::cout << "tok type " << tok.name() << " " << t << "\n";
+
   switch( t )  
     {
       
@@ -394,13 +389,20 @@ unsigned int Eval::op_arg_count( const Token & tok )
     case Token::AND_OPERATOR : 
     case Token::OR_OPERATOR : return 2;
             
-    case Token::FUNCTION : return Token::fn_map[ tok.name() ];
-
+    case Token::FUNCTION : 
+      if ( Token::fn_map.find( tok.name() ) == Token::fn_map.end() )
+	Helper::halt( "did not recognize function " + tok.name() );
+      return Token::fn_map[ tok.name() ];
+      
     default:
+      Helper::halt( "did not recognize operator " + tok.name() );
       break;
-
+      
     }
-  return 0;
+
+  std::cout << "leaving\n";
+
+  return 0; 
 }
 
 
@@ -482,7 +484,7 @@ bool Eval::shunting_yard( const std::string & oinput,
 	  
 	  if( !pe )   
 	    {
-	      errmsg( "separator or parentheses mismatched" );
+	      Helper::halt( "separator or parentheses mismatched" );
 	      return false;
 	    }
 	}
@@ -569,7 +571,7 @@ bool Eval::shunting_yard( const std::string & oinput,
 	    
 	    if( ! pe )  
 	      {
-		errmsg( "parentheses mismatched" );
+		Helper::halt( "parentheses mismatched" );
 		return false;
 	      }
 	    
@@ -598,7 +600,7 @@ bool Eval::shunting_yard( const std::string & oinput,
 	  }
 	else  
 	  {	    
-	    errmsg( "unknown token" ) ;
+	    Helper::halt( "unknown token" ) ;
 	    return false; 
 	  }
       
@@ -615,7 +617,7 @@ bool Eval::shunting_yard( const std::string & oinput,
       
       if ( sc.is_left_paren() || sc.is_right_paren() )
 	{
-	  errmsg( "parentheses mismatched" );
+	  Helper::halt( "parentheses mismatched" );
 	  return false;
         }
       
@@ -669,11 +671,12 @@ bool Eval::execute( const std::vector<Token> & input )
 	  
 	  int nargs = op_arg_count(c);
 	  
+	  
 	  // If there are fewer than n values on the stack
 	  
 	  if ( (int)sl < nargs && nargs != -1 ) 
 	    {
-	      errmsg( "not enough arguments for " + c.name() ) ;
+	      Helper::halt( "not enough arguments for " + c.name() ) ;
 	      return false;
 	    }
 	  
@@ -718,52 +721,53 @@ bool Eval::execute( const std::vector<Token> & input )
 	      const int nargs = Token::fn_map[ c.name() ]; 
 	      if ( args.size() != nargs && nargs != -1 ) 
 		{
-		  errmsg( "wrong number of arguments for " + c.name() );
+		  Helper::halt( "wrong number of arguments for " + c.name() );
 		  return false;
 		}
 
+
 	      // note: args are in reverse order here
 	      
-	      if      ( c.name() == "set" )  res = func.fn_set( args[0] );
+	      if      ( c.name() == "if" )     res = func.fn_set( args[0] );
+	      else if ( c.name() == "ifnot" )  res = func.fn_notset( args[0] );
 	      
-	      else if ( c.name() == "sqrt" ) res = func.fn_sqrt( args[0] );
-	      else if ( c.name() == "sqr" )  res = func.fn_sqr( args[0] );
-	      else if ( c.name() == "pow" )  res = func.fn_pow( args[1] , args[0] );
+	      else if ( c.name() == "sqrt" )   res = func.fn_sqrt( args[0] );
+	      else if ( c.name() == "sqr" )    res = func.fn_sqr( args[0] );
+	      else if ( c.name() == "pow" )    res = func.fn_pow( args[1] , args[0] );
 	      
-	      else if ( c.name() == "exp" ) res = func.fn_exp( args[0] );
-	      else if ( c.name() == "log" ) res = func.fn_log( args[0] );
-	      else if ( c.name() == "log10" ) res = func.fn_log10( args[0] );
-
+	      else if ( c.name() == "exp" )    res = func.fn_exp( args[0] );
+	      else if ( c.name() == "log" )    res = func.fn_log( args[0] );
+	      else if ( c.name() == "log10" )  res = func.fn_log10( args[0] );
+	      
 	      else if ( c.name() == "ifelse" ) res = func.fn_ifelse( args[2], args[1], args[0] );
 	      
 	      // vector functions
 	
-	      else if ( c.name() == "element" ) res = func.fn_vec_extract( args[1] , args[0] );
+	      else if ( c.name() == "element" )  res = func.fn_vec_extract( args[1] , args[0] );
 	      
-	      else if ( c.name() == "length" )  res = func.fn_vec_length( args[0] );	      
+	      else if ( c.name() == "length" )   res = func.fn_vec_length( args[0] );	      
+	      else if ( c.name() == "size" )     res = func.fn_vec_length( args[0] );	      
 	      
-	      else if ( c.name() == "min" )     res = func.fn_vec_min( args[0] );	      
-	      else if ( c.name() == "max" )     res = func.fn_vec_maj( args[0] );
+	      else if ( c.name() == "min" )      res = func.fn_vec_min( args[0] );	      
+	      else if ( c.name() == "max" )      res = func.fn_vec_maj( args[0] );
 	      
-	      else if ( c.name() == "sum" )     res = func.fn_vec_sum( args[0] );
-	      else if ( c.name() == "mean" )    res = func.fn_vec_mean( args[0] );
-	      else if ( c.name() == "sort" )    res = func.fn_vec_sort( args[0] );
+	      else if ( c.name() == "sum" )      res = func.fn_vec_sum( args[0] );
+	      else if ( c.name() == "mean" )     res = func.fn_vec_mean( args[0] );
+	      else if ( c.name() == "sort" )     res = func.fn_vec_sort( args[0] );
 
-	      else if ( c.name() == "vec_func" )  res = func.fn_vec_new_float( args );
-	      else if ( c.name() == "int_func" )   res = func.fn_vec_new_int( args );
-	      else if ( c.name() == "str_func" )   res = func.fn_vec_new_str( args );     
-	      else if ( c.name() == "bool_func" )  res = func.fn_vec_new_bool( args ); 
+	      else if ( c.name() == "num_func" )  res = func.fn_vec_new_float( args );
+	      else if ( c.name() == "int_func" )  res = func.fn_vec_new_int( args );
+	      else if ( c.name() == "txt_func" )  res = func.fn_vec_new_str( args );     
+	      else if ( c.name() == "bool_func" ) res = func.fn_vec_new_bool( args ); 
 	      
-	      else if ( c.name() == "any" )     res = func.fn_vec_any( args[1] , args[0] );	      
-	      else if ( c.name() == "count" )   res = func.fn_vec_count( args[1] , args[0] );	      
-
-// 	      else if ( c.name() == "g_func" )   res = func.fn_vec_g( args[0] , this );
-// 	      else if ( c.name() == "gf_func" )  res = func.fn_vec_gnull( args[0] , this );
-// 	      else if ( c.name() == "gs_func" )  res = func.fn_vec_gset( args[0] , this );
-// 	      else if ( c.name() == "n" )        res = Token( gvar ? gvar->calls.size() : 0 );
-
-// 	      else if ( c.name() == "p_func" )   res = genmeta_mode ? func.fn_vec_1pheno( args[0] , indiv ) : func.fn_vec_pheno( args[0] );
-
+	      else if ( c.name() == "any" )       res = func.fn_vec_any( args[0] );	      
+	      else if ( c.name() == "all" )       res = func.fn_vec_all( args[0] );	      
+	      else if ( c.name() == "contains" )  res = func.fn_vec_any( args[1] , args[0] );	      
+	      else if ( c.name() == "countif" )   res = func.fn_vec_count( args[1] , args[0] );	      
+	      
+	      else if ( c.name() == "c" )         res = func.fn_vec_cat( args[1] , args[0] );	      
+	      	    	      
+	      else Helper::halt( "did not recognize function " + c.name() );
 	    }
 	  else
 	    {
@@ -789,10 +793,10 @@ bool Eval::execute( const std::vector<Token> & input )
 		    {
 		      
 		      res = func.fn_assign( sc, t0 );  // res==T
-		      
+
 		      // and bind new value if needed
 		      bind( &sc );
-		      
+
 		    }		  
 		  else
 		    res = c.operands( t0 , sc );		    
@@ -807,14 +811,13 @@ bool Eval::execute( const std::vector<Token> & input )
       
     }
 
- 
 
   // If there is only one value in the stack
   // That value is the result of the calculation.
   
   if ( sl != 1 || stack.size() != 1 ) 
     {
-      errmsg( "badly formed expression" );
+      Helper::halt( "badly formed eval expression" );
       return false;
     }
   
@@ -834,7 +837,7 @@ bool Eval::execute( const std::vector<Token> & input )
   // If there are more values in the stack
   // (Error) The user input has too many values.
   
-  errmsg( "badly formed expression: too many values" );
+  Helper::halt( "badly formed expression: too many values" );
   return false;
 }
 
@@ -853,9 +856,19 @@ bool Eval::parse( const std::string & input )
   // evaluate each sequential, to perform any assignments into
   // meta data, but only the last will be reflected in the 'e' 
   // endpoint
-
   
-  std::vector<std::string> etok = Helper::parse( input2, ";" );
+  std::vector<std::string> etok0 = Helper::parse( input2, ";" );
+  
+  // strip out any empty expressions (e.g. if there was a final ; but no expression after)
+  
+   std::vector<std::string> etok;
+   for (int i=0;i<etok0.size();i++)
+     {
+       std::string j = Helper::ltrim( etok0[i] );
+       j = Helper::rtrim( j );
+       if ( j.size() > 0 ) etok.push_back( j );
+     }
+  
 
   // set number of evals we need to do
 
@@ -885,192 +898,187 @@ bool Eval::parse( const std::string & input )
 
 }
 
-// bool Eval::extract_gfunc( std::string * s )
-// {
-
-//   // replace g( DP > 10 && PL[1] < 0.2 ) with 
-//   //  with,  g( 'DP > 10 && PL[1] < 0.2' ) 
-  
-//   // NOTE -- not allowed to have nested g() functions
-  
-//   // Also set p(X) -> p('X')
-  
-//   while ( 1 ) 
-//     {
-
-//       bool found = false;
-      
-//       std::map<std::string,int>::iterator i = gdef.begin();
-      
-//       while ( i != gdef.end() )
-// 	{
-	  
-// 	  size_t p = s->find( i->first + "(" );
-	  
-// 	  if ( p != std::string::npos ) 
-// 	    {	      
-
-// 	      // this will also match 
-// 	      //       g(X)
-// 	      //     log(X)
-// 	      // so we need to check that an actual g() or p() has been found
-	      
-// 	      if ( p > 1 )
-// 		{
-// 		  if ( ( (*s)[p-1] >= 'A' && (*s)[p-1] <= 'Z' ) || 
-// 		       ( (*s)[p-1] >= 'a' && (*s)[p-1] <= 'z' ) || 
-// 		       ( (*s)[p-1] >= '0' && (*s)[p-1] <= '9' ) || 
-// 		       (*s)[p-1] >= '_' ) { p = std::string::npos; } 
-// 		}
-// 	    }
-	  
-
-// 	  if ( p != std::string::npos )
-// 	    {
-	      
-// 	      found = true;
-	      
-// 	      std::vector<std::string> arglist;
-// 	      arglist.push_back( i->first ); // track fn name: g() or gnull()
-
-// 	      // look for closing brace
-	      
-// 	      int bc = 0;
-// 	      int q = p;
-// 	      int pp = p;
-	      
-// 	      while ( ++q )
-// 		{
-		  
-// 		  // gone past end of string?
-// 		  if ( q == s->size() ) return false;
-		  
-// 		  char c = s->substr(q,1)[0];
-		  
-// 		  if ( c == '(' ) 
-// 		    {
-// 		      ++bc;  //includes first paran
-// 		      if ( bc == 1 ) pp = q+1; // track position of first argument
-// 		    }
-// 		  else if ( c == ')' )
-// 		    {
-// 		      --bc;
-// 		      if ( bc == 0 ) 
-// 			{
-// 			  std::string str = s->substr(pp,q-pp);
-// 			  str.erase(remove_if(str.begin(), str.end(), isspace), str.end());
-// 			  arglist.push_back( str );
-// 			  break;
-// 			}
-// 		    }		  
-// 		}
-	      	      
-
-// 	      // gfunc() spans positions p to q
-
-// 	      // correct number of arguments? (typically 1 or 2)
-// 	      // allow that first 'arglist' is function name
-// 	      // if one short, assume we skipped the filter -- make to include all
-
-// 	      std::string label = arglist[0] + "_func({" + arglist[1] + "})";
-	      
-// 	      // store internally too, if a genotype-function
-// 	      if ( arglist[0] == "g" || arglist[0] == "gf" )
-// 		gfunc[ label ] = arglist;
-	
-      
-// 	      // swap out entire expression
-// 	      // replace gfunc() with a variable
-
-// 	      s->replace( p , (q-p+1) , label );
-	      
-// 	      // also replace any ';' with ':' so that we do not confuse the parser; these will be swapped back
-// 	      // when this expression is parsed
-	      
-// 	      for (int i=0;i<s->size();i++)
-// 		if ( (*s)[i] == ';' ) (*s)[i] = ':';
-
-// 	    }
-	  
-// 	  ++i;  // next possible gfunc()
-// 	}
-      
-//       // are we sure there are no more gfunc()s in input?
-//       if ( ! found ) break;
-      
-//     }
-  
-//   return true;
-
-// }
-
-
-
-// void Eval::bind( SampleVariant & ref_svar , SampleVariant & ref_gvar , bool reset )   
-// {    
-  
-
-//   // We have svar and gvar, as the gvar might be the consensus SampleVariant (e.g. 
-//   // from a flat alignment) whereas the variant meta-information will still be 
-//   // in the original SampleVariant.
-
-//   if ( reset ) reset_symbols();
-  
-//   // Bind any gfunc()s  
-
-//   gvar = &ref_gvar;
-  
-//   // Standard meta-information  
-//   bind( ref_svar.meta , false );
-  
-//   // For assignment ( --> to meta )  
-//   func.attach( ref_gvar.meta );
-// }
-
-// void Eval::bind( SampleVariant & ref_svar , bool reset )   
-// {     
-
-//   if ( reset ) reset_symbols();
-
-//   gvar = &ref_svar;
-
-//   // For lookup ( --> from meta )
-//   bind( ref_svar.meta , false );
-
-//   // For assignment ( --> to meta )  
-//   func.attach( ref_svar.meta );
-
-// }
-
-
-// void Eval::bind( Variant & var , bool reset )   
-// {     
-
-//   if ( reset ) reset_symbols();
-  
-//   // genotypes in consensus SampleVariant
-//   gvar = &var.consensus;
-  
-//   // Standard meta-information  
-//   bind( var.meta , false );
-
-//   // For assignment ( --> to meta )  
-//   func.attach( var.meta );
-  
-// }
-
-
 void Eval::assign_to( instance_t & m )
 {
-  func.attach( m );
+  func.attach( &m );
 }
 
-void Eval::bind( instance_t & m , bool reset )   
+void Eval::bind( const std::map<std::string,annot_map_t> & inputs , 
+		 instance_t * outputs , 
+		 instance_t * accumulator , 
+		 const std::set<std::string> * global_vars , 
+		 bool reset )   
 {
+
+
+  
+  if ( reset ) reset_symbols();  
   
   //
-  // Bind information in an annotation instance_t (m) to the variable table here
+  // Input: bind information from inputs and also from accumulator 
   //
+  
+  //
+  // Output: either to outputs (i.e. which is assumed to be local) OR to the 'global' accumulator (i.e. 
+  // which is assumed to persist across evaluations
+  //
+  
+
+  //
+  // create a single instance that organizes all the information in
+  // the annot_map_t above in a sane variable naming scheme
+  // 
+  // nb. some redundancy here, as we copy stuff over that we might not need in the 
+  // expression;  can edit here to only copy variables that are in the vartb (i.e. 
+  // those that will actually be used in evaluating the expression)
+  //
+  
+  std::map<std::string,std::vector<std::string> > accum_txt;
+  std::map<std::string,std::vector<int> > accum_int;
+  std::map<std::string,std::vector<double> > accum_dbl;
+  std::map<std::string,std::vector<bool> > accum_bool;
+
+  std::map<std::string,annot_map_t>::const_iterator ii = inputs.begin();
+  
+  while ( ii != inputs.end() )
+    {
+      const std::string & annot_name = ii->first;
+      const annot_map_t & annot_map  = ii->second;
+      
+      // consider every instance for this annotation; make a txtvector that 
+      // lists all instance IDs 
+      std::vector<std::string> instance_labels;
+      
+      annot_map_t::const_iterator mm = annot_map.begin();
+      while ( mm != annot_map.end() )
+	{
+	  
+	  const instance_idx_t & instance_idx = mm->first;
+	  const std::string & instance_id = instance_idx.id;
+	  const instance_t * instance = mm->second;
+	  
+	  // store instance IDs as variable name == 'annot_name'
+	  accum_txt[ annot_name ].push_back( instance_id );
+	  
+	  // store interval duration (in seconds) as variable name == 'annot_name
+	  accum_dbl[ annot_name + "_sec" ].push_back( instance_idx.interval.duration_sec() );
+
+	  // store arbitrary meta-data
+	  std::map<std::string,avar_t*>::const_iterator kk = instance->data.begin();
+	  while ( kk != instance->data.end() )
+	    {
+	      
+	      // variable name is annot.var
+	      
+	      const std::string meta_name = annot_name + "." + kk->first;
+
+	      const avar_t * value = kk->second;
+	      
+	      // for now... we cannot read IN vectors
+	      // is okay, as currently no way to specify those from files in any case!
+	      
+	      globals::atype_t type = value->atype();
+	      
+	      if      ( type == globals::A_TXT_T ) accum_txt[ meta_name ].push_back( value->text_value() ); 
+	      else if ( type == globals::A_DBL_T ) accum_dbl[ meta_name ].push_back( value->double_value() );
+	      else if ( type == globals::A_INT_T ) accum_int[ meta_name ].push_back( value->int_value() );
+	      else if ( type == globals::A_BOOL_T ) accum_bool[ meta_name ].push_back( value->bool_value() );
+	      
+	      // next meta-data
+	      ++kk;
+	    } 
+	  
+	  // next instance
+	  ++mm;
+	} 
+      
+      // next annotation
+      ++ii;
+    }
+  
+
+
+  //
+  // add all to a single instance_t to hand to the token parser
+  //
+
+  instance_t m;
+  
+  std::map<std::string,std::vector<std::string> >::const_iterator ii1 = accum_txt.begin();
+  while ( ii1 != accum_txt.end() )
+    {
+      if ( ii1->second.size() == 1 ) m.set( ii1->first , ii1->second[0] );
+      else m.set( ii1->first , ii1->second );
+      ++ii1;
+    }
+
+  std::map<std::string,std::vector<double> >::const_iterator ii2 = accum_dbl.begin();
+  while ( ii2 != accum_dbl.end() )
+    {
+      if ( ii2->second.size() == 1 ) m.set( ii2->first , ii2->second[0] );
+      else m.set( ii2->first , ii2->second );
+      ++ii2;
+    }
+
+  std::map<std::string,std::vector<int> >::const_iterator ii3 = accum_int.begin();
+  while ( ii3 != accum_int.end() )
+    {
+      if ( ii3->second.size() == 1 ) m.set( ii3->first , ii3->second[0] );
+      else m.set( ii3->first , ii3->second );
+      ++ii3;
+    }
+  
+  std::map<std::string,std::vector<bool> >::const_iterator ii4 = accum_bool.begin();
+  while ( ii4 != accum_bool.end() )
+    {
+      if ( ii4->second.size() == 1 ) m.set( ii4->first , ii4->second[0] );
+      else m.set( ii4->first , ii4->second );
+      ++ii4;
+    }
+
+
+  //
+  // now add any meta-data from the global input/output class, directly to 'm'
+  //
+    
+  if ( accumulator != NULL )
+    {
+      std::map<std::string,avar_t*>::const_iterator kk = accumulator->data.begin();
+      while ( kk != accumulator->data.end() )
+	{
+	  
+	  // variable name (which /should/ always start with _ if it has been written to a global store)
+	  
+	  const std::string meta_name =  kk->first;
+	  
+	  const avar_t * value = kk->second;
+	  
+	  // for now... we cannot read IN vectors
+	  // is okay, as currently no way to specify those from files in any case!
+	  
+	  globals::atype_t type = value->atype();
+	  
+	  if      ( type == globals::A_TXT_T ) m.set( meta_name , value->text_value() ); 
+	  else if ( type == globals::A_DBL_T ) m.set( meta_name , value->double_value() );
+	  else if ( type == globals::A_INT_T ) m.set( meta_name , value->int_value() );
+	  else if ( type == globals::A_BOOL_T ) m.set( meta_name , value->bool_value() );
+	  else if ( type == globals::A_TXTVEC_T ) m.set( meta_name , value->text_vector() ); 
+	  else if ( type == globals::A_DBLVEC_T ) m.set( meta_name , value->double_vector() );
+	  else if ( type == globals::A_INTVEC_T ) m.set( meta_name , value->int_vector() );
+	  else if ( type == globals::A_BOOLVEC_T ) m.set( meta_name , value->bool_vector() );
+	  
+	  // next meta-data
+	  ++kk;
+	} 
+      
+    }
+  
+  // Check...
+//   std::cout << m.print() << "\n";
+
+//   if ( accumulator != NULL ) 
+//     std::cout << "acc\n" << accumulator->print() << "\n";
+
   
   //
   // Two scenarios: 
@@ -1093,7 +1101,7 @@ void Eval::bind( instance_t & m , bool reset )
 	  globals::atype_t mt = m.type( var_name );
 
 	  avar_t * a = m.find( var_name );
-	  	  
+	  
 	  // numeric, int, text and bool scalars
 	  // also allow vectors downstream
 	  
@@ -1101,16 +1109,30 @@ void Eval::bind( instance_t & m , bool reset )
 	    {
 	      (*tok)->set(); // UNDEFINED
 	    }
+
 	  else if ( a->atype() == globals::A_INT_T  )  { (*tok)->set( a->int_value() ) ;  }
 	  else if ( a->atype() == globals::A_DBL_T  )  { (*tok)->set( a->double_value() ); }
 	  else if ( a->atype() == globals::A_TXT_T  )  { (*tok)->set( a->text_value() ); }
 	  else if ( a->atype() == globals::A_BOOL_T )  { (*tok)->set( a->bool_value() );   }	      
+
+	  else if ( a->atype() == globals::A_INTVEC_T  )  { (*tok)->set( a->int_vector() ) ;  }
+	  else if ( a->atype() == globals::A_DBLVEC_T  )  { (*tok)->set( a->double_vector() ); }
+	  else if ( a->atype() == globals::A_TXTVEC_T  )  { (*tok)->set( a->text_vector() ); }
+	  else if ( a->atype() == globals::A_BOOLVEC_T )  { (*tok)->set( a->bool_vector() );   }	      
+	  
 	  else (*tok)->set(); // UNDEFINED
 	  
 	  ++tok;
 	}
       ++i;
     }    
+
+  //
+  // For assignment
+  //
+  
+  func.attach( outputs , accumulator , global_vars );
+  
 }
 
 
@@ -1276,9 +1298,9 @@ bool Eval::expand_vargs( std::string * s )
 
 
   std::vector<std::string> fname;
-  fname.push_back("vec(");
+  fname.push_back("num(");
   fname.push_back("int(");
-  fname.push_back("str(");
+  fname.push_back("txt(");
   fname.push_back("bool(");
   
   for (int f = 0 ; f < fname.size() ; f++)

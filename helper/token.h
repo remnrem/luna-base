@@ -28,8 +28,7 @@
 #include <ostream>
 #include <vector>
 #include <map>
-
-//#include "annot/annot.h"
+#include <set>
 
 struct instance_t;
 
@@ -46,7 +45,7 @@ class Token {
 	for ( int i=0; i<l; i++ ) 
 	  {
 	    if ( i ) out << "," ; 
-	    if      ( tok.is_bool_vector() ) out << ( tok.bvec[i] ? "T" : "F" );
+	    if      ( tok.is_bool_vector() ) out << ( tok.bvec[i] ? "true" : "false" );
 	    else if ( tok.is_int_vector() ) out << tok.ivec[i];
 	    else if ( tok.is_float_vector() ) out << tok.fvec[i];
 	    else if ( tok.is_string_vector() ) out << tok.svec[i];
@@ -59,7 +58,7 @@ class Token {
 	else if ( tok.is_float_vector() ) out << "]f";
 	else if ( tok.is_string_vector() ) out << "]s";
       }    
-    else if ( tok.is_bool() ) out << ( tok.bval ? "T" : "F" );     
+    else if ( tok.is_bool() ) out << ( tok.bval ? "true" : "false" );     
     else if ( tok.is_int() ) out << tok.ival << "i";
     else if ( tok.is_float() ) out << tok.fval << "f";
     else if ( tok.is_string() ) out << tok.sval;
@@ -255,19 +254,18 @@ class Token {
   std::vector<std::string>  svec;
   std::vector<bool>         bvec;
   
-
   // helper func
   bool string2bool( const std::string & sval ) const ;
 
 };
 
 
-class TokenFunctions{ 
+struct  TokenFunctions{ 
   
- public:
+  TokenFunctions() { meta = NULL; } 
   
-
   Token fn_set( const Token & tok ) const;    
+  Token fn_notset( const Token & tok ) const;    
   Token fn_sqrt( const Token & tok ) const;    
   Token fn_log( const Token & tok ) const;
   Token fn_log10( const Token & tok ) const;
@@ -285,35 +283,26 @@ class TokenFunctions{
   Token fn_vec_mean( const Token & tok ) const;
   Token fn_vec_sort( const Token & tok ) const;
 
-  // genotype extraction
-/*   Token fn_vec_g( const Token & tok , Eval * e ) const; */
-/*   Token fn_vec_gnull( const Token & tok , Eval * e ) const; */
-/*   Token fn_vec_gset( const Token & tok , Eval * e ) const; */
-  
-  // phenotype extraction/assignment
-/*   Token fn_vec_pheno( const Token & tok ) const; */
-/*   Token fn_vec_1pheno( const Token & rhs , int ) const; */
-/*   Token fn_assign_pheno( Token & lhs , const Token & rhs ); */
-
-
   Token fn_vec_new_float( const std::vector<Token> & tok ) const;
   Token fn_vec_new_int( const std::vector<Token> & tok ) const;
   Token fn_vec_new_str( const std::vector<Token> & tok ) const;
   Token fn_vec_new_bool( const std::vector<Token> & tok ) const;
   
-  Token fn_vec_any( const Token & tok1 , const Token & tok2 ) const;
+  Token fn_vec_any( const Token & tok1 ) const; // versus T
+  Token fn_vec_all( const Token & tok1 ) const; // versus T
+  Token fn_vec_any( const Token & tok1 , const Token & tok2 ) const; // vresus 'tok2'
   Token fn_vec_count( const Token & tok1 , const Token & tok2 ) const;
+  Token fn_vec_cat( const Token & tok1 , const Token & tok2 ) const;
 
-  void attach( instance_t & m ); //MetaInformation<VarMeta> & m );
-/*   void attach( MetaInformation<GenMeta> & m ); */
-  
+  void attach( instance_t * m ); 
+  void attach( instance_t * m , instance_t * m2 , const std::set<std::string> * ); 
   Token fn_assign( Token & lhs , const Token & rhs );
-/*   Token fn_assign_gen( Token & lhs , const Token & rhs ); */
   
  private:  
   
-  instance_t * meta;
-  
+  instance_t * meta;        // i.e. per-epoch
+  instance_t * accumulator; // optional, i.e. wholetrace
+  const std::set<std::string> * global_vars; 
 };
 
 #endif

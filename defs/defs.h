@@ -178,6 +178,9 @@ struct globals
 
   // default annotation folder (i.e. added to each record in sample-list implicitly)
   static std::string annot_folder;
+
+  // additional annot files 
+  static std::vector<std::string> annot_files;
   
   // specified annots
   static std::set<std::string> specified_annots;
