@@ -28,6 +28,7 @@
 #include <string>
 #include <complex>
 #include <stdint.h>
+#include <vector>
 
 struct param_t; 
 

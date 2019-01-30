@@ -3,7 +3,7 @@
 #include <cstdlib>
 
 #include <vector>
-#include <string>
+#include <cstring>
 #include <sstream>
 
 #include <unistd.h>
