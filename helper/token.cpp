@@ -1563,16 +1563,25 @@ Token Token::operator<(const Token & rhs) const
   // scalar < scalar  
   else if ( is_int() ) 
     {
-      if ( rhs.is_int() )  return Token( ival < rhs.ival );
+      if ( rhs.is_int() )   return Token( ival < rhs.ival );
       if ( rhs.is_float() ) return Token( ival < rhs.fval );
+      if ( rhs.is_bool() )  return Token( ival < rhs.bval );
     }
   
   else if ( is_float() ) 
     {
-      if ( rhs.is_int() )  return Token( fval < rhs.ival );
+      if ( rhs.is_int() )   return Token( fval < rhs.ival );
       if ( rhs.is_float() ) return Token( fval < rhs.fval );
+      if ( rhs.is_bool() )  return Token( fval < rhs.bval );
     }
   
+  else if ( is_bool() )
+    {
+      if ( rhs.is_bool() )   return Token( bval < rhs.bval );
+      if ( rhs.is_int()   )  return Token( bval < rhs.ival );
+      if ( rhs.is_float() )  return Token( bval < rhs.fval );
+    }
+
   else if ( is_string() ) 
     {
       if ( rhs.is_string() )  return Token( sval < rhs.sval );
@@ -1696,19 +1705,30 @@ Token Token::operator>(const Token & rhs) const
     {
       if ( rhs.is_int() )  return Token( ival > rhs.ival );
       if ( rhs.is_float() ) return Token( ival > rhs.fval );
+      if ( rhs.is_bool() ) return Token( ival > rhs.bval );
     }
   
   if ( is_float() ) 
     {
       if ( rhs.is_int() )  return Token( fval > rhs.ival );
       if ( rhs.is_float() ) return Token( fval > rhs.fval );
+      if ( rhs.is_bool() ) return Token( fval > rhs.bval );
     }
   
+  else if ( is_bool() )
+    {
+      if ( rhs.is_bool() )  return Token( bval > rhs.bval );
+      if ( rhs.is_int() )   return Token( bval > rhs.ival );
+      if ( rhs.is_float() ) return Token( bval > rhs.fval );
+
+    }
+
   if ( is_string() ) 
     {
       if ( rhs.is_string() )  return Token( sval > rhs.sval );
     }
   
+
   return Token();
 }
 
@@ -1725,6 +1745,9 @@ Token Token::operator<=(const Token & rhs) const
 
 Token Token::operator&&(const Token & rhs) const
 {
+
+  // if *either* side is NULL, return NULL
+  if ( ! ( is_set() && rhs.is_set() ) ) return Token();
 
   // only defined for int and bool
 
@@ -1756,30 +1779,27 @@ Token Token::operator&&(const Token & rhs) const
     }
   
   // TODO: Note -- currently no vector x scalar implementataion....
-  
-  // 'lazy evaluation' of RHS
-  if ( is_bool() && !bval ) return Token( false );
-  if ( is_int() && !ival ) return Token( false );
-  
-  if ( is_bool() ) 
-    {
-      if ( rhs.is_bool() ) return Token( bval && rhs.bval );
-      if ( rhs.is_int() ) return Token( bval && rhs.ival );
-    }
-  
-  if ( is_int() ) 
-    {
-      if ( rhs.is_bool() ) return Token( ival && rhs.bval );
-      if ( rhs.is_int() ) return Token( ival && rhs.ival );
-    }
 
+
+  // scalar AND scalar
+
+  if ( is_bool() && rhs.is_bool() ) return Token( bval && rhs.bval );
+  if ( is_bool() && rhs.is_int()  ) return Token( bval && rhs.ival );
+  if ( is_int( ) && rhs.is_bool() ) return Token( ival && rhs.bval );
+  if ( is_int( ) && rhs.is_int()  ) return Token( ival && rhs.ival );
+
+  // undefined for other types
   return Token();
+  
 }
 
 
 Token Token::operator||(const Token & rhs) const
 {
 
+  // if *both* sides NULL, return NULL
+  if ( ! ( is_set() || rhs.is_set() ) ) return Token();
+  
   // vector x vector comparison not defined
   if ( is_vector() && rhs.is_vector() ) 
     {
@@ -1807,25 +1827,18 @@ Token Token::operator||(const Token & rhs) const
     }
 
   // TODO: no vector x scalar ops
-  // no lazy evaluation in the above
-
-
-  // lazy evaluation of RHS
-  if ( is_bool() && bval ) return Token( true );
-  if ( is_int() && ival ) return Token( true );
+    
+  // scalars:  return T is at least 1 T 
+  // scalar OR scalar
+  if ( is_bool()     && bval ) return Token( true );
+  if ( is_int()      && ival ) return Token( true );
   
-  if ( is_bool() ) 
-    {
-      if ( rhs.is_bool() ) return Token( bval || rhs.bval );
-      if ( rhs.is_int() ) return Token( bval || rhs.ival );
-    }
+  if ( rhs.is_bool() && rhs.bval ) return Token( true );
+  if ( rhs.is_int()  && rhs.ival ) return Token( true );
   
-  if ( is_int() )
-    {
-      if ( rhs.is_bool() ) return Token( ival || rhs.bval );
-      if ( rhs.is_int() ) return Token( ival || rhs.ival );
-    }
-  return Token();    
+  // undefined for other types
+  return Token();
+  
 }
 
 Token Token::operands( Token & t)
