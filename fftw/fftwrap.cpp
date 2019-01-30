@@ -604,3 +604,71 @@ void coherence_t::process()
 
 }
 
+
+
+int bin_t::bin( const std::vector<double> & f , 
+		const std::vector<double> & y ) 
+{
+  
+  if ( f.size() != y.size() ) Helper::halt( "bin_t internal error" );
+  
+  bfa.clear();
+  bfb.clear();  
+  bspec.clear();
+  
+  if ( f.size() < 2 ) return 0;
+  
+  // assume always from 0, DC component  
+  if ( f[0] == 0 ) 
+      {
+	bspec.push_back( y[0] );
+	bfa.push_back( 0 );
+	bfb.push_back( 0 );
+      }
+    
+  double nyquist = 0.5 * Fs;
+    
+  int num_freqs = f.size();
+  
+  double df = f[1] - f[0];    
+  
+  if ( w/df  < 1.0 ) Helper::halt( "bin resolution too small: min " + Helper::dbl2str( df ) );
+
+  int freqwin = (int) ( w / df ) ;      
+  
+  if ( mx_f > nyquist ) mx_f = nyquist; 
+  
+  for (int i = 1; i < num_freqs ; i += freqwin)
+      {
+	
+	double tem = 0.0;
+	
+	int k = 0;
+	
+	for (int j = i ; j < i + freqwin ; j++) 
+	  {
+	    
+	    if (j > 0 && j < num_freqs - 1) // skip DC and Nyquist
+	      {	      	      
+		if ( f[j] <= mx_f )
+		  {
+		    //std::cout << "adding " << f[j] << "\n";
+		    tem += y[j];
+		    k++;
+		  }
+	      }
+	  }
+	
+	//std::cout << "scanning " << f[i] << " to " << f[ i + freqwin -1 ] <<  " " << k << "\n";	
+
+	if ( k > 0 ) 
+	  {	  
+	    bspec.push_back( tem/(double)k );
+	    bfa.push_back( f[i-1] ); // less than 
+	    bfb.push_back( f[i+k-1] ); // greater than or equal to
+	  }
+	
+      }   
+    
+    return bspec.size();
+  }

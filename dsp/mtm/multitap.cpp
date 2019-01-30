@@ -216,35 +216,16 @@ int  mtm::multitap(int num_points, int nwin, double *lam, double npi, double *ta
 	  tapers[i + kk] = aa;
 	  tapsum[k] = tapsum[k] + aa;
 	  tapsq = tapsq + aa * aa;
-    }
-
-    aa = sqrt(tapsq / (double) num_points);
-    
-    double aa2 = sqrt( tapsq );
-
-    tapsum[k] = tapsum[k] / aa;
-    
-    std::cerr << "aa = " << aa << "\n";
-    
-    for (i = 0; i < num_points; i++) 
-      {
-	tapers[i + kk] = tapers[i + kk] / aa2;
-      }
-
-    std::cerr << "kk = " << kk << "\n";
-    double sumsq = 0;
-    tapsum[k] = 0;
-    for (i = 0; i < num_points; i++) 
-      {
-	sumsq += tapers[ i + kk ] * tapers[ i + kk ];
-	tapsum[k] += tapers[ i + kk ];
-      }
-    std::cerr << "sumsq = " << sumsq << "\n";
-
-
-
-    
-    }
+	}
+      
+      aa = sqrt(tapsq / (double) num_points);
+      
+      tapsum[k] = tapsum[k] / aa;
+      
+      for (i = 0; i < num_points; i++) 
+	tapers[i + kk] = tapers[i + kk] / aa;
+      
+    } // next taper
   
   
   /* Free Memory */

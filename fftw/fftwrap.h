@@ -144,6 +144,25 @@ class FFT
 };
 
 
+//
+// Helper 'bin' class
+//
+
+struct bin_t { 
+  
+  bin_t( double w , double mx_f , double Fs )
+  : w(w) , mx_f(mx_f) , Fs(Fs) { } 
+
+  double w, mx_f, Fs;
+  
+  int bin( const std::vector<double> & f , 
+	   const std::vector<double> & y ) ;
+
+  // data members
+  std::vector<double> bspec, bfa, bfb; 
+  
+};
+
 
 
 //

@@ -145,6 +145,7 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
   num_freqs = 1+klen/2;
   num_freq_tap = num_freqs*nwin;
   
+  //  std::cerr << "dets = " << klen << " " << num_freqs << "\n";
   
   //
   // calculate Slepian tapers
@@ -171,13 +172,6 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
     }
 
 
-  // normalize tapers so that sum of X^2 = 1.0
-  
-  
-//   for(i=0; i<npoints; i++)
-//     for(j=0; j<nwin; j++) tapers[ i+j*npoints ] *= 2 ;
-
-
   /* choose normalization based on inorm flag  */
   
   anrm = 1.;
@@ -185,8 +179,7 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
   switch (inorm) {
   case 0:
     anrm = 1.;
-    break;
-    
+    break;    
   case 1:
     anrm = npoints;
     break;
@@ -195,6 +188,10 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
     break;
   case 3:
     anrm = sqrt((double) npoints);
+    break;
+  case 4:
+    //anrm = sqrt(npoints) * sqrt(1.0/dt);  // 1/(NFs)    
+    anrm = sqrt(npoints/dt);
     break;
   default:
     anrm = 1.;
@@ -228,7 +225,6 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
     /* get spectrum from real fourier transform    */
     
     norm = 1.0/(anrm*anrm);
-    std::cerr << "norm =  " << norm << "\n";
     
     for(i=1; i<num_freqs-1; i++){
       if(2*i+1 > klen) Helper::halt( "mtm_t error in index");
@@ -331,11 +327,12 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
 	avar = avar * dt * dt;
 	break;
 	
-      case 3:
-	
+      case 3:	
 	avar = avar / npoints;
 	break;
 	
+      case 4:
+	avar = avar / ( npoints / dt ) ;
       default:
 	break;
       }

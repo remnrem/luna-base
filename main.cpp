@@ -892,7 +892,7 @@ void proc_dummy( const std::string & p )
   if ( p == "fft" )
     {
       int index_length = x.size();
-      int my_Fs = 1; // arbitrary
+      int my_Fs = 20; // arbitrary
       int index_start = 0;
       
       FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
@@ -927,13 +927,14 @@ void proc_dummy( const std::string & p )
   if ( p == "mtm" )
     {
       const int npi = 3;
+      
       const int nwin = 5;
-
+      
       mtm_t mtm( npi , nwin );
       
-      mtm.display_tapers = true;
-
-      mtm.apply( &x , 1 );
+      mtm.display_tapers = false;
+      
+      mtm.apply( &x , 20 );
       
       std::cout << mtm.f.size() << "\t" << mtm.spec.size() << "\n";
       
@@ -942,20 +943,18 @@ void proc_dummy( const std::string & p )
       
       std::exit(0);
     }
- 
-
+  
+  
   std::string expr;
-
+  
   std::getline( std::cin , expr );
   
-
   std::map<std::string,annot_map_t> inputs;
-
+  
   annot_map_t amap1, amap2;
-
+  
   std::vector<int> ints(3);
   ints[0] = 637; ints[1] = 87; ints[3] = -23;
-
 
   instance_t in1;
   in1.set( "v1" , 10.0 );

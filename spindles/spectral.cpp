@@ -44,6 +44,17 @@ annot_t * spectral_power( edf_t & edf ,
 
   bool show_spectrum = param.has( "spectrum" );
 
+  // Report dB scale ?
+  bool dB = param.has( "dB" );
+  
+  // Mean center data first? 
+
+  bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" );
+  
+  // Spectrum bin width (0.5 Hz by default)
+
+  double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0.5;
+
   // Band power per-epoch
 
   bool show_epoch = param.has( "epoch" );
@@ -53,7 +64,7 @@ annot_t * spectral_power( edf_t & edf ,
   bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
   // truncate spectrum
-  double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : -1 ;
+  double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 20 ;
 
   // Calculate MSE
 
@@ -219,7 +230,6 @@ annot_t * spectral_power( edf_t & edf ,
 	   std::vector<double> * d = slice.nonconst_pdata();
 	   
 	   // mean centre just this epoch
-	   const bool mean_centre_epoch = true;
 	   if ( mean_centre_epoch ) 
 	     MiscMath::centre( d );
 	   
@@ -419,27 +429,34 @@ annot_t * spectral_power( edf_t & edf ,
 
        if ( freqs[s].size() == pwelch.psd.size() )
 	 {
+
+	   // accumulate for entire night means
 	   for (int f=0;f<pwelch.psd.size();f++)
-	     {
-	       freqmean[ s ][ f ] += pwelch.psd[f];
-	       
-	       if ( show_epoch_spectrum )
-		 {
+	     freqmean[ s ][ f ] += pwelch.psd[f];
 
-		   if ( max_power < 0 || max_power >= pwelch.freq[f] )
-		     {
-		       writer.level( pwelch.freq[f] , globals::freq_strat );
-		       writer.value( "PSD" , pwelch.psd[f] ); 
-		     }
-		 }
-	     }
-
+	   // epoch-level output?
+	   
 	   if ( show_epoch_spectrum )
-	     writer.unlevel( globals::freq_strat );
+	     {		 
+
+	      // using bin_t 	      
+	      bin_t bin( bin_width , max_power , Fs[s] );
+	      
+	      bin.bin( freqs[s] , pwelch.psd );
+	      
+	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
+		{
+		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
+		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  writer.value( "PSD" , bin.bspec[i] );
+		}
+	       writer.unlevel( globals::freq_strat );
+	     }
 	   
 	 }
        else
 	 logger << " *** warning:: skipped a segment: different NFFT/internal problem ... \n";
+
        
        if ( epoch_level_output )
 	 writer.unlevel( globals::signal_strat );
@@ -451,8 +468,7 @@ annot_t * spectral_power( edf_t & edf ,
 	 writer.unepoch();
        
      } // next EPOCH
-  
-  
+    
    
   //
   // Output summary power curve
@@ -476,15 +492,36 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  if ( total_epochs > 0 ) 
 	    {	  
+
+	      // get mean power across epochs
+	      if ( freqmean[s].size() != freqs[s].size() ) Helper::halt( "internal error psd_t" );
+	      std::vector<double> means;
+	      for (int f=0;f<n;f++) means.push_back( freqmean[ s ][ f ] / (double)total_epochs );
 	      
-	      for (int f=0;f<n;f++)
-		{	      		  
-		  double x = freqmean[ s ][ f ] / (double)total_epochs;	      
-		  writer.level( freqs[s][f] , globals::freq_strat );		  
-		  writer.value( "PSD" , x ); 		  
+	      // using bin_t 	      
+	      bin_t bin( bin_width , max_power , Fs[s] );
+
+	      bin.bin( freqs[s] , means );
+
+	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
+		{
+		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
+		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  writer.value( "PSD" , bin.bspec[i] );
 		}
-	      writer.unlevel( globals::freq_strat );
+	       writer.unlevel( globals::freq_strat );
+
+// 	      for (int f=0;f<n;f++)
+// 		{	      		  
+// 		  double x = freqmean[ s ][ f ] / (double)total_epochs;	      
+// 		  writer.level( freqs[s][f] , globals::freq_strat );		  
+// 		  writer.value( "PSD" , x ); 		  
+// 		}
+// 	      writer.unlevel( globals::freq_strat );
+
+	      
 	    }
+	  
 	}
 
       

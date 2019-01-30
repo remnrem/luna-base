@@ -33,51 +33,48 @@ struct param_t;
 struct mtm_t
 {
   
-  mtm_t( const int npi = 3 , const int nwin = 5 );
+  mtm_t( const double npi = 3 , const int nwin = 5 );
   
   void apply( const std::vector<double> * , const int fs );
 
-  // REDUNDANT/OLD CODE
-  void apply2( const std::vector<double> * , const int fs );
-  
-  // structure to house results
-  
   // MTM parameters
   
-  // number of pi-prolate functions (default = 3) 
-  int npi; 
+  // number of pi-prolate functions (default = 3), usually something like:  3, 3.5, 4  
+  double npi; 
   
-  // the number of summing windows, nwin (default = 5) i.e. as 3*2-1 = 5 
+  // the number of summing windows, nwin (default = 2*npi-1), e.g. 3*2-1 = 5 , i.e. drop last taper
   int nwin;
-
+  
   // kind of analysis
   int kind;  //  1  hires
              //  2  adwait  (default)
              // naive periodogram
-
-  int inorm; // default: 3 = 1/N weighting
-
+  
+  int inorm; // default: 4 = 1/(N.Fs) weighting
+  
   // p. 335, Percival and Walden, choose 
   // npi=2,3,4 some small integer
   // W = npi/(num_points*dt);
   // or num_points*W = npi/dt ;
   // K < 2*num_points*W*dt
   //  nwin = 0...K-1
-  
-  void bin( double w , double , double );
+
+  // dB output?
+  bool dB;
+
+  //  void bin( double w , double , double );
 
   // hold results here
   std::vector<double> f;
   std::vector<double> spec;
   
-  void smooth( double w , double );
+  //  void smooth( double w , double );
   
   // binned spectra  
-  std::vector<double> bfa, bfb;
-  std::vector<double> bspec;
+/*   std::vector<double> bfa, bfb; */
+/*   std::vector<double> bspec; */
   
   // output 
-  
   bool display_tapers;
 };
 
