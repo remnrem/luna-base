@@ -78,7 +78,8 @@ FFT::FFT( int N , int Fs , fft_t type , window_function_t window )
   for (int i=0;i<N;i++) normalisation_factor += w[i] * w[i];
   normalisation_factor *= Fs;  
   normalisation_factor = 1.0/normalisation_factor;
-
+  //  std::cerr << "norm " << normalisation_factor << "\n";
+  
 } 
 
 bool FFT::apply( const std::vector<double> & x )
@@ -130,6 +131,8 @@ bool FFT::apply( const double * x , const int n )
       // sided PSD
       
       if ( i > 0 && i < cutoff-1 ) X[i] *= 2;
+      
+      //      std::cout << "det " << mag[i] << "\t" << X[i] << "\t" << ( a*a + b*b ) << "\n";
       
     }
   

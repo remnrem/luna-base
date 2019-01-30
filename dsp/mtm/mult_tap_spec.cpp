@@ -25,6 +25,7 @@
 // C-subroutine: Computers & Geology: 21, 199-236.
 
 #include "mtm.h"
+#include "helper/helper.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -76,7 +77,7 @@ void  mtm::mt_get_spec(double *series, int inum, int klength, double *amp)
 
 void  mtm::do_mtap_spec(double *data, int npoints, int kind,
 			int nwin, double npi, int inorm, double dt,
-			double *ospec, double *dof, double *Fvalues, int klen)
+			double *ospec, double *dof, double *Fvalues, int klen, bool display_tapers )
 {
 
   /*
@@ -153,11 +154,11 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
 
 
   // display tapers
-  if ( 0 ) 
+  if ( display_tapers ) 
     {  
       for(i=0; i<npoints; i++)
 	{
-	  std::cout << "t"<<i;
+	  std::cout << "MTM" << "t"<<i;
 	  for(j=0; j<nwin; j++) std::cout << "\t" << tapers[i+j*npoints];
 	  std::cout << "\n";
 	}
@@ -168,6 +169,13 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
 	}
       
     }
+
+
+  // normalize tapers so that sum of X^2 = 1.0
+  
+  
+//   for(i=0; i<npoints; i++)
+//     for(j=0; j<nwin; j++) tapers[ i+j*npoints ] *= 2 ;
 
 
   /* choose normalization based on inorm flag  */
@@ -218,12 +226,13 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
 
     
     /* get spectrum from real fourier transform    */
-
+    
     norm = 1.0/(anrm*anrm);
+    std::cerr << "norm =  " << norm << "\n";
     
     for(i=1; i<num_freqs-1; i++){
-      if(2*i+1 > klen) fprintf(stderr,"error in index\n");
-      if(i+kf > num_freq_tap ) fprintf(stderr,"error in index\n");
+      if(2*i+1 > klen) Helper::halt( "mtm_t error in index");
+      if(i+kf > num_freq_tap ) Helper::halt( "mtm_t error in index");
       
       sqramp = SQR(amp[2*i+1])+SQR(amp[2*i]);
       
@@ -245,7 +254,7 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
     
     sum += sqr_spec[0+kf] + sqr_spec[num_freqs-1+kf];
     
-    if(num_freqs-1+kf>num_freq_tap )fprintf(stderr,"error in index\n");
+    if(num_freqs-1+kf>num_freq_tap ) Helper::halt( "mtm_t error in index");
     
     temp = sum / (double) num_freqs;
     if (temp > 0.0)

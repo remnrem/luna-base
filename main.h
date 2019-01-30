@@ -33,7 +33,7 @@
 class param_t;
 class cmd_t;
 
-void proc_dummy();
+void proc_dummy( const std::string & );
 void proc_eval_tester();
 void process_edfs(cmd_t&);
 void list_cmds();

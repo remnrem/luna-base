@@ -35,49 +35,50 @@ struct mtm_t
   
   mtm_t( const int npi = 3 , const int nwin = 5 );
   
-  void apply( const std::vector<double> * , const int );
+  void apply( const std::vector<double> * , const int fs );
 
-  void apply2( const std::vector<double> * , const int );
+  // REDUNDANT/OLD CODE
+  void apply2( const std::vector<double> * , const int fs );
   
   // structure to house results
-
+  
   // MTM parameters
-
+  
   // number of pi-prolate functions (default = 3) 
   int npi; 
-
+  
   // the number of summing windows, nwin (default = 5) i.e. as 3*2-1 = 5 
   int nwin;
 
   // kind of analysis
-  int kind;  // default 1  hires
-             // 2 adwait               (use this...)
+  int kind;  //  1  hires
+             //  2  adwait  (default)
              // naive periodogram
 
-  int inorm; // 1 standard ; 2 other, use 3 = 1/N weighting
+  int inorm; // default: 3 = 1/N weighting
 
   // p. 335, Percival and Walden, choose 
-
   // npi=2,3,4 some small integer
   // W = npi/(num_points*dt);
   // or num_points*W = npi/dt ;
   // K < 2*num_points*W*dt
   //  nwin = 0...K-1
-
+  
   void bin( double w , double , double );
 
   // hold results here
   std::vector<double> f;
   std::vector<double> spec;
-
+  
   void smooth( double w , double );
   
-  // binned spectra
-
+  // binned spectra  
   std::vector<double> bfa, bfb;
   std::vector<double> bspec;
   
+  // output 
   
+  bool display_tapers;
 };
 
 
@@ -94,8 +95,6 @@ namespace mtm
 	     double *ares,
 	     double *degf,
 	     double avar);
-
-  
 
   void get_F_values(double *sr, double *si, int nf, int nwin, double *Fvalue, double *b);
 
@@ -120,13 +119,12 @@ namespace mtm
   // get the multitaper slepian functions:
   // num_points = number of points in data stream
   // nwin = number of windows
-  // lam= vector of eigenvalues
+  // lam = vector of eigenvalues
   // npi = order of slepian functions
   // tapsum = sum of each taper, saved for use in adaptive weighting
   // tapers =  matrix of slepian tapers, packed in a 1D double array
   
   int  multitap(int num_points, int nwin, double *lam, double npi, double *tapers, double *tapsum);
-  
   
   //    series = input time series
   //    inum   = length of time series
@@ -151,11 +149,11 @@ namespace mtm
 
   void  do_mtap_spec(double *data, int npoints, int kind,
 		     int nwin, double npi, int inorm, double dt,
-		     double *ospec, double *dof, double *Fvalues, int klen);
+		     double *ospec, double *dof, double *Fvalues, int klen, bool display_tapers );
   
-
+  
   // NR utilities
-
+  
   void nrerror( const std::string & );
   double *vector(long nl, long nh);
   int *ivector(long nl, long nh);

@@ -50,10 +50,11 @@ int main(int argc , char ** argv )
   // Some initial options (called prior to the main banner, etc)
   //
   
-  if ( argc == 2 && strcmp( argv[1] ,"-d" ) == 0 )
+  if ( argc <= 3 && strcmp( argv[1] ,"-d" ) == 0 )
     { 
+      std::string p = argc == 3 ? argv[2] : "";
       global.api();
-      proc_dummy(); 
+      proc_dummy( p ); 
       exit(0); 
     } 
   else if ( argc == 2 && strcmp( argv[1] , "--eval" ) == 0 ) 
@@ -864,9 +865,85 @@ void proc_eval_tester()
 
 // DUMMY : a generic placeholder/scratchpad for templating new things
 
-void proc_dummy()
+void proc_dummy( const std::string & p )
 {
+ 
+  //
+  // Straight FFT of stdin
+  //
+
+  std::vector<double> x;
   
+  if ( p == "fft" || p == "mtm" ) 
+    {
+
+      
+      while ( ! std::cin.eof() )
+	{
+	  double xx;
+	  std::cin >> xx;
+	  if ( std::cin.eof() ) break;	  
+	  x.push_back( xx );	  
+	}
+      std::cerr << x.size() << " values read\n";
+
+    }
+
+  if ( p == "fft" )
+    {
+      int index_length = x.size();
+      int my_Fs = 1; // arbitrary
+      int index_start = 0;
+      
+      FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
+      
+      fftseg.apply( &(x[index_start]) , index_length );
+
+      // Extract the raw transform
+      std::vector<std::complex<double> > t = fftseg.transform();
+
+      // Extract the raw transform scaled by 1/n
+      std::vector<std::complex<double> > t2 = fftseg.scaled_transform();
+      
+      int my_N = fftseg.cutoff;
+
+      //std::cout << t.size() << "\t" << t2.size() << "\t" << my_N << "\n";
+      
+      for (int f=0;f<my_N;f++)
+	{
+	  std::cout << "M" << f << "\t" << fftseg.frq[f] << "\t" << fftseg.X[f] << "\n";
+	}
+ 
+//       for (int f=0;f<t.size();f++)
+// 	std::cout << "V2\t" << t[f] << "\t" << t2[f] << "\n";
+      
+      std::exit(1);
+    }
+
+  //
+  // MTM
+  //
+  
+  if ( p == "mtm" )
+    {
+      const int npi = 3;
+      const int nwin = 5;
+
+      mtm_t mtm( npi , nwin );
+      
+      mtm.display_tapers = true;
+
+      mtm.apply( &x , 1 );
+      
+      std::cout << mtm.f.size() << "\t" << mtm.spec.size() << "\n";
+      
+      for (int f=0;f<mtm.f.size();f++)
+	std::cout << "MTM\t" << f << "\t" << mtm.f[f] << "\t" << mtm.spec[f] << "\n";
+      
+      std::exit(0);
+    }
+ 
+
   std::string expr;
 
   std::getline( std::cin , expr );
@@ -1155,7 +1232,6 @@ void proc_dummy()
 
   std::exit(1);
   
-  std::vector<double> x;
   //  std::vector<double> h;
   std::ifstream X1( "eeg.txt", std::ios::in );
   //std::ifstream H1( "h.txt", std::ios::in );

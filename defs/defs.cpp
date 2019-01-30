@@ -189,13 +189,13 @@ void globals::init_defs()
   // Primary sleep stage encoding 
   //
   
-  sleep_stage[ WAKE  ]     = "W";
+  sleep_stage[ WAKE  ]     = "wake";
   sleep_stage[ LIGHTS_ON ] = "L";
-  sleep_stage[ NREM1 ]     = "N1";
-  sleep_stage[ NREM2 ]     = "N2";
-  sleep_stage[ NREM3 ]     = "N3";
+  sleep_stage[ NREM1 ]     = "NREM1";
+  sleep_stage[ NREM2 ]     = "NREM2";
+  sleep_stage[ NREM3 ]     = "NREM3";
   sleep_stage[ NREM4 ]     = "NREM4";
-  sleep_stage[ REM   ]     = "R";
+  sleep_stage[ REM   ]     = "REM";
   sleep_stage[ MOVEMENT ]  = "M";
   sleep_stage[ UNKNOWN ]   = "?";
 

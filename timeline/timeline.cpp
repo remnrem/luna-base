@@ -1814,7 +1814,7 @@ void hypnogram_t::construct( timeline_t * t , const std::string sslabel )
   
   // set epoch-level annotations
   std::set<std::string> values;
-  values.clear(); values.insert( "Wake" );
+  values.clear(); values.insert( "wake" );
   timeline->annotate_epochs(  globals::stage( WAKE ) , "SleepStage" , values );
 
   values.clear(); values.insert( "NREM1" );
@@ -1838,7 +1838,7 @@ void hypnogram_t::construct( timeline_t * t , const std::string sslabel )
  
  for (int e = 0 ; e < ne ; e++ )
     {
-      bool wake = timeline->epoch_annotation( "Wake"  , e );
+      bool wake = timeline->epoch_annotation( "wake"  , e );
       bool n1   = timeline->epoch_annotation( "NREM1" , e );
       bool n2   = timeline->epoch_annotation( "NREM2" , e );
       bool n3   = timeline->epoch_annotation( "NREM3" , e );

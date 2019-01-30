@@ -48,15 +48,15 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   // other parameters
   bool epoch_level_output = param.has( "epoch" );
   bool spectrum = param.has( "spectrum" );
-  bool epoch_spectrum = param.has( "epoch-spectrum" );
-
   
   // MTM parameters
   int npi = param.has( "nw" ) ? param.requires_int( "nw" ) : 3 ;
   int nwin = param.has( "t" ) ? param.requires_int( "t" ) : 2*npi-1 ;
   
   double max_f = param.has( "max" ) ?  param.requires_dbl( "max" ) : 30;
-  double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 1 ;
+  double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : ( spectrum ? 0 : 1 ) ;
+  
+  
   
   //
   // Whole signal analyses
@@ -96,15 +96,12 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       // call MTM
       
       mtm_t mtm( npi , nwin );
-      
-      mtm.kind = 2 ; // adaptive weights;
-      mtm.inorm = 3 ; // 1/N weights
-      
+
       mtm.apply( d , Fs[s] );
 	   	   
       if ( wid_f > 0 )
 	{
-
+	  
 	  // 1 Hz bins
 	  mtm.bin( wid_f , max_f , Fs[s] );
 	  
@@ -139,13 +136,14 @@ void mtm::wrapper( edf_t & edf , param_t & param )
        
   writer.unlevel( globals::signal_strat );
   
+
   
   //
   // Epoch-wise analyses
   //
   
 
-  if ( ! ( epoch_level_output || epoch_spectrum ) ) 
+  if ( ! epoch_level_output )
     return;
 
   
@@ -203,22 +201,18 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	   
 	   // call MTM
 	   
-	   mtm_t mtm( 4 , 7 );
-	   
-	   mtm.kind = 2 ; // adaptive weights;
-	   mtm.inorm = 3 ; // 1/N weights
+	   mtm_t mtm( npi , nwin );
 	   
 	   mtm.apply( d , Fs[s] );
 	   
 	   
-	   if ( wid_f > 0 ) 
-	     {
+	   if ( wid_f > 0 )  // binned output
+	     {	       
 
-	       // 1 Hz bins
+	       // wid_f (default 1) Hz bins
 	       mtm.bin( wid_f , max_f , Fs[s] );
 	       
-	       // output
-	       
+	       // output	       
 	       for ( int i = 0 ; i < mtm.bfa.size() ; i++ ) 
 		 {
 		   writer.level( Helper::dbl2str( mtm.bfa[i] ) + "-" + Helper::dbl2str( mtm.bfb[i] ) ,  globals::freq_strat  );
@@ -229,7 +223,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	       
 	     }
 
-	   else
+	   else // full-spectrum output
 	     {
 	       
 	       for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
@@ -240,35 +234,33 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		       writer.value( "MTM" , mtm.spec[i] );
 		     }
 		 }
+	      
 	       writer.unlevel( globals::freq_strat );
-
+	       
 	     }
-
+	   
 	 } // next signal
        
        writer.unlevel( globals::signal_strat );
-
+       
      } // next epoch
 
   writer.unepoch();
-
   
-  
-  //
-  // Whole signal MTM
-  //
-
-  
-
 }
 
 
 
 mtm_t::mtm_t( const int npi , const int nwin ) : npi(npi) , nwin(nwin) 
 {
+  
+  // by default, set to use 'adaptive weights' (2)
+  kind = 2 ; 
+  
+  // by default, set to use 1/N weights 
+  inorm = 0 ; 
 
-  kind = 1;
-  inorm = 1;
+  display_tapers = true;
 }
 
 void mtm_t::bin( double w , double mx_f , double fs )
@@ -282,19 +274,10 @@ void mtm_t::bin( double w , double mx_f , double fs )
   
   int num_freqs = f.size();
   
-  // check this is the same...
   double df = f[1] - f[0];
-  // as 2*nyquist/klen;
+  // i.e. 2*nyquist/klen;
 
-  int freqwin = (int) ( w / df) ;      
-
-//   std::cout << "w = " << w << " " << df << "\n";
-
-//   std::cout << "freqwin = " << freqwin << "\n";
-
-//   std::cout << "in bin() " << f.size() << " " << spec.size() << " " << num_freqs << "\n";
-
-  // note ... start at 1, but record bfa[0]... i.e.  lwr < f << upr
+  int freqwin = (int) ( w / df ) ;      
 
   for (int i = 1; i < num_freqs ; i += freqwin)
     {
@@ -314,29 +297,25 @@ void mtm_t::bin( double w , double mx_f , double fs )
 	    }
 	}  
       
-      //      std::cout << "f[i] " << f[i] << " " << f[i+k] << "\n";
-      
       if ( k > 0 ) 
 	{	  
 	  bspec.push_back( tem/(double)k );
 	  bfa.push_back( f[i-1] );
 	  bfb.push_back( f[i+k] );
 	}
-
+      
     }      
-     
-  
+    
 }
+
 
 void mtm_t::smooth( double w , double fs )
 {
     
   int num_freqs = f.size();
-
-  // check this is the same...
+  
   double df = f[1] - f[0];
-  // as 2*nyquist/klen;
-  std::cout << "df = " << df << "\n";
+  
   int freqwin = (int) ( w / df) /2 ;      
   
   for (int i = 0; i < num_freqs ; i++)
@@ -396,22 +375,22 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
   std::vector<double> Fvalues( klen );
   
   mtm::do_mtap_spec(&(data)[0], npoints, kind,  nwin,  npi, inorm, dt,
-		    &(spec)[0], &(dof)[0], &(Fvalues)[0], klen);
-
+		    &(spec)[0], &(dof)[0], &(Fvalues)[0], klen , display_tapers );
+  
   // shrink to positive spectrum 
   spec.resize( num_freqs );
-
+  
   f.resize( num_freqs , 0 );
-
+  
   for (int i = 0; i < num_freqs; i++)
     {
       
       f[i] = df*i;
       
-//       std::cout << i << "\t" 
-// 		<< f[i] << "\t" 
-// 		<< spec[i] << "\t"
-// 		<< 10*log10(spec[i]) << "\n";
+      // std::cerr << i << "\t" 
+      //        		<< f[i] << "\t" 
+      // 	 	<< spec[i] << "\t"
+      //        		<< 10*log10(spec[i]) << "\n";
       
     }
     
@@ -579,7 +558,7 @@ void mtm_t::apply2( const std::vector<double> * d , const int fs )
   std::cout << "\n\nentering MTM\n\n";
 
   mtm::do_mtap_spec(&(data)[0], npoints, kind,  nwin,  npi, inorm, dt,
-		    &(spec)[0], &(dof)[0], &(Fvalues)[0], klen);
+		    &(spec)[0], &(dof)[0], &(Fvalues)[0], klen , true );
 
   std::cerr << " done with do_mtap_spec: " << num_freqs << "\n";
   
