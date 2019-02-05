@@ -47,6 +47,7 @@ bool globals::remap_nsrr_annots;
 std::map<globals::atype_t,std::string> globals::type_name;
 std::map<std::string,globals::atype_t> globals::name_type;
 
+bool globals::enforce_epoch_check;
 
 std::map<frequency_band_t,freq_range_t> globals::freq_band;
 
@@ -306,6 +307,12 @@ void globals::init_defs()
   
   edf_timetrack_label = "_TT";
   edf_timetrack_size = 15; // i.e. up to 30 chars
+
+  
+  // whether to assume 30-sec and enfore epoch check when first attaching 
+  // an .eannot file
+
+  enforce_epoch_check = true;
 
   //
   // Annot types

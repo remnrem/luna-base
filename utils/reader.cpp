@@ -310,9 +310,11 @@ int main(int argc , char ** argv )
 		Helper::halt( "cannot have factor as both row and col stratifier " + std::string( cmd_factor ) );
 	      args_rvar.insert( cmd_factor );
 	      cmd_spec = cmd_factor;
+	      
+	      any_opt = true;
 
 	      mode = '0';
-
+	      
 	    }
 	  
 	  if ( mode == 'D' ) 

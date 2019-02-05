@@ -146,6 +146,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // detect slow waves and estimate ITPC etc for spindle start/peak/stop and slow waves
   const bool     sw_coupling              = param.has( "sw" );
 
+  // show SPINDLES in sample-pints
+  const bool     show_sample_points       = param.has( "sp" );
+
   // intra-spindle frequency changes via HT
   const bool     ht_chirp                 = param.has( "if" );
   const double   ht_chirp_frq             = param.has( "if-frq" ) ? param.requires_dbl( "if-frq" ) : 2.0 ;
@@ -2368,7 +2371,13 @@ void characterize_spindles( edf_t & edf ,
        
        writer.value( "START"  , spindle->tp.start );
        writer.value( "STOP"   , spindle->tp.stop  );
-
+       
+       if ( 1 ) // show_sample_points )
+	 {
+	   writer.value( "START_SP"  , spindle->start_sp );
+	   writer.value( "STOP_SP"   , spindle->stop_sp  );
+	 }
+       
        if ( starttime != NULL )
 	 {
 

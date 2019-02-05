@@ -252,10 +252,7 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
 
 
   // static function that will create multiple annotations (one per class label)
-  
-  // we do not check for epoch size in EDF here (i.e. as this may be before it is loaded)
-  // in that case, we should assume 30-second, non-overlapping epochs
-  
+    
   bool unepoched = elen == 0 ;
   
   if ( unepoched )  
@@ -263,6 +260,19 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       elen = 30 * globals::tp_1sec;
       einc = 30 * globals::tp_1sec;      
     }
+
+  
+  if ( globals::enforce_epoch_check )
+    {
+      // get implied number of epochs
+      
+      double seconds = (uint64_t)parent_edf.header.nr * parent_edf.header.record_duration ;      
+      const int ne = seconds / ( unepoched ? 30 : elen / globals::tp_1sec );
+      if ( ne != ann.size() ) 
+	Helper::halt( "expecting " + Helper::int2str(ne) + " epoch annotations, but found " + Helper::int2str( (int)ann.size() ) );
+    }
+  
+  
 
   // because we otherwise might have a discontinuous EDF, we need to look up the proper epoch 
   // intervals below , if epoched 

@@ -135,6 +135,9 @@ struct globals
   static int sample_list_max;
   static std::string sample_list_id;
 
+  // enforce or not the 30-second epoch check
+  static bool enforce_epoch_check;
+
   // output common stratifier labels
   static std::string epoch_strat;
   static std::string time_strat;

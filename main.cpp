@@ -38,7 +38,7 @@ extern logger_t logger;
 
 int main(int argc , char ** argv )
 {
-  
+
   //
   // initiate global defintions
   //
@@ -50,9 +50,9 @@ int main(int argc , char ** argv )
   // Some initial options (called prior to the main banner, etc)
   //
   
-  if ( argc <= 3 && strcmp( argv[1] ,"-d" ) == 0 )
+  if ( argc >= 2 && strcmp( argv[1] ,"-d" ) == 0 )
     { 
-      std::string p = argc == 3 ? argv[2] : "";
+      std::string p = argc >= 3 ? argv[2] : "";
       global.api();
       proc_dummy( p ); 
       exit(0); 
@@ -546,7 +546,13 @@ void process_edfs( cmd_t & cmd )
 
       if ( globals::excludes.find( rootname ) != globals::excludes.end() )
 	{
-	  logger << "\nskipping EDF " << rootname << std::endl;
+	  logger << "\n"
+		 << "___________________________________________________________________\n"
+		 << "  **********************************\n"
+		 << "  * Skipping EDF " << rootname << "\n"
+		 << "  **********************************\n"
+		 << std::endl;
+
 	  ++processed;
 	  continue; // to the next EDF in the list
 	}
@@ -874,7 +880,7 @@ void proc_dummy( const std::string & p )
 
   std::vector<double> x;
   
-  if ( p == "fft" || p == "mtm" ) 
+  if ( p == "fft" || p == "mtm" || p == "tv" ) 
     {
 
       
@@ -945,6 +951,25 @@ void proc_dummy( const std::string & p )
     }
   
   
+  //
+  // TV
+  //
+
+  if ( p == "tv" )
+    {
+      
+      double lambda = 10;
+
+      std::vector<double> y = dsptools::TV1D_denoise_copy( x , lambda );
+      
+      for (int i=0;i<x.size();i++)
+	std::cout << x[i] << "\t" << y[i] << "\n";
+      
+      std::exit(1);
+    }
+
+
+
   std::string expr;
   
   std::getline( std::cin , expr );

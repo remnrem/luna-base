@@ -1229,8 +1229,13 @@ void proc_epoch( edf_t & edf , param_t & param )
   
   logger << " set epochs, length " << dur << " (step " << inc << "), " << ne << " epochs\n";
 
+  writer.value( "NE" , ne );
+  writer.value( "DUR" , dur );
+  writer.value( "INC" , inc );
+  
+
   //
-  // writer to db
+  // write more verbose information to db
   //
   
   if ( param.has( "verbose" ) )
@@ -1720,7 +1725,7 @@ void proc_rerecord( edf_t & edf , param_t & param )
 
     logger << " altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
   
-  edf.reset_record_size( rs );
+    edf.reset_record_size( rs );
 
     logger << " now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF\n";
 
@@ -1827,6 +1832,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  // not enforce epoch check for .eannot
+  else if ( Helper::iequals( tok0 , "no-epoch-check" ) )
+    {
+      globals::enforce_epoch_check = false; 
+      return;
+    }
 
   // additional annot files to add from the command line
   // i.e. so we don't have to edit the sample-list
