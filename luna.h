@@ -51,6 +51,8 @@
 
 #include "edf/edf.h"
 
+#include "edf/slice.h"
+
 #include "timeline/timeline.h"
 
 #include "annot/nsrr-remap.h"

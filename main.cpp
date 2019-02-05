@@ -677,9 +677,9 @@ void process_edfs( cmd_t & cmd )
       
 //       if ( ! single_edf ) 
 // 	{
-	  
-	  for (int i=2;i<tok.size();i++) 
-	    {
+      
+      for (int i=2;i<tok.size();i++) 
+	{
 	      if ( tok[i][ tok[i].size() - 1 ] == '/' ) 
 		{
 		  // this means we are specifying a folder, in which case search for all files that 
