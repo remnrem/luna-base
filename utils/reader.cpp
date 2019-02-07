@@ -804,31 +804,50 @@ void summary()
   
   bool baseline_level = fmatch.factors.size() == 0 ; 
 
+  std::cerr << "----------------:-------------------:---------------:---------------------------\n";
+
   if ( baseline_level ) 
     std::cerr << "Default/no strata:\n";
   else
     {
       
-      std::cerr << "selected strata:\n "
-		<< fmatch.factors.size() << " factor(s): ";
+      std::cerr << "factors for the selected strata:\n ";
       
       std::set<factor_t>::const_iterator gg = fmatch.factors.begin();
       while ( gg != fmatch.factors.end() )
 	{
+	  // command
+	  if ( gg->factor_name[0] == '_' ) { ++gg; continue; } 
 	  // timepoint?
 	  bool is_tp = gg->factor_name == "E" || gg->factor_name == "T";
 	  if ( gg != fmatch.factors.begin() ) std::cerr << " "; 
 	  if ( ! is_tp )
-	    std::cerr << gg->factor_name << " (" << e_faclvl[ gg->factor_name ].size() << " levels)";
+	    {
+	      std::cerr << gg->factor_name << " (" << e_faclvl[ gg->factor_name ].size() << " levels):";
+	      std::map<std::string,int> & ss = e_faclvl[ gg->factor_name ];
+	      int cnt = 0;
+	      std::map<std::string,int>::const_iterator ii = ss.begin();
+	      while ( ii != ss.end() )
+		{
+		  std::cerr << " " << ii->first ;
+		  ++cnt;
+		  if( cnt > 12 ) { std::cerr << " ...(etc)..." ; break; } 
+		  ++ii;
+		}
+	    }
 	  else
 	    std::cerr << gg->factor_name << " (...)";
+
+	  std::cerr << "\n";
+
 	  ++gg;
+
 	}
 
-      std::cerr << "\n";
+      
     }
 
-  
+  std::cerr << "\n";
   
   std::cerr << " " << e_inds.size() << " individual(s): ";
   int c = 0;
@@ -933,6 +952,9 @@ void get_matching_strata()
       // ignore baseline
       std::cerr << "distinct strata group(s):\n";
       
+      std::cerr << "  commands      : factors           : levels        : variables \n";
+      std::cerr << "----------------:-------------------:---------------:---------------------------\n";
+
       std::map<fstrata_t,int>::const_iterator ff = fstrata.begin();
       while ( ff != fstrata.end() ) 
 	{	  

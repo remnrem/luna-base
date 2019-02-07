@@ -2626,8 +2626,9 @@ bool edf_t::basic_stats( param_t & param )
   if ( ! param.has( "epoch" ) ) by_epoch = false;
   
   const int ns = signals.size();
-
-  bool calc_median = param.has( "median" );
+  
+  //bool calc_median = param.has( "median" );
+  bool calc_median = true;
 
   for (int s=0; s<ns; s++)
     {
@@ -2712,6 +2713,7 @@ bool edf_t::basic_stats( param_t & param )
       double t_min = 0 , t_max = 0;
       
       logger << " processing " << header.label[ signals(s) ] << " ...\n";
+
 
       
       //
@@ -2813,6 +2815,7 @@ bool edf_t::basic_stats( param_t & param )
 	  
 	}
 
+
       // 
       // Any data?
       //
@@ -2835,14 +2838,17 @@ bool edf_t::basic_stats( param_t & param )
 
       writer.unepoch();
       
-      writer.var( "DMIN"  , "Digital minimum from EDF header" );
-      writer.var( "DMAX"  , "Digital maximum from EDF header" );
-      writer.var( "UNIT"  , "Physical unit from EDF header" );
-      writer.var( "PMIN"  , "Physical minimum from EDF header" );
-      writer.var( "PMAX"  , "Physical maximum from EDF header" );
+//       writer.var( "DMIN"  , "Digital minimum from EDF header" );
+//       writer.var( "DMAX"  , "Digital maximum from EDF header" );
+//       writer.var( "UNIT"  , "Physical unit from EDF header" );
+//       writer.var( "PMIN"  , "Physical minimum from EDF header" );
+//       writer.var( "PMAX"  , "Physical maximum from EDF header" );
 
-      writer.var( "OMIN" , "Observed physical minimum" );
-      writer.var( "OMAX" , "Observed physical maximum" );
+//       writer.var( "OMIN" , "Observed physical minimum" );
+//       writer.var( "OMAX" , "Observed physical maximum" );
+
+      writer.var( "NE" , "Total number of epochs" );
+      writer.var( "NE1" , "Number of unmasked epochs used in calculation" );
 
       writer.var( "MEDIAN.MEAN" , "Median of per-epoch means" );
       if ( calc_median ) 
@@ -2850,17 +2856,19 @@ bool edf_t::basic_stats( param_t & param )
 
       writer.var( "MEDIAN.SD"   , "Median of per-epoch SDs" );
       writer.var( "MEDIAN.RMS"  , "Median of per-epoch RMSs" );
+
+      writer.value( "NE" , timeline.num_total_epochs() );
+      writer.value( "NE1" , ne );
+
     	
+//       writer.value( "DMIN" , header.digital_min[ signals(s) ] );
+//       writer.value( "DMAX" , header.digital_max[ signals(s) ] );
+//       writer.value( "UNIT" , unit );
+//       writer.value( "PMIN" , header.physical_min[ signals(s) ] );
+//       writer.value( "PMAX" , header.physical_max[ signals(s) ] );
 
-
-      writer.value( "DMIN" , header.digital_min[ signals(s) ] );
-      writer.value( "DMAX" , header.digital_max[ signals(s) ] );
-      writer.value( "UNIT" , unit );
-      writer.value( "PMIN" , header.physical_min[ signals(s) ] );
-      writer.value( "PMAX" , header.physical_max[ signals(s) ] );
-
-      writer.value( "OMIN" , t_min );
-      writer.value( "OMAX" , t_max );
+//       writer.value( "OMIN" , t_min );
+//       writer.value( "OMAX" , t_max );
 
       writer.value( "MEDIAN.MEAN" , med_mean );
       if ( calc_median )
