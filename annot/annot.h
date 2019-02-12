@@ -85,6 +85,13 @@ struct annot_t
   //
 
   std::string name;
+  
+  // here an annot_t can have a 'type';  in practice, the instances can 
+  // have artbitrary meta-data of any type;  however, based on the definition
+  // of the annot class, this type will be useful to help clients know what to 
+  // expect for this annotation. 
+
+  globals::atype_t type;
 
   std::string file;
 
@@ -112,6 +119,7 @@ struct annot_t
   annot_t( const std::string & n )  : name(n) 
   { 
     file = description = "";
+    type = globals::A_NULL_T;
     types.clear();
   }
   
@@ -152,6 +160,8 @@ struct annot_t
   //
   
   instance_t * add( const std::string & id , const interval_t & interval );
+
+  void remove( const std::string & id , const interval_t & interval );
    
   uint64_t minimum_tp() const;  
   
@@ -236,7 +246,7 @@ struct instance_idx_t {
 
 
 struct instance_t {   
-
+  
   // an instance then has 0 or more variable/value pairs
   
   std::map<std::string,avar_t*> data;
@@ -264,12 +274,26 @@ struct instance_t {
   } 
   
   bool empty() const { return data.size() == 0; } 
-  
+
+  bool single( const std::string * n , const avar_t * d ) const
+  {
+    n = NULL;
+    d = NULL;
+    if ( data.size() != 1 ) return false;
+    std::map<std::string,avar_t*>::const_iterator aa = data.begin();
+    n = &(aa->first);
+    d = aa->second;
+    return true;
+  }
+
   void check( const std::string & name );
   
   // add flag 
   void set( const std::string & name );
-  
+
+  // add mask
+  void set_mask( const std::string & name , const bool b );
+
   // add integer 
   void set( const std::string & name , const int i );
 
@@ -383,6 +407,35 @@ struct flag_avar_t : public avar_t
 
   globals::atype_t atype() const { return globals::A_FLAG_T; }  
 };
+
+
+//
+// MASK -- just a special BOOL
+//
+
+struct mask_avar_t : public avar_t 
+{
+ public:
+  mask_avar_t( bool b ) { set(b); }
+  ~mask_avar_t() { } 
+  mask_avar_t *  clone() const { return new mask_avar_t(*this); }
+  bool value;
+  void set( bool b ) { has_value=true; value=b; } 
+  bool bool_value() const { return value; }
+  int int_value() const { return value; }
+  double double_value() const { return value; }
+  std::string text_value() const { return has_value ? ( value ? "true" : "false" ) : "." ; } 
+  globals::atype_t atype() const { return globals::A_MASK_T; }
+
+  std::vector<bool>        bool_vector()   const { return std::vector<bool>(1,bool_value()); } 
+  std::vector<int>         int_vector()    const { return std::vector<int>(1,int_value()); } 
+  std::vector<double>      double_vector() const { return std::vector<double>(1,double_value()); } 
+  std::vector<std::string> text_vector()   const { return std::vector<std::string>(1,text_value()); } 
+  bool is_vector() const { return false; } 
+  int size() const { return 1; } 
+  
+};
+
 
 
 //

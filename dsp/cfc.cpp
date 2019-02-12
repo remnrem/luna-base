@@ -86,7 +86,7 @@ void dsptools::cfc( edf_t & edf , param_t & param )
   // Get signals
   //
   
-  std::string signal_label = param.requires( "signal" );
+  std::string signal_label = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( signal_label );    
   const int ns = signals.size();
 

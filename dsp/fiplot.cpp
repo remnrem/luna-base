@@ -44,7 +44,7 @@ extern logger_t logger;
 void fiplot_wrapper( edf_t & edf , const param_t & param )
 {
 
-  std::string signal_label = param.requires( "signal" );
+  std::string signal_label = param.requires( "sig" );
   
   signal_list_t signals = edf.header.signal_list( signal_label );
 

@@ -70,6 +70,33 @@ instance_t * annot_t::add( const std::string & id , const interval_t & interval 
   
 }
 
+void annot_t::remove( const std::string & id , const interval_t & interval )
+{
+
+  instance_idx_t key = instance_idx_t( this , interval , id );
+
+  std::map<instance_idx_t,instance_t*>::iterator ii = interval_events.find( key );
+
+  if ( ii == interval_events.end() ) return;
+
+  // clean up instance
+  if ( ii->second != NULL ) {
+    
+    // remove pointer from global instance tracker
+    std::set<instance_t*>::iterator kk = all_instances.find( ii->second );
+    if ( kk != all_instances.end() )
+      all_instances.erase( kk );
+
+    // release actual instance
+    delete ii->second;
+  }
+  
+  // clean up idx
+  interval_events.erase( key );
+
+}
+
+
 std::string instance_t::print( const std::string & delim , const std::string & prelim ) const
 {
   std::stringstream ss;
@@ -162,6 +189,14 @@ void instance_t::set( const std::string & name , const bool b )
 {
   check( name );
   avar_t * a = new bool_avar_t( b ) ;
+  tracker.insert( a );
+  data[ name ] = a;    
+}
+
+void instance_t::set_mask( const std::string & name , const bool b )
+{
+  check( name );
+  avar_t * a = new mask_avar_t( b ) ;
   tracker.insert( a );
   data[ name ] = a;    
 }
@@ -307,11 +342,13 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       
       a->file = filename ;
       
+      a->type = globals::A_FLAG_T;  // no meta-data from .eannot 
+      
       a->types.clear();
   
     }
   
-    
+  
   //
   // Populate intervals
   //
@@ -538,12 +575,15 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  a->file = f;
 	  
+	  a->type = globals::A_FLAG_T; // unless we learn otherwise, i.e. just below when parsing header line
+
 	  a->types.clear();
 	  
 	  // columns specified
 	  if ( tok.size() == 3 ) 
 	    {
 	      std::vector<std::string> type_tok = Helper::parse( tok[2] , " \t" );
+	      
 	      for (int j=0;j<type_tok.size();j++)
 		{
 		  std::vector<std::string> type_tok2 = Helper::parse( type_tok[j] , "[(" );
@@ -575,9 +615,17 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		    Helper::halt( "unsupported annotation type from\n" + line );
 
 		  a->types[ var_name ] = t ; 
+		
+		  // if only a single TYPE has been specified, assign this to the 
+		  // annotation class, otherwise set it as undefined
+		  
+		  if ( type_tok.size() == 1 ) 
+		    a->type = t ; 
+		  else 
+		    a->type = globals::A_NULL_T ; // i.e. instead of 'FLAG', this means that we have multiple types
 		  
 		} // next column for this annotation
-
+	      
 	    }
 	  
 	}
@@ -785,6 +833,16 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  instance->set( label );
 		}
 	      
+	      else if ( t == globals::A_MASK_T )
+		{
+		  if ( tok[j] != "." )
+		    {
+		      // accepts F and T as well as long forms (false, true)
+		      bool value = Helper::yesno( tok[j] );
+		      instance->set_mask( label , value );
+		    }
+		}
+	      
 	      else if ( t == globals::A_BOOL_T )
 		{
 		  if ( tok[j] != "." )
@@ -794,7 +852,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		      instance->set( label , value );
 		    }
 		}
-	      
+
 	      else if ( t == globals::A_INT_T )
 		{
 		  int value = 0;
@@ -968,8 +1026,7 @@ bool annot_t::save( const std::string & t)
   //
   // Interval-based annotation
   //
-  
-  
+    
   annot_map_t::const_iterator ii = interval_events.begin();
   while ( ii != interval_events.end() )
     {
@@ -1078,7 +1135,7 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
       element_t * notes    = (*e)("Notes" );
      
       element_t * type    = (*e)( "EventType" );
-
+      
 
       //      if ( concept == NULL || start == NULL || duration == NULL ) continue;
       if ( concept == NULL ) continue;
@@ -1267,7 +1324,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       // skip this..
       if ( concept->value == "Recording Start Time" ) continue;
-
+      
+      //     std::cout << "notes " << concept->name << "\t" << concept->value << "\n";
+      
       // NSRR remap?
       if ( globals::remap_nsrr_annots )
 	concept->value = nsrr_t::remap( concept->value );
@@ -1283,6 +1342,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       annot_t * a = edf->timeline.annotations.add( concept->value );
       a->description = "XML-derived";
       a->file = filename;
+      a->type = globals::A_FLAG_T; // not expecting any meta-data
       added.insert( concept->value );
     }
 
@@ -1321,6 +1381,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  annot_t * a = edf->timeline.annotations.add( ss );
 	  a->description = "XML-derived";
 	  a->file = filename;
+	  a->type = globals::A_FLAG_T; // not expecting any meta-data from XML
 	  added.insert( ss );
 	  
 	}
@@ -1374,17 +1435,18 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       annot_t * a = edf->timeline.annotations.add( concept->value );
       
+      if ( a == NULL ) Helper::halt( "internal error in loadxml()");
+
       instance_t * instance = a->add( concept->value , interval );      
       
-      //      if ( notes ) std::cout << " HAS NOTES!!! " << concept->value << "\n";
-
       // any notes?  set as TXT, otherwise it will be listed as a FLAG
       if ( notes ) 
-	instance->set( concept->value , notes->value );  
-//       else
-// 	instance->set( concept->value ); 
+	{
+	  instance->set( concept->value , notes->value );  
+	}
       
     }
+  
   
   //
   // Profusion-formatted sleep-stages?
@@ -1889,11 +1951,15 @@ void proc_eval( edf_t & edf , param_t & param )
   std::string expression = Helper::unquote( param.requires( "expr" ) , '#' );
    
   std::set<std::string> acc_vars;
-  if ( param.has( "globals" ) ) acc_vars = param.strset( "globals" );
+  
+  bool use_globals = param.has( "globals" );
+  if ( use_globals ) 
+    acc_vars = param.strset( "globals" );
   
   logger << "  evaluating expression           : " << expression << "\n";
-  logger << "  derived values annotation class : " << new_annot_class << " (and " << new_annot_class << "_global)\n";
-
+  logger << "  derived values annotation class : " << new_annot_class ;
+  if ( use_globals ) logger << " (and " << new_annot_class << "_global)";
+  logger << "\n";
   
   //
   // Get all existing annotations
@@ -1914,22 +1980,27 @@ void proc_eval( edf_t & edf , param_t & param )
   // Make global annotation an entirely separate class of annotation
   //
   
-  annot_t * global_annot = edf.timeline.annotations.add( new_annot_class + "_global" );
+  annot_t * global_annot = use_globals ? edf.timeline.annotations.add( new_annot_class + "_global" ) : NULL ;
+ 
+  instance_t dummy;
   
-  instance_t * accumulator = global_annot->add( "." , edf.timeline.wholetrace() );
+  instance_t * accumulator = use_globals ? global_annot->add( "." , edf.timeline.wholetrace() ) : &dummy ;
   
   //
   // We need to initialize any global variables that will appear in the main expression
   // Assume these are all floats for now, and will have the form _var 
   //
   
-  std::set<std::string>::const_iterator ii = acc_vars.begin();
-  while ( ii != acc_vars.end() ) 
+  if ( use_globals ) 
     {
-      accumulator->set( *ii , 0 );
-      ++ii;
+      std::set<std::string>::const_iterator ii = acc_vars.begin();
+      while ( ii != acc_vars.end() ) 
+	{
+	  accumulator->set( *ii , 0 );
+	  ++ii;
+	}
     }
-   
+
   //
   // Iterate over epochs
   //
@@ -1964,9 +2035,13 @@ void proc_eval( edf_t & edf , param_t & param )
 	  inputs[ names[a] ] = events;
 	}
       
-      // create a new instance for the output variables
-      instance_t * new_instance = new_annot->add( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval );
+     
+      //
+      // create new annotation
+      //
       
+      instance_t * new_instance = new_annot->add( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval );
+
       //
       // evaluate the expression
       //
@@ -1980,7 +2055,7 @@ void proc_eval( edf_t & edf , param_t & param )
       bool retval;
       
       if ( ! tok.value( retval ) ) is_valid = false;
-
+      
       //
       // Output
       //
@@ -1990,8 +2065,18 @@ void proc_eval( edf_t & edf , param_t & param )
       acc_valid += is_valid;
 
       if ( acc_valid ) 
-	acc_retval += retval;
+	{
+	  
+	  acc_retval += retval;
 
+	}
+      
+      // remove instance if expression was F or invalid
+      if ( ( ! acc_valid ) || ( ! retval ) ) 
+	{
+	  new_annot->remove( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval );
+	}
+            
       // next epoch
     } 
   

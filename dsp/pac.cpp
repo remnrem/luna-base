@@ -38,7 +38,7 @@ extern writer_t writer;
 void dsptools::pac( edf_t & edf , param_t & param )
 {
 
-  std::string signal_label = param.requires( "signal" );
+  std::string signal_label = param.requires( "sig" );
   
   signal_list_t signals = edf.header.signal_list( signal_label );    
   

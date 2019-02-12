@@ -146,7 +146,7 @@ void dsptools::resample_channel( edf_t & edf , const int s , const int nsr )
 void dsptools::resample_channel( edf_t & edf , param_t & param )
 {
   
-  std::string signal_label = param.requires( "signal" );
+  std::string signal_label = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( signal_label );      
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 

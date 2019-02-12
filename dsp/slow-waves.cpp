@@ -97,14 +97,14 @@ double slow_waves_t::nearest( const int i , int * sw_idx  ) const
 slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 {
 
-  std::string signal_label = param.requires( "signal" );   
+  std::string signal_label = param.requires( "sig" );   
 
   signal_list_t signals = edf.header.signal_list( signal_label );  
   
   const int ns = signals.size();
 
   if ( ns != 1 ) 
-    Helper::halt( "can only apply slow_waves_t() to a single signal, i.e.  SW signal=<label>" );
+    Helper::halt( "can only apply slow_waves_t() to a single signal, i.e.  SW sig=<label>" );
 
   writer.level( signals(0) , globals::signal_strat );
   

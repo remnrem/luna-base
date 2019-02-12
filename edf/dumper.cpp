@@ -724,7 +724,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   // Get signals
   //  
   
-  std::string signal_label = param.requires( "signal" );   
+  std::string signal_label = param.requires( "sig" );   
   
   signal_list_t signals = header.signal_list( signal_label );  
   

@@ -1641,10 +1641,16 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
       if ( header.n_samples[ signals(s) ] != np ) 
 	Helper::halt( "all signals/references must have similar sampling rates" );
       
+      // do not reference to self
+      if ( nr == 1 && signals(s) == refs(0) ) 
+	{
+	  logger << " skipping " << refs.label(0) << " to not re-reference to self\n"; 
+	  continue;
+	}
+      
       // transformed signal      
       std::vector<double> d;
       int cc = 0;
-
 
       //
       // iterate over records
@@ -2617,7 +2623,7 @@ bool edf_t::basic_stats( param_t & param )
   // Get min/max
   // Calculate RMS for each signal
   
-  std::string signal_label = param.requires( "signal" );  
+  std::string signal_label = param.requires( "sig" );  
   signal_list_t signals = header.signal_list( signal_label );
   std::vector<double> Fs = header.sampling_freq( signals );
   

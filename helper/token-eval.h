@@ -50,13 +50,13 @@ struct Eval {
   
   // constructors
 
-  Eval() 
-    { init(); }
+  Eval( const bool na = false ) 
+    { init( na ); }
 
-  Eval( const std::string & input ) 
-    { init(); parse(input); }
+  Eval( const std::string & input , const bool na = false ) 
+    { init( na ); parse(input); }
   
-  void init(); 
+  void init( const bool ); 
 
   // primary functions
   
@@ -128,7 +128,9 @@ struct Eval {
 
   // the number of evals
   int neval;
-
+  
+  // run in no-assignment mode (i.e. MASK)
+  bool no_assignments;
 
 };
 

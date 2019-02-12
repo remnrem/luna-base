@@ -47,7 +47,7 @@ void band_pass_filter( edf_t & edf ,
   // Signals
   //
 
-  std::string signal_label = param.requires( "signal" );
+  std::string signal_label = param.requires( "sig" );
   
   signal_list_t signals = edf.header.signal_list( signal_label );      
 

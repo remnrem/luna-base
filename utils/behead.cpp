@@ -103,7 +103,7 @@ int main(int argc , char ** argv )
 		}
 	      
 	      if ( tab_sep )
-		std::cout << "\t" << headers[i] << "\t" << data[i] << "\n";
+		std::cout << headers[i] << "\t" << data[i] << "\n";
 	      else
 		std::cout << std::right << std::setw(25) << headers[i] 
 			  << "   "

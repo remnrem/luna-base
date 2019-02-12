@@ -103,7 +103,7 @@ void pdc_t::construct_tslib( edf_t & edf , param_t & param )
   // Signals and sample-rate
   //
   
-  std::string signal_label = param.requires( "signal" );   
+  std::string signal_label = param.requires( "sig" );   
   
   signal_list_t signals = edf.header.signal_list( signal_label );  
 
