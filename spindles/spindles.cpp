@@ -71,21 +71,28 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // center frequencies for wavelets
   std::vector<double> frq;  
   
-  const double   fc_lower = param.has("fc") ? 
-    param.requires_dbl("fc") : ( param.has("fc-lower") ? param.requires_dbl("fc-lower") : 13.5 ) ; 
+  if ( param.has( "fc" ) )
+    {
+      frq = param.dblvector( "fc" );
+    }
+  else if ( param.has("fc-lower") )
+    {
+      
+      const double   fc_lower = param.requires_dbl("fc-lower") ;
 
-  const double   fc_upper = param.has("fc") ? 
-    param.requires_dbl("fc") : ( param.has("fc-upper") ? param.requires_dbl("fc-upper") : 13.5 ) ; 
-  
-  const double   fc_step = param.has("fc-step") ? 
-    param.requires_dbl("fc-step") : 0.5;  
-  
-  for (double fc = fc_lower ; fc <= fc_upper ; fc += fc_step ) frq.push_back( fc );
+      const double   fc_upper = param.requires_dbl("fc-upper") ;
+
+      const double   fc_step = param.requires_dbl("fc-step"); 
+	  
+      for (double fc = fc_lower ; fc <= fc_upper ; fc += fc_step ) frq.push_back( fc );
+    }
+  else
+    frq.push_back( 13.5 );
 
   // number of cycles
   const int num_cycles = param.has("cycles" ) ? param.requires_int( "cycles" ) : 7 ;
-    
-  
+
+      
   //
   // Detection parameters
   //
@@ -494,7 +501,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       for (int fi=0; fi<frq.size(); fi++)
 	{
 	  
-	  logger << " detecting spindles around F_C " << frq[fi] << "Hz" << std::endl ;
+	  logger << "\n detecting spindles around F_C " << frq[fi] << "Hz" << std::endl ;
 	  logger << " wavelet with " << num_cycles << " cycles" << std::endl;       
 	  logger << " smoothing window = " << moving_window_sec << "s" << std::endl;	  
 

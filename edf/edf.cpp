@@ -897,7 +897,7 @@ bool edf_t::attach( const std::string & f ,
 
   logger << " total duration " << Helper::timestring( timeline.total_duration_tp ) 
 	    << ", with last time-point at " << Helper::timestring( ++timeline.last_time_point_tp ) << "\n";
-  logger << " " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
+  logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
 
   logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
   logger << "in " << ( header.edfplus ? "an EDF+" : "a standard EDF" ) << " file:" ;

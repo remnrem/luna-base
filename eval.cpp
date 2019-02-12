@@ -1812,7 +1812,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 {
   
   // add signals?
-  if ( Helper::iequals( tok0 , "signal" ) || Helper::iequals( tok0 , "signals" ) )
+  if ( Helper::iequals( tok0 , "sig" ) )
     {		  
       std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );		        
       for (int s=0;s<tok2.size();s++) 
