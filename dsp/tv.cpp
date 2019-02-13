@@ -41,7 +41,7 @@ void dsptools::tv( edf_t & edf , param_t & param )
   int lambda = param.requires_dbl( "lamdba" );
   if ( lambda < 0 ) Helper::halt( "lambda must be >= 0" ) ; 
   
-  std::string signal_label = param.requires( "signal" );
+  std::string signal_label = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( signal_label );    
   const int ns = signals.size();
   

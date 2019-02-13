@@ -37,10 +37,12 @@ std::map<Token::tok_type,std::string> Token::tok_unmap;
 std::map<std::string,int> Token::fn_map; 
 
 
-void Eval::init()
+void Eval::init( bool na )
 {
   is_valid = false;
   
+  no_assignments = na;
+
   errs = "";
 
 }
@@ -400,8 +402,6 @@ unsigned int Eval::op_arg_count( const Token & tok )
       
     }
 
-  std::cout << "leaving\n";
-
   return 0; 
 }
 
@@ -734,7 +734,10 @@ bool Eval::execute( const std::vector<Token> & input )
 	      else if ( c.name() == "sqrt" )   res = func.fn_sqrt( args[0] );
 	      else if ( c.name() == "sqr" )    res = func.fn_sqr( args[0] );
 	      else if ( c.name() == "pow" )    res = func.fn_pow( args[1] , args[0] );
-	      
+
+	      else if ( c.name() == "rnd" )    res = func.fn_rnd();
+	      else if ( c.name() == "rand" )   res = func.fn_rnd( args[0] );
+
 	      else if ( c.name() == "exp" )    res = func.fn_exp( args[0] );
 	      else if ( c.name() == "log" )    res = func.fn_log( args[0] );
 	      else if ( c.name() == "log10" )  res = func.fn_log10( args[0] );
@@ -747,7 +750,7 @@ bool Eval::execute( const std::vector<Token> & input )
 	      
 	      else if ( c.name() == "length" )   res = func.fn_vec_length( args[0] );	      
 	      else if ( c.name() == "size" )     res = func.fn_vec_length( args[0] );	      
-	      
+	      	      
 	      else if ( c.name() == "min" )      res = func.fn_vec_min( args[0] );	      
 	      else if ( c.name() == "max" )      res = func.fn_vec_maj( args[0] );
 	      
@@ -792,6 +795,8 @@ bool Eval::execute( const std::vector<Token> & input )
 		  if ( c.is_assignment() ) 
 		    {
 		      
+		      if ( no_assignments ) Helper::halt( "no A = B assigments allowed in this expression" );
+
 		      res = func.fn_assign( sc, t0 );  // res==T
 
 		      // and bind new value if needed
@@ -910,7 +915,6 @@ void Eval::bind( const std::map<std::string,annot_map_t> & inputs ,
 		 bool reset )   
 {
 
-
   
   if ( reset ) reset_symbols();  
   
@@ -971,11 +975,12 @@ void Eval::bind( const std::map<std::string,annot_map_t> & inputs ,
 	      // variable name is annot.var
 	      
 	      const std::string meta_name = annot_name + "." + kk->first;
-
+	      
 	      const avar_t * value = kk->second;
 	      
 	      // for now... we cannot read IN vectors
 	      // is okay, as currently no way to specify those from files in any case!
+	      // although note.. could be generated via a prior EVAL statement...
 	      
 	      globals::atype_t type = value->atype();
 	      
@@ -996,7 +1001,6 @@ void Eval::bind( const std::map<std::string,annot_map_t> & inputs ,
       ++ii;
     }
   
-
 
   //
   // add all to a single instance_t to hand to the token parser
@@ -1074,17 +1078,17 @@ void Eval::bind( const std::map<std::string,annot_map_t> & inputs ,
     }
   
   // Check...
-//   std::cout << m.print() << "\n";
+  //    std::cout << m.print() << "\n";
 
-//   if ( accumulator != NULL ) 
-//     std::cout << "acc\n" << accumulator->print() << "\n";
+//    if ( accumulator != NULL ) 
+//      std::cout << "acc\n" << accumulator->print() << "\n";
 
   
   //
   // Two scenarios: 
   //  1) a value might already exist (in which case we use that type and value to specify the token )
   //  2) this could be used as part of an assignment to an instance; here we would not know the 
-  //     type of the to-be-assigned field yet
+  //     type of the to-be-assigned field yet [ IF we are allowing assignments ] 
   //
   
   std::map<std::string,std::set<Token*> >::iterator i = vartb.begin();
@@ -1105,10 +1109,7 @@ void Eval::bind( const std::map<std::string,annot_map_t> & inputs ,
 	  // numeric, int, text and bool scalars
 	  // also allow vectors downstream
 	  
-	  if ( a == NULL ) 
-	    {
-	      (*tok)->set(); // UNDEFINED
-	    }
+	  if ( a == NULL ) (*tok)->set(); // UNDEFINED
 
 	  else if ( a->atype() == globals::A_INT_T  )  { (*tok)->set( a->int_value() ) ;  }
 	  else if ( a->atype() == globals::A_DBL_T  )  { (*tok)->set( a->double_value() ); }
@@ -1121,7 +1122,7 @@ void Eval::bind( const std::map<std::string,annot_map_t> & inputs ,
 	  else if ( a->atype() == globals::A_BOOLVEC_T )  { (*tok)->set( a->bool_vector() );   }	      
 	  
 	  else (*tok)->set(); // UNDEFINED
-	  
+	    	  
 	  ++tok;
 	}
       ++i;

@@ -222,7 +222,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // Signals
   // 
   
-  std::string signal_label = param.requires( "signal" );   
+  std::string signal_label = param.requires( "sig" );   
   
   // list of signals
   signal_list_t signals = edf.header.signal_list( signal_label );  
@@ -2617,7 +2617,7 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
   // Attach signals
   // 
 
-  std::string signal_label = param.requires( "signal" );   
+  std::string signal_label = param.requires( "sig" );   
 
   signal_list_t signals = edf.header.signal_list( signal_label );  
   

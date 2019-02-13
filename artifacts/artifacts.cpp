@@ -517,7 +517,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   // exclude EPOCH is more than 5% of points are clipped
   const double clip_threshold = 0.05;
   
-  std::string signal_label = param.requires( "signal" );  
+  std::string signal_label = param.requires( "sig" );  
 
   bool verbose = param.has( "verbose" ) || param.has( "epoch") ;
 
@@ -1078,7 +1078,7 @@ void  mse_per_epoch( edf_t & edf , param_t & param )
   // Attach signal(s)
   //
 
-  std::string signal_label = param.requires( "signal" );  
+  std::string signal_label = param.requires( "sig" );  
   
   signal_list_t signals = edf.header.signal_list( signal_label );  
 
@@ -1242,7 +1242,7 @@ void lzw_per_epoch( edf_t & edf , param_t & param )
   // Attach signal(s)
   //
 
-  std::string signal_label = param.requires( "signal" );  
+  std::string signal_label = param.requires( "sig" );  
   
   signal_list_t signals = edf.header.signal_list( signal_label );  
 

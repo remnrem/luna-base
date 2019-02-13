@@ -143,7 +143,7 @@ void extract();
 void display();
 void summary();
 void pre_summary();
-void get_matching_strata();
+void get_matching_strata( bool show_table = true );
 
 struct request_t;
 struct reqvar_t;
@@ -407,12 +407,17 @@ int main(int argc , char ** argv )
 
   std::set<reqvar_t> all_vars;
 
-  std::cerr << "attaching databases";
+  bool verbose = databases.size() > 1; 
+
+  if ( verbose )
+    std::cerr << "attaching databases";
   
   for (int d=0;d<databases.size();d++)
     {
-      std::cerr << ".";
-
+      
+      if ( verbose )
+	std::cerr << ".";
+      
       if ( ! Helper::fileExists( databases[d] ) ) 
 	Helper::halt( "could not find stout file " + databases[d] );
       
@@ -441,7 +446,8 @@ int main(int argc , char ** argv )
 	}
     }
   
-  std::cerr << "\n";
+  if ( verbose ) 
+    std::cerr << "\n";
   
   //
   // Map of strata-labels to row/col specifics: cfacs and rfacs
@@ -556,22 +562,32 @@ int main(int argc , char ** argv )
       // Summary mode?
       //
 
-      if ( run_summary ) pre_summary();
-      
+      if ( run_summary ) 
+	{
+	  // only show the main table if we have 
+	  // not specified *any* arguments, 
+	  if ( ! any_opt ) 
+	    pre_summary();
+	}
 
       //
       // Check a command has been specified, if one is needed
       //
       
-       if ( (!run_summary) && cmd_spec == "." ) 
-	 std::cerr << "*** warning: this may be an old DB, but note that for newer STOUT databases you'll need to add -s {statement} ***\n";
-      
+      if ( (!run_summary) && cmd_spec == "." ) 
+	std::cerr << "*** did you forget to type the [COMMAND]?\n"
+		  << "\n"
+		  << "*** if not, this may be an old-format DB\n"
+		  << "*** it should still be processed correctly\n"
+		  << "*** but please update Luna and destrat\n";
 
       //
-      // identify which rows we are interested in
+      // identify which rows we are interested in;  this function also will 
+      // print the general table, but only if not any other options have
+      // been given
       //
       
-      get_matching_strata();
+      get_matching_strata( !any_opt );
 
 
       //
@@ -802,95 +818,105 @@ void summary()
   
   if ( empty ) return;
   
-  bool baseline_level = fmatch.factors.size() == 0 ; 
+  bool baseline_level = fmatch.factors.size() <= 1 ; 
 
-  std::cerr << "----------------:-------------------:---------------:---------------------------\n";
 
+  // -1 from factors size to exclude [COMMAND]
+  std::cerr << "Factors: " << ( baseline_level ? "n/a" : Helper::int2str( (int)fmatch.factors.size() -1 ) ) << "\n";
+  
   if ( baseline_level ) 
-    std::cerr << "Default/no strata:\n";
+    std::cerr << "     [ default/baseline ]\n\n";
   else
     {
       
-      std::cerr << "factors for the selected strata:\n ";
       
       std::set<factor_t>::const_iterator gg = fmatch.factors.begin();
       while ( gg != fmatch.factors.end() )
 	{
 	  // command
 	  if ( gg->factor_name[0] == '_' ) { ++gg; continue; } 
+
 	  // timepoint?
 	  bool is_tp = gg->factor_name == "E" || gg->factor_name == "T";
-	  if ( gg != fmatch.factors.begin() ) std::cerr << " "; 
+	  
 	  if ( ! is_tp )
 	    {
-	      std::cerr << gg->factor_name << " (" << e_faclvl[ gg->factor_name ].size() << " levels):";
+	      
+	      std::cerr << "     [" << gg->factor_name << "] " << e_faclvl[ gg->factor_name ].size() << " levels\n     ->";
+
 	      std::map<std::string,int> & ss = e_faclvl[ gg->factor_name ];
 	      int cnt = 0;
 	      std::map<std::string,int>::const_iterator ii = ss.begin();
 	      while ( ii != ss.end() )
 		{
-		  std::cerr << " " << ii->first ;
+		  if ( ii == ss.begin() )
+		    std::cerr << " ";
+		  else
+		    std::cerr << ", ";
+
+		  std::cerr << ii->first ;
 		  ++cnt;
-		  if( cnt > 12 ) { std::cerr << " ...(etc)..." ; break; } 
+		  if( cnt > 12 ) { std::cerr << " ..." ; break; } 
 		  ++ii;
 		}
+	      std::cerr << "\n";
 	    }
 	  else
-	    std::cerr << gg->factor_name << " (...)";
-
+	    std::cerr << "     [" << gg->factor_name << "] (time/epoch marker)\n";
+	  
 	  std::cerr << "\n";
 
 	  ++gg;
 
 	}
-
       
     }
 
-  std::cerr << "\n";
   
-  std::cerr << " " << e_inds.size() << " individual(s): ";
+  std::cerr << "Individuals: " << e_inds.size() << "\n";
+
   int c = 0;
+  std::cerr << "    ";
   std::map<std::string,int>::const_iterator ii = e_inds.begin();
   while ( ii != e_inds.end() )
     {
-      std::cerr << " " << ii->first ; // << "(" << ii->second << ")";
-      //      if ( ++c > 6 ) { std::cerr << " ...";  break; } 
-      if ( ++c > 8 ) { std::cerr << "\n    "; c = 0; } 
+      std::cerr << " " << ii->first ;
+      //if ( ++c > 8 ) { std::cerr << "..."; break; } 
+      if ( ++c > 8 ) { std::cerr << "\n     "; c = 0; } 
       ++ii;
     }
-  std::cerr << "\n";
-
-  std::cerr << " " << e_cmds.size() << " command(s): ";
+  
+  std::cerr << "\n\n";
+      
+  std::cerr << "Commands: " << e_cmds.size() << "\n    ";
   c = 0;
   ii = e_cmds.begin();
   while ( ii != e_cmds.end() )
     {
       std::cerr << " " << ii->first ; // << "(" << ii->second << ")";
       //      if ( ++c > 6 ) { std::cerr << " ...";  break; } 
-      if ( ++c > 8 ) { std::cerr << "\n    "; c = 0; } 
+      if ( ++c > 6 ) { std::cerr << "\n     "; c = 0; } 
       ++ii;
     }
-  std::cerr << "\n";
+  std::cerr << "\n\n";
 
-  std::cerr << " " << e_vars.size() << " variable(s): ";
+  std::cerr << "Variables: " << e_vars.size() << "\n    ";
   c = 0;
   ii = e_vars.begin();
   while ( ii != e_vars.end() )
     {
       std::cerr << " " << ii->first ; // << "(" << ii->second << ")";
       //      if ( ++c > 6 ) { std::cerr << " ...";  break; } 
-      if ( ++c > 8 ) { std::cerr << "\n    "; c = 0; } 
+      if ( ++c > 6 ) { std::cerr << "\n     "; c = 0; } 
       ++ii;
     }
-  std::cerr << "\n";
-  
+  std::cerr << "\n";  
   
 }
 
 
 
-void get_matching_strata()
+void get_matching_strata( bool show_table)
 {
 
   
@@ -944,7 +970,7 @@ void get_matching_strata()
   
   //  std::map<int,int> StratOutDBase::count_strata()
 
-  if ( run_summary ) 
+  if ( run_summary && show_table ) 
     {
       
       std::map<int,std::set<int> > vars_by_strata = writer.dump_vars_by_strata();
@@ -1066,9 +1092,10 @@ void get_matching_strata()
 	    {
 	      std::cerr << " " << *vv;
 	      w += 1 + vv->size();
-	      if ( w > 50 ) 
+	      if ( w > 30 ) 
 		{
-		  std::cout << "\n" << std::setw(1+16+20+16) << " ";
+		  std::cout << "\n" 
+			    << "                :                   :               :";
 		  w = 0;
 		}
 	      ++vv;
@@ -1077,9 +1104,12 @@ void get_matching_strata()
 	  // if ( ff->first.epoch ) { if ( ff->first.factors.size() > 0 ) { std::cerr << " x "; } std::cerr << "E"; } 
 	  // if ( ff->first.interval ) { if ( ff->first.factors.size() > 0 ) { std::cerr << " x "; } std::cerr << "T"; } 
 	  
-	  std::cerr << "\n\n";
+	  std::cerr << "\n"
+		    << "                :                   :               : \n";
 	  ++ff;
 	}
+
+      std::cerr << "----------------:-------------------:---------------:---------------------------\n";
 
     }
   

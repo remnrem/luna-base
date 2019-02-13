@@ -128,7 +128,7 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
   bool flatten_overlap = ! param.has( "allow-overlap" );
   
   // only a single signal allowed
-  std::string signal_label = param.requires( "signal" );   
+  std::string signal_label = param.requires( "sig" );   
 
   // optionally dump the raw signal?
   bool raw_signal = param.has( "dump-signal" );

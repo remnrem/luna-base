@@ -120,6 +120,7 @@ void globals::init_defs()
   // Version
   //
   
+
   version = "v0.9";
   date    = "12-Feb-2019";
 
@@ -320,6 +321,7 @@ void globals::init_defs()
 
   type_name[ A_NULL_T ] = "null";
   type_name[ A_FLAG_T ] = "flag";
+  type_name[ A_MASK_T ] = "mask";
 
   type_name[ A_TXT_T ] = "txt";
   type_name[ A_INT_T ] = "int";
@@ -330,12 +332,15 @@ void globals::init_defs()
   type_name[ A_INTVEC_T ] = "intvec";
   type_name[ A_DBLVEC_T ] = "numvec";
   type_name[ A_BOOLVEC_T ] = "boolvec";
-
+  
   // flags (i.e. no value)
 
   name_type[ "FLAG" ] = A_FLAG_T; 
   name_type[ "flag" ] = A_FLAG_T; 
 
+  name_type[ "MASK" ] = A_MASK_T;
+  name_type[ "mask" ] = A_MASK_T;
+  
   // scalars 
 
   name_type[ "TXT" ] = A_TXT_T;

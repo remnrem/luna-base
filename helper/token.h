@@ -271,6 +271,10 @@ struct  TokenFunctions{
   Token fn_log10( const Token & tok ) const;
   Token fn_exp( const Token & tok ) const;
   Token fn_pow( const Token & tok , const Token & tok2 ) const;
+
+  Token fn_rnd( ) const;
+  Token fn_rnd( const Token & tok  ) const;
+
   Token fn_sqr( const Token & tok ) const { return fn_pow( tok , Token(2) ); }
   Token fn_ifelse( const Token & cond , const Token & left , const Token & right ) const;
 

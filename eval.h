@@ -55,8 +55,6 @@ struct param_t
   
   bool has(const std::string & s ) const;
 
-  std::string match( const std::string & s );
-  
   std::string value( const std::string & s ) const;
  
   bool single() const;  
@@ -85,6 +83,7 @@ private:
 
   std::map<std::string,std::string> opt;
   std::set<std::string> hidden;
+
 
 };
 

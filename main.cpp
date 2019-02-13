@@ -266,7 +266,7 @@ int main(int argc , char ** argv )
   else if ( argc < 2 || ( isatty(STDIN_FILENO) || argc != 1 ) )  
     {
 
-      logger << "usage: luna [sample-list|EDF] [n1] [n2] [signal=s1,s2] [v1=val1] [@parameter-file] < command-file"
+      logger << "usage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file"
 	     << std::endl;
       logger.off();
       std::exit(1);

@@ -3313,8 +3313,10 @@ void timeline_t::list_all_annotations( const param_t & param )
       writer.value( "STOP" , interval.stop_sec() );
       
       if ( ! instance->empty() ) 
-	writer.value(  "VAL" , instance->print() );
-      
+	{
+	  writer.value(  "VAL" , instance->print() );
+	}
+
       if ( show_masked ) 
 	{
 	  
@@ -3331,6 +3333,8 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  writer.value( "ALL_UNMASKED"  , all_unmasked );
 	}
       
+      writer.unlevel( globals::annot_instance_strat );
+
       writer.unlevel( globals::annot_strat );
       
       ++aa;
@@ -3346,19 +3350,23 @@ void timeline_t::list_all_annotations( const param_t & param )
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() ) 
     {
+
       writer.level( cc->first , globals::annot_strat );
       writer.value( "COUNT" , cc->second );      
       writer.value( "DUR" , dur[ cc->first ] );
-      
-      std::map<std::string,int>::const_iterator dd = counts2[ cc->first ].begin();
-      while ( dd != counts2[ cc->first ].end() )
+
+      if ( counts2[ cc->first ].size() > 0 )
 	{
-	  writer.level( dd->first , globals::annot_instance_strat );	  
-	  writer.value( "COUNT" , dd->second );      
-	  writer.value( "DUR" , dur2[ cc->first ][ dd->first ] );
-	  ++dd;
+	  std::map<std::string,int>::const_iterator dd = counts2[ cc->first ].begin();
+	  while ( dd != counts2[ cc->first ].end() )
+	    {	      
+	      writer.level( dd->first , globals::annot_instance_strat );	  
+	      writer.value( "COUNT" , dd->second );      
+	      writer.value( "DUR" , dur2[ cc->first ][ dd->first ] );
+	      ++dd;
+	    }
+	  writer.unlevel( globals::annot_instance_strat );
 	}
-      writer.unlevel( globals::annot_instance_strat );
 
       ++cc;
     }
@@ -3420,7 +3428,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
     {
       
       int e = next_epoch_ignoring_mask() ;
-      
+
       if ( e == -1 ) break;
       
       interval_t interval = epoch( e );
@@ -3447,17 +3455,21 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
       instance_t dummy;
       
       //
-      // evaluate the expression
+      // evaluate the expression, but note, this is set to not 
+      // allow any assignments.... this makes it cleaner and easier 
+      // to spot bad//undefined variables as errors.
       //
 
-      Eval tok( expression );
+      const bool no_assignments = true;
       
+      Eval tok( expression , no_assignments );
+
       tok.bind( inputs , &dummy );
-      
+
       bool is_valid = tok.evaluate();
       
       bool matches;
-      
+       
       if ( ! tok.value( matches ) ) is_valid = false;
       
       //
@@ -3474,6 +3486,8 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
       acc_total++;
 
       acc_valid += is_valid;
+      
+      if ( acc_valid ) acc_retval += matches;
 
       
       // count basic matches
@@ -3502,6 +3516,8 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
   
   
   logger << " based on eval expression [" << expression << "]\n"
+	 << "  " << acc_retval << "  true, " << acc_valid - acc_retval << " false and " 
+	 << acc_total - acc_valid << " invalid return values\n"
 	 << "  " << cnt_basic_match << " epochs match; " 
 	 << cnt_mask_set << " newly masked, "
 	 << cnt_mask_unset << " unmasked, "

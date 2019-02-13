@@ -105,11 +105,14 @@ struct globals
   static bool remap_nsrr_annots;
 
   //
-  // Annotation types stored here statically
+  // Annotation types stored here statically;  these can be properties of both 
+  // annot_t, in which case they provide a guide for all instance_t.data fields
+  // alternatively, they are specified for every a_var_t, 
   //
   
-  enum atype_t { A_NULL_T ,  // i.e. not found
+  enum atype_t { A_NULL_T ,  // i.e. not found, or for annot_t means that no one type is specified
 		 A_FLAG_T , 
+		 A_MASK_T , 
 		 A_BOOL_T , 
 		 A_INT_T , 
 		 A_DBL_T , 

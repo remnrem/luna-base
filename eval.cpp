@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -97,33 +98,54 @@ void param_t::clear()
   opt.clear(); 
   hidden.clear(); 
 } 
-  
+
 bool param_t::has(const std::string & s ) const 
-{ 
+{
   return opt.find(s) != opt.end(); 
 } 
 
-std::string param_t::match( const std::string & s ) 
-{
-  std::string ms = "";
-  int m = 0;
-  std::map<std::string,std::string>::iterator ii = opt.begin();
-  while ( ii != opt.end() )
-    {
-      if ( ii->first.substr( 0, s.size() ) == s ) 
-	{
-	  ms = ii->first;
-	  ++m;
-	}
-      ++ii;
-    }
-  if ( m == 1 ) return ms;
-  return "";
-}
+  
+// bool param_t::has(const std::string & s , std::string * mstr ) const 
+// {
+//   std::string m = match( s );
+//   if ( mstr != NULL ) *mstr = m;
+//   return m != "";
+//   //  return opt.find(s) != opt.end(); 
+// } 
+
+// bool param_t::matches( const std::string & inp , const std::string & tmp ) const
+// {
+//   // input, e.g.  signals
+//   // ref    e.g.  sig       i.e. ref/template must be unique
+//   return Helper::iequals( inp.substr( 0 , tmp.size() ) , tmp ) ;
+// }
+
+// std::string param_t::match( const std::string & str ) const 
+// {
+//   std::string ms = "";
+//   int m = 0;
+//   std::map<std::string,std::string>::const_iterator ii = opt.begin();
+//   while ( ii != opt.end() )
+//     {
+//       // partial, case-insensitive match
+//       if ( matches( ii->first , str ) )
+// 	{
+// 	  ++m;
+// 	  if ( m > 1 ) Helper::halt( str + " matches multiple argumens" );
+// 	  ms = ii->first;
+// 	}
+//       ++ii;
+//     }
+//   if ( m == 1 ) return ms;
+//   return "";
+// }
 
 std::string param_t::value( const std::string & s ) const 
 { 
-  return has(s) ? opt.find(s)->second : "" ; 
+  if ( has( s ) )
+    return opt.find( s )->second;
+  else
+    return "";
 }
 
 bool param_t::single() const 
@@ -636,8 +658,8 @@ bool cmd_t::eval( edf_t & edf )
       // signals, then add all
       //
       
-      if ( ! param(c).has( "signal" ) )
-	param(c).add_hidden( "signal" , signal_string() );
+      if ( ! param(c).has( "sig" ) )
+	param(c).add_hidden( "sig" , signal_string() );
       
 
       //
@@ -841,7 +863,7 @@ void proc_lzw( edf_t & edf , param_t & param )
 // ZR : Z-ratio 
 void proc_zratio( edf_t & edf , param_t & param )
 {    
-  std::string signal = param.requires( "signal" );
+  std::string signal = param.requires( "sig" );
 
   staging_t staging;
   staging.zratio.calc( edf , signal );
@@ -852,7 +874,7 @@ void proc_zratio( edf_t & edf , param_t & param )
 
 void proc_artifacts( edf_t & edf , param_t & param )	  
 {
-  std::string signal = param.requires( "signal" );
+  std::string signal = param.requires( "sig" );
   annot_t * a = buckelmuller_artifact_detection( edf , param , signal );  
 }
 
@@ -946,7 +968,7 @@ void proc_resample( edf_t & edf , param_t & param )
 
 void proc_psd( edf_t & edf , param_t & param )	  
 {  
-  std::string signal = param.requires( "signal" );
+  std::string signal = param.requires( "sig" );
   annot_t * power = spectral_power( edf , signal , param );  
 }
 
@@ -1020,7 +1042,7 @@ void proc_anon( edf_t & edf , param_t & param )
 
 void proc_dump( edf_t & edf , param_t & param )	  
 {
-  std::string signal = param.requires( "signal" );  
+  std::string signal = param.requires( "sig" );  
   edf.data_dumper( signal , param );	  
 }
       
@@ -1066,8 +1088,8 @@ void proc_intervals( param_t & param , const std::string & data )
 
 void proc_covar( edf_t & edf , param_t & param )
 {  
-  std::string signals1 = param.requires( "signal1" );
-  std::string signals2 = param.requires( "signal2" );
+  std::string signals1 = param.requires( "sig1" );
+  std::string signals2 = param.requires( "sig2" );
   edf.covar(signals1,signals2);
 }
 
@@ -1182,7 +1204,7 @@ void proc_epoch( edf_t & edf , param_t & param )
   double dur = 0 , inc = 0;
 
   // default = 30 seconds, non-overlapping
-  if ( ! ( param.has( "len" ) || param.has( "epoch" ) ) )
+  if ( ! ( param.has( "len" ) || param.has("dur") || param.has( "epoch" ) ) )
     {
       dur = 30; inc = 30;
     }
@@ -1206,14 +1228,20 @@ void proc_epoch( edf_t & edf , param_t & param )
       
       else if ( param.has( "len" ) ) 
 	{
-	  
-	  dur = param.requires_dbl( "len" );
-	  
+	  dur = param.requires_dbl( "len" );	  
 	  if ( param.has( "inc" ) ) 
 	    inc = param.requires_dbl( "inc" );
 	  else 
 	    inc = dur;
+	}
 
+      else if ( param.has( "dur" ) ) 
+	{
+	  dur = param.requires_dbl( "dur" );	  
+	  if ( param.has( "inc" ) ) 
+	    inc = param.requires_dbl( "inc" );
+	  else 
+	    inc = dur;
 	}
 
     }
@@ -1475,12 +1503,12 @@ void proc_record_dump( edf_t & edf , param_t & param )
 void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 {
   
-  std::string wake   = param.has( "W" )  ? param.value("W")  : "" ; 
+  std::string wake   = param.has( "wake" )  ? param.value("wake")  : "" ; 
   std::string nrem1  = param.has( "N1" ) ? param.value("N1") : "" ; 
   std::string nrem2  = param.has( "N2" ) ? param.value("N2") : "" ; 
   std::string nrem3  = param.has( "N3" ) ? param.value("N3") : "" ; 
   std::string nrem4  = param.has( "N4" ) ? param.value("N4") : "" ; 
-  std::string rem    = param.has( "R" )  ? param.value("R")  : "" ; 
+  std::string rem    = param.has( "REM" )  ? param.value("REM")  : "" ; 
   std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
 
   // either read these from a file, or display
@@ -1710,7 +1738,7 @@ void proc_reference( edf_t & edf , param_t & param )
   std::string refstr = param.requires( "ref" );
   signal_list_t references = edf.header.signal_list( refstr );
   
-  std::string sigstr = param.requires( "signal" );
+  std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
 
   edf.reference( signals , references );
@@ -1737,7 +1765,7 @@ void proc_rerecord( edf_t & edf , param_t & param )
 
 void proc_scale( edf_t & edf , param_t & param , const std::string & sc )
 {
-  std::string sigstr = param.requires( "signal" );
+  std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
   const int ns = signals.size();  
   for (int s=0;s<ns;s++) 
@@ -1749,7 +1777,7 @@ void proc_scale( edf_t & edf , param_t & param , const std::string & sc )
 
 void proc_flip( edf_t & edf , param_t & param  )
 {
-  std::string sigstr = param.requires( "signal" );
+  std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
   const int ns = signals.size();  
   for (int s=0;s<ns;s++) 
@@ -1953,4 +1981,28 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   
 }
+
+
+
+
+//
+// Kludge... so that scope compiles on Mac... need to ensure the reduce_t is 
+// called within the primary libluna.dylib, or else this function is not accessible
+// when linking against libluna.dylib from scope...   TODO... remind myself 
+// how to control which functions are exported, etc, in shared libraries
+//
+
+void tmp_includes()
+{
+
+  // dummy function to make sure reduce_t() [ which otherwise isn't used by luna-base ] is 
+  // accessible from scope
+
+  std::vector<double> d;
+  std::vector<uint64_t> tp;
+  uint64_t s1,s2;
+  reduce_t r( &d,&tp,s1,s2,1);
+  return;
+}
+
 

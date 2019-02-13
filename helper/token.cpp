@@ -25,6 +25,7 @@
 #include "token-eval.h"
 
 #include "helper.h"
+#include "miscmath/crandom.h"
 
 #include "annot/annot.h"
 
@@ -189,6 +190,9 @@ void Token::init()
   fn_map[ "if" ]     = 1;  // number of args
   fn_map[ "ifnot" ]  = 1;  // complement of if()
   fn_map[ "sqrt" ]   = 1;  // square-root
+  fn_map[ "rand" ]   = 1;  // rand(10)
+  fn_map[ "rnd" ]    = 0;  // rnd() 0..1
+
   fn_map[ "sqr"  ]   = 1;  // X^2
   fn_map[ "log"  ]   = 1;
   fn_map[ "log10"]   = 1;
@@ -2227,6 +2231,25 @@ Token TokenFunctions::fn_sqrt( const Token & tok ) const
   return Token();
 }
 
+
+Token TokenFunctions::fn_rnd() const
+{
+  return Token( CRandom::rand() );
+}
+
+
+Token TokenFunctions::fn_rnd( const Token & tok ) const
+{
+  
+  // make int return value, base-1
+  if ( tok.is_int() || tok.is_float() ) 
+    return Token( 1 + CRandom::rand( tok.as_int() ) );
+  
+  // oherwise 0..1
+  return fn_rnd();
+}
+
+
 Token TokenFunctions::fn_log( const Token & tok ) const
 {
   if ( tok.is_int() ) return Token( log( tok.as_int() ) );
@@ -2736,7 +2759,13 @@ Token TokenFunctions::fn_assign( Token & lhs , const Token & rhs )
   
   // global variables, if being used, need to start with an underscore to distinguish them
   // also, the variable must already exist (i.e. have been initialized with EVAL globals=X,Y,Z for example
-  
+
+  // enfore rule that you cannot assign to existing variables; this means if we have a '.' in the name
+  // i.e. it is a member of an instance that already exists, then we cannot assign
+  // give an error
+
+  if ( lhs.name().find( "." ) != std::string::npos ) 
+    Helper::halt( "cannot assign new values to existing instance meta-data:" + lhs.name() );
 
   bool global = accumulator != NULL && global_vars->find( lhs.name() ) != global_vars->end() ;
   
@@ -2745,7 +2774,8 @@ Token TokenFunctions::fn_assign( Token & lhs , const Token & rhs )
   if ( ! m ) return Token();
   
   // still check that we already found a global var, i.e. is initialized
-  if ( global && m->find( lhs.name() ) == NULL ) Helper::halt( "internal error: did not initialize global variable " + lhs.name() ); 
+  if ( global && m->find( lhs.name() ) == NULL ) 
+    Helper::halt( "internal error: did not initialize global variable " + lhs.name() ); 
 
   bool b;
   if ( rhs.is_bool(&b) )
