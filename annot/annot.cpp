@@ -1700,16 +1700,17 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
       const std::string & s = ii->first;
       
       sleep_stage_t ss = globals::stage( s );
-      
-      if      ( ss == WAKE ) dwake = s;
-      else if ( ss == NREM1 ) dn1 = s;
-      else if ( ss == NREM2 ) dn2 = s;
-      else if ( ss == NREM3 ) dn3 = s;
-      else if ( ss == NREM4 ) dn4 = s;
-      else if ( ss == REM ) drem = s;
-      else if ( ss == UNKNOWN ) dother = s;
-      else if ( ss == MOVEMENT ) dother = s;
 
+      if      ( ss == WAKE )     dwake = s;
+      else if ( ss == NREM1 )    dn1 = s;
+      else if ( ss == NREM2 )    dn2 = s;
+      else if ( ss == NREM3 )    dn3 = s;
+      else if ( ss == NREM4 )    dn4 = s;
+      else if ( ss == REM )      drem = s;
+      else if ( ss == UNSCORED ) dother = s;
+      else if ( ss == MOVEMENT ) dother = s;
+      else if ( ss == ARTIFACT ) dother = s;
+      // if ss == UNKNOWN means this is not a Sleep Stage
       ++ii;
     }
 
@@ -1812,7 +1813,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
       annot_map_t::const_iterator ee = events.begin();
       while ( ee != events.end() )
 	{	  
-	  instance_t * instance = ss->add( globals::stage( UNKNOWN ) , ee->first.interval );
+	  instance_t * instance = ss->add( globals::stage( UNSCORED ) , ee->first.interval );
 	  ++ee;
 	}
     }

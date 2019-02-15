@@ -422,7 +422,7 @@ void process_edfs( cmd_t & cmd )
   //
 
   std::string f = cmd.data();
-  f = f.substr( f.size() - 4 );
+  f = f.substr( f.size() - 4 >= 0 ? f.size() - 4 : 0 );
   bool single_edf = f == ".edf" || f == ".EDF";
 
   std::ifstream EDFLIST;
