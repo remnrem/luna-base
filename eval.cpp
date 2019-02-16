@@ -1871,7 +1871,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // set default epoch length
   else if ( Helper::iequals( tok0 , "epoch-len" ) )
     {
-      if ( ! Helper::str2int( tok0 , &globals::default_epoch_len ) )
+      if ( ! Helper::str2int( tok1 , &globals::default_epoch_len ) )
 	Helper::halt( "epoch-len requires integer value, e.g. epoch-len=10" );
       return;
     }

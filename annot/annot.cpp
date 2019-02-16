@@ -292,8 +292,8 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
   
   if ( unepoched )  
     {
-      elen = 30 * globals::tp_1sec;
-      einc = 30 * globals::tp_1sec;      
+      elen = globals::default_epoch_len * globals::tp_1sec;
+      einc = globals::default_epoch_len * globals::tp_1sec;      
     }
 
   
@@ -302,7 +302,7 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       // get implied number of epochs
       
       double seconds = (uint64_t)parent_edf.header.nr * parent_edf.header.record_duration ;      
-      const int ne = seconds / ( unepoched ? 30 : elen / globals::tp_1sec );
+      const int ne = seconds / ( unepoched ? globals::default_epoch_len : elen / globals::tp_1sec );
       if ( ne != ann.size() ) 
 	Helper::halt( "expecting " + Helper::int2str(ne) + " epoch annotations, but found " + Helper::int2str( (int)ann.size() ) );
     }
@@ -697,8 +697,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      if ( tok2[0] != "e" ) 
 		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
 	      
-	      int epoch_length = 30 ;
-	      int epoch_increment = 30;
+	      int epoch_length = globals::default_epoch_len;
+	      int epoch_increment = globals::default_epoch_len;
 	      int epoch;
 	      
 	      if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
@@ -1102,8 +1102,9 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
   
   if ( epoch_sec == -1 ) 
     {
-      Helper::warn( "did not find EpochLength in XML, defaulting to 30 seconds" );
-      epoch_sec = 30;
+      Helper::warn( "did not find EpochLength in XML, defaulting to " 
+		    + Helper::int2str( globals::default_epoch_len ) + " seconds" );
+      epoch_sec = globals::default_epoch_len;
     }
 
 
