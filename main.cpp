@@ -406,6 +406,7 @@ int main(int argc , char ** argv )
 void process_edfs( cmd_t & cmd )
 {
   
+  
   //
   // Iterate over some or all of a list of EDFs and annotations,
   // performing one or more commands
@@ -422,7 +423,8 @@ void process_edfs( cmd_t & cmd )
   //
 
   std::string f = cmd.data();
-  f = f.substr( f.size() - 4 );
+  int fs = f.size() - 4 ;
+  f = f.substr( fs >= 0 ? fs : 0 );
   bool single_edf = f == ".edf" || f == ".EDF";
 
   std::ifstream EDFLIST;
@@ -498,7 +500,7 @@ void process_edfs( cmd_t & cmd )
 	    }
 	  
 	  // parse by tabs
-	  
+		
 	  tok = Helper::parse( line , "\t" );      
 	  if ( tok.size() < 2 ) 
 	    Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
@@ -539,6 +541,7 @@ void process_edfs( cmd_t & cmd )
 	  tok[0] = rootname;
 	  tok[1] = edffile;
 	}
+
 
       //
       // File in exclude list?
