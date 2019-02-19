@@ -1157,24 +1157,25 @@ void proc_write( edf_t & edf , param_t & param )
 	  if ( filename[j] == globals::folder_delimiter ) { v=j+1; break; }
 	}
       filename = outdir + filename.substr( v );            
-
+      
       // create folder if it does not exist
       std::string syscmd = "mkdir -p " + param.value( "edf-dir" );
       int retval = system( syscmd.c_str() );
+      
+    }
 
-      if ( param.has("sample-list") )
-	{	  
-	  std::string file = param.value("sample-list");
-
-	  // open/append
-	  logger << " appending " << filename << " to sample-list " << file << "\n";
-	  
-	  std::ofstream FL( file.c_str() , std::ios_base::app );
-	  FL << edf.id << "\t"
-	     << filename << "\n";
-	  
-	  FL.close();
-	}
+  if ( param.has("sample-list") )
+    {	  
+      std::string file = param.value("sample-list");
+      
+      // open/append
+      logger << " appending " << filename << " to sample-list " << file << "\n";
+      
+      std::ofstream FL( file.c_str() , std::ios_base::app );
+      FL << edf.id << "\t"
+	 << filename << "\n";
+      
+      FL.close();
     }
 
   //
@@ -1866,6 +1867,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::enforce_epoch_check = false; 
       return;
     }
+
+  // set default epoch length
+  else if ( Helper::iequals( tok0 , "epoch-len" ) )
+    {
+      if ( ! Helper::str2int( tok1 , &globals::default_epoch_len ) )
+	Helper::halt( "epoch-len requires integer value, e.g. epoch-len=10" );
+      return;
+    }
+
 
   // additional annot files to add from the command line
   // i.e. so we don't have to edit the sample-list

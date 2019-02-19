@@ -1849,8 +1849,8 @@ void hypnogram_t::construct( timeline_t * t , const std::string sslabel )
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem ) > 1;
       if ( conflict ) other = true;
       
-      if ( conflict ) stages[e] = UNKNOWN;
-      else if ( other ) stages[e] = UNKNOWN;
+      if ( conflict ) stages[e] = UNSCORED;
+      else if ( other ) stages[e] = UNSCORED;
       else if ( wake ) stages[e] = WAKE;
       else if ( n1 ) stages[e] = NREM1;
       else if ( n2 ) stages[e] = NREM2;
@@ -1881,14 +1881,14 @@ void hypnogram_t::calc_stats()
   
   for (int e =0; e < ne ; e++)
     {
-      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+      if ( stages[e] == UNSCORED ) stages[e] = LIGHTS_ON;
+      if ( stages[e] != UNSCORED && stages[e] != LIGHTS_ON ) break;
     }
   
   for (int e = ne - 1 ; e != 0 ; e--)
     {
-      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+      if ( stages[e] == UNSCORED ) stages[e] = LIGHTS_ON;
+      if ( stages[e] != UNSCORED && stages[e] != LIGHTS_ON ) break;
     }
 
   
@@ -2075,7 +2075,7 @@ void hypnogram_t::calc_stats()
   for (int e=0;e<ne;e++)
     {
       
-      if ( stages[ e ] == WAKE || stages[ e ] == LIGHTS_ON || stages[e] == UNKNOWN )
+      if ( stages[ e ] == WAKE || stages[ e ] == LIGHTS_ON || stages[e] == UNSCORED )
 	{
 	  persistent_sleep[e] = "W";
 	  continue;
@@ -2084,7 +2084,7 @@ void hypnogram_t::calc_stats()
       // otherwise, assume all other annotations are consistent with sleep
       bool okay = true;
       int ec = e - def_persistent_sleep_epochs;
-
+      
       while ( okay )
 	{
 	  if ( ec < 0 ) { okay = false; break; }	  
@@ -2873,7 +2873,8 @@ void hypnogram_t::output( const bool verbose )
   stagen[ NREM2 ] = -2;
   stagen[ NREM3 ] = -3;
   stagen[ NREM4 ] = -4;
-  stagen[ UNKNOWN ] = 2;
+  stagen[ UNSCORED ] = 2;
+  stagen[ UNKNOWN ] = 2; // this should not happen
   stagen[ MOVEMENT ] = 2;
   stagen[ ARTIFACT ] = 2;
   stagen[ LIGHTS_ON ] = 2;
@@ -3075,7 +3076,7 @@ void dummy_hypno()
       else if ( s == "N4" ) h.stages.push_back( NREM4 );
       else if ( s == "R"  ) h.stages.push_back( REM );
       else if ( s == "L"  ) h.stages.push_back( LIGHTS_ON );
-      else if ( s == "?"  ) h.stages.push_back( UNKNOWN );
+      else if ( s == "?"  ) h.stages.push_back( UNSCORED );
       else logger << "did not recognize " << s << "\n";
     }
 

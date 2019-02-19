@@ -48,6 +48,7 @@ std::map<globals::atype_t,std::string> globals::type_name;
 std::map<std::string,globals::atype_t> globals::name_type;
 
 bool globals::enforce_epoch_check;
+int globals::default_epoch_len;
 
 std::map<frequency_band_t,freq_range_t> globals::freq_band;
 
@@ -199,7 +200,8 @@ void globals::init_defs()
   sleep_stage[ NREM4 ]     = "NREM4";
   sleep_stage[ REM   ]     = "REM";
   sleep_stage[ MOVEMENT ]  = "M";
-  sleep_stage[ UNKNOWN ]   = "?";
+  sleep_stage[ UNSCORED ]  = "?";
+  sleep_stage[ UNKNOWN ]   = ".";
 
 
   //
@@ -230,7 +232,7 @@ void globals::init_defs()
   sleep_stage_labels[ "Stage 3 sleep|3" ] = NREM3;
   sleep_stage_labels[ "Stage 4 sleep|4" ] = NREM4;
   sleep_stage_labels[ "REM sleep|5" ]     = REM;
-  sleep_stage_labels[ "Unsure|Unsure" ]   = UNKNOWN;
+  sleep_stage_labels[ "Unsure|Unsure" ]   = UNSCORED;
 
   // Basic
   sleep_stage_labels[ "wake" ]     = WAKE;  
@@ -240,7 +242,7 @@ void globals::init_defs()
   sleep_stage_labels[ "NREM4" ]    = NREM4;  
   sleep_stage_labels[ "REM" ]      = REM;
   sleep_stage_labels[ "Movement" ] = MOVEMENT;
-  sleep_stage_labels[ "Unscored" ] = UNKNOWN; 
+  sleep_stage_labels[ "Unscored" ] = UNSCORED;
   sleep_stage_labels[ "L" ] = LIGHTS_ON;
 
   // minimal 
@@ -250,14 +252,14 @@ void globals::init_defs()
   sleep_stage_labels[ "N3" ]    = NREM3;  
   sleep_stage_labels[ "N4" ]    = NREM4;  
   sleep_stage_labels[ "R" ]     = REM;
-  sleep_stage_labels[ "?" ]     = UNKNOWN;  
+  sleep_stage_labels[ "?" ]     = UNSCORED;
   sleep_stage_labels[ "M" ]     = MOVEMENT;  
   
   // mouse: make generic 'NR' -> NREM2
   sleep_stage_labels[ "W" ]     = WAKE;  
   sleep_stage_labels[ "NR" ]    = NREM2;  
   sleep_stage_labels[ "R" ]     = REM;
-  sleep_stage_labels[ "?" ]     = UNKNOWN;  
+  sleep_stage_labels[ "?" ]     = UNSCORED;
   
   //
   // Time-units
@@ -315,6 +317,8 @@ void globals::init_defs()
 
   enforce_epoch_check = true;
 
+  default_epoch_len = 30;
+    
   //
   // Annot types
   //
@@ -409,6 +413,7 @@ std::string globals::stage( int s )
   else if ( s == 3 ) return stage( NREM3 );
   else if ( s == 4 ) return stage( NREM4 );
   else if ( s == 5 ) return stage( REM );
+  else if ( s == 6 ) return stage( UNSCORED );
   else return stage( UNKNOWN );
 }
 

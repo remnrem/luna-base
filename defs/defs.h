@@ -71,10 +71,11 @@ enum sleep_stage_t
     NREM3    , 
     NREM4    ,    
     REM      ,
-    UNKNOWN  ,
+    UNSCORED ,
     MOVEMENT ,
     ARTIFACT ,
-    LIGHTS_ON 
+    LIGHTS_ON ,
+    UNKNOWN //  i.e. null marker / not a sleep stage
   };
 
 typedef std::map<sleep_stage_t,std::string> sleep_stage_label_t;
@@ -140,6 +141,8 @@ struct globals
 
   // enforce or not the 30-second epoch check
   static bool enforce_epoch_check;
+
+  static int default_epoch_len;
 
   // output common stratifier labels
   static std::string epoch_strat;
