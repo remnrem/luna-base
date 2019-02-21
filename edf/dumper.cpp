@@ -160,21 +160,21 @@ void edf_t::record_dumper( param_t & param )
 		  for (int i=0;i<n;i++)
 		    {	      
 		      
-		      uint64_t sec = (*tp)[i] / globals::tp_1sec;
-		      uint64_t rem = (*tp)[i] - ( sec * globals::tp_1sec );
-		      double   rem2 = (double)rem / (double) globals::tp_1sec ;
-		      double   sec2 = (double)sec + rem2;
+// 		      uint64_t sec = (*tp)[i] / globals::tp_1sec;
+// 		      uint64_t rem = (*tp)[i] - ( sec * globals::tp_1sec );
+// 		      double   rem2 = (double)rem / (double) globals::tp_1sec ;
+// 		      double   sec2 = (double)sec + rem2;
 		      
 		      std::cout << "RECORD-DUMP" << "\t" 
 				<< header.label[s] << "\t"
 				<< "rec=" << r << "\t"
 				<< (i+1) << "/" << n << "\t"
-				<< "tp=" << (*tp)[i] << "\t"
-				<< "sec=" << (*tp)[i] * globals::tp_duration << "\t"
-				<< sec << "\t"
-				<< rem << "\t"
-				<< rem2 << "\t"
-				<< sec2 << "\t"
+				<< (*tp)[i] << "\t"
+				<< (*tp)[i] * globals::tp_duration << "\t"
+// 				<< sec << "\t"
+// 				<< rem << "\t"
+// 				<< rem2 << "\t"
+// 				<< sec2 << "\t"
 				<< (*d)[i] << "\n";
 		    }
 		}
@@ -227,6 +227,12 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
   
   timeline.first_epoch();
   
+
+  //
+  // output precision
+  //
+
+  std::cout.precision(8);
 
   //
   // for each each epoch 
@@ -346,13 +352,24 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
 	      std::cout << ss.str() << "\t" 
 			<< "tp=" << (*tp)[i] ;
 	    
-	      if ( sec ) std::cout << "\t" << (*tp)[i] / (double)globals::tp_1sec;
+	      if ( sec ) 
+		std::cout << "\t" 
+			  << (*tp)[i] / (double)globals::tp_1sec;
+
 	      if ( hms ) 
 		{
-		  double tp_sec =  (*tp)[i] / (double)globals::tp_1sec;
-		  clocktime_t present = starttime;
-		  present.advance( tp_sec / 3600.0 );
-		  std::cout << "\t" << present.as_string();
+// 		  double tp_sec =  (*tp)[i] / (double)globals::tp_1sec;
+ 		  clocktime_t present = starttime;
+// 		  present.advance( tp_sec / 3600.0 );
+// 		  std::cout << "\t" << present.as_string();
+
+		  interval_t now( (*tp)[i] , (*tp)[i]+1LLU );
+		  std::string t1, t2;
+		  if ( Helper::hhmmss( present , now , &t1,&t2 , 5 ) ) 
+		    std::cout << "\t" << t1;
+		  else
+		    std::cout << "\t.";
+
 		}
 	  
 	      // signal 	  
@@ -452,11 +469,11 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 	  
 	  writer.epoch( timeline.display_epoch( epoch ) );
 	  
-	  writer.var( "E1" , "Epoch number ignoring original structure" );
+	  //	  writer.var( "E1" , "Epoch number ignoring original structure" );
 	  writer.var( "MASK" , "Masked epoch (1=Y)" );
 	  writer.var( "INTERVAL" , "Interval start-stop (secs)" );
 	  
-	  writer.value( "E1" , epoch+1 );
+	  //writer.value( "E1" , epoch+1 );
 	  writer.value( "MASK" , timeline.masked_epoch( epoch ) ? 1 : 0 );
 	  writer.value( "INTERVAL" , interval.as_string() );
 	  

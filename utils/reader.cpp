@@ -45,13 +45,15 @@ struct options_t {
   double prec; // -p 
   bool full;   // -f
   bool show_progress; // -
+  bool cmd_hash;
   options_t() 
     :
     print_empty_rows( false ) , 
     print_cmd_name( false ) ,
     long_format( false ) ,
     prec(3) , 
-    full( true )
+    full( true ) ,
+    cmd_hash( false )
   { }     
 };
 
@@ -298,7 +300,7 @@ int main(int argc , char ** argv )
       else // assume a variable name
 	{
 	  
-	  // check it is not a command, e.g. [STATS]
+	  // check it is not a command, e.g. [STATS] or #STATS
 	  std::string s = argv[i] ;
 	  if ( s[0] == '[' && s[ s.size()-1 ] == ']' )
 	    {
@@ -316,6 +318,27 @@ int main(int argc , char ** argv )
 	      mode = '0';
 	      
 	    }
+	  
+	  // of #STATS instead of [STATS]
+	  if ( s[0] == '#' )
+	    {
+	      if ( cmd_spec != "." ) Helper::halt( "cannot specify more than one #command or [command]" );
+	      
+	      options.cmd_hash = true;
+	      
+	      std::string cmd_factor = "_" + s.substr(1,s.size()-1); // ignore lead #
+	      
+	      if ( args_rvar.find( cmd_factor ) != args_rvar.end() ) 
+		Helper::halt( "cannot have factor as both row and col stratifier " + std::string( cmd_factor ) );
+	      args_rvar.insert( cmd_factor );
+	      cmd_spec = cmd_factor;
+	      
+	      any_opt = true;
+
+	      mode = '0';
+	      
+	    }
+	  
 	  
 	  if ( mode == 'D' ) 
 	    {
