@@ -406,6 +406,7 @@ int main(int argc , char ** argv )
 void process_edfs( cmd_t & cmd )
 {
   
+  
   //
   // Iterate over some or all of a list of EDFs and annotations,
   // performing one or more commands
@@ -498,7 +499,7 @@ void process_edfs( cmd_t & cmd )
 	    }
 	  
 	  // parse by tabs
-	  
+		
 	  tok = Helper::parse( line , "\t" );      
 	  if ( tok.size() < 2 ) 
 	    Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
@@ -539,6 +540,7 @@ void process_edfs( cmd_t & cmd )
 	  tok[0] = rootname;
 	  tok[1] = edffile;
 	}
+
 
       //
       // File in exclude list?
