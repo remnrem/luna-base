@@ -712,7 +712,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) );
 
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
-      else if ( is( c, "RESTRUCTURE" ) )  proc_restructure( edf , param(c) );
+      else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
       else if ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) proc_rms( edf, param(c) );
       else if ( is( c, "MSE" ) )          proc_mse( edf, param(c) );

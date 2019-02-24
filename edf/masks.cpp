@@ -46,7 +46,11 @@ void proc_mask( edf_t & edf , param_t & param )
 
   
   if ( ! edf.timeline.epoched() ) 
-    Helper::halt( "no EPOCHs set, cannot apply an epoch mask" );
+    {
+      int ne = edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+      logger << " set epochs, to default length " << globals::default_epoch_len << ", " << ne << " epochs\n";
+    }
+
   
   //
   // Mode:   mask[default]     // Existing      Evaluated      mask    unmask    both

@@ -31,6 +31,8 @@
 #include <map>
 
 #include "helper/helper.h"
+#include "helper/logger.h"
+
 #include "defs/defs.h"
 #include "annot/annot.h"
 
@@ -39,6 +41,8 @@ struct edf_t;
 struct timeline_t;
 
 struct interval_t;
+
+extern logger_t logger;
 
 //
 // General class to represent a hypnogram and perform calculations on it
@@ -277,6 +281,14 @@ struct timeline_t
   // 2) The primary 'epoch'
   //
   
+  int ensure_epoched() 
+  {
+    if ( epoched() ) return num_epochs();
+    // otherwise, set to default
+    int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+    logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+    return ne;
+  }
   
   bool epoched() const { return epoch_length_tp != 0; } 
   
@@ -342,7 +354,12 @@ struct timeline_t
   int first_epoch()  
   { 
     // point to first epoch, and return number of non-masked epochs also
-    if ( ! epoched() ) Helper::halt( "no EPOCHs set" );
+    if ( ! epoched() ) 
+      {
+	int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+	logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+      }
+
     current_epoch = -1; 
     return num_epochs();
   } 

@@ -1560,8 +1560,12 @@ void timeline_t::set_epoch_mapping()
 void timeline_t::load_mask( const std::string & f , bool exclude )
 {
   
-  if ( ! epoched() ) Helper::halt( "trying to apply a mask to an un-epoched EDF\n" );
-  
+  if ( ! epoched() ) 
+    {
+      int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+      logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+    }
+     
   if ( ! Helper::fileExists( f ) ) Helper::halt( "could not find " + f );
   
   logger << " attaching mask file " << f << "\n";
@@ -3111,7 +3115,11 @@ void timeline_t::list_all_annotations( const param_t & param )
 
   // count annotations per epoch
   bool per_epoch = param.has( "epoch" );
-  if ( per_epoch && ! epoched() ) Helper::halt( "no EPOCHs set" );
+  if ( per_epoch && ! epoched() ) 
+    {
+      int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+      logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+    }
 
   // how to decide whether an interval overlaps a mask or not?
   //  start  -- keep annotations that start in an unmasked region

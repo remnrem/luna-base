@@ -26,11 +26,15 @@
 
 #include "annot/annot.h"
 #include "helper/helper.h"
+#include "helper/logger.h"
+
 #include "eval.h"
 #include "defs/defs.h"
 #include "db/db.h"
 
 extern writer_t writer;
+
+extern logger_t logger;
 
 extern annotation_set_t annotations;
 
@@ -201,7 +205,6 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
   if ( signals.size() != 1 ) 
     Helper::halt( "DUMP currently only for single channels; see MATRIX" );
   
-
   //
   // Options
   //
@@ -663,7 +666,12 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   std::string filename = param.requires( "file" );
   
   std::ofstream OUT( filename.c_str() , std::ios::out );
+  
+  //
+  // Minimal output?
+  //
 
+  bool minimal = param.has( "min" ) || param.has( "minimal" );
 
   //
   // Set up annotations: both interval and epoch level
@@ -674,6 +682,10 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   std::map<std::string,int> atype; // 0 not found, 1 interval, 2 epoch
    
   int na_int = 0 , na_epoch = 0 , na = 0;
+
+  int ns_data = 0;
+
+  if ( minimal ) show_annots = false;
   
   if ( show_annots ) 
     {
@@ -732,10 +744,8 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   
   bool alternative_format = param.has( "format2" );
 
-  std::cerr << " dumping  " << timeline.num_epochs() << " unmasked epochs in " 
-	    << ( alternative_format ? "alternative" : "standard" ) 
-	    << " matrix-format to stdout\n";  
-
+  if ( minimal ) alternative_format = false;
+  
   
   //
   // Get signals
@@ -759,23 +769,51 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   // Check FS for all signals
   //
 
-  int fs = header.sampling_freq( signals( 0 ) ) ;
+  int fs = -1;
   
-  for (int s=1; s<ns; s++) 
+  for (int s=0; s<ns; s++) 
     {
-      if ( header.sampling_freq( signals(s) ) != fs ) 
-	Helper::halt( "MATRIX requires uniform sampling rate across signals" ); 
+      
+      if ( header.is_data_channel( s ) )
+	{
+	  if ( fs < 0 ) fs = header.sampling_freq( signals(s) );
+	  
+	  else if ( header.sampling_freq( signals(s) ) != fs ) 
+	    Helper::halt( "MATRIX requires uniform sampling rate across signals" ); 
+	  
+	  ++ns_data;
+	}
     }
   
-      
+  
   
   //
   // Point to first epoch
   //
   
+  if ( ! timeline.epoched() ) 
+    {
+      int n = timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+      logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << n << " epochs\n";
+    }
+
   timeline.first_epoch();
 
   const int ne = timeline.num_epochs();
+
+  
+  //
+  // Output to log
+  //
+  
+  std::cerr << " dumping " << ne << " unmasked epochs in " ;
+  
+  if ( minimal ) std::cerr << "minimal";
+  else
+    std::cerr << ( alternative_format ? "alternative" : "standard" ) ;
+  
+  std::cerr << " matrix-format to stdout\n";  
+
 
   
 
@@ -792,7 +830,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 	  << timeline.epoch_length() << "\t"
 	  << fs << "\t"
 	  << na << "\t"
-	  << ns << "\n";
+	  << ns_data << "\n";
       
 
       //
@@ -901,10 +939,13 @@ void edf_t::epoch_matrix_dumper( param_t & param )
       for (int s = 0 ; s < ns ; s++ )
 	{	  
 	  
+	  // skip non-data channels
+	  
+	  if ( ! header.is_data_channel( s ) ) continue;
 	  
 	  OUT << "S" << "\t"	  
 	      << header.label[ signals(s) ] ;
-
+	  
 	  timeline.first_epoch();
 	  
 	  while ( 1 ) 
@@ -945,6 +986,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 
 
   
+
   //
   // Standard matrix format
   //
@@ -957,10 +999,13 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   bool include_hms = param.has( "hms" ) || param.has( "hms2" );
   bool include_hms2 = param.has( "hms2" );
 
-  OUT << "ID\tE\tS\tSP\tT";
-  
-  if ( include_hms ) OUT << "\tHMS";
-  
+  if ( ! minimal )
+    {
+      OUT << "ID\tE\tS\tSP\tT";
+      
+      if ( include_hms ) OUT << "\tHMS";
+    }
+
   clocktime_t starttime( header.starttime );
 
   bool invalid_hms = ! starttime.valid;
@@ -982,10 +1027,16 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   
 
   // Signals header
-  for (int s = 0 ; s < ns ; s++ )
-    OUT << "\t" << header.label[ signals(s) ] ;
   
-  OUT << "\n";
+  if ( ! minimal )
+    {
+      for (int s = 0 ; s < ns ; s++ )
+	{
+	  if ( header.is_data_channel( s ) )
+	    OUT << "\t" << header.label[ signals(s) ] ;
+	}
+      OUT << "\n";
+    }
 
 
     
@@ -1005,17 +1056,22 @@ void edf_t::epoch_matrix_dumper( param_t & param )
       
       interval_t interval = timeline.epoch( epoch );
 
-      std::vector<std::vector<double> > sigdat( ns );
+      std::vector<std::vector<double> > sigdat( ns_data );
       
       // track time-points, ie. may be a discontinuous file
       std::vector<uint64_t> tp;
 
+      int s2 = 0;
       for (int s = 0 ; s < ns ; s++ )
 	{	  	  
-	  slice_t slice( *this , signals(s) , interval );
-	  const std::vector<double> * signal = slice.pdata();
-	  sigdat[s] = *signal;
-	  if ( s== 0 ) tp = *slice.ptimepoints();
+	  if ( header.is_data_channel( s ) )
+	    {
+	      slice_t slice( *this , signals(s) , interval );
+	      const std::vector<double> * signal = slice.pdata();
+	      sigdat[s2] = *signal;
+	      if ( s2 == 0 ) tp = *slice.ptimepoints();
+	      ++s2; // next data signal
+	    }
 	}
       
       // now iterate over all time-points (rows)
@@ -1030,29 +1086,32 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 	  double tp_sec_past_estart = ( tp[t] - interval.start) / (double)globals::tp_1sec; 
 	  
 	  // output rows
-	  OUT << id << "\t"
-	      << timeline.display_epoch( epoch ) << "\t"	    
-	      << floor( tp_sec ) << "\t"
-	      << t - fs * floor( tp_sec_past_estart )  << "\t"	  
-	      << tp_sec;
-	  
-	  if ( include_hms )
+	  if ( ! minimal )
 	    {
-	      clocktime_t present = starttime;
+	      OUT << id << "\t"
+		  << timeline.display_epoch( epoch ) << "\t"	    
+		  << floor( tp_sec ) << "\t"
+		  << t - fs * floor( tp_sec_past_estart )  << "\t"	  
+		  << tp_sec;
 	      
-	      if ( include_hms2 ) 
+	      if ( include_hms )
 		{
-		  interval_t now( tp[t] , tp[t]+1LLU );
-		  std::string t1, t2;
-		  if ( Helper::hhmmss( present , now , &t1,&t2 , 5 ) ) 
-		    OUT << "\t" << t1;
+		  clocktime_t present = starttime;
+		  
+		  if ( include_hms2 ) 
+		    {
+		      interval_t now( tp[t] , tp[t]+1LLU );
+		      std::string t1, t2;
+		      if ( Helper::hhmmss( present , now , &t1,&t2 , 5 ) ) 
+			OUT << "\t" << t1;
+		      else
+			OUT << "\t.";
+		    }
 		  else
-		    OUT << "\t.";
-		}
-	      else
-		{
-		  present.advance( tp_sec / 3600.0 );
-		  OUT << "\t" << present.as_string();
+		    {
+		      present.advance( tp_sec / 3600.0 );
+		      OUT << "\t" << present.as_string();
+		    }
 		}
 	    }
 
@@ -1086,7 +1145,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 	  
 	  
 	  // signals
-	  for (int s=0;s<ns;s++) OUT << "\t" << sigdat[s][t];
+	  for (int s=0;s<ns_data;s++) OUT << ( s>0 ? "\t" : "" ) << sigdat[s][t];
 	  
 	  // done, next row/time-point
 	  OUT << "\n";	  
