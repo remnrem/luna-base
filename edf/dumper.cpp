@@ -393,17 +393,12 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
 void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selected_annots )
 {
   
-  std::cerr << " listing " << timeline.num_total_epochs() << " epochs, of which " 
-	    << timeline.num_epochs() << " are unmasked\n";
-
-  bool show_times  = param.has("show-times");
-  bool hide_masked = param.has("hide-masked");
-  bool indiv_only  = param.has("indiv-only");
-  bool show_indiv  = param.has("indiv") || indiv_only;
-  bool show_epoch  = ! indiv_only;
-  bool hide_false  = param.has("show-all") ? false : true; 
-
-
+  
+  bool show_times  = param.has( "show-times" );
+  
+  bool hide_masked = param.has( "hide-masked" );
+  
+  
   //
   // What annotations are present? (i.e. already loaded)
   //
@@ -416,7 +411,11 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
   
   timeline.first_epoch();
   
-
+  
+  std::cerr << " listing " << timeline.num_total_epochs() << " epochs, of which " 
+	    << timeline.num_epochs() << " are unmasked\n";
+  
+  
   //
   // Summary statistics for this individual
   //
@@ -430,7 +429,7 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
   //
   
   std::set<std::string> epoch_annotations = timeline.epoch_annotations();
-
+  
   bool has_epoch_annotations = epoch_annotations.size() > 0 ;
   
 
@@ -446,13 +445,13 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
       //
       
       int epoch = timeline.next_epoch_ignoring_mask();      
-
+      
       if ( epoch == -1 ) break;
       
       if ( hide_masked && timeline.masked_epoch( epoch ) )
 	continue;
 
-
+      
       interval_t interval = timeline.epoch( epoch );
 
       //
@@ -460,28 +459,22 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
       //
       
 
-
       //
       // Collate 'header'
       //
- 
+      
       // ID, epoch #, mask setting and time point
       
-      if ( show_epoch )
-	{
-	  
-	  writer.epoch( timeline.display_epoch( epoch ) );
-	  
-	  //	  writer.var( "E1" , "Epoch number ignoring original structure" );
-	  writer.var( "MASK" , "Masked epoch (1=Y)" );
-	  writer.var( "INTERVAL" , "Interval start-stop (secs)" );
-	  
-	  //writer.value( "E1" , epoch+1 );
-	  writer.value( "MASK" , timeline.masked_epoch( epoch ) ? 1 : 0 );
-	  writer.value( "INTERVAL" , interval.as_string() );
-	  
-	}
+      writer.epoch( timeline.display_epoch( epoch ) );
       
+      //	  writer.var( "E1" , "Epoch number ignoring original structure" );
+      writer.var( "MASK" , "Masked epoch (1=Y)" );
+      writer.var( "INTERVAL" , "Interval start-stop (secs)" );
+      
+      //writer.value( "E1" , epoch+1 );
+      writer.value( "MASK" , timeline.masked_epoch( epoch ) ? 1 : 0 );
+      writer.value( "INTERVAL" , interval.as_string() );
+	  
 
       //
       // Collapsed 'bool' epoch level annotations
@@ -489,16 +482,16 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
       
       if ( has_epoch_annotations )
 	{
-
+	  
 	  bool any_annot = false;
-
+	  
 	  std::set<std::string>::const_iterator aa = epoch_annotations.begin();
 	  while ( aa != epoch_annotations.end() )
 	    {	      
 	      
 	      bool has_annot = timeline.epoch_annotation( *aa , epoch );
 	      
-	      if ( show_epoch && has_annot )
+	      if ( has_annot )
 		{
 		  writer.level( *aa , globals::annot_strat );
 		  writer.var( "PRESENT" , "Epoch has annotation?" );		      		  
@@ -510,7 +503,7 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 		  any_annot = true;
 		  ecnts[ *aa ]++;
 		}
-
+	      
 	      ++aa;
 	    }
 	  
@@ -518,21 +511,21 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 	  
 	}
       
-
+      
       //
       // Display full (values/times) for annotations
       //
-
+      
       std::map<std::string,std::set<std::string> > atxt;
       std::map<std::string,std::map<std::string,std::string> > atimes; // time-points
-
+      
       for (int a=0;a<annots.size();a++)
 	{
 	  
 	  if ( selected_annots != NULL && selected_annots->find( annots[a] ) == selected_annots->end() ) continue;
-
+	  
 	  annot_t * annot = timeline.annotations( annots[a] );
-
+	  
 	  annot_map_t events = annot->extract( interval );
 	  
 	  // collapse
@@ -540,7 +533,7 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 	  annot_map_t::const_iterator ii = events.begin();
 	  while ( ii != events.end() )
 	    {	 
-
+	      
 	      const instance_idx_t & instance_idx = ii->first;
 	      const instance_t * instance = ii->second;
 
@@ -567,7 +560,7 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 	      ++ii;
 	    }
 	}
-
+      
 
       // display
       
@@ -575,79 +568,66 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
       while ( ai != atxt.end() )
 	{
 	  
-	  if ( show_epoch )
+	  
+	  writer.level( ai->first , globals::annot_strat );
+	  
+	  // optionally, times
+	  
+	  std::map<std::string,std::string>::const_iterator tii;
+	  if ( show_times )
 	    {
+	      std::map<std::string,std::map<std::string,std::string> >::const_iterator ti = atimes.find( ai->first );
+	      tii = ti->second.begin();
+	    }
+	  
+	  int acnt = 0;
+	  
+	  std::set<std::string>::iterator si = ai->second.begin();
+	  while ( si != ai->second.end() )
+	    {
+	      writer.level( ++acnt , globals::count_strat );
 	      
-	      writer.level( ai->first , globals::annot_strat );
+	      writer.var( "ANNOT" , "Annotation" );
+	      writer.value( "ANNOT" , *si );
 	      
-	      // optionally, times
-	      
-	      std::map<std::string,std::string>::const_iterator tii;
 	      if ( show_times )
 		{
-		  std::map<std::string,std::map<std::string,std::string> >::const_iterator ti = atimes.find( ai->first );
-		  tii = ti->second.begin();
+		  writer.var( "ANNOT_TIME" , "Annotation timestamp" );
+		  writer.value( "ANNOT_TIME" , tii->second );
 		}
-
-	      int acnt = 0;
-
-	      std::set<std::string>::iterator si = ai->second.begin();
-	      while ( si != ai->second.end() )
-		{
-		  writer.level( ++acnt , globals::count_strat );
-		  
-		  writer.var( "ANNOT" , "Annotation" );
-		  writer.value( "ANNOT" , *si );
-		  
-		  if ( show_times )
-		    {
-		      writer.var( "ANNOT_TIME" , "Annotation timestamp" );
-		      writer.value( "ANNOT_TIME" , tii->second );
-		    }
-		  
-		  ++si;
-		}
-	      writer.unlevel( globals::count_strat );
+	      
+	      ++si;
 	    }
-
-	  ++ai;
+	  writer.unlevel( globals::count_strat );
 	}
       
-      if ( show_epoch ) 
-	writer.unlevel( globals::annot_strat );
-      
-      
-    } // next epoch
-
+      ++ai;
+    }
   
-  if ( show_epoch ) 
-    writer.unepoch();
-
+  writer.unlevel( globals::annot_strat );
+  
+  writer.unepoch();
 
 
   //
   // summary
   //
   
-  if ( show_indiv )
+  writer.var( "N" , "Total number of epochs" );
+  writer.var( "NE_FLAGGED" , "Total number of flagged epochs" );
+  
+  writer.value( "N" , timeline.num_epochs() );
+  writer.value( "NE_FLAGGED" , ecnt );
+  
+  std::map<std::string,int>::const_iterator ee = ecnts.begin();
+  while ( ee != ecnts.end() ) 
     {
-
-      writer.var( "N" , "Total number of epochs" );
-      writer.var( "NE_FLAGGED" , "Total number of flagged epochs" );
-            
-      writer.value( "N" , timeline.num_epochs() );
-      writer.value( "NE_FLAGGED" , ecnt );
-
-      std::map<std::string,int>::const_iterator ee = ecnts.begin();
-      while ( ee != ecnts.end() ) 
-	{
-	  writer.level( ee->first , globals::annot_strat );
-	  writer.var( "N_ANNOT" , "Number of annotation instances" );	  
-	  writer.value( "N_ANNOT" , ee->second );
-	  ++ee;
-	}
-      writer.unlevel( globals::annot_strat );
+      writer.level( ee->first , globals::annot_strat );
+      writer.var( "N_ANNOT" , "Number of annotation instances" );	  
+      writer.value( "N_ANNOT" , ee->second );
+      ++ee;
     }
+  writer.unlevel( globals::annot_strat );
 
 }
 
@@ -1142,10 +1122,10 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 		}
 	      
 	    } 
-	  
+
 	  
 	  // signals
-	  for (int s=0;s<ns_data;s++) OUT << ( s>0 ? "\t" : "" ) << sigdat[s][t];
+	  for (int s=0;s<ns_data;s++) OUT << ( ( ! minimal ) || s>0 ? "\t" : "" ) << sigdat[s][t];
 	  
 	  // done, next row/time-point
 	  OUT << "\n";	  

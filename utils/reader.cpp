@@ -302,6 +302,7 @@ int main(int argc , char ** argv )
 	  
 	  // check it is not a command, e.g. [STATS] or #STATS
 	  std::string s = argv[i] ;
+
 	  if ( s[0] == '[' && s[ s.size()-1 ] == ']' )
 	    {
 	      if ( cmd_spec != "." ) Helper::halt( "cannot specify more than one [command] or -s command" );
@@ -319,15 +320,17 @@ int main(int argc , char ** argv )
 	      
 	    }
 	  
-	  // of #STATS instead of [STATS]
-	  if ( s[0] == '#' )
+	  // used +STATS instead of [STATS]
+	  if ( s[0] == '+' )
 	    {
+
+	      
 	      if ( cmd_spec != "." ) Helper::halt( "cannot specify more than one #command or [command]" );
 	      
 	      options.cmd_hash = true;
 	      
 	      std::string cmd_factor = "_" + s.substr(1,s.size()-1); // ignore lead #
-	      
+
 	      if ( args_rvar.find( cmd_factor ) != args_rvar.end() ) 
 		Helper::halt( "cannot have factor as both row and col stratifier " + std::string( cmd_factor ) );
 	      args_rvar.insert( cmd_factor );
