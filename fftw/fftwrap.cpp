@@ -71,7 +71,6 @@ FFT::FFT( int N , int Fs , fft_t type , window_function_t window )
   
   normalisation_factor = 0;  
   if      ( window == WINDOW_TUKEY50 ) w = MiscMath::tukey_window(N,0.5);
-  else if ( window == WINDOW_HANNING ) w = MiscMath::hanning_window(N);
   else if ( window == WINDOW_HANN )    w = MiscMath::hann_window(N);
   else if ( window == WINDOW_HAMMING ) w = MiscMath::hamming_window(N);
   
@@ -421,7 +420,7 @@ std::map<double,double> fft_spectrum( const std::vector<double> * d , int Fs )
   if ( sec <= 60 ) 
     {
       
-      FFT fft( np , Fs , FFT_FORWARD , WINDOW_HANNING );
+      FFT fft( np , Fs , FFT_FORWARD , WINDOW_HANN );
       fft.apply( *d );
       int N = fft.cutoff;
       

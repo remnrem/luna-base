@@ -2185,7 +2185,7 @@ void characterize_spindles( edf_t & edf ,
       // (performed on bandpass filtered data)
       //
 
-      FFT fft( npoints , Fs , FFT_FORWARD , WINDOW_HANNING );     
+      FFT fft( npoints , Fs , FFT_FORWARD , WINDOW_HANN );     
       fft.apply( d );
       int cutoff = fft.cutoff;
       
@@ -2501,7 +2501,7 @@ void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_
 		 Fs , 
 		 segment_sec , 
 		 noverlap_segments , 
-		 WINDOW_HANNING );
+		 WINDOW_HANN );
   
   freqs->clear();
 

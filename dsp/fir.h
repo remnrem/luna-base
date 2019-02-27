@@ -81,7 +81,7 @@ struct fir_t
   // http://www.labbookpages.co.uk/audio/firWindowing.html
 
   enum filterType { LOW_PASS, HIGH_PASS, BAND_PASS, BAND_STOP };
-  enum windowType { RECTANGULAR, BARTLETT, HANNING, HAMMING, BLACKMAN };
+  enum windowType { RECTANGULAR, BARTLETT, HANN, HAMMING, BLACKMAN };
   
   // Prototypes
   std::vector<double> create1TransSinc( int windowLength, double transFreq, double sampFreq, enum filterType type);

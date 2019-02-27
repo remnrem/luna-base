@@ -848,7 +848,7 @@ void summary()
 
 
   // -1 from factors size to exclude [COMMAND]
-  std::cerr << "Factors: " << ( baseline_level ? "n/a" : Helper::int2str( (int)fmatch.factors.size() -1 ) ) << "\n";
+  std::cerr << "Factors: " << ( baseline_level ? "NA" : Helper::int2str( (int)fmatch.factors.size() -1 ) ) << "\n";
   
   if ( baseline_level ) 
     std::cerr << "     [ default/baseline ]\n\n";
@@ -1060,7 +1060,7 @@ void get_matching_strata( bool show_table)
 		}
 
 	      std::cerr << "  " 
-			<< std::left << std::setw( 14 ) << "[ n/a ]" 
+			<< std::left << std::setw( 14 ) << "[ NA ]" 
 			<< std::left << std::setw( 20 ) << ": ." 
 			<< std::left << std::setw( 16 ) << ": ."
 			<< ":";
@@ -1072,7 +1072,7 @@ void get_matching_strata( bool show_table)
 	    {
 	      bool has_tp = false;
 	      std::cerr << "  " ;	      
-	      std::string msg = "[ n/a ]";
+	      std::string msg = "[ NA ]";
 	      
 	      // first show _COMMAND strata if present
 	      std::set<factor_t>::const_iterator gg = ff->first.factors.begin();

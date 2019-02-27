@@ -37,8 +37,7 @@ typedef std::complex<double> dcomp;
 enum window_function_t
   { 
     WINDOW_NONE = 0 , 
-    WINDOW_HAMMING,
-    WINDOW_HANNING,
+    WINDOW_HAMMING,    
     WINDOW_TUKEY50,
     WINDOW_HANN , 
   };

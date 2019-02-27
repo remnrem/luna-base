@@ -1201,7 +1201,7 @@ void proc_write( edf_t & edf , param_t & param )
 
 void proc_epoch( edf_t & edf , param_t & param )
 {
-
+  
   double dur = 0 , inc = 0;
 
   // default = 30 seconds, non-overlapping
@@ -1248,6 +1248,14 @@ void proc_epoch( edf_t & edf , param_t & param )
     }
 
 
+  // if already EPOCH'ed for a different record size, we should first remove all epochs
+  // this will remove the EPOCH-to-record mapping too
+  
+  if ( edf.timeline.epoched() && ! Helper::similar( edf.timeline.epoch_length() , dur ) ) 
+    {
+      logger << " removing original epoch and record-mappings\n";
+      edf.timeline.unepoch();
+    }
 
   //
   // basic log info
@@ -1517,12 +1525,12 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   if ( param.has( "file" ) )
     {
       std::vector<std::string> ss = Helper::file2strvector( param.value( "file" ) );
-      edf.timeline.hypnogram.construct( &edf.timeline , ss );
+      edf.timeline.hypnogram.construct( &edf.timeline , verbose , ss );
     }
   else
     {      
       edf.timeline.annotations.make_sleep_stage( wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , misc );
-      edf.timeline.hypnogram.construct( &edf.timeline );
+      edf.timeline.hypnogram.construct( &edf.timeline , verbose );
     }
 
   // and output...

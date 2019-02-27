@@ -211,6 +211,9 @@ int main(int argc , char ** argv )
 		  std::getline( INC , line);
 		  if ( INC.eof() || line == "" ) continue;
 		  
+		  // skip % comments
+		  if ( line[0] == '%' ) continue;
+
 		  std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
 		  if ( tok.size() != 2 ) Helper::halt("badly formatted line in " + filename );
 		  
@@ -317,8 +320,13 @@ int main(int argc , char ** argv )
       writer.begin();      
       writer.id( "." , "." );
        
+      writer.cmd( "FIR-DESIGN" , 1 , "" );
+      writer.level( "FIR-DESIGN", "_FIR-DESIGN" );
+      
       // expects input from std::cin
       proc_filter_design_cmdline();
+      
+      writer.unlevel( "_FIR-DESIGN" );
 
       writer.commit();
 
@@ -927,7 +935,30 @@ void proc_dummy( const std::string & p )
       
       std::exit(1);
     }
+  
+  //
+  // Windows
+  //
 
+  if ( p == "windows" )
+    {
+      const int N = 100;
+      std::vector<double> W1(N), W2(N), W3(N);
+      W1 = MiscMath::tukey_window(N,0.5);      
+      W2 = MiscMath::hann_window(N);    
+      W3 = MiscMath::hamming_window(N);
+      
+      for (int i=0;i<N;i++)
+	std::cout << W1[i] << "\t"
+		  << W2[i] << "\t"
+		  << W3[i] << "\n";
+
+
+      
+      std::exit(1);
+    }
+  
+  
   //
   // MTM
   //

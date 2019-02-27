@@ -42,7 +42,7 @@ annot_t * spectral_power( edf_t & edf ,
   
   // Report dull spectrum as well as band power
 
-  bool show_spectrum = param.has( "spectrum" );
+  bool show_spectrum = param.has( "spectrum" ) || param.has("epoch-spectrum" );
 
   // Report dB scale ?
   bool dB = param.has( "dB" );
@@ -57,23 +57,19 @@ annot_t * spectral_power( edf_t & edf ,
 
   // Band power per-epoch
 
-  bool show_epoch = param.has( "epoch" );
+  bool show_epoch = param.has( "epoch" ) || param.has("epoch-spectrum" );
 
   // Verbose output: full spectrum per epoch
 
   bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
-  // truncate spectrum
+  // truncate spectra
   double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 20 ;
 
   // Calculate MSE
 
   bool calc_mse = param.has( "mse" ); 
 
-  // Distinguish fast/slow sigma
-
-  bool fastslow_sigma = param.has("fast-slow-sigma");
-  
 
   //
   // Alter PWELCH sliding window parameters
@@ -93,6 +89,23 @@ annot_t * spectral_power( edf_t & edf ,
     }
   
 
+  //
+  // Option to average adjacent points in the power spectra (default = Y)
+  //
+  
+  bool average_adj = param.has( "no-averaging" ) ? false : true;
+  
+  //
+  // Window function
+  //
+  
+  window_function_t window_function = WINDOW_TUKEY50;	   
+  if      ( param.has( "no-window" ) ) window_function = WINDOW_NONE;
+  else if ( param.has( "hann" ) ) window_function = WINDOW_HANN;
+  else if ( param.has( "hamming" ) ) window_function = WINDOW_HAMMING;
+  else if ( param.has( "tukey50" ) ) window_function = WINDOW_TUKEY50;
+
+  
   //
   // Spectrum summaries
   //
@@ -238,7 +251,7 @@ annot_t * spectral_power( edf_t & edf ,
 	   //
 	   
 	   // Fixed parameters:: use 4-sec segments with 2-second
-	   // overlaps and Hanning window
+	   // overlaps 
 	  	   
 	   const double overlap_sec = fft_segment_overlap;
 	   const double segment_sec  = fft_segment_size;
@@ -257,19 +270,11 @@ annot_t * spectral_power( edf_t & edf ,
 // 	    logger << "noverlap_points = " << noverlap_points << "\n";
 // 	    logger << "segment_points = " << segment_points << "\n";
 	   
-// 	   PWELCH pwelch( *d , 
-// 			  Fs[s] , 
-// 			  segment_sec , 
-// 			  noverlap_segments , 
-// 			  WINDOW_HANNING );
-
-	   const bool average_adj = true;
-
 	   PWELCH pwelch( *d , 
 			  Fs[s] , 
 			  segment_sec , 
 			  noverlap_segments , 
-			  WINDOW_TUKEY50 , 
+			  window_function , 
 			  average_adj );
 
 	   double this_slowwave   = pwelch.psdsum( SLOW )  ;/// globals::band_width( SLOW );

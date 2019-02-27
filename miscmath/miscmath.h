@@ -129,11 +129,6 @@ namespace MiscMath
   double overdispersion( const std::vector<int> & , double * pv = NULL );
   double poisson( double, double );
 
-  // Hanning window (following Matlab naming)
-  std::vector<double> hanning_window( int n , bool periodic = false );
-  void hanning_window( std::vector<double> * );
-  double hanning_window(unsigned int n, unsigned int N);
-
   // Hann window
   std::vector<double> hann_window( int n );
   void hann_window( std::vector<double> * );

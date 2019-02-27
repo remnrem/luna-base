@@ -249,13 +249,8 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
   // parameters
   //
   
-  bool set_mask = param.has( "mask" );
-  bool write_xml = param.has( "write-xml" );
-  std::string xml_root;
-  if ( write_xml ) xml_root = param.value( "write-xml" );
-  
+  bool set_mask = ! param.has( "no-mask" );
   bool verbose = param.has("verbose") || param.has( "epoch" );
-
   
   //
   // attach signal
@@ -450,7 +445,7 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
       writer.var( "FLAGGED_EPOCHS" , "Number of epochs failing Buckelmueller" );
       writer.var( "ALTERED_EPOCHS" , "Number of epochs actually masked" ); 
       writer.var( "TOTAL_EPOCHS" , "Number of epochs tested" );
-
+      
       writer.value( "FLAGGED_EPOCHS" , total );
       writer.value( "ALTERED_EPOCHS" , altered );
       writer.value( "TOTAL_EPOCHS" , ne );

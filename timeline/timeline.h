@@ -55,9 +55,9 @@ struct hypnogram_t
 {
   
   hypnogram_t() { } 
-  void construct( timeline_t * t , const std::vector<std::string> & s );
-  void construct( timeline_t * t , const std::string sslabel = "SleepStage" );
-  void calc_stats();
+  void construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s );
+  void construct( timeline_t * t , const bool verbose , const std::string sslabel = "SleepStage" );
+  void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
   void output( const bool verbose );
 
   // special case, if analysing a hypnogram with no EDF
@@ -65,7 +65,9 @@ struct hypnogram_t
 
   timeline_t * timeline;
   
+  // sleep stage information
   std::vector<sleep_stage_t> stages;
+  std::vector<int> epoch_n;
   
   // times 
   clocktime_t clock_lights_out;
@@ -308,6 +310,9 @@ struct timeline_t
     // Annotations
     clear_epoch_annotations();    
     
+    // old/new epoch mapping
+    clear_epoch_mapping();
+
     // record/epoch mappings
     rec2epoch.clear();
     epoch2rec.clear();
@@ -612,7 +617,7 @@ struct timeline_t
 
   // 1-based epoch mapping
   int display_epoch(int e) 
-    {
+    {      
       if ( ! has_epoch_mapping() ) return e+1;
       if ( epoch_curr2orig.find(e) == epoch_curr2orig.end() ) return -1;
       return epoch_curr2orig.find(e)->second + 1 ;

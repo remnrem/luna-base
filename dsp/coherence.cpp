@@ -456,8 +456,8 @@ coh_t dsptools::legacy_coherence( const std::vector<double> * s1 ,
   int nd2 = szout;
   
 
-  // Compute Hanning window.
-  std::vector<double> weight = MiscMath::hanning_window( szin );
+  // Compute Hann window.
+  std::vector<double> weight = MiscMath::hann_window( szin );
 
   int nffts = 0;
   
@@ -493,7 +493,7 @@ coh_t dsptools::legacy_coherence( const std::vector<double> * s1 ,
 	  coh_lremv( yy , nloaded );
 	}
 
-      // Apply Hanning window
+      // Apply Hann window
       for (int i = 0; i < nloaded; i++) 
 	{
 	  xx[i] *= weight[i];
@@ -628,7 +628,7 @@ coh_t dsptools::coherence( edf_t & edf , const int signal1 , const int signal2 ,
 
       coherence_t coherence( *d1, *d2 , Fs , 
 			     segment_sec , overlap_sec , 
-			     WINDOW_HANNING , average_adj , detrend );
+			     WINDOW_HANN , average_adj , detrend );
 
       return coherence.res;
     }

@@ -58,8 +58,7 @@ fir_impl_t::fir_impl_t( const std::vector<double> & coefs_ )
 
 void dsptools::design_fir( param_t & param )
 {
-
-  writer.cmd( "FIR-DESIGN" , 1 , param.dump( "" , " " ) );
+  // assume this is called only by --fir option, and so we need to set this
   
   int fs = param.requires_int( "fs" );
   double ripple = param.requires_dbl( "ripple" );
@@ -73,6 +72,7 @@ void dsptools::design_fir( param_t & param )
       if ( f.size() != 2 ) Helper::halt( "expect bandpass=f1,f2" );
       f1 = f[0];
       f2 = f[1];
+      logger << " designing bandpass filter, " << f1 << "-" << f2 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
       design_bandpass_fir( ripple , tw , fs , f1, f2 , true );
     }
   
@@ -82,18 +82,21 @@ void dsptools::design_fir( param_t & param )
       if ( f.size() != 2 ) Helper::halt( "expect bandstop=f1,f2" );
       f1 = f[0];
       f2 = f[1];
+      logger << " designing bandstop filter, " << f1 << "-" << f2 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
       design_bandstop_fir( ripple , tw , fs , f1, f2 , true );
     }
   
   if ( param.has( "lowpass" ) )
     {
       f1 = param.requires_dbl( "lowpass" );
+      logger << " designing lowpass filter, " << f1 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
       design_lowpass_fir( ripple , tw , fs , f1 , true );
     }
 
   if ( param.has( "highpass" ) )
     {
       f1 = param.requires_dbl( "highpass" );
+      logger << " designing highpass filter, " << f1 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
       design_highpass_fir( ripple , tw , fs , f1 , true );
     }
 
@@ -562,7 +565,7 @@ std::vector<double> fir_t::createWindow( const std::vector<double> * in, enum wi
       
       break;
       
-    case HANNING:
+    case HANN:
       for (int n=0 ; n<=halfLength ; n++) {
 	double val = 0.5 - 0.5 * cos(2.0 * M_PI * n / m);
 	out[n] = val;

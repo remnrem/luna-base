@@ -279,7 +279,7 @@ class coherence_t {
 		int Fs, 
 		double segment_sec ,  // segment size in seconds 
 		double overlap_sec , // overlap in seconds
-		window_function_t W = WINDOW_HANNING , 
+		window_function_t W = WINDOW_HANN , 
 		bool average_adj = false , 
 		bool detrend = false , 
 		bool zerocenter = false )		

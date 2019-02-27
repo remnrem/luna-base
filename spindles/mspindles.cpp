@@ -857,7 +857,7 @@ void OLD_FFT_INTERSECTION()
   // 	      std::vector<double> padded( NF , 0 );
   // 	      for(int j=0;j<NF2;j++) padded[j] = (*data)[j];
 	      	      
-  // 	      FFT fftseg( NF , Fs , FFT_FORWARD , WINDOW_HANNING );	      
+  // 	      FFT fftseg( NF , Fs , FFT_FORWARD , WINDOW_HANN );	      
 	     
   // 	      fftseg.apply( padded );
 

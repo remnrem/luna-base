@@ -1797,16 +1797,16 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
 // Hypnogram functions
 //
 
-void hypnogram_t::construct( timeline_t * t , const std::vector<std::string> & s )
+void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s )
 { 
   timeline = t;
   if ( s.size() != timeline->num_total_epochs() ) Helper::halt( "bad number of stages, " + Helper::int2str( (int)s.size() ) + " but expecting " + Helper::int2str( timeline->num_total_epochs() ) );    
   stages.resize( s.size() );
   for (int e=0;e<s.size();e++) stages[e] = globals::stage( s[e] );
-  calc_stats();
+  calc_stats( verbose );
 } 
 
-void hypnogram_t::construct( timeline_t * t , const std::string sslabel ) 
+void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::string sslabel ) 
 {
   
   // point to 'parent' timeline
@@ -1835,39 +1835,56 @@ void hypnogram_t::construct( timeline_t * t , const std::string sslabel )
 
   values.clear(); values.insert( "REM" );
   timeline->annotate_epochs(  globals::stage( REM ) , "SleepStage" , values );
+
+  //
+  // If we've masked the data, epoch count may not start at 0...
+  // Although it probably doesn't make sense to use HYPNO then, 
+  // we still want to be able to dump STAGE information easily w/ the
+  // STAGE command...
+  //
   
   const int ne = timeline->num_total_epochs();
+  
+  stages.clear();
+  epoch_n.clear();
 
-  stages.resize( ne );
- 
- for (int e = 0 ; e < ne ; e++ )
+  while ( 1 ) 
     {
+
+      int e = edf.timeline.next_epoch();
+      
+      if ( e == -1 ) break;
+      
       bool wake = timeline->epoch_annotation( "wake"  , e );
       bool n1   = timeline->epoch_annotation( "NREM1" , e );
       bool n2   = timeline->epoch_annotation( "NREM2" , e );
       bool n3   = timeline->epoch_annotation( "NREM3" , e );
       bool n4   = timeline->epoch_annotation( "NREM4" , e );
       bool rem  = timeline->epoch_annotation( "REM"   , e );
-
+      
       bool other = ! ( wake || n1 || n2 || n3 || n4 || rem );
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem ) > 1;
       if ( conflict ) other = true;
       
-      if ( conflict ) stages[e] = UNSCORED;
-      else if ( other ) stages[e] = UNSCORED;
-      else if ( wake ) stages[e] = WAKE;
-      else if ( n1 ) stages[e] = NREM1;
-      else if ( n2 ) stages[e] = NREM2;
-      else if ( n3 ) stages[e] = NREM3;
-      else if ( n4 ) stages[e] = NREM4;
-      else if ( rem ) stages[e] = REM;
+      if      ( conflict ) stages.push_back( UNSCORED );
+      else if ( other ) stages.push_back( UNSCORED );
+      else if ( wake ) stages.push_back( WAKE );
+      else if ( n1 ) stages.push_back( NREM1 );
+      else if ( n2 ) stages.push_back( NREM2 );
+      else if ( n3 ) stages.push_back( NREM3 );
+      else if ( n4 ) stages.push_back( NREM4 );
+      else if ( rem ) stages.push_back( REM );
+      else stages.push_back( UNSCORED );
       
+      epoch_n.push_back( e );
+
     }
   
-   calc_stats();
+   calc_stats( verbose );
 }   
 
-void hypnogram_t::calc_stats()
+
+void hypnogram_t::calc_stats( const bool verbose )
 {
 
   //
@@ -1875,9 +1892,27 @@ void hypnogram_t::calc_stats()
   //
 
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
-
+  
   const int ne = stages.size();
-
+  
+  
+  //
+  // Check whether stages are not contiguous and give a warning if not
+  //
+  
+  if ( verbose  )
+    {
+      if ( epoch_n[0] != 0 ) 
+	Helper::halt( "you cannot meaningfully run HYPNO on a masked and non-contiguous set of epochs" );
+      for (int e=1;e<epoch_n.size();e++)
+	{
+	  if ( epoch_n[e] - epoch_n[e-1] > 1 )
+	    {
+	      Helper::halt( "you cannot meaningfully run HYPNO on a masked and non-contiguous set of epochs" );
+	      break;
+	    }
+	}
+    }
 
   //
   // Recode any leading/trailing "?" as "L"
@@ -2902,9 +2937,9 @@ void hypnogram_t::output( const bool verbose )
     {
       
       // epoch-level stratification
-      writer.epoch( timeline->display_epoch( e ) );
+      writer.epoch( timeline->display_epoch( epoch_n[e] ) );
             
-      writer.value( "MINS" ,  e * epoch_mins );
+      writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
       writer.value( "CLOCK_TIME" , epoch_time.as_string() );      
       if ( verbose ) 
 	writer.value( "CLOCK_HOURS" ,  epoch_time.as_numeric_string() );
