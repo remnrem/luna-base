@@ -1843,28 +1843,60 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
   // STAGE command...
   //
   
+
+  // in VERBOSE (HYPNO) mode, we require the FULL epoch set
+  
+  if ( verbose ) 
+    {
+      if ( timeline->num_total_epochs() !=  timeline->num_epochs() ) 
+	Helper::halt( "cannot run HYPNO on masked data" );
+      
+      int eprev = -1;
+      timeline->first_epoch();
+      while ( 1 ) 
+	{	  
+	  int e = timeline->next_epoch();      
+	  if ( e == -1 ) break;
+	  if ( eprev >= 0 && timeline->display_epoch( e ) - eprev != 1 ) 
+	    Helper::halt( "cannot run HYPNO on masked data" );
+	  eprev =  timeline->display_epoch( e ) ;
+	}
+    }
+
   const int ne = timeline->num_total_epochs();
   
+  timeline->first_epoch();
+
   stages.clear();
   epoch_n.clear();
 
+  //
+  // Need to check how epoch annotations work after a RESTRUCTURE...
+  //
+  
   while ( 1 ) 
     {
 
-      int e = edf.timeline.next_epoch();
+      int e = timeline->next_epoch();
       
       if ( e == -1 ) break;
       
-      bool wake = timeline->epoch_annotation( "wake"  , e );
-      bool n1   = timeline->epoch_annotation( "NREM1" , e );
-      bool n2   = timeline->epoch_annotation( "NREM2" , e );
-      bool n3   = timeline->epoch_annotation( "NREM3" , e );
-      bool n4   = timeline->epoch_annotation( "NREM4" , e );
-      bool rem  = timeline->epoch_annotation( "REM"   , e );
+      int e2 = timeline->display_epoch(e) ;
       
+      bool wake = timeline->epoch_annotation( "wake"  , e2 );
+      bool n1   = timeline->epoch_annotation( "NREM1" , e2 );
+      bool n2   = timeline->epoch_annotation( "NREM2" , e2 );
+      bool n3   = timeline->epoch_annotation( "NREM3" , e2 );
+      bool n4   = timeline->epoch_annotation( "NREM4" , e2 );
+      bool rem  = timeline->epoch_annotation( "REM"   , e2 );
+      
+
+
       bool other = ! ( wake || n1 || n2 || n3 || n4 || rem );
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem ) > 1;
       if ( conflict ) other = true;
+
+      std::cerr << "ss " << wake << n1 << n2<<n3<<n4<<rem << other << "\n";
       
       if      ( conflict ) stages.push_back( UNSCORED );
       else if ( other ) stages.push_back( UNSCORED );
@@ -1876,10 +1908,10 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
       else if ( rem ) stages.push_back( REM );
       else stages.push_back( UNSCORED );
       
-      epoch_n.push_back( e );
-
+      epoch_n.push_back( e2 );
+      
     }
-  
+
    calc_stats( verbose );
 }   
 
@@ -1895,24 +1927,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   const int ne = stages.size();
   
-  
-  //
-  // Check whether stages are not contiguous and give a warning if not
-  //
-  
-  if ( verbose  )
-    {
-      if ( epoch_n[0] != 0 ) 
-	Helper::halt( "you cannot meaningfully run HYPNO on a masked and non-contiguous set of epochs" );
-      for (int e=1;e<epoch_n.size();e++)
-	{
-	  if ( epoch_n[e] - epoch_n[e-1] > 1 )
-	    {
-	      Helper::halt( "you cannot meaningfully run HYPNO on a masked and non-contiguous set of epochs" );
-	      break;
-	    }
-	}
-    }
 
   //
   // Recode any leading/trailing "?" as "L"
@@ -2926,19 +2940,21 @@ void hypnogram_t::output( const bool verbose )
 
   // epoch size (in minutes)
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
-  const int ne = timeline->num_total_epochs();
+  const int ne = timeline->num_epochs();
 
   clocktime_t epoch_time( clock_lights_out );
 
   clocktime_t epoch_duration( "00:00:30" );
+  
+  std::cerr << "ne2 = " << ne << "\n";
 
   // output
   for (int e=0;e<ne;e++)
     {
       
       // epoch-level stratification
-      writer.epoch( timeline->display_epoch( epoch_n[e] ) );
-            
+      writer.epoch( epoch_n[e] );
+      
       writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
       writer.value( "CLOCK_TIME" , epoch_time.as_string() );      
       if ( verbose ) 
@@ -3127,7 +3143,7 @@ void dummy_hypno()
   edf.id = "_DUMMY_";
   h.fudge( 30 , h.stages.size() );
 
-  h.calc_stats();
+  h.calc_stats( true );
   h.output( true ); // verbose mode == T 
 
 }
