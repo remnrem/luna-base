@@ -80,14 +80,7 @@ annot_t * spectral_power( edf_t & edf ,
 
   double fft_segment_overlap = param.has( "segment-overlap" ) 
     ? param.requires_dbl( "segment-overlap" ) : 2 ;
-  
 
-  if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
-    {
-      fft_segment_overlap = 0;
-      fft_segment_size = edf.timeline.epoch_length();
-    }
-  
 
   //
   // Option to average adjacent points in the power spectra (default = Y)
@@ -180,11 +173,24 @@ annot_t * spectral_power( edf_t & edf ,
   
   std::map<int,std::map<frequency_band_t,std::vector<double> > > track_mse;
   
+
   //
   // Set first epoch
   //
   
   edf.timeline.first_epoch();
+
+  //
+  // Check segment lengths
+  //
+
+  if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
+    {
+      fft_segment_overlap = 0;
+      fft_segment_size = edf.timeline.epoch_length();
+    }
+  
+
   
   //
   // Initiate output

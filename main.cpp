@@ -293,21 +293,6 @@ int main(int argc , char ** argv )
     writer.nodb();
   
   
-  //
-  // specify types for common stratifiers
-  //
-
-  writer.numeric_factor( globals::epoch_strat );
-  writer.numeric_factor( globals::freq_strat );
-  writer.numeric_factor( globals::cycle_strat );
-  writer.string_factor( globals::band_strat );
-  writer.string_factor( globals::annot_strat );
-  writer.string_factor( globals::annot_instance_strat );
-  writer.string_factor( globals::annot_meta_strat );
-  writer.string_factor( globals::signal_strat );
-  writer.string_factor( globals::stage_strat );
-  writer.numeric_factor( globals::count_strat );
-  writer.numeric_factor( globals::time_strat );
 
   
   //
@@ -944,7 +929,7 @@ void proc_dummy( const std::string & p )
   if ( p == "db" )
     {
       //      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" , "nsrr01" );
-      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" );
+      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" , "nsrr01" );
       std::cout << "\n\n";
       retval.dump(); 
       std::cout << "\n";

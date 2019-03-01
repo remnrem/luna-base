@@ -33,13 +33,15 @@ retval_factor_t::retval_factor_t( const strata_t & s , const timepoint_t & tp )
   std::map<factor_t,level_t>::const_iterator aa = s.levels.begin();
   while ( aa != s.levels.end() )
     {
+      const factor_t & factor = aa->first;
+
       // skip E/T factors here (they will be added by the timepoint_t below) 
       // also skip _COMMANDS as they are represented separately
-      if ( aa->first.factor_name == globals::epoch_strat || 
-	   aa->first.factor_name == globals::time_strat  || 
-	   aa->first.factor_name[0] == '_' ) { ++aa; continue; }  
+      if ( factor.factor_name == globals::epoch_strat || 
+	   factor.factor_name == globals::time_strat  || 
+	   factor.factor_name[0] == '_' ) { ++aa; continue; }  
   
-     factors.insert( aa->first.factor_name );
+     factors.insert( factor.factor_name );
      
      ++aa;
     }
@@ -57,14 +59,27 @@ retval_strata_t::retval_strata_t( strata_t & strata , timepoint_t & tp )
 
   while ( aa != strata.levels.end() )
     {
+      const factor_t & factor = aa->first;
+      const level_t & level = aa->second;
+
       // skip E/T factors here (they will be added by the timepoint_t below) 
       // also skip _COMMANDS as they are represented separately
-      if ( aa->first.factor_name == globals::epoch_strat || 
-	   aa->first.factor_name == globals::time_strat || 
-	   aa->first.factor_name[0] == '_' ) { ++aa; continue; }  
+      if ( factor.factor_name == globals::epoch_strat || 
+	   factor.factor_name == globals::time_strat || 
+	   factor.factor_name[0] == '_' ) { ++aa; continue; }  
       
-      add( retval_factor_level_t( aa->first.factor_name , aa->second.level_name ) );
+      // try to maintain numeric encoding of numeric factors
       
+      if ( factor.is_numeric )	
+	{
+	  double lvln = 0;
+	  if ( ! Helper::str2dbl( level.level_name , &lvln ) ) 
+	    Helper::halt( "problem converting level to numeric:" + factor.factor_name + " " + level.level_name ); 
+	  add( retval_factor_level_t( aa->first.factor_name , lvln ) );
+	}
+      else
+	add( retval_factor_level_t( factor.factor_name , level.level_name ) );
+
       ++aa;
     }
 

@@ -251,7 +251,28 @@ bool StratOutDBase::attach( const std::string & n , bool readonly , writer_t * c
   //
 
   read_all( caller );
+
        
+  //
+  // specify types for common stratifiers
+  //
+  
+  caller->numeric_factor( globals::epoch_strat );
+  caller->numeric_factor( globals::freq_strat );
+  caller->numeric_factor( globals::cycle_strat );
+  caller->string_factor( globals::band_strat );
+  caller->string_factor( globals::annot_strat );
+  caller->string_factor( globals::annot_instance_strat );
+  caller->string_factor( globals::annot_meta_strat );
+  caller->string_factor( globals::signal_strat );
+  caller->string_factor( globals::stage_strat );
+  caller->numeric_factor( globals::count_strat );
+  caller->numeric_factor( globals::time_strat );
+
+  //
+  // all done
+  //
+
   return true;
 
 }
