@@ -69,12 +69,15 @@ retval_strata_t::retval_strata_t( strata_t & strata , timepoint_t & tp )
 	   factor.factor_name[0] == '_' ) { ++aa; continue; }  
       
       // try to maintain numeric encoding of numeric factors
-      
+      std::cout << "fac = " << factor.factor_name << "\n";
       if ( factor.is_numeric )	
 	{
 	  double lvln = 0;
 	  if ( ! Helper::str2dbl( level.level_name , &lvln ) ) 
 	    Helper::halt( "problem converting level to numeric:" + factor.factor_name + " " + level.level_name ); 
+
+	  std::cout << "num " << lvln << "\n";
+
 	  add( retval_factor_level_t( aa->first.factor_name , lvln ) );
 	}
       else

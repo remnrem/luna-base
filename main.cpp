@@ -936,6 +936,34 @@ void proc_dummy( const std::string & p )
       std::exit(1);
     }
 
+
+  //
+  // retval test
+  //
+
+  if ( p == "retval" )
+    {
+      
+      edf_t edf;
+      edf.attach( "/Users/shaun/my-dropbox/my-sleep/Purcell06072016.edf" , "smp" );
+
+      // mimic R leval() behavior
+      retval_t retval ;
+      
+      writer.use_retval( &retval );
+
+      // set command string                                                                                                                                                                                                                                                               
+      cmd_t cmd( "PSD epoch sig=EEG1" );
+
+      cmd.eval( edf );
+
+      writer.use_retval( NULL );
+
+      retval.dump();
+	
+      std::exit(1);
+    }
+  
   //
   // Windows
   //

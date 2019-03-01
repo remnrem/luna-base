@@ -1068,6 +1068,23 @@ bool to_retval( const std::string & var_name , const std::string & s  )
   std::map<std::string,int> timepoints_idmap;
   std::map<strata_t,int>    strata_idmap;
   std::map<std::string,int> commands_idmap;
+
+  void clear() 
+  {
+    factors.clear();     factors_idmap.clear();
+    levels.clear();      levels_idmap.clear();
+    variables.clear();   variables_idmap.clear();
+    individuals.clear(); individuals_idmap.clear();
+    commands.clear();    commands_idmap.clear();
+    timepoints.clear();  timepoints_idmap.clear();
+    strata.clear();      strata_idmap.clear();
+    
+    curr_indiv.clear();
+    curr_strata.clear();
+    curr_timepoint.timeless();
+    curr_command.clear();
+  }
+
   
  private:
 
@@ -1095,21 +1112,7 @@ bool to_retval( const std::string & var_name , const std::string & s  )
   strata_t      curr_strata;
   timepoint_t   curr_timepoint;  
   
-  void clear() 
-  {
-    factors.clear();     factors_idmap.clear();
-    levels.clear();      levels_idmap.clear();
-    variables.clear();   variables_idmap.clear();
-    individuals.clear(); individuals_idmap.clear();
-    commands.clear();    commands_idmap.clear();
-    timepoints.clear();  timepoints_idmap.clear();
-    strata.clear();      strata_idmap.clear();
-
-    curr_indiv.clear();
-    curr_strata.clear();
-    curr_timepoint.timeless();
-    curr_command.clear();
-  }
+ 
   
   // helper functions
   std::string timestamp()

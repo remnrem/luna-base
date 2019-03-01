@@ -799,7 +799,9 @@ bool edf_t::attach( const std::string & f ,
   // Store filename and ID
   //
 
-  filename = f;
+  
+  // expand() expands out any ~/ notation to full path
+  filename = Helper::expand( f ) ;
 
   id = i; 
 
