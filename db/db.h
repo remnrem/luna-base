@@ -293,20 +293,35 @@ struct var_t
 };
 
 struct value_t
-{
-  value_t( const std::string & s ) : numeric(false) , missing( false ) , s(s) { } 
-  value_t( double d ) : numeric(true) , missing( false ), d(d) { } 
-  value_t( int d ) : numeric(true) , missing(false) , d(d) { } 
+{ 
+  value_t( const std::string & s ) : numeric(false) , integer(false), missing( false ) , s(s) { } 
+  value_t( double d ) : numeric(true) , integer(false) , missing( false ), d(d) { } 
+  value_t( int i ) : numeric(false) , integer(true) , missing(false) , i(i) { } 
   value_t() : missing(true) { } 
 
+  // numeric   integer   missing
+  // T         F         F             double
+  // F         T         F             int
+  // F         F         F             string
+  // F         F         T             missing
+  
+  bool is_string() const { return ! ( numeric || integer || missing ); } 
+  bool is_numeric() const { return numeric; } 
+  bool any_number() const { return numeric || integer; } 
+  bool is_integer() const { return integer; } 
+  bool is_missing() const { return missing; } 
+  
   bool numeric;
+  bool integer;
   bool missing;
+
   double d;
   std::string s;
+  int i;
 
-  void set( const double d_ ) { numeric = true; d = d_; missing = false; } 
-  void set( const int d_ ) { numeric = true; d = d_; missing = false; } 
-  void set( const std::string & d ) { numeric = false; s = d; missing = false; } 
+  void set( const double d_ )        { numeric = true;  integer = false; d = d_; missing = false; } 
+  void set( const int i_ )           { numeric = true;  integer = true;  i = i_; missing = false; } 
+  void set( const std::string & s_ ) { numeric = false; integer = false; s = s_; missing = false; } 
   void set_missing() { missing = true; } 
 
   std::string str() const 
@@ -314,20 +329,28 @@ struct value_t
     std::stringstream ss;
     if ( missing ) ss << "NA";    
     else if ( numeric ) ss << d;
+    else if ( integer ) ss << i;
     else ss << s;
     return ss.str();
   }
 
+  // not even sure we need this in any context....
   bool operator<( const value_t & rhs ) const
   {
     if ( missing     && ! rhs.missing ) return false;
     if ( rhs.missing && ! missing ) return true;
     if ( missing     && rhs.missing ) return false;
 
-    if ( numeric && ! rhs.numeric ) return true;
-    if ( (!numeric) && rhs.numeric ) return false;    
-    if ( numeric ) return d < rhs.d;
-    else return s < rhs.s;
+    if ( any_number() && ! rhs.any_number() ) return true;
+    if ( (! any_number() ) && rhs.any_number() ) return false;    
+    
+    if ( is_string() && rhs.is_string() ) return s < rhs.s;
+    
+    if ( numeric && rhs.numeric ) return d < rhs.d;
+    if ( integer && rhs.integer ) return i < rhs.i;
+    if ( numeric && rhs.integer ) return d < rhs.i;
+    return i < rhs.d;
+
   }
 };
 
@@ -361,13 +384,14 @@ class StratOutDBase {
     {      
       dettach();
     }
-  
-  bool attach( const std::string & name , bool readonly );
+
+  bool attach( const std::string & name , bool readonly , writer_t * caller );
 
   bool dettach();
   
   // on first attaching a database, we read all factor/level/encodings, etc.
-  void read_all();  
+  // and save back to the calling writer_t
+  void read_all( writer_t * );  
   
   bool init();
   bool release();
@@ -407,6 +431,10 @@ class StratOutDBase {
 
   packets_t enumerate( int strata_id );
 
+  packets_t dump_all();
+
+  packets_t dump_indiv( const int indiv_id );
+  
   std::map<int,std::set<int> > dump_vars_by_strata();
 
   std::map<int,int> count_strata();
@@ -478,7 +506,12 @@ class StratOutDBase {
   sqlite3_stmt * stmt_dump_individuals;	      
   sqlite3_stmt * stmt_dump_timepoints;	      
   sqlite3_stmt * stmt_dump_commands;	      
-  
+
+  // bool are 0/1 integer
+  sqlite3_stmt * stmt_dump_int_datapoints;
+  sqlite3_stmt * stmt_dump_dbl_datapoints;
+  sqlite3_stmt * stmt_dump_txt_datapoints;
+
   sqlite3_stmt * stmt_count_values;
   sqlite3_stmt * stmt_lookup_value_by_null_strata;
   sqlite3_stmt * stmt_lookup_value_by_strata;
@@ -520,13 +553,13 @@ class writer_t
   //
 
   writer_t() { dbless = true; retval = NULL; } 
- 
+
   bool attach( const std::string & filename , bool readonly = false )
   {
 
     dbless = false; retval = NULL;
 
-    db.attach( filename , readonly );
+    db.attach( filename , readonly , this );
 
     //
     // Ensure that default strata is set as '1' baseline
@@ -561,12 +594,12 @@ class writer_t
   
   
   std::string name() const { return dbless ? "." : db.name(); } 
-  
+
   void index() { db.index(); } 
   void drop_index() { db.drop_index(); } 
   void begin() { return db.begin(); } 
   void commit() { return db.commit(); }
-  void read_all() { db.read_all(); }
+  void read_all() { db.read_all(this); }
   bool attached() { return db.attached(); }
   void fetch( int strata_id, int time_mode, packets_t * packets, std::set<int> * i = NULL, std::set<int> * c = NULL, std::set<int> * v = NULL )
   { return db.fetch( strata_id , time_mode, packets, i, c, v) ; }  
@@ -579,6 +612,9 @@ class writer_t
 
   std::set<int> all_matching_vars( const std::set<std::string> & vars ) { return db.all_matching_vars( vars ); }
   std::set<int> all_matching_cmds( const std::set<std::string> & cmds ) { return db.all_matching_cmds( cmds ); }
+
+  // open db and send to a retval
+  static retval_t dump_to_retval( const std::string & dbname , const std::string & indiv_name = "" );
 
   bool close() 
   { 

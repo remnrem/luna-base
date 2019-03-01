@@ -1279,6 +1279,7 @@ void timeline_t::select_epoch_until_isnot( const std::string & str )
 
 
 
+
 void timeline_t::annotate_epochs( const std::string & label , 
 				  const std::string & annot_label , 
 				  const std::set<std::string> & values )
@@ -1286,28 +1287,18 @@ void timeline_t::annotate_epochs( const std::string & label ,
 
 
   //
-  // Take information from the annot_t class, and make a simple per-epoch annotation  
+  // Take information from the annot_t class, and make a simple
+  // per-epoch annotation this can be performed after a restructure,
+  // but (total) # of epochs must match the file exactly
   //
-  
-  // this can be performed after a restructure, but (total) # of epochs must match the file exactly
-  
-  //
-  // Get things that we want to display; from an EPOCH-ANNOT-EPOCHS command, 
-  // all options are keys;  the key is the display name; the value is the 
-  // mask-style option, e.g.   nrem2=SRO::Stage2Sleep[1] 
-  //  label=annot_label[values]  
-  // where values is a comma-delimited list
-  
-  //
-  // What annotations are present? (i.e. already loaded)
-  //
-  
-  //  std::vector<std::string> annots = annotations.names();
-  
+
 
   //
-  // Point to first epoch, but get the 'total' number of epochs (masked and unmasked), 
-  // first_epoch() only returns the unmasked counts
+  // Point to first epoch, and get the 'total' number of epochs
+  // (i.e. both masked and unmasked), as first_epoch() only returns
+  // the unmasked counts; nb. first_epoch() actually sets the pointer
+  // *before* the first epoch, so fine to use this whether actual
+  // first epoch is masked or not
   //
   
   first_epoch();
@@ -1322,7 +1313,19 @@ void timeline_t::annotate_epochs( const std::string & label ,
   
 
   //
-  // for each each epoch 
+  // Get annotations
+  //
+  
+  annot_t * annot = annotations( annot_label );
+
+  // if not found, then all eannots are effectively false
+  // (i.e. missing)
+
+  if ( annot == NULL ) return;
+
+
+  //
+  // for each epoch 
   //
   
   while ( 1 ) 
@@ -1335,22 +1338,24 @@ void timeline_t::annotate_epochs( const std::string & label ,
       int e = next_epoch_ignoring_mask();      
 
       if ( e == -1 ) break;
+
+
+      // use 'e' for look-up here; but need to use orginal EDF
+      // encoding for eannots, internally i.e. the zero-based version
       
+      int e0 = original_epoch( e ) ;
+
+      if ( e0 == -1 ) 
+	Helper::halt( "internal error in annotate_epochs()" );
+
       interval_t interval = epoch( e );
       
-      //
-      // Get annotations
-      //
-      
-      annot_t * annot = annotations( annot_label );
-      
-      if ( annot == NULL ) continue;
-
       annot_map_t events = annot->extract( interval );
       
       // search for a matching value (at least one)
       
       annot_map_t::const_iterator ii = events.begin();
+
       while ( ii != events.end() )
 	{	
 	  
@@ -1358,15 +1363,16 @@ void timeline_t::annotate_epochs( const std::string & label ,
 	  const instance_t * instance = ii->second;
 
 	  if ( values.find( instance_idx.id ) != values.end() )
-	    {
-	      eannots[ label ][ e ] = true;
+	    {	      
+	      // nb. store w.r.t. original epoch encoding e0
+	      eannots[ label ][ e0 ] = true;
 	      break;
 	    }	      
 	  
 	  ++ii;
 	  
 	}
-
+      
     } // next epoch
 }
 
@@ -1816,11 +1822,14 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
   annot_t * annot = timeline->annotations( sslabel );
   if ( annot == NULL ) Helper::halt( "[" + sslabel + "] not set" );
   
-  // set epoch-level annotations
+  //
+  // set internal, epoch-level annotations used by timeline
+  //
+  
   std::set<std::string> values;
   values.clear(); values.insert( "wake" );
   timeline->annotate_epochs(  globals::stage( WAKE ) , "SleepStage" , values );
-
+  
   values.clear(); values.insert( "NREM1" );
   timeline->annotate_epochs(  globals::stage( NREM1  )  , "SleepStage" , values );
 
@@ -1835,6 +1844,7 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
 
   values.clear(); values.insert( "REM" );
   timeline->annotate_epochs(  globals::stage( REM ) , "SleepStage" , values );
+
 
   //
   // If we've masked the data, epoch count may not start at 0...
@@ -1871,7 +1881,8 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
   epoch_n.clear();
 
   //
-  // Need to check how epoch annotations work after a RESTRUCTURE...
+  // We should be able to use current 0..ne epoch naming as epoch-annotations
+  // still work after a restructure
   //
   
   while ( 1 ) 
@@ -1880,24 +1891,21 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
       int e = timeline->next_epoch();
       
       if ( e == -1 ) break;
-      
-      int e2 = timeline->display_epoch(e) ;
-      
-      bool wake = timeline->epoch_annotation( "wake"  , e2 );
-      bool n1   = timeline->epoch_annotation( "NREM1" , e2 );
-      bool n2   = timeline->epoch_annotation( "NREM2" , e2 );
-      bool n3   = timeline->epoch_annotation( "NREM3" , e2 );
-      bool n4   = timeline->epoch_annotation( "NREM4" , e2 );
-      bool rem  = timeline->epoch_annotation( "REM"   , e2 );
-      
 
+      // for output of STAGES or HYPNO, use original EDF annotations though
+      int e2 = timeline->original_epoch(e) ;
+      
+      bool wake = timeline->epoch_annotation( "wake"  , e );
+      bool n1   = timeline->epoch_annotation( "NREM1" , e );
+      bool n2   = timeline->epoch_annotation( "NREM2" , e );
+      bool n3   = timeline->epoch_annotation( "NREM3" , e );
+      bool n4   = timeline->epoch_annotation( "NREM4" , e );
+      bool rem  = timeline->epoch_annotation( "REM"   , e );      
 
       bool other = ! ( wake || n1 || n2 || n3 || n4 || rem );
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem ) > 1;
       if ( conflict ) other = true;
 
-      std::cerr << "ss " << wake << n1 << n2<<n3<<n4<<rem << other << "\n";
-      
       if      ( conflict ) stages.push_back( UNSCORED );
       else if ( other ) stages.push_back( UNSCORED );
       else if ( wake ) stages.push_back( WAKE );
@@ -1908,6 +1916,7 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
       else if ( rem ) stages.push_back( REM );
       else stages.push_back( UNSCORED );
       
+      // store original EDF 0-based encoding, to be passed to calc_stats()
       epoch_n.push_back( e2 );
       
     }
@@ -2942,30 +2951,49 @@ void hypnogram_t::output( const bool verbose )
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
   const int ne = timeline->num_epochs();
 
-  clocktime_t epoch_time( clock_lights_out );
+  clocktime_t starttime( clock_lights_out );
 
-  clocktime_t epoch_duration( "00:00:30" );
-  
-  std::cerr << "ne2 = " << ne << "\n";
+  //clocktime_t epoch_duration( "00:00:30" );
+  //const double epoch_mins = timeline->epoch_length() / 60.0 ; 
+  const double epoch_hrs = epoch_mins / 60.0;
 
   // output
   for (int e=0;e<ne;e++)
     {
       
       // epoch-level stratification
-      writer.epoch( epoch_n[e] );
+      // epoch_n is the original 0-based epoch encoding
+      // so, for diplay +1 , but for other calculations
+      // we want to keep this original encoding
+
+      writer.epoch( epoch_n[e] + 1 );
+      
+      
+      // clock time based on EDF header
+
+      if ( starttime.valid ) 
+	{
+	  clocktime_t current_clock_time = starttime;
+	  
+	  current_clock_time.advance( epoch_hrs * epoch_n[e] );
+	  
+	  writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
+	  
+	  if ( verbose ) 
+	    writer.value( "CLOCK_HOURS" ,  current_clock_time.as_numeric_string() );
+
+	}
+
+      // time in minutes
       
       writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
-      writer.value( "CLOCK_TIME" , epoch_time.as_string() );      
-      if ( verbose ) 
-	writer.value( "CLOCK_HOURS" ,  epoch_time.as_numeric_string() );
-      
-      // next epoch...
-      epoch_time.advance( epoch_duration );           
       
       // stages
+      
       writer.value( "STAGE" , globals::stage( stages[e] ) );
+    
       writer.value( "STAGE_N" , stagen[ stages[e] ] );
+
     }
 
   writer.unepoch();
@@ -3041,6 +3069,11 @@ void hypnogram_t::output( const bool verbose )
     {
       
       // epoch-level stratification
+
+      // nb. we can use display_epoch() here, not epoch_n[], as 
+      // HYPNO (verbose=T) should never be called on a masked/noncontiguous 
+      // set of epochs...
+
       writer.epoch( timeline->display_epoch( e ) );
       
       // stage stats
@@ -3440,8 +3473,16 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
 
   // mask_mode   0   mask
   //             1   unmask
-  //             2   force  (mask & unmask) 
+  //             2   force  (T = mask    &  F = unmask) 
+  //            -2   force  (T = unmask  &  T = mask)
   
+
+  // is this 'KEEP' mode? 
+
+  bool flip = false;
+  
+  if ( mask_mode == - 2 ) { mask_mode = 2 ; flip = true; } 
+
 
   //
   // allow both " and # quoting of EVAL expressions
@@ -3529,15 +3570,22 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
       bool is_valid = tok.evaluate();
       
       bool matches;
-       
-      if ( ! tok.value( matches ) ) is_valid = false;
       
+      if ( ! tok.value( matches ) ) is_valid = false;
+
       //
       // A match must be a valid value
       //
       
       if ( ! is_valid ) matches = false;
 
+
+      //
+      // Flip?
+      //
+
+      if ( flip ) matches = ! matches;
+            
       
       //
       // apply mask (or not)

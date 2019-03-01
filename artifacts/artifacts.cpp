@@ -562,16 +562,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   const int ns = signals.size();
 
-
-  
-  //
-  // Set up epoch annotations
-  //
- 
-  std::set<std::string> epoch_annotations = edf.timeline.epoch_annotations();
-
-  bool has_epoch_annotations = epoch_annotations.size() > 0 ;
-
   //
   // Store per-epoch statistics
   //
@@ -716,24 +706,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 	      writer.epoch( edf.timeline.display_epoch( epoch ) );
 
-	      // any annotations?
-	      
-	      if ( has_epoch_annotations )
-		{
-		  std::stringstream ss;
-		  std::set<std::string>::const_iterator aa = epoch_annotations.begin();
-		  while ( aa != epoch_annotations.end() )
-		    {		      
-		      if ( aa != epoch_annotations.begin() ) ss << ";";
-		      ss << *aa << "=" << edf.timeline.epoch_annotation( *aa , epoch );
-		      ++aa;
-		    }
-
-		  writer.var( "ANNOT" , "Epoch annotations" );
-		  writer.var( "ANNOT" , ss.str() );
-		}
-	      
-
+	     
 	      //
 	      // Report calculated values
 	      //

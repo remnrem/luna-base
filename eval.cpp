@@ -706,7 +706,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );
       else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );
-      else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) );
+      else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
       else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) );
@@ -724,6 +724,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
+
       else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
       
@@ -1051,7 +1052,7 @@ void proc_dump( edf_t & edf , param_t & param )
 
 void proc_epoch_dump( edf_t & edf , param_t & param )
 {
-
+  // REDUNDANT ; command not documented
   std::set<std::string> * annots = NULL;
   if ( param.has( "annot" ) )
     {

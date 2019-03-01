@@ -523,27 +523,33 @@ struct timeline_t
   // EPOCH annotations
   //
   
-  // i.e. typically used for 'stage' information
-
+  // i.e. a lightweight annot, separate from annot_t, that is only
+  // used internally for store SleepStage information
+  
+  // numbering works with respect to the original, EDF epoch scheme
+  // i.e. and so should follow any remapping
+  
   void annotate_epochs( const std::string & label , 
-  			        const std::string & annot_label , 
+			const std::string & annot_label , 
 			const std::set<std::string> & values );
   
-  void annotate_epochs( const std::string & label , bool b )
-  {
-    const int ne = num_epochs();
-    eannots[ label ].clear();
-    for (int e = 0 ; e < ne ; e++) eannots[ label ][ e ] = b ;
-  }
+   
+/*   void annotate_epochs( const std::string & label , bool b ) */
+/*   { */
+/*     const int ne = num_epochs(); */
+/*     eannots[ label ].clear(); */
+/*     for (int e = 0 ; e < ne ; e++) eannots[ label ][ e ] = b ; */
+/*   } */
   
-  void annotate_epochs( const std::vector<std::string> & s )
-  {
-    // if ( has_epoch_mapping() ) Helper::halt( "cannot EPOCH-ANNOT after RESTRUCTURE-ing an EDF" );
-    if ( s.size() != num_total_epochs() ) Helper::halt("incorrect number of epochs specified in EPOCH-ANNOT");
-    for (int i=0;i<s.size();i++) eannots[ s[i] ][ i ] = true; 
-  }
+/*   void annotate_epochs( const std::vector<std::string> & s ) */
+/*   { */
+/*     if ( s.size() != num_total_epochs() )  */
+/*       Helper::halt( "internal error: incorrect number of epochs in annotate_epochs()" ); */
+/*     for (int i=0;i<s.size();i++) eannots[ s[i] ][ i ] = true;  */
+/*   } */
   
   void clear_epoch_annotations();
+
 
   // Return all epoch annotations
   
@@ -565,14 +571,21 @@ struct timeline_t
   {
     return eannots.find( k ) != eannots.end() ;
   }
-
+  
   // does EPOCH 'e' contain annotation 'k'?
-
+  // where 'e' is in the current 0..ne epoch form, 
+  // and will be remapped if necessary
+  
   bool epoch_annotation(const std::string & k, int e) const
   {
 
+    // look up this annotation 'k'
     std::map<std::string,std::map<int,bool> >::const_iterator ii = eannots.find( k );
+
+    // annotation k does not exist anywhere
     if ( ii == eannots.end() ) return false;
+    
+    // do we need to remap the epoch? 
     if ( has_epoch_mapping() ) 
       {
 	// off-the-grid
@@ -580,7 +593,12 @@ struct timeline_t
 	// convert query to the original mapping
 	e = epoch_curr2orig.find( e )->second;
       }
+    
+    // now we have the correct original-EDF epoch number, do
+    // we have an flag? if not, means FALSE
     if ( ii->second.find( e ) == ii->second.end() ) return false;
+
+    // return the boolean value (i.e. could still be set FALSE explicitly)
     return ii->second.find( e )->second; 
   }
   
@@ -590,6 +608,7 @@ struct timeline_t
   //
 
   interval_t wholetrace() const; 
+
   
   //
   // Epoch mappings
@@ -665,14 +684,13 @@ struct timeline_t
   int               orig_epoch_size;
 
   // Epoch annotations 
+
   // type --> [ epoch-2-bool ]
   // where epoch is *always* with regard to the original value
-
+  
   // boolean epoch-based annotations
   std::map<std::string,std::map<int,bool> > eannots;
   
-  // string epoch-based annotations: primary for sleep staging
-  //  std::map<std::string,std::vector<std::string> > str_eannots
 };
 
 

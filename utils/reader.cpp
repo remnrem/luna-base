@@ -522,7 +522,8 @@ int main(int argc , char ** argv )
       writer.index();
 
       // get all current information
-      writer.read_all();
+      // NOTE -- attach() above will already do this
+      //      writer.read_all();
 
       //
       // Check that factors are present

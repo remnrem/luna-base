@@ -150,10 +150,17 @@ void proc_mask( edf_t & edf , param_t & param )
   // Eval expression masks
   //
   
-  if ( param.has( "expr" ) ) 
+  if ( param.has( "drop" ) ) 
     {
       // force, mask_mode == 2 
-      edf.timeline.apply_eval_mask( param.value( "expr" ) ,  2 ) ; 
+      edf.timeline.apply_eval_mask( param.value( "drop" ) ,  2 ) ; 
+      return;
+   }
+
+  if ( param.has( "keep" ) ) 
+    {
+      // force, mask_mode == -2 
+      edf.timeline.apply_eval_mask( param.value( "keep" ) ,  -2 ) ; 
       return;
    }
 
@@ -283,6 +290,8 @@ void proc_mask( edf_t & edf , param_t & param )
     }
 
 
+
+
   //
   // Include/exclude/annotate masks
   //
@@ -355,6 +364,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	}
     }
   
+  
 
   //
   // MASK exclude [ ifnot ]
@@ -399,44 +409,4 @@ void proc_mask( edf_t & edf , param_t & param )
 	}
     }
   
-
-  //
-  // MASK annot
-  //
-  
-  if ( has_amask )
-    {
-      
-      Helper::halt( "no curently supported...") ;
-      
-      // this may be okay, but a) not sure of the use-case and b) need to check etc 
-      // so for now, make unavailable
-
-      std::vector<std::string> am0 = Helper::parse( amask_str , "," );      
-      for (int i=0;i<am0.size();i++)
-	{
-	  
-	  std::vector<std::string> am = Helper::parse( am0[i] , "[]" );
-	  if ( am.size() == 1 ) am.push_back("1");
-	  if ( am.size() != 2 ) Helper::halt( "incorrectly specified flag[value]" );
-	  
-	  std::vector<std::string> amask_val = Helper::parse( am[1] , "," );
-	  const std::string annot_label = Helper::unquote( am[0] );
-	  
-	  annot_t * annot = edf.timeline.annotations( annot_label );
-	  
-	  if ( annot == NULL ) 
-	    edf.timeline.annotate_epochs( alabel_str , false );
-	  else
-	    {
-	      std::set<std::string> ss;
-	      for (int v=0;v<amask_val.size();v++) ss.insert( amask_val[v] );
-	      edf.timeline.annotate_epochs( alabel_str , annot_label , ss );
-	    }
-	  
-	  logger << " set flag annotation for [" << annot_label << "], labeled as [" << alabel_str << "]\n";
-	}      
-            
-    }
-
 }

@@ -34,12 +34,14 @@ retval_factor_t::retval_factor_t( const strata_t & s , const timepoint_t & tp )
   while ( aa != s.levels.end() )
     {
       // skip E/T factors here (they will be added by the timepoint_t below) 
+      // also skip _COMMANDS as they are represented separately
       if ( aa->first.factor_name == globals::epoch_strat || 
-	   aa->first.factor_name == globals::time_strat ) { ++aa; continue; }  
-
-      factors.insert( aa->first.factor_name );
-
-      ++aa;
+	   aa->first.factor_name == globals::time_strat  || 
+	   aa->first.factor_name[0] == '_' ) { ++aa; continue; }  
+  
+     factors.insert( aa->first.factor_name );
+     
+     ++aa;
     }
 
   // any time-points;  split T into T1 and T2
@@ -56,8 +58,10 @@ retval_strata_t::retval_strata_t( strata_t & strata , timepoint_t & tp )
   while ( aa != strata.levels.end() )
     {
       // skip E/T factors here (they will be added by the timepoint_t below) 
+      // also skip _COMMANDS as they are represented separately
       if ( aa->first.factor_name == globals::epoch_strat || 
-	   aa->first.factor_name == globals::time_strat ) { ++aa; continue; }  
+	   aa->first.factor_name == globals::time_strat || 
+	   aa->first.factor_name[0] == '_' ) { ++aa; continue; }  
       
       add( retval_factor_level_t( aa->first.factor_name , aa->second.level_name ) );
       
@@ -80,7 +84,6 @@ retval_strata_t::retval_strata_t( strata_t & strata , timepoint_t & tp )
 void retval_t::dump()
 {
   // std::map<retval_cmd_t, std::map<retval_factor_t,std::map<retval_var_t, std::map<retval_strata_t, retval_value_t > > > > retval_data_t;
-
 
   retval_data_t::iterator cc = data.begin();
   while ( cc != data.end() )

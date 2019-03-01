@@ -936,6 +936,21 @@ void proc_dummy( const std::string & p )
       std::exit(1);
     }
   
+
+  //
+  // db -> retval
+  //
+
+  if ( p == "db" )
+    {
+      //      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" , "nsrr01" );
+      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" );
+      std::cout << "\n\n";
+      retval.dump(); 
+      std::cout << "\n";
+      std::exit(1);
+    }
+
   //
   // Windows
   //

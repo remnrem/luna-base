@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -148,7 +147,7 @@ std::string strata_t::print_nocmd() const
 }
 
 
-bool StratOutDBase::attach( const std::string & n , bool readonly )
+bool StratOutDBase::attach( const std::string & n , bool readonly , writer_t * caller )
 {
   
   if ( attached() ) dettach();
@@ -251,8 +250,7 @@ bool StratOutDBase::attach( const std::string & n , bool readonly )
   // get any existing encodings
   //
 
-  read_all();
-
+  read_all( caller );
        
   return true;
 
@@ -260,8 +258,12 @@ bool StratOutDBase::attach( const std::string & n , bool readonly )
 
 
 
-void StratOutDBase::read_all()
+void StratOutDBase::read_all( writer_t * w )
 {
+
+  //
+  // dump everything into writer_t *except* datapoints
+  //
 
 
   //
@@ -273,8 +275,8 @@ void StratOutDBase::read_all()
       indiv_t indiv;
       indiv.indiv_id = sql.get_int( stmt_dump_individuals , 0 );
       indiv.indiv_name = sql.get_text( stmt_dump_individuals , 1 );
-      writer.individuals[ indiv.indiv_id ] = indiv;
-      writer.individuals_idmap[ indiv.indiv_name ] = indiv.indiv_id;
+      w->individuals[ indiv.indiv_id ] = indiv;
+      w->individuals_idmap[ indiv.indiv_name ] = indiv.indiv_id;
     }
   sql.reset( stmt_dump_individuals );
   
@@ -291,8 +293,8 @@ void StratOutDBase::read_all()
       cmd.cmd_number = sql.get_int( stmt_dump_commands , 2 );
       cmd.timestamp = sql.get_text( stmt_dump_commands , 3 );
       cmd.cmd_parameters = sql.get_text( stmt_dump_commands , 4 );
-      writer.commands[ cmd.cmd_id ] = cmd;
-      writer.commands_idmap[ cmd.cmd_name ] = cmd.cmd_id;
+      w->commands[ cmd.cmd_id ] = cmd;
+      w->commands_idmap[ cmd.cmd_name ] = cmd.cmd_id;
     }
   sql.reset( stmt_dump_commands );
 
@@ -307,8 +309,8 @@ void StratOutDBase::read_all()
       factor.factor_id = sql.get_int( stmt_dump_factors , 0 );
       factor.factor_name = sql.get_text( stmt_dump_factors , 1 );
       factor.is_numeric = sql.get_int( stmt_dump_factors , 2 ) == 1;
-      writer.factors[ factor.factor_id ] = factor;
-      writer.factors_idmap[ factor.factor_name ] = factor.factor_id;
+      w->factors[ factor.factor_id ] = factor;
+      w->factors_idmap[ factor.factor_name ] = factor.factor_id;
     }
   sql.reset( stmt_dump_factors );
 
@@ -323,12 +325,12 @@ void StratOutDBase::read_all()
       level.level_id = sql.get_int( stmt_dump_levels , 0 );
       level.factor_id = sql.get_int( stmt_dump_levels , 1 );
       level.level_name = sql.get_text( stmt_dump_levels , 2 );
-      writer.levels[ level.level_id ] = level;
-      if ( writer.factors.find( level.factor_id ) == writer.factors.end() )
+      w->levels[ level.level_id ] = level;
+      if ( w->factors.find( level.factor_id ) == w->factors.end() )
 	Helper::halt( "internal error, undefined factor" );
       std::string level_key = level.level_name 
-	+ "." + writer.factors[ level.factor_id ].factor_name ;
-      writer.levels_idmap[ level_key ] = level.level_id;
+	+ "." + w->factors[ level.factor_id ].factor_name ;
+      w->levels_idmap[ level_key ] = level.level_id;
     }
   sql.reset( stmt_dump_levels );
 
@@ -350,11 +352,11 @@ void StratOutDBase::read_all()
       if ( level_id == 0 ) 
 	{
 	  // add root if needed
-	  if ( writer.strata.find( strata_id ) == writer.strata.end() )
+	  if ( w->strata.find( strata_id ) == w->strata.end() )
 	    {
 	      strata_t s;
 	      s.strata_id = strata_id;
-	      writer.strata[ strata_id ] = s;	
+	      w->strata[ strata_id ] = s;	
 	    }
 	  
 	}
@@ -364,13 +366,13 @@ void StratOutDBase::read_all()
 	  level_t level; 
 	  factor_t factor; 
 	  
-	  level = writer.levels[ level_id ]; 
-	  factor = writer.factors[ level.factor_id ];	    
+	  level = w->levels[ level_id ]; 
+	  factor = w->factors[ level.factor_id ];	    
 	  
 	  // existing strata?
-	  if ( writer.strata.find( strata_id ) != writer.strata.end() )
+	  if ( w->strata.find( strata_id ) != w->strata.end() )
 	    {
-	      writer.strata[ strata_id ].insert( level , factor );
+	      w->strata[ strata_id ].insert( level , factor );
 	    }
 	  else
 	    {
@@ -379,7 +381,7 @@ void StratOutDBase::read_all()
 	      
 	      s.insert( level , factor );
 	      
-	      writer.strata[ strata_id ] = s;	
+	      w->strata[ strata_id ] = s;	
 	    }
 	}
 
@@ -390,12 +392,12 @@ void StratOutDBase::read_all()
   //
   // Update strata idmap
   //
-  
-  writer.strata_idmap.clear();
-  std::map<int,strata_t>::const_iterator ss = writer.strata.begin();
-  while ( ss != writer.strata.end() )
+
+  w->strata_idmap.clear();
+  std::map<int,strata_t>::const_iterator ss = w->strata.begin();
+  while ( ss != w->strata.end() )
     {
-      writer.strata_idmap[ ss->second ] = ss->first;
+      w->strata_idmap[ ss->second ] = ss->first;
       ++ss;
     }
 
@@ -419,8 +421,8 @@ void StratOutDBase::read_all()
       std::string tp_key = ( has_epoch ? Helper::int2str( timepoint.epoch ) : "" ) + ":" 
 	+ ( has_interval ? Helper::int2str( timepoint.start ) + "-" + Helper::int2str( timepoint.stop ) : "" ); 
       
-      writer.timepoints[ timepoint.timepoint_id ] = timepoint;
-      writer.timepoints_idmap[ tp_key ] = timepoint.timepoint_id;
+      w->timepoints[ timepoint.timepoint_id ] = timepoint;
+      w->timepoints_idmap[ tp_key ] = timepoint.timepoint_id;
 
     }
 
@@ -439,11 +441,11 @@ void StratOutDBase::read_all()
       var.var_label = sql.get_text( stmt_dump_variables , 3 );
 
       std::string command_name = sql.get_text( stmt_dump_variables , 2 );
-      if ( writer.commands_idmap.find( command_name ) != writer.commands_idmap.end() ) 
-	var.cmd_id = writer.commands_idmap[ command_name ];
+      if ( w->commands_idmap.find( command_name ) != w->commands_idmap.end() ) 
+	var.cmd_id = w->commands_idmap[ command_name ];
 
-      writer.variables[ var.var_id ] = var;
-      writer.variables_idmap[ command_name + ":" + var.var_name ] = var.var_id;
+      w->variables[ var.var_id ] = var;
+      w->variables_idmap[ command_name + ":" + var.var_name ] = var.var_id;
     }
   sql.reset( stmt_dump_variables );
   
@@ -477,7 +479,7 @@ std::set<std::string> StratOutDBase::indiv_names()
 bool StratOutDBase::init()
 {
 
-  // dumpers: from all except /values/
+  // dumpers
 
   stmt_dump_factors = sql.prepare( "SELECT * FROM factors;" );
   stmt_dump_levels = sql.prepare( "SELECT * FROM levels;" );
@@ -487,6 +489,11 @@ bool StratOutDBase::init()
   stmt_dump_timepoints = sql.prepare( "SELECT * FROM timepoints;" );
   stmt_dump_commands = sql.prepare( "SELECT * FROM commands;" );
 
+  // for datapoints, these are only pulled for a given individual (used only when making a retval_t)
+  stmt_dump_int_datapoints = sql.prepare( "SELECT * FROM datapoints where indiv_id == :indiv_id AND typeof(value) == \"integer\" ;" );
+  stmt_dump_dbl_datapoints = sql.prepare( "SELECT * FROM datapoints where indiv_id == :indiv_id AND typeof(value) == \"real\" ;" );
+  stmt_dump_txt_datapoints = sql.prepare( "SELECT * FROM datapoints where indiv_id == :indiv_id AND typeof(value) == \"text\" ;" );
+  
   // queries
   stmt_count_values = sql.prepare( "SELECT count(1) FROM datapoints;" );
   stmt_lookup_value_by_null_strata = sql.prepare( "SELECT * FROM datapoints WHERE timepoint_id IS NULL AND strata_id IS NULL ; " );
@@ -539,6 +546,10 @@ bool StratOutDBase::release()
   sql.finalise( stmt_dump_individuals);	      
   sql.finalise( stmt_dump_timepoints);	      
   sql.finalise( stmt_dump_commands);	      
+
+  sql.finalise( stmt_dump_int_datapoints);	      
+  sql.finalise( stmt_dump_dbl_datapoints);	      
+  sql.finalise( stmt_dump_txt_datapoints);	      
 
   sql.finalise( stmt_lookup_value_by_strata);
   sql.finalise( stmt_lookup_value_by_strata_and_timepoint);
@@ -755,9 +766,10 @@ bool      StratOutDBase::insert_value( const int indiv_id , const int cmd_id , c
   else
     sql.bind_int( stmt_insert_value , ":timepoint_id" , timepoint_id );
 
-  if      ( x.missing ) sql.bind_null( stmt_insert_value , ":value" );
+  if      ( x.missing ) sql.bind_null( stmt_insert_value ,   ":value" );
   else if ( x.numeric ) sql.bind_double( stmt_insert_value , ":value" , x.d );
-  else                  sql.bind_text( stmt_insert_value , ":value" , x.s );
+  else if ( x.integer ) sql.bind_int( stmt_insert_value ,    ":value" , x.i );
+  else                  sql.bind_text( stmt_insert_value ,   ":value" , x.s );
   
   sql.step( stmt_insert_value );
   sql.reset( stmt_insert_value );
@@ -871,6 +883,129 @@ std::set<int> StratOutDBase::all_matching_cmds( const std::set<std::string> & cm
 
 
 
+packets_t StratOutDBase::dump_all() 
+{
+  
+  packets_t packets;
+
+  while ( sql.step( stmt_dump_int_datapoints ) )
+    {      
+      packet_t packet;
+      packet.indiv_id = sql.get_int( stmt_dump_int_datapoints , 0);
+      packet.cmd_id   = sql.get_int( stmt_dump_int_datapoints , 1);
+      packet.var_id   = sql.get_int( stmt_dump_int_datapoints , 2);
+      bool has_strata = ! sql.is_null( stmt_dump_int_datapoints , 3);
+      packet.strata_id = has_strata ? sql.get_int( stmt_dump_int_datapoints , 3) : -1;            
+      bool has_tp = ! sql.is_null( stmt_dump_int_datapoints , 4); 
+      packet.timepoint_id = has_tp ? sql.get_int( stmt_dump_int_datapoints , 4) : -1;
+      // Integers
+      packet.value = value_t( sql.get_int( stmt_dump_int_datapoints , 5) );
+      packets.push_back( packet );
+      
+    }
+  sql.reset( stmt_dump_int_datapoints );
+
+
+  while ( sql.step( stmt_dump_dbl_datapoints ) )
+    {      
+      packet_t packet;
+      packet.indiv_id = sql.get_int( stmt_dump_dbl_datapoints , 0);
+      packet.cmd_id   = sql.get_int( stmt_dump_dbl_datapoints , 1);
+      packet.var_id   = sql.get_int( stmt_dump_dbl_datapoints , 2);
+      bool has_strata = ! sql.is_null( stmt_dump_dbl_datapoints , 3);
+      packet.strata_id = has_strata ? sql.get_int( stmt_dump_dbl_datapoints , 3) : -1;      
+      bool has_tp = ! sql.is_null( stmt_dump_dbl_datapoints , 4); 
+      packet.timepoint_id = has_tp ? sql.get_int( stmt_dump_dbl_datapoints , 4) : -1;
+      // doubles
+      packet.value = value_t( sql.get_double( stmt_dump_dbl_datapoints , 5) );      
+      packets.push_back( packet );      
+    }
+  sql.reset( stmt_dump_dbl_datapoints );
+
+
+  while ( sql.step( stmt_dump_txt_datapoints ) )
+    {     
+      packet_t packet;
+      packet.indiv_id = sql.get_int( stmt_dump_txt_datapoints , 0);
+      packet.cmd_id   = sql.get_int( stmt_dump_txt_datapoints , 1);
+      packet.var_id   = sql.get_int( stmt_dump_txt_datapoints , 2);
+      bool has_strata = ! sql.is_null( stmt_dump_txt_datapoints , 3);
+      packet.strata_id = has_strata ? sql.get_int( stmt_dump_txt_datapoints , 3) : -1;      
+      bool has_tp = ! sql.is_null( stmt_dump_txt_datapoints , 4); 
+      packet.timepoint_id = has_tp ? sql.get_int( stmt_dump_txt_datapoints , 4) : -1;
+      // Strings
+      packet.value = value_t( sql.get_text( stmt_dump_txt_datapoints , 5) );
+      packets.push_back( packet );      
+    }
+  sql.reset( stmt_dump_txt_datapoints );
+
+  return packets;
+
+}
+
+
+packets_t StratOutDBase::dump_indiv( const int indiv_id ) 
+{
+  
+  packets_t packets;
+  
+  sql.bind_int( stmt_dump_int_datapoints , ":indiv_id" , indiv_id );
+  while ( sql.step( stmt_dump_int_datapoints ) )
+    {      
+      packet_t packet;
+      packet.indiv_id = sql.get_int( stmt_dump_int_datapoints , 0);
+      packet.cmd_id   = sql.get_int( stmt_dump_int_datapoints , 1);
+      packet.var_id   = sql.get_int( stmt_dump_int_datapoints , 2);
+      bool has_strata = ! sql.is_null( stmt_dump_int_datapoints , 3);
+      packet.strata_id = has_strata ? sql.get_int( stmt_dump_int_datapoints , 3) : -1;            
+      bool has_tp = ! sql.is_null( stmt_dump_int_datapoints , 4); 
+      packet.timepoint_id = has_tp ? sql.get_int( stmt_dump_int_datapoints , 4) : -1;
+      // Integers
+      packet.value = value_t( sql.get_int( stmt_dump_int_datapoints , 5) );
+      packets.push_back( packet );
+      
+    }
+  sql.reset( stmt_dump_int_datapoints );
+
+  sql.bind_int( stmt_dump_dbl_datapoints , ":indiv_id" , indiv_id );
+  while ( sql.step( stmt_dump_dbl_datapoints ) )
+    {      
+      packet_t packet;
+      packet.indiv_id = sql.get_int( stmt_dump_dbl_datapoints , 0);
+      packet.cmd_id   = sql.get_int( stmt_dump_dbl_datapoints , 1);
+      packet.var_id   = sql.get_int( stmt_dump_dbl_datapoints , 2);
+      bool has_strata = ! sql.is_null( stmt_dump_dbl_datapoints , 3);
+      packet.strata_id = has_strata ? sql.get_int( stmt_dump_dbl_datapoints , 3) : -1;      
+      bool has_tp = ! sql.is_null( stmt_dump_dbl_datapoints , 4); 
+      packet.timepoint_id = has_tp ? sql.get_int( stmt_dump_dbl_datapoints , 4) : -1;
+      // doubles
+      packet.value = value_t( sql.get_double( stmt_dump_dbl_datapoints , 5) );      
+      packets.push_back( packet );      
+    }
+  sql.reset( stmt_dump_dbl_datapoints );
+
+  sql.bind_int( stmt_dump_txt_datapoints , ":indiv_id" , indiv_id );
+  while ( sql.step( stmt_dump_txt_datapoints ) )
+    {     
+      packet_t packet;
+      packet.indiv_id = sql.get_int( stmt_dump_txt_datapoints , 0);
+      packet.cmd_id   = sql.get_int( stmt_dump_txt_datapoints , 1);
+      packet.var_id   = sql.get_int( stmt_dump_txt_datapoints , 2);
+      bool has_strata = ! sql.is_null( stmt_dump_txt_datapoints , 3);
+      packet.strata_id = has_strata ? sql.get_int( stmt_dump_txt_datapoints , 3) : -1;      
+      bool has_tp = ! sql.is_null( stmt_dump_txt_datapoints , 4); 
+      packet.timepoint_id = has_tp ? sql.get_int( stmt_dump_txt_datapoints , 4) : -1;
+      // Strings
+      packet.value = value_t( sql.get_text( stmt_dump_txt_datapoints , 5) );
+      packets.push_back( packet );      
+    }
+  sql.reset( stmt_dump_txt_datapoints );
+
+  return packets;
+
+}
+
+
 void StratOutDBase::fetch( int strata_id , int time_mode, packets_t * packets, std::set<int> * indivs_id , std::set<int> * cmds_id , std::set<int> * vars_id )
 {
 
@@ -959,3 +1094,86 @@ void StratOutDBase::fetch( int strata_id , int time_mode, packets_t * packets, s
 }
 
 
+
+
+retval_t writer_t::dump_to_retval( const std::string & dbname , const std::string & person )
+{
+
+  //
+  // Pulls out all information *for a single individual/EDF* and creates a retval_t 
+  //
+
+  retval_t retval;
+  
+  //
+  // attach named database as read-only
+  //
+  
+  const bool IS_READONLY = true;
+  
+  writer_t w;
+  
+  w.attach( dbname , IS_READONLY );
+
+
+  std::string indiv_name = person;
+  
+  // if no individual is specified on the command line, assume a single individual 
+  
+  if ( indiv_name == "" ) 
+    {
+      // if only one individual, set ID to that person
+      if ( w.individuals_idmap.size() == 1 ) 
+	indiv_name = w.individuals_idmap.begin()->first;
+      else  // otherwise return an empty set
+	return retval;
+    }
+
+  // if no individual found, just return an empty retval
+  if ( w.individuals_idmap.find( indiv_name ) == w.individuals_idmap.end() ) 
+    return retval;
+  
+  // get numeric indiv ID code
+
+  int indiv_id = w.individuals_idmap[ indiv_name ];
+  
+  //
+  // separately dump all int, double and text values, so that appropriate retval_t types can be set
+  //
+  
+  packets_t packets = w.db.dump_indiv( indiv_id );
+
+  //
+  // Convert packets_t to retval_t
+  //  
+  
+  packets_t::const_iterator pp = packets.begin();
+  while ( pp != packets.end() )
+    {
+      
+      if ( pp->value.numeric )
+	retval.add( retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
+		    retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
+		    retval_var_t( w.variables[ pp->var_id ].var_name ) , 
+		    retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
+		    pp->value.d );
+
+      else if ( pp->value.integer )
+	retval.add( retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
+		    retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
+		    retval_var_t( w.variables[ pp->var_id ].var_name ) , 
+		    retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
+		    pp->value.i );
+      else
+	retval.add( retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
+		    retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
+		    retval_var_t( w.variables[ pp->var_id ].var_name ) , 
+		    retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
+		    pp->value.s );
+
+         
+      ++pp;
+    }
+
+  return retval;
+}

@@ -55,7 +55,7 @@ typedef std::map<retval_cmd_t, std::map<retval_factor_t,std::map<retval_var_t, s
 
 
 //   retval_t
-//     retval_cmd_t  e.g. SPINDELS
+//     retval_cmd_t  e.g. SPINDLES
 //       retval_factors_t   e.g. which 'table'   "F CH"
 //         retval_var_t     e.g. DENS
 //           retval_strata_t --> value   e.g. F=11, CH=C3, DENS=2.22
@@ -86,8 +86,8 @@ struct retval_value_t {
     if ( is_str ) return s;
 
     std::stringstream ss;
-    if      ( is_dbl ) ss  <<d;
-    else if ( is_int ) ss  <<i;    
+    if      ( is_dbl ) ss  <<d << "d";
+    else if ( is_int ) ss  <<i << "i";    
     else ss << ".";
     return ss.str();    
   }

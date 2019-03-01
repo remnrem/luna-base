@@ -1800,7 +1800,7 @@ Token Token::operator&&(const Token & rhs) const
 
 Token Token::operator||(const Token & rhs) const
 {
-
+  
   // if *both* sides NULL, return NULL
   if ( ! ( is_set() || rhs.is_set() ) ) return Token();
   
@@ -1831,19 +1831,25 @@ Token Token::operator||(const Token & rhs) const
     }
 
   // TODO: no vector x scalar ops
-    
-  // scalars:  return T is at least 1 T 
+
+  
+  //
   // scalar OR scalar
-  if ( is_bool()     && bval ) return Token( true );
-  if ( is_int()      && ival ) return Token( true );
+  //
   
-  if ( rhs.is_bool() && rhs.bval ) return Token( true );
-  if ( rhs.is_int()  && rhs.ival ) return Token( true );
+  bool left_valid = is_bool() || is_int() ;
+  bool right_valid = rhs.is_bool() || rhs.is_int();
   
-  // undefined for other types
-  return Token();
+  // only NULL if BOTH sides are invalid (not bool or int)
+  if ( ( ! left_valid ) && ( ! right_valid ) ) return Token();
+  
+  bool left_val  = is_bool() ? bval : ival ; 
+  bool right_val = rhs.is_bool() ? rhs.bval : rhs.ival;
+  
+  return Token( left_val || right_val );
   
 }
+
 
 Token Token::operands( Token & t)
 {
