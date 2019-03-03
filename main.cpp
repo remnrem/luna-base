@@ -953,7 +953,7 @@ void proc_dummy( const std::string & p )
       writer.use_retval( &retval );
 
       // set command string                                                                                                                                                                                                                                                               
-      cmd_t cmd( "PSD epoch sig=EEG1" );
+      cmd_t cmd( "PSD epoch sig=EEG1 & SPINDLES fc=11,15 sig=EEG1" );
 
       cmd.eval( edf );
 

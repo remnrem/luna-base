@@ -21,11 +21,13 @@
 
 #include "sstore.h"
 #include "db/sqlwrap.h"
+#include "helper/helper.h"
 
-
-sstore_t::sstore_t( const std::string & f ) 
+sstore_t::sstore_t( const std::string & f1  ) 
 {
   
+  std::string f = Helper::expand( f1 );
+
   if ( attached() ) dettach();
   
   if ( f == "-" || f == "." ) { dettach(); } 
@@ -374,8 +376,8 @@ void sstore_t::insert_epoch( const int e , const std::string & id , const std::v
 
 void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const std::string & value , const std::string * ch , const std::string * lvl )
 {
-  sql.bind_int64( stmt_insert_interval , ":start" ,  a );
-  sql.bind_int64( stmt_insert_interval , ":stop" ,  b );
+  sql.bind_uint64( stmt_insert_interval , ":start" ,  a );
+  sql.bind_uint64( stmt_insert_interval , ":stop" ,  b );
   sql.bind_text( stmt_insert_interval , ":id" , id );
 
   if ( lvl == NULL ) 
@@ -397,8 +399,8 @@ void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std:
 
 void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const double      & value , const std::string * ch , const std::string * lvl )
 {
-  sql.bind_int64( stmt_insert_interval , ":start" ,  a );
-  sql.bind_int64( stmt_insert_interval , ":stop" ,  b );
+  sql.bind_uint64( stmt_insert_interval , ":start" ,  a );
+  sql.bind_uint64( stmt_insert_interval , ":stop" ,  b );
   sql.bind_text( stmt_insert_interval , ":id" , id );
 
   if ( lvl == NULL ) 
@@ -423,8 +425,8 @@ void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std:
   const int n = value.size();
   if ( n == 1 ) insert_interval( a , b , id , value[0] , ch );
   
-  sql.bind_int64( stmt_insert_interval , ":start" ,  a );  
-  sql.bind_int64( stmt_insert_interval , ":stop" ,  b );  
+  sql.bind_uint64( stmt_insert_interval , ":start" ,  a );  
+  sql.bind_uint64( stmt_insert_interval , ":stop" ,  b );  
   sql.bind_text( stmt_insert_interval , ":id" , id );
 
   if ( lvl == NULL ) 
@@ -584,8 +586,8 @@ sstore_data_t sstore_t::fetch_interval( const interval_t & interval )
   sstore_data_t data;
 
   // select particular interval
-  sql.bind_int64( stmt_fetch_interval , ":start" , interval.start );
-  sql.bind_int64( stmt_fetch_interval , ":stop" , interval.stop );
+  sql.bind_uint64( stmt_fetch_interval , ":start" , interval.start );
+  sql.bind_uint64( stmt_fetch_interval , ":stop" , interval.stop );
   
   while ( sql.step( stmt_fetch_interval ) )
     {
@@ -662,8 +664,8 @@ std::map<interval_t,sstore_data_t> sstore_t::fetch_intervals()
       sstore_key_t key;
       sstore_value_t val;
 
-      interval_t interval( sql.get_int64( stmt_fetch_all_intervals , 0 ) , 
-			   sql.get_int64( stmt_fetch_all_intervals , 1 ) );
+      interval_t interval( sql.get_uint64( stmt_fetch_all_intervals , 0 ) , 
+			   sql.get_uint64( stmt_fetch_all_intervals , 1 ) );
 			         
       bool has_channel = ! sql.is_null( stmt_fetch_all_intervals , 2 );
       key.ch = has_channel ? sql.get_text( stmt_fetch_all_intervals , 2 ) : "" ;

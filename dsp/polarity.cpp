@@ -736,8 +736,8 @@ void dsptools::polarity_check( const std::vector<double> & x0 , const std::vecto
 	 
 	}
 
-      writer.value( "N_H" , delta_activity.size() );
-      writer.value( "N_FFT" , delta_psd[ 0.5 * 100 ].size() );
+      writer.value( "N_H" , (int)delta_activity.size() );
+      writer.value( "N_FFT" , (int)delta_psd[ 0.5 * 100 ].size() );
       
       
       if ( delta_psd[ 0.5 * 100 ].size() > min_epochs_required ) 

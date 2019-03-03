@@ -28,7 +28,9 @@
 
 bool SQL::open(std::string n)
 {
-  name = n;
+
+  // expand ~ to home folder...
+  name = Helper::expand( n ) ;
   
   rc = sqlite3_open( name.c_str() , &db);
   
@@ -177,7 +179,7 @@ void SQL::bind_null( sqlite3_stmt * stmt , const std::string index  )
 		       sqlite3_bind_parameter_index( stmt , index.c_str() ) );
 }
 
-void SQL::bind_int64( sqlite3_stmt * stmt , const std::string index , uint64_t value )
+void SQL::bind_uint64( sqlite3_stmt * stmt , const std::string index , uint64_t value )
 {
   sqlite3_bind_int64( stmt , 
 		     sqlite3_bind_parameter_index( stmt , index.c_str() ) ,
@@ -218,8 +220,8 @@ int SQL::get_int( sqlite3_stmt * stmt , int idx )
   return sqlite3_column_int( stmt , idx );
 }
 
-uint64_t SQL::get_int64( sqlite3_stmt * stmt , int idx )
-{
+uint64_t SQL::get_uint64( sqlite3_stmt * stmt , int idx )
+{  
   return sqlite3_column_int64( stmt , idx );
 }
 
@@ -274,12 +276,12 @@ std::vector<int> SQL::intTable(sqlite3_stmt * stmt, int cols)
   return res;
 }
 
-std::vector<uint64_t> SQL::int64Table( const std::string & q, int cols)
+std::vector<uint64_t> SQL::uint64Table( const std::string & q, int cols)
 {  
-  return int64Table( prepare(q) , cols );
+  return uint64Table( prepare(q) , cols );
 }
 
-std::vector<uint64_t> SQL::int64Table(sqlite3_stmt * stmt, int cols)
+std::vector<uint64_t> SQL::uint64Table(sqlite3_stmt * stmt, int cols)
 {
   std::vector<uint64_t> res;
   rc = sqlite3_step( stmt );
@@ -313,7 +315,7 @@ int SQL::lookup_int( const std::string & q )
   return r;
 }
 
-uint64_t SQL::lookup_int64(sqlite3_stmt * stmt)
+uint64_t SQL::lookup_uint64(sqlite3_stmt * stmt)
 {
   uint64_t r = 0;
   rc = sqlite3_step( stmt );
@@ -321,4 +323,3 @@ uint64_t SQL::lookup_int64(sqlite3_stmt * stmt)
     r = sqlite3_column_int64( stmt , 0 );  
   return r;
 }
-

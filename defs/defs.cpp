@@ -265,9 +265,13 @@ void globals::init_defs()
   // Time-units
   //
   
-  tp_1sec  = 1000000000000LLU; // 1e-12 sec resolution
+  // 1e-12 sec resolution
+//   tp_1sec  = 1000000000000LLU; 
+//   tp_duration    = 1.0 / (double)tp_1sec;
+
+  // 1e-9 sec resolution
+  tp_1sec  = 1000000000LLU;
   tp_duration    = 1.0 / (double)tp_1sec;
-  
   
   //
   // Common output stratifiers

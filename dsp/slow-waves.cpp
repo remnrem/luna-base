@@ -334,11 +334,11 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	
 	writer.level( i+1 , globals::count_strat );
 	
-	writer.value( "START_IDX" , w.interval.start );
-	writer.value( "STOP_IDX"  , w.interval.stop );
+	writer.value( "START_IDX" , static_cast<int>(w.interval.start) );
+	writer.value( "STOP_IDX"  , static_cast<int>(w.interval.stop ) );
 	
-	writer.value( "START" , w.interval_tp.start );
-	writer.value( "STOP"  , w.interval_tp.stop );
+	writer.value( "START" , w.interval_tp.start * globals::tp_duration );
+	writer.value( "STOP"  , w.interval_tp.stop * globals::tp_duration );
 	
 	writer.value( "DUR"  , w.interval_tp.duration_sec() );
 	

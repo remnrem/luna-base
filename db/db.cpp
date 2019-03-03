@@ -436,8 +436,8 @@ void StratOutDBase::read_all( writer_t * w )
       timepoint.epoch = has_epoch ? sql.get_int( stmt_dump_timepoints , 1 ) : -1 ;
 
       bool has_interval = ! sql.is_null( stmt_dump_timepoints , 2 );      
-      timepoint.start = has_interval ? sql.get_int64( stmt_dump_timepoints , 2 ) : 0 ; 
-      timepoint.stop  = has_interval ? sql.get_int64( stmt_dump_timepoints , 3 ) : 0 ; 
+      timepoint.start = has_interval ? sql.get_uint64( stmt_dump_timepoints , 2 ) : 0 ; 
+      timepoint.stop  = has_interval ? sql.get_uint64( stmt_dump_timepoints , 3 ) : 0 ; 
       
       std::string tp_key = ( has_epoch ? Helper::int2str( timepoint.epoch ) : "" ) + ":" 
 	+ ( has_interval ? Helper::int2str( timepoint.start ) + "-" + Helper::int2str( timepoint.stop ) : "" ); 
@@ -651,8 +651,8 @@ timepoint_t   StratOutDBase::insert_epoch_timepoint( const int epoch )
 timepoint_t   StratOutDBase::insert_interval_timepoint( const interval_t & interval )
 {
   sql.bind_null( stmt_insert_timepoint , ":epoch"  );
-  sql.bind_int64( stmt_insert_timepoint , ":start" , interval.start );
-  sql.bind_int64( stmt_insert_timepoint , ":stop" , interval.stop );
+  sql.bind_uint64( stmt_insert_timepoint , ":start" , interval.start );
+  sql.bind_uint64( stmt_insert_timepoint , ":stop" , interval.stop );
   sql.step( stmt_insert_timepoint );
   sql.reset( stmt_insert_timepoint );
 

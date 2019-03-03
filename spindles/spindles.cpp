@@ -169,6 +169,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool     ftr_output               = param.has("ftr-dir") || param.has("ftr");
 
   
+  // show verbose ENRICH output
+  const bool     enrich_output            = param.has( "enrich" );
+
+  
   //
   // Intersection of multiple wavelets/spindles/channels   ( by default, do not merge across channels)
   //
@@ -1256,7 +1260,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		{
 		  writer.level( i+1 , "SPINDLE" );
 		  
-		  writer.value("PEAK" , spindle_peak[i] );
+		  writer.value("PEAK" , spindle_peak[i] * globals::tp_duration );
 		  
 		  if ( nearest_sw_number[i] != 0 ) // is now 1-basewd 
 		    writer.value( "NEAREST_SW" , nearest_sw[i] );
@@ -1484,7 +1488,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      writer.value( "N01" , nspindles_premerge );  // original
 	      writer.value( "N02" , nspindles_postmerge ); // post merging
-	      writer.value( "N" ,  spindles.size()  ) ;    // post merging and QC	    
+	      writer.value( "N" ,  (int)spindles.size()  ) ;    // post merging and QC	    
 	      writer.value( "MINS" , t_minutes );
 	      writer.value( "DENS" , spindles.size() / t_minutes );
 	      
@@ -1584,7 +1588,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  
 		  writer.value( "DISPERSION" , stat );
 		  writer.value( "DISPERSION_P" , pval );
-		  writer.value( "NE" , epoch_counts.size() );
+		  writer.value( "NE" , (int)epoch_counts.size() );
 		}
 
 	    }
@@ -1823,7 +1827,13 @@ void characterize_spindles( edf_t & edf ,
 			    std::map<double,double> * locked 
 			    )   // input, is 
 {
-  
+ 
+  //
+  // Copy key output modes
+  //
+
+  const bool enrich_output = param.has( "enrich" );
+
   //
   // Create a copy of this signal, if it does not already exist
   //
@@ -2376,8 +2386,8 @@ void characterize_spindles( edf_t & edf ,
 
        writer.level( i+1 , "SPINDLE" );  // 1-based spindle count
        
-       writer.value( "START"  , spindle->tp.start );
-       writer.value( "STOP"   , spindle->tp.stop  );
+       writer.value( "START"  , spindle->tp.start * globals::tp_duration );
+       writer.value( "STOP"   , spindle->tp.stop * globals::tp_duration );
        
        if ( 1 ) // show_sample_points )
 	 {
@@ -2433,19 +2443,21 @@ void characterize_spindles( edf_t & edf ,
 	   writer.value( "Q"      , spindle->qual     );
 	   writer.value( "PASS"   , spindle->include  );
 	   
-	   std::map<freq_range_t,double>::const_iterator bb = spindle->enrich.begin();
-	   while ( bb != spindle->enrich.end() )
+	   if ( enrich_output )
 	     {
-	       writer.level( globals::print( bb->first ) , globals::band_strat );
-	       writer.value( "ENRICH" , bb->second );
-	       ++bb;
+	       std::map<freq_range_t,double>::const_iterator bb = spindle->enrich.begin();
+	       while ( bb != spindle->enrich.end() )
+		 {
+		   writer.level( globals::print( bb->first ) , globals::band_strat );
+		   writer.value( "ENRICH" , bb->second );
+		   ++bb;
+		 }
+	       writer.unlevel( globals::band_strat );
 	     }
-	   writer.unlevel( globals::band_strat );
 	 }
-       
+
      }
    
-
    // end of per-spindle output
    writer.unlevel( "SPINDLE" );
 
@@ -2466,10 +2478,6 @@ void characterize_spindles( edf_t & edf ,
      }
 
 }
-
-
-
-
 
 
 void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_t,double> * freqs )
@@ -2817,12 +2825,12 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
 	      const spindle_t & spindle = *ii;	  
 	      
 	      writer.level( ++cnt , "SPINDLE" );
-	      writer.var( "SINGLE_SP_START_TP" , "Single spindle start time-point" );
-	      writer.var( "SINGLE_SP_STOP_TP" , "Single spindle stop time-point" );
+	      writer.var( "SINGLE_SP_START" , "Single spindle start time-point" );
+	      writer.var( "SINGLE_SP_STOP" , "Single spindle stop time-point" );
 	      writer.var( "SINGLE_SP_DUR" , "Single spindle stop time-point" );
 
-	      writer.value(  "SINGLE_SP_START_TP" , spindle.tp.start );
-	      writer.value( "SINGLE_SP_STOP_TP" , spindle.tp.stop );
+	      writer.value( "SINGLE_SP_START" , spindle.tp.start * globals::tp_duration );
+	      writer.value( "SINGLE_SP_STOP" , spindle.tp.stop * globals::tp_duration );
 	      writer.value( "SINGLE_SP_DUR" , (spindle.tp.stop-spindle.tp.start+1)/(double)globals::tp_1sec );
 
 	      ++ii;

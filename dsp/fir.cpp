@@ -321,7 +321,7 @@ void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double
   // Filter data
   //
   
-  std::cerr << " filtering channel " << edf.header.label[ s ] << ", ";
+  logger << " filtering channel " << edf.header.label[ s ] << ", ";
 
   //
   // Pull entire signals out
@@ -342,22 +342,22 @@ void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double
   if ( ftype == fir_t::BAND_PASS ) 
     {
       fc = design_bandpass_fir( ripple , tw , fs , f1, f2 );    
-      std::cerr << "bandpass FIR order " << fc.size() << "\n";
+      logger << "bandpass FIR order " << fc.size() << "\n";
     }
   else if ( ftype == fir_t::BAND_STOP )
     {
       fc = design_bandstop_fir( ripple , tw , fs , f1, f2 );
-      std::cerr << "bandstop FIR order " << fc.size() << "\n";
+      logger << "bandstop FIR order " << fc.size() << "\n";
     }
   else if ( ftype == fir_t::LOW_PASS )
     {
       fc = design_lowpass_fir( ripple , tw , fs , f1 );
-      std::cerr << "lowpass FIR order " << fc.size() << "\n";
+      logger << "lowpass FIR order " << fc.size() << "\n";
     }
   else if ( ftype == fir_t::HIGH_PASS )
     {
       fc = design_highpass_fir( ripple , tw , fs , f1 );
-      std::cerr << "highpass FIR order " << fc.size() << "\n";
+      logger << "highpass FIR order " << fc.size() << "\n";
     }
   
   //int filter_order = num_taps == -1 ? 3 * ( Fs[s] / lwr ) : num_taps ; 

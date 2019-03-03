@@ -696,7 +696,7 @@ void timeline_t::apply_empty_epoch_mask( const std::string & label , bool includ
   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
-  writer.value( "N_TOTAL"      , epochs.size()    );
+  writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
   writer.unlevel( "EPOCH_MASK" );
 
@@ -814,7 +814,7 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
-  writer.value( "N_TOTAL"      , epochs.size()    );
+  writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
   writer.unlevel( "EPOCH_MASK" );
 }
@@ -1791,7 +1791,7 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
-  writer.value( "N_TOTAL"      , epochs.size()    );
+  writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
   writer.unlevel( "EPOCH_MASK" );
 
@@ -3649,7 +3649,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
-  writer.value( "N_TOTAL"      , epochs.size()    );
+  writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
   writer.unlevel( "EPOCH_MASK" );
 

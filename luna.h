@@ -23,6 +23,8 @@
 #ifndef __LUNA_H__
 #define __LUNA_H__
 
+#include <cstddef>
+
 #include "eval.h" 
 
 #include "defs/defs.h"

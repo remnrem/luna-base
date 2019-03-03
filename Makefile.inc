@@ -3,9 +3,9 @@
 ARCH=LINUX
 
 # if dependencies are installed locally, the DEP variable will be set on the command line
-ifdef DEP
-DEP_INCLUDES = -I$(DEP)/include
-DEP_LIB = -L$(DEP)/lib
+ifdef LUNA_DEP
+DEP_INCLUDES = -I$(LUNA_DEP)/include
+DEP_LIB = -L$(LUNA_DEP)/lib
 endif
 
 CXX = g++

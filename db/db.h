@@ -898,14 +898,14 @@ class writer_t
     return value( var_name , value_t( d ) ) ;
   }
 
-  /* bool value( const std::string & var_name , int i , const std::string & desc = "" ) */
-  /* { */
-  /*   if ( retval != NULL ) return to_retval( var_name , i ); */
-  /*   else if ( dbless ) return to_stdout( var_name , value_t( i ) ) ; */
-  /*   if ( desc != "" ) var( var_name , desc ); */
-  /*   return value( var_name , value_t( i ) ) ; */
-  /* } */
-
+  bool value( const std::string & var_name , int i , const std::string & desc = "" ) 
+  { 
+    if ( retval != NULL ) return to_retval( var_name , i ); 
+    else if ( dbless ) return to_stdout( var_name , value_t( i ) ) ; 
+    if ( desc != "" ) var( var_name , desc ); 
+    return value( var_name , value_t( i ) ) ; 
+  } 
+  
   bool value( const std::string & var_name , const std::string & s , const std::string & desc = "" )
   {
     if ( retval != NULL ) return to_retval( var_name , s );
@@ -1002,18 +1002,19 @@ class writer_t
   }
 
 
-bool to_retval( const std::string & var_name , const std::string & s  )
-{
-  
-  retval->add( retval_cmd_t( curr_command.cmd_name ) ,
-	       retval_factor_t( curr_strata , curr_timepoint ) ,
-	       retval_var_t( var_name ) , 
-	       retval_strata_t( curr_strata , curr_timepoint ) ,
-	       s );
-  
+
+  bool to_retval( const std::string & var_name , const std::string & s  )
+  {
+    
+    retval->add( retval_cmd_t( curr_command.cmd_name ) ,
+		 retval_factor_t( curr_strata , curr_timepoint ) ,
+		 retval_var_t( var_name ) , 
+		 retval_strata_t( curr_strata , curr_timepoint ) ,
+		 s );
+    
     return true;
   }
-
+  
 
   bool to_retval( const std::string & var_name )
   {

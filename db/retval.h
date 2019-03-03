@@ -72,15 +72,16 @@ struct retval_cmd_t {
 struct retval_value_t {
   
   retval_value_t() { is_dbl = is_int = is_str = false; } 
+
   retval_value_t( double d ) :              is_dbl(true) , is_int(false), is_str(false), d(d)  { i=0; s="";  }
-  retval_value_t( int i ) :                 is_dbl(false), is_int(true),  is_str(false), i(i)  { d=0; s=""; }
+  retval_value_t( int64_t i ) :             is_dbl(false), is_int(true),  is_str(false), i(i)  { d=0; s=""; }
   retval_value_t( const std::string & s ) : is_dbl(false), is_int(false), is_str(true),  s(s)  { d=0; i=0; } 
 
   bool is_dbl, is_int, is_str;
   
   double d;
   std::string s;
-  int i;
+  int64_t i; // to handle time-point information
 
   std::string print() const {
     if ( is_str ) return s;
@@ -154,9 +155,27 @@ struct retval_t {
 	    const retval_strata_t & stratum ,
 	    int  x )
   {
-    data[cmd][fac][var][stratum] = retval_value_t( x );
+    data[cmd][fac][var][stratum] = retval_value_t( (int64_t)x );
   }
   
+  void add( const retval_cmd_t & cmd ,
+	    const retval_factor_t & fac ,
+	    const retval_var_t & var ,
+	    const retval_strata_t & stratum ,
+	    int64_t  x )
+  {
+    data[cmd][fac][var][stratum] = retval_value_t( x );
+  }
+
+  void add( const retval_cmd_t & cmd ,
+	    const retval_factor_t & fac ,
+	    const retval_var_t & var ,
+	    const retval_strata_t & stratum ,
+	    uint64_t  x )
+  {
+    data[cmd][fac][var][stratum] = retval_value_t( (int64_t)x );
+  }
+
   void add( const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,

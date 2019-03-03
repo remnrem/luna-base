@@ -196,7 +196,7 @@ void mspindles_t::output( const signal_list_t & signals )
   writer.var( "MSP_DENS" , "Merged spindle density");
   writer.var( "MSP_MINS" , "Denominator for merged spindle density" );
   
-  writer.value( "MSP_N" , M.size() );
+  writer.value( "MSP_N" , (int)M.size() );
   writer.value( "MSP_DENS" , M.size() / max_mins );
   writer.value( "MSP_MINS" , max_mins );
   
@@ -253,8 +253,8 @@ void mspindles_t::output( const signal_list_t & signals )
       writer.value( "MSP_FU" , M[i].upr_frq );
       writer.value( "MSP_DUR" , M[i].dur() );
       writer.value( "MSP_STAT" , M[i].stat );      
-      writer.value( "MSP_START" , M[i].start );
-      writer.value( "MSP_STOP" , M[i].stop );
+      writer.value( "MSP_START" , M[i].start * globals::tp_duration );
+      writer.value( "MSP_STOP" , M[i].stop * globals::tp_duration );
 
       if ( hms )
 	 {
@@ -285,8 +285,8 @@ void mspindles_t::output( const signal_list_t & signals )
 	    {
 	      writer.level( s+1     , "SPINDLE" );
 	      writer.value( "SCH"   , M[i].lab[s] );
-	      writer.value( "START" , M[i].spindles[s]->tp.start );
-	      writer.value( "STOP"  , M[i].spindles[s]->tp.stop );             
+	      writer.value( "START" , M[i].spindles[s]->tp.start * globals::tp_duration );
+	      writer.value( "STOP"  , M[i].spindles[s]->tp.stop * globals::tp_duration );             
 	      writer.value( "FFT"   , M[i].spindles[s]->fft ); 
 	    }	  
 	  writer.unlevel( "SPINDLE" );

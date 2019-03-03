@@ -245,7 +245,7 @@ void edf_t::terse_summary() const
   writer.var( "REC.DUR" , "Record duration (sec)" );
   writer.var( "TOT.DUR.SEC" , "Total recording duration (sec)" );
   writer.var( "TOT.DUR.HMS" , "Total recording duration (hh:mm:ss)" );
-  writer.var( "TOT.DUR.TP"  , "Total recording duration (time-points, 10^(-12) secs)" );
+  writer.var( "TOT.DUR.TP"  , "Total recording duration (time-points)" );
 
   writer.var( "SR" , "Sampling race (points per second)" );
   writer.var( "PDIM" , "Physical dimension/units" );
@@ -2106,8 +2106,8 @@ bool edf_t::restructure()
 	 << records.size() << " records of " 
 	 << copy.size() << ", resetting mask\n";
   
-  writer.value( "NR1" , copy.size() );
-  writer.value( "NR2" , records.size() );
+  writer.value( "NR1" , (int)copy.size() );
+  writer.value( "NR2" , (int)records.size() );
   
   writer.value( "DUR1" , copy.size() * header.record_duration );
   writer.value( "DUR2" , records.size() * header.record_duration );
