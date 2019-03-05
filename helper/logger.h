@@ -27,6 +27,7 @@
 
 #include <type_traits>
 #include <iostream>
+#include <sstream>
 #include <chrono>
 #include <ctime>
 #include <string>
@@ -44,6 +45,8 @@ class logger_t
   const std::string _log_header;
 
   std::ostream& _out_stream;
+  
+  std::stringstream ss;
   
   bool         _next_is_begin;
  
@@ -74,7 +77,7 @@ class logger_t
   {
 
     if ( is_off || globals::silent ) return;
-
+    
     // initialize log with this message
     
     auto now        = std::chrono::system_clock::now();
@@ -115,7 +118,10 @@ class logger_t
   void warning( const std::string & msg )
   {
     if ( is_off ) return ;
-    _out_stream << " ** warning: " << msg << " ** " << std::endl;
+    if ( globals::Rmode && globals::Rdisp )
+      ss << " ** warning: " << msg << " ** " << std::endl;
+    else
+      _out_stream << " ** warning: " << msg << " ** " << std::endl;
   }
   
 
@@ -127,7 +133,8 @@ class logger_t
 
       if ( ! globals::silent ) 
 	_out_stream << endl; 
-
+      else if ( globals::Rmode && globals::Rdisp )
+	ss << endl;
       return *this; 
     }
   
@@ -140,10 +147,22 @@ class logger_t
 
       if ( ! globals::silent ) 
 	_out_stream << data;
-
+      else if ( globals::Rmode && globals::Rdisp )
+	{
+	  ss << data;
+	}
       return *this;
 
     }
+  
+  std::string print_buffer() 
+    {      
+      std::string retval = ss.str();
+      ss.str(std::string());
+      return retval;
+    }
+  
+
 };
 
 

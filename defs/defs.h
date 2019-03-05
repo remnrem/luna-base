@@ -170,6 +170,7 @@ struct globals
 
   // is in R mode
   static bool Rmode;
+  static bool Rdisp;
 
   // generic global parameters
   static param_t param;
@@ -182,7 +183,7 @@ struct globals
   // modes
   void api();
 
-  void R();
+  void R( bool );
 
 
   // default annotation folder (i.e. added to each record in sample-list implicitly)

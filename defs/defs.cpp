@@ -86,6 +86,7 @@ void (*globals::bail_function) ( const std::string & );
 
 bool globals::silent; 
 bool globals::Rmode;
+bool globals::Rdisp;
 
 std::string globals::epoch_strat;
 std::string globals::time_strat;
@@ -108,9 +109,10 @@ void globals::api()
   writer.nodb();
 }
 
-void globals::R()
+void globals::R( bool disp )
 {
   Rmode = true;
+  Rdisp = disp;
   api();
 }
 
@@ -121,7 +123,6 @@ void globals::init_defs()
   // Version
   //
   
-
   version = "v0.9";
   date    = "12-Feb-2019";
 
@@ -137,8 +138,16 @@ void globals::init_defs()
   
   bail_function = NULL;
 
+  //
+  // Output
+  //
+
   silent = false;
   
+  Rmode = false;
+
+  Rdisp = false;
+
   //
   // Annotation folder
   //

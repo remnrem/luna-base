@@ -1685,9 +1685,11 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
 }
 
 
-bool edf_t::load_annotations( const std::string & f )
+bool edf_t::load_annotations( const std::string & f0 )
 {
     
+  const std::string f = Helper::expand( f0 );
+
   //
   // peek into each annotation file just to get a list of the
   // available annoations, do not load at this point
