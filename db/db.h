@@ -614,7 +614,7 @@ class writer_t
   std::set<int> all_matching_cmds( const std::set<std::string> & cmds ) { return db.all_matching_cmds( cmds ); }
 
   // open db and send to a retval
-  static retval_t dump_to_retval( const std::string & dbname , const std::string & indiv_name = "" );
+  static retval_t dump_to_retval( const std::string & dbname , const std::string & indiv_name = "" , std::vector<std::string> * ids = NULL );
 
   bool close() 
   { 

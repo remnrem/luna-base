@@ -675,36 +675,38 @@ void process_edfs( cmd_t & cmd )
       
       for (int i=2;i<tok.size();i++) 
 	{
-	      if ( tok[i][ tok[i].size() - 1 ] == '/' ) 
+	  
+	  std::string fname = Helper::expand( tok[i] );
+
+	  if ( fname[ fname.size() - 1 ] == '/' ) 
 		{
 		  // this means we are specifying a folder, in which case search for all files that 
 		  // start id_<ID>_* and attach thoses
 		  DIR * dir;		  
 		  struct dirent *ent;
-		  if ( (dir = opendir ( tok[i].c_str() ) ) != NULL )
+		  if ( (dir = opendir ( fname.c_str() ) ) != NULL )
 		    {
 		      /* print all the files and directories within directory */
 		      while ((ent = readdir (dir)) != NULL)
 			{
-			  std::string fname = ent->d_name;
-			  //std::cerr << " fname [" << fname << "]\n";
-			  // only annot files (.xml, .ftr, .annot)
- 			  if ( Helper::file_extension( fname , "ftr" ) ||
- 			       Helper::file_extension( fname , "xml" ) ||
-			       Helper::file_extension( fname , "eannot" ) ||
-			       Helper::file_extension( fname , "annot" ) )
+			  std::string fname2 = ent->d_name;
+			  // only annot files (.xml, .ftr, .annot, .eannot)
+ 			  if ( Helper::file_extension( fname2 , "ftr" ) ||
+ 			       Helper::file_extension( fname2 , "xml" ) ||
+			       Helper::file_extension( fname2 , "eannot" ) ||
+			       Helper::file_extension( fname2 , "annot" ) )
 			    {
-			      edf.load_annotations( tok[i] + fname );	 			   
+			      edf.load_annotations( fname + fname2 );	 			   
 			    }
 			}
 		      closedir (dir);
 		    }
 		  else 
-		    Helper::halt( "could not open folder " + tok[i] );
+		    Helper::halt( "could not open folder " + fname );
 		}
 	      else
 		{
-		  edf.load_annotations( tok[i] );	 
+		  edf.load_annotations( fname );	 
 		}
 	      
 	    }

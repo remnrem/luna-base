@@ -1117,7 +1117,7 @@ void StratOutDBase::fetch( int strata_id , int time_mode, packets_t * packets, s
 
 
 
-retval_t writer_t::dump_to_retval( const std::string & dbname , const std::string & person )
+retval_t writer_t::dump_to_retval( const std::string & dbname , const std::string & person , std::vector<std::string> * ids )
 {
 
   //
@@ -1136,7 +1136,6 @@ retval_t writer_t::dump_to_retval( const std::string & dbname , const std::strin
   
   w.attach( dbname , IS_READONLY );
 
-
   std::string indiv_name = person;
   
   // if no individual is specified on the command line, assume a single individual 
@@ -1146,8 +1145,20 @@ retval_t writer_t::dump_to_retval( const std::string & dbname , const std::strin
       // if only one individual, set ID to that person
       if ( w.individuals_idmap.size() == 1 ) 
 	indiv_name = w.individuals_idmap.begin()->first;
-      else  // otherwise return an empty set
-	return retval;
+      else  // otherwise return an empty set, but also give all IDs in *ids[]
+	{
+	  if ( ids != NULL )
+	    {
+	      ids->clear();
+	      std::map<std::string,int>::const_iterator ii = w.individuals_idmap.begin();
+	      while ( ii != w.individuals_idmap.end() )
+		{
+		  ids->push_back( ii->first );
+		  ++ii;
+		}
+	    }
+	  return retval;
+	}
     }
 
   // if no individual found, just return an empty retval

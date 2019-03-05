@@ -1654,8 +1654,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  if ( ftr_output )
 	    {
-	      
-	      const std::string ftr_tag    = param.has("ftr") ? "-" + param.value( "ftr" ) : "";
+	      const std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;	      
+	      const std::string ftr_tag    = "-" + analysis_label + ( param.has("ftr") ? "-" + param.value( "ftr" ) : "" ) ;
 	      const std::string ftr_folder = param.has("ftr-dir") ? param.value( "ftr-dir" ) : "./";
 	      const std::string delim = ftr_folder[ ftr_folder.size() - 1 ] != '/' ? "/" : "";
 	      
