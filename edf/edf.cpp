@@ -222,14 +222,30 @@ void edf_t::description() const
 {
   
   uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
+
+  int n_data_channels = 0 , n_annot_channels = 0;
   
-  std::cout << "EDF file          : " << filename << "\n"
+  for (int s=0;s<header.ns;s++) 
+    {
+      if ( header.is_data_channel(s) )
+	++n_data_channels;
+      else 
+	++n_annot_channels;
+    }
+
+  std::cout << "EDF filename      : " << filename << "\n"
 	    << "ID                : " << id << "\n"
 	    << "Duration          : " << Helper::timestring( duration_tp ) << "\n"
-	    << "Number of signals : " << header.ns << "\n"
-	    << "Signals           :";
+	    << "# signals         : " << n_data_channels << "\n";
+  if ( n_annot_channels > 0 ) 
+    std::cout << "# EDF annotations : " << n_data_channels << "\n";
   
-  for (int s=0;s<header.ns;s++) std::cout << " " << header.label[s];
+  std::cout << "Signals           :";
+  
+  for (int s=0;s<header.ns;s++) 
+    if ( header.is_data_channel(s) )
+      std::cout << " " << header.label[s];
+
   std::cout << "\n\n";
   
   
