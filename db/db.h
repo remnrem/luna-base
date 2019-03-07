@@ -578,6 +578,7 @@ class writer_t
   void nodb() 
   { 
     // in an in-memory DB to store factor information, etc, but then set to 'dbless' 
+    close();
     attach( ":memory:" );
     dbless = true; 
     retval = NULL;
@@ -586,8 +587,9 @@ class writer_t
   void use_retval( retval_t * r ) 
   { 
     // in an in-memory DB to store factor information, etc, but then set to write to a retval 
+    close();
     attach( ":memory:" );
-    dbless = false;  // still set this as true
+    dbless = false;  
     retval = r;
   } 
   
