@@ -696,7 +696,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
       
       else if ( is( c, "TIME-TRACK" ) )   proc_timetrack( edf, param(c) );
-      
+      else if ( is( c, "CONTIN" ) )       proc_continuous( edf, param(c) );
+
       else if ( is( c, "STAGE" ) )        proc_sleep_stage( edf , param(c) , false );
       else if ( is( c, "HYPNO" ) )        proc_sleep_stage( edf , param(c) , true );
       
@@ -2025,3 +2026,13 @@ void tmp_includes()
 }
 
 
+
+//
+// Make an EDF continuous
+// 
+
+void proc_continuous( edf_t & edf , param_t & param )
+{
+  logger << " forcing EDF to be continuous\n";
+  edf.set_edf();
+}

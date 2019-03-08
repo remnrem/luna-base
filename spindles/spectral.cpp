@@ -455,8 +455,8 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      bin.bin( freqs[s] , pwelch.psd );
 	      
-	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
-		{
+	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 		{
+		  
 		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  writer.value( "PSD" , bin.bspec[i] );
@@ -503,19 +503,21 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  if ( total_epochs > 0 ) 
 	    {	  
-
+	      
 	      // get mean power across epochs
 	      if ( freqmean[s].size() != freqs[s].size() ) Helper::halt( "internal error psd_t" );
 	      std::vector<double> means;
 	      for (int f=0;f<n;f++) means.push_back( freqmean[ s ][ f ] / (double)total_epochs );
 	      
 	      // using bin_t 	      
+	      //std::cout << "DETS " << bin_width << " " << max_power << " "<< Fs[s] << "\n";
 	      bin_t bin( bin_width , max_power , Fs[s] );
 
 	      bin.bin( freqs[s] , means );
 
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
+		  //std::cout << "PSD bin.bfa[i] " << bin.bfa[i] << " " << bin.bfb[i] << "\n";
 		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  writer.value( "PSD" , bin.bspec[i] );

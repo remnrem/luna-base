@@ -306,12 +306,12 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 
       for ( int s=0; s<ns; s++ )
 	{
-	  
+
 	  //
 	  // only consider data tracks
 	  //
 	  
-	  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+	  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;	  
 	  
 	  slice_t slice( edf , signals(s) , interval );
 	  
@@ -455,41 +455,44 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
     } // next signal    
   
   
-      //
-      // Hanning adjustment
-      //
+
+  //
+  // For now, do not return any annot_t
+  //
   
-      // Notes:
-      // Need to adjust for amplitude by a factor of 2
-      // Need to adjust for energy by a factor of sqrt(8/3)
-  
+  return NULL;
+
+
+  //
+  // In future, we may routinely expand all functions to return annotations
+  //
   
   annot_t * a = edf.timeline.annotations.add( "Buckelmuller" );
   
+  if ( a == NULL ) std::cout << "is null;\n";
+
   a->description = "Buckelmuller et al (2006) automatic artifact detection" ;
-  
+
   for (int s=0;s<ns;s++)
     {
       //
       // only consider data tracks
       //
       
-      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+      if ( edf.header.is_annotation_channel( signals(s) ) ) 
+	continue;
       
-    }
-
-  for (int e=0;e<ne;e++)
-    {
-      for (int s=0;s<ns;s++)
+      for (int e=0;e<ne;e++)
 	{
 	  double dfac = delta[s][e] / delta_average[s][e];
 	  double bfac = beta[s][e] / beta_average[s][e];
 	  
 	  bool reject =  dfac > delta_threshold || bfac > beta_threshold;
-
+	  
 	  if ( reject ) 
 	    a->add( "buckelmuller:" + signals.label(s)  , edf.timeline.epoch(e) );
 	}
+      
     }
   
   return a;
@@ -539,9 +542,20 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   // comma-delimited thresholds
   //
   
-  bool has_threshold = param.has( "threshold" );
+  bool has_threshold = false;
   std::vector<double> th;
-  if ( has_threshold ) th = param.dblvector( "threshold" );
+
+  if ( param.has( "threshold" ) )
+    {
+      has_threshold = true;
+      th = param.dblvector( "threshold" );
+    }
+  else if ( param.has( "th" ) )
+    {
+      has_threshold = true;
+      th = param.dblvector( "th" );
+    }
+
   int th_nlevels = th.size();
 
   // apply mask (requires a threshold)

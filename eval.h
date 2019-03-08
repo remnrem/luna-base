@@ -226,6 +226,7 @@ void proc_epoch( edf_t & , param_t & );
 void proc_slice( edf_t & , param_t & , int );
 
 void proc_timetrack( edf_t & , param_t & );
+void proc_continuous( edf_t & , param_t & );
 
 void proc_covar( edf_t & , param_t & );
 

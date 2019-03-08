@@ -619,18 +619,18 @@ int bin_t::bin( const std::vector<double> & f ,
   
   // assume always from 0, DC component  
   if ( f[0] == 0 ) 
-      {
-	bspec.push_back( y[0] );
-	bfa.push_back( 0 );
-	bfb.push_back( 0 );
-      }
+    {
+      bspec.push_back( y[0] );
+      bfa.push_back( 0 );
+      bfb.push_back( 0 );
+    }
     
   double nyquist = 0.5 * Fs;
     
   int num_freqs = f.size();
   
   double df = f[1] - f[0];    
-  
+
   if ( w/df  < 1.0 ) Helper::halt( "bin resolution too small: min " + Helper::dbl2str( df ) );
 
   int freqwin = (int) ( w / df ) ;      

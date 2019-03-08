@@ -62,6 +62,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   double max_f = param.has( "max" ) ?  param.requires_dbl( "max" ) : 20;  // default up to 20 Hz
   double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0.5 ; // default 0.5 Hz bins
 
+  logger << " running MTM with tw=" << npi << " and " << nwin << " tapers\n";
 
   // output
   
@@ -124,6 +125,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	    {
 	      
 	      // 'x' Hz bins
+	      //	      std::cout << "DETS: " << wid_f << " " << max_f << " " << Fs[s] << "\n";
 	      bin_t bin( wid_f , max_f , Fs[s] );
 	      
 	      bin.bin( mtm.f , mtm.spec );
@@ -131,6 +133,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      // output
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
+		  //std::cout << "MTM bin.bfa[i] " << bin.bfa[i] << " " << bin.bfb[i] << "\n";
 		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  writer.value( "MTM" , bin.bspec[i] );
@@ -438,9 +441,9 @@ void mtm_t::apply( const std::vector<double> * d , const int fs )
       if ( dB ) spec[i] = 10 * log10( spec[i] );
       
       // std::cerr << i << "\t" 
-      //        		<< f[i] << "\t" 
-      // 	 	<< spec[i] << "\t"
-      //        		<< 10*log10(spec[i]) << "\n";
+      //           << f[i] << "\t" 
+      // 	   << spec[i] << "\t"
+      //           << 10*log10(spec[i]) << "\n";
       
     }  
   
