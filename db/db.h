@@ -616,7 +616,7 @@ class writer_t
   std::set<int> all_matching_cmds( const std::set<std::string> & cmds ) { return db.all_matching_cmds( cmds ); }
 
   // open db and send to a retval
-  static retval_t dump_to_retval( const std::string & dbname , const std::string & indiv_name = "" , std::vector<std::string> * ids = NULL );
+  static retval_t dump_to_retval( const std::string & dbname , const std::set<std::string> * = NULL , std::vector<std::string> * ids = NULL );
 
   bool close() 
   { 
@@ -981,7 +981,8 @@ class writer_t
   bool to_retval( const std::string & var_name , double d )
   {
 
-    retval->add( retval_cmd_t( curr_command.cmd_name ) , 
+    retval->add( curr_indiv.indiv_name,
+		 retval_cmd_t( curr_command.cmd_name ) , 
 		 retval_factor_t( curr_strata , curr_timepoint ) ,
 		 retval_var_t( var_name ) , 
 		 retval_strata_t( curr_strata , curr_timepoint ) ,
@@ -994,7 +995,8 @@ class writer_t
   bool to_retval( const std::string & var_name , int i )
   {
 
-    retval->add( retval_cmd_t( curr_command.cmd_name ) , 
+    retval->add( curr_indiv.indiv_name,
+		 retval_cmd_t( curr_command.cmd_name ) , 
 		 retval_factor_t( curr_strata , curr_timepoint ) ,
 		 retval_var_t( var_name ) , 
 		 retval_strata_t( curr_strata , curr_timepoint ) ,
@@ -1008,7 +1010,8 @@ class writer_t
   bool to_retval( const std::string & var_name , const std::string & s  )
   {
     
-    retval->add( retval_cmd_t( curr_command.cmd_name ) ,
+    retval->add( curr_indiv.indiv_name,
+		 retval_cmd_t( curr_command.cmd_name ) ,
 		 retval_factor_t( curr_strata , curr_timepoint ) ,
 		 retval_var_t( var_name ) , 
 		 retval_strata_t( curr_strata , curr_timepoint ) ,
@@ -1021,7 +1024,8 @@ class writer_t
   bool to_retval( const std::string & var_name )
   {
     // use special string code for missing data 'NA' 
-    retval->add( retval_cmd_t( curr_command.cmd_name ) ,
+    retval->add( curr_indiv.indiv_name,
+		 retval_cmd_t( curr_command.cmd_name ) ,
 		 retval_factor_t( curr_strata , curr_timepoint ) ,
 		 retval_var_t( var_name ) ,
 		 retval_strata_t( curr_strata , curr_timepoint ) ,

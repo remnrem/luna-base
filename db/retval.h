@@ -36,28 +36,39 @@ struct retval_cmd_t;
 struct retval_var_t;
 struct retval_factor_t;
 struct retval_strata_t;
+struct retval_indiv_t;
 struct retval_value_t;
 
 struct strata_t;
 struct timepoint_t;
 
-typedef std::map<retval_cmd_t, std::map<retval_factor_t,std::map<retval_var_t, std::map<retval_strata_t, retval_value_t > > > > retval_data_t;
+typedef std::map<retval_cmd_t, 
+  std::map<retval_factor_t,
+  std::map<retval_var_t, 
+  std::map<retval_strata_t, 
+  std::map<retval_indiv_t,
+  retval_value_t > > > > > retval_data_t;
 
 // when working with Luna via an API or through R, this structure
 // provides a way to return results from multiple commands for a
 // single dataset (i.e. edf/individual)
 
+// we will also track ID in the retval_value_t struct, so that databases
+// containing multiple individuals can be read as a single retval_t and
+// passed to R, for example
+
 // it is designed to be a plug-in for writer, i.e. writer.var() and
 // writer.value(), writer.level(), writer.unlevel(), and
-// writer.epoch()
+// writer.epoch() all still work as expected 
 
-// this may become a better, more light-weight replacement for destrat
+// [?this may become a better, more light-weight replacement for destrat]
 
 
 //   retval_t
 //     retval_cmd_t  e.g. SPINDLES
 //       retval_factors_t   e.g. which 'table'   "F CH"
 //         retval_var_t     e.g. DENS
+//           retval_indiv_t e.g. id001
 //           retval_strata_t --> value   e.g. F=11, CH=C3, DENS=2.22
 
 
@@ -66,6 +77,13 @@ struct retval_cmd_t {
   std::string name;
   std::set<retval_var_t> vars;  
   bool operator< ( const retval_cmd_t & rhs ) const { return name < rhs.name; }
+};
+
+
+struct retval_indiv_t {
+  retval_indiv_t( const std::string & n ) : name(n) { } 
+  std::string name;
+  bool operator< ( const retval_indiv_t & rhs ) const { return name < rhs.name; }
 };
 
 
@@ -82,7 +100,7 @@ struct retval_value_t {
   double d;
   std::string s;
   int64_t i; // to handle time-point information
-
+  
   std::string print() const {
     if ( is_str ) return s;
 
@@ -139,51 +157,56 @@ struct retval_t {
   void dump();
   
   // add a double
-  void add( const retval_cmd_t & cmd ,
+  void add( const retval_indiv_t & id, 
+	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
 	    const double x )
   {
     var_has_doubles.insert( var.name );
-    data[cmd][fac][var][stratum] = retval_value_t( x );
+    data[cmd][fac][var][stratum][id] = retval_value_t( x );
   }
   
-  void add( const retval_cmd_t & cmd ,
+  void add( const retval_indiv_t & id , 
+	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
 	    int  x )
   {
-    data[cmd][fac][var][stratum] = retval_value_t( (int64_t)x );
+    data[cmd][fac][var][stratum][id] = retval_value_t( (int64_t)x );
   }
   
-  void add( const retval_cmd_t & cmd ,
+  void add( const retval_indiv_t & id, 
+	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
 	    int64_t  x )
   {
-    data[cmd][fac][var][stratum] = retval_value_t( x );
+    data[cmd][fac][var][stratum][id] = retval_value_t( x );
   }
 
-  void add( const retval_cmd_t & cmd ,
+  void add( const retval_indiv_t & id, 
+	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
 	    uint64_t  x )
   {
-    data[cmd][fac][var][stratum] = retval_value_t( (int64_t)x );
+    data[cmd][fac][var][stratum][id] = retval_value_t( (int64_t)x );
   }
 
-  void add( const retval_cmd_t & cmd ,
+  void add( const retval_indiv_t & id, 
+	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
 	    const std::string & x )
   {  
     var_has_strings.insert( var.name );
-    data[cmd][fac][var][stratum] = retval_value_t( x );
+    data[cmd][fac][var][stratum][id] = retval_value_t( x );
   }
     
 };

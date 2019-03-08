@@ -261,7 +261,6 @@ void edf_t::terse_summary() const
   writer.var( "REC.DUR" , "Record duration (sec)" );
   writer.var( "TOT.DUR.SEC" , "Total recording duration (sec)" );
   writer.var( "TOT.DUR.HMS" , "Total recording duration (hh:mm:ss)" );
-  writer.var( "TOT.DUR.TP"  , "Total recording duration (time-points)" );
 
   writer.var( "SR" , "Sampling race (points per second)" );
   writer.var( "PDIM" , "Physical dimension/units" );
@@ -281,7 +280,6 @@ void edf_t::terse_summary() const
   std::string total_duration_hms = Helper::timestring( duration_tp );
   writer.value( "TOT.DUR.SEC" , header.nr * header.record_duration );
   writer.value( "TOT.DUR.HMS" , total_duration_hms );
-  writer.value( "TOT.DUR.TP" , Helper::int2str( duration_tp ) );
 
   for (int s=0;s<header.ns;s++)
     {

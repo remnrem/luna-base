@@ -1117,11 +1117,12 @@ void StratOutDBase::fetch( int strata_id , int time_mode, packets_t * packets, s
 
 
 
-retval_t writer_t::dump_to_retval( const std::string & dbname , const std::string & person , std::vector<std::string> * ids )
+retval_t writer_t::dump_to_retval( const std::string & dbname , const std::set<std::string> * persons , std::vector<std::string> * ids )
 {
 
   //
-  // Pulls out all information *for a single individual/EDF* and creates a retval_t 
+  // Pulls out all information for one or more individuals/EDFs and
+  // creates a single retval_t
   //
 
   retval_t retval;
@@ -1136,76 +1137,101 @@ retval_t writer_t::dump_to_retval( const std::string & dbname , const std::strin
   
   w.attach( dbname , IS_READONLY );
 
-  std::string indiv_name = person;
+
+  //
+  // Read all individuals, or a subset?
+  //
+
+  bool read_all_individuals = persons == NULL || persons->size() == 0 ; 
   
-  // if no individual is specified on the command line, assume a single individual 
   
-  if ( indiv_name == "" ) 
+  //
+  // Loop over each individual in the DB
+  //
+
+  std::map<std::string,int>::const_iterator ii = w.individuals_idmap.begin();
+  while ( ii != w.individuals_idmap.end() )
     {
-      // if only one individual, set ID to that person
-      if ( w.individuals_idmap.size() == 1 ) 
-	indiv_name = w.individuals_idmap.begin()->first;
-      else  // otherwise return an empty set, but also give all IDs in *ids[]
+
+      const std::string & indiv_name = ii->first;
+
+      if ( ! read_all_individuals )
 	{
-	  if ( ids != NULL )
+	  // not on the list, so skip
+	  if ( persons->find( indiv_name ) == persons->end() ) 
 	    {
-	      ids->clear();
-	      std::map<std::string,int>::const_iterator ii = w.individuals_idmap.begin();
-	      while ( ii != w.individuals_idmap.end() )
-		{
-		  ids->push_back( ii->first );
-		  ++ii;
-		}
+	      ++ii;
+	      continue;
 	    }
-	  return retval;
 	}
-    }
+	
 
-  // if no individual found, just return an empty retval
-  if ( w.individuals_idmap.find( indiv_name ) == w.individuals_idmap.end() ) 
-    return retval;
-  
-  // get numeric indiv ID code
+      //
+      // track who is being read
+      //
 
-  int indiv_id = w.individuals_idmap[ indiv_name ];
-  
-  //
-  // separately dump all int, double and text values, so that appropriate retval_t types can be set
-  //
-  
-  packets_t packets = w.db.dump_indiv( indiv_id );
+      if ( ids != NULL ) ids->push_back( indiv_name );
 
-  //
-  // Convert packets_t to retval_t
-  //  
+      //
+      // get numeric indiv ID code
+      //
+
+      int indiv_id = w.individuals_idmap[ indiv_name ];
   
-  packets_t::const_iterator pp = packets.begin();
-  while ( pp != packets.end() )
-    {
+      //
+      // separately dump all int, double and text values, so that appropriate retval_t types can be set
+      //
       
-      if ( pp->value.numeric )
-	retval.add( retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
-		    retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
-		    retval_var_t( w.variables[ pp->var_id ].var_name ) , 
-		    retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
-		    pp->value.d );
+      packets_t packets = w.db.dump_indiv( indiv_id );
 
-      else if ( pp->value.integer )
-	retval.add( retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
-		    retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
-		    retval_var_t( w.variables[ pp->var_id ].var_name ) , 
-		    retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
-		    pp->value.i );
-      else
-	retval.add( retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
-		    retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
-		    retval_var_t( w.variables[ pp->var_id ].var_name ) , 
-		    retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
-		    pp->value.s );
+      //
+      // Convert packets_t to retval_t
+      //  
+      
+      packets_t::const_iterator pp = packets.begin();
+      while ( pp != packets.end() )
+	{
+	  
+	  if ( pp->value.numeric )
+	    retval.add( indiv_name , 
+			retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
+			retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
+			retval_var_t( w.variables[ pp->var_id ].var_name ) , 
+			retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
+			pp->value.d );
+	  
+	  else if ( pp->value.integer )
+	    retval.add( indiv_name , 
+			retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
+			retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
+			retval_var_t( w.variables[ pp->var_id ].var_name ) , 
+			retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
+			pp->value.i );
+	  else
+	    retval.add( indiv_name , 
+			retval_cmd_t(  w.commands[ pp->cmd_id ].cmd_name ) , 
+			retval_factor_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) , 
+			retval_var_t( w.variables[ pp->var_id ].var_name ) , 
+			retval_strata_t( w.strata[ pp->strata_id] , w.timepoints[ pp->timepoint_id ] ) ,
+			pp->value.s );
 
          
-      ++pp;
+	  ++pp;
+	}
+
+      
+      //
+      // next individual
+      //
+
+      ++ii;
+
     }
+  
+  //
+  // all done, return info
+  //
 
   return retval;
+
 }

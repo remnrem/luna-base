@@ -99,7 +99,8 @@ retval_strata_t::retval_strata_t( strata_t & strata , timepoint_t & tp )
 
 void retval_t::dump()
 {
-  // std::map<retval_cmd_t, std::map<retval_factor_t,std::map<retval_var_t, std::map<retval_strata_t, retval_value_t > > > > retval_data_t;
+
+  // std::map<retval_cmd_t, std::map<retval_factor_t,std::map<retval_var_t, std::map<retval_strata_t, std::map<retval_indiv_t,retval_value_t > > > > > retval_data_t;
 
   retval_data_t::iterator cc = data.begin();
   while ( cc != data.end() )
@@ -111,7 +112,7 @@ void retval_t::dump()
 
       // factors/tables for this command
       
-      std::map<retval_factor_t,std::map<retval_var_t, std::map<retval_strata_t, retval_value_t > > >::iterator ff = cc->second.begin();
+      std::map<retval_factor_t,std::map<retval_var_t, std::map<retval_strata_t, std::map<retval_indiv_t,retval_value_t > > > >::iterator ff = cc->second.begin();
       while ( ff != cc->second.end() )
 	{
 
@@ -119,7 +120,7 @@ void retval_t::dump()
 	  
 	  // variables
 	  
-	  std::map<retval_var_t, std::map<retval_strata_t, retval_value_t > >::iterator vv = ff->second.begin();
+	  std::map<retval_var_t, std::map<retval_strata_t, std::map<retval_indiv_t,retval_value_t > > >::iterator vv = ff->second.begin();
 	  while ( vv != ff->second.end() )
 	    {
 
@@ -127,31 +128,38 @@ void retval_t::dump()
 
 	      // strata
 	      
-	      std::map<retval_strata_t, retval_value_t >::iterator ss = vv->second.begin();
+	      std::map<retval_strata_t, std::map<retval_indiv_t,retval_value_t > >::iterator ss = vv->second.begin();
 	      while ( ss != vv->second.end() )
 		{
 		  
 		  const retval_strata_t & strata = ss->first;
 		  
-		  const retval_value_t & value = ss->second;
+		  // individual
 		  
-		  // output
-		  std::cout << cmd.name << "\t"
-			    << fac.print() << "\t"
-			    << var.name << "\t"
-			    << strata.print() << "\t"
-			    << value.print() << "\n";
+		  std::map<retval_indiv_t,retval_value_t>::iterator ii = ss->second.begin();
+		  while ( ii != ss->second.end() )
+		    {
+		      
+		      const retval_value_t & value = ii->second;
+		      
+		      // output
+		      std::cout << ii->first.name << "\t"
+				<< cmd.name << "\t"
+				<< fac.print() << "\t"
+				<< var.name << "\t"
+				<< strata.print() << "\t"
+				<< value.print() << "\n";
 		  
-		  
-		    ++ss; // next strata
+		      ++ii; // next individual
+		    }
+		  ++ss; // next strata
 		}
 	      ++vv; // next variable
 	    }
-	  ++ff; // next factor/table
-	}
+	 ++ff; // next factor/table
+         }
       ++cc; // next command
-    }
-
-  // all done
+    }      
+      // all done
 }
 
