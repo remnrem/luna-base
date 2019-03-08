@@ -32,6 +32,7 @@
 
 #include "helper/helper.h"
 #include "helper/logger.h"
+#include "timeline/hypno.h"
 
 #include "defs/defs.h"
 #include "annot/annot.h"
@@ -43,132 +44,6 @@ struct timeline_t;
 struct interval_t;
 
 extern logger_t logger;
-
-//
-// General class to represent a hypnogram and perform calculations on it
-// linked to a timeline_t's epochs
-//
-
-void dummy_hypno();
-
-struct hypnogram_t
-{
-  
-  hypnogram_t() { } 
-  void construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s );
-  void construct( timeline_t * t , const bool verbose , const std::string sslabel = "SleepStage" );
-  void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
-  void output( const bool verbose );
-
-  // special case, if analysing a hypnogram with no EDF
-  void fudge( double es, int ne );
-
-  timeline_t * timeline;
-  
-  // sleep stage information
-  std::vector<sleep_stage_t> stages;
-  std::vector<int> epoch_n;
-  
-  // times 
-  clocktime_t clock_lights_out;
-  clocktime_t clock_lights_on;
-
-  clocktime_t clock_sleep_onset;
-  clocktime_t clock_sleep_midpoint;
-  clocktime_t clock_wake_time;
-
-  // Epoch markers
-  
-  int first_sleep_epoch;    // (epoch)  
-  int first_persistent_sleep_epoch;  // first persistent sleep epoch
-  int final_wake_epoch;     // (epoch)
-
-
-  // statistics
-  
-  double TIB;  // time in bed : length of entire record, ignoring all staging
-  double TRT;  // total recording time : from lights out to lights on
-
-  double TWT;  // total wake time
-  double TST;  // total sleep time
-  double TpST;  // total persistent sleep time
-  
-  double FWT;  // final wake time  ( from final wake to end of test )
-  double SPT;  // sleep period time [ Amount of time available for sleep after Sleep Onset , SPT = TRT - Sleep Latency ]
-
-  double WASO; // wake after sleep onset  [ WASO = Wake epochs/2 - (Sleep Latency {+ Final Wake Time}) ]  (mins)  
-  
-  
-  double slp_eff_pct;   // sleep efficiency [ TST/TIB X 100 ]  (%)
-  double slp_main_pct;  // sleep maintaince [ TST/SPT X 100 ] (%)
-  double slp_eff2_pct;  // sleep maintaince 2 
-
-  double slp_lat;   // sleep latency [ Sleep Latency = Lights Out - Sleep Onset ]  (mins)
-  double per_slp_lat;  // latency to 10 mins sleep
-  double rem_lat_mins;      // REM latency (minutes)
-
-  
-  double mins_wake;  // minutes awake
-  double mins_n1;  // minutes N1
-  double mins_n2;  // etc
-  double mins_n3;  // 
-  double mins_n4;  // 
-  double mins_rem;  // 
-  double mins_other;
-
-  double pct_n1;   // % of sleep that is N1
-  double pct_n2;   // etc
-  double pct_n3;   // 
-  double pct_n4;   // 
-  double pct_rem;  // 
-  double pct_other;
-  
-  
-  // sleep cycles (modified Feinberg & Floyd definitions)
-  std::vector<bool> in_persistent_sleep;
-  std::vector<int> sleep_cycle_number;
-  std::vector<int> sleep_code; // 1 NR, 5 REM, 0 other
-  
-  int num_nremc;  // number of complete (NREM/REM) cycles
-  double nremc_mean_duration;  // mean duration (mins)
-  
-  // duration/timing for each cycle
-  std::map<int,double> nremc_duration;   // includes W/? too here
-  std::map<int,double> nremc_nrem_duration;
-  std::map<int,double> nremc_rem_duration;
-  std::map<int,int> nremc_start_epoch;
-  
-  // Summarize epochs w.r.t cycles  
-
-  std::vector<double> cycle_pos_relative;
-  std::vector<double> cycle_pos_absolute;
-
-  // ascending/descending N2
-  std::vector<double> n2_ascdesc;
-
-  // other local context
-  std::vector<int> flanking;      // number of similar flanking epochs as 'x'
-  std::vector<int> nearest_wake;  // distance to nearest wake
-
-  // N2-REM and N2-WAKE transitions
-
-  // X is the number of epochs until next REM/WAKE
-  // X_total is the size of that segment
-
-  //                N3 N2  N2  N2  N2  R  R  R
-  // NREM2REM        0  4   3   2   1  0  0  0
-  // NREM2REM_TOTAL  0  4   4   4   4  0  0  0 
-
-  std::vector<int> nrem2rem;    
-  std::vector<int> nrem2rem_total; 
-  
-  std::vector<int> nrem2wake;    
-  std::vector<int> nrem2wake_total; 
-
-  std::vector<bool> is_waso;      // distinguish WAKE during SLEEP from pre/post
-    
-
-};
 
 
 //
@@ -300,7 +175,7 @@ struct timeline_t
     
     // No EPOCHs
     epoch_length_tp = 0L;
-    epoch_overlap_tp = 0L;
+    epoch_inc_tp = 0L;
     epochs.clear();
     
     // Masks
@@ -331,12 +206,13 @@ struct timeline_t
   
   int set_epoch(const double s, const double o ) 
   { 
-    if ( s <= 0 || o < 0 ) Helper::halt( "cannot specify negative epoch durations/increments");
-
+    if ( s <= 0 || o < 0 ) 
+      Helper::halt( "cannot specify negative epoch durations/increments");
+    
     clear_epoch_annotations();
     epoch_length_tp = s * globals::tp_1sec;
-    epoch_overlap_tp = o * globals::tp_1sec;
-    if ( epoch_length_tp == 0 || epoch_overlap_tp == 0 ) 
+    epoch_inc_tp = o * globals::tp_1sec;
+    if ( epoch_length_tp == 0 || epoch_inc_tp == 0 ) 
       Helper::halt( "invalid epoch parameters" );
     first_epoch();
     return calc_epochs();
@@ -345,14 +221,14 @@ struct timeline_t
   double epoch_length() const 
   { return (double)epoch_length_tp / globals::tp_1sec; }
   
-  double epoch_overlap() const 
-  { return (double)epoch_overlap_tp / globals::tp_1sec; }
+  double epoch_inc() const 
+  { return (double)epoch_inc_tp / globals::tp_1sec; }
   
   double epoch_len_tp() const 
   { return epoch_length_tp ; }
   
-  double epoch_inc_tp() const 
-  { return epoch_overlap_tp ; } 
+  double epoch_increment_tp() const 
+  { return epoch_inc_tp ; } 
 
   int calc_epochs();
   
@@ -645,8 +521,6 @@ struct timeline_t
 
   static bool discontinuity( const std::vector<uint64_t> & t , int sr, int sp1, int sp2 );
 
-  bool spans_epoch_boundary( const interval_t & ) const ; 
-
 
  private:
 
@@ -661,7 +535,7 @@ struct timeline_t
   
   uint64_t     epoch_length_tp;  
   
-  uint64_t     epoch_overlap_tp;    
+  uint64_t     epoch_inc_tp;    
   
   std::vector<interval_t> epochs;
 
@@ -681,7 +555,6 @@ struct timeline_t
   
   std::map<int,int> epoch_orig2curr;
   std::map<int,int> epoch_curr2orig;
-  int               orig_epoch_size;
 
   // Epoch annotations 
 

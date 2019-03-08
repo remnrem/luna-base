@@ -1205,7 +1205,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 {
   
   double dur = 0 , inc = 0;
-
+  
   // default = 30 seconds, non-overlapping
   if ( ! ( param.has( "len" ) || param.has("dur") || param.has( "epoch" ) ) )
     {
@@ -1249,13 +1249,21 @@ void proc_epoch( edf_t & edf , param_t & param )
 
     }
 
-
-  // if already EPOCH'ed for a different record size, we should first remove all epochs
-  // this will remove the EPOCH-to-record mapping too
-  
-  if ( edf.timeline.epoched() && ! Helper::similar( edf.timeline.epoch_length() , dur ) ) 
+  if ( param.has( "inc" ) )
     {
-      logger << " removing original epoch and record-mappings\n";
+      inc = param.requires_dbl( "inc" );
+    }
+
+
+  // if already EPOCH'ed for a different record size, or increment,
+  // then we should first remove all epochs; this will remove the
+  // EPOCH-to-record mapping too
+  
+  if ( edf.timeline.epoched() 
+       && ( ( ! Helper::similar( edf.timeline.epoch_length() , dur ) )
+	    || ( ! Helper::similar( edf.timeline.epoch_inc() , inc ) ) ) )
+    {
+      logger << " epoch definitions have changed: original epoch mappings will be lost\n";
       edf.timeline.unepoch();
     }
 
@@ -1279,6 +1287,13 @@ void proc_epoch( edf_t & edf , param_t & param )
   
   if ( param.has( "verbose" ) )
     {
+
+      // track clock time
+
+      clocktime_t starttime( edf.header.starttime );
+      
+      bool hms = starttime.valid;
+      
       
       edf.timeline.first_epoch();
       
@@ -1293,14 +1308,31 @@ void proc_epoch( edf_t & edf , param_t & param )
 	  
 	  //      std::cout << "epoch " << epoch << "\t" << interval.as_string() << "\n";
 	  
+	  // original encoding (i.e. to allows epochs to be connected after the fact
 	  writer.epoch( edf.timeline.display_epoch( epoch ) );
 	  
-	  writer.value( "EPOCH_INTERVAL" , interval.as_string() );      
-	  writer.value( "EPOCH_START" , interval.start_sec() );
-	  writer.value( "EPOCH_MID"   , interval.mid_sec() );
-	  writer.value( "EPOCH_STOP" , interval.stop_sec() );
-		  
-	}
+	  // if present, original encoding
+	  writer.value( "E1" , epoch+1 );
+	  
+	  writer.value( "INTERVAL" , interval.as_string() );      
+	  writer.value( "START"    , interval.start_sec() );
+	  writer.value( "MID"      , interval.mid_sec() );
+	  writer.value( "STOP"     , interval.stop_sec() );
+	  
+	  // original time-points
+	  
+	  if ( hms )
+	    {
+	      const double sec0 = interval.start * globals::tp_duration;
+	      clocktime_t present = starttime;
+	      present.advance( sec0 / 3600.0 );
+	      std::string clocktime = present.as_string();
+	      writer.value( "HMS" , clocktime );
+	    }
+	
+	  
+	}		  
+      
   
       writer.unepoch();
       
@@ -1443,7 +1475,7 @@ void proc_file_annot( edf_t & edf , param_t & param )
 				  a , 
 				  f , 
 				  edf.timeline.epoch_len_tp() , 
-				  edf.timeline.epoch_inc_tp() );
+				  edf.timeline.epoch_increment_tp() );
   
 }
 

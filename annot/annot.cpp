@@ -474,7 +474,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 				      a , 
 				      f , 
 				      parent_edf.timeline.epoch_len_tp() , 
-				      parent_edf.timeline.epoch_inc_tp() );
+				      parent_edf.timeline.epoch_increment_tp() );
       
       
       return true;
@@ -698,7 +698,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
 	      
 	      int epoch_length = globals::default_epoch_len;
-	      int epoch_increment = globals::default_epoch_len;
+	      int epoch_increment = globals::default_epoch_len; // i.e. non-overlapping
 	      int epoch;
 	      
 	      if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 

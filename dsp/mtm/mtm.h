@@ -35,7 +35,13 @@ struct mtm_t
   
   mtm_t( const double npi = 3 , const int nwin = 5 );
   
-  void apply( const std::vector<double> * , const int fs );
+  void apply( const std::vector<double> * , const int fs , 
+	      std::vector<double> * write_tapers = NULL , 
+	      std::vector<double> * write_tapsum = NULL , 
+	      std::vector<double> * write_lambda = NULL , 
+	      const std::vector<double> * read_tapers = NULL , 
+	      const std::vector<double> * read_tapsum = NULL , 
+	      const std::vector<double> * read_lambda = NULL );
 
   // MTM parameters
   
@@ -146,7 +152,10 @@ namespace mtm
 
   void  do_mtap_spec(double *data, int npoints, int kind,
 		     int nwin, double npi, int inorm, double dt,
-		     double *ospec, double *dof, double *Fvalues, int klen, bool display_tapers );
+		     double *ospec, double *dof, double *Fvalues, int klen, 
+		     bool display_tapers , 
+		     std::vector<double> * write_tapers = NULL, std::vector<double> * write_tapsum = NULL, std::vector<double> * write_lambda = NULL , 
+		     const std::vector<double> * read_tapers = NULL , const std::vector<double> * read_tapsum = NULL, const std::vector<double> * read_lambda = NULL );
   
   
   // NR utilities

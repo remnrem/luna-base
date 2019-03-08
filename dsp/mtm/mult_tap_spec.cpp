@@ -75,9 +75,25 @@ void  mtm::mt_get_spec(double *series, int inum, int klength, double *amp)
   
 }
 
-void  mtm::do_mtap_spec(double *data, int npoints, int kind,
-			int nwin, double npi, int inorm, double dt,
-			double *ospec, double *dof, double *Fvalues, int klen, bool display_tapers )
+void  mtm::do_mtap_spec( double *data, 
+			 int npoints, 
+			 int kind,
+			 int nwin, 
+			 double npi, 
+			 int inorm, 
+			 double dt,
+			 double *ospec, 
+			 double *dof, 
+			 double *Fvalues, 
+			 int klen, 
+			 bool display_tapers , 
+			 std::vector<double> * write_tapers , 
+			 std::vector<double> * write_tapsum , 
+			 std::vector<double> * write_lambda , 
+			 const std::vector<double> * read_tapers , 
+			 const std::vector<double> * read_tapsum , 
+			 const std::vector<double> * read_lambda )
+
 {
 
   /*
@@ -146,13 +162,49 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
   num_freq_tap = num_freqs*nwin;
   
   //  std::cerr << "dets = " << klen << " " << num_freqs << "\n";
-  
-  //
-  // calculate Slepian tapers
-  //
-  
-  k = multitap(npoints, nwin, lambda,  npi, tapers, tapsum);
 
+    
+  //
+  // calculate or read in Slepian tapers
+  //
+  
+  if ( read_tapers && read_tapsum && read_lambda ) 
+    {
+      if ( read_tapers->size() != len_taps ) Helper::halt( "internal error, wrong saved taper length" );
+      if ( read_tapsum->size() != nwin ) Helper::halt( "internal error, wrong saved taper length" );
+      if ( read_lambda->size() != nwin ) Helper::halt( "internal error, wrong saved taper length" );
+      for (int i=0;i<len_taps;i++) tapers[i] = (*read_tapers)[i];
+      for (int i=0;i<nwin;i++) tapsum[i] = (*read_tapsum)[i];
+      for (int i=0;i<nwin;i++) lambda[i] = (*read_lambda)[i];
+    }
+  else  // calculate tapers
+    {
+      k = multitap(npoints, nwin, lambda,  npi, tapers, tapsum);
+    }
+  
+
+  
+  //
+  // write tapers?
+  //
+
+  if ( write_tapers ) 
+    {
+      write_tapers->resize( len_taps );
+      for (int i=0;i<len_taps;i++) (*write_tapers)[i] = tapers[i];
+    }
+
+  if ( write_tapsum ) 
+    {
+      write_tapsum->resize( nwin );
+      for (int i=0;i<nwin;i++) (*write_tapsum)[i] = tapsum[i];
+    }
+
+  if ( write_lambda ) 
+    {
+      write_lambda->resize( nwin );
+      for (int i=0;i<nwin;i++) (*write_lambda)[i] = lambda[i];
+    }
 
   // display tapers
   if ( display_tapers ) 
@@ -288,7 +340,7 @@ void  mtm::do_mtap_spec(double *data, int npoints, int kind,
       
       for (i = 0; i < num_freqs; i++) 
 	{
-	  ospec[i] =amu[i];
+	  ospec[i] = amu[i];
 	  dof[i] = nwin-1;
 	  Fvalues[i] = fv[i];
 	}

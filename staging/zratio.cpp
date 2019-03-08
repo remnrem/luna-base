@@ -77,7 +77,7 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
   //
   
   double saved_epoch_length = edf.timeline.epoch_length(); 
-  double saved_epoch_overlap = edf.timeline.epoch_overlap(); 
+  double saved_epoch_inc = edf.timeline.epoch_inc(); 
   
   if ( fabs( saved_epoch_length - 30.0 ) > 0.001 ) 
     Helper::halt( "require 30-second epochs initially" );
@@ -242,7 +242,7 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
   // reset epochs
   //
 
-  edf.timeline.set_epoch( saved_epoch_length , saved_epoch_overlap ); 
+  edf.timeline.set_epoch( saved_epoch_length , saved_epoch_inc ); 
 
 
 }

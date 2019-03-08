@@ -55,14 +55,17 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       epoch_level_output = true;
     }
 
-  // MTM parameters
-  double npi = param.has( "nw" ) ? param.requires_dbl( "nw" ) : 3 ;
+  // MTM parameters (tw or nw)
+  double npi = 3;
+  if ( param.has( "nw" ) ) npi = param.requires_dbl( "nw" );
+  else if ( param.has( "tw" ) ) npi = param.requires_dbl( "tw" );
+
   int nwin = param.has( "t" ) ? param.requires_int( "t" ) : 2*npi-1 ;
   
   double max_f = param.has( "max" ) ?  param.requires_dbl( "max" ) : 20;  // default up to 20 Hz
   double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0.5 ; // default 0.5 Hz bins
 
-  logger << " running MTM with tw=" << npi << " and " << nwin << " tapers\n";
+  logger << " running MTM with nw=" << npi << " and t=" << nwin << " tapers\n";
 
   // output
   
@@ -177,105 +180,135 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   edf.timeline.first_epoch();
 
   
+  
   //
-  // for each each epoch 
+  // Get each signal
   //
-
   
-  int total_epochs = 0;
-  
-  while ( 1 ) 
-     {
-       
-       int epoch = edf.timeline.next_epoch();      
-       
-       if ( epoch == -1 ) break;              
-  
-       ++total_epochs;
-       
-       interval_t interval = edf.timeline.epoch( epoch );
-       
-       // stratify output by epoch?
-       writer.epoch( edf.timeline.display_epoch( epoch ) );
-       
-       //
-       // Get each signal
-       //
-       
-       for (int s = 0 ; s < ns; s++ )
-	 {
-	   
-	   //
-	   // only consider data tracks
-	   //
+  for (int s = 0 ; s < ns; s++ )
+    {
+      
+      //
+      // only consider data tracks
+      //
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) )
+	continue;
+      
+      //
+      // Stratify output by channel
+      //
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      
 
-	   if ( edf.header.is_annotation_channel( signals(s) ) )
-	     continue;
-	   
-	   //
-	   // Stratify output by channel
-	   //
-	   
-	   writer.level( signals.label(s) , globals::signal_strat );
+      //
+      // for each each epoch 
+      //
 
-	   //
-	   // Get data
-	   //
-	   
-	   slice_t slice( edf , signals(s) , interval );
-	   
-	   const std::vector<double> * d = slice.pdata();	   
-	   
-	   // call MTM
-	   
-	   mtm_t mtm( npi , nwin );
-	   
-	   mtm.dB = dB;
-	   
-	   mtm.apply( d , Fs[s] );
-	   	   
-	   if ( wid_f > 0 )  // binned output
-	     {	       
+      int total_epochs = 0;
+      
+      
+      //
+      // Recycle tapers
+      //
 
-	       // wid_f (default 1) Hz bins
-	       bin_t bin( wid_f , max_f , Fs[s] );
-	       
-	       bin.bin( mtm.f , mtm.spec );
+      std::vector<double> tapers, tapsum, lambda;
+      
+      while ( 1 ) 
+	{
+	  
+	  int epoch = edf.timeline.next_epoch();      
+	  
+	  if ( epoch == -1 ) break;              
+	  
+	  //
+	  // stratify output by epoch
+	  //
+	  
+	  writer.epoch( edf.timeline.display_epoch( epoch ) );
 
-	       // output	       
-	       for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
-		 {
-		   //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		   writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		   writer.value( "MTM" , bin.bspec[i] );
-		 }
-	       writer.unlevel( globals::freq_strat );
-	       
-	     }
+	  ++total_epochs;
+	  
+      	  
+	  //
+	  // Get data
+	  //
+	  
+	  interval_t interval = edf.timeline.epoch( epoch );
+ 
+	  slice_t slice( edf , signals(s) , interval );
+	  
+	  const std::vector<double> * d = slice.pdata();	   
+	  
+	  //	  
+	  // call MTM
+	  //
 
-	   else // full-spectrum output
-	     {
-	       
-	       for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
-		 {
-		   if ( mtm.f[i] <= max_f ) 
-		     {
-		       writer.level( mtm.f[i] , globals::freq_strat  );
-		       writer.value( "MTM" , mtm.spec[i] );
-		     }
-		 }
+	  mtm_t mtm( npi , nwin );
+	  
+	  mtm.dB = dB;
+	  
+	  
+	  if ( total_epochs == 1 ) 
+	    {
+	      // write mode for tapers on the 1st epoch
+	      mtm.apply( d , Fs[s] , &tapers , &tapsum, &lambda );
+	    }
+	  else
+	    {
+	      // re-read tapers on subsequent 
+	      mtm.apply( d , Fs[s] , NULL, NULL, NULL, &tapers , &tapsum, &lambda );	      
+	    }
+	  
+
+	  //
+	  // Ouput
+	  //
+
+	  if ( wid_f > 0 )  // binned output
+	    {	       
 	      
-	       writer.unlevel( globals::freq_strat );
-	       
-	     }
-	   
-	 } // next signal
-       
-       writer.unlevel( globals::signal_strat );
-       
-     } // next epoch
-
-  writer.unepoch();
+	      // wid_f (default 1) Hz bins
+	      bin_t bin( wid_f , max_f , Fs[s] );
+	      
+	      bin.bin( mtm.f , mtm.spec );
+	      
+	      // output	       
+	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
+		{
+		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
+		  writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  writer.value( "MTM" , bin.bspec[i] );
+		}
+	      writer.unlevel( globals::freq_strat );
+	      
+	    }
+	  
+	  else // full-spectrum output
+	    {
+	      
+	      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+		{
+		  if ( mtm.f[i] <= max_f ) 
+		    {
+		      writer.level( mtm.f[i] , globals::freq_strat  );
+		      writer.value( "MTM" , mtm.spec[i] );
+		    }
+		}
+	      
+	      writer.unlevel( globals::freq_strat );
+	      
+	    }
+	  
+	} // next epoch
+      
+      writer.unepoch();
+      
+    } // next signal
+  
+  writer.unlevel( globals::signal_strat );
+  
   
 }
 
@@ -293,91 +326,16 @@ mtm_t::mtm_t( const double npi , const int nwin ) : npi(npi) , nwin(nwin)
 }
 
 
-// void mtm_t::bin( double w , double mx_f , double fs )
-// {
-  
-//   if ( f.size() < 2 ) return;
-  
-//   bfa.clear();
-//   bfb.clear();  
-//   bspec.clear();
-  
-//   // DC component  
-//   bspec.push_back( spec[0] );
-//   bfa.push_back( 0 );
-//   bfb.push_back( 0 );
-
-//   // other frequencies:
-//   // 0-0
-//   // 0 < x <= t1
-//   // t1 < x <= t2
-//   // etc
-  
-//   int num_freqs = f.size();
-  
-//   double df = f[1] - f[0];
-//   // i.e. 2*nyquist/klen;
-
-//   int freqwin = (int) ( w / df ) ;      
-
-//   for (int i = 1; i < num_freqs ; i += freqwin)
-//     {
-      
-//       double tem = 0.0;
-
-//       int k = 0;
-      
-//       for (int j = i ; j < i + freqwin - 1 ; j++) 
-// 	{
-	  
-// 	  if (j > 0 && j < num_freqs - 1) // skip DC and Nyquist
-// 	    {	      	      
-// 	      if ( f[j] <= mx_f )
-// 		{
-// 		  tem += spec[j];
-// 		  k++;
-// 		}
-// 	    }
-// 	}  
-      
-//       if ( k > 0 ) 
-// 	{	  
-// 	  bspec.push_back( tem/(double)k );
-// 	  bfa.push_back( f[i-1] ); // less than 
-// 	  bfb.push_back( f[i+k] ); // greater than or equal to
-// 	}
-      
-//     }      
-    
-// }
 
 
-// void mtm_t::smooth( double w , double fs )
-// {
-    
-//   int num_freqs = f.size();
-  
-//   double df = f[1] - f[0];
-  
-//   int freqwin = (int) ( w / df) /2 ;      
-  
-//   for (int i = 0; i < num_freqs ; i++)
-//     {
-//       double tem = 0.0;
-//       int k = 0;
-//       for (int j = i - freqwin; j <= i + freqwin; j++) {
-// 	if (j > 0 && j < num_freqs - 1) {
-// 	  tem += spec[j];
-// 	  k++;
-// 	}
-//       }      
-//       if(k>0) { spec[i] = tem/(double)k; } // else spec[i] = spec[i];       
-//     }
-  
-// }
 
-
-void mtm_t::apply( const std::vector<double> * d , const int fs )
+void mtm_t::apply( const std::vector<double> * d , const int fs , 
+		   std::vector<double> * write_tapers , 
+		   std::vector<double> * write_tapsum , 
+		   std::vector<double> * write_lambda , 
+		   const std::vector<double> * read_tapers , 
+		   const std::vector<double> * read_tapsum , 
+		   const std::vector<double> * read_lambda )
 {
   
   std::vector<double> d2 = *d;
