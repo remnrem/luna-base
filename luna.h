@@ -91,7 +91,6 @@
 
 #include "graphics/graphics.h"
 
-#include <thread>
 #include <iostream>
 #include <unistd.h>
 #include <dirent.h>

@@ -25,6 +25,7 @@
 
 #include <vector>
 #include <map>
+#include <stdint.h>
 
 struct edf_t;
 struct param_t;

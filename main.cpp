@@ -202,7 +202,7 @@ int main(int argc , char ** argv )
 	      filename = Helper::expand( filename.substr(1).c_str() );
 	      if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not open " + filename );
 	      
-	      std::ifstream INC( filename , std::ios::in );
+	      std::ifstream INC( filename.c_str() , std::ios::in );
 	      if ( INC.bad() ) Helper::halt("could not open file: " + filename );
 	      while ( ! INC.eof() )
 		{

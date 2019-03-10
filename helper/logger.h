@@ -25,10 +25,8 @@
 #ifndef __LOGGER_H__
 #define	__LOGGER_H__
 
-#include <type_traits>
 #include <iostream>
 #include <sstream>
-#include <chrono>
 #include <ctime>
 #include <string>
 #include <iomanip>

@@ -320,13 +320,13 @@ void mi_t::calc()
   // shannonize, calc
   for (int j=0;j<nbins;j++)
     {
-      infa -= pa[j] * std::log2( pa[j] + eps );
-      infb -= pb[j] * std::log2( pb[j] + eps );
+      infa -= pa[j] * log2( pa[j] + eps );
+      infb -= pb[j] * log2( pb[j] + eps );
             
       for (int k=0;k<nbins;k++)
 	{
-	  jointinf -= pab[j][k] * std::log2( pab[j][k] + eps );	  
-	  //mutinf2 += pab[j][k] * std::log2( pab[j][k] / ( pa[j] * pb[j] + eps ) + eps );
+	  jointinf -= pab[j][k] * log2( pab[j][k] + eps );	  
+	  //mutinf2 += pab[j][k] * log2( pab[j][k] / ( pa[j] * pb[j] + eps ) + eps );
 	}
       
     }
@@ -495,7 +495,7 @@ void mi_t::permute( const int nrep , double * pemp , double * pz )
 	for (int k=0;k<nbins;k++)
 	  {
 	    pab[j][k] /= (double)n;
-	    pjointinf -= pab[j][k] * std::log2( pab[j][k] + eps );
+	    pjointinf -= pab[j][k] * log2( pab[j][k] + eps );
 	  }
       
       
