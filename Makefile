@@ -2,7 +2,7 @@ include Makefile.inc
 
 DIRS = edf tinyxml helper timeline annot dsp miscmath spindles	\
 artifacts intervals fftw cwt defs zfile stats graphics staging 	\
-db ica clocs pdc sstore dsp/mtm
+db ica clocs pdc sstore dsp/mtm dsp/libsamplerate
 
 EXE	= luna
 LUNALIB = libluna.so
@@ -12,12 +12,12 @@ OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
 libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
 libintervals.a libfftwrap.a libcwt.a libzfile.a libstats.a		\
 libgraphics.a libstaging.a libdb.a libica.a libclocs.a libpdc.a		\
-libsstore.a libmtm.a
+libsstore.a libmtm.a libsrate.a
 
 LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper	\
 -ltimeline -lstaging -lfftwrap -ldsp -lmtm -lmiscmath -lintervals	\
 -ltinyxml -lcwt -lclocs -lpdc -lzfile -lstats -lgraphics -ldb		\
--lsstore -lfftw3 -lhpdf -lpng -lsamplerate -lz
+-lsstore -lsrate -lfftw3 -lz
 
 all : $(EXE) $(LUNALIB) utils
 
@@ -27,12 +27,11 @@ $(EXE) : main.o globals.o eval.o $(OBJLIBS)
 
 static : main.o globals.o eval.o $(OBJLIBS)
 	$(LD) $(LDFLAGS) -o $(EXE)-static $(OBJS) $(OBJLIBS) $(LUNA_DEP)/lib/*.a 
-	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna2.dylib eval.o globals.o  *.a $(LUNA_DEP)/lib/*.a 
 
 $(LUNALIB) : globals.o eval.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)
 	$(ECHO) "building libluna.dylib..."
-	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a -lz -lfftw3 -lhpdf -lsamplerate
+	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a -lz -lfftw3
 else
 	$(ECHO) "building libluna.so..."
 	$(LD) -shared     -fPIC $(LDFLAGS) -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
@@ -82,6 +81,10 @@ libdsp.a : force_look
 libmtm.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)
 	cd dsp/mtm; $(MAKE) $(MFLAGS)
+
+libsrate.a : force_look
+	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)
+	cd dsp/libsamplerate; $(MAKE) $(MFLAGS)
 
 libcwt.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)

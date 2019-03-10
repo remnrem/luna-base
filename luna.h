@@ -63,6 +63,8 @@
 
 #include "dsp/mtm/mtm.h"
 
+#include "dsp/libsamplerate/samplerate.h"
+
 #include "fftw/fftwrap.h"
 
 #include "ica/ica.h"

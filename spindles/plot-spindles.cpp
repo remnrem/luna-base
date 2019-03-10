@@ -31,6 +31,8 @@
 #include "spindles.h"
 #include "mspindles.h"
 
+
+
 void draw_spindles( edf_t & edf , 
 		    param_t & param , 
 		    const std::string & filename ,
@@ -38,6 +40,11 @@ void draw_spindles( edf_t & edf ,
 		    const std::vector<spindle_t> & spindles , 		    
 		    const std::map<uint64_t, double> * avgmap )
 {
+
+#ifdef NO_HPDFLIB
+
+  Helper::halt( "draw_spindles() not enabled without lhpdf" );
+#else
   
   bool spectrogram = param.has( "heatmap" );
 
@@ -407,7 +414,8 @@ void draw_spindles( edf_t & edf ,
   //
   
   pdf.write( filename );
-  
+
+#endif  
 }
 
 

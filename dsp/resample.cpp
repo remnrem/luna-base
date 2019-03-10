@@ -24,7 +24,7 @@
 #include "resample.h"
 #include <iostream>
 
-#include "samplerate.h"
+#include "libsamplerate/samplerate.h"
 
 #include "eval.h"
 #include "edf/edf.h"

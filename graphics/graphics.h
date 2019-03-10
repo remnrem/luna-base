@@ -24,6 +24,8 @@
 #ifndef __LUNA_GRAPHICS_H__
 #define __LUNA_GRAPHICS_H__
 
+#ifndef NO_HPDFLIB
+
 #include "hpdf.h"
 
 #include <map>
@@ -155,6 +157,9 @@ struct pdf_t
   
   
 };
+
+
+#endif
 
 #endif
 

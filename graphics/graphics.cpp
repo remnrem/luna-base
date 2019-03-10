@@ -22,6 +22,9 @@
 
 
 #include "graphics.h"
+
+#ifndef NO_HPDFLIB
+
 #include <cstdlib>
 #include <cstdio>
 #include <setjmp.h>
@@ -476,3 +479,8 @@ void pdf_t::heatmap( float px1 , float py1 , float px2 , float py2 , const std::
 //  HPDF_STATUS st = HPDF_Page_Rectangle( page , lwr_x , lwr_y , rect_width , rect_height );
   
 }
+
+
+#endif
+
+
