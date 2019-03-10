@@ -1150,7 +1150,7 @@ void proc_write( edf_t & edf , param_t & param )
       const std::string outdir = param.value("edf-dir");
       
       if ( outdir[ outdir.size() - 1 ] != globals::folder_delimiter ) 
-	Helper::halt("edf-dir value must end in '/' to specify a folder" );
+	Helper::halt("edf-dir value must end in '" + std::string(globals::folder_delimiter) + "' to specify a folder" );
 
       int p=filename.size()-1;
       int v = 0;
@@ -1897,7 +1897,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	    Helper::iequals( tok0 , "annots-folder" ) ) 
     {
       if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
-	globals::annot_folder = tok1 + "/";
+	globals::annot_folder = tok1 + globals::folder_delimiter ;
       else
 	globals::annot_folder = tok1;		      
       return;

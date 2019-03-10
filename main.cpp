@@ -678,7 +678,7 @@ void process_edfs( cmd_t & cmd )
 	  
 	  std::string fname = Helper::expand( tok[i] );
 
-	  if ( fname[ fname.size() - 1 ] == '/' ) 
+	  if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
 		{
 		  // this means we are specifying a folder, in which case search for all files that 
 		  // start id_<ID>_* and attach thoses

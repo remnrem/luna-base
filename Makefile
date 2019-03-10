@@ -1,7 +1,7 @@
 include Makefile.inc
 
 DIRS = edf tinyxml helper timeline annot dsp miscmath spindles	\
-artifacts intervals fftw cwt defs zfile stats graphics staging 	\
+artifacts intervals fftw cwt defs stats graphics staging 	\
 db ica clocs pdc sstore dsp/mtm dsp/libsamplerate
 
 EXE	= luna
@@ -10,14 +10,14 @@ OBJS	= main.o globals.o eval.o
 
 OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
 libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
-libintervals.a libfftwrap.a libcwt.a libzfile.a libstats.a		\
-libgraphics.a libstaging.a libdb.a libica.a libclocs.a libpdc.a		\
-libsstore.a libmtm.a libsrate.a
+libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a		\
+libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
+libsrate.a
 
 LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper	\
 -ltimeline -lstaging -lfftwrap -ldsp -lmtm -lmiscmath -lintervals	\
--ltinyxml -lcwt -lclocs -lpdc -lzfile -lstats -lgraphics -ldb		\
--lsstore -lsrate -lfftw3 -lz
+-ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lsrate	\
+-lfftw3
 
 all : $(EXE) $(LUNALIB) utils
 
@@ -31,7 +31,7 @@ static : main.o globals.o eval.o $(OBJLIBS)
 $(LUNALIB) : globals.o eval.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)
 	$(ECHO) "building libluna.dylib..."
-	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a -lz -lfftw3
+	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a  -lfftw3
 else
 	$(ECHO) "building libluna.so..."
 	$(LD) -shared     -fPIC $(LDFLAGS) -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
@@ -66,9 +66,9 @@ libstats.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)
 	cd stats; $(MAKE) $(MFLAGS)
 
-libzfile.a : force_look
-	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)
-	cd zfile; $(MAKE) $(MFLAGS)
+#libzfile.a : force_look
+#	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)
+#	cd zfile; $(MAKE) $(MFLAGS)
 
 libfftwrap.a : force_look
 	$(ECHO) looking into subdir : $(MAKE) $(MFLAGS)

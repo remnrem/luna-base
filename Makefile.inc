@@ -6,7 +6,7 @@
 ARCH=LINUX
 
 ##
-## If dependencies (FFTW, libz if needed, and optionally, libhpdf and libpng) are installed locally, 
+## If dependencies (FFTW, if needed, and optionally, libhpdf and libpng) are installed locally, 
 ## the DEP variable will be set on the command line
 ##
 
@@ -27,10 +27,11 @@ CXXFLAGS = -O2 -I. -I.. -I/usr/local/include $(DEP_INCLUDES) -Wno-logical-op-par
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DT_LINUX
 
 ##
-## By default, do not try to add pdf_t support (i.e. omit -lhpdf and -lpng)
+## By default, do not try to add pdf_t support (i.e. omit -lhpdf and -lpng), or zfile support
 ##
 
-CXXFLAGS += -DNO_HPDFLIB
+CXXFLAGS += -DNO_HPDFLIB -DNO_ZFILE
+
 
 ##
 ## Static binary: 'make static STATIC=1', otherwise set PIC code

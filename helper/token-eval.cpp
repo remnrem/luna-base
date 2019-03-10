@@ -87,7 +87,7 @@ bool Eval::get_token( std::string & input ,  Token & tok )
   if ( ( c >= "0" && c <= "9" ) || c == "." || ( (!previous_value) && ( c=="-" || c=="+" ) ) )
     {
 
-      uint p = 1;
+      unsigned int p = 1;
       
       bool need_leading_zero = c == ".";
       
@@ -179,7 +179,7 @@ bool Eval::get_token( std::string & input ,  Token & tok )
   // a literal string
   else if ( c == "'" )
     {
-      uint p = 1;
+      unsigned int p = 1;
       bool found = false;
       while ( 1 ) 
 	{
@@ -197,7 +197,7 @@ bool Eval::get_token( std::string & input ,  Token & tok )
   else if ( c == "{" )
     {
       int cnt = 1;
-      uint p = 1;
+      unsigned int p = 1;
       bool found = false;
       while ( 1 ) 
 	{
@@ -236,7 +236,7 @@ bool Eval::get_token( std::string & input ,  Token & tok )
 
       // read until space or next operator char, or comma
 
-      uint p = 1;
+      unsigned int p = 1;
       while ( 1 ) 
 	{
 	  if ( p == input.size() ) break;
@@ -638,12 +638,12 @@ bool Eval::execute( const std::vector<Token> & input )
   std::vector<Token> stack;
   
   // redundant, but keep track of stack size here also
-  uint sl = 0;
+  unsigned int sl = 0;
   
   
   // While there are input tokens left
   
-  for (uint i = 0 ; i < input.size() ; i++ )
+  for (unsigned int i = 0 ; i < input.size() ; i++ )
     {
       
       // Read the next token from input.

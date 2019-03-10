@@ -304,9 +304,13 @@ void globals::init_defs()
   //
 
   project_path = "";
-  
+
+#ifdef WINDOWS
+  folder_delimiter = '\';
+#else
   folder_delimiter = '/';
-  
+#endif  
+
   skip_edf_annots = false;
 
   current_tag = "";

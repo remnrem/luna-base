@@ -33,7 +33,9 @@
 #include <iomanip>
 #include <fstream>
 
+#ifndef WINDOWS
 #include <wordexp.h>
+#endif
 
 extern logger_t logger;
 
@@ -81,17 +83,19 @@ std::string Helper::search_replace( const std::string & s , char a , char b )
 
 std::string Helper::expand( const std::string & f )
 {
+#ifdef WINDOWS
+  return f;
+#else
   wordexp_t exp_result;
   wordexp( f.c_str(), &exp_result, 0);
   std::string r = exp_result.we_wordv[0];
   wordfree(&exp_result);
   return r;
+#endif
 }
 
 
-
-
-bool Helper::is_folder( const std::string & f ) { if ( f.size() == 0 ) return false; return f[f.size()-1]=='/'; } 
+bool Helper::is_folder( const std::string & f ) { if ( f.size() == 0 ) return false; return f[f.size()-1]== globals::folder_delimiter; } 
 
 
 bool Helper::file_extension( const std::string & f, const std::string & ext )
