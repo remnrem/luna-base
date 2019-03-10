@@ -784,7 +784,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		Helper::halt( "invalid interval: " + line );
 	      
 	      interval.start = globals::tp_1sec * dbl_start;
-	      interval.stop  = globals::tp_1sec * dbl_stop;	      
+	      interval.stop  = ( globals::tp_1sec * dbl_stop ) + 1LLU;  // make one-past-the-end
 	      	      
 	    }
 
@@ -935,6 +935,7 @@ int annot_t::load_features( const std::string & f )
       
       feature_t feature;
       
+      // features work directly in interval-TP coding, so no need to change the end-point
       if ( ! Helper::str2int64( tok[0] , &feature.feature.start ) ) Helper::halt( "bad format " + line + "\n" );
       if ( ! Helper::str2int64( tok[1] , &feature.feature.stop  ) ) Helper::halt( "bad format " + line + "\n" );
       feature.label = tok[2];
@@ -1037,7 +1038,7 @@ bool annot_t::save( const std::string & t)
       FOUT << name << "\t"
 	   << instance_idx.id << "\t"
 	   << instance_idx.interval.start/(double)globals::tp_1sec << "\t" 
-	   << instance_idx.interval.stop/(double)globals::tp_1sec; 
+	   << (instance_idx.interval.stop-1LLU)/(double)globals::tp_1sec;  // note.. taking off the +1 end point
       
       std::map<std::string,avar_t*>::const_iterator ti = instance->data.begin();
       while ( ti != instance->data.end() )
@@ -1157,9 +1158,13 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 	  stop_sec = start_sec + duration_sec;
 	  start_tp = globals::tp_1sec * start_sec; 
 	  stop_tp = start_tp + (uint64_t)( globals::tp_1sec * duration_sec ) ; 
+
+	  // EDIT OUT	  
+// 	  // in case duration was 0, make this a 1-time-unit event
+// 	  if ( start_tp == stop_tp ) ++stop_tp;
 	  
-	  // in case duration was 0, make this a 1-time-unit event
-	  if ( start_tp == stop_tp ) ++stop_tp;
+	  // MAKE ALL points one past the end
+	  ++stop_tp;
 
 	  //stop_tp = start_tp + (uint64_t)( globals::tp_1sec * duration_sec ) - 1LLU ; 
 	  
@@ -1485,7 +1490,8 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  // otherwise, add
 
 	  uint64_t start_tp = start_sec * globals::tp_1sec;
-	  uint64_t stop_tp  = start_tp + (uint64_t)( epoch_sec * globals::tp_1sec ) - 1LLU ;
+	  //uint64_t stop_tp  = start_tp + (uint64_t)( epoch_sec * globals::tp_1sec ) - 1LLU ;
+	  uint64_t stop_tp  = start_tp + (uint64_t)( epoch_sec * globals::tp_1sec ) ; // 1-past-end encoding
 	  
 	  // advance to the next epoch
 	  start_sec += epoch_sec;

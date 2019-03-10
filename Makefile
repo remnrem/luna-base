@@ -25,6 +25,10 @@ $(EXE) : main.o globals.o eval.o $(OBJLIBS)
 	$(ECHO) $(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 	$(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 
+static : main.o globals.o eval.o $(OBJLIBS)
+	$(LD) $(LDFLAGS) -o $(EXE)-static $(OBJS) $(OBJLIBS) $(LUNA_DEP)/lib/*.a 
+	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna2.dylib eval.o globals.o  *.a $(LUNA_DEP)/lib/*.a 
+
 $(LUNALIB) : globals.o eval.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)
 	$(ECHO) "building libluna.dylib..."

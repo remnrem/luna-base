@@ -218,7 +218,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   clocktime_t starttime( edf.header.starttime );
   if ( ! starttime.valid ) 
     {
-      logger << " ** could not find valid start-time in EDF header **" << std::endl;
+      logger << " ** could not find valid start-time in EDF header **\n";
       hms = false;
     }
   
@@ -283,7 +283,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   if ( param.has( "out" ) )
     {
       annotfile = param.value("out");
-      logger << " writing annotation files [" << annotfile << "]" << std::endl;
+      logger << " writing annotation files [" << annotfile << "]\n";
     }
 
   
@@ -505,9 +505,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       for (int fi=0; fi<frq.size(); fi++)
 	{
 	  
-	  logger << "\n detecting spindles around F_C " << frq[fi] << "Hz" << std::endl ;
-	  logger << " wavelet with " << num_cycles << " cycles" << std::endl;       
-	  logger << " smoothing window = " << moving_window_sec << "s" << std::endl;	  
+	  logger << "\n detecting spindles around F_C " << frq[fi] << "Hz\n";
+	  logger << " wavelet with " << num_cycles << " cycles\n";       
+	  logger << " smoothing window = " << moving_window_sec << "s\n";
 
 	  //
 	  // Output stratifier: F_C
@@ -553,14 +553,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      if ( verbose_empirical ) 
 		{
 		  for (int i=0; i<adj_vals.size();i++)
-		    std::cout << "AV\t" << adj_vals[i] << std::endl ; 
+		    std::cout << "AV\t" << adj_vals[i] << "\n";
 		}
 
-	      logger << " estimated empirical thresholds as " << empirical_threshold << std::endl;
+	      logger << " estimated empirical thresholds as " << empirical_threshold << "\n";
 
 	      if ( use_empirical_thresholds )
 		{
-		  logger << " setting thresholds to empirical value, " << empirical_threshold << std::endl;
+		  logger << " setting thresholds to empirical value, " << empirical_threshold << "\n";
 		  multiplicative_threshold = empirical_threshold;
 		  boundary_threshold = multiplicative_threshold * 0.5;
 		  maximal_threshold = multiplicative_threshold * 10;
@@ -607,10 +607,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    << boundary_threshold;
 	  if ( maximal_threshold > 0 ) 	 
 	    logger << ", " << maximal_threshold;
-	  logger << "x" << std::endl;
+	  logger << "x" << "\n";
 	  
-	  logger << " core duration threshold (core, min, max) = " << min0_dur_sec << ", " << min_dur_sec << ", " << max_dur_sec << "s" << std::endl;      
-	  
+	  logger << " core duration threshold (core, min, max) = " << min0_dur_sec << ", " << min_dur_sec << ", " << max_dur_sec << "s" << "n";	  
 
 	  // Set up threshold values as a matrix;  typically, these will use the same mean, 
 	  // and so every value will be identical, but allow for the case where we have
@@ -909,7 +908,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  logger << " pruned spindle count from " 
 		    << spindles1.size() << " to " 
-		    << spindles.size() << std::endl ;
+		 << spindles.size() << "\n";
 	  
 	  
 	  //
@@ -1378,7 +1377,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	    {
 	      std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;
 	      std::string fname = param.value( "pdf" ) + "-" + signals.label(s) + "-" + analysis_label + ".pdf";
-	      logger << " writing PDF of spindle traces to " << fname << std::endl;
+	      logger << " writing PDF of spindle traces to " << fname << "\n";
 	      std::map<uint64_t,double> avgmap;
 	      for (int j=0;j<averaged.size();j++) avgmap[ (*tp)[j] ] = averaged[j] ;
 	      draw_spindles( edf , param , fname , signals(s) , spindles, &avgmap );
@@ -1465,7 +1464,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  bool empty = spindles.size() == 0; 
 	  
 	  if ( ! empty )
-	    logger << " estimated spindle density is " << spindles.size() / t_minutes << std::endl;
+	    logger << " estimated spindle density is " << spindles.size() / t_minutes << "\n";
 	    
 	  if ( characterize && ! empty )
 	    {
@@ -1666,7 +1665,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      const std::string ftr_name = ftr_folder + delim + "id_" + edf.id + "_feature_" 
 		+ "SPINDLES-" + sp_label + "-" + signals.label(s) + ftr_tag + ".ftr";
 
-	      logger << " writing " << spindles.size() << " spindles to " << ftr_name << std::endl;
+	      logger << " writing " << spindles.size() << " spindles to " << ftr_name << "\n";
 	      std::ofstream OUT1( ftr_name.c_str() , std::ios::out );
 	      if ( OUT1.bad() ) Helper::halt( "could not open " + ftr_name + " for writing" );
 	      
@@ -1798,7 +1797,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   if ( annotfile != "" ) 
     {
-      logger << " saving... " << edf.id << std::endl;
+      logger << " saving... " << edf.id << "\n";
       a->save( annotfile + "-" + edf.id + ".annot" );
 
       if ( add_channels ) 
@@ -1855,7 +1854,7 @@ void characterize_spindles( edf_t & edf ,
       if ( ! bandpass_filtered ) 
 	{
 	  
-	  logger << " filtering at " << target_f - window_f * 0.5  << " to " << target_f + window_f * 0.5 << std::endl;
+	  logger << " filtering at " << target_f - window_f * 0.5  << " to " << target_f + window_f * 0.5 << "\n";
 	  
 	  // default above is 4 Hz, i.e. +/- 2 Hz    ~ 9-13Hz for slow spindles,    13-17Hz for fast spindles
 
@@ -2092,7 +2091,7 @@ void characterize_spindles( edf_t & edf ,
       // something strange?  bail
       if ( peak.size() < 2 ) 
 	{
-	  logger << " *** warning: spindle w/ only a single peak... should not happen... bailing" << std::endl;
+	  logger << " *** warning: spindle w/ only a single peak... should not happen... bailing" << "\n";
 	  continue;
 	}
 
@@ -2371,7 +2370,7 @@ void characterize_spindles( edf_t & edf ,
        spindles->clear();
        for (int i=0;i<copy_spindles.size();i++)
 	 if ( copy_spindles[i].include ) spindles->push_back( copy_spindles[i] );
-       logger << " QC'ed spindle list from " << copy_spindles.size() << " to " << spindles->size() << std::endl;
+       logger << " QC'ed spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
      }
    
    

@@ -2009,10 +2009,10 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	      globals::excludes.insert( xid );
 	    }
 	  logger << "excluding " << globals::excludes.size() 
-		 << " individuals from " << xfile << std::endl;
+		 << " individuals from " << xfile << "\n";
 	  XIN.close();
 	}
-      else logger << "**warning: exclude file " << xfile << " does not exist" << std::endl;
+      else logger << "**warning: exclude file " << xfile << " does not exist\n";
 
       return;
     }

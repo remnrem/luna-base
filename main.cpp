@@ -270,7 +270,7 @@ int main(int argc , char ** argv )
     {
 
       logger << "usage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file"
-	     << std::endl;
+	     << "\n";
       logger.off();
       std::exit(1);
     }
@@ -386,8 +386,8 @@ int main(int argc , char ** argv )
   //
 
   logger << "...processed " << processed << " command set(s), ";
-  if ( failed == 0 ) logger << " all of which passed" << std::endl;
-  else logger << failed << " of which failed" << std::endl;
+  if ( failed == 0 ) logger << " all of which passed" << "\n";
+  else logger << failed << " of which failed\n";
 
   exit(0);
   
@@ -444,7 +444,7 @@ void process_edfs( cmd_t & cmd )
       if ( globals::project_path[ globals::project_path.size() - 1 ] != globals::folder_delimiter )
 	globals::project_path = globals::project_path + globals::folder_delimiter ; 
       
-      logger << "path    : " << globals::project_path << std::endl;
+      logger << "path    : " << globals::project_path << "\n";
                  
     }
   
@@ -546,7 +546,7 @@ void process_edfs( cmd_t & cmd )
 		 << "  **********************************\n"
 		 << "  * Skipping EDF " << rootname << "\n"
 		 << "  **********************************\n"
-		 << std::endl;
+		 << "\n";
 
 	  ++processed;
 	  continue; // to the next EDF in the list
@@ -560,7 +560,7 @@ void process_edfs( cmd_t & cmd )
       
       logger  << "\n___________________________________________________________________\n"
 	      << "Processing: " << rootname 
-	      << " [ #" << processed+1 << " ]" << std::endl;
+	      << " [ #" << processed+1 << " ]" << "\n";
       
       
       //
@@ -643,7 +643,7 @@ void process_edfs( cmd_t & cmd )
 	  globals::problem = true;
 
 	  logger << "**warning: problem loading " 
-		 << edffile << ", skipping..." << std::endl;
+		 << edffile << ", skipping..." << "\n";
 	  
 	  writer.commit();
 
@@ -823,11 +823,11 @@ void process_edfs( cmd_t & cmd )
   // All done
   //
 
-  logger << std::endl
+  logger << "\n"
 	 << "___________________________________________________________________"
-	 << std::endl
+	 << "\n"
 	 << "...processed " << actual << " EDFs, done."
-	 << std::endl;
+	 << "\n";
 
 }
 
@@ -1341,7 +1341,7 @@ void proc_dummy( const std::string & p )
   //   }
   // H1.close();
 
-  logger << "read " << x.size() << " x values" << std::endl;
+  logger << "read " << x.size() << " x values\n" ;
   //  logger << "read " << h.size() << " h values\n";
   
   

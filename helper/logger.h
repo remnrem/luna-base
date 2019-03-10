@@ -33,8 +33,6 @@
 #include <string>
 #include <iomanip>
 
-using std::chrono::system_clock;
-
 #include "defs/defs.h"
 
 class logger_t
@@ -48,27 +46,17 @@ class logger_t
   
   std::stringstream ss;
   
-  bool         _next_is_begin;
- 
   bool         is_off;
-
-  using endl_type = std::ostream&(std::ostream&);
-
-
-  //This is the key: std::endl is a template function, and this is the
-  //signature of that function (For std::ostream).
   
  public:
   
-  // Constructor: User passes a custom log header and output stream, or uses defaults.
-
-   logger_t(const std::string& log_header  ,
+ logger_t( const std::string & log_header  ,
 	  std::ostream& out_stream = std::cerr)
-   : _log_header( log_header ) , _out_stream( out_stream ) , _next_is_begin( true )
-    {
-      is_off = false;      
-    }
-
+   : _log_header( log_header ) , _out_stream( out_stream ) 
+  {
+    is_off = false;      
+  }
+  
   void flush() { _out_stream.flush(); } 
 
   void off() { flush(); is_off = true; } 
@@ -80,40 +68,47 @@ class logger_t
     
     // initialize log with this message
     
-    auto now        = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t( now ); 
-    auto now_tm     = std::localtime( &now_time_t ); 
+    time_t rawtime;
+    time (&rawtime);
+    struct tm * timeinfo = localtime (&rawtime);
     
-    _out_stream << "===================================================================" << std::endl
+    char BUFFER[50];
+    strftime(BUFFER, sizeof(BUFFER), "%d-%b-%Y %T", timeinfo); 
+
+    _out_stream << "===================================================================" << "\n"
 		<< _log_header
-		<< " | " << v << ", " << bd 
-		<< " | starting process "
-		<< std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")		  
-		<< std::endl
+		<< " | " << v << ", " << bd << "  |  starting " << BUFFER  << "  +++\n"
 		<< "===================================================================" << std::endl;
   }
-  
-  
-  
+
+                         
+   
   ~logger_t()
     {
       
       if ( is_off || globals::silent ) return;
       
-      auto now        = std::chrono::system_clock::now();
-      auto now_time_t = std::chrono::system_clock::to_time_t( now ); 
-      auto now_tm     = std::localtime( &now_time_t ); 
-
       if ( ! globals::silent ) 
-	_out_stream << "-------------------------------------------------------------------"
-		    << std::endl 
-		    << "+++ luna | finishing process "
-		    << std::put_time( now_tm, "%Y-%m-%d %H:%M:%S")
-		    << std::endl
-		    << "==================================================================="
-		    << std::endl;
+	{
+	  
+	  time_t rawtime;
+	  time (&rawtime);
+	  struct tm * timeinfo = localtime (&rawtime);
+	  
+	  char BUFFER[50];
+	  strftime(BUFFER, sizeof(BUFFER), "%d-%b-%Y %T", timeinfo); 
+	  
+	  _out_stream << "-------------------------------------------------------------------"
+		      << "\n"
+		      << "+++ luna | finishing "
+		      << BUFFER
+		      << "                       +++\n"
+		      << "==================================================================="
+		      << std::endl;
+	}
 
     }
+
 
   void warning( const std::string & msg )
   {
@@ -124,21 +119,6 @@ class logger_t
       _out_stream << " ** warning: " << msg << " ** " << std::endl;
   }
   
-
-  // Overload for std::endl only:
-  logger_t& operator<<(endl_type endl)
-    {       
-      if ( is_off ) return *this;
-      _next_is_begin = true; 
-
-      if ( ! globals::silent ) 
-	_out_stream << endl; 
-      else if ( globals::Rmode && globals::Rdisp )
-	ss << endl;
-      return *this; 
-    }
-  
-  //Overload for anything else:
 
   template<typename T>           
     logger_t& operator<< (const T& data) 
@@ -155,6 +135,7 @@ class logger_t
 
     }
   
+
   std::string print_buffer() 
     {      
       std::string retval = ss.str();
