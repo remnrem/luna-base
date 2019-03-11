@@ -10,10 +10,28 @@ ARCH=LINUX
 ## the DEP variable will be set on the command line
 ##
 
-ifdef LUNA_DEP
-DEP_INCLUDES = -I$(LUNA_DEP)/include
-DEP_LIB = -L$(LUNA_DEP)/lib
+DEP_INCLUDES = 
+DEP_LIB = 
+
+ifdef FFTW
+DEP_INCLUDES += -I$(FFTW)/include
+DEP_LIB = -L$(FFTW)/lib
 endif
+
+ifdef HPDF
+DEP_INCLUDES += -I$(HPDF)/include
+DEP_LIB = -L$(HPDF)/lib
+else
+CXXFLAGS += -DNO_HPDFLIB 
+endif
+
+ifdef LIBPNG
+DEP_INCLUDES += -I$(LIBPNG)/include
+DEP_LIB = -L$(LIBPNG)/lib
+else
+CXXFLAGS += -DNO_HPDFLIB 
+endif
+
 
 
 ##
@@ -26,29 +44,28 @@ CXXFLAGS = -O2 -I. -I.. -I/usr/local/include $(DEP_INCLUDES) -Wno-logical-op-par
 
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -DT_LINUX
 
-##
-## By default, do not try to add pdf_t support (i.e. omit -lhpdf and -lpng), or zfile support
-##
-
-CXXFLAGS += -DNO_HPDFLIB -DNO_ZFILE
-
-
-##
-## Static binary: 'make static STATIC=1', otherwise set PIC code
-##
-
-ifndef STATIC
-CXXFLAGS += -fPIC
-CFLAGS += -fPIC
-endif
-
 
 ##
 ## Linker flags
 ##
 
 LD = g++ 
-LDFLAGS = $(DEP_LIB) -L/usr/local/lib
+LDFLAGS = $(DEP_LIB)
+
+ifndef WINDOWS
+LDFLAGS += -L/usr/local/lib
+endif
+
+
+##
+## Static binary: 'make static STATIC=1', otherwise set PIC code
+##
+
+ifndef LUNA_STATIC
+CXXFLAGS += -fPIC
+CFLAGS += -fPIC
+LDFLAGS += -static -static-libgcc -static-libstdc++
+endif
 
 
 ##

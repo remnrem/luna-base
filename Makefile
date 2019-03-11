@@ -26,7 +26,13 @@ $(EXE) : main.o globals.o eval.o $(OBJLIBS)
 	$(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 
 static : main.o globals.o eval.o $(OBJLIBS)
-	$(LD) $(LDFLAGS) -o $(EXE)-static $(OBJS) $(OBJLIBS) $(LUNA_DEP)/lib/*.a 
+	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib	\
+	-o $(LUNA_STATIC) main.o globals.o eval.o libspindles.a libartifacts.a	\
+	libtimeline.a libannot.a libedf.a libintervals.a libcwt.a libdsp.a	\
+	libstaging.a libclocs.a libpdc.a libsstore.a libmtm.a libdefs.a		\
+	libhelper.a libfftwrap.a libgraphics.a libmiscmath.a libstats.a		\
+	libsrate.a libtinyxml.a libdb.a libica.a $(FFTW)/lib/libfftw3.a
+
 
 $(LUNALIB) : globals.o eval.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)

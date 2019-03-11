@@ -1150,7 +1150,7 @@ void proc_write( edf_t & edf , param_t & param )
       const std::string outdir = param.value("edf-dir");
       
       if ( outdir[ outdir.size() - 1 ] != globals::folder_delimiter ) 
-	Helper::halt("edf-dir value must end in '" + std::string(globals::folder_delimiter) + "' to specify a folder" );
+	Helper::halt("edf-dir value must end in '" + std::string(1,globals::folder_delimiter) + "' to specify a folder" );
 
       int p=filename.size()-1;
       int v = 0;

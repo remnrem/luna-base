@@ -306,7 +306,7 @@ void globals::init_defs()
   project_path = "";
 
 #ifdef WINDOWS
-  folder_delimiter = '\';
+  folder_delimiter = '\\';
 #else
   folder_delimiter = '/';
 #endif  
