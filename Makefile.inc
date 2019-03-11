@@ -65,18 +65,18 @@ LDFLAGS += -L/usr/local/lib
 endif
 
 
-
 ##
 ## Static binary: 'make static STATIC=1', otherwise set PIC code
 ##
 
-ifndef LUNA_STATIC
-CXXFLAGS += -fPIC
-CFLAGS += -fPIC
-else
+ifdef LUNA_STATIC
 LDFLAGS += -static -static-libgcc -static-libstdc++
 endif
 
+ifdef SHAREDLIBS
+CXXFLAGS += -fPIC
+CFLAGS += -fPIC
+endif
 
 ##
 ## Misc
