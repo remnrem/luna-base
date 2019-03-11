@@ -4,14 +4,13 @@ DIRS = edf tinyxml helper timeline annot dsp miscmath spindles	\
 artifacts intervals fftw cwt defs stats graphics staging 	\
 db ica clocs pdc sstore dsp/mtm dsp/libsamplerate
 
-EXE	= luna
-LUNALIB = libluna.so
-OBJS	= main.o globals.o eval.o
+EXE    = luna
+OBJS   = main.o globals.o eval.o
 
 OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
-libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
-libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a		\
-libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
+libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a			\
+libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a				\
+libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a			\
 libsrate.a
 
 LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper	\
@@ -19,30 +18,34 @@ LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper	\
 -ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lsrate	\
 -lfftw3
 
-all : $(EXE) $(LUNALIB) utils
-
-$(EXE) : main.o globals.o eval.o $(OBJLIBS)
-	$(ECHO) $(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
-	$(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
-
-static : main.o globals.o eval.o $(OBJLIBS)
-	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib	\
-	-o $(LUNA_STATIC) main.o globals.o eval.o libspindles.a libartifacts.a	\
-	libtimeline.a libannot.a libedf.a libintervals.a libcwt.a libdsp.a	\
-	libstaging.a libclocs.a libpdc.a libsstore.a libmtm.a libdefs.a		\
-	libhelper.a libfftwrap.a libgraphics.a libmiscmath.a libstats.a		\
-	libsrate.a libtinyxml.a libdb.a libica.a $(FFTW)/lib/libfftw3.a
-
-
-$(LUNALIB) : globals.o eval.o $(OBJLIBS)
-ifeq ($(ARCH),MAC)
-	$(ECHO) "building libluna.dylib..."
-	$(LD) -dynamiclib -fPIC $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a  -lfftw3
-else
-	$(ECHO) "building libluna.so..."
-	$(LD) -shared     -fPIC $(LDFLAGS) -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
+ifdef SHARED
+all : luna shared utils
 endif
 
+ifdef STATIC
+all : static utils
+endif
+
+luna : main.o globals.o eval.o $(OBJLIBS)
+	$(ECHO) $(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
+	$(LD) $(LDFLAGS) -o luna $(OBJS) $(LIBS)
+
+static : main.o globals.o eval.o $(OBJLIBS)
+	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib \
+	-o luna main.o globals.o eval.o libspindles.a libartifacts.a \
+	libtimeline.a libannot.a libedf.a libintervals.a libcwt.a libdsp.a \
+	libstaging.a libclocs.a libpdc.a libsstore.a libmtm.a libdefs.a \
+	libhelper.a libfftwrap.a libgraphics.a libmiscmath.a libstats.a \
+	libsrate.a libtinyxml.a libdb.a libica.a $(FFTW)/lib/libfftw3.a
+
+sharedlib : globals.o eval.o $(OBJLIBS)
+ifeq ($(ARCH),MAC)
+	$(ECHO) "building libluna.dylib..."
+	$(LD) -dynamiclib $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a  -lfftw3
+else
+	$(ECHO) "building libluna.so..."
+	$(LD) -shared      $(LDFLAGS) -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
+endif
 
 libedf.a : force_look
 	cd edf; $(MAKE) $(MFLAGS)
@@ -66,7 +69,7 @@ libstats.a : force_look
 	cd stats; $(MAKE) $(MFLAGS)
 
 #libzfile.a : force_look
-#	cd zfile; $(MAKE) $(MFLAGS)
+#	    cd zfile; $(MAKE) $(MFLAGS)
 
 libfftwrap.a : force_look
 	cd fftw; $(MAKE) $(MFLAGS)

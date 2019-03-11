@@ -69,13 +69,21 @@ endif
 ## Static binary: 'make static STATIC=1', otherwise set PIC code
 ##
 
-ifdef LUNA_STATIC
-LDFLAGS += -static -static-libgcc -static-libstdc++
+ifdef STATIC
+LDFLAGS += -static
+ifdef LINUX
+LDFLAGS += -static-libgcc -static-libstdc++
+endif
 endif
 
-ifdef SHAREDLIBS
+##
+## Build with dynamic linking, and libluna.so (default)
+##
+
+ifndef STATIC
 CXXFLAGS += -fPIC
 CFLAGS += -fPIC
+LDFLAGS += -fPIC
 endif
 
 ##
