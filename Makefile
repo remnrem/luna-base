@@ -18,8 +18,8 @@ LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper	\
 -ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lsrate	\
 -lfftw3
 
-ifdef SHARED
-all : luna shared utils
+ifndef STATIC
+all : luna sharedlib utils
 endif
 
 ifdef STATIC
