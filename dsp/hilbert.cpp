@@ -122,7 +122,6 @@ std::vector<double> hilbert_t::instantaneous_frequency( double Fs ) const
   std::vector<double> f( nm1 );
   for (int i=0;i<nm1;i++)
     f[i] = Fs / ( 2.0 * M_PI ) * ( angles[i+1] - angles[i] ) ;
-  
   return f;
         
 }
@@ -193,8 +192,8 @@ double hilbert_t::phase_events( const std::vector<int> & e ,
 void hilbert_t::unwrap( std::vector<double> * p ) const 
 {
   
-  // function from : https://www.medphysics.wisc.edu/~ethan/phaseunwrap/unwrap.c
-  
+  // http://homepages.cae.wisc.edu/~brodskye/mr/phaseunwrap/unwrap.c
+
   const int n = p->size();
   
   std::vector<double> dp( n );

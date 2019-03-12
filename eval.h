@@ -204,6 +204,7 @@ void proc_anon( edf_t & , param_t & );
 void proc_write( edf_t & , param_t & );
 void proc_restructure( edf_t & , param_t & );
 void proc_drop_signals( edf_t & , param_t & );
+void proc_copy_signal( edf_t & , param_t & );
 void proc_scale( edf_t & , param_t & , const std::string & s );
 void proc_flip( edf_t & , param_t & );
 void proc_reference( edf_t & , param_t & );
@@ -247,6 +248,9 @@ void proc_psd( edf_t & , param_t & );
 void proc_mtm( edf_t & , param_t & );
 void proc_1overf_norm( edf_t & , param_t & );
 void proc_tv_denoise( edf_t & , param_t & );
+void proc_cwt( edf_t & , param_t & );
+void proc_hilbert( edf_t & , param_t & );
+
 
 void proc_fiplot( edf_t & , param_t & );
 void proc_mi( edf_t & , param_t & );

@@ -406,7 +406,7 @@ int mi_t::set_nbins_scott()
 
 int mi_t::set_nbins_sturges()
 {
-  nbins = ceil( 1 + std::log2( n ) );
+  nbins = ceil( 1 + log2( n ) );
   return nbins;
 }
     

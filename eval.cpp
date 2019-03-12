@@ -715,6 +715,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
       else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
+      else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
       else if ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) proc_rms( edf, param(c) );
       else if ( is( c, "MSE" ) )          proc_mse( edf, param(c) );
       else if ( is( c, "LZW" ) )          proc_lzw( edf, param(c) );
@@ -736,6 +737,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );      
       else if ( is( c, "FILTER-DESIGN" )) proc_filter_design( edf, param(c) );
       else if ( is( c, "CWT-DESIGN" ) )   proc_cwt_design( edf , param(c) );
+      else if ( is( c, "CWT" ) )          proc_cwt( edf , param(c) );
+      else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
 
       //	  else if ( is( c, "LEGACY-FILTER" )) proc_filter_legacy( edf, param(c) );
       else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
@@ -917,11 +920,23 @@ void proc_filter_design_cmdline()
 }
 
 // TV   total variation 1D denoising
+
 void proc_tv_denoise( edf_t & edf , param_t & param )
 {
   dsptools::tv( edf , param );
 }
 
+// CWT 
+void proc_cwt( edf_t & edf , param_t & param )
+{
+  dsptools::cwt( edf , param );
+}
+
+// HILBERT 
+void proc_hilbert( edf_t & edf , param_t & param )
+{
+  dsptools::hilbert( edf , param );
+}
 
 // -cwt  from the command line
 void proc_cwt_design_cmdline()
@@ -1678,6 +1693,32 @@ void proc_bpm( edf_t & edf , param_t & param )
   dsptools::bpm( edf , param );
 }
 
+
+// COPY : mirror a signal
+void proc_copy_signal( edf_t & edf , param_t & param )
+{
+  
+  signal_list_t originals = edf.header.signal_list( param.requires( "sig" ) );
+
+  std::string tag = param.requires( "tag" );
+  
+  for (int s=0;s<originals.size();s++)
+    {
+
+      if ( edf.header.is_data_channel( originals(s) ) )
+	{
+
+	  std::string new_label = originals.label( s ) + "_" + tag; 
+	  
+	  if ( ! edf.header.has_signal( new_label ) )
+	    {
+	      logger << " copying " << originals.label(s) << " to " << new_label << "\n";
+	      edf.copy_signal( originals.label(s) , new_label );
+	    }
+	}
+    }
+}
+
 // DROP : drop a signal
 
 void proc_drop_signals( edf_t & edf , param_t & param )
@@ -1987,7 +2028,36 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       cmd_t::signal_alias( tok1 );
       return;
     }
-  
+
+  // power band defintions
+  if ( Helper::iequals( tok0 , "slow" ) 
+       || Helper::iequals( tok0 , "delta" ) 
+       || Helper::iequals( tok0 , "theta" ) 
+       || Helper::iequals( tok0 , "alpha" ) 
+       || Helper::iequals( tok0 , "sigma" ) 
+       || Helper::iequals( tok0 , "beta" ) 
+       || Helper::iequals( tok0 , "gamma" ) 
+       || Helper::iequals( tok0 , "total" ) ) 
+    {
+      std::vector<std::string> f = Helper::parse( tok1 , ",-" );
+      if ( f.size() != 2 ) Helper::halt( "expecting band=lower,upper" );
+      double f0, f1;
+      if ( ! Helper::str2dbl( f[0] , &f0 ) ) Helper::halt( "expecting numeric for power range" );
+      if ( ! Helper::str2dbl( f[1] , &f1 ) ) Helper::halt( "expecting numeric for power range" );
+      if ( f0 >= f1 ) Helper::halt( "expecting band=lower,upper" );
+      if ( f0 < 0 || f1 < 0 ) Helper::halt( "negative frequencies specified" );
+      
+      if      ( Helper::iequals( tok0 , "slow" ) )  globals::freq_band[ SLOW ] =  freq_range_t( f0 , f1 ) ;
+      else if ( Helper::iequals( tok0 , "delta" ) ) globals::freq_band[ DELTA ] = freq_range_t( f0 , f1 ) ;
+      else if ( Helper::iequals( tok0 , "theta" ) ) globals::freq_band[ THETA ] = freq_range_t( f0 , f1 ) ;
+      else if ( Helper::iequals( tok0 , "alpha" ) ) globals::freq_band[ ALPHA ] = freq_range_t( f0 , f1 ) ;
+      else if ( Helper::iequals( tok0 , "sigma" ) ) globals::freq_band[ SIGMA ] = freq_range_t( f0 , f1 ) ;
+      else if ( Helper::iequals( tok0 , "beta" ) )  globals::freq_band[ BETA ] =  freq_range_t( f0 , f1 ) ;
+      else if ( Helper::iequals( tok0 , "gamma" ) ) globals::freq_band[ GAMMA ] = freq_range_t( f0 , f1 ) ;
+      else if ( Helper::iequals( tok0 , "total" ) ) globals::freq_band[ TOTAL ] = freq_range_t( f0 , f1 ) ;
+      
+    }
+
   // exclude individuals?
   if ( Helper::iequals( tok0 , "exclude" ) )
     {

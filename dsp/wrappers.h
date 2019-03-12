@@ -20,30 +20,33 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#ifndef __WRAPPERS_H__
+#define __WRAPPERS_H__
 
-#include "spectral_norm.h"
-#include "tv.h"
-#include "cfc.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
+struct edf_t;
+struct param_t;
+
+#include <vector>
+#include <stdint.h>
+
+namespace dsptools 
+{  
+  
+  void cwt( edf_t & , param_t & );
+
+  void hilbert( edf_t & , param_t & );
+  
+  void run_cwt( const std::vector<double> & data , const int ,
+		const double fc , const int num_cycles , 
+		std::vector<double> * mag , 
+		std::vector<double> * phase = NULL ); 
+  
+  void run_hilbert( const std::vector<double> & data , const int Fs , 
+		    const double flwr , const double fupr , const double ripple , const double tw , 
+		    std::vector<double> * mag , 
+		    std::vector<double> * phase = NULL , 
+		    std::vector<double> * frequency = NULL ); 
+  
+}
 
 #endif
