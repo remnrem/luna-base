@@ -28,6 +28,7 @@ struct param_t;
 
 #include <vector>
 #include <stdint.h>
+#include <cstddef>
 
 namespace dsptools 
 {  
