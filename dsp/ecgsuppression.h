@@ -29,6 +29,7 @@ struct interval_t;
 
 #include <vector>
 #include <stdint.h>
+#include <cstddef>
 
 struct rpeaks_t
 {
