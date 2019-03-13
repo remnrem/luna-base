@@ -202,8 +202,22 @@ bool timeline_t::interval2records( const interval_t & interval ,
 				   int * stop_smp ) const
 
 {
+
+  if ( interval.stop < interval.start ) 
+    Helper::halt( "badly defined interval requested, with stop before start" );
+
+  // empty record set?
+  if ( interval.stop == interval.start )
+    {
+      *start_rec = 0;
+      *start_smp = 0;	  
+      *stop_rec = 0;
+      *stop_smp = 0;
+      return false;
+    }
+
+  //  std::cout << "i2r: interval = " << interval << "\n";
   
-  //   std::cout << "i2r: interval = " << interval << "\n";
 
   //
   // Note: here we want to find records/samples that are inclusive w.r.t. the interval
@@ -212,6 +226,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
   if ( interval.stop == 0 ) 
     Helper::halt( "internal error in timeline()" );
+
+  // subtract 1 off this timepoint
 
   uint64_t stop_tp = interval.stop - 1LLU;
   
@@ -224,26 +240,42 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
   if ( edf->header.continuous )
     {
-      
-      // get initial records/samples
+      //      std::cout << "EDF-C\n";
+
+      // get initial records/samples, nb. use ceil() to get nearest sample *after* start of interval
 
       uint64_t start_record = interval.start / edf->header.record_duration_tp;
       uint64_t start_offset = interval.start % edf->header.record_duration_tp;
       uint64_t start_sample = 
-	( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ;
+	ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
       
-      if ( start_sample >= n_samples_per_record ) start_sample = (uint64_t)n_samples_per_record - 1LLU; 
+      //      std::cout << "othr = " << edf->header.record_duration_tp << " " << n_samples_per_record << "\n";
+
+      //      std::cout << "start = " << start_record << " " << start_offset << " " << start_sample << "\n";
+
+      // not sure why this was in place, should never happen
+      // and I doubt the 'fix' is correct in any case
+      //       if ( start_sample >= n_samples_per_record ) 
+      // 	{
+      // 	  std::cout << "backshifting\n";
+      // 	  start_sample = (uint64_t)n_samples_per_record - 1LLU; 
+      // 	}
       
-      
-      // get final records/samples
+      // get final records/samples, nb. use floor() to get the nearest sample *prior* to end
       
       uint64_t stop_record = stop_tp / edf->header.record_duration_tp;
       uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
       uint64_t stop_sample = 
-	( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ;
+	floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
 
-      if ( stop_sample >= n_samples_per_record ) stop_sample = n_samples_per_record - 1LLU;
+//       if ( stop_sample >= n_samples_per_record ) 
+// 	{
+// 	  stop_sample = n_samples_per_record - 1LLU;
+// 	}
+
       
+      
+
       // pass back to calling function
       
       *start_rec = (int)start_record;
@@ -255,6 +287,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
     }
   else
     {
+
+      //      std::cout << "in EDF+D\n";
 
       //
       // For a discontinuous EDF+ we need to search 
@@ -268,17 +302,18 @@ bool timeline_t::interval2records( const interval_t & interval ,
       std::map<uint64_t,int>::const_iterator lwr = tp2rec.lower_bound( interval.start ); 
            
       //
-      // This will find the first record AFTER the start; thus we should skip one record back;
-      // This should never be the first record, but check in case...
+      // This will find the first record AFTER the start; thus, if the
+      // interval is aligned to the sample point, we'll need to skip
+      // one back; this should never be the first record, but check in
+      // case...
       //
-
-      // Does the search point fall outside of a record?
+      
+      // track whether the start search point falls between sample-points
       
       bool in_gap = false;
       
       if ( lwr != tp2rec.begin() ) 
 	{
-
 	  // go back one record
 	  --lwr;
 	  uint64_t previous_rec_start = lwr->first;
@@ -295,8 +330,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       else if ( lwr == tp2rec.begin() )
        	{
-	  // If the search point occurs before /all/ records, need to indicate that we are in a gap
-	  // also
+	  // If the search point occurs before /all/ records, need to
+	  // indicate that we are in a gap also	  
 	  if ( interval.start < lwr->first ) 
 	    in_gap = true;	      
 	}
@@ -320,10 +355,11 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	{	
 	  uint64_t start_offset = interval.start % edf->header.record_duration_tp;
 	  uint64_t start_sample = 
-	    ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ;
-	  if ( start_sample >= n_samples_per_record ) start_sample = n_samples_per_record - 1LLU; 
+	    ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+	  //if ( start_sample >= n_samples_per_record ) start_sample = n_samples_per_record - 1LLU; 
 	  *start_smp = (int)start_sample;
 	}
+      
       
       //
       // for upper bound, find the record whose end is equal/greater *greater* 
@@ -351,21 +387,30 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	{	  
 	  uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
 	  uint64_t stop_sample = 
-	    ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ;
-	  if ( stop_sample >= n_samples_per_record ) stop_sample = n_samples_per_record - 1LLU;
+	    floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+	  //if ( stop_sample >= n_samples_per_record ) stop_sample = n_samples_per_record - 1LLU;
 	  *stop_smp = (int)stop_sample;
 	}
       
     }
+  
+//   std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
+//   std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
 
-  // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
-  // std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
-
-  // if the interval is in a gap, we will not get any records here (in fact, stop < start), so fix
-  // this
-
-  if ( *start_rec > *stop_rec ) { *stop_rec = *start_rec; } 
-  if ( *start_rec == *stop_rec && *start_smp > *stop_smp ) { *stop_smp = *start_smp; } 
+  //
+  // If the interval is in a gap, we will not get any records here, and 
+  // stop < start;  so check for this and flag if so 
+  //
+  
+  if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
+    {
+      *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
+      return false;
+    }
+  
+  //
+  // Otherwise, we're all good
+  //
 
   return true;
   

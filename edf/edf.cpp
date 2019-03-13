@@ -943,25 +943,20 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   rec->clear();
 
   //
-  // ensure we are within bounds
+  // Ensure we are within bounds
   //
   
   if ( stop > timeline.last_time_point_tp + 1 )
     stop = timeline.last_time_point_tp + 1 ;      
   
   //
-  // Figure out which records are being requested 
+  // First, determine which records are being requested?
   //
   
-  //
-  // we know total tp-duration of file
-  // we here are given start and stop both in tp
-  // 
-
   const uint64_t n_samples_per_record = header.n_samples[signal];
   
 //   std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
-//   std::cerr << "FR " << n_samples_per_record << "\n";
+//   std::cerr << "SR " << n_samples_per_record << "\n";
  
   int start_record, stop_record;
   int start_sample, stop_sample;
@@ -977,21 +972,27 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 //   std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
 //   std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
 
+  //
+  // If the interval is too small (or is applied to a signal with a low sampling rate)
+  // we might not find any sample-points in this region.   Not an error per se, but flag
+  // (we have to check that all downstream functons will play nicely with an empty set being returned)
+  //
+  
   if ( ! okay ) 
     {
-      logger << " ** warning ... null record set found... ** \n";
-      return ret; // ie empty
+      logger << " ** warning ... empty intervals returned (check intervals/sampling rates)\n";
+      return ret; // i.e. empty
     }
 
   
-  
-  
+  //
   // Ensure that these records are loaded into memory
   // (if they are already, they will not be re-read)
+  //
   
   bool retval = read_records( start_record , stop_record );
   
-
+  
   //
   // Copy data into a single vector
   //
@@ -1009,12 +1010,11 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
       const int start = r == start_record ? start_sample : 0 ;
       const int stop  = r == stop_record  ? stop_sample  : n_samples_per_record - 1;
       
-       // std::cerr << "OUT\t"
-       // 		<< record->pdata.size() << " " 
-       // 		<< record->data.size() << " "
-       // 		<< signal << " " 
-       // 		<< header.ns << "\n";
-	      
+//       std::cerr << "OUT\t"
+// 		<< record->data.size() << " "
+// 		<< signal << " " 
+// 		<< header.ns << "\n";
+      
       for (int s=start;s<=stop;s+=downsample)
 	{
 	  // convert from digital to physical on-the-fly

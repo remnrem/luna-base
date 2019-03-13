@@ -160,7 +160,7 @@ void dsptools::run_cwt( const std::vector<double> & data , const int Fs,
   CWT cwt;
   
   cwt.set_sampling_rate( Fs );
- 
+  
   cwt.add_wavelet( fc , num_cycles ); 
   
   cwt.load( &data );

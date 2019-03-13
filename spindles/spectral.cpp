@@ -354,7 +354,7 @@ annot_t * spectral_power( edf_t & edf ,
 		       
 		       // power value
 		       writer.var( "PSD" , "Spectral band power" );
-		       writer.value( "PSD" , ii->second );
+		       writer.value( "PSD" , dB ? 10*log10( ii->second ) : ii->second  );
 						
 		       ++ii;
 		     }
@@ -383,43 +383,43 @@ annot_t * spectral_power( edf_t & edf ,
 		 + this_gamma;
 
 	       writer.level( globals::band( SLOW ) , globals::band_strat );
-	       writer.value( "PSD" , this_slowwave );
+	       writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
 	       writer.value( "RELPSD" , this_slowwave / this_total );
 	       
 	       writer.level( globals::band( DELTA ) , globals::band_strat );
-	       writer.value( "PSD" , this_delta );
+	       writer.value( "PSD" , dB ? 10*log10( this_delta ) : this_delta );
 	       writer.value( "RELPSD" , this_delta / this_total );
 
 	       writer.level( globals::band( THETA ) , globals::band_strat );
-	       writer.value( "PSD" , this_theta );
+	       writer.value( "PSD" , dB ? 10*log10( this_theta ) : this_theta  );
 	       writer.value( "RELPSD" , this_theta / this_total );
 
 	       writer.level( globals::band( ALPHA ) , globals::band_strat );
-	       writer.value( "PSD" , this_alpha );
+	       writer.value( "PSD" , dB ? 10*log10( this_alpha ) : this_alpha );
 	       writer.value( "RELPSD" , this_alpha / this_total );
 
 	       writer.level( globals::band( SIGMA ) , globals::band_strat );
-	       writer.value( "PSD" , this_sigma );
+	       writer.value( "PSD" , dB ? 10*log10( this_sigma ) : this_sigma );
 	       writer.value( "RELPSD" , this_sigma / this_total );
 
 	       writer.level( globals::band( LOW_SIGMA ) , globals::band_strat );
-	       writer.value( "PSD" , this_low_sigma );
+	       writer.value( "PSD" , dB ? 10*log10( this_low_sigma ) : this_low_sigma  );
 	       writer.value( "RELPSD" , this_low_sigma / this_total );
 
 	       writer.level( globals::band( HIGH_SIGMA ) , globals::band_strat );
-	       writer.value( "PSD" , this_high_sigma );
+	       writer.value( "PSD" , dB ? 10*log10( this_high_sigma ) : this_high_sigma );
 	       writer.value( "RELPSD" , this_high_sigma / this_total );
 
 	       writer.level( globals::band( BETA ) , globals::band_strat );
-	       writer.value( "PSD" , this_beta );
+	       writer.value( "PSD" , dB ? 10*log10( this_beta ) : this_beta  );
 	       writer.value( "RELPSD" , this_beta / this_total );
 
 	       writer.level( globals::band( GAMMA ) , globals::band_strat );
-	       writer.value( "PSD" , this_gamma );
+	       writer.value( "PSD" , dB ? 10*log10( this_gamma ) : this_gamma );
 	       writer.value( "RELPSD" , this_gamma / this_total );
 
 	       writer.level( globals::band( TOTAL ) , globals::band_strat );
-	       writer.value( "PSD" , this_total );
+	       writer.value( "PSD" , dB ? 10*log10( this_total ) : this_total );
 	       
 	       writer.unlevel( globals::band_strat );
 	       
@@ -459,7 +459,7 @@ annot_t * spectral_power( edf_t & edf ,
 		  
 		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		  writer.value( "PSD" , bin.bspec[i] );
+		  writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
 		}
 	       writer.unlevel( globals::freq_strat );
 	     }
@@ -517,22 +517,11 @@ annot_t * spectral_power( edf_t & edf ,
 
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
-		  //std::cout << "PSD bin.bfa[i] " << bin.bfa[i] << " " << bin.bfb[i] << "\n";
-		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		  writer.value( "PSD" , bin.bspec[i] );
+		  writer.value( "PSD" , dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
 		}
 	       writer.unlevel( globals::freq_strat );
 
-// 	      for (int f=0;f<n;f++)
-// 		{	      		  
-// 		  double x = freqmean[ s ][ f ] / (double)total_epochs;	      
-// 		  writer.level( freqs[s][f] , globals::freq_strat );		  
-// 		  writer.value( "PSD" , x ); 		  
-// 		}
-// 	      writer.unlevel( globals::freq_strat );
-
-	      
 	    }
 	  
 	}
@@ -565,7 +554,7 @@ annot_t * spectral_power( edf_t & edf ,
 	      double p = bandmean[ s ][ *bi ] / (double)total_epochs;
 
 	      writer.level( globals::band( *bi ) , globals::band_strat );
-	      writer.value( "PSD" , p );
+	      writer.value( "PSD" , dB ? 10*log10(p) : p  );
 	      writer.value( "RELPSD" , p / total_power );
 	    }
 	  
@@ -587,7 +576,7 @@ annot_t * spectral_power( edf_t & edf ,
 
 	      writer.level( ss.str() , "FRQRANGE" );
 	      writer.value( "FRQMID" , ( ii->first.second  + ii->first.first ) / 2.0 ); 
-	      writer.value( "PSD" , ii->second / (double)total_epochs );	      
+	      writer.value( "PSD" , dB ? 10*log10( ii->second / (double)total_epochs ) : ii->second / (double)total_epochs ) ;
 	      ++ii;
 	    }
 	  writer.unlevel( "FRQRANGE" );

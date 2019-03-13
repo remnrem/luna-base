@@ -50,23 +50,6 @@ Place - Suite 330, Boston, MA 02111-1307, USA.
 You may contact the author by e-mail (mcosta@fsa.harvard.edu).  For updates to
 this software, please visit PhysioNet (http://www.physionet.org/).
 _______________________________________________________________________________
-
-Compile this program by
-    gcc -o mse -O mse.c -lm
-
-There are two major steps in the calculations performed by mse:
-1. Time series are coarse-grained.
-2. Sample entropy (SampEn) is calculated for each coarse-grained time series.
-
-Output file:
-1st line: shows the r value.
-2nd line: shows the m values. 
-
-After the 2nd line there are several columns: the first column (of integers)
-is the scale factor. The following columns are SampEn values for coarse-grained
-time series calculated for the values of r and m specified. If the option for
-calculating MSE for several r values is chosen a new line containing the new r
-value and new columns with the corresponding results are written.
 */
 
 #include <cmath>
@@ -92,12 +75,12 @@ std::map<int,double> mse_t::calc( const std::vector<double> & d )
     {      
       
       std::vector<double> y = coarse_graining( zd , j ) ;
-            
+      
       // faster version (from mse.c)
       //retval[j] = sample_entropy( y , 1.0 );
       
       // old version (slower)
-       retval[j] = sampen( y , m , r );
+      retval[j] = sampen( y , m , r );
       
     }
   

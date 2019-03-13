@@ -924,6 +924,32 @@ void proc_dummy( const std::string & p )
     }
   
 
+  if ( p == "mse" )
+    {
+
+      while ( ! std::cin.eof() )
+	{
+	  double xx;
+	  std::cin >> xx;
+	  if ( std::cin.eof() ) break;	  
+	  x.push_back( xx );	  
+	}
+      std::cerr << x.size() << " values read\n";
+      
+      mse_t mse( 1,20,1,2,0.15 );
+      
+      std::map<int,double> mses = mse.calc( x );
+
+      std::map<int,double>::const_iterator ii = mses.begin();
+      while ( ii != mses.end() )
+	{
+	  std::cout << ii->first << "\t" << ii->second << "\n";
+	  ++ii;
+	}
+
+      std::exit(1);
+    }
+
   //
   // db -> retval
   //

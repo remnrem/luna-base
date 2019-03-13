@@ -63,7 +63,7 @@ slice_t::slice_t( edf_t & edf ,
 		  int downsample )   
   : edf(edf) , signal(signal) , interval(interval) , downsample(downsample) 
 {
-  
+
   //
   // Extract data for a single signal from an EDF structure, given a
   // mask (in timeline)
