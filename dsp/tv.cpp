@@ -38,7 +38,7 @@
 void dsptools::tv( edf_t & edf , param_t & param )
 {
   
-  int lambda = param.requires_dbl( "lamdba" );
+  int lambda = param.requires_dbl( "lambda" );
   if ( lambda < 0 ) Helper::halt( "lambda must be >= 0" ) ; 
   
   std::string signal_label = param.requires( "sig" );
@@ -57,10 +57,16 @@ void dsptools::tv( edf_t & edf , param_t & param )
       interval_t interval = edf.timeline.wholetrace();
       
       slice_t slice1( edf , signals(s) , interval );    
+
       const std::vector<double> * d = slice1.pdata();
       
       // denoise
       std::vector<double> denoised = TV1D_denoise_copy( *d , lambda );
+
+      std::cout << "sig = " << d->size() << "\t" << denoised.size() << "\n";
+
+      for (int i=0;i<d->size();i++)
+	std::cout << (*d)[i] << "\t" << denoised[i] << "\n";
       
       // update 
       edf.update_signal( signals(s) , &denoised );

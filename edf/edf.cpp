@@ -2177,16 +2177,11 @@ void edf_t::copy_signal( const std::string & from_label , const std::string & to
   const int s1 = header.signal( from_label );
   
   if ( s1 == -1 ) 
-    {
-      logger << "**error** could not find signal " << from_label << "\n";
-      return;
-    }
-
+    Helper::halt( "could not find signal " + from_label );
+  
   if ( header.has_signal( to_label ) ) 
-    {
-      logger << "**error** to-signal already exists in copy_signal()\n";
-      return;
-    }
+    Helper::halt( to_label + " already exists in the EDF" );
+  
 
   //
   // get data

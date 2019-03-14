@@ -37,8 +37,12 @@ void dsptools::design_cwt( param_t & param )
 
   int fs = param.requires_int( "fs" );
 
+  logger << " running CWT design for fc=" << fc << ", cycles=" << cycles << " and fs=" << fs << "\n";
+
   writer.cmd( "CWT-DESIGN" , 1 , param.dump( "" , " " ) );
 
+  writer.level( Helper::dbl2str( fc ) + "_" + Helper::int2str( cycles ) + "_" + Helper::int2str( fs ) , "PARAM" );
+  
   CWT cwt;
   
   cwt.set_sampling_rate( fs );
@@ -85,5 +89,6 @@ void dsptools::design_cwt( param_t & param )
     }
   writer.unlevel( globals::freq_strat );
 
+  writer.unlevel( "PARAM" );
 
 }

@@ -23,6 +23,11 @@
 #include "xmlreader.h"
 
 
+XML::~XML()
+{
+  if ( root ) delete root;
+}
+
 std::vector<element_t*> XML::children( const std::string & n )
 {
   // search entire documenet to first instance of this type
@@ -36,7 +41,7 @@ std::vector<element_t*> XML::children( const std::string & n )
 void XML::finder( element_t * e , const std::string & n , std::vector<element_t*> ** r ) 
 {
   // inefficient, but assume we'll usually be looking for label near the start of 
-  // the file (i.e. that earlier siblings won't have lots of children
+  // the file (i.e. that earlier siblings won't have lots of children)
   if ( Helper::iequals( e->name , n ) ) *r = &(e->child);
   for (int c=0;c<e->child.size();c++) finder( e->child[c] , n , r );  
 }

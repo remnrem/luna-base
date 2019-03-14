@@ -48,6 +48,8 @@ class XML
     if ( is_valid ) parse( &doc );
   }
   
+  ~XML();
+
   bool valid() const { return is_valid; }  
   void dump();
   void dumper( element_t * e );
