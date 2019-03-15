@@ -175,7 +175,9 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   //
 
   std::string ecg_label = param.requires("ecg");
+
   int ecg_n = edf.header.signal( ecg_label );
+
   if ( ecg_n == -1 ) 
     {
       logger << "could not find ECG (label " << ecg_label << "), skipping ECG suppression\n";
@@ -185,16 +187,16 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   //
   // check SR for each channel
   //
-
+  
   for (int s=0;s<ns;s++)
     {
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
 
       if ( edf.header.sampling_freq( signals(s) ) != sr ) 
 	{
-	  logger << " resampling channel " << signals.label(s) 
-		    << " from " << edf.header.sampling_freq( signals(s) )
-		    << " to " << sr << "\n";
+// 	  logger << " resampling channel " << signals.label(s) 
+// 		    << " from " << edf.header.sampling_freq( signals(s) )
+// 		    << " to " << sr << "\n";
 	  resample_channel( edf, signals(s) , sr );
 	}
     }
@@ -202,9 +204,9 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   // and for ECG...
   if ( edf.header.sampling_freq( ecg_n ) != sr ) 
     {
-      logger << " resampling channel " << signals.label(ecg_n) 
-		<< " from " << edf.header.sampling_freq( ecg_n )
-		<< " to " << sr << "\n";
+//       logger << " resampling channel " << edf.header.label[ ecg_n ]
+// 		<< " from " << edf.header.sampling_freq( ecg_n )
+// 		<< " to " << sr << "\n";
       resample_channel( edf, ecg_n , sr );
     }
   
@@ -442,8 +444,16 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
 	  logger << " updating ECG-corrected signal " << signals.label(s) << "\n";
 	  edf.update_signal( signals(s) , &nsig );      
 	}
+
+
+      //
+      // Next signal
+      //
+
     }
-    
+  
+  writer.unlevel( globals::signal_strat );
+  
 }
  
 

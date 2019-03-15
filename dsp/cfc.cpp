@@ -46,13 +46,17 @@ cfc_t::cfc_t( const std::vector<double> & d ,
 	      const double a2,
 	      const double b1,
 	      const double b2 , 
-	      const double sr )
-  : d(d), a1(a1), a2(a2), b1(b1), b2(b2), sr(sr) 
+	      const double sr , 
+	      const double tw ,
+	      const double ripple )
+  : d(d), a1(a1), a2(a2), b1(b1), b2(b2), sr(sr), tw(tw), ripple(ripple)
 { 
   if ( a2 <= a1 ) Helper::halt("cfc: invalid lower frequency band");
   if ( b2 <= b1 ) Helper::halt("cfc: invalid upper frequency band");
   if ( a2 >= b1 ) Helper::halt("cfc: invalid lower/upper frequency band combination");
+
 }
+
 
 void dsptools::cfc( edf_t & edf , param_t & param )
 {
@@ -212,14 +216,11 @@ void dsptools::cfc( edf_t & edf , param_t & param )
 bool cfc_t::glm()
 {
   
-  // TODO:  trim start and stop of windows?    
-  //  probably not necessary when working with large epochs
+  // Q: potentially should trim start and stop of windows,
+  // althogh when working w/ large epochs, not really necessary
 
   // Step 1) filter-Hilbert signal at both bands
   
-  double ripple = 0.01;  // will need to make these 
-  double tw = 1;         // parameters adjustable...
-
   hilbert_t ha( d , sr , a1, a2 , ripple , tw );
   hilbert_t hb( d , sr , b1, b2 , ripple , tw );
   
@@ -230,9 +231,8 @@ bool cfc_t::glm()
   for (int i=0; i<pha.size(); i++) pha[i] = fmod( pha[i] , 2 * M_PI );
   std::vector<double> ampb = * hb.magnitude();
   
-
   // Step 3) Normalize 
-
+  
   const int nrow = ampa.size();
 
   // DV
@@ -253,7 +253,7 @@ bool cfc_t::glm()
   
   // Step 4) Generate predictors
 
-  // no intercept, as we performed above normalization
+  // nb. no intercept, as we performed above normalization
   Data::Matrix<double> x( nrow , 3 , 1 );
   
   for (int i = 0 ; i < nrow ; i++)
@@ -265,13 +265,6 @@ bool cfc_t::glm()
 
   Data::Vector<double> y(ampb);
   
-//   for (int i = 0 ; i < nrow ; i++)
-//     {
-//       std::cout << "DD\t" << y[i] ;
-//       for (int j=0;j<3;j++) std::cout << "\t" << x[i][j] ;
-//       std::cout << "\n";
-//     }
-      
   //
   // Fit GLM
   //
@@ -294,11 +287,16 @@ bool cfc_t::glm()
   
   glm.display( &beta, &se, &pvalue , &mask, &lowci, &uprci, &statistic );
   
-//    const int nterms = beta.size();
-//    for (int b = 0 ; b < nterms ; b++)
-//      {
-//        std::cout << "b" << b << "\t" << beta[b] << "\t" << se[b] << "\t" << pvalue[b] << "\t" << lowci[b] << "\t" << uprci[b] << "\n";
-//      }
+  //    const int nterms = beta.size();
+  //    for (int b = 0 ; b < nterms ; b++)
+  //      {
+  //        std::cout << "b" << b << "\t" 
+  //                  << beta[b] << "\t" 
+  //                  << se[b] << "\t" 
+  //                  << pvalue[b] << "\t" 
+  //                  << lowci[b] << "\t" 
+  //                  << uprci[b] << "\n";
+  //      }
   
   //
   // Calculate measures

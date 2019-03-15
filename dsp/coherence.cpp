@@ -55,9 +55,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
   
   bool show_spectrum = param.has( "spectrum" );
   
-  double upper_freq = param.has("upper") ? param.requires_dbl( "upper" ) : -1 ; 
+  double upper_freq = param.has("max") ? param.requires_dbl( "max" ) : 20 ; 
 
-   
   // adjust all SRs now
   if ( sr )
     {

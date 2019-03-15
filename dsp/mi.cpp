@@ -131,7 +131,7 @@ void dsptools::compute_mi( edf_t & edf , param_t & param )
 	  
 	  const int sr1 = edf.header.sampling_freq( signals(i) );
 	  const int sr2 = edf.header.sampling_freq( signals(j) );	      
-	  if ( sr1 != sr2 ) Helper::halt( "'COH epoch' requires similiar sampling rates (or specify, e.g., sr=200)" );
+	  if ( sr1 != sr2 ) Helper::halt( "MI requires similiar sampling rates" );
 	  
 
 	  //
@@ -347,6 +347,12 @@ void mi_t::calc()
   
 }
 
+
+//fd_bins      = ceil(maxmin_range/(2.0*iqr(signal1)*n^(-1/3))); % Freedman-Diaconis 
+//scott_bins   = ceil(maxmin_range/(3.5*std(signal1)*n^(-1/3))); % Scott
+//sturges_bins = ceil(1+log2(n)); % Sturges
+
+
 int mi_t::set_nbins_fd()
 {
  
@@ -367,16 +373,7 @@ int mi_t::set_nbins_fd()
   int nbinsb = ceil( rngb / ( 2 * Qb * pow( n , -1/3.0) ) );
   
   nbins = ceil( nbinsa +  nbinsb / 2.0 );
-  
-  // % note: the function iqr (inter-quartile range) is in the stats toolbox. 
-  //% If you don't have this toolbox, you can write your own similar function
-  //% by sorting the values, finding the values that are 25% and 75% of the
-  //% sorted distribution, and then subtracting the 25% number from the 75% number.
-  
-  //fd_bins      = ceil(maxmin_range/(2.0*iqr(signal1)*n^(-1/3))); % Freedman-Diaconis 
-  //scott_bins   = ceil(maxmin_range/(3.5*std(signal1)*n^(-1/3))); % Scott
-  //sturges_bins = ceil(1+log2(n)); % Sturges
-
+    
   return nbins;
 }
 
@@ -505,7 +502,6 @@ void mi_t::permute( const int nrep , double * pemp , double * pz )
       
       stats.push_back( stat );
       
-      //      std::cerr << "mutinf " << jointinf << " " << infa << " " << infb << " |  " << pjointinf << " | " << mutinf << "  " << stat << " " << r << "\n";
     }
   
   *pemp = ( r+1.0 ) / ( nrep+1.0 ); 

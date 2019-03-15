@@ -45,8 +45,10 @@ struct cfc_t
 	 const double a2,
 	 const double b1,
 	 const double b2 , 
-	 const double sr );
-
+	 const double sr , 
+	 const double tw = 1, 
+	 const double ripple = 0.01 );
+  
   bool glm();
   
 private:
@@ -54,6 +56,7 @@ private:
   std::vector<double> d;  
   double a1, a2, b1, b2;
   double sr;
+  double ripple, tw;
 
   
   // output
