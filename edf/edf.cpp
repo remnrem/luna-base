@@ -233,19 +233,32 @@ void edf_t::description() const
 	++n_annot_channels;
     }
 
+  clocktime_t et( header.starttime );
+  if ( et.valid )
+    {
+      double time_hrs = ( timeline.last_time_point_tp * globals::tp_duration ) / 3600.0 ; 
+      et.advance( time_hrs );
+    }
+  
   std::cout << "EDF filename      : " << filename << "\n"
 	    << "ID                : " << id << "\n"
+	    << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n"
 	    << "Duration          : " << Helper::timestring( duration_tp ) << "\n"
 	    << "# signals         : " << n_data_channels << "\n";
   if ( n_annot_channels > 0 ) 
-    std::cout << "# EDF annotations : " << n_data_channels << "\n";
+    std::cout << "# EDF annotations : " << n_annot_channels << "\n";
   
   std::cout << "Signals           :";
-  
-  for (int s=0;s<header.ns;s++) 
-    if ( header.is_data_channel(s) )
-      std::cout << " " << header.label[s];
 
+  int cnt=0;
+  for (int s=0;s<header.ns;s++) 
+    {
+      if ( header.is_data_channel(s) )
+	std::cout << " " 
+		  << header.label[s]
+		  << "[" << header.sampling_freq(s) << "]";
+      if ( ++cnt > 8 ) { cnt=0; std::cout << "\n                   "; } 
+    }
   std::cout << "\n\n";
   
   
@@ -911,8 +924,8 @@ bool edf_t::attach( const std::string & f ,
   // Output some basic information
   //
 
-  logger << " total duration " << Helper::timestring( timeline.total_duration_tp ) 
-	    << ", with last time-point at " << Helper::timestring( ++timeline.last_time_point_tp ) << "\n";
+  logger << " duration " << Helper::timestring( timeline.total_duration_tp ) 
+	    << " hrs, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hrs after start\n";
   logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
 
   logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
@@ -1930,8 +1943,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s )
 
 void edf_header_t::rename_channel( const std::string & old_label , const std::string & new_label )
 {
-  // expects exact match (i.e. this only called from XML <Signals> / <CanonicalLabel> information
-  
+  // expects exact match (i.e. this only called from XML <Signals> / <CanonicalLabel> information  
   for (int s=0;s<label.size();s++) if ( label[s] == old_label ) label[s] = new_label;
   label_all[ new_label ] = label_all[ old_label ];
   label2header[ new_label ] = label2header[ old_label ];
@@ -1940,13 +1952,7 @@ void edf_header_t::rename_channel( const std::string & old_label , const std::st
 
 
 double edf_header_t::sampling_freq( const int s ) const
-{
-
-  //   for (int ss=0;ss<n_samples.size();ss++)
-  //     std::cout << "GET " << ss << "\t" << n_samples[s] << "\n";
-  //   for (int ss=0;ss<n_samples_all.size();ss++)
-  //     std::cout << "GET_ALL " << ss << "\t" << n_samples_all[s] << "\n";
-  
+{  
   if ( s < 0 || s >= n_samples.size() ) return -1;
   return n_samples[ s ] / record_duration;
 }
@@ -1956,19 +1962,8 @@ std::vector<double> edf_header_t::sampling_freq( const signal_list_t & signals )
   const int n = signals.size();
   std::vector<double> fs( n );
   for (int s=0;s<n;s++)
-    {
-//       std::cout << "SF " << s << " " 
-// 		<< signals.signals[s] << " "
-// 		<< signals(s) << " "
-// 		<< n_samples[ signals.signals[s] ] << " "
-// 		<< n_samples[ signals(s) ] << "\n";
-
-      fs[s] = n_samples[ signals.signals[s] ] / record_duration;
-    }
+    fs[s] = n_samples[ signals.signals[s] ] / record_duration;
   
-//   for (int jj=0;jj<n_samples.size();jj++)
-//     std::cout << "SF jj " << n_samples[ jj ] << "\n";
-
   return fs;
 }
 

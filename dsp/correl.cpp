@@ -97,6 +97,8 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 
   bool verbose = param.has("verbose");
 
+  if ( verbose ) epoched = true;
+
   //
   // Ensure similar sampling rates
   //
