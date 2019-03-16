@@ -105,6 +105,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   bool verbose_empirical = param.has("verbose-empirical");
   
+  if ( estimate_empirical_thresholds )
+    writer.numeric_factor( "TH" );
+
   // default multiplicative threshold for spindle core, = 4.5 
   double   multiplicative_threshold = param.has( "th" ) ? param.requires_dbl( "th" ) : 4.5 ;
   
@@ -178,7 +181,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   //
   
   
-  const bool do_channel_merge = param.has( "collate-channels" ) ;
+  const bool do_channel_merge = param.has( "collate-within-channel" ) ;
 
   const bool do_merge = do_channel_merge || param.has( "collate" ); 
 
@@ -609,7 +612,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	    logger << ", " << maximal_threshold;
 	  logger << "x" << "\n";
 	  
-	  logger << " core duration threshold (core, min, max) = " << min0_dur_sec << ", " << min_dur_sec << ", " << max_dur_sec << "s" << "n";	  
+	  logger << " core duration threshold (core, min, max) = " << min0_dur_sec << ", " << min_dur_sec << ", " << max_dur_sec << "s" << "\n";	  
 
 	  // Set up threshold values as a matrix;  typically, these will use the same mean, 
 	  // and so every value will be identical, but allow for the case where we have

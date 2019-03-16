@@ -465,7 +465,6 @@ int timeline_t::calc_epochs()
   
   epoch2rec.clear();
 
-  
 
   //
   // Easy case for continuous EDFs
@@ -473,7 +472,7 @@ int timeline_t::calc_epochs()
 
   if ( edf->header.continuous )
     {
-      
+
       // set first timepoint
       uint64_t s = 0;
       
@@ -515,8 +514,10 @@ int timeline_t::calc_epochs()
       // Epochs for the discontinuous case:
       //
       
+      //      std::cout << "HERE\t" << epoch_length_tp << "\t" << epoch_inc_tp << "\n";
+
       int r = first_record();
-      
+
       if ( r == -1 ) return 0;
       
       // epochs have to be continuous in clocktime
@@ -553,6 +554,9 @@ int timeline_t::calc_epochs()
 	  uint64_t rec_start = rec2tp[r];
 	  uint64_t rec_end   = rec2tp_end[r];
 	  
+// 	  std::cout << "dets " << rec_start << " " << rec_end << "\t"
+// 		    << estart << " " << erestart << " " << estop << "\n";
+
 	  //
 	  // Will the next epoch potentially come from this record?
 	  //
@@ -574,7 +578,11 @@ int timeline_t::calc_epochs()
 	      interval_t saved_interval( estart , estop + 1LLU );
 	      epochs.push_back( saved_interval );
 	      
-	      //	      std::cout << "E " << epochs.size() << " adding " << estart << " -- " << estop + 1LLU << "\n";
+	      // std::cout << "E " << epochs.size() << " adding " << estart << " -- " << estop + 1LLU << "\n";
+	      
+	      // add this last record to the epoch in any case
+	      putative_r2e[ r ].insert( e );
+	      putative_e2r[ e ].insert( r );
 
 	      // add record mappings
 	      std::map<int,std::set<int> >::const_iterator ii = putative_r2e.begin();
@@ -675,15 +683,20 @@ int timeline_t::calc_epochs()
 	  // then just add this record to the mapping
 	  // and get the next record
 	  //
-	  
+		  
 	  else 
 	    {
+
+	      // should this not be putative_ cases?
+
+	      // original
+// 	      rec2epoch[r].insert(e);
+// 	      epoch2rec[e].insert(r);
 	      
-	      //std::cout << "ADDING ANOTHER REC.. ";
-	      
-	      rec2epoch[r].insert(e);
-	      epoch2rec[e].insert(r);
-	      
+	      // revised
+	      putative_r2e[r].insert(e);
+	      putative_e2r[e].insert(r);
+
 	      r = next_record(r);
 	      
 	      // if out of epochs, then just quit (i.e. we won't be adding this
@@ -697,7 +710,7 @@ int timeline_t::calc_epochs()
 	      
 	      uint64_t rec2_start = rec2tp[r];
 	      
-	      //	      std::cout << "recs " << rec2_start << "\t" << rec_end << "\n";
+	      //std::cout << "recs " << rec2_start << "\t" << rec_end << "\n";
 
 	      // 
 	      // If we've come to a break, we need to give up on the previous
