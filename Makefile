@@ -13,10 +13,10 @@ libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a				\
 libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a			\
 libsrate.a
 
-LIBS = -L. -lspindles -lica -lannot -ldefs -lartifacts -ledf -lhelper	\
+LIBS = -L. -lspindles -lannot -ldefs -lartifacts -ledf -lhelper		\
 -ltimeline -lstaging -lfftwrap -ldsp -lmtm -lmiscmath -lintervals	\
--ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lsrate	\
--lfftw3
+-ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lica	\
+-lsrate -lfftw3
 
 ifndef STATIC
 all : luna sharedlib utils

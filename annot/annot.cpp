@@ -331,7 +331,7 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
 	continue;
       
       //
-      // otherwise, creete the new annotation class
+      // otherwise, create the new annotation class
       //
       
       annot_t * a = parent_edf.timeline.annotations.add( ann[e] );
@@ -392,7 +392,7 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       while ( 1 ) 
 	{
 
-	  int epoch = parent_edf.timeline.next_epoch();      
+	  int epoch = parent_edf.timeline.next_epoch_ignoring_mask();
 	  
 	  if ( epoch == -1 ) break;
           
