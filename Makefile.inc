@@ -28,6 +28,9 @@ DEP_LIB =
 ifdef FFTW
 DEP_INCLUDES += -I$(FFTW)/include
 DEP_LIB = -L$(FFTW)/lib
+ifeq ($(ARCH),LINUX)
+DEP_LIB	+= -Wl,-rpath,$(FFTW)/lib
+endif
 endif
 
 ifdef HPDF
@@ -50,7 +53,7 @@ endif
 
 CXXFLAGS += $(DEP_INCLUDES) 
 
-ifdef MAC
+ifeq ($(ARCH),MAC)
 CXXFLAGS += -I/usr/local/include
 endif
 

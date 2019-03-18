@@ -23,6 +23,7 @@
 #include "ica-wrapper.h"
 
 #include "edf/edf.h"
+#include "edf/slice.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "eval.h"

@@ -45,7 +45,7 @@ extern "C" {
 struct edf_t; 
 struct param_t; 
 
-void ica_wrapper( edf_t & , param_t & ); 
+void ica_wrapper0( edf_t & , param_t & ); 
 
 struct ica_t {
   

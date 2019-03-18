@@ -45,5 +45,6 @@
 #include "mi.h"
 #include "reduce.h"
 #include "wrappers.h"
+#include "ica-wrapper.h"
 
 #endif

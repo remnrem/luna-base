@@ -1619,7 +1619,7 @@ void proc_emd( edf_t & edf , param_t & param )
 
 void proc_ica( edf_t & edf , param_t & param )
 {
-  ica_wrapper( edf , param );
+  dsptools::ica_wrapper( edf , param );
 }
 
 // COH : calculate cross spectral coherence, using new/default code

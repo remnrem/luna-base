@@ -93,7 +93,7 @@ bool ica_t::proc( mat pX , int rows , int cols , int compc )
 
 
 
- void ica_wrapper( edf_t & edf , param_t & param )
+ void ica_wrapper0( edf_t & edf , param_t & param )
  {
 
    std::string signal_label = param.requires( "sig" );
