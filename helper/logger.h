@@ -71,7 +71,7 @@ class logger_t
     struct tm * timeinfo = localtime (&rawtime);
     
     char BUFFER[50];
-    strftime(BUFFER, sizeof(BUFFER), "%d-%b-%Y %T", timeinfo); 
+    strftime(BUFFER, sizeof(BUFFER), "%d-%b-%Y %H:%M:%S", timeinfo); 
 
     _out_stream << "===================================================================" << "\n"
 		<< _log_header
@@ -94,7 +94,7 @@ class logger_t
 	  struct tm * timeinfo = localtime (&rawtime);
 	  
 	  char BUFFER[50];
-	  strftime(BUFFER, sizeof(BUFFER), "%d-%b-%Y %T", timeinfo); 
+	  strftime(BUFFER, sizeof(BUFFER), "%d-%b-%Y %H:%M:%S", timeinfo); 
 	  
 	  _out_stream << "-------------------------------------------------------------------"
 		      << "\n"

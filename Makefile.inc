@@ -6,6 +6,7 @@
 ARCH=LINUX
 
 
+
 ##
 ## Basic C/C++ compilation flags
 ## 
@@ -13,14 +14,6 @@ ARCH=LINUX
 CXX = g++
 
 CXXFLAGS = -O2 -I. -I.. -Wno-logical-op-parentheses -Wno-deprecated-register
-
-CXXFLAGS += $(DEP_INCLUDES) 
-
-ifdef MAC
-CXXFLAGS += -I/usr/local/include
-endif
-
-CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
 
 ##
@@ -51,6 +44,17 @@ else
 CXXFLAGS += -DNO_HPDFLIB 
 endif
 
+##
+## Compiler flags
+##
+
+CXXFLAGS += $(DEP_INCLUDES) 
+
+ifdef MAC
+CXXFLAGS += -I/usr/local/include
+endif
+
+CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
 
 ##
