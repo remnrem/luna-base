@@ -203,8 +203,20 @@ std::string edf_header_t::summary() const
   
   for (int s=0;s<ns;s++)
     {
-      ss << "Signal " << (s+1) << " : [" << label[s] << "]\n"
-	 << "\t# samples per record : " << n_samples[s] << "\n"	
+      
+      ss << "Signal " << (s+1) << " : [" << label[s] << "]\n";
+      
+      std::string primary = label[s];
+      
+      // is alias? ( will have been mapped already )
+      if ( cmd_t::primary_alias.find( primary ) != cmd_t::primary_alias.end() )
+	{
+	  std::string aliases = Helper::stringize( cmd_t::primary_alias[ primary ] , " " );
+	  ss << "\taliased from         : " << aliases << "\n"; 
+	}
+      
+      
+      ss << "\t# samples per record : " << n_samples[s] << "\n"	
 	 << "\ttransducer type      : " << transducer_type[s] << "\n"
 	 << "\tphysical dimension   : " << phys_dimension[s] << "\n"
 	 << "\tmin/max (phys)       : " << physical_min[s] << "/" << physical_max[s] << "\n"
@@ -869,7 +881,13 @@ bool edf_t::attach( const std::string & f ,
 
   inp_signals_n = header.read( file , inp_signals );
 
-
+  
+  //
+  // Swap out any signal label aliases at this point
+  //
+  
+  swap_in_aliases();
+  
   //
   // EDF+ requires a time-track
   //
@@ -938,6 +956,18 @@ bool edf_t::attach( const std::string & f ,
 
 }
 
+
+
+void edf_t::swap_in_aliases()
+{
+
+  // simply get a wildcard-ed signal_list_t
+  // as this process of searching for all signals also 
+  // swaps in the alias and updates the EDF header
+  
+  signal_list_t dummy = header.signal_list( "*" );
+  
+}
 
 
 std::vector<double> edf_t::fixedrate_signal( uint64_t start , 

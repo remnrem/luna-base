@@ -379,14 +379,43 @@ void cmd_t::quit(bool b)
 
 void cmd_t::signal_alias( const std::string & s )
 {
+
+  // the primary alias can occur multiple times, and have multiple 
+  // labels that are mapped to it
+  
+  // however: two rules
+  // 1. many-to-one mapping means the same label cannot have multiple primary aliases
+  // 2. following, and on principle of no transitive properties, alias cannot have alias
+
+  // X|Y|Z
+  // X|A|B
+  
+  // W|A  bad, A already mapped
+  // V|X  bad, X already mapped
+  // i.e. things can only occur once in the RHS, or multiple times in the LHS
+  
+  
   // format canonical|alias1|alias2 , etc.
   std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
   if ( tok.size() < 2 ) Helper::halt( "bad format for signal alias:  canonical|alias 1|alias 2" );
   const std::string primary = Helper::unquote( tok[0] );
   for (int j=1;j<tok.size();j++) 
     {
-      label_aliases[ Helper::unquote( tok[j] ) ] = primary;
-      primary_alias[ primary ].push_back( Helper::unquote( tok[j] ) );
+      
+      // impose rules
+      const std::string mapped = Helper::unquote( tok[j] ) ;
+      
+      if ( primary_alias.find( mapped ) != primary_alias.end() )
+	Helper::halt( mapped + " specified as both primary alias and mapped term" );
+
+      if ( label_aliases.find( mapped ) != label_aliases.end() )
+	if ( primary != label_aliases[ mapped ] )  
+	  Helper::halt( mapped + " specified twice in alias file w/ different primary aliases" );
+
+      // otherwise, set 
+      label_aliases[ mapped ] = primary;
+
+      primary_alias[ primary ].push_back( mapped );
     }
   
 }
