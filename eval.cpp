@@ -303,6 +303,20 @@ void cmd_t::reset()
   will_quit = false;
 }
 
+
+void cmd_t::clear_static_members() 
+{
+  input = "";
+  cmdline_cmds = "";
+  stout_file = "";
+  append_stout_file = false;
+  
+  vars.clear();
+  signallist.clear();
+  label_aliases.clear();
+  primary_alias.clear();
+}
+
 bool cmd_t::empty() const 
 { 
   return will_quit; 

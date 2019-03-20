@@ -717,6 +717,15 @@ struct annotation_set_t
     annots.clear(); 
   }
   
+  void clear( const std::string & name )
+  {
+    std::map<std::string,annot_t*>::iterator ii = annots.find( name );
+    if ( ii != annots.end() )
+      {
+	delete ii->second;
+	annots.erase( ii ); 
+      }
+  }
   
   std::vector<std::string> names() const 
   {

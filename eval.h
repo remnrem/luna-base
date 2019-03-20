@@ -163,6 +163,8 @@ class cmd_t
 
   static std::string signal_string() ;
 
+  static void clear_static_members() ;
+
  private:
   
   // a command is a single input (0+ EDFs) linked to 1 or more

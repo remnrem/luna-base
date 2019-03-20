@@ -627,8 +627,8 @@ annot_t * spectral_power( edf_t & edf ,
     } // summary for next signal
   
   // redundant, ignore this for now...
-  annot_t * a = edf.timeline.annotations.add( "Sigma power" );  
-  return a;
+  //  annot_t * a = edf.timeline.annotations.add( "Sigma power" );  
+  return NULL;
 
 }
 

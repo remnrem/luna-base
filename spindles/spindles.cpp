@@ -242,17 +242,19 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
  
   //
-  // Set up annotation 
+  // Set up annotation, skip this...  use FTR instead...
   //
 
+//   if ( 0 ) 
+//     {
   std::string sp_label = "spindles";
-  annot_t * a = edf.timeline.annotations.add( sp_label );
-  a->description = "Wavelet spindle detector";
-
-  std::string sp_label2 = "pre-spindles";
-  annot_t * a2 = edf.timeline.annotations.add( sp_label2 );
-  a2->description = "Wavelet spindle detector (pre)" ;
-
+//       annot_t * a = edf.timeline.annotations.add( sp_label );
+//       a->description = "Wavelet spindle detector";
+      
+//       std::string sp_label2 = "pre-spindles";
+//       annot_t * a2 = edf.timeline.annotations.add( sp_label2 );
+//       a2->description = "Wavelet spindle detector (pre)" ;
+//     }
 
 
   //
@@ -1638,17 +1640,18 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // Save annotations
 	  //
 	  
-	  for (int i=0;i<spindles.size();i++)
-	    {
-	      a->add( signals.label(s) , spindles[i].tp );
-	    }
+// 	  for (int i=0;i<spindles.size();i++)
+// 	    {
+// 	      a->add( signals.label(s) , spindles[i].tp );
+// 	    }
 	  
-	  // more verbose recording?
-	  if ( add_channels ) 
-	    {
-	      for (int i=0;i<spindles1.size();i++)
-		a2->add(  signals.label(s) , spindles1[i] );
-	    }
+// 	  // more verbose recording?
+// 	  if ( add_channels ) 
+// 	    {
+// 	      for (int i=0;i<spindles1.size();i++)
+// 		a2->add(  signals.label(s) , spindles1[i] );
+// 	    }
+
 
 	  //
 	  // Record as a .ftr file
@@ -1660,6 +1663,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      const std::string ftr_tag    = "-" + analysis_label + ( param.has("ftr") ? "-" + param.value( "ftr" ) : "" ) ;
 	      const std::string ftr_folder = param.has("ftr-dir") ? param.value( "ftr-dir" ) : "./";
 	      const std::string delim = ftr_folder[ ftr_folder.size() - 1 ] != '/' ? "/" : "";
+	      
+	      // create folder if it does not exist
+	      // (will need to change for windows...)
+
+	      std::string syscmd = "mkdir -p " + ftr_folder ;
+	      int retval = system( syscmd.c_str() );
 	      
 	      // id_<id>_feature_<feature name>.ftr
 	      // tab-delim:
@@ -1798,16 +1807,16 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // Save annotations to file
   //
   
-  if ( annotfile != "" ) 
-    {
-      logger << " saving... " << edf.id << "\n";
-      a->save( annotfile + "-" + edf.id + ".annot" );
+//   if ( annotfile != "" ) 
+//     {
+//       logger << " saving... " << edf.id << "\n";
+//       a->save( annotfile + "-" + edf.id + ".annot" );
 
-      if ( add_channels ) 
-	a2->save( annotfile +"-pre" + "-" + edf.id + ".annot" );
-    }
+//       if ( add_channels ) 
+// 	a2->save( annotfile +"-pre" + "-" + edf.id + ".annot" );
+//     }
   
-  return a;
+  return NULL;
   
 }
 
@@ -2477,6 +2486,17 @@ void characterize_spindles( edf_t & edf ,
 	   ll->second /= (double)spindles->size();
 	   ++ll;
 	 }
+     }
+
+
+   //
+   // Remove tmp channel we created
+   //
+   
+   if (  edf.header.has_signal( new_label ) )
+     {
+       int s = edf.header.signal( new_label );
+       edf.drop_signal( s );	  
      }
 
 }
