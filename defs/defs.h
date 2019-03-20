@@ -177,6 +177,8 @@ struct globals
 
   static bool problem;
 
+  static bool bail_on_fail;
+
   // global functions: primary initiation of all globals
   void init_defs();
   

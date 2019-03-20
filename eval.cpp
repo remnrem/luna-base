@@ -1987,7 +1987,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       cmd_t::signal_alias( tok1 );
       return;
     }
-
+  
+  // behaviour when a problem encountered
+  if ( Helper::iequals( tok0 , "bail-on-fail" ) )
+    {
+      globals::bail_on_fail = Helper::yesno( tok1 );
+      return;
+    }
   
   // do not read EDF annotations
   if ( Helper::iequals( tok0 , "skip-annots" ) )

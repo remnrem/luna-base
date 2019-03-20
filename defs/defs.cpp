@@ -78,6 +78,8 @@ double globals::tp_duration;
 
 bool globals::problem;
 
+bool globals::bail_on_fail;
+
 std::map<std::string,sleep_stage_t> sleep_stage_labels;
 
 param_t globals::param;
@@ -324,6 +326,8 @@ void globals::init_defs()
   assume_pm_starttime = true;
   
   problem = false;
+  
+  bail_on_fail = true;
   
   edf_timetrack_label = "_TT";
   edf_timetrack_size = 15; // i.e. up to 30 chars
