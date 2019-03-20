@@ -414,6 +414,8 @@ public:
   // Manipulate signal data
   //
 
+  void swap_in_aliases();
+  
   void drop_signal( const int s );
 
   void add_signal( const std::string & label , const int n_samples , const std::vector<double> & data );
