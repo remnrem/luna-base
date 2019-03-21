@@ -332,7 +332,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	  bool has_values = false;
 	  
 	  std::vector<std::string> im = Helper::parse( im0[i] , "[]" );
-	  if      ( im.size() == 1 ) im.clear(); // i.e. null
+	  if      ( im.size() == 1 ) has_values = false;
 	  else if ( im.size() != 2 ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
 	  else if ( im0[i][im0[i].size()-1] != ']' ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
 	  else    has_values = true;
@@ -378,7 +378,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	{
 	  bool has_values = false;
 	  std::vector<std::string> xm = Helper::parse( xm0[i] , "[]" );
-	  if      ( xm.size() == 1 ) xm.clear();
+	  if      ( xm.size() == 1 ) has_values = false;
 	  else if ( xm.size() != 2 ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
 	  else if ( xm0[i][xm0[i].size()-1] != ']' ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
 	  else    has_values = true;

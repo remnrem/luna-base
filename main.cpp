@@ -35,21 +35,29 @@ extern writer_t writer;
 
 extern logger_t logger;
 
-
 int main(int argc , char ** argv )
 {
 
+  bool show_version = argc >= 2 && ( strcmp( argv[1] ,"-v" ) == 0 || strcmp( argv[1] ,"--version" ) == 0 );
+  
   //
   // initiate global defintions
   //
 
   global.init_defs();
 
+  if ( show_version )  
+    {
+      global.api();
+      std::cerr << luna_base_version() ;
+      std::exit(0);
+    }
+
   
   //
   // Some initial options (called prior to the main banner, etc)
   //
-  
+
   if ( argc >= 2 && strcmp( argv[1] ,"-d" ) == 0 )
     { 
       std::string p = argc >= 3 ? argv[2] : "";
@@ -1931,5 +1939,14 @@ void build_param_from_cmdline( param_t * param )
       if ( x == "" ) continue;
       param->parse( x ); 
     }
+}
+
+
+std::string luna_base_version() 
+{
+  std::stringstream ss;
+  ss << "luna-base version " << globals::version << " (release date " << globals::date << ")\n";
+  ss << "luna-base build date/time " << __DATE__ << " " << __TIME__ << "\n";
+  return ss.str();
 }
 
