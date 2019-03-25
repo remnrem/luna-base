@@ -583,6 +583,9 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      while ( ii != track_freq.end() )
 		{
+		  
+		  if ( freqs[ ii->first ] > max_power )  { ++ii; continue; } 
+		  
 		  writer.level( freqs[ ii->first ] , globals::freq_strat );
 		  
 		  if ( has_cycles )
