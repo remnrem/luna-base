@@ -269,7 +269,7 @@ void edf_t::description() const
 	std::cout << " " 
 		  << header.label[s]
 		  << "[" << header.sampling_freq(s) << "]";
-      if ( ++cnt > 6 ) { cnt=0; std::cout << "\n                   "; } 
+      if ( ++cnt >= 6 ) { cnt=0; std::cout << "\n                   "; } 
     }
   std::cout << "\n\n";
   

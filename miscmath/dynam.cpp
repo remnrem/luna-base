@@ -52,6 +52,7 @@ void dynam_report( const std::vector<double> & y ,
 		   const std::vector<std::string> * g )
 {
   
+
   
   // scale 't' to be 0..1
   double mnt = t[0] , mxt = t[0];
@@ -79,6 +80,7 @@ void dynam_report( const std::vector<double> & y ,
   d.linear_trend( &slope, &rsq );
   d.hjorth( &h1, &h2, &h3 );
   
+  writer.value( "N" , d.size() );
   writer.value( "SLOPE" , slope );
   writer.value( "RSQ" , rsq );
   writer.value( "H1" , h1 );
@@ -93,6 +95,7 @@ void dynam_report( const std::vector<double> & y ,
 
   if ( g == NULL ) return;
 
+
   //
   // make integer representaiton of group label
   //
@@ -103,23 +106,25 @@ void dynam_report( const std::vector<double> & y ,
   
   glabel[ "" ] = 0;
   glabel[ "." ] = 0;
+
+  int cnt = 1;
   
   std::vector<int> gint( g->size() );
   
-  for (int i=0; g->size(); i++) 
+  for (int i=0; i < g->size(); i++) 
     {
       std::map<std::string,int>::iterator ii =  glabel.find( (*g)[i] );
       
       if ( ii == glabel.end() )
 	{
-	  int t = glabel.size();
-	  glabel[ (*g)[i] ] = t;
+	  glabel[ (*g)[i] ] = cnt;
+	  ++cnt;
 	}
-
+      
       gint[i] = glabel[ (*g)[i] ];
-  
+      
     }
-  
+
 			       
   //
   // now we want to get within and between group (i.e. group-mean) based results
@@ -140,13 +145,16 @@ void dynam_report( const std::vector<double> & y ,
     double slope, rsq, h1, h2, h3;
     
     gdynam.between.linear_trend( &slope, &rsq );
-    gdynam.between.hjorth( &h1, &h2, &h3 );
-    
+    //    gdynam.between.hjorth( &h1, &h2, &h3 );
+
+    writer.value( "N" , gdynam.between.size() );
     writer.value( "SLOPE" , slope );
     writer.value( "RSQ" , rsq );
-    writer.value( "H1" , h1 );
-    writer.value( "H2" , h2 );
-    writer.value( "H3" , h3 );
+
+    // these won't be meaningful typically...
+    //     writer.value( "H1" , h1 );
+    //     writer.value( "H2" , h2 );
+    //     writer.value( "H3" , h3 );
     
     writer.unlevel( "BETWEEN" );
     
@@ -156,6 +164,8 @@ void dynam_report( const std::vector<double> & y ,
   std::map<std::string,int>::const_iterator gg = glabel.begin();
   while ( gg != glabel.end() )
     {
+      
+      if ( gg->first == "." || gg->first == "" ) { ++gg; continue; }
 
       writer.level( gg->first , "EDYNAM" );
       
@@ -166,7 +176,8 @@ void dynam_report( const std::vector<double> & y ,
       d.mean_variance( &mean , &var );
       d.linear_trend( &slope, &rsq );
       d.hjorth( &h1, &h2, &h3 );
-      
+
+      writer.value( "N" , d.size() );
       writer.value( "SLOPE" , slope );
       writer.value( "RSQ" , rsq );
       writer.value( "H1" , h1 );
@@ -310,6 +321,7 @@ gdynam_t::gdynam_t( const std::vector<int> & g , const std::vector<double> & y ,
 int gdynam_t::stratify()
 {
 
+  // maps strata to epochs
   gmap.clear();
 
   for (int i=0;i<g.size();i++) 
@@ -323,14 +335,15 @@ int gdynam_t::stratify()
   const int ng = gmap.size();
   
   if ( ng < 2 ) return ng;
-  
+
+
   // get means for a between-strata model
   
   between.clear();
   
-  // create a dynam_t for each strata
+  // create a dynam_t for each strata (which are numbered 1..ng)
   
-  for (int i=0;i<ng;i++)
+  for (int i=1;i<=ng;i++)
     {
       std::vector<double> yy, tt;
       std::set<int>::const_iterator ii = gmap[i].begin();

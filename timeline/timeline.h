@@ -402,14 +402,37 @@ struct timeline_t
   // i.e. a lightweight annot, separate from annot_t, that is only
   // used internally for store SleepStage information
   
-  // numbering works with respect to the original, EDF epoch scheme
-  // i.e. and so should follow any remapping
+  // *internally*, numbering works with respect to the original, EDF
+  // epoch scheme, i.e. and so should follow any remapping
+  // all function calls for eannots-related stuff should use the current
+  // epoch mapping however (i.e. remapping done internally if needed)
   
   void annotate_epochs( const std::string & label , 
 			const std::string & annot_label , 
 			const std::set<std::string> & values );
   
-   
+  // should be used with current 0..(ne-1) mapping, will
+  // be converted to original epoch mapping if needed
+
+  void annotate_epoch( const std::string & label , int e )
+  {
+    
+    // do we need to remap the epoch?
+    
+    if ( has_epoch_mapping() )
+      {
+        // off-the-grid  
+        if ( epoch_curr2orig.find( e ) == epoch_curr2orig.end() ) 
+	  return;
+	
+        // convert query to the original mapping
+        e = epoch_curr2orig.find( e )->second;
+      }
+
+    eannots[ label ][ e ] = true;
+  }
+
+
 /*   void annotate_epochs( const std::string & label , bool b ) */
 /*   { */
 /*     const int ne = num_epochs(); */

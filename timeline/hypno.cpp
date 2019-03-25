@@ -758,6 +758,8 @@ void hypnogram_t::calc_stats( const bool verbose )
       nremc_rem_duration[ sn ] = counts_rem[sn]  * epoch_mins ; 
       
       nremc_start_epoch[ sn ] = ii->second + 1 ;  // output 1-based coding
+
+      nremc_epoch_duration[ sn ] = counts_rem[sn] + counts_nrem[sn] + counts_other[sn] ;
             
       ++ii;
     }
@@ -1150,6 +1152,7 @@ void hypnogram_t::output( const bool verbose )
       writer.var( "NREMC_REM_MINS" , "NREM cycle REM duration (mins)" );
       writer.var( "NREMC_OTHER_MINS" , "NREM cycle other duration (mins)" );
       writer.var( "NREMC_MINS" , "NREM cycle total duration (mins)" );
+      writer.var( "NREMC_N" , "NREM cycle total duration (epochs)" );
       
       std::map<int,double>::iterator cc = nremc_duration.begin();
       while ( cc != nremc_duration.end() )
@@ -1161,6 +1164,7 @@ void hypnogram_t::output( const bool verbose )
 	  writer.value(  "NREMC_REM_MINS" , nremc_rem_duration[ cc->first ] );
 	  writer.value(  "NREMC_OTHER_MINS" , cc->second - nremc_nrem_duration[ cc->first ] - nremc_rem_duration[ cc->first ] );
 	  writer.value( "NREMC_MINS" , cc->second );
+	  writer.value( "NREMC_N" , nremc_epoch_duration[ cc->first ] );
 	  
 	  ++cc;
 	}
@@ -1268,36 +1272,21 @@ void hypnogram_t::output( const bool verbose )
   //   e) N2 measure of direction
 
 
-  
-  // Annotations: cycles
-
 
   //
-  // Add cycle annotations
+  // Add cycle epoch-annotation
   //
-  
-  // output
-
-  annot_t * cycle_annot = timeline->annotations.add( "__cycle" );
-  
-  cycle_annot->type = globals::A_FLAG_T;
-
-  cycle_annot->types.clear();
   
   for (int e=0;e<ne;e++)
     if ( sleep_cycle_number[e] ) 
-      {
-	
-	interval_t interval = timeline->epoch( e );
-	
-	const std::string cycle = "NREMC" + Helper::int2str( sleep_cycle_number[e] );
-	
-	instance_t * instance = cycle_annot->add( cycle , interval );
-	
+      {	
+	const std::string cycle = "_NREMC_" + Helper::int2str( sleep_cycle_number[e] );	
+	timeline->annotate_epoch( cycle , e );	
       }
 
-  
+
   double elapsed_n1 = 0 , elapsed_n2 = 0 , elapsed_n34 = 0 , elapsed_rem = 0;
+    
   double elapsed_sleep = 0 , elapsed_wake = 0 , elapsed_waso = 0 ;
 
   
