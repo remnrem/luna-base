@@ -1248,12 +1248,14 @@ void hypnogram_t::output( const bool verbose )
 
   writer.unepoch();
 
-  
+
   //
   // ... otherwise, the rest of this function is verbose mode only
   //
   
   if ( ! verbose ) return;
+
+
 
 
   
@@ -1264,7 +1266,36 @@ void hypnogram_t::output( const bool verbose )
   //   c) elapsed sleep
   //   d) period number
   //   e) N2 measure of direction
+
+
   
+  // Annotations: cycles
+
+
+  //
+  // Add cycle annotations
+  //
+  
+  // output
+
+  annot_t * cycle_annot = timeline->annotations.add( "__cycle" );
+  
+  cycle_annot->type = globals::A_FLAG_T;
+
+  cycle_annot->types.clear();
+  
+  for (int e=0;e<ne;e++)
+    if ( sleep_cycle_number[e] ) 
+      {
+	
+	interval_t interval = timeline->epoch( e );
+	
+	const std::string cycle = "NREMC" + Helper::int2str( sleep_cycle_number[e] );
+	
+	instance_t * instance = cycle_annot->add( cycle , interval );
+	
+      }
+
   
   double elapsed_n1 = 0 , elapsed_n2 = 0 , elapsed_n34 = 0 , elapsed_rem = 0;
   double elapsed_sleep = 0 , elapsed_wake = 0 , elapsed_waso = 0 ;

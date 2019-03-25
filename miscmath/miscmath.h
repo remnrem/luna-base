@@ -52,6 +52,7 @@ namespace MiscMath
  double median( const std::vector<double> & x );
  double iqr( const std::vector<double> & x );
 
+ 
  template<typename T> static inline double Lerp(T v0, T v1, T t)
    {
      return (1 - t)*v0 + t*v1;

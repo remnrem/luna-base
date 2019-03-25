@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libmiscmath.a
-OBJS	 = miscmath.o crandom.o
+OBJS	 = miscmath.o dynam.o crandom.o
 
 all : $(OBJLIBS)
 

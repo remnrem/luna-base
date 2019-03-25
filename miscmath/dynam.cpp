@@ -1,0 +1,357 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
+#include "miscmath/dynam.h"
+
+#include "miscmath/miscmath.h"
+
+#include "helper/helper.h"
+
+#include "dsp/tv.h"
+
+#include "db/db.h"
+
+#include <cstddef>
+
+extern writer_t writer;
+
+// wrapper(s)
+
+void dynam_report_with_log( const std::vector<double> & y , 
+			    const std::vector<double> & t , 
+			    const std::vector<std::string> * g )
+{
+  std::vector<double> yl( y.size() );
+  for (int i=0;i<y.size();i++) yl[i] = log( y[i] );
+  dynam_report( yl , t , g );
+}
+
+
+
+void dynam_report( const std::vector<double> & y , 
+		   const std::vector<double> & t , 
+		   const std::vector<std::string> * g )
+{
+  
+  
+  // scale 't' to be 0..1
+  double mnt = t[0] , mxt = t[0];
+
+  for (int i=1;i<t.size();i++)
+    {
+      if ( t[i] < mnt ) mnt = t[i];
+      if ( t[i] > mxt ) mxt = t[i];
+    }
+
+  std::vector<double> t01( t.size() );
+  for (int i=0;i<t.size();i++)
+    t01[i] = ( t[i] - mnt ) / ( mxt - mnt );
+  
+  // create actual dynam_t object
+
+  dynam_t d( y , t01 );
+
+  if ( d.size() < 2 ) return;
+  
+  writer.level( "UNSTRAT" , "EDYNAM" );
+  
+  double slope, rsq, h1, h2, h3;
+
+  d.linear_trend( &slope, &rsq );
+  d.hjorth( &h1, &h2, &h3 );
+  
+  writer.value( "SLOPE" , slope );
+  writer.value( "RSQ" , rsq );
+  writer.value( "H1" , h1 );
+  writer.value( "H2" , h2 );
+  writer.value( "H3" , h3 );
+  
+  writer.unlevel( "EDYNAM" );
+  
+  //
+  // all done if no additional group-specification (e.g. sleep cycle)
+  //
+
+  if ( g == NULL ) return;
+
+  //
+  // make integer representaiton of group label
+  //
+
+  std::map<std::string,int> glabel;
+
+  // 0 means skip; should be encoded as "" or "." by the requesting function
+  
+  glabel[ "" ] = 0;
+  glabel[ "." ] = 0;
+  
+  std::vector<int> gint( g->size() );
+  
+  for (int i=0; g->size(); i++) 
+    {
+      std::map<std::string,int>::iterator ii =  glabel.find( (*g)[i] );
+      
+      if ( ii == glabel.end() )
+	{
+	  int t = glabel.size();
+	  glabel[ (*g)[i] ] = t;
+	}
+
+      gint[i] = glabel[ (*g)[i] ];
+  
+    }
+  
+			       
+  //
+  // now we want to get within and between group (i.e. group-mean) based results
+  //
+  
+  gdynam_t gdynam( gint , y , t );
+
+
+  // assess strata and create the within-group dynam_t objects
+
+  if ( gdynam.stratify() < 2 ) return;
+  
+  // within-group reports
+  {
+    
+    writer.level( "BETWEEN" , "EDYNAM" );
+    
+    double slope, rsq, h1, h2, h3;
+    
+    gdynam.between.linear_trend( &slope, &rsq );
+    gdynam.between.hjorth( &h1, &h2, &h3 );
+    
+    writer.value( "SLOPE" , slope );
+    writer.value( "RSQ" , rsq );
+    writer.value( "H1" , h1 );
+    writer.value( "H2" , h2 );
+    writer.value( "H3" , h3 );
+    
+    writer.unlevel( "BETWEEN" );
+    
+  }
+
+  
+  std::map<std::string,int>::const_iterator gg = glabel.begin();
+  while ( gg != glabel.end() )
+    {
+
+      writer.level( gg->first , "EDYNAM" );
+      
+      dynam_t & d = gdynam.within[ gg->second ];
+	
+      double mean, var, slope, rsq, h1, h2, h3;
+      
+      d.mean_variance( &mean , &var );
+      d.linear_trend( &slope, &rsq );
+      d.hjorth( &h1, &h2, &h3 );
+      
+      writer.value( "SLOPE" , slope );
+      writer.value( "RSQ" , rsq );
+      writer.value( "H1" , h1 );
+      writer.value( "H2" , h2 );
+      writer.value( "H3" , h3 );
+      
+      writer.unlevel( "EDYNAM" );
+      ++gg;
+    }
+
+  
+}
+
+
+dynam_t::dynam_t( const std::vector<double> & y ) : y(y) 
+{
+  t.resize( y.size() );
+  for (int i=0;i<t.size();i++) t[i] = i;
+}
+
+dynam_t::dynam_t( const std::vector<double> & y , const std::vector<double> & t ) : y(y), t(t) 
+{
+  if ( y.size() != t.size() ) Helper::halt( "dynam_t given unequal y and t lengths" );
+}
+  
+dynam_t::dynam_t( const std::vector<double> & y , const std::vector<int> & ti ) : y(y)
+{
+  if ( y.size() != ti.size() ) Helper::halt( "dynam_t given unequal y and t lengths" );
+  t.resize(y.size());
+  for (int i=0;i<t.size();i++) t[i] = ti[i];
+}
+ 
+   
+void dynam_t::denoise( double lambda )
+{ 
+  dsptools::TV1D_denoise( y , lambda );
+}
+  
+
+bool dynam_t::mean_variance( double * mean , double * var )
+{
+  const int n = y.size();
+
+  double my = 0;
+
+  double myy = 0;
+
+  for (int i=0;i<n;i++) {
+    my += y[i];
+    myy += y[i] * y[i];
+  }
+  
+  if ( n < 2 ) return false;
+  
+  my /= n;
+  myy /= n;
+
+  *mean = my;
+  *var = myy - my*my;
+  
+  return true;
+}
+
+
+
+bool dynam_t::linear_trend( double * beta , double * rsq )
+{
+
+  const int n = y.size();
+  double mx = 0;
+  double my = 0;
+  double mxy = 0;
+  double mxx = 0;
+  double myy = 0;
+
+  for (int i=0;i<n;i++) {
+    my += y[i];
+    mx += t[i];
+    mxy += y[i] * t[i];
+    mxx += t[i] * t[i];
+    myy += y[i] * y[i];
+  }
+
+  mx /= n;
+  my /= n;
+  mxy /= n;
+  mxx /= n;
+  myy /= n;
+
+  double varx = mxx - mx*mx;
+  double vary = myy - my*my;
+
+  if ( varx == 0 ) return false;
+
+  *beta = ( mxy - ( mx *  my ) ) / varx ; 
+
+  if ( vary == 0 ) rsq = 0;
+  else  
+    {
+      *rsq = ( mxy - mx * my ) / sqrt( varx * vary );
+      *rsq *= *rsq;
+    }
+  return true;
+}
+    
+void dynam_t::hjorth( double * h1 , double *h2 , double *h3 )
+{  
+  MiscMath::hjorth( &y , h1 , h2 , h3 );
+}
+
+
+//
+// group-stratified dynamics
+//
+
+gdynam_t::gdynam_t( const std::vector<int> & g , const std::vector<double> & y ) : g(g) , y(y) 
+{
+  if ( g.size() != y.size() ) Helper::halt( "problem in gdynam_t" );
+  t.resize( y.size() );
+  for (int i=0;i<t.size();i++) t[i] = i;
+}
+
+gdynam_t::gdynam_t( const std::vector<int> & g , const std::vector<double> & y , const std::vector<double> & t ) : g(g), y(y), t(t)
+{
+  if ( g.size() != y.size() ) Helper::halt( "problem in gdynam_t" );
+  if ( g.size() != t.size() ) Helper::halt( "problem in gdynam_t" );
+}
+
+gdynam_t::gdynam_t( const std::vector<int> & g , const std::vector<double> & y , const std::vector<int> & ti ) : g(g) , y(y) 
+{
+  if ( g.size() != y.size() ) Helper::halt( "problem in gdynam_t" );
+  if ( g.size() != ti.size() ) Helper::halt( "problem in gdynam_t" ); 
+  t.resize(y.size());
+  for (int i=0;i<t.size();i++) t[i] = ti[i];  
+}
+
+
+
+
+
+int gdynam_t::stratify()
+{
+
+  gmap.clear();
+
+  for (int i=0;i<g.size();i++) 
+    {
+      if ( g[i] > 0 )  // only strata 1, 2, 3 etc are included
+	gmap[ g[i] ].insert( i );
+    }
+  
+  // number of strata
+  
+  const int ng = gmap.size();
+  
+  if ( ng < 2 ) return ng;
+  
+  // get means for a between-strata model
+  
+  between.clear();
+  
+  // create a dynam_t for each strata
+  
+  for (int i=0;i<ng;i++)
+    {
+      std::vector<double> yy, tt;
+      std::set<int>::const_iterator ii = gmap[i].begin();
+
+      while ( ii != gmap[i].end() ) 
+	{
+	  yy.push_back( y[ *ii ] );
+	  tt.push_back( t[ *ii ] );
+	  ++ii;
+	}
+      
+      within[ i ].y = yy;
+      within[ i ].t = tt;      
+      
+      // means for between-group model
+      between.y.push_back( MiscMath::mean( yy ) );
+      between.t.push_back( MiscMath::mean( tt ) );
+      
+    }
+
+  return ng;
+}
+
+  

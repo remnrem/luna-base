@@ -885,7 +885,7 @@ void proc_dummy( const std::string & p )
 
   std::vector<double> x;
   
-  if ( p == "fft" || p == "mtm" || p == "tv" ) 
+  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" ) 
     {
 
       
@@ -931,6 +931,21 @@ void proc_dummy( const std::string & p )
       std::exit(1);
     }
   
+  
+  if ( p == "dynam" )
+    {
+      
+      dynam_t dynam( x );
+
+      double beta, rsq = 0;
+
+      dynam.linear_trend( &beta , &rsq );
+      
+      std::cout << "beta = " << beta << "\n";
+      std::cout << "rsq = " << rsq  << "\n";
+      
+      std::exit(0);
+    }
 
   if ( p == "mse" )
     {

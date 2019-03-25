@@ -30,6 +30,7 @@
 #include "db/db.h"
 #include "fftw/fftwrap.h"
 #include "dsp/mse.h"
+#include "miscmath/dynam.h"
 
 
 extern writer_t writer;
@@ -59,11 +60,18 @@ annot_t * spectral_power( edf_t & edf ,
 
   bool show_epoch = param.has( "epoch" ) || param.has("epoch-spectrum" );
 
+  // Characterize dynamics: of all epoch-level stats created, get the H1, H2, H3, linear and exponential trend
+  // Hjorth stats just consider all points concatenated
+  // trend lines are based on observed E numbers 
+
+  bool calc_dynamics = param.has( "dynamics" );
+  
   // Verbose output: full spectrum per epoch
 
   bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
   // truncate spectra
+
   double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 20 ;
 
   // Calculate MSE
@@ -98,35 +106,6 @@ annot_t * spectral_power( edf_t & edf ,
   else if ( param.has( "hamming" ) ) window_function = WINDOW_HAMMING;
   else if ( param.has( "tukey50" ) ) window_function = WINDOW_TUKEY50;
 
-  
-  //
-  // Spectrum summaries
-  //
-  
-  bool show_user_ranges = param.has( "ranges" ); // lwr, upr, inc
-
-  bool show_user_ranges_per_epoch = param.has( "epoch-ranges" ); // boolean
-
-  if ( show_user_ranges_per_epoch && ! show_user_ranges ) 
-    Helper::halt( "need to specify ranges=lwr,upr,inc with epoch-ranges" );
-
-  std::map<freq_range_t,double> user_ranges;
-  if ( show_user_ranges )
-    {
-      std::vector<std::string> tok = param.strvector( "ranges" );
-      if ( tok.size() != 3 ) Helper::halt( "expecting 3 values for ranges=lwr,upr,inc" );
-      double lwr = 0 , upr = 0 , inc = 0;
-      if ( ! Helper::str2dbl( tok[0] , &lwr ) ) Helper::halt( "bad ranges" );
-      if ( ! Helper::str2dbl( tok[1] , &upr ) ) Helper::halt( "bad ranges" );
-      if ( ! Helper::str2dbl( tok[2] , &inc ) ) Helper::halt( "bad ranges" );
-      if ( lwr >= upr ) Helper::halt( "bad ranges" );      
-      //      std::cout << lwr << " " << upr << " " << inc << "\n";
-      
-      for (double f = lwr; f<= upr; f += inc ) 
-	user_ranges[ freq_range_t( f , f+inc ) ] = 0;      
-
-    }
-  
 
   //
   // Define standard band summaries
@@ -151,6 +130,7 @@ annot_t * spectral_power( edf_t & edf ,
   signal_list_t signals = edf.header.signal_list( signal_label );  
   
   const int ns = signals.size();
+
   
   //
   // Obtain sampling freqs (Hz)
@@ -158,27 +138,12 @@ annot_t * spectral_power( edf_t & edf ,
   
   std::vector<double> Fs = edf.header.sampling_freq( signals );
   
-  
-  //
-  // get high, low and total power.
-  //
-
-  int total_epochs = 0;  
-
-  std::map<int,std::vector<double> > freqs;
-
-  std::map<int,std::map<frequency_band_t,double> > bandmean;
-  std::map<int,std::map<freq_range_t,double> > rangemean;  
-  std::map<int,std::map<int,double> > freqmean; 
-  
-  std::map<int,std::map<frequency_band_t,std::vector<double> > > track_mse;
-  
-
   //
   // Set first epoch
   //
   
   edf.timeline.first_epoch();
+    
 
   //
   // Check segment lengths
@@ -197,49 +162,78 @@ annot_t * spectral_power( edf_t & edf ,
   //
   
 
-  bool epoch_level_output = show_epoch || show_user_ranges_per_epoch || show_epoch_spectrum ;
+  bool epoch_level_output = show_epoch || show_epoch_spectrum ;
   
-    
-  //
-  // for each each epoch 
-  //
-
-  while ( 1 ) 
-     {
-       
-       int epoch = edf.timeline.next_epoch();      
-       
-       if ( epoch == -1 ) break;
-              
   
-       ++total_epochs;
-       
-       interval_t interval = edf.timeline.epoch( epoch );
-       
-       // stratify output by epoch?
-       if ( epoch_level_output )
-	 writer.epoch( edf.timeline.display_epoch( epoch ) );
-       
-       //
-       // Get each signal
-       //
-       
-       for (int s = 0 ; s < ns; s++ )
-	 {
-	   
-	   //
-	   // only consider data tracks
-	   //
+  //
+  // Get each signal
+  //
+  
+  for (int s = 0 ; s < ns; s++ )
+    {
+      
 
-	   if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
-	   
-	   //
-	   // Stratify output by channel
-	   //
-	   
-	   if ( epoch_level_output )
-	     writer.level( signals.label(s) , globals::signal_strat );
-	   
+      //
+      // only consider data tracks
+      //
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) ) 
+	continue;
+      
+
+      //
+      // Stratify output by channel
+      //
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      
+      
+      //
+      // get high, low and total power.
+      //
+      
+      int total_epochs = 0;  
+      
+      // store frequencies from epoch-level analysis
+      std::vector<double> freqs;
+
+      std::vector<double> epochs;
+
+      // band and F results
+      std::map<frequency_band_t,std::vector<double> > track_band;
+      std::map<int,std::vector<double> > track_freq;
+      
+
+
+      
+      //
+      // Set first epoch
+      //
+      
+      edf.timeline.first_epoch();
+
+
+      //
+      // for each each epoch 
+      //
+      
+      while ( 1 ) 
+	{
+	  
+	  int epoch = edf.timeline.next_epoch();      
+	  
+	  if ( epoch == -1 ) break;
+	  
+
+	  ++total_epochs;
+
+	  
+	  interval_t interval = edf.timeline.epoch( epoch );
+	  
+	  // stratify output by epoch?
+	  if ( epoch_level_output )
+	    writer.epoch( edf.timeline.display_epoch( epoch ) );
+	  	  
 	   //
 	   // Get data
 	   //
@@ -247,8 +241,11 @@ annot_t * spectral_power( edf_t & edf ,
 	   slice_t slice( edf , signals(s) , interval );
 	   
 	   std::vector<double> * d = slice.nonconst_pdata();
-	   
-	   // mean centre just this epoch
+
+	   //
+	   // mean centre epoch?
+	   //
+
 	   if ( mean_centre_epoch ) 
 	     MiscMath::centre( d );
 	   
@@ -256,9 +253,6 @@ annot_t * spectral_power( edf_t & edf ,
 	   // pwelch() to obtain full PSD
 	   //
 	   
-	   // Fixed parameters:: use 4-sec segments with 2-second
-	   // overlaps 
-	  	   
 	   const double overlap_sec = fft_segment_overlap;
 	   const double segment_sec  = fft_segment_size;
 	   
@@ -271,104 +265,58 @@ annot_t * spectral_power( edf_t & edf ,
 					  / (double)( segment_points - noverlap_points ) );
 	   
 	   
-// 	    logger << "total_points = " << total_points << "\n";
-// 	    logger << "nooverlap_segments = " << noverlap_segments << "\n";
-// 	    logger << "noverlap_points = " << noverlap_points << "\n";
-// 	    logger << "segment_points = " << segment_points << "\n";
+// 	   logger << "total_points = " << total_points << "\n";
+// 	   logger << "nooverlap_segments = " << noverlap_segments << "\n";
+// 	   logger << "noverlap_points = " << noverlap_points << "\n";
+// 	   logger << "segment_points = " << segment_points << "\n";
 	   
+// 	   std::cout << "about to fly...\n";
+// 	   std::cout << "Fs = " << Fs[s] << "\n";
+
 	   PWELCH pwelch( *d , 
 			  Fs[s] , 
 			  segment_sec , 
 			  noverlap_segments , 
 			  window_function , 
 			  average_adj );
+	   
+	   //	   std::cout << "done\n";
 
-	   double this_slowwave   = pwelch.psdsum( SLOW )  ;/// globals::band_width( SLOW );
-	   double this_delta      = pwelch.psdsum( DELTA ) ;/// globals::band_width( DELTA );
-	   double this_theta      = pwelch.psdsum( THETA ) ;/// globals::band_width( THETA );
-	   double this_alpha      = pwelch.psdsum( ALPHA ) ;/// globals::band_width( ALPHA );
-	   double this_sigma      = pwelch.psdsum( SIGMA ) ;/// globals::band_width( SIGMA );
-	   double this_low_sigma  = pwelch.psdsum( LOW_SIGMA ) ;/// globals::band_width( LOW_SIGMA );
-	   double this_high_sigma = pwelch.psdsum( HIGH_SIGMA ) ;/// globals::band_width( HIGH_SIGMA );
-	   double this_beta       = pwelch.psdsum( BETA )  ;/// globals::band_width( BETA );
-	   double this_gamma      = pwelch.psdsum( GAMMA ) ;/// globals::band_width( GAMMA );]
-	   double this_total      = pwelch.psdsum( TOTAL ) ;/// globals::band_width( TOTAL );
+
+	   double this_slowwave   = pwelch.psdsum( SLOW )  ;      /// globals::band_width( SLOW );
+	   double this_delta      = pwelch.psdsum( DELTA ) ;      /// globals::band_width( DELTA );
+	   double this_theta      = pwelch.psdsum( THETA ) ;      /// globals::band_width( THETA );
+	   double this_alpha      = pwelch.psdsum( ALPHA ) ;      /// globals::band_width( ALPHA );
+	   double this_sigma      = pwelch.psdsum( SIGMA ) ;      /// globals::band_width( SIGMA );
+	   double this_low_sigma  = pwelch.psdsum( LOW_SIGMA ) ;  /// globals::band_width( LOW_SIGMA );
+	   double this_high_sigma = pwelch.psdsum( HIGH_SIGMA ) ; /// globals::band_width( HIGH_SIGMA );
+	   double this_beta       = pwelch.psdsum( BETA )  ;      /// globals::band_width( BETA );
+	   double this_gamma      = pwelch.psdsum( GAMMA ) ;      /// globals::band_width( GAMMA );]
+	   double this_total      = pwelch.psdsum( TOTAL ) ;      /// globals::band_width( TOTAL );
 	   
 	   //
-	   // Track average over epochs
+	   // track epoch-level band-power statistics
 	   //
-	    
-	   bandmean[ s ][ SLOW ]       +=  this_slowwave;
-	   bandmean[ s ][ DELTA ]      +=  this_delta;
-	   bandmean[ s ][ THETA ]      +=  this_theta;
-	   bandmean[ s ][ ALPHA ]      +=  this_alpha;
-	   bandmean[ s ][ LOW_SIGMA ]  += this_low_sigma;
-	   bandmean[ s ][ HIGH_SIGMA ] += this_high_sigma;
-	   bandmean[ s ][ SIGMA ]      +=  this_sigma;	   
-	   bandmean[ s ][ BETA ]       +=  this_beta;
-	   bandmean[ s ][ GAMMA ]      +=  this_gamma;
-	   bandmean[ s ][ TOTAL ]      +=  this_total;
-
+	   
+	   track_band[ SLOW  ].push_back( this_slowwave );
+	   track_band[ DELTA ].push_back( this_delta );
+	   track_band[ THETA ].push_back( this_theta );
+	   track_band[ ALPHA ].push_back( this_alpha );
+	   track_band[ SIGMA ].push_back( this_sigma );
+	   track_band[ BETA  ].push_back( this_beta );
+	   track_band[ GAMMA ].push_back( this_gamma );
+	   track_band[ LOW_SIGMA ].push_back( this_low_sigma );
+	   track_band[ HIGH_SIGMA ].push_back( this_high_sigma );
+	   track_band[ TOTAL ].push_back( this_total );
+	   
 	   //
-	   // MSE for bands
+	   // track epoch numbers (for dynam_t)
 	   //
+	   
+	   epochs.push_back( epoch );
 
-	   track_mse[ s ][ SLOW  ].push_back( this_slowwave );
-	   track_mse[ s ][ DELTA ].push_back( this_delta );
-	   track_mse[ s ][ THETA ].push_back( this_theta );
-	   track_mse[ s ][ ALPHA ].push_back( this_alpha );
-	   track_mse[ s ][ SIGMA ].push_back( this_sigma );
-	   track_mse[ s ][ BETA  ].push_back( this_beta );
-	   track_mse[ s ][ GAMMA ].push_back( this_gamma );
-
-	 
 	   //
 	   // Epoch-level output
-	   //
-
-	   //
-	   // User-defined ranges
-	   //
-
-	   if ( show_user_ranges )
-	     {
-	       
-	       rangemean[ s ] = user_ranges;
-	       pwelch.psdsum( &rangemean[s] );
-	       
-	       if ( show_user_ranges_per_epoch )
-		 {
-		   
-		   const std::map<freq_range_t,double> & x = rangemean[ s ];
-		   std::map<freq_range_t,double>::const_iterator ii = x.begin();
-		   while ( ii != x.end() )
-		     {
-		       std::stringstream ss;
-		       ss << ii->first.first << ".." << ii->first.second ;
-		       
-		       writer.level( ss.str() , "FRQRANGE" );
-
-		       // track numeric range mid-point
-		       writer.var( "FRQMID" , "Frequency range mid-point" );
-		       writer.value( "FRQMID" , ( ii->first.second  + ii->first.first ) / 2.0  );
-		       
-		       // power value
-		       writer.var( "PSD" , "Spectral band power" );
-		       writer.value( "PSD" , dB ? 10*log10( ii->second ) : ii->second  );
-						
-		       ++ii;
-		     }
-
-		   writer.unlevel( "FRQRANGE" );
-
-		   // display
-		 }
-	       
-	     }
-	   
-
-	   //
-	   // detailed, per-EPOCH outout
 	   //
 
 	   if ( show_epoch )
@@ -424,78 +372,76 @@ annot_t * spectral_power( edf_t & edf ,
 	       writer.unlevel( globals::band_strat );
 	       
 	     }
-	 
 	   
-       //
-       // track over entire spectrum
-       //
 	   
-       if( freqs.find( s ) == freqs.end() )
-	 {
-	   freqs[s] = pwelch.freq;
-	 }
-       
-       // std::cout << "freqs.size() = " << freqs[s].size() << "\n";
-       // std::cout << "pwelch.size() = " << pwelch.psd.size() << "\n";
-
-       if ( freqs[s].size() == pwelch.psd.size() )
-	 {
-
-	   // accumulate for entire night means
-	   for (int f=0;f<pwelch.psd.size();f++)
-	     freqmean[ s ][ f ] += pwelch.psd[f];
-
-	   // epoch-level output?
+	   //
+	   // track over entire spectrum (track on first encounter)
+	   //
 	   
-	   if ( show_epoch_spectrum )
-	     {		 
-
-	      // using bin_t 	      
-	      bin_t bin( bin_width , max_power , Fs[s] );
-	      
-	      bin.bin( freqs[s] , pwelch.psd );
-	      
-	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 		{
-		  
-		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		  writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
-		}
-	       writer.unlevel( globals::freq_strat );
+	   if( freqs.size() == 0 ) 
+	     {
+	       freqs = pwelch.freq;
 	     }
+	     
+       
+	   // std::cout << "freqs.size() = " << freqs[s].size() << "\n";
+	   // std::cout << "pwelch.size() = " << pwelch.psd.size() << "\n";
 	   
-	 }
-       else
-	 logger << " *** warning:: skipped a segment: different NFFT/internal problem ... \n";
-
-       
-       if ( epoch_level_output )
-	 writer.unlevel( globals::signal_strat );
-       
-       
-	 } // next signal
-       
-       if ( epoch_level_output )
-	 writer.unepoch();
-       
-     } // next EPOCH
-    
-   
-  //
-  // Output summary power curve
-  //
-  
-  
-  for (int s=0; s < ns ; s++ )
-    {
-
-      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+	   if ( freqs.size() == pwelch.psd.size() )
+	     {
+	       
+	       // accumulate for entire night means
+	       for (int f=0;f<pwelch.psd.size();f++)
+		 track_freq[ f ].push_back( pwelch.psd[f] );
+	       
+	       // epoch-level output?
+	       
+	       if ( show_epoch_spectrum )
+		 {		 
+		   
+		   // using bin_t 	      
+		   bin_t bin( bin_width , max_power , Fs[s] );
+		   
+		   bin.bin( freqs , pwelch.psd );
+		   
+		   for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 		{
+		     
+		     //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
+		     writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		     writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
+		   }
+		   writer.unlevel( globals::freq_strat );
+		 }
+	       
+	     }
+	   else
+	     logger << " *** warning:: skipped a segment: different NFFT/internal problem ... \n";
+	   
+	   
       
-      const int n = freqs[s].size();      
+	   //
+	   // end of epoch-level strata
+	   //
+
+	   if ( epoch_level_output )
+	     writer.unepoch();
+	   
+	   
+	   //
+	   // next epoch
+	   //
+
+	} 
       
-      writer.level( signals.label(s) , globals::signal_strat );
+      
+      //
+      // Output
+      //
+      
+      const int n = freqs.size();      
       
       writer.var( "NE" , "Number of epochs" );
+      
       writer.value( "NE" , total_epochs );
       
       if ( show_spectrum )
@@ -505,15 +451,17 @@ annot_t * spectral_power( edf_t & edf ,
 	    {	  
 	      
 	      // get mean power across epochs
-	      if ( freqmean[s].size() != freqs[s].size() ) Helper::halt( "internal error psd_t" );
-	      std::vector<double> means;
-	      for (int f=0;f<n;f++) means.push_back( freqmean[ s ][ f ] / (double)total_epochs );
 	      
-	      // using bin_t 	      
-	      //std::cout << "DETS " << bin_width << " " << max_power << " "<< Fs[s] << "\n";
+	      if ( track_freq.size() != freqs.size() ) 
+		Helper::halt( "internal error psd_t" );
+	      
+	      std::vector<double> means;
+	      for (int f=0;f<n;f++) 
+		means.push_back( MiscMath::mean( track_freq[f] ) );
+	      
 	      bin_t bin( bin_width , max_power , Fs[s] );
 
-	      bin.bin( freqs[s] , means );
+	      bin.bin( freqs , means );
 
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
@@ -528,34 +476,28 @@ annot_t * spectral_power( edf_t & edf ,
 
       
       bool okay = total_epochs > 0 ;
-      
-      // get total power
-      double total_power = bandmean[ s ][ TOTAL ] / (double)total_epochs;
 
-//       std::vector<frequency_band_t>::const_iterator bi = bands.begin();
-//       while ( bi != bands.end() )
-// 	{
-// 	  if ( okay ) 
-// 	    {
-// 	      double p = 
-// 	      total_power += p;
-// 	    }
-// 	  ++bi;
-// 	}
-      
-      
+      //
+      // mean total power
+      //
+
+      double mean_total_power = MiscMath::mean( track_band[ TOTAL ] );
+
+      //
       // by band 
+      //
+      
       std::vector<frequency_band_t>::const_iterator bi = bands.begin();
       while ( bi != bands.end() )
 	{	   
 
 	  if ( okay ) 
 	    {
-	      double p = bandmean[ s ][ *bi ] / (double)total_epochs;
+	      double p = MiscMath::mean( track_band[ *bi ] );
 
 	      writer.level( globals::band( *bi ) , globals::band_strat );
 	      writer.value( "PSD" , dB ? 10*log10(p) : p  );
-	      writer.value( "RELPSD" , p / total_power );
+	      writer.value( "RELPSD" , p / mean_total_power );
 	    }
 	  
  	  ++bi;
@@ -564,23 +506,33 @@ annot_t * spectral_power( edf_t & edf ,
       writer.unlevel( globals::band_strat );
 
 
-      // by user-defined ranges
-      if ( show_user_ranges )
-	{
-	  const std::map<freq_range_t,double> & x = rangemean[ s ];
-	  std::map<freq_range_t,double>::const_iterator ii = x.begin();
-	  while ( ii != x.end() )
-	    {
-	      std::stringstream ss;
-	      ss << ii->first.first << ".." << ii->first.second;
+      
+      //
+      // Dynamics?
+      //
+      
 
-	      writer.level( ss.str() , "FRQRANGE" );
-	      writer.value( "FRQMID" , ( ii->first.second  + ii->first.first ) / 2.0 ); 
-	      writer.value( "PSD" , dB ? 10*log10( ii->second / (double)total_epochs ) : ii->second / (double)total_epochs ) ;
+      if ( calc_dynamics )
+	{
+	  
+	  // do we have a __cycle annotation?
+	  bool has_cycles = edf.timeline.annotations.find( "__cycles" );
+	  
+	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();
+	  
+	  while ( ii != track_band.end() )
+	    {	      
+	      writer.level( globals::band( ii->first ) , globals::band_strat );
+	      
+	      dynam_report_with_log( ii->second , epochs );
+	      
 	      ++ii;
 	    }
-	  writer.unlevel( "FRQRANGE" );
+
+	  writer.unlevel( globals::band_strat ); 
+	  
 	}
+
 
       if ( calc_mse )
 	{
@@ -595,16 +547,13 @@ annot_t * spectral_power( edf_t & edf ,
 		     mse_m , mse_r );
 
 	  
-	  const std::map<frequency_band_t,std::vector<double> > & x = track_mse[ s ];
-	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = x.begin();
-	  while ( ii != x.end() )
+	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();
+
+	  while ( ii != track_band.end() )
 	    {
 	      
 	      writer.level( globals::band( ii->first ) , globals::band_strat );
 	      
-// 	      for (int ll=0;ll<10;ll++) std::cout << " " << (ii->second)[ll];
-// 	      std::cout << "\n";
-
 	      std::map<int,double> mses = mse.calc( ii->second );
 	      
 	      writer.var( "MSE" , "Multiscale entropy" );
@@ -621,13 +570,23 @@ annot_t * spectral_power( edf_t & edf ,
 	    }
 	  writer.unlevel( globals::band_strat );
 	}
+     
+
+
+
+
+
       
-      writer.unlevel( globals::signal_strat );
+      //
+      // next signal
+      //
+    } 
+
+
+  writer.unlevel( globals::signal_strat );	   
       
-    } // summary for next signal
   
-  // redundant, ignore this for now...
-  //  annot_t * a = edf.timeline.annotations.add( "Sigma power" );  
+  // ignore return annot_t * 
   return NULL;
 
 }

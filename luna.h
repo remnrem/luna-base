@@ -47,6 +47,8 @@
 
 #include "miscmath/miscmath.h"
 
+#include "miscmath/dynam.h"
+
 #include "stats/glm.h"
 
 #include "annot/annot.h"
