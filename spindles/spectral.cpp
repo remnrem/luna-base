@@ -383,7 +383,8 @@ annot_t * spectral_power( edf_t & edf ,
 	       freqs = pwelch.freq;
 	     }
 	     
-       
+
+	       
 	   // std::cout << "freqs.size() = " << freqs[s].size() << "\n";
 	   // std::cout << "pwelch.size() = " << pwelch.psd.size() << "\n";
 	   
@@ -391,8 +392,9 @@ annot_t * spectral_power( edf_t & edf ,
 	     {
 	       
 	       // accumulate for entire night means
-	       for (int f=0;f<pwelch.psd.size();f++)
-		 track_freq[ f ].push_back( pwelch.psd[f] );
+	       if ( show_spectrum )
+		 for (int f=0;f<pwelch.psd.size();f++)
+		   track_freq[ f ].push_back( pwelch.psd[f] );
 	       
 	       // epoch-level output?
 	       
@@ -547,6 +549,11 @@ annot_t * spectral_power( edf_t & edf ,
 		}
 	    }
 	  
+
+	  //
+	  // band power 
+	  //
+
 	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();
 	  
 	  while ( ii != track_band.end() )
@@ -562,6 +569,35 @@ annot_t * spectral_power( edf_t & edf ,
 	    }
 	  
 	  writer.unlevel( globals::band_strat ); 
+
+
+	  //
+	  // full spectra?
+	  //
+	  
+	  if ( show_spectrum )
+	    {
+
+	      
+	      std::map<int,std::vector<double> >::const_iterator ii = track_freq.begin();
+	      
+	      while ( ii != track_freq.end() )
+		{
+		  writer.level( freqs[ ii->first ] , globals::freq_strat );
+		  
+		  if ( has_cycles )
+		    dynam_report_with_log( ii->second , epochs , &cycle );
+		  else
+		    dynam_report_with_log( ii->second , epochs );
+		  
+		  ++ii;
+		  
+		}
+	      
+	      writer.unlevel( globals::freq_strat );
+	      
+	    }
+	  
 	}
       
       
