@@ -47,11 +47,36 @@ void dynam_report_with_log( const std::vector<double> & y ,
 
 
 
-void dynam_report( const std::vector<double> & y , 
-		   const std::vector<double> & t , 
-		   const std::vector<std::string> * g )
+void dynam_report( const std::vector<double> & y_ , 
+		   const std::vector<double> & t_ , 
+		   const std::vector<std::string> * g_ )
 {
   
+
+  //
+  // Remove 'y' outliers
+  //
+  const double th = 3;
+
+  std::vector<double> z0 = MiscMath::Z( y_ );
+
+  std::vector<double> y, t;
+  std::vector<std::string> g;
+
+  for (int i=0;i<y_.size();i++)
+    {
+      if ( z0[i] >= -th && z0[i] <= th ) 
+	{
+	  y.push_back( y_[i] );
+	  t.push_back( t_[i] );
+	  if ( g_ != NULL ) g.push_back( (*g_)[i] ); 
+	}
+    }
+
+  writer.value( "NOUT" , (int)(y_.size() - y.size()) );
+
+
+  if ( t.size() == 0 ) return;
 
   //
   // scale 't' to be 0..1
@@ -69,12 +94,15 @@ void dynam_report( const std::vector<double> & y ,
   for (int i=0;i<t.size();i++)
     t01[i] = ( t[i] - mnt ) / ( mxt - mnt );
 
+
+
   //
   // Scale 'y' to be N(0,1)
   //
 
   std::vector<double> z = MiscMath::Z( y );
   
+
   // create actual dynam_t object
 
   dynam_t d( z , t01 );
@@ -101,7 +129,7 @@ void dynam_report( const std::vector<double> & y ,
   // all done if no additional group-specification (e.g. sleep cycle)
   //
 
-  if ( g == NULL ) return;
+  if ( g_ == NULL ) return;
 
 
   //
@@ -117,19 +145,19 @@ void dynam_report( const std::vector<double> & y ,
 
   int cnt = 1;
   
-  std::vector<int> gint( g->size() );
+  std::vector<int> gint( g.size() );
   
-  for (int i=0; i < g->size(); i++) 
+  for (int i=0; i < g.size(); i++) 
     {
-      std::map<std::string,int>::iterator ii =  glabel.find( (*g)[i] );
+      std::map<std::string,int>::iterator ii =  glabel.find( g[i] );
       
       if ( ii == glabel.end() )
 	{
-	  glabel[ (*g)[i] ] = cnt;
+	  glabel[ g[i] ] = cnt;
 	  ++cnt;
 	}
       
-      gint[i] = glabel[ (*g)[i] ];
+      gint[i] = glabel[ g[i] ];
       
     }
 
@@ -186,6 +214,8 @@ void dynam_report( const std::vector<double> & y ,
       d.hjorth( &h1, &h2, &h3 );
 
       writer.value( "N" , d.size() );
+      writer.value( "MEAN" , mean );
+      writer.value( "VAR" , var );
       writer.value( "SLOPE" , slope );
       writer.value( "RSQ" , rsq );
       writer.value( "H1" , h1 );
