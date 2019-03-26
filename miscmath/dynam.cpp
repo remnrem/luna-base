@@ -53,8 +53,10 @@ void dynam_report( const std::vector<double> & y ,
 {
   
 
-  
+  //
   // scale 't' to be 0..1
+  //
+
   double mnt = t[0] , mxt = t[0];
 
   for (int i=1;i<t.size();i++)
@@ -66,10 +68,16 @@ void dynam_report( const std::vector<double> & y ,
   std::vector<double> t01( t.size() );
   for (int i=0;i<t.size();i++)
     t01[i] = ( t[i] - mnt ) / ( mxt - mnt );
+
+  //
+  // Scale 'y' to be N(0,1)
+  //
+
+  std::vector<double> z = MiscMath::Z( y );
   
   // create actual dynam_t object
 
-  dynam_t d( y , t01 );
+  dynam_t d( z , t01 );
 
   if ( d.size() < 2 ) return;
   
@@ -130,7 +138,7 @@ void dynam_report( const std::vector<double> & y ,
   // now we want to get within and between group (i.e. group-mean) based results
   //
   
-  gdynam_t gdynam( gint , y , t );
+  gdynam_t gdynam( gint , z , t );
 
 
   // assess strata and create the within-group dynam_t objects
