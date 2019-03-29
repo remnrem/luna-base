@@ -1089,11 +1089,11 @@ void set_tag( const std::string & t )
 
 void proc_anon( edf_t & edf , param_t & param )
 {
-  logger << " setting subject ID, start time/date to null ('.') for EDF " 
+  logger << " setting subject ID and start date to null ('.') for EDF " 
 	 << edf.filename << "\n";
   
   edf.header.patient_id = ".";
-  edf.header.starttime = ".";
+  //edf.header.starttime = ".";
   edf.header.startdate = ".";
 }
 

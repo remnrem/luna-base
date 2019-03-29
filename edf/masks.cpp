@@ -150,32 +150,32 @@ void proc_mask( edf_t & edf , param_t & param )
   // Eval expression masks
   //
   
-  if ( param.has( "drop" ) ) 
+  if ( param.has( "expr" ) ) 
     {
       // force, mask_mode == 2 
-      edf.timeline.apply_eval_mask( param.value( "drop" ) ,  2 ) ; 
+      edf.timeline.apply_eval_mask( param.value( "expr" ) ,  2 ) ; 
       return;
    }
 
-  if ( param.has( "keep" ) ) 
+  if ( param.has( "not-expr" ) ) 
     {
       // force, mask_mode == -2 
-      edf.timeline.apply_eval_mask( param.value( "keep" ) ,  -2 ) ; 
+      edf.timeline.apply_eval_mask( param.value( "not-expr" ) ,  -2 ) ; 
       return;
    }
 
-  if ( param.has( "mask" ) )
+  if ( param.has( "mask-expr" ) )
     {
       // mask, mask_mode == 0 
-      edf.timeline.apply_eval_mask( param.value( "mask" ) , 0 ) ; 
+      edf.timeline.apply_eval_mask( param.value( "mask-expr" ) , 0 ) ; 
       return;      
     }
   
-  if ( param.has( "unmask" ) )
+  if ( param.has( "unmask-expr" ) )
     {
       // unmask , mask_mode == 1 
       // i.e. if true, unmask
-      edf.timeline.apply_eval_mask( param.value( "unmask" ) , 1 ) ; 
+      edf.timeline.apply_eval_mask( param.value( "unmask-expr" ) , 1 ) ; 
       return;            
     }
   
