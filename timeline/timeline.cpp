@@ -763,6 +763,7 @@ void timeline_t::clear_epoch_mask( bool b )
 
 int timeline_t::set_epoch_mask( const int e , const bool b ) 
 {
+
   mask_set = true;
   
   if ( e < 0 || e >= mask.size() ) Helper::halt( "internal error setting mask" );
@@ -2234,8 +2235,8 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
 
   // mask_mode   0   mask
   //             1   unmask
-  //             2   force  (T = mask    &  F = unmask) 
-  //            -2   force  (T = unmask  &  T = mask)
+  //             2   force  (T = mask    &  F = unmask)   [ drop mode ] 
+  //            -2   force  (T = unmask  &  F = mask)     [ keep mode ]
   
 
   // is this 'KEEP' mode? 
@@ -2243,6 +2244,17 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
   bool flip = false;
   
   if ( mask_mode == - 2 ) { mask_mode = 2 ; flip = true; } 
+
+
+  //
+  // Set mask mode
+  //
+
+  if ( mask_mode > -1 ) 
+    {
+      set_epoch_mask_mode( mask_mode );  
+      logger << " set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
+    }
 
 
   //
@@ -2258,6 +2270,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
   
   std::vector<std::string> names = annotations.names();
 
+
   //
   // Keep track of changes
   //
@@ -2266,6 +2279,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
 
   const int ne = epochs.size();
   
+
   //
   // We do not clear the mask here, as we want to allow multiple
   // filters to be added on top of oneanther
@@ -2275,7 +2289,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
   int cnt_mask_unset = 0;
   int cnt_unchanged = 0;
   int cnt_now_unmasked = 0;
-  int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
+  int cnt_basic_match = 0;  
 
   
   //
@@ -2334,6 +2348,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
       
       if ( ! tok.value( matches ) ) is_valid = false;
 
+
       //
       // A match must be a valid value
       //
@@ -2385,7 +2400,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
   
   
   logger << " based on eval expression [" << expression << "]\n"
-	 << "  " << acc_retval << "  true, " << acc_valid - acc_retval << " false and " 
+	 << "  " << acc_retval << " true, " << acc_valid - acc_retval << " false and " 
 	 << acc_total - acc_valid << " invalid return values\n"
 	 << "  " << cnt_basic_match << " epochs match; " 
 	 << cnt_mask_set << " newly masked, "
