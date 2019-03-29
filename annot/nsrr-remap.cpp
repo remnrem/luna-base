@@ -51,12 +51,12 @@ void nsrr_t::init()
   // the command line, this will not yet have been parsed
   //
   
-  cmd_t::vars[ "arousal" ] = "arousal_standard,arousal_spontaneous,arousal_external,arousal_respiratory, arousal_plm,arousal_chesire";
+  cmd_t::vars[ "arousal" ] = "arousal_standard,arousal_spontaneous,arousal_external,arousal_respiratory,arousal_plm,arousal_cheshire";
   
   cmd_t::vars[ "apnea" ] = "apnea_obstructive,apnea_central,apnea_mixed,hypopnea";
   
   cmd_t::vars[ "artifact" ] 
-    = "artifact_respiratory,artifact_proximal_pH,artifact_distal_pH, artifact_blood_pressure,artifact_TcCO2,artifact_SpO2,artifact_EtCO2";
+    = "artifact_respiratory,artifact_proximal_pH,artifact_distal_pH,artifact_blood_pressure,artifact_TcCO2,artifact_SpO2,artifact_EtCO2";
   
   cmd_t::vars[ "arrhythmia" ] = "bradycardia,tachycardia,tachycardia_narrowcomplex";
 	       
@@ -79,16 +79,16 @@ void nsrr_t::init()
   // actual remapping terms
   //
   
-  amap[ "Arousal ()" ] = "arousal";
-  amap[ "Arousal|Arousal ()" ] = "arousal";
-  amap[ "Arousal|Arousal (Arousal)" ] = "arousal";
-  amap[ "Arousal|Arousal (Standard)" ] = "arousal";
-  amap[ "Arousal|Arousal (STANDARD)" ] = "arousal";
-  amap[ "ASDA arousal|Arousal (ADSA)" ] = "arousal";
-  amap[ "ASDA arousal|Arousal (asda)" ] = "arousal";
-  amap[ "ASDA arousal|Arousal (ASDA)" ] = "arousal";
-  amap[ "Arousal (Asda)" ] = "arousal";
-  amap[ "Arousal (ASDA)" ] = "arousal";
+  amap[ "Arousal ()" ] = "arousal_standard";
+  amap[ "Arousal|Arousal ()" ] = "arousal_standard";
+  amap[ "Arousal|Arousal (Arousal)" ] = "arousal_standard";
+  amap[ "Arousal|Arousal (Standard)" ] = "arousal_standard";
+  amap[ "Arousal|Arousal (STANDARD)" ] = "arousal_standard";
+  amap[ "ASDA arousal|Arousal (ADSA)" ] = "arousal_standard";
+  amap[ "ASDA arousal|Arousal (asda)" ] = "arousal_standard";
+  amap[ "ASDA arousal|Arousal (ASDA)" ] = "arousal_standard";
+  amap[ "Arousal (Asda)" ] = "arousal_standard";
+  amap[ "Arousal (ASDA)" ] = "arousal_standard";
 
   amap[ "Arousal (ARO SPONT)" ] = "arousal_spontaneous";
   amap[ "Spontaneous arousal|Arousal (apon aro)" ] = "arousal_spontaneous" ;
@@ -104,7 +104,7 @@ void nsrr_t::init()
   amap[ "Arousal (ARO RES)" ] = "arousal_respiratory";
   amap[ "Respiratory effort related arousal|RERA" ] = "arousal_respiratory";
       
-  amap[ "Arousal resulting from Chin EMG|Arousal (Cheshire)" ] = "arousal_chesire";
+  amap[ "Arousal resulting from Chin EMG|Arousal (Cheshire)" ] = "arousal_cheshire";
   amap[ "Arousal resulting from Chin EMG|Arousal (CHESHIRE)" ] = "arousal_cheshire";
       
   amap[ "Arousal (ARO Limb)" ] = "arousal_plm";

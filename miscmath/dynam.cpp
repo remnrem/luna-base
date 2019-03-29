@@ -107,7 +107,9 @@ void dynam_report( const std::vector<double> & y_ ,
 
   dynam_t d( z , t01 );
 
-  if ( d.size() < 2 ) return;
+  // requires at least 10 epochs 
+
+  if ( d.size() < 10 ) return;
   
   writer.level( "UNSTRAT" , "EDYNAM" );
   
@@ -173,59 +175,64 @@ void dynam_report( const std::vector<double> & y_ ,
 
   if ( gdynam.stratify() < 2 ) return;
   
-  // within-group reports
-  {
-    
-    writer.level( "BETWEEN" , "EDYNAM" );
-    
-    double slope, rsq, h1, h2, h3;
-    
-    gdynam.between.linear_trend( &slope, &rsq );
-    //    gdynam.between.hjorth( &h1, &h2, &h3 );
+  // between-group report : requires at least 3 groups
 
-    writer.value( "N" , gdynam.between.size() );
-    writer.value( "SLOPE" , slope );
-    writer.value( "RSQ" , rsq );
-
-    // these won't be meaningful typically...
-    //     writer.value( "H1" , h1 );
-    //     writer.value( "H2" , h2 );
-    //     writer.value( "H3" , h3 );
-    
-    writer.unlevel( "BETWEEN" );
-    
-  }
-
+  if ( gdynam.stratify() >= 3 ) 
+    {
+      
+      writer.level( "BETWEEN" , "EDYNAM" );
+      
+      double slope, rsq, h1, h2, h3;
+      
+      gdynam.between.linear_trend( &slope, &rsq );
+      //    gdynam.between.hjorth( &h1, &h2, &h3 );
+      
+      writer.value( "N" , gdynam.between.size() );
+      writer.value( "SLOPE" , slope );
+      writer.value( "RSQ" , rsq );
+      
+      // these won't be meaningful typically...
+      //     writer.value( "H1" , h1 );
+      //     writer.value( "H2" , h2 );
+      //     writer.value( "H3" , h3 );
+      
+      writer.unlevel( "BETWEEN" );
+      
+    }
+  
   
   std::map<std::string,int>::const_iterator gg = glabel.begin();
   while ( gg != glabel.end() )
     {
       
       if ( gg->first == "." || gg->first == "" ) { ++gg; continue; }
-
-      writer.level( gg->first , "EDYNAM" );
       
       dynam_t & d = gdynam.within[ gg->second ];
-	
-      double mean, var, slope, rsq, h1, h2, h3;
       
-      d.mean_variance( &mean , &var );
-      d.linear_trend( &slope, &rsq );
-      d.hjorth( &h1, &h2, &h3 );
-
-      writer.value( "N" , d.size() );
-      writer.value( "MEAN" , mean );
-      writer.value( "VAR" , var );
-      writer.value( "SLOPE" , slope );
-      writer.value( "RSQ" , rsq );
-      writer.value( "H1" , h1 );
-      writer.value( "H2" , h2 );
-      writer.value( "H3" , h3 );
-      
-      writer.unlevel( "EDYNAM" );
+      if ( d.size() >= 10 ) 
+        {
+	  
+	  writer.level( gg->first , "EDYNAM" );
+	  
+	  double mean, var, slope, rsq, h1, h2, h3;
+	  
+	  d.mean_variance( &mean , &var );
+	  d.linear_trend( &slope, &rsq );
+	  d.hjorth( &h1, &h2, &h3 );
+	  
+	  writer.value( "N" , d.size() );
+	  writer.value( "MEAN" , mean );
+	  writer.value( "VAR" , var );
+	  writer.value( "SLOPE" , slope );
+	  writer.value( "RSQ" , rsq );
+	  writer.value( "H1" , h1 );
+	  writer.value( "H2" , h2 );
+	  writer.value( "H3" , h3 );
+	  
+	  writer.unlevel( "EDYNAM" );
+	}
       ++gg;
     }
-
   
 }
 
