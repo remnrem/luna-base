@@ -137,6 +137,7 @@ struct hypnogram_t
   std::map<int,double> nremc_nrem_duration;
   std::map<int,double> nremc_rem_duration;
   std::map<int,int> nremc_start_epoch;
+  std::map<int,int> nremc_epoch_duration;
   
   // Summarize epochs w.r.t cycles  
 

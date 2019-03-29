@@ -157,11 +157,13 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
     {
       
       double f = frqs[fi];
+      
+      logger << "  assessing " << f << " Hz ...";
 
       writer.level( f , globals::freq_strat );
       
-      // get CWT (7 cycles, fixed for now...)
-      std::vector<double> c = cwt( x , fs , f , 7 );
+      // get CWT (12 cycles, fixed for now...)
+      std::vector<double> c = cwt( x , fs , f , 12 );
       
       // get intervals
       
@@ -264,7 +266,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	}
     }
   
-  logger << "including " << ( included_seconds / all_seconds ) * 100 << "% of " << all_seconds << "\n";
+  logger << "  including " << ( included_seconds / all_seconds ) * 100 << "% of " << all_seconds << " seconds\n";
   
   // normalize
   std::vector<double> x( n , 0 );

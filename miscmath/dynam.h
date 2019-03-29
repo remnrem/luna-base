@@ -26,7 +26,7 @@
 #include <vector>
 #include <map>
 #include <set>
-
+#include <string>
 
 // wrapper
 void dynam_report( const std::vector<double> & y , 

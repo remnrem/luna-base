@@ -47,13 +47,41 @@ void dynam_report_with_log( const std::vector<double> & y ,
 
 
 
-void dynam_report( const std::vector<double> & y , 
-		   const std::vector<double> & t , 
-		   const std::vector<std::string> * g )
+void dynam_report( const std::vector<double> & y_ , 
+		   const std::vector<double> & t_ , 
+		   const std::vector<std::string> * g_ )
 {
   
-  
+
+  //
+  // Remove 'y' outliers
+  //
+  const double th = 3;
+
+  std::vector<double> z0 = MiscMath::Z( y_ );
+
+  std::vector<double> y, t;
+  std::vector<std::string> g;
+
+  for (int i=0;i<y_.size();i++)
+    {
+      if ( z0[i] >= -th && z0[i] <= th ) 
+	{
+	  y.push_back( y_[i] );
+	  t.push_back( t_[i] );
+	  if ( g_ != NULL ) g.push_back( (*g_)[i] ); 
+	}
+    }
+
+  writer.value( "NOUT" , (int)(y_.size() - y.size()) );
+
+
+  if ( t.size() == 0 ) return;
+
+  //
   // scale 't' to be 0..1
+  //
+
   double mnt = t[0] , mxt = t[0];
 
   for (int i=1;i<t.size();i++)
@@ -65,12 +93,23 @@ void dynam_report( const std::vector<double> & y ,
   std::vector<double> t01( t.size() );
   for (int i=0;i<t.size();i++)
     t01[i] = ( t[i] - mnt ) / ( mxt - mnt );
+
+
+
+  //
+  // Scale 'y' to be N(0,1)
+  //
+
+  std::vector<double> z = MiscMath::Z( y );
   
+
   // create actual dynam_t object
 
-  dynam_t d( y , t01 );
+  dynam_t d( z , t01 );
 
-  if ( d.size() < 2 ) return;
+  // requires at least 10 epochs 
+
+  if ( d.size() < 10 ) return;
   
   writer.level( "UNSTRAT" , "EDYNAM" );
   
@@ -79,6 +118,7 @@ void dynam_report( const std::vector<double> & y ,
   d.linear_trend( &slope, &rsq );
   d.hjorth( &h1, &h2, &h3 );
   
+  writer.value( "N" , d.size() );
   writer.value( "SLOPE" , slope );
   writer.value( "RSQ" , rsq );
   writer.value( "H1" , h1 );
@@ -91,7 +131,8 @@ void dynam_report( const std::vector<double> & y ,
   // all done if no additional group-specification (e.g. sleep cycle)
   //
 
-  if ( g == NULL ) return;
+  if ( g_ == NULL ) return;
+
 
   //
   // make integer representaiton of group label
@@ -103,80 +144,95 @@ void dynam_report( const std::vector<double> & y ,
   
   glabel[ "" ] = 0;
   glabel[ "." ] = 0;
+
+  int cnt = 1;
   
-  std::vector<int> gint( g->size() );
+  std::vector<int> gint( g.size() );
   
-  for (int i=0; g->size(); i++) 
+  for (int i=0; i < g.size(); i++) 
     {
-      std::map<std::string,int>::iterator ii =  glabel.find( (*g)[i] );
+      std::map<std::string,int>::iterator ii =  glabel.find( g[i] );
       
       if ( ii == glabel.end() )
 	{
-	  int t = glabel.size();
-	  glabel[ (*g)[i] ] = t;
+	  glabel[ g[i] ] = cnt;
+	  ++cnt;
 	}
-
-      gint[i] = glabel[ (*g)[i] ];
-  
+      
+      gint[i] = glabel[ g[i] ];
+      
     }
-  
+
 			       
   //
   // now we want to get within and between group (i.e. group-mean) based results
   //
   
-  gdynam_t gdynam( gint , y , t );
+  gdynam_t gdynam( gint , z , t );
 
 
   // assess strata and create the within-group dynam_t objects
 
   if ( gdynam.stratify() < 2 ) return;
   
-  // within-group reports
-  {
-    
-    writer.level( "BETWEEN" , "EDYNAM" );
-    
-    double slope, rsq, h1, h2, h3;
-    
-    gdynam.between.linear_trend( &slope, &rsq );
-    gdynam.between.hjorth( &h1, &h2, &h3 );
-    
-    writer.value( "SLOPE" , slope );
-    writer.value( "RSQ" , rsq );
-    writer.value( "H1" , h1 );
-    writer.value( "H2" , h2 );
-    writer.value( "H3" , h3 );
-    
-    writer.unlevel( "BETWEEN" );
-    
-  }
+  // between-group report : requires at least 3 groups
 
+  if ( gdynam.stratify() >= 3 ) 
+    {
+      
+      writer.level( "BETWEEN" , "EDYNAM" );
+      
+      double slope, rsq, h1, h2, h3;
+      
+      gdynam.between.linear_trend( &slope, &rsq );
+      //    gdynam.between.hjorth( &h1, &h2, &h3 );
+      
+      writer.value( "N" , gdynam.between.size() );
+      writer.value( "SLOPE" , slope );
+      writer.value( "RSQ" , rsq );
+      
+      // these won't be meaningful typically...
+      //     writer.value( "H1" , h1 );
+      //     writer.value( "H2" , h2 );
+      //     writer.value( "H3" , h3 );
+      
+      writer.unlevel( "BETWEEN" );
+      
+    }
+  
   
   std::map<std::string,int>::const_iterator gg = glabel.begin();
   while ( gg != glabel.end() )
     {
-
-      writer.level( gg->first , "EDYNAM" );
+      
+      if ( gg->first == "." || gg->first == "" ) { ++gg; continue; }
       
       dynam_t & d = gdynam.within[ gg->second ];
-	
-      double mean, var, slope, rsq, h1, h2, h3;
       
-      d.mean_variance( &mean , &var );
-      d.linear_trend( &slope, &rsq );
-      d.hjorth( &h1, &h2, &h3 );
-      
-      writer.value( "SLOPE" , slope );
-      writer.value( "RSQ" , rsq );
-      writer.value( "H1" , h1 );
-      writer.value( "H2" , h2 );
-      writer.value( "H3" , h3 );
-      
-      writer.unlevel( "EDYNAM" );
+      if ( d.size() >= 10 ) 
+        {
+	  
+	  writer.level( gg->first , "EDYNAM" );
+	  
+	  double mean, var, slope, rsq, h1, h2, h3;
+	  
+	  d.mean_variance( &mean , &var );
+	  d.linear_trend( &slope, &rsq );
+	  d.hjorth( &h1, &h2, &h3 );
+	  
+	  writer.value( "N" , d.size() );
+	  writer.value( "MEAN" , mean );
+	  writer.value( "VAR" , var );
+	  writer.value( "SLOPE" , slope );
+	  writer.value( "RSQ" , rsq );
+	  writer.value( "H1" , h1 );
+	  writer.value( "H2" , h2 );
+	  writer.value( "H3" , h3 );
+	  
+	  writer.unlevel( "EDYNAM" );
+	}
       ++gg;
     }
-
   
 }
 
@@ -310,6 +366,7 @@ gdynam_t::gdynam_t( const std::vector<int> & g , const std::vector<double> & y ,
 int gdynam_t::stratify()
 {
 
+  // maps strata to epochs
   gmap.clear();
 
   for (int i=0;i<g.size();i++) 
@@ -323,14 +380,15 @@ int gdynam_t::stratify()
   const int ng = gmap.size();
   
   if ( ng < 2 ) return ng;
-  
+
+
   // get means for a between-strata model
   
   between.clear();
   
-  // create a dynam_t for each strata
+  // create a dynam_t for each strata (which are numbered 1..ng)
   
-  for (int i=0;i<ng;i++)
+  for (int i=1;i<=ng;i++)
     {
       std::vector<double> yy, tt;
       std::set<int>::const_iterator ii = gmap[i].begin();

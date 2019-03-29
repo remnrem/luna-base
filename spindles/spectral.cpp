@@ -383,7 +383,8 @@ annot_t * spectral_power( edf_t & edf ,
 	       freqs = pwelch.freq;
 	     }
 	     
-       
+
+	       
 	   // std::cout << "freqs.size() = " << freqs[s].size() << "\n";
 	   // std::cout << "pwelch.size() = " << pwelch.psd.size() << "\n";
 	   
@@ -391,8 +392,9 @@ annot_t * spectral_power( edf_t & edf ,
 	     {
 	       
 	       // accumulate for entire night means
-	       for (int f=0;f<pwelch.psd.size();f++)
-		 track_freq[ f ].push_back( pwelch.psd[f] );
+	       if ( show_spectrum )
+		 for (int f=0;f<pwelch.psd.size();f++)
+		   track_freq[ f ].push_back( pwelch.psd[f] );
 	       
 	       // epoch-level output?
 	       
@@ -515,24 +517,93 @@ annot_t * spectral_power( edf_t & edf ,
       if ( calc_dynamics )
 	{
 	  
-	  // do we have a __cycle annotation?
-	  bool has_cycles = edf.timeline.annotations.find( "__cycles" );
+	  // do we have any _CYCLE epoch-annotations ?
 	  
+	  bool has_cycles = edf.timeline.epoch_annotation( "_NREMC_1" );
+	  
+	  std::vector<std::string> cycle;
+	  
+	  if ( has_cycles )
+	    {
+	      
+	      for (int e=0;e<epochs.size(); e++)
+		{
+		  
+		  std::string c = "."; // null
+		  
+		  // nb. uses current epoch encoding
+		  // take up to 10 cycles
+		  if      ( edf.timeline.epoch_annotation( "_NREMC_1" , epochs[e] ) ) c = "C1";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_2" , epochs[e] ) ) c = "C2";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_3" , epochs[e] ) ) c = "C3";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_4" , epochs[e] ) ) c = "C4";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_5" , epochs[e] ) ) c = "C5";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_6" , epochs[e] ) ) c = "C6";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_7" , epochs[e] ) ) c = "C7";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_8" , epochs[e] ) ) c = "C8";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_9" , epochs[e] ) ) c = "C9";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_10" , epochs[e] ) ) c = "C10";
+		  
+		  cycle.push_back( c );
+		  
+		}
+	    }
+	  
+
+	  //
+	  // band power 
+	  //
+
 	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();
 	  
 	  while ( ii != track_band.end() )
 	    {	      
 	      writer.level( globals::band( ii->first ) , globals::band_strat );
 	      
-	      dynam_report_with_log( ii->second , epochs );
+	      if ( has_cycles )
+		dynam_report_with_log( ii->second , epochs , &cycle );
+	      else
+		dynam_report_with_log( ii->second , epochs );
 	      
 	      ++ii;
 	    }
-
+	  
 	  writer.unlevel( globals::band_strat ); 
+
+
+	  //
+	  // full spectra?
+	  //
+	  
+	  if ( show_spectrum )
+	    {
+
+	      
+	      std::map<int,std::vector<double> >::const_iterator ii = track_freq.begin();
+	      
+	      while ( ii != track_freq.end() )
+		{
+		  
+		  if ( freqs[ ii->first ] > max_power )  { ++ii; continue; } 
+		  
+		  writer.level( freqs[ ii->first ] , globals::freq_strat );
+		  
+		  if ( has_cycles )
+		    dynam_report_with_log( ii->second , epochs , &cycle );
+		  else
+		    dynam_report_with_log( ii->second , epochs );
+		  
+		  ++ii;
+		  
+		}
+	      
+	      writer.unlevel( globals::freq_strat );
+	      
+	    }
 	  
 	}
-
+      
+      
 
       if ( calc_mse )
 	{
