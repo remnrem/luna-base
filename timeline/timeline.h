@@ -318,7 +318,7 @@ struct timeline_t
   void apply_empty_epoch_mask( const std::string & , bool include );
 
   // eval-based mask
-  void apply_eval_mask( const std::string & , int mask_mode );
+  void apply_eval_mask( const std::string & , int mask_mode , const bool verbose = false );
   
   // other masks : randomly select up to 'n' epochs from the current set 
   void select_epoch_randomly( int n );

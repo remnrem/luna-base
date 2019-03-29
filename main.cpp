@@ -65,11 +65,18 @@ int main(int argc , char ** argv )
       proc_dummy( p ); 
       exit(0); 
     } 
-  else if ( argc == 2 && strcmp( argv[1] , "--eval" ) == 0 ) 
+  else if ( argc == 2 && strcmp( argv[1] , "--eval" ) == 0 ) 	   
     {
       // simple test evaluation of expressions from the command line
       global.api();
-      proc_eval_tester(); 
+      proc_eval_tester( false ); 
+      exit(0);       
+    }
+  else if ( argc == 2 && strcmp( argv[1] , "--eval-verbose" ) == 0 ) 
+    {
+      // as above, but w/ verbose output
+      global.api();
+      proc_eval_tester( true ); 
       exit(0);       
     }
   else if ( argc == 3 && strcmp( argv[1] , "--validate" ) == 0 ) 
@@ -843,7 +850,7 @@ void process_edfs( cmd_t & cmd )
 
 // EVAL expresions
 
-void proc_eval_tester()
+void proc_eval_tester( const bool verbose )
 {
 
   // read a single line
@@ -857,8 +864,8 @@ void proc_eval_tester()
   Eval tok( expr );
 
   tok.bind( inputs , &out );
-
-  bool is_valid = tok.evaluate();
+  
+  bool is_valid = tok.evaluate( verbose );
   
   bool retval;
   

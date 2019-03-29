@@ -132,13 +132,14 @@ bool Eval::get_token( std::string & input ,  Token & tok )
       // looks like an operator
       // if potentially a two-char operator, look for 2nd char
       
-      if ( c == "%" && input.substr(1,1) == "%" ) c = "%%";
-      if ( c == "<" && input.substr(1,1) == "=" ) c = "<=";
-      if ( c == ">" && input.substr(1,1) == "=" ) c = ">=";
-      if ( c == "&" && input.substr(1,1) == "&" ) c = "&&";
-      if ( c == "|" && input.substr(1,1) == "|" ) c = "||";
-      if ( c == "!" && input.substr(1,1) == "=" ) c = "!=";
-      if ( c == "=" && input.substr(1,1) == "=" ) c = "==";
+      if      ( c == "%" && input.substr(1,1) == "%" ) c = "%%";
+      else if ( c == "<" && input.substr(1,1) == "=" ) c = "<=";
+      else if ( c == ">" && input.substr(1,1) == "=" ) c = ">=";
+      else if ( c == "&" && input.substr(1,1) == "&" ) c = "&&";
+      else if ( c == "|" && input.substr(1,1) == "|" ) c = "||";
+      else if ( c == "!" && input.substr(1,1) == "=" ) c = "!=";
+      else if ( c == "=" && input.substr(1,1) == "=" ) c = "==";
+      else if ( c == "=" && input.substr(1,1) == "~" ) c = "=~";
       
       tok.oper( Token::tok_map[ c ] ); 
       
@@ -318,6 +319,7 @@ int Eval::op_preced( const Token & c )
     case Token::GREATER_THAN_OR_EQUAL_OPERATOR : return 6;
       
     case Token::EQUAL_OPERATOR : 
+    case Token::HAS_OPERATOR :
     case Token::UNEQUAL_OPERATOR : return 5;
 
     case Token::AND_OPERATOR : return 4;
@@ -350,6 +352,7 @@ bool Eval::op_left_assoc(const Token & tok )
     case Token::MOD_OPERATOR :
     case Token::ADD_OPERATOR :
     case Token::EQUAL_OPERATOR :
+    case Token::HAS_OPERATOR :
     case Token::AND_OPERATOR :
     case Token::OR_OPERATOR :
     case Token::ARG_SEPARATOR : 
@@ -387,6 +390,7 @@ unsigned int Eval::op_arg_count( const Token & tok )
     case Token::GREATER_THAN_OPERATOR : 
     case Token::GREATER_THAN_OR_EQUAL_OPERATOR : 
     case Token::EQUAL_OPERATOR : 
+    case Token::HAS_OPERATOR : 
     case Token::UNEQUAL_OPERATOR : 
     case Token::AND_OPERATOR : 
     case Token::OR_OPERATOR : return 2;
@@ -640,7 +644,15 @@ bool Eval::execute( const std::vector<Token> & input )
   // redundant, but keep track of stack size here also
   unsigned int sl = 0;
   
-  
+  if ( verbose ) 
+    {
+      std::cout << "-----------------------------------------------------------\n";
+      std::cout << "evaluating " << input.size() << " tokens\n";  
+      for (int i=0;i<input.size();i++)
+	std::cout << " token " << i << "\t" << input[i] << "\n";
+      std::cout << "\n";
+    }
+
   // While there are input tokens left
   
   for (unsigned int i = 0 ; i < input.size() ; i++ )
@@ -649,28 +661,31 @@ bool Eval::execute( const std::vector<Token> & input )
       // Read the next token from input.
       
       Token c = input[i];
+
+      if ( verbose ) 
+	std::cout << " considering token " << c << "\n";
       
       // If the token is a value or identifier
       
       if ( c.is_ident() )
 	{
+	  if ( verbose ) 
+	    std::cout << "  pushing onto stack\n";
 	  
-	  // Push it onto the stack.
-	  
+	  // Push it onto the stack.	  
 	  stack.push_back( c );
 	  ++sl;
         }
       
       // Otherwise, the token is an operator
       // (operator here includes both operators, and functions).
-	
+      
       else if ( c.is_operator() || c.is_function() )
 	{
-
+	  
 	  // It is known a priori that the operator takes n arguments.
 	  
 	  int nargs = op_arg_count(c);
-	  
 	  
 	  // If there are fewer than n values on the stack
 	  
@@ -689,7 +704,7 @@ bool Eval::execute( const std::vector<Token> & input )
 
 	  if ( c.is_function() ) 
 	    {
-	      
+	  
 	      std::vector<Token> args;
 	      
 	      // for fixed 'nargs' functions, just count them off 
@@ -708,6 +723,9 @@ bool Eval::execute( const std::vector<Token> & input )
 		  sl--;
 		  args.push_back(sc);
 		  --nargs;
+
+		  if ( verbose )
+		    std::cout << "  popping argument off stack: " << sc << "\n";
 		}
 	      
 
@@ -762,41 +780,58 @@ bool Eval::execute( const std::vector<Token> & input )
 	      else if ( c.name() == "int_func" )  res = func.fn_vec_new_int( args );
 	      else if ( c.name() == "txt_func" )  res = func.fn_vec_new_str( args );     
 	      else if ( c.name() == "bool_func" ) res = func.fn_vec_new_bool( args ); 
+	      else if ( c.name() == "c_func" )    res = func.fn_vec_cat( args );
 	      
 	      else if ( c.name() == "any" )       res = func.fn_vec_any( args[0] );	      
 	      else if ( c.name() == "all" )       res = func.fn_vec_all( args[0] );	      
-	      else if ( c.name() == "contains" )  res = func.fn_vec_any( args[1] , args[0] );	      
-	      else if ( c.name() == "countif" )   res = func.fn_vec_count( args[1] , args[0] );	      
+	      else if ( c.name() == "contains" )  res = func.fn_vec_any( args[1] , args[0] );
+	      else if ( c.name() == "countif" )   res = func.fn_vec_count( args[1] , args[0] );
 	      
-	      else if ( c.name() == "c" )         res = func.fn_vec_cat( args[1] , args[0] );	      
+
 	      	    	      
 	      else Helper::halt( "did not recognize function " + c.name() );
+
+	      
 	    }
 	  else
 	    {
 	      
 	      if ( nargs == 1 )  // unary operator
 		{
+
 		  sc = stack.back();
 		  stack.pop_back(); sl--; 
 		  res = c.operands( sc );
+
+		  if ( verbose )
+		    {
+		      std::cout << "  popping 1 value off stack, " << sc << "\n";		      
+		    }
+		  
 		}
 	      else // binary operator
 		{
+		  
 		  Token t0 = stack.back();
 		  stack.pop_back(); sl--;
 		  
 		  sc = stack.back();
 		  stack.pop_back(); sl--;		    
 		  
+		  if ( verbose )
+		    {
+		      std::cout << "  popping 2 values off stack, " << t0 << " and " << sc << "\n";
+		    }
+
 		  // For assignment (that impacts meta-information)
 		  // need to call a function also
 
 		  if ( c.is_assignment() ) 
 		    {
 		      
-		      if ( no_assignments ) Helper::halt( "no A = B assigments allowed in this expression" );
-
+		      if ( no_assignments ) 
+			Helper::halt( "no A = B assigments allowed in this expression" );
+		      
 		      res = func.fn_assign( sc, t0 );  // res==T
 
 		      // and bind new value if needed
@@ -804,16 +839,28 @@ bool Eval::execute( const std::vector<Token> & input )
 
 		    }		  
 		  else
-		    res = c.operands( t0 , sc );		    
-		  
+		    res = c.operands( t0 , sc );
+		  		  
 		}
 	    }
-	
+	  
+	  if ( verbose ) 
+	    std::cout << "  pushing result on stack, " << res << "\n";
+
 	  // Push the returned results, if any, back onto the stack.
 	  stack.push_back( res );
 	  ++sl;
         }
-      
+
+
+      if ( verbose )
+	{
+	  std::cout << " current stack size n=" << stack.size() << "\n";
+	  for (int ss = 0 ; ss < stack.size() ; ss++ )
+	    std::cout << "  " << stack[ss] << "\n";
+	  std::cout << "\n\n";
+	}
+
     }
 
 
@@ -828,9 +875,16 @@ bool Eval::execute( const std::vector<Token> & input )
   
   if ( sl == 1 ) 
     {
+
       sc = stack.back(); 
       stack.pop_back();
       sl--;
+
+      if ( verbose )
+	{
+	  std::cout << "final value " << sc << "\n";
+	  std::cout << "ALL DONE.\n\n";
+	}
       
       // store result in primary slot, e
       e = sc;
@@ -1169,10 +1223,12 @@ void Eval::bind( const Token * ntok )
     }
 }
 
-bool Eval::evaluate()
+bool Eval::evaluate( const bool v )
 {
+  verbose = v;
   for (int i=0; i<neval; i++)
-    if ( is_valid ) is_valid = execute( output[i] );
+    if ( is_valid ) 
+      is_valid = execute( output[i] );
   return is_valid;
 }
 
@@ -1303,7 +1359,8 @@ bool Eval::expand_vargs( std::string * s )
   fname.push_back("int(");
   fname.push_back("txt(");
   fname.push_back("bool(");
-  
+  fname.push_back("c(");
+
   for (int f = 0 ; f < fname.size() ; f++)
     while ( 1 ) 
       {

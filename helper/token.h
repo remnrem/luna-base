@@ -97,6 +97,7 @@ class Token {
 		  OR_OPERATOR , 
 		  NOT_OPERATOR , 
 		  EQUAL_OPERATOR , 
+		  HAS_OPERATOR , 
 		  UNEQUAL_OPERATOR , 
 		  GREATER_THAN_OPERATOR , 
 		  LESS_THAN_OPERATOR ,
@@ -158,6 +159,8 @@ class Token {
   Token operator==(const Token & rhs) const;
   Token operator!=(const Token & rhs) const;
 
+  Token contains( const Token & rhs) const;
+  
   Token operator+(const Token & rhs) const;
   Token operator-(const Token & rhs) const;
   Token operator*(const Token & rhs) const;
@@ -291,12 +294,14 @@ struct  TokenFunctions{
   Token fn_vec_new_int( const std::vector<Token> & tok ) const;
   Token fn_vec_new_str( const std::vector<Token> & tok ) const;
   Token fn_vec_new_bool( const std::vector<Token> & tok ) const;
+  Token fn_vec_cat( const std::vector<Token> & tok ) const;
+  Token fn_vec_cat( const Token & tok1 , const Token & tok2 ) const;
   
   Token fn_vec_any( const Token & tok1 ) const; // versus T
   Token fn_vec_all( const Token & tok1 ) const; // versus T
   Token fn_vec_any( const Token & tok1 , const Token & tok2 ) const; // vresus 'tok2'
   Token fn_vec_count( const Token & tok1 , const Token & tok2 ) const;
-  Token fn_vec_cat( const Token & tok1 , const Token & tok2 ) const;
+
 
   void attach( instance_t * m ); 
   void attach( instance_t * m , instance_t * m2 , const std::set<std::string> * ); 

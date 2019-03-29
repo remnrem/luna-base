@@ -2230,7 +2230,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 
 
 // eval-based mask
-void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
+void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , const bool verbose )
 {
 
   // mask_mode   0   mask
@@ -2342,18 +2342,12 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
 
       tok.bind( inputs , &dummy );
 
-      bool is_valid = tok.evaluate();
+      bool is_valid = tok.evaluate( verbose );
       
       bool matches;
       
       if ( ! tok.value( matches ) ) is_valid = false;
 
-
-      //
-      // A match must be a valid value
-      //
-      
-      if ( ! is_valid ) matches = false;
 
 
       //
@@ -2364,6 +2358,13 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
             
       
       //
+      // A match must be a valid value
+      //
+      
+      if ( ! is_valid ) matches = false;
+
+
+      //
       // apply mask (or not)
       //
       
@@ -2371,29 +2372,38 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode )
 
       acc_valid += is_valid;
       
-      if ( acc_valid ) acc_retval += matches;
+      //
+      // Only for valud results
+      //
 
+      if ( is_valid ) 	
+	{
+	  acc_retval += matches;
       
-      // count basic matches
+	  
+	  // count basic matches
+	  
+	  if ( matches ) ++cnt_basic_match;
+      
+	  // set new potential mask, depending on match_mode
+	  
+	  bool new_mask = mask[e];
+	  
+	  if      ( mask_mode == 0 ) new_mask = matches;   // mask
+	  else if ( mask_mode == 1 ) new_mask = !matches;  // unmask
+	  else if ( mask_mode == 2 ) new_mask = matches ;  // mask/unmask
+	  
+	  int mc = set_epoch_mask( e , new_mask );
+	  
+	  if      ( mc == +1 ) ++cnt_mask_set;
+	  else if ( mc == -1 ) ++cnt_mask_unset;
+	  else                 ++cnt_unchanged;
+	}
+      else ++cnt_unchanged;
 
-      if ( matches ) ++cnt_basic_match;
-      
-      // set new potential mask, depending on match_mode
-      
-      bool new_mask = mask[e];
+      // count current mask state
 
-      if      ( mask_mode == 0 ) new_mask = matches;   // mask
-      else if ( mask_mode == 1 ) new_mask = !matches;  // unmask
-      else if ( mask_mode == 2 ) new_mask = matches ;  // mask/unmask
-      
-      int mc = set_epoch_mask( e , new_mask );
-      
-      if      ( mc == +1 ) ++cnt_mask_set;
-      else if ( mc == -1 ) ++cnt_mask_unset;
-      else                 ++cnt_unchanged;
-      
       if ( !mask[e] ) ++cnt_now_unmasked;
-      
       
       // next epoch
     } 

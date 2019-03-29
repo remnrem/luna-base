@@ -162,6 +162,7 @@ void Token::init()
   tok_map[ "|" ]  = OR_OPERATOR;
   tok_map[ "=" ]  = ASSIGNMENT_OPERATOR;
   tok_map[ "==" ] = EQUAL_OPERATOR;
+  tok_map[ "=~" ] = HAS_OPERATOR; // like equal but vector =~ scalar returns scalar, any( lhs == rhs )
   tok_map[ "!=" ] = UNEQUAL_OPERATOR;
   tok_map[ "!" ]  = NOT_OPERATOR;
   tok_map[ "~" ]  = NOT_OPERATOR;
@@ -217,7 +218,7 @@ void Token::init()
   fn_map[ "int_func" ]    = -1;  // int( 1,0,1 )  ints
   fn_map[ "txt_func" ]    = -1;  // txt( '1','0','1' )  strings
   fn_map[ "bool_func" ]   = -1;  // bool( 1,0,1 )  bools
-  
+  fn_map[ "c_func" ]      = -1;  // c( expr1, expr2 , expr3 ... )         concatenate similar types   
 
   // misc
 
@@ -225,7 +226,7 @@ void Token::init()
   fn_map[ "all" ]      = 1;   // all( expr1 )              returns BOOL , countif(x,T) == size(x)
   fn_map[ "contains" ] = 2;   // contains( expr1 , expr )  returns BOOL , countif(x,y)>0
   fn_map[ "countif" ]  = 2;   // countif( expr1, expr2 )   returns INT,  for # of elements in expr1 that match expr2
-  fn_map[ "c" ]        = 2;   // c( expr1, expr2 )         concatenate similar types 
+
 
   
 }
@@ -326,6 +327,7 @@ bool Token::is_operator() const
   // note -- treat parenthesis separately
 
   return ttype == EQUAL_OPERATOR ||
+    ttype == HAS_OPERATOR ||
     ttype == UNEQUAL_OPERATOR ||
     ttype == ASSIGNMENT_OPERATOR ||
     ttype == NOT_OPERATOR ||
@@ -642,6 +644,118 @@ Token Token::operator!=(const Token & rhs ) const
 }
 
 
+Token Token::contains( const Token & rhs) const 
+{
+
+  // first test for two vectors (of any length)
+  // otherwise, we can use existing operator==() code to test for scalar/vector and scalar/scalar
+  
+  if ( is_vector() && rhs.is_vector() )
+    {
+	  
+      const int sz1 = size();
+      const int sz2 = rhs.size();
+      
+      if ( rhs.is_int_vector() ) 
+	{	  
+	  if      ( is_int_vector() )    
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j<sz2; j++) if ( ivec[i] == rhs.ivec[j] ) return true;
+	      return false;
+	    }
+	  
+	  else if ( is_float_vector() )
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j<sz2; j++) if ( fvec[i] == rhs.ivec[j] ) return true; 
+	      return false;
+	    }
+	  else if ( is_string_vector() ) return Token();
+	  else if ( is_bool_vector() )   
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j<sz2; j++) if ( bvec[i] == rhs.ivec[j] ) return true;
+	      return false;
+	    }
+	  return Token();
+	}
+      else if ( rhs.is_float_vector() )
+	{
+	  if      ( is_int_vector() )    
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j<sz2; j++) if ( ivec[i] == rhs.fvec[j] ) return true;
+	      return false;
+	    }
+	  else if ( is_float_vector() )  
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j<sz2; j++) if ( fvec[i] == rhs.fvec[j] ) return true;
+	      return false;
+	    }
+	  else if ( is_string_vector() ) return Token();
+	  else if ( is_bool_vector() )  
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j< sz2; j++) if ( bvec[i] == rhs.fvec[j] ) return true;
+	      return false;
+	    }
+	  return Token( );	 
+	}
+      else if ( rhs.is_bool_vector() )
+	{
+	  if      ( is_int_vector() )    
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j<sz2; j++) if ( ivec[i] == rhs.bvec[j] ) return true;
+	      return false;
+	    }
+	  else if ( is_float_vector() )  
+	    {
+	      for (int i=0; i<sz1; i++)  for (int j=0; j<sz2; j++) if ( fvec[i] == rhs.bvec[j] ) return true;
+	      return false;
+	    }
+	  else if ( is_string_vector() ) return Token();
+	  else if ( is_bool_vector() )   
+	    {
+	      for (int i=0; i<sz1; i++)  for (int j=0; j<sz2; j++) if ( bvec[i] == rhs.bvec[j] ) return true;
+	      return false;
+	    }
+	  return Token();
+	}	  
+      else if ( rhs.is_string_vector() )
+	{
+	  if ( is_string_vector() )  
+	    {
+	      for (int i=0; i<sz1; i++) for (int j=0; j< sz2; j++) if ( svec[i] == rhs.svec[j] ) return true;
+	      return false;
+	    }
+	  else return Token();
+	  return Token();
+	}	  	  
+      else
+	return Token();
+    }
+  
+  //
+  // Otherwise, handle cases involving at least one scalar
+  //
+
+  
+  if ( ! is_set() ) return false;
+
+  if ( ! rhs.is_set() ) return false;
+  
+  Token res = *this == rhs;
+
+  if ( ! res.is_set() ) return false;
+
+  if ( res.is_scalar() ) return res;
+
+  if ( ! res.is_bool_vector() ) 
+    Helper::halt("internal error");
+  
+  for (int i=0;i<res.size();i++) 
+    if ( res.bvec[i] ) return Token(true);
+  
+  return Token(false);
+  
+}
+
 Token Token::operator==(const Token & rhs) const
 {
 
@@ -649,49 +763,58 @@ Token Token::operator==(const Token & rhs) const
 
   if ( is_vector() && rhs.is_vector() ) 
     {
-      if ( size() != rhs.size() ) return Token();
 
-      const int sz = size();
-      std::vector<bool> ans( sz );      
+      //
+      // element-wise comparisons, if sizes match
+      //
+      
+      if ( size() == rhs.size() ) 
+	{
 
-      if ( rhs.is_int_vector() ) 
-	{	  
-	  if      ( is_int_vector() )    for (int i=0; i<sz; i++) ans[i] = ivec[i] == rhs.ivec[i];
-	  else if ( is_float_vector() )  for (int i=0; i<sz; i++) ans[i] = fvec[i] == rhs.ivec[i]; 
-	  else if ( is_string_vector() ) return Token();
-	  else if ( is_bool_vector() )   for (int i=0; i<sz; i++) ans[i] = bvec[i] == rhs.ivec[i]; 
-	  return Token( ans );
+	  const int sz = size();
+	  std::vector<bool> ans( sz );      
+	  
+	  if ( rhs.is_int_vector() ) 
+	    {	  
+	      if      ( is_int_vector() )    for (int i=0; i<sz; i++) ans[i] = ivec[i] == rhs.ivec[i];
+	      else if ( is_float_vector() )  for (int i=0; i<sz; i++) ans[i] = fvec[i] == rhs.ivec[i]; 
+	      else if ( is_string_vector() ) return Token();
+	      else if ( is_bool_vector() )   for (int i=0; i<sz; i++) ans[i] = bvec[i] == rhs.ivec[i]; 
+	      return Token( ans );
+	    }
+	  else if ( rhs.is_float_vector() )
+	    {
+	      if      ( is_int_vector() )    for (int i=0; i<sz; i++) ans[i] = ivec[i] == rhs.fvec[i];
+	      else if ( is_float_vector() )  for (int i=0; i<sz; i++) ans[i] = fvec[i] == rhs.fvec[i]; 
+	      else if ( is_string_vector() ) return Token();
+	      else if ( is_bool_vector() )   for (int i=0; i<sz; i++) ans[i] = bvec[i] == rhs.fvec[i]; 
+	      return Token( ans );	 
+	    }
+	  else if ( rhs.is_bool_vector() )
+	    {
+	      if      ( is_int_vector() )    for (int i=0; i<sz; i++) ans[i] = ivec[i] == rhs.bvec[i];
+	      else if ( is_float_vector() )  for (int i=0; i<sz; i++) ans[i] = fvec[i] == rhs.bvec[i]; 
+	      else if ( is_string_vector() ) return Token();
+	      else if ( is_bool_vector() )   for (int i=0; i<sz; i++) ans[i] = bvec[i] == rhs.bvec[i]; 
+	      return Token( ans );
+	    }	  
+	  else if ( rhs.is_string_vector() )
+	    {
+	      if ( is_string_vector() )  for (int i=0; i<sz; i++) ans[i] = svec[i] == rhs.svec[i]; 
+	      else return Token();
+	      return Token( ans );
+	    }	  	  
+	  else
+	    return Token();
 	}
-      else if ( rhs.is_float_vector() )
-	{
-	  if      ( is_int_vector() )    for (int i=0; i<sz; i++) ans[i] = ivec[i] == rhs.fvec[i];
-	  else if ( is_float_vector() )  for (int i=0; i<sz; i++) ans[i] = fvec[i] == rhs.fvec[i]; 
-	  else if ( is_string_vector() ) return Token();
-	  else if ( is_bool_vector() )   for (int i=0; i<sz; i++) ans[i] = bvec[i] == rhs.fvec[i]; 
-	  return Token( ans );	 
-	}
-      else if ( rhs.is_bool_vector() )
-	{
-	  if      ( is_int_vector() )    for (int i=0; i<sz; i++) ans[i] = ivec[i] == rhs.bvec[i];
-	  else if ( is_float_vector() )  for (int i=0; i<sz; i++) ans[i] = fvec[i] == rhs.bvec[i]; 
-	  else if ( is_string_vector() ) return Token();
-	  else if ( is_bool_vector() )   for (int i=0; i<sz; i++) ans[i] = bvec[i] == rhs.bvec[i]; 
-	  return Token( ans );
-	}	  
-      else if ( rhs.is_string_vector() )
-	{
-	  if ( is_string_vector() )  for (int i=0; i<sz; i++) ans[i] = svec[i] == rhs.svec[i]; 
-	  else return Token();
-	  return Token( ans );
-	}	  
-      else
-	return Token();
+      else 
+	return Token();  // comparisons of different length vectors not allowed 
 
     }
 
 
   // vector == scalar 
-
+  
   if ( is_vector() )
     {
       const int sz = size();
@@ -1843,8 +1966,8 @@ Token Token::operator||(const Token & rhs) const
   // only NULL if BOTH sides are invalid (not bool or int)
   if ( ( ! left_valid ) && ( ! right_valid ) ) return Token();
   
-  bool left_val  = is_bool() ? bval : ival ; 
-  bool right_val = rhs.is_bool() ? rhs.bval : rhs.ival;
+  bool left_val  = left_valid ? ( is_bool() ? bval : ival ) : false ; 
+  bool right_val = right_valid ? ( rhs.is_bool() ? rhs.bval : rhs.ival ) : false ;
   
   return Token( left_val || right_val );
   
@@ -1874,6 +1997,7 @@ Token Token::operands( Token & right, Token & left )
     case GREATER_THAN_OPERATOR : return left > right ;
     case GREATER_THAN_OR_EQUAL_OPERATOR : return left >= right ;
     case EQUAL_OPERATOR : return left == right ;
+    case HAS_OPERATOR : return left.contains( right );
     case UNEQUAL_OPERATOR : return left != right ;
     default : return Token();
 }
@@ -2187,7 +2311,13 @@ std::vector<std::string> Token::as_string_vector() const
 {
   if ( ttype == STRING_VECTOR ) return svec;
   std::vector<std::string> ans;
-  Helper::halt( "as_string_vector() automatic type conversion not defined" );
+
+  if ( is_scalar() ) { ans.push_back( as_string() ); return ans; }
+  
+  ans.resize( size() );
+  for (int i=0; i<size(); i++) 
+    ans[i] = as_string_element( i );
+  
   return ans;
 }
 
@@ -2453,6 +2583,17 @@ Token TokenFunctions::fn_vec_sum( const Token & tok ) const
 }
 
   
+Token TokenFunctions::fn_vec_cat( const std::vector<Token> & tok ) const
+{
+  if ( tok.size() == 0 ) return Token();
+  if ( tok.size() == 1 ) return tok[0];
+
+  Token ans = tok[0];
+  for (int i=1;i<tok.size();i++)
+    ans = fn_vec_cat( ans , tok[i] );
+
+  return ans;
+}
 
 Token TokenFunctions::fn_vec_cat( const Token & tok1 , const Token & tok2 ) const
 {

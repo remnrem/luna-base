@@ -621,8 +621,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  
 		  if ( type_tok.size() == 1 ) 
 		    a->type = t ; 
-		  else 
-		    a->type = globals::A_NULL_T ; // i.e. instead of 'FLAG', this means that we have multiple types
+		  else // i.e. instead of 'FLAG', this means that we have multiple types
+		    a->type = globals::A_NULL_T ; 
 		  
 		} // next column for this annotation
 	      
@@ -784,9 +784,16 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		Helper::halt( "invalid interval: " + line );
 	      
 	      interval.start = globals::tp_1sec * dbl_start;
-	      interval.stop  = ( globals::tp_1sec * dbl_stop ) + 1LLU;  // make one-past-the-end
-	      	      
+	      
+
+	      // assume stop is already specified as 1 past the end, e.g. 30 60
+	      // *unless* it is a single point, e.g. 5 5 
+	      // which is handled below
+
+	      interval.stop  = globals::tp_1sec * dbl_stop ;
+	      
 	    }
+	  
 
 
 	  if ( interval.stop == interval.start ) ++interval.stop;

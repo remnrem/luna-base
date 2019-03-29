@@ -72,7 +72,7 @@ struct Eval {
   
   void bind( const Token * );
 
-  bool evaluate();
+  bool evaluate( const bool v = false );
     
   bool valid() const;
   
@@ -131,6 +131,9 @@ struct Eval {
   
   // run in no-assignment mode (i.e. MASK)
   bool no_assignments;
+
+  // verbose mode?
+  bool verbose;
 
 };
 
