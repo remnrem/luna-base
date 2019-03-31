@@ -452,10 +452,24 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   
 
   //
-  // A simple epoch annotation file?
+  // A simple epoch annotation file? (based on extension or NOT having # as first char
+  // i.e. no header)
   //
+
+  bool is_eannot = Helper::file_extension( f , "eannot" ) ;
   
-  if ( Helper::file_extension( f , "eannot" ) ) 
+  if ( ! is_eannot )
+    {
+      std::ifstream IN1( f.c_str() , std::ios::in );
+      std::string x;
+      std::getline( IN1 , x );
+      if ( IN1.eof() ) return false;
+      IN1.close();
+      if ( x == "" ) return false;
+      if ( x[0] != '#' ) is_eannot = true;
+    }
+  
+  if ( is_eannot )
     {
       std::vector<std::string> a;
       

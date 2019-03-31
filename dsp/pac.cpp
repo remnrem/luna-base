@@ -82,6 +82,9 @@ void dsptools::pac( edf_t & edf , param_t & param )
       //
 
       writer.level( signals.label(s) , globals::signal_strat );
+
+      
+      logger << "  running PAC...\n";
       
       //
       // either for each epoch, or for entire trace
@@ -129,7 +132,8 @@ void dsptools::pac( edf_t & edf , param_t & param )
 	  
 	  bool okay = pac.calc();
 	  
-	  if ( ! okay ) Helper::halt( "problem in PAC calculation" );
+	  if ( ! okay )
+	    Helper::halt( "problem in PAC calculation" );
 
 
 	  //
@@ -174,12 +178,13 @@ bool pac_t::calc()
   
   for (int fa=0;fa<frq4phase.size();fa++)
     for (int fb=0;fb<frq4pow.size();fb++)
-      {
-
+      {	
+	
 	// for wavelets, for high temporal resolution, set a relatively 
 	// small number of cycles
 	
-	const int n_cycles = 4;
+	//	const int n_cycles = 4;
+	const int n_cycles = 7;
 	
 	//
 	// wavelet for phase
@@ -223,6 +228,20 @@ bool pac_t::calc()
 	// In broad terms, things line up
 
 	//
+	// Precalculate x and exp(y) 
+	//
+
+	std::vector<std::complex<double> > x(n);
+ 
+	std::vector<std::complex<double> > y(n);
+
+	for (int i=0;i<n;i++)
+	  {
+	    x[i] = std::complex<double>( pwr[i] , 0 );
+	    y[i] = exp( std::complex<double>( 0 , angle[i] ) );
+	  }
+	
+	//
 	// Calculate PAC
 	//
 	
@@ -231,11 +250,7 @@ bool pac_t::calc()
 	dcomp sm = 0;
 	
 	for (int i=0; i<n; i++)
-	  {
-	    const std::complex<double> x( pwr[i] , 0 );
-	    const std::complex<double> y( 0 , angle[i] );
-	    sm += x * exp( y );
-	  }
+	  sm += x[i] * y[i] ;
 	
 	double pac = abs( sm / (double)n );
 	
@@ -248,6 +263,7 @@ bool pac_t::calc()
 	
 	for (int r=0; r<nreps ; r++ ) 
 	  {
+
 	    // from 0..n, select a random time-point (from within 10-90% of signal)
 
 	    int pp = n * 0.1 + CRandom::rand( int( n * 0.8 ) );
@@ -256,12 +272,13 @@ bool pac_t::calc()
 	
 	    for (int i=0; i<n; i++)
 	      {
-		const std::complex<double> x( pwr[pp] , 0 );
-		const std::complex<double> y( 0 , angle[i] );
-		sm += x * exp( y );
+
+		sm += x[pp] * y[i] ;
 		
-		// advance permuted position, wrapping around when needed
+		// advance permuted position, 
 		++pp;
+
+		// wrapping around when needed
 		if ( pp == n ) pp = 0;
 	      }
 	    

@@ -72,7 +72,18 @@ void dsptools::cfc( edf_t & edf , param_t & param )
   if ( fa.size() != 2 || fb.size() !=2 ) Helper::halt( "CFC requires a=lwr,upr b=lwr,upr" );
 
 
+  //
+  // Get signals
+  //
+  
+  std::string signal_label = param.requires( "sig" );
+  signal_list_t signals = edf.header.signal_list( signal_label );    
+  const int ns = signals.size();
 
+  if ( ns == 0 )
+    logger << "  no valid signals specified for CFC\n";
+
+  
   //
   // Output
   //
@@ -86,14 +97,7 @@ void dsptools::cfc( edf_t & edf , param_t & param )
   writer.var( "R2_TOT" , "Total CFC R-squared (phase and amplitude)" );
   
 
-  //
-  // Get signals
-  //
   
-  std::string signal_label = param.requires( "sig" );
-  signal_list_t signals = edf.header.signal_list( signal_label );    
-  const int ns = signals.size();
-
   //
   // using epochs or entire time-line?
   //

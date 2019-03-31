@@ -1889,10 +1889,10 @@ void characterize_spindles( edf_t & edf ,
    const int n = spindles->size();
 
    //
-   // Spindle-level QC filters
+   // Spindle-level QC filters (set default at 0, i.e spindle-activity must be more likely)
    //
 
-   bool qc_q = false;
+   bool qc_q = true;
    double qc_qmin = 0 , qc_qmax = -1;
    if ( param.has( "q" ) ) { qc_q = true; qc_qmin = param.requires_dbl( "q" ); } 
    if ( param.has( "q-max" ) ) { qc_q = true; qc_qmax = param.requires_dbl( "q-max" ); }
@@ -2250,33 +2250,53 @@ void characterize_spindles( edf_t & edf ,
 	  
 	  do_fft( slice0.nonconst_pdata() , Fs , &spindle_fft );
 	  
-	  // calculate enrichment
-	  double q_spindle = 0 , q_baseline = 0;
+	  // calculate enrichment (log10-scale), so set min to v. low...
+	  double q_spindle = -999 , q_baseline = -999;
+
 	  std::map<freq_range_t,double>::const_iterator ff = spindle_fft.begin();
 	  while ( ff != spindle_fft.end() )
 	    {
-	      //std::cout << ff->second << " vs " << (*baseline)[ ff->first ] << "\n";
 
-	      spindle->enrich[ ff->first ] = ff->second / (*baseline)[ ff->first ]; 
-
-	      // relative enrichment (to baseline)
-	      double re = ff->second / (*baseline)[ ff->first ];
+	      const double & baseline_band_power = (*baseline)[ ff->first ] ;
+	      const double & spindle_band_power = ff->second;
+	      const freq_range_t & band = ff->first;
 	      
+	      // relative enrichment (to baseline)  [ log scale ]
+	      double re = spindle_band_power - baseline_band_power;
+	      
+	      // relative enrichment (to baseline)
+	      //double re = spindle_band_power / baseline_band_power;
+	      
+	      // store
+	      spindle->enrich[ ff->first ] = re;
+	      
+	      // calculate overall q score
+	      // take 'spindle' as the two middle categories
+
 	      // quality score: 10..16 is spindle range
-	      if ( ff->first.first <= 16  && ff->first.second >= 10 ) 
+	      // 
+	      if ( band.first <= 16 && band.second >= 10 )
 		{
+		  // i.e. get largest of slow and fast bands
 		  if ( re > q_spindle ) q_spindle = re;
 		}
 	      else
 		{
+		  // i.e. get largest of non-spindle bands
 		  if ( re > q_baseline) q_baseline = re;
 		}
 	      ++ff;
 	    }
 	  
-	  // relative relative enrichment
-	  spindle->qual = q_spindle / q_baseline ; 
-	 
+	  // relative relative enrichment [ log scale ]
+	  spindle->qual = q_spindle - q_baseline ;
+
+	  // relative relative enrichment [ log scale ]
+	  //spindle->qual = q_spindle / q_baseline ;
+
+	  // i.e. max( B_S / B_S_0 ) / max( B_NS / B_NS_0 ) 
+	  // or logs
+	  
 	  // QUAL filter? 
 	  
 	  if ( qc_q ) 
@@ -2504,6 +2524,7 @@ void characterize_spindles( edf_t & edf ,
 
 void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_t,double> * freqs )
 {
+
   // Fixed parameters:: use 4-sec segments with 2-second
   // overlaps and Hanning window
   
@@ -2552,9 +2573,8 @@ void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_
   std::map<freq_range_t,double>::iterator ff = freqs->begin();
   while ( ff != freqs->end() )
     {
-      //std::cout << "got " << ff->second << "\n";
-      //ff->second = log( ff->second ); 
-      ff->second =  ff->second ; 
+      ff->second = log10( ff->second ); 
+      //ff->second =  ff->second ; 
       ++ff;
     }
 
