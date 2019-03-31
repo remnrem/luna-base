@@ -125,8 +125,8 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v0.2";
-  date    = "17-Mar-2019";
+  version = "v0.22";
+  date    = "31-Mar-2019";
 
   //
   // Set up RNG
