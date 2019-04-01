@@ -1675,7 +1675,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // tp1 tp2 label key=value key2=value2 ...
 
 	      const std::string ftr_name = ftr_folder + delim + "id_" + edf.id + "_feature_" 
-		+ "SPINDLES-" + sp_label + "-" + signals.label(s) + ftr_tag + ".ftr";
+		+ sp_label + "-" + signals.label(s) + ftr_tag + ".ftr";
 
 	      logger << " writing " << spindles.size() << " spindles to " << ftr_name << "\n";
 	      std::ofstream OUT1( ftr_name.c_str() , std::ios::out );

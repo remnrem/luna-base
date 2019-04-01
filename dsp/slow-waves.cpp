@@ -123,7 +123,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   // default parameters from Latchoumane et al (2017) (nb. mouse EEG)
   //
 
-  const double thr   = param.has( "th" ) ? param.requires_dbl( "th" )       : 0 ;
+  const double thr   = param.has( "mag" ) ? param.requires_dbl( "mag" )       : 0 ;
 
   const double f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.2  ; 
   const double f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.5  ; 
