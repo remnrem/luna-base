@@ -45,7 +45,7 @@ void dump_intervals( const std::string & ints ,
   while ( ! EDFLIST.eof() )
     {      
       std::string line;
-      std::getline( EDFLIST , line );
+      Helper::safe_getline( EDFLIST , line );
       if ( EDFLIST.eof() || line == "" ) continue;
       
       std::vector<std::string> tok = Helper::parse( line , "\t" );
@@ -71,7 +71,7 @@ void dump_intervals( const std::string & ints ,
   while ( ! INTLIST.eof() ) 
     {
       std::string line;
-      std::getline( INTLIST , line );
+      Helper::safe_getline( INTLIST , line );
       if ( INTLIST.eof() || line == "" ) continue;
       
       std::vector<std::string> tok = Helper::parse( line , "\t" );

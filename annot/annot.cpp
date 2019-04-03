@@ -462,7 +462,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
     {
       std::ifstream IN1( f.c_str() , std::ios::in );
       std::string x;
-      std::getline( IN1 , x );
+      Helper::safe_getline( IN1 , x );
       if ( IN1.eof() ) return false;
       IN1.close();
       if ( x == "" ) return false;
@@ -477,7 +477,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       while ( ! IN1.eof() )
 	{
 	  std::string x;
-	  std::getline( IN1 , x );
+	  Helper::safe_getline( IN1 , x );
 	  if ( IN1.eof() ) break;
 	  if ( x == "" ) continue;
 	  a.push_back( x );      
@@ -538,7 +538,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       
       if ( FIN.bad() ) continue;
       std::string line;      
-      std::getline( FIN , line );      
+      Helper::safe_getline( FIN , line );      
       if ( FIN.eof() || line == "" ) continue;
       
       //
@@ -947,7 +947,7 @@ int annot_t::load_features( const std::string & f )
       
       if ( FIN.bad() ) continue;
       std::string line;      
-      std::getline( FIN , line );      
+      Helper::safe_getline( FIN , line );      
       if ( FIN.eof() || line == "" ) continue;
       
       std::vector<std::string> tok = Helper::parse( line , "\t" );

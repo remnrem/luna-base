@@ -104,6 +104,8 @@ namespace Helper
   bool deleteFile( const std::string & );
   
   std::vector<std::string> file2strvector( const std::string & filename );
+  
+  std::istream& safe_getline(std::istream& is, std::string& t);
 
   void halt( const std::string & msg );
   void warn( const std::string & msg );

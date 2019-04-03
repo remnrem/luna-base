@@ -101,7 +101,7 @@ int main(int argc, char ** argv)
   while ( ! std::cin.eof() )
     {
       std::string line;
-      std::getline( std::cin , line , '\n' );
+      Helper::safe_getline( std::cin , line );
       if ( line == "" ) continue;
       if ( std::cin.eof() ) break;
       std::vector<std::string> tok = Helper::parse( line , "\t" );

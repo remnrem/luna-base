@@ -105,7 +105,7 @@ int main(int argc , char ** argv )
       while ( !IN1.eof() ) 
 	{      
 	  std::string line;      
-	  std::getline( IN1 , line );      
+	  Helper::safe_getline( IN1 , line );      
 	  if ( IN1.eof() ) continue;
 	  std::vector<std::string> tok = Helper::parse( line , "\t" );
 	  const int n = tok.size();
@@ -130,7 +130,7 @@ int main(int argc , char ** argv )
   while ( !IN1.eof() ) 
     {      
       std::string line;      
-      std::getline( IN1 , line );      
+      Helper::safe_getline( IN1 , line );      
       if ( IN1.eof() ) continue;
       std::vector<std::string> tok = Helper::parse( line , "\t" );
       const int n = tok.size();
@@ -154,7 +154,7 @@ int main(int argc , char ** argv )
   while ( !IN2.eof() ) 
     {      
       std::string line;      
-      std::getline( IN2 , line );      
+      Helper::safe_getline( IN2 , line );      
       if ( IN2.eof() ) continue;
       std::vector<std::string> tok = Helper::parse( line , "\t" );
       const int n = tok.size();

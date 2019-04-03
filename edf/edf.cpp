@@ -211,7 +211,7 @@ std::string edf_header_t::summary() const
       // is alias? ( will have been mapped already )
       if ( cmd_t::primary_alias.find( primary ) != cmd_t::primary_alias.end() )
 	{
-	  std::string aliases = Helper::stringize( cmd_t::primary_alias[ primary ] , " " );
+	  std::string aliases = Helper::stringize( cmd_t::primary_alias[ primary ] , " | " );
 	  ss << "\taliased from         : " << aliases << "\n"; 
 	}
       

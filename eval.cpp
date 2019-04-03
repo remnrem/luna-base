@@ -543,7 +543,7 @@ bool cmd_t::read( const std::string * str , bool silent )
       while ( 1 )
 	{
 	  std::string s;
-	  std::getline( std::cin , s , '\n' );
+	  Helper::safe_getline( std::cin , s );
 	  if ( std::cin.eof() ) break;
 	  if ( s == "" ) continue;	  
 	  
@@ -1514,7 +1514,7 @@ void proc_file_annot( edf_t & edf , param_t & param )
   while ( ! IN1.eof() )
     {
       std::string x;
-      std::getline( IN1 , x );
+      Helper::safe_getline( IN1 , x );
       if ( IN1.eof() ) break;
       if ( x == "" ) continue;
       if ( recodes.find(x) != recodes.end() ) 
@@ -2154,7 +2154,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	    {
 	      // format: ID {white-space} any notes (ignored)
 	      std::string line2;
-	      std::getline( XIN , line2);
+	      Helper::safe_getline( XIN , line2);
 	      if ( XIN.eof() || line2 == "" ) continue;
 	      std::vector<std::string> tok2 = Helper::parse( line2 , "\t " );
 	      if ( tok2.size() == 0 ) continue;			      

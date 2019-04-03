@@ -223,7 +223,10 @@ int main(int argc , char ** argv )
 		{
 
 		  std::string line;
-		  std::getline( INC , line);
+		  
+		  //std::getline( INC , line);		  
+		  Helper::safe_getline( INC , line );
+		  
 		  if ( INC.eof() || line == "" ) continue;
 		  
 		  // skip % comments
@@ -486,7 +489,8 @@ void process_edfs( cmd_t & cmd )
       if ( ! single_edf )
 	{
 	  std::string line;
-	  std::getline( EDFLIST , line);
+	  
+	  Helper::safe_getline( EDFLIST , line);
 	  
 	  if ( line == "" ) continue;
 
@@ -863,7 +867,7 @@ void proc_eval_tester( const bool verbose )
 
   // read a single line
   std::string expr;
-  std::getline( std::cin , expr );
+  Helper::safe_getline( std::cin , expr );
 
   std::map<std::string,annot_map_t> inputs;
 
@@ -1096,10 +1100,9 @@ void proc_dummy( const std::string & p )
     }
 
 
-
   std::string expr;
   
-  std::getline( std::cin , expr );
+  Helper::safe_getline( std::cin , expr );
   
   std::map<std::string,annot_map_t> inputs;
   

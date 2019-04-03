@@ -1818,7 +1818,7 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
 
       std::string line;
 
-      std::getline( FIN , line , '\n' );
+      Helper::safe_getline( FIN , line );
       
       std::vector<std::string> tok = Helper::parse( line , "\t" );
       

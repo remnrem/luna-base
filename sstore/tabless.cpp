@@ -42,7 +42,7 @@ int main(int argc , char ** argv )
   // get header line
   
   std::string line;
-  std::getline( std::cin , line , '\n' );
+  Helper::safe_getline( std::cin , line , '\n' );
   std::vector<std::string> hdr = Helper::parse( line , "\t" );
   const int n = hdr.size();
   int eidx = -1;
@@ -83,7 +83,7 @@ int main(int argc , char ** argv )
     {
       
       std::string line;
-      std::getline( std::cin , line , '\n' );
+      Helper::safe_getline( std::cin , line , '\n' );
       if ( std::cin.eof() ) break;
       if ( line == "" ) break;
       
