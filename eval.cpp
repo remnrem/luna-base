@@ -2005,6 +2005,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     {
       globals::write_naughty_list = true;
       globals::naughty_list = tok1;
+      // create an empty file (i.e. as we append things to this subsequently
+      std::ofstream P( globals::naughty_list.c_str() , std::ios::out );
+      P.close();      
     }
   
   // default annot folder
