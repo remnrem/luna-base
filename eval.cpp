@@ -1781,6 +1781,16 @@ void proc_drop_signals( edf_t & edf , param_t & param )
   if ( keeps.size() > 0 )
     {
 
+      // check signals first
+      std::set<std::string>::const_iterator ss = keeps.begin();
+      while ( ss != keeps.end() )
+	{
+	  if ( ! edf.header.has_signal( *ss ) )
+	    Helper::halt( "could not find requested keep signal: " + *ss );
+	  ++ss;
+	}
+
+      
       const int ns = edf.header.ns;
 
       for (int s = 0 ; s < ns ; s++ )

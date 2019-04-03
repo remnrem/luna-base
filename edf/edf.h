@@ -211,6 +211,8 @@ struct edf_header_t
 
   bool  has_signal( const std::string & s );
 
+  int  original_signal( const std::string & s );
+
   signal_list_t signal_list( const std::string & s );
   
   void signal_alias( const std::string & s );

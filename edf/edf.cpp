@@ -1234,10 +1234,28 @@ void edf_t::drop_signal( const int s )
   if ( s < 0 || s >= header.ns ) return;  
   --header.ns;
 
-  // was this signal in the original EDF file? 
-  bool present_in_EDF_file = header.label_all.find( header.label[s] ) != header.label_all.end() ;
-  int os = present_in_EDF_file ? header.label_all[ header.label[ s ] ] : -1 ;
+  // need to track whether this signal was in the list of signals to be read from the original file
+  //  -- it needn't be, i.e. if a new channel has been created
+  //  -- but if it is, we need to know this when we subsequently read in
+  //     new data from disk
 
+  // i.e. it is not whether it was on disk per se, it is whether it would have been included
+  //      via an initial sig= specification, i.e. inp_signals for edf_t::attach()
+  //      so then we can remove it from edf.inp_signals_n[]
+  
+  // old; does not respect alias use
+  //bool present_in_EDF_file = header.label_all.find( header.label[s] ) != header.label_all.end() ;
+  //int os = present_in_EDF_file = ? header.label_all[ header.label[ s ] ] : -1 ;
+
+  // get original signal slot number (-1 if not present)
+  int os = header.original_signal( header.label[ s ] ) ;
+
+  
+  std::cout << "sig  to drop :  "
+	    << header.label[s] << "\t"	    
+	    << s << "\t"
+	    << os << "\n";
+  
   // alter header
   header.label.erase( header.label.begin() + s );
   header.annotation_channel.erase( header.annotation_channel.begin() + s );
@@ -1257,18 +1275,29 @@ void edf_t::drop_signal( const int s )
   header.bitvalue.erase( header.bitvalue.begin() + s );
   header.offset.erase( header.offset.begin() + s );
   
+  std::cout << "h1\n";
+  
   // remove from 'primary input' list (i.e. which is used
   // when reading a new record;  these signal numbers
   // are in the original (EDF-based) counting scheme
-
-  if ( present_in_EDF_file )
-    inp_signals_n.erase( inp_signals_n.find(os) );
-
+  
+  if ( os != -1 ) // i.e. present in original signal list
+    {
+      std::cout << "inp sz = " << inp_signals_n.size() << "\n";
+      std::cout << "in " << (inp_signals_n.find(os) != inp_signals_n.end() ) << "\n";
+      
+      inp_signals_n.erase( inp_signals_n.find(os) );
+    }
+  
+  std::cout << "h2\n";
+  
   // need to remake label2header
   header.label2header.clear();
   for (int l=0;l<header.label.size();l++)     
     if ( header.is_data_channel(l) ) 
       header.label2header[ header.label[l] ] = l;      
+  
+  std::cout << "h3\n";
   
   // records
   int r = timeline.first_record();
@@ -1278,7 +1307,9 @@ void edf_t::drop_signal( const int s )
 	records.find(r)->second.drop(s);
       r = timeline.next_record(r);
     }
-
+  
+  std::cout << "h4\n";
+  
 }
 
 void edf_record_t::drop( const int s )
@@ -1841,10 +1872,49 @@ bool  edf_header_t::has_signal( const std::string & s )
 {
   std::vector<std::string> tok = Helper::parse( s , "|" );    
   for (int t=0;t<tok.size();t++)
-    if ( label2header.find(tok[t]) != label2header.end() ) return true;
+    {
+      // primary name (that might be an alias)?
+      if ( label2header.find(tok[t]) != label2header.end() )
+	return true;
+      
+      // using aliased (i.e. original) name?
+      if ( cmd_t::label_aliases.find( tok[t] ) != cmd_t::label_aliases.end() )
+	return true;
+    }
   return false;
 }
 
+
+int  edf_header_t::original_signal( const std::string & s )
+{  
+  // look up, with aliases, in original
+  // label_all[ ]
+
+  std::map<std::string,int>::const_iterator ff = label_all.find( s );
+  if ( ff != label_all.end() ) return ff->second;
+
+  // otherwise, consider if we have aliases
+  if ( cmd_t::label_aliases.find( s ) != cmd_t::label_aliases.end() )
+    {
+      const std::string & s2 = cmd_t::label_aliases[ s ];
+      ff = label_all.find( s2 );
+      if ( ff != label_all.end() ) return ff->second;
+    }
+
+  
+  if ( cmd_t::primary_alias.find( s ) != cmd_t::primary_alias.end() )
+    {
+      std::vector<std::string> & a = cmd_t::primary_alias.find( s )->second;
+      for (int i=0;i<a.size();i++)
+	{
+	  ff = label_all.find( a[i] );
+	  if ( ff != label_all.end() ) return ff->second;
+	}
+    }
+  
+  return -1;
+    
+}
 
 
 signal_list_t edf_header_t::signal_list( const std::string & s )
