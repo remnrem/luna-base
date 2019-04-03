@@ -660,6 +660,14 @@ void process_edfs( cmd_t & cmd )
 	  logger << "**warning: problem loading " 
 		 << edffile << ", skipping..." << "\n";
 	  
+	  if ( globals::write_naughty_list )
+	    {
+	      logger << "**writing ID " << edf.id << " to " <<  globals::naughty_list << "\n";
+	      std::ofstream PROBLEMS( globals::naughty_list.c_str() , std::ios_base::app );
+	      PROBLEMS << edf.id << "\n";
+	      PROBLEMS.close();
+	    }
+	 	  
 	  writer.commit();
 
 	  continue;

@@ -36,11 +36,16 @@ extern logger_t logger;
 void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 {
 
+  std::cout << "h0\n";
+
   std::string signal_label = param.requires( "sig" );
   
   signal_list_t signals = edf.header.signal_list( signal_label );  
-  
+
+
   const int ns = signals.size();
+
+  std::cout << "ns = " << ns << "\n";
   
   // Assuming multiple signals, all with similar sample rates
   if ( ns < 2 ) return;
@@ -75,6 +80,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 
   int compc = param.has( "compc" ) ? param.requires_int( "compc" ) : ns ;
 
+  std::cout << "h1\n";
   
   //
   // ICA
@@ -82,6 +88,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 
   ica_t ica( pX , rows , cols , compc );
 
+  std::cout << "h2\n";
   
   //
   // Output

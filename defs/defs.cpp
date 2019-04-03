@@ -70,6 +70,9 @@ int globals::sample_list_min;
 int globals::sample_list_max;
 std::string globals::sample_list_id;
 
+bool globals::write_naughty_list;
+std::string globals::naughty_list;
+
 std::string globals::edf_timetrack_label;
 int globals::edf_timetrack_size;
 
@@ -323,6 +326,9 @@ void globals::init_defs()
   sample_list_max = -1;
   sample_list_id = "";
 
+  write_naughty_list = false;
+  naughty_list = "";
+  
   assume_pm_starttime = true;
   
   problem = false;

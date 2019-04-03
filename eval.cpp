@@ -821,21 +821,35 @@ bool cmd_t::eval( edf_t & edf )
 	  Helper::halt( "did not recognize command: " + cmd(c) );
 	  return false; 
 	}
-      
-      
+
+       
       //
       // Was a problem flag set?
       //
       
       if ( globals::problem ) 
 	{
-	  logger << "**warning: the PROBLEM flag was set, skipping to next EDF...\n";
 
+	  logger << "**warning: the PROBLEM flag was set, skipping to next EDF...\n";
+	  
+	  if ( globals::write_naughty_list )
+	    {
+	      logger << "**writing ID " << edf.id << " to " <<  globals::naughty_list << "\n";
+	      std::ofstream PROBLEMS( globals::naughty_list.c_str() , std::ios_base::app );
+	      PROBLEMS << edf.id << "\n";
+	      PROBLEMS.close();
+	    }
+	  
 	  return false;
 	}
-         
+      
+      //
+      // next command
+      //
+
+      writer.unlevel( "_" + cmd(c) );      
      
-      writer.unlevel( "_" + cmd(c) );
+      
 
     } // next command
   
@@ -1984,8 +1998,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	cmd_t::signallist.insert(Helper::unquote(tok2[s]));		  
       return;
     }
+   
   
-
+  // naughty list?
+  if ( Helper::iequals( tok0 , "fail-list" ) )
+    {
+      globals::write_naughty_list = true;
+      globals::naughty_list = tok1;
+    }
+  
   // default annot folder
   else if ( Helper::iequals( tok0 , "annot-folder" ) ||
 	    Helper::iequals( tok0 , "annots-folder" ) ) 
