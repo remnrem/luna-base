@@ -176,6 +176,7 @@ void globals::init_defs()
 
   nsrr_t::init();
 
+
   //
   // By default, read and extract all FTR; if this is a pain, can be turned off (ftr=0)
   //

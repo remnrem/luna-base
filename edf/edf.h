@@ -235,9 +235,11 @@ struct edf_header_t
   int time_track_offset() const { return t_track_edf_offset; }
   
   std::vector<double> sampling_freq( const signal_list_t & ) const;
-
+  
   void rename_channel( const std::string & o , const std::string & n );
 
+  void check_channels();
+  
   void drop_annots_from_signal_list( signal_list_t * slist )
   {
     

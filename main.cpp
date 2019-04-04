@@ -677,6 +677,13 @@ void process_edfs( cmd_t & cmd )
 	  continue;
 	}
       
+
+      //
+      // Check labels are still unique given aliases
+      //
+
+      edf.header.check_channels();
+
       
       //
       // Add additional annotations? 

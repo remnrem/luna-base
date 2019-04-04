@@ -463,7 +463,9 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
 	      // new unique label?
 	      if ( slabels.find( l + "." + Helper::int2str( inc )  ) == slabels.end() )
 		{
+		  logger << " uniqifying " << l ;
 		  l = l + "." + Helper::int2str( inc );
+		  logger << " to " << l << "\n";
 		  break;
 		}
 	      else // keep trying
@@ -1250,12 +1252,6 @@ void edf_t::drop_signal( const int s )
   // get original signal slot number (-1 if not present)
   int os = header.original_signal( header.label[ s ] ) ;
 
-  
-  std::cout << "sig  to drop :  "
-	    << header.label[s] << "\t"	    
-	    << s << "\t"
-	    << os << "\n";
-  
   // alter header
   header.label.erase( header.label.begin() + s );
   header.annotation_channel.erase( header.annotation_channel.begin() + s );
@@ -1275,29 +1271,22 @@ void edf_t::drop_signal( const int s )
   header.bitvalue.erase( header.bitvalue.begin() + s );
   header.offset.erase( header.offset.begin() + s );
   
-  std::cout << "h1\n";
-  
   // remove from 'primary input' list (i.e. which is used
   // when reading a new record;  these signal numbers
   // are in the original (EDF-based) counting scheme
   
   if ( os != -1 ) // i.e. present in original signal list
     {
-      std::cout << "inp sz = " << inp_signals_n.size() << "\n";
-      std::cout << "in " << (inp_signals_n.find(os) != inp_signals_n.end() ) << "\n";
-      
+//       std::cout << "inp sz = " << inp_signals_n.size() << "\n";
+//       std::cout << "in " << (inp_signals_n.find(os) != inp_signals_n.end() ) << "\n";
       inp_signals_n.erase( inp_signals_n.find(os) );
     }
-  
-  std::cout << "h2\n";
   
   // need to remake label2header
   header.label2header.clear();
   for (int l=0;l<header.label.size();l++)     
     if ( header.is_data_channel(l) ) 
       header.label2header[ header.label[l] ] = l;      
-  
-  std::cout << "h3\n";
   
   // records
   int r = timeline.first_record();
@@ -1308,7 +1297,6 @@ void edf_t::drop_signal( const int s )
       r = timeline.next_record(r);
     }
   
-  std::cout << "h4\n";
   
 }
 
@@ -2065,6 +2053,44 @@ std::vector<double> edf_header_t::sampling_freq( const signal_list_t & signals )
     fs[s] = n_samples[ signals.signals[s] ] / record_duration;
   
   return fs;
+}
+
+
+void edf_header_t::check_channels()
+{
+  // when loading EDF, we would have made unique  (a, a.1, a.2, etc) any identical channel
+  // names;  here we also need to check that aliases aren't making non-unique labels
+  // e.g. 
+  //   A|B,C
+  // but EDF has both "B" and "C" 
+  // therefore, for each cmd_t::primary_alias[term].vector[] we need to make sure that 
+  // we do not see more than one instance
+
+  bool okay = true;
+
+  std::map<std::string,std::vector<std::string> >::const_iterator ii = cmd_t::primary_alias.begin();
+  while ( ii != cmd_t::primary_alias.end() )
+    {
+      std::set<std::string> obs;
+      std::vector<std::string>::const_iterator jj = ii->second.begin();
+      while ( jj != ii->second.end() )
+	{
+	  if ( original_signal( *jj ) != -1 ) obs.insert( *jj );
+	  ++jj;
+	}
+      if ( obs.size() > 1 ) 
+	{
+	  okay = false;
+	  logger << " different channels map to the same alias term: "
+		 << ii->first << " <- " << Helper::stringize( obs , " | " ) << "\n";
+	}
+      ++ii;
+    }
+  
+  if ( ! okay ) 
+    Helper::halt( "problem: different channels present in the EDF are mapped to the same alias" );
+
+  
 }
 
 

@@ -431,7 +431,7 @@ void cmd_t::signal_alias( const std::string & s )
 
       primary_alias[ primary ].push_back( mapped );
     }
-  
+    
 }
 
 
@@ -2008,6 +2008,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       // create an empty file (i.e. as we append things to this subsequently
       std::ofstream P( globals::naughty_list.c_str() , std::ios::out );
       P.close();      
+    }
+  
+  // NSRR remapping
+  if ( Helper::iequals( tok0 , "nsrr-remap" ) )
+    {
+      globals::remap_nsrr_annots = Helper::yesno( tok1 );
+      return;
     }
   
   // default annot folder
