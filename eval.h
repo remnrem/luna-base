@@ -219,6 +219,7 @@ void proc_file_annot( edf_t & , param_t & );
 void proc_sleep_stage( edf_t & , param_t & , bool verbose = false );
 
 void proc_record_dump( edf_t & , param_t & );
+void proc_record_table( edf_t & , param_t & );
 void proc_intervals( param_t & , const std::string & );
 void proc_epoch_dump( edf_t & , param_t & );
 void proc_epoch_matrix( edf_t & , param_t & );

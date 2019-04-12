@@ -45,7 +45,7 @@ tal_t edf_t::tal( const int signal , const int rec )
   if ( ! loaded( rec ) ) 
     {
       edf_record_t record( this ); 
-      record.read( file , rec );
+      record.read( rec );
       records.insert( std::map<int,edf_record_t>::value_type ( rec , record ) );
     }
 

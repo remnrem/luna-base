@@ -63,7 +63,7 @@ bool ica_t::proc( const std::vector<std::vector<double> > & X , int compc )
 
 bool ica_t::proc( mat pX , int rows , int cols , int compc )
 {  
-  std::cout << "in here.\n";
+
   double ** pW = mat_create(compc, compc);
   double ** pA = mat_create(compc, compc);
   double ** pK = mat_create(cols, compc);

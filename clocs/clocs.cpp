@@ -74,7 +74,8 @@ int clocs_t::load_cart( const std::string & filename )
       cloc[ lab ] = cart_t( x, y, z );
     }
   IN1.close();
-  std::cerr << " read " << cloc.size() << " channel locations\n"; 
+
+  logger << " read " << cloc.size() << " channel locations\n"; 
 
   std::map<std::string,cart_t>::const_iterator ii = cloc.begin();
   while ( ii != cloc.end() ) 
@@ -85,17 +86,16 @@ int clocs_t::load_cart( const std::string & filename )
       polar_t polar( sph );
       cart_t  pc = polar.cart();
 
-      std::cout << "\t" << ii->first << "\t"
- 		<< ii->second.x << " " 
- 		<< ii->second.y << " " 
- 		<< ii->second.z << "\t" 
- 		<< sph.r << " "
-		<< sph.azimuth << " "
- 		<< sph.elevation << " "
- 		
-	//<< c2.x << " " << c2.y << " " << c2.z << "\t"
-		<< polar.angle << " " << polar.radius << "\t"
-		<< pc.x << " " << pc.y << " " << pc.z << "\n";
+      logger << "  " 
+	     << ii->first << "\t"
+	     << ii->second.x << " " 
+	     << ii->second.y << " " 
+	     << ii->second.z << "\t[R,AZ,E] = " 
+	     << sph.r << " "
+	     << sph.azimuth << " "
+	     << sph.elevation << "\t[ polar angle/radius ] = "
+	     << polar.angle << " " << polar.radius << "\t[X,Y,Z]' = "
+	     << pc.x << " " << pc.y << " " << pc.z << "\n";
       
       ++ii;
     }

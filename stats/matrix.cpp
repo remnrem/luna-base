@@ -144,6 +144,7 @@ template<class T> std::string Data::Vector<T>::print( const std::string & label 
   return ss.str();
 }
 
+
 template<class T> std::string Data::Matrix<T>::print( const std::string & label , const int nrow , const int ncol) const
 {
   int arow =  nrow == 0 || nrow > dim1() ? dim1() : nrow ; 
@@ -162,6 +163,22 @@ template<class T> std::string Data::Matrix<T>::print( const std::string & label 
   return ss.str();
 }
 
+
+template<class T> std::string Data::Matrix<T>::dump() const
+{
+  int arow =  dim1() ;
+  int acol =  dim2() ;
+
+  std::stringstream ss;
+
+  for (int r=0;r<arow;r++)
+    {
+      for (int c=0;c<acol;c++)
+	ss << (c ? "\t" : "" ) << (*this)(r,c) ;
+      ss << "\n";
+    }
+  return ss.str();
+}
 
 
 // added to avoid linker errors, given we've defined these templated functions in the .cpp file.

@@ -750,6 +750,8 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );
       else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );
+      else if ( is( c, "RECS" ) )         proc_record_table( edf , param(c) );
+
       else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
@@ -1202,11 +1204,14 @@ void proc_slowwaves( edf_t & edf , param_t & param )
 }
 
 
-// WRITE : write a new EDF to disk (but not annotation files, they 
-// must always be anchored to the 'original' EDF
+// WRITE : write a new EDF or EDFZ to disk (but not annotation files,
+// they must always be anchored to the 'original' EDF
 
 void proc_write( edf_t & edf , param_t & param )
 {
+  
+  // write a .edfz and .edfz.idx
+  bool edfz = param.has( "edfz" );
     
   // add 'tag' to new EDF
   std::string filename = edf.filename;
@@ -1215,8 +1220,12 @@ void proc_write( edf_t & edf , param_t & param )
     filename = filename.substr(0 , filename.size() - 4 );
   
   filename += "-" + param.requires( "edf-tag" ) + ".edf";
-
+  if ( edfz ) filename += "z";
+  
+  //
   // optionally, allow directory change
+  //
+
   if ( param.has( "edf-dir" ) )
     {
       const std::string outdir = param.value("edf-dir");
@@ -1237,6 +1246,10 @@ void proc_write( edf_t & edf , param_t & param )
       int retval = system( syscmd.c_str() );
       
     }
+
+  //
+  // Sample list
+  //
 
   if ( param.has("sample-list") )
     {	  
@@ -1263,7 +1276,7 @@ void proc_write( edf_t & edf , param_t & param )
   // if a mask has been set, this will restructure the mask
   edf.restructure(); 
 
-  bool saved = edf.write( filename );
+  bool saved = edf.write( filename , edfz );
 
   if ( saved ) 
     logger << " saved new EDF, " << filename << "\n";
@@ -1611,6 +1624,13 @@ void proc_record_dump( edf_t & edf , param_t & param )
   edf.record_dumper( param );
 }
 
+
+// RECS : simple table of records, epochs
+
+void proc_record_table( edf_t & edf , param_t & param )
+{
+  edf.record_table( param );
+}
 
 // STAGE : set and display sleep stage labels (verbose = F)
 // HYPNO : verbose report on sleep STAGES     (verbose = F)

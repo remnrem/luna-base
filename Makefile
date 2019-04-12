@@ -8,15 +8,15 @@ EXE    = luna
 OBJS   = main.o globals.o eval.o
 
 OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
-libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a			\
-libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a				\
-libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a			\
-libsrate.a
+libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
+libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a		\
+libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
+libsrate.a libedfz.a
 
-LIBS = -L. -lspindles -lannot -ldefs -lartifacts -ledf -lhelper		\
+LIBS = -L. -lspindles -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
 -ltimeline -lstaging -lfftwrap -ldsp -lmtm -lmiscmath -lintervals	\
 -ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lica	\
--lsrate -lfftw3
+-lsrate -lfftw3 -lz
 
 ifndef STATIC
 all : luna sharedlib utils
@@ -41,7 +41,8 @@ static : main.o globals.o eval.o $(OBJLIBS)
 sharedlib : globals.o eval.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)
 	$(ECHO) "building libluna.dylib..."
-	$(LD) -dynamiclib $(LDFLAGS) -o libluna.dylib eval.o globals.o  *.a  -lfftw3
+
+	$(LD) -dynamiclib $(LDFLAGS) -o libluna.dylib eval.o globals.o  -Wl,-all_load *.a  -lfftw3 -lz
 else
 	$(ECHO) "building libluna.so..."
 	$(LD) -shared      $(LDFLAGS) -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
@@ -68,8 +69,8 @@ libdefs.a : force_look
 libstats.a : force_look
 	cd stats; $(MAKE) $(MFLAGS)
 
-#libzfile.a : force_look
-#	    cd zfile; $(MAKE) $(MFLAGS)
+libedfz.a : force_look
+	cd edfz; $(MAKE) $(MFLAGS)
 
 libfftwrap.a : force_look
 	cd fftw; $(MAKE) $(MFLAGS)

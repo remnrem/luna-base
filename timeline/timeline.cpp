@@ -426,6 +426,7 @@ int timeline_t::calc_epochs()
 
   // Also populate rec2epoch and epoch2rec mappings
   
+
   // **Epoch size has to be a multiple of EDF record size**
 
   //
@@ -439,23 +440,13 @@ int timeline_t::calc_epochs()
   // In all cases, epoch length must be >= record length
   //
   
-  if ( epoch_length_tp < edf->header.record_duration_tp )
-    Helper::halt( "epoch duration must be greater or equal to EDF record size\n         which is currently "
-  		  + Helper::dbl2str( edf->header.record_duration_tp * globals::tp_duration ) + " second(s); "
-  		  + "see RECORD-SIZE command to change this" );
+   if ( epoch_length_tp < edf->header.record_duration_tp )
+     Helper::halt( "epoch duration must be greater or equal to EDF record size\n         which is currently "
+   		  + Helper::dbl2str( edf->header.record_duration_tp * globals::tp_duration ) + " second(s); "
+   		  + "see RECORD-SIZE command to change this" );
 
-  if ( epoch_length_tp < epoch_inc_tp ) Helper::halt( "epoch increment cannot be larger than epoch duration" );
-  
-//    if ( epoch_length_tp % edf->header.record_duration_tp != 0 )
-//      Helper::halt( "epoch duration must be an integer multiple of EDF record size\n         which is currently "
-//  		  + Helper::dbl2str( edf->header.record_duration_tp * globals::tp_duration ) + " second(s); "
-//  		  + "see RECORD-SIZE command to change this" );
-  
-//   if ( epoch_inc_tp % edf->header.record_duration_tp != 0 )
-//     Helper::halt( "epoch increment must be an integer multiple of EDF record size\n        which is currently "
-// 		  + Helper::dbl2str( edf->header.record_duration_tp * globals::tp_duration ) + " second(s); "
-// 		  + "see RECORD-SIZE command to change this" );
-  
+   if ( epoch_length_tp < epoch_inc_tp ) Helper::halt( "epoch increment cannot be larger than epoch duration" );
+
   
   epochs.clear();
   
@@ -732,7 +723,43 @@ int timeline_t::calc_epochs()
 
 	}
     }
-  
+
+
+  if ( 0 ) 
+    {
+      std::map<int,std::set<int> >::const_iterator ii = rec2epoch.begin();
+      while ( ii != rec2epoch.end() )
+	{
+	  std::cout << "r" << ii->first << "->";
+	  std::set<int>::const_iterator jj = ii->second.begin();
+	  while ( jj != ii->second.end() ) 
+	    {
+	      std::cout << " " << *jj;
+	      ++jj;
+	    }
+	  std::cout << "\n";
+	  ++ii;
+	}
+      std::cout << "\n";
+
+      
+      ii = epoch2rec.begin();
+      while ( ii != epoch2rec.end() )
+	{
+	  std::cout << "e" << ii->first << "->";
+	  std::set<int>::const_iterator jj = ii->second.begin();
+	  while ( jj != ii->second.end() ) 
+	    {
+	      std::cout << " " << *jj;
+	      ++jj;
+	    }
+	  std::cout << "\n";
+	  ++ii;
+	}
+
+
+    }
+
 
   // reset counter
   current_epoch = -1;

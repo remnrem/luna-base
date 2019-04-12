@@ -26,6 +26,7 @@
 #include "helper/logger.h"
 #include "miscmath/miscmath.h"
 #include "db/db.h"
+#include "edfz/edfz.h"
 
 #include "slice.h"
 #include "tal.h"
@@ -253,9 +254,15 @@ void edf_t::description() const
     }
   
   std::cout << "EDF filename      : " << filename << "\n"
-	    << "ID                : " << id << "\n"
-	    << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n"
-	    << "Duration          : " << Helper::timestring( duration_tp ) << "\n"
+	    << "ID                : " << id << "\n";
+
+  if ( header.edfplus ) 
+    std::cout << "Header start time : " << header.starttime << "\n"
+	      << "Last observed time: " << et.as_string() << "\n";
+  else 
+    std::cout << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n";
+
+  std::cout << "Duration          : " << Helper::timestring( duration_tp ) << "\n"
 	    << "# signals         : " << n_data_channels << "\n";
   if ( n_annot_channels > 0 ) 
     std::cout << "# EDF annotations : " << n_annot_channels << "\n";
@@ -333,9 +340,14 @@ void edf_t::terse_summary() const
 
 
 
-std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * inp_signals )
+std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<std::string> * inp_signals )
 {
 
+  // must be *either* EDF or EDFZ
+  
+  if ( file != NULL && edfz != NULL ) 
+    Helper::halt( "internal error in edf_header_t::read(), unclear whether EDF or EDFZ" );
+  
   // Fixed buffer size for header
   // Total header = 256 + ns*256
  
@@ -345,9 +357,19 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
   byte_t * q = new byte_t[ hdrSz ];
   byte_t * q0 = q;
 
+  //
   // Read start of header into the buffer
-  size_t rdsz = fread( q , 1, hdrSz , file);
+  //
 
+  size_t rdsz;
+
+  if ( file ) {
+    rdsz = fread( q , 1, hdrSz , file);
+  } else {
+    rdsz = edfz->read( q , hdrSz );
+  }
+    
+  
   std::set<int> channels;
   
   version        = edf_t::get_string( &q , 8 );
@@ -439,7 +461,10 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
   byte_t * p = new byte_t[ hdrSz * ns_all ]; 
   byte_t * p0 = p;
 
-  rdsz = fread( p , 1, hdrSz * ns_all , file);      
+  if ( file ) 
+    rdsz = fread( p , 1, hdrSz * ns_all , file);      
+  else
+    rdsz = edfz->read( p , hdrSz * ns_all );
 
   // for each of 'ns_all' signals
   
@@ -655,7 +680,7 @@ std::set<int> edf_header_t::read( FILE * file , const std::set<std::string> * in
 
 
 
-bool edf_record_t::read( FILE * file , int r )
+bool edf_record_t::read( int r )
 {
   
   // bound checking on 'r' already done, via edf_t::read_record();
@@ -663,19 +688,32 @@ bool edf_record_t::read( FILE * file , int r )
   // skip if already loaded?
   if ( edf->loaded( r ) ) return false;
   
-  // determine offset into EDF
-  long int offset = edf->header_size + (long int)(edf->record_size) * r;
-  
-  // find the appropriate record
-  fseek( file , offset , SEEK_SET );
-  
   // allocate space in the buffer for a single record, and read from file
+  
   byte_t * p = new byte_t[ edf->record_size ];
+  
   byte_t * p0 = p;
 
-  // and read it
-  size_t rdsz = fread( p , 1, edf->record_size , edf->file );
+  // EDF?
+  if ( edf->file ) 
+    {
+      
+      // determine offset into EDF
+      long int offset = edf->header_size + (long int)(edf->record_size) * r;
+      
+      // find the appropriate record
+      fseek( edf->file , offset , SEEK_SET );
+  
+      // and read it
+      size_t rdsz = fread( p , 1, edf->record_size , edf->file );
+    }
+  else // EDFZ
+    {
+      
+      if ( ! edf->edfz->read_record( r , p , edf->record_size ) ) 
+	Helper::halt( "corrupt .edfz or .idx" );      
 
+    }
 
   // which signals/channels do we actually want to read?
   // header : 0..(ns-1)
@@ -821,7 +859,7 @@ bool edf_t::read_records( int r1 , int r2 )
 	  if ( ! loaded( r ) ) 
 	    {
 	      edf_record_t record( this ); 
-	      record.read( file , r );
+	      record.read( r );
 	      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
 	    }
 	}
@@ -846,43 +884,81 @@ bool edf_t::attach( const std::string & f ,
 
   id = i; 
 
+  //
+  // EDF or EDFZ?
+  //
+  
+  file = NULL; 
 
+  edfz = NULL;
+
+  bool edfz_mode = Helper::file_extension( filename , "edfz" );
+  
+  
   //
   // Attach the file
   //
   
-  if ( ( file = fopen( filename.c_str() , "rb" ) ) == NULL )
-    {      
-      file = NULL;
-      logger << " PROBLEM: could not open specified EDF: " << filename << "\n";
-      globals::problem = true;
-      return false;
+  if ( ! edfz_mode ) 
+    {
+      if ( ( file = fopen( filename.c_str() , "rb" ) ) == NULL )
+	{      
+	  file = NULL;
+	  logger << " PROBLEM: could not open specified EDF: " << filename << "\n";
+	  globals::problem = true;
+	  return false;
+	}
     }
-  
+  else
+    {
+      edfz = new edfz_t;
+      
+      // this also looks for the .idx, which sets the record size
+      if ( ! edfz->open_for_reading( filename ) ) 
+	{
+	  delete edfz;
+	  edfz = NULL;
+	  logger << " PROBLEM: could not open specified .edfz (or .edfz.idx) " << filename << "\n";
+	  globals::problem = true;
+	  return false;
+	}
+    }
+
   
   //
   // Does this look like a valid EDF (i.e. at least contains a header?)
   //
 
-  long fileSize = edf_t::get_filesize( file );
-  
-  if ( fileSize < 256 ) 
+  long fileSize = 0 ; 
+
+  // for EDF
+  if ( file ) 
     {
-      logger << " PROBLEM: corrupt EDF, file < header size (256 bytes): " << filename << "\n";
-      globals::problem = true;
-      return false;
+
+      fileSize = edf_t::get_filesize( file );
+      
+      if ( fileSize < 256 ) 
+	{
+	  logger << " PROBLEM: corrupt EDF, file < header size (256 bytes): " << filename << "\n";
+	  globals::problem = true;
+	  return false;
+	}
+    }
+  else
+    {
+      // TODO... need to check EDFZ file. e.g. try reading the last record?
+      
     }
 
-
   //
-  // Read and parse the EDF header
+  // Read and parse the EDF header (from either EDF or EDFZ)
   //
   
   // Parse the header and extract signal codes 
   // store so we know how to read records
-
-  inp_signals_n = header.read( file , inp_signals );
-
+  
+  inp_signals_n = header.read( file , edfz , inp_signals );
+  
   
   //
   // Swap out any signal label aliases at this point
@@ -916,6 +992,13 @@ bool edf_t::attach( const std::string & f ,
   
   for (int s=0;s<header.ns_all;s++)
     record_size += 2 * header.n_samples_all[s] ; // 2 bytes each
+
+  
+  if ( edfz ) 
+    {
+      if ( record_size != edfz->record_size ) 
+	Helper::halt( "internal error, different record size in EDFZ header versus index" );      
+    }
   
 
   //
@@ -931,21 +1014,24 @@ bool edf_t::attach( const std::string & f ,
   // Check remaining file size, based on header information
   //    
   
-
-  long implied = header_size + header.nr_all * record_size;
-  
-  if ( fileSize != implied ) 
+  if ( file ) 
     {
-      Helper::halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
-		    + " but observed " + Helper::int2str( fileSize) + " bytes" );
+      long implied = header_size + header.nr_all * record_size;
+      
+      if ( fileSize != implied ) 
+	{
+	  Helper::halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
+			+ " but observed " + Helper::int2str( fileSize) + " bytes" );
+	}
     }
+
 
   //
   // Output some basic information
   //
 
   logger << " duration " << Helper::timestring( timeline.total_duration_tp ) 
-	    << " hrs, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hrs after start\n";
+	    << " hms, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hms after start\n";
   logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
 
   logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
@@ -1093,6 +1179,7 @@ bool edf_header_t::write( FILE * file )
   // regarding the nbytes_header variable, although we don't really
   // use it, still ensure that it is properly set (i.e. we may have
   // added/removed signals, so we need to update before making the EDF
+
   nbytes_header = 256 + ns * 256;
   
   writestring( version , 8 , file );
@@ -1142,10 +1229,73 @@ bool edf_header_t::write( FILE * file )
 }
 
 
+
+bool edf_header_t::write( edfz_t * edfz )
+{
+  
+  // For now, we can only write a EDF+C (i.e. standard EDF, not EDF plus)
+
+  if ( edfplus )
+    logger << " ** warning... can only write as standard EDF (not EDF+) currently... **\n";
+
+  // regarding the nbytes_header variable, although we don't really
+  // use it, still ensure that it is properly set (i.e. we may have
+  // added/removed signals, so we need to update before making the EDF
+  nbytes_header = 256 + ns * 256;
+  
+  edfz->writestring( version , 8 );
+  edfz->writestring( patient_id , 80 );
+  edfz->writestring( recording_info , 80 );
+  edfz->writestring( startdate , 8 );
+  edfz->writestring( starttime , 8 );
+  edfz->writestring( nbytes_header , 8 );
+  edfz->write( (byte_t*)reserved.data() , 44 );
+  edfz->writestring( nr , 8 );
+  edfz->writestring( record_duration , 8 );
+  edfz->writestring( ns , 4 );
+
+  // for each of 'ns' signals
+  
+  for (int s=0;s<ns;s++)
+    edfz->writestring( label[s], 16 );
+  
+  for (int s=0;s<ns;s++)
+    edfz->writestring( transducer_type[s], 80 );
+
+  for (int s=0;s<ns;s++)
+    edfz->writestring( phys_dimension[s], 8 );
+
+  for (int s=0;s<ns;s++)
+    edfz->writestring( physical_min[s], 8 );
+
+  for (int s=0;s<ns;s++)
+    edfz->writestring( physical_max[s], 8 );
+
+  for (int s=0;s<ns;s++)
+    edfz->writestring( digital_min[s], 8  );
+
+  for (int s=0;s<ns;s++)
+    edfz->writestring( digital_max[s], 8 );
+
+  for (int s=0;s<ns;s++)
+    edfz->writestring( prefiltering[s], 80 );
+
+  for (int s=0;s<ns;s++)
+    edfz->writestring( n_samples[s], 8 );
+  
+  for (int s=0;s<ns;s++)
+    edfz->writestring( signal_reserved[s], 32 );
+  
+  return true;
+}
+
+
+
+
+
 bool edf_record_t::write( FILE * file )
 {
 
-  // check if this has been read?
   
   for (int s=0;s<edf->header.ns;s++)
     {
@@ -1181,53 +1331,175 @@ bool edf_record_t::write( FILE * file )
 	}
     
     }
+
   return true;
 }
 
 
-bool edf_t::write( const std::string & f )
+bool edf_record_t::write( edfz_t * edfz )
+{
+
+  // check if this has been read?
+  
+  for (int s=0;s<edf->header.ns;s++)
+    {
+      
+      const int nsamples = edf->header.n_samples[s];
+
+      //
+      // Normal data channel
+      //
+
+      if ( edf->header.is_data_channel(s) )
+	{  
+	  std::vector<char> d( 2 * nsamples );
+	  
+	  for (int j=0;j<nsamples;j++)
+	    dec2tc( data[s][j] , &(d)[2*j], &(d)[2*j+1] );	  
+
+	  edfz->write( (byte_t*)&(d)[0] , 2 * nsamples );
+	  
+	}
+      
+      //
+      // EDF Annotations channel
+      //
+      
+      if ( edf->header.is_annotation_channel(s) )
+	{      	  	  
+
+	  std::vector<char> d( 2 * nsamples );
+
+	  for (int j=0;j< 2*nsamples;j++)
+	    {	  	      
+	      char a = j >= data[s].size() ? '\x00' : data[s][j];	      
+	      d[j] = a;
+	    }
+	  
+	  edfz->write( (byte_t*)&(d)[0] , 2 * nsamples ); 
+	  
+	}
+    
+    }
+
+  return true;
+}
+
+
+
+bool edf_t::write( const std::string & f , bool as_edfz )
 {
   
-  // Note: currently, we can only write a EDF, not EDF+
-  // will be easy to change, but right now, if EDF+, the time-track is
-  // not properly written to disk for some reason.
+  // CHANGED:  now okay to write EDF+
 
-  // ensure is a standard EDF
-
+  // Note: currently, we can only write a EDF, not EDF+ will be easy
+  // to change, but right now, if EDF+, the time-track is not properly
+  // written to disk for some reason.
+  
   set_edf();
-
+  
+  reset_start_time();
+  
   filename = f;
 
-  FILE * outfile = NULL;
-
-  if ( ( outfile = fopen( filename.c_str() , "wb" ) ) == NULL )      
-    {
-      logger << " ** could not open " << filename << " for writing **\n";
-      return false;
-    }
-
-  header.write( outfile );
-
-  int r = timeline.first_record();
-  while ( r != -1 ) 
+  if ( ! as_edfz ) 
     {
 
-      // we may need to load this record, before we can write it
-      if ( ! loaded( r ) )
- 	{
- 	  edf_record_t record( this ); 
- 	  record.read( file , r );
- 	  records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
- 	}
+      FILE * outfile = NULL;
       
-      records.find(r)->second.write( outfile );
-      r = timeline.next_record(r);
+      if ( ( outfile = fopen( filename.c_str() , "wb" ) ) == NULL )      
+	{
+	  logger << " ** could not open " << filename << " for writing **\n";
+	  return false;
+	}
+      
+      header.write( outfile );
+      
+      int r = timeline.first_record();
+      while ( r != -1 ) 
+	{
+	  
+	  // we may need to load this record, before we can write it
+	  if ( ! loaded( r ) )
+	    {
+	      edf_record_t record( this ); 
+	      record.read( r );
+	      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
+	    }
+	  
+	  records.find(r)->second.write( outfile );
+	  r = timeline.next_record(r);
+	}
+      
+      fclose(outfile);
     }
 
-  fclose(outfile);
+  //
+  // .edfz and .edfz.idx
+  //
+
+  else 
+    {
+
+      edfz_t edfz;
+
+      if ( ! edfz.open_for_writing( filename ) )
+	{
+	  logger << " ** could not open " << filename << " for writing **\n";
+	  return false;
+	}
+
+      // write header (as EDFZ)
+      header.write( &edfz );
+      
+      int r = timeline.first_record();
+      while ( r != -1 ) 
+	{
+	  
+	  // we may need to load this record, before we can write it
+	  if ( ! loaded( r ) )
+	    {
+	      edf_record_t record( this ); 
+	      record.read( r );
+	      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
+	    }
+	  
+	
+	  // set index	  
+	  int64_t offset = edfz.tell();	  
+	  edfz.add_index( r , offset );
+	  
+	  // now write to the .edfz
+	  records.find(r)->second.write( &edfz );
+	  
+	  // next record
+	  r = timeline.next_record(r);
+	}
+      
+
+      //
+      // Write .idx
+      //
+      
+      logger << "  writing EDFZ index to " << filename << ".idx\n";
+
+      edfz.write_index( record_size );
+
+      
+      //
+      // All done
+      //
+
+      edfz.close();
+
+
+    }
+  
 
   return true;
 }
+
+
 
 
 void edf_t::drop_signal( const int s )
@@ -1483,7 +1755,9 @@ void edf_t::reset_record_size( const double new_record_duration )
   if ( header.record_duration == new_record_duration ) return;
   
   std::vector<int> new_nsamples;
-  
+
+  int new_record_size = 0;
+
   // check that all signals can fit evenly into the new record size
   for (int s=0;s<header.ns;s++)
     {
@@ -1505,6 +1779,9 @@ void edf_t::reset_record_size( const double new_record_duration )
       
       new_nsamples.push_back( new_nsamples1 );
 
+      // track for record size of the new EDF 
+      new_record_size += 2 * new_nsamples1 ; 
+      
     }
   
   // buffer for new records
@@ -1586,6 +1863,12 @@ void edf_t::reset_record_size( const double new_record_duration )
   header.n_samples = new_nsamples;
   header.record_duration = new_record_duration;
   header.record_duration_tp = header.record_duration * globals::tp_1sec;
+
+  // also, update edf.record_size : we won't be reading anything else from the original 
+  // EDF, but if we are writing an EDFZ, then edf_t needs the /new/ record size for the
+  // index
+
+  record_size = new_record_size ; 
 
   // make a new timeline 
   timeline.re_init_timeline();
@@ -1905,7 +2188,7 @@ int  edf_header_t::original_signal( const std::string & s )
 }
 
 
-signal_list_t edf_header_t::signal_list( const std::string & s )
+signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotation_channels )
 {
   
   signal_list_t r;
@@ -1916,8 +2199,14 @@ signal_list_t edf_header_t::signal_list( const std::string & s )
     {
       for (int s=0;s<label.size();s++)
 	{
+	  
+	  // ? only consider data tracks
+	  
+	  if ( no_annotation_channels  && 
+	       is_annotation_channel( s ) ) continue;
+	  
 	  std::string lb = label[s];
-
+	  	  
 	  // swap in alias?
 	  if ( cmd_t::label_aliases.find( lb ) != cmd_t::label_aliases.end() ) 
 	    {
@@ -2434,6 +2723,29 @@ edf_record_t::edf_record_t( edf_t * e )
 }
 
 
+void edf_t::reset_start_time()
+{
+
+  // get time of first record
+  int r = timeline.first_record();
+  if ( r == -1 ) return;
+  // interval for this record
+  logger << "  resetting EDF start time from " << header.starttime ;
+
+  interval_t interval = timeline.record2interval(r); 
+
+  clocktime_t et( header.starttime );
+  if ( et.valid )
+    {
+      double time_hrs = ( interval.start * globals::tp_duration ) / 3600.0 ; 
+      et.advance( time_hrs );
+    }
+
+  header.starttime = et.as_string();;
+  logger << " to " << header.starttime  << "\n"; 
+}
+
+
 void edf_t::set_continuous()
 {
   if ( ! header.edfplus ) return;
@@ -2491,7 +2803,6 @@ void edf_t::drop_time_track()
 
 int edf_t::add_continuous_time_track()
 {
-
   
   // this can only add a time-track to a continuous record
   // i.e. if discontinuous, it must already (by definition) 
@@ -2582,7 +2893,7 @@ int edf_t::add_continuous_time_track()
 	  
 	  edf_record_t record( this ); 
 	  
-	  record.read( file , r );
+	  record.read( r );
 
 	  records.insert( std::map<int,edf_record_t>::value_type ( r , record ) );
 
@@ -2621,7 +2932,7 @@ int edf_t::add_continuous_time_track()
 
 uint64_t edf_t::timepoint_from_EDF( int r )
 {
-
+  
   //
   // Read this is called when constructing a time-series for 
   // an existing EDF+D, only

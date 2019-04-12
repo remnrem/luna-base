@@ -544,6 +544,20 @@ struct timeline_t
 
   static bool discontinuity( const std::vector<uint64_t> & t , int sr, int sp1, int sp2 );
 
+  std::map<int,bool> spanning_epoch_masks( const int r ) 
+  {
+    std::map<int,bool> rec;
+    std::map<int,std::set<int> >::const_iterator ii = rec2epoch.find( r );
+    if ( ii == rec2epoch.end() ) return rec;
+    std::set<int>::const_iterator jj = ii->second.begin();
+    while ( jj != ii->second.end() )
+      {
+	rec[ *jj ] = masked_epoch( *jj );
+	++jj;
+      }
+    return rec;
+  }
+  
 
  private:
 

@@ -911,7 +911,7 @@ void proc_dummy( const std::string & p )
 
   std::vector<double> x;
   
-  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" ) 
+  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" || p == "ica" ) 
     {
 
       
@@ -1013,6 +1013,80 @@ void proc_dummy( const std::string & p )
       std::exit(1);
     }
 
+  
+  //
+  // ICA
+  //
+
+  if ( p == "ica" ) 
+    {
+
+
+      // asssume two signals for now
+      const int n2 = x.size();
+      const int ns = 2;
+
+      int rows = x.size() / ns;
+      int cols = ns;
+      mat pX = mat_create( rows , cols );
+      int p = 0;
+      
+      
+      for (int i=0;i<rows;i++) 
+	for (int j=0;j<ns;j++)
+	  pX[i][j] = x[p++];
+      
+      int compc = ns;
+
+      std::cout << "want to perform ICA on " << rows << " x " << cols << " matrix\n";
+
+      ica_t ica( pX , rows , cols , compc );
+
+      for (int i=0;i<rows;i++)
+	{
+	  std::cout << i ;
+	  
+	  for (int j=0;j<cols;j++) 
+	    std::cout << "\t" << pX[i][j] << "\t";
+	 	  	  
+	  for (int j=0;j<compc;j++) 
+	    std::cout << "\t" << ica.S[i][j] ;      
+	 
+	  std::cout << "\n";
+ 
+	}
+      
+
+      // other matrices
+      
+      // K : cols x compc
+      // A : compc x compc
+      // W : compc x compc
+      // S : as original data
+      
+      std::cout << "K\n";
+      for (int i=0;i<cols;i++)
+	{
+	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.K[i][j];
+	  std::cout << "\n\n";
+	}
+      
+      std::cout << "W\n";
+      for (int i=0;i<compc;i++)
+	{
+	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.W[i][j];
+	  std::cout << "\n\n";
+	}
+      
+      std::cout << "A\n";
+      for (int i=0;i<compc;i++)
+	{
+	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.A[i][j];
+	  std::cout << "\n\n";
+	}      
+      
+    }
+
 
   //
   // retval test
@@ -1107,668 +1181,134 @@ void proc_dummy( const std::string & p )
     }
 
 
-  std::string expr;
-  
-  Helper::safe_getline( std::cin , expr );
-  
-  std::map<std::string,annot_map_t> inputs;
-  
-  annot_map_t amap1, amap2;
-  
-  std::vector<int> ints(3);
-  ints[0] = 637; ints[1] = 87; ints[3] = -23;
-
-  instance_t in1;
-  in1.set( "v1" , 10.0 );
-  in1.set( "v2" , std::string("A") );
-  in1.set( "v3" , true );
-
-  instance_t in2;
-  in2.set( "v1" , 92.1 );
-  in2.set( "v2" , std::string( "B" ) );
-  in2.set( "v3" , true );
-
-  instance_t in3;
-  in3.set( "v1" , 108.5 );
-  in3.set( "v2" , std::string( "C" ) );
-  in3.set( "v3" , false );
-
-  annot_t annot1( "a1" );
-  
-  amap1[ instance_idx_t( &annot1 , interval_t(0,100) , "inst1" ) ] = &in1;
-  amap1[ instance_idx_t( &annot1 , interval_t(200,300) , "inst2" ) ] = &in2;
-  amap1[ instance_idx_t( &annot1 , interval_t(200,300) , "inst3" ) ] = &in3;
-
-//   amap2[ instance_idx_t( &annot2 , interval_t(0,100) , "." ) ] = &in3;
-//   amap2[ instance_idx_t( &annot2 , interval_t(200,300) , "." ) ] = &in4;
-
-  // collate all annotations
-  inputs[ "a1" ] = amap1;
-  //  inputs[ "annot2" ] = amap2;
-  
-  instance_t out;
-  
-  Eval tok( expr );
-
-  tok.bind( inputs , &out );
-
-
-  bool is_valid = tok.evaluate();
-  
-  bool retval; 
-  
-  bool is_valid2 = tok.value( retval );
-  
-  std::cout << "\n\n\n";
-  std::cout << "valid " << is_valid << "\t" << is_valid2 << "\n";
-  std::cout << "value  = " << retval << "\n";
-  std::cout << "result = " << tok.result() << "\n";
-
-  std::cout << "\n\n\n";
-  
-  std::cout << "out : " << out.print() << "\n";
-  
-  std::exit(1);
-  
-  
-  
-  //std::cout << "annot " << nsrr_t::remap( "Stage 4 sleep|4" ) << "\n";
-
-  std::exit(0);
-
-  
-  std::vector<double> dx;
-  while ( ! std::cin.eof() ) 
-    {
-      double dxx;
-      std::cin >> dxx;
-      if ( std::cin.eof() ) break;
-      dx.push_back( dxx );
-    }
-  std::cout << "read " << dx.size() << " points\n";
-
-  // nw = 4, i.e. 2*4-1 = 7 tapers
-  // 1 window ??
-
-//   mtm_t::mtm_t( const int npi , const int nwin ) : npi(npi) , nwin(nwin)
-//   {
-
-//     kind = 1;
-//     inorm = 1;
-//   }
-
-  // P number of points 
-  // W bandwidth 
-  // W = P/N
-  // P = NW  , ... 4 
- 
-  // N = 512, i.e. 
-  // or 320?  i.e. length of sequence
-  // P = NW
-  // 
-
-  //         npi , nwin 
-  //          P     # tapers (should be max 2P-1)
-  //          P=NW
-  mtm_t mtm(   4 , 7 );
-
-  //  mtm.inorm = 0; // normalization factor
-  //   mtm.kind = 1; // 1 or 2 (weights)
-
-  // adaptive weights and 1/N normalization 
-  // seems to give similar results to ML pmtm
-  
-  // weights
-  // 1 hi-res, 2 adaptive, 3 none
-
-  mtm.kind = 2 ; 
-
-  //normalization 1/N
-  mtm.inorm = 3 ; 
-
-  // inorm               norm
-  // 0  1 (none)      -> 1
-  // 1  N             -> 1/N^2
-  // 2  1/dt          -> dt^2
-  // 3  sqrt(N)       -> 1/N
-  
-  // norm = 1/(W^2)
-
-  mtm.apply( &dx , 1024 );
-
-  
-
   //
-  // standard
+  // topop
   //
 
-//   int index_length = dx.size();
-//   int my_Fs = 1024;
-//   int index_start = 0;
-  
-
-//   FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
-
-//   fftseg.apply( &(dx[index_start]) , index_length );
-
-//   int my_N = fftseg.cutoff;
-//   for (int f=0;f<my_N;f++)
-//     {
-//       std::cout << f << "\t" << fftseg.frq[f] << "\t" << fftseg.X[f] << "\n";
-//    }
-  
-  
-    
-  std::exit(1);
-
-
-  std::string edf_file2 = "/home/shaun/Dropbox/my-sleep/Purcell06072016.edf";  
-  edf_t edf2; 
-  edf2.attach( edf_file2 , "id-007" );
-  
-    
-  retval_t ret;
-  writer.nodb();
-  writer.use_retval( &ret );
-
-  // evaluate a command
-  cmd_t cmd( "EPOCH & SPINDLES method=wavelet fc=13" );
-
-  cmd.eval( edf2 ); 
-
-  ret.dump();
-
-  std::exit(0);
-  
-  // retval_strata_t s;
-  // s.add( retval_factor_level_t( "F" , 11 ) ) ;
-  // s.add( retval_factor_level_t( "SS" , "N2" ) ) ;
-  // s.add( retval_factor_level_t( "B" , 12.4 ) ) ; 
-
-  // ret.add( retval_cmd_t("c1") , retval_var_t("v1") , s , 22 );
-  // ret.add( retval_cmd_t("c2") , retval_var_t("v1") , s , 22.2 );
-  // ret.add( retval_cmd_t("c2") , retval_var_t("v2") , s , 22.5 );
-  // ret.dump();
-  
-  std::exit(1);
-  
-  Data::Matrix<double> D( 10 , 10 );
-  for (int i=0;i<10;i++) 
-    for (int j=0;j<10;j++) 
-      std::cin >> D(i,j) ;
-  
-  cluster_t cl;
-  cl.build( D );
-
-  
-  std::exit(1);
-
-  if ( 1 ) 
+  if ( p == "topo" )
     {
 
+      // read map from 'example.topo'   CH  THETA  RAD 
+      // read data from std::cin,       CH  VALUE
+      
       topo_t topo;
       
-      int ch = topo.load("/Users/shaun/dropbox/ebooks/eegbook/clocs.theta.rad.txt");
-
+      int ch = topo.load( "example.topo" );
+      
       topo.max_radius( 0.55 );
       
       topo.grid( 67 , 67 );
       
       std::map<std::string, double> data;  
+      
       while ( ! std::cin.eof() ) 
 	{
 	  std::string l;
-	  double x,y,z;
+	  double z;
 	  std::cin >> l;
 	  if ( std::cin.eof() ) continue;
 	  if ( l == "" ) continue;
 	  std::cin >> z ;
-	  data[l] = z;
-	  
+	  data[l] = z;	  
 	}
-      
+
+      std::cerr << "read topo for " << ch << " channels\n";
+
+      std::cerr << "read data for " <<  data.size() << " channels\n";
+
       Data::Matrix<double> I = topo.interpolate( data );
       
-      std::cout << I.print() << "\n";
+      std::cout << I.dump() << "\n";
       
       std::exit(0);
     }
 
 
-  if ( 0 ) 
+
+  if ( p == "clocs" )
     {
+
+  
+      clocs_t clocs;
+      clocs.load_cart( "ex.clocs" );
+      ///Users/shaun/dropbox/sleep/projects/grins-test/clocs.txt" );
       
 
-      std::vector<double> x,y;
-      std::vector<double> z;
-      double xmin = 99, xmax = -99;
-      double ymin = 99, ymax = -99;
+      // read data : 64 by 
+      int ns = 64;
+      int np = 63360;
       
-      while ( ! std::cin.eof() ) 
-	{
-	  std::string ch;
-	  double x1,y1,z1;
-	  std::cin >> ch ;
-	  if ( ch == "" ) continue;
-	  std::cin >> x1 >> y1 >> z1;
-	  x.push_back( x1  );
-	  y.push_back( y1 );
-	  z.push_back( z.size() );
-	  if ( x1 < xmin ) xmin = x1;
-	  if ( y1 < ymin ) ymin = y1;
-	  
-	  if ( x1 > xmax ) xmax = x1;
-	  if ( y1 > ymax ) ymax = y1;
-
-	}
-
-      std::cout << "read " << z.size() << "\n";
+      Data::Matrix<double> X( ns , np );
       
-      for (int i=0;i<x.size();i++) 
-	{ 
-	  x[i] = ( x[i] - xmin ) / ( xmax - xmin ) ; 
-	  y[i] = ( y[i] - ymin ) / ( ymax - ymin ) ; 
-	}
-      
-
-      Data::Matrix<double> results =   
-	dsptools::interpolate2D( x , y , z , 0 , 1 , 67 , 0 , 1 , 67 );
-      
-      std::cout << "\n" << results.print() << "\n";
-      
-    }
-
-
-  std::exit(1);
-  
-  writer.nodb();
-
-  writer.begin();      
-  writer.id( "." , "." );
-  
-  pdc_t pdc;
-  pdc.test();
-
-  writer.commit();
-
-  std::exit(1);
-  
-  //  std::vector<double> h;
-  std::ifstream X1( "eeg.txt", std::ios::in );
-  //std::ifstream H1( "h.txt", std::ios::in );
-
-  while ( ! X1.eof() )
-    {
-      double xx;
-      X1 >> xx;
-      if ( X1.eof() ) break;
-      x.push_back( xx ) ;
-    }
-  X1.close();
-
-  // while ( ! H1.eof() )
-  //   {
-  //     double xx;
-  //     H1 >> xx;
-  //     if ( H1.eof() ) break;
-  //     h.push_back( xx ) ;
-  //   }
-  // H1.close();
-
-  logger << "read " << x.size() << " x values\n" ;
-  //  logger << "read " << h.size() << " h values\n";
-  
-  
-  int kaiserWindowLength;
-  double beta;
-
-  double transitionWidthHz = 0.5;
-  double ripple = 0.001;
-  int sampFreq = 128;
-  double trans1Freq = 10;
-  double trans2Freq = 16;
-
-  fir_t fir;
-  fir.calculateKaiserParams( ripple , transitionWidthHz, sampFreq, &kaiserWindowLength, &beta);
-  
-  std::cout << "KWL, beta = " << kaiserWindowLength << "\t" << beta << "\n";
-  if ( kaiserWindowLength % 2 == 0 ) ++kaiserWindowLength;
-  std::vector<double> bpf = fir.create2TransSinc(kaiserWindowLength, trans1Freq, trans2Freq,  sampFreq, fir_t::BAND_PASS);
-  std::vector<double> fc = fir.createKaiserWindow(&bpf, beta);
-
-  //
-  // Convolve
-  //
-  
-  for (int tt=0;tt<10;tt++)
-    {
-      logger << "tt + " << tt << "\n";
-
-      fir_impl_t ft( fc );      
-      std::vector<double> ff1 = ft.filter( &x );
-      //std::vector<double> ff2 = ft.fft_filter( &x );      
-      //for (int j=0;j<ff1.size();j++) std::cout  << "conv\t" << j << "\t" << ff1[j] << "\n";     
-      // for (int j=0;j<ff2.size();j++) std::cout  << "fftconv\t" << j << "\t" << ff2[j] << "\n";
-    }
-  
-  std::exit(1);
-    
-  //
-  // Method 2
-  //
-
-
-  // fir_impl_t ft( fc );
-  // std::vector<double> ff2 = ft.filter( &x );
-
-  // for ( int  i = 0 ; i < ff2.size() ; i ++ ) 
-  //   std::cout << "ff2_" << i << "\t" << x[i] << "\t" << ff2[i] << "\n";
-
-  // for ( int  i = 0 ; i < c.size() ; i ++ ) 
-  //   std::cout << "cc1_" << i << "\t" << c[i] << "\n";
-  
-  std::exit(1);
-  
-
-  std::vector<double> signal( 5 , 1 );
-  std::vector<double> kernel( 2 , 1 );
-  signal.push_back( 2222 );
-  signal.push_back( 2 );
-  signal.push_back( 2 );
-  signal.push_back( 2 );
-  signal.push_back( 2 );
-
-  std::vector<double> conv = dsptools::convolve( signal , kernel );
-  
-  for (int i = 0 ; i < conv.size() ; i++ ) 
-    {
-      std::cout << "\t" << conv[i] << "\n";
-    }
-  
-  std::exit(1);
-  
-  
-  
-  edf_t edf;
-  timeline_t t(&edf);
-  t.load_interval_list_mask( "n2.int" );
-  std::exit(0);
-
-
-  //
-  // Load signal from STDIN
-  //
-
-  //   std::vector<double> x;
-
-//   while ( ! std::cin.eof() ) 
-//     {
-//       double t;
-//       std::cin >> t;
-//       if ( std::cin.eof() ) break;
-//       x.push_back(t);
-//     }
-//   logger << "read " << x.size() << " values\n";
-
-   while ( ! std::cin.eof() ) 
-     {
-       double t;
-       std::cin >> t;
-       if ( std::cin.eof() ) break;
-       x.push_back(t);
-     }
-   logger << "read " << x.size() << " values\n";
-
-
-//   std::exit(1);
-  
-   //
-   // CFC/GLM
-   //
-
-   cfc_t cfc( x , 0.5 , 1.5 , 9 , 11 , 200 );
-
-   bool okay = cfc.glm();
-
-   if ( ! okay ) Helper::halt( "problem" );
-
-   std::cout << "r_PAC\t" << cfc.r_PAC << "\n"
-	     << "C_AMP\t" << cfc.c_AMP << "\n"
-	     << "Z_AMP\t" << cfc.z_AMP << "\n"
-	     << "R2_TOT\t" << cfc.r2_TOT <<"\n";
-   
-   std::exit(1);
-
-
-//   // Test
-  
-//   int index_length = x.size();
-//   int my_Fs = 1000;
-//   int index_start = 0;
-
-
-//   FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
-  
-//   fftseg.apply( &(x[index_start]) , index_length );
-  
-//   int my_N = fftseg.cutoff;
-//   for (int f=0;f<my_N;f++)
-//     {
-//       std::cout << f << "\t" << fftseg.frq[f] << "\t" << fftseg.X[f] << "\n";
-//     }
-
-//   std::exit(1);
-
-//   //
-//   // EMD
-//   //
-  // 
-  // fiplot_t fp( x , 200 , 0 , 5 , 0.1 , 
-  // 	       15 , 15 , 1 ); // frequencies
-
-
-//   double x2 = 0.9243;
-
-//   for (int j=1;j<=10;j++)
-//     {
-//       std::vector<double> lp = legendre( j , x2 );
-//       for (int k=0;k<j;k++) std::cout << " " << j << " " << lp.size() << " " << lp[k] << "\n";
-//     }
-  
-//   std::exit(1);
-
-  //
-  //
-  
-  clocs_t clocs;
-  clocs.load_cart( "ex.clocs" );
-  ///Users/shaun/dropbox/sleep/projects/grins-test/clocs.txt" );
-
-  std::exit(1);
-
-  // read data : 64 by 
-  int ns = 64;
-  int np = 63360;
-  
-  Data::Matrix<double> X( ns , np );
-
-  for (int c=0;c<ns;c++) // channel by data points
-    for (int r=0;r<np;r++)
-      {
- 	double x1;
- 	std::cin >> x1;
- 	if ( std::cin.eof() ) Helper::halt("prob");
- 	X(r,c) = x1;
-       }
-  
-  signal_list_t good_signals;
-  signal_list_t bad_signals;
-
-  int si = 0;
-  std::ifstream IN1("good.sigs",std::ios::in);
-  while ( !IN1.eof() ) 
-    {
-      std::string l;
-      IN1 >> l;
-      if ( IN1.eof() ) break;
-      good_signals.add( si++ , l );
-    }
-  IN1.close();
-
-//   std::map<double,double> tvals;
-//   double thf;
-//   double empirical_threshold = MiscMath::threshold( x , 0.1 , 20 , 0.1 , &thf, &tvals );
-
-//   logger << "et = " << empirical_threshold << "\n";
-
-//   std::map<double,double>::const_iterator tt = tvals.begin();
-//   while ( tt != tvals.end() ) 
-//     {
-//       logger << tt->first << "\t" 
-// 		<< tt->second << "\n";
-//       ++tt;
-//     }
-
-//   std::exit(1);
-
-//   emd_t emd( x , 1000 );
-
-//   std::exit(1);
-
-  // bad
-  si = 0;
-  std::ifstream IN2("bad.sigs",std::ios::in);
-  while ( !IN2.eof() ) 
-    {
-      std::string l;
-      IN2 >> l;
-      if ( IN2.eof() ) break;
-      bad_signals.add( si++ , l );
-    }
-  IN2.close();
-
-
-  Data::Matrix<double> invG;
-  Data::Matrix<double> Gi;
-  clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
-  std::vector<int> gi;
-  for (int i=11;i<=64;i++) gi.push_back(i-1);
-
-  Data::Matrix<double> interp = clocs.interpolate( X , gi , invG , Gi );
-  
-  std::exit(1);
-
-  //
-  // Load signal from STDIN
-  //
-
-  if ( 0 ) 
-    {
-      while ( ! std::cin.eof() ) 
-	{
-	  double t;
-	  std::cin >> t;
-	  if ( std::cin.eof() ) break;
-	  x.push_back(t);
-	}
-      logger << "read " << x.size() << " values\n";
-    }
-
-  if ( 0 ) 
-    {
-      // 
-//       fiplot_t fp( x , 1000 , 
-// 		   0   , 5    , 0.05 ,   // min/max for display, time interval 
-// 		   0.5 , 25   , 0.5 );   // frequencies
-      
-      std::exit(1);
-    }
-
-
-  if ( 0 ) 
-    {
-      int rows = 1000;
-      int cols = 2;
-      int compc = 2;
-      
-      mat X = mat_create( rows , cols );
-      
-      for (int i=0;i<rows;i++)
-	for (int j=0;j<cols;j++)
+      for (int c=0;c<ns;c++) // channel by data points
+	for (int r=0;r<np;r++)
 	  {
-	    double x;
-	    std::cin >> x;
-	    X[i][j] = x;
+	    double x1;
+	    std::cin >> x1;
+	    if ( std::cin.eof() ) Helper::halt("prob");
+	    X(r,c) = x1;
 	  }
       
-      //    double ** pW = mat_create(compc, compc);
-      //    double ** pA = mat_create(compc, compc);
-      //    double ** pK = mat_create(cols, compc);
-      //    double ** pS = mat_create(rows, cols);     
+      signal_list_t good_signals;
+      signal_list_t bad_signals;
       
-      //      ica_t ica( X , rows , cols , compc );
-      
-      //     fastICA(X, rows, cols, compc, pK, pW, pA, pS);
-      
-      //
-      // EMD
-      //
-      
-      ica_t ica( X , rows , cols , compc );
-      
-//     fastICA(X, rows, cols, compc, pK, pW, pA, pS);
-      
-
-   std::cout << "W <comp x comp>\n";
-
-      std::cout << "W <comp x comp>\n";
-      
-      for (int i=0;i<ica.W.size();i++)
+      int si = 0;
+      std::ifstream IN1("good.sigs",std::ios::in);
+      while ( !IN1.eof() ) 
 	{
-	  for (int j=0;j<ica.W[i].size();j++)
-	    std::cout << ica.W[i][j] << " ";
-	  std::cout << "\n";
+	  std::string l;
+	  IN1 >> l;
+	  if ( IN1.eof() ) break;
+	  good_signals.add( si++ , l );
 	}
+      IN1.close();
       
-      std::cout << "A <comp x comp>\n";
-      for (int i=0;i<ica.A.size();i++)
+      //   std::map<double,double> tvals;
+      //   double thf;
+      //   double empirical_threshold = MiscMath::threshold( x , 0.1 , 20 , 0.1 , &thf, &tvals );
+      
+      //   logger << "et = " << empirical_threshold << "\n";
+      
+      //   std::map<double,double>::const_iterator tt = tvals.begin();
+      //   while ( tt != tvals.end() ) 
+      //     {
+      //       logger << tt->first << "\t" 
+      // 		<< tt->second << "\n";
+      //       ++tt;
+      //     }
+      
+      //   std::exit(1);
+      
+      // bad
+      si = 0;
+      std::ifstream IN2("bad.sigs",std::ios::in);
+      while ( !IN2.eof() ) 
 	{
-	  for (int j=0;j<ica.A[i].size();j++)
-	    std::cout << ica.A[i][j] << " ";
-	  std::cout << "\n";
+	  std::string l;
+	  IN2 >> l;
+	  if ( IN2.eof() ) break;
+	  bad_signals.add( si++ , l );
 	}
+      IN2.close();
       
-      std::cout << "K <cols x comp>\n";
-      for (int i=0;i<ica.K.size();i++)
-	{
-	  for (int j=0;j<ica.K[i].size();j++)
-	    std::cout << ica.K[i][j] << " ";
-	  std::cout << "\n";
-	}
       
-      std::cout << "S <rows x cols>\n";
-      for (int i=0;i<ica.S.size();i++)
-	{
-	  for (int j=0;j<ica.S[i].size();j++)
-	    std::cout << ica.S[i][j] << " ";
-	  std::cout << "\n";
-	}
-      
-    }
+      Data::Matrix<double> invG;
+      Data::Matrix<double> Gi;
+      clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
+      std::vector<int> gi;
+      for (int i=11;i<=64;i++) gi.push_back(i-1);
 
-
-  if ( 0 ) 
-    {
-      hilbert_t hilbert( x );
-      std::vector<double> ph = * hilbert.phase();
-      for (int k=0;k<ph.size();k++) std::cout << x[k] << " " << ph[k] << "\n";
-      std::cout << "\n";
-      std::vector<double> f = hilbert.instantaneous_frequency( 1000 );
-      for (int k=0;k<f.size();k++) std::cout << k << " " << f[k] << "\n";
+      Data::Matrix<double> interp = clocs.interpolate( X , gi , invG , Gi );
       
       std::exit(1);
+      
     }
 
+  
+  //
+  // end of dummy()
+  //
+      
 }
 
 

@@ -40,8 +40,9 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 
   std::string signal_label = param.requires( "sig" );
   
-  signal_list_t signals = edf.header.signal_list( signal_label );  
+  const bool no_annotations = true;
 
+  signal_list_t signals = edf.header.signal_list( signal_label , no_annotations );  
 
   const int ns = signals.size();
 
@@ -71,7 +72,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   for (int j=0;j<ns;j++)
     {
       const std::vector<double> * data = mslice.channel[j]->pdata();      
-      for (int i=0;i<cols;i++) pX[i][j] = (*data)[i];
+      for (int i=0;i<rows;i++) pX[i][j] = (*data)[i];
     }
   
   //
@@ -96,9 +97,15 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 
   for (int i=0;i<rows;i++)
     {
+  
       std::cout << i ;
-      for (int j=0;i<cols;j++) std::cout << "\t" << pX[i][j] << "\t";
-      for (int j=0;i<compc;j++) std::cout << "\t" << ica.S[i][j] ;      
+
+      for (int j=0;j<cols;j++) std::cout << "\t" << pX[i][j] << "\t";
+      
+      for (int j=0;j<compc;j++) std::cout << "\t" << ica.S[i][j] ;      
+
+      std::cout << "\n";
+
     }
 
   // other matrices
@@ -108,25 +115,25 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   // W : compc x compc
   // S : as original data
 
-  logger << "K\n";
+  std::cout << "K\n";
   for (int i=0;i<cols;i++)
     {
-      for (int j=0;j<compc;j++) logger << "\t" << ica.K[i][j];
-      logger << "\n\n";
+      for (int j=0;j<compc;j++) std::cout << "\t" << ica.K[i][j];
+      std::cout << "\n\n";
     }
 
-  logger << "W\n";
+  std::cout << "W\n";
   for (int i=0;i<compc;i++)
     {
-      for (int j=0;j<compc;j++) logger << "\t" << ica.W[i][j];
-      logger << "\n\n";
+      for (int j=0;j<compc;j++) std::cout << "\t" << ica.W[i][j];
+      std::cout << "\n\n";
     }
   
-  logger << "A\n";
+  std::cout << "A\n";
   for (int i=0;i<compc;i++)
     {
-      for (int j=0;j<compc;j++) logger << "\t" << ica.A[i][j];
-      logger << "\n\n";
+      for (int j=0;j<compc;j++) std::cout << "\t" << ica.A[i][j];
+      std::cout << "\n\n";
     }
 
 

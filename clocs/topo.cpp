@@ -65,6 +65,7 @@ int topo_t::load( const std::string & filename )
       IN1 >> ch.label >> l.th >> l.r ;
       
       if ( IN1.eof() ) break;
+
       // skip
       if ( l.r > 0.6 ) continue;
       
@@ -78,14 +79,14 @@ int topo_t::load( const std::string & filename )
       l.x = l.r * cos( l.th );
       l.y = l.r * sin( l.th );
       cxy[ ch ] = l;
-
       
-      // std::cerr << "read " << ch.n << " " << ch.label << "\t" << l.x << " " << l.y << " " << l.th << " " << l.r << "\n";
+      logger << "  channel location " << ch.label << " [TH,R] = " << l.th << " " << l.r << ", [X,Y] = " << l.x << " " << l.y << "\n";
+
     }
   IN1.close();
 
-  if ( ! globals::silent ) 
-    std::cerr << " read " << cxy.size() << " channel locations\n"; 
+  
+  logger << " read " << cxy.size() << " channel locations\n"; 
 
   return cxy.size();
 
@@ -238,8 +239,7 @@ Data::Matrix<double> topo_t::interpolate( const std::map<std::string, double> & 
 
       if ( l == -1 ) 
 	{ 
-	  if ( ! globals::silent ) 
-	    std::cerr << " no topographical information for " << ii->first << " found, dropping\n"; 
+	  logger << " no topographical information for " << ii->first << " found, dropping\n"; 
 	  ++ii; 
 	  continue; 
 	}

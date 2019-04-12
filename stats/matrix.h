@@ -217,6 +217,8 @@ namespace Data {
     
     std::string print( const std::string & label = "" , const int nrow = 0 , const int ncol = 0 ) const;
 
+    std::string dump() const;
+
     // some convenience functions
     
     void inplace_add( const double x );

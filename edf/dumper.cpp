@@ -38,6 +38,63 @@ extern logger_t logger;
 
 extern annotation_set_t annotations;
 
+
+void edf_t::record_table( param_t & param )
+{
+  
+  // iterate over each record
+
+  int r = timeline.first_record();
+  
+  while ( r != -1 )
+    {
+                      
+      // Interval for this record
+      
+      interval_t interval = timeline.record2interval(r); 
+
+      // basic information
+
+      std::cout << "RECS\t"
+		<< id << "\t";
+
+      std::cout << r+1 << "\t" 
+		<< header.nr << "/" << header.nr_all ;
+      
+      std::cout << "\t" << interval.as_string() ;
+
+      // epoch information?
+      
+      if ( timeline.epoched() )
+	{
+	  std::cout << "\t";
+   	  std::map<int,bool>  epochs = timeline.spanning_epoch_masks( r );
+	  std::map<int,bool>::const_iterator ii = epochs.begin();
+	  while ( ii != epochs.end() ) 
+	    {
+
+	      interval_t epoch_interval = timeline.epoch(ii->first );
+	      std::cout << " ";
+	      if ( ii->second ) std::cout << "[" ;
+	      std::cout << timeline.display_epoch( ii->first ) ;
+	      std::cout << ";" << epoch_interval.as_string() ;
+	      if ( ii->second ) std::cout << "]" ;
+	      ++ii;
+	    }
+
+	}
+      
+      // next record
+
+      std::cout << "\n";
+
+      r = timeline.next_record( r );
+
+    }
+  
+  
+}
+
 void edf_t::record_dumper( param_t & param )
 {
 

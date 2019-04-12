@@ -231,6 +231,7 @@ void fastICA(mat X, int rows, int cols, int compc, mat K, mat W, mat A, mat S)
 	mat_mult(D, compc, compc, TU, compc, compc, V);
 	mat_inverse(V, compc, D);
 	mat_mult(TU, compc, compc, D, compc, compc, V);
+
 	// A
 	mat_transpose(V, compc, compc, A);
 

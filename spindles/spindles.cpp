@@ -510,7 +510,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       for (int fi=0; fi<frq.size(); fi++)
 	{
 	  
-	  logger << "\n detecting spindles around F_C " << frq[fi] << "Hz\n";
+	  logger << "\n detecting spindles around F_C " << frq[fi] << "Hz for " << signals.label(s) << "\n";
 	  logger << " wavelet with " << num_cycles << " cycles\n";       
 	  logger << " smoothing window = " << moving_window_sec << "s\n";
 

@@ -635,7 +635,7 @@ clocktime_t::clocktime_t( const std::string & t )
   valid = Helper::timestring( t , &h, &m, &s );
   if ( h < 0 || m < 0 || s < 0 ) valid = false;
   if ( h > 23 || m > 59 || s > 59 ) valid = false;  
-};
+}
 
 bool clocktime_t::midpoint( const clocktime_t & t1 , const clocktime_t & t2 )
 {
@@ -801,7 +801,9 @@ bool Helper::timestring( const std::string & t, int * h, int *m , int *s)
 
 void Helper::swap_in_variables( std::string * t , const std::map<std::string,std::string> & vars )
 {
+  std::cout << "[" << *t << "]\n";
 
+  
   // variable must be in the form   ${var} 
   std::string s;
   for (int i=0;i<t->size();i++)
@@ -818,7 +820,7 @@ void Helper::swap_in_variables( std::string * t , const std::map<std::string,std
 	  
 	  if ( (*t)[i] != '}' ) varname += (*t)[i];
 	  else
-	    {
+	    {	      
 	      if ( vars.find( varname ) == vars.end() )
 		Helper::halt( "variable ${" + varname + "} was not specified" );
 	      else // swap in new text

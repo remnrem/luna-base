@@ -25,6 +25,7 @@
 
 #include "timeline/timeline.h"
 #include "tal.h"
+#include "edfz/edfz.h"
 
 #include <iostream>
 #include <vector>
@@ -203,9 +204,11 @@ struct edf_header_t
 
   std::string summary() const;
 
-  std::set<int> read( FILE * file, const std::set<std::string> * inp_signals );
+  std::set<int> read( FILE * file, edfz_t * edfz , const std::set<std::string> * inp_signals );
   
   bool write( FILE * file );
+  
+  bool write( edfz_t * edfz );
   
   int  signal( const std::string & s );
 
@@ -213,7 +216,7 @@ struct edf_header_t
 
   int  original_signal( const std::string & s );
 
-  signal_list_t signal_list( const std::string & s );
+  signal_list_t signal_list( const std::string & s , bool no_annotation_channels = false );
   
   void signal_alias( const std::string & s );
 
@@ -283,10 +286,15 @@ struct edf_record_t
   // Main I/O functions
   //
 
-  bool read( FILE * file , int r );
-  
+  // from either EDF or EDFZ, it will determine given edf_t * parent
+  bool read( int r ); 
+
+  // for writing, split out into two separate functions (no particular reason for the differences...)
   bool write( FILE * file );
 
+  bool write( edfz_t * );
+
+  
   void add_data( const std::vector<int16_t> & );
   
   std::vector<double> get_pdata( const int signal );
@@ -399,7 +407,7 @@ public:
     if ( ! loaded( rec ) )
       {
 	edf_record_t record( this ); 
-	record.read( file , rec );
+	record.read( rec );
 	records.insert( std::map<int,edf_record_t>::value_type( rec , record ) );	      
       }
   }
@@ -431,6 +439,8 @@ public:
   void data_dumper( const std::string & , const param_t & );
   
   void record_dumper( param_t & param );
+  
+  void record_table( param_t & param );
 
   void data_epoch_dumper( param_t & param , std::set<std::string> * = NULL );
 
@@ -473,11 +483,18 @@ public:
 private:
   
   //
-  // File buffer
+  // File buffer for standard EDF
   //
   
   FILE * file;
 
+
+  //
+  // Alternate buffer for EDFZ
+  //
+
+  edfz_t * edfz;
+  
   
   //
   // Endianness
@@ -505,6 +522,7 @@ public:
   {
     endian = determine_endian();    
     file = NULL;
+    edfz = NULL;
     init();
   } 
 
@@ -519,6 +537,14 @@ public:
     if ( file != NULL ) 
       fclose(file);
     file = NULL;
+
+    if ( edfz != NULL ) 
+      {
+	edfz->close();
+	delete edfz;
+      }
+    edfz = NULL;
+    
     header.init();
     records.clear();    
     inp_signals_n.clear();
@@ -542,6 +568,8 @@ public:
   void set_edfplus();
 
   void set_edf();
+  
+  void reset_start_time();
 
   void set_continuous();
   
@@ -557,34 +585,14 @@ public:
 
   bool load_annotations( const std::string & f );
   
-/*   std::string annotation_file( const std::string & f )  */
-/*   { */
-/*     if ( alist.find(f) != alist.end() ) return alist.find(f)->second; */
-/*     return ""; */
-/*   } */
-  
-/*   bool available_annotation( const std::string & a )  */
-/*   { */
-/*     return alist.find( a ) != alist.end(); */
-/*   } */
-
-/*   std::set<std::string> available_annotations()  */
-/*   { */
-/*     std::set<std::string> r; */
-/*     std::map<std::string,std::string>::iterator ii = alist.begin(); */
-/*     while ( ii != alist.end() ) { r.insert( ii->first ); ++ii; } */
-/*     return r; */
-/*   } */
-
 
   //
-  // Write EDF back to file
+  // Write EDF(Z) back to file
   //
-
-  bool write( const std::string & f );
-
   
+  bool write( const std::string & f , bool edfz = false );
   
+    
   // given a mask, change the representation in memory, 
   // [downstream, we can add new things, like changing the record structure, etc]
   // needs to update header as well (and timeline)
