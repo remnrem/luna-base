@@ -11,9 +11,9 @@ OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
 libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
 libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a		\
 libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
-libsrate.a libedfz.a
+libsrate.a libedfz.a liblwprep.a
 
-LIBS = -L. -lspindles -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
+LIBS = -L. -lspindles -llwprep -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
 -ltimeline -lstaging -lfftwrap -ldsp -lmtm -lmiscmath -lintervals	\
 -ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lica	\
 -lsrate -lfftw3 -lz
@@ -31,12 +31,13 @@ luna : main.o globals.o eval.o $(OBJLIBS)
 	$(LD) $(LDFLAGS) -o luna $(OBJS) $(LIBS)
 
 static : main.o globals.o eval.o $(OBJLIBS)
-	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib \
-	-o luna main.o globals.o eval.o libspindles.a libartifacts.a \
-	libtimeline.a libannot.a libedf.a libintervals.a libcwt.a libdsp.a \
-	libstaging.a libclocs.a libpdc.a libsstore.a libmtm.a libdefs.a \
-	libhelper.a libfftwrap.a libgraphics.a libmiscmath.a libstats.a \
-	libsrate.a libtinyxml.a libdb.a libica.a $(FFTW)/lib/libfftw3.a
+	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib	\
+	-o luna main.o globals.o eval.o libspindles.a liblwprep.a	\
+	libartifacts.a libtimeline.a libannot.a libedf.a		\
+	libintervals.a libcwt.a libdsp.a libstaging.a libclocs.a	\
+	libpdc.a libsstore.a libmtm.a libdefs.a libhelper.a		\
+	libfftwrap.a libgraphics.a libmiscmath.a libstats.a libsrate.a	\
+	libtinyxml.a libdb.a libica.a $(FFTW)/lib/libfftw3.a
 
 sharedlib : globals.o eval.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)
@@ -68,6 +69,9 @@ libdefs.a : force_look
 
 libstats.a : force_look
 	cd stats; $(MAKE) $(MFLAGS)
+
+liblwprep.a : force_look
+	cd lwprep; $(MAKE) $(MFLAGS)
 
 libedfz.a : force_look
 	cd edfz; $(MAKE) $(MFLAGS)

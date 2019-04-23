@@ -41,6 +41,8 @@
 
 #include "tinyxml/tinyxml.h"
 
+#include "lwprep/lwprep.h"
+
 #include "tinyxml/xmlreader.h"
 
 #include "stats/cluster.h"

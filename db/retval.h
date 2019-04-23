@@ -217,12 +217,18 @@ struct retval_factor_t {
   
   retval_factor_t( const strata_t & s , const timepoint_t & tp );
   
+  retval_factor_t() { }
+
+  retval_factor_t( const std::string & f ) { add( f ); }
+
+  retval_factor_t( const std::set<std::string> & f ) { factors = f; }
+  
   std::set<std::string> factors; // i.e. just factor names, not levels.
   // i.e. these specify which 'virtual table' we are looking at
   //  e.g.   F
-  //         F CH
-  //         F CH E
-
+  //         CH CH
+  //         CH E F
+  
   void add( const std::string & f ) { factors.insert( f ); } 
 
   std::string print() const { return Helper::stringize( factors ); } 
@@ -303,7 +309,9 @@ struct retval_strata_t {
   // e.g. SS=N2, F=11,
   
   retval_strata_t( strata_t & strata , timepoint_t & tp );
-  
+
+  retval_strata_t() { }  // dummy baseline strata, used in lw_prep_t
+
   std::set<retval_factor_level_t> factors;
 
   retval_factor_level_t find( const std::string & f ) const

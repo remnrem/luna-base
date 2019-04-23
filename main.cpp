@@ -832,7 +832,7 @@ void process_edfs( cmd_t & cmd )
       //
       // commit output to DB
       //
-     
+
       writer.commit();
 
 

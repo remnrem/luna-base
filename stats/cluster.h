@@ -36,7 +36,7 @@
 // solution
 struct cluster_solution_t { 
 
-  // number of clusters in best solution (based on min silhouette)
+  // number of clusters in best solution
   int k;
 
   // length n-obs, o-based cluster assignment
@@ -50,10 +50,11 @@ struct cluster_solution_t {
 
 };
 
+
 // (naive) clustering routine
 struct cluster_t {
   
-  cluster_solution_t build( const Data::Matrix<double> & D );
+  cluster_solution_t build( const Data::Matrix<double> & D , const int preK = 0 );
 
   // Helper function: find the maximum distance between two clusters
   double cldist( const Data::Matrix<double> & , std::vector<int> &, std::vector<int> &);

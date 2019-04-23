@@ -107,6 +107,8 @@ namespace MiscMath
  double sqr( const double a );
 
  void minmax( const std::vector<double> & x , double * mn , double * mx);
+ void normalize( std::vector<double> * x , double * mn , double * mx);
+ void normalize( std::vector<double> * x , const std::vector<bool> & include_mask );
   
   std::vector<double> Z( const std::vector<double> & x );
   std::vector<double> logvector( const std::vector<double> & x );

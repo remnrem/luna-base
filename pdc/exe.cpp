@@ -218,7 +218,9 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 
   cluster_t cluster;
 
-  cluster_solution_t sol = cluster.build( D );
+  int preK = param.has( "k" ) ? param.requires_int( "k" ) : 0 ;
+
+  cluster_solution_t sol = cluster.build( D , preK );
   
   if ( sol.best.size() != ne ) Helper::halt( "internal error in ExE" );
 

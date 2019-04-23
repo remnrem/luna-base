@@ -94,10 +94,10 @@ struct sstore_t {
   void insert_epoch( const int e , const std::string & id , const double      & value , const std::string * ch = NULL , const std::string * lvl = NULL);
   void insert_epoch( const int e , const std::string & id , const std::vector<double> & value , const std::string * ch = NULL , const std::string * lvl = NULL);
 
-  // tp-based interval codes (i.e. 1 tp = 1e-12 of a second)
-  void insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const std::string & value , const std::string * ch = NULL , const std::string * lvl = NULL);  
-  void insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const double      & value , const std::string * ch = NULL , const std::string * lvl = NULL);  
-  void insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const std::vector<double> & value , const std::string * ch = NULL , const std::string * lvl = NULL);  
+  // tp-based interval codes (in seconnds)
+  void insert_interval( const double a , const double b , const std::string & id , const std::string & value , const std::string * ch = NULL , const std::string * lvl = NULL);  
+  void insert_interval( const double a , const double b , const std::string & id , const double      & value , const std::string * ch = NULL , const std::string * lvl = NULL);  
+  void insert_interval( const double a , const double b , const std::string & id , const std::vector<double> & value , const std::string * ch = NULL , const std::string * lvl = NULL);  
 
   // gets
   sstore_data_t fetch_base(); 

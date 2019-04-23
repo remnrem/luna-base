@@ -104,42 +104,6 @@ bool param_t::has(const std::string & s ) const
   return opt.find(s) != opt.end(); 
 } 
 
-  
-// bool param_t::has(const std::string & s , std::string * mstr ) const 
-// {
-//   std::string m = match( s );
-//   if ( mstr != NULL ) *mstr = m;
-//   return m != "";
-//   //  return opt.find(s) != opt.end(); 
-// } 
-
-// bool param_t::matches( const std::string & inp , const std::string & tmp ) const
-// {
-//   // input, e.g.  signals
-//   // ref    e.g.  sig       i.e. ref/template must be unique
-//   return Helper::iequals( inp.substr( 0 , tmp.size() ) , tmp ) ;
-// }
-
-// std::string param_t::match( const std::string & str ) const 
-// {
-//   std::string ms = "";
-//   int m = 0;
-//   std::map<std::string,std::string>::const_iterator ii = opt.begin();
-//   while ( ii != opt.end() )
-//     {
-//       // partial, case-insensitive match
-//       if ( matches( ii->first , str ) )
-// 	{
-// 	  ++m;
-// 	  if ( m > 1 ) Helper::halt( str + " matches multiple argumens" );
-// 	  ms = ii->first;
-// 	}
-//       ++ii;
-//     }
-//   if ( m == 1 ) return ms;
-//   return "";
-// }
-
 std::string param_t::value( const std::string & s ) const 
 { 
   if ( has( s ) )
@@ -747,6 +711,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "TSLIB" ) )        pdc_t::construct_tslib( edf , param(c) );
       else if ( is( c, "SSS" ) )          pdc_t::simple_sleep_scorer( edf , param(c) );
       else if ( is( c, "EXE" ) )          pdc_t::similarity_matrix( edf , param(c) );
+      
+      else if ( is( c, "LW" ) )           lw_prep_t( edf , param(c) );
       
       else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );
       else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );

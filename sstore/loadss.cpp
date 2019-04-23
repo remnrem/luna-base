@@ -84,13 +84,14 @@ int main(int argc , char ** argv )
   
 
   // 
-  // Input format, tab-delimited
+  // Input format, tab-delimited (START/STOP are in SECONDS)
   //
   
   // all      :   ID LVL CH              N VALUE(S)
   // epoch    :   ID LVL CH  E           N VALUE(S)
   // interval :   ID LVL CH  START STOP  N VALUE(S)
-
+  
+  
 
   // LVL and CH are optional ( set to . if missing)
 
@@ -257,12 +258,12 @@ int main(int argc , char ** argv )
 	  if ( ! Helper::str2int( tok[5] , &n ) ) 
 	    Helper::halt( "format problem:\n" + line );
 	  
-	  uint64_t a;
-	  if ( ! Helper::str2int64( tok[3] , &a ) ) 
+	  double a;
+	  if ( ! Helper::str2double( tok[3] , &a ) ) 
 	    Helper::halt( "format problem:\n" + line  );
 
-	  uint64_t b;
-	  if ( ! Helper::str2int64( tok[4] , &b ) ) 
+	  double b;
+	  if ( ! Helper::str2double( tok[4] , &b ) ) 
 	    Helper::halt( "format problem:\n" + line  );
 
 	  int expected = 7; 

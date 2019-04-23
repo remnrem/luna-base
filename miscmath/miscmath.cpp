@@ -839,6 +839,53 @@ double MiscMath::chisq( const std::vector<double> & o , const std::vector<double
 
 
 
+void MiscMath::normalize( std::vector<double> * x , double * mn , double * mx)
+{
+  // get min/max
+  minmax( *x , mn , mx );
+  double denom = *mx - *mn;
+  const int n = x->size();
+  for (int i=0;i<n;i++) (*x)[i] = ( (*x)[i] - *mn ) / denom ;   
+}
+
+// min/max normalization with mask
+
+void MiscMath::normalize( std::vector<double> * x , const std::vector<bool> & include_mask )
+{
+  std::vector<double> nx;
+  std::vector<int> ox;
+  if ( x->size() != include_mask.size() ) Helper::halt( "error in normalize()" );
+  
+  
+  for (int i=0;i<x->size();i++) 
+    {
+      if ( include_mask[i] ) 
+	{
+	  nx.push_back( (*x)[i] );
+	  ox.push_back( i );
+	}
+    }
+
+  const int n = nx.size();
+
+  if ( n == 0 ) return;
+ 
+  double mn, mx;
+
+  minmax( nx , &mn , &mx );
+
+  double denom = mx - mn;
+
+  // alter original 
+  for (int i=0;i<n;i++)
+    {
+      (*x)[ ox[i] ] = ( nx[i] - mn ) / denom;
+    }
+  
+}
+
+
+
 void MiscMath::minmax( const std::vector<double> & x , double * mn , double * mx)
 {
 

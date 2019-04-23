@@ -801,8 +801,6 @@ bool Helper::timestring( const std::string & t, int * h, int *m , int *s)
 
 void Helper::swap_in_variables( std::string * t , const std::map<std::string,std::string> & vars )
 {
-  std::cout << "[" << *t << "]\n";
-
   
   // variable must be in the form   ${var} 
   std::string s;

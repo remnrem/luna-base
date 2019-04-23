@@ -22,22 +22,27 @@
 
 
 #include "cluster.h"
+#include "helper/logger.h"
+
+extern logger_t logger;
 
 #include <map>
 
-cluster_solution_t cluster_t::build( const Data::Matrix<double> & D )
+cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int preK )
 {
  
-  bool calc_silhouette = false;
-
+  bool calc_silhouette = preK == 0 ;
+  
   const int ni = D.dim1();
   
-  // by default, no constraints here;
-  const int max_cluster_N = ni;
-  const int max_cluster_size = 10; // group up to 10 epochs; set to 0 for no constraints
+  const int max_cluster_N = preK > 0 ? preK : ni ;
   
+  const int max_cluster_size = 0; 
+  
+  //
   // seed initial solution
-
+  //
+  
   // cluster --> individuals
   std::vector<std::vector<int> > cl;
   
@@ -55,22 +60,23 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D )
   
   bool done=false;
   
-  // Matrix of solutions
-  
+  // Matrix of solutions  
   std::vector< std::vector<int> > sol(ni);
   for (int i=0;i<ni;i++) sol[i].resize(ni);
   
   std::vector<double> hist(1);
   
-  // K -> obs sil values
-  std::map<int, std::vector<double> > sil;
-  
   // Build solution
   for (int i=0; i<cl.size(); i++)
     for (int j=0; j<cl[i].size(); j++)
       sol[cl[i][j]][0] = i;
-      
-      
+  
+  // silhouette metric
+  int best_sil_idx = 0;
+  int best_sil_K = 0;
+  double best_sil = -1; // lowest possible value      
+
+
   while( ! done )
     {
       
@@ -123,7 +129,7 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D )
       
 
       // List entire sample
-      //      std::cout << "Merge step " << c << "\t" << hist[c];
+      std::cout << "Merge step " << c << "\t" << hist[c] << "\n";
 	  
       // Build solution
       for (int i=0; i<cl.size(); i++)
@@ -157,29 +163,33 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D )
 // 		<< "\t" << ( betweenN > 0 && withinN > 0 ? ( between/(double)betweenN )  / ( within/(double)withinN ) : 0 )
 // 		<< "\n";
 	  
+    
 
-//
-      // silhouette
-      
+      //
+      // silhouette method to determine best # of clusters
+      //
+    
       if ( calc_silhouette )
 	{
+	 
 	  const int K = cl.size();
 	  
-	  sil[K].resize( ni , 0 );
+	  std::vector<double> sil( ni , 0 );
 	  
-	  if ( K >= 2 && K <= ni -1 )
+	  //	  if ( K >= 2 && K < ni  )
+	  if ( K >= 2 && K <= 20  )
 	    {
-	      std::cout << "K = " << K << "\n";
 	      
 	      for (int i=0;i<ni;i++)
 		{
+		
 		  // this individual currently assigned to:
 		  const int assign_k = sol[i][c];
-	      
+		  
 		  int n = cl[assign_k].size();
 		  
 		  // is this cluster size 1? 
-		  if ( n == 1 ) sil[K][i] = 0; 
+		  if ( n == 1 ) sil[i] = 0; 
 		  else
 		    {
 		      
@@ -207,21 +217,26 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D )
 		      // calc. sil
 		      double s = ( min_b - a ) / ( a > min_b ? a : min_b ); 
 		      
-		      sil[K][i] = s;
+		      sil[i] = s;
 		    }
 		  
-		  std::cout << "K,I,S = " << K << "\t" << i << "\t" << assign_k << "\t" << sil[K][i] << "\n";
+		  //std::cout << "K,I,S = " << K << "\t" << i << "\t" << assign_k << "\t" << sil[K][i] << "\n";
 		}
-	  
+	      
 	      // get average silhouette score
 	      
 	      double avg_sil = 0;
-	      std::vector<double> & t = sil[K];
-	      for (int i=0;i<ni;i++) avg_sil += t[i];
+	      for (int i=0;i<ni;i++) avg_sil += sil[i];
 	      avg_sil /= (ni);
+	      //std::cout << " avg sil = " << K << "\t" << avg_sil << "\n";
 	      
-	      std::cout << " avg sil = " << K << "\t" << avg_sil << "\n";
-	      
+	      if ( avg_sil > best_sil )
+		{
+		  best_sil = avg_sil;
+		  best_sil_idx = c;
+		  best_sil_K = K;
+		  //std::cerr << "updating " << best_sil << " " << c << " K=" << K << "\n";
+		}
 	    }
 
 	}
@@ -232,46 +247,52 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D )
   
  done_making_clusters:
 
-  
-  //
-  // Find best solution based on silhouette method 
-  //
-  
-  
-  
-  
+   
+     
   //////////////////////////////////
   // Best solution is final solution
   
-  int best = hist.size()-1;
-  
-  final_sol.k = best;
-  final_sol.best.resize( ni );
+  int best = cl.size();
+  int best_c = hist.size() - 1; // last sol
 
-  std::cerr << " stopped clustering at K=" << best << "\n";
-
-  for (int i=0; i<cl.size(); i++)
+  // use silhouette?
+  if ( calc_silhouette )
     {
-//       std::cout << "SOL-" << i << "\t"
-// 		<< cl[i].size() << "\t";
-
-      for (int j=0; j<cl[i].size(); j++)
-	{
-	  final_sol.best[ cl[i][j] ] = i ; 
-	  //std::cout << " " << cl[i][j] ;
-	}
-      //std::cout << "\n";
+      best = best_sil_K;
+      best_c = best_sil_idx;
     }
+
+  final_sol.k = best;
+  final_sol.best.resize( ni );  
+  
+  logger << " stopped clustering at K=" << best << "\n";
+
+  // copy best solution
+  for (int j=0; j<sol.size(); j++)
+    final_sol.best[j] = sol[j][best_c] ;
+
+  
+//   for (int i=0; i<cl.size(); i++)
+//     {
+      
+// //       std::cout << "SOL-" << i << "\t"
+// //        		<< cl[i].size() << "\t";
+      
+//       for (int j=0; j<cl[i].size(); j++)
+// 	{
+// 	  final_sol.best[ cl[i][j] ] = i ; 
+// 	  //	  std::cout << " " << cl[i][j] ;
+// 	}
+//       //      std::cout << "\n";
+//     }
   
   //  std::cout << "\n";
-
-//   for (int j=0; j<sol.size(); j++)
-//     std::cout << j << "\t" << sol[j][best] << "\n";
   
-//   std::cout << "\n";
+  
+  //   std::cout << "\n";
 
 //   // final
-
+  
 //   for (int j=0; j<sol.size(); j++)
 //     {
 //       // Display...

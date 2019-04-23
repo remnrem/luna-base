@@ -33,8 +33,8 @@ int main(int argc , char ** argv )
 
   if ( argc != 3 ) 
     { 
-      std::cerr << "usage: ./loadints {filename} {label} < < input\n"
-		<< "where input is the interval ranges (uint64_t tp)"
+      std::cerr << "usage: ./loadints {filename} {label} < input\n"
+		<< " where input is the interval ranges (seconds)"
 		<< "\n";          
 	std::exit(1); 
     } 
@@ -59,7 +59,7 @@ int main(int argc , char ** argv )
   
   while ( ! std::cin.eof() ) 
     {
-      uint64_t a, b;
+      double a,b,;
       std::cin >> a >> b;
       if ( std::cin.eof() ) break;
       

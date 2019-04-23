@@ -593,16 +593,22 @@ class writer_t
     retval = r;
   } 
   
-  
+  bool open_db() const 
+  { 
+    // T if we have an open, attached DB
+    // F if we don't (i.e. if we have a retval_t structure attached instead
+    return retval != NULL || ! dbless ; 
+  }
+
   
   std::string name() const { return dbless ? "." : db.name(); } 
 
-  void index() { db.index(); } 
-  void drop_index() { db.drop_index(); } 
-  void begin() { return db.begin(); } 
-  void commit() { return db.commit(); }
-  void read_all() { db.read_all(this); }
-  bool attached() { return db.attached(); }
+  void index() { if ( open_db() ) db.index(); } 
+  void drop_index() { if ( open_db() ) db.drop_index(); } 
+  void begin() { if ( open_db() ) db.begin(); } 
+  void commit() { if ( open_db() ) db.commit(); }
+  void read_all() { if ( open_db() ) db.read_all(this); }
+  bool attached() { if ( ! open_db() ) return false; return db.attached(); }
   void fetch( int strata_id, int time_mode, packets_t * packets, std::set<int> * i = NULL, std::set<int> * c = NULL, std::set<int> * v = NULL )
   { return db.fetch( strata_id , time_mode, packets, i, c, v) ; }  
 

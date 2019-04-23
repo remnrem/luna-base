@@ -54,8 +54,8 @@ sstore_t::sstore_t( const std::string & f1  )
 	    "   val  VARCHAR(20) ); " );
 
   sql.query(" CREATE TABLE IF NOT EXISTS intervals ("
-	    "   start UNSIGNED BIG INT NOT NULL , "
-	    "   stop  UNSIGNED BIG INT NOT NULL , "	    
+	    "   start REAL NOT NULL , "
+	    "   stop  REAL NOT NULL , "	    
             "   ch   VARCHAR(2) , "
             "   id   VARCHAR(8) NOT NULL , "
 	    "   lvl  VARCHAR(8) , "
@@ -374,10 +374,10 @@ void sstore_t::insert_epoch( const int e , const std::string & id , const std::v
 
 }
 
-void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const std::string & value , const std::string * ch , const std::string * lvl )
+void sstore_t::insert_interval( double a , double b , const std::string & id , const std::string & value , const std::string * ch , const std::string * lvl )
 {
-  sql.bind_uint64( stmt_insert_interval , ":start" ,  a );
-  sql.bind_uint64( stmt_insert_interval , ":stop" ,  b );
+  sql.bind_double( stmt_insert_interval , ":start" ,  a );
+  sql.bind_double( stmt_insert_interval , ":stop" ,  b );
   sql.bind_text( stmt_insert_interval , ":id" , id );
 
   if ( lvl == NULL ) 
@@ -397,10 +397,10 @@ void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std:
 
 } 
 
-void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const double      & value , const std::string * ch , const std::string * lvl )
+void sstore_t::insert_interval( const double a , const double b , const std::string & id , const double      & value , const std::string * ch , const std::string * lvl )
 {
-  sql.bind_uint64( stmt_insert_interval , ":start" ,  a );
-  sql.bind_uint64( stmt_insert_interval , ":stop" ,  b );
+  sql.bind_double( stmt_insert_interval , ":start" ,  a );
+  sql.bind_double( stmt_insert_interval , ":stop" ,  b );
   sql.bind_text( stmt_insert_interval , ":id" , id );
 
   if ( lvl == NULL ) 
@@ -420,13 +420,13 @@ void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std:
 
 }  
 
-void sstore_t::insert_interval( const uint64_t a , const uint64_t b , const std::string & id , const std::vector<double> & value , const std::string * ch , const std::string * lvl )
+void sstore_t::insert_interval( const double a , const double b , const std::string & id , const std::vector<double> & value , const std::string * ch , const std::string * lvl )
 {
   const int n = value.size();
   if ( n == 1 ) insert_interval( a , b , id , value[0] , ch );
   
-  sql.bind_uint64( stmt_insert_interval , ":start" ,  a );  
-  sql.bind_uint64( stmt_insert_interval , ":stop" ,  b );  
+  sql.bind_double( stmt_insert_interval , ":start" ,  a );  
+  sql.bind_double( stmt_insert_interval , ":stop" ,  b );  
   sql.bind_text( stmt_insert_interval , ":id" , id );
 
   if ( lvl == NULL ) 
@@ -585,9 +585,9 @@ sstore_data_t sstore_t::fetch_interval( const interval_t & interval )
 {
   sstore_data_t data;
 
-  // select particular interval
-  sql.bind_uint64( stmt_fetch_interval , ":start" , interval.start );
-  sql.bind_uint64( stmt_fetch_interval , ":stop" , interval.stop );
+  // select particular interval (converting to seconds)
+  sql.bind_double( stmt_fetch_interval , ":start" , interval.start * globals::tp_duration );
+  sql.bind_double( stmt_fetch_interval , ":stop" , interval.stop  * globals::tp_duration );
   
   while ( sql.step( stmt_fetch_interval ) )
     {
@@ -653,8 +653,8 @@ std::map<interval_t,sstore_data_t> sstore_t::fetch_intervals()
   while ( sql.step( stmt_fetch_all_intervals ) )
     {
       
-      // 0  start
-      // 1  stop
+      // 0  start (as seconds)
+      // 1  stop  (as seconds)
       // 2  ch
       // 3  id
       // 4  lvl
@@ -664,8 +664,9 @@ std::map<interval_t,sstore_data_t> sstore_t::fetch_intervals()
       sstore_key_t key;
       sstore_value_t val;
 
-      interval_t interval( sql.get_uint64( stmt_fetch_all_intervals , 0 ) , 
-			   sql.get_uint64( stmt_fetch_all_intervals , 1 ) );
+      // convert from seconds to tp-units
+      interval_t interval( globals::tp_1sec * sql.get_double( stmt_fetch_all_intervals , 0 ) , 
+			   globals::tp_1sec * sql.get_double( stmt_fetch_all_intervals , 1 ) );
 			         
       bool has_channel = ! sql.is_null( stmt_fetch_all_intervals , 2 );
       key.ch = has_channel ? sql.get_text( stmt_fetch_all_intervals , 2 ) : "" ;
