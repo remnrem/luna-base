@@ -28,16 +28,16 @@ extern logger_t logger;
 
 #include <map>
 
-cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int preK )
+cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int preK , const int maxS )
 {
  
-  bool calc_silhouette = preK == 0 ;
+  bool calc_silhouette = preK < 0 ;
   
   const int ni = D.dim1();
   
-  const int max_cluster_N = preK > 0 ? preK : ni ;
+  const int max_cluster_N = preK > 0 ? preK : 0 ;
   
-  const int max_cluster_size = 0; 
+  const int max_cluster_size = maxS > 0 ? maxS : 0; 
   
   //
   // seed initial solution
@@ -79,7 +79,8 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
 
   while( ! done )
     {
-      
+
+
       double dmin = 999;
       
       int imin=-1;
@@ -113,7 +114,7 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
   
       if (imin==-1) {
 	done=true;
-	//printLOG("Cannot make clusters that satisfy constraints at step "+int2str(c)+"\n");	
+	//	std::cerr << "Cannot make clusters that satisfy constraints at step " << c << " " << cl.size() << "\n";
 	goto done_making_clusters;
       }
 	  
@@ -129,7 +130,7 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
       
 
       // List entire sample
-      std::cout << "Merge step " << c << "\t" << hist[c] << "\n";
+      //      std::cout << "Merge step " << c << "\t" << hist[c] << "\n";
 	  
       // Build solution
       for (int i=0; i<cl.size(); i++)
@@ -270,41 +271,7 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
   // copy best solution
   for (int j=0; j<sol.size(); j++)
     final_sol.best[j] = sol[j][best_c] ;
-
-  
-//   for (int i=0; i<cl.size(); i++)
-//     {
-      
-// //       std::cout << "SOL-" << i << "\t"
-// //        		<< cl[i].size() << "\t";
-      
-//       for (int j=0; j<cl[i].size(); j++)
-// 	{
-// 	  final_sol.best[ cl[i][j] ] = i ; 
-// 	  //	  std::cout << " " << cl[i][j] ;
-// 	}
-//       //      std::cout << "\n";
-//     }
-  
-  //  std::cout << "\n";
-  
-  
-  //   std::cout << "\n";
-
-//   // final
-  
-//   for (int j=0; j<sol.size(); j++)
-//     {
-//       // Display...
-//       std::cout << j << " | " ;
-      
-//       for (int i=0; i<sol[0].size(); i++)
-// 	std::cout << sol[j][i]+1 << " ";
-	      
-//       std::cout  << "\n";
-//     }
-//   std::cout << "\n";
-  
+   
   return final_sol;
 }
 

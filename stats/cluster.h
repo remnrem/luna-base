@@ -54,7 +54,7 @@ struct cluster_solution_t {
 // (naive) clustering routine
 struct cluster_t {
   
-  cluster_solution_t build( const Data::Matrix<double> & D , const int preK = 0 );
+  cluster_solution_t build( const Data::Matrix<double> & D , const int preK = 0 , const int maxS = 0 );
 
   // Helper function: find the maximum distance between two clusters
   double cldist( const Data::Matrix<double> & , std::vector<int> &, std::vector<int> &);

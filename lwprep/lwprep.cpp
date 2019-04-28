@@ -194,7 +194,7 @@ lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
   // i.e. to create the set-up that luna-web will be expecting
   //
   
-  cmd_t cmd( "HYPNO & ANNOTS & PSD max=20 bin=0.5 epoch-spectrum sig=${eeg}" );
+  cmd_t cmd( "ANNOTS & HYPNO & PSD max=20 bin=0.5 epoch-spectrum sig=${eeg} & EXE uni sig=${eeg} mx=50" );
     
     
   //
@@ -279,6 +279,21 @@ lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
 
   psd_spec.dettach();
   
+
+  //
+  // ExE clusters (epoch-by-channel)
+  //
+
+
+  logger << " making lw/inds/" << edf.id << "/eclusters.db"; 
+
+  sstore_t exe_summary( folder + "/eclusters.db" );
+
+  insert_exe_clusters( ret , edf.id , &exe_summary );
+  
+  exe_summary.index();  
+
+  exe_summary.dettach();
 
 
   //
@@ -682,3 +697,52 @@ void  lw_prep_t::insert_psd_spec( retval_t & ret ,
 
   logger << " ... inserted " << cnt << " PSDs\n";
 }
+
+
+
+void  lw_prep_t::insert_exe_clusters( retval_t & ret , 
+				      const std::string & indiv , 
+				      sstore_t * ss )
+{
+
+  retval_cmd_t    rv_cmd( "EXE" );
+  std::set<std::string> dummy;
+  dummy.insert( "E" );
+  dummy.insert( "CH" );
+  retval_factor_t rv_fac( dummy ); 
+  retval_var_t    rv_var( "CL" );
+  retval_indiv_t  rv_indiv( indiv );
+    
+  const std::map<retval_strata_t,
+    std::map<retval_indiv_t,
+    retval_value_t > > & dat1 = ret.data[ rv_cmd ][ rv_fac ][ rv_var ];
+  
+  std::map<retval_strata_t,
+    std::map<retval_indiv_t,
+    retval_value_t > >::const_iterator ii = dat1.begin();
+
+  int cnt = 0;
+
+  while ( ii != dat1.end() )
+    {
+      // get epoch
+      retval_factor_level_t epoch_lvl = ii->first.find( "E" );
+      retval_factor_level_t channel_lvl = ii->first.find( "CH" );
+      
+      if ( epoch_lvl.is_int )
+	{
+	  int e = epoch_lvl.int_level;
+	  std::map<retval_indiv_t,retval_value_t>::const_iterator jj = ii->second.find( rv_indiv );
+	  if ( jj != ii->second.end() ) 
+	    {	      
+	      // int value for 'CL'
+	      ss->insert_epoch( e  , "CL" , jj->second.i , &(channel_lvl.str_level) , NULL );
+	      ++cnt;
+	    }
+	}      
+      ++ii; // next level
+    }
+
+    logger << " ... inserted " << cnt << " values\n";
+}
+
