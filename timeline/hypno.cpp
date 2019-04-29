@@ -1052,9 +1052,11 @@ void hypnogram_t::output( const bool verbose )
   // currently, this routine is hard-coded to assume 30-second epochs,
   // so for now flag if this is not the case (we can fix downstream)
 
-
-  if ( ! Helper::similar( timeline->epoch_length() , 30 , 0.001 ) ) 
-    Helper::halt( "requires 30-second epochs to be set currently" );
+  if ( verbose )
+    {
+      if ( ! Helper::similar( timeline->epoch_length() , 30 , 0.001 ) ) 
+	Helper::halt( "requires 30-second epochs to be set currently" );
+    }
 
   
   //
@@ -1203,13 +1205,11 @@ void hypnogram_t::output( const bool verbose )
 
   // epoch size (in minutes)
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
-  const int ne = timeline->num_epochs();
-
-  clocktime_t starttime( clock_lights_out );
-
-  //clocktime_t epoch_duration( "00:00:30" );
-  //const double epoch_mins = timeline->epoch_length() / 60.0 ; 
   const double epoch_hrs = epoch_mins / 60.0;
+  
+  const int ne = timeline->num_epochs();
+  
+  clocktime_t starttime( clock_lights_out );
 
   // output
   for (int e=0;e<ne;e++)

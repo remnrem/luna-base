@@ -588,6 +588,7 @@ void process_edfs( cmd_t & cmd )
 
       writer.begin();
 
+      writer.clear_tags();
       
       writer.id( rootname , edffile );
       

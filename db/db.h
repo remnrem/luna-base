@@ -738,6 +738,11 @@ class writer_t
     return true;
   }
 
+  void clear_tags()
+  { 
+    unlevel();
+  } 
+
   // Current factor
   bool level( const int level_name , const std::string & factor_name )
   {

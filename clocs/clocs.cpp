@@ -192,16 +192,17 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
 					   Data::Matrix<double> * G , 
 					   Data::Matrix<double> * Gi )
 {
-  
-  // order of Legendre polynomials
+    
+  // 'm' parameter (Perrin et al, m = 4, otherwise m = 2..6 reasonable
+  const int m = 4;  
+
+  // order of Legendre polynomials; 7 also suggested Perry et al.
   const int N = 10;
 
-  // smoothing parameter
+  // smoothing parameter/ 1e-5 suggested for 64 electrodes
+  // for > 64 electrodes, 1e-6 or 5e-6
   const double smoothing = 1e-5;
   
-  // other param
-  const int m = 2;  
-    
   convert_to_unit_sphere();
   
   int ns  = good_signals.size();
