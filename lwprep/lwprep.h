@@ -55,7 +55,8 @@ struct lw_prep_t {
   void insert_psd_band( retval_t & retval , const std::string & indiv , sstore_t * ss );
 
   void insert_psd_spec( retval_t & retval , const std::string & indiv , sstore_t * ss );
-
+  
+  void insert_exe_clusters( retval_t & retval , const std::string & indiv , sstore_t * ss );
   
   // for time-course power
   bool denoise;

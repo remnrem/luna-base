@@ -785,7 +785,9 @@ void pdc_obs_t::encode( int m , int t )
   pd.resize(ns);
   int normalize = 1; 
   for (int i=0;i<ns;i++)
-    pd[i] = pdc_t::calc_pd( ts[i] , m , t , &normalize );
+    {
+      pd[i] = pdc_t::calc_pd( ts[i] , m , t , &normalize );
+    }
 }
   
 // get (per-channel) entropy of current PD(s)
@@ -934,14 +936,12 @@ void pdc_t::add( const pdc_obs_t & ob ) {
 
 double pdc_t::distance( const pdc_obs_t & a, const pdc_obs_t & b )
 {
-
   if ( q == 0 ) 
     return 0;
   
   if ( a.pd[0].size() != b.pd[0].size() ) 
     Helper::halt( "incompatible PD -- check similar m used" );
 
-  
   // univariate
   if ( q == 1 ) 
     return symmetricAlphaDivergence( a.pd[0] , b.pd[0] );

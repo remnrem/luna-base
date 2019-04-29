@@ -378,7 +378,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 
   
   //
-  // Epoch-level counts of SW
+  // Epoch-level counts of SW, and means of other key SW statistics
   //
   
   if ( edf != NULL )
@@ -400,6 +400,8 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	  
 	  int so_epoch = 0;
 	  
+	  std::set<int> sw_in_epoch;
+
 	  for (int i=0 ; i<nso; i++)
 	    {
 	      
@@ -409,10 +411,17 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	      // i.e. for purpose of assigning to EPOCH (so as not
 	      // to double-count SO that overlap epoch boundaries
 	      
+	      // this search strategy is v. inefficient, but in this context
+	      // doesn't really seem to matter (at least w/ large epoch sizes)
+	      // but we should revisit this...
+	      
 	      interval_t sostart( w.interval_tp.start , w.interval_tp.start );
 	      
 	      if ( interval.overlaps( sostart ) )
-		++so_epoch;
+		{
+		  ++so_epoch;
+		  sw_in_epoch.insert( i );
+		}
 	      else if ( sostart.is_after( interval ) )
 		break; // SO are in order, so can skip
 	    }
@@ -425,15 +434,83 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	  //
 	  
 	  writer.epoch( edf->timeline.display_epoch( epoch ) );
-	  
+
+	  //
 	  // per-epoch SO count
+	  //
+
 	  writer.value( "N" , so_epoch );
+
+	  //
+	  // and mean statistics
+	  //
+
+	  double mean_dur = 0 , mean_up_amp = 0 , mean_down_amp = 0 , mean_p2p_amp = 0;
 	  
+	  double mean_slope_n1 = 0 , mean_slope_n2 = 0 , mean_slope_p1 = 0  , mean_slope_p2 = 0;
+	  int n_pos = 0 , n_neg = 0;
+
+	  std::set<int>::const_iterator jj = sw_in_epoch.begin();
+	  while ( jj != sw_in_epoch.end() )
+	    {
+	      
+	      const slow_wave_t & w = sw[ *jj ];
+
+	      mean_dur += w.interval_tp.duration_sec() ;
+	      mean_up_amp += w.up_amplitude ;
+	      mean_down_amp += w.down_amplitude ;
+	      mean_p2p_amp += w.amplitude() ;	      
+	      
+	      if ( w.type == SO_FULL || w.type == SO_NEGATIVE_HALF )
+		{
+		  mean_slope_n1 += w.slope_n1();
+		  mean_slope_n2 += w.slope_n2();
+		  ++n_neg;
+		}
+	      
+	      if ( w.type == SO_FULL || w.type == SO_POSITIVE_HALF )
+		{
+		  mean_slope_p1 += w.slope_p1() ;
+		  mean_slope_p2 += w.slope_p2() ;
+		  ++n_pos;
+		}
+	      ++jj;
+	    }
+	  
+
+	  // output epoch-level SW morphology stats
+	  
+	  if ( sw_in_epoch.size() > 0 ) 
+	    {
+	      writer.value( "DUR"  , mean_dur / (double)sw_in_epoch.size() );
+	
+	      writer.value( "UP_AMP" , mean_up_amp / (double)sw_in_epoch.size() );
+	      writer.value( "DOWN_AMP" , mean_down_amp / (double)sw_in_epoch.size() );
+	      writer.value( "P2P_AMP" , mean_p2p_amp / (double)sw_in_epoch.size() );
+	      
+	      if ( n_neg > 0 ) 
+		{
+		  writer.value( "SLOPE_NEG1" , mean_slope_n1 / (double)n_neg );
+		  writer.value( "SLOPE_NEG2" , mean_slope_n2 / (double)n_neg );
+		}
+	      
+	      if ( n_pos > 0 ) 
+		{
+		  writer.value( "SLOPE_POS1" , mean_slope_p1 / (double)n_pos );
+		  writer.value( "SLOPE_POS2" , mean_slope_p2 / (double)n_pos );
+		}
+	    }
+
 	}
       
-      writer.unepoch();
-    }
 
+      // end of epoch-level reporting 
+
+      writer.unepoch();      
+    }
+  
+  // all done 
+  
 }
 
 slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered , 
@@ -492,6 +569,9 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 			      << uV_neg << " uV for negative peak, " 
 			      << uV_p2p << " peak-to-peak";
   logger << "\n";
+
+  logger << " using " << ( use_mean ? "mean" : "median" ) << " thresholds\n";
+
   if ( type == SO_FULL ) 
     logger << " full waves, based on consecutive "  
 	      << ( use_alternate_neg2pos_zc ? "negative-to-positive" : "positive-to-negative" ) << " zero-crossings\n";
@@ -501,6 +581,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     logger << " all negative half waves\n";
   else if ( type == SO_POSITIVE_HALF ) 
     logger << " all positive half waves\n";
+
+
     
   //
   // Band-pass filter for slow waves
@@ -652,7 +734,6 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     }
   else
     {
-      logger << "using median...\n";
       avg_x = MiscMath::median( tmp_x );
       avg_yminusx = MiscMath::median( tmp_yminusx );
     }
