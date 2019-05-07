@@ -105,6 +105,7 @@ std::string globals::annot_instance_strat;
 std::string globals::annot_meta_strat;
 std::string globals::count_strat;
 std::string globals::sample_strat;
+std::string globals::cluster_strat;
 
 std::string & globals::SQLITE_SCRATCH_FOLDER() { static std::string s = ""; return s; }
 
@@ -120,6 +121,7 @@ void globals::R( bool disp )
   Rdisp = disp;
   api();
 }
+
 
 void globals::init_defs()
 {
@@ -152,7 +154,8 @@ void globals::init_defs()
   Rmode = false;
 
   Rdisp = false;
-
+  
+  
   //
   // Annotation folder
   //
@@ -304,6 +307,7 @@ void globals::init_defs()
   epoch_strat  = "E";
   time_strat   = "T";
   sample_strat = "SP"; // sample-point
+  cluster_strat = "K";
 
   //
   // Misc.

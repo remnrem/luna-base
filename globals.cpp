@@ -33,7 +33,10 @@ std::set<std::string>              cmd_t::commands;
 std::string                        cmd_t::input = "";
 std::string                        cmd_t::cmdline_cmds = "";
 std::string                        cmd_t::stout_file = "";
+std::string                        cmd_t::stout_template = "";
 bool                               cmd_t::append_stout_file = false;
+bool                               cmd_t::has_indiv_wildcard = false;
+
 std::map<std::string,std::string>  cmd_t::vars;
 std::set<std::string>              cmd_t::signallist;
 std::map<std::string,std::string>  cmd_t::label_aliases;

@@ -76,6 +76,8 @@ namespace Helper
   
   void swap_in_variables( std::string * , const std::map<std::string,std::string> & );
   
+  std::string insert_indiv_id( const std::string & id , const std::string & str );
+
   bool file_extension( const std::string & , const std::string & );
   
   bool is_folder( const std::string & f );

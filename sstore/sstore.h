@@ -80,6 +80,10 @@ struct sstore_t {
 
   bool release();
   
+  void begin() { sql.begin_exclusive(); }
+
+  void commit() { sql.commit(); }
+
   bool index();
   
   bool drop_index();

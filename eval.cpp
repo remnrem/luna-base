@@ -2214,3 +2214,14 @@ void proc_continuous( edf_t & edf , param_t & param )
   logger << " forcing EDF to be continuous\n";
   edf.set_edf();
 }
+
+
+//
+// Output DB 
+//
+
+std::string cmd_t::resolved_outdb( const std::string & id , const std::string & str )
+{ 
+  return Helper::insert_indiv_id( Helper::sanitize( id ) , str ); 
+} 
+

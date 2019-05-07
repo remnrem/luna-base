@@ -20,9 +20,12 @@
 //
 //    --------------------------------------------------------------------
 
-#include "sstore.h"
+#include "sstore/sstore.h"
 #include <iostream>
 #include "helper/helper.h"
+#include "helper/logger.h"
+
+extern logger_t logger;
 
 //
 // loadss, a simple loader for a sstore_t 
@@ -30,56 +33,17 @@
 
 int main(int argc , char ** argv )
 {
-
-   if ( 0 ) 
-     {
-       
-       sstore_t ss( "ss1.db" );
-
-       std::map<int,sstore_data_t> epochs = ss.fetch_epochs();
-       
-       std::cout << "sz = " << epochs.size() << "\n";
-
-       std::map<int,sstore_data_t>::const_iterator ii = epochs.begin();
-
-       while ( ii != epochs.end() )
-	 {
-	   
-	   std::cout << "epoch " << ii->first << "\n";
-	   	   	   
-	   const std::map<sstore_key_t,sstore_value_t> & datum   = ii->second.data;
-	   
-	   std::map<sstore_key_t,sstore_value_t>::const_iterator kk = datum.begin();
-	   while ( kk != datum.end() )
-	     {
-	       
-	       std::cout << kk->first.id << " (" << kk->first.ch << ") ";
-	       if      ( kk->second.is_text ) std::cout << " str = " << kk->second.str_value << "\n";
-	       else if ( kk->second.is_double ) std::cout << " dbl = " << kk->second.dbl_value << "\n";
-	       else {
-		 std::cout << " vec[" << kk->second.vec_value.size() << "]";
-		 for (int i=0;i<kk->second.vec_value.size();i++) std::cout << " " << kk->second.vec_value[i] ;
-		 std::cout << "\n";
-	       }
-	       
-	       ++kk;
-	       
-	     }
-	   
-	   ++ii;
-	 }
-       
-       std::exit(0);
-     }
-
+  
+  logger.off();
   
   if ( argc != 3 ) 
     { 
-      std::cerr << "usage: ./loadss {ss.db} {strata}  < input\n"
-		<< "where ss.db  --> sstore_t database file\n"
-		<< "      strata --> [-a|-e|-i|index|unindex] to specify all/epoch/interval data\n"	
+      std::cerr << "usage: ./loadss {ss.db} {-a|-e|-i|index|unindex} < input\n"
+		<< "where ss.db      --> sstore_t database file\n"
+		<< "      [-a|-e|-i] --> to specify baseline/epoch-level/interval-level data\n"	
+		<< "      input      --> as prepared by prepss\n"
 		<< "\n";          
-	std::exit(1); 
+      std::exit(1); 
     } 
   
 
@@ -130,17 +94,23 @@ int main(int argc , char ** argv )
 
   sstore_t ss( filename );
 
+  ss.begin();
+
   ss.drop_index();
   
+  int lines = 0 ; 
+
   while ( ! std::cin.eof() ) 
     {
       std::string line;
-      Helper::safe_getline( std::cin , line , '\n' );
+      Helper::safe_getline( std::cin , line );
       if ( std::cin.eof() ) break;
       std::vector<std::string> tok = Helper::parse( line , "\t" );
 
       const int t = tok.size();
       if ( tok.size() == 0 ) continue;
+
+      std::cerr << "read " << ++lines << " lines\n";
       
       //
       // Baseline-level inputs
@@ -259,11 +229,11 @@ int main(int argc , char ** argv )
 	    Helper::halt( "format problem:\n" + line );
 	  
 	  double a;
-	  if ( ! Helper::str2double( tok[3] , &a ) ) 
+	  if ( ! Helper::str2dbl( tok[3] , &a ) ) 
 	    Helper::halt( "format problem:\n" + line  );
 
 	  double b;
-	  if ( ! Helper::str2double( tok[4] , &b ) ) 
+	  if ( ! Helper::str2dbl( tok[4] , &b ) ) 
 	    Helper::halt( "format problem:\n" + line  );
 
 	  int expected = 7; 
@@ -305,13 +275,17 @@ int main(int argc , char ** argv )
       // next row of input
     }
     
-
+  std::cerr << "indexing... ";
+    
   ss.index();
+
+  ss.commit();
 
   // all      :   ID CH LVL             N VALUE(S)
   // epoch    :   ID CH LVL E           N VALUE(S)
   // interval :   ID CH LVL START STOP  N VALUE(S)
-
+  
+  std::cerr << "done\n";
 
   std::exit(0);
 }

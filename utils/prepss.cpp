@@ -21,20 +21,21 @@
 //    --------------------------------------------------------------------
 
 
-#include "sstore.h"
+#include "sstore/sstore.h"
 #include <iostream>
 #include "helper/helper.h"
+#include "helper/logger.h"
 #include <vector>
 #include <set>
 #include <map>
 
-//
-// loadss, a simple loader for a sstore_t 
-// 
+extern logger_t logger;
 
 int main(int argc , char ** argv )
 {
   
+  logger.off();
+
   std::map<std::string,int> lvls;
   for (int i=1;i<argc;i++)
     lvls[ argv[i] ] = -1 ;
@@ -42,7 +43,7 @@ int main(int argc , char ** argv )
   // get header line
   
   std::string line;
-  Helper::safe_getline( std::cin , line , '\n' );
+  Helper::safe_getline( std::cin , line  );
   std::vector<std::string> hdr = Helper::parse( line , "\t" );
   const int n = hdr.size();
   int eidx = -1;
@@ -83,7 +84,7 @@ int main(int argc , char ** argv )
     {
       
       std::string line;
-      Helper::safe_getline( std::cin , line , '\n' );
+      Helper::safe_getline( std::cin , line );
       if ( std::cin.eof() ) break;
       if ( line == "" ) break;
       

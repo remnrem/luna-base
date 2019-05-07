@@ -266,12 +266,84 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
   final_sol.k = best;
   final_sol.best.resize( ni );  
   
-  logger << " stopped clustering at K=" << best << "\n";
+  logger << "  stopped clustering at K=" << best << "\n";
 
   // copy best solution
   for (int j=0; j<sol.size(); j++)
     final_sol.best[j] = sol[j][best_c] ;
-   
+  
+  // get an exemplar observation for each cluster from silhouette
+  final_sol.exemplars.clear();
+
+  std::map<int,double> smax;
+  
+  if ( best >= 2 )
+    {
+      
+      for (int i=0;i<ni;i++)
+	{	  
+
+	  // this individual currently assigned to:
+	  const int assign_k = final_sol.best[i];
+
+	  //	  std::cout << "ind " << i << " assigned to " << assign_k << "\n";
+	  
+	  int n = cl[assign_k].size();
+	  
+	  double s = 0;
+
+	  if ( n > 1 )
+	    {
+	      
+	      // a = average distance to all other members of this cluster
+	      double a = 0;
+	      
+	      for (int j=0;j<n;j++) 
+		if ( cl[assign_k][j] != i ) // skip this indiv. 
+		  a += D( i , cl[assign_k][j] );
+	      a /= (double)(n-1);
+	      
+	      // b = smallest average distance to all members of another cluster
+	      double min_b = 99999;
+	      
+	      for (int k=0;k<best;k++)
+		{
+		  if ( k == assign_k ) continue; // skip this cluster
+		  double b = 0;
+		  int n = cl[k].size();
+		  for (int j=0;j<n;j++) b += D( i , cl[k][j] );
+		  b /= (double)n;
+		  if ( b < min_b ) min_b = b;
+		} // next cluster
+	      
+	      // calc. sil
+	      s = ( min_b - a ) / ( a > min_b ? a : min_b ); 
+	      
+	    }
+	  
+	  // max?
+	  if ( s > smax[ assign_k ] ) 
+	    {
+// 	      std::cout << "setting best K,I,S = " << best << "\t" 
+// 			<< i << "\t" << assign_k << "\t" << s  << "\n";
+    
+	      smax[ assign_k ] = s;
+	      final_sol.exemplars[ assign_k ] = i;
+	    }
+	  
+	  
+	  //	  std::cout << "tracking " << final_sol.exemplars.size() << "\n";
+	}
+    }
+  
+
+//   std::map<int,int>::const_iterator ss = final_sol.exemplars.begin();
+//   while ( ss != final_sol.exemplars.end() )
+//     {
+//       std::cout << " sol = " << ss->first << "\t" << ss->second << "\n";
+//       ++ss;
+//     }
+
   return final_sol;
 }
 

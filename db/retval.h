@@ -155,7 +155,14 @@ struct retval_t {
   
   // to stdout
   void dump();
-  
+
+  // IGNORE THIS FOR NOW... was only going to be used for 
+  // quikcly making luna-web sstores, but this probably
+  // isn't the best route...  stick w/ destrat | prepss | loadss 
+
+  // to a sstore_t on disk
+  //  void write_sstore( const std::string & f );
+
   // add a double
   void add( const retval_indiv_t & id, 
 	    const retval_cmd_t & cmd ,

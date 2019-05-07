@@ -35,9 +35,9 @@ static : main.o globals.o eval.o $(OBJLIBS)
 	-o luna main.o globals.o eval.o libspindles.a liblwprep.a	\
 	libartifacts.a libtimeline.a libannot.a libedf.a		\
 	libintervals.a libcwt.a libdsp.a libstaging.a libclocs.a	\
-	libpdc.a libsstore.a libmtm.a libdefs.a libhelper.a		\
+	libpdc.a libmtm.a libdefs.a libhelper.a		\
 	libfftwrap.a libgraphics.a libmiscmath.a libstats.a libsrate.a	\
-	libtinyxml.a libdb.a libica.a $(FFTW)/lib/libfftw3.a
+	libtinyxml.a libdb.a libsstore.a libica.a $(FFTW)/lib/libfftw3.a
 
 sharedlib : globals.o eval.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)

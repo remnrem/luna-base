@@ -72,7 +72,8 @@ extern logger_t logger;
 
 lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
 {
-
+  
+  
   //
   // Root folder, for 'lw/'
   //
@@ -119,8 +120,8 @@ lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
   folder += "inds"; 
   folder += globals::folder_delimiter;
   folder += edf.id ;
-  
 
+  
   //
   // check folder exists (should have previously been created
   //
@@ -129,6 +130,26 @@ lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
   system( syscmd.c_str() );
 
 
+  //
+  // Evaluate a user-specified command, and place results in a sstore_t ?  (ie. this
+  // is for the 'Outputs' section of LW
+  //
+  
+  // LW db=outdb-name cmd="SPINDLES fc=11 etc"
+//   if ( param.has( "cmd" ) )
+//     {
+//       std::string db = folder + "/out_" + param.requires( "db" ) + ".db"; 
+//       std::string cmdstr = param.value( "cmd" );
+//       lw_eval_to_sstore( edf , db , cmdstr );
+//       return;
+//     }
+    
+
+  //
+  // Otherwise, run the prespecified series of commands...
+  //
+
+  //
   //
   // hijack the output stream, i.e. we want retval_t directly
   //
@@ -263,9 +284,13 @@ lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
  
   sstore_t psd_band( folder + "/psd-epoch-band.db" );
 
+  psd_band.begin();
+
   insert_psd_band( ret , edf.id , &psd_band );
   
   psd_band.index();  
+
+  psd_band.commit();
 
   psd_band.dettach();
 
@@ -289,10 +314,14 @@ lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
 
   sstore_t exe_summary( folder + "/eclusters.db" );
 
+  exe_summary.begin();
+
   insert_exe_clusters( ret , edf.id , &exe_summary );
   
   exe_summary.index();  
 
+  exe_summary.commit();
+  
   exe_summary.dettach();
 
 
@@ -591,6 +620,8 @@ void  lw_prep_t::insert_psd_band( retval_t & ret ,
 		{	      
 		  // take log(power) from 'PSD'
 		  pows[ channel_lvl.str_level ][ band_lvl.str_level ].push_back( log( jj->second.d )  );
+		  // insert at epoch level 
+		  ss->insert_epoch( e , "PSD" , log( jj->second.d ) , &(channel_lvl.str_level) , &(band_lvl.str_level) );
 		}
 	    }      
 	}
@@ -745,4 +776,40 @@ void  lw_prep_t::insert_exe_clusters( retval_t & ret ,
 
     logger << " ... inserted " << cnt << " values\n";
 }
+
+
+
+
+// void lw_prep_t::lw_eval_to_sstore( edf_t & edf , const std::string & db , const std::string cmdstr )
+// {
+  
+//   // take a single CMD and eval, and save from retval_t to a sstore_t for use by LW
+  
+//   writer.nodb();
+  
+//   writer.clear();
+  
+//   retval_t ret;
+  
+//   writer.use_retval( &ret );
+  
+//   writer.id( edf.id , edf.filename );
+
+//   // eval cmdstr 
+//   cmd_t cmd( cmdstr );
+    
+//   cmd.eval( edf );
+
+//   // and save 
+//   ret.write_sstore( db );
+
+//   // and clean up
+//   writer.use_retval( NULL );
+  
+//   writer.clear();
+  
+//   writer.nodb();
+  
+      
+// }
 

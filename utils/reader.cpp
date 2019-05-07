@@ -271,7 +271,6 @@ int main(int argc , char ** argv )
 
   run_dictionary = false;
 
-  
   std::string cmd_spec = "."; // which luna command, if taking output from -r/-c , i.e. we need a -s too ('statement') 
 
   bool any_opt = false; // either -x, -l, -d or -r/-c : otherwise do summary
@@ -284,7 +283,7 @@ int main(int argc , char ** argv )
       if      ( strcmp( argv[i] , "-x" ) == 0 ) { run_summary = true; any_opt = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-l" ) == 0 ) { run_summary = false; any_opt = true; options.long_format = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-d" ) == 0 ) { run_dictionary = true; any_opt = true; mode = '0'; }
-      
+ 
       else if ( strcmp( argv[i] , "-n" ) == 0 ) { options.print_cmd_name = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-e" ) == 0 ) { options.print_empty_rows = true; mode = '0'; }
 

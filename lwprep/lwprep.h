@@ -38,7 +38,8 @@ struct lw_prep_t {
 
   lw_prep_t( edf_t & edf , param_t & param );
   
-
+  //  void lw_eval_to_sstore( edf_t & edf , const std::string & db , const std::string cmdstr );
+  
   // helper functions
 
   

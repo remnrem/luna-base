@@ -772,7 +772,7 @@ Data::Matrix<double> pdc_t::all_by_all()
 
 void pdc_t::encode_ts()
 {  
-  logger << " encoding with m="<<m << ", t=" << t << "\n";  
+  logger << "  encoding with m="<<m << ", t=" << t << "\n";  
   // encode each observation in PD space
   const int N = obs.size();
   for (int i=0;i<N;i++) obs[i].encode( m , t );

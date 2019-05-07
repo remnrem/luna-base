@@ -159,12 +159,13 @@ struct globals
   static std::string annot_meta_strat;     // annot instance meta variable label
   static std::string count_strat;
   static std::string sample_strat;
+  static std::string cluster_strat;
 
   // database variables
   static std::string & SQLITE_SCRATCH_FOLDER();  
   
   static std::string print( const freq_range_t & );
-
+    
   // function to bail to if needed
   static void (*bail_function) ( const std::string & msg );
   

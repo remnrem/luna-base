@@ -147,8 +147,11 @@ class cmd_t
 
   static std::string                        cmdline_cmds;
   static std::string                        stout_file;
+  static std::string                        stout_template;
   static bool                               append_stout_file;
-
+  static bool                               has_indiv_wildcard;
+  static std::string resolved_outdb( const std::string & id , const std::string & str );
+  
   // command-specific parameters (i.e. from command-file)
   static std::set<std::string>    signallist;
   

@@ -150,6 +150,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       
       if ( univariate )
 	{
+	  logger << "  calculating epoch-by-epoch distances for " << signals.label(s0) << "\n";
 	  // just add one channel
 	  add_channel( signals.label(s0) );
 	  // and stratify output by channel
@@ -158,8 +159,13 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       else
 	{
 	  // add all channels (and we'll quite afterwards)
+	  logger << "  calculating epoch-by-epoch distances for " ;
 	  for ( int s=0; s<ns; s++ )
-	    add_channel( signals.label(s) );
+	    {
+	      add_channel( signals.label(s) );
+	      logger << signals.label(s) ;
+	    }
+	  logger << "\n";
 	}
       
       //
@@ -282,9 +288,12 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       for (int e=0; e<ne; e++ )
 	{
 	  writer.epoch( edf.timeline.display_epoch( e ) );
-	  writer.value( "CL" , sol.best[e] );
+	  // cluster 'label' is the exemplar epoch for that cluster
+	  writer.value( "CL" , edf.timeline.display_epoch( sol.exemplars[ sol.best[e] ] ) );
+	  //	  writer.value( "KK" , sol.best[e] );
 	}
       writer.unepoch();
+      
      
       //
       // in multivariate-mode, we are all done after one pass

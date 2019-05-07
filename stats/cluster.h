@@ -30,6 +30,7 @@
 #include <set>
 #include <algorithm>
 #include <cmath>
+#include <map>
 
 #include "stats/matrix.h"
 
@@ -38,16 +39,13 @@ struct cluster_solution_t {
 
   // number of clusters in best solution
   int k;
-
+  
   // length n-obs, o-based cluster assignment
   std::vector<int> best;
   
-/*   // silhouette per observation at best */
-/*   std::vector<double> Si; */
-
-/*   // average silhouette over all obs, for each K */
-/*   std::vector<double> silhouette; */
-
+  // one 'exemplar' observation (based on max silhouette) per cluster 
+  std::map<int,int> exemplars;
+   
 };
 
 

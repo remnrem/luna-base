@@ -301,15 +301,29 @@ int main(int argc , char ** argv )
   //
   // initialize output to a STOUT db or not?
   //
-
-  if ( ! cmd_t::append_stout_file ) 
-    Helper::deleteFile( cmd_t::stout_file );
   
+  if ( cmd_t::stout_file.find( globals::indiv_wildcard ) != std::string::npos )
+    {
+      cmd_t::has_indiv_wildcard = true;
+      cmd_t::stout_template = cmd_t::stout_file;
+    }
+  
+  // was an output db specified?
   if ( cmd_t::stout_file != "" )
-    writer.attach( cmd_t::stout_file );  
+    {
+      
+      // if using indiv-specific output databases, postpone this...
+      if ( ! cmd_t::has_indiv_wildcard ) 
+	{
+	  // if not append-mode, first wipe it
+	  if ( ! cmd_t::append_stout_file ) 
+	    Helper::deleteFile( cmd_t::stout_file );
+	  
+	  writer.attach( cmd_t::stout_file );  
+	}
+    }
   else 
     writer.nodb();
-  
   
 
   
@@ -581,7 +595,27 @@ void process_edfs( cmd_t & cmd )
 	      << "Processing: " << rootname 
 	      << " [ #" << processed+1 << " ]" << "\n";
       
+
+
+      //
+      // Do we need to open an individual-specific out-db?
+      //
       
+      if ( cmd_t::has_indiv_wildcard ) 
+	{
+	  cmd_t::stout_file = cmd_t::resolved_outdb( rootname , cmd_t::stout_template );
+
+	  // if not append-mode, first wipe it
+	  if ( ! cmd_t::append_stout_file ) 
+	    Helper::deleteFile( cmd_t::stout_file );
+	  
+	  writer.attach( cmd_t::stout_file );  
+	  
+	  logger << " writing to " << writer.name() << "\n";
+
+	}
+      
+
       //
       // Begin transaction
       //
@@ -603,38 +637,6 @@ void process_edfs( cmd_t & cmd )
 
       
       //
-      // Handle  luna --validate {edf|sample-list} separaetely (NOT IMPLEMENTED YET)
-      //
-
-//       if ( globals::validation_mode )
-// 	{
-	  
-// 	  writer.cmd( "VALIDATE" , 1 , "" );
-
-// 	  // test: can we attach this EDF?
-// 	  edf_t edf;  
-	  
-// 	  bool okay = edf.attach( edffile , rootname );
-
-// 	  if ( ! okay ) logger.warning( "could not attach " + edffile );
-	  
-// 	  writer.value( "VALID" , (int)okay );
-	  
-// 	  // note that we've done this
-// 	  ++processed;
-// 	  ++actual;
-
-// 	  writer.commit();
-
-// 	  if ( single_edf ) break;
-	  
-// 	  // go to next EDF
-// 	  continue;
-	  
-// 	}
-
-	  
-      //
       // Unset 'problem' flag (i.e. for bailing for this individual)
       //
       
@@ -649,6 +651,7 @@ void process_edfs( cmd_t & cmd )
       
       if ( cmd.signals().size() > 0 ) inp_signals = &cmd.signals();
       
+
       //
       // load EDF
       //
@@ -702,117 +705,112 @@ void process_edfs( cmd_t & cmd )
     
           
       //
-      // Attach annotations.  (run for single_edf mode, as we may have added an annotation file as above)
+      // Attach annotations
       //
-      
-//       if ( ! single_edf ) 
-// 	{
       
       for (int i=2;i<tok.size();i++) 
 	{
 	  
 	  std::string fname = Helper::expand( tok[i] );
-
+	  
 	  if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
-		{
-		  // this means we are specifying a folder, in which case search for all files that 
-		  // start id_<ID>_* and attach thoses
-		  DIR * dir;		  
-		  struct dirent *ent;
-		  if ( (dir = opendir ( fname.c_str() ) ) != NULL )
-		    {
-		      /* print all the files and directories within directory */
-		      while ((ent = readdir (dir)) != NULL)
-			{
-			  std::string fname2 = ent->d_name;
-			  // only annot files (.xml, .ftr, .annot, .eannot)
- 			  if ( Helper::file_extension( fname2 , "ftr" ) ||
- 			       Helper::file_extension( fname2 , "xml" ) ||
-			       Helper::file_extension( fname2 , "eannot" ) ||
-			       Helper::file_extension( fname2 , "annot" ) )
-			    {
-			      edf.load_annotations( fname + fname2 );	 			   
-			    }
-			}
-		      closedir (dir);
-		    }
-		  else 
-		    Helper::halt( "could not open folder " + fname );
-		}
-	      else
-		{
-		  edf.load_annotations( fname );	 
-		}
-	      
-	    }
-
-	  
-	  //
-	  // Now, all annotations (except EPOCH-ANNOT) are attached and can be reported on
-	  //
-	  
-	  std::vector<std::string> names = edf.timeline.annotations.names();
-	  
-	  if ( names.size() > 0 ) logger << "\n annotations:\n";
-
-	  for (int a = 0 ; a < names.size() ; a++ )
 	    {
-	      
-	      annot_t * annot = edf.timeline.annotations.find( names[a] );
-	      
-	      if ( annot == NULL ) Helper::halt( "internal problem in list_all_annotations()" );
-	      
-	      const int num_events = annot->num_interval_events();
-	      const int nf = annot->types.size();
-	      
-	      logger << "  [" << names[a] << "] " 
-		     << num_events << " instance(s)"
-		     << " (from " << annot->file << ")\n";
-	      
-	      // list instance IDs (up to 8) if multiple or differnt from annot name
-	      
-	      std::set<std::string> instance_ids = annot->instance_ids();
-
-	      if ( instance_ids.size() > 0 ) 
+	      // this means we are specifying a folder, in which case search for all files that 
+	      // start id_<ID>_* and attach thoses
+	      DIR * dir;		  
+	      struct dirent *ent;
+	      if ( (dir = opendir ( fname.c_str() ) ) != NULL )
 		{
-		  if ( ! ( instance_ids.size() == 1 && ( *instance_ids.begin()  == names[a] || *instance_ids.begin() == "." ) ) )
+		  /* print all the files and directories within directory */
+		  while ((ent = readdir (dir)) != NULL)
 		    {
-		      logger << "   " << instance_ids.size() << " instance IDs: ";
-		      std::set<std::string>::const_iterator ii = instance_ids.begin();
-		      int icnt = 0 ; 
-		      while ( ii != instance_ids.end() )
+		      std::string fname2 = ent->d_name;
+		      // only annot files (.xml, .ftr, .annot, .eannot)
+		      if ( Helper::file_extension( fname2 , "ftr" ) ||
+			   Helper::file_extension( fname2 , "xml" ) ||
+			   Helper::file_extension( fname2 , "eannot" ) ||
+			   Helper::file_extension( fname2 , "annot" ) )
 			{
-			  logger << " " << *ii ;
-			  ++icnt;
-			  if ( icnt > 8 ) { logger << " ..." ; break;  }
-			  ++ii;		  
+			  edf.load_annotations( fname + fname2 );	 			   
 			}
-		      logger << "\n";
 		    }
+		  closedir (dir);
 		}
+	      else 
+		Helper::halt( "could not open folder " + fname );
+	    }
+	  else
+	    {
+	      edf.load_annotations( fname );	 
+	    }
+	  
+	}
 
-
-	      // lists meta-data
-	      
-	      if ( nf > 1 )
+	  
+      //
+      // Now, all annotations (except EPOCH-ANNOT) are attached and can be reported on
+      //
+      
+      std::vector<std::string> names = edf.timeline.annotations.names();
+      
+      if ( names.size() > 0 ) logger << "\n annotations:\n";
+      
+      for (int a = 0 ; a < names.size() ; a++ )
+	{
+	  
+	  annot_t * annot = edf.timeline.annotations.find( names[a] );
+	  
+	  if ( annot == NULL ) Helper::halt( "internal problem in list_all_annotations()" );
+	  
+	  const int num_events = annot->num_interval_events();
+	  const int nf = annot->types.size();
+	  
+	  logger << "  [" << names[a] << "] " 
+		 << num_events << " instance(s)"
+		 << " (from " << annot->file << ")\n";
+	  
+	  // list instance IDs (up to 8) if multiple or differnt from annot name
+	  
+	  std::set<std::string> instance_ids = annot->instance_ids();
+	  
+	  if ( instance_ids.size() > 0 ) 
+	    {
+	      if ( ! ( instance_ids.size() == 1 
+		       && ( *instance_ids.begin()  == names[a] || *instance_ids.begin() == "." ) ) )
 		{
-		  logger << "   w/ " << nf << " field(s):";
-		  std::map<std::string,globals::atype_t>::const_iterator aa = annot->types.begin();
-		  while ( aa != annot->types.end() )
+		  logger << "   " << instance_ids.size() << " instance IDs: ";
+		  std::set<std::string>::const_iterator ii = instance_ids.begin();
+		  int icnt = 0 ; 
+		  while ( ii != instance_ids.end() )
 		    {
-		      logger << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
-		      ++aa;
+		      logger << " " << *ii ;
+		      ++icnt;
+		      if ( icnt > 8 ) { logger << " ..." ; break;  }
+		      ++ii;		  
 		    }
 		  logger << "\n";
 		}
-	      
-	      
-	      
 	    }
+	  
+	
+	  // lists meta-data
+	  
+	  if ( nf > 1 )
+	    {
+	      logger << "   w/ " << nf << " field(s):";
+	      std::map<std::string,globals::atype_t>::const_iterator aa = annot->types.begin();
+	      while ( aa != annot->types.end() )
+		{
+		  logger << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
+		  ++aa;
+		}
+	      logger << "\n";
+	    }
+	  
+	}
 
 
-	  //	} // end of single-EDF check 
-
+      
 	    
       //
       // Evaluate all commands
@@ -820,13 +818,11 @@ void process_edfs( cmd_t & cmd )
 
       bool cmd_okay = cmd.eval( edf );
       
-      // TODO: we need to track what passed/failed here?? 
-
 
       //
       // done 
       //
-
+      
       ++processed;
       ++actual;
 
@@ -837,6 +833,13 @@ void process_edfs( cmd_t & cmd )
       writer.commit();
 
 
+      //
+      // clean up if using individual-specific outdb
+      //
+      
+      if ( cmd_t::has_indiv_wildcard ) 
+	writer.close();
+      
       //
       // all done / next EDF
       //

@@ -4,7 +4,7 @@ include ../Makefile.inc
 
 DESTRAT = ../destrat
 DESTRAT_OBJS = reader.o ../globals.o
-DESTRAT_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lannot
+DESTRAT_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot
 
 BEHEAD = ../behead
 BEHEAD_OBJS = behead.o
@@ -12,13 +12,21 @@ BEHEAD_LIBS =
 
 TSPICKER = ../tspicker 
 TSPICKER_OBJS = tspicker.o ../globals.o
-TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lannot
+TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lannot -lsstore
 
 INTERSECT = ../intersect 
 INTERSECT_OBJS = list-intersection.o ../globals.o
-INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals -ldb -lannot
+INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals -ldb -lannot -lsstore
 
-all : $(DESTRAT) $(TSPICKER) $(INTERSECT) $(BEHEAD)
+PREPSS = ../prepss
+PREPSS_OBJS = prepss.o ../globals.o
+PREPSS_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot
+
+LOADSS = ../loadss
+LOADSS_OBJS = loadss.o ../globals.o
+LOADSS_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot
+
+all : $(DESTRAT) $(TSPICKER) $(INTERSECT) $(BEHEAD) $(PREPSS) $(LOADSS)
 
 $(DESTRAT) : ${DESTRAT_OBJS}
 	$(ECHO) $(LD) $(LDFLAGS) -o $(DESTRAT) $(DESTRAT_OBJS) $(DESTRAT_LIBS)
@@ -36,10 +44,20 @@ $(INTERSECT) : $(INTERSECT_OBJS)
 	$(ECHO) $(LD) $(LDFLAGS) -o $(INTERSECT) $(INTERSECT_OBJS) $(INTERSECT_LIBS)
 	$(LD) $(LDFLAGS) -o $(INTERSECT) $(INTERSECT_OBJS) $(INTERSECT_LIBS)
 
+$(PREPSS) : ${PREPSS_OBJS}
+	$(ECHO) $(LD) $(LDFLAGS) -o $(PREPSS) $(PREPSS_OBJS) $(PREPSS_LIBS)
+	$(LD) $(LDFLAGS) -o $(PREPSS) $(PREPSS_OBJS) $(PREPSS_LIBS)
+
+$(LOADSS) : ${LOADSS_OBJS}
+	$(ECHO) $(LD) $(LDFLAGS) -o $(LOADSS) $(LOADSS_OBJS) $(LOADSS_LIBS)
+	$(LD) $(LDFLAGS) -o $(LOADSS) $(LOADSS_OBJS) $(LOADSS_LIBS)
+
 clean :
 	$(ECHO) cleaning up utils/
 	-$(RM) -f $(DESTRAT) $(DESTRAT_OBJS)
 	-$(RM) -f $(BEHEAD) $(BEHEAD_OBJS)
 	-$(RM) -f $(TSPICKER) $(TSPICKER_OBJS)
 	-$(RM) -f $(INTERSECT) $(INTERSECT_OBJS)
+	-$(RM) -f $(PREPSS) $(PREPSS_OBJS)
+	-$(RM) -f $(LOADSS) $(LOADSS_OBJS)
 	-$(RM) -f *~

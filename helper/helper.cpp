@@ -797,6 +797,17 @@ bool Helper::timestring( const std::string & t, int * h, int *m , int *s)
 
 
 
+std::string Helper::insert_indiv_id( const std::string & id , const std::string & str )
+{
+  // replace all instances of 'globals::indiv_wildcard' in 'str' with 'id'  
+  std::string v = str;
+  while ( v.find( globals::indiv_wildcard ) != std::string::npos )
+    {
+      int p = v.find( globals::indiv_wildcard  );
+      v = v.substr( 0 , p ) + id + v.substr(p+1);
+    }
+  return v;
+}
 
 
 void Helper::swap_in_variables( std::string * t , const std::map<std::string,std::string> & vars )
