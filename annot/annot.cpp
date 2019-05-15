@@ -296,13 +296,12 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       einc = globals::default_epoch_len * globals::tp_1sec;      
     }
 
+  // get implied number of epochs
+  double seconds = (uint64_t)parent_edf.header.nr * parent_edf.header.record_duration ;      
+  const int ne = seconds / ( unepoched ? globals::default_epoch_len : elen / globals::tp_1sec );
   
   if ( globals::enforce_epoch_check )
     {
-      // get implied number of epochs
-      
-      double seconds = (uint64_t)parent_edf.header.nr * parent_edf.header.record_duration ;      
-      const int ne = seconds / ( unepoched ? globals::default_epoch_len : elen / globals::tp_1sec );
       if ( ne != ann.size() ) 
 	Helper::halt( "expecting " + Helper::int2str(ne) + " epoch annotations, but found " + Helper::int2str( (int)ann.size() ) );
     }
@@ -329,6 +328,12 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       if ( globals::specified_annots.size() > 0 && 
 	   globals::specified_annots.find( ann[e] ) == globals::specified_annots.end() ) 
 	continue;
+      
+      //
+      // ignore this annotation if past the end?
+      //
+      
+      if ( e >= ne ) continue;
       
       //
       // otherwise, create the new annotation class

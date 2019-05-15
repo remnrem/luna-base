@@ -162,20 +162,22 @@ void topo_t::grid( int nx , int ny )
 void topo_t::grid( double xmin, double xmax, int _nx, 
 		   double ymin, double ymax, int _ny)
 {
-  // make a grid: in future, may want to place some circle 
-  // constraints on what we bother to estimate
+
   nx = _nx; ny = _ny;
+
   out_xy.clear();
   out_inc.clear();
+  
   double xinc = ( xmax - xmin ) / (double)(nx-1);
   double yinc = ( ymax - ymin ) / (double)(ny-1);
-
+  
   double xx = xmin, yy = ymin;
+  
   for (int xi=0;xi<nx;xi++)
     {
       double xx = xmin + xi * xinc;
       double xx2 = xx - 0.5;
-
+      
       for (int yi=0;yi<ny;yi++)
 	{ 
 	  

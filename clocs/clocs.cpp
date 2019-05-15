@@ -60,7 +60,8 @@ polar_t::polar_t( sph_t & sph )
 
 int clocs_t::load_cart( const std::string & filename )
 {
-  if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not find " + filename );
+  if ( ! Helper::fileExists( filename ) ) 
+    Helper::halt( "could not find " + filename );
   cloc.clear();
 
   // assume LABEL X Y Z 
