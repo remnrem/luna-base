@@ -525,11 +525,18 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   
   // name  id1  sec1  sec2  { vars }
   // name  id   e:1   {e:2} { vars } 
-  
+  // name  id   hh:mm:ss  hh:mm:ss { vars }
+
   // assume e:1   means 30-second epoch, no overlap  [ hard-code this ] 
   // e:1:20 is first of a 20-second epoch
   // e:1:20:10 is similar, but w/ epoch overlap of 10 seconds (10=increment)
 
+  // check EDF starttime, which might be needed
+  
+  clocktime_t starttime( parent_edf.header.starttime );
+    
+  // read header then data
+  
   bool epoched = false;
   
   int line_count = 0;
@@ -583,7 +590,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // store a temporary lookup table
 	  //
-
 	  annot_map[ name ] = a;
 	  
 	  //
@@ -793,22 +799,52 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  else // an INTERVAL
 	    {
 	      
-	      // read as seconds and convert to uint64_t 
+	      // assume this is either a single numeric value (in seconds) which is an offset past the EDF start
+	      // OR in clock-time, in hh:mm:ss (24-hour) format
+	      
+	      std::vector<std::string> tok_start_hms = Helper::parse( tok[2] , ":" );
+	      std::vector<std::string> tok_stop_hms = Helper::parse( tok[3] , ":" );
+	      
+	      bool is_hms = tok_start_hms.size() == 3 && tok_stop_hms.size() == 3;
+	      
+	      if ( is_hms && ! starttime.valid ) 
+		Helper::halt( "specifying hh:mm:ss clocktime annotations, but no valid starttime in the EDF" );
+	      
+	      // read as seconds 
 	      double dbl_start = 0 , dbl_stop = 0;
 	      
-	      if ( ! Helper::str2dbl( tok[2] , &dbl_start ) )
-		Helper::halt( "invalid interval: " + line );
+	      if ( is_hms )
+		{
+		  
+		  clocktime_t atime( tok[2] );
+
+		  clocktime_t btime( tok[3] );
+		  
+		  dbl_start = clocktime_t::difference( starttime , atime ) * 3600; 
+		  
+		  dbl_stop = clocktime_t::difference( starttime , btime ) * 3600; 
+		  
+		}
+	      else
+		{
+		  
+		  if ( ! Helper::str2dbl( tok[2] , &dbl_start ) )
+		    Helper::halt( "invalid interval: " + line );
+		  
+		  if ( ! Helper::str2dbl( tok[3] , &dbl_stop ) ) 
+		    Helper::halt( "invalid interval: " + line );
+		  
+		}
 	      
-	      if ( ! Helper::str2dbl( tok[3] , &dbl_stop ) ) 
-		Helper::halt( "invalid interval: " + line );
+
+	      // convert to uint64_t time-point units
 	      
 	      interval.start = globals::tp_1sec * dbl_start;
 	      
-
 	      // assume stop is already specified as 1 past the end, e.g. 30 60
 	      // *unless* it is a single point, e.g. 5 5 
 	      // which is handled below
-
+	      
 	      interval.stop  = globals::tp_1sec * dbl_stop ;
 	      
 	    }

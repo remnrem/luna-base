@@ -36,12 +36,16 @@ int main(int argc , char ** argv )
 {
   
   global.init_defs();
-  
-  if ( argc < 3 ) Helper::halt( "usage: intersect list1 list2 -b bglist -x exclude-list -w window -t threshold (0..1)" );
+
+  global.api();
+
+  if ( argc < 3 ) Helper::halt( "usage: intersect list1 list2 -b bglist -x exclude-list -w window -t threshold (0..1) {-s} " );
   
   std::string list1, list2;
 
   bool has_bg = false, xlist = false; 
+  bool sec_mode = false;
+  
   std::string bglist = "";
   
   // param
@@ -75,7 +79,12 @@ int main(int argc , char ** argv )
 	  has_bg = true; xlist = true;
 	  bglist = argv[i+1]; ++i; continue;	  
 	}
-
+     else if ( strcmp( argv[i] , "-s" ) == 0 ) 
+       {
+	 // expect doubles (seconds) and not TP-units
+	 sec_mode = true;
+       }
+      
       else 
 	{
 	  if ( listed > 2 ) Helper::halt( "too many lists" );
@@ -87,9 +96,6 @@ int main(int argc , char ** argv )
 
   uint64_t window_msec = window <= 0 ? 0 : window * globals::tp_1sec;
 
-//   std::cerr << "window_msec " << window_msec << "\n";
-//   std::cerr << "th          " << threshold << "\n";
-
   // lists
 
   std::set<interval_t> bg, l1, l2;
@@ -97,10 +103,13 @@ int main(int argc , char ** argv )
 
   
   // background intervals?
-  
+
   if ( has_bg )
     {
-      std::cout << "opening " << bglist << "\n";
+
+      if ( ! Helper::fileExists( bglist ) ) Helper::halt( "could not find " + bglist );
+
+      std::cerr << "opening bg-list " << bglist << "\n";
       std::ifstream IN1( bglist.c_str() , std::ios::in );
       while ( !IN1.eof() ) 
 	{      
@@ -109,12 +118,29 @@ int main(int argc , char ** argv )
 	  if ( IN1.eof() ) continue;
 	  std::vector<std::string> tok = Helper::parse( line , "\t" );
 	  const int n = tok.size();
-	  if ( n < 2 ) Helper::halt( "bad line" );
 	  
-	  uint64_t a, b;
-	  if ( ! Helper::str2int64( tok[0] , &a ) ) Helper::halt( "bad format" );
-	  if ( ! Helper::str2int64( tok[1] , &b ) ) Helper::halt( "bad format" );
-	  interval_t i( a, b );
+	  if ( n < 2 ) Helper::halt( "bad line in bg-list:\n" + line );
+	  
+
+	  uint64_t a1, b1;
+
+	  if ( sec_mode )
+	    {
+	      double a, b;
+	      if ( ! Helper::str2dbl( tok[0] , &a ) ) Helper::halt( "bad format" );
+	      if ( ! Helper::str2dbl( tok[1] , &b ) ) Helper::halt( "bad format" );
+	      
+	      a1 = a * globals::tp_1sec;
+	      b1 = b * globals::tp_1sec;
+	    }
+	  else
+	    {
+	      if ( ! Helper::str2int64( tok[0] , &a1 ) ) Helper::halt( "bad format" );
+	      if ( ! Helper::str2int64( tok[1] , &b1 ) ) Helper::halt( "bad format" );
+	    }
+	  
+	  
+	  interval_t i( a1, b1 );
 	  
 	  bg.insert( i );
 	}
@@ -122,9 +148,11 @@ int main(int argc , char ** argv )
       std::cerr << "read " << bg.size() << " background elements to " 
 		<< ( xlist ? "exclude" : "include" ) << "\n";
     }
-    
+
 
   // read lists: expecting FTR format -- will save rest of line, just take first two fields
+
+  if ( ! Helper::fileExists( list1 ) ) Helper::halt( "could not find " + list1 );
 
   std::ifstream IN1( list1.c_str() , std::ios::in );
   while ( !IN1.eof() ) 
@@ -134,12 +162,28 @@ int main(int argc , char ** argv )
       if ( IN1.eof() ) continue;
       std::vector<std::string> tok = Helper::parse( line , "\t" );
       const int n = tok.size();
-      if ( n < 2 ) Helper::halt( "bad line" );
-
-      uint64_t a, b;
-      if ( ! Helper::str2int64( tok[0] , &a ) ) Helper::halt( "bad format" );
-      if ( ! Helper::str2int64( tok[1] , &b ) ) Helper::halt( "bad format" );
-      interval_t i( a, b );
+      if ( n < 2 ) Helper::halt( "bad line in list 1:\n" + line );
+      
+      uint64_t a1, b1;
+      
+      if ( sec_mode )
+	{
+	  double a,b;
+	  
+	  if ( ! Helper::str2dbl( tok[0] , &a ) ) Helper::halt( "bad format" );
+	  if ( ! Helper::str2dbl( tok[1] , &b ) ) Helper::halt( "bad format" );
+	  
+	  a1 = a * globals::tp_1sec;
+	  b1 = b * globals::tp_1sec;
+	  
+	}
+      else
+	{
+	  if ( ! Helper::str2int64( tok[0] , &a1 ) ) Helper::halt( "bad format" );
+	  if ( ! Helper::str2int64( tok[1] , &b1 ) ) Helper::halt( "bad format" );
+	}
+      
+      interval_t i( a1, b1 );
       
       //save line
       l1.insert( i );
@@ -149,6 +193,7 @@ int main(int argc , char ** argv )
   IN1.close();
 
 
+  if ( ! Helper::fileExists( list2 ) ) Helper::halt( "could not find " + list2 );
 
   std::ifstream IN2( list2.c_str() , std::ios::in );
   while ( !IN2.eof() ) 
@@ -158,12 +203,28 @@ int main(int argc , char ** argv )
       if ( IN2.eof() ) continue;
       std::vector<std::string> tok = Helper::parse( line , "\t" );
       const int n = tok.size();
-      if ( n < 2 ) Helper::halt( "bad line" );
+      if ( n < 2 ) Helper::halt( "bad line in list 2:\n" + line );
 
-      uint64_t a, b;
-      if ( ! Helper::str2int64( tok[0] , &a ) ) Helper::halt( "bad format" );
-      if ( ! Helper::str2int64( tok[1] , &b ) ) Helper::halt( "bad format" );
-      interval_t i( a, b );
+      uint64_t a1, b1;
+
+      if ( sec_mode )
+	{
+	  double a,b;
+	  
+	  if ( ! Helper::str2dbl( tok[0] , &a ) ) Helper::halt( "bad format" );
+	  if ( ! Helper::str2dbl( tok[1] , &b ) ) Helper::halt( "bad format" );
+	  
+	  a1 = a * globals::tp_1sec;
+	  b1 = b * globals::tp_1sec;
+	  
+	}
+      else
+	{
+	  if ( ! Helper::str2int64( tok[0] , &a1 ) ) Helper::halt( "bad format" );
+	  if ( ! Helper::str2int64( tok[1] , &b1 ) ) Helper::halt( "bad format" );
+	}
+      
+      interval_t i( a1, b1 );
       
       //save line
       l2.insert( i );
@@ -171,6 +232,9 @@ int main(int argc , char ** argv )
 
     }
   IN2.close();
+
+
+  //  std::cerr << "lists contained " << l1.size() << " and " << l2.size() << " intervals\n";
 
 
   // need to first intersect with the background?
@@ -235,21 +299,21 @@ int main(int argc , char ** argv )
   double olapb = bb.size() / (double)l2.size() ;
 
   std::cerr << "# intervals : " << l1.size() << "\t" << l2.size() << "\n";
-
   std::cerr << "# overlap   : " << ba.size() << "\t" << bb.size() << "\n";
-  
   
   std::cerr << "p(overlap)  : ";
   if ( l1.size() > 0 ) std::cerr << olapa ; else std::cerr << "n/a";
   std::cerr << "\t";
   if ( l2.size() > 0 ) std::cerr << olapb ; else std::cerr << "n/a";
   std::cerr << "\n";
-
+  
   if ( l1.size() > 0 && l2.size() > 0 )
     std::cerr << "average p(overlap) : " << ( olapa + olapb ) / 2.0 << "\n";
-
-  // stats
   
+  //
+  // stats
+  //
+
   // list overlapping spindles 
   
   //   bool olap = oa.find( ii->tp ) == oa.end();
@@ -301,8 +365,6 @@ int main(int argc , char ** argv )
       
       ++ii2;
     }
-  
-
   
   std::exit(0);
 }

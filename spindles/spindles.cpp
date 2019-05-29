@@ -236,7 +236,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   // number of signals
   const int ns = signals.size();
-  
+
+  // nothing to do...
+  if ( ns == 0 ) return NULL;
+
   // sampling rate
   std::vector<double> Fs = edf.header.sampling_freq( signals );
   
@@ -1417,7 +1420,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // Save for an 'intersection' command?
 	  //
 
-	  if ( do_merge )
+	  if ( do_merge &&  spindles.size() > 0 )
 	    {
 	    
 	      // channel specific info? 
