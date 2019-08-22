@@ -176,18 +176,22 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   if ( ! epoch_level_output )
     return;
 
-  
-  edf.timeline.first_epoch();
-
-  
-  
+ 
+   
   //
   // Get each signal
   //
   
   for (int s = 0 ; s < ns; s++ )
     {
-      
+  
+      //
+      // reset timeline 
+      //
+
+      edf.timeline.first_epoch();
+
+    
       //
       // only consider data tracks
       //

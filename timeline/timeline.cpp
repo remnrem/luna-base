@@ -2155,6 +2155,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  
 	  if ( keep_this )
 	    {      
+	     
 	      events[ instance_idx ] = instance ; 
 	      
 	      counts[ annot->name ]++;
