@@ -117,7 +117,6 @@ namespace Helper
   
   std::string int2str(int n);  
   std::string int2str(long n);
-  std::string int2str(unsigned long int n);
   std::string int2str(uint64_t n);
   std::string dbl2str(double n);  
   std::string dbl2str(double n, int dp);  

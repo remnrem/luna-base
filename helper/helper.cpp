@@ -163,13 +163,6 @@ std::string Helper::int2str(long n)
   return s2.str();
 }
 
-std::string Helper::int2str(unsigned long int n)
-{
-  std::ostringstream s2( std::stringstream::out );
-  s2 << n;
-  return s2.str();
-}
-
 std::string Helper::int2str(uint64_t n)
 {
   std::ostringstream s2( std::stringstream::out );
