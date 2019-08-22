@@ -63,9 +63,9 @@ void writestring( const double & s , int n , FILE * file )
 
 edf_t::endian_t edf_t::endian = edf_t::MACHINE_LITTLE_ENDIAN;
 
-long long edf_t::get_filesize(FILE *file)
+uint64_t edf_t::get_filesize(FILE *file)
 {  
-  long lCurPos, lEndPos;
+  uint64_t lCurPos, lEndPos;
   lCurPos = ftell(file);
   fseek(file, 0, 2);
   lEndPos = ftell(file);
@@ -699,7 +699,7 @@ bool edf_record_t::read( int r )
     {
       
       // determine offset into EDF
-      long int offset = edf->header_size + (long int)(edf->record_size) * r;
+      uint64_t offset = edf->header_size + (uint64_t)(edf->record_size) * r;
       
       // find the appropriate record
       fseek( edf->file , offset , SEEK_SET );
@@ -929,7 +929,7 @@ bool edf_t::attach( const std::string & f ,
   // Does this look like a valid EDF (i.e. at least contains a header?)
   //
 
-  long fileSize = 0 ; 
+  uint64_t fileSize = 0 ; 
 
   // for EDF
   if ( file ) 
@@ -1016,7 +1016,7 @@ bool edf_t::attach( const std::string & f ,
   
   if ( file ) 
     {
-      long implied = header_size + header.nr_all * record_size;
+      uint64_t implied = (uint64_t)header_size + (uint64_t)header.nr_all * record_size;
       
       if ( fileSize != implied ) 
 	{
@@ -2943,7 +2943,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
   if (   header.time_track() == -1 ) Helper::halt( "internal error: no EDF+D time-track" );
   
   // determine offset into EDF
-  long int offset = header_size + (long int)(record_size) * r;
+  uint64_t offset = header_size + (uint64_t)(record_size) * r;
 
   offset += header.time_track_offset(); 
 
