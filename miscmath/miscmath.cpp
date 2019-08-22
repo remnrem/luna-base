@@ -1061,6 +1061,8 @@ double MiscMath::as_angle_0_pos2neg( const double r )
   // pi       DN        180        pi/2    90
   
   double a = MiscMath::rad2deg( r ) + 270;
-  if ( a >= 360 ) a -= 360;
+
+  while ( a >= 360 ) a -= 360;
+
   return a;
 }

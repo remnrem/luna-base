@@ -1946,7 +1946,7 @@ void edf_t::reference_and_scale( const int s , const int r , const double rescal
 void edf_t::reference( const signal_list_t & signals , const signal_list_t & refs )
 {
 
-  if ( signals.size() == 0 || refs.size() == 0 ) Helper::halt( "must specify signal={ ... } and ref={ ... }" );
+  if ( signals.size() == 0 || refs.size() == 0 ) Helper::halt( "must specify sigl={ ... } and ref={ ... }" );
   const int ns = signals.size();
   const int nr = refs.size();
 

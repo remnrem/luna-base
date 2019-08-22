@@ -23,6 +23,7 @@
 #include "hilbert.h"
 
 #include "fftw/fftwrap.h"
+#include "miscmath/crandom.h"
 #include "miscmath/miscmath.h"
 #include "dsp/fir.h"
 #include "defs/defs.h"
@@ -126,66 +127,223 @@ std::vector<double> hilbert_t::instantaneous_frequency( double Fs ) const
         
 }
 
-double hilbert_t::phase_events( const std::vector<int> & e , 
-				std::vector<double> * p , 
-				double * pvalue ,            // ITPC p-value
-				int * nvalid ,               // number of valid (above threshold) observations
-				double * angle ) const       // mean angle
+
+void hilbert_t::bin( double p , int bs , std::vector<int> * acc ) const
 {
-  return phase_events( e , p , 0 , pvalue , nvalid , angle , NULL );
+  int a = floor( MiscMath::as_angle_0_pos2neg( p ) );
+  int b = a / bs;
+  
+  if( b < 0 || b >= acc->size() ) 
+    {      
+      std::cerr << "p, a,b " << p << " " << MiscMath::as_angle_0_pos2neg( p ) << " " << a << " " << b << " " << acc->size() << "\n";
+      Helper::halt( "internal error in hilbert_t::bin() " );
+    }
+  (*acc)[b]++;
 }
 
-double hilbert_t::phase_events( const std::vector<int> & e , 
-				std::vector<double> * p , 
-				double th ,           // magnitude thresold // unit?
-				double * pvalue ,     // ITPC p-value
-				int * nvalid ,        // number of valid (above threshold) observations
-				double * angle ,      // mean angle
-				std::vector<bool> * fnd ) const
+
+
+itpc_t::itpc_t( const int ne , const int nbins )
+{
+  if ( 360 % nbins ) Helper::halt( "number of bins must imply integer number of degrees per bin" );    
+  phase.resize( ne , 0 );
+  event_included.resize( ne , false );
+  phasebin.resize( nbins );
+}
+
+itpc_t hilbert_t::phase_events( const std::vector<int> & e , const std::vector<bool> * mask , 
+				const int nreps , 
+				const int sr , 
+				const double epoch_sec 
+				) const
 {
 
-  // given a set of 'events' in 'e', populate 'p' to contain the phases of these
-  // also calculate 'inter-trial phase clustering' metric (i.e. measure of consistency
-  
+  // given a set of 'events' (i.e. spindles) in 'e' defined by sample-point
+ 
+  // if we are given a 'mask', only consider events that fall within this mask 
+  // when permuting, mask stays w/ hilbert phase (i.e. typically indicates whether a SO is present)
+  // but events get permuted
+
+  // if nreps > 0 then use permutation to get empirical distribution of key metrics
+
+  // return itpc_t, which contains the phase for each event, 
+  //  - the ITPC statistic
+  //  - counts of how many times 
+  // calculate 'inter-trial phase clustering' metric (i.e. measure of
+  // consistency
+
   const int n = e.size();
+
+  const int nbins = 18; // 18 * 20-degree bins
+  const int binsize = 360 / nbins;
+ 
+  itpc_t itpc( n , nbins );
+
+  // the maximum expected sample-point (+1)
   const int mx = ph.size();
   
-  p->resize( n , -999 ); // return this if not satisfying the magnitude criterion
-  if ( fnd != NULL ) fnd->resize( n , false );
+  if ( mask != NULL && mask->size() != mx ) 
+    Helper::halt( "internal error in hilbert_t::phase_events()" );
+
+  //
+  // shuffle only /within/ epoch, if epochs are defined?  If so, for
+  // each event, we need to find the start and stop sp for that epoch,
+  // and shuffle only within those bounds (with wrapping)
+  //
+  
+  int es = sr * epoch_sec;
+
+  // from e[], also get eoffset[], which is the relative within-epoch position
+  std::vector<int> eoffset( n ) ;
+
+  if ( es ) 
+    {
+      for (int i=0; i<n; i++) 
+	eoffset[i] = e[i] % es;
+    }
+
+  
+  //
+  // Observed events
+  //
   
   int counted = 0;
+  
+  std::vector<int> pbacc( nbins , 0 ); // phase-bin accumulator 
+
   dcomp s(0,0);
+
   for (int i=0;i<n;i++)
     {      
-      
-      // check range
-      if ( e[i] >= mx || e[i] < 0 ) Helper::halt( "problem requesting value outside range in hilbert()" );
 
-      // if hilbert transform above threshold magnitude?
-      if ( fnd == NULL || mag[ e[i] ] >= th  ) 
+      // check range
+      if ( e[i] >= mx || e[i] < 0 ) 
+	Helper::halt( "problem requesting value outside range in hilbert()" );
+
+      // if hilbert transform to be included? 
+      if ( mask == NULL || (*mask)[ e[i] ] ) 
 	{
+	  
 	  // track phase
-	  (*p)[i] = ph[ e[i] ];      
+	  itpc.phase[i] = ph[ e[i] ];      
+
+	  // phase bin
+	  bin( itpc.phase[i] , binsize , &pbacc );
+	  
 	  // accumulate ITPC
-	  s += exp( dcomp(0,(*p)[i]) );
+	  s += exp( dcomp(0,itpc.phase[i]) );
+
+	  // and record that this event was included
 	  ++counted;
-	  if ( fnd ) (*fnd)[i] = true;
+	  
+	  itpc.event_included[i] = true; 
+
 	}      
+
     }
+
 
   // normalise ITPC and return
   s /= double(counted);
-  double itpc = abs( s );
   
-  // save
-  *nvalid = counted;
-  *pvalue = exp( -counted * itpc * itpc );   
-  *angle  = arg( s );
+  // record ITPC etc
+  itpc.itpc.obs = abs( s );
+  itpc.ninc.obs  = counted;
+  itpc.pv.obs    = exp( -counted * itpc.itpc.obs * itpc.itpc.obs );   
+  itpc.sig.obs   = itpc.pv.obs < 0.05;
+  itpc.angle.obs = MiscMath::as_angle_0_pos2neg( arg( s ) );
+  for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = pbacc[b];
 
+  if ( nreps == 0 ) return itpc;
+
+
+  //
+  // Permutations
+  //
+
+  // max shuffle, either within epoch, or whole signal
+
+  const int maxshuffle = es ? es : mx ;
+  
+  for (int r = 0 ; r < nreps ; r++ ) 
+    {
+      
+      // get permutation shift
+      int pp = CRandom::rand( maxshuffle );
+      
+      std::vector<int> pbacc( nbins , 0 ); // phase-bin accumulator 
+      
+      int counted = 0 ; 
+      
+      dcomp s(0,0);
+      
+      for (int i=0;i<n;i++)
+	{      
+	  
+	  // get permuted position, and wrap if needed
+	  int pei = e[i] + pp ; 
+	  
+	  // check for wrapping
+	  if ( es == 0 ) // whole-signal shuffle
+	    {
+	      if ( pei >= maxshuffle ) pei -= maxshuffle;
+	    }
+	  else // within-epoch shuffle
+	    {
+	      if ( eoffset[i] + pp >= maxshuffle ) pei -= maxshuffle;
+	    }
+
+	  // if hilbert transform to be included? 
+
+	  if ( mask == NULL || (*mask)[ pei ] ) 
+	    {
+	      
+	      // track phase
+	      itpc.phase[i] = ph[ pei ];      
+	  
+	      // phase bin
+	      bin( itpc.phase[i] , binsize , &pbacc );
+
+	      // accumulate ITPC
+	      s += exp( dcomp(0,itpc.phase[i]) );
+
+	      // and record that this event was included
+	      ++counted;
+	      
+	      itpc.event_included[i] = true; 
+	      
+	    }      
+	  
+	}
+      
+      // normalise ITPC and return
+      s /= double(counted);
+  
+      // record ITPC etc
+      itpc.itpc.perm.push_back( abs( s ) );
+      itpc.ninc.perm.push_back( counted );
+      double pv = exp( -counted * itpc.itpc.obs * itpc.itpc.obs ) ;
+      itpc.pv.perm.push_back( pv );
+      itpc.sig.perm.push_back( pv < 0.05 );
+      itpc.angle.perm.push_back( MiscMath::as_angle_0_pos2neg( arg( s ) ) );
+      for (int b=0; b < nbins; b++) itpc.phasebin[b].perm.push_back ( pbacc[b] );
+
+    }
+
+  // get empirical p-values
+  itpc.itpc.calc_stats();
+  itpc.ninc.calc_stats();
+  itpc.sig.calc_stats();
+  for (int b=0; b < nbins; b++) itpc.phasebin[b].calc_stats();
+
+  
+  //
+  // All done
+  //
+  
   return itpc;
+
 }
-
-
 
 
 

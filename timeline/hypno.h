@@ -86,6 +86,8 @@ struct hypnogram_t
 
   // statistics
   
+  bool any_sleep;
+
   double TIB;  // time in bed : length of entire record, ignoring all staging
   double TRT;  // total recording time : from lights out to lights on
 
