@@ -163,10 +163,9 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
       writer.level( f , globals::freq_strat );
       
       // get CWT (12 cycles, fixed for now...)
-      std::vector<double> c = cwt( x , fs , f , 12 );
+      std::vector<double> c = cwt( x , fs , f , 7 );
       
       // get intervals
-      
       fibin_t r = intervalize( c , tp , fs , t_lwr , t_upr , t_inc , cycles , f ); 
       
       // report
@@ -271,8 +270,13 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   // normalize
   std::vector<double> x( n , 0 );
   for (int i=0;i<n;i++) 
-    x[i] = ( x_[i] - min ) / ( max - min );
-  
+    {
+      std::cout << "x\t" << i << "\t" << fc << "\t" << x_[i] ;
+      //      x[i] = ( x_[i] - min ) / ( max - min );
+      x[i] = x_[i];
+      std::cout << "\t" << x[i] << "\n";
+    }
+
   // init. each time-bin
   for (int t=0;t<nt;t++) 
     {
@@ -330,6 +334,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   // last point: ignore
   // fipoint_t f( n-1 , n-1 , x[n-1] ) ;
   // pts.insert( f ) ;
+
+  
   
   if ( 0 )
     {
@@ -397,7 +403,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
     }
   
   // at end, x should equal used
-  //  for (int i=0;i<n;i++) std::cout << "x/u " << x[i] << "\t" << used[i] << "\n";  
+  //for (int i=0;i<n;i++) std::cout << "x/u " << x[i] << "\t" << used[i] << "\n";  
   
   // all done
   

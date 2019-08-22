@@ -36,7 +36,7 @@ struct emp_t {
   
   void add_permuted( double x ) { perm.push_back( x ) ; }   
 
-  double calc_stats() 
+  void calc_stats() 
   {
     mean = MiscMath::mean( perm );
     sd = MiscMath::sdev( perm );

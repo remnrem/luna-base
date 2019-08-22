@@ -141,6 +141,7 @@ void CWT::run()
       
       dcomp denom( 1.0/(double)n_conv_pow2 , 0 );
 
+
       //
       // Normalize
       //
