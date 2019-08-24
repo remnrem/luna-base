@@ -316,7 +316,7 @@ void dsptools::polarity_check( const std::vector<double> & x0 , const std::vecto
   //
 
   std::vector<double> f = MiscMath::Z( dsptools::apply_fir( x , fs , fir_t::BAND_PASS , 
-							    0.001 , 0.5 , f_lwr , f_upr ) );
+							    0.01 , 0.5 , f_lwr , f_upr ) );
 
   if ( f.size() != ns ) Helper::halt( "problem in dsp::polarity()" );
 

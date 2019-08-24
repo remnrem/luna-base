@@ -195,13 +195,18 @@ struct slow_waves_t
 
   const std::vector<double> * p_filtered() const { return &filtered; }  
   
-
+  std::vector<bool> sp_in_sw_vec() { 
+    std::vector<bool> r( in_sw.size() ) ;
+    for (int i=0;i<in_sw.size();i++) r[i] = in_sw[i] != -1;
+    return r;
+  } 
+  
 private:
 
   // store all individual slow waves
   std::vector<slow_wave_t> sw;
   
-  // simple vector of 0/n for whether this point is in a slow wave ('n') or no (0)
+  // simple vector of 0/n for whether this point is in a slow wave ('n') or no (-1)
   std::vector<int> in_sw;
 
   // filtered signal

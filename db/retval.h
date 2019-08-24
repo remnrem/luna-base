@@ -169,52 +169,35 @@ struct retval_t {
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
-	    const double x )
-  {
-    var_has_doubles.insert( var.name );
-    data[cmd][fac][var][stratum][id] = retval_value_t( x );
-  }
+	    const double x );
   
   void add( const retval_indiv_t & id , 
 	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
-	    int  x )
-  {
-    data[cmd][fac][var][stratum][id] = retval_value_t( (int64_t)x );
-  }
+	    int  x );
   
   void add( const retval_indiv_t & id, 
 	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
-	    int64_t  x )
-  {
-    data[cmd][fac][var][stratum][id] = retval_value_t( x );
-  }
+	    int64_t  x );
 
   void add( const retval_indiv_t & id, 
 	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
-	    uint64_t  x )
-  {
-    data[cmd][fac][var][stratum][id] = retval_value_t( (int64_t)x );
-  }
+	    uint64_t  x );
 
   void add( const retval_indiv_t & id, 
 	    const retval_cmd_t & cmd ,
 	    const retval_factor_t & fac ,
 	    const retval_var_t & var ,
 	    const retval_strata_t & stratum ,
-	    const std::string & x )
-  {  
-    var_has_strings.insert( var.name );
-    data[cmd][fac][var][stratum][id] = retval_value_t( x );
-  }
+	    const std::string & x );
     
 };
 

@@ -1188,6 +1188,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      std::vector<int> sw_spindles_start; std::map<int,int> swmap_start;
 	      std::vector<int> sw_spindles_stop; std::map<int,int> swmap_stop;
 	      std::vector<int> sw_spindles_peak; std::map<int,int> swmap_peak;
+	      std::vector<int> all_spindles_peak;
 	      std::vector<double> nearest_sw;
 	      std::vector<int> nearest_sw_number;
 	      std::vector<uint64_t> spindle_peak;
@@ -1205,11 +1206,31 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  
 		  bool any = false;
 		  // is this feature in a slow-wave?
-		  if ( p_sw->in_slow_wave(b0) ) { any=true; sw_spindles_start.push_back( b0 ); swmap_start[i]=sw_spindles_start.size()-1; }
-		  if ( p_sw->in_slow_wave(b1) ) { any=true; sw_spindles_stop.push_back( b1 ); swmap_stop[i]=sw_spindles_stop.size()-1; }
-		  if ( p_sw->in_slow_wave(mxi) ) { any=true;sw_spindles_peak.push_back( mxi ); swmap_peak[i]=sw_spindles_peak.size()-1; }
+		  if ( p_sw->in_slow_wave(b0) ) 
+		    { 
+		      any=true; 
+		      sw_spindles_start.push_back( b0 ); 
+		      swmap_start[i]=sw_spindles_start.size()-1; 
+		    }
+		  
+		  if ( p_sw->in_slow_wave(b1) ) 
+		    { 
+		      any=true; 
+		      sw_spindles_stop.push_back( b1 ); 
+		      swmap_stop[i]=sw_spindles_stop.size()-1; 
+		    }
+		  
+		  // is spindle peak in SO ? 
+		  if ( p_sw->in_slow_wave(mxi) ) 
+		    { any=true;
+		      sw_spindles_peak.push_back( mxi ); 
+		      swmap_peak[i]=sw_spindles_peak.size()-1; 
+		    }
 		  
 		  if ( any ) ++sw_spin_count;
+		  
+		  // record all peaks 
+		  all_spindles_peak.push_back( mxi ); 
 		  
 		  // second distance to nearest SW (secs)
 		  int sw_num = 0;
@@ -1236,24 +1257,103 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // SW-phase for each spindle in a SW
 	      //
 	      
-	      if ( sw_spindles_peak.size() > 0 ) 
+	      if ( all_spindles_peak.size() > 0 ) 
 		{
-	      
-		  double pv_peak;
-		  int    n_peak;
-		  double avg_ph_peak;
 		  
-		  // relative magnitude 
+		  //
+		  // restrict SO/spindle coupling calculations to
+		  // spindles that occur within a SO? Or use all
+		  // spindles?
+		  //
+
+		  std::vector<bool> so_mask;		  
+		  bool use_mask = param.has( "coupl-so-only" );
 		  
-		  double mag  = param.has( "mag" ) ? param.requires_dbl( "mag" ) : 0 ; 
+		  if ( use_mask ) 
+		    so_mask = p_sw->sp_in_sw_vec();
+
 		  
-		  double itpc_peak  = p_hilbert->phase_events( sw_spindles_peak  , &ph_peak , mag , &pv_peak, &n_peak, &avg_ph_peak, &sw_peak );
+		  //
+		  // Within-epoch permutation
+		  //
+
+		  bool eperm = param.has( "perm-within-epoch" );
 		  
-		  double angle_peak = MiscMath::as_angle_0_pos2neg( avg_ph_peak );
+		  double epoch_sec = 0 ;
+		  int sr = Fs[s];
+		
+		  if ( eperm ) 
+		    {
+		      if ( ! edf.timeline.epoched() ) Helper::halt( "data not epoched" );
+		      epoch_sec = edf.timeline.epoch_length();
+		    }
+
+		  // use permutation for ITPC values?
+		  int nreps = 0;
+		  if ( param.has( "nreps" ) ) nreps = param.requires_int( "nreps" );
+		  if ( nreps != 0 && nreps < 10 ) Helper::halt( "nreps must be 10+" );
 		  
-		  writer.value( "ITPC_PEAK" , itpc_peak );
-		  writer.value( "ITPC_PV_PEAK" , pv_peak );
-		  writer.value( "ITPC_ANGLE_PEAK" , angle_peak );
+		  itpc_t itpc  = p_hilbert->phase_events( all_spindles_peak , 
+							  use_mask ? &so_mask : NULL , nreps ,  // optional, mask events/spindles
+							  sr , epoch_sec   // optionally, within-epoch shuffle
+							  );
+		  
+		  sw_peak = itpc.event_included;
+		  ph_peak = itpc.phase;
+
+		  // ITPC magnitude of coupling
+
+		  writer.value( "COUPL_MAG"      , itpc.itpc.obs );
+		  writer.value( "COUPL_MAG_EMP"  , itpc.itpc.p );
+		  writer.value( "COUPL_MAG_NULL" , itpc.itpc.mean );
+		  writer.value( "COUPL_MAG_Z"    , ( itpc.itpc.obs - itpc.itpc.mean ) / itpc.itpc.sd  );
+		  
+		  // proportion of spdinles that overlap a SO 
+		  // unless itpc-so was set, this will be meaningless
+		  // so only report is a 'mask' was set
+		  
+		  if ( use_mask ) 
+		    {
+		      writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
+		      writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
+		      writer.value( "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
+		      if ( itpc.ninc.sd > 0 )  		    			
+			writer.value( "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
+		    }
+
+		  //
+		  // mean angle; no empirical test results
+		  //
+		  
+		  writer.value( "COUPL_ANGLE"   , itpc.angle.obs );
+
+		  //
+		  // asymptotic significance of coupling test; under
+		  // the null, give mean rate of 'significant'
+		  // (P<0.05) coupling
+		  //
+
+		  writer.value( "COUPL_PV"      , itpc.pv.obs );
+		  writer.value( "COUPL_SIGPV_NULL" , itpc.sig.mean ); 
+
+		  //
+		  // phase-bin stratified overlap/counts
+		  //
+
+		  const int nbins = 18;
+		  for (int b = 0 ; b < nbins ; b++ ) 
+		    {
+		      writer.level( b * 20 + 10 , "PHASE" );
+		      writer.value( "COUPL_OVERLAP"      , itpc.phasebin[b].obs );
+		      writer.value( "COUPL_OVERLAP_P"    , itpc.phasebin[b].p );
+		      writer.value( "COUPL_OVERLAP_NULL" , itpc.phasebin[b].mean );
+		      if ( itpc.phasebin[b].sd > 0 ) 
+			{
+			  double Z = ( itpc.phasebin[b].obs - itpc.phasebin[b].mean ) / itpc.phasebin[b].sd ; 
+			  writer.value( "COUPL_OVERLAP_Z" , Z );
+			}
+		    }
+		  writer.unlevel( "PHASE" );
 		  
 		}
 

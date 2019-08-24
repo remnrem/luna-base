@@ -613,7 +613,7 @@ public:
   // Helper functions
   //
 
-  static long long   get_filesize(FILE *file);
+  static uint64_t    get_filesize(FILE *file);
   static int         get_int( byte_t ** p , int sz );
   static double      get_double( byte_t ** p , int sz );
   static void        skip( byte_t ** p , int sz );

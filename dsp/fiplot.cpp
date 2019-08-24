@@ -230,17 +230,7 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
 
       std::vector<double> c = cwt( x , fs , f , num_cycles );
 
-      //        for (int j=0;j<c.size();j++)
-//       for (int j=0;j<1000;j++)
-// 	  {
-//   	  std::cout << "x\t" 
-//   		    << f << "\t"
-//   		    << j << "\t"
-//   		    << c[j] << "\n";
-//   	}
-      
       // get intervals
-      
       fibin_t r = intervalize( c , tp , fs , t_lwr , t_upr , t_inc , cycles , f ); 
       
       // report
@@ -418,13 +408,26 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   
   logger << "  including " << ( included_seconds / all_seconds ) * 100 << "% of " << all_seconds << " seconds\n";
   
-
   //
   // Initialise time-bins
   //
   
   r.t.clear();
   
+// =======
+//   // normalize
+//   std::vector<double> x( n , 0 );
+//   for (int i=0;i<n;i++) 
+//     {
+//       std::cout << "x\t" << i << "\t" << fc << "\t" << x_[i] ;
+//       //      x[i] = ( x_[i] - min ) / ( max - min );
+//       x[i] = x_[i];
+//       std::cout << "\t" << x[i] << "\n";
+//     }
+
+//   // init. each time-bin
+// >>>>>>> 21e0e5bbf4804daa512b7003134ec6ae63fa6701
+
   for (int t=0;t<nt;t++) 
     {
       // score as the midpoint of each time-bin      
@@ -485,8 +488,13 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	    }
 	}
     }
-  
+
   logger << " decomposed signal into " << pts.size() << " elements\n";
+    
+  // last point: ignore
+  // fipoint_t f( n-1 , n-1 , x[n-1] ) ;
+  // pts.insert( f ) ;
+
   
   if ( 0 )
     {
@@ -584,6 +592,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 
   // at end, x should equal used
   //    for (int i=0;i<n;i++) std::cout << "x/u " << fc << "\t" << x[i] << "\t" << used[i] << "\n";  
+  //for (int i=0;i<n;i++) std::cout << "x/u " << x[i] << "\t" << used[i] << "\n";  
   
   // all done
   

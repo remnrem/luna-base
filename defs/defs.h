@@ -39,7 +39,7 @@ enum window_function_t
     WINDOW_NONE = 0 , 
     WINDOW_HAMMING,    
     WINDOW_TUKEY50,
-    WINDOW_HANN , 
+    WINDOW_HANN  
   };
 
 enum frequency_band_t 
