@@ -1322,18 +1322,19 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    }
 
 		  //
-		  // mean angle; no empirical test results
+		  // mean angle; no empirical test results; -9 means no events observed, so set to missing
 		  //
 		  
-		  writer.value( "COUPL_ANGLE"   , itpc.angle.obs );
-
+		  if ( itpc.angle.obs > -9 ) 
+		    writer.value( "COUPL_ANGLE"   , itpc.angle.obs );
+		  
 		  //
 		  // asymptotic significance of coupling test; under
 		  // the null, give mean rate of 'significant'
 		  // (P<0.05) coupling
 		  //
 
-		  writer.value( "COUPL_PV"      , itpc.pv.obs );
+		  writer.value( "COUPL_PV"         , itpc.pv.obs );
 		  writer.value( "COUPL_SIGPV_NULL" , itpc.sig.mean ); 
 
 		  //
@@ -1346,7 +1347,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      writer.level( b * 20 + 10 , "PHASE" );
 		      writer.value( "COUPL_OVERLAP"      , itpc.phasebin[b].obs );
 		      writer.value( "COUPL_OVERLAP_P"    , itpc.phasebin[b].p );
-		      writer.value( "COUPL_OVERLAP_NULL" , itpc.phasebin[b].mean );
+		      //writer.value( "COUPL_OVERLAP_NULL" , itpc.phasebin[b].mean );
 		      if ( itpc.phasebin[b].sd > 0 ) 
 			{
 			  double Z = ( itpc.phasebin[b].obs - itpc.phasebin[b].mean ) / itpc.phasebin[b].sd ; 

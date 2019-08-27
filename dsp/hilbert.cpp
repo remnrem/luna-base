@@ -243,16 +243,32 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e , const std::vector<b
     }
 
 
-  // normalise ITPC and return
-  s /= double(counted);
-  
-  // record ITPC etc
-  itpc.itpc.obs = abs( s );
-  itpc.ninc.obs  = counted;
-  itpc.pv.obs    = exp( -counted * itpc.itpc.obs * itpc.itpc.obs );   
-  itpc.sig.obs   = itpc.pv.obs < 0.05;
-  itpc.angle.obs = MiscMath::as_angle_0_pos2neg( arg( s ) );
-  for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = pbacc[b];
+  if ( counted == 0 ) 
+    {
+      // if no obs, set ITPC to 0, PV = 1 	  
+      itpc.itpc.obs = 0 ;
+      itpc.ninc.obs = 0;
+      itpc.pv.obs = 1 ;
+      itpc.sig.obs = 0; // this is not used in any case, only null distribution mean of use here
+      for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = 0;
+
+      // angle to -9, will be set as NA in output
+      itpc.angle.perm.push_back( -9 );
+            
+    }
+  else
+    {
+      // normalise ITPC and return
+      s /= double(counted);
+      
+      // record ITPC etc
+      itpc.itpc.obs = abs( s );
+      itpc.ninc.obs  = counted;
+      itpc.pv.obs    = exp( -counted * itpc.itpc.obs * itpc.itpc.obs );   
+      itpc.sig.obs   = itpc.pv.obs < 0.05;
+      itpc.angle.obs = MiscMath::as_angle_0_pos2neg( arg( s ) );
+      for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = pbacc[b];
+    }
 
   if ( nreps == 0 ) return itpc;
 
@@ -315,18 +331,35 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e , const std::vector<b
 	    }      
 	  
 	}
-      
-      // normalise ITPC and return
-      s /= double(counted);
-  
-      // record ITPC etc
-      itpc.itpc.perm.push_back( abs( s ) );
-      itpc.ninc.perm.push_back( counted );
-      double pv = exp( -counted * itpc.itpc.obs * itpc.itpc.obs ) ;
-      itpc.pv.perm.push_back( pv );
-      itpc.sig.perm.push_back( pv < 0.05 );
-      itpc.angle.perm.push_back( MiscMath::as_angle_0_pos2neg( arg( s ) ) );
-      for (int b=0; b < nbins; b++) itpc.phasebin[b].perm.push_back ( pbacc[b] );
+
+      if ( counted == 0 ) 
+	{
+	  // if no obs, set ITPC to 0, PV = 1 	  
+	  itpc.itpc.perm.push_back( 0 );
+	  itpc.ninc.perm.push_back( 0 );
+	  itpc.pv.perm.push_back( 1 );
+	  itpc.sig.perm.push_back( 0 );
+	  
+	  // angle to -9 (this should never be looked at, in any case), i.e. null 
+	  itpc.angle.perm.push_back( -9 );
+
+	  for (int b=0; b < nbins; b++) itpc.phasebin[b].perm.push_back ( 0 );
+
+	}
+      else
+	{
+	  // normalise ITPC and return
+	  s /= double(counted);
+	  
+	  // record ITPC etc
+	  itpc.itpc.perm.push_back( abs( s ) );
+	  itpc.ninc.perm.push_back( counted );
+	  double pv = exp( -counted * itpc.itpc.obs * itpc.itpc.obs ) ;
+	  itpc.pv.perm.push_back( pv );
+	  itpc.sig.perm.push_back( pv < 0.05 );
+	  itpc.angle.perm.push_back( MiscMath::as_angle_0_pos2neg( arg( s ) ) );
+	  for (int b=0; b < nbins; b++) itpc.phasebin[b].perm.push_back ( pbacc[b] );
+	}
 
     }
 
