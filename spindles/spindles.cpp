@@ -1312,10 +1312,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // unless itpc-so was set, this will be meaningless
 		  // so only report is a 'mask' was set
 		  
+		  writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
+		  writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
+		  
 		  if ( use_mask ) 
 		    {
-		      writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
-		      writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
 		      writer.value( "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
 		      if ( itpc.ninc.sd > 0 )  		    			
 			writer.value( "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
