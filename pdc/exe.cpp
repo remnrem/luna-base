@@ -163,7 +163,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	  for ( int s=0; s<ns; s++ )
 	    {
 	      add_channel( signals.label(s) );
-	      logger << signals.label(s) ;
+	      logger << signals.label(s) << " " ;
 	    }
 	  logger << "\n";
 	}

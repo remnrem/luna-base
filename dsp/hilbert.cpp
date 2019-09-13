@@ -379,8 +379,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
       // all spindles
       
       int pp = CRandom::rand( maxshuffle );
-      
-      
+            
       // overlap stats (i.e. based on standard permutation)
       
       int overlap = 0;  // for overlap statistic
@@ -462,7 +461,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
 	  // to be included?   this should only be based on whether the **observed** event was included
 	  // i.e. we do not want to include original events that were outside of a SO but were now permuted
-	  // into one by chance...   so e[i] here, not pei in the line below
+	  // into one by chance...   so e[i] here, not pei in the line below;  these ARE counted in the above OVERLAP 
+	  // calculation however, i.e. allowed to have SO overlap by chance, naturally, in null datasets
 	  
 	  if ( mask == NULL || (*mask)[ e[i] ] ) 
 	    {
@@ -478,8 +478,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  //
 	  // next spindle
 	  //
-
+	  
 	}
+
 
       //
       // record stats
@@ -520,10 +521,11 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  // normalise ITPC and return
 	  s /= double(counted);
 	  
-	  itpc.itpc.perm.push_back( abs( s ) );
+	  double itpc_perm =  abs( s ); 
+	  itpc.itpc.perm.push_back( itpc_perm );
 
 	  // asymptotic significance
-	  double pv = exp( -counted * itpc.itpc.obs * itpc.itpc.obs ) ;
+	  double pv = exp( -counted * itpc_perm * itpc_perm ) ;
 	  itpc.pv.perm.push_back( pv ); // nb. not used currently
 	  itpc.sig.perm.push_back( pv < 0.05 ); // for mean under null
 

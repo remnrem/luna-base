@@ -53,7 +53,7 @@ struct options_t {
     long_format( false ) ,
     prec(3) , 
     full( true ) ,
-    cmd_hash( false )
+    cmd_hash( false ) 
   { }     
 };
 
@@ -789,8 +789,7 @@ void summary()
   //
   // Get variables/levels for the fstrata of interest
   //
-  
-  
+    
   std::set<int>::const_iterator kk = match_strata_ids.begin();
 
   std::map<std::string,int> e_inds, e_cmds, e_vars;
@@ -800,7 +799,7 @@ void summary()
     {
       
       // strata details
-      const strata_t & strata = writer.strata[ *kk ];      
+      const strata_t & strata = writer.strata[ *kk ];
       
       // enumerate variables, for this strata
       packets_t packets = writer.enumerate( *kk );
@@ -1289,14 +1288,14 @@ void extract()
   //
   // Fetch packets
   //
-  
+
   packets_t packets;
   
   if ( match_strata_ids.size() > 0 ) 
     {
       std::set<int>::const_iterator kk = match_strata_ids.begin();
       while ( kk != match_strata_ids.end() )
-	{
+	{	  
 	  writer.fetch( *kk , req_timepoints, &packets, p_inds , p_cmds , p_vars );
 	  ++kk;
 	}
@@ -1403,7 +1402,6 @@ void extract()
   
   
 
-
   //
   // Convert packets_t to indexed_value_t
   //  
@@ -1414,7 +1412,6 @@ void extract()
   // also build a unique list of all col-stratifiers 
   std::map<std::pair<int,int> ,std::string> col_strata_labels;
   
-  
   packets_t::const_iterator pp = packets.begin();
   while ( pp != packets.end() )
     {
@@ -1424,7 +1421,7 @@ void extract()
       // have we built this strata label already?
       if ( strata_labels.find( pr ) == strata_labels.end() )
 	{
-
+	  
 	  strata_t strata = writer.strata[ pp->strata_id ];	  
 	  
 	  timepoint_t timepoint;
@@ -1433,7 +1430,7 @@ void extract()
 	  std::stringstream ss;
 	  if ( strata.levels.size() == 0 ) 
 	    {
-	      ss << ".";	  
+	      ss << ".";
 	    }
 	  else
 	    {
@@ -1448,7 +1445,7 @@ void extract()
 		  if      ( ll != strata.levels.begin() ) ss << ".";
 		  if      ( timepoint.is_epoch() && fac == "E" ) ss << "E." << timepoint.epoch;
 		  else if ( timepoint.is_interval() && fac == "T" ) ss << "E." << timepoint.start << "_" << timepoint.stop;
-		  else    ss << fac << "." << ll->second.level_name;	      
+		  else    ss << fac << "." << ll->second.level_name;
 		  
 		  ++ll;
 		}
@@ -1458,11 +1455,14 @@ void extract()
 	  std::string strata_label = ss.str();
 	  strata_labels[ pr ] = strata_label;
 	  
+	  //	  std::cerr << "made strata level [" << strata_label << "]\n";
 	  // map onto col- and row specific labels
 	  std::string clab, rlab;
 	  std::map<std::string,std::string> rlabs;
 	  std::map<factor_t,level_t>::const_iterator ll = strata.levels.begin();
-	  
+	
+	  //	  std::cerr << "considering " << strata.levels.size() << " levels\n";
+
 	  while ( ll != strata.levels.end() )
 	    {
 	      const std::string & fac = ll->first.factor_name ;
@@ -1494,7 +1494,7 @@ void extract()
 	      
 	      ++ll;
 	    }
-
+	
 	  // no col/row strata?
 	  if ( clab == "" ) clab = ".";
 	  if ( rlab == "" ) rlab = ".";
@@ -1506,7 +1506,7 @@ void extract()
 	  row2fac2level[ rlab ] = rlabs;
 
 	}
-            
+
       std::string db_name     = writer.name();
       std::string indiv_name  = writer.individuals[ pp->indiv_id ].indiv_name;
       std::string cmd_name    = writer.commands[ pp->cmd_id ].cmd_name;
@@ -1582,7 +1582,7 @@ void extract()
   //
   
   if ( options.long_format ) return;
-  
+
 
 }
 
