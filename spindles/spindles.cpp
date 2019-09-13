@@ -1347,7 +1347,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    {
 		      writer.level( b * 20 + 10 , "PHASE" );
 		      writer.value( "COUPL_OVERLAP"      , itpc.phasebin[b].obs );
-		      writer.value( "COUPL_OVERLAP_P"    , itpc.phasebin[b].p );
+		      writer.value( "COUPL_OVERLAP_EMP"    , itpc.phasebin[b].p );
 		      //writer.value( "COUPL_OVERLAP_NULL" , itpc.phasebin[b].mean );
 		      if ( itpc.phasebin[b].sd > 0 ) 
 			{

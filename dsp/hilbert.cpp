@@ -420,10 +420,24 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
 	  if ( mask != NULL ) 
 	    { 
-	      if ( (*mask)[ pei ] ) ++overlap;
+	      if ( (*mask)[ pei ] ) 
+		{
+		  ++overlap;
+		  
+		  // for SO-phase stratified, if a mask is set, use within-SO permutation (i.e. bin() is below)
+
+		}
 	    }
 	  else
-	    ++overlap;  // everything 'overlaps' if no mask...
+	    {
+	      // everything 'overlaps' if no mask...
+	      ++overlap;  
+
+	      // SO-phase stratified overlap counts when no mask/SO given
+	      bin( ph[ pei ] , binsize , &pbacc );
+	    }
+
+
 	  
 // 	  std::cerr << "pp " << i << "\t" << e[i] << " " << ( mask == NULL ? "noM" : "M" ) << " " 
 // 		    << ( mask == NULL || (*mask)[e[i]] ) 
@@ -473,6 +487,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	      // and record that this event was included in the ITPC calculation
 	      ++counted;
 	      
+	      // SO-phase stratified overlap counts using within-SO permutation
+	      bin( ph[ pei ] , binsize , &pbacc );
+	      
 	    }
 	  
 	  //
@@ -484,46 +501,39 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
       //
       // record stats
       //
+            
+
+      // overlap statistics
+      //      std::cerr << "po = " << overlap << "\n";
       
+      itpc.ninc.perm.push_back( overlap );
+      
+      for (int b=0; b < nbins; b++) 
+	itpc.phasebin[b].perm.push_back ( pbacc[b] );
       
 
-      
       // this should not happen now, i.e. given within-SO permutation is employed is a SO-mask is set
       // and so we likely do not need to handle this as a special case
       
-      if ( counted == 0 ) 
-	{
-	  itpc.ninc.perm.push_back( 0 );
-	  for (int b=0; b < nbins; b++) 
-	    itpc.phasebin[b].perm.push_back ( 0 );
-
+      if ( counted == 0 )
+	{	  
 	  // if no obs, set ITPC to 0, PV = 1 	  
 	  itpc.itpc.perm.push_back( 0 );
 	  itpc.pv.perm.push_back( 1 );
-	  itpc.sig.perm.push_back( 0 );
-	  
+	  itpc.sig.perm.push_back( 0 );	  
 	  // angle to -9 (this should never be looked at, in any case), i.e. null 
 	  itpc.angle.perm.push_back( -9 );
-	  
-	  
-
 	}
       else
 	{
-
-	  // overlap statistics
-	  itpc.ninc.perm.push_back( overlap );
-
-	  for (int b=0; b < nbins; b++) 
-	    itpc.phasebin[b].perm.push_back ( pbacc[b] );
-
 	  // normalise ITPC and return
 	  s /= double(counted);
 	  
-	  itpc.itpc.perm.push_back( abs( s ) );
+          double itpc_perm =  abs( s );
+          itpc.itpc.perm.push_back( itpc_perm );
 
 	  // asymptotic significance
-	  double pv = exp( -counted * itpc.itpc.obs * itpc.itpc.obs ) ;
+	  double pv = exp( -counted * itpc_perm * itpc_perm ) ;
 	  itpc.pv.perm.push_back( pv ); // nb. not used currently
 	  itpc.sig.perm.push_back( pv < 0.05 ); // for mean under null
 
@@ -540,6 +550,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
   // get empirical p-values
   itpc.itpc.calc_stats();
   itpc.ninc.calc_stats();
+
+  //  std::cerr << "SD = " << itpc.itpc.sd << " " << itpc.ninc.sd << "\n";
+
   itpc.sig.calc_stats(); // only for the mean under the null
   for (int b=0; b < nbins; b++) itpc.phasebin[b].calc_stats();
   
