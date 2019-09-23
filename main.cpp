@@ -915,19 +915,45 @@ void proc_dummy( const std::string & p )
 
   std::vector<double> x;
   
-  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" || p == "ica" ) 
+  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" || p == "ica" || p == "fip" ) 
     {
 
-      
+      int cnt= 0;
       while ( ! std::cin.eof() )
 	{
 	  double xx;
 	  std::cin >> xx;
+	  if ( std::cin.bad() ) { std::cerr << "bad input\n"; std::exit(1);  } 
 	  if ( std::cin.eof() ) break;	  
 	  x.push_back( xx );	  
+	  if ( ++cnt % 100000  == 0 ) std::cerr << cnt << "\n";
 	}
       std::cerr << x.size() << " values read\n";
 
+    }
+
+  if ( p == "fip" )
+    {
+      const int sr = 256;
+      const uint64_t fs = globals::tp_1sec / sr;
+      std::vector<uint64_t> tp( x.size() );
+      for (int i=0;i<tp.size();i++) tp[i] = i * fs;
+      double th = 0;
+      bool norm = false;
+      bool logit = false;
+      double t_lwr = 0.1; double t_upr = 5;  double t_inc = 0.1;
+      double f_lwr = 1;   double f_upr = 20; double f_inc = 0.5;
+      bool logspace = false;
+      bool cycles = false;
+
+      int num_cyc = 7;
+
+      fiplot_t fp( x , &tp , sr , 
+		   th , norm , logit , 
+		   t_lwr, t_upr, t_inc , cycles , 
+		   f_lwr, f_upr, f_inc , num_cyc , logspace );
+
+      std::exit(0);
     }
 
   if ( p == "fft" )

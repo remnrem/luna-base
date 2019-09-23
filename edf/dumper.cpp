@@ -418,6 +418,7 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
 
 	      if ( hms ) 
 		{
+
 // 		  double tp_sec =  (*tp)[i] / (double)globals::tp_1sec;
  		  clocktime_t present = starttime;
 // 		  present.advance( tp_sec / 3600.0 );
@@ -469,8 +470,8 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
   timeline.first_epoch();
   
   
-  std::cerr << " listing " << timeline.num_total_epochs() << " epochs, of which " 
-	    << timeline.num_epochs() << " are unmasked\n";
+  logger << " listing " << timeline.num_total_epochs() << " epochs, of which " 
+	 << timeline.num_epochs() << " are unmasked\n";
   
   
   //
@@ -704,6 +705,8 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   
   std::ofstream OUT( filename.c_str() , std::ios::out );
   
+  OUT.precision(12);
+
   //
   // Minimal output?
   //
@@ -843,13 +846,13 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   // Output to log
   //
   
-  std::cerr << " dumping " << ne << " unmasked epochs in " ;
+  logger << " dumping " << ne << " unmasked epochs in " ;
   
-  if ( minimal ) std::cerr << "minimal";
+  if ( minimal ) logger << "minimal";
   else
-    std::cerr << ( alternative_format ? "alternative" : "standard" ) ;
+    logger << ( alternative_format ? "alternative" : "standard" ) ;
   
-  std::cerr << " matrix-format to stdout\n";  
+  logger << " matrix-format to " << filename << "\n";  
 
 
   
@@ -1115,10 +1118,20 @@ void edf_t::epoch_matrix_dumper( param_t & param )
       
       const int np = sigdat[0].size();
       
+      std::cout.precision(12);
+
       for (int t=0;t<np;t++)
 	{
-	  
-	  double tp_sec = tp[t] / (double)globals::tp_1sec; 
+	  //	  std::cout << "xx " << tp[t] << "\t" << globals::tp_1sec << "\n";
+
+// 	  int64_t tp_int = tp[t] / globals::tp_1sec;
+// 	  int64_t tp_0   = tp_int * globals::tp_1sec;
+// 	  int tp_rem = tp[t]  - tp_0 ; 
+// 	  double tp_sec = tp_rem * globals::tp_duration;
+// 	  double tp_sec2 = tp_int + tp_sec;
+
+// 	  double tp_sec2 = (double)tp[t] / (double)globals::tp_1sec; 
+ 	  double tp_sec = tp[t] * globals::tp_duration;
 
 	  double tp_sec_past_estart = ( tp[t] - interval.start) / (double)globals::tp_1sec; 
 	  
@@ -1131,6 +1144,8 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 		  << t - fs * floor( tp_sec_past_estart )  << "\t"	  
 		  << tp_sec;
 	      
+	      //std::cout << "tp = " << tp_sec << "\t" << tp_sec2 << "\n";
+
 	      if ( include_hms )
 		{
 		  clocktime_t present = starttime;

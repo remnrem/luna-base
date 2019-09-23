@@ -30,7 +30,7 @@
 struct edf_t;
 struct param_t;
 
-void fiplot_wrapper( edf_t & edf , const param_t & param );
+void fiplot_wrapper( edf_t & edf , const param_t & param , const std::vector<double> * raw = NULL , const int * sr = NULL );
 
 struct fipair_t 
 { 
@@ -39,7 +39,21 @@ struct fipair_t
   double w; double n; 
 };
 
-struct fibin_t { std::map<double,fipair_t> r; };
+struct fibin_t 
+{ 
+
+  std::vector<double> t;
+  
+  // map keyed of time (double) but rather than use a double as a key, 
+  // store the actual time values in 't' and use the integer index for 
+  // map access
+  
+  std::map<int,fipair_t> r; 
+  
+  // i.e. t[i] --> time
+  //      r[i] --> frequency 
+  
+};
 
 struct fipoint_t 
 { 
@@ -64,17 +78,21 @@ struct fipoint_t
 
 struct fiplot_t
 {
-  fiplot_t( const std::vector<double> & x , const std::vector<uint64_t> * tp , const int _fs  ,
+  fiplot_t( const std::vector<double> & x , const std::vector<uint64_t> * tp , const int _fs  , 
+	    const int _th , const bool norm_ , const bool logit_ ,  
 	    double t_lwr , double t_upr , double t_inc , bool cycles , 
-	    double f_lwr , double f_upr , double f_inc , bool logspace = true )
+	    double f_lwr , double f_upr , double f_inc , int num_cyc , bool logspace = true )
   {
     fs = _fs;
+    th = _th;
+    normalize = norm_;
+    logit = logit_;
     set_t( t_lwr, t_upr, t_inc , cycles );
-    set_f( f_lwr, f_upr, f_inc , logspace );
+    set_f( f_lwr, f_upr, f_inc , logspace , num_cyc );
     proc(x,tp,fs);
   }
   
-  void set_t( double lwr , double upr , double inc , bool cyc ) 
+  void set_t( double lwr , double upr , double inc , bool cyc )
   {
     t_lwr = lwr;
     t_upr = upr;
@@ -82,7 +100,7 @@ struct fiplot_t
     cycles = cyc;
   }
 
-  void set_f( double lwr , double upr , double inc , bool logspace ) ;
+  void set_f( double lwr , double upr , double inc , bool logspace , int num_cycles ) ;
 
   void proc( const std::vector<double> & x , 
 	     const std::vector<uint64_t> * tp , 
@@ -92,13 +110,20 @@ struct fiplot_t
   int nf; // number of frequencies
   
   int fs; // sample rate
-
+  double th; // multiplicative threshold
+  bool normalize; // 0..1 normalization?
+  bool logit;  // use log-space values
+ 
   std::vector<double> frqs;
   double f_lwr, f_upr, f_inc;
   
   double t_lwr, t_upr, t_inc;
+
+  // whether to show results by cycles (rather than time)
   bool cycles;
 
+  // CWT number of cycles
+  int num_cycles;
   std::vector<double> cwt( const std::vector<double> & x , const int fs, const double fc , const int num_cycles );
   
   fibin_t intervalize( const std::vector<double> & x , 

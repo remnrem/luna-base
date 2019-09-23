@@ -671,7 +671,7 @@ void clocktime_t::advance( uint64_t tp )
 
 
 
-std::string Helper::timestring( const std::string & st , const interval_t & i )
+std::string Helper::timestring( const std::string & st , const interval_t & i , char delim , const std::string & delim2 )
 {  
   int h0 = 0, m0 = 0, s0 = 0;  
   if ( ! Helper::timestring( st, &h0, &m0, &s0 ) ) return ".";  
@@ -683,12 +683,12 @@ std::string Helper::timestring( const std::string & st , const interval_t & i )
   std::stringstream str;
   str.precision(0);
   str << std::fixed;
-  str << Helper::timestring(h1,m1,s1) << " - " << Helper::timestring(h2,m2,s2);
+  str << Helper::timestring(h1,m1,s1,delim) << delim2 << Helper::timestring(h2,m2,s2,delim);
   return str.str(); 
 }
 
 
-std::string Helper::timestring( uint64_t a )
+std::string Helper::timestring( uint64_t a , char delim )
 {
 
   // a is tp units
@@ -706,9 +706,9 @@ std::string Helper::timestring( uint64_t a )
   // return 00:00:00 format
   std::stringstream ss;
   if ( h < 10 ) ss << "0";
-  ss << h << ":";
+  ss << h << delim;
   if ( m < 10 ) ss << "0";
-  ss << m << ":";
+  ss << m << delim;
   if ( s < 10 ) ss << "0";
   ss << s;
   return ss.str();		  
@@ -716,14 +716,14 @@ std::string Helper::timestring( uint64_t a )
 
 
 
-std::string Helper::timestring( int h , int m , int s )
+std::string Helper::timestring( int h , int m , int s , char delim )
 {
   // return 00:00:00 format
   std::stringstream ss;
   if ( h < 10 ) ss << "0";
-  ss << h << ":";
+  ss << h << delim;
   if ( m < 10 ) ss << "0";
-  ss << m << ":";
+  ss << m << delim;
   if ( s < 10 ) ss << "0";
   ss << s;
   return ss.str();		  
