@@ -171,9 +171,9 @@ namespace Helper
 
 
   // time-string
-  std::string timestring( uint64_t msec ); 
-  std::string timestring( int h , int m , int s );
-  std::string timestring( const std::string & , const interval_t & );
+  std::string timestring( uint64_t msec , char delim = '.' ); 
+  std::string timestring( int h , int m , int s , char delim = '.' );
+  std::string timestring( const std::string & , const interval_t & , char delim = '.' , const std::string & delim2 = " - " );
 
   double position( uint64_t a , uint64_t tot , int * h , int * m , int *s);  
   bool timestring( const std::string & , int * h, int *m , int *s);
