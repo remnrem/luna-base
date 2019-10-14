@@ -120,6 +120,83 @@ std::string strata_t::print() const
 }
 
 
+tfac_t strata_t::tfac() const
+{
+
+  tfac_t tfac("");
+
+  std::map<factor_t,level_t>::const_iterator aa = levels.begin();
+  while ( aa != levels.end() )
+    {
+
+      // skip commands
+      if ( aa->first.factor_name[0] == '_' ) 
+	{ ++aa; continue; } 
+      
+      // skip tags
+      if ( globals::cmddefs.is_tag( aa->first.factor_name ) )
+	{ ++aa; continue; }
+
+      // otherwise, add (to ID which zfile_t to write to)
+      tfac.fac.insert( aa->first.factor_name  );
+
+      ++aa;
+    }
+  return tfac;
+}
+
+std::map<std::string,std::string> writer_t::faclvl() const
+{
+  // no commands, but includes TAGs and factors, as key-value map
+  std::map<std::string,std::string> r;
+
+  std::map<factor_t,level_t>::const_iterator aa = curr_strata.levels.begin();
+  while ( aa != curr_strata.levels.end() )
+    {
+      // skip commands
+      if ( aa->first.factor_name[0] == '_' ) { ++aa; continue; } 
+
+      // epoch/time-point? levels stored separately
+      if ( aa->first.factor_name == globals::epoch_strat || 
+	   aa->first.factor_name == globals::time_strat )
+	{
+	  if ( curr_timepoint.none() ) r[ aa->first.factor_name ] = "." ;
+	  else r[ aa->first.factor_name ] = curr_timepoint.print();
+	}
+      else      
+	r[ aa->first.factor_name ] = aa->second.level_name ; 
+      ++aa;
+    }
+  return r;
+}
+
+std::string strata_t::print_zfile_tag() const
+{
+  // factors only, (no commands, no TAGs) in a comma-delim list
+
+  if ( levels.size() == 0 ) return ""; // baseline
+
+  std::stringstream ss;
+  std::map<factor_t,level_t>::const_iterator aa = levels.begin();
+  bool printed = false;
+  while ( aa != levels.end() )
+    {
+      // skip commands
+      if ( aa->first.factor_name[0] == '_' ) { ++aa; continue; } 
+      
+      // skip TAGs
+      if ( globals::cmddefs.is_tag( aa->first.factor_name ) )
+        { ++aa; continue; }
+
+      if ( printed ) ss << ",";
+      ss << aa->first.factor_name ;
+      printed = true;
+      ++aa;
+    }
+  std::string rstr = ss.str();
+  return ss.str();
+}
+ 
 std::string strata_t::print_nocmd() const
 {
   if ( levels.size() == 0 ) return ".";
@@ -1234,4 +1311,33 @@ retval_t writer_t::dump_to_retval( const std::string & dbname , const std::set<s
 
   return retval;
 
+}
+
+bool writer_t::to_plaintext( const std::string & var_name , const value_t & x ) 
+{
+  if ( curr_zfile == NULL ) Helper::halt( "null curr_zfile in writer_t" );
+  curr_zfile->set_value( var_name , x.str() );    
+  return true;
+}
+
+
+void writer_t::update_plaintext_curr_strata()
+{
+  if ( zfiles == NULL ) return ;
+  
+  // get zfile-set for this individual, creating if it does not exist
+
+  // NOTE -- should NULL be okay for param here... 
+  // need to get param into here... (i.e. when writer_t::cmd() function)
+  
+  // figure out which table (command/strata)  
+  curr_zfile = zfiles->file( curr_command.cmd_name , NULL , curr_strata.print_zfile_tag() ) ;  
+  
+  // might not be a valid table (i.e. this could be the case if setting 
+  // levels, e.g. A+B,  then when only level(A) is set, it will not be valid
+  if ( curr_zfile == NULL ) return;
+
+  // set (all) levels 
+  curr_zfile->set_stratum( faclvl() );
+  
 }

@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libhelper.a
-OBJS	 = helper.o token.o token-eval.o
+OBJS	 = helper.o token.o token-eval.o zfile.o zfstream.o 
 
 all : $(OBJLIBS)
 

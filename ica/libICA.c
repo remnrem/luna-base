@@ -53,93 +53,97 @@ static scal fx_1sub_sqr(scal x, scal par)
  */
 static mat ICA_compute(mat X, int rows, int cols)
 {
-	mat TXp, GWX, W, Wd, W1, D, TU, TMP;
-	vect d, lim;
-	int i, it;
-
-	// matrix creation
-	TXp = mat_create(cols, rows);
-	GWX = mat_create(rows, cols);
-	W = mat_create(rows, rows);
-	Wd = mat_create(rows, rows);
-	D = mat_create(rows, rows);
-	TMP = mat_create(rows, rows);
-	TU = mat_create(rows, rows);
-	W1 = mat_create(rows, rows);
-	d = vect_create(rows);
-
-	// W rand init
-	mat_apply_fx(W, rows, rows, fx_rand, 0);
-
-	// sW <- La.svd(W)
-	mat_copy(W, rows, rows, Wd);
-	svdcmp(Wd, rows, rows, d, D);
-
-	// W <- sW$u %*% diag(1/sW$d) %*% t(sW$u) %*% W
-	mat_transpose(Wd, rows, rows, TU);
-	vect_apply_fx(d, rows, fx_inv, 0);
-	mat_diag(d, rows, D);
-	mat_mult(Wd, rows, rows, D, rows, rows, TMP);
-	mat_mult(TMP, rows, rows, TU, rows, rows, D);
-	mat_mult(D, rows, rows, W, rows, rows, Wd); // W = Wd
-
-	// W1 <- W 
-	mat_copy(Wd, rows, rows, W1);
-
-	// lim <- rep(1000, maxit); it = 1
-	lim = vect_create(MAX_ITERATIONS);
-	for (i=0; i<MAX_ITERATIONS; i++)
-		lim[i] = 1000;
-	it = 0;
-
-
-	// t(X)/p
-	mat_transpose(X, rows, cols, TXp);
-	mat_apply_fx(TXp, cols, rows, fx_div_c, cols);
-
-	while (lim[it] > TOLERANCE && it < MAX_ITERATIONS) {
-		// wx <- W %*% X
-		mat_mult(Wd, rows, rows, X, rows, cols, GWX);
-
-		// gwx <- tanh(alpha * wx)
-		mat_apply_fx(GWX, rows, cols, fx_tanh, 0);
+  
+  mat TXp, GWX, W, Wd, W1, D, TU, TMP;
+  vect d, lim;
+  int i, it;
+  
+  // matrix creation
+  TXp = mat_create(cols, rows);
+  GWX = mat_create(rows, cols);
+  W = mat_create(rows, rows);
+  Wd = mat_create(rows, rows);
+  D = mat_create(rows, rows);
+  TMP = mat_create(rows, rows);
+  TU = mat_create(rows, rows);
+  W1 = mat_create(rows, rows);
+  d = vect_create(rows);
+  
+  // W rand init
+  mat_apply_fx(W, rows, rows, fx_rand, 0);
+  
+  // sW <- La.svd(W)
+  mat_copy(W, rows, rows, Wd);
+  svdcmp(Wd, rows, rows, d, D);
+  
+  // W <- sW$u %*% diag(1/sW$d) %*% t(sW$u) %*% W
+  mat_transpose(Wd, rows, rows, TU);
+  vect_apply_fx(d, rows, fx_inv, 0);
+  mat_diag(d, rows, D);
+  mat_mult(Wd, rows, rows, D, rows, rows, TMP);
+  mat_mult(TMP, rows, rows, TU, rows, rows, D);
+  mat_mult(D, rows, rows, W, rows, rows, Wd); // W = Wd
+  
+  // W1 <- W 
+  mat_copy(Wd, rows, rows, W1);
+  
+  // lim <- rep(1000, maxit); it = 1
+  lim = vect_create(MAX_ITERATIONS);
+  for (i=0; i<MAX_ITERATIONS; i++)
+    lim[i] = 1000;
+  it = 0;
+  
+  
+  // t(X)/p
+  mat_transpose(X, rows, cols, TXp);
+  mat_apply_fx(TXp, cols, rows, fx_div_c, cols);
+  
+  while (lim[it] > TOLERANCE && it < MAX_ITERATIONS) {
+    
+    fprintf( stderr , " iteration %i\n" , it );
+    
+    // wx <- W %*% X
+    mat_mult(Wd, rows, rows, X, rows, cols, GWX);
+    
+    // gwx <- tanh(alpha * wx)
+    mat_apply_fx(GWX, rows, cols, fx_tanh, 0);
 		
-		// v1 <- gwx %*% t(X)/p
-		mat_mult(GWX, rows, cols, TXp, cols, rows, TMP); // V1 = TMP
+    // v1 <- gwx %*% t(X)/p
+    mat_mult(GWX, rows, cols, TXp, cols, rows, TMP); // V1 = TMP
 		
-		// g.wx <- alpha * (1 - (gwx)^2)
-		mat_apply_fx(GWX, rows, cols, fx_1sub_sqr, 0);
-
-		// v2 <- diag(apply(g.wx, 1, FUN = mean)) %*% W
-		mat_mean_rows(GWX, rows, cols, d);
-		mat_diag(d, rows, D);
-		mat_mult(D, rows, rows, Wd, rows, rows, TU); // V2 = TU
-
-		// W1 <- v1 - v2
-		mat_sub(TMP, TU, rows, rows, W1);
-		
-		// sW1 <- La.svd(W1)
-		mat_copy(W1, rows, rows, W);
-		svdcmp(W, rows, rows, d, D);
-
-		// W1 <- sW1$u %*% diag(1/sW1$d) %*% t(sW1$u) %*% W1
-		mat_transpose(W, rows, rows, TU);
-		vect_apply_fx(d, rows, fx_inv, 0);
-		mat_diag(d, rows, D);
-		mat_mult(W, rows, rows, D, rows, rows, TMP);
-		mat_mult(TMP, rows, rows, TU, rows, rows, D);
-		mat_mult(D, rows, rows, W1, rows, rows, W); // W1 = W
-		
-		// lim[it + 1] <- max(Mod(Mod(diag(W1 %*% t(W))) - 1))
-		mat_transpose(Wd, rows, rows, TU);
-		mat_mult(W, rows, rows, TU, rows, rows, TMP);
-		lim[it+1] = fabs(mat_max_diag(TMP, rows, rows) - 1);
-
-		// W <- W1
-		mat_copy(W, rows, rows, Wd);
-
-		it++;
-	}
+    // g.wx <- alpha * (1 - (gwx)^2)
+    mat_apply_fx(GWX, rows, cols, fx_1sub_sqr, 0);
+    
+    // v2 <- diag(apply(g.wx, 1, FUN = mean)) %*% W
+    mat_mean_rows(GWX, rows, cols, d);
+    mat_diag(d, rows, D);
+    mat_mult(D, rows, rows, Wd, rows, rows, TU); // V2 = TU
+    
+    // W1 <- v1 - v2
+    mat_sub(TMP, TU, rows, rows, W1);
+    
+    // sW1 <- La.svd(W1)
+    mat_copy(W1, rows, rows, W);
+    svdcmp(W, rows, rows, d, D);
+    
+    // W1 <- sW1$u %*% diag(1/sW1$d) %*% t(sW1$u) %*% W1
+    mat_transpose(W, rows, rows, TU);
+    vect_apply_fx(d, rows, fx_inv, 0);
+    mat_diag(d, rows, D);
+    mat_mult(W, rows, rows, D, rows, rows, TMP);
+    mat_mult(TMP, rows, rows, TU, rows, rows, D);
+    mat_mult(D, rows, rows, W1, rows, rows, W); // W1 = W
+    
+    // lim[it + 1] <- max(Mod(Mod(diag(W1 %*% t(W))) - 1))
+    mat_transpose(Wd, rows, rows, TU);
+    mat_mult(W, rows, rows, TU, rows, rows, TMP);
+    lim[it+1] = fabs(mat_max_diag(TMP, rows, rows) - 1);
+    
+    // W <- W1
+    mat_copy(W, rows, rows, Wd);
+    
+    it++;
+  }
 
 	// clean up
 	mat_delete(TXp, cols, rows);
@@ -206,8 +210,10 @@ void fastICA(mat X, int rows, int cols, int compc, mat K, mat W, mat A, mat S)
 	/*
 	 * FAST ICA
 	 */
-	_A = ICA_compute(X1, compc, rows);
 
+	printf( "starting ICA\n" );
+
+	_A = ICA_compute(X1, compc, rows);
 	
 	/*
 	 * OUTPUT

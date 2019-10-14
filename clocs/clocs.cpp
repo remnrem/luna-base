@@ -25,11 +25,12 @@
 #include "helper/helper.h"
 #include "edf/edf.h"
 #include "legendre_polynomial.h"
+#include "db/db.h"
 
 #include <fstream>
 #include <cmath>
 
-
+extern writer_t writer;
 
 cart_t sph_t::cart() const { return clocs_t::sph2cart( *this ); } 
 sph_t cart_t::sph() const { return clocs_t::cart2sph( *this ); } 
@@ -60,8 +61,9 @@ polar_t::polar_t( sph_t & sph )
 
 int clocs_t::load_cart( const std::string & filename )
 {
+
   if ( ! Helper::fileExists( filename ) ) 
-    Helper::halt( "could not find " + filename );
+    Helper::halt( "could not find clocs file; " + filename );
   cloc.clear();
 
   // assume LABEL X Y Z 
@@ -86,21 +88,32 @@ int clocs_t::load_cart( const std::string & filename )
       
       polar_t polar( sph );
       cart_t  pc = polar.cart();
+      
+      writer.level( ii->first , globals::signal_strat );
 
-      logger << "  " 
-	     << ii->first << "\t"
-	     << ii->second.x << " " 
-	     << ii->second.y << " " 
-	     << ii->second.z << "\t[R,AZ,E] = " 
-	     << sph.r << " "
-	     << sph.azimuth << " "
-	     << sph.elevation << "\t[ polar angle/radius ] = "
-	     << polar.angle << " " << polar.radius << "\t[X,Y,Z]' = "
-	     << pc.x << " " << pc.y << " " << pc.z << "\n";
+      writer.value( "X" , ii->second.x );
+      writer.value( "Y" , ii->second.y );
+      writer.value( "Z" , ii->second.z );
+
+      writer.value( "SPH_R"  , sph.r );
+      writer.value( "SPH_AZ" , sph.azimuth );
+      writer.value( "SPH_E"  , sph.elevation );
+
+      writer.value( "POLAR_ANGLE" , polar.angle );
+      writer.value( "POLAR_RAD" , polar.radius );
+      
+//       << sph.r << " "
+//       << sph.azimuth << " "
+//       << sph.elevation << "\t[ polar angle/radius ] = "
+//       << polar.angle << " " << polar.radius << "\t[X,Y,Z]' = "
+
+	   //      << pc.x << " " << pc.y << " " << pc.z << "\n";
       
       ++ii;
     }
   
+  writer.unlevel( globals::signal_strat );
+
   return cloc.size();
 }
 
@@ -133,7 +146,10 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
 {
   
   for (int s=0;s<signals.size();s++)
-    if ( ! has(signals.label(s) ) ) Helper::halt( "could not find " + signals.label(s) );
+    if ( ! has( signals.label(s) ) ) 
+      {
+	Helper::halt( "could not find cloc for: " + signals.label(s) + "\navailable clocs: " + print() );
+      }
 
   const int ns = signals.size();
   
@@ -162,10 +178,12 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
 {
   
   for (int s=0;s<signals1.size();s++)
-    if ( ! has(signals1.label(s) ) ) Helper::halt( "could not find " + signals1.label(s) );
+    if ( ! has(signals1.label(s) ) ) 
+      Helper::halt( "could not find cloc for: " + signals1.label(s) + "\navailable clocs: " + print() );
 
   for (int s=0;s<signals2.size();s++)
-    if ( ! has(signals2.label(s) ) ) Helper::halt( "could not find " + signals2.label(s) );
+    if ( ! has(signals2.label(s) ) ) 
+      Helper::halt( "could not find cloc for: " + signals2.label(s) + "\navailable clocs: " + print() );
 
   const int ns1 = signals1.size();
   const int ns2 = signals2.size();
@@ -299,19 +317,21 @@ Data::Matrix<double> clocs_t::interpolate( const Data::Matrix<double> & data ,
 					   const Data::Matrix<double> & invG , 
 					   const Data::Matrix<double> & Gi )
 {
+
   
   const int nrows = data.dim1();
   const int nbad  = Gi.dim1();
   const int ngood = Gi.dim2();
- 
-//   std::cout << "data  " << data.dim1() << " " << data.dim2() << "\n";
-//   for (int i = 0 ; i < nrows ; i++) 
-//     {
-//       for (int j = 0 ; j < good_channels.size()  ; j++) 
-// 	std::cout << data( i , good_channels[j] ) << " ";
-//       std::cout << "\n";
-//     }
-//   std::cout << "\n";
+
+//    for (int i = 0 ; i < nrows ; i++) 
+//      {
+//        for (int j = 0 ; j < good_channels.size()  ; j++) 
+// 	 {
+// 	   std::cout << data( i , good_channels[j] ) << " ";
+// 	 }
+//        std::cout << "\n";
+//      }
+//    std::cout << "\n";
  
   // sanity check
   if ( invG.dim1() != ngood || invG.dim2() != invG.dim1() || good_channels.size() != ngood ) 
@@ -324,7 +344,6 @@ Data::Matrix<double> clocs_t::interpolate( const Data::Matrix<double> & data ,
   
   // as we need to transpose data for noral mat mult, just do by hand here
   // swapping rows and cols
-  //  for (int jj=0;jj<good_channels.size();jj++) std::cout << "gc = " << good_channels[jj] << "\n";
 
   Data::Matrix<double> t( ngood , nrows );
 

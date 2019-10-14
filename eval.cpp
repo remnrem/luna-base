@@ -428,21 +428,9 @@ std::string cmd_t::signal_string()
 
 void cmd_t::populate_commands() 
 {
-  commands.insert( "VALIDATE" );
-  commands.insert( "HEADERS" );
-  commands.insert( "SUMMARY" );
-  commands.insert( "PSD" );
-  commands.insert( "SPINDLES" );
-  commands.insert( "RMS" );
-  commands.insert( "MASK" );
-  commands.insert( "CWT" );
-  commands.insert( "RESCALE" );
-  commands.insert( "DUMP" );
-  commands.insert( "DUMP-MASK" );
-  commands.insert( "DUMMY" );
-  commands.insert( "ARTIFACTS" );
-  commands.insert( "TIME-TRACK" );
+  // redundant... now using cmddefs_t  
 }
+
 
 
 // ----------------------------------------------------------------------------------------
@@ -679,7 +667,8 @@ bool cmd_t::eval( edf_t & edf )
       
       writer.cmd( cmd(c) , c+1 , param(c).dump( "" , " " ) );
 
-      // use strata to keep track of tables by commands
+      // use strata to keep track of tables by commands, with leading underscore to denote
+      // special status of this factor
 
       writer.level( cmd(c) , "_" + cmd(c) );
       
@@ -714,7 +703,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "LW" ) )           lw_prep_t( edf , param(c) );
       
-      else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );
+      else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );      
       else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );
       else if ( is( c, "RECS" ) )         proc_record_table( edf , param(c) );
 
@@ -740,6 +729,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
+      else if ( is( c, "CHEP" ) )         proc_chep( edf, param(c) );
       
       else if ( is( c, "EPOCH-ANNOT" ) )  proc_file_annot( edf , param(c) );
       else if ( is( c, "EPOCH-MASK" ) )   proc_epoch_mask( edf, param(c) );
@@ -767,7 +757,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
       else if ( is( c, "L1OUT" ) )        proc_leave_one_out( edf , param(c) );
-      
+      else if ( is( c, "INTERPOLATE" ) )  proc_chep_based_interpolation( edf, param(c) );
       else if ( is( c, "EMD" ) )          proc_emd( edf , param(c) );
   
       else if ( is( c, "MI" ) )           proc_mi( edf, param(c) );
@@ -1089,6 +1079,7 @@ void proc_dump( edf_t & edf , param_t & param )
   edf.data_dumper( signal , param );	  
 }
       
+
 
 // EPOCH DUMP 
 
@@ -1548,8 +1539,57 @@ void proc_dump_mask( edf_t & edf , param_t & param )
   edf.timeline.mask2annot( path, tag );
 }
 
+// CHEP : dump, or convert from CHEP->MASK
 
+void proc_chep( edf_t & edf , param_t & param )
+{
+  
+  if ( param.has( "load" ) )
+    {
+      std::string f = param.value( "load" );
+      logger << "  reading chep from " << f << "\n";
+      edf.timeline.read_chep_file( f );
+    }
+  
+  if ( param.has( "epochs" ) ) 
+    {
 
+      std::string sigstr = param.requires( "sig" );
+      signal_list_t signals = edf.header.signal_list( sigstr );
+
+      std::vector<double> p = param.dblvector( "epochs" );
+      if ( p.size() == 1 ) 
+	edf.timeline.collapse_chep2epoch( signals , p[0] , 0 ); 
+      else if ( p.size() == 2 ) 
+	edf.timeline.collapse_chep2epoch( signals , p[0] , p[1] ); 
+      
+    }
+
+  if ( param.has( "channels" ) ) 
+    {
+
+      std::string sigstr = param.requires( "sig" );
+      signal_list_t signals = edf.header.signal_list( sigstr );
+      
+      std::vector<double> p = param.dblvector( "channels" );
+      if ( p.size() == 1 ) 
+	edf.timeline.collapse_chep2ch( signals , p[0] , 0 ); 
+      else if ( p.size() == 2 ) 
+	edf.timeline.collapse_chep2ch( signals , p[0] , p[1] ); 
+      
+    }
+  
+  if ( param.has( "dump" ) ) edf.timeline.dump_chep_mask();  
+  
+  if ( param.has( "save" ) )
+    {
+      std::string f = param.value( "save" );
+      logger << "  saving chep to " << f << "\n";
+      edf.timeline.write_chep_file( f );
+    }
+
+  
+}
 
 
 // COUNT-ANNOTS : show all annotations for the EDF
@@ -1645,6 +1685,13 @@ void proc_leave_one_out( edf_t & edf , param_t & param )
 {
   dsptools::leave_one_out( edf , param );
 }
+
+// INTERPOLATE : chep-based interpolation
+void proc_chep_based_interpolation( edf_t & edf , param_t & param )
+{
+  dsptools::chep_based_interpolation( edf , param );
+}
+
 
 // COH : calculate cross spectral coherence, using legacy code
 

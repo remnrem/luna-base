@@ -37,6 +37,9 @@ std::string                        cmd_t::stout_template = "";
 bool                               cmd_t::append_stout_file = false;
 bool                               cmd_t::has_indiv_wildcard = false;
 
+bool                               cmd_t::plaintext_mode = false;
+std::string                        cmd_t::plaintext_root = ".";
+
 std::map<std::string,std::string>  cmd_t::vars;
 std::set<std::string>              cmd_t::signallist;
 std::map<std::string,std::string>  cmd_t::label_aliases;

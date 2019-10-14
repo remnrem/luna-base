@@ -3,28 +3,28 @@ include ../Makefile.inc
 # set all executables to be placed in parent directory
 
 DESTRAT = ../destrat
-DESTRAT_OBJS = reader.o ../globals.o
-DESTRAT_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot
+DESTRAT_OBJS = reader.o ../globals.o ../cmddefs.o
+DESTRAT_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot -lz
 
 BEHEAD = ../behead
 BEHEAD_OBJS = behead.o
 BEHEAD_LIBS = 
 
 TSPICKER = ../tspicker 
-TSPICKER_OBJS = tspicker.o ../globals.o
-TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lannot -lsstore
+TSPICKER_OBJS = tspicker.o ../globals.o ../cmddefs.o
+TSPICKER_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lannot -lsstore -lz
 
 INTERSECT = ../intersect 
-INTERSECT_OBJS = list-intersection.o ../globals.o
-INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals -ldb -lannot -lsstore
+INTERSECT_OBJS = list-intersection.o ../globals.o ../cmddefs.o
+INTERSECT_LIBS = -L.. -lhelper -ldefs -lmiscmath -lintervals -ldb -lannot -lsstore -lz
 
 PREPSS = ../prepss
-PREPSS_OBJS = prepss.o ../globals.o
-PREPSS_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot
+PREPSS_OBJS = prepss.o ../globals.o ../cmddefs.o
+PREPSS_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot -lz
 
 LOADSS = ../loadss
-LOADSS_OBJS = loadss.o ../globals.o
-LOADSS_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot
+LOADSS_OBJS = loadss.o ../globals.o ../cmddefs.o
+LOADSS_LIBS = -L.. -lhelper -ldefs -lmiscmath -ldb -lsstore -lannot -lz
 
 all : $(DESTRAT) $(TSPICKER) $(INTERSECT) $(BEHEAD) $(PREPSS) $(LOADSS)
 

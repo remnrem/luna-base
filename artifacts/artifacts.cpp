@@ -504,6 +504,7 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 //
 // SIGSTATS
 //
+
 void  rms_per_epoch( edf_t & edf , param_t & param )
 {
 
@@ -560,8 +561,21 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   // apply mask (requires a threshold)
   bool apply_mask = param.has( "mask" );
-  if ( apply_mask && ! has_threshold ) Helper::halt("RMS: need threshold=X with mask");
+  if ( apply_mask && ! has_threshold ) 
+    Helper::halt("RMS: need threshold=X with mask");
 
+
+  //
+  // channel/epoch (chep) masks; this will not set any full epoch-masks, but it will 
+  // populate timeline.chep masks (i.e. that can be subsequently turned into lists of bad channels/epochs
+  // and also used to interpolate signals
+  //
+
+  bool chep_mask = param.has( "chep" );
+  
+  if ( chep_mask && apply_mask ) 
+    Helper::halt( "cannot apply both chep and mask options" );
+  
 
   //
   // Calculate per-EPOCH, and also signal-wide, the signal RMS 
@@ -786,7 +800,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   // Find outliers and mask epochs?
   //
   
-  if ( apply_mask ) 
+  if ( apply_mask || chep_mask ) 
     {
       
       for (int s=0;s<ns;s++)
@@ -906,18 +920,39 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		      cnt_cmp++;
 		    }
 		  
+		  
+
+		  //
+		  // full mask
+		  //
+		  
 		  if ( set_mask ) 
 		    {
-		      if ( !edf.timeline.masked(e) ) ++altered;
-		      edf.timeline.set_epoch_mask( e );		  
-		      dropped[ei] = true;
-		      ++total_this_iteration;
-		      ++total;
+		      
+		      if ( chep_mask ) // channel/epoch mask rather than standard epoch mask?
+			{
+			  edf.timeline.set_chep_mask( e , signals(s) );
+			  // do not set 'dropped' here... 
+			  // i.e. we'll consider all epochs for subsequent
+			  //      signals
+			  ++total_this_iteration;
+			  ++total;
+			}
+		      else
+			{			  
+			  if ( !edf.timeline.masked(e) ) ++altered;
+			  edf.timeline.set_epoch_mask( e );		  
+			  dropped[ei] = true;
+			  ++total_this_iteration;
+			  ++total;
+			}
 		    }
 		  
 		} // next epoch	  
 	      
-	      logger << ": removed " << total_this_iteration << " of " << act_rms.size() << " epochs of iteration " << o+1 << "\n";
+	      logger << ": removed " << total_this_iteration 
+		     << " of " << act_rms.size() 
+		     << " epochs of iteration " << o+1 << "\n";
 
 	    } // next outlier iteration
 	  

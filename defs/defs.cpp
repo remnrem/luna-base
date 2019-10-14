@@ -37,6 +37,8 @@ extern logger_t logger;
 std::string globals::version;
 std::string globals::date;
 
+cmddefs_t globals::cmddefs;
+
 std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
 

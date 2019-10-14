@@ -33,7 +33,10 @@ struct topo_t;
 
 namespace dsptools
 {
+
   void leave_one_out( edf_t & edf , param_t & param );
+
+  void chep_based_interpolation( edf_t & edf , param_t & param );
 
   Data::Matrix<double> interpolate2D( const std::vector<double> & x , 
 				      const std::vector<double> & y , 

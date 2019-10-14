@@ -33,6 +33,7 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "helper/token-eval.h"
+#include <cstddef>
 
 extern writer_t writer;
 
@@ -1025,6 +1026,324 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
 }
 
 
+signal_list_t timeline_t::masked_channels_sl( const int e0 , const signal_list_t & signals ) const
+{
+  int e = display_epoch( e0 );
+  std::cout << "e in TLM = " << e0 << " " << e << "\n";
+  signal_list_t msigs;
+  std::vector<int> m = masked_channels( e0 , signals );
+  for (int i=0;i<m.size();i++) msigs.add( m[i] , edf->header.label[ m[i] ] );
+  return msigs;
+}
+
+signal_list_t timeline_t::unmasked_channels_sl( const int e0 , const signal_list_t & signals ) const
+{
+  signal_list_t usigs;
+  int e = display_epoch( e0 );
+  std::cout << "e in TLU = " << e0 << " " << e << "\n";
+  if ( e == -1 ) return usigs;
+  std::vector<int> u = unmasked_channels( e0 , signals );
+  for (int i=0;i<u.size();i++) usigs.add( u[i] , edf->header.label[ u[i] ] );
+  return usigs;
+}
+
+std::vector<int> timeline_t::masked_channels( const int e0 , const signal_list_t & signals ) const
+{
+  int e = display_epoch( e0 );
+  std::cerr << " e , e0 = " << e << " " << e0 << "\n";
+  std::vector<int> m;
+  const int ns = signals.size();
+  bool any_masked = chep.find( e ) != chep.end() ;
+  if ( ! any_masked ) return m; // all good
+  std::cerr << "h\n";
+
+  const std::set<int> & masked = chep.find(e)->second ;
+  for (int s=0; s<ns; s++) 
+    {
+      if ( masked.find( signals(s) ) != masked.end() )
+	m.push_back( signals(s) );
+    }
+  return m;
+}
+
+std::vector<int> timeline_t::unmasked_channels( const int e0 , const signal_list_t & signals ) const
+{
+
+  int e = display_epoch( e0 );
+
+  std::vector<int> u;
+  const int ns = signals.size();
+  bool any_masked = chep.find( e ) != chep.end() ;
+  if ( ! any_masked ) 
+    {
+      // all good
+      for (int s=0; s<ns; s++) u.push_back( signals(s) );
+      return u; 
+    }
+
+  const std::set<int> & masked = chep.find(e)->second ;
+  for (int s=0; s<ns; s++) 
+    {
+      if ( masked.find( signals(s) ) == masked.end() )
+	u.push_back( signals(s) );
+    }
+  return u;
+}
+
+void timeline_t::collapse_chep2epoch( signal_list_t signals , const int k  , const double pct )
+{
+  
+  // drop any non-data channels (modifies 'signals')
+  edf->header.drop_annots_from_signal_list( &signals );
+
+  logger << "  masking epochs";
+  if ( k ) logger << " with " << k << " or more masked channels";
+  if ( pct ) logger << (k?", or " : " with " ) << pct *100 << "% masked channels\n";
+
+  // if k or more channels are masked --> set epoch mask  [ default 1 ] 
+  // if more than pct channels are masked --> set epoch mask [ default 0 ]
+  // automatically adjust main 'mask' (using set_mask(), i.e. respecting mask_mode etc)
+  
+  int epoch = 0; 
+  int masked = 0;
+  int masks_set = 0;
+
+  std::map<int,std::set<int> >::iterator ee = chep.begin();
+  while ( ee != chep.end() )
+    {
+      // **assume** same signals overlap
+
+      int sz = ee->second.size();
+
+      int epoch = ee->first;
+
+      if ( ( k != 0 && sz >= k ) || 
+	   ( pct != 0 && sz / (double)signals.size() > pct ) ) 
+	{
+	  // change main epoch mask
+	  if ( set_epoch_mask( epoch ) ) ++masked;
+
+	  // and also set all CHEP masks (to signals) for this epoch
+	  for (int s=0;s<signals.size();s++) ee->second.insert( signals(s) );
+	  
+	}
+      
+      if ( mask[epoch] ) ++masks_set; 
+    
+      ++ee;
+    }
+  
+  logger << "  newly masked " << masked << " epochs; now " << masks_set << " masked in total\n";
+  
+}
+
+
+signal_list_t timeline_t::collapse_chep2ch( signal_list_t signals , 
+					    const int k  , const double pct , 
+					    bool bad_set_all_bad ,
+					    bool good_set_all_good )
+{
+
+  // identify which channels have more than 'k' (or more than pct %) of epochs masked
+  // return this as a set of 'bad channels'
+  // if k or more channels are masked --> set epoch mask  [ default 1 ] 
+  // if more than pct channels are masked --> set epoch mask [ default 0 ]
+  
+  // drop any non-data channels (modifies 'signals')
+  edf->header.drop_annots_from_signal_list( &signals );
+
+  logger << "  masking channels";
+  if ( k ) logger << " with " << k << " or more masked epochs";
+  if ( pct ) logger << (k?", or " : " with " ) << pct *100 << "% masked epochs\n";
+  
+  std::map<int,int> c;
+  int ns = signals.size();
+  int ne = num_epochs();
+  for (int i=0; i<ns; i++) c[ signals(i) ] = 0;
+  
+  std::map<int,std::set<int> >::const_iterator ee = chep.begin();
+  while ( ee != chep.end() )
+    {
+      std::set<int>::const_iterator ss = ee->second.begin();
+      while ( ss != ee->second.end() )
+	{
+	  if ( c.find( *ss ) != c.end() ) c[ *ss ]++;
+	  ++ss;
+	}
+      ++ee;
+    }
+  
+  signal_list_t good_signals;
+  
+  std::map<int,int>::const_iterator cc = c.begin(); 
+  while ( cc != c.end() ) 
+    {
+      if ( ! ( ( k != 0 && cc->second >= k ) || 
+	       ( pct != 0 &&  cc->second/(double)ne > pct ) ) )
+	good_signals.add( cc->first , signals.label( cc->first ) );
+      
+      ++cc;
+    }
+  
+  std::set<int> good_sigs;
+  for (int i=0;i<good_signals.size();i++) 
+    good_sigs.insert( good_signals(i) );
+  
+  if ( bad_set_all_bad ) 
+    {
+      logger << "  masking all chep epochs for all bad signals\n";
+      for (int i=0; i<ns; i++) 
+	if ( good_sigs.find( i ) == good_sigs.end() ) 
+	  for (int e=0;e<ne;e++) chep[e].insert( i );	
+    }
+
+  if ( good_set_all_good )
+    {
+      logger << "  unmasking all chep epochs for all good signals\n";
+      for (int i=0; i<ns; i++) 
+	if ( good_sigs.find( i ) != good_sigs.end() ) 
+	  for (int e=0;e<ne;e++) 
+	    {
+	      std::set<int>::iterator ii = chep[e].find( i );
+	      if ( ii != chep[e].end() ) chep[e].erase( ii );
+	    }
+    }
+
+  logger << "  " << good_signals.size() << " of " << signals.size() << " signals are good\n"; 
+
+  return good_signals;
+}
+
+
+void timeline_t::dump_chep_mask()
+{
+
+  first_epoch();
+  
+  logger << " dumping CHEP MASK\n";
+  
+  int ns = edf->header.ns;
+
+  std::map<std::string,int> chtots;
+
+  while ( 1 ) 
+    {
+      
+      int e = next_epoch_ignoring_mask();      
+      
+      if ( e == -1 ) break;
+      
+      int eptot = 0;
+
+      interval_t interval = epoch( e );
+      
+      int depoch = display_epoch( e );
+
+      writer.epoch( depoch );
+
+      if ( chep.find( depoch ) == chep.end() )
+	{
+	  for (int s=0;s<ns;s++)     
+	    {
+	      if ( edf->header.is_data_channel( s ) )
+		{
+		  writer.level( edf->header.label[s] , globals::signal_strat );
+		  writer.value( "CHEP" , false );
+		}
+	    }
+	  writer.unlevel( globals::signal_strat );
+	}
+      else
+	{
+	  const std::set<int> & ss = chep.find( depoch )->second;
+	  for (int s=0;s<ns;s++)     
+	    {
+	      if ( edf->header.is_data_channel( s ) )
+		{
+		  bool masked = ss.find(s) != ss.end() ;
+		  writer.level( edf->header.label[s] , globals::signal_strat );
+		  writer.value( "CHEP" , masked );
+		  if ( masked ) 
+		    {
+		      chtots[ edf->header.label[s] ]++;
+		      eptot++;
+		    }
+		}
+	    }
+	  writer.unlevel( globals::signal_strat );	  
+	}
+      
+      writer.value( "CHEP" , eptot );
+
+    } // next epoch
+
+  writer.unepoch();
+  
+  // ch totals
+  for (int s=0;s<ns;s++)     
+    {
+      if ( edf->header.is_data_channel( s ) )
+	{
+	  writer.level( edf->header.label[s] , globals::signal_strat );
+	  writer.value( "CHEP" , chtots[ edf->header.label[s] ] );
+	}
+    }
+  writer.unlevel( globals::signal_strat );
+  
+}
+
+void timeline_t::read_chep_file( const std::string & f , bool reset )
+{
+  if ( reset ) clear_chep_mask();
+  
+  if ( ! Helper::fileExists( f ) ) Helper::halt( f + " does not exist" );
+
+  std::ifstream FIN( f.c_str() , std::ios::in );
+  
+  // **assumes** same epoch size, etc...users responsibility to keep that 
+  // as it should be 
+
+  bool silent_mode = true;
+
+  while ( 1 ) 
+    {
+      std::string ch;
+      int e;      
+      FIN >> e >> ch ; 
+      if ( FIN.eof() ) break;
+      if ( ch == "" ) break;      
+      int chn = edf->header.signal( ch , silent_mode );      
+      if ( chn != -1 ) chep[ e ].insert( chn );      
+      
+    }
+
+  
+  FIN.close();
+}
+
+void timeline_t::write_chep_file( const std::string & f ) const
+{
+  std::ofstream FOUT( f.c_str() , std::ios::out );
+  if ( FOUT.bad() ) Helper::halt( "could not open " + f );
+  std::map<int,std::set<int> >::const_iterator ee = chep.begin();
+  while ( ee != chep.end() )
+    {
+      const std::set<int> & chs = ee->second;
+      std::set<int>::const_iterator cc = chs.begin();
+      while ( cc != chs.end() )
+	{
+	  FOUT << ee->first << "\t" 
+	       << edf->header.label[ *cc ] << "\n";
+	  ++cc;
+	}
+      ++ee;
+    }
+  FOUT.close();
+}
+
+
+
+
 bool timeline_t::masked_timepoint( uint64_t a ) const
 {
 
@@ -1672,6 +1991,8 @@ void timeline_t::dumpmask()
   writer.unepoch();
   
 }
+
+
 
 
 void timeline_t::set_epoch_mapping()

@@ -30,6 +30,8 @@
 #include <stdint.h>
 #include <vector>
 
+#include "cmddefs.h"
+
 struct param_t; 
 
 typedef std::complex<double> dcomp;
@@ -88,6 +90,10 @@ struct globals
   static std::string version;
   static std::string date;
 
+  // command definitions
+
+  static cmddefs_t cmddefs;
+  
   // global variables
   static std::map<frequency_band_t,freq_range_t> freq_band;
   static sleep_stage_label_t sleep_stage;

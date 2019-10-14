@@ -7,9 +7,9 @@
 #ifndef LIBICA_H_
 #define LIBICA_H_
 
-#define MAX_ITERATIONS	1000
-#define TOLERANCE		0.0001
-#define LIBICA_ALPHA			1
+#define MAX_ITERATIONS   1000
+#define TOLERANCE        0.0001
+#define LIBICA_ALPHA     1
 
 void fastICA(double** X, int rows, int cols, int compc, double** K, double** W, double** A, double** S);
 

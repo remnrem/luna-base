@@ -26,6 +26,7 @@
 #include "timeline/timeline.h"
 #include "tal.h"
 #include "edfz/edfz.h"
+#include "edf/signal-list.h"
 
 #include <iostream>
 #include <vector>
@@ -39,42 +40,6 @@ typedef unsigned char byte_t;
 struct param_t;
 
 struct edf_t;
-
-struct signal_list_t
-{
-  
-  std::vector<int> signals;  
-
-  std::vector<std::string> signal_labels;  
-
-  int size() const { return signals.size(); } 
-
-  int operator()(int i) const { return signals[i]; } 
-
-  std::string label(const int i) const { return signal_labels[i]; } 
-  
-  int find( const std::string & label ) const
-  { 
-    for (int j=0;j<signal_labels.size();j++) 
-      if ( signal_labels[j] == label ) return j;
-    return -1;
-  }
-
-  void add(int i , const std::string & label ) 
-  { 
-    //    std::cout << "adding " << i << " to " << label << "\n";
-    for (int j=0;j<signals.size();j++) if ( signals[j] == i ) return;
-    signals.push_back(i); 
-    signal_labels.push_back(label); 
-  }
-
-  void clear() { signals.clear(); signal_labels.clear(); }
-  
-  static bool match( const std::set<std::string> * inp_signals , std::string * l , const std::set<std::string> & slabels );
-
-  
-};
-
 
 struct edf_header_t
 {
@@ -210,7 +175,7 @@ struct edf_header_t
   
   bool write( edfz_t * edfz );
   
-  int  signal( const std::string & s );
+  int  signal( const std::string & s , bool silent = false );
 
   bool  has_signal( const std::string & s );
 
@@ -351,7 +316,7 @@ struct edf_t
   
   friend struct edf_header_t;
   friend struct edf_record_t;
-  
+
 public:
 
   //
@@ -435,6 +400,8 @@ public:
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
   void update_signal( int s , std::vector<double> * );
+
+  void update_records( int a , int b , int s , const std::vector<double> * );
 
   void data_dumper( const std::string & , const param_t & );
   

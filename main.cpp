@@ -182,11 +182,21 @@ int main(int argc , char ** argv )
 	  else if ( Helper::iequals( tok[0] , "-o" ) || Helper::iequals( tok[0] , "-a" ) )
 	    {
 	      // next arg will be DB
-	      if ( i + 1 >= argc ) Helper::halt( "expecting database name after -o" );
+	      if ( i + 1 >= argc ) Helper::halt( "expecting database name after -o/a" );
 	      cmd_t::stout_file = argv[ ++i ];
 	      if ( Helper::iequals( tok[0] , "-a" ) ) cmd_t::append_stout_file = true;
 	    }
 	  
+	  // specify database for output
+	  
+	  else if ( Helper::iequals( tok[0] , "-t" ) )
+	    {
+	      
+	      // next arg will be root (folder) for plain-text
+	      if ( i + 1 >= argc ) Helper::halt( "expecting database name after -t" );
+	      cmd_t::plaintext_root = argv[ ++i ];
+	      cmd_t::plaintext_mode = true;
+	    }
 	  
 	  // luna-script from command line
 	  
@@ -308,8 +318,14 @@ int main(int argc , char ** argv )
       cmd_t::stout_template = cmd_t::stout_file;
     }
   
+  // text-table mode?
+  if ( cmd_t::plaintext_mode )
+    {
+      logger << "in text-table mode, writing to " << cmd_t::plaintext_root  << "\n";
+      writer.use_plaintext( cmd_t::plaintext_root );
+    }
   // was an output db specified?
-  if ( cmd_t::stout_file != "" )
+  else if ( cmd_t::stout_file != "" )
     {
       
       // if using indiv-specific output databases, postpone this...
@@ -322,10 +338,10 @@ int main(int argc , char ** argv )
 	  writer.attach( cmd_t::stout_file );  
 	}
     }
+  // otherwise, just send to std out
   else 
     writer.nodb();
   
-
   
   //
   // branch off to run any cmdline driven special functions, then quit
@@ -603,6 +619,9 @@ void process_edfs( cmd_t & cmd )
       
       if ( cmd_t::has_indiv_wildcard ) 
 	{
+
+	  if ( cmd_t::plaintext_mode ) Helper::halt( "cannot specify -t and have ^ wild card" );
+
 	  cmd_t::stout_file = cmd_t::resolved_outdb( rootname , cmd_t::stout_template );
 
 	  // if not append-mode, first wipe it
@@ -621,11 +640,8 @@ void process_edfs( cmd_t & cmd )
       //
 
       writer.begin();
-
       writer.clear_tags();
-      
       writer.id( rootname , edffile );
-      
     
 
       //
@@ -835,11 +851,12 @@ void process_edfs( cmd_t & cmd )
 
       //
       // clean up if using individual-specific outdb
+      // or if in plaintext mode (i.e. as one folder per individual)
       //
       
-      if ( cmd_t::has_indiv_wildcard ) 
+      if ( cmd_t::has_indiv_wildcard || cmd_t::plaintext_mode ) 
 	writer.close();
-      
+
       //
       // all done / next EDF
       //
@@ -908,7 +925,120 @@ void proc_eval_tester( const bool verbose )
 
 void proc_dummy( const std::string & p )
 {
+  
+  
  
+  globals::cmddefs.add_domain( "misc" , "misc" ,  "Misc" );
+
+  globals::cmddefs.add_cmd( "misc" , "comm1" , "this is a dummy command" );
+  globals::cmddefs.add_table( "comm1" , "XX" , "A simple table" , false );
+  globals::cmddefs.add_var( "comm1" , "XX" , "X", "Var X" );
+  globals::cmddefs.add_var( "comm1" , "XX" , "Y" , "Var Y" );
+
+  globals::cmddefs.add_cmd( "misc" , "comm2" , "this is a dummy command" );
+  globals::cmddefs.add_table( "comm2" , "CH,B" , "A nice table" , true );
+  globals::cmddefs.add_var( "comm2" , "CH,B" , "V1" , "Variable 1" );
+  globals::cmddefs.add_var( "comm2" , "CH,B" , "V2" , "Variable 2" );
+  
+//   std::cout << globals::cmddefs.help( "comm1" , true )  << "\n\n\n";
+   std::cout << globals::cmddefs.help( "comm2" , true )  << "\n";
+  
+  // add a dummy tag
+  globals::cmddefs.add_tag( "Z" );
+
+  zfiles_t files( "folder1" , "indiv1" ); 
+
+  zfile_t * z1 = files.file( "comm1" , NULL , "XX" ) ; 
+
+  param_t param2;
+
+  zfile_t * z2 = files.file( "comm2" , &param2 , "CH,B,Z" ) ; 
+
+  z1->write_header();
+  
+  z2->write_header();
+  
+  //z1->display() ;
+  //z2->display() ;
+
+  z1->set_stratum( "XX" , "L1" );
+  z1->set_value( "X" , 22 );
+  z1->set_value( "Y" , 23 );
+  z1->write_buffer();
+  z1->set_stratum( "XX" , "L2" );
+  z1->set_value( "X" , 24 );
+  z1->set_value( "Y" , 25 );
+  z1->write_buffer();
+
+  z2->set_stratum( "CH" , "C3" );
+  z2->set_stratum( "B" , "ALPHA" );
+  z2->set_stratum( "Z" , "R1" );
+  z2->set_value( "V1" , 22 );
+  z2->set_value( "V2" , 23 );
+  z2->write_buffer();
+
+  files.close();
+
+  std::exit(1);
+  
+  
+  //
+  // Test cmddefs_t
+  //
+  
+  if ( p == "cmddefs" )
+    {
+      
+      globals::cmddefs.add_cmd( "misc"   , "NEWONE" , "A test command" );
+      globals::cmddefs.add_table( "NEWONE" , "" , "Table 0, baseline" );
+      globals::cmddefs.add_table( "NEWONE" , "CH" , "Table 1, by channel" );
+      globals::cmddefs.add_table( "NEWONE" , "CH,X" , "Table 2, by channel and X" );
+      globals::cmddefs.add_table( "NEWONE" , "CH,X,Y" , "Table 2a, by channel and X/Y" , true );
+      globals::cmddefs.add_table( "NEWONE" , "CH,X,Z" , "Table 2b, by channel and X/Z"  );
+
+      globals::cmddefs.add_var( "NEWONE" , "" , "V1" , "some var1" );
+      globals::cmddefs.add_var( "NEWONE" , "" , "V2" , "some var2" );
+
+      globals::cmddefs.add_var( "NEWONE" , "CH" , "V1" , "some var1" );
+      globals::cmddefs.add_var( "NEWONE" , "CH" , "V2" , "some var2" );
+      globals::cmddefs.add_var( "NEWONE" , "CH" , "V3" , "some var3" );
+
+      globals::cmddefs.add_var( "NEWONE" , "CH,X" , "V2a" , "some var2" );
+      globals::cmddefs.add_var( "NEWONE" , "CH,X" , "V3a" , "some var3" );
+
+      globals::cmddefs.add_var( "NEWONE" , "CH,X,Y" , "V2a" , "some var2" );
+      globals::cmddefs.add_var( "NEWONE" , "CH,X,Y" , "V3a" , "some var3" );
+
+      globals::cmddefs.add_var( "NEWONE" , "CH,X,Z" , "V2a" , "some var2" );
+      globals::cmddefs.add_var( "NEWONE" , "CH,X,Z" , "V3a" , "some var3" );
+
+      //  std::cout << globals::cmddefs.help_domains() << "\n";
+      //std::cout << globals::cmddefs.help_commands() << "\n";
+      
+      globals::cmddefs.set_compressed( "NEWONE" , tfac_t( "CH,X,Z" ) );
+      globals::cmddefs.set_compressed( "NEWONE" , tfac_t( "CH,X,Y" ) , false );
+      
+      std::cout << globals::cmddefs.help( "NEWONE" , true ) << "\n";
+      
+      
+      std::exit(0);
+
+      param_t param;
+      param.add( "epoch" );
+      param.add( "ep" );
+      std::set<std::string> unk;
+      std::cout << "st = " << globals::cmddefs.check( "ANNOTS" , param.keys() , &unk ) << "\n";
+      
+      std::set<std::string>::const_iterator uu = unk.begin();
+      while ( uu != unk.end() ) { std::cout << " bad param " << *uu << "\n"; ++uu; } 
+
+
+
+      
+      
+
+    }
+
   //
   // Straight FFT of stdin
   //

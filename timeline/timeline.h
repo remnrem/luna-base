@@ -34,6 +34,7 @@
 #include "helper/logger.h"
 #include "timeline/hypno.h"
 
+#include "edf/signal-list.h"
 #include "defs/defs.h"
 #include "annot/annot.h"
 
@@ -103,7 +104,9 @@ struct timeline_t
   //
 
   int first_record() const; // -1 if empty
+
   int next_record(const int r) const; // -1 if at end
+
   bool retained(const int r ) const;
   
   
@@ -160,10 +163,17 @@ struct timeline_t
   
   int ensure_epoched() 
   {
+
     if ( epoched() ) return num_epochs();
+
     // otherwise, set to default
+
     int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-    logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+
+    logger << " set epochs to default " 
+	   << globals::default_epoch_len 
+	   << " seconds, " << ne << " epochs\n";
+
     return ne;
   }
   
@@ -204,6 +214,7 @@ struct timeline_t
     return calc_epochs();
   }
   
+
   int set_epoch(const double s, const double o ) 
   { 
     if ( s <= 0 || o < 0 ) 
@@ -230,21 +241,31 @@ struct timeline_t
   double epoch_increment_tp() const 
   { return epoch_inc_tp ; } 
 
+
   int calc_epochs();
+
   
   int first_epoch()  
   { 
+
     // point to first epoch, and return number of non-masked epochs also
+
     if ( ! epoched() ) 
       {
+
 	int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-	logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+
+	logger << " set epochs to default " 
+	       << globals::default_epoch_len 
+	       << " seconds, " << ne << " epochs\n";
       }
 
     current_epoch = -1; 
+
     return num_epochs();
   } 
   
+
   int next_epoch()  
   { 
     // return the next unmasked epoch
@@ -286,7 +307,16 @@ struct timeline_t
     return epochs[e]; 
   }
  
-
+  bool epoch_records( const int e , int * a , int * b ) const 
+  {
+    *a = *b = 0;
+    std::map<int,std::set<int> >::const_iterator rr = epoch2rec.find( e );
+    if ( rr == epoch2rec.end() ) return false;
+    const std::set<int> & recs = rr->second;
+    *a = *recs.begin();
+    *b = *recs.rbegin();
+    return true;
+  }
 
   
   //
@@ -362,7 +392,51 @@ struct timeline_t
 
   void dumpmask();
 
+  //
+  // Channel-specific epoch masks (ch/ep mask)
+  //
+  
+  bool is_chep_mask_set() const { return chep.size() != 0; } 
+  
+  void clear_chep_mask() { chep.clear(); } 
 
+  void set_chep_mask( const int e , const int s ) { chep[ display_epoch( e ) ].insert(s); } 
+
+  void dump_chep_mask();
+  
+  bool masked( const int e , const int s ) const 
+  {
+    std::map<int,std::set<int> >::const_iterator ee = chep.find( display_epoch( e ) );
+    if ( ee == chep.end() ) return false;
+    return ee->second.find( s ) != ee->second.end() ;
+  }
+
+  // save/load cheps
+  void read_chep_file( const std::string & f , bool reset = true );
+
+  void write_chep_file( const std::string & f ) const;
+
+  // query
+  std::vector<int> masked_channels( const int e , const signal_list_t & ) const;
+  
+  std::vector<int> unmasked_channels( const int e , const signal_list_t & ) const;
+
+  signal_list_t masked_channels_sl( const int e , const signal_list_t & ) const;
+  
+  signal_list_t unmasked_channels_sl( const int e , const signal_list_t & ) const;
+
+  // sets main epoch mask
+  void collapse_chep2epoch( signal_list_t signals , const int k  , const double pct );
+  
+  // doesn't change epoch-mask, returns a channel list
+  // optionally, if a channel is designated as 'bad', then set all to bad
+  // and/or,     if a channel is designated as 'good', then set all to good
+  
+  signal_list_t collapse_chep2ch( signal_list_t signals , 
+				  const int k  , const double pct , 
+				  const bool bad_set_all_bad = true , 
+				  const bool good_set_all_good = true );
+  
   //
   // Generic masks
   //
@@ -534,7 +608,7 @@ struct timeline_t
   }
 
   // 1-based epoch mapping
-  int display_epoch(int e) 
+  int display_epoch(int e) const
     {      
       if ( ! has_epoch_mapping() ) return e+1;
       if ( epoch_curr2orig.find(e) == epoch_curr2orig.end() ) return -1;
@@ -576,13 +650,18 @@ struct timeline_t
   
   std::vector<interval_t> epochs;
 
+  int current_epoch;
+
+
   std::vector<bool> mask;
   
   bool mask_set;
   
   int mask_mode;
+
+  // epoch -> ch ; presence implies mask set
+  std::map<int,std::set<int> > chep;
   
-  int current_epoch;
 
   std::map<int,std::set<int> > epoch2rec;
   std::map<int,std::set<int> > rec2epoch;

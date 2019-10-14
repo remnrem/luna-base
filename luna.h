@@ -27,9 +27,13 @@
 
 #include "eval.h" 
 
+#include "cmddefs.h"
+
 #include "defs/defs.h"
 
 #include "helper/helper.h"
+
+#include "helper/zfile.h"
 
 #include "helper/token-eval.h"
 

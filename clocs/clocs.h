@@ -27,6 +27,7 @@
 #include <cmath>
 #include <map>
 #include <vector>
+#include <sstream>
 
 #include "stats/statistics.h" 
 
@@ -72,6 +73,18 @@ struct clocs_t {
   
   std::map<std::string,cart_t> cloc;
   
+  std::string print( const std::string & delim = "," ) const 
+  {
+    std::map<std::string,cart_t>::const_iterator cc = cloc.begin();
+    std::stringstream ss;
+    while ( cc != cloc.end() )
+      {
+	if ( cc != cloc.begin() ) ss << delim;
+	ss << cc->first ; 
+	++cc;
+      }
+    return ss.str();
+  }
 
   void convert_to_unit_sphere();
 

@@ -27,7 +27,8 @@
 #include "retval.h"
 #include <string>
 #include "intervals/intervals.h"
-
+#include "cmddefs.h"
+#include "helper/zfile.h"
 
 class writer_t;
 extern writer_t writer;
@@ -174,7 +175,9 @@ struct level_t;
     int matches( const std::set<int> & cvars , const std::set<int> & rvars );
     std::string print() const;
     std::string print_nocmd() const; // skip if factor starts w/ _
-  
+    tfac_t tfac() const; // for plaintext tables (zfiles_t) [ NOT USED ]
+    std::string print_zfile_tag() const; // for plaintext tables; skips commands, TAGs, adds E/T
+
     bool drop( int factor_id )
     {            
       std::map<factor_t,level_t> levels_copy = levels;
@@ -551,13 +554,13 @@ class writer_t
   //
   // database
   //
-
-  writer_t() { dbless = true; retval = NULL; } 
-
+  
+  writer_t() { dbless = true; plaintext = false; zfiles = NULL ; curr_zfile = NULL ; retval = NULL; } 
+  
   bool attach( const std::string & filename , bool readonly = false )
   {
 
-    dbless = false; retval = NULL;
+    dbless = false; plaintext = false; zfiles = NULL ; curr_zfile = NULL; retval = NULL;
 
     db.attach( filename , readonly , this );
 
@@ -581,6 +584,8 @@ class writer_t
     close();
     attach( ":memory:" );
     dbless = true; 
+    plaintext = false;
+    zfiles = NULL;
     retval = NULL;
   } 
   
@@ -590,8 +595,25 @@ class writer_t
     close();
     attach( ":memory:" );
     dbless = false;  
+    plaintext = false;
+    zfiles = NULL;
     retval = r;
   } 
+
+  void use_plaintext( const std::string & r )
+  { 
+    // in an in-memory DB to store factor information, etc, but then set to 'dbless' 
+    close();
+    attach( ":memory:" );
+    dbless = true; 
+    plaintext = true;
+    zfiles = NULL;
+    curr_zfile = NULL;
+    retval = NULL;
+    
+    plaintext_root = r ;
+  } 
+
   
   bool open_db() const 
   { 
@@ -601,7 +623,7 @@ class writer_t
   }
 
   
-  std::string name() const { return dbless ? "." : db.name(); } 
+  std::string name() const { return plaintext ? plaintext_root : ( dbless ? "." : db.name() ) ; } 
 
   void index() { if ( open_db() ) db.index(); } 
   void drop_index() { if ( open_db() ) db.drop_index(); } 
@@ -626,9 +648,25 @@ class writer_t
 
   bool close() 
   { 
+
+    // if in plaintext mode, close out if needed and clean up
+    if ( plaintext ) 
+      { 	
+	if ( zfiles != NULL ) 
+	  {
+	    update_plaintext_curr_strata();
+	    zfiles->close();
+	    delete zfiles;
+	    zfiles = NULL;
+	  }
+
+      }
+    
+    // otherwise, handle any DB-related stuff
     if ( ! attached() ) return false;
     clear(); 
     db.dettach();
+
     return true; 
   } 
 
@@ -719,6 +757,27 @@ class writer_t
 	individuals_idmap[ indiv_name ] = curr_indiv.indiv_id;
 	individuals[ curr_indiv.indiv_id ] = curr_indiv;
       }
+    
+    // do we ned to set a new zfile? 
+    
+    if ( plaintext ) 
+      {
+
+	if ( zfiles != NULL ) 
+	  {
+	    if ( zfiles->indiv != indiv_name ) 
+	      {
+		zfiles->close();
+		delete zfiles;
+		zfiles = NULL;
+	      }
+	  }
+	
+	if ( zfiles == NULL ) 
+	  zfiles = new zfiles_t( plaintext_root , indiv_name );
+		
+      }
+
     return true;
   }
   
@@ -781,7 +840,10 @@ class writer_t
 
     // swap/add to current strata
     curr_strata.insert( level , factor );
-        
+
+    // if needed, update which table to point to
+    if ( plaintext ) update_plaintext_curr_strata();
+    
     return true;
   }
   
@@ -795,6 +857,9 @@ class writer_t
     // drop this level/factor from current strata
     curr_strata.drop( factors_idmap[ factor_name ] );
         
+    // if needed, update which table to point to
+    if ( plaintext ) update_plaintext_curr_strata();
+
     return true;
   }
   
@@ -802,6 +867,10 @@ class writer_t
   {
     // set curr_strata to 'empty' 
     curr_strata.clear();
+
+    // if needed, update which table to point to
+    if ( plaintext ) update_plaintext_curr_strata();
+
     return true;
   }
   
@@ -854,6 +923,9 @@ class writer_t
     // tables
     
     level( "." , globals::epoch_strat );
+    
+    // if needed, update which table to point to
+    if ( plaintext ) update_plaintext_curr_strata();
 
     return true;
   }
@@ -883,6 +955,10 @@ class writer_t
     
     level( "." , globals::time_strat );
 
+    // if needed, update which table to point to
+    if ( plaintext ) update_plaintext_curr_strata();
+
+
     return true;
   }
   
@@ -896,9 +972,22 @@ class writer_t
     unlevel( globals::time_strat );    
     // set to timeless
     curr_timepoint.timeless();
+
+    // if needed, update which table to point to
+    if ( plaintext ) update_plaintext_curr_strata();
+
     return true;
   }
   
+  
+  //
+  // zfiles_t commands: (for plaintext/i.e. raw table-dump mode)
+  //
+
+  void update_plaintext_curr_strata();
+ 
+  std::map<std::string,std::string> faclvl() const; 
+
   //
   // Value (to DB or stdout)
   //
@@ -906,7 +995,7 @@ class writer_t
   bool value( const std::string & var_name , double d , const std::string & desc = "" )
   {    
     if ( retval != NULL ) return to_retval( var_name , d );
-    else if ( dbless ) return to_stdout( var_name , value_t( d ) ) ;
+    else if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( d ) ) : to_stdout( var_name , value_t( d ) ) ;
     if ( desc != "" ) var( var_name , desc );
     return value( var_name , value_t( d ) ) ;
   }
@@ -914,7 +1003,7 @@ class writer_t
   bool value( const std::string & var_name , int i , const std::string & desc = "" ) 
   { 
     if ( retval != NULL ) return to_retval( var_name , i ); 
-    else if ( dbless ) return to_stdout( var_name , value_t( i ) ) ; 
+    else if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( i ) ) : to_stdout( var_name , value_t( i ) ) ; 
     if ( desc != "" ) var( var_name , desc ); 
     return value( var_name , value_t( i ) ) ; 
   } 
@@ -922,7 +1011,7 @@ class writer_t
   bool value( const std::string & var_name , const std::string & s , const std::string & desc = "" )
   {
     if ( retval != NULL ) return to_retval( var_name , s );
-    if ( dbless ) return to_stdout( var_name , value_t( s ) ); 
+    if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( s ) ) : to_stdout( var_name , value_t( s ) ); 
     if ( desc != "" ) var( var_name , desc );
     return value( var_name , value_t( s ) ) ;
   }
@@ -930,7 +1019,7 @@ class writer_t
   bool missing_value( const std::string & var_name , const std::string & desc = "" )
   {
     if ( retval != NULL ) return to_retval( var_name ); // missing value 
-    if ( dbless ) return to_stdout( var_name , value_t() ); 
+    if ( dbless ) return plaintext ? to_plaintext( var_name , value_t() ) : to_stdout( var_name , value_t() ); 
     if ( desc != "" ) var( var_name , desc );
     return value( var_name , value_t() );
   }
@@ -941,7 +1030,7 @@ class writer_t
     // this should never be called in retval mode, but just in case... 
     if ( retval != NULL ) Helper::halt( "internal error in value(), should not get here" );
 
-    if ( dbless ) return to_stdout( var_name , x );
+    if ( dbless ) return plaintext ? to_plaintext( var_name , x ) : to_stdout( var_name , x );
 
     // use 'command.var' as the unique identifier                                                                                                     
     std::string var_key = curr_command.cmd_name + ":" + var_name;
@@ -988,6 +1077,8 @@ class writer_t
   }
 
   
+  bool to_plaintext( const std::string & var_name , const value_t & x ) ;
+
   
   bool to_retval( const std::string & var_name , double d )
   {
@@ -1106,15 +1197,38 @@ class writer_t
   
  private:
 
+  //
   // primary data-store
-  
+  //
+
   StratOutDBase db; 
-  
+
+
+  //
   // write to std::cout, instead of to a DB
+  //
 
   bool dbless;
 
+
+  //
+  // alternatively, still dbless but write to plain-text instead of std::cout
+  // we need one zfiles_t for each indiv (although will typically close out after
+  // finishing processing each individual... so this is likely redundant but keep
+  // for now)
+  //
+
+  bool plaintext;
+  
+  std::string plaintext_root;
+  
+  zfiles_t * zfiles;
+  
+  zfile_t * curr_zfile;
+
+  //
   // write to a retval_t, instead of a DB
+  //
 
   retval_t * retval;
   

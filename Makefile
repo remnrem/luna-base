@@ -5,7 +5,7 @@ artifacts intervals fftw cwt defs stats graphics staging 	\
 db ica clocs pdc sstore dsp/mtm dsp/libsamplerate
 
 EXE    = luna
-OBJS   = main.o globals.o eval.o
+OBJS   = main.o globals.o eval.o cmddefs.o
 
 OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
 libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
@@ -26,27 +26,27 @@ ifdef STATIC
 all : static utils
 endif
 
-luna : main.o globals.o eval.o $(OBJLIBS)
+luna : main.o globals.o eval.o cmddefs.o $(OBJLIBS)
 	$(ECHO) $(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
 	$(LD) $(LDFLAGS) -o luna $(OBJS) $(LIBS)
 
-static : main.o globals.o eval.o $(OBJLIBS)
+static : main.o globals.o eval.o cmddefs.o $(OBJLIBS)
 	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib	\
-	-o luna main.o globals.o eval.o libspindles.a liblwprep.a	\
+	-o luna main.o globals.o eval.o cmddefs.o libspindles.a liblwprep.a	\
 	libartifacts.a libtimeline.a libannot.a libedf.a		\
 	libintervals.a libcwt.a libdsp.a libstaging.a libclocs.a	\
 	libpdc.a libmtm.a libdefs.a libhelper.a		\
 	libfftwrap.a libgraphics.a libmiscmath.a libstats.a libsrate.a	\
 	libtinyxml.a libdb.a libsstore.a libica.a $(FFTW)/lib/libfftw3.a
 
-sharedlib : globals.o eval.o $(OBJLIBS)
+sharedlib : globals.o eval.o cmddefs.o $(OBJLIBS)
 ifeq ($(ARCH),MAC)
 	$(ECHO) "building libluna.dylib..."
 
-	$(LD) -dynamiclib $(LDFLAGS) -o libluna.dylib eval.o globals.o  -Wl,-all_load *.a  -lfftw3 -lz
+	$(LD) -dynamiclib $(LDFLAGS) -o libluna.dylib eval.o cmddefs.o globals.o  -Wl,-all_load *.a  -lfftw3 -lz
 else
 	$(ECHO) "building libluna.so..."
-	$(LD) -shared      $(LDFLAGS) -o libluna.so eval.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
+	$(LD) -shared      $(LDFLAGS) -o libluna.so eval.o cmddefs.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
 endif
 
 libedf.a : force_look

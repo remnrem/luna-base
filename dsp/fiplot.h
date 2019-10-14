@@ -24,6 +24,7 @@
 #define __FIPLOT_H__
 
 #include <vector>
+#include <cstddef>
 #include <map>
 #include <stdint.h>
 

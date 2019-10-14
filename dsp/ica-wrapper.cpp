@@ -36,8 +36,6 @@ extern logger_t logger;
 void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 {
 
-  std::cout << "h0\n";
-
   std::string signal_label = param.requires( "sig" );
   
   const bool no_annotations = true;
@@ -52,17 +50,15 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   if ( ns < 2 ) return;
   
   const int sr = edf.header.sampling_freq( signals(0) );
-  logger << "st = " << sr << "\n";
   for (int i=1;i<ns;i++)
-    {
-      logger << "s2 = " <<  edf.header.sampling_freq( signals(i) ) << "\n";
+    {      
       if ( edf.header.sampling_freq( signals(i) ) != sr ) 
 	Helper::halt( "all signals must have similar SR for ICA" );
     }
   
   // Fetch sample matrix
   mslice_t mslice( edf , signals , edf.timeline.wholetrace() );
-
+  
   const std::vector<double> * data = mslice.channel[0]->pdata();
 
   int rows = data->size();
@@ -81,32 +77,42 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 
   int compc = param.has( "compc" ) ? param.requires_int( "compc" ) : ns ;
 
-  std::cout << "h1\n";
+  logger << "  running with " << compc << " components\n"; 
   
   //
   // ICA
   //
 
   ica_t ica( pX , rows , cols , compc );
-
-  std::cout << "h2\n";
+  
+  logger << "  finished ICA\n";
   
   //
   // Output
   //
 
+  std::string froot = "ica_";
+  
+  std::ofstream S( (froot + "S.txt").c_str() , std::ios::out );
+  for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << "S" << j+1;
+  S << "\n";  
   for (int i=0;i<rows;i++)
     {
-  
-      std::cout << i ;
-
-      for (int j=0;j<cols;j++) std::cout << "\t" << pX[i][j] << "\t";
-      
-      for (int j=0;j<compc;j++) std::cout << "\t" << ica.S[i][j] ;      
-
-      std::cout << "\n";
-
+      for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << ica.S[i][j] ;      
+      S << "\n";
     }
+  S.close();
+
+  std::ofstream X( (froot + "X.txt").c_str() , std::ios::out );
+  for (int j=0;j<cols;j++) X << ( j ? "\t" : "" ) << "X" << j+1;
+  X << "\n";
+  for (int i=0;i<rows;i++)
+    {
+      for (int j=0;j<cols;j++) X << ( j ? "\t" : "" ) << pX[i][j];
+      X << "\n";
+    }
+  X.close();
+  
 
   // other matrices
   
@@ -115,26 +121,31 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   // W : compc x compc
   // S : as original data
 
-  std::cout << "K\n";
+
+  std::ofstream K( (froot + "K.txt").c_str() , std::ios::out );
   for (int i=0;i<cols;i++)
     {
-      for (int j=0;j<compc;j++) std::cout << "\t" << ica.K[i][j];
-      std::cout << "\n\n";
+      for (int j=0;j<compc;j++) K << ( j ? "\t" : "" ) << ica.K[i][j];
+      K << "\n";
     }
-
-  std::cout << "W\n";
-  for (int i=0;i<compc;i++)
-    {
-      for (int j=0;j<compc;j++) std::cout << "\t" << ica.W[i][j];
-      std::cout << "\n\n";
-    }
+  K.close();
   
-  std::cout << "A\n";
+  std::ofstream W( (froot + "W.txt").c_str() , std::ios::out );
   for (int i=0;i<compc;i++)
     {
-      for (int j=0;j<compc;j++) std::cout << "\t" << ica.A[i][j];
-      std::cout << "\n\n";
+      for (int j=0;j<compc;j++) W << ( j ? "\t" : "" ) << ica.W[i][j];
+      W << "\n";
     }
+  W.close();
+
+
+  std::ofstream A( (froot + "A.txt").c_str() , std::ios::out );
+  for (int i=0;i<compc;i++)
+    {
+      for (int j=0;j<compc;j++) A << ( j ? "\t" : "" ) << ica.A[i][j];
+      A << "\n";
+    }
+  A.close();
 
 
 }

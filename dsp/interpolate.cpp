@@ -40,17 +40,190 @@ extern logger_t logger;
 
 extern writer_t writer;
 
+void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
+{
+
+  // check that data are epoched 
+  if ( ! edf.timeline.epoched() ) 
+    Helper::halt( "requires epoch'ed data" ) ;
+  
+  // we require that a chep-mask has been set (or else nothing to do)
+  if ( ! edf.timeline.is_chep_mask_set() ) 
+    {
+      logger << "  leaving interpolate... either CHEP not set, or no bad channel/epoch pairs\n";
+      return;
+    }
+
+  // load channel locations
+  std::string cloc_file = param.requires( "clocs" );  
+  clocs_t clocs;
+  clocs.load_cart( cloc_file );
+  
+  // get signals, dropping any non-data channels
+  std::string signal_label = param.requires( "sig" );
+  signal_list_t signals = edf.header.signal_list( signal_label );  
+  edf.header.drop_annots_from_signal_list( &signals );
+  const int ns = signals.size();
+
+  // no valid signals? quit
+  if ( ns == 0 ) 
+    { 
+      logger << "  no signals to interpolate, leaving\n"; 
+      return; 
+    } 
+
+   
+  // check that all signals have the same sample rate
+  int sr = 0;
+  for (int s=0;s<signals.size();s++)
+    {
+      if ( sr == 0 ) sr = edf.header.sampling_freq( signals(s) ) ;
+      if ( edf.header.sampling_freq( signals(s) ) != sr ) 
+	Helper::halt( "requires all signals to have similar sampling rate, see RESAMPLE" );      
+    }
+
+
+
+  //
+  // Step through each epoch/channel
+  //
+
+  
+  int ne = edf.timeline.first_epoch();
+
+  logger << " now interpolating " << ne << " epochs\n";
+
+  int cnt = 0;
+
+  // if no good signals, set epoch-level mask
+  int cnt_masked = 0 , cnt_noaction = 0;
+  int cnt_interpolated_epochs = 0 , cnt_interpolated_cheps = 0 ; 
+
+  while ( 1 ) 
+    {
+      
+      int epoch = edf.timeline.next_epoch();      
+
+      std::cout << "eee = " << epoch << "\n";
+
+      if ( epoch == -1 ) break;
+            
+      logger << ".";
+
+      if ( ++cnt % 50 == 0 ) logger << " " << cnt << " epochs\n";
+
+      writer.epoch( edf.timeline.display_epoch( epoch ) );
+
+      interval_t interval = edf.timeline.epoch( epoch );
+      
+      //
+      // get signal data 
+      //
+
+      mslice_t mslice( edf , signals , interval );
+      
+      Data::Matrix<double> D = mslice.extract();
+
+
+
+      //
+      // Get good/bad channel lists from chep
+      //
+      
+      signal_list_t good_signals = edf.timeline.unmasked_channels_sl( epoch , signals );
+
+      signal_list_t bad_signals = edf.timeline.masked_channels_sl( epoch , signals );
+
+      // index good signals, within context of 'signals' i.e. of 0..ns-1  where ns = signals.size()
+      // (i.e. which might be smaller than total number of EDF signals)
+      
+      std::vector<int> good_signals_idx;
+      for (int s=0;s<signals.size();s++) 
+	if ( ! edf.timeline.masked( epoch , signals(s) ) ) 
+	  good_signals_idx.push_back( s ); // i.e. different encoding, relative to signals()
+
+      std::cerr << "epoch e " << epoch << " " << good_signals.size() << " " << bad_signals.size() << "\n";
+      
+
+      // nothing to do
+      if ( bad_signals.size() == 0 ) 
+	{
+	  ++cnt_noaction;
+	  continue;
+	}
+
+      // hopeless case: set epoch mask
+      if ( good_signals.size() == 0 ) 
+	{
+	  int mc = edf.timeline.set_epoch_mask( epoch );
+	  if ( mc == 1 ) ++cnt_masked;
+	  continue;
+	}
+
+      
+      //
+      // Construct interpolation matrices
+      //
+
+      Data::Matrix<double> invG;
+
+      Data::Matrix<double> Gi;
+      
+      clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
+
+      
+      //
+      // interpolate
+      //
+      
+      Data::Matrix<double> I = clocs.interpolate( D , good_signals_idx , invG, Gi );
+
+
+      //
+      // Update original signal
+      //
+      
+      int a , b ; 
+      
+      if ( ! edf.timeline.epoch_records( epoch , &a , &b ) )
+	Helper::halt( "internal error in interpolate()... are non-overlappnig epochs correctly set?" );
+	   
+      std::cerr << " epoch UPDTE = " << epoch << " --> " << a << " " << b << "\n";
+
+      for (int s=0;s<bad_signals.size();s++)	
+	edf.update_records( a , b , bad_signals(s) , I.col(s).data_pointer() );
+      
+      
+      cnt_interpolated_epochs++;
+      cnt_interpolated_cheps += bad_signals.size();
+
+      //
+      // Next epoch...
+      //
+    }
+  
+  logger << " all done\n";
+
+  logger << " set mask for " << cnt_masked << " epochs without any good channels\n";
+  logger << " skipped " << cnt_noaction << " epochs without any bad channels\n";
+  logger << " interpolated " << cnt_interpolated_epochs << " epochs, for " << cnt_interpolated_cheps << " ch/epoch pairs\n";
+
+}
+
+
+
 void dsptools::leave_one_out( edf_t & edf , param_t & param )
 {
   
   // expect following input / args
-  //   cloc file 
+  //   clocs file 
   //   
 
-  // cloc file
-  std::string cloc_file = param.requires( "cloc" );
+  // clocs file
+  std::string cloc_file = param.requires( "clocs" );
   
   clocs_t clocs;
+
   clocs.load_cart( cloc_file );
   
   // signal list
@@ -85,8 +258,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
   std::vector<Data::Matrix<double> > Gi;
   std::vector<std::vector<int> > good_channels;
   
-  if ( ! globals::silent ) 
-    logger << " generating leave-one-out G matrices for " << signals.size() << " signals\n";
+  logger << " generating leave-one-out G matrices for " << signals.size() << " signals\n";
   
   for (int s=0;s<ns;s++)
     {
@@ -136,8 +308,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
   
   int ne = edf.timeline.first_epoch();
 
-  if ( ! globals::silent ) 
-    logger << " now iterating through " << ne << " epochs\n";
+  logger << " now iterating through " << ne << " epochs\n";
 	
   while ( 1 ) 
     {
@@ -160,6 +331,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
       
       for (int s=0;s<ns;s++)
 	{
+
 	  Data::Matrix<double> & _invG = invG[s];
 	  Data::Matrix<double> & _Gi = Gi[s];
 	  std::vector<int> & _good_channels = good_channels[s];

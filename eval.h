@@ -149,6 +149,8 @@ class cmd_t
   static std::string                        stout_file;
   static std::string                        stout_template;
   static bool                               append_stout_file;
+  static bool                               plaintext_mode;
+  static std::string                        plaintext_root;
   static bool                               has_indiv_wildcard;
   static std::string resolved_outdb( const std::string & id , const std::string & str );
   
@@ -217,6 +219,7 @@ void proc_rerecord( edf_t & edf , param_t & param );
 
 void proc_dump( edf_t & , param_t & );
 void proc_dump_mask( edf_t & , param_t & );
+void proc_chep( edf_t & , param_t & );
 void proc_file_mask( edf_t & , param_t & );
 void proc_file_annot( edf_t & , param_t & );
 void proc_sleep_stage( edf_t & , param_t & , bool verbose = false );
@@ -263,6 +266,7 @@ void proc_mi( edf_t & , param_t & );
 void proc_ica( edf_t & , param_t & );
 void proc_emd( edf_t & , param_t & );
 void proc_leave_one_out( edf_t & , param_t & );
+void proc_chep_based_interpolation( edf_t & , param_t & );
 void proc_correl( edf_t & , param_t & );
 void proc_coh( edf_t & , param_t & );
 void proc_coh_legacy( edf_t & , param_t & );

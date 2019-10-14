@@ -2128,16 +2128,18 @@ bool edf_t::load_annotations( const std::string & f0 )
 }
 
 
-int  edf_header_t::signal( const std::string & s )
+int  edf_header_t::signal( const std::string & s , bool silent )
 {  
   signal_list_t slist = signal_list(s);
   if ( slist.size() != 1 ) 
     {
-      logger << " ** could not find signal [" << s << "] of " << label2header.size() << " signals **\n";
+      if ( ! silent ) 
+	logger << " ** could not find signal [" << s << "] of " << label2header.size() << " signals **\n";
       return -1;
     }  
   return slist(0);
 }
+
 
 bool  edf_header_t::has_signal( const std::string & s )
 {
@@ -2154,6 +2156,7 @@ bool  edf_header_t::has_signal( const std::string & s )
     }
   return false;
 }
+
 
 
 int  edf_header_t::original_signal( const std::string & s )
@@ -2610,7 +2613,76 @@ void edf_t::copy_signal( const std::string & from_label , const std::string & to
 }
 
 
-void edf_t::update_signal( const int s , std::vector<double> * d )
+void edf_t::update_records( int a , int b , int s , const std::vector<double> * d )
+{
+
+  if ( header.is_annotation_channel(s) ) 
+    Helper::halt( "edf_t:: internal error, cannot update an annotation channel" );
+
+  // keep digital min/max scale as is.
+
+  // for signal s, place back data in 'd' into EDF record structure
+  // and update the physical min/max
+
+  const int points_per_record = header.n_samples[s];
+  const int n_records = b - a + 1 ;
+
+  //std::cerr << "a,b = " << a << " " << b << " " << header.nr << "\n";
+
+  if ( a < 0 || b < 0 || n_records <= 0 || a >= header.nr_all || b >= header.nr_all )    
+    Helper::halt( "bad record specification in edf_t::update_records()" );
+  const int n = d->size();
+  
+  if ( n != n_records * points_per_record )
+    Helper::halt( "internal error in update_records()" );
+  
+  // use existing digital/physical min/max encoding
+  // but will need to make sure we stay within digital min/max
+  
+  const int16_t dmin = header.digital_min[s];
+  const int16_t dmax = header.digital_max[s];
+  
+  double pmin = header.physical_min[s];
+  double pmax = header.physical_max[s];
+  
+  double bv = header.bitvalue[s];
+  double os = header.offset[s];
+  
+  int cnt = 0;
+  
+  // assume records have already been read in... if they have, this function
+  // automatically returns so okay to call just in case
+
+  read_records( a , b );
+
+  for ( int r = a ; r <= b ; r++ ) 
+    {
+      
+      // find records      
+      std::vector<int16_t>    & data  = records.find(r)->second.data[ s ];
+      
+      // check that we did not change sample rate      
+      if ( data.size() != points_per_record ) 
+	Helper::halt( "changed sample rate, cannot update record" );
+      
+      for (int p=0;p<points_per_record;p++)
+	{
+	  double x = (*d)[cnt];
+	  if ( x < pmin ) x = pmin;
+	  else if ( x > pmax ) x = pmax;
+
+// 	  std::cout << "edit\t" << edf_record_t::dig2phys( data[p] , bv , os ) 
+// 		    << "\t"
+// 		    << (*d)[cnt] << "\n";
+	  data[p] = edf_record_t::phys2dig( (*d)[cnt] , bv , os );
+	  ++cnt;	  
+	}
+    }
+}
+
+  
+
+void edf_t::update_signal( int s , std::vector<double> * d )
 {
   
   if ( header.is_annotation_channel(s) ) 
@@ -3078,7 +3150,6 @@ bool edf_t::basic_stats( param_t & param )
   
   const int ns = signals.size();
   
-  //bool calc_median = param.has( "median" );
   bool calc_median = true;
 
   for (int s=0; s<ns; s++)
@@ -3090,10 +3161,125 @@ bool edf_t::basic_stats( param_t & param )
 
       if ( header.is_annotation_channel( signals(s) ) ) continue;
 
+
+
+      //
+      // Output signal
+      //
+      
+
+      writer.level( header.label[ signals(s) ] , globals::signal_strat );
+
+
+      //
+      // Mean, variance, RMS, min, max based on per-epoch stats
+      //
+            
+      std::vector<double> e_mean, e_median , e_sd, e_rms;
+      
+      double t_min = 0 , t_max = 0;
+      
+      logger << " processing " << header.label[ signals(s) ] << " ...\n";
+      
+      
+      //
+      // EPOCH-level statistics first
+      //
+      
+      if ( by_epoch ) 
+	{
+
+	  timeline.first_epoch();  
+	  	  
+	  //
+	  // Iterate over epcohs
+	  //
+	  
+	  while ( 1 ) 
+	    {
+	      
+	      int epoch = timeline.next_epoch();      
+	      
+	      if ( epoch == -1 ) break;
+	      
+	      interval_t interval = timeline.epoch( epoch );
+	      
+	      //
+	      // Get data 
+	      //
+	      
+	      slice_t slice( *this , signals(s) , interval );
+	      
+	      const std::vector<double> * d = slice.pdata();
+	      
+	      const int n = d->size();
+	      
+	      if ( n == 0 ) { continue; } 
+	      
+	      
+	      //
+	      // Filter data
+	      //
+	      
+	      double mean = MiscMath::mean( *d );
+	      double median = calc_median ? MiscMath::median( *d ) : 0;
+	      double sd   = MiscMath::sdev( *d , mean );
+	      double rms  = MiscMath::rms( *d );
+	      
+	      double min = (*d)[0];
+	      double max = (*d)[0];
+	      
+	      for (int i = 0 ; i < n ; i++ )
+		{
+		  if ( (*d)[i] < min ) min = (*d)[i];
+		  if ( (*d)[i] > max ) max = (*d)[i];
+		}
+	      
+	      
+	      //
+	      // Output
+	      //
+	      
+	      writer.epoch( timeline.display_epoch( epoch ) );
+	      
+	      writer.value( "MAX"  , max  );
+	      writer.value( "MIN"  , min  );	      
+	      writer.value( "MEAN" , mean );
+	      if ( calc_median ) 
+		writer.value( "MEDIAN" , median );	      
+	      writer.value( "RMS"  , rms  );
+	      
+	      //
+	      // Record
+	      //
+	      
+	      if ( t_min == 0 && t_max == 0 ) 
+		{ 
+		  t_min = min; 
+		  t_max = max; 
+		} 
+	      
+	      if ( min < t_min ) t_min = min;
+	      if ( max > t_max ) t_max = max;
+	      
+	      e_mean.push_back( mean );
+	      if ( calc_median ) 
+		e_median.push_back( median );
+	      e_sd.push_back( sd );
+	      e_rms.push_back( rms );	  
+	      
+	    }
+	  
+	  writer.unepoch();
+	  
+	  
+	}
+      
+      
       //
       // Whole-signal level output
       //
-
+      
       interval_t interval = timeline.wholetrace();
       
       slice_t slice( *this , signals(s) , interval );
@@ -3103,24 +3289,10 @@ bool edf_t::basic_stats( param_t & param )
       const int n = d->size();
 
       if ( n == 0 ) { continue; } 
-      
-
-      //
-      // Output signal
-      //
-      
-      std::string unit = header.phys_dimension[ signals(s) ];
-
-      writer.level( header.label[ signals(s) ] , globals::signal_strat );
-      
-      //
-      // Calculate whole-signal stats
-      //
-
+ 
       double mean = MiscMath::mean( *d );
       double median = calc_median ? MiscMath::median( *d ) : 0 ;
       
-      double sd   = MiscMath::sdev( *d , mean );
       double rms  = MiscMath::rms( *d );
 	  
       double min = (*d)[0];
@@ -3131,204 +3303,53 @@ bool edf_t::basic_stats( param_t & param )
 	  if ( (*d)[i] < min ) min = (*d)[i];
 	  if ( (*d)[i] > max ) max = (*d)[i];
 	}
+
       
       //
       // Output
       //
 	  
-      writer.var( "MIN"  , "Signal minimum" );
-      writer.var( "MAX"  , "Signal maximum" );
-      writer.var( "MEAN" , "Signal mean" );
-      if ( calc_median ) 
-      writer.var( "MEDIAN" , "Signal median" );
-      writer.var( "SD"   , "Signal SD" );
-      writer.var( "RMS"  , "Signal RMS" );
 
       writer.value( "MAX"  , max  );
-      writer.value( "MIN"  , min  );
-      
+      writer.value( "MIN"  , min  );      
       writer.value( "MEAN" , mean );
-      if ( calc_median ) 
-	writer.value( "MEDIAN" , median );
-
-      writer.value( "SD"   , sd   );
+      if ( calc_median ) writer.value( "MEDIAN" , median );
       writer.value( "RMS"  , rms  );
-            
 
       //
-      // Mean, variance, RMS, min, max
-      //
-            
-      std::vector<double> e_mean, e_median , e_sd, e_rms;
-      
-      double t_min = 0 , t_max = 0;
-      
-      logger << " processing " << header.label[ signals(s) ] << " ...\n";
-
-
-      
-      //
-      // Perform EPOCH-level analyses?
+      // Also, same strata:  summaries of epoch-level statistics
       //
       
-      if ( ! by_epoch ) 
+      if ( by_epoch && e_mean.size() > 0 )
 	{
-	  writer.unlevel( globals::signal_strat );
-	  continue;
-	}
+	  const int ne = e_mean.size(); 
+	  double med_mean  = median_destroy( &e_mean[0] , ne );
+	  double med_median  = calc_median ? median_destroy( &e_median[0] , ne ) : 0 ;  
+	  double med_rms  = median_destroy( &e_rms[0] , ne );
+	  	  
+	  writer.value( "NE" , timeline.num_total_epochs() );	  
+	  writer.value( "NE1" , ne );
 
-    
-      //
-      // Each EPOCH
-      //
-
-      timeline.first_epoch();  
-  
-  
-      //
-      // Iterate over epcohs
-      //
-
-      while ( 1 ) 
-	{
-	  
-	  int epoch = timeline.next_epoch();      
-	  
-	  if ( epoch == -1 ) break;
-	  
-	  interval_t interval = timeline.epoch( epoch );
-      
-	  //
-	  // Get data 
-	  //
-	  
-	  slice_t slice( *this , signals(s) , interval );
-	  
-	  const std::vector<double> * d = slice.pdata();
-
-	  const int n = d->size();
-	  
-	  if ( n == 0 ) { continue; } 
-
-
-	  //
-	  // Filter data
-	  //
-	  	 
-	  double mean = MiscMath::mean( *d );
-	  double median = calc_median ? MiscMath::median( *d ) : 0;
-	  double sd   = MiscMath::sdev( *d , mean );
-	  double rms  = MiscMath::rms( *d );
-	  
-	  double min = (*d)[0];
-	  double max = (*d)[0];
-	  
-	  for (int i = 0 ; i < n ; i++ )
-	    {
-	      if ( (*d)[i] < min ) min = (*d)[i];
-	      if ( (*d)[i] > max ) max = (*d)[i];
-	    }
-	  
-
-	  //
-	  // Output
-	  //
-	  
-	  writer.epoch( timeline.display_epoch( epoch ) );
-
-	  writer.value( "MAX"  , max  );
-	  writer.value( "MIN"  , min  );
-
-	  writer.value( "MEAN" , mean );
-	  if ( calc_median ) 
-	    writer.value( "MEDIAN" , median );
-	  writer.value( "SD"   , sd   );
-	  writer.value( "RMS"  , rms  );
-
-	  //
-	  // Record
-	  //
-	  
-	  if ( t_min == 0 && t_max == 0 ) 
-	    { 
-	      t_min = min; 
-	      t_max = max; 
-	    } 
-
-	  if ( min < t_min ) t_min = min;
-	  if ( max > t_max ) t_max = max;
-	  
-	  e_mean.push_back( mean );
-	  if ( calc_median ) 
-	    e_median.push_back( median );
-	  e_sd.push_back( sd );
-	  e_rms.push_back( rms );	  
+	  writer.value( "MEDIAN.MEAN" , med_mean );
+	  if ( calc_median )
+	    writer.value( "MEDIAN.MEDIAN" , med_median );
+	  writer.value( "MEDIAN.RMS"  , med_rms );
 	  
 	}
 
 
-      // 
-      // Any data?
       //
-
-      if ( e_mean.size() == 0 ) continue;
-
+      // Next channel
       //
-      // Get median mean/max, etc
-      //
-      
-      const int ne = e_mean.size(); 
-      double med_mean  = median_destroy( &e_mean[0] , ne );
-      double med_median  = calc_median ? median_destroy( &e_median[0] , ne ) : 0 ;  
-      double med_sd   = median_destroy( &e_sd[0] , ne );
-      double med_rms  = median_destroy( &e_rms[0] , ne );
-      
-      //
-      // Whole channel
-      //
-
-      writer.unepoch();
-      
-//       writer.var( "DMIN"  , "Digital minimum from EDF header" );
-//       writer.var( "DMAX"  , "Digital maximum from EDF header" );
-//       writer.var( "UNIT"  , "Physical unit from EDF header" );
-//       writer.var( "PMIN"  , "Physical minimum from EDF header" );
-//       writer.var( "PMAX"  , "Physical maximum from EDF header" );
-
-//       writer.var( "OMIN" , "Observed physical minimum" );
-//       writer.var( "OMAX" , "Observed physical maximum" );
-
-      writer.var( "NE" , "Total number of epochs" );
-      writer.var( "NE1" , "Number of unmasked epochs used in calculation" );
-
-      writer.var( "MEDIAN.MEAN" , "Median of per-epoch means" );
-      if ( calc_median ) 
-	writer.var( "MEDIAN.MEDIAN" , "Median of per-epoch median" );
-
-      writer.var( "MEDIAN.SD"   , "Median of per-epoch SDs" );
-      writer.var( "MEDIAN.RMS"  , "Median of per-epoch RMSs" );
-
-      writer.value( "NE" , timeline.num_total_epochs() );
-      writer.value( "NE1" , ne );
-
-    	
-//       writer.value( "DMIN" , header.digital_min[ signals(s) ] );
-//       writer.value( "DMAX" , header.digital_max[ signals(s) ] );
-//       writer.value( "UNIT" , unit );
-//       writer.value( "PMIN" , header.physical_min[ signals(s) ] );
-//       writer.value( "PMAX" , header.physical_max[ signals(s) ] );
-
-//       writer.value( "OMIN" , t_min );
-//       writer.value( "OMAX" , t_max );
-
-      writer.value( "MEDIAN.MEAN" , med_mean );
-      if ( calc_median )
-	writer.value( "MEDIAN.MEDIAN" , med_median );
-      writer.value( "MEDIAN.SD"   , med_sd  );
-      writer.value( "MEDIAN.RMS"  , med_rms );
-
+            
     }
 
+  //
+  // All done
+  //
+
+  writer.unlevel( globals::signal_strat );
+  
   return true;
   
 }
