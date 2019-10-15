@@ -686,6 +686,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "STATS" ) )        proc_stats( edf , param(c) );
       
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
+      else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
       else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
@@ -1929,6 +1930,21 @@ void proc_reference( edf_t & edf , param_t & param )
   edf.reference( signals , references );
   
 }
+
+// Remove reference
+
+void proc_dereference( edf_t & edf , param_t & param )
+{
+  std::string refstr = param.requires( "ref" );
+  signal_list_t references = edf.header.signal_list( refstr );
+  
+  std::string sigstr = param.requires( "sig" );
+  signal_list_t signals = edf.header.signal_list( sigstr );
+
+  edf.reference( signals , references , true );
+  
+}
+
 
 // change record size for one or more signals
 

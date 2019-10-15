@@ -1943,14 +1943,14 @@ void edf_t::reference_and_scale( const int s , const int r , const double rescal
 }
 
 
-void edf_t::reference( const signal_list_t & signals , const signal_list_t & refs )
+void edf_t::reference( const signal_list_t & signals , const signal_list_t & refs , bool dereference )
 {
 
   if ( signals.size() == 0 || refs.size() == 0 ) Helper::halt( "must specify sigl={ ... } and ref={ ... }" );
   const int ns = signals.size();
   const int nr = refs.size();
 
-  logger << " referencing";
+  logger << ( dereference ? " dereferencing" : " referencing" );
   for (int s=0;s<ns;s++) logger << " " << header.label[ signals(s) ];
   logger << " with respect to";
   if ( nr > 1 ) logger << " the average of";
@@ -1958,6 +1958,7 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
   logger << "\n";
 
   // check SR for all channels  
+
   int np = header.n_samples[ signals(0) ];
 
   //
@@ -2028,7 +2029,10 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
 	  
 	  std::vector<double> d0 = record.get_pdata( signals(s) );
 	  
-	  for (int i=0;i<np;i++) d.push_back( d0[i] - reference[cc++] );
+	  if ( dereference ) 
+	    for (int i=0;i<np;i++) d.push_back( d0[i] + reference[cc++] );
+	  else	    
+	    for (int i=0;i<np;i++) d.push_back( d0[i] - reference[cc++] );
 	  
 	  // next record
 	  rec = timeline.next_record(rec); 

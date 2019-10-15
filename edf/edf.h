@@ -416,7 +416,7 @@ public:
   // redundant
   void reference_and_scale( const int s , const int r , double rescale = 1 ); // perform single channel referencing
   
-  void reference( const signal_list_t & signals , const signal_list_t & refs );
+  void reference( const signal_list_t & signals , const signal_list_t & refs , bool dereference = false );
   
   void flip( const int s ); 
 

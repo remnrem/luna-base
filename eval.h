@@ -215,6 +215,7 @@ void proc_copy_signal( edf_t & , param_t & );
 void proc_scale( edf_t & , param_t & , const std::string & s );
 void proc_flip( edf_t & , param_t & );
 void proc_reference( edf_t & , param_t & );
+void proc_dereference( edf_t & , param_t & );
 void proc_rerecord( edf_t & edf , param_t & param );
 
 void proc_dump( edf_t & , param_t & );
