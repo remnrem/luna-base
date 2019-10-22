@@ -754,6 +754,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "COH" ) )          proc_coh( edf , param(c) );
       else if ( is( c, "LECGACY-COH" ) )  proc_coh_legacy( edf , param(c) );
+      else if ( is( c, "PHSYN" ) )        proc_phsyn( edf , param(c) );
       else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
@@ -1734,6 +1735,14 @@ void proc_mi( edf_t & edf , param_t & param )
 {
   dsptools::compute_mi( edf , param );
 }
+
+// PHSYN : calculate phase synchrony measures
+
+void proc_phsyn( edf_t & edf , param_t & param )
+{
+  dsptools::phsyn( edf , param );
+}
+
 
 // SPIKE : spike in a new bit of signal
 

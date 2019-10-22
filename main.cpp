@@ -927,60 +927,63 @@ void proc_dummy( const std::string & p )
 {
   
   
- 
-  globals::cmddefs.add_domain( "misc" , "misc" ,  "Misc" );
-
-  globals::cmddefs.add_cmd( "misc" , "comm1" , "this is a dummy command" );
-  globals::cmddefs.add_table( "comm1" , "XX" , "A simple table" , false );
-  globals::cmddefs.add_var( "comm1" , "XX" , "X", "Var X" );
-  globals::cmddefs.add_var( "comm1" , "XX" , "Y" , "Var Y" );
-
-  globals::cmddefs.add_cmd( "misc" , "comm2" , "this is a dummy command" );
-  globals::cmddefs.add_table( "comm2" , "CH,B" , "A nice table" , true );
-  globals::cmddefs.add_var( "comm2" , "CH,B" , "V1" , "Variable 1" );
-  globals::cmddefs.add_var( "comm2" , "CH,B" , "V2" , "Variable 2" );
-  
-//   std::cout << globals::cmddefs.help( "comm1" , true )  << "\n\n\n";
-   std::cout << globals::cmddefs.help( "comm2" , true )  << "\n";
-  
-  // add a dummy tag
-  globals::cmddefs.add_tag( "Z" );
-
-  zfiles_t files( "folder1" , "indiv1" ); 
-
-  zfile_t * z1 = files.file( "comm1" , NULL , "XX" ) ; 
-
-  param_t param2;
-
-  zfile_t * z2 = files.file( "comm2" , &param2 , "CH,B,Z" ) ; 
-
-  z1->write_header();
-  
-  z2->write_header();
-  
-  //z1->display() ;
-  //z2->display() ;
-
-  z1->set_stratum( "XX" , "L1" );
-  z1->set_value( "X" , 22 );
-  z1->set_value( "Y" , 23 );
-  z1->write_buffer();
-  z1->set_stratum( "XX" , "L2" );
-  z1->set_value( "X" , 24 );
-  z1->set_value( "Y" , 25 );
-  z1->write_buffer();
-
-  z2->set_stratum( "CH" , "C3" );
-  z2->set_stratum( "B" , "ALPHA" );
-  z2->set_stratum( "Z" , "R1" );
-  z2->set_value( "V1" , 22 );
-  z2->set_value( "V2" , 23 );
-  z2->write_buffer();
-
-  files.close();
-
-  std::exit(1);
-  
+  if ( p == "cmddefs" ) 
+    {
+      
+      globals::cmddefs.add_domain( "misc" , "misc" ,  "Misc" );
+      
+      globals::cmddefs.add_cmd( "misc" , "comm1" , "this is a dummy command" );
+      globals::cmddefs.add_table( "comm1" , "XX" , "A simple table" , false );
+      globals::cmddefs.add_var( "comm1" , "XX" , "X", "Var X" );
+      globals::cmddefs.add_var( "comm1" , "XX" , "Y" , "Var Y" );
+      
+      globals::cmddefs.add_cmd( "misc" , "comm2" , "this is a dummy command" );
+      globals::cmddefs.add_table( "comm2" , "CH,B" , "A nice table" , true );
+      globals::cmddefs.add_var( "comm2" , "CH,B" , "V1" , "Variable 1" );
+      globals::cmddefs.add_var( "comm2" , "CH,B" , "V2" , "Variable 2" );
+      
+      //   std::cout << globals::cmddefs.help( "comm1" , true )  << "\n\n\n";
+      std::cout << globals::cmddefs.help( "comm2" , true )  << "\n";
+      
+      // add a dummy tag
+      globals::cmddefs.add_tag( "Z" );
+      
+      zfiles_t files( "folder1" , "indiv1" ); 
+      
+      zfile_t * z1 = files.file( "comm1" , NULL , "XX" ) ; 
+      
+      param_t param2;
+      
+      zfile_t * z2 = files.file( "comm2" , &param2 , "CH,B,Z" ) ; 
+      
+      z1->write_header();
+      
+      z2->write_header();
+      
+      //z1->display() ;
+      //z2->display() ;
+      
+      z1->set_stratum( "XX" , "L1" );
+      z1->set_value( "X" , 22 );
+      z1->set_value( "Y" , 23 );
+      z1->write_buffer();
+      z1->set_stratum( "XX" , "L2" );
+      z1->set_value( "X" , 24 );
+      z1->set_value( "Y" , 25 );
+      z1->write_buffer();
+      
+      z2->set_stratum( "CH" , "C3" );
+      z2->set_stratum( "B" , "ALPHA" );
+      z2->set_stratum( "Z" , "R1" );
+      z2->set_value( "V1" , 22 );
+      z2->set_value( "V2" , 23 );
+      z2->write_buffer();
+      
+      files.close();
+      
+      std::exit(1);
+      
+    }
   
   //
   // Test cmddefs_t
@@ -1088,8 +1091,10 @@ void proc_dummy( const std::string & p )
 
   if ( p == "fft" )
     {
+
+      //      x = MiscMath::Z( x ) ;
       int index_length = x.size();
-      int my_Fs = 20; // arbitrary
+      int my_Fs = 200; // arbitrary
       int index_start = 0;
       
       FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
