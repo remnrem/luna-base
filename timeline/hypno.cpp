@@ -49,7 +49,7 @@ bool is_wake_or_lights( sleep_stage_t s ) { return s == WAKE || s == LIGHTS_ON; 
 bool is_sleep( sleep_stage_t s ) { return s == NREM1 || s == NREM2 || s == NREM3 || s == NREM4 || s == REM ; } 
 
 
-void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s )
+bool hypnogram_t::construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s )
 { 
   timeline = t;
   if ( s.size() != timeline->num_total_epochs() ) 
@@ -60,18 +60,24 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::ve
   stages.resize( s.size() );
   for (int e=0;e<s.size();e++) stages[e] = globals::stage( s[e] );
   calc_stats( verbose );
+  return true;
 } 
 
-void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::string sslabel ) 
+bool hypnogram_t::construct( timeline_t * t , const bool verbose , const std::string sslabel ) 
 {
-  
+
   // point to 'parent' timeline
   timeline = t ;
   
   // get handle
   annot_t * annot = timeline->annotations( sslabel );
-  if ( annot == NULL ) Helper::halt( "[" + sslabel + "] not set" );
-  
+  if ( annot == NULL ) 
+    {
+      logger << " could not find any valid sleep stage annotations... quitting\n";
+      return false;
+      //Helper::halt( "[" + sslabel + "] not set" );
+    }
+
   //
   // set internal, epoch-level annotations used by timeline
   //
@@ -172,6 +178,8 @@ void hypnogram_t::construct( timeline_t * t , const bool verbose , const std::st
     }
 
    calc_stats( verbose );
+
+   return true;
 }   
 
 
@@ -1112,8 +1120,6 @@ void hypnogram_t::calc_stats( const bool verbose )
     }
 
 
-  
-   
 
 }
 

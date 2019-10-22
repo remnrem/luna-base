@@ -1655,7 +1655,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
 
   // either read these from a file, or display
-
+  
   if ( param.has( "file" ) )
     {
       std::vector<std::string> ss = Helper::file2strvector( param.value( "file" ) );
@@ -1664,7 +1664,8 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   else
     {      
       edf.timeline.annotations.make_sleep_stage( wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , misc );
-      edf.timeline.hypnogram.construct( &edf.timeline , verbose );
+      bool okay = edf.timeline.hypnogram.construct( &edf.timeline , verbose ); 
+      if ( ! okay ) return; // i.e. if no valid annotations found
     }
 
   // and output...

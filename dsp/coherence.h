@@ -44,6 +44,12 @@ struct coh_t
     frq.resize( n );
 
     coh.resize( n );
+    icoh.resize( n );
+    lcoh.resize( n ) ;
+    plv.resize( n );
+    pli.resize( n );
+    wpli.resize( n );
+
     cross_spectrum.resize( n );
 
     auto_spectrum1.resize( n );
@@ -65,10 +71,14 @@ struct coh_t
 
   std::vector<double> cross_norm1;
   std::vector<double> cross_norm2;
-
   
   std::vector<double> coh;
-  
+  std::vector<double> icoh;
+  std::vector<double> lcoh;
+  std::vector<double> plv;
+  std::vector<double> pli;
+  std::vector<double> wpli;
+
 };
 
 

@@ -565,32 +565,60 @@ void coherence_t::process()
 	  cpsd[i].push_back( normalisation_factor * Xy );
 
 	}
-
+      
     } // next segment
   
   
   //
   // take average over segments
   //
+
   const double COH_EPS = 1e-10;
 
   for (int i=0;i<psd_x.size();i++)
     {
 
+      // https://mne.tools/stable/generated/mne.connectivity.spectral_connectivity.html
+      
       double sxx = MiscMath::mean( psd_x[i] );
+      
       double syy = MiscMath::mean( psd_y[i] );
+      
       std::complex<double> sxy = MiscMath::mean( cpsd[i] );
 
-      // calculate magnitude squared coherence and cross/auto spectra (in dB)
+      // calculate magnitude squared coherence 
       double phi = abs( sxy ) ;
       double phi2 = phi * phi;
-      
+            
       if ( sxx < COH_EPS || syy < COH_EPS ) 
 	res.coh[i] = -9;
       else
 	res.coh[i] = phi2 / ( sxx * syy ); 
       
-      // truncate?
+
+      // imaginary coherence
+      
+      double Im = std::imag( sxy );
+      double Re = std::real( sxy );
+
+      res.icoh[i] = Im / sqrt( sxx * syy );
+	
+      // lagged coherence
+      
+      res.lcoh[i] = Im / sqrt( sxx * syy - ( Re * Re ) );
+
+
+      // // plv : phase-locking value
+      // std::vector<double> sign_sxy = cpsd[i];
+      // for (int i=
+
+      // pli : phase lag index
+
+      // wpli : weight phase lag index
+
+      
+      // cross/auto spectra (in dB)
+
       res.cross_spectrum[i] = phi2 > COH_EPS ? 5.0*log10(phi2) : -50.0 ;	  
       res.auto_spectrum1[i] = sxx > COH_EPS ?  10.0*log10(sxx) : -100.0 ;
       res.auto_spectrum2[i] = syy > COH_EPS ?  10.0*log10(syy) : -100.0 ;

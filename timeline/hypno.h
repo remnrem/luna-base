@@ -55,8 +55,8 @@ struct hypnogram_t
 {
   
   hypnogram_t() { } 
-  void construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s );
-  void construct( timeline_t * t , const bool verbose , const std::string sslabel = "SleepStage" );
+  bool construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s );
+  bool construct( timeline_t * t , const bool verbose , const std::string sslabel = "SleepStage" );
   void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
   void output( const bool verbose );
 

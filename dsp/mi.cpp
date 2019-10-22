@@ -138,7 +138,7 @@ void dsptools::compute_mi( edf_t & edf , param_t & param )
 	  // stratify output by SIGNALS
 	  //
 	  
-	  writer.level( signals.label(i) + "x" + signals.label(j) , "CHS" );
+	  writer.level( signals.label(i) + "_x_" + signals.label(j) , "CHS" );
 	  
 	  //
 	  // First, MI for entire duration

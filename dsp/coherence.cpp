@@ -117,31 +117,22 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		  if ( epoch == -1 ) break;
 		  interval_t interval = edf.timeline.epoch( epoch );
 
-// 		  slice_t slice1( edf , signals(i) , interval );
-// 		  slice_t slice2( edf , signals(j) , interval );
-		  
-// 		  const std::vector<double> * d1 = slice1.pdata();
-// 		  const std::vector<double> * d2 = slice2.pdata();
+		  //
+		  // Calculate coherence metrics
+		  //
 
 		  coh_t coh = dsptools::coherence( edf , signals(i) , signals(j) , interval , legacy );
 		  
+
 		  //
 		  // Summarize into bands
 		  //
-
-		  double coh_slow = 0 , 
-		    coh_delta = 0 , 
-		    coh_theta = 0 , 
-		    coh_alpha = 0 , 
-		    coh_sigma = 0 , 
-		    coh_beta = 0; 
 		  
-		  double n_slow = 0 , 
-		    n_delta = 0 , 
-		    n_theta = 0 , 
-		    n_alpha = 0 , 
-		    n_sigma = 0 , 
-		    n_beta = 0; 
+		  double coh_slow = 0 , coh_delta = 0 , coh_theta = 0 , coh_alpha = 0 , coh_sigma = 0 , coh_beta = 0; 
+		  double icoh_slow = 0 , icoh_delta = 0 , icoh_theta = 0 , icoh_alpha = 0 , icoh_sigma = 0 , icoh_beta = 0; 
+		  double lcoh_slow = 0 , lcoh_delta = 0 , lcoh_theta = 0 , lcoh_alpha = 0 , lcoh_sigma = 0 , lcoh_beta = 0; 
+		  
+		  double n_slow = 0 , n_delta = 0 , n_theta = 0 , n_alpha = 0 , n_sigma = 0 , n_beta = 0; 
 		  
 		  int sz = coh.frq.size();
 
@@ -152,6 +143,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			   && coh.frq[k] < globals::freq_band[ SLOW ].second ) 
 			{			  
 			  coh_slow += coh.coh[k];
+			  icoh_slow += coh.icoh[k];
+			  lcoh_slow += coh.lcoh[k];
 			  n_slow++;
 			}
 
@@ -159,6 +152,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			   && coh.frq[k] < globals::freq_band[ DELTA ].second ) 
 			{
 			  coh_delta += coh.coh[k];
+			  icoh_delta += coh.icoh[k];
+			  lcoh_delta += coh.lcoh[k];
 			  n_delta++;
 			}
 		      
@@ -166,6 +161,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			   && coh.frq[k] < globals::freq_band[ THETA ].second ) 
 			{
 			  coh_theta += coh.coh[k];
+			  icoh_theta += coh.icoh[k];
+			  lcoh_theta += coh.lcoh[k];
 			  n_theta++;
 			}
 
@@ -173,6 +170,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			   && coh.frq[k] < globals::freq_band[ ALPHA ].second ) 
 			{
 			  coh_alpha += coh.coh[k];
+			  icoh_alpha += coh.icoh[k];
+			  lcoh_alpha += coh.lcoh[k];
 			  n_alpha++;
 			}
 
@@ -180,6 +179,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			   && coh.frq[k] < globals::freq_band[ SIGMA ].second ) 
 			{
 			  coh_sigma += coh.coh[k];
+			  icoh_sigma += coh.icoh[k];
+			  lcoh_sigma += coh.lcoh[k];
 			  n_sigma++;
 			}
 
@@ -187,6 +188,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			   && coh.frq[k] < globals::freq_band[ BETA ].second ) 
 			{
 			  coh_beta += coh.coh[k];
+			  icoh_beta += coh.icoh[k];
+			  lcoh_beta += coh.lcoh[k];
 			  n_beta++;
 			}
 		      
@@ -199,29 +202,56 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		  if ( n_sigma ) coh_sigma /= (double)n_sigma;
 		  if ( n_beta ) coh_beta /= (double)n_beta;
 
+		  if ( n_slow  ) icoh_slow /= (double)n_slow;
+		  if ( n_delta ) icoh_delta /= (double)n_delta; 
+		  if ( n_theta ) icoh_theta /= (double)n_theta;
+		  if ( n_alpha ) icoh_alpha /= (double)n_alpha; 
+		  if ( n_sigma ) icoh_sigma /= (double)n_sigma;
+		  if ( n_beta ) icoh_beta /= (double)n_beta;
+
+		  if ( n_slow  ) lcoh_slow /= (double)n_slow;
+		  if ( n_delta ) lcoh_delta /= (double)n_delta; 
+		  if ( n_theta ) lcoh_theta /= (double)n_theta;
+		  if ( n_alpha ) lcoh_alpha /= (double)n_alpha; 
+		  if ( n_sigma ) lcoh_sigma /= (double)n_sigma;
+		  if ( n_beta ) lcoh_beta /= (double)n_beta;
+
+
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );		  				
 
+		  // standard. imaginary and lagged coherence
 		  writer.level( globals::band( SLOW ) , globals::band_strat );
 		  writer.value( "COH" , coh_slow );
+		  writer.value( "ICOH" , icoh_slow );
+		  writer.value( "LCOH" , lcoh_slow );
 
 		  writer.level( globals::band( DELTA ) , globals::band_strat );
 		  writer.value( "COH" , coh_delta );
+		  writer.value( "ICOH" , icoh_delta );
+		  writer.value( "LCOH" , lcoh_delta );
 
 		  writer.level( globals::band( THETA ) , globals::band_strat );
 		  writer.value( "COH" , coh_theta );
+		  writer.value( "ICOH" , icoh_theta );
+		  writer.value( "LCOH" , lcoh_theta );
 
 		  writer.level( globals::band( ALPHA ) , globals::band_strat );
 		  writer.value( "COH" , coh_alpha );
+		  writer.value( "ICOH" , icoh_alpha );
+		  writer.value( "LCOH" , lcoh_alpha );
 
 		  writer.level( globals::band( SIGMA ) , globals::band_strat );
 		  writer.value( "COH" , coh_sigma );
-
+		  writer.value( "ICOH" , icoh_sigma );
+		  writer.value( "LCOH" , lcoh_sigma );
+		  		  
 		  writer.level( globals::band( BETA ) , globals::band_strat );
 		  writer.value( "COH" , coh_beta );
+		  writer.value( "ICOH" , icoh_beta );
+		  writer.value( "LCOH" , lcoh_beta );
 
 		  writer.unlevel( globals::band_strat );
 		  
-
 		  if ( show_spectrum )
 		    {
 		      
@@ -231,7 +261,13 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			    {
 			      writer.level( coh.frq[k] , globals::freq_strat );			  
 			      writer.value( "COH" , coh.coh[k] );
-			      writer.value( "COH" , coh.coh[k] );
+			      writer.value( "ICOH" , coh.icoh[k] );
+			      writer.value( "LCOH" , coh.lcoh[k] );
+
+			      // writer.value( "PLV" , coh.plv[k] );
+			      // writer.value( "PLI" , coh.pli[k] );
+			      // writer.value( "WPLI" , coh.wpli[k] );
+			      
 			      writer.value( "CSPEC" , coh.cross_spectrum[k] );
 			      writer.value( "ASPEC1" , coh.auto_spectrum1[k] );
 			      writer.value( "ASPEC2" , coh.auto_spectrum2[k] );
@@ -271,19 +307,11 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 	      // Band-level summaries
 	      //
 
-	      double coh_slow = 0 , 
-		coh_delta = 0 , 
-		coh_theta = 0 , 
-		coh_alpha = 0 , 
-		coh_sigma = 0 , 
-		coh_beta = 0; 
-		  
-	      double n_slow = 0 , 
-		n_delta = 0 , 
-		n_theta = 0 , 
-		n_alpha = 0 , 
-		n_sigma = 0 , 
-		n_beta = 0; 
+	      double coh_slow = 0 , coh_delta = 0 , coh_theta = 0 , coh_alpha = 0 , coh_sigma = 0 , coh_beta = 0; 
+	      double icoh_slow = 0 , icoh_delta = 0 , icoh_theta = 0 , icoh_alpha = 0 , icoh_sigma = 0 , icoh_beta = 0; 
+	      double lcoh_slow = 0 , lcoh_delta = 0 , lcoh_theta = 0 , lcoh_alpha = 0 , lcoh_sigma = 0 , lcoh_beta = 0; 
+	      
+	      double n_slow = 0 , n_delta = 0 , n_theta = 0 , n_alpha = 0 , n_sigma = 0 , n_beta = 0; 
 		  
 	      for (int k=0;k<sz;k++)
 		{
@@ -292,6 +320,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		       && coh.frq[k] < globals::freq_band[ SLOW ].second ) 
 		    {			  
 		      coh_slow += coh.coh[k];
+		      icoh_slow += coh.icoh[k];
+		      lcoh_slow += coh.lcoh[k];
 		      n_slow++;
 		    }
 		  
@@ -299,6 +329,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		       && coh.frq[k] < globals::freq_band[ DELTA ].second ) 
 		    {
 		      coh_delta += coh.coh[k];
+		      icoh_delta += coh.icoh[k];
+		      lcoh_delta += coh.lcoh[k];
 		      n_delta++;
 		    }
 		  
@@ -306,6 +338,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		       && coh.frq[k] < globals::freq_band[ THETA ].second ) 
 		    {
 		      coh_theta += coh.coh[k];
+		      icoh_theta += coh.icoh[k];
+		      lcoh_theta += coh.lcoh[k];
 		      n_theta++;
 		    }
 		  
@@ -313,6 +347,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		       && coh.frq[k] < globals::freq_band[ ALPHA ].second ) 
 		    {
 		      coh_alpha += coh.coh[k];
+		      icoh_alpha += coh.icoh[k];
+		      lcoh_alpha += coh.lcoh[k];
 		      n_alpha++;
 		    }
 		  
@@ -320,6 +356,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		       && coh.frq[k] < globals::freq_band[ SIGMA ].second ) 
 		    {
 		      coh_sigma += coh.coh[k];
+		      icoh_sigma += coh.icoh[k];
+		      lcoh_sigma += coh.lcoh[k];
 		      n_sigma++;
 		    }
 		  
@@ -327,6 +365,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		       && coh.frq[k] < globals::freq_band[ BETA ].second ) 
 		    {
 		      coh_beta += coh.coh[k];
+		      icoh_beta += coh.icoh[k];
+		      lcoh_beta += coh.lcoh[k];
 		      n_beta++;
 		    }
 		  
@@ -338,24 +378,51 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 	      if ( n_alpha ) coh_alpha /= (double)n_alpha; 
 	      if ( n_sigma ) coh_sigma /= (double)n_sigma;
 	      if ( n_beta ) coh_beta /= (double)n_beta;
+	      
+	      if ( n_slow  ) icoh_slow /= (double)n_slow;
+	      if ( n_delta ) icoh_delta /= (double)n_delta; 
+	      if ( n_theta ) icoh_theta /= (double)n_theta;
+	      if ( n_alpha ) icoh_alpha /= (double)n_alpha; 
+	      if ( n_sigma ) icoh_sigma /= (double)n_sigma;
+	      if ( n_beta ) icoh_beta /= (double)n_beta;
+
+	      if ( n_slow  ) lcoh_slow /= (double)n_slow;
+	      if ( n_delta ) lcoh_delta /= (double)n_delta; 
+	      if ( n_theta ) lcoh_theta /= (double)n_theta;
+	      if ( n_alpha ) lcoh_alpha /= (double)n_alpha; 
+	      if ( n_sigma ) lcoh_sigma /= (double)n_sigma;
+	      if ( n_beta ) lcoh_beta /= (double)n_beta;
+
 
 	      writer.level( globals::band( SLOW ) , globals::band_strat );
 	      writer.value( "COH" , coh_slow );
-
+	      writer.value( "ICOH" , icoh_slow );
+	      writer.value( "LCOH" , lcoh_slow );
+	      
 	      writer.level( globals::band( DELTA ) , globals::band_strat );
 	      writer.value( "COH" , coh_delta );
+	      writer.value( "ICOH" , icoh_delta );
+	      writer.value( "LCOH" , lcoh_delta );
 	      
 	      writer.level( globals::band( THETA ) , globals::band_strat );
 	      writer.value( "COH" , coh_theta );
+	      writer.value( "ICOH" , icoh_theta );
+	      writer.value( "LCOH" , lcoh_theta );
 
 	      writer.level( globals::band( ALPHA ) , globals::band_strat );
 	      writer.value( "COH" , coh_alpha );
+	      writer.value( "ICOH" , icoh_alpha );
+	      writer.value( "LCOH" , lcoh_alpha );
 
 	      writer.level( globals::band( SIGMA ) , globals::band_strat );
 	      writer.value( "COH" , coh_sigma );
+	      writer.value( "ICOH" , icoh_sigma );
+	      writer.value( "LCOH" , lcoh_sigma );
 
 	      writer.level( globals::band( BETA ) , globals::band_strat );
 	      writer.value( "COH" , coh_beta );
+	      writer.value( "ICOH" , icoh_beta );
+	      writer.value( "LCOH" , lcoh_beta );
 
 	      writer.unlevel( globals::band_strat );
 		  
@@ -370,6 +437,13 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		    {
 		      writer.level( coh.frq[k] , globals::freq_strat );
 		      writer.value( "COH" , coh.coh[k] );
+		      writer.value( "ICOH" , coh.icoh[k] );
+		      writer.value( "LCOH" , coh.lcoh[k] );
+
+		      // writer.value( "PLV" , coh.plv[k] );
+		      // writer.value( "PLI" , coh.pli[k] );
+		      // writer.value( "WPLI" , coh.wpli[k] );
+
 		      writer.value( "CSPEC" , coh.cross_spectrum[k] );
 		      writer.value( "ASPEC1" , coh.auto_spectrum1[k] );
 		      writer.value( "ASPEC2" , coh.auto_spectrum2[k] );

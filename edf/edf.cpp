@@ -1961,6 +1961,15 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
 
   int np = header.n_samples[ signals(0) ];
 
+  for (int s=0;s<ns;s++) 
+    if ( header.n_samples[ signals(s) ] != np ) 
+      Helper::halt( "all signals/references must have similar sampling rates" );
+  
+  for (int r=0;r<nr;r++) 		
+    if ( header.n_samples[ refs(r) ] != np ) 
+      Helper::halt( "all signals/references must have similar sampling rates" );
+  
+
   //
   // Build reference once
   //
@@ -1999,9 +2008,6 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
   
   for (int s=0;s<signals.size();s++) 
     {
-      
-      if ( header.n_samples[ signals(s) ] != np ) 
-	Helper::halt( "all signals/references must have similar sampling rates" );
       
       // do not reference to self
       if ( nr == 1 && signals(s) == refs(0) ) 
