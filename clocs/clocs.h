@@ -129,8 +129,10 @@ struct clocs_t {
     return cloc.find( cl )->second.sph(); 
   }
   
-  int load_cart( const std::string & filename );
+  int load_cart( const std::string & filename , bool verbose = false );
 
+  
+  bool attached() const { return cloc.size() != 0 ; } 
 
 
   //

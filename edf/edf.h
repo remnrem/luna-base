@@ -24,6 +24,7 @@
 #define __PSGLIB_EDF_H__
 
 #include "timeline/timeline.h"
+#include "clocs/clocs.h"
 #include "tal.h"
 #include "edfz/edfz.h"
 #include "edf/signal-list.h"
@@ -343,6 +344,13 @@ public:
   timeline_t timeline;
 
   uint64_t timepoint_from_EDF( int r );
+
+
+  //
+  // Channel location data 
+  //
+
+  clocs_t clocs;
 
 
   //

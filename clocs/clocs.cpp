@@ -59,11 +59,12 @@ polar_t::polar_t( sph_t & sph )
 }
 
 
-int clocs_t::load_cart( const std::string & filename )
+int clocs_t::load_cart( const std::string & filename , bool verbose )
 {
 
   if ( ! Helper::fileExists( filename ) ) 
     Helper::halt( "could not find clocs file; " + filename );
+
   cloc.clear();
 
   // assume LABEL X Y Z 
@@ -80,39 +81,42 @@ int clocs_t::load_cart( const std::string & filename )
 
   logger << " read " << cloc.size() << " channel locations\n"; 
 
-  std::map<std::string,cart_t>::const_iterator ii = cloc.begin();
-  while ( ii != cloc.end() ) 
+  if ( verbose ) 
     {
-      sph_t sph = ii->second.sph();
-      cart_t c2 = sph.cart();
-      
-      polar_t polar( sph );
-      cart_t  pc = polar.cart();
-      
-      writer.level( ii->first , globals::signal_strat );
+      std::map<std::string,cart_t>::const_iterator ii = cloc.begin();
+      while ( ii != cloc.end() ) 
+	{
+	  sph_t sph = ii->second.sph();
+	  cart_t c2 = sph.cart();
+	  
+	  polar_t polar( sph );
+	  cart_t  pc = polar.cart();
+	  
+	  writer.level( ii->first , globals::signal_strat );
 
-      writer.value( "X" , ii->second.x );
-      writer.value( "Y" , ii->second.y );
-      writer.value( "Z" , ii->second.z );
-
-      writer.value( "SPH_R"  , sph.r );
-      writer.value( "SPH_AZ" , sph.azimuth );
-      writer.value( "SPH_E"  , sph.elevation );
-
-      writer.value( "POLAR_ANGLE" , polar.angle );
-      writer.value( "POLAR_RAD" , polar.radius );
+	  writer.value( "X" , ii->second.x );
+	  writer.value( "Y" , ii->second.y );
+	  writer.value( "Z" , ii->second.z );
+	  
+	  writer.value( "SPH_R"  , sph.r );
+	  writer.value( "SPH_AZ" , sph.azimuth );
+	  writer.value( "SPH_E"  , sph.elevation );
+	  
+	  writer.value( "POLAR_ANGLE" , polar.angle );
+	  writer.value( "POLAR_RAD" , polar.radius );
+	  
+	  //       << sph.r << " "
+	  //       << sph.azimuth << " "
+	  //       << sph.elevation << "\t[ polar angle/radius ] = "
+	  //       << polar.angle << " " << polar.radius << "\t[X,Y,Z]' = "
+	  
+	  //      << pc.x << " " << pc.y << " " << pc.z << "\n";
+	  
+	  ++ii;
+	}
       
-//       << sph.r << " "
-//       << sph.azimuth << " "
-//       << sph.elevation << "\t[ polar angle/radius ] = "
-//       << polar.angle << " " << polar.radius << "\t[X,Y,Z]' = "
-
-	   //      << pc.x << " " << pc.y << " " << pc.z << "\n";
-      
-      ++ii;
+      writer.unlevel( globals::signal_strat );
     }
-  
-  writer.unlevel( globals::signal_strat );
 
   return cloc.size();
 }

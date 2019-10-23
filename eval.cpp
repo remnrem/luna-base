@@ -758,6 +758,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
+      else if ( is( c, "CLOCS" ) )        proc_attach_clocs( edf , param(c) );
       else if ( is( c, "L1OUT" ) )        proc_leave_one_out( edf , param(c) );
       else if ( is( c, "INTERPOLATE" ) )  proc_chep_based_interpolation( edf, param(c) );
       else if ( is( c, "EMD" ) )          proc_emd( edf , param(c) );
@@ -1694,6 +1695,15 @@ void proc_chep_based_interpolation( edf_t & edf , param_t & param )
   dsptools::chep_based_interpolation( edf , param );
 }
 
+void proc_attach_clocs( edf_t & edf , param_t & param )
+{
+  
+  std::string filename = Helper::expand( param.requires( "file" ) );
+  if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not find " + filename );
+
+  // assume a cartesian format
+  edf.clocs.load_cart( filename , param.has( "verbose" ) );
+}
 
 // COH : calculate cross spectral coherence, using legacy code
 

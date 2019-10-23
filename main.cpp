@@ -1091,12 +1091,26 @@ void proc_dummy( const std::string & p )
 
   if ( p == "fft" )
     {
+      
+      //
+      // FIR
+      //
+      
+      //std::vector<double> fc = design_bandpass_fir( ripple , tw , fs , f1, f2 );
+      std::vector<double> fc = dsptools::design_bandpass_fir( 0.001 , 0.1 , 1000 , 2 , 15 );
+      std::cerr << "bandpass FIR order " << fc.size() << "\n";
+  
+      fir_impl_t fir_impl ( fc );
+      
+      x = fir_impl.filter( &x );
 
+      for (int i=0;i<x.size();i++) std::cout << x[i] << "\n";
+      
       //      x = MiscMath::Z( x ) ;
       int index_length = x.size();
-      int my_Fs = 200; // arbitrary
+      int my_Fs = 1000; // arbitrary
       int index_start = 0;
-      
+
       FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
       
       fftseg.apply( &(x[index_start]) , index_length );
