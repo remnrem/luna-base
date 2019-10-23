@@ -275,7 +275,7 @@ void phsyn_t::calc()
 	    int b1 = 0, b2 = 0; 
 
 	    // whole trace perm
-	    //int j = CRandom::rand( npoints );
+	    int j = CRandom::rand( npoints );
 
 	    // within-epoch perms
 	    std::vector<int> offset;
