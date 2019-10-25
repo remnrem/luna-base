@@ -27,6 +27,7 @@ void vect_apply_fx(vect v, int n, scal (*fx)(double,double), scal par);
 void mat_apply_fx(mat M, int rows, int cols, scal (*fx)(double,double), scal par);
 void mat_mean_rows(mat M, int rows, int cols, vect v);
 scal mat_max_diag(mat M, int rows, int cols);
+scal mat_max_abs_diag(mat M, int rows, int cols);
 void mat_diag(vect v, int n, mat R);
 void mat_transpose(mat M, int rows, int cols, mat R);
 void mat_inverse(mat M, int dim, mat R);

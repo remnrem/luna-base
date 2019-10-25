@@ -12,6 +12,27 @@
 #include "svdcmp.h"
 
 
+void print( mat D , const int r  , const int c )
+{
+  printf("\n");
+  for (int i=0;i<r;i++)
+    {
+      for (int j=0;j<c;j++)
+	printf( " %f" , D[i][j] );
+      printf("\n");
+    }
+}
+
+void printv( vect D , const int r  )
+{
+  printf("\n");
+  for (int i=0;i<r;i++)
+    printf( " %f" , D[i] );
+  printf("\n");
+}
+
+
+
 /*
  * Functions for matrix elements transformations
  * used in mat_apply_fx().
@@ -58,6 +79,8 @@ static mat ICA_compute(mat X, int rows, int cols)
   vect d, lim;
   int i, it;
   
+  //  printf( "%i rows x %i cols \n" , rows , cols );
+
   // matrix creation
   TXp = mat_create(cols, rows);
   GWX = mat_create(rows, cols);
@@ -71,7 +94,7 @@ static mat ICA_compute(mat X, int rows, int cols)
   
   // W rand init
   mat_apply_fx(W, rows, rows, fx_rand, 0);
-  
+
   // sW <- La.svd(W)
   mat_copy(W, rows, rows, Wd);
   svdcmp(Wd, rows, rows, d, D);
@@ -83,7 +106,7 @@ static mat ICA_compute(mat X, int rows, int cols)
   mat_mult(Wd, rows, rows, D, rows, rows, TMP);
   mat_mult(TMP, rows, rows, TU, rows, rows, D);
   mat_mult(D, rows, rows, W, rows, rows, Wd); // W = Wd
-  
+
   // W1 <- W 
   mat_copy(Wd, rows, rows, W1);
   
@@ -97,23 +120,27 @@ static mat ICA_compute(mat X, int rows, int cols)
   // t(X)/p
   mat_transpose(X, rows, cols, TXp);
   mat_apply_fx(TXp, cols, rows, fx_div_c, cols);
-  
+
   while (lim[it] > TOLERANCE && it < MAX_ITERATIONS) {
-    
-    fprintf( stderr , " iteration %i\n" , it );
+      
+    if ( it+1 % 50 == 0 ) 
+      fprintf( stderr , " iteration %i %f\n" , it , lim[it] );
+    else
+      printf(".");
     
     // wx <- W %*% X
     mat_mult(Wd, rows, rows, X, rows, cols, GWX);
-    
+    		
     // gwx <- tanh(alpha * wx)
     mat_apply_fx(GWX, rows, cols, fx_tanh, 0);
-		
+
     // v1 <- gwx %*% t(X)/p
     mat_mult(GWX, rows, cols, TXp, cols, rows, TMP); // V1 = TMP
 		
     // g.wx <- alpha * (1 - (gwx)^2)
     mat_apply_fx(GWX, rows, cols, fx_1sub_sqr, 0);
-    
+
+        
     // v2 <- diag(apply(g.wx, 1, FUN = mean)) %*% W
     mat_mean_rows(GWX, rows, cols, d);
     mat_diag(d, rows, D);
@@ -124,21 +151,23 @@ static mat ICA_compute(mat X, int rows, int cols)
     
     // sW1 <- La.svd(W1)
     mat_copy(W1, rows, rows, W);
-    svdcmp(W, rows, rows, d, D);
-    
+    svdcmp(W, rows, rows, d, D); // sets W as U
+
     // W1 <- sW1$u %*% diag(1/sW1$d) %*% t(sW1$u) %*% W1
     mat_transpose(W, rows, rows, TU);
     vect_apply_fx(d, rows, fx_inv, 0);
     mat_diag(d, rows, D);
+    //    print(D,2,2);
     mat_mult(W, rows, rows, D, rows, rows, TMP);
     mat_mult(TMP, rows, rows, TU, rows, rows, D);
     mat_mult(D, rows, rows, W1, rows, rows, W); // W1 = W
-    
+
     // lim[it + 1] <- max(Mod(Mod(diag(W1 %*% t(W))) - 1))
     mat_transpose(Wd, rows, rows, TU);
     mat_mult(W, rows, rows, TU, rows, rows, TMP);
-    lim[it+1] = fabs(mat_max_diag(TMP, rows, rows) - 1);
-    
+
+    lim[it+1] = fabs(mat_max_abs_diag(TMP, rows, rows) - 1);
+
     // W <- W1
     mat_copy(W, rows, rows, Wd);
     
@@ -178,11 +207,12 @@ void fastICA(mat X, int rows, int cols, int compc, mat K, mat W, mat A, mat S)
 	scale = vect_create(cols);
 	d = vect_create(cols);
 
+	printf( "  pre-processing...\n" );	
+
 	/*
 	 * CENTERING
 	 */
 	mat_center(X, rows, cols, scale);
-
 
 	/*
 	 * WHITENING
@@ -211,7 +241,7 @@ void fastICA(mat X, int rows, int cols, int compc, mat K, mat W, mat A, mat S)
 	 * FAST ICA
 	 */
 
-	printf( "starting ICA\n" );
+	printf( "  starting ICA\n" );
 
 	_A = ICA_compute(X1, compc, rows);
 	

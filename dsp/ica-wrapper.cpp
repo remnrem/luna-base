@@ -37,115 +37,188 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 {
 
   std::string signal_label = param.requires( "sig" );
-  
-  const bool no_annotations = true;
 
+  std::string component_tag = param.has( "tag" ) ? param.value( "tag" ) : "ICA";
+
+  bool write_S_matrix = param.has( "file" );
+  
+  std::string S_matrix_fileroot = write_S_matrix ? param.value( "file" ) : "xxx";
+
+  bool original_signals = param.has( "original-signals" );
+
+  bool do_not_add_channels = param.has( "no-new-channels" );
+
+  //
+  // Fetch all data signals (specified via sig=,  which defaults to all signals if not given)
+  //
+
+  const bool no_annotations = true;
+  
   signal_list_t signals = edf.header.signal_list( signal_label , no_annotations );  
 
   const int ns = signals.size();
 
-  std::cout << "ns = " << ns << "\n";
+
+  //
+  // Check sample rates
+  //
   
-  // Assuming multiple signals, all with similar sample rates
   if ( ns < 2 ) return;
   
   const int sr = edf.header.sampling_freq( signals(0) );
+  
   for (int i=1;i<ns;i++)
     {      
       if ( edf.header.sampling_freq( signals(i) ) != sr ) 
 	Helper::halt( "all signals must have similar SR for ICA" );
     }
-  
-  // Fetch sample matrix
-  mslice_t mslice( edf , signals , edf.timeline.wholetrace() );
-  
-  const std::vector<double> * data = mslice.channel[0]->pdata();
 
-  int rows = data->size();
-  int cols = ns;
-  mat pX = mat_create( rows , cols );
+
+  //
+  // Fetch sample matrix
+  //
   
-  for (int j=0;j<ns;j++)
-    {
-      const std::vector<double> * data = mslice.channel[j]->pdata();      
-      for (int i=0;i<rows;i++) pX[i][j] = (*data)[i];
-    }
+  matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
   
+  // nb. fastICA() this will modify X/mslice...
+  Data::Matrix<double> & X = mslice.nonconst_data_ref();
+    
+
   //
   // Number of components
   //
 
   int compc = param.has( "compc" ) ? param.requires_int( "compc" ) : ns ;
 
-  logger << "  running with " << compc << " components\n"; 
-  
+
   //
   // ICA
   //
-
-  ica_t ica( pX , rows , cols , compc );
   
-  logger << "  finished ICA\n";
+  ica_t ica( X , compc );
+
+
+  //
+  // Add new signals
+  //
+
+  if ( ! do_not_add_channels ) 
+    {
+      logger << "  adding " << compc << " new signals to EDF\n";
+    
+      for (int c=0;c<compc;c++)
+	edf.add_signal( component_tag + "_" + Helper::int2str( c+1 ) , sr , *ica.S.col(c).data_pointer() );
+      
+    }
+ 
   
   //
-  // Output
+  // Output mixing matrix, etc
   //
 
-  std::string froot = "ica_";
-  
-  std::ofstream S( (froot + "S.txt").c_str() , std::ios::out );
-  for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << "S" << j+1;
-  S << "\n";  
-  for (int i=0;i<rows;i++)
-    {
-      for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << ica.S[i][j] ;      
-      S << "\n";
-    }
-  S.close();
+  const int rows = X.dim1();
 
-  std::ofstream X( (froot + "X.txt").c_str() , std::ios::out );
-  for (int j=0;j<cols;j++) X << ( j ? "\t" : "" ) << "X" << j+1;
-  X << "\n";
-  for (int i=0;i<rows;i++)
-    {
-      for (int j=0;j<cols;j++) X << ( j ? "\t" : "" ) << pX[i][j];
-      X << "\n";
-    }
-  X.close();
-  
+  const int cols = X.dim2();
 
-  // other matrices
-  
+
   // K : cols x compc
   // A : compc x compc
   // W : compc x compc
-  // S : as original data
+  
+  for (int i=0;i<compc;i++)
+    {
+      writer.level( i+1 , "IC1" );
+      for (int j=0;j<compc;j++)
+	{
+	  writer.level( j+1 , "IC2" );	  
+	  writer.value( "A" , ica.A[i][j] );
+	  writer.value( "W" , ica.W[i][j] );
+	}
+      writer.unlevel( "IC2" );
+    }
+  writer.unlevel( "IC1" );
 
 
-  std::ofstream K( (froot + "K.txt").c_str() , std::ios::out );
   for (int i=0;i<cols;i++)
     {
-      for (int j=0;j<compc;j++) K << ( j ? "\t" : "" ) << ica.K[i][j];
-      K << "\n";
+      writer.level( signals.label(i) , globals::signal_strat );
+      for (int j=0;j<compc;j++)
+	{
+	  writer.level( j+1 , "IC" );	  
+	  writer.value( "K" , ica.K[i][j] );
+	}
+      writer.unlevel( "IC" );
     }
-  K.close();
+  writer.unlevel( globals::signal_strat );
+
+
+  //
+  // File-based output
+  //
   
-  std::ofstream W( (froot + "W.txt").c_str() , std::ios::out );
-  for (int i=0;i<compc;i++)
+  if ( write_S_matrix )
     {
-      for (int j=0;j<compc;j++) W << ( j ? "\t" : "" ) << ica.W[i][j];
-      W << "\n";
-    }
-  W.close();
+      
+      std::string froot = S_matrix_fileroot + "_" ;
+      
+      std::ofstream S( (froot + "S.txt").c_str() , std::ios::out );
+      for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << "S" << j+1;
+      S << "\n";  
+      for (int i=0;i<rows;i++)
+	{
+	  for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << ica.S[j][i] ;      
+	  S << "\n";
+	}
+      S.close();
 
+      if ( original_signals ) 
+	{
+	  std::ofstream F( (froot + "X.txt").c_str() , std::ios::out );
+	  for (int j=0;j<cols;j++) F << ( j ? "\t" : "" ) << "X" << j+1;
+	  F << "\n";
+	  for (int i=0;i<rows;i++)
+	    {
+	      for (int j=0;j<cols;j++) F << ( j ? "\t" : "" ) << X[i][j];
+	      F << "\n";
+	    }
+	  F.close();
+	}
+      
+      // other matrices
+      
+      // K : cols x compc
+      // A : compc x compc
+      // W : compc x compc
+      // S : as original data
+      
+      
+      std::ofstream K( (froot + "K.txt").c_str() , std::ios::out );
+      for (int i=0;i<cols;i++)
+	{
+	  for (int j=0;j<compc;j++) K << ( j ? "\t" : "" ) << ica.K[i][j];
+	  K << "\n";
+	}
+      K.close();
+      
+      std::ofstream W( (froot + "W.txt").c_str() , std::ios::out );
+      for (int i=0;i<compc;i++)
+	{
+	  for (int j=0;j<compc;j++) W << ( j ? "\t" : "" ) << ica.W[i][j];
+	  W << "\n";
+	}
+      W.close();
+      
+      
+      std::ofstream A( (froot + "A.txt").c_str() , std::ios::out );
+      for (int i=0;i<compc;i++)
+	{
+	  for (int j=0;j<compc;j++) A << ( j ? "\t" : "" ) << ica.A[i][j];
+	  A << "\n";
+	}
+      A.close();
 
-  std::ofstream A( (froot + "A.txt").c_str() , std::ios::out );
-  for (int i=0;i<compc;i++)
-    {
-      for (int j=0;j<compc;j++) A << ( j ? "\t" : "" ) << ica.A[i][j];
-      A << "\n";
     }
-  A.close();
+
 
 
 }

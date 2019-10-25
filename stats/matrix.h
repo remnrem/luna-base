@@ -140,7 +140,7 @@ namespace Data {
 
     Vector<T> col( const int c ) const { return data[c]; } 
     Vector<T> & col( const int c ) { return data[c]; } 
-    const Vector<T> * col_pointer( const int c ) { return &data[c]; } 
+    const Vector<T> * col_pointer( const int c ) const { return &data[c]; } 
 
     void add_col( const Vector<T> & r ) 
     { 

@@ -1203,39 +1203,42 @@ void proc_dummy( const std::string & p )
 
       // asssume two signals for now
       const int n2 = x.size();
-      const int ns = 2;
+      const int ns = 61;
 
       int rows = x.size() / ns;
       int cols = ns;
-      mat pX = mat_create( rows , cols );
+      Data::Matrix<double> X( rows , cols );
+
       int p = 0;
       
+      // nb ex.dat is col major
+      for (int j=0;j<ns;j++)
+	for (int i=0;i<rows;i++) 	
+	  X[i][j] = x[p++];
       
-      for (int i=0;i<rows;i++) 
-	for (int j=0;j<ns;j++)
-	  pX[i][j] = x[p++];
+      int compc = 2;
       
-      int compc = ns;
-
       std::cout << "want to perform ICA on " << rows << " x " << cols << " matrix\n";
+         
+      ica_t ica( X , compc );
 
-      ica_t ica( pX , rows , cols , compc );
-
+      std::cout << "done HERE\n";
+      
       for (int i=0;i<rows;i++)
 	{
-	  std::cout << i ;
+	  std::cout << "ICA " << i ;
 	  
-	  for (int j=0;j<cols;j++) 
-	    std::cout << "\t" << pX[i][j] << "\t";
-	 	  	  
-	  for (int j=0;j<compc;j++) 
-	    std::cout << "\t" << ica.S[i][j] ;      
+// 	  for (int j=0;j<cols;j++) 
+// 	    std::cout << "\t" << pX[i][j] << "\t";
+	  
+  	  for (int j=0;j<compc;j++) 
+  	    std::cout << "\t" << ica.S[i][j] ;  // component then time-points (ie. col-major for S )       
 	 
 	  std::cout << "\n";
  
 	}
       
-
+      
       // other matrices
       
       // K : cols x compc
@@ -1247,25 +1250,26 @@ void proc_dummy( const std::string & p )
       for (int i=0;i<cols;i++)
 	{
 	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.K[i][j];
-	  std::cout << "\n\n";
+	  std::cout << "\n";
 	}
-      
+       
+
       std::cout << "W\n";
       for (int i=0;i<compc;i++)
-	{
-	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.W[i][j];
-	  std::cout << "\n\n";
-	}
+ 	{
+ 	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.W[i][j];
+ 	  std::cout << "\n\n";
+ 	}
       
       std::cout << "A\n";
       for (int i=0;i<compc;i++)
-	{
-	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.A[i][j];
-	  std::cout << "\n\n";
-	}      
+ 	{
+ 	  for (int j=0;j<compc;j++) std::cout << "\t" << ica.A[i][j];
+ 	  std::cout << "\n\n";
+ 	}      
       
     }
-
+  
 
   //
   // retval test

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ica_matrix.h"
+#include <math.h>
 
 #define min(a,b) ((a<b) ? a : b)
 #define abs(x) ((x)<0 ? -(x) : (x))
@@ -158,6 +159,21 @@ scal mat_max_diag(mat M, int rows, int cols)
 	for (i=1; i<rows; i++)
 		if (M[i][i] > max)
 			max = M[i][i];
+	return max;
+}
+
+/**
+ * Returns the maximal absolute element on the diagonal
+ * of the matrix M.
+ */
+scal mat_max_abs_diag(mat M, int rows, int cols)
+{
+	int i; scal max;
+
+	max = fabs( M[0][0] ) ;
+	for (i=1; i<rows; i++)
+	  if ( fabs( M[i][i] )> max)
+	    max = fabs( M[i][i] );
 	return max;
 }
 

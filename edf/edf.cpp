@@ -1068,10 +1068,12 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 
 
   std::vector<double> ret;
-  
-  tp->clear();
 
-  rec->clear();
+  if ( tp != NULL ) 
+    tp->clear();
+
+  if ( rec != NULL ) 
+    rec->clear();
 
   //
   // Ensure we are within bounds
@@ -1150,8 +1152,11 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 	{
 	  // convert from digital to physical on-the-fly
 	  ret.push_back( edf_record_t::dig2phys( record->data[ signal ][ s ] , bitvalue , offset ) );
-	  tp->push_back( timeline.timepoint( r , s , n_samples_per_record ) );
-	  rec->push_back( r );
+	  
+	  if ( tp != NULL ) 
+	    tp->push_back( timeline.timepoint( r , s , n_samples_per_record ) );
+	  if ( rec != NULL ) 
+	    rec->push_back( r );
 	}
       
       r = timeline.next_record(r);
@@ -1591,6 +1596,8 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
       logger << " **empty EDF, not going to add channel " << label << " **\n";
       return;
     }
+
+  //  std::cout << "nd = " << ndata << " " << header.nr << " " << n_samples << "\n";
 
   // sanity check -- ie. require that the data is an appropriate length
   if ( ndata != header.nr * n_samples ) 

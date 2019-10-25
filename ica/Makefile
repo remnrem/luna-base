@@ -4,7 +4,7 @@ CFLAGS += -Wpointer-sign
 
 OBJLIBS	 = ../libica.a
 
-OBJS = ica.o libICA.o ica_matrix.o svdcmp.o
+OBJS = ica.o lica_fastICA.o lica_matrix.o lica_svdcmp.o
 
 all : $(OBJLIBS)
 
