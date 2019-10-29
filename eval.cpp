@@ -1543,56 +1543,7 @@ void proc_dump_mask( edf_t & edf , param_t & param )
 }
 
 // CHEP : dump, or convert from CHEP->MASK
-
-void proc_chep( edf_t & edf , param_t & param )
-{
-  
-  if ( param.has( "load" ) )
-    {
-      std::string f = param.value( "load" );
-      logger << "  reading chep from " << f << "\n";
-      edf.timeline.read_chep_file( f );
-    }
-  
-  if ( param.has( "epochs" ) ) 
-    {
-
-      std::string sigstr = param.requires( "sig" );
-      signal_list_t signals = edf.header.signal_list( sigstr );
-
-      std::vector<double> p = param.dblvector( "epochs" );
-      if ( p.size() == 1 ) 
-	edf.timeline.collapse_chep2epoch( signals , p[0] , 0 ); 
-      else if ( p.size() == 2 ) 
-	edf.timeline.collapse_chep2epoch( signals , p[0] , p[1] ); 
-      
-    }
-
-  if ( param.has( "channels" ) ) 
-    {
-
-      std::string sigstr = param.requires( "sig" );
-      signal_list_t signals = edf.header.signal_list( sigstr );
-      
-      std::vector<double> p = param.dblvector( "channels" );
-      if ( p.size() == 1 ) 
-	edf.timeline.collapse_chep2ch( signals , p[0] , 0 ); 
-      else if ( p.size() == 2 ) 
-	edf.timeline.collapse_chep2ch( signals , p[0] , p[1] ); 
-      
-    }
-  
-  if ( param.has( "dump" ) ) edf.timeline.dump_chep_mask();  
-  
-  if ( param.has( "save" ) )
-    {
-      std::string f = param.value( "save" );
-      logger << "  saving chep to " << f << "\n";
-      edf.timeline.write_chep_file( f );
-    }
-
-  
-}
+// in edf/chep.cpp
 
 
 // COUNT-ANNOTS : show all annotations for the EDF

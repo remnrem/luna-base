@@ -42,7 +42,7 @@ struct phsyn_t
 	   const double tw = 0.5 , 
 	   const int es = 0 
 	   )
-  : x(x) , sr(sr), f1(f2), f2(f2), nbins(nbins) , nreps(nreps) , ripple(ripple) , tw(tw) , es(es) 
+  : x(x) , sr(sr), f1(f1), f2(f2), nbins(nbins) , nreps(nreps) , ripple(ripple) , tw(tw) , es(es) 
   { 
   }
   
@@ -72,7 +72,9 @@ struct phsyn_t
 private:
 
   bool bin( double d , int * b , const std::vector<double> & th , const int nbins );
+  double test_uniform( const std::vector<std::vector<double> > & m );
 
+  
 };
 
 

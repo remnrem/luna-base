@@ -97,6 +97,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   
   ica_t ica( X , compc );
 
+  std::cout << "output mode\n";
 
   //
   // Add new signals
@@ -111,6 +112,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
       
     }
  
+  
   
   //
   // Output mixing matrix, etc
@@ -166,7 +168,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
       S << "\n";  
       for (int i=0;i<rows;i++)
 	{
-	  for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << ica.S[j][i] ;      
+	  for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << ica.S[i][j] ;      
 	  S << "\n";
 	}
       S.close();

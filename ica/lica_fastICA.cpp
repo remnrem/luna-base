@@ -296,6 +296,8 @@ void fastICA( Data::Matrix<double> & X ,
   mat_transpose(XT, X);
   mat_decenter(X, scale);
 
+  std::cout << "done0\n";
+
   // K
   mat_transpose(V1, K);
 
@@ -303,6 +305,8 @@ void fastICA( Data::Matrix<double> & X ,
   D.resize( compc , cols );
   mat_mult(_A, V1, D);	
   mat_mult(D, XT, X1);
+
+  std::cout << "done-2\n";
   
   // S
   mat_transpose(X1, S);
@@ -311,6 +315,8 @@ void fastICA( Data::Matrix<double> & X ,
   D.resize(compc,compc);
   TU.resize(compc,compc);
   mat_transpose(D, TU);
+
+  std::cout << "done1\n";
 
   Data::Matrix<double> V2( compc , compc );
   mat_mult(D, TU, V2);
@@ -323,4 +329,5 @@ void fastICA( Data::Matrix<double> & X ,
   // W
   mat_transpose(_A, W);
 
+  std::cout << "donedone\n";
 }

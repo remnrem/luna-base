@@ -50,12 +50,17 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
   //
 
   std::vector<freq_range_t> lf;
+  std::vector<freq_range_t> uf;
 //   lf.push_back( freq_range_t( 0.5 , 1.5 ) );
 //   lf.push_back( freq_range_t( 4.5 , 5.5 ) );
   lf.push_back( freq_range_t( 48 , 52 ) );
-  lf.push_back( freq_range_t( 148 , 152 ) );
 
-  std::vector<freq_range_t> uf = lf;
+
+  for (int f = 5 ; f < 200 ; f += 5 ) 
+    uf.push_back( freq_range_t( f-2 , f+2 ) );
+  //uf.push_back( freq_range_t( 178 , 182 ) );
+
+
   
   //
   // Sampling rates
@@ -147,6 +152,8 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
 void phsyn_t::calc() 
 {
   
+  std::cerr << "calc\n";
+
   //
   // bin boundaries (0..360)
   //
@@ -190,7 +197,10 @@ void phsyn_t::calc()
   for (int f=0;f<f2.size();f++) frqs.insert( f2[f] );
   
   std::set<freq_range_t>::const_iterator ff = frqs.begin();
+  
+  logger << "  considering " << frqs.size() << " frequency bands\n";
 
+  logger << " f1, f2 = " << f1.size() << " " << f2.size() << "\n";
   //
   // get phase angles at each time point
   //  
@@ -222,8 +232,6 @@ void phsyn_t::calc()
     for (int i2=0;i2<f2.size();i2++) 
       {
 	
-	if ( i1 == i2 ) continue;
-
 	//
 	// Clear working count matrix
 	//
@@ -244,25 +252,31 @@ void phsyn_t::calc()
 	    // increment by one unit (default, unweighted)
 	    obs[ b1 ][ b2 ]++;
 	    
-// 	    std::cerr  << "rep" << i << " of " << npoints << "\t" 
-// 		       << (*ph1)[i]  << "\t" << b1 << "\t" 
-// 		       << (*ph2)[i]  << "\t" << b2 << "\n"; 
 	  }
 		
 
 	//
+	// Observed summary statistic
+	//
+
+	double obs_stat = test_uniform( obs );
+
+	
+	//
 	// Replicates
 	//
 	
+	int emp_stat = 0;
+	std::vector<double> perm_stats;
+
 	for (int r = 0; r < nreps; r++) 
 	  {
 
-	    if ( r % 10 == 0 ) logger << ".";
-
-	    if ( r % 100 == 0 ) logger << "\n";
+// 	    if ( r % 10 == 0 ) logger << ".";
+// 	    if ( r % 100 == 0 ) logger << "\n";
 	    
 	    // clear working perm matrix
-
+	    
 	    for (int b1=0;b1<nbins;b1++)
 	      for (int b2=0;b2<nbins;b2++)
 		perm[b1][b2] = 0;
@@ -281,11 +295,10 @@ void phsyn_t::calc()
 	    std::vector<int> offset;
 	    
 
-
+	    
 	    for (int i=0;i<npoints;i++)
 	      {
-		
-		
+				
 		bin( (*ph1)[i] , &b1 , bb , nbins );
 
 		++j;
@@ -297,8 +310,22 @@ void phsyn_t::calc()
 		// increment by one unit (default, unweighted)
 		perm[ b1 ][ b2 ]++;
 	      }
-	  
-	    // accumulate pv/z file
+
+	    
+	    // 
+	    // summary stat for surrogate 
+	    //
+
+	    double perm_stat = test_uniform( perm );
+	    
+	    perm_stats.push_back( perm_stat );
+
+	    if ( perm_stat >= obs_stat ) ++emp_stat;
+
+	    //
+	    // accumulate point level pv/z file
+	    //
+
 	    for (int b1=0;b1<nbins;b1++)
 	      for (int b2=0;b2<nbins;b2++)
 		{
@@ -306,26 +333,44 @@ void phsyn_t::calc()
 		  z[b1][b2] += perm[b1][b2];
 		  z2[b1][b2] += perm[b1][b2] * perm[b1][b2];
 		}
-	    	    
+	    
 	    // next replicate
 	  
 	  }
 	
-	for (int b1=0;b1<nbins;b1++)
-	  for (int b2=0;b2<nbins;b2++)
-	    {
-	      std::cout << "ha " << z[b1][b2] << "  " << (double)nreps << "\n";
-	      double zmean = z[b1][b2]/(double)nreps;
-	      double zsd   = sqrt(   z2[b1][b2]/(double)nreps  - zmean * zmean );
-	      
-	      std::cout << "res " << b1 << " " << b2 << " " 
-			<< obs[b1][b2] << " " 		
-			<< (pv[b1][b2] + 1 )/double(nreps+1) << " " 
-			<< zmean << " " 
-			<< zsd << " " 
-			<< (obs[b1][b2] - zmean ) / zsd << "\n";
-	    }
+
+	double z_stat_mean = MiscMath::mean( perm_stats );
+	double z_stat_sd   = MiscMath::sdev( perm_stats );
+	double z_stat = ( obs_stat - z_stat_mean ) / z_stat_sd ; 
 	
+	std::cout << f1[i1].first << "-" << f1[i1].second << "\t"
+		  << f2[i2].first << "-" << f2[i2].second << "\t"
+	  //<< obs_stat << "\t"
+		  << z_stat << "\t"
+		  << (emp_stat+1)/double(nreps+1) << "\n";
+
+
+
+	if ( false )
+	  {
+	    
+	    for (int b1=0;b1<nbins;b1++)
+	      for (int b2=0;b2<nbins;b2++)
+		{
+		  //std::cout << "ha " << z[b1][b2] << "  " << (double)nreps << "\n";
+		  double zmean = z[b1][b2]/(double)nreps;
+		  double zsd   = sqrt(   z2[b1][b2]/(double)nreps  - zmean * zmean );
+		  
+		  std::cout << "res " << b1 << " " << b2 << " " 
+			    << obs[b1][b2] << " " 		
+			    << (pv[b1][b2] + 1 )/double(nreps+1) << " " 
+			    << zmean << " " 
+			    << zsd << " " 
+			    << (obs[b1][b2] - zmean ) / zsd << "\n";
+		}
+	  }
+
+
 
 	//
 	// Next pair of frequencies
@@ -362,4 +407,34 @@ bool phsyn_t::bin( double d , int * b , const std::vector<double> & th , const i
     }
   
   return false;
+}
+
+
+double phsyn_t::test_uniform( const std::vector<std::vector<double> > & m )
+{
+  // stat = ( O - E )^2 
+
+  const int bs = m.size();
+  
+  std::vector<double> rows( bs , 0 );
+  std::vector<double> cols( bs , 0 );
+  double tot = 0;
+  for (int b1=0;b1<bs;b1++)
+    for (int b2=0;b2<bs;b2++)
+      {
+	rows[b1] += m[b1][b2];
+	cols[b2] += m[b1][b2];
+	tot += m[b1][b2];
+      }
+
+  double stat = 0; 
+    
+  for (int b1=0;b1<bs;b1++)
+    for (int b2=0;b2<bs;b2++)
+      {
+	double exp = ( rows[b1] * cols[b2] ) / tot;
+	stat += ( m[b1][b2] - exp ) * ( m[b1][b2] - exp );
+      }
+  return stat;
+    
 }
