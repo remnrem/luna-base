@@ -216,15 +216,17 @@ std::string edf_header_t::summary() const
 	  ss << "\taliased from         : " << aliases << "\n"; 
 	}
       
-      
-      ss << "\t# samples per record : " << n_samples[s] << "\n"	
-	 << "\ttransducer type      : " << transducer_type[s] << "\n"
-	 << "\tphysical dimension   : " << phys_dimension[s] << "\n"
-	 << "\tmin/max (phys)       : " << physical_min[s] << "/" << physical_max[s] << "\n"
-	 << "\tEDF min/max (phys)   : " << orig_physical_min[s] << "/" << orig_physical_max[s] << "\n"
-	 << "\tmin/max (digital)    : " << digital_min[s] << "/" << digital_max[s] << "\n"
-	 << "\tEDF min/max (digital): " << orig_digital_min[s] << "/" << orig_digital_max[s] << "\n"
-	 << "\tpre-filtering        : " << prefiltering[s] << "\n\n";
+      if ( is_annotation_channel( s ) ) 
+	ss << "\tannotation channel\n";
+      else
+	ss << "\t# samples per record : " << n_samples[s] << "\n"	
+	   << "\ttransducer type      : " << transducer_type[s] << "\n"
+	   << "\tphysical dimension   : " << phys_dimension[s] << "\n"
+	   << "\tmin/max (phys)       : " << physical_min[s] << "/" << physical_max[s] << "\n"
+	   << "\tEDF min/max (phys)   : " << orig_physical_min[s] << "/" << orig_physical_max[s] << "\n"
+	   << "\tmin/max (digital)    : " << digital_min[s] << "/" << digital_max[s] << "\n"
+	   << "\tEDF min/max (digital): " << orig_digital_min[s] << "/" << orig_digital_max[s] << "\n"
+	   << "\tpre-filtering        : " << prefiltering[s] << "\n\n";
       
     }
 
@@ -517,9 +519,9 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       std::string l = tlabels[s];
       
       bool include = inp_signals == NULL || signal_list_t::match( inp_signals , &l , slabels );
-
-      // imatch allows for case-insensitive match of 'edf annotation*'
-      bool annotation = Helper::imatch( l , "EDF Annotation" ) ;
+      
+      // imatch allows for case-insensitive match of 'edf annotation*'  (i.e. 14 chars)
+      bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
 
       // optionally skip all EDF annotation channels?
       if ( annotation && globals::skip_edf_annots ) 
@@ -1650,11 +1652,11 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   
   header.label.push_back( label );
   
-  if ( ! Helper::imatch( label , "EDF Annotation" ) )
+  if ( ! Helper::imatch( label , "EDF Annotation" , 14 ) )
     header.label2header[label] = header.label.size()-1;     
 
   header.annotation_channel.push_back( ( header.edfplus ? 
-					 Helper::imatch( label , "EDF Annotation" ) :
+					 Helper::imatch( label , "EDF Annotation" , 14 ) :
 					 false ) ) ;
 
   header.transducer_type.push_back( "n/a" );
@@ -2918,7 +2920,7 @@ int edf_t::add_continuous_time_track()
   std::map<std::string,int>::const_iterator jj = header.label_all.begin();
   while ( jj != header.label_all.end() )
     {
-      if ( Helper::imatch( jj->first  , "EDF Annotation" ) ) 
+      if ( Helper::imatch( jj->first  , "EDF Annotation" , 14 ) ) 
 	annot_tracks++;                     
       ++jj;
     }
@@ -3102,7 +3104,7 @@ void edf_t::rescale( const int s , const std::string & sc )
   if ( ! ( rescale_from_mV_to_uV || rescale_from_uV_to_mV 
 	   || rescale_from_V_to_uV || rescale_from_V_to_mV ) ) 
     {
-      logger << " no rescaling needed\n";
+      //logger << " no rescaling needed\n";
       return;
     }
 

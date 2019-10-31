@@ -279,6 +279,21 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
 
 
+  add_cmd( "manip"   , "RE" , "Restructure an EDF (drop channels/epochs)" );
+  add_table( "RE" , "" , "Restructured data duration" );
+  add_var( "RE" , "" , "DUR1" , "Duration pre-restructuring (secs)");
+  add_var( "RE" , "" , "DUR2" , "Duration post-restructuring (secs)");
+  add_var( "RE" , "" , "NR1" , "Duration pre-restructuring (records)");
+  add_var( "RE" , "" , "NR2" , "Duration post-restructuring (records)");
+
+  add_cmd( "manip"   , "RESTRUCTURE" , "Restructure an EDF (drop channels/epochs)" );
+  add_table( "RESTRUCTURE" , "" , "Restructured data duration" );
+  add_var( "RESTRUCTURE" , "" , "DUR1" , "Duration pre-restructuring (secs)");
+  add_var( "RESTRUCTURE" , "" , "DUR2" , "Duration post-restructuring (secs)");
+  add_var( "RESTRUCTURE" , "" , "NR1" , "Duration pre-restructuring (records)");
+  add_var( "RESTRUCTURE" , "" , "NR2" , "Duration post-restructuring (records)");
+
+
 // SIGNALSRetain/remove specific EDF channels
 
 //   drop drop=EMG,ECGDrop channels EMG and ECG
@@ -365,6 +380,60 @@ void cmddefs_t::init()
   // SPECTRAL
   //
   /////////////////////////////////////////////////////////////////////////////////
+
+
+  //
+  // PSD
+  //
+
+  add_cmd( "power"   , "PSD" , "Power spectral density estimation (Welch)" );
+  add_param( "PSD" , "sig" , "C3,C4" , "" , "Restrict analysis to these channels" );
+  add_param( "PSD" , "epoch" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "PSD" , "max" , "100" , "" , "Calculate per-epoch statistics" );
+  add_param( "PSD" , "spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "PSD" , "epoch-spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  
+  add_table( "PSD" , "CH" , "Number of epochs" );
+  add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
+
+  add_table( "PSD" , "CH,B" , "Whole-night, per-channel band power" );
+  add_var( "PSD" , "CH,B" , "PSD" , "Power" );
+  add_var( "PSD" , "CH,B" , "RELPSD" , "Relative power" );
+
+  add_table( "PSD" , "CH,F" , "Whole-night, per-channel power" );
+  add_var( "PSD" , "CH,F" , "PSD" , "Power" );
+
+  add_table( "PSD" , "CH,B,E" , "Whole-night, per-channel per-epoch band power" );
+  add_var( "PSD" , "CH,B,E" , "PSD" , "Power" );
+  add_var( "PSD" , "CH,B,E" , "RELPSD" , "Relative power" );
+
+  add_table( "PSD" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
+  add_var( "PSD" , "CH,F,E" , "PSD" , "Power" );
+  set_compressed( "PSD" , tfac_t( "CH,F,E" ) );
+
+
+
+  //
+  // MTM
+  //
+
+  add_cmd( "power"   , "MTM" , "Power spectral density estimation (Welch)" );
+  add_param( "MTM" , "sig" , "C3,C4" , "" , "Restrict analysis to these channels" );
+  add_param( "MTM" , "epoch" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "max" , "100" , "" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "dB" , "" , "" , "Decibel scale output" );
+  add_param( "MTM" , "spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "epoch-spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  
+  add_table( "MTM" , "CH" , "Number of epochs" );
+  add_var( "MTM" , "CH" , "NE" , "Number of epochs" );
+
+  add_table( "MTM" , "CH,F" , "Whole-night, per-channel power" );
+  add_var( "MTM" , "CH,F" , "MTM" , "Power" );
+
+  add_table( "MTM" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
+  add_var( "MTM" , "CH,F,E" , "MTM" , "Power" );
+  set_compressed( "MTM" , tfac_t( "CH,F,E" ) );
 
 
   /////////////////////////////////////////////////////////////////////////////////

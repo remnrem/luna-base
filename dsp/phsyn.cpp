@@ -44,24 +44,39 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
   std::string signal_label = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( signal_label );  
   const int ns = signals.size();
+
   
   //
   // Frequencies
   //
-
+  
+  std::vector<double> lf0 = param.dblvector( "lwr" );
+  std::vector<double> uf0 = param.dblvector( "upr" );
+  
   std::vector<freq_range_t> lf;
   std::vector<freq_range_t> uf;
-//   lf.push_back( freq_range_t( 0.5 , 1.5 ) );
-//   lf.push_back( freq_range_t( 4.5 , 5.5 ) );
-  lf.push_back( freq_range_t( 48 , 52 ) );
 
+  double w = param.requires_dbl( "w" );
 
-  for (int f = 5 ; f < 200 ; f += 5 ) 
-    uf.push_back( freq_range_t( f-2 , f+2 ) );
-  //uf.push_back( freq_range_t( 178 , 182 ) );
-
-
+  if ( lf0.size() < 1 || lf0.size() > 3 ) Helper::halt( "expecting lwr to have 1,2 or 3 values: start,end,step" );
+  if ( uf0.size() < 1 || uf0.size() > 3 ) Helper::halt( "expecting upr to have 1,2 or 3 values: start,end,step" );
   
+  if ( lf0.size() == 1 ) lf0.push_back( lf0[0] );
+  if ( lf0.size() == 2 ) lf0.push_back( 1 );
+  if ( uf0.size() == 1 ) uf0.push_back( uf0[0] );
+  if ( uf0.size() == 2 ) uf0.push_back( 1 );
+  if ( lf0[0] > lf0[1] ) Helper::halt( "bad format for lwr" );
+  if ( uf0[0] > uf0[1] ) Helper::halt( "bad format for upr" );
+  
+  if ( lf0[0] - w < 0 ) Helper::halt( "bad format for lwr, lower value too low given w" );
+  if ( uf0[0] - w < 0 ) Helper::halt( "bad format for upr, lower value too low given w" );
+
+  for (double v = lf0[0] ; v <= lf0[1] ; v += lf0[2] )
+    lf.push_back( freq_range_t( v-w , v+w ) );
+
+  for (double v = uf0[0] ; v <= uf0[1] ; v += uf0[2] )
+    uf.push_back( freq_range_t( v-w , v+w ) );
+
   //
   // Sampling rates
   //
@@ -69,11 +84,20 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 
   //
+  // Filter
+  // 
+
+  double ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.05;
+
+  double tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 2 ;
+
+  
+  //
   // Number of bins, rplicates
   //
 
-  const int nbins = 20;
-  const int nreps = 1000;
+  const int nbins = param.has( "nbin" ) ? param.requires_int( "nbin" ) : 20;
+  const int nreps = param.has( "nrep" ) ? param.requires_int( "nrep" ) : 1000;
 
 
   //
@@ -85,15 +109,14 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
   
   const double epoch_sec = edf.timeline.epoch_length();
 
+  bool no_epoch_perm = param.has( "no-epoch-perm" );
+  
 
   //
   // function only applies to entire current trace
   //
   
   interval_t interval = edf.timeline.wholetrace();
-
-
-  
 
   
   //
@@ -110,10 +133,10 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;	  
       
 
-      // epoch size in sample points
+      // epoch size in sample points (if using epoch-perms)
       
-      const int es = Fs[s] * epoch_sec;
-            
+      const int es = no_epoch_perm ? 0 : Fs[s] * epoch_sec;
+
 
       //
       // Get signal
@@ -128,7 +151,7 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
       // Calculate
       //
 
-      phsyn_t phsyn( *d , Fs[s] , lf , uf , nbins , nreps , es );
+      phsyn_t phsyn( *d , Fs[s] , lf , uf , nbins , nreps , ripple , tw , es );
       
       phsyn.calc();
 
@@ -152,7 +175,6 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
 void phsyn_t::calc() 
 {
   
-  std::cerr << "calc\n";
 
   //
   // bin boundaries (0..360)
@@ -200,7 +222,6 @@ void phsyn_t::calc()
   
   logger << "  considering " << frqs.size() << " frequency bands\n";
 
-  logger << " f1, f2 = " << f1.size() << " " << f2.size() << "\n";
   //
   // get phase angles at each time point
   //  
@@ -208,7 +229,7 @@ void phsyn_t::calc()
   while ( ff != frqs.end() )
     {
 
-      logger << "hilbert " << ff->first << "-" << ff->second << "\n";
+      //logger << "  hilbert " << ff->first << "-" << ff->second << "\n";
 
       // filter-Hilbert
       hilbert_t hilbert( x , sr , ff->first , ff->second , ripple , tw );
@@ -288,23 +309,44 @@ void phsyn_t::calc()
 	
 	    int b1 = 0, b2 = 0; 
 
-	    // whole trace perm
-	    int j = CRandom::rand( npoints );
+	    // within-epoch perm
+	    
+	    std::vector<int> permpos( npoints );
+	    int j = 0;
 
-	    // within-epoch perms
-	    std::vector<int> offset;
+	    if ( es ) 
+	      {
+		int num_epoch = npoints / es ; 
+		std::vector<int> shuffle;
+		for (int e=0;e<num_epoch;e++) shuffle.push_back( CRandom::rand( es ) );
+		//std::cout << "fig " << num_epoch << " epochs\n";
+		for (int i=0;i<npoints;i++)
+		  {		    
+		    int cur_epoch = i / es;
+		    if ( cur_epoch >= num_epoch ) continue; // do not permute last epoch, if partial
+		    int off = i - cur_epoch * es; 
+		    if ( off + shuffle[ cur_epoch ] >= es ) permpos[i] = i - es + shuffle[cur_epoch ];
+		    else permpos[i] = i + shuffle[cur_epoch ];
+		    //std::cout << "pp\t" << cur_epoch << "\t" << i << "\t" << permpos[i] << "\t" << off << " " << shuffle[cur_epoch ] << "\n";
+		  }
+	      }
+	    else  // otherwise whole trace perm
+	      j = CRandom::rand( npoints );
 	    
 
-	    
 	    for (int i=0;i<npoints;i++)
 	      {
-				
-		bin( (*ph1)[i] , &b1 , bb , nbins );
-
-		++j;
-
-		if ( j == npoints ) j = 0;
 		
+		bin( (*ph1)[i] , &b1 , bb , nbins );
+		
+		if ( es ) // within-epoch shuffle
+		  j = permpos[i];
+		else // whole trace shuffle
+		  {
+		    ++j;
+		    if ( j == npoints ) j = 0;
+		  }
+
 		bin( (*ph2)[j] , &b2 , bb , nbins );
 
 		// increment by one unit (default, unweighted)
@@ -312,6 +354,7 @@ void phsyn_t::calc()
 	      }
 
 	    
+
 	    // 
 	    // summary stat for surrogate 
 	    //
@@ -351,7 +394,7 @@ void phsyn_t::calc()
 
 
 
-	if ( false )
+	if ( true )
 	  {
 	    
 	    for (int b1=0;b1<nbins;b1++)

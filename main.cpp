@@ -65,13 +65,85 @@ int main(int argc , char ** argv )
       proc_dummy( p ); 
       exit(0); 
     } 
+  
+  //
+  // help mode
+  //
+
+  else if ( argc >= 2 && strcmp( argv[1] , "-h" ) == 0 )
+    {
+
+      global.api();
+
+      std::cerr << "\nusage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file\n\n";
+      
+      
+      
+      if ( argc == 2 ) 
+	{
+	  std::cerr << "List of domains\n"
+		    << "---------------\n\n";
+	  
+	  std::cerr << globals::cmddefs.help_domains()
+		    << "\n";
+
+	  std::cerr << "for commands within a domain, add the domain label after -h, e.g.\n"
+		    << "\n  luna -h annot\n\n";
+	}
+      else
+	{
+	  std::string p = argv[2] ;
+
+	  // 'all'  list all commands for all domains
+	  if ( p == "all" ) 
+	    {
+
+	      std::cerr << "List of all commands (from all domains)\n"
+			<< "---------------------------------------\n\n";
+
+	      std::cerr << globals::cmddefs.help_commands() << "\n";
+
+	    }
+	  // {domain}  list all commands (non-verbose)
+	  else if ( globals::cmddefs.is_domain(p) ) 
+	    {
+	      std::cerr << "List of all commands in this domain\n"
+			<< "-----------------------------------\n\n";
+
+	      std::cerr << globals::cmddefs.help_commands( p ) << "\n";
+
+	    }
+	  
+	  // {cmd}  list all options/tables (verbose)
+	  else if ( globals::cmddefs.is_cmd(p) ) 
+	    {
+	      std::cerr << "List of all parameters/outputs\n"
+			<< "------------------------------\n";
+
+	      std::cerr << globals::cmddefs.help( p , true ) << "\n";
+	    }
+	  
+	  // otherwise, complain
+	  else  
+	    std::cerr << "option [" << p << "] not recognized as a domain or command\n";
+	}      
+      std::exit(0);
+    }
+
+  //
+  // EVAL from the command line 
+  //
   else if ( argc == 2 && strcmp( argv[1] , "--eval" ) == 0 ) 	   
     {
-      // simple test evaluation of expressions from the command line
       global.api();
       proc_eval_tester( false ); 
       exit(0);       
     }
+
+  //
+  // Verbose EVAL
+  //
+
   else if ( argc == 2 && strcmp( argv[1] , "--eval-verbose" ) == 0 ) 
     {
       // as above, but w/ verbose output
@@ -79,18 +151,19 @@ int main(int argc , char ** argv )
       proc_eval_tester( true ); 
       exit(0);       
     }
-  else if ( argc == 3 && strcmp( argv[1] , "--validate" ) == 0 ) 
-    {
-      // 1: sample-list or EDF
-      // 2: --validate 
-      Helper::halt( "--validate not implemented... ");
-    }
+
+
+  //
+  // DUMP an XML file
+  //
+
   else if ( argc == 3 && strcmp( argv[1] , "--xml" ) == 0 )
     {
       global.api();
       annot_t::dumpxml( argv[2] , false );
       std::exit(0);
     }
+
 
   //
   // banner

@@ -612,9 +612,19 @@ bool Helper::iequals(const std::string& a, const std::string& b)
 }
 
 
-bool Helper::imatch(const std::string& a, const std::string& b)
+bool Helper::imatch(const std::string& a, const std::string& b , unsigned int min )
 {
+  // only compare up to length of the shortest
+  // i.e. 
+  //     E
+  //     EDF Annotations
+  // will match, so  
+ 
   unsigned int sz = a.size() < b.size() ? a.size() : b.size() ;
+  // if specified, require up to 'min' characters
+  if ( min != 0 ) sz = min;
+  if ( a.size() < min || b.size() < min ) return false;
+
   for (unsigned int i = 0; i < sz; ++i)
     if (tolower(a[i]) != tolower(b[i]))
       return false;

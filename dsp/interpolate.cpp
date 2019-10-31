@@ -200,6 +200,9 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       // Next epoch...
       //
     }
+
+  
+  writer.unepoch();
   
   logger << " all done\n";
 
