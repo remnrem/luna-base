@@ -20,33 +20,52 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#ifndef __LUNA_SL_H__
+#define __LUNA_SL_H__
 
-#include "spectral_norm.h"
-#include "tv.h"
-#include "cfc.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "phsyn.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
+struct edf_t;
+struct param_t;
+struct clocs_t;
+struct signal_list_t;
+
+#include <vector>
+
+#include "stats/matrix.h"
+
+
+struct sl_t { 
+  
+  sl_t( const clocs_t & clocs , const signal_list_t & signals , 
+	int m_ = 4 , int order_ = 10 , double lambda_ = 1e-5 ); 
+  
+  bool apply( const Data::Matrix<double> & inp , Data::Matrix<double> & out );
+
+ private:
+  
+  int m; 
+  
+  int order;
+  
+  double lambda;
+
+  Data::Matrix<double> G;
+  
+  Data::Matrix<double> invG;
+
+  Data::Matrix<double> H;
+
+  std::vector<double> GsinvS;
+  
+  double sumGsinvS;
+  
+}; 
+
+
+namespace dsptools
+{
+  
+  void surface_laplacian_wrapper( edf_t & edf , param_t & param );
+    
+}
 
 #endif

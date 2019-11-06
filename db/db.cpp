@@ -829,7 +829,7 @@ command_t StratOutDBase::insert_command( const std::string & cmd_name , int cmd_
   sql.bind_text( stmt_insert_command , ":cmd_name" , cmd_name );
   sql.bind_int( stmt_insert_command , ":cmd_number" , cmd_number );
   sql.bind_text( stmt_insert_command , ":cmd_timestamp" , timedate );
-  sql.bind_text( stmt_insert_command , ":cmd_parameteres" , cmd_param );
+  sql.bind_text( stmt_insert_command , ":cmd_parameters" , cmd_param );
   sql.step( stmt_insert_command );
   sql.reset( stmt_insert_command );
   

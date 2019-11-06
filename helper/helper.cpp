@@ -853,6 +853,120 @@ void Helper::swap_in_variables( std::string * t , const std::map<std::string,std
   *t = s;
 }
 
+
+void Helper::process_block_conditionals( std::string * t , const std::map<std::string,std::string> & vars )
+{
+  
+  // either tag=1 or tag=0 and tag2=1 etc
+  // or  add=tag,tag2
+  
+  std::set<std::string> adds;
+  if ( vars.find( "add" ) != vars.end() )
+    {
+      std::vector<std::string> tok = Helper::parse( vars.find( "add" )->second , "," );
+      for (int i=0; i<tok.size(); i++) adds.insert( tok[i] );
+    }
+
+  // 
+  // [[var 
+  //    ...
+  //    include ...
+  //    ...
+  // ]]var
+  //
+    
+  
+  std::string s;
+  bool include = true;
+
+  std::set<std::string> includes;
+  std::set<std::string> excludes;
+
+  for (int i=0;i<t->size();i++)
+    {
+      
+      //
+      // end of an inclusion block?
+      //
+      
+      if ( i < t->size() - 1 && (*t)[i] == ']' && (*t)[i+1] == ']' ) 
+	{
+	  ++i;
+	  std::string h = "";
+	  while (1) 
+	    { 
+	      ++i;
+	      if ( i == t->size() ) break; // can be EOF
+	      if ( (*t)[i] == ' ' || (*t)[i] == '\t' || (*t)[i] == '\n' ) break;
+	      h += (*t)[i];
+	    }	  
+	  
+	  bool was_exclude = excludes.find(h) != excludes.end();
+	  bool was_include = includes.find(h) != includes.end();
+	  
+	  if ( was_exclude ) excludes.erase( excludes.find(h)  );
+	  else if ( was_include ) includes.erase( includes.find(h) );
+	  
+	  // set current inclusion status
+	  include = excludes.size() == 0 ;
+
+	  continue;
+	}
+
+      
+      //
+      // skipping?
+      //
+
+      if ( ! include ) continue;
+
+      //
+      // start of inclusion block?
+      //
+
+      if ( include && i < t->size() - 1 && (*t)[i] == '[' && (*t)[i+1] == '[' ) 
+	{
+	  ++i;
+	  std::string h = "";
+	  while (1) 
+	    { 
+	      ++i;
+	      if ( i == t->size() ) Helper::halt( "badly formed inclusion block" );
+	      if ( (*t)[i] == ' ' || (*t)[i] == '\t' || (*t)[i] == '\n' ) break;
+	      h += (*t)[i];
+	    }
+	  
+	  bool v_inc = vars.find( h ) != vars.end() && vars.find( h )->second != "0";
+	  bool a_inc = adds.find( h ) != adds.end();
+
+	  include = v_inc || a_inc;
+
+	  if ( includes.find( h ) != includes.end() || excludes.find(h) != excludes.end() )
+	    Helper::halt( "bad format for conditional block: [["+h + " already set" );
+	  
+	  if ( include ) 
+	    includes.insert( h );
+	  else 
+	    excludes.insert( h );
+
+
+	  continue;
+	}
+      
+      
+      //
+      // normal add
+      //
+
+      s += (*t)[i];
+      
+    }
+
+  // copy back
+  *t = s;
+}
+
+
 std::vector<std::string> Helper::file2strvector( const std::string & filename )
 {
   if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not find " + filename );

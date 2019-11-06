@@ -59,6 +59,7 @@ struct tfac_t {
   std::set<std::string> fac;
 
   std::string as_string( const std::string & delim = "," ) const { 
+    if ( fac.size() == 0 ) return "{baseline}";
     std::stringstream ss;
     std::set<std::string>::const_iterator ii = fac.begin();
     while ( ii != fac.end() ) {

@@ -88,7 +88,7 @@ struct clocs_t {
 
   void convert_to_unit_sphere();
 
-  Data::Matrix<double> interelectrode_distance_matrix( const signal_list_t & signals ) const; 
+  Data::Matrix<double> interelectrode_distance_matrix( const signal_list_t & signals , const int mode = 1 ) const; 
 						       
   Data::Matrix<double> interelectrode_distance_matrix( const signal_list_t & signals1 , 
 						       const signal_list_t & signals2 ) const;
@@ -133,6 +133,8 @@ struct clocs_t {
 
   
   bool attached() const { return cloc.size() != 0 ; } 
+
+  int size() const { return cloc.size() ; } 
 
 
   //

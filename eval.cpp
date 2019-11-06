@@ -572,10 +572,25 @@ bool cmd_t::read( const std::string * str , bool silent )
       else recheck = false;
     }
   
+
+  //
+  // remove any conditional blocks, where variable should be var=1 (in) or var=0 (out)
+  // or a value for add=variable,var2 for var=1 var=2
+  //
+
+  // [[var1
+  //   block
+  // ]]var1
+
+  Helper::process_block_conditionals( &line , vars );
+     
+  //
   // swap in any variables
+  //
+
   Helper::swap_in_variables( &line , vars );
 
-  
+
   std::vector<std::string> tok = Helper::quoted_parse( line , "\n" );
   if ( tok.size() == 0 ) 
     {
@@ -761,8 +776,9 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CLOCS" ) )        proc_attach_clocs( edf , param(c) );
       else if ( is( c, "L1OUT" ) )        proc_leave_one_out( edf , param(c) );
       else if ( is( c, "INTERPOLATE" ) )  proc_chep_based_interpolation( edf, param(c) );
+      else if ( is( c, "SL" ) )           proc_surface_laplacian( edf , param(c) );
       else if ( is( c, "EMD" ) )          proc_emd( edf , param(c) );
-  
+      
       else if ( is( c, "MI" ) )           proc_mi( edf, param(c) );
       else if ( is( c, "HR" ) )           proc_bpm( edf , param(c) );
       else if ( is( c, "SUPPRESS-ECG" ) ) proc_ecgsuppression( edf , param(c) );
@@ -1644,6 +1660,12 @@ void proc_leave_one_out( edf_t & edf , param_t & param )
 void proc_chep_based_interpolation( edf_t & edf , param_t & param )
 {
   dsptools::chep_based_interpolation( edf , param );
+}
+
+// SL : surface laplacian
+void proc_surface_laplacian( edf_t & edf , param_t & param )
+{
+  dsptools::surface_laplacian_wrapper( edf , param );
 }
 
 void proc_attach_clocs( edf_t & edf , param_t & param )

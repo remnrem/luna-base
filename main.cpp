@@ -75,12 +75,12 @@ int main(int argc , char ** argv )
 
       global.api();
 
-      std::cerr << "\nusage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file\n\n";
       
-      
-      
-      if ( argc == 2 ) 
+      if ( argc == 2 )  // -h 
 	{
+
+	  std::cerr << "\nusage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file\n\n";
+
 	  std::cerr << "List of domains\n"
 		    << "---------------\n\n";
 	  
@@ -89,37 +89,30 @@ int main(int argc , char ** argv )
 
 	  std::cerr << "for commands within a domain, add the domain label after -h, e.g.\n"
 		    << "\n  luna -h annot\n\n";
+
+	  std::cerr << "for options and output for a given command, add the (upper-case) command after -h, e.g.\n"
+		    << "\n  luna -h SIGSTATS\n\n";
+
 	}
-      else
+      else // --h all
 	{
 	  std::string p = argv[2] ;
 
 	  // 'all'  list all commands for all domains
 	  if ( p == "all" ) 
 	    {
-
-	      std::cerr << "List of all commands (from all domains)\n"
-			<< "---------------------------------------\n\n";
-
 	      std::cerr << globals::cmddefs.help_commands() << "\n";
 
 	    }
-	  // {domain}  list all commands (non-verbose)
+	  // -h {domain}  list all commands (non-verbose)
 	  else if ( globals::cmddefs.is_domain(p) ) 
 	    {
-	      std::cerr << "List of all commands in this domain\n"
-			<< "-----------------------------------\n\n";
-
-	      std::cerr << globals::cmddefs.help_commands( p ) << "\n";
-
+	      std::cerr << "\n" << globals::cmddefs.help_commands( p ) << "\n";
 	    }
 	  
-	  // {cmd}  list all options/tables (verbose)
+	  // -h {cmd}  list all options/tables (verbose)
 	  else if ( globals::cmddefs.is_cmd(p) ) 
 	    {
-	      std::cerr << "List of all parameters/outputs\n"
-			<< "------------------------------\n";
-
 	      std::cerr << globals::cmddefs.help( p , true ) << "\n";
 	    }
 	  
@@ -1121,7 +1114,7 @@ void proc_dummy( const std::string & p )
 
   std::vector<double> x;
   
-  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" || p == "ica" || p == "fip" ) 
+  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" || p == "ica" || p == "fip" || p == "sl" ) 
     {
 
       int cnt= 0;
@@ -1209,7 +1202,50 @@ void proc_dummy( const std::string & p )
       std::exit(1);
     }
   
-  
+  if ( p == "sl" ) 
+    {
+
+      // CLOCLS
+      
+      clocs_t clocs;
+      
+      clocs.load_cart( "/Users/shaun/dropbox/projects/ltest/clocs.eegbook" );
+
+      int i = 0 ; 
+      signal_list_t signals;
+      
+      std::ifstream II( "/Users/shaun/dropbox/projects/ltest/clocs.eegbook" );
+      while ( ! II.eof() ) 
+	{
+	  std::string l;
+	  double x, y, z;
+	  II >> l >> x >> y >> z;
+	  if ( II.eof() ) break;
+	  signals.add( i++ , l );
+	  
+	}
+      II.close();
+
+      sl_t sl( clocs , signals );
+      
+      
+      // assume 64 channels; rows = channels; cols = time-points
+      const int ns = 64;
+      const int np = x.size() / ns;
+      Data::Matrix<double> X( np , ns );
+
+      i = 0;
+      for (int c=0;c<ns;c++)
+	for (int t=0;t<np;t++) 
+	  X[t][c] = x[i++];
+      
+      Data::Matrix<double> O;
+
+      sl.apply( X , O );
+      
+      
+    }
+
   if ( p == "dynam" )
     {
       
