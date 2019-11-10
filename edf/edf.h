@@ -24,6 +24,7 @@
 #define __PSGLIB_EDF_H__
 
 #include "timeline/timeline.h"
+#include "clocs/clocs.h"
 #include "tal.h"
 #include "edfz/edfz.h"
 #include "edf/signal-list.h"
@@ -346,6 +347,13 @@ public:
 
 
   //
+  // Channel location data 
+  //
+
+  clocs_t clocs;
+
+
+  //
   // Annotations
   //
 
@@ -399,7 +407,7 @@ public:
   
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
-  void update_signal( int s , std::vector<double> * );
+  void update_signal( int s , const std::vector<double> * );
 
   void update_records( int a , int b , int s , const std::vector<double> * );
 

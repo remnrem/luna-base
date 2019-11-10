@@ -266,6 +266,8 @@ void proc_fiplot( edf_t & , param_t & );
 void proc_mi( edf_t & , param_t & );
 void proc_ica( edf_t & , param_t & );
 void proc_emd( edf_t & , param_t & );
+void proc_attach_clocs( edf_t & , param_t & );
+void proc_surface_laplacian( edf_t & edf , param_t & param );
 void proc_leave_one_out( edf_t & , param_t & );
 void proc_chep_based_interpolation( edf_t & , param_t & );
 void proc_correl( edf_t & , param_t & );

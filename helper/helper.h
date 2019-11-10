@@ -76,6 +76,8 @@ namespace Helper
   
   void swap_in_variables( std::string * , const std::map<std::string,std::string> & );
   
+  void process_block_conditionals( std::string * , const std::map<std::string,std::string> & );
+
   std::string insert_indiv_id( const std::string & id , const std::string & str );
 
   bool file_extension( const std::string & , const std::string & );
@@ -88,7 +90,7 @@ namespace Helper
   bool iequals(const std::string& a, const std::string& b);
 
   // case insenstive string-root match
-  bool imatch(const std::string& a, const std::string& b);
+  bool imatch(const std::string& a, const std::string& b , unsigned int min = 0 );
 
   // print vector
   template <class T> std::string print( const std::vector<T> & x , const std::string & label , const int l )

@@ -11,6 +11,9 @@
 #define TOLERANCE        0.0001
 #define LIBICA_ALPHA     1
 
-void fastICA(double** X, int rows, int cols, int compc, double** K, double** W, double** A, double** S);
+#include "stats/matrix.h"
+
+void fastICA( Data::Matrix<double> & X , int compc, Data::Matrix<double> & K , Data::Matrix<double> & W , Data::Matrix<double> & A , Data::Matrix<double> & S );
+
 
 #endif /*LIBICA_H_*/

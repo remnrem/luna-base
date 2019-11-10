@@ -59,6 +59,7 @@ struct tfac_t {
   std::set<std::string> fac;
 
   std::string as_string( const std::string & delim = "," ) const { 
+    if ( fac.size() == 0 ) return "{baseline}";
     std::stringstream ss;
     std::set<std::string>::const_iterator ii = fac.begin();
     while ( ii != fac.end() ) {
@@ -120,6 +121,11 @@ class cmddefs_t
     domain_desc[ domain ] = desc;
   }
 
+  bool is_domain( const std::string & d ) 
+  {
+    return domain_label.find( d ) != domain_label.end();
+  }
+
   // command description 
   void add_cmd( const std::string & domain , const std::string & cmd , const std::string & desc )
   {
@@ -128,7 +134,12 @@ class cmddefs_t
     cdomain[ cmd ] = domain;
   }
 
-
+  bool is_cmd( const std::string & c ) 
+  {
+    return cmds.find( c ) != cmds.end();
+  }
+  
+  
   // command URLs , e.g.  zzz.bwh.harvard.edu/luna/ref/
   void add_url( const std::string & cmd , const std::string & url ) 
   {

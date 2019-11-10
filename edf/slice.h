@@ -73,8 +73,16 @@ class slice_t
   
   interval_t duration() const ;
 
- private:
+  void clear()
+  {
+    data.clear();
+    time_points.clear();
+    records.clear();
+    start = stop = 0;
+  }
 
+ private:
+  
   // input
   edf_t & edf;
   const int signal;
@@ -89,6 +97,8 @@ class slice_t
   double start, stop;
   
 };
+
+
 
 class mslice_t {
   
@@ -116,8 +126,64 @@ class mslice_t {
   int size() const { return channel.size(); } 
 
   std::string label(const int s) const { return labels[s]; } 
+
+  void clear() // nb. leaves in an invalid state, so do not try to reuse...
+  { 
+    for (int s=0;s<channel.size();s++)
+      {
+	if ( channel[s] != NULL ) delete channel[s];
+	channel[s] = NULL;
+      }
+  }
   
 };
+
+
+
+
+class matslice_t {
+  
+ public:
+  
+  matslice_t( edf_t & edf , 
+	      const signal_list_t & , 
+	      const interval_t & interval );
+  
+  ~matslice_t()
+    {
+      clear();      
+    }
+
+  
+  const std::vector<double> * col( const int s ) const { return data.col_pointer(s)->data_pointer(); } 
+  
+  const Data::Matrix<double> & data_ref() const { return data; } 
+
+  Data::Matrix<double> & nonconst_data_ref() { return data; } 
+
+  int size() const { return labels.size(); } 
+  
+  std::string label(const int s) const { return labels[s]; } 
+
+  void clear()
+  { 
+    data.clear();
+    labels.clear();
+    time_points.clear();
+  }
+
+ private:
+
+  Data::Matrix<double> data;  
+
+  std::vector<uint64_t> time_points;
+
+  std::vector<std::string> labels; 
+
+  
+};
+
+
 
 
 #endif

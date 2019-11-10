@@ -32,6 +32,13 @@ extern globals global;
 void cmddefs_t::init()
 {
 
+  /////////////////////////////////////////////////////////////////////////
+  //
+  // Document domains, commands, parameters, output tables and variables 
+  //
+  /////////////////////////////////////////////////////////////////////////
+
+
   //
   // base URL
   //
@@ -58,13 +65,17 @@ void cmddefs_t::init()
   add_domain( "topo"     , "Cross-signal analyses"    , "Coherence and other topographical analyses" );
   add_domain( "cfc"      , "Cross-frequency coupling" , "Phase-amplitude and spindle/SO coupling" );
   add_domain( "misc"     , "Misc"           , "Misc. commands" );
-  add_domain( "exp"      , "Experimental"   , "Experimental features, under heavy development / for internal use only" );
+  add_domain( "exp"      , "Experimental"   , "Experimental features: under heavy development, for internal use only" );
 
   
+   
+
+  /////////////////////////////////////////////////////////////////////////////////
   //
-  // Commands, parameters, output tables and variables 
+  // SUMMARIES
   //
-  
+  /////////////////////////////////////////////////////////////////////////////////
+
 
   //
   // DESC
@@ -72,8 +83,7 @@ void cmddefs_t::init()
 
   add_cmd( "summ" , "DESC" , "Simple description of an EDF, sent to the console" );
 
-
-
+  
   //
   // SUMMARY
   //
@@ -110,6 +120,7 @@ void cmddefs_t::init()
   add_cmd( "summ" , "TAG" , "Generic command to add a tag (level/factor) to the output" );  
   add_param( "TAG" , ""    , "RUN/L1" , "" , "Add tag with level L1 to factor RUN in output" );
   add_param( "TAG" , "tag" , "RUN/L1" , "" , "Identical to the above, but explicitly using the tag option" );
+
 
   //
   // STATS
@@ -197,21 +208,41 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
   
-
-  //
-  // Domain: 
-  //
+  // EPOCH 
 
   add_cmd( "epoch" , "EPOCH" , "Set epochs" );
   add_url ( "EPOCH" , "epochs/#epoch" );
+
+  add_param( "EPOCH" , "len" , "30" , "" , "Epoch length (seconds), defaults to 30" );
+  add_param( "EPOCH" , "dur" , "30" , "" , "Same as len" );
+  add_param( "EPOCH" , "inc" , "30" , "" , "Epoch increment (seconds), defaults to len (i.e. no overlap)" );
+  add_param( "EPOCH" , "epoch" , "30,15" , "" , "Same as len=30 inc=15" );
+  add_param( "EPOCH" , "require" , "10" , "" , "Stop processing that EDF if there are not at least N epochs" );
+  add_param( "EPOCH" , "verbose" , "" , "" , "Output epoch-level information" );
 
   add_table( "EPOCH" , "" , "Epoch-level summaries" );
   add_var( "EPOCH" , "" , "DUR" , "Epoch duration (seconds)" );
   add_var( "EPOCH" , "" , "INC" , "Epoch increment (seconds)" );
   add_var( "EPOCH" , "" , "NE" , "Number of epochs" );
 
-  
+  add_table( "EPOCH" , "E" , "Per-epoch interval information [verbose]" );
+  add_var( "EPOCH" , "E" , "E1" , "Current epoch number (which may differ from E if the EDF has been restructured)" );
+  add_var( "EPOCH" , "E" , "HMS" , "Clock-time for epoch start (hh:mm:ss)" );
+  add_var( "EPOCH" , "E" , "INTERVAL" , "String label of epoch interval (seconds)" );
+  add_var( "EPOCH" , "E" , "MID" , "Midpoint of epoch (seconds elapsed from EDF start)" );
+  add_var( "EPOCH" , "E" , "START" , "Start of epoch (seconds elapsed from EDF start)" );
+  add_var( "EPOCH" , "E" , "STOP" , "Stop of epoch (seconds elapsed from EDF start)" );
 
+
+  // EPOCH-ANNOT
+
+  add_cmd( "epoch" , "EPOCH-ANNOT" , "Attach epoch-level annotations from a file, to an epoched EDF" );
+  add_url( "EPOCH-ANNOT" , "epochs/#epoch-annot" );  
+  add_param( "EPOCH-ANNOT" , "file" , "annots/id1.epochs" , "" , "File path/name to read annotations from [required]" );
+  add_param( "EPOCH-ANNOT" , "recode" , "NREM1=N1,NREM2=N2" , "" , "Comma-delimited list of recodings (from=to)");
+  
+  
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // MASKS
@@ -219,57 +250,80 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
 
 
-//   MASKMask epochs based on annotations and other features
+  // MASK
 
-//     ifif=N2Mask N2 epochs; unmask non-N2 epochs
-// 			     ifnotifnot=N2Mask non-N2 epochs; unmask N2 epochs
-// 								mask-ifmask-if=N2Mask N2 epochs; leave non-N2 epochs as they are
-// 												   mask-ifnotmask-ifnot=N2Mask non-N2 epochs, leave N2 epochs as they are
-// 												   unmask-ifunmask-if=N2Unmask N2 epochs; leave non-N2 epochs as they are
-// 																	    unmask-ifnotunmask-ifnot=N2Unmask non-N2 epochs; leave N2 epochs as they are
+  add_cmd( "mask" , "MASK" , "Mask epochs based on annotations and other features" );
+  add_url( "MASK" , "masks/#mask" );
 
+  add_param( "MASK" , "if"    , "NREM2" , "" , "Mask NREM2 epochs, unmask all others" );
+  add_param( "MASK" , "ifnot" , "NREM2" , "" , "Unmask NREM2 epochs, mask all others" );
+  add_param( "MASK" , "expr" , "A>2" , "" , "Mask epochs with A>2, unmask all others" );
+  add_param( "MASK" , "not-expr" , "A>2" , "" , "Unmask epochs with A>2, mask all others" );
 
-// 																							       exprexpr="if(annot1) && annot2.v2 > 0.95"Mask/unmask epochs for which the expression is true/false
-// 																																       not-exprnot-expr="if(annot1) && annot2.v2 > 0.95"Unmask/mask epochs for which the expression is true/false
-// 																																										       mask-exprmask-expr="if(annot1) && annot2.v2 > 0.95"Mask epochs for which the expression is true
-// 																																																				  unmask-exprunmask-expr="if(annot1) && annot2.v2 > 0.95"Unmask epochs for which the expression is true
+  add_param( "MASK" , "mask-if" , "NREM2" , "" , "Mask NREM2 epochs" );
+  add_param( "MASK" , "mask-ifnot" , "NREM2" , "" , "Mask non-NREM2 epochs" );
+  add_param( "MASK" , "mask-expr" , "A>2" , "" , "Mask epochs with A>2" );
 
+  add_param( "MASK" , "unmask-if" , "NREM2" , "" , "Unask NREM2 epochs" );
+  add_param( "MASK" , "unmask-ifnot" , "NREM2" , "" , "Unask non-NREM2 epochs" );
+  add_param( "MASK" , "unmask-expr" , "A>2" , "" , "Unmask epochs with A>2" );
 
-// 																																																														   epochepoch=20-50Mask epochs outside of this range
-// 																																																														   mask-epochmask-epoch=20-50As above, except mask epochs inside this range
-// 																																																														   secsec=0-60Set mask to include all epochs that span the interval from 0 to 60 seconds (i.e. these are unmasked, all other epochs are masked)
-// 																																																														   hmshms=8:00-9:00Set mask to include all epochs that span the interval from 8am to 9am
+  add_param( "MASK" , "none" , "" , "" , "Clear mask (i.e. unmask all)" );
+  add_param( "MASK" , "clear" , "" , "" , "Clear mask (i.e. unmask all)" );
+  add_param( "MASK" , "include-all" , "" , "" , "Clear mask (i.e. unmask all)" );
 
-
-// 																																																														   noneMASK noneSet to include all epochs (default when first loading a new EDF)
-// 																																																														   allMASK allSet to exclude (i.e. mask) all epochs
-// 																																																														   flipMASK flipFlip all epoch masks
-// 																																																														   randomMASK random=50Select up to 50 from currently unmasked epochs
-// 																																																														   leadingMASK leading=wakeRemove all epochs up to the first epoch without this annotation
-// 																																																														   flankedMASK flanked=N2,2Include only N2 epochs flanked by at least 2 other N2 epochs
+  add_param( "MASK" , "all" , "" , "" , "Mask all epochs" );
+  add_param( "MASK" , "total" , "" , "" , "Mask all epochs" );
+  add_param( "MASK" , "exclude-all" , "" , "" , "Mask all epochs" );
 
 
-// 																																																														   N_MATCHESNumber of epochs that match the condition (e.g. having annotation A)
-// 																																																														   N_MASK_SETNumber of previously unmasked epochs that were masked by this operation
-// 																																																														   N_MASK_UNSETNumber of previously masked epochs that were unmasked by this operation
-// 																																																														   N_UNCHANGEDNumber of epochs whose mask status was not changed by this operation
-// 																																																														   N_RETAINEDNumber of epochs retained after this operation
-// 																																																														   N_TOTALTotal number of epochs
+  add_param( "MASK" , "epoch" , "1-10" , "" , "Select epochs 1 to 10" );
+  add_param( "MASK" , "sec" , "60-120" , "" , "Select epochs overlapping this interval" );
+  add_param( "MASK" , "hms" , "8:00-9:00" , "" , "Select epochs overlapping this interval" );
 
+  add_param( "MASK" , "random" , "20" , "" , "Select 20 random (currently unmasked) epochs" );
 
+  add_param( "MASK" , "flip" , "" , "" , "Reverse all masks" );
+  add_param( "MASK" , "leading" , "W" , "" , "Remove all leading epochs matching W" );
+  add_param( "MASK" , "flanked" , "REM,2" , "" , "Select only REM epochs flanked by 2+ REM epochs before/after" );
+  
+  
+  add_table( "MASK" , "EPOCH_MASK" , "Output stratified by mask" );
+  add_var( "MASK" , "EPOCH_MASK", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
+  add_var( "MASK" , "EPOCH_MASK", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation");
+  add_var( "MASK" , "EPOCH_MASK", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation");
+  add_var( "MASK" , "EPOCH_MASK", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation");
+  add_var( "MASK" , "EPOCH_MASK", "N_RETAINED" , "Number of epochs retained after this operation");
+  add_var( "MASK" , "EPOCH_MASK", "N_TOTAL" , "Total number of epochs");
+  
+  // DUMP-MASK
+  
+  add_cmd( "mask" , "DUMP-MASK" , "Output epoch-level mask information" );
+  add_url( "DUMP-MASK" , "masks/#dump-mask" );
 
+  add_table( "DUMP-MASK" , "E" , "Epoch-level mask tabulation" );
+  add_var( "EPOCH" , "E" , "EPOCH_MASK" , "Mask status: 0 is unmasked (included), and 1 is masked (i.e. excluded)" );
+ 
 
-//     DUMP-MASKOutput epoch-level mask information
+  // RE (or RESTRUCTURE)
 
-// 																																																														   Out: 
-// Epoch-level tabulation (strata: E)
+  add_cmd( "mask"   , "RE" , "Restructure an EDF (drop channels/epochs)" );
+  add_url( "RE" , "masks/#restructure" );
 
+  add_table( "RE" , "" , "Restructured data duration" );
+  add_var( "RE" , "" , "DUR1" , "Duration pre-restructuring (secs)");
+  add_var( "RE" , "" , "DUR2" , "Duration post-restructuring (secs)");
+  add_var( "RE" , "" , "NR1" , "Duration pre-restructuring (records)");
+  add_var( "RE" , "" , "NR2" , "Duration post-restructuring (records)");
 
-//       EPOCH_MASK Mask status: 0 is unmasked (included), and 1 is masked (i.e. excluded)
+  add_cmd( "mask"   , "RESTRUCTURE" , "Restructure an EDF (drop channels/epochs)" );
+  add_url( "RESTRUCTURE" , "masks/#restructure" );
 
-
-
-//     RESTRUCTURE (or RE)Remove masked out epochs (and channels)
+  add_table( "RESTRUCTURE" , "" , "Restructured data duration" );
+  add_var( "RESTRUCTURE" , "" , "DUR1" , "Duration pre-restructuring (secs)");
+  add_var( "RESTRUCTURE" , "" , "DUR2" , "Duration post-restructuring (secs)");
+  add_var( "RESTRUCTURE" , "" , "NR1" , "Duration pre-restructuring (records)");
+  add_var( "RESTRUCTURE" , "" , "NR2" , "Duration post-restructuring (records)");
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -277,57 +331,66 @@ void cmddefs_t::init()
   // MANIPULATIONS
   //
   /////////////////////////////////////////////////////////////////////////////////
+  
+  // SIGNALS
 
+  add_cmd( "manip" , "SIGNALS" , "Retain/remove specific EDF channels" );
+  add_url( "SIGNALS" , "manipulatons/#signals" );
+  add_param( "SIGNALS" , "drop" , "EMG,ECG" , "" , "Drop channels EMG and ECG" );
+  add_param( "SIGNALS" , "keep" , "C3,C4" , "" , "Drop all channels except C3 and C4" );
 
-// SIGNALSRetain/remove specific EDF channels
+  // COPY
 
-//   drop drop=EMG,ECGDrop channels EMG and ECG
-//   keep keep=C3,C4Drop all channels except C3 and C4
+  add_cmd( "manip" , "COPY" , "Duplicate one or more EDF channels" );
+  add_url( "COPY" , "manipulations/#copy" );
+  add_param( "COPY" , "sig" , "C3,C4" , "" , "List of channels to duplicate" );
+  add_param( "COPY" , "tag" , "V2" , "" , "Tag add to new channel names, e.g. C3_V2 [required] " );
+    
+  // RESAMPLE 
 
+  add_cmd( "manip" , "RESAMPLE" , "Resample signal(s)" );
+  add_url( "RESAMPLE" , "manipulations/#resample" );
+  add_param( "RESAMPLE" , "sig" , "C3,C4" , "" , "List of channels to resample" );
+  add_param( "RESAMPLE" , "sr" , "200" , "" , "New sampling rate (Hz) [required]" );
+  
+  // REFERENCE
 
-// COPYDuplicate one or more EDF channels
+  add_cmd( "manip" , "REFERENCE" , "Resample signal(s)" );
+  add_url( "REFERENCE" , "manipulations/#resample" );
+  add_param( "REFERENCE" , "sig" , "C3,C4" , "" , "List of signals to re-reference" );
+  add_param( "REFERENCE" , "ref" , "A1,A2" , "" , "Signal(s) providing the reference [required]" );
 
-//   sig=C3,C4List of channels to duplicate
-//   tagtag=DELTAA required option, this is added to make the new channel name, e.g. C3 becomes C3_DELTA
+  // uV
 
+  add_cmd( "manip" , "uV" , "Converts a signal to uV units" );
+  add_url( "uV" , "manipulations/#uv" );
+  add_param( "uV" , "sig" , "C3,C4" , "" , "List of signals to convert" );
 
-// RESAMPLEResample signal(s)
+  // mV
 
-//   sig sig=C3,C4Signal list
-//   sr sr=100New sampling rate (Hz)
+  add_cmd( "manip" , "mV" , "Converts a signal to mV units" );
+  add_url( "mV" , "manipulations/#mv" );
+  add_param( "mV" , "sig" , "C3,C4" , "" , "List of signals to convert" );
 
+  // FLIP
 
-// REFERENCERe-reference signals
+  add_cmd( "manip" , "FLIP" , "Flips the polarity of a signal" );
+  add_url( "FLIP" , "manipulations/#flip" );
+  add_param( "FLIP" , "sig" , "C3,C4" , "" , "List of signals to flip" );
 
-//   sigsig=C3,C4Signal(s) to re-reference
-//   refref=A1,A2Signal(s) to provide the reference
+  // RECORD-SIZE
 
+  add_cmd( "manip" , "RECORD-SIZE" , "Alters the record size of an EDF, and writes a new EDF" );
+  add_url( "RECORD-SIZE" , "manipulations/#record-size" );
+  add_param( "RECORD-SIZE" , "dur" , "1" , "" , "New EDF record/block size" );
+  add_param( "RECORD-SIZE" , "edf-dir" , "edfs/" , "" , "Folder for writing new EDFs" );
+  add_param( "RECORD-SIZE" , "edf-tag" , "rec1" , "" , "Tag added to new EDFs" );
+  add_param( "RECORD-SIZE" , "sample-list" , "s2.lst" , "" , "Generate a sample-list pointing to the new EDFs" );
 
-// uVRescale units to uV
+  // ANON
 
-//   sigsig=C3,C4Signal(s) to convert
-
-// mVRescale units to mV
-
-//   sigsig=C3,C4Signal(s) to convert
-
-// FLIPFlip polarity of signal
-
-//   sigsig=C3,C4Signals to flip
-
-// TIME-TRACK Add a time-track to an EDF
-//   // no param
-
-// RECORD-SIZEChange EDF record size
-
-//   durdur=1New EDF record/block size
-//   edf-diredf-dir=edfs/Folder for writing new EDFs
-//   edf-tagedf-tag=rec1Tag added to new EDFs
-//   sample-listsample-list=s2.lstGenerate a sample-list pointing to the new EDFs
-
-// ANONStrip ID information from EDF header
-
-// 					   // no param
+  add_cmd( "manip" , "ANON" , "Strips EDF ID and and Start Date headers" );
+  add_url( "ANON" , "manipulations/#anon" );
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -336,6 +399,33 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
+  // WRITE
+
+  add_cmd( "output" , "WRITE" , "Write a new EDF file" );
+  add_url( "WRITE" , "outputs/#write" );
+  add_param( "WRITE" , "edf-dir" , "edfs/" , "" , "Set folder where new EDFs should be written" );
+  add_param( "WRITE" , "edf-tag" , "v2" , "" , "Add a tag to each new EDF filename" );
+  add_param( "WRITE" , "sample-list" , "v2.lst" , "" , "Name of the new sample-list" );
+
+
+  // MATRIX
+
+  add_cmd( "output" , "MATRIX" , "Dumps signal information to a file" );
+  add_url( "MATRIX" , "outputs/#matrix" );
+  add_param( "MATRIX" , "file" , "signals.txt" , "" , "Required parameter, to specify the filename for the output" );
+  add_param( "MATRIX" , "sig" , "C3,C4" , "" , "Restrict output to these signal(s)" );
+  add_param( "MATRIX" , "hms" , "" , "" , "Add a clock-time column in hh:mm:ss format" );
+  add_param( "MATRIX" , "hms2" , "" , "" , "Add a clock-time column in hh:mm:ss:microsecond format" );
+  add_param( "MATRIX" , "annot" , "X,Y" , "" , "Add columns with values 1/0 to indicate the presence/absence of that annotation" );
+  add_param( "MATRIX" , "min" , "" , "" , "Minimal output to show only signal information (no headers or lead columns)" );
+  
+
+  // DUMP-RECORDS
+
+  add_cmd( "output" , "DUMP-RECORDS" , "Writes detailed annotation and signal data to standard output" );
+  add_url( "DUMP-RECORDS" , "outputs/#dump-records" );
+  add_param( "DUMP-RECORDS" , "no-signals" , "" , "" , "Do not show signal data" );
+  add_param( "DUMP-RECORDS" , "no-annots" , "" , "" , "Do not show annotation information" );
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -344,6 +434,32 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
+  // FILTER
+
+  add_cmd( "filter" , "FILTER" , "Apply a FIR filter to one or more signals");
+  add_url( "FILTER" , "fir-filters/#filter" );
+  add_param( "FILTER" , "sig" , "C3,C4" , "" , "Restrict analysis to these channels" );
+
+  add_param( "FILTER" , "bandpass" , "0.3,35" , "" , "Band-pass filter between 0.3 and 35 Hz" );
+  add_param( "FILTER" , "lowpass"  , "35" , "" , "Low-pass filter with cutoff of 35 Hz" );
+  add_param( "FILTER" , "highpass" , "0.3" , "" , "High-pass filter with cutiff of 0.3 Hz" );
+  add_param( "FILTER" , "bandstop" , "55,65" , "" , "Band-stop filter between 55 and 65 Hz" );
+  add_param( "FILTER" , "ripple" , "0.02" , "" , "Ripple (as a proportion)" );
+  add_param( "FILTER" , "tw" , "1" , "" , "Transition width (in Hz)" );
+
+
+  // FILTER-DESIGN
+
+  add_cmd( "filter" , "FILTER-DESIGN" , "Apply a FIR filter to one or more signals");
+  add_url( "FILTER-DESIGN" , "fir-filters/#filter-design" );
+  add_param( "FILTER-DESIGN" , "bandpass" , "0.3,35" , "" , "Band-pass filter between 0.3 and 35 Hz" );
+  add_param( "FILTER-DESIGN" , "lowpass"  , "35" , "" , "Low-pass filter with cutoff of 35 Hz" );
+  add_param( "FILTER-DESIGN" , "highpass" , "0.3" , "" , "High-pass filter with cutiff of 0.3 Hz" );
+  add_param( "FILTER-DESIGN" , "bandstop" , "55,65" , "" , "Band-stop filter between 55 and 65 Hz" );
+  add_param( "FILTER-DESIGN" , "ripple" , "0.02" , "" , "Ripple (as a proportion)" );
+  add_param( "FILTER-DESIGN" , "tw" , "1" , "" , "Transition width (in Hz)" );
+  add_param( "FILTER-DESIGN" , "fs" , "200" , "" , "Specify sample rate (in Hz)" ); 
+
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -351,6 +467,31 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
+  add_cmd( "artifact" , "SIGSTATS" , "Per-epoch outlier detection (RMS, Hjorth parameters, clipped signals)" );
+  add_url( "SIGSTATS" , "artifacts/#sigstats" );
+  add_param( "SIGSTATS" , "sig" , "C3,C4" , "" , "Restrict analysis to these channels" );
+
+  add_param( "SIGSTATS" , "verbose" , "" , "" , "Report epoch-level statistics" );
+  add_param( "SIGSTATS" , "mask" , "" , "" , "Set mask for outlier epochs" );
+  add_param( "SIGSTATS" , "threshold" , "2,2" , "" , "Set standard unit threshold(s) for (iterative) outlier detection" );
+  add_param( "SIGSTATS" , "th" , "2,2" , "" , "Same as 'threshold'" );
+
+  add_table( "SIGSTATS" , "CH" , "Per-channel whole-signal statistics" );
+  add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" );
+  add_var( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" );
+  add_var( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" );
+  add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
+  add_var( "SIGSTATS" , "CH" , "RMS" , "Signal root mean square" );
+
+  add_var( "SIGSTATS" , "CH" , "CNT_ACT" , "Number of epochs flagged based on H1 [mask]" );
+  add_var( "SIGSTATS" , "CH" , "CNT_MOB" , "Number of epochs flagged based on H2 [mask]" );
+  add_var( "SIGSTATS" , "CH" , "CNT_CMP" , "Number of epochs flagged based on H3 [mask]" );
+  add_var( "SIGSTATS" , "CH" , "CNT_CLP" , "Number of epochs flagged based on clipping metric" );
+  add_var( "SIGSTATS" , "CH" , "CNT_RMS" , "Number of epochs flagged based on RMS" );
+
+  add_var( "SIGSTATS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs flagged as outliers [mask]" );
+  add_var( "SIGSTATS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs whose mask was altered [mask]" );
+  add_var( "SIGSTATS" , "CH" , "TOTAL_EPOCHS" , "Total number of masked epochs [mask]" );
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -360,11 +501,218 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
 
 
+  add_cmd( "hypno" , "STAGE" , "Output sleep stage annotations, per epoch" );
+  add_url( "STAGE" , "hypnograms/#stage" );
+  add_param( "STAGE" , "N1" , "NREM1" , "" , "Set the annotation used for N1 sleep" );
+  add_param( "STAGE" , "N2" , "NREM2" , "" , "Set the annotation used for N2 sleep" );
+  add_param( "STAGE" , "N3" , "NREM3" , "" , "Set the annotation used for N3 sleep" );
+  add_param( "STAGE" , "REM" , "REM" , "" , "Set the annotation used for REM sleep" );
+  add_param( "STAGE" , "wake" , "W" , "" , "Set the annotation used for N3 sleep" );
+  add_param( "STAGE" , "?" , "-9" , "" , "Set the annotation used for unknown/other" );
+
+  add_table( "STAGE" , "E" , "Stage annotations per-epoch" );
+  add_var( "STAGE" , "E" , "CLOCK_TIME" , "Clock time (hh:mm:ss)" );
+  add_var( "STAGE" , "E" , "MINS" , "Elapsed time from start of EDF (minutes)" );
+  add_var( "STAGE" , "E" , "STAGE" , "Sleep stage (text value)" );
+  add_var( "STAGE" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" );
+
+
+  add_cmd( "hypno" , "HYPNO" , "Metrics based on sleep stage annotations" );
+  add_url( "HYPNO" , "hypnograms/#hypno" );
+
+  add_param( "HYPNO" , "file" , "stages.txt" , "" , "Optionally, read stages from file" );
+  add_param( "HYPNO" , "N1" , "NREM1" , "" , "Set the annotation used for N1 sleep" );
+  add_param( "HYPNO" , "N2" , "NREM2" , "" , "Set the annotation used for N2 sleep" );
+  add_param( "HYPNO" , "N3" , "NREM3" , "" , "Set the annotation used for N3 sleep" );
+  add_param( "HYPNO" , "REM" , "REM" , "" , "Set the annotation used for REM sleep" );
+  add_param( "HYPNO" , "wake" , "W" , "" , "Set the annotation used for N3 sleep" );
+  add_param( "HYPNO" , "?" , "-9" , "" , "Set the annotation used for unknown/other" );
+
+
+  add_table( "HYPNO" , "" , "Individual-level output" );
+  add_var( "HYPNO" , "" , "TST" , "Total sleep time" );
+  add_var( "HYPNO" , "" , "TPST" , "Total persistent sleep time" );
+  add_var( "HYPNO" , "" , "TIB" , "Time in bed" );
+  add_var( "HYPNO" , "" , "TWT" , "Total wake time" );
+  add_var( "HYPNO" , "" , "WASO" , "Wake after sleep onset" );
+  add_var( "HYPNO" , "" , "LIGHTS_OFF" , "Lights off time (hours since midnight)" );
+  add_var( "HYPNO" , "" , "SLEEP_ONSET" , "Sleep onset time (hours since midnight)" );
+  add_var( "HYPNO" , "" , "SLEEP_MIDPOINT" , "Sleep midpoint time (hours since midnight)" );
+  add_var( "HYPNO" , "" , "LIGHTS_ON" , "Lights on time (hours since midnight)" );
+  add_var( "HYPNO" , "" , "FINAL_WAKE" , "Final wake time (hours since midnight)" );
+  add_var( "HYPNO" , "" , "SLP_EFF" , "Sleep efficiency" );
+  add_var( "HYPNO" , "" , "SLP_EFF2" , "Sleep efficiency (alternate defn.)" );
+  add_var( "HYPNO" , "" , "SLP_MAIN_EFF" , "Sleep maintenance efficiency" );
+  add_var( "HYPNO" , "" , "SLP_LAT" , "Sleep latency (minutes from lights off)" );
+  add_var( "HYPNO" , "" , "PER_SLP_LAT" , "Persistent sleep latency (mins from lights off)" );
+  add_var( "HYPNO" , "" , "REM_LAT" , "REM latency (minutes from onset of sleep)" );
+  add_var( "HYPNO" , "" , "MINS_N1" , "Total duration of N1 sleep (mins)" );
+  add_var( "HYPNO" , "" , "MINS_N2" , "Total duration of N2 sleep (mins)" );
+  add_var( "HYPNO" , "" , "MINS_N3" , "Total duration of N3 sleep (mins)" );
+  add_var( "HYPNO" , "" , "MINS_N4" , "Total duration of N4 (NREM4) sleep (mins)" );
+  add_var( "HYPNO" , "" , "MINS_REM" , "Total duration of REM sleep (mins)" );
+  add_var( "HYPNO" , "" , "PCT_N1" , "Proportion N1 of total sleep time" );
+  add_var( "HYPNO" , "" , "PCT_N2" , "Proportion N2 of total sleep time" );
+  add_var( "HYPNO" , "" , "PCT_N3" , "Proportion N3 of total sleep time" );
+  add_var( "HYPNO" , "" , "PCT_N4" , "Proportion N4 of total sleep time" );
+  add_var( "HYPNO" , "" , "PCT_REM" , "Proportion REM of total sleep time" );
+  add_var( "HYPNO" , "" , "NREMC" , "Number of sleep cycles" );
+  add_var( "HYPNO" , "" , "NREMC_MINS" , "Mean duration of each sleep cycle" );
+
+
+  add_table( "HYPNO" , "C" , "NREM cycle-level output" );
+  add_var( "HYPNO" , "C" , "NREMC_START" , "First epoch number of this NREM cycle" );
+  add_var( "HYPNO" , "C" , "NREMC_MINS" , "Total duration of this cycle (mins)" );
+  add_var( "HYPNO" , "C" , "NREMC_NREM_MINS" , "Duration of NREM in this cycle (mins)" );
+  add_var( "HYPNO" , "C" , "NREMC_REM_MINS" , "Duration of REM in this cycle (mins)" );
+  add_var( "HYPNO" , "C" , "NREMC_OTHER_MINS" , "Minutes of wake and unscored epochs" );
+
+
+  add_table( "HYPNO" , "E" , "Epoch-level output" );
+  add_var( "HYPNO" , "E" , "CLOCK_HOURS" , "Start time of epoch (hours since midnight)" );
+  add_var( "HYPNO" , "E" , "CLOCK_TIME" , "Start time of epoch (hh:mm:ss)" );
+  add_var( "HYPNO" , "E" , "MINS" , "Start time of epoch (minutes since start of EDF)" );
+  add_var( "HYPNO" , "E" , "STAGE" , "Text description of sleep stage" );
+  add_var( "HYPNO" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" );
+  add_var( "HYPNO" , "E" , "PERSISTENT_SLEEP" , "Flag to indicate persistent sleep" );
+  add_var( "HYPNO" , "E" , "WASO" , "Flag to indicate wake after sleep onset" );
+  add_var( "HYPNO" , "E" , "E_N1" , "Cumulative elapsed N1 sleep (minutes)" );
+  add_var( "HYPNO" , "E" , "E_N2" , "Cumulative elapsed N2 sleep (minutes)" );
+  add_var( "HYPNO" , "E" , "E_N3" , "Cumulative elapsed N3 sleep (minutes)" );
+  add_var( "HYPNO" , "E" , "E_REM" , "Cumulative elapsed REM (minutes)" );
+  add_var( "HYPNO" , "E" , "E_SLEEP" , "Cumulative elapsed sleep (minutes)" );
+  add_var( "HYPNO" , "E" , "E_WAKE" , "Cumulative elapsed wake (minutes)" );
+  add_var( "HYPNO" , "E" , "E_WASO" , "Cumulative elapsed WASO (minutes)" );
+  add_var( "HYPNO" , "E" , "PCT_E_N1" , "Cumulative elapsed N1 as proportion of total N1 sleep" );
+  add_var( "HYPNO" , "E" , "PCT_E_N2" , "Cumulative elapsed N2 as proportion of total N2 sleep" );
+  add_var( "HYPNO" , "E" , "PCT_E_N3" , "Cumulative elapsed N3 as proportion of total N3 sleep" );
+  add_var( "HYPNO" , "E" , "PCT_E_REM" , "Cumulative elapsed REM as proportion of total REM sleep" );
+  add_var( "HYPNO" , "E" , "PCT_E_SLEEP" , "Cumulative elapsed sleep as proportion of total sleep" );
+  add_var( "HYPNO" , "E" , "FLANKING_SIM" , "Number of similarly-staged epochs,either forwards or backwards" );
+
+  add_var( "HYPNO" , "E" , "N2_WGT" , "Score to indicate ascending versus descending N2 sleep" );
+  add_var( "HYPNO" , "E" , "NEAREST_WAKE" , "Number of epochs (forward or backwards) since nearest wake epoch" );
+  add_var( "HYPNO" , "E" , "NREM2REM" , "Number of epochs from this N2 epoch to the N2/REM transition" );
+  add_var( "HYPNO" , "E" , "NREM2REM_TOTAL" , "Total number of contiguous N2 epochs until a REM transition" );
+  add_var( "HYPNO" , "E" , "NREM2WAKE" , "Number of epochs from this N2 epoch to the N2/Wake transition" );
+  add_var( "HYPNO" , "E" , "NREM2WAKE_TOTAL" , "Total number of contiguous N2 epochs until a Wake transition" );
+  add_var( "HYPNO" , "E" , "CYCLE" , "Cycle number, if this epoch is in a sleep cycle" );
+  add_var( "HYPNO" , "E" , "CYCLE_POS_ABS" , "Absolute position of this epoch in the current NREM cycle (mins)" );
+  add_var( "HYPNO" , "E" , "CYCLE_POS_REL" , "Relative position of this epoch in the current NREM cycle (0-1)" );
+  add_var( "HYPNO" , "E" , "PERIOD" , "Cycle period: NREMP or REMP, or missing if not in a cycle" );
+
+
   /////////////////////////////////////////////////////////////////////////////////
   //
   // SPECTRAL
   //
   /////////////////////////////////////////////////////////////////////////////////
+
+
+  //
+  // PSD
+  //
+
+  add_cmd( "power"   , "PSD" , "Power spectral density estimation (Welch)" );
+  add_url( "PSD" , "power-spectra/#psd" );
+
+  add_param( "PSD" , "sig" , "C3,C4" , "" , "Restrict analysis to these channels" );
+  add_param( "PSD" , "epoch" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "PSD" , "max" , "100" , "" , "Calculate per-epoch statistics" );
+  add_param( "PSD" , "spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "PSD" , "epoch-spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  
+  add_table( "PSD" , "CH" , "Number of epochs" );
+  add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
+
+  add_table( "PSD" , "CH,B" , "Whole-night, per-channel band power" );
+  add_var( "PSD" , "CH,B" , "PSD" , "Power" );
+  add_var( "PSD" , "CH,B" , "RELPSD" , "Relative power" );
+
+  add_table( "PSD" , "CH,F" , "Whole-night, per-channel power" );
+  add_var( "PSD" , "CH,F" , "PSD" , "Power" );
+
+  add_table( "PSD" , "CH,B,E" , "Whole-night, per-channel per-epoch band power" );
+  add_var( "PSD" , "CH,B,E" , "PSD" , "Power" );
+  add_var( "PSD" , "CH,B,E" , "RELPSD" , "Relative power" );
+
+  add_table( "PSD" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
+  add_var( "PSD" , "CH,F,E" , "PSD" , "Power" );
+  set_compressed( "PSD" , tfac_t( "CH,F,E" ) );
+
+
+  //
+  // MTM
+  //
+
+  add_cmd( "power"   , "MTM" , "Power spectral density estimation (Welch)" );
+  add_url( "MTM" , "power-spectra/#mtm" );
+
+  add_param( "MTM" , "sig" , "C3,C4" , "" , "Restrict analysis to these channels" );
+  add_param( "MTM" , "epoch" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "max" , "100" , "" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "dB" , "" , "" , "Decibel scale output" );
+  add_param( "MTM" , "spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "epoch-spectrum" , "" , "" , "Calculate per-epoch statistics" );
+  
+  add_table( "MTM" , "CH,F" , "Whole-night, per-channel power" );
+  add_var( "MTM" , "CH,F" , "MTM" , "Power" );
+
+  add_table( "MTM" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
+  add_var( "MTM" , "CH,F,E" , "MTM" , "Power" );
+  set_compressed( "MTM" , tfac_t( "CH,F,E" ) );
+
+  //
+  // MSE
+  //
+
+  add_cmd( "power" , "MSE" , "Multi-scale entropy statistics" );
+  add_url( "MSE" , "power-spectra/#mse" );
+
+
+  //
+  // LZW 
+  //
+
+  add_cmd( "power" , "LZW" , "LZW compression index" );
+  add_url( "LZW" , "power-spectra/#lzw" );
+
+
+  //
+  // HILBERT 
+  //
+
+  add_cmd( "power" , "HILBERT" , "Applies filter-Hilbert transform" );
+  add_url( "HILBERT" , "power-spectra/#hilbert" );
+
+  add_param( "HILBERT" , "sig" , "C3,C4" , "" , "Restrict analysis to these channels" );
+  add_param( "HILBERT" , "f" , "0.5,4" , "" , "Lower and upper transition frequencies" );
+  add_param( "HILBERT" , "ripple" , "0.02" , "" , "FIR filter ripple (as proportion)" );
+  add_param( "HILBERT" , "tw" , "0.5" , "" , "Transition width (in Hz)" );
+  add_param( "HILBERT" , "tag" , "v1" , "" , "Optional tag to be added to new signals" );
+  add_param( "HILBERT" , "phase" , "" , "" , "As well as magnitude, generate signal with instantaneous phase" );
+
+
+  //
+  // CWT
+  //
+
+  
+  
+  //
+  // CWT-DESIGN 
+  //
+
+
+  //
+  // 1FNORM
+  //
+
+
+  //
+  // TV
+  //
+
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -561,19 +909,27 @@ std::string cmddefs_t::help( const std::string & cmd , bool verbose ) const
 	  while ( jj != ii->second.end() ) {
 
 	    ss << "  " << std::left << std::setw( 12 ) << jj->first;
-
-	    // requirements?
-	    std::string req = px.find( cmd )->second.find( jj->first )->second ; 
-	    if ( req != "" )
-	      ss << std::left << std::setw(12) << req;
-	    else
-	      ss << std::left << std::setw(12) << " ";;
-
-	    // example (if any)
+	    
+  	    // example (if any)
 	    std::string ex = px.find( cmd )->second.find( jj->first )->second ; 
 	    if ( ex != "" )
-	      ss << " e.g. " << jj->first << "=" << ex;
-	    ss << " " << jj->second << "\n";
+	      {
+		std::string msg = jj->first + "=" + ex;
+		ss << std::left << std::setw( 20 ) << msg;
+	      }
+ 	    else
+ 	      ss << std::left << std::setw(20) << " ";;
+
+	    // description
+	    ss << std::left << std::setw( 12 ) << jj->second ;
+	    
+	    // requirements?
+	    std::string req = preq.find( cmd )->second.find( jj->first )->second ; 
+	    if ( req != "" )
+	      ss << " [req. " << req << "]";
+	    
+	    ss << "\n";
+	    
 	    ++jj;
 	  }
 	  ++ii;

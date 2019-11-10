@@ -34,26 +34,14 @@
 
 
 
+//
+// slice_t
+//
+
 interval_t slice_t::duration() const 
 { 
   // interval is 1-past end of interval
   return interval_t( time_points[0] , time_points[ time_points.size()-1 ] + 1LLU );
-}
-
-mslice_t::mslice_t( edf_t & edf , 
-		    const signal_list_t & signals , 
-		    const interval_t & interval , 
-		    int    downsample )
-{
-  channel.clear();
-  labels.clear();
-  const int ns = signals.size();
-  for (int s=0;s<ns;s++)
-    {
-      slice_t * slice = new slice_t(edf , signals(s) , interval , downsample );
-      channel.push_back( slice ); 
-      labels.push_back( signals.label( s ) );
-    }
 }
 
 
@@ -110,6 +98,113 @@ slice_t::slice_t( edf_t & edf ,
   
 }
  
+
+
+//
+// mslice_t
+//
+
+mslice_t::mslice_t( edf_t & edf , 
+		    const signal_list_t & signals , 
+		    const interval_t & interval , 
+		    int    downsample )
+{
+  channel.clear();
+  labels.clear();
+  const int ns = signals.size();
+  for (int s=0;s<ns;s++)
+    {
+      slice_t * slice = new slice_t(edf , signals(s) , interval , downsample );
+      channel.push_back( slice ); 
+      labels.push_back( signals.label( s ) );
+    }
+}
+
+
+
+Data::Matrix<double> mslice_t::extract()
+{
+  const int nr = channel[0]->size(); 
+  const int nc = channel.size();
+  
+  Data::Matrix<double> d;
+  for (int c=0;c<nc;c++)
+    {
+      if ( nr != channel[c]->size() ) 
+	Helper::halt( "internal error in mslice, SRs different" );
+      d.add_col( *channel[c]->pdata() );
+    }
+  return d;
+}
+
+
+
+
+//
+// matslice_t : only for equal SR data, returns a single matrix
+//
+
+
+matslice_t::matslice_t( edf_t & edf , 
+			const signal_list_t & signals , 
+			const interval_t & interval )
+{
+
+
+  data.clear();
+  
+  time_points.clear();
+
+  labels.clear();
+
+  //
+  // Empty?
+  //
+
+  const int ns = signals.size();
+  
+  if ( ns == 0 ) return;
+  
+  if ( interval.empty() ) return;
+  
+  
+  //
+  // Get labels and check SR
+  //
+
+  const int Fs = edf.header.n_samples[ signals(0) ];
+
+  labels.push_back( signals.label(0) );
+  
+  for (int s=1;s<ns;s++)
+    {
+      if ( edf.header.n_samples[ signals(s) ] != Fs ) Helper::halt( "unequal sample rates in matslice_t: use RESAMPLE" );
+      labels.push_back( signals.label(s) );
+    }
+
+
+  
+  //
+  // use fixed channel/signal sampling rate (i.e. array can be ragged), and populate time-points
+  //
+  
+  data.add_col( edf.fixedrate_signal( interval.start , 
+				      interval.stop , 
+				      signals(0) ,  // first channel
+				      1 ,  // no downsampling
+				      &time_points ,  // get TPs for first channel only
+				      NULL ) ); // no records
+  
+  
+  //
+  // get all other channels (w/out time-points)
+  //
+  
+  for (int s=1;s<ns;s++) 
+    data.add_col( edf.fixedrate_signal( interval.start , interval.stop , signals(s) , 1 , NULL , NULL ) );  
+  
+}
+  
 
 
 
@@ -536,18 +631,3 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
 }
 
 
-
-Data::Matrix<double> mslice_t::extract()
-{
-  const int nr = channel[0]->size(); 
-  const int nc = channel.size();
-  
-  Data::Matrix<double> d;
-  for (int c=0;c<nc;c++)
-    {
-      if ( nr != channel[c]->size() ) 
-	Helper::halt( "internal error in mslice, SRs different" );
-      d.add_col( *channel[c]->pdata() );
-    }
-  return d;
-}

@@ -59,11 +59,12 @@ polar_t::polar_t( sph_t & sph )
 }
 
 
-int clocs_t::load_cart( const std::string & filename )
+int clocs_t::load_cart( const std::string & filename , bool verbose )
 {
 
   if ( ! Helper::fileExists( filename ) ) 
     Helper::halt( "could not find clocs file; " + filename );
+
   cloc.clear();
 
   // assume LABEL X Y Z 
@@ -80,39 +81,42 @@ int clocs_t::load_cart( const std::string & filename )
 
   logger << " read " << cloc.size() << " channel locations\n"; 
 
-  std::map<std::string,cart_t>::const_iterator ii = cloc.begin();
-  while ( ii != cloc.end() ) 
+  if ( verbose ) 
     {
-      sph_t sph = ii->second.sph();
-      cart_t c2 = sph.cart();
-      
-      polar_t polar( sph );
-      cart_t  pc = polar.cart();
-      
-      writer.level( ii->first , globals::signal_strat );
+      std::map<std::string,cart_t>::const_iterator ii = cloc.begin();
+      while ( ii != cloc.end() ) 
+	{
+	  sph_t sph = ii->second.sph();
+	  cart_t c2 = sph.cart();
+	  
+	  polar_t polar( sph );
+	  cart_t  pc = polar.cart();
+	  
+	  writer.level( ii->first , globals::signal_strat );
 
-      writer.value( "X" , ii->second.x );
-      writer.value( "Y" , ii->second.y );
-      writer.value( "Z" , ii->second.z );
-
-      writer.value( "SPH_R"  , sph.r );
-      writer.value( "SPH_AZ" , sph.azimuth );
-      writer.value( "SPH_E"  , sph.elevation );
-
-      writer.value( "POLAR_ANGLE" , polar.angle );
-      writer.value( "POLAR_RAD" , polar.radius );
+	  writer.value( "X" , ii->second.x );
+	  writer.value( "Y" , ii->second.y );
+	  writer.value( "Z" , ii->second.z );
+	  
+	  writer.value( "SPH_R"  , sph.r );
+	  writer.value( "SPH_AZ" , sph.azimuth );
+	  writer.value( "SPH_E"  , sph.elevation );
+	  
+	  writer.value( "POLAR_ANGLE" , polar.angle );
+	  writer.value( "POLAR_RAD" , polar.radius );
+	  
+	  //       << sph.r << " "
+	  //       << sph.azimuth << " "
+	  //       << sph.elevation << "\t[ polar angle/radius ] = "
+	  //       << polar.angle << " " << polar.radius << "\t[X,Y,Z]' = "
+	  
+	  //      << pc.x << " " << pc.y << " " << pc.z << "\n";
+	  
+	  ++ii;
+	}
       
-//       << sph.r << " "
-//       << sph.azimuth << " "
-//       << sph.elevation << "\t[ polar angle/radius ] = "
-//       << polar.angle << " " << polar.radius << "\t[X,Y,Z]' = "
-
-	   //      << pc.x << " " << pc.y << " " << pc.z << "\n";
-      
-      ++ii;
+      writer.unlevel( globals::signal_strat );
     }
-  
-  writer.unlevel( globals::signal_strat );
 
   return cloc.size();
 }
@@ -142,7 +146,7 @@ void clocs_t::convert_to_unit_sphere()
 
 
 
-Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_t & signals ) const
+Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_t & signals , const int mode ) const
 {
   
   for (int s=0;s<signals.size();s++)
@@ -159,15 +163,25 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
       cart_t c1 = cloc.find( signals.label(s1) )->second;
       for (int s2=s1;s2<ns;s2++)
 	{
-	  cart_t c2 = cloc.find( signals.label( s2 ) )->second; 
-	  double d = 1 - ( ( (c1.x-c2.x)*(c1.x-c2.x) +
-			     (c1.y-c2.y)*(c1.y-c2.y) +
-			     (c1.z-c2.z)*(c1.z-c2.z) ) / 2.0 );
-	  D[s1][s2] = D[s2][s1] = d;
+
+	  cart_t c2 = cloc.find( signals.label( s2 ) )->second; 	  
+	  
+	  if ( mode == 1 ) 
+	    {
+	      double d = 1 - ( ( (c1.x-c2.x)*(c1.x-c2.x) +
+				 (c1.y-c2.y)*(c1.y-c2.y) +
+				 (c1.z-c2.z)*(c1.z-c2.z) ) / 2.0 );	      
+	      D[s1][s2] = D[s2][s1] = d;
+	    }
+	  else
+	    {
+	      double d = sqrt( (c1.x-c2.x)*(c1.x-c2.x) + (c1.y-c2.y)*(c1.y-c2.y) + (c1.z-c2.z)*(c1.z-c2.z) );
+	      D[s1][s2] = D[s2][s1] = d;
+	    }
 	}
       
     }
-
+  
   return D;
 }
 
@@ -213,7 +227,7 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
 {
     
   // 'm' parameter (Perrin et al, m = 4, otherwise m = 2..6 reasonable
-  const int m = 4;  
+  const int m = 2;   // m=2 in interpolate_perrinX
 
   // order of Legendre polynomials; 7 also suggested Perry et al.
   const int N = 10;
@@ -245,7 +259,7 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
   for (int i=1;i<=N;i++) 
     { 
       twoN1.push_back( ( 2 * i ) + 1 ) ; 
-      gdenom.push_back( pow( i*(i+1)  , 2 ) ) ;
+      gdenom.push_back( pow( i*(i+1)  , m ) ) ; 
     }
 
   

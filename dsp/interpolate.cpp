@@ -43,6 +43,9 @@ extern writer_t writer;
 void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 {
 
+  // requires some clocs
+  if ( ! edf.clocs.attached() ) Helper::halt( "no clocs attached" );
+  
   // check that data are epoched 
   if ( ! edf.timeline.epoched() ) 
     Helper::halt( "requires epoch'ed data" ) ;
@@ -54,10 +57,6 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       return;
     }
 
-  // load channel locations
-  std::string cloc_file = param.requires( "clocs" );  
-  clocs_t clocs;
-  clocs.load_cart( cloc_file );
   
   // get signals, dropping any non-data channels
   std::string signal_label = param.requires( "sig" );
@@ -104,12 +103,11 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       
       int epoch = edf.timeline.next_epoch();      
 
-      std::cout << "eee = " << epoch << "\n";
+      //std::cout << "eee = " << epoch << "\n";
 
       if ( epoch == -1 ) break;
-            
+      
       logger << ".";
-
       if ( ++cnt % 50 == 0 ) logger << " " << cnt << " epochs\n";
 
       writer.epoch( edf.timeline.display_epoch( epoch ) );
@@ -142,7 +140,7 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 	if ( ! edf.timeline.masked( epoch , signals(s) ) ) 
 	  good_signals_idx.push_back( s ); // i.e. different encoding, relative to signals()
 
-      std::cerr << "epoch e " << epoch << " " << good_signals.size() << " " << bad_signals.size() << "\n";
+      //std::cerr << "epoch e " << epoch << " " << good_signals.size() << " " << bad_signals.size() << "\n";
       
 
       // nothing to do
@@ -166,17 +164,17 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       //
 
       Data::Matrix<double> invG;
-
+      
       Data::Matrix<double> Gi;
       
-      clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
-
+      edf.clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
+      
       
       //
       // interpolate
       //
       
-      Data::Matrix<double> I = clocs.interpolate( D , good_signals_idx , invG, Gi );
+      Data::Matrix<double> I = edf.clocs.interpolate( D , good_signals_idx , invG, Gi );
 
 
       //
@@ -187,20 +185,24 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       
       if ( ! edf.timeline.epoch_records( epoch , &a , &b ) )
 	Helper::halt( "internal error in interpolate()... are non-overlappnig epochs correctly set?" );
-	   
-      std::cerr << " epoch UPDTE = " << epoch << " --> " << a << " " << b << "\n";
+      
+      //std::cerr << " epoch UPDTE = " << epoch << " --> " << a << " " << b << "\n";
 
       for (int s=0;s<bad_signals.size();s++)	
-	edf.update_records( a , b , bad_signals(s) , I.col(s).data_pointer() );
-      
+	edf.update_records( a , b , bad_signals(s) , I.col(s).data_pointer() );      
       
       cnt_interpolated_epochs++;
+
       cnt_interpolated_cheps += bad_signals.size();
+
 
       //
       // Next epoch...
       //
     }
+
+  
+  writer.unepoch();
   
   logger << " all done\n";
 
@@ -215,16 +217,8 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 void dsptools::leave_one_out( edf_t & edf , param_t & param )
 {
   
-  // expect following input / args
-  //   clocs file 
-  //   
-
-  // clocs file
-  std::string cloc_file = param.requires( "clocs" );
-  
-  clocs_t clocs;
-
-  clocs.load_cart( cloc_file );
+  // requires ome clocs to be attached
+  if ( ! edf.clocs.attached() ) Helper::halt( "no clocs attached" );
   
   // signal list
   std::string signal_label = param.requires( "sig" );
@@ -288,7 +282,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
       Data::Matrix<double> _invG;
       Data::Matrix<double> _Gi;
       
-      clocs.make_interpolation_matrices( good_signals , bad_signals , &_invG , &_Gi );
+      edf.clocs.make_interpolation_matrices( good_signals , bad_signals , &_invG , &_Gi );
       
       //
       // save all
@@ -337,7 +331,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
 	  std::vector<int> & _good_channels = good_channels[s];
 
 	  // interpolate
-	  Data::Matrix<double> I = clocs.interpolate( D , _good_channels , _invG, _Gi );
+	  Data::Matrix<double> I = edf.clocs.interpolate( D , _good_channels , _invG, _Gi );
 	  
 	  // calculate error 
 // 	  logger << "X " << s << "\t" 

@@ -22,25 +22,20 @@
 #ifndef __ICA_H__
 #define __ICA_H__
 
-
-extern "C" {
-#include "ica_matrix.h"
-#include "svdcmp.h"
-#include "libICA.h"
-}
+#include "ica/lica_matrix.h"
+#include "ica/lica_fastICA.h"
 
 #include <vector>
-
+#include "stats/matrix.h"
 #include "helper/helper.h"
+
 
 // Notes
 // https://en.wikipedia.org/wiki/FastICA
 // http://research.ics.aalto.fi/ica/book/
 
-// Code adapted from:
+// Code here modified from C/C++ implementation of R fastICA package
 // http://tumic.wz.cz/fel/online/libICA/
-// wrapper around fastICA() 
-
 
 struct edf_t; 
 struct param_t; 
@@ -49,33 +44,25 @@ void ica_wrapper0( edf_t & , param_t & );
 
 struct ica_t {
   
-  ica_t( const std::vector<std::vector<double> > & X , int compc )
+  ica_t( Data::Matrix<double> & X , int compc )
   {        
     if ( ! proc(X,compc) ) Helper::halt( "problem in ica_t" );    
   }
-  
-  ica_t( mat X , int rows , int cols, int compc )
-  {
-    if ( ! proc(X,rows, cols,compc) ) Helper::halt( "problem in ica_t" );    
-  }
 
-  std::vector<std::vector<double> > K;
-  std::vector<std::vector<double> > W;
-  std::vector<std::vector<double> > A;
-  std::vector<std::vector<double> > S;
+  Data::Matrix<double> K;
+  Data::Matrix<double> W;
+  Data::Matrix<double> A;
+  Data::Matrix<double> S;
   
-  bool proc( const std::vector<std::vector<double> > & , int compc );
-  bool proc( mat , int rows, int cols, int compc );
+  bool proc( Data::Matrix<double> & , int compc );
 
-  void copy( std::vector<std::vector<double> > & M , double ** O , int r , int c )
-  {    
-    M.resize( r );
-    for (int i=0;i<r;i++) M[i].resize(c);    
-    for (int i=0;i<r;i++)
-      for (int j=0;j<c;j++)
-	M[i][j] = O[i][j];    
-  }
+
+  //
+  // Helper functions
+  //
   
+  static void cpp_svdcmp( Data::Matrix<double> & A, Data::Vector<double> & W, Data::Matrix<double> & V);
+   
 };
 
 

@@ -78,9 +78,11 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
   //
   
   std::string signal_label = param.requires( "sig" );   
-  
-  signal_list_t signals = edf.header.signal_list( signal_label );  
 
+  const bool no_annotations = true;
+
+  signal_list_t signals = edf.header.signal_list( signal_label , no_annotations );
+  
   const int ns = signals.size();
 
   // desired
@@ -135,7 +137,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
   
   for (int s0=0; s0<ns; s0++)
     {     
-
+      
       
       //
       // Reset obs()
@@ -150,7 +152,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       
       if ( univariate )
 	{
-	  logger << "  calculating epoch-by-epoch distances for " << signals.label(s0) << "\n";
+	  logger << " calculating epoch-by-epoch distances for " << signals.label(s0) << "\n";	  
 	  // just add one channel
 	  add_channel( signals.label(s0) );
 	  // and stratify output by channel
@@ -159,9 +161,9 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       else
 	{
 	  // add all channels (and we'll quite afterwards)
-	  logger << "  calculating epoch-by-epoch distances for " ;
+	  logger << " calculating epoch-by-epoch distances for " ;
 	  for ( int s=0; s<ns; s++ )
-	    {
+	    {	      
 	      add_channel( signals.label(s) );
 	      logger << signals.label(s) << " " ;
 	    }
@@ -200,12 +202,13 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	  
 	  if ( univariate )
 	    {
+	      
 	      if ( edf.header.is_annotation_channel( signals(s0) ) ) continue;
-
+	      
 	      slice_t slice( edf , signals(s0) , interval );
 	      
-	      std::vector<double> * d = slice.nonconst_pdata();
-	      
+	      std::vector<double> * d = slice.nonconst_pdata();	      
+
 	      ob.ch[0] = true;
 	      ob.ts[0] = *d;
 	    }

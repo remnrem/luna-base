@@ -572,10 +572,25 @@ bool cmd_t::read( const std::string * str , bool silent )
       else recheck = false;
     }
   
+
+  //
+  // remove any conditional blocks, where variable should be var=1 (in) or var=0 (out)
+  // or a value for add=variable,var2 for var=1 var=2
+  //
+
+  // [[var1
+  //   block
+  // ]]var1
+
+  Helper::process_block_conditionals( &line , vars );
+     
+  //
   // swap in any variables
+  //
+
   Helper::swap_in_variables( &line , vars );
 
-  
+
   std::vector<std::string> tok = Helper::quoted_parse( line , "\n" );
   if ( tok.size() == 0 ) 
     {
@@ -758,10 +773,12 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
+      else if ( is( c, "CLOCS" ) )        proc_attach_clocs( edf , param(c) );
       else if ( is( c, "L1OUT" ) )        proc_leave_one_out( edf , param(c) );
       else if ( is( c, "INTERPOLATE" ) )  proc_chep_based_interpolation( edf, param(c) );
+      else if ( is( c, "SL" ) )           proc_surface_laplacian( edf , param(c) );
       else if ( is( c, "EMD" ) )          proc_emd( edf , param(c) );
-  
+      
       else if ( is( c, "MI" ) )           proc_mi( edf, param(c) );
       else if ( is( c, "HR" ) )           proc_bpm( edf , param(c) );
       else if ( is( c, "SUPPRESS-ECG" ) ) proc_ecgsuppression( edf , param(c) );
@@ -1542,56 +1559,7 @@ void proc_dump_mask( edf_t & edf , param_t & param )
 }
 
 // CHEP : dump, or convert from CHEP->MASK
-
-void proc_chep( edf_t & edf , param_t & param )
-{
-  
-  if ( param.has( "load" ) )
-    {
-      std::string f = param.value( "load" );
-      logger << "  reading chep from " << f << "\n";
-      edf.timeline.read_chep_file( f );
-    }
-  
-  if ( param.has( "epochs" ) ) 
-    {
-
-      std::string sigstr = param.requires( "sig" );
-      signal_list_t signals = edf.header.signal_list( sigstr );
-
-      std::vector<double> p = param.dblvector( "epochs" );
-      if ( p.size() == 1 ) 
-	edf.timeline.collapse_chep2epoch( signals , p[0] , 0 ); 
-      else if ( p.size() == 2 ) 
-	edf.timeline.collapse_chep2epoch( signals , p[0] , p[1] ); 
-      
-    }
-
-  if ( param.has( "channels" ) ) 
-    {
-
-      std::string sigstr = param.requires( "sig" );
-      signal_list_t signals = edf.header.signal_list( sigstr );
-      
-      std::vector<double> p = param.dblvector( "channels" );
-      if ( p.size() == 1 ) 
-	edf.timeline.collapse_chep2ch( signals , p[0] , 0 ); 
-      else if ( p.size() == 2 ) 
-	edf.timeline.collapse_chep2ch( signals , p[0] , p[1] ); 
-      
-    }
-  
-  if ( param.has( "dump" ) ) edf.timeline.dump_chep_mask();  
-  
-  if ( param.has( "save" ) )
-    {
-      std::string f = param.value( "save" );
-      logger << "  saving chep to " << f << "\n";
-      edf.timeline.write_chep_file( f );
-    }
-
-  
-}
+// in edf/chep.cpp
 
 
 // COUNT-ANNOTS : show all annotations for the EDF
@@ -1695,6 +1663,21 @@ void proc_chep_based_interpolation( edf_t & edf , param_t & param )
   dsptools::chep_based_interpolation( edf , param );
 }
 
+// SL : surface laplacian
+void proc_surface_laplacian( edf_t & edf , param_t & param )
+{
+  dsptools::surface_laplacian_wrapper( edf , param );
+}
+
+void proc_attach_clocs( edf_t & edf , param_t & param )
+{
+  
+  std::string filename = Helper::expand( param.requires( "file" ) );
+  if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not find " + filename );
+
+  // assume a cartesian format
+  edf.clocs.load_cart( filename , param.has( "verbose" ) );
+}
 
 // COH : calculate cross spectral coherence, using legacy code
 

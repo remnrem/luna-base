@@ -20,44 +20,52 @@
 //
 //    --------------------------------------------------------------------
 
+#ifndef __LUNA_SL_H__
+#define __LUNA_SL_H__
 
-#include "ica/ica.h"
+struct edf_t;
+struct param_t;
+struct clocs_t;
+struct signal_list_t;
 
-#include "edf/edf.h"
-#include "edf/slice.h"
-#include "helper/helper.h"
-#include "helper/logger.h"
-#include "eval.h"
-#include "db/db.h"
+#include <vector>
+
 #include "stats/matrix.h"
 
-extern writer_t writer;
 
-extern logger_t logger;
+struct sl_t { 
+  
+  sl_t( const clocs_t & clocs , const signal_list_t & signals , 
+	int m_ = 4 , int order_ = 10 , double lambda_ = 1e-5 ); 
+  
+  bool apply( const Data::Matrix<double> & inp , Data::Matrix<double> & out );
 
-// wrapper around libICA function
+ private:
+  
+  int m; 
+  
+  int order;
+  
+  double lambda;
 
-bool ica_t::proc( Data::Matrix<double> & X , int compc )
+  Data::Matrix<double> G;
+  
+  Data::Matrix<double> invG;
+
+  Data::Matrix<double> H;
+
+  std::vector<double> GsinvS;
+  
+  double sumGsinvS;
+  
+}; 
+
+
+namespace dsptools
 {
-
-  int rows = X.dim1();
-
-  if ( rows == 0 ) return false;
-
-  int cols = X.dim2();
   
-  // mean center
-  Data::Vector<double> means( cols );
-  mat_center( X , means );
-
-  W.resize(compc, compc);
-  A.resize(compc, compc);
-  K.resize(cols , compc);
-  S.resize(rows, cols);
-  
-  // compute ICA
-
-  fastICA(X, compc, K, W, A, S);
-
-  return true;
+  void surface_laplacian_wrapper( edf_t & edf , param_t & param );
+    
 }
+
+#endif

@@ -44,19 +44,39 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
   std::string signal_label = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( signal_label );  
   const int ns = signals.size();
+
   
   //
   // Frequencies
   //
-
-  std::vector<freq_range_t> lf;
-//   lf.push_back( freq_range_t( 0.5 , 1.5 ) );
-//   lf.push_back( freq_range_t( 4.5 , 5.5 ) );
-  lf.push_back( freq_range_t( 48 , 52 ) );
-  lf.push_back( freq_range_t( 148 , 152 ) );
-
-  std::vector<freq_range_t> uf = lf;
   
+  std::vector<double> lf0 = param.dblvector( "lwr" );
+  std::vector<double> uf0 = param.dblvector( "upr" );
+  
+  std::vector<freq_range_t> lf;
+  std::vector<freq_range_t> uf;
+
+  double w = param.requires_dbl( "w" );
+
+  if ( lf0.size() < 1 || lf0.size() > 3 ) Helper::halt( "expecting lwr to have 1,2 or 3 values: start,end,step" );
+  if ( uf0.size() < 1 || uf0.size() > 3 ) Helper::halt( "expecting upr to have 1,2 or 3 values: start,end,step" );
+  
+  if ( lf0.size() == 1 ) lf0.push_back( lf0[0] );
+  if ( lf0.size() == 2 ) lf0.push_back( 1 );
+  if ( uf0.size() == 1 ) uf0.push_back( uf0[0] );
+  if ( uf0.size() == 2 ) uf0.push_back( 1 );
+  if ( lf0[0] > lf0[1] ) Helper::halt( "bad format for lwr" );
+  if ( uf0[0] > uf0[1] ) Helper::halt( "bad format for upr" );
+  
+  if ( lf0[0] - w < 0 ) Helper::halt( "bad format for lwr, lower value too low given w" );
+  if ( uf0[0] - w < 0 ) Helper::halt( "bad format for upr, lower value too low given w" );
+
+  for (double v = lf0[0] ; v <= lf0[1] ; v += lf0[2] )
+    lf.push_back( freq_range_t( v-w , v+w ) );
+
+  for (double v = uf0[0] ; v <= uf0[1] ; v += uf0[2] )
+    uf.push_back( freq_range_t( v-w , v+w ) );
+
   //
   // Sampling rates
   //
@@ -64,11 +84,20 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 
   //
+  // Filter
+  // 
+
+  double ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.05;
+
+  double tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 2 ;
+
+  
+  //
   // Number of bins, rplicates
   //
 
-  const int nbins = 20;
-  const int nreps = 1000;
+  const int nbins = param.has( "nbin" ) ? param.requires_int( "nbin" ) : 20;
+  const int nreps = param.has( "nrep" ) ? param.requires_int( "nrep" ) : 1000;
 
 
   //
@@ -80,15 +109,14 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
   
   const double epoch_sec = edf.timeline.epoch_length();
 
+  bool no_epoch_perm = param.has( "no-epoch-perm" );
+  
 
   //
   // function only applies to entire current trace
   //
   
   interval_t interval = edf.timeline.wholetrace();
-
-
-  
 
   
   //
@@ -105,10 +133,10 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;	  
       
 
-      // epoch size in sample points
+      // epoch size in sample points (if using epoch-perms)
       
-      const int es = Fs[s] * epoch_sec;
-            
+      const int es = no_epoch_perm ? 0 : Fs[s] * epoch_sec;
+
 
       //
       // Get signal
@@ -123,7 +151,7 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
       // Calculate
       //
 
-      phsyn_t phsyn( *d , Fs[s] , lf , uf , nbins , nreps , es );
+      phsyn_t phsyn( *d , Fs[s] , lf , uf , nbins , nreps , ripple , tw , es );
       
       phsyn.calc();
 
@@ -147,6 +175,7 @@ void dsptools::phsyn( edf_t & edf , param_t & param )
 void phsyn_t::calc() 
 {
   
+
   //
   // bin boundaries (0..360)
   //
@@ -190,6 +219,8 @@ void phsyn_t::calc()
   for (int f=0;f<f2.size();f++) frqs.insert( f2[f] );
   
   std::set<freq_range_t>::const_iterator ff = frqs.begin();
+  
+  logger << "  considering " << frqs.size() << " frequency bands\n";
 
   //
   // get phase angles at each time point
@@ -198,7 +229,7 @@ void phsyn_t::calc()
   while ( ff != frqs.end() )
     {
 
-      logger << "hilbert " << ff->first << "-" << ff->second << "\n";
+      //logger << "  hilbert " << ff->first << "-" << ff->second << "\n";
 
       // filter-Hilbert
       hilbert_t hilbert( x , sr , ff->first , ff->second , ripple , tw );
@@ -222,8 +253,6 @@ void phsyn_t::calc()
     for (int i2=0;i2<f2.size();i2++) 
       {
 	
-	if ( i1 == i2 ) continue;
-
 	//
 	// Clear working count matrix
 	//
@@ -244,25 +273,31 @@ void phsyn_t::calc()
 	    // increment by one unit (default, unweighted)
 	    obs[ b1 ][ b2 ]++;
 	    
-// 	    std::cerr  << "rep" << i << " of " << npoints << "\t" 
-// 		       << (*ph1)[i]  << "\t" << b1 << "\t" 
-// 		       << (*ph2)[i]  << "\t" << b2 << "\n"; 
 	  }
 		
 
 	//
+	// Observed summary statistic
+	//
+
+	double obs_stat = test_uniform( obs );
+
+	
+	//
 	// Replicates
 	//
 	
+	int emp_stat = 0;
+	std::vector<double> perm_stats;
+
 	for (int r = 0; r < nreps; r++) 
 	  {
 
-	    if ( r % 10 == 0 ) logger << ".";
-
-	    if ( r % 100 == 0 ) logger << "\n";
+// 	    if ( r % 10 == 0 ) logger << ".";
+// 	    if ( r % 100 == 0 ) logger << "\n";
 	    
 	    // clear working perm matrix
-
+	    
 	    for (int b1=0;b1<nbins;b1++)
 	      for (int b2=0;b2<nbins;b2++)
 		perm[b1][b2] = 0;
@@ -274,31 +309,66 @@ void phsyn_t::calc()
 	
 	    int b1 = 0, b2 = 0; 
 
-	    // whole trace perm
-	    //int j = CRandom::rand( npoints );
-
-	    // within-epoch perms
-	    std::vector<int> offset;
+	    // within-epoch perm
 	    
+	    std::vector<int> permpos( npoints );
+	    int j = 0;
 
+	    if ( es ) 
+	      {
+		int num_epoch = npoints / es ; 
+		std::vector<int> shuffle;
+		for (int e=0;e<num_epoch;e++) shuffle.push_back( CRandom::rand( es ) );
+		//std::cout << "fig " << num_epoch << " epochs\n";
+		for (int i=0;i<npoints;i++)
+		  {		    
+		    int cur_epoch = i / es;
+		    if ( cur_epoch >= num_epoch ) continue; // do not permute last epoch, if partial
+		    int off = i - cur_epoch * es; 
+		    if ( off + shuffle[ cur_epoch ] >= es ) permpos[i] = i - es + shuffle[cur_epoch ];
+		    else permpos[i] = i + shuffle[cur_epoch ];
+		    //std::cout << "pp\t" << cur_epoch << "\t" << i << "\t" << permpos[i] << "\t" << off << " " << shuffle[cur_epoch ] << "\n";
+		  }
+	      }
+	    else  // otherwise whole trace perm
+	      j = CRandom::rand( npoints );
+	    
 
 	    for (int i=0;i<npoints;i++)
 	      {
 		
-		
 		bin( (*ph1)[i] , &b1 , bb , nbins );
-
-		++j;
-
-		if ( j == npoints ) j = 0;
 		
+		if ( es ) // within-epoch shuffle
+		  j = permpos[i];
+		else // whole trace shuffle
+		  {
+		    ++j;
+		    if ( j == npoints ) j = 0;
+		  }
+
 		bin( (*ph2)[j] , &b2 , bb , nbins );
 
 		// increment by one unit (default, unweighted)
 		perm[ b1 ][ b2 ]++;
 	      }
-	  
-	    // accumulate pv/z file
+
+	    
+
+	    // 
+	    // summary stat for surrogate 
+	    //
+
+	    double perm_stat = test_uniform( perm );
+	    
+	    perm_stats.push_back( perm_stat );
+
+	    if ( perm_stat >= obs_stat ) ++emp_stat;
+
+	    //
+	    // accumulate point level pv/z file
+	    //
+
 	    for (int b1=0;b1<nbins;b1++)
 	      for (int b2=0;b2<nbins;b2++)
 		{
@@ -306,26 +376,44 @@ void phsyn_t::calc()
 		  z[b1][b2] += perm[b1][b2];
 		  z2[b1][b2] += perm[b1][b2] * perm[b1][b2];
 		}
-	    	    
+	    
 	    // next replicate
 	  
 	  }
 	
-	for (int b1=0;b1<nbins;b1++)
-	  for (int b2=0;b2<nbins;b2++)
-	    {
-	      std::cout << "ha " << z[b1][b2] << "  " << (double)nreps << "\n";
-	      double zmean = z[b1][b2]/(double)nreps;
-	      double zsd   = sqrt(   z2[b1][b2]/(double)nreps  - zmean * zmean );
-	      
-	      std::cout << "res " << b1 << " " << b2 << " " 
-			<< obs[b1][b2] << " " 		
-			<< (pv[b1][b2] + 1 )/double(nreps+1) << " " 
-			<< zmean << " " 
-			<< zsd << " " 
-			<< (obs[b1][b2] - zmean ) / zsd << "\n";
-	    }
+
+	double z_stat_mean = MiscMath::mean( perm_stats );
+	double z_stat_sd   = MiscMath::sdev( perm_stats );
+	double z_stat = ( obs_stat - z_stat_mean ) / z_stat_sd ; 
 	
+	std::cout << f1[i1].first << "-" << f1[i1].second << "\t"
+		  << f2[i2].first << "-" << f2[i2].second << "\t"
+	  //<< obs_stat << "\t"
+		  << z_stat << "\t"
+		  << (emp_stat+1)/double(nreps+1) << "\n";
+
+
+
+	if ( true )
+	  {
+	    
+	    for (int b1=0;b1<nbins;b1++)
+	      for (int b2=0;b2<nbins;b2++)
+		{
+		  //std::cout << "ha " << z[b1][b2] << "  " << (double)nreps << "\n";
+		  double zmean = z[b1][b2]/(double)nreps;
+		  double zsd   = sqrt(   z2[b1][b2]/(double)nreps  - zmean * zmean );
+		  
+		  std::cout << "res " << b1 << " " << b2 << " " 
+			    << obs[b1][b2] << " " 		
+			    << (pv[b1][b2] + 1 )/double(nreps+1) << " " 
+			    << zmean << " " 
+			    << zsd << " " 
+			    << (obs[b1][b2] - zmean ) / zsd << "\n";
+		}
+	  }
+
+
 
 	//
 	// Next pair of frequencies
@@ -362,4 +450,34 @@ bool phsyn_t::bin( double d , int * b , const std::vector<double> & th , const i
     }
   
   return false;
+}
+
+
+double phsyn_t::test_uniform( const std::vector<std::vector<double> > & m )
+{
+  // stat = ( O - E )^2 
+
+  const int bs = m.size();
+  
+  std::vector<double> rows( bs , 0 );
+  std::vector<double> cols( bs , 0 );
+  double tot = 0;
+  for (int b1=0;b1<bs;b1++)
+    for (int b2=0;b2<bs;b2++)
+      {
+	rows[b1] += m[b1][b2];
+	cols[b2] += m[b1][b2];
+	tot += m[b1][b2];
+      }
+
+  double stat = 0; 
+    
+  for (int b1=0;b1<bs;b1++)
+    for (int b2=0;b2<bs;b2++)
+      {
+	double exp = ( rows[b1] * cols[b2] ) / tot;
+	stat += ( m[b1][b2] - exp ) * ( m[b1][b2] - exp );
+      }
+  return stat;
+    
 }

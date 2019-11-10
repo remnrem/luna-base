@@ -47,5 +47,6 @@
 #include "reduce.h"
 #include "wrappers.h"
 #include "ica-wrapper.h"
+#include "sl.h"
 
 #endif
