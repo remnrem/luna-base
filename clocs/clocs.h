@@ -68,10 +68,10 @@ struct clocs_t {
 
   void add_cart( const std::string & label , double x , double y , double z ) 
   { 
-    cloc[ label ] = cart_t( x , y , z ) ;
+    // ensure always stored as upper case
+    cloc[ Helper::toupper( label ) ] = cart_t( x , y , z ) ;
   } 
-  
-  std::map<std::string,cart_t> cloc;
+
   
   std::string print( const std::string & delim = "," ) const 
   {
@@ -85,6 +85,7 @@ struct clocs_t {
       }
     return ss.str();
   }
+
 
   void convert_to_unit_sphere();
 
@@ -114,23 +115,26 @@ struct clocs_t {
 
   bool has( const std::string & cl ) const
   {
-    return cloc.find( cl ) != cloc.end() ;
+    std::string CL = Helper::toupper( cl );
+    return cloc.find( CL ) != cloc.end() ;
   }
   
   cart_t cart( const std::string & cl ) const
-  {
-    if ( ! has( cl ) ) Helper::halt( "did not have map position for " + cl ) ;
-    return cloc.find( cl )->second; 
+  {    
+    std::string CL = Helper::toupper( cl );
+
+    if ( cloc.find( CL ) == cloc.end() ) 
+      Helper::halt( "did not have map position for " + cl ) ;
+    
+    return cloc.find( CL )->second; 
   }
 
   sph_t sph( const std::string & cl ) const
   {
-    if ( ! has( cl ) ) Helper::halt( "did not have map position for " + cl ) ;
-    return cloc.find( cl )->second.sph(); 
+    return cart( cl ).sph();
   }
   
   int load_cart( const std::string & filename , bool verbose = false );
-
   
   bool attached() const { return cloc.size() != 0 ; } 
 
@@ -169,6 +173,10 @@ struct clocs_t {
     // plane. If elevation = pi/2, then the point is on the positive z-axis.																			      
   }
   
+  
+private:
+
+  std::map<std::string,cart_t> cloc;
   
   
   

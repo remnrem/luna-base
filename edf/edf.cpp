@@ -342,6 +342,7 @@ void edf_t::terse_summary() const
 
 
 
+
 std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<std::string> * inp_signals )
 {
 
@@ -866,6 +867,177 @@ bool edf_t::read_records( int r1 , int r2 )
 	    }
 	}
     }
+  return true;
+}
+
+
+bool edf_t::read_from_ascii( const std::string & f , // filename
+			     const std::string & i , // id
+			     const int Fs , // fixed Fs for all signals
+			     const std::vector<std::string> & labels0 ,  // if null, look for header
+			     const std::string & startdate , 
+			     const std::string & starttime 
+			     ) 
+{
+  
+  filename = Helper::expand( f );
+  
+  id = i;
+  
+  bool has_arg_labels = labels0.size() > 0;
+
+  bool has_header_labels = false;
+
+  std::vector<std::string> labels;
+
+  if ( has_arg_labels ) labels = labels0;
+
+  if ( ! Helper::fileExists( filename ) ) 
+    Helper::halt( "could not read " + filename );
+  
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+  
+  std::string line;
+  Helper::safe_getline( IN1 , line );
+  if ( IN1.eof() || line == "" ) Helper::halt( "problem reading from " + filename + ", empty?" );
+
+  // has a header row (whether we want to use it or not)
+
+  if ( line[0] == '#' ) 
+    {
+      has_header_labels = true;
+      if ( has_arg_labels ) 
+	logger << "  ignoring header row in " << filename << " as channel labels specified with --chs\n" ;
+      else
+	{
+	  line = line.substr(1);
+	  labels = Helper::parse( line , "\t ," );
+	}
+    } 
+
+  // if no arg or header labels, we need to make something up 
+  else if ( ! has_arg_labels ) 
+    {
+      std::vector<std::string> tok = Helper::parse( line , "\t ," );
+      labels.resize( tok.size() );
+      for (int l=0;l<labels.size();l++) labels[l] = "S" + Helper::int2str(l+1) ;
+    }
+
+  // and rewind file to start from the beginning, if needed
+  
+  if ( ! has_header_labels ) 
+    {
+      IN1.clear();
+      IN1.seekg(0, std::ios::beg);
+    }
+
+  
+  const int ns = labels.size();
+
+  //
+  // Scan file to get number of records
+  //
+  
+  int np = 0;
+  while ( !IN1.eof() ) 
+    {
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      
+      if ( IN1.eof() ) break;
+      if ( line == "" ) continue;
+      ++np;
+    }
+
+  // will ignore any partial records at the end of the file
+  int nr = np / Fs;
+  np = nr * Fs;
+
+  IN1.close();
+
+  // re-read
+  std::ifstream IN2( filename.c_str() , std::ios::in );
+
+  // skip header?
+  if ( has_header_labels ) 
+    {
+      std::string dummy;
+      Helper::safe_getline( IN2 , dummy );
+    }
+  
+
+  //
+  // Set header
+  //
+
+  header.version = "0";
+  header.patient_id = id;
+  header.recording_info = "";
+  header.startdate = startdate;
+  header.starttime = starttime;
+  header.nbytes_header = 256 + ns * 256;
+  header.ns = 0; // these will be added by add_signal()
+  header.ns_all = ns; // check this... should only matter for EDF access, so okay... 
+  header.nr = header.nr_all = nr;  // likewise, value of nr_all should not matter, but set anyway
+  header.record_duration = 1;
+  header.record_duration_tp = header.record_duration * globals::tp_1sec;
+  
+  
+
+  //
+  // create a timeline
+  //
+
+  set_continuous();
+
+  timeline.init_timeline();
+
+  //
+  // read data
+  //
+
+  logger << "  reading " << ns << " signals, " 
+	 << nr << " seconds ("
+	 << np << " samples " << Fs << " Hz) from " << filename << "\n";
+
+  Data::Matrix<double> data( np , ns );
+  
+  for (int p=0;p<np;p++)
+    for (int s=0;s<ns;s++)
+      {
+
+	IN2 >> data(p,s);
+	
+	if ( IN2.eof() ) 
+	  Helper::halt( filename + " does not contain enough data-points given parameters\n" );
+      }
+  
+  double dd;
+  IN2 >> dd;
+  if ( ! IN2.eof() ) Helper::halt( filename + " has too many data-points given parameters\n" );
+  
+  // should now be end of file...
+	    
+  IN2.close();
+
+
+  //
+  // resize data[][], by adding empty records
+  //
+
+  for (int r=0;r<nr;r++)
+    {
+      edf_record_t record( this ); 
+      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
+    }
+
+  //
+  // add signals (this populates channel-specific 
+  //
+  
+  for (int s=0;s<ns;s++)
+    add_signal( labels[s] , Fs , *data.col(s).data_pointer() );
+
   return true;
 }
 
@@ -2623,6 +2795,19 @@ void edf_t::copy_signal( const std::string & from_label , const std::string & to
 
   add_signal( to_label , header.sampling_freq(s1) , *d );
   
+  //
+  // and copy the header values that would not have been properly set by add_signal()
+  //
+
+  const int s2 = header.signal( to_label );
+  
+  if ( s2 == -1 ) 
+    Helper::halt( "problem with COPY: could not find new signal " + to_label );
+  
+  header.transducer_type[s2] = header.transducer_type[s1];
+  header.phys_dimension[s2] = header.phys_dimension[s1];
+  header.prefiltering[s2] = header.prefiltering[s1];
+  
 }
 
 
@@ -2787,7 +2972,7 @@ edf_record_t::edf_record_t( edf_t * e )
 
   edf = e;
 
-  // just for now, store both digital and physical values
+  // only store digital value, convert on-the-fly
   data.resize( edf->header.ns );
   //pdata.resize( edf->header.ns );
   
