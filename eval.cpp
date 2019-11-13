@@ -585,12 +585,18 @@ bool cmd_t::read( const std::string * str , bool silent )
   Helper::process_block_conditionals( &line , vars );
      
   //
-  // swap in any variables
+  // swap in any variables (and allows for them being defined on-the-fly
   //
 
-  Helper::swap_in_variables( &line , vars );
+  Helper::swap_in_variables( &line , &vars );
 
+  //
+  // expand [var][1:10] sequences
+  //
 
+  Helper::expand_numerics( &line );
+
+  
   std::vector<std::string> tok = Helper::quoted_parse( line , "\n" );
   if ( tok.size() == 0 ) 
     {

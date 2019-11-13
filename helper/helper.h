@@ -74,8 +74,10 @@ namespace Helper
   
   std::string search_replace( const std::string & , char a , char b );
   
-  void swap_in_variables( std::string * , const std::map<std::string,std::string> & );
+  void swap_in_variables( std::string * , std::map<std::string,std::string> * );
   
+  void expand_numerics( std::string * );
+
   void process_block_conditionals( std::string * , const std::map<std::string,std::string> & );
 
   std::string insert_indiv_id( const std::string & id , const std::string & str );
