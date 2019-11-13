@@ -217,7 +217,7 @@ int main(int argc , char ** argv )
       //   @variable-file 
       //   key=value
       //   signals=S1,S2,...
-      //   --flag  ( added minus fist '-' to globals::param
+      //   --flag  ( added minus fist '-' to globals::param ), e.g. --fs, --labels
       //   exclude={file}
 
       //   -o  output db
@@ -526,18 +526,24 @@ void process_edfs( cmd_t & cmd )
 
   
   //
-  // Open sample-list
+  // Open sample-list, or working with single EDF (or ASCII file)?
   //
 
   std::string f = cmd.data();
+
+  // use .edf or .EDF extension to indicate 'single EDF' mode
   f = f.substr( f.size() - 4 >= 0 ? f.size() - 4 : 0 );
   bool single_edf = f == ".edf" || f == ".EDF";
+  
+  // use presence of --fs command-line option to indicate 'single ASCII file' mode
+  bool single_txt = globals::param.has( "-fs" );
+  if ( single_txt ) single_edf = true;
 
   std::ifstream EDFLIST;
   
   if ( ! single_edf ) 
     EDFLIST.open( cmd.data().c_str() , std::ios::in );
-
+  
   //
   // Do we have a search path for EDFs and ANNOTs?
   //
@@ -739,8 +745,28 @@ void process_edfs( cmd_t & cmd )
       //
 
       edf_t edf;
+      
+      bool okay = true; 
+      
+      if ( single_txt )
+	{
+	  int fs = globals::param.requires_int( "-fs" );
+	  std::string startdate = globals::param.has("-date") ? globals::param.value( "-date" ) : "01.01.00" ; 
+	  std::string starttime = globals::param.has("-time") ? globals::param.value( "-time" ) : "00.00.00" ; 
+	  std::string id = globals::param.has("-id") ? globals::param.value( "-id" ) : rootname ; 
 
-      bool okay = edf.attach( edffile , rootname , inp_signals );
+	  std::vector<std::string> labels;
+	  if ( globals::param.has("-chs" ) ) labels = globals::param.strvector( "-chs" ); 
+	  
+	  okay = edf.read_from_ascii( edffile , 
+				      id , 
+				      fs , 
+				      labels , 
+				      startdate , starttime );
+
+	}
+      else
+	okay = edf.attach( edffile , rootname , inp_signals ); // read EDF
       
       if ( ! okay ) 
 	{
@@ -1114,7 +1140,8 @@ void proc_dummy( const std::string & p )
 
   std::vector<double> x;
   
-  if ( p == "fft" || p == "mtm" || p == "tv" || p == "dynam" || p == "ica" || p == "fip" || p == "sl" ) 
+  if ( p == "fir" || p == "fft" || p == "mtm" || p == "tv" 
+       || p == "dynam" || p == "ica" || p == "fip" || p == "sl" ) 
     {
 
       int cnt= 0;
@@ -1155,24 +1182,36 @@ void proc_dummy( const std::string & p )
       std::exit(0);
     }
 
-  if ( p == "fft" )
+
+  if ( p == "fir" ) 
     {
-      
+
       //
       // FIR
       //
       
-      //std::vector<double> fc = design_bandpass_fir( ripple , tw , fs , f1, f2 );
-      std::vector<double> fc = dsptools::design_bandpass_fir( 0.001 , 0.1 , 1000 , 2 , 15 );
-      std::cerr << "bandpass FIR order " << fc.size() << "\n";
-  
-      fir_impl_t fir_impl ( fc );
-      
-      x = fir_impl.filter( &x );
+      double ripple = 0.1;
+      double tw = 3;
+      double f1 = 2;
+      double f2 = 15;
+      double fs = 1000;
 
-      for (int i=0;i<x.size();i++) std::cout << x[i] << "\n";
+      std::vector<double> fc = dsptools::design_bandpass_fir( ripple , tw , fs , f1, f2 );
       
+      //       std::vector<double> fc = dsptools::design_bandpass_fir( 0.001 , 0.1 , 1000 , 2 , 15 );
+      std::cerr << "bandpass FIR order " << fc.size() << "\n";
+      fir_impl_t fir_impl ( fc );
+      x = fir_impl.filter( &x );
+      for (int i=0;i<x.size();i++) std::cout << x[i] << "\n";
       //      x = MiscMath::Z( x ) ;
+      
+      std::exit(1);
+    }
+
+  if ( p == "fft" )
+    {
+      
+      
       int index_length = x.size();
       int my_Fs = 1000; // arbitrary
       int index_start = 0;

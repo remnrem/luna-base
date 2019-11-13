@@ -165,10 +165,14 @@ annot_t * spectral_power( edf_t & edf ,
   bool epoch_level_output = show_epoch || show_epoch_spectrum ;
   
   
+  
   //
   // Get each signal
   //
   
+
+  logger << "  calculating PSD for " << ns << " signals\n"; 
+
   for (int s = 0 ; s < ns; s++ )
     {
       
