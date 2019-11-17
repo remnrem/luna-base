@@ -57,7 +57,10 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
   
   double upper_freq = param.has("max") ? param.requires_dbl( "max" ) : 20 ; 
 
+  //
   // adjust all SRs now
+  //
+
   if ( sr )
     {
       for (int s=0;s<ns;s++)
@@ -81,8 +84,13 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
   //
 
   bool epoched = edf.timeline.epoched() && param.has("epoch") ;
-  
 
+  //
+  // Start iterating over pairs
+  //
+
+  logger << "  calculating coherence for " << ns*(ns-1) << " channel pairs\n";
+  
   //
   // Ensure similar sampling rates
   //

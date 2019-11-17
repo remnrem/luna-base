@@ -820,37 +820,148 @@ std::string Helper::insert_indiv_id( const std::string & id , const std::string 
 }
 
 
-void Helper::swap_in_variables( std::string * t , const std::map<std::string,std::string> & vars )
+void Helper::expand_numerics( std::string * t )
+{
+  // expand [SIG][1:4] to SIG1,SIG2,SIG3,SIG4
+  
+  // search for '][' 
+  
+  std::map<int,int> splices; // txt locations
+  // maps keyed on start position of 'splices'
+  std::map<int,int> starts, stops; // to-be-expanded numbers, e.g. 1 and 4
+  std::map<int,std::string> root; // e.g. SIG
+  
+  for (int i=1;i<t->size();i++)
+    {
+      if ( (*t)[i-1] == ']' && (*t)[i] == '[' ) 
+	{
+	  int j=i-1;
+	  while ( 1 ) { 
+	    --j;
+	    if ( j < 0 ) Helper::halt( "bad format for [var][n:m]" );
+	    if ( (*t)[j] == '[' ) break;
+	  }
+	  
+	  int k=i+1;
+	  while ( 1 ) { 
+	    ++k;
+	    if ( k == t->size() ) Helper::halt( "bad format for [var][n:m]" );
+	    if ( (*t)[k] == ']' ) break;
+	  }
+	  
+	  std::string s = t->substr( j , k - j + 1 );
+	  std::vector<std::string> tok = Helper::parse( s , "][" );
+	  if ( tok.size() != 2 ) Helper::halt( "bad format for [var][n:m]" );
+	  
+	  std::vector<std::string> tok2 = Helper::parse( tok[1] , ":" );
+	  if ( tok2.size() != 2 ) Helper::halt( "bad format for [var][n:m]" );
+	  int s1 , s2;
+	  if ( ! Helper::str2int( tok2[0] , &s1 ) ) Helper::halt( "bad format for [var][n:m]" );
+	  if ( ! Helper::str2int( tok2[1] , &s2 ) ) Helper::halt( "bad format for [var][n:m]" );
+	  starts[j] = s1;
+	  stops[j] = s2;
+	  root[j] = tok[0];
+	  splices[j] = k;
+	}
+    }
+
+//   std::map<int,int>::const_iterator jj = starts.begin();
+//   while ( jj != starts.end() )
+//     {
+//       std::cout << "--> " 
+// 		<< jj->second << "\t"
+// 		<< stops[ jj->first ] << "\t"
+// 		<< root[ jj->first ] << "\n";
+//       ++jj;
+//     }
+
+  //
+  // splice in...
+  //
+  
+  if ( root.size() == 0 ) return;
+  
+  int p = 0;
+  std::string s;
+  std::map<int,int>::const_iterator jj = splices.begin();
+  while ( jj != splices.end() )
+    {
+      s += t->substr( p , jj->first - p ); 
+      int d = starts[ jj->first ] < stops[ jj->first ] ? 1 : -1 ; 
+      bool first = true;
+      for (int a = starts[ jj->first ] ; a <= stops[ jj->first ] ; a += d ) 
+	{
+	  if ( ! first ) s += ",";
+	  s += root[ jj->first ] + Helper::int2str( a );
+	  first = false;
+	}
+      // skip to end 
+      p = splices[ jj->first ] + 1;
+      ++jj;
+    }
+  // now add final part
+  s += t->substr( p );
+  
+  std::cout << "s = [" << s << "]\n";
+  std::cout << "t = [" << *t << "]\n";
+  *t = s ; 
+}
+
+void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars )
 {
   
   // variable must be in the form   ${var} 
+  // definitions can be as ${var=values,etc}
+
+  int open = 0;
   std::string s;
   for (int i=0;i<t->size();i++)
     {
       if ( (*t)[i] != '$' ) { s = s + (*t)[i]; continue; } 
       ++i;
+      
       if ( i == t->size() ) Helper::halt( "badly formed variable:" + *t );
       if ( (*t)[i] != '{' ) Helper::halt( "badly formed variable:" + *t );
+      ++open;
       std::string varname;
       while (1)
 	{
 	  ++i;
 	  if ( i == t->size() ) Helper::halt( "badly formed variable" );
-	  
-	  if ( (*t)[i] != '}' ) varname += (*t)[i];
+	  	  
+	  if ( (*t)[i] != '}' || open > 1 ) 
+	    {
+	      varname += (*t)[i];
+	      if ( (*t)[i] == '}' ) --open;
+	      if ( (*t)[i] == '{' ) ++open;
+	    }	  
 	  else
 	    {	      
-	      if ( vars.find( varname ) == vars.end() )
+	      open = 0;
+	      // definition?
+	      if ( varname.find( "=" ) != std::string::npos )
+		{
+		  std::vector<std::string> tok = Helper::parse( varname , "=" );
+		  
+		  if ( tok.size() != 2 ) Helper::halt( "bad format for ${var=value} definition" );
+		  // recursively swap in any existing variables in the defiinition
+		  // ${a=${b}} 
+		  Helper::swap_in_variables( &tok[1] , vars );
+		  (*vars)[ tok[0] ] = tok[1]; 
+		  break;
+		}
+  	      else if ( vars->find( varname ) == vars->end() )
 		Helper::halt( "variable ${" + varname + "} was not specified" );
 	      else // swap in new text
 		{
-		  s += vars.find( varname )->second;
+		  s += vars->find( varname )->second;
 		  break;
 		}
 	    }
 	}
     }
   *t = s;
+
 }
 
 

@@ -91,13 +91,13 @@ void timeline_t::init_timeline( bool okay_to_reinit )
   
   if ( edf->header.continuous )
     {
-      
+
       total_duration_tp = 
 	(uint64_t)edf->header.nr * edf->header.record_duration_tp;
       last_time_point_tp = total_duration_tp - 1LLU;
       
       uint64_t tp = 0;
-      
+
       for (int r = 0;r < edf->header.nr;r++)
 	{	  
 	  tp2rec[tp] = r;	

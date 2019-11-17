@@ -537,6 +537,19 @@ public:
   bool basic_stats( param_t & );
 
   //
+  // Create EDF struct from ASCII
+  //
+  
+  bool read_from_ascii( const std::string & f , // filename
+			const std::string & i , // id
+			const int Fs , // fixed Fs for all signals
+			const std::vector<std::string> & labels0 , // if null, look for header
+			const std::string & startdate = "01.01.00", 
+			const std::string & starttime = "00.00.00" 
+			) ;
+    
+
+  //
   // EDF vs EDF+
   //
 

@@ -69,13 +69,33 @@ int clocs_t::load_cart( const std::string & filename , bool verbose )
 
   // assume LABEL X Y Z 
   std::ifstream IN1( filename.c_str() , std::ios::in );
+
+
   while ( !IN1.eof() )
     {
-      std::string lab;
-      double x,y,z;
-      IN1 >> lab >> x >> y >> z;
+
+      std::string s;
+      Helper::safe_getline( IN1 , s );
       if ( IN1.eof() ) break;
-      cloc[ lab ] = cart_t( x, y, z );
+      if ( s == "" ) continue;	  
+      if ( s[0] == '#' ) continue; // skip comments
+      
+      // expecting 4 columnds
+      std::vector<std::string> tok = Helper::parse( s , "\t ," );
+      if ( tok.size() != 4 ) Helper::halt( "bad format: expecting CH X Y Z" );
+      
+      // store all channel names as upper case
+      std::string lab = Helper::toupper( tok[0] );
+
+      double x,y,z;
+      if ( ! ( Helper::str2dbl( tok[1] , &x ) 
+	       && Helper::str2dbl( tok[2] , &y ) 
+	       && Helper::str2dbl( tok[3] , &z ) ) )
+	Helper::halt( "bad format:  expecting CH X Y Z" );
+
+      // add
+      add_cart( lab , x , y , z );
+
     }
   IN1.close();
 
@@ -151,20 +171,24 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
   
   for (int s=0;s<signals.size();s++)
     if ( ! has( signals.label(s) ) ) 
-      {
-	Helper::halt( "could not find cloc for: " + signals.label(s) + "\navailable clocs: " + print() );
-      }
+      Helper::halt( "could not find cloc for: " 
+		    + signals.label(s) 
+		    + "\navailable clocs: " + print() );
+      
 
   const int ns = signals.size();
   
   Data::Matrix<double> D(ns,ns);
+  
   for (int s1=0;s1<ns;s1++)
     {      
-      cart_t c1 = cloc.find( signals.label(s1) )->second;
+
+      cart_t c1 = cart( signals.label(s1) );
+      
       for (int s2=s1;s2<ns;s2++)
 	{
 
-	  cart_t c2 = cloc.find( signals.label( s2 ) )->second; 	  
+	  cart_t c2 = cart( signals.label( s2 ) );
 	  
 	  if ( mode == 1 ) 
 	    {
@@ -200,15 +224,20 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
       Helper::halt( "could not find cloc for: " + signals2.label(s) + "\navailable clocs: " + print() );
 
   const int ns1 = signals1.size();
+
   const int ns2 = signals2.size();
   
   Data::Matrix<double> D(ns1,ns2);
   for (int s1=0;s1<ns1;s1++)
     {      
-      cart_t c1 = cloc.find( signals1.label(s1) )->second;
+
+      cart_t c1 = cart( signals1.label(s1) );
+
       for (int s2=0;s2<ns2;s2++)
 	{
-	  cart_t c2 = cloc.find( signals2.label( s2 ) )->second; 
+
+	  cart_t c2 = cart( signals2.label( s2 ) ); 
+
 	  double d = 1 - ( ( (c1.x-c2.x)*(c1.x-c2.x) +
 			     (c1.y-c2.y)*(c1.y-c2.y) +
 			     (c1.z-c2.z)*(c1.z-c2.z) ) / 2.0 );

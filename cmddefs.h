@@ -156,8 +156,8 @@ class cmddefs_t
   // parameters for this command
   void add_param( const std::string & cmd , const std::string & param , 
 		  const std::string & ex ,  // "" if none
-		  const std::string & requirements , // "" if noone
-		  const std::string & desc ) 
+  		  const std::string & desc , 
+		  const std::string & requirements = "" )
   {
     pdesc[ cmd ][ param ] = desc;
     preq[ cmd ][ param ] = requirements;
