@@ -159,6 +159,20 @@ int main(int argc , char ** argv )
 
 
   //
+  // build a project list
+  //
+
+  else if ( argc >=2 && strcmp( argv[1] , "--build" ) == 0 )
+    {
+      global.api();
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::build_sample_list( tok );
+      std::exit(0);
+    }
+
+
+  //
   // banner
   //
 
@@ -532,7 +546,7 @@ void process_edfs( cmd_t & cmd )
   std::string f = cmd.data();
 
   // use .edf or .EDF extension to indicate 'single EDF' mode
-  f = f.substr( f.size() - 4 >= 0 ? f.size() - 4 : 0 );
+  f = f.substr( (int)f.size() - 4 >= 0 ? (int)f.size() - 4 : 0 );
   bool single_edf = f == ".edf" || f == ".EDF";
   
   // use presence of --fs command-line option to indicate 'single ASCII file' mode

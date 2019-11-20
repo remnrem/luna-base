@@ -68,6 +68,11 @@ bool globals::skip_edf_annots;
 
 std::set<std::string> globals::excludes;
 
+std::set<std::string> globals::sl_annot_extensions;
+std::map<std::string,sample_list_t> globals::sl_data;
+bool globals::sl_visit_edf;
+bool globals::sl_link_across_folders;
+
 int globals::sample_list_min;
 int globals::sample_list_max;
 std::string globals::sample_list_id;
@@ -181,7 +186,12 @@ void globals::init_defs()
 
   nsrr_t::init();
 
+  //
+  // --build
+  //
 
+  sl_visit_edf = true;
+  
   //
   // By default, read and extract all FTR; if this is a pain, can be turned off (ftr=0)
   //

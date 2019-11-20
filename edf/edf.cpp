@@ -34,6 +34,8 @@
 #include "clocs/clocs.h"
 #include "timeline/timeline.h"
 
+//#include <ftw.h>
+
 #include <iostream>
 #include <fstream>
 
@@ -3595,4 +3597,8 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
     }    
   return false;
 }
+
+
+
+
 

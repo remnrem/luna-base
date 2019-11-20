@@ -25,6 +25,7 @@
 
 #include "defs/defs.h"
 #include "intervals/intervals.h"
+#include "edf/edf.h"
 
 #include <cmath>
 #include <cstdio>
@@ -39,6 +40,8 @@
 #endif
 
 extern logger_t logger;
+
+int fn_luna_slbuilder(const char * fpath, const struct stat *ptr, int type );
 
 std::string Helper::toupper( const std::string & s )
 {
@@ -106,6 +109,9 @@ bool Helper::file_extension( const std::string & f, const std::string & ext )
   const std::string s = f.substr( f.size() - l );
   return Helper::iequals( s , "." + ext );
 }
+
+
+
 
 void Helper::halt( const std::string & msg )
 {

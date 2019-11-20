@@ -86,6 +86,8 @@ namespace Helper
   
   bool is_folder( const std::string & f );
 
+  void build_sample_list( const std::vector<std::string> & );
+
   std::vector<std::string> file2strvector( const std::string & );
 
   // case insenstive string comparison
