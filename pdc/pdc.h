@@ -259,6 +259,12 @@ struct pdc_t {
   }
 
   //
+  // Channel-checker interface
+  //
+
+  void channel_checker( edf_t & edf , param_t & param );
+
+  //
   // Primary routine to autoscore, assuming a library has been attached
   //
 

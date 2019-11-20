@@ -785,9 +785,7 @@ void pdc_obs_t::encode( int m , int t )
   pd.resize(ns);
   int normalize = 1; 
   for (int i=0;i<ns;i++)
-    {
-      pd[i] = pdc_t::calc_pd( ts[i] , m , t , &normalize );
-    }
+    pd[i] = pdc_t::calc_pd( ts[i] , m , t , &normalize );
 }
   
 // get (per-channel) entropy of current PD(s)
