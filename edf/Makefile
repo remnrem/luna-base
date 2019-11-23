@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libedf.a
-OBJS	 = edf.o slice.o dumper.o covar.o tal.o masks.o dump-intervals.o chep.o
+OBJS	 = edf.o slice.o dumper.o covar.o tal.o masks.o dump-intervals.o chep.o slist.o
  
 all : $(OBJLIBS)
 

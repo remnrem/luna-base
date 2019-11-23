@@ -193,7 +193,7 @@ class cmddefs_t
   //
 
   // describe one command 
-  std::string help( const std::string & cmd , bool verbose = false ) const;
+  std::string help( const std::string & cmd , bool show_domain_label = true , bool verbose = false ) const;
 
   // list all domains
   std::string help_domains() const;

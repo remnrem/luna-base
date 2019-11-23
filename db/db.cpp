@@ -1315,8 +1315,28 @@ retval_t writer_t::dump_to_retval( const std::string & dbname , const std::set<s
 
 bool writer_t::to_plaintext( const std::string & var_name , const value_t & x ) 
 {
-  if ( curr_zfile == NULL ) Helper::halt( "null curr_zfile in writer_t" );
+
+  // if trying to write to an ill-formed table, complain
+  
+  if ( curr_zfile == NULL ) 
+    {
+            
+      if ( zfiles != NULL )
+	{
+	  zfiles->close();
+	  delete zfiles;
+	  zfiles = NULL;
+	}
+
+      Helper::halt( "internal error: null curr_zfile in writer_t"
+		    "\n -- output tables for this command have not yet been hooked up for '-t' mode output" 
+		    "\n -- please re-run without -t (i.e. -o/-a or raw output to the console) " );
+    }
+  
+  // write variable/value to buffer
+  
   curr_zfile->set_value( var_name , x.str() );    
+
   return true;
 }
 
@@ -1335,6 +1355,9 @@ void writer_t::update_plaintext_curr_strata()
   
   // might not be a valid table (i.e. this could be the case if setting 
   // levels, e.g. A+B,  then when only level(A) is set, it will not be valid
+  // this is fine, so we won't give an error yet;  but if somebody tries writing 
+  // to a NULL,  writer_t::to_plaintext(), give an error then.
+
   if ( curr_zfile == NULL ) return;
 
   // set (all) levels 

@@ -34,6 +34,12 @@
 
 struct param_t; 
 
+struct sample_list_t { 
+  std::string id;
+  std::string edf;
+  std::set<std::string> annots;
+};
+
 typedef std::complex<double> dcomp;
 
 enum window_function_t
@@ -140,6 +146,12 @@ struct globals
 
   static std::set<std::string> excludes;
 
+  // used by the --build command only
+  static std::set<std::string> sl_annot_extensions;
+  static std::map<std::string,sample_list_t> sl_data;
+  static bool sl_visit_edf;
+  static bool sl_link_across_folders;
+  
   static int sample_list_min;
   static int sample_list_max;
   static std::string sample_list_id;
