@@ -689,8 +689,8 @@ std::map<std::string,double> pdc_t::summarize( const std::set<pd_dist_t> & match
 	}
       else
 	{
-	  //s[ *ll ] = scnt[ *ll ] / (double)label_count[ *ll ];
-	  s[ *ll ] = s[ *ll ] / total;
+	  s[ *ll ] = scnt[ *ll ] / (double)label_count[ *ll ];
+	  //s[ *ll ] = s[ *ll ] / total;
 	}
       
       ++ll;

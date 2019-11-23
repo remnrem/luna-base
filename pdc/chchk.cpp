@@ -76,6 +76,9 @@ void pdc_t::channel_checker( edf_t & edf , param_t & param )
   
   if ( obs.size() == 0 ) 
     {      
+
+      // expecting only the single 'test' channel _T
+      add_channel( "_T" ); 
       
       std::vector<std::string> references;
 
@@ -90,16 +93,13 @@ void pdc_t::channel_checker( edf_t & edf , param_t & param )
       references.push_back( "snore" );
       references.push_back( "abdo" );
       references.push_back( "nasal" );
-
-      // add all target channel names
-      //       for ( int s=0; s<ns; s++ )
-      // 	add_channel( signals.label(s) );
-      
       
       read_pdlib( pdlib );
       
       if ( obs.size() == 0 ) 
 	Helper::halt( "no valid PDLIB specified" );
+      else
+	logger << " read " << obs.size() << " obs\n";
     }
   
 
@@ -120,169 +120,229 @@ void pdc_t::channel_checker( edf_t & edf , param_t & param )
   // actual SRs
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 
-  // resampling if neeeded
+
+
+  ///
+  // Iterate over signals
+  //
+
+  
   for (int s=0;s<ns;s++)
-    {
+    {      
+      
+
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
       
+      writer.level( signals.label(s) , globals::signal_strat );
+      
+      //
+      // resample as neeeded
+      //
+
       if ( edf.header.sampling_freq( signals(s) ) != sr ) 
 	dsptools::resample_channel( edf, signals(s) , sr );
-    }  
-  
-  
 
-//   //
-//   // Consider each eppch, and split into 3 10 second components;  match each against the PDLIB
-//   //
-
-//   // epoch x 3 vector
-//   std::vector<std::vector<pdc_obs_t> > targets;
+      //   // epoch x 3 vector
+      //   std::vector<std::vector<pdc_obs_t> > targets;
   
+      
+      //
+      // Iterate over each epoch
+      //
+      
+      int ne = edf.timeline.first_epoch();
   
-//   //
-//   // Iterate over each epoch
-//   //
-  
-//   int ne = edf.timeline.first_epoch();
-  
-//   if ( pre_grouping ) 
-//     {
-//       if ( ne != epoch2group.size() ) 
-// 	{
-// 	  std::cout << " ne = " << ne << " " << epoch2group.size() << "\n";
-// 	  Helper::halt( "not all epochs pre-grouped" );
-// 	}
-//     }
-
   
 //   std::map<int,int> displayepoch2internal;
   
 //   int cnt = 0;
+
+       //
+       // Always map against _T test-channel label (i.e. all pdlib channels)
+       //
+       
+       int c = channel( "_T" );
   
-//   while ( 1 ) 
-//     {
-      
-//       int epoch = edf.timeline.next_epoch();      
-      
-//       if ( epoch == -1 ) break;
-      
-//       // track, as we may use this if doing grouping, see below
-//       displayepoch2internal[ edf.timeline.display_epoch( epoch ) ] = epoch; 
 
-//       interval_t interval = edf.timeline.epoch( epoch );
-      
-//       // epoch counter
-//       ++cnt;
-      
-//       // 30 ten-second intervals per epoch
-//       pdc_obs_t e1(ns), e2(ns), e3(ns);
-      
-//       // select first, middle and last 10 seconds
-//       int start1 = 0;
-//       int end1   = start1 + 10 * sr - 1 ;
-      
-//       int start2 = 10 * sr - 1 ;
-//       int end2   = start2 + 10 * sr - 1 ;
-      
-//       int start3 = 20 * sr - 1 ;
-//       int end3   = start3 + 10 * sr - 1 ;
-      
-            
-//       for ( int s=0; s<ns; s++ )
-// 	{
-	  
-// 	  // only consider data tracks
-	  
-// 	  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
-	  
-// 	  int c = channel( chmap[ signals.label(s) ] );
-	  
-// 	  if ( c == -1 ) continue;
 
-// 	  // extract signal from EDF
 
-// 	  slice_t slice( edf , signals(s) , interval );
-	  
-// 	  std::vector<double> * d = slice.nonconst_pdata();
-	  
-// 	  const std::vector<uint64_t> * tp = slice.ptimepoints();
-	  
-// 	  // check epoch length is exactly 30s, otherwise skip
-// 	  const int na = d->size();
-// 	  if ( na != sr * 30 ) continue;
-	  
-	  
-// 	  std::vector<double> ts1, ts2, ts3;
-// 	  for (int j=start1; j<=end1; j++) ts1.push_back( (*d)[j] );
-// 	  for (int j=start2; j<=end2; j++) ts2.push_back( (*d)[j] );
-// 	  for (int j=start3; j<=end3; j++) ts3.push_back( (*d)[j] );
-	  
-// 	  // record
-// 	  e1.ch[c] = e2.ch[c] = e3.ch[c] = true;
 
-// 	  e1.ts[c] = ts1;
-// 	  e2.ts[c] = ts2;
-// 	  e3.ts[c] = ts3;
-	  
-// 	}
-      
-//       // compile
-//       e1.encode( encoding_m, encoding_t );
-//       e2.encode( encoding_m, encoding_t );
-//       e3.encode( encoding_m, encoding_t );
-      
-//       std::vector<pdc_obs_t> te;
-//       te.reserve(3);
-//       te.push_back( e1 );
-//       te.push_back( e2 );
-//       te.push_back( e3 );
-//       targets.push_back( te );
-      
-      
-//       //
-//       // Optional output of PD for the to-be-staged epochs?
-//       //
-      
-//       if ( out_pd ) 
-// 	{
-	  
-// 	  // e1	  
+        while ( 1 ) 
+        	 {
+	   
+        	   int epoch = edf.timeline.next_epoch();      
+	   
+        	   if ( epoch == -1 ) break;
+	   
+		   interval_t interval = edf.timeline.epoch( epoch );
+		   //interval_t interval = edf.timeline.wholetrace();
+	   
+	   // extract signal from EDF
+	   
+	   slice_t slice( edf , signals(s) , interval );
+	   
+	   std::vector<double> * d = slice.nonconst_pdata();
+	   
+	   // check epoch length is exactly 30s, otherwise skip
+	   const int na = d->size();
+	   //if ( na != sr * 30 ) continue;
+	   
+	   // 30-second intervals per epoch, for 1 channel
+	   pdc_obs_t e1(1);
+	   pdc_obs_t e1r(1);
+	   
+	   // record
+	   e1.ch[c] = true;
+	   e1.ts[c] = *d;
+	   
+	   // reverse
+	   e1r.ch[c] = true;
+	   e1r.ts[c] = *d;
+	   for (int i=0;i<na;i++) 
+	     e1r.ts[c][i] *= -1;
 
-// 	  std::map<std::string,int>::const_iterator cc = channels.begin();
-// 	  while ( cc != channels.end() )
-// 	    {
-// 	      OUT1 << edf.id << "\t" 
-// 		   << cc->first << "\t"
-// 		   << epoch+1 << "\t"
-// 		   << 1 ;
-// 	      for (int p=0;p<e1.pd[cc->second].size();p++) OUT1 << "\t" << e1.pd[ cc->second ][p];
-// 	      OUT1 << "\n";
-	      
-// 	      OUT1 << edf.id << "\t" 
-// 		   << cc->first << "\t"
-// 		   << epoch+1 << "\t"
-// 		   << 2 ;
-// 	      for (int p=0;p<e2.pd[cc->second].size();p++) OUT1 << "\t" << e2.pd[ cc->second ][p];
-// 	      OUT1 << "\n";
+      	   // encode
+	   
+	   e1.encode( encoding_m, encoding_t );
+	   e1r.encode( encoding_m, encoding_t );
 
-// 	      OUT1 << edf.id << "\t" 
-// 		   << cc->first << "\t"
-// 		   << epoch+1 << "\t"
-// 		   << 3 ;
-// 	      for (int p=0;p<e3.pd[cc->second].size();p++) OUT1 << "\t" << e3.pd[ cc->second ][p];
-// 	      OUT1 << "\n";
-	      
-// 	      ++cc;
-// 	    }
-// 	}
-//     }
+	   
+	   std::vector<pdc_obs_t> te;
+	   te.reserve(3);
+	   // te.push_back( e1 );
+	   // targets.push_back( te );
 
+	   std::set<pd_dist_t> matches1 = match( e1 , nmatch );
+	   std::set<pd_dist_t> matches1r = match( e1r , nmatch );
+	   
+
+	   std::string match1, match1r;
+	   double conf1, conf1r;
+	   
+	   std::map<std::string,double> summ1 = summarize2( matches1 , &match1 , &conf1 );
+	   std::map<std::string,double> summ1r = summarize2( matches1r , &match1r , &conf1r );
+	   
+   	   // individual matches, and confidence scores:
+	   std::cout << match1 << "\t" << conf1 << "\n";
+	   
+	   writer.epoch( edf.timeline.display_epoch( epoch ) );
+	   
+	   writer.value( "MATCH" , match1 );
+	   writer.value( "RMATCH" , match1r );
+
+	   writer.value( "CONF" , conf1 );
+	   writer.value( "RCONF" , conf1r );
+
+	   //   logger << " scanned " << cnt << " epochs, extracted " << targets.size() << " time-series\n";
+	   
+        	 }
+       
+        writer.unepoch();
+       
+    }
   
-//   if ( out_pd ) OUT1.close();
+  writer.unlevel ( globals::signal_strat );
   
-//   logger << " scanned " << cnt << " epochs, extracted " << targets.size() << " time-series\n";
+}
 
-    
+
+
+std::map<std::string,double> pdc_t::summarize2( const std::set<pd_dist_t> & matches , std::string * cat , double * conf )
+{
+  
+  const int nmatches = matches.size();
+
+  std::map<std::string,double> s;
+  std::map<std::string,int> scnt;
+
+  if ( nmatches == 0 ) return s;
+
+  double pdmin = matches.begin()->d;
+  double pdmax = matches.begin()->d;
+
+  std::vector<pd_dist_t> scaled;
+  
+  std::set<pd_dist_t>::const_iterator ii = matches.begin();
+  while ( ii != matches.end() ) 
+    {
+      if ( ii->d < pdmin ) pdmin = ii->d;
+      if ( ii->d > pdmax ) pdmax = ii->d;      
+      scaled.push_back( *ii );
+      ++ii;
+    }
+
+  // scale so that within this 'best-match' set, best is 1.0 and worst is 0.
+  // then sum for each label
+
+  // and then get sum per label in top N, as we enfore the same
+  // number of templates, this is equivalent to having a uniform prior
+  // for each class
+
+  double total = 0;
+
+  std::vector<pd_dist_t>::iterator jj = scaled.begin();
+  while ( jj != scaled.end() ) 
+    {
+
+      jj->d = 1 - ( ( jj->d - pdmin ) / ( pdmax - pdmin ) ) ;
+
+      //      std::cout << "jj->d = " << jj->d << "\n";
+
+      // sum per stage
+      s[ obs[ jj->ix ].label ] += jj->d;
+
+      // sum overall
+      total += jj->d;
+
+      // track how many obs per 
+      scnt[ obs[ jj->ix ].label ]++;
+      
+      ++jj;
+    }
+  
+  
+  // normalize to 1.0 over all labels and take complement
+  
+  //  double total2 = 0 ; 
+  
+  std::set<std::string>::const_iterator ll = labels.begin();
+  while ( ll != labels.end() )
+    {
+      
+      if ( s.find( *ll ) == s.end() ) 
+	{
+	  s[ *ll ] = 0 ; 
+	}
+      else
+	{
+	  s[ *ll ] /= scnt[ *ll ] ;
+	  //	  s[ *ll ] = scnt[ *ll ] / (double)label_count[ *ll ];
+	  //s[ *ll ] = s[ *ll ] / total;
+	  //std::cout <<  "  " << s[ *ll ]  << " is " << *ll << "\n";
+	}
+      
+      ++ll;
+    }
+  
+  // select the best label
+  
+  *conf = 0;
+  *cat = ".";
+  
+  ll = labels.begin();
+  while ( ll != labels.end() )
+    {      
+      if ( s[ *ll ] > *conf ) 
+	{
+	  *cat = *ll;
+	  *conf = s[ *ll ];
+	}
+      
+      ++ll;
+    }
+  
+
+  return s;
 }
 
 

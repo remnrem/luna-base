@@ -262,7 +262,7 @@ struct pdc_t {
   // Channel-checker interface
   //
 
-  void channel_checker( edf_t & edf , param_t & param );
+  static void channel_checker( edf_t & edf , param_t & param );
 
   //
   // Primary routine to autoscore, assuming a library has been attached
@@ -303,6 +303,9 @@ struct pdc_t {
   static std::set<pd_dist_t> match( const pdc_obs_t & target , const int nbest = 10 );
 
   static std::map<std::string,double> summarize( const std::set<pd_dist_t> & matches , std::string * cat , double * conf );
+
+  // might end of being redundant, but edit this to allow unequal ref/class N
+  static std::map<std::string,double> summarize2( const std::set<pd_dist_t> & matches , std::string * cat , double * conf );
     
   
 private: 

@@ -722,7 +722,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "TSLIB" ) )        pdc_t::construct_tslib( edf , param(c) );
       else if ( is( c, "SSS" ) )          pdc_t::simple_sleep_scorer( edf , param(c) );
       else if ( is( c, "EXE" ) )          pdc_t::similarity_matrix( edf , param(c) );
-      
+      else if ( is( c, "CHCHK" ) )        pdc_t::channel_checker( edf , param(c) );
+
       else if ( is( c, "LW" ) )           lw_prep_t( edf , param(c) );
       
       else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );      
