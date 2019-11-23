@@ -113,7 +113,7 @@ int main(int argc , char ** argv )
 	  // -h {cmd}  list all options/tables (verbose)
 	  else if ( globals::cmddefs.is_cmd(p) ) 
 	    {
-	      std::cerr << globals::cmddefs.help( p , true ) << "\n";
+	      std::cerr << globals::cmddefs.help( p , true , true ) << "\n";
 	    }
 	  
 	  // otherwise, complain

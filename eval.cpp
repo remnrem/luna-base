@@ -856,7 +856,8 @@ bool cmd_t::eval( edf_t & edf )
 
 void proc_headers( edf_t & edf , param_t & param )
 {
-  edf.terse_summary();
+  // optionally add a SIGNALS col that has a comma-delimited list of all signals
+  edf.terse_summary( param.has( "signals" ) );
 }
 
 

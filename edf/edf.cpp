@@ -288,7 +288,7 @@ void edf_t::description() const
 }
 
 
-void edf_t::terse_summary() const
+void edf_t::terse_summary( const bool write_signals ) const
 {
   
   // variable definitions
@@ -316,6 +316,13 @@ void edf_t::terse_summary() const
   std::string total_duration_hms = Helper::timestring( duration_tp );
   writer.value( "TOT.DUR.SEC" , header.nr * header.record_duration );
   writer.value( "TOT.DUR.HMS" , total_duration_hms );
+
+  writer.value( "EDF_ID" , header.patient_id );
+  writer.value( "START_TIME" , header.starttime );
+  writer.value( "START_DATE" , header.startdate );
+
+  if ( write_signals ) 
+    writer.value( "SIGNALS" , Helper::stringize<std::vector<std::string> >( header.label ) ); 
 
   for (int s=0;s<header.ns;s++)
     {
@@ -3597,8 +3604,4 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
     }    
   return false;
 }
-
-
-
-
 

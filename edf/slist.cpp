@@ -26,85 +26,140 @@
 #include "defs/defs.h"
 #include "edf/edf.h"
 #include <iostream>
+
+
+int fn_luna_slbuilder( const std::string & filename );
+
+
+//
+// POSIX directory traversal function (called from ftw() below)
+//
+
+#ifndef WINDOWS
+
 #include <ftw.h>
 
-
-int fn_luna_slbuilder(const char * fpath, const struct stat *ptr, int type )
+int fn_luna_slbuilder_ftw(const char * fpath, const struct stat *ptr, int type )
 {
-  if (type == FTW_F)
+  if (type == FTW_F) 
     {
       std::string filename( fpath );
+      return fn_luna_slbuilder( filename );
+    }  
+  return 0;
+}
+
+
+#else
+
+//
+// Windows API folder traveral 
+//
+
+
+void fn_luna_slbuilder_win( const std::string & fpath )
+{
+
+  WIN32_FIND_DATA FindFileData;
+  
+  HANDLE hFind = FindFirstFile( fpath ,  &FindFileData);
+  
+  if (hFind == INVALID_HANDLE_VALUE) {
+    printf ("FindFirstFile failed (%d)\n", GetLastError());
+    return;
+  } 
+  
+  do {
+    if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      _tprintf(TEXT("  %s   <DIR>\n"), FindFileData.cFileName);
+    else
+      _tprintf(TEXT("  %s \n"), FindFileData.cFileName);
+  } while (FindNextFile(hFind, &FindFileData) != 0);
+  
+  FindClose(hFind);
+  
+}
+
+
+
+#endif
+
+
+
+//
+// Generic code
+//
+
+int fn_luna_slbuilder( const std::string & filename )
+{
+ 
+  // need to parse foldes?
+  std::vector<std::string> tok;
+  if ( globals::sl_link_across_folders || ( ! globals::sl_visit_edf ) )
+    {
+      std::string dl( 1 , globals::folder_delimiter );	      
+      tok = Helper::parse( filename , dl );
+    }
+  
+  if ( Helper::file_extension( filename , "edf" ) )
+    {
       
-      // need to parse foldes?
-      std::vector<std::string> tok;
-      if ( globals::sl_link_across_folders || ( ! globals::sl_visit_edf ) )
+      std::string id;
+      
+      // get ID from EDF? 
+      if ( globals::sl_visit_edf ) 
 	{
-	  std::string dl( 1 , globals::folder_delimiter );	      
-	  tok = Helper::parse( filename , dl );
+	  edf_t edf;
+	  edf.attach( filename , "." );
+	  id = edf.header.patient_id;
+	}
+      else
+	{	      
+	  id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 );
 	}
       
-      if ( Helper::file_extension( filename , "edf" ) )
-	{
-	  
-	  std::string id;
-	  
-	  // get ID from EDF? 
-	  if ( globals::sl_visit_edf ) 
-	    {
-	      edf_t edf;
-	      edf.attach( filename , "." );
-	      id = edf.header.patient_id;
-	    }
-	  else
-	    {	      
-	      id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 );
-	    }
-
-	  //
-	  // store EDF/ID pair (locked on either full of local )
-	  //   for EDF:   /path/to/file.edf
-	  
-	  //   either link EDF to ANNOTs based on ; 
-	  //       /path/to/file    ( if -nospan ) 
-	  //   or:
-	  //       file             ( the default) 
-	  //   i.e. the latter will match annots and EDFs in different folders
-	  //        but it will also clash if different EDFs have same names but are in different folders
-
-	  std::string key = globals::sl_link_across_folders ? 
-	    tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 ) : 
-	    filename.substr( 0 , filename.size() - 4 );
-	  
-	  globals::sl_data[ key ].id = id;
-	  globals::sl_data[ key ].edf = filename;
-
-	}
-      else 
-	{
-	  std::set<std::string>::const_iterator ii = globals::sl_annot_extensions.begin();
-	  while ( ii != globals::sl_annot_extensions.end() )
-	    {
-
-	      if ( Helper::file_extension( filename , *ii ) )
-		{
-		  
-		  std::string key = globals::sl_link_across_folders ? 
-		    tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 ) :
-		    filename.substr( 0 , filename.size() - 4 );
-		  
-		  globals::sl_data[ key ].annots.insert( filename );
-		  
-		}
-	      
-	      ++ii;
-	    }
-	}
+      //
+      // store EDF/ID pair (locked on either full of local )
+      //   for EDF:   /path/to/file.edf
       
+      //   either link EDF to ANNOTs based on ; 
+      //       /path/to/file    ( if -nospan ) 
+      //   or:
+      //       file             ( the default) 
+      //   i.e. the latter will match annots and EDFs in different folders
+      //        but it will also clash if different EDFs have same names but are in different folders
+      
+      std::string key = globals::sl_link_across_folders ? 
+	tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 ) : 
+	filename.substr( 0 , filename.size() - 4 );
+      
+      globals::sl_data[ key ].id = id;
+      globals::sl_data[ key ].edf = filename;
       
     }
-
-
+  else 
+    {
+      std::set<std::string>::const_iterator ii = globals::sl_annot_extensions.begin();
+      while ( ii != globals::sl_annot_extensions.end() )
+	{
+	  
+	  if ( Helper::file_extension( filename , *ii ) )
+	    {
+	      
+	      std::string key = globals::sl_link_across_folders ? 
+		tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 ) :
+		filename.substr( 0 , filename.size() - 4 );
+	      
+	      globals::sl_data[ key ].annots.insert( filename );
+	      
+	    }
+	  
+	  ++ii;
+	}
+    }
+  
   return 0;
+
 }
 
 
@@ -148,9 +203,15 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   
   for (int t=0;t<tok.size();t++)
     {      
+      
+#ifndef WINDOWS
       // expands any ~ home folder
-      if ( ftw( Helper::expand( tok[t] ).c_str() , fn_luna_slbuilder, 10 ) != 0 ) 
+      if ( ftw( Helper::expand( tok[t] ).c_str() , fn_luna_slbuilder_ftw, 10 ) != 0 ) 
 	Helper::halt( "problem traversing folder " + tok[t] );      
+#else
+      // windows code here
+      
+#endif      
     }
   
 

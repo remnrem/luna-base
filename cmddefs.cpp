@@ -67,8 +67,42 @@ void cmddefs_t::init()
   add_domain( "misc"     , "Misc"           , "Misc. commands" );
   add_domain( "exp"      , "Experimental"   , "Experimental features: under heavy development, for internal use only" );
 
-  
+  add_domain( "cmdline"  , "Command-line options"       , "Other functions that do not operate on EDFs" );  
    
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // COMMAND-LINE OPTIONS
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+  
+  add_cmd( "cmdline" , "--build" , "Scan folders recursively to geneate a sample list" );
+  add_param( "--build" , "-usefilename" , "" , "Use filename as ID, instead of looking in each EDF header" );
+  add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
+  add_param( "--build" , "-ext" , "-ext=txt,eannot,annot" , "Consider these extensions as annotation files" );
+  
+  add_cmd( "cmdline" , "--xml" , "Dump the contents of an XML annotation file to the console" );
+  add_cmd( "cmdline" , "--eval" , "" );
+  add_cmd( "cmdline" , "--pdlib" , "" );
+  add_cmd( "cmdline" , "--fir" , " Or --fir-design" );
+  add_cmd( "cmdline" , "--cwt" , "Or --cwt-design" );
+  add_cmd( "cmdline" , "--eval-verbose" , "" );
+
+  add_cmd( "cmdline" , "-h" , "Help functions" );
+
+  add_cmd( "cmdline" , "--version" , "Show version (or -v)" );
+  add_cmd( "cmdline" , "--xml" , "Dump the contents of an XML annotation file to the console" );
+
+
+  // -o
+  // -t 
+  // -a 
+  // -s
+  // @parameter file
+  // x=y ... including special variables
+  // ID
+  // 1 2 
+
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1055,7 +1089,7 @@ std::string cmddefs_t::help_commands() const
     const std::set<std::string> & dc = ii->second;
     std::set<std::string>::const_iterator jj = dc.begin();
     while ( jj != dc.end() ) {
-      ss << help( *jj , false ) ;
+      ss << help( *jj , true , false ) ;
       ++jj;
     }
     ss << "\n";
@@ -1073,7 +1107,7 @@ std::string cmddefs_t::help_commands( const std::string & d ) const
   const std::set<std::string> & c = ii->second;
   std::set<std::string>::const_iterator jj = c.begin();
   while ( jj != c.end() ) { 
-    ss << help( *jj , false ) ;
+    ss << help( *jj , false , false ) ;
     ++jj;
   }
   return ss.str();    
@@ -1081,14 +1115,16 @@ std::string cmddefs_t::help_commands( const std::string & d ) const
   
 // verbose describe commands [cmd] 
 
-std::string cmddefs_t::help( const std::string & cmd , bool verbose ) const
+std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , bool verbose ) const
 {
   if ( cmds.find( cmd ) == cmds.end() ) return "";
   std::stringstream ss;
   if ( ! verbose ) 
     {
-      ss << std::left << std::setw( 18 ) << domain_label.find( cdomain.find( cmd )->second )->second  << " " 
-	 << std::left << std::setw( 12 ) << cmd << " "
+      if ( show_domain_label )
+	ss << std::left << std::setw( 18 ) << domain_label.find( cdomain.find( cmd )->second )->second  << " " ;
+      
+      ss << std::left << std::setw( 12 ) << cmd << " "
 	 << cmds.find( cmd )->second << "\n";    
     }
   else

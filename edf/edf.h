@@ -444,7 +444,7 @@ public:
   // Header reporting 
   //
 
-  void terse_summary() const;
+  void terse_summary( const bool write_signals = false ) const;
 
   void description() const;
   
