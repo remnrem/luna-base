@@ -600,24 +600,29 @@ bool cmd_t::read( const std::string * str , bool silent )
   std::vector<std::string> tok = Helper::quoted_parse( line , "\n" );
   if ( tok.size() == 0 ) 
     {
-      quit(true);
+      quit(true);      
       return false;
     }
+
 
   // command(s)
   for (int c=0;c<tok.size();c++)
     {      
       std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
-      if ( ctok.size() < 1 ) return false;
-      cmds.push_back( ctok[0] );
-      param_t param;
-      for (int j=1;j<ctok.size();j++) param.parse( ctok[j] );
-      params.push_back( param );
+
+      // may be 0 if a line was a variable declaration
+      if ( ctok.size() >= 1 ) 
+	{
+	  cmds.push_back( ctok[0] );
+	  param_t param;
+	  for (int j=1;j<ctok.size();j++) param.parse( ctok[j] );
+	  params.push_back( param );
+	}
     }
-  
+
   // make a copy of the 'orginal' params
   original_params = params;
-
+  
   // summary
 
   logger << "input(s): " << input << "\n";

@@ -443,6 +443,16 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   // of any intervals that start... but not sure an easy workaround at this
   // point
   //
+
+  int n_disc = 0 , n_above_th = 0;
+  for (int i=0;i<n;i++)
+    { 
+      if ( disc[i] ) ++n_disc;
+      if ( x[i] >= yt ) ++n_above_th;
+      //std::cerr << "dets = " << x[i] << "\n";
+    }
+
+  std::cerr << " of " << n << " points, " << n_disc << " disc, " << n_above_th << " above th\n";
   
   // fipoint_t (i,h,t)  
   
@@ -454,8 +464,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       //
       // min threshold at which we ignore
       //
-
-      if ( x[i] <= yt ) continue;
+      
+      if ( x[i] < yt ) continue;
       
       //
       // at a discontinuity?
@@ -490,6 +500,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
     }
 
   logger << " decomposed signal into " << pts.size() << " elements\n";
+  //  std::cerr  << " decomposed signal into " << pts.size() << " elements\n";
     
   // last point: ignore
   // fipoint_t f( n-1 , n-1 , x[n-1] ) ;
@@ -551,8 +562,10 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  
 	  int bin = ( t - t_lwr ) / t_inc; 
 	  
-// 	  double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  	  
-// 	  std::cout  << "bin = " << nt << "\t" << bin << " " << tbin << "\n";
+	  // TMP
+ 	  //double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  	  
+ 	  //std::cerr  << "bin = " << nt << "\t" << bin << " " << tbin << "\n";
+	  // TMP
 	  
 	  //
 	  // add value to bin
