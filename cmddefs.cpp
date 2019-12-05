@@ -997,6 +997,10 @@ void cmddefs_t::init()
 
 
 
+cmddefs_t::cmddefs_t()
+{
+  init();
+}
 
 
 tfac_t::tfac_t( const std::string & s ) { 
@@ -1008,11 +1012,46 @@ tfac_t::tfac_t( const std::string & s ) {
     } 
 }
 
-cmddefs_t::cmddefs_t()
-{
-  init();
+std::string tfac_t::as_string( const std::string & delim ) const { 
+  if ( fac.size() == 0 ) return "{baseline}";
+  std::stringstream ss;
+  std::set<std::string>::const_iterator ii = fac.begin();
+  while ( ii != fac.end() ) {
+    if ( ii != fac.begin() )
+      ss << delim;
+    ss << *ii;
+    ++ii;
+  }
+  return ss.str();
 }
 
+
+bool tfac_t::operator< ( const tfac_t & rhs ) const { 
+  if ( fac.size() < rhs.fac.size() ) return true;
+  if ( fac.size() > rhs.fac.size() ) return false;
+  std::set<std::string>::const_iterator ii = fac.begin();
+  std::set<std::string>::const_iterator jj = rhs.fac.begin();
+  while ( ii != fac.end() ) {
+    if ( *ii < *jj ) return true;
+    if ( *ii > *jj ) return false;      
+    ++ii;
+    ++jj;
+  }
+  return false;
+} 
+
+
+bool tfac_t::operator== ( const tfac_t & rhs ) const { 
+  if ( fac.size() != rhs.fac.size() ) return false;
+  std::set<std::string>::const_iterator ii = fac.begin();
+  std::set<std::string>::const_iterator jj = rhs.fac.begin();
+  while ( ii != fac.end() ) {
+    if ( *ii != *jj ) return false;
+    ++ii;
+    ++jj;
+  }
+  return true;
+} 
 
 
 //
