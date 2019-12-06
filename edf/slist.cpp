@@ -190,12 +190,18 @@ int fn_luna_slbuilder( const std::string & filename )
       while ( ii != globals::sl_annot_extensions.end() )
 	{
 	  
-	  if ( Helper::file_extension( filename , *ii ) )
+	  bool match_with_period = Helper::file_extension( filename , *ii , true );
+	  bool match_no_period = Helper::file_extension( filename , *ii , false );
+
+	  
+	  if ( match_with_period || match_no_period )
 	    {
+
+	      int len = ii->size() + ( match_with_period ? 1 : 0 ); 
 	      
 	      std::string key = globals::sl_link_across_folders ? 
-		tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 ) :
-		filename.substr( 0 , filename.size() - 4 );
+		tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - len ) :
+		filename.substr( 0 , filename.size() - len );
 	      
 	      globals::sl_data[ key ].annots.insert( filename );
 	      

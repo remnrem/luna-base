@@ -102,12 +102,26 @@ std::string Helper::expand( const std::string & f )
 bool Helper::is_folder( const std::string & f ) { if ( f.size() == 0 ) return false; return f[f.size()-1]== globals::folder_delimiter; } 
 
 
-bool Helper::file_extension( const std::string & f, const std::string & ext )
+bool Helper::file_extension( const std::string & f, const std::string & ext , bool with_period )
 {
-  int l = ext.size() + 1;  
-  if ( f.size() < l ) return false;
-  const std::string s = f.substr( f.size() - l );
-  return Helper::iequals( s , "." + ext );
+  if ( with_period ) 
+    {
+      int l = ext.size() + 1;  
+      if ( f.size() < l ) return false;
+      const std::string s = f.substr( f.size() - l );
+      return Helper::iequals( s , "." + ext );
+    }
+
+  // for matching where extensions and file names differ by a tag,  e.g. file1.edf and file1-annot.xml,  
+  // so here match would be "-annot.xml" and would match without a period, rather than "xml" which matches with a period 
+  
+  else 
+    {
+      int l = ext.size() ;  
+      if ( f.size() < l ) return false;
+      const std::string s = f.substr( f.size() - l );
+      return Helper::iequals( s , ext );
+    }
 }
 
 

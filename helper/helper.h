@@ -82,7 +82,7 @@ namespace Helper
 
   std::string insert_indiv_id( const std::string & id , const std::string & str );
 
-  bool file_extension( const std::string & , const std::string & );
+  bool file_extension( const std::string & , const std::string & , bool with_period = true );
   
   bool is_folder( const std::string & f );
 
