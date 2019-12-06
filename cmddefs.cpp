@@ -1280,7 +1280,7 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		<< "\n";
 
 	      // dump as compressed text ?
-	      bool tdump = allz || ofacs.find( cmd )->second.find( tfac )->second;
+	      bool tdump = allz || ( ofacs.find( cmd ) != ofacs.end() && ofacs.find( cmd )->second.find( tfac )->second );
 	      if ( tdump ) ss << "   (compressed output)\n";
 
 	      // variables?
@@ -1326,8 +1326,9 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 bool cmddefs_t::exists( const std::string & cmd ,
 			const tfac_t & tfac ) const
 {
-
-  if ( cmds.find( cmd ) == cmds.end() ) return false;
+  
+  //if ( cmds.find( cmd ) == cmds.end() ) return false;
+  if ( ofacs.find( cmd ) == ofacs.end() ) return false;
   return ofacs.find( cmd )->second.find( tfac ) != ofacs.find( cmd )->second.end() ;
 }
 
@@ -1341,10 +1342,11 @@ bool cmddefs_t::out_compressed( const std::string & cmd , const tfac_t & tfac ) 
   // all output is in compressed plain-text
   if ( allz ) return true;
   
-  // cmd not found
-  if ( cmds.find( cmd ) == cmds.end() ) return false;
+  // cmd not found [use ofacs instead of cmd, i.e. for commands w/ no registered tables, such as DESC
+  //  if ( cmds.find( cmd ) == cmds.end() ) return false;
   
-  // table not found
+  // table not found 
+  if ( ofacs.find( cmd ) == ofacs.end() ) return false;
   if ( ofacs.find( cmd )->second.find( tfac ) == ofacs.find( cmd )->second.end() ) return false;
   
   return ofacs.find( cmd )->second.find( tfac )->second ;
