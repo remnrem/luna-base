@@ -54,52 +54,16 @@ struct tfac_t {
   
   tfac_t( const std::string & s ) ;
 
+  std::string as_string( const std::string & delim = "," ) const;
+
+  // LT operator
+  bool operator< ( const tfac_t & rhs ) const;
+
+  // EQ operator
+  bool operator== ( const tfac_t & rhs ) const;
 
   // key (non-command, non-tag) factors that represent the virtual table
   std::set<std::string> fac;
-
-  std::string as_string( const std::string & delim = "," ) const { 
-    if ( fac.size() == 0 ) return "{baseline}";
-    std::stringstream ss;
-    std::set<std::string>::const_iterator ii = fac.begin();
-    while ( ii != fac.end() ) {
-      if ( ii != fac.begin() )
-	ss << delim;
-      ss << *ii;
-      ++ii;
-    }
-    return ss.str();
-  }
-
-  // LT operator
-
-  bool operator< ( const tfac_t & rhs ) const { 
-    if ( fac.size() < rhs.fac.size() ) return true;
-    if ( fac.size() > rhs.fac.size() ) return false;
-    std::set<std::string>::const_iterator ii = fac.begin();
-    std::set<std::string>::const_iterator jj = rhs.fac.begin();
-    while ( ii != fac.end() ) {
-      if ( *ii < *jj ) return true;
-      if ( *ii > *jj ) return false;      
-      ++ii;
-      ++jj;
-    }
-    return false;
-  } 
-  
-
-  // EQ operator
-  bool operator== ( const tfac_t & rhs ) const { 
-    if ( fac.size() != rhs.fac.size() ) return false;
-    std::set<std::string>::const_iterator ii = fac.begin();
-    std::set<std::string>::const_iterator jj = rhs.fac.begin();
-    while ( ii != fac.end() ) {
-      if ( *ii != *jj ) return false;
-      ++ii;
-      ++jj;
-    }
-    return true;
-  } 
 
 };
 
