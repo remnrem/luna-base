@@ -231,6 +231,8 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   // different folders, then this needs to be set (the default)
   
   std::vector<std::string> tok;
+
+  bool specified_extensions = false;
   
   for (int t=0;t<tok0.size();t++)
     {
@@ -244,20 +246,30 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	      std::string s = tok0[t].substr(5);
 	      std::vector<std::string> tok2 = Helper::parse( s , "," );
 	      for (int i=0;i<tok2.size();i++) globals::sl_annot_extensions.insert( tok2[i] );
+	      specified_extensions = true;
+
 	    }
 	}
       else tok.push_back( tok0[t] );
     }
 
   //
-  // standard annotation types
+  // standard annotation types, if none given above
   //
 
-  globals::sl_annot_extensions.insert( "xml" );
-  globals::sl_annot_extensions.insert( "annot" );
-  globals::sl_annot_extensions.insert( "eannot" );
-  globals::sl_annot_extensions.insert( "ftr" );
-  
+  if ( ! specified_extensions )
+    {
+      globals::sl_annot_extensions.insert( "xml" );
+      globals::sl_annot_extensions.insert( "annot" );
+      globals::sl_annot_extensions.insert( "eannot" );
+      globals::sl_annot_extensions.insert( "ftr" );
+    }
+
+
+  //
+  // traverse folders
+  //
+
   for (int t=0;t<tok.size();t++)
     {      
       
