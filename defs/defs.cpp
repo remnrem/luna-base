@@ -61,6 +61,7 @@ char globals::folder_delimiter;
 std::string globals::project_path;
 
 bool globals::assume_pm_starttime;
+int globals::assume_pm_starttime_hour;
 
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
@@ -138,7 +139,7 @@ void globals::init_defs()
   //
   
   version = "v0.23";
-  date    = "22-Aug-2019";
+  date    = "27-Nov-2019";
 
   //
   // Set up RNG
@@ -192,6 +193,7 @@ void globals::init_defs()
 
   sl_visit_edf = true;
   
+
   //
   // By default, read and extract all FTR; if this is a pain, can be turned off (ftr=0)
   //
@@ -346,8 +348,21 @@ void globals::init_defs()
   write_naughty_list = false;
   naughty_list = "";
   
-  assume_pm_starttime = true;
+  assume_pm_starttime = false;
+  assume_pm_starttime_hour = 4; // i.e. if 04:00 given or later (up to & including 12:00) assume +12 hours
   
+  // otherwise, leave as is
+  //  00:00 -> 00:00 (as is)
+  //  01:00 -> 01:00 (as is)
+  //  03:00 -> 03:00 (as is)
+  
+  //  04:00 -> 16:00 (*shift)
+  //  06:00 -> 18:00 (*shift)
+  //  12:00 -> 00:00 (*shift)
+
+  //  13:00 -> 13:00 (as is)
+  //  18:00 -> 18:00 (as is)
+
   problem = false;
   
   bail_on_fail = true;

@@ -210,37 +210,49 @@ void proc_mask( edf_t & edf , param_t & param )
       edf.timeline.select_epoch_first( n );
     }
 
-  if ( param.has( "epoch" ) )
+
+  if ( param.has( "epoch" ) || param.has( "mask-epoch" ) )
     {
-      std::vector<int> val = param.intvector( "epoch" , "-" );
-      if ( val.size() == 1 ) 
+      // epoch --> 'force' mode (i.e. set all)
+      // mask-epoch --> 'mask' mode
+      
+      bool include_mode = param.has( "epoch" );
+      
+      std::string label = include_mode ? "epoch" : "mask-epoch" ; 
+
+      std::vector<std::string> toks = Helper::parse( param.value( label ) , "," );
+      
+      std::set<int> epochs;
+
+      for (int t=0; t<toks.size(); t++) 
 	{
-	  if ( val[0] < 1 ) Helper::halt( "epoch value must be >= 1" );
-	  edf.timeline.select_epoch_range( val[0] , val[0] , true );
-      	}
-      else 
-	{
-	  if ( val.size() != 2 ) Helper::halt("epoch=a-b");
-	  if ( val[0] > val[1] ) Helper::halt("epoch=a-b requires a <= b");
-	  edf.timeline.select_epoch_range( val[0] , val[1] , true );
+	  std::vector<std::string> val = Helper::parse( toks[t] , "-" );
+	  if ( val.size() == 1 ) 
+	    {
+	      int v1=-1;
+	      if ( ! Helper::str2int( val[0] , &v1 ) ) Helper::halt( label + " value must be integer" );
+	      if ( v1 < 1 ) Helper::halt( label + " value must be >= 1" );
+	      epochs.insert( v1 );
+	    }
+	  else if ( val.size() == 2 )
+	    {
+	      int v1=-1 , v2 = -1;
+	      if ( ! Helper::str2int( val[0] , &v1 ) ) Helper::halt( label + " value must be integer" );
+	      if ( ! Helper::str2int( val[1] , &v2 ) ) Helper::halt( label + " value must be integer" );
+	      
+	      if ( v1 > v2 ) Helper::halt( label + "=a-b requires a <= b");
+	      for (int i=v1; i<= v2; i++) epochs.insert( i );
+	    }
+	  else
+	    Helper::halt( label + "=a-b-c is bad format");
+	  
 	}
+
+      edf.timeline.select_epoch_range( epochs , include_mode );
+
+      
     }
   
-  if ( param.has( "mask-epoch" ) )
-    {
-      std::vector<int> val = param.intvector( "mask-epoch" , "-" );
-      if ( val.size() == 1 ) 
-	{
-	  if ( val[0] < 1 ) Helper::halt( "mask-epoch value must be >= 1" );
-	  edf.timeline.select_epoch_range( val[0] , val[0] , false );
-      	}
-      else 
-	{
-	  if ( val.size() != 2 ) Helper::halt("mask-epoch=a-b");
-	  if ( val[0] > val[1] ) Helper::halt("mask-epoch=a-b requires a <= b");
-	  edf.timeline.select_epoch_range( val[0] , val[1] , false );
-	}
-    }
 
   if ( param.has( "flanked" ) )
     {
@@ -288,7 +300,7 @@ void proc_mask( edf_t & edf , param_t & param )
       
       if ( epoch1 > epoch2 ) Helper::halt( "misspecified hms times: implies start after end" );
 
-      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );      
+      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
     }
 
 

@@ -734,7 +734,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );      
       else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );
       else if ( is( c, "RECS" ) )         proc_record_table( edf , param(c) );
-
+      else if ( is( c, "SEGMENTS" ) )     proc_dump_segs( edf , param(c) );
       else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
@@ -1269,7 +1269,7 @@ void proc_write( edf_t & edf , param_t & param )
   bool saved = edf.write( filename , edfz );
 
   if ( saved ) 
-    logger << " saved new EDF, " << filename << "\n";
+    logger << " saved new EDF" << ( edf.header.edfplus ? "+" : "" ) << ", " << filename << "\n";
 
 }
 
@@ -1612,6 +1612,14 @@ void proc_record_dump( edf_t & edf , param_t & param )
 {
   edf.add_continuous_time_track();  
   edf.record_dumper( param );
+}
+
+
+// SEGMENTS : show all contiguous segments
+
+void proc_dump_segs( edf_t & edf , param_t & param )
+{
+  edf.seg_dumper( param );
 }
 
 
@@ -2158,13 +2166,23 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  // do not force PM start-time
+  // shift times +12 hours if between 04:00 and 12:00  (--> 16:00 to 00:00 ) 
   if ( Helper::iequals( tok0 , "assume-pm-start" ) )
     {
+
       if ( tok1 == "0"
 	   || Helper::iequals( tok1 , "n" )
 	   || Helper::iequals( tok1 , "no" ) )
 	globals::assume_pm_starttime = false; 
+      else
+	{
+	  globals::assume_pm_starttime = true;
+	  
+	  if ( ! Helper::str2int( tok1 , &globals::assume_pm_starttime_hour ) ) 
+	    Helper::halt( "expecting integer between 0 and 12" );
+
+	}
+      
       return;
     }
   

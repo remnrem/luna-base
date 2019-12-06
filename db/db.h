@@ -1032,7 +1032,8 @@ class writer_t
 
     if ( dbless ) return plaintext ? to_plaintext( var_name , x ) : to_stdout( var_name , x );
 
-    // use 'command.var' as the unique identifier                                                                                                     
+    // use 'command.var' as the unique identifier
+
     std::string var_key = curr_command.cmd_name + ":" + var_name;
     
     // should be already here, but incase it is not

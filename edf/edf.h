@@ -413,6 +413,8 @@ public:
 
   void data_dumper( const std::string & , const param_t & );
   
+  void seg_dumper( param_t & param );
+  
   void record_dumper( param_t & param );
   
   void record_table( param_t & param );

@@ -953,12 +953,51 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "if" , "" , "Estimate instantaneous frequency of spindles" );
   add_param( "SPINDLES" , "if-frq" , "1" , "Window around target frequency (default 2 hz)" );
   add_param( "SPINDLES" , "tlock" , "" , "Flag to request (verbose) average, peak-locked waveforms" );
+  add_param( "SPINDLES" , "verbose-coupling" , "" , "Add extra tables of EEG/CWT phase/time-locked to SO" );
 
-  
+
   //
   // SO
   //
 
+  
+  //
+  // SP/SO coupling options
+  //
+
+  add_param( "SPINDLES" , "nreps" , "1000" , "Number of replications for SP/SO coupling" );
+  add_param( "SPINDLES" , "perm-whole-trace" , "" , "Do not use within-epoch shuffling" );
+  add_param( "SPINDLES" , "overlapping" , "" , "Only consider spindles that overlap a SO" );
+  add_param( "SPINDLES" , "stratify-by-phase" , "" , "Overlap statistics per SO phase bin" );
+
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "Coupling magnitude (original statistic)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "Coupling magnitude (empirical Z)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "Coupling magnitude (empirical P)" );
+  //  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "Coupling magnitude (proportion asymptotic p < 0.05)" );
+  
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "Coupling overlap (original statistic)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "Coupling overlap (empirical Z)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "Coupling overlap (empirical P)" );
+  //  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "Coupling overlap (mean under null) " );
+
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "Coupling overlap (original statistic)" );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "Coupling overlap (empirical P)" );
+
+  // COUPL_OVERLAP
+  // COUPL_OVERLAP_EMP
+  // "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
+  // "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
+
+  // "COUPL_ANGLE"   , itpc.angle.obs );
+
+  //                                                                                                                          
+  // asymptotic significance of coupling test; under                                                                          
+  // the null, give mean rate of 'significant'                                                                                
+  // (P<0.05) coupling                                                                                                        
+  //                                                                                                                          
+
+  // "COUPL_PV"         , itpc.pv.obs );
+  // "COUPL_SIGPV_NULL" , itpc.sig.mean );
 
 
   /////////////////////////////////////////////////////////////////////////////////

@@ -56,29 +56,71 @@ int fn_luna_slbuilder_ftw(const char * fpath, const struct stat *ptr, int type )
 // Windows API folder traveral 
 //
 
+#include <windows.h>
 
 void fn_luna_slbuilder_win( const std::string & fpath )
 {
 
+  //  std::cout << "search [" << fpath << "]\n" ;
+  
   WIN32_FIND_DATA FindFileData;
   
-  HANDLE hFind = FindFirstFile( fpath ,  &FindFileData);
+  HANDLE hFind = FindFirstFile( (fpath+"\\*").c_str() ,  &FindFileData);
+
+  if ( hFind == INVALID_HANDLE_VALUE )
+    {
+      Helper::halt( "search failed on " + fpath ) ;
+    }
   
-  if (hFind == INVALID_HANDLE_VALUE) {
-    printf ("FindFirstFile failed (%d)\n", GetLastError());
-    return;
-  } 
+  //
+  // look at all results
+  //
+
+  bool cont = true;
+
+  while ( cont )
+    {
+      
+      std::string fname =  FindFileData.cFileName ;
+      
+      //std::cout << "do... [" <<  fname << "]\n";
+
+      if ( fname != "." && fname != ".." )
+	{
+	  
+	  // directory? if so, search (recursively)
+	  
+	  if ( FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+	    {	      
+	      //std::cout << "folder... [" <<  fname << "]\n";
+	      fn_luna_slbuilder_win( fpath + "\\" + fname );
+	    }
+      
+	  // else, process as a file
+	  
+	  else
+	    {
+	      //std::cout << "testing " << fname << "\n";
+	      fn_luna_slbuilder( fpath + "\\" + fname );
+	    }
+	  
+	  
+	}
+
+      cont = FindNextFile( hFind , &FindFileData );
+      
+    }
+
+
+  if ( GetLastError() != ERROR_NO_MORE_FILES )
+    Helper::halt( "FindNextFile failed" );
   
-  do {
-    if (FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-      _tprintf(TEXT("  %s   <DIR>\n"), FindFileData.cFileName);
-    else
-      _tprintf(TEXT("  %s \n"), FindFileData.cFileName);
-  } while (FindNextFile(hFind, &FindFileData) != 0);
   
-  FindClose(hFind);
+  if ( ! FindClose(hFind) ) Helper::halt( "FindClose failed" );
   
+
 }
+
 
 
 
@@ -112,6 +154,11 @@ int fn_luna_slbuilder( const std::string & filename )
 	  edf_t edf;
 	  edf.attach( filename , "." );
 	  id = edf.header.patient_id;
+	  if ( id == "" ) 
+	    {
+	      std::cerr << " *** empty Patient ID header for " << filename << ", so going to set ID to filename\n";
+	      id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 );
+	    }
 	}
       else
 	{	      
@@ -189,7 +236,6 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	    {
 	      // -ext=txt,eannot,xls.eannot
 	      std::string s = tok0[t].substr(5);
-	      std::cerr << "s [" << s << "]\n";
 	      std::vector<std::string> tok2 = Helper::parse( s , "," );
 	      for (int i=0;i<tok2.size();i++) globals::sl_annot_extensions.insert( tok2[i] );
 	    }
@@ -197,9 +243,14 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
       else tok.push_back( tok0[t] );
     }
 
+  //
+  // standard annotation types
+  //
 
-  
   globals::sl_annot_extensions.insert( "xml" );
+  globals::sl_annot_extensions.insert( "annot" );
+  globals::sl_annot_extensions.insert( "eannot" );
+  globals::sl_annot_extensions.insert( "ftr" );
   
   for (int t=0;t<tok.size();t++)
     {      
@@ -209,8 +260,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
       if ( ftw( Helper::expand( tok[t] ).c_str() , fn_luna_slbuilder_ftw, 10 ) != 0 ) 
 	Helper::halt( "problem traversing folder " + tok[t] );      
 #else
-      // windows code here
-      
+      fn_luna_slbuilder_win( tok[t] );
 #endif      
     }
   
@@ -243,7 +293,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
       if ( has_edf && ids.find( ii->second.id ) != ids.end() ) 
 	{
 	  dupes = true;
-	  std::cerr << "*** warning *** ID " << ii->second.id << " is duplicated\n";
+	  logger << "*** warning *** ID " << ii->second.id << " is duplicated\n";
 	}
 
       if ( has_edf ) 

@@ -1605,15 +1605,30 @@ void timeline_t::select_epoch_randomly( int n )
 
 // other masks: select epochs from 'a' to 'b' inclusive (include=T)
 // otherwise do the opposite
+
 void timeline_t::select_epoch_range( int a , int b , bool include )
 {
-
+  std::set<int> e;
   if ( a > b ) 
     {
       int tmp = b;
       b = a;
       a = tmp;
     }
+
+  for (int i=a; i<=b; i++) e.insert( i );
+
+  if ( include )
+    logger << " selecting epochs from " << a << " to " << b << "; ";
+  else
+    logger << " masking epochs from " << a << " to " << b << "; ";
+
+  return select_epoch_range( e , include );
+
+}
+
+void timeline_t::select_epoch_range( const std::set<int> & specified_epochs , bool include )
+{
 
   mask_set = true;
 
@@ -1630,9 +1645,10 @@ void timeline_t::select_epoch_range( int a , int b , bool include )
       // use base-1 coding of epochs
       const int epoch = e+1;
 
+      bool inset = specified_epochs.find( epoch ) != specified_epochs.end() ;
+
       bool match = include ? 
-	epoch < a || epoch > b : 
-	epoch >= a && epoch <= b ;
+	! inset : inset ;
       
       if ( match ) 
 	{
@@ -1646,17 +1662,19 @@ void timeline_t::select_epoch_range( int a , int b , bool include )
     }
 
   if ( include )
-    logger << " selecting epochs from " << a << " to " << b << "; ";
+    logger << " selecting";
   else
-    logger << " masking epochs from " << a << " to " << b << "; ";
+    logger << " masking";
 
+  logger << " from set of " << specified_epochs.size() << " epochs; ";
+  
   logger << cnt_mask_set << " newly masked, " 
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
+
   logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
-
 
 
 

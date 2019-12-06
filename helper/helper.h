@@ -88,6 +88,8 @@ namespace Helper
 
   void build_sample_list( const std::vector<std::string> & );
 
+  void compile_txttabs( const std::string & );
+
   std::vector<std::string> file2strvector( const std::string & );
 
   // case insenstive string comparison

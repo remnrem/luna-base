@@ -358,6 +358,9 @@ struct timeline_t
 
   // mask range of epochs from a to b inclusive
   void select_epoch_range( int a , int b , bool include );
+
+  // mask set of epochs
+  void select_epoch_range( const std::set<int> & e , bool include );
   
   // flip all values of current epoch mask
   void flip_epoch_mask();

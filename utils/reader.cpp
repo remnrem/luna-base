@@ -704,6 +704,34 @@ struct fstrata_t
 
     //    if ( interval && ! rhs.interval ) return false;
     //    if ( (!interval) && rhs.interval ) return true;
+    
+    // find commands first
+    std::string lcmd = "", rcmd = "";
+
+    std::set<factor_t>::const_iterator ff = factors.begin();
+    while ( ff != factors.end() )
+      {
+	if ( ff->factor_name.substr(0,1) == "_" ) 
+	  {
+	    lcmd = ff->factor_name.substr(1);
+	    break;
+	  }
+	++ff;
+      }
+
+    std::set<factor_t>::const_iterator gg = rhs.factors.begin();
+    while ( gg != rhs.factors.end() )
+      {
+	if ( gg->factor_name.substr(0,1) == "_" ) 
+	  {
+	    rcmd = gg->factor_name.substr(1);
+	    break;
+	  }
+	++gg;
+      }
+    
+    if ( lcmd < rcmd ) return true;
+    if ( rcmd < lcmd ) return false;
 
     if ( factors.size() == rhs.factors.size() )
       {
@@ -999,7 +1027,7 @@ void get_matching_strata( bool show_table)
     {
       
       std::map<int,std::set<int> > vars_by_strata = writer.dump_vars_by_strata();
-      
+
       // ignore baseline
       std::cerr << "distinct strata group(s):\n";
       

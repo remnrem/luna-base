@@ -155,7 +155,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 				const std::vector<bool> * mask , 
 				const int nreps , 
 				const int sr , 
-				const double epoch_sec ) const
+				const double epoch_sec , 
+				const bool by_phase ) const
 {
   
   // given a set of 'events' (i.e. spindles) in 'e' defined by sample-point
@@ -314,7 +315,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  itpc.event_included[i] = true; 
 
 	  // phase bin
-	  bin( itpc.phase[i] , binsize , &pbacc );
+	  if ( by_phase ) 
+	    bin( itpc.phase[i] , binsize , &pbacc );
 	  
 	  // accumulate ITPC
 	  s += exp( dcomp(0,itpc.phase[i]) );
@@ -334,7 +336,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
       itpc.ninc.obs = 0;
       itpc.pv.obs = 1 ;
       itpc.sig.obs = 0; // this is not used in any case, only null distribution mean of use here
-      for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = 0;
+
+      if ( by_phase ) 
+	for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = 0;
 
       // angle to -9, will be set as NA in output
       itpc.angle.obs = -9;
@@ -351,7 +355,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
       itpc.pv.obs    = exp( -counted * itpc.itpc.obs * itpc.itpc.obs );   
       itpc.sig.obs   = itpc.pv.obs < 0.05;
       itpc.angle.obs = MiscMath::as_angle_0_pos2neg( arg( s ) );
-      for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = pbacc[b];
+      if ( by_phase ) 
+	for (int b=0; b < nbins; b++) itpc.phasebin[b].obs = pbacc[b];
     }
 
   if ( nreps == 0 ) return itpc;
@@ -433,7 +438,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	      ++overlap;  
 
 	      // SO-phase stratified overlap counts when no mask/SO given
-	      bin( ph[ pei ] , binsize , &pbacc );
+	      if ( by_phase )
+		bin( ph[ pei ] , binsize , &pbacc );
 	    }
 
 
@@ -488,7 +494,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	      ++counted;
 	      
 	      // SO-phase stratified overlap counts using within-SO permutation
-	      bin( ph[ pei ] , binsize , &pbacc );
+	      if ( by_phase )
+		bin( ph[ pei ] , binsize , &pbacc );
 	      
 	    }
 	  
@@ -509,8 +516,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
       
       itpc.ninc.perm.push_back( overlap );
       
-      for (int b=0; b < nbins; b++) 
-	itpc.phasebin[b].perm.push_back ( pbacc[b] );
+      if ( by_phase ) 
+	for (int b=0; b < nbins; b++) 
+	  itpc.phasebin[b].perm.push_back ( pbacc[b] );
       
 
       // this should not happen now, i.e. given within-SO permutation is employed is a SO-mask is set
@@ -555,7 +563,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
   //  std::cerr << "SD = " << itpc.itpc.sd << " " << itpc.ninc.sd << "\n";
 
   itpc.sig.calc_stats(); // only for the mean under the null
-  for (int b=0; b < nbins; b++) itpc.phasebin[b].calc_stats();
+
+  if ( by_phase ) 
+    for (int b=0; b < nbins; b++) itpc.phasebin[b].calc_stats();
   
   
   //

@@ -69,6 +69,9 @@ void edf_t::record_table( param_t & param )
 	{
 	  std::cout << "\t";
    	  std::map<int,bool>  epochs = timeline.spanning_epoch_masks( r );
+
+	  if ( epochs.size() == 0 ) std::cout << ".";
+
 	  std::map<int,bool>::const_iterator ii = epochs.begin();
 	  while ( ii != epochs.end() ) 
 	    {
@@ -1213,3 +1216,103 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 
 }
 
+
+
+void edf_t::seg_dumper( param_t & param )
+{
+
+  clocktime_t starttime( header.starttime );
+
+  bool valid_hms = starttime.valid;
+
+  // we only need to consider this for discontinuous EDF+ 
+  
+  if ( header.continuous || ! header.edfplus )
+    {
+      
+      writer.value( "NSEGS" , 1 );
+
+      writer.level( 1 , "SEG" );
+      double secs = header.nr * header.record_duration;
+      writer.value( "START" , 0 );
+      writer.value( "STOP" ,  secs );
+      
+      writer.value( "DUR_SEC" , secs );
+      writer.value( "DUR_MIN" , secs / 60.0);
+      writer.value( "DUR_HR"  , secs/ 3600.0 );
+
+      if ( valid_hms )
+	{
+	  clocktime_t stoptime = starttime;
+	  stoptime.advance( secs / 3600.0 );
+	  writer.value( "START_HMS" , starttime.as_string() );
+	  writer.value( "STOP_HMS" ,  stoptime.as_string() );
+	}
+      
+      writer.unlevel( "SEG" );
+  
+      return;
+
+    }
+  
+  //
+  // For a discontinuous EDF+, we need to look at the time-track
+  //
+    
+  int num_segments = 0;
+  
+  uint64_t tp0 = timeline.rec2tp[0];
+
+  uint64_t tp_start = tp0;
+  
+  for (int r = 1; r < header.nr; r++)
+    {
+      uint64_t tp = timeline.rec2tp[r] ;
+      
+      if ( tp - tp0 != header.record_duration_tp || r == ( header.nr - 1 ) ) 
+	{
+
+	  // if at last record, then need to make this the 'previous'
+	  if ( r == header.nr - 1 ) tp0 = tp;
+	  
+	  double secs1 = tp_start * globals::tp_duration ; 	  
+	  double secs2 = tp0 * globals::tp_duration + header.record_duration; 
+	  
+	  writer.level( ++num_segments  , "SEG" );
+	  
+	  writer.value( "START" , secs1 );
+	  writer.value( "STOP" ,  secs2 );
+	  
+	  if ( valid_hms )
+	    {
+	      
+	      clocktime_t starttime2 = starttime;
+	      starttime2.advance( secs1 / 3600.0 );
+	      writer.value( "START_HMS" , starttime2.as_string() );
+
+	      clocktime_t stoptime = starttime;
+	      stoptime.advance( secs2 / 3600.0 );
+	      writer.value( "STOP_HMS" ,  stoptime.as_string() );
+	      
+	    }
+	  
+	  writer.value( "DUR_SEC" , secs2 - secs1 );
+	  writer.value( "DUR_MIN" , ( secs2 - secs1 ) / 60.0);
+	  writer.value( "DUR_HR"  , ( secs2 - secs1 ) / ( 3600.0 ) );
+	  
+	  // current point becomes start of the next segment
+	  tp_start = tp;
+	  
+	}
+      
+      // current point becomes the last one, for next lookup
+      tp0 = tp;
+      
+    }
+
+  writer.unlevel( "SEG" );
+  
+  writer.value( "NSEGS" , num_segments );
+    
+  
+}

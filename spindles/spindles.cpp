@@ -163,10 +163,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool     ht_chirp                 = param.has( "if" );
   const double   ht_chirp_frq             = param.has( "if-frq" ) ? param.requires_dbl( "if-frq" ) : 2.0 ;
   const int      ht_bins                  = 5; // divide spindle interval into 'n' equal size bins
-  const bool     ht_verbose               = param.has( "if-verbose" );
+  const bool     ht_verbose               = param.has( "verbose-if" );
   
   // time-locked signal means
   const bool     tlocking                 = param.has( "tlock" );
+
+  const bool     verbose_time_phase_locking = param.has( "verbose-coupling" );
 
   // generate a feature file of spindles
   const bool     ftr_output               = param.has("ftr-dir") || param.has("ftr");
@@ -225,6 +227,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       hms = false;
     }
   
+
+
+
   //
   // Signals
   // 
@@ -390,6 +395,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       
       slow_waves_t * p_sw = NULL ;
     
+      
       if ( sw_coupling )
 	{
 	  
@@ -401,19 +407,17 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
  	  double tlwr = param.has( "t-lwr" ) ? param.requires_dbl( "t-lwr" ) : 0;
 	  double tupr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 0;
 	  
+	  // time of negative peak only
 	  double t_neg_lwr = param.has( "t-neg-lwr" ) ? param.requires_dbl( "t-neg-lwr" ) : 0;
 	  double t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 0;
 
-	  // time of negative peak only
+	  // absolute magnitude
 	  double uV_neg = param.has( "uV-neg" ) ? param.requires_dbl( "uV-neg" ) : 0 ;
 	  double uV_p2p = param.has( "uV-p2p" ) ? param.requires_dbl( "uV-p2p" ) : 0 ;
 
 	  // relative magnitude 
 	  double mag  = param.has( "mag" ) ? param.requires_dbl( "mag" ) : 0 ;
 	  bool   use_mean = param.has( "sw-mean" ); 
-	  
-	  // absolute magnitude
-
 	  
 	  // for full wave detection, count based on positive-to-negative zero-crossings 
 	  // (i.e. negative wave first), or the other way
@@ -447,63 +451,67 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  p_sw->display_slow_waves( param.has( "verbose" ) , &edf );
 	  
 
-	  //
-	  // Time-locked average of ( raw | BPF filtered ) EEG 
-	  //
-	  
-	  
-	  // unfiltered EEG (i.e prior to SO BPF)
-	  const std::vector<double> * dsig = d;
-
-	  // an alternative would be to plot the BPF version
-	  //const std::vector<double> * dsig = p_sw->p_filtered() ;
-	  
-	  // 36 bins = 10-degree bins; 18 = 20-deg bins
-	  int nbins = 36/2;
-	  std::vector<double> pl_eeg     = p_sw->phase_locked_averaging( dsig , nbins );
-
-	  if ( pl_eeg.size() > 0 ) // no SO detected anyway
+	  if ( verbose_time_phase_locking ) 
 	    {
-	      writer.var( "SWPL_EEG" , "Slow wave phase-locked average EEG" );
 	      
-	      double inc = 360 / (double)nbins;
-	      double ph = inc/2.0; // use mid-point of range
+	      //
+	      // Time-locked average of ( raw | BPF filtered ) EEG 
+	      //
 	      
-	      for (int j=0;j<nbins;j++)
+	      
+	      // unfiltered EEG (i.e prior to SO BPF)
+	      const std::vector<double> * dsig = d;
+	      
+	      // an alternative would be to plot the BPF version
+	      //const std::vector<double> * dsig = p_sw->p_filtered() ;
+	      
+	      // 36 bins = 10-degree bins; 18 = 20-deg bins
+	      int nbins = 36/2;
+	      std::vector<double> pl_eeg     = p_sw->phase_locked_averaging( dsig , nbins );
+	      
+	      if ( pl_eeg.size() > 0 ) // no SO detected anyway
 		{
-		  writer.level( ph  , "PHASE" );
-		  writer.value( "SWPL_EEG" , pl_eeg[j] );
-		  ph += inc;
+		  writer.var( "SWPL_EEG" , "Slow wave phase-locked average EEG" );
+		  
+		  double inc = 360 / (double)nbins;
+		  double ph = inc/2.0; // use mid-point of range
+		  
+		  for (int j=0;j<nbins;j++)
+		    {
+		      writer.level( ph  , "PHASE" );
+		      writer.value( "SWPL_EEG" , pl_eeg[j] );
+		      ph += inc;
+		    }
+		  writer.unlevel( "PHASE" );
 		}
-	      writer.unlevel( "PHASE" );
-	    }
-
-
-	  //
-	  // Time-locked signal averaging, to negative peak of SO
-	  //
-
-	  std::vector<double> tl_eeg = p_sw->time_locked_averaging( dsig , Fs[s] , 1 , 1 );
-	  
-	  writer.var( "SWTL_EEG" , "Slow wave time-locked average EEG" );
-	  
-	  int sz = tl_eeg.size();
-	  
-	  if ( sz > 0 ) // 0 if no SW were detected in the first place
-	    {
-	      int sz2 = - (sz-1)/2;
 	      
-	      for (int j=0;j<sz;j++)
+	      
+	      //
+	      // Time-locked signal averaging, to negative peak of SO
+	      //
+	      
+	      std::vector<double> tl_eeg = p_sw->time_locked_averaging( dsig , Fs[s] , 1 , 1 );
+	      
+	      writer.var( "SWTL_EEG" , "Slow wave time-locked average EEG" );
+	      
+	      int sz = tl_eeg.size();
+	      
+	      if ( sz > 0 ) // 0 if no SW were detected in the first place
 		{
-		  writer.level( sz2 , "SP" );
-		  writer.value( "SWTL_EEG" , tl_eeg[j] );		  
-		  ++sz2;
+		  int sz2 = - (sz-1)/2;
+		  
+		  for (int j=0;j<sz;j++)
+		    {
+		      writer.level( sz2 , "SP" );
+		      writer.value( "SWTL_EEG" , tl_eeg[j] );		  
+		      ++sz2;
+		    }
+		  writer.unlevel( "SP" );
 		}
-	      writer.unlevel( "SP" );
+	      
 	    }
-
+	  
 	}
-
 
       
       //
@@ -1127,57 +1135,61 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
  	      std::vector<bool> sw_peak;
 
-	      //
-	      // Phase-locked average of spindle power w.r.t. SO phase
-	      //	      
-	      
-	      // 36 bins = 10-degree bins; 18 = 20-deg bins
-	      int nbins = 36/2;
-	      
-	      std::vector<double> pl_spindle = p_sw->phase_locked_averaging( &averaged_corr , nbins );
-
-	      if ( pl_spindle.size() > 0 ) 
+	      if ( verbose_time_phase_locking )
 		{
-	      	      	      	      
-		  writer.var( "SWPL_CWT" , "Slow wave phase-locked average spindle power" );
-		  
-		  double inc = 360 / (double)nbins;
-		  double ph = inc/2.0; // use mid-point of range
-		  
-		  for (int j=0;j<nbins;j++)
-		    {
-		      writer.level( ph  , "PHASE" );
-		      writer.value( "SWPL_CWT" , pl_spindle[j] );
-		      ph += inc;
-		    }
-		  writer.unlevel( "PHASE" );
-		}
 
-	      
-	      //
-	      // Time-locked averaging
-	      //
-	      
-	      // +1/-1 1 second
-	      std::vector<double> tl_spindle = p_sw->time_locked_averaging( &averaged_corr , Fs[s] , 1 , 1 );
-	      
-	      writer.var( "SWTL_CWT" , "Slow wave time-locked average spindle power" );
-	      
-	      int sz = tl_spindle.size();
-	      
-	      if ( sz > 0 )
-		{
-		  int sz2 = - (sz-1)/2;
+		  //
+		  // Phase-locked average of spindle power w.r.t. SO phase
+		  //	      
 		  
-		  for (int j=0;j<sz;j++)
+		  // 36 bins = 10-degree bins; 18 = 20-deg bins
+		  int nbins = 36/2;
+		  
+		  std::vector<double> pl_spindle = p_sw->phase_locked_averaging( &averaged_corr , nbins );
+		  
+		  if ( pl_spindle.size() > 0 ) 
 		    {
-		      writer.level( sz2 , "SP" );
-		      writer.value( "SWTL_CWT" , tl_spindle[j] );
-		      ++sz2;
+		      
+		      writer.var( "SWPL_CWT" , "Slow wave phase-locked average spindle power" );
+		      
+		      double inc = 360 / (double)nbins;
+		      double ph = inc/2.0; // use mid-point of range
+		      
+		      for (int j=0;j<nbins;j++)
+			{
+			  writer.level( ph  , "PHASE" );
+			  writer.value( "SWPL_CWT" , pl_spindle[j] );
+			  ph += inc;
+			}
+		      writer.unlevel( "PHASE" );
 		    }
-		  writer.unlevel( "SP" );
+		  
+	      
+		  //
+		  // Time-locked averaging
+		  //
+		  
+		  // +1/-1 1 second
+		  std::vector<double> tl_spindle = p_sw->time_locked_averaging( &averaged_corr , Fs[s] , 1 , 1 );
+		  
+		  writer.var( "SWTL_CWT" , "Slow wave time-locked average spindle power" );
+		  
+		  int sz = tl_spindle.size();
+		  
+		  if ( sz > 0 )
+		    {
+		      int sz2 = - (sz-1)/2;
+		      
+		      for (int j=0;j<sz;j++)
+			{
+			  writer.level( sz2 , "SP" );
+			  writer.value( "SWTL_CWT" , tl_spindle[j] );
+			  ++sz2;
+			}
+		      writer.unlevel( "SP" );
+		    }
+		  
 		}
-
 	      
 	      //
 	      //  Seed on spindles, consider SO phase
@@ -1246,11 +1258,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;
 	      
-	      writer.var( "PROP_PEAK_ON_SW"  , "Proportion of spindles with peak overlapping a slow wave" );
-	      writer.var( "PROP_ON_SW"  , "Proportion of spindles with start/stop/peak overlapping a slow wave" );
-	      
-	      writer.value( "PROP_PEAK_ON_SW"  , sw_spindles_peak.size() / (double)nspindles );
-	      writer.value( "PROP_ON_SW"  , sw_spin_count / (double)nspindles );
+// 	      writer.var( "PROP_PEAK_ON_SW"  , "Proportion of spindles with peak overlapping a slow wave" );
+// 	      writer.var( "PROP_ON_SW"  , "Proportion of spindles with start/stop/peak overlapping a slow wave" );
+// 	      writer.value( "PROP_PEAK_ON_SW"  , sw_spindles_peak.size() / (double)nspindles );
+// 	      writer.value( "PROP_ON_SW"  , sw_spin_count / (double)nspindles );
 	      
 
 	      //
@@ -1267,17 +1278,23 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  //
 
 		  std::vector<bool> so_mask;		  
-		  bool use_mask = param.has( "coupl-so-only" );
+
+		  bool use_mask = ! param.has( "overlapping" );
 		  
 		  if ( use_mask ) 
 		    so_mask = p_sw->sp_in_sw_vec();
 
+		  //
+		  // report coupling overlap by SO phase
+		  //
+		  
+		  bool stratify_by_so_phase_bin = param.has ( "stratify-by-phase" );
 		  
 		  //
-		  // Within-epoch permutation
+		  // Within-epoch permutation (default)
 		  //
 
-		  bool eperm = param.has( "perm-within-epoch" );
+		  bool eperm = ! param.has( "perm-whole-trace" );
 		  
 		  double epoch_sec = 0 ;
 		  int sr = Fs[s];
@@ -1289,37 +1306,52 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    }
 
 		  // use permutation for ITPC values?
+
 		  int nreps = 0;
+
 		  if ( param.has( "nreps" ) ) nreps = param.requires_int( "nreps" );
+
 		  if ( nreps != 0 && nreps < 10 ) Helper::halt( "nreps must be 10+" );
 		  
 		  itpc_t itpc  = p_hilbert->phase_events( all_spindles_peak , 
 							  use_mask ? &so_mask : NULL , nreps ,  // optional, mask events/spindles
-							  sr , epoch_sec   // optionally, within-epoch shuffle
+							  sr , 
+							  epoch_sec ,  // optionally, within-epoch shuffle
+							  stratify_by_so_phase_bin // optional, overlap by SO-phase bin
 							  );
 		  
 		  sw_peak = itpc.event_included;
+		  
 		  ph_peak = itpc.phase;
 
 		  // ITPC magnitude of coupling
 
 		  writer.value( "COUPL_MAG"      , itpc.itpc.obs );
-		  writer.value( "COUPL_MAG_EMP"  , itpc.itpc.p );
-		  writer.value( "COUPL_MAG_NULL" , itpc.itpc.mean );
-		  writer.value( "COUPL_MAG_Z"    , ( itpc.itpc.obs - itpc.itpc.mean ) / itpc.itpc.sd  );
-		  
+
+		  if ( nreps ) 
+		    {
+		      writer.value( "COUPL_MAG_EMP"  , itpc.itpc.p );
+		      writer.value( "COUPL_MAG_NULL" , itpc.itpc.mean );
+		      writer.value( "COUPL_MAG_Z"    , ( itpc.itpc.obs - itpc.itpc.mean ) / itpc.itpc.sd  );
+		    }
+
 		  // proportion of spdinles that overlap a SO 
 		  // unless itpc-so was set, this will be meaningless
 		  // so only report is a 'mask' was set
 		  
 		  writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
-		  writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
 		  
-		  if ( use_mask ) 
+		  if ( nreps ) 
 		    {
-		      writer.value( "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
-		      if ( itpc.ninc.sd > 0 )  		    			
-			writer.value( "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
+		      writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
+		      
+		      if ( use_mask ) 
+			{
+			  writer.value( "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
+			  
+			  if ( itpc.ninc.sd > 0 )  		    			
+			    writer.value( "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
+			}
 		    }
 
 		  //
@@ -1334,29 +1366,36 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // the null, give mean rate of 'significant'
 		  // (P<0.05) coupling
 		  //
-
+		  
 		  writer.value( "COUPL_PV"         , itpc.pv.obs );
-		  writer.value( "COUPL_SIGPV_NULL" , itpc.sig.mean ); 
+		  
+		  if ( nreps ) 
+		    writer.value( "COUPL_SIGPV_NULL" , itpc.sig.mean ); 
 
 		  //
 		  // phase-bin stratified overlap/counts
 		  //
-
-		  const int nbins = 18;
-		  for (int b = 0 ; b < nbins ; b++ ) 
-		    {
-		      writer.level( b * 20 + 10 , "PHASE" );
-		      writer.value( "COUPL_OVERLAP"      , itpc.phasebin[b].obs );
-		      writer.value( "COUPL_OVERLAP_EMP"    , itpc.phasebin[b].p );
-		      //writer.value( "COUPL_OVERLAP_NULL" , itpc.phasebin[b].mean );
-		      if ( itpc.phasebin[b].sd > 0 ) 
-			{
-			  double Z = ( itpc.phasebin[b].obs - itpc.phasebin[b].mean ) / itpc.phasebin[b].sd ; 
-			  writer.value( "COUPL_OVERLAP_Z" , Z );
-			}
-		    }
-		  writer.unlevel( "PHASE" );
 		  
+		  if ( nreps && 
+		       stratify_by_so_phase_bin )
+		    {
+		      
+		      const int nbins = 18;
+		      for (int b = 0 ; b < nbins ; b++ ) 
+			{
+			  writer.level( b * 20 + 10 , "PHASE" );
+			  writer.value( "COUPL_OVERLAP"      , itpc.phasebin[b].obs );
+			  writer.value( "COUPL_OVERLAP_EMP"    , itpc.phasebin[b].p );
+			  //writer.value( "COUPL_OVERLAP_NULL" , itpc.phasebin[b].mean );
+			  if ( itpc.phasebin[b].sd > 0 ) 
+			    {
+			      double Z = ( itpc.phasebin[b].obs - itpc.phasebin[b].mean ) / itpc.phasebin[b].sd ; 
+			      writer.value( "COUPL_OVERLAP_Z" , Z );
+			    }
+			}
+		      writer.unlevel( "PHASE" );
+		    }
+
 		}
 
 	      
@@ -1618,8 +1657,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	    }
 
-	
-		  
 
 	  //
 	  // Per-EPOCH summary and test of over-dispersion

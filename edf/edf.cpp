@@ -395,7 +395,14 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   //
   // ensure starttime is in the PM, i.e. 07:00 --> 19:00
   // unless we've otherwise been instructed to respect
-  // AM start-times (assume-pm-start=0)
+  // AM start-times (assume-pm-start=0);  but going to bed at midnight or 
+  // 1am should be fine... so 
+
+  //    6am ....  12pm   .... 6pm .... 12am .... 6am 
+  //                    |4pm     
+  
+  //
+  // assumes typical sleep onset 
   //
   
   if ( globals::assume_pm_starttime )
@@ -403,9 +410,9 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       clocktime_t st( starttime );
       if ( st.valid ) 
 	{
-	  if      ( st.h < 12 )  st.h += 12;
+	  if      ( st.h >= globals::assume_pm_starttime_hour && st.h < 12 ) st.h += 12;
 	  else if ( st.h == 12 ) st.h = 0; 
-	  starttime = st.as_string();
+	  starttime = st.as_string();	  
 	}
     }
 
@@ -990,12 +997,14 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   header.nr = header.nr_all = nr;  // likewise, value of nr_all should not matter, but set anyway
   header.record_duration = 1;
   header.record_duration_tp = header.record_duration * globals::tp_1sec;
-  
+
   
 
   //
   // create a timeline
   //
+
+  set_edf();
 
   set_continuous();
 
@@ -1359,15 +1368,10 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 bool edf_header_t::write( FILE * file )
 {
   
-  // For now, we can only write a EDF+C (i.e. standard EDF, not EDF plus)
-
-  if ( edfplus )
-    logger << " ** warning... can only write as standard EDF (not EDF+) currently... **\n";
-
   // regarding the nbytes_header variable, although we don't really
   // use it, still ensure that it is properly set (i.e. we may have
   // added/removed signals, so we need to update before making the EDF
-
+  
   nbytes_header = 256 + ns * 256;
   
   writestring( version , 8 , file );
@@ -1421,11 +1425,6 @@ bool edf_header_t::write( FILE * file )
 bool edf_header_t::write( edfz_t * edfz )
 {
   
-  // For now, we can only write a EDF+C (i.e. standard EDF, not EDF plus)
-
-  if ( edfplus )
-    logger << " ** warning... can only write as standard EDF (not EDF+) currently... **\n";
-
   // regarding the nbytes_header variable, although we don't really
   // use it, still ensure that it is properly set (i.e. we may have
   // added/removed signals, so we need to update before making the EDF
@@ -1578,13 +1577,7 @@ bool edf_record_t::write( edfz_t * edfz )
 bool edf_t::write( const std::string & f , bool as_edfz )
 {
   
-  // CHANGED:  now okay to write EDF+
-
-  // Note: currently, we can only write a EDF, not EDF+ will be easy
-  // to change, but right now, if EDF+, the time-track is not properly
-  // written to disk for some reason.
-  
-  set_edf();
+  //set_edf();
   
   reset_start_time();
   
@@ -2644,15 +2637,20 @@ bool edf_t::restructure()
 
     }
 
+
   //
   // We now will have a discontinuous EDF+
   //
 
-  logger << " restructuring as an EDF+ : ";
-  
-  set_edfplus();
-
+  if ( ! header.edfplus ) 
+    {
+      logger << " restructuring as an EDF+ : ";
+      
+      set_edfplus();
+    }
+      
   set_discontinuous();
+
 
   //
   // First, check that all necessary records have actually been loaded
@@ -3049,6 +3047,7 @@ void edf_t::set_discontinuous()
 
 void edf_t::set_edfplus()
 {
+
   if ( header.edfplus ) return;
   header.edfplus = true;
   header.continuous = true;  
@@ -3056,6 +3055,7 @@ void edf_t::set_edfplus()
   header.reserved[1] = 'D';
   header.reserved[2] = 'F';
   header.reserved[3] = '+';
+  
   set_continuous();
   add_continuous_time_track();
 }

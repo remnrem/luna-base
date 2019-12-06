@@ -39,6 +39,12 @@ int main(int argc , char ** argv )
 {
 
   bool show_version = argc >= 2 && ( strcmp( argv[1] ,"-v" ) == 0 || strcmp( argv[1] ,"--version" ) == 0 );
+
+  //
+  // usgae
+  //
+
+  std::string usage_msg = "usage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file";
   
   //
   // initiate global defintions
@@ -79,7 +85,8 @@ int main(int argc , char ** argv )
       if ( argc == 2 )  // -h 
 	{
 
-	  std::cerr << "\nusage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file\n\n";
+	  std::cerr << "\nusage:\n"
+		    << "  luna [sample-list|EDF|ASCII] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file\n\n";
 
 	  std::cerr << "List of domains\n"
 		    << "---------------\n\n";
@@ -170,6 +177,20 @@ int main(int argc , char ** argv )
       Helper::build_sample_list( tok );
       std::exit(0);
     }
+
+
+  //
+  // compile text-table output across individuals
+  //
+
+//   else if ( argc >=2 && strcmp( argv[1] , "--compile" ) == 0 )
+//     {
+//       global.api();
+//       std::vector<std::string> tok;
+//       for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+//       Helper::compile_txttabs( tok );
+//       std::exit(0);
+//     }
 
 
   //
@@ -377,7 +398,7 @@ int main(int argc , char ** argv )
   else if ( argc < 2 || ( isatty(STDIN_FILENO) || argc != 1 ) )  
     {
 
-      logger << "usage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file"
+      logger << usage_msg
 	     << "\n";
       logger.off();
       std::exit(1);

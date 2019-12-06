@@ -111,7 +111,8 @@ struct globals
   static std::string project_path; 
 
   static bool assume_pm_starttime;
-  
+  static int assume_pm_starttime_hour;
+
   static bool skip_edf_annots;
 
   static bool remap_nsrr_annots;

@@ -1123,3 +1123,22 @@ bool Helper::hhmmss( const clocktime_t & ct , const interval_t & interval , std:
   
   return true;
 }
+
+
+
+
+void Helper::compile_txttabs( const std::string & d )
+{
+  // compilw all files across all subfolders of d 
+  // make a special folder '00_all'
+  
+  // create folder if it does not exist
+  std::string syscmd = "mkdir -p " + d + "/00_all"; 
+  
+  int retval = system( syscmd.c_str() );
+  
+  // 1) get all subfolders (indivs)
+  
+  
+
+}

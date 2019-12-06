@@ -99,7 +99,8 @@ struct hilbert_t
   itpc_t phase_events( const std::vector<int> & , const std::vector<bool> * m = NULL , 
 		       const int nreps = 0 , 
 		       const int sr = 0 , 
-		       const double epoch_sec = 0 
+		       const double epoch_sec = 0 ,
+		       const bool by_phase = false 
 		       ) const;
   
 private:
