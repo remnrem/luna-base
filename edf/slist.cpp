@@ -263,7 +263,6 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
       globals::sl_annot_extensions.insert( "ftr" );
     }
 
-
   //
   // traverse folders
   //
