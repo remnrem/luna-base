@@ -42,12 +42,30 @@ extern logger_t logger;
 
 void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 {
+
+
+  std::string signal_label1 , signal_label2 ; 
+
+  bool all_by_all = false;
+
+  if ( param.has( "sig1" ) )
+    {
+      signal_label1 =  param.requires( "sig1" );
+      signal_label2 =  param.requires( "sig2" );
+    }
+  else
+    {
+      all_by_all = true;
+      signal_label1 = signal_label2 = param.requires( "sig" );
+    }
   
-  std::string signal_label = param.requires( "sig" );
   
-  signal_list_t signals = edf.header.signal_list( signal_label );  
+  signal_list_t signals1 = edf.header.signal_list( signal_label1 );  
+
+  signal_list_t signals2 = edf.header.signal_list( signal_label2 );  
   
-  const int ns = signals.size();
+  const int ns1 = signals1.size();
+  const int ns2 = signals2.size();
   
   int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ;
   
@@ -56,6 +74,30 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
   bool show_spectrum = param.has( "spectrum" );
   
   double upper_freq = param.has("max") ? param.requires_dbl( "max" ) : 20 ; 
+
+  std::vector<int> sigs;
+  std::map<int,std::string> sigset;
+
+  for (int s=0;s<ns1;s++) 
+    {
+      if ( sigset.find( signals1(s) ) == sigset.end() )
+	{
+	  sigset[ signals1(s) ] =  signals1.label(s);
+	  sigs.push_back( signals1(s) );
+	}
+    }
+
+
+  for (int s=0;s<ns2;s++) 
+    {
+      if ( sigset.find( signals2(s) ) == sigset.end() )
+	{
+	  sigset[ signals2(s) ] =  signals2.label(s);
+	  sigs.push_back( signals2(s) );
+	}
+    }
+
+  const int ns = sigs.size();
 
   //
   // adjust all SRs now
@@ -66,14 +108,14 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
       for (int s=0;s<ns;s++)
 	{
 	  
-	  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+	  if ( edf.header.is_annotation_channel( sigs[s] ) ) continue;
 	  
-	  if ( edf.header.sampling_freq( signals(s) ) != sr ) 
+	  if ( edf.header.sampling_freq( sigs[s] ) != sr ) 
 	    {
-	      logger << "resampling channel " << signals.label(s) 
-		     << " from " << edf.header.sampling_freq( signals(s) )
+	      logger << "resampling channel " << sigset[ sigs[s] ] 
+		     << " from " << edf.header.sampling_freq( sigs[s] )
 		     << " to " << sr << "\n";
-	      resample_channel( edf, signals(s) , sr );
+	      resample_channel( edf, sigs[s] , sr );
 	    }
 	}
     }
@@ -86,37 +128,52 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
   bool epoched = edf.timeline.epoched() && param.has("epoch") ;
 
   //
+  // Number of pairwise comparisons
+  //
+
+  const int np = all_by_all ? ns*(ns-1) : ns1 * ns2;
+  
+  //
   // Start iterating over pairs
   //
 
-  logger << "  calculating coherence for " << ns*(ns-1) << " channel pairs\n";
+  logger << "  calculating coherence for " << np << " channel pairs\n";
   
   //
   // Ensure similar sampling rates
   //
   
-  for (int i=0;i<ns-1;i++)
+  for (int i=0;i<ns1;i++)
     {
       
-      if ( edf.header.is_annotation_channel( signals(i) ) ) continue;
+      if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
       
-      for (int j=i+1;j<ns;j++)
+      for (int j=0;j<ns2;j++)
 	{
 	  
-	  if ( edf.header.is_annotation_channel( signals(j) ) ) continue;
-	  
+	  if ( edf.header.is_annotation_channel( signals2(j) ) ) continue;
+
+	  //
+	  // if all-by-all, do not do redundant channels
+	  //
+
+	  if ( all_by_all ) 
+	    {
+	      if ( j <= i ) continue;
+	    }
+
 	  if ( epoched ) 
 	    {
 	      
 	      int epoch = edf.timeline.first_epoch();      
 
-	      const int sr1 = edf.header.sampling_freq( signals(i) );
-	      const int sr2 = edf.header.sampling_freq( signals(j) );	      
+	      const int sr1 = edf.header.sampling_freq( signals1(i) );
+	      const int sr2 = edf.header.sampling_freq( signals2(j) );	      
 	      if ( sr1 != sr2 ) Helper::halt( "'COH epoch' requires similiar sampling rates (or specify, e.g., sr=200)" );
 
 	      
 	      // stratify output by SIGNALS
-	      writer.level( signals.label(i) + "_x_" + signals.label(j) , "CHS" );
+	      writer.level( signals1.label(i) + "_x_" + signals2.label(j) , "CHS" );
 
 	      while ( 1 ) 
 		{
@@ -129,7 +186,7 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		  // Calculate coherence metrics
 		  //
 
-		  coh_t coh = dsptools::coherence( edf , signals(i) , signals(j) , interval , legacy );
+		  coh_t coh = dsptools::coherence( edf , signals1(i) , signals2(j) , interval , legacy );
 		  
 
 		  //
@@ -305,11 +362,11 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 	      // Coherence for entire signal
 	      //
 
-	      coh_t coh = coherence( edf , signals(i) , signals(j) , edf.timeline.wholetrace() , legacy  );
+	      coh_t coh = coherence( edf , signals1(i) , signals2(j) , edf.timeline.wholetrace() , legacy  );
 	      
 	      int sz = coh.frq.size();
 	      
-	      writer.level( signals.label(i) + "_x_" + signals.label(j) , "CHS" );
+	      writer.level( signals1.label(i) + "_x_" + signals2.label(j) , "CHS" );
 	      
 	      //
 	      // Band-level summaries
