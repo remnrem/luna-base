@@ -174,6 +174,11 @@ class cmddefs_t
   //
 
   void all_compressed( bool b ) { allz = b; } 
+  bool all_compressed() const { return allz; }
+
+  void none_compressed( bool b ) { nonez = b; } 
+  bool none_compressed() const { return nonez; }
+
 
   // allow change after table has been registered  
   void set_compressed( const std::string & cmd , 
@@ -245,8 +250,9 @@ class cmddefs_t
   // cmd->table->var->desc
   std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > > ovars;
   
-  // all output should be compressed
+  // all, or no, output should be compressed
   bool allz;
+  bool nonez;
 
   //
   // TAGs, need to keep track of these so they can be ignored when determining 

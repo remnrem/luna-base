@@ -114,6 +114,7 @@ struct globals
   static int assume_pm_starttime_hour;
 
   static bool skip_edf_annots;
+  static bool skip_all_annots;
 
   static bool remap_nsrr_annots;
 

@@ -45,6 +45,8 @@ void edf_t::record_table( param_t & param )
   // iterate over each record
 
   int r = timeline.first_record();
+
+  int cnt = 0;
   
   while ( r != -1 )
     {
@@ -58,7 +60,8 @@ void edf_t::record_table( param_t & param )
       std::cout << "RECS\t"
 		<< id << "\t";
 
-      std::cout << r+1 << "\t" 
+      std::cout << ++cnt << "\t" // one-based 
+	        << r+1 << "\t" 
 		<< header.nr << "/" << header.nr_all ;
       
       std::cout << "\t" << interval.as_string() ;
@@ -1260,20 +1263,44 @@ void edf_t::seg_dumper( param_t & param )
   //
     
   int num_segments = 0;
+
+  int r = timeline.first_record();
   
-  uint64_t tp0 = timeline.rec2tp[0];
+  uint64_t tp0 = timeline.rec2tp[r];
 
   uint64_t tp_start = tp0;
   
-  for (int r = 1; r < header.nr; r++)
-    {
-      uint64_t tp = timeline.rec2tp[r] ;
-      
-      if ( tp - tp0 != header.record_duration_tp || r == ( header.nr - 1 ) ) 
-	{
 
-	  // if at last record, then need to make this the 'previous'
-	  if ( r == header.nr - 1 ) tp0 = tp;
+  while ( r != -1 )
+    {
+      
+      // next record
+      r = timeline.next_record( r );
+
+      // start of this next record
+      uint64_t tp;
+
+      bool segend = false;
+      
+      // end?
+      if ( r == -1 )
+	{
+	  // make this the 'previous'
+	   tp0 = tp;
+	   segend = true;
+	}
+      else
+	{
+	  tp = timeline.rec2tp[r] ;
+
+	  // discontinuity / end of segment?
+	  segend = tp - tp0 != header.record_duration_tp ;
+	}
+
+      // record this segment 
+
+      if ( segend )
+	{
 	  
 	  double secs1 = tp_start * globals::tp_duration ; 	  
 	  double secs2 = tp0 * globals::tp_duration + header.record_duration; 
@@ -1307,7 +1334,7 @@ void edf_t::seg_dumper( param_t & param )
       
       // current point becomes the last one, for next lookup
       tp0 = tp;
-      
+
     }
 
   writer.unlevel( "SEG" );

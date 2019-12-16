@@ -101,24 +101,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 
   signal_list_t signals = edf.header.signal_list( signal_label );  
   
-  const int ns = signals.size();
-
-  if ( ns != 1 ) 
-    Helper::halt( "can only apply slow_waves_t() to a single signal, i.e.  SW sig=<label>" );
-
-  writer.level( signals(0) , globals::signal_strat );
-  
-  double sr = edf.header.sampling_freq( signals )[0];
-  
-  interval_t interval = edf.timeline.wholetrace();
-
-  slice_t slice( edf , signals(0) , interval );
-      
-  const std::vector<double> * d = slice.pdata();
-  
-  const std::vector<uint64_t> * tp = slice.ptimepoints(); 
-
-
+ 
   //
   // default parameters from Latchoumane et al (2017) (nb. mouse EEG)
   //
@@ -152,103 +135,135 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   if      ( param.has( "half-wave" ) ) type = SO_HALF;
   else if ( param.has( "negative-half-wave" ) ) type = SO_NEGATIVE_HALF;
   else if ( param.has( "positive-half-wave" ) ) type = SO_POSITIVE_HALF;
-  
-
-  //
-  // Detect slow waves
-  //
-  
-  detect_slow_waves( *d , *tp , sr , thr, use_mean , 
-		     uV_neg , uV_p2p , 
-		     f_lwr , f_upr , 
-		     t_lwr , t_upr , 
-		     t_neg_lwr, t_neg_upr , 
-		     use_alternate_neg2pos_zc , type ); 
-  
-  
-  //
-  // spectral analysis around SWs
-  //
-  
-  phase_slow_waves();
-  
-  
-  // 
-  // Other stuff?
-  //
-
-  // time_locked_spectral_analysis( edf , d, Fs );
 
 
   //
-  // Display
+  // iterate over signals
   //
-  
-  display_slow_waves( param.has( "verbose" ) , &edf );
-  
 
-  //
-  // Optionally, consider another signal w.r.t SO 
-  //
+  const int ns = signals.size();
   
-  
-  if ( param.has( "tl" ) ) 
+  interval_t interval = edf.timeline.wholetrace();
+
+  for (int s=0;s<ns;s++)
     {
-      
-      int position = -1;
-      if ( param.has("onset" ) ) position = 0;
-      else if ( param.has("pos" ) ) position = +1;
-      
-      double twin = param.has("window") ? param.requires_dbl( "window" ) : 3.0 ; 
-      
-      std::string label2 = param.requires( "tl" );   
-      
-      signal_list_t signals2 = edf.header.signal_list( label2 );
-      
-      const int ns2 = signals2.size();
-      
-      logger << " averaging " << label2 << " based on time-locked averaging to SO ";
-      if ( position == -1 ) logger << "negative peak";
-      else if ( position == 0 ) logger << "onset";
-      else if ( position == 1 ) logger << "positive peak";
-      logger << ", within window of +/-" << twin << " seconds\n";
 
+      //
+      // Only consider raw signal channels
+      //
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) )
+	continue;
 
-      for (int i=0;i<ns2;i++)
+      logger << " estimating SO for " << signals.label(s) << "\n";
+	  
+      writer.level( signals(s) , globals::signal_strat );
+      
+      double sr = edf.header.sampling_freq( signals )[s];
+      
+      slice_t slice( edf , signals(s) , interval );
+      
+      const std::vector<double> * d = slice.pdata();
+      
+      const std::vector<uint64_t> * tp = slice.ptimepoints(); 
+
+      
+      //
+      // Detect slow waves
+      //
+      
+      detect_slow_waves( *d , *tp , sr , thr, use_mean , 
+			 uV_neg , uV_p2p , 
+			 f_lwr , f_upr , 
+			 t_lwr , t_upr , 
+			 t_neg_lwr, t_neg_upr , 
+			 use_alternate_neg2pos_zc , type ); 
+      
+      
+      //
+      // spectral analysis around SWs
+      //
+      
+      phase_slow_waves();
+      
+      
+      //
+      // verbose display
+      //
+      
+      display_slow_waves( param.has( "verbose" ) , &edf );
+      
+      
+      //
+      // Optionally, consider another signal w.r.t SO 
+      //
+      
+      
+      if ( param.has( "tl" ) ) 
 	{
-
-	  double sr2 = edf.header.sampling_freq( signals2 )[i];
 	  
-	  interval_t interval2 = edf.timeline.wholetrace();
-
-	  slice_t slice2( edf , signals2(i) , interval2 );
+	  int position = -1;
 	  
-	  const std::vector<double> * d2 = slice2.pdata();
+	  if ( param.has("onset" ) ) position = 0;
+	  else if ( param.has("pos" ) ) position = +1;
 	  
-	  const std::vector<uint64_t> * tp2 = slice2.ptimepoints(); 
+	  double twin = param.has("window") ? param.requires_dbl( "window" ) : 3.0 ; 
 	  
-	  std::vector<double> tl_sig = time_locked_averaging( d2 , sr2 , twin , twin , position );
-	
-	  if ( tl_sig.size() > 0 ) 
+	  std::string label2 = param.requires( "tl" );   
+	  
+	  signal_list_t signals2 = edf.header.signal_list( label2 );
+	  
+	  const int ns2 = signals2.size();
+	  
+	  logger << " averaging " << label2 << " based on time-locked averaging to SO ";
+	  if ( position == -1 ) logger << "negative peak";
+	  else if ( position == 0 ) logger << "onset";
+	  else if ( position == 1 ) logger << "positive peak";
+	  logger << ", within window of +/-" << twin << " seconds\n";
+	  
+	  
+	  for (int i=0;i<ns2;i++)
 	    {
-	      writer.var( "SWTL_SIG" , "Slow wave time-locked averages" );
-	      writer.level( signals2.label(i)  , "CH2" );
 	      
-	      int sz = tl_sig.size();
-	      int sz2 = - (sz-1)/2;
+	      double sr2 = edf.header.sampling_freq( signals2 )[i];
 	      
-	      for (int j=0;j<sz;j++)
+	      interval_t interval2 = edf.timeline.wholetrace();
+	      
+	      slice_t slice2( edf , signals2(i) , interval2 );
+	      
+	      const std::vector<double> * d2 = slice2.pdata();
+	      
+	      const std::vector<uint64_t> * tp2 = slice2.ptimepoints(); 
+	      
+	      std::vector<double> tl_sig = time_locked_averaging( d2 , sr2 , twin , twin , position );
+	      
+	      if ( tl_sig.size() > 0 ) 
 		{
-		  writer.level( sz2 , "SP" );
-		  writer.value( "SWTL" , tl_sig[j] );		  
-		  ++sz2;
+		  writer.var( "SWTL_SIG" , "Slow wave time-locked averages" );
+		  writer.level( signals2.label(i)  , "CH2" );
+		  
+		  int sz = tl_sig.size();
+		  int sz2 = - (sz-1)/2;
+		  
+		  for (int j=0;j<sz;j++)
+		    {
+		      writer.level( sz2 , "SP" );
+		      writer.value( "SWTL" , tl_sig[j] );		  
+		      ++sz2;
+		    }
+		  writer.unlevel( "SP" );
 		}
-	      writer.unlevel( "SP" );
+	      
+	      // next channel
 	    }
-
-	  // next channel
+	  writer.unlevel( "CH2" );
+	  
 	}
-      writer.unlevel( "CH2" );
+      
+      
+      //
+      // Next signal
+      //
       
     }
 
@@ -548,7 +563,9 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 				     const double t_neg_lwr , 
 				     const double t_neg_upr , 
 				     const bool use_alternate_neg2pos_zc , 
-				     const slow_wave_type type )
+				     const slow_wave_type type ,
+				     const double fir_ripple ,
+				     const double fir_tw )
 {
   
   // track Fs for later
@@ -558,38 +575,37 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // track total signal duration
   signal_duration_sec = unfiltered.size() / (double)sr ; 
 
-  logger << " detecting slow waves: " << f_lwr << "-" << f_upr << "Hz, ";
+  logger << " detecting slow waves: " << f_lwr << "-" << f_upr << "Hz\n";
   
-  if ( t_lwr > 0 ) logger << " duration " << t_lwr << "-" << t_upr << "s;"; 
-  if ( t_neg_lwr > 0 ) logger << " negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << ";";
-  logger << "\n";
+  if ( t_lwr > 0 ) logger << "  - duration " << t_lwr << "-" << t_upr << "s\n"; 
+  if ( t_neg_lwr > 0 ) logger << "  - negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << "\n";
 
-  if ( thr > 0 ) logger << " relative threshold "<< thr ;
-  if ( uV_neg < 0 ) logger << " absolute threshold based on " 
+  if ( thr > 0 ) logger << "  - relative threshold " << thr  << "x " <<  ( use_mean ? "mean" : "median" ) << "\n";
+
+  if ( uV_neg < 0 ) logger << "  - absolute threshold based on " 
 			      << uV_neg << " uV for negative peak, " 
-			      << uV_p2p << " peak-to-peak";
-  logger << "\n";
+			      << uV_p2p << " peak-to-peak\n";
 
-  logger << " using " << ( use_mean ? "mean" : "median" ) << " thresholds\n";
 
   if ( type == SO_FULL ) 
-    logger << " full waves, based on consecutive "  
+    logger << "  - full waves, based on consecutive "  
 	      << ( use_alternate_neg2pos_zc ? "negative-to-positive" : "positive-to-negative" ) << " zero-crossings\n";
   else if ( type == SO_HALF ) 
-    logger << " all half waves\n";
+    logger << "  - all half waves\n";
   else if ( type == SO_NEGATIVE_HALF ) 
-    logger << " all negative half waves\n";
+    logger << "  - all negative half waves\n";
   else if ( type == SO_POSITIVE_HALF ) 
-    logger << " all positive half waves\n";
+    logger << "  - all positive half waves\n";
 
 
+  
     
   //
   // Band-pass filter for slow waves
   //
 
-  // ripple = 0.005 , transition width (Hz) = 0.5 Hz 
-  filtered = dsptools::apply_fir( unfiltered , sr , fir_t::BAND_PASS , 0.005 , 0.5 , f_lwr , f_upr );
+  
+  filtered = dsptools::apply_fir( unfiltered , sr , fir_t::BAND_PASS ,fir_ripple , fir_tw , f_lwr , f_upr );
   
   //filtered = band_pass_filter( unfiltered , sr , filter_order , f_lwr , f_upr );  
   //  std::cout << MiscMath::mean( d ) << " is the mean \n";
@@ -614,7 +630,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // # of putative SOs
   int cnt = 0;  
 
-  logger << " " << zc.size() << " zero crossings ";
+  logger << " " << zc.size() << " zero crossings";
   
   // putative waves
   std::vector<slow_wave_t> waves; 
@@ -815,8 +831,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   median_slope_n1 = acc_slope_n1.size() > 0 ? MiscMath::median( acc_slope_n1 ) : 0 ; 
   median_slope_n2 = acc_slope_n2.size() > 0 ? MiscMath::median( acc_slope_n2 ) : 0 ; 
     
-  logger << ", of which " << sw.size() << " slow waves met criteria";
-  if ( thr > 0 ) logger << " (based on sw thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
+  logger << ", of which " << sw.size() << " met criteria";
+  if ( thr > 0 ) logger << " (thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
   logger << "\n";
 
   return sw.size();

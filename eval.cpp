@@ -801,7 +801,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "POL" ) )          proc_polarity( edf, param(c) );	  
       
-      else if ( is( c, "SW" ) || is( c, "SLOW-WAVES" ) ) proc_slowwaves( edf, param(c) );
+      else if ( is( c, "SO" ) )            proc_slowwaves( edf, param(c) );
       else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
       
@@ -2053,7 +2053,15 @@ void proc_flip( edf_t & edf , param_t & param  )
 
 void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 {
-  
+
+
+  // no console logging?
+  if ( Helper::iequals( tok0 , "silent" ) ) 
+    {
+      globals::silent = Helper::yesno( tok1 );
+      return;      
+    }
+
   // add signals?
   if ( Helper::iequals( tok0 , "sig" ) )
     {		  
@@ -2073,7 +2081,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       std::ofstream P( globals::naughty_list.c_str() , std::ios::out );
       P.close();      
     }
-  
+
+  // -t output compression 
+  if ( Helper::iequals( tok0 , "compressed" ) )
+    {
+      bool yesno = Helper::yesno( tok1 );      
+      globals::cmddefs.all_compressed( yesno );
+      globals::cmddefs.none_compressed( !yesno );
+      return;
+    }
+
   // NSRR remapping
   if ( Helper::iequals( tok0 , "nsrr-remap" ) )
     {
@@ -2144,10 +2161,18 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
   
   // do not read EDF annotations
-  if ( Helper::iequals( tok0 , "skip-annots" ) )
+  if ( Helper::iequals( tok0 , "skip-edf-annots" ) )
     {
       if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
 	globals::skip_edf_annots = true;
+      return;
+    }
+
+  // do not read EDF annotations
+  if ( Helper::iequals( tok0 , "skip-all-annots" ) )
+    {
+      if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
+	globals::skip_all_annots = true;
       return;
     }
 

@@ -1343,13 +1343,14 @@ bool writer_t::to_plaintext( const std::string & var_name , const value_t & x )
 
 void writer_t::update_plaintext_curr_strata()
 {
+
   if ( zfiles == NULL ) return ;
-  
+
   // get zfile-set for this individual, creating if it does not exist
 
   // NOTE -- should NULL be okay for param here... 
   // need to get param into here... (i.e. when writer_t::cmd() function)
-  
+
   // figure out which table (command/strata)  
   curr_zfile = zfiles->file( curr_command.cmd_name , NULL , curr_strata.print_zfile_tag() ) ;  
   

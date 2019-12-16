@@ -160,7 +160,13 @@ struct slow_waves_t
 			 // as opposed to positive-to-negative
 			 const bool neg2pos = true , 
 			 
-			 const slow_wave_type type = SO_FULL );
+			 const slow_wave_type type = SO_FULL ,
+
+			 // default FIR settings for filter-Hilbert
+			 const double fir_ripple = 0.01 ,
+			 const double fir_tw = 0.5 			 
+			 
+			 );
   
   // output
 

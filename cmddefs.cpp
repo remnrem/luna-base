@@ -32,6 +32,13 @@ extern globals global;
 void cmddefs_t::init()
 {
 
+  //
+  // parameters
+  //
+
+  allz = false;
+  nonez = false;
+
   /////////////////////////////////////////////////////////////////////////
   //
   // Document domains, commands, parameters, output tables and variables 
@@ -131,12 +138,15 @@ void cmddefs_t::init()
   
   add_cmd( "summ" , "HEADERS" , "Tabulate (channel-specific) EDF header information" );
 
-  add_table( "HEADERS" , "." , "Basic EDF header information" );
-  add_var( "HEADERS" , "." , "NR" , "Number of records" );
-  add_var( "HEADERS" , "." , "NS" , "Number of signals/channels" );
-  add_var( "HEADERS" , "." , "REC.DUR" , "Duration of each record (seconds)" );
-  add_var( "HEADERS" , "." , "TOT.DUR.SEC" , "Total duration of EDF (seconds)" );
-  add_var( "HEADERS" , "." , "TOT.DUR.HMS" , "Total duration of EDF (hh:mm:ss string)" );
+  add_table( "HEADERS" , "" , "Basic EDF header information" );
+  add_var( "HEADERS" , "" , "NR" , "Number of records" );
+  add_var( "HEADERS" , "" , "NS" , "Number of signals/channels" );
+  add_var( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
+  add_var( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" );
+  add_var( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
+  add_var( "HEADERS" , "" , "REC.DUR" , "Duration of each record (seconds)" );
+  add_var( "HEADERS" , "" , "TOT.DUR.SEC" , "Total duration of EDF (seconds)" );
+  add_var( "HEADERS" , "" , "TOT.DUR.HMS" , "Total duration of EDF (hh:mm:ss string)" );
 
   add_table( "HEADERS" , "CH" , "Per-channel header information" );
   add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
@@ -462,6 +472,31 @@ void cmddefs_t::init()
   add_param( "DUMP-RECORDS" , "no-annots" , "" , "Do not show annotation information" );
 
 
+  // RECS
+  
+  add_cmd( "output" , "RECS" , "Dumps information on EDF record structure to standard out" );
+  add_url( "RECS" , "outputs/#recs" );
+
+  // SEGMENTS
+
+  add_cmd( "output" , "SEGMENTS" , "Report on contiguous segments in an EDF/EDF+" );
+  add_url( "SEGMENTS" , "outputs/#segments" );
+
+  add_table( "SEGMENTS" , "" , "Number of contiguous segments" );
+  add_var( "SEGMENTS" , "" , "NSEGS" , "Number of contiguous segments" );
+
+  add_table( "SEGMENTS" , "SEG" , "Information on each segment" );
+  add_var( "SEGMENTS" , "SEG" , "DUR_HR" , "Segment duration (hours)" );
+  add_var( "SEGMENTS" , "SEG" , "DUR_MIN" , "Segment duration (minutes)" );
+  add_var( "SEGMENTS" , "SEG" , "DUR_SEC" , "Segment duration (seconds)" );
+
+  add_var( "SEGMENTS" , "SEG" , "START" , "Segment start (seconds)" );
+  add_var( "SEGMENTS" , "SEG" , "START_HMS" , "Segment start (hh:mm:ss)" );
+    
+  add_var( "SEGMENTS" , "SEG" , "STOP" , "Segment stop (seconds)" );
+  add_var( "SEGMENTS" , "SEG" , "STOP_HMS" , "Segment stop (hh:mm:ss)" );
+
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // FILTERS
@@ -651,10 +686,11 @@ void cmddefs_t::init()
   add_url( "PSD" , "power-spectra/#psd" );
 
   add_param( "PSD" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-  add_param( "PSD" , "epoch" , "" , "Calculate per-epoch statistics" );
-  add_param( "PSD" , "max" , "100" , "Calculate per-epoch statistics" );
-  add_param( "PSD" , "spectrum" , "" , "Calculate per-epoch statistics" );
-  add_param( "PSD" , "epoch-spectrum" , "" , "Calculate per-epoch statistics" );
+  add_param( "PSD" , "epoch" , "" , "Calculate per-epoch band power" );
+  add_param( "PSD" , "max" , "100" , "Specify max frequency for power spectra" );
+  add_param( "PSD" , "bin" , "1" , "Specify bin-size for power spectra" );
+  add_param( "PSD" , "spectrum" , "" , "Calculate power spectra" );
+  add_param( "PSD" , "epoch-spectrum" , "" , "Calculate per-epoch power spectra" );
   
   add_table( "PSD" , "CH" , "Number of epochs" );
   add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
@@ -760,7 +796,8 @@ void cmddefs_t::init()
   add_param( "CWT" , "cycles" , "12" , "Bandwidth of the wavelet (number of cycles, default 7)" );
   add_param( "CWT" , "tag" , "v1" , "Additional tag to be added to the new signal" );
   add_param ( "CWT" , "phase" , "" , "Generate a second new signal with wavelet's phase" );
-    
+
+  
   //
   // CWT-DESIGN 
   //
@@ -904,19 +941,19 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration ('if' option)" );
 
   
-  add_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle" );
+  add_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
   add_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
 
-  add_table( "SPINDLES" , "" , "Individual-level summaries of m-spindles" );
+  add_table( "SPINDLES" , "" , "Individual-level summaries of m-spindles [collate]" );
   add_var( "SPINDLES" , "" , "MSP_DENS" , "m-spindle density" );
   add_var( "SPINDLES" , "" , "MSP_N" , "m-spindle count" );
   add_var( "SPINDLES" , "" , "MSP_MINS" , "Denominator for density, i.e. minutes of signal analyzed" );
 
-  add_table( "SPINDLES" , "F" , "m-spindle density stratified by m-spindle frequency" );
+  add_table( "SPINDLES" , "F" , "m-spindle density stratified by m-spindle frequency [collate]" );
   add_var( "SPINDLES" , "F" , "MSP_DENS" , "m-spindle density conditional on m-spindle frequency" );
   
 
-  add_table( "SPINDLES" , "MSPINDLE" , "Merged-spindle output" );
+  add_table( "SPINDLES" , "MSPINDLE" , "Merged-spindle output [collate]" );
   add_var( "SPINDLES" , "MSPINDLE" , "MSP_DUR","Duration of this m-spindle" );
   add_var( "SPINDLES" , "MSPINDLE" , "MSP_F","Estimated frequency of this m-spindle" );
   add_var( "SPINDLES" , "MSPINDLE" , "MSP_FL","Lower frequency of this m-spindle" );
@@ -928,7 +965,7 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "MSPINDLE" , "MSP_START_HMS" , "Merged spindle start clock-time (if 'hms')" );
   add_var( "SPINDLES" , "MSPINDLE" , "MSP_STOP_HMS" , "Merged spindle stop clock-time (if 'hms')" );
   
-  add_table( "SPINDLES" , "CH,MSPINDLE" , "Within-channel merged-spindle output" );
+  add_table( "SPINDLES" , "CH,MSPINDLE" , "Within-channel merged-spindle output [collate]" );
   add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_DUR","Duration of this m-spindle" );
   add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_F","Estimated frequency of this m-spindle" );
   add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_FL","Lower frequency of this m-spindle" );
@@ -941,13 +978,11 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_STOP_HMS" , "Merged spindle stop clock-time (if 'hms')" );
  
   
-  add_table( "SPINDLES" , "SPINDLE,MSPINDLE" , "Spindle to m-spindle mappings (from 'list-all-spindles')" );
-  
+  add_table( "SPINDLES" , "SPINDLE,MSPINDLE" , "Spindle to m-spindle mappings (from 'list-all-spindles') [collate]" );
   add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "SCH", "Spindle label (channel:target frequency)" );
   add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "FFT", "Spindle estimated frequency (via FFT)" );
   add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "START" , "Spindle start time (elapsed seconds from EDF start)" );
   add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "STOP" , "Spindle stop time (elapsed seconds from EDF start)" );
-
   
   // experimental
   add_param( "SPINDLES" , "if" , "" , "Estimate instantaneous frequency of spindles" );
@@ -959,7 +994,8 @@ void cmddefs_t::init()
   //
   // SO
   //
-
+  
+  
   
   //
   // SP/SO coupling options
@@ -972,32 +1008,14 @@ void cmddefs_t::init()
 
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "Coupling magnitude (original statistic)" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "Coupling magnitude (empirical Z)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "Coupling magnitude (empirical P)" );
-  //  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "Coupling magnitude (proportion asymptotic p < 0.05)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "Coupling magnitude (empirical P)" );  
   
   add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "Coupling overlap (original statistic)" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "Coupling overlap (empirical Z)" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "Coupling overlap (empirical P)" );
-  //  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "Coupling overlap (mean under null) " );
-
+  
   add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "Coupling overlap (original statistic)" );
   add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "Coupling overlap (empirical P)" );
-
-  // COUPL_OVERLAP
-  // COUPL_OVERLAP_EMP
-  // "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
-  // "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
-
-  // "COUPL_ANGLE"   , itpc.angle.obs );
-
-  //                                                                                                                          
-  // asymptotic significance of coupling test; under                                                                          
-  // the null, give mean rate of 'significant'                                                                                
-  // (P<0.05) coupling                                                                                                        
-  //                                                                                                                          
-
-  // "COUPL_PV"         , itpc.pv.obs );
-  // "COUPL_SIGPV_NULL" , itpc.sig.mean );
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -1280,11 +1298,14 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		<< "\n";
 
 	      // dump as compressed text ?
-	      bool tdump = allz || ( ofacs.find( cmd ) != ofacs.end() && ofacs.find( cmd )->second.find( tfac )->second );
-	      if ( tdump ) ss << "   (compressed output)\n";
-
-	      // variables?
+	      bool tdump = false;
+	      if ( allz ) tdump = true;
+	      else if ( nonez ) tdump = false;
+	      else tdump = ofacs.find( cmd ) != ofacs.end() && ofacs.find( cmd )->second.find( tfac )->second ;
 	      
+	      if ( tdump ) ss << "   (compressed output)\n";
+	      
+	      // variables?
 	      if ( ovars.find( cmd ) != ovars.end() )
 		{
 		  const std::map<tfac_t,std::map<std::string,std::string> > & t = ovars.find( cmd )->second;
@@ -1339,9 +1360,10 @@ bool cmddefs_t::exists( const std::string & cmd ,
 
 bool cmddefs_t::out_compressed( const std::string & cmd , const tfac_t & tfac ) const
 {
-  // all output is in compressed plain-text
+  // all or none factors supplied?
   if ( allz ) return true;
-  
+  if ( nonez ) return false;
+
   // cmd not found [use ofacs instead of cmd, i.e. for commands w/ no registered tables, such as DESC
   //  if ( cmds.find( cmd ) == cmds.end() ) return false;
   

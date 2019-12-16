@@ -202,7 +202,7 @@ std::string edf_header_t::summary() const
      << "\n"
      << "# signals      : " << ns << "\n"
      << "# records      : " << nr << "\n"
-     << "Duration       : " << record_duration << "\n\n";
+     << "Rec. dur. (s)  : " << record_duration << "\n\n";
   
   for (int s=0;s<ns;s++)
     {

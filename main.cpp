@@ -38,7 +38,12 @@ extern logger_t logger;
 int main(int argc , char ** argv )
 {
 
-  bool show_version = argc >= 2 && ( strcmp( argv[1] ,"-v" ) == 0 || strcmp( argv[1] ,"--version" ) == 0 );
+  //
+  // display version info?
+  //
+  
+  bool show_version = argc >= 2 
+    && ( strcmp( argv[1] ,"-v" ) == 0 || strcmp( argv[1] ,"--version" ) == 0 );
 
   //
   // usgae
@@ -85,8 +90,7 @@ int main(int argc , char ** argv )
       if ( argc == 2 )  // -h 
 	{
 
-	  std::cerr << "\nusage:\n"
-		    << "  luna [sample-list|EDF|ASCII] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file\n\n";
+	  std::cerr << "\n" << usage_msg << "\n\n";
 
 	  std::cerr << "List of domains\n"
 		    << "---------------\n\n";
@@ -133,6 +137,7 @@ int main(int argc , char ** argv )
   //
   // EVAL from the command line 
   //
+
   else if ( argc == 2 && strcmp( argv[1] , "--eval" ) == 0 ) 	   
     {
       global.api();
@@ -192,12 +197,6 @@ int main(int argc , char ** argv )
 //       std::exit(0);
 //     }
 
-
-  //
-  // banner
-  //
-
-  logger.banner( globals::version , globals::date );
 
 
   //
@@ -406,6 +405,18 @@ int main(int argc , char ** argv )
 
   if ( std::cin.eof() || ! std::cin.good() ) 
     Helper::halt( "no input, quitting" );
+
+
+  //
+  // -------- done parsing command args --------
+  //
+
+
+  //
+  // banner
+  //
+
+  logger.banner( globals::version , globals::date );
 
 
 
@@ -851,42 +862,45 @@ void process_edfs( cmd_t & cmd )
       // Attach annotations
       //
       
-      for (int i=2;i<tok.size();i++) 
+      if ( ! globals::skip_all_annots ) 
 	{
-	  
-	  std::string fname = Helper::expand( tok[i] );
-	  
-	  if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
+	  for (int i=2;i<tok.size();i++) 
 	    {
-	      // this means we are specifying a folder, in which case search for all files that 
-	      // start id_<ID>_* and attach thoses
-	      DIR * dir;		  
-	      struct dirent *ent;
-	      if ( (dir = opendir ( fname.c_str() ) ) != NULL )
+	      
+	      std::string fname = Helper::expand( tok[i] );
+	      
+	      if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
 		{
-		  /* print all the files and directories within directory */
-		  while ((ent = readdir (dir)) != NULL)
+		  // this means we are specifying a folder, in which case search for all files that 
+		  // start id_<ID>_* and attach thoses
+		  DIR * dir;		  
+		  struct dirent *ent;
+		  if ( (dir = opendir ( fname.c_str() ) ) != NULL )
 		    {
-		      std::string fname2 = ent->d_name;
-		      // only annot files (.xml, .ftr, .annot, .eannot)
-		      if ( Helper::file_extension( fname2 , "ftr" ) ||
-			   Helper::file_extension( fname2 , "xml" ) ||
-			   Helper::file_extension( fname2 , "eannot" ) ||
-			   Helper::file_extension( fname2 , "annot" ) )
+		      /* print all the files and directories within directory */
+		      while ((ent = readdir (dir)) != NULL)
 			{
-			  edf.load_annotations( fname + fname2 );	 			   
+			  std::string fname2 = ent->d_name;
+			  // only annot files (.xml, .ftr, .annot, .eannot)
+			  if ( Helper::file_extension( fname2 , "ftr" ) ||
+			       Helper::file_extension( fname2 , "xml" ) ||
+			       Helper::file_extension( fname2 , "eannot" ) ||
+			       Helper::file_extension( fname2 , "annot" ) )
+			    {
+			      edf.load_annotations( fname + fname2 );	 			   
+			    }
 			}
+		      closedir (dir);
 		    }
-		  closedir (dir);
+		  else 
+		    Helper::halt( "could not open folder " + fname );
 		}
-	      else 
-		Helper::halt( "could not open folder " + fname );
+	      else
+		{
+		  edf.load_annotations( fname );	 
+		}
+	      
 	    }
-	  else
-	    {
-	      edf.load_annotations( fname );	 
-	    }
-	  
 	}
 
 	  
