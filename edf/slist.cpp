@@ -192,7 +192,6 @@ int fn_luna_slbuilder( const std::string & filename )
 	  
 	  bool match_with_period = Helper::file_extension( filename , *ii , true );
 	  bool match_no_period = Helper::file_extension( filename , *ii , false );
-
 	  
 	  if ( match_with_period || match_no_period )
 	    {
@@ -202,7 +201,7 @@ int fn_luna_slbuilder( const std::string & filename )
 	      std::string key = globals::sl_link_across_folders ? 
 		tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - len ) :
 		filename.substr( 0 , filename.size() - len );
-	      
+
 	      globals::sl_data[ key ].annots.insert( filename );
 	      
 	    }
@@ -233,7 +232,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   std::vector<std::string> tok;
 
   bool specified_extensions = false;
-  
+
   for (int t=0;t<tok0.size();t++)
     {
       if ( tok0[t][0] == '-' ) 
@@ -247,12 +246,11 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	      std::vector<std::string> tok2 = Helper::parse( s , "," );
 	      for (int i=0;i<tok2.size();i++) globals::sl_annot_extensions.insert( tok2[i] );
 	      specified_extensions = true;
-
 	    }
 	}
       else tok.push_back( tok0[t] );
     }
-
+  
   //
   // standard annotation types, if none given above
   //
@@ -264,7 +262,6 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
       globals::sl_annot_extensions.insert( "eannot" );
       globals::sl_annot_extensions.insert( "ftr" );
     }
-
 
   //
   // traverse folders
@@ -302,11 +299,12 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   std::map<std::string,sample_list_t>::const_iterator ii = globals::sl_data.begin();
   while ( ii != globals::sl_data.end() )
     {
-      
+
       // does this have an EDF? 
       
       bool has_edf = ii->second.edf != "";
       int  num_annots = ii->second.annots.size();
+
       
       if ( has_edf && ids.find( ii->second.id ) != ids.end() ) 
 	{
