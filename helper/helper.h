@@ -165,6 +165,9 @@ namespace Helper
       std::istringstream iss(s);
       return !(iss >> f >> t).fail();
     }
+  
+  uint64_t sec2tp( double );
+  double tp2sec( uint64_t );
 
   std::vector<std::string> parse(const std::string & item, const std::string & s = " \t\n" , bool empty = false );
   std::vector<std::string> quoted_parse(const std::string & item , const std::string & s , const char q = '"' , const char q2 = '#' , bool empty = false );

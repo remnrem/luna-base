@@ -738,7 +738,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
-      else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) );
+      else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
+      //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
       else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
@@ -1575,7 +1576,7 @@ void proc_dump_mask( edf_t & edf , param_t & param )
 // in edf/chep.cpp
 
 
-// COUNT-ANNOTS : show all annotations for the EDF
+// COUNT-ANNOTS : show all annotations for the EDF // REDUNDANT
 
 void proc_list_annots( edf_t & edf , param_t & param )
 {
@@ -1583,12 +1584,22 @@ void proc_list_annots( edf_t & edf , param_t & param )
 }
 
 
-// LIST-ANNOTS : list all annotations
+// ANNOTS : list all annotations
 
 void proc_list_all_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.list_all_annotations( param );
 }
+
+
+// ANNOTS-SPANNING : list all annotations
+
+void proc_list_spanning_annots( edf_t & edf , param_t & param )
+{
+  edf.timeline.list_spanning_annotations( param );
+}
+
+
 
 // TIME-TRACK : make EDF+
 

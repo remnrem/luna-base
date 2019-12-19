@@ -97,7 +97,9 @@ struct slow_wave_t
 struct slow_waves_t
 {
 
-  slow_waves_t() { } ;
+  slow_waves_t() {
+    report_median_stats = false;
+  } ;
 
   slow_waves_t( edf_t & , const param_t & );
 
@@ -229,6 +231,10 @@ private:
   // total signal time in seconds (i.e. denonimnator for SW rate)
   double signal_duration_sec;
   
+  // use mean or median? 
+  
+  bool report_median_stats;
+  
   double avg_x; // minimum amplitude  SW_SMP
   double avg_yminusx; // peak-to-peak SW_P2P
   double avg_duration_sec; // length  SW_DUR
@@ -252,6 +258,7 @@ private:
 
   int Fs;
 
+  
   // helper function
   int getbin( double x , const std::vector<double> & th , int last_bin , int nb ) const; 
 };

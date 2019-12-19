@@ -292,8 +292,8 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
   
   if ( unepoched )  
     {
-      elen = globals::default_epoch_len * globals::tp_1sec;
-      einc = globals::default_epoch_len * globals::tp_1sec;      
+      elen = Helper::sec2tp( globals::default_epoch_len );
+      einc = Helper::sec2tp( globals::default_epoch_len );
     }
 
   // get implied number of epochs
@@ -739,10 +739,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      if ( tok2.size() == 4  ) 
 		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
 		  Helper::halt( "invalid epoch increment:  " + tok[2] );
-
-	      uint64_t epoch_length_tp = epoch_length * globals::tp_1sec;
 	      
-	      uint64_t epoch_increment_tp = epoch_increment * globals::tp_1sec;
+	      uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
+	      
+	      uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
 	      
 	      // set interval from current line
 	      // last point is defined as point *past* end of interval
@@ -782,9 +782,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
 		      Helper::halt( "invalid epoch increment:  " + tok[2] );
 		  
-		  uint64_t epoch_length_tp = epoch_length * globals::tp_1sec;
+		  uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
 		  
-		  uint64_t epoch_increment_tp = epoch_increment * globals::tp_1sec;
+		  uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
 		  
 		  
 		  // set interval from current line
@@ -837,15 +837,19 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		}
 	      
 
+	      if ( dbl_start < 0 ) Helper::halt( f + " contains row(s) with negative time points" ) ;
+
+	      if ( dbl_stop < 0 ) Helper::halt( f + " contains row(s) with negative time points" ) ;
+
 	      // convert to uint64_t time-point units
-	      
-	      interval.start = globals::tp_1sec * dbl_start;
+
+	      interval.start = Helper::sec2tp( dbl_start );
 	      
 	      // assume stop is already specified as 1 past the end, e.g. 30 60
 	      // *unless* it is a single point, e.g. 5 5 
 	      // which is handled below
 	      
-	      interval.stop  = globals::tp_1sec * dbl_stop ;
+	      interval.stop  = Helper::sec2tp( dbl_stop );
 	      
 	    }
 	  
@@ -1218,9 +1222,9 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 	  if ( ! Helper::str2dbl( start->value , &start_sec ) ) 
 	    Helper::halt( "bad value in annotation" );
 	  stop_sec = start_sec + duration_sec;
-	  start_tp = globals::tp_1sec * start_sec; 
-	  stop_tp = start_tp + (uint64_t)( globals::tp_1sec * duration_sec ) ; 
-
+	  start_tp = Helper::sec2tp( start_sec );
+	  stop_tp = start_tp + Helper::sec2tp( duration_sec ) ; 
+	  
 	  // EDIT OUT	  
 // 	  // in case duration was 0, make this a 1-time-unit event
 // 	  if ( start_tp == stop_tp ) ++stop_tp;
@@ -1293,11 +1297,11 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 	  else if ( e->value == "4" ) stg = "NREM4";
 	  else if ( e->value == "5" ) stg = "REM";	 
 	 
+	  interval_t interval( Helper::sec2tp( seconds ) , 
+			       Helper::sec2tp( seconds + epoch_sec ) );
+
 // 	  interval_t interval( (uint64_t)(seconds * globals::tp_1sec ) , 
-// 			       (uint64_t)(( seconds + epoch_sec ) * globals::tp_1sec - 1LLU ) );
- 
-	  interval_t interval( (uint64_t)(seconds * globals::tp_1sec ) , 
-			       (uint64_t)(( seconds + epoch_sec ) * globals::tp_1sec ) );
+// 			       (uint64_t)(( seconds + epoch_sec ) * globals::tp_1sec ) );
 
 	  std::stringstream ss;      
 	  ss << seconds << " - " << seconds + epoch_sec << "\t"
@@ -1488,7 +1492,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       if ( ! Helper::str2dbl( start->value , &start_sec ) ) Helper::halt( "bad value in annotation" );
       if ( ! Helper::str2dbl( duration->value , &duration_sec ) ) Helper::halt( "bad value in annotation" );
 
-      uint64_t start_tp = start_sec * globals::tp_1sec;
+      uint64_t start_tp = Helper::sec2tp( start_sec );
 
 //       uint64_t stop_tp  = duration_sec > 0 
 // 	? start_tp + (uint64_t)( duration_sec * globals::tp_1sec ) - 1LLU 
@@ -1496,9 +1500,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 
       // stop is defined as 1 unit past the end of the interval
       uint64_t stop_tp  = duration_sec > 0 
-	? start_tp + (uint64_t)( duration_sec * globals::tp_1sec ) 
+	? start_tp + Helper::sec2tp( duration_sec )
 	: start_tp + 1LLU ;
-
+      
       interval_t interval( start_tp , stop_tp );
       
       annot_t * a = edf->timeline.annotations.add( concept->value );
@@ -1550,10 +1554,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  if ( added.find( ss ) == added.end() ) continue;
 	  
 	  // otherwise, add
-
-	  uint64_t start_tp = start_sec * globals::tp_1sec;
-	  //uint64_t stop_tp  = start_tp + (uint64_t)( epoch_sec * globals::tp_1sec ) - 1LLU ;
-	  uint64_t stop_tp  = start_tp + (uint64_t)( epoch_sec * globals::tp_1sec ) ; // 1-past-end encoding
+	  
+	  uint64_t start_tp = Helper::sec2tp( start_sec );
+	  uint64_t stop_tp  = start_tp + Helper::sec2tp( epoch_sec ) ; // 1-past-end encoding
 	  
 	  // advance to the next epoch
 	  start_sec += epoch_sec;
