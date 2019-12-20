@@ -84,21 +84,19 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
   
   add_cmd( "cmdline" , "--build" , "Scan folders recursively to geneate a sample list" );
-  add_param( "--build" , "-usefilename" , "" , "Use filename as ID, instead of looking in each EDF header" );
+  add_param( "--build" , "-edfid" , "" , "Use filename as ID, instead of looking in each EDF header" );
   add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
   add_param( "--build" , "-ext" , "-ext=txt,eannot,annot" , "Consider these extensions as annotation files" );
   
-  add_cmd( "cmdline" , "--xml" , "Dump the contents of an XML annotation file to the console" );
+  add_cmd( "cmdline" , "--xml" , "Dump annotations from an XML annotation file (to console)" );
+  add_cmd( "cmdline" , "--xml2" , "Dump entire XML tree (to console)" );
   add_cmd( "cmdline" , "--eval" , "" );
   add_cmd( "cmdline" , "--pdlib" , "" );
   add_cmd( "cmdline" , "--fir" , " Or --fir-design" );
   add_cmd( "cmdline" , "--cwt" , "Or --cwt-design" );
   add_cmd( "cmdline" , "--eval-verbose" , "" );
-
   add_cmd( "cmdline" , "-h" , "Help functions" );
-
   add_cmd( "cmdline" , "--version" , "Show version (or -v)" );
-  add_cmd( "cmdline" , "--xml" , "Dump the contents of an XML annotation file to the console" );
 
 
   // -o
@@ -1260,8 +1258,10 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
+  //
   // COH
-    
+  //
+
   add_cmd( "topo" , "COH" , "Pairwise channel coherence" );
   add_url( "COH" , "cross-signal-analysis/#coh" );
   
@@ -1283,10 +1283,73 @@ void cmddefs_t::init()
   add_var( "COH" , "F,CHS" , "ICOH" , "Imaginary coherence" );
   add_var( "COH" , "F,CHS" , "LCOH" , "Lagged coherence" );
 
+
+  //
   // CORREL
+  //
+
+  add_cmd( "topo" , "CORREL" , "Pairwise signal correlation coefficients" );
+  add_url( "CORREL" , "cross-signal-analysis/#correl" );
   
+  add_param( "CORREL" , "sig" , "C3,C4" , "Restrict analysis to these channels (all-by-all pairs)" );
+  add_param( "CORREL" , "sig1" , "C3,C4" , "Restrict analysis to sig1 x sig2 channel pairs only" );
+  add_param( "CORREL" , "sig2" , "F3,F4" , "Restrict analysis to sig1 x sig2 channel pairs only" );
   
+  add_param( "CORREL" , "sr" , "128" , "Resample channels to this sample rate if needed" );
+  add_param( "CORREL" , "epoch" , "" , "Estimate mean and median correlation across epochs" );
+  add_param( "CORREL" , "verbose" , "" , "Display per-epoch correlations" );
+
+  add_table( "CORREL" , "CHS" , "Whole-signal correlations for pairs of channels" );
+  add_var( "CORREL" , "CHS" , "R", "Pearson product moment correlation" );
+  add_var( "CORREL" , "CHS" , "R_MEAN", "(If epoch is specified) the mean of epoch-level correlations" );
+  add_var( "CORREL" , "CHS" , "R_MEDIAN" ,  "(If epoch is specified) the median of epoch-level correlations" );
+
+  add_table( "CORREL" , "CHS,E" , "Whole-signal correlations for pairs of channels" );
+  add_var( "CORREL" , "CHS,E" , "R", "Pearson product moment correlation" );
+
+
+  //
+  // MI
+  //
   
+  add_cmd( "topo" , "MI" , "Calculates pairwise mutual information metrics across channels" );
+  add_url( "MI" , "cross-signal-analysis/#mi" );
+
+  add_param( "MI" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
+  add_param( "MI" , "epoch" , "" , "Report MI and other measures per epoch" );
+  add_param( "MI" , "scott" , "" , "Use Scott's rule to determine bin number" );
+  add_param( "MI" , "sturges" , "" , "Use Sturges' rule to determine bin number" );
+  add_param( "MI" , "permute" , "1000" , "Estimate empirical significance via permutation, with N replicates" );
+
+  add_table( "MI" , "CHS" , "Output for the whole signal pairs" );
+  add_var( "MI" , "CHS" , "MI" , "Mutual information" );
+  add_var( "MI" , "CHS" , "TOTCORR" , "Total correlation" );
+  add_var( "MI" , "CHS" , "DTOTCORR" , "Dual total correlation" );
+  add_var( "MI" , "CHS" , "JINF" , "Joint entropy" );
+  add_var( "MI" , "CHS" , "INFA" , "Marginal entropy of first signal" );
+  add_var( "MI" , "CHS" , "INFB" , "Marginal entropy of second signal" );
+  add_var( "MI" , "CHS" , "NBINS" , "Number of bins" );
+  add_var( "MI" , "CHS" , "EMP" , "Empirical significance [permute]" );
+  add_var( "MI" , "CHS" , "Z" , "Z statistic [permute]" );
+
+  add_table( "MI" , "CHS,E" , "Output per epoch" );
+  add_var( "MI" , "CHS,E" , "MI" , "Mutual information" );
+  add_var( "MI" , "CHS,E" , "TOTCORR" , "Total correlation" );
+  add_var( "MI" , "CHS,E" , "DTOTCORR" , "Dual total correlation" );
+  add_var( "MI" , "CHS,E" , "JINF" , "Joint entropy" );
+  add_var( "MI" , "CHS,E" , "INFA" , "Marginal entropy of first signal" );
+  add_var( "MI" , "CHS,E" , "INFB" , "Marginal entropy of second signal" );
+  
+
+  add_table( "MI" , "CHS" , "Output per epoch" );
+
+
+  //
+  // INTERPOLATE
+  //
+
+
+
   /////////////////////////////////////////////////////////////////////////////////
   //
   // CFC
@@ -1294,8 +1357,14 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
 
   
+  //
+  // PAC
+  //
   
   
+  //
+  // GLM
+  //
   
   
 
@@ -1306,14 +1375,54 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
 
 
+  // HR     Estimate per-epoch heart rate from ECG
+  // SPIKE  Create a synthetic signal by combining part of one signal with another
+  // ZR     Calculate per-epoch Z-ratio
+
 
   /////////////////////////////////////////////////////////////////////////////////
   //
   // EXPERIMENTAL
   //
   /////////////////////////////////////////////////////////////////////////////////
+  
+//   add_cmd( "exp" , "ICA" , "Implementation of fastICA" );
+//   add_url( "ICA" , "exp/#mi" );
+  
+//   add_param( "ICA" , "tag" , "comp" , "Add tag 'comp' to new channels, defaults to 'ICA'" );
+
+//   add_param( "ICA" , "file" , "path/to/
+//   std::string component_tag = param.has( "tag" ) ? param.value( "tag" ) : "ICA";
+
+//   bool write_S_matrix = param.has( "file" );
+
+//   std::string S_matrix_fileroot = write_S_matrix ? param.value( "file" ) : "xxx";
+
+//   bool original_signals = param.has( "original-signals" );
+
+//   bool do_not_add_channels = param.has( "no-new-channels" );
+
+//   int compc = param.has( "compc" ) ? param.requires_int( "compc" ) : ns ;
+
+  // A.txt
+  // 
+
+  // K : cols x compc                                                                                                                                       
+  // A : compc x compc                                                                                                                                      
+  // W : compc x compc                                                                                                                                      
+
+  // S : as original data                                                                                                                                   
 
 
+  // ICA   Independent component analysis
+  // EMD   Empirical mode decomposition  
+  // ED    Diagnostic for electrical bridging
+  // POL   Polarity check heuristic for sleep EEG
+  // FIP   Frequency-interval plots
+  // EXE   Epoch-wise distance/similarity matrix
+  // TSLIB Build library for SSS
+  // SSS   Simple sleep stager
+  // SLICE Short-time FFT for specified intervals
 
 }
 

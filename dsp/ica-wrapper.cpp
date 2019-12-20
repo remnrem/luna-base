@@ -97,7 +97,6 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   
   ica_t ica( X , compc );
 
-  std::cout << "output mode\n";
 
   //
   // Add new signals
@@ -185,14 +184,15 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 	    }
 	  F.close();
 	}
-      
+
+      //
       // other matrices
-      
+      //
+
       // K : cols x compc
       // A : compc x compc
       // W : compc x compc
-      // S : as original data
-      
+      // S : as original data      
       
       std::ofstream K( (froot + "K.txt").c_str() , std::ios::out );
       for (int i=0;i<cols;i++)
@@ -209,8 +209,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 	  W << "\n";
 	}
       W.close();
-      
-      
+            
       std::ofstream A( (froot + "A.txt").c_str() , std::ios::out );
       for (int i=0;i<compc;i++)
 	{
@@ -220,7 +219,6 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
       A.close();
 
     }
-
 
 
 }
