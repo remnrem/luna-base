@@ -244,6 +244,27 @@ std::string Helper::dbl2str_fixed(double n, int ch )
 
 }
 
+uint64_t Helper::sec2tp( double s )
+{
+  // to avoid floating point errors, take 's' precision to 1/1000 of a second only, i.e. when reading 
+  // input; internally, time-points have 1e-9 precision, so this avoids any floating point issues, 
+  // i.e. with small inaccuracies in 's' being scaled up, as double float precision will be bette than 1/1000 
+  
+  if ( s < 0 ) 
+    Helper::halt( "all time-points must be positive integers: cannot convert " + Helper::dbl2str( s ) );
+
+  uint64_t si = 1000 * s;
+
+  return globals::tp_1000thsec * si;
+}
+
+
+double Helper::tp2sec( uint64_t tp )
+{
+  return (double)tp * globals::tp_duration;
+}
+
+
 bool Helper::str2dbl(const std::string & s , double * d)
 {
   return from_string<double>(*d,s,std::dec);

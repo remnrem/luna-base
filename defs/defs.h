@@ -239,6 +239,7 @@ struct globals
   
   // time-units
   static uint64_t tp_1sec;
+  static uint64_t tp_1000thsec;
   static double tp_duration;   
 };
 

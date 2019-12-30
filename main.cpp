@@ -162,10 +162,11 @@ int main(int argc , char ** argv )
   // DUMP an XML file
   //
 
-  else if ( argc == 3 && strcmp( argv[1] , "--xml" ) == 0 )
+  else if ( argc == 3 && ( strcmp( argv[1] , "--xml" ) == 0 || strcmp( argv[1] , "--xml2" ) == 0 ) )
     {
+      bool raw_format =  strcmp( argv[1] , "--xml2" ) == 0 ;
       global.api();
-      annot_t::dumpxml( argv[2] , false );
+      annot_t::dumpxml( argv[2] , raw_format );
       std::exit(0);
     }
 

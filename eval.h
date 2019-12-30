@@ -204,6 +204,7 @@ void proc_desc( edf_t & , param_t & );
 void proc_stats( edf_t & , param_t & );
 void proc_list_annots( edf_t & , param_t & );
 void proc_list_all_annots( edf_t & , param_t & );
+void proc_list_spanning_annots( edf_t & , param_t & );
 
 void proc_tag( param_t & );
 void set_tag( const std::string & t = "." );

@@ -86,6 +86,7 @@ std::string globals::edf_timetrack_label;
 int globals::edf_timetrack_size;
 
 uint64_t globals::tp_1sec;
+uint64_t globals::tp_1000thsec;
 double globals::tp_duration;
 
 bool globals::problem;
@@ -306,6 +307,11 @@ void globals::init_defs()
 
   // 1e-9 sec resolution
   tp_1sec  = 1000000000LLU;
+
+  // 1e-6 sec resolution in 1/1000th of a second; used when reading in floating point
+  // times in seconds, Helper::sec2tp(), to avoid floating point issues beyond 1/1000th sec 
+  tp_1000thsec  = 1000000LLU;
+
   tp_duration    = 1.0 / (double)tp_1sec;
   
   //

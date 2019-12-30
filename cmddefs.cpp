@@ -84,21 +84,19 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
   
   add_cmd( "cmdline" , "--build" , "Scan folders recursively to geneate a sample list" );
-  add_param( "--build" , "-usefilename" , "" , "Use filename as ID, instead of looking in each EDF header" );
+  add_param( "--build" , "-edfid" , "" , "Use filename as ID, instead of looking in each EDF header" );
   add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
   add_param( "--build" , "-ext" , "-ext=txt,eannot,annot" , "Consider these extensions as annotation files" );
   
-  add_cmd( "cmdline" , "--xml" , "Dump the contents of an XML annotation file to the console" );
+  add_cmd( "cmdline" , "--xml" , "Dump annotations from an XML annotation file (to console)" );
+  add_cmd( "cmdline" , "--xml2" , "Dump entire XML tree (to console)" );
   add_cmd( "cmdline" , "--eval" , "" );
   add_cmd( "cmdline" , "--pdlib" , "" );
   add_cmd( "cmdline" , "--fir" , " Or --fir-design" );
   add_cmd( "cmdline" , "--cwt" , "Or --cwt-design" );
   add_cmd( "cmdline" , "--eval-verbose" , "" );
-
   add_cmd( "cmdline" , "-h" , "Help functions" );
-
   add_cmd( "cmdline" , "--version" , "Show version (or -v)" );
-  add_cmd( "cmdline" , "--xml" , "Dump the contents of an XML annotation file to the console" );
 
 
   // -o
@@ -206,7 +204,14 @@ void cmddefs_t::init()
   //
 
   add_cmd( "annot" , "--xml" , "Quickly view an NSRR XML annotation file" );
+  add_note( "--xml" , "Command line option\n  luna --xml file.xml" );
 
+  //
+  // --xml2
+  //
+
+  add_cmd( "annot" , "--xml2" , "Verbose dump of XML tree" );
+  add_note( "--xml2" , "Command line option\n  luna --xml2 file.xml" );
 
   //
   // ANNOTS
@@ -244,6 +249,43 @@ void cmddefs_t::init()
   add_var( "ANNOTS" , "E,INTERVAL,INST" , "ANNOT_MASK" , "Annotation instance mask status (1=masked/excluded) [epoch]" );
   add_var( "ANNOTS" , "E,INTERVAL,INST" , "EPOCH_MASK" , "Epoch mask status (1=masked/excluded) [epoch]" );
 
+
+  //
+  // SPANNING
+  //
+
+  add_cmd( "annot" , "SPANNING" , "Report duration spanned or not by group of annotations" );
+  add_url( "SPANNING" , "annotations/#spanning" );
+  add_param( "SPANNING" , "annot" , "N1,N2,N3,R,W" , "Spanning annotation group" );
+
+  add_table( "SPANNING" , "N" , "Invalid annotations" );
+  add_var( "SPANNING" , "N" , "ANNOT" , "Annotation class" );
+  add_var( "SPANNING" , "N" , "INST" , "Annotation instance" );
+  add_var( "SPANNING" , "N" , "START" , "Start (seconds)" );
+  add_var( "SPANNING" , "N" , "STOP" , "Stop (seconds)" );
+
+  add_table( "SPANNING" , "" , "Spanning summary report" );
+  add_var( "SPANNING" , "" , "REC_SEC" , "EDF recording duration (seconds)" );
+  add_var( "SPANNING" , "" , "REC_HMS" , "EDF recording duration (hh:mm:ss)" );
+
+  add_var( "SPANNING" , "" , "ANNOT_N" , "Number of annotations in group" );
+  add_var( "SPANNING" , "" , "ANNOT_SEC" , "Total (potentially overlapping) annotation duration (secs)" );
+  add_var( "SPANNING" , "" , "ANNOT_HMS" , "Total (potentially overlapping) annotation duration (hh:mm:ss)" );
+
+  add_var( "SPANNING" , "" , "ANNOT_OVERLAP" , "Do any annotations in group overlap w/ one another (0/1)?" );
+
+  add_var( "SPANNING" , "" , "INVALID_N" , "Number of annotations that over-extend EDF duration" );
+  add_var( "SPANNING" , "" , "VALID_N" , "Number of valid annotations, ANNOT_N - INVALID_N" );
+
+  add_var( "SPANNING" , "" , "INVALID_SEC" , "Total duration of all annotation beyond EDF end" );
+
+  add_var( "SPANNING" , "" , "SPANNED_PCT" , "% of EDF spanned by 1+ of these annotations" );
+  add_var( "SPANNING" , "" , "SPANNED_SEC" , "Duration of EDF spanned by 1+ of these annotations (secs)" );
+  add_var( "SPANNING" , "" , "SPANNED_HMS" , "Duration of EDF spanned by 1+ of these annotations (hh:mm:ss)" );
+
+  add_var( "SPANNING" , "" , "UNSPANNED_PCT" , "% of EDF unspanned by 1+ of these annotations" );
+  add_var( "SPANNING" , "" , "UNSPANNED_SEC" , "Duration of EDF unspanned by 1+ of these annotations (secs)" );
+  add_var( "SPANNING" , "" , "UNSPANNED_HMS" , "Duration of EDF unspanned by 1+ of these annotations (hh:mm:ss)" );
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -536,6 +578,8 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
+  // SIGSTATS
+
   add_cmd( "artifact" , "SIGSTATS" , "Per-epoch outlier detection (RMS, Hjorth parameters, clipped signals)" );
   add_url( "SIGSTATS" , "artifacts/#sigstats" );
   add_param( "SIGSTATS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
@@ -561,6 +605,60 @@ void cmddefs_t::init()
   add_var( "SIGSTATS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs flagged as outliers [mask]" );
   add_var( "SIGSTATS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs whose mask was altered [mask]" );
   add_var( "SIGSTATS" , "CH" , "TOTAL_EPOCHS" , "Total number of masked epochs [mask]" );
+
+
+  // ARTIFACTS
+
+  add_cmd( "artifact" , "ARTIFACTS" , "Detect EEG artifacts following Buckelmueller et al." );
+  add_url( "ARTIFACTS" , "artifacts/#artifacst" );
+  add_param( "ARTIFACTS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "ARTIFACTS" , "verbose" , "" , "Report epoch-level statistics" );
+  add_param( "ARTIFACTS" , "no-mask" , "" , "Do not set mask for outlier epochs" );
+
+  add_table( "ARTIFACTS" , "CH" , "Per-channel output" );
+  add_var( "ARTIFACTS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs failing" );
+  add_var( "ARTIFACTS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs actually masked" );
+  add_var( "ARTIFACTS" , "CH" , "TOTAL_EPOCHS" , "Number of epochs tested" );
+
+
+  add_table( "ARTIFACTS" , "CH,E" , "Per-channel per-epoch output [verbose]" );
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA" , "Delta power" );
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA_AVG" , "Local average delta power" );
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA_FAC" , "Relative delta factor" );
+
+  add_var( "ARTIFACTS" , "CH,E" , "BETA" , "Beta power" );
+  add_var( "ARTIFACTS" , "CH,E" , "BETA_AVG" , "Local average beta power" );
+  add_var( "ARTIFACTS" , "CH,E" , "BETA_FAC" , "Relative beta factor" );
+
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA_MASK" , "Masked based on delta power?" );
+  add_var( "ARTIFACTS" , "CH,E" , "BETA_MASK" , "Masked based on beta power?" );
+  add_var( "ARTIFACTS" , "CH,E" , "MASK" , "Is this epoch masked?" );
+
+
+  // SUPPRESS-ECG
+
+  add_cmd( "artifact" , "SUPPRESS-ECG" , "Detect/remove cardiac-contamination from the EEG" );
+  add_url( "SUPPRESS-ECG" , "artifacts/#suppress-ecg" );
+  add_param( "SUPPRESS-ECG" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "SUPPRESS-ECG" , "sr" , "125" , "Set sample rate for ECG/EEG channels" );
+  add_param( "SUPPRESS-ECG" , "no-suppress" , "" , "Do not alter any EEG channels" );
+  
+  add_table( "SUPPRESS-ECG" , "" , "Individual-level summaries" );
+  add_var( "SUPPRESS-ECG" , "" , "BPM" , "Mean heart rate (bpm)" );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_L95" , "Lower 95% confidence interval for mean HR" );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_U95" , "Upper 95% confidence interval for mean HR" );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_N_REMOVED" , "Number of epochs flagged as having invalid HR estimates" );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_PCT_REMOVED" , "Proportion of epochs flagged as having invalid HR estimates" );
+
+  add_table( "SUPPRESS-ECG" , "E" , "Epoch-level metrics" );
+  add_var( "SUPPRESS-ECG" , "E" , "BPM" , "HR for this epoch" );
+  add_var( "SUPPRESS-ECG" , "E" , "BPM_MASK" , "Was this epoch invalid?" );
+  
+  add_table( "SUPPRESS-ECG" , "CH" , "Channel-level metrics" );
+  add_var( "SUPPRESS-ECG" , "CH" , "ART_RMS" , "Root mean square of correction signature" );
+  
+  add_table( "SUPPRESS-ECG" , "CH,SP" , "Details of artifact signature" );
+  add_var( "SUPPRESS-ECG" , "CH,SP" , "ART_RMS" , "Estimate correction factor, for each sample point in a 2-second window" );
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -991,21 +1089,16 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "verbose-coupling" , "" , "Add extra tables of EEG/CWT phase/time-locked to SO" );
 
 
-  //
-  // SO
-  //
-  
-  
-  
+
   //
   // SP/SO coupling options
   //
-
+  
   add_param( "SPINDLES" , "nreps" , "1000" , "Number of replications for SP/SO coupling" );
   add_param( "SPINDLES" , "perm-whole-trace" , "" , "Do not use within-epoch shuffling" );
   add_param( "SPINDLES" , "overlapping" , "" , "Only consider spindles that overlap a SO" );
   add_param( "SPINDLES" , "stratify-by-phase" , "" , "Overlap statistics per SO phase bin" );
-
+  
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "Coupling magnitude (original statistic)" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "Coupling magnitude (empirical Z)" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "Coupling magnitude (empirical P)" );  
@@ -1016,13 +1109,244 @@ void cmddefs_t::init()
   
   add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "Coupling overlap (original statistic)" );
   add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "Coupling overlap (empirical P)" );
+   
+
+  //
+  // SO
+  //
+  
+  add_cmd( "spindles" , "SO" , "Detect slow oscillations" );
+  add_url( "SO" , "spindles-so/#so" );
+  
+  add_param( "SO" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  
+  add_param( "SO" , "mag" , "2" , "Relative mangitude threshold (times mean/median)" );
+  add_param( "SO" , "uV-neg" , "-40" , "Absolute negative peak uV amplitude threshold" );
+  add_param( "SO" , "uV-p2p" , "80" , "Absolute peak-to-peak uV amplitude threshold" );
+  
+  add_param( "SO" , "mag" , "2" , "Relative mangitude threshold (times mean/median)" );
+  
+  add_param( "SO" , "f-lwr" , "0.2" , "Lower transition frequency" );
+  add_param( "SO" , "f-upr" , "4.5" , "Upper transition frequency" );
+  
+  add_param( "SO" , "t-lwr" , "0" , "Lower duration (secs)" );
+  add_param( "SO" , "t-upr" , "3" , "Upper duration (secs)" );
+  
+  add_param( "SO" , "t-neg-lwr" , "0" , "Lower duration for negative peak (secs)" );
+  add_param( "SO" , "t-neg-upr" , "1" , "Upper duration for negative peak (secs)" );
+  
+  add_param( "SO" , "neg2pos" , "" , "Use negative-to-positive zero crossings" );
+  add_param( "SO" , "th-mean" , "" , "Use mean not median" );
+  add_param( "SO" , "stats-median" , "" , "Use median (not mean) when reporting stats over SOs" );  
+ 
+  add_table( "SO" , "CH" , "Channel-level statistics" );
+  add_var( "SO" , "CH" , "SO" , "Number of SO detected" );
+  add_var( "SO" , "CH" , "SO_RATE" , "SO per minute" );
+  add_var( "SO" , "CH" , "SO_AMP" , "SO amplitude (negative peak)" );
+  add_var( "SO" , "CH" , "SO_P2P" , "SO peak-to-peak amplitude" );
+  add_var( "SO" , "CH" , "SO_DUR" , "SO duration (secs)" );	   
+  add_var( "SO" , "CH" , "SO_NEG_DUR" , "Negative peak duration (secs)" );
+  add_var( "SO" , "CH" , "SO_POS_DUR", "Positive peak duration (secs)" );
+  add_var( "SO" , "CH" , "SO_P2P" , "Peak-to-peak amplitude" );
+  add_var( "SO" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
+  add_var( "SO" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
+  add_var( "SO" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SO" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" );
+  add_var( "SO" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" );
+  add_var( "SO" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" );
+
+  add_table( "SO" , "CH,E" , "Epoch-level statistics" );
+  add_var( "SO" , "CH,E" , "N" , "Number of SO detected" );
+  add_var( "SO" , "CH,E" , "DOWN_AMP" , "Number of SO detected" );
+  add_var( "SO" , "CH,E" , "UP_AMP" , "Number of SO detected" );
+  add_var( "SO" , "CH,E" , "P2P_AMP" , "Number of SO detected" );
+  add_var( "SO" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SO" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" );
+  add_var( "SO" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" );
+  add_var( "SO" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" );
+  
+  add_table( "SO" , "CH,N" , "Epoch-level statistics" );
+  add_var( "SO" , "CH,N" , "DOWN_AMP" , "Negative peak amplitude" );
+  add_var( "SO" , "CH,N" , "DOWN_IDX" , "Negative peak sample index" ); 
+  add_var( "SO" , "CH,N" , "UP_AMP" , "Positive peak ampltiude" ); 
+  add_var( "SO" , "CH,N" , "UP_IDX" , "Positive peak sample index" ); 
+  add_var( "SO" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" ); 
+  add_var( "SO" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" ); 
+  add_var( "SO" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
+  add_var( "SO" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
+  add_var( "SO" , "CH,N" , "DUR" , "SO duration" ); 
+  add_var( "SO" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" ); 
+  add_var( "SO" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
+  add_var( "SO" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
+  add_var( "SO" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SO" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
+  
 
 
+
+  //
+  // SO (duplicated for SPINDLES)
+  //
+  
+  add_param( "SPINDLES" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  
+  add_param( "SPINDLES" , "mag" , "2" , "Relative mangitude threshold (times mean/median)" );
+  add_param( "SPINDLES" , "uV-neg" , "-40" , "Absolute negative peak uV amplitude threshold" );
+  add_param( "SPINDLES" , "uV-p2p" , "80" , "Absolute peak-to-peak uV amplitude threshold" );
+  
+  add_param( "SPINDLES" , "mag" , "2" , "Relative mangitude threshold (times mean/median)" );
+  
+  add_param( "SPINDLES" , "f-lwr" , "0.2" , "Lower transition frequency" );
+  add_param( "SPINDLES" , "f-upr" , "4.5" , "Upper transition frequency" );
+  
+  add_param( "SPINDLES" , "t-lwr" , "0" , "Lower duration (secs)" );
+  add_param( "SPINDLES" , "t-upr" , "3" , "Upper duration (secs)" );
+  
+  add_param( "SPINDLES" , "t-neg-lwr" , "0" , "Lower duration for negative peak (secs)" );
+  add_param( "SPINDLES" , "t-neg-upr" , "1" , "Upper duration for negative peak (secs)" );
+  
+  add_param( "SPINDLES" , "neg2pos" , "" , "Use negative-to-positive zero crossings" );
+  add_param( "SPINDLES" , "th-mean" , "" , "Use mean not median" );
+  add_param( "SPINDLES" , "stats-median" , "" , "Use median (not mean) when reporting stats over SOs" );  
+ 
+  add_table( "SPINDLES" , "CH" , "Channel-level statistics" );
+  add_var( "SPINDLES" , "CH" , "SPINDLES" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH" , "SO_RATE" , "SO per minute" );
+  add_var( "SPINDLES" , "CH" , "SO_AMP" , "SO amplitude (negative peak)" );
+  add_var( "SPINDLES" , "CH" , "SO_P2P" , "SO peak-to-peak amplitude" );
+  add_var( "SPINDLES" , "CH" , "SO_DUR" , "SO duration (secs)" );	   
+  add_var( "SPINDLES" , "CH" , "SO_NEG_DUR" , "Negative peak duration (secs)" );
+  add_var( "SPINDLES" , "CH" , "SO_POS_DUR", "Positive peak duration (secs)" );
+  add_var( "SPINDLES" , "CH" , "SO_P2P" , "Peak-to-peak amplitude" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" );
+  add_var( "SPINDLES" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" );
+  add_var( "SPINDLES" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" );
+
+  add_table( "SPINDLES" , "CH,E" , "Epoch-level statistics" );
+  add_var( "SPINDLES" , "CH,E" , "N" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "DOWN_AMP" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "UP_AMP" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "P2P_AMP" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" );
+  
+  add_table( "SPINDLES" , "CH,N" , "Epoch-level statistics" );
+  add_var( "SPINDLES" , "CH,N" , "DOWN_AMP" , "Negative peak amplitude" );
+  add_var( "SPINDLES" , "CH,N" , "DOWN_IDX" , "Negative peak sample index" ); 
+  add_var( "SPINDLES" , "CH,N" , "UP_AMP" , "Positive peak ampltiude" ); 
+  add_var( "SPINDLES" , "CH,N" , "UP_IDX" , "Positive peak sample index" ); 
+  add_var( "SPINDLES" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" ); 
+  add_var( "SPINDLES" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" ); 
+  add_var( "SPINDLES" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
+  add_var( "SPINDLES" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR" , "SO duration" ); 
+  add_var( "SPINDLES" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
+  
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // CROSS-SIGNAL
   //
   /////////////////////////////////////////////////////////////////////////////////
+
+  //
+  // COH
+  //
+
+  add_cmd( "topo" , "COH" , "Pairwise channel coherence" );
+  add_url( "COH" , "cross-signal-analysis/#coh" );
+  
+  add_param( "COH" , "sig" , "C3,C4" , "Restrict analysis to these channels (all-by-all pairs)" );
+  add_param( "COH" , "sig1" , "C3,C4" , "Restrict analysis to sig1 x sig2 channel pairs only" );
+  add_param( "COH" , "sig2" , "F3,F4" , "Restrict analysis to sig1 x sig2 channel pairs only" );
+
+  add_param( "COH" , "sr" , "125" , "Set sample rate (i.e. if different for some channels)" );
+  add_param( "COH" , "spectrum" , "" , "Show full coherence spectra as well as bands" );
+  add_param( "COH" , "epoch" , "" , "Show per-epoch coherence" );
+
+  add_table( "COH" , "B,CHS" , "Coherence for power bands" );
+  add_var( "COH" , "B,CHS" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "B,CHS" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "B,CHS" , "LCOH" , "Lagged coherence" );
+  
+  add_table( "COH" , "F,CHS" , "Full cross-spectra coherence [spectrum]" );
+  add_var( "COH" , "F,CHS" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "F,CHS" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "F,CHS" , "LCOH" , "Lagged coherence" );
+
+
+  //
+  // CORREL
+  //
+
+  add_cmd( "topo" , "CORREL" , "Pairwise signal correlation coefficients" );
+  add_url( "CORREL" , "cross-signal-analysis/#correl" );
+  
+  add_param( "CORREL" , "sig" , "C3,C4" , "Restrict analysis to these channels (all-by-all pairs)" );
+  add_param( "CORREL" , "sig1" , "C3,C4" , "Restrict analysis to sig1 x sig2 channel pairs only" );
+  add_param( "CORREL" , "sig2" , "F3,F4" , "Restrict analysis to sig1 x sig2 channel pairs only" );
+  
+  add_param( "CORREL" , "sr" , "128" , "Resample channels to this sample rate if needed" );
+  add_param( "CORREL" , "epoch" , "" , "Estimate mean and median correlation across epochs" );
+  add_param( "CORREL" , "verbose" , "" , "Display per-epoch correlations" );
+
+  add_table( "CORREL" , "CHS" , "Whole-signal correlations for pairs of channels" );
+  add_var( "CORREL" , "CHS" , "R", "Pearson product moment correlation" );
+  add_var( "CORREL" , "CHS" , "R_MEAN", "(If epoch is specified) the mean of epoch-level correlations" );
+  add_var( "CORREL" , "CHS" , "R_MEDIAN" ,  "(If epoch is specified) the median of epoch-level correlations" );
+
+  add_table( "CORREL" , "CHS,E" , "Whole-signal correlations for pairs of channels" );
+  add_var( "CORREL" , "CHS,E" , "R", "Pearson product moment correlation" );
+
+
+  //
+  // MI
+  //
+  
+  add_cmd( "topo" , "MI" , "Calculates pairwise mutual information metrics across channels" );
+  add_url( "MI" , "cross-signal-analysis/#mi" );
+
+  add_param( "MI" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
+  add_param( "MI" , "epoch" , "" , "Report MI and other measures per epoch" );
+  add_param( "MI" , "scott" , "" , "Use Scott's rule to determine bin number" );
+  add_param( "MI" , "sturges" , "" , "Use Sturges' rule to determine bin number" );
+  add_param( "MI" , "permute" , "1000" , "Estimate empirical significance via permutation, with N replicates" );
+
+  add_table( "MI" , "CHS" , "Output for the whole signal pairs" );
+  add_var( "MI" , "CHS" , "MI" , "Mutual information" );
+  add_var( "MI" , "CHS" , "TOTCORR" , "Total correlation" );
+  add_var( "MI" , "CHS" , "DTOTCORR" , "Dual total correlation" );
+  add_var( "MI" , "CHS" , "JINF" , "Joint entropy" );
+  add_var( "MI" , "CHS" , "INFA" , "Marginal entropy of first signal" );
+  add_var( "MI" , "CHS" , "INFB" , "Marginal entropy of second signal" );
+  add_var( "MI" , "CHS" , "NBINS" , "Number of bins" );
+  add_var( "MI" , "CHS" , "EMP" , "Empirical significance [permute]" );
+  add_var( "MI" , "CHS" , "Z" , "Z statistic [permute]" );
+
+  add_table( "MI" , "CHS,E" , "Output per epoch" );
+  add_var( "MI" , "CHS,E" , "MI" , "Mutual information" );
+  add_var( "MI" , "CHS,E" , "TOTCORR" , "Total correlation" );
+  add_var( "MI" , "CHS,E" , "DTOTCORR" , "Dual total correlation" );
+  add_var( "MI" , "CHS,E" , "JINF" , "Joint entropy" );
+  add_var( "MI" , "CHS,E" , "INFA" , "Marginal entropy of first signal" );
+  add_var( "MI" , "CHS,E" , "INFB" , "Marginal entropy of second signal" );
+  
+
+  add_table( "MI" , "CHS" , "Output per epoch" );
+
+
+  //
+  // INTERPOLATE
+  //
 
 
 
@@ -1032,7 +1356,17 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
-
+  
+  //
+  // PAC
+  //
+  
+  
+  //
+  // GLM
+  //
+  
+  
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1041,14 +1375,54 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
 
 
+  // HR     Estimate per-epoch heart rate from ECG
+  // SPIKE  Create a synthetic signal by combining part of one signal with another
+  // ZR     Calculate per-epoch Z-ratio
+
 
   /////////////////////////////////////////////////////////////////////////////////
   //
   // EXPERIMENTAL
   //
   /////////////////////////////////////////////////////////////////////////////////
+  
+//   add_cmd( "exp" , "ICA" , "Implementation of fastICA" );
+//   add_url( "ICA" , "exp/#mi" );
+  
+//   add_param( "ICA" , "tag" , "comp" , "Add tag 'comp' to new channels, defaults to 'ICA'" );
+
+//   add_param( "ICA" , "file" , "path/to/
+//   std::string component_tag = param.has( "tag" ) ? param.value( "tag" ) : "ICA";
+
+//   bool write_S_matrix = param.has( "file" );
+
+//   std::string S_matrix_fileroot = write_S_matrix ? param.value( "file" ) : "xxx";
+
+//   bool original_signals = param.has( "original-signals" );
+
+//   bool do_not_add_channels = param.has( "no-new-channels" );
+
+//   int compc = param.has( "compc" ) ? param.requires_int( "compc" ) : ns ;
+
+  // A.txt
+  // 
+
+  // K : cols x compc                                                                                                                                       
+  // A : compc x compc                                                                                                                                      
+  // W : compc x compc                                                                                                                                      
+
+  // S : as original data                                                                                                                                   
 
 
+  // ICA   Independent component analysis
+  // EMD   Empirical mode decomposition  
+  // ED    Diagnostic for electrical bridging
+  // POL   Polarity check heuristic for sleep EEG
+  // FIP   Frequency-interval plots
+  // EXE   Epoch-wise distance/similarity matrix
+  // TSLIB Build library for SSS
+  // SSS   Simple sleep stager
+  // SLICE Short-time FFT for specified intervals
 
 }
 
@@ -1331,6 +1705,12 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	    }
 	  
 	}
+
+      // any notes? 
+      std::map<std::string,std::string>::const_iterator nn = cnotes.find( cmd );
+      if ( nn != cnotes.end() )
+	ss << "\n" << nn->second << "\n";
+
     }
 
   

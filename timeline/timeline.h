@@ -149,6 +149,8 @@ struct timeline_t
   
   void list_all_annotations( const param_t & param );
 
+  void list_spanning_annotations( const param_t & param );
+
 
   //
   // Hypnogram
@@ -470,6 +472,8 @@ struct timeline_t
   bool masked_record( int r ) const;
 
   bool masked_epoch( int e ) const;
+
+  uint64_t valid_tps(  const interval_t & );
 
 
   //

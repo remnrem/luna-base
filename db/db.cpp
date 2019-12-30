@@ -1328,7 +1328,7 @@ bool writer_t::to_plaintext( const std::string & var_name , const value_t & x )
 	  zfiles = NULL;
 	}
 
-      Helper::halt( "internal error: null curr_zfile in writer_t"
+      Helper::halt( "internal error: null curr_zfile in writer_t: " + var_name + 
 		    "\n -- output tables for this command have not yet been hooked up for '-t' mode output" 
 		    "\n -- please re-run without -t (i.e. -o/-a or raw output to the console) " );
     }

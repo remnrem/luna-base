@@ -126,8 +126,15 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   // for full waves, default is to find positive to negative zero-crossings
   const bool   use_alternate_neg2pos_zc = param.has( "neg2pos" ) ;
   
-  // use mean instead of median
-  const bool use_mean = param.has( "sw-mean" ) ;
+  // use mean instead of median for thresholds
+  const bool use_mean = param.has( "th-mean" ) ;
+
+  // use mean instead of median for report
+  report_median_stats = param.has( "stats-median" ) ;
+  
+  logger << " stats based on " 
+	 << ( report_median_stats ? "median" : "mean" ) 
+	 << " over SOs\n";
 
   // type of SO to detect: full, half (and negative or positive only)
 
@@ -154,10 +161,10 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       
       if ( edf.header.is_annotation_channel( signals(s) ) )
 	continue;
-
+      
       logger << " estimating SO for " << signals.label(s) << "\n";
-	  
-      writer.level( signals(s) , globals::signal_strat );
+      
+      writer.level( signals.label(s) , globals::signal_strat );
       
       double sr = edf.header.sampling_freq( signals )[s];
       
@@ -276,65 +283,74 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 {
 
   //
-  // Individual-level summaries 
+  // Variables
   //
 
-  writer.var( "SW" , "Number of slow waves" );
-  writer.var( "SW_RATE" , "Slow waves per minute" );
-
-  writer.var( "SW_DUR" , "Slow wave duration (sec)" );
-  writer.var( "SW_NEG_DUR" , "Negative half-wave duration (sec)" );
-  writer.var( "SW_POS_DUR" , "Positive half-wave duration (sec)" );
-  writer.var( "SW_AMP" , "Slow wave minimim peak amplitude" );
-  writer.var( "SW_P2P" , "Slow wave peak-to-peak amplitude" );
-  writer.var( "SW_SLOPE_NEG1" , "Slow wave down-going slope on negative peak (uV/sec)" );
-  writer.var( "SW_SLOPE_NEG2" , "Slow wave up-going slope on negative peak (uV/sec)" );
-  writer.var( "SW_SLOPE_POS1" , "Slow wave up-going slope on positive peak (uV/sec)" );
-  writer.var( "SW_SLOPE_POS2" , "Slow wave down-going slope on positive peak (uV/sec)" );
+  writer.var( "SO" , "Number of slow waves" );
+  writer.var( "SO_RATE" , "Slow waves per minute" );
   
-  writer.var( "SW_MD_DUR" , "Median slow wave duration (sec)" );
-  writer.var( "SW_MD_NEG_DUR" , "Median negative half-wave duration (sec)" );
-  writer.var( "SW_MD_POS_DUR" , "Median positive half-wave duration (sec)" );
-  writer.var( "SW_MD_AMP" , "Median slow wave minimim peak amplitude" );
-  writer.var( "SW_MD_P2P" , "Median slow wave peak-to-peak amplitude" );
-  writer.var( "SW_MD_SLOPE_NEG1" , "Median slow wave down-going slope on negative peak (uV/sec)" );
-  writer.var( "SW_MD_SLOPE_NEG2" , "Median slow wave up-going slope on negative peak (uV/sec)" );
-  writer.var( "SW_MD_SLOPE_POS1" , "Median slow wave up-going slope on positive peak (uV/sec)" );
-  writer.var( "SW_MD_SLOPE_POS2" , "Median slow wave down-going slope on positive peak (uV/sec)" );
+  writer.var( "SO_DUR" , "Median slow wave duration (sec)" );
+  writer.var( "SO_NEG_DUR" , "Median negative half-wave duration (sec)" );
+  writer.var( "SO_POS_DUR" , "Median positive half-wave duration (sec)" );
+  writer.var( "SO_AMP" , "Median slow wave minimim peak amplitude" );
+  writer.var( "SO_P2P" , "Median slow wave peak-to-peak amplitude" );
+  writer.var( "SO_SLOPE_NEG1" , "Median slow wave down-going slope on negative peak (uV/sec)" );
+  writer.var( "SO_SLOPE_NEG2" , "Median slow wave up-going slope on negative peak (uV/sec)" );
+  writer.var( "SO_SLOPE_POS1" , "Median slow wave up-going slope on positive peak (uV/sec)" );
+  writer.var( "SO_SLOPE_POS2" , "Median slow wave down-going slope on positive peak (uV/sec)" );
 
-  writer.value( "SW" , num_waves() );
-  writer.value( "SW_RATE" , num_waves() / ( signal_duration_sec / 60.0 ) );
+  //
+  // Output 
+  //
 
-  writer.value( "SW_TH_NEG" , th_x );
-  writer.value( "SW_TH_P2P" , th_yminusx );
+  writer.value( "SO" , num_waves() );
+  writer.value( "SO_RATE" , num_waves() / ( signal_duration_sec / 60.0 ) );
+
+  writer.value( "SO_TH_NEG" , th_x );
+  writer.value( "SO_TH_P2P" , th_yminusx );
 
   if ( num_waves() > 0 ) 
     {
-      writer.value( "SW_DUR" , avg_duration_sec );    
-      writer.value( "SW_NEG_DUR" , avg_negative_duration_sec );    
-      writer.value( "SW_POS_DUR" , avg_positive_duration_sec );    
-      writer.value( "SW_AMP" , avg_x );
-      writer.value( "SW_P2P" , avg_yminusx );
+
+      //
+      // statistics are means over SOs
+      //
+    
+      if ( ! report_median_stats )
+	{
+	  writer.value( "SO_DUR" , avg_duration_sec );    
+	  writer.value( "SO_NEG_DUR" , avg_negative_duration_sec );    
+	  writer.value( "SO_POS_DUR" , avg_positive_duration_sec );    
+	  writer.value( "SO_AMP" , avg_x );
+	  writer.value( "SO_P2P" , avg_yminusx );
+	  
+	  // may not be calculated, i.e.  if looking at half-waves  
+	  if ( avg_slope_n1 != 0 ) writer.value( "SO_SLOPE_NEG1" , avg_slope_n1 );  
+	  if ( avg_slope_n2 != 0 ) writer.value( "SO_SLOPE_NEG2" , avg_slope_n2 );
+	  if ( avg_slope_p1 != 0 ) writer.value( "SO_SLOPE_POS1" , avg_slope_p1 );  
+	  if ( avg_slope_p2 != 0 ) writer.value( "SO_SLOPE_POS2" , avg_slope_p2 );
+	}
+
       
-      // may not be calculated, i.e.  if looking at half-waves  
-      if ( avg_slope_n1 != 0 ) writer.value( "SW_SLOPE_NEG1" , avg_slope_n1 );  
-      if ( avg_slope_n2 != 0 ) writer.value( "SW_SLOPE_NEG2" , avg_slope_n2 );
-      if ( avg_slope_p1 != 0 ) writer.value( "SW_SLOPE_POS1" , avg_slope_p1 );  
-      if ( avg_slope_p2 != 0 ) writer.value( "SW_SLOPE_POS2" , avg_slope_p2 );
+      //
+      // or medians
+      //
       
-      // medians
-      writer.value( "SW_MD_DUR" , median_duration_sec );    
-      writer.value( "SW_MD_NEG_DUR" , median_negative_duration_sec );    
-      writer.value( "SW_MD_POS_DUR" , median_positive_duration_sec );    
-      writer.value( "SW_MD_AMP" , median_x );
-      writer.value( "SW_MD_P2P" , median_yminusx );
+      if ( report_median_stats )
+	{
+	  writer.value( "SO_DUR" , median_duration_sec );    
+	  writer.value( "SO_NEG_DUR" , median_negative_duration_sec );    
+	  writer.value( "SO_POS_DUR" , median_positive_duration_sec );    
+	  writer.value( "SO_AMP" , median_x );
+	  writer.value( "SO_P2P" , median_yminusx );
       
-      // may not be calculated, i.e.  if looking at half-waves  
-      if ( median_slope_n1 != 0 ) writer.value( "SW_MD_SLOPE_NEG1" , median_slope_n1 );  
-      if ( median_slope_n2 != 0 ) writer.value( "SW_MD_SLOPE_NEG2" , median_slope_n2 );
-      if ( median_slope_p1 != 0 ) writer.value( "SW_MD_SLOPE_POS1" , median_slope_p1 );  
-      if ( median_slope_p2 != 0 ) writer.value( "SW_MD_SLOPE_POS2" , median_slope_p2 );
-      
+	  // may not be calculated, i.e.  if looking at half-waves  
+	  if ( median_slope_n1 != 0 ) writer.value( "SO_SLOPE_NEG1" , median_slope_n1 );  
+	  if ( median_slope_n2 != 0 ) writer.value( "SO_SLOPE_NEG2" , median_slope_n2 );
+	  if ( median_slope_p1 != 0 ) writer.value( "SO_SLOPE_POS1" , median_slope_p1 );  
+	  if ( median_slope_p2 != 0 ) writer.value( "SO_SLOPE_POS2" , median_slope_p2 );
+	}
+
     }
 
 
@@ -376,7 +392,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	    writer.value( "SLOPE_POS2" , w.slope_p2() );
 	  }
 	
-	if ( verbose )
+	if ( 0 && verbose )
 	  {
 	    int pos = 0;
 	    for (uint64_t j = w.interval.start ; j <= w.interval.stop ; j++ ) 
@@ -390,7 +406,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	  }
       }
   writer.unlevel( globals::count_strat );
-
+  
   
   //
   // Epoch-level counts of SW, and means of other key SW statistics
@@ -399,9 +415,9 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
   if ( edf != NULL )
     {
       edf->timeline.first_epoch();
-  
+      
       std::vector<int> epoch_counts;
-  
+      
       while ( 1 ) 
 	{
 	  
@@ -410,7 +426,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	  if ( epoch == -1 ) break;
 	  
 	  interval_t interval = edf->timeline.epoch( epoch );
-      
+	  
 	  const int nso = sw.size();
 	  
 	  int so_epoch = 0;
@@ -544,6 +560,9 @@ slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered ,
 			    const bool neg2pos , 
 			    const slow_wave_type type )
 {
+  
+  report_median_stats = false;
+  
   detect_slow_waves( unfiltered, tp , sr , thr, use_mean , uV_neg , uV_p2p , f_lwr, f_upr, 
 		     t_lwr, t_upr , t_neg_lwr , t_neg_upr , neg2pos , type );
 }

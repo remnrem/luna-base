@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -1384,13 +1383,64 @@ bool timeline_t::masked_timepoint( uint64_t a ) const
 }
 
 
+uint64_t timeline_t::valid_tps(  const interval_t & interval )
+{
+
+  // given an interval, how many of its time-points fall within the EDF?
+  
+  // nb:  last_time_point_tp is the actual last time point 
+  //      interval.stop is one-past-the-end 
+
+  if ( edf->header.continuous )
+    {
+      // all out? (last time point tp is  dur - 1 , so GT rather than GE ) 
+      if ( interval.start > last_time_point_tp ) return 0;
+
+      // all in?  stop is 1 past last interval 
+      if ( interval.stop <= last_time_point_tp + 1LLU ) return interval.duration();
+      
+      // otherwise, we have partial overlap
+      return last_time_point_tp - interval.start + 1LLU;
+    }
+  else  // for the discontinuous case
+    {      
+      std::set<int> records = records_in_interval( interval );
+      std::set<int>::const_iterator rr = records.begin();
+      int tpin = 0;//, tpout = 0;
+      while ( rr != records.end() )
+	{
+	  // start/stop for this record	(as above, does not use 1-past-end encoding here)
+	  interval_t rec = record2interval( *rr );
+	  
+	  // all out? (last time point tp is  dur - 1 , so GT rather than GE )
+	  //if ( interval.start > rec.stop ) tpout += rec.duration() + 1LLU;
+	  
+	  // all in?  stop is 1 past last interval
+	  if ( interval.stop <= rec.stop + 1LLU ) tpin += rec.duration() + 1LLU;
+	  
+	  // otherwise, we have partial overlap
+	  tpin += rec.stop - interval.start + 1LLU;
+	  //tpout += interval.stop - ( rec.stop + 1LLU );
+
+	  ++rr;
+	}
+      
+      return tpin;
+      
+    }
+  
+  return 0;
+
+}
+
+
 bool timeline_t::masked_interval( const interval_t & interval , bool all_masked , bool * start_masked ) const
 {
   
   // if all_masked,   returns T if /all/ of interval falls within masked regions
   // if not,          returns T if interval falls in at least one masked region
 
-  if ( start_masked != NULL ) *start_masked = false;
+  if ( start_masked != NULL ) *start_masked = false;  
 
   if ( ! mask_set ) 
     {
@@ -2315,6 +2365,210 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
 }
 
 
+
+void timeline_t::list_spanning_annotations( const param_t & param )
+{
+  
+  
+  if ( mask_set ) 
+    Helper::halt( "cannot run SPANNING with a MASK set... use RE" );
+  
+  // currently, SPANNING only for continuous EDFs
+  if ( ! edf->header.continuous )
+    Helper::halt( "currently, can only run SPANNING on continuous EDF" );
+  
+
+  // given a /set/ of annotations, determine 
+  //   - seconds outside of EDF
+  //   - total duration of signal covered by these (seconds)
+  //   - coverage as a proportion of EDF file
+  //   - coverage as a proportion of in-memory representation
+  // etc
+  
+
+  //
+  // which signals: either look at all, or the requested set
+  //
+
+
+  std::vector<std::string> requested = param.has( "annot" ) 
+    ? param.strvector( "annot" ) 
+    : annotations.names() ;
+  
+
+  //
+  // Get all annotations (i.e. not stratified by epoch), sort by time and collapse
+  //
+  
+
+  std::set<instance_idx_t> events;
+
+
+  //
+  // iterate over each annotation
+  //
+
+  for (int a = 0 ; a < requested.size() ; a++ ) 
+    {
+      
+      annot_t * annot = annotations.find( requested[a] );
+      
+      if ( annot == NULL ) continue;
+      
+      const int num_events = annot->num_interval_events();
+      
+      //
+      // iterator over interval/event map
+      //
+      
+      annot_map_t::const_iterator ii = annot->interval_events.begin();
+      while ( ii != annot->interval_events.end() )
+	{	  
+	  const instance_idx_t & instance_idx = ii->first;	  
+	  events.insert( instance_idx );	  
+	  ++ii;
+	}
+      
+      
+    }
+
+
+  //
+  // track total coverage, etc
+  //
+
+  uint64_t total = 0;
+  
+  uint64_t total_collapsed = 0;
+  
+  uint64_t invalid_tps = 0;
+
+  int over_extended = 0;
+
+
+  // keep track of where longest spanning annot reaches to 
+  // or 0 if past the previous spanning annot
+
+  uint64_t earliest = 0;
+
+  uint64_t furthest = 0;
+
+
+  std::set<instance_idx_t>::const_iterator aa = events.begin();
+  while ( aa != events.end() )
+    {
+      
+      const interval_t & interval = aa->interval;
+      
+      //
+      // track total (uncollapsed) duration across all ANNOTs
+      //
+
+      total += interval.duration();
+      
+      // 
+      // what overlap, if any?
+      //
+      
+      uint64_t vtp = valid_tps( interval );
+      
+      bool is_valid = interval.duration() == vtp;
+
+      if ( ! is_valid ) 
+	{
+
+	  // duration of annots that do not map to a EDF region
+	  invalid_tps +=  interval.duration() - vtp; 
+	  
+	  // count of intervals that do not perfectly match valid regions
+	  ++over_extended;
+	  
+	  // report
+	  writer.level( over_extended , globals::count_strat );
+
+	  writer.value( "ANNOT" , aa->parent->name );
+	  writer.value( "INST" , aa->id );
+	  writer.value( "START" , interval.start_sec() );
+	  writer.value( "STOP" , interval.stop_sec() );
+	  writer.unlevel( globals::count_strat );
+	}
+      
+      
+      //
+      // track collapsed duration, but here only consider completely 'valid' intervals
+      //
+
+      if ( is_valid ) 
+	{
+
+	  // start of a 'new' region?
+	  
+	  if ( furthest == 0 ) 
+	    {
+	      earliest = interval.start;
+	      furthest = interval.stop;
+	    }
+	  else // we already have at least one region counted
+	    {
+	      
+	      // is the old region finished?  if so, add
+	      if ( interval.start > furthest ) 
+		{
+		  total_collapsed += furthest - earliest ;
+		  earliest = interval.start;
+		  furthest = interval.stop;
+		}
+	      else // add to current region 
+		{
+		  if ( interval.stop > furthest )
+		    furthest = interval.stop;
+		}
+	      
+	    }
+	 	  
+	}
+	  
+      // next segment
+      ++aa;
+      
+    }
+  
+  // add final interval(s)
+  
+  total_collapsed +=  furthest - earliest ;
+  
+
+  //
+  // Report
+  //
+  
+
+  writer.value( "REC_SEC" , Helper::tp2sec( total_duration_tp )  );
+  writer.value( "REC_HMS" , Helper::timestring( total_duration_tp , ':' )  );
+
+  writer.value( "ANNOT_N" , (int)events.size() );
+  writer.value( "ANNOT_SEC" , Helper::tp2sec( total )  );
+  writer.value( "ANNOT_HMS" , Helper::timestring( total , ':' )  );
+
+  // do any (valid) annots overlap each other?
+  writer.value( "ANNOT_OVERLAP" , total_collapsed < total );
+
+  // how many annots over-extended beyond range of EDF?
+  writer.value( "INVALID_N" , over_extended );
+  writer.value( "VALID_N" , (int)events.size() - over_extended );
+
+  // extent of this over-extension
+  writer.value( "INVALID_SEC" , Helper::tp2sec( invalid_tps ) );
+  
+  writer.value( "SPANNED_PCT" , 100 * ( Helper::tp2sec( total_collapsed ) / Helper::tp2sec( total_duration_tp ) )  );
+  writer.value( "SPANNED_SEC" , Helper::tp2sec( total_collapsed )  );
+  writer.value( "SPANNED_HMS" , Helper::timestring( total_collapsed , ':' ) );
+
+  writer.value( "UNSPANNED_SEC" , Helper::tp2sec( total_duration_tp - total_collapsed ) );
+  writer.value( "UNSPANNED_PCT" , 100 * ( 1 - Helper::tp2sec( total_collapsed ) / Helper::tp2sec( total_duration_tp ) )  );
+  writer.value( "UNSPANNED_HMS" , Helper::timestring( total_duration_tp - total_collapsed , ':' ) ); 
+    
+}
 
 
 void timeline_t::list_all_annotations( const param_t & param )
