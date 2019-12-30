@@ -1494,6 +1494,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 // 	? start_tp + (uint64_t)( duration_sec * globals::tp_1sec ) - 1LLU 
 // 	: start_tp;
 
+      // std::cout << "xxx " <<  concept->value << "\t" << start_sec << "\t" << duration_sec << "\t"
+      // 		<< duration_sec * globals::tp_1sec  << "\t" <<  (uint64_t)( duration_sec ) * globals::tp_1sec  << "\n";
+      
       // stop is defined as 1 unit past the end of the interval
       uint64_t stop_tp  = duration_sec > 0 
 	? start_tp + (uint64_t)( duration_sec * globals::tp_1sec ) 
