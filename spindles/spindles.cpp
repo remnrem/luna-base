@@ -154,7 +154,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool     show_cwt_coeff           = param.has( "show-coef" );
 
   // detect slow waves and estimate ITPC etc for spindle start/peak/stop and slow waves
-  const bool     sw_coupling              = param.has( "sw" );
+  const bool     sw_coupling              = param.has( "so" );
 
   // show SPINDLES in sample-pints
   const bool     show_sample_points       = param.has( "sp" );
@@ -417,7 +417,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  // relative magnitude 
 	  double mag  = param.has( "mag" ) ? param.requires_dbl( "mag" ) : 0 ;
-	  bool   use_mean = param.has( "sw-mean" ); 
+	  bool   use_mean = param.has( "so-mean" ); 
 	  
 	  // for full wave detection, count based on positive-to-negative zero-crossings 
 	  // (i.e. negative wave first), or the other way
@@ -471,7 +471,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      if ( pl_eeg.size() > 0 ) // no SO detected anyway
 		{
-		  writer.var( "SWPL_EEG" , "Slow wave phase-locked average EEG" );
+		  writer.var( "SOPL_EEG" , "Slow wave phase-locked average EEG" );
 		  
 		  double inc = 360 / (double)nbins;
 		  double ph = inc/2.0; // use mid-point of range
@@ -479,7 +479,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  for (int j=0;j<nbins;j++)
 		    {
 		      writer.level( ph  , "PHASE" );
-		      writer.value( "SWPL_EEG" , pl_eeg[j] );
+		      writer.value( "SOPL_EEG" , pl_eeg[j] );
 		      ph += inc;
 		    }
 		  writer.unlevel( "PHASE" );
@@ -492,7 +492,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      std::vector<double> tl_eeg = p_sw->time_locked_averaging( dsig , Fs[s] , 1 , 1 );
 	      
-	      writer.var( "SWTL_EEG" , "Slow wave time-locked average EEG" );
+	      writer.var( "SOTL_EEG" , "Slow wave time-locked average EEG" );
 	      
 	      int sz = tl_eeg.size();
 	      
@@ -503,7 +503,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  for (int j=0;j<sz;j++)
 		    {
 		      writer.level( sz2 , "SP" );
-		      writer.value( "SWTL_EEG" , tl_eeg[j] );		  
+		      writer.value( "SOTL_EEG" , tl_eeg[j] );		  
 		      ++sz2;
 		    }
 		  writer.unlevel( "SP" );
@@ -1127,7 +1127,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  if ( sw_coupling )
 	    {
 
-	      // slow waves have already been detected for this channel (in 'sw')
+	      // slow waves have already been detected for this channel (in 'so')
 
 	      std::vector<double> ph_peak;
 	      
@@ -1150,7 +1150,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  if ( pl_spindle.size() > 0 ) 
 		    {
 		      
-		      writer.var( "SWPL_CWT" , "Slow wave phase-locked average spindle power" );
+		      writer.var( "SOPL_CWT" , "Slow wave phase-locked average spindle power" );
 		      
 		      double inc = 360 / (double)nbins;
 		      double ph = inc/2.0; // use mid-point of range
@@ -1158,7 +1158,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      for (int j=0;j<nbins;j++)
 			{
 			  writer.level( ph  , "PHASE" );
-			  writer.value( "SWPL_CWT" , pl_spindle[j] );
+			  writer.value( "SOPL_CWT" , pl_spindle[j] );
 			  ph += inc;
 			}
 		      writer.unlevel( "PHASE" );
@@ -1172,7 +1172,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // +1/-1 1 second
 		  std::vector<double> tl_spindle = p_sw->time_locked_averaging( &averaged_corr , Fs[s] , 1 , 1 );
 		  
-		  writer.var( "SWTL_CWT" , "Slow wave time-locked average spindle power" );
+		  writer.var( "SOTL_CWT" , "Slow wave time-locked average spindle power" );
 		  
 		  int sz = tl_spindle.size();
 		  
@@ -1183,7 +1183,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      for (int j=0;j<sz;j++)
 			{
 			  writer.level( sz2 , "SP" );
-			  writer.value( "SWTL_CWT" , tl_spindle[j] );
+			  writer.value( "SOTL_CWT" , tl_spindle[j] );
 			  ++sz2;
 			}
 		      writer.unlevel( "SP" );
@@ -1253,19 +1253,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
 	      //
-	      // Proportion of spindles in a SW
+	      // Proportion of spindles in a SO
 	      //
 	      
 	      std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;
 	      
-// 	      writer.var( "PROP_PEAK_ON_SW"  , "Proportion of spindles with peak overlapping a slow wave" );
-// 	      writer.var( "PROP_ON_SW"  , "Proportion of spindles with start/stop/peak overlapping a slow wave" );
-// 	      writer.value( "PROP_PEAK_ON_SW"  , sw_spindles_peak.size() / (double)nspindles );
-// 	      writer.value( "PROP_ON_SW"  , sw_spin_count / (double)nspindles );
-	      
-
+	     
 	      //
-	      // SW-phase for each spindle in a SW
+	      // SW-phase for each spindle in a SO
 	      //
 	      
 	      if ( all_spindles_peak.size() > 0 ) 
@@ -1324,6 +1319,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  
 		  ph_peak = itpc.phase;
 
+		  
 		  // ITPC magnitude of coupling
 
 		  writer.value( "COUPL_MAG"      , itpc.itpc.obs );
@@ -1397,13 +1393,13 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    }
 
 		}
-
+	      	      
 	      
 	      //
 	      // Individual PEAKS
 	      //
 	      
-	      
+	    
 	      for (int i=0;i<nspindles;i++)
 		{
 		  writer.level( i+1 , "SPINDLE" );
@@ -1411,12 +1407,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  writer.value("PEAK" , spindle_peak[i] * globals::tp_duration );
 		  
 		  if ( nearest_sw_number[i] != 0 ) // is now 1-basewd 
-		    writer.value( "NEAREST_SW" , nearest_sw[i] );
-		  writer.value( "NEAREST_SW_NUM" , nearest_sw_number[i] );
+		    {
+		      writer.value( "SO_NEAREST" , nearest_sw[i] );
+		      writer.value( "SO_NEAREST_NUM" , nearest_sw_number[i] );
+		    }
 		  
-		  if ( swmap_peak.find(i) != swmap_peak.end() && sw_peak[ swmap_peak[i] ] )
-		    writer.value( "SW_SPHASE_PEAK" , MiscMath::as_angle_0_pos2neg( ph_peak[swmap_peak[i]] ) );
-		  
+		  if ( sw_peak[ i ] )
+		    writer.value( "SO_PHASE_PEAK" , MiscMath::as_angle_0_pos2neg( ph_peak[ i ] ) );
+		  		  
 		}
 	      
 	      writer.unlevel( "SPINDLE" );
@@ -1442,7 +1440,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 		  std::vector<double> pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_spindle );
 	      	      	      	      
-		  writer.var( "SWPL_CHIRP" , "Slow wave phase-locked average spindle frequency/chirp" );
+		  writer.var( "SOPL_CHIRP" , "Slow wave phase-locked average spindle frequency/chirp" );
 	      
 		  double inc = 360 / (double)nbins;
 		  double ph = inc/2.0; // use mid-point of range
@@ -1450,7 +1448,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  for (int j=0;j<nbins;j++)
 		    {
 		      writer.level( ph  , "PHASE" );
-		      writer.value( "SWPL_CHIRP" , pl_chirp[j] );
+		      writer.value( "SOPL_CHIRP" , pl_chirp[j] );
 		      ph += inc;
 		    }
 		  writer.unlevel( "PHASE" );
@@ -1460,7 +1458,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      // +1/-1 1 second
 		      std::vector<double> tl_chirp = p_sw->time_locked_averaging( p_chirp_if , Fs[s] , 1 , 1 );
 		      
-		      writer.var( "SWTL_CHIRP" , "Slow wave time-locked average spindle frequency/chirp" );
+		      writer.var( "SOTL_CHIRP" , "Slow wave time-locked average spindle frequency/chirp" );
 		      
 		      int sz = tl_chirp.size();
 		      if ( sz > 0 ) 
@@ -1470,7 +1468,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			  for (int j=0;j<sz;j++)
 			    {
 			      writer.level( sz2 , "SP" );
-			      writer.value( "SWTL_CHIRP" , tl_chirp[j] );
+			      writer.value( "SOTL_CHIRP" , tl_chirp[j] );
 			      ++sz2;
 			    }
 			  writer.unlevel( "SP" );
@@ -1504,7 +1502,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      for (int j=0;j<nbins;j++)
 			{
 			  writer.level( ph  , "PHASE" );
-			  writer.value( "SWPL_CHIRP" , pl_chirp[j] );
+			  writer.value( "SOPL_CHIRP" , pl_chirp[j] );
 			  ph += inc;
 			}
 		      writer.unlevel( "PHASE" );

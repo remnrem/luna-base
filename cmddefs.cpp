@@ -68,13 +68,12 @@ void cmddefs_t::init()
   add_domain( "artifact" , "Artifacts"       , "Artifacts detection/correction routines" );
   add_domain( "hypno"    , "Hypnograms"      , "Characterizations of hypnograms" );
   add_domain( "power"    , "Power spectra"   , "Power spectral density estimation" );
-  add_domain( "spindles" , "Spindles and SO" , "Spindles and slow oscillations" );
-  add_domain( "topo"     , "Cross-signal analyses"    , "Coherence and other topographical analyses" );
-  add_domain( "cfc"      , "Cross-frequency coupling" , "Phase-amplitude and spindle/SO coupling" );
-  add_domain( "misc"     , "Misc"           , "Misc. commands" );
-  add_domain( "exp"      , "Experimental"   , "Experimental features: under heavy development, for internal use only" );
-
-  add_domain( "cmdline"  , "Command-line options"       , "Other functions that do not operate on EDFs" );  
+  add_domain( "transients" , "Spindles and SO" , "Spindles and slow oscillations" );
+  add_domain( "topo"     , "Cross-signal"    , "Coherence and other topographical analyses" );
+  add_domain( "cfc"      , "Cross-frequency" , "Phase-amplitude coupling" );
+  add_domain( "misc"     , "Misc"            , "Misc. commands" );
+  add_domain( "exp"      , "Experimental"    , "Experimental features: under heavy development, for internal use only" );
+  add_domain( "cmdline"  , "Command-line"    , "Functions that do not operate on EDFs" );  
    
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +81,7 @@ void cmddefs_t::init()
   // COMMAND-LINE OPTIONS
   //
   /////////////////////////////////////////////////////////////////////////////////
-  
+    
   add_cmd( "cmdline" , "--build" , "Scan folders recursively to geneate a sample list" );
   add_param( "--build" , "-edfid" , "" , "Use filename as ID, instead of looking in each EDF header" );
   add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
@@ -412,6 +411,22 @@ void cmddefs_t::init()
   add_var( "RESTRUCTURE" , "" , "NR2" , "Duration post-restructuring (records)");
 
 
+  //
+  // CHEP
+  //
+
+  add_cmd( "mask" , "CHEP" , "CHannel/EPoch masks" );
+  add_url( "CHEP" , "masks/#chep" );
+  add_param( "CHEP" , "clear" , "" , "Clear CHEP mask" );
+  add_param( "CHEP" , "load" , "file.txt" , "Load CHEP from file.txt" );
+  add_param( "CHEP" , "bad-channels" , "C3,C5" , "Manually specify bad channels" );
+  add_param( "CHEP" , "epochs" , "2,0.1" , "Mask epochs with 2 or more bad channels, or >10% bad channels" );
+  add_param( "CHEP" , "channels" , "10,0.5" , "Mask channels with 10 or more bad epochs, or >50% bad epochs" );
+  add_param( "CHEP" , "dump" , "" , "Write current CHEP mask to output" );
+  add_param( "CHEP" , "save" , "file.txt" , "Write CHEP mask to file.txt" );
+
+  // CHEP output....  
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // MANIPULATIONS
@@ -586,6 +601,7 @@ void cmddefs_t::init()
 
   add_param( "SIGSTATS" , "verbose" , "" , "Report epoch-level statistics" );
   add_param( "SIGSTATS" , "mask" , "" , "Set mask for outlier epochs" );
+  add_param( "SIGSTATS" , "chep" , "" , "Set CHEP mask for outlier epochs" );
   add_param( "SIGSTATS" , "threshold" , "2,2" , "Set standard unit threshold(s) for (iterative) outlier detection" );
   add_param( "SIGSTATS" , "th" , "2,2" , "Same as 'threshold'" );
 
@@ -941,7 +957,7 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
-  add_cmd( "spindles" , "SPINDLES" , "Wavelet-based sleep spindle detection" );
+  add_cmd( "transients" , "SPINDLES" , "Wavelet-based sleep spindle detection" );
   add_url( "SPINDLES" , "spindles-so/#spindles" );
 
   add_param( "SPINDLES" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
@@ -964,8 +980,8 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "local" , "120" , "Use local window (in seconds) to define baseline for spindle detection" );
 
   add_param( "SPINDLES" , "empirical" , "" , "Empirically determine thresholds" );
-  add_param( "SPINDLES" , "set-empirical" , "" , "Use empirically determined thresholds for spindle detection" );
-  add_param( "SPINDLES" , "verbose-empirical" , "" , "Output extensive information on threshold estimation" );
+  hide_param( "SPINDLES" , "set-empirical" , "" , "Use empirically determined thresholds for spindle detection" );
+  hide_param( "SPINDLES" , "verbose-empirical" , "" , "Output extensive information on threshold estimation" );
 
   add_param( "SPINDLES" , "merge" , "0.2", "Merge two putative spindles if within this interval (default 0.5 seconds)" );
   add_param( "SPINDLES" , "collate" , "" , "Within each channel, collate overlapping spindles of similar frequencies" );
@@ -974,14 +990,14 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "list-all-spindles" , "" , "List all spindles that comprise each m-spindle" );
 
   add_param( "SPINDLES" , "th-interval" , "0.5" , "Merge if the ratio of intersection to union is at least this (default 0, i.e. any overlap)" );
-  add_param( "SPINDLES" , "th-interval-cross-channel" , "" , "not currently used" );
-  add_param( "SPINDLES" , "th-interval-within-channel" , "" , "not currently used" );
+  hide_param( "SPINDLES" , "th-interval-cross-channel" , "" , "not currently used" );
+  hide_param( "SPINDLES" , "th-interval-within-channel" , "" , "not currently used" );
   add_param( "SPINDLES" , "window" , "0.5" , "Set window around each spindle when defining temporal overlap" );
   add_param( "SPINDLES" , "hms" , "" , "Show clock-time of each m-spindle" );
 
   add_param( "SPINDLES" , "ftr" , "tag" , "Produce FTR files for all spindles, with the tag in the filename" );
   add_param( "SPINDLES" , "ftr-dir" , "/path/to/folder" , "Folder for FTR files" );
-  add_param( "SPINDLES" , "show-coef" , "" , "Request (very verbose) coefficient output (to stdout)" );
+  hide_param( "SPINDLES" , "show-coef" , "" , "Request (very verbose) coefficient output (to stdout)" );
 
   // output
 
@@ -1036,12 +1052,11 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP_SP" , "Stop position of the spindle (in sample-units relative to the current in-memory EDF)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM" , "Symmetry index (relative position of peak)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM2" , "Folded symmetry index (0=symmetrical, 1=asymmetrical)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration ('if' option)" );
-
+  hide_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration [if]" );
   
-  add_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
-  add_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
-
+  hide_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
+  hide_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
+  
   add_table( "SPINDLES" , "" , "Individual-level summaries of m-spindles [collate]" );
   add_var( "SPINDLES" , "" , "MSP_DENS" , "m-spindle density" );
   add_var( "SPINDLES" , "" , "MSP_N" , "m-spindle count" );
@@ -1083,39 +1098,124 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "STOP" , "Spindle stop time (elapsed seconds from EDF start)" );
   
   // experimental
-  add_param( "SPINDLES" , "if" , "" , "Estimate instantaneous frequency of spindles" );
-  add_param( "SPINDLES" , "if-frq" , "1" , "Window around target frequency (default 2 hz)" );
-  add_param( "SPINDLES" , "tlock" , "" , "Flag to request (verbose) average, peak-locked waveforms" );
-  add_param( "SPINDLES" , "verbose-coupling" , "" , "Add extra tables of EEG/CWT phase/time-locked to SO" );
+  hide_param( "SPINDLES" , "if" , "" , "Estimate instantaneous frequency of spindles" );
+  hide_param( "SPINDLES" , "if-frq" , "1" , "Window around target frequency (default 2 hz)" );
+  hide_param( "SPINDLES" , "tlock" , "" , "Flag to request (verbose) average, peak-locked waveforms" );
+  hide_param( "SPINDLES" , "verbose-coupling" , "" , "Add extra tables of EEG/CWT phase/time-locked to SO" );
 
 
+
+
+  //
+  // SO (duplicated from SO command below)
+  //
+
+
+  add_param( "SPINDLES" , "so" , "" , "Detects slow oscillations and spindle/SO coupling" );
+  
+  add_param( "SPINDLES" , "mag" , "2" , "SO, relative mangitude threshold (times mean/median)" );
+  add_param( "SPINDLES" , "uV-neg" , "-40" , "SO, absolute negative peak uV amplitude threshold" );
+  add_param( "SPINDLES" , "uV-p2p" , "80" , "SO, absolute peak-to-peak uV amplitude threshold" );
+    
+  add_param( "SPINDLES" , "f-lwr" , "0.2" , "SO filter, lower transition frequency" );
+  add_param( "SPINDLES" , "f-upr" , "4.5" , "SO filter, upper transition frequency" );
+  
+  add_param( "SPINDLES" , "t-lwr" , "0" , "SO, lower duration (secs)" );
+  add_param( "SPINDLES" , "t-upr" , "3" , "SO, upper duration (secs)" );
+  
+  add_param( "SPINDLES" , "t-neg-lwr" , "0" , "SO, lower duration for negative peak (secs)" );
+  add_param( "SPINDLES" , "t-neg-upr" , "1" , "SO, upper duration for negative peak (secs)" );
+  
+  hide_param( "SPINDLES" , "neg2pos" , "" , "SO, Use negative-to-positive zero crossings" );
+  add_param( "SPINDLES" , "th-mean" , "" , "SO, use mean not median" );
+  add_param( "SPINDLES" , "stats-median" , "" , "SO, use median (not mean) when reporting stats over SOs" );  
+ 
+  add_table( "SPINDLES" , "CH" , "SO channel-level statistics" );
+  add_var( "SPINDLES" , "CH" , "SPINDLES" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH" , "SO_RATE" , "SO per minute" );
+  add_var( "SPINDLES" , "CH" , "SO_AMP" , "SO amplitude (negative peak)" );
+  add_var( "SPINDLES" , "CH" , "SO_P2P" , "SO peak-to-peak amplitude" );
+  add_var( "SPINDLES" , "CH" , "SO_DUR" , "SO duration (secs)" );	   
+  add_var( "SPINDLES" , "CH" , "SO_NEG_DUR" , "Negative peak SO duration (secs)" );
+  add_var( "SPINDLES" , "CH" , "SO_POS_DUR", "Positive peak SO duration (secs)" );
+  add_var( "SPINDLES" , "CH" , "SO_P2P" , "Peak-to-peak SO amplitude" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" );
+  add_var( "SPINDLES" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" );
+  add_var( "SPINDLES" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" );
+
+  add_table( "SPINDLES" , "CH,E" , "Epoch-level SO statistics" );
+  add_var( "SPINDLES" , "CH,E" , "N" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "DOWN_AMP" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "UP_AMP" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "P2P_AMP" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" );
+  
+  add_table( "SPINDLES" , "CH,N" , "per-SO statistics" );
+  add_var( "SPINDLES" , "CH,N" , "DOWN_AMP" , "Negative peak SO amplitude" );
+  add_var( "SPINDLES" , "CH,N" , "DOWN_IDX" , "Negative peak sample index" ); 
+  add_var( "SPINDLES" , "CH,N" , "UP_AMP" , "Positive peak SO ampltiude" ); 
+  add_var( "SPINDLES" , "CH,N" , "UP_IDX" , "Positive peak sample index" ); 
+  add_var( "SPINDLES" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" ); 
+  add_var( "SPINDLES" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" ); 
+  add_var( "SPINDLES" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
+  add_var( "SPINDLES" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR" , "SO duration" ); 
+  add_var( "SPINDLES" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
+  
+  
 
   //
   // SP/SO coupling options
   //
   
-  add_param( "SPINDLES" , "nreps" , "1000" , "Number of replications for SP/SO coupling" );
-  add_param( "SPINDLES" , "perm-whole-trace" , "" , "Do not use within-epoch shuffling" );
-  add_param( "SPINDLES" , "overlapping" , "" , "Only consider spindles that overlap a SO" );
-  add_param( "SPINDLES" , "stratify-by-phase" , "" , "Overlap statistics per SO phase bin" );
+  add_param( "SPINDLES" , "nreps" , "1000" , "SO/SP coupling: number of replications for SP/SO coupling" );
+  add_param( "SPINDLES" , "perm-whole-trace" , "" , "SO/SP coupling: Do not use within-epoch shuffling" );
+  add_param( "SPINDLES" , "overlapping" , "" , "SO/SP coupling: Only consider spindles that overlap a SO" );
+  add_param( "SPINDLES" , "stratify-by-phase" , "" , "SO/SP coupling: Overlap statistics per SO phase bin" );
   
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "Coupling magnitude (original statistic)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "Coupling magnitude (empirical Z)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "Coupling magnitude (empirical P)" );  
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_MEAN" , "SO/SP coupling: meanmagnitude under null" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "SO/SP coupling: magnitude (empirical Z)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "SO/SP coupling: magnitude (empirical P)" );  
   
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "Coupling overlap (original statistic)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "Coupling overlap (empirical Z)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "Coupling overlap (empirical P)" );
-  
-  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "Coupling overlap (original statistic)" );
-  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "Coupling overlap (empirical P)" );
-   
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_MEAN" , "SO/SP coupling: mean overlap under null" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (empirical Z)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );
 
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ANGLE" , "SO/SP coupling: mean SO phase angle at spindle peak" );
+    
+  add_var( "SPINDLES" , "CH,F" , "COUPL_PV" , "SO/SP coupling: asymptotic ITPC p-value" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_SIGPV_NULL" , "SO/SP coupling: null rate of asymptotic ITPC p-value < 0.05" );
+
+  
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (Z statistic)" );
+   
+  // spindle-level SO-coupling output
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK" , "Spindle peak (seconds)" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST" , "SO/SP coupling: time to nearest SO (0 if in one)" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST_NUM" , "SO/SP coupling: number of nearest SO" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_PHASE_PEAK" , "SO/SP coupling: SO phase at spindle peak, if in SO" );
+  
+  
+   
   //
   // SO
   //
-  
-  add_cmd( "spindles" , "SO" , "Detect slow oscillations" );
+
+  add_cmd( "transients" , "SO" , "Detect slow oscillations" );
   add_url( "SO" , "spindles-so/#so" );
   
   add_param( "SO" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
@@ -1165,7 +1265,7 @@ void cmddefs_t::init()
   add_var( "SO" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" );
   add_var( "SO" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" );
   
-  add_table( "SO" , "CH,N" , "Epoch-level statistics" );
+  add_table( "SO" , "CH,N" , "Per-SO statistics" );
   add_var( "SO" , "CH,N" , "DOWN_AMP" , "Negative peak amplitude" );
   add_var( "SO" , "CH,N" , "DOWN_IDX" , "Negative peak sample index" ); 
   add_var( "SO" , "CH,N" , "UP_AMP" , "Positive peak ampltiude" ); 
@@ -1183,74 +1283,6 @@ void cmddefs_t::init()
   
 
 
-
-  //
-  // SO (duplicated for SPINDLES)
-  //
-  
-  add_param( "SPINDLES" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-  
-  add_param( "SPINDLES" , "mag" , "2" , "Relative mangitude threshold (times mean/median)" );
-  add_param( "SPINDLES" , "uV-neg" , "-40" , "Absolute negative peak uV amplitude threshold" );
-  add_param( "SPINDLES" , "uV-p2p" , "80" , "Absolute peak-to-peak uV amplitude threshold" );
-  
-  add_param( "SPINDLES" , "mag" , "2" , "Relative mangitude threshold (times mean/median)" );
-  
-  add_param( "SPINDLES" , "f-lwr" , "0.2" , "Lower transition frequency" );
-  add_param( "SPINDLES" , "f-upr" , "4.5" , "Upper transition frequency" );
-  
-  add_param( "SPINDLES" , "t-lwr" , "0" , "Lower duration (secs)" );
-  add_param( "SPINDLES" , "t-upr" , "3" , "Upper duration (secs)" );
-  
-  add_param( "SPINDLES" , "t-neg-lwr" , "0" , "Lower duration for negative peak (secs)" );
-  add_param( "SPINDLES" , "t-neg-upr" , "1" , "Upper duration for negative peak (secs)" );
-  
-  add_param( "SPINDLES" , "neg2pos" , "" , "Use negative-to-positive zero crossings" );
-  add_param( "SPINDLES" , "th-mean" , "" , "Use mean not median" );
-  add_param( "SPINDLES" , "stats-median" , "" , "Use median (not mean) when reporting stats over SOs" );  
- 
-  add_table( "SPINDLES" , "CH" , "Channel-level statistics" );
-  add_var( "SPINDLES" , "CH" , "SPINDLES" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH" , "SO_RATE" , "SO per minute" );
-  add_var( "SPINDLES" , "CH" , "SO_AMP" , "SO amplitude (negative peak)" );
-  add_var( "SPINDLES" , "CH" , "SO_P2P" , "SO peak-to-peak amplitude" );
-  add_var( "SPINDLES" , "CH" , "SO_DUR" , "SO duration (secs)" );	   
-  add_var( "SPINDLES" , "CH" , "SO_NEG_DUR" , "Negative peak duration (secs)" );
-  add_var( "SPINDLES" , "CH" , "SO_POS_DUR", "Positive peak duration (secs)" );
-  add_var( "SPINDLES" , "CH" , "SO_P2P" , "Peak-to-peak amplitude" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" );
-  add_var( "SPINDLES" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" );
-  add_var( "SPINDLES" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" );
-
-  add_table( "SPINDLES" , "CH,E" , "Epoch-level statistics" );
-  add_var( "SPINDLES" , "CH,E" , "N" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "DOWN_AMP" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "UP_AMP" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "P2P_AMP" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" );
-  
-  add_table( "SPINDLES" , "CH,N" , "Epoch-level statistics" );
-  add_var( "SPINDLES" , "CH,N" , "DOWN_AMP" , "Negative peak amplitude" );
-  add_var( "SPINDLES" , "CH,N" , "DOWN_IDX" , "Negative peak sample index" ); 
-  add_var( "SPINDLES" , "CH,N" , "UP_AMP" , "Positive peak ampltiude" ); 
-  add_var( "SPINDLES" , "CH,N" , "UP_IDX" , "Positive peak sample index" ); 
-  add_var( "SPINDLES" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" ); 
-  add_var( "SPINDLES" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" ); 
-  add_var( "SPINDLES" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
-  add_var( "SPINDLES" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
-  add_var( "SPINDLES" , "CH,N" , "DUR" , "SO duration" ); 
-  add_var( "SPINDLES" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" ); 
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
-  
   
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1271,6 +1303,7 @@ void cmddefs_t::init()
 
   add_param( "COH" , "sr" , "125" , "Set sample rate (i.e. if different for some channels)" );
   add_param( "COH" , "spectrum" , "" , "Show full coherence spectra as well as bands" );
+  add_param( "COH" , "max" , "50" , "Upper frequency for spectra" );
   add_param( "COH" , "epoch" , "" , "Show per-epoch coherence" );
 
   add_table( "COH" , "B,CHS" , "Coherence for power bands" );
@@ -1283,7 +1316,20 @@ void cmddefs_t::init()
   add_var( "COH" , "F,CHS" , "ICOH" , "Imaginary coherence" );
   add_var( "COH" , "F,CHS" , "LCOH" , "Lagged coherence" );
 
+  add_table( "COH" , "B,CHS,E" , "Epoch-level band coherence" );
+  add_var( "COH" , "B,CHS,E" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "B,CHS,E" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "B,CHS,E" , "LCOH" , "Lagged coherence" );
+  
+  add_table( "COH" , "CHS,E,F" , "Epoch-level coherence" );
+  add_var( "COH" , "CHS,E,F" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "CHS,E,F" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "CHS,E,F" , "LCOH" , "Lagged coherence" );
 
+  // as these files can get large...
+  set_compressed( "COH" , tfac_t( "CHS,B,E" ) );
+  set_compressed( "COH" , tfac_t( "CHS,F,E" ) );
+      
   //
   // CORREL
   //
@@ -1306,8 +1352,9 @@ void cmddefs_t::init()
 
   add_table( "CORREL" , "CHS,E" , "Whole-signal correlations for pairs of channels" );
   add_var( "CORREL" , "CHS,E" , "R", "Pearson product moment correlation" );
+  set_compressed( "CORREL" , tfac_t( "CHS,E" ) );
 
-
+  
   //
   // MI
   //
@@ -1339,17 +1386,15 @@ void cmddefs_t::init()
   add_var( "MI" , "CHS,E" , "JINF" , "Joint entropy" );
   add_var( "MI" , "CHS,E" , "INFA" , "Marginal entropy of first signal" );
   add_var( "MI" , "CHS,E" , "INFB" , "Marginal entropy of second signal" );
+  set_compressed( "MI" , tfac_t( "CHS,E" ) );
   
-
-  add_table( "MI" , "CHS" , "Output per epoch" );
-
 
   //
   // INTERPOLATE
   //
-
-
-
+  
+  
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // CFC
@@ -1559,7 +1604,8 @@ std::string cmddefs_t::help_commands() const
     const std::set<std::string> & dc = ii->second;
     std::set<std::string>::const_iterator jj = dc.begin();
     while ( jj != dc.end() ) {
-      ss << help( *jj , true , false ) ;
+      if ( ! hidden_cmd( *jj ) ) 
+	ss << help( *jj , true , false ) ;
       ++jj;
     }
     ss << "\n";
@@ -1577,7 +1623,8 @@ std::string cmddefs_t::help_commands( const std::string & d ) const
   const std::set<std::string> & c = ii->second;
   std::set<std::string>::const_iterator jj = c.begin();
   while ( jj != c.end() ) { 
-    ss << help( *jj , false , false ) ;
+    if ( ! hidden_cmd( *jj ) )
+      ss << help( *jj , false , false ) ;
     ++jj;
   }
   return ss.str();    
@@ -1588,6 +1635,8 @@ std::string cmddefs_t::help_commands( const std::string & d ) const
 std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , bool verbose ) const
 {
   if ( cmds.find( cmd ) == cmds.end() ) return "";
+  if ( hidden_cmd( cmd ) ) return "";
+	
   std::stringstream ss;
   if ( ! verbose ) 
     {
@@ -1620,6 +1669,12 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	  std::map<std::string,std::string>::const_iterator jj = ii->second.begin();
 	  while ( jj != ii->second.end() ) {
 
+	    if ( hidden_param( cmd , jj->first ) )
+	      {
+		++jj;
+		continue;
+	      }
+	    
 	    ss << "  " << std::left << std::setw( 12 ) << jj->first;
 	    
   	    // example (if any)
@@ -1631,7 +1686,7 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	      }
  	    else
  	      ss << std::left << std::setw(20) << " ";;
-
+	    
 	    // description
 	    ss << std::left << std::setw( 12 ) << jj->second ;
 	    
@@ -1665,6 +1720,12 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	    {
 	      const tfac_t & tfac = ii->first;
 	      
+	      if ( hidden_table( cmd , tfac ) )
+		{
+		  ++ii;
+		  continue;
+		}
+
 	      ss << "   " << std::left << std::setw( 24 ) << tfac.as_string( " x " ) 
 		 << ii->second << "\n";
 	      
@@ -1688,11 +1749,12 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		      const std::map<std::string,std::string> & v = t.find( ii->first )->second;
 		      std::map<std::string,std::string>::const_iterator vv = v.begin();
 		      while ( vv != v.end() ) {
-			ss << "     " 
-			   << std::left 
-			   << std::setw(21) 
-			   << vv->first << " " 
-			   << vv->second << "\n";
+			if ( ! hidden_var( cmd , tfac , vv->first ) ) 
+			  ss << "     " 
+			     << std::left 
+			     << std::setw(21) 
+			     << vv->first << " " 
+			     << vv->second << "\n";
 			++vv;
 		      }
 		       

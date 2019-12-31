@@ -178,9 +178,6 @@ struct slow_waves_t
   
   void phase_slow_waves();
   
-  void time_locked_spectral_analysis( edf_t & edf , const std::vector<double> * sig , double sr, double window_sec = 1.5  ); 
-
-
   // time-locked and phase-locked averaging
   
   std::vector<double> time_locked_averaging( const std::vector<double> * sig , int sr , double left, double right , int position = -1 );

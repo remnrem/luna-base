@@ -66,6 +66,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
   
   const int ns1 = signals1.size();
   const int ns2 = signals2.size();
+
+  const bool verbose = param.has( "verbose" );
   
   int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ;
   
@@ -125,8 +127,9 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
   // Epochs or whole signal?
   //
 
-  bool epoched = edf.timeline.epoched() && param.has("epoch") ;
+  bool epoched = param.has("epoch") ;
 
+  
   //
   // Number of pairwise comparisons
   //
@@ -332,16 +335,20 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			      // writer.value( "PLV" , coh.plv[k] );
 			      // writer.value( "PLI" , coh.pli[k] );
 			      // writer.value( "WPLI" , coh.wpli[k] );
-			      
-			      writer.value( "CSPEC" , coh.cross_spectrum[k] );
-			      writer.value( "ASPEC1" , coh.auto_spectrum1[k] );
-			      writer.value( "ASPEC2" , coh.auto_spectrum2[k] );
-			      
-			      if ( ! legacy )
+
+			      if ( verbose )
 				{
-				  writer.value( "CSPEC.N1" , coh.cross_norm1[k] );
-				  writer.value( "CSPEC.N2" , coh.cross_norm2[k] );
+				  writer.value( "CSPEC" , coh.cross_spectrum[k] );
+				  writer.value( "ASPEC1" , coh.auto_spectrum1[k] );
+				  writer.value( "ASPEC2" , coh.auto_spectrum2[k] );
+				  
+				  if ( ! legacy )
+				    {
+				      writer.value( "CSPEC.N1" , coh.cross_norm1[k] );
+				      writer.value( "CSPEC.N2" , coh.cross_norm2[k] );
+				    }
 				}
+			      
 			    }
 			}
 		      
@@ -509,16 +516,18 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		      // writer.value( "PLI" , coh.pli[k] );
 		      // writer.value( "WPLI" , coh.wpli[k] );
 
-		      writer.value( "CSPEC" , coh.cross_spectrum[k] );
-		      writer.value( "ASPEC1" , coh.auto_spectrum1[k] );
-		      writer.value( "ASPEC2" , coh.auto_spectrum2[k] );
-
-		      if ( ! legacy )
+		      if ( verbose )
 			{
-			  writer.value( "CSPEC.N1" , coh.cross_norm1[k] );
-			  writer.value( "CSPEC.N2" , coh.cross_norm2[k] );
+			  writer.value( "CSPEC" , coh.cross_spectrum[k] );
+			  writer.value( "ASPEC1" , coh.auto_spectrum1[k] );
+			  writer.value( "ASPEC2" , coh.auto_spectrum2[k] );
+			  
+			  if ( ! legacy )
+			    {
+			      writer.value( "CSPEC.N1" , coh.cross_norm1[k] );
+			      writer.value( "CSPEC.N2" , coh.cross_norm2[k] );
+			    }
 			}
-
 		    }		  
 		}
 
