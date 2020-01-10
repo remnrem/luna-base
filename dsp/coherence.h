@@ -29,20 +29,22 @@ struct edf_t;
 struct param_t;
 struct interval_t;
 
+
 struct coh_t
 {
-
+  
   coh_t() { } 
-
-  coh_t( const int n )
+  
+  coh_t( const int nf )
   {
-    resize(n);
+    resize(nf);
   }
   
   void resize( const int n )
   {
-    frq.resize( n );
-
+    frq.resize( n );    
+    bad.resize( n , false );
+    
     coh.resize( n );
     icoh.resize( n );
     lcoh.resize( n ) ;
@@ -59,16 +61,17 @@ struct coh_t
     cross_norm2.resize( n );
         
   }
-
   
   // results of a coherence analysis
   
   std::vector<double> frq;
   
+  std::vector<bool>   bad;
+  
   std::vector<double> auto_spectrum1;
   std::vector<double> auto_spectrum2;
   std::vector<double> cross_spectrum;
-
+    
   std::vector<double> cross_norm1;
   std::vector<double> cross_norm2;
   
@@ -80,6 +83,8 @@ struct coh_t
   std::vector<double> wpli;
 
 };
+
+
 
 
 namespace dsptools 

@@ -20,34 +20,17 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
 
-#include "spectral_norm.h"
-#include "tv.h"
-#include "cfc.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "phsyn.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
+#ifndef __DSP_SHIFT_H__
+#define __DSP_SHIFT_H__
+
+struct edf_t;
+struct param_t;
+
+namespace dsptools { 
+
+  void shift( edf_t & , param_t & );
+
+} 
 
 #endif

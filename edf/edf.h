@@ -409,6 +409,8 @@ public:
 
   void update_signal( int s , const std::vector<double> * );
 
+  void shift( int s , int tp , bool wrap = true ); 
+
   void update_records( int a , int b , int s , const std::vector<double> * );
 
   void data_dumper( const std::string & , const param_t & );

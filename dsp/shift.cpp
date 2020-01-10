@@ -20,34 +20,36 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#include "dsp/shift.h"
+#include "edf/edf.h"
 
-#include "spectral_norm.h"
-#include "tv.h"
-#include "cfc.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "phsyn.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
+#include <iostream>
+#include <cmath>
 
-#endif
+void dsptools::shift( edf_t & edf , param_t & param ) 
+{
+
+  std::string signal_label = param.value( "sig" );
+
+  signal_list_t signals = edf.header.signal_list( signal_label );  
+
+  const int ns = signals.size();
+  
+  const int nt = param.requires_int( "sp" );
+  
+  bool nowrap = param.has( "no-wrap" );
+
+  for ( int s = 0 ; s < ns ; s++ )
+    {
+      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;	  
+
+      logger << "  shifting " << signals.label(s) << " by " << nt << " sample points";
+      if ( nowrap ) logger << " (no wrapping)\n";
+      else logger << " (wrapping)\n";
+      
+      edf.shift( signals(s) , nt , ! nowrap );
+
+    }
+  
+}
+

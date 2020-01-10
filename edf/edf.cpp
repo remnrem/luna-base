@@ -2782,6 +2782,58 @@ void edf_t::update_physical_minmax( const int s )
 }
 
 
+void edf_t::shift( int s , int shift_sp , bool wrap )
+{
+
+  if ( shift_sp == 0 ) return;
+
+  // i.e. parameterize as +ve means to push the series forward
+  shift_sp = -shift_sp;
+  
+  // get data : note, this ignores EDF discontinuities
+  
+  slice_t slice( *this , s , timeline.wholetrace() );
+
+  const std::vector<double> * d = slice.pdata();
+  
+  const int np = d->size();
+
+  if ( np <= shift_sp ) return;
+  
+  std::vector<double> d2( np , 0 );
+  
+  for (int i=0;i<np;i++)
+    {
+
+      int j = i - shift_sp;
+      
+      if ( j < 0 )
+	{
+	  if ( wrap ) 
+	    {
+	      j = np - shift_sp + i;
+	      d2[j] = (*d)[i];
+	    }
+	}
+      else if ( j >= np ) 
+	{ 
+	  if ( wrap ) 
+	    {
+	      j = j - np;
+	      d2[j] = (*d)[i];
+	    }
+	}
+      else
+	{
+	  d2[j] = (*d)[i];
+	}
+    }
+  
+  update_signal( s , &d2 );
+
+}
+
+
 void edf_t::copy_signal( const std::string & from_label , const std::string & to_label )
 {
   
@@ -2904,7 +2956,7 @@ void edf_t::update_signal( int s , const std::vector<double> * d )
 
   const int points_per_record = header.n_samples[s];
   const int n = d->size();
-  
+
   if ( n != header.nr * points_per_record )
     Helper::halt( "internal error in update_signal()" );
 

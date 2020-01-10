@@ -591,7 +591,10 @@ void coherence_t::process()
       double phi2 = phi * phi;
             
       if ( sxx < COH_EPS || syy < COH_EPS ) 
-	res.coh[i] = -9;
+	{
+	  res.coh[i] = -9;
+	  res.bad[i] = true;
+	}
       else
 	res.coh[i] = phi2 / ( sxx * syy ); 
       
@@ -608,7 +611,7 @@ void coherence_t::process()
       res.lcoh[i] = Im / sqrt( sxx * syy - ( Re * Re ) );
 
 
-      // // plv : phase-locking value
+      // plv : phase-locking value
       // std::vector<double> sign_sxy = cpsd[i];
       // for (int i=
 
@@ -618,15 +621,34 @@ void coherence_t::process()
 
       
       // cross/auto spectra (in dB)
+      
+      if ( phi2 > COH_EPS )
+	res.cross_spectrum[i] = 5.0*log10(phi2);
+      else
+	{
+	  res.cross_spectrum[i] =  -50.0 ;
+	  res.bad[i] = true;
+	}
 
-      res.cross_spectrum[i] = phi2 > COH_EPS ? 5.0*log10(phi2) : -50.0 ;	  
-      res.auto_spectrum1[i] = sxx > COH_EPS ?  10.0*log10(sxx) : -100.0 ;
-      res.auto_spectrum2[i] = syy > COH_EPS ?  10.0*log10(syy) : -100.0 ;
+      if ( sxx > COH_EPS )
+	res.auto_spectrum1[i] = 10.0*log10(sxx) ;
+      else
+	{
+	  res.auto_spectrum1[i] = -100.0 ;
+	  res.bad[i] = true;
+	}
+      
+      if (  syy > COH_EPS )
+	res.auto_spectrum2[i] = 10.0*log10(syy) ;
+      else
+	{
+	  res.auto_spectrum2[i] = -100.0 ;
+	  res.bad[i] = true;
+	}
       
       res.cross_norm1[i] = phi2 / (sxx*sxx) ;
       res.cross_norm2[i] = phi2 / (syy*syy) ;
-  
-	//      std::cerr << "res " << res.frq[i] << " " << res.coh[i] << "\n";
+      
     }
 
 }

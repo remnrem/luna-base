@@ -182,13 +182,15 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		{
 
 		  int epoch = edf.timeline.next_epoch();      
+		  
 		  if ( epoch == -1 ) break;
+		  
 		  interval_t interval = edf.timeline.epoch( epoch );
 
 		  //
 		  // Calculate coherence metrics
 		  //
-
+		  
 		  coh_t coh = dsptools::coherence( edf , signals1(i) , signals2(j) , interval , legacy );
 		  
 
@@ -206,6 +208,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 
 		  for (int k=0;k<sz;k++)
 		    {
+		      
+		      if ( coh.bad[k] ) continue;
 		      
 		      if ( coh.frq[k] >= globals::freq_band[ SLOW ].first 
 			   && coh.frq[k] < globals::freq_band[ SLOW ].second ) 
@@ -262,79 +266,113 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			}
 		      
 		    }
-		  
-		  if ( n_slow  ) coh_slow /= (double)n_slow;
-		  if ( n_delta ) coh_delta /= (double)n_delta; 
-		  if ( n_theta ) coh_theta /= (double)n_theta;
-		  if ( n_alpha ) coh_alpha /= (double)n_alpha; 
-		  if ( n_sigma ) coh_sigma /= (double)n_sigma;
-		  if ( n_beta ) coh_beta /= (double)n_beta;
-
-		  if ( n_slow  ) icoh_slow /= (double)n_slow;
-		  if ( n_delta ) icoh_delta /= (double)n_delta; 
-		  if ( n_theta ) icoh_theta /= (double)n_theta;
-		  if ( n_alpha ) icoh_alpha /= (double)n_alpha; 
-		  if ( n_sigma ) icoh_sigma /= (double)n_sigma;
-		  if ( n_beta ) icoh_beta /= (double)n_beta;
-
-		  if ( n_slow  ) lcoh_slow /= (double)n_slow;
-		  if ( n_delta ) lcoh_delta /= (double)n_delta; 
-		  if ( n_theta ) lcoh_theta /= (double)n_theta;
-		  if ( n_alpha ) lcoh_alpha /= (double)n_alpha; 
-		  if ( n_sigma ) lcoh_sigma /= (double)n_sigma;
-		  if ( n_beta ) lcoh_beta /= (double)n_beta;
+		 
 
 
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );		  				
 
 		  // standard. imaginary and lagged coherence
-		  writer.level( globals::band( SLOW ) , globals::band_strat );
-		  writer.value( "COH" , coh_slow );
-		  writer.value( "ICOH" , icoh_slow );
-		  writer.value( "LCOH" , lcoh_slow );
+		  if ( n_slow ) 
+		    { 
+		      coh_slow /= (double)n_slow;
+		      icoh_slow /= (double)n_slow;
+		      lcoh_slow /= (double)n_slow;
+		      
+		      writer.level( globals::band( SLOW ) , globals::band_strat );
+		      writer.value( "COH" , coh_slow );
+		      writer.value( "ICOH" , icoh_slow );
+		      writer.value( "LCOH" , lcoh_slow );
+		  }
+		  
+		  if ( n_delta )
+		    {		      
+		      coh_delta /= (double)n_delta; 
+		      icoh_delta /= (double)n_delta; 
+		      lcoh_delta /= (double)n_delta; 
+		      
+		      writer.level( globals::band( DELTA ) , globals::band_strat );
+		      writer.value( "COH" , coh_delta );
+		      writer.value( "ICOH" , icoh_delta );
+		      writer.value( "LCOH" , lcoh_delta );
+		    }
 
-		  writer.level( globals::band( DELTA ) , globals::band_strat );
-		  writer.value( "COH" , coh_delta );
-		  writer.value( "ICOH" , icoh_delta );
-		  writer.value( "LCOH" , lcoh_delta );
+		  if ( n_theta )
+		    {
+		      coh_theta /= (double)n_theta;
+		      icoh_theta /= (double)n_theta;
+		      lcoh_theta /= (double)n_theta;
+		      
+		      writer.level( globals::band( THETA ) , globals::band_strat );
+		      writer.value( "COH" , coh_theta );
+		      writer.value( "ICOH" , icoh_theta );
+		      writer.value( "LCOH" , lcoh_theta );
+		    }
 
-		  writer.level( globals::band( THETA ) , globals::band_strat );
-		  writer.value( "COH" , coh_theta );
-		  writer.value( "ICOH" , icoh_theta );
-		  writer.value( "LCOH" , lcoh_theta );
+		  if ( n_alpha )
+		    {
+		      coh_alpha /= (double)n_alpha; 
+		      icoh_alpha /= (double)n_alpha; 
+		      lcoh_alpha /= (double)n_alpha; 
+		      
+		      writer.level( globals::band( ALPHA ) , globals::band_strat );
+		      writer.value( "COH" , coh_alpha );
+		      writer.value( "ICOH" , icoh_alpha );
+		      writer.value( "LCOH" , lcoh_alpha );
+		    }
+		  
+		  if ( n_sigma )
+		    {
+		      coh_sigma /= (double)n_sigma;
+		      icoh_sigma /= (double)n_sigma;
+		      lcoh_sigma /= (double)n_sigma;
+		      
+		      writer.level( globals::band( SIGMA ) , globals::band_strat );
+		      writer.value( "COH" , coh_sigma );
+		      writer.value( "ICOH" , icoh_sigma );
+		      writer.value( "LCOH" , lcoh_sigma );
+		    }
+		  
+		  if ( n_beta )
+		    {		      
+		      coh_beta /= (double)n_beta;
+		      icoh_beta /= (double)n_beta;
+		      lcoh_beta /= (double)n_beta;
 
-		  writer.level( globals::band( ALPHA ) , globals::band_strat );
-		  writer.value( "COH" , coh_alpha );
-		  writer.value( "ICOH" , icoh_alpha );
-		  writer.value( "LCOH" , lcoh_alpha );
-
-		  writer.level( globals::band( SIGMA ) , globals::band_strat );
-		  writer.value( "COH" , coh_sigma );
-		  writer.value( "ICOH" , icoh_sigma );
-		  writer.value( "LCOH" , lcoh_sigma );
-		  		  
-		  writer.level( globals::band( BETA ) , globals::band_strat );
-		  writer.value( "COH" , coh_beta );
-		  writer.value( "ICOH" , icoh_beta );
-		  writer.value( "LCOH" , lcoh_beta );
-
-		  writer.unlevel( globals::band_strat );
+		      writer.level( globals::band( BETA ) , globals::band_strat );
+		      writer.value( "COH" , coh_beta );
+		      writer.value( "ICOH" , icoh_beta );
+		      writer.value( "LCOH" , lcoh_beta );
+		    }
+		  
+		  
+		  // if at least one band level set, need to unset
+		  if ( n_slow + n_delta + n_theta + n_alpha + n_sigma + n_beta ) 
+		    writer.unlevel( globals::band_strat );
+		  
 		  
 		  if ( show_spectrum )
 		    {
 		      
+		      bool anyout = false;
+
 		      for (int k=0;k<sz;k++)
 			{
+			  
+			  if ( coh.bad[k] ) continue;
+			  
 			  if ( upper_freq < 0 || coh.frq[k] <= upper_freq )
 			    {
+			      
+			      anyout = true;
+
 			      writer.level( coh.frq[k] , globals::freq_strat );			  
 			      writer.value( "COH" , coh.coh[k] );
 			      writer.value( "ICOH" , coh.icoh[k] );
 			      writer.value( "LCOH" , coh.lcoh[k] );
-
-			      // writer.value( "PLV" , coh.plv[k] );
-			      // writer.value( "PLI" , coh.pli[k] );
-			      // writer.value( "WPLI" , coh.wpli[k] );
+			      
+// 			      writer.value( "PLV" , coh.plv[k] );
+// 			      writer.value( "PLI" , coh.pli[k] );
+// 			      writer.value( "WPLI" , coh.wpli[k] );
 
 			      if ( verbose )
 				{
@@ -352,7 +390,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			    }
 			}
 		      
-		      writer.unlevel( globals::freq_strat );
+		      if ( anyout )
+			writer.unlevel( globals::freq_strat );
 		      
 		    } // end of epoch-spectrum level output
 		  
@@ -387,6 +426,8 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		  
 	      for (int k=0;k<sz;k++)
 		{
+		  
+		  if ( coh.bad[k] ) continue;
 		  
 		  if ( coh.frq[k] >= globals::freq_band[ SLOW ].first 
 		       && coh.frq[k] < globals::freq_band[ SLOW ].second ) 
@@ -444,78 +485,111 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 		  
 		}
 	      
-	      if ( n_slow  ) coh_slow /= (double)n_slow;
-	      if ( n_delta ) coh_delta /= (double)n_delta; 
-	      if ( n_theta ) coh_theta /= (double)n_theta;
-	      if ( n_alpha ) coh_alpha /= (double)n_alpha; 
-	      if ( n_sigma ) coh_sigma /= (double)n_sigma;
-	      if ( n_beta ) coh_beta /= (double)n_beta;
+
+
+	      if ( n_slow ) 
+		{
+		  coh_slow /= (double)n_slow;
+		  icoh_slow /= (double)n_slow;
+		  lcoh_slow /= (double)n_slow;
+		  
+		  writer.level( globals::band( SLOW ) , globals::band_strat );
+		  writer.value( "COH" , coh_slow );
+		  writer.value( "ICOH" , icoh_slow );
+		  writer.value( "LCOH" , lcoh_slow );
+		}
+
+	      if ( n_delta )
+		{
+		  coh_delta /= (double)n_delta; 
+		  icoh_delta /= (double)n_delta; 
+		  lcoh_delta /= (double)n_delta; 
+		  
+		  writer.level( globals::band( DELTA ) , globals::band_strat );
+		  writer.value( "COH" , coh_delta );
+		  writer.value( "ICOH" , icoh_delta );
+		  writer.value( "LCOH" , lcoh_delta );
+		}
+
+	      if ( n_theta )
+		{
+		  coh_theta /= (double)n_theta;
+		  icoh_theta /= (double)n_theta;
+		  lcoh_theta /= (double)n_theta;
+		  
+		  writer.level( globals::band( THETA ) , globals::band_strat );
+		  writer.value( "COH" , coh_theta );
+		  writer.value( "ICOH" , icoh_theta );
+		  writer.value( "LCOH" , lcoh_theta );
+		}
+
+	      if ( n_alpha )
+		{
+		  coh_alpha /= (double)n_alpha; 
+		  icoh_alpha /= (double)n_alpha; 
+		  lcoh_alpha /= (double)n_alpha; 
+		  
+		  writer.level( globals::band( ALPHA ) , globals::band_strat );
+		  writer.value( "COH" , coh_alpha );
+		  writer.value( "ICOH" , icoh_alpha );
+		  writer.value( "LCOH" , lcoh_alpha );
+		}
+
+	      if ( n_sigma )
+		{
+		  coh_sigma /= (double)n_sigma;
+		  icoh_sigma /= (double)n_sigma;
+		  lcoh_sigma /= (double)n_sigma;
+		  
+		  writer.level( globals::band( SIGMA ) , globals::band_strat );
+		  writer.value( "COH" , coh_sigma );
+		  writer.value( "ICOH" , icoh_sigma );
+		  writer.value( "LCOH" , lcoh_sigma );
+		}
 	      
-	      if ( n_slow  ) icoh_slow /= (double)n_slow;
-	      if ( n_delta ) icoh_delta /= (double)n_delta; 
-	      if ( n_theta ) icoh_theta /= (double)n_theta;
-	      if ( n_alpha ) icoh_alpha /= (double)n_alpha; 
-	      if ( n_sigma ) icoh_sigma /= (double)n_sigma;
-	      if ( n_beta ) icoh_beta /= (double)n_beta;
+	      if ( n_beta )
+		{
+		  coh_beta /= (double)n_beta;
+		  icoh_beta /= (double)n_beta;
+		  lcoh_beta /= (double)n_beta;
 
-	      if ( n_slow  ) lcoh_slow /= (double)n_slow;
-	      if ( n_delta ) lcoh_delta /= (double)n_delta; 
-	      if ( n_theta ) lcoh_theta /= (double)n_theta;
-	      if ( n_alpha ) lcoh_alpha /= (double)n_alpha; 
-	      if ( n_sigma ) lcoh_sigma /= (double)n_sigma;
-	      if ( n_beta ) lcoh_beta /= (double)n_beta;
+		  writer.level( globals::band( BETA ) , globals::band_strat );
+		  writer.value( "COH" , coh_beta );
+		  writer.value( "ICOH" , icoh_beta );
+		  writer.value( "LCOH" , lcoh_beta );
+		}
 
 
-	      writer.level( globals::band( SLOW ) , globals::band_strat );
-	      writer.value( "COH" , coh_slow );
-	      writer.value( "ICOH" , icoh_slow );
-	      writer.value( "LCOH" , lcoh_slow );
-	      
-	      writer.level( globals::band( DELTA ) , globals::band_strat );
-	      writer.value( "COH" , coh_delta );
-	      writer.value( "ICOH" , icoh_delta );
-	      writer.value( "LCOH" , lcoh_delta );
-	      
-	      writer.level( globals::band( THETA ) , globals::band_strat );
-	      writer.value( "COH" , coh_theta );
-	      writer.value( "ICOH" , icoh_theta );
-	      writer.value( "LCOH" , lcoh_theta );
-
-	      writer.level( globals::band( ALPHA ) , globals::band_strat );
-	      writer.value( "COH" , coh_alpha );
-	      writer.value( "ICOH" , icoh_alpha );
-	      writer.value( "LCOH" , lcoh_alpha );
-
-	      writer.level( globals::band( SIGMA ) , globals::band_strat );
-	      writer.value( "COH" , coh_sigma );
-	      writer.value( "ICOH" , icoh_sigma );
-	      writer.value( "LCOH" , lcoh_sigma );
-
-	      writer.level( globals::band( BETA ) , globals::band_strat );
-	      writer.value( "COH" , coh_beta );
-	      writer.value( "ICOH" , icoh_beta );
-	      writer.value( "LCOH" , lcoh_beta );
-
-	      writer.unlevel( globals::band_strat );
+	      if ( n_slow + n_delta + n_theta + n_alpha + n_sigma + n_beta )
+		writer.unlevel( globals::band_strat );
 		  
 
 	      //
 	      // Frequency-bin level output
 	      //
-
+	      
+	      bool anyout = false;
+	      
 	      for (int k=0;k<sz;k++)
 		{
+		  
+		  if ( coh.bad[k] ) continue;
+		  
 		  if ( upper_freq < 0 || coh.frq[k] <= upper_freq )
 		    {
+
+		      anyout = true;
+
 		      writer.level( coh.frq[k] , globals::freq_strat );
+		      
 		      writer.value( "COH" , coh.coh[k] );
 		      writer.value( "ICOH" , coh.icoh[k] );
 		      writer.value( "LCOH" , coh.lcoh[k] );
 
-		      // writer.value( "PLV" , coh.plv[k] );
-		      // writer.value( "PLI" , coh.pli[k] );
-		      // writer.value( "WPLI" , coh.wpli[k] );
-
+// 		      writer.value( "PLV" , coh.plv[k] );
+// 		      writer.value( "PLI" , coh.pli[k] );
+// 		      writer.value( "WPLI" , coh.wpli[k] );
+		      
 		      if ( verbose )
 			{
 			  writer.value( "CSPEC" , coh.cross_spectrum[k] );
@@ -530,10 +604,12 @@ void dsptools::coherence( edf_t & edf , param_t & param , bool legacy )
 			}
 		    }		  
 		}
-
-	      writer.unlevel( globals::freq_strat );
+	      
+	      if ( anyout )
+		writer.unlevel( globals::freq_strat );
+	      
 	      writer.unlevel( "CHS" );
-
+	      
 	    }
 	}
     }
@@ -713,14 +789,38 @@ coh_t dsptools::legacy_coherence( const std::vector<double> * s1 ,
       
       //      std::cout << "phi " << i << " " << phi[i] << " " << gxyre[i] << " " << gxyim[i] << " " << gxx[i] << " " << gyy[i] << "\n";
 
-      if (gxx[i] == 0.0 || gyy[i] == 0.0) res.coh[i] = 1.0;
+      if (gxx[i] == 0.0 || gyy[i] == 0.0) 
+	{
+	  res.coh[i] = 1.0;
+	  res.bad[i] = true;
+	}
       else res.coh[i] = phi[i] / (gxx[i]*gyy[i]);
       
       // truncate?
-      res.cross_spectrum[i] = phi[i] > 1.0e-10 ? 5.0*log10(phi[i]) : -50.0 ;
-      res.auto_spectrum1[i] = gxx[i] > 1.0e-10 ? 10.0*log10(gxx[i]) : -100.0 ;
-      res.auto_spectrum2[i] = gyy[i] > 1.0e-10 ? 10.0*log10(gyy[i]) : -100.0 ;
+      if ( phi[i] > 1.0e-10 ) 
+	res.cross_spectrum[i] = 5.0*log10(phi[i]) ;
+      else
+	{
+	  res.cross_spectrum[i] = -50.0 ;
+	  res.bad[i] = true;
+	}
+
+      if ( gxx[i] > 1.0e-10  )
+	res.auto_spectrum1[i] = 10.0*log10(gxx[i]) ;
+      else
+	{
+	  res.auto_spectrum1[i] = -100.0 ;
+	  res.bad[i] = true;
+	}
       
+      if ( gyy[i] > 1.0e-10 )
+	res.auto_spectrum2[i] = 10.0*log10(gyy[i]) ;
+      else
+	{
+	  res.auto_spectrum2[i] = -100.0 ;
+	  res.bad[i] = true;
+	}
+
       // frq
       res.frq[i] = df*i;
       

@@ -804,7 +804,9 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "SO" ) )            proc_slowwaves( edf, param(c) );
       else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
+
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
+      else if ( is( c, "SHIFT" ) )        proc_shift( edf , param(c) );
       
       else 
 	{
@@ -1759,6 +1761,13 @@ void proc_phsyn( edf_t & edf , param_t & param )
   dsptools::phsyn( edf , param );
 }
 
+
+// SHIFT : shift one or more signals by X samples
+
+void proc_shift( edf_t & edf , param_t & param )
+{
+  dsptools::shift( edf , param );
+}
 
 // SPIKE : spike in a new bit of signal
 
