@@ -805,6 +805,17 @@ void cmddefs_t::init()
   add_param( "PSD" , "bin" , "1" , "Specify bin-size for power spectra" );
   add_param( "PSD" , "spectrum" , "" , "Calculate power spectra" );
   add_param( "PSD" , "epoch-spectrum" , "" , "Calculate per-epoch power spectra" );
+  add_param( "PSD" , "dB" , "" , "Report power in decibel units" );
+
+
+  add_param( "PSD" , "no-window" , "" , "No windowing on FFT segments" );
+  add_param( "PSD" , "hann"    , "" , "Use Hann window" );
+  add_param( "PSD" , "hamming" , "" , "Use Hamming window" );
+  add_param( "PSD" , "tukey50" , "" , "Use Tukey(50%) window (default)" );
+
+  add_param( "PSD" , "average-adj" , "" , "Average adjacent frequency bins" );
+  
+  add_param( "PSD" , "dynamics" , "" , "Power dynamics (experimental/undocumented)" );
   
   add_table( "PSD" , "CH" , "Number of epochs" );
   add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
@@ -1180,7 +1191,7 @@ void cmddefs_t::init()
   
   add_param( "SPINDLES" , "nreps" , "1000" , "SO/SP coupling: number of replications for SP/SO coupling" );
   add_param( "SPINDLES" , "perm-whole-trace" , "" , "SO/SP coupling: Do not use within-epoch shuffling" );
-  add_param( "SPINDLES" , "overlapping" , "" , "SO/SP coupling: Only consider spindles that overlap a SO" );
+  add_param( "SPINDLES" , "all-spindles" , "" , "SO/SP coupling: Sonsider all spindles, whether ot not they overlap a SO" );
   add_param( "SPINDLES" , "stratify-by-phase" , "" , "SO/SP coupling: Overlap statistics per SO phase bin" );
   
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" );
@@ -1305,6 +1316,7 @@ void cmddefs_t::init()
   add_param( "COH" , "spectrum" , "" , "Show full coherence spectra as well as bands" );
   add_param( "COH" , "max" , "50" , "Upper frequency for spectra" );
   add_param( "COH" , "epoch" , "" , "Show per-epoch coherence" );
+  add_param( "COH" , "epoch-spectrum" , "" , "Show per-epoch full coherence spectra" );
 
   add_table( "COH" , "B,CH1,CH2" , "Coherence for power bands" );
   add_var( "COH" , "B,CH1,CH2" , "COH" , "Magnitude-squared coherence" );

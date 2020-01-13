@@ -225,7 +225,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
   
   if ( mask != NULL )
     {
-
+      
       for (int i=0;i<n;i++) // for each spindle
 	{	  
 	  if ( ! (*mask)[ e[i] ] ) 

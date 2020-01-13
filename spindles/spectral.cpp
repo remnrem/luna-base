@@ -91,7 +91,7 @@ annot_t * spectral_power( edf_t & edf ,
 
 
   //
-  // Option to average adjacent points in the power spectra (default = Y)
+  // Option to average adjacent points in the power spectra (default = T)
   //
   
   bool average_adj = param.has( "average-adj" ) ;

@@ -1274,7 +1274,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 		  std::vector<bool> so_mask;		  
 
-		  bool use_mask = ! param.has( "overlapping" );
+		  // default is to use mask
+		  bool use_mask = ! param.has( "all-spindles" );
 		  
 		  if ( use_mask ) 
 		    so_mask = p_sw->sp_in_sw_vec();
@@ -1324,30 +1325,30 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 		  writer.value( "COUPL_MAG"      , itpc.itpc.obs );
 
+		  if ( use_mask )
+		    writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
+
 		  if ( nreps ) 
 		    {
 		      writer.value( "COUPL_MAG_EMP"  , itpc.itpc.p );
 		      writer.value( "COUPL_MAG_NULL" , itpc.itpc.mean );
 		      writer.value( "COUPL_MAG_Z"    , ( itpc.itpc.obs - itpc.itpc.mean ) / itpc.itpc.sd  );
-		    }
-
-		  // proportion of spdinles that overlap a SO 
-		  // unless itpc-so was set, this will be meaningless
-		  // so only report is a 'mask' was set
-		  
-		  writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
-		  
-		  if ( nreps ) 
-		    {
-		      writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
+		      
+		      // proportion of spdinles that overlap a SO 
+		      // unless itpc-so was set, this will be meaningless
+		      // so only report is a 'mask' was set		  
 		      
 		      if ( use_mask ) 
 			{
+			  			  
+			  writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
+			  
 			  writer.value( "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
 			  
 			  if ( itpc.ninc.sd > 0 )  		    			
 			    writer.value( "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
 			}
+		      
 		    }
 
 		  //
