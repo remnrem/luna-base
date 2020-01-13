@@ -24,66 +24,60 @@
 #define __COH_H__
 
 #include <vector>
+#include <complex>
 
 struct edf_t;
 struct param_t;
 struct interval_t;
+struct coherence_t;
 
+// results of a single cross-spectral analysis
+// either for 1 epoch, or for the whole signal
 
-struct coh_t
+struct scoh_t
 {
   
-  coh_t() { } 
+  scoh_t() { } 
   
-  coh_t( const int nf )
+  scoh_t( const int nf )
   {
     resize(nf);
   }
   
   void resize( const int n )
   {
-    frq.resize( n );    
     bad.resize( n , false );
-    
-    coh.resize( n );
-    icoh.resize( n );
-    lcoh.resize( n ) ;
-    plv.resize( n );
-    pli.resize( n );
-    wpli.resize( n );
-
-    cross_spectrum.resize( n );
-
-    auto_spectrum1.resize( n );
-    auto_spectrum2.resize( n );
-    
-    cross_norm1.resize( n );
-    cross_norm2.resize( n );
-        
+    sxx.resize( n );
+    syy.resize( n );
+    sxy.resize( n );    
   }
   
-  // results of a coherence analysis
-  
-  std::vector<double> frq;
-  
+  void output( const coherence_t & , const double upper_freq = -1 ) const;
+
+  // cross and auto spectra (vector over frequencies)
   std::vector<bool>   bad;
-  
-  std::vector<double> auto_spectrum1;
-  std::vector<double> auto_spectrum2;
-  std::vector<double> cross_spectrum;
-    
-  std::vector<double> cross_norm1;
-  std::vector<double> cross_norm2;
-  
-  std::vector<double> coh;
-  std::vector<double> icoh;
-  std::vector<double> lcoh;
-  std::vector<double> plv;
-  std::vector<double> pli;
-  std::vector<double> wpli;
+  std::vector<double> sxx;
+  std::vector<double> syy;
+  std::vector<std::complex<double> > sxy;
+
 
 };
 
+
+struct coh_t
+{
+
+  // accumulate (over epochs)
+
+  void add( const scoh_t & c ) { epochs.push_back( c ); } 
+  
+  // calculate and output final (averaged) connectivity stats, 
+  void calc_stats( const coherence_t & , const double upper_freq = -1 ) const;
+    
+  // data 
+  std::vector<scoh_t> epochs;
+  
+};
 
 
 
@@ -91,42 +85,16 @@ namespace dsptools
 {  
 
   // ultimate wrapper
-  void coherence( edf_t & , param_t & , bool legacy = false );
+  void coherence( edf_t & , param_t & );
 
-  // for a given pair of signals, return coh object, either using 
-  //  coherence_t()  (from fttwrap/) or legacy_coherence (below)
-
-  coh_t coherence( edf_t & , int signal1 , int signal2 , const interval_t & , bool legacy = false );
-
-  // legacy code... remove in fture 
-  coh_t legacy_coherence( const std::vector<double> * s1 , 
-			  const std::vector<double> * s2 , 
-			  double sampfreq );
+  void coherence_prepare( edf_t & edf , const int signal1 , const interval_t & interval , coherence_t * coh );
     
+  // for a given pair of signals, return coh object, either using 
+  //  coherence_t()  (from fttwrap/) 
   
-  void coh_lremv( std::vector<double> & , const int );
-
-  void coh_r2tx(int nthpo, double* cr0, double* cr1, double * ci0, double * ci1);
-
-  void coh_r4tx(int nthpo, 
-		double * cr0, 
-		double * cr1, 
-		double * cr2, 
-		double * cr3, 
-		double * ci0, 
-		double * ci1, 
-		double * ci2, 
-		double * ci3);
+  scoh_t coherence_do( coherence_t * , int signal1 , int signal2 );
   
-  void coh_r8tx(int nx, int nthpo, int length, 
-		double * cr0, double * cr1, double * cr2, double * cr3, double * cr4, double * cr5, 
-		double * cr6, double * cr7, double * ci0, double * ci1,
-		double * ci2, double * ci3, double * ci4, double * ci5, double * ci6, double * ci7);
-
-  void coh_fft842(int in, int n, double * , double * );
-
-  // end of legacy code...
-
+  
 }
 
 #endif

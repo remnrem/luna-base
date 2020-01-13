@@ -275,8 +275,9 @@ void PWELCH::process()
 
   int segment_increment_points = segment_size_points - noverlap_points;
   
-//   std::cout << "noverlap_points = " << noverlap_points << "\n"
-//    	    << "segment_increment_points = " << segment_increment_points << "\n";
+  // std::cout << "segment_size_points = " << segment_size_points << "\n"
+  // 	    << "noverlap_points = " << noverlap_points << "\n"
+  //   	    << "segment_increment_points = " << segment_increment_points << "\n";
   
   //
   // Initial FFT
@@ -291,8 +292,11 @@ void PWELCH::process()
   N = fft0.cutoff;
 
   freq.resize(N);
-  for (int f=0;f<N;f++) freq[f] = fft0.frq[f];
-  
+  for (int f=0;f<N;f++)
+    {
+      freq[f] = fft0.frq[f];
+      //      std::cout << "Wf " << f << "\t" << freq[f] << "\n" ;
+    }
 
   //
   // Iterate over segments, performing individual FFT in each
@@ -462,197 +466,6 @@ std::map<double,double> fft_spectrum( const std::vector<double> * d , int Fs )
     }
   return results;
 }
-
-
-
-
-
-void coherence_t::process()
-{
-
-  //
-  // Initial FFT to get frequencies
-  //
-  
-  FFT fft0( segment_points , Fs , FFT_FORWARD , window );
-
-  if ( average_adj ) fft0.average_adjacent();
-  
-  N = fft0.cutoff;
-
-  res.resize(N);
-
-  // freqs.
-  for (int f=0;f<N;f++) res.frq[f] = fft0.frq[f];
-
-  //
-  // Accumulate PSD for X, Y and cross-spectra, by freq, then 
-  //
-
-  std::vector<std::vector<double> > psd_x(N);
-  std::vector<std::vector<double> > psd_y(N);
-  std::vector<std::vector<std::complex<double> > > cpsd(N);
-
-  
-  //
-  // Iterate over segments, performing individual FFT in each
-  //
-
-  int segments = 0;
-  
-  for (int p = 0; p <= total_points - segment_points ; p += segment_increment_points )
-    {
-      
-      ++segments;
-
-//       std::cout << "seg " << segments << "\t" 
-// 		<< p << " -- " << p + segment_points - 1 << "\n";
-      
-      if ( p + segment_points > total_points )
-	Helper::halt( "internal error in coherence()" );
-      
-      FFT fftx( segment_points , Fs , FFT_FORWARD , window );
-      FFT ffty( segment_points , Fs , FFT_FORWARD , window );      
-      
-      if ( detrend || zerocenter )
- 	{	  
- 	  std::vector<double> x1( segment_points );
- 	  for (int j=0;j<segment_points;j++) x1[j] = x[p+j];
-	  if  ( detrend ) MiscMath::detrend(&x1);
-	  else MiscMath::centre(&x1);
-	  fftx.apply( x1 );
-
- 	  std::vector<double> y1( segment_points );
- 	  for (int j=0;j<segment_points;j++) y1[j] = y[p+j];
- 	  if ( detrend ) MiscMath::detrend(&y1);      
-	  else MiscMath::centre(&y1);      
- 	  ffty.apply( y1 ); 	  
- 	}
-       else
- 	{
- 	  fftx.apply( &(x[p]) , segment_points );
-	  ffty.apply( &(y[p]) , segment_points );
- 	}
-
-      if ( average_adj )
-	{
-	  fftx.average_adjacent();
-	  ffty.average_adjacent();
-	}
-
-    
-      int cutoff = fftx.cutoff;
-      
-      // x2 is to get full spectrum  
-      double normalisation_factor = 2 * fftx.normalisation_factor;
-
-      for (int i=0;i<cutoff;i++)
-	{
-	  // nb, normalization factors will be the same
-	  
-	  double a = fftx.out[i][0];
-	  double b = fftx.out[i][1];
-      	  psd_x[i].push_back( ( a*a + b*b ) * normalisation_factor );
-	  std::complex<double> Xx( a , b );
-
-	  a = ffty.out[i][0];
-	  b = ffty.out[i][1];
-	  psd_y[i].push_back( ( a*a + b*b ) * normalisation_factor );
-	  std::complex<double> Yy( a , b );
-
-	  std::complex<double> Xy = Xx * conj( Yy );
-	  
-	  cpsd[i].push_back( normalisation_factor * Xy );
-
-	}
-      
-    } // next segment
-  
-  
-  //
-  // take average over segments
-  //
-
-  const double COH_EPS = 1e-10;
-
-  for (int i=0;i<psd_x.size();i++)
-    {
-
-      // https://mne.tools/stable/generated/mne.connectivity.spectral_connectivity.html
-      
-      double sxx = MiscMath::mean( psd_x[i] );
-      
-      double syy = MiscMath::mean( psd_y[i] );
-      
-      std::complex<double> sxy = MiscMath::mean( cpsd[i] );
-
-      // calculate magnitude squared coherence 
-      double phi = abs( sxy ) ;
-      double phi2 = phi * phi;
-            
-      if ( sxx < COH_EPS || syy < COH_EPS ) 
-	{
-	  res.coh[i] = -9;
-	  res.bad[i] = true;
-	}
-      else
-	res.coh[i] = phi2 / ( sxx * syy ); 
-      
-
-      // imaginary coherence
-      
-      double Im = std::imag( sxy );
-      double Re = std::real( sxy );
-
-      res.icoh[i] = Im / sqrt( sxx * syy );
-	
-      // lagged coherence
-      
-      res.lcoh[i] = Im / sqrt( sxx * syy - ( Re * Re ) );
-
-
-      // plv : phase-locking value
-      // std::vector<double> sign_sxy = cpsd[i];
-      // for (int i=
-
-      // pli : phase lag index
-
-      // wpli : weight phase lag index
-
-      
-      // cross/auto spectra (in dB)
-      
-      if ( phi2 > COH_EPS )
-	res.cross_spectrum[i] = 5.0*log10(phi2);
-      else
-	{
-	  res.cross_spectrum[i] =  -50.0 ;
-	  res.bad[i] = true;
-	}
-
-      if ( sxx > COH_EPS )
-	res.auto_spectrum1[i] = 10.0*log10(sxx) ;
-      else
-	{
-	  res.auto_spectrum1[i] = -100.0 ;
-	  res.bad[i] = true;
-	}
-      
-      if (  syy > COH_EPS )
-	res.auto_spectrum2[i] = 10.0*log10(syy) ;
-      else
-	{
-	  res.auto_spectrum2[i] = -100.0 ;
-	  res.bad[i] = true;
-	}
-      
-      res.cross_norm1[i] = phi2 / (sxx*sxx) ;
-      res.cross_norm2[i] = phi2 / (syy*syy) ;
-      
-    }
-
-}
-
 
 
 int bin_t::bin( const std::vector<double> & f , 

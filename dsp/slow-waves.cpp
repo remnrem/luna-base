@@ -594,7 +594,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // track total signal duration
   signal_duration_sec = unfiltered.size() / (double)sr ; 
 
-  logger << " detecting slow waves: " << f_lwr << "-" << f_upr << "Hz\n";
+  logger << "\n detecting slow waves: " << f_lwr << "-" << f_upr << "Hz\n";
   
   if ( t_lwr > 0 ) logger << "  - duration " << t_lwr << "-" << t_upr << "s\n"; 
   if ( t_neg_lwr > 0 ) logger << "  - negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << "\n";

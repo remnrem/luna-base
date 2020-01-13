@@ -170,6 +170,8 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
     {
       
       if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
+
+      writer.level( signals1.label(i) , "CH1" );
       
       for (int j=0;j<ns2;j++)
 	{
@@ -193,10 +195,11 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	  double overall_r;
 	  double mean_r;
 	  double median_r;
-
-	  // stratify output by SIGNALS
-	  writer.level( signals1.label(i) + "x" + signals2.label(j) , "CHS" );
 	  
+	  // stratify output by SIGNALS
+	  //writer.level( signals1.label(i) + "x" + signals2.label(j) , "CHS" );
+	  
+	  writer.level( signals2.label(j) , "CH2" );
 	  
 	  if ( epoched ) 
 	    {
@@ -205,7 +208,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	      
 	      while ( 1 ) 
 		{
-
+		  
 		  int epoch = edf.timeline.next_epoch();      
 		  if ( epoch == -1 ) break;
 
@@ -274,7 +277,8 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	}
     }
   
-  writer.unlevel( "CHS" );
+  writer.unlevel( "CH1" );
+  writer.unlevel( "CH2" );
 
 }
 

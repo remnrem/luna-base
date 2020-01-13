@@ -38,6 +38,8 @@
 #include "defs/defs.h"
 #include "dsp/coherence.h"
 
+#include "fftw/cohfft.h"
+
 extern logger_t logger;
 
 struct edf_t;
@@ -48,6 +50,7 @@ class FFT
 {
   
   friend class coherence_t;
+  friend class precoh_t;
 
  public:
 
@@ -268,96 +271,6 @@ class PWELCH
   bool average_adj;
   
 };
-
-
-class coherence_t {
-
- public:
-
-  coherence_t ( const std::vector<double> & x , 
-		const std::vector<double> & y , 
-		int Fs, 
-		double segment_sec ,  // segment size in seconds 
-		double overlap_sec , // overlap in seconds
-		window_function_t W = WINDOW_HANN , 
-		bool average_adj = false , 
-		bool detrend = false , 
-		bool zerocenter = false )		
-    :  segment_sec(segment_sec) , overlap_sec(overlap_sec),
-    Fs(Fs), window(W), detrend(detrend) , zerocenter(zerocenter) , average_adj(average_adj) ,  x(x), y(y) 
-  {
-    
-    if ( x.size() != y.size() ) 
-      Helper::halt( "coherence_t() called for signals of varying length" );
-
-    total_points = x.size();
-
-    // segment parameters in sample points (NFFT)
-    segment_points = segment_sec * Fs;
-    
-    // overlap in sample points
-    noverlap_points1  = overlap_sec * Fs;
-    
-    // calculate implied overlap in actual data-points
-    noverlap_segments = floor( ( total_points - noverlap_points1) 
-			       / (double)( segment_points - noverlap_points1 ) );
-    
-    noverlap_points2          = noverlap_segments > 1 
-    ? ceil( ( noverlap_segments*segment_points - total_points  ) / double( noverlap_segments - 1 ) )
-    : 0 ;
-
-    // points1 -- will truncate end of signal if the segment length plus overlap is not an exact match
-    // points2 -- will reduce overlap so that last intervals sits on end of signal, i.e. ensures that 
-    //            whole signal is evenly covered;  probably this is a better one to use as a default
-    
-    const bool ensure_even_signal_coverage = true;
-    
-    if ( ensure_even_signal_coverage )
-      segment_increment_points = segment_points - noverlap_points2;
-    else
-      segment_increment_points = segment_points - noverlap_points1;
-    
-/*          std::cerr << "noverlap_points1\t" << noverlap_points1 << "\n";  */
-/*          std::cerr << "noverlap_points2\t" << noverlap_points2 << "\n";  */
-/*          std::cerr << "segment_increment_points\t" << segment_increment_points << "\n";  */
-/*          std::cerr << "noverlap_segments\t" << noverlap_segments << "\n";  */
-/*          std::cerr << "segment_points\t" << segment_points << "\n";  */
-        
-    process(); 
-  } 
-
-  double segment_sec, overlap_sec;
-
-
-  
-  int total_points;
-  int noverlap_segments;
-  int segment_points;
-  int noverlap_points1, noverlap_points2;
-  int segment_increment_points;
-
-  int Fs;
-  
-  coh_t res;
-  
- private:
-
-  window_function_t window;
-  
-  bool detrend;
-  bool zerocenter;
-
-  bool average_adj;
-
-  int N;
-
-  const std::vector<double> & x;
-  const std::vector<double> & y;  
-
-  void process();
-  
-};
-
 
 
 #endif

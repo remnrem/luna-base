@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libfftwrap.a
-OBJS	 = fftwrap.o
+OBJS	 = fftwrap.o cohfft.o
 
 all : $(OBJLIBS)
 

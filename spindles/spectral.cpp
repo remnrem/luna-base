@@ -94,7 +94,7 @@ annot_t * spectral_power( edf_t & edf ,
   // Option to average adjacent points in the power spectra (default = Y)
   //
   
-  bool average_adj = param.has( "no-averaging" ) ? false : true;
+  bool average_adj = param.has( "average-adj" ) ;
   
   //
   // Window function
@@ -464,7 +464,7 @@ annot_t * spectral_power( edf_t & edf ,
 	      std::vector<double> means;
 	      for (int f=0;f<n;f++) 
 		means.push_back( MiscMath::mean( track_freq[f] ) );
-	      
+
 	      bin_t bin( bin_width , max_power , Fs[s] );
 
 	      bin.bin( freqs , means );

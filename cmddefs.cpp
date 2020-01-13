@@ -1306,29 +1306,29 @@ void cmddefs_t::init()
   add_param( "COH" , "max" , "50" , "Upper frequency for spectra" );
   add_param( "COH" , "epoch" , "" , "Show per-epoch coherence" );
 
-  add_table( "COH" , "B,CHS" , "Coherence for power bands" );
-  add_var( "COH" , "B,CHS" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "B,CHS" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "B,CHS" , "LCOH" , "Lagged coherence" );
+  add_table( "COH" , "B,CH1,CH2" , "Coherence for power bands" );
+  add_var( "COH" , "B,CH1,CH2" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "B,CH1,CH2" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "B,CH1,CH2" , "LCOH" , "Lagged coherence" );
   
-  add_table( "COH" , "F,CHS" , "Full cross-spectra coherence [spectrum]" );
-  add_var( "COH" , "F,CHS" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "F,CHS" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "F,CHS" , "LCOH" , "Lagged coherence" );
+  add_table( "COH" , "F,CH1,CH2" , "Full cross-spectra coherence [spectrum]" );
+  add_var( "COH" , "F,CH1,CH2" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "F,CH1,CH2" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "F,CH1,CH2" , "LCOH" , "Lagged coherence" );
 
-  add_table( "COH" , "B,CHS,E" , "Epoch-level band coherence" );
-  add_var( "COH" , "B,CHS,E" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "B,CHS,E" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "B,CHS,E" , "LCOH" , "Lagged coherence" );
+  add_table( "COH" , "B,CH1,CH2,E" , "Epoch-level band coherence" );
+  add_var( "COH" , "B,CH1,CH2,E" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "B,CH1,CH2,E" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "B,CH1,CH2,E" , "LCOH" , "Lagged coherence" );
   
-  add_table( "COH" , "CHS,E,F" , "Epoch-level coherence" );
-  add_var( "COH" , "CHS,E,F" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "CHS,E,F" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "CHS,E,F" , "LCOH" , "Lagged coherence" );
+  add_table( "COH" , "CH1,CH2,E,F" , "Epoch-level coherence" );
+  add_var( "COH" , "CH1,CH2,E,F" , "COH" , "Magnitude-squared coherence" );
+  add_var( "COH" , "CH1,CH2,E,F" , "ICOH" , "Imaginary coherence" );
+  add_var( "COH" , "CH1,CH2,E,F" , "LCOH" , "Lagged coherence" );
 
   // as these files can get large...
-  set_compressed( "COH" , tfac_t( "CHS,B,E" ) );
-  set_compressed( "COH" , tfac_t( "CHS,F,E" ) );
+  set_compressed( "COH" , tfac_t( "CH1,CH2,B,E" ) );
+  set_compressed( "COH" , tfac_t( "CH1,CH2,F,E" ) );
       
   //
   // CORREL
@@ -1345,14 +1345,14 @@ void cmddefs_t::init()
   add_param( "CORREL" , "epoch" , "" , "Estimate mean and median correlation across epochs" );
   add_param( "CORREL" , "verbose" , "" , "Display per-epoch correlations" );
 
-  add_table( "CORREL" , "CHS" , "Whole-signal correlations for pairs of channels" );
-  add_var( "CORREL" , "CHS" , "R", "Pearson product moment correlation" );
-  add_var( "CORREL" , "CHS" , "R_MEAN", "(If epoch is specified) the mean of epoch-level correlations" );
-  add_var( "CORREL" , "CHS" , "R_MEDIAN" ,  "(If epoch is specified) the median of epoch-level correlations" );
+  add_table( "CORREL" , "CH1,CH2" , "Whole-signal correlations for pairs of channels" );
+  add_var( "CORREL" , "CH1,CH2" , "R", "Pearson product moment correlation" );
+  add_var( "CORREL" , "CH1,CH2" , "R_MEAN", "(If epoch is specified) the mean of epoch-level correlations" );
+  add_var( "CORREL" , "CH1,CH2" , "R_MEDIAN" ,  "(If epoch is specified) the median of epoch-level correlations" );
 
-  add_table( "CORREL" , "CHS,E" , "Whole-signal correlations for pairs of channels" );
-  add_var( "CORREL" , "CHS,E" , "R", "Pearson product moment correlation" );
-  set_compressed( "CORREL" , tfac_t( "CHS,E" ) );
+  add_table( "CORREL" , "CH1,CH2,E" , "Whole-signal correlations for pairs of channels" );
+  add_var( "CORREL" , "CH1,CH2,E" , "R", "Pearson product moment correlation" );
+  set_compressed( "CORREL" , tfac_t( "CH1,CH2,E" ) );
 
   
   //
@@ -1368,25 +1368,25 @@ void cmddefs_t::init()
   add_param( "MI" , "sturges" , "" , "Use Sturges' rule to determine bin number" );
   add_param( "MI" , "permute" , "1000" , "Estimate empirical significance via permutation, with N replicates" );
 
-  add_table( "MI" , "CHS" , "Output for the whole signal pairs" );
-  add_var( "MI" , "CHS" , "MI" , "Mutual information" );
-  add_var( "MI" , "CHS" , "TOTCORR" , "Total correlation" );
-  add_var( "MI" , "CHS" , "DTOTCORR" , "Dual total correlation" );
-  add_var( "MI" , "CHS" , "JINF" , "Joint entropy" );
-  add_var( "MI" , "CHS" , "INFA" , "Marginal entropy of first signal" );
-  add_var( "MI" , "CHS" , "INFB" , "Marginal entropy of second signal" );
-  add_var( "MI" , "CHS" , "NBINS" , "Number of bins" );
-  add_var( "MI" , "CHS" , "EMP" , "Empirical significance [permute]" );
-  add_var( "MI" , "CHS" , "Z" , "Z statistic [permute]" );
+  add_table( "MI" , "CH1,CH2" , "Output for the whole signal pairs" );
+  add_var( "MI" , "CH1,CH2" , "MI" , "Mutual information" );
+  add_var( "MI" , "CH1,CH2" , "TOTCORR" , "Total correlation" );
+  add_var( "MI" , "CH1,CH2" , "DTOTCORR" , "Dual total correlation" );
+  add_var( "MI" , "CH1,CH2" , "JINF" , "Joint entropy" );
+  add_var( "MI" , "CH1,CH2" , "INFA" , "Marginal entropy of first signal" );
+  add_var( "MI" , "CH1,CH2" , "INFB" , "Marginal entropy of second signal" );
+  add_var( "MI" , "CH1,CH2" , "NBINS" , "Number of bins" );
+  add_var( "MI" , "CH1,CH2" , "EMP" , "Empirical significance [permute]" );
+  add_var( "MI" , "CH1,CH2" , "Z" , "Z statistic [permute]" );
 
-  add_table( "MI" , "CHS,E" , "Output per epoch" );
-  add_var( "MI" , "CHS,E" , "MI" , "Mutual information" );
-  add_var( "MI" , "CHS,E" , "TOTCORR" , "Total correlation" );
-  add_var( "MI" , "CHS,E" , "DTOTCORR" , "Dual total correlation" );
-  add_var( "MI" , "CHS,E" , "JINF" , "Joint entropy" );
-  add_var( "MI" , "CHS,E" , "INFA" , "Marginal entropy of first signal" );
-  add_var( "MI" , "CHS,E" , "INFB" , "Marginal entropy of second signal" );
-  set_compressed( "MI" , tfac_t( "CHS,E" ) );
+  add_table( "MI" , "CH1,CH2,E" , "Output per epoch" );
+  add_var( "MI" , "CH1,CH2,E" , "MI" , "Mutual information" );
+  add_var( "MI" , "CH1,CH2,E" , "TOTCORR" , "Total correlation" );
+  add_var( "MI" , "CH1,CH2,E" , "DTOTCORR" , "Dual total correlation" );
+  add_var( "MI" , "CH1,CH2,E" , "JINF" , "Joint entropy" );
+  add_var( "MI" , "CH1,CH2,E" , "INFA" , "Marginal entropy of first signal" );
+  add_var( "MI" , "CH1,CH2,E" , "INFB" , "Marginal entropy of second signal" );
+  set_compressed( "MI" , tfac_t( "CH1,CH2,E" ) );
   
 
   //

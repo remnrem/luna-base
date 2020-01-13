@@ -1,5 +1,7 @@
 
 
+
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -375,7 +377,7 @@ void cmd_t::signal_alias( const std::string & s )
   
   // format canonical|alias1|alias2 , etc.
   std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
-  if ( tok.size() < 2 ) Helper::halt( "bad format for signal alias:  canonical|alias 1|alias 2" );
+  if ( tok.size() < 2 ) Helper::halt( "bad format for signal alias:  canonical|alias 1|alias 2\n" + s );
   const std::string primary = Helper::unquote( tok[0] );
   for (int j=1;j<tok.size();j++) 
     {
@@ -770,7 +772,6 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CWT" ) )          proc_cwt( edf , param(c) );
       else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
 
-      //	  else if ( is( c, "LEGACY-FILTER" )) proc_filter_legacy( edf, param(c) );
       else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
       
       else if ( is( c, "COVAR" ) )        proc_covar( edf, param(c) );
@@ -781,7 +782,6 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "FIP" ) )          proc_fiplot( edf , param(c) );
       
       else if ( is( c, "COH" ) )          proc_coh( edf , param(c) );
-      else if ( is( c, "LECGACY-COH" ) )  proc_coh_legacy( edf , param(c) );
       else if ( is( c, "PHSYN" ) )        proc_phsyn( edf , param(c) );
       else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
@@ -1713,12 +1713,6 @@ void proc_attach_clocs( edf_t & edf , param_t & param )
   edf.clocs.load_cart( filename , param.has( "verbose" ) );
 }
 
-// COH : calculate cross spectral coherence, using legacy code
-
-void proc_coh_legacy( edf_t & edf , param_t & param )
-{
-  dsptools::coherence( edf , param , true );
-}
 
 // EMD : Empirical Mode Decomposition 
 void proc_emd( edf_t & edf , param_t & param )

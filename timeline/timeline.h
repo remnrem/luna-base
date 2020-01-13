@@ -172,7 +172,7 @@ struct timeline_t
 
     int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
 
-    logger << " set epochs to default " 
+    logger << "  set epochs to default " 
 	   << globals::default_epoch_len 
 	   << " seconds, " << ne << " epochs\n";
 

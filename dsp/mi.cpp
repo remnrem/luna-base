@@ -119,6 +119,8 @@ void dsptools::compute_mi( edf_t & edf , param_t & param )
     {
       
       if ( edf.header.is_annotation_channel( signals(i) ) ) continue;
+
+      writer.level( signals.label(i) , "CH1" );
       
       for (int j=i+1;j<ns;j++)
 	{
@@ -138,7 +140,8 @@ void dsptools::compute_mi( edf_t & edf , param_t & param )
 	  // stratify output by SIGNALS
 	  //
 	  
-	  writer.level( signals.label(i) + "_x_" + signals.label(j) , "CHS" );
+	  //writer.level( signals.label(i) + "_x_" + signals.label(j) , "CHS" );
+	  writer.level( signals.label(j) , "CH2" );
 	  
 	  //
 	  // First, MI for entire duration
@@ -277,7 +280,8 @@ void dsptools::compute_mi( edf_t & edf , param_t & param )
   // All done 
   //
   
-  writer.unlevel( "CHS" );
+  writer.unlevel( "CH1" );
+  writer.unlevel( "CH2" );
   
 }
 
