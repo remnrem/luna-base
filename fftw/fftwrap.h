@@ -49,8 +49,8 @@ std::map<double,double> fft_spectrum( const std::vector<double> * d , int Fs );
 class FFT
 {
   
-  friend class coherence_t;
-  friend class precoh_t;
+  friend struct coherence_t;
+  friend struct precoh_t;
 
  public:
 

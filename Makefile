@@ -14,7 +14,7 @@ libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
 libsrate.a libedfz.a liblwprep.a
 
 LIBS = -L. -lspindles -llwprep -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
--ltimeline -lstaging -lfftwrap -ldsp -lmtm -lmiscmath -lintervals	\
+-ltimeline -lstaging -ldsp -lfftwrap -lmtm -lmiscmath -lintervals	\
 -ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lica	\
 -lsrate -lfftw3 -lz
 

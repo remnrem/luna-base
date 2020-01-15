@@ -81,11 +81,11 @@ struct precoh_t {
 };
 
 
-class coherence_t {
+struct coherence_t {
 
   friend struct precoh_t;
   
- public:
+public:
 
   coherence_t ( int total_points ,
 		int Fs, 
@@ -133,9 +133,10 @@ class coherence_t {
     //process(); 
   } 
 
+  int total_points;
+
   double segment_sec, overlap_sec;
   
-  int total_points;
   int noverlap_segments;
   int segment_points;
   int noverlap_points1, noverlap_points2;
