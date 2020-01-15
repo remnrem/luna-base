@@ -287,9 +287,9 @@ bool timeline_t::interval2records( const interval_t & interval ,
     }
   else
     {
-
-      //      std::cout << "in EDF+D\n";
-
+      
+      // std::cout << "in EDF+D\n";
+      
       //
       // For a discontinuous EDF+ we need to search 
       // explicitly across record timepoints
@@ -332,8 +332,10 @@ bool timeline_t::interval2records( const interval_t & interval ,
        	{
 	  // If the search point occurs before /all/ records, need to
 	  // indicate that we are in a gap also	  
+	  
 	  if ( interval.start < lwr->first ) 
 	    in_gap = true;	      
+	  
 	}
       
       // problem? return empty record set
@@ -368,14 +370,22 @@ bool timeline_t::interval2records( const interval_t & interval ,
       std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( stop_tp ); 
       
       //
-      // this should have return one past the one we are looking for 
+      // this should have returned one past the one we are looking for 
       // i.e. that starts *after* the search point
       //
       
-      if ( upr != tp2rec.begin() ) --upr;  
+      bool ends_before = upr == tp2rec.begin() ;
       
-      *stop_rec  = upr->second;
-      
+      if ( ! ends_before ) 
+	{
+	  --upr;  
+	  *stop_rec  = upr->second;
+	}
+      else
+	{
+	  *stop_rec  = -1; // i.e. flag as bad, so ensure that stop is before the start (which will also be rec 0)
+	}
+
       // get samples within (as above)      
       uint64_t previous_rec_start = upr->first;
       uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1;
@@ -394,15 +404,15 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
     }
   
-//   std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
-//   std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
+//    std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
+//    std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
 
   //
   // If the interval is in a gap, we will not get any records here, and 
   // stop < start;  so check for this and flag if so 
   //
   
-  if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
+   if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
     {
       *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
       return false;
@@ -1028,7 +1038,7 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
 signal_list_t timeline_t::masked_channels_sl( const int e0 , const signal_list_t & signals ) const
 {
   int e = display_epoch( e0 );
-  std::cout << "e in TLM = " << e0 << " " << e << "\n";
+  //  std::cout << "e in TLM = " << e0 << " " << e << "\n";
   signal_list_t msigs;
   std::vector<int> m = masked_channels( e0 , signals );
   for (int i=0;i<m.size();i++) msigs.add( m[i] , edf->header.label[ m[i] ] );
@@ -1039,7 +1049,7 @@ signal_list_t timeline_t::unmasked_channels_sl( const int e0 , const signal_list
 {
   signal_list_t usigs;
   int e = display_epoch( e0 );
-  std::cout << "e in TLU = " << e0 << " " << e << "\n";
+  //  std::cout << "e in TLU = " << e0 << " " << e << "\n";
   if ( e == -1 ) return usigs;
   std::vector<int> u = unmasked_channels( e0 , signals );
   for (int i=0;i<u.size();i++) usigs.add( u[i] , edf->header.label[ u[i] ] );
@@ -1120,8 +1130,12 @@ void timeline_t::collapse_chep2epoch( signal_list_t signals , const int k  , con
 	   ( pct != 0 && sz / (double)signals.size() > pct ) ) 
 	{
 	  // change main epoch mask
-	  if ( set_epoch_mask( epoch ) ) ++masked;
+	  int epoch0 = display2curr_epoch( epoch );
 
+	  // if this epoch is still present in current file, set mask
+	  if ( epoch0 != -1 ) 
+	    if ( set_epoch_mask( epoch0 ) ) ++masked;
+	  
 	  // and also set all CHEP masks (to signals) for this epoch
 	  for (int s=0;s<signals.size();s++) ee->second.insert( signals(s) );
 	  
@@ -1442,24 +1456,27 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 
   if ( start_masked != NULL ) *start_masked = false;  
 
-  if ( ! mask_set ) 
-    {
-      return false;
-    }
   
   if ( edf->header.continuous )
     {
 
+      if ( ! mask_set ) 
+	{
+	  return false;
+	}
+      
       int eleft = MiscMath::position2leftepoch( interval.start , epoch_length_tp, epoch_inc_tp , mask.size() );
-      int eright = MiscMath::position2rightepoch( interval.stop , epoch_length_tp, epoch_inc_tp , mask.size() );
+
+      // end of interval is one past end of region:
+      int eright = MiscMath::position2rightepoch( interval.stop-1LLU , epoch_length_tp, epoch_inc_tp , mask.size() );
       
       //std::cout << "e1e2 = " << eleft << "  " << eright << "\n";
-
+      
       if ( start_masked != NULL )
 	{
 	  if ( eleft == -1 || mask[eleft] ) *start_masked = true;
 	}
-
+      
       if ( eleft == -1 || eright == -1 ) return true;
       
       // above functions return -1 if the tp is off the map
@@ -1477,11 +1494,15 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
   else // for EDF+D
     {
       std::set<int> records = records_in_interval( interval );
+      
+      // falls off edge of the map
+      if ( records.size() == 0 ) return true;
+      
       std::set<int>::const_iterator rr = records.begin();
       while ( rr != records.end() )
 	{
 	  const std::set<int> & epochs = rec2epoch.find( *rr )->second;
-
+	  
 	  std::set<int>::const_iterator ee = epochs.begin();
 	  
 	  if ( start_masked != NULL )
@@ -1517,7 +1538,7 @@ std::set<int> timeline_t::records_in_interval( const interval_t & interval ) con
   std::set<int> recs;
   
   bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
-  
+
   if ( ! any ) return recs;
   
   int r = start_rec;

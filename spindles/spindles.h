@@ -64,6 +64,14 @@ struct spindle_t
   // flag not to be included in analyis
   bool include;
 
+  // SO coupling metrics
+  double peak_sec;
+  double so_nearest;
+  int so_nearest_num;
+  double so_phase_peak;
+
+  double if_spindle;
+
   bool operator<( const spindle_t & rhs ) const { return tp < rhs.tp; } 
 
 };
@@ -78,7 +86,10 @@ annot_t * spindle_wavelet( edf_t & , param_t & );
 void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_t,double> * fft );
 
 // helper to get spindle stats
-std::map<std::string,double> spindle_stats( const std::vector<spindle_t> & spindles ) ;
+void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & ) ;
+
+// helper
+void write_if_exists( const std::string & s , const std::map<std::string,double> & means ) ;
 
 void characterize_spindles( edf_t & edf , 
 			    param_t & param , 
@@ -94,6 +105,12 @@ void characterize_spindles( edf_t & edf ,
 			    std::map<freq_range_t,double> * baseline = NULL , 
 			    std::map<double,double> * locked = NULL 
 			    );
+
+
+void per_spindle_output( std::vector<spindle_t>    * spindles ,
+			 param_t & param , 
+			 clocktime_t               * starttime , 
+			 std::map<freq_range_t,double> * baseline );
 
 
 #endif

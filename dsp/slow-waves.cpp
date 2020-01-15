@@ -392,7 +392,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 	    writer.value( "SLOPE_POS2" , w.slope_p2() );
 	  }
 	
-	if ( 0 && verbose )
+	if ( false && verbose )
 	  {
 	    int pos = 0;
 	    for (uint64_t j = w.interval.start ; j <= w.interval.stop ; j++ ) 

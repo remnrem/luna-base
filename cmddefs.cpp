@@ -1068,6 +1068,9 @@ void cmddefs_t::init()
   hide_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
   hide_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
   
+  hide_table( "SPINDLES", "F,CH,PHASE,RELLOC" , "Mean IF stratified by phase and relative location in spindle [if]" );
+  hide_var( "SPINDLES" , "F,CH,PHASE,RELLOC" , "SOPL_CHIRP" , "Spindle chirp" );
+  
   add_table( "SPINDLES" , "" , "Individual-level summaries of m-spindles [collate]" );
   add_var( "SPINDLES" , "" , "MSP_DENS" , "m-spindle density" );
   add_var( "SPINDLES" , "" , "MSP_N" , "m-spindle count" );
@@ -1142,7 +1145,7 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "stats-median" , "" , "SO, use median (not mean) when reporting stats over SOs" );  
  
   add_table( "SPINDLES" , "CH" , "SO channel-level statistics" );
-  add_var( "SPINDLES" , "CH" , "SPINDLES" , "Number of SO detected" );
+  add_var( "SPINDLES" , "CH" , "SO" , "Number of SO detected" );
   add_var( "SPINDLES" , "CH" , "SO_RATE" , "SO per minute" );
   add_var( "SPINDLES" , "CH" , "SO_AMP" , "SO amplitude (negative peak)" );
   add_var( "SPINDLES" , "CH" , "SO_P2P" , "SO peak-to-peak amplitude" );
@@ -1195,12 +1198,12 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "stratify-by-phase" , "" , "SO/SP coupling: Overlap statistics per SO phase bin" );
   
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_MEAN" , "SO/SP coupling: meanmagnitude under null" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "SO/SP coupling: meanmagnitude under null" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "SO/SP coupling: magnitude (empirical Z)" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "SO/SP coupling: magnitude (empirical P)" );  
   
   add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_MEAN" , "SO/SP coupling: mean overlap under null" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_NULL" , "SO/SP coupling: mean overlap under null" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (empirical Z)" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );
 
@@ -1209,18 +1212,31 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,F" , "COUPL_PV" , "SO/SP coupling: asymptotic ITPC p-value" );
   add_var( "SPINDLES" , "CH,F" , "COUPL_SIGPV_NULL" , "SO/SP coupling: null rate of asymptotic ITPC p-value < 0.05" );
 
-  
+  add_table( "SPINDLES" , "CH,F,PHASE" , "SO-phase stratified spindle overlap" );
   add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
   add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );
-  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (Z statistic)" );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (Z statistic)" );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "SOPL_CHIRP" , "Spindle frequency | SO phase" );
    
   // spindle-level SO-coupling output
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK" , "Spindle peak (seconds)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST" , "SO/SP coupling: time to nearest SO (0 if in one)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST_NUM" , "SO/SP coupling: number of nearest SO" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_PHASE_PEAK" , "SO/SP coupling: SO phase at spindle peak, if in SO" );
+
+
+  add_table( "SPINDLES", "CH,PHASE" , "Raw EEG by SO phase" );
+  add_var( "SPINDLES" , "CH,PHASE", "SOPL_EEG" , "Average EEG" );
   
-  
+  add_table( "SPINDLES", "CH,SP" , "Raw EEG by time from SO negative peak" );
+  add_var( "SPINDLES" , "CH,SP", "SOTL_EEG" , "Average EEG" );
+
+  add_table( "SPINDLES", "CH,F,PHASE" , "Spindle CWT by SO phase" );
+  add_var( "SPINDLES" , "CH,F,PHASE", "SOPL_CWT" , "Spindle CWT" );
+
+  add_table( "SPINDLES", "CH,F,SP" , "Spindle CWT by time from SO negative peak" );
+  add_var( "SPINDLES" , "CH,F,SP", "SOTL_CWT" , "Spindle CWT" );
+
    
   //
   // SO
@@ -1250,6 +1266,11 @@ void cmddefs_t::init()
   add_param( "SO" , "th-mean" , "" , "Use mean not median" );
   add_param( "SO" , "stats-median" , "" , "Use median (not mean) when reporting stats over SOs" );  
  
+  add_param( "SO" , "tl" , "C3" , "Output signal time-locked to detected SOs" );
+  add_param( "SO" , "onset" , "" , "Sync to SO onset for tl option" );
+  add_param( "SO" , "pos" , "" , "Sync to positive peak for tl option" );
+  add_param( "SO" , "window" , "2" , "Specify window size (seconds) for tl option" );
+  
   add_table( "SO" , "CH" , "Channel-level statistics" );
   add_var( "SO" , "CH" , "SO" , "Number of SO detected" );
   add_var( "SO" , "CH" , "SO_RATE" , "SO per minute" );
@@ -1292,6 +1313,8 @@ void cmddefs_t::init()
   add_var( "SO" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
   add_var( "SO" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
   
+  add_table( "SO" , "CH,CH2,SP" , "SO time-locked signal averaging [tl]" );
+  add_var( "SO" , "CH,CH2,SP" , "SOTL" , "SO time-locked signal average" );
 
 
   
@@ -1354,8 +1377,7 @@ void cmddefs_t::init()
   add_param( "CORREL" , "sig2" , "F3,F4" , "Restrict analysis to sig1 x sig2 channel pairs only" );
   
   add_param( "CORREL" , "sr" , "128" , "Resample channels to this sample rate if needed" );
-  add_param( "CORREL" , "epoch" , "" , "Estimate mean and median correlation across epochs" );
-  add_param( "CORREL" , "verbose" , "" , "Display per-epoch correlations" );
+  add_param( "CORREL" , "epoch" , "" , "Display per-epoch, and estimate mean and median correlation across epochs" );
 
   add_table( "CORREL" , "CH1,CH2" , "Whole-signal correlations for pairs of channels" );
   add_var( "CORREL" , "CH1,CH2" , "R", "Pearson product moment correlation" );

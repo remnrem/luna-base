@@ -312,6 +312,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   writer.numeric_factor( "SPINDLE" );
   writer.numeric_factor( "MSEC" );
+  writer.numeric_factor( "PHASE" );
   
 
   //
@@ -374,10 +375,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       //
       
       std::map<freq_range_t,double> baseline_fft;
-      do_fft( d , Fs[s] , &baseline_fft );
-      
-      
 
+      do_fft( d , Fs[s] , &baseline_fft );
 
 
       //
@@ -966,15 +965,25 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
 	  //
-	  // Calculate additional spindle parameters?
-	  //	  
+	  // Track some CH/F level output (i.e. so can all be sent together, given new -t demands...)
+	  //
+	  
+	  
+ 	  std::map<std::string,double> means;
+
+
+
 	  
 
+	  //
+	  // Calculate additional spindle parameters, and final spindle-level QC (Q scores, PASS/ENRICH)
+	  //	  
+	  
 	  std::map<double,double> locked;
 
 	  if ( characterize && some_data ) 
 	    {	  
-
+	      
 	      const double window_f = 4;  // +/- 2 Hz around each peak
 	      
 	      characterize_spindles( edf , param , signals(s) , 
@@ -992,9 +1001,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	    }
 	  
+	  	  
+	  if ( characterize ) 
+	    spindle_stats( spindles , means );
+	  
 
-
-
+	  
 	  //
 	  // Optionally, transform of spindle frequencies (+/- 2 Hz ) to get IF
 	  //
@@ -1081,32 +1093,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  //
 		  // Mean IF for this spindle
 		  //
-
-		  writer.level( i+1  , "SPINDLE" );
-
-		  if_spindle /= (double)if_n;		  
-		  writer.value( "IF" , if_spindle );		  
 		  
-		  //
-		  // Variability of IF for tshis spindle
-		  //
-		  
-// 		  double sd = MiscMath::sdev( xdata , if_spindle );
-// 		  writer.value( "SDIF" , sd  );		  
-
-// 		  // points below threshold
-// 		  writer.value( "SLOWED" , slower_points / (double)if_n );
-		  
-		  // std::cout << "XXX\tIF\t" << i+1 << "\t" << if_spindle << "\n";	  
-		  
-		  // for (int j = b0 ; j <= b1 ; j++ ) 
-		  //   std::cout << "XXX\tsig\t" << i+1 << "\t" << (*d)[j] << "\t" 
-		  //  	      << averaged[j] << "\t" 
-		  //  	      << (*p_chirp_if)[j] << "\n";
-		  
+		  spindles[i].if_spindle = if_spindle;
 		  
 		}
-	      writer.unlevel( "SPINDLE" );
 	      
 	      // output by bin
 	      for (int j=0;j<ht_bins;j++)
@@ -1309,6 +1299,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 		  if ( nreps != 0 && nreps < 10 ) Helper::halt( "nreps must be 10+" );
 		  
+
+		  //
+		  // Perform spindle/SO coupling analysis
+		  //
+
 		  itpc_t itpc  = p_hilbert->phase_events( all_spindles_peak , 
 							  use_mask ? &so_mask : NULL , nreps ,  // optional, mask events/spindles
 							  sr , 
@@ -1319,20 +1314,25 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  sw_peak = itpc.event_included;
 		  
 		  ph_peak = itpc.phase;
-
 		  
-		  // ITPC magnitude of coupling
+		  //
+		  // Gather output (but don't send to writer until later, i.e. need to 
+		  // group all CH/F strata output together for -t mode
+		  //
 
-		  writer.value( "COUPL_MAG"      , itpc.itpc.obs );
+		  // ITPC magnitude of coupling
+		  
+		  means[ "COUPL_MAG" ] =  itpc.itpc.obs ;
+		  //writer.value( "COUPL_MAG"      , itpc.itpc.obs );
 
 		  if ( use_mask )
-		    writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
-
+		    means[ "COUPL_OVERLAP" ] = itpc.ninc.obs ;
+		  
 		  if ( nreps ) 
 		    {
-		      writer.value( "COUPL_MAG_EMP"  , itpc.itpc.p );
-		      writer.value( "COUPL_MAG_NULL" , itpc.itpc.mean );
-		      writer.value( "COUPL_MAG_Z"    , ( itpc.itpc.obs - itpc.itpc.mean ) / itpc.itpc.sd  );
+		      means[  "COUPL_MAG_EMP"  ] = itpc.itpc.p ;
+		      means[  "COUPL_MAG_NULL" ] = itpc.itpc.mean ;
+		      means[  "COUPL_MAG_Z"    ] = ( itpc.itpc.obs - itpc.itpc.mean ) / itpc.itpc.sd ;
 		      
 		      // proportion of spdinles that overlap a SO 
 		      // unless itpc-so was set, this will be meaningless
@@ -1341,12 +1341,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      if ( use_mask ) 
 			{
 			  			  
-			  writer.value( "COUPL_OVERLAP_EMP" , itpc.ninc.p );
-			  
-			  writer.value( "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
+			  means[ "COUPL_OVERLAP_EMP" ] = itpc.ninc.p ;
+
+			  means[ "COUPL_OVERLAP_NULL" ] = itpc.ninc.mean ;
 			  
 			  if ( itpc.ninc.sd > 0 )  		    			
-			    writer.value( "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd  );
+			    means[ "COUPL_OVERLAP_Z" ] = ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd ;
 			}
 		      
 		    }
@@ -1356,7 +1356,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  //
 		  
 		  if ( itpc.angle.obs > -9 ) 
-		    writer.value( "COUPL_ANGLE"   , itpc.angle.obs );
+		    means[ "COUPL_ANGLE" ] = itpc.angle.obs ;
 		  
 		  //
 		  // asymptotic significance of coupling test; under
@@ -1364,11 +1364,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // (P<0.05) coupling
 		  //
 		  
-		  writer.value( "COUPL_PV"         , itpc.pv.obs );
+		  means[ "COUPL_PV" ] = itpc.pv.obs ;
 		  
 		  if ( nreps ) 
-		    writer.value( "COUPL_SIGPV_NULL" , itpc.sig.mean ); 
+		    means[ "COUPL_SIGPV_NULL" ] = itpc.sig.mean ; 
 
+		  
 		  //
 		  // phase-bin stratified overlap/counts
 		  //
@@ -1395,32 +1396,30 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 		}
 	      	      
-	      
+	  
 	      //
-	      // Individual PEAKS
+	      // Individual PEAKS, to be output later, in characterize() 
 	      //
 	      
-	    
 	      for (int i=0;i<nspindles;i++)
 		{
-		  writer.level( i+1 , "SPINDLE" );
-		  
-		  writer.value("PEAK" , spindle_peak[i] * globals::tp_duration );
+		  // peak_sec
+		  spindles[i].peak_sec = spindle_peak[i] * globals::tp_duration ;
 		  
 		  if ( nearest_sw_number[i] != 0 ) // is now 1-basewd 
 		    {
-		      writer.value( "SO_NEAREST" , nearest_sw[i] );
-		      writer.value( "SO_NEAREST_NUM" , nearest_sw_number[i] );
+		      spindles[i].so_nearest = nearest_sw[i] ;
+		      spindles[i].so_nearest_num = nearest_sw_number[i] ;		      
 		    }
 		  
 		  if ( sw_peak[ i ] )
-		    writer.value( "SO_PHASE_PEAK" , MiscMath::as_angle_0_pos2neg( ph_peak[ i ] ) );
-		  		  
+		    spindles[i].so_phase_peak =  MiscMath::as_angle_0_pos2neg( ph_peak[ i ] ) ;		  		  		      
+		  else 
+		    spindles[i].so_phase_peak =  -9;
+		  
 		}
 	      
-	      writer.unlevel( "SPINDLE" );
-	      
-	     	      	      
+	    	     	      	      
 	      //
 	      // Optional, consideration of spindle chirp as a function of SO phase
 	      //
@@ -1512,9 +1511,17 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  
 		}
 	    
-
+	    
 	    } // end of SW-coupling code
 	  
+	  
+
+	  //
+	  // Per-spindle level output
+	  //
+
+	  per_spindle_output( &spindles , param , ( hms ? &starttime : NULL) , &baseline_fft );
+
 
 
 	  //
@@ -1557,6 +1564,17 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	
 
 	  //
+	  // Estiamte of spindle density to console
+	  //
+
+	  bool empty = spindles.size() == 0; 
+	  
+	  if ( ! empty )
+	    logger << " estimated spindle density is " << spindles.size() / t_minutes << "\n";
+  
+
+
+	  //
 	  // Save for an 'intersection' command?
 	  //
 
@@ -1591,71 +1609,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		}
 
 	    }
-	  
-	  
-	  
-	  //
-	  // Calculate and output mean statistics for this spindle set 
-	  //
-	    
-	  
- 	  std::map<std::string,double> means;
-	  
-	  if ( characterize ) 
-	    means = spindle_stats( spindles );
 
-	  
-	  //
-	  // Output over all epochs
-	  //
-	  
-	  bool empty = spindles.size() == 0; 
-	  
-	  if ( ! empty )
-	    logger << " estimated spindle density is " << spindles.size() / t_minutes << "\n";
-	    
-	  if ( characterize && ! empty )
-	    {
-	      
-	      writer.var( "N01"     , "Number of spindles prior to merging" );
-	      writer.var( "N02"     , "Number of spindles prior to QC" );
-	      writer.var( "N"       , "Final number of spindles" );
-	      
-	      writer.var( "MINS"  , "Number of minutes for spindle detection" );	      
-	      writer.var( "DENS"  , "Spindle density (per minute)" );
-	      writer.var( "AMP"   , "Mean spindle amplitude" );
-	      writer.var( "DUR"   , "Mean spindle duration" );
-	      writer.var( "FWHM"  , "Mean spindle FWHM" );
-	      writer.var( "NOSC"  , "Mean spindle number of oscillations" );
-	      writer.var( "FRQ"   , "Mean spindle frequency (zero-crossing method)" );
-	      writer.var( "FFT"   , "Mean spindle frequency (FFT)" );	      
-	      writer.var( "SYMM"  , "Mean spindle symmetry index" );
-	      writer.var( "SYMM2"  , "Mean spindle folded symmetry index" );
-	      writer.var( "CHIRP" , "Mean spindle chirp index" );
-	      
-	      writer.value( "N01" , nspindles_premerge );  // original
-	      writer.value( "N02" , nspindles_postmerge ); // post merging
-	      writer.value( "N" ,  (int)spindles.size()  ) ;    // post merging and QC	    
-	      writer.value( "MINS" , t_minutes );
-	      writer.value( "DENS" , spindles.size() / t_minutes );
-	      
-	      writer.value( "ISA_S" , means[ "ISA_PER_SPINDLE" ] );
-	      writer.value( "ISA_M" , means[ "ISA_TOTAL" ] / t_minutes );
-	      writer.value( "ISA_T" , means[ "ISA_TOTAL" ] );
-	      writer.value( "Q"     , means[ "Q" ] );
 
-	      writer.value( "AMP" , means["AMP"] );
-	      writer.value( "DUR" , means["DUR"] );
-	      writer.value( "FWHM" , means["FWHM"] );
-	      writer.value( "NOSC" , means["NOSC"] );
-	      writer.value( "FRQ" , means["FRQ"] );
-	      writer.value( "FFT" , means["FFT"] );
-	      writer.value( "SYMM" , means["SYMM"] );
-	      writer.value( "SYMM2" , means["SYMM2"] );
-	      writer.value( "CHIRP" , means["CHIRP"] );
-
-	    }
-
+	 	  
 
 	  //
 	  // Per-EPOCH summary and test of over-dispersion
@@ -1731,13 +1687,89 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  writer.var( "DISPERSION_P" , "Spindle epoch-dispersion index p-value" );
 		  writer.var( "NE" , "Number of epochs for spindle detection" );
 		  
-		  writer.value( "DISPERSION" , stat );
-		  writer.value( "DISPERSION_P" , pval );
-		  writer.value( "NE" , (int)epoch_counts.size() );
+		  means[ "DISPERSION" ] = stat ;
+		  means[ "DISPERSION_P" ] = pval ;
+		  means[ "NE" ] = (int)epoch_counts.size() ;
 		}
 
 	    }
 	
+	  
+
+	  //
+	  // Main output
+	  //
+
+	  
+	  //
+	  // Output over all epochs
+	  //
+	  
+	  if ( characterize && ! empty )
+	    {
+	      
+	      writer.var( "N01"     , "Number of spindles prior to merging" );
+	      writer.var( "N02"     , "Number of spindles prior to QC" );
+	      writer.var( "N"       , "Final number of spindles" );
+	      
+	      writer.var( "MINS"  , "Number of minutes for spindle detection" );	      
+	      writer.var( "DENS"  , "Spindle density (per minute)" );
+	      writer.var( "AMP"   , "Mean spindle amplitude" );
+	      writer.var( "DUR"   , "Mean spindle duration" );
+	      writer.var( "FWHM"  , "Mean spindle FWHM" );
+	      writer.var( "NOSC"  , "Mean spindle number of oscillations" );
+	      writer.var( "FRQ"   , "Mean spindle frequency (zero-crossing method)" );
+	      writer.var( "FFT"   , "Mean spindle frequency (FFT)" );	      
+	      writer.var( "SYMM"  , "Mean spindle symmetry index" );
+	      writer.var( "SYMM2"  , "Mean spindle folded symmetry index" );
+	      writer.var( "CHIRP" , "Mean spindle chirp index" );
+	      
+	      writer.value( "N01" , nspindles_premerge );  // original
+	      writer.value( "N02" , nspindles_postmerge ); // post merging
+	      writer.value( "N" ,  (int)spindles.size()  ) ;    // post merging and QC	    
+	      writer.value( "MINS" , t_minutes );
+	      writer.value( "DENS" , spindles.size() / t_minutes );
+	      
+	      writer.value( "ISA_S" , means[ "ISA_PER_SPINDLE" ] );
+	      writer.value( "ISA_M" , means[ "ISA_TOTAL" ] / t_minutes );
+	      writer.value( "ISA_T" , means[ "ISA_TOTAL" ] );
+	      writer.value( "Q"     , means[ "Q" ] );
+
+	      writer.value( "AMP" , means["AMP"] );
+	      writer.value( "DUR" , means["DUR"] );
+	      writer.value( "FWHM" , means["FWHM"] );
+	      writer.value( "NOSC" , means["NOSC"] );
+	      writer.value( "FRQ" , means["FRQ"] );
+	      writer.value( "FFT" , means["FFT"] );
+	      writer.value( "SYMM" , means["SYMM"] );
+	      writer.value( "SYMM2" , means["SYMM2"] );
+	      writer.value( "CHIRP" , means["CHIRP"] );
+
+	      
+	      writer.value( "DISPERSION" , means[ "DISPERSION" ] );
+	      writer.value( "DISPERSION_P" , means[ "DISPERSION_P" ] );
+	      writer.value( "NE" , means[ "NE" ] );
+
+	      write_if_exists( "COUPL_MAG" , means );
+	      write_if_exists( "COUPL_MAG_EMP" , means );
+	      write_if_exists( "COUPL_MAG_Z" , means );
+	      write_if_exists( "COUPL_MAG_NULL" , means );
+
+	      write_if_exists( "COUPL_OVERLAP" , means );
+	      write_if_exists( "COUPL_OVERLAP_EMP" , means );
+	      write_if_exists( "COUPL_OVERLAP_NULL" , means );
+	      write_if_exists( "COUPL_OVERLAP_Z" , means );
+
+	      write_if_exists( "COUPL_ANGLE" , means );
+	      write_if_exists( "COUPL_PV" , means );
+
+	      write_if_exists( "COUPL_SIGPV_NULL" , means );
+
+	    }
+
+
+
+
 	  
 	  //
 	  // Adding new signals?
@@ -2518,17 +2550,8 @@ void characterize_spindles( edf_t & edf ,
       //
 
       if ( ! spindle->include ) removed_some = true;
-
-
-      // if ( spindle->include )
-      //  	{
-//       std::cout << "XXX\tfrq\t" << i+1 << "\t" << spindle->frq << "\n";
-//       std::cout << "XXX\tsymm1\t" << i+1 << "\t" << spindle->symm << "\n";
-//       std::cout << "XXX\tsymm2\t" << i+1 << "\t" << spindle->symm2 << "\n";
-      // 	}
-
-	    
-
+      
+      
      }
 
 
@@ -2545,27 +2568,62 @@ void characterize_spindles( edf_t & edf ,
 	 if ( copy_spindles[i].include ) spindles->push_back( copy_spindles[i] );
        logger << " QC'ed spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
      }
+      
    
+   //
+   // Denominator for mean of spindle-locked average signal
+   //
    
+   if ( locked ) 
+     {
+       std::map<double,double>::iterator ll = locked->begin();
+       while ( ll != locked->end() )
+	 {
+	   ll->second /= (double)spindles->size();
+	   ++ll;
+	 }
+     }
+
+
+   //
+   // Remove tmp channel we created
+   //
+   
+   if (  edf.header.has_signal( new_label ) )
+     {
+       int s = edf.header.signal( new_label );
+       edf.drop_signal( s );	  
+     }
+
+}
+
+
+void per_spindle_output( std::vector<spindle_t>    * spindles ,
+			 param_t & param , 
+			 clocktime_t               * starttime , 
+			 std::map<freq_range_t,double> * baseline )
+{
+ 
+  const bool enrich_output = param.has( "enrich" );
+
+  const int n = spindles->size();
+  
    //
    // Per-spindle output
    //
-   
+  
    for (int i = 0 ; i < spindles->size(); i++ ) 
      {
        
        spindle_t * spindle = &(*spindles)[i];
-
+       
        writer.level( i+1 , "SPINDLE" );  // 1-based spindle count
        
        writer.value( "START"  , spindle->tp.start * globals::tp_duration );
        writer.value( "STOP"   , spindle->tp.stop * globals::tp_duration );
        
-       if ( 1 ) // show_sample_points )
-	 {
-	   writer.value( "START_SP"  , spindle->start_sp );
-	   writer.value( "STOP_SP"   , spindle->stop_sp  );
-	 }
+       writer.value( "START_SP"  , spindle->start_sp );
+       writer.value( "STOP_SP"   , spindle->stop_sp  );
        
        if ( starttime != NULL )
 	 {
@@ -2592,8 +2650,6 @@ void characterize_spindles( edf_t & edf ,
        writer.value( "NOSC"   , spindle->nosc     );
        writer.value( "FRQ"    , spindle->frq      );
        writer.value( "FFT"    , spindle->fft      );
-//        writer.value( "TREND"  , spindle->trend    );
-//        writer.value( "ABSTREND"  , spindle->abstrend );
        writer.value( "SYMM"   , spindle->symm     );
        writer.value( "SYMM2"  , spindle->symm2    );
        writer.value( "ISA"    , spindle->isa      );
@@ -2603,6 +2659,23 @@ void characterize_spindles( edf_t & edf ,
        
        writer.value( "MAXSTAT" , spindle->max_stat );
        writer.value( "MEANSTAT" , spindle->mean_stat );
+       
+       if ( param.has( "so" ) )
+	 {
+	   writer.value( "PEAK" , spindle->peak_sec );
+
+	   if ( spindle->so_nearest_num != 0 ) 
+	     {
+	       writer.value( "SO_NEAREST" , spindle->so_nearest );
+	       writer.value( "SO_NEAREST_NUM" , spindle->so_nearest_num );
+	     }
+	   
+	   if ( spindle->so_phase_peak >= 0 ) 
+	     writer.value( "SO_PHASE_PEAK" , spindle->so_phase_peak );
+	 }
+
+       if ( param.has( "if" ) )
+	 writer.value( "IF" , spindle->if_spindle );
        
       
        //
@@ -2632,35 +2705,12 @@ void characterize_spindles( edf_t & edf ,
    
    // end of per-spindle output
    writer.unlevel( "SPINDLE" );
-
-     
-   
-   //
-   // Denominator for mean of spindle-locked average signal
-   //
-   
-   if ( locked ) 
-     {
-       std::map<double,double>::iterator ll = locked->begin();
-       while ( ll != locked->end() )
-	 {
-	   ll->second /= (double)spindles->size();
-	   ++ll;
-	 }
-     }
-
-
-   //
-   // Remove tmp channel we created
-   //
-   
-   if (  edf.header.has_signal( new_label ) )
-     {
-       int s = edf.header.signal( new_label );
-       edf.drop_signal( s );	  
-     }
-
+    
 }
+
+
+
+
 
 
 void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_t,double> * freqs )
@@ -2725,7 +2775,7 @@ void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_
 
 
 
-std::map<std::string,double> spindle_stats( const std::vector<spindle_t> & spindles ) 
+void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & results ) 
 {
 
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , symm = 0 , 
@@ -2769,7 +2819,7 @@ std::map<std::string,double> spindle_stats( const std::vector<spindle_t> & spind
       ++ii;
     }
   
-  std::map<std::string,double> results;
+
   results[ "AMP" ]      = amp /(double)denom;
   results[ "TOTDUR" ]   = dur;
   results[ "DUR" ]      = dur / (double)denom;
@@ -2795,7 +2845,7 @@ std::map<std::string,double> spindle_stats( const std::vector<spindle_t> & spind
       ++ee;
     }
   
-  return results;
+
 }
 
 
@@ -2977,7 +3027,9 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
 			     "bandpass" ,
 			     NULL , NULL , &spindles , NULL , NULL );
       
-      std::map<std::string,double> means = spindle_stats( spindles );
+      std::map<std::string,double> means;
+
+      spindle_stats( spindles , means );
 
       //
       // Save in the annotation class
@@ -3068,4 +3120,12 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
   return a;
   
 }
+
+// helper function
+void write_if_exists( const std::string & s , const std::map<std::string,double> & means ) 
+{ 
+  std::map<std::string,double>::const_iterator ss = means.find( s );
+  if ( ss != means.end() ) writer.value( s , ss->second );
+}
+
 

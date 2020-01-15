@@ -142,11 +142,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   // Epochs or whole signal?
   //
   
-  bool epoched = edf.timeline.epoched() && param.has("epoch") ;
-
-  bool verbose = param.has("verbose");
-
-  if ( verbose ) epoched = true;
+  bool epoched = param.has( "epoch" ) ;
 
 
   //
@@ -226,20 +222,17 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 		  // Output
 		  //
 
-		  if ( verbose )
-		    {
-		      writer.epoch( edf.timeline.display_epoch( epoch ) );
-		      
-		      writer.value( "R" , r );
-		    }
+		  writer.epoch( edf.timeline.display_epoch( epoch ) );
+		  
+		  writer.value( "R" , r );
 
 		  epoch_r.push_back( r );
 
 
 		} // next epoch
 	      	      
-	      if ( verbose )
-		writer.unepoch();
+	      
+	      writer.unepoch();
 	      
 	      //
 	      // Get mean/median correlation over epochs

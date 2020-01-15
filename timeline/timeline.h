@@ -623,6 +623,13 @@ struct timeline_t
     }
 
 
+  int display2curr_epoch(int e) const 
+  {
+    if ( ! has_epoch_mapping() ) return e-1;    
+    if ( epoch_orig2curr.find(e-1) == epoch_orig2curr.end() ) return -1;
+    return epoch_orig2curr.find(e-1)->second ;
+  }
+  
   static bool discontinuity( const std::vector<uint64_t> & t , int sr, int sp1, int sp2 );
 
   std::map<int,bool> spanning_epoch_masks( const int r ) 

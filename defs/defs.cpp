@@ -135,15 +135,16 @@ void globals::R( bool disp )
 
 void globals::init_defs()
 {
+
   
   //
   // Version
   //
   
   version = "v0.23";
-
-  date    = "5-Dec-2019";
-
+  
+  date    = "14-Jan-2020";
+  
 
   //
   // Set up RNG
