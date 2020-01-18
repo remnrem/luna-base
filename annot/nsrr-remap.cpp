@@ -124,6 +124,10 @@ void nsrr_t::init()
   
   amap[ "Hypopnea" ] = "hypopnea";
   amap[ "Hypopnea|Hypopnea" ] = "hypopnea";
+
+  // note -- this is some kind of apnea event... need to update
+  amap[ "Unsure" ] = "unsure";
+  amap[ "Unsure|Unsure" ] = "unsure";
   
   
   // sleep staging
@@ -145,8 +149,6 @@ void nsrr_t::init()
   
   amap[ "Unscored" ] = "unscored";
   amap[ "Unscored|9" ] = "unscored";
-  amap[ "Unsure" ] = "unscored";
-  amap[ "Unsure|Unsure" ] = "unscored";
   
   amap[ "Wake" ] = "wake";
   amap[ "Wake|0" ] = "wake";

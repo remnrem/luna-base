@@ -74,7 +74,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 
   const int ns2 = signals2.size();
 
-   
+  
 
   //
   // Epochs or whole signal?  Other output param
@@ -196,7 +196,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   slice_t slice1( edf , sigs[0] , interval );      
   const std::vector<double> * d1 = slice1.pdata();
   const int total_sample_points = d1->size();
-  
+
   coherence_t coherence( total_sample_points, Fs, segment_sec, overlap_sec, WINDOW_HANN, average_adj , detrend );
 
   //
@@ -253,7 +253,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
       for (int i=0;i<ns;i++)
 	{
 	  if ( edf.header.is_annotation_channel( sigs[i] ) ) continue;
-	  dsptools::coherence_prepare( edf , signals1(i) , interval , &coherence );
+	  dsptools::coherence_prepare( edf , sigs[i] , interval , &coherence );
 	}  
 
       //
@@ -262,7 +262,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
       
       for (int i=0;i<ns1;i++)
 	{
-	  
+
 	  if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
 	  
 	  writer.level( signals1.label(i) , "CH1" );
@@ -274,6 +274,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 	  for (int j=0;j<ns2;j++)
 	    {
 	      
+
 	      if ( edf.header.is_annotation_channel( signals2(j) ) ) continue;
 	      
 	      // if all-by-all, do not do redundant channels	      
@@ -430,8 +431,8 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
 	  scoh.sxx[i] += epochs[e].sxx[i];
 	  scoh.syy[i] += epochs[e].syy[i];
 	  scoh.sxy[i] += epochs[e].sxy[i];
-
-
+	  
+	  
 	  double Im = std::imag( scoh.sxy[i] );
 	  if ( Im < 0 ) --s; else if ( Im > 0 )  ++s;
 
@@ -473,6 +474,12 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
 
       double phi2 = phi * phi;
 
+      //
+      // Phase Slope Index (PSI)
+      // http://doc.ml.tu-berlin.de/causality/
+      //
+      
+      
 
       //
       // Final stats
