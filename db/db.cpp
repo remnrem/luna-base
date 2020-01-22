@@ -1192,6 +1192,36 @@ void StratOutDBase::fetch( int strata_id , int time_mode, packets_t * packets, s
 }
 
 
+bool writer_t::close() 
+{ 
+  std::cout << "in here\n";
+  // if in plaintext mode, close out if needed and clean up
+  if ( plaintext ) 
+    { 	
+      if ( zfiles != NULL ) 
+	{
+	  
+	  update_plaintext_curr_strata();
+
+	  zfiles->close();
+
+	  delete zfiles;
+
+	  zfiles = NULL;
+
+	}
+      
+    }
+
+
+
+  // otherwise, handle any DB-related stuff
+  if ( ! attached() ) return false;
+  clear(); 
+  db.dettach();
+  
+  return true; 
+} 
 
 
 retval_t writer_t::dump_to_retval( const std::string & dbname , const std::set<std::string> * persons , std::vector<std::string> * ids )
@@ -1350,17 +1380,17 @@ void writer_t::update_plaintext_curr_strata()
 
   // NOTE -- should NULL be okay for param here... 
   // need to get param into here... (i.e. when writer_t::cmd() function)
-
+  
   // figure out which table (command/strata)  
   curr_zfile = zfiles->file( curr_command.cmd_name , NULL , curr_strata.print_zfile_tag() ) ;  
-  
+
   // might not be a valid table (i.e. this could be the case if setting 
   // levels, e.g. A+B,  then when only level(A) is set, it will not be valid
   // this is fine, so we won't give an error yet;  but if somebody tries writing 
   // to a NULL,  writer_t::to_plaintext(), give an error then.
 
   if ( curr_zfile == NULL ) return;
-
+  
   // set (all) levels 
   curr_zfile->set_stratum( faclvl() );
   

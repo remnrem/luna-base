@@ -1823,10 +1823,29 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 bool cmddefs_t::exists( const std::string & cmd ,
 			const tfac_t & tfac ) const
 {
+  // std::cout << "in xist ..." << cmd << " .... \n";
+
+  // std::cout << "cmds size = " << cmds.size() << "\n";
   
-  //if ( cmds.find( cmd ) == cmds.end() ) return false;
-  if ( ofacs.find( cmd ) == ofacs.end() ) return false;
-  return ofacs.find( cmd )->second.find( tfac ) != ofacs.find( cmd )->second.end() ;
+  // bool init =  cmds.find( cmd ) != cmds.end();
+  
+  // std::cout << "intit = " << init << "\n";
+    
+  if ( cmds.find( cmd ) == cmds.end() )
+    {
+      //      std::cout << "ret false\n";
+      return false;
+    } 
+
+  //  std::cout << "in xist ...3\n";
+    
+  if ( ofacs.find( cmd ) == ofacs.end() ) return false; 
+
+  //  std::cout << "in xist ...2\n";
+  bool rv = ofacs.find( cmd )->second.find( tfac ) != ofacs.find( cmd )->second.end() ;
+
+  //  std::cout << "rv = " << rv << "\n";
+  return rv; 
 }
 
 

@@ -259,8 +259,10 @@ private:
     tfac_t tfac( table );
     
     // is this a valid table?  
-
-    if ( ! globals::cmddefs.exists( cmd , tfac ) ) return NULL;
+    if ( ! globals::cmddefs.exists( cmd , tfac ) )
+      {	
+	return NULL;
+      }
 
     // should this be compressed by default?
     bool compressed = globals::cmddefs.out_compressed( cmd , tfac );

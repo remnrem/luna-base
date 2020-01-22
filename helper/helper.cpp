@@ -136,7 +136,8 @@ void Helper::halt( const std::string & msg )
   
   // switch logger off , i.e. as we don't want close-out msg
   logger.off();
-
+  
+  
   // generic bail function (not using logger)
   std::cerr << "error : " << msg << "\n";   
   std::exit(1);

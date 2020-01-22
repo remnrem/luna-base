@@ -646,30 +646,7 @@ class writer_t
   // open db and send to a retval
   static retval_t dump_to_retval( const std::string & dbname , const std::set<std::string> * = NULL , std::vector<std::string> * ids = NULL );
 
-  bool close() 
-  { 
-
-    // if in plaintext mode, close out if needed and clean up
-    if ( plaintext ) 
-      { 	
-	if ( zfiles != NULL ) 
-	  {
-	    update_plaintext_curr_strata();
-	    zfiles->close();
-	    delete zfiles;
-	    zfiles = NULL;
-	  }
-
-      }
-    
-    // otherwise, handle any DB-related stuff
-    if ( ! attached() ) return false;
-    clear(); 
-    db.dettach();
-
-    return true; 
-  } 
-
+  bool close(); 
   
   ~writer_t() { close(); } 
   
@@ -774,8 +751,10 @@ class writer_t
 	  }
 	
 	if ( zfiles == NULL ) 
-	  zfiles = new zfiles_t( plaintext_root , indiv_name );
-		
+	  {
+	    std::cout << "setting new ZFILE\n";
+	    zfiles = new zfiles_t( plaintext_root , indiv_name );
+	  }	
       }
 
     return true;
