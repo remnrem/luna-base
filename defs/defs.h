@@ -116,7 +116,6 @@ struct globals
   static bool skip_edf_annots;
   static bool skip_all_annots;
 
-  static bool remap_nsrr_annots;
 
   //
   // Annotation types stored here statically;  these can be properties of both 

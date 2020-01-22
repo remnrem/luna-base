@@ -307,7 +307,7 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
     }
   
   
-
+  //
   // because we otherwise might have a discontinuous EDF, we need to look up the proper epoch 
   // intervals below , if epoched 
 
@@ -596,7 +596,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Other details
 	  //
 	  
-	  a->description = tok.size() >= 2 ? tok[1] : name ; 
+	  a->description = tok.size() >= 2 ? Helper::trim( tok[1] ) : name ; 
 	  
 	  a->file = f;
 	  
@@ -1343,12 +1343,20 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
   XML xml( filename );
 
   if ( ! xml.valid() ) Helper::halt( "invalid annotation file: " + filename );
-  
-  // Determine format: Profusion or NSRR ? 
 
+  //
+  // Determine format: Profusion or NSRR or Luna ? 
+  //
+  
   std::vector<element_t*> nsrr_format_test = xml.children( "PSGAnnotation" );
+  std::vector<element_t*> luna_format_test = xml.children( "Annotations" );
+  
   bool profusion_format = nsrr_format_test.size() == 0 ;
+  bool luna_format = luna_format_test.size() > 0 ;
+
   if ( globals::param.has( "profusion" ) ) profusion_format = true;
+  
+  if ( luna_format ) return loadxml_luna( filename , edf );
 
   const std::string EventConcept = profusion_format ? "Name"           : "EventConcept" ;
   const std::string epoch_parent = profusion_format ? "CMPStudyConfig" : "PSGAnnotation" ;
@@ -1397,11 +1405,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       // skip this..
       if ( concept->value == "Recording Start Time" ) continue;
       
-      //     std::cout << "notes " << concept->name << "\t" << concept->value << "\n";
       
-      // NSRR remap?
-      if ( globals::remap_nsrr_annots )
-	concept->value = nsrr_t::remap( concept->value );
+      // annotation remap?
+      concept->value = nsrr_t::remap( concept->value );
       
       // are we checking whether to add this file or no? 
       if ( globals::specified_annots.size() > 0 && 
@@ -1645,6 +1651,11 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 
   return true;
 }
+
+
+
+
+
 
 bool annot_t::savexml( const std::string & f )
 {
@@ -2173,3 +2184,453 @@ void proc_eval( edf_t & edf , param_t & param )
   return;
   
 }
+
+
+
+
+
+void annotation_set_t::write( const std::string & filename , param_t & param )
+{
+  // write all annotations here as a single file; 
+  // either XML or .annot file format
+  // default if as XML  
+  
+  bool annot_format = param.has( "luna" );
+
+  bool xml_format = param.has( "xml" ) || ! annot_format;
+  
+  std::ofstream O1( filename.c_str() , std::ios::out );
+  
+  // XML header
+  
+  O1 << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n\n";
+
+  O1 << "<Annotations>\n\n";
+
+  O1 << "<SoftwareVersion>luna-" << globals::version << "</SoftwareVersion>\n";
+
+  O1 << "<EpochLength>" << globals::default_epoch_len << "</EpochLength>\n\n";
+
+
+  //
+  // Loop over each annotation
+  //
+
+  std::vector<std::string> anames = names();
+
+  //
+  // Annotation header
+  //
+
+  O1 << "<Classes>\n";
+
+  for (int a=0;a<anames.size();a++)
+    {
+
+      //   <Class>
+      //    <Name>Annotation Name</Name>
+      //    <Description>Annotation Description</Description>
+      //     <Variable name="label" type="type">Numeric variable name</Variable>
+      //     <Variable name="label" type="type">Numeric variable name</Variable>
+      //     <Variable name="label" type="type">Numeric variable name</Variable>
+      //   </Class>
+      
+      annot_t * annot = find( anames[a] );
+      
+      if ( annot == NULL ) continue;
+
+      O1 << "<Class name=\"" << annot->name << "\">\n"
+	 << " <Description>" << annot->description << "</Description>\n";
+      
+      std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
+      while ( aa != annot->types.end() )
+	{
+	  O1 << "  <Variable type=\"" 
+	     << globals::type_name[ aa->second ] 
+	     << "\">" 
+	     << aa->first 
+	     << "</Variable>\n";
+	  ++aa;
+	}
+      
+      O1 << "</Class>\n\n";
+      
+      
+      //
+      // Next annotation/class header
+      // 
+    }
+
+  O1 << "</Classes>\n\n";  
+
+  
+  //
+  // Loop over all annotation instances
+  //
+  
+  O1 << "<Instances>\n\n";
+  
+  
+  //   <Instance>   
+  //      <Class>Recording Start Time</Class>
+  //      <Name>Recording Start Time</Name>
+  //      <Start>0</Start>
+  //      <Duration>32820.0</Duration>
+  //      <Channel>Optional channel label(s)</Channel>
+  //      <Value var="name">0.123</Value>
+  //      <Value var="name">0.123</Value>
+  //      <Value var="name">0.123</Value>
+  //    </Instance>
+
+  for (int a=0;a<anames.size();a++)
+    {
+      
+      annot_t * annot = find( anames[a] );
+      
+      if ( annot == NULL ) continue;
+      
+      //
+      // iterator over interval/event map
+      //
+      
+      annot_map_t::const_iterator ii = annot->interval_events.begin();
+      while ( ii != annot->interval_events.end() )
+	{
+	  const instance_idx_t & instance_idx = ii->first;
+
+	  O1 << "<Instance class=\"" << anames[a] << "\">\n";
+
+	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
+	    O1 << " <Name>" << instance_idx.id << "</Name>\n";
+	  
+	  O1 << " <Start>" << instance_idx.interval.start_sec() << "</Start>\n"
+	     << " <Duration>" << instance_idx.interval.duration_sec() << "</Duration>\n";
+	  
+	  // name : instance_idx.id
+	  // start : instance_idx.interval.start_sec()
+	  // duration : instance_idx.interval.duration_sec()
+	  
+	  instance_t * inst = ii->second;
+	  
+	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+
+	  while ( dd != inst->data.end() )
+	    {
+	      // var-name : dd->first
+	      // value : 
+	      
+	      O1 << " <Value name=\"" << dd->first << "\">" 
+		 << *dd->second 
+		 << "</Value>\n"; 
+	      ++dd;
+	    }
+	  
+	  O1 << "</Instance>\n\n";
+	  
+	  ++ii;
+	}
+      
+    }
+  
+  //
+  // End of all annotation instatances
+  //
+  
+  O1 << "</Instances>\n\n";
+
+  //
+  // Root node, close out the XML
+  //
+  
+  O1 << "</Annotations>\n";
+  
+
+  //
+  // All done
+  //
+
+  O1.close();
+  
+}
+
+
+
+
+bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
+{
+  
+  XML xml( filename );
+  
+  if ( ! xml.valid() ) Helper::halt( "invalid annotation file: " + filename );
+
+  //
+  // Annotation classes
+  //
+  
+  std::vector<element_t*> classes = xml.children( "Classes" );
+
+  std::set<std::string> added;
+  
+  for (int i=0;i<classes.size();i++)
+    {
+      
+      element_t * cls = classes[i];
+      
+      if ( ! Helper::iequals( cls->name , "Class" ) ) continue;
+      
+      std::string cls_name = cls->attr.value( "name" );
+      
+      //
+      // alias remapping?
+      //
+
+      cls_name = nsrr_t::remap( cls_name );
+      
+      //
+      // ignore this annotation?
+      //
+      
+      if ( globals::specified_annots.size() > 0 && 
+	   globals::specified_annots.find( cls_name )
+	   == globals::specified_annots.end() ) continue;
+      
+      
+      std::string desc = "";
+      std::map<std::string,std::string> atypes;
+
+      std::vector<element_t*> kids = cls->child;
+      
+      for (int j=0; j<kids.size(); j++)
+        {
+	  
+          const std::string & key = kids[j]->name;
+
+	  if ( key == "Description" ) 
+	    {
+	      desc = kids[j]->value;
+	    }
+	  else if ( key == "Variable" ) 
+	    {
+// 	      std::cout << "Var name = " << kids[j]->value << "\n";
+// 	      std::cout << "Var type = " << kids[j]->attr.value( "type" ) << "\n";
+	      atypes[ kids[j]->value ] = kids[j]->attr.value( "type" );
+	    }
+	  
+        }
+
+      
+      //       <Class name="a3">
+      // 	  <Name>a3</Name>
+      // 	  <Description>This annotation also specifies meta-data types</Description>
+      // 	  <Variable type="txt">val1</Variable>
+      // 	  <Variable type="num">val2</Variable>
+      // 	  <Variable type="bool">val3</Variable>
+      //       </Class>
+      
+      //
+      // add this annotation
+      //
+      
+      annot_t * a = edf->timeline.annotations.add( cls_name );
+      
+      a->description = desc;
+      a->file = filename;
+      a->type = globals::A_FLAG_T; // not expecting any meta-data (unless changed below)
+
+      std::map<std::string,std::string>::const_iterator aa = atypes.begin();
+      while ( aa != atypes.end() )
+	{
+	  // if a recognizable type, add
+	  if ( globals::name_type.find( aa->second ) != globals::name_type.end() )
+	    a->types[ aa->first ] = globals::name_type[ aa->second ];
+	  ++aa;
+	}
+      
+      // as with .annot files; if only one variable, set annot_t equal to the one instance type
+      // otherwise, set as A_NULL_T ; in practice, don't think we'll ever use annot_t::type 
+      // i.e. will always use annot_t::atypes[]
+
+      if ( a->types.size() == 1 ) a->type = a->types.begin()->second;
+      else if ( a->type > 1 ) a->type = globals::A_NULL_T; 
+      // i.e. multiple variables/types set, so set overall one to null
+
+    }
+
+
+  //
+  // Annotation Instances
+  //
+  
+  std::vector<element_t*> instances = xml.children( "Instances" );
+  
+
+  //
+  // First pass through all instances
+  //
+  
+  for (int i=0; i<instances.size(); i++) 
+    {
+      
+      element_t * ii = instances[i];
+      
+      std::string cls_name = ii->attr.value( "class" );
+
+      //
+      // alias remapping?
+      //
+
+      cls_name = nsrr_t::remap( cls_name );
+      
+      //
+      // ignore this annotation?
+      //
+           
+      if ( globals::specified_annots.size() > 0 && 
+	   globals::specified_annots.find( cls_name ) 
+	   == globals::specified_annots.end() ) continue;
+      
+      //
+      // get a pointer to this class
+      //
+
+      annot_t * a = edf->timeline.annotations.find( cls_name );
+      
+      if ( a == NULL ) continue;
+      
+      // pull information for this instance:
+      
+      element_t * name     = (*ii)( "Name" );
+      
+      element_t * start    = (*ii)( "Start" );
+      
+      element_t * duration = (*ii)( "Duration" );
+      
+      //
+      // Get time interval
+      //
+
+      double dbl_start = 0 , dbl_dur = 0 , dbl_stop = 0;
+      
+      if ( ! Helper::str2dbl( start->value , &dbl_start ) )
+	Helper::halt( "invalid interval: " + start->value );
+		  
+      if ( ! Helper::str2dbl( duration->value , &dbl_dur ) ) 
+	Helper::halt( "invalid interval: " +  duration->value );
+      
+      dbl_stop = dbl_start + dbl_dur; 
+	      
+      if ( dbl_start < 0 ) Helper::halt( filename + " contains row(s) with negative time points" ) ;
+
+      if ( dbl_dur < 0 ) Helper::halt( filename + " contains row(s) with negative durations" );
+      
+      // convert to uint64_t time-point units
+      
+      interval_t interval;
+
+      interval.start = Helper::sec2tp( dbl_start );
+      
+      // assume stop is already specified as 1 past the end, e.g. 30 60
+      // *unless* it is a single point, e.g. 5 5 
+      // which is handled below
+      
+      interval.stop  = Helper::sec2tp( dbl_stop );
+
+      
+      // given interval encoding, we always want one past the end
+      // if a single time-point given (0 duration)
+      //
+      // otherwise, assume 30 second duration means up to 
+      // but not including 30 .. i..e  0-30   30-60   60-90 
+      // in each case, start + duration is the correct value
+
+      if ( interval.start == interval.stop ) ++interval.stop;
+
+      //
+      // Create the instance
+      //
+      
+      instance_t * instance = a->add( name ? name->value : "." , interval );
+
+      //
+      // Add any additional data members
+      //
+
+      std::vector<element_t*> kids = ii->child;
+      
+      for (int j=0; j<kids.size(); j++) 
+	{
+	  
+	  const std::string & key = kids[j]->name;
+	  
+	  if ( key == "Value" ) 
+	    {
+	      std::string var = kids[j]->attr.value( "name" );
+	      std::string val = kids[j]->value;
+	      
+	      if ( a->types.find( var ) != a->types.end() ) 
+		{
+		  
+		  globals::atype_t t = a->types[ var ];
+	      
+		  if ( t == globals::A_FLAG_T ) 
+		    {
+		      instance->set( var );
+		    }
+		  
+		  else if ( t == globals::A_MASK_T )
+		    {
+		      if ( var != "." )
+			{
+			  // accepts F and T as well as long forms (false, true)
+			  instance->set_mask( var , Helper::yesno( val ) );
+			}
+		    }
+		  
+		  else if ( t == globals::A_BOOL_T )
+		    {
+		      if ( val != "." )
+			{
+			  // accepts F and T as well as long forms (false, true)
+			  instance->set( var , Helper::yesno( val ) );
+			}
+		    }
+		  
+		  else if ( t == globals::A_INT_T )
+		    {
+		      int value = 0;
+		      if ( ! Helper::str2int( val , &value ) )
+			Helper::halt( "bad numeric value in " + filename );
+		      instance->set( var , value );
+		    }
+
+		  else if ( t == globals::A_DBL_T )
+		    {
+		      double value = 0;
+		      
+		      if ( Helper::str2dbl( val , &value ) )		    
+			instance->set( var , value );
+		      else
+			if ( var != "." && var != "NA" ) 
+			  Helper::halt( "bad numeric value in " + filename );		  
+		    }
+		  
+		  else if ( t == globals::A_TXT_T )
+		    {
+		      instance->set( var , val );
+		    }
+		  
+		}
+
+	    } // added this data member
+	  
+	}
+     
+      //
+      // Next instance
+      //
+    }
+  
+  return true;
+}
+
+

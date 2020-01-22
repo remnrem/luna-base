@@ -1194,7 +1194,7 @@ void StratOutDBase::fetch( int strata_id , int time_mode, packets_t * packets, s
 
 bool writer_t::close() 
 { 
-  std::cout << "in here\n";
+
   // if in plaintext mode, close out if needed and clean up
   if ( plaintext ) 
     { 	

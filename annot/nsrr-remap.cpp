@@ -27,6 +27,7 @@
 
 // annotation map
 std::map<std::string,std::string> nsrr_t::amap;
+std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
 
 std::string nsrr_t::remap( const std::string & a )
 {
@@ -40,6 +41,66 @@ std::string nsrr_t::remap( const std::string & a )
   // else return the remapped term
   return amap[ a ] ;
   
+}
+
+
+void nsrr_t::annot_remapping( const std::string & s )
+{
+  // same structure for annotation re-mappings as for signal channels;
+  // code copied from cmd_t::signal_alias()
+
+  // the primary alias can occur multiple times, and have multiple 
+  // labels that are mapped to it
+  
+  // however: two rules
+  // 1. many-to-one mapping means the same label cannot have multiple primary aliases
+  // 2. following, and on principle of no transitive properties, alias cannot have alias
+
+  // X|Y|Z
+  // X|A|B
+  
+  // W|A  bad, A already mapped
+  // V|X  bad, X already mapped
+  // i.e. things can only occur once in the RHS, or multiple times in the LHS
+  
+  
+  // format canonical|alias1|alias2 , etc.
+  std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
+  if ( tok.size() < 2 ) Helper::halt( "bad format for annotation remapping:  canonical|alias 1|alias 2\n" + s );
+
+  const std::string primary = Helper::unquote( tok[0] );
+  for (int j=1;j<tok.size();j++) 
+    {
+      
+      // impose rules
+      const std::string mapped = Helper::unquote( tok[j] ) ;
+      
+      if ( bmap.find( mapped ) != bmap.end() )
+	Helper::halt( mapped + " specified as both primary annotation and mapped term" );
+      
+      if ( amap.find( mapped ) != amap.end() )
+	if ( primary != amap[ mapped ] )  
+	  Helper::halt( mapped + " specified twice in alias file w/ different primary remaping" );
+
+      // otherwise, set 
+      amap[ mapped ] = primary;
+
+      bmap[ primary ].push_back( mapped );
+    }
+    
+}
+
+
+// add a new annotation remap
+void nsrr_t::add( const std::string & a , const std::string & b )
+{
+  amap[a] = b;
+}
+
+// clear all existing 
+void nsrr_t::clear()
+{
+  amap.clear();
 }
 
 void nsrr_t::init() 

@@ -1,7 +1,5 @@
 
 
-
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -26,12 +24,9 @@
 
 
 #include "eval.h"
-
 #include "luna.h"
 
-
 extern logger_t logger;
-
 extern writer_t writer;
 
 
@@ -740,6 +735,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
+      else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
@@ -1586,6 +1582,14 @@ void proc_list_annots( edf_t & edf , param_t & param )
 }
 
 
+// WRITE-ANNOTS : write all annots to disk
+
+void proc_write_annots( edf_t & edf , param_t & param )
+{
+  edf.timeline.annotations.write( param.requires( "file" ) , param );
+}
+
+
 // ANNOTS : list all annotations
 
 void proc_list_all_annots( edf_t & edf , param_t & param )
@@ -2108,10 +2112,18 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // NSRR remapping
   if ( Helper::iequals( tok0 , "nsrr-remap" ) )
     {
-      globals::remap_nsrr_annots = Helper::yesno( tok1 );
+      // clear pre-populated NSRR remapping
+      nsrr_t::clear();
       return;
     }
   
+  // generic annotation re-labelling, same format as 'alias'
+  else if ( Helper::iequals( tok0 , "remap" ) )
+    {
+      nsrr_t::annot_remapping( tok1 );
+      return;
+    }
+
   // default annot folder
   else if ( Helper::iequals( tok0 , "annot-folder" ) ||
 	    Helper::iequals( tok0 , "annots-folder" ) ) 
@@ -2225,12 +2237,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  // signal alias?
-  if ( Helper::iequals( tok0 , "alias" ) )
-    {
-      cmd_t::signal_alias( tok1 );
-      return;
-    }
 
   // power band defintions
   if ( Helper::iequals( tok0 , "slow" ) 

@@ -44,7 +44,6 @@ std::vector<std::string> globals::annot_files;
 
 bool globals::read_ftr;
 std::set<std::string> globals::specified_annots;
-bool globals::remap_nsrr_annots;
 
 std::map<globals::atype_t,std::string> globals::type_name;
 std::map<std::string,globals::atype_t> globals::name_type;
@@ -185,10 +184,11 @@ void globals::init_defs()
   specified_annots.clear();
   
   //
-  // Automatically remap NSRR annotations (nsrr-remap=Y)
+  // Automatically remap NSRR annotations; 
+  // if nsrr-remap=0 is subsequently, set, 
+  // we will call nsrr_t::clear() which wipes
+  // all this
   //
-
-  remap_nsrr_annots = true;
 
   nsrr_t::init();
 

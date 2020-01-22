@@ -35,9 +35,20 @@ struct nsrr_t {
   // do mapping
   static std::string remap( const std::string & ); 
   
-  // annotation map data
-  static std::map<std::string,std::string> amap;
+  // annotation map data (one-to-one)
+  static std::map<std::string,std::string> amap; // alias --> orig
+  
+  // from primary --> multiple (can be one to many) 
+  static std::map<std::string,std::vector<std::string > > bmap; // orig --> alias(es)
 
+  // add a new annotation remap (in 'alias/remap' format  canonical|alias1|"alias2 |2"
+  static void annot_remapping( const std::string & s );
+
+  // add a new annotation remap
+  static void add( const std::string & a , const std::string & b );
+
+  // clear all existing 
+  static void clear();
 };
 
 #endif

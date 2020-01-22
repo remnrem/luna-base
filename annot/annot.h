@@ -146,6 +146,8 @@ struct annot_t
   
   static bool loadxml( const std::string & , edf_t * );
 
+  static bool loadxml_luna( const std::string & , edf_t * );
+
   bool save( const std::string & );  
   
   bool savexml( const std::string & );  
@@ -739,6 +741,7 @@ struct annotation_set_t
     return n;
   }
   
+  void write( const std::string & filename , param_t & param );
 
   // Attempt to create a single SLEEP STAGE annotation from multiple
   // other annotations
