@@ -2191,6 +2191,7 @@ void proc_eval( edf_t & edf , param_t & param )
 
 void annotation_set_t::write( const std::string & filename , param_t & param )
 {
+
   // write all annotations here as a single file; 
   // either XML or .annot file format
   // default if as XML  
@@ -2199,158 +2200,254 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 
   bool xml_format = param.has( "xml" ) || ! annot_format;
   
+  if ( filename=="" ) Helper::halt( "bad filename for WRITE-ANNOTS" );
+
+  logger << "  writing annotations (" 
+	 << ( annot_format ? ".annot" : ".xml" ) 
+	 << " format) to " 
+	 << filename << "\n";
+
   std::ofstream O1( filename.c_str() , std::ios::out );
   
-  // XML header
-  
-  O1 << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n\n";
-
-  O1 << "<Annotations>\n\n";
-
-  O1 << "<SoftwareVersion>luna-" << globals::version << "</SoftwareVersion>\n";
-
-  O1 << "<EpochLength>" << globals::default_epoch_len << "</EpochLength>\n\n";
-
-
-  //
-  // Loop over each annotation
-  //
-
-  std::vector<std::string> anames = names();
-
-  //
-  // Annotation header
-  //
-
-  O1 << "<Classes>\n";
-
-  for (int a=0;a<anames.size();a++)
-    {
-
-      //   <Class>
-      //    <Name>Annotation Name</Name>
-      //    <Description>Annotation Description</Description>
-      //     <Variable name="label" type="type">Numeric variable name</Variable>
-      //     <Variable name="label" type="type">Numeric variable name</Variable>
-      //     <Variable name="label" type="type">Numeric variable name</Variable>
-      //   </Class>
-      
-      annot_t * annot = find( anames[a] );
-      
-      if ( annot == NULL ) continue;
-
-      O1 << "<Class name=\"" << annot->name << "\">\n"
-	 << " <Description>" << annot->description << "</Description>\n";
-      
-      std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
-      while ( aa != annot->types.end() )
-	{
-	  O1 << "  <Variable type=\"" 
-	     << globals::type_name[ aa->second ] 
-	     << "\">" 
-	     << aa->first 
-	     << "</Variable>\n";
-	  ++aa;
-	}
-      
-      O1 << "</Class>\n\n";
-      
-      
-      //
-      // Next annotation/class header
-      // 
-    }
-
-  O1 << "</Classes>\n\n";  
-
-  
-  //
-  // Loop over all annotation instances
-  //
-  
-  O1 << "<Instances>\n\n";
-  
-  
-  //   <Instance>   
-  //      <Class>Recording Start Time</Class>
-  //      <Name>Recording Start Time</Name>
-  //      <Start>0</Start>
-  //      <Duration>32820.0</Duration>
-  //      <Channel>Optional channel label(s)</Channel>
-  //      <Value var="name">0.123</Value>
-  //      <Value var="name">0.123</Value>
-  //      <Value var="name">0.123</Value>
-  //    </Instance>
-
-  for (int a=0;a<anames.size();a++)
+  if ( xml_format ) 
     {
       
-      annot_t * annot = find( anames[a] );
+      // XML header
       
-      if ( annot == NULL ) continue;
+      O1 << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n\n";
+      O1 << "<Annotations>\n\n";
+      O1 << "<SoftwareVersion>luna-" << globals::version << "</SoftwareVersion>\n";
+      O1 << "<EpochLength>" << globals::default_epoch_len << "</EpochLength>\n\n";
+
+      //
+      // Loop over each annotation
+      //
+      
+      std::vector<std::string> anames = names();
       
       //
-      // iterator over interval/event map
+      // Annotation header
       //
       
-      annot_map_t::const_iterator ii = annot->interval_events.begin();
-      while ( ii != annot->interval_events.end() )
+      O1 << "<Classes>\n";
+      
+      for (int a=0;a<anames.size();a++)
 	{
-	  const instance_idx_t & instance_idx = ii->first;
-
-	  O1 << "<Instance class=\"" << anames[a] << "\">\n";
-
-	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
-	    O1 << " <Name>" << instance_idx.id << "</Name>\n";
 	  
-	  O1 << " <Start>" << instance_idx.interval.start_sec() << "</Start>\n"
-	     << " <Duration>" << instance_idx.interval.duration_sec() << "</Duration>\n";
+	  //   <Class>
+	  //    <Name>Annotation Name</Name>
+	  //    <Description>Annotation Description</Description>
+	  //     <Variable name="label" type="type">Numeric variable name</Variable>
+	  //     <Variable name="label" type="type">Numeric variable name</Variable>
+	  //     <Variable name="label" type="type">Numeric variable name</Variable>
+	  //   </Class>
 	  
-	  // name : instance_idx.id
-	  // start : instance_idx.interval.start_sec()
-	  // duration : instance_idx.interval.duration_sec()
+	  annot_t * annot = find( anames[a] );
 	  
-	  instance_t * inst = ii->second;
+	  if ( annot == NULL ) continue;
 	  
-	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
-
-	  while ( dd != inst->data.end() )
+	  O1 << "<Class name=\"" << annot->name << "\">\n"
+	     << " <Description>" << annot->description << "</Description>\n";
+	  
+	  std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
+	  while ( aa != annot->types.end() )
 	    {
-	      // var-name : dd->first
-	      // value : 
-	      
-	      O1 << " <Value name=\"" << dd->first << "\">" 
-		 << *dd->second 
-		 << "</Value>\n"; 
-	      ++dd;
+	      O1 << "  <Variable type=\"" 
+		 << globals::type_name[ aa->second ] 
+		 << "\">" 
+		 << aa->first 
+		 << "</Variable>\n";
+	      ++aa;
 	    }
 	  
-	  O1 << "</Instance>\n\n";
+	  O1 << "</Class>\n\n";
 	  
-	  ++ii;
+	  
+	  //
+	  // Next annotation/class header
+	  // 
+	}
+      
+      O1 << "</Classes>\n\n";  
+      
+      
+      //
+      // Loop over all annotation instances
+      //
+      
+      O1 << "<Instances>\n\n";
+  
+  
+      //   <Instance>   
+      //      <Class>Recording Start Time</Class>
+      //      <Name>Recording Start Time</Name>
+      //      <Start>0</Start>
+      //      <Duration>32820.0</Duration>
+      //      <Channel>Optional channel label(s)</Channel>
+      //      <Value var="name">0.123</Value>
+      //      <Value var="name">0.123</Value>
+      //      <Value var="name">0.123</Value>
+      //    </Instance>
+      
+      for (int a=0;a<anames.size();a++)
+	{
+	  
+	  annot_t * annot = find( anames[a] );
+	  
+	  if ( annot == NULL ) continue;
+	  
+	  //
+	  // iterator over interval/event map
+	  //
+	  
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  while ( ii != annot->interval_events.end() )
+	    {
+	      const instance_idx_t & instance_idx = ii->first;
+	      
+	      O1 << "<Instance class=\"" << anames[a] << "\">\n";
+	      
+	      if ( instance_idx.id != "." && instance_idx.id != "" ) 
+		O1 << " <Name>" << instance_idx.id << "</Name>\n";
+	      
+	      O1 << " <Start>" << instance_idx.interval.start_sec() << "</Start>\n"
+		 << " <Duration>" << instance_idx.interval.duration_sec() << "</Duration>\n";
+	  
+	      // name : instance_idx.id
+	      // start : instance_idx.interval.start_sec()
+	      // duration : instance_idx.interval.duration_sec()
+	  
+	      instance_t * inst = ii->second;
+	  
+	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	      
+	      while ( dd != inst->data.end() )
+		{
+		  // var-name : dd->first
+		  // value : 
+	      
+		  O1 << " <Value name=\"" << dd->first << "\">" 
+		     << *dd->second 
+		     << "</Value>\n"; 
+		  ++dd;
+		}
+	  
+	      O1 << "</Instance>\n\n";
+	  
+	      ++ii;
+	    }
+	  
+	}
+      
+      //
+      // End of all annotation instatances
+      //
+  
+      O1 << "</Instances>\n\n";
+
+      //
+      // Root node, close out the XML
+      //
+      
+      O1 << "</Annotations>\n";
+    }
+
+
+  if ( annot_format ) 
+    {
+
+      //
+      // Annotation header
+      //
+      
+      std::vector<std::string> anames = names();      
+
+      for (int a=0;a<anames.size();a++)
+	{
+	  
+	  annot_t * annot = find( anames[a] );
+	  
+	  if ( annot == NULL ) continue;
+
+	  bool has_vars = annot->types.size() > 0 ;
+
+	  O1 << "# " << annot->name;
+	  
+	  if ( annot->description != "" )
+	    O1 << " | " << annot->description;
+	  else if ( has_vars ) // need a dummy description here 
+	    O1 << " | " << annot->description ;
+	  
+	  if ( has_vars ) 
+	    O1 << " |";
+	  
+	  std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
+	  while ( aa != annot->types.end() )
+	    {
+	      O1 << " " << aa->first 
+		 << "[" 
+		 << globals::type_name[ aa->second ] 
+		 << "]";	      
+	      ++aa;
+	    }
+	  
+	  O1 << "\n";
+	  
+	}
+      
+      //
+      // Loop over all annotation instances
+      //
+      
+      for (int a=0;a<anames.size();a++)
+	{
+	  
+	  annot_t * annot = find( anames[a] );
+
+	  if ( annot == NULL ) continue;
+	  
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  
+	  while ( ii != annot->interval_events.end() )
+	    {
+	      const instance_idx_t & instance_idx = ii->first;
+	      
+	      O1 << anames[a] << "\t";
+
+	      if ( instance_idx.id != "." && instance_idx.id != "" ) 
+		O1 << instance_idx.id << "\t";
+	      else 
+		O1 << ".\t";
+
+	      O1 << instance_idx.interval.start_sec() << "\t"
+		 << instance_idx.interval.stop_sec();
+	      
+	      instance_t * inst = ii->second;
+	      
+	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	      
+	      while ( dd != inst->data.end() )
+		{
+		  O1 << "\t" << *dd->second;
+		  ++dd;
+		}
+	      
+	      O1 << "\n";
+	  
+	      ++ii;
+	    }
+	  
 	}
       
     }
-  
-  //
-  // End of all annotation instatances
-  //
-  
-  O1 << "</Instances>\n\n";
-
-  //
-  // Root node, close out the XML
-  //
-  
-  O1 << "</Annotations>\n";
-  
-
+      
   //
   // All done
   //
-
-  O1.close();
   
+  O1.close();
+    
+
 }
 
 

@@ -188,7 +188,7 @@ annot_t * spectral_power( edf_t & edf ,
       //
       // Stratify output by channel
       //
-      
+
       writer.level( signals.label(s) , globals::signal_strat );
       
       
@@ -237,7 +237,7 @@ annot_t * spectral_power( edf_t & edf ,
 	  // stratify output by epoch?
 	  if ( epoch_level_output )
 	    writer.epoch( edf.timeline.display_epoch( epoch ) );
-	  	  
+
 	   //
 	   // Get data
 	   //
@@ -333,7 +333,7 @@ annot_t * spectral_power( edf_t & edf ,
 		 + this_sigma  
 		 + this_beta
 		 + this_gamma;
-
+	       
 	       writer.level( globals::band( SLOW ) , globals::band_strat );
 	       writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
 	       writer.value( "RELPSD" , this_slowwave / this_total );
@@ -432,12 +432,11 @@ annot_t * spectral_power( edf_t & edf ,
 	   if ( epoch_level_output )
 	     writer.unepoch();
 	   
-	   
 	   //
 	   // next epoch
 	   //
 
-	} 
+	}
       
       
       //

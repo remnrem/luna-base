@@ -53,12 +53,12 @@ bool zfile_t::set_stratum( const std::string & f , const std::string & l )
   // we are changing strata, so write out buffer if it has been written to 
   // if empty, nothing will happen (i.e. as will be the case when first setting 
   // a level
-  //  std::cout << "in set stratum = " << f << " " << l << "\n";
+
   write_buffer();
   
   // 'facs' should only contain normal factors, and tags; i.e. no
   // commands, but
-     
+
   if ( facs.find( f ) == facs.end() ) Helper::halt( "factor " + f + " not specified" );
  
   stratum[ f ] = l;
@@ -87,10 +87,12 @@ bool zfile_t::set_stratum( const std::map<std::string,std::string> & fl )
   std::map<std::string,std::string>::const_iterator ii = fl.begin();
   while ( ii != fl.end() )
     {
-      if ( facs.find( ii->first ) == facs.end() ) Helper::halt( "factor " + ii->first + " not specified" );
+
+      if ( facs.find( ii->first ) == facs.end() ) 
+	Helper::halt( "factor " + ii->first + " not specified" );
       ++ii;
     }
-
+  
   stratum = fl;
   
   return true;

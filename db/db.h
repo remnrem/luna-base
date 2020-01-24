@@ -751,8 +751,7 @@ class writer_t
 	  }
 	
 	if ( zfiles == NULL ) 
-	  {
-	    std::cout << "setting new ZFILE\n";
+	  {	    
 	    zfiles = new zfiles_t( plaintext_root , indiv_name );
 	  }	
       }
@@ -765,6 +764,12 @@ class writer_t
   bool tag( const std::string & lvl_name , const std::string & fac_name )
   {
 
+    // tell cmddefs about this TAG factor (so it can be ignored when finding the 
+    // right table to output to)
+
+    if ( fac_name != "." ) 
+      globals::cmddefs.add_tag( fac_name );
+    
     if      ( fac_name == "." ) unlevel();
     else if ( lvl_name == "." ) unlevel( fac_name );
     else 
@@ -861,13 +866,11 @@ class writer_t
     // if this is here, it will have an ID
     if ( strata_idmap.find( s ) != strata_idmap.end() ) 
       {
-	//std::cout << "found existing " << s.strata_id << " " << strata_idmap[ s ] << "\n";	
 	return strata_idmap[ s ];
       }
     
     // if not, add to DB and track ID
     strata_t new_strata = db.insert_strata( s );
-    //std::cout << "new id = " << new_strata.strata_id;
     strata_idmap[ new_strata ] = new_strata.strata_id;
     strata[ new_strata.strata_id ] = new_strata;
     return new_strata.strata_id;
@@ -903,9 +906,6 @@ class writer_t
     
     level( "." , globals::epoch_strat );
     
-    // if needed, update which table to point to
-    if ( plaintext ) update_plaintext_curr_strata();
-
     return true;
   }
   
@@ -933,10 +933,6 @@ class writer_t
     // tables
     
     level( "." , globals::time_strat );
-
-    // if needed, update which table to point to
-    if ( plaintext ) update_plaintext_curr_strata();
-
 
     return true;
   }

@@ -623,8 +623,10 @@ bool cmd_t::read( const std::string * str , bool silent )
   // summary
 
   logger << "input(s): " << input << "\n";
-  logger << "output  : " << writer.name() << "\n";
-  
+  logger << "output  : " << writer.name() 
+	 << ( cmd_t::plaintext_mode ? " [dir for text-tables]" : "" ) 
+	 << "\n";
+
   if ( signallist.size() > 0 )
     {
       logger << "signals :";

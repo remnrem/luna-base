@@ -553,6 +553,15 @@ void cmddefs_t::init()
   add_var( "SEGMENTS" , "SEG" , "STOP" , "Segment stop (seconds)" );
   add_var( "SEGMENTS" , "SEG" , "STOP_HMS" , "Segment stop (hh:mm:ss)" );
 
+
+  // WRITE-ANNOTS
+  
+  add_cmd( "output" , "WRITE-ANNOTS" , "Write all annotations to file" );
+  add_url( "WRITE-ANNOTS" , "outputs/#write-annots" );
+  
+  add_param( "WRITE-ANNOTS" , "file" , "f1.xml" , "Required filename for output" );
+  add_param( "WRITE-ANNOTS" , "luna" , "" , "Output in Luna .annot format instead of XML" );
+
   
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1823,28 +1832,14 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 bool cmddefs_t::exists( const std::string & cmd ,
 			const tfac_t & tfac ) const
 {
-  // std::cout << "in xist ..." << cmd << " .... \n";
-
-  // std::cout << "cmds size = " << cmds.size() << "\n";
-  
-  // bool init =  cmds.find( cmd ) != cmds.end();
-  
-  // std::cout << "intit = " << init << "\n";
     
   if ( cmds.find( cmd ) == cmds.end() )
-    {
-      //      std::cout << "ret false\n";
-      return false;
-    } 
-
-  //  std::cout << "in xist ...3\n";
+    return false;
     
   if ( ofacs.find( cmd ) == ofacs.end() ) return false; 
 
-  //  std::cout << "in xist ...2\n";
   bool rv = ofacs.find( cmd )->second.find( tfac ) != ofacs.find( cmd )->second.end() ;
 
-  //  std::cout << "rv = " << rv << "\n";
   return rv; 
 }
 
