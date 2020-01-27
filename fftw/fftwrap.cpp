@@ -471,6 +471,7 @@ std::map<double,double> fft_spectrum( const std::vector<double> * d , int Fs )
 int bin_t::bin( const std::vector<double> & f , 
 		const std::vector<double> & y ) 
 {
+
   
   if ( f.size() != y.size() ) Helper::halt( "bin_t internal error" );
   
@@ -479,7 +480,26 @@ int bin_t::bin( const std::vector<double> & f ,
   bspec.clear();
   
   if ( f.size() < 2 ) return 0;
+
+
+  //
+  // no binning?
+  //
   
+  if ( w == 0 )
+    {
+      for (int i=0;i<f.size();i++)
+	{
+	  if ( f[i] > mx_f ) break;
+	  bfa.push_back( f[i] );
+	  bfb.push_back( f[i] );
+	  bspec.push_back( y[i] );
+	}
+      return bspec.size();
+    }
+
+
+
   // assume always from 0, DC component  
   if ( f[0] == 0 ) 
     {
@@ -487,7 +507,9 @@ int bin_t::bin( const std::vector<double> & f ,
       bfa.push_back( 0 );
       bfb.push_back( 0 );
     }
-    
+
+  //for (int ii=0;ii<f.size();ii++) std::cout << "Frq " << f[ii] << "\n";
+  
   double nyquist = 0.5 * Fs;
     
   int num_freqs = f.size();

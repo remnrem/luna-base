@@ -840,7 +840,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   if ( ! timeline.epoched() ) 
     {
       int n = timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-      logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << n << " epochs\n";
+      logger << "  set epochs to default " << globals::default_epoch_len << " seconds, " << n << " epochs\n";
     }
 
   timeline.first_epoch();
@@ -852,7 +852,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   // Output to log
   //
   
-  logger << " dumping " << ne << " unmasked epochs in " ;
+  logger << "  dumping " << ne << " unmasked epochs in " ;
   
   if ( minimal ) logger << "minimal";
   else
