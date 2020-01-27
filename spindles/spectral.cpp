@@ -52,9 +52,9 @@ annot_t * spectral_power( edf_t & edf ,
 
   bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" );
   
-  // Spectrum bin width (0.5 Hz by default)
+  // Spectrum bin width (0 means no binning, default)
 
-  double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0.5;
+  double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0;
 
   // Band power per-epoch
 
