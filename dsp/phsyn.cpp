@@ -228,8 +228,8 @@ void phsyn_t::calc()
 
   while ( ff != frqs.end() )
     {
-
-      //logger << "  hilbert " << ff->first << "-" << ff->second << "\n";
+      
+      logger << "  hilbert " << ff->first << "-" << ff->second << "\n";
 
       // filter-Hilbert
       hilbert_t hilbert( x , sr , ff->first , ff->second , ripple , tw );
@@ -246,13 +246,15 @@ void phsyn_t::calc()
   const int npoints = x.size();
   
   //
-  // create obsered frequency bin
+  // create observed frequency bin
   //
         
   for (int i1=0;i1<f1.size();i1++) 
     for (int i2=0;i2<f2.size();i2++) 
       {
-	
+
+	logger << f1[i1].first << " and " << f2[i2].first << "\n";
+
 	//
 	// Clear working count matrix
 	//
