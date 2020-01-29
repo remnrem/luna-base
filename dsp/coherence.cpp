@@ -566,8 +566,8 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
       double icoh = Im / sqrt( Sxx * Syy );
       double lcoh = Im / sqrt( Sxx * Syy - ( Re * Re ) );
 
-      if ( frq[k] < 20 ) 
-	std::cout << "dets = " << frq[k] << "\t" << Sxx << " " << Syy << " " << " " << Re << " " << Im << " " << coh << " " << icoh << "\n";
+//       if ( frq[k] < 20 ) 
+// 	std::cout << "dets = " << frq[k] << "\t" << Sxx << " " << Syy << " " << " " << Re << " " << Im << " " << coh << " " << icoh << "\n";
 
 
       
