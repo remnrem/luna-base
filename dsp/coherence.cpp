@@ -568,8 +568,6 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 
       // if ( frq[k] < 20 ) 
       // 	std::cout << "dets = " << frq[k] << "\t" << Sxx << " " << Syy << " " << " " << Re << " " << Im << " " << coh << " " << icoh << "\n";
-
-
       
       //
       // band-level summaries

@@ -136,7 +136,7 @@ tfac_t strata_t::tfac() const
       // skip tags
       if ( globals::cmddefs.is_tag( aa->first.factor_name ) )
 	{ ++aa; continue; }
-
+      
       // otherwise, add (to ID which zfile_t to write to)
       tfac.fac.insert( aa->first.factor_name  );
 
@@ -185,8 +185,8 @@ std::string strata_t::print_zfile_tag() const
       if ( aa->first.factor_name[0] == '_' ) { ++aa; continue; } 
       
       // skip TAGs
-      if ( globals::cmddefs.is_tag( aa->first.factor_name ) )
-        { ++aa; continue; }
+//       if ( globals::cmddefs.is_tag( aa->first.factor_name ) )
+//         { ++aa; continue; }
 
       if ( printed ) ss << ",";
       ss << aa->first.factor_name ;
@@ -1378,12 +1378,11 @@ void writer_t::update_plaintext_curr_strata()
 
   // get zfile-set for this individual, creating if it does not exist
 
-  // NOTE -- should NULL be okay for param here... 
-  // need to get param into here... (i.e. when writer_t::cmd() function)
-  
+  // note: need to get param into here... (i.e. when writer_t::cmd() function)
+
   // figure out which table (command/strata)  
   curr_zfile = zfiles->file( curr_command.cmd_name , NULL , curr_strata.print_zfile_tag() ) ;  
-
+ 
   // might not be a valid table (i.e. this could be the case if setting 
   // levels, e.g. A+B,  then when only level(A) is set, it will not be valid
   // this is fine, so we won't give an error yet;  but if somebody tries writing 

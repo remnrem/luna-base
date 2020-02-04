@@ -360,8 +360,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   
   int klen = mtm::get_pow_2( num_points );
   
-  //  logger << "  running MTM based on " << klen << "-point FFT\n";
-  
+
   double df = 2*nyquist/klen;  
   
   int num_freqs = 1+klen/2;
@@ -370,6 +369,18 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   
   int k = 1;
   
+  //  logger << "  running MTM based on " << klen << "-point FFT\n";
+  
+  if ( 1 ) 
+    {
+      logger << "  MTM: number of points " << num_points << "\n"
+	     << "       fWidth           " << fWidth << "\n"
+	     << "       klen             " << klen << "\n"
+	     << "       df               " << df << "\n"
+	     << "       num_freqs        " << num_freqs << "\n";
+	}
+
+
   // mean-center
   
   if ( 0 ) 

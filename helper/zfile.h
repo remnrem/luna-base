@@ -49,9 +49,9 @@ struct zfile_t {
 	  const param_t * param = NULL , 
 	  bool compressed = true ) 
  : parent(p) , indiv(indiv) , cmd(cmd) , table(table), compressed(compressed) 
-   { 
-         
-     if ( compressed ) 
+  { 
+    
+    if ( compressed ) 
        zout.open( n.c_str() , std::ios_base::out );
      else
        out.open( n.c_str() );
@@ -66,7 +66,7 @@ struct zfile_t {
      // factors... so track these separately
      
      facs = str2set( table , "," );
-    
+     
      // and write the header
      
      write_header();
@@ -109,7 +109,7 @@ struct zfile_t {
   void write_header() ;
   void write_buffer();
   
- private:
+private:
   
   zfiles_t * parent;
   
@@ -259,11 +259,10 @@ private:
     tfac_t tfac( table );
     
     // is this a valid table?  
-    if ( ! globals::cmddefs.exists( cmd , tfac ) )
-      {	
-	return NULL;
-      }
 
+    if ( ! globals::cmddefs.exists( cmd , tfac ) )
+      return NULL;
+      
     // should this be compressed by default?
     bool compressed = globals::cmddefs.out_compressed( cmd , tfac );
 

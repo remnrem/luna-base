@@ -2157,14 +2157,14 @@ void timeline_t::load_mask( const std::string & f , bool exclude )
   if ( ! epoched() ) 
     {
       int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-      logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+      logger << "  set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
     }
      
   if ( ! Helper::fileExists( f ) ) Helper::halt( "could not find " + f );
   
-  logger << " attaching mask file " << f << "\n";
+  logger << "  attaching mask file " << f << "\n";
   
-  logger << " currently, mask mode set to: ";
+  logger << "  currently, mask mode set to: ";
   int mm = epoch_mask_mode();
   if ( mm == 0 ) logger << " mask (default)\n";
   else if ( mm == 1 ) logger << " unmask\n";
@@ -2604,7 +2604,7 @@ void timeline_t::list_all_annotations( const param_t & param )
   if ( per_epoch && ! epoched() ) 
     {
       int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-      logger << " set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
+      logger << "  set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
     }
 
   // how to decide whether an interval overlaps a mask or not?

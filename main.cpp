@@ -434,7 +434,6 @@ int main(int argc , char ** argv )
   // text-table mode?
   if ( cmd_t::plaintext_mode )
     {
-      logger << "in text-table mode, writing to " << cmd_t::plaintext_root  << "\n";
       writer.use_plaintext( cmd_t::plaintext_root );
     }
   // was an output db specified?

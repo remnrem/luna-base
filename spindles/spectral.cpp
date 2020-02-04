@@ -52,9 +52,9 @@ annot_t * spectral_power( edf_t & edf ,
 
   bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" );
   
-  // Spectrum bin width (0.5 Hz by default)
+  // Spectrum bin width (0 means no binning, default)
 
-  double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0.5;
+  double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0;
 
   // Band power per-epoch
 
@@ -72,7 +72,7 @@ annot_t * spectral_power( edf_t & edf ,
 
   // truncate spectra
 
-  double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 20 ;
+  double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
 
   // Calculate MSE
 
@@ -88,13 +88,13 @@ annot_t * spectral_power( edf_t & edf ,
 
   double fft_segment_overlap = param.has( "segment-overlap" ) 
     ? param.requires_dbl( "segment-overlap" ) : 2 ;
-
-
+       
   //
   // Option to average adjacent points in the power spectra (default = T)
   //
   
   bool average_adj = param.has( "average-adj" ) ;
+
   
   //
   // Window function
@@ -117,8 +117,11 @@ annot_t * spectral_power( edf_t & edf ,
   bands.push_back( THETA );
   bands.push_back( ALPHA );
   bands.push_back( SIGMA );
-  bands.push_back( LOW_SIGMA );
-  bands.push_back( HIGH_SIGMA );
+  if ( 0 )
+    {
+      bands.push_back( LOW_SIGMA );
+      bands.push_back( HIGH_SIGMA );
+    }
   bands.push_back( BETA );
   bands.push_back( GAMMA );
   bands.push_back( TOTAL );
@@ -188,7 +191,7 @@ annot_t * spectral_power( edf_t & edf ,
       //
       // Stratify output by channel
       //
-      
+
       writer.level( signals.label(s) , globals::signal_strat );
       
       
@@ -237,7 +240,7 @@ annot_t * spectral_power( edf_t & edf ,
 	  // stratify output by epoch?
 	  if ( epoch_level_output )
 	    writer.epoch( edf.timeline.display_epoch( epoch ) );
-	  	  
+
 	   //
 	   // Get data
 	   //
@@ -309,9 +312,13 @@ annot_t * spectral_power( edf_t & edf ,
 	   track_band[ SIGMA ].push_back( this_sigma );
 	   track_band[ BETA  ].push_back( this_beta );
 	   track_band[ GAMMA ].push_back( this_gamma );
-	   track_band[ LOW_SIGMA ].push_back( this_low_sigma );
-	   track_band[ HIGH_SIGMA ].push_back( this_high_sigma );
 	   track_band[ TOTAL ].push_back( this_total );
+
+	   if ( 0 )
+	     {
+	       track_band[ LOW_SIGMA ].push_back( this_low_sigma );
+	       track_band[ HIGH_SIGMA ].push_back( this_high_sigma );
+	     }
 	   
 	   //
 	   // track epoch numbers (for dynam_t)
@@ -333,7 +340,7 @@ annot_t * spectral_power( edf_t & edf ,
 		 + this_sigma  
 		 + this_beta
 		 + this_gamma;
-
+	       
 	       writer.level( globals::band( SLOW ) , globals::band_strat );
 	       writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
 	       writer.value( "RELPSD" , this_slowwave / this_total );
@@ -354,14 +361,17 @@ annot_t * spectral_power( edf_t & edf ,
 	       writer.value( "PSD" , dB ? 10*log10( this_sigma ) : this_sigma );
 	       writer.value( "RELPSD" , this_sigma / this_total );
 
-	       writer.level( globals::band( LOW_SIGMA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_low_sigma ) : this_low_sigma  );
-	       writer.value( "RELPSD" , this_low_sigma / this_total );
-
-	       writer.level( globals::band( HIGH_SIGMA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_high_sigma ) : this_high_sigma );
-	       writer.value( "RELPSD" , this_high_sigma / this_total );
-
+	       if ( 0 )
+		 {
+		   writer.level( globals::band( LOW_SIGMA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_low_sigma ) : this_low_sigma  );
+		   writer.value( "RELPSD" , this_low_sigma / this_total );
+		   
+		   writer.level( globals::band( HIGH_SIGMA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_high_sigma ) : this_high_sigma );
+		   writer.value( "RELPSD" , this_high_sigma / this_total );
+		 }
+	       
 	       writer.level( globals::band( BETA ) , globals::band_strat );
 	       writer.value( "PSD" , dB ? 10*log10( this_beta ) : this_beta  );
 	       writer.value( "RELPSD" , this_beta / this_total );
@@ -432,12 +442,11 @@ annot_t * spectral_power( edf_t & edf ,
 	   if ( epoch_level_output )
 	     writer.unepoch();
 	   
-	   
 	   //
 	   // next epoch
 	   //
 
-	} 
+	}
       
       
       //
