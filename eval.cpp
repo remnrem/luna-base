@@ -2113,7 +2113,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "nsrr-remap" ) )
     {
       // clear pre-populated NSRR remapping
-      nsrr_t::clear();
+      if ( ! Helper::yesno( tok1 ) )
+	nsrr_t::clear();
       return;
     }
   

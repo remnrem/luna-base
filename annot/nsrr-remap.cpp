@@ -32,10 +32,7 @@ std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
 std::string nsrr_t::remap( const std::string & a )
 {
 
-  // check that remapping is enforced
-  if ( ! globals::remap_nsrr_annots ) return a;
-  
-  // not found in map 
+  // not found in map, or if map is empty, then no remapping
   if ( amap.find( a ) == amap.end() ) return a;
 
   // else return the remapped term

@@ -1212,8 +1212,19 @@ bool edf_t::attach( const std::string & f ,
       
       if ( fileSize != implied ) 
 	{
+
+	  std::stringstream msg;
+	  msg << "num signals = " << header.ns_all << "\n"
+	      << "header size ( = 256 + # signals * 256 ) = " << header_size << "\n"
+	      << "record size = " << record_size << "\n"
+	      << "numebr of records = " << header.nr_all << "\n"
+	      << "implied EDF size from header = " << header_size << " + " << record_size << " * " << header.nr_all << " = " << implied << "\n"
+	      << "assuming header correct, means observed has " <<  (double)(fileSize-header_size)/(double)record_size - (double)(implied-header_size)/(double)record_size 
+	      << " records too many\n"
+	      << "  (where one record is " << header.record_duration << " seconds)\n";
+	  
 	  Helper::halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
-			+ " but observed " + Helper::int2str( fileSize) + " bytes" );
+			+ " but observed " + Helper::int2str( fileSize) + " bytes" + "\n" + msg.str() );
 	}
     }
 

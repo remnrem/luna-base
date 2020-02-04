@@ -26,6 +26,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 struct nsrr_t { 
 

@@ -252,7 +252,10 @@ uint64_t Helper::sec2tp( double s )
   // i.e. with small inaccuracies in 's' being scaled up, as double float precision will be bette than 1/1000 
   
   if ( s < 0 ) 
-    Helper::halt( "all time-points must be positive integers: cannot convert " + Helper::dbl2str( s ) );
+    {
+      logger << "warning -- cannot have negative time-points, setting to 0 (from " << Helper::dbl2str( s ) << "\n";
+      return 0; 
+    }
 
   uint64_t si = 1000 * s;
 
