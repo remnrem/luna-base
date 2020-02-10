@@ -83,6 +83,7 @@ std::string globals::naughty_list;
 
 std::string globals::edf_timetrack_label;
 int globals::edf_timetrack_size;
+std::string globals::edf_annot_label;
 
 uint64_t globals::tp_1sec;
 uint64_t globals::tp_1000thsec;
@@ -345,7 +346,7 @@ void globals::init_defs()
   folder_delimiter = '/';
 #endif  
 
-  skip_edf_annots = false;
+  skip_edf_annots = true;
   skip_all_annots = false;
 
   current_tag = "";
@@ -380,7 +381,8 @@ void globals::init_defs()
   
   edf_timetrack_label = "_TT";
   edf_timetrack_size = 15; // i.e. up to 30 chars
-
+  edf_annot_label = "edf_annot";
+  
   
   // whether to assume 30-sec and enfore epoch check when first attaching 
   // an .eannot file

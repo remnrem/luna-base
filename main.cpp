@@ -853,7 +853,7 @@ void process_edfs( cmd_t & cmd )
 
 	  if ( globals::annot_files[i][0] == globals::folder_delimiter ) 
 	    tok.push_back( globals::annot_files[i] );
-	  else  // projecyt path may be "" if not set; but if set, will end in /
+	  else  // project path may be "" if not set; but if set, will end in /
 	    tok.push_back( globals::project_path + globals::annot_files[i] );
 	}
     
@@ -903,7 +903,17 @@ void process_edfs( cmd_t & cmd )
 	    }
 	}
 
-	  
+      
+      //
+      // Attach EDF Annotations, potentially
+      //
+
+      if ( edf.header.edfplus && ! globals::skip_edf_annots )
+	{
+	  edf.timeline.annotations.from_EDF( edf );
+	}
+      
+      
       //
       // Now, all annotations (except EPOCH-ANNOT) are attached and can be reported on
       //

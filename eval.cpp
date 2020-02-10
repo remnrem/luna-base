@@ -1584,6 +1584,7 @@ void proc_list_annots( edf_t & edf , param_t & param )
 }
 
 
+
 // WRITE-ANNOTS : write all annots to disk
 
 void proc_write_annots( edf_t & edf , param_t & param )
@@ -2189,11 +2190,11 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  // do not read EDF annotations
-  if ( Helper::iequals( tok0 , "skip-edf-annots" ) )
+  // read EDF annotations
+  if ( Helper::iequals( tok0 , "load-edf-annots" ) )
     {
       if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
-	globals::skip_edf_annots = true;
+	globals::skip_edf_annots = false;
       return;
     }
 

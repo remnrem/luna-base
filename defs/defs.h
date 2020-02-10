@@ -235,7 +235,8 @@ struct globals
   // time track for EDF
   static std::string edf_timetrack_label;
   static int edf_timetrack_size;
-  
+  static std::string edf_annot_label;
+
   // time-units
   static uint64_t tp_1sec;
   static uint64_t tp_1000thsec;

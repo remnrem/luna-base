@@ -2731,3 +2731,78 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 }
 
 
+//
+// Convert from EDF Annotations track(s) to Luna-format annotations
+//
+
+annot_t * annotation_set_t::from_EDF( edf_t & edf )
+{
+  
+  logger << "  extracting 'EDF Annotations' track\n";
+  
+
+  // create a single annotation (or bind to it, if it already exists)
+  
+  annot_t * a = edf.timeline.annotations.add( globals::edf_annot_label );
+  
+  a->name = globals::edf_annot_label;
+  a->description = "EDF Annotations";
+  a->file = edf.filename;
+  a->type = globals::A_FLAG_T; 
+
+  int r = edf.timeline.first_record();
+  
+  while ( r != -1 )
+    {
+
+      for ( int s = 0 ; s < edf.header.ns; s ++ )
+	{
+	  
+	  if ( edf.header.is_annotation_channel( s ) )
+	    {	      
+	      
+	      tal_t t = edf.tal( s , r );
+	      
+	      const int na = t.size();
+	      
+	      for (int i=0; i<na; i++)
+		{
+		  
+		  tal_element_t & te = t.d[i];
+		  
+		  if ( te.name != globals::edf_timetrack_label )
+		    {
+		      
+		      uint64_t start_tp = Helper::sec2tp( te.onset );
+
+		      uint64_t dur_tp = Helper::sec2tp( te.duration );
+		      
+		      uint64_t stop_tp  = dur_tp == 0 ?
+			start_tp :
+			start_tp + dur_tp - 1LLU;
+		      
+		      //if ( start_tp == stop_tp ) ++stop_tp;
+		      
+		      interval_t interval( start_tp , stop_tp );
+		      
+		      instance_t * instance = a->add( Helper::trim( te.name ) , interval );
+		      
+		      //std::cerr << " adding [" << te.name << "] -- " << te.onset << "\t" << te.duration << "\n";
+		      
+		      // track how many annotations we add
+		      edf.aoccur[ globals::edf_annot_label ]++;
+		    }
+		  
+		}
+
+	    } 
+	  
+	} // next signal
+
+      r = edf.timeline.next_record( r );
+      
+    } // next record
+  
+  return a;
+}
+

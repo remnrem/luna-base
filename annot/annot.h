@@ -708,6 +708,8 @@ struct annotation_set_t
       return NULL;
   }
 
+  annot_t * from_EDF( edf_t & edf );
+  
   void clear() 
   { 
     std::map<std::string,annot_t*>::iterator ii = annots.begin();
