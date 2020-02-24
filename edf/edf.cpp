@@ -1032,7 +1032,8 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   
   double dd;
   IN2 >> dd;
-  if ( ! IN2.eof() ) Helper::halt( filename + " has too many data-points given parameters\n" );
+  if ( ! IN2.eof() ) 
+    logger << " ** warning, truncating potential trailing sample points (<1 second) from end of input\n";
   
   // should now be end of file...
 	    
