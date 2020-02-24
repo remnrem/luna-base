@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -58,13 +59,30 @@ void annot_t::wipe()
 
 instance_t * annot_t::add( const std::string & id , const interval_t & interval )
 {
+
+  // swap in hh:mm:ss for null instance ID?
   
+  bool id2hms = 
+    globals::set_annot_inst2hms_force ||
+    ( globals::set_annot_inst2hms &&
+      ( id == "." || id == "" || id == name ) );
+
+  std::string id2 = id;
+  
+  if ( id2hms )
+    {
+      clocktime_t t = parent->start_ct ;
+      double start_hrs = interval.start_sec() / 3600.0; 
+      t.advance( start_hrs );
+      id2 = t.as_string();
+    }
+      
   instance_t * instance = new instance_t ;
   
   // track (for clean-up)
   all_instances.insert( instance );
-  
-  interval_events[ instance_idx_t( this , interval , id ) ] = instance; 
+    
+  interval_events[ instance_idx_t( this , interval , id2 ) ] = instance; 
   
   return instance; 
   
@@ -428,6 +446,21 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
 }
 
 
+bool annot_t::special() const
+{
+  if ( name == "duration_hms" ) return true;
+  if ( name == "duration_sec" ) return true;
+  if ( name == "epoch_sec" ) return true; 
+  if ( name == "start_hms" ) return true; 
+  return false;
+}
+
+
+bool annot_t::process_special( const std::string & , const std::string & )
+{
+  // look for special flags, and add to 
+  return true;
+}
 
 bool annot_t::load( const std::string & f , edf_t & parent_edf )
 {
@@ -2191,10 +2224,11 @@ void proc_eval( edf_t & edf , param_t & param )
 
 void annotation_set_t::write( const std::string & filename , param_t & param )
 {
-
+  
   // write all annotations here as a single file; 
   // either XML or .annot file format
-  // default if as XML  
+  // default is as XML  
+  // order by time
   
   bool annot_format = param.has( "luna" );
 
@@ -2216,14 +2250,26 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
       
       O1 << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n\n";
       O1 << "<Annotations>\n\n";
-      O1 << "<SoftwareVersion>luna-" << globals::version << "</SoftwareVersion>\n";
-      O1 << "<EpochLength>" << globals::default_epoch_len << "</EpochLength>\n\n";
-
+      O1 << "<SoftwareVersion>luna-" << globals::version << "</SoftwareVersion>\n\n";
+      
+      O1 << "<StartTime>" << start_hms << "</StartTime>\n";
+      O1 << "<Duration>" << duration_hms << "</Duration>\n";
+      O1 << "<DurationSeconds>" << duration_sec << "</DurationSeconds>\n";      
+      O1 << "<EpochLength>" << epoch_sec << "</EpochLength>\n";
+      
+      O1 << "\n";
+      
       //
       // Loop over each annotation
       //
       
       std::vector<std::string> anames = names();
+
+      //
+      // Track all instances (in order)      
+      //
+
+      std::set<instance_idx_t> events;
       
       //
       // Annotation header
@@ -2262,7 +2308,20 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	  
 	  O1 << "</Class>\n\n";
 	  
+
+	  //
+	  // Enter all events in to a single table
+	  //
+
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+          while ( ii != annot->interval_events.end() )
+            {
+              const instance_idx_t & instance_idx = ii->first;
+	      events.insert( instance_idx );
+	      ++ii;
+	    }
 	  
+
 	  //
 	  // Next annotation/class header
 	  // 
@@ -2288,61 +2347,61 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
       //      <Value var="name">0.123</Value>
       //      <Value var="name">0.123</Value>
       //    </Instance>
-      
-      for (int a=0;a<anames.size();a++)
+
+
+      std::set<instance_idx_t>::const_iterator ee = events.begin();
+      while ( ee != events.end() )
 	{
+
+	  const instance_idx_t & instance_idx = *ee;
 	  
-	  annot_t * annot = find( anames[a] );
+	  const annot_t * annot = instance_idx.parent;
+
+	  annot_map_t::const_iterator ii = annot->interval_events.find( instance_idx );
+          if ( ii == annot->interval_events.end() )  continue;
+	  instance_t * inst = ii->second;
 	  
-	  if ( annot == NULL ) continue;
 	  
-	  //
-	  // iterator over interval/event map
-	  //
+	  O1 << "<Instance class=\"" << annot->name << "\">\n";
 	  
-	  annot_map_t::const_iterator ii = annot->interval_events.begin();
-	  while ( ii != annot->interval_events.end() )
+	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
+	    O1 << " <Name>" << instance_idx.id << "</Name>\n";
+	  
+	  O1 << " <Start>" << instance_idx.interval.start_sec() << "</Start>\n"
+	     << " <Duration>" << instance_idx.interval.duration_sec() << "</Duration>\n";
+	  
+	  // name : instance_idx.id
+	  // start : instance_idx.interval.start_sec()
+	  // duration : instance_idx.interval.duration_sec()
+	  
+	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	  
+	  while ( dd != inst->data.end() )
 	    {
-	      const instance_idx_t & instance_idx = ii->first;
+	      // var-name : dd->first
+	      // value : 
 	      
-	      O1 << "<Instance class=\"" << anames[a] << "\">\n";
-	      
-	      if ( instance_idx.id != "." && instance_idx.id != "" ) 
-		O1 << " <Name>" << instance_idx.id << "</Name>\n";
-	      
-	      O1 << " <Start>" << instance_idx.interval.start_sec() << "</Start>\n"
-		 << " <Duration>" << instance_idx.interval.duration_sec() << "</Duration>\n";
-	  
-	      // name : instance_idx.id
-	      // start : instance_idx.interval.start_sec()
-	      // duration : instance_idx.interval.duration_sec()
-	  
-	      instance_t * inst = ii->second;
-	  
-	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
-	      
-	      while ( dd != inst->data.end() )
-		{
-		  // var-name : dd->first
-		  // value : 
-	      
-		  O1 << " <Value name=\"" << dd->first << "\">" 
-		     << *dd->second 
-		     << "</Value>\n"; 
-		  ++dd;
-		}
-	  
-	      O1 << "</Instance>\n\n";
-	  
-	      ++ii;
+	      O1 << " <Value name=\"" << dd->first << "\">" 
+		 << *dd->second 
+		 << "</Value>\n"; 
+	      ++dd;
 	    }
 	  
+	  O1 << "</Instance>\n\n";
+
+
+	  //
+	  // Next instance (from events)
+	  //
+
+	  ++ee;
+
 	}
       
       //
       // End of all annotation instatances
       //
-  
+      
       O1 << "</Instances>\n\n";
 
       //
@@ -2357,11 +2416,17 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
     {
 
       //
+      // Track all instances (in order)      
+      //
+      
+      std::set<instance_idx_t> events;
+      
+      //
       // Annotation header
       //
       
       std::vector<std::string> anames = names();      
-
+      
       for (int a=0;a<anames.size();a++)
 	{
 	  
@@ -2392,55 +2457,102 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	    }
 	  
 	  O1 << "\n";
+
+
+	  //
+	  // Enter all events in to a single table
+	  //
 	  
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+          while ( ii != annot->interval_events.end() )
+            {
+              const instance_idx_t & instance_idx = ii->first;
+	      events.insert( instance_idx );
+	      ++ii;
+	    }
+	  
+	  //
+	  // Next annotation class
+	  //
+
 	}
-      
+
+      //
+      // dummy markers first 
+      //
+
+      // O1 << "<StartTime>" << start_hms << "</StartTime>\n";
+      // O1 << "<Duration>" << duration_hms << "</Duration>\n";
+      // O1 << "<DurationSeconds>" << duration_sec << "</DurationSeconds>\n";
+      // O1 << "<EpochLength>" << epoch_sec << "</EpochLength>\n";
+
+      if ( start_hms != "." ) 
+	O1 << "# start_hms | EDF start time\n";
+      if ( duration_hms != "." )
+	O1 << "# duration_hms | EDF duration (hh:mm:ss)\n";
+      if ( duration_sec != 0 )
+	O1 << "# duration_sec | EDF duration (seconds)\n";
+      if ( epoch_sec != 0 )
+	O1 << "# epoch_sec | Default epoch duration (seconds)\n";
+
+      if ( start_hms != "." )  
+ 	O1 << "start_hms\t" << start_hms << "\t" << 0 << "\t" << 0 << "\n";
+
+      if ( duration_hms != "." )
+	O1 << "duration_hms\t" << duration_hms << "\t0\t0\n";
+      if ( duration_sec != 0 )
+	O1 << "duration_sec\t" << duration_sec << "\t0\t0\n";
+      if ( epoch_sec != 0 )
+	O1 << "epoch_sec\t" << epoch_sec << "\t0\t0\n";
+
       //
       // Loop over all annotation instances
       //
       
-      for (int a=0;a<anames.size();a++)
+      std::set<instance_idx_t>::const_iterator ee = events.begin();
+      while ( ee != events.end() )
 	{
-	  
-	  annot_t * annot = find( anames[a] );
 
-	  if ( annot == NULL ) continue;
+	  const instance_idx_t & instance_idx = *ee;
 	  
-	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  const annot_t * annot = instance_idx.parent;
+
+	  if ( annot == NULL ) { ++ee; continue; } 
 	  
-	  while ( ii != annot->interval_events.end() )
+	  annot_map_t::const_iterator ii = annot->interval_events.find( instance_idx );
+          if ( ii == annot->interval_events.end() )  { ++ee; continue; } 
+	  instance_t * inst = ii->second;
+
+	  O1 << annot->name << "\t";
+
+	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
+	    O1 << instance_idx.id << "\t";
+	  else 
+	    O1 << ".\t";
+	  
+	  O1 << instance_idx.interval.start_sec() << "\t"
+	     << instance_idx.interval.stop_sec();
+	  
+	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	  
+	  while ( dd != inst->data.end() )
 	    {
-	      const instance_idx_t & instance_idx = ii->first;
-	      
-	      O1 << anames[a] << "\t";
-
-	      if ( instance_idx.id != "." && instance_idx.id != "" ) 
-		O1 << instance_idx.id << "\t";
-	      else 
-		O1 << ".\t";
-
-	      O1 << instance_idx.interval.start_sec() << "\t"
-		 << instance_idx.interval.stop_sec();
-	      
-	      instance_t * inst = ii->second;
-	      
-	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
-	      
-	      while ( dd != inst->data.end() )
-		{
-		  O1 << "\t" << *dd->second;
-		  ++dd;
-		}
-	      
-	      O1 << "\n";
-	  
-	      ++ii;
+	      O1 << "\t" << *dd->second;
+	      ++dd;
 	    }
+	  
+	  O1 << "\n";
+
+	  //
+	  // Next instance/event
+	  //
+
+	  ++ee;
 	  
 	}
       
     }
-      
+        
   //
   // All done
   //
@@ -2728,6 +2840,71 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
     }
   
   return true;
+}
+
+
+
+void annotation_set_t::clear() 
+{ 
+  std::map<std::string,annot_t*>::iterator ii = annots.begin();
+  while ( ii != annots.end() ) 
+    {
+      delete ii->second;
+      ++ii;
+    }
+  
+  annots.clear(); 
+  
+  start_ct.reset();
+  
+  start_hms = ".";
+  
+  duration_hms = ".";
+  
+  duration_sec = 0 ;
+  
+  epoch_sec = 0 ; 
+  
+}
+
+
+//
+// Initiate annotation set from EDF, to seed with a few key values
+//
+
+void annotation_set_t::set( edf_t * edf ) 
+{
+  // populate start_hms
+  // duration_hms,
+  // duration_sec
+  // and epoch_sec
+
+  
+  if ( edf != NULL )
+    {
+      
+      duration_sec = edf->header.nr_all * edf->header.record_duration ;
+      
+      duration_hms = Helper::timestring( globals::tp_1sec * duration_sec );
+      
+      clocktime_t etime( edf->header.starttime );
+      
+      if ( etime.valid )
+	{
+
+	  start_ct = etime;
+	  start_hms = edf->header.starttime ;
+	  
+	  // double time_hrs = ( edf->timeline.last_time_point_tp * globals::tp_duration ) / 3600.0 ;
+	  // etime.advance( time_hrs );	  
+	}
+      
+      epoch_sec = edf->timeline.epoched() ?
+	edf->timeline.epoch_length() :
+	globals::default_epoch_len ; 
+      
+    }
+  
 }
 
 

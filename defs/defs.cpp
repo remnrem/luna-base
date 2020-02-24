@@ -65,7 +65,9 @@ int globals::assume_pm_starttime_hour;
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
 bool globals::skip_edf_annots;
-bool globals::skip_all_annots;
+bool globals::skip_nonedf_annots;
+bool globals::set_annot_inst2hms;
+bool globals::set_annot_inst2hms_force;
 
 std::set<std::string> globals::excludes;
 
@@ -347,8 +349,10 @@ void globals::init_defs()
 #endif  
 
   skip_edf_annots = true;
-  skip_all_annots = false;
-
+  skip_nonedf_annots = false;
+  set_annot_inst2hms = true;
+  set_annot_inst2hms_force = false;
+   
   current_tag = "";
 
   indiv_wildcard = "^";
