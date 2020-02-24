@@ -67,6 +67,7 @@ struct instance_idx_t;
 struct instance_t;
 struct avar_t;
 struct edf_t;
+struct annotation_set_t;
 
 typedef std::map<instance_idx_t,instance_t*> annot_map_t;
 typedef std::map<std::string,avar_t*> instance_table_t;
@@ -74,9 +75,9 @@ typedef std::map<std::string,avar_t*> instance_table_t;
 struct annot_t
 {
   
-  friend struct timeline_t;
+  //  friend struct timeline_t;
 
-  friend struct annotation_set_t;
+  //  friend struct annotation_set_t;
   
   
 
@@ -110,13 +111,15 @@ struct annot_t
 
   std::set<instance_t*> all_instances;
 
+  // parent
+  annotation_set_t * parent;
   
 
   //
   // Constructor/destructor
   //
 
-  annot_t( const std::string & n )  : name(n) 
+  annot_t( const std::string & n , annotation_set_t * p )  : name(n) , parent(p)
   { 
     file = description = "";
     type = globals::A_NULL_T;
@@ -141,6 +144,10 @@ struct annot_t
 				     const std::string & filename , 
 				     uint64_t elen , 
 				     uint64_t einc );
+  
+  bool special() const;
+
+  bool process_special( const std::string & , const std::string & );
   
   int  load_features( const std::string & );    
   
@@ -667,30 +674,58 @@ struct textvec_avar_t : public avar_t
 struct annotation_set_t;
 struct edf_t;
 struct param_t;
+struct clocktime_t;
 
 void summarize_annotations( edf_t & edf , param_t & param );
 
 
-
-
-
 struct annotation_set_t
 {
+
+  annotation_set_t()
+  {
+    
+    start_hms = ".";
+    
+    duration_hms = ".";
+    
+    duration_sec = 0 ;
+    
+    epoch_sec = 0 ; 
+    
+  }
   
+  void set( edf_t * edf );
+    
   ~annotation_set_t()
   {
     clear();
   }
-  
+
+  // data
+
   std::map<std::string,annot_t*> annots;
+
+  clocktime_t start_ct;
   
+  std::string start_hms;
+
+  std::string duration_hms;
+
+  double duration_sec;
+
+  int epoch_sec;
+
+  
+  // member functions
+
   annot_t * add( const std::string & name ) 
   { 
     
     if ( annots.find( name ) != annots.end() )
       return annots[name];
     
-    annot_t * a = new annot_t( name ); 
+    annot_t * a = new annot_t( name , this ); 
     annots[ name ] = a;
     return a;
   }
@@ -710,16 +745,7 @@ struct annotation_set_t
 
   annot_t * from_EDF( edf_t & edf );
   
-  void clear() 
-  { 
-    std::map<std::string,annot_t*>::iterator ii = annots.begin();
-    while ( ii != annots.end() ) 
-      {
-	delete ii->second;
-	++ii;
-      }
-    annots.clear(); 
-  }
+  void clear() ;
   
   void clear( const std::string & name )
   {
@@ -742,7 +768,7 @@ struct annotation_set_t
       }
     return n;
   }
-  
+
   void write( const std::string & filename , param_t & param );
 
   // Attempt to create a single SLEEP STAGE annotation from multiple

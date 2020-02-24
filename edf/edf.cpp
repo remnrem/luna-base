@@ -2250,25 +2250,28 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
 
 bool edf_t::load_annotations( const std::string & f0 )
 {
-    
-  const std::string f = Helper::expand( f0 );
 
   //
-  // peek into each annotation file just to get a list of the
-  // available annoations, do not load at this point
+  // parse annotation filename
   //
-  
-  // Allow wildcards
+
+  const std::string f = Helper::expand( f0 );
+
+  // allow wildcards
     
   if ( ! Helper::fileExists( f ) ) 
     Helper::halt( "annotation file " + f + " does not exist for EDF " + filename );
-  
+
+  //
+  // Type of input?
+  //
+
   bool xml_mode = Helper::file_extension( f , "xml" );
   
   bool feature_list_mode = Helper::file_extension( f , "ftr" );
   
   //
-  // For XML files, we have to parse everything, so do this just once and store
+  // XML files (NSRR, Profusion or Luna formats)
   //
   
   if ( xml_mode ) 
@@ -2277,14 +2280,16 @@ bool edf_t::load_annotations( const std::string & f0 )
       return true;
     }
   
+
   //
-  // For feature lists, load now (unless FTR is turned off)
+  // Feature lists
   //
   
   if ( feature_list_mode && globals::read_ftr )
     {
-            
+      
       std::vector<std::string> tok = Helper::parse( f , "/" );
+
       std::string file_name = tok[ tok.size()-1];	
     
       // filename should be id_<ID>_feature_<FEATURE>.ftr
@@ -2324,7 +2329,7 @@ bool edf_t::load_annotations( const std::string & f0 )
 
 
   //
-  // For .annot files, we now load them completely here too
+  // Otherwise, process as an .annot or .eannot file
   //
   
   return annot_t::load( f , *this );

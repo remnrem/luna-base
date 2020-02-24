@@ -842,6 +842,11 @@ void process_edfs( cmd_t & cmd )
 
       edf.header.check_channels();
 
+      //
+      // Give annotations some basic details about the EDF
+      //
+
+      edf.timeline.annotations.set( &edf );
       
       //
       // Add additional annotations? 
@@ -862,8 +867,9 @@ void process_edfs( cmd_t & cmd )
       // Attach annotations
       //
       
-      if ( ! globals::skip_all_annots ) 
+      if ( ! globals::skip_nonedf_annots ) 
 	{
+
 	  for (int i=2;i<tok.size();i++) 
 	    {
 	      
@@ -928,6 +934,9 @@ void process_edfs( cmd_t & cmd )
 	  annot_t * annot = edf.timeline.annotations.find( names[a] );
 	  
 	  if ( annot == NULL ) Helper::halt( "internal problem in list_all_annotations()" );
+
+	  // do not show special annots [ duration_hms, duration_sec, epoch_sec, start_hms ]
+	  if ( annot->special() ) continue;
 	  
 	  const int num_events = annot->num_interval_events();
 	  const int nf = annot->types.size();
@@ -936,12 +945,16 @@ void process_edfs( cmd_t & cmd )
 		 << num_events << " instance(s)"
 		 << " (from " << annot->file << ")\n";
 	  
-	  // list instance IDs (up to 8) if multiple or differnt from annot name
+	  // list instance IDs (up to 4) if multiple or differnt from annot name
+	  // but only if there are >1 unique value, *and* the number of unique values
+	  // does not equal the total instance count (i.e. do not print if just time-stamp
+	  // or count for each ID, only if some coding
 	  
 	  std::set<std::string> instance_ids = annot->instance_ids();
 	  
-	  if ( instance_ids.size() > 0 ) 
+	  if ( instance_ids.size() > 0 && instance_ids.size() != num_events ) 
 	    {
+	      
 	      if ( ! ( instance_ids.size() == 1 
 		       && ( *instance_ids.begin()  == names[a] || *instance_ids.begin() == "." ) ) )
 		{
@@ -952,7 +965,7 @@ void process_edfs( cmd_t & cmd )
 		    {
 		      logger << " " << *ii ;
 		      ++icnt;
-		      if ( icnt > 8 ) { logger << " ..." ; break;  }
+		      if ( icnt > 4 ) { logger << " ..." ; break;  }
 		      ++ii;		  
 		    }
 		  logger << "\n";

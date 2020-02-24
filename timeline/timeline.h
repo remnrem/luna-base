@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -66,7 +67,7 @@ struct timeline_t
   
  public:
   
-  timeline_t( edf_t * p )
+  timeline_t( edf_t * p ) 
     {      
       edf = p;            
       unepoch();      

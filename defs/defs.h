@@ -112,10 +112,11 @@ struct globals
 
   static bool assume_pm_starttime;
   static int assume_pm_starttime_hour;
-
+  
   static bool skip_edf_annots;
-  static bool skip_all_annots;
-
+  static bool skip_nonedf_annots;
+  static bool set_annot_inst2hms;
+  static bool set_annot_inst2hms_force;
 
   //
   // Annotation types stored here statically;  these can be properties of both 
