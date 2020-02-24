@@ -289,6 +289,7 @@ void proc_spindles( edf_t & , param_t & );
 void proc_polarity( edf_t & , param_t & );
 void proc_slowwaves( edf_t & , param_t & );
 void proc_cwt( edf_t & , param_t & );
+void proc_rems( edf_t & , param_t & );
 
 void proc_spike( edf_t & , param_t & );
 void proc_shift( edf_t & , param_t & );

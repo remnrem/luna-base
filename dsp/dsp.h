@@ -25,6 +25,7 @@
 
 #include "spectral_norm.h"
 #include "tv.h"
+#include "rems.h"
 #include "cfc.h"
 #include "resample.h"
 #include "coherence.h"

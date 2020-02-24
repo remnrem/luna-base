@@ -799,8 +799,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "POL" ) )          proc_polarity( edf, param(c) );	  
-      
-      else if ( is( c, "SO" ) )            proc_slowwaves( edf, param(c) );
+      else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
+      else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
       else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
 
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
@@ -1182,6 +1182,13 @@ void proc_spindles( edf_t & edf , param_t & param )
 void proc_polarity( edf_t & edf , param_t & param )
 {	
   dsptools::polarity( edf , param );
+}
+
+// REMS : detect REMS via simple heuristic
+
+void proc_rems( edf_t & edf , param_t & param )
+{
+  dsptools::rems( edf , param );
 }
 
 // SW || SLOW-WAVES : detect slow waves, do time-locked FFT on rest of signal
