@@ -2368,15 +2368,24 @@ bool  edf_header_t::has_signal( const std::string & s )
 }
 
 
-
-int  edf_header_t::original_signal( const std::string & s )
+int  edf_header_t::original_signal_no_aliasing( const std::string & s  )
 {  
-  // look up, with aliases, in original
-  // label_all[ ]
-
   std::map<std::string,int>::const_iterator ff = label_all.find( s );
   if ( ff != label_all.end() ) return ff->second;
+  return -1;
+}
 
+
+int  edf_header_t::original_signal( const std::string & s  )
+{  
+
+  // look up, with aliases, in original
+  // label_all[ ]
+  
+  std::map<std::string,int>::const_iterator ff = label_all.find( s );
+  
+  if ( ff != label_all.end() ) return ff->second;
+  
   // otherwise, consider if we have aliases
   if ( cmd_t::label_aliases.find( s ) != cmd_t::label_aliases.end() )
     {
@@ -2385,7 +2394,6 @@ int  edf_header_t::original_signal( const std::string & s )
       if ( ff != label_all.end() ) return ff->second;
     }
 
-  
   if ( cmd_t::primary_alias.find( s ) != cmd_t::primary_alias.end() )
     {
       std::vector<std::string> & a = cmd_t::primary_alias.find( s )->second;
@@ -2397,7 +2405,7 @@ int  edf_header_t::original_signal( const std::string & s )
     }
   
   return -1;
-    
+  
 }
 
 
@@ -2577,7 +2585,7 @@ void edf_header_t::check_channels()
       std::vector<std::string>::const_iterator jj = ii->second.begin();
       while ( jj != ii->second.end() )
 	{
-	  if ( original_signal( *jj ) != -1 ) obs.insert( *jj );
+	  if ( original_signal_no_aliasing( *jj ) != -1 ) obs.insert( *jj );
 	  ++jj;
 	}
       if ( obs.size() > 1 ) 

@@ -2214,24 +2214,21 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // read EDF annotations
   if ( Helper::iequals( tok0 , "load-edf-annots" ) )
     {
-      if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
-	globals::skip_edf_annots = false;
+      globals::skip_edf_annots = ! Helper::yesno( tok1 );
       return;
     }
 
   // do not read ANNOT annotations
   if ( Helper::iequals( tok0 , "skip-annots" ) )
     {
-      if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
-	globals::skip_nonedf_annots = true;
+      globals::skip_nonedf_annots = Helper::yesno( tok1 );
       return;
     }
 
   // do not read EDF or ANNOT annotations
   if ( Helper::iequals( tok0 , "skip-all-annots" ) )
     {
-      if ( tok1 == "1" || tok1 == "Y" || tok1 == "y" )
-	globals::skip_edf_annots = globals::skip_nonedf_annots = true;
+      globals::skip_edf_annots = globals::skip_nonedf_annots = Helper::yesno( tok1 );
       return;
     }
 

@@ -182,6 +182,8 @@ struct edf_header_t
 
   int  original_signal( const std::string & s );
 
+  int  original_signal_no_aliasing( const std::string & s );
+
   signal_list_t signal_list( const std::string & s , bool no_annotation_channels = false );
   
   void signal_alias( const std::string & s );
