@@ -518,7 +518,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  Helper::safe_getline( IN1 , x );
 	  if ( IN1.eof() ) break;
 	  if ( x == "" ) continue;
-	  a.push_back( x );      
+	  //std::cout << "x = " << x << "  " << nsrr_t::remap( x ) << "\n";
+	  // store, optionally annotation-remapping
+	  a.push_back( nsrr_t::remap( x )  );      
 	}
       IN1.close();
 

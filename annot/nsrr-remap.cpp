@@ -31,10 +31,9 @@ std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
 
 std::string nsrr_t::remap( const std::string & a )
 {
-
   // not found in map, or if map is empty, then no remapping
   if ( amap.find( a ) == amap.end() ) return a;
-
+  
   // else return the remapped term
   return amap[ a ] ;
   
@@ -60,11 +59,11 @@ void nsrr_t::annot_remapping( const std::string & s )
   // V|X  bad, X already mapped
   // i.e. things can only occur once in the RHS, or multiple times in the LHS
   
-  
+
   // format canonical|alias1|alias2 , etc.
   std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
   if ( tok.size() < 2 ) Helper::halt( "bad format for annotation remapping:  canonical|alias 1|alias 2\n" + s );
-
+  
   const std::string primary = Helper::unquote( tok[0] );
   for (int j=1;j<tok.size();j++) 
     {
@@ -81,7 +80,7 @@ void nsrr_t::annot_remapping( const std::string & s )
 
       // otherwise, set 
       amap[ mapped ] = primary;
-
+      
       bmap[ primary ].push_back( mapped );
     }
     
@@ -102,7 +101,7 @@ void nsrr_t::clear()
 
 void nsrr_t::init() 
 {
-
+  
   //
   // auto-populated variables -- note these are defined here even if nsrr-remap mode if 
   // later turned off.  not a problem, as the variables will be overwritten by anything specified on

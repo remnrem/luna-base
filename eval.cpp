@@ -882,7 +882,7 @@ void proc_summaries( edf_t & edf , param_t & param )
 
 void proc_desc( edf_t & edf , param_t & param )
 {
-  edf.description();
+  edf.description( param );
 }
 
 // STATS : get basic stats for an EDF

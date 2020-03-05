@@ -235,9 +235,21 @@ std::string edf_header_t::summary() const
   return ss.str();
 }
 
-void edf_t::description() const
+void edf_t::description( const param_t & param ) const
 {
-  
+
+  bool channel_list = param.has( "channels" );
+
+  if ( channel_list )
+    {
+      for (int s=0;s<header.ns;s++) 
+	{
+	  if ( header.is_data_channel(s) )
+	    std::cout << header.label[s] << "\n";
+	}
+      return;
+    }
+    
   uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
 
   int n_data_channels = 0 , n_annot_channels = 0;
@@ -446,7 +458,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   // check whether we are forcing EDF format
   if ( globals::skip_edf_annots )
     {
-      logger << " forcing read as EDF\n";
+      logger << "  forcing read as EDF [else set load-edf-annots=1]\n";
       edfplus = false;
       continuous = true;
     }

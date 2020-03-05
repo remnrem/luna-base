@@ -1059,12 +1059,11 @@ signal_list_t timeline_t::unmasked_channels_sl( const int e0 , const signal_list
 std::vector<int> timeline_t::masked_channels( const int e0 , const signal_list_t & signals ) const
 {
   int e = display_epoch( e0 );
-  std::cerr << " e , e0 = " << e << " " << e0 << "\n";
+  //  std::cerr << " e , e0 = " << e << " " << e0 << "\n";
   std::vector<int> m;
   const int ns = signals.size();
   bool any_masked = chep.find( e ) != chep.end() ;
   if ( ! any_masked ) return m; // all good
-  std::cerr << "h\n";
 
   const std::set<int> & masked = chep.find(e)->second ;
   for (int s=0; s<ns; s++) 

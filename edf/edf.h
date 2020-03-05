@@ -452,7 +452,7 @@ public:
 
   void terse_summary( const bool write_signals = false ) const;
 
-  void description() const;
+  void description( const param_t & ) const;
   
 
   //
