@@ -120,6 +120,7 @@ void cmddefs_t::init()
   //
 
   add_cmd( "summ" , "DESC" , "Simple description of an EDF, sent to the console" );
+  add_param( "DESC" , "channels" , "" , "Only write channel names, one-per-line" );
 
   
   //
@@ -613,6 +614,8 @@ void cmddefs_t::init()
   add_param( "SIGSTATS" , "chep" , "" , "Set CHEP mask for outlier epochs" );
   add_param( "SIGSTATS" , "threshold" , "2,2" , "Set standard unit threshold(s) for (iterative) outlier detection" );
   add_param( "SIGSTATS" , "th" , "2,2" , "Same as 'threshold'" );
+  add_param( "SIGSTATS" , "cstats" , "2" , "Run channel-comparisons, with threshold in SD units" );
+  add_param( "SIGSTATS" , "cstats-unmasked-only" , "" , "Channel-comparisons only for unmasked epochs" );
 
   add_table( "SIGSTATS" , "CH" , "Per-channel whole-signal statistics" );
   add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" );
@@ -1388,11 +1391,22 @@ void cmddefs_t::init()
   add_param( "CORREL" , "sr" , "128" , "Resample channels to this sample rate if needed" );
   add_param( "CORREL" , "epoch" , "" , "Display per-epoch, and estimate mean and median correlation across epochs" );
 
+  add_param( "CORREL" , "ch-low" , "0.1" , "Number of correlations below threshold for this channel" );
+  add_param( "CORREL" , "ch-high" , "0.98" , "Number of correlations above threshold for this channel" );
+  
   add_table( "CORREL" , "CH1,CH2" , "Whole-signal correlations for pairs of channels" );
   add_var( "CORREL" , "CH1,CH2" , "R", "Pearson product moment correlation" );
   add_var( "CORREL" , "CH1,CH2" , "R_MEAN", "(If epoch is specified) the mean of epoch-level correlations" );
   add_var( "CORREL" , "CH1,CH2" , "R_MEDIAN" ,  "(If epoch is specified) the median of epoch-level correlations" );
 
+  add_table( "CORREL" , "CH,CH" , "Channel-level summaries of whole-signal correlations" );
+  add_var( "CORREL" , "CH" , "SUMM_LOW", "Number of correlations below ch-low threshold" );
+  add_var( "CORREL" , "CH" , "SUMM_HIGH", "Number of correlations aboive ch-high threshold" );
+  
+  add_var( "CORREL" , "CH" , "SUMM_MEAN", "Mean correlation for this channel" );
+  add_var( "CORREL" , "CH" , "SUMM_MIN", "Min correlation for this channel" );
+  add_var( "CORREL" , "CH" , "SUMM_MAX", "Max correlation for this channel" );
+  
   add_table( "CORREL" , "CH1,CH2,E" , "Whole-signal correlations for pairs of channels" );
   add_var( "CORREL" , "CH1,CH2,E" , "R", "Pearson product moment correlation" );
   set_compressed( "CORREL" , tfac_t( "CH1,CH2,E" ) );

@@ -153,6 +153,18 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   
 
   //
+  // For channel-level summaries (not in per-epoch mode)
+  //
+
+  bool ch_summaries = param.has( "ch-high" ) || param.has( "ch-low" );
+  double ch_over = param.has( "ch-high" ) ? param.requires_dbl( "ch-high" ) : 1;
+  double ch_under = param.has( "ch-low" ) ? param.requires_dbl( "ch-low" ) : -1;
+  std::map<int,double> summr_mean, summr_min, summr_max;
+  std::map<int,int> summr_under, summr_over, summr_n;
+  for (int s=0;s<ns;s++) { summr_min[ sigs[s] ] = 1; summr_max[ sigs[s] ] = -1; }
+  if ( ch_summaries && ! all_by_all ) Helper::halt( "can only do ch-high/ch-low summaries with all-by-all CORREL (i.e. sig=X, not sig1=X sig2=Y)" );
+  
+  //
   // Start iterating over pairs
   //
 
@@ -265,13 +277,60 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	      overall_r = Statistics::correlation( *d1 , *d2 );
 	      	      
 	      writer.value( "R" , overall_r ); 
-	      	      
-	    }	  
+	      
+
+	      // store channel-level summaries
+	      if ( ch_summaries )
+		{
+		  summr_mean[ signals1(i) ] += overall_r;
+		  summr_mean[ signals2(j) ] += overall_r;
+		  ++summr_n[ signals1(i) ];
+		  ++summr_n[ signals2(j) ];
+		  
+		  if ( overall_r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = overall_r;
+		  if ( overall_r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = overall_r;
+				  
+		  if ( overall_r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = overall_r;
+		  if ( overall_r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = overall_r;
+		  
+		  if ( overall_r > ch_over ) { ++summr_over[ signals1(i) ]; ++summr_over[ signals2(j) ]; }
+		  if ( overall_r < ch_under ) { ++summr_under[ signals1(i) ]; ++summr_under[ signals2(j) ]; }
+		  
+		}	      
+	    }	 
 	}
     }
   
   writer.unlevel( "CH1" );
   writer.unlevel( "CH2" );
 
+  
+  //
+  // Write channel-level summaries (min/max/mean/median/# channels over t1/# channels under t2)  correlations, if whole-signal (only)
+  //
+
+  if ( ch_summaries )
+    {
+
+      logger << "  writing channel-level summaries: mean min max";
+      if ( ch_over < 1 ) logger << " #>" << ch_over ;
+      if ( ch_under > -1 ) logger << " #<" << ch_under ;
+      logger << "\n";
+      
+      for (int s=0;s<ns;s++)
+	{
+          if ( edf.header.is_annotation_channel( sigs[s]) ) continue;
+	  writer.level( sigset[ sigs[s] ] , globals::signal_strat );
+	  writer.value( "SUMM_MEAN" , summr_mean[ sigs[s] ] / (double)summr_n[ sigs[s] ] );
+	  writer.value( "SUMM_MIN" , summr_min[ sigs[s] ] );
+	  writer.value( "SUMM_MAX" , summr_max[ sigs[s] ] );
+	  writer.value( "SUMM_HIGH" , summr_over[ sigs[s] ] );
+	  writer.value( "SUMM_LOW" , summr_under[ sigs[s] ] );
+	}
+      writer.unlevel( globals::signal_strat );
+      
+    }
+  
+  
 }
 

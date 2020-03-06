@@ -521,10 +521,22 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   bool verbose = param.has( "verbose" ) || param.has( "epoch") ;
 
   //
+  // Calculate channel-level statistics?
+  //
+
+  bool cstats = param.has( "cstats" ) ;
+
+  double ch_th = param.requires_dbl( "cstats" );
+
+  bool cstats_all = ! param.has( "cstats-unmasked-only" );
+  
+  
+  //
   // Optionally calculate turning rate
   //
   
   bool turning_rate = param.has( "tr" )  || param.has( "tr-epoch" ) || param.has( "tr-d" ) || param.has( "tr-smooth" );
+
   double tr_epoch_sec = 1.0;
   int    tr_d = 4;
   int    tr_epoch_smooth = 30; // +1 is added afterwards
@@ -544,6 +556,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   //
   
   bool has_threshold = false;
+
   std::vector<double> th;
 
   if ( param.has( "threshold" ) )
@@ -557,6 +570,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       th = param.dblvector( "th" );
     }
 
+  
   int th_nlevels = th.size();
 
   // apply mask (requires a threshold)
@@ -583,7 +597,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   //
   
   //
-  // Attach signal
+  // Attach signals
   //
   
   signal_list_t signals = edf.header.signal_list( signal_label );  
@@ -616,7 +630,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<std::vector<double> > e_epoch;
   std::vector<std::vector<double> > e_tr;
 
-  if ( has_threshold )
+  if ( has_threshold || cstats )
     {
       e_rms.resize( ns );
       e_clp.resize( ns );
@@ -763,10 +777,10 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  n[s]   += 1;
 
 	  //
-	  // Track for thresholding?
+	  // Track for thresholding, or channel-stats ?
 	  //
 
-	  if ( has_threshold ) 
+	  if ( has_threshold || cstats ) 
 	    {
 	      e_rms[s].push_back( x );
 	      e_clp[s].push_back( c );
@@ -795,7 +809,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   if ( verbose ) // did we have any output
     writer.unlevel( globals::signal_strat );
 
-
+    
+  
   //
   // Find outliers and mask epochs?
   //
@@ -996,7 +1011,112 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
     }
   
+
+  //
+  // Channel level stats (i.e. between channel comparisons, within each epoch)
+  //  per epoch
+  //   then, averaged all epochs
+  //         only for unmasked epochs
+  // this only makes sense if we have multiple channels
+  //
   
+  if ( cstats && ns > 2 )
+    {
+
+      logger << "  calculating between-channel statistics, ";
+      if ( cstats_all ) logger << "based on all epochs\n";
+      else logger << "based only on unmasked epochs\n";
+      logger << "  threshold (for P_H1, P_H2, P_H3) is " << ch_th << " SD units\n";
+      
+      // mean over epochs (Z score of this channel versus all others)
+      std::vector<double> m_ch_h1(ns), m_ch_h2(ns), m_ch_h3(ns);
+
+      // number/proportion of epochs where channel has |Z| > ch_th;
+      std::vector<double> t_ch_h1(ns), t_ch_h2(ns), t_ch_h3(ns);
+
+      int ne_actual = 0;
+      
+      for (int ei=0; ei<ne; ei++)
+	{
+
+	  // only consider unmasked epochs here?
+	  if ( ! cstats_all )
+	    if ( edf.timeline.masked( ei ) ) continue;
+
+	  
+	  std::vector<double> tmp_h1(ns), tmp_h2(ns), tmp_h3(ns);
+	  for (int s=0;s<ns;s++)
+	    {
+	      tmp_h1[s] = e_act[s][ei];
+	      tmp_h2[s] = e_mob[s][ei];
+	      tmp_h3[s] = e_cmp[s][ei];	      
+	    }
+
+	  // normalize
+	  tmp_h1 = MiscMath::Z( tmp_h1 );
+	  tmp_h2 = MiscMath::Z( tmp_h2 );
+	  tmp_h3 = MiscMath::Z( tmp_h3 );
+
+	  // accumulate
+	  for (int s=0;s<ns;s++)
+	    {
+	      tmp_h1[s] = fabs( tmp_h1[s] );
+	      tmp_h2[s] = fabs( tmp_h2[s] );
+	      tmp_h3[s] = fabs( tmp_h3[s] );
+	      
+	      if ( tmp_h1[s] > ch_th ) ++t_ch_h1[s];
+	      if ( tmp_h2[s] > ch_th ) ++t_ch_h2[s];
+	      if ( tmp_h3[s] > ch_th ) ++t_ch_h3[s];
+
+	      m_ch_h1[s] += tmp_h1[s];
+	      m_ch_h2[s] += tmp_h2[s];
+	      m_ch_h3[s] += tmp_h3[s];
+	      
+	    }
+
+	  // track epochs included in analysis
+	  
+	  ++ne_actual;
+
+	  // next epoch
+	}
+      
+      // normalize by number of epochs
+
+      for (int s=0;s<ns;s++)
+	{
+	  
+	  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+	  
+	  m_ch_h1[s] /= (double)ne_actual;
+	  m_ch_h2[s] /= (double)ne_actual;
+	  m_ch_h3[s] /= (double)ne_actual;
+	  
+	  t_ch_h1[s] /= (double)ne_actual;
+	  t_ch_h2[s] /= (double)ne_actual;
+	  t_ch_h3[s] /= (double)ne_actual;
+
+	  writer.level( signals.label(s) , globals::signal_strat );
+
+	  // all epochs
+	  writer.value( "Z_H1" , m_ch_h1[s] );
+	  writer.value( "Z_H2" , m_ch_h2[s] );
+	  writer.value( "Z_H3" , m_ch_h3[s] );
+	  
+	  writer.value( "P_H1" , t_ch_h1[s] );
+	  writer.value( "P_H2" , t_ch_h2[s] );
+	  writer.value( "P_H3" , t_ch_h3[s] );
+
+	  // only unmasked epochs	  
+	  
+	}
+      
+      writer.unlevel( globals::signal_strat );
+
+    }
+      
+  
+
   //
   // Turning rate sub-epoch level reporting (including smoothing over sub-epochs)
   //
@@ -1027,6 +1147,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     }
 
 
+  
   //
   // Individual level summary
   //
