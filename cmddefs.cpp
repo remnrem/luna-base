@@ -610,9 +610,13 @@ void cmddefs_t::init()
   add_param( "SIGSTATS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
 
   add_param( "SIGSTATS" , "verbose" , "" , "Report epoch-level statistics" );
-  add_param( "SIGSTATS" , "mask" , "" , "Set mask for outlier epochs" );
+  add_param( "SIGSTATS" , "epoch" , "" , "Report epoch-level statistics (same as verbose)" );
   add_param( "SIGSTATS" , "chep" , "" , "Set CHEP mask for outlier epochs" );
-  add_param( "SIGSTATS" , "threshold" , "2,2" , "Set standard unit threshold(s) for (iterative) outlier detection" );
+
+  add_param( "SIGSTATS" , "rms" , "" , "Calculate/mask on RMS" );
+  add_param( "SIGSTATS" , "clipped" , "" , "Calculate/mask on signal clipping" );
+
+  add_param( "SIGSTATS" , "threshold" , "2,2" , "Set eppoch masks based on SD unit (iterative) outlier detection" );
   add_param( "SIGSTATS" , "th" , "2,2" , "Same as 'threshold'" );
   add_param( "SIGSTATS" , "cstats" , "2" , "Run channel-comparisons, with threshold in SD units" );
   add_param( "SIGSTATS" , "cstats-unmasked-only" , "" , "Channel-comparisons only for unmasked epochs" );

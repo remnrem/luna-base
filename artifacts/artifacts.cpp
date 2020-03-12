@@ -508,8 +508,9 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 void  rms_per_epoch( edf_t & edf , param_t & param )
 {
 
-  // RMS, % clipped signals
+  
   // Hjorth parameters: H1, H2, H3
+  // Optional: RMS, % clipped signals
   // Turning rate 
 
   
@@ -519,6 +520,11 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::string signal_label = param.requires( "sig" );  
 
   bool verbose = param.has( "verbose" ) || param.has( "epoch") ;
+
+  bool calc_rms = param.has( "rms" );
+
+  bool calc_clipped = param.has( "clipped" );
+  
 
   //
   // Calculate channel-level statistics?
@@ -555,30 +561,23 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   // comma-delimited thresholds
   //
   
-  bool has_threshold = false;
+  bool apply_mask = false;
 
   std::vector<double> th;
 
   if ( param.has( "threshold" ) )
     {
-      has_threshold = true;
+      apply_mask = true;
       th = param.dblvector( "threshold" );
     }
   else if ( param.has( "th" ) )
     {
-      has_threshold = true;
+      apply_mask = true;
       th = param.dblvector( "th" );
     }
-
   
   int th_nlevels = th.size();
-
-  // apply mask (requires a threshold)
-  bool apply_mask = param.has( "mask" );
-  if ( apply_mask && ! has_threshold ) 
-    Helper::halt("RMS: need threshold=X with mask");
-
-
+  
   //
   // channel/epoch (chep) masks; this will not set any full epoch-masks, but it will 
   // populate timeline.chep masks (i.e. that can be subsequently turned into lists of bad channels/epochs
@@ -630,7 +629,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<std::vector<double> > e_epoch;
   std::vector<std::vector<double> > e_tr;
 
-  if ( has_threshold || cstats )
+  if ( apply_mask || cstats )
     {
       e_rms.resize( ns );
       e_clp.resize( ns );
@@ -711,17 +710,19 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 	  MiscMath::centre( d );
 	  
-	  double x = MiscMath::rms( *d ); 
+	  double x = calc_rms ? MiscMath::rms( *d ) : 0 ;
 	  	  
-	  double c = MiscMath::clipped( *d ); 
+	  double c = calc_clipped ? MiscMath::clipped( *d ) : 0 ; 
 	  
+
 	  //
 	  // Hjorth parameters
 	  //
 
 	  double activity = 0 , mobility = 0 , complexity = 0;
-
+	  
 	  MiscMath::hjorth( d , &activity , &mobility , &complexity );
+
 
 	  //
 	  // Turning rate
@@ -753,12 +754,16 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      // Report calculated values
 	      //
   
-	      writer.value( "CLIP" , c , "Proportion of epoch with clipped signal" );
 	      writer.value( "H1" , activity , "Epoch Hjorth parameter 1: activity (variance)" );
 	      writer.value( "H2" , mobility , "Epoch Hjorth parameter 2: mobility" );
 	      writer.value( "H3" , complexity , "Epoch Hjorth parameter 3: complexity" );
-	      writer.value( "RMS" , x , "Epoch root mean square (RMS)" );
+
+	      if ( calc_rms )
+		writer.value( "RMS" , x , "Epoch root mean square (RMS)" );
 	      
+	      if ( calc_rms )
+		writer.value( "CLIP" , c , "Proportion of epoch with clipped signal" );
+
 	      if ( turning_rate ) 
 		writer.value( "TR" , turning_rate_mean , "Turning rate mean per epoch" );
 	    }
@@ -768,25 +773,35 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // Tot up for individual-level means
 	  //
 
-	  rms[s] += x;
-	  clipped[s] += c;
+	  if ( calc_rms )
+	    rms[s] += x;
 
+	  if ( calc_clipped )
+	    clipped[s] += c;
+	  
 	  mean_activity[s] += activity;
 	  mean_mobility[s] += mobility;
 	  mean_complexity[s] += complexity;
-	  n[s]   += 1;
 
+	  n[s]   += 1;
+	  
+	  
 	  //
 	  // Track for thresholding, or channel-stats ?
 	  //
 
-	  if ( has_threshold || cstats ) 
+	  if ( apply_mask || cstats ) 
 	    {
-	      e_rms[s].push_back( x );
-	      e_clp[s].push_back( c );
+	      if ( calc_rms ) 
+		e_rms[s].push_back( x );
+
+	      if ( calc_clipped)
+		e_clp[s].push_back( c );
+
 	      e_act[s].push_back( activity );
 	      e_mob[s].push_back( mobility );
 	      e_cmp[s].push_back( complexity );
+
 	      e_epoch[s].push_back( epoch );
 	    }
 	
@@ -860,29 +875,31 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		{
 		  if ( ! dropped[j] ) 
 		    {
-		      act_rms.push_back( e_rms[s][j] );
+		      if ( calc_rms )
+			act_rms.push_back( e_rms[s][j] );
+
 		      act_act.push_back( e_act[s][j] );
 		      act_mob.push_back( e_mob[s][j] );
 		      act_cmp.push_back( e_cmp[s][j] );
 		    }
 		}
 	      
-	      double mean_rms = MiscMath::mean( act_rms );
+	      double mean_rms = calc_rms ? MiscMath::mean( act_rms ) : 0 ;
 	      double mean_act = MiscMath::mean( act_act );
 	      double mean_mob = MiscMath::mean( act_mob );
 	      double mean_cmp = MiscMath::mean( act_cmp );
 	      
-	      double sd_rms = MiscMath::sdev( act_rms , mean_rms ); 
+	      double sd_rms = calc_rms ? MiscMath::sdev( act_rms , mean_rms ) : 1;
 	      double sd_act = MiscMath::sdev( act_act , mean_act ); 
 	      double sd_mob = MiscMath::sdev( act_mob , mean_mob ); 
 	      double sd_cmp = MiscMath::sdev( act_cmp , mean_cmp ); 
 	  
-	      double lwr_rms = mean_rms - th[o] * sd_rms;
+	      double lwr_rms = calc_rms ? mean_rms - th[o] * sd_rms : 0 ;
 	      double lwr_act = mean_act - th[o] * sd_act;
 	      double lwr_mob = mean_mob - th[o] * sd_mob;
 	      double lwr_cmp = mean_cmp - th[o] * sd_cmp;
 	  
-	      double upr_rms = mean_rms + th[o] * sd_rms;
+	      double upr_rms = calc_rms ? mean_rms + th[o] * sd_rms : 0 ; 
 	      double upr_act = mean_act + th[o] * sd_act;
 	      double upr_mob = mean_mob + th[o] * sd_mob;
 	      double upr_cmp = mean_cmp + th[o] * sd_cmp;
@@ -904,14 +921,14 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		  
 		  bool set_mask = false;
 		  
-		  if ( e_rms[s][ei] < lwr_rms || e_rms[s][ei] > upr_rms ) 
+		  if ( calc_rms && ( e_rms[s][ei] < lwr_rms || e_rms[s][ei] > upr_rms ) ) 
 		    {
 		      set_mask = true;
 		      cnt_rms++;
 		    }
 		  
 		  // For clipping, use a fixed threshold
-		  if ( e_clp[s][ei] > clip_threshold ) 
+		  if ( calc_clipped && e_clp[s][ei] > clip_threshold ) 
 		    {
 		      set_mask = true;
 		      cnt_clp++;
@@ -987,15 +1004,17 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      writer.unepoch();
 	    }
 	  
-	  logger << " Overall, masked " << total << " of " << ne << " epochs ("
-		    << "RMS:" << cnt_rms << ", "
-		    << "CLP:" << cnt_clp << ", "
-		    << "ACT:" << cnt_act << ", "
-		    << "MOB:" << cnt_mob << ", "
-		    << "CMP:" << cnt_cmp << ")\n";
-	  	  
-	  writer.value( "CNT_RMS" , cnt_rms , "Epochs failing RMS filter" );
-	  writer.value( "CNT_CLP" , cnt_clp , "Epochs failing CLIP filter" );
+	  logger << " Overall, masked " << total << " of " << ne << " epochs:"
+		 << " ACT:" << cnt_act 
+		 << " MOB:" << cnt_mob 
+		 << " CMP:" << cnt_cmp ;
+	  if ( calc_rms ) logger << " RMS:" << cnt_rms ;
+	  if ( calc_clipped ) logger << " CLP:" << cnt_clp;
+	  logger << "\n";
+
+	  
+	  if ( calc_rms ) writer.value( "CNT_RMS" , cnt_rms , "Epochs failing RMS filter" );
+	  if ( calc_clipped) writer.value( "CNT_CLP" , cnt_clp , "Epochs failing CLIP filter" );
 	  writer.value( "CNT_ACT" , cnt_act , "Epochs failing H1 filter" );
 	  writer.value( "CNT_MOB" , cnt_mob , "Epochs failing H2 filter" );
 	  writer.value( "CNT_CMP" , cnt_cmp , "Epochs failing H3 filter" );
@@ -1042,7 +1061,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // only consider unmasked epochs here?
 	  if ( ! cstats_all )
 	    if ( edf.timeline.masked( ei ) ) continue;
-
 	  
 	  std::vector<double> tmp_h1(ns), tmp_h2(ns), tmp_h3(ns);
 	  for (int s=0;s<ns;s++)
@@ -1162,11 +1180,15 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
       
       writer.level( signals.label(s) , globals::signal_strat );
-      writer.value( "CLIP" , clipped[s] / (double)n[s] , "Mean CLIP statistic" );
+      
       writer.value( "H1"   , mean_activity[s] / (double)n[s] , "Mean H1 statistic" );
       writer.value( "H2"   , mean_mobility[s] / (double)n[s] , "Mean H2 statistic" );
       writer.value( "H3"   , mean_complexity[s] / (double)n[s] , "Mean H3 statistic" );
-      writer.value( "RMS"   , rms[s] / (double)n[s] , "Mean RMS statistic" );      
+
+      if ( calc_clipped )
+	writer.value( "CLIP" , clipped[s] / (double)n[s] , "Mean CLIP statistic" );
+      if ( calc_rms )
+	writer.value( "RMS"   , rms[s] / (double)n[s] , "Mean RMS statistic" );      
     }
 
   writer.unlevel( globals::signal_strat );
