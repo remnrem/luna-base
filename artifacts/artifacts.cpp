@@ -532,7 +532,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   bool cstats = param.has( "cstats" ) ;
 
-  double ch_th = param.requires_dbl( "cstats" );
+  double ch_th = cstats ? param.requires_dbl( "cstats" ) : 0 ;
 
   bool cstats_all = ! param.has( "cstats-unmasked-only" );
   
