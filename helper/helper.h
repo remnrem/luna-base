@@ -75,7 +75,9 @@ namespace Helper
   std::string search_replace( const std::string & , char a , char b );
   
   void swap_in_variables( std::string * , std::map<std::string,std::string> * );
-  
+
+  bool swap_in_includes( std::string * , const std::string & delim = "," );
+			
   void expand_numerics( std::string * );
 
   void process_block_conditionals( std::string * , const std::map<std::string,std::string> & );

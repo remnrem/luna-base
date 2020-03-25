@@ -103,7 +103,7 @@ struct pdc_obs_t {
     ts.resize( q ); pd.resize( q );
 
   }
-  
+
   
 };
 
@@ -307,7 +307,12 @@ struct pdc_t {
   // might end of being redundant, but edit this to allow unequal ref/class N
   static std::map<std::string,double> summarize2( const std::set<pd_dist_t> & matches , std::string * cat , double * conf );
     
+  //
+  // Read data from an external source , and output an all-by-all matrix (to/from files)
+  //
   
+  void external( param_t & );
+
 private: 
 
 

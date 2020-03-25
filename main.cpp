@@ -157,7 +157,24 @@ int main(int argc , char ** argv )
       exit(0);       
     }
 
-
+  //
+  // PDC helper
+  //
+  
+  else if ( strcmp( argv[1] , "--pdc" ) == 0 )
+    {
+      std::cerr << "in here..\n";
+      param_t param;
+      build_param_from_cmdline( &param );
+      writer.nodb();
+      writer.begin();      
+      writer.id( "." , "." );
+      pdc_t pdc;
+      pdc.external( param );
+      writer.commit();
+      std::exit(0);
+    }
+    
   //
   // DUMP an XML file
   //
@@ -764,11 +781,11 @@ void process_edfs( cmd_t & cmd )
 
       //
       // Update any indiv-wildcards in the command list
+      // and also insert any @includes
       //
 
-
       cmd.replace_wildcards( rootname );
-
+      
       
       //
       // Unset 'problem' flag (i.e. for bailing for this individual)

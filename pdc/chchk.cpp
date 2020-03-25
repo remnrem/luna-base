@@ -43,8 +43,30 @@ extern writer_t writer;
 
 extern logger_t logger;
 
-void pdc_t::channel_checker( edf_t & edf , param_t & param )
+void pdc_t::external( const std::string & input , const std::string & output )
 {
+
+  // read data from file 'input'
+  // calculate distance matrix, and write to 'output'
+  
+  // input format expected:
+  // ID E VAL1 VAL2...
+
+  if ( ! Helper::fileExists( input ) ) Helper::halt( "could not find file " + input );
+
+  std::map<std::string,std::vector<double> > data;
+	     
+  std::ifstream IN( input.c_str() , std::ios::in );
+  
+  while ( ! IN.eof() )
+    {
+      std::string id;
+      
+      std::string id;
+      IN >> id >> epoch ;
+      
+    }
+  IN.close();
   
   //
   // have we already attached a PDLIB, i.e. 'reference'?

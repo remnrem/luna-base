@@ -71,22 +71,36 @@ void param_t::parse( const std::string & s )
 
 void param_t::update( const std::string & id , const std::string & wc )
 {
+
   // replace all instances of 'globals::indiv_wildcard' with 'id'
   // for all values
+  
   std::map<std::string,std::string>::iterator ii = opt.begin();
   while ( ii != opt.end() ) 
     {
+
       std::string v = ii->second;
       bool changed = false;
+
+      // 1. replace indiv wildcard (e.g. ^) with this person's ID
+      
       while ( v.find( wc ) != std::string::npos )
 	{
 	  int p = v.find( wc );
 	  v = v.substr( 0 , p ) + id + v.substr(p+1);
 	  changed = true;
 	}
+      
+      // 2. for any @{includes}, insert contents of file (comma-delimited)
+      
+      if ( Helper::swap_in_includes( &v ) )
+	changed = true;
+      
       if ( changed ) ii->second = v;
+      
       ++ii;
     }
+  
   
 }
 
@@ -439,11 +453,12 @@ void cmd_t::populate_commands()
 void cmd_t::replace_wildcards( const std::string & id )
 {
   // replace in all 'params' any instances of 'globals::indiv_wildcard' with 'id'
+  // ALSO, will expand any @{includes} from files (which may contain ^ ID wildcards
+  // in their names,  e..g.    CHEP bad-channels=@{aux/files/bad-^.txt}  
+  
   params = original_params;
   for (int p = 0 ; p < params.size(); p++ ) params[p].update( id , globals::indiv_wildcard );
 }
-
-
 
 bool cmd_t::read( const std::string * str , bool silent )
 {

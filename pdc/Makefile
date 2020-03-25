@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libpdc.a
-OBJS	 = pdc.o pdcfuncs.o exe.o sss.o chchk.o
+OBJS	 = pdc.o pdcfuncs.o exe.o sss.o external.o
 
 all : $(OBJLIBS)
 

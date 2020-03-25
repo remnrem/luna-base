@@ -947,8 +947,8 @@ void Helper::expand_numerics( std::string * t )
   // now add final part
   s += t->substr( p );
   
-  std::cout << "s = [" << s << "]\n";
-  std::cout << "t = [" << *t << "]\n";
+  // std::cout << "s = [" << s << "]\n";
+  // std::cout << "t = [" << *t << "]\n";
   *t = s ; 
 }
 
@@ -1009,6 +1009,63 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 
 }
 
+
+bool Helper::swap_in_includes( std::string * t ,			       
+			       const std::string & delim )
+{
+
+  bool changed = false;
+  
+  // includes must be in the form @{include} 
+
+  std::string s;
+
+  for (int i=0;i<t->size();i++)
+    {
+      
+      if ( (*t)[i] != '@' ) { s = s + (*t)[i]; continue; } 
+      ++i;
+      changed = true;
+
+      if ( i == t->size() ) Helper::halt( "badly formed @{include}:" + *t );
+      if ( (*t)[i] != '{' ) Helper::halt( "badly formed @{include}:" + *t );
+      
+      std::string filename;
+      while (1)
+	{
+	  ++i;
+	  if ( i == t->size() ) Helper::halt( "badly formed @{include}" );
+	  	  
+	  if ( (*t)[i] != '}' ) filename += (*t)[i];
+	  else break;	  
+	}
+      
+      // check for inserting file contents
+      if ( ! Helper::fileExists( filename ) )
+	Helper::halt( "could not find @{include} file: " + filename );
+      
+      std::string insert;
+      std::ifstream IN( filename.c_str() , std::ios::in );
+      while ( ! IN.eof() )
+	{
+	  std::string item;
+	  IN >> item;
+	  if ( IN.eof() ) break;
+	  if ( insert != "" ) insert += delim ;
+	  insert += item;
+	}
+      IN.close();
+      s += insert;
+
+      // continue on to the next character
+    }
+
+  // all done
+  *t = s;
+
+  return changed;
+}
+  
 
 void Helper::process_block_conditionals( std::string * t , const std::map<std::string,std::string> & vars )
 {

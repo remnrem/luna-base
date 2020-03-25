@@ -1304,54 +1304,62 @@ void hypnogram_t::output( const bool verbose )
   
   clocktime_t starttime( clock_lights_out );
 
-  // output
-  for (int e=0;e<ne;e++)
+
+  
+  // output in non-verbsoe mode (STAGES command)
+
+  if ( ! verbose )
     {
       
-      // epoch-level stratification
-      // epoch_n is the original 0-based epoch encoding
-      // so, for diplay +1 , but for other calculations
-      // we want to keep this original encoding
-
-      writer.epoch( epoch_n[e] + 1 );
-      
-      
-      // clock time based on EDF header
-
-      if ( starttime.valid ) 
+      for (int e=0;e<ne;e++)
 	{
-	  clocktime_t current_clock_time = starttime;
 	  
-	  current_clock_time.advance( epoch_hrs * epoch_n[e] );
+	  // epoch-level stratification
+	  // epoch_n is the original 0-based epoch encoding
+	  // so, for diplay +1 , but for other calculations
+	  // we want to keep this original encoding
 	  
-	  writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
+	  writer.epoch( epoch_n[e] + 1 );
 	  
-	  if ( verbose ) 
-	    writer.value( "CLOCK_HOURS" ,  current_clock_time.as_numeric_string() );
-
+	  
+	  // clock time based on EDF header
+	  
+	  if ( starttime.valid ) 
+	    {
+	      clocktime_t current_clock_time = starttime;
+	      
+	      current_clock_time.advance( epoch_hrs * epoch_n[e] );
+	      
+	      writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
+	      
+	      if ( verbose ) 
+		writer.value( "CLOCK_HOURS" ,  current_clock_time.as_numeric_string() );
+	      
+	    }
+	  
+	  // time in minutes
+	  
+	  writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
+	  
+	  // stages
+	  
+	  writer.value( "STAGE" , globals::stage( stages[e] ) );
+	  
+	  writer.value( "STAGE_N" , stagen[ stages[e] ] );
+	  
 	}
-
-      // time in minutes
       
-      writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
+      writer.unepoch();
       
-      // stages
-      
-      writer.value( "STAGE" , globals::stage( stages[e] ) );
-    
-      writer.value( "STAGE_N" , stagen[ stages[e] ] );
+        
+      return;
 
     }
 
-  writer.unepoch();
-
-
+  
   //
   // ... otherwise, the rest of this function is verbose mode only
   //
-  
-  if ( ! verbose ) return;
-
 
 
 
@@ -1439,6 +1447,29 @@ void hypnogram_t::output( const bool verbose )
 
       writer.epoch( timeline->display_epoch( e ) );
       
+
+      // clock time based on EDF header
+      if ( starttime.valid ) 
+	{
+	  clocktime_t current_clock_time = starttime;
+	  
+	  current_clock_time.advance( epoch_hrs * e );
+	  
+	  writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
+	  
+	  if ( verbose ) 
+	    writer.value( "CLOCK_HOURS" ,  current_clock_time.as_numeric_string() );
+
+	}
+
+      // time in minutes
+      writer.value( "MINS" ,  e * epoch_mins );
+      
+      // stages      
+      writer.value( "STAGE" , globals::stage( stages[e] ) );    
+      writer.value( "STAGE_N" , stagen[ stages[e] ] );
+
+
       // stage stats
       writer.value( "E_WAKE" , elapsed_wake );
       writer.value( "E_WASO" , elapsed_waso );
