@@ -13,9 +13,9 @@ libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a		\
 libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
 libsrate.a libedfz.a liblwprep.a
 
-LIBS = -L. -lspindles -llwprep -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
+LIBS = -L. -lspindles -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
 -ltimeline -lstaging -ldsp -lfftwrap -lmtm -lmiscmath -lintervals	\
--ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -ldb -lsstore -lica	\
+-ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -llwprep -ldb -lsstore -lica	\
 -lsrate -lfftw3 -lz
 
 ifndef STATIC

@@ -161,7 +161,7 @@ int main(int argc , char ** argv )
   // PDC helper
   //
   
-  else if ( strcmp( argv[1] , "--pdc" ) == 0 )
+  else if ( argc == 2 && strcmp( argv[1] , "--pdc" ) == 0 )
     {
       std::cerr << "in here..\n";
       param_t param;
