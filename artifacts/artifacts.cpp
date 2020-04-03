@@ -585,9 +585,20 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   //
 
   bool chep_mask = param.has( "chep" );
-  
-  if ( chep_mask && apply_mask ) 
-    Helper::halt( "cannot apply both chep and mask options" );
+
+  // cannot apply both chep and mask options
+  if ( chep_mask )
+    {
+      // check a masking threshold was specified above
+
+      if ( ! apply_mask )
+	Helper::halt( "no threshold ('th') specified for chep" );
+      
+      // cannot apply epoch mask and chep mask together,
+      // so now set this to F anyway
+      
+      apply_mask = false;
+    }
   
 
   //
@@ -629,7 +640,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<std::vector<double> > e_epoch;
   std::vector<std::vector<double> > e_tr;
 
-  if ( apply_mask || cstats )
+  if ( apply_mask || cstats || chep_mask )
     {
       e_rms.resize( ns );
       e_clp.resize( ns );
@@ -790,7 +801,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // Track for thresholding, or channel-stats ?
 	  //
 
-	  if ( apply_mask || cstats ) 
+	  if ( apply_mask || cstats || chep_mask ) 
 	    {
 	      if ( calc_rms ) 
 		e_rms[s].push_back( x );

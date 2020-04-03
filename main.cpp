@@ -77,6 +77,8 @@ int main(int argc , char ** argv )
       exit(0); 
     } 
   
+
+  
   //
   // help mode
   //
@@ -137,7 +139,7 @@ int main(int argc , char ** argv )
   //
   // EVAL from the command line 
   //
-
+  
   else if ( argc == 2 && strcmp( argv[1] , "--eval" ) == 0 ) 	   
     {
       global.api();
@@ -161,7 +163,7 @@ int main(int argc , char ** argv )
   // PDC helper
   //
   
-  else if ( strcmp( argv[1] , "--pdc" ) == 0 )
+  else if ( argc == 2 && strcmp( argv[1] , "--pdc" ) == 0 )
     {
       std::cerr << "in here..\n";
       param_t param;
@@ -187,12 +189,14 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+  
 
+  
   //
   // build a project list
   //
 
-  else if ( argc >=2 && strcmp( argv[1] , "--build" ) == 0 )
+  if ( argc >=2 && strcmp( argv[1] , "--build" ) == 0 )
     {
       global.api();
       std::vector<std::string> tok;
@@ -202,6 +206,8 @@ int main(int argc , char ** argv )
     }
 
 
+
+      
   //
   // compile text-table output across individuals
   //
@@ -215,7 +221,7 @@ int main(int argc , char ** argv )
 //       std::exit(0);
 //     }
 
-
+  
 
   //
   // special command-line driven functions that do not involve
