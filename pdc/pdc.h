@@ -305,7 +305,7 @@ struct pdc_t {
   static std::map<std::string,double> summarize( const std::set<pd_dist_t> & matches , std::string * cat , double * conf );
 
   // might end of being redundant, but edit this to allow unequal ref/class N
-  static std::map<std::string,double> summarize2( const std::set<pd_dist_t> & matches , std::string * cat , double * conf );
+  //  static std::map<std::string,double> summarize2( const std::set<pd_dist_t> & matches , std::string * cat , double * conf );
     
   //
   // Read data from an external source , and output an all-by-all matrix (to/from files)

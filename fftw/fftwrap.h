@@ -162,7 +162,7 @@ struct bin_t {
 	   const std::vector<double> & y ) ;
 
   // data members
-  std::vector<double> bspec, bfa, bfb; 
+  std::vector<double> bspec, bfa, bfb, nominal; 
   
 };
 

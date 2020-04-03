@@ -478,9 +478,9 @@ int bin_t::bin( const std::vector<double> & f ,
   bfa.clear();
   bfb.clear();  
   bspec.clear();
-  
-  if ( f.size() < 2 ) return 0;
+  nominal.clear();
 
+  if ( f.size() < 2 ) return 0;
 
   //
   // no binning?
@@ -494,6 +494,7 @@ int bin_t::bin( const std::vector<double> & f ,
           bfa.push_back( f[i] );
           bfb.push_back( f[i] );
           bspec.push_back( y[i] );
+	  nominal.push_back( f[i] );
         }
       return bspec.size();
     }
@@ -504,6 +505,7 @@ int bin_t::bin( const std::vector<double> & f ,
       bspec.push_back( y[0] );
       bfa.push_back( 0 );
       bfb.push_back( 0 );
+      nominal.push_back( 0 );
     }
 
   //for (int ii=0;ii<f.size();ii++) std::cout << "Frq " << f[ii] << "\n";
@@ -519,7 +521,9 @@ int bin_t::bin( const std::vector<double> & f ,
   int freqwin = (int) ( w / df ) ;      
   
   if ( mx_f > nyquist ) mx_f = nyquist; 
-  
+
+  double lower_f = 0;
+
   for (int i = 1; i < num_freqs ; i += freqwin)
       {
 	
@@ -534,24 +538,27 @@ int bin_t::bin( const std::vector<double> & f ,
 	      {	      	      
 		if ( f[j] <= mx_f )
 		  {
-		    std::cout << "adding " << f[j] << "\n";
+		    //std::cout << "adding " << f[j] << "\n";
 		    tem += y[j];
 		    k++;
 		  }
 	      }
 	  }
 	
-	std::cout << "scanning " << f[i] << " to " << f[ i + freqwin -1 ] <<  " " << k << "\n";	
-
+	//std::cout << "scanning " << f[i] << " to " << f[ i + freqwin -1 ] <<  " " << k << "\n";	
+	
 	if ( k > 0 ) 
 	  {	  
 	    bspec.push_back( tem/(double)k );
 	    bfa.push_back( f[i-1] ); // less than 
 	    bfb.push_back( f[i+k-1] ); // greater than or equal to
-	    std::cout << "from " <<  f[i-1]  << " " << f[i+k-1] << "\n";
+	    nominal.push_back( lower_f + w * 0.5 ); // intended midpoint 
+	    //std::cout << "ADDING: k=" << k << " points in " <<  f[i-1]  << " < F <= " << f[i+k-1] << "\n";
 	  }
+
+	lower_f += w;
 	
-      }   
-    
+      }
+  
     return bspec.size();
   }

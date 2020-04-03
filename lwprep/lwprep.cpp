@@ -30,6 +30,7 @@
 #include "db/db.h"
 #include "dsp/tv.h"
 
+#include <string>
 #include <cstdlib>
 #include <vector>
 #include <map>

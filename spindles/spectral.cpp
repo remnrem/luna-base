@@ -423,7 +423,8 @@ annot_t * spectral_power( edf_t & edf ,
 		   for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 		{
 		     
 		     //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		     writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		     //writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		     writer.level( bin.nominal[i] , globals::freq_strat );
 		     writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
 		   }
 		   writer.unlevel( globals::freq_strat );
@@ -480,7 +481,8 @@ annot_t * spectral_power( edf_t & edf ,
 
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
-		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  //writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  writer.level( bin.nominal[i] , globals::freq_strat );
 		  writer.value( "PSD" , dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
 		}
 	       writer.unlevel( globals::freq_strat );

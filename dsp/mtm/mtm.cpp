@@ -138,7 +138,8 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		{
 		  //std::cout << "MTM bin.bfa[i] " << bin.bfa[i] << " " << bin.bfb[i] << "\n";
 		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  //writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  writer.level( bin.nominal[i] , globals::freq_strat );
 		  writer.value( "MTM" , bin.bspec[i] );
 		}
 	      writer.unlevel( globals::freq_strat );
@@ -282,7 +283,8 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
 		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		  writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  //writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  writer.level(  bin.nominal[i]  , globals::freq_strat );
 		  writer.value( "MTM" , bin.bspec[i] );
 		}
 	      writer.unlevel( globals::freq_strat );
@@ -371,7 +373,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   
   //  logger << "  running MTM based on " << klen << "-point FFT\n";
   
-  if ( 1 ) 
+  if ( 0 ) 
     {
       logger << "  MTM: number of points " << num_points << "\n"
 	     << "       fWidth           " << fWidth << "\n"
