@@ -897,7 +897,7 @@ void timeline_t::apply_empty_epoch_mask( const std::string & label , bool includ
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
-  writer.level( label  , "EPOCH_MASK" );
+  writer.level( label  , "EMASK" );
 
   writer.var( "N_MATCHES"    , "Number of matching epochs" );
   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
@@ -913,7 +913,7 @@ void timeline_t::apply_empty_epoch_mask( const std::string & label , bool includ
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
   writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
-  writer.unlevel( "EPOCH_MASK" );
+  writer.unlevel( "EMASK" );
 
 }
 
@@ -1015,7 +1015,7 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
-  writer.level( a->name , "EPOCH_MASK" );
+  writer.level( a->name , "EMASK" );
 
   writer.var( "N_MATCHES"    , "Number of matching epochs" );
   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
@@ -1031,7 +1031,7 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
   writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
-  writer.unlevel( "EPOCH_MASK" );
+  writer.unlevel( "EMASK" );
 }
 
 
@@ -2070,9 +2070,9 @@ void timeline_t::dumpmask()
       // EPOCH_INTERVAL will already have been output by the EPOCH command
       writer.epoch( display_epoch( e ) );
       //      writer.var(   "INTERVAL" , "Epoch time start/stop" );
-      writer.var(   "EPOCH_MASK" ,      "Is masked? (1=Y)" );
+      writer.var(   "EMASK" ,      "Is masked? (1=Y)" );
       //      writer.value( "INTERVAL" , interval.as_string() );
-      writer.value( "EPOCH_MASK" , mask_set ? mask[e] : false );
+      writer.value( "EMASK" , mask_set ? mask[e] : false );
 
     }
 
@@ -2364,7 +2364,7 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
 
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
-  writer.level( onelabel , "EPOCH_MASK" );
+  writer.level( onelabel , "EMASK" );
 
   writer.var( "N_MATCHES"    , "Number of matching epochs" );
   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
@@ -2380,7 +2380,7 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
   writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
-  writer.unlevel( "EPOCH_MASK" );
+  writer.unlevel( "EMASK" );
 
 }
 
@@ -2686,8 +2686,8 @@ void timeline_t::list_all_annotations( const param_t & param )
 		  writer.level( instance_idx.id , "INST" );
 		  writer.level( interval.as_string() , "INTERVAL" );
 
-		  writer.value( "EPOCH_MASK" , masked( e ) );
-		  writer.value( "ANNOT_MASK" , is_masked );
+		  writer.value( "EMASK" , masked( e ) );
+		  writer.value( "AMASK" , is_masked );
 		  
 		  
 		  ++ii;
@@ -3062,7 +3062,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
-  writer.level( expression , "EPOCH_MASK" );
+  writer.level( expression , "EMASK" );
   
   writer.var( "N_MATCHES"    , "Number of matching epochs" );
   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
@@ -3078,7 +3078,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
   writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
-  writer.unlevel( "EPOCH_MASK" );
+  writer.unlevel( "EMASK" );
 
 
   // all done 

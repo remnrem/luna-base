@@ -245,8 +245,8 @@ void cmddefs_t::init()
   add_var( "ANNOTS" , "ANNOT,INST,T" , "START_MASKED" , "? [show-masked]" );
 
   add_table( "ANNOTS" , "E,INTERVAL,INST" , "Per-epoch instance-level annotation tabulation" );
-  add_var( "ANNOTS" , "E,INTERVAL,INST" , "ANNOT_MASK" , "Annotation instance mask status (1=masked/excluded) [epoch]" );
-  add_var( "ANNOTS" , "E,INTERVAL,INST" , "EPOCH_MASK" , "Epoch mask status (1=masked/excluded) [epoch]" );
+  add_var( "ANNOTS" , "E,INTERVAL,INST" , "AMASK" , "Annotation instance mask status (1=masked/excluded) [epoch]" );
+  add_var( "ANNOTS" , "E,INTERVAL,INST" , "EMASK" , "Epoch mask status (1=masked/excluded) [epoch]" );
 
 
   //
@@ -373,13 +373,13 @@ void cmddefs_t::init()
   add_param( "MASK" , "flanked" , "REM,2" , "Select only REM epochs flanked by 2+ REM epochs before/after" );
   
   
-  add_table( "MASK" , "EPOCH_MASK" , "Output stratified by mask" );
-  add_var( "MASK" , "EPOCH_MASK", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
-  add_var( "MASK" , "EPOCH_MASK", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation");
-  add_var( "MASK" , "EPOCH_MASK", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation");
-  add_var( "MASK" , "EPOCH_MASK", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation");
-  add_var( "MASK" , "EPOCH_MASK", "N_RETAINED" , "Number of epochs retained after this operation");
-  add_var( "MASK" , "EPOCH_MASK", "N_TOTAL" , "Total number of epochs");
+  add_table( "MASK" , "EMASK" , "Output stratified by mask" );
+  add_var( "MASK" , "EMASK", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
+  add_var( "MASK" , "EMASK", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation");
+  add_var( "MASK" , "EMASK", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation");
+  add_var( "MASK" , "EMASK", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation");
+  add_var( "MASK" , "EMASK", "N_RETAINED" , "Number of epochs retained after this operation");
+  add_var( "MASK" , "EMASK", "N_TOTAL" , "Total number of epochs");
   
   // DUMP-MASK
   
@@ -387,7 +387,7 @@ void cmddefs_t::init()
   add_url( "DUMP-MASK" , "masks/#dump-mask" );
 
   add_table( "DUMP-MASK" , "E" , "Epoch-level mask tabulation" );
-  add_var( "EPOCH" , "E" , "EPOCH_MASK" , "Mask status: 0 is unmasked (included), and 1 is masked (i.e. excluded)" );
+  add_var( "EPOCH" , "E" , "EMASK" , "Mask status: 0 is unmasked (included), and 1 is masked (i.e. excluded)" );
  
 
   // RE (or RESTRUCTURE)

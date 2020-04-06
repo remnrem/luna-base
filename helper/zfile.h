@@ -270,7 +270,7 @@ private:
     std::string filename = folder 
       + ( globals::txt_table_prepend != "" ? globals::txt_table_prepend + "-" : "" ) 
       + cmd 
-      + ( table == "" ? "" : "-" + table ) 
+      + ( table == "" ? "" : "." + table ) 
       + (  globals::txt_table_append != "" ? "." + globals::txt_table_append : "" )
       + ( compressed ? ".txt.gz" : ".txt" ) ;
 

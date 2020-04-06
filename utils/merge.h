@@ -203,11 +203,15 @@ struct dataset_t {
   void write( std::ofstream & );
   
   std::set<indiv_t> indivs;
-  
+
+  std::set<std::string> files;
+
   std::set<domain_t> domains;
 
   std::set<var_t> xvars; // expanded vars, e.g. DENS.F_11_CH_C3_SS_N2
-
+  
+  std::map<std::string,int> obscount; // count non-missing obs
+  
   std::map<std::string,std::string> faclabels; // track labels for factors (for dict output)
   
   var_t xvar( const var_t & var , const std::vector<std::string> & fac , const std::vector<std::string> & lvl )

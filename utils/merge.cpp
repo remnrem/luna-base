@@ -42,21 +42,51 @@ dataset_t data;
 struct options_t {
   options_t() {
     skip_folders.insert( "extra" );
-    missing_data_symbol = "NA";
+
+    missing_data_outsymbol = "NA";
+
+    missing_data_symbol.insert(  "NA" );
+    missing_data_symbol.insert(  "?" );
+    missing_data_symbol.insert(  "." );
+    missing_data_symbol.insert(  "NaN" );
+
     domain_includes.clear();
+    file_excludes.clear();
+    var_excludes.clear();
     hms_delim = ":.";
     date_delim = "/-";
+    verbose = false;
   }
 
+  bool verbose;
   std::set<std::string> skip_folders;
-  std::string missing_data_symbol; // for output
+  std::string missing_data_outsymbol; // NA for output
+  std::set<std::string> missing_data_symbol; // for input
   std::map<std::string,std::set<std::string> > domain_includes;
+  std::set<std::string> file_excludes;
+  std::set<std::string> var_excludes;
 
   // hh:mm:ss delimiter characters (allowed up to two)
   std::string hms_delim;
   // date delimiter chars
   std::string date_delim;
 
+  bool is_missing( const std::string & val ) const
+  {
+    std::set<std::string>::const_iterator ii = missing_data_symbol.begin();
+    while ( ii != missing_data_symbol.end() )
+      {
+	if ( iequals( *ii , val ) ) return true;
+	++ii;
+      }
+    return false;
+  }
+
+  bool read_file( const std::string & filetag ) const
+  {
+    return file_excludes.find( filetag ) == file_excludes.end() ;
+  }
+  
   bool read_domain( const std::string & domain , const std::string & group ) const {
 
     if ( domain_includes.size() == 0 ) return true;
@@ -101,14 +131,29 @@ int main( int argc , char ** argv )
   for (int i=7;i<argc;i++)
     {
       std::string t = argv[i];
-      std::vector<std::string> tok = parse( t , "-" );
-      if ( tok.size() > 2 ) halt( "invalid domain-group specification" );
-      if ( tok.size() == 1 ) {
-	std::set<std::string> empty;
-	options.domain_includes[ tok[0] ] = empty;
-      }
+      
+      // if starts with "-" assume file excliude
+      // otherwise, assume a domain-cinlude
+      if ( t[0] == '-' ) 
+	{
+	  options.file_excludes.insert( t.substr(1) );
+	}
       else
-	options.domain_includes[ tok[0] ].insert( tok[1] );
+	{
+	  std::vector<std::string> tok = parse( t , "-" );
+	  
+	  if ( tok.size() > 2 ) 
+	    halt( "invalid domain-group specification" );
+	  
+	  if ( tok.size() == 1 ) 
+	    {
+	      std::set<std::string> empty;
+	      options.domain_includes[ tok[0] ] = empty;
+	    }
+	  else
+	    options.domain_includes[ tok[0] ].insert( tok[1] );
+	}
+
     }
   
   
@@ -146,6 +191,11 @@ int main( int argc , char ** argv )
   //
   // All done
   //
+
+  std::cerr << "finished: processed " << data.indivs.size() 
+	    << " individuals across " << data.files.size() 
+	    << " files, yielding " << data.xvars.size() 
+	    << " (expanded) variables\n";
 
   std::exit(0);
 }
@@ -259,11 +309,24 @@ int domain_t::read( const std::string & filename )
 	      + line + "\n" );
       
       
+      // check if this variable is set to be excluded
+      // i.e. if has '-' prior to name in the dictionary
+      // if so, we ignore it here, and when reading data files
+      // will be dangerous to exclude ID or factor, but there
+      // will be error messages in place if someebody tries
+      // to do this for some reason.
+
+      if ( varname[0] == '-' ) 
+	{
+	  options.var_excludes.insert( varname.substr(1) );
+	  continue;
+	}
+
       // check this is not already populated      
       if ( variables.find( varname ) != variables.end() )
 	halt( "duplicate of " + varname + " in " + filename );
 
-      // variabkle names cannot contain periods
+      // variable names cannot contain periods
       if ( varname.find(".") != std::string::npos )
 	halt( "variable names cannot contain periods: " );
 	      
@@ -273,6 +336,9 @@ int domain_t::read( const std::string & filename )
       // and store
       variables[ tok[0] ] = var;
       
+      if ( options.verbose ) 
+ 	std::cerr << name << "::" << group << "\t" << tok[0] << " (" << var.print_type() << ")\n";
+
     }
   
   IN1.close();
@@ -287,6 +353,10 @@ int domain_t::read( const std::string & filename )
 
 void dataset_t::read( const std::string & filename )
 {
+
+  if ( options.verbose )
+    std::cerr << "reading " << filename << "\n";
+
   // expecting 
   
   // figure out which individual this is, as folder name
@@ -354,10 +424,16 @@ void dataset_t::read( const std::string & filename )
   // shoud we read this?
   //
 
-  bool read_this = options.read_domain( domain_name , group_name );
+  if ( ! options.read_domain( domain_name , group_name ) ) return;
+  
+  if ( ! options.read_file( remainder ) ) return;
 
-  if ( ! read_this ) return;
+  //
+  // track files actually read
+  //
 
+  files.insert( filename );
+  
   //
   // domain-specific missing data code?
   //
@@ -402,6 +478,8 @@ void dataset_t::read( const std::string & filename )
   int id_col = 0;
   std::vector<std::string> colvar; // track column names
   std::set<std::string> colcheck; // for dupes
+  std::set<int> donotread;
+
   while ( ! IN1.eof() )
     {
       
@@ -425,11 +503,15 @@ void dataset_t::read( const std::string & filename )
 		{
 		  // enfore upper-case
 		  std::string varname = toupper( tok[i] );
+		  
+		  // is this to be skipped?
+		  if ( options.var_excludes.find( varname ) != options.var_excludes.end() )
+		    donotread.insert( i );
 
 		  // check it exists in the dictionary
 		  if ( ! domain->has( varname ) )
 		    halt( varname + " not specified in data-dictionary for " + filename );
-		  		  
+		  
 		  // for checking factors exist
 		  colcheck.insert( varname );
 
@@ -518,12 +600,15 @@ void dataset_t::read( const std::string & filename )
 	      // ignore ID column
 	      if ( i == id_col ) continue;
 	      
+	      // asked to ignore this anyway?
+	      if ( donotread.find( i ) != donotread.end() ) continue;
+
 	      // ignore FACTOR columns (they will go to VARNAMES)
 	      if ( setfac.find( colvar[i] ) != setfac.end() ) continue; 
-
+	      
 	      // get (base) variable; as header was checked, if here, var will always exist
 	      const var_t * var = domain->variable( colvar[ i ] );
-
+	      
 	      // get expanded variable
 
 	      var_t xvar = data.xvar( *var , facs , lvls );
@@ -532,7 +617,11 @@ void dataset_t::read( const std::string & filename )
 
 	      if ( missing_code && tok[i] == domain->missing ) continue;
 
-	      // get value
+	      // also NA and '.' as missing codes
+
+	      if ( options.is_missing( tok[i] ) ) continue;
+
+	      // otheriwse, get value
 
 	      value_t value( tok[i] );
 
@@ -545,7 +634,10 @@ void dataset_t::read( const std::string & filename )
 	      // insert
 	      
 	      indiv.add( xvar , value );
-
+	      
+	      // and track
+	      
+	      obscount[ xvar.name ]++;
 	    }
 	  
 	}
@@ -582,7 +674,7 @@ void dataset_t::write( std::ofstream & OUT1 )
 
   // header, listing all factors present in the data
 
-  std::cout << "COL\tVAR\tBASE\tDOMAIN\tGROUP\tTYPE\tDESC";
+  std::cout << "COL\tVAR\tBASE\tOBS\tDOMAIN\tGROUP\tTYPE\tDESC";
 
   std::set<std::string> factors;
   std::set<domain_t>::const_iterator dd = domains.begin();
@@ -619,7 +711,7 @@ void dataset_t::write( std::ofstream & OUT1 )
       
       std::cout << "0\t"
 		<< *ff << "\t"
-		<< ".\t.\t.\t"
+		<< ".\t.\t.\t.\t"
 		<< "Factor\t"
 		<< faclabels[ *ff ];
       
@@ -640,7 +732,7 @@ void dataset_t::write( std::ofstream & OUT1 )
   // First ID row
   //
   
-  std::cout << "1\tID\t.\t.\t.\tID\tIndividual ID";
+  std::cout << "1\tID\t.\t" << indivs.size() << "\t.\t.\tID\tIndividual ID";
 
   ff = factors.begin();
   while ( ff != factors.end() )
@@ -663,6 +755,7 @@ void dataset_t::write( std::ofstream & OUT1 )
       std::cout << ++cnt << "\t"
 		<< vv->name << "\t"
 		<< ( vv->base != vv->name ? vv->base : "." ) << "\t"
+		<< obscount[ vv->name ] << "\t"
 		<< vv->domain_name << "\t"
 		<< vv->domain_group << "\t"
 		<< vv->print_type() << "\t"
@@ -723,7 +816,7 @@ void dataset_t::write( std::ofstream & OUT1 )
 
 	  std::map<var_t,value_t>::const_iterator kk = ii->values.find( var_t( vv->name ) );
 	  if ( kk == ii->values.end() )
-	    OUT1 << "\t" << options.missing_data_symbol;
+	    OUT1 << "\t" << options.missing_data_outsymbol;
 	  else
 	    OUT1 << "\t" << kk->second.data;
 	  ++vv;
@@ -812,8 +905,8 @@ var_t::var_t( const domain_t & domain ,
 bool type_check( const std::string & value , type_t type )
 {
   if ( type == TEXT || type == FACTOR ) return true;
-
-  if ( value == options.missing_data_symbol ) return true;
+  
+  if ( options.is_missing( value ) ) return true;
   
   if ( type == FLOAT )
     {
