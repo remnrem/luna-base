@@ -46,6 +46,10 @@ struct options_t {
   bool full;   // -f
   bool show_progress; // -
   bool cmd_hash;
+
+  char strata_delim;
+  char faclvl_delim;
+  
   options_t() 
     :
     print_empty_rows( false ) , 
@@ -53,7 +57,9 @@ struct options_t {
     long_format( false ) ,
     prec(3) , 
     full( true ) ,
-    cmd_hash( false ) 
+    cmd_hash( false ) ,
+    strata_delim( '.' ) ,
+    faclvl_delim( '_' )
   { }     
 };
 
@@ -1507,15 +1513,15 @@ void extract()
 		{
 		  if ( fac[0] != '_' ) 
 		    { 
-		      if ( clab.size() > 0 ) clab += ".";
-		      clab += fac + "." + lvl;
+		      if ( clab.size() > 0 ) clab += options.strata_delim ;
+		      clab += fac + options.faclvl_delim + lvl;
 		    }
 		}
 	      else
 		{
 		  
 		  if ( rlab.size() > 0 ) rlab += ".";
-		  rlab += fac + "." + lvl;
+		  rlab += fac + options.faclvl_delim + lvl;
 		  rlabs[ fac ] = lvl;
 
 		}

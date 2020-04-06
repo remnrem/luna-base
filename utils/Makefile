@@ -26,12 +26,20 @@ LOADSS = ../loadss
 LOADSS_OBJS = loadss.o ../globals.o ../cmddefs.o
 LOADSS_LIBS = -L.. -ldb -lsstore  -lhelper -ldefs -lmiscmath -lintervals -lannot  -lz
 
+MERGE = ../nsrr-merge
+MERGE_OBJS = merge.o merge-helpers.o
+MERGE_LIBS = 
 
-all : $(DESTRAT) $(TSPICKER) $(INTERSECT) $(BEHEAD) $(PREPSS) $(LOADSS)
+
+all : $(DESTRAT) $(TSPICKER) $(INTERSECT) $(BEHEAD) $(PREPSS) $(LOADSS) $(MERGE)
 
 $(DESTRAT) : ${DESTRAT_OBJS}
 	$(ECHO) $(LD) $(LDFLAGS) -o $(DESTRAT) $(DESTRAT_OBJS) $(DESTRAT_LIBS)
 	$(LD) $(LDFLAGS) -o $(DESTRAT) $(DESTRAT_OBJS) $(DESTRAT_LIBS)
+
+$(MERGE) : ${MERGE_OBJS}
+	$(ECHO) $(LD) $(LDFLAGS) -o $(MERGE) $(MERGE_OBJS) $(MERGE_LIBS)
+	$(LD) $(LDFLAGS) -o $(MERGE) $(MERGE_OBJS) $(MERGE_LIBS)
 
 $(BEHEAD) : ${BEHEAD_OBJS}
 	$(ECHO) $(LD) $(LDFLAGS) -o $(BEHEAD) $(BEHEAD_OBJS) $(BEHEAD_LIBS)
