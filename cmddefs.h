@@ -52,7 +52,7 @@ struct tfac_t {
   //   factors that are listed as TAGs here
   // i.e. as we already know command name, and the TAGs will not define the variables to use
   
-  tfac_t( const std::string & s ) ;
+  tfac_t( const std::string & s , const std::string & delim = "," ) ;
 
   std::string as_string( const std::string & delim = "," ) const;
 

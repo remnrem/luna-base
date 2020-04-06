@@ -60,12 +60,12 @@ struct zfile_t {
      // TAG-defined factors... i.e. get straight to core variables
      // as represented in the cmddefs_t
      
-     vars = global.cmddefs.variables( cmd , param , tfac_t( table ) );
+     vars = global.cmddefs.variables( cmd , param , tfac_t( table , "." ) );
      
      // however, in generating the output, we'll need to respect the TAG-defined
      // factors... so track these separately
      
-     facs = str2set( table , "," );
+     facs = str2set( table , "." );
      
      // and write the header
      
@@ -155,8 +155,8 @@ private:
 
 struct zfiles_t { 
   
-  // root/indiv/command-table.txt.gz
-  // root/indiv/command-table.txt
+  // root/indiv/{prepend}command-table{append}.txt.gz
+  // root/indiv/{prepend}command-table{append}.txt
   
   zfiles_t( const std::string & fileroot , 
 	    const std::string & _indiv ) 
@@ -256,7 +256,7 @@ private:
     
     // figure out whether this table should be compressed, according to cmddefs
     
-    tfac_t tfac( table );
+    tfac_t tfac( table , "." );
     
     // is this a valid table?  
 
@@ -267,7 +267,13 @@ private:
     bool compressed = globals::cmddefs.out_compressed( cmd , tfac );
 
     // create a new file, store a pointer to it, and return that pointer
-    std::string filename = folder + cmd + ( table == "" ? "" : "-" + table ) + ( compressed ? ".txt.gz" : ".txt" ) ;
+    std::string filename = folder 
+      + ( globals::txt_table_prepend != "" ? globals::txt_table_prepend + "-" : "" ) 
+      + cmd 
+      + ( table == "" ? "" : "-" + table ) 
+      + (  globals::txt_table_append != "" ? "." + globals::txt_table_append : "" )
+      + ( compressed ? ".txt.gz" : ".txt" ) ;
+
     zfile_t * p = new zfile_t( this , filename , indiv , cmd , table , param , compressed );
     files[ cmd ][ table ] = p;
     return p;

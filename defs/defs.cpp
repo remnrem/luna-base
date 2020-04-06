@@ -59,6 +59,9 @@ sleep_stage_label_lookup_t globals::sleep_stage_labels;
 char globals::folder_delimiter;
 std::string globals::project_path;
 
+std::string globals::txt_table_prepend;
+std::string globals::txt_table_append;
+
 bool globals::assume_pm_starttime;
 int globals::assume_pm_starttime_hour;
 
@@ -347,6 +350,9 @@ void globals::init_defs()
 #else
   folder_delimiter = '/';
 #endif  
+
+  txt_table_prepend = "";
+  txt_table_append = "";
 
   skip_edf_annots = true;
   skip_nonedf_annots = false;

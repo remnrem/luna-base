@@ -2276,7 +2276,19 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::param.add( "path" , tok1 );
       return;
     }
-  
+
+  // prepend/append for text-table output files
+  if ( Helper::iequals( tok0 , "tt-prepend" ) )
+    {
+      globals::txt_table_prepend = tok1;
+      return;
+    }
+  if ( Helper::iequals( tok0 , "tt-append" ) )
+    {
+      globals::txt_table_append = tok1;
+      return;
+    }
+
   // shift times +12 hours if between 04:00 and 12:00  (--> 16:00 to 00:00 ) 
   if ( Helper::iequals( tok0 , "assume-pm-start" ) )
     {

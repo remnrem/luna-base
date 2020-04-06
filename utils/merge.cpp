@@ -31,6 +31,7 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <cstdlib>
 
 int fn_process_data_dictionary( const char * fpath, const struct stat *ptr, int type );
 
@@ -318,15 +319,21 @@ void dataset_t::read( const std::string & filename )
   //
   
   // filename format:  {domain}-{group}-{tag}{.fac1}{.fac2}{.f3_l3}{.txt}
-  
+  // the 'tag' and factors/lvls can have '-' characters in them; i.e.
+  // we just delimit based on the first two '-' characters;  everything after is 
+  // taken 'as is'
+
+  // domain-group-LUNA-COMMAND.F1.F2
+  // [ domain ]  [ group ]  [ LUNA-COMMAND.F1.F2 ] 
+
   std::string fname = remove_extension( tok[ tok.size() - 1 ] , "txt" );
     
   std::vector<std::string> tok3 = parse( fname , "-" );
 
-  if ( tok3.size() != 3 )
+  if ( tok3.size() < 3 )
     {
-      std::cerr << "found " << tok3.size() << " '-'-delimited items, not 3: " << fname << "\n";
-      halt( "err1: expecting {domain}-{group}-{tag}{.fac1}{.fac2}{.f3_l3}{.txt}\n" );
+      std::cerr << "found " << tok3.size() << " '-'-delimited items, expecting at least 3: " << fname << "\n";
+      halt( "err1: expecting {domain}-{group}-{tag-name}{.fac1}{.fac2}{.f3_l3}{.txt}\n" );
     }
 
   //
@@ -339,7 +346,9 @@ void dataset_t::read( const std::string & filename )
   const domain_t * domain = data.domain( domain_name , group_name );
   if ( domain == NULL ) halt( "could not find a dictionary for " + domain_name + "-" + group_name );
 
-
+  // i.e. strip 'domain-group-' off start of filename
+  std::string remainder = fname.substr( domain_name.size() + group_name.size() + 2 );
+  
   
   //
   // shoud we read this?
@@ -359,7 +368,8 @@ void dataset_t::read( const std::string & filename )
   // split off any factors
   //
   
-  std::vector<std::string> tokb = parse( tok3[2] , "." );
+  std::vector<std::string> tokb = parse( remainder , "." );
+
   std::string tag_name = tokb[0];
   
   // any factors [ and optionally, levels ] 

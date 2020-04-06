@@ -110,6 +110,10 @@ struct globals
 
   static std::string project_path; 
 
+  // in -t output mode:   folder/indiv-id/{value}COMMAND-F{value}.txt{.gz}
+  static std::string txt_table_prepend;
+  static std::string txt_table_append;
+
   static bool assume_pm_starttime;
   static int assume_pm_starttime_hour;
   

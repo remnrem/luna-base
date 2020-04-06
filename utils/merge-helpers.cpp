@@ -24,6 +24,7 @@
 #include "merge.h"
 #include "merge-helpers.h"
 #include <fstream>
+#include <cstdlib>
 #include <wordexp.h>
 
 

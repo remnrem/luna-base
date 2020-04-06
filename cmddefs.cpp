@@ -1539,8 +1539,8 @@ cmddefs_t::cmddefs_t()
 }
 
 
-tfac_t::tfac_t( const std::string & s ) { 
-  std::vector<std::string> tok = Helper::parse( s , "," );
+tfac_t::tfac_t( const std::string & s , const std::string & delim ) { 
+  std::vector<std::string> tok = Helper::parse( s , delim );
   for (int i=0;i<tok.size();i++) 
     {
       if ( tok[i][0] != '_' && ! globals::cmddefs.is_tag( tok[i] ) )
