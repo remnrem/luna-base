@@ -26,7 +26,7 @@ LOADSS = ../loadss
 LOADSS_OBJS = loadss.o ../globals.o ../cmddefs.o
 LOADSS_LIBS = -L.. -ldb -lsstore  -lhelper -ldefs -lmiscmath -lintervals -lannot  -lz
 
-MERGE = ../nsrr-merge
+MERGE = ../merge
 MERGE_OBJS = merge.o merge-helpers.o
 MERGE_LIBS = 
 
