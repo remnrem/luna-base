@@ -65,10 +65,10 @@ CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 ##
 
 LD = g++ 
-LDFLAGS = $(DEP_LIB)
+LDFLAGS = $(DEP_LIB) -L. -L..
 
 ifndef WINDOWS
-LDFLAGS += -L. -L.. -L/usr/local/lib
+LDFLAGS += -L/usr/local/lib
 endif
 
 
