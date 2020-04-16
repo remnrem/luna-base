@@ -1940,18 +1940,20 @@ void proc_drop_signals( edf_t & edf , param_t & param )
 	} // next signal
     }
 
-  
+
+  if ( drops.size() > 0 ) logger << "  dropping channels:";
   std::set<std::string>::const_iterator dd = drops.begin();
   while ( dd != drops.end() )
     {
       if ( edf.header.has_signal( *dd ) )
 	{	  	  
+	  logger << " " << *dd ;
 	  int s = edf.header.signal( *dd );
-	  //logger << "  dropping " << *dd << "\n";
 	  edf.drop_signal( s );	  
 	}
 	++dd;
     }
+  if ( drops.size() > 0 ) logger << "\n";
   
 }
 

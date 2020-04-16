@@ -1232,7 +1232,7 @@ void timeline_t::dump_chep_mask()
 
   first_epoch();
   
-  logger << " dumping CHEP MASK\n";
+  logger << "  dumping CHEP MASK\n";
   
   int ns = edf->header.ns;
 

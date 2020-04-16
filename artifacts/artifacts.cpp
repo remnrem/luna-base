@@ -599,7 +599,21 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       
       apply_mask = false;
     }
+
+  //
+  // All-Epochs
+  //
+
+  // make missing based on distribution of ALL epochs and ALL channels
+  // do this indpendent of CHEP or CSTATS for now, or standard th= mask
   
+  bool astats = param.has( "astats" );
+  if ( astats && chep_mask ) Helper::halt( "cannot specify astats and chep" ) ;
+  if ( astats && cstats ) Helper::halt( "cannot specify astats and cstats" ) ;
+  if ( astats && apply_mask ) Helper::halt( "cannot specify astats and th" ) ;
+  
+  std::vector<double> astats_th = param.dblvector( "astats" );
+
 
   //
   // Calculate per-EPOCH, and also signal-wide, the signal RMS 
@@ -655,7 +669,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<std::vector<int> > e_epoch;
   std::vector<std::vector<double> > e_tr;
 
-  if ( apply_mask || cstats || chep_mask )
+  if ( apply_mask || cstats || chep_mask || astats )
     {
       e_rms.resize( ns );
       e_clp.resize( ns );
@@ -819,7 +833,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // Track for thresholding, or channel-stats ?
 	  //
 
-	  if ( apply_mask || cstats || chep_mask ) 
+	  if ( apply_mask || cstats || chep_mask || astats ) 
 	    {
 	      if ( calc_rms ) 
 		e_rms[si].push_back( x );
@@ -1211,6 +1225,111 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     }
 
 
+
+  //
+  // Phase 4: astatst (compare epoch to ALL epochs and ALL channels, i.e. th + cstats )
+  //
+
+  if ( astats )
+    {
+
+      logger << "  setting CHEP mask based on astats\n";
+
+      //
+      // Temporary 'chep' mask
+      //
+
+      std::vector<std::vector<bool> > emask(ns);
+      for (int si=0;si<ns;si++)
+	{
+	  emask[si].resize(ne,false);
+	  for (int ei=0; ei<ne; ei++)
+	    if ( edf.timeline.masked( e_epoch[si][ei] , signals(sdata[si]) ) )
+	      emask[si][ei] = true;		 
+	}
+      
+      //
+      // Iterative outlier removal
+      //
+
+      
+      for (int t = 0 ; t < astats_th.size(); t++)
+	{
+	  
+	  // standardize over all epochs and channels
+	  double h1_mean = 0 , h2_mean = 0 , h3_mean = 0;
+	  double h1_sd = 0 , h2_sd = 0 , h3_sd = 0;
+	  uint64_t cnt = 0;
+	  
+	  for (int si=0;si<ns;si++)
+	    for (int ei=0; ei<ne; ei++)
+	      if ( ! emask[si][ei] ) 
+		{
+		  h1_mean += e_act[si][ei];
+		  h2_mean += e_mob[si][ei];
+		  h3_mean += e_cmp[si][ei];
+		  ++cnt;
+		}
+
+	  h1_mean /= (double)cnt;
+	  h2_mean /= (double)cnt;
+	  h3_mean /= (double)cnt;
+	  
+	  for (int si=0;si<ns;si++)
+	    for (int ei=0; ei<ne; ei++)
+	      if ( ! emask[si][ei] ) 
+		{
+		  h1_sd += ( e_act[si][ei] - h1_mean ) * ( e_act[si][ei] - h1_mean ) ;
+		  h2_sd += ( e_mob[si][ei] - h2_mean ) * ( e_mob[si][ei] - h2_mean ) ;
+		  h3_sd += ( e_cmp[si][ei] - h3_mean ) * ( e_cmp[si][ei] - h3_mean ) ;
+		}
+	  
+	  h1_sd = sqrt( h1_sd / (double)(cnt-1) );
+	  h2_sd = sqrt( h2_sd / (double)(cnt-1) );
+	  h3_sd = sqrt( h3_sd / (double)(cnt-1) );
+
+	  double h1_lwr = h1_mean - astats_th[t] * h1_sd;
+	  double h2_lwr = h2_mean - astats_th[t] * h2_sd;
+	  double h3_lwr = h3_mean - astats_th[t] * h3_sd;
+			    
+	  double h1_upr = h1_mean + astats_th[t] * h1_sd;
+	  double h2_upr = h2_mean + astats_th[t] * h2_sd;
+	  double h3_upr = h3_mean + astats_th[t] * h3_sd;
+	  
+	  // mask
+	  uint64_t masked = 0;
+	  for (int si=0;si<ns;si++)
+            for (int ei=0; ei<ne; ei++)
+	      if ( ! emask[si][ei] )
+		{
+		  if      ( e_act[si][ei] < h1_lwr || e_act[si][ei] > h1_upr ) { emask[si][ei] = true; ++masked; } 
+		  else if ( e_mob[si][ei] < h2_lwr || e_mob[si][ei] > h2_upr ) { emask[si][ei] = true; ++masked; }
+		  else if ( e_cmp[si][ei] < h3_lwr || e_cmp[si][ei] > h3_upr ) { emask[si][ei] = true; ++masked; }
+		}
+
+	  // all done for this iteration
+	  logger << "  masked " << masked << " CHEPs of " << cnt << " unmasked CHEPs ("
+		 << 100*(masked/(double(ns*ne))) << "%), from " << ne*ns << " total  CHEPs, "
+		 << "on iteration " << t+1 << "\n";
+
+	}
+
+      //
+      // fill in CHEP mask
+      //
+      
+      for (int si=0;si<ns;si++)
+	for (int ei=0; ei<ne; ei++)
+	  if (  emask[si][ei] )
+	    edf.timeline.set_chep_mask( e_epoch[si][ei] , signals(sdata[si]) );
+
+
+      //
+      // end of 'astats' 
+      //
+    }
+
+  
   
   //
   // Individual level summary

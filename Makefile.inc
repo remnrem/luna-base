@@ -68,8 +68,10 @@ LD = g++
 LDFLAGS = $(DEP_LIB)
 
 ifndef WINDOWS
-LDFLAGS += -L/usr/local/lib
+LDFLAGS += -L. -L.. -L/usr/local/lib
 endif
+
+
 
 
 ##
