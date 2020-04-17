@@ -36,6 +36,47 @@ enum type_t { FACTOR , TEXT , INT , FLOAT , YESNO , DATE , TIME };
 bool type_check( const std::string & value , type_t );
 
 
+struct alias_t {
+
+  void add_canonical( const std::string & canonical )
+  {
+    canonicals.insert( canonical );
+  }
+
+  void add_alias( const std::string & alias , const std::string & canonical ) 
+  {
+    // nonsensical
+    if ( alias == canonical ) halt( "alias and canonical equal: " + alias );
+
+    // check canonical term not already an alias
+    if ( canonicals.find( alias ) != canonicals.end() )
+      halt("cannot specify " + alias + " as both an ALIAS and canonical term" );
+
+    // check alias not already pointing to a different canonical term
+    std::map<std::string,std::string>::const_iterator aa = a.find( alias );
+    if ( aa != a.end() && aa->second != canonical )
+      halt( "alias " + alias + " cannot point to multiple canonical values (" + canonical + " and " + aa->second );
+
+    a[ alias ] = canonical;
+    canonicals.insert( canonical );
+
+  }
+  
+  std::string unalias( const std::string & n ) const
+  {
+    std::map<std::string,std::string>::const_iterator aa = a.find(n);
+    if ( aa == a.end() ) return n;
+    return aa->second;
+  }
+
+  // alias --> canonical
+  std::map<std::string,std::string> a;
+
+  // check: canonical cannot also be an alias
+  std::set<std::string> canonicals;
+  
+};
+
 struct domain_t;
 
 struct var_t {
@@ -93,6 +134,9 @@ struct domain_t {
   std::string group; // e.g. 'spindles'
 
   std::map<std::string,var_t> variables;
+
+  // domain-specific aliases for variable names
+  alias_t aliases;
   
   // domain-specific missing data symbol?
   std::string missing;
@@ -122,7 +166,7 @@ struct domain_t {
   bool operator<( const domain_t & rhs ) const {
     if ( name < rhs.name ) return true;
     if ( name > rhs.name ) return false;
-    return group < rhs.name ; 
+    return group < rhs.group ; 
   }
 
 };
@@ -163,7 +207,8 @@ struct indiv_t {
     while ( ii != indiv.values.end() )
       {
 	if ( values.find( ii->first ) != values.end() )
-	  halt( "multiple values for " + id + " " + ii->first.name );
+	  halt( "multiple obervations for " + id
+		+ " for variable: " + ii->first.name );
 	values[ ii->first ] = ii->second;
 	++ii;
       }

@@ -69,4 +69,5 @@ clean :
 	-$(RM) -f $(INTERSECT) $(INTERSECT_OBJS)
 	-$(RM) -f $(PREPSS) $(PREPSS_OBJS)
 	-$(RM) -f $(LOADSS) $(LOADSS_OBJS)
+	-$(RM) -f $(MERGE) $(MERGE_OBJS)
 	-$(RM) -f *~

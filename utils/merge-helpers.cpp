@@ -200,7 +200,7 @@ std::vector<std::string> char_split( const std::string & s , const char c , cons
 
 void halt( const std::string & msg )
 { 
-  std::cerr << "error : " << msg << "\n";   
+  std::cerr << "\n*** error : " << msg << "\n";   
   std::exit(1);
 }
 

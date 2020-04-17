@@ -262,8 +262,8 @@ int domain_t::read( const std::string & filename )
   // 2) name should be in 'domain-group' form, i.e. two hypen-delimited words
   std::string domain_group = remove_extension( tok[ tok.size() - 1 ] , "txt" );
   tok = parse( domain_group , "-" );
-  if ( tok.size() != 2 ) halt( "expected 'domain-group' naming for " + domain_group );
-
+  if ( tok.size() != 2 ) halt( "expected 'domain-group' naming for " + domain_group + " in " + filename );
+  
   // all good, assign:
   name = tok[0];
   group = tok[1];
@@ -291,18 +291,48 @@ int domain_t::read( const std::string & filename )
       std::vector<std::string> tok = parse(  line , "\t" );
       if ( tok.size() == 0 ) continue;
 
-      // make all upper case for
-      std::string varname = toupper( tok[0] );
+      //
+      // make all upper case for varname
+      //
 
+      std::string varname = toupper( tok[0] );
+      
+      //
       // special missing data code?
+      //
+
       if ( tok.size() == 3 && iequals( tok[1] , "missing" ) )
 	{
 	  missing = tok[2];
 	  continue;
 	}
 
-      // otherwise, process as a variable
+      //
+      // special alias code?
+      //
 
+      if ( tok.size() == 3 && iequals( tok[1] , "alias" ) )
+	{
+	  // {alias}  ALIAS   {canonical}
+	  
+	  std::string aname = toupper( tok[0] );
+	  std::string cname = toupper( tok[2] );
+	  
+	  // check that canonical has already been specified
+	  if ( variables.find( cname ) == variables.end() )
+	    halt( "canonical form not prespecified for " + cname + " in " + filename + "\n  " + line ); 
+	  
+	  // add to list of aliases
+	  aliases.add_alias( aname , cname );
+	  
+	  // all done for this row
+	  continue;
+	}
+
+      //
+      // otherwise, process as a variable
+      //
+      
       if ( tok.size() != 3 )
 	halt( "error in " + filename
 	      + "\n  -- expecting 3 tab-delimited columns\n  -- "
@@ -325,19 +355,26 @@ int domain_t::read( const std::string & filename )
       // check this is not already populated      
       if ( variables.find( varname ) != variables.end() )
 	halt( "duplicate of " + varname + " in " + filename );
-
-      // variable names cannot contain periods
-      if ( varname.find(".") != std::string::npos )
-	halt( "variable names cannot contain periods: " );
 	      
       // assign variable
       var_t var( *this , varname , tok[1] , tok[2] ) ;
     
+      // variable names cannot contain periods, unless it is a factor
+      if ( varname.find(".") != std::string::npos && var.type != FACTOR )
+	halt( "(non-factor) variable names cannot contain periods, in " + filename + "\n " + line );
+
+      // factor names cannot contain underscores
+      if ( varname.find("_") != std::string::npos && var.type == FACTOR )
+	halt( "factor names cannot contain underscores, in "+ filename + "\n " + line );
+      
       // and store
-      variables[ tok[0] ] = var;
+      variables[ varname ] = var;
+
+      // and tell the alias lookup table this exists as a canonical
+      aliases.add_canonical( varname );
       
       if ( options.verbose ) 
- 	std::cerr << name << "::" << group << "\t" << tok[0] << " (" << var.print_type() << ")\n";
+ 	std::cerr << name << "::" << group << "\t" << varname << " (" << var.print_type() << ")\n";
 
     }
   
@@ -353,6 +390,7 @@ int domain_t::read( const std::string & filename )
 
 void dataset_t::read( const std::string & filename )
 {
+
 
   if ( options.verbose )
     std::cerr << "reading " << filename << "\n";
@@ -388,13 +426,10 @@ void dataset_t::read( const std::string & filename )
   // Get domain and factors from filename
   //
   
-  // filename format:  {domain}-{group}-{tag}{.fac1}{.fac2}{.f3_l3}{.txt}
+  // filename format:  {domain}-{group}-{tag}{_fac1}{_fac2}{_f3=l3}{.txt}
   // the 'tag' and factors/lvls can have '-' characters in them; i.e.
   // we just delimit based on the first two '-' characters;  everything after is 
   // taken 'as is'
-
-  // domain-group-LUNA-COMMAND.F1.F2
-  // [ domain ]  [ group ]  [ LUNA-COMMAND.F1.F2 ] 
 
   std::string fname = remove_extension( tok[ tok.size() - 1 ] , "txt" );
     
@@ -403,7 +438,7 @@ void dataset_t::read( const std::string & filename )
   if ( tok3.size() < 3 )
     {
       std::cerr << "found " << tok3.size() << " '-'-delimited items, expecting at least 3: " << fname << "\n";
-      halt( "err1: expecting {domain}-{group}-{tag-name}{.fac1}{.fac2}{.f3_l3}{.txt}\n" );
+      halt( "err1: expecting {domain}-{group}-{tag-name}{_fac1}{_fac2}{_f3-l3}{.txt}\n" );
     }
 
   //
@@ -413,12 +448,29 @@ void dataset_t::read( const std::string & filename )
   std::string domain_name = tok3[0];
   std::string group_name = tok3[1];
 
+  if ( options.verbose )
+    std::cerr << "looking for domain::group " << domain_name << "::" << group_name << "\n";
+  
   const domain_t * domain = data.domain( domain_name , group_name );
-  if ( domain == NULL ) halt( "could not find a dictionary for " + domain_name + "-" + group_name );
+  if ( domain == NULL ) {
+    std::stringstream ss;
+    ss << "Available domain::groups\n";
+    std::set<domain_t>::const_iterator dd = data.domains.begin();
+    while ( dd != data.domains.end() )
+      {
+	ss << "\t[" << dd->name << "] :: [" << dd->group << "]\n";
+	++dd;
+      }
+    
 
+    halt( "could not find a dictionary for ["
+	  + domain_name + "] :: [" + group_name
+	  + "]\n --> searching for that based on data file " + filename + "\n" + ss.str() );
+  }
+  
   // i.e. strip 'domain-group-' off start of filename
   std::string remainder = fname.substr( domain_name.size() + group_name.size() + 2 );
-  
+
   
   //
   // shoud we read this?
@@ -441,33 +493,60 @@ void dataset_t::read( const std::string & filename )
   bool missing_code = domain->missing != "";
 
   //
-  // split off any factors
+  // split off tag-name (hyphen delim), then any factors (underscore delimited)
   //
   
-  std::vector<std::string> tokb = parse( remainder , "." );
+  std::vector<std::string> toktag = parse( remainder , "-" );
+  std::string tag_name = toktag[0];
 
-  std::string tag_name = tokb[0];
+  // any further factors?
+  std::vector<std::string> tokb;
+  if ( remainder.size() > tag_name.size() ) 
+    tokb = parse( remainder.substr( tag_name.size() +1 ) , "_" );
   
-  // any factors [ and optionally, levels ] 
+  // any factors [ and optionally, levels , set w/ '-' ] 
   std::vector<std::string> facs;
   std::map<std::string,int> fac2col;
-  std::map<std::string,std::string> setfac;// fixed factors, set by filename, e.g. SS_N2
-  for (int i=1;i<tokb.size();i++)
+  std::map<std::string,std::string> setfac;// fixed factors, set by filename, e.g. SS-N2
+  for (int i=0;i<tokb.size();i++)
     {
-      std::vector<std::string> tokfl = parse( tokb[i] , "_" );
-      if ( tokfl.size() == 1 ) { facs.push_back( toupper( tokfl[0] ) ) ; setfac[ toupper( tokfl[0] ) ] = "" ; }
-      else if ( tokfl.size() == 2 ) { facs.push_back( toupper( tokfl[0] ) ); setfac[ toupper( tokfl[0] ) ] = tokfl[1] ; }
-      else halt( "expecting {domain}-{group}-{tag}{.fac1}{.fac2}{.f3_l3}{.txt}\n" + filename );
+      std::vector<std::string> tokfl = parse( tokb[i] , "-" );
+
+      // edge case? if single delim? -->  "_-_" would have 0 size tokfl
+      if ( tokfl.size() == 0 ) 
+	halt( "expecting {domain}-{group}-{tag}{_fac1}{_fac2}{_f3-l3}{.txt}\n" + filename );
+
+      // get (unaliased) factor name
+      std::string factor = domain->aliases.unalias( toupper( tokfl[0] ) );
+
+      // check it was specified /as a factor/ in the data dictionary
+      if ( ! domain->has( factor , FACTOR ) )
+	{
+	  if ( factor != tokfl[0] )
+	    halt( "when parsing " + filename + "\n  " + tokfl[0] + " ( --> " + factor + ") not specified as a factor " );
+	  else
+	    halt( "when parsing " + filename + "\n  " + factor + " not specified as a factor " );
+	}
       
-      // check that tokfl[0] was specified /as a factor/ in the data dictionary
-      if ( ! domain->has( toupper( tokfl[0] ) , FACTOR ) )
-	halt( tokfl[0] + " not specified as a factor" );
+      if ( tokfl.size() == 1 )
+	{
+	  facs.push_back( factor );
+	  setfac[ factor ] = "" ;
+	}
+      else if ( tokfl.size() > 1 )
+	{
+	  // edge case, but allow for >1 delimiter, e.g. F--2  means F = -2 
+	  // so only split up to the first delimiter
+	  facs.push_back( factor );
+	  setfac[ factor ] = tokb[i].substr( 1 + tokfl[0].size() ); // rest of entry
+	}
+	
     }
   
   //
   // Read actual data
   //
-  
+
   std::set<var_t> vars;
 
   indiv_t indiv( folder_indiv_id );
@@ -479,7 +558,8 @@ void dataset_t::read( const std::string & filename )
   std::vector<std::string> colvar; // track column names
   std::set<std::string> colcheck; // for dupes
   std::set<int> donotread;
-
+  int rows = 0;
+  
   while ( ! IN1.eof() )
     {
       
@@ -489,10 +569,13 @@ void dataset_t::read( const std::string & filename )
 	  safe_getline( IN1 , header );
 
 	  if ( IN1.eof() ) break;
+
+	  // parse tab-delimited column
 	  std::vector<std::string> tok = parse( header , "\t" );
 	  std::string id = "";
 	  for (int i=0;i<tok.size();i++)
 	    {
+
 	      if ( iequals( tok[i] , "ID" ) )
 		{
 		  if ( id != "" ) halt( "multiple ID columns in " + filename );
@@ -501,8 +584,12 @@ void dataset_t::read( const std::string & filename )
 		}
 	      else
 		{
-		  // enfore upper-case
-		  std::string varname = toupper( tok[i] );
+
+		  // enfore upper-case, and unalias
+		  std::string varname = domain->aliases.unalias( toupper( tok[i] ) );
+
+		  // and put editted version back in 'tok' (header) as this is saved below in colvar
+		  tok[i] = varname;
 		  
 		  // is this to be skipped?
 		  if ( options.var_excludes.find( varname ) != options.var_excludes.end() )
@@ -514,9 +601,12 @@ void dataset_t::read( const std::string & filename )
 		  
 		  // for checking factors exist
 		  colcheck.insert( varname );
-
+		  
 		  if ( domain->has( varname , FACTOR ) )
-		    fac2col[ varname ] = i;
+		    {
+		      fac2col[ varname ] = i;
+		      //std::cerr << "adding factor " << varname << " column " << i << "\n";
+		    }
 		}
 
 	    } // next header col
@@ -560,6 +650,8 @@ void dataset_t::read( const std::string & filename )
 	  // Read a data row
 	  //
 
+	  ++rows;
+	  
 	  std::string line;
 	  safe_getline( IN1 , line );
 	  if ( IN1.eof() ) break;
@@ -588,7 +680,6 @@ void dataset_t::read( const std::string & filename )
 	      else
 		lvls[f] = tok[ fac2col[ facs[f] ] ]; // from data
 	    }
-	  
 
 	  //
 	  // add variables
@@ -596,7 +687,7 @@ void dataset_t::read( const std::string & filename )
 	  
 	  for (int i=0;i<tok.size();i++)
 	    {
-
+	      
 	      // ignore ID column
 	      if ( i == id_col ) continue;
 	      
@@ -605,48 +696,42 @@ void dataset_t::read( const std::string & filename )
 
 	      // ignore FACTOR columns (they will go to VARNAMES)
 	      if ( setfac.find( colvar[i] ) != setfac.end() ) continue; 
-	      
+
 	      // get (base) variable; as header was checked, if here, var will always exist
 	      const var_t * var = domain->variable( colvar[ i ] );
+
+	      if ( var == NULL ) halt( "internal error, could not relink col " + colvar[ i ] );
 	      
 	      // get expanded variable
-
 	      var_t xvar = data.xvar( *var , facs , lvls );
 	      
 	      // missing value?
-
 	      if ( missing_code && tok[i] == domain->missing ) continue;
 
 	      // also NA and '.' as missing codes
-
 	      if ( options.is_missing( tok[i] ) ) continue;
 
 	      // otheriwse, get value
-
 	      value_t value( tok[i] );
 
 	      // check value
-
 	      if ( ! type_check( tok[i] , var->type ) )
 		halt( "invalid value [" + tok[i] + "] for " + var->name
 		      + " (type " + var->print_type() + ")\n        in: " + filename );
 	      
-	      // insert
-	      
+	      // insert	      
 	      indiv.add( xvar , value );
 	      
-	      // and track
-	      
+	      // and track	      
 	      obscount[ xvar.name ]++;
 	    }
 	  
-	}
-
-      
+	}      
       
     }
   IN1.close();
 
+  
   //
   // merge new data w/ existing
   //
@@ -655,9 +740,40 @@ void dataset_t::read( const std::string & filename )
   
   data.add( indiv );  
   
-  std::cerr << " ++ added to " << domain_name << "::" << group_name << " : " << filename << "\n";
+  std::cerr << " ++ read " << rows << " rows from data-file " << filename << "\n";
+  std::cerr << "      domain    [ " << domain_name << " ]\n"
+	    << "      group     [ " << group_name << " ]\n"
+	    << "      file-tag  [ " << tag_name << " ]\n";
 
+  // report variables
 
+  std::cerr << "      variables [ ";
+  bool first = true;
+  for (int i=0;i<colvar.size();i++)
+    {
+      if ( i == id_col ) continue;
+      if ( setfac.find( colvar[i] ) != setfac.end() ) continue;
+      if ( ! first ) std::cerr << " | ";
+      std::cerr << colvar[i];
+      if ( donotread.find( i ) != donotread.end() ) std::cerr << " (skipped)";      
+      first = false;
+    }
+  std::cerr << " ]\n";
+
+  // report factors
+  
+  std::cerr << "      factors   [";
+  std::map<std::string,std::string>::const_iterator ff =  setfac.begin();
+  while ( ff != setfac.end() )
+    {
+      std::cerr << " " ;
+      if ( ff != setfac.begin() ) std::cerr << "| ";
+      std::cerr << ff->first;
+      if ( ff->second != "" ) std::cerr << " = " << ff->second;
+      ++ff;
+    }
+  std::cerr << " ]\n";
+  
 }
 
 
@@ -888,10 +1004,10 @@ var_t::var_t( const domain_t & domain ,
 
   domain_group = domain.group;
 
-  if      ( imatch( t , "factor" ) ) type = FACTOR;
+  if      ( imatch( t , "fact" ) ) type = FACTOR;
   else if ( imatch( t , "text" ) ) type = TEXT;
   else if ( imatch( t , "int" ) ) type = INT;
-  else if ( imatch( t , "numeric" ) ) type = FLOAT;
+  else if ( imatch( t , "num" ) ) type = FLOAT;
   else if ( imatch( t , "yesno" ) ) type = YESNO;
   else if ( imatch( t , "yn" ) ) type = YESNO;
   else if ( imatch( t , "date" ) ) type = DATE;
