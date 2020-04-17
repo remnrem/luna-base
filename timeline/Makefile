@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libtimeline.a
-OBJS	 = timeline.o hypno.o cache.o
+OBJS	 = timeline.o hypno.o
 
 all : $(OBJLIBS)
 
