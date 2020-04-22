@@ -301,6 +301,30 @@ void edf_t::description( const param_t & param ) const
 }
 
 
+void edf_t::report_aliases() const
+{
+  // annotations
+  std::map<std::string,std::string>::const_iterator aa = timeline.annotations.aliasing.begin();
+  while ( aa != timeline.annotations.aliasing.end() )
+    {
+      writer.level( aa->first , globals::annot_strat );
+      writer.value( "ORIG" , aa->second );
+      ++aa;
+    }
+  writer.unlevel( globals::annot_strat );
+  
+  // channels
+  std::map<std::string,std::string>::const_iterator cc = header.aliasing.begin();
+  while ( cc != header.aliasing.end() )
+    {
+      writer.level( cc->first , globals::signal_strat );
+      writer.value( "ORIG" , cc->second );
+      ++cc;
+    }
+  writer.unlevel( globals::signal_strat );
+
+}
+
 void edf_t::terse_summary( const bool write_signals ) const
 {
   
@@ -2154,7 +2178,8 @@ void edf_t::reference_and_scale( const int s , const int r , const double rescal
 void edf_t::reference( const signal_list_t & signals , const signal_list_t & refs , bool dereference )
 {
 
-  if ( signals.size() == 0 || refs.size() == 0 ) Helper::halt( "must specify sigl={ ... } and ref={ ... }" );
+  if ( signals.size() == 0 || refs.size() == 0 )
+    Helper::halt( "must specify sig={ ... } and ref={ ... }" );
   const int ns = signals.size();
   const int nr = refs.size();
 
@@ -2444,9 +2469,15 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	  // swap in alias?
 	  if ( cmd_t::label_aliases.find( lb ) != cmd_t::label_aliases.end() ) 
 	    {
+	      // track
+	      aliasing[ cmd_t::label_aliases[ lb ] ] = lb;
+
+	      //swap
 	      lb = cmd_t::label_aliases[ lb ];
 	      label2header[ lb ] = s;
 	      label[s] = lb;
+
+	      
 	    }
 	  
 	  r.add( s, lb );

@@ -1113,6 +1113,13 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p )
 {
 
+
+  if ( p == "cache" )
+    {
+      ctest();
+      std::exit(0);
+    }
+  
   if ( p == "cmddefs" ) 
     {
       

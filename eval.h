@@ -197,6 +197,7 @@ class cmd_t
 //
 
 void proc_summaries( edf_t & , param_t & );
+void proc_aliases( edf_t & , param_t & );
 void proc_headers( edf_t & , param_t & );
 void proc_validate( edf_t & , param_t & );
 void proc_desc( edf_t & , param_t & );
@@ -271,7 +272,7 @@ void proc_mi( edf_t & , param_t & );
 void proc_ica( edf_t & , param_t & );
 void proc_emd( edf_t & , param_t & );
 void proc_attach_clocs( edf_t & , param_t & );
-void proc_surface_laplacian( edf_t & edf , param_t & param );
+void proc_surface_laplacian( edf_t & , param_t & );
 void proc_leave_one_out( edf_t & , param_t & );
 void proc_chep_based_interpolation( edf_t & , param_t & );
 void proc_correl( edf_t & , param_t & );
@@ -286,10 +287,14 @@ void proc_ecgsuppression( edf_t & , param_t & );
 void proc_bpm( edf_t & , param_t & );
 
 void proc_spindles( edf_t & , param_t & );
+void proc_coupling( edf_t & , param_t & );
+
 void proc_polarity( edf_t & , param_t & );
 void proc_slowwaves( edf_t & , param_t & );
 void proc_cwt( edf_t & , param_t & );
 void proc_rems( edf_t & , param_t & );
+
+void proc_dump_cache( edf_t & , param_t & );
 
 void proc_spike( edf_t & , param_t & );
 void proc_shift( edf_t & , param_t & );

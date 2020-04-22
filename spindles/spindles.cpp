@@ -177,6 +177,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // show verbose ENRICH output
   const bool     enrich_output            = param.has( "enrich" );
 
+
+  //
+  // Cache spindle peaks (and wavelet power) for downstream COUPL analyses
+  //
+  
+  const bool cache_data                   = param.has( "cache" );
+  const std::string cache_name = cache_data ? param.value( "cache" ) : "" ;
+  
   
   //
   // Intersection of multiple wavelets/spindles/channels   ( by default, do not merge across channels)
@@ -1107,9 +1115,23 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.unlevel( "RELLOC" );
 
 	    }
-	  
 
 	
+	  //
+	  // Cache spindle infor
+	  //
+
+	  if ( cache_data )
+	    {
+	      cache_t<double> * cache_num = edf.timeline.cache.find_num( cache_name );
+	      cache_num->add( ckey_t( "wavelet-power" , writer.faclvl() ) , averaged_corr );
+	      
+	      // cache_t<uint64_t> * cache_tp = edf.timeline.cache_tp( cache_name );
+	      // cache_tp->add( ckey_t( "spindle-peaks" , writer.faclvl() ) , averaged_corr );	      
+
+	    }
+
+	  
 	  //
 	  // Optional slow-wave coupling?
 	  //

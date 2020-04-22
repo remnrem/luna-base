@@ -32,7 +32,110 @@
 
 #include "merge-helpers.h"
 
+struct options_t {
+  options_t() {
+    skip_folders.insert( "extra" );
+
+    missing_data_outsymbol = "NA";
+
+    missing_data_symbol.insert(  "NA" );
+    missing_data_symbol.insert(  "?" );
+    missing_data_symbol.insert(  "." );
+    missing_data_symbol.insert(  "NaN" );
+
+    domain_includes.clear();
+    file_excludes.clear();
+    var_excludes.clear();
+    hms_delim = ":.";
+    date_delim = "/-";
+    show_fac = true;
+    verbose = false;
+    
+    max_var_len = 100;
+  }
+
+  bool verbose;
+  int max_var_len;
+  std::set<std::string> skip_folders;
+  std::string missing_data_outsymbol; // NA for output
+  std::set<std::string> missing_data_symbol; // for input
+  std::map<std::string,std::set<std::string> > domain_includes;
+  std::set<std::string> file_excludes;
+  std::set<std::string> var_excludes;
+
+  // hh:mm:ss delimiter characters (allowed up to two)
+  std::string hms_delim;
+  // date delimiter chars
+  std::string date_delim;
+
+  // show factors in varnames
+  bool show_fac;
+  
+  bool is_missing( const std::string & val ) const
+  {
+    std::set<std::string>::const_iterator ii = missing_data_symbol.begin();
+    while ( ii != missing_data_symbol.end() )
+      {
+	if ( iequals( *ii , val ) ) return true;
+	++ii;
+      }
+    return false;
+  }
+
+  bool read_file( const std::string & filetag ) const
+  {
+    return file_excludes.find( filetag ) == file_excludes.end() ;
+  }
+  
+  bool read_domain( const std::string & domain , const std::string & group ) const {
+
+    if ( domain_includes.size() == 0 ) return true;
+    std::map<std::string,std::set<std::string> >::const_iterator ii = domain_includes.find( domain );
+
+    // domain not in include list
+    if ( ii == domain_includes.end() ) return false;
+
+    // domain in include list, and no groups specified
+    if ( ii->second.size() == 0 ) return true;
+
+    // groups specified, is the domain::group pairing in the include
+    return ii->second.find( group ) != ii->second.end() ;
+
+  }
+
+  int parse_opt( const std::string & o , std::string * k , std::string * v )
+  {
+    if ( o.size() <= 1 ) return 0;
+    std::vector<std::string> tok = parse( o.substr(1) , "=" );
+    if ( tok.size() == 0 || tok.size() > 2 ) return 0;
+    *k = tok[0];
+    if ( tok.size() == 2 ) *v = tok[1];
+    return tok.size();
+  }
+
+  void include_domain( const std::string & t )
+  {
+    std::vector<std::string> tok = parse( t , "-" );
+	  
+    if ( tok.size() > 2 || tok.size() == 0 ) 
+      halt( "invalid domain-group specification: " + t );
+	  
+    if ( tok.size() == 1 ) 
+      {
+	std::set<std::string> empty;
+	domain_includes[ tok[0] ] = empty;
+      }
+    else
+      domain_includes[ tok[0] ].insert( tok[1] );
+  }
+  
+};
+
+
+extern options_t options;
+
 enum type_t { FACTOR , TEXT , INT , FLOAT , YESNO , DATE , TIME };
+
 bool type_check( const std::string & value , type_t );
 
 
@@ -270,7 +373,7 @@ struct dataset_t {
     //
     
     if ( fac.size() == 0 ) {
-      xvars.insert( var );
+      xvars.insert( var );      
       return var;
     }
 
@@ -294,7 +397,13 @@ struct dataset_t {
       {
 	std::string fac2 = search_replace( fac[i] , '_' , '.' );
 	std::string lvl2 = search_replace( lvl[i] , '_' , '.' );
-	xname += (i > 0 ? "_" : "." ) + fac2 + "_" + lvl2;
+
+	// FAC_LVL or just LVL encoding in varnames
+	if ( options.show_fac )
+	  xname += (i > 0 ? "_" : "." ) + fac2 + "_" + lvl2;
+	else
+	  xname += (i > 0 ? "_" : "." ) + lvl2;
+	
 	xlabel += (i > 0 ? ", " : "" ) + fac[i] + "=" + lvl[i]; 	
 	xv.fac2lvl[ fac2 ] = lvl2;	
       }
@@ -311,6 +420,8 @@ struct dataset_t {
 
     return xv;
   }
+
+  void check_variable_lengths();
   
   void check_variables_across_domains();
 
