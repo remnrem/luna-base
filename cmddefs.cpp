@@ -134,7 +134,7 @@ void cmddefs_t::init()
   //
   
   add_cmd( "summ" , "HEADERS" , "Tabulate (channel-specific) EDF header information" );
-
+  
   add_table( "HEADERS" , "" , "Basic EDF header information" );
   add_var( "HEADERS" , "" , "NR" , "Number of records" );
   add_var( "HEADERS" , "" , "NS" , "Number of signals/channels" );
@@ -153,6 +153,17 @@ void cmddefs_t::init()
   add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
   add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
 
+  //
+  // ALIASES
+  //
+
+  add_cmd( "summ" , "ALIASES" , "Tabulate channel and annotation alias replacements" );
+  
+  add_table( "ALIASES" , "CH" , "Channel aliasing" );
+  add_var( "ALIASES" , "CH" , "ORIG" , "Original channel label in EDF" );
+
+  add_table( "ALIASES" , "ANNOT" , "Annotation aliasing" );
+  add_var( "ALIASES" , "ANNOT" , "ORIG" , "Original annotation label" );
 
   //
   // TAG
@@ -611,6 +622,8 @@ void cmddefs_t::init()
   add_param( "SIGSTATS" , "verbose" , "" , "Report epoch-level statistics" );
   add_param( "SIGSTATS" , "epoch" , "" , "Report epoch-level statistics (same as verbose)" );
   add_param( "SIGSTATS" , "chep" , "" , "Set CHEP mask for outlier epochs" );
+  add_param( "SIGSTATS" , "astats" , "3,3" , "Between-epoch, betwee-channel filtering" );
+  add_param( "SIGSTATS" , "cstats" , "2" , "Within-epoch, between-channel filtering" );
 
   add_param( "SIGSTATS" , "rms" , "" , "Calculate/mask on RMS" );
   add_param( "SIGSTATS" , "clipped" , "" , "Calculate/mask on signal clipping" );
@@ -627,6 +640,15 @@ void cmddefs_t::init()
   add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
   add_var( "SIGSTATS" , "CH" , "RMS" , "Signal root mean square" );
 
+  add_var( "SIGSTATS" , "CH" , "P_H1" , "Proportion flagged epochs for H1 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "P_H2" , "Proportion flagged epochs for H2 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "P_H3" , "Proportion flagged epochs for H3 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "P_OUT" , "Proportion flagged epochs for H1, H2 or H3 [cstats]" );
+
+  add_var( "SIGSTATS" , "CH" , "Z_H1" , "Z score for H1 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "Z_H2" , "Z score for H2 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "Z_H3" , "Z score for H3 [cstats]" );
+
   add_var( "SIGSTATS" , "CH" , "CNT_ACT" , "Number of epochs flagged based on H1 [mask]" );
   add_var( "SIGSTATS" , "CH" , "CNT_MOB" , "Number of epochs flagged based on H2 [mask]" );
   add_var( "SIGSTATS" , "CH" , "CNT_CMP" , "Number of epochs flagged based on H3 [mask]" );
@@ -636,6 +658,13 @@ void cmddefs_t::init()
   add_var( "SIGSTATS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs flagged as outliers [mask]" );
   add_var( "SIGSTATS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs whose mask was altered [mask]" );
   add_var( "SIGSTATS" , "CH" , "TOTAL_EPOCHS" , "Total number of masked epochs [mask]" );
+
+  add_table( "SIGSTATS" , "CH,E" , "Per-channel per-epoch statistics [epoch]" );
+  add_var( "SIGSTATS" , "CH,E" , "H1" , "First Hjorth parameter (activity)" );
+  add_var( "SIGSTATS" , "CH,E" , "H2" , "Second Hjorth parameter (mobility)" );
+  add_var( "SIGSTATS" , "CH,E" , "H3" , "Third Hjorth parameter (complexity)" );
+  hide_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" );
+  hide_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" );
 
 
   // ARTIFACTS
@@ -1490,6 +1519,27 @@ void cmddefs_t::init()
   // EXPERIMENTAL
   //
   /////////////////////////////////////////////////////////////////////////////////
+
+
+  //
+  // EXE
+  //
+
+
+  add_cmd( "exp" , "EXE" , "Epoch-by-epoch PDC-based clustering" );
+  add_url( "EXE" , "exp/#exe" );
+
+  add_param( "EXE" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
+  add_param( "EXE" , "uni" , "" , "For N signals, run N univariate analyses, rather than a single multi-signal one" );
+    
+  add_param( "EXE" , "m" , "5" , "PDC embedding dimension" );
+  add_param( "EXE" , "t" , "1" , "PDC span" );
+
+  add_param( "EXE" , "k" , "10" , "Number of clusters" );
+    
+  add_table( "EXE" , "E,CH" , "Epoch cluster assignment" );
+  add_var( "EXE" , "E,CH" , "CL" , "Cluster code" );
+
   
 //   add_cmd( "exp" , "ICA" , "Implementation of fastICA" );
 //   add_url( "ICA" , "exp/#mi" );
@@ -1524,7 +1574,7 @@ void cmddefs_t::init()
   // ED    Diagnostic for electrical bridging
   // POL   Polarity check heuristic for sleep EEG
   // FIP   Frequency-interval plots
-  // EXE   Epoch-wise distance/similarity matrix
+
   // TSLIB Build library for SSS
   // SSS   Simple sleep stager
   // SLICE Short-time FFT for specified intervals

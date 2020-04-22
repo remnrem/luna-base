@@ -752,7 +752,7 @@ Data::Matrix<double> pdc_t::all_by_all()
 
   const int N = obs.size();
 
-  logger << " calculating " << N << "-by-" << N << " distance matrix\n";
+  logger << "  calculating " << N << "-by-" << N << " distance matrix\n";
 
   if ( N == 0 ) Helper::halt("internal error: PD not encoded in pdc_t");
 

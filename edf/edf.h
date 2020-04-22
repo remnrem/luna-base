@@ -128,6 +128,9 @@ struct edf_header_t
   // EDF+ -- time-track annotation channel (or -1)
   int t_track;  // track in loaded (selected) internal space
   int t_track_edf_offset; // track in original EDF space 
+
+  // track alias swaps
+  std::map<std::string,std::string> aliasing;
   
   edf_header_t() 
   {
@@ -452,6 +455,8 @@ public:
 
   void terse_summary( const bool write_signals = false ) const;
 
+  void report_aliases() const;
+  
   void description( const param_t & ) const;
   
 

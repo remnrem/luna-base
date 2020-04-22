@@ -113,4 +113,17 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 			 std::map<freq_range_t,double> * baseline );
 
 
+
+
+
+
+
+//
+// Spindle / SO coupling
+//
+
+
+void spindle_so_coupling( edf_t & , param_t & );
+
+
 #endif

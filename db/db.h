@@ -1033,7 +1033,6 @@ class writer_t
     return true;
   }
 
-
   bool to_stdout( const std::string & var_name , const value_t & x )  
   {
     std::cout << curr_indiv.indiv_name << "\t"

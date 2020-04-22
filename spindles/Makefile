@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libspindles.a
-OBJS	 = spindles.o mspindles.o plot-spindles.o spectral.o
+OBJS	 = spindles.o mspindles.o plot-spindles.o spectral.o coupling.o
 
 all : $(OBJLIBS)
 

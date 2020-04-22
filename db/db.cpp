@@ -173,7 +173,7 @@ std::map<std::string,std::string> writer_t::faclvl() const
 std::string strata_t::print_zfile_tag() const
 {
 
-  // factors only, (no commands, no TAGs) in a period-delim list
+  // factors only, (no commands, no TAGs) in a underscore-delim list
 
   if ( levels.size() == 0 ) return ""; // baseline
 
@@ -185,11 +185,7 @@ std::string strata_t::print_zfile_tag() const
       // skip commands
       if ( aa->first.factor_name[0] == '_' ) { ++aa; continue; } 
       
-      // skip TAGs
-//       if ( globals::cmddefs.is_tag( aa->first.factor_name ) )
-//         { ++aa; continue; }
-
-      if ( printed ) ss << ".";
+      if ( printed ) ss << "_";
       ss << aa->first.factor_name ;
       printed = true;
       ++aa;

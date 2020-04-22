@@ -177,7 +177,11 @@ void timeline_t::restructure( const std::set<int> & keep )
 
   // reset epochs (but retain epoch-level annotations)
   reset_epochs();
-  logger << " retaining " << num_epochs() << " epochs\n";
+
+  // clear any cache
+  cache.clear();
+  
+  logger << "  retaining " << num_epochs() << " epochs\n";
 }
 
 

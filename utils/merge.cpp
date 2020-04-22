@@ -39,122 +39,63 @@ int fn_process_study_data( const char * fpath, const struct stat *ptr, int type 
 
 dataset_t data;
 
-struct options_t {
-  options_t() {
-    skip_folders.insert( "extra" );
-
-    missing_data_outsymbol = "NA";
-
-    missing_data_symbol.insert(  "NA" );
-    missing_data_symbol.insert(  "?" );
-    missing_data_symbol.insert(  "." );
-    missing_data_symbol.insert(  "NaN" );
-
-    domain_includes.clear();
-    file_excludes.clear();
-    var_excludes.clear();
-    hms_delim = ":.";
-    date_delim = "/-";
-    verbose = false;
-  }
-
-  bool verbose;
-  std::set<std::string> skip_folders;
-  std::string missing_data_outsymbol; // NA for output
-  std::set<std::string> missing_data_symbol; // for input
-  std::map<std::string,std::set<std::string> > domain_includes;
-  std::set<std::string> file_excludes;
-  std::set<std::string> var_excludes;
-
-  // hh:mm:ss delimiter characters (allowed up to two)
-  std::string hms_delim;
-  // date delimiter chars
-  std::string date_delim;
-
-  bool is_missing( const std::string & val ) const
-  {
-    std::set<std::string>::const_iterator ii = missing_data_symbol.begin();
-    while ( ii != missing_data_symbol.end() )
-      {
-	if ( iequals( *ii , val ) ) return true;
-	++ii;
-      }
-    return false;
-  }
-
-  bool read_file( const std::string & filetag ) const
-  {
-    return file_excludes.find( filetag ) == file_excludes.end() ;
-  }
-  
-  bool read_domain( const std::string & domain , const std::string & group ) const {
-
-    if ( domain_includes.size() == 0 ) return true;
-    std::map<std::string,std::set<std::string> >::const_iterator ii = domain_includes.find( domain );
-
-    // domain not in include list
-    if ( ii == domain_includes.end() ) return false;
-
-    // domain in include list, and no groups specified
-    if ( ii->second.size() == 0 ) return true;
-
-    // groups specified, is the domain::group pairing in the include
-    return ii->second.find( group ) != ii->second.end() ;
-
-  }
-    
-  
-};
-
 options_t options;
 
 int main( int argc , char ** argv )
 {
 
-  // merge -d derived/domains -s /studies/Study2 -o merged/study2.txt                                                                    
-  if ( argc < 7 )
+  // merge derived/domains /studies/Study2 merged/study2.txt                                                                    
+  if ( argc < 4 )
     {
-      std::cerr << "usage: merge -d path/to/domains -s path/to/study -o path/to/outputfile {domains domain-groups}\n";
+      std::cerr << "usage: merge [options] path/to/domains path/to/study path/to/outputfile  {domains domain-groups}\n";
       std::exit(1);
     }
 
   std::string domain_dir = "" , study_dir = "" , outfile = "";
 
-  if ( std::string( argv[1] ) != "-d" ) halt( "usage: merge -d path/to/domains -s path/to/study -o path/to/outputfile {domains domain-groups}");
-  if ( std::string( argv[3] ) != "-s" ) halt( "usage: merge -d path/to/domains -s path/to/study -o path/to/outputfile {domains domain-groups}");
-  if ( std::string( argv[5] ) != "-o" ) halt( "usage: merge -d path/to/domains -s path/to/study -o path/to/outputfile {domains domain-groups}");
-  domain_dir = argv[2];
-  study_dir = argv[4];
-  outfile = argv[6];
-  
-  // any other args are to only include these domains
-  for (int i=7;i<argc;i++)
+  int p = 0;
+
+  for (int i=1;i<argc;i++)
     {
       std::string t = argv[i];
-      
-      // if starts with "-" assume file excliude
-      // otherwise, assume a domain-cinlude
-      if ( t[0] == '-' ) 
+      if ( t[0] != '-' )
 	{
-	  options.file_excludes.insert( t.substr(1) );
+	  if ( p == 0 ) domain_dir = t;
+	  else if ( p == 1 ) study_dir = t;
+	  else if ( p == 2 ) outfile = t;
+	  else options.include_domain( t );
+	  ++p;
 	}
       else
 	{
-	  std::vector<std::string> tok = parse( t , "-" );
+	  std::string key = "" , val = "";
 	  
-	  if ( tok.size() > 2 ) 
-	    halt( "invalid domain-group specification" );
+	  int n = options.parse_opt( t , &key , &val);
+
+	  if ( n == 0 ) halt("problem with format of option " + t );
 	  
-	  if ( tok.size() == 1 ) 
+	  // -exclude=ROOT
+	  if ( key == "exclude" ) 
+	    options.file_excludes.insert( t.substr(1) );
+
+	  // verbose
+	  if ( key == "v" || key == "-verbose" )
+	    options.verbose = true;
+
+	  // do not show factors
+	  if ( key == "nf" )
+	    options.show_fac = false;
+
+	  // set max var len
+	  if ( key == "ml" )
 	    {
-	      std::set<std::string> empty;
-	      options.domain_includes[ tok[0] ] = empty;
+	      if ( n != 2 || ! str2int( val , &options.max_var_len ) )
+		halt("problem with format of option " + t );
 	    }
-	  else
-	    options.domain_includes[ tok[0] ].insert( tok[1] );
 	}
 
     }
+  
   
   
   //
@@ -183,6 +124,9 @@ int main( int argc , char ** argv )
   // nothing to do?
   if ( data.xvars.size() == 0 || data.indivs.size() == 0 )
     halt( "no data (variables and/or individuals) available for output" );
+
+  // enforce varl length check ( -ml=999, default is 100)
+  data.check_variable_lengths();
   
   std::ofstream OUT1( outfile.c_str() , std::ios::out );
   data.write(OUT1);
@@ -1070,3 +1014,30 @@ bool type_check( const std::string & value , type_t type )
 
   return true;
 }
+
+
+
+void dataset_t::check_variable_lengths()
+{
+
+  bool problem = false;
+
+  // across expanded variables
+  std::set<var_t>::const_iterator vv = xvars.begin();
+  while ( vv != xvars.end() )
+    {
+      if ( vv->name.size() > options.max_var_len )
+	{
+	  std::cerr << " ** variable name exceeds " << options.max_var_len << " characters: " << vv->name << "\n";
+	  problem = true;
+	}
+      ++vv;
+    }
+
+  if ( problem )
+    halt( "variables too long... options:\n"
+	  " - change max. allowed length with -ml=999 option\n"
+	  " - do not show factors with -nf\n"
+	  " - use aliases in data dictionaries");
+}
+      

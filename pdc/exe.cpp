@@ -152,7 +152,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       
       if ( univariate )
 	{
-	  logger << " calculating epoch-by-epoch distances for " << signals.label(s0) << "\n";	  
+	  logger << "  calculating epoch-by-epoch distances for " << signals.label(s0) << "\n";	  
 	  // just add one channel
 	  add_channel( signals.label(s0) );
 	  // and stratify output by channel
@@ -161,7 +161,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       else
 	{
 	  // add all channels (and we'll quite afterwards)
-	  logger << " calculating epoch-by-epoch distances for " ;
+	  logger << "  calculating epoch-by-epoch distances for " ;
 	  for ( int s=0; s<ns; s++ )
 	    {	      
 	      add_channel( signals.label(s) );
@@ -252,6 +252,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       //
       // Calculate distance matrix
       //
+
       
       Data::Matrix<double> D = all_by_all();
       
@@ -270,7 +271,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	    }
 	  OUT1.close();
 	  
-	  logger << " output distance matrix for " << ne
+	  logger << "  output distance matrix for " << ne
 		 << " epochs (" << ns << " signals) to " << outfile << "\n";
 	}
       
@@ -278,6 +279,8 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       //
       // Cluster
       //
+
+      logger << "  clustering epochs...\n";
       
       cluster_t cluster;
       

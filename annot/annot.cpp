@@ -518,9 +518,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  Helper::safe_getline( IN1 , x );
 	  if ( IN1.eof() ) break;
 	  if ( x == "" ) continue;
-	  //std::cout << "x = " << x << "  " << nsrr_t::remap( x ) << "\n";
-	  // store, optionally annotation-remapping
-	  a.push_back( nsrr_t::remap( x )  );      
+
+	  // remap? (and if so, track)
+	  std::string y = nsrr_t::remap( x ) ;
+	  if ( y != x ) parent_edf.timeline.annotations.aliasing[ y ] = x ;
+
+	  // store
+	  a.push_back( y );
 	}
       IN1.close();
 
@@ -1442,6 +1446,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       
       // annotation remap?
+      std::string original_label = concept->value;
       concept->value = nsrr_t::remap( concept->value );
       
       // are we checking whether to add this file or no? 
@@ -1452,6 +1457,10 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       if ( added.find( concept->value ) != added.end() ) continue;
 
       // otherwise, add
+
+      if ( original_label != concept->value )
+	  edf->timeline.annotations.aliasing[ concept->value ] = original_label ;
+
       annot_t * a = edf->timeline.annotations.add( concept->value );
       a->description = "XML-derived";
       a->file = filename;
@@ -2595,6 +2604,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       // alias remapping?
       //
 
+      std::string original_label = cls_name;
       cls_name = nsrr_t::remap( cls_name );
       
       //
@@ -2604,7 +2614,10 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       if ( globals::specified_annots.size() > 0 && 
 	   globals::specified_annots.find( cls_name )
 	   == globals::specified_annots.end() ) continue;
+
       
+      if ( cls_name != original_label )
+	edf->timeline.annotations.aliasing[ cls_name ] = original_label ;
       
       std::string desc = "";
       std::map<std::string,std::string> atypes;
@@ -2690,6 +2703,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       // alias remapping?
       //
 
+      std::string original_label = cls_name;
       cls_name = nsrr_t::remap( cls_name );
       
       //
@@ -2699,6 +2713,10 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       if ( globals::specified_annots.size() > 0 && 
 	   globals::specified_annots.find( cls_name ) 
 	   == globals::specified_annots.end() ) continue;
+
+      if ( cls_name != original_label )
+	edf->timeline.annotations.aliasing[ cls_name ] = original_label ;
+
       
       //
       // get a pointer to this class

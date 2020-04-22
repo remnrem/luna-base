@@ -720,7 +720,7 @@ bool cmd_t::eval( edf_t & edf )
       if      ( is( c, "WRITE" ) )        proc_write( edf, param(c) );
       else if ( is( c, "SUMMARY" ) )      proc_summaries( edf , param(c) );
       else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
-      
+      else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
 
       else if ( is( c, "DESC" ) )         proc_desc( edf , param(c) );
       else if ( is( c, "STATS" ) )        proc_stats( edf , param(c) );
@@ -812,12 +812,18 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CFC" ) )          proc_cfc( edf , param(c) );
       else if ( is( c, "TAG" ) )          proc_tag( param(c) );
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
+
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
+      else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
+      else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
+      
       else if ( is( c, "POL" ) )          proc_polarity( edf, param(c) );	  
       else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
-      else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
+      
       else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
 
+      else if ( is( c, "CACHE" ) )        proc_dump_cache( edf , param(c) );
+      
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
       else if ( is( c, "SHIFT" ) )        proc_shift( edf , param(c) );
       
@@ -882,6 +888,12 @@ void proc_headers( edf_t & edf , param_t & param )
   edf.terse_summary( param.has( "signals" ) );
 }
 
+// ALIASES : report aliasing of channels and annotations
+
+void proc_aliases( edf_t & edf , param_t & param )
+{
+  edf.report_aliases();
+}
 
 // SUMMARY : summarize EDF files (verbose, human-readable)  
 
@@ -1206,6 +1218,15 @@ void proc_spindles( edf_t & edf , param_t & param )
   else Helper::halt( "SPINDLE method not recognized; should be 'bandpass' or 'wavelet'" );
 
 }
+
+// COUPL : spindle/SO couplig
+
+void proc_coupling( edf_t & edf , param_t & param )
+{
+  // requires cached SPINDLES and SO results
+  spindle_so_coupling( edf , param );
+}
+
 
 // POL : polarity check for EEG N2/N3 
 
@@ -1806,6 +1827,47 @@ void proc_shift( edf_t & edf , param_t & param )
 {
   dsptools::shift( edf , param );
 }
+
+
+// CACHE : internal command to dump cache contents (debugging)
+
+void proc_dump_cache( edf_t & edf , param_t & param )
+{
+  // cache types: int, num and tp
+  int int_cache = param.has( "int" );
+  int num_cache = param.has( "num" );
+  int tp_cache = param.has( "tp" );
+
+  if ( int_cache + num_cache + tp_cache != 1 )
+    Helper::halt( "need to specify one of int, num or tp cache types" );
+
+  std::string cname;
+  if ( int_cache ) cname = param.value( "int" );
+  else if ( num_cache ) cname = param.value( "num" );
+  else cname = param.value( "tp" );
+
+  if ( int_cache )
+    {
+      cache_t<int> * cache = edf.timeline.cache.find_int( cname );
+      if ( cache == NULL ) Helper::halt( "could not find int-cache " + cname );
+      cache->dump();
+    }
+  else if ( num_cache )
+    {
+      cache_t<double> * cache = edf.timeline.cache.find_num( cname );
+      if ( cache == NULL ) Helper::halt( "could not find num-cache " + cname );
+      cache->dump();
+    }
+  else if ( tp_cache )
+    {
+      cache_t<uint64_t> * cache = edf.timeline.cache.find_tp( cname );
+      if ( cache == NULL ) Helper::halt( "could not find tp-cache " + cname );
+      cache->dump();
+    }
+  
+}
+
+
 
 // SPIKE : spike in a new bit of signal
 

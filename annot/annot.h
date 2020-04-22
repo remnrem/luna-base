@@ -716,6 +716,8 @@ struct annotation_set_t
 
   int epoch_sec;
 
+  // track alias swaps for this person
+  std::map<std::string,std::string> aliasing;
   
   // member functions
 

@@ -34,6 +34,7 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "timeline/hypno.h"
+#include "timeline/cache.h"
 
 #include "edf/signal-list.h"
 #include "defs/defs.h"
@@ -142,6 +143,13 @@ struct timeline_t
   //  uint64_t endpoint( int r ) const;
 
 
+  //
+  // Cache (for temporary, inter-command communication)
+  //
+
+  caches_t cache;
+
+  
   //
   // Annoations
   //
@@ -258,7 +266,7 @@ struct timeline_t
 
 	int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
 
-	logger << " set epochs to default " 
+	logger << "  set epochs to default " 
 	       << globals::default_epoch_len 
 	       << " seconds, " << ne << " epochs\n";
       }
