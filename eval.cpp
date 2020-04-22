@@ -390,7 +390,7 @@ void cmd_t::signal_alias( const std::string & s )
   const std::string primary = Helper::unquote( tok[0] );
   for (int j=1;j<tok.size();j++) 
     {
-      
+
       // impose rules
       const std::string mapped = Helper::unquote( tok[j] ) ;
       
@@ -521,7 +521,7 @@ bool cmd_t::read( const std::string * str , bool silent )
 	      int comment_start = -1;
 	      for (int i=0;i<s.size();i++)
 		{
-		  if ( s[i] == '"' || s[i] == '#' ) inquote = ! inquote;
+		  if ( s[i] == '"' ) inquote = ! inquote;
 		  if ( s[i] == '%' && ! inquote ) { comment_start = i; break; }
 		}
 	      
@@ -566,7 +566,7 @@ bool cmd_t::read( const std::string * str , bool silent )
   bool inquote = false;
   for (int i=0;i<line.size();i++) 
     {
-      if ( line[i] == '#' || line[i] == '"' ) inquote = ! inquote;
+      if ( line[i] == '"' ) inquote = ! inquote;
       else if ( line[i] == '&' ) 
 	{
 	  if ( ! inquote ) line[i] = '\n';

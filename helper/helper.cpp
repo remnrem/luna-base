@@ -628,19 +628,29 @@ std::istream& Helper::safe_getline(std::istream& is, std::string& t)
 
 bool Helper::fileExists( const std::string & f )
 {
-  
-  std::ifstream inp;
-  
-  inp.open(f.c_str(), std::ifstream::in);
 
-  if(inp.fail())
+  FILE *file;
+
+  if ( file = fopen( f.c_str() , "r" ) ) 
     {
-      inp.clear(std::ios::failbit);
-      inp.close();
-      return false;
-    }
-  inp.close();
-  return true;
+      fclose(file);
+      return true;
+    } 
+
+  return false;
+
+  // std::ifstream inp;
+  
+  // inp.open(f.c_str(), std::ifstream::in);
+
+  // if(inp.fail())
+  //   {
+  //     inp.clear(std::ios::failbit);
+  //     inp.close();
+  //     return false;
+  //   }
+  // inp.close();
+  // return true;
 
 }
 

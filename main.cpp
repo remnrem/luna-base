@@ -369,7 +369,7 @@ int main(int argc , char ** argv )
 		  std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
 		  if ( tok.size() != 2 ) Helper::halt("badly formatted line in " + filename );
 		  
-		  cmd_t::parse_special( tok[0] , tok[1] );		  
+		  cmd_t::parse_special( tok[0] , tok[1] );
 
 		}
 	     	      
