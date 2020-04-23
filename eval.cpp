@@ -1113,6 +1113,27 @@ void set_tag( const std::string & t )
     {
       std::vector<std::string> tok = Helper::parse( globals::current_tag , "/" );
       if ( tok.size() != 2 ) Helper::halt( "TAG format should be factor/level" );
+
+      // check that it is not a known tage
+      std::string fac = Helper::toupper( tok[0] );
+
+      if ( fac == globals::freq_strat ||
+	   fac == globals::signal_strat ||
+	   fac == globals::stage_strat  ||
+	   fac == globals::cycle_strat  ||
+	   fac == globals::band_strat   ||
+	   fac == globals::annot_strat ||
+	   fac == globals::annot_instance_strat ||
+	   fac == globals::annot_meta_strat ||
+	   fac == globals::count_strat  ||
+	   fac == globals::epoch_strat  ||
+	   fac == globals::time_strat  ||
+	   fac == globals::sample_strat ||
+	   fac == globals::cluster_strat ||
+	   fac == "TH" || fac == "MSEC" || fac == "SP" )
+	Helper::halt( "cannot use " + tok[0] + " as a TAG factor, matches an internal label" );
+            
+      // set
       writer.tag( tok[1] , tok[0] );
     }
 }
