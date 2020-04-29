@@ -2363,12 +2363,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // prepend/append for text-table output files
-  if ( Helper::iequals( tok0 , "tt-prepend" ) )
+  if ( Helper::iequals( tok0 , "tt-prepend" ) ||  Helper::iequals( tok0 , "tt-prefix" ) )
     {
       globals::txt_table_prepend = tok1;
       return;
     }
-  if ( Helper::iequals( tok0 , "tt-append" ) )
+  if ( Helper::iequals( tok0 , "tt-append" ) ||  Helper::iequals( tok0 , "tt-suffix" ) )
     {
       globals::txt_table_append = tok1;
       return;

@@ -39,23 +39,45 @@ extern logger_t logger;
 
 extern writer_t writer;
 
+
+
+
 void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 {
 
 
   
-  // ExE uni mat=output-root  
+  // ExE uni cat mat=output-root  
 
   //
+  // Three modes:
+  //
+  //   for E epochs and K channels
+  //
+  //       uni       K different channel-specific ExE matrices
+  //       [default] 1 combined multi-channel ExE matrix, w/ distance based on K channels
+  //       cat       1 combined KExKE matrix, i.e. concatenating channels/epochs 
+   
+  //d
   // For multiple signals, create a single matrix based on all channels 
-  // *unless* uni is specified, in which case write clusters separately
+  // *unliess* uni is specified, in which case write clusters separately
   // for each channel (i.e. output stratified by channel) 
   // -- do not allow mat and uni to be specified together/
   //
   
   bool univariate = param.has( "uni" );
-  
 
+  //
+  // Alternatively, concatenate multiple signals to get, for N channels,
+  // an NE x NE matrix, i.e. to jointly cluster channels and epochs together
+  //
+
+  bool ne_by_ne = param.has( "cat" );
+
+  if ( ne_by_ne && univariate )
+    Helper::halt( "cannot specify both uni and cat" );
+
+    
   //
   // write cluster solution to normal output stream
   // write to a separate txt file, not an output-db
@@ -111,8 +133,18 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
   //
 
   if ( !edf.timeline.epoched() )
-    Helper::halt( "ExE requires epoched data" );
-  
+    {
+      if ( ne_by_ne )
+	{
+	  // if not epoched but in cat mode, set one single epoch
+	  // spanning the whole night, i.e. to het a KxK matrix
+	  // of only channels
+	  int seconds = edf.timeline.whole_recording_epoch_dur();
+	  edf.timeline.set_epoch( seconds , seconds );
+	}
+      else
+	Helper::halt( "ExE requires epoched data" );
+    }
 
   //
   // Set entropy values?
@@ -130,21 +162,33 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       m = param.has( "m" ) ? param.requires_int( "m" ) : 5 ;
       t = param.has( "t" ) ? param.requires_int( "t" ) : 1 ;
     }
+
+
+  logger << "  PDC-encoding with m=" <<m << ", t=" << t << "\n";  
   
   //
-  // Outer loop (if in univariate mode)
+  // Outer loop (if in univariate mode || cat mode , otherwise exits after one pass)
   //
   
   for (int s0=0; s0<ns; s0++)
     {     
-      
-      
-      //
-      // Reset obs()
-      //
-      
-      clear();
 
+      //
+      // Only consider data channels
+      //
+
+      if ( univariate || ne_by_ne )
+	{
+	  if ( edf.header.is_annotation_channel( signals(s0) ) ) continue;
+	}
+      
+      //
+      // Reset obs() unless accumulating over all channels (cat mode)
+      //
+      
+      if ( ! ne_by_ne ) 
+	clear();
+      
       
       //
       // Add channels
@@ -155,12 +199,21 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	  logger << "  calculating epoch-by-epoch distances for " << signals.label(s0) << "\n";	  
 	  // just add one channel
 	  add_channel( signals.label(s0) );
+	  
 	  // and stratify output by channel
-	  writer.level( signals.label(s0) , globals::signal_strat );
+	  if ( univariate )
+	    writer.level( signals.label(s0) , globals::signal_strat );
+	}
+      else if ( ne_by_ne )
+	{
+	  logger << "  calculating epoch-by-epoch distances for " << signals.label(s0) << "\n";
+	  // only have a single, dummy 'channe'
+	  if ( obs.size() == 0 )
+	    add_channel( "_dummy" );
 	}
       else
 	{
-	  // add all channels (and we'll quite afterwards)
+	  // add all channels (and we'll quit afterwards)
 	  logger << "  calculating epoch-by-epoch distances for " ;
 	  for ( int s=0; s<ns; s++ )
 	    {	      
@@ -168,6 +221,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	      logger << signals.label(s) << " " ;
 	    }
 	  logger << "\n";
+
 	}
       
       //
@@ -189,21 +243,19 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	  // record for this epoch
 	  
 	  pdc_obs_t ob( ns );
-	  
-	  ob.id = epoch;
-	  ob.label = ".";
+	
+	  ob.id = Helper::int2str( edf.timeline.display_epoch( epoch ) ); 
+
+	  ob.label = signals.label(s0);
 	  
 	  epochs.push_back( edf.timeline.display_epoch( epoch ) ) ; 
-	  
 	  
 	  //
 	  // get signal(s)	  
 	  //
 	  
-	  if ( univariate )
+	  if ( univariate || ne_by_ne )
 	    {
-	      
-	      if ( edf.header.is_annotation_channel( signals(s0) ) ) continue;
 	      
 	      slice_t slice( edf , signals(s0) , interval );
 	      
@@ -244,76 +296,204 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 
       
       //
-      // Encode time-series
+      // Encode (all unencoded) time-series
       //
       
       encode_ts();
       
+
       //
-      // Calculate distance matrix
+      // Purge unnecessary TS after encoding as PD (helps w/ cat mode)
+      //
+      
+      purge_ts();
+      
+
+      //
+      // For either univariate or multivariat mode, we have all epochs and so calculate
+      // solution
       //
 
-      
-      Data::Matrix<double> D = all_by_all();
-      
-      
-      if ( D.dim1() != ne ) 
-	Helper::halt( "internal error in pdc_t::similarity_matrix()" );
-      
-      if ( write_matrix )
+      if ( ! ne_by_ne )
 	{
-	  std::ofstream OUT1( outfile.c_str() , std::ios::out );
 	  
-	  for (int i=0;i<ne;i++)
-	    {
-	      for (int j=0;j<ne;j++) OUT1 << ( j ? "\t" : "" ) << D[i][j];
-	      OUT1 << "\n";
-	    }
-	  OUT1.close();
+	  exe_calc_matrix_and_cluster( edf , param , write_matrix , outfile );	  
 	  
-	  logger << "  output distance matrix for " << ne
-		 << " epochs (" << ns << " signals) to " << outfile << "\n";
+	  //
+	  // in multivariate-mode, we are all done after one pass
+	  //
+	  
+	  if ( ! univariate ) break;
+	  
 	}
       
-      
       //
-      // Cluster
+      // next channel in univariate || NExNE mode
       //
 
-      logger << "  clustering epochs...\n";
-      
-      cluster_t cluster;
-      
-      int preK = param.has( "k" ) ? param.requires_int( "k" ) : 0 ;
-      int maxS = param.has( "mx" ) ? param.requires_int( "mx" ) : 0 ;
-
-      cluster_solution_t sol = cluster.build( D , preK , maxS );
-      
-      if ( sol.best.size() != ne ) Helper::halt( "internal error in ExE" );
-      
-      for (int e=0; e<ne; e++ )
-	{
-	  writer.epoch( edf.timeline.display_epoch( e ) );
-	  // cluster 'label' is the exemplar epoch for that cluster
-	  writer.value( "CL" , edf.timeline.display_epoch( sol.exemplars[ sol.best[e] ] ) );
-	  //	  writer.value( "KK" , sol.best[e] );
-	}
-      writer.unepoch();
-      
-     
-      //
-      // in multivariate-mode, we are all done after one pass
-      //
-      
-      if ( ! univariate ) break;
-     
-      
-      //
-      // next channel in univariate mode
-      //
     }
 
+
+  //
+  // Final call after we've built all NExNE obs 
+  // 
+
+  if ( ne_by_ne )
+    exe_calc_matrix_and_cluster( edf , param , write_matrix , outfile );
+
+  //
+  // else all done
+  //
+    
   if ( univariate ) 
     writer.unlevel( globals::signal_strat );
 
 }
+
+
+
+
+void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
+					 const bool write_matrix , const std::string & outfile )
+{
+
+  const bool ne_by_ne = param.has( "cat" );
+  
+  const int nobs = obs.size();
+    
+  
+  //
+  // Calculate distance matrix
+  //
+  
+  
+  Data::Matrix<double> D = all_by_all();
+  
+  
+  if ( D.dim1() != nobs ) 
+    Helper::halt( "internal error in pdc_t::similarity_matrix()" );
+  
+  if ( write_matrix )
+    {
+
+      std::ofstream OUT1( outfile.c_str() , std::ios::out );
+      for (int i=0;i<nobs;i++)
+	{
+	  for (int j=0;j<nobs;j++) OUT1 << ( j ? "\t" : "" ) << D[i][j];
+	  OUT1 << "\n";
+	}
+      OUT1.close();
+
+      logger << "  output distance matrix for " << nobs
+	     << " observations to " << outfile << "\n";
+
+      // channel/epoch labels?
+      if ( ne_by_ne )
+	{	  
+	  std::ofstream OUT1( ( outfile+".idx").c_str() , std::ios::out );
+	  OUT1 << "ID\tCH\tE\n";
+	  for (int i=0;i<nobs;i++)
+	    OUT1 << edf.id << "\t"		 
+		 << obs[i].label << "\t"
+		 << obs[i].id << "\n";
+	  OUT1.close();
+	  
+	  logger << "  paired with channel/epoch index: " << outfile << ".idx\n";
+
+	}
+      
+
+    }
+
+  
+  //
+  // Cluster
+  //
+  
+  if ( ne_by_ne )
+    logger << "  clustering channels/epochs...\n";
+  else
+    logger << "  clustering epochs...\n";
+
+  
+  cluster_t cluster;
+
+  // max. number of clusters (stopping rule)
+  int preK = param.has( "k" ) ? param.requires_int( "k" ) : 0 ;
+
+  // constraint on maximum size of each cluster (0 = no constraint)
+  int maxS = param.has( "mx" ) ? param.requires_int( "mx" ) : 0 ;
+
+  //
+  // do we want to cluster?
+  //
+
+  if ( preK == 0 && maxS == 0 ) return;
+    
+  //
+  // get cluster solution
+  //
+
+  cluster_solution_t sol = cluster.build( D , preK , maxS );
+  
+  if ( sol.best.size() != nobs )
+    Helper::halt( "internal error in ExE" );
+
+
+  //
+  // Report output
+  //
+  
+  for (int e=0; e<nobs; e++ )
+    {
+      
+      // [ option: uni ] (report K different ExE]
+      // 1 C4
+      // 2 C4
+      // 3 C4
+
+      // [ default, multivariate ]  (reports single ExE based on K channels)
+      // 1 C3,C4
+      // 2 C3,C4
+      // 3 C3.C4
+
+      // option: concatenate (reports single KExKE)
+      // 1 C3
+      // 2 C3
+      // 3 C3
+      // 1 C4
+      // 2 C4
+      // 3 C4
+
+      // if reporting in CAT mode, here we need to specify the CH level
+      // for each observation
+      
+      if ( ne_by_ne )
+	writer.level( obs[e].label , globals::signal_strat );
+
+      //
+      // In all cases, we need to stratify by epoch
+      //
+
+      writer.epoch( edf.timeline.display_epoch( e ) );
+      
+      //
+      // cluster 'label' is the exemplar epoch for that cluster
+      //
+      
+      writer.value( "CL" , edf.timeline.display_epoch( sol.exemplars[ sol.best[e] ] ) );
+      
+      
+    }
+
+  //
+  // tidy up
+  //
+
+  if ( ne_by_ne )
+    writer.unlevel( globals::signal_strat );
+  
+  writer.unepoch();
+  
+}
+
