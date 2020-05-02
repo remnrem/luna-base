@@ -45,15 +45,18 @@ struct pdc_obs_t {
   // has channel?
   std::vector<bool> ch;
 
+  // is encoded?
+  bool encoded;
+  
   // (optional) time-series data (per channel)
   std::vector<std::vector<double> > ts;
   
   // permutation-distribution data (per channel) 
   std::vector<std::vector<double> > pd;
   
-  // aux. info: primary label
+  // aux. info: primary label (e.g. sleep stage)
   std::string label;
-  
+
   // aux. info: all other info, as key=value pairs
   std::map<std::string,std::string> aux;
 
@@ -63,17 +66,28 @@ struct pdc_obs_t {
 
   // encode TS(s) as PD(s)
   void encode( int , int );
+
+  // free TS space
+  void purge()
+  {
+    ts.clear();
+  }
   
   // add (combine PD counts; *assumes* channels, m/t etc are the same...
   void add( const pdc_obs_t & rhs )
   {
-    if ( pd.size() != rhs.pd.size() ) Helper::halt( "cannot add pdc_obs_t" );
+
+    if ( ! ( encoded && rhs.encoded ) )
+      Helper::halt( "internal error: observations not encoded yet" );
+
+    if ( pd.size() != rhs.pd.size() )
+      Helper::halt( "cannot add pdc_obs_t" );
+
     for (int i=0;i<pd.size();i++)
       {
 	if ( pd[i].size() == 0 ) pd[i] = rhs.pd[i];
 	else
-	  {
-	    //std::cout << "Sz = " << pd[i].size() << " " << rhs.pd[i].size() << "\n";
+	  {	    
 	    if ( pd[i].size() != rhs.pd[i].size() ) Helper::halt( "internal pdc_obs_t prob" );
 	    for (int j=0;j<pd[i].size();j++) pd[i][j] += rhs.pd[i][j];
 	  }
@@ -97,13 +111,14 @@ struct pdc_obs_t {
     id = "";
     label = "";
     aux.clear();
+    encoded = false;
     
     ch.resize( q , false );
     ts.clear(); pd.clear();
     ts.resize( q ); pd.resize( q );
 
   }
-
+  
   
 };
 
@@ -170,7 +185,8 @@ struct pdc_t {
   //
   
   static void encode_ts();
-  
+
+  static void purge_ts();
   
   //
   // determine optimal m and t, given entropy heuristic
@@ -373,7 +389,8 @@ private:
   static double symmetricAlphaDivergence( const std::vector<double> & , const std::vector<double> & );
   
   static int codebook( const std::vector<double> & , int, int, int );
-  
+
+  static void exe_calc_matrix_and_cluster( edf_t & , param_t & , const bool , const std::string & );
 
 };
 

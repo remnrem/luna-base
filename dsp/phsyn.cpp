@@ -390,8 +390,12 @@ void phsyn_t::calc()
 	
 	std::cout << f1[i1].first << "-" << f1[i1].second << "\t"
 		  << f2[i2].first << "-" << f2[i2].second << "\t"
-	  //<< obs_stat << "\t"
+
+		  << obs_stat << "\t"
+		  << z_stat_mean << "\t"
+		  << z_stat_sd << "\t" 
 		  << z_stat << "\t"
+	  
 		  << (emp_stat+1)/double(nreps+1) << "\n";
 
 

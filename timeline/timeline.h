@@ -224,7 +224,9 @@ struct timeline_t
     first_epoch();
     return calc_epochs();
   }
-  
+
+
+  int whole_recording_epoch_dur(); 
 
   int set_epoch(const double s, const double o ) 
   { 

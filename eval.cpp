@@ -1113,6 +1113,27 @@ void set_tag( const std::string & t )
     {
       std::vector<std::string> tok = Helper::parse( globals::current_tag , "/" );
       if ( tok.size() != 2 ) Helper::halt( "TAG format should be factor/level" );
+
+      // check that it is not a known tage
+      std::string fac = Helper::toupper( tok[0] );
+
+      if ( fac == globals::freq_strat ||
+	   fac == globals::signal_strat ||
+	   fac == globals::stage_strat  ||
+	   fac == globals::cycle_strat  ||
+	   fac == globals::band_strat   ||
+	   fac == globals::annot_strat ||
+	   fac == globals::annot_instance_strat ||
+	   fac == globals::annot_meta_strat ||
+	   fac == globals::count_strat  ||
+	   fac == globals::epoch_strat  ||
+	   fac == globals::time_strat  ||
+	   fac == globals::sample_strat ||
+	   fac == globals::cluster_strat ||
+	   fac == "TH" || fac == "MSEC" || fac == "SP" )
+	Helper::halt( "cannot use " + tok[0] + " as a TAG factor, matches an internal label" );
+            
+      // set
       writer.tag( tok[1] , tok[0] );
     }
 }
@@ -2342,12 +2363,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // prepend/append for text-table output files
-  if ( Helper::iequals( tok0 , "tt-prepend" ) )
+  if ( Helper::iequals( tok0 , "tt-prepend" ) ||  Helper::iequals( tok0 , "tt-prefix" ) )
     {
       globals::txt_table_prepend = tok1;
       return;
     }
-  if ( Helper::iequals( tok0 , "tt-append" ) )
+  if ( Helper::iequals( tok0 , "tt-append" ) ||  Helper::iequals( tok0 , "tt-suffix" ) )
     {
       globals::txt_table_append = tok1;
       return;

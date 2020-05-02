@@ -947,13 +947,32 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
 
   if ( ! Helper::fileExists( filename ) ) 
     Helper::halt( "could not read " + filename );
+
+  bool compressed = Helper::file_extension( filename , "gz" );
   
   std::ifstream IN1( filename.c_str() , std::ios::in );
+
+  gzifstream ZIN1;
+  
+  if ( compressed  ) 
+    ZIN1.open( filename.c_str() );
+  else
+    IN1.open( filename.c_str() , std::ios::in );    
   
   std::string line;
-  Helper::safe_getline( IN1 , line );
-  if ( IN1.eof() || line == "" ) Helper::halt( "problem reading from " + filename + ", empty?" );
 
+  if ( compressed ) 
+    {
+      Helper::safe_getline( ZIN1 , line );
+      if ( ZIN1.eof() || line == "" ) Helper::halt( "problem reading from " + filename + ", empty?" );
+    }
+  else
+    {
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.eof() || line == "" ) Helper::halt( "problem reading from " + filename + ", empty?" );
+    }
+  
+      
   // has a header row (whether we want to use it or not)
 
   if ( line[0] == '#' ) 
@@ -980,8 +999,16 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   
   if ( ! has_header_labels ) 
     {
-      IN1.clear();
-      IN1.seekg(0, std::ios::beg);
+      if ( compressed )
+	{
+	  ZIN1.clear();
+	  ZIN1.seekg(0, std::ios::beg);
+	}
+      else
+	{
+	  IN1.clear();
+	  IN1.seekg(0, std::ios::beg);
+	}
     }
 
   
@@ -995,9 +1022,19 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   while ( !IN1.eof() ) 
     {
       std::string line;
-      Helper::safe_getline( IN1 , line );
+
+      if ( compressed )
+	{
+	  Helper::safe_getline( ZIN1 , line );
+	  if ( ZIN1.eof() ) break;
+	}
+      else
+	{
+	  Helper::safe_getline( IN1 , line );
+	  if ( IN1.eof() ) break;
+	}
       
-      if ( IN1.eof() ) break;
+	  
       if ( line == "" ) continue;
       ++np;
     }
@@ -1006,16 +1043,29 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   int nr = np / Fs;
   np = nr * Fs;
 
-  IN1.close();
+  if ( compressed ) 
+    IN1.close();
+  else
+    IN1.close();
 
   // re-read
-  std::ifstream IN2( filename.c_str() , std::ios::in );
+  std::ifstream IN2;
+  gzifstream ZIN2;
+  
+  if ( compressed ) 
+    ZIN2.open( filename.c_str() );
+  else
+    IN2.open( filename.c_str() , std::ios::in );
 
   // skip header?
   if ( has_header_labels ) 
     {
       std::string dummy;
-      Helper::safe_getline( IN2 , dummy );
+
+      if ( compressed )	
+	Helper::safe_getline( ZIN2 , dummy );
+      else
+	Helper::safe_getline( IN2 , dummy );	
     }
   
 
@@ -1061,20 +1111,36 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
     for (int s=0;s<ns;s++)
       {
 
-	IN2 >> data(p,s);
+	if ( compressed )
+	  ZIN2 >> data(p,s);
+	else
+	  IN2 >> data(p,s);
 	
 	if ( IN2.eof() ) 
 	  Helper::halt( filename + " does not contain enough data-points given parameters\n" );
       }
   
   double dd;
-  IN2 >> dd;
-  if ( ! IN2.eof() ) 
-    logger << " ** warning, truncating potential trailing sample points (<1 second) from end of input\n";
+
+  if ( compressed )
+    {
+      ZIN2 >> dd;
+      if ( ! ZIN2.eof() ) 
+	logger << " ** warning, truncating potential trailing sample points (<1 second) from end of input\n";
+    }
+  else
+    {
+      IN2 >> dd;
+      if ( ! IN2.eof() ) 
+	logger << " ** warning, truncating potential trailing sample points (<1 second) from end of input\n";
+    }
   
   // should now be end of file...
-	    
-  IN2.close();
+
+  if ( compressed )
+    ZIN2.close();
+  else
+    IN2.close();
 
 
   //

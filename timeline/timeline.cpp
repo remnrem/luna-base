@@ -3090,3 +3090,10 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
 
 }
 
+
+int timeline_t::whole_recording_epoch_dur() {
+  // only allow this for a continuous EDF 
+  if ( ! edf->header.continuous ) return 0;    
+  return floor( edf->header.nr * edf->header.record_duration_tp * globals::tp_duration );
+}
+

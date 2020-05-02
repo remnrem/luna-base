@@ -1034,6 +1034,9 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "win" , "0.2" , "Smoothing window for wavelet coefficients (default 0.1 seconds)" );
   add_param( "SPINDLES" , "local" , "120" , "Use local window (in seconds) to define baseline for spindle detection" );
 
+  add_param( "SPINDLES" , "epoch" , "" , "Show epoch-level counts" );
+  add_param( "SPINDLES" , "per-spindle" , "" , "Show per-spindle output" );
+  
   add_param( "SPINDLES" , "empirical" , "" , "Empirically determine thresholds" );
   hide_param( "SPINDLES" , "set-empirical" , "" , "Use empirically determined thresholds for spindle detection" );
   hide_param( "SPINDLES" , "verbose-empirical" , "" , "Output extensive information on threshold estimation" );
@@ -1085,10 +1088,10 @@ void cmddefs_t::init()
   add_table( "SPINDLES" , "CH,F,TH" , "Between-class variance over range of thresholds" );
   add_var( "SPINDLES" , "CH,F,TH" , "SIGMAB" , "Between-class variance for given threshold" );
 
-  add_table( "SPINDLES" , "CH,E,F" , "Epoch-level output" ); 
+  add_table( "SPINDLES" , "CH,E,F" , "Epoch-level output [epoch]" ); 
   add_var( "SPINDLES" , "CH,E,F" , "N" , "Number of spindles observed in that epoch (for that target frequency/channel)" );
 
-  add_table( "SPINDLES" , "CH,F,SPINDLE" , "Spindle-level output" ); 
+  add_table( "SPINDLES" , "CH,F,SPINDLE" , "Spindle-level output [per-spindle]" ); 
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "AMP" , "Spindle amplitude (uV or mV units)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "CHIRP" , "Spindle chirp (-1 to +1)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "DUR" , "Spindle duration (seconds)" );
@@ -1162,6 +1165,15 @@ void cmddefs_t::init()
   hide_param( "SPINDLES" , "verbose-coupling" , "" , "Add extra tables of EEG/CWT phase/time-locked to SO" );
 
 
+  // show-coef verbose output
+
+  add_table( "SPINDLES" , "F,CH,T" , "Verbose threshold/coefficient output [show-coeff]" );
+  add_var( "SPINDLES" , "F,CH,T" , "RAWCWT" , "Raw CWT coefficient" );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT" , "CWT coefficient" );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH" , "CWT primary threshold" );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH2" , "CWT secondary threshold" );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT_THMAX" , "CWT maximum threshold" );
+  
 
 
   //

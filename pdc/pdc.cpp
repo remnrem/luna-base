@@ -772,10 +772,23 @@ Data::Matrix<double> pdc_t::all_by_all()
 
 void pdc_t::encode_ts()
 {  
-  logger << "  encoding with m="<<m << ", t=" << t << "\n";  
-  // encode each observation in PD space
+
+
+  // encode each observation in PD space, /if not already encoded/
   const int N = obs.size();
-  for (int i=0;i<N;i++) obs[i].encode( m , t );
+
+  for (int i=0;i<N;i++)
+    if ( ! obs[i].encoded ) 
+      obs[i].encode( m , t );
+}  
+
+void pdc_t::purge_ts()
+{  
+  // assuming we've encoded, purge original TS
+  const int N = obs.size();
+  for (int i=0;i<N;i++)
+    if ( obs[i].encoded )
+      obs[i].purge();
 }  
 
 // encode TS(s) as PD(s)
@@ -784,6 +797,7 @@ void pdc_obs_t::encode( int m , int t )
   const int ns = ts.size();
   pd.resize(ns);
   int normalize = 1; 
+  encoded = true;
   for (int i=0;i<ns;i++)
     pd[i] = pdc_t::calc_pd( ts[i] , m , t , &normalize );
 }
@@ -791,6 +805,10 @@ void pdc_obs_t::encode( int m , int t )
 // get (per-channel) entropy of current PD(s)
 std::vector<double> pdc_obs_t::entropy() const
 {
+
+  if ( ! encoded )
+    Helper::halt( "internal error: obs not encoded" );
+  
   const int ns = pd.size();
   std::vector<double> e( ns );
   for (int i=0;i<ns;i++)

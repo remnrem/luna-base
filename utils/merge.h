@@ -134,7 +134,7 @@ struct options_t {
 
 extern options_t options;
 
-enum type_t { FACTOR , TEXT , INT , FLOAT , YESNO , DATE , TIME };
+enum type_t { ROWID , FACTOR , TEXT , INT , FLOAT , YESNO , DATE , TIME };
 
 bool type_check( const std::string & value , type_t );
 

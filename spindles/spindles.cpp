@@ -150,6 +150,13 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // Analysis/output parameters
   //
 
+  // epoch-level output
+  const bool     show_epoch_level         = param.has( "epoch" );
+
+  // spindle-level output
+  const bool     show_spindle_level       = param.has( "per-spindle" );
+  
+  
   // verbose display of all CWT coefficients
   const bool     show_cwt_coeff           = param.has( "show-coef" );
 
@@ -1542,7 +1549,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // Per-spindle level output
 	  //
 
-	  per_spindle_output( &spindles , param , ( hms ? &starttime : NULL) , &baseline_fft );
+	  if ( show_spindle_level )
+	    per_spindle_output( &spindles , param , ( hms ? &starttime : NULL) , &baseline_fft );
 
 
 
@@ -1639,83 +1647,86 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // Per-EPOCH summary and test of over-dispersion
 	  //
 	  
-	  if ( 1 )
+
+	  edf.timeline.first_epoch();
+	      
+	  std::vector<int> epoch_counts;
+	  
+	  while ( 1 ) 
 	    {
-
-	      edf.timeline.first_epoch();
 	      
-	      std::vector<int> epoch_counts;
+	      int epoch = edf.timeline.next_epoch();      
 	      
-	      while ( 1 ) 
-		{
-		  
-		  int epoch = edf.timeline.next_epoch();      
-		  
-		  if ( epoch == -1 ) break;
+	      if ( epoch == -1 ) break;
               
-		  interval_t interval = edf.timeline.epoch( epoch );
-	       		  
-		
-		  const int nsp = spindles.size();
-		  
-		  int sp_epoch = 0;
-		  
-		  for (int i=0 ; i<nsp; i++)
-		    {
-		      
-		      // is this spindle included?
-
-		      if ( ! spindles[i].include ) continue;
-
-		      // dummy interval for just starting point of spindle 
-		      // i.e. for purpose of assigning to EPOCH (so as not
-		      // to double-count spindles that overlap epoch boundaries
-		      
-		      interval_t spstart( spindles[i].tp.start , spindles[i].tp.start );
-		      
-		      if ( interval.overlaps( spstart ) )
-			++sp_epoch;
-		      else if ( spstart.is_after( interval ) )
-			break; // spindles are in order, so can skip
-		    }
-		  
-		  // record
-		  epoch_counts.push_back( sp_epoch );
-		  
-		  //
-		  // per-epoch output
-		  //
-		  
-		  writer.epoch( edf.timeline.display_epoch( epoch ) );
-		  
-		  // per-epoch spindle number
-		  writer.value( "N" , sp_epoch );
-		  
-		}
+	      interval_t interval = edf.timeline.epoch( epoch );
 	      
-	      writer.unepoch();
-
 	      
-	      // 
-	      // Test for over-dispersion of spindle counts
-	      //
-	     
-	      if ( ! empty )
+	      const int nsp = spindles.size();
+	      
+	      int sp_epoch = 0;
+	      
+	      for (int i=0 ; i<nsp; i++)
 		{
-		  double pval = 0;
-		  double stat = MiscMath::overdispersion( epoch_counts , &pval );
 		  
-		  writer.var( "DISPERSION" ,"Spindle epoch-dispersion index" );
-		  writer.var( "DISPERSION_P" , "Spindle epoch-dispersion index p-value" );
-		  writer.var( "NE" , "Number of epochs for spindle detection" );
+		  // is this spindle included?
 		  
-		  means[ "DISPERSION" ] = stat ;
-		  means[ "DISPERSION_P" ] = pval ;
-		  means[ "NE" ] = (int)epoch_counts.size() ;
+		  if ( ! spindles[i].include ) continue;
+		  
+		  // dummy interval for just starting point of spindle 
+		  // i.e. for purpose of assigning to EPOCH (so as not
+		  // to double-count spindles that overlap epoch boundaries
+		  
+		  interval_t spstart( spindles[i].tp.start , spindles[i].tp.start );
+		  
+		  if ( interval.overlaps( spstart ) )
+		    ++sp_epoch;
+		  else if ( spstart.is_after( interval ) )
+		    break; // spindles are in order, so can skip
 		}
+	      
+	      // record
+	      epoch_counts.push_back( sp_epoch );
+	      
 
+	      //
+	      // per-epoch output
+	      //
+
+	      if ( show_epoch_level )
+		{	      
+		  writer.epoch( edf.timeline.display_epoch( epoch ) );		  
+		  // per-epoch spindle count
+		  writer.value( "N" , sp_epoch );
+		}
+	      
 	    }
-	
+
+
+	  // close out any epoch-level output
+	  if ( show_epoch_level )
+	    writer.unepoch();
+	  
+	      
+	  // 
+	  // Test for over-dispersion of spindle counts
+	  //
+	  
+	  if ( ! empty )
+	    {
+	      double pval = 0;
+	      double stat = MiscMath::overdispersion( epoch_counts , &pval );
+	      
+	      writer.var( "DISPERSION" ,"Spindle epoch-dispersion index" );
+	      writer.var( "DISPERSION_P" , "Spindle epoch-dispersion index p-value" );
+	      writer.var( "NE" , "Number of epochs for spindle detection" );
+	      
+	      means[ "DISPERSION" ] = stat ;
+	      means[ "DISPERSION_P" ] = pval ;
+	      means[ "NE" ] = (int)epoch_counts.size() ;
+	    }
+	  
+	      
 	  
 
 	  //
@@ -1832,30 +1843,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	
 
 	  //
-	  // Save annotations
-	  //
-	  
-// 	  for (int i=0;i<spindles.size();i++)
-// 	    {
-// 	      a->add( signals.label(s) , spindles[i].tp );
-// 	    }
-	  
-// 	  // more verbose recording?
-// 	  if ( add_channels ) 
-// 	    {
-// 	      for (int i=0;i<spindles1.size();i++)
-// 		a2->add(  signals.label(s) , spindles1[i] );
-// 	    }
-
-
-	  //
 	  // Record as a .ftr file
 	  //
 
 	  if ( ftr_output )
 	    {
 	      const std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;	      
-	      const std::string ftr_tag    = "-" + analysis_label + ( param.has("ftr") ? "-" + param.value( "ftr" ) : "" ) ;
+	      const std::string ftr_tag    = "-" + analysis_label
+		+ ( param.has("ftr") ? "-" + param.value( "ftr" ) : "" ) ;
 	      const std::string ftr_folder = param.has("ftr-dir") ? param.value( "ftr-dir" ) : "./";
 	      const std::string delim = ftr_folder[ ftr_folder.size() - 1 ] != '/' ? "/" : "";
 	      
@@ -1997,19 +1992,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
     proc_write( edf , param );
     
   
-
-  //
-  // Save annotations to file
-  //
-  
-//   if ( annotfile != "" ) 
-//     {
-//       logger << " saving... " << edf.id << "\n";
-//       a->save( annotfile + "-" + edf.id + ".annot" );
-
-//       if ( add_channels ) 
-// 	a2->save( annotfile +"-pre" + "-" + edf.id + ".annot" );
-//     }
   
   return NULL;
   
