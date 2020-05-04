@@ -95,7 +95,7 @@ slice_t::slice_t( edf_t & edf ,
 			       downsample , 
 			       &time_points , 
 			       &records );
-  
+
 }
  
 

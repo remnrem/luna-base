@@ -129,18 +129,20 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 
   
   //
-  // Requires data to be epoched
+  // Requires data to be epoched, ubnless 'cat' mode and no epochs,se whole signal
   //
 
-  if ( !edf.timeline.epoched() )
+  bool use_whole_trace = false;
+  
+  if ( ! edf.timeline.epoched() )
     {
       if ( ne_by_ne )
 	{
 	  // if not epoched but in cat mode, set one single epoch
 	  // spanning the whole night, i.e. to het a KxK matrix
 	  // of only channels
-	  int seconds = edf.timeline.whole_recording_epoch_dur();
-	  edf.timeline.set_epoch( seconds , seconds );
+	  use_whole_trace = true;
+	  logger << "  clustering channels only, not epochs\n";
 	}
       else
 	Helper::halt( "ExE requires epoched data" );
@@ -228,39 +230,38 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
       // Get list of included epochs
       //
      
-      int ne = edf.timeline.first_epoch();
+      int ne = use_whole_trace ? 1 : edf.timeline.first_epoch();
  
       std::vector<int> epochs;
       
       while ( 1 ) 
 	{
-	  int epoch = edf.timeline.next_epoch();      
-	  
+
+	  int epoch = use_whole_trace ? -9 : edf.timeline.next_epoch();      
+
 	  if ( epoch == -1 ) break;
-	  
-	  interval_t interval = edf.timeline.epoch( epoch );
-	  
-	  // record for this epoch
+
+	  interval_t interval = use_whole_trace ? edf.timeline.wholetrace() : edf.timeline.epoch( epoch );
+
+	  // record for this epoch/signal
 	  
 	  pdc_obs_t ob( ns );
-	
-	  ob.id = Helper::int2str( edf.timeline.display_epoch( epoch ) ); 
+
+	  ob.id = use_whole_trace ? "0" : Helper::int2str( edf.timeline.display_epoch( epoch ) ); 
 
 	  ob.label = signals.label(s0);
 	  
-	  epochs.push_back( edf.timeline.display_epoch( epoch ) ) ; 
-	  
+	  epochs.push_back( use_whole_trace ? 0 : edf.timeline.display_epoch( epoch ) ) ; 
+		  
 	  //
 	  // get signal(s)	  
 	  //
 	  
 	  if ( univariate || ne_by_ne )
 	    {
-	      
 	      slice_t slice( edf , signals(s0) , interval );
-	      
 	      std::vector<double> * d = slice.nonconst_pdata();	      
-
+		      
 	      ob.ch[0] = true;
 	      ob.ts[0] = *d;
 	    }
@@ -288,26 +289,30 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 	  //
 	  
 	  add( ob );
-          
+
+	  //
+	  // If we read the entire trace, we can exit epoch loop now
+	  //
+
+	  if ( use_whole_trace ) break;
+	  
 	  //
 	  // next epoch
 	  //
 	}
 
-      
       //
       // Encode (all unencoded) time-series
       //
       
       encode_ts();
       
-
       //
       // Purge unnecessary TS after encoding as PD (helps w/ cat mode)
       //
       
       purge_ts();
-      
+
 
       //
       // For either univariate or multivariat mode, we have all epochs and so calculate
@@ -361,6 +366,8 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
   
   const int nobs = obs.size();
     
+  const bool use_whole_trace = ne_by_ne && ! edf.timeline.epoched() ; 
+
   
   //
   // Calculate distance matrix
@@ -391,18 +398,29 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
       if ( ne_by_ne )
 	{	  
 	  std::ofstream OUT1( ( outfile+".idx").c_str() , std::ios::out );
-	  OUT1 << "ID\tCH\tE\n";
+
+	  OUT1 << "ID\tCH";
+
+	  if ( ! use_whole_trace )
+	    OUT1 << "\tE";
+
+	  OUT1 << "\n";
+
 	  for (int i=0;i<nobs;i++)
-	    OUT1 << edf.id << "\t"		 
-		 << obs[i].label << "\t"
-		 << obs[i].id << "\n";
+	    {
+	      OUT1 << edf.id << "\t"		 
+		   << obs[i].label ;
+	      if ( ! use_whole_trace )
+		OUT1 << "\t" << obs[i].id ;
+	      OUT1 << "\n";
+	    }
+	  
 	  OUT1.close();
 	  
 	  logger << "  paired with channel/epoch index: " << outfile << ".idx\n";
-
+	  
 	}
       
-
     }
 
   
@@ -472,17 +490,20 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	writer.level( obs[e].label , globals::signal_strat );
 
       //
-      // In all cases, we need to stratify by epoch
+      // Stratify by epoch?
       //
 
-      writer.epoch( edf.timeline.display_epoch( e ) );
+      if ( ! use_whole_trace )
+	writer.epoch( edf.timeline.display_epoch( e ) );
       
       //
       // cluster 'label' is the exemplar epoch for that cluster
       //
-      
-      writer.value( "CL" , edf.timeline.display_epoch( sol.exemplars[ sol.best[e] ] ) );
-      
+
+      if ( use_whole_trace )
+	writer.value( "CL" , sol.exemplars[ sol.best[e] ] ); // use channel # 
+      else
+	writer.value( "CL" , edf.timeline.display_epoch( sol.exemplars[ sol.best[e] ] ) );
       
     }
 
@@ -492,8 +513,9 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 
   if ( ne_by_ne )
     writer.unlevel( globals::signal_strat );
-  
-  writer.unepoch();
+
+  if ( ! use_whole_trace )
+    writer.unepoch();
   
 }
 
