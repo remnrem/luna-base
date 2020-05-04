@@ -315,6 +315,7 @@ void cmddefs_t::init()
   add_param( "EPOCH" , "epoch" , "30,15" , "Same as len=30 inc=15" );
   add_param( "EPOCH" , "require" , "10" , "Stop processing that EDF if there are not at least N epochs" );
   add_param( "EPOCH" , "verbose" , "" , "Output epoch-level information" );
+  add_param( "EPOCH" , "clear" , "" , "Unepoch all signals" );
 
   add_table( "EPOCH" , "" , "Epoch-level summaries" );
   add_var( "EPOCH" , "" , "DUR" , "Epoch duration (seconds)" );

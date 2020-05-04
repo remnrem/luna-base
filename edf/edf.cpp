@@ -1395,13 +1395,13 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   
   const uint64_t n_samples_per_record = header.n_samples[signal];
   
-//   std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
-//   std::cerr << "SR " << n_samples_per_record << "\n";
+   //   std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
+   // std::cerr << "SR " << n_samples_per_record << "\n";
  
   int start_record, stop_record;
   int start_sample, stop_sample;
 
-  //  std::cerr << "looking for " << start << " to " << stop << "\n";
+  //    std::cerr << "looking for " << start << " to " << stop << "\n";
 
   bool okay = timeline.interval2records( interval_t( start , stop ) , 
 					 n_samples_per_record , 
@@ -1409,8 +1409,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					 &stop_record, &stop_sample );
   
   
-//   std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
-//   std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
+   // std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
+   // std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
 
   //
   // If the interval is too small (or is applied to a signal with a low sampling rate)
@@ -1432,6 +1432,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   
   bool retval = read_records( start_record , stop_record );
   
+  //  std::cerr << "read records: " << retval << "\n";
   
   //
   // Copy data into a single vector
@@ -1444,16 +1445,24 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 
   while ( r <= stop_record )
     {
+      //std::cerr << "rec " << r << "\n";
+
+      // std::cout << records.size() << " is REC SIZE\n";
+      // std::cout << "foudn " << ( records.find( r ) != records.end() ? " FOUND " : "NOWHERE" ) << "\n";
 
       const edf_record_t * record = &(records.find( r )->second);
 
+      //std::cerr << " test for NULL " << ( record == NULL ? "NULL" : "OK" ) << "\n";
+      
       const int start = r == start_record ? start_sample : 0 ;
       const int stop  = r == stop_record  ? stop_sample  : n_samples_per_record - 1;
+
+      // std::cerr << " start, stop = " << start << "   " << stop << "\n";
       
-//       std::cerr << "OUT\t"
-// 		<< record->data.size() << " "
-// 		<< signal << " " 
-// 		<< header.ns << "\n";
+      // std::cerr << "OUT\t"
+      // 		<< record->data.size() << " "
+      // 		<< signal << " " 
+      // 		<< header.ns << "\n";
       
       for (int s=start;s<=stop;s+=downsample)
 	{
@@ -3458,6 +3467,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
 void edf_t::flip( const int s )
 {
   if ( header.is_annotation_channel(s) ) return;
+  logger << "  flipping polarity of " << header.label[s] << "\n";
 
   // get all data
   interval_t interval = timeline.wholetrace();

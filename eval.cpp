@@ -733,7 +733,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
       
       else if ( is( c, "TIME-TRACK" ) )   proc_timetrack( edf, param(c) );
-      else if ( is( c, "CONTIN" ) )       proc_continuous( edf, param(c) );
+      //      else if ( is( c, "CONTIN" ) )       proc_continuous( edf, param(c) ); // not allowed....
 
       else if ( is( c, "STAGE" ) )        proc_sleep_stage( edf , param(c) , false );
       else if ( is( c, "HYPNO" ) )        proc_sleep_stage( edf , param(c) , true );
@@ -1358,6 +1358,14 @@ void proc_write( edf_t & edf , param_t & param )
 
 void proc_epoch( edf_t & edf , param_t & param )
 {
+
+  // unepoch?
+  if ( param.has( "clear" ) )
+    {
+      logger << "  clearing all epochs: signals are now unepoched\n";
+      edf.timeline.unepoch();
+      return;
+    }
   
   double dur = 0 , inc = 0;
   
@@ -1371,7 +1379,7 @@ void proc_epoch( edf_t & edf , param_t & param )
       
       if ( param.has( "epoch" ) )
 	{
-	  std::string p = param.requires( "epoch" );
+	  std:: string p = param.requires( "epoch" );
 	  std::vector<std::string> tok = Helper::parse( p , "," );
 	  if ( tok.size() > 2 || tok.size() < 1 ) Helper::halt( "expcting epoch=length{,increment}" );
 	  
