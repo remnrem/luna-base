@@ -1242,7 +1242,7 @@ void proc_dummy( const std::string & p )
   std::vector<double> x;
   
   if ( p == "fir" || p == "fft" || p == "mtm" || p == "tv" 
-       || p == "dynam" || p == "ica" || p == "fip" || p == "sl" ) 
+       || p == "dynam" || p == "ica" || p == "fip" || p == "sl" || p == "acf" ) 
     {
 
       int cnt= 0;
@@ -1259,6 +1259,16 @@ void proc_dummy( const std::string & p )
 
     }
 
+
+  if ( p == "acf" )
+    {
+      acf_t acf( x );
+      std::vector<double> rr = acf.acf();
+      for (int i=0;i<rr.size();i++)
+	std::cout << "lag = " << i << "\t" << rr[i] << "\n";
+      std::exit(0);
+    }
+  
   if ( p == "fip" )
     {
       const int sr = 256;

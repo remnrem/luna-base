@@ -797,6 +797,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "COH" ) )          proc_coh( edf , param(c) );
       else if ( is( c, "PHSYN" ) )        proc_phsyn( edf , param(c) );
       else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
+      else if ( is( c, "ACF" ) )          proc_acf( edf , param(c) );
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
       else if ( is( c, "CLOCS" ) )        proc_attach_clocs( edf , param(c) );
@@ -1833,6 +1834,12 @@ void proc_coh( edf_t & edf , param_t & param )
 void proc_correl( edf_t & edf , param_t & param )
 {
   dsptools::correlate_channels( edf , param );
+}
+
+// ACF : autocorrelation function
+void proc_acf( edf_t & edf , param_t & param )
+{
+  dsptools::autocorr_channels( edf , param );
 }
 
 // MI : mutual information
