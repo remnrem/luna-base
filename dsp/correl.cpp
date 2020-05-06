@@ -102,9 +102,18 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	}
     }
 
+
+  std::vector<int> datasigs = sigs;
+  sigs.clear();
+  for (int s=0;s<datasigs.size();s++)
+    {
+      if ( ! edf.header.is_annotation_channel( datasigs[s] ) )
+	sigs.push_back( datasigs[s] ) ;
+    }
+  
   const int ns = sigs.size();
 
-
+  
   //
   // adjust all SRs now if needed
   //
@@ -113,9 +122,6 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
     {
       for (int s=0;s<ns;s++)
 	{
-	  
-	  if ( edf.header.is_annotation_channel( sigs[s] ) ) continue;
-	  
 	  if ( edf.header.sampling_freq( sigs[s] ) != sr ) 
 	    {
 	      logger << "resampling channel " << sigset[ sigs[s] ]
@@ -130,10 +136,8 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
       // check SR
       std::set<int> srs;
       for (int s=0;s<ns;s++)
-	{
-	  if ( edf.header.is_annotation_channel( sigs[s]) ) continue;
-	  srs.insert( edf.header.sampling_freq( sigs[s] ) );
-	}
+	srs.insert( edf.header.sampling_freq( sigs[s] ) );
+	
       if ( srs.size() > 1 ) Helper::halt( "all sampling rates must be similar, use 'sr'" );
     }
 
@@ -167,149 +171,189 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   //
   // Start iterating over pairs
   //
-
+  
   logger << "  calculating correlation for " << np << " channel pairs\n";
 
+
   //
-  // Iterate over pairs
+  // Loop for both epoch and unepoched analysis
   //
   
-  for (int i=0;i<ns1;i++)
+  std::map<int,std::map<int,std::vector<double> > > epoch_r;
+ 
+  int epoch = epoched ? edf.timeline.first_epoch() : -9;
+		  
+  while ( 1 ) 
     {
-      
-      if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
 
-      writer.level( signals1.label(i) , "CH1" );
+      //
+      // get epoch/interval
+      //
+
+      int epoch = epoched ? edf.timeline.next_epoch() : -9;
       
-      for (int j=0;j<ns2;j++)
+      if ( epoch == -1 ) break;
+      
+      interval_t interval = epoched ? edf.timeline.epoch( epoch ) : edf.timeline.wholetrace();
+
+      //
+      // collect all signals into a temporary
+      //
+      
+      std::map<int,int> slots;
+      std::vector<std::vector<double> > X( ns );
+      for (int s=0;s<ns;s++)
 	{
-	  
-	  if ( edf.header.is_annotation_channel( signals2(j) ) ) continue;
-	  
-	  //
-	  // if all-by-all, do not do redundant channels
-	  //
-	  
-	  if ( all_by_all ) 
-	    {
-	      if ( j <= i ) continue;
-	    }
+	  slice_t slice1( edf , sigs[s] , interval );
+	  X[s] = * slice1.pdata();
+	  slots[ sigs[s] ] = s;
+	}
 
+
+      //
+      // calculate requested pairs of correlations
+      //
+
+      //
+      // first channel
+      //
+      
+      for (int i=0;i<ns1;i++)
+	{
+
+	  if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
+
+	  writer.level( signals1.label(i) , "CH1" );
+	  
 	  //
-	  // Store correlations
+	  // second channel
 	  //
-	  
-	  std::vector<double> epoch_r;
-	  double overall_r;
-	  double mean_r;
-	  double median_r;
-	  
-	  // stratify output by SIGNALS
-	  //writer.level( signals1.label(i) + "x" + signals2.label(j) , "CHS" );
-	  
-	  writer.level( signals2.label(j) , "CH2" );
-	  
-	  if ( epoched ) 
+
+	  for (int j=0;j<ns2;j++)
 	    {
+	      if ( edf.header.is_annotation_channel( signals2(j) ) ) continue;
 	      
-	      int epoch = edf.timeline.first_epoch();      
+	      //
+	      // if all-by-all, do not do redundant channels
+	      //
 	      
-	      while ( 1 ) 
+	      if ( all_by_all ) 
 		{
-		  
-		  int epoch = edf.timeline.next_epoch();      
-		  if ( epoch == -1 ) break;
+		  if ( j <= i ) continue;
+		}
+	      
+	      writer.level( signals2.label(j) , "CH2" );
+	      
 
-		  interval_t interval = edf.timeline.epoch( epoch );
+	      //
+	      // calculate correlation, using slots[] to look up correct value
+	      //
+	      
+	      double r = Statistics::correlation( X[ slots[ signals1(i) ] ] , X[ slots[ signals2(j) ] ] );
 
- 		  slice_t slice1( edf , signals1(i) , interval );
- 		  slice_t slice2( edf , signals2(j) , interval );
-		  
- 		  const std::vector<double> * d1 = slice1.pdata();
- 		  const std::vector<double> * d2 = slice2.pdata();
-
-		  double r = Statistics::correlation( *d1 , *d2 );
-
-		  //
-		  // Output
-		  //
-
+	      
+	      //
+	      // Output
+	      //
+	      
+	      if ( epoched ) 
+		{
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );
-		  
-		  writer.value( "R" , r );
-
-		  epoch_r.push_back( r );
-
-
-		} // next epoch
-	      	      
+		  epoch_r[i][j].push_back( r );
+		}
 	      
-	      writer.unepoch();
+	      writer.value( "R" , r );
 	      
+	      
+	      //	      
+	      // store channel-level summaries (only whole-signal analysis right now)
 	      //
-	      // Get mean/median correlation over epochs
-	      //
-	    
-	      mean_r = MiscMath::mean( epoch_r );
-
-	      median_r = MiscMath::median( epoch_r );
 	      
-	      writer.value( "R_MEAN" , mean_r ); 
-
-	      writer.value( "R_MEDIAN" , median_r ); 
-
-	    }
-	  else
-	    {
-	      
-	      //
-	      // Coherence for entire signal
-	      //
-
-	      interval_t interval = edf.timeline.wholetrace();
-	      
-	      slice_t slice1( edf , signals1(i) , interval );
-	      slice_t slice2( edf , signals2(j) , interval );
-	      
-	      const std::vector<double> * d1 = slice1.pdata();
-	      const std::vector<double> * d2 = slice2.pdata();
-	      
-	      overall_r = Statistics::correlation( *d1 , *d2 );
-	      	      
-	      writer.value( "R" , overall_r ); 
-	      
-
-	      // store channel-level summaries
-	      if ( ch_summaries )
+	      if ( (!epoched) && ch_summaries )
 		{
-		  summr_mean[ signals1(i) ] += overall_r;
-		  summr_mean[ signals2(j) ] += overall_r;
+		  summr_mean[ signals1(i) ] += r;
+		  summr_mean[ signals2(j) ] += r;
 		  ++summr_n[ signals1(i) ];
 		  ++summr_n[ signals2(j) ];
 		  
-		  if ( overall_r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = overall_r;
-		  if ( overall_r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = overall_r;
+		  if ( r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = r;
+		  if ( r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = r;
 				  
-		  if ( overall_r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = overall_r;
-		  if ( overall_r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = overall_r;
+		  if ( r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = r;
+		  if ( r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = r;
 		  
-		  if ( overall_r > ch_over ) { ++summr_over[ signals1(i) ]; ++summr_over[ signals2(j) ]; }
-		  if ( overall_r < ch_under ) { ++summr_under[ signals1(i) ]; ++summr_under[ signals2(j) ]; }
+		  if ( r > ch_over ) { ++summr_over[ signals1(i) ]; ++summr_over[ signals2(j) ]; }
+		  if ( r < ch_under ) { ++summr_under[ signals1(i) ]; ++summr_under[ signals2(j) ]; }
 		  
 		}	      
-	    }	 
+
+
+	      //
+	      // all done for this pair, for to next 
+	      //
+
+	    } // next CH2
+	  
+	} // next CH1
+
+      writer.unlevel( "CH2" );      
+      writer.unlevel( "CH1" );
+
+      //
+      // if we looked at the whole signal, we're all done now
+      //
+      
+      if ( ! epoched ) break;
+
+      
+      //
+      // otherwise, next epoch 
+      //
+    } 
+  
+  writer.unepoch();
+
+
+  //
+  // Summaries over epochs
+  //
+
+
+  if ( epoched )
+    {
+      
+      for (int i=0;i<ns1;i++)
+	{
+          if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
+          writer.level( signals1.label(i) , "CH1" );
+
+          for (int j=0;j<ns2;j++)
+            {
+              if ( all_by_all && j <= i ) continue;
+	      if ( edf.header.is_annotation_channel( signals2(j) ) ) continue;	                    
+              writer.level( signals2.label(j) , "CH2" );
+	      
+	      double mean_r = MiscMath::mean( epoch_r[i][j] );	      
+	      double median_r = MiscMath::median( epoch_r[i][j] );
+	      
+	      writer.value( "R_MEAN" , mean_r );   
+	      writer.value( "R_MEDIAN" , median_r ); 
+	    }
 	}
+
+      writer.unlevel( "CH2" );
+      writer.unlevel( "CH1" );
+
     }
   
-  writer.unlevel( "CH1" );
-  writer.unlevel( "CH2" );
-
+  
   
   //
-  // Write channel-level summaries (min/max/mean/median/# channels over t1/# channels under t2)  correlations, if whole-signal (only)
+  // Write channel-level summaries (min/max/mean/median/# channels over t1/# channels under t2)
+  // Presently, only implemented for un-epoched analysis, can relax that
   //
 
-  if ( ch_summaries )
+  if ( ( ! epoched ) && ch_summaries )
     {
 
       logger << "  writing channel-level summaries: mean min max";

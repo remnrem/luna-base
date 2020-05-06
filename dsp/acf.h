@@ -20,36 +20,24 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
 
-#include "spectral_norm.h"
-#include "tv.h"
-#include "rems.h"
-#include "cfc.h"
-#include "acf.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "phsyn.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
+#ifndef __ACF_H__
+#define __ACF_H__
+
+#include <vector>
+
+struct edf_t;
+struct param_t;
+
+struct acf_t {
+  acf_t( const std::vector<double> & d , int maxlag = 0 ) { calc(d,maxlag); }
+  void calc( const std::vector<double> & d , int maxlag = 0 );
+  std::vector<double> acf() const { return r; }
+  std::vector<double> r;
+};
+
+namespace dsptools { 
+  void autocorr_channels( edf_t & edf , param_t & param );
+}
 
 #endif
