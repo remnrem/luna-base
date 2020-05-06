@@ -140,7 +140,7 @@ namespace Statistics {
 
   Data::Matrix<double> cholesky( const Data::Matrix<double> & );
   
-  double correlation( const std::vector<double> & a , const std::vector<double> & b );
+  double correlation( const std::vector<double> & a , const std::vector<double> & b , const double eps = 1e-8 );
   
   double bartlett(const int N, 
 		  const int p, 

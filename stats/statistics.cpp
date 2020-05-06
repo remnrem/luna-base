@@ -2272,10 +2272,11 @@ bool Statistics::t_test( double u1, double s1, int n1 ,
 
 
 
-double Statistics::correlation( const std::vector<double> & x , const std::vector<double> & y )
+double Statistics::correlation( const std::vector<double> & x , const std::vector<double> & y , const double eps )
 {
-  // basic correlation 
 
+  // basic correlation 
+  
   // r = cov(1,2) / sqrt( var(1).var(2) )                                                                                                                 
   double X = 0;
   double X2 = 0;
@@ -2305,8 +2306,15 @@ double Statistics::correlation( const std::vector<double> & x , const std::vecto
   double var1 = X2 - X*X;
   double var2 = Y2 - Y*Y;
   double cov12 = XY - X*Y;
+  
+  const double denom = sqrt(var1)*sqrt(var2);
 
-  double r = cov12 / (sqrt(var1)*sqrt(var2));
+  if ( denom < eps ) return -9;
+  
+  double r = cov12 / denom;
+  
+  if ( r < -1 ) r = -1;
+  else if ( r > 1 ) r = 1;
   
   return r;
 }

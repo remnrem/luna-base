@@ -44,8 +44,14 @@ extern writer_t writer;
 
 void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 {
+  
+  
+  //
+  // ensure we've cleared any prior PDC obs
+  //
 
-
+  clear();
+  
   
   // ExE uni cat mat=output-root  
 

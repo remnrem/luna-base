@@ -118,9 +118,9 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	  
 	  if ( edf.header.sampling_freq( sigs[s] ) != sr ) 
 	    {
-	      logger << "resampling channel " << sigset[ sigs[s] ]
-		     << " from " << edf.header.sampling_freq( sigs[s] )
-		     << " to " << sr << "\n";
+	      // logger << "resampling channel " << sigset[ sigs[s] ]
+	      // 	     << " from " << edf.header.sampling_freq( sigs[s] )
+	      // 	     << " to " << sr << "\n";
 	      resample_channel( edf, sigs[s] , sr );
 	    }
 	}
@@ -233,30 +233,35 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 		  //
 		  // Output
 		  //
-
+		  
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );
 		  
-		  writer.value( "R" , r );
-
-		  epoch_r.push_back( r );
-
-
+		  // -9 is NA code for a correlation
+		  if ( r > -5 ) 
+		    {
+		      writer.value( "R" , r );
+		      epoch_r.push_back( r );
+		    }
+		  
 		} // next epoch
-	      	      
+	      
 	      
 	      writer.unepoch();
 	      
 	      //
 	      // Get mean/median correlation over epochs
 	      //
-	    
-	      mean_r = MiscMath::mean( epoch_r );
-
-	      median_r = MiscMath::median( epoch_r );
 	      
-	      writer.value( "R_MEAN" , mean_r ); 
-
-	      writer.value( "R_MEDIAN" , median_r ); 
+	      if ( epoch_r.size() > 0 ) 
+		{
+		  mean_r = MiscMath::mean( epoch_r );
+		  
+		  median_r = MiscMath::median( epoch_r );
+		  
+		  writer.value( "R_MEAN" , mean_r ); 
+		  
+		  writer.value( "R_MEDIAN" , median_r ); 
+		}
 
 	    }
 	  else
@@ -274,29 +279,33 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	      const std::vector<double> * d1 = slice1.pdata();
 	      const std::vector<double> * d2 = slice2.pdata();
 	      
-	      overall_r = Statistics::correlation( *d1 , *d2 );
-	      	      
-	      writer.value( "R" , overall_r ); 
 	      
-
-	      // store channel-level summaries
-	      if ( ch_summaries )
+	      overall_r = Statistics::correlation( *d1 , *d2 );
+	      
+	      if ( overall_r > -5 ) 
 		{
-		  summr_mean[ signals1(i) ] += overall_r;
-		  summr_mean[ signals2(j) ] += overall_r;
-		  ++summr_n[ signals1(i) ];
-		  ++summr_n[ signals2(j) ];
 		  
-		  if ( overall_r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = overall_r;
-		  if ( overall_r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = overall_r;
-				  
-		  if ( overall_r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = overall_r;
-		  if ( overall_r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = overall_r;
-		  
-		  if ( overall_r > ch_over ) { ++summr_over[ signals1(i) ]; ++summr_over[ signals2(j) ]; }
-		  if ( overall_r < ch_under ) { ++summr_under[ signals1(i) ]; ++summr_under[ signals2(j) ]; }
-		  
-		}	      
+		  writer.value( "R" , overall_r ); 
+	      
+		  // store channel-level summaries
+		  if ( ch_summaries )
+		    {
+		      summr_mean[ signals1(i) ] += overall_r;
+		      summr_mean[ signals2(j) ] += overall_r;
+		      ++summr_n[ signals1(i) ];
+		      ++summr_n[ signals2(j) ];
+		      
+		      if ( overall_r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = overall_r;
+		      if ( overall_r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = overall_r;
+		      
+		      if ( overall_r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = overall_r;
+		      if ( overall_r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = overall_r;
+		      
+		      if ( overall_r > ch_over ) { ++summr_over[ signals1(i) ]; ++summr_over[ signals2(j) ]; }
+		      if ( overall_r < ch_under ) { ++summr_under[ signals1(i) ]; ++summr_under[ signals2(j) ]; }
+		      
+		    }	
+		}
 	    }	 
 	}
     }

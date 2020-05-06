@@ -69,12 +69,15 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   signal_list_t signals1 = edf.header.signal_list( signal_label1 );  
 
   signal_list_t signals2 = edf.header.signal_list( signal_label2 );  
-  
-  const int ns1 = signals1.size();
 
-  const int ns2 = signals2.size();
+  // accumulate these below
+  int ns1 = 0 , ns2 = 0;
 
+  for (int s=0;s<signals1.size();s++)
+    if ( ! edf.header.is_annotation_channel( signals1(s) ) ) ++ns1;
   
+  for (int s=0;s<signals2.size();s++)
+    if ( ! edf.header.is_annotation_channel( signals2(s) ) ) ++ns2;
 
   //
   // Epochs or whole signal?  Other output param
@@ -101,16 +104,18 @@ void dsptools::coherence( edf_t & edf , param_t & param )
     {
       if ( sigset.find( signals1(s) ) == sigset.end() )
 	{
+	  if ( edf.header.is_annotation_channel( signals1(s) ) ) continue;
 	  sigset[ signals1(s) ] =  signals1.label(s);
 	  sigs.push_back( signals1(s) );
 	}
     }
 
-
+  
   for (int s=0;s<ns2;s++) 
     {
       if ( sigset.find( signals2(s) ) == sigset.end() )
 	{
+	  if ( edf.header.is_annotation_channel( signals2(s) ) ) continue;
 	  sigset[ signals2(s) ] =  signals2.label(s);
 	  sigs.push_back( signals2(s) );
 	}
@@ -161,7 +166,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   // Number of pairwise comparisons
   //
 
-  const int np = all_by_all ? ns*(ns-1) : ns1 * ns2;
+  const int np = all_by_all ? (ns*(ns-1))/2 : ns1 * ns2;
   
 
 
@@ -249,7 +254,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
       //
       // (Re)popilate cache with single-channel spectra
       //
-      
+
       for (int i=0;i<ns;i++)
 	{
 	  if ( edf.header.is_annotation_channel( sigs[i] ) ) continue;
@@ -262,7 +267,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
       
       for (int i=0;i<ns1;i++)
 	{
-
+	  
 	  if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
 	  
 	  writer.level( signals1.label(i) , "CH1" );
@@ -335,14 +340,14 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   // if we previously analyzed epochs
   //
   
-  logger << "  calculating overal coherence statistics\n";
-    
+  logger << "  calculating overall coherence statistics\n";
+  
   std::map<int,std::map<int,coh_t> >::const_iterator ii = coh.begin();
   while ( ii != coh.end() )
     {
 
       writer.level( signals1.label(ii->first) , "CH1" );
-
+            
       std::map<int,coh_t>::const_iterator jj = ii->second.begin();
       while ( jj != ii->second.end() )
 	{
@@ -353,6 +358,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 	  
 	  ++jj;
 	}
+
       ++ii;
     }
 
@@ -581,7 +587,7 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 	      bcoh[ *bb ] += coh;
 	      bicoh[ *bb ] += icoh;
 	      blcoh[ *bb ] += lcoh;
-	      ++bn[ *bb ];
+	      ++bn[ *bb ];	      
 	    }
 	  
 	  ++bb;
@@ -624,6 +630,8 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
   while ( bb != bands.end() )
     {
 
+      //      std::cerr << " b " << globals::band( *bb ) << " " << bn[ *bb ] << "\n";
+      
       if ( bn[ *bb ] )
 	{
 
