@@ -226,6 +226,7 @@ bool cfc_t::glm()
   // Step 1) filter-Hilbert signal at both bands
   
   hilbert_t ha( d , sr , a1, a2 , ripple , tw );
+
   hilbert_t hb( d , sr , b1, b2 , ripple , tw );
   
   // Step 2) Obtain amp(a), mod( phase(a), 2PI)  and amp(b)
@@ -291,17 +292,19 @@ bool cfc_t::glm()
   
   glm.display( &beta, &se, &pvalue , &mask, &lowci, &uprci, &statistic );
   
-  //    const int nterms = beta.size();
-  //    for (int b = 0 ; b < nterms ; b++)
-  //      {
-  //        std::cout << "b" << b << "\t" 
-  //                  << beta[b] << "\t" 
-  //                  << se[b] << "\t" 
-  //                  << pvalue[b] << "\t" 
-  //                  << lowci[b] << "\t" 
-  //                  << uprci[b] << "\n";
-  //      }
-  
+      const int nterms = beta.size();
+      for (int b = 0 ; b < nterms ; b++)
+        {
+          std::cout << "b" << b << "\t" 
+                    << beta[b] << "\t" 
+                    << se[b] << "\t" 
+                    << pvalue[b] << "\t" 
+                    << lowci[b] << "\t" 
+                    << uprci[b] << "\n";
+        }
+
+
+    
   //
   // Calculate measures
   //

@@ -47,7 +47,7 @@ struct cfc_t
 	 const double b2 , 
 	 const double sr , 
 	 const double tw = 1, 
-	 const double ripple = 0.01 );
+	 const double ripple = 0.05 );
   
   bool glm();
   

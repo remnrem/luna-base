@@ -341,7 +341,8 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   //
   
   logger << "  calculating overall coherence statistics\n";
-  
+
+ 
   std::map<int,std::map<int,coh_t> >::const_iterator ii = coh.begin();
   while ( ii != coh.end() )
     {
