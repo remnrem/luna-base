@@ -136,8 +136,11 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
       // check SR
       std::set<int> srs;
       for (int s=0;s<ns;s++)
-	srs.insert( edf.header.sampling_freq( sigs[s] ) );
-	
+	{
+	  // std::cerr << "sigs " << sigs.size() << " " << s << " " << "\n";
+	  // std::cerr << " sr = " << edf.header.sampling_freq( sigs[s] )  << "\n";
+	  srs.insert( edf.header.sampling_freq( sigs[s] ) );
+	}
       if ( srs.size() > 1 ) Helper::halt( "all sampling rates must be similar, use 'sr'" );
     }
 

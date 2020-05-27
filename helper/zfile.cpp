@@ -148,14 +148,12 @@ void zfile_t::write_header()
 void zfile_t::write_buffer()
 {
   
-  //  std::cout << "in write buffer " << buf.size() << "\n";
-  
   // if no variables specified, nothing to do [ i.e. do not write a blank row ] 
   // as this will be called every time a level is set, this means it will write out
   // completed buffers, but should not give an empty row
 
   if ( buf.size() == 0 ) return;
-  
+   
   // all factors must be specified 
   //  std::cout << "facs st = " << facs.size() << " " << stratum.size() << " " << vars.size() << "\n";
 

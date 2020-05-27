@@ -1113,6 +1113,7 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p )
 {
 
+ 
 
   if ( p == "cache" )
     {
@@ -1242,7 +1243,7 @@ void proc_dummy( const std::string & p )
   std::vector<double> x;
   
   if ( p == "fir" || p == "fft" || p == "mtm" || p == "tv" 
-       || p == "dynam" || p == "ica" || p == "fip" || p == "sl" || p == "acf" ) 
+       || p == "dynam" || p == "ica" || p == "fip" || p == "sl" || p == "acf" || p == "otsu" ) 
     {
 
       int cnt= 0;
@@ -1259,6 +1260,26 @@ void proc_dummy( const std::string & p )
 
     }
 
+  if ( p == "otsu" )
+    {
+      double w = 0;
+      std::map<double,double> tvals;
+
+      double th = MiscMath::threshold( x , -1 , 6 , 0.5 , &w , &tvals );
+
+      std::cout << "w = " << w << "\n";
+      std::cout << "th = " << th << "\n";
+
+      std::map<double,double>::const_iterator ii = tvals.begin();
+      while ( ii != tvals.end() )
+	{
+	  std::cout << ii->first << "\t" << ii->second << "\n";
+	  ++ii;
+	}
+
+      std::exit(0);
+    }
+
 
   if ( p == "acf" )
     {
@@ -1268,6 +1289,7 @@ void proc_dummy( const std::string & p )
 	std::cout << "lag = " << i << "\t" << rr[i] << "\n";
       std::exit(0);
     }
+
   
   if ( p == "fip" )
     {

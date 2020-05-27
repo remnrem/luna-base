@@ -186,7 +186,7 @@ void coherence_t::process( const int s1 , const int s2 )
 
       // bad?
 
-      if ( sxx < COH_EPS || syy < COH_EPS ) res.bad[i] = true;
+      res.bad[i] = sxx < COH_EPS || syy < COH_EPS ;
 
 
       // // cross/auto spectra (in dB)

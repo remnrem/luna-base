@@ -155,7 +155,12 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 	    Helper::halt( "all signals must have similar sampling rates (add 'sr' option)" );
 	}
     }
-  
+
+  //
+  // Nothing to do
+  //
+
+  if ( sigs.size() == 0 ) return;
   
   // track what SR is 
   if ( ! sr ) sr = edf.header.sampling_freq( sigs[0] );
@@ -236,7 +241,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
       if ( epoched )
 	{
 	  epoch = edf.timeline.next_epoch();      
-	  
+
 	  if ( epoch == -1 ) break;
 	  
 	  interval = edf.timeline.epoch( epoch );
@@ -308,7 +313,6 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 	      
 	      if ( epoched )
 		{
-		  
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );
 		  
 		  scoh.output( coherence , show_epoch_spectrum ? upper_freq : -1 );
@@ -336,27 +340,26 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   
 	  
   //
-  // Output whole-signal coherence (this may optionally contain an averaged over all coh_t
-  // if we previously analyzed epochs
+  // Output whole-signal coherence (this may optionally contain an average over all coh_t
+  // if we previously analyzed epochs)
   //
   
   logger << "  calculating overall coherence statistics\n";
 
- 
   std::map<int,std::map<int,coh_t> >::const_iterator ii = coh.begin();
   while ( ii != coh.end() )
     {
-
+      
       writer.level( signals1.label(ii->first) , "CH1" );
-            
+      
       std::map<int,coh_t>::const_iterator jj = ii->second.begin();
       while ( jj != ii->second.end() )
 	{
 	  writer.level( signals2.label(jj->first) , "CH2" );
-	  
+
 	  // output (and calc stats averaged over epochs)
 	  jj->second.calc_stats( coherence , show_spectrum ? upper_freq : -1 );
-	  
+
 	  ++jj;
 	}
 
@@ -415,6 +418,7 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
       return;
    }
 
+
   //
   // otherwise, average over epochs and calc all overall stats
   //
@@ -455,15 +459,8 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
       plv0 /= (double)ne;
 
       s /= (double)ne;
-
-
-      //
-      // Output
-      //
-
-      scoh.output( coherence , upper_freq );
       
-
+      
       //
       // connectivity statistics
       //
@@ -485,8 +482,7 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
       // Phase Slope Index (PSI)
       // http://doc.ml.tu-berlin.de/causality/
       //
-      
-      
+            
 
       //
       // Final stats
@@ -506,12 +502,17 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
       // plv = abs( plv0 );
 
       // pli = fabs( s );
+            
       
-      
-      
-      
+     
     }
   
+
+  //
+  // Output
+  //
+  
+  scoh.output( coherence , upper_freq );
   
   
 }
@@ -552,7 +553,7 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 
   for (int k=0; k< frq.size() ; k++)
     {
-
+      
       if ( bad[k] ) continue;
       
       //
@@ -576,6 +577,7 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
       // if ( frq[k] < 20 ) 
       // 	std::cout << "dets = " << frq[k] << "\t" << Sxx << " " << Syy << " " << " " << Re << " " << Im << " " << coh << " " << icoh << "\n";
       
+
       //
       // band-level summaries
       //
@@ -583,17 +585,23 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
       std::vector<frequency_band_t>::const_iterator bb = bands.begin();
       while ( bb != bands.end() )
 	{
+
 	  if ( frq[k] >= globals::freq_band[ *bb ].first && frq[k] < globals::freq_band[ *bb ].second ) 
-	    {			  
-	      bcoh[ *bb ] += coh;
-	      bicoh[ *bb ] += icoh;
-	      blcoh[ *bb ] += lcoh;
-	      ++bn[ *bb ];	      
+	    {
+	      
+	      if ( Helper::realnum( coh ) && Helper::realnum( icoh ) && Helper::realnum( lcoh ) ) 
+		{
+		  bcoh[ *bb ] += coh;
+		  bicoh[ *bb ] += icoh;
+		  blcoh[ *bb ] += lcoh;
+		  ++bn[ *bb ];	      
+		}
 	    }
 	  
 	  ++bb;
 	}
 
+      
       //
       // frequency-bin output
       //
@@ -604,10 +612,13 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 	  any = true;
 	  
 	  writer.level( frq[k] , globals::freq_strat );
-	  
-	  writer.value( "COH" , coh );
-	  writer.value( "ICOH" , icoh );
-	  writer.value( "LCOH" , lcoh );
+
+	  if ( Helper::realnum( coh ) )
+	    writer.value( "COH" , coh );
+	  if ( Helper::realnum( icoh ) )
+	    writer.value( "ICOH" , icoh );
+	  if ( Helper::realnum( lcoh ) )
+	    writer.value( "LCOH" , lcoh );
 	  
 	}      
       
@@ -618,9 +629,10 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
   // clear any frequency-strata, if set
   //
   
-  if ( any ) writer.unlevel( globals::freq_strat );
+  if ( any )
+    writer.unlevel( globals::freq_strat );
   
-
+  
   //
   // band summary/output
   //
@@ -630,9 +642,9 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
   std::vector<frequency_band_t>::const_iterator bb = bands.begin();
   while ( bb != bands.end() )
     {
-
-      //      std::cerr << " b " << globals::band( *bb ) << " " << bn[ *bb ] << "\n";
       
+      //std::cerr << " b " << globals::band( *bb ) << " " << bn[ *bb ] << "\n";
+	    
       if ( bn[ *bb ] )
 	{
 
@@ -642,14 +654,22 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 
 	  any = true;
 	  writer.level( globals::band( *bb ) , globals::band_strat );	  
-	  writer.value( "COH" , bcoh[ *bb ] );
-	  writer.value( "ICOH" , bicoh[ *bb ] );
-	  writer.value( "LCOH" , blcoh[ *bb ] );	  
+
+	  if ( Helper::realnum( bcoh[ *bb ] ) )
+	    writer.value( "COH" , bcoh[ *bb ] );
+
+	  if ( Helper::realnum( bicoh[ *bb ] ) )
+	    writer.value( "ICOH" , bicoh[ *bb ] );
+	  
+	  if ( Helper::realnum( blcoh[ *bb ] ) )
+	    writer.value( "LCOH" , blcoh[ *bb ] );	  
 	}      
+
       ++bb;
     }
 
-  if ( any ) writer.unlevel( globals::band_strat );
+  if ( any )
+    writer.unlevel( globals::band_strat );
 		  
 
 }
