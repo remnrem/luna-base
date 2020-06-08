@@ -220,9 +220,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
       return false;
     }
 
-  //  std::cout << "i2r: interval = " << interval << "\n";
+  //    std::cout << "i2r: interval = " << interval << "\n";
   
-
   //
   // Note: here we want to find records/samples that are inclusive w.r.t. the interval
   // so change coding of stop being 1 unit past the end below
@@ -234,8 +233,13 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // subtract 1 off this timepoint
 
   uint64_t stop_tp = interval.stop - 1LLU;
+
+  // allow 0-duration annotations, but note that these often
+  // need fixes if end if 1 TP before the start (as can happen if the
+  // annotation start/stop fall between sample-points); this is handled at
+  // the end
   
-  if ( interval.start >= stop_tp ) return false;
+  if ( interval.start > stop_tp ) return false;
 
   //
   // For a continuous timeline, given time-points can
@@ -254,16 +258,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
       
       //      std::cout << "othr = " << edf->header.record_duration_tp << " " << n_samples_per_record << "\n";
-
       //      std::cout << "start = " << start_record << " " << start_offset << " " << start_sample << "\n";
-
-      // not sure why this was in place, should never happen
-      // and I doubt the 'fix' is correct in any case
-      //       if ( start_sample >= n_samples_per_record ) 
-      // 	{
-      // 	  std::cout << "backshifting\n";
-      // 	  start_sample = (uint64_t)n_samples_per_record - 1LLU; 
-      // 	}
       
       // get final records/samples, nb. use floor() to get the nearest sample *prior* to end
       
@@ -271,15 +266,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
       uint64_t stop_sample = 
 	floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
-
-//       if ( stop_sample >= n_samples_per_record ) 
-// 	{
-// 	  stop_sample = n_samples_per_record - 1LLU;
-// 	}
-
       
-      
-
       // pass back to calling function
       
       *start_rec = (int)start_record;
@@ -408,15 +395,33 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
     }
   
-//    std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
-//    std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
-
   //
   // If the interval is in a gap, we will not get any records here, and 
-  // stop < start;  so check for this and flag if so 
+  // stop < start;  so check for this and flag if so
   //
+  // however, we may have an annotaiton of very small duration (i.e. at the extreme a 0-second annotation
+  // which falls between two sample points, and stop_rec may be 1 less than the start rec;  allow this scenario
+  // by adding the 1LLU to stop_smp when start_rec and stop_rec are the same
+  //
+
+    
+    // allow for off-by-one (i.e. if 0-duration point falls between time-points)
+
+  if ( *start_rec == *stop_rec && *start_smp == *stop_smp + 1LLU )
+    {
+        *stop_smp = *start_smp;
+    }
   
-   if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
+  else if ( *start_rec == *stop_rec + 1LLU
+   	    && *stop_smp == 0 // first point of new record
+   	    && *start_smp == n_samples_per_record - 1 ) // last point of previous record
+     {
+       *stop_rec = *start_rec;
+       *stop_smp = *start_smp;
+     }
+  
+  // otherwise, check for a gap/problem
+  else if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
     {
       *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
       return false;
@@ -425,7 +430,10 @@ bool timeline_t::interval2records( const interval_t & interval ,
   //
   // Otherwise, we're all good
   //
-
+  
+  // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
+  // std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
+    
   return true;
   
 }
@@ -741,6 +749,8 @@ int timeline_t::calc_epochs()
 
   if ( 0 ) 
     {
+      std::cout << "REC 2 E\n";
+      
       std::map<int,std::set<int> >::const_iterator ii = rec2epoch.begin();
       while ( ii != rec2epoch.end() )
 	{
@@ -756,6 +766,7 @@ int timeline_t::calc_epochs()
 	}
       std::cout << "\n";
 
+      std::cout << "E 2 REC\n";
       
       ii = epoch2rec.begin();
       while ( ii != epoch2rec.end() )
@@ -1496,16 +1507,24 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 
   else // for EDF+D
     {
+
+      // if ( ! mask_set )
+      // 	{
+      //     return false;
+      // 	}
+
+          
       std::set<int> records = records_in_interval( interval );
-      
+
       // falls off edge of the map
       if ( records.size() == 0 ) return true;
       
       std::set<int>::const_iterator rr = records.begin();
       while ( rr != records.end() )
 	{
+
 	  const std::set<int> & epochs = rec2epoch.find( *rr )->second;
-	  
+
 	  std::set<int>::const_iterator ee = epochs.begin();
 	  
 	  if ( start_masked != NULL )
@@ -1539,6 +1558,8 @@ std::set<int> timeline_t::records_in_interval( const interval_t & interval ) con
   const int srate = 100;  // will not matter, as we only consider whole records here
 
   std::set<int> recs;
+
+  //  std::cerr << "searching " << interval.as_string() << "\n";
   
   bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
 
@@ -1549,6 +1570,7 @@ std::set<int> timeline_t::records_in_interval( const interval_t & interval ) con
     {
       recs.insert(r);
       r = next_record(r);
+      if ( r > stop_rec ) break;
     }
   return recs;
 }
@@ -2604,7 +2626,9 @@ void timeline_t::list_all_annotations( const param_t & param )
 
   // count annotations per epoch
   bool per_epoch = param.has( "epoch" );
-  if ( per_epoch && ! epoched() ) 
+
+  // do this either way, as EDF+ mode requires epochs to locate annots
+  if ( ! epoched() ) 
     {
       int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
       logger << "  set epochs to default " << globals::default_epoch_len << " seconds, " << ne << " epochs\n";
@@ -2632,6 +2656,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 
   std::vector<std::string> names = annotations.names();
 
+
   //
   // Per epoch summary of all annotations
   //
@@ -2651,13 +2676,13 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  writer.epoch( display_epoch( e ) );
 
 	  interval_t interval = epoch( e );
-	  
+
 	  // get each annotations
 	  for (int a=0;a<names.size();a++)
 	    {
 	      
 	      annot_t * annot = annotations.find( names[a] );
-	      
+
 	      // get overlapping annotations for this epoch
 	      annot_map_t events = annot->extract( interval );
 
@@ -2684,7 +2709,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 		  else if ( keep_mode == 2 ) is_masked = interval_start_is_masked( interval ) ;
 		  
 		  // skip?
-		  if ( is_masked && ! show_masked ) {  continue; } 
+		  if ( is_masked && ! show_masked ) { ++ii; continue; } 
 		  
 		  // else display
 		  writer.level( instance_idx.id , "INST" );
@@ -2765,7 +2790,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  const instance_t * instance = ii->second;
 	  
 	  bool keep_this = false;
-	  
+
 	  if      ( keep_mode == 0 ) keep_this = interval_overlaps_unmasked_region( instance_idx.interval );
 	  else if ( keep_mode == 1 ) keep_this = interval_is_completely_unmasked( instance_idx.interval );
 	  else if ( keep_mode == 2 ) keep_this = ! interval_start_is_masked( instance_idx.interval ) ;

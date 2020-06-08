@@ -491,11 +491,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
   //
   // A simple epoch annotation file? (based on extension or NOT having # as first char
-  // i.e. no header)
+  // i.e. no header).  These are not allowed for EDF+ files.
   //
 
   bool is_eannot = Helper::file_extension( f , "eannot" ) ;
-  
+
+  if ( is_eannot && ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) ) 
+    Helper::halt( "cannot use .eannot files with (discontinuous) EDF+ files" );
+       
   if ( ! is_eannot )
     {
       std::ifstream IN1( f.c_str() , std::ios::in );
@@ -748,6 +751,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( eline )
 	    {
+
+	      if ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) 
+		Helper::halt( "cannot use e:1 notation in .annot files with (discontinuous) EDF+ files" );
+	      
 	      
 	      // 2 e:1        assumes 30
 	      // 3 e:30:1     assumes no overlap
@@ -2974,17 +2981,17 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 
 		      uint64_t dur_tp = Helper::sec2tp( te.duration );
 		      
-		      uint64_t stop_tp  = dur_tp == 0 ?
-			start_tp :
-			start_tp + dur_tp - 1LLU;
-		      
-		      //if ( start_tp == stop_tp ) ++stop_tp;
+		      // stop is one past the end 
+		      uint64_t stop_tp  = start_tp + dur_tp ;
+
+		      // ensure at least one tp (i.e. zero-length annotation is (a,a+1)
+		      if ( stop_tp == start_tp ) stop_tp += 1LLU;
 		      
 		      interval_t interval( start_tp , stop_tp );
 		      
 		      instance_t * instance = a->add( Helper::trim( te.name ) , interval );
 		      
-		      //std::cerr << " adding [" << te.name << "] -- " << te.onset << "\t" << te.duration << "\n";
+		      //std::cerr << " adding [" << te.name << "] -- " << te.onset << "\t" << interval.duration() << "\n";
 		      
 		      // track how many annotations we add
 		      edf.aoccur[ globals::edf_annot_label ]++;

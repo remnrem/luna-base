@@ -481,9 +481,9 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
     }
   
   // check whether we are forcing EDF format
-  if ( globals::skip_edf_annots )
+  if ( globals::force_edf )
     {
-      logger << "  forcing read as EDF [else set load-edf-annots=1]\n";
+      logger << "  forcing read as EDF [else remove force-edf=1]\n";
       edfplus = false;
       continuous = true;
     }
@@ -578,7 +578,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
 
       // optionally skip all EDF annotation channels?
-      if ( annotation && globals::skip_edf_annots ) 
+      if ( annotation && ( globals::skip_edf_annots || globals::force_edf ) ) 
 	{	  
 	  include = false;
 	}

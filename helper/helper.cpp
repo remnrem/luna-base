@@ -631,7 +631,7 @@ bool Helper::fileExists( const std::string & f )
 
   FILE *file;
 
-  if ( file = fopen( f.c_str() , "r" ) ) 
+  if ( ( file = fopen( f.c_str() , "r" ) ) ) 
     {
       fclose(file);
       return true;

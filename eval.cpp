@@ -2341,10 +2341,18 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  // read EDF annotations
-  if ( Helper::iequals( tok0 , "load-edf-annots" ) )
+  // force reading EDF+ as EDF
+  // (skips EDF Annotations track, and ignores any time-track information)
+  if ( Helper::iequals( tok0 , "force-edf" ) )
     {
-      globals::skip_edf_annots = ! Helper::yesno( tok1 );
+      globals::force_edf = Helper::yesno( tok1 );      
+      return;
+    }
+
+  // skip anyt EDF Annotations from EDF+
+  if ( Helper::iequals( tok0 , "skip-edf-annots" ) )
+    {
+      globals::skip_edf_annots = Helper::yesno( tok1 );
       return;
     }
 
