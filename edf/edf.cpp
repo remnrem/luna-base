@@ -28,6 +28,7 @@
 #include "miscmath/miscmath.h"
 #include "db/db.h"
 #include "edfz/edfz.h"
+#include "dsp/resample.h"
 
 #include "slice.h"
 #include "tal.h"
@@ -2250,25 +2251,73 @@ void edf_t::reference_and_scale( const int s , const int r , const double rescal
 }
 
 
-void edf_t::reference( const signal_list_t & signals , const signal_list_t & refs , bool dereference )
+void edf_t::reference( const signal_list_t & signals0 ,
+		       const signal_list_t & refs ,
+		       bool make_new ,
+		       const std::string & new_channel , 
+		       bool dereference )
 {
 
-  if ( signals.size() == 0 || refs.size() == 0 )
-    Helper::halt( "must specify sig={ ... } and ref={ ... }" );
+  // copy as we may modify this
+  signal_list_t signals = signals0;
+  
   const int ns = signals.size();
   const int nr = refs.size();
 
-  logger << ( dereference ? " dereferencing" : " referencing" );
-  for (int s=0;s<ns;s++) logger << " " << header.label[ signals(s) ];
-  logger << " with respect to";
-  if ( nr > 1 ) logger << " the average of";
-  for (int r=0;r<nr;r++) logger << " " << header.label[ refs(r) ];
-  logger << "\n";
+  // need at least one channel specified
 
+  if ( ns == 0 ) 
+    Helper::halt( "must specify sig={ ... }" );
+
+
+  
+  //
+  // Create a new channel?
+  //
+
+  if ( make_new && ns > 1 )
+    Helper::halt( "can only re-reference a single channel if 'new' is specified" );
+
+  if ( make_new )
+    {
+      // make copy
+      copy_signal( header.label[ signals(0) ] , new_channel );
+
+      // switch to re-reference this copy now
+      signals = header.signal_list( new_channel );
+    
+    }
+
+  
+  //
+  // if nr size is 0, means leave as is
+  // if we've requested a new channel, we need to make this still
+  //
+  
+  if ( nr == 0 ) return;
+
+  //
+  // Consode logging 
+  //
+
+  if ( nr > 0 )
+    {
+      logger << ( dereference ? " dereferencing" : " referencing" );
+      for (int s=0;s<ns;s++) logger << " " << header.label[ signals(s) ];
+      logger << " with respect to";
+      if ( nr > 1 ) logger << " the average of";
+      for (int r=0;r<nr;r++) logger << " " << header.label[ refs(r) ];
+      logger << "\n";
+    }
+  
+
+
+  //
   // check SR for all channels  
-
+  //
+  
   int np = header.n_samples[ signals(0) ];
-
+  
   for (int s=0;s<ns;s++) 
     if ( header.n_samples[ signals(s) ] != np ) 
       Helper::halt( "all signals/references must have similar sampling rates" );
@@ -2288,6 +2337,7 @@ void edf_t::reference( const signal_list_t & signals , const signal_list_t & ref
   while ( rec != -1 )
     {
       ensure_loaded( rec );
+
       edf_record_t & record = records.find(rec)->second;
       
       std::vector<std::vector<double> > refdata;
@@ -3808,3 +3858,90 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
   return false;
 }
 
+
+
+
+
+void edf_t::make_canonicals( const std::string & file0, const std::string &  group )
+{
+
+  std::string file = Helper::expand( file0 );
+  
+  if ( ! Helper::fileExists( file ) )
+    Helper::halt( "could not find " + file );
+
+  
+  // GROUP   CANONICAL   CH   REF   SR
+  
+  // looking for EEG, LOC, ROC, EMG, ECG
+
+  std::map<std::string,std::string> sigs, refs, srs;
+  
+  std::ifstream IN1( file.c_str() , std::ios::in );
+  while ( ! IN1.eof() )
+    {
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( line == "" ) continue;
+      if ( IN1.eof() ) break;
+      if ( line[0] == '%' ) continue;
+      std::vector<std::string> tok = Helper::parse( line , "\t" );
+      if ( tok.size() != 5 ) Helper::halt( "bad format, expecting 4 tab-delimited columns in\n" + file );
+      if ( tok[0] != group ) continue;
+      
+      sigs[ "cs_" + tok[1] ] = tok[2];
+      refs[ "cs_" + tok[1] ] = tok[3];
+      srs[ "cs_" + tok[1] ] = tok[4];
+    }
+  
+
+  //
+  // Set to sample rate SR if not already done, and ensure units are uV
+  //
+
+  std::vector<std::string> canons;
+  canons.push_back( "cs_EEG" );
+  canons.push_back( "cs_LOC" );
+  canons.push_back( "cs_ROC" );
+  canons.push_back( "cs_EMG" );
+  canons.push_back( "cs_ECG" );
+
+  for (int i=0; i<canons.size(); i++)
+    {
+      std::string canon = canons[i];
+
+      if ( sigs.find( canon ) == sigs.end() )
+	Helper::halt( "could not find definition of " + canon + " in " + file );
+
+      std::string sigstr = sigs.find( canon )->second;
+      std::string refstr = refs.find( canon )->second;
+      std::string srstr = srs.find( canon )->second;
+
+      logger << "  generating canonical signal " << canon << " from " << sigstr << "/" << refstr << "\n";
+	    
+      if ( header.signal( sigstr ) == -1 ) Helper::halt( sigstr + " not present" );
+      if ( refstr != "." && header.signal( refstr ) == -1 ) Helper::halt( sigstr + " not present" );
+	  
+      int sr = 0;
+      if ( ! Helper::str2int( srstr , &sr ) )
+	Helper::halt( "could not determine integer SR from " + file );
+
+
+      // copy signal --> canonical form
+      signal_list_t ref;
+      if ( refstr != "." ) ref =  header.signal_list( refstr );
+
+      signal_list_t sig = header.signal_list( sigstr );
+      reference( sig , ref , true , canon , true );
+      
+      signal_list_t canonical_signal = header.signal_list( canon );
+
+      // resample
+      if ( sr != header.sampling_freq( canonical_signal(0) ) )
+	dsptools::resample_channel( *this , canonical_signal(0) , sr );
+
+
+    }
+  
+  
+}

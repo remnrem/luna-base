@@ -728,6 +728,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
       else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
       else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
+      else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
       else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
@@ -2089,17 +2090,35 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
 }
 
 
+// CANONICAL
+
+void proc_canonical( edf_t & edf , param_t & param )
+{
+  std::string file = param.requires( "file" );
+  std::string group = param.requires( "group" );
+  edf.make_canonicals( file, group );
+}
+
 // Reference tracks
 
 void proc_reference( edf_t & edf , param_t & param )
 {
-  std::string refstr = param.requires( "ref" );
-  signal_list_t references = edf.header.signal_list( refstr );
-  
   std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
 
-  edf.reference( signals , references );
+  signal_list_t references;
+  std::string refstr = param.requires( "ref" );
+  if ( refstr != "." ) references = edf.header.signal_list( refstr );
+
+  // if new channel label given, then also rename signal 
+  // REFERENCE sig=C3 ref=A2 new=C3_A2
+  //   this leaves C3 as is, and make a new channel called 'C3_A2'
+
+  bool make_new = param.has( "new" );
+  std::string new_channel = "";
+  if ( make_new ) new_channel = param.value( "new" );
+  
+  edf.reference( signals , references , make_new , new_channel , false );
   
 }
 
@@ -2107,13 +2126,18 @@ void proc_reference( edf_t & edf , param_t & param )
 
 void proc_dereference( edf_t & edf , param_t & param )
 {
-  std::string refstr = param.requires( "ref" );
-  signal_list_t references = edf.header.signal_list( refstr );
-  
   std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
+  
+  signal_list_t references;
+  std::string refstr = param.requires( "ref" );
+  if ( refstr != "." ) references = edf.header.signal_list( refstr );
 
-  edf.reference( signals , references , true );
+  bool make_new = param.has( "new" );
+  std::string new_channel = "";
+  if ( make_new ) new_channel = param.value( "new" );
+  
+  edf.reference( signals , references , make_new , new_channel , true );
   
 }
 

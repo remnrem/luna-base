@@ -220,6 +220,7 @@ void proc_flip( edf_t & , param_t & );
 void proc_reference( edf_t & , param_t & );
 void proc_dereference( edf_t & , param_t & );
 void proc_rerecord( edf_t & edf , param_t & param );
+void proc_canonical( edf_t & edf , param_t & param );
 
 void proc_dump( edf_t & , param_t & );
 void proc_dump_mask( edf_t & , param_t & );

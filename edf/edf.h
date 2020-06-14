@@ -433,8 +433,13 @@ public:
   // redundant
   void reference_and_scale( const int s , const int r , double rescale = 1 ); // perform single channel referencing
   
-  void reference( const signal_list_t & signals , const signal_list_t & refs , bool dereference = false );
-  
+  void reference( const signal_list_t & signals , const signal_list_t & refs ,
+		  bool make_new ,
+		  const std::string & new_channel ,
+		  bool dereference );
+
+  void make_canonicals( const std::string & file, const std::string &  group );
+    
   void flip( const int s ); 
 
   void reset_record_size( const double );
