@@ -459,6 +459,23 @@ void cmddefs_t::init()
   add_param( "COPY" , "sig" , "C3,C4" , "List of channels to duplicate" );
   add_param( "COPY" , "tag" , "V2" , "Tag add to new channel names, e.g. C3_V2 [required] " );
     
+
+  // CANONICAL
+  add_cmd( "manip" , "CANONICAL" , "Create canonical signals" );
+  add_url( "CANONICAL" , "manipulations/#canonical" );
+  add_param( "CANONICAL" , "file" , "csfile.txt" , "File with canonical signal definitions" );
+  add_param( "CANONICAL" , "group" , "GRP1" , "Group (from csfile.txt)" );
+  add_param( "CANONICAL" , "cs" , "EEG,LOC,ROC" , "Optional: only calculate these CS" );
+
+  add_table( "CANONICAL" , "CS" , "Canonical signal information" );
+  add_var( "CANONICAL" , "CS" , "DEFINED" , "Is canonical signal present/defined?" );
+  add_var( "CANONICAL" , "CS" , "SIG" , "Primary signal" );
+  add_var( "CANONICAL" , "CS" , "REF" , "Reference signal" );
+  add_var( "CANONICAL" , "CS" , "SR" , "Sample rate" );
+  add_var( "CANONICAL" , "CS" , "UNITS" , "Units for canonical signal" );
+  add_var( "CANONICAL" , "CS" , "NOTES" , "Optional, notes" );
+
+
   // RESAMPLE 
 
   add_cmd( "manip" , "RESAMPLE" , "Resample signal(s)" );
@@ -763,11 +780,12 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "" , "TIB" , "Time in bed" );
   add_var( "HYPNO" , "" , "TWT" , "Total wake time" );
   add_var( "HYPNO" , "" , "WASO" , "Wake after sleep onset" );
-  add_var( "HYPNO" , "" , "LIGHTS_OFF" , "Lights off time (hours since midnight)" );
-  add_var( "HYPNO" , "" , "SLEEP_ONSET" , "Sleep onset time (hours since midnight)" );
-  add_var( "HYPNO" , "" , "SLEEP_MIDPOINT" , "Sleep midpoint time (hours since midnight)" );
-  add_var( "HYPNO" , "" , "LIGHTS_ON" , "Lights on time (hours since midnight)" );
-  add_var( "HYPNO" , "" , "FINAL_WAKE" , "Final wake time (hours since midnight)" );
+
+  add_var( "HYPNO" , "" , "T1_LIGHTS_OFF" , "Lights off, hrs since midnight [0,24)" );
+  add_var( "HYPNO" , "" , "T2_SLEEP_ONSET" , "Sleep onset, hrs since midnight [0,24)" );
+  add_var( "HYPNO" , "" , "T3_SLEEP_MIDPOINT" , "Sleep midpoint, hrs since midnight [0,24)" );
+  add_var( "HYPNO" , "" , "T4_FINAL_WAKE" , "Final wake, hrs since midnight [0,24)" );
+  add_var( "HYPNO" , "" , "T5_LIGHTS_ON" , "Lights on, hrs since midnight [0,24)" );
   add_var( "HYPNO" , "" , "SLP_EFF" , "Sleep efficiency" );
   add_var( "HYPNO" , "" , "SLP_EFF2" , "Sleep efficiency (alternate defn.)" );
   add_var( "HYPNO" , "" , "SLP_MAIN_EFF" , "Sleep maintenance efficiency" );

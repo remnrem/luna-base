@@ -2096,7 +2096,14 @@ void proc_canonical( edf_t & edf , param_t & param )
 {
   std::string file = param.requires( "file" );
   std::string group = param.requires( "group" );
-  edf.make_canonicals( file, group );
+
+  if ( ! param.has( "cs" ) )    
+    edf.make_canonicals( file, group );
+  else
+    {
+      const std::set<std::string> cs = param.strset( "cs" );
+      edf.make_canonicals( file, group , &cs );
+    }
 }
 
 // Reference tracks

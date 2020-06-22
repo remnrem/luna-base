@@ -187,7 +187,7 @@ struct edf_header_t
 
   int  original_signal_no_aliasing( const std::string & s );
 
-  signal_list_t signal_list( const std::string & s , bool no_annotation_channels = false );
+  signal_list_t signal_list( const std::string & s , bool no_annotation_channels = false , bool show_warnings = true );
   
   void signal_alias( const std::string & s );
 
@@ -436,9 +436,9 @@ public:
   void reference( const signal_list_t & signals , const signal_list_t & refs ,
 		  bool make_new ,
 		  const std::string & new_channel ,
-		  bool dereference );
+		  const bool dereference = false );
 
-  void make_canonicals( const std::string & file, const std::string &  group );
+  void make_canonicals( const std::string & file, const std::string &  group , const std::set<std::string> * cs = NULL );
     
   void flip( const int s ); 
 

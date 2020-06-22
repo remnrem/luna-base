@@ -180,8 +180,14 @@ void dsptools::cfc( edf_t & edf , param_t & param )
 	  cfc_t cfc( *signal , fa[0] , fa[1] , fb[0] , fb[1] , srate );
 	  
 	  bool okay = cfc.glm();
-	  
-	  if ( ! okay ) Helper::halt( "problem in CFC calculation" );
+
+	  //if ( ! okay ) Helper::halt( "problem in CFC calculation" );
+	  if ( ! okay ) 
+	    {
+	      logger << "  ** problem estimating CFC ";
+	      if ( epoched ) logger << "for epoch " << edf.timeline.display_epoch( epoch );
+	      logger << "\n";
+	    }
 
 	  //
 	  // Output
@@ -190,13 +196,15 @@ void dsptools::cfc( edf_t & edf , param_t & param )
 	  if ( epoched ) 
 	    writer.epoch( edf.timeline.display_epoch( epoch ) );
 	  
-	  
 	  writer.value( "OKAY" , okay );
-	  writer.value( "R2_PAC" , cfc.r_PAC );
-	  writer.value( "C_AMP" , cfc.c_AMP );
-	  writer.value( "Z_AMP" , cfc.z_AMP );
-	  writer.value( "R2_TOT" , cfc.r2_TOT );
-
+	  
+	  if ( okay )
+	    {
+	      writer.value( "R2_PAC" , cfc.r_PAC );
+	      writer.value( "C_AMP" , cfc.c_AMP );
+	      writer.value( "Z_AMP" , cfc.z_AMP );
+	      writer.value( "R2_TOT" , cfc.r2_TOT );
+	    }
 
 	  //
 	  // Done
@@ -290,35 +298,36 @@ bool cfc_t::glm()
   Data::Vector<double> statistic;
   Data::Vector<double> pvalue;
   
-  glm.display( &beta, &se, &pvalue , &mask, &lowci, &uprci, &statistic );
-  
-      const int nterms = beta.size();
-      for (int b = 0 ; b < nterms ; b++)
-        {
-          std::cout << "b" << b << "\t" 
-                    << beta[b] << "\t" 
-                    << se[b] << "\t" 
-                    << pvalue[b] << "\t" 
-                    << lowci[b] << "\t" 
-                    << uprci[b] << "\n";
-        }
-
-
-    
-  //
-  // Calculate measures
-  //
-
-  // phase-ampitude coupling ( 0..1 )  r_PAC = sqrt( b1^2 + b2^2 ) ; report here R^2
-  r_PAC = beta[0] * beta[0] + beta[1] * beta[1] ;
-  
-  // amplitude-amplitude coupling (correl -1 .. +1)
-  c_AMP = beta[2];
-  z_AMP = 0.5 * log( ( 1 + c_AMP ) / ( 1 - c_AMP ) );
-
-  // total r^2
-  r2_TOT = glm.calc_rsqr();
-  
+  if ( valid ) 
+    {
+      glm.display( &beta, &se, &pvalue , &mask, &lowci, &uprci, &statistic );
+      
+      // const int nterms = beta.size();
+      // for (int b = 0 ; b < nterms ; b++)
+      //   {
+      //     std::cout << "b" << b << "\t" 
+      //               << beta[b] << "\t" 
+      //               << se[b] << "\t" 
+      //               << pvalue[b] << "\t" 
+      //               << lowci[b] << "\t" 
+      //               << uprci[b] << "\n";
+      //   }
+      
+      
+      //
+      // Calculate measures
+      //
+      
+      // phase-ampitude coupling ( 0..1 )  r_PAC = sqrt( b1^2 + b2^2 ) ; report here R^2
+      r_PAC = beta[0] * beta[0] + beta[1] * beta[1] ;
+      
+      // amplitude-amplitude coupling (correl -1 .. +1)
+      c_AMP = beta[2];
+      z_AMP = 0.5 * log( ( 1 + c_AMP ) / ( 1 - c_AMP ) );
+      
+      // total r^2
+      r2_TOT = glm.calc_rsqr();
+    }
   
   return valid;
 }

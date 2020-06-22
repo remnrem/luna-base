@@ -39,6 +39,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
 					int sr1 , int sr2 )
 {
 
+
   int n = d->size();
   std::vector<float> f( n );
   for (int i=0;i<n;i++) f[i] = (*d)[i];
@@ -60,7 +61,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
   src.data_out = &(f2[0]);
   src.output_frames = n2;
   src.src_ratio = ratio;
-  
+
   int r = src_simple( &src, SRC_SINC_FASTEST , 1 );
   
   // problem?
@@ -69,9 +70,10 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
       logger << src_strerror ( r ) << "\n";
       Helper::halt( "problem in resample()" );
     }
-  
+
   std::vector<double> out( n2 );
   for (int i=0;i<n2;i++) out[i] = f2[i];
+
   return out;
 }
 
@@ -106,23 +108,21 @@ void dsptools::resample_channel( edf_t & edf , const int s , const int nsr )
   interval_t interval = edf.timeline.wholetrace();
 
   slice_t slice( edf , s , interval );
-  
-  
+
   const std::vector<double> * d = slice.pdata();
   
   //
   // Resample to new SR
   //
-  
+
   std::vector<double> resampled = resample( d , Fs , nsr );
   
-
   // 
   // Ensure that resultant signal is the exact correct length 
   //
   
   resampled.resize( edf.header.nr * edf.header.record_duration * nsr , 0 ); // i.e. zero-pad if necessary
-  
+
 
   //
   // Update EDF header with new sampling rate
@@ -137,9 +137,9 @@ void dsptools::resample_channel( edf_t & edf , const int s , const int nsr )
   //
   // Place back
   //
-  
+
   edf.update_signal( s , &resampled );
-  
+
 }
 
 

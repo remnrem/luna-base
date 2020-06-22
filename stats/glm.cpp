@@ -149,7 +149,7 @@ void GLM::standardise()
 
 bool GLM::check_VIF()
 {
-
+  
   valid( false );
 
   // Calculate correlation matrix for X
@@ -410,10 +410,10 @@ bool GLM::fit_univariate_linear()
       all_valid = false;
       return false;
     }
-
+  
   coef.resize(2);
   S.resize(2,2);
-  
+
   double x_mean=0, x_var=0;
   double y_mean=0, y_var=0;
   double y_x_covar=0;
@@ -630,7 +630,10 @@ double GLM::calc_RSS()
 
   // Might already be calculated?  
   if ( RSS >= 0 ) return RSS;
-  
+
+  // std::cerr << nind << " " << np << "\n";
+  // std::cerr << "coef " << coef.size() << " " << X.dim1() << " " << X.dim2() << "\n";
+    
   RSS = 0;  
   for (int i=0; i<nind; i++)
     {
