@@ -1,7 +1,7 @@
 include ../Makefile.inc
 
 OBJLIBS	 = ../libstats.a
-OBJS	 = dcdflib.o matrix.o statistics.o glm.o cluster.o
+OBJS	 = dcdflib.o matrix.o statistics.o glm.o cluster.o lda.o
 
 
 all : $(OBJLIBS)

@@ -57,6 +57,8 @@
 
 #include "stats/glm.h"
 
+#include "stats/lda.h"
+
 #include "annot/annot.h"
 
 #include "edf/edf.h"
