@@ -1971,19 +1971,6 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   header.prefiltering.push_back( "n/a" );
   header.n_samples.push_back( n_samples );  
   header.signal_reserved.push_back( "" );  
-
-
-  // Redundant now
-
-  
-  // create digital version of data in each record given overall scaling
-
-//   r = timeline.first_record();
-//   while ( r != -1 )
-//     {
-//       records.find(r)->second.calc_data( bv , os );
-//       r = timeline.next_record(r);
-//     }
   
 }
 
@@ -2572,7 +2559,7 @@ int  edf_header_t::original_signal( const std::string & s  )
 }
 
 
-signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotation_channels )
+signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotation_channels , bool show_warnings )
 {
   
   signal_list_t r;
@@ -3862,20 +3849,28 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
 
 
 
-void edf_t::make_canonicals( const std::string & file0, const std::string &  group )
+void edf_t::make_canonicals( const std::string & file0, const std::string &  group , const std::set<std::string> * cs )
 {
 
   std::string file = Helper::expand( file0 );
   
   if ( ! Helper::fileExists( file ) )
     Helper::halt( "could not find " + file );
-
   
-  // GROUP   CANONICAL   CH   REF   SR
-  
+  // GROUP   CANONICAL   CH   REF   SR  NOTES
   // looking for EEG, LOC, ROC, EMG, ECG
 
-  std::map<std::string,std::string> sigs, refs, srs;
+  // if cs is non-null, only make the CS in that set ('EEG')
+
+  // can have multiple versions of a rule, will pick the first match
+
+  //  EEG   C4,EEG1      M1,A1   100  
+  //  EEG   C3,EEG2      M2,A2   100  Using C3, not C4
+  //  EEG   C4_A1,C4_M1  .       100
+  //  EEG   C3_A2,C3_M2  .       100  Using C3, not C4
+
+  std::map<std::string,std::vector< std::vector<std::string> > >sigs, refs;
+  std::map<std::string,std::vector<std::string> > srs, notes;
   
   std::ifstream IN1( file.c_str() , std::ios::in );
   while ( ! IN1.eof() )
@@ -3886,12 +3881,20 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       if ( IN1.eof() ) break;
       if ( line[0] == '%' ) continue;
       std::vector<std::string> tok = Helper::parse( line , "\t" );
-      if ( tok.size() != 5 ) Helper::halt( "bad format, expecting 4 tab-delimited columns in\n" + file );
+      if ( tok.size() != 5 && tok.size() != 6 ) 
+	Helper::halt( "bad format, expecting 5 or 6 tab-delimited columns\nfile: " 
+		      + file + "\nline: [" + line + "]\n" );
       if ( tok[0] != group ) continue;
+
+      // skip if a specific list requested?
+      if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
+
+      // otherwise, add to the set of things to be calculated
+      sigs[ "cs_" + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
+      refs[ "cs_" + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
+      srs[ "cs_" + tok[1] ].push_back( tok[4] ) ;
+      notes[ "cs_" + tok[1] ].push_back( tok.size() == 6 ? tok[5] : "." );
       
-      sigs[ "cs_" + tok[1] ] = tok[2];
-      refs[ "cs_" + tok[1] ] = tok[3];
-      srs[ "cs_" + tok[1] ] = tok[4];
     }
   
 
@@ -3900,48 +3903,167 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
   //
 
   std::vector<std::string> canons;
-  canons.push_back( "cs_EEG" );
-  canons.push_back( "cs_LOC" );
-  canons.push_back( "cs_ROC" );
-  canons.push_back( "cs_EMG" );
-  canons.push_back( "cs_ECG" );
+
+  if ( cs == NULL ) 
+    {
+      canons.push_back( "cs_EEG" );
+      canons.push_back( "cs_LOC" );
+      canons.push_back( "cs_ROC" );
+      canons.push_back( "cs_EMG" );
+      canons.push_back( "cs_ECG" );
+    }
+  else
+    {
+      std::set<std::string>::const_iterator ss = cs->begin();
+      while ( ss != cs->end() )
+	{
+	  canons.push_back( "cs_" + *ss );
+	  ++ss;
+	}
+    }
+
+
 
   for (int i=0; i<canons.size(); i++)
     {
       std::string canon = canons[i];
 
+      writer.level( canon , "CS" );
+
       if ( sigs.find( canon ) == sigs.end() )
-	Helper::halt( "could not find definition of " + canon + " in " + file );
+	{
+	  writer.value( "DEFINED" , 0 );
+	  continue;
+	}
 
-      std::string sigstr = sigs.find( canon )->second;
-      std::string refstr = refs.find( canon )->second;
-      std::string srstr = srs.find( canon )->second;
-
-      logger << "  generating canonical signal " << canon << " from " << sigstr << "/" << refstr << "\n";
-	    
-      if ( header.signal( sigstr ) == -1 ) Helper::halt( sigstr + " not present" );
-      if ( refstr != "." && header.signal( refstr ) == -1 ) Helper::halt( sigstr + " not present" );
-	  
-      int sr = 0;
-      if ( ! Helper::str2int( srstr , &sr ) )
-	Helper::halt( "could not determine integer SR from " + file );
-
-
-      // copy signal --> canonical form
-      signal_list_t ref;
-      if ( refstr != "." ) ref =  header.signal_list( refstr );
-
-      signal_list_t sig = header.signal_list( sigstr );
-      reference( sig , ref , true , canon , true );
+      // as soon as we find a matching rule, we stop
+      bool done = false;
       
-      signal_list_t canonical_signal = header.signal_list( canon );
+      const int n_rules = sigs.find( canon )->second.size() ; 
+          
+      for (int j=0; j<n_rules; j++ )
+	{
+	  
+	  // find best choice of signals
+	  std::string sigstr = "";
+	  std::vector<std::string> v = sigs.find( canon )->second[j];
+	  for (int k=0; k<v.size(); k++)
+	    {
+	      if ( header.signal( v[k] ) != -1 ) 
+		{
+		  sigstr = v[k];
+		  break;
+		}
+	    }
+	  
+	  if ( sigstr == "" ) 
+	    {
+	      //writer.value( "DEFINED" , 0 );
+	      continue;
+	    }
 
-      // resample
-      if ( sr != header.sampling_freq( canonical_signal(0) ) )
-	dsptools::resample_channel( *this , canonical_signal(0) , sr );
+	  //
+	  // Reference
+	  //
+	  
+	  std::string refstr = "";
+	  v = refs.find( canon )->second[j];
+	  if ( v.size() == 1 && v[0] == "." ) 
+	    refstr = ".";
+	  else
+	    {
+	      for (int k=0; k<v.size(); k++)
+		{
+		  if ( v[k] == "." ) 
+		    Helper::halt( "cannot mix '.' and non-'.' references" );
+		  
+		  if ( header.signal( v[k] ) != -1 )
+		    {
+		      refstr = v[k];
+		      break;
+		    }
+		}
+	    }
+	  
+	  if ( sigstr == "" || refstr == "" )
+	    {
+	      //writer.value( "DEFINED" , 0 );
+	      continue;
+	    }      
 
+	  logger << "  generating canonical signal " << canon 
+		 << " from " << sigstr << "/" << refstr << "\n";
+	  	  
+	  std::string srstr = srs.find( canon )->second[j];
 
-    }
+	  std::string notesstr = notes.find( canon )->second[j];
+	    
+	  int sr = 0;
+	  if ( ! Helper::str2int( srstr , &sr ) )
+	    Helper::halt( "could not determine integer SR from " + file );
+	  
+
+	  // copy signal --> canonical form
+	  signal_list_t ref;
+	  if ( refstr != "." ) ref =  header.signal_list( refstr );
+	  
+	  signal_list_t sig = header.signal_list( sigstr );
+	  reference( sig , ref , true , canon );
+	  
+	  signal_list_t canonical_signal = header.signal_list( canon );
+      
+	  //
+	  // resample
+	  //
+	  
+	  if ( sr != header.sampling_freq( canonical_signal(0) ) )
+	    dsptools::resample_channel( *this , canonical_signal(0) , sr );
+	  
+	  //
+	  // rescale units?
+	  //
+	  
+	  // EEG, EOG, EMG all uV
+	  // ECG in mV
+	  // others?
+	  
+	  std::string units = "uV";
+	  
+	  if ( canon == "cs_ECG" ) units = "mV" ;
+	  
+	  if ( units == "uV" || units == "mV" ) 
+	    rescale(  canonical_signal(0) , units );
+
+      
+	  //
+	  // output
+	  //
+	  
+	  writer.value( "DEFINED" , 1 );
+	  writer.value( "SIG" , sigstr );
+	  writer.value( "REF" , refstr );
+	  writer.value( "SR" , srstr );
+	  writer.value( "UNITS" , units );
+	  
+	  if ( notesstr != "" )
+	    writer.value( "NOTES" , notesstr );
+	 
+	  
+	  //
+	  // at this point, rule was found, so quit
+	  //
+
+	  break;
+
+	} // next rule for this CS
+
+      // if we failed to get a match, flag here
+
+      if ( ! done ) 
+	writer.value( "DEFINED" , 0 );
+      
+    } // next CS
   
+  writer.unlevel( "CS" );
   
 }
