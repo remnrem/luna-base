@@ -99,7 +99,7 @@ void dsptools::resample_channel( edf_t & edf , const int s , const int nsr )
   // Ouput
   //
 
-  logger << " resampling channel " << edf.header.label[ s ] << " from sample rate " << Fs << " to " << nsr << "\n";
+  logger << "  resampling channel " << edf.header.label[ s ] << " from sample rate " << Fs << " to " << nsr << "\n";
   
   //
   // Pull entire signals out

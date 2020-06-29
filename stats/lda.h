@@ -57,10 +57,11 @@ struct lda_posteriors_t {
   // rows = observations
   
   Data::Matrix<double> pp;
-
+  
   // most likely class label for each observation
   std::vector<std::string> cl;
   std::vector<int> cli; // as above, but index
+
   
 };
 
@@ -78,7 +79,7 @@ class lda_t {
   
   lda_model_t fit();
   
-  lda_posteriors_t predict( const lda_model_t & , const Data::Matrix<double> & X );
+  static lda_posteriors_t predict( const lda_model_t & , const Data::Matrix<double> & X );
 
  private:
   

@@ -91,6 +91,8 @@
 
 #include "staging/staging.h"
 
+#include "suds/suds.h"
+
 #include "clocs/topo.h"
 
 #include "clocs/clocs.h"

@@ -42,6 +42,8 @@ namespace Statistics {
   bool svdcmp( Data::Matrix<double> & , Data::Vector<double> & , Data::Matrix<double> & );
   void svbksb( Data::Matrix<double> & , Data::Vector<double> & , Data::Matrix<double> & , Data::Vector<double> & , Data::Vector<double> & );
 
+  int orderSVD( Data::Matrix<double> & , Data::Vector<double> & , Data::Matrix<double> & , const double tol = 1e-4 );
+  
   // 1-dimensional numerical integration
   double integrate(double a, double b, double (*f)(double x,void*,bool*), bool * , void*d = NULL , double eps = 10e-15 );  
   double integrate_old(double a, double b, double (*f)(double x,void*,bool*), bool*,void*d, double eps);

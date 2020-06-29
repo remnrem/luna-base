@@ -85,6 +85,7 @@ namespace Data {
     }
     
     const std::vector<T> * data_pointer() const { return data.size() ? &data : NULL ; }
+    std::vector<T> * data_nonconst_pointer() { return data.size() ? &data : NULL ; }
     T * elem_pointer( const int i ) { return data.size() ? &data[i] : NULL ; }
     std::vector<T> extract() const { return data; } // ignores mask
 
@@ -140,7 +141,8 @@ namespace Data {
 
     Vector<T> col( const int c ) const { return data[c]; } 
     Vector<T> & col( const int c ) { return data[c]; } 
-    const Vector<T> * col_pointer( const int c ) const { return &data[c]; } 
+    const Vector<T> * col_pointer( const int c ) const { return &data[c]; }
+    Vector<T> * col_nonconst_pointer( const int c ) { return &data[c]; } 
 
     void add_col( const Vector<T> & r ) 
     { 

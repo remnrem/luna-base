@@ -54,7 +54,8 @@ annot_t * spectral_power( edf_t & edf ,
   
   // Spectrum bin width (0 means no binning, default)
 
-  double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0;
+  //double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0;
+  double bin_fac = param.has( "fac" ) ? param.requires_int( "fac" ) : 1;
 
   // Band power per-epoch
 
@@ -71,7 +72,7 @@ annot_t * spectral_power( edf_t & edf ,
   bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
   // truncate spectra
-
+  double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
   double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
 
   // Calculate MSE
@@ -416,17 +417,18 @@ annot_t * spectral_power( edf_t & edf ,
 		 {		 
 		   
 		   // using bin_t 	      
-		   bin_t bin( bin_width , max_power , Fs[s] );
+		   bin_t bin( min_power , max_power , bin_fac );
 		   
 		   bin.bin( freqs , pwelch.psd );
 		   
-		   for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 		{
-		     
-		     //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		     //writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		     writer.level( bin.nominal[i] , globals::freq_strat );
-		     writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
-		   }
+		   for ( int i = 0 ; i < bin.bfa.size() ; i++ )
+		     {		     
+		       writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		       //writer.level( bin.bfa[i] , globals::freq_strat );
+		       writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
+		       if ( bin.nominal[i] != "" )
+			 writer.value( "INT" , bin.nominal[i] );
+		     }
 		   writer.unlevel( globals::freq_strat );
 		 }
 	       
@@ -475,22 +477,23 @@ annot_t * spectral_power( edf_t & edf ,
 	      for (int f=0;f<n;f++) 
 		means.push_back( MiscMath::mean( track_freq[f] ) );
 
-	      bin_t bin( bin_width , max_power , Fs[s] );
+	      bin_t bin( min_power , max_power , bin_fac );
 
 	      bin.bin( freqs , means );
 
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
-		  //writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		  writer.level( bin.nominal[i] , globals::freq_strat );
+		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		  //writer.level( bin.bfa[i] , globals::freq_strat );
 		  writer.value( "PSD" , dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
+		  if ( bin.nominal[i] != "" )
+		    writer.value( "INT" , bin.nominal[i] );		  
 		}
-	       writer.unlevel( globals::freq_strat );
-
+	      writer.unlevel( globals::freq_strat );
+	      
 	    }
 	  
 	}
-
       
       bool okay = total_epochs > 0 ;
 

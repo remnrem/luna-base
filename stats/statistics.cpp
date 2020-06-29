@@ -2339,3 +2339,51 @@ double Statistics::variance( const Data::Vector<double> & x )
   ss /= (double)n;
   return ss;
 }
+
+
+
+
+int Statistics::orderSVD( Data::Matrix<double> & U , Data::Vector<double> & W , Data::Matrix<double> & V , const double tol )
+{
+
+  // std::cerr << "reording " << U.dim1() << " " << U.dim2() << "\t"
+  // 	    << W.size() << "\t"
+  // 	    << V.dim1() << " " << V.dim2() << "\n";
+  
+  // order W, U and V so that we have descending singular values (W)
+  // and return rank
+  
+  std::vector<int> o;
+  std::vector<bool> in( W.size() , false ) ;
+  for (int i=0;i<W.size();i++) 
+    {
+      int mxi = 0;
+      for (int j=0;j<W.size();j++) { if ( ! in[j] ) { mxi = j ; break; } }
+      for (int j=0;j<W.size();j++) if ( (!in[j]) && W[j] >= W[mxi] ) mxi = j ;      
+      o.push_back( mxi );
+      in[ mxi ] = true;
+    }
+
+  Data::Vector<double> W2 = W;
+  Data::Matrix<double> V2 = V;
+  Data::Matrix<double> U2 = U;
+  for (int i=0;i<W.size();i++)
+    W[i] = W2[ o[i] ];
+  
+  // swap cols of V
+  for (int i=0;i<V.dim2();i++)
+    for (int j=0;j<V.dim2();j++)
+      V(i,j) = V2( i , o[j] );
+
+  // swap cols of U
+  for (int i=0;i<U.dim2();i++)
+    for (int j=0;j<U.dim2();j++)
+      U(i,j) = U2( i , o[j] );
+  
+  int rank = 0;
+  for (int j=0;j<W.size();j++)
+    if ( W[j] > tol ) ++rank;
+
+  return rank;
+  
+}

@@ -61,17 +61,20 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   else if ( param.has( "tw" ) ) npi = param.requires_dbl( "tw" );
 
   int nwin = param.has( "t" ) ? param.requires_int( "t" ) : 2*npi-1 ;
-  
-  double max_f = param.has( "max" ) ?  param.requires_dbl( "max" ) : 20;  // default up to 20 Hz
-  double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0.5 ; // default 0.5 Hz bins
 
+  double min_f = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5; // default up to 20 Hz
+  double max_f = param.has( "max" ) ? param.requires_dbl( "max" ) : 20;  // default up to 20 Hz
+  int    fac_f = param.has( "fac" ) ? param.requires_int( "fac" ) : 1 ; // no binning
+  
+  //double wid_f = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0.5 ; // default 0.5 Hz bins
+  
   logger << " running MTM with nw=" << npi << " and t=" << nwin << " tapers\n";
 
   // output
   
   bool dB = param.has( "dB" );
   
-  if ( param.has( "full-spectrum" ) ) wid_f = 0 ; // return full spectrum, no binning.
+  if ( param.has( "full-spectrum" ) ) fac_f = 1 ; // return full spectrum, no binning.
   
   
   //
@@ -124,23 +127,22 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  // for 1-sided spectrum, scale by x2
 	  // (skipping DC and NQ)
 	  
-	  if ( wid_f > 0 )
+	  if ( fac_f > 1 )
 	    {
 	      
 	      // 'x' Hz bins
 	      //	      std::cout << "DETS: " << wid_f << " " << max_f << " " << Fs[s] << "\n";
-	      bin_t bin( wid_f , max_f , Fs[s] );
+	      bin_t bin( min_f , max_f , fac_f );
 	      
 	      bin.bin( mtm.f , mtm.spec );
 	      
 	      // output
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
-		  //std::cout << "MTM bin.bfa[i] " << bin.bfa[i] << " " << bin.bfb[i] << "\n";
-		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		  //writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		  writer.level( bin.nominal[i] , globals::freq_strat );
+		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  writer.value( "MTM" , bin.bspec[i] );
+		  if ( bin.nominal[i] != "" )
+		    writer.value( "INT" , bin.nominal[i] );
 		}
 	      writer.unlevel( globals::freq_strat );
 	      
@@ -271,11 +273,11 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  // Ouput
 	  //
 
-	  if ( wid_f > 0 )  // binned output
+	  if ( fac_f > 1 )  // binned output
 	    {	       
 	      
 	      // wid_f (default 1) Hz bins
-	      bin_t bin( wid_f , max_f , Fs[s] );
+	      bin_t bin( min_f , max_f , fac_f );
 	      
 	      bin.bin( mtm.f , mtm.spec );
 	      
@@ -283,9 +285,10 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
 		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		  //writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		  writer.level(  bin.nominal[i]  , globals::freq_strat );
+		  writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  writer.value( "MTM" , bin.bspec[i] );
+		  if ( bin.nominal[i] != "" )
+		    writer.value( "INT" , bin.nominal[i] );
 		}
 	      writer.unlevel( globals::freq_strat );
 	      
@@ -362,7 +365,6 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   
   int klen = mtm::get_pow_2( num_points );
   
-
   double df = 2*nyquist/klen;  
   
   int num_freqs = 1+klen/2;

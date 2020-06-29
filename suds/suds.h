@@ -1,0 +1,252 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
+
+#ifndef __SUDS_H__
+#define __SUDS_H__
+
+#include <string>
+#include "stats/matrix.h"
+#include <vector>
+#include <set>
+#include <map>
+#include "stats/lda.h"
+
+#include "eval.h"
+#include "helper/helper.h"
+
+struct edf_t;
+
+struct param_t;
+
+
+enum suds_stage_t
+  {
+   SUDS_WAKE = 0 ,
+   SUDS_N1 = 1 ,
+   SUDS_N2 = 2 ,
+   SUDS_N3 = 3 ,
+   SUDS_REM = 5 ,
+   SUDS_ARTIFACT = 6 , 
+   SUDS_UNKNOWN = 7 
+  };
+
+
+struct suds_indiv_t {
+
+  // wrapper to add a trainer 
+  void add_trainer( edf_t & edf , param_t & param );
+
+  // process either trainer or target
+  void proc( edf_t & edf , param_t & param , bool trainer = false );
+  
+  // write trainers to file
+  void write( edf_t & edf , param_t & param ) const;
+
+  // read trainer data from disk
+  void reload( const std::string & filename , bool load_psd = false );
+
+  // fit LDA, io.e. after reloading U
+  void fit_lda();
+
+  // make predictions given a different individuals signal data
+  lda_posteriors_t predict( const suds_indiv_t & trainer );
+
+  // individual ID
+  std::string id;
+
+  // trainer or no?  (i.e. has manual staging?)
+  bool trainer;
+  
+  // number of final epochs
+  int nve;
+
+  // number of spectral variables
+  int nbins;
+  
+  // spectral data: only loaded for 'weight trainers'
+  // not needed to be reloaded for standard trainers
+  Data::Matrix<double> PSD;
+  
+  // SVD
+  Data::Matrix<double> U;
+  Data::Vector<double> W;
+  Data::Matrix<double> V;
+
+  // LDA
+  std::vector<std::string> y;
+  lda_model_t model; // calculated on reload for trainers
+  
+  // staging
+  std::vector<suds_stage_t> obs_stage;
+  std::vector<suds_stage_t> prd_stage;
+  
+  std::map<std::string,int> counts;
+  
+  bool operator<( const suds_indiv_t & rhs ) const {
+    return id < rhs.id;
+  }
+  
+};
+
+
+struct suds_t { 
+
+  //  friend struct suds_indiv_t;
+    
+  static void attach_db( const std::string & );
+  
+  static void score( edf_t & edf , param_t & param );
+
+  static void set_options( param_t & param )
+  {
+
+    // number of PSC components
+    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 10 ;
+
+    // smoothing factor (multiple of SD)
+    denoise_fac = param.has( "denoise" ) ? param.requires_dbl( "denoise" ) : 0.1 ; 
+
+    // epoch-level outlier removal for trainers
+    if ( param.has( "th" ) ) outlier_ths = param.dblvector( "th" );
+    
+    //
+    // channels, w/ sample rates
+    //
+    // sig=A,B,C
+    // lwr=10,10,10
+    // upr=20,20,20
+    // inc=0.25,0.25,0.25
+    // sr=100,100,100
+    
+    siglab = param.strvector( "sig" );
+    
+    ns = siglab.size();
+           
+    //
+    // channel-specific options can be given
+    //
+  
+  lwr.resize( ns , 0.5 );
+  upr.resize( ns , 25 );
+  fac.resize( ns , 1 );
+  sr.resize( ns , 100 );
+
+  if ( param.has( "lwr" ) )
+    {
+      lwr = param.dblvector( "lwr" );
+      if ( lwr.size() != ns ) Helper::halt( "incorrect number of values for lwr" );
+    }
+  
+  if ( param.has( "upr" ) )
+    {
+      upr = param.dblvector( "upr" );
+      if ( upr.size() != ns ) Helper::halt( "incorrect number of values for upr" );
+    }
+
+  if ( param.has( "fac" ) )
+    {
+      fac = param.dblvector( "fac" );
+      if ( fac.size() != ns ) Helper::halt( "incorrect number of values for fac" );
+    }
+
+  if ( param.has( "sr" ) )
+    {
+      sr = param.intvector( "sr" );
+      if ( sr.size() != ns ) Helper::halt( "incorrect number of values for sr" );
+    }
+ 
+    
+  }
+
+  //
+  // SUDS parameters, needed to be the same across all individuals
+  //
+
+  static int nc;
+
+  static int ns;
+  
+  static std::vector<std::string> siglab;
+
+  static std::vector<double> lwr;
+
+  static std::vector<double> upr;
+
+  static std::vector<double> fac;
+
+  static std::vector<int> sr;
+  
+  static double denoise_fac;
+
+  static std::vector<double> outlier_ths;
+
+  
+private: 
+
+  // trainer library
+
+  static std::set<suds_indiv_t> bank;
+
+  // Misc helper 
+
+public:
+
+
+  static std::vector<suds_stage_t> type( const std::vector<std::string> & s )
+  {
+    std::vector<suds_stage_t> pp( s.size() );
+    for (int i=0;i<s.size();i++) pp[i] = type( s[i] );
+    return pp;
+  }
+  
+  static std::string str( const suds_stage_t & s )
+  {
+    if ( s == SUDS_WAKE ) return "W";
+    if ( s == SUDS_N1 ) return "N1";
+    if ( s == SUDS_N2 ) return "N2";
+    if ( s == SUDS_N3 ) return "N3";
+    if ( s == SUDS_REM ) return "REM";
+    if ( s == SUDS_ARTIFACT ) return "BAD";
+    if ( s == SUDS_UNKNOWN ) return "?";       
+    return "?";
+  }
+  
+  static suds_stage_t type( const std::string & s )
+  {
+    if ( s == "W" ) return SUDS_WAKE;
+    if ( s == "N1" ) return SUDS_N1;
+    if ( s == "N2" ) return SUDS_N2;
+    if ( s == "N3" ) return SUDS_N3;
+    if ( s == "REM" ) return SUDS_REM;
+    if ( s == "BAD" ) return SUDS_ARTIFACT;
+    if ( s == "?" ) return SUDS_UNKNOWN;
+    return SUDS_UNKNOWN;
+  }
+
+
+  
+  
+};
+
+
+#endif

@@ -1,8 +1,8 @@
 include Makefile.inc
 
-DIRS = edf tinyxml helper timeline annot dsp miscmath spindles	\
-artifacts intervals fftw cwt defs stats graphics staging 	\
-db ica clocs pdc sstore dsp/mtm dsp/libsamplerate
+DIRS = edf tinyxml helper timeline annot dsp miscmath spindles		\
+artifacts intervals fftw cwt defs stats graphics staging suds db ica	\
+clocs pdc sstore dsp/mtm dsp/libsamplerate
 
 EXE    = luna
 OBJS   = main.o globals.o eval.o cmddefs.o
@@ -11,10 +11,10 @@ OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
 libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
 libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a		\
 libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
-libsrate.a libedfz.a liblwprep.a
+libsrate.a libedfz.a liblwprep.a libsuds.a
 
 LIBS = -L. -lspindles -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
--ltimeline -lstaging -ldsp -lfftwrap -lmtm -lmiscmath -lintervals	\
+-ltimeline -lstaging -lsuds -ldsp -lfftwrap -lmtm -lmiscmath -lintervals	\
 -ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics -llwprep -ldb -lsstore -lica	\
 -lsrate -lfftw3 -lz
 
@@ -34,7 +34,7 @@ static : main.o globals.o eval.o cmddefs.o $(OBJLIBS)
 	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib	\
 	-o luna main.o globals.o eval.o cmddefs.o libspindles.a liblwprep.a	\
 	libartifacts.a libtimeline.a libannot.a libedf.a		\
-	libintervals.a libcwt.a libdsp.a libstaging.a libclocs.a	\
+	libintervals.a libcwt.a libdsp.a libstaging.a libsuds.a libclocs.a	\
 	libpdc.a libmtm.a libdefs.a libhelper.a		\
 	libfftwrap.a libgraphics.a libmiscmath.a libstats.a libsrate.a	\
 	libtinyxml.a libdb.a libsstore.a libica.a $(FFTW)/lib/libfftw3.a
@@ -63,6 +63,9 @@ libgraphics.a : force_look
 
 libstaging.a : force_look
 	cd staging; $(MAKE) $(MFLAGS)
+
+libsuds.a : force_look
+	cd suds; $(MAKE) $(MFLAGS)
 
 libdefs.a : force_look
 	cd defs; $(MAKE) $(MFLAGS)
