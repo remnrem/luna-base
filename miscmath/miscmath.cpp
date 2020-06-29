@@ -1105,18 +1105,20 @@ double MiscMath::kappa( const std::vector<std::string> & a , const std::vector<s
     Helper::halt( "unequal input vectors for kappa()" );
 
   std::map<std::string,int> allcounts;
-  std::map<std::string,int> acounts;
-  std::map<std::string,int> bcounts;
-  std::map<std::string,std::map<std::string,int > > abcounts;
+  std::map<std::string,double> acounts;
+  std::map<std::string,double> bcounts;
+  std::map<std::string,std::map<std::string,double > > abcounts;
 
   const int n = a.size();
+
   if ( n == 0 ) return 0;
   double inc = 1/(double)n;
-    
+  
   for ( int i = 0 ; i < a.size() ; i++ )
     {
+      //std::cout << "ZZ\t" << a[i] << "\t" << b[i] << "\n";
+      
       allcounts[ a[i] ]++ ; allcounts[ b[i] ]++;      
-
       acounts[ a[i] ] += inc;
       bcounts[ b[i] ] += inc;
       abcounts[ a[i] ][ b[i] ] += inc;
@@ -1125,15 +1127,21 @@ double MiscMath::kappa( const std::vector<std::string> & a , const std::vector<s
   
   double observed_agreement = 0;
   double chance_agreement = 0;
-
+  //  std::cout << "allcounts = " << allcounts.size() << "\n";
+  
   std::map<std::string,int>::const_iterator cc = allcounts.begin();
   while ( cc != allcounts.end() )
     {
+      // std::cout << " cc-> " << cc->first << "\t"
+      // 		<< abcounts[ cc->first ][ cc->first ] << "\t"
+      // 		<< acounts[ cc->first ] << " * " <<  bcounts[ cc->first ] << " = " << acounts[ cc->first ] * bcounts[ cc->first ] << "\n";
       observed_agreement += abcounts[ cc->first ][ cc->first ] ;
       chance_agreement += acounts[ cc->first ] * bcounts[ cc->first ];
       ++cc;
     }
 
+  //  std::cout << " observed_agreement = " << observed_agreement << " " << chance_agreement << "\n";
+  
   double kappa = ( observed_agreement - chance_agreement ) / ( 1 - chance_agreement );
   return kappa;
   

@@ -80,9 +80,12 @@ std::vector<double> suds_t::outlier_ths;
 void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
 {
   // build a trainer
-  proc( edf , param , true );
-  
-  // save disk
+  int n_unique_stages = proc( edf , param , true );
+
+  // only include recordings that have all five stages included, for now
+  if ( n_unique_stages != 5 ) return;
+
+  // save to disk
   write( edf , param ); 
 
 }
@@ -90,7 +93,7 @@ void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
 
 
 
-void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
+int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 {
 
   //
@@ -109,7 +112,7 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
 
-  if ( signals.size() != ns ) Helper::halt( "could not find all channels" );
+  if ( signals.size() != ns ) Helper::halt( "could not find specified signals" );
   
   //
   // Resample as needed
@@ -461,7 +464,7 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     
   
   //
-  // Make variables for LDA (trainers only)
+  // Make variables for LDA: shrink down to 'nc'
   //
 
   Data::Matrix<double> U2 = U;
@@ -471,7 +474,14 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     for (int j=0;j<nc;j++)
       U(i,j) = U2(i,j);
   
-
+  W.resize( nc );
+  Data::Matrix<double> VV = V;
+  V.clear();
+  V.resize( VV.dim1() , nc );
+  for (int i=0;i<VV.dim1();i++)
+    for (int j=0;j<nc;j++)
+      V(i,j) = VV(i,j);
+  
   //
   // make class labels ( trainer only )
   //
@@ -504,6 +514,8 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
     }
 
+  // for trainers, returns number of observed stages -- i.e. should be 5
+  return counts.size();
   
 }
 
@@ -535,6 +547,9 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   logger << "  writing trainer data to " << filename << "\n";
   
   std::ofstream OUT1( filename.c_str() , std::ios::out );
+
+  // file version code
+  OUT1 << "SUDS\t1\n";
   
   OUT1 << edf.id << "\n"
        << nve << "\t"
@@ -553,6 +568,16 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
 	   << suds_t::fac[s] << "\n";
     }
 
+  // stages
+  OUT1 << counts.size() << "\n";
+  
+  std::map<std::string,int>::const_iterator ss = counts.begin();
+  while ( ss != counts.end() )
+    {
+      OUT1 << ss->first << "\t" << ss->second << "\n";
+      ++ss;
+    }
+  
   // W
   for (int j=0;j<nc;j++)
     OUT1 << W[j] << "\n";
@@ -595,7 +620,14 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
   logger << "  reloading trainer data from " << filename << "\n";
   
   std::ifstream IN1( filename.c_str() , std::ios::in );
-
+  
+  std::string suds;
+  int version;
+  IN1 >> suds >> version;
+  
+  if ( suds != "SUDS" )
+    Helper::halt( "bad file format for " + filename );
+  
   int this_ns, this_nc;
 
   IN1 >> id 
@@ -603,9 +635,9 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
       >> nbins 
       >> this_ns 
       >> this_nc ;
-
+  
   if ( this_nc != suds_t::nc || this_ns != suds_t::ns ) Helper::halt( "prob" );
-
+  
   const int nc = suds_t::nc;
   const int ns = suds_t::ns;
   
@@ -640,6 +672,18 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
       if ( this_fac != suds_t::fac[s] ) Helper::halt( "prob" );
       
     }
+
+  // stages
+  int nstages;
+  IN1 >> nstages;
+  for (int i=0;i<nstages;i++)
+    {
+      std::string sname;
+      int scnt;
+      IN1 >> sname >> scnt;
+      counts[ sname ] = scnt;
+    }
+  
   
   // check that these equal suds_t values?
   
@@ -658,7 +702,8 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
   y.resize( nve );
   for (int i=0;i<nve;i++)
     IN1 >> y[i] ;
-
+  obs_stage = suds_t::type( y );
+  
   // U (to reestimate LDA model upon loading, i.e
   //  to use lda.predict() on target 
   U.resize( nve , nc );
@@ -686,8 +731,6 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
   //
 
 }
-
-
 
 
 void suds_t::attach_db( const std::string & folder )
@@ -720,7 +763,6 @@ void suds_t::attach_db( const std::string & folder )
       Helper::halt( "could not open directory " + folder );      
     }
 
-  logger << "  found " << trainer_ids.size() << " trainers in " << folder << "\n";
   
   //
   // load each
@@ -762,15 +804,19 @@ void suds_indiv_t::fit_lda()
 lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 {
 
+  
+  // check: 
+  
   //
   // Project target (this) into trainer space:   U_targ = X_targ * V_trainer * D_trainer^{-1} 
+  // subsetting to # of columns
   //
-  
-  const int nc = trainer.W.size();  
-  
-  Data::Matrix<double> trainer_DW( nc , nc );
 
-  for (int i=0;i< nc; i++)
+  if ( trainer.W.size() != suds_t::nc || trainer.V.dim2() != suds_t::nc )
+    Helper::halt( "V of incorrect column dimension in suds_indiv_t::predict()");
+  
+  Data::Matrix<double> trainer_DW( suds_t::nc , suds_t::nc );  
+  for (int i=0;i< suds_t::nc; i++)
     trainer_DW(i,i) = 1.0 / trainer.W[i];
   
   U = PSD * trainer.V * trainer_DW;
@@ -780,7 +826,7 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   //
   
   if ( suds_t::denoise_fac > 0 ) 
-    for (int j=0;j<nc;j++)
+    for (int j=0;j<suds_t::nc;j++)
       {
 	std::vector<double> * col = U.col_nonconst_pointer(j)->data_nonconst_pointer();
 	double sd = MiscMath::sdev( *col );
@@ -791,6 +837,8 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   //
   // predict using trainer model
   //
+
+  std::cout << "U size = " << U.dim1() << "x" << U.dim2() << "\n";
   
   lda_posteriors_t pp = lda_t::predict( trainer.model , U );
 
@@ -824,16 +872,159 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     {
 
       const suds_indiv_t & trainer = *tt;
+
+      //
+      // Predict target given trainer 
+      //
       
       lda_posteriors_t prediction = target.predict( trainer );
 
-      // most likely stage assignment 
-      
       target.prd_stage = suds_t::type( prediction.cl );      
-            
+      
+      //
+      // Save predictions
+      //
+
+      target.add( tt->id , prediction );
+
+      
+
+      //
+      // Reweighting (for now, considers all other individuals)
+      //
+      // Consider that 'predicted' stages are 'real' stages, and build
+      // LDA model for the target based on this trainer's predicted
+      // stages
+      //
+      
+      lda_t lda( prediction.cl , target.U );
+      
+      target.model = lda.fit();
+
+      //
+      // Now consider how well this predicts all the weight-trainers
+      // i.e. where we also have true stage information
+      //
+
+      std::set<suds_indiv_t>::iterator ww = bank.begin();
+      while ( ww != bank.end() )
+	{
+	  
+	  suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
+
+	  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
+	  
+	  lda_posteriors_t reprediction = weight_trainer.predict( target );
+	  
+	  weight_trainer.prd_stage = suds_t::type( reprediction.cl );
+
+	  //std::cout << "XX " << reprediction.cl.size() << " " << weight_trainer.y.size() << "\n";
+	  
+	  double kappa = MiscMath::kappa( reprediction.cl , str( weight_trainer.obs_stage ) );
+	  
+	  std::cout << "KAPPA = " << kappa << "\n";
+	  
+	  ++ww;
+	}
+
+
+      //
+      // Next trainer
+      //
+      
       ++tt;
 
     }
+
+
+  //
+  // Summarize (w/ weights)
+  //
+
+  
+  const int ne = target.prd_stage.size();
+
+  target.prd_stage.clear();
+
+  target.prd_stage.resize( SUDS_UNKNOWN );
+  
+  Data::Matrix<double> pp( ne , 5 );
+
+  std::map<std::string,Data::Matrix<double> >::const_iterator ii = target.target_posteriors.begin();
+  while ( ii != target.target_posteriors.end() )
+    {
+      const Data::Matrix<double> & m = ii->second;
+
+      // std::cout << "dims " << pp.dim1() << "x" << pp.dim2() << "  "
+      // 		<< m.dim1() << "x" << m.dim2() << "\n";
+
+      const suds_indiv_t & trainer = *bank.find( suds_indiv_t( ii->first ) );
+
+      std::map<std::string,int>::const_iterator cn = trainer.counts.begin();
+      while ( cn != trainer.counts.end() )
+	{
+	  std::cout << "  " << cn->first << " = " << cn->second << "\n";
+	  ++cn;
+	}
+      
+      
+      if ( pp.dim1() != m.dim1() || pp.dim2() != m.dim2() )
+	Helper::halt( "internal error in compiling posteriors across trainers" );
+
+      for (int i=0;i<ne;i++)
+	for (int j=0;j<5;j++)
+	  pp(i,j) += m(i,j);
+      
+      ++ii;
+    }
+
+  const int ntrainers = bank.size();
+  
+  for (int i=0;i<ne;i++)
+    for (int j=0;j<5;j++)
+      pp(i,j) /= (double)ntrainers;
+
+
+  //
+  // Report
+  //
+
+  if ( 0 )
+    {
+      for (int i=0;i<ne;i++)
+	{
+	  std::cout << str( target.obs_stage[i] ) ;
+	  for (int j=0;j<5;j++)
+	    std::cout << "\t" << pp(i,j);
+	  
+	  std::cout << "\t" << str( target.prd_stage[i] )
+		    << "\n";
+	}
+    }
+  
+
+  //
+  // If prior staging exists, report similarity
+  //
+
+  bool prior_staging = target.obs_stage.size() != 0 ; 
+
+  if ( prior_staging )
+    {
+      // kappa
+    }
+  
   
 }
 
+
+
+
+void suds_indiv_t::add( const std::string & trainer_id , const lda_posteriors_t & prediction )
+{
+  
+  target_posteriors[ trainer_id ] = prediction.pp;
+
+  target_predictions[ trainer_id ] = suds_t::type( prediction.cl );
+  
+}

@@ -274,6 +274,8 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
 
   const int p = X.dim2();
   const int n = X.dim1();
+
+  std::cout << "p = " << p << " " << n << " " << model.means.dim2() << "\n";
   
   if ( p != model.means.dim2() )
     Helper::halt( "wrong number of columns in lda_t::predict()" );  

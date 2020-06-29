@@ -53,11 +53,15 @@ enum suds_stage_t
 
 struct suds_indiv_t {
 
+  suds_indiv_t() { } 
+
+  suds_indiv_t( const std::string & id ) : id(id) { } 
+  
   // wrapper to add a trainer 
   void add_trainer( edf_t & edf , param_t & param );
 
-  // process either trainer or target
-  void proc( edf_t & edf , param_t & param , bool trainer = false );
+  // process either trainer or target;
+  int proc( edf_t & edf , param_t & param , bool trainer = false );
   
   // write trainers to file
   void write( edf_t & edf , param_t & param ) const;
@@ -71,6 +75,9 @@ struct suds_indiv_t {
   // make predictions given a different individuals signal data
   lda_posteriors_t predict( const suds_indiv_t & trainer );
 
+  // add a prediction from one trainer
+  void add( const std::string & id , const lda_posteriors_t & );
+  
   // individual ID
   std::string id;
 
@@ -101,6 +108,13 @@ struct suds_indiv_t {
   std::vector<suds_stage_t> prd_stage;
   
   std::map<std::string,int> counts;
+
+  //
+  // target predictions/staging
+  //
+  
+  std::map<std::string,Data::Matrix<double> > target_posteriors;
+  std::map<std::string,std::vector<suds_stage_t> > target_predictions;
   
   bool operator<( const suds_indiv_t & rhs ) const {
     return id < rhs.id;
@@ -222,6 +236,13 @@ public:
     return pp;
   }
   
+  static std::vector<std::string> str( const std::vector<suds_stage_t> & s )
+  {
+    std::vector<std::string> pp( s.size() );
+    for (int i=0;i<s.size();i++) pp[i] = str( s[i] );
+    return pp;
+  }
+
   static std::string str( const suds_stage_t & s )
   {
     if ( s == SUDS_WAKE ) return "W";
