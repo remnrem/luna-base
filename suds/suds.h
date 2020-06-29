@@ -229,6 +229,20 @@ private:
 public:
 
 
+  static std::string max( const Data::Vector<double> & r ) { 
+    if ( r.size() != 5 ) Helper::halt( "internal error, max()" );
+    int m = 0;
+    double mx = r[0];
+
+    for (int j=1;j<5;j++) 
+      if ( r[j] > mx ) { mx = r[j] ; m = j; } 
+    if ( m == 0 ) return "N1";
+    if ( m == 1 ) return "N2";
+    if ( m == 2 ) return "N3";
+    if ( m == 3 ) return "REM";
+    return "W";
+  }
+
   static std::vector<suds_stage_t> type( const std::vector<std::string> & s )
   {
     std::vector<suds_stage_t> pp( s.size() );

@@ -48,12 +48,16 @@ lda_model_t lda_t::fit()
   while ( cc != counts.end() )
     {
       //std::cout << " cc -> " << cc->first << " " << cc->second << "\n";
-      gidx[ cc->first ] = gidx.size();
+      const int sz = gidx.size();
+      gidx[ cc->first ] = sz;
       ++cc;
     }
+
   std::vector<int> yi( n );
-  for (int i=0;i<n;i++) yi[i] = gidx[y[i]];
-  
+  for (int i=0;i<n;i++) { 
+    yi[i] = gidx[y[i]];    
+  }
+    
   // number of classes
   const int ng = counts.size();
   
@@ -65,6 +69,7 @@ lda_model_t lda_t::fit()
       prior.push_back( cc->second / (double)n );
       ++cc;
     }
+
 
   // group means
   Data::Matrix<double> group_means( ng , p );
@@ -89,7 +94,7 @@ lda_model_t lda_t::fit()
 	return model;
       }      
     }
-  
+
   // scaling matrix (diagonal)... can keep as vector
   Data::Matrix<double> scaling( p , p , 0 );
   for (int j=0;j<p;j++) scaling(j,j) = 1.0 / f1[j] ;
@@ -275,7 +280,7 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
   const int p = X.dim2();
   const int n = X.dim1();
 
-  std::cout << "p = " << p << " " << n << " " << model.means.dim2() << "\n";
+  //  std::cout << "p = " << p << " " << n << " " << model.means.dim2() << "\n";
   
   if ( p != model.means.dim2() )
     Helper::halt( "wrong number of columns in lda_t::predict()" );  
