@@ -168,6 +168,8 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
 
   std::vector<bool> retained( ne , true );
+
+  bool has_prior_staging = false;
   
   if ( trainer )
     {
@@ -179,8 +181,25 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // total number of epochs does not match?
       if ( ne != edf.timeline.hypnogram.stages.size() )
 	Helper::halt( "problem extracting stage information for trainer" );
+
+      has_prior_staging = true;
+      
     }
-  
+  else
+    {
+      // for targets, manual/prior staging may exist, in which case we'll want to track it for comparison
+      edf.timeline.annotations.make_sleep_stage();
+
+      has_prior_staging = edf.timeline.hypnogram.construct( &edf.timeline , false ) ;
+      
+      if ( has_prior_staging )
+	{
+	  // total number of epochs does not match?
+	  if ( ne != edf.timeline.hypnogram.stages.size() )
+	    Helper::halt( "problem extracting stage information for trainer" );
+	}
+      
+    }
   
   // overkill to have two staging classifications, but keep for now,
   // i.e. we may want to extend one type only
@@ -190,9 +209,9 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   int nge = 0 ;
 
   
-  if ( trainer )
+  if ( has_prior_staging )
     {
-
+      
       obs_stage.resize( ne , SUDS_UNKNOWN );
       
       for (int ss=0; ss < ne ; ss++ )
@@ -215,12 +234,16 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  else ++nge;
 	}
     }
-  else
+
+  //
+  // for target individuals without stag, include all epochs here (whether we have staging info or no)
+  //
+
+  if ( ! trainer )
     {
-      // for target individuals, include all epochs here
       nge = ne;
     }
-  
+
   
   //
   // iterate over (retained) epochs
@@ -397,20 +420,24 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // Get PSC (post outlier removal)
   //
 
-  // mean-center columns
+  // mean-center columns (PSD)
   
   Statistics::mean_center_cols( PSD );
-
+  
+  // copy to U
+  
+  U  = PSD;
+  
   // get PSCs
 
   W.clear(); V.clear();
   W.resize( nbins ); 
   V.resize( nbins , nbins );
   
-  okay = Statistics::svdcmp( PSD , W , V );
+  okay = Statistics::svdcmp( U , W , V );
   if ( ! okay ) Helper::halt( "problem with SVD" );
 
-  rank = Statistics::orderSVD( PSD , W , V );
+  rank = Statistics::orderSVD( U , W , V );
   if ( rank == 0 ) Helper::halt( "problem with input data, rank 0" );
   
 
@@ -426,7 +453,7 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( suds_t::denoise_fac > 0 ) 
     for (int j=0;j<nc;j++)
       {
-	std::vector<double> * col = PSD.col_nonconst_pointer(j)->data_nonconst_pointer();
+	std::vector<double> * col = U.col_nonconst_pointer(j)->data_nonconst_pointer();
 	double sd = MiscMath::sdev( *col );
 	double lambda = suds_t::denoise_fac * sd;
 	dsptools::TV1D_denoise( *col , lambda );
@@ -436,13 +463,14 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
   // Make variables for LDA (trainers only)
   //
-    
+
+  Data::Matrix<double> U2 = U;
   U.clear();
   U.resize( nve , nc );
   for (int i=0;i<nve;i++)
     for (int j=0;j<nc;j++)
-      U(i,j) = PSD(i,j);
-
+      U(i,j) = U2(i,j);
+  
 
   //
   // make class labels ( trainer only )
@@ -475,7 +503,6 @@ void suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	}
       
     }
-  
 
   
 }
@@ -706,13 +733,12 @@ void suds_t::attach_db( const std::string & folder )
       trainer.reload( folder + globals::folder_delimiter + trainer_ids[i] , true );      
       
       trainer.fit_lda();
-	
+
       bank.insert( trainer );
     }
   
   logger << "  read " << bank.size() << " trainers from " << folder << "\n";
-    
-  
+      
 }
 
 
@@ -746,7 +772,7 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 
   for (int i=0;i< nc; i++)
     trainer_DW(i,i) = 1.0 / trainer.W[i];
-    
+  
   U = PSD * trainer.V * trainer_DW;
   
   //
@@ -761,7 +787,6 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 	double lambda = suds_t::denoise_fac * sd;
 	dsptools::TV1D_denoise( *col , lambda );
       }
-
 
   //
   // predict using trainer model
@@ -804,8 +829,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       // most likely stage assignment 
       
-      target.prd_stage = suds_t::type( prediction.cl );
-      
+      target.prd_stage = suds_t::type( prediction.cl );      
+            
       ++tt;
 
     }

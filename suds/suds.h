@@ -137,51 +137,54 @@ struct suds_t {
     // upr=20,20,20
     // inc=0.25,0.25,0.25
     // sr=100,100,100
-    
+
+
+    if ( param.requires( "sig" ) == "*" ) Helper::halt( "requires sig to be set explicitly" );
+
     siglab = param.strvector( "sig" );
     
     ns = siglab.size();
-           
+    
     //
     // channel-specific options can be given
     //
-  
-  lwr.resize( ns , 0.5 );
-  upr.resize( ns , 25 );
-  fac.resize( ns , 1 );
-  sr.resize( ns , 100 );
-
-  if ( param.has( "lwr" ) )
-    {
-      lwr = param.dblvector( "lwr" );
-      if ( lwr.size() != ns ) Helper::halt( "incorrect number of values for lwr" );
-    }
-  
-  if ( param.has( "upr" ) )
-    {
-      upr = param.dblvector( "upr" );
-      if ( upr.size() != ns ) Helper::halt( "incorrect number of values for upr" );
-    }
-
-  if ( param.has( "fac" ) )
-    {
-      fac = param.dblvector( "fac" );
-      if ( fac.size() != ns ) Helper::halt( "incorrect number of values for fac" );
-    }
-
-  if ( param.has( "sr" ) )
-    {
-      sr = param.intvector( "sr" );
-      if ( sr.size() != ns ) Helper::halt( "incorrect number of values for sr" );
-    }
- 
+    
+    lwr.resize( ns , 0.5 );
+    upr.resize( ns , 25 );
+    fac.resize( ns , 1 );
+    sr.resize( ns , 100 );
+    
+    if ( param.has( "lwr" ) )
+      {
+	lwr = param.dblvector( "lwr" );
+	if ( lwr.size() != ns ) Helper::halt( "incorrect number of values for lwr" );
+      }
+    
+    if ( param.has( "upr" ) )
+      {
+	upr = param.dblvector( "upr" );
+	if ( upr.size() != ns ) Helper::halt( "incorrect number of values for upr" );
+      }
+    
+    if ( param.has( "fac" ) )
+      {
+	fac = param.dblvector( "fac" );
+	if ( fac.size() != ns ) Helper::halt( "incorrect number of values for fac" );
+      }
+    
+    if ( param.has( "sr" ) )
+      {
+	sr = param.intvector( "sr" );
+	if ( sr.size() != ns ) Helper::halt( "incorrect number of values for sr" );
+      }
+    
     
   }
-
+  
   //
   // SUDS parameters, needed to be the same across all individuals
   //
-
+  
   static int nc;
 
   static int ns;

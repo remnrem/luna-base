@@ -1116,7 +1116,7 @@ void proc_dummy( const std::string & p )
   if ( p == "lda" )
     {
       std::vector<std::string> y;
-      Data::Matrix<double> X(300,4);
+      Data::Matrix<double> X(500,10);
       std::ifstream INY( Helper::expand("~/y.txt" ), std::ios::in );
       int k = 0;
       while ( ! INY.eof() )
@@ -1137,7 +1137,7 @@ void proc_dummy( const std::string & p )
           if ( INX.eof() ) break;
           X(i,j) = d;
 	  ++j;
-	  if ( j == 4 ) { ++i; j=0; }
+	  if ( j == 10 ) { ++i; j=0; }
 	}
       INX.close();
       std::cerr << "done reading\n";

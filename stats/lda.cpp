@@ -32,15 +32,12 @@
 extern logger_t logger;
 
 
-
-
 lda_model_t lda_t::fit()
 {
   lda_model_t model;
 
   const int n = X.dim1();
   const int p = X.dim2();
-  std::cout << "n,p = " << n << " " << p << " " << y.size() << "\n";
 
   std::map<std::string,int> counts;
   for (int i=0;i<y.size();i++) counts[ y[i] ]++;
@@ -59,7 +56,6 @@ lda_model_t lda_t::fit()
   
   // number of classes
   const int ng = counts.size();
-  //  std::cout << "ng = " << ng << "\n";
   
   // priors
   std::vector<double> prior;
@@ -70,8 +66,6 @@ lda_model_t lda_t::fit()
       ++cc;
     }
 
-  //  std::cout << "prior.size = " << prior.size() << "\n";
-  
   // group means
   Data::Matrix<double> group_means( ng , p );
   for ( int i = 0 ; i < n ; i++ )
@@ -82,8 +76,6 @@ lda_model_t lda_t::fit()
     for ( int j = 0 ; j < p ; j++ )
       group_means( i, j ) /= n * prior[i];
 
-  //  std::cout << "group_means " << group_means.print() << "\n";  
-  
   // adjust X by group mean; get variance of each measure (i.e. looking for within-group variability)
   std::vector<double> f1(p);
   for (int j=0;j<p;j++)
@@ -119,7 +111,6 @@ lda_model_t lda_t::fit()
 
   // SVD (no left singular vectors needed)
   // X.s <- svd(X1, nu = 0L)
-
 
   // order so that we have descending singular values
 
@@ -205,14 +196,13 @@ lda_model_t lda_t::fit()
   V.clear();
   
   W.resize( rank );
-  V.resize( rank , rank );  // CHECK: or 'p' ? 
-
-  // std::cout << " X U V " << X2.dim1() << "x" << X2.dim2()
-  // 	    << "\t"
-  // 	    << W.size() << "\t"
-  // 	    << V.dim1() << "x" << V.dim2() << "\n";
+  V.resize( rank , rank );
   
-    
+  // std::cout << " X U V " << X2.dim1() << "x" << X2.dim2()
+  //  	    << "\t"
+  //  	    << W.size() << "\t"
+  //  	    << V.dim1() << "x" << V.dim2() << "\n";
+      
   okay = Statistics::svdcmp( X2 , W , V );
 
   int rank2 = 0;
@@ -241,14 +231,13 @@ lda_model_t lda_t::fit()
   for (int i=0;i<rank;i++)
     for (int j=0;j<ng;j++)
       V(i,j) = V2( i , o[j] );
-
-       
+      
   if ( rank2 == 0 ) {
     model.valid = false;
     model.errmsg = "group means are numerically identical" ;
     return model;
   }
-
+  
   // ( p x r ) . ( r , r2 ) 
   // scaling <- scaling %*% X.s$v[, 1L:rank]
 
@@ -285,7 +274,6 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
 
   const int p = X.dim2();
   const int n = X.dim1();
-  std::cout << " model.means.dim2() = " << model.means.dim2() << "\n";
   
   if ( p != model.means.dim2() )
     Helper::halt( "wrong number of columns in lda_t::predict()" );  
@@ -369,16 +357,9 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
       for (int k=1;k<ng;k++) if ( dist(i,k) > dist(i,mxi) ) mxi = k;
       cli[i] = mxi;
       cl[i] = model.labels[ mxi ];
-      //std::cout << i+1 << "\t" << cl[i] << "\n";
     }
   
-    //     posterior <- dist / drop(dist %*% rep(1, ng))
-    // nm <- names(object$prior)
-    // cl <- factor(nm[max.col(posterior)], levels = object$lev)
-    // dimnames(posterior) <- list(rownames(x), nm)
-    // list(class = cl, posterior = posterior, x = x[, 1L:dimen, drop = FALSE])
-
-			      
+  			      
   lda_posteriors_t pp;
 
   // posterior probs
@@ -386,10 +367,10 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
 
   // most likely class assignment (idx)
   pp.cli = cli;
-
-  // as above, but string label from model
+  
+  // as above, but using string label from model
   pp.cl = cl;
-
+  
   return pp;
 
 }
