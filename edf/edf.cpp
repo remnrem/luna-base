@@ -485,8 +485,15 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   if ( globals::force_edf )
     {
       logger << "  forcing read as EDF [else remove force-edf=1]\n";
+
       edfplus = false;
-      continuous = true;
+      continuous = true;  
+      reserved[0] = ' '; 
+      reserved[1] = ' ';
+      reserved[2] = ' ';
+      reserved[3] = ' ';
+      reserved[4] = ' ';
+
     }
 
   // Number and direction of records/signals
@@ -1701,11 +1708,9 @@ bool edf_record_t::write( edfz_t * edfz )
 
 bool edf_t::write( const std::string & f , bool as_edfz )
 {
-  
-  //set_edf();
-  
+
   reset_start_time();
-  
+
   filename = f;
 
   if ( ! as_edfz ) 

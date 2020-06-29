@@ -726,10 +726,14 @@ void process_edfs( cmd_t & cmd )
 
 
       //
-      // File in exclude list?
+      // File in exclude list? (or not in an include list?)
       //
 
-      if ( globals::excludes.find( rootname ) != globals::excludes.end() )
+      bool include = true;
+      if ( globals::id_excludes.find( rootname ) != globals::id_excludes.end() ) include = false;
+      if ( globals::id_includes.size() != 0 && globals::id_includes.find( rootname ) == globals::id_includes.end() ) include = false;
+
+      if ( ! include )
 	{
 	  logger << "\n"
 		 << "___________________________________________________________________\n"
