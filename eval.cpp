@@ -768,6 +768,9 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ANON" ) )         proc_anon( edf , param(c) );
       else if ( is( c ,"EPOCH" ) )        proc_epoch( edf, param(c) );
       else if ( is( c ,"SLICE" ) )        proc_slice( edf , param(c) , 1 );
+
+      else if ( is( c , "SUDS" ) )        proc_suds( edf , param(c) );
+      else if ( is( c , "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
       
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
@@ -940,6 +943,36 @@ void proc_lzw( edf_t & edf , param_t & param )
 {    
   lzw_per_epoch( edf , param );
 }
+
+
+// MAKE-SUDS : populate folder 'db' with trainers
+
+void proc_make_suds( edf_t & edf , param_t & param  )
+{  
+  suds_t::set_options( param );  
+  suds_indiv_t trainer;
+  trainer.add_trainer( edf , param );  
+}
+
+
+// SUDS : stageing
+
+void proc_suds( edf_t & edf , param_t & param )
+{
+  // set up global parameters (i.e. should apply to target /and/ all trainers)
+  suds_t suds;
+  suds_t::set_options( param );
+  
+  // this is only do once per session, i.e. even if
+  // multiple targets are scored 
+  suds.attach_db( param.requires( "db" ) );
+  
+  // do actual scoring  
+  suds.score( edf , param );
+
+}
+
+
 
 
 // ZR : Z-ratio 

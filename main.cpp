@@ -1117,7 +1117,52 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p )
 {
 
- 
+  if ( p == "lda" )
+    {
+      std::vector<std::string> y;
+      Data::Matrix<double> X(500,10);
+      std::ifstream INY( Helper::expand("~/y.txt" ), std::ios::in );
+      int k = 0;
+      while ( ! INY.eof() )
+	{
+	  std::string s;
+	  INY >> s;
+	  if ( INY.eof() ) break;
+	  y.push_back(s);
+	}
+
+      INY.close();
+      int i = 0 , j = 0;
+      std::ifstream INX( Helper::expand( "~/x.txt" ) , std::ios::in );
+      while ( ! INX.eof() )
+        {
+          double d;
+          INX >> d;
+          if ( INX.eof() ) break;
+          X(i,j) = d;
+	  ++j;
+	  if ( j == 10 ) { ++i; j=0; }
+	}
+      INX.close();
+      std::cerr << "done reading\n";
+      
+      lda_t lda( y , X );
+
+      lda_model_t fit = lda.fit();
+
+      lda_posteriors_t pp = lda.predict( fit , X );
+
+      for (int i=0;i<pp.pp.dim1() ;i++)
+	{
+	  for (int j=0;j<pp.pp.dim2();j++)
+	    std::cout << " " << pp.pp(i,j);
+	  std::cout << "\t" << pp.cl[i] << "\n";
+
+	}      
+      
+      std::exit(1);
+      
+    }
 
   if ( p == "cache" )
     {

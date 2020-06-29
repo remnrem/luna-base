@@ -153,16 +153,20 @@ class FFT
 
 struct bin_t { 
   
-  bin_t( double w , double mx_f , double Fs )
-  : w(w) , mx_f(mx_f) , Fs(Fs) { } 
-
-  double w, mx_f, Fs;
+  // bin_t( double w , double mx_f , double Fs )
+  //   : w(w) , mn_f(0) , mx_f(mx_f) , Fs(Fs) { } 
+  
+  bin_t( double mn_f , double mx_f , int fac )
+    : fac(fac) , mn_f(mn_f) , mx_f(mx_f) { } 
+  
+  double fac, mn_f , mx_f;
   
   int bin( const std::vector<double> & f , 
 	   const std::vector<double> & y ) ;
-
+  
   // data members
-  std::vector<double> bspec, bfa, bfb, nominal; 
+  std::vector<double> bspec, bfa, bfb;
+  std::vector<std::string> nominal; 
   
 };
 

@@ -53,7 +53,7 @@ namespace MiscMath
  double iqr( const std::vector<double> & x );
 
  
- template<typename T> static inline double Lerp(T v0, T v1, T t)
+  template<typename T> static inline double Lerp(T v0, T v1, T t)
    {
      return (1 - t)*v0 + t*v1;
    }
@@ -113,6 +113,10 @@ namespace MiscMath
   std::vector<double> Z( const std::vector<double> & x );
   std::vector<double> logvector( const std::vector<double> & x );
 
+
+  double kappa( const std::vector<int> & a , const std::vector<int> & b );
+  double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b );
+  
 	      
   // covariance
   double covariance( const std::vector<double> & x ,

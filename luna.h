@@ -57,6 +57,8 @@
 
 #include "stats/glm.h"
 
+#include "stats/lda.h"
+
 #include "annot/annot.h"
 
 #include "edf/edf.h"
@@ -88,6 +90,8 @@
 #include "pdc/pdc.h"
 
 #include "staging/staging.h"
+
+#include "suds/suds.h"
 
 #include "clocs/topo.h"
 

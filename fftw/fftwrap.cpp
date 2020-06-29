@@ -482,83 +482,123 @@ int bin_t::bin( const std::vector<double> & f ,
 
   if ( f.size() < 2 ) return 0;
 
+  
   //
   // no binning?
   //
   
-  if ( w == 0 )
+  if ( fac == 1 )
     {
       for (int i=0;i<f.size();i++)
         {
+	  if ( f[i] < mn_f ) continue;
           if ( f[i] > mx_f ) break;
           bfa.push_back( f[i] );
           bfb.push_back( f[i] );
           bspec.push_back( y[i] );
-	  nominal.push_back( f[i] );
+	  //nominal.push_back( Helper::dbl2str( f[i] ) );
+	  nominal.push_back( "" );
         }
       return bspec.size();
     }
 
-  // assume always from 0, DC component  
-  if ( f[0] == 0 ) 
+  //
+  // integer binning, using lower value as the nominal seed
+  //
+
+  int i = 0;
+  for (i=0;i<f.size();i++)
+    if ( f[i] >= mn_f ) break;
+
+  for ( ;i<f.size(); i+=fac )
     {
-      bspec.push_back( y[0] );
-      bfa.push_back( 0 );
-      bfb.push_back( 0 );
-      nominal.push_back( 0 );
+      if ( ( i + fac - 1 ) < f.size() )
+	{
+	  if ( f[i+fac-1] > mx_f ) break;
+	  
+	  double sum = 0;
+	  for (int j=i;j<i+fac;j++)
+	    sum += y[i];
+	  bspec.push_back( sum / (double)fac );
+	  
+	  bfa.push_back( f[i] );
+	  bfb.push_back( f[i + fac - 1] );
+	  // midpoint as nominal label
+	  nominal.push_back( Helper::dbl2str( f[i] ) + "-" + Helper::dbl2str( f[i + fac - 1] ) );
+	  //nominal.push_back( ( f[i + fac - 1]  + f[i] ) / 2.0  ); // use mean as nominal label
+	}
     }
+  
+  return bspec.size();
+  
+  //
+  // Old version below... ignore
+  //
+
+  
+  // assume always from 0, DC component  
+  // if ( f[0] == 0 ) 
+  //   {
+  //     bspec.push_back( y[0] );
+  //     bfa.push_back( 0 );
+  //     bfb.push_back( 0 );
+  //     nominal.push_back( 0 );
+  //   }
 
   //for (int ii=0;ii<f.size();ii++) std::cout << "Frq " << f[ii] << "\n";
   
-  double nyquist = 0.5 * Fs;
+
+
+  // double nyquist = 0.5 * Fs;
     
-  int num_freqs = f.size();
+  // int num_freqs = f.size();
   
-  double df = f[1] - f[0];    
+  // double df = f[1] - f[0];    
 
-  if ( w/df  < 1.0 ) Helper::halt( "bin resolution too small: min " + Helper::dbl2str( df ) );
+  // if ( w/df  < 1.0 ) Helper::halt( "bin resolution too small: min " + Helper::dbl2str( df ) );
 
-  int freqwin = (int) ( w / df ) ;      
+  // int freqwin = (int) ( w / df ) ;      
   
-  if ( mx_f > nyquist ) mx_f = nyquist; 
+  // if ( mx_f > nyquist ) mx_f = nyquist; 
 
-  double lower_f = 0;
+  // double lower_f = 0;
 
-  for (int i = 1; i < num_freqs ; i += freqwin)
-      {
+  // for (int i = 0; i < num_freqs ; i += freqwin)
+  //     {
 	
-	double tem = 0.0;
+  // 	double tem = 0.0;
 	
-	int k = 0;
+  // 	int k = 0;
 	
-	for (int j = i ; j < i + freqwin ; j++) 
-	  {
+  // 	for (int j = i ; j < i + freqwin ; j++) 
+  // 	  {
 	    
-	    if (j > 0 && j < num_freqs - 1) // skip DC and Nyquist
-	      {	      	      
-		if ( f[j] <= mx_f )
-		  {
-		    //std::cout << "adding " << f[j] << "\n";
-		    tem += y[j];
-		    k++;
-		  }
-	      }
-	  }
+  // 	    if (j > 0 && j < num_freqs - 1) // skip DC and Nyquist
+  // 	      {	      	      
+  // 		if ( f[j] >= mn_f && f[j] <= mx_f )
+  // 		  {
+  // 		    //std::cout << "adding " << f[j] << "\n";
+  // 		    tem += y[j];
+  // 		    k++;
+  // 		  }
+  // 	      }
+  // 	  }
 	
-	//std::cout << "scanning " << f[i] << " to " << f[ i + freqwin -1 ] <<  " " << k << "\n";	
+  // 	std::cout << "scanning " << f[i] << " to " << f[ i + freqwin -1 ] <<  " " << k << "\n";	
 	
-	if ( k > 0 ) 
-	  {	  
-	    bspec.push_back( tem/(double)k );
-	    bfa.push_back( f[i-1] ); // less than 
-	    bfb.push_back( f[i+k-1] ); // greater than or equal to
-	    nominal.push_back( lower_f + w * 0.5 ); // intended midpoint 
-	    //std::cout << "ADDING: k=" << k << " points in " <<  f[i-1]  << " < F <= " << f[i+k-1] << "\n";
-	  }
+  // 	if ( k > 0 ) 
+  // 	  {	  
+  // 	    bspec.push_back( tem/(double)k );
+  // 	    bfa.push_back( f[i-1] ); // less than 
+  // 	    bfb.push_back( f[i+k-1] ); // greater than or equal to
+  // 	    nominal.push_back( lower_f + w * 0.5 ); // intended midpoint 
+  // 	    std::cout << "ADDING: k=" << k << " points in " <<  f[i-1]  << " < F <= " << f[i+k-1] << "\n";
+  // 	  }
 
-	lower_f += w;
+  // 	lower_f += w;
 	
-      }
+  //     }
   
-    return bspec.size();
-  }
+  //   return bspec.size();
+
+}

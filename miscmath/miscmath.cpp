@@ -1089,3 +1089,60 @@ double MiscMath::as_angle_0_pos2neg( const double r )
 
   return a;
 }
+
+double MiscMath::kappa( const std::vector<int> & a , const std::vector<int> & b )
+{
+  std::vector<std::string> aa( a.size() );
+  std::vector<std::string> bb( b.size() );
+  for (int i=0;i<a.size();i++) aa[i] = Helper::int2str( a[i] );
+  for (int i=0;i<b.size();i++) bb[i] = Helper::int2str( b[i] );
+  return kappa( aa, bb );
+}
+
+double MiscMath::kappa( const std::vector<std::string> & a , const std::vector<std::string> & b )
+{
+  if ( a.size() != b.size() )
+    Helper::halt( "unequal input vectors for kappa()" );
+
+  std::map<std::string,int> allcounts;
+  std::map<std::string,double> acounts;
+  std::map<std::string,double> bcounts;
+  std::map<std::string,std::map<std::string,double > > abcounts;
+
+  const int n = a.size();
+
+  if ( n == 0 ) return 0;
+  double inc = 1/(double)n;
+  
+  for ( int i = 0 ; i < a.size() ; i++ )
+    {
+      //std::cout << "ZZ\t" << a[i] << "\t" << b[i] << "\n";
+      
+      allcounts[ a[i] ]++ ; allcounts[ b[i] ]++;      
+      acounts[ a[i] ] += inc;
+      bcounts[ b[i] ] += inc;
+      abcounts[ a[i] ][ b[i] ] += inc;
+    }
+  
+  
+  double observed_agreement = 0;
+  double chance_agreement = 0;
+  //  std::cout << "allcounts = " << allcounts.size() << "\n";
+  
+  std::map<std::string,int>::const_iterator cc = allcounts.begin();
+  while ( cc != allcounts.end() )
+    {
+      // std::cout << " cc-> " << cc->first << "\t"
+      // 		<< abcounts[ cc->first ][ cc->first ] << "\t"
+      // 		<< acounts[ cc->first ] << " * " <<  bcounts[ cc->first ] << " = " << acounts[ cc->first ] * bcounts[ cc->first ] << "\n";
+      observed_agreement += abcounts[ cc->first ][ cc->first ] ;
+      chance_agreement += acounts[ cc->first ] * bcounts[ cc->first ];
+      ++cc;
+    }
+
+  //  std::cout << " observed_agreement = " << observed_agreement << " " << chance_agreement << "\n";
+  
+  double kappa = ( observed_agreement - chance_agreement ) / ( 1 - chance_agreement );
+  return kappa;
+  
+}
