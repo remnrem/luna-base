@@ -177,6 +177,23 @@ std::complex<double> MiscMath::mean( const std::vector<std::complex<double> > & 
 }
 
 
+double MiscMath::skewness( const std::vector<double> & x )
+{
+  double m    = MiscMath::mean( x );
+  double sd   = MiscMath::sdev( x , m );
+  return MiscMath::skewness( x , m , sd );
+}
+
+double MiscMath::skewness( const std::vector<double> & x , double m , double sd )
+{
+  double sum = 0;
+  const int n = x.size();
+  for (int i=0; i<n; i++)
+    sum += ( x[i] - m ) * ( x[i] - m ) * ( x[i] - m ) ;
+  return sum / (double)( n * sd * sd * sd );  
+} 
+  
+
 double MiscMath::median( const std::vector<double> & x )
 {
   //  const double * a = &(x[0]);

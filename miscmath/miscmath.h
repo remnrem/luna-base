@@ -33,26 +33,29 @@
 
 namespace MiscMath
 {
-
+  
   // next pow2
   long int nextpow2( const int a );
   std::vector<double> logspace(double a, double b, int n);
-
+  
   double rms( const std::vector<double> & );
   double rms( const double * , int n );
-
+  
   // differences 
- std::vector<double> diff( const std::vector<double> & x );
-
+  std::vector<double> diff( const std::vector<double> & x );
+  
   // mean/variance  
- double mean( const std::vector<double> & x );
- double mean( const std::vector<int> & x );
- std::complex<double> mean( const std::vector<std::complex<double> > & x );
- 
- double median( const std::vector<double> & x );
- double iqr( const std::vector<double> & x );
-
- 
+  double mean( const std::vector<double> & x );
+  double mean( const std::vector<int> & x );
+  std::complex<double> mean( const std::vector<std::complex<double> > & x );
+  
+  double skewness( const std::vector<double> & x );
+  double skewness( const std::vector<double> & x , double m , double sd );
+  
+  double median( const std::vector<double> & x );
+  double iqr( const std::vector<double> & x );
+  
+  
   template<typename T> static inline double Lerp(T v0, T v1, T t)
    {
      return (1 - t)*v0 + t*v1;

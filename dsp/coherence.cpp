@@ -574,6 +574,9 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
       double icoh = Im / sqrt( Sxx * Syy );
       double lcoh = Im / sqrt( Sxx * Syy - ( Re * Re ) );
 
+      double cross_spectra_dB = 5.0 * log10( phi2 );
+      
+      
       // if ( frq[k] < 20 ) 
       // 	std::cout << "dets = " << frq[k] << "\t" << Sxx << " " << Syy << " " << " " << Re << " " << Im << " " << coh << " " << icoh << "\n";
       
@@ -619,7 +622,8 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 	    writer.value( "ICOH" , icoh );
 	  if ( Helper::realnum( lcoh ) )
 	    writer.value( "LCOH" , lcoh );
-	  
+	  if ( Helper::realnum( cross_spectra_dB ) )
+	    writer.value( "CSPEC" , cross_spectra_dB );
 	}      
       
     } // next frequency 'k'

@@ -3586,14 +3586,15 @@ bool edf_t::basic_stats( param_t & param )
   // Run through each record
   // Get min/max
   // Calculate RMS for each signal
+  // Get mean/median/SD and skewness
   
   std::string signal_label = param.requires( "sig" );  
+
   signal_list_t signals = header.signal_list( signal_label );
+
   std::vector<double> Fs = header.sampling_freq( signals );
   
-  bool by_epoch = timeline.epoched();
-
-  if ( ! param.has( "epoch" ) ) by_epoch = false;
+  bool by_epoch = param.has( "epoch" );
   
   const int ns = signals.size();
   
@@ -3609,20 +3610,17 @@ bool edf_t::basic_stats( param_t & param )
       if ( header.is_annotation_channel( signals(s) ) ) continue;
 
 
-
       //
       // Output signal
       //
       
-
       writer.level( header.label[ signals(s) ] , globals::signal_strat );
 
-
       //
-      // Mean, variance, RMS, min, max based on per-epoch stats
+      // Mean, variance, skewmess, RMS, min, max based on per-epoch stats
       //
             
-      std::vector<double> e_mean, e_median , e_sd, e_rms;
+      std::vector<double> e_mean, e_median , e_sd, e_rms, e_skew;
       
       double t_min = 0 , t_max = 0;
       
@@ -3668,11 +3666,12 @@ bool edf_t::basic_stats( param_t & param )
 	      // Filter data
 	      //
 	      
-	      double mean = MiscMath::mean( *d );
+	      double mean   = MiscMath::mean( *d );
 	      double median = calc_median ? MiscMath::median( *d ) : 0;
-	      double sd   = MiscMath::sdev( *d , mean );
-	      double rms  = MiscMath::rms( *d );
-	      
+	      double sd     = MiscMath::sdev( *d , mean );
+	      double rms    = MiscMath::rms( *d );
+	      double skew   = MiscMath::skewness( *d , mean , sd );
+					     
 	      double min = (*d)[0];
 	      double max = (*d)[0];
 	      
@@ -3692,8 +3691,11 @@ bool edf_t::basic_stats( param_t & param )
 	      writer.value( "MAX"  , max  );
 	      writer.value( "MIN"  , min  );	      
 	      writer.value( "MEAN" , mean );
+	      writer.value( "SKEW" , skew );
+
 	      if ( calc_median ) 
 		writer.value( "MEDIAN" , median );	      
+
 	      writer.value( "RMS"  , rms  );
 	      
 	      //
@@ -3714,7 +3716,7 @@ bool edf_t::basic_stats( param_t & param )
 		e_median.push_back( median );
 	      e_sd.push_back( sd );
 	      e_rms.push_back( rms );	  
-	      
+	      e_skew.push_back( skew );
 	    }
 	  
 	  writer.unepoch();
@@ -3739,9 +3741,10 @@ bool edf_t::basic_stats( param_t & param )
  
       double mean = MiscMath::mean( *d );
       double median = calc_median ? MiscMath::median( *d ) : 0 ;
-      
+      double sd = MiscMath::sdev( *d );
       double rms  = MiscMath::rms( *d );
-	  
+      double skew = MiscMath::skewness( *d , mean , sd );
+				    
       double min = (*d)[0];
       double max = (*d)[0];
       
@@ -3760,6 +3763,7 @@ bool edf_t::basic_stats( param_t & param )
       writer.value( "MAX"  , max  );
       writer.value( "MIN"  , min  );      
       writer.value( "MEAN" , mean );
+      writer.value( "SKEW" , skew );
       if ( calc_median ) writer.value( "MEDIAN" , median );
       writer.value( "RMS"  , rms  );
 
@@ -3773,7 +3777,8 @@ bool edf_t::basic_stats( param_t & param )
 	  double med_mean  = median_destroy( &e_mean[0] , ne );
 	  double med_median  = calc_median ? median_destroy( &e_median[0] , ne ) : 0 ;  
 	  double med_rms  = median_destroy( &e_rms[0] , ne );
-	  	  
+	  double med_skew = median_destroy( &e_skew[0] , ne );
+	  
 	  writer.value( "NE" , timeline.num_total_epochs() );	  
 	  writer.value( "NE1" , ne );
 
@@ -3781,7 +3786,7 @@ bool edf_t::basic_stats( param_t & param )
 	  if ( calc_median )
 	    writer.value( "MEDIAN.MEDIAN" , med_median );
 	  writer.value( "MEDIAN.RMS"  , med_rms );
-	  
+	  writer.value( "MEDIAN.SKEW" , med_skew );
 	}
 
 
