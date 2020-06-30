@@ -152,7 +152,11 @@ struct globals
 
   static std::string current_tag;
 
-  static std::set<std::string> excludes;
+  // drop these EDFs
+  static std::set<std::string> id_excludes;
+
+  // only include these EDFs
+  static std::set<std::string> id_includes;
 
   // used by the --build command only
   static std::set<std::string> sl_annot_extensions;

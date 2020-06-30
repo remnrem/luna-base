@@ -2515,6 +2515,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "exclude" ) )
     {
       
+      if ( globals::id_includes.size() > 0 ) 
+	Helper::halt( "cannot specify both include= and exclude= lists" );
+
       std::string xfile = Helper::expand( tok1 );
       
       if ( Helper::fileExists( xfile ) ) 
@@ -2529,13 +2532,50 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	      std::vector<std::string> tok2 = Helper::parse( line2 , "\t " );
 	      if ( tok2.size() == 0 ) continue;			      
 	      std::string xid = tok2[0];
-	      globals::excludes.insert( xid );
+	      globals::id_excludes.insert( xid );
 	    }
-	  logger << "excluding " << globals::excludes.size() 
+
+	  logger << "  excluding " << globals::id_excludes.size() 
 		 << " individuals from " << xfile << "\n";
 	  XIN.close();
 	}
-      else logger << "**warning: exclude file " << xfile << " does not exist\n";
+      else 
+	Helper::halt( "exclude file " + xfile + " does not exist" );
+
+      return;
+    }
+
+
+  // exclude individuals?
+  if ( Helper::iequals( tok0 , "include" ) )
+    {
+      
+      if ( globals::id_excludes.size() > 0 ) 
+	Helper::halt( "cannot specify both include= and exclude= lists" );
+
+      std::string xfile = Helper::expand( tok1 );
+      
+      if ( Helper::fileExists( xfile ) ) 
+	{
+	  std::ifstream XIN( xfile.c_str() , std::ios::in );
+	  while ( !XIN.eof() ) 
+	    {
+	      // format: ID {white-space} any notes (ignored)
+	      std::string line2;
+	      Helper::safe_getline( XIN , line2);
+	      if ( XIN.eof() || line2 == "" ) continue;
+	      std::vector<std::string> tok2 = Helper::parse( line2 , "\t " );
+	      if ( tok2.size() == 0 ) continue;			      
+	      std::string xid = tok2[0];
+	      globals::id_includes.insert( xid );
+	    }
+
+	  logger << "  only including " << globals::id_includes.size() 
+		 << " individuals from " << xfile << "\n";
+	  XIN.close();
+	}
+      else 
+      	Helper::halt( "include file " + xfile + " does not exist" );
 
       return;
     }

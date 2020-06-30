@@ -74,7 +74,8 @@ bool globals::skip_nonedf_annots;
 bool globals::set_annot_inst2hms;
 bool globals::set_annot_inst2hms_force;
 
-std::set<std::string> globals::excludes;
+std::set<std::string> globals::id_excludes;
+std::set<std::string> globals::id_includes;
 
 std::set<std::string> globals::sl_annot_extensions;
 std::map<std::string,sample_list_t> globals::sl_data;

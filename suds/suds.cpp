@@ -79,12 +79,13 @@ std::vector<double> suds_t::outlier_ths;
 
 void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
 {
+
   // build a trainer
   int n_unique_stages = proc( edf , param , true );
-
+  
   // only include recordings that have all five stages included, for now
   if ( n_unique_stages != 5 ) return;
-
+  
   // save to disk
   write( edf , param ); 
 
@@ -233,10 +234,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  else if ( edf.timeline.hypnogram.stages[ ss ] == REM ) obs_stage[ss] = SUDS_REM;
 	  
 	  // expand retained class to exclude unknown staging info
-	  if ( obs_stage[ss] == SUDS_UNKNOWN ) retained[ss] = false;
+	  if ( obs_stage[ss] == SUDS_UNKNOWN ) { retained[ss] = false; } 
 	  else ++nge;
 	}
     }
+
 
   //
   // for target individuals without stag, include all epochs here (whether we have staging info or no)
@@ -252,8 +254,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // iterate over (retained) epochs
   //
     
-  int en = 0;
-  
+  int en = 0 , en_good = 0;
+
   edf.timeline.first_epoch();
   
   while ( 1 ) 
@@ -266,8 +268,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       if ( en == ne ) Helper::halt( "internal error: over-counted epochs" );
 
       // retained? if not, skip
-      if ( ! retained[ en ] ) continue;
-      
+      if ( ! retained[ en ] ) 
+	{
+	  ++en;
+	  continue;
+	}
+
       // col counter for PSD aggregation matrix
       int col = 0;
       std::vector<double> firstrow;
@@ -311,8 +317,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      
 	      if ( bin.bfa[i] >= suds_t::lwr[s] && bin.bfb[i] <= suds_t::upr[s] )
 		{
-		  if ( en == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
-		  else PSD( en , col ) = 10*log10( bin.bspec[i] ) ; 		  
+		  if ( en_good == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
+		  else PSD( en_good , col ) = 10*log10( bin.bspec[i] ) ; 		  
 		  ++col;		  
 		}	      
 	    }
@@ -321,7 +327,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
       // store/shape output if first go around
       nbins = col;
-      if ( en == 0 )
+      if ( en_good == 0 )
 	{
 	  PSD.resize( nge , col );
 	  for (int i=0;i<col;i++) PSD(0,i) = firstrow[i];
@@ -329,13 +335,14 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       // increase epoch-number
       ++en;
+      ++en_good;
 
     } // next epoch
   
 
   // all done: check
 
-  if ( en != nge ) Helper::halt( "internal error: umder-counted epochs" );
+  if ( en_good != nge ) Helper::halt( "internal error: under-counted epochs" );
 
 
   //
@@ -353,12 +360,14 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   W.clear(); V.clear();
   W.resize( nbins ); 
   V.resize( nbins , nbins );
-	   
+
   bool okay = Statistics::svdcmp( U , W , V );
   if ( ! okay ) Helper::halt( "problem with SVD" );
 
   int rank = Statistics::orderSVD( U , W , V );
   if ( rank == 0 ) Helper::halt( "problem with input data, rank 0" );
+
+
 
   //
   // Outliers/smoothing
@@ -388,6 +397,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    }
 	}
     }
+
+
 
   int included = 0;
   for (int i=0;i<nge;i++)
@@ -790,10 +801,12 @@ void suds_t::attach_db( const std::string & folder )
 void suds_indiv_t::fit_lda()
 {
 
+  //  std::cout << "y U = " << y.size() << "\n" << U.dim1() <<"x" << U.dim2() << "\n";
+
   lda_t lda( y , U );      
-  
+
   model = lda.fit();
-  
+
 }
 
 
@@ -838,8 +851,6 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   // predict using trainer model
   //
 
-  std::cout << "U size = " << U.dim1() << "x" << U.dim2() << "\n";
-  
   lda_posteriors_t pp = lda_t::predict( trainer.model , U );
 
   return pp;
@@ -854,13 +865,27 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 
 void suds_t::score( edf_t & edf , param_t & param ) {
 
-  // by this point, bank will be populated with N+ trainers
 
+  //
+  // by this point, bank will be populated with N+ trainers
+  //
+  
+
+  //
   // create a target 
+  //
 
   suds_indiv_t target;
 
   target.proc( edf , param );
+
+  
+  //
+  // save weights for each trainer
+  //
+  
+  std::map<std::string,double> wgt;
+
 
   //
   // iterate over trainers
@@ -872,6 +897,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     {
 
       const suds_indiv_t & trainer = *tt;
+      
 
       //
       // Predict target given trainer 
@@ -906,27 +932,45 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // i.e. where we also have true stage information
       //
 
+      double max_kappa = 0;
+      double mean_kappa = 0;
+      int n_kappa50 = 0;
+
       std::set<suds_indiv_t>::iterator ww = bank.begin();
       while ( ww != bank.end() )
 	{
 	  
 	  suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
 
-	  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
+	  //	  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
 	  
 	  lda_posteriors_t reprediction = weight_trainer.predict( target );
 	  
 	  weight_trainer.prd_stage = suds_t::type( reprediction.cl );
 
-	  //std::cout << "XX " << reprediction.cl.size() << " " << weight_trainer.y.size() << "\n";
-	  
 	  double kappa = MiscMath::kappa( reprediction.cl , str( weight_trainer.obs_stage ) );
 	  
-	  std::cout << "KAPPA = " << kappa << "\n";
+	  if ( kappa > 0.5 ) n_kappa50++;
+	  if ( kappa > max_kappa ) max_kappa = kappa;
+	  mean_kappa += kappa;
+	  
+	  // std::cout << "KAPPA = " << trainer.id << "\t" 
+	  // 	    << weight_trainer.id << "\t" 
+	  // 	    << kappa << "\n";
 	  
 	  ++ww;
 	}
 
+      // actual trainer kappa
+      double true_kappa =  MiscMath::kappa( str( target.prd_stage ) , str( target.obs_stage ) );
+      
+      wgt[ trainer.id ] = n_kappa50 ;
+      
+      std::cout << "K\t"
+		<< true_kappa << "\t"
+		<< n_kappa50 << "\t"
+		<< mean_kappa / (double)(bank.size()) << "\t"
+		<< max_kappa << "\n";
 
       //
       // Next trainer
@@ -950,24 +994,31 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   
   Data::Matrix<double> pp( ne , 5 );
 
+  int ntrainers = 0;
+
   std::map<std::string,Data::Matrix<double> >::const_iterator ii = target.target_posteriors.begin();
   while ( ii != target.target_posteriors.end() )
     {
-      const Data::Matrix<double> & m = ii->second;
+      
 
-      // std::cout << "dims " << pp.dim1() << "x" << pp.dim2() << "  "
-      // 		<< m.dim1() << "x" << m.dim2() << "\n";
+
+      const Data::Matrix<double> & m = ii->second;
 
       const suds_indiv_t & trainer = *bank.find( suds_indiv_t( ii->first ) );
 
-      std::map<std::string,int>::const_iterator cn = trainer.counts.begin();
-      while ( cn != trainer.counts.end() )
-	{
-	  std::cout << "  " << cn->first << " = " << cn->second << "\n";
-	  ++cn;
-	}
+
+      //
+      // Use this ?
+      //
+
+      if ( wgt[ trainer.id ] <= 10 ) {
+	++ii;
+	continue;
+      }
       
-      
+      ++ntrainers;
+
+            
       if ( pp.dim1() != m.dim1() || pp.dim2() != m.dim2() )
 	Helper::halt( "internal error in compiling posteriors across trainers" );
 
@@ -978,8 +1029,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       ++ii;
     }
 
-  const int ntrainers = bank.size();
-  
+  std::cout << "used " << ntrainers << "\n";
+
   for (int i=0;i<ne;i++)
     for (int j=0;j<5;j++)
       pp(i,j) /= (double)ntrainers;
@@ -989,15 +1040,16 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Report
   //
 
-  if ( 0 )
+  if ( 1 )
     {
       for (int i=0;i<ne;i++)
 	{
 	  std::cout << str( target.obs_stage[i] ) ;
+
 	  for (int j=0;j<5;j++)
 	    std::cout << "\t" << pp(i,j);
 	  
-	  std::cout << "\t" << str( target.prd_stage[i] )
+	  std::cout << "\t" << max( pp.row(i) ) 
 		    << "\n";
 	}
     }

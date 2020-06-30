@@ -20,14 +20,14 @@
 //
 //    --------------------------------------------------------------------
 
-#include "helper/token.h"
-
-#include "helper/token-eval.h"
-
 #include "luna.h"
 
 #include "main.h"
 
+// for dummy routines below
+#include "helper/token.h"
+#include "helper/token-eval.h"
+#include <fstream>
 
 extern globals global;
 
@@ -726,10 +726,14 @@ void process_edfs( cmd_t & cmd )
 
 
       //
-      // File in exclude list?
+      // File in exclude list? (or not in an include list?)
       //
 
-      if ( globals::excludes.find( rootname ) != globals::excludes.end() )
+      bool include = true;
+      if ( globals::id_excludes.find( rootname ) != globals::id_excludes.end() ) include = false;
+      if ( globals::id_includes.size() != 0 && globals::id_includes.find( rootname ) == globals::id_includes.end() ) include = false;
+
+      if ( ! include )
 	{
 	  logger << "\n"
 		 << "___________________________________________________________________\n"
@@ -1117,7 +1121,8 @@ void proc_dummy( const std::string & p )
     {
       std::vector<std::string> y;
       Data::Matrix<double> X(500,10);
-      std::ifstream INY( Helper::expand("~/y.txt" ), std::ios::in );
+      
+      std::ifstream INY( Helper::expand("~/y.txt" ).c_str() , std::ios::in );
       int k = 0;
       while ( ! INY.eof() )
 	{
@@ -1129,7 +1134,7 @@ void proc_dummy( const std::string & p )
 
       INY.close();
       int i = 0 , j = 0;
-      std::ifstream INX( Helper::expand( "~/x.txt" ) , std::ios::in );
+      std::ifstream INX( Helper::expand( "~/x.txt" ).c_str() , std::ios::in );
       while ( ! INX.eof() )
         {
           double d;
