@@ -41,6 +41,8 @@ bool                               cmd_t::plaintext_mode = false;
 std::string                        cmd_t::plaintext_root = ".";
 
 std::map<std::string,std::string>  cmd_t::vars;
+std::map<std::string,std::map<std::string,std::string> >  cmd_t::ivars;
+
 std::set<std::string>              cmd_t::signallist;
 std::map<std::string,std::string>  cmd_t::label_aliases;
 std::map<std::string,std::vector<std::string> >  cmd_t::primary_alias;

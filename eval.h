@@ -100,6 +100,8 @@ class cmd_t
   static void add_cmdline_cmd( const std::string & c ) ;
   
   static void parse_special( const std::string & s , const std::string & delim );
+
+  static void attach_ivars( const std::string & file );
   
   // by default (str == NULL) read from command line arguments, 
   // then from STDIN;  otherwise, parse the commands in the 
@@ -143,8 +145,13 @@ class cmd_t
   //
 
   static std::string                        input;  
+
+  // project-level variables
   static std::map<std::string,std::string>  vars;
 
+  // individual-specific vars
+  static std::map<std::string,std::map<std::string,std::string> >  ivars;
+  
   static std::string                        cmdline_cmds;
   static std::string                        stout_file;
   static std::string                        stout_template;

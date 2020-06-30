@@ -95,8 +95,20 @@ void param_t::update( const std::string & id , const std::string & wc )
       
       if ( Helper::swap_in_includes( &v ) )
 	changed = true;
+
+      // 3. swap in ivars (note -- these don't have return values, so can't just
+      //    use 'changed' below... TODO: change this
       
-      if ( changed ) ii->second = v;
+      Helper::process_block_conditionals( &v , cmd_t::ivars[id]  );
+      
+      Helper::swap_in_variables( &v , &cmd_t::ivars[id] );
+      
+      //
+      // needs updating?
+      //
+
+      if ( changed || v != ii->second ) 
+	ii->second = v;
       
       ++ii;
     }
@@ -287,6 +299,7 @@ void cmd_t::clear_static_members()
   append_stout_file = false;
   
   vars.clear();
+  ivars.clear();
   signallist.clear();
   label_aliases.clear();
   primary_alias.clear();
@@ -452,12 +465,94 @@ void cmd_t::populate_commands()
 
 void cmd_t::replace_wildcards( const std::string & id )
 {
+
+  //
+  // get copy of original script;  comments, newlines vesrus '&' will already have
+  // been taken care of
+  //
+  
+  std::string iline = line;
+
+  //
+  // Copy a set of variables, where any i-vars will overwrite an existing var
+  //
+  std::cout << "sz = " << vars.size() << " " << ivars.size() << "\n";
+  std::map<std::string,std::string> allvars = vars;
+  if ( ivars.find( id ) != ivars.end() )
+    {
+      const std::map<std::string,std::string> & newvars = ivars.find( id )->second;
+      std::map<std::string,std::string>::const_iterator vv = newvars.begin();
+      while ( vv != newvars.end() )
+	{
+	  logger << "  setting " << vv->first << " -> " << vv->second << "\n";
+	  allvars[ vv->first ] = vv->second;
+	  ++vv;
+	}
+    }
+
+  
+  //
+  //
+  // remove any conditional blocks, where variable should be var=1 (in) or var=0 (out)
+  // or a value for add=variable,var2 for var=1 var=2
+  //
+
+  // [[var1
+  //   block
+  // ]]var1
+
+  
+  Helper::process_block_conditionals( &iline , allvars  );
+     
+  //
+  // swap in any variables (and allows for them being defined on-the-fly)
+  //
+
+  Helper::swap_in_variables( &iline , &allvars );
+
+  //
+  // expand [var][1:10] sequences
+  //
+
+  Helper::expand_numerics( &iline );
+
+
+  std::cout << "final [" << iline << "]\n";
+  
+  //
+  // Parse into commands/options
+  //
+
+  std::vector<std::string> tok = Helper::quoted_parse( iline , "\n" );
+  
+  // command(s): do this just for printing; real parsing will include variables, etc
+
+  params.clear();
+  
+  for (int c=0;c<tok.size();c++)
+    {      
+      std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
+      
+      // may be 0 if a line was a variable declaration
+      if ( ctok.size() >= 1 ) 
+	{
+	  cmds.push_back( ctok[0] );
+	  param_t param;
+	  for (int j=1;j<ctok.size();j++) param.parse( ctok[j] );
+	  params.push_back( param );
+	}
+    }
+  
   // replace in all 'params' any instances of 'globals::indiv_wildcard' with 'id'
   // ALSO, will expand any @{includes} from files (which may contain ^ ID wildcards
   // in their names,  e..g.    CHEP bad-channels=@{aux/files/bad-^.txt}  
   
-  params = original_params;
-  for (int p = 0 ; p < params.size(); p++ ) params[p].update( id , globals::indiv_wildcard );
+  //params = original_params;
+  for (int p = 0 ; p < params.size(); p++ )
+    params[p].update( id , globals::indiv_wildcard );
+
+  
+  
 }
 
 bool cmd_t::read( const std::string * str , bool silent )
@@ -585,31 +680,18 @@ bool cmd_t::read( const std::string * str , bool silent )
     }
   
 
-  //
-  // remove any conditional blocks, where variable should be var=1 (in) or var=0 (out)
-  // or a value for add=variable,var2 for var=1 var=2
-  //
+  // Note... used to do processing of command file here (global)
+  //  as we now use ivars as well as vars, hold on this till later,
+  //  in update()
+  
 
-  // [[var1
-  //   block
-  // ]]var1
-
-  Helper::process_block_conditionals( &line , vars );
-     
-  //
-  // swap in any variables (and allows for them being defined on-the-fly
-  //
-
-  Helper::swap_in_variables( &line , &vars );
 
   //
-  // expand [var][1:10] sequences
+  // Initial processing 
   //
-
-  Helper::expand_numerics( &line );
-
   
   std::vector<std::string> tok = Helper::quoted_parse( line , "\n" );
+  
   if ( tok.size() == 0 ) 
     {
       quit(true);      
@@ -617,7 +699,8 @@ bool cmd_t::read( const std::string * str , bool silent )
     }
 
 
-  // command(s)
+  
+  // command(s): do this just for printing; real parsing will include variables, etc
   for (int c=0;c<tok.size();c++)
     {      
       std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
@@ -632,8 +715,9 @@ bool cmd_t::read( const std::string * str , bool silent )
 	}
     }
 
+  // redundant now, as this is remade anew for each EDF
   // make a copy of the 'orginal' params
-  original_params = params;
+  // original_params = params;
   
   // summary
 
@@ -703,6 +787,7 @@ bool cmd_t::eval( edf_t & edf )
 
       logger << " ..................................................................\n"
 	     << " CMD #" << c+1 << ": " << cmd(c) << "\n";
+      logger << "   options: " << param(c).dump( "" , " " ) << "\n";
       
       
       writer.cmd( cmd(c) , c+1 , param(c).dump( "" , " " ) );
@@ -2293,6 +2378,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
    
+  // individual-specific variables
+  if ( Helper::iequals( tok0 , "var" ) ) 
+    {
+      cmd_t::attach_ivars( tok1 );
+      return;      
+    }
   
   // naughty list?
   if ( Helper::iequals( tok0 , "fail-list" ) )
@@ -2642,3 +2733,78 @@ std::string cmd_t::resolved_outdb( const std::string & id , const std::string & 
   return Helper::insert_indiv_id( Helper::sanitize( id ) , str ); 
 } 
 
+
+
+//
+// Attach i-vars from a file
+//
+
+void cmd_t::attach_ivars( const std::string & file )
+{
+
+  std::vector<std::string> files = Helper::parse( file , "," );
+
+  for ( int f = 0; f < files.size() ; f++ )
+    {
+      std::string filename = Helper::expand( files[f] );
+
+      if ( ! Helper::fileExists( filename ) )
+	Helper::halt( "could not find " + filename );
+      
+      std::cout << "reading from " << filename << "\n";
+      
+      std::ifstream IN1( filename.c_str() , std::ios::in );
+      bool header = true ; 
+      int idcol = -1;
+      int ncols = 0;
+
+      std::vector<std::string> head;
+
+      while ( ! IN1.eof() ) 
+	{
+          std::string s;
+          Helper::safe_getline( IN1 , s );
+          if ( IN1.eof() ) break;
+          if ( s == "" ) continue;
+
+	  std::vector<std::string> tok = Helper::parse( s , "\t" );
+	  
+	  if ( header )
+	    {
+	      for (int i=0;i<tok.size();i++)
+		{
+		  if ( tok[i] == "ID" )
+		    {
+		      if ( idcol != -1 )
+			Helper::halt( "cannot have multiple ID columns in " + filename );
+		      idcol = i;
+		    }
+		}
+	      // store header
+	      head = tok;
+	      ncols = head.size();	      
+	    }
+	  
+	  if ( ! header )
+	    {
+	      if ( ncols != tok.size() )
+		Helper::halt( "inconsistent number of columns in " + filename );
+	      
+	      for (int c=0;c<ncols;c++)
+		{
+		  if ( c == idcol ) continue;		  
+		  cmd_t::ivars[ tok[ idcol ] ][ head[ c ] ] = tok[c] ;		  
+		  std::cout << "setting: " << tok[ idcol ] << " " << head[ c ]  << "  " << tok[c]  << "\n";
+		  
+		}
+	      
+	    }
+
+	  // read header now
+	  header = false; 
+	}
+      IN1.eof();
+          
+      //      logger << "  attached " << ncols - 1 << " from " << filename << "\n";
+    }
+}
