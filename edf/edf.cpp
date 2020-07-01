@@ -2247,6 +2247,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
 		       const signal_list_t & refs ,
 		       bool make_new ,
 		       const std::string & new_channel , 
+		       const int new_sr ,
 		       bool dereference )
 {
 
@@ -2277,7 +2278,22 @@ void edf_t::reference( const signal_list_t & signals0 ,
 
       // switch to re-reference this copy now
       signals = header.signal_list( new_channel );
-    
+
+      // do we need to resample? 
+      
+      const int sig_sr = (int)header.sampling_freq( signals(0) );
+      
+      // resample sig, if needed (only one)
+      // this slot is the 'new' one, so original signal untouched
+      if ( new_sr != 0 && sig_sr != new_sr )
+	dsptools::resample_channel( *this , signals(0) , new_sr );
+      
+      // if the reference needs resampling, we need to copy a new
+      // channel and do the re-sampling (i.e. to leave the original
+      // untouched).   Do this downstream on the 'final' reference
+      // (as this may involve multiple channels that have different 
+      // SRs.
+      
     }
 
   
@@ -2289,7 +2305,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
   if ( nr == 0 ) return;
 
   //
-  // Consode logging 
+  // Console logging 
   //
 
   if ( nr > 0 )
@@ -2308,22 +2324,44 @@ void edf_t::reference( const signal_list_t & signals0 ,
   // check SR for all channels  
   //
   
-  int np = header.n_samples[ signals(0) ];
-  
-  for (int s=0;s<ns;s++) 
-    if ( header.n_samples[ signals(s) ] != np ) 
-      Helper::halt( "all signals/references must have similar sampling rates" );
-  
-  for (int r=0;r<nr;r++) 		
-    if ( header.n_samples[ refs(r) ] != np ) 
-      Helper::halt( "all signals/references must have similar sampling rates" );
-  
+  int np_sig = header.n_samples[ signals(0) ];
+
+  if ( (!make_new ) || ( make_new && new_sr == 0 ) ) 
+    {
+      
+      
+      for (int s=0;s<ns;s++) 
+	if ( header.n_samples[ signals(s) ] != np_sig ) 
+	  Helper::halt( "all signals/references must have similar sampling rates" );
+      
+      for (int r=0;r<nr;r++) 		
+	if ( header.n_samples[ refs(r) ] != np_sig ) 
+	  Helper::halt( "all signals/references must have similar sampling rates" );
+      
+    }
+  else
+    {
+      // here we are fixing SR, and we've already done this for the 
+      // signal;  we'll do it later for REF, but need to check they
+      // all (if >1 ref, i.e. average ref) match
+
+      int np_ref = header.n_samples[ refs(0) ];
+      
+      for (int r=0;r<nr;r++) 		
+	if ( header.n_samples[ refs(r) ] != np_ref ) 
+	  Helper::halt( "all references must have similar sampling rates" );
+
+    }
+
 
   //
   // Build reference once
   //
   
   std::vector<double> reference;
+
+  // number of samples points per record for reference
+  const int np_ref = header.n_samples[ refs(0) ];
 
   int rec = timeline.first_record();
   while ( rec != -1 )
@@ -2339,7 +2377,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
 	refdata.push_back( record.get_pdata( refs(r) ) );
       
       // average
-      for (int i=0;i<np;i++) 
+      for (int i=0;i<np_ref;i++) 
 	{
 	  double avg = 0;
 	  for (int r=0;r<nr;r++) avg += refdata[r][i];
@@ -2351,6 +2389,25 @@ void edf_t::reference( const signal_list_t & signals0 ,
       rec = timeline.next_record(rec);       
     }
 
+
+  //
+  // We to resample reference?
+  //
+
+  if ( make_new && new_sr != 0 )
+    {
+      const int ref_sr = (int)header.sampling_freq( refs(0) );
+      if ( ref_sr != new_sr )
+	{
+	  const int refsize = reference.size();
+
+	  reference = dsptools::resample( &reference , ref_sr , new_sr );
+
+	  // ensure exact length... pad if needed
+	  if ( reference.size() != refsize )
+	    reference.resize( refsize );
+	}
+    }
   
   //
   // transform signals one at a time, now we have reference in 'reference'
@@ -2386,9 +2443,9 @@ void edf_t::reference( const signal_list_t & signals0 ,
 	  std::vector<double> d0 = record.get_pdata( signals(s) );
 	  
 	  if ( dereference ) 
-	    for (int i=0;i<np;i++) d.push_back( d0[i] + reference[cc++] );
+	    for (int i=0;i<np_sig;i++) d.push_back( d0[i] + reference[cc++] );
 	  else	    
-	    for (int i=0;i<np;i++) d.push_back( d0[i] - reference[cc++] );
+	    for (int i=0;i<np_sig;i++) d.push_back( d0[i] - reference[cc++] );
 	  
 	  // next record
 	  rec = timeline.next_record(rec); 
@@ -4019,25 +4076,11 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  
 	  signal_list_t sig = header.signal_list( sigstr );
 
-
-
-	  //
-	  // Resample original signals first (this ensure they are of the correct/matched SR too
-	  //
-
-	  for (int s = 0 ; s < ref.size() ; s++ ) 
-	    if ( sr != header.sampling_freq( ref(s) ) )
-	      dsptools::resample_channel( *this , ref(s) , sr );
-
-	  for (int s = 0 ; s < sig.size() ; s++ ) 
-	    if ( sr != header.sampling_freq( sig(s) ) )
-	      dsptools::resample_channel( *this , sig(s) , sr );
-
 	  //
 	  // Rerefence and make canonical signal
 	  //
 
-	  reference( sig , ref , true , canon );
+	  reference( sig , ref , true , canon , sr );
 	  
 	  signal_list_t canonical_signal = header.signal_list( canon );
 

@@ -436,6 +436,7 @@ public:
   void reference( const signal_list_t & signals , const signal_list_t & refs ,
 		  bool make_new ,
 		  const std::string & new_channel ,
+		  const int new_channel_sr , // ignored if not make_new
 		  const bool dereference = false );
 
   void make_canonicals( const std::string & file, const std::string &  group , const std::set<std::string> * cs = NULL );

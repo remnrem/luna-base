@@ -2239,8 +2239,9 @@ void proc_reference( edf_t & edf , param_t & param )
   bool make_new = param.has( "new" );
   std::string new_channel = "";
   if ( make_new ) new_channel = param.value( "new" );
-  
-  edf.reference( signals , references , make_new , new_channel , false );
+  int new_sr = 0;
+  if ( make_new && param.has( "sr" ) ) new_sr = param.requires_int( "sr" );
+  edf.reference( signals , references , make_new , new_channel , new_sr , false );
   
 }
 
@@ -2258,8 +2259,10 @@ void proc_dereference( edf_t & edf , param_t & param )
   bool make_new = param.has( "new" );
   std::string new_channel = "";
   if ( make_new ) new_channel = param.value( "new" );
+  int new_sr = 0;
+  if ( make_new && param.has( "sr" ) ) new_sr = param.requires_int( "sr" );
   
-  edf.reference( signals , references , make_new , new_channel , true );
+  edf.reference( signals , references , make_new , new_channel , new_sr , true );
   
 }
 

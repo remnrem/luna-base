@@ -315,9 +315,11 @@ public:
     return SUDS_UNKNOWN;
   }
 
-
   
-  
+  static std::map<std::string,std::map<std::string,int> > tabulate( const std::vector<std::string> & a , 
+								    const std::vector<std::string> & b , 
+								    const bool print = false );
+    
 };
 
 

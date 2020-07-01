@@ -1093,7 +1093,11 @@ void Helper::process_block_conditionals( std::string * t , const std::map<std::s
   if ( vars.find( "add" ) != vars.end() )
     {
       std::vector<std::string> tok = Helper::parse( vars.find( "add" )->second , "," );
-      for (int i=0; i<tok.size(); i++) adds.insert( tok[i] );
+      for (int i=0; i<tok.size(); i++) {
+	if ( cmd_t::is_special( tok[i] ) ) Helper::halt( "cannot specify special variable " + tok[i] );
+	adds.insert( tok[i] );
+      }
+
     }
 
   // 
@@ -1129,6 +1133,9 @@ void Helper::process_block_conditionals( std::string * t , const std::map<std::s
 	      if ( (*t)[i] == ' ' || (*t)[i] == '\t' || (*t)[i] == '\n' ) break;
 	      h += (*t)[i];
 	    }	  
+
+	  if ( cmd_t::is_special( h ) ) 
+	    Helper::halt( h + " is a special reserved variable, cannot be used for a block-conditional" );
 	  
 	  bool was_exclude = excludes.find(h) != excludes.end();
 	  bool was_include = includes.find(h) != includes.end();

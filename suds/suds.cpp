@@ -440,6 +440,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   PSD.resize( nve , nbins );
   std::vector<int> epochs2 = epochs;
   epochs.clear();
+  std::vector<suds_stage_t> obs_stage2 = obs_stage;
+  obs_stage.clear();
+
   int r = 0;
   for (int i=0;i<PSD2.dim1() ; i++)
     {
@@ -449,6 +452,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    PSD(r,j) = PSD2(i,j);
 
 	  epochs.push_back( epochs2[i] );
+
+	  obs_stage.push_back( obs_stage2[i] );
 
 	  ++r;
 	}
@@ -977,7 +982,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  weight_trainer.prd_stage = suds_t::type( reprediction.cl );
 
 	  double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer.obs_stage ) ) );
-	  
+
 	  ++n_kappa_all;
 	  if ( kappa > 0.5 ) n_kappa50++;
 	  if ( kappa > max_kappa ) max_kappa = kappa;
@@ -987,6 +992,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	}
 
       // actual trainer kappa
+
+      //std::cout << target.prd_stage.size() << " " << target.obs_stage.size() << "\n";       
       double true_kappa =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage ) ) );
       
       wgt[ trainer.id ] = max_kappa ;
@@ -996,7 +1003,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		<< n_kappa50 << "\t"
 		<< mean_kappa / (double)n_kappa_all << "\t"
 		<< max_kappa << "\n";
-
+      
       //
       // Next trainer
       //
@@ -1105,6 +1112,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     }
   
   
+  suds_t::tabulate(  NRW(final_prediction) , NRW(str( target.obs_stage ) ) , true );
+  
 }
 
 
@@ -1117,4 +1126,72 @@ void suds_indiv_t::add( const std::string & trainer_id , const lda_posteriors_t 
 
   target_predictions[ trainer_id ] = suds_t::type( prediction.cl );
   
+}
+
+
+
+std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::vector<std::string> & a , 
+								   const std::vector<std::string> & b , 
+								   const bool print  )
+{
+  std::map<std::string,std::map<std::string,int> > res;
+  
+  const int n = a.size();
+  
+  if ( n != b.size() ) 
+    Helper::halt( "internal error: unequal vectors in tabulate()" );
+  
+  std::set<std::string> uniq;
+  for (int i=0;i<n;i++)
+    {
+      res[ a[i] ][ b[i] ]++;
+      uniq.insert( a[i] );
+      uniq.insert( b[i] );
+    }
+  
+  std::set<std::string>::const_iterator uu = uniq.begin();
+  while ( uu != uniq.end() )
+    {
+      std::set<std::string>::const_iterator jj = uniq.begin();
+      while ( jj != uniq.end() )
+	{
+	  if ( res.find( *uu ) == res.end() )
+	    res[ *uu ][ *jj ] = 0;
+	  else
+	    {
+	      std::map<std::string,int> & rjj = res.find(*uu)->second;
+	      if ( rjj.find( *jj ) == rjj.end() )
+		res[ *uu ][ *jj ] = 0;
+	    }	      
+	  
+	  ++jj;
+	}
+      ++uu;
+    }
+  
+  
+  if ( print )
+    {
+      std::set<std::string>::const_iterator uu = uniq.begin();
+      while ( uu != uniq.end() )
+	{
+	  logger << "\t" << *uu;
+	  ++uu;
+	}
+      logger << "\n";	
+      uu = uniq.begin();
+      while ( uu != uniq.end() )
+	{
+	  logger << *uu;
+	  std::set<std::string>::const_iterator jj = uniq.begin();
+	  while ( jj != uniq.end() )
+	    {
+	      logger << "\t" << res[ *uu ][ *jj ];
+	      ++jj;
+	    }	    
+	  ++uu;
+	}
+    }
+  
+  return res;
 }
