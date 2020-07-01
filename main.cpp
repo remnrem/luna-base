@@ -1021,8 +1021,27 @@ void process_edfs( cmd_t & cmd )
 	  
 	}
 
-
       
+      
+      //
+      // List any individual level variables
+      //
+
+      if ( cmd_t::ivars.find( edf.id ) != cmd_t::ivars.end() )
+	{
+	  logger << "\n variables:\n";
+
+	  const std::map<std::string,std::string> & newvars = cmd_t::ivars.find( edf.id )->second;
+	  std::map<std::string,std::string>::const_iterator vv = newvars.begin();
+	  while ( vv != newvars.end() )
+	    {
+	      logger << "  " << vv->first << "=" << vv->second << "\n";
+	      ++vv;
+	    }
+	  logger << "\n";
+	}
+
+
 	    
       //
       // Evaluate all commands
@@ -1058,7 +1077,7 @@ void process_edfs( cmd_t & cmd )
       //
 
       if ( single_edf ) break;
-
+      
     }
 
 

@@ -57,6 +57,7 @@ std::vector<double> suds_t::upr;
 std::vector<double> suds_t::fac;
 std::vector<int> suds_t::sr;
 double suds_t::denoise_fac;
+bool suds_t::standardize_u = true;
 std::vector<double> suds_t::outlier_ths;
 
 
@@ -258,6 +259,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   edf.timeline.first_epoch();
   
+  epochs.clear();
+  
   while ( 1 ) 
     {
       
@@ -336,7 +339,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // increase epoch-number
       ++en;
       ++en_good;
-
+      epochs.push_back( epoch );
+    
     } // next epoch
   
 
@@ -345,6 +349,18 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( en_good != nge ) Helper::halt( "internal error: under-counted epochs" );
 
 
+
+  //
+  // Rescale PSD?
+  //
+
+
+  if ( suds_t::standardize_u )
+    {
+      logger << "  standardizing PSD\n";
+      Statistics::standardize( PSD );
+    }
+  
   //
   // Get PSC
   //
@@ -360,6 +376,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   W.clear(); V.clear();
   W.resize( nbins ); 
   V.resize( nbins , nbins );
+
+
+  // std::cout << "U\n"
+  // 	    << U.print() << "\n";
 
   bool okay = Statistics::svdcmp( U , W , V );
   if ( ! okay ) Helper::halt( "problem with SVD" );
@@ -418,6 +438,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   Data::Matrix<double> PSD2 = PSD;
   PSD.clear();
   PSD.resize( nve , nbins );
+  std::vector<int> epochs2 = epochs;
+  epochs.clear();
   int r = 0;
   for (int i=0;i<PSD2.dim1() ; i++)
     {
@@ -425,6 +447,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	{
 	  for (int j=0;j<nbins;j++)
 	    PSD(r,j) = PSD2(i,j);
+
+	  epochs.push_back( epochs2[i] );
+
 	  ++r;
 	}
     }
@@ -456,11 +481,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
 
   //
-  // Rescale PSCs?  (e.g. unit variance?)
-  //
-
-  
-  //
   // Smooth PSCs?
   //
 
@@ -473,6 +493,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	dsptools::TV1D_denoise( *col , lambda );
       }
     
+
+      
   
   //
   // Make variables for LDA: shrink down to 'nc'
@@ -600,7 +622,7 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
 
   // stages
   for (int i=0;i<nve;i++)
-    OUT1 << y[i] << "\n";
+    OUT1 << epochs[i] << "\t" << y[i] << "\n";
 
   // U (to reestimate LDA model upon loading, i.e
   //  to use lda.predict() on target   ; only needs to be nc rather than nbins
@@ -711,8 +733,9 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
 
   // stages
   y.resize( nve );
+  epochs.resize( nve );
   for (int i=0;i<nve;i++)
-    IN1 >> y[i] ;
+    IN1 >> epochs[i] >> y[i] ;
   obs_stage = suds_t::type( y );
   
   // U (to reestimate LDA model upon loading, i.e
@@ -847,6 +870,8 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 	dsptools::TV1D_denoise( *col , lambda );
       }
 
+
+
   //
   // predict using trainer model
   //
@@ -885,7 +910,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   //
   
   std::map<std::string,double> wgt;
-
 
   //
   // iterate over trainers
@@ -935,12 +959,16 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       double max_kappa = 0;
       double mean_kappa = 0;
       int n_kappa50 = 0;
+      int n_kappa_all = 0;
 
       std::set<suds_indiv_t>::iterator ww = bank.begin();
       while ( ww != bank.end() )
 	{
 	  
 	  suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
+	  
+	  // only use self-training
+	  //if ( trainer.id != weight_trainer.id ) { ++ww; continue; } 
 
 	  //	  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
 	  
@@ -948,28 +976,25 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  
 	  weight_trainer.prd_stage = suds_t::type( reprediction.cl );
 
-	  double kappa = MiscMath::kappa( reprediction.cl , str( weight_trainer.obs_stage ) );
+	  double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer.obs_stage ) ) );
 	  
+	  ++n_kappa_all;
 	  if ( kappa > 0.5 ) n_kappa50++;
 	  if ( kappa > max_kappa ) max_kappa = kappa;
 	  mean_kappa += kappa;
-	  
-	  // std::cout << "KAPPA = " << trainer.id << "\t" 
-	  // 	    << weight_trainer.id << "\t" 
-	  // 	    << kappa << "\n";
 	  
 	  ++ww;
 	}
 
       // actual trainer kappa
-      double true_kappa =  MiscMath::kappa( str( target.prd_stage ) , str( target.obs_stage ) );
+      double true_kappa =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage ) ) );
       
-      wgt[ trainer.id ] = n_kappa50 ;
+      wgt[ trainer.id ] = max_kappa ;
       
       std::cout << "K\t"
 		<< true_kappa << "\t"
 		<< n_kappa50 << "\t"
-		<< mean_kappa / (double)(bank.size()) << "\t"
+		<< mean_kappa / (double)n_kappa_all << "\t"
 		<< max_kappa << "\n";
 
       //
@@ -995,12 +1020,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   Data::Matrix<double> pp( ne , 5 );
 
   int ntrainers = 0;
+  double tot_wgt = 0;
 
   std::map<std::string,Data::Matrix<double> >::const_iterator ii = target.target_posteriors.begin();
   while ( ii != target.target_posteriors.end() )
     {
-      
-
+     
 
       const Data::Matrix<double> & m = ii->second;
 
@@ -1011,20 +1036,23 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // Use this ?
       //
 
-      if ( wgt[ trainer.id ] <= 10 ) {
-	++ii;
-	continue;
-      }
+      // if ( wgt[ trainer.id ] <= 10 ) {
+      // 	++ii;
+      // 	continue;
+      // }
       
       ++ntrainers;
+      
+      double w = wgt[ trainer.id ];
 
+      tot_wgt += w;
             
       if ( pp.dim1() != m.dim1() || pp.dim2() != m.dim2() )
 	Helper::halt( "internal error in compiling posteriors across trainers" );
 
       for (int i=0;i<ne;i++)
 	for (int j=0;j<5;j++)
-	  pp(i,j) += m(i,j);
+	  pp(i,j) += w * m(i,j);
       
       ++ii;
     }
@@ -1033,23 +1061,32 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   for (int i=0;i<ne;i++)
     for (int j=0;j<5;j++)
-      pp(i,j) /= (double)ntrainers;
+      pp(i,j) /= (double)tot_wgt;
 
 
   //
   // Report
   //
 
+  std::vector<std::string> final_prediction;
+
   if ( 1 )
     {
       for (int i=0;i<ne;i++)
 	{
-	  std::cout << str( target.obs_stage[i] ) ;
+	  std::cout << "e" <<  1 + target.epochs[i] ;
 
 	  for (int j=0;j<5;j++)
 	    std::cout << "\t" << pp(i,j);
 	  
-	  std::cout << "\t" << max( pp.row(i) ) 
+	  std::string predss = max( pp.row(i) );
+
+	  final_prediction.push_back( predss );
+
+	  std::cout << "\t" << str( target.obs_stage[i] ) 
+		    << "\t" << predss 
+		    << "\t" << suds_t::num( str( target.obs_stage[i] ) )
+		    << "\t" << suds_t::num( predss )
 		    << "\n";
 	}
     }
@@ -1063,7 +1100,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   if ( prior_staging )
     {
-      // kappa
+      std::cout << "overall kappa " << MiscMath::kappa( final_prediction , str( target.obs_stage ) ) << "\t"
+		<< MiscMath::kappa( NRW(final_prediction) , NRW(str( target.obs_stage ) )) << "\n";
     }
   
   

@@ -96,13 +96,6 @@ void param_t::update( const std::string & id , const std::string & wc )
       if ( Helper::swap_in_includes( &v ) )
 	changed = true;
 
-      // 3. swap in ivars (note -- these don't have return values, so can't just
-      //    use 'changed' below... TODO: change this
-      
-      Helper::process_block_conditionals( &v , cmd_t::ivars[id]  );
-      
-      Helper::swap_in_variables( &v , &cmd_t::ivars[id] );
-      
       //
       // needs updating?
       //
@@ -266,12 +259,14 @@ std::set<std::string> param_t::keys() const
 
 cmd_t::cmd_t() 
 {
+  register_specials();
   reset();
   error = ! read();
 }
 
 cmd_t::cmd_t( const std::string & str ) 
 {
+  register_specials();
   reset();
   error = ! read( &str , true ); 
 }
@@ -476,7 +471,7 @@ void cmd_t::replace_wildcards( const std::string & id )
   //
   // Copy a set of variables, where any i-vars will overwrite an existing var
   //
-  std::cout << "sz = " << vars.size() << " " << ivars.size() << "\n";
+
   std::map<std::string,std::string> allvars = vars;
   if ( ivars.find( id ) != ivars.end() )
     {
@@ -484,7 +479,6 @@ void cmd_t::replace_wildcards( const std::string & id )
       std::map<std::string,std::string>::const_iterator vv = newvars.begin();
       while ( vv != newvars.end() )
 	{
-	  logger << "  setting " << vv->first << " -> " << vv->second << "\n";
 	  allvars[ vv->first ] = vv->second;
 	  ++vv;
 	}
@@ -500,10 +494,10 @@ void cmd_t::replace_wildcards( const std::string & id )
   // [[var1
   //   block
   // ]]var1
+  
+  Helper::process_block_conditionals( &iline , allvars );
 
   
-  Helper::process_block_conditionals( &iline , allvars  );
-     
   //
   // swap in any variables (and allows for them being defined on-the-fly)
   //
@@ -517,7 +511,7 @@ void cmd_t::replace_wildcards( const std::string & id )
   Helper::expand_numerics( &iline );
 
 
-  std::cout << "final [" << iline << "]\n";
+  //  std::cout << "final [" << iline << "]\n";
   
   //
   // Parse into commands/options
@@ -528,7 +522,8 @@ void cmd_t::replace_wildcards( const std::string & id )
   // command(s): do this just for printing; real parsing will include variables, etc
 
   params.clear();
-  
+  cmds.clear();
+
   for (int c=0;c<tok.size();c++)
     {      
       std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
@@ -536,7 +531,9 @@ void cmd_t::replace_wildcards( const std::string & id )
       // may be 0 if a line was a variable declaration
       if ( ctok.size() >= 1 ) 
 	{
+	  //std::cout << "adding [" << ctok[0] << "]\n";
 	  cmds.push_back( ctok[0] );
+	  
 	  param_t param;
 	  for (int j=1;j<ctok.size();j++) param.parse( ctok[j] );
 	  params.push_back( param );
@@ -551,8 +548,7 @@ void cmd_t::replace_wildcards( const std::string & id )
   for (int p = 0 ; p < params.size(); p++ )
     params[p].update( id , globals::indiv_wildcard );
 
-  
-  
+   
 }
 
 bool cmd_t::read( const std::string * str , bool silent )
@@ -680,10 +676,15 @@ bool cmd_t::read( const std::string * str , bool silent )
     }
   
 
+  //
+  // Completed extracting 'line'
+  //
+
+  //
   // Note... used to do processing of command file here (global)
   //  as we now use ivars as well as vars, hold on this till later,
   //  in update()
-  
+  //
 
 
   //
@@ -715,9 +716,6 @@ bool cmd_t::read( const std::string * str , bool silent )
 	}
     }
 
-  // redundant now, as this is remade anew for each EDF
-  // make a copy of the 'orginal' params
-  // original_params = params;
   
   // summary
 
@@ -747,7 +745,7 @@ bool cmd_t::read( const std::string * str , bool silent )
 	     << params[i].dump("","|") 
 	     << "\n";
     }
-  
+
 
   return true;
 }
@@ -767,7 +765,7 @@ bool cmd_t::eval( edf_t & edf )
   
   for ( int c = 0 ; c < num_cmds() ; c++ )
     {	        
-      
+
       // was a problem flag raised when loading the EDF?
       
       if ( globals::problem ) return false;
@@ -950,7 +948,6 @@ bool cmd_t::eval( edf_t & edf )
 
       writer.unlevel( "_" + cmd(c) );      
      
-      
 
     } // next command
   
@@ -2379,7 +2376,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
    
   // individual-specific variables
-  if ( Helper::iequals( tok0 , "var" ) ) 
+  if ( Helper::iequals( tok0 , "vars" ) ) 
     {
       cmd_t::attach_ivars( tok1 );
       return;      
@@ -2807,4 +2804,54 @@ void cmd_t::attach_ivars( const std::string & file )
           
       //      logger << "  attached " << ncols - 1 << " from " << filename << "\n";
     }
+}
+
+
+
+
+void cmd_t::register_specials()
+{
+  specials.insert( "silent" ) ;
+  specials.insert( "sig" ) ;
+  specials.insert( "vars" ) ;
+  specials.insert( "add" ) ;
+  specials.insert( "fail-list" ) ;
+  specials.insert( "compressed" ) ;
+  specials.insert( "nsrr-remap" ) ;
+  specials.insert( "remap" ) ;
+  specials.insert( "annot-folder" ) ;
+  specials.insert( "annots-folder" ) ; 
+  specials.insert( "inst-hms" ) ;
+  specials.insert( "force-inst-hms" ) ;
+  specials.insert( "no-epoch-check" ) ;
+  specials.insert( "epoch-len" ) ;
+  specials.insert( "annots-file" ) ;
+  specials.insert( "annots-files" ) ;
+  specials.insert( "annot-file" ) ;
+  specials.insert( "annot-files" ) ;
+  specials.insert( "annots" );
+  specials.insert( "annot"  );
+  specials.insert( "alias" ) ;
+  specials.insert( "bail-on-fail" ) ;
+  specials.insert( "force-edf" ) ;
+  specials.insert( "skip-edf-annots" ) ;
+  specials.insert( "skip-annots" ) ;
+  specials.insert( "skip-all-annots" ) ;
+  specials.insert( "ftr" ) ;
+  specials.insert( "path" ) ;
+  specials.insert( "tt-prepend" );
+  specials.insert( "tt-prefix" ) ;
+  specials.insert( "tt-append" ); 
+  specials.insert( "tt-suffix" );
+  specials.insert( "assume-pm-start" );
+  specials.insert( "slow" ) ;
+  specials.insert( "delta" ) ;
+  specials.insert( "theta" ) ;
+  specials.insert( "alpha" ) ;
+  specials.insert( "sigma" ) ;
+  specials.insert( "beta" ) ;
+  specials.insert( "gamma" ) ;
+  specials.insert( "total" ) ;
+  specials.insert( "exclude" ) ;
+  specials.insert( "include" ) ;
 }

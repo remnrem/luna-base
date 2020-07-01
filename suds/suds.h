@@ -110,6 +110,12 @@ struct suds_indiv_t {
   std::map<std::string,int> counts;
 
   //
+  // retained epochs
+  //
+
+  std::vector<int> epochs;
+
+  //
   // target predictions/staging
   //
   
@@ -138,11 +144,13 @@ struct suds_t {
     nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 10 ;
 
     // smoothing factor (multiple of SD)
-    denoise_fac = param.has( "denoise" ) ? param.requires_dbl( "denoise" ) : 0.1 ; 
+    denoise_fac = param.has( "denoise" ) ? param.requires_dbl( "denoise" ) : 0.5 ; 
 
     // epoch-level outlier removal for trainers
     if ( param.has( "th" ) ) outlier_ths = param.dblvector( "th" );
     
+    standardize_u = ! param.has( "unnorm" );
+
     //
     // channels, w/ sample rates
     //
@@ -215,6 +223,8 @@ struct suds_t {
   
   static double denoise_fac;
 
+  static bool standardize_u;
+
   static std::vector<double> outlier_ths;
 
   
@@ -241,6 +251,30 @@ public:
     if ( m == 2 ) return "N3";
     if ( m == 3 ) return "REM";
     return "W";
+  }
+
+  static int num( const std::string & ss ) {
+    if ( ss == "N1" ) return -1;
+    if ( ss == "N2" ) return -2;
+    if ( ss == "N3" ) return -3;
+    if ( ss == "REM" ) return 0;
+    if ( ss == "W" ) return 1;
+    return 2;
+  }
+
+
+  // downcast
+  static std::string NRW( const std::string & ss ) { 
+    if ( ss == "REM" ) return "R";
+    if ( ss == "N1" || ss == "N2" || ss == "N3" ) return "NR";
+    return "W";
+  }
+
+  static std::vector<std::string> NRW( const std::vector<std::string> & ss ) { 
+    std::vector<std::string> s( ss.size() );
+    for (int i=0;i<ss.size();i++) s[i] = NRW( ss[i] );
+    return s;
+
   }
 
   static std::vector<suds_stage_t> type( const std::vector<std::string> & s )

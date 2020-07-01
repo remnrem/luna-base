@@ -130,7 +130,9 @@ namespace Statistics {
   Data::Vector<double> variance( const Data::Matrix<double> & , const Data::Vector<double> & );
   
   Data::Vector<double> mean_center_cols( const Data::Matrix<double> & d );
-    
+  
+  void standardize( Data::Matrix<double> & d );
+  
   Data::Matrix<double> covariance_matrix( const Data::Matrix<double> & );
   Data::Matrix<double> covariance_matrix( const Data::Matrix<double> & , const Data::Vector<double> & );
 

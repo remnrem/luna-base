@@ -31,7 +31,6 @@
 
 struct edf_t;
 
-
 //
 // Helper to parse command syntax
 //
@@ -82,6 +81,7 @@ struct param_t
 private:
 
   std::map<std::string,std::string> opt;
+
   std::set<std::string> hidden;
 
 
@@ -103,6 +103,9 @@ class cmd_t
 
   static void attach_ivars( const std::string & file );
   
+  // these cannot be used as variable names in scripts
+  static void register_specials();
+
   // by default (str == NULL) read from command line arguments, 
   // then from STDIN;  otherwise, parse the commands in the 
   // text string 
@@ -177,6 +180,9 @@ class cmd_t
 
   static void clear_static_members() ;
 
+  static bool is_special( const std::string & v ) 
+  { return specials.find( v ) != specials.end() ; } 
+
  private:
   
   // a command is a single input (0+ EDFs) linked to 1 or more
@@ -189,11 +195,13 @@ class cmd_t
       
   std::vector<std::string> cmds;
   std::vector<param_t>     params;
-  std::vector<param_t>     original_params;
   
   static std::set<std::string> commands;
   
   static void populate_commands() ;
+
+  static std::set<std::string> specials;
+
 
 };
 

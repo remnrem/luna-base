@@ -104,7 +104,7 @@ Data::Vector<double> Statistics::mean( const Data::Matrix<double> & d )
     {
       for (int i=0; i<d.dim1(); i++)
 	m[j] += d(i,j);
-      m[j] /= d.dim1();
+      m[j] /= (double)d.dim1();
     }
   return m;
 }
@@ -132,6 +132,25 @@ Data::Matrix<double> Statistics::covariance_matrix( const Data::Matrix<double> &
   return covariance_matrix( d , u , d , u );  
 }  
 
+void Statistics::standardize( Data::Matrix<double> & D )
+{
+  const int nr = D.dim1();
+  const int nc = D.dim2();
+  
+  Data::Vector<double> col_means = mean( D );
+  Data::Vector<double> col_var = variance( D , col_means );
+  Data::Vector<double> col_sd( nc );
+  for (int j=0;j<nc;j++) 
+    {
+      if ( abs( col_var[j] ) < 1e-8 ) col_sd[j] = 1;
+      else col_sd[j] = sqrt( col_var[j] );
+    }
+  
+  for (int i=0;i<nr;i++)
+    for (int j=0;j<nc;j++)
+      D(i,j) = ( D(i,j) - col_means[j] ) / col_sd[j] ; 
+  
+}
 
 
 std::vector<double> Statistics::as_vector( const Data::Vector<double> & d )

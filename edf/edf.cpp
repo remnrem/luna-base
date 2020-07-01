@@ -4018,16 +4018,29 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  if ( refstr != "." ) ref =  header.signal_list( refstr );
 	  
 	  signal_list_t sig = header.signal_list( sigstr );
+
+
+
+	  //
+	  // Resample original signals first (this ensure they are of the correct/matched SR too
+	  //
+
+	  for (int s = 0 ; s < ref.size() ; s++ ) 
+	    if ( sr != header.sampling_freq( ref(s) ) )
+	      dsptools::resample_channel( *this , ref(s) , sr );
+
+	  for (int s = 0 ; s < sig.size() ; s++ ) 
+	    if ( sr != header.sampling_freq( sig(s) ) )
+	      dsptools::resample_channel( *this , sig(s) , sr );
+
+	  //
+	  // Rerefence and make canonical signal
+	  //
+
 	  reference( sig , ref , true , canon );
 	  
 	  signal_list_t canonical_signal = header.signal_list( canon );
-      
-	  //
-	  // resample
-	  //
-	  
-	  if ( sr != header.sampling_freq( canonical_signal(0) ) )
-	    dsptools::resample_channel( *this , canonical_signal(0) , sr );
+
 	  
 	  //
 	  // rescale units?

@@ -967,7 +967,7 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
   
   // variable must be in the form   ${var} 
   // definitions can be as ${var=values,etc}
-
+    
   int open = 0;
   std::string s;
   for (int i=0;i<t->size();i++)
@@ -993,8 +993,14 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 	  else
 	    {	      
 	      open = 0;
+
+	      // special?
+	      if ( cmd_t::is_special( varname ) )
+		{
+		  Helper::halt( varname + " is a reserved variable and cannot be used in a script" );
+		}
 	      // definition?
-	      if ( varname.find( "=" ) != std::string::npos )
+	      else if ( varname.find( "=" ) != std::string::npos )
 		{
 		  std::vector<std::string> tok = Helper::parse( varname , "=" );
 		  
