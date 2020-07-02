@@ -822,8 +822,6 @@ void suds_t::attach_db( const std::string & folder )
 void suds_indiv_t::fit_lda()
 {
 
-  std::cout << "y U = " << y.size() << "\n" << U.dim1() <<"x" << U.dim2() << "\n";
-
   lda_t lda( y , U );      
 
   model = lda.fit();
@@ -973,30 +971,35 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       int n_kappa50 = 0;
       int n_kappa_all = 0;
 
-      std::set<suds_indiv_t>::iterator ww = bank.begin();
-      while ( ww != bank.end() )
+      if ( 0 ) 
 	{
+	  std::set<suds_indiv_t>::iterator ww = bank.begin();
+	  while ( ww != bank.end() )
+	    {
+	      
+	      suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
+	      
+	      // only use self-training
+	      // if ( trainer.id != weight_trainer.id ) { ++ww; continue; } 
+	      //	  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
+	      
+	      lda_posteriors_t reprediction = weight_trainer.predict( target );
+	      
+	      weight_trainer.prd_stage = suds_t::type( reprediction.cl );
+	      
+	      double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer.obs_stage ) ) );
+	      
+	      ++n_kappa_all;
+	      if ( kappa > 0.5 ) n_kappa50++;
+	      if ( kappa > max_kappa ) max_kappa = kappa;
+	      mean_kappa += kappa;
+	      
+	      ++ww;
+	    }
 	  
-	  suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
-
-	  // only use self-training
-	  // if ( trainer.id != weight_trainer.id ) { ++ww; continue; } 
-	  //	  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
-	  
-	  lda_posteriors_t reprediction = weight_trainer.predict( target );
-	  
-	  weight_trainer.prd_stage = suds_t::type( reprediction.cl );
-
-	  double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer.obs_stage ) ) );
-
-	  ++n_kappa_all;
-	  if ( kappa > 0.5 ) n_kappa50++;
-	  if ( kappa > max_kappa ) max_kappa = kappa;
-	  mean_kappa += kappa;
-	  
-	  ++ww;
 	}
-
+      
+      
       //
       // Trainer weights
       //
@@ -1027,8 +1030,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //
       // Select actual weight to use
       //
+      
+      //wgt[ trainer.id ] = max_kappa ;
 
-      wgt[ trainer.id ] = max_kappa ;
+      wgt[ trainer.id ] = 1 ;
 
       
       //
@@ -1067,16 +1072,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       const Data::Matrix<double> & m = ii->second;
 
       const suds_indiv_t & trainer = *bank.find( suds_indiv_t( ii->first ) );
-
-
+      
       //
       // Use this ?
       //
-
-      // if ( wgt[ trainer.id ] <= 10 ) {
-      // 	++ii;
-      // 	continue;
-      // }
       
       ++ntrainers;
       

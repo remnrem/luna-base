@@ -333,6 +333,8 @@ public:
 
   std::string                id;
 
+  std::vector<std::string>   annot_files; // for WRITE --> sample-list
+
   edf_header_t               header;
   
   std::map<int,edf_record_t> records;

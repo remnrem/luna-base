@@ -2470,10 +2470,17 @@ bool edf_t::load_annotations( const std::string & f0 )
 
   const std::string f = Helper::expand( f0 );
 
+
   // allow wildcards
     
   if ( ! Helper::fileExists( f ) ) 
     Helper::halt( "annotation file " + f + " does not exist for EDF " + filename );
+
+  //
+  // store filename (if needed to be output in a WRITE to the sample-list)
+  //
+  
+  annot_files.push_back( f );
 
   //
   // Type of input?

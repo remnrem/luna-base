@@ -1442,12 +1442,18 @@ void proc_write( edf_t & edf , param_t & param )
     {	  
       std::string file = param.value("sample-list");
       
+      // also append annotation files
+      bool append_annots = param.has( "with-annots" );
+
       // open/append
-      logger << " appending " << filename << " to sample-list " << file << "\n";
+      logger << " appending " << filename << " to sample-list " << file << ( append_annots ? " (with annotations)" : " (dropping any annotations)" ) << "\n";
       
       std::ofstream FL( file.c_str() , std::ios_base::app );
       FL << edf.id << "\t"
-	 << filename << "\n";
+	 << filename;
+      if ( append_annots )
+	for (int i=0;i<edf.annot_files.size();i++) FL << "\t" << edf.annot_files[i];
+      FL << "\n";
       
       FL.close();
     }
