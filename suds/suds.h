@@ -141,10 +141,10 @@ struct suds_t {
   {
 
     // number of PSC components
-    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 10 ;
+    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 4 ;
 
     // smoothing factor (multiple of SD)
-    denoise_fac = param.has( "denoise" ) ? param.requires_dbl( "denoise" ) : 0.5 ; 
+    denoise_fac = param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 0.5 ; 
 
     // epoch-level outlier removal for trainers
     if ( param.has( "th" ) ) outlier_ths = param.dblvector( "th" );
@@ -172,7 +172,7 @@ struct suds_t {
     //
     
     lwr.resize( ns , 0.5 );
-    upr.resize( ns , 25 );
+    upr.resize( ns , 20 );
     fac.resize( ns , 1 );
     sr.resize( ns , 100 );
     
@@ -190,7 +190,7 @@ struct suds_t {
     
     if ( param.has( "fac" ) )
       {
-	fac = param.dblvector( "fac" );
+	fac = param.intvector( "fac" );
 	if ( fac.size() != ns ) Helper::halt( "incorrect number of values for fac" );
       }
     
@@ -217,7 +217,7 @@ struct suds_t {
 
   static std::vector<double> upr;
 
-  static std::vector<double> fac;
+  static std::vector<int> fac;
 
   static std::vector<int> sr;
   

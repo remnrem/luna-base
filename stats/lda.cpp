@@ -81,6 +81,8 @@ lda_model_t lda_t::fit()
     for ( int j = 0 ; j < p ; j++ )
       group_means( i, j ) /= n * prior[i];
 
+  std::cout << "GM\n" << group_means.print() << "\n";
+  
   // adjust X by group mean; get variance of each measure (i.e. looking for within-group variability)
   std::vector<double> f1(p);
   for (int j=0;j<p;j++)
@@ -95,6 +97,8 @@ lda_model_t lda_t::fit()
       }      
     }
 
+  std::cout << "here\n";
+  
   // scaling matrix (diagonal)... can keep as vector
   Data::Matrix<double> scaling( p , p , 0 );
   for (int j=0;j<p;j++) scaling(j,j) = 1.0 / f1[j] ;
@@ -119,6 +123,8 @@ lda_model_t lda_t::fit()
 
   // order so that we have descending singular values
 
+  std::cout << "here2\n";
+  
   std::vector<int> o;
   std::vector<bool> in( W.size() , false ) ;
   for (int i=0;i<W.size();i++) 
@@ -154,7 +160,9 @@ lda_model_t lda_t::fit()
 
   // get new scaling matrix p x rank , possibly of rank < p
   // scaling <- scaling %*% X.s$v[, 1L:rank] %*% diag(1/X.s$d[1L:rank],,rank)
- 
+
+
+    
   Data::Matrix<double> scaling2( p , rank );
   for (int i=0;i<p;i++)
     for (int j=0;j<rank;j++)
@@ -196,23 +204,28 @@ lda_model_t lda_t::fit()
 	X2(i,j) += group_means_centered(i,k) * scaling2(k,j); 
   
   // SVD of X2, g x r matrix
-
+  
+  std::cout << "X2 dim = " << X2.dim1() << " " << X2.dim2() << "\n";
   W.clear();
   V.clear();
   
   W.resize( rank );
-  V.resize( rank , rank );
+  V.resize( rank , ng );
   
-  // std::cout << " X U V " << X2.dim1() << "x" << X2.dim2()
-  //  	    << "\t"
-  //  	    << W.size() << "\t"
-  //  	    << V.dim1() << "x" << V.dim2() << "\n";
+  std::cout << " X U V " << X2.dim1() << "x" << X2.dim2()
+    	    << "\t"
+    	    << W.size() << "\t"
+    	    << V.dim1() << "x" << V.dim2() << "\n";
       
   okay = Statistics::svdcmp( X2 , W , V );
 
+  std::cout << "here2.5\n";
+  
   int rank2 = 0;
-  for (int j=0;j<ng;j++) if ( W[j] > tol ) ++rank2;
-
+  for (int j=0;j<rank;j++) if ( W[j] > tol ) ++rank2;
+  
+  std::cout << "rank2 = " << rank2 << "\n";
+  
   // re-order elements once more
 
   o.clear();
@@ -220,6 +233,7 @@ lda_model_t lda_t::fit()
   in.resize( W.size() , false ) ;
   for (int i=0;i<W.size();i++) 
     {
+      std::cout << "i = " << i << " of " << W.size() << "\n";
       int mxi = -1;
       for (int j=0;j<W.size();j++) { if ( ! in[j] ) { mxi = j ; break; } } 
       for (int j=0;j<W.size();j++) if ( (!in[j]) && W[j] >= W[mxi] ) mxi = j ;      
@@ -227,21 +241,36 @@ lda_model_t lda_t::fit()
       in[ mxi ] = true;
     }
 
+  std::cout << "here3\n";
+  
   W2 = W;
   V2 = V;
 
+  std::cout << "hereXXXYYY\n";
+  
+  std::cout << " W V O " << o.size() << " " 
+    	    << "\t"
+    	    << W.size() << "\t"
+    	    << V.dim1() << "x" << V.dim2() << "\n";
+  
   for (int i=0;i<W.size();i++)
     W[i] = W2[ o[i] ]; 
- 
+
+  std::cout << "hereXX3 " << rank << " " << ng << "\n";
+
+  // for V: only consider cols up to rank
   for (int i=0;i<rank;i++)
-    for (int j=0;j<ng;j++)
+    for (int j=0;j<rank;j++)
       V(i,j) = V2( i , o[j] );
-      
+
+  std::cout << "now\n";
+    
   if ( rank2 == 0 ) {
     model.valid = false;
     model.errmsg = "group means are numerically identical" ;
     return model;
   }
+
   
   // ( p x r ) . ( r , r2 ) 
   // scaling <- scaling %*% X.s$v[, 1L:rank]
@@ -252,6 +281,8 @@ lda_model_t lda_t::fit()
       for (int k=0;k<rank;k++)
 	scaling3(i,j) += scaling2(i,k) * V(k,j);
 
+  std::cout <<" h4\n";
+  
   model.valid = true;
   model.prior = prior;
   model.counts = counts;
@@ -261,6 +292,8 @@ lda_model_t lda_t::fit()
   model.svd.resize( rank2 );
   for (int i=0;i<rank2;i++) model.svd[i] = W[i];
 
+  std::cout << "here5\n";
+      
   model.labels.clear();
   
   std::map<std::string,int>::const_iterator ll = counts.begin();

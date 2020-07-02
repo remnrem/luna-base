@@ -54,7 +54,7 @@ int suds_t::ns;
 std::vector<std::string> suds_t::siglab;
 std::vector<double> suds_t::lwr;
 std::vector<double> suds_t::upr;
-std::vector<double> suds_t::fac;
+std::vector<int> suds_t::fac;
 std::vector<int> suds_t::sr;
 double suds_t::denoise_fac;
 bool suds_t::standardize_u = true;
@@ -674,16 +674,11 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
       >> this_ns 
       >> this_nc ;
   
-  if ( this_nc != suds_t::nc || this_ns != suds_t::ns ) Helper::halt( "prob" );
+  if ( this_nc != suds_t::nc || this_ns != suds_t::ns )
+    Helper::halt( "different trainer nc " + Helper::int2str( this_nc ) + " in " + filename ); 
   
   const int nc = suds_t::nc;
   const int ns = suds_t::ns;
-  
-  // siglab.resize( ns );
-  // sr.resize( ns );
-  // lwr.resize( ns );
-  // upr.resize( ns );
-  // fac.resize( ns );
   
   for (int s=0;s<ns;s++)
     {
@@ -691,23 +686,22 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
       double this_lwr, this_upr;
       int this_sr, this_fac;
       
-      // IN1 >> siglab[s] 
-      // 	  >> sr[s] 
-      // 	  >> lwr[s] 
-      // 	  >> upr[s] 
-      // 	  >> fac[s] ;
-
       IN1 >> this_siglab
 	  >> this_sr 
 	  >> this_lwr
 	  >> this_upr
 	  >> this_fac ;
 
-      if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "prob" );
-      if ( this_sr != suds_t::sr[s] ) Helper::halt( "prob" );
-      if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "prob" );
-      if ( this_upr != suds_t::upr[s] ) Helper::halt( "prob" );
-      if ( this_fac != suds_t::fac[s] ) Helper::halt( "prob" );
+      if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "different signals: " + this_siglab
+							    + ", but expecting " + suds_t::siglab[s] );
+      if ( this_sr != suds_t::sr[s] ) Helper::halt( "different SR: " + this_siglab
+						    + ", but expecting " + suds_t::siglab[s] );
+      if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "different lower-freq: " + Helper::dbl2str( this_lwr )
+						      + ", but expecting " + Helper::dbl2str( suds_t::lwr[s] ) );
+      if ( this_upr != suds_t::upr[s] ) Helper::halt( "different upper-freq: " + Helper::dbl2str( this_upr )
+						      + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;
+      if ( this_fac != suds_t::fac[s] ) Helper::halt( "different fac: " + Helper::int2str( this_fac )
+						      + ", but expecting " + Helper::int2str( suds_t::fac[s] ) ) ;
       
     }
 
@@ -750,7 +744,6 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
     for (int j=0;j<nc;j++)
       IN1 >> U(i,j) ;	
 
-  
   // PSD (mean-centered PSD)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
@@ -762,7 +755,7 @@ void suds_indiv_t::reload( const std::string & filename , bool load_psd )
 	for (int j=0;j<nbins;j++)
 	  IN1 >> PSD(i,j) ;
     }
-  
+
   IN1.close();
   
   //
@@ -829,7 +822,7 @@ void suds_t::attach_db( const std::string & folder )
 void suds_indiv_t::fit_lda()
 {
 
-  //  std::cout << "y U = " << y.size() << "\n" << U.dim1() <<"x" << U.dim2() << "\n";
+  std::cout << "y U = " << y.size() << "\n" << U.dim1() <<"x" << U.dim2() << "\n";
 
   lda_t lda( y , U );      
 
@@ -909,6 +902,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   target.proc( edf , param );
 
+  //
+  // Do we have prior staging available for this target?
+  //
+
+  bool prior_staging = target.obs_stage.size() != 0 ;
+
   
   //
   // save weights for each trainer
@@ -916,6 +915,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   
   std::map<std::string,double> wgt;
 
+  
   //
   // iterate over trainers
   //
@@ -925,9 +925,15 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   while ( tt != bank.end() )
     {
 
-      const suds_indiv_t & trainer = *tt;
-      
+      //
+      // Extract this one trainer
+      //
 
+      const suds_indiv_t & trainer = *tt;
+
+      writer.level( trainer.id , "TRAINER" );
+
+      
       //
       // Predict target given trainer 
       //
@@ -935,13 +941,13 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       lda_posteriors_t prediction = target.predict( trainer );
 
       target.prd_stage = suds_t::type( prediction.cl );      
+
       
       //
       // Save predictions
       //
 
       target.add( tt->id , prediction );
-
       
 
       //
@@ -956,11 +962,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
       target.model = lda.fit();
 
+
       //
       // Now consider how well this predicts all the weight-trainers
       // i.e. where we also have true stage information
       //
-
+      
       double max_kappa = 0;
       double mean_kappa = 0;
       int n_kappa50 = 0;
@@ -971,10 +978,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	{
 	  
 	  suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
-	  
-	  // only use self-training
-	  //if ( trainer.id != weight_trainer.id ) { ++ww; continue; } 
 
+	  // only use self-training
+	  // if ( trainer.id != weight_trainer.id ) { ++ww; continue; } 
 	  //	  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
 	  
 	  lda_posteriors_t reprediction = weight_trainer.predict( target );
@@ -991,18 +997,39 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  ++ww;
 	}
 
-      // actual trainer kappa
+      //
+      // Trainer weights
+      //
 
       //std::cout << target.prd_stage.size() << " " << target.obs_stage.size() << "\n";       
-      double true_kappa =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage ) ) );
+
+      //
+      // If prior staging is available, report on kappa for this single trainer
+      //
+
+      if ( prior_staging )
+	{
+	  double kappa3 =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage ) ) );
+	  writer.value( "K3" , kappa3 );
+	}
       
+      
+     
+      //
+      // Report weights
+      //
+
+      writer.value( "WGT_N50"  , n_kappa50 );
+      writer.value( "WGT_MAX"  , max_kappa );
+      writer.value( "WGT_MEAN" , mean_kappa / (double)n_kappa_all );
+      
+
+      //
+      // Select actual weight to use
+      //
+
       wgt[ trainer.id ] = max_kappa ;
-      
-      std::cout << "K\t"
-		<< true_kappa << "\t"
-		<< n_kappa50 << "\t"
-		<< mean_kappa / (double)n_kappa_all << "\t"
-		<< max_kappa << "\n";
+
       
       //
       // Next trainer
@@ -1012,7 +1039,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
     }
 
+  writer.unlevel( "TRAINER" );
 
+
+  
   //
   // Summarize (w/ weights)
   //
@@ -1064,56 +1094,79 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       ++ii;
     }
 
-  std::cout << "used " << ntrainers << "\n";
+  //  std::cout << "used " << ntrainers << "\n";
+
+  //
+  // Calculate (weighted) posteriors
+  //
 
   for (int i=0;i<ne;i++)
     for (int j=0;j<5;j++)
       pp(i,j) /= (double)tot_wgt;
-
+  
 
   //
   // Report
   //
 
+    
   std::vector<std::string> final_prediction;
 
-  if ( 1 )
+  for (int i=0;i<ne;i++)
     {
-      for (int i=0;i<ne;i++)
+      
+      writer.epoch( edf.timeline.display_epoch( target.epochs[i] ) );
+
+      writer.value( "PP_N1"  , pp(i,0) );
+      writer.value( "PP_N2"  , pp(i,1) );
+      writer.value( "PP_N3"  , pp(i,2) );
+      writer.value( "PP_REM" , pp(i,3) );
+      writer.value( "PP_W"   , pp(i,4) );
+      writer.value( "PP_NR"  , pp(i,0)+pp(i,1)+pp(i,2) );
+
+      // most likely value
+      std::string predss = max( pp.row(i) );
+      writer.value( "PRED" , predss );
+      final_prediction.push_back( predss );
+      
+      if ( prior_staging )
 	{
-	  std::cout << "e" <<  1 + target.epochs[i] ;
-
-	  for (int j=0;j<5;j++)
-	    std::cout << "\t" << pp(i,j);
-	  
-	  std::string predss = max( pp.row(i) );
-
-	  final_prediction.push_back( predss );
-
-	  std::cout << "\t" << str( target.obs_stage[i] ) 
-		    << "\t" << predss 
-		    << "\t" << suds_t::num( str( target.obs_stage[i] ) )
-		    << "\t" << suds_t::num( predss )
-		    << "\n";
+	  // discordance if prior/obs staging available
+	  bool disc5 = predss !=  str( target.obs_stage[i] ) ;
+	  bool disc3 = NRW( predss ) != NRW( str( target.obs_stage[i] ) ) ;
+	  writer.value( "DISC5" , disc5 );
+	  writer.value( "DISC3" , disc3 );
+	  writer.value( "PRIOR" ,  str( target.obs_stage[i] ) );
 	}
+      
     }
+
+  writer.unepoch();
+
+
+  //
+  // Confusion matrix to console, if available
+  //
   
-
-  //
-  // If prior staging exists, report similarity
-  //
-
-  bool prior_staging = target.obs_stage.size() != 0 ; 
-
   if ( prior_staging )
     {
-      std::cout << "overall kappa " << MiscMath::kappa( final_prediction , str( target.obs_stage ) ) << "\t"
-		<< MiscMath::kappa( NRW(final_prediction) , NRW(str( target.obs_stage ) )) << "\n";
+
+      double kappa5 = MiscMath::kappa( final_prediction , str( target.obs_stage ) );
+      double kappa3 = MiscMath::kappa( NRW(final_prediction) , NRW(str( target.obs_stage ) ) );
+      
+      // 5-level reporting
+      logger << "\nConfusion matrix: 5-level classification: kappa = " << kappa5 << "\n";
+      suds_t::tabulate(  final_prediction , str( target.obs_stage ) , true );
+      
+      // 3-level reporting
+      logger << "\nConfusion matrix: 3-level classification: kappa = " << kappa3 << "\n";
+      suds_t::tabulate(  NRW(final_prediction) , NRW(str( target.obs_stage ) ) , true );
+
+      writer.value( "K5" , kappa5 );
+      writer.value( "K3" , kappa3 );
+      
     }
-  
-  
-  suds_t::tabulate(  NRW(final_prediction) , NRW(str( target.obs_stage ) ) , true );
-  
+
 }
 
 
@@ -1172,6 +1225,8 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
   
   if ( print )
     {
+
+      logger << "\tObs:\n\t";
       std::set<std::string>::const_iterator uu = uniq.begin();
       while ( uu != uniq.end() )
 	{
@@ -1179,16 +1234,18 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
 	  ++uu;
 	}
       logger << "\n";	
+      logger << "Pred:";
       uu = uniq.begin();
       while ( uu != uniq.end() )
 	{
-	  logger << *uu;
+	  logger << "\t" << *uu;
 	  std::set<std::string>::const_iterator jj = uniq.begin();
 	  while ( jj != uniq.end() )
 	    {
 	      logger << "\t" << res[ *uu ][ *jj ];
 	      ++jj;
-	    }	    
+	    }
+	  logger << "\n";
 	  ++uu;
 	}
     }
