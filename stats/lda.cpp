@@ -80,8 +80,8 @@ lda_model_t lda_t::fit()
   for ( int i = 0 ; i < ng ; i++ )
     for ( int j = 0 ; j < p ; j++ )
       group_means( i, j ) /= n * prior[i];
-
-  //  std::cout << "GM\n" << group_means.print() << "\n";
+  
+  // std::cout << "GM\n" << group_means.print() << "\n";
   
   // adjust X by group mean; get variance of each measure (i.e. looking for within-group variability)
   std::vector<double> f1(p);

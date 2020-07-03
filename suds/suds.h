@@ -104,7 +104,8 @@ struct suds_indiv_t {
   lda_model_t model; // calculated on reload for trainers
   
   // staging
-  std::vector<suds_stage_t> obs_stage;
+  std::vector<suds_stage_t> obs_stage;       // always all epochs
+  std::vector<suds_stage_t> obs_stage_valid; // will match prd_stage
   std::vector<suds_stage_t> prd_stage;
   
   std::map<std::string,int> counts;
@@ -133,7 +134,7 @@ struct suds_t {
 
   //  friend struct suds_indiv_t;
     
-  static void attach_db( const std::string & );
+  static void attach_db( const std::string & , bool );
   
   static void score( edf_t & edf , param_t & param );
 
@@ -231,14 +232,18 @@ struct suds_t {
 private: 
 
   // trainer library
-
   static std::set<suds_indiv_t> bank;
 
-  // Misc helper 
+  // weight-trainer library
+  static std::set<suds_indiv_t> wbank;
+
 
 public:
 
-
+  //
+  // Misc helpers 
+  //
+  
   static std::string max( const Data::Vector<double> & r ) { 
     if ( r.size() != 5 ) Helper::halt( "internal error, max()" );
     int m = 0;

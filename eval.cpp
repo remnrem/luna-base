@@ -1046,8 +1046,13 @@ void proc_suds( edf_t & edf , param_t & param )
   suds_t::set_options( param );
   
   // this is only do once per session, i.e. even if
-  // multiple targets are scored 
-  suds.attach_db( param.requires( "db" ) );
+  // multiple targets are scored
+  // F -> do not load PSD (not needed)
+  suds.attach_db( param.requires( "db" ) , false );
+
+  // optional weight trainers (T -> load PSD)
+  if ( param.has( "wdb" ) )
+    suds.attach_db( param.value( "wdb" ) , true );
   
   // do actual scoring  
   suds.score( edf , param );
