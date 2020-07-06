@@ -122,6 +122,41 @@ Data::Vector<double> Statistics::variance( const Data::Matrix<double> & d , cons
   return v;
 }
 
+Data::Vector<double> Statistics::sdev( const Data::Matrix<double> & d , const Data::Vector<double> & u )
+{
+
+  const int nc = d.dim2();
+
+  Data::Vector<double> v( nc ); 
+
+  for (int c=0;c<nc;c++ )
+    {
+
+      const Data::Vector<double> & x = d.col(c);
+
+      const double m = u[c];
+      
+      const int n = x.size();
+
+      if ( n < 2 ) v[c] = 0;
+      else
+	{
+	  double ss = 0;
+	  for (int i=0;i<n;i++)
+	    {
+	      const double t = x[i] - m;
+	      ss += t*t;      	      
+	    }
+	  // SD
+	  v[c] = sqrt( ss/(double)(n-1) );
+	}
+    }
+
+  return v;
+
+}
+
+
 Data::Matrix<double> Statistics::covariance_matrix( const Data::Matrix<double> & d )
 {
   return covariance_matrix( d , mean(d) );
@@ -141,8 +176,8 @@ void Statistics::standardize( Data::Matrix<double> & D )
   Data::Vector<double> col_var = variance( D , col_means );
   Data::Vector<double> col_sd( nc );
   for (int j=0;j<nc;j++) 
-    {
-      if ( abs( col_var[j] ) < 1e-8 ) col_sd[j] = 1;
+    {      
+      if ( fabs( col_var[j] ) < 1e-8 ) col_sd[j] = 1;
       else col_sd[j] = sqrt( col_var[j] );
     }
   
@@ -426,7 +461,7 @@ bool Statistics::svdcmp( Data::Matrix<double> & a, Data::Vector<double> & w , Da
 	}
 	break;
       }
-
+      
       if (its == 29) 
 	{
 	  Helper::warn("cannot converge SVD, perhaps due to multi-colinearity"); 
@@ -2402,4 +2437,34 @@ int Statistics::orderSVD( Data::Matrix<double> & U , Data::Vector<double> & W , 
 
   return rank;
   
+}
+
+
+
+Data::Vector<double> Statistics::elem_sqrt( const Data::Vector<double> & x )
+{
+  Data::Vector<double> r = x;
+  for (int i=0;i<r.size();i++) r[i] = sqrt( r[i] );
+  return r;
+}
+
+
+Data::Vector<double> Statistics::unit_scale( const Data::Vector<double> & x )
+{
+
+  const int n = x.size();
+  if ( n == 0 ) return x;
+
+  double xmin = x[0] , xmax = x[0];
+  for (int i=0;i<n;i++)
+    {
+      if ( x[i] < xmin ) xmin = x[i];
+      else if ( x[i] > xmax ) xmax = x[i];
+    }  
+
+  if ( xmin == xmax ) return x;
+
+  Data::Vector<double> r( n );
+  for (int i=0;i<n;i++) r[i] = ( x[i] - xmin ) / ( xmax - xmin );
+  return r;
 }

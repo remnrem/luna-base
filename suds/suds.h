@@ -78,6 +78,9 @@ struct suds_indiv_t {
   // add a prediction from one trainer
   void add( const std::string & id , const lda_posteriors_t & );
   
+  // get KL weights across trainers
+  Data::Vector<double> wgt_kl() const;
+
   // individual ID
   std::string id;
 
@@ -98,6 +101,12 @@ struct suds_indiv_t {
   Data::Matrix<double> U;
   Data::Vector<double> W;
   Data::Matrix<double> V;
+
+  // Hjorth (mean/variance, per signal)
+  Data::Vector<double> mean_h2, sd_h2;
+  Data::Vector<double> mean_h3, sd_h3;
+  // for targets only, keep epoch level Hjorths (epoch x signal)
+  Data::Matrix<double> h2, h3;
 
   // LDA
   std::vector<std::string> y;
@@ -152,6 +161,16 @@ struct suds_t {
     
     standardize_u = ! param.has( "unnorm" );
 
+    // if target staging present, ignore 
+    // e.g. if is is all 'UNKNOWN'
+
+    ignore_target_priors = param.has( "ignore-prior" );
+
+
+    // by default, requires 5 of each 5 epochs to include a trainer
+    required_epoch_n = 5;
+    if ( param.has( "req-epochs" ) ) required_epoch_n = param.requires_int( "req-epochs" );
+    
     //
     // channels, w/ sample rates
     //
@@ -225,8 +244,16 @@ struct suds_t {
   static double denoise_fac;
 
   static bool standardize_u;
+  
+  static bool ignore_target_priors;
+
+  static int required_epoch_n;
 
   static std::vector<double> outlier_ths;
+
+  // based on trainer mean/SD (averaged), per signal
+  static std::vector<double> lwr_h2, upr_h2;
+  static std::vector<double> lwr_h3, upr_h3;
 
   
 private: 

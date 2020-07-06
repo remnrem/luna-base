@@ -128,7 +128,11 @@ namespace Statistics {
   Data::Vector<double> mean( const Data::Matrix<double> & );
   Data::Vector<double> variance( const Data::Matrix<double> & );
   Data::Vector<double> variance( const Data::Matrix<double> & , const Data::Vector<double> & );
+  Data::Vector<double> sdev( const Data::Matrix<double> & , const Data::Vector<double> & );
+  Data::Vector<double> elem_sqrt( const Data::Vector<double> & );
+  Data::Vector<double> unit_scale( const Data::Vector<double> & );
   
+
   Data::Vector<double> mean_center_cols( const Data::Matrix<double> & d );
   
   void standardize( Data::Matrix<double> & d );

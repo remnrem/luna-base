@@ -47,7 +47,7 @@ lda_model_t lda_t::fit()
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() )
     {
-      //std::cout << " cc -> " << cc->first << " " << cc->second << "\n";
+      //      std::cout << " cc -> " << cc->first << " " << cc->second << "\n";
       const int sz = gidx.size();
       gidx[ cc->first ] = sz;
       ++cc;
@@ -60,7 +60,11 @@ lda_model_t lda_t::fit()
     
   // number of classes
   const int ng = counts.size();
-  
+
+  if ( ng == 1 ) 
+    Helper::halt( "no variation in group labels in lda_t::fit()" );
+
+
   // priors
   std::vector<double> prior;
   cc = counts.begin();
@@ -81,7 +85,7 @@ lda_model_t lda_t::fit()
     for ( int j = 0 ; j < p ; j++ )
       group_means( i, j ) /= n * prior[i];
   
-  // std::cout << "GM\n" << group_means.print() << "\n";
+  //  std::cout << "GM\n" << group_means.print() << "\n";
   
   // adjust X by group mean; get variance of each measure (i.e. looking for within-group variability)
   std::vector<double> f1(p);
@@ -117,6 +121,8 @@ lda_model_t lda_t::fit()
   
   bool okay = Statistics::svdcmp( X1 , W , V );
 
+  if ( ! okay ) Helper::halt( "problem in lda_t, initial SVD\n" );
+  
   // SVD (no left singular vectors needed)
   // X.s <- svd(X1, nu = 0L)
 
@@ -211,6 +217,14 @@ lda_model_t lda_t::fit()
         
   okay = Statistics::svdcmp( X2 , W , V );
   
+  if ( ! okay ) 
+    {
+      std::cout << "group means\n"
+		<< group_means.print() << "\n";
+      std::cout << "X\n" << X2.print() << "\n";
+      Helper::halt( "problem in lda_t, SVD 2" );
+    }
+
   int rank2 = 0;
   for (int j=0;j<rank;j++) if ( W[j] > tol ) ++rank2;
   
