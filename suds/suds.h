@@ -98,7 +98,8 @@ struct suds_indiv_t {
   Data::Matrix<double> PSD;
   
   // SVD
-  Data::Matrix<double> U;
+  Data::Matrix<double> U;  // based on own data
+  Data::Matrix<double> U_projected; // can be projected into this space
   Data::Vector<double> W;
   Data::Matrix<double> V;
 
@@ -161,11 +162,16 @@ struct suds_t {
     
     standardize_u = ! param.has( "unnorm" );
 
+    use_best_guess = ! param.has( "no-best-guess" );
+
     // if target staging present, ignore 
     // e.g. if is is all 'UNKNOWN'
 
     ignore_target_priors = param.has( "ignore-prior" );
-
+    
+    // weights: take top N % (if 0 use all)
+    wgt_percentile = param.has( "pct" ) ? param.requires_dbl( "pct" ) : 0 ;
+    if ( wgt_percentile < 0 || wgt_percentile > 100 ) Helper::halt( "pct should be between 0 and 100" );
 
     // by default, requires 5 of each 5 epochs to include a trainer
     required_epoch_n = 5;
@@ -179,7 +185,8 @@ struct suds_t {
     // upr=20,20,20
     // inc=0.25,0.25,0.25
     // sr=100,100,100
-
+    
+    verbose = param.has( "verbose" );
 
     if ( param.requires( "sig" ) == "*" ) Helper::halt( "requires sig to be set explicitly" );
 
@@ -220,13 +227,22 @@ struct suds_t {
 	if ( sr.size() != ns ) Helper::halt( "incorrect number of values for sr" );
       }
     
+
+    eannot_file = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
+
+    eannot_prepend = param.has( "prefix" ) ? ( param.value( "prefix" ) + "_" ) : "" ;
     
+    mat_dump_file = param.has( "mat" ) ? param.value( "mat" ) : "" ;
+
   }
+
   
   //
   // SUDS parameters, needed to be the same across all individuals
   //
-  
+
+  static bool verbose;
+
   static int nc;
 
   static int ns;
@@ -241,9 +257,13 @@ struct suds_t {
 
   static std::vector<int> sr;
   
+  static double wgt_percentile;
+  
   static double denoise_fac;
 
   static bool standardize_u;
+  
+  static bool use_best_guess;
   
   static bool ignore_target_priors;
 
@@ -255,6 +275,10 @@ struct suds_t {
   static std::vector<double> lwr_h2, upr_h2;
   static std::vector<double> lwr_h3, upr_h3;
 
+  static std::string eannot_file;
+  static std::string eannot_prepend;
+
+  static std::string mat_dump_file;
   
 private: 
 
@@ -271,6 +295,31 @@ public:
   // Misc helpers 
   //
   
+  static void make01( Data::Matrix<double> & r ) { 
+
+    if ( r.dim2() != 5 ) Helper::halt( "internal error, maxpp()" );
+    const int n = r.dim1();
+    for (int i=0;i<n;i++)
+      {
+	int m = 0;
+	double mx = r(i,0);
+	for (int j=1;j<5;j++) 
+	  if ( r(i,j) > mx ) { mx = r(i,j) ; m = j; } 
+	for (int j=0;j<5;j++) r(i,j) = 0;
+	r(i,m) = 1;
+      } // next row/epoch
+
+  }
+
+
+  static double maxpp( const Data::Vector<double> & r ) { 
+    if ( r.size() != 5 ) Helper::halt( "internal error, maxpp()" );
+    double mx = r[0];    
+    for (int j=1;j<5;j++) 
+      if ( r[j] > mx ) mx = r[j] ;
+    return mx;
+  }
+
   static std::string max( const Data::Vector<double> & r ) { 
     if ( r.size() != 5 ) Helper::halt( "internal error, max()" );
     int m = 0;

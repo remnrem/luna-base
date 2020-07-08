@@ -2325,6 +2325,11 @@ bool Statistics::t_test( double u1, double s1, int n1 ,
 }
 
 
+double Statistics::correlation( const Data::Vector<double> & a , const Data::Vector<double> & b , const double eps )
+{
+  return correlation( *a.data_pointer() , *b.data_pointer() , eps );
+}
+
 
 double Statistics::correlation( const std::vector<double> & x , const std::vector<double> & y , const double eps )
 {
@@ -2372,6 +2377,9 @@ double Statistics::correlation( const std::vector<double> & x , const std::vecto
   
   return r;
 }
+
+
+
 
 
 double Statistics::mean( const Data::Vector<double> & x )

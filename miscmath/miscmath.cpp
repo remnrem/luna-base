@@ -212,6 +212,17 @@ double MiscMath::iqr( const std::vector<double> & x )
   return quartiles[1] - quartiles[0];
 }
 
+double MiscMath::percentile( const std::vector<double> & x , double p )
+{
+  
+  const int n = x.size();  
+  if ( n == 0 ) Helper::halt( "internal problem, taking percentile of 0 elements");
+  if ( n == 1 ) return x[0];
+  if ( p < 0 || p > 1 ) Helper::halt( "internal problem, invalid percentile specified" );
+  int pn = n*p;
+  return MiscMath::kth_smallest_preserve(x,pn);
+}
+
 
 double MiscMath::meansq( const std::vector<double> & x )
 {

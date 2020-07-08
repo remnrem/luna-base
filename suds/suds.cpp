@@ -38,6 +38,7 @@
 #include "stats/matrix.h"
 #include "stats/statistics.h"
 #include "stats/lda.h"
+#include "miscmath/miscmath.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -50,6 +51,8 @@ extern logger_t logger;
 
 extern writer_t writer;
 
+
+bool suds_t::verbose = false;
 std::set<suds_indiv_t> suds_t::bank;
 std::set<suds_indiv_t> suds_t::wbank;
 int suds_t::nc;
@@ -59,11 +62,16 @@ std::vector<double> suds_t::lwr;
 std::vector<double> suds_t::upr;
 std::vector<int> suds_t::fac;
 std::vector<int> suds_t::sr;
+double suds_t::wgt_percentile;
 double suds_t::denoise_fac;
 bool suds_t::standardize_u = true;
+bool suds_t::use_best_guess = true;
 bool suds_t::ignore_target_priors = false;
 std::vector<double> suds_t::outlier_ths;
 int suds_t::required_epoch_n = 5;
+std::string suds_t::eannot_file = "";
+std::string suds_t::eannot_prepend = "";
+std::string suds_t::mat_dump_file = "";
 
 std::vector<double> suds_t::lwr_h2, suds_t::upr_h2;
 std::vector<double> suds_t::lwr_h3, suds_t::upr_h3;
@@ -1021,14 +1029,12 @@ void suds_indiv_t::fit_lda()
 
 
 //
-// make predictions given a different individuals signal data
+// make predictions given a different individual's signal data
 //
 
 lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 {
 
-  // check: 
-  
   //
   // Project target (this) into trainer space:   U_targ = X_targ * V_trainer * D_trainer^{-1} 
   // subsetting to # of columns
@@ -1041,28 +1047,27 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   for (int i=0;i< suds_t::nc; i++)
     trainer_DW(i,i) = 1.0 / trainer.W[i];
   
-  U = PSD * trainer.V * trainer_DW;
+  U_projected = PSD * trainer.V * trainer_DW;
   
   //
-  // smooth U
+  // smooth U (projected)
   //
   
   if ( suds_t::denoise_fac > 0 ) 
     for (int j=0;j<suds_t::nc;j++)
       {
-	std::vector<double> * col = U.col_nonconst_pointer(j)->data_nonconst_pointer();
+	std::vector<double> * col = U_projected.col_nonconst_pointer(j)->data_nonconst_pointer();
 	double sd = MiscMath::sdev( *col );
 	double lambda = suds_t::denoise_fac * sd;
 	dsptools::TV1D_denoise( *col , lambda );
       }
 
 
-
   //
   // predict using trainer model
   //
 
-  lda_posteriors_t pp = lda_t::predict( trainer.model , U );
+  lda_posteriors_t pp = lda_t::predict( trainer.model , U_projected );
 
   return pp;
 }
@@ -1086,23 +1091,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // create a target 
   //
 
-  suds_indiv_t target;
+  suds_indiv_t target( edf.id ) ;
 
   target.proc( edf , param );
 
-  //
-  // Verbose output?
-  //
-
-  if ( 0  ) 
-    {
-
-      // std::cout << "PSD\n"
-      // 		<< target.PSD.print( " " , 0 , 10 ) << "\n";
-
-      std::cout << "U\n"
-		<< target.U.print() << "\n";
-    }
 
   //
   // Do we have prior staging available for this target?
@@ -1119,6 +1111,24 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   Data::Vector<double> wgt_mean( bank.size() ) ;
   Data::Vector<double> wgt_n50( bank.size() ) ;
 
+  //
+  // Store Kappa3 for each trainer (valid w/ prior staging only)
+  //
+  
+  Data::Vector<double> k3_prior( bank.size() ) ;
+  
+  //
+  // Stats on trainers
+  //
+
+  Data::Vector<double> nr_trainer( bank.size() ) ; // number of unique imputed stages 
+
+  //
+  // Stats on weight trainers
+  //
+
+  std::map<std::string,double> wtrainer_mean_k3;
+  
 
   //
   // iterate over trainers
@@ -1139,32 +1149,47 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       const suds_indiv_t & trainer = *tt;
 
-      writer.level( trainer.id , "TRAINER" );
+      
+      //
+      // Verbose output: TRAINER x WEIGHT TRAINER STATS: not yet
+      //
 
       
       //
-      // Predict target given trainer 
+      // Predict target given trainer, after project target PSD into trainer-defined space 
+      // ( i.e. this generates target.U_projected based on trainer, and then uses it to 
+      //        predict target class given the trainer model )
       //
       
       lda_posteriors_t prediction = target.predict( trainer );
 
-      target.prd_stage = suds_t::type( prediction.cl );   
- 
+      
       //
       // Save predictions
       //
+
+      target.prd_stage = suds_t::type( prediction.cl );   
 
       target.add( tt->id , prediction );
       
 
       //
-      // Reweighting (for now, considers all other individuals)
+      // Reweighting (using individuals specified in wbank, if any) 
       //
-      // Consider that 'predicted' stages are 'real' stages, and build
-      // LDA model for the target based on this trainer's predicted
-      // stages. Requires at least 2 predicted stages.
+      // Consider that target's predicted stages (from this one particular trainer)
+      // are in fact the real/observed stages for this target.    Now, the 'target'
+      // stages and target model is used to predict other people (i.e. called 'weight trainers', 
+      // and they are effectively targets in this context)
       //
+      // Requires at least 2 predicted stages (of sufficient N) have been predicted by the trainer
+      // before doing this step 
  
+      //  trainer --> target                         : using trainer model (to define U)
+      //              target ---> weight trainer1    : using target model (to define U)
+      //              target ---> weight trainer2
+      //              target ---> weight trainer3
+
+
       //
       // Now consider how well this predicts all the weight-trainers
       // i.e. where we also have true stage information
@@ -1185,19 +1210,24 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  ++cc;
 	}
 
+      // save for output
+      nr_trainer[ cntr ] = nr;
+
 
       //
       // If prior staging is available, report on kappa for this single trainer
       //
 
+      double k3;
       if ( prior_staging )
 	{
 	  // obs_stage for valid epochs only
-	  double kappa3 =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) );
+	  double kappa3 =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) );	  
+	  k3_prior[ cntr ] = kappa3;
 	  
-	  writer.value( "K3" , kappa3 );
-	  
-	  //suds_t::tabulate( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) , true );
+	  // tmp
+	  k3 = kappa3;
+	  //	  suds_t::tabulate( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) , true  );	  
 	}
       
       
@@ -1206,6 +1236,18 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       if ( okay_to_fit_model )
 	{
+	  
+	  // std::cout << "U\n" << target.U.print() << "\n";
+	  // for (int i=0;i<prediction.cl.size();i++) std::cout << prediction.cl[i] << "\n";
+	  // std::cout << "\n";
+	  	  
+	  //
+	  // Generate model for prediction based on 'dummy' target (imputed) stages
+	  // but U basd on the target's own SVD (i.e. not projected into trainer space);  
+	  // This we use target.U, which is the original for the target, based on their own data
+	  // (we ignore the U_projected which is based on the trainer model)
+	  //
+
 	  lda_t lda( prediction.cl , target.U );
       
 	  target.model = lda.fit();
@@ -1226,15 +1268,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      
 	      // obs_stage for predicted/valid epochs only
 	      double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer.obs_stage ) ) );
-
 	      
-	      // logger << "\n trainer/wt kappa = " << k3 << "\t" << kappa << "\n";
-	      // suds_t::tabulate(  NRW( reprediction.cl ) , NRW(str( weight_trainer.obs_stage ) ) , true );
+	      //logger << "trainer/wt kappa = " << trainer.id << " " << weight_trainer.id << " " << k3 << "\t" << kappa << "\n";
+	      //suds_t::tabulate(  NRW( reprediction.cl ) , NRW(str( weight_trainer.obs_stage ) ) , true );
 	      
 	      ++n_kappa_all;
 	      if ( kappa > 0.5 ) n_kappa50++;
 	      if ( kappa > max_kappa ) max_kappa = kappa;
-	      mean_kappa += kappa;
+	      mean_kappa +=  kappa  ;
+	      
+	      if ( suds_t::verbose ) 
+		wtrainer_mean_k3[ weight_trainer.id ] += kappa;
 	      
 	      ++ww;
 	    }
@@ -1251,7 +1295,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( wbank.size() > 0 && okay_to_fit_model ) 
 	{
 	  wgt_max[ cntr ] = max_kappa;
-	  wgt_mean[ cntr ] = mean_kappa / (double)n_kappa_all;
+	  wgt_mean[ cntr ] = ( mean_kappa ) / (double)n_kappa_all ;
 	  wgt_n50[ cntr ] = n_kappa50;
 	}
       
@@ -1264,8 +1308,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
     }
 
-  writer.unlevel( "TRAINER" );
-
 
 
   //
@@ -1277,12 +1319,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   Data::Vector<double> wgt_kl = Statistics::unit_scale( target.wgt_kl() );
   
-
   //
   // Output all weights, and generate 'final' weigth
   //
-
-  std::map<std::string,double> wgt;
+  
+  Data::Vector<double> wgt( bank.size() );
 
   tt = bank.begin();
   cntr = 0;
@@ -1293,19 +1334,31 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       const suds_indiv_t & trainer = *tt;
 
       writer.level( trainer.id , "TRAINER" );
+
+      writer.value( "NS" , nr_trainer[ cntr ] );
+
+      if ( prior_staging )
+	writer.value( "K3" , k3_prior[ cntr ] );
+      
       writer.value( "WGT_KL"   , wgt_kl[ cntr ] );
 
       if ( wbank.size() > 0 ) 
 	{
 	  writer.value( "WGT_N50"  , wgt_n50[ cntr ] );
 	  writer.value( "WGT_MAX"  , wgt_max[ cntr ] );
-	  writer.value( "WGT_MEAN" , wgt_mean[ cntr ] );
+	  writer.value( "WGT_MEAN" , wgt_mean[ cntr ] ); // normalized	  
 	}
 
-      // define 'final' weight
-      wgt[ trainer.id ] = wgt_kl[ cntr ] ;
-      //      wgt[ trainer.id ] = 1;
+      //
+      // define 'final' weight: if weight trainers exist, 
+      // using WGT_MEAN, otherwise WGT_KL
+      //
 
+      if ( wbank.size() > 0 )
+	wgt[ cntr ] = wgt_mean[ cntr ] ;
+      else
+	wgt[ cntr ] = wgt_kl[ cntr ] ;
+      
       ++tt;
       ++cntr;
     }
@@ -1313,8 +1366,45 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   
 
   //
-  // Summarize (w/ weights)
+  // Verbose output: mean weight trainer values
   //
+
+  if ( suds_t::verbose && wbank.size() > 0 )
+    {
+      std::set<suds_indiv_t>::iterator ww = wbank.begin();
+      while ( ww != wbank.end() )
+	{	  
+	  suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
+	  writer.level( weight_trainer.id , "WTRAINER" );
+	  double m = wtrainer_mean_k3[ weight_trainer.id ] / (double)bank.size() ;
+	  writer.value( "K3" , m );
+	  ++ww;
+	}
+      writer.unlevel( "WTRAINER" );
+            
+    }
+
+
+  //
+  // Normalize wgt / truncate at percentile?
+  //
+
+  if ( suds_t::wgt_percentile > 0 ) 
+    {
+
+      // get value X = top N% and set to 0/1 if below/above X
+      double threshold = MiscMath::percentile( *wgt.data_pointer() , 1.0 - suds_t::wgt_percentile / 100.0 ) ;
+
+      // binarize wgt 
+      for (int i=0;i<wgt.size();i++)	
+	wgt[i] = wgt[i] >= threshold ? 1 : 0 ;
+	
+    }
+  
+
+  //
+  // Construct (weighted) posterior probabilities
+  //    
   
   const int ne = target.prd_stage.size();
 
@@ -1327,21 +1417,24 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   int ntrainers = 0;
   double tot_wgt = 0;
 
-  std::map<std::string,Data::Matrix<double> >::const_iterator ii = target.target_posteriors.begin();
+  std::map<std::string,Data::Matrix<double> >::iterator ii = target.target_posteriors.begin();
   while ( ii != target.target_posteriors.end() )
     {
-     
-      const Data::Matrix<double> & m = ii->second;
+
+      // get posteriors from this trainer 
+
+      Data::Matrix<double> & m = ii->second;
+
+      // force 0/1 encoding? i.e. 100% weight placed on most likely
+      
+      if ( suds_t::use_best_guess ) 
+	{
+	  suds_t::make01( m );
+	}
 
       const suds_indiv_t & trainer = *bank.find( suds_indiv_t( ii->first ) );
-
-      //
-      // Construct (weighted) posterior probabilities
-      //
-
-      ++ntrainers;
-      
-      double w = wgt[ trainer.id ];
+            
+      double w = wgt[ ntrainers ];
 
       tot_wgt += w;
             
@@ -1352,33 +1445,53 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	for (int j=0;j<5;j++)
 	  pp(i,j) += w * m(i,j);
       
+      ++ntrainers;
       ++ii;
     }
 
-  logger << "  constructed posteriors using " << ntrainers << " trainers\n";
+  if ( suds_t::wgt_percentile > 0 ) 
+    logger << "  constructed posteriors using " << (int)tot_wgt << " (of " << ntrainers << ") trainers\n";
+  else
+    logger << "  constructed posteriors using " << ntrainers << " trainers\n";
 
 
   //
-  // Normalize (weighted) posteriors to sum to 1.0
+  // Normalize (weighted) posteriors to sum to 1.0, and get MAP
   //
 
-  if ( tot_wgt > 0 ) 
+  double mean_maxpp = 0;
+
+  for (int i=0;i<ne;i++)
     {
-      for (int i=0;i<ne;i++)
-	for (int j=0;j<5;j++) // fixed, 5 stages
-	  pp(i,j) /= (double)tot_wgt;
+      // normalize
+      for (int j=0;j<5;j++) // fixed, 5 stages
+        pp(i,j) /= (double)tot_wgt;
+
+      // track level of confidence for MAP
+      mean_maxpp += suds_t::maxpp( pp.row(i) );
+      
     }
+  mean_maxpp /= (double)ne;
+
 
 
   //
-  // Report
+  // Report, and calculate stage duraition too
   //
+
+  
 
   std::map<int,int> e2e;
   for (int i=0;i<ne;i++) e2e[target.epochs[i]] = i ;  
   const int ne_all = edf.timeline.num_epochs();
     
   std::vector<std::string> final_prediction;
+
+  const double epoch_sec = edf.timeline.epoch_length();
+
+  std::map<std::string,double> prd_dur; // sum of PP
+  std::map<std::string,double> prd2_dur; // based on mist likely
+  std::map<std::string,double> obs_dur; // obserevd  (if present)... but based on same epochs as used in the staging (i.e. removing some outliers) 
 
   for (int i=0;i<ne_all;i++)
     {
@@ -1403,7 +1516,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  std::string predss = max( pp.row(e) );
 	  writer.value( "PRED" , predss );
 	  final_prediction.push_back( predss );
-	  
+
+	  // track stage duration (based on probabilistic calls)	  
+	  prd_dur[ "N1" ]  += pp(e,0) * epoch_sec ;
+	  prd_dur[ "N2" ]  += pp(e,1) * epoch_sec ;
+	  prd_dur[ "N3" ]  += pp(e,2) * epoch_sec ;
+	  prd_dur[ "REM" ] += pp(e,3) * epoch_sec ;
+	  prd_dur[ "W" ]   += pp(e,4) * epoch_sec ;
+
+	  // duration based on MAP estimate
+	  prd2_dur[ predss ] += epoch_sec;
+
 	  if ( prior_staging )
 	    {
 	      // discordance if prior/obs staging available	      
@@ -1413,6 +1536,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      writer.value( "DISC3" , disc3 );
 	      writer.value( "PRIOR" ,  str( target.obs_stage[i] ) );
 	      //writer.value( "PRIOR" ,  str( target.obs_stage[i] ) + " " + str( target.obs_stage_valid[e] ) ) ;
+
+	      // comparable OBS duration
+	      obs_dur[ str( target.obs_stage[i] ) ] += epoch_sec; 
+
 	    }
 	}
       else
@@ -1427,11 +1554,29 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     }
 
   writer.unepoch();
+  
+
+  
 
 
   //
-  // Confusion matrix to console, if available
+  // Baseline/individual level report
+  // and cnfusion matrices to console (if prior staging available)
   //
+  
+  // stage durations (in minutes)
+  writer.value( "DUR_PRD_N1" , prd_dur[ "N1" ] / 60.0 );
+  writer.value( "DUR_PRD_N2" , prd_dur[ "N2" ] / 60.0 );
+  writer.value( "DUR_PRD_N3" , prd_dur[ "N3" ] / 60.0 );
+  writer.value( "DUR_PRD_REM" , prd_dur[ "REM" ] / 60.0 );
+  writer.value( "DUR_PRD_W" , prd_dur[ "W" ] / 60.0 );
+
+  // alternate estimates, based on most likely predicted epoch
+  writer.value( "DUR_PRD2_N1" , prd2_dur[ "N1" ] / 60.0 );
+  writer.value( "DUR_PRD2_N2" , prd2_dur[ "N2" ] / 60.0 );
+  writer.value( "DUR_PRD2_N3" , prd2_dur[ "N3" ] / 60.0 );
+  writer.value( "DUR_PRD2_REM" , prd2_dur[ "REM" ] / 60.0 );
+  writer.value( "DUR_PRD2_W" , prd2_dur[ "W" ] / 60.0 );
   
   if ( prior_staging )
     {
@@ -1442,16 +1587,124 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       double kappa3 = MiscMath::kappa( NRW(final_prediction) , NRW(str( target.obs_stage_valid ) ) );
       
       // 5-level reporting
-      logger << "\nConfusion matrix: 5-level classification: kappa = " << kappa5 << "\n";
+      logger << "\n  Confusion matrix: 5-level classification: kappa = " << kappa5 << "\n";
       suds_t::tabulate(  final_prediction , str( target.obs_stage_valid ) , true );
       
       // 3-level reporting
-      logger << "\nConfusion matrix: 3-level classification: kappa = " << kappa3 << "\n";
+      logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << "\n";
       suds_t::tabulate(  NRW(final_prediction) , NRW(str( target.obs_stage_valid ) ) , true );
       
       writer.value( "K5" , kappa5 );
       writer.value( "K3" , kappa3 );
+      writer.value( "MAXPP" , mean_maxpp );
+
+      //
+      // estimates of observed stage duration (based on comparable set of epochs)
+      //
+
+      std::map<std::string,double>::const_iterator ss = obs_dur.begin();
+      while ( ss != obs_dur.end() )
+	{
+	  writer.value( "DUR_OBS_" + ss->first , ss->second / 60.0 );
+	  ++ss;
+	}
       
+      //
+      // also, given correlations between weights and trainer kappas
+      //
+
+      writer.value( "R_K3_KL" , Statistics::correlation( wgt_kl , k3_prior) ); 
+
+      if ( wbank.size() > 0 ) 
+	{
+	  writer.value( "R_K3_MAX" , Statistics::correlation( wgt_max  , k3_prior) ); 
+	  writer.value( "R_K3_MEAN" , Statistics::correlation( wgt_mean , k3_prior) ); 
+	  writer.value( "R_K3_N50" , Statistics::correlation( wgt_n50  , k3_prior) ); 
+	}
+					          
+    }
+
+
+  //
+  // Verbose output?
+  //
+
+  if ( suds_t::mat_dump_file != "" ) 
+    {
+      
+      std::string filename = Helper::expand( suds_t::mat_dump_file );
+      std::ofstream OUT1( filename.c_str() , std::ios::out );
+      
+      logger << "  writing epoch-wise matrix to " << filename << "\n";
+
+      OUT1 << "ID\tE";
+
+      for (int i=0;i<target.PSD.dim2();i++)
+	OUT1 << "\t" << "X" << (i+1);
+
+      for (int i=0;i<target.U.dim2();i++)
+	OUT1 << "\t" << "PSC" << (i+1);
+      
+      OUT1 << "\tPP_N1"
+	   << "\tPP_N2"
+	   << "\tPP_N3"
+	   << "\tPP_R"
+	   << "\tPP_W";      
+      OUT1 << "\tPRD";
+      if ( prior_staging ) OUT1 << "\tOBS";
+      OUT1 << "\n";
+      
+      // each row/epoch
+      for (int i=0;i<ne_all; i++)
+	{
+
+	  int e = -1;
+	  if ( e2e.find( i ) != e2e.end() ) e = e2e[i];	  
+	  
+	  if ( e == -1 ) continue;
+
+	  // only display good lines
+	  OUT1 << target.id << "\t"
+	       << edf.timeline.display_epoch( i ) ;
+	  
+	  for (int j=0;j<target.PSD.dim2();j++)
+	    OUT1 << "\t" << target.PSD(e,j); 
+	  
+	  for (int j=0;j<target.U.dim2();j++)
+	    OUT1 << "\t" << target.U(e,j); 
+	  
+	  for (int j=0;j<pp.dim2();j++)
+	    OUT1 << "\t" << pp(e,j); 
+	  
+	  OUT1 << "\t" << final_prediction[e] ;
+
+	  if ( prior_staging ) 
+	    OUT1 << "\t" << str( target.obs_stage[i] ) ;
+
+	  OUT1 << "\n";
+
+	}
+
+      OUT1.close();
+    }
+
+
+
+
+  //
+  // Write .eannot file?
+  //
+  
+  if ( suds_t::eannot_file != "" )
+    {
+      // expecting this will have individual wild-cards, but these will have 
+      // been expanded already;  this is for home folder encoding ~ 
+      std::string filename = Helper::expand( suds_t::eannot_file );
+      logger << "\n  writing .eannot stage annotations to " << filename << "\n";
+      std::ofstream OUT1( filename.c_str() , std::ios::out );
+      for (int i=0;i<final_prediction.size(); i++)
+	OUT1 << suds_t::eannot_prepend << final_prediction[i] << "\n";
+      OUT1.close();      
     }
 
 }
@@ -1520,7 +1773,7 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
   if ( print )
     {
 
-      logger << "\tObs:\n\t";
+      logger << "\t  Obs:\n\t";
       std::set<std::string>::const_iterator uu = uniq.begin();
       while ( uu != uniq.end() )
 	{
@@ -1529,7 +1782,7 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
 	}
       logger << "\tTot\n";	
       
-      logger << "Pred:";
+      logger << "  Pred:";
       uu = uniq.begin();
       while ( uu != uniq.end() )
 	{
@@ -1556,7 +1809,7 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
       logger << "\t1.00\n";
     }
 
-   
+  
   return res;
 }
 

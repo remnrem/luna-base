@@ -54,7 +54,7 @@ namespace MiscMath
   
   double median( const std::vector<double> & x );
   double iqr( const std::vector<double> & x );
-  
+  double percentile( const std::vector<double> & x , double p );
   
   template<typename T> static inline double Lerp(T v0, T v1, T t)
    {
@@ -229,6 +229,8 @@ namespace MiscMath
   
 #define median_destroy(a,n) MiscMath::kth_smallest_destroy(a,n,(((n)&1)?((n)/2):(((n)/2)-1)))
 #define median_preserve(a,n) MiscMath::kth_smallest_preserve(a,n,(((n)&1)?((n)/2):(((n)/2)-1)))
+#define percentile_preserve(a,n,k) MiscMath::kth_smallest_preserve(a,n,k);
+
   
 }
 

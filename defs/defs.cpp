@@ -149,9 +149,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v0.23";
+  version = "v0.23b";
   
-  date    = "15-Jan-2020";
+  date    = "7-Jul-2020";
   
 
   //
@@ -307,14 +307,11 @@ void globals::init_defs()
   sleep_stage_labels[ "R" ]     = REM;
   sleep_stage_labels[ "?" ]     = UNSCORED;
   
+
   //
   // Time-units
   //
   
-  // 1e-12 sec resolution
-//   tp_1sec  = 1000000000000LLU; 
-//   tp_duration    = 1.0 / (double)tp_1sec;
-
   // 1e-9 sec resolution
   tp_1sec  = 1000000000LLU;
 
@@ -341,6 +338,7 @@ void globals::init_defs()
   time_strat   = "T";
   sample_strat = "SP"; // sample-point
   cluster_strat = "K";
+
 
   //
   // Misc.

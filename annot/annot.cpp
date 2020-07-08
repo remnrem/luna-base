@@ -1828,7 +1828,12 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
   //
   
   if ( find( "SleepStage" ) != NULL ) return false; 
-  
+
+
+  //
+  // Use default annotation labels, if not otherwise specified
+  // 
+
   std::string dwake, dn1, dn2, dn3, dn4, drem, dother;
   
   std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
@@ -1837,7 +1842,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
       const std::string & s = ii->first;
       
       sleep_stage_t ss = globals::stage( s );
-
+      
       if      ( ss == WAKE )     dwake = s;
       else if ( ss == NREM1 )    dn1 = s;
       else if ( ss == NREM2 )    dn2 = s;
@@ -1852,106 +1857,184 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
     }
 
 
+  std::vector<std::string> v_wake  = Helper::parse( a_wake , "," );
+  std::vector<std::string> v_n1    = Helper::parse( a_n1 , "," );
+  std::vector<std::string> v_n2    = Helper::parse( a_n2 , "," );
+  std::vector<std::string> v_n3    = Helper::parse( a_n3 , "," );
+  std::vector<std::string> v_n4    = Helper::parse( a_n4 , "," );
+  std::vector<std::string> v_rem   = Helper::parse( a_rem , "," );
+  std::vector<std::string> v_other = Helper::parse( a_other , "," );
+
+  // add defaults
+  if ( v_wake.size() == 0 ) v_wake.push_back( dwake );
+  if ( v_n1.size() == 0 ) v_n1.push_back( dn1 );
+  if ( v_n2.size() == 0 ) v_n2.push_back( dn2 );
+  if ( v_n3.size() == 0 ) v_n3.push_back( dn3 );
+  if ( v_n4.size() == 0 ) v_n4.push_back( dn4 );
+  if ( v_rem.size() == 0 ) v_rem.push_back( drem );
+  if ( v_other.size() == 0 ) v_other.push_back( dother );
+  
+
   //
-  // find annotations
+  // find annotations, allowing a comma-delimited list
   //
 
-  annot_t * wake  = find( a_wake != ""    ? a_wake : dwake );
-  annot_t * n1    = find( a_n1 != ""      ? a_n1   : dn1 );
-  annot_t * n2    = find( a_n2 != ""      ? a_n2   : dn2 );
-  annot_t * n3    = find( a_n3 != ""      ? a_n3   : dn3 );
-  annot_t * n4    = find( a_n4  != ""     ? a_n4   : dn4 );
-  annot_t * rem   = find( a_rem  != ""    ? a_rem  : drem );
-  annot_t * other = find( a_other != ""   ? a_other : dother );
+  std::vector<annot_t *> wakes, n1s, n2s, n3s, n4s, rems, others;
   
-  if ( wake == NULL 
-       && n1 == NULL 
-       && n2 == NULL 
-       && n3 == NULL 
-       && rem == NULL ) 
+  for (int a=0;a<v_wake.size();a++)
+    wakes.push_back( find( v_wake[a] ) );
+  
+  for (int a=0;a<v_n1.size();a++)
+    n1s.push_back( find( v_n1[a] ) );
+  
+  for (int a=0;a<v_n2.size();a++)
+    n2s.push_back( find( v_n2[a] ) );
+
+  for (int a=0;a<v_n3.size();a++)
+    n3s.push_back( find( v_n3[a] ) );
+
+  for (int a=0;a<v_n4.size();a++)
+    n4s.push_back( find( v_n4[a] ) );
+
+  for (int a=0;a<v_rem.size();a++)
+    rems.push_back( find( v_rem[a] ) );
+  
+  for (int a=0;a<v_other.size();a++)
+    others.push_back( find( v_other[a] ) );
+
+
+
+  //
+  // Check we had sensible annotations
+  //
+
+  int assigned = 0;
+
+  for (int a=0;a<n1s.size();a++) if ( n1s[a] != NULL ) ++assigned;
+  for (int a=0;a<n2s.size();a++) if ( n2s[a] != NULL ) ++assigned;
+  for (int a=0;a<n3s.size();a++) if ( n3s[a] != NULL ) ++assigned;
+  for (int a=0;a<rems.size();a++) if ( rems[a] != NULL ) ++assigned;
+  for (int a=0;a<wakes.size();a++) if ( wakes[a] != NULL ) ++assigned;
+
+  if ( assigned == 0 )
     return false;
+
+  
+  //
+  // Create the 'SleepStage' unified annotation (used by HYPNO, STAGE, and SUDS)
+  //
   
   annot_t * ss = add( "SleepStage" );
+
   ss->description = "SleepStage";
+
+  for ( int i=0; i<wakes.size(); i++ )
+    {
+      annot_t * wake = wakes[i];
+      if ( wake ) 
+	{
+	  annot_map_t & events = wake->interval_events;
+	  annot_map_t::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {	  
+	      instance_t * instance = ss->add( globals::stage( WAKE ) , ee->first.interval );
+	      ++ee;
+	    }
+	}
+    }
+
+
+  for ( int i=0; i<n1s.size(); i++ )
+    {
+      annot_t * n1 = n1s[i];
+      if ( n1 ) 
+	{
+	  annot_map_t & events = n1->interval_events;
+	  annot_map_t::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {	  
+	      instance_t * instance = ss->add( globals::stage( NREM1 ) , ee->first.interval );
+	      ++ee;
+	    }
+	}
+    }
+
+
+  for ( int i=0; i<n2s.size(); i++ )
+    {
+      annot_t * n2 = n2s[i];      
+      if ( n2 ) 
+	{
+	  annot_map_t & events = n2->interval_events;
+	  annot_map_t::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {	  
+	      instance_t * instance = ss->add( globals::stage( NREM2 ) , ee->first.interval );
+	      ++ee;
+	    }
+	}
+    }
+
   
-  if ( wake ) 
+  for ( int i=0; i<n3s.size(); i++ )
     {
-      annot_map_t & events = wake->interval_events;
-      annot_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  instance_t * instance = ss->add( globals::stage( WAKE ) , ee->first.interval );
-	  ++ee;
+      annot_t * n3 = n3s[i];
+      if ( n3 ) 
+	{
+	  annot_map_t & events = n3->interval_events;
+	  annot_map_t::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {	  
+	      instance_t * instance = ss->add( globals::stage( NREM3 ) , ee->first.interval );
+	      ++ee;
+	    }
 	}
     }
 
 
-  if ( n1 ) 
+  for ( int i=0; i<n4s.size(); i++ )
     {
-      annot_map_t & events = n1->interval_events;
-      annot_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  instance_t * instance = ss->add( globals::stage( NREM1 ) , ee->first.interval );
-	  ++ee;
-	}
-    }
-
-  if ( n2 ) 
-    {
-      annot_map_t & events = n2->interval_events;
-      annot_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  instance_t * instance = ss->add( globals::stage( NREM2 ) , ee->first.interval );
-	  ++ee;
-	}
-    }
-
-  if ( n3 ) 
-    {
-      annot_map_t & events = n3->interval_events;
-      annot_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  instance_t * instance = ss->add( globals::stage( NREM3 ) , ee->first.interval );
-	  ++ee;
+      annot_t * n4 = n4s[i];
+      if ( n4 ) 
+	{
+	  annot_map_t & events = n4->interval_events;
+	  annot_map_t::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {	  
+	      instance_t * instance = ss->add( globals::stage( NREM4 ) , ee->first.interval );
+	      ++ee;
+	    }
 	}
     }
 
 
-  if ( n4 ) 
+  for ( int i=0; i<rems.size(); i++ )
     {
-      annot_map_t & events = n4->interval_events;
-      annot_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  instance_t * instance = ss->add( globals::stage( NREM4 ) , ee->first.interval );
-	  ++ee;
+      annot_t * rem = rems[i];
+      if ( rem ) 
+	{
+	  annot_map_t & events = rem->interval_events;
+	  annot_map_t::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {
+	      instance_t * instance = ss->add( globals::stage( REM ) , ee->first.interval );
+	      ++ee;
+	    }
 	}
     }
   
-
-  if ( rem ) 
+  for ( int i=0; i<others.size(); i++ )
     {
-      annot_map_t & events = rem->interval_events;
-      annot_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  instance_t * instance = ss->add( globals::stage( REM ) , ee->first.interval );
-	  ++ee;
-	}
-    }
-
-
-  if ( other ) 
-    {
-      annot_map_t & events = other->interval_events;
-      annot_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
-	{	  
-	  instance_t * instance = ss->add( globals::stage( UNSCORED ) , ee->first.interval );
-	  ++ee;
+      annot_t * other = others[i];
+      if ( other ) 
+	{
+	  annot_map_t & events = other->interval_events;
+	  annot_map_t::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {	  
+	      instance_t * instance = ss->add( globals::stage( UNSCORED ) , ee->first.interval );
+	      ++ee;
+	    }
 	}
     }
   
