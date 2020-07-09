@@ -102,7 +102,7 @@ class cmd_t
   static void parse_special( const std::string & s , const std::string & delim );
 
   static void attach_ivars( const std::string & file );
-  
+
   // these cannot be used as variable names in scripts
   static void register_specials();
 
@@ -115,6 +115,8 @@ class cmd_t
   
   void reset() ;
 
+  void define_channel_type_variables( edf_t & );
+  
   void replace_wildcards( const std::string & id );
 
   bool eval( edf_t & ) ;
@@ -216,6 +218,8 @@ void proc_aliases( edf_t & , param_t & );
 void proc_headers( edf_t & , param_t & );
 void proc_validate( edf_t & , param_t & );
 void proc_desc( edf_t & , param_t & );
+void proc_dump_vars( edf_t & , param_t & );
+void proc_show_channel_map();
 
 void proc_stats( edf_t & , param_t & );
 void proc_list_annots( edf_t & , param_t & );

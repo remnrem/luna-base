@@ -806,6 +806,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
 
       else if ( is( c, "DESC" ) )         proc_desc( edf , param(c) );
+      else if ( is( c, "TYPES" ) )        proc_show_channel_map();
+      else if ( is( c, "VARS" ) )         proc_dump_vars( edf , param(c) );
       else if ( is( c, "STATS" ) )        proc_stats( edf , param(c) );
       
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
@@ -998,6 +1000,46 @@ void proc_desc( edf_t & edf , param_t & param )
 {
   edf.description( param );
 }
+
+// TYPES : show channel mappings
+
+void proc_show_channel_map()
+{
+  std::cout << globals::dump_channel_map(); 
+}
+
+// VARS : dump variables for this individual
+
+void proc_dump_vars( edf_t & edf , param_t & param )
+{
+  
+  std::map<std::string,std::string>::const_iterator vv =  cmd_t::vars.begin();
+  while ( vv != cmd_t::vars.end() )
+    {
+      writer.level( vv->first , globals::var_strat );
+      writer.value( "INDIV" , 0 );
+      writer.value( "VAL" , vv->second );
+      ++vv;
+    }
+  writer.unlevel( globals::var_strat );
+
+  // no individual-level variables
+  if ( cmd_t::ivars.find( edf.id ) == cmd_t::ivars.end() ) return;
+  
+  const std::map<std::string,std::string> & ivars =  cmd_t::ivars.find( edf.id )->second;
+
+  vv = ivars.begin();
+  while ( vv != ivars.end() )
+    {
+      writer.level( vv->first , globals::var_strat );
+      writer.value( "INDIV" , 1 );
+      writer.value( "VAL" , vv->second );
+      ++vv;
+    }
+  writer.unlevel( globals::var_strat );
+        
+}
+
 
 // STATS : get basic stats for an EDF
 
@@ -2395,6 +2437,44 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       cmd_t::attach_ivars( tok1 );
       return;      
     }
+
+
+  // channel type labels: partial match
+
+  if ( Helper::iequals( tok0 , "ch-match" ) )
+    {
+      //  type|label1|label2,type|label1|label2
+      std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );
+      for (int s=0;s<tok2.size();s++)
+        {
+	  std::vector<std::string> tok3 = Helper::quoted_parse( tok2[s] , "|" );
+	  if ( tok3.size() < 2 ) Helper::halt( "bad format for " + tok0 + "=" + tok1 );
+	  for ( int j=1;j<tok3.size();j++) globals::add_channel_map( tok3[j] , tok3[0] );
+	}
+      return;
+    }
+
+  // channel type labels: exact match
+
+  if ( Helper::iequals( tok0 , "ch-exact" ) )
+    {
+      //  type|label1|label2,type|label1|label2
+      std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );
+      for (int s=0;s<tok2.size();s++)
+        {
+	  std::vector<std::string> tok3 = Helper::quoted_parse( tok2[s] , "|" );
+	  if ( tok3.size() < 2 ) Helper::halt( "bad format for " + tok0 + "=" + tok1 );
+	  for ( int j=1;j<tok3.size();j++) globals::add_channel_map_exact( tok3[j] , tok3[0] );
+	}
+      return;
+    }
+
+  // wipe channel type map
+  if ( Helper::iequals( tok0 , "ch-clear" ) )
+    {
+      if ( Helper::yesno( tok1 ) ) globals::clear_channel_map();
+      return;
+    }
   
   // naughty list?
   if ( Helper::iequals( tok0 , "fail-list" ) )
@@ -2404,6 +2484,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       // create an empty file (i.e. as we append things to this subsequently
       std::ofstream P( globals::naughty_list.c_str() , std::ios::out );
       P.close();      
+      return;
     }
 
   // -t output compression 
@@ -2701,6 +2782,52 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
 
 
+void cmd_t::define_channel_type_variables( edf_t & edf )
+{
+  std::string eeg = globals::list_channels( EEG , edf.header.label );
+  if ( eeg != "" ) cmd_t::ivars[ edf.id ][ "eeg" ] = eeg;
+
+  std::string eog = globals::list_channels( EOG , edf.header.label );
+  if ( eog != "" ) cmd_t::ivars[ edf.id ][ "eog" ] = eog;
+
+  std::string ecg = globals::list_channels( ECG , edf.header.label );
+  if ( ecg != "" ) cmd_t::ivars[ edf.id ][ "ecg" ] = ecg;
+
+  std::string emg = globals::list_channels( EMG , edf.header.label );
+  if ( emg != "" ) cmd_t::ivars[ edf.id ][ "emg" ] = emg;
+
+  std::string leg = globals::list_channels( LEG , edf.header.label );
+  if ( leg != "" ) cmd_t::ivars[ edf.id ][ "leg" ] = leg;
+
+  std::string generic = globals::list_channels( GENERIC , edf.header.label );
+  if ( generic != "" ) cmd_t::ivars[ edf.id ][ "generic" ] = generic;
+  
+  std::string airflow = globals::list_channels( AIRFLOW , edf.header.label );
+  if ( airflow != "" ) cmd_t::ivars[ edf.id ][ "airflow" ] = airflow;
+
+  std::string effort = globals::list_channels( EFFORT , edf.header.label );
+  if ( effort != "" ) cmd_t::ivars[ edf.id ][ "effort" ] = effort;
+
+  std::string oxygen = globals::list_channels( OXYGEN , edf.header.label );
+  if ( oxygen != "" ) cmd_t::ivars[ edf.id ][ "oxygen" ] = oxygen;
+
+  std::string position = globals::list_channels( POSITION , edf.header.label );
+  if ( position != "" ) cmd_t::ivars[ edf.id ][ "position" ] = position;
+
+  std::string light = globals::list_channels( LIGHT , edf.header.label );
+  if ( light != "" ) cmd_t::ivars[ edf.id ][ "light" ] = light;
+
+  std::string snore = globals::list_channels( SNORE , edf.header.label );
+  if ( snore != "" ) cmd_t::ivars[ edf.id ][ "snore" ] = snore;
+
+  std::string hr = globals::list_channels( HR , edf.header.label );
+  if ( hr != "" ) cmd_t::ivars[ edf.id ][ "hr" ] = hr;
+
+  std::string ignore = globals::list_channels( IGNORE , edf.header.label );
+  if ( ignore != "" ) cmd_t::ivars[ edf.id ][ "ignore" ] = ignore;
+
+}
+
 
 //
 // Kludge... so that scope compiles on Mac... need to ensure the reduce_t is 
@@ -2825,6 +2952,27 @@ void cmd_t::attach_ivars( const std::string & file )
 
 void cmd_t::register_specials()
 {
+
+  specials.insert( "ch-match" );
+  specials.insert( "ch-exact" ) ;
+  specials.insert( "ch-clear" ) ;
+
+  // 14 channel types:: automatic, but okay to overwrite...  
+  // specials.insert( "eeg"); 
+  // specials.insert( "emg");
+  // specials.insert( "leg");
+  // specials.insert( "eog");
+  // specials.insert( "ecg");
+  // specials.insert( "generic");
+  // specials.insert( "airflow");
+  // specials.insert( "effort");
+  // specials.insert( "oxygen");
+  // specials.insert( "light");
+  // specials.insert( "snore");
+  // specials.insert( "hr");
+  // specials.insert( "ignore");
+  // specials.insert( "hr");
+
   specials.insert( "silent" ) ;
   specials.insert( "sig" ) ;
   specials.insert( "vars" ) ;
@@ -2869,3 +3017,4 @@ void cmd_t::register_specials()
   specials.insert( "exclude" ) ;
   specials.insert( "include" ) ;
 }
+

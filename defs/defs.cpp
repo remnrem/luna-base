@@ -27,6 +27,7 @@
 #include "helper/logger.h"
 #include "annot/annot.h"
 #include "annot/nsrr-remap.h"
+#include "edf/signal-list.h"
 
 #include <iostream>
 
@@ -47,6 +48,11 @@ std::set<std::string> globals::specified_annots;
 
 std::map<globals::atype_t,std::string> globals::type_name;
 std::map<std::string,globals::atype_t> globals::name_type;
+
+channel_map_t globals::chmap1; 
+channel_map_t globals::chmap2; 
+std::map<std::string,channel_type_t> globals::label2ch;
+std::map<channel_type_t,std::string> globals::ch2label;
 
 bool globals::enforce_epoch_check;
 int globals::default_epoch_len;
@@ -124,6 +130,7 @@ std::string globals::annot_meta_strat;
 std::string globals::count_strat;
 std::string globals::sample_strat;
 std::string globals::cluster_strat;
+std::string globals::var_strat;
 
 std::string & globals::SQLITE_SCRATCH_FOLDER() { static std::string s = ""; return s; }
 
@@ -309,6 +316,13 @@ void globals::init_defs()
   
 
   //
+  // Channel types
+  //
+
+  init_channel_types();
+
+  
+  //
   // Time-units
   //
   
@@ -338,7 +352,7 @@ void globals::init_defs()
   time_strat   = "T";
   sample_strat = "SP"; // sample-point
   cluster_strat = "K";
-
+  var_strat     = "VAR";
 
   //
   // Misc.
@@ -522,4 +536,230 @@ std::string globals::print( const freq_range_t & r )
   std::stringstream ss;
   ss << r.first << ".." << r.second ;
   return ss.str();
+}
+
+
+std::string globals::map_channel_label( const std::string & s )
+{
+  return ch2label[ map_channel( s ) ] ;
+}
+
+channel_type_t globals::map_channel( const std::string & s )
+{
+  // given chmap1 and chmap2, figure out what type this channel 's' is
+  // try for an exact match first
+  channel_map_t::const_iterator cc = chmap2.begin();
+  while ( cc != chmap2.end() )
+    {
+      if ( cc->second.find( s ) != cc->second.end() )
+	return cc->first;
+      ++cc;
+    }
+  
+  // otherwise, allow wildcards/case-insensitive matches
+  const std::string s2 = Helper::toupper( s );
+
+  cc = chmap1.begin();
+  while ( cc != chmap1.end() )
+    {
+      const std::set<std::string> & ss = cc->second;
+      std::set<std::string>::const_iterator jj = ss.begin();
+      while ( jj != ss.end() )
+	{
+	  //	  std::cout << "partial ["<<s2<<"] [" << *jj << "]\n"; 
+ 	  if ( s2.find( *jj ) != std::string::npos ) // any match?
+	    return cc->first;
+	  ++jj;
+	}
+      // next class
+      ++cc;
+    }
+    
+  // otherwise, not found...
+  return GENERIC;
+}
+
+
+void globals::clear_channel_map()
+{
+  chmap1.clear();
+  chmap2.clear();
+}
+
+void globals::add_channel_map( const std::string & s , const std::string & lab )
+{
+  if ( label2ch.find( lab ) == label2ch.end() ) Helper::halt( "bad channel type: " + lab );
+  add_channel_map( s , label2ch[ lab ] );
+}
+
+void globals::add_channel_map_exact( const std::string & s , const std::string & lab )
+{
+  if ( label2ch.find( lab ) == label2ch.end() ) Helper::halt( "bad channel type: " + lab );
+  add_channel_map_exact( s , label2ch[ lab ] );
+}
+
+void globals::add_channel_map( const std::string & s , channel_type_t ch )
+{
+  // case-insensitive, so all UPPER
+  chmap1[ ch ].insert( Helper::toupper( s ) );
+}
+
+void globals::add_channel_map_exact( const std::string & s , channel_type_t ch )
+{
+  chmap2[ ch ].insert( s );
+}
+
+void globals::channel_type( const std::string & label , channel_type_t ch )
+{
+  label2ch[ label ] = ch;
+  ch2label[ ch ] = label;
+}
+
+
+std::string globals::list_channels( channel_type_t ch ,
+				    const std::vector<std::string> & signals , 
+				    const std::string & delim )
+{
+
+  std::stringstream ss;
+  bool first = true;
+  // consider each channel, and extract ones matching type 'ch'
+  for (int s=0; s<signals.size(); s++) 
+    {
+      // match this type?
+      if ( map_channel( signals[s] ) == ch )
+	{
+	  if  ( ! first ) ss << delim;
+	  ss << signals[s];
+	  first = false;
+	}
+    }
+  return ss.str();
+}
+
+
+void globals::init_channel_types()
+{
+  channel_type( "EEG" , EEG );
+  channel_type( "EOG" , EOG );
+  channel_type( "GENERIC" , GENERIC );
+  channel_type( "ECG" , ECG );
+  channel_type( "EMG" , EMG );
+  channel_type( "LEG" , LEG );
+  channel_type( "AIRFLOW" , AIRFLOW );
+  channel_type( "EFFORT" , EFFORT );
+  channel_type( "OXYGEN" , OXYGEN );
+  channel_type( "POSITION" , POSITION );
+  channel_type( "LIGHT" , LIGHT );
+  channel_type( "SNORE" , SNORE );
+  channel_type( "HR" , HR );
+  channel_type( "IGNORE" , IGNORE );
+
+  // wild-cards (any partial match/case-insensitive)
+
+  // EEG --- full 64-EEG montage labels to be added in too
+  add_channel_map( "EEG" , EEG );
+  add_channel_map( "C3" , EEG );
+  add_channel_map( "C4" , EEG );
+  add_channel_map( "F3" , EEG );
+  add_channel_map( "F4" , EEG );
+  add_channel_map( "T3" , EEG );
+  add_channel_map( "T4" , EEG );
+  add_channel_map( "O1" , EEG );
+  add_channel_map( "O2" , EEG );
+  add_channel_map( "CZ" , EEG );
+  add_channel_map( "FZ" , EEG );
+  add_channel_map( "PZ" , EEG );
+  add_channel_map( "FPZ" , EEG );
+  add_channel_map( "CPZ" , EEG );
+
+  add_channel_map( "M1" , EEG );
+  add_channel_map( "A1" , EEG );
+  add_channel_map( "M2" , EEG );
+  add_channel_map( "A2" , EEG );
+
+  // EOG
+  add_channel_map( "EOG" , EOG );
+  add_channel_map( "LOC" , EOG );
+  add_channel_map( "ROC" , EOG );
+  add_channel_map( "E1" , EOG );
+  add_channel_map( "E2" , EOG );
+  
+  // ECG
+  add_channel_map( "ECG" , ECG );
+  add_channel_map( "EKG" , ECG );
+
+  // EMG
+  add_channel_map( "EMG" , EMG );
+  add_channel_map( "CHIN" , EMG );
+
+  // LEG
+  add_channel_map( "LEG" , LEG );
+  add_channel_map( "LAT" , LEG );
+  add_channel_map( "RAT" , LEG );
+  
+  // AIRFLOW
+  add_channel_map( "FLOW" , AIRFLOW );
+  add_channel_map( "NASAL" , AIRFLOW );
+
+  // EFFORT
+  add_channel_map( "ABDO" , EFFORT );
+  add_channel_map( "CHEST" , EFFORT );
+  add_channel_map( "THORAX" , EFFORT );
+  add_channel_map( "SUM" , EFFORT );
+
+  // OXYGEN
+  add_channel_map( "SPO2" , OXYGEN );
+  add_channel_map( "SAO2" , OXYGEN );
+  add_channel_map( "SP02" , OXYGEN ); // common typo
+  add_channel_map( "SA02" , OXYGEN ); // common typo
+  add_channel_map( "OX"   , OXYGEN ); 
+  
+  // HR
+  add_channel_map( "HR" , HR );
+  add_channel_map( "PULSE" , HR );
+      
+  // POSITION
+  add_channel_map( "POS" , POSITION );
+
+  // LIGHT
+  add_channel_map( "LIGHT" , LIGHT );
+
+  // SNORE
+  add_channel_map( "SNORE" , SNORE );
+
+}
+
+
+std::string globals::dump_channel_map()
+{
+  std::stringstream ss;
+
+  channel_map_t::const_iterator cc = chmap2.begin();
+  while ( cc != chmap2.end() )
+    {
+      const std::set<std::string> & kk = cc->second;
+      std::set<std::string>::const_iterator jj = kk.begin();
+      while ( jj != kk.end() )
+	{
+	  ss << "EXACT\t" << *jj << "\t" << ch2label[ cc->first ] << "\n";
+	  ++jj;
+	}
+      ++cc;
+    }
+
+  cc = chmap1.begin();
+  while ( cc != chmap1.end() )
+    {
+      const std::set<std::string> & kk = cc->second;
+      std::set<std::string>::const_iterator jj = kk.begin();
+      while ( jj != kk.end() )
+	{
+	  ss << "PARTIAL\t" << *jj << "\t" << ch2label[ cc->first ] << "\n";
+	  ++jj;
+	}
+      ++cc;
+    }
+    
+    return ss.str();
 }

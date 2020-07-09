@@ -237,17 +237,19 @@ std::string edf_header_t::summary() const
   return ss.str();
 }
 
-void edf_t::description( const param_t & param ) const
+void edf_t::description( const param_t & param ) 
 {
 
+  signal_list_t signals = header.signal_list( param.requires( "sig" ) );
+  
   bool channel_list = param.has( "channels" );
-
+  
   if ( channel_list )
     {
-      for (int s=0;s<header.ns;s++) 
+      for (int s=0;s<signals.size();s++) 
 	{
-	  if ( header.is_data_channel(s) )
-	    std::cout << header.label[s] << "\n";
+	  if ( header.is_data_channel( signals(s) ) )
+	    std::cout << signals.label(s) << "\n";
 	}
       return;
     }
@@ -255,6 +257,7 @@ void edf_t::description( const param_t & param ) const
   uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
 
   int n_data_channels = 0 , n_annot_channels = 0;
+  int n_data_channels_sel = 0 , n_annot_channels_sel = 0;
   
   for (int s=0;s<header.ns;s++) 
     {
@@ -262,6 +265,14 @@ void edf_t::description( const param_t & param ) const
 	++n_data_channels;
       else 
 	++n_annot_channels;
+    }
+
+  for (int s=0;s<signals.size(); s++) 
+    {
+      if ( header.is_data_channel( signals(s) ) )
+	++n_data_channels_sel;
+      else 
+	++n_annot_channels_sel;
     }
 
   clocktime_t et( header.starttime );
@@ -280,20 +291,30 @@ void edf_t::description( const param_t & param ) const
   else 
     std::cout << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n";
 
-  std::cout << "Duration          : " << Helper::timestring( duration_tp ) << "\n"
-	    << "# signals         : " << n_data_channels << "\n";
-  if ( n_annot_channels > 0 ) 
-    std::cout << "# EDF annotations : " << n_annot_channels << "\n";
+  std::cout << "Duration          : " << Helper::timestring( duration_tp ) << "\n";
+
+  if ( n_data_channels_sel < n_data_channels )
+    std::cout << "# signals         : " << n_data_channels_sel << " selected (of " << n_data_channels << ")\n";
+  else
+    std::cout << "# signals         : " << n_data_channels << "\n";
+    
+  if ( n_annot_channels > 0 )
+    {
+      if ( n_annot_channels_sel < n_annot_channels )
+	std::cout << "# EDF annotations : " << n_annot_channels_sel << " selected (of " << n_annot_channels << ")\n";
+      else
+	std::cout << "# EDF annotations : " << n_annot_channels << "\n";
+    }
   
   std::cout << "Signals           :";
 
   int cnt=0;
-  for (int s=0;s<header.ns;s++) 
+  for (int s=0;s<signals.size();s++) 
     {
-      if ( header.is_data_channel(s) )
+      if ( header.is_data_channel( signals(s) ) )
 	std::cout << " " 
-		  << header.label[s]
-		  << "[" << header.sampling_freq(s) << "]";
+		  << signals.label(s) 
+		  << "[" << header.sampling_freq( signals(s) ) << "]";
       if ( ++cnt >= 6 ) { cnt=0; std::cout << "\n                   "; } 
     }
   std::cout << "\n\n";
@@ -366,6 +387,9 @@ void edf_t::terse_summary( const bool write_signals ) const
     {
       // channel name
       writer.level( header.label[s] , globals::signal_strat );
+
+      // channel type
+      writer.value( "TYPE" , globals::map_channel_label(  header.label[s]  )  );
       
       // number of samples
       writer.value( "SR" , header.n_samples[s] / (double)header.record_duration );

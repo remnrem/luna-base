@@ -465,7 +465,7 @@ public:
 
   void report_aliases() const;
   
-  void description( const param_t & ) const;
+  void description( const param_t & );
   
 
   //

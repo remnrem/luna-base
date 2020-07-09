@@ -33,6 +33,7 @@
 #include "cmddefs.h"
 
 struct param_t; 
+struct signal_list_t;
 
 struct sample_list_t { 
   std::string id;
@@ -85,10 +86,34 @@ enum sleep_stage_t
     UNKNOWN //  i.e. null marker / not a sleep stage
   };
 
+
 typedef std::map<sleep_stage_t,std::string> sleep_stage_label_t;
 typedef std::map<std::string,sleep_stage_t> sleep_stage_label_lookup_t;
 
 typedef std::pair<double,double> freq_range_t;
+
+
+enum channel_type_t
+  {
+   GENERIC , // i.e. unknown
+   EEG ,     // any EEG
+   EOG ,
+   ECG , 
+   EMG ,       // only chin
+   LEG ,       // Leg EMG
+   AIRFLOW ,   // nasal or 
+   EFFORT ,    // chest/adbo
+   OXYGEN ,    //
+   POSITION ,  //
+   LIGHT , 
+   SNORE ,      
+   HR ,     // heart rate/pulse, i.e. if derived/non-ECG
+   IGNORE   // drop these signals
+  };
+
+
+// look-up table to guess channel type (or can be supplied)
+typedef std::map<channel_type_t,std::set<std::string> > channel_map_t;
 
 struct globals
 {
@@ -152,6 +177,28 @@ struct globals
 
   static std::string current_tag;
 
+
+  //
+  // Channel types
+  //
+
+  static channel_map_t chmap1; // wildcard, case-insensitive matching 
+  static channel_map_t chmap2; // exact matching (preferred over champ1)
+  static std::map<std::string,channel_type_t> label2ch;
+  static std::map<channel_type_t,std::string> ch2label;
+  static void channel_type( const std::string & , channel_type_t );
+  static channel_type_t map_channel( const std::string & s );
+  static std::string map_channel_label( const std::string & s );
+  static void clear_channel_map();
+
+  static void add_channel_map( const std::string & s , const std::string & ch );
+  static void add_channel_map_exact( const std::string & s , const std::string & ch );
+  static void add_channel_map( const std::string & s , channel_type_t ch );
+  static void add_channel_map_exact( const std::string & s , channel_type_t ch );
+  static std::string list_channels( channel_type_t ch , const std::vector<std::string> & signals , const std::string & delim = "," );
+  static std::string dump_channel_map();
+  static void init_channel_types();
+  
   // drop these EDFs
   static std::set<std::string> id_excludes;
 
@@ -190,6 +237,7 @@ struct globals
   static std::string count_strat;
   static std::string sample_strat;
   static std::string cluster_strat;
+  static std::string var_strat;
 
   // database variables
   static std::string & SQLITE_SCRATCH_FOLDER();  

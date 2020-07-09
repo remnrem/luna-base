@@ -792,15 +792,7 @@ void process_edfs( cmd_t & cmd )
       writer.begin();
       writer.clear_tags();
       writer.id( rootname , edffile );
-    
-
-      //
-      // Update any indiv-wildcards in the command list
-      // and also insert any @includes
-      //
-
-      cmd.replace_wildcards( rootname );
-      
+          
       
       //
       // Unset 'problem' flag (i.e. for bailing for this individual)
@@ -1022,9 +1014,17 @@ void process_edfs( cmd_t & cmd )
 	}
 
       
+      //
+      // Automatically generate channel type variables based on attached EDF
+      //
+
+
+      cmd.define_channel_type_variables( edf );
+
+
       
       //
-      // List any individual level variables
+      // List any individual level variables (including new channel type variables)
       //
 
       if ( cmd_t::ivars.find( edf.id ) != cmd_t::ivars.end() )
@@ -1041,8 +1041,16 @@ void process_edfs( cmd_t & cmd )
 	  logger << "\n";
 	}
 
+      
+      //
+      // Swap in (indiv-level) variables into the command file
+      //  - update any indiv-wildcards in the command list
+      //  - include any @includes
+      //
 
-	    
+      cmd.replace_wildcards( rootname );
+
+      
       //
       // Evaluate all commands
       //
