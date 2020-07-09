@@ -53,6 +53,7 @@ channel_map_t globals::chmap1;
 channel_map_t globals::chmap2; 
 std::map<std::string,channel_type_t> globals::label2ch;
 std::map<channel_type_t,std::string> globals::ch2label;
+std::map<std::string,channel_type_t> globals::sig2type; 
 
 bool globals::enforce_epoch_check;
 int globals::default_epoch_len;
@@ -546,6 +547,23 @@ std::string globals::map_channel_label( const std::string & s )
 
 channel_type_t globals::map_channel( const std::string & s )
 {
+
+  // for wildcards/case-insensitive matches
+  const std::string s2 = Helper::toupper( s );
+  
+  // special case: for IGNORE first (i.e. for OFF and Status channels)  
+  if ( chmap2[ IGNORE ].find( s ) != chmap2[ IGNORE ].end() ) return IGNORE;
+  // wildcard match for IGNORE
+  const std::set<std::string> & ss = chmap1[ IGNORE ];
+  std::set<std::string>::const_iterator jj = ss.begin();
+  while ( jj != ss.end() )
+    {
+      if ( s2.find( *jj ) != std::string::npos ) // any match?
+	return IGNORE;
+      ++jj;
+    }
+
+  // otherwise, try all other TYPES
   // given chmap1 and chmap2, figure out what type this channel 's' is
   // try for an exact match first
   channel_map_t::const_iterator cc = chmap2.begin();
@@ -556,9 +574,6 @@ channel_type_t globals::map_channel( const std::string & s )
       ++cc;
     }
   
-  // otherwise, allow wildcards/case-insensitive matches
-  const std::string s2 = Helper::toupper( s );
-
   cc = chmap1.begin();
   while ( cc != chmap1.end() )
     {
@@ -566,7 +581,6 @@ channel_type_t globals::map_channel( const std::string & s )
       std::set<std::string>::const_iterator jj = ss.begin();
       while ( jj != ss.end() )
 	{
-	  //	  std::cout << "partial ["<<s2<<"] [" << *jj << "]\n"; 
  	  if ( s2.find( *jj ) != std::string::npos ) // any match?
 	    return cc->first;
 	  ++jj;
@@ -600,12 +614,37 @@ void globals::add_channel_map_exact( const std::string & s , const std::string &
 
 void globals::add_channel_map( const std::string & s , channel_type_t ch )
 {
-  // case-insensitive, so all UPPER
+  // check not already specified: if it is, erase from other type
+  if ( sig2type.find( s ) != sig2type.end() )
+    {
+      channel_type_t ch = sig2type[ s ];
+      // case-insensitive match
+      if ( chmap1[ ch ].find( Helper::toupper( s ) ) != chmap1[ ch ].end() )
+	chmap1[ ch ].erase( chmap1[ ch ].find( Helper::toupper( s ) ) );
+      // exact match
+      if ( chmap2[ ch ].find( s ) != chmap2[ ch ].end() )
+	chmap2[ ch ].erase( chmap2[ ch ].find( s ) );
+    }
+
+  // now added: case-insensitive, so all UPPER
   chmap1[ ch ].insert( Helper::toupper( s ) );
+  
 }
 
 void globals::add_channel_map_exact( const std::string & s , channel_type_t ch )
 {
+  // check not already specified: if it is, erase from other type
+  if ( sig2type.find( s ) != sig2type.end() )
+    {
+      channel_type_t ch = sig2type[ s ];
+      // case-insensitive match
+      if ( chmap1[ ch ].find( Helper::toupper( s ) ) != chmap1[ ch ].end() )
+	chmap1[ ch ].erase( chmap1[ ch ].find( Helper::toupper( s ) ) );
+      // exact match
+      if ( chmap2[ ch ].find( s ) != chmap2[ ch ].end() )
+	chmap2[ ch ].erase( chmap2[ ch ].find( s ) );
+    }
+
   chmap2[ ch ].insert( s );
 }
 
@@ -657,6 +696,9 @@ void globals::init_channel_types()
 
   // wild-cards (any partial match/case-insensitive)
 
+  add_channel_map( "OFF" , IGNORE );
+  add_channel_map( "STATUS" , IGNORE );
+
   // EEG --- full 64-EEG montage labels to be added in too
   add_channel_map( "EEG" , EEG );
   add_channel_map( "C3" , EEG );
@@ -701,22 +743,26 @@ void globals::init_channel_types()
   // AIRFLOW
   add_channel_map( "FLOW" , AIRFLOW );
   add_channel_map( "NASAL" , AIRFLOW );
+  add_channel_map( "THERM" , AIRFLOW );
+
 
   // EFFORT
   add_channel_map( "ABDO" , EFFORT );
   add_channel_map( "CHEST" , EFFORT );
-  add_channel_map( "THORAX" , EFFORT );
+  add_channel_map( "THOR" , EFFORT );
   add_channel_map( "SUM" , EFFORT );
 
   // OXYGEN
-  add_channel_map( "SPO2" , OXYGEN );
-  add_channel_map( "SAO2" , OXYGEN );
-  add_channel_map( "SP02" , OXYGEN ); // common typo
-  add_channel_map( "SA02" , OXYGEN ); // common typo
+  add_channel_map_exact( "SPO2" , OXYGEN );
+  add_channel_map_exact( "SAO2" , OXYGEN );
+  add_channel_map_exact( "SpO2" , OXYGEN );
+  add_channel_map_exact( "SaO2" , OXYGEN );
+
   add_channel_map( "OX"   , OXYGEN ); 
   
   // HR
   add_channel_map( "HR" , HR );
+  add_channel_map_exact( "HRate" , HR );
   add_channel_map( "PULSE" , HR );
       
   // POSITION

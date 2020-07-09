@@ -184,12 +184,13 @@ struct globals
 
   static channel_map_t chmap1; // wildcard, case-insensitive matching 
   static channel_map_t chmap2; // exact matching (preferred over champ1)
-  static std::map<std::string,channel_type_t> label2ch;
-  static std::map<channel_type_t,std::string> ch2label;
+  static std::map<std::string,channel_type_t> label2ch; // names for TYPES only
+  static std::map<channel_type_t,std::string> ch2label; // ..
   static void channel_type( const std::string & , channel_type_t );
   static channel_type_t map_channel( const std::string & s );
   static std::string map_channel_label( const std::string & s );
   static void clear_channel_map();
+  static std::map<std::string,channel_type_t> sig2type; // track if string is already assigned
 
   static void add_channel_map( const std::string & s , const std::string & ch );
   static void add_channel_map_exact( const std::string & s , const std::string & ch );
