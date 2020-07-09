@@ -95,20 +95,21 @@ typedef std::pair<double,double> freq_range_t;
 
 enum channel_type_t
   {
-   GENERIC , // i.e. unknown
-   EEG ,     // any EEG
-   EOG ,
-   ECG , 
-   EMG ,       // only chin
-   LEG ,       // Leg EMG
-   AIRFLOW ,   // nasal or 
-   EFFORT ,    // chest/adbo
-   OXYGEN ,    //
-   POSITION ,  //
-   LIGHT , 
-   SNORE ,      
-   HR ,     // heart rate/pulse, i.e. if derived/non-ECG
-   IGNORE   // drop these signals
+    IGNORE ,  // drop these signals
+    EOG ,
+    ECG , 
+    EMG ,       // only chin
+    LEG ,       // Leg EMG
+    AIRFLOW ,   // nasal or 
+    EFFORT ,    // chest/adbo
+    OXYGEN ,    //
+    POSITION ,  //
+    LIGHT , 
+    SNORE ,      
+    HR ,     // heart rate/pulse, i.e. if derived/non-ECG
+    GENERIC , // i.e. unknown
+    EEG      // any EEG
+    
   };
 
 
