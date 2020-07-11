@@ -2430,7 +2430,21 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	cmd_t::signallist.insert(Helper::unquote(tok2[s]));		  
       return;
     }
-   
+
+  // swap spaces
+  if ( Helper::iequals( tok0 , "spaces" ) )
+    {
+      globals::replace_channel_spaces = true;
+      if ( tok1.size() != 1 ) Helper::halt( "expecting single character after spaces" );
+      globals::space_replacement = tok1[0];
+    }
+
+  // keep spaces
+  if ( Helper::iequals( tok0 , "keep-spaces" ) )
+    {
+      globals::replace_channel_spaces = false;
+    }
+  
   // individual-specific variables
   if ( Helper::iequals( tok0 , "vars" ) ) 
     {
@@ -2784,47 +2798,63 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
 void cmd_t::define_channel_type_variables( edf_t & edf )
 {
+  // add these even if blank, so that scripts can always use
+  
   std::string eeg = globals::list_channels( EEG , edf.header.label );
-  if ( eeg != "" ) cmd_t::ivars[ edf.id ][ "eeg" ] = eeg;
-
+  //if ( eeg != "" )
+  cmd_t::ivars[ edf.id ][ "eeg" ] = eeg;
+    
   std::string eog = globals::list_channels( EOG , edf.header.label );
-  if ( eog != "" ) cmd_t::ivars[ edf.id ][ "eog" ] = eog;
+  //if ( eog != "" )
+  cmd_t::ivars[ edf.id ][ "eog" ] = eog;
 
   std::string ecg = globals::list_channels( ECG , edf.header.label );
-  if ( ecg != "" ) cmd_t::ivars[ edf.id ][ "ecg" ] = ecg;
+  //if ( ecg != "" )
+  cmd_t::ivars[ edf.id ][ "ecg" ] = ecg;
 
   std::string emg = globals::list_channels( EMG , edf.header.label );
-  if ( emg != "" ) cmd_t::ivars[ edf.id ][ "emg" ] = emg;
+  //if ( emg != "" )
+    cmd_t::ivars[ edf.id ][ "emg" ] = emg;
 
   std::string leg = globals::list_channels( LEG , edf.header.label );
-  if ( leg != "" ) cmd_t::ivars[ edf.id ][ "leg" ] = leg;
+  //if ( leg != "" )
+    cmd_t::ivars[ edf.id ][ "leg" ] = leg;
 
   std::string generic = globals::list_channels( GENERIC , edf.header.label );
-  if ( generic != "" ) cmd_t::ivars[ edf.id ][ "generic" ] = generic;
+  //if ( generic != "" )
+    cmd_t::ivars[ edf.id ][ "generic" ] = generic;
   
   std::string airflow = globals::list_channels( AIRFLOW , edf.header.label );
-  if ( airflow != "" ) cmd_t::ivars[ edf.id ][ "airflow" ] = airflow;
+  //if ( airflow != "" )
+    cmd_t::ivars[ edf.id ][ "airflow" ] = airflow;
 
   std::string effort = globals::list_channels( EFFORT , edf.header.label );
-  if ( effort != "" ) cmd_t::ivars[ edf.id ][ "effort" ] = effort;
+  //if ( effort != "" )
+    cmd_t::ivars[ edf.id ][ "effort" ] = effort;
 
   std::string oxygen = globals::list_channels( OXYGEN , edf.header.label );
-  if ( oxygen != "" ) cmd_t::ivars[ edf.id ][ "oxygen" ] = oxygen;
+  //if ( oxygen != "" )
+    cmd_t::ivars[ edf.id ][ "oxygen" ] = oxygen;
 
   std::string position = globals::list_channels( POSITION , edf.header.label );
-  if ( position != "" ) cmd_t::ivars[ edf.id ][ "position" ] = position;
+  //if ( position != "" )
+    cmd_t::ivars[ edf.id ][ "position" ] = position;
 
   std::string light = globals::list_channels( LIGHT , edf.header.label );
-  if ( light != "" ) cmd_t::ivars[ edf.id ][ "light" ] = light;
+  //if ( light != "" )
+    cmd_t::ivars[ edf.id ][ "light" ] = light;
 
   std::string snore = globals::list_channels( SNORE , edf.header.label );
-  if ( snore != "" ) cmd_t::ivars[ edf.id ][ "snore" ] = snore;
+  //if ( snore != "" )
+    cmd_t::ivars[ edf.id ][ "snore" ] = snore;
 
   std::string hr = globals::list_channels( HR , edf.header.label );
-  if ( hr != "" ) cmd_t::ivars[ edf.id ][ "hr" ] = hr;
+  // if ( hr != "" )
+    cmd_t::ivars[ edf.id ][ "hr" ] = hr;
 
   std::string ignore = globals::list_channels( IGNORE , edf.header.label );
-  if ( ignore != "" ) cmd_t::ivars[ edf.id ][ "ignore" ] = ignore;
+  //if ( ignore != "" )
+    cmd_t::ivars[ edf.id ][ "ignore" ] = ignore;
 
 }
 

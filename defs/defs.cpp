@@ -63,6 +63,9 @@ std::map<frequency_band_t,freq_range_t> globals::freq_band;
 sleep_stage_label_t globals::sleep_stage;
 sleep_stage_label_lookup_t globals::sleep_stage_labels;
 
+bool globals::replace_channel_spaces;
+char globals::space_replacement;
+
 char globals::folder_delimiter;
 std::string globals::project_path;
 
@@ -193,7 +196,16 @@ void globals::init_defs()
 
   annot_files.clear();
   
-  
+
+  //
+  // Spaces in channel names
+  //
+
+  replace_channel_spaces = true;
+
+  space_replacement = '_';
+
+
   //
   // Requested to load specific annotations only?
   //
@@ -764,6 +776,7 @@ void globals::init_channel_types()
   add_channel_map( "HR" , HR );
   add_channel_map_exact( "HRate" , HR );
   add_channel_map( "PULSE" , HR );
+  add_channel_map( "PR" , HR );
       
   // POSITION
   add_channel_map( "POS" , POSITION );

@@ -150,6 +150,9 @@ struct globals
   static bool set_annot_inst2hms;
   static bool set_annot_inst2hms_force;
 
+  static bool replace_channel_spaces;
+  static char space_replacement;
+  
   //
   // Annotation types stored here statically;  these can be properties of both 
   // annot_t, in which case they provide a guide for all instance_t.data fields

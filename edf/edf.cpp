@@ -566,7 +566,11 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       
       // signal label
       std::string l = edf_t::get_string( &p , 16 );
-      
+
+      // remove spaces?
+      if ( globals::replace_channel_spaces )
+	l = Helper::search_replace( l , ' ' , globals::space_replacement );
+	   
       // does this exist already? if so, uniqify 
       if ( slabels.find( l ) != slabels.end() )
 	{

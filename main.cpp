@@ -1035,7 +1035,8 @@ void process_edfs( cmd_t & cmd )
 	  std::map<std::string,std::string>::const_iterator vv = newvars.begin();
 	  while ( vv != newvars.end() )
 	    {
-	      logger << "  " << vv->first << "=" << vv->second << "\n";
+	      if ( vv->second != "" ) 
+		logger << "  " << vv->first << "=" << vv->second << "\n";
 	      ++vv;
 	    }
 	  logger << "\n";
