@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -70,6 +69,7 @@ bool suds_t::ignore_target_priors = false;
 std::vector<double> suds_t::outlier_ths;
 int suds_t::required_epoch_n = 5;
 std::string suds_t::eannot_file = "";
+bool suds_t::eannot_ints = false;
 std::string suds_t::eannot_prepend = "";
 std::string suds_t::mat_dump_file = "";
 
@@ -1700,13 +1700,37 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // expecting this will have individual wild-cards, but these will have 
       // been expanded already;  this is for home folder encoding ~ 
       std::string filename = Helper::expand( suds_t::eannot_file );
-      logger << "\n  writing .eannot stage annotations to " << filename << "\n";
+
+      logger << "\n  writing .eannot stage annotations "
+	     << ( suds_t::eannot_ints ? "(as integeres) " : "" )
+	     << " to " << filename << "\n";
+
       std::ofstream OUT1( filename.c_str() , std::ios::out );
-      for (int i=0;i<final_prediction.size(); i++)
-	OUT1 << suds_t::eannot_prepend << final_prediction[i] << "\n";
+
+
+      // make sure we output all epochs
+      for (int i=0;i<ne_all;i++)
+	{
+	  
+	  int e = -1;
+	  if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+	  if ( e != -1 )
+	    {
+	      if ( suds_t::eannot_ints )
+		OUT1 << suds_t::num( final_prediction[e] ) << "\n";
+	      else
+		OUT1 << final_prediction[e] << "\n";	      
+	    }
+	  else // could not score
+	    {
+	      if ( suds_t::eannot_ints ) OUT1 << suds_t::num( "?" ) << "\n";
+	      else OUT1 << "?" << "\n";
+	    }
+	}
+            
       OUT1.close();      
     }
-
+  
 }
 
 

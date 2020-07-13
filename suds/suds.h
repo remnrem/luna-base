@@ -230,6 +230,8 @@ struct suds_t {
 
     eannot_file = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
 
+    eannot_ints = param.has( "stage-numbers" );
+    
     eannot_prepend = param.has( "prefix" ) ? ( param.value( "prefix" ) + "_" ) : "" ;
     
     mat_dump_file = param.has( "mat" ) ? param.value( "mat" ) : "" ;
@@ -276,6 +278,7 @@ struct suds_t {
   static std::vector<double> lwr_h3, upr_h3;
 
   static std::string eannot_file;
+  static bool        eannot_ints;
   static std::string eannot_prepend;
 
   static std::string mat_dump_file;
