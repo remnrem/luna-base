@@ -45,20 +45,35 @@ namespace Helper
 
   std::string toupper( const std::string & );  
 
+
   // trim from start
-  static inline std::string &ltrim(std::string &s) {
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(std::isspace))));
-    return s;
-  }
+  // static inline std::string &ltrim(std::string &s) {
+  //   s.erase(s.begin(), std::find_if( s.begin(), s.end(),  std::not1(std::ptr_fun<int, int>(std::isspace))  ));
+  //   return s;
+  // }
 
   // trim from end
-  static inline std::string &rtrim(std::string &s) {
-    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+  // static inline std::string &rtrim( std::string s ) {
+  //    s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(std::isspace))).base(), s.end());
+  //    return s;
+  //  }
+
+  // Updated for C++11 using lambda function; trim now do not modify existing string...
+  
+  // trim from start
+  static inline std::string ltrim( std::string s ) {
+    s.erase(s.begin(), std::find_if( s.begin(), s.end(),  [](int c) {return !std::isspace(c);} ));
     return s;
   }
-
+ 
+  // trim from end
+  static inline std::string rtrim(std::string s) {
+    s.erase(std::find_if( s.rbegin(), s.rend(),  [](int c) {return !std::isspace(c);} ).base(), s.end() );
+    return s;
+  }
+  
   // trim from both ends
-  static inline std::string &trim(std::string &s) {
+  static inline std::string lrtrim( std::string s ) {
     return ltrim(rtrim(s));
   }
 
@@ -136,8 +151,8 @@ namespace Helper
 /*   std::string stringize( const std::set<std::string> & , const std::string & delim = "," ); */
 
 
-  bool ascii7( std::string * s , char repl );
-  bool ascii7( std::vector<char> * s , char repl );
+  void ascii7( std::string * s , char repl );
+  void ascii7( std::vector<char> * s , char repl );
   
 
   template<typename T> 

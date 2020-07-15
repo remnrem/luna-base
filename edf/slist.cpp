@@ -237,8 +237,20 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
     {
       if ( tok0[t][0] == '-' ) 
 	{
+
+	  // use ID from EDF header, rather than file name
 	  if ( tok0[t].substr(1) == "edfid" ) globals::sl_visit_edf = true;
+
+	  // only link EDF and annotation files within the same folder
 	  if ( tok0[t].substr(1) == "nospan" ) globals::sl_link_across_folders = false;
+
+	  // special case for -nsrr.xml extensions
+	  if ( tok0[t].substr(1) == "nsrr" ) {	    
+	    globals::sl_annot_extensions.insert( "-nsrr.xml" ); 
+	    specified_extensions = true;
+	  }
+	  
+	  // other user-defined extensions
 	  if ( tok0[t].substr(1,4) == "ext=" ) 
 	    {
 	      // -ext=txt,eannot,xls.eannot
@@ -247,6 +259,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	      for (int i=0;i<tok2.size();i++) globals::sl_annot_extensions.insert( tok2[i] );
 	      specified_extensions = true;
 	    }
+
 	}
       else tok.push_back( tok0[t] );
     }
