@@ -103,10 +103,13 @@ double edf_t::get_double( byte_t ** p , int sz )
 
 std::string edf_t::get_string( byte_t ** p , int sz )
 {
+  // only US-ASCII printable characters allowed: 32 .. 126 
+  // other characters mapped to '?'
   std::vector<char> buf(sz+1);
   for (int i=0;i<sz;i++)
     {
       buf[i] = **p;
+      if ( buf[i] < 32 || buf[i] > 126 ) buf[i] = 63; // '?'
       ++(*p);      
     }
   buf[sz] = '\0';
@@ -454,6 +457,11 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   nbytes_header  = edf_t::get_int( &q , 8 );  
   reserved       = edf_t::get_bytes( &q , 44 );
 
+  // enforce check that reserevd field contains only US-ASCII characters 32-126
+  // not clear this is needed, but other software seems to prefer this
+
+  Helper::ascii7( &reserved , ' ' );
+
   //
   // ensure starttime is in the PM, i.e. 07:00 --> 19:00
   // unless we've otherwise been instructed to respect
@@ -663,7 +671,11 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   for (int s=0;s<ns_all;s++)
     {
       if ( channels.find(s) != channels.end() ) 
-	phys_dimension.push_back( edf_t::get_string( &p , 8 ) );
+	{
+
+	  phys_dimension.push_back( edf_t::get_string( &p , 8 ) );
+
+	}
       else
 	edf_t::skip( &p , 8 );
     }

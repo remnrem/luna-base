@@ -759,17 +759,16 @@ void globals::init_channel_types()
 
 
   // EFFORT
-  add_channel_map( "ABDO" , EFFORT );
+  add_channel_map( "ABD" , EFFORT );
   add_channel_map( "CHEST" , EFFORT );
   add_channel_map( "THOR" , EFFORT );
   add_channel_map( "SUM" , EFFORT );
 
   // OXYGEN
-  add_channel_map_exact( "SPO2" , OXYGEN );
-  add_channel_map_exact( "SAO2" , OXYGEN );
-  add_channel_map_exact( "SpO2" , OXYGEN );
-  add_channel_map_exact( "SaO2" , OXYGEN );
-
+  add_channel_map( "SPO2" , OXYGEN );
+  add_channel_map( "SAO2" , OXYGEN );
+  add_channel_map( "SP02" , OXYGEN );
+  add_channel_map( "SA02" , OXYGEN );
   add_channel_map( "OX"   , OXYGEN ); 
   
   // HR
@@ -786,6 +785,10 @@ void globals::init_channel_types()
 
   // SNORE
   add_channel_map( "SNORE" , SNORE );
+
+  // GENERIC (add to avoid clash w/ EEG because of O2)
+  add_channel_map( "etco2" , GENERIC );
+  add_channel_map( "etc02" , GENERIC );
 
 }
 

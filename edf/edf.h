@@ -145,7 +145,9 @@ struct edf_header_t
   {
     edfplus    = false;
     continuous = true;
-    reserved.resize( 44 , '\0' );
+    // original: reserved area filled with NULL
+    // reserved.resize( 44 , '\0' );
+    reserved.resize( 44 , ' ' );
     ns = ns_all = 0;
     t_track = -1;
     
