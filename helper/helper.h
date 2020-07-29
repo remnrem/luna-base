@@ -191,6 +191,11 @@ namespace Helper
   uint64_t sec2tp( double );
   double tp2sec( uint64_t );
 
+
+  template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+  }
+
   std::vector<std::string> parse(const std::string & item, const std::string & s = " \t\n" , bool empty = false );
   std::vector<std::string> quoted_parse(const std::string & item , const std::string & s , const char q = '"' , const char q2 = '\'' , bool empty = false );
 

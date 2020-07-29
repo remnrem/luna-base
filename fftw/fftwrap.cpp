@@ -77,7 +77,7 @@ FFT::FFT( int N , int Fs , fft_t type , window_function_t window )
   for (int i=0;i<N;i++) normalisation_factor += w[i] * w[i];
   normalisation_factor *= Fs;  
   normalisation_factor = 1.0/normalisation_factor;
-  //  std::cerr << "norm " << normalisation_factor << "\n";
+  
   
 } 
 

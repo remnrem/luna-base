@@ -255,6 +255,9 @@ struct globals
   // in CGI mode, set this to T
   static bool silent;
 
+  // if LOG verbose?
+  static bool verbose;
+
   // is in R mode
   static bool Rmode;
   static bool Rdisp;

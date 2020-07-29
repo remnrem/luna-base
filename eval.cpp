@@ -22,7 +22,6 @@
 //    --------------------------------------------------------------------
 
 
-
 #include "eval.h"
 #include "luna.h"
 
@@ -884,7 +883,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "FIP" ) )          proc_fiplot( edf , param(c) );
       
       else if ( is( c, "COH" ) )          proc_coh( edf , param(c) );
-      else if ( is( c, "PHSYN" ) )        proc_phsyn( edf , param(c) );
+      else if ( is( c, "CC" ) )           proc_conncoupl( edf , param(c) );
       else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
       else if ( is( c, "ACF" ) )          proc_acf( edf , param(c) );
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
@@ -2018,13 +2017,13 @@ void proc_mi( edf_t & edf , param_t & param )
   dsptools::compute_mi( edf , param );
 }
 
-// PHSYN : calculate phase synchrony measures
 
-void proc_phsyn( edf_t & edf , param_t & param )
+// CC : gerneral connectivity and coupling metrics, using wavelets or filter-Hilbert
+
+void proc_conncoupl( edf_t & edf , param_t & param )
 {
-  dsptools::phsyn( edf , param );
+  dsptools::connectivity_coupling( edf , param );
 }
-
 
 // SHIFT : shift one or more signals by X samples
 
@@ -2422,6 +2421,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;      
     }
 
+  if ( Helper::iequals( tok0 , "verbose" ) )
+    {
+      globals::verbose = Helper::yesno( tok1 );
+      return;
+    }
+  
   // add signals?
   if ( Helper::iequals( tok0 , "sig" ) )
     {		  
@@ -3004,6 +3009,7 @@ void cmd_t::register_specials()
   // specials.insert( "hr");
 
   specials.insert( "silent" ) ;
+  specials.insert( "verbose" ) ;
   specials.insert( "sig" ) ;
   specials.insert( "vars" ) ;
   specials.insert( "add" ) ;

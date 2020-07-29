@@ -41,10 +41,13 @@ hilbert_t::hilbert_t( const std::vector<double> & d ) : input(d)
 }
 
 
-hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , double ripple , double tw )
+hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , double ripple , double tw , const bool store )
 {
+
   // include band-pass filter
   input = dsptools::apply_fir( d , sr , fir_t::BAND_PASS , ripple , tw , lwr , upr );
+
+  store_real_imag = store;
   
   proc();
 }
@@ -89,13 +92,43 @@ void hilbert_t::proc()
   ph.resize( n );
   mag.resize( n );
 
+  if ( store_real_imag )
+    {
+      // real_part.resize( n );
+      // imag_part.resize( n );
+      conv_complex.resize( n );
+    }      
+  
   for(int i=0;i<n;i++)
     {
       double a = std::real( ht[i] ) ;
       double b = std::imag( ht[i] ) ;
       ph[i] = atan2( b , a );
       mag[i] = sqrt( a*a + b*b );     
+
+      if ( store_real_imag )
+	{
+	  // real_part[i] = a;
+	  // imag_part[i] = b;
+	  conv_complex[i] = ht[i] ;
+	}      
     }
+}
+
+
+// std::vector<double> hilbert_t::get_real() const
+// {
+//   return real_part;
+// }
+
+// std::vector<double> hilbert_t::get_imag() const
+// {
+//   return imag_part;
+// }
+
+std::vector<dcomp> hilbert_t::get_complex() const
+{
+  return conv_complex;
 }
 
 const std::vector<double> * hilbert_t::phase() const

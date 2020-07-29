@@ -37,13 +37,18 @@ void dsptools::cwt( edf_t & edf , param_t & param )
   const int ns = signals.size();
 
   double fc = param.requires_dbl( "fc" );
+
+  bool alt_spec = param.has( "fwhm" );
+
+  double fwhm = alt_spec ? param.requires_dbl( "fwhm" ) : 0 ;
   
-  int num_cycles = param.requires_int( "cycles" );
+  int num_cycles = alt_spec ? 0 : param.requires_int( "cycles" );
+
+  double timelength = alt_spec ? ( param.has( "len" ) ? param.requires_dbl( "len" ) : 20 ) : 0 ; 
   
   bool return_phase = param.has( "phase" );
   
   std::string tag = param.has( "tag" ) ? "_" + param.value( "tag" ) : "" ; 
-
 
   for (int s=0;s<ns;s++)
     {
@@ -61,7 +66,10 @@ void dsptools::cwt( edf_t & edf , param_t & param )
       
       std::vector<double> mag , phase;
       
-      run_cwt( *d , Fs , fc , num_cycles , &mag , return_phase ? &phase : NULL );
+      if ( alt_spec )
+	alt_run_cwt( *d , Fs , fc , fwhm , timelength , &mag , return_phase ? &phase : NULL );
+      else
+	run_cwt( *d , Fs , fc , num_cycles , &mag , return_phase ? &phase : NULL );
       
       std::string new_mag_label = signals.label(s) + tag + "_cwt_" + Helper::dbl2str(fc) + "_" + Helper::int2str( num_cycles ) + "_mag";
       std::string new_phase_label = signals.label(s) + tag + "_cwt_" + Helper::dbl2str(fc) + "_" + Helper::int2str( num_cycles ) + "_phase";
@@ -96,7 +104,9 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
   
   double tw = param.requires_dbl( "tw" );
   
-  bool return_phase = param.has( "phase" );
+  bool return_phase = param.has( "phase" ) || param.has( "angle" );
+
+  bool return_angle = param.has( "angle" );
 
   bool return_ifrq = param.has( "ifrq" );
   
@@ -118,10 +128,14 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
       
       std::vector<double> mag , phase, ifrq;
       
-      run_hilbert( *d , Fs , frqs[0] , frqs[1] , ripple , tw , &mag , return_phase ? &phase : NULL , return_ifrq ? &ifrq : NULL );
+      run_hilbert( *d , Fs , frqs[0] , frqs[1] , ripple , tw , &mag ,
+		   return_phase ? &phase : NULL ,
+		   return_angle ? &phase : NULL ,
+		   return_ifrq ? &ifrq : NULL );
             
       std::string new_mag_label = signals.label(s) + tag + "_hilbert_"   + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_mag";
       std::string new_phase_label = signals.label(s) + tag + "_hilbert_" + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_phase";
+      std::string new_angle_label = signals.label(s) + tag + "_hilbert_" + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_angle";
       std::string new_ifrq_label = signals.label(s) + tag + "_hilbert_"  + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_ifrq";
       
       logger << " Hilbert transform for " << signals.label(s) << " --> " << new_mag_label ;      
@@ -129,7 +143,10 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
       if ( return_phase ) 
 	logger << ", " << new_phase_label ;
 
-      if ( return_ifrq ) 
+      if ( return_angle )
+	logger << ", " << new_angle_label ;
+
+     if ( return_ifrq ) 
 	logger << ", " << new_ifrq_label ;
 
       logger << "\n";
@@ -139,6 +156,9 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
       if ( return_phase ) 
 	edf.add_signal( new_phase_label , Fs , phase );
       
+      if ( return_angle )
+	edf.add_signal( new_angle_label , Fs , phase );
+
       if ( return_ifrq ) 
 	{
 	  // this returns n-1 estimates, i.e. based on the derivative of the phase
@@ -151,8 +171,38 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 }
 
   
-void dsptools::run_cwt( const std::vector<double> & data , const int Fs, 
-			const double fc , const int num_cycles , 
+void dsptools::alt_run_cwt( const std::vector<double> & data ,
+			    const int Fs, 
+			    const double fc ,
+			    const double FWHM ,
+			    const double tlen , 
+			    std::vector<double> * mag , 
+			    std::vector<double> * phase )
+{
+  
+  CWT cwt;
+  
+  cwt.set_sampling_rate( Fs );
+
+  cwt.alt_add_wavelet( fc , FWHM , tlen );
+
+  cwt.load( &data );
+  
+  cwt.run();
+  
+  *mag = cwt.results(0);
+  
+  if ( phase != NULL ) 
+    *phase = cwt.phase(0);
+  
+}
+
+
+
+void dsptools::run_cwt( const std::vector<double> & data ,
+			const int Fs, 
+			const double fc ,
+			const int num_cycles , 
 			std::vector<double> * mag , 
 			std::vector<double> * phase )
 {
@@ -179,15 +229,24 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
 			    const double flwr , const double fupr , const double ripple , const double tw , 
 			    std::vector<double> * mag , 
 			    std::vector<double> * phase ,
+			    std::vector<double> * angle ,
 			    std::vector<double> * ifrq )
 {
-
+  
   hilbert_t hilbert( data , Fs , flwr , fupr , tw , ripple );
   
   *mag = *(hilbert.magnitude());
 
   if ( phase != NULL )
     *phase = *(hilbert.phase());
+
+  if ( angle != NULL )
+    {
+      *angle = *phase;
+      // convert to degrees with 0 as pos-to-neg crossing
+      for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );
+      
+    }
 
   if ( ifrq != NULL )   
       *ifrq = hilbert.instantaneous_frequency( Fs );    

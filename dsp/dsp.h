@@ -31,7 +31,7 @@
 #include "resample.h"
 #include "coherence.h"
 #include "correl.h"
-#include "phsyn.h"
+#include "conncoupl.h"
 #include "conv.h"
 #include "ecgsuppression.h"
 #include "pac.h"

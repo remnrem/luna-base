@@ -27,6 +27,8 @@
 // for dummy routines below
 #include "helper/token.h"
 #include "helper/token-eval.h"
+#include "cwt/cwt.h"
+
 #include <fstream>
 
 extern globals global;
@@ -73,8 +75,9 @@ int main(int argc , char ** argv )
   if ( argc >= 2 && strcmp( argv[1] ,"-d" ) == 0 )
     { 
       std::string p = argc >= 3 ? argv[2] : "";
+      std::string p2 = argc >= 4 ? argv[3] : "";
       global.api();
-      proc_dummy( p ); 
+      proc_dummy( p , p2 ); 
       exit(0); 
     } 
   
@@ -965,55 +968,76 @@ void process_edfs( cmd_t & cmd )
 	  
 	  const int num_events = annot->num_interval_events();
 	  const int nf = annot->types.size();
-	  
-	  logger << "  [" << names[a] << "] " 
-		 << num_events << " instance(s)"
-		 << " (from " << annot->file << ")\n";
-	  
-	  // list instance IDs (up to 4) if multiple or differnt from annot name
-	  // but only if there are >1 unique value, *and* the number of unique values
-	  // does not equal the total instance count (i.e. do not print if just time-stamp
-	  // or count for each ID, only if some coding
-	  
-	  std::set<std::string> instance_ids = annot->instance_ids();
-	  
-	  if ( instance_ids.size() > 0 && instance_ids.size() != num_events ) 
+
+
+	  // verbose mode
+
+	  if ( globals::verbose )
 	    {
 	      
-	      if ( ! ( instance_ids.size() == 1 
-		       && ( *instance_ids.begin()  == names[a] || *instance_ids.begin() == "." ) ) )
+	      logger << "  [" << names[a] << "] " 
+		     << num_events << " instance(s)"
+		     << " (from " << annot->file << ")\n";
+	      
+	      // list instance IDs (up to 4) if multiple or differnt from annot name
+	      // but only if there are >1 unique value, *and* the number of unique values
+	      // does not equal the total instance count (i.e. do not print if just time-stamp
+	      // or count for each ID, only if some coding
+	      
+	      std::set<std::string> instance_ids = annot->instance_ids();
+	      
+	      if ( instance_ids.size() > 0 && instance_ids.size() != num_events ) 
 		{
-		  logger << "   " << instance_ids.size() << " instance IDs: ";
-		  std::set<std::string>::const_iterator ii = instance_ids.begin();
-		  int icnt = 0 ; 
-		  while ( ii != instance_ids.end() )
+		  
+		  if ( ! ( instance_ids.size() == 1 
+			   && ( *instance_ids.begin()  == names[a] || *instance_ids.begin() == "." ) ) )
 		    {
-		      logger << " " << *ii ;
-		      ++icnt;
-		      if ( icnt > 4 ) { logger << " ..." ; break;  }
-		      ++ii;		  
+		      logger << "   " << instance_ids.size() << " instance IDs: ";
+		      std::set<std::string>::const_iterator ii = instance_ids.begin();
+		      int icnt = 0 ; 
+		      while ( ii != instance_ids.end() )
+			{
+			  logger << " " << *ii ;
+			  ++icnt;
+			  if ( icnt > 4 ) { logger << " ..." ; break;  }
+			  ++ii;		  
+			}
+		      logger << "\n";
+		    }
+		}
+	  	
+	      // lists meta-data
+	      
+	      if ( nf > 1 )
+		{
+		  logger << "   w/ " << nf << " field(s):";
+		  std::map<std::string,globals::atype_t>::const_iterator aa = annot->types.begin();
+		  while ( aa != annot->types.end() )
+		    {
+		      logger << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
+		      ++aa;
 		    }
 		  logger << "\n";
 		}
+
 	    }
-	  
-	
-	  // lists meta-data
-	  
-	  if ( nf > 1 )
+
+	  //
+	  // else non-verbose annotaiton listing
+	  //
+
+	  else
 	    {
-	      logger << "   w/ " << nf << " field(s):";
-	      std::map<std::string,globals::atype_t>::const_iterator aa = annot->types.begin();
-	      while ( aa != annot->types.end() )
-		{
-		  logger << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
-		  ++aa;
-		}
-	      logger << "\n";
+	      if ( a != 0 && a % 4 == 0 ) logger << "\n ";
+	      else if ( a != 0 ) logger << " |";
+	      else logger << " ";
+	      logger << " " << names[a] << " (x" << num_events << ")";
 	    }
 	  
 	}
 
+      logger << "\n";
+      
       
       //
       // Automatically generate channel type variables based on attached EDF
@@ -1031,13 +1055,28 @@ void process_edfs( cmd_t & cmd )
       if ( cmd_t::ivars.find( edf.id ) != cmd_t::ivars.end() )
 	{
 	  logger << "\n variables:\n";
-
+	  
 	  const std::map<std::string,std::string> & newvars = cmd_t::ivars.find( edf.id )->second;
 	  std::map<std::string,std::string>::const_iterator vv = newvars.begin();
+	  int icnt = 0 ;
 	  while ( vv != newvars.end() )
 	    {
-	      if ( vv->second != "" ) 
-		logger << "  " << vv->first << "=" << vv->second << "\n";
+
+	      if ( vv->second != "" )
+		{
+		  if ( globals::verbose )
+		    {
+		      logger << "  " << vv->first << "=" << vv->second << "\n";
+		    }
+		  else		    
+		    {
+		      if ( icnt % 5 == 4 ) logger << "\n ";
+		      else if ( icnt != 0 ) logger << " |";
+		      else logger << " ";
+		      logger << " " << vv->first << "=" << Helper::brief( vv->second , 13 ) ;		    
+		      ++icnt;
+		    }
+		}	      
 	      ++vv;
 	    }
 	  logger << "\n";
@@ -1148,9 +1187,25 @@ void proc_eval_tester( const bool verbose )
 
 // DUMMY : a generic placeholder/scratchpad for templating new things
 
-void proc_dummy( const std::string & p )
+void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+
+  if ( p == "cwt" )
+    {
+      CWT cwt;
+      cwt.set_sampling_rate( 400 );
+      cwt.add_wavelets( 0.5 , 5 , 30 , 0.25 , 35 , 20 ) ;
+
+
+      std::vector<dcomp> w1 = cwt.alt_wavelet( 0 );
+      for (int i=0;i<w1.size();i++)
+	std::cout << i << "\t" << w1[i] << "\n";
+      
+      std::exit(1);
+    }
+
+  
   if ( p == "lda" )
     {
       std::vector<std::string> y;
@@ -1425,12 +1480,17 @@ void proc_dummy( const std::string & p )
       std::exit(1);
     }
 
+
   if ( p == "fft" )
     {
       
-      
       int index_length = x.size();
-      int my_Fs = 1000; // arbitrary
+
+      int my_Fs = 400; // arbitrary
+
+      if ( p2 != "" )
+	if ( ! Helper::str2int( p2 , &my_Fs ) ) Helper::halt( "expecting integer sample rate as second parameter" );
+
       int index_start = 0;
 
       FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
@@ -1443,17 +1503,29 @@ void proc_dummy( const std::string & p )
       // Extract the raw transform scaled by 1/n
       std::vector<std::complex<double> > t2 = fftseg.scaled_transform();
       
-      int my_N = fftseg.cutoff;
+      int my_N = fftseg.cutoff;      
 
-      //std::cout << t.size() << "\t" << t2.size() << "\t" << my_N << "\n";
-      
+      std::cout << "N" << "\t"
+		<< "F" << "\t"
+		<< "REAL" << "\t"
+		<< "IMAG" << "\t"
+		<< "UNNORM_AMP" << "\t"
+		<< "PSD" << "\t"
+		<< "log10(PSD)" << "\n";
+
       for (int f=0;f<my_N;f++)
-	{
-	  std::cout << "M" << f << "\t" << fftseg.frq[f] << "\t" << fftseg.X[f] << "\n";
-	}
- 
-//       for (int f=0;f<t.size();f++)
-// 	std::cout << "V2\t" << t[f] << "\t" << t2[f] << "\n";
+	{	  
+	  // t : raw transform
+	  // t2 : scaled by 1/N
+	  // 
+	  std::cout << f << "\t"
+		    << fftseg.frq[f] << "\t"		    
+		    << std::real( t[f] ) << "\t"
+		    << std::imag( t[f] ) << "\t"
+		    << fftseg.mag[f] << "\t"
+		    << fftseg.X[f] << "\t"
+		    << log10( fftseg.X[f] ) << "\n";
+	} 
       
       std::exit(1);
     }

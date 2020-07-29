@@ -1387,10 +1387,22 @@ bool edf_t::attach( const std::string & f ,
   // Output some basic information
   //
 
-  logger << " duration " << Helper::timestring( timeline.total_duration_tp ) 
-	    << " hms, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hms after start\n";
-  logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
+  logger << " duration: " << Helper::timestring( timeline.total_duration_tp );
 
+  clocktime_t et( header.starttime );
+  if ( et.valid )
+    {
+      double time_hrs = ( timeline.last_time_point_tp * globals::tp_duration ) / 3600.0 ;
+      et.advance( time_hrs );
+      logger << " ( clocktime " << header.starttime << " - " << et.as_string() << " )";
+    }
+  logger << "\n";
+  
+  //	 << " hms, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hms after start\n";
+
+  if ( globals::verbose )
+    logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
+  
   logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
   logger << "in " << ( header.edfplus ? "an EDF+" : "a standard EDF" ) << " file:" ;
   for (int s=0;s<header.ns;s++) 

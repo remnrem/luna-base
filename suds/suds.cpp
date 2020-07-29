@@ -427,17 +427,22 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
 
   std::vector<bool> valid( nge , true );
+
+  // track reasons for exclusion
+  int nout_flat = 0;
+  int nout_hjorth = 0;
+  int nout_stat = 0;
   
   //
   // Exclusions based on H==0 parameters
   //
-
+  
   for ( int s=0;s<ns;s++)
     {
       for (int i=0;i<nge;i++) 
 	{
-	  if ( h2( i, s ) < 1e-8 ) valid[i] = false;
-	  else if ( h3( i , s ) < 1e-8 ) valid[i] = false;
+	  if ( h2( i, s ) < 1e-8 ) { valid[i] = false; nout_flat++; }
+	  else if ( h3( i , s ) < 1e-8 ) { valid[i] = false; nout_flat++; } 
 	}
     }
 
@@ -453,7 +458,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  for (int i=0;i<nge;i++)
 	    {
 	      if ( h2( i, s ) <= suds_t::lwr_h2[s] || h2(i,s) >= suds_t::upr_h2[s] ||
-		   h3( i, s ) <= suds_t::lwr_h3[s] || h3(i,s) >= suds_t::upr_h3[s] ) valid[i] = false;
+		   h3( i, s ) <= suds_t::lwr_h3[s] || h3(i,s) >= suds_t::upr_h3[s] ) { valid[i] = false; nout_hjorth++; } 
 	    }
 	}
     }
@@ -479,7 +484,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    {
 	      if ( valid[i] )
 		{
-		  if ( x[c] < lwr || x[c] > upr ) valid[i] = false;
+		  if ( x[c] < lwr || x[c] > upr ) { valid[i] = false; nout_stat++; } 
 		  ++c;
 		}
 	    }
@@ -493,10 +498,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   int included = 0;
   for (int i=0;i<nge;i++)
     if ( valid[i] ) ++included;
-  
+
   logger << "  of " << ne << " total epochs, valid staging for " << nge
-	 << ", and of those " << included << " passed outlier removal\n";
-  
+         << ", and of those " << included << " passed outlier removal\n";
+
+  logger << " (detailed outlier counts: " << nout_flat << ", " << nout_hjorth << ", " << nout_stat << ")\n";
+
   //
   // Remove bad epochs and repeat (SVD and smoothing)
   //

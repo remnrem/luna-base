@@ -58,6 +58,7 @@ fir_impl_t::fir_impl_t( const std::vector<double> & coefs_ )
 
 void dsptools::design_fir( param_t & param )
 {
+  
   // assume this is called only by --fir option, and so we need to set this
   
   int fs = param.requires_int( "fs" );
