@@ -106,7 +106,12 @@ annot_t * spectral_power( edf_t & edf ,
   else if ( param.has( "hamming" ) ) window_function = WINDOW_HAMMING;
   else if ( param.has( "tukey50" ) ) window_function = WINDOW_TUKEY50;
 
+  //
+  // Use nextpow2 for NFFT
+  //
 
+  bool use_nextpow2 = param.has( "pow2" );
+  
   //
   // Define standard band summaries
   //
@@ -285,7 +290,8 @@ annot_t * spectral_power( edf_t & edf ,
 			  segment_sec , 
 			  noverlap_segments , 
 			  window_function , 
-			  average_adj );
+			  average_adj ,
+			  use_nextpow2 );
 	   
 	   //	   std::cout << "done\n";
 
