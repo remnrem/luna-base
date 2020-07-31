@@ -299,14 +299,14 @@ bool Helper::str2int64(const std::string & s , uint64_t * i)
 // }
 
 
-bool Helper::ascii7( std::string * s , char repl )
+void Helper::ascii7( std::string * s , char repl )
 {
   const int sz = s->size();
   for ( int i=0; i<sz; i++) 
-    if ( (*s)[i] < 32 || (*s)[i] > 126 ) (*s)[i] = repl;  
+    if ( (*s)[i] < 32 || (*s)[i] > 126 ) (*s)[i] = repl;    
 }
 
-bool Helper::ascii7( std::vector<char> * s , char repl )
+void Helper::ascii7( std::vector<char> * s , char repl )
 {
   const int sz = s->size();
   for ( int i=0; i<sz; i++) 
