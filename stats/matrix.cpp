@@ -139,7 +139,7 @@ template<class T> std::string Data::Vector<T>::print( const std::string & label 
   if ( label != "" ) ss << label << "\n";
   for (int r=0;r<aelem;r++)
     {
-      ss << " [" << data[r] << " ]\n";
+      ss << " [ " << data[r] << " ]\n";
     }
   return ss.str();
 }
@@ -155,7 +155,7 @@ template<class T> std::string Data::Matrix<T>::print( const std::string & label 
 
   for (int r=0;r<arow;r++)
     {
-      ss << " [" ;
+      ss << " [ " ;
       for (int c=0;c<acol;c++)
 	ss << " " << (*this)(r,c) ;
       ss << " ]\n";

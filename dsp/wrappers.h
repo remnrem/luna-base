@@ -41,11 +41,20 @@ namespace dsptools
 		const double fc , const int num_cycles , 
 		std::vector<double> * mag , 
 		std::vector<double> * phase = NULL ); 
-  
+
+  void alt_run_cwt( const std::vector<double> & data ,
+		    const int Fs, 
+		    const double fc ,
+		    const double FWHM ,
+		    const double tlen , 
+		    std::vector<double> * mag , 
+		    std::vector<double> * phase );
+      
   void run_hilbert( const std::vector<double> & data , const int Fs , 
 		    const double flwr , const double fupr , const double ripple , const double tw , 
 		    std::vector<double> * mag , 
-		    std::vector<double> * phase = NULL , 
+		    std::vector<double> * phase = NULL ,
+		    std::vector<double> * angle = NULL , 
 		    std::vector<double> * frequency = NULL ); 
   
 }

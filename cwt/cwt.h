@@ -86,13 +86,15 @@ class CWT {
   
   void add_wavelet(const double _fc, const int n_cycles ) 
   {
-    fc.push_back( _fc );
 
+    fc.push_back( _fc );
+    
     // s = n/2pif
     // Fb = 2s^2
     
     const double s = n_cycles / (double)( 2 * M_PI * _fc );    
-    sig.push_back(s);
+
+    sig.push_back(s); // not used
     fb.push_back( 2 * s*s );
     
     num_frex = fc.size();
@@ -100,23 +102,36 @@ class CWT {
   }
 
 
-/*   void set_wavelet_param( const double f , const int a = 3 , const int b = 10 ) */
-/*   { */
-/*     //    Helper::halt( "not used currently..." ); */
+  //
+  // alternate specification of wavelets
+  //
 
-/*     // here 'a' and 'b' are the number of cycles requested (that can change as a function of frequency */
-/*     // i.e. here, it cycles between 3 and 10 (mapping onto the example frequencies in frex[0] .. freqx[end] */
+  std::vector<dcomp> alt_wavelet(const int);
 
-/*     // This uses the relation s = n/(2pi.f) as given in the Cohen text, page 145 */
+  void add_wavelets( double minFreq, double minFreqTempRes, double maxFreq, double maxFreqTempRes, double numFreqs, double waveLength )
+  {
+
+    alt_spec = true;
     
-/*     // we could set a==b here (especially in the case of a single frex */
-/*     // (i.e. frex.size() == 1 as in the spindle example, most likely) */
-/*     // here num_frex == 1 too */
+    fc = MiscMath::logspace( minFreq , maxFreq , numFreqs );
+    fwhm = MiscMath::logspace( minFreqTempRes , maxFreqTempRes , numFreqs );
+    num_frex = fc.size();
+	
+    // given this function, this sets timeline to -waveLength/2 to +waveLength/2
+    // i.e. usually it is designed to scale w/ the frequency of the wavelet (and so changes w/ each wavelet)
+    
+    set_timeframe( 50.0 / waveLength );
+  }
 
-/*     s = MiscMath::logspace( a, b , num_frex); */
-/*     for (int i=0;i<num_frex;i++) s[i] /= 2*M_PI*frex[i]; */
-/*   } */
-
+  void alt_add_wavelet( double Freq , double TempRes , double waveLength )
+  {
+    alt_spec = true;
+    fc.push_back( Freq );
+    fwhm.push_back( TempRes );
+    num_frex = fc.size();
+    set_timeframe( 50.0 / waveLength );
+  }
+  
   void set_pnts_trials( const int p , const int t )
   {
     // trials / epochs here 
@@ -140,17 +155,24 @@ class CWT {
     verbose = false;
 
   }
-
   
   void run();
+  
+  void run_wrapped();
   
   double freq(const int fi) const { return fc[fi]; }
   int    points() const { return num_pnts; }
   int    freqs() const { return num_frex; }
   double result(const int fi, const int ti) const { return eegpower[fi][ti]; }
   double raw_result(const int fi, const int ti) const { return rawpower[fi][ti]; }
-  const std::vector<double> & results(const int fi) const { return rawpower[fi]; }  
+  const std::vector<double> & results(const int fi) const { return rawpower[fi]; }
+
+  // same as above 'results' function
+
+  std::vector<double> amplitude(const int fi) const { return rawpower[fi]; }
   std::vector<double> phase(const int fi) const { return ph[fi]; }
+  std::vector<dcomp> get_complex( const int fi ) { return conv_complex[fi] ; } 
+
   
   //
   // get-functions
@@ -160,6 +182,17 @@ class CWT {
   int get_num_freq() const { return num_frex; }
   double get_srate() const { return srate; }
 
+  //
+  // options
+  //
+
+  void store_real_imag_vectors( const int b ) { store_real_imag = b; } 
+
+  void use_alt() { alt_spec = true; }
+
+  void alt_timeline( double t ) { set_timeframe( 50.0 / t ); }
+
+  
  private:
   
   //
@@ -175,22 +208,31 @@ class CWT {
   int                 srate;
   std::vector<double> time;
 
+  //
+  // Alternate specification: 
+  //
+  
+  bool                alt_spec; 
 
+  
+  
+  
   //
   // Wavelet parameters
   //
 
   std::vector<double> fc;
   std::vector<double> fb;
-
   std::vector<double> sig;
 
+  std::vector<double> fwhm;
+  
   //
   // Segments
   //
   
-  int num_pnts;   // number of points per EPOCH (640)
-  int num_trials;  // number of EPOCHS (99)
+  int num_pnts;   // number of points per EPOCH 
+  int num_trials;  // number of trials (always 1)
   
   
   //
@@ -223,6 +265,13 @@ class CWT {
   //
 
   std::vector<std::vector<double> > ph; 
+
+  //
+  // Optionally, store complex wavelet transform
+  //
+
+  bool store_real_imag;
+  std::vector<std::vector<dcomp> > conv_complex; 
   
   //
   // Misc
@@ -232,12 +281,15 @@ class CWT {
 
   void init()
   {
+    alt_spec = false;
     fc.clear();
     fb.clear();
-    srate = 256;
+    srate = 0;
     num_pnts = num_trials = 1;
     eegpower.clear();
     rawpower.clear();
+    conv_complex.clear();
+    store_real_imag = false;
   }
   
 };

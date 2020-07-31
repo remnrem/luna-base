@@ -52,6 +52,7 @@ long int MiscMath::nextpow2( const int a )
 
 std::vector<double> MiscMath::logspace(double a, double b, int n)
 {
+  if ( n < 2 ) Helper::halt( "logspace requires at least two values" );
   // for a->b, generate a series of logarithmically (log10) equally spaced intervals
   a = log10(a);
   b = log10(b);
@@ -60,6 +61,21 @@ std::vector<double> MiscMath::logspace(double a, double b, int n)
   r[0] = pow(10,a);
   r[n-1] = pow(10,b);
   for (int i=1;i<n-1;i++) r[i] = pow( 10, a + i*st );
+  return r;
+}
+
+
+//
+// linspace function
+//
+
+std::vector<double> MiscMath::linspace(double a, double b, int n)
+{
+  if ( n < 2 ) Helper::halt( "linspace requires at least two values" );
+  const double st = (b-a)/(double)(n-1);
+  std::vector<double> r(n);
+  r[0] = a; r[n-1] = b;
+  for (int i=1;i<n-1;i++) r[i] = a + i*st ;
   return r;
 }
 
@@ -159,6 +175,21 @@ double MiscMath::mean( const std::vector<int> & x )
   for (int i=0;i<n;i++) s += x[i];
   return s/(double)n;
 }
+
+std::complex<double> MiscMath::max( const std::vector<std::complex<double> > & x )
+{
+  const int n = x.size();
+  if ( n == 0 ) return std::complex<double>(0,0);
+  double mm = 0;
+  int mi = 0;
+  for (int i=0;i<n;i++)
+    {
+      double m = std::abs( x[i] );
+      if ( m > mm ) { mi = i; mm = m; }
+    }
+  return x[mi];
+}
+
 
 std::complex<double> MiscMath::mean( const std::vector<std::complex<double> > & x )
 {
@@ -865,6 +896,13 @@ double MiscMath::chisq( const std::vector<double> & o , const std::vector<double
   return Statistics::chi2_prob( x , k-1 );
 }
 
+
+double MiscMath::empirical_pvalue( const double s , const std::vector<double> & x )
+{
+  double pv = 1;
+  for (int i=0;i<x.size();i++) if ( x[i] >= s ) ++pv;
+  return pv / (double)( x.size() + 1.0 );
+}
 
 
 void MiscMath::normalize( std::vector<double> * x , double * mn , double * mx)

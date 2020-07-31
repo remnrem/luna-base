@@ -298,7 +298,6 @@ bool Helper::str2int64(const std::string & s , uint64_t * i)
 //   return ss.str();
 // }
 
-
 void Helper::ascii7( std::string * s , char repl )
 {
   const int sz = s->size();

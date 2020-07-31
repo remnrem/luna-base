@@ -119,7 +119,6 @@ class FFT
   // Extract the raw transform scaled by 1/n
   std::vector<std::complex<double> > scaled_transform() const;
   
-  // Extract the ?
   std::vector<double> inverse() const;
 
   //

@@ -13,7 +13,7 @@ ARCH=LINUX
 
 CXX = g++
 
-CXXFLAGS = -O2 -I. -I.. -Wno-logical-op-parentheses -Wno-deprecated-register -pg
+CXXFLAGS = -O2 -I. -I.. -Wno-logical-op-parentheses -Wno-deprecated-register  -std=gnu++11
 
 
 ##

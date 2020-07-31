@@ -76,7 +76,6 @@ annot_t * spectral_power( edf_t & edf ,
   double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
 
   // Calculate MSE
-
   bool calc_mse = param.has( "mse" ); 
 
 

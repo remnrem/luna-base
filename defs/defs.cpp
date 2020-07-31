@@ -117,7 +117,8 @@ param_t globals::param;
 
 void (*globals::bail_function) ( const std::string & );
 
-bool globals::silent; 
+bool globals::silent;
+bool globals::verbose; 
 bool globals::Rmode;
 bool globals::Rdisp;
 
@@ -186,7 +187,8 @@ void globals::init_defs()
   Rmode = false;
 
   Rdisp = false;
-  
+
+  verbose = false; 
   
   //
   // Annotation folder
@@ -724,9 +726,55 @@ void globals::init_channel_types()
   add_channel_map( "CZ" , EEG );
   add_channel_map( "FZ" , EEG );
   add_channel_map( "PZ" , EEG );
+  add_channel_map( "OZ" , EEG );
   add_channel_map( "FPZ" , EEG );
-  add_channel_map( "CPZ" , EEG );
 
+  add_channel_map( "FP2" , EEG );
+  add_channel_map( "FP1" , EEG );
+  add_channel_map( "AF8" , EEG );
+  add_channel_map( "AF7" , EEG );
+  add_channel_map( "F8" , EEG );
+  add_channel_map( "F6" , EEG );
+  add_channel_map( "F2" , EEG );
+  add_channel_map( "F1" , EEG );
+  add_channel_map( "F5" , EEG );
+  add_channel_map( "F7" , EEG );
+  add_channel_map( "FC6" , EEG );
+  add_channel_map( "FC2" , EEG );
+  add_channel_map( "FC1" , EEG );
+  add_channel_map( "FC5" , EEG );
+
+  add_channel_map( "T8" , EEG );
+  add_channel_map( "C6" , EEG );
+  add_channel_map( "C2" , EEG );
+  add_channel_map( "C1" , EEG );
+  add_channel_map( "C5" , EEG );
+  add_channel_map( "T7" , EEG );
+  
+  add_channel_map( "TP8" , EEG );
+  add_channel_map( "CP6" , EEG );
+  add_channel_map( "CP4" , EEG );
+  add_channel_map( "CP2" , EEG );
+  add_channel_map( "CP1" , EEG );
+  add_channel_map( "CP3" , EEG );
+  add_channel_map( "CP5" , EEG );
+  add_channel_map( "TP7" , EEG );
+  
+  add_channel_map( "P8" , EEG );
+  add_channel_map( "P6" , EEG );
+  add_channel_map( "P4" , EEG );
+  add_channel_map( "P2" , EEG );
+  add_channel_map( "P1" , EEG );
+  add_channel_map( "P3" , EEG );
+  add_channel_map( "P5" , EEG );
+  add_channel_map( "P7" , EEG );
+  
+  add_channel_map( "PO8" , EEG );
+  add_channel_map( "PO4" , EEG );
+  add_channel_map( "POZ" , EEG );
+  add_channel_map( "PO3" , EEG );
+  add_channel_map( "PO7" , EEG );
+  
   add_channel_map( "M1" , EEG );
   add_channel_map( "A1" , EEG );
   add_channel_map( "M2" , EEG );

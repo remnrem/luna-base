@@ -29,6 +29,7 @@ struct param_t;
 
 #include <vector>
 #include "miscmath/miscmath.h"
+#include "defs/defs.h"
 
 struct emp_t { 
 
@@ -86,16 +87,19 @@ struct hilbert_t
   hilbert_t( const std::vector<double> & d );
   
   // filter-Hilbert
-  hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , double ripple, double tw );
+  hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , double ripple, double tw , const bool store_ri = false );
   
   
   // extract instantaneous phase, magnitude
   const std::vector<double> * phase() const;
-  //  const std::vector<double> * angle() const;
+  //const std::vector<double> * angle() const;
   const std::vector<double> * magnitude() const;
   const std::vector<double> * signal() const;
   std::vector<double> instantaneous_frequency(double) const;
-
+  /* std::vector<double> get_real() const; */
+  /* std::vector<double> get_imag() const; */
+  std::vector<dcomp> get_complex() const;
+  bool store_real_imag;
   itpc_t phase_events( const std::vector<int> & , const std::vector<bool> * m = NULL , 
 		       const int nreps = 0 , 
 		       const int sr = 0 , 
@@ -111,6 +115,9 @@ private:
   std::vector<double> input;
   std::vector<double> ph;
   std::vector<double> mag;
+  /* std::vector<double> real_part; */
+  /* std::vector<double> imag_part; */
+  std::vector<dcomp> conv_complex;
   
 };
 
