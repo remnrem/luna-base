@@ -28,37 +28,41 @@
 
 #include "defs/defs.h"
 
-FFT::FFT( int N , int Fs , fft_t type , window_function_t window )
-  : N(N) , Fs(Fs), type(type), window(window), in(NULL), out(NULL), p(NULL)
+FFT::FFT( int Ndata, int Fs , fft_t type , window_function_t window , bool use_nextpow2 )
+  : Ndata(Ndata) , Fs(Fs), type(type), window(window), in(NULL), out(NULL), p(NULL), use_nextpow2(use_nextpow2)
 {
+
+  // set Nfft either to segment size, or the next power of two
+  Nfft = use_nextpow2 ? MiscMath::nextpow2( Ndata ) : Ndata ;
   
   // Allocate storage for input/output
-  in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+  in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * Nfft);
   if ( in == NULL ) Helper::halt( "FFT failed to allocate input buffer" );
   
-  out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+  out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * Nfft);
   if ( out == NULL ) Helper::halt( "FFT failed to allociate output buffer" );
 
   // Initialise (probably not necessary, but do anyway)
-  for (int i=0;i<N;i++) { in[i][0] = in[i][1] = 0; }
+  for (int i=0;i<Nfft;i++) { in[i][0] = in[i][1] = 0; }
   
   // Generate plan
-  p = fftw_plan_dft_1d( N, in, out , type == FFT_FORWARD ? FFTW_FORWARD : FFTW_BACKWARD , FFTW_ESTIMATE );
+  p = fftw_plan_dft_1d( Nfft, in, out , type == FFT_FORWARD ? FFTW_FORWARD : FFTW_BACKWARD , FFTW_ESTIMATE );
 
   //
   // We want to return only the positive spectrum, so set the cut-off
   //
   
-  cutoff = N % 2 == 0 ? N/2+1 : (N+1)/2 ;
+  cutoff = Nfft % 2 == 0 ? Nfft/2+1 : (Nfft+1)/2 ;
   X.resize(cutoff,0);
   mag.resize(cutoff,0);
   frq.resize(cutoff,0);
 
   //
-  // Scale frequencies appropriate (not used in calculation, just for output/convenience)
+  // Scale frequencies appropriately (not used in calculation, just for output)
   //
 
-  double T = N/(double)Fs;
+  double T = Nfft/(double)Fs;
+
   for (int i=0;i<cutoff;i++) frq[i] = i/T;
   
   //
@@ -67,18 +71,17 @@ FFT::FFT( int N , int Fs , fft_t type , window_function_t window )
   // we take the window into account
   //
 
-  w.resize( N , 1 ); // i.e. default of no window
+  w.resize( Ndata , 1 ); // i.e. default of no window
   
   normalisation_factor = 0;  
-  if      ( window == WINDOW_TUKEY50 ) w = MiscMath::tukey_window(N,0.5);
-  else if ( window == WINDOW_HANN )    w = MiscMath::hann_window(N);
-  else if ( window == WINDOW_HAMMING ) w = MiscMath::hamming_window(N);
+  if      ( window == WINDOW_TUKEY50 ) w = MiscMath::tukey_window(Ndata,0.5);
+  else if ( window == WINDOW_HANN )    w = MiscMath::hann_window(Ndata);
+  else if ( window == WINDOW_HAMMING ) w = MiscMath::hamming_window(Ndata);
   
-  for (int i=0;i<N;i++) normalisation_factor += w[i] * w[i];
+  for (int i=0;i<Ndata;i++) normalisation_factor += w[i] * w[i];
   normalisation_factor *= Fs;  
   normalisation_factor = 1.0/normalisation_factor;
-  
-  
+    
 } 
 
 bool FFT::apply( const std::vector<double> & x )
@@ -95,9 +98,11 @@ bool FFT::apply( const double * x , const int n )
   //
   
   if ( window == WINDOW_NONE )
-    for (int i=0;i<n;i++) { in[i][0] = x[i];        in[i][1] = 0; } 
+    for (int i=0;i<Ndata;i++) { in[i][0] = x[i];  in[i][1] = 0; } 
   else
-    for (int i=0;i<n;i++) { in[i][0] = x[i] * w[i]; in[i][1] = 0; } 
+    for (int i=0;i<Ndata;i++) { in[i][0] = x[i] * w[i]; in[i][1] = 0; } 
+
+  for (int i=Ndata;i<Nfft;i++) { in[i][0] = 0;  in[i][1] = 0;  } 
   
   //
   // Execute actual FFT
@@ -145,13 +150,19 @@ bool FFT::apply( const std::vector<std::complex<double> > & x )
   
   const int n = x.size();
   
-  if ( n > N ) Helper::halt( "error in FFT" );
+  if ( n > Nfft ) Helper::halt( "error in FFT" );
   
-  for (int i=0;i<n;i++)
+  for (int i=0;i<Ndata;i++)
     {
       in[i][0] = std::real( x[i] );
       in[i][1] = std::imag( x[i] );	
     }    
+
+  // zero-pad any remainder
+  for (int i=Ndata;i<Nfft;i++)
+    {
+      in[i][0] =  in[i][1] = 0;
+    }
   
   fftw_execute(p);
   
@@ -190,17 +201,18 @@ bool FFT::apply( const std::vector<std::complex<double> > & x )
 
 std::vector<std::complex<double> > FFT::transform() const
 {
-  std::vector<std::complex<double> > r(N);
-  for (int i=0;i<N;i++) 
+  std::vector<std::complex<double> > r(Nfft);
+  for (int i=0;i<Nfft;i++) 
     r[i] = std::complex<double>( out[i][0] , out[i][1] );
   return r;
 }
 
 std::vector<std::complex<double> > FFT::scaled_transform() const
 {
-  const double fac = 1.0 / (double)N;
-  std::vector<std::complex<double> > r(N);
-  for (int i=0;i<N;i++) 
+  // or Ndata??  check
+  const double fac = 1.0 / (double)Nfft;
+  std::vector<std::complex<double> > r(Nfft);
+  for (int i=0;i<Nfft;i++) 
     r[i] = std::complex<double>( out[i][0] * fac , out[i][1] * fac );
   return r;
 }
@@ -209,8 +221,8 @@ std::vector<double> FFT::inverse() const
 {
   // from an IFFT, get the REAL values and divide by N, i.e. this
   // should mirror the input data when the input data are REAL  
-  std::vector<double> r(N);
-  for (int i=0;i<N;i++) r[i] = out[i][0] / (double)N;
+  std::vector<double> r(Nfft);
+  for (int i=0;i<Nfft;i++) r[i] = out[i][0] / (double)Nfft;
   return r;
 }
 
@@ -278,13 +290,14 @@ void PWELCH::process()
   // std::cout << "segment_size_points = " << segment_size_points << "\n"
   // 	    << "noverlap_points = " << noverlap_points << "\n"
   //   	    << "segment_increment_points = " << segment_increment_points << "\n";
+
   
   //
   // Initial FFT
   //
   
-  FFT fft0( segment_size_points , Fs , FFT_FORWARD , window );
-
+  FFT fft0( segment_size_points , Fs , FFT_FORWARD , window , use_nextpow2 );
+      
   if ( average_adj ) 
     fft0.average_adjacent();
   
@@ -322,39 +335,41 @@ void PWELCH::process()
       // and all segments passed must be of exactly size segment_size_points
      
       
-      FFT fft( segment_size_points , Fs , FFT_FORWARD , window );
+      //      FFT fft( nfft , Fs , FFT_FORWARD , window );
       
       if ( p + segment_size_points > data.size() ) 
 	Helper::halt( "internal error in pwelch()" );
       
       const bool detrend = false;
+
       const bool zerocentre = false;
+
       if ( detrend )
 	{
 	  std::vector<double> y( segment_size_points );
 	  for (int j=0;j<segment_size_points;j++) y[j] = data[p+j];
 	  MiscMath::detrend(&y);      
-	  fft.apply( y );
+	  fft0.apply( y ); //wass fft.apply()
 	}
       else if ( zerocentre )
 	{
 	  std::vector<double> y( segment_size_points );
 	  for (int j=0;j<segment_size_points;j++) y[j] = data[p+j];
 	  MiscMath::centre(&y);      
-	  fft.apply( y );
+	  fft0.apply( y ); //wass fft.apply()
 	}
       else
 	{
-	  fft.apply( &(data[p]) , segment_size_points );
+	  fft0.apply( &(data[p]) , segment_size_points ); //wass fft.apply()
 	}
       
       if ( average_adj )
-	fft.average_adjacent();
+	fft0.average_adjacent(); //wass fft.apply()
       
-      int cutoff = fft.cutoff;
+      int cutoff = fft0.cutoff;
       
-      for (int i=0;i<fft.cutoff;i++)
-	psd[i] += fft.X[i];
+      for (int i=0;i<fft0.cutoff;i++)
+	psd[i] += fft0.X[i];
       
     } // next segment
   

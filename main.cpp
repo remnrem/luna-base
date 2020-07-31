@@ -1507,9 +1507,10 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       std::cout << "N" << "\t"
 		<< "F" << "\t"
-		<< "REAL" << "\t"
-		<< "IMAG" << "\t"
+		<< "RE" << "\t"
+		<< "IM" << "\t"
 		<< "UNNORM_AMP" << "\t"
+		<< "NORM_AMP" << "\t"
 		<< "PSD" << "\t"
 		<< "log10(PSD)" << "\n";
 
@@ -1523,6 +1524,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 		    << std::real( t[f] ) << "\t"
 		    << std::imag( t[f] ) << "\t"
 		    << fftseg.mag[f] << "\t"
+		    << ( f == 0 ? 1 : 2 ) * fftseg.mag[f] / (double)index_length << "\t"
 		    << fftseg.X[f] << "\t"
 		    << log10( fftseg.X[f] ) << "\n";
 	} 

@@ -54,7 +54,7 @@ class FFT
 
  public:
 
-  FFT( int N , int Fs , fft_t type = FFT_FORWARD , window_function_t window = WINDOW_NONE );
+  FFT( int N , int Fs , fft_t type = FFT_FORWARD , window_function_t window = WINDOW_NONE , bool use_nextpow2 = false );
   
   ~FFT() 
     {    
@@ -66,7 +66,10 @@ class FFT
  private:
 
   // Size (NFFT)
-  int N;
+  int Nfft;
+
+  // Size of data 
+  int Ndata;
   
   // Sampling rate, so we can construct the appropriate Hz for the PSD
   int Fs;
@@ -89,7 +92,9 @@ class FFT
 
   // Normalisation factor given the window
   double normalisation_factor;
-  
+
+  // always set NFFT to next power of 2 (else Nfft = Ndata)
+  bool use_nextpow2;
 
   //
   // Power band helper functions
@@ -199,9 +204,10 @@ class PWELCH
 	 double M , 
 	 int noverlap_segments , 
 	 window_function_t W = WINDOW_TUKEY50 , 
-	 bool average_adj = false ) 
+	 bool average_adj = false ,
+	 bool use_nextpow2 = false ) 
    : data(data) , Fs(Fs) , M(M) , noverlap_segments(noverlap_segments) , 
-     window(W), average_adj(average_adj) 
+     window(W), average_adj(average_adj) , use_nextpow2( use_nextpow2 )
   {
 
     // calculate implied overlap in actual data-points
@@ -272,7 +278,10 @@ class PWELCH
   
   // option to average adjacent frequency bins (default=F)
   bool average_adj;
-  
+
+  // always set NFFT to the next power of 2
+  bool use_nextpow2;
+
 };
 
 
