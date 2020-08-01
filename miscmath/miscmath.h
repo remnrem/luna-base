@@ -44,7 +44,10 @@ namespace MiscMath
   
   // differences 
   std::vector<double> diff( const std::vector<double> & x );
-  
+
+  // nearest index [within lwr/upr range]
+  int nearest_idx( const std::vector<double> & x , double value , int lwr = -1 , int upr = -1 );
+
   // mean/variance  
   double mean( const std::vector<double> & x );
   double mean( const std::vector<int> & x );

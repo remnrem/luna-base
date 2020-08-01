@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -80,7 +81,7 @@ struct fir_t
   // http://www.labbookpages.co.uk
   // http://www.labbookpages.co.uk/audio/firWindowing.html
 
-  enum filterType { LOW_PASS, HIGH_PASS, BAND_PASS, BAND_STOP };
+  enum filterType { LOW_PASS, HIGH_PASS, BAND_PASS, BAND_STOP , EXTERNAL };
   enum windowType { RECTANGULAR, BARTLETT, HANN, HAMMING, BLACKMAN };
   
   // Prototypes
@@ -127,8 +128,8 @@ namespace dsptools
   //
   
   void apply_fir( edf_t & edf , param_t & param );
-  void apply_fir( edf_t & edf , int s , fir_t::filterType , double ripple , double tw , double f1, double f2 );
-  std::vector<double> apply_fir( const std::vector<double> & , int fs , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 );
+  void apply_fir( edf_t & edf , int s , fir_t::filterType , double ripple , double tw , double f1, double f2 , const std::string & fir_file = "" );
+  std::vector<double> apply_fir( const std::vector<double> & , int fs , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const std::string & fir_file = "" );
   
 }
 

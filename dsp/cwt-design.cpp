@@ -32,26 +32,44 @@ void dsptools::design_cwt( param_t & param )
 {
   
   double fc = param.requires_dbl( "fc" );
+  
+  bool alt_spec = param.has( "fwhm" );
 
-  int cycles = param.requires_int( "cycles" );
+  double fwhm = alt_spec ? param.requires_dbl( "fwhm" ) : 0 ;
+  
+  int cycles = alt_spec ? 0 : param.requires_int( "cycles" );
 
+  double timelength = alt_spec ? ( param.has( "len" ) ? param.requires_dbl( "len" ) : 20 ) : 0 ;
+  
   int fs = param.requires_int( "fs" );
 
-  logger << " running CWT design for fc=" << fc << ", cycles=" << cycles << " and fs=" << fs << "\n";
-
+  if ( alt_spec )
+    logger << " running CWT design for fc=" << fc << ", FWHM=" << fwhm << " and fs=" << fs << "\n";
+  else
+    logger << " running CWT design for fc=" << fc << ", cycles=" << cycles << " and fs=" << fs << "\n";
+  
   writer.cmd( "CWT-DESIGN" , 1 , param.dump( "" , " " ) );
 
-  writer.level( Helper::dbl2str( fc ) + "_" + Helper::int2str( cycles ) + "_" + Helper::int2str( fs ) , "PARAM" );
+  if ( alt_spec )
+    writer.level( Helper::dbl2str( fc ) + "_" + Helper::dbl2str( fwhm ) + "_" + Helper::int2str( fs ) , "PARAM" );
+  else
+    writer.level( Helper::dbl2str( fc ) + "_" + Helper::int2str( cycles ) + "_" + Helper::int2str( fs ) , "PARAM" );
   
   CWT cwt;
   
   cwt.set_sampling_rate( fs );
-  
-  cwt.add_wavelet( fc , cycles );
-  
-  cwt.set_timeframe( fc );
-  
-  std::vector<dcomp> w = cwt.wavelet(0);
+
+  if ( alt_spec )
+    cwt.alt_add_wavelet( fc , fwhm , timelength );
+  else    
+    {
+      cwt.add_wavelet( fc , cycles );      
+      cwt.set_timeframe( fc );
+    }
+
+
+  std::vector<dcomp> w = alt_spec ? cwt.alt_wavelet(0) : cwt.wavelet(0);
+
   std::vector<double> t = cwt.get_timeframe();
   
   const int n = w.size();
@@ -70,7 +88,6 @@ void dsptools::design_cwt( param_t & param )
   // FFT of CWT
   //
   
-
   FFT fft( n , fs );
   fft.apply( w );
   std::vector<double> mag = fft.mag;
@@ -80,15 +97,29 @@ void dsptools::design_cwt( param_t & param )
   double mx = 0;
   for (int i=0;i<nx;i++) if ( mag[i] > mx ) mx = mag[i];
   if ( mx > 0 ) for (int i=0;i<nx;i++) mag[i] /= mx;
+
+  // get FWHM in frequency domain
+  int mid_idx = MiscMath::nearest_idx( mag , 1 );
+  int lwr_idx = MiscMath::nearest_idx( mag , 0.5 , 0 , mid_idx );
+  int upr_idx = MiscMath::nearest_idx( mag , 0.5 , mid_idx , -1 );
+  double fwhmF = fft.frq[upr_idx] - fft.frq[lwr_idx]; 
+
+  if ( alt_spec ) 
+    writer.value( "FWHM" , cwt.alt_empirical_fwhm(0) );
+
+  writer.value( "FWHM_F" , fwhmF );
+  writer.value( "FWHM_LWR" , fft.frq[lwr_idx] );
+  writer.value( "FWHM_UPR" , fft.frq[upr_idx] );
   
   
+  // full spectra
   for (int i=0;i<fft.frq.size();i++)
     {
       writer.level( fft.frq[i] , globals::freq_strat );
       writer.value( "MAG" , mag[i] );
     }
   writer.unlevel( globals::freq_strat );
-
+  
   writer.unlevel( "PARAM" );
 
 }

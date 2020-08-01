@@ -510,7 +510,10 @@ int main(int argc , char ** argv )
     {
       writer.begin();      
       writer.id( "." , "." );
-       
+
+      writer.cmd( "CWT-DESIGN" , 1 , "" );
+      writer.level( "CWT-DESIGN", "_CWT-DESIGN" );
+
       // expects input from std::cin
       proc_cwt_design_cmdline();
 

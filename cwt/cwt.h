@@ -103,10 +103,12 @@ class CWT {
 
 
   //
-  // alternate specification of wavelets
+  // alternate specification of wavelets, based on FWHM
   //
 
   std::vector<dcomp> alt_wavelet(const int);
+
+  double alt_empirical_fwhm( const int fi );
 
   void add_wavelets( double minFreq, double minFreqTempRes, double maxFreq, double maxFreqTempRes, double numFreqs, double waveLength )
   {
@@ -115,12 +117,11 @@ class CWT {
     
     fc = MiscMath::logspace( minFreq , maxFreq , numFreqs );
     fwhm = MiscMath::logspace( minFreqTempRes , maxFreqTempRes , numFreqs );
+    wlen.clear();
+    wlen.resize( fc.size() , waveLength );
+
     num_frex = fc.size();
 	
-    // given this function, this sets timeline to -waveLength/2 to +waveLength/2
-    // i.e. usually it is designed to scale w/ the frequency of the wavelet (and so changes w/ each wavelet)
-    
-    set_timeframe( 50.0 / waveLength );
   }
 
   void alt_add_wavelet( double Freq , double TempRes , double waveLength )
@@ -128,8 +129,8 @@ class CWT {
     alt_spec = true;
     fc.push_back( Freq );
     fwhm.push_back( TempRes );
+    wlen.push_back( waveLength );
     num_frex = fc.size();
-    set_timeframe( 50.0 / waveLength );
   }
   
   void set_pnts_trials( const int p , const int t )
@@ -226,6 +227,7 @@ class CWT {
   std::vector<double> sig;
 
   std::vector<double> fwhm;
+  std::vector<double> wlen;
   
   //
   // Segments
