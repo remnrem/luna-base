@@ -84,7 +84,7 @@ struct hilbert_t
   hilbert_t() { } 
   
   // Hilbert transform
-  hilbert_t( const std::vector<double> & d );
+  hilbert_t( const std::vector<double> & d , const bool store_ri = false );
   
   // filter-Hilbert
   hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , double ripple, double tw , const bool store_ri = false );
@@ -96,8 +96,6 @@ struct hilbert_t
   const std::vector<double> * magnitude() const;
   const std::vector<double> * signal() const;
   std::vector<double> instantaneous_frequency(double) const;
-  /* std::vector<double> get_real() const; */
-  /* std::vector<double> get_imag() const; */
   std::vector<dcomp> get_complex() const;
   bool store_real_imag;
   itpc_t phase_events( const std::vector<int> & , const std::vector<bool> * m = NULL , 

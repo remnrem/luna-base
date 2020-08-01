@@ -70,6 +70,8 @@ std::vector<dcomp> CWT::alt_wavelet( const int fi )
   //  FWHM is a bandwidth parameter
   //  Fc is a wavelet center frequency
 
+  // also get empirical FWHM
+  
   const int n = time.size();
 
   std::vector<dcomp> w(n);
@@ -91,6 +93,32 @@ std::vector<dcomp> CWT::alt_wavelet( const int fi )
    //       std::real(w[i]) << "\t" << std::imag(w[i] )  << "\n";
 
   return w;
+}
+
+
+double CWT::alt_empirical_fwhm( const int fi )
+{
+
+  // for the alternate parameterization of CWT,
+  // get empirical time-domain FWHM (from the Gaussian)
+  
+  // depending on two parameters:
+  //  FWHM is a bandwidth parameter
+  //  Fc is a wavelet center frequency
+
+  const int n = time.size();
+  
+  std::vector<double> g(n);
+  
+  for (int i=0;i<n;i++)
+    g[i] = exp( -4 * log(2.0) * (time[i]*time[i]) / (fwhm[fi]*fwhm[fi]) );      
+    
+  int mid_idx = MiscMath::nearest_idx( g , 1 );
+  int lwr_idx = MiscMath::nearest_idx( g , 0.5 , 0 , mid_idx );
+  int upr_idx = MiscMath::nearest_idx( g , 0.5 , mid_idx , -1 );
+  
+  return time[ upr_idx ] - time[ lwr_idx ];
+  
 }
 
 
@@ -148,9 +176,18 @@ void CWT::run()
       //
       // Set timeline for this wavelet (or is fixed already under alt_spec) 
       //
-      
+	    
       if ( ! alt_spec ) 
-	set_timeframe( fc[fi] );      
+	set_timeframe( fc[fi] );  
+      else
+	set_timeframe( 50.0 / wlen[fi] );
+
+
+      std::cout << "n_conv_pow2 = " << n_conv_pow2 << "\n"
+		<< "n_data = " << n_data << "\n"
+		<< "n_convolution " << n_convolution << "\n"
+		<< "half_of_wavelet_size " << half_of_wavelet_size << "\n"
+		<< "n_wavelet " << n_wavelet << "\n";
       
       //
       // Generate wavelet 
@@ -162,6 +199,7 @@ void CWT::run()
       //
       // First FFT
       //
+
       
       FFT fft1( n_conv_pow2 , 1 , FFT_FORWARD );
       fft1.apply( w );
@@ -197,7 +235,7 @@ void CWT::run()
       //
       // Trim
       //
-
+      
       eegconv_tmp.resize( n_convolution );      
       std::vector<dcomp> eegconv;
       for (int i=half_of_wavelet_size-1;
@@ -210,17 +248,26 @@ void CWT::run()
       // extract phase from the convolution
       //
 
+      std::cout << "num_pnts*num_trials " << num_pnts << " " << num_trials << " " << num_pnts * num_trials << "\n";
+      std::cout << "eegconv = " << eegconv.size() << "\n";
+
       for (int i=0; i<num_pnts*num_trials; i++)
 	{
+	  // std::cout << "ph.s " << ph.size() << "\n";
+	  // std::cout << ph[fi].size() << "\n";
+	  // std::cout << eegconv.size() << " is S\n";
+	  // std::cout << " fi i " << fi << " " << i << "\n";
 	  ph[fi][i] = atan2( eegconv[i].imag() , eegconv[i].real() );
 	}
+
+      std::cout << "cc0\n";
 
       //
       // optionally, extract real/imag parts
       //
 
       if ( store_real_imag )
-	{
+	{	  
 	  // nb. num_trials == 1 always... 
 	  conv_complex[fi].resize( num_pnts * num_trials ); 
 	  for (int i=0; i<num_pnts*num_trials; i++)
@@ -244,7 +291,7 @@ void CWT::run()
 	  ++cnt;
 	  temppower[i] = num_trials > 1 ? x / (double)num_trials : x ;
 	}
-      
+
       //
       // Record in freq x time-point matrix; use the 'baseline
       // correction based on 'all' time-points, i.e. to get dB
@@ -254,7 +301,7 @@ void CWT::run()
       int    baseline_n     = 0;
       int    baseline_start = 0;
       int    baseline_stop  = num_pnts; // 1 past index
-      
+
       if ( baseline_normalization )
 	{
 
@@ -272,7 +319,7 @@ void CWT::run()
       // save non-dB version too
       rawpower[fi] = temppower;
     }
-    
+
 }
 
 

@@ -34,10 +34,14 @@
 
 
 
-hilbert_t::hilbert_t( const std::vector<double> & d ) : input(d)
+hilbert_t::hilbert_t( const std::vector<double> & d , const bool store ) : input(d)
 {
+
   // this mode assumes we've already BPF the input
-  proc();
+
+  store_real_imag = store;
+
+   proc();
 }
 
 

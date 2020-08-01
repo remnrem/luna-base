@@ -1129,6 +1129,7 @@ void proc_artifacts( edf_t & edf , param_t & param )
 //   //band_pass_filter( edf , param );
 // }
 
+
 // FILTER : general FIR
 
 void proc_filter( edf_t & edf , param_t & param )	  

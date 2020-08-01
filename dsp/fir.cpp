@@ -62,9 +62,15 @@ void dsptools::design_fir( param_t & param )
   // assume this is called only by --fir option, and so we need to set this
   
   int fs = param.requires_int( "fs" );
-  double ripple = param.requires_dbl( "ripple" );
-  double tw = param.requires_dbl( "tw" );
 
+  double ripple, tw;
+
+  if ( ! param.has( "file" ) )
+    {
+      ripple = param.requires_dbl( "ripple" );
+      tw = param.requires_dbl( "tw" );
+    }
+  
   double f1 , f2;
   
   if ( param.has( "bandpass" ) )
@@ -101,6 +107,25 @@ void dsptools::design_fir( param_t & param )
       design_highpass_fir( ripple , tw , fs , f1 , true );
     }
 
+  if ( param.has( "file" ) )
+    {
+      std::vector<double> fc;
+      std::string fir_file = param.value( "file" );
+      if ( ! Helper::fileExists( fir_file ) ) Helper::halt( "could not find " + fir_file );
+      std::ifstream IN1( fir_file.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  double c;
+	  IN1 >> c;
+	  if ( IN1.eof() ) break;
+	  fc.push_back( c );
+	}
+      IN1.close();
+      std::string label = "EXTERNAL";      
+      fir_t fir;
+      fir.outputFFT( label , fc , fs );
+    }
+  
 }
   
 
@@ -217,7 +242,7 @@ std::vector<double> dsptools::design_highpass_fir( double ripple , double tw , d
 // apply FIR
 //
 
-std::vector<double> dsptools::apply_fir( const std::vector<double> & x , int fs, fir_t::filterType ftype , double ripple , double tw , double f1, double f2 )
+std::vector<double> dsptools::apply_fir( const std::vector<double> & x , int fs, fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const std::string & fir_file )
 {
 
   std::vector<double> fc;
@@ -230,6 +255,19 @@ std::vector<double> dsptools::apply_fir( const std::vector<double> & x , int fs,
     fc = design_lowpass_fir( ripple , tw , fs , f1 );
   else if ( ftype == fir_t::HIGH_PASS )
     fc = design_highpass_fir( ripple , tw , fs , f1 );
+  else if ( ftype == fir_t::EXTERNAL )
+    {
+      if ( ! Helper::fileExists( fir_file ) ) Helper::halt( "could not find " + fir_file );
+      std::ifstream IN1( fir_file.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  double c;
+	  IN1 >> c;
+	  if ( IN1.eof() ) break;
+	  fc.push_back( c );
+	}
+      IN1.close();
+    }
   
   //
   // Apply FIR 
@@ -244,13 +282,19 @@ std::vector<double> dsptools::apply_fir( const std::vector<double> & x , int fs,
 void dsptools::apply_fir( edf_t & edf , param_t & param )
 {
 
-  double ripple = param.requires_dbl( "ripple" );
-  
-  double tw = param.requires_dbl( "tw" );
+  double ripple, tw;
+
+  if ( ! param.has( "file" ) )
+    {
+      ripple = param.requires_dbl( "ripple" );      
+      tw = param.requires_dbl( "tw" );
+    }
   
   double f1 , f2 ;
   
   fir_t::filterType ftype = fir_t::BAND_PASS;
+
+  std::string fir_file = "";
   
   if ( param.has( "bandpass" ) )
     {
@@ -278,9 +322,15 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       ftype = fir_t::HIGH_PASS;
       f1 = param.requires_dbl( "highpass" );      
     }
+  else if ( param.has( "file" ) )
+    {
+      ftype = fir_t::EXTERNAL;
+      fir_file = param.value( "file" );
+    }	    
   else 
-    Helper::halt( "need to specify FIR type as bandpass, bandstop, lowpass or highpass" );
+    Helper::halt( "need to specify FIR type as bandpass, bandstop, lowpass, highpass, or file" );
 
+  
   //
   // Signals
   //
@@ -292,6 +342,7 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   std::vector<double> Fs = edf.header.sampling_freq( signals );
   
   const int ns = signals.size();
+
 
   //
   // Process each signal
@@ -306,13 +357,13 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       
       if ( edf.header.is_annotation_channel(s) ) continue;
       
-      apply_fir( edf , signals(s) , ftype , ripple, tw , f1 , f2 );
+      apply_fir( edf , signals(s) , ftype , ripple, tw , f1 , f2 , fir_file );
       
     }
 
 }
 
-void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 )
+void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const std::string & fir_file )
 {
       
   
@@ -359,6 +410,20 @@ void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double
     {
       fc = design_highpass_fir( ripple , tw , fs , f1 );
       logger << "highpass FIR order " << fc.size() << "\n";
+    }
+  else if ( ftype == fir_t::EXTERNAL )
+    {
+      if ( ! Helper::fileExists( fir_file ) ) Helper::halt( "cannot find " + fir_file );
+      std::ifstream IN1( fir_file.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  double c;
+	  IN1 >> c;
+	  if ( IN1.eof() ) break;
+	  fc.push_back( c );
+	}
+      IN1.close();
+      logger << "read " << fc.size() << " FIR coeffs from " << fir_file << "\n";
     }
   
   //int filter_order = num_taps == -1 ? 3 * ( Fs[s] / lwr ) : num_taps ; 
@@ -693,22 +758,47 @@ int fir_t::outputFFT(const std::string & label, const std::vector<double> & wind
   //
 
   // 2 window second around filter size
-  double sz = window.size() / (double)sampFreq + 2 ;
+  const double padding_sec = 2; // default = 2 
+  double sz = window.size() / (double)sampFreq + padding_sec ;
   fir_impl_t fir_impl ( window );
   std::vector<double> xx0( sampFreq * sz );
   xx0[sampFreq*(sz/2.0)-1] = 1;
   std::vector<double> xx = fir_impl.filter( &xx0 ); 
   double idx0 = sampFreq*(sz/2.0)-1;
   
+  //
+  // Step response
+  //
+
+  // same 2 window second around filter size
+  fir_impl_t fir_impl2 ( window );
+  std::vector<double> xx1( sampFreq * sz , 1 );
+  for (int i=sampFreq*(sz/2.0)-1;i<sampFreq * sz;i++) xx1[i] = 0;
+  std::vector<double> ss = fir_impl2.filter( &xx1 ); 
+  double idx1 = sampFreq*(sz/2.0)-1;
+
+  //
+  // Output IR and SR
+  //
+  
   writer.numeric_factor( "SEC" );  
+
+  // SR
+  double integ = xx[0];
   
   for (int xi=0;xi<xx.size();xi++)
     {
-      double tp = 1.0/sampFreq * (xi - idx0 ); 
+      double tp = 1.0/sampFreq * (xi - idx1 ); 
       writer.level( Helper::dbl2str(tp) , "SEC" );
-      writer.value( "IR" , xx[xi] ); 
+      writer.value( "IR" , xx[xi] );
+
+      writer.value( "SR" , integ );
+      integ += xx[xi];
+      
+      // writer.value( "SR2" , ss[xi] ); 
     }
   writer.unlevel( "SEC" );
+
   
   //
   // Frequency response

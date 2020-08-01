@@ -1212,3 +1212,32 @@ double MiscMath::kappa( const std::vector<std::string> & a , const std::vector<s
   return kappa;
   
 }
+
+
+int MiscMath::nearest_idx( const std::vector<double> & x , double value , int lwr  , int upr )
+{
+  if ( x.size() == 0 ) return -1;
+  int start = lwr >= 0 ? lwr : 0 ;
+  int stop  = upr >= 0 ? upr : x.size() - 1 ;
+  int nidx = -1;
+  double diff = 0;
+
+  for (int i=start;i<=stop;i++)
+    {
+      if ( nidx == -1 )
+	{
+	  diff = fabs( x[i] - value );
+	  nidx = i;
+	}
+      else
+	{
+	  double d = fabs( x[i] - value );
+	  if ( d < diff )
+	    {
+	      nidx = i;
+	      diff = d;
+	    }
+	}	
+    }
+  return nidx;
+}
