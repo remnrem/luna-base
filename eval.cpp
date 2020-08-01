@@ -828,7 +828,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EXE" ) )          pdc_t::similarity_matrix( edf , param(c) );
       //      else if ( is( c, "CHCHK" ) )        pdc_t::channel_checker( edf , param(c) );
 
-      else if ( is( c, "LW" ) )           lw_prep_t( edf , param(c) );
+      //      else if ( is( c, "LW" ) )           lw_prep_t( edf , param(c) );
       
       else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );      
       else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );
