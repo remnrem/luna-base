@@ -88,7 +88,7 @@ void dsptools::design_cwt( param_t & param )
   // FFT of CWT
   //
   
-  FFT fft( n , fs );
+  FFT fft( n , n , fs );
   fft.apply( w );
   std::vector<double> mag = fft.mag;
   const int nx= mag.size();

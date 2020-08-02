@@ -89,10 +89,26 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   else
     frq.push_back( 13.5 );
 
+
+  //
+  // Alternate specication, w/ FWHM?
+  //
+  
+  const bool alt_spec = param.has( "fwhm" ) ;
+
+  std::vector<double> fwhm;
+  
+  if ( alt_spec ) fwhm = param.dblvector( "fwhm" );
+  if ( fwhm.size() == 1 && frq.size()>1 ) fwhm.resize( frq.size() , fwhm[0] );
+
+  //
   // number of cycles
+  //
+
   const int num_cycles = param.has("cycles" ) ? param.requires_int( "cycles" ) : 7 ;
 
-      
+  if ( param.has( "cycles" ) && alt_spec ) Helper::halt( "use either fwhm or cycles" );
+  
   //
   // Detection parameters
   //
@@ -377,9 +393,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       CWT cwt;
       
       cwt.set_sampling_rate( Fs[s] );
+
       
       for (int fi=0;fi<frq.size();fi++)
-	cwt.add_wavelet( frq[fi] , num_cycles );  // f( Fc , number of cycles ) 
+	{
+	  if ( alt_spec )
+	    cwt.alt_add_wavelet( frq[fi] , fwhm[fi] , 10 );  // f( Fc , FWHM , 10 seconds window (fixed number of cycles ) 
+	  else
+	    cwt.add_wavelet( frq[fi] , num_cycles );  // f( Fc , number of cycles ) 
+	}
       
       cwt.load( d );
 
@@ -536,7 +558,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	{
 	  
 	  logger << "\n detecting spindles around F_C " << frq[fi] << "Hz for " << signals.label(s) << "\n";
-	  logger << " wavelet with " << num_cycles << " cycles\n";       
+
+	  if ( alt_spec ) 
+	    logger << " wavelet with FWHM(T) " << fwhm[fi] << "\n";       
+	  else
+	    logger << " wavelet with " << num_cycles << " cycles\n";       
+
 	  logger << " smoothing window = " << moving_window_sec << "s\n";
 
 	  //
@@ -2383,7 +2410,7 @@ void characterize_spindles( edf_t & edf ,
       // (performed on bandpass filtered data)
       //
 
-      FFT fft( npoints , Fs , FFT_FORWARD , WINDOW_HANN );     
+      FFT fft( npoints , MiscMath::nextpow2( Fs ) , Fs , FFT_FORWARD , WINDOW_HANN );     
       fft.apply( d );
       int cutoff = fft.cutoff;
       

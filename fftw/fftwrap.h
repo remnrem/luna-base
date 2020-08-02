@@ -54,7 +54,21 @@ class FFT
 
  public:
 
-  FFT( int N , int Fs , fft_t type = FFT_FORWARD , window_function_t window = WINDOW_NONE , bool use_nextpow2 = false );
+  FFT() { } 
+
+  FFT( int Ndata , int Nfft , int Fs , fft_t type = FFT_FORWARD , window_function_t window = WINDOW_NONE ) 
+    {
+      init( Ndata , Nfft , Fs , type , window );
+    }
+
+  void init( int Ndata , int Nfft , int Fs , fft_t type = FFT_FORWARD , window_function_t window = WINDOW_NONE );
+  
+  void reset() 
+  {
+    fftw_destroy_plan(p);
+    fftw_free(in);
+    fftw_free(out);
+  }
   
   ~FFT() 
     {    
@@ -65,15 +79,19 @@ class FFT
   
  private:
 
-  // Size (NFFT)
-  int Nfft;
-
   // Size of data 
   int Ndata;
   
   // Sampling rate, so we can construct the appropriate Hz for the PSD
   int Fs;
+
+  // Forward or inverse FFT?
+  fft_t type;
   
+  // Optional windowing function
+  window_function_t window;
+  std::vector<double> w;
+
   // Input signal
   fftw_complex *in;
 
@@ -83,18 +101,12 @@ class FFT
   // FFT plan from FFTW3
   fftw_plan p;
 
-  // Forward or inverse FFT?
-  fft_t type;
+  // Size (NFFT)
+  int Nfft;
   
-  // Optional windowing function
-  window_function_t window;
-  std::vector<double> w;
-
   // Normalisation factor given the window
   double normalisation_factor;
 
-  // always set NFFT to next power of 2 (else Nfft = Ndata)
-  bool use_nextpow2;
 
   //
   // Power band helper functions

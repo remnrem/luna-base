@@ -128,7 +128,7 @@ void zratio_t::calc( edf_t & edf , const std::string & signal_label )
 	  
 	  const int total_points = d->size();
 	  
-	  FFT fft( total_points , Fs[s] , FFT_FORWARD , WINDOW_NONE );
+	  FFT fft( total_points , total_points , Fs[s] , FFT_FORWARD , WINDOW_NONE );
 
 	  fft.apply( *d );
 	  

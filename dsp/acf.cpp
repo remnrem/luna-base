@@ -94,13 +94,13 @@ void acf_t::calc( const std::vector<double> & d , int maxlag )
   const int nfft = dz.size();
   
   // take FFT
-  FFT fft( nfft , 1 , FFT_FORWARD , WINDOW_NONE );
+  FFT fft( nfft , nfft , 1 , FFT_FORWARD , WINDOW_NONE );
   fft.apply( dz );
   std::vector<dcomp> f = fft.transform();
   for (int i=0;i<f.size();i++) f[i] = f[i] * conj( f[i] );
 
   // IFFT
-  FFT ifft( nfft , 1 , FFT_INVERSE );
+  FFT ifft( nfft , nfft , 1 , FFT_INVERSE );
   ifft.apply( f );
   std::vector<double> xx = ifft.inverse();
 

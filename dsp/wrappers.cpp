@@ -48,6 +48,8 @@ void dsptools::cwt( edf_t & edf , param_t & param )
   
   bool return_phase = param.has( "phase" );
   
+  bool wrapped_wavelet = param.has( "wrapped" );
+
   std::string tag = param.has( "tag" ) ? "_" + param.value( "tag" ) : "" ; 
 
   for (int s=0;s<ns;s++)
@@ -67,7 +69,7 @@ void dsptools::cwt( edf_t & edf , param_t & param )
       std::vector<double> mag , phase;
 
       if ( alt_spec )
-	alt_run_cwt( *d , Fs , fc , fwhm , timelength , &mag , return_phase ? &phase : NULL );
+	alt_run_cwt( *d , Fs , fc , fwhm , timelength , wrapped_wavelet , &mag , return_phase ? &phase : NULL );
       else
 	run_cwt( *d , Fs , fc , num_cycles , &mag , return_phase ? &phase : NULL );
       
@@ -202,6 +204,7 @@ void dsptools::alt_run_cwt( const std::vector<double> & data ,
 			    const double fc ,
 			    const double FWHM ,
 			    const double tlen , 
+			    const bool wrapped , 
 			    std::vector<double> * mag , 
 			    std::vector<double> * phase )
 {
@@ -209,12 +212,19 @@ void dsptools::alt_run_cwt( const std::vector<double> & data ,
   CWT cwt;
   
   cwt.set_sampling_rate( Fs );
+  
+  cwt.set_timeframe( 50.0 / tlen );
 
   cwt.alt_add_wavelet( fc , FWHM , tlen );
   
+  cwt.store_real_imag_vectors( true );
+
   cwt.load( &data );
-  
-  cwt.run();
+
+  if ( wrapped ) 
+    cwt.run_wrapped();
+  else
+    cwt.run();
   
   *mag = cwt.results(0);
   

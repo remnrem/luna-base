@@ -30,8 +30,6 @@
 #include "fftw/fftwrap.h"
 
 
-
-
 std::vector<dcomp> CWT::wavelet( const int fi )
 {
   
@@ -88,7 +86,6 @@ std::vector<dcomp> CWT::alt_wavelet( const int fi )
    // 	       << dcomp( 0 , 2 * M_PI * fc[fi] * time[i] ) << "\t"
    // 	       << exp( dcomp( 0 , 2 * M_PI * fc[fi] * time[i] ) ) << "\t"
    // 	       << std::exp( dcomp( 0 , 2 * M_PI * fc[fi] * time[i] ) ) << "\n";
-
 
    //       std::real(w[i]) << "\t" << std::imag(w[i] )  << "\n";
 
@@ -157,14 +154,30 @@ void CWT::run()
   
   const double SQRT_PI = sqrt(M_PI);
 
+
+  //
+  // Does the timeframe vary for different wavlets?  If not, precompute FFT of data just once
+  //
+
+  std::set<double> tf;
+  for (int i=0;i<wlen.size();i++) tf.insert(wlen[i]);
+  bool fixed_wlen = alt_spec && tf.size() == 1;
   
   //
   // Initial FFT of data 
   //
-      
-  FFT eegfft( n_conv_pow2 , srate );
-  eegfft.apply( *data );
-  std::vector<dcomp> eegfftX = eegfft.transform();
+
+  FFT eegfft;
+  std::vector<dcomp> eegfftX;
+
+  if ( fixed_wlen ) 
+    {
+      set_timeframe( 50.0 / wlen[0] );      
+      eegfft.init( n_conv_pow2 , n_conv_pow2 , srate );
+      eegfft.apply( *data );
+      eegfftX = eegfft.transform();
+    }
+  
 
   //
   // loop through frequencies and compute synchronization
@@ -173,7 +186,7 @@ void CWT::run()
   for (int fi=0;fi<num_frex;fi++)
     {
       
-      //
+       //
       // Set timeline for this wavelet (or is fixed already under alt_spec) 
       //
 	    
@@ -183,11 +196,23 @@ void CWT::run()
 	set_timeframe( 50.0 / wlen[fi] );
 
 
-      std::cout << "n_conv_pow2 = " << n_conv_pow2 << "\n"
-		<< "n_data = " << n_data << "\n"
-		<< "n_convolution " << n_convolution << "\n"
-		<< "half_of_wavelet_size " << half_of_wavelet_size << "\n"
-		<< "n_wavelet " << n_wavelet << "\n";
+      //
+      // Do we need FFT of data?
+      //
+
+      if ( ! fixed_wlen ) 
+	{
+	  if ( fi != 0 ) eegfft.reset();
+	  eegfft.init( n_conv_pow2 , n_conv_pow2 , srate );
+	  eegfft.apply( *data );
+	  eegfftX = eegfft.transform();
+	}
+
+   // std::cout << "n_conv_pow2 = " << n_conv_pow2 << "\n"
+   // 	    << "n_data = " << n_data << "\n"
+   // 	    << "n_convolution " << n_convolution << "\n"
+   // 	    << "half_of_wavelet_size " << half_of_wavelet_size << "\n"
+   // 	    << "n_wavelet " << n_wavelet << "\n";
       
       //
       // Generate wavelet 
@@ -200,12 +225,30 @@ void CWT::run()
       // First FFT
       //
 
-      
-      FFT fft1( n_conv_pow2 , 1 , FFT_FORWARD );
+      FFT fft1( w.size() , n_conv_pow2 , 1 , FFT_FORWARD );
+
       fft1.apply( w );
+
       std::vector<dcomp> wt = fft1.transform();
 
 
+
+      //
+      // Scaling factor to ensure similar amplitudes of original traces and wavelet-filtered signal
+      // kernelFFT = 2*kernelFFT./max(kernelFFT);
+      //
+      
+      const bool rescale_wavelet = true;
+
+      if ( rescale_wavelet ) 
+	{
+	  dcomp max = MiscMath::max( wt );
+	  
+	  for ( int i = 0 ; i < wt.size() ; i++ )
+	    wt[i] = ( dcomp( 2, 0 ) * wt[i] ) / max;
+	}
+
+      
       //
       // Convolution in the frequency domain 
       //
@@ -215,23 +258,16 @@ void CWT::run()
 
       
       //
-      // Inverse FFT back to time-domain
+      // Inverse FFT, normalized by 1/Nfft, back to time-domain
       //
 
-      FFT ifft( n_conv_pow2 , 1 , FFT_INVERSE );
+      FFT ifft( n_conv_pow2 , n_conv_pow2 , 1 , FFT_INVERSE );
+
       ifft.apply( y );
-      std::vector<dcomp> eegconv_tmp = ifft.transform();
+
+      std::vector<dcomp> eegconv_tmp = ifft.scaled_transform() ;
+     
       
-      dcomp denom( 1.0/(double)n_conv_pow2 , 0 );
-
-
-      //
-      // Normalize
-      //
-
-      for (int i=0;i<n_conv_pow2;i++) eegconv_tmp[i] *= denom;
-
-
       //
       // Trim
       //
@@ -248,19 +284,9 @@ void CWT::run()
       // extract phase from the convolution
       //
 
-      std::cout << "num_pnts*num_trials " << num_pnts << " " << num_trials << " " << num_pnts * num_trials << "\n";
-      std::cout << "eegconv = " << eegconv.size() << "\n";
-
       for (int i=0; i<num_pnts*num_trials; i++)
-	{
-	  // std::cout << "ph.s " << ph.size() << "\n";
-	  // std::cout << ph[fi].size() << "\n";
-	  // std::cout << eegconv.size() << " is S\n";
-	  // std::cout << " fi i " << fi << " " << i << "\n";
-	  ph[fi][i] = atan2( eegconv[i].imag() , eegconv[i].real() );
-	}
+	ph[fi][i] = atan2( eegconv[i].imag() , eegconv[i].real() );
 
-      std::cout << "cc0\n";
 
       //
       // optionally, extract real/imag parts
@@ -328,11 +354,12 @@ void CWT::run()
 void CWT::run_wrapped()
 {
 
+  logger << "  applying wrapped wavelet\n";
+
   //
   // Alternate parameterization, for a wrapped wavelet and fixed time-frame
   // following Cox & Fell
   //
-
 
   //
   // Initialize
@@ -379,15 +406,9 @@ void CWT::run_wrapped()
   // Initial FFT of data 
   //
       
-  FFT eegfft( Lconv , srate );
+  FFT eegfft( Lconv , Lconv , srate );
   eegfft.apply( *data );
   std::vector<dcomp> eegfftX = eegfft.transform();
-
-  // for (int i=0;i<50;i++)
-  //   std::cout << "data " << (*data)[i] << "\n";
-
-  // for (int i=0;i<50;i++)
-  //   std::cout << "eegFFTX " << std::real( eegfftX[i] ) << " " << std::imag( eegfftX[i]  ) << "\n";
 
   //
   // loop through frequencies and compute synchronization
@@ -395,20 +416,18 @@ void CWT::run_wrapped()
 
   for (int fi=0;fi<num_frex;fi++)
     {
-      //      std::cout << "FC = " << fc[fi] << "\n";
-
+      
       //
       // Generate wavelet 
       //
+
+      set_timeframe( 50.0 / wlen[fi] );
 
       std::vector<dcomp> w0 = alt_wavelet(fi) ;
       
       //
       // Wrap wavelet? ( second half, padding, first half )
       //
-
-      // std::cout << "dets " << Lconv << " " << Ltapr << "\n";
-      // std::cout << "hh " << half2_idx << " " << half1_idx << "\n";
       
       std::vector<dcomp> w( Lconv , dcomp(0,0) );
       int cc = 0;
@@ -417,31 +436,11 @@ void CWT::run_wrapped()
       cc += middlePaddingLength;
       for (int i= 0; i <= half1_idx ; i++ ) w[ cc++ ] = w0[ i ];
 
-      //      std::cout << "check " << cc << " " << Lconv << "\n";
-      
-      // print TEMP
-      
-      // cc = 0;
-      // for (int i= half2_idx; i < Ltapr ; i++ ) std::cout << "WrapW\t" << cc++ << "\t" << i << "\t" << w0[ i ] << "\n";
-      // // skip middle zeros
-      // cc += middlePaddingLength;
-      // for (int i= 0; i < half1_idx ; i++ ) std::cout << "WrapW\t" << cc++ << "\t" << i << "\t" << w0[ i ] << "\n";
-
-      // std::cout << "WrapW END\n";
-      
-      // print TMP
-      
-      // std::cout << "cc = " << cc << "\n"
-      // 		<< "LC = " << Lconv << "\n";
-
-      // for (int i=0;i<100;i++)
-      // 	std::cout << "ww " << w[i] << "\n";
-      
       //
       // FFT of wrapped wavelet
       //
       
-      FFT kernelFFT( Lconv , 1 , FFT_FORWARD );
+      FFT kernelFFT( w.size() , Lconv , 1 , FFT_FORWARD );
 
       kernelFFT.apply( w );
 
@@ -456,7 +455,8 @@ void CWT::run_wrapped()
 
       for ( int i = 0 ; i < wt.size() ; i++ )
        	wt[i] = ( dcomp( 2, 0 ) * wt[i] ) / max;
-      
+
+
       //
       // Convolution in the frequency domain 
       //
@@ -465,24 +465,12 @@ void CWT::run_wrapped()
       for (int i=0; i<Lconv; i++)
 	y[i] = eegfftX[i] * wt[i]; 
       
-      // if ( 0 )
-      // 	for (int i=0; i<50; i++)
-      // 	  std::cout << "yy "
-      // 		    << std::real( eegfftX[i] ) << "\t" << std::imag( eegfftX[i] ) << "\t"
-      // 		    << std::real( wt[i] ) << "\t" << std::imag( wt[i] ) << "\t"
-      // 		    << std::real( y[i] ) << "\t" << std::imag( y[i] ) << "\n";
-
-
-      // for (int i=0; i<Lconv; i++)
-      //  	std::cout << "WW\t" << fi << "\t" 
-      //  		  << std::real( wt[i] ) << "\t" << std::imag( wt[i] ) << "\n";
-      
-          
+               
       //
       // Inverse FFT back to time-domain
       //
 
-      FFT ifft( Lconv , 1 , FFT_INVERSE );
+      FFT ifft( y.size() , Lconv , 1 , FFT_INVERSE );
       ifft.apply( y );
 
       // nb. using scaled transform here
@@ -497,28 +485,41 @@ void CWT::run_wrapped()
       
       // m = m(1:end-Ltapr+1);  
       eegconv.resize( Lconv1 - Ltapr + 1 ); 
-			  
-      //  std::cout << eegconv.size() << " is eegconv,size() \n";
-      //  std::cout << " data size = " << data->size() << " " << Ldata << "\n";      
-      // for (int j=0;j<50;j++)
-      //  	std::cout << "ff\t" << std::real( eegconv[j] ) << "\t" << std::imag( eegconv[j] ) <<"\n";
-
+	
 
       //
       // extract phase from the convolution
       //
 
       for (int i=0; i < Ldata ; i++)
-	{
-	  ph[fi][i] = atan2( eegconv[i].imag() , eegconv[i].real() );
-	}
+	ph[fi][i] = atan2( eegconv[i].imag() , eegconv[i].real() );
+
 
       //
-      // optionally, extract real/imag parts
+      // extract real/imag parts
       //
 
       conv_complex[fi] = eegconv;
+
+      //
+      // wavelet power: abx(X)^2, dB/normalized and raw
+      //
       
+      for (int i=0;i<num_pnts;i++)
+	{
+	  rawpower[fi][i] = pow( abs( eegconv[i] ) , 2 );
+	}
+
+      //
+      // Baseline normalized
+      //
+
+      double baseline = MiscMath::mean( rawpower[fi] );
+
+      // i.e. express as dB over entire night, i.e. 10log10(ratio)
+      for (int i=0; i<num_pnts; i++) eegpower[fi][i] = 10*log10( rawpower[fi][i]/baseline );
+        
+
       //
       // next frequency/wavelet
       //

@@ -1496,7 +1496,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       int index_start = 0;
 
-      FFT fftseg( index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
+      FFT fftseg( index_length , index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
       
       fftseg.apply( &(x[index_start]) , index_length );
 

@@ -47,6 +47,7 @@ namespace dsptools
 		    const double fc ,
 		    const double FWHM ,
 		    const double tlen , 
+		    const bool wrapped , 
 		    std::vector<double> * mag , 
 		    std::vector<double> * phase );
       

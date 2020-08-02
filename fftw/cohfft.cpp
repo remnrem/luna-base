@@ -45,7 +45,7 @@ void precoh_t::prepare( coherence_t * coh ,
 
   if ( frq.size() == 0 )
     {
-      FFT fft0( coh->segment_points , coh->Fs , FFT_FORWARD , coh->window );
+      FFT fft0( coh->segment_points , coh->segment_points , coh->Fs , FFT_FORWARD , coh->window );
       if ( coh->average_adj ) fft0.average_adjacent();
 
       coh->N = fft0.cutoff;
@@ -75,7 +75,7 @@ void precoh_t::prepare( coherence_t * coh ,
       if ( p + coh->segment_points > coh->total_points )
 	Helper::halt( "internal error in coherence()" );
       
-      FFT fftx( coh->segment_points , coh->Fs , FFT_FORWARD , coh->window );
+      FFT fftx( coh->segment_points ,  coh->segment_points , coh->Fs , FFT_FORWARD , coh->window );
       
       if ( coh->detrend || coh->zerocenter )
  	{	  

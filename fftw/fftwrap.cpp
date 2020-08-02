@@ -28,13 +28,17 @@
 
 #include "defs/defs.h"
 
-FFT::FFT( int Ndata, int Fs , fft_t type , window_function_t window , bool use_nextpow2 )
-  : Ndata(Ndata) , Fs(Fs), type(type), window(window), in(NULL), out(NULL), p(NULL), use_nextpow2(use_nextpow2)
+void FFT::init( int Ndata_, int Nfft_, int Fs_ , fft_t type_ , window_function_t window_ )
 {
-
-  // set Nfft either to segment size, or the next power of two
-  Nfft = use_nextpow2 ? MiscMath::nextpow2( Ndata ) : Ndata ;
   
+  Ndata = Ndata_;
+  Nfft = Nfft_;
+  Fs = Fs_;
+  type = type_;
+  window = window_;
+
+  if ( Ndata > Nfft ) Helper::halt( "Ndata cannot be larger than Nfft" );
+
   // Allocate storage for input/output
   in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * Nfft);
   if ( in == NULL ) Helper::halt( "FFT failed to allocate input buffer" );
@@ -92,7 +96,7 @@ bool FFT::apply( const std::vector<double> & x )
 
 bool FFT::apply( const double * x , const int n )
 {
-  
+
   //
   // Load up (windowed) input buffer
   //
@@ -147,7 +151,7 @@ bool FFT::apply( const double * x , const int n )
 
 bool FFT::apply( const std::vector<std::complex<double> > & x )
 {
-  
+
   const int n = x.size();
   
   if ( n > Nfft ) Helper::halt( "error in FFT" );
@@ -163,9 +167,8 @@ bool FFT::apply( const std::vector<std::complex<double> > & x )
     {
       in[i][0] =  in[i][1] = 0;
     }
-  
+
   fftw_execute(p);
-  
 
   //
   // Calculate PSD
@@ -209,7 +212,7 @@ std::vector<std::complex<double> > FFT::transform() const
 
 std::vector<std::complex<double> > FFT::scaled_transform() const
 {
-  // or Ndata??  check
+  // or Ndata?  check
   const double fac = 1.0 / (double)Nfft;
   std::vector<std::complex<double> > r(Nfft);
   for (int i=0;i<Nfft;i++) 
@@ -296,7 +299,7 @@ void PWELCH::process()
   // Initial FFT
   //
   
-  FFT fft0( segment_size_points , Fs , FFT_FORWARD , window , use_nextpow2 );
+  FFT fft0( segment_size_points , use_nextpow2 ? MiscMath::nextpow2( segment_size_points ) : segment_size_points , Fs , FFT_FORWARD , window );
       
   if ( average_adj ) 
     fft0.average_adjacent();
@@ -439,7 +442,7 @@ std::map<double,double> fft_spectrum( const std::vector<double> * d , int Fs )
   if ( sec <= 60 ) 
     {
       
-      FFT fft( np , Fs , FFT_FORWARD , WINDOW_HANN );
+      FFT fft( np , np , Fs , FFT_FORWARD , WINDOW_HANN );
       fft.apply( *d );
       int N = fft.cutoff;
       

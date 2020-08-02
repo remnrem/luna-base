@@ -424,7 +424,7 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
       //
       
       //      std::cout << "index = " << index_length << "\n";
-      FFT fftseg( index_length , Fs , FFT_FORWARD , WINDOW_HANN );
+      FFT fftseg( index_length , MiscMath::nextpow2( index_length ) , Fs , FFT_FORWARD , WINDOW_HANN );
       
       fftseg.apply( &(d[index_start]) , index_length );
 
@@ -487,7 +487,7 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
       // Whole interval
       //
 
-      FFT fftall( tot_length , Fs , FFT_FORWARD , WINDOW_HANN );
+      FFT fftall( tot_length , MiscMath::nextpow2( tot_length ) , Fs , FFT_FORWARD , WINDOW_HANN );
       fftall.apply( &(d[j]) , tot_length );
       
       // reset
@@ -576,12 +576,12 @@ void edf_t::slicer( const std::set<interval_t> & intervals1 , param_t & param , 
       //
       // Windows
       //
-      
+    
       for (int w=0;w<win_start.size();w++)
 	{
 	  delta = theta = alpha = sigma = beta = gamma = 0;
 	  
-	  FFT fftwin( window_samples , Fs , FFT_FORWARD , WINDOW_HANN );      
+	  FFT fftwin( window_samples , MiscMath::nextpow2( window_samples ) , Fs , FFT_FORWARD , WINDOW_HANN );      
 	  fftwin.apply( &(d[win_start[w]]) , window_samples );
 	  
 	  
