@@ -62,7 +62,7 @@ void hilbert_t::proc()
   int n = input.size();
   
   // 1) take FFT
-  FFT fft( n , 1 , FFT_FORWARD );
+  FFT fft( n , n , 1 , FFT_FORWARD );
   fft.apply( input );
   std::vector<dcomp> f = fft.transform();
   if ( f.size() != n ) Helper::halt( "internal error in hilbert()" );
@@ -85,7 +85,7 @@ void hilbert_t::proc()
   
   
   // 3) Inverse FFT of the rotated coefficients 
-  FFT ifft( n , 1 , FFT_INVERSE );
+  FFT ifft( n , n , 1 , FFT_INVERSE );
   ifft.apply( f );
   std::vector<dcomp> ht = ifft.scaled_transform();
   

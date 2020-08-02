@@ -128,8 +128,8 @@ namespace dsptools
   //
   
   void apply_fir( edf_t & edf , param_t & param );
-  void apply_fir( edf_t & edf , int s , fir_t::filterType , double ripple , double tw , double f1, double f2 , const std::string & fir_file = "" );
-  std::vector<double> apply_fir( const std::vector<double> & , int fs , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const std::string & fir_file = "" );
+  void apply_fir( edf_t & edf , int s , fir_t::filterType , double ripple , double tw , double f1, double f2 , const bool use_fft = false , const std::string & fir_file = "" );
+  std::vector<double> apply_fir( const std::vector<double> & , int fs , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const bool use_fft = false , const std::string & fir_file = "" );
   
 }
 

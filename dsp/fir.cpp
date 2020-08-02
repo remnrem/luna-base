@@ -242,7 +242,7 @@ std::vector<double> dsptools::design_highpass_fir( double ripple , double tw , d
 // apply FIR
 //
 
-std::vector<double> dsptools::apply_fir( const std::vector<double> & x , int fs, fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const std::string & fir_file )
+std::vector<double> dsptools::apply_fir( const std::vector<double> & x , int fs, fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const bool use_fft , const std::string & fir_file )
 {
 
   std::vector<double> fc;
@@ -274,10 +274,15 @@ std::vector<double> dsptools::apply_fir( const std::vector<double> & x , int fs,
   //
   
   fir_impl_t fir_impl ( fc );
-  
-  return fir_impl.filter( &x );  
 
+  if ( use_fft ) 
+    return fir_impl.fft_filter( &x );  
+
+  return fir_impl.filter( &x );
+    
+    
 }
+
 
 void dsptools::apply_fir( edf_t & edf , param_t & param )
 {
@@ -289,6 +294,8 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       ripple = param.requires_dbl( "ripple" );      
       tw = param.requires_dbl( "tw" );
     }
+
+  bool use_fft = param.has( "fft" );
   
   double f1 , f2 ;
   
@@ -357,13 +364,13 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       
       if ( edf.header.is_annotation_channel(s) ) continue;
       
-      apply_fir( edf , signals(s) , ftype , ripple, tw , f1 , f2 , fir_file );
+      apply_fir( edf , signals(s) , ftype , ripple, tw , f1 , f2 , use_fft , fir_file );
       
     }
 
 }
 
-void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const std::string & fir_file )
+void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const bool use_fft , const std::string & fir_file )
 {
       
   
@@ -434,7 +441,7 @@ void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype , double
   
   fir_impl_t fir_impl ( fc );
   
-  std::vector<double> filtered = fir_impl.filter( d );
+  std::vector<double> filtered = use_fft ? fir_impl.fft_filter( d ) : fir_impl.filter( d ) ; 
   
   //
   // Place back
@@ -930,22 +937,21 @@ std::vector<double> fir_impl_t::fft_filter( const std::vector<double> * px )
   h.resize( Nfft , 0 );
 
   // FFT
-  FFT fftx( Nfft , 1 , FFT_FORWARD );
+  FFT fftx( Nfft , Nfft , 1 , FFT_FORWARD );
   fftx.apply( x );
   std::vector<dcomp> rfftx = fftx.transform();
   
-  FFT ffth( Nfft , 1 , FFT_FORWARD );
+  FFT ffth( Nfft , Nfft , 1 , FFT_FORWARD );
   ffth.apply( h );
   std::vector<dcomp> rffth = ffth.transform();
   
   // convolution in the frequency domain
-
   std::vector<dcomp> y( Nfft );
   for (int i=0;i<rfftx.size();i++) y[i] = rfftx[i] * rffth[i]; 
   
   // inverse FFT
 
-  FFT ifft( Nfft , 1 , FFT_INVERSE );
+  FFT ifft( Nfft , Nfft , 1 , FFT_INVERSE );
   ifft.apply( y );
   std::vector<dcomp> conv_tmp = ifft.transform();
   

@@ -435,6 +435,7 @@ void conncoupl_t::pre_calc()
 	      double fwhm = ff->second.second;
 	      CWT cwt;
 	      cwt.set_sampling_rate( sr );
+	      cwt.set_timeframe( 50.0 / tlen );
 	      cwt.alt_add_wavelet( freq , fwhm , tlen );	      
 
 	      std::vector<double> t = cwt.get_timeframe();	      
@@ -487,7 +488,7 @@ void conncoupl_t::pre_calc()
 	      std::string label = ff->first;
 	      double freq = ff->second.first;
 	      double fwhm = ff->second.second;
-
+	      cwt.set_timeframe( 50.0 / tlen );
 	      cwt.alt_add_wavelet( freq , fwhm , tlen );	      
 
 	      ++ff;

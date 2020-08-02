@@ -2074,10 +2074,10 @@ void characterize_spindles( edf_t & edf ,
 	  
 	  // default above is 4 Hz, i.e. +/- 2 Hz    ~ 9-13Hz for slow spindles,    13-17Hz for fast spindles
 
-	  //  ripple = 0.01 tw=4 bandpass=9,13 
-	  //  ripple = 0.01 tw=4 bandpass=13,17 
+	  //  ripple = 0.02 tw=4 bandpass=9,13 
+	  //  ripple = 0.02 tw=4 bandpass=13,17 
 	  
-	  dsptools::apply_fir( edf , s , fir_t::BAND_PASS , 0.01 , 4 , target_f - window_f * 0.5 , target_f + window_f * 0.5 );
+	  dsptools::apply_fir( edf , s , fir_t::BAND_PASS , 0.02 , 4 , target_f - window_f * 0.5 , target_f + window_f * 0.5 );
 	  
 	}
       
@@ -2410,7 +2410,7 @@ void characterize_spindles( edf_t & edf ,
       // (performed on bandpass filtered data)
       //
 
-      FFT fft( npoints , MiscMath::nextpow2( Fs ) , Fs , FFT_FORWARD , WINDOW_HANN );     
+      FFT fft( npoints , MiscMath::nextpow2( npoints ) , Fs , FFT_FORWARD , WINDOW_HANN );     
       fft.apply( d );
       int cutoff = fft.cutoff;
       

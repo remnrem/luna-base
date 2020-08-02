@@ -162,7 +162,7 @@ void CWT::run()
   std::set<double> tf;
   for (int i=0;i<wlen.size();i++) tf.insert(wlen[i]);
   bool fixed_wlen = alt_spec && tf.size() == 1;
-  
+    
   //
   // Initial FFT of data 
   //
@@ -354,8 +354,6 @@ void CWT::run()
 void CWT::run_wrapped()
 {
 
-  logger << "  applying wrapped wavelet\n";
-
   //
   // Alternate parameterization, for a wrapped wavelet and fixed time-frame
   // following Cox & Fell
@@ -435,7 +433,13 @@ void CWT::run_wrapped()
       // skip middle zeros
       cc += middlePaddingLength;
       for (int i= 0; i <= half1_idx ; i++ ) w[ cc++ ] = w0[ i ];
-
+      
+      // padded, unwrapped
+      // std::vector<dcomp> w( Lconv , dcomp(0,0) );
+      // for (int i= 0; i <= w0.size() ; i++ ) w[ i ] = w0[i];
+      
+      
+      
       //
       // FFT of wrapped wavelet
       //
