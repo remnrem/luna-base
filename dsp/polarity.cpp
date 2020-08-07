@@ -315,8 +315,10 @@ void dsptools::polarity_check( const std::vector<double> & x0 , const std::vecto
   // Band-pass filter and normalize signal
   //
 
-  std::vector<double> f = MiscMath::Z( dsptools::apply_fir( x , fs , fir_t::BAND_PASS , 
-							    0.01 , 0.5 , f_lwr , f_upr ) );
+  std::vector<double> f = MiscMath::Z( dsptools::apply_fir( x , fs , fir_t::BAND_PASS ,
+							    1 , // Kaiser
+							    0.02 , 0.5 , // ripple/ TW
+							    f_lwr , f_upr ) );
 
   if ( f.size() != ns ) Helper::halt( "problem in dsp::polarity()" );
 

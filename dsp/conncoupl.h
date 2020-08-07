@@ -65,8 +65,11 @@ struct conncoupl_t
 	       const double tw = 0.5 ,
 	       const int nreps = 1000 ,  
 	       const int es = 0 ,
-	       const bool xpac = false )
-    : edf(edf) , signals(signals) , sr(sr) , fint1(fint1) , fint2(fint2) , nreps(nreps), tw(tw) , ripple(ripple) , es(es) , xpac(xpac)  
+	       const bool do_pac = true ,
+	       const bool do_xch = false , 
+	       const bool do_xpac = false )
+    : edf(edf) , signals(signals) , sr(sr) , fint1(fint1) , fint2(fint2) , nreps(nreps), tw(tw) , ripple(ripple) , es(es) ,
+    do_pac(do_pac) , do_xch(do_xch), do_xpac(do_xpac)  
   {
     
     use_hilbert = true;
@@ -100,13 +103,16 @@ struct conncoupl_t
 	       
 	       const int nreps = 1000 ,
 	       const int es = 0 ,
-	       const bool xpac = false ,
+	       const bool do_pac = true ,
+	       const bool do_xch = false,
+	       const bool do_xpac = false ,
 	       const bool dump_wavelets = false ) :
   edf(edf) , signals(signals) , sr(sr) ,
     fc1(fc1) , fwhm1( fwhm1 ) , num1( num1 ),
     fc2(fc2) , fwhm2( fwhm2 ) , num2( num2 ),
     tlen( tlen ), 
-    nreps(nreps) , es(es) , xpac( xpac ) ,
+    nreps(nreps) , es(es) ,
+    do_pac(do_pac) , do_xch(do_xch), do_xpac( do_xpac ) ,
     dump_wavelets( dump_wavelets )
   {
 
@@ -201,8 +207,12 @@ private:
   // within-channel, different freq. (PAC)    [ Y if second set of freqs given ] 
   // across-channek, within freq. (wPLI, coherence, PLV)  [ Y if multiple channels given ] 
   // cross-channel PAC (cross-frequency) [ Y if xpac option is set ] 
+
+  bool do_pac;
+
+  bool do_xch;
   
-  bool xpac;
+  bool do_xpac;
   
   
   //

@@ -624,7 +624,10 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   //
 
   
-  filtered = dsptools::apply_fir( unfiltered , sr , fir_t::BAND_PASS ,fir_ripple , fir_tw , f_lwr , f_upr );
+  filtered = dsptools::apply_fir( unfiltered , sr , fir_t::BAND_PASS ,
+				  1 , // use Kaiser window
+				  fir_ripple , fir_tw ,
+				  f_lwr , f_upr );
   
   //filtered = band_pass_filter( unfiltered , sr , filter_order , f_lwr , f_upr );  
   //  std::cout << MiscMath::mean( d ) << " is the mean \n";

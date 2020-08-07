@@ -73,15 +73,11 @@ void dsptools::cwt( edf_t & edf , param_t & param )
       else
 	run_cwt( *d , Fs , fc , num_cycles , &mag , return_phase ? &phase : NULL );
       
-      std::string new_mag_label = signals.label(s) + tag + "_cwt_" + Helper::dbl2str(fc) + "_" + Helper::int2str( num_cycles ) + "_mag";
-      std::string new_phase_label = signals.label(s) + tag + "_cwt_" + Helper::dbl2str(fc) + "_" + Helper::int2str( num_cycles ) + "_phase";
-      if ( alt_spec )
-	{
-	  new_mag_label = signals.label(s) + tag + "_cwt_" + Helper::dbl2str(fc) + "_fwhm" + Helper::dbl2str( fwhm ) + "_mag";
-	  new_phase_label = signals.label(s) + tag + "_cwt_" + Helper::dbl2str(fc) + "_fwhm" + Helper::dbl2str( fwhm ) + "_phase";
-	}
-
+      std::string new_mag_label = signals.label(s) + tag + "_cwt_mag";
+      std::string new_phase_label = signals.label(s) + tag + "_cwt_phase";
+      
       logger << " CWT for " << signals.label(s) << " --> " << new_mag_label ;      
+
       if ( return_phase ) 
 	logger << ", " << new_phase_label ;
       logger << "\n";
@@ -103,27 +99,30 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
   
   const int ns = signals.size();
   
+  bool use_kaiser = param.has( "tw" );
+
+  bool use_file = param.has( "file" );
+
+  bool use_fixed = param.has( "order" );
+
+  bool no_filter = ! ( use_kaiser || use_file || use_fixed );
+
   std::vector<double> frqs = param.dblvector( "f" );
 
-  bool no_filter = frqs.size() != 2 ;
+  double ripple = use_kaiser ? param.requires_dbl( "ripple" ) : 0 ;
 
-  if ( no_filter )
-    {
-      // this is checked in run_hilbert() for impossible freqs
-      frqs.resize( 2 , -1 );
-    }
+  double tw = use_kaiser ? param.requires_dbl( "tw" ) : 0 ;
 
-  double ripple = 0, tw = 0;;
+  int order = use_fixed ? param.requires_int( "order" ) : 0;
 
-  if ( ! no_filter )
-    {
-      ripple = param.requires_dbl( "ripple" );
-      tw = param.requires_dbl( "tw" );
-    }
+  fir_t::windowType window = fir_t::HAMMING;
+  if ( param.has( "rectangular" ) ) window = fir_t::RECTANGULAR;
+  else if ( param.has( "bartlett" ) ) window = fir_t::BARTLETT;
+  else if ( param.has( "hann" ) ) window = fir_t::HANN;
+  else if ( param.has( "blackman" ) ) window = fir_t::BLACKMAN;
+
+  std::string fir_file = use_file ? param.value( "file" ) : "";
   
-  if ( no_filter && param.has( "ripple" ) ) Helper::halt( "cannot specify ripple with no filter" );
-  if ( no_filter && param.has( "tw" ) ) Helper::halt( "cannot specify tw with no filter" );
-    
   bool return_phase = param.has( "phase" ) || param.has( "angle" );
 
   bool return_angle = param.has( "angle" );
@@ -148,23 +147,39 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
       
       std::vector<double> mag , phase, ifrq;
 
-      run_hilbert( *d , Fs , frqs[0] , frqs[1] , ripple , tw , &mag ,
-		   return_phase ? &phase : NULL ,
-		   return_angle ? &phase : NULL ,
-		   return_ifrq ? &ifrq : NULL );
-            
-      std::string new_mag_label = signals.label(s) + tag + "_hilbert_"   + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_mag";
-      std::string new_phase_label = signals.label(s) + tag + "_hilbert_" + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_phase";
-      std::string new_angle_label = signals.label(s) + tag + "_hilbert_" + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_angle";
-      std::string new_ifrq_label = signals.label(s) + tag + "_hilbert_"  + Helper::dbl2str(frqs[0]) + "_" + Helper::dbl2str( frqs[1] ) + "_ifrq";
+      if ( use_kaiser ) 
+	run_hilbert( *d , Fs , frqs[0] , frqs[1] , ripple , tw ,
+		     &mag ,
+		     return_phase ? &phase : NULL ,
+		     return_angle ? &phase : NULL ,
+		     return_ifrq ? &ifrq : NULL );
+      else if ( use_fixed )
+	run_hilbert( *d , Fs , frqs[0] , frqs[1] , order , window ,
+		     &mag ,
+		     return_phase ? &phase : NULL ,
+		     return_angle ? &phase : NULL ,
+		     return_ifrq ? &ifrq : NULL );
+      else if ( use_file )
+	run_hilbert( *d , Fs , fir_file , 
+		     &mag ,
+		     return_phase ? &phase : NULL ,
+		     return_angle ? &phase : NULL ,
+		     return_ifrq ? &ifrq : NULL );
+      else
+	run_hilbert( *d , Fs , 
+		     &mag ,
+		     return_phase ? &phase : NULL ,
+		     return_angle ? &phase : NULL ,
+		     return_ifrq ? &ifrq : NULL );
 
-      if ( no_filter )
-	{
-	  new_mag_label = signals.label(s) + tag + "_hilbert_mag";
-	  new_phase_label = signals.label(s) + tag + "_hilbert_phase";
-	  new_angle_label = signals.label(s) + tag + "_hilbert_angle";
-	  new_ifrq_label = signals.label(s) + tag + "_hilbert_ifrq";
-	}
+      //
+      // labels for new EDF channel(s)
+      //
+
+      std::string new_mag_label = signals.label(s) + tag + "_hilbert_mag";
+      std::string new_phase_label = signals.label(s) + tag + "_hilbert_phase";
+      std::string new_angle_label = signals.label(s) + tag + "_hilbert_angle";
+      std::string new_ifrq_label = signals.label(s) + tag + "_hilbert_ifrq";
 
       logger << " Hilbert transform for " << signals.label(s) << " --> " << new_mag_label ;      
 
@@ -261,6 +276,36 @@ void dsptools::run_cwt( const std::vector<double> & data ,
 }
 
 
+
+
+void dsptools::run_hilbert( const std::vector<double> & data , const int Fs , 
+			    std::vector<double> * mag , 
+			    std::vector<double> * phase ,
+			    std::vector<double> * angle ,
+			    std::vector<double> * ifrq )
+{
+  
+  // straight Hilbert , no filter
+  hilbert_t hilbert( data );
+  
+  *mag = *(hilbert.magnitude());
+  
+  if ( phase != NULL ) *phase = *(hilbert.phase());
+  
+  if ( angle != NULL )
+    {
+      *angle = *phase;
+      // convert to degrees with 0 as pos-to-neg crossing
+      for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
+    }
+  
+  if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
+  
+}
+
+
+
+// filter-Hilbert, Kaiser window
 void dsptools::run_hilbert( const std::vector<double> & data , const int Fs , 
 			    const double flwr , const double fupr , const double ripple , const double tw , 
 			    std::vector<double> * mag , 
@@ -269,43 +314,69 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
 			    std::vector<double> * ifrq )
 {
   
-  if ( flwr < 0 )
+  // filter-Hilbert 
+  hilbert_t hilbert( data , Fs , flwr , fupr , ripple , tw );
+  *mag = *(hilbert.magnitude());
+  if ( phase != NULL ) *phase = *(hilbert.phase());
+  
+  if ( angle != NULL )
     {
-      // straight Hilbert , no filter
-      hilbert_t hilbert( data );
-
-      *mag = *(hilbert.magnitude());
-
-      if ( phase != NULL ) *phase = *(hilbert.phase());
-      
-      if ( angle != NULL )
-	{
-	  *angle = *phase;
-	  // convert to degrees with 0 as pos-to-neg crossing
-	  for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
-	}
-      
-      if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
-
+      *angle = *phase;
+      // convert to degrees with 0 as pos-to-neg crossing
+      for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
     }
-  else
+  
+  if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
+
+}
+
+// filter-Hilbert, from file
+void dsptools::run_hilbert( const std::vector<double> & data , const int Fs , 
+			    const std::string & fir_file , 
+			    std::vector<double> * mag , 
+			    std::vector<double> * phase ,
+			    std::vector<double> * angle ,
+			    std::vector<double> * ifrq )
+{
+  
+  hilbert_t hilbert( data , Fs , fir_file );
+
+  *mag = *(hilbert.magnitude());
+  if ( phase != NULL ) *phase = *(hilbert.phase());
+  
+  if ( angle != NULL )
     {
-
-      // filter-Hilbert 
-      hilbert_t hilbert( data , Fs , flwr , fupr , tw , ripple );
-      *mag = *(hilbert.magnitude());
-      if ( phase != NULL ) *phase = *(hilbert.phase());
-
-      if ( angle != NULL )
-	{
-	  *angle = *phase;
-	  // convert to degrees with 0 as pos-to-neg crossing
-	  for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
-	}
-      
-      if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
+      *angle = *phase;
+      // convert to degrees with 0 as pos-to-neg crossing
+      for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
     }
+  
+  if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
 
 }
 
 
+// filter-Hilbert, fixed order
+void dsptools::run_hilbert( const std::vector<double> & data , const int Fs , 
+			    const double flwr , const double fupr , const int order , const fir_t::windowType window , 
+			    std::vector<double> * mag , 
+			    std::vector<double> * phase ,
+			    std::vector<double> * angle ,
+			    std::vector<double> * ifrq )
+{
+  
+  // filter-Hilbert 
+  hilbert_t hilbert( data , Fs , flwr , fupr , order , window );
+  *mag = *(hilbert.magnitude());
+  if ( phase != NULL ) *phase = *(hilbert.phase());
+  
+  if ( angle != NULL )
+    {
+      *angle = *phase;
+      // convert to degrees with 0 as pos-to-neg crossing
+      for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
+    }
+  
+  if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
+
+}

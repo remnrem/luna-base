@@ -89,9 +89,14 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
   //
   
   bool use_hilbert = param.has( "hilbert" );
+   
+  bool do_pac = param.has( "pac" );
+  
+  bool do_xch = param.has( "xch" );
+  
+  bool do_xpac = param.has( "xpac" );
     
-  bool xpac = param.has( "xpac" );
-      
+
       
   //
   // filter-Hilbert approach
@@ -149,7 +154,7 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
 		      ripple, tw , 
 		      nreps ,
 		      epoch_sec ,
-		      xpac );
+		      do_pac , do_xch , do_xpac );
 
 
     }
@@ -229,7 +234,9 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
 		      tline , 
 		      nreps ,
 		      epoch_sec ,
-		      param.has( "xpac" ) , 
+		      param.has( "pac" ) ,
+		      param.has( "xch" ) , 
+		      param.has( "xpac" ) ,
 		      param.has( "dump-wavelets" ) 		      
 		      );
 
@@ -261,56 +268,62 @@ void conncoupl_t::setup()
   // ii) cross-channel, within frequency
   // iii) cross-channel, cross-frequency (xpac)
   //
+
+  if ( do_xch )
+    {
+      for (int si1=0;si1<signals.size();si1++)
+	for (int si2=si1+1;si2<signals.size();si2++)
+	  //for (int si2=0;si2<signals.size();si2++)
+	  {
+	    
+	    if ( use_hilbert )
+	      for (int f=0;f<fint1.size();f++)
+		{
+		  s1.push_back( si1 ); s2.push_back( si2 );
+		  f1.push_back( str( fint1[f] ) ); f2.push_back( str( fint1[f] ) ); 
+		  cfc.push_back( false );
+		  xch.push_back( true );
+		}
+	    else
+	      for (int f=0;f<fc1.size();f++)
+		{
+		  s1.push_back( si1 ); s2.push_back( si2 );
+		  f1.push_back( str( freq_range_t( fc1[f] , fwhm1[f] ) ) ); f2.push_back( str( freq_range_t( fc1[f] , fwhm1[f] ) ) ); 
+		  disp_f1.push_back(  fc1[f] ) ; disp_f2.push_back(  fc1[f] ) ; 
+		  cfc.push_back( false );
+		  xch.push_back( true );
+		}
+	  }
+    }
+
   
-  for (int si1=0;si1<signals.size();si1++)
-    for (int si2=si1+1;si2<signals.size();si2++)
-      //for (int si2=0;si2<signals.size();si2++)
-    {
-
-      if ( use_hilbert )
-	for (int f=0;f<fint1.size();f++)
-	  {
-	    s1.push_back( si1 ); s2.push_back( si2 );
-	    f1.push_back( str( fint1[f] ) ); f2.push_back( str( fint1[f] ) ); 
-	    cfc.push_back( false );
-	    xch.push_back( true );
-	  }
-      else
-	for (int f=0;f<fc1.size();f++)
-	  {
-	    s1.push_back( si1 ); s2.push_back( si2 );
-	    f1.push_back( str( freq_range_t( fc1[f] , fwhm1[f] ) ) ); f2.push_back( str( freq_range_t( fc1[f] , fwhm1[f] ) ) ); 
-	    disp_f1.push_back(  fc1[f] ) ; disp_f2.push_back(  fc1[f] ) ; 
-	    cfc.push_back( false );
-	    xch.push_back( true );
-	  }
-    }
-
-
   // within-channel, across frequency
-  for (int si1=0;si1<signals.size();si1++)
+  if ( do_pac )
     {
-      if ( use_hilbert )
-	for (int fi1=0;fi1<fint1.size();fi1++)
-	  for (int fi2=0;fi2<fint2.size();fi2++)
-	  {
-	    s1.push_back( si1 ); s2.push_back( si1 );
-	    f1.push_back( str( fint1[fi2] ) ); f2.push_back( str( fint2[fi2] ) ); 
-	    cfc.push_back( true ); xch.push_back( false );
-	  }
-      else
-	for (int fi1=0;fi1<fc1.size();fi1++)
-	  for (int fi2=0;fi2<fc2.size();fi2++)
-	    {
-	      s1.push_back( si1 ); s2.push_back( si1 );
-	      f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 
-	      disp_f1.push_back(  fc1[fi1] ) ; disp_f2.push_back(  fc2[fi2] ) ; 
-	      cfc.push_back( true ); xch.push_back( false );
-	    }
+      for (int si1=0;si1<signals.size();si1++)
+	{
+	  if ( use_hilbert )
+	    for (int fi1=0;fi1<fint1.size();fi1++)
+	      for (int fi2=0;fi2<fint2.size();fi2++)
+		{
+		  s1.push_back( si1 ); s2.push_back( si1 );
+		  f1.push_back( str( fint1[fi2] ) ); f2.push_back( str( fint2[fi2] ) ); 
+		  cfc.push_back( true ); xch.push_back( false );
+		}
+	  else
+	    for (int fi1=0;fi1<fc1.size();fi1++)
+	      for (int fi2=0;fi2<fc2.size();fi2++)
+		{
+		  s1.push_back( si1 ); s2.push_back( si1 );
+		  f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 
+		  disp_f1.push_back(  fc1[fi1] ) ; disp_f2.push_back(  fc2[fi2] ) ; 
+		  cfc.push_back( true ); xch.push_back( false );
+		}
+	}
     }
-
+  
   // cross-channel, cross-frequency PAC
-  if ( xpac )
+  if ( do_xpac )
     {
       for (int si1=0;si1<signals.size();si1++)
 	for (int si2=0;si2<signals.size();si2++) // need to do all pairs i-j as well as j-i 
@@ -338,7 +351,8 @@ void conncoupl_t::setup()
     }
 
   logger << "  registered " << s1.size() << " channel/frequency combinations to evaluate per epoch\n";
-  
+
+  if ( s1.size() == 0 ) Helper::halt( "no combinations specified: add pac, xch and/or xpac options" );
 }
   
 

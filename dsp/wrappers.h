@@ -26,6 +26,8 @@
 struct edf_t;
 struct param_t;
 
+#include "dsp/fir.h"
+
 #include <vector>
 #include <stdint.h>
 #include <cstddef>
@@ -50,14 +52,39 @@ namespace dsptools
 		    const bool wrapped , 
 		    std::vector<double> * mag , 
 		    std::vector<double> * phase );
-      
+
+  
+  // Hilbert
+  void run_hilbert( const std::vector<double> & data , const int Fs , 		    
+		    std::vector<double> * mag , 
+		    std::vector<double> * phase = NULL ,
+		    std::vector<double> * angle = NULL , 
+		    std::vector<double> * frequency = NULL ); 
+
+  // filter-Hilbert, Kaiser
   void run_hilbert( const std::vector<double> & data , const int Fs , 
 		    const double flwr , const double fupr , const double ripple , const double tw , 
 		    std::vector<double> * mag , 
 		    std::vector<double> * phase = NULL ,
 		    std::vector<double> * angle = NULL , 
 		    std::vector<double> * frequency = NULL ); 
-  
+
+  // filter-Hilbert, from file
+  void run_hilbert( const std::vector<double> & data , const int Fs , 
+		    const std::string & fir_file , 
+		    std::vector<double> * mag , 
+		    std::vector<double> * phase = NULL ,
+		    std::vector<double> * angle = NULL , 
+		    std::vector<double> * frequency = NULL ); 
+
+  // filter-Hilbert, fixed order
+  void run_hilbert( const std::vector<double> & data , const int Fs , 
+		    const double flwr , const double fupr , const int order , const fir_t::windowType , 
+		    std::vector<double> * mag , 
+		    std::vector<double> * phase = NULL ,
+		    std::vector<double> * angle = NULL , 
+		    std::vector<double> * frequency = NULL ); 
+
 }
 
 #endif

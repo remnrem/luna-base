@@ -2077,7 +2077,10 @@ void characterize_spindles( edf_t & edf ,
 	  //  ripple = 0.02 tw=4 bandpass=9,13 
 	  //  ripple = 0.02 tw=4 bandpass=13,17 
 	  
-	  dsptools::apply_fir( edf , s , fir_t::BAND_PASS , 0.02 , 4 , target_f - window_f * 0.5 , target_f + window_f * 0.5 );
+	  dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
+			       1 , // 1 = Kaiser window
+			       0.02 , 4 , // ripple , transition width
+			       target_f - window_f * 0.5 , target_f + window_f * 0.5 );
 	  
 	}
       
@@ -2949,7 +2952,11 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
       //
       
       // ripple = 0.005 , transition width (Hz) = 0.5 Hz 
-      dsptools::apply_fir( edf , signals(s) , fir_t::BAND_PASS , 0.001 , 0.5 , 10 , 16 );
+      dsptools::apply_fir( edf , signals(s) , fir_t::BAND_PASS ,
+			   1 , // Kaiser window
+			   0.02 , 0.5 , // ripple , TW
+			   10 , 16			   
+			   );
 
       //
       // Get windows of 0.25seconds, no overlap (i.e. advance by 0.25)

@@ -30,6 +30,7 @@ struct param_t;
 #include <vector>
 #include "miscmath/miscmath.h"
 #include "defs/defs.h"
+#include "dsp/fir.h"
 
 struct emp_t { 
 
@@ -86,10 +87,15 @@ struct hilbert_t
   // Hilbert transform
   hilbert_t( const std::vector<double> & d , const bool store_ri = false );
   
-  // filter-Hilbert
+  // filter-Hilbert: Kaiser window
   hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , double ripple, double tw , const bool store_ri = false );
   
-  
+  // filter-Hilbert: FIR coefs from file
+  hilbert_t( const std::vector<double> & d , const int sr , const std::string & , const bool store_ri = false );
+
+  // filter-Hilbert: use fixed order and other window
+  hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , int order , fir_t::windowType , const bool store_ri = false );
+
   // extract instantaneous phase, magnitude
   const std::vector<double> * phase() const;
   //const std::vector<double> * angle() const;

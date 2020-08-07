@@ -49,13 +49,48 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr 
 {
 
   // include band-pass filter
-  input = dsptools::apply_fir( d , sr , fir_t::BAND_PASS , ripple , tw , lwr , upr );
-
+  input = dsptools::apply_fir( d , sr , fir_t::BAND_PASS ,
+			       1 , // Kaiser window
+			       ripple , tw ,
+			       lwr , upr );
+  
   store_real_imag = store;
   
   proc();
 }
       
+
+hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , const std::string & fir_file , const bool store )
+{
+  // include band-pass filter
+  input = dsptools::apply_fir( d , sr , fir_t::EXTERNAL , 
+			       0 , // from file
+			       0 , 0 , // ripple , tw ,
+			       0 , 0 , // lwr , upr ,
+			       0 , fir_t::RECTANGULAR , // 
+			       false , fir_file  // all ignored except fir_file 
+			       );
+  
+  store_real_imag = store;
+
+  proc();
+}
+
+hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , int order , fir_t::windowType window , const bool store )
+{
+
+  // include band-pass filter
+  input = dsptools::apply_fir( d , sr , fir_t::BAND_PASS ,
+			       2 ,   // fixed order
+			       0 , 0 , // ripple , tw , ignored
+			       lwr , upr ,
+			       order , window );
+  
+  store_real_imag = store;
+
+  proc();
+}
+
 void hilbert_t::proc()
 {
 
@@ -82,8 +117,7 @@ void hilbert_t::proc()
 
   // f(posF) = f(posF) + -1i*complexf(posF);
   // f(negF) = f(negF) +  1i*complexf(negF);
-  
-  
+
   // 3) Inverse FFT of the rotated coefficients 
   FFT ifft( n , n , 1 , FFT_INVERSE );
   ifft.apply( f );

@@ -83,6 +83,16 @@ struct fir_t
 
   enum filterType { LOW_PASS, HIGH_PASS, BAND_PASS, BAND_STOP , EXTERNAL };
   enum windowType { RECTANGULAR, BARTLETT, HANN, HAMMING, BLACKMAN };
+
+  static std::string window( windowType & w )
+  {
+    if ( w == RECTANGULAR ) return "Rectangular";
+    if ( w == BARTLETT ) return "Bartlett";
+    if ( w == HANN ) return "Hann";
+    if ( w == HAMMING ) return "Hamming";
+    if ( w == BLACKMAN ) return "Blackman";
+    return "?";
+  }
   
   // Prototypes
   std::vector<double> create1TransSinc( int windowLength, double transFreq, double sampFreq, enum filterType type);
@@ -122,14 +132,39 @@ namespace dsptools
   std::vector<double> design_bandstop_fir( double ripple , double tw , double fs , double f1 , double f2 , bool eval = false );
   std::vector<double> design_lowpass_fir( double ripple  , double tw , double fs , double f , bool eval = false );
   std::vector<double> design_highpass_fir( double ripple , double tw , double fs , double f , bool eval = false );
-    
+
+  //
+  // Other window
+  //
+
+  std::vector<double> design_bandpass_fir( int taps , double fs , double f1 , double f2 , fir_t::windowType & window , bool eval = false );
+  std::vector<double> design_bandstop_fir( int taps , double fs , double f1 , double f2 , fir_t::windowType & window , bool eval = false );
+  std::vector<double> design_lowpass_fir(  int taps , double fs , double f , fir_t::windowType & window , bool eval = false );
+  std::vector<double> design_highpass_fir( int taps , double fs , double f , fir_t::windowType & window , bool eval = false );
+
   //
   // apply FIR
   //
   
   void apply_fir( edf_t & edf , param_t & param );
-  void apply_fir( edf_t & edf , int s , fir_t::filterType , double ripple , double tw , double f1, double f2 , const bool use_fft = false , const std::string & fir_file = "" );
-  std::vector<double> apply_fir( const std::vector<double> & , int fs , fir_t::filterType ftype , double ripple , double tw , double f1, double f2 , const bool use_fft = false , const std::string & fir_file = "" );
+
+  // filter given EDF and signal slot 's' (pull data, call apply_fir() 
+  void apply_fir( edf_t & edf , int s , fir_t::filterType ,
+		  int mode ,
+		  double ripple , double tw ,
+		  double f1, double f2 ,
+		  int order = 0 , fir_t::windowType = fir_t::HAMMING ,
+		  const bool use_fft = false ,
+		  const std::string & fir_file = "" );
+
+  // do the actual filtering, given data
+  std::vector<double> apply_fir( const std::vector<double> & , int fs , fir_t::filterType ftype ,
+				 int mode ,
+				 double ripple , double tw ,
+				 double f1, double f2 ,
+				 int order = 0 , fir_t::windowType = fir_t::HAMMING ,
+				 const bool use_fft = false ,
+				 const std::string & fir_file = "" );
   
 }
 

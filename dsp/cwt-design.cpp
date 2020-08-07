@@ -60,7 +60,10 @@ void dsptools::design_cwt( param_t & param )
   cwt.set_sampling_rate( fs );
 
   if ( alt_spec )
-    cwt.alt_add_wavelet( fc , fwhm , timelength );
+    {
+      cwt.set_timeframe( 50.0 / timelength );
+      cwt.alt_add_wavelet( fc , fwhm , timelength );
+    }
   else    
     {
       cwt.add_wavelet( fc , cycles );      
