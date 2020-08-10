@@ -233,6 +233,8 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 
   bool specified_extensions = false;
 
+  bool show_path = true;
+  
   for (int t=0;t<tok0.size();t++)
     {
       if ( tok0[t][0] == '-' ) 
@@ -248,6 +250,11 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	  if ( tok0[t].substr(1) == "nsrr" ) {	    
 	    globals::sl_annot_extensions.insert( "-nsrr.xml" ); 
 	    specified_extensions = true;
+	  }
+
+	  // do not show path in s.lst
+	  if (  tok0[t].substr(1) == "rel" ) {
+	    show_path = false;
 	  }
 	  
 	  // other user-defined extensions
@@ -312,12 +319,10 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   std::map<std::string,sample_list_t>::const_iterator ii = globals::sl_data.begin();
   while ( ii != globals::sl_data.end() )
     {
-
       // does this have an EDF? 
       
       bool has_edf = ii->second.edf != "";
       int  num_annots = ii->second.annots.size();
-
       
       if ( has_edf && ids.find( ii->second.id ) != ids.end() ) 
 	{

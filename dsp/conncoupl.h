@@ -68,8 +68,8 @@ struct conncoupl_t
 	       const bool do_pac = true ,
 	       const bool do_xch = false , 
 	       const bool do_xpac = false )
-    : edf(edf) , signals(signals) , sr(sr) , fint1(fint1) , fint2(fint2) , nreps(nreps), tw(tw) , ripple(ripple) , es(es) ,
-    do_pac(do_pac) , do_xch(do_xch), do_xpac(do_xpac)  
+    : edf(edf) , signals(signals) , sr(sr) , fint1(fint1) , fint2(fint2) , tw(tw) , ripple(ripple) ,
+    nreps(nreps), es(es) , do_pac(do_pac) , do_xch(do_xch), do_xpac(do_xpac)  
   {
     
     use_hilbert = true;
@@ -108,8 +108,9 @@ struct conncoupl_t
 	       const bool do_xpac = false ,
 	       const bool dump_wavelets = false ) :
   edf(edf) , signals(signals) , sr(sr) ,
-    fc1(fc1) , fwhm1( fwhm1 ) , num1( num1 ),
-    fc2(fc2) , fwhm2( fwhm2 ) , num2( num2 ),
+    fc1(fc1) , fwhm1( fwhm1 ) , 
+    fc2(fc2) , fwhm2( fwhm2 ) , 
+    num1( num1 ), num2( num2 ),
     tlen( tlen ), 
     nreps(nreps) , es(es) ,
     do_pac(do_pac) , do_xch(do_xch), do_xpac( do_xpac ) ,
@@ -178,7 +179,6 @@ private:
   
   double tlen; 
 
-  bool dump_wavelets;
   
   // hilbert
 
@@ -214,6 +214,13 @@ private:
   
   bool do_xpac;
   
+
+  //
+  // Misc
+  //
+
+  bool dump_wavelets;
+
   
   //
   // Core transformed complex signal(s) 
