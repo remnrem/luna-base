@@ -173,7 +173,7 @@ void CWT::run()
   if ( fixed_wlen ) 
     {
       set_timeframe( 50.0 / wlen[0] );      
-      eegfft.init( n_conv_pow2 , n_conv_pow2 , srate );
+      eegfft.init( data->size() , n_conv_pow2 , srate );
       eegfft.apply( *data );
       eegfftX = eegfft.transform();
     }
@@ -191,11 +191,13 @@ void CWT::run()
       //
 	    
       if ( ! alt_spec ) 
-	set_timeframe( fc[fi] );  
+	{
+	  set_timeframe( fc[fi] );  
+	}
       else
 	set_timeframe( 50.0 / wlen[fi] );
 
-
+      
       //
       // Do we need FFT of data?
       //
@@ -203,16 +205,11 @@ void CWT::run()
       if ( ! fixed_wlen ) 
 	{
 	  if ( fi != 0 ) eegfft.reset();
-	  eegfft.init( n_conv_pow2 , n_conv_pow2 , srate );
+	  eegfft.init( data->size() ,  n_conv_pow2 , srate );
 	  eegfft.apply( *data );
 	  eegfftX = eegfft.transform();
 	}
 
-   // std::cout << "n_conv_pow2 = " << n_conv_pow2 << "\n"
-   // 	    << "n_data = " << n_data << "\n"
-   // 	    << "n_convolution " << n_convolution << "\n"
-   // 	    << "half_of_wavelet_size " << half_of_wavelet_size << "\n"
-   // 	    << "n_wavelet " << n_wavelet << "\n";
       
       //
       // Generate wavelet 
@@ -220,6 +217,12 @@ void CWT::run()
 
       std::vector<dcomp> w = alt_spec ? alt_wavelet(fi) : wavelet(fi);
       
+      // std::cerr << "n_conv_pow2 = " << n_conv_pow2 << "\n"
+      // 	    << "n_data = " << n_data << "\n"
+      // 	    << "n_convolution " << n_convolution << "\n"
+      // 	    << "half_of_wavelet_size " << half_of_wavelet_size << "\n"
+      // 	    << "n_wavelet " << n_wavelet << "\n";
+
 
       //
       // First FFT
@@ -404,7 +407,7 @@ void CWT::run_wrapped()
   // Initial FFT of data 
   //
       
-  FFT eegfft( Lconv , Lconv , srate );
+  FFT eegfft( data->size() , Lconv , srate );
   eegfft.apply( *data );
   std::vector<dcomp> eegfftX = eegfft.transform();
 

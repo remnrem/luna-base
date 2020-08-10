@@ -3033,7 +3033,7 @@ bool edf_t::restructure()
   if ( records.size() == 0 ) globals::problem = true;
     
 
-  logger << "keeping " 
+  logger << "  keeping " 
 	 << records.size() << " records of " 
 	 << copy.size() << ", resetting mask\n";
   
