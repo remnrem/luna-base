@@ -136,6 +136,7 @@ std::string globals::count_strat;
 std::string globals::sample_strat;
 std::string globals::cluster_strat;
 std::string globals::var_strat;
+std::string globals::value_strat;
 
 std::string & globals::SQLITE_SCRATCH_FOLDER() { static std::string s = ""; return s; }
 
@@ -163,7 +164,7 @@ void globals::init_defs()
   
   version = "v0.24";
   
-  date    = "07-Aug-2020";
+  date    = "11-Aug-2020";
   
 
   //
@@ -368,7 +369,8 @@ void globals::init_defs()
   sample_strat = "SP"; // sample-point
   cluster_strat = "K";
   var_strat     = "VAR";
-
+  value_strat   = "VAL";
+  
   //
   // Misc.
   //

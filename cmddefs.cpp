@@ -189,6 +189,13 @@ void cmddefs_t::init()
   add_var( "STATS" , "CH" , "MEDIAN" , "Signal median" );
   add_var( "STATS" , "CH" , "RMS" , "Signal root mean square" );
 
+  add_var( "STATS" , "CH" , "MAX_ENCODING" , "Possible # of unique values" );
+  add_var( "STATS" , "CH" , "OBS_ENCODING" , "Observed # of unique values" );
+  add_var( "STATS" , "CH" , "PCT_ENCODING" , "Obs/possible unique values" );
+
+  add_table( "STATS" , "CH,VAL" , "Encoding value distribution [encoding]" );
+  add_var( "STATS" , "CH,VAL" , "CNT" , "Number of observations" );
+
   add_var( "STATS" , "CH" , "NE" ,  "Total number of epochs in record [epoch]" );
   add_var( "STATS" , "CH" , "NE1" , "Number of unmasked epochs actually used in calculations [epoch]" );
   add_var( "STATS" , "CH" , "MEDIAN.MEAN" , "Median of all per-epoch means [epoch]" );
@@ -644,7 +651,9 @@ void cmddefs_t::init()
   add_param( "SIGSTATS" , "cstats" , "2" , "Within-epoch, between-channel filtering" );
 
   add_param( "SIGSTATS" , "rms" , "" , "Calculate/mask on RMS" );
-  add_param( "SIGSTATS" , "clipped" , "" , "Calculate/mask on signal clipping" );
+  add_param( "SIGSTATS" , "clipped" , "0.05" , "Calculate/mask on signal clipping" );
+  add_param( "SIGSTATS" , "flat" , "0.05" , "Calculate/mask on signal clipping" );
+  add_param( "SIGSTATS" , "max" , "0.05" , "Calculate/mask on signal clipping" );
 
   add_param( "SIGSTATS" , "threshold" , "2,2" , "Set eppoch masks based on SD unit (iterative) outlier detection" );
   add_param( "SIGSTATS" , "th" , "2,2" , "Same as 'threshold'" );
@@ -653,6 +662,8 @@ void cmddefs_t::init()
 
   add_table( "SIGSTATS" , "CH" , "Per-channel whole-signal statistics" );
   add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" );
+  add_var( "SIGSTATS" , "CH" , "FLAT" , "Proportion of flat sample points" );
+  add_var( "SIGSTATS" , "CH" , "MAX" , "Proportion of max sample points" );
   add_var( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" );
   add_var( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" );
   add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
@@ -682,6 +693,8 @@ void cmddefs_t::init()
   add_var( "SIGSTATS" , "CH,E" , "H2" , "Second Hjorth parameter (mobility)" );
   add_var( "SIGSTATS" , "CH,E" , "H3" , "Third Hjorth parameter (complexity)" );
   hide_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" );
+  hide_var( "SIGSTATS" , "CH,E" , "FLAT" , "Proportion of flat sample points" );
+  hide_var( "SIGSTATS" , "CH,E" , "MAX" , "Proportion of max sample points" );
   hide_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" );
 
 

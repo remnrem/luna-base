@@ -342,6 +342,7 @@ bool StratOutDBase::attach( const std::string & n , bool readonly , writer_t * c
   caller->string_factor( globals::stage_strat );
   caller->numeric_factor( globals::count_strat );
   caller->numeric_factor( globals::time_strat );
+  caller->numeric_factor( globals::value_strat );
 
   //
   // all done

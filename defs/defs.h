@@ -243,7 +243,8 @@ struct globals
   static std::string sample_strat;
   static std::string cluster_strat;
   static std::string var_strat;
-
+  static std::string value_strat; // numeric value
+  
   // database variables
   static std::string & SQLITE_SCRATCH_FOLDER();  
   

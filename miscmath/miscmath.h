@@ -135,6 +135,9 @@ namespace MiscMath
   
   double clipped( const std::vector<double> & x );
   double clipped( const std::vector<double> & x , double, double);
+
+  double flat( const std::vector<double> & x , double EPS = 1e-6 );
+  double max( const std::vector<double> & x , double th );
   
   // Hjorth parameters
   void hjorth( const std::vector<double> * , double * , double * , double * );

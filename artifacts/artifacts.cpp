@@ -350,9 +350,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   // Turning rate 
 
   
-  // exclude EPOCH is more than 5% of points are clipped
-  const double clip_threshold = 0.05;
-  
   std::string signal_label = param.requires( "sig" );  
 
   bool verbose = param.has( "verbose" ) || param.has( "epoch") ;
@@ -360,8 +357,39 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   bool calc_rms = param.has( "rms" );
 
   bool calc_clipped = param.has( "clipped" );
-  
 
+  bool calc_flat = param.has( "flat" );
+
+  bool calc_maxxed = param.has( "max" );
+
+
+  // e.g. exclude EPOCH is more than 5% of points are clipped  
+  double clip_threshold = calc_clipped ? param.requires_dbl( "clipped" ) : 0.05 ;
+  if ( calc_clipped )
+    logger << "  flagging epochs with " << clip_threshold << " proportion X[i] == max(X) or min(X)\n";
+
+  double flat_threshold = 0.05;
+  double flat_eps = 1e-6;
+  if ( calc_flat )
+    {
+      std::vector<double> x = param.dblvector( "flat" );
+      if ( x.size() != 1 && x.size() != 2 ) Helper::halt( "flat requires 1 or 2 param: flat=<pct>,<eps>" );
+      flat_threshold = x[0];
+      if ( x.size() == 2 ) flat_eps = x[1];
+      logger << "  flagging epochs with " << flat_threshold << " proportion |X[i]-X[i-1]| < " << flat_eps << "\n";
+    }
+  
+  double max_threshold = 0.05;
+  double max_value = 0;
+  if ( calc_maxxed )
+    {
+      std::vector<double> x = param.dblvector( "max" );
+      if ( x.size() != 2 ) Helper::halt( "max requires 2 params: max=<value>,<pct>" );
+      max_value = x[0];
+      max_threshold = x[1];
+      logger << "  flagging epochs with " << max_threshold << " proportion |X| > " << max_value << "\n";
+    }
+  
   //
   // Calculate channel-level statistics?
   //
@@ -411,6 +439,11 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       apply_mask = true;
       th = param.dblvector( "th" );
     }
+
+  // if only want to mask given CLIP, MAX, FLAT (i.e. not Hjorth)
+  // need to add 'mask' option;   
+  if ( param.has( "mask" ) )
+    apply_mask = true;
   
   int th_nlevels = th.size();
   
@@ -487,6 +520,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   std::vector<double> rms( ns , 0 );
   std::vector<double> clipped( ns , 0 );
+  std::vector<double> flat( ns , 0 );
+  std::vector<double> maxxed( ns , 0 );
   std::vector<double> mean_activity( ns , 0 );
   std::vector<double> mean_mobility( ns , 0 );
   std::vector<double> mean_complexity( ns , 0 );
@@ -499,6 +534,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   
   std::vector<std::vector<double> > e_rms;
   std::vector<std::vector<double> > e_clp;
+  std::vector<std::vector<double> > e_flt;
+  std::vector<std::vector<double> > e_max;
   std::vector<std::vector<double> > e_act;
   std::vector<std::vector<double> > e_mob;
   std::vector<std::vector<double> > e_cmp;
@@ -509,6 +546,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     {
       e_rms.resize( ns );
       e_clp.resize( ns );
+      e_flt.resize( ns );
+      e_max.resize( ns );
       e_act.resize( ns );
       e_mob.resize( ns );
       e_cmp.resize( ns );
@@ -519,7 +558,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     e_tr.resize( ns );
   
   //
-  // Point to first epoch (assume 30 seconds, but could be different)
+  // Point to first epoch 
   //
   
   int ne = edf.timeline.first_epoch();
@@ -545,10 +584,12 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       ++si;
 
       //
-      // output stratifier
+      // output stratifier (only needed at this stage if verbose, epoch-level output will
+      // also be written)
       //
 
-      writer.level( signals.label(s) , globals::signal_strat );
+      if ( verbose ) 
+	writer.level( signals.label(s) , globals::signal_strat );
 
       //
       // reset to first epoch
@@ -582,7 +623,18 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  slice_t slice( edf , signals(s) , interval );
 	  
 	  std::vector<double> * d = slice.nonconst_pdata();
+
+	  //
+	  // get clipped, flat and/or maxxed points (each is a proportion of points in the epoch)
+	  //
+
+	  double c = calc_clipped ? MiscMath::clipped( *d ) : 0 ;
+
+	  double f = calc_flat ? MiscMath::flat( *d , flat_eps ) : 0 ;
 	  
+	  double m = calc_maxxed ? MiscMath::max( *d , max_value ) : 0 ; 
+
+
 	  //
 	  // Mean-centre 30-second window, calculate RMS
 	  //
@@ -591,7 +643,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  
 	  double x = calc_rms ? MiscMath::rms( *d ) : 0 ;
 	  	  
-	  double c = calc_clipped ? MiscMath::clipped( *d ) : 0 ; 
 	  
 
 	  //
@@ -608,6 +659,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  //
 	  
 	  double turning_rate_mean = 0;
+
 	  if ( turning_rate )
 	    {
 
@@ -640,9 +692,15 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      if ( calc_rms )
 		writer.value( "RMS" , x , "Epoch root mean square (RMS)" );
 	      
-	      if ( calc_rms )
+	      if ( calc_clipped )
 		writer.value( "CLIP" , c , "Proportion of epoch with clipped signal" );
 
+	      if ( calc_flat )
+		writer.value( "FLAT" , f , "Proportion of epoch with flat signal" );
+
+	      if ( calc_maxxed )
+		writer.value( "MAX" , c , "Proportion of epoch with maxed signal" );
+	      
 	      if ( turning_rate ) 
 		writer.value( "TR" , turning_rate_mean , "Turning rate mean per epoch" );
 	    }
@@ -657,6 +715,12 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 	  if ( calc_clipped )
 	    clipped[si] += c;
+	  
+	  if ( calc_flat )
+	    flat[si] += f;
+
+	  if ( calc_maxxed )
+	    maxxed[si] += m;
 	  
 	  mean_activity[si] += activity;
 	  mean_mobility[si] += mobility;
@@ -677,10 +741,16 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      if ( calc_clipped)
 		e_clp[si].push_back( c );
 
+	      if ( calc_flat )
+		e_flt[si].push_back( f );
+	      
+	      if ( calc_maxxed )
+		e_max[si].push_back( m );
+
 	      e_act[si].push_back( activity );
 	      e_mob[si].push_back( mobility );
 	      e_cmp[si].push_back( complexity );
-
+	      
 	      e_epoch[si].push_back( epoch );
 	    }
 	
@@ -700,8 +770,9 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       
     } 
 
-  if ( verbose ) // did we have any output
+  if ( verbose )
     writer.unlevel( globals::signal_strat );
+
 
   
   //
@@ -727,7 +798,9 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 	  ++si;
 
-	  int cnt_rms = 0 , cnt_clp = 0 , cnt_act = 0 , cnt_mob = 0 , cnt_cmp = 0;
+	  int cnt_rms = 0 , cnt_clp = 0 ,
+	    cnt_flt = 0 , cnt_max = 0 ,
+	    cnt_act = 0 , cnt_mob = 0 , cnt_cmp = 0;
 	  
 	  if ( n[si] < 2 ) continue;
 	  
@@ -742,10 +815,14 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // total number of epochs dropped
 	  int total = 0;
 	  int altered = 0;
-	
-	  for (int o=0;o<th_nlevels;o++)
-	    {
 
+	  // masking only on FLAT/CLIP or MAX?
+	  bool no_hjorth = apply_mask && th_nlevels == 0 ;
+
+	  int iters = no_hjorth ? 1 : th_nlevels ;
+	  for (int o=0; o < iters ; o++)
+	    {
+	      
 	      const int nepochs = n[si];
 
 	      std::vector<double> act_rms;
@@ -762,13 +839,13 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		    {
 		      if ( calc_rms )
 			act_rms.push_back( e_rms[si][j] );
-
+		      
 		      act_act.push_back( e_act[si][j] );
 		      act_mob.push_back( e_mob[si][j] );
 		      act_cmp.push_back( e_cmp[si][j] );
 		    }
 		}
-	      
+
 	      double mean_rms = calc_rms ? MiscMath::mean( act_rms ) : 0 ;
 	      double mean_act = MiscMath::mean( act_act );
 	      double mean_mob = MiscMath::mean( act_mob );
@@ -778,18 +855,23 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      double sd_act = MiscMath::sdev( act_act , mean_act ); 
 	      double sd_mob = MiscMath::sdev( act_mob , mean_mob ); 
 	      double sd_cmp = MiscMath::sdev( act_cmp , mean_cmp ); 
-	  
-	      double lwr_rms = calc_rms ? mean_rms - th[o] * sd_rms : 0 ;
-	      double lwr_act = mean_act - th[o] * sd_act;
-	      double lwr_mob = mean_mob - th[o] * sd_mob;
-	      double lwr_cmp = mean_cmp - th[o] * sd_cmp;
-	  
-	      double upr_rms = calc_rms ? mean_rms + th[o] * sd_rms : 0 ; 
-	      double upr_act = mean_act + th[o] * sd_act;
-	      double upr_mob = mean_mob + th[o] * sd_mob;
-	      double upr_cmp = mean_cmp + th[o] * sd_cmp;
+
+	      double this_th = no_hjorth ? 0 : th[o];
 	      
-	      logger << " RMS/Hjorth filtering " << edf.header.label[ signals(s) ] << ", threshold +/-" << th[o] << " SDs";
+	      double lwr_rms = calc_rms ? mean_rms - this_th * sd_rms : 0 ;
+	      double lwr_act = mean_act - this_th * sd_act;
+	      double lwr_mob = mean_mob - this_th * sd_mob;
+	      double lwr_cmp = mean_cmp - this_th * sd_cmp;
+	  
+	      double upr_rms = calc_rms ? mean_rms + this_th * sd_rms : 0 ; 
+	      double upr_act = mean_act + this_th * sd_act;
+	      double upr_mob = mean_mob + this_th * sd_mob;
+	      double upr_cmp = mean_cmp + this_th * sd_cmp;
+
+	      if ( ! no_hjorth ) 
+		logger << "  RMS/Hjorth filtering " << edf.header.label[ signals(s) ] << ", threshold +/-" << th[o] << " SDs";
+	      else
+		logger << "  Fixed threshold filtering " << edf.header.label[ signals(s) ] ;
 	      
 	      const int ne = e_epoch[si].size();
 
@@ -807,41 +889,57 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		  if ( dropped[ei] ) continue;
 		  
 		  bool set_mask = false;
-		  
-		  if ( calc_rms && ( e_rms[si][ei] < lwr_rms || e_rms[si][ei] > upr_rms ) ) 
-		    {
-		      set_mask = true;
-		      cnt_rms++;
-		    }
-		  
-		  // For clipping, use a fixed threshold
+		  		  
+		  // For clipping/flat/max, use a fixed threshold
 		  if ( calc_clipped && e_clp[si][ei] > clip_threshold ) 
 		    {
 		      set_mask = true;
 		      cnt_clp++;
 		    }
-		  		  
-		  if ( e_act[si][ei] < lwr_act || e_act[si][ei] > upr_act ) 
+		  		  		  
+		  if ( calc_flat && e_flt[si][ei] > flat_threshold ) 
 		    {
 		      set_mask = true;
-		      cnt_act++;
+		      cnt_flt++;
 		    }
-		  
-		  if ( e_mob[si][ei] < lwr_mob || e_mob[si][ei] > upr_mob ) 
-		    {
-		      set_mask = true;
-		      cnt_mob++;
-		    }
-		  
-		  if ( e_cmp[si][ei] < lwr_cmp || e_cmp[si][ei] > upr_cmp )
-		    {
-		      set_mask = true;
-		      cnt_cmp++;
-		    }
-		  
-		  
 
-		  //
+		  if ( calc_maxxed && e_max[si][ei] > max_threshold ) 
+		    {
+		      set_mask = true;
+		      cnt_max++;
+		    }
+
+		  // For other metrics, use a (variable) statistical threshold (SD units)
+		  if ( ! no_hjorth )
+		    {
+
+		      if ( calc_rms && ( e_rms[si][ei] < lwr_rms || e_rms[si][ei] > upr_rms ) ) 
+			{
+			  set_mask = true;
+			  cnt_rms++;
+			}
+		      
+		      if ( e_act[si][ei] < lwr_act || e_act[si][ei] > upr_act ) 
+			{
+			  set_mask = true;
+			  cnt_act++;
+			}
+		      
+		      if ( e_mob[si][ei] < lwr_mob || e_mob[si][ei] > upr_mob ) 
+			{
+			  set_mask = true;
+			  cnt_mob++;
+			}
+		      
+		      if ( e_cmp[si][ei] < lwr_cmp || e_cmp[si][ei] > upr_cmp )
+			{
+			  set_mask = true;
+			  cnt_cmp++;
+			}
+		      
+		    }
+	
+	          //
 		  // full mask
 		  //
 		  
@@ -870,12 +968,15 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		} // next epoch	  
 	      
 	      logger << ": removed " << total_this_iteration 
-		     << " of " << act_rms.size() 
-		     << " epochs of iteration " << o+1 << "\n";
-
+		     << " epochs";
+	      if ( no_hjorth )
+		logger << "\n";
+	      else
+		logger << " (iteration " << o+1 << ")\n";
+	      	      
 	    } // next outlier iteration
 	  
-		  
+	
 	  //
 	  // report final epoch-level masking
 	  //
@@ -891,25 +992,32 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      writer.unepoch();
 	    }
 	  
-	  logger << " Overall, masked " << total << " of " << ne << " epochs:"
-		 << " ACT:" << cnt_act 
-		 << " MOB:" << cnt_mob 
-		 << " CMP:" << cnt_cmp ;
+	  logger << " Overall, masked " << total << " of " << ne << " epochs:";
+
+	  if ( ! no_hjorth ) logger << " ACT:" << cnt_act 
+				    << " MOB:" << cnt_mob 
+				    << " CMP:" << cnt_cmp ;
 	  if ( calc_rms ) logger << " RMS:" << cnt_rms ;
 	  if ( calc_clipped ) logger << " CLP:" << cnt_clp;
+	  if ( calc_flat ) logger << " FLT:" << cnt_flt;
+	  if ( calc_maxxed ) logger << " MAX:" << cnt_max;
+	  	  
 	  logger << "\n";
-
 	  
 	  if ( calc_rms ) writer.value( "CNT_RMS" , cnt_rms , "Epochs failing RMS filter" );
 	  if ( calc_clipped) writer.value( "CNT_CLP" , cnt_clp , "Epochs failing CLIP filter" );
-	  writer.value( "CNT_ACT" , cnt_act , "Epochs failing H1 filter" );
-	  writer.value( "CNT_MOB" , cnt_mob , "Epochs failing H2 filter" );
-	  writer.value( "CNT_CMP" , cnt_cmp , "Epochs failing H3 filter" );
+	  if ( calc_flat) writer.value( "CNT_FLT" , cnt_flt , "Epochs failing FLAT filter" );
+	  if ( calc_maxxed) writer.value( "CNT_MAX" , cnt_max , "Epochs failing MAX filter" );
 
+	  if ( ! no_hjorth ) {
+	    writer.value( "CNT_ACT" , cnt_act , "Epochs failing H1 filter" );
+	    writer.value( "CNT_MOB" , cnt_mob , "Epochs failing H2 filter" );
+	    writer.value( "CNT_CMP" , cnt_cmp , "Epochs failing H3 filter" );
+	  }
+	  
 	  writer.value( "FLAGGED_EPOCHS" , total,    "Number of epochs failing SIGSTATS" );
 	  writer.value( "ALTERED_EPOCHS" , altered , "Number of epochs actually masked, i.e. not already masked" );
 	  writer.value( "TOTAL_EPOCHS"   , ne,       "Number of epochs tested" );
-	
 	
 	} // next signal      
       
@@ -1181,6 +1289,13 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
       if ( calc_clipped )
 	writer.value( "CLIP" , clipped[si] / (double)n[si] , "Mean CLIP statistic" );
+
+      if ( calc_flat )
+	writer.value( "FLAT" , flat[si] / (double)n[si] , "Mean FLAT statistic" );
+
+      if ( calc_maxxed )
+	writer.value( "MAX" , maxxed[si] / (double)n[si] , "Mean MAX statistic" );
+
       if ( calc_rms )
 	writer.value( "RMS"   , rms[si] / (double)n[si] , "Mean RMS statistic" );      
     }

@@ -459,13 +459,14 @@ void cmd_t::populate_commands()
 
 void cmd_t::replace_wildcards( const std::string & id )
 {
-
+  
   //
   // get copy of original script;  comments, newlines vesrus '&' will already have
   // been taken care of
   //
   
   std::string iline = line;
+
 
   //
   // Copy a set of variables, where any i-vars will overwrite an existing var
@@ -510,7 +511,7 @@ void cmd_t::replace_wildcards( const std::string & id )
   Helper::expand_numerics( &iline );
 
 
-  //  std::cout << "final [" << iline << "]\n";
+  //  std::cerr << "final [" << iline << "]\n";
   
   //
   // Parse into commands/options
@@ -815,6 +816,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
+      else if ( is( c, "MINMAX" ) )       proc_minmax( edf , param(c) );
+      
       else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
       
       else if ( is( c, "TIME-TRACK" ) )   proc_timetrack( edf, param(c) );
@@ -2347,6 +2350,16 @@ void proc_scale( edf_t & edf , param_t & param , const std::string & sc )
     edf.rescale( signals(s) , sc );
 }
 
+// MINMAX : set EDF header to have identical min/max (physical) values
+
+void proc_minmax( edf_t & edf , param_t & param )
+{
+  std::string sigstr = param.requires( "sig" );
+  signal_list_t signals = edf.header.signal_list( sigstr );
+  const int ns = signals.size();  
+  for (int s=0;s<ns;s++) 
+    edf.minmax( signals(s) );
+}
 
 // FLIP : change polarity of signal
 

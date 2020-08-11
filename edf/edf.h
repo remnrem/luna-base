@@ -416,7 +416,7 @@ public:
   
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
-  void update_signal( int s , const std::vector<double> * );
+  void update_signal( int s , const std::vector<double> * , bool force_minmax = false );
 
   void shift( int s , int tp , bool wrap = true ); 
 
@@ -446,6 +446,8 @@ public:
   void make_canonicals( const std::string & file, const std::string &  group , const std::set<std::string> * cs = NULL );
     
   void flip( const int s ); 
+
+  void minmax( const int s );
 
   void reset_record_size( const double );
 

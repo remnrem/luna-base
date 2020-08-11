@@ -139,6 +139,24 @@ double MiscMath::clipped( const std::vector<double> & x )
   return clipped( x , mn , mx );
 }
 
+double MiscMath::flat( const std::vector<double> & x , double EPS )
+{
+  const int n = x.size();
+  int c = 0;
+  for (int i=1;i<n;i++) if ( fabs( x[i] - x[i-1] ) < EPS ) ++c;
+  return c/(double)(n-1);  
+}
+
+
+double MiscMath::max( const std::vector<double> & x , double th )
+{
+  const int n = x.size();
+  int c = 0;
+  for (int i=0;i<n;i++) if ( fabs( x[i] ) > th ) ++c;
+  return c/(double)(n);  
+}
+
+
 
 double MiscMath::sqr( const double a )
 {

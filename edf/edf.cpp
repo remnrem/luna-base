@@ -2948,7 +2948,7 @@ bool edf_t::restructure()
 
   if ( ! header.edfplus ) 
     {
-      logger << " restructuring as an EDF+ : ";
+      logger << "  restructuring as an EDF+ : ";
       
       set_edfplus();
     }
@@ -3249,7 +3249,7 @@ void edf_t::update_records( int a , int b , int s , const std::vector<double> * 
 
   
 
-void edf_t::update_signal( int s , const std::vector<double> * d )
+void edf_t::update_signal( int s , const std::vector<double> * d , bool force_minmax )
 {
   
   if ( header.is_annotation_channel(s) ) 
@@ -3277,6 +3277,15 @@ void edf_t::update_signal( int s , const std::vector<double> * d )
     {
       if      ( (*d)[i] < pmin ) pmin = (*d)[i];
       else if ( (*d)[i] > pmax ) pmax = (*d)[i];
+    }
+
+  // force equal physical min/max in EDF?
+  if ( force_minmax )
+    {
+      double largest = fabs( pmin );
+      if ( fabs( pmax ) > largest ) largest = fabs( pmax ) ;
+      pmin = -largest;
+      pmax =  largest;
     }
   
   // update physical min/max (but leave orig_physical_min/max unchanged)
@@ -3703,6 +3712,23 @@ void edf_t::rescale( const int s , const std::string & sc )
 
 
 
+void edf_t::minmax( const int s )
+{
+    if ( header.is_annotation_channel(s) ) return;
+
+  logger << "  forcing EDF min/max to be similar for " << header.label[s] << "\n";
+
+  // get all data
+  interval_t interval = timeline.wholetrace();
+  slice_t slice( *this , s , interval );
+  const std::vector<double> * d = slice.pdata();
+
+  // update signal (and min/max in header), where true implies
+  // we force the same physical min/max values in the EDF header
+  update_signal( s , d , true );
+}
+
+
 bool edf_t::basic_stats( param_t & param )
 {
   
@@ -3710,6 +3736,7 @@ bool edf_t::basic_stats( param_t & param )
   // Get min/max
   // Calculate RMS for each signal
   // Get mean/median/SD and skewness
+  // optinoally, display a histogram of observed values (and figure out range)
   
   std::string signal_label = param.requires( "sig" );  
 
@@ -3718,6 +3745,8 @@ bool edf_t::basic_stats( param_t & param )
   std::vector<double> Fs = header.sampling_freq( signals );
   
   bool by_epoch = param.has( "epoch" );
+
+  bool hist = param.has( "encoding" );
   
   const int ns = signals.size();
   
@@ -3890,6 +3919,7 @@ bool edf_t::basic_stats( param_t & param )
       if ( calc_median ) writer.value( "MEDIAN" , median );
       writer.value( "RMS"  , rms  );
 
+      
       //
       // Also, same strata:  summaries of epoch-level statistics
       //
@@ -3913,6 +3943,42 @@ bool edf_t::basic_stats( param_t & param )
 	}
 
 
+
+      //
+      // Optional, encoding 
+      //
+      
+      std::map<double,int> counts;
+      for (int i = 0 ; i < n ; i++ )
+	counts[ (*d)[i] ]++;
+      
+      writer.value( "OBS_ENCODING" , (int)counts.size() );
+      
+      // largest possible EDF digital span
+      
+      // -32767 for "digital minimum" and +32767 for "digital maximum"? 
+      //	  int span_max = 32767 - ( -32767 );
+      
+      int span_obs = header.digital_max[ signals(s) ] - header.digital_min[ signals(s) ] + 1;
+      
+      int zero_cells = span_obs - counts.size();
+      
+      writer.value( "MAX_ENCODING" , span_obs );
+      writer.value( "PCT_ENCODING" , counts.size() / (double)span_obs );
+      
+      // verbose output: every unique value / count 
+      if ( hist )
+	{
+	  std::map<double,int>::const_iterator ii = counts.begin();
+	  while ( ii != counts.end() )
+	    {
+	      writer.level( ii->first , globals::value_strat );
+	      writer.value( "CNT" , ii->second );
+	      ++ii;
+	    }
+	  writer.unlevel( "VAL" );
+	}
+    
       //
       // Next channel
       //
