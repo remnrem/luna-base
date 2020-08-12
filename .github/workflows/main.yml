@@ -1,0 +1,26 @@
+name: lunabase CI
+
+on:
+  push:
+    branches: master
+  pull_request:
+    branches: master
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install fftw
+      run: |
+        wget http://www.fftw.org/fftw-3.3.8.tar.gz
+        tar -xzvf fftw-3.3.8.tar.gz
+        cd fftw-3.3.8
+        ./configure --prefix=/home/runner/work/remnrem/luna-base/fftw-3.3.8/
+        make
+        make install
+        cd ..
+    - name: make
+      run: make FFTW=/home/runner/work/remnrem/luna-base/fftw-3.3.8
