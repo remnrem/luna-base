@@ -344,6 +344,13 @@ bool StratOutDBase::attach( const std::string & n , bool readonly , writer_t * c
   caller->numeric_factor( globals::time_strat );
   caller->numeric_factor( globals::value_strat );
 
+  caller->numeric_factor( "SEC" );
+  caller->numeric_factor( "TAP" );
+  caller->numeric_factor( "TH" );
+  caller->numeric_factor( "SPINDLE" );
+  caller->numeric_factor( "MSEC" );
+  caller->numeric_factor( "PHASE" );
+  
   //
   // all done
   //

@@ -985,8 +985,6 @@ int fir_t::outputFFT(const std::string & label, const std::vector<double> & wind
   // Filter coefficients
   //
   
-  writer.numeric_factor( "TAP" );
-  
   for (int i=0;i<window.size();i++)
     {
       writer.level( i , "TAP" );
@@ -1022,8 +1020,6 @@ int fir_t::outputFFT(const std::string & label, const std::vector<double> & wind
   // Output IR and SR
   //
   
-  writer.numeric_factor( "SEC" );  
-
   // SR
   double integ = xx[0];
   

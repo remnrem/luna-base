@@ -77,8 +77,6 @@ void dsptools::design_cwt( param_t & param )
   
   const int n = w.size();
   
-  writer.numeric_factor( "SEC" );
-
   for (int i=0;i<n;i++)
     {
       writer.level( t[i] , "SEC" );

@@ -121,9 +121,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   bool verbose_empirical = param.has("verbose-empirical");
   
-  if ( estimate_empirical_thresholds )
-    writer.numeric_factor( "TH" );
-
   // default multiplicative threshold for spindle core, = 4.5 
   double   multiplicative_threshold = param.has( "th" ) ? param.requires_dbl( "th" ) : 4.5 ;
   
@@ -337,15 +334,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   std::set<feature_t> all_spindles;
   
-  //
-  // Initiate output
-  //
   
-  writer.numeric_factor( "SPINDLE" );
-  writer.numeric_factor( "MSEC" );
-  writer.numeric_factor( "PHASE" );
-  
-
   //
   // For each signal, over the whole signal
   //
@@ -2736,7 +2725,7 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	 }
 
      }
-   
+
    // end of per-spindle output
    writer.unlevel( "SPINDLE" );
     
@@ -3086,7 +3075,7 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
       // Per-spindle level output 
       //
       
-      if ( true ) 
+      if ( false ) 
 	{
 	  
 	  std::vector<spindle_t>::const_iterator ii = spindles.begin();

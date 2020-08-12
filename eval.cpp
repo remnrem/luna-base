@@ -2356,9 +2356,7 @@ void proc_minmax( edf_t & edf , param_t & param )
 {
   std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
-  const int ns = signals.size();  
-  for (int s=0;s<ns;s++) 
-    edf.minmax( signals(s) );
+  edf.minmax( signals );
 }
 
 // FLIP : change polarity of signal

@@ -3712,20 +3712,22 @@ void edf_t::rescale( const int s , const std::string & sc )
 
 
 
-void edf_t::minmax( const int s )
+void edf_t::minmax( signal_list_t & signals )
 {
-    if ( header.is_annotation_channel(s) ) return;
 
-  logger << "  forcing EDF min/max to be similar for " << header.label[s] << "\n";
+  // // get max/min for digital and physical signals over all 's' in signals
+  // if ( header.is_annotation_channel(s) ) return;
 
-  // get all data
-  interval_t interval = timeline.wholetrace();
-  slice_t slice( *this , s , interval );
-  const std::vector<double> * d = slice.pdata();
+  // logger << "  forcing EDF min/max to be similar for " << header.label[s] << "\n";
 
-  // update signal (and min/max in header), where true implies
-  // we force the same physical min/max values in the EDF header
-  update_signal( s , d , true );
+  // // get all data
+  // interval_t interval = timeline.wholetrace();
+  // slice_t slice( *this , s , interval );
+  // const std::vector<double> * d = slice.pdata();
+
+  // // update signal (and min/max in header), where true implies
+  // // we force the same physical min/max values in the EDF header
+  // update_signal( s , d , true );
 }
 
 

@@ -460,8 +460,6 @@ void conncoupl_t::pre_calc()
 	      writer.level( freq , "F" );
 	      writer.level( fwhm , "FWHM" );
 	      
-	      writer.numeric_factor( "SEC" );
-	      
 	      for (int i=0;i<n;i++)
 	       	{
 	       	  writer.level( t[i] , "SEC" );

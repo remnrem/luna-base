@@ -447,7 +447,7 @@ public:
     
   void flip( const int s ); 
 
-  void minmax( const int s );
+  void minmax( signal_list_t & );
 
   void reset_record_size( const double );
 

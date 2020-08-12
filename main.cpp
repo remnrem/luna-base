@@ -1626,9 +1626,11 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "db" )
     {
-      //      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" , "nsrr01" );
-      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" );
+      const std::string db = p2;
 
+      //      retval_t retval = writer_t::dump_to_retval( "/Users/shaun/dropbox/projects/nsrr/tutorial/luna/out.db" , "nsrr01" );
+
+      retval_t retval = writer_t::dump_to_retval( db );
       retval.dump(); 
       std::cout << "\n";
       std::exit(1);
