@@ -1115,7 +1115,7 @@ class writer_t
   std::map<strata_t,int>    strata_idmap;
   std::map<std::string,int> commands_idmap;
 
-  void clear() 
+  void clear( bool reset = true ) 
   {
     factors.clear();     factors_idmap.clear();
     levels.clear();      levels_idmap.clear();
@@ -1130,8 +1130,6 @@ class writer_t
     curr_timepoint.timeless();
     curr_command.clear();    
 
-    // but reset types
-    set_types();
   }
 
   

@@ -1010,7 +1010,6 @@ void get_matching_strata( bool show_table)
       fstrata_t f;
       f.factors = factors;
 
-      
       // tmp fix,i.e.. only add non-baseline factors
       if ( factors.size() > 0 ) 
 	{
@@ -1020,7 +1019,6 @@ void get_matching_strata( bool show_table)
 
       ++ss;
     }
-  
   
 
   //
@@ -1182,10 +1180,8 @@ void get_matching_strata( bool show_table)
   std::set<request_t>::const_iterator ii = rvars.begin();
   while ( ii != rvars.end() )
     {
-      
       if ( writer.factors_idmap.find( ii->fac ) == writer.factors_idmap.end() ) 
 	{ ++ii; continue; } 
-      
       requested.insert( writer.factors[ writer.factors_idmap[ ii->fac ] ] );
       ++ii;
     }
