@@ -578,6 +578,8 @@ class writer_t
     return db.attached();
   }
 
+  void set_types();
+  
   void nodb() 
   { 
     // in an in-memory DB to store factor information, etc, but then set to 'dbless' 
@@ -588,11 +590,18 @@ class writer_t
     zfiles = NULL;
     retval = NULL;
   } 
-  
+
   void use_retval( retval_t * r ) 
   { 
+    // added for lunaR context... [TODO. need to check cleanup/ set_types() for other modes
+    // typically doesn't matter, as in lunaC mode, we are always starting w/ a fresh DB
+    // only in lunaR do we 'recycle' the writer... which can lead to the DB (:memory:) and the
+    // factor_idmap() being out-of-sync
+    clear();
+
     // in an in-memory DB to store factor information, etc, but then set to write to a retval 
     close();
+        
     attach( ":memory:" );
     dbless = false;  
     plaintext = false;
@@ -657,27 +666,9 @@ class writer_t
 
     // Define factor types (not set current level)
   
-  bool numeric_factor( const std::string & fac_name )
-  {
-    if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
-      {
-	factor_t factor = db.insert_factor( fac_name , 1 );  // 1 -> numeric factor
-	factors_idmap[ fac_name ] = factor.factor_id;
-	factors[ factor.factor_id ] = factor;
-      }
-    return true;
-  }
+  bool numeric_factor( const std::string & fac_name );
   
-  bool string_factor( const std::string & fac_name )
-  {
-    if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
-      {
-	factor_t factor = db.insert_factor( fac_name , 0 ); // 0 -> string factor  
-	factors_idmap[ fac_name ] = factor.factor_id;
-	factors[ factor.factor_id ] = factor;
-      }
-    return true;
-  }
+  bool string_factor( const std::string & fac_name );
 
   bool var( const std::string & var_name , const std::string & var_label )
   {
@@ -796,40 +787,10 @@ class writer_t
   {
     return level( Helper::dbl2str( level_name ) , factor_name );
   }
-  
-  bool level( const std::string & level_name , const std::string & factor_name )
-  {
 
-    // add factor (as string by default) if it doesn't already exist
-    if ( factors_idmap.find( factor_name ) == factors_idmap.end() ) 
-      string_factor( factor_name );
-    
-    factor_t factor = factors[ factors_idmap[ factor_name ] ];
-    
-    // for level, use level.factor as the lookup key
-    std::string level_key = level_name + "." + factor_name ;
-    
-    // cached?
-    if ( levels_idmap.find( level_key ) == levels_idmap.end() )
-      {
-	// if not, add to DB,
-	level_t level = db.insert_level( level_name , factor.factor_id );
-	// and then cache
-	levels_idmap[ level_key ] = level.level_id;
-	levels[ level.level_id ] = level;
-      }
-
-    // fetch from cache
-    level_t level = levels[ levels_idmap[ level_key ] ];
-
-    // swap/add to current strata
-    curr_strata.insert( level , factor );
-
-    // if needed, update which table to point to
-    if ( plaintext ) update_plaintext_curr_strata();
-    
-    return true;
-  }
+  // main add function
+  bool level( const std::string & level_name , const std::string & factor_name );
+ 
   
   bool unlevel( const std::string & factor_name )
   {
@@ -969,6 +930,7 @@ class writer_t
 
   bool value( const std::string & var_name , double d , const std::string & desc = "" )
   {    
+    //    std::cout << "add-v :" << var_name << " " << d << "\n";
     if ( retval != NULL ) return to_retval( var_name , d );
     else if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( d ) ) : to_stdout( var_name , value_t( d ) ) ;
     if ( desc != "" ) var( var_name , desc );
@@ -1166,7 +1128,10 @@ class writer_t
     curr_indiv.clear();
     curr_strata.clear();
     curr_timepoint.timeless();
-    curr_command.clear();
+    curr_command.clear();    
+
+    // but reset types
+    set_types();
   }
 
   

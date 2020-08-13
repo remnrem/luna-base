@@ -225,9 +225,9 @@ bool StratOutDBase::attach( const std::string & n , bool readonly , writer_t * c
 {
   
   if ( attached() ) dettach();
-  
-  if ( n == "-" || n == "." ) { dettach(); return false; } 
 
+  if ( n == "-" || n == "." ) { dettach(); return false; } 
+      
   sql.open(n); 
   
   sql.synchronous(false);
@@ -330,26 +330,9 @@ bool StratOutDBase::attach( const std::string & n , bool readonly , writer_t * c
   //
   // specify types for common stratifiers
   //
-  
-  caller->numeric_factor( globals::epoch_strat );
-  caller->numeric_factor( globals::freq_strat );
-  caller->numeric_factor( globals::cycle_strat );
-  caller->string_factor( globals::band_strat );
-  caller->string_factor( globals::annot_strat );
-  caller->string_factor( globals::annot_instance_strat );
-  caller->string_factor( globals::annot_meta_strat );
-  caller->string_factor( globals::signal_strat );
-  caller->string_factor( globals::stage_strat );
-  caller->numeric_factor( globals::count_strat );
-  caller->numeric_factor( globals::time_strat );
-  caller->numeric_factor( globals::value_strat );
 
-  caller->numeric_factor( "SEC" );
-  caller->numeric_factor( "TAP" );
-  caller->numeric_factor( "TH" );
-  caller->numeric_factor( "SPINDLE" );
-  caller->numeric_factor( "MSEC" );
-  caller->numeric_factor( "PHASE" );
+  caller->set_types();
+  
   
   //
   // all done
@@ -1398,4 +1381,101 @@ void writer_t::update_plaintext_curr_strata()
   // set (all) levels 
   curr_zfile->set_stratum( faclvl() );
   
+}
+
+
+bool writer_t::level( const std::string & level_name , const std::string & factor_name )
+{
+  
+  //std::cout << "lvl: " << factor_name << " " << level_name << "\n";
+  
+  // add factor (as string by default) if it doesn't already exist
+  if ( factors_idmap.find( factor_name ) == factors_idmap.end() ) 
+    {
+      //std::cout << "setting str factor\n";
+      string_factor( factor_name );
+    }
+
+  // std::cout << " factors_idmap size = " << factors_idmap.size() << "\n";
+  
+  // std::cout << "fidmap = " << factors_idmap[ factor_name ] << "\n";
+  
+  factor_t factor = factors[ factors_idmap[ factor_name ] ];
+
+  //  std::cout << "fname " << factor.factor_name << "\n";
+  
+  // for level, use level.factor as the lookup key
+  std::string level_key = level_name + "." + factor_name ;
+  
+  // cached?
+  if ( levels_idmap.find( level_key ) == levels_idmap.end() )
+    {
+      // if not, add to DB,
+      level_t level = db.insert_level( level_name , factor.factor_id );
+      // and then cache
+      levels_idmap[ level_key ] = level.level_id;
+      levels[ level.level_id ] = level;
+    }
+  
+  // fetch from cache
+  level_t level = levels[ levels_idmap[ level_key ] ];
+  //  std::cout << "lvl-set: " << level.level_name << " " << factor.factor_name << "\n";
+  // swap/add to current strata
+  curr_strata.insert( level , factor );
+  
+  // if needed, update which table to point to
+  if ( plaintext ) update_plaintext_curr_strata();
+  
+  return true;
+}
+
+bool writer_t::numeric_factor( const std::string & fac_name )
+  {
+    if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
+      {
+	factor_t factor = db.insert_factor( fac_name , 1 );  // 1 -> numeric factor
+	//	std::cout << "ASSIGN: num " << fac_name << " " << factor.factor_id << "\n";
+	factors_idmap[ fac_name ] = factor.factor_id;
+	factors[ factor.factor_id ] = factor;
+      }
+    return true;
+  }
+
+bool writer_t::string_factor( const std::string & fac_name )
+  {
+    if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
+      {
+	factor_t factor = db.insert_factor( fac_name , 0 ); // 0 -> string factor  
+	//std::cout << "ASSIGN: str " << fac_name << " " << factor.factor_id << "\n";
+	factors_idmap[ fac_name ] = factor.factor_id;
+	factors[ factor.factor_id ] = factor;
+      }
+    return true;
+  }
+
+
+void writer_t::set_types()
+{
+
+  //  std::cout << "SETTING_TYPES()\n";
+  
+  numeric_factor( globals::epoch_strat );
+  numeric_factor( globals::freq_strat );
+  numeric_factor( globals::cycle_strat );
+  string_factor( globals::band_strat );
+  string_factor( globals::annot_strat );
+  string_factor( globals::annot_instance_strat );
+  string_factor( globals::annot_meta_strat );
+  string_factor( globals::signal_strat );
+  string_factor( globals::stage_strat );
+  numeric_factor( globals::count_strat );
+  numeric_factor( globals::time_strat );
+  numeric_factor( globals::value_strat );
+
+  numeric_factor( "SEC" );
+  numeric_factor( "TAP" );
+  numeric_factor( "TH" );
+  numeric_factor( "SPINDLE" );
+  numeric_factor( "MSEC" );
+  numeric_factor( "PHASE" );
 }

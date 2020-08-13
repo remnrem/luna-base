@@ -3950,27 +3950,28 @@ bool edf_t::basic_stats( param_t & param )
       // Optional, encoding 
       //
       
-      std::map<double,int> counts;
-      for (int i = 0 ; i < n ; i++ )
-	counts[ (*d)[i] ]++;
-      
-      writer.value( "OBS_ENCODING" , (int)counts.size() );
-      
-      // largest possible EDF digital span
-      
-      // -32767 for "digital minimum" and +32767 for "digital maximum"? 
-      //	  int span_max = 32767 - ( -32767 );
-      
-      int span_obs = header.digital_max[ signals(s) ] - header.digital_min[ signals(s) ] + 1;
-      
-      int zero_cells = span_obs - counts.size();
-      
-      writer.value( "MAX_ENCODING" , span_obs );
-      writer.value( "PCT_ENCODING" , counts.size() / (double)span_obs );
-      
       // verbose output: every unique value / count 
       if ( hist )
 	{
+	  
+	  std::map<double,int> counts;
+	  for (int i = 0 ; i < n ; i++ )
+	    counts[ (*d)[i] ]++;
+	  
+	  writer.value( "OBS_ENCODING" , (int)counts.size() );
+	  
+	  // largest possible EDF digital span
+	  
+	  // -32767 for "digital minimum" and +32767 for "digital maximum"? 
+	  //	  int span_max = 32767 - ( -32767 );
+	  
+	  int span_obs = header.digital_max[ signals(s) ] - header.digital_min[ signals(s) ] + 1;
+	  
+	  int zero_cells = span_obs - counts.size();
+	  
+	  writer.value( "MAX_ENCODING" , span_obs );
+	  writer.value( "PCT_ENCODING" , counts.size() / (double)span_obs );
+	  
 	  std::map<double,int>::const_iterator ii = counts.begin();
 	  while ( ii != counts.end() )
 	    {
@@ -3979,8 +3980,9 @@ bool edf_t::basic_stats( param_t & param )
 	      ++ii;
 	    }
 	  writer.unlevel( "VAL" );
+
 	}
-    
+      
       //
       // Next channel
       //

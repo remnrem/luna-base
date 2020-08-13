@@ -37,6 +37,15 @@ void retval_t::add( const retval_indiv_t & id,
 		    const retval_strata_t & stratum ,
 		    const double x )
 {
+
+  // std::cout << "add: "
+  // 	    << id.name << " "
+  // 	    << cmd.name << " "
+  // 	    << fac.print() << " "
+  // 	    << var.name << " "
+  // 	    << stratum.print() << " "
+  // 	    << x << "\n";
+  
   var_has_doubles.insert( var.name );
   data[cmd][fac][var][stratum][id] = retval_value_t( x );
 }
