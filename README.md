@@ -1,5 +1,7 @@
 # luna #
 
+![lunabase CI](https://github.com/remnrem/luna-base/workflows/lunabase%20CI/badge.svg)
+
 The luna library is designed to support large-scale objective studies
 of sleep.  It supports EDF(+) data and XML annotations, and offers
 efficient handling, filtering and manipulation of data, a range of
