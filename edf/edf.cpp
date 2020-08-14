@@ -398,7 +398,8 @@ void edf_t::terse_summary( const bool write_signals ) const
       writer.value( "SR" , header.n_samples[s] / (double)header.record_duration );
       
       // physical dimension
-      writer.value( "PDIM" , header.phys_dimension[s] );
+      std::string pdim = Helper::trim( header.phys_dimension[s]  );
+      writer.value( "PDIM" , pdim != "" ? pdim : "." );
 
       // physical min/max
       writer.value( "PMIN" , header.physical_min[s] );
@@ -408,6 +409,8 @@ void edf_t::terse_summary( const bool write_signals ) const
       writer.value( "DMIN" , header.digital_min[s] );
       writer.value( "DMAX" , header.digital_max[s] );
 
+      // sensitivity (unit per bit)
+      writer.value( "SENS" , ( header.physical_max[s] - header.physical_min[s] ) / (double)(  header.digital_max[s] -  header.digital_min[s] + 1 ) ); 
     }
   
   writer.unlevel( globals::signal_strat );
@@ -3249,8 +3252,10 @@ void edf_t::update_records( int a , int b , int s , const std::vector<double> * 
 
   
 
-void edf_t::update_signal( int s , const std::vector<double> * d , bool force_minmax )
+void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmin_ , int16_t * dmax_ , double * pmin_ , double * pmax_ )
 {
+
+  // if non-null, use these dmax/dmin pmax/pmin values to update signal 
   
   if ( header.is_annotation_channel(s) ) 
     Helper::halt( "edf_t:: internal error, cannot update an annotation channel" );
@@ -3264,34 +3269,43 @@ void edf_t::update_signal( int s , const std::vector<double> * d , bool force_mi
   if ( n != header.nr * points_per_record )
     Helper::halt( "internal error in update_signal()" );
 
-  // use full digital min/max scale
-  const int16_t dmin = -32768;
-  const int16_t dmax = 32767;  
-  header.digital_min[s] = dmin;
-  header.digital_max[s] = dmax;
+  bool set_minmax = dmin_ != NULL ; 
+  
+  // use full digital min/max scale if not otherwise specified
+  int16_t dmin = -32768;
+  int16_t dmax = 32767;  
 
   double pmin = (*d)[0];
   double pmax = (*d)[0];
-  
-  for (int i=0;i<n;i++)
-    {
-      if      ( (*d)[i] < pmin ) pmin = (*d)[i];
-      else if ( (*d)[i] > pmax ) pmax = (*d)[i];
-    }
 
-  // force equal physical min/max in EDF?
-  if ( force_minmax )
+  if ( set_minmax )
     {
-      double largest = fabs( pmin );
-      if ( fabs( pmax ) > largest ) largest = fabs( pmax ) ;
-      pmin = -largest;
-      pmax =  largest;
+      pmin = *pmin_;
+      pmax = *pmax_;
+      dmin = *dmin_;
+      dmax = *dmax_;      
+    }
+  else
+    {
+      // empirically find physical min/max for this signal
+      for (int i=0;i<n;i++)
+	{
+	  if      ( (*d)[i] < pmin ) pmin = (*d)[i];
+	  else if ( (*d)[i] > pmax ) pmax = (*d)[i];
+	}
     }
   
-  // update physical min/max (but leave orig_physical_min/max unchanged)
+  //
+  // update header min/max (but leave orig_physical_min/max unchanged)
+  //
+  
+  header.digital_min[s] = dmin;
+  header.digital_max[s] = dmax;
+
   header.physical_min[s] = pmin;
   header.physical_max[s] = pmax;
 
+  
   double bv = ( pmax - pmin ) / (double)( dmax - dmin );
   double os = ( pmax / bv ) - dmax;
 
@@ -3326,14 +3340,17 @@ void edf_t::update_signal( int s , const std::vector<double> * d , bool force_mi
       for (int p=0;p<points_per_record;p++)
 	{
 	  
-	  //pdata[p] = (*d)[cnt]; 
+	  // check that does not exceed range
+	  double x = (*d)[cnt];
+	  if ( x < pmin ) x = pmin;
+	  if ( x > pmax ) x = pmax;
 	  
 	  // also need to convert to bit-value
 	  // pdata[s][j] = header->bitvalue[s] * ( header->offset[s] + d );	  
 	  // reverse digital --> physical scaling
 	  
 	  //data[p] = (*d)[cnt] / bv - os;
-	  data[p] = edf_record_t::phys2dig( (*d)[cnt] , bv , os );
+	  data[p] = edf_record_t::phys2dig( x , bv , os );
 	
 	  ++cnt;	  
 	}
@@ -3715,19 +3732,54 @@ void edf_t::rescale( const int s , const std::string & sc )
 void edf_t::minmax( signal_list_t & signals )
 {
 
-  // // get max/min for digital and physical signals over all 's' in signals
-  // if ( header.is_annotation_channel(s) ) return;
+  int16_t dmax = 0;
+  int16_t dmin = 0;
+  double pmin = 0 , pmax = 0;
+  
+  bool any_set = false;
 
-  // logger << "  forcing EDF min/max to be similar for " << header.label[s] << "\n";
+  const int ns = signals.size();
 
-  // // get all data
-  // interval_t interval = timeline.wholetrace();
-  // slice_t slice( *this , s , interval );
-  // const std::vector<double> * d = slice.pdata();
+  for (int s=0; s < ns; s++)
+    {
 
-  // // update signal (and min/max in header), where true implies
-  // // we force the same physical min/max values in the EDF header
-  // update_signal( s , d , true );
+      if ( ! header.is_data_channel( signals(s) ) ) continue;
+
+      if ( ! any_set )
+	{
+	  pmin = header.physical_min[ signals(s) ] ;
+	  pmax = header.physical_max[ signals(s) ] ;	  
+	  dmin = header.digital_min[ signals(s) ] ;
+	  dmax = header.digital_max[ signals(s) ] ;
+	  any_set = true;
+	}
+      else
+	{
+	  if ( header.physical_min[ signals(s) ] < pmin ) pmin = header.physical_min[ signals(s) ];
+	  if ( header.physical_max[ signals(s) ] > pmax ) pmax = header.physical_max[ signals(s) ];
+	  if ( header.digital_min[ signals(s) ] < dmin ) dmin = header.digital_min[ signals(s) ];
+	  if ( header.digital_max[ signals(s) ] > dmax ) dmax = header.digital_max[ signals(s) ];
+	}
+    }
+
+  //
+  // now rescale each channel to these identical EDF scales
+  //
+
+  interval_t interval = timeline.wholetrace();
+ 
+  for (int s=0; s < ns; s++)
+    {
+      if ( ! header.is_data_channel( signals(s) ) ) continue;
+      
+      slice_t slice( *this , signals(s) , interval );
+
+      const std::vector<double> * d = slice.pdata();
+      
+      update_signal( signals(s) , d , &dmin, &dmax , &pmin , &pmax );
+    }
+  
+  
 }
 
 

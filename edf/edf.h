@@ -416,7 +416,7 @@ public:
   
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
-  void update_signal( int s , const std::vector<double> * , bool force_minmax = false );
+  void update_signal( int s , const std::vector<double> * , int16_t * dmin = NULL , int16_t * dmax = NULL , double * pmin = NULL , double * pmax = NULL );
 
   void shift( int s , int tp , bool wrap = true ); 
 
