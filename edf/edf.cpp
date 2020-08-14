@@ -410,7 +410,7 @@ void edf_t::terse_summary( const bool write_signals ) const
       writer.value( "DMAX" , header.digital_max[s] );
 
       // sensitivity (unit per bit)
-      writer.value( "SENS" , ( header.physical_max[s] - header.physical_min[s] ) / (double)(  header.digital_max[s] -  header.digital_min[s] + 1 ) ); 
+      writer.value( "SENS" , ( header.physical_max[s] - header.physical_min[s] ) / (double)(  header.digital_max[s] -  header.digital_min[s] ) ); 
     }
   
   writer.unlevel( globals::signal_strat );
