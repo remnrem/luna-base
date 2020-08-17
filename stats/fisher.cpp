@@ -904,6 +904,8 @@ L310:
 	    key2[i] = -9999;
 
     } while (k >= 2);
+
+    return true;
 }
 
 /*

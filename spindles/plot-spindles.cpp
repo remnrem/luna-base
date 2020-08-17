@@ -21,17 +21,12 @@
 //    --------------------------------------------------------------------
 
 
-#include "graphics/graphics.h"
-
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "eval.h"
-
 #include "cwt/cwt.h"
 #include "spindles.h"
 #include "mspindles.h"
-
-
 
 void draw_spindles( edf_t & edf , 
 		    param_t & param , 
@@ -41,8 +36,7 @@ void draw_spindles( edf_t & edf ,
 		    const std::map<uint64_t, double> * avgmap )
 {
 
-#ifdef NO_HPDFLIB
-
+#ifndef HAS_HPDFLIB
   Helper::halt( "draw_spindles() not enabled without lhpdf" );
 #else
   
@@ -169,10 +163,6 @@ void draw_spindles( edf_t & edf ,
       // location in time
       
       std::string timestr = Helper::timestring( edf.header.starttime , actual_slice );
-
-//       std::stringstream ss;
-//       ss << " ( " << spindle_start << " - " << spindle_stop << " )";
-//       timestr.append( ss.str() );
       
       pdf.set_font_color( "black" );
       pdf.set_fontsize( 8 );

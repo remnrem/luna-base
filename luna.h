@@ -103,8 +103,6 @@
 
 #include "sstore/sstore.h"
 
-#include "graphics/graphics.h"
-
 #include <iostream>
 #include <unistd.h>
 #include <dirent.h>

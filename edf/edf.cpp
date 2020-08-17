@@ -379,9 +379,10 @@ void edf_t::terse_summary( const bool write_signals ) const
   writer.value( "TOT.DUR.SEC" , header.nr * header.record_duration );
   writer.value( "TOT.DUR.HMS" , total_duration_hms );
 
-  writer.value( "EDF_ID" , header.patient_id );
-  writer.value( "START_TIME" , header.starttime );
-  writer.value( "START_DATE" , header.startdate );
+  const std::string pat_id = Helper::trim( header.patient_id ) ;
+  writer.value( "EDF_ID" , pat_id == "" ? "." : pat_id );
+  writer.value( "START_TIME" , Helper::trim( header.starttime ) );
+  writer.value( "START_DATE" , Helper::trim( header.startdate ) );
 
   if ( write_signals ) 
     writer.value( "SIGNALS" , Helper::stringize<std::vector<std::string> >( header.label ) ); 

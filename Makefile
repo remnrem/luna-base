@@ -1,148 +1,84 @@
+
 include Makefile.inc
 
-DIRS = edf tinyxml helper timeline annot dsp miscmath spindles		\
-artifacts intervals fftw cwt defs stats graphics staging suds db ica	\
-clocs pdc sstore dsp/mtm dsp/libsamplerate
+TARGETS = luna libluna destrat behead merge
 
-EXE    = luna
-OBJS   = main.o globals.o eval.o cmddefs.o
+SRCS = globals.cpp eval.cpp cmddefs.cpp \
+        $(wildcard edf/*.cpp) \
+        $(wildcard edfz/*.cpp) \
+        $(wildcard defs/*.cpp) \
+	$(wildcard tinyxml/*.cpp) \
+	$(wildcard helper/*.cpp) \
+	$(wildcard timeline/*.cpp) \
+	$(wildcard annot/*.cpp) \
+	$(wildcard dsp/*.cpp) \
+	$(wildcard miscmath/*.cpp) \
+	$(wildcard artifacts/*.cpp) \
+	$(wildcard spindles/*.cpp) \
+	$(wildcard intervals/*.cpp) \
+	$(wildcard fftw/*.cpp) \
+	$(wildcard cwt/*.cpp) \
+        $(wildcard stats/*.cpp) \
+	$(wildcard staging/*.cpp) \
+	$(wildcard suds/*.cpp) \
+	$(wildcard db/*.cpp) \
+	$(wildcard ica/*.cpp) \
+	$(wildcard clocs/*.cpp) \
+        $(wildcard pdc/*.cpp) \
+	$(wildcard sstore/*.cpp) \
+	$(wildcard dsp/mtm/*.cpp) \
+	$(wildcard dsp/libsamplerate/*.cpp)
 
-OBJLIBS = libdefs.a libedf.a libtinyxml.a libhelper.a libtimeline.a	\
-libannot.a libdsp.a libmiscmath.a libspindles.a libartifacts.a		\
-libintervals.a libfftwrap.a libcwt.a libstats.a libgraphics.a		\
-libstaging.a libdb.a libica.a libclocs.a libpdc.a libsstore.a libmtm.a	\
-libsrate.a libedfz.a libsuds.a
+CSRCS = $(wildcard db/*.c) \
+        $(wildcard dsp/libsamplerate/*.c)
 
-LIBS = -L. -lspindles -lannot -ldefs -lartifacts -ledf -ledfz -lhelper	\
--ltimeline -lstaging -lsuds -ldsp -lfftwrap -lmtm -lmiscmath -lintervals	\
--ltinyxml -lcwt -lclocs -lpdc -lstats -lgraphics  -ldb -lsstore -lica	\
--lsrate -lfftw3 -lz
+OBJS = $(SRCS:.cpp=.o) $(CSRCS:.c=.o) 
 
-ifndef STATIC
-all : luna sharedlib utils
-endif
+DEPS := $(OBJS:.o=.d)
 
-ifdef STATIC
-all : static utils
-endif
+#
+# targets
+#
 
-luna : main.o globals.o eval.o cmddefs.o $(OBJLIBS)
-	$(ECHO) $(LD) $(LDFLAGS) -o $(EXE) $(OBJS) $(LIBS)
-	$(LD) $(LDFLAGS) -o luna $(OBJS) $(LIBS)
+all : $(TARGETS)
 
-static : main.o globals.o eval.o cmddefs.o $(OBJLIBS)
-	g++ -static -static-libgcc -static-libstdc++ -L/usr/local/lib	\
-	-o luna main.o globals.o eval.o cmddefs.o libspindles.a 	\
-	libartifacts.a libtimeline.a libannot.a libedf.a		\
-	libintervals.a libcwt.a libdsp.a libstaging.a libsuds.a libclocs.a	\
-	libpdc.a libmtm.a libdefs.a libhelper.a		\
-	libfftwrap.a libgraphics.a libmiscmath.a libstats.a libsrate.a	\
-	libtinyxml.a libdb.a libsstore.a libica.a $(FFTW)/lib/libfftw3.a
+luna: main.o $(OBJS)
+	$(CXX) -o $@ $^ $(LDFLAGS)
 
-sharedlib : globals.o eval.o cmddefs.o $(OBJLIBS)
+libluna: libluna.a $(SHARED_LIB)
+
+# header dependencies
+
+-include $(DEPS)
+
+# shared library (libluna)
+
 ifeq ($(ARCH),MAC)
-	$(ECHO) "building libluna.dylib..."
-
-	$(LD) -dynamiclib $(LDFLAGS) -o libluna.dylib eval.o cmddefs.o globals.o  -Wl,-all_load *.a  -lfftw3 -lz
-else
-	$(ECHO) "building libluna.so..."
-	$(LD) -shared      $(LDFLAGS) -o libluna.so eval.o cmddefs.o globals.o -Wl,--whole-archive *.a -Wl,--no-whole-archive
+$(SHARED_LIB) : $(OBJS)
+	$(LD) -dynamiclib $(LDFLAGS) -o $(SHARED_LIB)  $(OBJS)
+else ifeq ($(ARCH),LINUX)
+$(SHARED_LIB) : $(OBJS)
+	$(LD) -shared $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
 endif
 
-libedf.a : force_look
-	cd edf; $(MAKE) $(MFLAGS)
+# onjects
+libluna.a : $(OBJS)
+	$(AR) $(ARFLAGS) $@ $?
+	$(RANLIB) $@
 
-libdb.a : force_look
-	cd db; $(MAKE) $(MFLAGS)
+static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
+	$(CXX) -static -static-libgcc -static-libstdc++ -o luna-static $^ 
 
-libsstore.a : force_look
-	cd sstore; $(MAKE) $(MFLAGS)
+destrat: utils/reader.o libluna.a
+	$(CXX) -o $@ $^ -L. -lz 
 
-libgraphics.a : force_look
-	cd graphics; $(MAKE) $(MFLAGS)
+behead: utils/behead.o
+	$(CXX) -o $@ $^ 
 
-libstaging.a : force_look
-	cd staging; $(MAKE) $(MFLAGS)
+merge: utils/merge.o utils/merge-helpers.o
+	$(CXX) -o $@ $^ 
 
-libsuds.a : force_look
-	cd suds; $(MAKE) $(MFLAGS)
+.PHONY: clean
 
-libdefs.a : force_look
-	cd defs; $(MAKE) $(MFLAGS)
-
-libstats.a : force_look
-	cd stats; $(MAKE) $(MFLAGS)
-
-#liblwprep.a : force_look
-#	cd lwprep; $(MAKE) $(MFLAGS)
-
-libedfz.a : force_look
-	cd edfz; $(MAKE) $(MFLAGS)
-
-libfftwrap.a : force_look
-	cd fftw; $(MAKE) $(MFLAGS)
-
-libdsp.a : force_look
-	cd dsp; $(MAKE) $(MFLAGS)
-
-libmtm.a : force_look
-	cd dsp/mtm; $(MAKE) $(MFLAGS)
-
-libsrate.a : force_look
-	cd dsp/libsamplerate; $(MAKE) $(MFLAGS)
-
-libcwt.a : force_look
-	cd cwt; $(MAKE) $(MFLAGS)
-
-libpdc.a : force_look
-	cd pdc; $(MAKE) $(MFLAGS)
-
-libica.a : force_look
-	cd ica; $(MAKE) $(MFLAGS)
-
-libclocs.a : force_look
-	cd clocs; $(MAKE) $(MFLAGS)
-
-libartifacts.a : force_look
-	cd artifacts; $(MAKE) $(MFLAGS)
-
-libspindles.a : force_look
-	cd spindles; $(MAKE) $(MFLAGS)
-
-libtimeline.a : force_look
-	cd timeline; $(MAKE) $(MFLAGS)
-
-libmiscmath.a : force_look
-	cd miscmath; $(MAKE) $(MFLAGS)
-
-libannot.a : force_look
-	cd annot; $(MAKE) $(MFLAGS)
-
-libintervals.a : force_look
-	cd intervals; $(MAKE) $(MFLAGS)
-
-libhelper.a : force_look
-	cd helper; $(MAKE) $(MFLAGS)
-
-libtinyxml.a : force_look
-	cd tinyxml; $(MAKE) $(MFLAGS)
-
-utils : force_look $(OBJLIBS)
-	cd utils && $(MAKE)
-
-clean :
-	$(ECHO) cleaning up in .
-	-$(RM) -f $(OBJS)
-	-$(RM) -f *~
-	-for d in $(DIRS); do (cd $$d; $(MAKE) clean ); done
-	cd utils && $(MAKE) clean
-
-cleanall :
-	$(ECHO) cleaning up in .
-	-$(RM) -f $(EXE) $(OBJS) $(OBJLIBS)
-	-$(RM) -f *~
-	-for d in $(DIRS); do (cd $$d; $(MAKE) clean ); done
-	cd utils && $(MAKE) clean
-
-force_look :
-	true
+clean:
+	-$(RM) $(TARGETS) libluna.dylib libluna.so $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS)) 

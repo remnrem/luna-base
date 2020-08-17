@@ -141,9 +141,9 @@ void cmddefs_t::init()
   add_var( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
   add_var( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" );
   add_var( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
-  add_var( "HEADERS" , "" , "REC.DUR" , "Duration of each record (seconds)" );
-  add_var( "HEADERS" , "" , "TOT.DUR.SEC" , "Total duration of EDF (seconds)" );
-  add_var( "HEADERS" , "" , "TOT.DUR.HMS" , "Total duration of EDF (hh:mm:ss string)" );
+  add_var( "HEADERS" , "" , "REC_DUR" , "Duration of each record (seconds)" );
+  add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Total duration of EDF (seconds)" );
+  add_var( "HEADERS" , "" , "TOT_DUR_HMS" , "Total duration of EDF (hh:mm:ss string)" );
 
   add_table( "HEADERS" , "CH" , "Per-channel header information" );
   add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
@@ -152,7 +152,13 @@ void cmddefs_t::init()
   add_var( "HEADERS" , "CH" , "PMAX", "Physical min" );
   add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
   add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
+  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
 
+  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+
+  
   //
   // ALIASES
   //
@@ -198,9 +204,9 @@ void cmddefs_t::init()
 
   add_var( "STATS" , "CH" , "NE" ,  "Total number of epochs in record [epoch]" );
   add_var( "STATS" , "CH" , "NE1" , "Number of unmasked epochs actually used in calculations [epoch]" );
-  add_var( "STATS" , "CH" , "MEDIAN.MEAN" , "Median of all per-epoch means [epoch]" );
-  add_var( "STATS" , "CH" , "MEDIAN.MEDIAN" , "Median of all per-epoch medians [epoch]" );
-  add_var( "STATS" , "CH" , "MEDIAN.RMS" , "Median of all per-epoch RMS [epoch]" );
+  add_var( "STATS" , "CH" , "MEDIAN_MEAN" , "Median of all per-epoch means [epoch]" );
+  add_var( "STATS" , "CH" , "MEDIAN_MEDIAN" , "Median of all per-epoch medians [epoch]" );
+  add_var( "STATS" , "CH" , "MEDIAN_RMS" , "Median of all per-epoch RMS [epoch]" );
 
   add_table( "STATS" , "CH,E" , "Per-epoch, per-channel statistics for unmasked epochs only" );
   add_var( "STATS" , "CH,E" , "MIN" , "Signal minimum (from data, not EDF header)" );

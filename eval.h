@@ -115,7 +115,7 @@ class cmd_t
   
   void reset() ;
 
-  void define_channel_type_variables( edf_t & );
+  static void define_channel_type_variables( edf_t & );
   
   void replace_wildcards( const std::string & id );
 

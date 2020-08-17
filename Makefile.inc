@@ -5,16 +5,14 @@
 
 ARCH=LINUX
 
-
-
 ##
 ## Basic C/C++ compilation flags
 ## 
 
 CXX = g++
 
-CXXFLAGS = -O2 -I. -I.. -Wno-logical-op-parentheses -Wno-deprecated-register  -std=gnu++11
-
+#CXXFLAGS = -O2 -I. -I.. -Wno-logical-op-parentheses -Wno-deprecated-register  -std=gnu++11
+CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. -Winvalid-source-encoding -Wlogical-op-parentheses
 
 ##
 ## If dependencies (FFTW, if needed, and optionally, libhpdf and libpng) are installed locally, 
@@ -24,6 +22,10 @@ CXXFLAGS = -O2 -I. -I.. -Wno-logical-op-parentheses -Wno-deprecated-register  -s
 DEP_INCLUDES = 
 DEP_LIB = 
 
+ifdef ZLIB
+DEP_INCLUDES += -I$(ZLIB)/include
+DEP_LIB += -L$(ZLIB)/lib
+endif
 
 ifdef FFTW
 DEP_INCLUDES += -I$(FFTW)/include
@@ -33,19 +35,6 @@ DEP_LIB	+= -Wl,-rpath,$(FFTW)/lib
 endif
 endif
 
-ifdef HPDF
-DEP_INCLUDES += -I$(HPDF)/include
-DEP_LIB = -L$(HPDF)/lib
-else
-CXXFLAGS += -DNO_HPDFLIB 
-endif
-
-ifdef LIBPNG
-DEP_INCLUDES += -I$(LIBPNG)/include
-DEP_LIB = -L$(LIBPNG)/lib
-else
-CXXFLAGS += -DNO_HPDFLIB 
-endif
 
 ##
 ## Compiler flags
@@ -65,13 +54,12 @@ CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 ##
 
 LD = g++ 
-LDFLAGS = $(DEP_LIB) -L. -L..
+
+LDFLAGS = $(DEP_LIB) -L. -L.. -lfftw3 -lz
 
 ifndef WINDOWS
 LDFLAGS += -L/usr/local/lib
 endif
-
-
 
 
 ##
@@ -90,10 +78,16 @@ endif
 ##
 
 ifndef STATIC
-CXXFLAGS += -fPIC
-CFLAGS += -fPIC
-LDFLAGS += -fPIC
+CXXFLAGS+=-fPIC
+CFLAGS+=-fPIC
+LDFLAGS+=-fPIC
 endif
+
+##
+## Shared library name
+##
+
+SHARED_LIB=libluna.dylib
 
 ##
 ## Misc
@@ -106,10 +100,8 @@ export LD
 export LDFLAGS
 
 AR = ar
-ARFLAGS =
+ARFLAGS = rv
 RANLIB= ranlib
 RM = rm -f
 ECHO = echo
 SHELL = /bin/sh
-
-.SILENT :

@@ -212,7 +212,7 @@ namespace MiscMath
   
   typedef double elem_type ;
   
-#define ELEM_SWAP(a,b) { register elem_type t=(a);(a)=(b);(b)=t; }
+#define ELEM_SWAP(a,b) { elem_type t=(a);(a)=(b);(b)=t; }
 
 
 /*---------------------------------------------------------------------------
