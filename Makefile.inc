@@ -11,8 +11,7 @@ ARCH=LINUX
 
 CXX = g++
 
-#CXXFLAGS = -O2 -I. -I.. -Wno-logical-op-parentheses -Wno-deprecated-register  -std=gnu++11
-CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. -Winvalid-source-encoding -Wlogical-op-parentheses
+CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. 
 
 ##
 ## If dependencies (FFTW, if needed, and optionally, libhpdf and libpng) are installed locally, 
