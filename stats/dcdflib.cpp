@@ -6090,7 +6090,7 @@ S90:
     qok = 1;
     return;
 S100:
-    qup = qincr && yy < 0.0e0 || !qincr && yy > 0.0e0;
+    qup = ( qincr && yy < 0.0e0 ) || ( !qincr && yy > 0.0e0 ) ;
 /*
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
      HANDLE CASE IN WHICH WE MUST STEP HIGHER
@@ -6114,7 +6114,7 @@ S120:
     goto S300;
 S130:
     yy = *fx;
-    qbdd = qincr && yy >= 0.0e0 || !qincr && yy <= 0.0e0;
+    qbdd = ( qincr && yy >= 0.0e0 ) || ( !qincr && yy <= 0.0e0 ) ;
     qlim = xub >= big;
     qcond = qbdd || qlim;
     if(qcond) goto S140;
@@ -6155,7 +6155,7 @@ S190:
     goto S300;
 S200:
     yy = *fx;
-    qbdd = qincr && yy <= 0.0e0 || !qincr && yy >= 0.0e0;
+    qbdd = ( qincr && yy <= 0.0e0 ) || ( !qincr && yy >= 0.0e0 ) ;
     qlim = xlb <= small;
     qcond = qbdd || qlim;
     if(qcond) goto S210;
