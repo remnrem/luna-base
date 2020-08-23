@@ -350,6 +350,8 @@ int main(int argc , char ** argv )
 
 	      // an 'include' 
 	      std::string filename = argv[i];
+
+	      if ( filename.size() == 1 ) Helper::halt( "no include file specified after @" );
 	      
 	      // expand() expands out any ~/ notation to full path
 	      filename = Helper::expand( filename.substr(1).c_str() );
