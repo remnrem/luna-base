@@ -84,7 +84,7 @@ struct slow_wave_t
   }
   
   // start --> mid
-  double dur1() {
+  double dur1() const {
     return ( zero_crossing_tp - interval_tp.start ) * globals::tp_duration ;    
   }
   
