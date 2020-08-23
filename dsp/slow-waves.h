@@ -79,6 +79,20 @@ struct slow_wave_t
   } 
 
 
+  double dur() const {
+    return ( interval_tp.stop - interval_tp.start ) * globals::tp_duration ;
+  }
+  
+  // start --> mid
+  double dur1() {
+    return ( zero_crossing_tp - interval_tp.start ) * globals::tp_duration ;    
+  }
+  
+  // mid --> stop
+  double dur2() const {
+    return ( interval_tp.stop - zero_crossing_tp ) * globals::tp_duration ;
+  }  
+  
   std::string print() const 
   {
     std::stringstream ss;

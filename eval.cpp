@@ -3005,21 +3005,10 @@ void cmd_t::register_specials()
   specials.insert( "ch-clear" ) ;
 
   // 14 channel types:: automatic, but okay to overwrite...  
-  // specials.insert( "eeg"); 
-  // specials.insert( "emg");
-  // specials.insert( "leg");
-  // specials.insert( "eog");
-  // specials.insert( "ecg");
-  // specials.insert( "generic");
-  // specials.insert( "airflow");
-  // specials.insert( "effort");
-  // specials.insert( "oxygen");
-  // specials.insert( "light");
-  // specials.insert( "snore");
-  // specials.insert( "hr");
-  // specials.insert( "ignore");
-  // specials.insert( "hr");
+  // e.g. $eeg $emg $leg etc 
 
+  specials.insert( "spaces" );
+  specials.insert( "keep-spaces" );  
   specials.insert( "silent" ) ;
   specials.insert( "verbose" ) ;
   specials.insert( "sig" ) ;

@@ -6,14 +6,6 @@
 ARCH=LINUX
 
 ##
-## Basic C/C++ compilation flags
-## 
-
-CXX = g++
-
-CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. 
-
-##
 ## If dependencies (FFTW, if needed, and optionally, libhpdf and libpng) are installed locally, 
 ## the DEP variable will be set on the command line
 ##
@@ -39,10 +31,20 @@ endif
 ## Compiler flags
 ##
 
+CXX = g++
+
+CC = gcc
+
+CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I..
+
 CXXFLAGS += $(DEP_INCLUDES) 
 
 ifeq ($(ARCH),MAC)
 CXXFLAGS += -I/usr/local/include
+endif
+
+ifeq ($(ARCH),WINDOWS)
+CXXFLAGS += -DWINDOWS
 endif
 
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
@@ -54,12 +56,15 @@ CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
 LD = g++ 
 
-LDFLAGS = $(DEP_LIB) -L. -L.. -lfftw3 -lz
+LDFLAGS = $(DEP_LIB) -L. -L.. 
 
 ifndef WINDOWS
-LDFLAGS += -L/usr/local/lib
+LDFLAGS += -L/usr/local/lib -lfftw3 -lz
 endif
 
+ifdef WINDOWS
+LDFLAGS += -L/usr/local/lib -lfftw3-3 -lz
+endif
 
 ##
 ## Static binary: 'make static STATIC=1', otherwise set PIC code
