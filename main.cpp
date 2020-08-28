@@ -24,7 +24,6 @@
 
 #include "main.h"
 
-// for dummy routines below
 #include "helper/token.h"
 #include "helper/token-eval.h"
 #include "cwt/cwt.h"
