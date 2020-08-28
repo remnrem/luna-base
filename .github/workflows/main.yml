@@ -84,7 +84,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Win_Release ${{ github.ref }}
+          release_name: Luna_Release ${{ github.ref }}
           draft: false
           prerelease: false
       - uses: actions/download-artifact@v2
