@@ -1,7 +1,9 @@
-
 include Makefile.inc
-
-TARGETS = luna libluna destrat behead merge
+ifeq ($(ARCH),WINDOWS)
+  TARGETS = luna destrat behead
+else
+  TARGETS = luna libluna destrat behead merge
+endif
 
 SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard edf/*.cpp) \
@@ -81,4 +83,4 @@ merge: utils/merge.o utils/merge-helpers.o
 .PHONY: clean
 
 clean:
-	-$(RM) $(TARGETS) libluna.dylib libluna.so main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS)) 
+	-$(RM) $(TARGETS) libluna.dylib libluna.so main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
