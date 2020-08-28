@@ -37,7 +37,7 @@ jobs:
           wget http://www.fftw.org/fftw-3.3.8.tar.gz
           tar -xzvf fftw-3.3.8.tar.gz
           cd fftw-3.3.8
-          ./configure --enable-shared --prefix=${HOME}/fftw-3.3.8/
+          ./configure --prefix=${HOME}/fftw-3.3.8/
           make
           make install
           cd ${GITHUB_WORKSPACE}
