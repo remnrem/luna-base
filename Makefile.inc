@@ -63,7 +63,7 @@ LDFLAGS += -L/usr/local/lib -lfftw3 -lz
 endif
 
 ifdef WINDOWS
-LDFLAGS += -L/usr/local/lib -lfftw3-3 -lz
+LDFLAGS += -lfftw3-3 -lz -static -static-libgcc -static-libstdc++
 endif
 
 ##
