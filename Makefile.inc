@@ -44,7 +44,7 @@ CXXFLAGS += -I/usr/local/include
 endif
 
 ifeq ($(ARCH),WINDOWS)
-CXXFLAGS += -DWINDOWS
+CXXFLAGS += -DWINDOWS 
 endif
 
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
@@ -59,11 +59,11 @@ LD = g++
 LDFLAGS = $(DEP_LIB) -L. -L.. 
 
 ifndef WINDOWS
-LDFLAGS += -L/usr/local/lib -lfftw3 -lz
+LDFLAGS += -L/usr/local/lib -lfftw3 -lz 
 endif
 
 ifdef WINDOWS
-LDFLAGS += -L/usr/local/lib -lfftw3-3 -lz
+LDFLAGS += -lfftw3-3 -lz -static -static-libgcc -static-libstdc++
 endif
 
 ##
