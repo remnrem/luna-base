@@ -585,8 +585,9 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
       // trim spaces
       
-      // remove spaces?
-      if ( globals::replace_channel_spaces )
+      // remove spaces? (not for special EDF Annotations channel)
+      bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
+      if ( globals::replace_channel_spaces && ! annotation )
 	l = Helper::search_replace( l , ' ' , globals::space_replacement );
 	   
       // does this exist already? if so, uniqify 
@@ -1082,8 +1083,8 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
       std::string line;
 
       if ( compressed )
-	{
-	  Helper::safe_getline( ZIN1 , line );
+	{	  
+	  Helper::safe_getline( ZIN1 , line );	  
 	  if ( ZIN1.eof() ) break;
 	}
       else
@@ -4307,6 +4308,8 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  // at this point, rule was found, so quit
 	  //
 
+	  done = true;
+	  
 	  break;
 
 	} // next rule for this CS

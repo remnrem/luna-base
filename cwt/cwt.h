@@ -76,6 +76,12 @@ class CWT {
     
 
   }
+
+
+  static double pick_fwhm( double f , double m = -0.7316762 , double c = 1.1022791 )
+  {
+    return exp( log(f) * m + c );
+  }
   
   void set_sampling_rate( const double sr ) 
   { 

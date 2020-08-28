@@ -82,6 +82,8 @@ void param_t::update( const std::string & id , const std::string & wc )
       bool changed = false;
 
       // 1. replace indiv wildcard (e.g. ^) with this person's ID
+      //    nb.  this will also happen via ${id} which is a special, automatic individual-level
+      //         variable
       
       while ( v.find( wc ) != std::string::npos )
 	{
@@ -2451,13 +2453,28 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // swap spaces
   if ( Helper::iequals( tok0 , "spaces" ) )
     {
-      globals::replace_channel_spaces = true;
+      // these are T by default, so leave as is
+      // globals::replace_channel_spaces = true;
+      // globals::replace_annot_spaces = true;
       if ( tok1.size() != 1 ) Helper::halt( "expecting single character after spaces" );
       globals::space_replacement = tok1[0];
     }
 
   // keep spaces
   if ( Helper::iequals( tok0 , "keep-spaces" ) )
+    {
+      globals::replace_channel_spaces = false;
+      globals::replace_annot_spaces = false;
+    }
+
+  // keep spaces (annots only) 
+  if ( Helper::iequals( tok0 , "keep-annot-spaces" ) )
+    {
+      globals::replace_annot_spaces = false;
+    }
+  
+  // keep spaces (annots only) 
+  if ( Helper::iequals( tok0 , "keep-channel-spaces" ) )
     {
       globals::replace_channel_spaces = false;
     }
@@ -2936,7 +2953,7 @@ void cmd_t::attach_ivars( const std::string & file )
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not find " + filename );
       
-      std::cout << "reading from " << filename << "\n";
+      //std::cout << "reading from " << filename << "\n";
       
       std::ifstream IN1( filename.c_str() , std::ios::in );
       bool header = true ; 
@@ -2979,7 +2996,7 @@ void cmd_t::attach_ivars( const std::string & file )
 		{
 		  if ( c == idcol ) continue;		  
 		  cmd_t::ivars[ tok[ idcol ] ][ head[ c ] ] = tok[c] ;		  
-		  std::cout << "setting: " << tok[ idcol ] << " " << head[ c ]  << "  " << tok[c]  << "\n";
+		  //std::cout << "setting: " << tok[ idcol ] << " " << head[ c ]  << "  " << tok[c]  << "\n";
 		  
 		}
 	      
@@ -3008,8 +3025,11 @@ void cmd_t::register_specials()
   // e.g. $eeg $emg $leg etc 
 
   specials.insert( "spaces" );
-  specials.insert( "keep-spaces" );  
+  specials.insert( "keep-spaces" );
+  specials.insert( "keep-annot-spaces" );
+  specials.insert( "keep-channel-spaces" );  
   specials.insert( "silent" ) ;
+  specials.insert( "id" );
   specials.insert( "verbose" ) ;
   specials.insert( "sig" ) ;
   specials.insert( "vars" ) ;

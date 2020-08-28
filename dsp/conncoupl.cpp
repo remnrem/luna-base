@@ -82,7 +82,7 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
   // use 30 seconds if not otherwise specified
   const double epoch_sec = param.has( "epoch" ) ? edf.timeline.epoch_length() : 30 ;
 
-
+  
 
   //
   // TF-decomposition approach
@@ -146,7 +146,10 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
       double ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.05;
       
       double tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 2 ;
-            
+
+      // output
+      bool epoch_level_output = ! param.has( "no-epoch-output" );
+      
       // do it
       
       conncoupl_t cc( edf , signals , Fs[0] ,
@@ -154,7 +157,8 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
 		      ripple, tw , 
 		      nreps ,
 		      epoch_sec ,
-		      do_pac , do_xch , do_xpac );
+		      do_pac , do_xch , do_xpac ,
+		      epoch_level_output );
 
 
     }
@@ -222,12 +226,29 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
       if ( param.has( "num2" ) && ( param.has( "fc2" ) || param.has( "fwhm2" ) ) )
 	Helper::halt( "cannot use fc2/fwhm2 and num2: use fc-range2/fwhm-range2" ) ;
       
-      if ( fc.size() == 0 || fc.size() != fwhm.size() ) Helper::halt( "bad specification of fc/fwhm" );
+      if ( fc.size() == 0 ) Helper::halt( "bad specification of fc/fwhm" );
+
+      // if FWHM not specified at at, use defaiults
+      if ( fwhm.size() == 0 )
+	{
+	  fwhm.resize( fc.size() );
+	  for (int i=0;i<fc.size();i++) fwhm[i] = CWT::pick_fwhm( fc[i] );
+	}
+
+      if ( fwhm2.size() == 0 )
+	{
+          fwhm2.resize( fc2.size() );
+          for (int i=0;i<fc2.size();i++) fwhm2[i] = CWT::pick_fwhm( fc2[i] );
+        }
+            
+      if ( fc.size() != fwhm.size() ) Helper::halt( "bad specification of fc/fwhm" );
       if ( fc2.size() != fwhm2.size() ) Helper::halt( "bad specification of fc2/fwhm2" );
 
       // wavelet duration (in seconds)
       double tline = param.has( "length" ) ? param.requires_dbl( "length" ) : 20 ; 
-            
+
+      // 
+      
       conncoupl_t cc( edf , signals , Fs[0] ,
 		      fc , fwhm , num , 
 		      fc2 , fwhm2 , num2 ,
@@ -236,7 +257,8 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
 		      epoch_sec ,
 		      param.has( "pac" ) ,
 		      param.has( "xch" ) , 
-		      param.has( "xpac" ) ,
+		      param.has( "xpac" ) ,		      
+		      ! param.has( "no-epoch-output") ,
 		      param.has( "dump-wavelets" ) 		      
 		      );
 
@@ -264,9 +286,9 @@ void conncoupl_t::setup()
   
   //
   // contrats to report:
-  // i) CFC-within channel (PAC)
+  // i) CFC-within channel (PAC) [ but only for f1 < f2 ]
   // ii) cross-channel, within frequency
-  // iii) cross-channel, cross-frequency (xpac)
+  // iii) cross-channel, cross-frequency (xpac) [ but only for f1 < f2 ] 
   //
 
   if ( do_xch )
@@ -306,18 +328,24 @@ void conncoupl_t::setup()
 	    for (int fi1=0;fi1<fint1.size();fi1++)
 	      for (int fi2=0;fi2<fint2.size();fi2++)
 		{
-		  s1.push_back( si1 ); s2.push_back( si1 );
-		  f1.push_back( str( fint1[fi2] ) ); f2.push_back( str( fint2[fi2] ) ); 
-		  cfc.push_back( true ); xch.push_back( false );
+		  if ( fint1[fi1] < fint2[fi2] )
+		    {
+		      s1.push_back( si1 ); s2.push_back( si1 );
+		      f1.push_back( str( fint1[fi1] ) ); f2.push_back( str( fint2[fi2] ) ); 
+		      cfc.push_back( true ); xch.push_back( false );
+		    }
 		}
 	  else
 	    for (int fi1=0;fi1<fc1.size();fi1++)
 	      for (int fi2=0;fi2<fc2.size();fi2++)
 		{
-		  s1.push_back( si1 ); s2.push_back( si1 );
-		  f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 
-		  disp_f1.push_back(  fc1[fi1] ) ; disp_f2.push_back(  fc2[fi2] ) ; 
-		  cfc.push_back( true ); xch.push_back( false );
+		  if ( fc1[fi1] < fc2[fi2] )
+		    {
+		      s1.push_back( si1 ); s2.push_back( si1 );
+		      f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 
+		      disp_f1.push_back(  fc1[fi1] ) ; disp_f2.push_back(  fc2[fi2] ) ; 
+		      cfc.push_back( true ); xch.push_back( false );
+		    }
 		}
 	}
     }
@@ -333,20 +361,25 @@ void conncoupl_t::setup()
 	      for (int fi1=0;fi1<fint1.size();fi1++)
 		for (int fi2=0;fi2<fint2.size();fi2++)
 		  {
-		    s1.push_back( si1 ); s2.push_back( si2 );
-		    f1.push_back( str( fint1[fi2] ) ); f2.push_back( str( fint2[fi2] ) ); 
-		    cfc.push_back( true ); xch.push_back( true );
+		    if ( fint1[fi2] < fint2[fi2] )
+		      {
+			s1.push_back( si1 ); s2.push_back( si2 );
+			f1.push_back( str( fint1[fi1] ) ); f2.push_back( str( fint2[fi2] ) ); 
+			cfc.push_back( true ); xch.push_back( true );
+		      }
 		  }
 	    else
 	      for (int fi1=0;fi1<fc1.size();fi1++)
 		for (int fi2=0;fi2<fc2.size();fi2++)
 		  {
-		    s1.push_back( si1 ); s2.push_back( si2 );
-		    f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 
-		    disp_f1.push_back(  fc1[fi1] ) ; disp_f2.push_back(  fc2[fi2] ) ; 
-		    cfc.push_back( true ); xch.push_back( true );
+		    if ( fc1[fi1] <  fc2[fi2] )
+		      {
+			s1.push_back( si1 ); s2.push_back( si2 );
+			f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 
+			disp_f1.push_back(  fc1[fi1] ) ; disp_f2.push_back(  fc2[fi2] ) ; 
+			cfc.push_back( true ); xch.push_back( true );
+		      }
 		  }
-	    
 	  }
     }
 
@@ -602,7 +635,7 @@ void conncoupl_t::calc()
 
   results[ "wPLI" ] = conncoupl_res_t( ne , nt );
   results[ "dPAC" ] = conncoupl_res_t( ne , nt );
-  results[ "dPAC_PHASE" ] = conncoupl_res_t( ne , nt );
+  //  results[ "dPAC_PHASE" ] = conncoupl_res_t( ne , nt );
   
   
   //
@@ -698,10 +731,10 @@ void conncoupl_t::calc()
 	      dPAC /= dcomp( es_pts , 0 );
 
 	      double obs_dPAC = abs( dPAC );
-	      double obs_dPAC_PHASE = arg( dPAC );
+	      //	      double obs_dPAC_PHASE = arg( dPAC );
 
 	      results[ "dPAC" ].stats( e , t ) = obs_dPAC;
-	      results[ "dPAC_PHASE" ].stats( e , t ) = obs_dPAC_PHASE;
+	      // results[ "dPAC_PHASE" ].stats( e , t ) = obs_dPAC_PHASE;
 
 	      //
 	      // Surrogates
@@ -733,9 +766,9 @@ void conncoupl_t::calc()
 		  double sd   = MiscMath::sdev( null_stats , mean );
 		  results[ "dPAC" ].emp_z( e , t ) = ( obs_dPAC - mean ) / sd;
 		  
-		  mean = MiscMath::mean( null_stats2 );
-		  sd   = MiscMath::sdev( null_stats2 , mean );
-		  results[ "dPAC_PHASE" ].emp_z( e , t ) = ( obs_dPAC_PHASE - mean ) / sd;
+		  // mean = MiscMath::mean( null_stats2 );
+		  // sd   = MiscMath::sdev( null_stats2 , mean );
+		  // results[ "dPAC_PHASE" ].emp_z( e , t ) = ( obs_dPAC_PHASE - mean ) / sd;
 		  
 		}
 	      
@@ -946,7 +979,7 @@ void conncoupl_t::calc()
       writer.value( "CFC" , cfc[t] );
       writer.value( "XCH" , xch[t] );      
 
-      if ( xch[t] ) {	
+      if ( xch[t] & ! cfc[t] ) {	
 	writer.value( "wPLI" , mean_s_wPLI[t] );
 	if ( nreps ) writer.value( "wPLI_Z" , mean_z_wPLI[t] );
       }
@@ -967,50 +1000,54 @@ void conncoupl_t::calc()
   // epoch level stats
   //
 
-  for (int e=0;e<ne;e++)
-    for (int t=0;t<nt;t++)
-      {
-	writer.epoch( edf.timeline.display_epoch( e ) );
-
-	writer.level( signals.label( s1[t] ) , "CH1" );
-	writer.level( signals.label( s2[t] ) , "CH2" );
-
-	if ( use_hilbert )
+  if ( epoch_level_output )
+    {
+      
+      for (int e=0;e<ne;e++)
+	for (int t=0;t<nt;t++)
 	  {
-	    writer.level( f1[t] , "F1" );
-	    writer.level( f2[t] , "F2" );	
-	  }
-	else
-	  {
-	    writer.level( disp_f1[t] , "F1" );
-	    writer.level( disp_f2[t] , "F2" );	
-	  }
-	
-	if ( xch[t] ) 
-	  {
-	    writer.value( "wPLI" , results["wPLI"].stats(e,t) );
-	    if ( nreps )
-	      writer.value( "wPLI_Z" , results["wPLI"].emp_z(e,t) );
-	  }
-	
-	if ( cfc[t] ) 
-	  {
-	    writer.value( "dPAC" , results["dPAC"].stats(e,t) );
-	    writer.value( "dPAC_PHASE" , results["dPAC_PHASE"].stats(e,t) );
-	    if ( nreps )
+	    writer.epoch( edf.timeline.display_epoch( e ) );
+	    
+	    writer.level( signals.label( s1[t] ) , "CH1" );
+	    writer.level( signals.label( s2[t] ) , "CH2" );
+	    
+	    if ( use_hilbert )
 	      {
-		writer.value( "dPAC_Z" , results["dPAC"].emp_z(e,t) );
-		writer.value( "dPAC_Z_PHASE" , results["dPAC_PHASE"].emp_z(e,t) );
+		writer.level( f1[t] , "F1" );
+		writer.level( f2[t] , "F2" );	
+	      }
+	    else
+	      {
+		writer.level( disp_f1[t] , "F1" );
+		writer.level( disp_f2[t] , "F2" );	
+	      }
+	    
+	    if ( xch[t] ) 
+	      {
+		writer.value( "wPLI" , results["wPLI"].stats(e,t) );
+		if ( nreps )
+		  writer.value( "wPLI_Z" , results["wPLI"].emp_z(e,t) );
+	      }
+	    
+	    if ( cfc[t] ) 
+	      {
+		writer.value( "dPAC" , results["dPAC"].stats(e,t) );
+		//	    writer.value( "dPAC_PHASE" , results["dPAC_PHASE"].stats(e,t) );
+		if ( nreps )
+		  {
+		    writer.value( "dPAC_Z" , results["dPAC"].emp_z(e,t) );
+		    //writer.value( "dPAC_Z_PHASE" , results["dPAC_PHASE"].emp_z(e,t) );
+		  }
 	      }
 	  }
-      }
+      
+      writer.unepoch();
+      writer.unlevel( "CH1" );
+      writer.unlevel( "CH2" );
+      writer.unlevel( "F1" );
+      writer.unlevel( "F2" );
+    }
   
-  writer.unepoch();
-  writer.unlevel( "CH1" );
-  writer.unlevel( "CH2" );
-  writer.unlevel( "F1" );
-  writer.unlevel( "F2" );
-
   
   //
   // All done

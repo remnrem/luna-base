@@ -64,6 +64,7 @@ sleep_stage_label_t globals::sleep_stage;
 sleep_stage_label_lookup_t globals::sleep_stage_labels;
 
 bool globals::replace_channel_spaces;
+bool globals::replace_annot_spaces;
 char globals::space_replacement;
 
 char globals::folder_delimiter;
@@ -164,7 +165,7 @@ void globals::init_defs()
   
   version = "v0.24.1";
   
-  date    = "17-Aug-2020";
+  date    = "28-Aug-2020";
   
 
   //
@@ -206,6 +207,8 @@ void globals::init_defs()
 
   replace_channel_spaces = true;
 
+  replace_annot_spaces = true;
+   
   space_replacement = '_';
 
 
