@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           mingw32-make.exe ARCH=WINDOWS 
-          zip win-luna.zip *.exe
+          zip win-luna.zip *.exe /mingw64/bin/libfftw3-3.dll
       - uses: actions/upload-artifact@v2
         with:
           name: win-luna.zip
