@@ -3,7 +3,9 @@
 ## ARCH is LINUX, MAC or WINDOWS
 ##
 
+ifndef ARCH
 ARCH=LINUX
+endif
 
 ##
 ## If dependencies (FFTW, if needed, and optionally, libhpdf and libpng) are installed locally, 
@@ -58,12 +60,10 @@ LD = g++
 
 LDFLAGS = $(DEP_LIB) -L. -L.. 
 
-ifndef WINDOWS
-LDFLAGS += -L/usr/local/lib -lfftw3 -lz 
-endif
-
-ifdef WINDOWS
+ifeq ($(ARCH),WINDOWS)
 LDFLAGS += -lfftw3-3 -lz -static -static-libgcc -static-libstdc++
+else
+LDFLAGS += -L/usr/local/lib -lfftw3 -lz 
 endif
 
 ##
