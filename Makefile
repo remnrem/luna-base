@@ -72,10 +72,10 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 	$(CXX) -static -static-libgcc -static-libstdc++ -o luna-static $^ 
 
 destrat: utils/reader.o libluna.a
-	$(CXX) -o $@ $^ -L. -lz 
+	$(CXX) -o $@ $^ -L. -lz  $(LDFLAGS)
 
 behead: utils/behead.o
-	$(CXX) -o $@ $^ 
+	$(CXX) -o $@ $^  $(LDFLAGS)
 
 merge: utils/merge.o utils/merge-helpers.o
 	$(CXX) -o $@ $^ 

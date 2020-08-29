@@ -68,12 +68,6 @@ jobs:
       - name: make
         run: |
           make FFTW=${HOME}/fftw-3.3.8
-          tar cvzf ubuntu-luna.tar.gz luna behead destrat
-          ls -lrt
-      - uses: actions/upload-artifact@v2
-        with:
-          name: ubuntu-luna.tar.gz
-          path: ubuntu-luna.tar.gz
   release:
     runs-on: ubuntu-latest
     needs: [linux-build,macos-build,windows-build]
@@ -97,11 +91,7 @@ jobs:
       - run: |
           echo ${{steps.download.outputs.download-path}}
           cd ${{steps.download.outputs.download-path}}
-          ls -lrt
-          ls -lrt mac-luna.tar.gz/
-          ls -lrt win-luna.zip/
           mv mac-luna.tar.gz/mac-luna.tar.gz mac_luna.tar.gz
-          mv ubuntu-luna.tar.gz/ubuntu-luna.tar.gz ubuntu_luna.tar.gz
           mv win-luna.zip/win-luna.zip win_luna.zip
       - name: Upload Release Asset Mac
         id: upload-release-asset-mac
@@ -112,16 +102,6 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: mac_luna.tar.gz
           asset_name: mac_luna.tar.gz
-          asset_content_type: application/gzip
-      - name: Upload Release Asset Ubuntu
-        id: upload-release-asset-ubuntu 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ubuntu_luna.tar.gz
-          asset_name: ubuntu_luna.tar.gz
           asset_content_type: application/gzip
       - name: Upload Release Asset Win
         id: upload-release-asset-win
