@@ -60,8 +60,10 @@ LD = g++
 
 LDFLAGS = $(DEP_LIB) -L. -L.. 
 
+# assuming mingw64 for windows build:
+
 ifeq ($(ARCH),WINDOWS)
-LDFLAGS += -lfftw3-3 -lz -static -static-libgcc -static-libstdc++
+LDFLAGS += -L/mingw64/bin/ -lfftw3-3 -lz -static -static-libgcc -static-libstdc++
 else
 LDFLAGS += -L/usr/local/lib -lfftw3 -lz 
 endif
