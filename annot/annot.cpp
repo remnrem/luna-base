@@ -1342,7 +1342,10 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 	  else if ( e->value == "3" ) stg = "NREM3";
 	  else if ( e->value == "4" ) stg = "NREM4";
 	  else if ( e->value == "5" ) stg = "REM";	 
-	 
+
+	  // remap?
+	  stg = nsrr_t::remap( stg );
+	  
 	  interval_t interval( Helper::sec2tp( seconds ) , 
 			       Helper::sec2tp( seconds + epoch_sec ) );
 
@@ -1362,7 +1365,7 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 	}
            
     }
-  
+
   //
   // Report
   //
@@ -1497,6 +1500,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  else if ( e->value == "3" ) ss = "NREM3";
 	  else if ( e->value == "4" ) ss = "NREM4";
 	  else if ( e->value == "5" ) ss = "REM";	 
+
+	  // annotation remap?
+	  ss = nsrr_t::remap( ss );
 	  
 	  // are we checking whether to add this file or no? 
 	  
@@ -1608,6 +1614,8 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  else if ( e->value == "4" ) ss = "NREM4";
 	  else if ( e->value == "5" ) ss = "REM";	 
 
+	  // annotation remap?
+	  ss = nsrr_t::remap( ss );
 
 	  // skip if we are not interested in this element
 	  
@@ -3071,8 +3079,11 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		      if ( stop_tp == start_tp ) stop_tp += 1LLU;
 		      
 		      interval_t interval( start_tp , stop_tp );
-		      
-		      instance_t * instance = a->add( Helper::trim( te.name ) , interval );
+
+		      // trim, and remap (also by default swap spaces)
+		      std::string inst_name = nsrr_t::remap( Helper::trim( te.name ) );
+
+		      instance_t * instance = a->add( inst_name , interval );
 		      
 		      //std::cerr << " adding [" << te.name << "] -- " << te.onset << "\t" << interval.duration() << "\n";
 		      

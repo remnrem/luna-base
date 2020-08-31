@@ -2812,6 +2812,18 @@ void timeline_t::list_all_annotations( const param_t & param )
 	}
     }
 
+  //
+  // report HMS?
+  //
+  
+  clocktime_t starttime( edf->header.starttime );
+  bool hms = true;  
+  if ( ! starttime.valid )
+    {
+      logger << " ** could not find valid start-time in EDF header **\n";
+      hms = false;
+    }
+
 
   // now print all by time point
   std::map<instance_idx_t,const instance_t*>::const_iterator aa = events.begin();
@@ -2833,8 +2845,47 @@ void timeline_t::list_all_annotations( const param_t & param )
       writer.level( instance_idx.id , globals::annot_instance_strat );	  
 
       writer.value( "START" , interval.start_sec() );
-      
-      writer.value( "STOP" , interval.stop_sec() );
+
+      // do not +1 time-unit
+      writer.value( "STOP" , interval.stop_sec_exact() );
+
+      // HMS : elapsed
+      // HMS : clock
+
+      if ( hms )
+	{
+	  
+	  double tp1_sec = interval.start_sec();
+	  clocktime_t present1 = starttime;
+	  present1.advance( tp1_sec / 3600.0 );
+	  // add down to 1/100th of a second
+	  double tp1_extra = tp1_sec - (long)tp1_sec;
+
+	  // stop_sec_exact() return last time point (rather than usual 1-past-the-end)
+	  double tp2_sec = interval.stop_sec_exact();
+	  clocktime_t present2 = starttime;
+	  present2.advance( tp2_sec / 3600.0 );
+	  double tp2_extra = tp2_sec - (long)tp2_sec;
+	   
+	  writer.value( "START_HMS"  , present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
+	  writer.value( "STOP_HMS"   , present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
+
+	  // elapsed time (00:00:00 is start of EDF)
+	  clocktime_t present3;
+	  present3.advance( tp1_sec / 3600.0 );
+	  // add down to 1/100th of a second
+	  tp1_extra = tp1_sec - (long)tp1_sec;
+
+	  clocktime_t present4;
+	  present4.advance( tp2_sec / 3600.0 );
+	  tp2_extra = tp2_sec - (long)tp2_sec;
+	   
+	  writer.value( "START_ELAPSED_HMS"  , present3.as_string() +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
+	  writer.value( "STOP_ELAPSED_HMS"   , present4.as_string() +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
+
+
+	}
+	
       
       if ( ! instance->empty() ) 
 	{

@@ -31,10 +31,27 @@ std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
 
 std::string nsrr_t::remap( const std::string & a )
 {
-  // not found in map, or if map is empty, then no remapping
-  if ( amap.find( a ) == amap.end() ) return a;
+
+  bool found = amap.find( a ) != amap.end() ;
   
-  // else return the remapped term
+  // not found as is (or map is empty)
+  if ( ! found )
+    {
+      std::string ca = a;
+      
+      // we may still want to swap spaces
+      if ( globals::replace_annot_spaces )
+	ca = Helper::search_replace( a , ' ' , globals::space_replacement );
+      
+      // recheck that space-swapped version does not have an alias
+      found = amap.find( ca ) != amap.end() ;
+      
+      if ( ! found ) return ca ; 
+      else return amap[ca];
+    }
+  
+  // else return the remapped term (which may contain spaces, if that
+  // was so requested...)
   return amap[ a ] ;
   
 }

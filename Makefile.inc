@@ -3,7 +3,9 @@
 ## ARCH is LINUX, MAC or WINDOWS
 ##
 
+ifndef ARCH
 ARCH=LINUX
+endif
 
 ##
 ## If dependencies (FFTW, if needed, and optionally, libhpdf and libpng) are installed locally, 
@@ -44,7 +46,7 @@ CXXFLAGS += -I/usr/local/include
 endif
 
 ifeq ($(ARCH),WINDOWS)
-CXXFLAGS += -DWINDOWS
+CXXFLAGS += -DWINDOWS 
 endif
 
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
@@ -58,12 +60,12 @@ LD = g++
 
 LDFLAGS = $(DEP_LIB) -L. -L.. 
 
-ifndef WINDOWS
-LDFLAGS += -L/usr/local/lib -lfftw3 -lz
-endif
+# assuming mingw64 for windows build:
 
-ifdef WINDOWS
-LDFLAGS += -L/usr/local/lib -lfftw3-3 -lz
+ifeq ($(ARCH),WINDOWS)
+LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3 -lz -static -static-libgcc -static-libstdc++
+else
+LDFLAGS += -L/usr/local/lib -lfftw3 -lz 
 endif
 
 ##

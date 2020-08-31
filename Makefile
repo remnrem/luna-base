@@ -1,7 +1,9 @@
-
 include Makefile.inc
-
-TARGETS = luna libluna destrat behead merge
+ifeq ($(ARCH),WINDOWS)
+  TARGETS = luna destrat behead
+else
+  TARGETS = luna libluna destrat behead merge
+endif
 
 SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard edf/*.cpp) \
@@ -70,10 +72,10 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 	$(CXX) -static -static-libgcc -static-libstdc++ -o luna-static $^ 
 
 destrat: utils/reader.o libluna.a
-	$(CXX) -o $@ $^ -L. -lz 
+	$(CXX) -o $@ $^ -L. -lz  $(LDFLAGS)
 
 behead: utils/behead.o
-	$(CXX) -o $@ $^ 
+	$(CXX) -o $@ $^  $(LDFLAGS)
 
 merge: utils/merge.o utils/merge-helpers.o
 	$(CXX) -o $@ $^ 
@@ -81,4 +83,4 @@ merge: utils/merge.o utils/merge-helpers.o
 .PHONY: clean
 
 clean:
-	-$(RM) $(TARGETS) libluna.dylib libluna.so main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS)) 
+	-$(RM) $(TARGETS) libluna.dylib libluna.so main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))

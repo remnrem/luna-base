@@ -67,9 +67,10 @@ struct conncoupl_t
 	       const int es = 0 ,
 	       const bool do_pac = true ,
 	       const bool do_xch = false , 
-	       const bool do_xpac = false )
+	       const bool do_xpac = false ,
+	       const bool epoch_level_output = true )
     : edf(edf) , signals(signals) , sr(sr) , fint1(fint1) , fint2(fint2) , tw(tw) , ripple(ripple) ,
-    nreps(nreps), es(es) , do_pac(do_pac) , do_xch(do_xch), do_xpac(do_xpac)  
+    nreps(nreps), es(es) , do_pac(do_pac) , do_xch(do_xch), do_xpac(do_xpac) , epoch_level_output( epoch_level_output ) 
   {
     
     use_hilbert = true;
@@ -106,6 +107,7 @@ struct conncoupl_t
 	       const bool do_pac = true ,
 	       const bool do_xch = false,
 	       const bool do_xpac = false ,
+	       const bool epoch_level_output = true , 
 	       const bool dump_wavelets = false ) :
   edf(edf) , signals(signals) , sr(sr) ,
     fc1(fc1) , fwhm1( fwhm1 ) , 
@@ -114,6 +116,7 @@ struct conncoupl_t
     tlen( tlen ), 
     nreps(nreps) , es(es) ,
     do_pac(do_pac) , do_xch(do_xch), do_xpac( do_xpac ) ,
+    epoch_level_output( epoch_level_output ) , 
     dump_wavelets( dump_wavelets )
   {
 
@@ -219,6 +222,8 @@ private:
   // Misc
   //
 
+  bool epoch_level_output;
+  
   bool dump_wavelets;
 
   

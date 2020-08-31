@@ -87,7 +87,11 @@ struct interval_t
 
   double mid_sec() const { return mid()/(double)globals::tp_1sec; }
 
+  // one time point past end
   double stop_sec() const { return stop/(double)globals::tp_1sec; }
+
+  // gives stop exactly at last time-point (i.e. better for display)
+  double stop_sec_exact() const { return stop == 0 ? 0 : (stop-1LLU)/(double)globals::tp_1sec; }
   
   bool operator<( const interval_t & rhs ) const 
   {

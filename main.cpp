@@ -24,7 +24,6 @@
 
 #include "main.h"
 
-// for dummy routines below
 #include "helper/token.h"
 #include "helper/token-eval.h"
 #include "cwt/cwt.h"
@@ -39,8 +38,8 @@ extern logger_t logger;
 
 int main(int argc , char ** argv )
 {
+  
 
-      
   //
   // display version info?
   //
@@ -1052,9 +1051,15 @@ void process_edfs( cmd_t & cmd )
       cmd.define_channel_type_variables( edf );
 
 
+      //
+      // Set special 'id' variable to EDF ID
+      //
+
+      cmd_t::ivars[ edf.id ][ "id" ] = edf.id;
+
       
       //
-      // List any individual level variables (including new channel type variables)
+      // List any individual level variables (including new channel type variables, and ${id})
       //
 
       if ( cmd_t::ivars.find( edf.id ) != cmd_t::ivars.end() )
