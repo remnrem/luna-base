@@ -1096,9 +1096,27 @@ void proc_suds( edf_t & edf , param_t & param )
   // F -> do not load PSD (not needed)
   suds.attach_db( param.requires( "db" ) , false );
 
-  // optional weight trainers (T -> load PSD)
-  if ( param.has( "wdb" ) )
-    suds.attach_db( param.value( "wdb" ) , true );
+  // by default, use self-trainer as the weight trainer
+  // if param 'retrain-all' then expect a distinct
+  // 'wdb' training bank;  this can be the same as 'db'
+  // but in this latter case, /all/ members will be used
+  // to retrain weights
+
+  // optional weight trainers (T -> load raw data, i.e. PSD)
+
+  // note: downstream, with larger training panels, we can avoid the duplication of
+  // db and wdb (i.e. bank and wbank) when they are identiical
+
+  if ( param.has( "retrain-all" ) )
+    {      
+      if ( param.has( "wdb" ) ) Helper::halt( "requires wdb=<folder> with 'retrain-all'" );
+      suds.attach_db( param.value( "wdb" ) , true );
+    }
+  else
+    {
+      // else, use the same training panel
+      suds.attach_db( param.value( "db" ) , true );      
+    }
   
   // do actual scoring  
   suds.score( edf , param );

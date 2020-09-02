@@ -45,6 +45,7 @@ enum suds_stage_t
    SUDS_N1 = 1 ,
    SUDS_N2 = 2 ,
    SUDS_N3 = 3 ,
+   SUDS_NR = 4 , // generic NR (for 3-stage model)
    SUDS_REM = 5 ,
    SUDS_ARTIFACT = 6 , 
    SUDS_UNKNOWN = 7 
@@ -67,7 +68,7 @@ struct suds_indiv_t {
   void write( edf_t & edf , param_t & param ) const;
 
   // read trainer data from disk
-  void reload( const std::string & filename , bool load_psd = false );
+  void reload( const std::string & filename , bool load_rawx = false );
 
   // fit LDA, io.e. after reloading U
   void fit_lda();
@@ -173,9 +174,27 @@ struct suds_t {
     wgt_percentile = param.has( "pct" ) ? param.requires_dbl( "pct" ) : 0 ;
     if ( wgt_percentile < 0 || wgt_percentile > 100 ) Helper::halt( "pct should be between 0 and 100" );
 
-    // by default, requires 5 of each 5 epochs to include a trainer
+    // NR/R/W or N1/N2/N3/R/W classification?
+    n_stages = param.has( "3-stage" ) ? 3 : 5;
+
+    // by default, requires at least 5 of each 5 epochs to include a trainer
     required_epoch_n = 5;
     if ( param.has( "req-epochs" ) ) required_epoch_n = param.requires_int( "req-epochs" );
+
+    // select /exactly/ N epochs (at random) from each stage/trainer
+    // N1, N2, N3, REM, W (or 3 stages if with have '3-stage'
+    use_fixed_trainer_req = param.has( "fixed-epochs" );
+    if ( use_fixed_trainer_req )
+      {
+	fixed_trainer_req = param.intvector( "fixed-epochs" );
+	if ( fixed_trainer_req.size() != n_stages )
+	  Helper::halt( "requiring fixed-epochs=N1,N2,N3,R,W, or NR/R/W epoch counts" );
+      }
+    
+    // swap in fake IDs to SUDS db:  if ids=suds, then suds_0001, suds_0002, suds_0003 etc
+    fake_ids = param.has( "ids" ) ? 1 : 0 ;  // rather than bool, use 1, 2, etc as the trainer count
+    fake_id_root = fake_ids ? param.value( "ids" ) : "";
+    
     
     //
     // channels, w/ sample rates
@@ -248,6 +267,16 @@ struct suds_t {
   static int nc;
 
   static int ns;
+
+  static int n_stages; // 5 or 3 class problem
+  
+  static int fake_ids;
+
+  static std::string fake_id_root;
+
+  static bool use_fixed_trainer_req;
+
+  static std::vector<int> fixed_trainer_req;
   
   static std::vector<std::string> siglab;
 
@@ -300,15 +329,16 @@ public:
   
   static void make01( Data::Matrix<double> & r ) { 
 
-    if ( r.dim2() != 5 ) Helper::halt( "internal error, maxpp()" );
+    if ( r.dim2() != suds_t::n_stages )
+      Helper::halt( "internal error, maxpp()" );
     const int n = r.dim1();
     for (int i=0;i<n;i++)
       {
 	int m = 0;
 	double mx = r(i,0);
-	for (int j=1;j<5;j++) 
+	for (int j=1;j< suds_t::n_stages ;j++) 
 	  if ( r(i,j) > mx ) { mx = r(i,j) ; m = j; } 
-	for (int j=0;j<5;j++) r(i,j) = 0;
+	for (int j=0;j< suds_t::n_stages; j++) r(i,j) = 0;
 	r(i,m) = 1;
       } // next row/epoch
 
@@ -316,34 +346,56 @@ public:
 
 
   static double maxpp( const Data::Vector<double> & r ) { 
-    if ( r.size() != 5 ) Helper::halt( "internal error, maxpp()" );
+    if ( r.size() != suds_t::n_stages )
+      Helper::halt( "internal error, maxpp()" );
     double mx = r[0];    
-    for (int j=1;j<5;j++) 
+    for (int j=1;j<suds_t::n_stages;j++) 
       if ( r[j] > mx ) mx = r[j] ;
     return mx;
   }
 
   static std::string max( const Data::Vector<double> & r ) { 
-    if ( r.size() != 5 ) Helper::halt( "internal error, max()" );
+    if ( r.size() != suds_t::n_stages )
+      Helper::halt( "internal error, max()" );
     int m = 0;
     double mx = r[0];
 
-    for (int j=1;j<5;j++) 
+    for (int j=1;j<suds_t::n_stages;j++) 
       if ( r[j] > mx ) { mx = r[j] ; m = j; } 
-    if ( m == 0 ) return "N1";
-    if ( m == 1 ) return "N2";
-    if ( m == 2 ) return "N3";
-    if ( m == 3 ) return "REM";
+
+    if ( suds_t::n_stages == 5 )
+      {
+	if ( m == 0 ) return "N1";
+	if ( m == 1 ) return "N2";
+	if ( m == 2 ) return "N3";
+	if ( m == 3 ) return "REM";
+	return "W";
+      }
+
+    // 3-stage classification
+    if ( m == 0 ) return "NR";
+    if ( m == 1 ) return "R";
     return "W";
+    
   }
 
   static int num( const std::string & ss ) {
-    if ( ss == "N1" ) return -1;
-    if ( ss == "N2" ) return -2;
-    if ( ss == "N3" ) return -3;
-    if ( ss == "REM" ) return 0;
+    if ( suds_t::n_stages == 5 )
+      {
+	if ( ss == "N1" ) return -1;
+	if ( ss == "N2" ) return -2;
+	if ( ss == "N3" ) return -3;
+	if ( ss == "REM" ) return 0;
+	if ( ss == "W" ) return 1;
+	return 2; // unknown/bad/missing
+      }
+
+    // 3-stage classification
+    if ( ss == "NR" ) return -1;
+    if ( ss == "R" ) return 0;
     if ( ss == "W" ) return 1;
-    return 2;
+    return 2; // unknown/bad/missing
+    
   }
 
 
@@ -381,6 +433,7 @@ public:
     if ( s == SUDS_N1 ) return "N1";
     if ( s == SUDS_N2 ) return "N2";
     if ( s == SUDS_N3 ) return "N3";
+    if ( s == SUDS_NR ) return "NR";
     if ( s == SUDS_REM ) return "REM";
     if ( s == SUDS_ARTIFACT ) return "BAD";
     if ( s == SUDS_UNKNOWN ) return "?";       
@@ -393,6 +446,7 @@ public:
     if ( s == "N1" ) return SUDS_N1;
     if ( s == "N2" ) return SUDS_N2;
     if ( s == "N3" ) return SUDS_N3;
+    if ( s == "NR" ) return SUDS_NR;
     if ( s == "REM" ) return SUDS_REM;
     if ( s == "BAD" ) return SUDS_ARTIFACT;
     if ( s == "?" ) return SUDS_UNKNOWN;
