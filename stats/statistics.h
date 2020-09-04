@@ -43,7 +43,11 @@ namespace Statistics {
   void svbksb( Data::Matrix<double> & , Data::Vector<double> & , Data::Matrix<double> & , Data::Vector<double> & , Data::Vector<double> & );
 
   int orderSVD( Data::Matrix<double> & , Data::Vector<double> & , Data::Matrix<double> & , const double tol = 1e-4 );
-  
+
+  // 1-way ANOVA (returns p-value)
+  double anova( const Data::Vector<int> & y , const Data::Vector<double> & x );
+  double anova( const std::vector<std::string> & y , const Data::Vector<double> & x );
+
   // 1-dimensional numerical integration
   double integrate(double a, double b, double (*f)(double x,void*,bool*), bool * , void*d = NULL , double eps = 10e-15 );  
   double integrate_old(double a, double b, double (*f)(double x,void*,bool*), bool*,void*d, double eps);
@@ -136,6 +140,7 @@ namespace Statistics {
   Data::Vector<double> mean_center_cols( const Data::Matrix<double> & d );
   
   void standardize( Data::Matrix<double> & d );
+  Data::Vector<double> standardize( const Data::Vector<double> & d );
   
   Data::Matrix<double> covariance_matrix( const Data::Matrix<double> & );
   Data::Matrix<double> covariance_matrix( const Data::Matrix<double> & , const Data::Vector<double> & );

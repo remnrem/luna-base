@@ -1439,6 +1439,25 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(0);
     }
 
+
+  if ( p == "anova" )
+    {
+      std::vector<std::string> group;
+      Data::Vector<double> x;
+      while ( ! std::cin.eof() ) 
+	{
+	  std::string g;
+	  double t;
+	  std::cin >> g >> t;
+	  if ( std::cin.eof() ) break;
+	  group.push_back( g );
+	  x.push_back( t );
+	}
+
+      std::cout << Statistics::anova( group , x );
+      std::exit(0);
+      
+    }
   
   if ( p == "fip" )
     {

@@ -57,8 +57,11 @@ struct suds_indiv_t {
   suds_indiv_t() { } 
 
   suds_indiv_t( const std::string & id ) : id(id) { } 
-  
-  // wrapper to add a trainer 
+
+  // 'SELF-SUDS", i.e. fit model to self and track performance; no new prediction
+  void evaluate( edf_t & edf , param_t & param );
+		
+  // wrapper to add a trainer and save to the libary
   void add_trainer( edf_t & edf , param_t & param );
 
   // process either trainer or target;
@@ -78,7 +81,18 @@ struct suds_indiv_t {
 
   // add a prediction from one trainer
   void add( const std::string & id , const lda_posteriors_t & );
+
+  // self-classify (which epochs are not self-predicted?)
+  std::vector<bool> self_classify( int * count , const bool verbose = false , Data::Matrix<double> * pp = NULL );
+
+  // summarize stage durations (based on predictions, and note
+  // discordance w/ obs, if present)
+  void summarize_stage_durations( const Data::Matrix<double> & , const std::vector<std::string> & , int , double );
   
+  // summarize stage durations (based on predictions, and note
+  // discordance w/ obs, if present)
+  void summarize_epochs( const Data::Matrix<double> & , const std::vector<std::string> & , int , edf_t & );
+
   // get KL weights across trainers
   Data::Vector<double> wgt_kl() const;
 
@@ -93,6 +107,10 @@ struct suds_indiv_t {
 
   // number of spectral variables
   int nbins;
+
+  // number of retained components (may be < suds_t::nc)
+  // but U, V, W etc will have dimension nc
+  int nc;
   
   // spectral data: only loaded for 'weight trainers'
   // not needed to be reloaded for standard trainers
@@ -152,14 +170,28 @@ struct suds_t {
   static void set_options( param_t & param )
   {
 
-    // number of PSC components
-    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 4 ;
+    // total/max number of PSC components
+    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 10 ;
 
+    // require p<T for each component, in oneway ANOVA a/ stage ( default = 1 );
+    required_comp_p = param.has( "pc" ) ? param.requires_dbl( "pc" ) : 0.01;
+    if ( param.has( "all-c" ) ) required_comp_p = 99;
+    
     // smoothing factor (multiple of SD)
     denoise_fac = param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 0.5 ; 
 
     // epoch-level outlier removal for trainers
     if ( param.has( "th" ) ) outlier_ths = param.dblvector( "th" );
+
+    // self-classification threshold? only use trainer epochs where self-classification == observed score
+    self_classification = param.has( "self" ); // epoch-level pruning
+
+    // require posterior > threshold rather than most likely call
+    self_classification_prob = param.has( "self-prob" ) ? param.requires_dbl( "self-prob" ) : 99;
+    
+    // require this individual level kappa for self-prediction to keep a trainer
+    self_classification_kappa = param.has( "self-kappa" ) ? param.requires_dbl( "self-kappa" ) : 0;
+    
     
     standardize_u = ! param.has( "unnorm" );
 
@@ -278,6 +310,12 @@ struct suds_t {
 
   static std::vector<int> fixed_trainer_req;
   
+  static bool self_classification;
+
+  static double self_classification_prob;
+
+  static double self_classification_kappa;
+  
   static std::vector<std::string> siglab;
 
   static std::vector<double> lwr;
@@ -300,6 +338,8 @@ struct suds_t {
 
   static int required_epoch_n;
 
+  static double required_comp_p;
+  
   static std::vector<double> outlier_ths;
 
   // based on trainer mean/SD (averaged), per signal
@@ -328,17 +368,15 @@ public:
   //
   
   static void make01( Data::Matrix<double> & r ) { 
-
-    if ( r.dim2() != suds_t::n_stages )
-      Helper::halt( "internal error, maxpp()" );
     const int n = r.dim1();
+    const int ns = r.dim2();
     for (int i=0;i<n;i++)
       {
 	int m = 0;
 	double mx = r(i,0);
-	for (int j=1;j< suds_t::n_stages ;j++) 
+	for (int j=1; j<ns ;j++) 
 	  if ( r(i,j) > mx ) { mx = r(i,j) ; m = j; } 
-	for (int j=0;j< suds_t::n_stages; j++) r(i,j) = 0;
+	for (int j=0; j<ns; j++) r(i,j) = 0;
 	r(i,m) = 1;
       } // next row/epoch
 
@@ -346,16 +384,14 @@ public:
 
 
   static double maxpp( const Data::Vector<double> & r ) { 
-    if ( r.size() != suds_t::n_stages )
-      Helper::halt( "internal error, maxpp()" );
     double mx = r[0];    
     for (int j=1;j<suds_t::n_stages;j++) 
       if ( r[j] > mx ) mx = r[j] ;
     return mx;
   }
 
-  static std::string max( const Data::Vector<double> & r ) { 
-    if ( r.size() != suds_t::n_stages )
+  static std::string max( const Data::Vector<double> & r , const std::vector<std::string> & labels ) { 
+    if ( r.size() != labels.size() )
       Helper::halt( "internal error, max()" );
     int m = 0;
     double mx = r[0];
@@ -363,20 +399,8 @@ public:
     for (int j=1;j<suds_t::n_stages;j++) 
       if ( r[j] > mx ) { mx = r[j] ; m = j; } 
 
-    if ( suds_t::n_stages == 5 )
-      {
-	if ( m == 0 ) return "N1";
-	if ( m == 1 ) return "N2";
-	if ( m == 2 ) return "N3";
-	if ( m == 3 ) return "REM";
-	return "W";
-      }
-
-    // 3-stage classification
-    if ( m == 0 ) return "NR";
-    if ( m == 1 ) return "R";
-    return "W";
-    
+    return labels[m];
+        
   }
 
   static int num( const std::string & ss ) {
@@ -398,11 +422,12 @@ public:
     
   }
 
+  
 
-  // downcast
-  static std::string NRW( const std::string & ss ) { 
-    if ( ss == "REM" ) return "R";
-    if ( ss == "N1" || ss == "N2" || ss == "N3" ) return "NR";
+  // downcast (but handle case where ss is already downcast / 3-stage too)
+  static std::string NRW( const std::string & ss ) {     
+    if ( ss == "REM" || ss == "R" ) return "R";
+    if ( ss == "N1" || ss == "N2" || ss == "N3" || ss == "NR" ) return "NR";
     return "W";
   }
 

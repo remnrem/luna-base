@@ -127,7 +127,11 @@ namespace MiscMath
   double kappa( const std::vector<int> & a , const std::vector<int> & b );
   double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b );
   
-	      
+  // p-values for F-test
+  double pF(const double F, const int df1, const int df2);
+  double betai(const double a, const double b, const double x);
+  double betacf(const double a, const double b, const double x);
+  
   // covariance
   double covariance( const std::vector<double> & x ,
 		     const std::vector<double> & y ,

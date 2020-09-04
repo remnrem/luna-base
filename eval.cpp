@@ -860,7 +860,8 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c , "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c , "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
-      
+      else if ( is( c , "SELF-SUDS" ) )   proc_self_suds( edf , param(c) );
+
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
 
@@ -1072,6 +1073,16 @@ void proc_lzw( edf_t & edf , param_t & param )
   lzw_per_epoch( edf , param );
 }
 
+
+
+// SELF-SUDS : use SUDS on self, to evaluate staging/signal quality, etc
+
+void proc_self_suds( edf_t & edf , param_t & param  )
+{  
+  suds_t::set_options( param );  
+  suds_indiv_t self;
+  self.evaluate( edf , param );  
+}
 
 // MAKE-SUDS : populate folder 'db' with trainers
 

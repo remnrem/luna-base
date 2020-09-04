@@ -1259,3 +1259,67 @@ int MiscMath::nearest_idx( const std::vector<double> & x , double value , int lw
     }
   return nidx;
 }
+
+
+
+double MiscMath::pF(const double F, const int df1, const int df2)
+{
+  return betai(0.5*df2,0.5*df1,(double)df2/(double)(df2+df1*F));
+}
+
+
+double MiscMath::betai(const double a, const double b, const double x)
+{
+  double bt;
+  
+  if (x < 0.0 || x > 1.0) Helper::halt("Internal error: bad x in routine betai");
+  if (x == 0.0 || x == 1.0) bt=0.0;
+  else
+    bt=exp(Statistics::gammln(a+b)-Statistics::gammln(a)-Statistics::gammln(b)+a*log(x)+b*log(1.0-x));
+  if (x < (a+1.0)/(a+b+2.0))
+    return bt*betacf(a,b,x)/a;
+  else
+    return 1.0-bt*betacf(b,a,1.0-x)/b;
+}
+
+
+double MiscMath::betacf(const double a, const double b, const double x)
+{
+  const int MAXIT = 100;
+  const double EPS = 3e-7;
+  const double FPMIN = 1.0e-30;
+
+  int m,m2;
+  double aa,c,d,del,h,qab,qam,qap;
+  
+  qab=a+b;
+  qap=a+1.0;
+  qam=a-1.0;
+  c=1.0;
+  d=1.0-qab*x/qap;
+  if (fabs(d) < FPMIN) d=FPMIN;
+  d=1.0/d;
+  h=d;
+  for (m=1;m<=MAXIT;m++) {
+    m2=2*m;
+    aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1.0+aa*d;
+    if (fabs(d) < FPMIN) d=FPMIN;
+    c=1.0+aa/c;
+    if (fabs(c) < FPMIN) c=FPMIN;
+    d=1.0/d;
+    h *= d*c;
+    aa = -(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1.0+aa*d;
+    if (fabs(d) < FPMIN) d=FPMIN;
+    c=1.0+aa/c;
+    if (fabs(c) < FPMIN) c=FPMIN;
+    d=1.0/d;
+    del=d*c;
+    h *= del;
+    if (fabs(del-1.0) <= EPS) break;
+  }
+  if (m > MAXIT) Helper::halt("Internal error in betacf() function (please report)");
+  return h;
+}
+

@@ -132,7 +132,7 @@ namespace Data {
     Row operator[] ( const unsigned int i) { return Row(*this,i); }
     ConstRow operator[] ( const unsigned int i) const { return ConstRow(*this,i); }
     
-    Vector<T> row( const int r ) 
+    Vector<T> row( const int r ) const
     { 
       Vector<T> d( ncol );
       for (int c=0; c<ncol; c++) d[c] = (*this)(r,c);
