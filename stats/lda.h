@@ -48,6 +48,25 @@ struct lda_model_t {
   int n;
   Data::Vector<double> svd;
   std::vector<std::string> labels;
+
+  Data::Vector<double> prop_trace() const
+  {
+    Data::Vector<double> t( svd.size() );
+
+    double sum = 0;
+
+    for (int i=0;i<svd.size();i++)
+      {
+	t[i] = svd[i] *	svd[i];
+	sum += svd[i] * svd[i];
+      }
+
+    for	(int i=0;i<svd.size();i++)
+      t[i] /= sum;
+
+    return t;
+  }
+  
 };
 
 

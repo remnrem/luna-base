@@ -1439,10 +1439,35 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(0);
     }
 
+
+  if ( p == "anova" )
+    {
+      std::vector<std::string> group;
+      Data::Vector<double> x;
+      while ( ! std::cin.eof() ) 
+	{
+	  std::string g;
+	  double t;
+	  std::cin >> g >> t;
+	  if ( std::cin.eof() ) break;
+	  group.push_back( g );
+	  x.push_back( t );
+	}
+
+      std::cout << Statistics::anova( group , x );
+      std::exit(0);
+      
+    }
   
   if ( p == "fip" )
     {
-      const int sr = 256;
+
+
+      int sr = 256;
+
+      if ( p2 != "" )
+        if ( ! Helper::str2int( p2 , &sr ) ) Helper::halt( "expecting integer sample rate as second parameter" );
+
       const uint64_t fs = globals::tp_1sec / sr;
       std::vector<uint64_t> tp( x.size() );
       for (int i=0;i<tp.size();i++) tp[i] = i * fs;

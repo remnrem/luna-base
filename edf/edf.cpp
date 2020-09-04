@@ -1022,7 +1022,7 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
 
   if ( compressed ) 
     {
-      Helper::safe_getline( ZIN1 , line );
+      Helper::zsafe_getline( ZIN1 , line );
       if ( ZIN1.eof() || line == "" ) Helper::halt( "problem reading from " + filename + ", empty?" );
     }
   else
@@ -1084,7 +1084,7 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
 
       if ( compressed )
 	{	  
-	  Helper::safe_getline( ZIN1 , line );	  
+	  Helper::zsafe_getline( ZIN1 , line );	  
 	  if ( ZIN1.eof() ) break;
 	}
       else
@@ -1102,6 +1102,8 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   int nr = np / Fs;
   np = nr * Fs;
 
+  std::cout << "nr, np = " << nr << " " << np << "\n";
+  
   if ( compressed ) 
     IN1.close();
   else
@@ -1120,9 +1122,9 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   if ( has_header_labels ) 
     {
       std::string dummy;
-
+      
       if ( compressed )	
-	Helper::safe_getline( ZIN2 , dummy );
+	std::getline( ZIN2 , dummy );
       else
 	Helper::safe_getline( IN2 , dummy );	
     }

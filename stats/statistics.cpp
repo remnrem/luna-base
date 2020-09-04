@@ -22,6 +22,7 @@
 
 #include "statistics.h"
 #include "helper/helper.h"
+#include "miscmath/miscmath.h"
 #include "matrix.h"
 #include "dcdflib.h"
 #include "ipmpar.h"
@@ -185,6 +186,21 @@ void Statistics::standardize( Data::Matrix<double> & D )
     for (int j=0;j<nc;j++)
       D(i,j) = ( D(i,j) - col_means[j] ) / col_sd[j] ; 
   
+}
+
+
+Data::Vector<double> Statistics::standardize( const Data::Vector<double> & X )
+{
+  const int n = X.size();
+
+  double m = mean( X );
+  double v = variance( X );
+  double sd = fabs( v ) < 1e-8 ? 1 : sqrt( v );
+
+  Data::Vector<double> Z( n );
+  for (int i=0;i<n;i++)
+    Z[i] = ( X[i] - m ) / sd ;
+  return Z;
 }
 
 
@@ -2475,4 +2491,90 @@ Data::Vector<double> Statistics::unit_scale( const Data::Vector<double> & x )
   Data::Vector<double> r( n );
   for (int i=0;i<n;i++) r[i] = ( x[i] - xmin ) / ( xmax - xmin );
   return r;
+}
+
+
+double Statistics::anova( const Data::Vector<int> & y , const Data::Vector<double> & x )
+{
+  std::vector<std::string> label( y.size() );
+  for ( int i=0;i<y.size(); i++) label[i] = "G" + Helper::int2str( y[i] );
+  return anova( label , x );
+  }
+
+double Statistics::anova( const std::vector<std::string> & y , const Data::Vector<double> & x )
+{
+  std::map<std::string,double> group_means;
+  std::map<std::string,int> group_n;
+  double mean = 0;
+  const int n = y.size();
+  if ( n != x.dim1() ) Helper::halt( "problem with input to Statistics::anova()" );
+
+  // group means / grand mean
+
+  for (int i=0;i<n;i++)
+    {
+      group_means[ y[i] ] += x[i];
+      group_n[ y[i] ]++;
+      mean += x[i];      
+    }
+
+  const int k = group_n.size();
+
+  mean /= (double)n;
+
+  std::map<std::string,double>::iterator ii = group_means.begin();
+  while ( ii != group_means.end() )
+    {
+      group_means[ ii->first ] /= (double)group_n[ ii->first ];
+      ++ii;
+    }
+
+  // ANOVA table for k groups, n observations
+  //  Source        df      SS      MS     F
+  //  Intercept     1          
+  //  Group(B)      k-1     SSB     MSB    MST/MSE
+  //  Error(W)      n-k     SSW     MSW
+  //  Total         n       SST
+
+  double SST = 0;
+
+  // sum of square per group
+  
+  std::map<std::string,double> SSw;
+  for (int i=0;i<n;i++)
+    {
+      SSw[ y[i] ] += ( x[i] - group_means[ y[i] ] ) * ( x[i] - group_means[ y[i] ] ) ; 
+      SST +=  ( x[i] - mean) * ( x[i] - mean ) ;
+    }
+  
+  // between sum of squares
+
+  double SSB = 0;
+  double SSW = 0;
+  ii = group_means.begin();
+  while	( ii != group_means.end() )
+    {
+      //      std::cout << "  " << ii->first << "\t" << group_n[ ii->first ] << "\t" << group_means[ ii->first ] << "\n";
+      SSB += group_n[ ii->first ] * ( ii->second - mean ) * ( ii->second - mean );
+      SSW += SSw[ ii->first ];
+      ++ii;
+    }
+  
+  double dfT = n - 1;
+  double MST = SST / dfT;
+
+  double dfB = k - 1;
+  double MSB = SSB / dfB;
+
+  double dfW = n - k;
+  double MSW = SSW / dfW;
+  
+  double F = MSB / MSW;
+  double p = MiscMath::pF( F , dfB , dfW );
+
+  // std::cout << "B: " << SSB << " " << MSB << "\n";
+  // std::cout << "W: " << SSW << " " << MSW << "\n";
+  // std::cout << "F , p = " << F << " " << p << "\n";
+
+  return p;
 }

@@ -250,6 +250,7 @@ void proc_file_annot( edf_t & , param_t & );
 void proc_sleep_stage( edf_t & , param_t & , bool verbose = false );
 void proc_suds( edf_t & , param_t & );
 void proc_make_suds( edf_t & , param_t & );
+void proc_self_suds( edf_t & , param_t & );
 
 void proc_record_dump( edf_t & , param_t & );
 void proc_record_table( edf_t & , param_t & );

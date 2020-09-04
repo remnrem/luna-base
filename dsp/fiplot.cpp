@@ -212,7 +212,7 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
 {
   
   // time points (secs)
-  nt = ( t_upr - t_lwr ) / t_inc;
+  nt = ( t_upr - t_lwr ) / t_inc + 1; 
   
   // frq points (Hz)
   nf = frqs.size();
@@ -230,6 +230,9 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
 
       std::vector<double> c = cwt( x , fs , f , num_cycles );
 
+      for (int i=0;i<c.size();i++)
+	std::cout << c[i] << "\t" << x[i] << "\n";
+      
       // get intervals
       fibin_t r = intervalize( c , tp , fs , t_lwr , t_upr , t_inc , cycles , f ); 
       
@@ -278,8 +281,6 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   // point duration to time-point: sample-points are inclusive so +1
   // double time = ( j - i + 1 ) * dt  
   //
-
-
   
 
   //
@@ -299,41 +300,45 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 
     
   //
-  // Rescale measure to 0..1 (i.e. to normalize across different Fc
+  // Rescale measure (for each frequency)
   //
 
   if ( normalize ) 
     {
 
-      double min = x[0] , max = x[0];
       
+      //x = MiscMath::Z( x );
+      
+      // scaling: 0..1 (i.e. to normalize across different Fc)
+      
+      double min = x[0] , max = x[0];
       for (int i=1;i<n;i++)
-	{
-	  if      ( x[i] < min ) min = x[i];
-	  else if ( x[i] > max ) max = x[i];
-	}
+       	{
+       	  if      ( x[i] < min ) min = x[i];
+       	  else if ( x[i] > max ) max = x[i];
+       	}
       
       if ( max == min ) Helper::halt( "flat signal" );
-      
       const double rng = max - min;
-      
       for (int i=0;i<n;i++) 
-	x[i] = ( x[i] - min ) / rng ; 
+       	x[i] = ( x[i] - min ) / rng ; 
+      
     }
-
+  
 
   //
   // Take only above threshold points?
   //
-
+  
   double yt = 0;
   
   if ( th > 0 ) 
     {
       yt = th * MiscMath::mean( x );
-      logger << " setting " << th << "x threshold to " << yt << "\n";
+      logger << " setting " << th << "x threshold to " << yt << "\n";      
     }
 
+  
   //
   // rule of thumb: only consider intervals that are at least twice
   // as long as the longest time span considered e.g. 5 seconds
@@ -408,26 +413,13 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   
   logger << "  including " << ( included_seconds / all_seconds ) * 100 << "% of " << all_seconds << " seconds\n";
   
+
   //
   // Initialise time-bins
   //
   
   r.t.clear();
   
-// =======
-//   // normalize
-//   std::vector<double> x( n , 0 );
-//   for (int i=0;i<n;i++) 
-//     {
-//       std::cout << "x\t" << i << "\t" << fc << "\t" << x_[i] ;
-//       //      x[i] = ( x_[i] - min ) / ( max - min );
-//       x[i] = x_[i];
-//       std::cout << "\t" << x[i] << "\n";
-//     }
-
-//   // init. each time-bin
-// >>>>>>> 21e0e5bbf4804daa512b7003134ec6ae63fa6701
-
   for (int t=0;t<nt;t++) 
     {
       // score as the midpoint of each time-bin      
@@ -452,7 +444,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       //std::cerr << "dets = " << x[i] << "\n";
     }
 
-  std::cerr << " of " << n << " points, " << n_disc << " disc, " << n_above_th << " above th\n";
+  std::cerr << " of " << n << " points, " << n_disc << " disc, " << n_above_th << " (" << (n_above_th/double(n))*100.0 << ") above threshold\n";
   
   // fipoint_t (i,h,t)  
   
@@ -491,17 +483,20 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	    {
 	      // or, we hit end/discontinuity?
 	      
-	      fipoint_t f( i , j , x[i] ) ;
-	      pts.insert( f ) ;
-	      //i = j+1; // skip ahead
+	      // v0.25: do not add if hit a disc. 
+	      if ( 0 )
+		{
+		  fipoint_t f( i , j , x[i] ) ;
+		  pts.insert( f ) ;
+		}
+	      
 	      break;	      
 	    }
 	}
     }
 
   logger << " decomposed signal into " << pts.size() << " elements\n";
-  //  std::cerr  << " decomposed signal into " << pts.size() << " elements\n";
-    
+
   // last point: ignore
   // fipoint_t f( n-1 , n-1 , x[n-1] ) ;
   // pts.insert( f ) ;
@@ -619,25 +614,23 @@ std::vector<double> fiplot_t::cwt( const std::vector<double> & x , const int fs 
 
   CWT cwt;
   cwt.set_sampling_rate( fs );
-  cwt.add_wavelet( fc , num_cycles );  
+  //cwt.add_wavelet( fc , num_cycles );  
+  cwt.alt_add_wavelet( fc , CWT::pick_fwhm( fc ) , 10 );
+  logger << "  cwt: fc = " << fc << " FWHM = " << CWT::pick_fwhm( fc ) << "\n";
   cwt.load( &x );  
   cwt.run();
+
   
   const std::vector<double> & results = cwt.results(0);
 
   return results;
 
   // OR... do some smoothing?
-
-   const double moving_window_sec = 0.1;
-   int window_points = moving_window_sec * fs;
-   if ( window_points % 2 == 0 ) ++window_points;
-	  
-   const std::vector<double> averaged 
-     = MiscMath::moving_average( results , window_points );
-  
-  return averaged;
-
-
+  // const double moving_window_sec = 0.1;
+  // int window_points = moving_window_sec * fs;
+  // if ( window_points % 2 == 0 ) ++window_points;  
+  // const std::vector<double> averaged 
+  //   = MiscMath::moving_average( results , window_points );  
+  // return averaged;
   
 }
