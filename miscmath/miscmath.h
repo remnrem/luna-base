@@ -146,6 +146,9 @@ namespace MiscMath
   // Hjorth parameters
   void hjorth( const std::vector<double> * , double * , double * , double * );
 
+  // second-order Hjorth parameters (window, inc)
+  void hjorth2( const std::vector<double> * , double * , int w , int inc = 0 );
+
   // turning rate
   double turning_rate( const std::vector<double> * , int , int , int , std::vector<double> * sub );
 
