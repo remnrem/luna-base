@@ -391,16 +391,16 @@ public:
   }
 
   static std::string max( const Data::Vector<double> & r , const std::vector<std::string> & labels ) { 
-    if ( r.size() != labels.size() )
+    const int ns = r.size();
+    if ( ns != labels.size() )
       Helper::halt( "internal error, max()" );
     int m = 0;
     double mx = r[0];
 
-    for (int j=1;j<suds_t::n_stages;j++) 
+    for (int j=1; j<ns; j++) 
       if ( r[j] > mx ) { mx = r[j] ; m = j; } 
 
-    return labels[m];
-        
+    return labels[m];        
   }
 
   static int num( const std::string & ss ) {

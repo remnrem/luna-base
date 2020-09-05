@@ -1323,3 +1323,48 @@ double MiscMath::betacf(const double a, const double b, const double x)
   return h;
 }
 
+
+
+// second-order Hjorth parameters (window, inc)
+void MiscMath::hjorth2( const std::vector<double> * x , double * r , int w , int inc )
+{
+
+  // expect r[9] to be a 9 element array; (3x3)
+  //  0,1,2   H1H1 H1H2 H1H3
+  //  3,4,5   H2H1 H2H2 H2H3
+  //  6,7,8   H3H1 H3H2 H3H3
+
+  // w   window size (in sample points)
+  // inc window increment (in sample points)
+
+  if ( inc == 0 ) inc = w;
+
+  const int nx = x->size();
+  const int nw = nx / w;
+
+  std::vector<double> h1, h2, h3;
+ 
+  for (int i=0; i<nx; i += inc )
+    {
+      std::vector<double> t;
+      for (int j=i;j<i+w;j++)
+	t.push_back( (*x)[j] );
+
+      // normalize window
+      t = MiscMath::Z( t );
+      
+      double hp1, hp2, hp3;
+      hjorth( &t , &hp1, &hp2, &hp3 );
+      h1.push_back( hp1 );
+      h2.push_back( hp2 );
+      h3.push_back( hp3 );      
+
+    }
+
+  if ( h1.size() != nw ) Helper::halt( "internal error in hjorth2()" );
+  
+  hjorth( &h1 , r   , r+1 , r+2 );
+  hjorth( &h2 , r+3 , r+4 , r+5 );
+  hjorth( &h3 , r+6 , r+7 , r+8 );
+  
+}

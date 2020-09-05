@@ -362,7 +362,14 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   bool calc_maxxed = param.has( "max" );
 
+  bool calc_hjorth2 = param.has( "hjorth2" );
 
+  double hjorth2_win = param.has( "hjorth2-win" ) ? param.requires_dbl( "hjorth2-win" ) : 1 ;
+
+  double hjorth2_inc = param.has( "hjorth2-inc" ) ? param.requires_dbl( "hjorth2-inc" ) : hjorth2_win ;
+  if ( hjorth2_inc < 0 ) hjorth2_inc = 0;
+
+  
   // e.g. exclude EPOCH is more than 5% of points are clipped  
   double clip_threshold = calc_clipped ? param.requires_dbl( "clipped" ) : 0.05 ;
   if ( calc_clipped )
@@ -600,8 +607,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       //
       // Get sampling rate
       //
-      
-      int sr = edf.header.sampling_freq( s );
+    
+      int sr = edf.header.sampling_freq( signals( s ) );
       
       //
       // for each each epoch 
@@ -655,6 +662,17 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 
 	  //
+	  // 'Second-order' Hjorth
+	  //
+
+	  double hjorth2[9];
+
+	  if ( calc_hjorth2 && sr >= 50 )
+	    {
+	      MiscMath::hjorth2( d , &(hjorth2)[0] , hjorth2_win * sr , hjorth2_inc * sr );
+	    }		    
+
+	  //
 	  // Turning rate
 	  //
 	  
@@ -689,6 +707,23 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      writer.value( "H2" , mobility , "Epoch Hjorth parameter 2: mobility" );
 	      writer.value( "H3" , complexity , "Epoch Hjorth parameter 3: complexity" );
 
+	      if ( calc_hjorth2 && sr >= 50 )
+		{
+		  writer.value( "H1H1" , hjorth2[0] );
+		  writer.value( "H1H2" , hjorth2[1] );
+		  writer.value( "H1H3" , hjorth2[2] );
+
+		  writer.value( "H2H1" , hjorth2[3] );
+		  writer.value( "H2H2" , hjorth2[4] );
+		  writer.value( "H2H3" , hjorth2[5] );
+		  
+		  writer.value( "H3H1" , hjorth2[6] );
+		  writer.value( "H3H2" , hjorth2[7] );
+		  writer.value( "H3H3" , hjorth2[8] );
+
+		}
+	      
+	      
 	      if ( calc_rms )
 		writer.value( "RMS" , x , "Epoch root mean square (RMS)" );
 	      
@@ -1148,12 +1183,12 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       
       for (int s=0;s<ns;s++)
 	{
-	  int sr = edf.header.sampling_freq( s );
+	  int sr = edf.header.sampling_freq( signals( s ) );
 	  
 	  // how many units (in # of sub-epoch units);  +1 means includes self
 	  int winsize = 1 + tr_epoch_smooth / tr_epoch_sec ; 
 
-	  logger << "sz = " << e_tr[s].size() << " " << winsize << "\n";
+	  //	  logger << "sz = " << e_tr[s].size() << " " << winsize << "\n";
 	  e_tr[s] = MiscMath::moving_average( e_tr[s] , winsize );
 
 	  // output
