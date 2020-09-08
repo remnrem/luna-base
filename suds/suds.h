@@ -93,6 +93,9 @@ struct suds_indiv_t {
   // discordance w/ obs, if present)
   void summarize_epochs( const Data::Matrix<double> & , const std::vector<std::string> & , int , edf_t & );
 
+  // output obs vs prd kappas (5 and 3 level)
+  void summarize_kappa( const std::vector<std::string> & prd , const bool to_console = false );
+
   // get KL weights across trainers
   Data::Vector<double> wgt_kl() const;
 
@@ -402,6 +405,21 @@ public:
 
     return labels[m];        
   }
+
+
+  static std::vector<std::string> max( const Data::Matrix<double> & r , const std::vector<std::string> & labels ) {
+
+    const int ne = r.dim1();
+
+    std::vector<std::string> p( ne );
+
+    for (int i=0; i<ne; i++) 
+      p[i] = max( r.row(i) , labels );
+
+    return p;
+  }
+
+
 
   static int num( const std::string & ss ) {
     if ( suds_t::n_stages == 5 )

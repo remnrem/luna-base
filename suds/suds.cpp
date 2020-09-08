@@ -114,6 +114,8 @@ std::vector<double> suds_t::lwr_h3, suds_t::upr_h3;
 void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 {
 
+  bool epoch_level_output = param.has( "epoch" );
+
   // ensure we do not call self_classify() from proc
 
   suds_t::self_classification = false;
@@ -124,13 +126,17 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   if ( n_unique_stages == 0 )
     Helper::halt( "no valid epochs/staging" );
 
+
   //
   // self-classify, and report discordant calls, etc ('true' -> verbose output)
   //
 
   int good_epochs = 0;
 
+
+  //
   // fit LDA, and extract posteriors (pp)
+  //
 
   Data::Matrix<double> pp;
 
@@ -146,7 +152,12 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
   summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
   
-  summarize_epochs( pp , model.labels , ne_all , edf );
+  std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
+
+  summarize_kappa( final_pred );
+
+  if ( epoch_level_output )
+    summarize_epochs( pp , model.labels , ne_all , edf );
   
 }
 
@@ -1922,6 +1933,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   target.summarize_stage_durations( pp , target.model.labels, ne_all , epoch_sec );
 
+
   
   //
   // Confiusion matrics and kappa w/ observed staging
@@ -1930,24 +1942,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   if ( prior_staging )
     {
       
-      logger << std::fixed << std::setprecision(2);
-      
-      // original reporting (5 or 3 level)
-      double kappa = MiscMath::kappa( final_prediction , str( target.obs_stage_valid ) );
-      logger << "\n  Confusion matrix: " << suds_t::n_stages << "-level classification: kappa = " << kappa << "\n";
-      suds_t::tabulate(  final_prediction , str( target.obs_stage_valid ) , true );
-      writer.value( "K" , kappa );
-      
-      // collapse 5->3?
-      if ( suds_t::n_stages == 5 )
-	{
-	  double kappa3 = MiscMath::kappa( NRW(final_prediction) , NRW(str( target.obs_stage_valid ) ) );
-	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << "\n";
-	  suds_t::tabulate(  NRW(final_prediction) , NRW(str( target.obs_stage_valid ) ) , true );
-	  writer.value( "K3" , kappa3 );
-	}
-      
-      writer.value( "MAXPP" , mean_maxpp );
+      //
+      // report kappa w/ observed 
+      //
+
+      target.summarize_kappa( final_prediction , true );
             
       //
       // also, given correlations between weights and trainer kappas
@@ -1964,6 +1963,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 					          
     }
 
+
+  //
+  // Misc other output
+  //
+
+  writer.value( "MAXPP" , mean_maxpp );
 
 
 
@@ -2337,7 +2342,6 @@ void suds_indiv_t::summarize_epochs( const Data::Matrix<double> & pp , // poster
     }
 
   writer.unepoch();
-
   
 }
 
@@ -2468,5 +2472,39 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
     }
   
 
+}
+
+
+
+void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const bool to_console )
+{
+  
+  if ( to_console )
+    logger << std::fixed << std::setprecision(2);
+  
+  // original reporting (5 or 3 level)
+  double kappa = MiscMath::kappa( prd , suds_t::str( obs_stage_valid ) );
+
+  writer.value( "K" , kappa );
+  
+  if ( to_console ) 
+    {
+      logger << "\n  Confusion matrix: " << suds_t::n_stages << "-level classification: kappa = " << kappa << "\n";
+      suds_t::tabulate(  prd , suds_t::str( obs_stage_valid ) , true );
+    }      
+  
+  // collapse 5->3?
+  if ( suds_t::n_stages == 5 )
+    {
+      double kappa3 = MiscMath::kappa( suds_t::NRW( prd ) , suds_t::NRW( suds_t::str( obs_stage_valid ) ) );
+      
+      writer.value( "K3" , kappa3 );
+      
+      if ( to_console )
+	{
+	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << "\n";
+	  suds_t::tabulate(  suds_t::NRW( prd ) , suds_t::NRW( suds_t:: str( obs_stage_valid ) ) , true );
+	}      
+    }
 }
 
