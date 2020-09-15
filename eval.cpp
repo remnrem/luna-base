@@ -1661,6 +1661,17 @@ void proc_epoch( edf_t & edf , param_t & param )
 
   
   int ne = edf.timeline.set_epoch( dur , inc );  
+
+
+  //
+  // minimal output to stdout
+  //
+
+  if ( param.has( "min" ) )
+    {
+      std::cout << ne << "\n";
+      return;
+    }
   
   logger << " set epochs, length " << dur << " (step " << inc << "), " << ne << " epochs\n";
 
