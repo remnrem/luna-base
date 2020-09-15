@@ -135,8 +135,8 @@ namespace Statistics {
   Data::Vector<double> elem_sqrt( const Data::Vector<double> & );
   Data::Vector<double> unit_scale( const Data::Vector<double> & );
   
-
   Data::Vector<double> mean_center_cols( Data::Matrix<double> & d );
+  void subtract_cols( Data::Matrix<double> & d , Data::Vector<double> & m );
   
   void standardize( Data::Matrix<double> & d );
   Data::Vector<double> standardize( const Data::Vector<double> & d );

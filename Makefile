@@ -83,5 +83,5 @@ merge: utils/merge.o utils/merge-helpers.o
 .PHONY: clean
 
 clean:
-	-$(RM) $(TARGETS) libluna.dylib libluna.so main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
+	-$(RM) $(TARGETS) libluna.dylib libluna.so libluna.a main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
 	-$(RM) utils/*.o utils/*.d utils/*~ 

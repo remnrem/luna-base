@@ -2095,14 +2095,16 @@ void proc_dump_cache( edf_t & edf , param_t & param )
 {
   // cache types: int, num and tp
   int int_cache = param.has( "int" );
+  int str_cache = param.has( "str" );
   int num_cache = param.has( "num" );
   int tp_cache = param.has( "tp" );
 
-  if ( int_cache + num_cache + tp_cache != 1 )
-    Helper::halt( "need to specify one of int, num or tp cache types" );
+  if ( str_cache + int_cache + num_cache + tp_cache != 1 )
+    Helper::halt( "need to specify one of int, str, num or tp cache types" );
 
   std::string cname;
   if ( int_cache ) cname = param.value( "int" );
+  else if ( str_cache ) cname = param.value( "str" );
   else if ( num_cache ) cname = param.value( "num" );
   else cname = param.value( "tp" );
 
@@ -2112,6 +2114,12 @@ void proc_dump_cache( edf_t & edf , param_t & param )
       if ( cache == NULL ) Helper::halt( "could not find int-cache " + cname );
       cache->dump();
     }
+  else if ( str_cache )
+    {
+      cache_t<std::string> * cache = edf.timeline.cache.find_str( cname );
+      if ( cache == NULL ) Helper::halt( "could not find str-cache " + cname );
+      cache->dump();
+    }  
   else if ( num_cache )
     {
       cache_t<double> * cache = edf.timeline.cache.find_num( cname );

@@ -126,6 +126,13 @@ struct cache_t {
     store[key] = value;
   }
 
+  void add( const ckey_t & key , const T & value )
+  {
+    std::vector<T> t(1);
+    t[0] = value;
+    add( key , t );
+  }
+
   void clear()
   {
     store.clear();
@@ -142,6 +149,13 @@ struct cache_t {
       }
     return k;
   }
+
+  std::vector<T> size( const ckey_t & key ) const {
+    typename std::map<ckey_t,std::vector<T> >::const_iterator ii = store.find( key );
+    if ( ii == store.end() ) return 0;
+    return ii->second.size();
+  }
+  
   
   std::vector<T> fetch( const ckey_t & key ) const {
     typename std::map<ckey_t,std::vector<T> >::const_iterator ii = store.find( key );
@@ -183,15 +197,18 @@ struct caches_t {
 
   std::map<std::string, cache_t<int> > cache_int;
   std::map<std::string, cache_t<double> > cache_num;  
+  std::map<std::string, cache_t<std::string> > cache_str;  
   std::map<std::string, cache_t<uint64_t> > cache_tp;
 
   void clear() {
     cache_int.clear();
     cache_num.clear();
+    cache_str.clear();
     cache_tp.clear();
   }
   
   bool has_int( const std::string & n ) const { return cache_int.find(n) != cache_int.end(); }
+  bool has_str( const std::string & n ) const { return cache_str.find(n) != cache_str.end(); }
   bool has_num( const std::string & n ) const { return cache_num.find(n) != cache_num.end(); }
   bool has_tp( const std::string & n ) const { return cache_tp.find(n) != cache_tp.end(); } 
   
@@ -204,6 +221,12 @@ struct caches_t {
   {
     if ( ! has_int( n ) ) cache_int.insert( std::pair<std::string,cache_t<int> >( n , cache_t<int>( n ) ) );;
     return &(cache_int.find( n )->second );
+  }
+
+  cache_t<std::string> * find_str( const std::string & n )
+  {
+    if ( ! has_str( n ) ) cache_str.insert( std::pair<std::string,cache_t<std::string> >( n , cache_t<std::string>( n ) ) );;
+    return &(cache_str.find( n )->second );
   }
 
   cache_t<double> * find_num( const std::string & n )

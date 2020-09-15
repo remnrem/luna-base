@@ -42,14 +42,12 @@ annot_t * spectral_power( edf_t & edf ,
 {
   
   // Report dull spectrum as well as band power
-
   bool show_spectrum = param.has( "spectrum" ) || param.has("epoch-spectrum" );
 
   // Report dB scale ?
   bool dB = param.has( "dB" );
   
   // Mean center data first? 
-
   bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" );
   
   // Spectrum bin width (0 means no binning, default)
@@ -77,6 +75,10 @@ annot_t * spectral_power( edf_t & edf ,
 
   // Calculate MSE
   bool calc_mse = param.has( "mse" ); 
+
+  // cache PSD for other analyses (e.g. PSC)
+  const bool cache_data = param.has( "cache" );
+  const std::string cache_name = cache_data ? param.value( "cache" ) : "" ;
 
 
   //
@@ -462,18 +464,32 @@ annot_t * spectral_power( edf_t & edf ,
       //
       
       const int n = freqs.size();      
+
+      bool okay = total_epochs > 0 ;
       
       writer.var( "NE" , "Number of epochs" );
       
       writer.value( "NE" , total_epochs );
+
       
       if ( show_spectrum )
-	{
+	{	  
 	  
-	  if ( total_epochs > 0 ) 
+	  if ( okay )
 	    {	  
 	      
+
+	      //
+	      // cache spectrum? (e.g. for PSC)
+	      //
+	      
+	      cache_t<double> * cache = NULL ; 
+	      if ( cache_data )
+		cache = edf.timeline.cache.find_num( cache_name );
+
+	      //
 	      // get mean power across epochs
+	      //
 	      
 	      if ( track_freq.size() != freqs.size() ) 
 		Helper::halt( "internal error psd_t" );
@@ -490,27 +506,34 @@ annot_t * spectral_power( edf_t & edf ,
 		{
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  //writer.level( bin.bfa[i] , globals::freq_strat );
-		  writer.value( "PSD" , dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
+
+		  double x = dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] ;
+		  writer.value( "PSD" , x );
+
+		  if ( cache )
+		    cache->add( ckey_t( "PSD" , writer.faclvl() ) , x );
+		  
 		  if ( bin.nominal[i] != "" )
-		    writer.value( "INT" , bin.nominal[i] );		  
+		    writer.value( "INT" , bin.nominal[i] );
 		}
 	      writer.unlevel( globals::freq_strat );
 	      
 	    }
 	  
 	}
-      
-      bool okay = total_epochs > 0 ;
+
+
 
       //
       // mean total power
       //
 
       double mean_total_power = MiscMath::mean( track_band[ TOTAL ] );
+      
 
       //
       // by band 
-      //
+      //      
       
       std::vector<frequency_band_t>::const_iterator bi = bands.begin();
       while ( bi != bands.end() )

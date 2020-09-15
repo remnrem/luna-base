@@ -82,6 +82,14 @@ Data::Vector<double> Statistics::col_sums( const Data::Matrix<double> & a)
 }
 
 
+void Statistics::subtract_cols( Data::Matrix<double> & d , Data::Vector<double> & m )
+{
+  // for each col d(*,j) , subtract m[j]
+  const int nc = d.dim2();  
+  for (int c=0;c<nc;c++)
+      d.col(c).inplace_add( -m[c] );
+}
+
 Data::Vector<double> Statistics::mean_center_cols( Data::Matrix<double> & d )
 {
   // and return the vector of original means
