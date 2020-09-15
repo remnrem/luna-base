@@ -30,6 +30,7 @@
 #include <sstream>
 
 #include "stats/statistics.h" 
+#include "helper/helper.h"
 
 struct edf_t;
 struct cart_t;

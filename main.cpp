@@ -39,7 +39,6 @@ extern logger_t logger;
 int main(int argc , char ** argv )
 {
   
-
   //
   // display version info?
   //
@@ -162,13 +161,14 @@ int main(int argc , char ** argv )
       exit(0);       
     }
 
+
+
   //
   // PDC helper
   //
   
   else if ( argc == 2 && strcmp( argv[1] , "--pdc" ) == 0 )
     {
-      std::cerr << "in here..\n";
       param_t param;
       build_param_from_cmdline( &param );
       writer.nodb();
@@ -234,7 +234,8 @@ int main(int argc , char ** argv )
   bool cmdline_proc_fir_design = false;
   bool cmdline_proc_cwt_design = false;
   bool cmdline_proc_pdlib      = false;
-
+  bool cmdline_proc_psc        = false;
+  
   //
   // parse command line
   //
@@ -263,10 +264,11 @@ int main(int argc , char ** argv )
 	  if ( strcmp( argv[1] , "--fir-design" ) == 0 ||  
 	       strcmp( argv[1] , "--fir" ) == 0 ) 	   
 	    cmdline_proc_fir_design = true;
-	  else 
-	    if ( strcmp( argv[1] , "--cwt-design" ) == 0 ||  
-		 strcmp( argv[1] , "--cwt" ) == 0 ) 	   
-	      cmdline_proc_cwt_design = true;
+	  else if ( strcmp( argv[1] , "--cwt-design" ) == 0 ||  
+		    strcmp( argv[1] , "--cwt" ) == 0 ) 	   
+	    cmdline_proc_cwt_design = true;
+	  else if (  strcmp( argv[1] , "--psc" ) == 0 )
+	    cmdline_proc_psc = true;
 	}
 
       // otherwise, first element will be treated as a file list
@@ -487,6 +489,33 @@ int main(int argc , char ** argv )
   // branch off to run any cmdline driven special functions, then quit
   //
 
+
+  //
+  // PSC 
+  //
+
+  if ( cmdline_proc_psc )
+    {
+      param_t param;
+      build_param_from_cmdline( &param );
+      
+      writer.begin();
+      
+      //      writer.id( "." , "." );
+
+      writer.cmd( "PSC" , 1 , "" );
+      writer.level( "PSC", "_PSC" );
+      
+      psc_t psc;
+      psc.construct( param );
+
+      writer.unlevel( "_PSC" );
+
+      writer.commit();
+      std::exit(0);
+    }
+
+  
   if ( cmdline_proc_fir_design )
     {
 
@@ -524,6 +553,7 @@ int main(int argc , char ** argv )
 
     }
 
+  
   
   //
   // iterate through the primary sample-list

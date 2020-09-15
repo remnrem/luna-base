@@ -919,6 +919,25 @@ void cmddefs_t::init()
 
 
   //
+  // PSC
+  //
+
+  add_cmd( "cmdline" , "--psc" , "Create PSC from power spectra from multiple individuals" );
+  add_url( "--psc" , "psc/#build-psc" );
+  add_param( "--psc" , "spectra" , "psd1.txt,psd2.txt" , "File list of PSD/COH output" );
+  add_param( "--psc" , "v" , "PSD,COH" , "List of variables to extract" );
+  add_param( "--psc" , "log" , "PSD" , "Take log of these variables" );
+  add_param( "--psc" , "proj" , "proj1.txt" , "Write projection file to disk" );
+  add_param( "--psc" , "output-input", "mat1.txt" , "Write constructed input matrix to disk" );
+  add_param( "--psc" , "nc", "10" , "Number of PSCs to extract (default 10)" );
+  add_param( "--psc" , "th", "5,3" , "Iterative SD thresholds for outlier removal" );
+  
+  add_cmd( "power"   , "PSC" , "Calculate/apply Power spectral density estimation (Welch)" );
+  add_url( "PSC" , "psc/#project-psc" );
+  add_param( "PSC" , "proj" , "proj1.txt" , "PSC projection file (from --psc) ");
+  add_param( "PSC" , "nc" , "5" , "Number of components (if subset of projection desired (default all)" );
+
+  //
   // MTM
   //
 

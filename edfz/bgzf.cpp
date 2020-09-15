@@ -75,9 +75,9 @@ typedef struct {
   int size;
   uint8_t *block;
   int64_t end_offset;
-} cache_t;
+} BGZF_cache_t;
 #include "khash.h"
-KHASH_MAP_INIT_INT64(cache, cache_t)
+KHASH_MAP_INIT_INT64(cache, BGZF_cache_t)
 #endif
 
 static inline void packInt16(uint8_t *buffer, uint16_t value)
@@ -280,7 +280,7 @@ static void free_cache(BGZF *fp)
 static int load_block_from_cache(BGZF *fp, int64_t block_address)
 {
   khint_t k;
-  cache_t *p;
+  BGZF_cache_t *p;
   khash_t(cache) *h = (khash_t(cache)*)fp->cache;
   k = kh_get(cache, h, block_address);
   if (k == kh_end(h)) return 0;
@@ -297,7 +297,7 @@ static void cache_block(BGZF *fp, int size)
 {
   int ret;
   khint_t k;
-  cache_t *p;
+  BGZF_cache_t *p;
   khash_t(cache) *h = (khash_t(cache)*)fp->cache;
   if (BGZF_BLOCK_SIZE >= fp->cache_size) return;
   if ((kh_size(h) + 1) * BGZF_BLOCK_SIZE > fp->cache_size) {

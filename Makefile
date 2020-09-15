@@ -84,3 +84,4 @@ merge: utils/merge.o utils/merge-helpers.o
 
 clean:
 	-$(RM) $(TARGETS) libluna.dylib libluna.so main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
+	-$(RM) utils/*.o utils/*.d utils/*~ 

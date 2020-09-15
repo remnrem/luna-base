@@ -82,7 +82,7 @@ Data::Vector<double> Statistics::col_sums( const Data::Matrix<double> & a)
 }
 
 
-Data::Vector<double> Statistics::mean_center_cols( const Data::Matrix<double> & d )
+Data::Vector<double> Statistics::mean_center_cols( Data::Matrix<double> & d )
 {
   // and return the vector of original means
 
@@ -92,8 +92,8 @@ Data::Vector<double> Statistics::mean_center_cols( const Data::Matrix<double> & 
   const int nc = d.dim2();
   
   for (int c=0;c<nc;c++)
-    d.col(c).inplace_add( -means[c] );
-  
+      d.col(c).inplace_add( -means[c] );
+
   return means;
 }
 

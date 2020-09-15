@@ -24,7 +24,6 @@
 #define __STATISTICS_H__
 
 #include "matrix.h"
-#include "fisher.h"
 
 #include <vector>
 
@@ -137,7 +136,7 @@ namespace Statistics {
   Data::Vector<double> unit_scale( const Data::Vector<double> & );
   
 
-  Data::Vector<double> mean_center_cols( const Data::Matrix<double> & d );
+  Data::Vector<double> mean_center_cols( Data::Matrix<double> & d );
   
   void standardize( Data::Matrix<double> & d );
   Data::Vector<double> standardize( const Data::Vector<double> & d );

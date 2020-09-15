@@ -1368,3 +1368,56 @@ void MiscMath::hjorth2( const std::vector<double> * x , double * r , int w , int
   hjorth( &h3 , r+6 , r+7 , r+8 );
   
 }
+
+
+int MiscMath::outliers( const std::vector<double> * x , double th ,
+			std::vector<bool> * inc , 
+			const std::vector<bool> * prior )
+{  
+  // only set 'inc' to missing; but if 'prior' exists, set any missing in 'prior'
+  // to missing in 'inc'
+  // i.e. never unset (set to include) any in inc.
+
+  int removed = 0;
+
+  if ( prior == NULL )
+    {
+      std::vector<double> z = MiscMath::Z(*x);
+      const int n = z.size();
+      for (int i=0;i<n; i++)
+	if ( z[i] < -th || z[i] > th )
+	  {
+	    ++removed;
+	    (*inc)[ i ] = false;
+	  }
+    }
+  else
+    {
+      std::vector<double> xx;
+      std::vector<double> xi;
+
+      for (int i=0;i<x->size();i++)
+	if ( (*prior)[i] )
+	  {
+	    xx.push_back( (*x)[i] );
+	    xi.push_back( i );
+	  }
+	else
+	  {
+	    (*inc)[i] = false;
+	  }
+
+      std::vector<double> z = MiscMath::Z(xx);
+      const int n = z.size();
+      for (int i=0;i<n; i++)
+	if ( z[i] < -th || z[i] > th )
+	  {
+	    (*inc)[ xi[i] ] = false;
+	    ++removed;
+	  }
+    }
+  
+  return removed;
+
+}
+

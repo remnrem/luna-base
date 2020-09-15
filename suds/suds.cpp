@@ -816,8 +816,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	}
       
       // no usable components --> no usable epochs... quit out (this trainer will be ignored)
-      if ( incl_comp.size() == 0 ) return 0;
-      
+      if ( incl_comp.size() == 0 )
+	{
+	  logger << "  0 components associated with stage at p<" << suds_t::required_comp_p << ", bailing\n";
+	  return 0;
+	}
+
       // and prune U and V down here
       const int nc2 = incl_comp.size();
       std::vector<bool> incl( nc );

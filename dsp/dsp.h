@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "psc.h"
 #include "spectral_norm.h"
 #include "tv.h"
 #include "rems.h"

@@ -885,6 +885,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "PSD" ) )          proc_psd( edf, param(c) );	  
       else if ( is( c, "MTM" ) )          proc_mtm( edf, param(c) );
       else if ( is( c, "1FNORM" ) )       proc_1overf_norm( edf, param(c) );
+
+      else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
       
       else if ( is( c, "FIP" ) )          proc_fiplot( edf , param(c) );
       
@@ -1098,6 +1100,7 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 
 void proc_suds( edf_t & edf , param_t & param )
 {
+
   // set up global parameters (i.e. should apply to target /and/ all trainers)
   suds_t suds;
   suds_t::set_options( param );
@@ -1252,6 +1255,24 @@ void proc_cwt_design( edf_t & edf , param_t & param )
 void proc_resample( edf_t & edf , param_t & param ) 
 {
   dsptools::resample_channel( edf, param );
+}
+
+// PSC : either build PSC (from multiple results) or fit to an EDF
+void proc_psc( edf_t & edf , param_t & param )
+{
+
+  // note:  PSC contruct() is called w/out an EDF from the command line
+  //  luna --psc <args>
+
+  psc_t psc;
+  
+  // if already populated, this returns so we can call multiple times
+  // expects 'proj=' variable to point to output of 'proj=' from PSC 
+  psc.attach( param );
+  
+  // project attached solution
+  psc.project( edf , param );
+
 }
 
 // PSD : calculate PSD 

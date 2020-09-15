@@ -122,8 +122,10 @@ namespace MiscMath
   
   std::vector<double> Z( const std::vector<double> & x );
   std::vector<double> logvector( const std::vector<double> & x );
-
-
+  
+  int outliers( const std::vector<double> * x , double th , 
+		std::vector<bool> * inc , const std::vector<bool> * prior = NULL );
+  
   double kappa( const std::vector<int> & a , const std::vector<int> & b );
   double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b );
   
