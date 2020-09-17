@@ -303,6 +303,7 @@ void proc_correl( edf_t & , param_t & );
 void proc_coh( edf_t & , param_t & );
 void proc_elec_distance( edf_t & , param_t & );
 void proc_acf( edf_t & , param_t & );
+void proc_psi( edf_t & , param_t & );
 
 void proc_conncoupl( edf_t & , param_t & );
 void proc_pac( edf_t & , param_t & );

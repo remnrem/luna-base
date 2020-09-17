@@ -26,6 +26,12 @@
 #include "defs/defs.h"
 #include "fftw/fftwrap.h"
 #include "stats/matrix.h"
+#include "stats/statistics.h"
+
+#include "db/db.h"
+#include "helper/logger.h"
+#include "edf/edf.h"
+#include "edf/slice.h"
 
 // This implements the phase slope index (PSI) as described here:
 //    Nolte G, Ziehe A, Nikulin VV, Schl\"ogl A, Kr\"amer N, Brismar T, M\"uller KR. 
@@ -33,9 +39,135 @@
 //    Physical Review Letters. To appear. 
 // This is based on their Matlab implementation, available: http://doc.ml.tu-berlin.de/causality/
 
+extern writer_t writer;
+extern logger_t logger;
+
+
+void dsptools::psi_wrapper( edf_t & edf , param_t & param )
+{
+
+  //
+  // get signals
+  //
+
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+
+  if ( signals.size() == 0 ) return;
+
+  const int ns = signals.size();
+  
+  //
+  // check sample rates
+  //
+
+  std::vector<double> Fs = edf.header.sampling_freq( signals );
+
+  int sr = Fs[0];
+  for (int s=1;s<ns;s++)
+    if ( Fs[s] != sr )
+      Helper::halt( "all sampling rates must be similar for PSI" );
+
+  //
+  // Epoch/segment lengths 
+  //
+
+  int eplen = sr * edf.timeline.epoch_length();
+
+  // by default, segment length is one fifth of the epoch length
+  int num_segments = param.has( "nseg" ) ? param.requires_int( "nseg" ) : 5;
+
+  int seglen = eplen / num_segments;
+
+  logger << "  running PSI with " << eplen << " samples per epoch, " << seglen << " per segment\n";
+
+  //
+  // Get data
+  //
+
+  matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
+
+  const Data::Matrix<double> & X = mslice.data_ref();
+
+  //
+  // set up class
+  //
+
+  psi_t psi( &X , eplen , seglen );
+    
+  //
+  // non-default models / frequency intervals?
+  //
+
+  
+
+
+  //
+  // run
+  //
+
+  logger << "  calculating phase slope index across " << ns << " channels\n";
+
+  psi.calc();
+  
+
+  //
+  // report
+  //
+  
+  psi.report( signals );
+
+}
+
+
+
+void psi_t::report( const signal_list_t & signals )
+{
+  const double EPS = 1e-8;
+
+  // note: need to tidy for text-table output
+
+  for (int m=0; m<n_models; m++)
+    {
+      writer.level( m+1 , "M" );
+      
+      writer.value( "F1" , freqbins[m][0] );
+      writer.value( "F2" , freqbins[m][ freqbins[m].size()-1 ] );
+      
+      // channel sums
+      for (int i=0;i<nchan;i++)
+	{
+	  writer.level( signals.label(i) , globals::signal_strat );
+	  writer.value( "PSI_RAW" , psi_sum[m][i] );
+	  writer.value( "STD" , std_psi_sum[m][i] );
+	  writer.value( "PSI" , psi_sum[m][i]  / ( EPS + std_psi_sum[m][i] ) );
+	}
+      writer.unlevel( globals::signal_strat );
+      
+      // channel pairs
+      for (int i=0;i<nchan;i++)
+	{
+	  writer.level( signals.label(i) , "CH1" );
+		    
+	  for (int j=0;j<nchan;j++)
+	    {
+	      if ( i == j ) continue;
+	      writer.level( signals.label(j) , "CH2" );
+
+	      writer.value( "PSI_RAW" , psi[m](i,j) );
+	      writer.value( "STD" , std_psi[m](i,j) );
+	      writer.value( "PSI" , psi[m](i,j)  / ( EPS + std_psi[m](i,j) ) );
+	    }
+	  writer.unlevel("CH2");
+	}
+      writer.unlevel("CH1");
+    }
+  writer.unlevel( "M" );
+  
+}
+
 void psi_t::calc()
 {
-  
+
   const int ndat = data->dim1();
   
   nchan = data->dim2();  // struct member
@@ -61,6 +193,8 @@ void psi_t::calc()
   else
     maxfreqbin = max_freq();
     
+  // store
+  n_models = freqbins.size();
   
   int nepoch = floor( ndat / eplen );
 
@@ -73,16 +207,14 @@ void psi_t::calc()
   // fbin / MxM 
   std::vector<Data::Matrix<std::complex<double> > > cs = data2cs_event( data , maxfreqbin );
 
-  for (int i=0;i<cs.size();i++)
-    {
-      Data::Matrix<dcomp> r = cs[i];
-      std::cout << "CS " << i << " " << r.print() << "\n";
-    }
+  // for (int i=0;i<cs.size();i++)
+  //   {
+  //     Data::Matrix<dcomp> r = cs[i];
+  //     std::cout << "CS " << i << " " << r.print() << "\n";
+  //   }
 
   const int nm = freqbins.size();
 
-  std::cout << "nm = " << nm << "\n";
-  
   const int nf = freqbins[0].size();
   // nb. this assumes that if there are multiple freqbins, they
   // all need to be the same size.
@@ -95,19 +227,17 @@ void psi_t::calc()
   std::vector<Data::Vector<double> > pssumall( nm );
   for (int i=0;i<nm;i++) pssumall[i].resize( nchan );
 
-  std::cout << "H0\n";
-  
   for (int ii=0; ii<nm; ii++)
     {
       const int nf = freqbins[ii].size();
-      std::cout << "nf = " << nf << "\n";
+
       //psall[ii] = cs2ps(cs(:,:,freqbins(ii,:)));
       std::vector<Data::Matrix<std::complex<double> > > tt(nf);
       for (int f = 0 ; f < nf ; f++) tt[f] = cs[ freqbins[ii][f] - 1 ] ;
-      std::cout << "XX1\n";
+
       psall[ii] = cs2ps( tt );
       // can redo the above to avoid copying
-      std::cout << "XX2\n";
+
       // pssumall(:,ii)=sum(psall(:,:,ii),2);
       for (int i=0;i<nchan;i++)
 	for (int j=0;j<nchan;j++)
@@ -115,11 +245,10 @@ void psi_t::calc()
       
     }
 
-  std::cout << "H1\n";
   
   //
   //psisum=squeeze(pssumall);  [ squeeze not needed ] 
-  std::vector<Data::Vector<double> > psisum = pssumall;
+  //  std::vector<Data::Vector<double> > psisum = pssumall;
 
 
   //
@@ -154,9 +283,9 @@ void psi_t::calc()
       //dataloc=data((b-1)*epjack+1:b*epjack,:);
       Data::Matrix<double> dataloc( epjack , nchan );
 
-      std::cout << "boot strap " << b << "\t"
-		<<  b*epjack << "\t"
-		<< (b+1)*epjack << "\n";
+      // std::cout << "boot strap " << b << "\t"
+      // 		<<  b*epjack << "\t"
+      // 		<< (b+1)*epjack << "\n";
 
       int r = 0;
       for (int i = b*epjack ; i < (b+1)*epjack ; i++ )
@@ -193,27 +322,50 @@ void psi_t::calc()
 	  for (int i=0;i<nchan;i++)
 	    for (int j=0;j<nchan;j++)
 	      pssumloc[b][ii][i] += psloc[b][ii](i,j);
-
+	  
 	  
 	}
     }
-  
-  
-  //psi=squeeze(psall);
 
-  std::cout << "PSI\n"
-	    << psall[0].print() << "\n";
   
-  // stdpsi=squeeze(std(psloc,0,3))*sqrt(nepochjack);
+  // store results:
+  // vector of MxM PSI matrices [ freqbins / nm ] 
   
-  // stdpsisum=squeeze(std(pssumloc,0,2))*sqrt(nepochjack);
+  psi = psall;
 
-	 // no bootstrap:
-         // psi=psall;
-         // stdpsi=0;
-         // stdpsisum=0;
-         // %disp('no standard deviation calculated')  
-   
+  // vector of vectors of total flux [ M ] 
+  psi_sum = pssumall;
+
+  // bootstreap SD deviations
+  
+  std_psi.clear();
+  std_psi_sum.clear();
+
+  for (int ii=0;ii<nm;ii++)
+    {
+      // PSI
+      Data::Matrix<double> S( nchan , nchan ); 
+      for (int i=0;i<nchan; i++)
+	for (int j=0;j<nchan; j++)
+	  {
+	    std::vector<double> xx;
+	    for (int b=0;b<nepochjack;b++) xx.push_back( psloc[b][ii](i,j) );
+	    S(i,j) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
+	  }
+      std_psi.push_back( S );
+
+      // PSI SUM
+      Data::Vector<double> V( nchan );
+      for (int i=0;i<nchan; i++)
+	{
+	  std::vector<double> xx;
+	  for (int b=0;b<nepochjack;b++) xx.push_back( pssumloc[b][ii](i) );
+	  V(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
+	}
+      std_psi_sum.push_back( V );
+      
+    }
+        
   return;
   
 }
@@ -236,12 +388,11 @@ Data::Matrix<double> psi_t::cs2ps( const std::vector<Data::Matrix<std::complex<d
     {
       // divide each element by 
       //pp(:,:,f)=cs(:,:,f)./sqrt(diag(cs(:,:,f))*diag(cs(:,:,f))');
-      std::cout << "f = " << f << "\n";
-      std::cout << "cs size = " << cs.size() << "\n";
+      // std::cout << "f = " << f << "\n";
+      // std::cout << "cs size = " << cs.size() << "\n";
       
       const Data::Matrix<std::complex<double> > & cc = cs[f];
       Data::Matrix<std::complex<double> > & ppf = pp[f];
-      std::cout << "HERE\n";
 
       for (int i=0;i<nchan;i++)
 	for (int j=0;j<nchan;j++)
@@ -250,7 +401,6 @@ Data::Matrix<double> psi_t::cs2ps( const std::vector<Data::Matrix<std::complex<d
       //pp(:,:,f)=cs(:,:,f)./sqrt(diag(cs(:,:,f))*diag(cs(:,:,f))');
     }
 
-  std::cout << "DNE\n";
   Data::Matrix<double> ps( nchan , nchan );
 
   // sum of nf-1   f / f+df comparisons
@@ -303,6 +453,9 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 									int maxfreqbin )
 {
 
+
+  
+
   // from main: 
   //  para.segave=1;   YES : AVERAGE ACROSS SEGMENTS
   //  para.subave=0;   NO  : SUBTRACTION OF AVERAGE ACROSS EPOCHS
@@ -331,19 +484,33 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
   // av=zeros(nchan,maxfreqbin);
   
   // get Hanning window of seglen, in mywindow
-  std::vector<double> window = MiscMath::hann_window( seglen );
+  std::vector<double> window = MiscMath::hanning_window( seglen );
 
+  // for (int i=0;i<window.size(); i++)
+  //   std::cout << "window " << i << " " << window[i] << "\n";
+  
   // for each epoch
   int nave = 0;
 
   // nb. ML useds j in 1-based encoding
   for (int j=0; j<nep; j++) 
     {
-      // get epoch slice of 'mydata' 
+      // get epoch slice of 'mydata'  -- horrible recopying but keeping for now
       //     dataep=data((j-1)*epleng+1:j*epleng,:);
       // rows : j * epleng
       //  to  : (j+1)*epleng-1 
-      
+      Data::Matrix<double> dataep( eplen , nchan );
+      int start = j*eplen;
+      int stop =  (j+1)*eplen-1;
+      //      std::cout << "from start , stop = " << start << " " << stop << "\n";
+      int r = 0;
+      for (int i=start;i<=stop;i++)
+	{
+	  for (int j=0;j<nchan;j++)
+	    dataep(r,j) = (*data)(i,j) ;
+	  ++r;
+	}
+		
       // average over each segment 
       for (int i=0; i<nseg; i++) 
 	{
@@ -352,13 +519,14 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 	  //	 dataloc=dataep((i-1)*segshift+1:(i-1)*segshift+segleng,:);
 	  int start = i*segshift;
 	  int stop =  i*segshift+seglen-1;
-
+	  //	  std::cout << "from start , stop = " << start << " " << stop << "\n";
+	  
 	  Data::Matrix<double> dataloc( seglen , nchan );
 	  int r = 0;
 	  for (int i=start;i<=stop;i++)
 	    {
 	      for (int j=0;j<nchan;j++)
-		dataloc(r,j) = (*data)(i,j) * window[r];
+		dataloc(r,j) = dataep(i,j) * window[r];
 	      ++r;
 	    }
 
@@ -382,9 +550,15 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 
 	      // Extract the raw transform
 	      datalocfft.push_back( fftseg.transform() );
-
+	      
+	      
 	    }
-	  
+
+	  // std::cout << "FFT\n";
+	  // for (int f=0; f<maxfreqbin; f++)
+	  //   for (int j=0; j<nchan;j++)
+	  //     std::cout << "FFT\t" << f+1 << "\t" << j+1 << "\t" << datalocfft[j][f] << "\n";
+
 	  
 	 // OR.. optionally, detrend segment
 	 //datalocfft=fft(detrend(dataloc,0).*mywindow);
@@ -396,7 +570,7 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 	     // cs(:,:,f)= cs(:,:,f)+conj(datalocfft(f,:)'*datalocfft(f,:));
 	     for (int i=0; i<nchan; i++)
 	       for (int j=0; j<nchan; j++)
-	      	 cs[f](i,j) += conj( datalocfft[i][f] ) * datalocfft[j][f] ;
+	      	 cs[f](i,j) += conj( conj(datalocfft[i][f] ) * datalocfft[j][f] ) ;
 	     
 
 	     // av(:,f)=av(:,f)+conj(datalocfft(f,:)');
@@ -412,7 +586,7 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
  // averageing 
  nave = nave * nseg;  
  
- std::cout << " nave = " << nave << "\n";
+ // std::cout << " nave = " << nave << "\n";
 
  for (int f=0;f<maxfreqbin;f++)   
    {

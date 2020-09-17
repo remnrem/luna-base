@@ -38,48 +38,7 @@ extern logger_t logger;
 
 int main(int argc , char ** argv )
 {
-  if( 0)
-    {
-  Data::Vector<double> V(3);
-  std::cout << "V.print() " << V.print() << "\n";
 
-  Data::Matrix<double> M(3,4);
-  std::cout << "M.print() " << M.print() << "\n";
-
-  for (int i=0;i<3;i++) V[i] = i+1;
-
-  int cc = 1;
-  for (int i=0;i<3;i++)
-    for (int j=0;j<4;j++)
-      M(i,j) = cc++;
-  std::cout << "HHH22222\n";
-  std::cout << "M" << M.print() << "\n";
-  std::cout << "HHH\n";
-  // 3 x 4 
-  Data::Matrix<double> MM = M * Statistics::transpose(M);
-  Data::Matrix<double> MM2 = Statistics::matrix_multiply( M , Statistics::transpose(M) );
-  
-  std::cout << "M1\n";
-  // std::cout << "MM\n"
-  // 	    << MM.print()
-  // 	    << MM2.print() << "\n";
-  
-  Data::Vector<double> MV = Statistics::transpose(M) * V;
-  Data::Vector<double> MV2 = Statistics::matrix_multiply( Statistics::transpose(M) , V );
-  std::cout << "M2\n"; 
-  // std::cout << "MV\n"
-  // 	    << MV.print()
-  // 	    << MV2.print() << "\n";
-
-  Data::Vector<double> VM = V * M;
-  Data::Vector<double> VM2 = Statistics::matrix_multiply( V , M );
-  std::cout << "M2\n";
-  // std::cout << "VM\n"
-  // 	    << VM.print()
-  // 	    << VM2.print() << "\n";
-
-  std::exit(1);
-    }
   //
   // display version info?
   //

@@ -519,6 +519,21 @@ std::vector<double> MiscMath::hann_window(int N )
 }
 
 
+//
+// Hanning  (same as Hann(n-2) w/ 0 at start/end
+// i.e. this matches matlab hanning() function 
+//
+
+std::vector<double> MiscMath::hanning_window(int N )
+{
+  if ( N < 3 ) Helper::halt( "bad hanning window" );
+  std::vector<double> r(N,0);
+  std::vector<double> w = hann_window( N+2 );
+  for (int i=0;i<N;i++)
+    r[i] = w[i+1];
+  return r;
+}
+
 
 //
 // Hamming window function (symmetric)

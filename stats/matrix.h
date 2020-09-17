@@ -293,7 +293,7 @@ namespace Data {
     
     // pretty-print
   
-    std::string print( const std::string & label = 0 , const int nrow = 0 , const int ncol = 0 ) const
+    std::string print( const std::string & label = "" , const int nrow = 0 , const int ncol = 0 ) const
     {
       std::cout << "dim1() = " << dim1() << " " << dim2() << "\n";
       int arow =  nrow == 0 || nrow > dim1() ? dim1() : nrow ; 

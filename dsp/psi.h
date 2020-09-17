@@ -25,17 +25,24 @@
 
 struct edf_t;
 struct param_t;
+struct signal_list_t;
 
 #include "stats/matrix.h"
 #include <complex>
 #include <vector>
 
+namespace dsptools
+{
+  void psi_wrapper( edf_t & edf , param_t & param );
+}
+
+  
 struct psi_t {
   
  psi_t( const Data::Matrix<double> * data , int seglen , int eplen )
   : data(data) , seglen( seglen ) , eplen( eplen )
   {
-    calc();
+    
   }
   
   int max_freq()
@@ -55,6 +62,8 @@ struct psi_t {
   }
 
   void calc();
+
+  void report( const signal_list_t & );
   
   std::vector<Data::Matrix<std::complex<double> > > data2cs_event( const Data::Matrix<double> * , int maxfreqbin );
 
@@ -87,13 +96,14 @@ struct psi_t {
   // Outputs
   //
 
-  Data::Matrix<double> psi;
-  Data::Matrix<double> stdpsi;
+  int n_models;
 
-  Data::Vector<double> psisum;
-  Data::Vector<double> stdpsisum;
+  std::vector<Data::Matrix<double> > psi;
+  std::vector<Data::Matrix<double> > std_psi;
 
-  
+  std::vector<Data::Vector<double> > psi_sum;
+  std::vector<Data::Vector<double> > std_psi_sum;
+
 };
 
 #endif

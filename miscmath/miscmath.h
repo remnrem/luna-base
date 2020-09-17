@@ -162,7 +162,10 @@ namespace MiscMath
   std::vector<double> hann_window( int n );
   void hann_window( std::vector<double> * );
   double hann_window(unsigned int n, unsigned int N);
-  
+
+  // Hanning window (to match Matlab: same as Hann(n-2), but w/ 0 at ends)
+  std::vector<double> hanning_window( int n );
+
   // Hamming window
   std::vector<double> hamming_window( int n );
   void hamming_window( std::vector<double> * );
