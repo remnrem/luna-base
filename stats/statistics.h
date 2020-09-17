@@ -27,6 +27,9 @@
 
 #include <vector>
 
+template struct Data::Vector<double>;
+template struct Data::Matrix<double>;
+
 namespace Statistics { 
   
   template<class T> inline const T SQR(const T a) {return a*a;}

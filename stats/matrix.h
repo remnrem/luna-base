@@ -25,6 +25,8 @@
 
 #include <vector>
 #include <string>
+#include <sstream>
+#include "helper/helper.h"
 
 namespace Data { 
 
@@ -51,16 +53,64 @@ namespace Data {
     T operator() (const unsigned int i ) const { return data[i]; }
     T & operator() (const unsigned int i ) { return data[i]; }
     
-    Vector<T> operator*( const Matrix<T> & rhs ) const;
-    Vector<T> operator+( const Vector<T> & rhs ) const;
-    Vector<T> operator-( const Vector<T> & rhs ) const;
-
+  
+    Data::Vector<T> operator*( const Data::Matrix<T> & rhs ) const
+    {
+      //  vector * MATRIX  [ 1 x R ] . [ R X C ] 
+      if ( size() != rhs.dim1() )
+	Helper::halt("non-conformable matrix multiplication requested");     
+      
+      const int nrow = rhs.dim2();
+      Data::Vector<double> r( nrow );
+      const int nk = size();
+      for (int i=0;i<nrow;i++)
+	for (int k=0; k<nk; k++)
+	  r(i) += (*this)(k) * rhs(k,i);
+      return r;
+    }
+    
+    Data::Vector<T> operator-( const Data::Vector<T> & rhs ) const
+    {
+      Data::Vector<T> r( rhs.dim1() );
+      for (int i=0; i<rhs.dim1(); i++) r[i] = (*this)[i] - rhs[i];
+      return r;
+    }
+    
+    Data::Vector<T> operator+( const Data::Vector<T> & rhs ) const
+    {
+      Data::Vector<T> r( rhs.dim1() );
+      for (int i=0; i<rhs.dim1(); i++) r[i] = (*this)[i] + rhs[i];
+      return r;
+    }
+    
     // some convenience functions
     
-    void inplace_add( const double x );
-    void inplace_multiply( const double x );
+    void inplace_add( const double x )
+    {
+      for (int i=0; i<dim1(); i++) data[i] += x;
+    }
+    
+    void inplace_multiply( const double x )
+    {
+      for (int i=0; i<dim1(); i++) data[i] *= x;
+    }
+    
 
-    std::string print( const std::string & label = "" , const int nelem = 0 ) const;
+  
+    // pretty-printers
+    std::string print( const std::string & label = "" , const int nelem = 0 ) const
+    {
+      int aelem =  nelem == 0 || nelem  > size() ? size() : nelem ;
+      
+      std::stringstream ss;
+      if ( label != "" ) ss << label << "\n";
+      for (int r=0;r<aelem;r++)
+	{
+	  ss << " [ " << data[r] << " ]\n";
+	}
+      return ss.str();
+    }
+
     
     void set_elem_mask( const int r , const bool val = true )
     {
@@ -160,13 +210,39 @@ namespace Data {
       if ( ncol == 0 ) nrow = r.size();
       data.push_back( Vector<T>(r) ); ++ncol; 
     }
-    
-    void cbind( const Data::Matrix<T> & rhs );
-    
-    void add_row( const Vector<T> & r ) ;
+  
+    void cbind( const Data::Matrix<T> & rhs )
+    {
+      if ( nrow != rhs.dim1() ) 
+	Helper::halt( "cbind() for matrices with unequal number of rows" );
+      for (int c=0; c<rhs.dim2(); c++)
+	add_col( rhs.col(c) );
+    }
 
-    void add_row( const std::vector<T> & r );
+    void add_row( const Vector<T> & r ) 
+    { 
+      if ( r.size() != ncol ) 
+	{ 
+	  if ( nrow == 0 ) { ncol = r.size(); resize(0,r.size()); }
+	  else { Helper::warn("bad row addition"); return; }
+	}
       
+      for( int i=0; i<ncol; i++ ) data[i].push_back( r[i] );
+      ++nrow;
+    }
+
+    void add_row( const std::vector<T> & r ) 
+    { 
+      if ( r.size() != ncol ) 
+	{
+	  if ( nrow == 0 ) { ncol = r.size(); resize(0,r.size()); }
+	  else { Helper::warn("bad row addition"); return; }
+	}
+      
+      for( int i=0; i<ncol; i++ ) data[i].push_back( r[i] );
+      ++nrow;
+    }
+
     void set_row_mask( int r , const bool b = true ) 
     { 
       if ( r >= 0 && r < nrow ) row_mask[r] = b;
@@ -216,23 +292,113 @@ namespace Data {
     int dim2() const { return ncol; }
     
     // pretty-print
-    
-    std::string print( const std::string & label = "" , const int nrow = 0 , const int ncol = 0 ) const;
+  
+    std::string print( const std::string & label = 0 , const int nrow = 0 , const int ncol = 0 ) const
+    {
+      std::cout << "dim1() = " << dim1() << " " << dim2() << "\n";
+      int arow =  nrow == 0 || nrow > dim1() ? dim1() : nrow ; 
+      int acol =  ncol == 0 || ncol > dim2() ? dim2() : ncol ;
+      
+      std::stringstream ss;
+      if ( label != "" ) ss << label << "\n";
+      std::cout << "a = " << arow << " " << acol << "\n";
+      for (int r=0;r<arow;r++)
+	{
+	  ss << " [ " ;
+	  for (int c=0;c<acol;c++)
+	    ss << " " << (*this)(r,c) ;
+	  ss << " ]\n";
+	}
+      return ss.str();
+    }
 
-    std::string dump() const;
 
-    // some convenience functions
+   std::string dump() const
+   {
+     int arow =  dim1() ;
+     int acol =  dim2() ;
+     
+     std::stringstream ss;
+     
+     for (int r=0;r<arow;r++)
+       {
+	 for (int c=0;c<acol;c++)
+	   ss << (c ? "\t" : "" ) << (*this)(r,c) ;
+	 ss << "\n";
+       }
+     return ss.str();
+   }
+
+// some convenience functions
+  
+    void inplace_add( const double x )
+    {
+      for (int i=0; i<dim1(); i++) 
+	for (int j=0; j<dim2(); j++) 
+	  (*this)(i,j) += x;
+    }
     
-    void inplace_add( const double x );
-    void inplace_multiply( const double x );
+    void inplace_multiply( const double x )
+    {
+      for (int i=0; i<dim1(); i++) 
+	for (int j=0; j<dim2(); j++) 
+	  (*this)(i,j) *= x;
+    }
+    
 
     // op. overloading for common matrix operations
-    
-    Matrix<T> operator*( const Data::Matrix<T> & rhs ) const;
-    Vector<T> operator*( const Data::Vector<T> & rhs ) const;
+  
+    Data::Matrix<T> operator*( const Data::Matrix<T> & rhs ) const
+    {
+      // MATRTX * MATRIX 
+      //  int [ r c ] x p [ rhs.r rhs.c ]
 
-    Matrix<T> operator+( const Data::Matrix<T> & rhs ) const;
-    Matrix<T> operator-( const Data::Matrix<T> & rhs ) const;    
+      if ( dim2() != rhs.dim1() )
+	Helper::halt("non-conformable matrix multiplication requested");     
+      const int nrow = dim1();
+      const int ncol = rhs.dim2();
+      const int nk = dim2();
+      Data::Matrix<double> r(nrow,ncol);
+      for (int i=0;i<nrow;i++)
+	for(int j=0; j<ncol;j++)
+	  for (int k=0; k<nk; k++)
+	    r(i,j) += (*this)(i,k) * rhs(k,j); 	
+      return r;
+    }
+
+    Data::Vector<T> operator*( const Data::Vector<T> & rhs ) const
+    {
+      // MATRIX * VECTOR -> VECTOR  [ R C ] * [ C 1 ]  --> [ R x 1 ] 
+
+      if ( dim2() != rhs.size() )
+	Helper::halt("non-conformable matrix multiplication requested");
+      const int nrow = dim1();
+      Data::Vector<double> r( nrow );
+      const int nk = dim2();
+      for (int i=0;i<nrow;i++)
+	for (int k=0; k<nk; k++)
+	  r(i) += (*this)(i,k) * rhs(k);
+      return r;
+    }
+
+    Data::Matrix<T> operator-( const Data::Matrix<T> & rhs ) const
+    {
+      Data::Matrix<T> r( rhs.dim1() , rhs.dim2() );
+      for (int i=0; i<rhs.dim1(); i++) 
+	for (int j=0; j<rhs.dim2(); j++) 
+	  r(i,j) = (*this)(i,j) - rhs(i,j);
+      return r;
+    }
+    
+    Data::Matrix<T> operator+( const Data::Matrix<T> & rhs ) const
+    {
+      Data::Matrix<T> r( rhs.dim1() , rhs.dim2() );
+      for (int i=0; i<rhs.dim1(); i++) 
+	for (int j=0; j<rhs.dim2(); j++) 
+	  r(i,j) = (*this)(i,j) + rhs(i,j);
+      return r;
+    }
+    
 
     private:
     
