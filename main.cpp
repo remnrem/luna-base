@@ -1451,7 +1451,15 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 	}
 
       psi_t psi( &data , 100 , 200 );
+
+      psi.calc();
+
+      signal_list_t signals;
+      signals.add( 0, "S1" );
+      signals.add( 1, "S2" );
       
+      psi.report( signals );
+	    
       std::exit(0);
     }
   

@@ -52,10 +52,10 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
 
-  if ( signals.size() == 0 ) return;
+  if ( signals.size() < 2 ) return;
 
   const int ns = signals.size();
-  
+
   //
   // check sample rates
   //
@@ -84,15 +84,17 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   // Get data
   //
 
-  matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
+   matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
+  
+   const Data::Matrix<double> & X = mslice.data_ref();
 
-  const Data::Matrix<double> & X = mslice.data_ref();
+   std::cout << "print" << X.print() << "\n";
 
-  //
-  // set up class
-  //
+   //
+   // set up class
+   //
 
-  psi_t psi( &X , eplen , seglen );
+   psi_t psi( &X , eplen , seglen );
     
   //
   // non-default models / frequency intervals?
@@ -107,15 +109,16 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
   logger << "  calculating phase slope index across " << ns << " channels\n";
 
-  psi.calc();
+  //  psi.calc();
   
-
+  std::cout << "done1\n";
+  
   //
   // report
   //
   
-  psi.report( signals );
-
+    psi.report( signals );
+  
 }
 
 
@@ -126,6 +129,9 @@ void psi_t::report( const signal_list_t & signals )
 
   // note: need to tidy for text-table output
 
+  std::cout << "freqbins = " << freqbins.size() << "\n" ;
+  std::cout << "nm = " << n_models << "\n";
+  
   for (int m=0; m<n_models; m++)
     {
       writer.level( m+1 , "M" );
@@ -308,8 +314,12 @@ void psi_t::calc()
       for (int f=0;f<maxfreqbin; f++)
 	for (int i=0;i<nchan;i++)
 	  for (int j=0;j<nchan;j++)
-	    cs[f](i,j) = ( nepochjack_cmp * csall[f](i,j) - csloc[f](i,j) ) / nepochjack_cmp_p1 ; 
-	    
+	    {
+	      
+	      cs[f](i,j) = ( nepochjack_cmp * csall[f](i,j) - csloc[f](i,j) ) / nepochjack_cmp_p1 ; 
+	      std::cout << " cs = " << csall[f](i,j) << " " << csloc[f](i,j)  << " " <<  cs[f](i,j)  << "\n";
+	    }
+      
       for (int ii=0; ii<nm; ii++)
 	{
 
@@ -340,7 +350,7 @@ void psi_t::calc()
   
   std_psi.clear();
   std_psi_sum.clear();
-
+  
   for (int ii=0;ii<nm;ii++)
     {
       // PSI
@@ -359,9 +369,14 @@ void psi_t::calc()
       for (int i=0;i<nchan; i++)
 	{
 	  std::vector<double> xx;
-	  for (int b=0;b<nepochjack;b++) xx.push_back( pssumloc[b][ii](i) );
-	  V(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
+	  for (int b=0;b<nepochjack;b++)
+	    {
+	      xx.push_back( pssumloc[b][ii](i) );
+	      std::cout << " xx = " << pssumloc[b][ii](i) << "\n";
+	    }
+	      V(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
 	}
+      std::cout << "V std = " << V.print() << "\n";
       std_psi_sum.push_back( V );
       
     }
@@ -507,7 +522,7 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
       for (int i=start;i<=stop;i++)
 	{
 	  for (int j=0;j<nchan;j++)
-	    dataep(r,j) = (*data)(i,j) ;
+	    dataep(r,j) = (*mydata)(i,j) ;
 	  ++r;
 	}
 		
