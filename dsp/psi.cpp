@@ -88,7 +88,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   
    const Data::Matrix<double> & X = mslice.data_ref();
 
-   std::cout << "print" << X.print() << "\n";
+   //   std::cout << "print" << X.print() << "\n";
 
    //
    // set up class
@@ -109,15 +109,14 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
   logger << "  calculating phase slope index across " << ns << " channels\n";
 
-  //  psi.calc();
+  psi.calc();
   
-  std::cout << "done1\n";
   
   //
   // report
   //
   
-    psi.report( signals );
+  psi.report( signals );
   
 }
 
@@ -129,13 +128,12 @@ void psi_t::report( const signal_list_t & signals )
 
   // note: need to tidy for text-table output
 
-  std::cout << "freqbins = " << freqbins.size() << "\n" ;
-  std::cout << "nm = " << n_models << "\n";
+  if ( n_models == 0 ) return;
   
   for (int m=0; m<n_models; m++)
     {
       writer.level( m+1 , "M" );
-      
+
       writer.value( "F1" , freqbins[m][0] );
       writer.value( "F2" , freqbins[m][ freqbins[m].size()-1 ] );
       
@@ -168,6 +166,7 @@ void psi_t::report( const signal_list_t & signals )
       writer.unlevel("CH1");
     }
   writer.unlevel( "M" );
+
   
 }
 
@@ -201,7 +200,7 @@ void psi_t::calc()
     
   // store
   n_models = freqbins.size();
-  
+
   int nepoch = floor( ndat / eplen );
 
   int nepochjack =  epjack > 0 ? floor(ndat/epjack) : 2;
@@ -212,12 +211,12 @@ void psi_t::calc()
   //[cs,nave]=data2cs_event(data,segleng,segshift,epleng,maxfreqbin,para);
   // fbin / MxM 
   std::vector<Data::Matrix<std::complex<double> > > cs = data2cs_event( data , maxfreqbin );
-
-  // for (int i=0;i<cs.size();i++)
-  //   {
-  //     Data::Matrix<dcomp> r = cs[i];
-  //     std::cout << "CS " << i << " " << r.print() << "\n";
-  //   }
+  
+   // for (int i=0;i<cs.size();i++)
+   //   {
+   //     Data::Matrix<dcomp> r = cs[i];
+   //     std::cout << "CS " << i << " " << r.print() << "\n";
+   //   }
 
   const int nm = freqbins.size();
 
@@ -302,10 +301,10 @@ void psi_t::calc()
 	}
       
       //      csloc=data2cs_event(dataloc,segleng,segshift,epleng,maxfreqbin,para);
-      
+
       std::vector<Data::Matrix<std::complex<double> > > csloc = data2cs_event( &dataloc , 
 									       maxfreqbin );
-
+      
       
       //cs=(nepochjack*csall-csloc)/(nepochjack+1);
       dcomp nepochjack_cmp( nepochjack , 0 );
@@ -315,9 +314,9 @@ void psi_t::calc()
 	for (int i=0;i<nchan;i++)
 	  for (int j=0;j<nchan;j++)
 	    {
-	      
+	      //	      std::cout << "CSLOC = " << csloc[f](i,j) << "\n";
 	      cs[f](i,j) = ( nepochjack_cmp * csall[f](i,j) - csloc[f](i,j) ) / nepochjack_cmp_p1 ; 
-	      std::cout << " cs = " << csall[f](i,j) << " " << csloc[f](i,j)  << " " <<  cs[f](i,j)  << "\n";
+	      //	      std::cout << " >> cs = " << csall[f](i,j) << " " << csloc[f](i,j)  << " " <<  cs[f](i,j)  << "\n";
 	    }
       
       for (int ii=0; ii<nm; ii++)
@@ -372,11 +371,11 @@ void psi_t::calc()
 	  for (int b=0;b<nepochjack;b++)
 	    {
 	      xx.push_back( pssumloc[b][ii](i) );
-	      std::cout << " xx = " << pssumloc[b][ii](i) << "\n";
+	      //	      std::cout << " xx = " << pssumloc[b][ii](i) << "\n";
 	    }
 	      V(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
 	}
-      std::cout << "V std = " << V.print() << "\n";
+      //      std::cout << "V std = " << V.print() << "\n";
       std_psi_sum.push_back( V );
       
     }
@@ -489,6 +488,8 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
   const int nchan = mydata->dim2();
 
   const int nep = floor(ndat/eplen);
+
+  //  std::cout << "eplen seglen segshift " << eplen << " " << seglen << " " << segshift << "\n";
   
   const int nseg = floor((eplen-seglen)/segshift)+1; //total number of segments
 
@@ -517,7 +518,7 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
       Data::Matrix<double> dataep( eplen , nchan );
       int start = j*eplen;
       int stop =  (j+1)*eplen-1;
-      //      std::cout << "from start , stop = " << start << " " << stop << "\n";
+      //      std::cout << "eplen " << eplen << " from start , stop = " << start << " " << stop << "\n";
       int r = 0;
       for (int i=start;i<=stop;i++)
 	{
@@ -525,7 +526,7 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 	    dataep(r,j) = (*mydata)(i,j) ;
 	  ++r;
 	}
-		
+
       // average over each segment 
       for (int i=0; i<nseg; i++) 
 	{
@@ -534,7 +535,7 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 	  //	 dataloc=dataep((i-1)*segshift+1:(i-1)*segshift+segleng,:);
 	  int start = i*segshift;
 	  int stop =  i*segshift+seglen-1;
-	  //	  std::cout << "from start , stop = " << start << " " << stop << "\n";
+	  //std::cout << "seglen " << seglen << " from start , stop = " << start << " " << stop << "\n";
 	  
 	  Data::Matrix<double> dataloc( seglen , nchan );
 	  int r = 0;

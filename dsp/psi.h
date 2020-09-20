@@ -39,10 +39,11 @@ namespace dsptools
   
 struct psi_t {
   
- psi_t( const Data::Matrix<double> * data , int seglen , int eplen )
-  : data(data) , seglen( seglen ) , eplen( eplen )
+  psi_t( const Data::Matrix<double> * data , int eplen , int seglen )
+    : data(data) , eplen( eplen ) , seglen( seglen ) 
   {
-    
+    if ( seglen > eplen )
+      Helper::halt( "epoch length is smaller than segment length" );
   }
   
   int max_freq()
@@ -78,13 +79,11 @@ struct psi_t {
   
   const Data::Matrix<double> * data;
 
+  int eplen;
   int seglen;
   int segshift;
-  int eplen;
 
-  // nb. integer frequencies used
   std::vector<std::vector<int> > freqbins;
-
 
   //
   // Internal 
