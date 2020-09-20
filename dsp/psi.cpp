@@ -66,58 +66,84 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   for (int s=1;s<ns;s++)
     if ( Fs[s] != sr )
       Helper::halt( "all sampling rates must be similar for PSI" );
-
+  
   //
-  // Epoch/segment lengths 
+  // Epoch or whole trace?
   //
 
-  int eplen = sr * edf.timeline.epoch_length();
+  bool by_epoch = param.has( "epoch" );
+  
+  int ne = edf.timeline.first_epoch();
 
-  // by default, segment length is one fifth of the epoch length
-  int num_segments = param.has( "nseg" ) ? param.requires_int( "nseg" ) : 5;
+  logger << "  running within " << ne << " " << edf.timeline.epoch_length() << " second epochs\n";
 
-  int seglen = eplen / num_segments;
+  
+  //
+  // PSI epoch/segment lengths 
+  //
 
+  // default 4 seconds epochs, with 2-second segments (w/ 50% overlap) 
+  int eplen = param.has( "eplen" ) ? sr * param.requires_dbl( "eplen" ) : sr * 4 ;
+  
+  // by default, segment length is 1/2 of epoch length (and w/ 50% overlap of segments) 
+  int seglen = param.has( "seglen" ) ? sr * param.requires_dbl( "seglen" ) :  eplen / 2 ;
+  
   logger << "  running PSI with " << eplen << " samples per epoch, " << seglen << " per segment\n";
 
   //
   // Get data
   //
 
-   matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
-  
-   const Data::Matrix<double> & X = mslice.data_ref();
+  if ( ! by_epoch )
+    {
 
-   //   std::cout << "print" << X.print() << "\n";
+      logger << "  running across entire trace\n";
+      
+      matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
+      
+      const Data::Matrix<double> & X = mslice.data_ref();
 
-   //
-   // set up class
-   //
-
-   psi_t psi( &X , eplen , seglen );
+      psi_t psi( &X , eplen , seglen );
     
+      psi.calc();
+  
+      psi.report( signals );
+
+      return; 
+    }
+
+
   //
-  // non-default models / frequency intervals?
+  // By epoch
   //
 
   
+  while ( 1 ) 
+    {
 
+      
+      int epoch = edf.timeline.next_epoch();      
+      
+      if ( epoch == -1 ) break;
+      
+      interval_t interval = edf.timeline.epoch( epoch );
+      
+      matslice_t mslice( edf , signals , interval );
+      
+      const Data::Matrix<double> & X = mslice.data_ref();
+      
+      psi_t psi( &X , eplen , seglen );
+      
+      psi.calc();
+      
+      writer.epoch( edf.timeline.display_epoch( epoch ) );
+      
+      psi.report( signals );
 
-  //
-  // run
-  //
+    }
 
-  logger << "  calculating phase slope index across " << ns << " channels\n";
-
-  psi.calc();
-  
-  
-  //
-  // report
-  //
-  
-  psi.report( signals );
-  
+  writer.unepoch();
+    
 }
 
 
