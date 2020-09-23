@@ -850,6 +850,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
+      else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
+
       else if ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) proc_rms( edf, param(c) );
       else if ( is( c, "MSE" ) )          proc_mse( edf, param(c) );
       else if ( is( c, "LZW" ) )          proc_lzw( edf, param(c) );
@@ -2203,6 +2205,15 @@ void proc_ecgsuppression( edf_t & edf , param_t & param )
 void proc_bpm( edf_t & edf , param_t & param )
 {
   dsptools::bpm( edf , param );
+}
+
+
+// ORDER : set order of signals ( in internal EDF)
+void proc_order_signals( edf_t & edf , param_t & param )
+{
+  // retain only specified set (all must exist)
+  // swap in EDF internal
+  edf.set_order( param );
 }
 
 

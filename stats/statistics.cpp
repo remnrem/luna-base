@@ -2527,6 +2527,7 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
     }
 
   const int k = group_n.size();
+  if ( k < 2 ) return 1.0;
 
   mean /= (double)n;
 

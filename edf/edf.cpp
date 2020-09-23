@@ -3149,6 +3149,14 @@ void edf_t::shift( int s , int shift_sp , bool wrap )
 }
 
 
+void edf_t::set_order( param_t & param )
+{
+
+  // do here
+
+}
+
+
 void edf_t::copy_signal( const std::string & from_label , const std::string & to_label )
 {
   

@@ -234,6 +234,7 @@ void proc_write( edf_t & , param_t & );
 void proc_restructure( edf_t & , param_t & );
 void proc_drop_signals( edf_t & , param_t & );
 void proc_copy_signal( edf_t & , param_t & );
+void proc_order_signals( edf_t & , param_t & );
 void proc_scale( edf_t & , param_t & , const std::string & s );
 void proc_minmax( edf_t & , param_t & );
 void proc_flip( edf_t & , param_t & );

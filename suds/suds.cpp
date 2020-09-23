@@ -124,8 +124,10 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   int n_unique_stages = proc( edf , param , true );
 
   if ( n_unique_stages == 0 )
-    Helper::halt( "no valid epochs/staging" );
-
+    {
+      logger << "  *** no valid epochs/staging for this individual, cannot complete SELF-SUDS\n";
+      return;
+    }
 
   //
   // self-classify, and report discordant calls, etc ('true' -> verbose output)
@@ -795,6 +797,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   if ( trainer && suds_t::required_comp_p < 1 ) 
     {
+
       // pull out currently retained epochs
       std::vector<std::string> ss_str;
       int c = 0;
@@ -811,10 +814,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       std::set<int> incl_comp;
       for (int j=0;j<nc;j++)
 	{	  
+	  
 	  double pv = Statistics::anova( ss_str  ,  Statistics::standardize( U.col(j) ) );
 	  if ( pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
 	}
-      
+
       // no usable components --> no usable epochs... quit out (this trainer will be ignored)
       if ( incl_comp.size() == 0 )
 	{
@@ -863,7 +867,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       nc = incl_comp.size();
       
     }
-
 
   //
   // Make variables for LDA: shrink down to 'nc' (if not already done by the above
@@ -1376,12 +1379,8 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
       
       trainer.reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd );      
 
-      std::cout << " ABOUT TO FIT\n";
-      
       trainer.fit_lda();
 
-      std::cout << " ABOUT TO FIT --- DONE\n";
-      
       b->insert( trainer );
 
       if ( ! read_psd ) 
@@ -1688,7 +1687,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      if ( retrain_self )
 		{
 		  if ( trainer.id != weight_trainer.id ) { ++ww; continue; } 
-		  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
+		  //		  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
 		}
 	      
 	      lda_posteriors_t reprediction = weight_trainer.predict( target );
