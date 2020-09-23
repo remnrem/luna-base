@@ -1103,37 +1103,48 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 
 void proc_suds( edf_t & edf , param_t & param )
 {
-
+  // clear cache?
+  if ( param.has( "clear" ) )
+    {
+      suds_t::empty_banks();
+      logger << "  clearing SUDS cache\n";
+      return;
+    }
+  
   // set up global parameters (i.e. should apply to target /and/ all trainers)
   suds_t suds;
   suds_t::set_options( param );
   
-  // this is only do once per session, i.e. even if
-  // multiple targets are scored
-  // F -> do not load PSD (not needed)
+  // this is only done once per session, i.e. even if multiple targets
+  // are scored
+
+  // bank() and wbank() can share the same individuals (they will only
+  // be loaded once) load wbank() first, as that also involves loading
+  // the PSD (i.e. raw features). If the an individual is only in the
+  // bank, these are not needed/loaded
+
+  //
+  // Weight trainers
+  //
+
+  // by default, use self-trainer as the weight trainer; if param
+  // 'wdb' is given explicitly, then ALL indivs in that database will be
+  // used to retrain the trainer weights
+  
+  if ( param.has( "wdb" ) ) 
+    suds.attach_db( param.value( "wdb" ) , true );
+  else // else, use the same training panel (but also loading raw features)
+    suds.attach_db( param.value( "db" ) , true );      
+
+ 
+  //
+  // Trainers (if not already loaded by wbank; in this case,
+  // attach_db() will just skip that person
+  //
+
+  // attaach_db() F -> do not load PSD (not needed)
   suds.attach_db( param.requires( "db" ) , false );
 
-  // by default, use self-trainer as the weight trainer
-  // if param 'retrain-all' then expect a distinct
-  // 'wdb' training bank;  this can be the same as 'db'
-  // but in this latter case, /all/ members will be used
-  // to retrain weights
-
-  // optional weight trainers (T -> load raw data, i.e. PSD)
-
-  // note: downstream, with larger training panels, we can avoid the duplication of
-  // db and wdb (i.e. bank and wbank) when they are identiical
-
-  if ( param.has( "retrain-all" ) )
-    {      
-      if ( param.has( "wdb" ) ) Helper::halt( "requires wdb=<folder> with 'retrain-all'" );
-      suds.attach_db( param.value( "wdb" ) , true );
-    }
-  else
-    {
-      // else, use the same training panel
-      suds.attach_db( param.value( "db" ) , true );      
-    }
   
   // do actual scoring  
   suds.score( edf , param );

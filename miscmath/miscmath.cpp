@@ -1300,7 +1300,6 @@ double MiscMath::betai(const double a, const double b, const double x)
 
 double MiscMath::betacf(const double a, const double b, const double x)
 {
-  std::cout << "beta = " << a << " " << b << " "<< x << "\n";
   
   const int MAXIT = 100;
   const double EPS = 3e-7;

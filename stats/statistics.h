@@ -157,6 +157,9 @@ namespace Statistics {
   
   double correlation( const std::vector<double> & a , const std::vector<double> & b , const double eps = 1e-8 );
   double correlation( const Data::Vector<double> & a , const Data::Vector<double> & b , const double eps = 1e-8 );
+
+  double weighted_variance( const std::map<int,int> & counts );
+  double runs_test( const std::vector<std::string> & s );
   
   double bartlett(const int N, 
 		  const int p, 

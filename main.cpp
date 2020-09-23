@@ -1230,6 +1230,30 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  
+  if ( p == "runs" )
+    {
+      std::vector<std::string> d = { "S", "S", "S", "F", "S", "F", "F", "F", "F" };
+
+
+      // runs_test({'M':{1:29, 2:10, 3:8, 4:3, 5:1, 6:1, 7:1, 8:1, 12:2}, 'D':{1:33, 2:17, 3:6, 5:1}}, path=False)
+
+      
+      //std::vector<std::string> d = { "S", "S", "F", "S", "F", "F", "F", "F", "S", "S", "S", "F", "F" };
+      //std::vector<std::string> d = { "S", "S", "S", "F", "S", "F", "S", "S", "S", "F", "F", "S", "S", "S" };
+      std::cout << "runs p = " << Statistics::runs_test( d ) << "\n";
+      std::exit(1);
+// #x = ["S", "S", "S", "F", "S", "F", "S", "S", "S", "F", "F", "S", "S", "S"]
+// #x = ["B","B","A","C","C","A","C","C","C","A","B","A","A","A","B","A","A","B","B","A","B","A","A","B","A","B","B"]
+// #x = ["S","S","S","S","S","F", "F", "F", "F", "F","S","S","S","S","S","F", "F", "F", "F", "F", "S", "F"]
+// #recalculation of results in O'Brien
+// runs_test({'M':{1:29, 2:10, 3:8, 4:3, 5:1, 6:1, 7:1, 8:1, 12:2}, 'D':{1:33, 2:17, 3:6, 5:1}}, path=False)
+// #this will produce an exception
+// #runs_test(["S", "S", "S", "F", "S", "F", "S", "S", "S", "F", "F", "S", "S", "S"])
+// runs_test(["B","B","A","C","C","A","C","C","C","A","B","A","A","A","B","A","A","B","B","A","B","A","A","B","A","B","B"])
+//runs_test(["S", "S", "S", "F", "S", "F", "F", "F", "F"])
+    }
+     
 
   if ( p == "cwt" )
     {

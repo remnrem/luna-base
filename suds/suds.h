@@ -358,13 +358,43 @@ struct suds_t {
 private: 
 
   // trainer library
-  static std::set<suds_indiv_t> bank;
+  static std::map<std::string,suds_indiv_t*> bank;
 
   // weight-trainer library
-  static std::set<suds_indiv_t> wbank;
-
+  static std::map<std::string,suds_indiv_t*> wbank;
 
 public:
+
+  // clear library
+  static void empty_banks()
+  {
+    // trainers
+    std::map<std::string,suds_indiv_t*>::iterator ii = bank.begin();
+    while ( ii != bank.end() )
+      {
+	// delete from bank
+	delete ii->second;
+
+	// if wbank also pointed to this person, make sure not to delete twice
+	std::map<std::string,suds_indiv_t*>::iterator ww = wbank.find( ii->first );
+	if ( ww != wbank.end() ) ww->second = NULL;
+
+	++ii;
+      }
+
+    // weight trainers
+    ii = wbank.begin();
+    while ( ii != wbank.end() )
+      {
+	if ( ii->second != NULL ) // already deleted from above?
+	  delete ii->second;
+	++ii;	
+      }
+
+    bank.clear();
+    
+  }
+
 
   //
   // Misc helpers 

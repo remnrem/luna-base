@@ -51,8 +51,8 @@ extern logger_t logger;
 extern writer_t writer;
 
 bool suds_t::verbose = false;
-std::set<suds_indiv_t> suds_t::bank;
-std::set<suds_indiv_t> suds_t::wbank;
+std::map<std::string,suds_indiv_t*> suds_t::bank;
+std::map<std::string,suds_indiv_t*> suds_t::wbank;
 int suds_t::nc;
 int suds_t::ns;
 std::vector<std::string> suds_t::siglab;
@@ -1334,7 +1334,7 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
 void suds_t::attach_db( const std::string & folder , bool read_psd )
 {
 
-  std::set<suds_indiv_t> * b = read_psd ? &wbank : &bank ;
+  std::map<std::string,suds_indiv_t*> * b = read_psd ? &wbank : &bank ;
     
   // already done?
   if ( b->size() > 0 ) return;
@@ -1348,12 +1348,25 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
     {
       /* print all the files and directories within directory */
       while ( (ent = readdir (dir)) != NULL) {
-	std::string fname = ent->d_name;
-	if (  fname != "." && fname != ".." ) 
-	  trainer_ids.push_back( fname );
+	if ( ent->d_type == DT_REG )
+	  {
+	    std::string fname = ent->d_name;
+	    if (  fname != "." && fname != ".." ) 
+	      {
+
+		// is this person the other bank?  we always attach wdb first (i.e. to make sure PSD
+		// data are included, if these are needed).  So, check against wbank in that case:
+
+		if ( ! read_psd && wbank.find( fname ) != wbank.end() ) continue;
+
+		// otherwise, we have not yet come across this person, so load up...
+		trainer_ids.push_back( fname );
+
+	      }
+	  }
       }
       closedir (dir);
-     }
+    }
   else
     {
       Helper::halt( "could not open directory " + folder );      
@@ -1375,22 +1388,23 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
   
   for ( int i=0; i<trainer_ids.size() ; i++)
     {
-      suds_indiv_t trainer;
+
+      suds_indiv_t * trainer = new suds_indiv_t;
       
-      trainer.reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd );      
+      trainer->reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd );      
 
-      trainer.fit_lda();
+      trainer->fit_lda();
 
-      b->insert( trainer );
+      (*b)[ trainer_ids[i] ] = trainer;
 
       if ( ! read_psd ) 
 	{
 	  for (int s=0;s<suds_t::ns;s++)
 	    {
-	      h2m(i,s) = trainer.mean_h2[s] ;
-	      h2sd(i,s) = trainer.sd_h2[s] ;
-	      h3m(i,s) = trainer.mean_h3[s] ;
-	      h3sd(i,s) = trainer.sd_h3[s] ;
+	      h2m(i,s) = trainer->mean_h2[s] ;
+	      h2sd(i,s) = trainer->sd_h2[s] ;
+	      h3m(i,s) = trainer->mean_h3[s] ;
+	      h3sd(i,s) = trainer->sd_h3[s] ;
 	    }
 	}
           
@@ -1523,10 +1537,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   bool prior_staging = target.obs_stage.size() != 0 ;
 
   //
-  // for weight training, on use 'self' 
+  // for weight training, on use 'self' unless an explicit wdb
+  // was specified, in which case use /all/ people in that
+  // wdb (even if that is identical to the db)
   //
 
-  bool retrain_self = ! param.has( "retrain-all" );
+  bool only_self_retrain = ! param.has( "wdb" );
   
   //
   // save weights for each trainer, based on re-predicting
@@ -1553,13 +1569,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   //
 
   std::map<std::string,double> wtrainer_mean_k3;
+  std::map<std::string,int> wtrainer_count_k3;
   
 
   //
   // iterate over trainers
   //
   
-  std::set<suds_indiv_t>::const_iterator tt = bank.begin();
+  std::map<std::string,suds_indiv_t*>::const_iterator tt = bank.begin();
 
   int cntr = 0;
 
@@ -1572,7 +1589,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // Extract this one trainer
       //
 
-      const suds_indiv_t & trainer = *tt;
+      const suds_indiv_t * trainer = tt->second;
 
       
       //
@@ -1586,7 +1603,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //        predict target class given the trainer model )
       //
       
-      lda_posteriors_t prediction = target.predict( trainer );
+      lda_posteriors_t prediction = target.predict( *trainer );
 
       
       //
@@ -1595,7 +1612,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       target.prd_stage = suds_t::type( prediction.cl );   
 
-      target.add( tt->id , prediction );
+      target.add( trainer->id , prediction );
       
 
       //
@@ -1677,25 +1694,24 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
 	  target.model = lda.fit();
 	  
-	  std::set<suds_indiv_t>::iterator ww = wbank.begin();
+	  std::map<std::string,suds_indiv_t*>::iterator ww = wbank.begin();
 	  while ( ww != wbank.end() )
 	    {
 	      
-	      suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
+	      suds_indiv_t * weight_trainer = ww->second;
 	      
 	      // only use self-training
-	      if ( retrain_self )
+	      if ( only_self_retrain )
 		{
-		  if ( trainer.id != weight_trainer.id ) { ++ww; continue; } 
-		  //		  std::cout << "WEIGHT TRAINER " << weight_trainer.id << "\n";
+		  if ( trainer->id != weight_trainer->id ) { ++ww; continue; } 
 		}
 	      
-	      lda_posteriors_t reprediction = weight_trainer.predict( target );
+	      lda_posteriors_t reprediction = weight_trainer->predict( target );
 	      
-	      weight_trainer.prd_stage = suds_t::type( reprediction.cl );
+	      weight_trainer->prd_stage = suds_t::type( reprediction.cl );
 	      
 	      // obs_stage for predicted/valid epochs only
-	      double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer.obs_stage ) ) );
+	      double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) );
 	      
 	      //logger << "trainer/wt kappa = " << trainer.id << " " << weight_trainer.id << " " << k3 << "\t" << kappa << "\n";
 	      //suds_t::tabulate(  NRW( reprediction.cl ) , NRW(str( weight_trainer.obs_stage ) ) , true );
@@ -1706,7 +1722,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      mean_kappa +=  kappa  ;
 	      
 	      if ( suds_t::verbose ) 
-		wtrainer_mean_k3[ weight_trainer.id ] += kappa;
+		{
+		  wtrainer_mean_k3[ weight_trainer->id ] += kappa;
+		  wtrainer_count_k3[ weight_trainer->id ]++;
+		}
 	      
 	      ++ww;
 	    }
@@ -1759,9 +1778,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   while ( tt != bank.end() )
     {
 
-      const suds_indiv_t & trainer = *tt;
+      const suds_indiv_t * trainer = tt->second;
 
-      writer.level( trainer.id , "TRAINER" );
+      writer.level( trainer->id , "TRAINER" );
 
       writer.value( "NS" , nr_trainer[ cntr ] );
 
@@ -1799,12 +1818,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   if ( suds_t::verbose && wbank.size() > 0 )
     {
-      std::set<suds_indiv_t>::iterator ww = wbank.begin();
+      std::map<std::string,suds_indiv_t*>::iterator ww = wbank.begin();
       while ( ww != wbank.end() )
 	{	  
-	  suds_indiv_t & weight_trainer = (suds_indiv_t&)(*ww);
-	  writer.level( weight_trainer.id , "WTRAINER" );
-	  double m = wtrainer_mean_k3[ weight_trainer.id ] / (double)bank.size() ;
+	  suds_indiv_t * weight_trainer = ww->second;
+	  writer.level( weight_trainer->id , "WTRAINER" );
+	  double m = wtrainer_mean_k3[ weight_trainer->id ] / (double)wtrainer_count_k3[ weight_trainer->id ];
 	  writer.value( "K3" , m );
 	  ++ww;
 	}
@@ -1860,7 +1879,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  suds_t::make01( m );
 	}
 
-      const suds_indiv_t & trainer = *bank.find( suds_indiv_t( ii->first ) );
+      //      const suds_indiv_t * trainer = bank.find( ii->first )->second ;
             
       double w = wgt[ ntrainers ];
 
@@ -1921,7 +1940,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	{
 	  // most likely value
 	  std::string predss = max( pp.row(e) , target.model.labels );
-	  writer.value( "PRED" , predss );
+	  //writer.value( "PRED" , predss );
 	  final_prediction.push_back( predss );
 	}
     }

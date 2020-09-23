@@ -2587,3 +2587,133 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
 
   return p;
 }
+
+
+double Statistics::weighted_variance( const std::map<int,int> & counts )
+{
+  // map : length --> count
+
+  double avg = 0;
+  double counts_sum = 0;
+  std::map<int,int>::const_iterator ii = counts.begin();
+  while ( ii != counts.end() )
+    {
+      avg += ii->first * ii->second;
+      counts_sum +=  ii->second;
+      ++ii;
+    }
+
+  avg /= counts_sum;
+  
+  double var = 0;
+
+  ii = counts.begin();
+  while ( ii != counts.end() )
+    {
+      var += ( ii->first - avg ) * ( ii->first - avg ) * ii->second;
+      ++ii;
+    }
+
+  if ( counts_sum < 2 )
+    Helper::halt( "not enough data in weighted_var()" );
+  
+  return var / (double)( counts_sum - 1 );
+
+}
+
+
+double Statistics::runs_test( const std::vector<std::string> & s )
+{
+  //  P. C. O’Brien and P. J. Dyck. A runs test based on run lengths. Biometrics, pages 237–244, 1985.
+  //  https://medium.com/@ph_singer/statistical-test-for-randomness-in-categorical-data-sequences-f973576084a
+
+  //  Simon Walk, Philipp Singer and Markus Strohmaier, Sequential
+  //  Action Patterns in Collaborative Ontology Engineering Projects:
+  //  A Case-study in the Biomedical Domain, 23rd A // CM Conference
+  //  on Information and Knowledge Management, Shanghai, China, 2014
+
+  // expect a path/sequence
+
+  int counter = 1;
+
+  bool same = true;
+
+  // label -> length of run -> number of instances
+  std::map<std::string,std::map<int,int> > cats;
+
+  // cats = defaultdict(lambda : defaultdict(int))
+  const int n = s.size();
+
+  for (int i=0; i<n; i++)
+    {
+      if ( i == n - 1 ) // end
+	{
+	  cats[ s[i] ][ counter ]++;
+	  break;
+	}
+
+      if ( s[i] == s[i+1] )
+	{
+	  same = true;
+	  ++counter;
+	}
+      else
+	{
+	  cats[ s[i] ][ counter ]++;
+	  counter = 1;
+	}
+    }
+  
+  double x2 = 0;
+  double df = 0;
+  int nr_elem = cats.size();
+  int fail_cnt = 0;
+  
+  std::map<std::string,std::map<int,int> >::const_iterator ii = cats.begin();
+  while ( ii != cats.end() )
+    {
+      // ns = sum([x*y for x,y in cats[elem].iteritems()])
+      double ns = 0 , rs = 0;
+      std::map<int,int>::const_iterator jj = ii->second.begin();
+      while ( jj != ii->second.end() )
+	{
+	  ns += jj->first * jj->second;
+	  rs += jj->second;
+	  ++jj;
+	}
+      
+      // some sanity conditions: skipping this element?
+      if (  ii->second.size() == 1 || rs == 1 || ( ns - rs ) == 1 )
+	{
+	  fail_cnt++;
+	  ++ii;
+	  continue;
+	}
+      
+      double ss = Statistics::weighted_variance(  ii->second );
+      double cs = ( pow(rs,2) -1 ) * ( rs+2 ) * ( rs + 3 ) / ( 2 * rs * (ns-rs-1) * (ns+1) );
+      //cs = (pow(rs,2)-1)*(rs+2)*(rs+3) / (2*rs*(ns-rs-1)*(ns+1))
+      double vs = cs * ns * (ns-rs) / ( rs * (rs+1) );      
+      x2 += ss * cs;
+      df += vs;
+
+      // next element
+      ++ii;
+    }
+
+  // note that this is kind-of a hack, you can adapt this as wanted
+  if ( nr_elem - fail_cnt < 2 )
+    Helper::halt( "problem in runs_test()" );
+  
+  // other probs?
+  if ( x2 == 0 || df == 0 )
+    Helper::halt( "internal error in runs_test(): x2 or df == 0" );
+
+  // return p-value
+  return chi2_prob( x2, df );
+
+}
+
+
+
+
