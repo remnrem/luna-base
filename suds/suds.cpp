@@ -88,6 +88,7 @@ std::string suds_t::mat_dump_file = "";
 
 std::vector<double> suds_t::lwr_h2, suds_t::upr_h2;
 std::vector<double> suds_t::lwr_h3, suds_t::upr_h3;
+double suds_t::hjorth_outlier_th = 3;
 
 // 1) Epoch-level PSD for 1+ channels (cs_EEG, etc) 
 //    These can be given arbitrary labels for targets, but then
@@ -1348,22 +1349,19 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
     {
       /* print all the files and directories within directory */
       while ( (ent = readdir (dir)) != NULL) {
-	if ( ent->d_type == DT_REG )
-	  {
-	    std::string fname = ent->d_name;
-	    if (  fname != "." && fname != ".." ) 
-	      {
 
-		// is this person the other bank?  we always attach wdb first (i.e. to make sure PSD
-		// data are included, if these are needed).  So, check against wbank in that case:
+#ifdef _DIRENT_HAVE_D_TYPE
+        if ( ent->d_type != DT_REG ) continue;
+#endif
 
-		if ( ! read_psd && wbank.find( fname ) != wbank.end() ) continue;
+        std::string fname = ent->d_name;
+        if (  fname == "." || fname == ".." ) continue;
 
-		// otherwise, we have not yet come across this person, so load up...
-		trainer_ids.push_back( fname );
+        // otherwise, we have not yet come across this person, so load
+        // up...
 
-	      }
-	  }
+	trainer_ids.push_back( fname );
+	
       }
       closedir (dir);
     }
@@ -1389,14 +1387,38 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
   for ( int i=0; i<trainer_ids.size() ; i++)
     {
 
-      suds_indiv_t * trainer = new suds_indiv_t;
+      // is this person the other bank?  we always attach wdb first
+      // (i.e. to make sure PSD data are included, if these are
+      // needed).  So, check against wbank in that case:
+
+      bool already_loaded =  ( ! read_psd ) && wbank.find( trainer_ids[i] ) != wbank.end() ; 
+
+      suds_indiv_t * trainer = NULL;
       
-      trainer->reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd );      
+      if ( already_loaded )
+	{
+	  // copy pointer over, to already-loaded (wdb) version
+	  trainer = wbank[  trainer_ids[i]  ];
+	}
+      else
+	{
+	  
+	  // otherwise, we need to read in and process as necessary
 
-      trainer->fit_lda();
+	  trainer = new suds_indiv_t;
+	  
+	  trainer->reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd );      
 
+	  trainer->fit_lda();
+	  
+	}
+
+      // store in the relevant bank:
+	  
       (*b)[ trainer_ids[i] ] = trainer;
 
+      // for primary trainers only, calculate Hjorth parameters
+      
       if ( ! read_psd ) 
 	{
 	  for (int s=0;s<suds_t::ns;s++)
@@ -1409,8 +1431,10 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
 	}
           
     }
+      
+
   
-  logger << "  read " << b->size() << " trainers ("
+  logger << "  attached " << b->size() << " trainers ("
 	 << ( read_psd ? "with spectra" : "w/out spectra" )
 	 << ") from " << folder << "\n";
 
@@ -1434,11 +1458,11 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
 
       for (int s=0;s<suds_t::ns;s++)
 	{
-	  suds_t::lwr_h2[s] = mean_h2m[s] - 3 * mean_h2sd[s];
-	  suds_t::upr_h2[s] = mean_h2m[s] + 3 * mean_h2sd[s];
+	  suds_t::lwr_h2[s] = mean_h2m[s] - suds_t::hjorth_outlier_th * mean_h2sd[s];
+	  suds_t::upr_h2[s] = mean_h2m[s] + suds_t::hjorth_outlier_th * mean_h2sd[s];
 
-	  suds_t::lwr_h3[s] = mean_h3m[s] - 3 * mean_h3sd[s];
-	  suds_t::upr_h3[s] = mean_h3m[s] + 3 * mean_h3sd[s];
+	  suds_t::lwr_h3[s] = mean_h3m[s] - suds_t::hjorth_outlier_th * mean_h3sd[s];
+	  suds_t::upr_h3[s] = mean_h3m[s] + suds_t::hjorth_outlier_th * mean_h3sd[s];
 
 	  if ( suds_t::lwr_h2[s] < 0 ) suds_t::lwr_h2[s] = 0;
 	  if ( suds_t::lwr_h3[s] < 0 ) suds_t::lwr_h3[s] = 0;
@@ -1738,7 +1762,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //
       // Trainer weights
       //
-      
+
       if ( wbank.size() > 0 && okay_to_fit_model ) 
 	{
 	  wgt_max[ cntr ] = max_kappa;
@@ -1974,15 +1998,18 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // also, given correlations between weights and trainer kappas
       //
 
-      writer.value( "R_K3_KL" , Statistics::correlation( wgt_kl , k3_prior) ); 
-
-      if ( wbank.size() > 0 ) 
+      if ( k3_prior.size() > 2 )
 	{
-	  writer.value( "R_K3_MAX" , Statistics::correlation( wgt_max  , k3_prior) ); 
-	  writer.value( "R_K3_MEAN" , Statistics::correlation( wgt_mean , k3_prior) ); 
-	  writer.value( "R_K3_N50" , Statistics::correlation( wgt_n50  , k3_prior) ); 
-	}
-					          
+	  writer.value( "R_K3_KL" , Statistics::correlation( wgt_kl , k3_prior) ); 
+
+	  if ( wbank.size() > 0 ) 
+	    {
+	      writer.value( "R_K3_MAX" , Statistics::correlation( wgt_max  , k3_prior) ); 
+	      writer.value( "R_K3_MEAN" , Statistics::correlation( wgt_mean , k3_prior) ); 
+	      writer.value( "R_K3_N50" , Statistics::correlation( wgt_n50  , k3_prior) ); 
+	    }
+	}				          
+
     }
 
 
@@ -2462,19 +2489,23 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
   writer.value( "DUR_PRD_W" , prd_dur[ "W" ] / 60.0 );
 
   // alternate estimates, based on most likely predicted epoch
-  if ( suds_t::n_stages == 5 )
+  // but only in verbose mode
+  if ( suds_t::verbose )
     {
-      writer.value( "DUR_PRD2_N1" , prd2_dur[ "N1" ] / 60.0 );
-      writer.value( "DUR_PRD2_N2" , prd2_dur[ "N2" ] / 60.0 );
-      writer.value( "DUR_PRD2_N3" , prd2_dur[ "N3" ] / 60.0 );
+      if ( suds_t::n_stages == 5 )
+	{
+	  writer.value( "DUR_PRD2_N1" , prd2_dur[ "N1" ] / 60.0 );
+	  writer.value( "DUR_PRD2_N2" , prd2_dur[ "N2" ] / 60.0 );
+	  writer.value( "DUR_PRD2_N3" , prd2_dur[ "N3" ] / 60.0 );
+	}
+      else
+	{
+	  writer.value( "DUR_PRD2_NR" , prd2_dur[ "NR" ] / 60.0 );
+	}
+      writer.value( "DUR_PRD2_REM" , prd2_dur[ "REM" ] / 60.0 );
+      writer.value( "DUR_PRD2_W" , prd2_dur[ "W" ] / 60.0 );
     }
-  else
-    {
-      writer.value( "DUR_PRD2_NR" , prd2_dur[ "NR" ] / 60.0 );
-    }
-  writer.value( "DUR_PRD2_REM" , prd2_dur[ "REM" ] / 60.0 );
-  writer.value( "DUR_PRD2_W" , prd2_dur[ "W" ] / 60.0 );
-
+  
   // unknown/missed epochs
   writer.value( "DUR_UNKNOWN" , unknown / 60.0 );
   

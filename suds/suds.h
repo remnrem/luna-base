@@ -195,6 +195,8 @@ struct suds_t {
     // require this individual level kappa for self-prediction to keep a trainer
     self_classification_kappa = param.has( "self-kappa" ) ? param.requires_dbl( "self-kappa" ) : 0;
     
+    // must be within X SD units of trainer Hjorth distribution for target epoch to be included 
+    hjorth_outlier_th = param.has( "th-hjorth" ) ? param.requires_dbl( "th-hjorth" ) : 3 ;
     
     standardize_u = ! param.has( "unnorm" );
 
@@ -348,7 +350,8 @@ struct suds_t {
   // based on trainer mean/SD (averaged), per signal
   static std::vector<double> lwr_h2, upr_h2;
   static std::vector<double> lwr_h3, upr_h3;
-
+  static double hjorth_outlier_th;
+  
   static std::string eannot_file;
   static bool        eannot_ints;
   static std::string eannot_prepend;
