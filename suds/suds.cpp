@@ -75,7 +75,8 @@ double suds_t::self_classification_kappa = 0;
 // 5 -> N1, N2, N3, R, W
 // 3 -> NR, R, W (3-stage)
 int suds_t::n_stages = 5; 
-                            
+std::vector<std::string> suds_t::labels;
+
 bool suds_t::use_fixed_trainer_req;
 std::vector<int> suds_t::fixed_trainer_req;
 int suds_t::fake_ids;
@@ -154,7 +155,7 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   const int ne_all = edf.timeline.num_epochs();
 
   summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
-  
+
   std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
 
   summarize_kappa( final_pred );
@@ -1339,7 +1340,10 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
     
   // already done?
   if ( b->size() > 0 ) return;
-  
+
+  if ( bank.size() == 0 && wbank.size() == 0 ) 
+    logger << "  attaching training data from " << folder << " ...\n";
+
   // find all files in this folder
   std::vector<std::string> trainer_ids;
 
@@ -1963,13 +1967,13 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( e != -1 ) 
 	{
 	  // most likely value
-	  std::string predss = max( pp.row(e) , target.model.labels );
+	  std::string predss = max( pp.row(e) , suds_t::labels );
 	  //writer.value( "PRED" , predss );
 	  final_prediction.push_back( predss );
 	}
     }
 
-  target.summarize_epochs( pp , target.model.labels, ne_all , edf );
+  target.summarize_epochs( pp , suds_t::labels , ne_all , edf );
   
   //
   // Summarize staging
@@ -1977,7 +1981,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   const double epoch_sec = edf.timeline.epoch_length();
 
-  target.summarize_stage_durations( pp , target.model.labels, ne_all , epoch_sec );
+  target.summarize_stage_durations( pp , suds_t::labels , ne_all , epoch_sec );
 
 
   
@@ -2357,7 +2361,7 @@ void suds_indiv_t::summarize_epochs( const Data::Matrix<double> & pp , // poster
 	  // automatically aggregate N1+N2+N3 under the 5-class model (or whatever NREM stages are present)
 	  if ( ! has_nr )
 	    writer.value( "PP_NR" , pp_nr );
-	  
+	
 	  // most likely value
 	  std::string predss = suds_t::max( pp.row(e) , labels );
 	  writer.value( "PRED" , predss );

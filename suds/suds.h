@@ -214,6 +214,11 @@ struct suds_t {
     // NR/R/W or N1/N2/N3/R/W classification?
     n_stages = param.has( "3-stage" ) ? 3 : 5;
 
+    if ( n_stages == 3 )
+      labels = { "NR" , "R" , "W" };
+    else
+      labels = { "N1" , "N2" , "N3" , "R" , "W" };
+    
     // by default, requires at least 5 of each 5 epochs to include a trainer
     required_epoch_n = 5;
     if ( param.has( "req-epochs" ) ) required_epoch_n = param.requires_int( "req-epochs" );
@@ -453,7 +458,10 @@ public:
   }
 
 
-
+  // either 5 or 3 stage fixed labels
+  static std::vector<std::string> labels;
+  
+  
   static int num( const std::string & ss ) {
     if ( suds_t::n_stages == 5 )
       {
