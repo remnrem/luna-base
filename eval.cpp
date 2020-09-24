@@ -2365,6 +2365,14 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
 
 void proc_canonical( edf_t & edf , param_t & param )
 {
+
+  // just try to guess... no file specification
+  if ( param.has( "guess" ) )
+    {
+      edf.guess_canonicals( param );
+      return;
+    }
+  
   std::string file = param.requires( "file" );
   std::string group = param.requires( "group" );
 

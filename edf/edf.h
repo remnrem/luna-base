@@ -445,6 +445,8 @@ public:
 		  const int new_channel_sr , // ignored if not make_new
 		  const bool dereference = false );
 
+  void guess_canonicals( param_t & );
+
   void make_canonicals( const std::string & file, const std::string &  group , const std::set<std::string> * cs = NULL );
     
   void flip( const int s ); 

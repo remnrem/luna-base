@@ -116,6 +116,9 @@ namespace Helper
   // case insenstive string-root match
   bool imatch(const std::string& a, const std::string& b , unsigned int min = 0 );
 
+  // case-insensitive any match
+  bool contains( const std::string& a, const std::string& b );
+  
   // print vector
   template <class T> std::string print( const std::vector<T> & x , const std::string & label , const int l )
     {

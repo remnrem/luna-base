@@ -4114,10 +4114,176 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
 
 
 
+void edf_t::guess_canonicals( param_t & param )
+{
+
+  // get available signals
+  std::string signal_label = param.requires( "sig" );    
+  signal_list_t signals = header.signal_list( signal_label );    
+  const int ns = signals.size();
+
+  int eeg = -1;
+  int eeg_ref = -1 , eeg_ref2 = -1;   // possible two refs, for CZ / (M1+M2)/2
+  
+  // specified EEG: quick fix, e.g. for EEG3 
+  bool has_label = param.has( "eeg" );
+  if ( has_label )
+    {
+      eeg = header.signal( param.value( "eeg" ) );
+      if ( eeg == -1 ) logger << "  could not find " <<  param.value( "eeg" ) << " -- will try to guess cs_EEG\n";
+    }
+
+  // still not found? then guess
+  if ( eeg == -1 ) 
+    {
+      // EEG: central electrode (and reference)
+      int c3 = -1 , m1 = -1 , a1 = -1 , eeg = -1 , c4 = -1 , a2 = -1 , m2 = -1 , eeg2 = -1 , cz = -1 ; 
+      
+      for (int s=0; s<ns; s++)
+	{
+	  // C3
+	  if ( Helper::contains( signals.label(s) , "C3" ) )
+	    { if ( c3 != -1 ) Helper::halt( "matched more than one C3" ); else c3 = s; }
+
+	  // C4
+	  if ( Helper::contains( signals.label(s) , "C4" ) )
+	    { if ( c4 != -1 ) Helper::halt( "matched more than one C4" ); else c4 = s; }
+
+	  // A1
+	  if ( Helper::contains( signals.label(s) , "A1" ) )
+	    { if ( a1 != -1 ) Helper::halt( "matched more than one A1" ); else a1 = s; }
+	  
+	  // A2
+	  if ( Helper::contains( signals.label(s) , "A2" ) )
+	    { if ( a2 != -1 ) Helper::halt( "matched more than one A2" ); else a2 = s; }
+
+	  // M1
+	  if ( Helper::contains( signals.label(s) , "M1" ) )
+	    { if ( m1 != -1 ) Helper::halt( "matched more than one M1" ); else m1 = s; }
+	  
+	  // M2
+	  if ( Helper::contains( signals.label(s) , "M2" ) )
+	    { if ( m2 != -1 ) Helper::halt( "matched more than one M2" ); else m2 = s; }
+
+	  // Cz
+	  if ( Helper::contains( signals.label(s) , "CZ" ) )
+	    { if ( cz != -1 ) Helper::halt( "matched more than one CZ" ); else cz = s; }
+
+	}
+
+      // collapse mastoid channels
+      if ( a1 != -1 && m1 != -1 ) Helper::halt( "both A1 and M1 present" );
+      if ( a2 != -1 && m2 != -1 ) Helper::halt( "both A2 and M2 present" );
+      if ( m1 == -1 ) m1 = a1;
+      if ( m2 == -1 ) m2 = a2;
+      	   
+      // C4/M1
+      if      ( c4 == m1 && c4 != -1 ) eeg = c4;
+      // C4 and M1 (separate ref.)
+      else if ( c4 != -1 && m1 != -1 ) { eeg = c4; eeg_ref = m1; }
+      // C4 as a single channel
+      else if ( c4 != -1 && m1 == -1 ) { eeg = c4; }
+      // C3/M2
+      if      ( c3 == m2 && c3 != -1 ) eeg = c3;
+      // C3 and M2 (separate ref.)
+      else if ( c3 != -1 && m2 != -1 ) { eeg = c3; eeg_ref = m2; }
+      // C3 as a single channel
+      else if ( c3 != -1 && m2 == -1 ) { eeg = c3; }
+
+      // else CZ, linked mastoid
+      else if ( cz != -1 && m1 != -1 && m2 != -1 ) { eeg = cz ; eeg_ref = m1 ; eeg_ref2 = m2; }
+      // else just CZ
+      else if ( cz != -1 ) eeg = cz;
+
+    }
+
+
+  //
+  // At this point, we should have eeg, eeg_ref and eeg_ref2 completed
+  //
+
+  if ( eeg == -1 )
+    {
+      logger << "  could not guess the canonical cs_EEG from any matching signals\n";
+
+      std::string canon = "cs_EEG";
+      writer.level( canon , "CS" );      
+      writer.value( "DEFINED" , 0 );
+      writer.unlevel( "CS" );
+
+      return;
+    }
+      
+  //
+  // Sample rate (default 100 Hz)
+  //
+
+  const int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 100;
+
+  //
+  // Note -- this duplicates code below, but keep for now...
+  //
+
+  std::string sigstr = signals.label( eeg );
+
+  signal_list_t sig = header.signal_list( sigstr );
+  
+  std::string refstr = ".";
+  if ( eeg_ref2 != -1 ) refstr = signals.label( eeg_ref ) + "," + signals.label( eeg_ref2 );
+  else if ( eeg_ref != -1 ) refstr = signals.label( eeg_ref );
+
+  signal_list_t ref;
+  if ( refstr != "." ) ref = header.signal_list( refstr );
+
+  logger << "  creating cs_EEG using signal [" << sigstr << "] and reference [" << refstr << "]\n";
+  
+  //
+  // Rerefence and make canonical signal
+  //
+  
+  std::string canon = "cs_EEG";
+  
+  reference( sig , ref , true , canon , sr );
+  
+  signal_list_t canonical_signal = header.signal_list( canon );
+
+  
+  //
+  // rescale units?
+  //
+  
+  // EEG, EOG, EMG all uV
+  // ECG in mV
+  // others?
+	  
+  std::string units = "uV";
+  
+  if ( canon == "cs_ECG" ) units = "mV" ;
+  
+  if ( units == "uV" || units == "mV" ) 
+    rescale( canonical_signal(0) , units );
+  
+  
+  //
+  // output
+  //
+
+  writer.level( canon , "CS" );
+
+  writer.value( "DEFINED" , 1 );
+  writer.value( "SIG" , sigstr );
+  writer.value( "REF" , refstr );
+  writer.value( "SR" , sr );
+  writer.value( "UNITS" , units );
+  
+  writer.unlevel( "CS" );
+  
+}
+
 
 void edf_t::make_canonicals( const std::string & file0, const std::string &  group , const std::set<std::string> * cs )
 {
-
+  
   std::string file = Helper::expand( file0 );
   
   if ( ! Helper::fileExists( file ) )
@@ -4164,6 +4330,9 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
     }
   
 
+
+
+  
   //
   // Set to sample rate SR if not already done, and ensure units are uV
   //

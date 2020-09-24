@@ -864,8 +864,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // set new 'nc' for this individual (which may be less than suds_t::nc)
       //
       
-      logger << "  retaining " << incl_comp.size() << " of " << nc << " PSCs\n";
-      
+      logger << "  retaining " << incl_comp.size() << " of " << nc << " PSCs, based on ANOVA p<" << suds_t::required_comp_p << "\n";
+
       nc = incl_comp.size();
       
     }

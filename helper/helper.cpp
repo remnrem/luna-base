@@ -1325,3 +1325,12 @@ void Helper::compile_txttabs( const std::string & d )
   
 
 }
+
+
+bool Helper::contains( const std::string & a , const std::string & b )
+{
+  std::string au = Helper::toupper( a );
+  std::string bu = Helper::toupper( b );
+  return au.find( bu ) != std::string::npos;
+}
+
