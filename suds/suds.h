@@ -217,7 +217,7 @@ struct suds_t {
     if ( n_stages == 3 )
       labels = { "NR" , "R" , "W" };
     else
-      labels = { "N1" , "N2" , "N3" , "R" , "W" };
+      labels = { "N1" , "N2" , "N3" , "REM" , "W" };
     
     // by default, requires at least 5 of each 5 epochs to include a trainer
     required_epoch_n = 5;
