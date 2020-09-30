@@ -176,6 +176,9 @@ struct suds_t {
     // total/max number of PSC components
     nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 10 ;
 
+    // bands instead of PSC? 
+    use_bands = param.has( "bands" );
+    
     // require p<T for each component, in oneway ANOVA a/ stage ( default = 1 );
     required_comp_p = param.has( "pc" ) ? param.requires_dbl( "pc" ) : 0.01;
     if ( param.has( "all-c" ) ) required_comp_p = 99;
@@ -261,7 +264,6 @@ struct suds_t {
     
     lwr.resize( ns , 0.5 );
     upr.resize( ns , 20 );
-    fac.resize( ns , 1 );
     sr.resize( ns , 100 );
     
     if ( param.has( "lwr" ) )
@@ -275,13 +277,7 @@ struct suds_t {
 	upr = param.dblvector( "upr" );
 	if ( upr.size() != ns ) Helper::halt( "incorrect number of values for upr" );
       }
-    
-    if ( param.has( "fac" ) )
-      {
-	fac = param.intvector( "fac" );
-	if ( fac.size() != ns ) Helper::halt( "incorrect number of values for fac" );
-      }
-    
+        
     if ( param.has( "sr" ) )
       {
 	sr = param.intvector( "sr" );
@@ -332,8 +328,6 @@ struct suds_t {
 
   static std::vector<double> upr;
 
-  static std::vector<int> fac;
-
   static std::vector<int> sr;
   
   static double wgt_percentile;
@@ -362,6 +356,8 @@ struct suds_t {
   static std::string eannot_prepend;
 
   static std::string mat_dump_file;
+
+  static bool use_bands;  // no PSC, bands instead 
   
 private: 
 

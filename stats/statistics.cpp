@@ -2555,6 +2555,9 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
       SSw[ y[i] ] += ( x[i] - group_means[ y[i] ] ) * ( x[i] - group_means[ y[i] ] ) ; 
       SST +=  ( x[i] - mean) * ( x[i] - mean ) ;
     }
+
+  // no variation?
+  if ( SST < 1e-8 ) return -1;
   
   // between sum of squares
 
@@ -2579,11 +2582,12 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
   double MSW = SSW / dfW;
   
   double F = MSB / MSW;
+  
   double p = MiscMath::pF( F , dfB , dfW );
 
-  // std::cout << "B: " << SSB << " " << MSB << "\n";
+  //std::cout << "B: " << SSB << " " << MSB << "\n";
   // std::cout << "W: " << SSW << " " << MSW << "\n";
-  // std::cout << "F , p = " << F << " " << p << "\n";
+  //std::cout << "F , p = " << F << " " << p << "\n";
 
   return p;
 }

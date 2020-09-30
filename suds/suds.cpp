@@ -55,10 +55,10 @@ std::map<std::string,suds_indiv_t*> suds_t::bank;
 std::map<std::string,suds_indiv_t*> suds_t::wbank;
 int suds_t::nc;
 int suds_t::ns;
+bool suds_t::use_bands;
 std::vector<std::string> suds_t::siglab;
 std::vector<double> suds_t::lwr;
 std::vector<double> suds_t::upr;
-std::vector<int> suds_t::fac;
 std::vector<int> suds_t::sr;
 double suds_t::wgt_percentile;
 double suds_t::denoise_fac;
@@ -158,7 +158,7 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
   std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
 
-  summarize_kappa( final_pred );
+  summarize_kappa( final_pred , true );
 
   if ( epoch_level_output )
     summarize_epochs( pp , model.labels , ne_all , edf );
@@ -456,7 +456,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   h2.resize( nge , ns );
   h3.resize( nge , ns );
-    
+
+
+  //
+  // For band power analysis (liklely EEG only, as a test condition),
+  // track frequecy of column
+  //
+
+  std::vector<double> frq;
+  Data::Matrix<double> R; // --> B, raw power (PSD is 10log10(R))
+  
   //
   // iterate over (retained) epochs
   //
@@ -487,6 +496,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // col counter for PSD aggregation matrix
       int col = 0;
       std::vector<double> firstrow;
+      std::vector<double> firstrow2; // if use_bands, for R matrix (raw power)
       
       // iterate over signals      
       for (int s = 0 ; s < ns; s++ )
@@ -516,8 +526,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 			 noverlap_segments , 
 			 window_function );
 	  	  	  
-	  // using bin_t 	      
-	  bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , suds_t::fac[s] );	  
+	  // using bin_t, 1 means no binning
+	  bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , 1 ); 
 	  
 	  bin.bin( pwelch.freq , pwelch.psd );
 
@@ -528,6 +538,17 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		{
 		  if ( en_good == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
 		  else PSD( en_good , col ) = 10*log10( bin.bspec[i] ) ; 		  
+
+		  if ( suds_t::use_bands )
+		    {
+		      if ( en_good == 0 ) firstrow2.push_back( bin.bspec[i] );
+		      else R( en_good , col ) = bin.bspec[i] ;
+
+		      // only track on first epoch 
+		      if ( en_good == 0 )
+			frq.push_back( bin.bfa[i] );
+		      
+		    }
 		  ++col;		  
 		}	      
 	    }
@@ -550,6 +571,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	{
 	  PSD.resize( nge , col );
 	  for (int i=0;i<col;i++) PSD(0,i) = firstrow[i];
+
+	  if ( suds_t::use_bands )
+	    {
+	      R.resize( nge , col );
+	      for (int i=0;i<col;i++) R(0,i) = firstrow2[i];
+	    }
+	  
 	}
 
       
@@ -566,6 +594,57 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 
   //
+  // Collapse PSD to bands instead:  
+  //
+
+  Data::Matrix<double> B;
+  
+  if ( suds_t::use_bands )
+    {
+
+      // SLOW DELTA THETA ALPHA SIGMA BETA GAMMA
+      // (up to) 7 bands
+
+      double lowf = frq[0] , uprf = frq[0];
+
+      for (int f=0;f<frq.size();f++)
+	{
+	  if ( frq[f] < lowf ) lowf = frq[f];
+	  if ( frq[f] > uprf ) uprf = frq[f];
+	}
+
+      // ASSUME... DELTA .. BETA, but GAMMA/SLOW may be absent 
+      int nbands = 5;
+      bool has_slow = lowf < globals::freq_band[ SLOW  ].second ;
+      bool has_gamma = uprf >=  globals::freq_band[ GAMMA  ].first ;;
+      if ( has_slow ) ++nbands;
+      if ( has_gamma ) ++nbands;      
+
+      B.resize( nge , nbands );
+
+      const int ncol = frq.size();
+
+      if ( ncol != PSD.dim2() ) Helper::halt( "problem" );
+      
+      for (int j=0; j<ncol ; j++ )
+	{
+	  int b = -1;
+	  if      ( frq[j] >= globals::freq_band[ SLOW  ].first && frq[j] < globals::freq_band[ SLOW  ].second ) b = has_slow ? 0 : 0;
+	  else if ( frq[j] >= globals::freq_band[ DELTA ].first && frq[j] < globals::freq_band[ DELTA ].second ) b = has_slow ? 1 : 0;
+	  else if ( frq[j] >= globals::freq_band[ THETA ].first && frq[j] < globals::freq_band[ THETA ].second ) b = has_slow ? 2 : 1;
+	  else if ( frq[j] >= globals::freq_band[ ALPHA ].first && frq[j] < globals::freq_band[ ALPHA ].second ) b = has_slow ? 3 : 2;
+	  else if ( frq[j] >= globals::freq_band[ SIGMA ].first && frq[j] < globals::freq_band[ SIGMA ].second ) b = has_slow ? 4 : 3;
+	  else if ( frq[j] >= globals::freq_band[ BETA  ].first && frq[j] < globals::freq_band[ BETA  ].second ) b = has_slow ? 5 : 4;
+	  else if ( frq[j] >= globals::freq_band[ GAMMA ].first && frq[j] < globals::freq_band[ GAMMA ].second ) b = has_slow ? 6 : 5;
+	  
+	  if ( b != -1 )
+	    for (int i=0; i<nge; i++) B(i,b) += R(i,j);
+
+	}
+    }
+  
+  
+  //
   // Rescale PSD?
   //
 
@@ -581,29 +660,27 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
 
   // mean-center columns
-
+  
   U = PSD;
   
   Statistics::mean_center_cols( U );
-
+  
   // SVD
   
   W.clear(); V.clear();
   W.resize( nbins ); 
   V.resize( nbins , nbins );
-
+  
   bool okay = Statistics::svdcmp( U , W , V );
   if ( ! okay ) Helper::halt( "problem with SVD" );
-
+  
   int rank = Statistics::orderSVD( U , W , V );
   if ( rank == 0 ) Helper::halt( "problem with input data, rank 0" );
-
-
-
+  
   //
   // Outliers/smoothing
   //
-
+  
   std::vector<bool> valid( nge , true );
 
   // track reasons for exclusion
@@ -718,6 +795,31 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 
   //
+  // optional, band-power per epoch tracking
+  //
+
+  if ( suds_t::use_bands )
+    {
+      // and make as log
+      int nbands = B.dim2();
+      Data::Matrix<double> B2 = B;
+      B.clear();
+      B.resize( nve , nbands );
+
+      int r = 0;
+      for (int i=0;i<B2.dim1() ; i++)
+	{      
+	  if ( valid[i] )
+	    {
+	      for (int j=0;j< nbands; j++)
+		B(r,j) = 10*log10( B2(i,j) );
+	      ++r;
+	    }
+	}
+    }
+
+  
+  //
   // splice out bad epochs for Hjorth parameters
   //
   
@@ -747,53 +849,70 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
       //logger << "  standardizing PSD, round 2\n";
       Statistics::standardize( PSD );
+
+      if ( suds_t::use_bands ) Statistics::standardize( B );      
     }
   else // just ensure we mean-center in any case
     {
       // mean-center columns (PSD)  
       Statistics::mean_center_cols( PSD );
-
+      
     }
 
+  
 
   //
   // Get PSC (post outlier removal)
   //
 
-  
   // copy to U
   
   U  = PSD;
   
   // get PSCs
-
+  
   W.clear(); V.clear();
   W.resize( nbins ); 
   V.resize( nbins , nbins );
   
   okay = Statistics::svdcmp( U , W , V );
   if ( ! okay ) Helper::halt( "problem with SVD" );
-
+  
   rank = Statistics::orderSVD( U , W , V );
   if ( rank == 0 ) Helper::halt( "problem with input data, rank 0" );
   
-
+  
   //
   // Smooth PSCs?
   //
-
+  
   if ( suds_t::denoise_fac > 0 ) 
-    for (int j=0;j<nc;j++)
-      {
-	std::vector<double> * col = U.col_nonconst_pointer(j)->data_nonconst_pointer();
-	double sd = MiscMath::sdev( *col );
-	double lambda = suds_t::denoise_fac * sd;
-	dsptools::TV1D_denoise( *col , lambda );
-      }
-    
+    {
+      for (int j=0;j<nc;j++)
+	{
+	  std::vector<double> * col = U.col_nonconst_pointer(j)->data_nonconst_pointer();
+	  double sd = MiscMath::sdev( *col );
+	  double lambda = suds_t::denoise_fac * sd;
+	  dsptools::TV1D_denoise( *col , lambda );
+	}
+      
+      if ( suds_t::use_bands )
+	{
+	  int nbands = B.dim2();
+	  for (int j=0; j<nbands; j++)
+	    {
+	      std::vector<double> * col = B.col_nonconst_pointer(j)->data_nonconst_pointer();
+	      double sd = MiscMath::sdev( *col );
+	      double lambda = suds_t::denoise_fac * sd;
+	      dsptools::TV1D_denoise( *col , lambda );
+	    }
+	  
+	}
 
+    }
+  
   //
-  // For trainers, optionally only retain PSCs that are significantly
+  // For trainers, optionally only retain PSCs (or bands) that are significantly
   // associated with observed stage in this individual
   //
 
@@ -816,23 +935,76 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       std::set<int> incl_comp;
       for (int j=0;j<nc;j++)
 	{	  
-	  
 	  double pv = Statistics::anova( ss_str  ,  Statistics::standardize( U.col(j) ) );
-	  if ( pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
+	  if ( pv >= 0 && pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
+	  writer.level( "PSC_" + Helper::int2str( j+1 ) , "VAR");
+	  writer.value( "PV", pv );
+	  writer.value( "INC" , pv >= 0 && pv <  suds_t::required_comp_p ); 
+	}
+      
+      //
+      // Optionally, compare to band-power association w/ stage for the same set of epochs
+      //
+
+      if ( suds_t::use_bands )
+	{
+	  
+	 
+	  int nbands = B.dim2();
+
+	  // fix, for now just assume always has SLOW band... 
+	  std::vector<std::string> bands7 = { "SLOW" , "DELTA" , "THETA" , "ALPHA" , "SIGMA" , "BETA" , "GAMMA" } ;
+	  std::vector<std::string> bands6 = { "SLOW" , "DELTA" , "THETA" , "ALPHA" , "SIGMA" , "BETA" } ;
+	  std::vector<std::string> bands = nbands == 7 ? bands7 : bands6;
+	  
+	  for (int j=0;j< nbands ;j++)
+	    {	      
+
+	      const Data::Vector<double> & V = B.col(j);
+	      
+	      if ( 1 ) // no variance check here now (might need to add back in)
+		{
+		  double pv = Statistics::anova( ss_str  ,  Statistics::standardize( V ) );
+		  writer.level( bands[j] , "VAR" );
+		  writer.value( "PV" , pv  );
+		  writer.value( "INC" , pv >= 0 && pv <  suds_t::required_comp_p ); 
+		}
+	      else
+		{		  
+                  writer.level( bands[j] , "VAR" );
+		  writer.value( "INC" , 0 );
+		  
+		}
+	      
+	    }
 	}
 
+      writer.unlevel( "VAR" );
+
+      
+      //
       // no usable components --> no usable epochs... quit out (this trainer will be ignored)
+      //
+      
       if ( incl_comp.size() == 0 )
 	{
 	  logger << "  0 components associated with stage at p<" << suds_t::required_comp_p << ", bailing\n";
 	  return 0;
 	}
 
+	  
+    
+      
+      
+      //
       // and prune U and V down here
+      //
+
+	  
       const int nc2 = incl_comp.size();
       std::vector<bool> incl( nc );
       for (int j=0;j<nc;j++) incl[j] = incl_comp.find( j ) != incl_comp.end();
-	
+      
       Data::Matrix<double> U2 = U;
       U.clear();
       U.resize( nve , nc2 );
@@ -849,7 +1021,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       int cc = 0;
       for (int j=0;j<nc;j++)
 	if ( incl[j] ) W[ cc++ ] = W2[ j ];
-	    
+      
       Data::Matrix<double> VV = V;
       V.clear();
       V.resize( VV.dim1() , nc2 );
@@ -860,6 +1032,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    if ( incl[j] ) V(i,cc++) = VV(i,j);
 	}
       
+          
       //
       // set new 'nc' for this individual (which may be less than suds_t::nc)
       //
@@ -929,10 +1102,57 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     }
 
 
+  //
+  // fit model based based only on band power
+  //
+
+  if ( suds_t::use_bands )
+    {
+      
+      // fit based on PSC
+      lda_t lda1( y , U );      
+      lda_model_t m1 = lda1.fit();
+      lda_posteriors_t prediction1 = lda_t::predict( m1 , U );
+      double kappa1 = MiscMath::kappa( prediction1.cl , y );
+
+      
+      // fit based on band power
+      lda_t lda2( y , B );
+      lda_model_t m2 = lda2.fit();
+      lda_posteriors_t prediction2 = lda_t::predict( m2 , B );
+      double kappa2 = MiscMath::kappa( prediction2.cl , y );
+
+      logger << "  PSC kappa = " << kappa1 << "\n";
+      logger << "  BAND kappa = " << kappa2 << "\n";
+      
+      if ( suds_t::verbose )
+	{
+
+	  for (int e=0; e<prediction1.cl.size(); e++)
+	    std::cout << "PSC/BAND\t" 
+		      << prediction1.cl[e] << "\t"
+		      << prediction2.cl[e] << "\n";
+
+	  std::cout << "PSC\n";
+	  std::cout << U.print() << "\n";
+
+	  std::cout << "PSC POSTERIORS\n";
+	  std::cout << prediction1.pp.print() << "\n";	  
+
+	  std::cout << "BANDS\n";
+	  std::cout << B.print() << "\n";
+
+	  std::cout << "BANDS POSTERIORS\n";
+	  std::cout << prediction2.pp.print() << "\n";	  
+	}
+      
+      
+    }
+
   
   //
   // Attempt self-classification, to remove epochs that aren't well self-classified (i.e.
-  // do not fir the model) and possible to reject a trainer, if their kappa is sufficiently
+  // do not fit the model) and possible to reject a trainer, if their kappa is sufficiently
   // poor?
   //
   
@@ -1125,8 +1345,7 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
       OUT1 << "\nCH\t" << suds_t::siglab[s] << "\n"
 	   << "SR\t" << suds_t::sr[s] << "\n"
 	   << "LWR\t" << suds_t::lwr[s] << "\n"
-	   << "UPR\t" << suds_t::upr[s] << "\n"
-	   << "FAC\t" << suds_t::fac[s] << "\n"
+	   << "UPR\t" << suds_t::upr[s] << "\n"	   
 	   << "H2_MN\t" << mean_h2[s] << "\n"
 	   << "H2_SD\t" << sd_h2[s] << "\n"
 	   << "H3_MN\t" << mean_h3[s] << "\n"
@@ -1239,13 +1458,12 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
     {
       std::string this_siglab;
       double this_lwr, this_upr;
-      int this_sr, this_fac;
+      int this_sr;
       double this_h2m, this_h2sd, this_h3m, this_h3sd;
       IN1 >> dummy >> this_siglab
 	  >> dummy >> this_sr 
 	  >> dummy >> this_lwr
-	  >> dummy >> this_upr
-	  >> dummy >> this_fac 
+	  >> dummy >> this_upr	  
 	  >> dummy >> this_h2m >> dummy >> this_h2sd 
 	  >> dummy >> this_h3m >> dummy >> this_h3sd;
 
@@ -1261,10 +1479,7 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
       if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "different lower-freq: " + Helper::dbl2str( this_lwr )
 						      + ", but expecting " + Helper::dbl2str( suds_t::lwr[s] ) );
       if ( this_upr != suds_t::upr[s] ) Helper::halt( "different upper-freq: " + Helper::dbl2str( this_upr )
-						      + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;
-      if ( this_fac != suds_t::fac[s] ) Helper::halt( "different fac: " + Helper::int2str( this_fac )
-						      + ", but expecting " + Helper::int2str( suds_t::fac[s] ) ) ;
-      
+						      + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;      
     }
 
   // stages

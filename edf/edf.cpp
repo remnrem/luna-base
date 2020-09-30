@@ -673,7 +673,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   for (int s=0;s<ns_all;s++)
     {
       if ( channels.find(s) != channels.end() ) 
-	transducer_type.push_back( edf_t::get_string( &p , 80 ) );
+	transducer_type.push_back( Helper::trim( edf_t::get_string( &p , 80 ) ) );
       else 
 	edf_t::skip( &p , 80 );
     }
@@ -684,7 +684,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       if ( channels.find(s) != channels.end() ) 
 	{
 
-	  phys_dimension.push_back( edf_t::get_string( &p , 8 ) );
+	  phys_dimension.push_back( Helper::trim( edf_t::get_string( &p , 8 ) ) );
 
 	}
       else
@@ -2375,7 +2375,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
 
   if ( nr > 0 )
     {
-      logger << ( dereference ? " dereferencing" : " referencing" );
+      logger << ( dereference ? "  dereferencing" : "  referencing" );
       for (int s=0;s<ns;s++) logger << " " << header.label[ signals(s) ];
       logger << " with respect to";
       if ( nr > 1 ) logger << " the average of";
@@ -4137,7 +4137,7 @@ void edf_t::guess_canonicals( param_t & param )
   if ( eeg == -1 ) 
     {
       // EEG: central electrode (and reference)
-      int c3 = -1 , m1 = -1 , a1 = -1 , eeg = -1 , c4 = -1 , a2 = -1 , m2 = -1 , eeg2 = -1 , cz = -1 ; 
+      int c3 = -1 , m1 = -1 , a1 = -1 , c4 = -1 , a2 = -1 , m2 = -1 , cz = -1 ; 
       
       for (int s=0; s<ns; s++)
 	{
@@ -4182,13 +4182,13 @@ void edf_t::guess_canonicals( param_t & param )
       // C4 and M1 (separate ref.)
       else if ( c4 != -1 && m1 != -1 ) { eeg = c4; eeg_ref = m1; }
       // C4 as a single channel
-      else if ( c4 != -1 && m1 == -1 ) { eeg = c4; }
+      else if ( c4 != -1 ) { eeg = c4; }
       // C3/M2
-      if      ( c3 == m2 && c3 != -1 ) eeg = c3;
+      else if ( c3 == m2 && c3 != -1 ) eeg = c3;
       // C3 and M2 (separate ref.)
       else if ( c3 != -1 && m2 != -1 ) { eeg = c3; eeg_ref = m2; }
       // C3 as a single channel
-      else if ( c3 != -1 && m2 == -1 ) { eeg = c3; }
+      else if ( c3 != -1 ) { eeg = c3; }
 
       // else CZ, linked mastoid
       else if ( cz != -1 && m1 != -1 && m2 != -1 ) { eeg = cz ; eeg_ref = m1 ; eeg_ref2 = m2; }
