@@ -991,9 +991,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  logger << "  0 components associated with stage at p<" << suds_t::required_comp_p << ", bailing\n";
 	  return 0;
 	}
-
-	  
-    
       
       
       //
@@ -1122,31 +1119,52 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       lda_posteriors_t prediction2 = lda_t::predict( m2 , B );
       double kappa2 = MiscMath::kappa( prediction2.cl , y );
 
-      logger << "  PSC kappa = " << kappa1 << "\n";
-      logger << "  BAND kappa = " << kappa2 << "\n";
-      
+      writer.value( "K_PSC" , kappa1 );
+      writer.value( "K_BAND" , kappa2);
+    
       if ( suds_t::verbose )
 	{
 
-	  for (int e=0; e<prediction1.cl.size(); e++)
-	    std::cout << "PSC/BAND\t" 
-		      << prediction1.cl[e] << "\t"
-		      << prediction2.cl[e] << "\n";
+	  std::map<int,int> e2e;
+	  for (int i=0; i< epochs.size(); i++) e2e[ epochs[i] ] = i ;  
+	  const int ne_all = edf.timeline.num_epochs();
+	  //if ( prediction1.cl.size() != ne_all ) Helper::halt( "need to adjust in bands lda_t() " );
+	  std::cout << "ne all = " << ne_all << "\n";
+	  std::cout << prediction1.cl.size()  << "\n";
+	  std::cout << epochs.size() << "\n";
+	  
+	  for (int i=0; i< ne_all; i++)
+	    {
+	      int e = -1;
+	      if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+	      if ( e == -1 ) continue;
 
-	  std::cout << "PSC\n";
-	  std::cout << U.print() << "\n";
+	      // show display epoch 'i'
+	      writer.epoch( edf.timeline.display_epoch( i ) ) ;
 
-	  std::cout << "PSC POSTERIORS\n";
-	  std::cout << prediction1.pp.print() << "\n";	  
+	      //std::cout << "check " << i << " " << edf.timeline.display_epoch( i ) << " " << e << " " << prediction1.cl.size() << "\n";
+	      
+	      writer.value( "PRED_PSC" , prediction1.cl[e]  );
+	      writer.value( "PRED_BAND" , prediction2.cl[e]  );
 
-	  std::cout << "BANDS\n";
-	  std::cout << B.print() << "\n";
-
-	  std::cout << "BANDS POSTERIORS\n";
-	  std::cout << prediction2.pp.print() << "\n";	  
+	      //     	  std::cout << "PSC\n";
+	      // std::cout << U.print() << "\n";
+	      
+	      // std::cout << "PSC POSTERIORS\n";
+	      // std::cout << prediction1.pp.print() << "\n";	  
+	      
+	      // std::cout << "BANDS\n";
+	      // std::cout << B.print() << "\n";
+	      
+	      // std::cout << "BANDS POSTERIORS\n";
+	      // std::cout << prediction2.pp.print() << "\n";	  
+	      
+	      
+	    }
+	  writer.unepoch();
+	  
 	}
-      
-      
+           
     }
 
   
