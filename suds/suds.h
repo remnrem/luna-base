@@ -251,7 +251,9 @@ struct suds_t {
     // sr=100,100,100
     
     verbose = param.has( "verbose" );
-
+  
+    epoch_lvl_output = param.has( "epoch" );
+    
     if ( param.requires( "sig" ) == "*" ) Helper::halt( "requires sig to be set explicitly" );
 
     siglab = param.strvector( "sig" );
@@ -301,6 +303,8 @@ struct suds_t {
   //
 
   static bool verbose;
+
+  static bool epoch_lvl_output;
 
   static int nc;
 

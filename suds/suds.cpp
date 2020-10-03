@@ -51,6 +51,7 @@ extern logger_t logger;
 extern writer_t writer;
 
 bool suds_t::verbose = false;
+bool suds_t::epoch_lvl_output = false;
 std::map<std::string,suds_indiv_t*> suds_t::bank;
 std::map<std::string,suds_indiv_t*> suds_t::wbank;
 int suds_t::nc;
@@ -1121,17 +1122,17 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
       writer.value( "K_PSC" , kappa1 );
       writer.value( "K_BAND" , kappa2);
-    
-      if ( suds_t::verbose )
+        
+      if ( suds_t::epoch_lvl_output )
 	{
 
 	  std::map<int,int> e2e;
 	  for (int i=0; i< epochs.size(); i++) e2e[ epochs[i] ] = i ;  
 	  const int ne_all = edf.timeline.num_epochs();
 	  //if ( prediction1.cl.size() != ne_all ) Helper::halt( "need to adjust in bands lda_t() " );
-	  std::cout << "ne all = " << ne_all << "\n";
-	  std::cout << prediction1.cl.size()  << "\n";
-	  std::cout << epochs.size() << "\n";
+	  // std::cout << "ne all = " << ne_all << "\n";
+	  // std::cout << prediction1.cl.size()  << "\n";
+	  // std::cout << epochs.size() << "\n";
 	  
 	  for (int i=0; i< ne_all; i++)
 	    {
