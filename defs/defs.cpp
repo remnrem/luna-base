@@ -78,6 +78,7 @@ int globals::assume_pm_starttime_hour;
 
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
+int globals::anon_idroot_cnt;
 
 bool globals::force_edf;
 bool globals::skip_edf_annots;
@@ -400,6 +401,8 @@ void globals::init_defs()
 
   indiv_wildcard = "^";
 
+  anon_idroot_cnt = 0; // count incremented each time set 
+  
   sample_list_min = -1;
   sample_list_max = -1;
   sample_list_id = "";

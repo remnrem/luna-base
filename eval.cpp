@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -1376,7 +1375,10 @@ void set_tag( const std::string & t )
 void proc_anon( edf_t & edf , param_t & param )
 {
 
-  
+  // either
+  //  1.  Set EDF ID/date to NULL
+  //  2.  Set EDF ID to (sample list) ID  ('insert-id')
+  //  3.  Change EDF /and/ (sample-list) ID to root_000000N  ('root')
   
   if ( param.has ( "insert-id" ) ) 
     {
@@ -1384,6 +1386,20 @@ void proc_anon( edf_t & edf , param_t & param )
 	     << edf.filename << "\n";
       
       edf.header.patient_id = edf.id;
+    }
+  else if ( param.has( "root" ) )
+    {
+
+      ++globals::anon_idroot_cnt;
+
+      // root_N
+      std::string newid = param.value( "root" ) + "_" + Helper::int2str( globals::anon_idroot_cnt );
+      
+      edf.header.patient_id = newid;
+      edf.id = newid;
+
+      logger << " setting ID and EDF ID to " << newid << "\n";
+
     }
   else
     {

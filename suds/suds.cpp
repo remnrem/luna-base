@@ -1805,26 +1805,37 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   //
 
   bool only_self_retrain = ! param.has( "wdb" );
-  
+
+  //
+  // Does trainer bank contain target?  (if so, plan to skip it)
+  //
+
+  bool bank_contains_target = bank.find( target.id ) != bank.end();
+
+  const int bank_size = bank_contains_target ? bank.size() - 1 : bank.size() ; 
+    
   //
   // save weights for each trainer, based on re-predicting
   //
 
-  Data::Vector<double> wgt_max( bank.size() ) ;
-  Data::Vector<double> wgt_mean( bank.size() ) ;
-  Data::Vector<double> wgt_n50( bank.size() ) ;
+  Data::Vector<double> wgt_max( bank_size ) ;
+  Data::Vector<double> wgt_mean( bank_size ) ;
+  Data::Vector<double> wgt_n50( bank_size ) ;
+
 
   //
   // Store Kappa3 for each trainer (valid w/ prior staging only)
   //
   
-  Data::Vector<double> k3_prior( bank.size() ) ;
+  Data::Vector<double> k3_prior( bank_size ) ;
   
+
   //
   // Stats on trainers
   //
 
-  Data::Vector<double> nr_trainer( bank.size() ) ; // number of unique imputed stages 
+  std::map<std::string,double> nr_trainer; // number of unique imputed stages 
+
 
   //
   // Stats on weight trainers
@@ -1853,12 +1864,13 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       const suds_indiv_t * trainer = tt->second;
 
-      
+
       //
-      // Verbose output: TRAINER x WEIGHT TRAINER STATS: not yet
+      // Skip self? [ nb. does not increate cntr ] 
       //
 
-      
+      if ( trainer->id == target.id ) { ++tt; continue; } 
+
       //
       // Predict target given trainer, after project target PSD into trainer-defined space 
       // ( i.e. this generates target.U_projected based on trainer, and then uses it to 
@@ -1871,12 +1883,19 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //
       // Save predictions
       //
+           
+      target.add( trainer->id , prediction );
+
+      // we can likely remove/change this next step: prediction.cl is
+      // stored above for this trainer, but use this slot as a temp so
+      // we can make the kappa comparison below; also it is used to
+      // get the final epoch number below when making the final set;
+      // we should go through and tidy this usage up, as this probably
+      // not necessary to store twice (but no biggie)
 
       target.prd_stage = suds_t::type( prediction.cl );   
 
-      target.add( trainer->id , prediction );
       
-
       //
       // Reweighting (using individuals specified in wbank, if any) 
       //
@@ -1915,7 +1934,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	}
 
       // save for output
-      nr_trainer[ cntr ] = nr;
+      nr_trainer[ trainer->id ] = nr;
 
 
       //
@@ -1941,10 +1960,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( okay_to_fit_model )
 	{
 	  
-	  // std::cout << "U\n" << target.U.print() << "\n";
-	  // for (int i=0;i<prediction.cl.size();i++) std::cout << prediction.cl[i] << "\n";
-	  // std::cout << "\n";
-	  	  
 	  //
 	  // Generate model for prediction based on 'dummy' target (imputed) stages
 	  // but U basd on the target's own SVD (i.e. not projected into trainer space);  
@@ -1967,16 +1982,16 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		{
 		  if ( trainer->id != weight_trainer->id ) { ++ww; continue; } 
 		}
-	      
+
+	      // do not use target as a weight-trainer
+	      if ( weight_trainer->id == target.id ) { ++ww; continue; } 
+		  
 	      lda_posteriors_t reprediction = weight_trainer->predict( target );
 	      
 	      weight_trainer->prd_stage = suds_t::type( reprediction.cl );
 	      
 	      // obs_stage for predicted/valid epochs only
 	      double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) );
-	      
-	      //logger << "trainer/wt kappa = " << trainer.id << " " << weight_trainer.id << " " << k3 << "\t" << kappa << "\n";
-	      //suds_t::tabulate(  NRW( reprediction.cl ) , NRW(str( weight_trainer.obs_stage ) ) , true );
 	      
 	      ++n_kappa_all;
 	      if ( kappa > 0.5 ) n_kappa50++;
@@ -1993,9 +2008,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	    }
 	  
 	}
-
-          
-          
+                    
      
       //
       // Trainer weights
@@ -2028,11 +2041,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   Data::Vector<double> wgt_kl = Statistics::unit_scale( target.wgt_kl() );
   
+
   //
   // Output all weights, and generate 'final' weigth
   //
   
-  Data::Vector<double> wgt( bank.size() );
+  Data::Vector<double> wgt( bank_size );
 
   tt = bank.begin();
   cntr = 0;
@@ -2042,9 +2056,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       const suds_indiv_t * trainer = tt->second;
 
+      // skip if target is in the trainer bank [ i.e. do not inc. cntr ]
+      if ( trainer->id == target.id ) { ++tt; } 
+      
       writer.level( trainer->id , "TRAINER" );
 
-      writer.value( "NS" , nr_trainer[ cntr ] );
+      writer.value( "NS" , nr_trainer[ trainer->id ] );
 
       if ( prior_staging )
 	writer.value( "K3" , k3_prior[ cntr ] );
@@ -2209,6 +2226,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   target.summarize_epochs( pp , suds_t::labels , ne_all , edf );
   
+
   //
   // Summarize staging
   //
