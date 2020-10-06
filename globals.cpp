@@ -42,6 +42,7 @@ std::string                        cmd_t::plaintext_root = ".";
 
 std::map<std::string,std::string>  cmd_t::vars;
 std::map<std::string,std::map<std::string,std::string> >  cmd_t::ivars;
+std::map<std::string,std::string>  cmd_t::idmapper;
 
 std::set<std::string>              cmd_t::specials;
 

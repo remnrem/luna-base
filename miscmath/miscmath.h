@@ -124,10 +124,13 @@ namespace MiscMath
   std::vector<double> logvector( const std::vector<double> & x );
   
   int outliers( const std::vector<double> * x , double th , 
-		std::vector<bool> * inc , const std::vector<bool> * prior = NULL );
-  
+		std::vector<bool> * inc , const std::vector<bool> * prior = NULL );  
   double kappa( const std::vector<int> & a , const std::vector<int> & b );
   double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b );
+
+  double accuracy( const std::vector<int> & a , const std::vector<int> & b , std::vector<double> * spacc = NULL );
+  double accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b , std::vector<double> * spacc = NULL );
+
   
   // p-values for F-test
   double pF(const double F, const int df1, const int df2);

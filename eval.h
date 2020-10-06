@@ -103,6 +103,14 @@ class cmd_t
 
   static void attach_ivars( const std::string & file );
 
+  static void attach_idmapper( const std::string & file );
+
+  static std::string remap_id( const std::string & id )
+  {
+    if ( idmapper.find( id ) == idmapper.end() ) return id;
+    return idmapper.find( id )->second; 
+  }
+  
   // these cannot be used as variable names in scripts
   static void register_specials();
 
@@ -156,6 +164,9 @@ class cmd_t
 
   // individual-specific vars
   static std::map<std::string,std::map<std::string,std::string> >  ivars;
+
+  // id-mapper
+  static std::map<std::string,std::string>  idmapper;
   
   static std::string                        cmdline_cmds;
   static std::string                        stout_file;

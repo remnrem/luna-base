@@ -295,6 +295,7 @@ void cmd_t::clear_static_members()
   
   vars.clear();
   ivars.clear();
+  idmapper.clear();
   signallist.clear();
   label_aliases.clear();
   primary_alias.clear();
@@ -2608,9 +2609,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;      
     }
 
+  // ID re-mapper?
+  if ( Helper::iequals( tok0 , "ids" ) )
+    {
+      cmd_t::attach_idmapper( tok1 );
+      return;
+    }
 
   // channel type labels: partial match
-
   if ( Helper::iequals( tok0 , "ch-match" ) )
     {
       //  type|label1|label2,type|label1|label2
@@ -3127,12 +3133,43 @@ void cmd_t::attach_ivars( const std::string & file )
 	  // read header now
 	  header = false; 
 	}
-      IN1.eof();
+      IN1.close();
           
       //      logger << "  attached " << ncols - 1 << " from " << filename << "\n";
     }
 }
 
+
+
+//
+// Attach idmapper from a file
+//
+
+void cmd_t::attach_idmapper( const std::string & file )
+{
+
+  std::string filename = Helper::expand( file );
+
+  if ( ! Helper::fileExists( filename ) )
+    Helper::halt( "could not find " + filename );
+      
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+  while ( ! IN1.eof() ) 
+    {
+      std::string s;
+      Helper::safe_getline( IN1 , s );
+      if ( IN1.eof() ) break;
+      if ( s == "" ) continue;
+      std::vector<std::string> tok = Helper::parse( s , "\t" );
+      if ( tok.size() != 2 ) Helper::halt( "bad format in " + filename );
+      cmd_t::idmapper[ tok[0] ] = tok[1];
+    }
+
+  IN1.close();
+
+  logger << "  read " << cmd_t::idmapper.size() << " IDs to remap\n";
+
+}
 
 
 
@@ -3154,7 +3191,8 @@ void cmd_t::register_specials()
   specials.insert( "id" );
   specials.insert( "verbose" ) ;
   specials.insert( "sig" ) ;
-  specials.insert( "vars" ) ;
+  specials.insert( "vars" );
+  specials.insert( "ids" );    
   specials.insert( "add" ) ;
   specials.insert( "fail-list" ) ;
   specials.insert( "compressed" ) ;

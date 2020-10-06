@@ -402,7 +402,7 @@ void globals::init_defs()
   indiv_wildcard = "^";
 
   anon_idroot_cnt = 0; // count incremented each time set 
-  
+    
   sample_list_min = -1;
   sample_list_max = -1;
   sample_list_id = "";

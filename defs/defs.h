@@ -181,7 +181,7 @@ struct globals
   static std::string indiv_wildcard;
 
   static int anon_idroot_cnt;
-  
+
   static std::string current_tag;
   
 

@@ -1189,6 +1189,45 @@ double MiscMath::as_angle_0_pos2neg( const double r )
   return a;
 }
 
+
+double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> & b , std::vector<double> * spacc )
+{
+  std::vector<std::string> aa( a.size() );
+  std::vector<std::string> bb( b.size() );
+  for (int i=0;i<a.size();i++) aa[i] = Helper::int2str( a[i] );
+  for (int i=0;i<b.size();i++) bb[i] = Helper::int2str( b[i] );
+  return accuracy( aa, bb , spacc );
+}
+
+double MiscMath::accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b , std::vector<double> * spacc)
+{
+  const int n = a.size();
+  if ( n != b.size() ) Helper::halt( "mismatched vectors in accuracy()" );
+
+  int m = 0;
+  //std::map<std::string,int> match;
+
+  for (int i=0;i<n;i++)
+    {
+      if ( a[i] == b[i] )
+	{
+	  ++m;
+	  //match[ a[i] ] = 1;
+	}
+    }
+  
+  // items specific accuracies
+  if ( spacc != NULL )
+    {
+      // leave for now
+    }
+
+  // overall accuracy
+  return m / (double)n;
+  
+}
+
+
 double MiscMath::kappa( const std::vector<int> & a , const std::vector<int> & b )
 {
   std::vector<std::string> aa( a.size() );

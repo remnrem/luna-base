@@ -2793,12 +2793,14 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   
   // original reporting (5 or 3 level)
   double kappa = MiscMath::kappa( prd , suds_t::str( obs_stage_valid ) );
-
+  double acc = MiscMath::accuracy( prd , suds_t::str( obs_stage_valid ) );
+  
   writer.value( "K" , kappa );
+  writer.value( "ACC" , acc );
   
   if ( to_console ) 
     {
-      logger << "\n  Confusion matrix: " << suds_t::n_stages << "-level classification: kappa = " << kappa << "\n";
+      logger << "\n  Confusion matrix: " << suds_t::n_stages << "-level classification: kappa = " << kappa << ", acc = " << acc << "\n";
       suds_t::tabulate(  prd , suds_t::str( obs_stage_valid ) , true );
     }      
   
@@ -2806,12 +2808,14 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   if ( suds_t::n_stages == 5 )
     {
       double kappa3 = MiscMath::kappa( suds_t::NRW( prd ) , suds_t::NRW( suds_t::str( obs_stage_valid ) ) );
+      double acc3 = MiscMath::accuracy( suds_t::NRW( prd ) , suds_t::NRW( suds_t::str( obs_stage_valid ) ) );
       
       writer.value( "K3" , kappa3 );
+      writer.value( "ACC3" , acc3 );
       
       if ( to_console )
 	{
-	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << "\n";
+	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << ", acc = " << acc3 << "\n";
 	  suds_t::tabulate(  suds_t::NRW( prd ) , suds_t::NRW( suds_t:: str( obs_stage_valid ) ) , true );
 	}      
     }
