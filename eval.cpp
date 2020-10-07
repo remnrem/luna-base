@@ -1134,7 +1134,7 @@ void proc_suds( edf_t & edf , param_t & param )
   if ( param.has( "wdb" ) ) 
     suds.attach_db( param.value( "wdb" ) , true );
   else // else, use the same training panel (but also loading raw features)
-    suds.attach_db( param.value( "db" ) , true );      
+    suds.attach_db( param.value( "db" ) , true );
 
  
   //

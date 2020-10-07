@@ -210,10 +210,19 @@ struct suds_t {
 
     ignore_target_priors = param.has( "ignore-prior" );
     
-    // weights: take top N % (if 0 use all)
+    // weights: take top N % (if 0 use all) based on the weighting
     wgt_percentile = param.has( "pct" ) ? param.requires_dbl( "pct" ) : 0 ;
     if ( wgt_percentile < 0 || wgt_percentile > 100 ) Helper::halt( "pct should be between 0 and 100" );
 
+    // wgt1: (do not) use backskip re-weighting
+    use_repred_weights = ! param.has( "no-repred-weights" );
+    
+    // wgt2: use kl_weights
+    use_kl_weights = param.has( "kl-weights" );
+
+    // total weight is either wgt1, wgt2 or a simple average of both wgt1+wgt2
+
+    
     // NR/R/W or N1/N2/N3/R/W classification?
     n_stages = param.has( "3-stage" ) ? 3 : 5;
 
@@ -333,7 +342,11 @@ struct suds_t {
   static std::vector<double> upr;
 
   static std::vector<int> sr;
-  
+
+  static bool use_repred_weights;
+
+  static bool use_kl_weights;
+    
   static double wgt_percentile;
   
   static double denoise_fac;

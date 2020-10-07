@@ -61,6 +61,9 @@ std::vector<std::string> suds_t::siglab;
 std::vector<double> suds_t::lwr;
 std::vector<double> suds_t::upr;
 std::vector<int> suds_t::sr;
+
+bool suds_t::use_kl_weights;
+bool suds_t::use_repred_weights;
 double suds_t::wgt_percentile;
 double suds_t::denoise_fac;
 bool suds_t::standardize_u = true;
@@ -1803,8 +1806,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // was specified, in which case use /all/ people in that
   // wdb (even if that is identical to the db)
   //
-
-  bool only_self_retrain = ! param.has( "wdb" );
+  
+  bool only_self_retrain = use_repred_weights && ! param.has( "wdb" );
 
   //
   // Does trainer bank contain target?  (if so, plan to skip it)
@@ -1950,7 +1953,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  
 	  // tmp
 	  k3 = kappa3;
-	  //	  suds_t::tabulate( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) , true  );	  
+	  
 	}
       
       
@@ -1972,7 +1975,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  target.model = lda.fit();
 	  
 	  std::map<std::string,suds_indiv_t*>::iterator ww = wbank.begin();
-	  while ( ww != wbank.end() )
+	  while ( use_repred_weights && ww != wbank.end() )
 	    {
 	      
 	      suds_indiv_t * weight_trainer = ww->second;
@@ -2014,7 +2017,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // Trainer weights
       //
 
-      if ( wbank.size() > 0 && okay_to_fit_model ) 
+      if ( use_repred_weights && wbank.size() > 0 && okay_to_fit_model ) 
 	{
 	  wgt_max[ cntr ] = max_kappa;
 	  wgt_mean[ cntr ] = ( mean_kappa ) / (double)n_kappa_all ;
@@ -2039,7 +2042,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   // normalized from 0..1 
 
-  Data::Vector<double> wgt_kl = Statistics::unit_scale( target.wgt_kl() );
+  Data::Vector<double> wgt_kl;
+  if ( use_kl_weights ) wgt_kl = Statistics::unit_scale( target.wgt_kl() );
   
 
   //
@@ -2079,12 +2083,19 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // define 'final' weight: if weight trainers exist, 
       // using WGT_MEAN, otherwise WGT_KL
       //
+    
+      bool w1 = wbank.size() > 0 && use_repred_weights;
+      bool w2 = use_kl_weights;
 
-      if ( wbank.size() > 0 )
+      if ( w1 && w2 )
+	wgt[ cntr ] = ( wgt_mean[ cntr ] +  wgt_kl[ cntr ] ) / 2.0 ; 
+      else if ( w1 )
 	wgt[ cntr ] = wgt_mean[ cntr ] ;
-      else
+      else if ( w2 )
 	wgt[ cntr ] = wgt_kl[ cntr ] ;
-      
+      else
+	wgt[ cntr ] = 1 ; 
+
       ++tt;
       ++cntr;
     }
@@ -2095,7 +2106,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Verbose output: mean weight trainer values
   //
 
-  if ( suds_t::verbose && wbank.size() > 0 )
+  if ( suds_t::verbose && use_repred_weights && wbank.size() > 0 )
     {
       std::map<std::string,suds_indiv_t*>::iterator ww = wbank.begin();
       while ( ww != wbank.end() )
@@ -2115,16 +2126,18 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Normalize wgt / truncate at percentile?
   //
 
-  if ( suds_t::wgt_percentile > 0 ) 
-    {
+  bool has_wgt = ( wbank.size() > 0 && use_repred_weights ) || use_kl_weights ;
 
+  if ( has_wgt && suds_t::wgt_percentile > 0 ) 
+    {
+      
       // get value X = top N% and set to 0/1 if below/above X
       double threshold = MiscMath::percentile( *wgt.data_pointer() , 1.0 - suds_t::wgt_percentile / 100.0 ) ;
-
+      
       // binarize wgt 
       for (int i=0;i<wgt.size();i++)	
 	wgt[i] = wgt[i] >= threshold ? 1 : 0 ;
-	
+      
     }
   
 
@@ -2176,7 +2189,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     }
 
   if ( suds_t::wgt_percentile > 0 ) 
-    logger << "  constructed posteriors using " << (int)tot_wgt << " (of " << ntrainers << ") trainers\n";
+    logger << "  constructed posteriors using top "
+	   << suds_t::wgt_percentile << " percentile, "
+	   << (int)tot_wgt << " (of " << ntrainers << ") trainers\n";
+  else if ( has_wgt )
+    logger << "  constructed posteriors using " << ntrainers << " trainers (weighted N = " << tot_wgt << ")\n";
   else
     logger << "  constructed posteriors using " << ntrainers << " trainers\n";
 
@@ -2198,7 +2215,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
     }
   mean_maxpp /= (double)ne;
-
 
 
   //
@@ -2793,11 +2809,36 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   
   // original reporting (5 or 3 level)
   double kappa = MiscMath::kappa( prd , suds_t::str( obs_stage_valid ) );
-  double acc = MiscMath::accuracy( prd , suds_t::str( obs_stage_valid ) );
+
+  // accuracy, precision/recall, kappa:   nb. ordering: 'truth' first, then 'predicted' 
+  double macro_f1 = 0 , macro_precision = 0 , macro_recall = 0;
+  double wgt_f1 = 0 , wgt_precision = 0 , wgt_recall = 0;
+  std::vector<double> precision, recall, f1;
+
+  double acc = MiscMath::accuracy( suds_t::str( obs_stage_valid ) , prd ,
+				   &suds_t::labels ,
+				   &precision, &recall, &f1,
+				   &macro_precision, &macro_recall, &macro_f1 ,
+				   &wgt_precision, &wgt_recall, &wgt_f1 );
   
   writer.value( "K" , kappa );
   writer.value( "ACC" , acc );
+
+  writer.value( "F1" , macro_f1 );
+  writer.value( "PREC" , macro_precision );
+  writer.value( "RECALL" , macro_recall );
   
+  writer.value( "WGT_F1" , wgt_f1 );
+  writer.value( "WGT_PREC" , wgt_precision );
+  writer.value( "WGT_RECALL" , wgt_recall );
+
+  for ( int l=0;l<suds_t::labels.size();l++)
+    {
+      writer.value( "F1_" + suds_t::labels[l] , f1[l] );
+      writer.value( "PREC_" + suds_t::labels[l] , precision[l] );
+      writer.value( "RECALL_" + suds_t::labels[l] , recall[l] );
+    }
+    
   if ( to_console ) 
     {
       logger << "\n  Confusion matrix: " << suds_t::n_stages << "-level classification: kappa = " << kappa << ", acc = " << acc << "\n";
@@ -2807,17 +2848,32 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   // collapse 5->3?
   if ( suds_t::n_stages == 5 )
     {
+      
       double kappa3 = MiscMath::kappa( suds_t::NRW( prd ) , suds_t::NRW( suds_t::str( obs_stage_valid ) ) );
-      double acc3 = MiscMath::accuracy( suds_t::NRW( prd ) , suds_t::NRW( suds_t::str( obs_stage_valid ) ) );
+
+      // nb. 'truth' / pred
+      double macro_f1 = 0 , macro_precision = 0 , macro_recall = 0;
+      double wgt_f1 = 0 , wgt_precision = 0 , wgt_recall = 0;
+      std::vector<double> precision, recall, f1;
+      std::vector<std::string> lab3 = { "NR" , "R" , "W" };
+      
+      double acc3 = MiscMath::accuracy( suds_t::NRW( suds_t::str( obs_stage_valid ) ) , suds_t::NRW( prd ) ,
+					&lab3 ,
+					&precision, &recall, &f1,
+					&macro_precision, &macro_recall, &macro_f1 ,
+					&wgt_precision, &wgt_recall, &wgt_f1 );
       
       writer.value( "K3" , kappa3 );
       writer.value( "ACC3" , acc3 );
       
+      writer.value( "F13" , macro_f1 );
+      writer.value( "PREC3" , macro_precision );
+      writer.value( "RECALL3" , macro_recall );
+
       if ( to_console )
 	{
 	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << ", acc = " << acc3 << "\n";
 	  suds_t::tabulate(  suds_t::NRW( prd ) , suds_t::NRW( suds_t:: str( obs_stage_valid ) ) , true );
-	}      
+	}
     }
 }
-

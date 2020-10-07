@@ -1190,39 +1190,138 @@ double MiscMath::as_angle_0_pos2neg( const double r )
 }
 
 
-double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> & b , std::vector<double> * spacc )
+double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> & b , 
+			   std::vector<int> * labels ,
+			   std::vector<double> * precision ,
+			   std::vector<double> * recall ,
+			   std::vector<double> * f1 ,
+			   double * macro_precision ,
+			   double * macro_recall ,
+			   double * macro_f1 ,
+			   double * avg_weighted_precision ,
+			   double * avg_weighted_recall ,
+			   double * avg_weighted_f1 )
 {
   std::vector<std::string> aa( a.size() );
   std::vector<std::string> bb( b.size() );
+
   for (int i=0;i<a.size();i++) aa[i] = Helper::int2str( a[i] );
   for (int i=0;i<b.size();i++) bb[i] = Helper::int2str( b[i] );
-  return accuracy( aa, bb , spacc );
+
+  std::vector<std::string> ll;
+  if ( labels != NULL )
+    {
+      ll.resize( labels->size() );
+      for (int i=0;i<labels->size();i++) ll[i] = Helper::int2str( (*labels)[i] );
+    }
+
+  return accuracy( aa, bb , labels == NULL ? NULL : &ll ,
+		   precision , recall , f1 ,
+		   macro_precision , macro_recall , macro_f1 , 
+		   avg_weighted_precision , avg_weighted_recall , avg_weighted_f1 );
 }
 
-double MiscMath::accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b , std::vector<double> * spacc)
+double MiscMath::accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b ,
+			   std::vector<std::string> * labels , 
+                           std::vector<double> * precision ,
+                           std::vector<double> * recall ,
+                           std::vector<double> * f1 ,
+			   double * macro_precision ,
+			   double * macro_recall ,
+			   double * macro_f1 ,
+			   double * avg_weighted_precision ,
+			   double * avg_weighted_recall ,
+			   double * avg_weighted_f1 )
 {
   const int n = a.size();
+
   if ( n != b.size() ) Helper::halt( "mismatched vectors in accuracy()" );
 
   int m = 0;
-  //std::map<std::string,int> match;
 
+  std::map<std::string,std::map<std::string,int> > table;
+  std::map<std::string,int> rows, cols;
+  std::set<std::string> obs;
+  
   for (int i=0;i<n;i++)
     {
-      if ( a[i] == b[i] )
-	{
-	  ++m;
-	  //match[ a[i] ] = 1;
-	}
+      // overall accuracy
+      if ( a[i] == b[i] ) ++m;
+      // build table
+      ++table[ a[i] ][ b[i] ];
+      ++rows[ a[i] ];
+      ++cols[ b[i] ];
+      obs.insert( a[i] );
+      obs.insert( b[i] );      
     }
   
-  // items specific accuracies
-  if ( spacc != NULL )
+  // items specific precision/recall/F1
+  if ( labels != NULL )
     {
-      // leave for now
-    }
+      // assume a [ row ] is the 'truth'
+      //        b [ col ] is the prediction
 
+      // so, precision = ii / sum(i*)
+      //     recall    = ii / (*i)
+
+      precision->resize( labels->size() );
+      recall->resize( labels->size() );
+      f1->resize( labels->size() );
+
+      *macro_recall = 0;
+      *macro_precision = 0;
+      *macro_f1 = 0;
+
+      *avg_weighted_f1 = 0;
+      *avg_weighted_precision = 0;
+      *avg_weighted_recall = 0;
+      
+      int ncat = 0;
+      int nobs = 0;
+      
+      for (int i=0;i<labels->size();i++)
+	{
+	  
+	  if ( obs.find( (*labels)[i] ) != obs.end() )
+	    {
+
+	      ++ncat;
+	      nobs += rows[ (*labels)[i] ] ;
+	      
+	      (*precision)[i] = table[ (*labels)[i] ][ (*labels)[i] ] / (double)cols[ (*labels)[i] ];
+	      (*recall)[i] = table[ (*labels)[i] ][ (*labels)[i] ] / (double)rows[ (*labels)[i] ];
+	      (*f1)[i] = 2 * ( (*precision)[i] * (*recall)[i] ) / ( (*precision)[i] + (*recall)[i] ); 
+	      
+	      *macro_f1 += (*f1)[i];
+	      *macro_precision += (*precision)[i];
+	      *macro_recall += (*recall)[i];
+	      
+	      *avg_weighted_f1 += rows[ (*labels)[i] ] * (*f1)[i];
+	      *avg_weighted_precision += rows[ (*labels)[i] ] * (*precision)[i];
+	      *avg_weighted_recall += rows[ (*labels)[i] ] * (*recall)[i];
+	    }
+	  else
+	    {
+	      (*precision)[i] = 0;
+	      (*recall)[i] = 0;
+	      (*f1)[i] = 0;
+	    }
+
+	}
+
+      *macro_f1 /= (double)ncat;
+      *macro_recall /= (double)ncat;
+      *macro_precision /= (double)ncat;
+
+      *avg_weighted_f1 /= (double)nobs;
+      *avg_weighted_precision /= (double)nobs;
+      *avg_weighted_recall /= (double)nobs;
+      
+    }
+  
+  
   // overall accuracy
+  
   return m / (double)n;
   
 }

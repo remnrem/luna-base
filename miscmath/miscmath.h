@@ -128,8 +128,29 @@ namespace MiscMath
   double kappa( const std::vector<int> & a , const std::vector<int> & b );
   double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b );
 
-  double accuracy( const std::vector<int> & a , const std::vector<int> & b , std::vector<double> * spacc = NULL );
-  double accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b , std::vector<double> * spacc = NULL );
+  double accuracy( const std::vector<int> & a , const std::vector<int> & b ,
+		   std::vector<int> * labels = NULL ,
+		   std::vector<double> * precision = NULL ,
+		   std::vector<double> * recall = NULL ,
+		   std::vector<double> * f1 = NULL ,
+		   double * macro_precision = NULL ,
+		   double * macro_recall = NULL ,
+		   double * macro_f1 = NULL ,		  
+		   double * avg_weighted_precision = NULL ,
+		   double * avg_weighted_recall = NULL ,
+		   double * avg_weighted_f1 = NULL );
+
+  double accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b ,
+		   std::vector<std::string> * labels = NULL , 
+		   std::vector<double> * precision = NULL ,
+		   std::vector<double> * recall = NULL ,
+		   std::vector<double> * f1 = NULL ,
+		   double * macro_precision = NULL ,
+		   double * macro_recall = NULL ,
+		   double * macro_f1 = NULL ,		   
+		   double * avg_weighted_precision = NULL ,
+		   double * avg_weighted_recall = NULL ,
+		   double * avg_weighted_f1 = NULL );
 
   
   // p-values for F-test
