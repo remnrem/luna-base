@@ -2302,12 +2302,20 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	{
 	  if ( use_kl_weights )
 	    writer.value( "R_K3_KL" , Statistics::correlation( wgt_kl , k3_prior) ); 
-
+	  
 	  if ( use_repred_weights && wbank.size() > 0 ) 
 	    {
 	      writer.value( "R_K3_MAX" , Statistics::correlation( wgt_max  , k3_prior) ); 
 	      writer.value( "R_K3_MEAN" , Statistics::correlation( wgt_mean , k3_prior) ); 
 	      writer.value( "R_K3_N50" , Statistics::correlation( wgt_n50  , k3_prior) ); 
+
+	      if ( use_kl_weights )
+		{
+		  writer.value( "R_MEAN_KL" , Statistics::correlation( wgt_mean , wgt_kl ) );
+		  writer.value( "R_K3_CMB" , Statistics::correlation( wgt , wgt_kl ) );
+		  
+		}
+	      
 	    }
 	}				          
 
@@ -2792,7 +2800,7 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
   
   // unknown/missed epochs
   writer.level( "UNKNOWN" , globals::stage_strat );
-  writer.value( "DUR_UNKNOWN" , unknown / 60.0 );
+  writer.value( "DUR_OBS" , unknown / 60.0 );
 
   // and done
   writer.unlevel( globals::stage_strat );
