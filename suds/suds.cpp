@@ -1882,8 +1882,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       if ( trainer->id == target.id ) { ++tt; continue; } 
 
-      std::cout << "trainer = " << trainer->id << "\n";
-      
       
       //
       // Predict target given trainer, after project target PSD into trainer-defined space 
@@ -2302,9 +2300,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       if ( k3_prior.size() > 2 )
 	{
-	  writer.value( "R_K3_KL" , Statistics::correlation( wgt_kl , k3_prior) ); 
+	  if ( use_kl_weights )
+	    writer.value( "R_K3_KL" , Statistics::correlation( wgt_kl , k3_prior) ); 
 
-	  if ( wbank.size() > 0 ) 
+	  if ( use_repred_weights && wbank.size() > 0 ) 
 	    {
 	      writer.value( "R_K3_MAX" , Statistics::correlation( wgt_max  , k3_prior) ); 
 	      writer.value( "R_K3_MEAN" , Statistics::correlation( wgt_mean , k3_prior) ); 
@@ -2727,6 +2726,9 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
       else if ( labels[i] == "W" ) wake_slot = i;      
     }
 
+  // for output, below
+  std::string rem_out = suds_t::n_stages == 5 ? "REM" : "R";
+  
   double unknown = 0;
   
   //
@@ -2754,7 +2756,7 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
 	  if ( n2_slot != -1 ) prd_dur[ "N2" ]  += pp(e,n2_slot) * epoch_sec ;
 	  if ( n3_slot != -1 ) prd_dur[ "N3" ]  += pp(e,n3_slot) * epoch_sec ;
 	  if ( nr_slot != -1 ) prd_dur[ "NR" ]  += pp(e,nr_slot) * epoch_sec ;
-	  if ( rem_slot != -1 ) prd_dur[ "REM" ]  += pp(e,rem_slot) * epoch_sec ;
+	  if ( rem_slot != -1 ) prd_dur[ rem_out ]  += pp(e,rem_slot) * epoch_sec ;
 	  if ( wake_slot != -1 ) prd_dur[ "W" ]  += pp(e,wake_slot) * epoch_sec ;
 	  
 	  // duration based on MAP estimate
@@ -2776,41 +2778,25 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
   //
   // Report stage durations (in minutes)
   //
-  
-  if ( suds_t::n_stages == 5 )
-    {
-      writer.value( "DUR_PRD_N1" , prd_dur[ "N1" ] / 60.0 );
-      writer.value( "DUR_PRD_N2" , prd_dur[ "N2" ] / 60.0 );
-      writer.value( "DUR_PRD_N3" , prd_dur[ "N3" ] / 60.0 );
-    }
-  else
-    {
-      writer.value( "DUR_PRD_NR" , prd_dur[ "NR" ] / 60.0 );
-    }
-  writer.value( "DUR_PRD_REM" , prd_dur[ "REM" ] / 60.0 );
-  writer.value( "DUR_PRD_W" , prd_dur[ "W" ] / 60.0 );
 
-  // alternate estimates, based on most likely predicted epoch
-  // but only in verbose mode
-  if ( suds_t::verbose )
+  for (int s=0; s < suds_t::labels.size(); s++) 
     {
-      if ( suds_t::n_stages == 5 )
-	{
-	  writer.value( "DUR_PRD2_N1" , prd2_dur[ "N1" ] / 60.0 );
-	  writer.value( "DUR_PRD2_N2" , prd2_dur[ "N2" ] / 60.0 );
-	  writer.value( "DUR_PRD2_N3" , prd2_dur[ "N3" ] / 60.0 );
-	}
-      else
-	{
-	  writer.value( "DUR_PRD2_NR" , prd2_dur[ "NR" ] / 60.0 );
-	}
-      writer.value( "DUR_PRD2_REM" , prd2_dur[ "REM" ] / 60.0 );
-      writer.value( "DUR_PRD2_W" , prd2_dur[ "W" ] / 60.0 );
-    }
+      writer.level( suds_t::labels[ s ] , globals::stage_strat );      
+      writer.value( "DUR_PRD" , prd_dur[ suds_t::labels[ s ] ] / 60.0 );
+
+      // alternate estimates, based on most likely predicted epoch
+      if ( suds_t::verbose )
+	writer.value( "DUR_PRD2" , prd_dur[ suds_t::labels[ s ] ] / 60.0 );
+
+    }  
   
   // unknown/missed epochs
+  writer.level( "UNKNOWN" , globals::stage_strat );
   writer.value( "DUR_UNKNOWN" , unknown / 60.0 );
-  
+
+  // and done
+  writer.unlevel( globals::stage_strat );
+
 
   //
   // estimates of observed stage duration (based on comparable set of epochs)
@@ -2821,12 +2807,13 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
       std::map<std::string,double>::const_iterator ss = obs_dur.begin();
       while ( ss != obs_dur.end() )
 	{
-	  writer.value( "DUR_OBS_" + ss->first , ss->second / 60.0 );
+	  writer.level( ss->first , globals::stage_strat );
+	  writer.value( "DUR_OBS" , ss->second / 60.0 );
 	  ++ss;
 	}
+      writer.unlevel( globals::stage_strat );
     }
   
-
 }
 
 
@@ -2858,20 +2845,23 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   writer.value( "PREC" , macro_precision );
   writer.value( "RECALL" , macro_recall );
   
-  writer.value( "WGT_F1" , wgt_f1 );
-  writer.value( "WGT_PREC" , wgt_precision );
-  writer.value( "WGT_RECALL" , wgt_recall );
+  writer.value( "F1_WGT" , wgt_f1 );
+  writer.value( "PREC_WGT" , wgt_precision );
+  writer.value( "RECALL_WGT" , wgt_recall );
 
   for ( int l=0;l<suds_t::labels.size();l++)
     {
-      writer.value( "F1_" + suds_t::labels[l] , f1[l] );
-      writer.value( "PREC_" + suds_t::labels[l] , precision[l] );
-      writer.value( "RECALL_" + suds_t::labels[l] , recall[l] );
+      writer.level( suds_t::labels[l] , globals::stage_strat );
+      writer.value( "F1" , f1[l] );
+      writer.value( "PREC" , precision[l] );
+      writer.value( "RECALL" , recall[l] );
     }
-    
+  writer.unlevel( globals::stage_strat );
+  
   if ( to_console ) 
     {
-      logger << "\n  Confusion matrix: " << suds_t::n_stages << "-level classification: kappa = " << kappa << ", acc = " << acc << "\n";
+      logger << "\n  Confusion matrix: " << suds_t::n_stages
+	     << "-level classification: kappa = " << kappa << ", acc = " << acc << "\n";
       suds_t::tabulate(  prd , suds_t::str( obs_stage_valid ) , true );
     }      
   
@@ -2893,12 +2883,12 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 					&macro_precision, &macro_recall, &macro_f1 ,
 					&wgt_precision, &wgt_recall, &wgt_f1 );
       
-      writer.value( "K3" , kappa3 );
-      writer.value( "ACC3" , acc3 );
+      writer.value( "K_3" , kappa3 );
+      writer.value( "ACC_3" , acc3 );
       
-      writer.value( "F13" , macro_f1 );
-      writer.value( "PREC3" , macro_precision );
-      writer.value( "RECALL3" , macro_recall );
+      writer.value( "F1_3" , macro_f1 );
+      writer.value( "PREC_3" , macro_precision );
+      writer.value( "RECALL_3" , macro_recall );
 
       if ( to_console )
 	{
