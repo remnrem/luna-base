@@ -215,10 +215,10 @@ struct suds_t {
     if ( wgt_percentile < 0 || wgt_percentile > 100 ) Helper::halt( "pct should be between 0 and 100" );
 
     // wgt1: (do not) use backskip re-weighting
-    use_repred_weights = ! param.has( "no-repred-weights" );
+    use_repred_weights = param.has( "repred-weights" ) ? Helper::yesno( param.value( "repred-weights" ) ) : true ;
     
     // wgt2: use kl_weights
-    use_kl_weights = param.has( "kl-weights" );
+    use_kl_weights = param.has( "kl-weights" ) ? Helper::yesno( param.value( "kl-weights" ) ) : false ;
 
     // total weight is either wgt1, wgt2 or a simple average of both wgt1+wgt2
 

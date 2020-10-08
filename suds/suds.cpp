@@ -1847,7 +1847,15 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   std::map<std::string,double> wtrainer_mean_k3;
   std::map<std::string,int> wtrainer_count_k3;
   
+  
+  bool w1 = wbank.size() > 0 && use_repred_weights;
+  bool w2 = use_kl_weights;
 
+  if ( w1 && w2 ) logger << "  using mean of repred-weights & KL-weights\n";
+  else if ( w1 ) logger << "  using repred-weights only\n";
+  else if ( w2 ) logger << "  using KL-weights only\n";
+  else logger << "  not applying any weights\n";
+  
   //
   // iterate over trainers
   //
@@ -1874,6 +1882,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       if ( trainer->id == target.id ) { ++tt; continue; } 
 
+      std::cout << "trainer = " << trainer->id << "\n";
+      
+      
       //
       // Predict target given trainer, after project target PSD into trainer-defined space 
       // ( i.e. this generates target.U_projected based on trainer, and then uses it to 
@@ -2035,6 +2046,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
 
 
+      
   //
   // Derive weights for each trainer based on KL divergence from trainer stage distribition to the mean
   // over all trainers
@@ -2043,15 +2055,16 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // normalized from 0..1 
 
   Data::Vector<double> wgt_kl;
-  if ( use_kl_weights ) wgt_kl = Statistics::unit_scale( target.wgt_kl() );
-  
+  if ( use_kl_weights )
+    wgt_kl = Statistics::unit_scale( target.wgt_kl() );
 
   //
   // Output all weights, and generate 'final' weigth
   //
   
   Data::Vector<double> wgt( bank_size );
-
+  std::vector<std::string> used_trainers;
+  
   tt = bank.begin();
   cntr = 0;
 
@@ -2069,10 +2082,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       if ( prior_staging )
 	writer.value( "K3" , k3_prior[ cntr ] );
-      
-      writer.value( "WGT_KL"   , wgt_kl[ cntr ] );
 
-      if ( wbank.size() > 0 ) 
+      if ( use_kl_weights )
+	writer.value( "WGT_KL"   , wgt_kl[ cntr ] );
+      
+      if ( use_repred_weights && wbank.size() > 0 ) 
 	{
 	  writer.value( "WGT_N50"  , wgt_n50[ cntr ] );
 	  writer.value( "WGT_MAX"  , wgt_max[ cntr ] );
@@ -2096,12 +2110,16 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       else
 	wgt[ cntr ] = 1 ; 
 
+      used_trainers.push_back( trainer->id );
+			     
       ++tt;
       ++cntr;
     }
   writer.unlevel( "TRAINER" );
-  
 
+
+  
+  
   //
   // Verbose output: mean weight trainer values
   //
@@ -2136,11 +2154,21 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
       // binarize wgt 
       for (int i=0;i<wgt.size();i++)	
-	wgt[i] = wgt[i] >= threshold ? 1 : 0 ;
-      
+	wgt[i] = wgt[i] >= threshold ? 1 : 0 ;     
+           
     }
-  
 
+  //
+  // Output final trainer weights
+  //
+
+  for (int t=0; t<used_trainers.size(); t++)
+    {
+      writer.level( used_trainers[t] , "TRAINER" );
+      writer.value( "WGT" , wgt[t] );
+    }
+  writer.unlevel( "TRAINER" );
+  
   //
   // Construct (weighted) posterior probabilities
   //    
@@ -2159,7 +2187,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   std::map<std::string,Data::Matrix<double> >::iterator ii = target.target_posteriors.begin();
   while ( ii != target.target_posteriors.end() )
     {
-
+      
       // get posteriors from this trainer 
 
       Data::Matrix<double> & m = ii->second;
@@ -2188,7 +2216,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       ++ii;
     }
 
-  if ( suds_t::wgt_percentile > 0 ) 
+
+  
+  if ( has_wgt && suds_t::wgt_percentile > 0 ) 
     logger << "  constructed posteriors using top "
 	   << suds_t::wgt_percentile << " percentile, "
 	   << (int)tot_wgt << " (of " << ntrainers << ") trainers\n";
