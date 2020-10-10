@@ -1879,7 +1879,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //
       // Skip self? [ nb. does not increate cntr ] 
       //
-
+    
       if ( trainer->id == target.id ) { ++tt; continue; } 
 
       
@@ -2072,7 +2072,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       const suds_indiv_t * trainer = tt->second;
 
       // skip if target is in the trainer bank [ i.e. do not inc. cntr ]
-      if ( trainer->id == target.id ) { ++tt; } 
+      if ( trainer->id == target.id ) { ++tt; continue; } 
       
       writer.level( trainer->id , "TRAINER" );
 

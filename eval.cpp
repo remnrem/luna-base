@@ -862,7 +862,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c , "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c , "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
-      else if ( is( c , "SELF-SUDS" ) )   proc_self_suds( edf , param(c) );
+      else if ( is( c , "SOAP-SUDS" ) )   proc_self_suds( edf , param(c) );
 
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
@@ -1080,7 +1080,8 @@ void proc_lzw( edf_t & edf , param_t & param )
 
 
 
-// SELF-SUDS : use SUDS on self, to evaluate staging/signal quality, etc
+// SOAP-SUDS : single observation accuracies and probabilities;
+//   i.e. use SUDS on self, to evaluate staging/signal quality
 
 void proc_self_suds( edf_t & edf , param_t & param  )
 {  
@@ -2561,6 +2562,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "verbose" ) )
     {
       globals::verbose = Helper::yesno( tok1 );
+      return;
+    }
+
+  // specify indiv (i.e. can be used if ID is numeric)
+  if ( Helper::iequals( tok0 , "id" ) )
+    {
+      globals::sample_list_id = tok1;
       return;
     }
   
