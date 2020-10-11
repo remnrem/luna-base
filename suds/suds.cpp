@@ -64,6 +64,7 @@ std::vector<int> suds_t::sr;
 
 bool suds_t::use_kl_weights;
 bool suds_t::use_repred_weights;
+bool suds_t::use_mcc;
 double suds_t::wgt_percentile;
 double suds_t::denoise_fac;
 bool suds_t::standardize_u = true;
@@ -1821,8 +1822,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // save weights for each trainer, based on re-predicting
   //
 
-  Data::Vector<double> wgt_max( bank_size ) ;
+  // either kappa or MCC (if 'mcc' option)
   Data::Vector<double> wgt_mean( bank_size ) ;
+
+  // kappa; not used in any calcs
+  Data::Vector<double> wgt_max( bank_size ) ;
   Data::Vector<double> wgt_n50( bank_size ) ;
 
 
@@ -2004,6 +2008,24 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      
 	      // obs_stage for predicted/valid epochs only
 	      double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) );
+
+	      // swap in MCC instead of kappa?
+	      if ( use_mcc )
+		{		  
+		  double macro_f1 = 0 , macro_precision = 0 , macro_recall = 0;
+		  double wgt_f1 = 0 , wgt_precision = 0 , wgt_recall = 0 , mcc = 0;
+		  std::vector<double> precision, recall, f1;
+		  
+		  double acc = MiscMath::accuracy( NRW( suds_t::str( weight_trainer->obs_stage ) ) , 
+						   NRW( reprediction.cl ) , 
+						   &suds_t::labels ,
+						   &precision, &recall, &f1,
+						   &macro_precision, &macro_recall, &macro_f1 ,
+						   &wgt_precision, &wgt_recall, &wgt_f1 , &mcc);
+		  // swap in MCC
+		  kappa = mcc;
+		}
+
 	      
 	      ++n_kappa_all;
 	      if ( kappa > 0.5 ) n_kappa50++;
@@ -2837,19 +2859,20 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 
   // accuracy, precision/recall, kappa:   nb. ordering: 'truth' first, then 'predicted' 
   double macro_f1 = 0 , macro_precision = 0 , macro_recall = 0;
-  double wgt_f1 = 0 , wgt_precision = 0 , wgt_recall = 0;
+  double wgt_f1 = 0 , wgt_precision = 0 , wgt_recall = 0 , mcc = 0;
   std::vector<double> precision, recall, f1;
 
   double acc = MiscMath::accuracy( suds_t::str( obs_stage_valid ) , prd ,
 				   &suds_t::labels ,
 				   &precision, &recall, &f1,
 				   &macro_precision, &macro_recall, &macro_f1 ,
-				   &wgt_precision, &wgt_recall, &wgt_f1 );
+				   &wgt_precision, &wgt_recall, &wgt_f1 , &mcc);
   
   writer.value( "K" , kappa );
   writer.value( "ACC" , acc );
 
   writer.value( "F1" , macro_f1 );
+  writer.value( "MCC" , mcc );
   writer.value( "PREC" , macro_precision );
   writer.value( "RECALL" , macro_recall );
   
@@ -2869,7 +2892,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   if ( to_console ) 
     {
       logger << "\n  Confusion matrix: " << suds_t::n_stages
-	     << "-level classification: kappa = " << kappa << ", acc = " << acc << "\n";
+	     << "-level classification: kappa = " << kappa << ", acc = " << acc << ", MCC = " << mcc << "\n";
       suds_t::tabulate(  prd , suds_t::str( obs_stage_valid ) , true );
     }      
   
@@ -2881,7 +2904,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 
       // nb. 'truth' / pred
       double macro_f1 = 0 , macro_precision = 0 , macro_recall = 0;
-      double wgt_f1 = 0 , wgt_precision = 0 , wgt_recall = 0;
+      double wgt_f1 = 0 , wgt_precision = 0 , wgt_recall = 0 , mcc = 0;
       std::vector<double> precision, recall, f1;
       std::vector<std::string> lab3 = { "NR" , "R" , "W" };
       
@@ -2889,18 +2912,19 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 					&lab3 ,
 					&precision, &recall, &f1,
 					&macro_precision, &macro_recall, &macro_f1 ,
-					&wgt_precision, &wgt_recall, &wgt_f1 );
+					&wgt_precision, &wgt_recall, &wgt_f1 , &mcc );
       
       writer.value( "K_3" , kappa3 );
       writer.value( "ACC_3" , acc3 );
       
       writer.value( "F1_3" , macro_f1 );
-      writer.value( "PREC_3" , macro_precision );
+      writer.value( "MCC_3" , mcc );
+      writer.value( "PREC_3", macro_precision );
       writer.value( "RECALL_3" , macro_recall );
 
       if ( to_console )
 	{
-	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << ", acc = " << acc3 << "\n";
+	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << ", acc = " << acc3 << ", MCC = " << mcc << "\n";
 	  suds_t::tabulate(  suds_t::NRW( prd ) , suds_t::NRW( suds_t:: str( obs_stage_valid ) ) , true );
 	}
     }

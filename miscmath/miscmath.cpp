@@ -1200,7 +1200,8 @@ double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> &
 			   double * macro_f1 ,
 			   double * avg_weighted_precision ,
 			   double * avg_weighted_recall ,
-			   double * avg_weighted_f1 )
+			   double * avg_weighted_f1 ,
+			   double * mcc )
 {
   std::vector<std::string> aa( a.size() );
   std::vector<std::string> bb( b.size() );
@@ -1218,7 +1219,7 @@ double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> &
   return accuracy( aa, bb , labels == NULL ? NULL : &ll ,
 		   precision , recall , f1 ,
 		   macro_precision , macro_recall , macro_f1 , 
-		   avg_weighted_precision , avg_weighted_recall , avg_weighted_f1 );
+		   avg_weighted_precision , avg_weighted_recall , avg_weighted_f1 , mcc );
 }
 
 double MiscMath::accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b ,
@@ -1231,7 +1232,8 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
 			   double * macro_f1 ,
 			   double * avg_weighted_precision ,
 			   double * avg_weighted_recall ,
-			   double * avg_weighted_f1 )
+			   double * avg_weighted_f1 ,
+			   double * mcc_val )
 {
   const int n = a.size();
 
@@ -1318,13 +1320,101 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
       *avg_weighted_recall /= (double)nobs;
       
     }
-  
+
+  // MCC?
+  if ( mcc_val != NULL )
+    *mcc_val = mcc( table , *labels );
   
   // overall accuracy
   
   return m / (double)n;
   
 }
+
+
+double MiscMath::mcc( std::map<std::string,std::map<std::string,int> > table ,
+		      const std::vector<std::string> & labels )
+{
+  // Implements MCC for multiclass data, based on the gawk implementation below:
+  // https://rth.dk/resources/rk/software/rkorrC
+  // # Computes the K-category correlation coefficient.
+  // # Copyright: Jan Gorodkin, gorodkin@bioinf.kvl.dk
+  // # This software is distributed with a 
+  // # GNU GENERAL PUBLIC LICENSE, see http://www.gnu.org/licenses/gpl.txt
+  // # Copyright (C) 2004  Jan Gorodkin
+  // # For publication of results, please cite:
+  // #  Comparing two K-category assignments by a K-category correlation coefficient.
+  // #  J. Gorodkin, Computational Biology and Chemistry, 28:367-374, 2004.
+
+  const int nk = labels.size();
+  int N = 0;
+  
+  Data::Matrix<double> C( nk, nk );
+  for (int r=0;r<nk;r++)
+    for (int c=0;c<nk;c++)
+      {
+	C(r,c) = table[ labels[r] ][ labels[c] ] ;
+	N += C(r,c);
+      }
+
+  std::cout << C.print() << "\n";
+  
+  // trace
+
+  double tr = 0;
+  for (int i=0;i<nk;i++) tr += C(i,i);
+
+  // sum row col dot product:
+  
+  double rowcol_sumprod = 0;
+  for(int r=0; r<nk; r++)
+    for(int c=0; c<nk; c++)
+      for (int i=0; i<nk; i++)
+	rowcol_sumprod += C(r,i) * C(i,c);
+  
+  // sum over row dot products
+  double rowrow_sumprod = 0;
+  for(int r1=0; r1<nk; r1++)
+    for(int r2=0; r2<nk; r2++)
+      for (int i=0; i<nk; i++)
+	rowrow_sumprod += C(r1,i) * C(r2,i);
+
+  // sum over col dot products
+  double colcol_sumprod = 0;
+  for(int c1=0; c1<nk; c1++)
+    for(int c2=0; c2<nk; c2++)
+      for (int i=0; i<nk; i++)
+	colcol_sumprod += C(i,c1) * C(i,c2);
+
+  double Qk = tr / (double)N;
+
+  double COV_XY = N*tr - rowcol_sumprod; //  NOTE, COV_XY, COV_XX and COV_YY
+  double COV_XX = N*N - rowrow_sumprod;  //# are HERE ALWAYS INTEGERS!
+  double COV_YY = N*N - colcol_sumprod; 
+  double denominator = sqrt( COV_XX*COV_YY );
+
+  double RK = 0;
+
+  if ( denominator  >0 ) {
+    RK= COV_XY / denominator;
+    //double b = COV_XY / COV_XX;
+    //double bprime=COV_XY/COV_YY;
+    // output 
+    // printf "%13.10f  %3d  %13.10f  %13.10f  %13d  %13d  %13d  %12.10f ", RK,  K, b, bprime, COV_XY, COV_XX, COV_YY, QK;
+  }
+  else if (denominator == 0 )
+    {      
+      RK=1;
+        // for(i=1;i<startpos;i++) printf misclabel[i]"  ";
+        // printf "%13s  %3d  %13s  %13s  %13d  %13d  %13d  %12.10f ", "Nan         ",  K, "Nan         ", "Nan         ", COV_XY, COV_XX, COV_YY, QK;
+        // for(l=1;l<K+1;l++) for(k=1;k<K+1;k++) printf "  "C[k,l];
+        // printf "\n";
+     }
+
+  return RK;
+
+}
+
 
 
 double MiscMath::kappa( const std::vector<int> & a , const std::vector<int> & b )

@@ -174,7 +174,7 @@ struct suds_t {
   {
 
     // total/max number of PSC components
-    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 10 ;
+    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 20 ;
 
     // bands instead of PSC? 
     use_bands = param.has( "bands" );
@@ -184,7 +184,7 @@ struct suds_t {
     if ( param.has( "all-c" ) ) required_comp_p = 99;
     
     // smoothing factor (multiple of SD)
-    denoise_fac = param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 0.5 ; 
+    denoise_fac = param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 2 ; 
 
     // epoch-level outlier removal for trainers
     if ( param.has( "th" ) ) outlier_ths = param.dblvector( "th" );
@@ -216,6 +216,9 @@ struct suds_t {
 
     // wgt1: (do not) use backskip re-weighting
     use_repred_weights = param.has( "repred-weights" ) ? Helper::yesno( param.value( "repred-weights" ) ) : true ;
+
+    // use MCC instead of kappa for weighting
+    use_mcc = param.has( "mcc" );
     
     // wgt2: use kl_weights
     use_kl_weights = param.has( "kl-weights" ) ? Helper::yesno( param.value( "kl-weights" ) ) : false ;
@@ -345,6 +348,8 @@ struct suds_t {
 
   static bool use_repred_weights;
 
+  static bool use_mcc;
+  
   static bool use_kl_weights;
     
   static double wgt_percentile;
