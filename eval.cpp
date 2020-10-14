@@ -2278,6 +2278,13 @@ void proc_drop_signals( edf_t & edf , param_t & param )
   
   std::set<std::string> keeps, drops;
   if ( param.has( "keep" ) ) keeps = param.strset( "keep" );
+
+  if ( param.has( "keep" ) && param.has( "req" ) ) 
+    Helper::halt( "cannot specify both keep and req" );
+
+  bool req = param.has( "req" ) ;
+  if ( param.has( "req" ) ) keeps = param.strset( "req" );
+  
   if ( param.has( "drop" ) ) drops = param.strset( "drop" );
   
   if ( param.has( "keep" ) && param.has( "drop" ) )
@@ -2290,16 +2297,25 @@ void proc_drop_signals( edf_t & edf , param_t & param )
   if ( keeps.size() > 0 )
     {
 
-      // check signals first
-      std::set<std::string>::const_iterator ss = keeps.begin();
-      while ( ss != keeps.end() )
+      //
+      // check that any required signals are present
+      //
+
+      if ( req ) 
 	{
-	  if ( ! edf.header.has_signal( *ss ) )
-	    Helper::halt( "could not find requested keep signal: " + *ss );
-	  ++ss;
+	  std::set<std::string>::const_iterator ss = keeps.begin();
+	  while ( ss != keeps.end() )
+	    {
+	      if ( ! edf.header.has_signal( *ss ) )
+		Helper::halt( "could not find requested keep signal: " + *ss );
+	      ++ss;
+	    }
 	}
 
-      
+      //
+      // Otherwise, keep what we can 
+      //
+
       const int ns = edf.header.ns;
 
       for (int s = 0 ; s < ns ; s++ )

@@ -37,7 +37,7 @@ CXX = g++
 
 CC = gcc
 
-CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I..
+CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. 
 
 CXXFLAGS += $(DEP_INCLUDES) 
 
