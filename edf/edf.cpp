@@ -4287,7 +4287,8 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
     Helper::halt( "could not find " + file );
   
   // GROUP   CANONICAL   CH   REF   SR  NOTES
-  // looking for EEG, LOC, ROC, EMG, ECG
+  // looking for EEG, LOC, ROC, EMG, ECG, etc
+  // but actually reading these from the file, adding 'cs_' to each
 
   // if cs is non-null, only make the CS in that set ('EEG')
 
@@ -4298,6 +4299,10 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
   //  EEG   C4_A1,C4_M1  .       100
   //  EEG   C3_A2,C3_M2  .       100  Using C3, not C4
 
+  // the to-be-created CS go here:
+  std::set<std::string> canons;
+
+  // read in definitions
   std::map<std::string,std::vector< std::vector<std::string> > >sigs, refs;
   std::map<std::string,std::vector<std::string> > srs, notes;
   
@@ -4315,6 +4320,11 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 		      + file + "\nline: [" + line + "]\n" );
       if ( tok[0] != group ) continue;
 
+      // if cs not specified, take all canonical signals as given in 
+      // the file
+  
+      if ( cs == NULL ) canons.insert( "cs_" + tok[1] );
+
       // skip if a specific list requested?
       if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
 
@@ -4326,45 +4336,35 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       
     }
   
-
-
-
-  
-  //
-  // Set to sample rate SR if not already done, and ensure units are uV
-  //
-
-  std::vector<std::string> canons;
-
-  if ( cs == NULL ) 
-    {
-      canons.push_back( "cs_EEG" );
-      canons.push_back( "cs_LOC" );
-      canons.push_back( "cs_ROC" );
-      canons.push_back( "cs_EMG" );
-      canons.push_back( "cs_ECG" );
-    }
-  else
+ 
+  if ( cs != NULL ) 
     {
       std::set<std::string>::const_iterator ss = cs->begin();
       while ( ss != cs->end() )
 	{
-	  canons.push_back( "cs_" + *ss );
+	  canons.insert( "cs_" + *ss );
 	  ++ss;
 	}
     }
 
 
+  //
+  // For each canonical signal
+  //
 
-  for (int i=0; i<canons.size(); i++)
+  std::set<std::string>::const_iterator cc = canons.begin();
+  while ( cc != canons.end() )
     {
-      std::string canon = canons[i];
+      //for (int i=0; i<canons.size(); i++)
+      
+      std::string canon = *cc;
 
       writer.level( canon , "CS" );
 
       if ( sigs.find( canon ) == sigs.end() )
 	{
 	  writer.value( "DEFINED" , 0 );
+	  ++cc;
 	  continue;
 	}
 
@@ -4372,7 +4372,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       bool done = false;
       
       const int n_rules = sigs.find( canon )->second.size() ; 
-          
+      
       for (int j=0; j<n_rules; j++ )
 	{
 	  
@@ -4419,10 +4419,10 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  
 	  if ( sigstr == "" || refstr == "" )
 	    {
-	      //writer.value( "DEFINED" , 0 );
+	      //writer.value( "DEFINED" , 0 );	      
 	      continue;
 	    }      
-
+	
 	  logger << "  generating canonical signal " << canon 
 		 << " from " << sigstr << "/" << refstr << "\n";
 	  	  
@@ -4487,15 +4487,21 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  done = true;
 	  
 	  break;
-
+	
 	} // next rule for this CS
+
 
       // if we failed to get a match, flag here
 
       if ( ! done ) 
 	writer.value( "DEFINED" , 0 );
+
       
-    } // next CS
+      // next CS
+      
+      ++cc;
+      
+    } 
   
   writer.unlevel( "CS" );
   

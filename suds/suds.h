@@ -170,6 +170,7 @@ struct suds_t {
   
   static void score( edf_t & edf , param_t & param );
 
+
   static void set_options( param_t & param )
   {
 
@@ -201,18 +202,21 @@ struct suds_t {
     // must be within X SD units of trainer Hjorth distribution for target epoch to be included 
     hjorth_outlier_th = param.has( "th-hjorth" ) ? param.requires_dbl( "th-hjorth" ) : 3 ;
     
-    standardize_u = ! param.has( "unnorm" );
+    standardize_psd  = param.has( "norm-psd" ) ? Helper::yesno( param.value( "norm-psd" ) ) : true ;
+    standardize_psc  = param.has( "norm-psc" ) ? Helper::yesno( param.value( "norm-psc" ) ) : false ;
 
-    use_best_guess = ! param.has( "no-best-guess" );
+    // how to combine predictions across trainers?  by default, use weighted PP (rather than set max to 1 vs 0)
+    use_best_guess = param.has( "best-guess" ) ? Helper::yesno( param.value( "best-guess" ) ) : false;
 
-    // if target staging present, ignore 
-    // e.g. if is is all 'UNKNOWN'
-
+    // if target staging present, ignore ; e.g. if it is all 'UNKNOWN'
     ignore_target_priors = param.has( "ignore-prior" );
     
     // weights: take top N % (if 0 use all) based on the weighting
     wgt_percentile = param.has( "pct" ) ? param.requires_dbl( "pct" ) : 0 ;
     if ( wgt_percentile < 0 || wgt_percentile > 100 ) Helper::halt( "pct should be between 0 and 100" );
+
+    // among selected, (pct) weight equally
+    equal_wgt_in_selected = param.has( "equalize-weights" );
 
     // wgt1: (do not) use backskip re-weighting
     use_repred_weights = param.has( "repred-weights" ) ? Helper::yesno( param.value( "repred-weights" ) ) : true ;
@@ -220,19 +224,27 @@ struct suds_t {
     // use MCC instead of kappa for weighting
     use_mcc = param.has( "mcc" );
     
+    // repred uses 5 classes, not NRW
+    use_5class_repred = param.has( "repred5" );
+
     // wgt2: use kl_weights
     use_kl_weights = param.has( "kl-weights" ) ? Helper::yesno( param.value( "kl-weights" ) ) : false ;
 
     // total weight is either wgt1, wgt2 or a simple average of both wgt1+wgt2
 
+    // allow cheating (trainer is target)
+    cheat = param.has( "cheat" );
     
     // NR/R/W or N1/N2/N3/R/W classification?
     n_stages = param.has( "3-stage" ) ? 3 : 5;
 
+    labels5 = { "N1" , "N2" , "N3" , "REM" , "W" };
+    labels3 = { "NR" , "R" , "W" };
+
     if ( n_stages == 3 )
-      labels = { "NR" , "R" , "W" };
+      labels = labels3;
     else
-      labels = { "N1" , "N2" , "N3" , "REM" , "W" };
+      labels = labels5;
     
     // by default, requires at least 5 of each 5 epochs to include a trainer
     required_epoch_n = 5;
@@ -264,6 +276,9 @@ struct suds_t {
     
     verbose = param.has( "verbose" );
   
+    // ultra verbose -- add each TRAINER one at a time and report kappa/MCC
+    one_by_one = param.has( "1x1" );
+
     epoch_lvl_output = param.has( "epoch" );
     
     if ( param.requires( "sig" ) == "*" ) Helper::halt( "requires sig to be set explicitly" );
@@ -318,6 +333,8 @@ struct suds_t {
 
   static bool epoch_lvl_output;
 
+  static bool one_by_one;
+
   static int nc;
 
   static int ns;
@@ -348,15 +365,23 @@ struct suds_t {
 
   static bool use_repred_weights;
 
+  static bool equal_wgt_in_selected;
+
   static bool use_mcc;
   
+  static bool use_5class_repred;
+
   static bool use_kl_weights;
     
   static double wgt_percentile;
   
+  static bool cheat;
+
   static double denoise_fac;
 
-  static bool standardize_u;
+  static bool standardize_psd;
+
+  static bool standardize_psc;
   
   static bool use_best_guess;
   
@@ -382,6 +407,7 @@ struct suds_t {
   static bool use_bands;  // no PSC, bands instead 
   
 private: 
+
 
   // trainer library
   static std::map<std::string,suds_indiv_t*> bank;
@@ -478,6 +504,8 @@ public:
 
   // either 5 or 3 stage fixed labels
   static std::vector<std::string> labels;
+  static std::vector<std::string> labels3;
+  static std::vector<std::string> labels5;
   
   
   static int num( const std::string & ss ) {
@@ -559,6 +587,10 @@ public:
   static std::map<std::string,std::map<std::string,int> > tabulate( const std::vector<std::string> & a , 
 								    const std::vector<std::string> & b , 
 								    const bool print = false );
+
+  static void trainer_1x1_evals( const suds_indiv_t & , 
+				 const Data::Vector<double> & wgt , 
+				 const std::vector<std::string> & );
     
 };
 

@@ -137,7 +137,9 @@ namespace Statistics {
   Data::Vector<double> sdev( const Data::Matrix<double> & , const Data::Vector<double> & );
   Data::Vector<double> elem_sqrt( const Data::Vector<double> & );
   Data::Vector<double> unit_scale( const Data::Vector<double> & );
-  
+  Data::Vector<double> unit_scale( const Data::Vector<double> & , double min , double max );
+  bool  minmax( const Data::Vector<double> & , double * min , double * max );
+
   Data::Vector<double> mean_center_cols( Data::Matrix<double> & d );
   void subtract_cols( Data::Matrix<double> & d , Data::Vector<double> & m );
   

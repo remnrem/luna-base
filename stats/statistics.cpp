@@ -2481,6 +2481,43 @@ Data::Vector<double> Statistics::elem_sqrt( const Data::Vector<double> & x )
 }
 
 
+bool Statistics::minmax( const Data::Vector<double> & x , double * min , double * max )
+{
+  const int n = x.size();
+  if ( n == 0 ) return false;
+  
+  double xmin = x[0] , xmax = x[0];
+  for (int i=0;i<n;i++)
+    {
+      if ( x[i] < xmin ) xmin = x[i];
+      else if ( x[i] > xmax ) xmax = x[i];
+    }
+  *min = xmin;
+  *max = xmax;
+  if ( min == max ) return false;
+  return true;
+}
+
+// unit_scale, specifying min/max and truncating at 0 and 1
+Data::Vector<double> Statistics::unit_scale( const Data::Vector<double> & x , double xmin , double xmax )
+{
+  const int n = x.size();
+  if ( n == 0 ) return x;
+  if ( xmin >= xmax ) return x;
+  
+  Data::Vector<double> r( n );
+  for (int i=0;i<n;i++) 
+    {
+      if ( x[i] <= xmin ) r[i] = 0;
+      else if ( x[i] >= xmax ) r[i] = 1;
+      else r[i] = ( x[i] - xmin ) / ( xmax - xmin );
+    }
+  return r;
+
+}
+
+
+
 Data::Vector<double> Statistics::unit_scale( const Data::Vector<double> & x )
 {
 

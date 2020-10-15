@@ -1201,7 +1201,7 @@ double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> &
 			   double * avg_weighted_precision ,
 			   double * avg_weighted_recall ,
 			   double * avg_weighted_f1 ,
-			   double * mcc )
+			   double * mcc_val )
 {
   std::vector<std::string> aa( a.size() );
   std::vector<std::string> bb( b.size() );
@@ -1219,7 +1219,7 @@ double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> &
   return accuracy( aa, bb , labels == NULL ? NULL : &ll ,
 		   precision , recall , f1 ,
 		   macro_precision , macro_recall , macro_f1 , 
-		   avg_weighted_precision , avg_weighted_recall , avg_weighted_f1 , mcc );
+		   avg_weighted_precision , avg_weighted_recall , avg_weighted_f1 , mcc_val );
 }
 
 double MiscMath::accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b ,
@@ -1280,7 +1280,15 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
       
       int ncat = 0;
       int nobs = 0;
-      
+            
+      // for (int i=0;i<labels->size();i++)
+      // 	if ( rows.find( (*labels)[i] ) != rows.end() ) 
+      // 	  std::cout << "ROW " << (*labels)[i] << " " << rows.find((*labels)[i] )->second << "\n";
+
+      // for (int i=0;i<labels->size();i++)
+      // 	if ( cols.find( (*labels)[i] ) != cols.end() ) 
+      // 	  std::cout << "COL " << (*labels)[i] << " " << cols.find((*labels)[i] )->second << "\n";
+
       for (int i=0;i<labels->size();i++)
 	{
 	  
@@ -1323,10 +1331,14 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
 
   // MCC?
   if ( mcc_val != NULL )
-    *mcc_val = mcc( table , *labels );
-  
+    {
+      std::vector<std::string> obsvec;
+      std::set<std::string>::const_iterator ii = obs.begin();
+      while ( ii != obs.end() )  { obsvec.push_back( *ii ) ; ++ii ; } 
+      *mcc_val = mcc( table , obsvec );
+    }
+
   // overall accuracy
-  
   return m / (double)n;
   
 }
@@ -1357,7 +1369,7 @@ double MiscMath::mcc( std::map<std::string,std::map<std::string,int> > table ,
 	N += C(r,c);
       }
 
-  std::cout << C.print() << "\n";
+  //  std::cout << C.print() << "\n";
   
   // trace
 
