@@ -321,7 +321,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
 
-  if ( signals.size() != ns ) Helper::halt( "could not find specified signals" );
+  if ( signals.size() != ns ) 
+    {
+      logger << "  ** warning: could not find specified signals\n";
+      return 0;
+    }
   
   //
   // Resample as needed
