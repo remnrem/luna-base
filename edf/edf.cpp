@@ -4252,9 +4252,7 @@ void edf_t::guess_canonicals( param_t & param )
   // rescale units?
   //
   
-  // EEG, EOG, EMG all uV
-  // ECG in mV
-  // others?
+  // EEG in uV
 	  
   std::string units = "uV";
   
@@ -4262,8 +4260,7 @@ void edf_t::guess_canonicals( param_t & param )
   
   if ( units == "uV" || units == "mV" ) 
     rescale( canonical_signal(0) , units );
-  
-  
+    
   //
   // output
   //
