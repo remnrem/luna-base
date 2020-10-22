@@ -94,6 +94,22 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ;
 
   //
+  // FFT parameters
+  //
+
+  const double segment_sec = param.has( "segment-sec" ) ? param.requires_dbl( "segment-sec" ) : 4; // was 5 
+
+  const double overlap_sec = param.has( "segment-inc" ) ? param.requires_dbl( "segment-inc" ) : 2; // was 0 
+
+  window_function_t window = WINDOW_TUKEY50;
+  if ( param.has( "hann" ) ) window = WINDOW_HANN;
+
+  const bool average_adj = false;
+
+  const bool detrend = false;
+     
+
+  //
   // Get all implied signals
   //
   
@@ -181,14 +197,6 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 
   const int Fs = sr;
 
-  const double segment_sec = 5; 
-
-  const double overlap_sec = 0;
-
-  const bool average_adj = false;
-
-  const bool detrend = false;
-
   interval_t interval;
 
   if ( epoched )
@@ -205,9 +213,10 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   
   slice_t slice1( edf , sigs[0] , interval );      
   const std::vector<double> * d1 = slice1.pdata();
-  const int total_sample_points = d1->size();
+  const int total_sample_points = d1->size();  
+      
+  coherence_t coherence( total_sample_points, Fs, segment_sec, overlap_sec, window , average_adj , detrend );
 
-  coherence_t coherence( total_sample_points, Fs, segment_sec, overlap_sec, WINDOW_HANN, average_adj , detrend );
 
   //
   // Iterate over epochs (potentially) 

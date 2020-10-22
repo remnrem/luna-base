@@ -573,6 +573,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // e:1:20 is first of a 20-second epoch
   // e:1:20:10 is similar, but w/ epoch overlap of 10 seconds (10=increment)
 
+  // if second time-point is '...' this means go until the next annot (or end of EDF)
+  // (note: a single '.' can be a missing variable)
+  
   // check EDF starttime, which might be needed
   
   clocktime_t starttime( parent_edf.header.starttime );
@@ -586,13 +589,27 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   std::map<std::string,annot_t*> annot_map;
   
   std::map<annot_t*,std::vector<std::string> > cols;
-    
+
+  // to allow '...' in the second line, we need to read ahead
+  // and so store the read line here
+  std::string buffer = "";
+  
   while ( ! FIN.eof() )
     {
       
       if ( FIN.bad() ) continue;
       std::string line;      
-      Helper::safe_getline( FIN , line );      
+
+      // read from buffer or disk?
+      if ( buffer != "" )
+	{
+	  line = buffer;
+	  // now clear buffer
+	  buffer = "";
+	}
+      else // get fresh line from disk
+	Helper::safe_getline( FIN , line );      
+
       if ( FIN.eof() || line == "" ) continue;
       
       //
@@ -605,7 +622,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // skip initial # here
 	  std::vector<std::string> tok = Helper::parse( line.substr(1) , "|" );
 	  
-	  if ( tok.size() < 1 || tok.size() > 3 ) Helper::halt( "bad header for format\n" + line );
+	  if ( tok.size() < 1 || tok.size() > 3 )
+	    Helper::halt( "bad header for format\n" + line );
 
 	  //
 	  // Get the name and ID 
@@ -632,7 +650,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // store a temporary lookup table
 	  //
+
 	  annot_map[ name ] = a;
+
 	  
 	  //
 	  // Other details
@@ -711,13 +731,17 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( tok.size() == 0 ) continue; 
 
+	  //
 	  // are we skipping this annotation anyway?
-
+	  //
+	  
 	  if ( globals::specified_annots.size() > 0 && 
 	       globals::specified_annots.find( tok[0] ) == globals::specified_annots.end() ) 
 	    continue;
-	  
+
+	  //
 	  // was this annotation specified in the header? 
+	  //
 	  
 	  std::map<std::string,annot_t*>::iterator aa = annot_map.find( tok[0] );
 	  
@@ -728,210 +752,99 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  std::string id = tok[1];
 
-	  // epoch (single or range) or an interval (range)? 
-	  
-	  if ( tok.size() < 3 ) Helper::halt( "bad line format, need at least 3 cols:\n" + line );
-	  
-	  bool eline = tok[2][0] == 'e' ;
-	  
-	  bool erange = tok.size() >= 4 && tok[3][0] == 'e'; 
-	  
-	  bool esingle = eline && ! erange;
-	  
-	  // expected # of cols
 
-	  const int expected = 2 + ( esingle ? 1 : 2 ) + a->types.size() ; 
-	  
-	  if ( tok.size() != expected ) 
-	    Helper::halt( "bad line format: saw " + Helper::int2str( (int)tok.size() ) + " cols but expecting " 
-			  + Helper::int2str( expected) + " for " + a->name + "\n" + line );
-	  
-	  
-	  interval_t interval;
-	  
-	  if ( eline )
-	    {
+	  //
+	  // Get interval implied 
+	  //
 
-	      if ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) 
-		Helper::halt( "cannot use e:1 notation in .annot files with (discontinuous) EDF+ files" );
-	      
-	      
-	      // 2 e:1        assumes 30
-	      // 3 e:30:1     assumes no overlap
-	      // 4 e:15:5:4   specifies all
-	      
-	      std::vector<std::string> tok2 = Helper::parse( tok[2] , ":" );
-	      
-	      if ( tok2.size() < 2 || tok2.size() > 4 ) 
-		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
-	      
-	      if ( tok2[0] != "e" ) 
-		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
-	      
-	      int epoch_length = globals::default_epoch_len;
-	      int epoch_increment = globals::default_epoch_len; // i.e. non-overlapping
-	      int epoch;
-	      
-	      if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
-		Helper::halt( "invalid epoch: " + tok[2] );
-	      
-	      if ( epoch == 0 ) 
-		Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
+	  // was only a single column specified?
+	  bool esingle = false;
 
-	      if ( tok2.size() >= 3 ) 
-		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
-		  Helper::halt( "invalid epoch length:  " + tok[2] );
+	  // if the second column '...', i.e. in which case we need to read the next line
+	  // (and store in buffer for the subsequent row)
+	  
+	  bool readon = false;
+	  
+	  interval_t interval = get_interval( line , tok ,
+					      &esingle , &readon , 
+					      parent_edf , a , starttime , f );
 
-	      if ( tok2.size() == 4  ) 
-		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
-		  Helper::halt( "invalid epoch increment:  " + tok[2] );
-	      
-	      uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
-	      
-	      uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
-	      
-	      // set interval from current line
-	      // last point is defined as point *past* end of interval
-	      
-	      interval.start = epoch_increment_tp * (epoch-1);
-	      interval.stop  = interval.start + epoch_length_tp;
-	      
-	      //
-	      // A second epoch ?   in this case, overwrite interval.stop from above
-	      //
-	      
-	      if ( erange ) 
-		{
-		    
 
-		  std::vector<std::string> tok2 = Helper::parse( tok[3] , ":" );
-		  
-		  if ( tok2.size() < 2 || tok2.size() > 4 ) 
-		    Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
-		  
-		  if ( tok2[0] != "e" ) 
-		    Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
-		  
-		  int epoch;
-		  
-		  if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
-		    Helper::halt( "invalid epoch: " + tok[2] );
-		  
-		  if ( epoch == 0 ) 
-		    Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
-		  
-		  if ( tok2.size() >= 3 ) 
-		    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
-		      Helper::halt( "invalid epoch length:  " + tok[2] );
-		  
-		  if ( tok2.size() == 4  ) 
-		    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
-		      Helper::halt( "invalid epoch increment:  " + tok[2] );
-		  
-		  uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
-		  
-		  uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
-		  
-		  
-		  // set interval from current line
-		  // last point is defined as point *past* end of interval
-		  
-		  uint64_t start_of_last_epoch = epoch_increment_tp * (epoch-1);
-		  interval.stop  = start_of_last_epoch + epoch_length_tp;
-		  
-		}	      
-	      
-	    }
-	  else // an INTERVAL
+	  //
+	  // a single time-point
+	  //
+
+	  if ( readon )
 	    {
 	      
-	      // assume this is either a single numeric value (in seconds) which is an offset past the EDF start
-	      // OR in clock-time, in hh:mm:ss (24-hour) format
-	      
-	      std::vector<std::string> tok_start_hms = Helper::parse( tok[2] , ":" );
-	      std::vector<std::string> tok_stop_hms = Helper::parse( tok[3] , ":" );
-	      
-	      bool is_hms = tok_start_hms.size() == 3 && tok_stop_hms.size() == 3;
-	      
-	      if ( is_hms && ! starttime.valid ) 
-		Helper::halt( "specifying hh:mm:ss clocktime annotations, but no valid starttime in the EDF" );
-	      
-	      // read as seconds 
-	      double dbl_start = 0 , dbl_stop = 0;
-	      
-	      if ( is_hms )
-		{
-		  
-		  clocktime_t atime( tok[2] );
+	      if ( FIN.bad() )
+		Helper::halt( "problem reading from " + f );
 
-		  clocktime_t btime( tok[3] );
-		  
-		  dbl_start = clocktime_t::difference( starttime , atime ) * 3600; 
-		  
-		  dbl_stop = clocktime_t::difference( starttime , btime ) * 3600; 
-		  
+	      // read into the read-ahead buffer
+	      Helper::safe_getline( FIN , buffer );
+	      std::cout << "read buffer [" << buffer << "]\n";
+	      
+	      // was this the last line?
+	      if ( FIN.eof() )
+		{		  
+		  // setting stop to 1 time-point past the last accessible
+		  // time-point in the EDF/EDF+
+		  interval.stop = parent_edf.timeline.last_time_point_tp + 1LLU;		  
 		}
 	      else
 		{
+		  std::vector<std::string> ntok = Helper::parse( buffer , " \t" );
 		  
-		  if ( ! Helper::str2dbl( tok[2] , &dbl_start ) )
-		    Helper::halt( "invalid interval: " + line );
+		  if ( ntok.size() == 0 ) Helper::halt( "invalid line following '...' end timepoint" );
+
+		  bool dummy1, dummy2;
+
+		  // only need to get the start of the interval here:
+		  interval_t ninterval = get_interval( line , ntok ,
+						      &dummy1 , &dummy2 , 
+						      parent_edf , NULL , starttime , f );
+
 		  
-		  if ( ! Helper::str2dbl( tok[3] , &dbl_stop ) ) 
-		    Helper::halt( "invalid interval: " + line );
+		  // Check for valid ordering: i.e. start of next cannot be before start of prior
+		  
+		  if ( interval.start >= ninterval.start )
+		    Helper::halt( "invalid '...' interval, next line starts too soon: " + line );
+
+		  // update with start of next annotation
+		  // (i.e. as stop is encoded as +1 end, this will
+		  //  imply we go right up until the point just before the
+		  //  next epoch, which is what we want
+
+		  interval.stop = ninterval.start;
+		  
+		  
 		  
 		}
-	      
 
-	      if ( dbl_start < 0 ) Helper::halt( f + " contains row(s) with negative time points" ) ;
-
-	      if ( dbl_stop < 0 ) Helper::halt( f + " contains row(s) with negative time points" ) ;
-
-	      // convert to uint64_t time-point units
-
-	      interval.start = Helper::sec2tp( dbl_start );
-	      
-	      // assume stop is already specified as 1 past the end, e.g. 30 60
-	      // *unless* it is a single point, e.g. 5 5 
-	      // which is handled below
-	      
-	      interval.stop  = Helper::sec2tp( dbl_stop );
-	      
 	    }
-	  
 
-
-	  if ( interval.stop == interval.start ) ++interval.stop;
-	  
-	  // the final point is interpreted as one past the end
-	  // i.e. 0 30   means up to 30
-	  // but a special case: for a single point specified,  1.00 1.00 
-	  // rather than have this as illegal, assume the user meant a 
-	  // 1-time-unit point; so advance the STOP by 1 unit
-	  
-	  if ( interval.start > interval.stop )
-	    Helper::halt( "invalid interval: " + line );
-	  
 	  
 	  //
 	  // for a FLAG for this annotation (with same name as primary annotaton)
 	  //
 	  
 	  instance_t * instance = a->add( id , interval );
+
 	  
-	  
+	  //
 	  // track how many annotations we add
+	  //
+	  
 	  parent_edf.aoccur[ a->name ]++;
 	  
-	  
-	  const int n = tok.size();
-	          
-
+	  	         
 	  //
 	  // Also add any other columns (as separate events under this same annotation)
 	  //
+
+	  const int n = tok.size();
 	  
-	  for (int j = (esingle ? 3 : 4 ) ;j<n; j++)
+	  for (int j = ( esingle ? 3 : 4 ) ;j<n; j++)
 	    {
 
 	      const int idx = j - (esingle ? 3 : 4 );
@@ -989,11 +902,12 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  instance->set( label , tok[j] );
 		}
 	      
+
 	      //
 	      // TODO.. add vector readers
 	      //
 
-
+	    
 	      else
 		logger << "could not read undefined type from annotation file for " << label << "\n";
 
@@ -1002,7 +916,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 // 	      parent_edf.aoccur[ a->name + ":" + label ]++;
 	      
 	    }
-	  
+
 	  ++line_count;
 	}
       
@@ -1014,6 +928,245 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   
   return line_count;
 }
+
+
+
+interval_t annot_t::get_interval( const std::string & line ,
+				  const std::vector<std::string> & tok ,
+				  bool * pt_esingle ,
+				  bool * readon , 
+				  const edf_t & parent_edf , 
+				  annot_t * a ,
+				  const clocktime_t & starttime , 
+				  const std::string & f
+				  )
+{
+  
+  // epoch (single or range) or an interval (range)? 
+  
+  if ( tok.size() < 3 ) Helper::halt( "bad line format, need at least 3 cols:\n" + line );
+
+  // specification in terms of epochs?
+  bool eline = tok[2][0] == 'e' ;
+  
+  // do we have two cols for epochs (with either a read-on or specific epoch?)
+  bool erange = tok.size() >= 4 && ( tok[3][0] == 'e' || tok[3] == "..." ) ;
+
+  // only 3 cols
+  bool esingle = eline && ! erange;
+
+  if ( tok.size() < 4 && ! esingle )
+    Helper::halt( "require at least 4 columsn (start & stop time) if not using epoch specification" ); 
+
+  
+  *pt_esingle = esingle; // give back to caller
+
+  // if the second timepoint is '...' then this will be set to true
+  // i.e. indicatig that we need to look at the next record in order to
+  // figure out the end of this annotation
+
+  *readon = false;
+  
+  // check expected # of cols
+
+  if ( a != NULL )
+    {
+      const int expected = 2 + ( esingle ? 1 : 2 ) + a->types.size() ; 
+      
+      if ( tok.size() != expected ) 
+	Helper::halt( "bad line format: saw " + Helper::int2str( (int)tok.size() ) + " cols but expecting " 
+		      + Helper::int2str( expected) + " for " + a->name + "\n" + line );
+    }
+  
+  
+  interval_t interval;
+  
+  if ( eline )
+    {
+      
+      if ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) 
+	Helper::halt( "cannot use e:1 notation in .annot files with (discontinuous) EDF+ files" );
+      
+      
+      // 2 e:1        assumes 30
+      // 3 e:30:1     assumes no overlap
+      // 4 e:15:5:4   specifies all
+      
+      std::vector<std::string> tok2 = Helper::parse( tok[2] , ":" );
+      
+      if ( tok2.size() < 2 || tok2.size() > 4 ) 
+	Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+      
+      if ( tok2[0] != "e" ) 
+	Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
+      
+      int epoch_length = globals::default_epoch_len;
+      int epoch_increment = globals::default_epoch_len; // i.e. non-overlapping
+      int epoch;
+      
+      if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
+	Helper::halt( "invalid epoch: " + tok[2] );
+      
+      if ( epoch == 0 ) 
+	Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
+      
+      if ( tok2.size() >= 3 ) 
+	if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
+	  Helper::halt( "invalid epoch length:  " + tok[2] );
+      
+      if ( tok2.size() == 4  ) 
+	if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
+	  Helper::halt( "invalid epoch increment:  " + tok[2] );
+      
+      uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
+      
+      uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
+      
+      // set interval from current line
+      // last point is defined as point *past* end of interval
+      
+      interval.start = epoch_increment_tp * (epoch-1);
+      interval.stop  = interval.start + epoch_length_tp;
+      
+      //
+      // A second epoch ?   in this case, overwrite interval.stop from above
+      //
+      
+      if ( erange ) 
+	{
+
+	  // if the second epoch was an ellipsis? then we need to look at the next line
+	  if ( tok[3] == "..." )
+	    *readon = true;
+	  else
+	    {
+	  
+	      std::vector<std::string> tok2 = Helper::parse( tok[3] , ":" );
+	      
+	      if ( tok2.size() < 2 || tok2.size() > 4 ) 
+		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+	      
+	      if ( tok2[0] != "e" ) 
+		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
+	      
+	      int epoch;
+	      
+	      if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
+		Helper::halt( "invalid epoch: " + tok[2] );
+	      
+	      if ( epoch == 0 ) 
+		Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
+	      
+	      if ( tok2.size() >= 3 ) 
+		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
+		  Helper::halt( "invalid epoch length:  " + tok[2] );
+	      
+	      if ( tok2.size() == 4  ) 
+		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
+		  Helper::halt( "invalid epoch increment:  " + tok[2] );
+	      
+	      uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
+	      
+	      uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
+	      
+	  
+	      // set interval from current line
+	      // last point is defined as point *past* end of interval
+	      
+	      uint64_t start_of_last_epoch = epoch_increment_tp * (epoch-1);
+	      interval.stop  = start_of_last_epoch + epoch_length_tp;
+	    }
+	}	      
+      
+    }
+  else // an INTERVAL (i.e. will have always two time cols: start & stop
+    {
+
+      *readon = tok[3] == "...";
+      
+      // assume this is either a single numeric value (in seconds) which is an offset past the EDF start
+      // OR in clock-time, in hh:mm:ss (24-hour) format
+      
+      std::vector<std::string> tok_start_hms = Helper::parse( tok[2] , ":" );
+      std::vector<std::string> tok_stop_hms;
+      if ( ! *readon ) tok_stop_hms = Helper::parse( tok[3] , ":" );
+      
+      bool is_hms1 = tok_start_hms.size() == 3;
+      bool is_hms2 = *readon ? false : tok_stop_hms.size() == 3;
+      
+      if ( ( is_hms1 || is_hms2 ) && ! starttime.valid ) 
+	Helper::halt( "specifying hh:mm:ss clocktime annotations, but no valid starttime in the EDF" );
+      
+      // read as seconds 
+      double dbl_start = 0 , dbl_stop = 0;
+
+      // start time:
+      if ( is_hms1 )
+	{
+	  clocktime_t atime( tok[2] );
+	  dbl_start = clocktime_t::difference( starttime , atime ) * 3600;
+	}
+      else
+	{	  
+	  if ( ! Helper::str2dbl( tok[2] , &dbl_start ) )
+	    Helper::halt( "invalid interval: " + line );
+	}
+
+      // stop time:
+      if ( is_hms2 )
+	{
+	  clocktime_t btime( tok[3] );
+	  dbl_stop = clocktime_t::difference( starttime , btime ) * 3600; 
+	}
+      else if ( ! *readon )
+	{	  
+	  if ( ! Helper::str2dbl( tok[3] , &dbl_stop ) ) 
+	    Helper::halt( "invalid interval: " + line );
+	}
+      
+
+      if ( dbl_start < 0 )
+	Helper::halt( f + " contains row(s) with negative time points" ) ;
+      
+      if ( ( !*readon ) && dbl_stop < 0 )
+	Helper::halt( f + " contains row(s) with negative time points" ) ;
+      
+      // convert to uint64_t time-point units
+      
+      interval.start = Helper::sec2tp( dbl_start );
+      
+      // assume stop is already specified as 1 past the end, e.g. 30 60
+      // *unless* it is a single point, e.g. 5 5 
+      // which is handled below
+
+      if ( ! *readon )
+	interval.stop  = Helper::sec2tp( dbl_stop );
+      
+    }
+  
+  
+  // the final point is interpreted as one past the end
+  // i.e. 0 30   means up to 30
+  // but a special case: for a single point specified,  1.00 1.00 
+  // rather than have this as illegal, assume the user meant a 
+  // 1-time-unit point; so advance the STOP by 1 unit
+
+  if ( ! *readon )
+    {
+      if ( interval.stop == interval.start )
+	++interval.stop;
+
+      // Check for valid ordering
+      
+      if ( interval.start > interval.stop )
+	Helper::halt( "invalid interval: " + line );
+      
+    }
+    
+  return interval;
+  
+}
+
 
 
 int annot_t::load_features( const std::string & f )
@@ -2837,7 +2990,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       //
 
       double dbl_start = 0 , dbl_dur = 0 , dbl_stop = 0;
-      
+    
       if ( ! Helper::str2dbl( start->value , &dbl_start ) )
 	Helper::halt( "invalid interval: " + start->value );
 		  

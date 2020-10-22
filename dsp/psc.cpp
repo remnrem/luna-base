@@ -55,12 +55,36 @@ void psc_t::construct( param_t & param )
   if ( ! param.has( "v" ) ) Helper::halt( "no v=<variables> specified" );
   std::set<std::string> vars = param.strset( "v" );
 
+
+  //
+  // individual include/exclude lists? (e.g. skip outliers)
+  // nb. can use @{exapansion} for file reading
+  //
+
+  std::set<std::string> id_includes, id_excludes;
+  if ( param.has( "inc-ids" ) ) id_includes = param.strset( "inc-ids" );
+  if ( param.has( "ex-ids" ) ) id_excludes = param.strset( "ex-ids" );
+  
+  if ( id_includes.size() > 0 && id_excludes.size() > 0 ) 
+    Helper::halt( "cannot specify both inc-ids and ex-ids lists" );
+
+  if ( id_includes.size() > 0 ) logger << "  read " << id_includes.size() << " IDs to include\n";
+  if ( id_excludes.size() > 0 ) logger << "  read " << id_excludes.size() << " IDs to exclude\n";
+  
+  //
+  // make any variables absolute values
+  //
+
+  std::set<std::string> toabs;
+  if ( param.has( "abs" ) ) toabs = param.strset( "abs" );
+
   //
   // log any variables? (dB)
   //
 
   std::set<std::string> tolog;
   if ( param.has( "dB" ) ) tolog = param.strset( "dB" );
+
 
   //
   // any frequencies limits?
@@ -91,7 +115,8 @@ void psc_t::construct( param_t & param )
   if ( param.has( "th" ) ) th = param.dblvector( "th" );
   
   const int q = param.has( "q" ) ? param.requires_int( "q" ) : 5 ; 
-  
+
+  const bool standardize_inputs = param.has( "norm" ) ;
 		 
   //
   // Read spectra into matrix X
@@ -189,7 +214,13 @@ void psc_t::construct( param_t & param )
 	  if ( tok.size() != ncols ) Helper::halt( "incorrect number of columns in " + infile );
 
 	  std::string id = tok[ id_slot ];
-	  
+
+	  // skip if person not on an include list
+	  if ( id_includes.size() != 0 && id_includes.find( id ) == id_includes.end() ) continue;
+
+	  // skip if person is on an exclude list
+	  if ( id_excludes.size() != 0 && id_excludes.find( id ) != id_excludes.end() ) continue;	  
+
 	  std::string ch = "";
 
 	  if ( ch_slot == -1 )
@@ -215,6 +246,9 @@ void psc_t::construct( param_t & param )
 	    {
 	      double x;
 	      if ( ! Helper::str2dbl( tok[ ii->first ] , &x ) ) Helper::halt( "bad value in " + infile );
+
+	      // make absolute?
+	      if ( toabs.find( ii->second ) != toabs.end() ) x = fabs( x );
 
 	      // take log?
 	      if ( tolog.find( ii->second ) != tolog.end() ) x = 10 * log10( x ) ;
@@ -282,7 +316,7 @@ void psc_t::construct( param_t & param )
       ++ii1;
     }
 
-  logger << "  expecting " << rows.size() << " rows (individuals) and " << cols.size() << " columns (features)\n";
+  logger << "  found " << rows.size() << " rows (individuals) and " << cols.size() << " columns (features)\n";
 
   
   //
@@ -415,8 +449,20 @@ void psc_t::construct( param_t & param )
       nc = nv;
     }
 
-  Statistics::mean_center_cols( U );
+  //
+  // First standardize columns? 
+  //
+  
+  if ( standardize_inputs )
+    {
+      Statistics::standardize( U );
+    }
+  else
+    {
+      Statistics::mean_center_cols( U );
+    }
 
+  
   Data::Vector<double> mm = Statistics::mean( U );
   
   W.clear(); V.clear();

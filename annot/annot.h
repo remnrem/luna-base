@@ -139,6 +139,18 @@ struct annot_t
 
   static bool load( const std::string & , edf_t & edf );  
 
+  static interval_t get_interval( const std::string & ,
+				  const std::vector<std::string> & ,
+				  bool * , 
+				  bool * , 
+				  const edf_t & ,
+				  annot_t * ,
+				  const clocktime_t & , 
+				  const std::string & 
+				  );
+
+				  
+  
   static bool map_epoch_annotations( edf_t & parent_edf , 
 				     const std::vector<std::string> & e , 
 				     const std::string & filename , 
@@ -167,7 +179,7 @@ struct annot_t
   //
   // key function to add a new instance to this annotation
   //
-  
+
   instance_t * add( const std::string & id , const interval_t & interval );
 
   void remove( const std::string & id , const interval_t & interval );
