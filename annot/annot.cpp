@@ -782,7 +782,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	      // read into the read-ahead buffer
 	      Helper::safe_getline( FIN , buffer );
-	      std::cout << "read buffer [" << buffer << "]\n";
 	      
 	      // was this the last line?
 	      if ( FIN.eof() )
