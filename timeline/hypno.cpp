@@ -42,16 +42,28 @@ extern logger_t logger;
 bool is_rem( sleep_stage_t s ) { return s == REM; } 
 bool is_nrem( sleep_stage_t s ) { return s == NREM1 || s == NREM2 || s == NREM3 || s == NREM4; } 
 bool is_nrem1( sleep_stage_t s ) { return s == NREM1; } 
+bool is_nrem2( sleep_stage_t s ) { return s == NREM2; } 
 bool is_nrem23( sleep_stage_t s ) { return s == NREM2 || s == NREM3; } 
+bool is_nrem34( sleep_stage_t s ) { return s == NREM3 || s == NREM4; } 
 bool is_nrem234( sleep_stage_t s ) { return s == NREM2 || s == NREM3 || s == NREM4; } 
 bool is_wake( sleep_stage_t s ) { return s == WAKE; }
 bool is_wake_or_lights( sleep_stage_t s ) { return s == WAKE || s == LIGHTS_ON; } 
 bool is_sleep( sleep_stage_t s ) { return s == NREM1 || s == NREM2 || s == NREM3 || s == NREM4 || s == REM ; } 
 
+bool is_same_3class( sleep_stage_t s1 , sleep_stage_t s2 ) 
+{ 
+  if ( s1 == s2 ) return true;
+  if ( ( s1 == NREM1 || s1 == NREM2 || s1 == NREM3 || s1 == NREM4 ) && 
+       ( s2 == NREM1 || s2 == NREM2 || s2 == NREM3 || s2 == NREM4 ) ) return true;
+  return false;
+}
 
-bool hypnogram_t::construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s )
+bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::vector<std::string> & s )
 { 
   timeline = t;
+  req_pre_post_epochs = param.has( "req-pre-post" ) ? param.requires_int( "req-pre-post" ) : 4;
+  flanking_3class = param.has( "flanking-collapse-nrem" ) ? Helper::yesno( param.value( "flanking-collapse-nrem") ) : true;
+
   if ( s.size() != timeline->num_total_epochs() ) 
     Helper::halt( "bad number of stages, " 
 		  + Helper::int2str( (int)s.size() ) 
@@ -63,12 +75,16 @@ bool hypnogram_t::construct( timeline_t * t , const bool verbose , const std::ve
   return true;
 } 
 
-bool hypnogram_t::construct( timeline_t * t , const bool verbose , const std::string sslabel ) 
+bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel ) 
 {
 
   // point to 'parent' timeline
   timeline = t ;
-  
+
+  // set any params
+  req_pre_post_epochs = param.has( "req-pre-post" ) ? param.requires_int( "req-pre-post" ) : 4;
+  flanking_3class = param.has( "flanking-collapse-nrem" ) ? Helper::yesno( param.value( "flanking-collapse-nrem") ) : true;
+
   // get handle
   annot_t * annot = timeline->annotations( sslabel );
   if ( annot == NULL ) 
@@ -401,7 +417,51 @@ void hypnogram_t::calc_stats( const bool verbose )
       
     }
 
-   
+
+  //
+  // Runs test on stages;;; collapse 
+  //
+
+  if ( 0 ) 
+    {
+
+      std::vector<std::string> runs_stage5, runs_stage3;
+      
+      // ignore L
+      for (int e=0;e<ne;e++)
+	{
+	  if ( is_rem( stages[e] ) )
+	    {
+	      runs_stage5.push_back( "R" );
+	      runs_stage3.push_back( "R" );
+	    }
+	  else if ( is_wake( stages[e] ) ) 
+	    {
+	      runs_stage5.push_back( "W" );
+	      runs_stage3.push_back( "W" );
+	    }
+	  else if ( is_nrem1( stages[e] ) ) 
+	    {
+	      runs_stage5.push_back( "N1" );
+	      runs_stage3.push_back( "NR" );
+	    }
+	  else if ( is_nrem2( stages[e] ) ) 
+	    {
+	      runs_stage5.push_back( "N2" );
+	      runs_stage3.push_back( "NR" );
+	    }
+	  else if ( is_nrem34( stages[e] ) ) 
+	    {
+	      runs_stage5.push_back( "N3" );
+	      runs_stage3.push_back( "NR" );
+	    }
+	}
+      
+      
+      runs_pv5 = Statistics::runs_test( runs_stage5 );
+      
+      runs_pv3 = Statistics::runs_test( runs_stage3 );
+    }
 
 
   //
@@ -988,7 +1048,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   
   //
-  // Flanking epochs
+  // Flanking epochs 
   //
 
   is_waso.resize( ne , false );
@@ -1000,17 +1060,34 @@ void hypnogram_t::calc_stats( const bool verbose )
     }
 
   flanking.resize( ne , 0 );
+  flanking_tot.resize( ne , 0 );
   nearest_wake.resize( ne , 0 );
+
+  // transitions in/out of NREM, REM or W sleep
+  //  (3class analysis)
+  // note: if not flanking-collapse-nrem=T (default) then 
+  // this will collapse NR when finding transitions, but 
+  //  if any req-pre-post=X is supplied, these values will
+  // be based on a 5-class (or 6-class) NREM value... a 
+  // little inconsistent perhaps, but the default will be good
 
   nrem2rem.resize( ne , 0 ); nrem2rem_total.resize( ne , 0 );
   nrem2wake.resize( ne , 0 ); nrem2wake_total.resize( ne , 0 );
+
+  rem2nrem.resize( ne , 0 ); rem2nrem_total.resize( ne , 0 );
+  rem2wake.resize( ne , 0 ); rem2wake_total.resize( ne , 0 );
+  
+  wake2nrem.resize( ne , 0 ); wake2nrem_total.resize( ne , 0 );
+  wake2rem.resize( ne , 0 ); wake2rem_total.resize( ne , 0 );
+
+  transitions.clear();
 
   for (int e = 0 ; e < ne ; e++)
     {
       
       //
       // calculate the number of similar epochs 
-      // (FLANKING_SIM)
+      // (FLANKING_MIN and FLANKING_ALL)
       //
       
       int sim = 0;  
@@ -1021,7 +1098,36 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  const int eright = e + j;
 	  // too much
 	  if ( eleft < 0 || eright >= ne ) { sim = j-1; break; }
-	  if ( stages[eleft] != stages[e] || stages[eright] != stages[e] ) { sim = j-1; break; }	  
+	  
+	  // 3 class or full comparison?
+	  if ( flanking_3class )
+	    if (  ( ! is_same_3class( stages[eleft] , stages[e] ) )
+		  || ( ! is_same_3class( stages[eright] , stages[e] ) ) )
+	      { sim = j-1; break; }	  
+	  else
+	    if ( stages[eleft] != stages[e] || stages[eright] != stages[e] ) 
+	      { sim = j-1; break; }	  
+	}
+
+
+      int sim_all = 1; // self
+      
+      // forward
+      for (int ee=e+1 ; ee<ne; ee++)
+	{
+	  if ( flanking_3class )
+	    if ( is_same_3class( stages[ee] , stages[e] ) ) ++sim_all; else break;
+	  else
+	    if ( stages[ee] == stages[e] ) ++sim_all; else break;
+	}
+
+      // backward      
+      for (int ee=e-1 ; ee != -1; ee--)
+	{
+	  if ( flanking_3class )
+	    if ( is_same_3class( stages[ee] , stages[e] ) )  ++sim_all; else break;    
+	  else
+	    if ( stages[ee] == stages[e] ) ++sim_all; else break;    
 	}
 
       int nw = 0;
@@ -1039,55 +1145,175 @@ void hypnogram_t::calc_stats( const bool verbose )
 	}
 
       flanking[e] = sim;
+      flanking_tot[e] = sim_all;
       nearest_wake[e] = nw;
 
       //
-      // transitions FROM N2?
+      // Generic transition matrix counts
       //
-            
-      if ( stages[e] == NREM2 )
+      
+      if ( e != 0 )	
+	{
+	  if ( flanking_3class )
+	    {
+	      // make all NREM --> NREM2 (and switch output) 
+	      sleep_stage_t ss1 = is_nrem( stages[ e - 1 ] ) ? NREM2 : stages[ e - 1 ] ;
+	      sleep_stage_t ss2 = is_nrem( stages[ e ] ) ? NREM2 : stages[ e ] ;
+	      ++transitions[ ss1 ][ ss2 ];
+	    }
+	  else	    
+	    ++transitions[ stages[ e - 1 ] ][ stages[e] ];
+	}
+
+
+    } // next epoch
+      
+
+  //
+  // Loop again over epochs (as we need to calc the flanking_tot[] value for the /next/
+  // epoch here
+  //
+  
+  for (int e=0; e<ne; e++)
+    {
+      //
+      // transitions FROM NREM? 
+      //
+      
+      if ( is_nrem( stages[e] ) ) 
 	{
 	  
-	  // n2 to rem
+	  // nr to rem
 	  int ei = 1;
 	  while ( 1 ) 
 	    {
 	      if ( e + ei == ne ) { ei=0; break; }
-	      if ( stages[ e + ei ] == NREM2 ) { ++ei; continue; }
-	      if ( stages[ e + ei ] == REM   ) break;
+	      if ( is_nrem( stages[ e + ei ] ) ) { ++ei; continue; }
+	      if ( is_rem( stages[ e + ei ] ) && flanking_tot[e+ei] >= req_pre_post_epochs ) break;
 	      ei = 0; break;
 	    }
 	  nrem2rem[e] = ei;
 	  
-	  // n2 to wake
+	  // nr to wake
 	  ei = 1;
 	  while ( 1 )
 	    {
 	      if ( e + ei == ne ) { ei=0; break; }
-	      if ( stages[ e + ei ] == NREM2 ) { ++ei; continue; }
-	      if ( stages[ e + ei ] == WAKE   ) break;
+	      if ( is_nrem( stages[ e + ei ] ) ) { ++ei; continue; }
+	      if ( is_wake( stages[ e + ei ] ) && flanking_tot[e+ei] >= req_pre_post_epochs ) break;
 	      ei = 0; break;
 	    }
 	  nrem2wake[e] = ei;
 	}
+
+
+      //
+      // transitions FROM REM?
+      //
+      
+      if ( is_rem( stages[e] ) ) 
+	{
+	  
+	  // rem to nr
+	  int ei = 1;
+	  while ( 1 ) 
+	    {
+	      if ( e + ei == ne ) { ei=0; break; }
+	      if ( is_rem( stages[ e + ei ] ) ) { ++ei; continue; }
+	      if ( is_nrem( stages[ e + ei ] ) && flanking_tot[e+ei] >= req_pre_post_epochs ) break;
+	      ei = 0; break;
+	    }
+	  rem2nrem[e] = ei;
+	  
+	  // rem to wake
+	  ei = 1;
+	  while ( 1 )
+	    {
+	      if ( e + ei == ne ) { ei=0; break; }
+	      if ( is_rem( stages[ e + ei ] ) ) { ++ei; continue; }
+	      if ( is_wake( stages[ e + ei ] ) && flanking_tot[e+ei] >= req_pre_post_epochs ) break;
+	      ei = 0; break;
+	    }
+	  rem2wake[e] = ei;
+	}
+
+      //
+      // transitions FROM wake?
+      //
+      
+      if ( is_wake( stages[e] ) ) 
+	{
+	  
+	  // w to nr
+	  int ei = 1;
+	  while ( 1 ) 
+	    {
+	      if ( e + ei == ne ) { ei=0; break; }
+	      if ( is_wake( stages[ e + ei ] ) ) { ++ei; continue; }
+	      if ( is_nrem( stages[ e + ei ] ) && flanking_tot[e+ei] >= req_pre_post_epochs ) break;
+	      ei = 0; break;
+	    }
+	  wake2nrem[e] = ei;
+	  
+	  // w to rem
+	  ei = 1;
+	  while ( 1 )
+	    {
+	      if ( e + ei == ne ) { ei=0; break; }
+	      if ( is_wake( stages[ e + ei ] ) ) { ++ei; continue; }
+	      if ( is_rem( stages[ e + ei ] ) && flanking_tot[e+ei] >= req_pre_post_epochs ) break;
+	      ei = 0; break;
+	    }
+	  wake2rem[e] = ei;
+	}
+           
     
     } // next epoch
   
   // now figure out the _total values 
   // i.e. move forward and copy largest number until we hit 0      
-  int e_rem  = nrem2rem[0];
-  int e_wake = nrem2wake[0]; 
+
+  int e_nrem2rem  = nrem2rem[0];
+  int e_nrem2wake = nrem2wake[0]; 
+
+  int e_rem2nrem  = rem2nrem[0];
+  int e_rem2wake  = rem2wake[0]; 
   
+  int e_wake2nrem = wake2nrem[0];
+  int e_wake2rem  = wake2rem[0]; 
+
   for (int e = 1 ; e < ne ; e++ )
     {
-      if ( nrem2rem[e] == 0 ) e_rem = 0;
-      else if ( nrem2rem[e] > e_rem ) e_rem = nrem2rem[e];
-      nrem2rem_total[e] = e_rem;
+      // NR --> 
+      if ( nrem2rem[e] == 0 ) e_nrem2rem = 0;
+      else if ( nrem2rem[e] > e_nrem2rem ) e_nrem2rem = nrem2rem[e];
+      nrem2rem_total[e] = e_nrem2rem;
+      
+      if ( nrem2wake[e] == 0 ) e_nrem2wake = 0;
+      else if ( nrem2wake[e] > e_nrem2wake ) e_nrem2wake = nrem2wake[e];
+      nrem2wake_total[e] = e_nrem2wake;
 
-      if ( nrem2wake[e] == 0 ) e_wake = 0;
-      else if ( nrem2wake[e] > e_wake ) e_wake = nrem2wake[e];
-      nrem2wake_total[e] = e_wake;
+      // REM -> 
+      if ( rem2nrem[e] == 0 ) e_rem2nrem = 0;
+      else if ( rem2nrem[e] > e_rem2nrem ) e_rem2nrem = rem2nrem[e];
+      rem2nrem_total[e] = e_rem2nrem;
+
+      if ( rem2wake[e] == 0 ) e_rem2wake = 0;
+      else if ( rem2wake[e] > e_rem2wake ) e_rem2wake = rem2wake[e];
+      rem2wake_total[e] = e_rem2wake;
+
+      // wake ->
+      if ( wake2nrem[e] == 0 ) e_wake2nrem = 0;
+      else if ( wake2nrem[e] > e_wake2nrem ) e_wake2nrem = wake2nrem[e];
+      wake2nrem_total[e] = e_wake2nrem;
+
+      if ( wake2rem[e] == 0 ) e_wake2rem = 0;
+      else if ( wake2rem[e] > e_wake2rem ) e_wake2rem = wake2rem[e];
+      wake2rem_total[e] = e_wake2rem;
     }
+
+
+
     
   //
   // Clocktime-based measures
@@ -1230,11 +1456,20 @@ void hypnogram_t::output( const bool verbose )
       writer.value( "MINS_N3" , mins_n3 );
       writer.value( "MINS_N4" , mins_n4 );
       writer.value( "MINS_REM" , mins_rem);
+      
+
+      // ignore for now... 
+      /// metrics need normalization by sequence length
+      if ( 0 || any_sleep ) 
+	{
+	  if ( runs_pv5 >= 0 ) writer.value( "RUNS" , runs_pv5 );
+	  if ( runs_pv3 >= 0 ) writer.value( "RUNS3" , runs_pv3 );	  
+	}
 
     }
   
   //
-  // Cycle-specific output (verbose mode only)
+  // Cycle-specific output (verbose mode only), and transitions
   //
 
   if ( verbose ) 
@@ -1242,6 +1477,7 @@ void hypnogram_t::output( const bool verbose )
 
       if ( any_sleep ) 
 	{
+
 	  writer.var( "NREMC_START" , "NREM cycle start epoch" );
 	  writer.var( "NREMC_NREM_MINS" , "NREM cycle NREM duration (mins)" );
 	  writer.var( "NREMC_REM_MINS" , "NREM cycle REM duration (mins)" );
@@ -1265,6 +1501,57 @@ void hypnogram_t::output( const bool verbose )
 	    }
 	  
 	  writer.unlevel( globals::cycle_strat );
+
+	  //
+	  // Transitions
+	  //
+	  
+	  std::vector<sleep_stage_t> ss = { NREM1 , NREM2 , NREM3 , NREM4 , REM , WAKE };
+	  std::vector<std::string> ss_str = { "NREM1" , "NREM2" , "NREM3" , "NREM4" , "REM" , "WAKE" };
+
+	  std::vector<sleep_stage_t> ss3 = { NREM2 , REM , WAKE };
+	  std::vector<std::string> ss3_str = { "NREM" , "REM" , "WAKE" };
+	  
+	  if ( flanking_3class ) 
+	    {
+	      ss = ss3; 
+	      ss_str = ss3_str; 
+	    }
+
+	  std::map<sleep_stage_t,int> marg_pre, marg_post;
+	  int tot = 0;
+          for (int ss1=0; ss1<ss.size(); ss1++)	    
+	    for (int ss2=0; ss2<ss.size(); ss2++)
+	      {
+		tot += transitions[ ss[ss1] ][ ss[ss2] ];
+		marg_pre[ ss[ss1] ] += transitions[ ss[ss1] ][ ss[ss2] ];
+		marg_post[ ss[ss2] ] += transitions[ ss[ss1] ][ ss[ss2] ];
+	      }
+
+	  for (int ss1=0; ss1<ss.size(); ss1++)
+	    {
+	      writer.level( ss_str[ss1] , "PRE" );
+
+	      for (int ss2=0; ss2<ss.size(); ss2++)
+		{
+		  writer.level(  ss_str[ss2] , "POST" );
+		  writer.value( "N" , transitions[ ss[ss1] ][ ss[ss2] ] );
+
+
+		  // probabilities: joint 
+		  writer.value( "P" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)tot );
+		  
+		  // P( post | pre ) 
+		  writer.value( "P_POST_COND_PRE" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_pre[ ss[ss1] ] );
+
+		  // P( pre | post )
+		  writer.value( "P_PRE_COND_POST" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_post[ ss[ss2] ] );
+
+		}
+	      writer.unlevel( "POST" );
+	    }
+	  writer.unlevel( "PRE" );
+	  
 	}
 
     }
@@ -1393,45 +1680,45 @@ void hypnogram_t::output( const bool verbose )
   
   // header
 
-  writer.var( "CLOCK_HOURS" , "Clock time [0,24) hours" );
+  // writer.var( "CLOCK_HOURS" , "Clock time [0,24) hours" );
         
-  writer.var( "E_WAKE" , "Elapsed wake (mins)" );
-  writer.var( "E_WASO" , "Elapsed WASO (mins)" );
-  writer.var( "E_SLEEP" , "Elapsed sleep (mins)" );
+  // writer.var( "E_WAKE" , "Elapsed wake (mins)" );
+  // writer.var( "E_WASO" , "Elapsed WASO (mins)" );
+  // writer.var( "E_SLEEP" , "Elapsed sleep (mins)" );
 
-  writer.var( "E_N1" , "Elapsed N1 (mins)" );
-  writer.var( "E_N2" , "Elapsed N2 (mins)" );
-  writer.var( "E_N3" , "Elapsed N3 (mins)" );
-  writer.var( "E_REM" , "Elapsed REM (mins)" );
+  // writer.var( "E_N1" , "Elapsed N1 (mins)" );
+  // writer.var( "E_N2" , "Elapsed N2 (mins)" );
+  // writer.var( "E_N3" , "Elapsed N3 (mins)" );
+  // writer.var( "E_REM" , "Elapsed REM (mins)" );
 
-  writer.var( "PCT_E_SLEEP" , "Elapsed sleep (percent of all sleep)" );
-  writer.var( "PCT_E_N1" , "Elapsed N1 (percent of all N1)" );
-  writer.var( "PCT_E_N2" , "Elapsed N2 (percent of all N2)" );
-  writer.var( "PCT_E_N3" , "Elapsed N3 (percent of all N3)" );
-  writer.var( "PCT_E_REM" , "Elapsed REM (percent of all REM)" );
+  // writer.var( "PCT_E_SLEEP" , "Elapsed sleep (percent of all sleep)" );
+  // writer.var( "PCT_E_N1" , "Elapsed N1 (percent of all N1)" );
+  // writer.var( "PCT_E_N2" , "Elapsed N2 (percent of all N2)" );
+  // writer.var( "PCT_E_N3" , "Elapsed N3 (percent of all N3)" );
+  // writer.var( "PCT_E_REM" , "Elapsed REM (percent of all REM)" );
 
-  writer.var( "PERSISTENT_SLEEP" , "Persistent sleep yes/no? (1=Y)" );
+  // writer.var( "PERSISTENT_SLEEP" , "Persistent sleep yes/no? (1=Y)" );
 
-  writer.var( "CYCLE" , "NREMC number" );
-  writer.var( "PERIOD" , "NREMC period (NREM/REM)" );
+  // writer.var( "CYCLE" , "NREMC number" );
+  // writer.var( "PERIOD" , "NREMC period (NREM/REM)" );
   
-  writer.var( "CYCLE_POS_REL" , "Position within NREMC, relative" );
-  writer.var( "CYCLE_POS_ABS" , "Position within NREMC, absolute (mins)" );
+  // writer.var( "CYCLE_POS_REL" , "Position within NREMC, relative" );
+  // writer.var( "CYCLE_POS_ABS" , "Position within NREMC, absolute (mins)" );
 
-  writer.var( "FLANKING_SIM" , "Number of similar epochs w.r.t. stage" );
-  writer.var( "NEAREST_WAKE" , "Number of epochs until the nearest wake" );
+  // writer.var( "FLANKING_SIM" , "Number of similar epochs w.r.t. stage" );
+  // writer.var( "NEAREST_WAKE" , "Number of epochs until the nearest wake" );
 
-  writer.var( "WASO" , "Epoch is WASO (1=Y)" );
+  // writer.var( "WASO" , "Epoch is WASO (1=Y)" );
     
   
   // these next four are all reported for the  NREM epoch
-  writer.var( "NREM2REM" , "If NREM epoch, number of NREM if next non-NREM is REM" );
-  writer.var( "NREM2REM_TOTAL" , "If NREM epoch, total number of contiguous NREM if next non-NREM is REM" );
+  // writer.var( "NREM2REM" , "If NREM epoch, number of NREM if next non-NREM is REM" );
+  // writer.var( "NREM2REM_TOTAL" , "If NREM epoch, total number of contiguous NREM if next non-NREM is REM" );
 
-  writer.var( "NREM2WAKE" , "If NREM epoch, number of NREM if next non-NREM is WAKE" );
-  writer.var( "NREM2WAKE_TOTAL" , "If NREM epoch, total number of contiguous NREM if next non-NREM is WAKE" );
+  // writer.var( "NREM2WAKE" , "If NREM epoch, number of NREM if next non-NREM is WAKE" );
+  // writer.var( "NREM2WAKE_TOTAL" , "If NREM epoch, total number of contiguous NREM if next non-NREM is WAKE" );
 
-  writer.var ("N2_WGT" , "Score for descending/ascending N2 epochs (-1 to +1)" );
+  //  writer.var ("N2_WGT" , "Score for descending/ascending N2 epochs (-1 to +1)" );
 
   
   
@@ -1514,20 +1801,31 @@ void hypnogram_t::output( const bool verbose )
       
       // flanking epochs
 
-      writer.value( "FLANKING_SIM" , flanking[e] );
+      writer.value( "FLANKING_MIN" , flanking[e] );
+      writer.value( "FLANKING_ALL" , flanking_tot[e] );
       writer.value( "NEAREST_WAKE" , nearest_wake[e] );
       writer.value( "WASO" , is_waso[e] );
 
-      writer.value( "NREM2REM" , nrem2rem[e] );
-      writer.value( "NREM2REM_TOTAL" , nrem2rem_total[e] );
+      writer.value( "TR_NR2R" , nrem2rem[e] );
+      writer.value( "TOT_NR2R" , nrem2rem_total[e] );
+      writer.value( "TR_NR2W" , nrem2wake[e] );
+      writer.value( "TOT_NR2W" , nrem2wake_total[e] );
 
-      writer.value( "NREM2WAKE" , nrem2wake[e] );
-      writer.value( "NREM2WAKE_TOTAL" , nrem2wake_total[e] );
+      writer.value( "TR_R2NR" , rem2nrem[e] );
+      writer.value( "TOT_R2NR" , rem2nrem_total[e] );
+      writer.value( "TR_R2W" , rem2wake[e] );
+      writer.value( "TOT_R2W" , rem2wake_total[e] );
+
+      writer.value( "TR_W2NR" , wake2nrem[e] );
+      writer.value( "TOT_W2NR" , wake2nrem_total[e] );
+      writer.value( "TR_W2R" , wake2rem[e] );
+      writer.value( "TOT_W2R" , wake2rem_total[e] );
 
       // N2 ascending/descending status
 
       if ( stages[e] == NREM2 ) 
 	writer.value( "N2_WGT" , n2_ascdesc[e] );
+      
            
     } // next epoch
 

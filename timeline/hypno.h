@@ -55,8 +55,8 @@ struct hypnogram_t
 {
   
   hypnogram_t() { } 
-  bool construct( timeline_t * t , const bool verbose , const std::vector<std::string> & s );
-  bool construct( timeline_t * t , const bool verbose , const std::string sslabel = "SleepStage" );
+  bool construct( timeline_t * t , param_t & param , const bool verbose , const std::vector<std::string> & s );
+  bool construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel = "SleepStage" );
   void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
   void output( const bool verbose );
 
@@ -124,7 +124,10 @@ struct hypnogram_t
   double pct_n4;   // 
   double pct_rem;  // 
   double pct_other;
-  
+
+
+  // runs-test 
+  double runs_pv5, runs_pv3;
   
   // sleep cycles (modified Feinberg & Floyd definitions)
   std::vector<bool> in_persistent_sleep;
@@ -150,10 +153,16 @@ struct hypnogram_t
   std::vector<double> n2_ascdesc;
 
   // other local context
+  bool flanking_3class;
   std::vector<int> flanking;      // number of similar flanking epochs as 'x'
+                                  // defined as min # of epochs until reach non-'x'
+  std::vector<int> flanking_tot;  // total number of similar flanking epochs as 'x'
+
   std::vector<int> nearest_wake;  // distance to nearest wake
 
-  // N2-REM and N2-WAKE transitions
+  //
+  // Stage transitions (incl. N2-REM and N2-WAKE transitions)
+  //
 
   // X is the number of epochs until next REM/WAKE
   // X_total is the size of that segment
@@ -162,12 +171,28 @@ struct hypnogram_t
   // NREM2REM        0  4   3   2   1  0  0  0
   // NREM2REM_TOTAL  0  4   4   4   4  0  0  0 
 
+  // to count as a transition, we require to see at least this
+  // many epochs pre and post   (the transitions[][] below counts all)
+
+  int req_pre_post_epochs;
+  
   std::vector<int> nrem2rem;    
   std::vector<int> nrem2rem_total; 
+  std::vector<int> rem2nrem;    
+  std::vector<int> rem2nrem_total; 
   
   std::vector<int> nrem2wake;    
-  std::vector<int> nrem2wake_total; 
+  std::vector<int> nrem2wake_total;     
+  std::vector<int> wake2nrem;    
+  std::vector<int> wake2nrem_total; 
 
+  std::vector<int> rem2wake;    
+  std::vector<int> rem2wake_total;     
+  std::vector<int> wake2rem;    
+  std::vector<int> wake2rem_total; 
+
+  std::map<sleep_stage_t,std::map<sleep_stage_t,int> > transitions;
+  
   std::vector<bool> is_waso;      // distinguish WAKE during SLEEP from pre/post
     
 

@@ -57,7 +57,7 @@ void annot_t::wipe()
 }
 
 
-instance_t * annot_t::add( const std::string & id , const interval_t & interval )
+instance_t * annot_t::add( const std::string & id , const interval_t & interval , const std::string & ch )
 {
 
   // swap in hh:mm:ss for null instance ID?
@@ -72,9 +72,9 @@ instance_t * annot_t::add( const std::string & id , const interval_t & interval 
   if ( id2hms )
     {
       clocktime_t t = parent->start_ct ;
-      double start_hrs = interval.start_sec() / 3600.0; 
-      t.advance( start_hrs );
-      id2 = t.as_string();
+      double start_secs = interval.start_sec(); 
+      t.advance_seconds( start_secs );
+      id2 = t.as_string( ':' , true ); // T = include any fractional seconds
     }
       
   instance_t * instance = new instance_t ;
@@ -82,16 +82,16 @@ instance_t * annot_t::add( const std::string & id , const interval_t & interval 
   // track (for clean-up)
   all_instances.insert( instance );
     
-  interval_events[ instance_idx_t( this , interval , id2 ) ] = instance; 
+  interval_events[ instance_idx_t( this , interval , id2 , ch ) ] = instance; 
   
   return instance; 
   
 }
 
-void annot_t::remove( const std::string & id , const interval_t & interval )
+void annot_t::remove( const std::string & id , const interval_t & interval , const std::string & ch )
 {
 
-  instance_idx_t key = instance_idx_t( this , interval , id );
+  instance_idx_t key = instance_idx_t( this , interval , id , ch );
 
   std::map<instance_idx_t,instance_t*>::iterator ii = interval_events.find( key );
 
@@ -305,7 +305,8 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
 
 
   // static function that will create multiple annotations (one per class label)
-    
+  // no associated channel labels
+
   bool unepoched = elen == 0 ;
   
   if ( unepoched )  
@@ -389,7 +390,8 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
 	      
 	      annot_t * a = amap[ ann[e] ];
 	      
-	      instance_t * instance = a->add( ann[e] , interval );
+	      // . indicates no specifically assigned channel
+	      instance_t * instance = a->add( ann[e] , interval , "." ); 
 	      
 	      // track how many annotations we add
 	      parent_edf.aoccur[ a->name ]++;
@@ -425,7 +427,8 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
 	  
 	  annot_t * a = amap[ ann[e] ];
 	  
-	  instance_t * instance = a->add( ann[e] , interval );
+	  // . indicates no assigned channel
+	  instance_t * instance = a->add( ann[e] , interval , "." );
 	  
 	  // track how many annotations we add
 	  parent_edf.aoccur[ a->name ]++;
@@ -563,11 +566,12 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // # name2 | description | col1(str)
   // # name3 | description                              [ just means a bool ] 
   
-  // then rows are either interval or epoch-based 
+  // then rows are either interval or epoch-based, but must **always** have 6 tab-delim columns 
   
-  // name  id1  sec1  sec2  { vars }
-  // name  id   e:1   {e:2} { vars } 
-  // name  id   hh:mm:ss  hh:mm:ss { vars }
+  // name  id1  ch  sec1  sec2  { vars }
+  // name  id   .   e:1   {e:2} { vars } 
+  // name  id   ch  hh:mm:ss  hh:mm:ss { vars }
+  // special .  .   . . .  // i.e. no time specified... store as 0/0 
 
   // assume e:1   means 30-second epoch, no overlap  [ hard-code this ] 
   // e:1:20 is first of a 20-second epoch
@@ -576,6 +580,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // if second time-point is '...' this means go until the next annot (or end of EDF)
   // (note: a single '.' can be a missing variable)
   
+  
   // check EDF starttime, which might be needed
   
   clocktime_t starttime( parent_edf.header.starttime );
@@ -583,7 +588,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // read header then data
   
   bool epoched = false;
-  
+
+  bool has_class_class = false;
+
   int line_count = 0;
 
   std::map<std::string,annot_t*> annot_map;
@@ -613,7 +620,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       if ( FIN.eof() || line == "" ) continue;
       
       //
-      // header or data row?
+      // header or data row? , or type header (optionally, this is skipped)  
       //
    
       if ( line[0] == '#' ) 
@@ -629,7 +636,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Get the name and ID 
 	  //
 
-	  std::string name = Helper::trim( tok[0] );
+	  std::string name = nsrr_t::remap( Helper::trim( tok[0] ) );
 	  
 	  //
 	  // skip this annotation
@@ -652,7 +659,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 
 	  annot_map[ name ] = a;
+	  
 
+	  //
+	  // special case: if an explicit class label is 'class', then do not
+	  // allow a header row starting 'class' also
+	  //
+
+	  if ( name == "class" ) has_class_class = true;
 	  
 	  //
 	  // Other details
@@ -686,7 +700,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  globals::atype_t t = globals::A_NULL_T;
 		  
 		  if ( type_tok2.size() == 1 ) 
-		    t = globals::A_FLAG_T;
+		    {
+		      // this is commented out to mean that we now force a type 
+		      // specification, i.e. what does 'FLAG' mean as meta-data?
+		      // t = globals::A_FLAG_T;
+		    }
 		  else
 		    {
 		      char c = type_tok2[1][ type_tok2[1].size() - 1 ] ;
@@ -716,7 +734,22 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    }
 	  
 	}
+      
+      //
+      // optional header (e.g. for stats package, that is skipped) 
+      //
 
+      else if ( line_count == 0 && (! has_class_class) && line.size() > 5 && line.substr(0,5) == "class" )
+	{
+	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
+	  if ( tok.size() !=6 ) Helper::halt( "invalid header line:\n" + line );
+	  if ( tok[0] != "class" ) Helper::halt( "expecting column 1 to be 'class':\n" + line );
+	  if ( tok[1] != "instance" ) Helper::halt( "expecting column 2 to be 'instance':\n" + line );
+	  if ( tok[2] != "channel" ) Helper::halt( "expecting column 3 to be 'channel':\n" + line );
+	  if ( tok[3] != "start" ) Helper::halt( "expecting column 4 to be 'start':\n" + line );
+	  if ( tok[4] != "stop" ) Helper::halt( "expecting column 5 to be 'stop':\n" + line );
+	  if ( tok[5] != "meta" ) Helper::halt( "expecting column 6 to be 'meta':\n" + line );
+	}
 
       //
       // otherwise, assume this is a data row
@@ -727,26 +760,32 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  // data-rows are tab-delimited
 	  
-	  std::vector<std::string> tok = Helper::parse( line , " \t" );
+	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
 	  
 	  if ( tok.size() == 0 ) continue; 
 
+	  //
+	  // Get annot name, optionally remapped
+	  //
+
+	  const std::string aname = nsrr_t::remap( tok[0] );
+	  
 	  //
 	  // are we skipping this annotation anyway?
 	  //
 	  
 	  if ( globals::specified_annots.size() > 0 && 
-	       globals::specified_annots.find( tok[0] ) == globals::specified_annots.end() ) 
+	       globals::specified_annots.find( aname ) == globals::specified_annots.end() ) 
 	    continue;
 
 	  //
 	  // was this annotation specified in the header? 
 	  //
 	  
-	  std::map<std::string,annot_t*>::iterator aa = annot_map.find( tok[0] );
+	  std::map<std::string,annot_t*>::iterator aa = annot_map.find( aname );
 	  
 	  if ( aa == annot_map.end() ) 
-	    Helper::halt( "annotation " + tok[0] + " not in header of " + f );
+	    Helper::halt( "annotation " + aname + " not in header of " + f );
 	  
 	  annot_t * a = aa->second; 			
 	  
@@ -757,16 +796,17 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Get interval implied 
 	  //
 
-	  // was only a single column specified?
-	  bool esingle = false;
-
-	  // if the second column '...', i.e. in which case we need to read the next line
-	  // (and store in buffer for the subsequent row)
+	  // if the second time-point is '...', i.e. in which case we
+	  // need to read the next line (and store in buffer for the
+	  // subsequent row)
 	  
 	  bool readon = false;
 	  
+	  std::string ch; 
+
 	  interval_t interval = get_interval( line , tok ,
-					      &esingle , &readon , 
+					      &ch , 
+					      &readon , 
 					      parent_edf , a , starttime , f );
 
 
@@ -782,7 +822,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	      // read into the read-ahead buffer
 	      Helper::safe_getline( FIN , buffer );
-	      std::cout << "read buffer [" << buffer << "]\n";
 	      
 	      // was this the last line?
 	      if ( FIN.eof() )
@@ -793,17 +832,19 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		}
 	      else
 		{
-		  std::vector<std::string> ntok = Helper::parse( buffer , " \t" );
+		  std::vector<std::string> ntok = Helper::parse( buffer , globals::allow_space_delim ? " \t" : "\t" );
 		  
 		  if ( ntok.size() == 0 ) Helper::halt( "invalid line following '...' end timepoint" );
 
-		  bool dummy1, dummy2;
-
+		  std::string nch;
+		  bool dummy;
+		  
 		  // only need to get the start of the interval here:
 		  interval_t ninterval = get_interval( line , ntok ,
-						      &dummy1 , &dummy2 , 
-						      parent_edf , NULL , starttime , f );
-
+						       &nch, 
+						       &dummy, 
+						       parent_edf , NULL , starttime , f );
+		  
 		  
 		  // Check for valid ordering: i.e. start of next cannot be before start of prior
 		  
@@ -814,11 +855,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  // (i.e. as stop is encoded as +1 end, this will
 		  //  imply we go right up until the point just before the
 		  //  next epoch, which is what we want
+		  
+		  interval.stop = ninterval.start;		  
 
-		  interval.stop = ninterval.start;
-		  
-		  
-		  
 		}
 
 	    }
@@ -827,8 +866,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // for a FLAG for this annotation (with same name as primary annotaton)
 	  //
-	  
-	  instance_t * instance = a->add( id , interval );
+		  
+	  instance_t * instance = a->add( id , interval , ch );
 
 	  
 	  //
@@ -844,44 +883,68 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  const int n = tok.size();
 	  
-	  for (int j = ( esingle ? 3 : 4 ) ;j<n; j++)
-	    {
+	  //
+	  // We now fix to 6 columns; the fifth column can contain pipe-delimited values
+	  //
 
-	      const int idx = j - (esingle ? 3 : 4 );
+	  if ( n != 6 ) 
+	    Helper::halt( f + " has a non-blank row with other than 6 tab-delimited fields:\n" + line );
+	
+	  //
+	  // If var column is '.' we can skip ahead to next line now (or if
+	  // we are not expecting any variables)
+	  //
+	  
+	  if ( tok[5] == "." || cols[a].size() == 0 ) continue;
+
+	  //
+	  // Otherwise, parse |-delimited values, that should match the header
+	  //
+
+	  std::vector<std::string> vartok = Helper::parse( tok[5] , "|" );
+
+	  const int nv = vartok.size();
+	  	  
+	  if ( nv != cols[a].size() ) 
+	    Helper::halt( "expecting " + Helper::int2str( cols[a].size() ) + " |-delimited fields for " + aname );
+	  
+	  for (int j=0; j<nv; j++)
+	    {
 	      
-	      const std::string & label = cols[a][idx];	      
+	      // skip missing values
+	      if ( vartok[j] == "." ) continue;
+	      
+	      const std::string & label = cols[a][j];	      
 
 	      globals::atype_t t = a->types[label];
+
+	      // this is now commented out... not
+	      // clear how it would be used in context
+	      // of meta-data...
+
+	      // if ( t == globals::A_FLAG_T ) 
+	      // 	{
+	      // 	  instance->set( label );
+	      // 	}
 	      
-	      if ( t == globals::A_FLAG_T ) 
+	      if ( t == globals::A_MASK_T )
 		{
-		  instance->set( label );
-		}
-	      
-	      else if ( t == globals::A_MASK_T )
-		{
-		  if ( tok[j] != "." )
-		    {
-		      // accepts F and T as well as long forms (false, true)
-		      bool value = Helper::yesno( tok[j] );
-		      instance->set_mask( label , value );
-		    }
+		  // accepts F and T as well as long forms (false, true)
+		  bool value = Helper::yesno( vartok[j] );
+		  instance->set_mask( label , value );		
 		}
 	      
 	      else if ( t == globals::A_BOOL_T )
 		{
-		  if ( tok[j] != "." )
-		    {
-		      // accepts F and T as well as long forms (false, true)
-		      bool value = Helper::yesno( tok[j] );
-		      instance->set( label , value );
-		    }
+		  // accepts F and T as well as long forms (false, true)
+		  bool value = Helper::yesno( vartok[j] );
+		  instance->set( label , value );
 		}
 
 	      else if ( t == globals::A_INT_T )
 		{
 		  int value = 0;
-		  if ( ! Helper::str2int( tok[j] , &value ) )
+		  if ( ! Helper::str2int( vartok[j] , &value ) )
 		    Helper::halt( "invalid E line, bad numeric value" );
 		  instance->set( label , value );
 		}
@@ -890,31 +953,28 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		{
 		  double value = 0;
 		  
-		  if ( Helper::str2dbl( tok[j] , &value ) )		    
+		  if ( Helper::str2dbl( vartok[j] , &value ) )		    
 		    instance->set( label , value );
 		  else
-		    if ( tok[j] != "." && tok[j] != "NA" ) 
-		      Helper::halt( "invalid E line, bad numeric value" );		  
+		    if ( vartok[j] != "NA" ) 
+		      Helper::halt( "invalid line, bad numeric value:\n" + line );		  
 		}
 
 	      else if ( t == globals::A_TXT_T )
-		{
-		  instance->set( label , tok[j] );
+		{		  
+		  instance->set( label , vartok[j] );
 		}
 	      
-
 	      //
-	      // TODO.. add vector readers
+	      // TODO.. add vector readers; for now, they can be encoded as, e.g. comma-delimited strings
 	      //
-
-	    
+	      
 	      else
 		logger << "could not read undefined type from annotation file for " << label << "\n";
-
-	      
-// 	      // track how many annotations we add
-// 	      parent_edf.aoccur[ a->name + ":" + label ]++;
-	      
+	     	      
+	      //
+	      // next value
+	      //
 	    }
 
 	  ++line_count;
@@ -922,8 +982,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       
     } // next line
 
-  //  logger << "  processed " << line_count << " lines\n";
-  
   FIN.close();
   
   return line_count;
@@ -933,7 +991,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 interval_t annot_t::get_interval( const std::string & line ,
 				  const std::vector<std::string> & tok ,
-				  bool * pt_esingle ,
+				  std::string * ch , 
 				  bool * readon , 
 				  const edf_t & parent_edf , 
 				  annot_t * a ,
@@ -942,57 +1000,61 @@ interval_t annot_t::get_interval( const std::string & line ,
 				  )
 {
   
+  // 0 class
+  // 1 instance
+  // 2 channel
+  // 3 start
+  // 4 stop
+  // 5 meta
+
   // epoch (single or range) or an interval (range)? 
   
-  if ( tok.size() < 3 ) Helper::halt( "bad line format, need at least 3 cols:\n" + line );
-
-  // specification in terms of epochs?
-  bool eline = tok[2][0] == 'e' ;
+  if ( tok.size() != 6 ) 
+    Helper::halt( "bad line format, need exactly 6 columns:\n" + line );
   
-  // do we have two cols for epochs (with either a read-on or specific epoch?)
-  bool erange = tok.size() >= 4 && ( tok[3][0] == 'e' || tok[3] == "..." ) ;
+  // specification in terms of one (or two) epochs?  
+  bool eline  = tok[3][0] == 'e' ;
+  bool eline2 = tok[4][0] == 'e' ;
 
-  // only 3 cols
-  bool esingle = eline && ! erange;
-
-  if ( tok.size() < 4 && ! esingle )
-    Helper::halt( "require at least 4 columsn (start & stop time) if not using epoch specification" ); 
-
+  if ( eline2 && ! eline ) 
+    Helper::halt( "not a valid epoch row if only second field has e:N encoding");
   
-  *pt_esingle = esingle; // give back to caller
-
   // if the second timepoint is '...' then this will be set to true
-  // i.e. indicatig that we need to look at the next record in order to
+  // i.e. indicating that we need to look at the next record in order to
   // figure out the end of this annotation
-
-  *readon = false;
   
-  // check expected # of cols
+  *readon = tok[4] == "..." ;
 
-  if ( a != NULL )
-    {
-      const int expected = 2 + ( esingle ? 1 : 2 ) + a->types.size() ; 
-      
-      if ( tok.size() != expected ) 
-	Helper::halt( "bad line format: saw " + Helper::int2str( (int)tok.size() ) + " cols but expecting " 
-		      + Helper::int2str( expected) + " for " + a->name + "\n" + line );
-    }
+  //
+  // Get channel label
+  //
   
+  *ch = tok[2];
+
+
+  //
+  // Get interval
+  //
   
   interval_t interval;
-  
-  if ( eline )
+
+  // for special annotations, can use thisL just insert at start of recording
+  if ( tok[3] == "." && tok[4] == "." )
+    {  
+      interval.start = 0LLU;
+      interval.stop = 0LLU;
+    } 
+  else if ( eline )
     {
       
       if ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) 
 	Helper::halt( "cannot use e:1 notation in .annot files with (discontinuous) EDF+ files" );
+            
+      //  e:1        assumes 30
+      //  e:30:1     assumes no overlap
+      //  e:15:5:4   specifies all
       
-      
-      // 2 e:1        assumes 30
-      // 3 e:30:1     assumes no overlap
-      // 4 e:15:5:4   specifies all
-      
-      std::vector<std::string> tok2 = Helper::parse( tok[2] , ":" );
+      std::vector<std::string> tok2 = Helper::parse( tok[3] , ":" );
       
       if ( tok2.size() < 2 || tok2.size() > 4 ) 
 	Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
@@ -1029,102 +1091,141 @@ interval_t annot_t::get_interval( const std::string & line ,
       interval.stop  = interval.start + epoch_length_tp;
       
       //
-      // A second epoch ?   in this case, overwrite interval.stop from above
+      // A second epoch?   in this case, overwrite interval.stop from above
       //
       
-      if ( erange ) 
+      if ( eline2 )
 	{
-
-	  // if the second epoch was an ellipsis? then we need to look at the next line
-	  if ( tok[3] == "..." )
-	    *readon = true;
-	  else
-	    {
+	  std::vector<std::string> tok2 = Helper::parse( tok[4] , ":" );
 	  
-	      std::vector<std::string> tok2 = Helper::parse( tok[3] , ":" );
-	      
-	      if ( tok2.size() < 2 || tok2.size() > 4 ) 
-		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
-	      
-	      if ( tok2[0] != "e" ) 
-		Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
-	      
-	      int epoch;
-	      
-	      if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
-		Helper::halt( "invalid epoch: " + tok[2] );
-	      
-	      if ( epoch == 0 ) 
-		Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
-	      
-	      if ( tok2.size() >= 3 ) 
-		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
-		  Helper::halt( "invalid epoch length:  " + tok[2] );
-	      
-	      if ( tok2.size() == 4  ) 
-		if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
-		  Helper::halt( "invalid epoch increment:  " + tok[2] );
-	      
-	      uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
-	      
-	      uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
-	      
+	  if ( tok2.size() < 2 || tok2.size() > 4 ) 
+	    Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
 	  
-	      // set interval from current line
-	      // last point is defined as point *past* end of interval
+	  if ( tok2[0] != "e" ) 
+	    Helper::halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
+	  
+	  int epoch;
+	  
+	  if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
+	    Helper::halt( "invalid epoch: " + tok[2] );
+	  
+	  if ( epoch == 0 ) 
+	    Helper::halt( "invalid E value of '0' (first epoch should be '1')" );
+	  
+	  if ( tok2.size() >= 3 ) 
+	    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
+	      Helper::halt( "invalid epoch length:  " + tok[2] );
+	  
+	  if ( tok2.size() == 4  ) 
+	    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
+	      Helper::halt( "invalid epoch increment:  " + tok[2] );
+	  
+	  uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
+	  
+	  uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
+	  	  
+	  // set interval from current line
+	  // last point is defined as point *past* end of interval
 	      
-	      uint64_t start_of_last_epoch = epoch_increment_tp * (epoch-1);
-	      interval.stop  = start_of_last_epoch + epoch_length_tp;
-	    }
-	}	      
+	  uint64_t start_of_last_epoch = epoch_increment_tp * (epoch-1);
+	  interval.stop  = start_of_last_epoch + epoch_length_tp;
+	}
       
     }
-  else // an INTERVAL (i.e. will have always two time cols: start & stop
+  else // an INTERVAL (i.e. starting with other than an e:N value)
     {
 
-      *readon = tok[3] == "...";
-      
-      // assume this is either a single numeric value (in seconds) which is an offset past the EDF start
+      // assume this is either: 
+      //    single numeric value (in seconds) which is an offset past the EDF start
       // OR in clock-time, in hh:mm:ss (24-hour) format
-      
-      std::vector<std::string> tok_start_hms = Helper::parse( tok[2] , ":" );
-      std::vector<std::string> tok_stop_hms;
-      if ( ! *readon ) tok_stop_hms = Helper::parse( tok[3] , ":" );
-      
-      bool is_hms1 = tok_start_hms.size() == 3;
-      bool is_hms2 = *readon ? false : tok_stop_hms.size() == 3;
-      
-      if ( ( is_hms1 || is_hms2 ) && ! starttime.valid ) 
-	Helper::halt( "specifying hh:mm:ss clocktime annotations, but no valid starttime in the EDF" );
-      
-      // read as seconds 
-      double dbl_start = 0 , dbl_stop = 0;
 
+      // with either format, the second column can be a read-on  ('...')
+      // with either format, the second column can be a duration (in secs) if second col starts +
+      
+      bool col2dur = tok[4][0] == '+';
+
+      //
+      // Check: are these times? hh:mm:ss or dd:hh:mm:ss 
+      //  1) allow microseconds to be specified
+      //  2) allow optional dd prefix 
+      //  3) assume 24-hour clock time...
+      //  4) ... unless it starts with [00:01:20]
+      
+      bool is_elapsed_hhmmss_start = tok[3][0] == '0' && tok[3][1] == '+';
+      bool is_elapsed_hhmmss_stop  = tok[4][0] == '0' && tok[4][1] == '+';
+
+      std::string start_str = is_elapsed_hhmmss_start ? 
+	tok[3].substr(2) : tok[3] ;
+
+      std::string stop_str = is_elapsed_hhmmss_stop ? 
+	tok[4].substr(2) : tok[4] ;
+      
+      // get :-delimited hh:mm:ss values ( potentially stripping [ and ] from start/end
+      std::vector<std::string> tok_start_hms = Helper::parse( start_str , ":" );
+
+      std::vector<std::string> tok_stop_hms;
+      if ( ! ( *readon || col2dur ) ) 
+	tok_stop_hms = Helper::parse( stop_str  , ":" );
+      
+      // does this look like hh:mm:ss or dd:hh:mm:ss?   (nb can be hh:mm:ss.ssss) 
+      bool is_hms1 = tok_start_hms.size() == 3 || tok_start_hms.size() == 4; 
+      bool is_hms2 = ( *readon || col2dur ) ? false : ( tok_stop_hms.size() == 3 || tok_stop_hms.size() == 4 );
+
+      // if so, check that there is a valid EDF header starttime
+      if ( is_hms1 && (!is_elapsed_hhmmss_start) && ( !starttime.valid) )
+	Helper::halt( "specifying hh:mm:ss clocktime start, but no valid EDF header starttime" );
+      
+      if ( is_hms2 && (!is_elapsed_hhmmss_stop) && ( !starttime.valid) )
+	Helper::halt( "specifying hh:mm:ss clocktime stop, but no valid EDF header starttime" );
+
+      
+      // convert to / read as seconds 
+      
+      double dbl_start = 0 , dbl_stop = 0;
+      
       // start time:
       if ( is_hms1 )
 	{
-	  clocktime_t atime( tok[2] );
-	  dbl_start = clocktime_t::difference( starttime , atime ) * 3600;
+	  clocktime_t atime( start_str );
+
+	  if ( is_elapsed_hhmmss_start )
+	    dbl_start = atime.seconds(); 
+	  else
+	    dbl_start = clocktime_t::difference_seconds( starttime , atime ) ;
+	  
 	}
-      else
-	{	  
-	  if ( ! Helper::str2dbl( tok[2] , &dbl_start ) )
+      else 
+	{
+	  // if here, we are assuming this is not a hh:mm:ss format time, 
+	  // so assume this is seconds 
+	  if ( ! Helper::str2dbl( start_str , &dbl_start ) )
 	    Helper::halt( "invalid interval: " + line );
 	}
 
       // stop time:
       if ( is_hms2 )
 	{
-	  clocktime_t btime( tok[3] );
-	  dbl_stop = clocktime_t::difference( starttime , btime ) * 3600; 
+	  clocktime_t btime( stop_str );
+
+	  if ( is_elapsed_hhmmss_stop )
+	    dbl_stop = btime.seconds(); // was ealpsed [hh:mm:ss] 
+	  else
+	    dbl_stop = clocktime_t::difference_seconds( starttime , btime ) ;  // was clocktime
+	}
+      else if ( col2dur ) // expecting ""
+	{
+	  // if a + if stop column, ALWAYS has to be in seconds 
+	  double dur = 0;
+	  if ( ! Helper::str2dbl( tok[4].substr(1) , &dur ) ) // skip '+' not that it matters
+	    Helper::halt( "could not parse stop time for line:\n" + line );
+	  dbl_stop = dbl_start + dur;
 	}
       else if ( ! *readon )
 	{	  
-	  if ( ! Helper::str2dbl( tok[3] , &dbl_stop ) ) 
+	  if ( ! Helper::str2dbl( tok[4] , &dbl_stop ) )
 	    Helper::halt( "invalid interval: " + line );
 	}
       
-
       if ( dbl_start < 0 )
 	Helper::halt( f + " contains row(s) with negative time points" ) ;
       
@@ -1136,8 +1237,8 @@ interval_t annot_t::get_interval( const std::string & line ,
       interval.start = Helper::sec2tp( dbl_start );
       
       // assume stop is already specified as 1 past the end, e.g. 30 60
-      // *unless* it is a single point, e.g. 5 5 
-      // which is handled below
+      // a zero-duration interval will therefore have start == stop (i.e. duration = 0)
+      // which should be fine
 
       if ( ! *readon )
 	interval.stop  = Helper::sec2tp( dbl_stop );
@@ -1145,22 +1246,22 @@ interval_t annot_t::get_interval( const std::string & line ,
     }
   
   
-  // the final point is interpreted as one past the end
-  // i.e. 0 30   means up to 30
-  // but a special case: for a single point specified,  1.00 1.00 
-  // rather than have this as illegal, assume the user meant a 
-  // 1-time-unit point; so advance the STOP by 1 unit
-
   if ( ! *readon )
     {
-      if ( interval.stop == interval.start )
-	++interval.stop;
+
+  
+      // TMP remove this
+      if ( 0 )  // TMP CHANGE
+	{
+	  if ( interval.stop == interval.start )
+	    ++interval.stop;
+	}
 
       // Check for valid ordering
       
       if ( interval.start > interval.stop )
-	Helper::halt( "invalid interval: " + line );
-      
+	Helper::halt( "invalid interval: stop is before start\n" + line );
+
     }
     
   return interval;
@@ -1173,8 +1274,8 @@ int annot_t::load_features( const std::string & f )
 {
   
   // set basic values for this annotation type, then add events/features  
-
-  //logger << " attaching feature-list file " << f << "\n";
+  
+  // logger << " attaching feature-list file " << f << "\n";
   
   std::ifstream FIN( f.c_str() , std::ios::in );
   
@@ -1233,7 +1334,7 @@ int annot_t::load_features( const std::string & f )
       // Add this interval
       //
 	  
-      instance_t * instance = add( feature.label , feature.feature );
+      instance_t * instance = add( feature.label , feature.feature , "." );
       
       //
       // and append meta-data
@@ -1540,8 +1641,6 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 {
 
-  //  logger << "  reading XML annotations from " << filename << "\n";
-  
   XML xml( filename );
 
   if ( ! xml.valid() ) Helper::halt( "invalid annotation file: " + filename );
@@ -1702,8 +1801,11 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 
       if ( concept == NULL || start == NULL || duration == NULL ) continue;
       
-      // otherwise, add 
 
+      // Luna format XML can also specify the channel
+      element_t * channel = (*e)( "Channel" );
+      
+      // otherwise, add 
       double start_sec, duration_sec;
       if ( ! Helper::str2dbl( start->value , &start_sec ) ) Helper::halt( "bad value in annotation" );
       if ( ! Helper::str2dbl( duration->value , &duration_sec ) ) Helper::halt( "bad value in annotation" );
@@ -1720,7 +1822,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       // stop is defined as 1 unit past the end of the interval
       uint64_t stop_tp  = duration_sec > 0 
 	? start_tp + Helper::sec2tp( duration_sec )
-	: start_tp + 1LLU ;
+	: start_tp ; // for zero-point interval (starts and stops at same place)
       
       interval_t interval( start_tp , stop_tp );
       
@@ -1728,7 +1830,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       if ( a == NULL ) Helper::halt( "internal error in loadxml()");
 
-      instance_t * instance = a->add( concept->value , interval );      
+      instance_t * instance = a->add( concept->value , interval , channel != NULL ? channel->value : "." );      
       
       // any notes?  set as TXT, otherwise it will be listed as a FLAG
       if ( notes ) 
@@ -1786,7 +1888,8 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  
 	  annot_t * a = edf->timeline.annotations.add( ss );
 	  
-	  instance_t * instance = a->add( ss , interval );      
+	  // . indicates no associated channel
+	  instance_t * instance = a->add( ss , interval , "." );      
       
 	  instance->set( ss );
 	  
@@ -2098,7 +2201,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 	  annot_map_t::const_iterator ee = events.begin();
 	  while ( ee != events.end() )
 	    {	  
-	      instance_t * instance = ss->add( globals::stage( WAKE ) , ee->first.interval );
+	      instance_t * instance = ss->add( globals::stage( WAKE ) , ee->first.interval , "." );
 	      ++ee;
 	    }
 	}
@@ -2114,7 +2217,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 	  annot_map_t::const_iterator ee = events.begin();
 	  while ( ee != events.end() )
 	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM1 ) , ee->first.interval );
+	      instance_t * instance = ss->add( globals::stage( NREM1 ) , ee->first.interval , "." );
 	      ++ee;
 	    }
 	}
@@ -2130,7 +2233,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 	  annot_map_t::const_iterator ee = events.begin();
 	  while ( ee != events.end() )
 	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM2 ) , ee->first.interval );
+	      instance_t * instance = ss->add( globals::stage( NREM2 ) , ee->first.interval , "." );
 	      ++ee;
 	    }
 	}
@@ -2146,7 +2249,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 	  annot_map_t::const_iterator ee = events.begin();
 	  while ( ee != events.end() )
 	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM3 ) , ee->first.interval );
+	      instance_t * instance = ss->add( globals::stage( NREM3 ) , ee->first.interval , "." );
 	      ++ee;
 	    }
 	}
@@ -2162,7 +2265,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 	  annot_map_t::const_iterator ee = events.begin();
 	  while ( ee != events.end() )
 	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM4 ) , ee->first.interval );
+	      instance_t * instance = ss->add( globals::stage( NREM4 ) , ee->first.interval , "." );
 	      ++ee;
 	    }
 	}
@@ -2178,7 +2281,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 	  annot_map_t::const_iterator ee = events.begin();
 	  while ( ee != events.end() )
 	    {
-	      instance_t * instance = ss->add( globals::stage( REM ) , ee->first.interval );
+	      instance_t * instance = ss->add( globals::stage( REM ) , ee->first.interval , "." );
 	      ++ee;
 	    }
 	}
@@ -2193,7 +2296,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
 	  annot_map_t::const_iterator ee = events.begin();
 	  while ( ee != events.end() )
 	    {	  
-	      instance_t * instance = ss->add( globals::stage( UNSCORED ) , ee->first.interval );
+	      instance_t * instance = ss->add( globals::stage( UNSCORED ) , ee->first.interval , "." );
 	      ++ee;
 	    }
 	}
@@ -2366,7 +2469,7 @@ void proc_eval( edf_t & edf , param_t & param )
  
   instance_t dummy;
   
-  instance_t * accumulator = use_globals ? global_annot->add( "." , edf.timeline.wholetrace() ) : &dummy ;
+  instance_t * accumulator = use_globals ? global_annot->add( "." , edf.timeline.wholetrace() , "." ) : &dummy ;
   
   //
   // We need to initialize any global variables that will appear in the main expression
@@ -2422,7 +2525,7 @@ void proc_eval( edf_t & edf , param_t & param )
       // create new annotation
       //
       
-      instance_t * new_instance = new_annot->add( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval );
+      instance_t * new_instance = new_annot->add( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval , "." );
 
       //
       // evaluate the expression
@@ -2456,7 +2559,7 @@ void proc_eval( edf_t & edf , param_t & param )
       // remove instance if expression was F or invalid
       if ( ( ! acc_valid ) || ( ! retval ) ) 
 	{
-	  new_annot->remove( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval );
+	  new_annot->remove( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval , "." );
 	}
             
       // next epoch
@@ -2510,7 +2613,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
       
       // XML header
       
-      O1 << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n\n";
+      O1 << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\n";
       O1 << "<Annotations>\n\n";
       O1 << "<SoftwareVersion>luna-" << globals::version << "</SoftwareVersion>\n\n";
       
@@ -2631,7 +2734,10 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	  
 	  O1 << " <Start>" << instance_idx.interval.start_sec() << "</Start>\n"
 	     << " <Duration>" << instance_idx.interval.duration_sec() << "</Duration>\n";
-	  
+	  	  
+	  if ( instance_idx.ch_str != "." && instance_idx.ch_str != "" )
+	    O1 << " <Channel>" << instance_idx.ch_str << "</Channel>\n";
+
 	  // name : instance_idx.id
 	  // start : instance_idx.interval.start_sec()
 	  // duration : instance_idx.interval.duration_sec()
@@ -2695,6 +2801,11 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	  annot_t * annot = find( anames[a] );
 	  
 	  if ( annot == NULL ) continue;
+	  
+	  if ( annot->name == "start_hms" ) continue; 
+	  if ( annot->name == "duration_hms" ) continue;
+	  if ( annot->name == "duration_sec" ) continue;
+	  if ( annot->name == "epoch_sec" ) continue; 
 
 	  bool has_vars = annot->types.size() > 0 ;
 
@@ -2757,15 +2868,16 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
       if ( epoch_sec != 0 )
 	O1 << "# epoch_sec | Default epoch duration (seconds)\n";
 
-      if ( start_hms != "." )  
- 	O1 << "start_hms\t" << start_hms << "\t" << 0 << "\t" << 0 << "\n";
+      // ensure 6-col format for .annot output
 
+      if ( start_hms != "." )  
+ 	O1 << "start_hms\t" << start_hms << "\t.\t.\t.\t.\n";
       if ( duration_hms != "." )
-	O1 << "duration_hms\t" << duration_hms << "\t0\t0\n";
+	O1 << "duration_hms\t" << duration_hms << "\t.\t.\t.\t.\n";
       if ( duration_sec != 0 )
-	O1 << "duration_sec\t" << duration_sec << "\t0\t0\n";
+	O1 << "duration_sec\t" << duration_sec << "\t.\t.\t.\t.\n";
       if ( epoch_sec != 0 )
-	O1 << "epoch_sec\t" << epoch_sec << "\t0\t0\n";
+	O1 << "epoch_sec\t" << epoch_sec << "\t.\t.\t.\t.\n";
 
       //
       // Loop over all annotation instances
@@ -2784,25 +2896,56 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	  annot_map_t::const_iterator ii = annot->interval_events.find( instance_idx );
           if ( ii == annot->interval_events.end() )  { ++ee; continue; } 
 	  instance_t * inst = ii->second;
+	  
 
+	  // skip special variables
+	  
+	  if ( annot->name == "start_hms" ) { ++ee; continue; } 
+	  if ( annot->name == "duration_hms" ) { ++ee; continue; } 
+	  if ( annot->name == "duration_sec" ) { ++ee; continue; } 
+	  if ( annot->name == "epoch_sec" ) { ++ee; continue; } 
+
+	  // output row
+	  
 	  O1 << annot->name << "\t";
 
 	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
 	    O1 << instance_idx.id << "\t";
 	  else 
 	    O1 << ".\t";
-	  
-	  O1 << instance_idx.interval.start_sec() << "\t"
-	     << instance_idx.interval.stop_sec();
-	  
-	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
-	  
-	  while ( dd != inst->data.end() )
+
+	  if ( instance_idx.ch_str != "." && instance_idx.ch_str != "" )
+            O1 << instance_idx.ch_str << "\t";
+          else
+            O1 << ".\t";
+
+	  // start/stop in seconds, with 4 d.p.
+
+	  // std::cout << "instance_idx.interval = " << instance_idx.interval.start << "\t" << instance_idx.interval.start_sec() << "\n";
+	  // std::cout << "instance_idx.interval.stop = " << instance_idx.interval.stop << "\t" << instance_idx.interval.stop_sec() << "\n";
+	  // std::cout << "\n";
+
+	  O1 << Helper::dbl2str( instance_idx.interval.start_sec() , globals::time_format_dp ) << "\t"
+	     << Helper::dbl2str( instance_idx.interval.stop_sec() , globals::time_format_dp );
+
+	  if ( inst->data.size() == 0 ) 
+	    O1 << "\t.";
+	  else
 	    {
-	      O1 << "\t" << *dd->second;
-	      ++dd;
+	      O1 << "\t";
+
+	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	      
+	      while ( dd != inst->data.end() )
+		{
+		  // pipe-delimiter
+		  if ( dd != inst->data.begin() ) O1 << "|";
+		  // meta-data value
+		  O1 << *dd->second;
+		  ++dd;
+		}
 	    }
-	  
+
 	  O1 << "\n";
 
 	  //
@@ -2984,6 +3127,8 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       element_t * start    = (*ii)( "Start" );
       
       element_t * duration = (*ii)( "Duration" );
+
+      element_t * channel  = (*ii)( "Channel" );
       
       //
       // Get time interval
@@ -3029,7 +3174,9 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       // Create the instance
       //
       
-      instance_t * instance = a->add( name ? name->value : "." , interval );
+      instance_t * instance = a->add( name ? name->value : "." , 
+				      interval ,
+				      channel ? channel->value : "." );
 
       //
       // Add any additional data members
@@ -3156,7 +3303,7 @@ void annotation_set_t::set( edf_t * edf )
       
       duration_sec = edf->header.nr_all * edf->header.record_duration ;
       
-      duration_hms = Helper::timestring( globals::tp_1sec * duration_sec );
+      duration_hms = Helper::timestring( globals::tp_1sec * duration_sec , '.' , false ); // no fractional seconds
       
       clocktime_t etime( edf->header.starttime );
       
@@ -3228,15 +3375,16 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		      // stop is one past the end 
 		      uint64_t stop_tp  = start_tp + dur_tp ;
 
+		      // CHANGE: zero-lengh annot is [a,a), so comment out the below
 		      // ensure at least one tp (i.e. zero-length annotation is (a,a+1)
-		      if ( stop_tp == start_tp ) stop_tp += 1LLU;
+		      // if ( stop_tp == start_tp ) stop_tp += 1LLU;
 		      
 		      interval_t interval( start_tp , stop_tp );
 
 		      // trim, and remap (also by default swap spaces)
 		      std::string inst_name = nsrr_t::remap( Helper::trim( te.name ) );
 
-		      instance_t * instance = a->add( inst_name , interval );
+		      instance_t * instance = a->add( inst_name , interval , "." );
 		      
 		      //std::cerr << " adding [" << te.name << "] -- " << te.onset << "\t" << interval.duration() << "\n";
 		      

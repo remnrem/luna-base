@@ -125,13 +125,14 @@ namespace MiscMath
   
   int outliers( const std::vector<double> * x , double th , 
 		std::vector<bool> * inc , const std::vector<bool> * prior = NULL );  
-  double kappa( const std::vector<int> & a , const std::vector<int> & b );
-  double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b );
+  double kappa( const std::vector<int> & a , const std::vector<int> & b , const int unknown = -1 );
+  double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b , const std::string & unknown = "?" );
 
   double mcc( std::map<std::string,std::map<std::string,int> > table ,
 	      const std::vector<std::string> & labels );
   
   double accuracy( const std::vector<int> & a , const std::vector<int> & b ,
+		   const int unknown = -1 , 
 		   std::vector<int> * labels = NULL ,
 		   std::vector<double> * precision = NULL ,
 		   std::vector<double> * recall = NULL ,
@@ -145,6 +146,7 @@ namespace MiscMath
 		   double * mcc = NULL );
 
   double accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b ,
+		   const std::string & unknown = "?" , 
 		   std::vector<std::string> * labels = NULL , 
 		   std::vector<double> * precision = NULL ,
 		   std::vector<double> * recall = NULL ,

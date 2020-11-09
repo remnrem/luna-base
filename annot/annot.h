@@ -141,7 +141,7 @@ struct annot_t
 
   static interval_t get_interval( const std::string & ,
 				  const std::vector<std::string> & ,
-				  bool * , 
+				  std::string * , 
 				  bool * , 
 				  const edf_t & ,
 				  annot_t * ,
@@ -175,14 +175,14 @@ struct annot_t
 
   int num_interval_events() const { return interval_events.size(); } 
 
-  
+
   //
   // key function to add a new instance to this annotation
   //
 
-  instance_t * add( const std::string & id , const interval_t & interval );
+  instance_t * add( const std::string & id , const interval_t & interval , const std::string & ch );
 
-  void remove( const std::string & id , const interval_t & interval );
+  void remove( const std::string & id , const interval_t & interval , const std::string & ch );
    
   uint64_t minimum_tp() const;  
   
@@ -244,14 +244,29 @@ struct instance_idx_t {
   
   instance_idx_t( const annot_t * p , 
 		  const interval_t & i , 
-		  const std::string & s ) 
-  : parent(p) , interval(i) , id(s) { } 
+		  const std::string & s , 
+		  const std::string & ch_str ) 
+  : parent(p) , interval(i) , id(s) , ch_str( ch_str )
+  { 
+    // for now, do nothing w/ channel info
+
+    /* chs.clear(); */
+    
+    /* if ( ch != "." )  */
+    /*   { */
+    /* 	std::vector<std::string> tok = Helper::quoted_parse( ch , "," ); */
+    /* 	for (int i=0;i<tok.size();i++) chs.insert( Helper::unquote( tok[i]) );	 */
+    /*   } */
+
+} 
   
-  const annot_t *   parent;
+  const annot_t * parent;
 
   interval_t  interval;
   
   std::string id;
+  
+  std::string ch_str;
 
   bool operator< ( const instance_idx_t & rhs ) const 
   {
@@ -259,6 +274,8 @@ struct instance_idx_t {
     if ( interval > rhs.interval ) return false;
     if ( parent->name < rhs.parent->name ) return true;
     if ( parent->name > rhs.parent->name ) return false;
+    if ( ch_str < rhs.ch_str ) return true;
+    if ( ch_str > rhs.ch_str ) return false;				  
     return id < rhs.id;
   }
 

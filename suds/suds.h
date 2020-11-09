@@ -177,6 +177,9 @@ struct suds_t {
     // total/max number of PSC components
     nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 20 ;
 
+    // flat priors?
+    flat_priors = param.has( "flat-priors" );
+
     // bands instead of PSC? 
     use_bands = param.has( "bands" );
     
@@ -336,6 +339,8 @@ struct suds_t {
   static bool one_by_one;
 
   static int nc;
+
+  static bool flat_priors;
 
   static int ns;
 

@@ -3066,7 +3066,7 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
       while ( ii != spindles.end() )
 	{	  
 	  const interval_t & spindle = ii->tp;
-	  a->add(  signals.label(s)  , spindle );      	  	  
+	  a->add(  signals.label(s)  , spindle , signals.label(s) );      	  	  
 	  ++ii;
 	}
 

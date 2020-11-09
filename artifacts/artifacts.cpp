@@ -326,7 +326,7 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 	  bool reject =  dfac > delta_threshold || bfac > beta_threshold;
 	  
 	  if ( reject ) 
-	    a->add( "buckelmuller:" + signals.label(s)  , edf.timeline.epoch(e) );
+	    a->add( "buckelmuller:" + signals.label(s)  , edf.timeline.epoch(e) , signals.label(s) );
 	}
       
     }
