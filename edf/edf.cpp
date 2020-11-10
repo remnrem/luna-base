@@ -294,7 +294,7 @@ void edf_t::description( const param_t & param )
   else 
     std::cout << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n";
 
-  std::cout << "Duration          : " << Helper::timestring( duration_tp ) << "\n";
+  std::cout << "Duration          : " << Helper::timestring( duration_tp , ':' , false ) << "\n"; // not fractional 
 
   if ( n_data_channels_sel < n_data_channels )
     std::cout << "# signals         : " << n_data_channels_sel << " selected (of " << n_data_channels << ")\n";
@@ -375,7 +375,7 @@ void edf_t::terse_summary( const bool write_signals ) const
 
   // total duration in TP units
   uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
-  std::string total_duration_hms = Helper::timestring( duration_tp );
+  std::string total_duration_hms = Helper::timestring( duration_tp , ':' , false );
   writer.value( "TOT.DUR.SEC" , header.nr * header.record_duration );
   writer.value( "TOT.DUR.HMS" , total_duration_hms );
 
@@ -1398,7 +1398,8 @@ bool edf_t::attach( const std::string & f ,
   // Output some basic information
   //
 
-  logger << " duration: " << Helper::timestring( timeline.total_duration_tp );
+  logger << " duration: " << Helper::timestring( timeline.total_duration_tp , '.' , false )  // not fractional
+	 << " | " << timeline.total_duration_tp * globals::tp_duration << " secs";
 
   clocktime_t et( header.starttime );
   if ( et.valid )

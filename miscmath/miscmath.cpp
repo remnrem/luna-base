@@ -1191,6 +1191,7 @@ double MiscMath::as_angle_0_pos2neg( const double r )
 
 
 double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> & b , 
+			   const int unknown , 
 			   std::vector<int> * labels ,
 			   std::vector<double> * precision ,
 			   std::vector<double> * recall ,
@@ -1206,23 +1207,30 @@ double MiscMath::accuracy( const std::vector<int> & a , const std::vector<int> &
   std::vector<std::string> aa( a.size() );
   std::vector<std::string> bb( b.size() );
 
-  for (int i=0;i<a.size();i++) aa[i] = Helper::int2str( a[i] );
-  for (int i=0;i<b.size();i++) bb[i] = Helper::int2str( b[i] );
+  for (int i=0;i<a.size();i++) aa[i] = a[i] == unknown ? "?" : Helper::int2str( a[i] );
+  for (int i=0;i<b.size();i++) bb[i] = b[i] == unknown ? "?" : Helper::int2str( b[i] );
 
   std::vector<std::string> ll;
   if ( labels != NULL )
     {
       ll.resize( labels->size() );
-      for (int i=0;i<labels->size();i++) ll[i] = Helper::int2str( (*labels)[i] );
+      for (int i=0;i<labels->size();i++) 
+	{
+	  if ( (*labels)[i] == unknown ) 
+	    Helper::halt( "internal error in accuracy(): cannot specify unknown value as an explicit label" );
+	  ll[i] = Helper::int2str( (*labels)[i] );
+	}
     }
 
-  return accuracy( aa, bb , labels == NULL ? NULL : &ll ,
+  return accuracy( aa, bb , "?" , 
+		   labels == NULL ? NULL : &ll ,
 		   precision , recall , f1 ,
 		   macro_precision , macro_recall , macro_f1 , 
 		   avg_weighted_precision , avg_weighted_recall , avg_weighted_f1 , mcc_val );
 }
 
 double MiscMath::accuracy( const std::vector<std::string> & a , const std::vector<std::string> & b ,
+			   const std::string & unknown , 
 			   std::vector<std::string> * labels , 
                            std::vector<double> * precision ,
                            std::vector<double> * recall ,
@@ -1247,15 +1255,20 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
   
   for (int i=0;i<n;i++)
     {
-      // overall accuracy
-      if ( a[i] == b[i] ) ++m;
-      // build table
-      ++table[ a[i] ][ b[i] ];
-      ++rows[ a[i] ];
-      ++cols[ b[i] ];
-      obs.insert( a[i] );
-      obs.insert( b[i] );      
+      // only consider known cells
+      if ( a[i] != unknown && b[i] != unknown )
+	{
+	  // overall accuracy
+	  if ( a[i] == b[i] ) ++m;
+	  // build table
+	  ++table[ a[i] ][ b[i] ];
+	  ++rows[ a[i] ];
+	  ++cols[ b[i] ];
+	  obs.insert( a[i] );
+	  obs.insert( b[i] );      
+	}
     }
+
   
   // items specific precision/recall/F1
   if ( labels != NULL )
@@ -1291,7 +1304,9 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
 
       for (int i=0;i<labels->size();i++)
 	{
-	  
+	  // only counts 'observed' labels, so no need to handle missing cats '?'
+	  // separately here
+
 	  if ( obs.find( (*labels)[i] ) != obs.end() )
 	    {
 
@@ -1429,16 +1444,16 @@ double MiscMath::mcc( std::map<std::string,std::map<std::string,int> > table ,
 
 
 
-double MiscMath::kappa( const std::vector<int> & a , const std::vector<int> & b )
+double MiscMath::kappa( const std::vector<int> & a , const std::vector<int> & b , const int unknown )
 {
   std::vector<std::string> aa( a.size() );
   std::vector<std::string> bb( b.size() );
-  for (int i=0;i<a.size();i++) aa[i] = Helper::int2str( a[i] );
-  for (int i=0;i<b.size();i++) bb[i] = Helper::int2str( b[i] );
-  return kappa( aa, bb );
+  for (int i=0;i<a.size();i++) aa[i] = a[i] == unknown ? "?" : Helper::int2str( a[i] );
+  for (int i=0;i<b.size();i++) bb[i] = b[i] == unknown ? "?" : Helper::int2str( b[i] );
+  return kappa( aa, bb , "?" );
 }
 
-double MiscMath::kappa( const std::vector<std::string> & a , const std::vector<std::string> & b )
+double MiscMath::kappa( const std::vector<std::string> & a , const std::vector<std::string> & b , const std::string & unknown )
 {
   if ( a.size() != b.size() )
     Helper::halt( "unequal input vectors for kappa()" );
@@ -1448,40 +1463,42 @@ double MiscMath::kappa( const std::vector<std::string> & a , const std::vector<s
   std::map<std::string,double> bcounts;
   std::map<std::string,std::map<std::string,double > > abcounts;
 
-  const int n = a.size();
-
+  // only consider cells where both are 'known' 
+  std::vector<bool> incl( a.size() );
+  int n = 0;
+  for (int i=0;i<a.size();i++)
+    {
+      incl[i] = a[i] != unknown && b[i] != unknown ;
+      if ( incl[i] ) ++n;
+    }
+  
   if ( n == 0 ) return 0;
   double inc = 1/(double)n;
   
   for ( int i = 0 ; i < a.size() ; i++ )
     {
       //std::cout << "ZZ\t" << a[i] << "\t" << b[i] << "\n";
-      
-      allcounts[ a[i] ]++ ; allcounts[ b[i] ]++;      
-      acounts[ a[i] ] += inc;
-      bcounts[ b[i] ] += inc;
-      abcounts[ a[i] ][ b[i] ] += inc;
+      if ( incl[i] )
+	{	   
+	  allcounts[ a[i] ]++ ; allcounts[ b[i] ]++;      
+	  acounts[ a[i] ] += inc;
+	  bcounts[ b[i] ] += inc;
+	  abcounts[ a[i] ][ b[i] ] += inc;
+	}
     }
-  
   
   double observed_agreement = 0;
   double chance_agreement = 0;
-  //  std::cout << "allcounts = " << allcounts.size() << "\n";
   
   std::map<std::string,int>::const_iterator cc = allcounts.begin();
   while ( cc != allcounts.end() )
     {
-      // std::cout << " cc-> " << cc->first << "\t"
-      // 		<< abcounts[ cc->first ][ cc->first ] << "\t"
-      // 		<< acounts[ cc->first ] << " * " <<  bcounts[ cc->first ] << " = " << acounts[ cc->first ] * bcounts[ cc->first ] << "\n";
       observed_agreement += abcounts[ cc->first ][ cc->first ] ;
       chance_agreement += acounts[ cc->first ] * bcounts[ cc->first ];
       ++cc;
     }
 
-  //  std::cout << " observed_agreement = " << observed_agreement << " " << chance_agreement << "\n";
-  
-  double kappa = ( observed_agreement - chance_agreement ) / ( 1 - chance_agreement );
+  double kappa = ( observed_agreement - chance_agreement ) / ( 1.0 - chance_agreement );
   return kappa;
   
 }

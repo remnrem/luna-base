@@ -214,14 +214,13 @@ namespace Helper
 
 
   // time-string
-  std::string timestring( uint64_t msec , char delim = '.' ); 
-  std::string timestring( int h , int m , int s , char delim = '.' );
+  std::string timestring( uint64_t msec , char delim = '.' , bool fractional = true ); 
+  std::string timestring( int h , int m , double s , char delim = '.' , bool fractional = false );
   std::string timestring( const std::string & , const interval_t & , char delim = '.' , const std::string & delim2 = " - " );
 
-  double position( uint64_t a , uint64_t tot , int * h , int * m , int *s);  
-  bool timestring( const std::string & , int * h, int *m , int *s);
-  bool add_clocktime( int *h , int *m , int *s , uint64_t a , int * msec = NULL );
-
+  double position( uint64_t a , uint64_t tot , int * h , int * m , double *s);  
+  bool timestring( const std::string & , int * h, int *m , double *s );
+  bool add_clocktime( int *h , int *m , double *s , uint64_t a );
 
   // given a clock time and an interval, get an output-friendly timestamp (x2)
   bool hhmmss( const clocktime_t & ct , const interval_t & interval , std::string * t1 , std::string * t2 , const int dp = 4 );
@@ -237,7 +236,8 @@ struct clocktime_t
   clocktime_t() 
   {
     valid = true;
-    h=m=s=0;
+    d=h=m=0;
+    s=0.0;
   }
 
   // assumes 24-hour clock
@@ -246,18 +246,29 @@ struct clocktime_t
   // assume from hours, fractional
   clocktime_t( double ); 
   
-  clocktime_t( int h, int m, int s ) : valid(true) , h(h), m(m), s(s) 
+  clocktime_t( int h, int m, double s ) 
+  : valid(true) , d(0) , h(h), m(m), s(s)
   { 
     if ( h < 0 || m < 0 || s < 0 ) valid = false;
-    if ( h > 23 || m > 59 || s > 59 ) valid = false;
+    if ( h > 23 || m > 59 || s >= 60.0 ) valid = false;
   } 
 
+  // with day specified
+  clocktime_t( int d , int h, int m, double s )
+  : valid(true) , d(d) , h(h), m(m), s(s) 
+  { 
+    if ( d < 0 ) valid = false;
+    if ( h < 0 || m < 0 || s < 0 ) valid = false;
+    if ( h > 23 || m > 59 || s >= 60.0 ) valid = false;
+  } 
 
   clocktime_t( const clocktime_t & t1 ) { copy(t1); } 
+
   clocktime_t & operator= (const clocktime_t & t1 ) { copy(t1); return *this; }
     
   void copy( const clocktime_t & t1 )
   {
+    d = t1.d;
     h = t1.h;
     m = t1.m;
     s = t1.s;
@@ -267,18 +278,19 @@ struct clocktime_t
   void reset() 
   {
     valid = true;
-    h = 0; m=0; s=0;
+    d = 0; h = 0; m=0; s=0.0;
   }
 
   bool valid;
+  int d;
   int h;
   int m;
-  int s;
-  
-  std::string as_string() 
+  double s;
+
+  std::string as_string( const char tchar = '.' , bool fractional = false ) 
   {
     if ( ! valid ) return "NA";
-    return Helper::timestring( h,m,s );
+    return Helper::timestring( h,m,s, tchar , fractional );
   }
 
   std::string as_numeric_string() 
@@ -300,9 +312,16 @@ struct clocktime_t
     return h + m/(double)60 + s/(double)(60*60);
   }
   
-  int seconds() const
+  double seconds() const
   {
-    return h*60*60 + m*60 + s;
+    return h*60*60 + m*60 + s ;
+  }
+
+  int rounded_seconds() const
+  {
+    int si = floor(s);
+    if ( s - si > 0.5 ) ++si;
+    return h*60*60 + m*60 + si ;
   }
   
   double difference( const clocktime_t & t )
@@ -310,10 +329,6 @@ struct clocktime_t
     // difference between this and another time
     // -ve means THIS happens before
     // +ve means THIS happens afterwards
-    
-/*     double hrs = hours(); */
-/*     double hrs2 = t.hours(); */
-    
     std::cerr << "**warning:: clocktime_t::difference() not implemented\n";
     return 0;
 
@@ -323,10 +338,10 @@ struct clocktime_t
   {
     ++s;
     // check we don't wrap mins or hours
-    if ( s == 60 ) 
+    if ( s >= 60 ) 
       {
 	++m;
-	s = 0;
+	s -= 60.0;
 	if ( m == 60 ) 
 	  {
 	    ++h;
@@ -353,16 +368,44 @@ struct clocktime_t
     
     h = floor(t_hours);
     m = floor(t_mins);
-    s = floor(t_secs);
+    s = t_secs;
     
-    // to deal w/ numerical imprecision, round to the nearest second
-    double remainder = t_secs - floor( t_secs );    
-    if ( remainder > 0.5 ) advance_1second();
-
+    /* if ( 0 )  */
+    /*   { */
+    /* 	// to deal w/ numerical imprecision, round to the nearest second */
+    /* 	f = t_secs - floor( t_secs );     */
+    
+    /* 	// round to nearest second? */
+    /* 	if ( f > 0.5 ) advance_1second(); */
+    /* 	f = 0.0; */
+    /*   } */
+ 
     return true;
 
   }
   
+
+  bool convert_seconds( double sec ) 
+  {
+    valid = true;
+    if ( sec < 0 ) valid = false;
+    if ( sec > 86400 ) valid = false;
+    if ( ! valid ) return false;
+    
+    double t_hours = floor( sec / 3600.0 );
+    sec -= t_hours * 3600.0;
+    
+    double t_mins  = floor( sec / 60.0 );
+    sec -= t_mins * 60.0;
+    
+    h = t_hours;
+    m = t_mins;
+    s = sec;
+     
+    return true;
+
+  }
+
   void advance( uint64_t tp );
 
   void advance( double hrs )
@@ -383,14 +426,33 @@ struct clocktime_t
     convert( t_hrs );
   }
   
+  void advance_seconds( double secs )
+  {
+
+    double t_sec = seconds();
+
+    t_sec += secs;
+    
+    // need to wrap? (86400 seconds in a day)
+    while ( 1 )
+      {
+	if ( t_sec >= 0 && t_sec < 86400 ) break;
+	if ( t_sec < 0 ) t_sec += 86400.0;
+	else if ( t_sec >= 86400.0 ) t_sec -= 86400.0;
+      }    
+    
+    // update this time back to usual format
+    convert_seconds( t_sec );
+  }
+
   //
   void advance( const clocktime_t & t ) 
   {
 
     if ( ! t.valid ) { valid = false; return; }
 
-    int secs = seconds();
-    int secs2 = t.seconds();
+    double secs = seconds();
+    double secs2 = t.seconds();
 
     //advance
     secs += secs2;
@@ -415,11 +477,7 @@ struct clocktime_t
  
     h = floor(t_hours);
     m = floor(t_mins);
-    s = floor(t_secs);
-
-    // to deal w/ numerical imprecision, round to the nearest second
-    double remainder = t_secs - floor( t_secs );    
-    if ( remainder > 0.5 ) advance_1second();
+    s = t_secs;
         
   }
 
@@ -443,9 +501,31 @@ struct clocktime_t
 	return t2h - t1h;
       }
     
-    return t1.hours() - t2.hours();
+    return 0;
   }
 
+
+  static double difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 )
+  {
+    // we assume t1 happens before t2
+    // thus  22 8   means from 22 to 8
+    // (not 8 to 22)
+    // and assume time wrap is always within 1 day
+
+    double t1s = t1.seconds();
+    double t2s = t2.seconds();
+    
+    if ( t2s < t1s ) 
+      {
+	return 86400.0 - t1s + t2s;
+      }
+    else // no overnight wrap, 
+      {
+	return t2s - t1s;
+      }
+    
+    return 0;
+  }
 
 };
 

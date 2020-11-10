@@ -2744,14 +2744,19 @@ double Statistics::runs_test( const std::vector<std::string> & s )
 
   // note that this is kind-of a hack, you can adapt this as wanted
   if ( nr_elem - fail_cnt < 2 )
-    Helper::halt( "problem in runs_test()" );
+    return -1; // Helper::halt( "problem in runs_test()" );
   
   // other probs?
   if ( x2 == 0 || df == 0 )
-    Helper::halt( "internal error in runs_test(): x2 or df == 0" );
+    return -1; // Helper::halt( "internal error in runs_test(): x2 or df == 0" );
+
+  double pv = chi2_prob( x2, df );
+  
+  if ( ! Helper::realnum( pv ) )
+    return -1;
 
   // return p-value
-  return chi2_prob( x2, df );
+  return pv;
 
 }
 

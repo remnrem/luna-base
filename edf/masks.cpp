@@ -290,8 +290,8 @@ void proc_mask( edf_t & edf , param_t & param )
       clocktime_t t1( tok[0] );
       clocktime_t t2( tok[1] );
       
-      double h1 = clocktime_t::difference( starttime , t1 );
-      double h2 = clocktime_t::difference( starttime , t2 );
+      double h1 = clocktime_t::difference_seconds( starttime , t1 ) / 3600.0 ;
+      double h2 = clocktime_t::difference_seconds( starttime , t2 ) / 3600.0 ;
       
       h2 -= globals::tp_duration;
       

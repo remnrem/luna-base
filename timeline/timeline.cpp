@@ -2059,7 +2059,7 @@ void timeline_t::mask2annot( const std::string & path , const std::string & tag 
     {
       if ( mask[e] )
 	{
-	  instance_t * instance = a->add( tag , epoch(e) );
+	  instance_t * instance = a->add( tag , epoch(e) , "." );
 	  instance->set( "M" , true );
 	}
     }
@@ -2539,7 +2539,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 	  writer.unlevel( globals::count_strat );
 	}
       
-      
+          
       //
       // track collapsed duration, but here only consider completely 'valid' intervals
       //
@@ -2714,6 +2714,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 		  // else display
 		  writer.level( instance_idx.id , "INST" );
 		  writer.level( interval.as_string() , "INTERVAL" );
+		  writer.level( instance_idx.ch_str , globals::signal_strat );
 
 		  writer.value( "EMASK" , masked( e ) );
 		  writer.value( "AMASK" , is_masked );
@@ -2724,6 +2725,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 
 	      writer.unlevel( "INTERVAL" );
 	      writer.unlevel( "INST" );
+	      writer.unlevel( globals::signal_strat );
 
 	    }
 	}
@@ -2771,8 +2773,13 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  
 	  const int nf = annot->types.size();
 	  std::cout << " fields = " << nf << "\n";
-// 	  for (int f = 0 ; f < nf ; f++ ) 
-// 	    std::cout << " " << annot->type_string(f) ;
+
+	  std::map<std::string, globals::atype_t>::const_iterator tt = annot->types.begin();
+	  while ( tt != annot->types.end() )
+	    {
+	      std::cout << "  " << tt->first << ", is " << globals::type_name[ tt->second ] << "\n";
+	      ++tt;
+	    }
 	  std::cout << "\n";	  
 
 	}
@@ -2835,7 +2842,7 @@ void timeline_t::list_all_annotations( const param_t & param )
       const interval_t & interval = instance_idx.interval;
       
       const instance_t * instance = aa->second;
-      
+
       // stratify output by interval
     
       writer.interval( interval );
@@ -2846,8 +2853,14 @@ void timeline_t::list_all_annotations( const param_t & param )
 
       writer.value( "START" , interval.start_sec() );
 
+      // NOTE: not sure why we previously did this... for output only, keep consistent form
       // do not +1 time-unit
-      writer.value( "STOP" , interval.stop_sec_exact() );
+      //writer.value( "STOP" , interval.stop_sec_exact() );
+
+      writer.value( "STOP" , interval.stop_sec() );
+
+      // channel label
+      writer.value( "CH" , instance_idx.ch_str );
 
       // HMS : elapsed
       // HMS : clock
@@ -2861,14 +2874,19 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  // add down to 1/100th of a second
 	  double tp1_extra = tp1_sec - (long)tp1_sec;
 
+	  // Not sure why we used this form previously... to be consistent, stick with STOP being +1 end
+	  
 	  // stop_sec_exact() return last time point (rather than usual 1-past-the-end)
-	  double tp2_sec = interval.stop_sec_exact();
+	  //double tp2_sec = interval.stop_sec_exact();
+
+	  double tp2_sec = interval.stop_sec();
+
 	  clocktime_t present2 = starttime;
 	  present2.advance( tp2_sec / 3600.0 );
 	  double tp2_extra = tp2_sec - (long)tp2_sec;
 	   
-	  writer.value( "START_HMS"  , present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
-	  writer.value( "STOP_HMS"   , present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
+	  writer.value( "START_HMS"  , present1.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
+	  writer.value( "STOP_HMS"   , present2.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
 
 	  // elapsed time (00:00:00 is start of EDF)
 	  clocktime_t present3;
@@ -2880,13 +2898,13 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  present4.advance( tp2_sec / 3600.0 );
 	  tp2_extra = tp2_sec - (long)tp2_sec;
 	   
-	  writer.value( "START_ELAPSED_HMS"  , present3.as_string() +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
-	  writer.value( "STOP_ELAPSED_HMS"   , present4.as_string() +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
+	  writer.value( "START_ELAPSED_HMS"  , present3.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
+	  writer.value( "STOP_ELAPSED_HMS"   , present4.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
 
 
 	}
 	
-      
+
       if ( ! instance->empty() ) 
 	{
 	  writer.value(  "VAL" , instance->print() );

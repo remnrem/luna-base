@@ -32,7 +32,7 @@
 extern logger_t logger;
 
 
-lda_model_t lda_t::fit()
+lda_model_t lda_t::fit( const bool flat_priors )
 {
   lda_model_t model;
 
@@ -70,7 +70,10 @@ lda_model_t lda_t::fit()
   cc = counts.begin();
   while ( cc != counts.end() )
     {
-      prior.push_back( cc->second / (double)n );
+      if ( flat_priors )
+	prior.push_back( 1.0 / (double) counts.size() );
+      else
+	prior.push_back( cc->second / (double)n );
       ++cc;
     }
 

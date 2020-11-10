@@ -96,7 +96,7 @@ class lda_t {
       tol = 1e-4;
     } 
   
-  lda_model_t fit();
+  lda_model_t fit( const bool flat_priors = false );
   
   static lda_posteriors_t predict( const lda_model_t & , const Data::Matrix<double> & X );
 

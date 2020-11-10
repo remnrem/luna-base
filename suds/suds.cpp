@@ -57,6 +57,7 @@ std::map<std::string,suds_indiv_t*> suds_t::bank;
 std::map<std::string,suds_indiv_t*> suds_t::wbank;
 int suds_t::nc;
 int suds_t::ns;
+bool suds_t::flat_priors;
 bool suds_t::use_bands;
 std::vector<std::string> suds_t::siglab;
 std::vector<double> suds_t::lwr;
@@ -222,7 +223,7 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
   // save posteriors?
   if ( pp != NULL ) *pp = prediction.pp;
 
-  double kappa = MiscMath::kappa( prediction.cl , y );
+  double kappa = MiscMath::kappa( prediction.cl , y , suds_t::str( SUDS_UNKNOWN )  );
 
   std::vector<bool> included( nve , false );
   
@@ -390,7 +391,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
       edf.timeline.annotations.make_sleep_stage();
       
-      if ( ! edf.timeline.hypnogram.construct( &edf.timeline , false ) )
+      if ( ! edf.timeline.hypnogram.construct( &edf.timeline , param , false ) )
 	Helper::halt( "problem extracting stage information for trainer" );
       
       // total number of epochs does not match?
@@ -408,7 +409,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
       edf.timeline.annotations.make_sleep_stage();
 
-      has_prior_staging = edf.timeline.hypnogram.construct( &edf.timeline , false ) ;
+      has_prior_staging = edf.timeline.hypnogram.construct( &edf.timeline , param , false ) ;
       
       if ( has_prior_staging )
 	{
@@ -781,7 +782,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
 
   // nve = number of valid epochs ( ne > nge > nve ) 
-
   
   nve = included;
 
@@ -790,9 +790,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   PSD.resize( nve , nbins );
   std::vector<int> epochs2 = epochs;
   epochs.clear();
-
-  if ( has_prior_staging )
-    obs_stage_valid.clear();
   
   int r = 0;
   for (int i=0;i<PSD2.dim1() ; i++)
@@ -804,9 +801,22 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  
 	  epochs.push_back( epochs2[i] );
 	  
-	  if ( has_prior_staging )
-	    obs_stage_valid.push_back( obs_stage[i] );
-	  
+	  ++r;
+	}
+    }
+  
+  // only retain nve obs labels from obs_stage[ne] originals
+
+  if ( has_prior_staging )
+    obs_stage_valid.clear();
+
+  r = 0;
+  for (int i=0;i<ne;i++)
+    {
+      if ( retained[i] )
+	{
+	  if ( valid[r] )
+	    obs_stage_valid.push_back( obs_stage[ i ] );
 	  ++r;
 	}
     }
@@ -1150,16 +1160,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       // fit based on PSC
       lda_t lda1( y , U );      
-      lda_model_t m1 = lda1.fit();
+      lda_model_t m1 = lda1.fit( suds_t::flat_priors );
       lda_posteriors_t prediction1 = lda_t::predict( m1 , U );
-      double kappa1 = MiscMath::kappa( prediction1.cl , y );
+      double kappa1 = MiscMath::kappa( prediction1.cl , y , suds_t::str( SUDS_UNKNOWN ) );
 
       
       // fit based on band power
       lda_t lda2( y , B );
-      lda_model_t m2 = lda2.fit();
+      lda_model_t m2 = lda2.fit( suds_t::flat_priors );
       lda_posteriors_t prediction2 = lda_t::predict( m2 , B );
-      double kappa2 = MiscMath::kappa( prediction2.cl , y );
+      double kappa2 = MiscMath::kappa( prediction2.cl , y , suds_t::str( SUDS_UNKNOWN ) );
 
       writer.value( "K_PSC" , kappa1 );
       writer.value( "K_BAND" , kappa2);
@@ -1220,7 +1230,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
 
       int nve2 = 0;
-      
+
       std::vector<bool> okay = self_classify( &nve2 );
       
       if ( nve2 == 0 )
@@ -1246,7 +1256,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
       std::vector<int> epochs2 = epochs;
       epochs.clear();
-      
+
+      std::vector<suds_stage_t> obs_stage_valid2 = obs_stage_valid;
       if ( has_prior_staging )
 	obs_stage_valid.clear();
 
@@ -1277,7 +1288,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	      // nb. take from already-pruned set, obs_stage_valid[] ) 
 	      if ( has_prior_staging )
-		obs_stage_valid.push_back( obs_stage_valid[i] );
+		{
+		  // std::cout << "hmm " << i << " " 
+		  // 	    << obs_stage_valid.size() << " " << obs_stage_valid2.size() << " " << nve << "\n";
+		  obs_stage_valid.push_back( obs_stage_valid2[i] );
+		}
 
 	      // Hjorth (per signal)
 	      for (int s=0;s<ns;s++)
@@ -1290,7 +1305,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      ++r;
 	    }
 	}
-      
+    
 
       //
       // Redo labels
@@ -1301,6 +1316,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       for ( int i = 0 ; i < nve ; i++ )
 	if ( okay[i] ) y.push_back( yy[i] );
 
+      // just in case...?
+      if ( y.size() != obs_stage_valid.size() ) Helper::halt( "internal error in proc()" );
 
       //
       // update nve
@@ -1763,7 +1780,7 @@ void suds_indiv_t::fit_lda()
 
   lda_t lda( y , U );      
 
-  model = lda.fit();
+  model = lda.fit( suds_t::flat_priors );
 
 }
 
@@ -2020,7 +2037,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( prior_staging )
 	{
 	  // obs_stage for valid epochs only
-	  double kappa3 =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) );	  
+	  double kappa3 =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) , suds_t::str( SUDS_UNKNOWN ) );	  
 	  
 	  k3_prior[ cntr ] = kappa3;
 	  
@@ -2047,7 +2064,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
 	  // set target model for use w/ all different weight-trainers
 
-	  target.model = lda.fit();
+	  target.model = lda.fit( suds_t::flat_priors );
 	  
 	  std::map<std::string,suds_indiv_t*>::iterator ww = wbank.begin();
 	  while ( use_repred_weights && ww != wbank.end() )
@@ -2070,7 +2087,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      
 	      // obs_stage for predicted/valid epochs only
 	      
-	      double kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) );
+	      double kappa = use_5class_repred ?
+		MiscMath::kappa( reprediction.cl , str( weight_trainer->obs_stage ) , suds_t::str( SUDS_UNKNOWN )  ) :
+	        MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) , suds_t::str( SUDS_UNKNOWN )  );
 
 	      //	      std::cout << "\nids: " << target.id << "\t" << trainer->id << "\t" << weight_trainer->id << "\n";
 
@@ -2084,6 +2103,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  if ( use_5class_repred )
 		    acc = MiscMath::accuracy( str( weight_trainer->obs_stage ) , 
 					      reprediction.cl , 
+					      suds_t::str( SUDS_UNKNOWN ) , 
 					      &suds_t::labels5 ,
 					      &precision, &recall, &f1,
 					      &macro_precision, &macro_recall, &macro_f1 ,
@@ -2092,6 +2112,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  else
 		    acc = MiscMath::accuracy( NRW( str( weight_trainer->obs_stage ) ) , 
 					      NRW( reprediction.cl ) , 
+					      suds_t::str( SUDS_UNKNOWN ) , 
 					      &suds_t::labels3 ,
 					      &precision, &recall, &f1,
 					      &macro_precision, &macro_recall, &macro_f1 ,
@@ -2612,10 +2633,14 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
   
   if ( n != b.size() ) 
     Helper::halt( "internal error: unequal vectors in tabulate()" );
-  
+
+  // includes unknown stages SUDS_UNKNOWN, '?' in table
+  // (but these should be removed from kappa and other stats)
+
   std::set<std::string> uniq;
   for (int i=0;i<n;i++)
     {
+      //std::cout << "CHECK\t" << a[i] << "\t" << b[i] << "\n";
       res[ a[i] ][ b[i] ]++;
       uniq.insert( a[i] );
       uniq.insert( b[i] );
@@ -2968,7 +2993,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
     logger << std::fixed << std::setprecision(2);
   
   // original reporting (5 or 3 level)
-  double kappa = MiscMath::kappa( prd , suds_t::str( obs_stage_valid ) );
+  double kappa = MiscMath::kappa( prd , suds_t::str( obs_stage_valid ) , suds_t::str( SUDS_UNKNOWN ) );
 
   // accuracy, precision/recall, kappa:   nb. ordering: 'truth' first, then 'predicted' 
   double macro_f1 = 0 , macro_precision = 0 , macro_recall = 0;
@@ -2976,6 +3001,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   std::vector<double> precision, recall, f1;
 
   double acc = MiscMath::accuracy( suds_t::str( obs_stage_valid ) , prd ,
+				   suds_t::str( SUDS_UNKNOWN ) , 
 				   &suds_t::labels ,
 				   &precision, &recall, &f1,
 				   &macro_precision, &macro_recall, &macro_f1 ,
@@ -3013,7 +3039,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   if ( suds_t::n_stages == 5 )
     {
       
-      double kappa3 = MiscMath::kappa( suds_t::NRW( prd ) , suds_t::NRW( suds_t::str( obs_stage_valid ) ) );
+      double kappa3 = MiscMath::kappa( suds_t::NRW( prd ) , suds_t::NRW( suds_t::str( obs_stage_valid ) ) , suds_t::str( SUDS_UNKNOWN ) );
 
       // nb. 'truth' / pred
       double macro_f1 = 0 , macro_precision = 0 , macro_recall = 0;
@@ -3022,6 +3048,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
       std::vector<std::string> lab3 = { "NR" , "R" , "W" };
       
       double acc3 = MiscMath::accuracy( suds_t::NRW( suds_t::str( obs_stage_valid ) ) , suds_t::NRW( prd ) ,
+					suds_t::str( SUDS_UNKNOWN ) , 
 					&lab3 ,
 					&precision, &recall, &f1,
 					&macro_precision, &macro_recall, &macro_f1 ,
@@ -3138,8 +3165,8 @@ void suds_t::trainer_1x1_evals( const suds_indiv_t & target ,
       if ( current_prediction.size() != obs_stages.size() )
 	Helper::halt( "internal error w/ 1x1" );
       
-      double kappa = MiscMath::kappa( current_prediction , obs_stages );
-      double kappa3 = MiscMath::kappa( suds_t::NRW( current_prediction ) , suds_t::NRW( obs_stages ) );
+      double kappa = MiscMath::kappa( current_prediction , obs_stages , suds_t::str( SUDS_UNKNOWN )  );
+      double kappa3 = MiscMath::kappa( suds_t::NRW( current_prediction ) , suds_t::NRW( obs_stages ) , suds_t::str( SUDS_UNKNOWN ) );
       
       //
       // track cumulative weighted N

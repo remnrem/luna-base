@@ -248,9 +248,10 @@ std::string Helper::dbl2str_fixed(double n, int ch )
 
 uint64_t Helper::sec2tp( double s )
 {
+
   // to avoid floating point errors, take 's' precision to 1/1000 of a second only, i.e. when reading 
   // input; internally, time-points have 1e-9 precision, so this avoids any floating point issues, 
-  // i.e. with small inaccuracies in 's' being scaled up, as double float precision will be bette than 1/1000 
+  // i.e. with small inaccuracies in 's' being scaled up, as double float precision will be better than 1/1000 
   
   if ( s < 0 ) 
     {
@@ -763,7 +764,7 @@ clocktime_t::clocktime_t( const std::string & t )
 {  
   valid = Helper::timestring( t , &h, &m, &s );
   if ( h < 0 || m < 0 || s < 0 ) valid = false;
-  if ( h > 23 || m > 59 || s > 59 ) valid = false;  
+  if ( h > 23 || m > 59 || s > 60.0 ) valid = false;  
 }
 
 bool clocktime_t::midpoint( const clocktime_t & t1 , const clocktime_t & t2 )
@@ -800,12 +801,16 @@ void clocktime_t::advance( uint64_t tp )
 
 
 
-std::string Helper::timestring( const std::string & st , const interval_t & i , char delim , const std::string & delim2 )
+std::string Helper::timestring( const std::string & st , 
+				const interval_t & i , 
+				char delim , 
+				const std::string & delim2 )
 {  
-  int h0 = 0, m0 = 0, s0 = 0;  
+  int h0 = 0, m0 = 0;
+  double s0 = 0.0;
   if ( ! Helper::timestring( st, &h0, &m0, &s0 ) ) return ".";  
-  int h1 = h0, m1 = m0, s1 = s0;
-  int h2 = h0, m2 = m0, s2 = s0;
+  int h1 = h0, m1 = m0; double s1 = s0;
+  int h2 = h0, m2 = m0; double s2 = s0;
   Helper::add_clocktime( &h1, &m1, &s1 , i.start );
   Helper::add_clocktime( &h2, &m2, &s2 , i.stop ); 
   
@@ -817,7 +822,7 @@ std::string Helper::timestring( const std::string & st , const interval_t & i , 
 }
 
 
-std::string Helper::timestring( uint64_t a , char delim )
+std::string Helper::timestring( uint64_t a , char delim , bool fractional )
 {
 
   // a is tp units
@@ -832,34 +837,47 @@ std::string Helper::timestring( uint64_t a , char delim )
   int m = floor(mins);
   int s = floor(sec);
 
-  // return 00:00:00 format
+  // return 00:00:00 or 00:00:00.00 format
   std::stringstream ss;
   if ( h < 10 ) ss << "0";
   ss << h << delim;
+
   if ( m < 10 ) ss << "0";
   ss << m << delim;
-  if ( s < 10 ) ss << "0";
-  ss << s;
+
+  if ( s < 10.0 ) ss << "0";
+  if ( fractional ) 
+    ss << std::fixed << std::setprecision( globals::time_format_dp ) << sec;
+  else
+    ss << s;
+
   return ss.str();		  
 }
 
 
 
-std::string Helper::timestring( int h , int m , int s , char delim )
+std::string Helper::timestring( int h , int m , double sec , char delim , bool fractional )
 {
-  // return 00:00:00 format
+  
+  // return 00:00:00 or 00:00:00.00 format
   std::stringstream ss;
+
   if ( h < 10 ) ss << "0";
   ss << h << delim;
   if ( m < 10 ) ss << "0";
   ss << m << delim;
-  if ( s < 10 ) ss << "0";
-  ss << s;
+  if ( sec < 10.0 ) ss << "0";
+  
+  if ( fractional ) 
+    ss << std::fixed << std::setprecision( globals::time_format_dp ) << sec;
+  else
+    ss << floor( sec );
+  
   return ss.str();		  
 }
 
 
-double Helper::position( uint64_t a , uint64_t tot , int * h , int * m , int *s)
+double Helper::position( uint64_t a , uint64_t tot , int * h , int * m , double *s)
 {
 
   // i.e. not that this matters, but for 0-based scaling for 'a'
@@ -876,13 +894,13 @@ double Helper::position( uint64_t a , uint64_t tot , int * h , int * m , int *s)
 
   *h = floor(hours);
   *m = floor(mins);
-  *s = floor(sec);
+  *s = sec;
   
   return sec2 / (double)(tot/globals::tp_1sec);
 }
 
 
-bool Helper::add_clocktime( int *h , int *m , int *s , uint64_t a , int * msec )
+bool Helper::add_clocktime( int *h , int *m , double *s , uint64_t a  )
 {
   // assumes starting time is always msec == 0
   // (i.e. as per EDF starttime), but this allows for 'a' to imply a fractional time to be output)
@@ -901,29 +919,88 @@ bool Helper::add_clocktime( int *h , int *m , int *s , uint64_t a , int * msec )
   
   *h = floor(fhours);
   *m = floor(fmins);
-  *s = floor(fsec);
+  *s = fsec;
+    
+  return true;
+}
+
+bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
+{
+  *h = *m = 0;
+  *s = 0.0;
+
+  // because of EDF spec, '.' a valid delimiter for hh.mm.ss
+  // makes fractional seconds hard to parse, if we also allow days
+  // so, parse separately: if 1+ colon, assume consistent colon-formatting 
   
-  if ( msec != NULL ) 
+  // valid formats:     hh:mm          hh.mm
+  //                    hh:mm:ss       hh.mm.ss
+  //                    hh:mm:ss.ss    hh.mm.ss.ss
+  //                 dd:hh:mm:ss.ss   
+
+  std::vector<std::string> tokc = Helper::parse( t , ":" );
+
+  // colon-delimited?
+  if ( tokc.size() > 1 ) 
     {
-      *msec = 1000 * ( fsec - *s );
+      if ( tokc.size() == 2 ) // hh:mm
+	{
+	  if ( ! Helper::str2int( tokc[0] , h ) ) return false;
+	  if ( ! Helper::str2int( tokc[1] , m ) ) return false;
+	  return true;
+	}
+      else if ( tokc.size() == 3 ) // hh:mm:ss
+	{
+	  if ( ! Helper::str2int( tokc[0] , h ) ) return false;
+	  if ( ! Helper::str2int( tokc[1] , m ) ) return false;
+	  if ( ! Helper::str2dbl( tokc[2] , s ) ) return false;
+	  return true;
+	}
+      else if ( tokc.size() == 4 ) // dd:hh:mm:ss
+	{
+	  int day = 0;
+	  if ( ! Helper::str2int( tokc[0] , &day ) ) return false;
+	  if ( ! Helper::str2int( tokc[1] , h ) ) return false;
+	  if ( ! Helper::str2int( tokc[2] , m ) ) return false;
+	  if ( ! Helper::str2dbl( tokc[3] , s ) ) return false;
+	  h += 24 * day;
+	  return true;
+	}
+      else 
+	return false;
     }
   
-  return true;
-}
 
-bool Helper::timestring( const std::string & t, int * h, int *m , int *s)
-{
-  *h = *m = *s = 0;
-  std::vector<std::string> tok = Helper::parse( t , ":.-" );
-  if ( tok.size() < 2 ) return false;
-  if ( tok.size() > 3 ) return false;
-  if ( ! Helper::str2int( tok[0] , h ) ) return false;
-  if ( ! Helper::str2int( tok[1] , m ) ) return false;
-  if ( tok.size() == 3 )
-    if ( ! Helper::str2int( tok[2] , s ) ) return false;  
-  return true;
-}
+  //
+  // if no colons, assume this is '.' (or '-') delimited
+  //
+  
+  std::vector<std::string> tok = Helper::parse( t , ".-" );
 
+  if ( tok.size() == 2  ) // hh.mm
+    {
+      if ( ! Helper::str2int( tok[0] , h ) ) return false;
+      if ( ! Helper::str2int( tok[1] , m ) ) return false;
+      return true;
+    }
+  else if ( tok.size() == 3 ) // hh.mm.ss
+    {      
+      if ( ! Helper::str2int( tok[0] , h ) ) return false;
+      if ( ! Helper::str2int( tok[1] , m ) ) return false;
+      if ( ! Helper::str2dbl( tok[2] , s ) ) return false;        
+      return true;
+    }
+  else if ( tok.size() == 4 ) // hh.mm.ss.ss
+    {
+      if ( ! Helper::str2int( tok[0] , h ) ) return false;
+      if ( ! Helper::str2int( tok[1] , m ) ) return false;
+      if ( ! Helper::str2dbl( tok[2] + "." + tok[3] , s ) ) return false;
+      return true;
+    }
+  
+  return false;
+
+}
 
 
 std::string Helper::insert_indiv_id( const std::string & id , const std::string & str )
@@ -941,8 +1018,7 @@ std::string Helper::insert_indiv_id( const std::string & id , const std::string 
 
 void Helper::expand_numerics( std::string * t )
 {
-  // expand [SIG][1:4] to SIG1,SIG2,SIG3,SIG4
-  
+  // expand [SIG][1:4] to SIG1,SIG2,SIG3,SIG4  
   // search for '][' 
   
   std::map<int,int> splices; // txt locations
@@ -1284,7 +1360,10 @@ std::vector<std::string> Helper::file2strvector( const std::string & filename )
 }
 
 
-bool Helper::hhmmss( const clocktime_t & ct , const interval_t & interval , std::string * t1 , std::string * t2 , const int dp )
+bool Helper::hhmmss( const clocktime_t & ct , 
+		     const interval_t & interval , 
+		     std::string * t1 , std::string * t2 , 
+		     const int dp )
 {
   *t1 = ".";
   *t2 = ".";

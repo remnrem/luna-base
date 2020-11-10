@@ -134,6 +134,9 @@ struct globals
   
   static char folder_delimiter;
 
+  // number of decimal places for seconds (e.g. output to .annot)
+  static int time_format_dp; 
+
   static std::string project_path; 
 
   // in -t output mode:   folder/indiv-id/{value}COMMAND-F{value}.txt{.gz}
@@ -290,6 +293,9 @@ struct globals
   
   // specified annots
   static std::set<std::string> specified_annots;
+
+  // allow spaces in .annot files, or only tab delimited?
+  static bool allow_space_delim;
 
   // helper functions to pull out global values
   static std::string band( frequency_band_t b );

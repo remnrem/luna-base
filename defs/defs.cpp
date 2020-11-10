@@ -42,6 +42,9 @@ cmddefs_t globals::cmddefs;
 
 std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
+bool globals::allow_space_delim = true;
+
+int globals::time_format_dp;
 
 bool globals::read_ftr;
 std::set<std::string> globals::specified_annots;
@@ -193,6 +196,8 @@ void globals::init_defs()
 
   verbose = false; 
   
+  time_format_dp = 3;
+
   //
   // Annotation folder
   //

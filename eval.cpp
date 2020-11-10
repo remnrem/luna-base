@@ -2030,12 +2030,12 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   if ( param.has( "file" ) )
     {
       std::vector<std::string> ss = Helper::file2strvector( param.value( "file" ) );
-      edf.timeline.hypnogram.construct( &edf.timeline , verbose , ss );
+      edf.timeline.hypnogram.construct( &edf.timeline , param , verbose , ss );
     }
   else
     {      
       edf.timeline.annotations.make_sleep_stage( wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , misc );
-      bool okay = edf.timeline.hypnogram.construct( &edf.timeline , verbose ); 
+      bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
       if ( ! okay ) return; // i.e. if no valid annotations found
     }
 
@@ -2588,6 +2588,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
+  // dp for time output
+  if ( Helper::iequals( tok0, "sec-dp" ) )
+    {
+      if ( ! Helper::str2int( tok1 , &globals::time_format_dp ) )
+	Helper::halt( "expecting integer for sec-dp=N" );
+      return;
+    }
+  
   // add signals?
   if ( Helper::iequals( tok0 , "sig" ) )
     {		  
@@ -2710,6 +2718,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     {
       nsrr_t::annot_remapping( tok1 );
       return;
+    }
+
+  // fix delimiter to tab only for .annot
+  else if ( Helper::iequals( tok0 , "tab-only" ) )
+    {
+      globals::allow_space_delim = ! Helper::yesno( tok1 );
     }
 
   // default annot folder
@@ -3214,6 +3228,7 @@ void cmd_t::register_specials()
   specials.insert( "silent" ) ;
   specials.insert( "id" );
   specials.insert( "verbose" ) ;
+  specials.insert( "sec-dp" );
   specials.insert( "sig" ) ;
   specials.insert( "vars" );
   specials.insert( "ids" );    
@@ -3222,6 +3237,7 @@ void cmd_t::register_specials()
   specials.insert( "compressed" ) ;
   specials.insert( "nsrr-remap" ) ;
   specials.insert( "remap" ) ;
+  specials.insert( "tab-only" );
   specials.insert( "annot-folder" ) ;
   specials.insert( "annots-folder" ) ; 
   specials.insert( "inst-hms" ) ;
