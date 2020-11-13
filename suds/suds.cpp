@@ -808,19 +808,20 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // only retain nve obs labels from obs_stage[ne] originals
 
   if ( has_prior_staging )
-    obs_stage_valid.clear();
-
-  r = 0;
-  for (int i=0;i<ne;i++)
     {
-      if ( retained[i] )
+      obs_stage_valid.clear();
+
+      r = 0;
+      for (int i=0;i<ne;i++)
 	{
-	  if ( valid[r] )
-	    obs_stage_valid.push_back( obs_stage[ i ] );
-	  ++r;
+	  if ( retained[i] )
+	    {
+	      if ( valid[r] )
+		obs_stage_valid.push_back( obs_stage[ i ] );
+	      ++r;
+	    }
 	}
     }
-
 
   //
   // optional, band-power per epoch tracking

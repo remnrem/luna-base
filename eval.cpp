@@ -890,6 +890,10 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
       
+      else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
+
+      else if ( is( c, "SEDF" ) )         proc_sedf( edf , param(c) );
+
       else if ( is( c, "FIP" ) )          proc_fiplot( edf , param(c) );
       
       else if ( is( c, "COH" ) )          proc_coh( edf , param(c) );
@@ -912,7 +916,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CFC" ) )          proc_cfc( edf , param(c) );
       else if ( is( c, "TAG" ) )          proc_tag( param(c) );
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
-
+      
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
       else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
@@ -1271,6 +1275,24 @@ void proc_resample( edf_t & edf , param_t & param )
 {
   dsptools::resample_channel( edf, param );
 }
+
+
+// TLOCZK
+void proc_tlock( edf_t & , param_t & )
+{
+  // get mean time-locked value of one signal against a set of annotations (time-points)
+  
+}
+
+
+// SEDF : make a summarize EDF 
+void proc_sedf( edf_t & , param_t & )
+{
+  
+  
+}
+
+
 
 // PSC : either build PSC (from multiple results) or fit to an EDF
 void proc_psc( edf_t & edf , param_t & param )
