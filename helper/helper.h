@@ -39,7 +39,7 @@
 
 struct interval_t;
 struct clocktime_t;
-struct gzifstream;
+class gzifstream;
 
 namespace Helper 
 {

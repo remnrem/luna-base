@@ -30,9 +30,9 @@
 
 namespace Data { 
 
-  template<class T> class Matrix;
+  template<class T> struct Matrix;
 
-  template<class T = double> class Vector {
+  template<class T = double> struct Vector {
 
     public:
 
@@ -147,7 +147,7 @@ namespace Data {
 
   
 
-  template<class T = double> class Matrix {
+  template<class T = double> struct Matrix {
     
     public:
 
@@ -155,7 +155,7 @@ namespace Data {
 
     struct Row
     { 
-      Row( Matrix & m , int i ) : mat(m), row(i) { }
+      Row( Matrix & m , int i ) : row(i) , mat(m)  { }
       T & operator[](const int j) { return mat(row,j); }     
       //T operator[](const int j) const { return mat(row,j); }     
       private:
