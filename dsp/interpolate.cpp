@@ -137,7 +137,7 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       
       std::vector<int> good_signals_idx;
       for (int s=0;s<signals.size();s++) 
-	if ( ! edf.timeline.masked( epoch , signals(s) ) ) 
+	if ( ! edf.timeline.masked( epoch , signals.label(s) ) ) 
 	  good_signals_idx.push_back( s ); // i.e. different encoding, relative to signals()
 
       //std::cerr << "epoch e " << epoch << " " << good_signals.size() << " " << bad_signals.size() << "\n";
@@ -195,6 +195,12 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 
       cnt_interpolated_cheps += bad_signals.size();
 
+      //
+      // And reset CHEP mask for this channel/epoch
+      //
+
+      for (int s=0;s<bad_signals.size();s++)
+        edf.timeline.unset_chep_mask( epoch , bad_signals.label(s) );
 
       //
       // Next epoch...

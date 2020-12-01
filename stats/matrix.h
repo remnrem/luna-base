@@ -165,7 +165,7 @@ namespace Data {
     
     struct ConstRow
     { 
-      ConstRow( const Matrix & m , int i ) : mat(m) , row(i) { } 
+      ConstRow( const Matrix & m , int i ) : row(i) , mat(m) { } 
       T operator[](const int j) const { return mat(row,j); }           
       private:
       int row;

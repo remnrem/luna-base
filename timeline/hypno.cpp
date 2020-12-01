@@ -1462,7 +1462,7 @@ void hypnogram_t::output( const bool verbose )
 
       // ignore for now... 
       /// metrics need normalization by sequence length
-      if ( 0 || any_sleep ) 
+      if ( 0 && any_sleep ) 
 	{
 	  if ( runs_pv5 >= 0 ) writer.value( "RUNS" , runs_pv5 );
 	  if ( runs_pv3 >= 0 ) writer.value( "RUNS3" , runs_pv3 );	  

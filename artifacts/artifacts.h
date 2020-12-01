@@ -30,16 +30,11 @@ struct annot_t;
 struct edf_t;
 struct param_t;
 
-void      rms_per_epoch( edf_t & , param_t & );
+// CHEP masks
+void      chep_mask_fixed( edf_t & edf , param_t & param );
+void      chep_mask( edf_t & edf , param_t & param );
 
-void      mse_per_epoch( edf_t & , param_t & );
-
-void      lzw_per_epoch( edf_t & , param_t & );
-
-annot_t * brunner_artifact_detection( edf_t & edf , 
-				      const std::string & signal , 
-				      const std::string & filename = "" );
-
+// ARTIFACTS
 annot_t * buckelmuller_artifact_detection( edf_t & edf , 
 					   param_t & param , 
 					   const std::string & signal , 
@@ -51,6 +46,14 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 					   const double beta_upr = 60 ,
 					   const std::string & filename = "" );
 
-void    spike_signal( edf_t & edf , int s1 , int s2 , double wgt , const std::string & ns = "" );
+// SIGSTATS
+void      rms_per_epoch( edf_t & , param_t & );
+
+// MISC
+void      mse_per_epoch( edf_t & , param_t & );
+
+void      lzw_per_epoch( edf_t & , param_t & );
+
+void      spike_signal( edf_t & edf , int s1 , int s2 , double wgt , const std::string & ns = "" );
 
 #endif

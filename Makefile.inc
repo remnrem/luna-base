@@ -58,7 +58,7 @@ CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
 LD = g++ 
 
-LDFLAGS = $(DEP_LIB) -L. -L.. 
+LDFLAGS = $(DEP_LIB) -L. -L..  
 
 # assuming mingw64 for windows build:
 

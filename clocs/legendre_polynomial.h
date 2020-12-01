@@ -26,7 +26,7 @@
 #include <vector>
 #include "stats/matrix.h"
 
-std::vector<std::vector<double> > legendre( const int , const std::vector<double> & );
+//std::vector<std::vector<double> > legendre( const int , const std::vector<double> & );
 std::vector<double> legendre( const int N , double x );
 std::vector<Data::Matrix<double> > legendre( const int , const Data::Matrix<double> & );
 

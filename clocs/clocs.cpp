@@ -273,8 +273,8 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
   // get interelectrode distance matrix
   Data::Matrix<double> D = interelectrode_distance_matrix( good_signals , good_signals );
   
-//   std::cout << "cosdist\n\n";
-//   std::cout << D.print() << "\n";
+  // std::cout << "cosdist\n\n";
+  // std::cout << D.print() << "\n";
 
   // Evaluate Legendre polynomials
   std::vector<Data::Matrix<double> > L = legendre( N , D );

@@ -869,7 +869,8 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
-      else if ( is( c, "CHEP" ) )         proc_chep( edf, param(c) );
+      else if ( is( c, "CHEP" ) )         timeline_t::proc_chep( edf, param(c) );
+      else if ( is( c, "CHEP-MASK" ) )    proc_chep_mask( edf, param(c) );
       
       else if ( is( c, "EPOCH-ANNOT" ) )  proc_file_annot( edf , param(c) );
       else if ( is( c, "EPOCH-MASK" ) )   proc_epoch_mask( edf, param(c) );

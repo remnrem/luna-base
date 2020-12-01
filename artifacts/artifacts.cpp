@@ -45,28 +45,6 @@ extern writer_t writer;
 
 extern logger_t logger;
 
-annot_t * brunner_artifact_detection( edf_t & edf , 
-				      const std::string & signal_label , 
-				      const std::string & filename )
-{
-  
-
-  Helper::halt("brunner artifact detection: not implemented" );
-  
-  //
-  // Brunner et al. (1996) power spectra:
-  //
-
-  // FFT on 4-sec intervals, with Hamming window
-  // 0.25Hz bins collapsed to
-  //  0.5Hz bins between 0.25 and 20.0Hz
-  //  1Hz bins between 20.25 and 32.0Hz
-  // -->results in 52 bins per 4-sec epoch
-    
-  return NULL;
-}
-
-
 
 annot_t * buckelmuller_artifact_detection( edf_t & edf , 
 					   param_t & param , 
@@ -343,12 +321,13 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
 
 void  rms_per_epoch( edf_t & edf , param_t & param )
 {
-
   
-  // Hjorth parameters: H1, H2, H3
-  // Optional: RMS, % clipped signals
-  // Turning rate 
+  if ( param.has( "th" ) || param.has( "chep" ) || param.has( "cstats" ) || param.has( "astats" ) || param.has( "mask" ) ) 
+    Helper::halt( "use CHEP-MASK to find channel/epoch outliers: SIGSTATS now only reports epoch-level/individual-level statistics" );
 
+  // Hjorth parameters: H1, H2, H3
+  // Second-order Hjorth
+  // Optional: RMS, % clipped signals
   
   std::string signal_label = param.requires( "sig" );  
 
@@ -362,6 +341,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   bool calc_maxxed = param.has( "max" );
 
+
   bool calc_hjorth2 = param.has( "hjorth2" );
 
   double hjorth2_win = param.has( "hjorth2-win" ) ? param.requires_dbl( "hjorth2-win" ) : 1 ;
@@ -369,132 +349,39 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   double hjorth2_inc = param.has( "hjorth2-inc" ) ? param.requires_dbl( "hjorth2-inc" ) : hjorth2_win ;
   if ( hjorth2_inc < 0 ) hjorth2_inc = 0;
 
-  
-  // e.g. exclude EPOCH is more than 5% of points are clipped  
-  double clip_threshold = calc_clipped ? param.requires_dbl( "clipped" ) : 0.05 ;
-  if ( calc_clipped )
-    logger << "  flagging epochs with " << clip_threshold << " proportion X[i] == max(X) or min(X)\n";
 
-  double flat_threshold = 0.05;
   double flat_eps = 1e-6;
   if ( calc_flat )
     {
-      std::vector<double> x = param.dblvector( "flat" );
-      if ( x.size() != 1 && x.size() != 2 ) Helper::halt( "flat requires 1 or 2 param: flat=<pct>,<eps>" );
-      flat_threshold = x[0];
-      if ( x.size() == 2 ) flat_eps = x[1];
-      logger << "  flagging epochs with " << flat_threshold << " proportion |X[i]-X[i-1]| < " << flat_eps << "\n";
+      if ( param.value( "flat" ) != "T" ) flat_eps = param.requires_dbl( "flat" );
+      logger << "  epsilon for flat signals: |X[i]-X[i-1]| < " << flat_eps << "\n";
     }
   
-  double max_threshold = 0.05;
   double max_value = 0;
   if ( calc_maxxed )
     {
-      std::vector<double> x = param.dblvector( "max" );
-      if ( x.size() != 2 ) Helper::halt( "max requires 2 params: max=<value>,<pct>" );
-      max_value = x[0];
-      max_threshold = x[1];
-      logger << "  flagging epochs with " << max_threshold << " proportion |X| > " << max_value << "\n";
+      max_value = param.requires_dbl( "max" );
+      logger << "  reporting max proportion, |X| > " << max_value << "\n";
     }
-  
-  //
-  // Calculate channel-level statistics?
-  //
-
-  bool cstats = param.has( "cstats" ) ;
-
-  double ch_th = cstats ? param.requires_dbl( "cstats" ) : 0 ;
-
-  bool cstats_all = ! param.has( "cstats-unmasked-only" );
-  
   
   //
   // Optionally calculate turning rate
   //
   
-  bool turning_rate = param.has( "tr" )  || param.has( "tr-epoch" ) || param.has( "tr-d" ) || param.has( "tr-smooth" );
+  // bool turning_rate = param.has( "tr" )  || param.has( "tr-epoch" ) || param.has( "tr-d" ) || param.has( "tr-smooth" );
 
-  double tr_epoch_sec = 1.0;
-  int    tr_d = 4;
-  int    tr_epoch_smooth = 30; // +1 is added afterwards
+  // double tr_epoch_sec = 1.0;
+  // int    tr_d = 4;
+  // int    tr_epoch_smooth = 30; // +1 is added afterwards
   
-  if ( turning_rate ) 
-    {
-      if ( param.has( "tr-epoch" ) ) tr_epoch_sec = param.requires_dbl( "tr-epoch" );
-      if ( param.has( "tr-d" ) ) tr_d = param.requires_int( "tr-d" );
-      if ( param.has( "tr-smooth" ) ) tr_epoch_smooth = param.requires_int( "tr-smooth" );
-      logger << " calculating turning rate: d="<< tr_d << " for " << tr_epoch_sec << "sec epochs, smoothed over " << tr_epoch_smooth << " epochs\n";
-    }
+  // if ( turning_rate ) 
+  //   {
+  //     if ( param.has( "tr-epoch" ) ) tr_epoch_sec = param.requires_dbl( "tr-epoch" );
+  //     if ( param.has( "tr-d" ) ) tr_d = param.requires_int( "tr-d" );
+  //     if ( param.has( "tr-smooth" ) ) tr_epoch_smooth = param.requires_int( "tr-smooth" );
+  //     logger << " calculating turning rate: d="<< tr_d << " for " << tr_epoch_sec << "sec epochs, smoothed over " << tr_epoch_smooth << " epochs\n";
+  //   }
 
-
-  //
-  // allow for iterative outlier detection, i.e. with multiple
-  // comma-delimited thresholds
-  //
-  
-  bool apply_mask = false;
-
-  std::vector<double> th;
-
-  if ( param.has( "threshold" ) )
-    {
-      apply_mask = true;
-      th = param.dblvector( "threshold" );
-    }
-  else if ( param.has( "th" ) )
-    {
-      apply_mask = true;
-      th = param.dblvector( "th" );
-    }
-
-  // if only want to mask given CLIP, MAX, FLAT (i.e. not Hjorth)
-  // need to add 'mask' option;   
-  if ( param.has( "mask" ) )
-    apply_mask = true;
-  
-  int th_nlevels = th.size();
-  
-  //
-  // channel/epoch (chep) masks; this will not set any full epoch-masks, but it will 
-  // populate timeline.chep masks (i.e. that can be subsequently turned into lists of bad channels/epochs
-  // and also used to interpolate signals
-  //
-
-  bool chep_mask = param.has( "chep" );
-
-  // cannot apply both chep and mask options
-  if ( chep_mask )
-    {
-      // check a masking threshold was specified above
-
-      if ( ! apply_mask )
-	Helper::halt( "no threshold ('th') specified for chep" );
-      
-      // cannot apply epoch mask and chep mask together,
-      // so now set this to F anyway
-      
-      apply_mask = false;
-    }
-
-  //
-  // All-Epochs
-  //
-
-  // make missing based on distribution of ALL epochs and ALL channels
-  // do this indpendent of CHEP or CSTATS for now, or standard th= mask
-  
-  bool astats = param.has( "astats" );
-  if ( astats && chep_mask ) Helper::halt( "cannot specify astats and chep" ) ;
-  if ( astats && cstats ) Helper::halt( "cannot specify astats and cstats" ) ;
-  if ( astats && apply_mask ) Helper::halt( "cannot specify astats and th" ) ;
-  
-  std::vector<double> astats_th = param.dblvector( "astats" );
-
-
-  //
-  // Calculate per-EPOCH, and also signal-wide, the signal RMS 
-  // Also calculate the proportion of flat/clipped signals (calculated per-EPOCH)
-  //
   
   //
   // Attach signals
@@ -502,7 +389,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   
   signal_list_t signals = edf.header.signal_list( signal_label );  
 
-  // all channels
   const int ns_all = signals.size();
 
   // data channels
@@ -510,20 +396,18 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   for (int s=0;s<ns_all;s++)
     if ( ! edf.header.is_annotation_channel( signals(s) ) )
       sdata.push_back(s);
-
+  
   int ns = 0;
   for (int s=0;s<ns_all;s++)
     if ( ! edf.header.is_annotation_channel( signals(s) ) ) ++ns;
-
-  //  std::cerr << "ns= " << ns << " " << ns_all << "\n";
-
+  
   if ( ns == 0 ) return;
 
   //
   // Store per-epoch statistics
   //
 
-  std::vector<int>      n( ns , 0 );
+  std::vector<int>    n( ns , 0 );
 
   std::vector<double> rms( ns , 0 );
   std::vector<double> clipped( ns , 0 );
@@ -532,37 +416,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<double> mean_activity( ns , 0 );
   std::vector<double> mean_mobility( ns , 0 );
   std::vector<double> mean_complexity( ns , 0 );
-  std::vector<double> mean_turning_rate( ns , 0 ); // nb. this is based on turning-rate epoch size
-
-
-  //
-  // Track original data, if calculating outliers, e_*, i.e. EPOCH level
-  //
-  
-  std::vector<std::vector<double> > e_rms;
-  std::vector<std::vector<double> > e_clp;
-  std::vector<std::vector<double> > e_flt;
-  std::vector<std::vector<double> > e_max;
-  std::vector<std::vector<double> > e_act;
-  std::vector<std::vector<double> > e_mob;
-  std::vector<std::vector<double> > e_cmp;
-  std::vector<std::vector<int> > e_epoch;
-  std::vector<std::vector<double> > e_tr;
-
-  if ( apply_mask || cstats || chep_mask || astats )
-    {
-      e_rms.resize( ns );
-      e_clp.resize( ns );
-      e_flt.resize( ns );
-      e_max.resize( ns );
-      e_act.resize( ns );
-      e_mob.resize( ns );
-      e_cmp.resize( ns );
-      e_epoch.resize( ns );
-    }
-
-  if ( turning_rate )
-    e_tr.resize( ns );
+  //  std::vector<double> mean_turning_rate( ns , 0 ); // nb. this is based on turning-rate epoch size
   
   //
   // Point to first epoch 
@@ -603,6 +457,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       //
       
       edf.timeline.first_epoch();
+
 
       //
       // Get sampling rate
@@ -651,7 +506,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  double x = calc_rms ? MiscMath::rms( *d ) : 0 ;
 	  	  
 	  
-
 	  //
 	  // Hjorth parameters
 	  //
@@ -672,22 +526,24 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      MiscMath::hjorth2( d , &(hjorth2)[0] , hjorth2_win * sr , hjorth2_inc * sr );
 	    }		    
 
+
 	  //
 	  // Turning rate
 	  //
 	  
-	  double turning_rate_mean = 0;
+	  // double turning_rate_mean = 0;
 
-	  if ( turning_rate )
-	    {
+	  // if ( turning_rate )
+	  //   {
 
-	      std::vector<double> subepoch_tr;
+	  //     std::vector<double> subepoch_tr;
 	      
-	      turning_rate_mean = MiscMath::turning_rate( d , sr, tr_epoch_sec , tr_d , &subepoch_tr );
+	  //     turning_rate_mean = MiscMath::turning_rate( d , sr, tr_epoch_sec , tr_d , &subepoch_tr );
 	      
-	      for (int i=0;i<subepoch_tr.size();i++)
-		e_tr[s].push_back( subepoch_tr[i] );
-	    }
+	  //     for (int i=0;i<subepoch_tr.size();i++)
+	  // 	e_tr[s].push_back( subepoch_tr[i] );
+	  //   }
+
 
 	  //
 	  // Verbose output
@@ -698,15 +554,14 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 	      writer.epoch( edf.timeline.display_epoch( epoch ) );
 
-	     
 	      //
 	      // Report calculated values
 	      //
-  
-	      writer.value( "H1" , activity , "Epoch Hjorth parameter 1: activity (variance)" );
-	      writer.value( "H2" , mobility , "Epoch Hjorth parameter 2: mobility" );
-	      writer.value( "H3" , complexity , "Epoch Hjorth parameter 3: complexity" );
-
+	      
+	      writer.value( "H1" , activity );
+	      writer.value( "H2" , mobility );
+	      writer.value( "H3" , complexity );
+	      
 	      if ( calc_hjorth2 && sr >= 50 )
 		{
 		  writer.value( "H1H1" , hjorth2[0] );
@@ -720,24 +575,23 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		  writer.value( "H3H1" , hjorth2[6] );
 		  writer.value( "H3H2" , hjorth2[7] );
 		  writer.value( "H3H3" , hjorth2[8] );
-
 		}
 	      
 	      
 	      if ( calc_rms )
-		writer.value( "RMS" , x , "Epoch root mean square (RMS)" );
+		writer.value( "RMS" , x );
 	      
 	      if ( calc_clipped )
-		writer.value( "CLIP" , c , "Proportion of epoch with clipped signal" );
+		writer.value( "CLIP" , c );
 
 	      if ( calc_flat )
-		writer.value( "FLAT" , f , "Proportion of epoch with flat signal" );
+		writer.value( "FLAT" , f );
 
 	      if ( calc_maxxed )
-		writer.value( "MAX" , c , "Proportion of epoch with maxed signal" );
+		writer.value( "MAX" , c );
 	      
-	      if ( turning_rate ) 
-		writer.value( "TR" , turning_rate_mean , "Turning rate mean per epoch" );
+	      // if ( turning_rate ) 
+	      // 	writer.value( "TR" , turning_rate_mean );
 	    }
 
 
@@ -762,38 +616,11 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  mean_complexity[si] += complexity;
 
 	  n[si]   += 1;
-	
-	  
-	  //
-	  // Track for thresholding, or channel-stats ?
-	  //
-
-	  if ( apply_mask || cstats || chep_mask || astats ) 
-	    {
-	      if ( calc_rms ) 
-		e_rms[si].push_back( x );
-
-	      if ( calc_clipped)
-		e_clp[si].push_back( c );
-
-	      if ( calc_flat )
-		e_flt[si].push_back( f );
-	      
-	      if ( calc_maxxed )
-		e_max[si].push_back( m );
-
-	      e_act[si].push_back( activity );
-	      e_mob[si].push_back( mobility );
-	      e_cmp[si].push_back( complexity );
-	      
-	      e_epoch[si].push_back( epoch );
-	    }
-	
-	
+		  
 	  //
 	  // Next epoch
 	  //
-
+	  
 	} 
 
       if ( verbose ) 
@@ -803,513 +630,46 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       // Next signal
       //
       
-    } 
+    }
 
   if ( verbose )
     writer.unlevel( globals::signal_strat );
 
-
-  
-  //
-  // Phase 2: within each signal, find outlier epochs and mask
-  //
-  
-  if ( apply_mask || chep_mask ) 
-    {
-
-      // s   selectedchannel (i.e. included annot tracks, all signals())
-      // si  only data channels, i.e. 'real' ns for downstream matrices
-
-      int si = -1;
-
-      for (int s=0;s<ns_all;s++)
-	{
-	  	  
-	  //
-	  // only consider data tracks
-	  //
-	  
-	  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
-
-	  ++si;
-
-	  int cnt_rms = 0 , cnt_clp = 0 ,
-	    cnt_flt = 0 , cnt_max = 0 ,
-	    cnt_act = 0 , cnt_mob = 0 , cnt_cmp = 0;
-	  
-	  if ( n[si] < 2 ) continue;
-	  
-	  writer.level( signals.label(s) , globals::signal_strat );
-
-	  //	  std::cout << "n[s] = " << si << " " << n[si] << "\n";
-	  
-	  // for each iteration of outlier pruning
-	  // track which epochs we are dropping here
-	  std::vector<bool> dropped( n[si] , false ); 
-	  
-	  // total number of epochs dropped
-	  int total = 0;
-	  int altered = 0;
-
-	  // masking only on FLAT/CLIP or MAX?
-	  bool no_hjorth = apply_mask && th_nlevels == 0 ;
-
-	  int iters = no_hjorth ? 1 : th_nlevels ;
-	  for (int o=0; o < iters ; o++)
-	    {
-	      
-	      const int nepochs = n[si];
-
-	      std::vector<double> act_rms;
-	      std::vector<double> act_act;
-	      std::vector<double> act_mob;
-	      std::vector<double> act_cmp;
-
-	      // calculate current mean for RMS and Hjorth parameters
-	      // (clipping based on a single fixed threshold, not statistically)
-
-	      for (int j=0;j<nepochs;j++)
-		{
-		  if ( ! dropped[j] ) 
-		    {
-		      if ( calc_rms )
-			act_rms.push_back( e_rms[si][j] );
-		      
-		      act_act.push_back( e_act[si][j] );
-		      act_mob.push_back( e_mob[si][j] );
-		      act_cmp.push_back( e_cmp[si][j] );
-		    }
-		}
-
-	      double mean_rms = calc_rms ? MiscMath::mean( act_rms ) : 0 ;
-	      double mean_act = MiscMath::mean( act_act );
-	      double mean_mob = MiscMath::mean( act_mob );
-	      double mean_cmp = MiscMath::mean( act_cmp );
-	      
-	      double sd_rms = calc_rms ? MiscMath::sdev( act_rms , mean_rms ) : 1;
-	      double sd_act = MiscMath::sdev( act_act , mean_act ); 
-	      double sd_mob = MiscMath::sdev( act_mob , mean_mob ); 
-	      double sd_cmp = MiscMath::sdev( act_cmp , mean_cmp ); 
-
-	      double this_th = no_hjorth ? 0 : th[o];
-	      
-	      double lwr_rms = calc_rms ? mean_rms - this_th * sd_rms : 0 ;
-	      double lwr_act = mean_act - this_th * sd_act;
-	      double lwr_mob = mean_mob - this_th * sd_mob;
-	      double lwr_cmp = mean_cmp - this_th * sd_cmp;
-	  
-	      double upr_rms = calc_rms ? mean_rms + this_th * sd_rms : 0 ; 
-	      double upr_act = mean_act + this_th * sd_act;
-	      double upr_mob = mean_mob + this_th * sd_mob;
-	      double upr_cmp = mean_cmp + this_th * sd_cmp;
-
-	      if ( ! no_hjorth ) 
-		logger << "  RMS/Hjorth filtering " << edf.header.label[ signals(s) ] << ", threshold +/-" << th[o] << " SDs";
-	      else
-		logger << "  Fixed threshold filtering " << edf.header.label[ signals(s) ] ;
-	      
-	      const int ne = e_epoch[si].size();
-
-	      //	      std::cerr << "comp = " << ne << " " << nepochs << "\n";
-	      
-	      int total_this_iteration = 0;
-	      
-	      for (int ei=0; ei<ne; ei++)
-		{
-		  
-		  // track which epochs were actually used
-		  const int e = e_epoch[si][ei];
-		  
-		  // skip if this epoch is already masked
-		  if ( dropped[ei] ) continue;
-		  
-		  bool set_mask = false;
-		  		  
-		  // For clipping/flat/max, use a fixed threshold
-		  if ( calc_clipped && e_clp[si][ei] > clip_threshold ) 
-		    {
-		      set_mask = true;
-		      cnt_clp++;
-		    }
-		  		  		  
-		  if ( calc_flat && e_flt[si][ei] > flat_threshold ) 
-		    {
-		      set_mask = true;
-		      cnt_flt++;
-		    }
-
-		  if ( calc_maxxed && e_max[si][ei] > max_threshold ) 
-		    {
-		      set_mask = true;
-		      cnt_max++;
-		    }
-
-		  // For other metrics, use a (variable) statistical threshold (SD units)
-		  if ( ! no_hjorth )
-		    {
-
-		      if ( calc_rms && ( e_rms[si][ei] < lwr_rms || e_rms[si][ei] > upr_rms ) ) 
-			{
-			  set_mask = true;
-			  cnt_rms++;
-			}
-		      
-		      if ( e_act[si][ei] < lwr_act || e_act[si][ei] > upr_act ) 
-			{
-			  set_mask = true;
-			  cnt_act++;
-			}
-		      
-		      if ( e_mob[si][ei] < lwr_mob || e_mob[si][ei] > upr_mob ) 
-			{
-			  set_mask = true;
-			  cnt_mob++;
-			}
-		      
-		      if ( e_cmp[si][ei] < lwr_cmp || e_cmp[si][ei] > upr_cmp )
-			{
-			  set_mask = true;
-			  cnt_cmp++;
-			}
-		      
-		    }
-	
-	          //
-		  // full mask
-		  //
-		  
-		  if ( set_mask ) 
-		    {
-		      
-		      if ( chep_mask ) // channel/epoch mask rather than standard epoch mask?
-			{
-			  edf.timeline.set_chep_mask( e , signals(s) );
-			  // do not set 'dropped' here... 
-			  // i.e. we'll consider all epochs for subsequent
-			  //      signals
-			  ++total_this_iteration;
-			  ++total;
-			}
-		      else
-			{			  
-			  if ( !edf.timeline.masked(e) ) ++altered;
-			  edf.timeline.set_epoch_mask( e );		  
-			  dropped[ei] = true;
-			  ++total_this_iteration;
-			  ++total;
-			}
-		    }
-		  
-		} // next epoch	  
-	      
-	      logger << ": removed " << total_this_iteration 
-		     << " epochs";
-	      if ( no_hjorth )
-		logger << "\n";
-	      else
-		logger << " (iteration " << o+1 << ")\n";
-	      	      
-	    } // next outlier iteration
-	  
-	
-	  //
-	  // report final epoch-level masking
-	  //
-	  
-	  if ( verbose )
-	    {	      
-	      const int ne = e_epoch[si].size();
-	      for (int ei = 0 ; ei < ne ; ei++ )		
-		{
-		  writer.epoch( edf.timeline.display_epoch( e_epoch[si][ei] ) );
-		  writer.value( "MASK" , dropped[ei] ? 1 : 0 , "Masked epoch? (1=Y)" ); 
-		}
-	      writer.unepoch();
-	    }
-	  
-	  logger << " Overall, masked " << total << " of " << ne << " epochs:";
-
-	  if ( ! no_hjorth ) logger << " ACT:" << cnt_act 
-				    << " MOB:" << cnt_mob 
-				    << " CMP:" << cnt_cmp ;
-	  if ( calc_rms ) logger << " RMS:" << cnt_rms ;
-	  if ( calc_clipped ) logger << " CLP:" << cnt_clp;
-	  if ( calc_flat ) logger << " FLT:" << cnt_flt;
-	  if ( calc_maxxed ) logger << " MAX:" << cnt_max;
-	  	  
-	  logger << "\n";
-	  
-	  if ( calc_rms ) writer.value( "CNT_RMS" , cnt_rms , "Epochs failing RMS filter" );
-	  if ( calc_clipped) writer.value( "CNT_CLP" , cnt_clp , "Epochs failing CLIP filter" );
-	  if ( calc_flat) writer.value( "CNT_FLT" , cnt_flt , "Epochs failing FLAT filter" );
-	  if ( calc_maxxed) writer.value( "CNT_MAX" , cnt_max , "Epochs failing MAX filter" );
-
-	  if ( ! no_hjorth ) {
-	    writer.value( "CNT_ACT" , cnt_act , "Epochs failing H1 filter" );
-	    writer.value( "CNT_MOB" , cnt_mob , "Epochs failing H2 filter" );
-	    writer.value( "CNT_CMP" , cnt_cmp , "Epochs failing H3 filter" );
-	  }
-	  
-	  writer.value( "FLAGGED_EPOCHS" , total,    "Number of epochs failing SIGSTATS" );
-	  writer.value( "ALTERED_EPOCHS" , altered , "Number of epochs actually masked, i.e. not already masked" );
-	  writer.value( "TOTAL_EPOCHS"   , ne,       "Number of epochs tested" );
-	
-	} // next signal      
       
-      writer.unlevel( globals::signal_strat );
-
-    }
-  
-
-  //
-  // Phase 3: within each epoch, find outlier channels, and track
-  //  i.e. if we have multiple, comparable channels, which are consisent outliers?
-  //       either calculate for all epochs,
-  //           or just for unmasked epochs (i.e. if th=X and cstats-unmasked-only)
-  //
-  
-  if ( cstats && ns > 2 )
-    {
-
-      logger << "  calculating between-channel statistics, ";
-
-      if ( cstats_all ) logger << "based on all epochs\n";
-      else logger << "based only on unmasked epochs\n";
-
-      logger << "  threshold (for P_H1, P_H2, P_H3) is " << ch_th << " SD units\n";
-      
-      // mean over epochs (Z score of this channel versus all others)
-      std::vector<double> m_ch_h1(ns), m_ch_h2(ns), m_ch_h3(ns);
-
-      // number/proportion of epochs where channel has |Z| > ch_th; (or any H, 'out')
-      std::vector<double> t_ch_h1(ns), t_ch_h2(ns), t_ch_h3(ns), t_ch_out(ns);
-
-      int ne_actual = 0;
-      
-      for (int ei=0; ei<ne; ei++)
-	{
-	  //	  std::cerr <<"e = " << ei << "\n";
-
-	  // only consider unmasked epochs here?
-	  if ( ! cstats_all )
-	    if ( edf.timeline.masked( e_epoch[si][ei] ) ) continue;
-	  
-	  //	  std::cerr << "considering epoch " << ei << "\n";
-	  
-	  std::vector<double> tmp_h1(ns), tmp_h2(ns), tmp_h3(ns);
-
-	  for (int si=0;si<ns;si++)
-	    {
-	      tmp_h1[si] = e_act[si][ei];
-	      tmp_h2[si] = e_mob[si][ei];
-	      tmp_h3[si] = e_cmp[si][ei];	
-	    }
-
-	  // normalize
-	  tmp_h1 = MiscMath::Z( tmp_h1 );
-	  tmp_h2 = MiscMath::Z( tmp_h2 );
-	  tmp_h3 = MiscMath::Z( tmp_h3 );
-	
-	  // accumulate
-	  for (int si=0;si<ns;si++)
-	    {
-	      tmp_h1[si] = fabs( tmp_h1[si] );
-	      tmp_h2[si] = fabs( tmp_h2[si] );
-	      tmp_h3[si] = fabs( tmp_h3[si] );
-	      
-	      if ( tmp_h1[si] > ch_th ) ++t_ch_h1[si];
-	      if ( tmp_h2[si] > ch_th ) ++t_ch_h2[si];
-	      if ( tmp_h3[si] > ch_th ) ++t_ch_h3[si];
-
-	      // any metric above threshold?
-	      if ( tmp_h1[si] > ch_th | tmp_h2[si] > ch_th | tmp_h3[si] > ch_th )
-		++t_ch_out[si];
-
-	      m_ch_h1[si] += tmp_h1[si];
-	      m_ch_h2[si] += tmp_h2[si];
-	      m_ch_h3[si] += tmp_h3[si];
-	      
-	    }
-
-	  // track epochs included in analysis
-	  
-	  ++ne_actual;
-
-	  // next epoch
-	}
-
-      // normalize by number of epochs
-
-      
-      for (int si=0;si<ns;si++)
-	{
-	  m_ch_h1[si] /= (double)ne_actual;
-	  m_ch_h2[si] /= (double)ne_actual;
-	  m_ch_h3[si] /= (double)ne_actual;
-	  
-	  t_ch_h1[si] /= (double)ne_actual;
-	  t_ch_h2[si] /= (double)ne_actual;
-	  t_ch_h3[si] /= (double)ne_actual;
-	  t_ch_out[si] /= (double)ne_actual;
-
-	  writer.level( signals.label( sdata[si] ) , globals::signal_strat );
-
-	  writer.value( "Z_H1" , m_ch_h1[si] );
-	  writer.value( "Z_H2" , m_ch_h2[si] );
-	  writer.value( "Z_H3" , m_ch_h3[si] );
-	  
-	  writer.value( "P_H1" , t_ch_h1[si] );
-	  writer.value( "P_H2" , t_ch_h2[si] );
-	  writer.value( "P_H3" , t_ch_h3[si] );
-	  writer.value( "P_OUT" , t_ch_out[si] );
-	  
-	}
-      
-      writer.unlevel( globals::signal_strat );
-
-    }
-      
-  
-
   //
   // Turning rate sub-epoch level reporting (including smoothing over sub-epochs)
   //
 
-  if ( turning_rate )
-    {
-      Helper::halt( "turning-rate not implemented" );
-      Helper::halt( "need to fix signal indexing, ns vs ns_all, si, as above");
-      // i.e. to skip annotation channels
+  // if ( turning_rate )
+  //   {
+  //     Helper::halt( "turning-rate not implemented" );
+  //     Helper::halt( "need to fix signal indexing, ns vs ns_all, si, as above");
+  //     // i.e. to skip annotation channels
       
-      for (int s=0;s<ns;s++)
-	{
-	  int sr = edf.header.sampling_freq( signals( s ) );
+  //     for (int s=0;s<ns;s++)
+  // 	{
+  // 	  int sr = edf.header.sampling_freq( signals( s ) );
 	  
-	  // how many units (in # of sub-epoch units);  +1 means includes self
-	  int winsize = 1 + tr_epoch_smooth / tr_epoch_sec ; 
+  // 	  // how many units (in # of sub-epoch units);  +1 means includes self
+  // 	  int winsize = 1 + tr_epoch_smooth / tr_epoch_sec ; 
 
-	  //	  logger << "sz = " << e_tr[s].size() << " " << winsize << "\n";
-	  e_tr[s] = MiscMath::moving_average( e_tr[s] , winsize );
+  // 	  //	  logger << "sz = " << e_tr[s].size() << " " << winsize << "\n";
+  // 	  e_tr[s] = MiscMath::moving_average( e_tr[s] , winsize );
 
-	  // output
-	  writer.level( signals.label(s) , globals::signal_strat );
-	  for (int i=0;i<e_tr[s].size();i++)
-	    {
-	      writer.level( i+1 , "SUBEPOCH" );
-	      writer.value( "TR" , e_tr[s][i] );
-	    }
-	  writer.unlevel( "SUBEPOCH" );
-	}
-      writer.unlevel( globals::signal_strat );
-    }
-
-
-
-  //
-  // Phase 4: astatst (compare epoch to ALL epochs and ALL channels, i.e. th + cstats )
-  //
-
-  if ( astats )
-    {
-
-      logger << "  setting CHEP mask based on astats\n";
-
-      //
-      // Temporary 'chep' mask
-      //
-
-      std::vector<std::vector<bool> > emask(ns);
-      for (int si=0;si<ns;si++)
-	{
-	  emask[si].resize(ne,false);
-	  for (int ei=0; ei<ne; ei++)
-	    if ( edf.timeline.masked( e_epoch[si][ei] , signals(sdata[si]) ) )
-	      emask[si][ei] = true;		 
-	}
-      
-      //
-      // Iterative outlier removal
-      //
-
-      
-      for (int t = 0 ; t < astats_th.size(); t++)
-	{
-	  
-	  // standardize over all epochs and channels
-	  double h1_mean = 0 , h2_mean = 0 , h3_mean = 0;
-	  double h1_sd = 0 , h2_sd = 0 , h3_sd = 0;
-	  uint64_t cnt = 0;
-	  
-	  for (int si=0;si<ns;si++)
-	    for (int ei=0; ei<ne; ei++)
-	      if ( ! emask[si][ei] ) 
-		{
-		  h1_mean += e_act[si][ei];
-		  h2_mean += e_mob[si][ei];
-		  h3_mean += e_cmp[si][ei];
-		  ++cnt;
-		}
-
-	  h1_mean /= (double)cnt;
-	  h2_mean /= (double)cnt;
-	  h3_mean /= (double)cnt;
-	  
-	  for (int si=0;si<ns;si++)
-	    for (int ei=0; ei<ne; ei++)
-	      if ( ! emask[si][ei] ) 
-		{
-		  h1_sd += ( e_act[si][ei] - h1_mean ) * ( e_act[si][ei] - h1_mean ) ;
-		  h2_sd += ( e_mob[si][ei] - h2_mean ) * ( e_mob[si][ei] - h2_mean ) ;
-		  h3_sd += ( e_cmp[si][ei] - h3_mean ) * ( e_cmp[si][ei] - h3_mean ) ;
-		}
-	  
-	  h1_sd = sqrt( h1_sd / (double)(cnt-1) );
-	  h2_sd = sqrt( h2_sd / (double)(cnt-1) );
-	  h3_sd = sqrt( h3_sd / (double)(cnt-1) );
-
-	  double h1_lwr = h1_mean - astats_th[t] * h1_sd;
-	  double h2_lwr = h2_mean - astats_th[t] * h2_sd;
-	  double h3_lwr = h3_mean - astats_th[t] * h3_sd;
-			    
-	  double h1_upr = h1_mean + astats_th[t] * h1_sd;
-	  double h2_upr = h2_mean + astats_th[t] * h2_sd;
-	  double h3_upr = h3_mean + astats_th[t] * h3_sd;
-	  
-	  // mask
-	  uint64_t masked = 0;
-	  for (int si=0;si<ns;si++)
-            for (int ei=0; ei<ne; ei++)
-	      if ( ! emask[si][ei] )
-		{
-		  if      ( e_act[si][ei] < h1_lwr || e_act[si][ei] > h1_upr ) { emask[si][ei] = true; ++masked; } 
-		  else if ( e_mob[si][ei] < h2_lwr || e_mob[si][ei] > h2_upr ) { emask[si][ei] = true; ++masked; }
-		  else if ( e_cmp[si][ei] < h3_lwr || e_cmp[si][ei] > h3_upr ) { emask[si][ei] = true; ++masked; }
-		}
-
-	  // all done for this iteration
-	  logger << "  masked " << masked << " CHEPs of " << cnt << " unmasked CHEPs ("
-		 << 100*(masked/(double(ns*ne))) << "%), from " << ne*ns << " total  CHEPs, "
-		 << "on iteration " << t+1 << "\n";
-
-	}
-
-      //
-      // fill in CHEP mask
-      //
-      
-      for (int si=0;si<ns;si++)
-	for (int ei=0; ei<ne; ei++)
-	  if (  emask[si][ei] )
-	    edf.timeline.set_chep_mask( e_epoch[si][ei] , signals(sdata[si]) );
-
-
-      //
-      // end of 'astats' 
-      //
-    }
-
+  // 	  // output
+  // 	  writer.level( signals.label(s) , globals::signal_strat );
+  // 	  for (int i=0;i<e_tr[s].size();i++)
+  // 	    {
+  // 	      writer.level( i+1 , "SUBEPOCH" );
+  // 	      writer.value( "TR" , e_tr[s][i] );
+  // 	    }
+  // 	  writer.unlevel( "SUBEPOCH" );
+  // 	}
+  //     writer.unlevel( globals::signal_strat );
+  //   }
   
-  
+
+   
   //
   // Individual level summary
   //
@@ -1318,26 +678,836 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     {
       writer.level( signals.label(sdata[si]) , globals::signal_strat );
       
-      writer.value( "H1"   , mean_activity[si] / (double)n[si] , "Mean H1 statistic" );
-      writer.value( "H2"   , mean_mobility[si] / (double)n[si] , "Mean H2 statistic" );
-      writer.value( "H3"   , mean_complexity[si] / (double)n[si] , "Mean H3 statistic" );
+      // mean Hjorth parameters
+      writer.value( "H1"   , mean_activity[si] / (double)n[si] );
+      writer.value( "H2"   , mean_mobility[si] / (double)n[si] );
+      writer.value( "H3"   , mean_complexity[si] / (double)n[si] );
 
       if ( calc_clipped )
-	writer.value( "CLIP" , clipped[si] / (double)n[si] , "Mean CLIP statistic" );
+	writer.value( "CLIP" , clipped[si] / (double)n[si] );
 
       if ( calc_flat )
-	writer.value( "FLAT" , flat[si] / (double)n[si] , "Mean FLAT statistic" );
+	writer.value( "FLAT" , flat[si] / (double)n[si] );
 
       if ( calc_maxxed )
-	writer.value( "MAX" , maxxed[si] / (double)n[si] , "Mean MAX statistic" );
+	writer.value( "MAX" , maxxed[si] / (double)n[si] );
 
       if ( calc_rms )
-	writer.value( "RMS"   , rms[si] / (double)n[si] , "Mean RMS statistic" );      
+	writer.value( "RMS"   , rms[si] / (double)n[si] );
     }
 
   writer.unlevel( globals::signal_strat );
 
 }
+
+
+
+
+//
+// CHEP-MASK: (1) fixed values only (no iterative/Hjorth procedures)
+//
+
+void  chep_mask_fixed( edf_t & edf , param_t & param )
+{
+
+  // set CHEP mask based on :
+  // - % clipped signals
+  // - flat signals
+  // - max values
+  
+  // nb. this command only ever sets the masks; we do not unmasked good values
+  bool calc_clipped = param.has( "clipped" );
+  bool calc_flat = param.has( "flat" );
+  bool calc_maxxed = param.has( "max" );
+  
+  // nothing to do...
+  if ( !( calc_clipped || calc_flat || calc_maxxed ) ) return;
+  
+  // e.g. exclude EPOCH is more than 5% of points are clipped  
+  double clip_threshold = calc_clipped ? param.requires_dbl( "clipped" ) : 0.05 ;
+  if ( calc_clipped )
+    logger << "  flagging epochs with " << clip_threshold << " proportion X[i] == max(X) or min(X)\n";
+  
+  double flat_threshold = 0.05;
+  double flat_eps = 1e-6;
+  if ( calc_flat )
+    {
+      std::vector<double> x = param.dblvector( "flat" );
+      if ( x.size() != 1 && x.size() != 2 ) Helper::halt( "flat requires 1 or 2 param: flat=<pct>,<eps>" );
+      flat_threshold = x[0];
+      if ( x.size() == 2 ) flat_eps = x[1];
+      logger << "  flagging epochs with " << flat_threshold << " proportion |X[i]-X[i-1]| < " << flat_eps << "\n";
+    }
+  
+  double max_threshold = 0.05;
+  double max_value = 0;
+  if ( calc_maxxed )
+    {
+      std::vector<double> x = param.dblvector( "max" );
+      if ( x.size() != 2 ) Helper::halt( "max requires 2 params: max=<value>,<prop>" );
+      max_value = x[0];
+      max_threshold = x[1];
+      logger << "  flagging epochs with " << max_threshold << " proportion |X| > " << max_value << "\n";
+    }
+
+
+  //
+  // Attach signals
+  //
+
+  std::string signal_label = param.requires( "sig" );  
+  
+  signal_list_t signals = edf.header.signal_list( signal_label );  
+
+  // count channels
+  const int ns = signals.size();  
+  
+  if ( ns == 0 ) return;
+  
+  //
+  // Point to first epoch 
+  //
+  
+  const int ne = edf.timeline.first_epoch();
+
+  if ( ne == 0 ) return;
+  
+  //
+  // Track what we remove, all channels/epochs
+  //
+
+  int count_all = 0 , count_unmasked = 0 , count_masked = 0;
+  
+  //
+  // For each signal
+  //
+
+  for (int s=0; s<ns; s++)
+    {
+
+      //
+      // only consider data tracks
+      //
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+
+      //
+      // reset to first epoch
+      //
+      
+      edf.timeline.first_epoch();
+
+      //
+      // Get sampling rate
+      //
+    
+      int sr = edf.header.sampling_freq( signals( s ) );
+      
+      //
+      // Track what we remove
+      //
+
+      int cnt_clp = 0 , cnt_flt = 0 , cnt_max = 0 , cnt_any = 0;
+      
+
+      //
+      // for each each epoch 
+      //
+      
+      while ( 1 ) 
+	{
+	  
+	  ++count_all;
+
+	  //
+	  // Get next epoch, which respects the epoch-level mask and CHEP mask
+	  //
+	  
+	  int epoch = edf.timeline.next_epoch();
+	  
+	  if ( epoch == -1 ) break;
+		  
+	  if ( edf.timeline.masked( epoch , signals.label(s) ) ) continue;
+
+	  ++count_unmasked;
+
+	  //
+	  // Get data
+	  //
+	  
+	  interval_t interval = edf.timeline.epoch( epoch );
+	  	  
+	  slice_t slice( edf , signals(s) , interval );
+	  
+	  std::vector<double> * d = slice.nonconst_pdata();
+
+	  //
+	  // clipped, flat and/or maxxed points (each is a proportion of points in the epoch)
+	  //
+
+	  double c = calc_clipped ? MiscMath::clipped( *d ) : 0 ;
+
+	  double f = calc_flat ? MiscMath::flat( *d , flat_eps ) : 0 ;
+	  
+	  double m = calc_maxxed ? MiscMath::max( *d , max_value ) : 0 ; 
+
+	  //
+	  // Mask?
+	  //
+
+	  bool set_mask = false;
+		  
+	  // For clipping/flat/max, use a fixed threshold
+	  if ( calc_clipped && c > clip_threshold ) 
+	    {
+	      set_mask = true;
+	      ++cnt_clp;
+	    }
+	  
+	  if ( calc_flat && f > flat_threshold ) 
+	    {
+	      set_mask = true;
+	      ++cnt_flt;
+	    }
+	  
+	  if ( calc_maxxed && m > max_threshold ) 
+	    {
+	      set_mask = true;
+	      ++cnt_max;
+	    }
+	  
+	  if ( set_mask ) 
+	    {	      
+	      edf.timeline.set_chep_mask( epoch , signals.label(s) );	      
+	      ++count_masked;
+	      ++cnt_any;
+	    }
+	  
+	  //
+	  // Next epoch
+	  //
+
+	} 
+
+      //
+      // Report signal level stats
+      //
+      
+      // writer.level( signals.label(s) , globals::signal_strat );
+      
+      // // channel-level output about # of epochs being masked
+      // if ( calc_clipped) writer.value( "CLP" , cnt_clp );
+      // if ( calc_flat) writer.value( "FLT" , cnt_flt );
+      // if ( calc_maxxed) writer.value( "MAX" , cnt_max );
+
+      // // if >1 criteria, report intersection 
+      // if ( calc_clipped + calc_flat + calc_maxxed > 1 ) 
+      // 	writer.value( "ANY" , cnt_any );
+	
+      //
+      // Next signal
+      //
+      
+    } 
+
+  //  writer.unlevel( globals::signal_strat );
+  
+  logger << "  masked " << count_masked << " epoch/channel pairs of "
+	 << count_unmasked << " previously unmasked (" << count_all << " in total)\n";
+  
+  
+}
+
+
+
+//
+// CHEP-MASK: (2) statistical Hjorth-based outlier detection
+//
+
+void  chep_mask( edf_t & edf , param_t & param )
+{
+  
+  // Hjorth parameters: H1, H2, H3
+  // respects any existing CHEP mask, and/or epoch-level mask
+  
+  std::string signal_label = param.requires( "sig" );  
+
+  // within-channel, across epochs:  ep-th
+  // within-epoch, across channels: ch-th
+  // across-channels, across-epoochs: chep-th
+
+  // by default, respects existing CHEP mask;  if in form ep-th0 instead, 
+  // then any existing chep mask is ignore;  within type of outlier detection, 
+  // iterative runs respect any mask (obviously).   Specifically, we
+  //   make a copy of the CHEP
+  //   clear CHEP
+  //   run the command as is
+  //   merge the orignial CHEP back into the new CHEP
+  
+  // all can be applied iterativly;  all respect the existing masks
+  //  use CHEP epochs=X  
+  //      CHEP drop-channels 
+  //   to drop channels and/or set the epoch mask
+
+  //
+  // allow for iterative outlier detection, i.e. with multiple
+  // comma-delimited thresholds
+  //
+  
+  bool ep_ignore = param.has( "ep-th0" );
+  bool ch_ignore = param.has( "ch-th0" );
+  bool chep_ignore = param.has( "chep-th0" );
+
+  if ( ep_ignore   && param.has( "ep-th" ) ) Helper::halt( "cannot specify both ep-th and ep-th0" );
+  if ( ch_ignore   && param.has( "ch-th" ) ) Helper::halt( "cannot specify both ch-th and ch-th0" );
+  if ( chep_ignore && param.has( "chep-th" ) ) Helper::halt( "cannot specify both chep-th and chep-th0" );
+
+  std::vector<double> ep_th, ch_th, chep_th;
+
+  if ( param.has( ep_ignore ? "ep-th0" : "ep-th" ) ) ep_th = param.dblvector( ep_ignore ? "ep-th0" : "ep-th"  );
+  if ( param.has( ch_ignore ? "ch-th0" : "ch-th" ) ) ch_th = param.dblvector( ch_ignore ? "ch-th0" : "ch-th" );
+  if ( param.has( chep_ignore ? "chep-th0" : "chep-th" ) ) chep_th = param.dblvector( chep_ignore ? "chep-th0" : "chep-th" );
+
+  //
+  // Attach signals
+  //
+  
+  signal_list_t signals = edf.header.signal_list( signal_label );  
+
+  // all channels
+  const int ns_all = signals.size();
+  
+  // data channels (slot number)
+  std::vector<int> sdata;
+  for (int s=0;s<ns_all;s++)
+    if ( ! edf.header.is_annotation_channel( signals(s) ) )
+      sdata.push_back( signals(s) );
+  
+  int ns = sdata.size();
+  
+  if ( ns == 0 ) return;
+
+  //
+  // Track epoch-level statistics
+  //
+  
+  std::vector<std::vector<double> > e_act(ns);
+  std::vector<std::vector<double> > e_mob(ns);
+  std::vector<std::vector<double> > e_cmp(ns);
+  std::vector<std::vector<int> > e_epoch(ns);
+  
+
+  //
+  // Point to first epoch 
+  //
+  
+  int ne = edf.timeline.first_epoch();
+
+  if ( ne == 0 ) return;
+    
+  //
+  // For each signal
+  //
+
+
+  for (int si=0; si < ns; si++ )
+    {
+      
+      const std::string clabel = edf.header.label[ sdata[si] ];
+
+      //
+      // reset to first epoch
+      //
+      
+      edf.timeline.first_epoch();
+
+      //
+      // Get sampling rate
+      //
+      
+      int sr = edf.header.sampling_freq( sdata[si] );
+
+      //
+      // for each each epoch 
+      //
+      
+      while ( 1 ) 
+	{
+	  
+	  //
+	  // Get next epoch, which respects the epoch-level mask
+	  //
+	  
+	  int epoch = edf.timeline.next_epoch();
+	  
+	  if ( epoch == -1 ) break;
+	  
+	  //
+	  // Is already CHEP-masked?
+	  //
+
+	  if ( edf.timeline.masked( epoch , clabel ) )
+	    {
+	      // just insert zeros, as this will be skipped over downstream 
+	      // in any case;  this way, we have all channels with the same number
+	      // of epochs;   nb.  we can make e_epoch a single vector, as all e_epoch[si] should
+	      // now be identical
+	      e_act[si].push_back( -9 );
+	      e_mob[si].push_back( -9 );
+	      e_cmp[si].push_back( -9 );
+	      e_epoch[si].push_back( epoch );
+	      continue;
+	    }
+
+	  //
+	  // Get data
+	  //
+	  
+	  interval_t interval = edf.timeline.epoch( epoch );
+	  
+	  slice_t slice( edf , sdata[si] , interval );
+	  
+	  std::vector<double> * d = slice.nonconst_pdata();
+	  
+
+	  //
+	  // Mean-centre 30-second window
+	  //
+
+	  MiscMath::centre( d );
+	  
+	  //
+	  // Hjorth parameters
+	  //
+
+	  double activity = 0 , mobility = 0 , complexity = 0;
+	  
+	  MiscMath::hjorth( d , &activity , &mobility , &complexity );
+
+	  //
+	  // Track all epoch/channel level Hjorth values for outlier detection
+	  //
+
+	  e_act[si].push_back( activity );
+	  e_mob[si].push_back( mobility );
+	  e_cmp[si].push_back( complexity );
+
+	  // track unmasked epochs (which may vary by channel)
+	  e_epoch[si].push_back( epoch );
+	  	  
+	  //
+	  // Next epoch
+	  //
+
+	} 
+
+      //
+      // Next signal
+      //
+
+    }
+
+  
+  //
+  // Apply statistical masks to Hjorth paramters: e_act, e_mob and e_cmp values 
+  //
+  // 1) within-channel, between-epoch masking (ep-th)
+  // 2) within-epoch, between channel masking (ch-th) 
+  // 3) between-channel, between-epoch masking (chep-th)
+  //
+  // Apply iterative masks, in the above order
+
+  // if at any step we are ignoring the prior mask, copy/clear/merge in using this:
+
+  std::map<int,std::set<std::string> > chep_copy;
+
+  if ( ep_th.size() > 0 ) 
+    logger << "  within-channel/between-epoch outlier detection, ep-th" << ( ep_ignore ? "0" : "" ) << " = " 
+	   << param.value( ep_ignore ? "ep-th0" : "ep-th" ) << "\n";
+  
+
+  //
+  // 1) ep-th masks
+  //
+
+
+  if ( ep_ignore ) 
+    {
+      logger << "   (ignoring existing CHEP mask)\n"; 
+      chep_copy = edf.timeline.make_chep_copy();
+      edf.timeline.clear_chep_mask();
+    }
+  
+  int total = 0;
+  
+  for (int o=0 ; o<ep_th.size(); o++ )
+    {
+      
+      int total_this_iteration = 0;
+      
+      //
+      // for each channel separately
+      //
+      
+      for (int si = 0; si < ns; si++)
+	{
+	  
+	  const std::string clabel = edf.header.label[ sdata[si] ];
+
+	  int cnt_act = 0 , cnt_mob = 0 , cnt_cmp = 0;
+	  
+	  const int nepochs = e_epoch[si].size();
+      
+	  if ( nepochs < 3 ) continue;
+      
+	  std::vector<double> act_act;
+	  std::vector<double> act_mob;
+	  std::vector<double> act_cmp;
+	  std::vector<int> act_epoch;
+
+	  // calculate current mean for RMS and Hjorth parameters
+	  // (clipping based on a single fixed threshold, not statistically)
+
+	  for (int j=0;j<nepochs;j++)
+	    {
+	      if ( ! edf.timeline.masked( e_epoch[si][j] , clabel ) )
+		{
+		  act_act.push_back( e_act[si][j] );
+		  act_mob.push_back( e_mob[si][j] );
+		  act_cmp.push_back( e_cmp[si][j] );
+		  act_epoch.push_back( e_epoch[si][j] );
+		}	      
+	    }
+	
+	  // actual number of currently included epochs
+	  const int ne = act_epoch.size();
+	  
+	  // if down to too few epochs, skip
+	  if ( ne < 3 ) continue;
+
+	  const double mean_act = MiscMath::mean( act_act );
+	  const double mean_mob = MiscMath::mean( act_mob );
+	  const double mean_cmp = MiscMath::mean( act_cmp );
+	  
+	  const double sd_act = MiscMath::sdev( act_act , mean_act ); 
+	  const double sd_mob = MiscMath::sdev( act_mob , mean_mob ); 
+	  const double sd_cmp = MiscMath::sdev( act_cmp , mean_cmp ); 
+
+	  const double this_th = ep_th[o];
+	  
+	  const double lwr_act = mean_act - this_th * sd_act;
+	  const double lwr_mob = mean_mob - this_th * sd_mob;
+	  const double lwr_cmp = mean_cmp - this_th * sd_cmp;
+
+	  const double upr_act = mean_act + this_th * sd_act;
+	  const double upr_mob = mean_mob + this_th * sd_mob;
+	  const double upr_cmp = mean_cmp + this_th * sd_cmp;
+
+	  for (int ei=0; ei<ne; ei++)
+	    {
+	      
+	      bool set_mask = false;
+		  		  
+	      if ( act_act[ei] < lwr_act || act_act[ei] > upr_act ) 
+		{
+		  set_mask = true;
+		  cnt_act++;
+		}
+		      
+	      if ( act_mob[ei] < lwr_mob || act_mob[ei] > upr_mob ) 
+		{
+		  set_mask = true;
+		  cnt_mob++;
+		}
+		      
+	      if ( act_cmp[ei] < lwr_cmp || act_cmp[ei] > upr_cmp )
+		{
+		  set_mask = true;
+		  cnt_cmp++;
+		}
+	      
+	      if ( set_mask ) 
+		{
+		  const int e = act_epoch[ei];
+		  edf.timeline.set_chep_mask( e , clabel ) ;
+		  ++total_this_iteration;
+		  ++total;
+		}
+	      
+	      
+	    } // next epoch	  
+	  	  
+	  
+	} // next channel
+      
+      	  //
+	  // report stats for this iteration 
+	  //
+      
+      logger << "   iteration " << o+1 << ": removed " 
+	     << total_this_iteration 
+	     << " channel/epoch pairs this iteration (" << total << " in total)\n";
+      
+    
+    } // next iteration
+
+  
+  if ( ep_ignore )
+    {
+      // add original mask back in
+      edf.timeline.merge_chep_mask( chep_copy );
+    }
+
+  //
+  // 2) ch-th masks
+  //
+  
+  if ( ch_th.size() > 0 ) 
+    logger << "  between-channel/within-epoch outlier detection, ch-th" << ( ch_ignore ? "0" : "" ) << " = " 
+	   << param.value( ch_ignore ? "ch-th0" : "ch-th" ) << "\n";
+  
+  total = 0;
+  
+  if ( ch_ignore ) 
+    {
+      logger << "   (ignoring existing CHEP mask)\n"; 
+      chep_copy = edf.timeline.make_chep_copy();
+      edf.timeline.clear_chep_mask();
+    }
+
+  for (int o=0 ; o<ch_th.size(); o++ )
+    {
+      
+      int total_this_iteration = 0;
+      
+      //
+      // for each epoch separately
+      //
+      
+      for (int ei=0; ei<e_epoch[0].size(); ei++) 
+	{
+
+	  // e_epoch is redundant... will be same across all channels... so just pick the first
+	  
+	  int epoch = e_epoch[0][ei];
+	  
+	  // track stats across comparable channels for this epoch (*ee)
+	  
+	  int cnt_act = 0 , cnt_mob = 0 , cnt_cmp = 0 ;
+	  
+	  std::vector<double> act_act;
+	  std::vector<double> act_mob;
+	  std::vector<double> act_cmp;
+	  std::vector<std::string> act_clabel; // which channels actually used?
+	  
+	  // for each channel (not already masked)
+	  for (int si = 0; si < ns; si++)
+	    {
+
+	      const std::string clabel = edf.header.label[ sdata[si] ];
+
+	      if ( ! edf.timeline.masked( epoch , clabel ) )
+		{
+		  act_act.push_back( e_act[si][ ei ] );
+		  act_mob.push_back( e_mob[si][ ei ] );
+		  act_cmp.push_back( e_cmp[si][ ei ] );
+		  act_clabel.push_back( clabel );
+		}	      
+	    }
+	
+	  // actual number of currently included channels
+	  const int act_ns = act_clabel.size();
+	  
+	  // if down to too few signals, skip
+	  if ( act_ns < 3 ) continue;
+
+	  const double mean_act = MiscMath::mean( act_act );
+	  const double mean_mob = MiscMath::mean( act_mob );
+	  const double mean_cmp = MiscMath::mean( act_cmp );
+	  
+	  const double sd_act = MiscMath::sdev( act_act , mean_act ); 
+	  const double sd_mob = MiscMath::sdev( act_mob , mean_mob ); 
+	  const double sd_cmp = MiscMath::sdev( act_cmp , mean_cmp ); 
+
+	  const double this_th = ch_th[o];
+	  
+	  const double lwr_act = mean_act - this_th * sd_act;
+	  const double lwr_mob = mean_mob - this_th * sd_mob;
+	  const double lwr_cmp = mean_cmp - this_th * sd_cmp;
+
+	  const double upr_act = mean_act + this_th * sd_act;
+	  const double upr_mob = mean_mob + this_th * sd_mob;
+	  const double upr_cmp = mean_cmp + this_th * sd_cmp;
+	  
+	  for (int si=0; si < act_ns; si++)
+	    {
+
+	      bool set_mask = false;
+
+	      if ( act_act[si] < lwr_act || act_act[si] > upr_act ) 
+		{
+		  set_mask = true;
+		  cnt_act++;
+		}
+		      
+	      if ( act_mob[si] < lwr_mob || act_mob[si] > upr_mob ) 
+		{
+		  set_mask = true;
+		  cnt_mob++;
+		}
+		      
+	      if ( act_cmp[si] < lwr_cmp || act_cmp[si] > upr_cmp )
+		{
+		  set_mask = true;
+		  cnt_cmp++;
+		}
+	      
+	      if ( set_mask ) 
+		{
+		  edf.timeline.set_chep_mask( epoch , act_clabel[si] ) ;
+		  ++total_this_iteration;
+		  ++total;
+		}
+	      
+	    } // next channel
+	  
+	} // next channel
+      
+      	  //
+	  // report stats for this iteration 
+	  //
+      
+      logger << "   iteration " << o+1 << ": removed " 
+	     << total_this_iteration 
+	     << " channel/epoch pairs this iteration (" << total << " in total)\n";
+      
+      
+    } // next iteration
+
+
+  if ( ch_ignore )
+    {
+      // add original mask back in
+      edf.timeline.merge_chep_mask( chep_copy );
+    }
+
+  
+  //
+  // 3) chep-th masks
+  //
+  
+  if ( chep_th.size() > 0 ) 
+    logger << "  between-channel/between-epoch outlier detection, chep-th" << ( chep_ignore ? "0" : "" ) << " = " 
+	   << param.value( chep_ignore ? "chep-th0" : "chep-th" ) << "\n";
+  
+  total = 0 ;
+
+  if ( chep_ignore ) 
+    {
+      logger << "   (ignoring existing CHEP mask)\n"; 
+      chep_copy = edf.timeline.make_chep_copy();
+      edf.timeline.clear_chep_mask();
+    }
+
+  for (int o=0 ; o<chep_th.size(); o++)
+    {
+      
+      // standardize over all epochs and channels
+      double h1_mean = 0 , h2_mean = 0 , h3_mean = 0;
+      double h1_sd = 0 , h2_sd = 0 , h3_sd = 0;
+      uint64_t cnt = 0;
+	  
+      for (int si=0;si<ns;si++)
+	{
+	  const std::string clabel = edf.header.label[ sdata[si] ];
+
+	  for (int ei=0; ei< e_epoch[si].size(); ei++)
+	    if ( ! edf.timeline.masked( e_epoch[si][ei] , clabel ) )
+	      {
+		h1_mean += e_act[si][ei];
+		h2_mean += e_mob[si][ei];
+		h3_mean += e_cmp[si][ei];
+		++cnt;
+	      }
+	}
+
+      h1_mean /= (double)cnt;
+      h2_mean /= (double)cnt;
+      h3_mean /= (double)cnt;
+      
+      for (int si=0;si<ns;si++)
+	{
+	  const std::string clabel = edf.header.label[ sdata[si] ];
+
+	  for (int ei=0; ei< e_epoch[si].size(); ei++)
+	    if ( ! edf.timeline.masked( e_epoch[si][ei] , clabel ) )
+	      {
+		h1_sd += ( e_act[si][ei] - h1_mean ) * ( e_act[si][ei] - h1_mean ) ;
+		h2_sd += ( e_mob[si][ei] - h2_mean ) * ( e_mob[si][ei] - h2_mean ) ;
+		h3_sd += ( e_cmp[si][ei] - h3_mean ) * ( e_cmp[si][ei] - h3_mean ) ;
+	      }
+	}
+
+      
+      h1_sd = sqrt( h1_sd / (double)(cnt-1) );
+      h2_sd = sqrt( h2_sd / (double)(cnt-1) );
+      h3_sd = sqrt( h3_sd / (double)(cnt-1) );
+
+      double h1_lwr = h1_mean - chep_th[o] * h1_sd;
+      double h2_lwr = h2_mean - chep_th[o] * h2_sd;
+      double h3_lwr = h3_mean - chep_th[o] * h3_sd;
+      
+      double h1_upr = h1_mean + chep_th[o] * h1_sd;
+      double h2_upr = h2_mean + chep_th[o] * h2_sd;
+      double h3_upr = h3_mean + chep_th[o] * h3_sd;
+	  
+      // mask
+      uint64_t masked = 0;
+      for (int si=0;si<ns;si++)
+	{
+	  const std::string clabel = edf.header.label[ sdata[si] ];
+	  for (int ei=0; ei< e_epoch[si].size(); ei++)
+	    if ( ! edf.timeline.masked( e_epoch[si][ei] , clabel ) )
+	      {
+		bool set_mask = false; 
+		if      ( e_act[si][ei] < h1_lwr || e_act[si][ei] > h1_upr ) set_mask = true;
+		else if ( e_mob[si][ei] < h2_lwr || e_mob[si][ei] > h2_upr ) set_mask = true;
+		else if ( e_cmp[si][ei] < h3_lwr || e_cmp[si][ei] > h3_upr ) set_mask = true;
+		
+		if ( set_mask ) 
+		  {
+		    edf.timeline.set_chep_mask( e_epoch[si][ei] , clabel );
+		    ++masked;
+		  }	      
+	      }	    
+	}
+
+      // all done for this iteration
+      logger << "  masked " << masked << " CHEPs of " << cnt << " unmasked CHEPs ("
+	     << 100*(masked/(double(ns*ne))) << "%), from " << ne*ns << " total CHEPs, "
+	     << "on iteration " << o+1 << "\n";
+      
+      
+      //
+      // Next iteration
+      //
+    }
+
+
+  if ( chep_ignore )
+    {
+      // add original mask back in 
+      edf.timeline.merge_chep_mask( chep_copy );
+    }
+  
+  //
+  // All done for CHEP-MASK based on Hjorth parameters
+  //
+}
+
+
+
+
 
 
 
