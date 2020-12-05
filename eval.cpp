@@ -1279,10 +1279,10 @@ void proc_resample( edf_t & edf , param_t & param )
 
 
 // TLOCZK
-void proc_tlock( edf_t & , param_t & )
+void proc_tlock( edf_t & edf  , param_t & param )
 {
   // get mean time-locked value of one signal against a set of annotations (time-points)
-  
+  dsptools::tlock( edf , param );
 }
 
 

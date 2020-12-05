@@ -220,7 +220,23 @@ struct suds_t {
 
     // among selected, (pct) weight equally
     equal_wgt_in_selected = param.has( "equalize-weights" );
+    
+    // instead of normalizing to 0..1 range, X / mean( X ) 
+    wgt_mean_normalize = param.has( "repred-mean" );    
 
+    // threshold on the means (only take above average scorers, default = 1) 
+    wgt_mean_th = ( param.has( "repred-mean" ) && param.value( "repred-mean" ) != "T" ) ? param.requires_dbl( "repred-mean" ) : 1 ;
+
+    if ( wgt_mean_normalize && ( wgt_percentile > 0 || equal_wgt_in_selected  ) ) 
+      Helper::halt( "cannot specify pct and/or equalize-weights and repred-mean together" );
+
+    // exponential on weight
+    wgt_exp = param.has( "wgt-exp" ) ? param.requires_int( "wgt-exp" ) : 0 ;
+    if ( wgt_exp < 0 ) Helper::halt( "wgt-exp must be a positive integer" );
+
+    if ( param.has( "wgt-exp" ) && ( wgt_mean_normalize || ( wgt_percentile > 0 || equal_wgt_in_selected  ) ) )
+      Helper::halt( "cannot specify wgt-exp along with pct, or repred-mean" );
+    
     // wgt1: (do not) use backskip re-weighting
     use_repred_weights = param.has( "repred-weights" ) ? Helper::yesno( param.value( "repred-weights" ) ) : true ;
 
@@ -229,6 +245,9 @@ struct suds_t {
     
     // repred uses 5 classes, not NRW
     use_5class_repred = param.has( "repred5" );
+    
+    // repred uses only REM vs non-REM
+    use_rem_repred = param.has( "repredR" ) ;
 
     // wgt2: use kl_weights
     use_kl_weights = param.has( "kl-weights" ) ? Helper::yesno( param.value( "kl-weights" ) ) : false ;
@@ -243,6 +262,7 @@ struct suds_t {
 
     labels5 = { "N1" , "N2" , "N3" , "REM" , "W" };
     labels3 = { "NR" , "R" , "W" };
+    labelsR = { "R" , "NOT" }; // just for repred special case
 
     if ( n_stages == 3 )
       labels = labels3;
@@ -376,10 +396,18 @@ struct suds_t {
   
   static bool use_5class_repred;
 
+  static bool use_rem_repred;
+
   static bool use_kl_weights;
     
   static double wgt_percentile;
   
+  static int wgt_exp;
+
+  static bool wgt_mean_normalize;
+
+  static double wgt_mean_th;
+
   static bool cheat;
 
   static double denoise_fac;
@@ -511,7 +539,7 @@ public:
   static std::vector<std::string> labels;
   static std::vector<std::string> labels3;
   static std::vector<std::string> labels5;
-  
+  static std::vector<std::string> labelsR;  
   
   static int num( const std::string & ss ) {
     if ( suds_t::n_stages == 5 )
@@ -547,6 +575,20 @@ public:
     return s;
 
   }
+
+  // for repred: reduce to just REM versus not , for example
+  static std::string Rnot( const std::string & ss ) {     
+    if ( ss == "REM" || ss == "R" ) return "R";
+    return "NOT";
+  }
+
+  static std::vector<std::string> Rnot( const std::vector<std::string> & ss ) { 
+    std::vector<std::string> s( ss.size() );
+    for (int i=0;i<ss.size();i++) s[i] = Rnot( ss[i] );
+    return s;
+
+  }
+
 
   static std::vector<suds_stage_t> type( const std::vector<std::string> & s )
   {

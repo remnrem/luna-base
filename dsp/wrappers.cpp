@@ -36,7 +36,19 @@ void dsptools::cwt( edf_t & edf , param_t & param )
   
   const int ns = signals.size();
 
-  double fc = param.requires_dbl( "fc" );
+  std::vector<double> fc;
+  if ( param.has( "fc-inc" ) )
+    {
+      std::vector<double> f = param.dblvector( "fc-inc" );
+      if ( f.size() != 3 ) Helper::halt( "expecting fc-inc=start,stop,inc" );
+      for (double ff = f[0] ; ff <= f[1] ; ff += f[2] ) fc.push_back(ff);
+    }
+  else
+    {
+      if ( ! param.has( "fc" ) ) Helper::halt( "no fc for CWT" );
+      
+      fc = param.dblvector( "fc" );
+    }
 
   bool alt_spec = param.has( "fwhm" );
 
@@ -65,29 +77,40 @@ void dsptools::cwt( edf_t & edf , param_t & param )
       slice_t slice( edf , signals(s) , interval );
 
       const std::vector<double> * d = slice.pdata();
-      
-      std::vector<double> mag , phase;
 
-      if ( alt_spec )
-	alt_run_cwt( *d , Fs , fc , fwhm , timelength , wrapped_wavelet , &mag , return_phase ? &phase : NULL );
-      else
-	run_cwt( *d , Fs , fc , num_cycles , &mag , return_phase ? &phase : NULL );
+      for (int fi=0; fi<fc.size(); fi++)
+	{
+    
+	  std::vector<double> mag , phase;
+	  
+	  if ( alt_spec )
+	    alt_run_cwt( *d , Fs , fc[fi] , fwhm , timelength , wrapped_wavelet , &mag , return_phase ? &phase : NULL );
+	  else
+	    run_cwt( *d , Fs , fc[fi] , num_cycles , &mag , return_phase ? &phase : NULL );
       
-      std::string new_mag_label = signals.label(s) + tag + "_cwt_mag";
-      std::string new_phase_label = signals.label(s) + tag + "_cwt_phase";
-      
-      logger << " CWT for " << signals.label(s) << " --> " << new_mag_label ;      
+	  std::string new_mag_label = signals.label(s) + tag + "_cwt_mag";
+	  std::string new_phase_label = signals.label(s) + tag + "_cwt_phase";
 
-      if ( return_phase ) 
-	logger << ", " << new_phase_label ;
-      logger << "\n";
-
-      edf.add_signal( new_mag_label , Fs , mag );
+	  if ( fc.size() > 1 ) 
+	    {
+	      new_mag_label += "_" + Helper::int2str( fi+1 );
+	      new_phase_label += "_" + Helper::int2str( fi+1 );
+	    }
       
-      if ( return_phase ) 
-	edf.add_signal( new_phase_label , Fs , phase );
+	  logger << "  CWT, Fc = " << fc[fi] << ", for " << signals.label(s) << " --> " << new_mag_label ;      
+	  
+	  if ( return_phase ) 
+	    logger << ", " << new_phase_label ;
+	  logger << "\n";
+	  
+	  edf.add_signal( new_mag_label , Fs , mag );
+	  
+	  if ( return_phase ) 
+	    edf.add_signal( new_phase_label , Fs , phase );
+	  
+	} // next Fc
       
-    }  
+    } // next signal
   
 }
 

@@ -24,6 +24,7 @@
 #define __DSP_H__
 
 #include "psi.h"
+#include "tlock.h"
 #include "psc.h"
 #include "spectral_norm.h"
 #include "tv.h"

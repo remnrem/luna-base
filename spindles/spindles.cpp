@@ -205,6 +205,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool cache_data                   = param.has( "cache" );
   const std::string cache_name = cache_data ? param.value( "cache" ) : "" ;
   
+  const bool cache_peaks                  = param.has( "cache-peaks" );
+  const std::string cache_peaks_name = cache_peaks ? param.value( "cache-peaks" ) : "";
+
+  
   
   //
   // Intersection of multiple wavelets/spindles/channels   ( by default, do not merge across channels)
@@ -1154,6 +1158,24 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	    }
 
+
+	  //
+	  // Cache spindle peaks
+	  //
+	  
+	  if ( cache_peaks )
+            {
+              cache_t<int> * cache = edf.timeline.cache.find_int( cache_peaks_name );
+
+	      std::vector<int> peaks;
+	      for (int i=0; i<spindles.size(); i++)
+		{
+		  int p = spindles[i].start_sp + spindles[i].peak_sp;
+		  //		  std::cout << "p = " << spindles[i].start_sp  << " " << spindles[i].peak_sp << "\n";
+		  peaks.push_back(p);
+		}
+              cache->add( ckey_t( "peak" , writer.faclvl() ) , peaks );
+	    }
 	  
 	  //
 	  // Optional slow-wave coupling?
