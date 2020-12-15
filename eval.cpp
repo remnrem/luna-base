@@ -892,6 +892,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
       
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
+      else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
 
       else if ( is( c, "SEDF" ) )         proc_sedf( edf , param(c) );
 
@@ -1278,13 +1279,18 @@ void proc_resample( edf_t & edf , param_t & param )
 }
 
 
-// TLOCZK
+// TLOCK
 void proc_tlock( edf_t & edf  , param_t & param )
 {
   // get mean time-locked value of one signal against a set of annotations (time-points)
   dsptools::tlock( edf , param );
 }
 
+// PEAKS
+void proc_peaks( edf_t & edf , param_t & param )
+{
+  dsptools::peaks( edf , param );
+}
 
 // SEDF : make a summarize EDF 
 void proc_sedf( edf_t & , param_t & )
@@ -1401,16 +1407,22 @@ void proc_anon( edf_t & edf , param_t & param )
 {
 
   // either
-  //  1.  Set EDF ID/date to NULL
+  //  1.  Set EDF ID/date to NULL (respecting silly EDF+ conventions)
   //  2.  Set EDF ID to (sample list) ID  ('insert-id')
   //  3.  Change EDF /and/ (sample-list) ID to root_000000N  ('root')
-  
+
+  const std::string anon_id = edf.header.edfplus ? "X X X X" : ".";
+  const std::string rec_info = edf.header.edfplus ? "Startdate X X X X" : ".";
+
   if ( param.has ( "insert-id" ) ) 
     {
       logger << " setting ID to " << edf.id << " and start date to '01.01.85' for " 
 	     << edf.filename << "\n";
       
       edf.header.patient_id = edf.id;
+      
+      edf.header.patient_id = edf.header.edfplus ? edf.id + " X X X" : edf.id;
+      
     }
   else if ( param.has( "root" ) )
     {
@@ -1420,7 +1432,8 @@ void proc_anon( edf_t & edf , param_t & param )
       // root_N
       std::string newid = param.value( "root" ) + "_" + Helper::int2str( globals::anon_idroot_cnt );
       
-      edf.header.patient_id = newid;
+      edf.header.patient_id = edf.header.edfplus ? newid + " X X X" : newid;
+      
       edf.id = newid;
 
       logger << " setting ID and EDF ID to " << newid << "\n";
@@ -1428,15 +1441,17 @@ void proc_anon( edf_t & edf , param_t & param )
     }
   else
     {
-      logger << " setting ID and start date to null ('.' and '01.01.85') for " 
+      logger << " setting ID and start date to null ('" << anon_id << "' and '01.01.85') for " 
 	     << edf.filename << "\n";
-  
-      edf.header.patient_id = ".";
+
+      edf.header.patient_id = anon_id;
+
     }
-  
-  //edf.header.starttime = ".";
-  // 'clipping' date for EDF
-  
+
+  // recording info field
+  edf.header.recording_info = rec_info;
+
+  // 'clipping' date for EDF  
   edf.header.startdate = "01.01.85";
 }
 
@@ -1591,8 +1606,11 @@ void proc_write( edf_t & edf , param_t & param )
 	}
       filename = outdir + filename.substr( v );            
       
-      // create folder if it does not exist
-      std::string syscmd = "mkdir -p " + param.value( "edf-dir" );
+      // create folder if it does not exist 
+      // -p is (usually?) not needed for Windows
+
+      std::string syscmd = globals::mkdir_command + " " + param.value( "edf-dir" );
+
       int retval = system( syscmd.c_str() );
       
     }
@@ -2184,25 +2202,25 @@ void proc_dump_cache( edf_t & edf , param_t & param )
     {
       cache_t<int> * cache = edf.timeline.cache.find_int( cname );
       if ( cache == NULL ) Helper::halt( "could not find int-cache " + cname );
-      cache->dump();
+      std::cout << cache->print();
     }
   else if ( str_cache )
     {
       cache_t<std::string> * cache = edf.timeline.cache.find_str( cname );
       if ( cache == NULL ) Helper::halt( "could not find str-cache " + cname );
-      cache->dump();
+      std::cout << cache->print();
     }  
   else if ( num_cache )
     {
       cache_t<double> * cache = edf.timeline.cache.find_num( cname );
       if ( cache == NULL ) Helper::halt( "could not find num-cache " + cname );
-      cache->dump();
+      std::cout << cache->print();
     }
   else if ( tp_cache )
     {
       cache_t<uint64_t> * cache = edf.timeline.cache.find_tp( cname );
       if ( cache == NULL ) Helper::halt( "could not find tp-cache " + cname );
-      cache->dump();
+      std::cout << cache->print();
     }
   
 }

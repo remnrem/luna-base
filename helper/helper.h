@@ -84,6 +84,8 @@ namespace Helper
     return s.substr(a,s.size()-a-b);
   }
 
+  std::string quote_spaced( const std::string & s );
+
   std::string sanitize( const std::string & );
   
   bool yesno( const std::string & );

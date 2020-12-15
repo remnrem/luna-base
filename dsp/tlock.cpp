@@ -69,7 +69,12 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   // all signals must have the same SR
   //
   
+  //
+  // output
+  // 
   
+  bool verbose = param.has( "verbose" );
+
   //
   // get window
   //
@@ -88,10 +93,10 @@ void dsptools::tlock( edf_t & edf , param_t & param )
     Helper::halt( "internal error constructing window" );
 
   //
-  // Normalisation: by default, 20% + 20% of window, i.e. skip middle 60%
-  //
+  // Normalisation: e.g. 0.2 means 20% + 20% of window, i.e. skip middle 60%
+  //                defauly = 0 , no normalisation
   
-  int norm_points = points * ( param.has( "np" ) ? param.requires_dbl( "np" ) : 0.2 );
+  int norm_points = points * ( param.has( "np" ) ? param.requires_dbl( "np" ) : 0 );
   
   if ( norm_points < 0 || norm_points > points / 2 ) 
     Helper::halt( "expecting np between 0 and 0.5" );
@@ -107,20 +112,25 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 
   cache_t<int> * cache = edf.timeline.cache.find_int( cache_name );
 
-
-  cache->dump();
+  //  cache->dump();
 
   //
-  // Get any/all keys associated with the 'peak' intrnal name cache
+  // Get any/all keys associated with the 'points' intrnal name cache
   //
 
-  std::set<ckey_t> ckeys = cache->keys( "peak" );
+  std::set<ckey_t> ckeys = cache->keys( "points" );
 
   std::set<ckey_t>::const_iterator cc = ckeys.begin();
+
+  // can use CACHE command explicitly...
+  //  logger << cache->print();
+
 
   while ( cc != ckeys.end() )
     {
       
+      int scnt = 0;
+
       std::vector<int> cx = cache->fetch( *cc );
 
       //
@@ -130,7 +140,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       std::map<std::string,std::string>::const_iterator ss = cc->stratum.begin();
       while ( ss != cc->stratum.end() )
 	{
-	  writer.level( ss->second , "S_" + ss->first );
+	  writer.level( ss->second , "s" + ss->first );
 	  ++ss;
 	}
 
@@ -141,6 +151,8 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       for (int s=0; s<ns; s++)
 	{
 	  
+	  int cnt_valid_intervals = 0;
+
 	  writer.level( signals.label(s) , globals::signal_strat );
 	  
 	  // get data and TP information 
@@ -154,7 +166,8 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	  // build up TLOCK matrix
 	  
 	  tlock_t tlock(t, norm_points );
-      
+	  tlock.verbose = verbose;
+
 	  // loop time-points to sync/lock on
 	  
 	  for ( int i=0; i<cx.size(); i++)
@@ -168,27 +181,35 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 		continue;
 	      
 	      // TODO: check for discontunuities (EDF+)	  
-	      //static bool discontinuity( const std::vector<uint64_t> & t , int sr, int sp1, int sp2 );
 	      
+	      if ( edf.timeline.discontinuity( *tp , Fs[0] , lower , upper ) )
+		{
+		  continue;
+		}
 
+	      // otherwise, add this interval to the tlock 
+	      
 	      tlock.add( d , lower , upper , take_log , angle_bins );
 	      
-	      // next sample-point
+	      ++cnt_valid_intervals;
+	      
+	      // next interval
 	    }
 	  
-	  
-
+	  // report number of interval considered/accepted
+	  writer.value( "N" , cnt_valid_intervals );
+	  writer.value( "N_ALL" , (int)cx.size() );
+	  	  
+	  logger << "  included " << cnt_valid_intervals << " of " << (int)cx.size() << " intervals for strata " << ++scnt << "\n";
+	
 	  //
-	  // Report either as angles, or as means
+	  // Report either as phase angles (assuming radians), otherwise take the mean
 	  //
 
 	  if ( angle_bins ) 
 	    {
 	      Data::Matrix<double> angbin = tlock.angles();
 	      
-	      std::cout << angbin.dim1() << " "<< angbin.dim2() << "\n";
-	      std::cout << angle_bins << " " << t.size() << "\n";
-
 	      if ( angbin.dim1() != angle_bins || angbin.dim2() != t.size() )
 		Helper::halt( "internal error in tlock_t()" );
 
@@ -214,11 +235,14 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	  
 	  else
 	    {
-	      Data::Vector<double> means = tlock.average();
+	      Data::Vector<double> means = tlock.average( );
 	  
 	      if ( means.size() != t.size() ) 
-		Helper::halt( "internal error in tlock_t()" );
-	      
+		{
+		  logger << "  means.size() = " << means.size() << " " << t.size() << "\n";
+		  Helper::halt( "internal error in tlock_t()" );
+		}	      
+
 	      for (int i=0; i<means.size(); i++) 
 		{
 		  writer.level( t[i] , "SEC" );
@@ -227,8 +251,32 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 
 	      writer.unlevel( "SEC" );
 	    }
+	  
+	  //
+	  // Verbose output? Show whole matrix...
+	  //
+	  
+	  if ( verbose )
+	    {
+	      for (int i=0; i<tlock.X.dim1(); i++)
+                {
+                  writer.level( t[i] , "SEC" );
 
+		  for (int j=0; j<tlock.X.dim2(); j++)
+		    {
+		      writer.level( j+1 , "N" );
+		      writer.value( "V" , tlock.X(i,j) );
+		    }
+		  writer.unlevel( "N" );
+		}
+              
+	      writer.unlevel( "SEC" );
+	    }
 
+	  //
+	  // all done
+	  //
+	  
 	} // next signal
       
       writer.unlevel( globals::signal_strat );
@@ -242,7 +290,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       ss = cc->stratum.begin();
       while ( ss != cc->stratum.end() )
 	{
-	  writer.unlevel( "S_" + ss->first );
+	  writer.unlevel( "s" + ss->first );
 	  ++ss;
 	}
 
@@ -262,7 +310,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 tlock_t::tlock_t( const std::vector<double> & t , const int norm_points ) 
   : t(t) , norm_points(norm_points)
 {
-  
+  verbose = false;
 }
 
 void tlock_t::add( const std::vector<double> * x , 
@@ -310,9 +358,9 @@ void tlock_t::add( const std::vector<double> * x ,
             
       
     }
-  
+
   //
-  // or else a regular value (take means, after normalizing )
+  // or else a regular value (take means, after normalizing, and adding smallest value if negative before division )
   //
   
   else
@@ -327,45 +375,90 @@ void tlock_t::add( const std::vector<double> * x ,
 	for ( int i = lower ; i <= higher ; i++ )
 	  d[j++] = (*x)[i] ;
       
-      if ( X.dim1() == 0 )
+      if ( verbose ) 
 	{
-	  X.resize( d.size() , 1 );
-	  for (int j=0;j<d.size(); j++)
-	    X(j,0) = d[j];
+	  if ( X.dim1() == 0 )
+	    {
+	      X.resize( d.size() , 1 );
+	      for (int j=0;j<d.size(); j++)
+		X(j,0) = d[j];
+	    }
+	  else
+	    X.add_col ( d ) ;
 	}
       else
-	X.add_col ( d ) ;
-      
-    }
+	{
+	  if ( means.size() == 0 )
+            {
+              means = d; 
+	      count = 1;
+	    }
+          else
+            {
+              for (int j=0;j<d.size(); j++)
+                means[j] += d[j];
+	      ++count;
+	    }
+	} // end of verb/non-verb mode
 
+    } // end of regular value accumulator
   
 }
 
 
 Data::Vector<double> tlock_t::average( ) const
 {  
-  // return row means (transpose + col means ) 
-  Data::Matrix<double> Xt = Statistics::transpose( X );
-  Data::Vector<double> means = Statistics::mean( Xt );
+  
+  Data::Vector<double> means1 = means;
 
-  // normalize by window edges (defaukt 20% either side)
+  //
+  // get/calculate means 
+  //
+
+  if ( verbose ) 
+    {
+      // return row means (transpose + col means ) 
+      Data::Matrix<double> Xt = Statistics::transpose( X );
+      means1 = Statistics::mean( Xt );  
+    }
+  else
+    {      
+      for (int i=0; i<means1.size(); i++)
+	means1[i] /= (double)count;
+    }
+
+  //
+  // normalize by window edges (e.g. np=0.2 --> default 20% either side)
+  //
+  
   if ( norm_points )
     {
-      double norm = 0; 
-
-      const int n = means.size() ; // should be 'points'
-
+      
+      const int n = means1.size() ; // should be 'points'
+      
+      // 1) rescale to minimumm of 0.0
+      
+      double minval = means1[0];
+      for (int i=0; i<n; i++) 
+	if ( means1[i] < minval ) minval = means1[i];
+      for (int i=0; i<n; i++)
+	means1[i] -= minval;
+      
+      // 2) normalize to get value of 1.0 for baseline, based on edges
+      
+      double norm = 0;
       for (int i=0; i<norm_points; i++)
 	{
-	  norm += means[i];
-	  norm += means[n-(i+1)];      
+	  norm += means1[i];
+	  norm += means1[n-(i+1)];
 	}
       norm /= 2.0 * norm_points;
-      for (int i=0; i<n; i++) means[i] /= norm;
+      for (int i=0; i<n; i++) means1[i] /= norm;
     }
-  return means;
-} 
+     
+  return means1;
 
+}
 
 Data::Matrix<double> tlock_t::angles() const 
 {

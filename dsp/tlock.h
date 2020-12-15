@@ -49,9 +49,8 @@ struct tlock_t {
 
   Data::Matrix<double> angles() const ;
   
-private:
-
   // for regular means::: track the whole matrix (just in case we want to ) 
+  //   but only when 'verbose' option is true;
   //   each row is a sample-point in the interval window
   //   each column is a new epoch
   
@@ -62,11 +61,19 @@ private:
 
   Data::Matrix<double> X;
 
+  // just track the means, & # of points in bon-verbose mode
+  Data::Vector<double> means;
+  int count;
+
   // time axis
   std::vector<double> t;
 
   // normalisation points
   int norm_points;
+
+  // verbose mode
+  bool verbose;
+
 };
 
 

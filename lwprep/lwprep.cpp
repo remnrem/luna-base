@@ -127,8 +127,8 @@ lw_prep_t::lw_prep_t( edf_t & edf , param_t & param )
   // check folder exists (should have previously been created
   //
   
-  std::string syscmd = "mkdir -p " + folder ;
-  system( syscmd.c_str() );
+  std::string syscmd = globals::mkdir_command + " " + folder ;
+  int retval = system( syscmd.c_str() );
 
 
   //

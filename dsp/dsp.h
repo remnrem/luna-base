@@ -25,6 +25,7 @@
 
 #include "psi.h"
 #include "tlock.h"
+#include "peaks.h"
 #include "psc.h"
 #include "spectral_norm.h"
 #include "tv.h"

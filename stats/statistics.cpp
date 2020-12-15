@@ -2481,6 +2481,36 @@ Data::Vector<double> Statistics::elem_sqrt( const Data::Vector<double> & x )
 }
 
 
+Data::Vector<double> min( const Data::Matrix<double> & X )  
+{
+  int nr = X.dim1();
+  int nc = X.dim2();
+  Data::Vector<double> m( nc );
+  
+  for (int i=0; i<nr; i++)
+    for (int j=0; i<nc; j++)
+      {
+	if ( i == 0 ) m[j] = X(i,j);
+	else if ( X(i,j) < m[j] ) m[j] = X(i,j);
+      }
+  return m;
+}
+
+Data::Vector<double> max( const Data::Matrix<double> & X )  
+{
+  int nr = X.dim1();
+  int nc = X.dim2();
+  Data::Vector<double> m( nc );
+  
+  for (int i=0; i<nr; i++)
+    for (int j=0; i<nc; j++)
+      {
+	if ( i == 0 ) m[j] = X(i,j);
+	else if ( X(i,j) > m[j] ) m[j] = X(i,j);
+      }
+  return m;
+}
+
 bool Statistics::minmax( const Data::Vector<double> & x , double * min , double * max )
 {
   const int n = x.size();

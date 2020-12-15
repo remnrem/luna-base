@@ -1403,7 +1403,7 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   //  stages [ nve ]  epochs[ nve ]
 
   // create output folder if it does not exist
-  std::string syscmd = "mkdir -p " + folder ;
+  std::string syscmd = globals::mkdir_command + " " + folder ;
   int retval = system( syscmd.c_str() );
 
 

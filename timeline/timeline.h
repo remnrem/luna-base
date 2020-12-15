@@ -247,6 +247,9 @@ struct timeline_t
   
   double epoch_inc() const 
   { return (double)epoch_inc_tp / globals::tp_1sec; }
+
+  bool exactly_contiguous_epochs() const
+  { return epoch_length_tp == epoch_inc_tp; } 
   
   double epoch_len_tp() const 
   { return epoch_length_tp ; }

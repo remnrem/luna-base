@@ -215,6 +215,49 @@ void cmddefs_t::init()
   add_var( "STATS" , "CH,E" , "MEDIAN" , "Signal median" );
   add_var( "STATS" , "CH,E" , "RMS" , "Signal root mean square" );
 
+
+
+  //
+  // TLOCK  
+  //
+
+  add_cmd( "summ"   , "TLOCK" , "Time-locked signal summaries" );
+  add_param( "TLOCK" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "TLOCK" , "cache" , "" , "Sample-point peak cache (req.)" );
+
+  add_param( "TLOCK" , "tolog" , "" , "Take log of input signals" );
+  add_param( "TLOCK" , "verbose" , "" , "Output individual intervals" );
+
+  add_param( "TLOCK" , "w" , "2" , "Window size around peaks (seconds) (req.)");
+  add_param( "TLOCK" , "phase" , "20" , "Expect phase values (radians) and summarize in, e.g. 20 bins" );
+  
+  // spindle peaks
+  add_table( "TLOCK" , "CH,sCH,sF" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "CH,sCH,sF" , "N" , "Number of included peaks" );
+  add_var( "TLOCK" , "CH,sCH,sF" , "N_ALL" , "Total number of included peaks" );
+
+  add_table( "TLOCK" , "CH,SEC,sCH,sF" , "Spindle peak time-locked summaries" );
+  add_var( "TLOCK" , "CH,SEC,sCH,sF" , "M" , "Signal mean" );
+
+  add_table( "TLOCK" , "N,SEC,CH,sCH,sF" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "N,SEC,CH,sCH,sF" , "V" , "Signal value" );
+  set_compressed( "TLOCK" , tfac_t( "N,SEC,CH,sCH,sF" ) );
+
+
+  //
+  // PEAKS
+  //
+
+  add_cmd( "misc"   , "PEAKS" , "Peak finder (maxima)" );
+  add_param( "PEAKS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "PEAKS" , "cache" , "c1" , "Sample-point peak cache (req.)" );
+
+  add_param( "PEAKS" , "epoch" , "" , "Also find minima" );
+  add_param( "PEAKS" , "clipped" , "3" , "Clipped regions = 3 consecutive points (0 = ignore clipping)" );
+  add_param( "PEAKS" , "min" , "" , "Also find minima" );
+  add_param( "PEAKS" , "min-only" , "" , "Only find minima" );
+  add_param( "PEAKS" , "percentile" , "20" , "Only report top 20% of peaks" );
+
     
   /////////////////////////////////////////////////////////////////////////////////
   //

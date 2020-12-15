@@ -51,6 +51,11 @@ std::string Helper::toupper( const std::string & s )
   return j;
 }
 
+std::string Helper::quote_spaced( const std::string & s )
+{
+  if ( s.find( " " ) == std::string::npos ) return s;
+  return "\"" + s + "\"";
+}
 
 std::string Helper::sanitize( const std::string & s )
 {
@@ -1391,12 +1396,11 @@ bool Helper::hhmmss( const clocktime_t & ct ,
 
 void Helper::compile_txttabs( const std::string & d )
 {
-  // compilw all files across all subfolders of d 
+  // compile all files across all subfolders of d 
   // make a special folder '00_all'
   
   // create folder if it does not exist
-  std::string syscmd = "mkdir -p " + d + "/00_all"; 
-  
+  std::string syscmd = globals::mkdir_command + " " + d + "/00_all";   
   int retval = system( syscmd.c_str() );
   
   // 1) get all subfolders (indivs)

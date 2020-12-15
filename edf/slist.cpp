@@ -340,7 +340,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
       if ( has_edf ) 
 	std::cout //<< ii->first << "\t" 
 		  << ii->second.id << "\t"
-		  << ii->second.edf ;
+		  << Helper::quote_spaced( ii->second.edf ) ;
       
       
       std::set<std::string>::const_iterator jj = ii->second.annots.begin();
@@ -348,7 +348,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	{
 	  
 	  if ( has_edf ) 
-	    std::cout << "\t" << *jj;
+	    std::cout << "\t" << Helper::quote_spaced( *jj ) ;
 	  else
 	    annot_wout_edf.push_back( *jj );
 	  

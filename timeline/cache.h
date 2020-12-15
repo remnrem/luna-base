@@ -166,22 +166,24 @@ struct cache_t {
     return ii->second;
   }
 
-	  
-  void dump() const {
-    std::cout << "cache: " << name << "\n";
+  
+  std::string print() const {
+    std::stringstream oo;
+    oo << "cache: " << name << "\n";
     typename std::map<ckey_t,std::vector<T> >::const_iterator ss = store.begin();
     while ( ss != store.end() )
       {
-	std::cout << "\t" << ss->first.name << "\n";
+	oo << "\t" << ss->first.name << "\n";
 	std::map<std::string,std::string>::const_iterator kk = ss->first.stratum.begin();
 	while ( kk != ss->first.stratum.end() )
 	  {
-	    std::cout << "\t" << kk->first << " --> " << kk->second << "\n";
+	    oo << "\t" << kk->first << " --> " << kk->second << "\n";
 	    ++kk;
 	  }
-	std::cout << "\tdata: " << ss->second.size() << " element vector\n";
+	oo << "\tdata: " << ss->second.size() << " element vector\n";
 	++ss;
       }
+    return oo.str();
   }
   
   

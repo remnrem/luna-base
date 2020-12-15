@@ -73,6 +73,8 @@ char globals::space_replacement;
 char globals::folder_delimiter;
 std::string globals::project_path;
 
+std::string globals::mkdir_command;
+
 std::string globals::txt_table_prepend;
 std::string globals::txt_table_append;
 
@@ -388,8 +390,10 @@ void globals::init_defs()
 
 #ifdef WINDOWS
   folder_delimiter = '\\';
+  mkdir_command = "mkdir";
 #else
   folder_delimiter = '/';
+  mkdir_command = "mkdir -p";
 #endif  
 
   txt_table_prepend = "";
