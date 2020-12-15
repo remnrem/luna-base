@@ -55,7 +55,18 @@ void psc_t::construct( param_t & param )
   if ( ! param.has( "v" ) ) Helper::halt( "no v=<variables> specified" );
   std::set<std::string> vars = param.strset( "v" );
 
+  //
+  // which channels to include (if not all)
+  //
 
+  std::set<std::string> chs;
+  if ( param.has( "ch" ) ) 
+    {
+      chs = param.strset( "ch" );
+      logger << "  expecting to retrain only " << chs.size() << " channels\n";
+    }
+
+  
   //
   // individual include/exclude lists? (e.g. skip outliers)
   // nb. can use @{exapansion} for file reading
@@ -221,8 +232,21 @@ void psc_t::construct( param_t & param )
 	  // skip if person is on an exclude list
 	  if ( id_excludes.size() != 0 && id_excludes.find( id ) != id_excludes.end() ) continue;	  
 
-	  std::string ch = "";
+	  // channels
 
+	  if ( chs.size() != 0 )
+	    {
+	      bool okay = true;
+	      if ( ch_slot == -1 )
+		okay = chs.find( tok[ ch1_slot ] ) != chs.end() && chs.find( tok[ ch2_slot ] ) != chs.end() ;
+	      else
+		okay = chs.find( tok[ ch_slot ] ) != chs.end() ;
+	      // skip if channel(s) not found
+	      if ( ! okay ) continue;
+	    }
+
+	  std::string ch = "";
+	  	  
 	  if ( ch_slot == -1 )
 	    ch = tok[ ch1_slot ] + "." + tok[ ch2_slot ];
 	  else

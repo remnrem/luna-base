@@ -1101,15 +1101,17 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  
 	  // 3 class or full comparison?
 	  if ( flanking_3class )
-	    if (  ( ! is_same_3class( stages[eleft] , stages[e] ) )
-		  || ( ! is_same_3class( stages[eright] , stages[e] ) ) )
-	      { sim = j-1; break; }	  
+	    {
+	      if (  ( ! is_same_3class( stages[eleft] , stages[e] ) )
+		    || ( ! is_same_3class( stages[eright] , stages[e] ) ) )
+		{ sim = j-1; break; }	  
+	    }
 	  else
 	    if ( stages[eleft] != stages[e] || stages[eright] != stages[e] ) 
 	      { sim = j-1; break; }	  
 	}
-
-
+      
+      
       int sim_all = 1; // self
       
       // forward

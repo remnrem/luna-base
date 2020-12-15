@@ -906,7 +906,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  const int nv = vartok.size();
 	  	  
 	  if ( nv != cols[a].size() ) 
-	    Helper::halt( "expecting " + Helper::int2str( cols[a].size() ) + " |-delimited fields for " + aname );
+	    Helper::halt( "expecting " + Helper::int2str( (int)cols[a].size() ) + " |-delimited fields for " + aname );
 	  
 	  for (int j=0; j<nv; j++)
 	    {
