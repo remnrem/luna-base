@@ -39,6 +39,11 @@ using namespace std;
 
 std::vector<double> legendre( const int N , double x )
 {
+
+  // hmm... not sure why this is structured this way... need to check
+  // originally, did not free allocated memory from pm_polynomial_value()
+  // 
+
   // returns N+1 vector 
   const int NP1 = N+1;
   
@@ -46,41 +51,58 @@ std::vector<double> legendre( const int N , double x )
   
   for (int M=0;M<=N;M++)
     {
-      std::vector<double> ans( NP1 );
-      double * pl = &(ans)[0];      
-      pl = pm_polynomial_value( 1 , N , M , &x );
+      // std::vector<double> ans( NP1 );
+      // double * pl = &(ans)[0];      
+      // pl = pm_polynomial_value( 1 , N , M , &x );
+      // // return last elemnt
+      // pl += N;
+      // L[M] = *pl;
+      
+      // new version
+      double * pl = pm_polynomial_value( 1 , N , M , &x );
       
       // return last elemnt
+      double * pl_orig = pl;
       pl += N;
-      
       L[M] = *pl;
+      
+      // clean-up
+      if ( pl_orig != NULL )
+	delete [] pl_orig;
     }
   return L;  
 
 }
 
-std::vector<std::vector<double> > legendre( const int N , const std::vector<double> & x )
-{
+
+
+// Note used::: and note -- needs fixing.... i.e. allocated memory from pm_polynomial_value() 
+// is not freed
+
+// std::vector<std::vector<double> > legendre( const int N , const std::vector<double> & x )
+// {
   
-  // returns N+1 by x.size() matrix 
-  const int MM = x.size();
-  const int NP1 = N+1;
-  double * px = (double*)&(x[0]);
+//   // returns N+1 by x.size() matrix 
+//   const int MM = x.size();
+//   const int NP1 = N+1;
+//   double * px = (double*)&(x[0]);
   
-  std::vector<std::vector<double> > L( NP1 );
-  for (int i=0;i<NP1;i++) L[i].resize( MM );
+//   std::vector<std::vector<double> > L( NP1 );
+//   for (int i=0;i<NP1;i++) L[i].resize( MM );
   
-  for (int M=0;M<=N;M++)
-    {
-      std::vector<double> ans( MM * NP1 );
-      double * pl = &(ans)[0];      
-      pl = pm_polynomial_value( MM , N , M , px );
-      // skip to last set
-      pl += MM*N;
-      for (int j=0;j< MM ; j++) L[M][j] = *(pl++);
-    }
-  return L;  
-}
+//   for (int M=0;M<=N;M++)
+//     {
+//       std::vector<double> ans( MM * NP1 );
+//       double * pl = &(ans)[0];      
+//       pl = pm_polynomial_value( MM , N , M , px );
+//       // skip to last set
+//       pl += MM*N;
+//       for (int j=0;j< MM ; j++) 
+// 	L[M][j] = *(pl++);
+      
+//     }
+//   return L;  
+// }
 
 
 
@@ -1113,6 +1135,8 @@ double *p_polynomial_prime2 ( int m, int n, double x[] )
 
   return vpp;
 }
+
+
 //****************************************************************************80
 
 double *p_polynomial_value ( int m, int n, double x[] )

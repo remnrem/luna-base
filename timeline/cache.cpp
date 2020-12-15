@@ -47,6 +47,6 @@ void ctest()
   
   writer.unlevel();
 
-  cache.dump();
+  std::cout << cache.print();
   
 }

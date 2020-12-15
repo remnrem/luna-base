@@ -73,6 +73,8 @@ char globals::space_replacement;
 char globals::folder_delimiter;
 std::string globals::project_path;
 
+std::string globals::mkdir_command;
+
 std::string globals::txt_table_prepend;
 std::string globals::txt_table_append;
 
@@ -167,9 +169,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v0.25.0";
+  version = "v0.25.1";
   
-  date    = "15-Sep-2020";
+  date    = "01-Dec-2020";
   
 
   //
@@ -388,8 +390,10 @@ void globals::init_defs()
 
 #ifdef WINDOWS
   folder_delimiter = '\\';
+  mkdir_command = "mkdir";
 #else
   folder_delimiter = '/';
+  mkdir_command = "mkdir -p";
 #endif  
 
   txt_table_prepend = "";

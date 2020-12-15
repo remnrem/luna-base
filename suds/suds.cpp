@@ -21,6 +21,10 @@
 //    --------------------------------------------------------------------
 
 
+// notes:
+// https://link.springer.com/article/10.1007/s10618-019-00638-y
+
+
 #include "suds.h"
 
 #include <vector>
@@ -68,8 +72,12 @@ bool suds_t::use_kl_weights;
 bool suds_t::use_repred_weights;
 bool suds_t::use_mcc;
 bool suds_t::use_5class_repred;
+bool suds_t::use_rem_repred;
 double suds_t::wgt_percentile;
+int suds_t::wgt_exp;
 bool suds_t::equal_wgt_in_selected;
+bool suds_t::wgt_mean_normalize;
+double suds_t::wgt_mean_th;
 
 bool suds_t::cheat;
 double suds_t::denoise_fac;
@@ -90,6 +98,7 @@ int suds_t::n_stages = 5;
 std::vector<std::string> suds_t::labels;
 std::vector<std::string> suds_t::labels3;
 std::vector<std::string> suds_t::labels5;
+std::vector<std::string> suds_t::labelsR;
 
 bool suds_t::use_fixed_trainer_req;
 std::vector<int> suds_t::fixed_trainer_req;
@@ -1394,7 +1403,7 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   //  stages [ nve ]  epochs[ nve ]
 
   // create output folder if it does not exist
-  std::string syscmd = "mkdir -p " + folder ;
+  std::string syscmd = globals::mkdir_command + " " + folder ;
   int retval = system( syscmd.c_str() );
 
 
@@ -2088,9 +2097,21 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      
 	      // obs_stage for predicted/valid epochs only
 	      
-	      double kappa = use_5class_repred ?
-		MiscMath::kappa( reprediction.cl , str( weight_trainer->obs_stage ) , suds_t::str( SUDS_UNKNOWN )  ) :
-	        MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) , suds_t::str( SUDS_UNKNOWN )  );
+	      double kappa = 0 ; 
+	      if ( use_5class_repred ) 
+		kappa = MiscMath::kappa( reprediction.cl , str( weight_trainer->obs_stage ) , suds_t::str( SUDS_UNKNOWN )  ) ;
+	      else if ( use_rem_repred ) 
+		kappa = MiscMath::kappa( Rnot( reprediction.cl ) , Rnot( str( weight_trainer->obs_stage ) ) , suds_t::str( SUDS_UNKNOWN )  );
+	      else
+		kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) , suds_t::str( SUDS_UNKNOWN )  );
+	      
+	      // if ( use_rem_repred ) 
+	      // 	{
+	      // 	  logger << "\n  REM REPRED:\n";
+	      // 	  suds_t::tabulate(  suds_t::NRW( reprediction.cl ) , suds_t::NRW(  str( weight_trainer->obs_stage ) ) , true );
+	      // 	  logger << "Rnot...\n";
+	      // 	  suds_t::tabulate(  suds_t::Rnot( reprediction.cl ) , suds_t::Rnot(  str( weight_trainer->obs_stage ) ) , true );		  
+	      // 	}
 
 	      //	      std::cout << "\nids: " << target.id << "\t" << trainer->id << "\t" << weight_trainer->id << "\n";
 
@@ -2109,7 +2130,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 					      &precision, &recall, &f1,
 					      &macro_precision, &macro_recall, &macro_f1 ,
 					      &wgt_precision, &wgt_recall, &wgt_f1 , &mcc);
-		  
+		  else if ( use_rem_repred ) // just accuracy on REM
+		    		    acc = MiscMath::accuracy( Rnot( str( weight_trainer->obs_stage ) ) , 
+					      Rnot( reprediction.cl ) , 
+					      suds_t::str( SUDS_UNKNOWN ) , 
+					      &suds_t::labelsR ,
+					      &precision, &recall, &f1,
+					      &macro_precision, &macro_recall, &macro_f1 ,
+					      &wgt_precision, &wgt_recall, &wgt_f1 , &mcc);
 		  else
 		    acc = MiscMath::accuracy( NRW( str( weight_trainer->obs_stage ) ) , 
 					      NRW( reprediction.cl ) , 
@@ -2262,7 +2290,47 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   //
 
   bool has_wgt = ( wbank.size() > 0 && use_repred_weights ) || use_kl_weights ;
+
+  if ( has_wgt && suds_t::wgt_mean_normalize ) 
+    {
+      logger << "  normalizing repred weights around trainer mean\n";
+      double mean_wgt = Statistics::mean( wgt );
+      for ( int i=0; i<wgt.size();i++)
+	{	  
+	  if ( wgt[i] < 0 ) wgt[i] = 0;
+	  else wgt[i] /= mean_wgt;	  
+	  // default threshold = 1 (i.e. only take values above the mean)
+	  if ( wgt[i] < suds_t::wgt_mean_th ) wgt[i] = 0;
+	}      
+    }
   
+
+  //
+  // Unit scale exponential 
+  //
+
+  if ( has_wgt && wgt_exp > 1 ) 
+    {
+      // get MAX --> set to 1.0
+      double max = 0;
+      for (int i=0;i<wgt.size();i++)
+	{
+	  if ( wgt[i] < 0 ) wgt[i] = 0; 
+	  else if ( wgt[i] > max ) max = wgt[i];
+	}
+      
+      for (int i=0;i<wgt.size();i++)
+	{
+	  wgt[i] /= max;
+	  wgt[i] = pow( wgt[i] , wgt_exp );
+	}
+      
+    }
+  
+  //
+  // Percentile based sclaing (subsetting) 
+  //
+
   if ( has_wgt && suds_t::wgt_percentile > 0 ) 
     {
       
@@ -2272,8 +2340,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // binarize wgt (if only 1 or 2 trainers, then assign equal weight) 
       if ( wgt.size() < 3 || suds_t::equal_wgt_in_selected ) 
 	{
-	  for (int i=0;i<wgt.size();i++)	
-	    wgt[i] = wgt[i] >= threshold ? 1 : 0 ;     
+	  for (int i=0;i<wgt.size();i++)
+	    wgt[i] = wgt[i] >= threshold ? 1 : 0 ; 
 	}
       else
 	{

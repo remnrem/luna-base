@@ -132,6 +132,9 @@ namespace Statistics {
   double variance( const Data::Vector<double> & );
 
   Data::Vector<double> mean( const Data::Matrix<double> & );
+  Data::Vector<double> min( const Data::Matrix<double> & );
+  Data::Vector<double> max( const Data::Matrix<double> & );
+
   Data::Vector<double> variance( const Data::Matrix<double> & );
   Data::Vector<double> variance( const Data::Matrix<double> & , const Data::Vector<double> & );
   Data::Vector<double> sdev( const Data::Matrix<double> & , const Data::Vector<double> & );

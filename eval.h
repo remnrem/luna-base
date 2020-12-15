@@ -256,7 +256,8 @@ void proc_canonical( edf_t & edf , param_t & param );
 
 void proc_dump( edf_t & , param_t & );
 void proc_dump_mask( edf_t & , param_t & );
-void proc_chep( edf_t & , param_t & );
+//void proc_chep( edf_t & , param_t & ); // now in timeline_t
+void proc_chep_mask( edf_t & , param_t & );
 void proc_file_mask( edf_t & , param_t & );
 void proc_file_annot( edf_t & , param_t & );
 void proc_sleep_stage( edf_t & , param_t & , bool verbose = false );
@@ -303,6 +304,7 @@ void proc_cwt( edf_t & , param_t & );
 void proc_hilbert( edf_t & , param_t & );
 void proc_psc( edf_t & , param_t & );
 void proc_tlock( edf_t & , param_t & );
+void proc_peaks( edf_t & , param_t & );
 void proc_sedf( edf_t & , param_t & );
 
 void proc_fiplot( edf_t & , param_t & );

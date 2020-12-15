@@ -1,8 +1,8 @@
 include Makefile.inc
 ifeq ($(ARCH),WINDOWS)
-  TARGETS = luna destrat behead
+  TARGETS = luna destrat behead tocol
 else
-  TARGETS = luna libluna destrat behead merge
+  TARGETS = luna libluna destrat behead merge tocol
 endif
 
 SRCS = globals.cpp eval.cpp cmddefs.cpp \
@@ -73,6 +73,9 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 
 destrat: utils/reader.o libluna.a
 	$(CXX) -o $@ $^ -L. -lz  $(LDFLAGS)
+
+tocol: utils/tocol.o 
+	$(CXX) -o $@ $^ $(LDFLAGS)
 
 behead: utils/behead.o
 	$(CXX) -o $@ $^  $(LDFLAGS)

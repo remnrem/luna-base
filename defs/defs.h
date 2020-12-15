@@ -134,6 +134,8 @@ struct globals
   
   static char folder_delimiter;
 
+  static std::string mkdir_command;
+
   // number of decimal places for seconds (e.g. output to .annot)
   static int time_format_dp; 
 

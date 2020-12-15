@@ -39,7 +39,7 @@
 
 struct interval_t;
 struct clocktime_t;
-struct gzifstream;
+class gzifstream;
 
 namespace Helper 
 {
@@ -83,6 +83,8 @@ namespace Helper
     int b = ( s[s.size()-1] == '"' || s[s.size()-1] == q2 ) ? 1 : 0 ;
     return s.substr(a,s.size()-a-b);
   }
+
+  std::string quote_spaced( const std::string & s );
 
   std::string sanitize( const std::string & );
   

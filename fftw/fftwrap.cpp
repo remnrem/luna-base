@@ -528,6 +528,19 @@ int bin_t::bin( const std::vector<double> & f ,
   for (i=0;i<f.size();i++)
     if ( f[i] >= mn_f ) break;
 
+  // put DC always as a separate value
+
+  if ( mn_f == 0 ) 
+    {
+      bspec.push_back( y[0] );
+      bfa.push_back( 0 );
+      bfb.push_back( 0 );
+      nominal.push_back( "0" );
+      ++i;
+    }
+
+  // make bins
+
   for ( ;i<f.size(); i+=fac )
     {
       if ( ( i + fac - 1 ) < f.size() )

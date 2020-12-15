@@ -4130,7 +4130,18 @@ void edf_t::guess_canonicals( param_t & param )
   bool has_label = param.has( "eeg" );
   if ( has_label )
     {
-      eeg = header.signal( param.value( "eeg" ) );
+      // INCORRECT: need to look up w.r.t. signals rather than EDF header
+      //eeg = header.signal( param.value( "eeg" ) );
+
+      std::string ts = param.value( "eeg" );
+
+      eeg = -1;
+
+      for (int s=0; s<ns; s++)
+	{
+	  if ( signals.label(s) == ts ) { eeg = s ; break; } 
+	}
+
       if ( eeg == -1 ) logger << "  could not find " <<  param.value( "eeg" ) << " -- will try to guess cs_EEG\n";
     }
 

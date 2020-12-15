@@ -205,6 +205,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool cache_data                   = param.has( "cache" );
   const std::string cache_name = cache_data ? param.value( "cache" ) : "" ;
   
+  const bool cache_peaks                  = param.has( "cache-peaks" );
+  const std::string cache_peaks_name = cache_peaks ? param.value( "cache-peaks" ) : "";
+
+  
   
   //
   // Intersection of multiple wavelets/spindles/channels   ( by default, do not merge across channels)
@@ -1147,13 +1151,31 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  if ( cache_data )
 	    {
 	      cache_t<double> * cache_num = edf.timeline.cache.find_num( cache_name );
-	      cache_num->add( ckey_t( "wavelet-power" , writer.faclvl() ) , averaged_corr );
+	      cache_num->add( ckey_t( "spindle-wavelet-power" , writer.faclvl() ) , averaged_corr );
 	      
 	      // cache_t<uint64_t> * cache_tp = edf.timeline.cache_tp( cache_name );
 	      // cache_tp->add( ckey_t( "spindle-peaks" , writer.faclvl() ) , averaged_corr );	      
 
 	    }
 
+
+	  //
+	  // Cache spindle peaks
+	  //
+	  
+	  if ( cache_peaks )
+            {
+              cache_t<int> * cache = edf.timeline.cache.find_int( cache_peaks_name );
+
+	      std::vector<int> peaks;
+	      for (int i=0; i<spindles.size(); i++)
+		{
+		  int p = spindles[i].start_sp + spindles[i].peak_sp;
+		  //		  std::cout << "p = " << spindles[i].start_sp  << " " << spindles[i].peak_sp << "\n";
+		  peaks.push_back(p);
+		}
+              cache->add( ckey_t( "points" , writer.faclvl() ) , peaks );
+	    }
 	  
 	  //
 	  // Optional slow-wave coupling?
@@ -1872,8 +1894,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      // create folder if it does not exist
 	      // (will need to change for windows...)
-
-	      std::string syscmd = "mkdir -p " + ftr_folder ;
+	      
+	      std::string syscmd = globals::mkdir_command + " " + ftr_folder ;
 	      int retval = system( syscmd.c_str() );
 	      
 	      // id_<id>_feature_<feature name>.ftr

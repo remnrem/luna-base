@@ -65,7 +65,7 @@ struct timeline_t
 {
   
   friend struct hypnogram_t;
-  
+
  public:
   
   timeline_t( edf_t * p ) 
@@ -247,6 +247,9 @@ struct timeline_t
   
   double epoch_inc() const 
   { return (double)epoch_inc_tp / globals::tp_1sec; }
+
+  bool exactly_contiguous_epochs() const
+  { return epoch_length_tp == epoch_inc_tp; } 
   
   double epoch_len_tp() const 
   { return epoch_length_tp ; }
@@ -412,17 +415,50 @@ struct timeline_t
   // Channel-specific epoch masks (ch/ep mask)
   //
   
+  static void proc_chep( edf_t & edf , param_t & param );
+
   bool is_chep_mask_set() const { return chep.size() != 0; } 
   
   void clear_chep_mask() { chep.clear(); } 
 
-  void set_chep_mask( const int e , const int s ) { chep[ display_epoch( e ) ].insert(s); } 
+  std::map<int,std::set<std::string> > make_chep_copy() const { return chep; }
 
-  void dump_chep_mask();
-  
-  bool masked( const int e , const int s ) const 
+  void set_chep_mask( const int e , const std::string & s ) { chep[ display_epoch( e ) ].insert(s); } 
+
+  void merge_chep_mask( const std::map<int,std::set<std::string> > & m ) 
   {
-    std::map<int,std::set<int> >::const_iterator ee = chep.find( display_epoch( e ) );
+    if ( chep.size() == 0 ) { chep = m ; return; } 
+    std::map<int,std::set<std::string> >::const_iterator ii = m.begin();
+    while ( ii != m.end() )
+      {
+	std::set<std::string>::const_iterator jj = ii->second.begin();
+	while ( jj != ii->second.end() )
+	  {
+	    chep[ ii->first ].insert( *jj );
+	    ++jj;
+	  }
+	++ii;
+      }
+  }
+  
+
+  bool unset_chep_mask( const int e , const std::string & s ) 
+  { 
+    // return T if anything removed
+    int e1 = display_epoch( e );    
+    std::map<int,std::set<std::string> >::iterator ii = chep.find( e1 ) ;
+    if ( ii == chep.end() ) return false;
+    std::set<std::string>::iterator jj = ii->second.find( s );
+    if ( jj == ii->second.end() ) return false;
+    ii->second.erase( jj );
+    return true; 
+  } 
+
+  void dump_chep_mask( signal_list_t , bool );
+  
+  bool masked( const int e , const std::string & s ) const 
+  {
+    std::map<int,std::set<std::string> >::const_iterator ee = chep.find( display_epoch( e ) );
     if ( ee == chep.end() ) return false;
     return ee->second.find( s ) != ee->second.end() ;
   }
@@ -433,23 +469,23 @@ struct timeline_t
   void write_chep_file( const std::string & f ) const;
 
   // query
-  std::vector<int> masked_channels( const int e , const signal_list_t & ) const;
+  std::vector<std::string> masked_channels( const int e , const signal_list_t & ) const;
   
-  std::vector<int> unmasked_channels( const int e , const signal_list_t & ) const;
+  std::vector<std::string> unmasked_channels( const int e , const signal_list_t & ) const;
 
   signal_list_t masked_channels_sl( const int e , const signal_list_t & ) const;
   
   signal_list_t unmasked_channels_sl( const int e , const signal_list_t & ) const;
 
   // sets main epoch mask
-  void collapse_chep2epoch( signal_list_t signals , const int k  , const double pct );
+  void collapse_chep2epoch( signal_list_t signals , const double pct , const int k );
   
   // doesn't change epoch-mask, returns a channel list
   // optionally, if a channel is designated as 'bad', then set all to bad
   // and/or,     if a channel is designated as 'good', then set all to good
   
   signal_list_t collapse_chep2ch( signal_list_t signals , 
-				  const int k  , const double pct , 
+				  const double pct , const int k  , 
 				  const bool bad_set_all_bad = true , 
 				  const bool good_set_all_good = true );
   
@@ -677,17 +713,16 @@ struct timeline_t
 
   int current_epoch;
 
-
   std::vector<bool> mask;
   
   bool mask_set;
   
   int mask_mode;
-
-  // epoch -> ch ; presence implies mask set
-  std::map<int,std::set<int> > chep;
   
-
+  // epoch -> ch ; presence implies mask set
+  std::map<int,std::set<std::string> > chep;
+  
+  // epoch to record mapping
   std::map<int,std::set<int> > epoch2rec;
   std::map<int,std::set<int> > rec2epoch;
   
