@@ -32,16 +32,12 @@
 #include "defs/defs.h"
 
 #include "helper/helper.h"
-
 #include "helper/zfile.h"
-
 #include "helper/token-eval.h"
-
 #include "helper/token.h"
-
 #include "helper/logger.h"
-
 #include "helper/xml-parser.h"
+#include "helper/json.h"
 
 #include "tinyxml/tinyxml.h"
 

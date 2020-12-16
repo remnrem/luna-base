@@ -25,7 +25,6 @@
 #include "helper/logger.h"
 #include "db/db.h"
 
-
 extern logger_t logger;
 
 extern writer_t writer;
@@ -33,8 +32,22 @@ extern writer_t writer;
 void spindle_so_coupling( edf_t & edf , param_t & param )
 {
 
-  logger << "  spindle/SO coupling\n";
+  const std::string spindle_cache = param.requires( "spindles" );
+  const std::string so_cache = param.requires( "so" );
 
+  // spindle/SWA or spindle/SO coupling?
+  bool all_spindles = param.has( "all-spindles" );
+
+  // use randomization (shuffled) surrogate time-series?
+  int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 0;
+
+  // shuffle only within epoch?
+  
+  // shuffle only within SO? 
+
+  // report what we're doing here:
+  logger << "  spindle/SO coupling\n";
+    
   
   //
   // retrieve pre-calculated values from the cache
