@@ -735,20 +735,22 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	}
       
+
       //
-      // optional header (e.g. for stats package, that is skipped) 
+      // optional case-insensitive header (e.g. for stats package, that is skipped); if an annotation 
+      // named 'class' was defined above, we do not allow this header row
       //
 
-      else if ( line_count == 0 && (! has_class_class) && line.size() > 5 && line.substr(0,5) == "class" )
+      else if ( line_count == 0 && (! has_class_class) && line.size() > 5 && Helper::iequals( line.substr(0,5) , "class" ) )
 	{
 	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
 	  if ( tok.size() !=6 ) Helper::halt( "invalid header line:\n" + line );
-	  if ( tok[0] != "class" ) Helper::halt( "expecting column 1 to be 'class':\n" + line );
-	  if ( tok[1] != "instance" ) Helper::halt( "expecting column 2 to be 'instance':\n" + line );
-	  if ( tok[2] != "channel" ) Helper::halt( "expecting column 3 to be 'channel':\n" + line );
-	  if ( tok[3] != "start" ) Helper::halt( "expecting column 4 to be 'start':\n" + line );
-	  if ( tok[4] != "stop" ) Helper::halt( "expecting column 5 to be 'stop':\n" + line );
-	  if ( tok[5] != "meta" ) Helper::halt( "expecting column 6 to be 'meta':\n" + line );
+	  if ( ! Helper::iequals( tok[0] , "class" ) ) Helper::halt( "expecting column 1 to be 'class':\n" + line );
+	  if ( ! Helper::iequals( tok[1] , "instance" ) ) Helper::halt( "expecting column 2 to be 'instance':\n" + line );
+	  if ( ! Helper::iequals( tok[2] , "channel" ) ) Helper::halt( "expecting column 3 to be 'channel':\n" + line );
+	  if ( ! Helper::iequals( tok[3] , "start" ) ) Helper::halt( "expecting column 4 to be 'start':\n" + line );
+	  if ( ! Helper::iequals( tok[4] , "stop" ) ) Helper::halt( "expecting column 5 to be 'stop':\n" + line );
+	  if ( ! Helper::iequals( tok[5] , "meta" ) ) Helper::halt( "expecting column 6 to be 'meta':\n" + line );
 	}
 
       //
@@ -779,13 +781,30 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    continue;
 
 	  //
-	  // was this annotation specified in the header? 
+	  // was this annotation specified in the header?  If not, create on-the-fly as
+	  // a vanilla annot (i.e. same as '# annot' in header row, so implies no 
+	  // meta-data
 	  //
 	  
 	  std::map<std::string,annot_t*>::iterator aa = annot_map.find( aname );
 	  
 	  if ( aa == annot_map.end() ) 
-	    Helper::halt( "annotation " + aname + " not in header of " + f );
+	    {
+	      
+	      // Helper::halt( "annotation " + aname + " not in header of " + f );
+	      
+	      // instead of complaining, we now create annot 
+	      annot_t * a = parent_edf.timeline.annotations.add( aname );
+	      annot_map[ aname ] = a;
+	      a->description = aname;
+	      a->file = f;
+	      a->type = globals::A_FLAG_T; 
+	      a->types.clear();
+
+	      // and now update this iterator
+	      aa = annot_map.find( aname );
+	    }
+
 	  
 	  annot_t * a = aa->second; 			
 	  

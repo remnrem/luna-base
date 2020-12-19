@@ -891,6 +891,8 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
       
+      else if ( is( c, "MICROSTATES" ) )  proc_microstates( edf , param(c) );
+
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
 
@@ -990,7 +992,7 @@ bool cmd_t::eval( edf_t & edf )
 void proc_headers( edf_t & edf , param_t & param )
 {
   // optionally add a SIGNALS col that has a comma-delimited list of all signals
-  edf.terse_summary( param.has( "signals" ) );
+  edf.terse_summary( param );
 }
 
 // ALIASES : report aliasing of channels and annotations
@@ -1279,6 +1281,13 @@ void proc_resample( edf_t & edf , param_t & param )
 }
 
 
+// MICROSTATES
+void proc_microstates( edf_t & edf , param_t & param )
+{
+  dsptools::microstates( edf , param );
+}
+
+
 // TLOCK
 void proc_tlock( edf_t & edf  , param_t & param )
 {
@@ -1293,10 +1302,9 @@ void proc_peaks( edf_t & edf , param_t & param )
 }
 
 // SEDF : make a summarize EDF 
-void proc_sedf( edf_t & , param_t & )
+void proc_sedf( edf_t & edf , param_t & param )
 {
-  
-  
+  sedf_t sedf( edf , param );  
 }
 
 
@@ -1569,8 +1577,11 @@ void proc_slowwaves( edf_t & edf , param_t & param )
 }
 
 
-// WRITE : write a new EDF or EDFZ to disk (but not annotation files,
-// they must always be anchored to the 'original' EDF
+// WRITE : write a new EDF or EDFZ to disk
+// optionally, writes annotation files,
+// (although user responsible for not altering time structure of EDF
+// i.e. we do not change the time encoding of the annotation file, which
+// are always anchored to the original)
 
 void proc_write( edf_t & edf , param_t & param )
 {
@@ -1580,10 +1591,15 @@ void proc_write( edf_t & edf , param_t & param )
     
   // add 'tag' to new EDF
   std::string filename = edf.filename;
+
   if ( Helper::file_extension( filename, "edf" ) || 
        Helper::file_extension( filename, "EDF" ) ) 
     filename = filename.substr(0 , filename.size() - 4 );
   
+  if ( Helper::file_extension( filename, "edfz" ) || 
+       Helper::file_extension( filename, "EDFZ" ) ) 
+    filename = filename.substr(0 , filename.size() - 5 );
+
   filename += "-" + param.requires( "edf-tag" ) + ".edf";
   if ( edfz ) filename += "z";
   
@@ -3045,6 +3061,10 @@ void cmd_t::define_channel_type_variables( edf_t & edf )
   //if ( eeg != "" )
   cmd_t::ivars[ edf.id ][ "eeg" ] = eeg;
     
+  std::string ref = globals::list_channels( REF , edf.header.label );
+  //if ( eeg != "" )
+  cmd_t::ivars[ edf.id ][ "ref" ] = ref;
+
   std::string eog = globals::list_channels( EOG , edf.header.label );
   //if ( eog != "" )
   cmd_t::ivars[ edf.id ][ "eog" ] = eog;

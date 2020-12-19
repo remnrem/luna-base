@@ -469,7 +469,7 @@ public:
   // Header reporting 
   //
 
-  void terse_summary( const bool write_signals = false ) const;
+  void terse_summary( param_t & param );
 
   void report_aliases() const;
   

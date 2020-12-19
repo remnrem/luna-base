@@ -108,6 +108,7 @@ enum channel_type_t
     SNORE ,      
     HR ,     // heart rate/pulse, i.e. if derived/non-ECG
     GENERIC , // i.e. unknown
+    REF , // A1, A2, M1, M2
     EEG      // any EEG
     
   };

@@ -46,6 +46,7 @@
 #include "tinyxml/xmlreader.h"
 
 #include "stats/cluster.h"
+#include "stats/kmeans.h"
 
 #include "miscmath/miscmath.h"
 
@@ -60,6 +61,8 @@
 #include "edf/edf.h"
 
 #include "edf/slice.h"
+
+#include "edf/sedf.h"
 
 #include "timeline/timeline.h"
 

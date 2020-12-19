@@ -35,6 +35,10 @@ void spindle_so_coupling( edf_t & edf , param_t & param )
   const std::string spindle_cache = param.requires( "spindles" );
   const std::string so_cache = param.requires( "so" );
 
+  //
+  // Options
+  //
+
   // spindle/SWA or spindle/SO coupling?
   bool all_spindles = param.has( "all-spindles" );
 
@@ -42,10 +46,16 @@ void spindle_so_coupling( edf_t & edf , param_t & param )
   int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 0;
 
   // shuffle only within epoch?
-  
-  // shuffle only within SO? 
+  bool stratify_by_so_phase_bin = param.has ( "stratify-by-phase" );
 
+  // Within-epoch permutation (default, unless this given)
+  bool eperm = ! param.has( "perm-whole-trace" );
+  
+
+  //
   // report what we're doing here:
+  //
+
   logger << "  spindle/SO coupling\n";
     
   

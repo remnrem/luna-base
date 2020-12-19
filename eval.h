@@ -303,6 +303,7 @@ void proc_tv_denoise( edf_t & , param_t & );
 void proc_cwt( edf_t & , param_t & );
 void proc_hilbert( edf_t & , param_t & );
 void proc_psc( edf_t & , param_t & );
+void proc_microstates( edf_t & , param_t & );
 void proc_tlock( edf_t & , param_t & );
 void proc_peaks( edf_t & , param_t & );
 void proc_sedf( edf_t & , param_t & );

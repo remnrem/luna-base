@@ -634,9 +634,17 @@ void process_edfs( cmd_t & cmd )
 
   std::string f = cmd.data();
 
-  // use .edf or .EDF extension to indicate 'single EDF' mode
+  // use .edf (or .EDF extension) to indicate 'single EDF' mode, '.rec'
   f = f.substr( (int)f.size() - 4 >= 0 ? (int)f.size() - 4 : 0 );
-  bool single_edf = f == ".edf" || f == ".EDF";
+  bool single_edf = Helper::iequals( f , ".edf" ) || Helper::iequals( f , ".rec" ) ;
+
+  // also allow .sedf for Luna summary EDF
+  if ( ! single_edf )
+    {
+      std::string f2 = cmd.data();
+      f2 = f2.substr( (int)f2.size() - 5 >= 0 ? (int)f2.size() - 5 : 0 );
+      if ( Helper::iequals( f2 , ".sedf" ) ) single_edf = true;
+    }
   
   // use presence of --fs command-line option to indicate 'single ASCII file' mode
   bool single_txt = globals::param.has( "-fs" );
@@ -961,7 +969,14 @@ void process_edfs( cmd_t & cmd )
 		}
 	      else
 		{
-		  edf.load_annotations( fname );	 
+		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
+		  // i.e. skip .sedf files that might also be specified as 
+		  // attached to this EDF
+		  if ( Helper::file_extension( fname , "ftr" ) ||
+		       Helper::file_extension( fname , "xml" ) ||
+		       Helper::file_extension( fname , "eannot" ) ||
+		       Helper::file_extension( fname , "annot" ) )
+		    edf.load_annotations( fname );	 
 		}
 	      
 	    }
@@ -1226,7 +1241,29 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  if ( p == "kmeans" )
+    {
+      const int nc = 4;
+      const int nr = 150;
+      const int nk = 3;
+      Data::Matrix<double> X( nr , nc );
+      for (int r=0;r<nr; r++)
+	for (int c=0;c<nc; c++)
+	  std::cin >> X(r,c);
+      
+      std::cout << "X. " << X.print() << "\n";
 
+      kmeans_t kmeans;
+      
+      std::vector<int> sol;
+      kmeans.kmeans( X , 3 , &sol );
+      std::cout << "SOL\n";
+      for (int i=0;i<150;i++)
+	std::cout << sol[i] << "\n";
+
+      std::exit(1);
+    }
+  
   if ( p == "json" )
     {
 

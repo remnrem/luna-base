@@ -350,34 +350,27 @@ void edf_t::report_aliases() const
 
 }
 
-void edf_t::terse_summary( const bool write_signals ) const
+void edf_t::terse_summary( param_t & param )
 {
+
+  signal_list_t signals = header.signal_list( param.value( "sig" ) );
   
-  // variable definitions
-  writer.var( "NS" , "Number of signals" );
-  writer.var( "NR" , "Number of records" ); 
-  writer.var( "REC.DUR" , "Record duration (sec)" );
-  writer.var( "TOT.DUR.SEC" , "Total recording duration (sec)" );
-  writer.var( "TOT.DUR.HMS" , "Total recording duration (hh:mm:ss)" );
+  const int ns1 = signals.size();
 
-  writer.var( "SR" , "Sampling race (points per second)" );
-  writer.var( "PDIM" , "Physical dimension/units" );
-  writer.var( "PMIN" , "Physical minimum" );
-  writer.var( "PMAX" , "Physical maximum" );
-
-  writer.var( "DMIN" , "Digital minimum" );
-  writer.var( "DMAX" , "Digital maximum" );
-
+  const bool write_signals = param.has( "signals" );
+  
   // write output
-  writer.value( "NS" , header.ns );
+  writer.value( "NS_ALL" , header.ns );
+  writer.value( "NS" , ns1 );
+
   writer.value( "NR" , header.nr );
-  writer.value( "REC.DUR" , header.record_duration );
+  writer.value( "REC_DUR" , header.record_duration );
 
   // total duration in TP units
   uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
   std::string total_duration_hms = Helper::timestring( duration_tp , ':' , false );
-  writer.value( "TOT.DUR.SEC" , header.nr * header.record_duration );
-  writer.value( "TOT.DUR.HMS" , total_duration_hms );
+  writer.value( "TOT_DUR_SEC" , header.nr * header.record_duration );
+  writer.value( "TOT_DUR_HMS" , total_duration_hms );
 
   const std::string pat_id = Helper::trim( header.patient_id ) ;
   writer.value( "EDF_ID" , pat_id == "" ? "." : pat_id );
@@ -385,10 +378,20 @@ void edf_t::terse_summary( const bool write_signals ) const
   writer.value( "START_DATE" , Helper::trim( header.startdate ) );
 
   if ( write_signals ) 
-    writer.value( "SIGNALS" , Helper::stringize<std::vector<std::string> >( header.label ) ); 
-
-  for (int s=0;s<header.ns;s++)
     {
+      std::vector<std::string> chs;
+      for (int s=0;s<ns1;s++) chs.push_back( signals.label(s) );
+      writer.value( "SIGNALS" , Helper::stringize<std::vector<std::string> >( chs ) ); 
+      //writer.value( "SIGNALS" , Helper::stringize<std::vector<std::string> >( header.label ) ); 
+    }
+  
+
+  //for (int s=0;s<header.ns;s++)
+  for (int s1=0;s1<ns1;s1++)
+    {
+
+      const int s = signals(s1);
+     
       // channel name
       writer.level( header.label[s] , globals::signal_strat );
 
@@ -1961,7 +1964,14 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
 {
   const int ndata = data.size();
 
-  const int n_samples = Fs * header.record_duration ;
+  // normally, n_samples is Fs * record length.
+  // *however*, as we are currently otherwise enforcing that sample rate must be an integer 
+  //   we've also added a backdoor for sedf_t creation here, to allow for
+  //   has sample rate < 1 Hz and very long records (e.g. 30 seconds): namely,
+  //   if Fs is negative, assume this directly encode the n_samples (negative of)
+  //   rather than the sample rate per say
+  
+  const int n_samples = Fs < 0 ? -Fs : Fs * header.record_duration ;
   
   if ( ndata == 0 ) 
     {

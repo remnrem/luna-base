@@ -711,6 +711,7 @@ std::string globals::list_channels( channel_type_t ch ,
 void globals::init_channel_types()
 {
   channel_type( "EEG" , EEG );
+  channel_type( "REF" , REF );
   channel_type( "EOG" , EOG );
   channel_type( "GENERIC" , GENERIC );
   channel_type( "ECG" , ECG );
@@ -791,11 +792,12 @@ void globals::init_channel_types()
   add_channel_map( "POZ" , EEG );
   add_channel_map( "PO3" , EEG );
   add_channel_map( "PO7" , EEG );
-  
-  add_channel_map( "M1" , EEG );
-  add_channel_map( "A1" , EEG );
-  add_channel_map( "M2" , EEG );
-  add_channel_map( "A2" , EEG );
+
+  // REF
+  add_channel_map( "M1" , REF );
+  add_channel_map( "A1" , REF );
+  add_channel_map( "M2" , REF );
+  add_channel_map( "A2" , REF );
 
   // EOG
   add_channel_map( "EOG" , EOG );

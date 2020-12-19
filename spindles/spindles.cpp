@@ -1462,7 +1462,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    }
 
 		}
-	      	      
+	        
 	  
 	      //
 	      // Individual PEAKS, to be output later, in characterize() 
@@ -1879,7 +1879,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	    }
 
 	
-
 	  //
 	  // Record as a .ftr file
 	  //
@@ -2154,17 +2153,7 @@ void characterize_spindles( edf_t & edf ,
        
        const int npoints = d.size();
        
-       
-       //
-       // (NO) detrend spindle signal
-       //
-
-       //        double trend_a = 0 , trend_b = 0;
-       //        std::vector<double> d = MiscMath::detrend( d0 , &trend_a , &trend_b );
-       //        spindle->trend = trend_b;
-       //        spindle->abstrend = fabs( trend_b );
-
-
+      
        //
        // ISA
        //
@@ -2525,12 +2514,9 @@ void characterize_spindles( edf_t & edf ,
 
 	}
 
-
-
-
       
       //
-      // Optional, time-locked analysis?  [ for QC+ spindles only ] 
+      // [ REMOVE ] Optional, time-locked analysis?  [ for QC+ spindles only ] 
       //
       
       if ( locked && spindle->include )
