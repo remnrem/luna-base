@@ -26,6 +26,8 @@
 #include "stats/matrix.h"
 #include <vector>
 
+//#include "stats/Eigen/Dense"
+
 // https://rosettacode.org/wiki/K-means%2B%2B_clustering
 #include <cstdio>
 #include <cstdlib>
@@ -82,7 +84,9 @@ struct kmeans_t {
 
   int nearest( const point_t & pt, 
 	       const std::vector<point_t> & cent,
-	       double * d2 );
+	       double * d2 ,
+	       int * lim = NULL 
+	       );
   
   void kpp( std::vector<point_t> & pts,  
 	    std::vector<point_t> & cent );
@@ -109,6 +113,151 @@ struct kmeans_t {
 
 };
 
+
+
+
+// modified K-means for EEG, following ...
+
+// Pascual-Marqui, R. D., Michel, C. M., & Lehmann, D. (1995).
+//         Segmentation of brain electrical activity into microstates: model
+//         estimation and validation. IEEE Transactions on Biomedical
+//         Engineering.
+
+
+struct modkmeans_out_t {
+
+  // .Z_all    - Cell containing the microstate activations for each number of
+  //             microstates defined in K_range. The dimensions of each cell
+  //                 is (K x samples).
   
+  Data::Matrix<double> Z;
+    
+  //     .A_all    - Cell containing the spatial distribution for each number of
+  //                 microstates defined in K_range. The dimensions of each cell
+  //                 is (channels x K).
+  
+  Data::Matrix<double> A;
+  
+  //     .L_all    - Cell containing the labels for each number of microstates
+  //                 defined in K_range. The dimensions of each cell is
+  //                 (1 x samples).
+  
+  std::vector<int> L;
+  
+  //     .R2       - Explained variance for the best solution of each K in K_range.
+  double R2;
+
+  double sig2;
+  
+  //     .sig2_modk     - Noise variance for the best solution of each K in K_range.  
+  double sig2_modk;
+    
+  //     .sig2_modk_mcv - Modified predictive residual variance of best solution
+  //                     of each K in K_range.  
+  double sig2_modk_mcv;
+  
+  //     .MSE      - Mean squared error for the best solution of each K in K_range.  
+  double MSE;
+
+  // number of iterations
+  int iter;
+};
+
+
+struct modkmeans_all_out_t {
+
+  // final, optimal solution
+  int K;
+
+  // A_opt   - Spatial distribution of microstates (channels x K)                                                                                                                     
+  Data::Matrix<double> A;
+
+  // L_opt   - Label of the most active microstate at each timepoint (1 x samples).                                                                                                   
+  std::vector<int> L;
+
+  //
+  // Verbose info for each K
+  //
+
+  std::map<int,modkmeans_out_t> kres;
+  
+};
+
+
+
+struct modkmeans_t {
+
+  modkmeans_t( const std::vector<int> & ks ,
+	       const bool normalize = false ,
+	       const int nreps = 10 ,
+	       const int max_iterations = 1000 ,
+	       const double threshold = 1e-6 ,
+	       const bool verbose = false )
+    : ks(ks),
+    normalize(normalize) ,
+    nreps(nreps) ,
+    max_iterations(max_iterations),
+    threshold(threshold) ,
+    verbose(verbose)
+  {
+    
+  }
+
+  modkmeans_all_out_t fit( const Data::Matrix<double> & );
+
+
+private:
+
+  modkmeans_out_t segmentation( const Data::Matrix<double> & X ,
+				int K , 
+				double const1 );
+  
+  
+  //
+  // Members
+  //
+
+  //Eigen::MatrixXd X;
+  Data::Matrix<double> X;
+  
+  // K to try
+  std::vector<int> ks;
+
+  // normalize EEG with average channel STD
+  bool normalize;
+
+  // # of times to randomly restart the algorithm (default = 10)
+  int nreps;
+
+  // (default 1000)
+  int max_iterations;
+
+  // default 1e-6
+  double threshold;
+
+  // not used:: always use CV
+  int fitmeas; // 0 = CV (default)
+  
+  bool verbose;
+
+  // optional smoothing; # sample on each side
+  int b; 
+
+  // smoothing weightt; def = 5  
+  double lambda;
+
+  //
+  // Outputs
+  //
+
+  
+  
+};
+
+
 
 #endif
+
+
+
+

@@ -814,8 +814,8 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   //
   // Check FS for all signals
   //
-
-  int fs = -1;
+  
+  double fs = -1;
   
   for (int s=0; s<ns; s++) 
     {
@@ -824,7 +824,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 	{
 	  if ( fs < 0 ) fs = header.sampling_freq( signals(s) );
 	  
-	  else if ( header.sampling_freq( signals(s) ) != fs ) 
+	  else if ( fabs( header.sampling_freq( signals(s) ) - fs ) > 1e-4 ) 
 	    Helper::halt( "MATRIX requires uniform sampling rate across signals" ); 
 	  
 	  ++ns_data;

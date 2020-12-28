@@ -129,7 +129,7 @@ namespace Statistics {
   Data::Vector<double> col_sums( const Data::Matrix<double> & );
 
   double mean( const Data::Vector<double> & );
-  double variance( const Data::Vector<double> & );
+  double variance( const Data::Vector<double> & , int w = 0 );
 
   Data::Vector<double> mean( const Data::Matrix<double> & );
   Data::Vector<double> min( const Data::Matrix<double> & );
@@ -141,6 +141,7 @@ namespace Statistics {
   Data::Vector<double> elem_sqrt( const Data::Vector<double> & );
   Data::Vector<double> unit_scale( const Data::Vector<double> & );
   Data::Vector<double> unit_scale( const Data::Vector<double> & , double min , double max );
+  Data::Matrix<double> unit_scale_cols( const Data::Matrix<double> & X );
   bool  minmax( const Data::Vector<double> & , double * min , double * max );
 
   Data::Vector<double> mean_center_cols( Data::Matrix<double> & d );

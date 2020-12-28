@@ -35,14 +35,190 @@ namespace dsptools
   void microstates( edf_t & edf , param_t & param );
 }
 
+
+struct ms_t {
   
+  // for a given clustering solution:
+
+  // for all sample-points::
+  std::vector<int> state; // 0 is missing / unknown
+  std::vector<bool> is_peak;
+
+  // fit 
+  Data::Matrix<double> means; // channels x clusters
+
+  // count of assignments (class --> # of points assigned)
+  std::map<int,int> counts;
+  
+};
+
+
+
+struct ms_assignment_t {
+  ms_assignment_t( int l , double g ) : label(l) , gmd(g) { } 
+  int label;
+  double gmd;
+
+  bool operator<( const ms_assignment_t & rhs ) const {
+    if ( gmd < rhs.gmd ) return true;
+    if ( gmd > rhs.gmd ) return false;
+    return label < rhs.label;			  
+  }
+
+};
+
+struct ms_assignments_t {
+
+  //ms_assignment_t( const int K ) { label.resize( K ); } 
+
+  // original, ordered values
+  std::set<ms_assignment_t> assignments;
+  void add( int l , double g )
+  {
+    assignments.insert( ms_assignment_t( l , g ) );
+  }
+
+  // populate ordered 
+  std::vector<int> picks;
+  void set_picks()
+  {
+    picks.clear();
+    std::set<ms_assignment_t>::const_iterator aa = assignments.begin();
+    while ( aa != assignments.end() )
+      {
+	picks.push_back( aa->label );
+	++aa;
+      }
+    // now done w/ assignments
+    assignments.clear();
+  }
+
+  // (circular) shift of labels (i.e. get next best) for smoothing
+  void shift()
+  {
+    const int n = picks.size();
+    std::vector<int> old = picks;
+    // shift current best to last
+    picks[ n-1 ] = picks[0]; 
+    // fill in the rest
+    for (int i=0; i<n-1; i++) picks[i] = old[i+1];
+  }
+
+  int best() const
+  {
+    return picks[0];
+  }
+    
+};
+
+struct ms_backfit_t {
+  ms_backfit_t( const int N ) { labels.resize(N); } 
+
+  // class to keep track of best (and 2nd, 3rd, etc) best picks, for each N
+  std::vector<ms_assignments_t> labels;
+
+  std::vector<int> best() const {
+    const int n = labels.size();
+    std::vector<int> L( n );
+    for (int i=0;i<n;i++) L[i] = labels[i].best();      
+    return L;
+  }
+  
+  // and also store full GMD for best class separately
+  Data::Matrix<double> GMD;
+
+};
+
+struct ms_rle_t {
+  std::vector<int> d;
+  std::vector<int> c;
+};
+
+struct ms_stats_t {
+  double s1;
+};
+
+
 struct microstates_t {
   
-  microstates_t( const Data::Matrix<double> & X , 
-		 const signal_list_t & signals , 
-		 const std::vector<int> & ks ); 
-     
-  Data::Vector<int> solution( const int k );
+  microstates_t( param_t & param );
+  
+  void segment( const Data::Matrix<double> & X , 
+		const signal_list_t & signals );
+
+  ms_backfit_t backfit( const Data::Matrix<double> & X_ ,
+			const Data::Matrix<double> & A_ ,
+			bool return_GMD );
+  
+
+  ms_backfit_t smooth_reject( const ms_backfit_t & labels ,
+			      int minTime  );  // in samples
+			      
+  ms_backfit_t smooth_windowed( const ms_backfit_t & labels ,
+				const Data::Matrix<double> & X_ ,
+				const Data::Matrix<double> & A_ ,
+				int smooth_width = 3 ,
+				double smooth_weight = 5 ,
+				int max_iterations = 1000 ,
+				double threshold = 1e-6 );
+
+  
+  ms_rle_t rle( const std::vector<int> & x );
+
+  
+  ms_stats_t stats( const Data::Matrix<double> & X ,
+		    const Data::Matrix<double> & A ,
+		    const std::vector<int> & L ,
+		    const int sr );
+
+  //  stats( Mstats = MicroStats(data,A,labels,settings.polarity,EEG.srate);
+
+
+		   
+  
+  static std::map<int,std::pair<int,double> > counts( const std::vector<int> & l )
+  {
+    // k --> N , %
+    const int n = l.size();
+    std::map<int,std::pair<int,double> > cnts;
+    for (int i=0; i<n; i++) cnts[ l[i] ].first++;
+    std::map<int,std::pair<int,double> >::iterator cc = cnts.begin();
+    while ( cc != cnts.end() )
+      {
+	cc->second.second = cc->second.first / (double)n;
+	++cc;
+      }
+    return cnts;      
+  }
+  
+  
+  //
+  // data members: solutions (keyed by number of classes)
+  //
+
+  std::map<int,ms_t> sol;
+  
+  //
+  // Options
+  //
+
+  // number of classes (vector)
+  std::vector<int> ks;
+
+  // dump GPF matrix prior to clustering?
+  std::string dump_file;
+  
+  bool standardize;
+
+  bool take_abs;
+
+  bool verbose;
+
+  double gfp_threshold;
+
+  int npeaks;
+  
+  double min_peak_dist;
 
 };
 

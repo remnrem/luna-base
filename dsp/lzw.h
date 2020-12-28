@@ -43,7 +43,8 @@ private:
 struct lzw_t 
 { 
   
-  //  lzw_t( const std::string & x , bool compress = true );
+  lzw_t( const std::string & x , double * );
+  lzw_t( const std::vector<int> & x , double * );
   lzw_t( const coarse_t & x );
   
   std::string decompress() { return decompress(compressed.begin(), compressed.end()); }

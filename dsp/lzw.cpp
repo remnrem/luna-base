@@ -220,5 +220,30 @@ lzw_t::lzw_t( const coarse_t & x )
 }
 
 
+lzw_t::lzw_t( const std::vector<int> & x , double * ratio )
+{
+  // use labels A, B, C, etc as states
+  // asssume x is 0 to 25
+  
+  std::string s( x.size() , '?' );
+  
+  for (int i=0; i<x.size(); i++)
+    {
+      if ( x[i] < 0 || x[i] > 25 )
+	Helper::halt( "bad state sequence in lzw_t() - cannot have more than 26 states" );
+      s[i] = (char)(65+x[i]);
+    }
+  std::cout << "s\n" << s << "\n";
+  std::vector<int> compressed;
+  compress( s , std::back_inserter(compressed));
+  *ratio = compressed.size() / (double)x.size();
+}
+
+lzw_t::lzw_t( const std::string & x , double * ratio )
+{
+  std::vector<int> compressed;
+  compress( x , std::back_inserter(compressed));
+  *ratio = compressed.size() / (double)x.size();
+}
 
 

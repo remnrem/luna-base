@@ -2416,13 +2416,13 @@ double Statistics::mean( const Data::Vector<double> & x )
 }
 
 
-double Statistics::variance( const Data::Vector<double> & x ) 
+double Statistics::variance( const Data::Vector<double> & x , int w ) 
 { 
   double m = mean(x);
   double ss = 0;
   const int n = x.size();
   for (int i=0;i<n;i++) ss += ( x[i] - m ) * ( x[i] - m );
-  ss /= (double)n;
+  ss /= (double)(n-w); // w is 0 by defailt
   return ss;
 }
 
@@ -2568,6 +2568,44 @@ Data::Vector<double> Statistics::unit_scale( const Data::Vector<double> & x )
   return r;
 }
 
+
+Data::Matrix<double> Statistics::unit_scale_cols( const Data::Matrix<double> & X )
+{
+  const int nr = X.dim1();
+  const int nc = X.dim2();
+
+  if ( nr == 0 || nc == 0 ) return X;
+
+  Data::Matrix<double> Y = X;
+
+  for (int c = 0; c < nc ; c++)
+    {
+      const Data::Vector<double> * col = X.col_pointer( c );
+      
+      double xmin = (*col)[0] , xmax = (*col)[0];
+
+      for (int i=0;i<nr;i++)
+	{
+	  if ( (*col)[i] < xmin ) xmin = (*col)[i];
+	  else if ( (*col)[i] > xmax ) xmax = (*col)[i];
+	}  
+
+      // scale
+      if ( xmin < xmax )
+	{
+	  for (int i=0;i<nr;i++)
+	    Y(i,c) = ( X(i,c) - xmin ) / ( xmax - xmin ) ;	      
+	}
+      else // set to 0
+	{
+	  for (int i=0;i<nr;i++)
+	    Y(i,c) = 0;
+	}
+
+    }
+
+  return Y;
+}
 
 double Statistics::anova( const Data::Vector<int> & y , const Data::Vector<double> & x )
 {

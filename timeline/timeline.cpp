@@ -2526,11 +2526,96 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
 }
 
 
+void timeline_t::annot2signal( const param_t & param )
+{
+  // create a new signal based on one or more annotations
+  if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
+  std::vector<std::string> anames = param.strvector( "annot" );
+
+  // SR of new signals
+  int sr = param.requires_int( "sr" );
+
+  // if not otherwise specified, use annot names as new channel labels
+  std::vector<std::string> labels = param.has( "label" ) ? param.strvector( "label" ) : anames;
+
+  if ( anames.size() != labels.size() )
+    Helper::halt( "label size does not match annot size" );
+  
+  // get whole signal size for this SR
+
+  const int np = sr * edf->header.record_duration * edf->header.nr;  
+
+  const uint64_t srtp = (1.0/sr) * globals::tp_1sec;
+
+  // create synthetic signal, 0/1 for presence/absence of the annotation
+  for (int a=0; a<anames.size(); a++)
+    {
+      // does annot exist?
+      annot_t * annot = edf->timeline.annotations( anames[a] );
+      if ( annot == NULL ) continue;
+
+      // get all events
+      const annot_map_t & events = annot->interval_events;
+
+      // new channel to be populated/added to EDF
+      std::vector<double> adat( np , 0 );
+
+      annot_map_t::const_iterator aa = events.begin();
+      while ( aa != events.end() )
+	{
+
+	  const interval_t & interval = aa->first.interval;
+	  
+	  // convert from time-points to (nearest) sample-points
+	  // (after removing the N+1 end point in annotations)
+	  
+	  int start = interval.start / srtp;
+	  int stop  = (interval.stop-1LLU) / srtp;
+	  
+	  if ( start < 0 || stop >= np )
+	    Helper::halt( "internal error in timeline_t::annot2signal()" );
+	  
+	  // populate (up to and including the start/stop, as we removed the final +1 TP above)
+	  for (int p=start; p<=stop; p++) adat[p] = true;
+
+	  // next annotation
+	  ++aa;
+	}
+
+      //
+      // track total time implicated
+      //
+      
+      int points = 0;
+      for (int i=0;i<adat.size();i++) if ( adat[i] > 0 ) ++points;
+      double seconds = points / sr;
+      int minutes = seconds / 60.0;
+      if ( minutes > 0 )
+	{
+	  seconds -= minutes * 60.0;
+	}
+
+      
+      //
+      // write as a new signal
+      //
+      
+      logger << "  adding " << events.size() << " "
+	     << anames[a] << " annotations (spanning ";
+      if ( minutes > 0 ) logger << minutes << " min " << seconds << " sec)";
+      else logger << seconds << " sec)";
+      logger << " as 0/1 signal " << labels[a] << "\n";
+      
+      edf->add_signal( labels[a]  , sr , adat );
+
+    }
+      
+}
+
 
 void timeline_t::list_spanning_annotations( const param_t & param )
 {
-  
-  
+    
   if ( mask_set ) 
     Helper::halt( "cannot run SPANNING with a MASK set... use RE" );
   

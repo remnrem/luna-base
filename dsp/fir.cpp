@@ -611,6 +611,8 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   const int ns = signals.size();
 
 
+  logger << "  filtering channel(s):";
+  
   //
   // Process each signal
   //
@@ -623,7 +625,9 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       //
       
       if ( edf.header.is_annotation_channel(s) ) continue;
-      
+
+      logger << " " << signals.label(s);
+
       apply_fir( edf , signals(s) , ftype , use_kaiser ? 1 : 2 ,
 		 ripple, tw ,
 		 f1 , f2 ,
@@ -631,7 +635,7 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
 		 use_fft , fir_file );
       
     }
-
+  logger << "\n";
 }
 
 
@@ -646,12 +650,6 @@ void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype ,
   
   interval_t interval = edf.timeline.wholetrace();
   
-  //
-  // Filter data
-  //
-  
-  logger << " filtering channel " << edf.header.label[ s ] << "\n";
-
   //
   // Pull entire signals out
   //

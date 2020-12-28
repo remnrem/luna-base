@@ -1105,8 +1105,6 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   int nr = np / Fs;
   np = nr * Fs;
 
-  std::cout << "nr, np = " << nr << " " << np << "\n";
-  
   if ( compressed ) 
     IN1.close();
   else
@@ -1972,7 +1970,7 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   //   rather than the sample rate per say
   
   const int n_samples = Fs < 0 ? -Fs : Fs * header.record_duration ;
-  
+
   if ( ndata == 0 ) 
     {
       logger << " **empty EDF, not going to add channel " << label << " **\n";
@@ -2009,24 +2007,26 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   
   int c = 0;
   int r = timeline.first_record();
-
+  
   while ( r != -1 ) 
     {
-
+      
+      ensure_loaded( r );
+      
       std::vector<int16_t> t(n_samples);
       
       for (int i=0;i<n_samples;i++) 
 	t[i] = edf_record_t::phys2dig( data[c++] , bv , os );
-      
+
       records.find(r)->second.add_data(t);
-      
+
       r = timeline.next_record(r);
+
     }
-    
+
   // add to header
   ++header.ns;
     
-
   header.bitvalue.push_back( bv );
   header.offset.push_back( os );
   
@@ -2356,7 +2356,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
       signals = header.signal_list( new_channel );
 
       // do we need to resample? 
-      
+    
       const int sig_sr = (int)header.sampling_freq( signals(0) );
       
       // resample sig, if needed (only one)
@@ -3924,7 +3924,9 @@ bool edf_t::basic_stats( param_t & param )
 	      writer.value( "MAX"  , max  );
 	      writer.value( "MIN"  , min  );	      
 	      writer.value( "MEAN" , mean );
-	      writer.value( "SKEW" , skew );
+
+	      if ( Helper::realnum( skew ) )
+		writer.value( "SKEW" , skew );
 
 	      if ( calc_median ) 
 		writer.value( "MEDIAN" , median );	      

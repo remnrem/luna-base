@@ -160,6 +160,7 @@ struct timeline_t
 
   void list_spanning_annotations( const param_t & param );
 
+  void annot2signal( const param_t & param );
 
   //
   // Hypnogram

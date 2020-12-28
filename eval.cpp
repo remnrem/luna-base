@@ -843,6 +843,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
       else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
+      else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
@@ -2010,6 +2011,12 @@ void proc_write_annots( edf_t & edf , param_t & param )
   edf.timeline.annotations.write( param.requires( "file" ) , param );
 }
 
+// A2S : make signbal from ANNOTS
+
+void proc_annot2signal( edf_t & edf , param_t & param )
+{
+  edf.timeline.annot2signal( param );
+}
 
 // ANNOTS : list all annotations
 
@@ -2778,6 +2785,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // fix delimiter to tab only for .annot
+  // default T --> tab-only=F is option to allow spaces  
   else if ( Helper::iequals( tok0 , "tab-only" ) )
     {
       globals::allow_space_delim = ! Helper::yesno( tok1 );

@@ -493,25 +493,71 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   
 
   //
-  // A simple epoch annotation file? (based on extension or NOT having # as first char
-  // i.e. no header).  These are not allowed for EDF+ files.
+  // A simple epoch annotation file? (based on extension)
+  // These are not allowed for EDF+ files.
   //
-
+  
   bool is_eannot = Helper::file_extension( f , "eannot" ) ;
-
+  bool is_annot = Helper::file_extension( f , "annot" ) ;
+  
   if ( is_eannot && ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) ) 
     Helper::halt( "cannot use .eannot files with (discontinuous) EDF+ files" );
-       
-  if ( ! is_eannot )
+
+  // otherwise, need to figure this out by looking at the file?
+  
+  if ( ! ( is_eannot || is_annot ) )
     {
       std::ifstream IN1( f.c_str() , std::ios::in );
-      std::string x;
-      Helper::safe_getline( IN1 , x );
-      if ( IN1.eof() ) return false;
+
+      while ( 1 )
+	{
+	  
+	  std::string x;
+	  Helper::safe_getline( IN1 , x );
+
+	  if ( IN1.eof() ) break;
+
+	  // no blank lines allowed for .eannot, so assume .annot if so
+	  // which is more flexible
+
+	  if ( x == "" )	    
+	    {
+	      is_eannot = false;
+	      is_annot = true;
+	      break;
+	    }
+	  
+	  // start w/ a # header?
+	  if ( x[0] != '#' )
+	    {
+	      is_eannot = false;
+	      is_annot = true;
+	      break;
+	    }
+	  
+	  // number of columns? (based on defined delimiters: either tab or tab/space
+	  std::vector<std::string> tok = Helper::parse( x , globals::allow_space_delim ? " \t" : "\t" );
+
+	  if ( tok.size() > 1 )
+	    {
+	      is_eannot = false;
+	      is_annot = true;	      
+	      break;
+	    }
+	}
+
       IN1.close();
-      if ( x == "" ) return false;
-      if ( x[0] != '#' ) is_eannot = true;
+
+      // hmm, not sure what this file is...
+      if ( is_annot == is_eannot )
+	Helper::halt( "unable to determine whether " + f + " is .annot or .eannot format" );
+      
     }
+
+
+  //
+  // parse as a simple .eannot file
+  // 
   
   if ( is_eannot )
     {
@@ -546,6 +592,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
     }
 
 
+  
+  
   //
   // Otherwise, this is an .annot file   
   //
