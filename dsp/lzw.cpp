@@ -233,7 +233,7 @@ lzw_t::lzw_t( const std::vector<int> & x , double * ratio )
 	Helper::halt( "bad state sequence in lzw_t() - cannot have more than 26 states" );
       s[i] = (char)(65+x[i]);
     }
-  std::cout << "s\n" << s << "\n";
+  
   std::vector<int> compressed;
   compress( s , std::back_inserter(compressed));
   *ratio = compressed.size() / (double)x.size();

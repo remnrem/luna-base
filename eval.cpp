@@ -892,7 +892,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
       
-      else if ( is( c, "MICROSTATES" ) )  proc_microstates( edf , param(c) );
+      else if ( is( c, "MS" ) )           proc_microstates( edf , param(c) );
 
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
@@ -1282,7 +1282,7 @@ void proc_resample( edf_t & edf , param_t & param )
 }
 
 
-// MICROSTATES
+// MS: microstate analysis
 void proc_microstates( edf_t & edf , param_t & param )
 {
   dsptools::microstates( edf , param );

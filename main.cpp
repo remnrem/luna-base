@@ -231,6 +231,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_cwt_design = false;
   bool cmdline_proc_pdlib      = false;
   bool cmdline_proc_psc        = false;
+  bool cmdline_proc_ms         = false;
   
   //
   // parse command line

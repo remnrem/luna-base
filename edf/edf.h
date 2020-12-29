@@ -176,11 +176,11 @@ struct edf_header_t
   std::string summary() const;
 
   std::set<int> read( FILE * file, edfz_t * edfz , const std::set<std::string> * inp_signals );
-  
+
   bool write( FILE * file );
   
   bool write( edfz_t * edfz );
-  
+
   int  signal( const std::string & s , bool silent = false );
 
   bool  has_signal( const std::string & s );
@@ -233,9 +233,7 @@ struct edf_header_t
     slist->signal_labels = signal_labels;    
   }
 
-  
-
-
+ 
 };
 
 
@@ -412,7 +410,7 @@ public:
   
   void drop_signal( const int s );
 
-  void add_signal( const std::string & label , const int n_samples , const std::vector<double> & data );
+  void add_signal( const std::string & label , const int n_samples , const std::vector<double> & data , double pmin = 0 , double pmax = 0 );
   
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
@@ -557,7 +555,7 @@ public:
   // Primary read modes
   //
 
-  bool attach( const std::string & f , const std::string & id , const std::set<std::string> * inp_signals = NULL );
+  bool attach( const std::string & f , const std::string & id , const std::set<std::string> * inp_signals = NULL , const bool silent = false );
   
   bool read_records( int r , int r2 );
 
@@ -574,7 +572,17 @@ public:
 			const std::string & startdate = "01.01.00", 
 			const std::string & starttime = "00.00.00" 
 			) ;
-    
+
+
+  //
+  // Utility to append to an EDF (static function)
+  //
+
+  
+  static bool append( const std::string & filename ,
+		      const std::vector<std::string> & channels ,
+		      const std::vector<std::vector<std::vector<double> > > & data );
+
 
   //
   // EDF vs EDF+

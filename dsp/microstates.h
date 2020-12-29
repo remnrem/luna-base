@@ -29,6 +29,7 @@ struct signal_list_t;
 
 #include <vector>
 #include "stats/matrix.h"
+#include "edf/signal-list.h"
 
 namespace dsptools
 {
@@ -36,21 +37,48 @@ namespace dsptools
 }
 
 
-struct ms_t {
+struct ms_prototypes_t {
+
+  // CH1 A1 A2 .. AK
+  // CH2 A1 A2 .. AK
+
+  ms_prototypes_t() { }
   
-  // for a given clustering solution:
-
-  // for all sample-points::
-  std::vector<int> state; // 0 is missing / unknown
-  std::vector<bool> is_peak;
-
-  // fit 
-  Data::Matrix<double> means; // channels x clusters
-
-  // count of assignments (class --> # of points assigned)
-  std::map<int,int> counts;
+  ms_prototypes_t( const signal_list_t & signals , const Data::Matrix<double> A_ )
+  {
+    A = A_;
+    C = signals.size();
+    K = A_.dim2();
+    if ( A_.dim1() != C ) Helper::halt( "internal inconsistency in ms_prototypes_t()" );    
+    chs.resize( C );
+    for (int s=0;s<C; s++) chs[s] = signals.label(s);
+  }
+		   
+  void write( const std::string & filename );
+  void read( const std::string & filename );
   
+  int K;
+  int C;
+  std::vector<std::string> chs; // C
+  Data::Matrix<double> A; // C x K
 };
+
+
+/* struct ms_t { */
+  
+/*   // for a given clustering solution: */
+
+/*   // for all sample-points:: */
+/*   std::vector<int> state; // 0 is missing / unknown */
+/*   std::vector<bool> is_peak; */
+
+/*   // fit  */
+/*   Data::Matrix<double> means; // channels x clusters */
+
+/*   // count of assignments (class --> # of points assigned) */
+/*   std::map<int,int> counts; */
+  
+/* }; */
 
 
 
@@ -135,25 +163,71 @@ struct ms_rle_t {
 };
 
 struct ms_stats_t {
-  double s1;
+
+  // global statistics
+  double GEV_tot;
+
+  Data::Vector<double> GFP;
+
+  Data::Vector<double> m_gfp;
+  Data::Vector<double> m_dur;
+  Data::Vector<double> m_occ;
+  Data::Vector<double> m_cov;
+  Data::Vector<double> m_gev;
+  Data::Vector<double> m_spc;
+
+  // transition probs
+  Data::Matrix<double> tr;
+
+  // LWZ complexity
+  double lwz_points, lwz_states;
+
+  // k-mers
+  
+  // ....
+  
+
 };
 
 
+struct ms_kmer_t {
+  ms_kmer_t( const std::vector<int> & l , int k1 , int k2 );
+  void shuffle( const int rep );
+  std::vector<std::string> permute( std::string str );
+  std::string s;
+  std::map<std::string,int> obs;  
+  std::map<std::string,int> zobs;
+};
+
 struct microstates_t {
   
-  microstates_t( param_t & param );
+  microstates_t( param_t & param , const int sr_ );
   
-  void segment( const Data::Matrix<double> & X , 
-		const signal_list_t & signals );
+  std::vector<int>  find_peaks( const Data::Matrix<double> & X , 
+				const signal_list_t & signals );
 
+  // track whether a header has been written or not yet, from aggrgetae2edf()
+  static bool wrote_header;
+  
+  static void aggregate2edf( const Data::Matrix<double> & X ,
+			     const signal_list_t & signals ,
+			     const std::vector<int> & peak_idx ,	
+			     const int srate ,
+			     const double pmin , const double pmax ,
+			     const std::string & edfname );
+
+  
+  ms_prototypes_t  segment( const Data::Matrix<double> & X , 
+			    const signal_list_t & signals ,
+			    const std::vector<int> & peaks );
+  
   ms_backfit_t backfit( const Data::Matrix<double> & X_ ,
 			const Data::Matrix<double> & A_ ,
 			bool return_GMD );
   
-
   ms_backfit_t smooth_reject( const ms_backfit_t & labels ,
 			      int minTime  );  // in samples
-			      
+  
   ms_backfit_t smooth_windowed( const ms_backfit_t & labels ,
 				const Data::Matrix<double> & X_ ,
 				const Data::Matrix<double> & A_ ,
@@ -161,20 +235,12 @@ struct microstates_t {
 				double smooth_weight = 5 ,
 				int max_iterations = 1000 ,
 				double threshold = 1e-6 );
-
   
   ms_rle_t rle( const std::vector<int> & x );
 
-  
   ms_stats_t stats( const Data::Matrix<double> & X ,
 		    const Data::Matrix<double> & A ,
-		    const std::vector<int> & L ,
-		    const int sr );
-
-  //  stats( Mstats = MicroStats(data,A,labels,settings.polarity,EEG.srate);
-
-
-		   
+		    const std::vector<int> & L );
   
   static std::map<int,std::pair<int,double> > counts( const std::vector<int> & l )
   {
@@ -192,11 +258,11 @@ struct microstates_t {
   }
   
   
-  //
-  // data members: solutions (keyed by number of classes)
-  //
+  /* // */
+  /* // data members: solutions (keyed by number of classes) */
+  /* // */
+  /* std::map<int,ms_t> sol; */
 
-  std::map<int,ms_t> sol;
   
   //
   // Options
@@ -205,18 +271,27 @@ struct microstates_t {
   // number of classes (vector)
   std::vector<int> ks;
 
+  // sample rate
+  int sr;
+  
+  // modes
+  bool single_sample; // find peaks, segment, backfit, smooth, calc stats
+  bool multi_peaks;   // aggregate peaks across EDFs
+  bool multi_segment; // fit to a single EDF (but that contains peaks from all)
+  bool multi_backfit; // apply the above solution to all EDFs
+  
+  // misc options
+
   // dump GPF matrix prior to clustering?
   std::string dump_file;
-  
+
   bool standardize;
-
-  bool take_abs;
-
+  
   bool verbose;
-
+  
   double gfp_threshold;
-
-  int npeaks;
+  
+  int restrict_npeaks;
   
   double min_peak_dist;
 

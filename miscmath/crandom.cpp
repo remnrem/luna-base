@@ -109,3 +109,27 @@ int CRandom::rand (int n)
   return r;
 }
 
+
+//
+// Yates-Fisher shuffle
+//
+
+void CRandom::random_draw( std::vector<int> & a )
+{
+  
+  // Generate a random permutation of 0 to n-1 where n is a.size(),
+  // using Fisher-Yates shuffle.
+  
+  const int n = a.size( ) ;  
+  for( int i = 0; i < n; i++ )
+    a[ i ] = i;
+
+  int tmp;
+  for( int i = n; i > 1;  i-- )
+    {
+      int j = CRandom::rand(i);
+      tmp = a[i-1];
+      a[i-1] = a[j];
+      a[j] = tmp;
+    }
+}

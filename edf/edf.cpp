@@ -1229,7 +1229,8 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
 
 bool edf_t::attach( const std::string & f , 
 		    const std::string & i , 
-		    const std::set<std::string> * inp_signals )
+		    const std::set<std::string> * inp_signals ,
+		    const bool silent )
 {
   
   //
@@ -1399,29 +1400,32 @@ bool edf_t::attach( const std::string & f ,
   // Output some basic information
   //
 
-  logger << " duration: " << Helper::timestring( timeline.total_duration_tp , '.' , false )  // not fractional
-	 << " | " << timeline.total_duration_tp * globals::tp_duration << " secs";
-
-  clocktime_t et( header.starttime );
-  if ( et.valid )
+  if ( ! silent ) 
     {
-      double time_hrs = ( timeline.last_time_point_tp * globals::tp_duration ) / 3600.0 ;
-      et.advance( time_hrs );
-      logger << " ( clocktime " << header.starttime << " - " << et.as_string() << " )";
+      logger << " duration: " << Helper::timestring( timeline.total_duration_tp , '.' , false )  // not fractional
+	     << " | " << timeline.total_duration_tp * globals::tp_duration << " secs";
+      
+      clocktime_t et( header.starttime );
+      if ( et.valid )
+	{
+	  double time_hrs = ( timeline.last_time_point_tp * globals::tp_duration ) / 3600.0 ;
+	  et.advance( time_hrs );
+	  logger << " ( clocktime " << header.starttime << " - " << et.as_string() << " )";
+	}
+      logger << "\n";
+      
+      //	 << " hms, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hms after start\n";
+      
+      if ( globals::verbose )
+	logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
+      
+      logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
+      logger << "in " << ( header.edfplus ? "an EDF+" : "a standard EDF" ) << " file:" ;
+      for (int s=0;s<header.ns;s++) 
+	logger << ( s % 8 == 0 ? "\n  " : " | " ) << header.label[s]; 
+      logger << "\n";
     }
-  logger << "\n";
   
-  //	 << " hms, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hms after start\n";
-
-  if ( globals::verbose )
-    logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
-  
-  logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
-  logger << "in " << ( header.edfplus ? "an EDF+" : "a standard EDF" ) << " file:" ;
-  for (int s=0;s<header.ns;s++) 
-    logger << ( s % 8 == 0 ? "\n  " : " | " ) << header.label[s]; 
-  logger << "\n";
-
   return true;
 
 }
@@ -1958,8 +1962,9 @@ void edf_record_t::drop( const int s )
 //   pdata.erase( pdata.begin() + s );
 }
 
-void edf_t::add_signal( const std::string & label , const int Fs , const std::vector<double> & data )
+void edf_t::add_signal( const std::string & label , const int Fs , const std::vector<double> & data , double pmin , double pmax )
 {
+
   const int ndata = data.size();
 
   // normally, n_samples is Fs * record length.
@@ -1977,25 +1982,32 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
       return;
     }
 
-  //  std::cout << "nd = " << ndata << " " << header.nr << " " << n_samples << "\n";
+  //    std::cout << "nd = " << ndata << " " << header.nr << " " << n_samples << "\n";
 
   // sanity check -- ie. require that the data is an appropriate length
   if ( ndata != header.nr * n_samples ) 
     Helper::halt( "internal error: problem with length of input data" );  
 
-  // get physical signal min/max to determine scaling
+  //
+  // if not othewise specified, get physical signal min/max to determine scaling
+  //
   
-  double pmin = data[0];
-  double pmax = data[0];
+  if ( pmin == pmax ) 
+    {      
+      pmin = data[0];
+      pmax = data[0];
   
-  for (int i=1;i<ndata;i++) 
-    {
-      if      ( data[i] < pmin ) pmin = data[i];
-      else if ( data[i] > pmax ) pmax = data[i];
+      for (int i=1;i<ndata;i++) 
+	{
+	  if      ( data[i] < pmin ) pmin = data[i];
+	  else if ( data[i] > pmax ) pmax = data[i];
+	}
     }
 
+  //
   // determine bitvalue and offset
-
+  //
+  
   //header
   const int16_t dmax = 32767;
   const int16_t dmin = -32768;
@@ -4530,3 +4542,212 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
   writer.unlevel( "CS" );
   
 }
+
+
+
+
+bool edf_t::append( const std::string & filename , 
+		    const std::vector<std::string> & channels , 
+		    const std::vector<std::vector<std::vector<double> > > & data ) 
+{
+
+  // data[rec][channels][samples]
+  
+  if ( channels.size() == 0 ) return false;
+  if ( data.size() == 0 ) return false;
+
+  //
+  // Read header of the original (base) EDF
+  //
+
+  edf_t base;
+
+  base.attach( filename , "." , NULL , true ); // true implies silent mode (no console logs)
+  
+  //
+  // Check this is not EDFZ
+  //
+  
+  if ( base.edfz )
+    Helper::halt( "cannot append to EDFZ" );
+
+  
+  //
+  // key measures
+  //
+  //  base.header.ns      # of signals
+  //  base.header.nr      # of records (will be increased)
+  //  base.header.recdur  # irrelevant
+
+  //  base.header.label[i]       hannel label, should match EXACTLY data[r].first
+  //  base.header.n_samples[i]   # samples per reccord for signal i, should match data[r][s].size() 
+
+  const int n_new_records = data.size();
+
+  //
+  // Check all channels exist, and have correct n_samples[]
+  //
+
+  if ( base.header.ns != channels.size() )
+    Helper::halt( "must have exactly same set of channels to append to an EDF" );
+  
+  for (int s=0; s<base.header.ns; s++)
+    if ( channels[s] != base.header.label[s] )
+      Helper::halt( "must have exactly the same order of channels to append to an EDF" );
+  
+  //
+  // Just check first record, but **assume** all records have the same length (will be checked when writing)
+  //
+
+  if ( data[0].size() != base.header.ns )
+    Helper::halt( "data[] must exactly match EDF # of channels" );
+
+  for (int s=0; s < base.header.ns; s++)
+    if ( data[0][s].size() != base.header.n_samples[s] )
+      Helper::halt( "data[] must have exactly the same # of samples per record to append" );
+
+  //
+  // Store key values
+  //
+
+  const int orig_nr = base.header.nr;
+  const int orig_ns = base.header.ns;
+  const std::vector<std::string> orig_label = base.header.label;
+  const std::vector<double> orig_physical_min = base.header.physical_min;
+  const std::vector<double> orig_physical_max = base.header.physical_max;
+  const std::vector<int> orig_digital_min = base.header.digital_min;
+  const std::vector<int> orig_digital_max = base.header.digital_max;
+  const std::vector<int> orig_nsamples = base.header.n_samples;
+
+  //
+  // All looks okay, so close original
+  //
+
+  base.init();
+
+  //
+  // Re-open for reading and writing 
+  //
+
+  FILE * mergefile = NULL;
+    
+  if ( ( mergefile = fopen( filename.c_str() , "rb+" ) ) == NULL )
+    Helper::halt( "problem opening " + filename + " to edit header" );
+
+  //
+  // Update NR in headar
+  //
+
+  std::string c = Helper::int2str( n_new_records + orig_nr );
+  c.resize(8,' ');
+  fseek( mergefile , 236 , SEEK_SET );  
+  fwrite( c.data() , 1 , 8 , mergefile );
+  
+  //
+  // Go to end of file 
+  //
+
+  fseek( mergefile , 0, SEEK_END); 
+
+  const int nr = data.size();
+
+  //
+  // Precompute EDF offset/bv
+  //
+
+  std::vector<double> bv( orig_ns );
+  std::vector<double> os( orig_ns );
+
+  for (int s=0; s<orig_ns; s++)
+    {      
+      bv[s] = ( orig_physical_max[s] - orig_physical_min[s] ) / (double)( orig_digital_max[s] - orig_digital_min[s] );
+      os[s] = ( orig_physical_max[s] / bv[s] ) - orig_digital_max[s];
+    }
+
+  //
+  // Iterate over records
+  //
+  std::map<std::string,int> clippings;
+  
+  for (int r = 0 ; r < nr ; r++ )
+    {
+      
+      for (int s=0;s<orig_ns;s++)
+	{
+
+	  const int nsamples = orig_nsamples[s];
+
+	  const std::vector<double> & d = data[r][s];
+	  
+	  if ( d.size() != nsamples ) Helper::halt( "hmm... internal error in append()" );
+
+	  const double pmin = orig_physical_min[s] ;
+	  const double pmax = orig_physical_max[s] ;
+	  
+	  for (int j=0;j<nsamples;j++)
+	    {
+
+	      double pvalue = d[j];
+
+	      //
+	      // range checking
+	      //
+	      
+	      if ( pvalue < pmin )
+		{
+		  ++clippings[ orig_label[s] ];
+		  pvalue = pmin;
+		}
+	      else if ( pvalue > pmax )
+		{
+		  ++clippings[ orig_label[s] ];
+		  pvalue = pmax;
+		}
+
+	      //
+	      // physical --> digital scaling [ double --> int16_t ] 
+	      //
+	      
+	      int16_t dvalue = edf_record_t::phys2dig( pvalue , bv[s] , os[s] );
+
+	      //
+	      // write in little-endian
+	      //
+	      
+	      char a , b;
+              edf_record_t::dec2tc( dvalue , &a, &b );	      
+              fputc( a , mergefile );
+              fputc( b , mergefile );
+
+
+	    } // next sample
+	} // next channel
+    } // next record
+
+
+  //
+  // warnings?
+  //
+
+  if ( clippings.size() > 0 )
+    {
+      logger << "  *** warning: physical values outside of EDF-header specified physical min/max ranges:\n";
+      std::map<std::string,int>::const_iterator cc = clippings.begin();
+      while ( cc != clippings.end() )
+	{
+	  logger << "   " << cc->second << " samples for " << cc->first << "\n";
+	  ++cc;
+	}
+    }
+  
+  //
+  // all done, close up the file 
+  //
+
+  fclose( mergefile );
+
+  logger << "  appended " << n_new_records << " to " << filename << ", and updated header\n";
+
+  return true;
+}
+

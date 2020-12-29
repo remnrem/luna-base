@@ -51,6 +51,9 @@ class CRandom
   static void srand(long unsigned iseed = 0);
   static double rand();
   static int rand (int);
+
+  static void random_draw( std::vector<int> & );
+
   
 };
 
