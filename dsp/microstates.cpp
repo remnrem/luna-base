@@ -255,14 +255,14 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 
 
   
-  std::map<int,std::pair<int,double> >::const_iterator cc = cnts.begin();
-  while ( cc != cnts.end() )
-    {
-      std::cout << cc->first << "\t"
-		<< cc->second.first << "\t"
-		<< cc->second.second << "\n";
-      ++cc;
-    }
+  // std::map<int,std::pair<int,double> >::const_iterator cc = cnts.begin();
+  // while ( cc != cnts.end() )
+  //   {
+  //     std::cout << cc->first << "\t"
+  // 		<< cc->second.first << "\t"
+  // 		<< cc->second.second << "\n";
+  //     ++cc;
+  //   }
   
   
   
@@ -997,15 +997,24 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   // k-mer distributions
   //
 
-  ms_kmer_t kmers( runs.d , 2 , 6 );
+  ms_kmer_t kmers( runs.d , 2 , 6 , 500 );
 
+  std::map<std::string,double>::const_iterator pp = kmers.pvals.begin();
+  while ( pp != kmers.pvals.end() )
+    {
+      std::cout << pp->first << "\t"
+		<< pp->first.size() << "\t"
+		<< kmers.obs[ pp->first ] << "\t"
+		<< pp->second << "\n";
+      ++pp;
+    }  
    
   return stats;
 }
 
 
 
-ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 )
+ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
 {
 
   // ensure bounded if using this naive algorithm
@@ -1014,6 +1023,7 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 )
 
   // Encode as A, B, C, ...
   const int n = l.size();
+
   s = std::string( n , '?' );
   for (int i=0; i<n; i++) s[i] = (char)(65 + l[i] ); 
        
@@ -1021,67 +1031,168 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 )
     for (int j=k1; j<=k2; j++)
       if ( i+j < n ) ++obs[ s.substr( i , j ) ];
 
+  // for each unique sequence, find the equivalance group:
+  //  the other sequences with the same number of each state, and with no
+  //  matching contiguous states (i.e. as the original sequences will not have this feature)
+
+  // label each equivalance group by the first sorted value 
+  // then permute data, and count the max # of times a
+
+  // observed -->  equiv group key.  e.g.  BCA --> ABC
+  std::map<std::string,std::string> obs2equiv;
   
-  // std::map<std::string,int>::const_iterator cc = obs.begin();
-  // while ( cc != obs.end() )
-  //   {
-  //     std::cout << cc->first << "\t" << cc->second << "\n";
-      
-  //     std::vector<std::string> perms = permute( cc->first );
-  //     std::cout << "  " << perms.size() << " perms: ";
-  //     for (int p=0; p<perms.size(); p++)
-  // 	std::cout << " " << perms[p] ;
-  //     std::cout << "\n";
-      
-  //     ++cc;
-  //   }
+  std::map<std::string,int>::const_iterator cc = obs.begin();
+  while ( cc != obs.end() )
+    {
+      std::string str = cc->first;
+      std::string key = first_permute( str );
+      obs2equiv[ str ] = key;
+      ++cc;
+    }
 
-  //  std::cout << "found " << obs.size() << " distinct kmers\n";
+  // equiv group key --> all members e.g.  ABC -->  ABC, ACB, BAC, BCA, CAB, CBA
+  std::map<std::string,std::set<std::string> > equivs;
 
+  std::map<std::string,std::string>::const_iterator ee = obs2equiv.begin();
+  int tot = 0;
+  while ( ee != obs2equiv.end() )
+    {
+      // based just on the keys, get the corresponding equiv. group
+      equivs[ ee->second ] = permute( ee->second );
+      tot += equivs[ ee->second ].size();
+      ++ee;
+    }
+  
+  
+  logger << "  for " << obs.size() << " sequences, " << equivs.size() << " equivalence groups, " << tot << " total sequences\n";
+
+  //
+  // Permute: for each equiv group, what is the highest # of occurrecnes of a given sequence?  Compare each observed to that (based on their
+  // equivalence group)
+  //
+
+  pvals.clear();
+
+  std::map<std::string,int>::const_iterator oo = obs.begin();
+  while ( oo != obs.end() )
+    {
+      pvals[ oo->first ] = 0;
+      ++oo;
+    }
+  
+  
+  std::map<std::string,double> sum, sumsq;
+  
+  for (int r = 0 ; r < nreps ; r++)
+    {
+      logger << "  replicate " << r+1 << " of " << nreps << "\n";
+
+      // make up a random sequence
+      std::vector<int> a( n );
+      CRandom::random_draw( a );
+      std::string ps = std::string( n , '?' );
+      for (int i=0; i<n; i++) ps[i] = (char)(65 + l[a[i]] ); 
+
+      // count kmers
+      std::map<std::string,int> pobs;
+      for (int i=0; i<n; i++)
+	for (int j=k1; j<=k2; j++)
+	  if ( i+j < n ) ++pobs[ ps.substr( i , j ) ];
+
+      // for each equivalance group, get max count
+      std::map<std::string,int> pbest;
+      std::map<std::string,std::set<std::string> >::const_iterator pp = equivs.begin();
+      while ( pp != equivs.end() )
+	{
+	  int mx = 0;
+	  const std::set<std::string>  & eqs = pp->second;
+	  std::set<std::string>::const_iterator ee = eqs.begin();
+	  while ( ee != eqs.end() )
+	    {	      
+	      if ( pobs[ *ee ] > mx ) mx = pobs[ *ee ];
+	      ++ee;
+	    }
+
+	  pbest[ pp->first ] = mx;
+	  ++pp;
+	}
+
+      // now compare each observed sequence to its equivalence group's permuted best
+
+      std::map<std::string,int>::const_iterator oo = obs.begin();
+      while ( oo != obs.end() )
+	{
+	  if ( pbest[ obs2equiv[ oo->first ] ] >= oo->second ) ++pvals[ oo->first ];
+	  ++oo;
+	}      
+
+      // also just get simple means of expected # of occurrences
+      
+      
+    } // next replicate
+
+
+  // standardize p-values
+
+  std::map<std::string,double>::iterator pp = pvals.begin();
+  while ( pp != pvals.end() )
+    {
+      pp->second = ( 1 + pp->second ) / (double)( 1 + nreps );
+      ++pp;
+    }
+
+  // caller can now look at this->pvals
+  
   // https://math.stackexchange.com/questions/220521/expected-number-of-times-random-substring-occurs-inside-of-larger-random-string
   // https://www.nature.com/articles/s41598-018-33433-8
 
   // compare to max of each permutation group
   //  i.e. if ABCD  then all permutations of A,B,C and D
-
-  
   
 }
- 
-// Function to print permutations of string str,
-// out is used to store permutations one by one
-std::vector<std::string> ms_kmer_t::permute( std::string str )
+
+
+
+std::string ms_kmer_t::first_permute( std::string str )
 {
-  std::vector<std::string> perms;
-  if ( str.size() == 0) return perms;
+  const int n = str.size();
   std::sort( str.begin() , str.end() );
-  do { perms.push_back( str ); }
+  do {
+    // do not include permutations with similar contiguous blocks
+    // as originals will never have this feature
+    bool okay = true;
+    for (int i=1;i<n;i++)
+      if ( str[i-1] == str[i] )
+	{ okay = false; break; }
+    if ( okay ) return str;
+  }
+  while ( next_permutation( str.begin() , str.end() ) );
+  // should not happen, i.e. str should always be a possible first key
+  // if no similar contiguous states
+  Helper::halt( "invalid sequence given" );
+  return "";
+
+}
+
+std::set<std::string> ms_kmer_t::permute( std::string str )
+{
+  std::set<std::string> perms;
+  if ( str.size() == 0) return perms;
+  const int n = str.size();
+  std::sort( str.begin() , str.end() );
+  do {
+    // do not include permutations with similar contiguous blocks
+    // as originals will never have this feature
+    bool okay = true;
+    for (int i=1;i<n;i++)
+      if ( str[i-1] == str[i] )
+	{ okay = false; break; }
+    if ( okay ) perms.insert( str );    
+  }
   while ( next_permutation( str.begin() , str.end() ) );
   return perms;
 }
  
-
-
-void ms_kmer_t::shuffle( const int rep )
-{
-
-
-  if ( obs.size() == 0 ) return;
-
-  // use 'rep' random replicates, fully shuffling the sequences, to
-  // generate the null distribution of kmers expected by chance and
-  // compare to what we observed
-
-  for (int r = 0 ; r < rep ; r++)
-    {
-
-      std::vector<int> a;
-    }
-  
-}
-
-
-
 
   
 void ms_prototypes_t::write( const std::string & filename )

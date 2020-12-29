@@ -191,12 +191,14 @@ struct ms_stats_t {
 
 
 struct ms_kmer_t {
-  ms_kmer_t( const std::vector<int> & l , int k1 , int k2 );
-  void shuffle( const int rep );
-  std::vector<std::string> permute( std::string str );
+  ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps );
+  std::set<std::string> permute( std::string str );
+  std::string first_permute( std::string str );
   std::string s;
   std::map<std::string,int> obs;  
-  std::map<std::string,int> zobs;
+  std::map<std::string,double> pexp;
+  std::map<std::string,double> psd;  
+  std::map<std::string,double> pvals;
 };
 
 struct microstates_t {

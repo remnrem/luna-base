@@ -1488,6 +1488,32 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       ctest();
       std::exit(0);
     }
+
+  if ( p == "kmer" )
+    {
+      std::vector<int> x;
+      while ( ! std::cin.eof() )
+	{
+	  int i;
+	  std::cin >> i;
+	  if ( std::cin.eof() ) break;
+	  x.push_back(i);
+	}
+
+      ms_kmer_t kmers( x , 2 , 6 , 50000 );
+	
+      std::map<std::string,double>::const_iterator pp = kmers.pvals.begin();
+      while ( pp != kmers.pvals.end() )
+	{
+	  std::cout << pp->first << "\t"
+		    << pp->first.size() << "\t"
+		    << kmers.obs[ pp->first ] << "\t"
+		    << pp->second << "\n";
+	  ++pp;
+	}
+      
+      std::exit(1);
+    }
   
   if ( p == "cmddefs" ) 
     {
