@@ -59,6 +59,8 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   // if none of the above three optinos, assume single-sample mode
   bool single_sample = ! ( multi_peaks || multi_segment || multi_backfit );
 
+  bool skip_peaks = param.has( "all-points" );
+
   
   //
   // Which channels
@@ -105,7 +107,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 
   std::vector<int> peaks;
   
-  if ( single_sample || multi_peaks )
+  if ( ( single_sample && ! skip_peaks ) || multi_peaks )
     {
       logger << "  find GPF peaks\n";
       peaks = mstates.find_peaks( X , signals );      
@@ -302,6 +304,9 @@ microstates_t::microstates_t( param_t & param , const int sr_ )
   standardize = param.has( "standardize" );
   
   verbose = param.has( "verbose" );
+
+  // all points (i.e. just just GFP peaks)
+  skip_peaks = param.has( "all-points" );
   
   // reject peaks > T times std(GFP) above the mean GFP if T>0 
   gfp_threshold = param.has( "gfp-th" ) ? param.requires_dbl( "gfp-th" ) : 0 ;
@@ -482,7 +487,7 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
   // Modified K-Means clustering for microstates
   //
 
-  modkmeans_t kmeans( ks );
+  modkmeans_t kmeans( ks , false , 10 , 1000 , 1e-6 , verbose );
 
   // modkmeans_t( const std::vector<int> & ks ,
   // 	       const bool normalize = false ,
@@ -997,18 +1002,48 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   // k-mer distributions
   //
 
-  ms_kmer_t kmers( runs.d , 2 , 6 , 500 );
+  ms_kmer_t kmers( runs.d , 2 , 4 , 1000 );
 
   std::map<std::string,double>::const_iterator pp = kmers.pvals.begin();
   while ( pp != kmers.pvals.end() )
     {
       std::cout << pp->first << "\t"
 		<< pp->first.size() << "\t"
-		<< kmers.obs[ pp->first ] << "\t"
-		<< pp->second << "\n";
+
+		<< kmers.obs2equiv[ pp->first ] << " "
+		<< kmers.equiv_set_size[ pp->first ] << "\t"
+	
+		<< kmers.obs[ pp->first ] << " "
+		<< kmers.pexp[ pp->first ] << "\t"
+		<< pp->second << " "
+		       
+		<< kmers.orel[ pp->first ] << " "		
+		<< kmers.pexp_equiv[ pp->first ] << " "
+		<< kmers.pvals_equiv[ pp->first ] << "\n";
       ++pp;
     }  
-   
+
+
+
+  // show equivalance classes
+  // pp = kmers.pvals.begin();
+  // while ( pp != kmers.pvals.end() )
+  //   {
+  //     std::string equiv = kmers.obs2equiv.find( pp->first )->second;
+  //     const std::set<std::string> & eqs = kmers.equivs.find( equiv )->second;
+  //     std::cout << pp->first << " --> " << equiv << "\n";
+  //     std::set<std::string>::const_iterator cc = eqs.begin();
+  //     while ( cc != eqs.end() )
+  // 	{
+  // 	  std::cout << " " << *cc ;
+  // 	  ++cc;
+  // 	}
+  //     std::cout << "\n";
+  //     ++pp;
+  //   }
+
+  
+  
   return stats;
 }
 
@@ -1039,7 +1074,7 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
   // then permute data, and count the max # of times a
 
   // observed -->  equiv group key.  e.g.  BCA --> ABC
-  std::map<std::string,std::string> obs2equiv;
+  obs2equiv.clear();
   
   std::map<std::string,int>::const_iterator cc = obs.begin();
   while ( cc != obs.end() )
@@ -1051,19 +1086,40 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
     }
 
   // equiv group key --> all members e.g.  ABC -->  ABC, ACB, BAC, BCA, CAB, CBA
-  std::map<std::string,std::set<std::string> > equivs;
-
+  equivs.clear();
+  orel.clear(); // tracked observed obs / group-obs ratio
+  
   std::map<std::string,std::string>::const_iterator ee = obs2equiv.begin();
   int tot = 0;
   while ( ee != obs2equiv.end() )
     {
       // based just on the keys, get the corresponding equiv. group
       equivs[ ee->second ] = permute( ee->second );
+
+      // for convenienc of output, track size of equiv set directly
+      equiv_set_size[ ee->first ] = equivs[ ee->second ].size();
+      std::cout << "MAIN = " <<  ee->first << " --> " << ee->second << "\n";
+
+      // orel stats : obs / obs-group 
+      const std::set<std::string> & s = equivs[ ee->second ];
+      std::set<std::string>::const_iterator qq = s.begin();
+      while ( qq != s.end() )
+	{
+	  std::cout << " adding " << *qq << " " << obs[*qq ] << "\n";
+	  orel[ ee->first ] += obs[ *qq ];
+	  ++qq;
+	}
+      
+      std::cout << " OREL = " << " " << obs[ ee->first ] << " / " << orel[ ee->first ] ;
+      orel[ ee->first ] = obs[ ee->first ] / orel[ ee->first ];
+      std::cout << " = " << orel[ ee->first ] << "\n";
+
+      
+      // and track for output
       tot += equivs[ ee->second ].size();
       ++ee;
     }
-  
-  
+    
   logger << "  for " << obs.size() << " sequences, " << equivs.size() << " equivalence groups, " << tot << " total sequences\n";
 
   //
@@ -1071,49 +1127,63 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
   // equivalence group)
   //
 
-  pvals.clear();
+  pvals.clear();           // nominal p-value for that sequence
+  pvals_equiv.clear();     // based on max count of all in the equivalance set... do as ratio, i.e. to condition on total of set counts?
 
   std::map<std::string,int>::const_iterator oo = obs.begin();
   while ( oo != obs.end() )
     {
       pvals[ oo->first ] = 0;
+      pvals_equiv[ oo->first ] = 0;
       ++oo;
     }
   
+
+  // track expected counts (of that sequence, and of the most common sequence in its
+  // equivalence set)
   
-  std::map<std::string,double> sum, sumsq;
+  pexp.clear();
+  pexp_equiv.clear();  
   
   for (int r = 0 ; r < nreps ; r++)
     {
       logger << "  replicate " << r+1 << " of " << nreps << "\n";
 
-      // make up a random sequence
-      std::vector<int> a( n );
-      CRandom::random_draw( a );
+      // rather than standard CRandom::random_draw(), this ensures
+      // no similar states are contiguous
+      std::vector<int> pl = modified_random_draw( l );
+      
+      // std::cout << " RAND: ";
+      // for (int i=0; i<n; i++) std::cout << pl[i] ;
+      // std::cout << "\n";
+      
       std::string ps = std::string( n , '?' );
-      for (int i=0; i<n; i++) ps[i] = (char)(65 + l[a[i]] ); 
-
+      for (int i=0; i<n; i++) ps[i] = (char)(65 + pl[i] ); 
+      
       // count kmers
       std::map<std::string,int> pobs;
       for (int i=0; i<n; i++)
 	for (int j=k1; j<=k2; j++)
 	  if ( i+j < n ) ++pobs[ ps.substr( i , j ) ];
-
-      // for each equivalance group, get max count
+      
+      // for each equivalance group, get max count (and sum)
       std::map<std::string,int> pbest;
+      std::map<std::string,int> psum;
       std::map<std::string,std::set<std::string> >::const_iterator pp = equivs.begin();
       while ( pp != equivs.end() )
 	{
-	  int mx = 0;
+	  int mx = 0, sum = 0;
 	  const std::set<std::string>  & eqs = pp->second;
 	  std::set<std::string>::const_iterator ee = eqs.begin();
 	  while ( ee != eqs.end() )
 	    {	      
 	      if ( pobs[ *ee ] > mx ) mx = pobs[ *ee ];
+	      sum += pobs[ *ee ];
 	      ++ee;
 	    }
 
 	  pbest[ pp->first ] = mx;
+	  psum[ pp->first ] = sum;
 	  ++pp;
 	}
 
@@ -1122,22 +1192,59 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
       std::map<std::string,int>::const_iterator oo = obs.begin();
       while ( oo != obs.end() )
 	{
-	  if ( pbest[ obs2equiv[ oo->first ] ] >= oo->second ) ++pvals[ oo->first ];
+
+	  // p-value based on exact count for that sequence
+	  // & track expected count
+	  if ( pobs[ oo->first ] >= oo->second ) ++pvals[ oo->first ];
+	  pexp[ oo->first ] += pobs[ oo->first ];
+
+	  // 1) EITHER p-value based on maximum of that equivalance group
+	  // if ( pbest[ obs2equiv[ oo->first ] ] >= oo->second ) ++pvals_equiv[ oo->first ];
+	  // pexp_equiv[ oo->first ] += pbest[ obs2equiv[ oo->first ] ];
+
+	  // 2) OR based on the relative frequency of this obs in its equivalence group
+	  double prel = psum[ obs2equiv[ oo->first ] ]  > 0 ? pobs[ oo->first ]  / (double)psum[ obs2equiv[ oo->first ] ]  : 0 ;
+	  if ( prel >= orel[ oo->first ] ) ++pvals_equiv[ oo->first ];
+	  pexp_equiv[ oo->first ] += prel;
+	  
 	  ++oo;
 	}      
 
-      // also just get simple means of expected # of occurrences
-      
-      
     } // next replicate
 
-
-  // standardize p-values
-
+  //
+  // empirical  p-values
+  //
+  
   std::map<std::string,double>::iterator pp = pvals.begin();
   while ( pp != pvals.end() )
     {
       pp->second = ( 1 + pp->second ) / (double)( 1 + nreps );
+      ++pp;
+    }
+
+  pp = pvals_equiv.begin();
+  while ( pp != pvals_equiv.end() )
+    {
+      pp->second = ( 1 + pp->second ) / (double)( 1 + nreps );
+      ++pp;
+    }
+
+  //
+  // expected counts under the null
+  //
+
+  pp = pexp.begin();
+  while ( pp != pexp.end() )
+    {
+      pp->second /= (double)nreps;
+      ++pp;
+    }
+  
+  pp = pexp_equiv.begin();
+  while ( pp != pexp_equiv.end() )
+    {
+      pp->second /= (double)nreps;
       ++pp;
     }
 
@@ -1461,4 +1568,114 @@ void microstates_t::aggregate2edf( const Data::Matrix<double> & X ,
     }
 
 }
+
+
+int ms_kmer_t::pick( const std::map<int,int> & urns , int skip )
+{
+  int tot = 0;
+  std::map<int,int>::const_iterator ii = urns.begin();
+  std::vector<int> counts;
+  std::vector<int> labels;
+  while ( ii != urns.end() )
+    {
+      if ( ii->first != skip || ii->second == 0 )
+	{
+	  tot += ii->second;
+	  counts.push_back( ii->second );
+	  labels.push_back( ii->first );
+	  //	  std::cout << " urn " << ii->first << " = " <<  ii->second  << "\n";
+	}
+      ++ii;
+    }
+
+  // if only one class left, and that was skipped previously, then we will not
+  // be able to satisfy the constraint...  for now, here we have to return
+  // the skipped value...
+
+  //if ( tot == 0 ) { std::cout << " SKIPPING...\n" ; return skip; }
+  if ( tot == 0 ) return skip;
+  
+  int rn = CRandom::rand( tot );
+  int p = 0;
+  //  std::cout << " rn / tot = " << rn << " " << tot << "\n";
+  while ( 1 )
+    {
+      //std::cout << "p, rn, cnt = " << p << " " << rn << " " << counts[p] << "\n";
+      if ( rn < counts[p] ) break;
+      rn -= counts[p];
+      ++p;
+    }
+  //  std::cout << " PICK " << p << " " << labels[p] << "\n";
+  return labels[p];
+}
+
+
+std::vector<int> ms_kmer_t::modified_random_draw( const std::vector<int> & l )
+{
+
+  // permute 'l' but in such a way that similar states (i.e. values of l, 0, 1, 2, ...)
+  // are not contiguous
+  // first element: pick any element (e.g. of 5)
+  // next elemnt: pick from the remaining 5-1 elements, i.e. not the previously selected
+  // repeat, until all done
+
+  std::map<int,int> urns;
+  const int n = l.size();
+  for (int i=0;i<n;i++) ++urns[l[i]];
+
+
+  // std::map<int,int>::const_iterator ll = urns.begin();
+  // while ( ll != urns.end() )
+  //   {
+  //     std::cout << " " << ll->first << " " << ll->second << "\n";
+  //     ++ll;
+  //   }
+
+  std::vector<int> p(n);
+  
+  // initiate
+  p[0] = l[ CRandom::rand( n ) ];
+  
+  int last = p[0];
+  --urns[ last ];
+
+  //  std::cout << " picked = " << last << "\n";
+
+  for (int i=1;i<n;i++)
+    {
+
+      // std::cout << " position = " << i << " of " << n << "\n";
+      
+      // std::map<int,int>::const_iterator ll = urns.begin();
+      // while ( ll != urns.end() )
+      // 	{
+      // 	  std::cout << " " << ll->first << " " << ll->second << "\n";
+      // 	  ++ll;
+      // 	}
+      
+      // skip last pick
+      p[i] = pick( urns , last );
+      --urns[ p[i] ];
+      last = p[i];
+      //      std::cout << " picked = " << p[i] << "\n";
+      
+      // sanity check, can remove
+      if ( urns[p[i]] < 0 ) Helper::halt( "error!" );
+      
+      
+    }
+
+  // sanity check... can remove 
+  std::map<int,int>::const_iterator ll = urns.begin();
+  while ( ll != urns.end() )
+    {
+      if ( ll->second != 0 ) Helper::halt( "bad" );
+      ++ll;
+    }
+  
+  // all done
+  return p;
+    
+}
+
 

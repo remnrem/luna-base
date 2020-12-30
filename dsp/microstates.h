@@ -194,11 +194,21 @@ struct ms_kmer_t {
   ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps );
   std::set<std::string> permute( std::string str );
   std::string first_permute( std::string str );
+  std::vector<int> modified_random_draw( const std::vector<int> & );
+  int pick( const std::map<int,int> & urns , int skip = -1 );
   std::string s;
-  std::map<std::string,int> obs;  
+
+  std::map<std::string,int> obs; 
+  std::map<std::string,double> orel; // obs / group-obs 
+
   std::map<std::string,double> pexp;
-  std::map<std::string,double> psd;  
+  std::map<std::string,double> pexp_equiv;
   std::map<std::string,double> pvals;
+  std::map<std::string,double> pvals_equiv;
+  std::map<std::string,int> equiv_set_size;
+  std::map<std::string,std::string> obs2equiv;
+  std::map<std::string,std::set<std::string> > equivs;
+
 };
 
 struct microstates_t {
@@ -290,6 +300,8 @@ struct microstates_t {
   bool standardize;
   
   bool verbose;
+
+  bool skip_peaks;
   
   double gfp_threshold;
   

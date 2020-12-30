@@ -1500,8 +1500,8 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 	  x.push_back(i);
 	}
 
-      ms_kmer_t kmers( x , 2 , 6 , 50000 );
-	
+      ms_kmer_t kmers( x , 2 , 6 , 1000 );
+      
       std::map<std::string,double>::const_iterator pp = kmers.pvals.begin();
       while ( pp != kmers.pvals.end() )
 	{

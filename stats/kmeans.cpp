@@ -700,6 +700,8 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
       // Z = A'*X;
       // A'  KxC CxN --> Z = KxN
       // do transpose in place, by hand rather than two function calls
+
+      std::cout << "S1\n";
       
       Data::Matrix<double> Z( K , N );
       for (int i=0; i<K; i++)
@@ -714,7 +716,9 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
       
       // [~,L] = max(Z.^2);
       // get max and put in L
-	      
+
+      std::cout << "S2\n";
+      
       std::map<int,std::vector<int> > K_idx; // track freq of each class, for below
       for (int j=0; j<N; j++)
 	{
@@ -733,7 +737,7 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
 	  K_idx[idx].push_back( j );		  
 	}
       
-      
+      std::cout << "S3\n";      
       
       // Step 4
       
@@ -828,7 +832,9 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
 	    }
 	  
 	} // next 'k' of K
-      
+
+      std::cout << "S4\n";
+	    
       // Step 5
 
       //sig2 = (const1 - sum( sum( A(:,L). *X ).^2) ) / (N*(C-1));
