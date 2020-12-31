@@ -34,6 +34,14 @@
 extern writer_t writer;
 extern logger_t logger;
 
+
+//
+// TODO:  to add annot from states;
+//        to add peaks to a cache_t from states
+//        to specify labels directly for a prototype file (i.e. if diff order)
+//        option to make aggregare EDF out of prototypes (i.e. to subsequently cluster prototypes)
+
+
 // static member to track header of aggrgated EDF in multi-sample mode
 bool microstates_t::wrote_header = false;
 
@@ -61,9 +69,16 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 
   bool skip_peaks = param.has( "all-points" );
 
+  bool epoch = param.has( "epoch" );
+  if ( epoch && ! multi_backfit )
+    Helper::halt( "can only specify epoch when running in backfit mode" );
+  if ( epoch && param.has( "gfp" ) )
+    Helper::halt( "cannot specify epoch and gfp (to dump sample-level GFP) together" );
   
+  int run_kmers = param.has( "kmers" ) ? param.requires_int( "kmers" ) : 0 ;
+    
   //
-  // Which channels
+  // Channels
   //
   
   const bool no_annotations = true;  
@@ -87,186 +102,297 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   
 
   //
-  // Fetch sample matrix
+  // If in epoch mode, only read prototypes once
   //
-  
-  matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
-
-  const Data::Matrix<double> & X = mslice.data_ref();
-  
-
-  //
-  // Perform microstate segmentation 
-  //
-  
-  microstates_t mstates( param , sr );      
-
-  //
-  // Find peaks?
-  //
-
-  std::vector<int> peaks;
-  
-  if ( ( single_sample && ! skip_peaks ) || multi_peaks )
-    {
-      logger << "  find GPF peaks\n";
-      peaks = mstates.find_peaks( X , signals );      
-
-      // in multi-sample mode, just save peak (data) and move on
-      if ( multi_peaks )
-	{
-	  microstates_t::aggregate2edf( X , signals, peaks , sr ,
-					param.requires_dbl( "pmin" ) ,
-					param.requires_dbl( "pmax" ) , 
-					param.value( "peaks" ) );
-	  return;
-	}
-    }
 
   
-  //
-  // Segmentatation based on peaks
-  //
+  ms_prototypes_t prior_prototypes;
 
-  ms_prototypes_t prototypes;
-  
-  if ( single_sample || multi_segment )
-    {
-      logger << "  segmenting peaks to microstrates\n";
-      
-      // nb, if peaks is empty, just takes all rows
-      // of X;  i.e. if coming from an aggregate peak EDF
-      
-      prototypes = mstates.segment( X , signals , peaks );
-      
-      // In multi-sample mode, just save prototypes and move on
-
-      if ( multi_segment )
-	{
-	  const std::string filename = Helper::expand( param.value( "segment" ) );
-	  prototypes.write( filename );
-	  return;
-	}
-    }
-
-
-  //
-  // Or read prototypes from a previous segmentation, and check that channels match
-  //
-
-  if ( multi_backfit )
+  if ( multi_backfit && epoch )
     {
       const std::string filename = Helper::expand( param.value( "backfit" ) );
-      prototypes.read( filename );
-
-      // check channels line up 
-      if ( signals.size() != prototypes.C )
+      prior_prototypes.read( filename );
+      
+      // check channels line up                                                                                                                                                 
+      if ( signals.size() != prior_prototypes.C )
 	Helper::halt( "number of channels in " + filename + " does not match current signal selection" );
       for (int s=0; s<signals.size(); s++)
-	if ( ! Helper::iequals( signals.label(s) , prototypes.chs[s] ) )
-	  Helper::halt( signals.label(s) + " does not match " + prototypes.chs[s]  + " for slot " + Helper::int2str( s+1) );
+	if ( ! Helper::iequals( signals.label(s) , prior_prototypes.chs[s] ) )
+	  Helper::halt( signals.label(s) + " does not match " + prior_prototypes.chs[s]  + " for slot " + Helper::int2str( s+1) );      
     }
 
-
-  //
-  // Backfitting
-  //
-
-  const bool store_GMD = true; // not sure this is needed...    
-
-  ms_backfit_t bf = mstates.backfit( Statistics::transpose( X )  , prototypes.A , store_GMD );
-  
   
   //
-  // Smoothing / rejection of small intervals
+  // Fetch sample matrix: typically whole trace, but if in backfit mode
+  // could be epoch level
   //
 
-  // smooth_reject takes minTime in sample points
+  int ne = edf.timeline.first_epoch();
 
-  double minTime_msec = param.has( "min-msec" ) ? param.requires_dbl( "min-msec" ) : 20 ; 
-
-  int minTime_samples = round( minTime_msec * sr/1000.0 );
-  
-  logger << "  smoothing: rejecting segments <= " << minTime_msec << " msec\n";
-
-  ms_backfit_t smoothed = mstates.smooth_reject( bf , minTime_samples );
-
-  
-  //
-  // Final stats
-  //
-  
-  ms_stats_t stats = mstates.stats( Statistics::transpose( X ) , prototypes.A , smoothed.best() );
-
-
-  //
-  // Output all final stats
-  //
-
-  //
-  // By class 'K'
-  //
-
-  std::map<int,std::pair<int,double> > cnts = microstates_t::counts( smoothed.best() );
-    
-  for (int k=0; k < prototypes.K ; k++)
-    {
-      std::string s="?";
-      s[0] = (char)(65+k);
-      writer.level( s , "K" );
-      writer.value( "GFP" , stats.m_gfp[k] );
-      writer.value( "OCC" , stats.m_occ[k] );
-      writer.value( "DUR" , stats.m_dur[k] );
-      writer.value( "COV" , stats.m_cov[k] );
-      writer.value( "SPC" , stats.m_spc[k] );
-      writer.value( "GEV" , stats.m_gev[k] );      
-      writer.value( "N" , cnts[k].first );
-      writer.value( "F" , cnts[k].second );
-    }
-  writer.unlevel( "K" );
-
-
-  // State transition probabilities
-  for (int k=0; k < prototypes.K ; k++)
-    {
-      std::string s1="?";
-      s1[0] = (char)(65+k);
-      writer.level( s1 , "PRE" );
-      for (int k2=0; k2 < prototypes.K ; k2++)
+  while ( 1 )
+    {  
+      
+      interval_t interval;
+      
+      if ( epoch )
 	{
-	  if ( k != k2 )
+	  int e = edf.timeline.next_epoch();      
+       	  if ( e == -1 ) break;      
+	  interval = edf.timeline.epoch( e );
+	  writer.epoch( edf.timeline.display_epoch( e ) );
+	  logger << " -- processing epoch " <<  edf.timeline.display_epoch( e ) << " (" << e+1 << " of " << ne << ")\n";
+	}
+      else
+	interval = edf.timeline.wholetrace();
+
+      //
+      // Get actual signals
+      //
+
+      matslice_t mslice( edf , signals , interval );
+      
+      const Data::Matrix<double> & X = mslice.data_ref();
+  
+      //
+      // Set up microstate class
+      //
+      
+      microstates_t mstates( param , sr );      
+      
+
+      //
+      // Find peaks?
+      //
+      
+      std::vector<int> peaks;
+      
+      if ( ( single_sample && ! skip_peaks ) || multi_peaks )
+	{
+	  logger << "  find GPF peaks\n";
+	  peaks = mstates.find_peaks( X , signals );      
+	  
+	  // in multi-sample mode, just save peak (data) and move on
+	  if ( multi_peaks )
 	    {
-	      std::string s2="?";
-	      s2[0] = (char)(65+k2);
-	      writer.level( s2 , "POST" );
-	      writer.value( "P" , stats.tr(k,k2) );
+	      microstates_t::aggregate2edf( X , signals, peaks , sr ,
+					    param.requires_dbl( "pmin" ) ,
+					    param.requires_dbl( "pmax" ) , 
+					    param.value( "peaks" ) );
+	      return;
 	    }
 	}
-    }
-  writer.unlevel( "PRE" );
-  writer.unlevel( "POST" );
+      
+  
+      //
+      // Segmentatation based on peaks
+      //
+      
+      ms_prototypes_t prototypes;
+      
+      if ( single_sample || multi_segment )
+	{
+	  logger << "  segmenting peaks to microstrates\n";
+	  
+	  // nb, if peaks is empty, just takes all rows
+	  // of X;  i.e. if coming from an aggregate peak EDF
+	  
+	  prototypes = mstates.segment( X , signals , peaks );
+	  
+	  // In multi-sample mode, just save prototypes and move on
+	  
+	  if ( multi_segment )
+	    {
+	      const std::string filename = Helper::expand( param.value( "segment" ) );
+	      prototypes.write( filename );
+	      return;
+	    }
+	}
+      
+      //
+      // Or read prototypes from a previous segmentation, and check that channels match
+      //
+      
+      if ( multi_backfit )
+       {
+	 if ( epoch )
+	   {
+	     // already read... no need to re-read
+	     prototypes = prior_prototypes;
+	   }
+	 else
+	   {
+	     const std::string filename = Helper::expand( param.value( "backfit" ) );
+	     prototypes.read( filename );
+	     
+	     // check channels line up 
+	     if ( signals.size() != prototypes.C )
+	       Helper::halt( "number of channels in " + filename + " does not match current signal selection" );
+	     for (int s=0; s<signals.size(); s++)
+	       if ( ! Helper::iequals( signals.label(s) , prototypes.chs[s] ) )
+		 Helper::halt( signals.label(s) + " does not match " + prototypes.chs[s]  + " for slot " + Helper::int2str( s+1) );
+	   }
+       }
+
+      
+      //
+      // Backfitting
+      //
+      
+      const bool store_GMD = true; // not sure this is needed...    
+      
+      logger << "  back-fitting solution to all time points\n";
+      
+      ms_backfit_t bf = mstates.backfit( Statistics::transpose( X ) , microstates_t::eig2mat( prototypes.A ) , store_GMD );
+      
+  
+      //
+      // Smoothing / rejection of small intervals
+      //
+      
+      // smooth_reject takes minTime in sample points
+      
+      double minTime_msec = param.has( "min-msec" ) ? param.requires_dbl( "min-msec" ) : 20 ; 
+      
+      int minTime_samples = round( minTime_msec * sr/1000.0 );
+      
+      logger << "  smoothing: rejecting segments <= " << minTime_msec << " msec\n";
+      
+      ms_backfit_t smoothed = mstates.smooth_reject( bf , minTime_samples );
+      
+  
+      //
+      // Final stats
+      //
+      
+      ms_stats_t stats = mstates.stats( Statistics::transpose( X ) , microstates_t::eig2mat( prototypes.A ) , smoothed.best() );
+  
+   
+
+      //
+      // Verbose dumping of GFP and L point by point? (nb. this only works in whole-trace mode)
+      //
+
+      std::string dump_file = param.has( "gfp" ) ? param.value( "gfp" ) : "" ;
+      
+      if ( dump_file != "" )
+	{
+
+	  logger << "  dumping GFP and states to " << dump_file << "\n";
+	  std::ofstream O1( Helper::expand( dump_file ).c_str() , std::ios::out );
+	  
+           
+	  // get TP...
+	  // for now, just raw stats
+	  
+	  const int N = stats.GFP.size();
+	  std::vector<int> states = smoothed.best();
+	  if ( states.size() != N ) Helper::halt( "hmmm" );
+	  for (int i=0;i<N;i++)
+	    O1 << (char)(states[i] + 65 ) << "\t"
+	       << stats.GFP[i] << "\n";
+	  O1.close();
+	}
+  
+
+      //
+      // Output all final stats
+      //
+
+      
+      //
+      // By class 'K'
+      //
+      
+      std::map<int,std::pair<int,double> > cnts = microstates_t::counts( smoothed.best() );
+      
+      for (int k=0; k < prototypes.K ; k++)
+	{
+	  std::string s="?";
+	  s[0] = (char)(65+k);
+	  writer.level( s , "K" );
+	  writer.value( "GFP" , stats.m_gfp[k] );
+	  writer.value( "OCC" , stats.m_occ[k] );
+	  writer.value( "DUR" , stats.m_dur[k] );
+	  writer.value( "COV" , stats.m_cov[k] );
+	  writer.value( "SPC" , stats.m_spc[k] );
+	  writer.value( "GEV" , stats.m_gev[k] );      
+	  writer.value( "N" , cnts[k].first );
+	  writer.value( "F" , cnts[k].second );
+	}
+      writer.unlevel( "K" );
+      
+
+  
+      //
+      // State transition probabilities
+      //
+      
+      for (int k=0; k < prototypes.K ; k++)
+	{
+	  std::string s1="?";
+	  s1[0] = (char)(65+k);
+	  writer.level( s1 , "PRE" );
+	  for (int k2=0; k2 < prototypes.K ; k2++)
+	    {
+	      if ( k != k2 )
+		{
+		  std::string s2="?";
+		  s2[0] = (char)(65+k2);
+		  writer.level( s2 , "POST" );
+		  writer.value( "P" , stats.tr(k,k2) );
+		}
+	    }
+	}
+      writer.unlevel( "PRE" );
+      writer.unlevel( "POST" );
+      
+      
+      // Overall stats: complexity
+      
+      writer.value( "LZW"     , stats.lwz_states );
+      writer.value( "LZW_ALL" , stats.lwz_points );
+      writer.value( "GEV"     , stats.GEV_tot );
+      
+      // kmer stats
     
-  
-  // Overall stats: complexity
+      if ( run_kmers )
+	{
+	  std::map<std::string,double>::const_iterator pp = stats.kmers.pvals.begin();
+	  while ( pp != stats.kmers.pvals.end() )
+	    {
+	      writer.level( pp->first , "KMER" );
+	      writer.level( (int)pp->first.size() , "L" );
+	      
+	      //writer.value( "EQ"   , kmers.obs2equiv[ pp->first ] );
+	      writer.value( "EQ" , stats.kmers.equiv_set_size[ pp->first ] );
+	      
+	      writer.value( "O_OBS" , stats.kmers.obs[ pp->first ] );
+	      writer.value( "O_EXP" , stats.kmers.pexp[ pp->first ] );
+	      writer.value( "O_P" , pp->second );
+	      
+	      writer.value( "M_OBS" , stats.kmers.orel[ pp->first ] );
+	      writer.value( "M_EXP" , stats.kmers.pexp_equiv[ pp->first ] );
+	      writer.value( "M_P" , stats.kmers.pvals_equiv[ pp->first ] );
+	      ++pp;
+	    }  
+	  writer.unlevel( "L" );
+	  writer.unlevel( "KMER" );
+	}
+      
 
-  writer.value( "LZW"     , stats.lwz_states );
-  writer.value( "LZW_ALL" , stats.lwz_points );
-  writer.value( "GEV"     , stats.GEV_tot );
+      //
+      // either next epoch or all done
+      //
+      
+      if ( ! epoch ) break;
+    }
 
-  // State frequencies
-
+  if ( epoch ) writer.unepoch();
 
   
-  // std::map<int,std::pair<int,double> >::const_iterator cc = cnts.begin();
-  // while ( cc != cnts.end() )
-  //   {
-  //     std::cout << cc->first << "\t"
-  // 		<< cc->second.first << "\t"
-  // 		<< cc->second.second << "\n";
-  //     ++cc;
-  //   }
-  
-  
+  //
+  // All done for MS analysis
+  //
   
 }
 
@@ -299,7 +425,7 @@ microstates_t::microstates_t( param_t & param , const int sr_ )
       ks = param.intvector( "k" );
     }
   
-  dump_file = param.has( "dump" ) ? param.value( "dump" ) : "";
+  dump_file = param.has( "dump-gfp" ) ? param.value( "dump-gfp" ) : "";
   
   standardize = param.has( "standardize" );
   
@@ -317,6 +443,20 @@ microstates_t::microstates_t( param_t & param , const int sr_ )
   // not imlpemented yet
   // select only peaks this far apart (to ensure distinct peaks)
   min_peak_dist = 0;    
+
+  if ( param.has( "kmers" ) )
+    {
+      std::vector<int> k = param.intvector( "kmers" );
+      if ( k.size() != 3 ) Helper::halt( "expecting 3 args for kmers=min,max,nreps" );
+      kmers_min = k[0];
+      kmers_max = k[1];
+      kmers_nreps = k[2];
+    }
+  else
+    {
+      kmers_nreps = 0;
+    }
+
   
 }
 
@@ -471,10 +611,11 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
     Statistics::standardize( Z );
 
   //
-  // Optionally, dump input prior to clustering?
+  // Optionally, dump input prior to clustering? ifnore for now;  dump_file
+  // will dump GFP instead (see below) 
   //
 
-  if ( dump_file != "" )
+  if ( 0 || dump_file != "" )
     {
       logger << "  dumping raw matrix to " << dump_file << "\n";
       std::ofstream O1( dump_file.c_str() , std::ios::out );      
@@ -496,10 +637,8 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
   // 	       const double threshold = 1e-6 ,
   // 	       const bool verbose = false )
 
-  
   modkmeans_all_out_t results = kmeans.fit( Z );
 
-  
   //
   // optimal K selected
   //
@@ -551,8 +690,8 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
   // Save prototypes
   //
 
+
   ms_prototypes_t prototypes( signals , results.A ) ;
-  
   return prototypes;
   
 }
@@ -562,10 +701,9 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
 				     const Data::Matrix<double> & A_ ,
 				     bool return_GMD )
 {
-
-
-  Data::Matrix<double> X = X_;
-  Data::Matrix<double> A = A_;
+  
+  Data::Matrix<double> X = X_ ;
+  Data::Matrix<double> A = A_ ; 
   
   // X will be C x N
   // A will be C x K
@@ -580,10 +718,13 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
   // Standardize EEG first?  hmm check polarity here, etc
   //
   
-  if ( 0 )
-    Statistics::standardize( X );
+  // if ( 0 )
+  //   Statistics::standardize( X );
 
+
+  //
   // GMD: global map dissimilarity
+  //
   
   // Assumes average reference already set  
   // Normalise EEG and maps (average reference and gfp = 1 for EEG)
@@ -733,19 +874,20 @@ ms_backfit_t microstates_t::smooth_reject( const ms_backfit_t & sol ,
 }
 
 
-ms_backfit_t smooth_windowed( const ms_backfit_t & labels ,
-			      const Data::Matrix<double> & X_ ,
-			      const Data::Matrix<double> & A_ ,
-			      int smooth_width ,	
-			      double smooth_weight ,
-			      int max_iterations ,
-			      double threshold )
+ms_backfit_t microstates_t::smooth_windowed( const ms_backfit_t & labels ,
+					     const Eigen::MatrixXd & X_ ,
+					     const Eigen::MatrixXd & A_ ,
+					     int smooth_width ,	
+					     double smooth_weight ,
+					     int max_iterations ,
+					     double threshold )
 {
 
   Helper::halt( "not yet implemented" );
-  
-  Data::Matrix<double> X = X_;  // C x N  EEG 
-  Data::Matrix<double> A = A_;  // C x K  prototypes
+
+  // TEMP..
+  Data::Matrix<double> X = eig2mat( X_ );  // C x N  EEG 
+  Data::Matrix<double> A = eig2mat( A_ );  // C x K  prototypes
 
   const int C = X.dim1();
   const int N = X.dim2();
@@ -882,9 +1024,9 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
     for (int j=0;j<N;j++)
       SpatCorr(i,j) = 1 - ( GMD(i,j) * GMD(i,j) ) / 2.0;
 
-  // Total GEV (nb. bsed on un-normalized X_)
-
-  Data::Vector<double> var = Statistics::sdev( X_ ,Statistics::mean( X_ ) );
+  // Total GEV (nb. bsed on un-normalized X_)..
+  
+  Data::Vector<double> var = Statistics::sdev( X_ ,Statistics::mean(  X_ ) );
   double denom = 0;
   for (int j=0;j<N;j++)
     {
@@ -998,58 +1140,20 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
   lzw_t lzw2( runs.d , &stats.lwz_states );
 
+   
   //
-  // k-mer distributions
+  // k-mer distributions, optionally
   //
 
-  ms_kmer_t kmers( runs.d , 2 , 4 , 1000 );
-
-  std::map<std::string,double>::const_iterator pp = kmers.pvals.begin();
-  while ( pp != kmers.pvals.end() )
-    {
-      std::cout << pp->first << "\t"
-		<< pp->first.size() << "\t"
-
-		<< kmers.obs2equiv[ pp->first ] << " "
-		<< kmers.equiv_set_size[ pp->first ] << "\t"
-	
-		<< kmers.obs[ pp->first ] << " "
-		<< kmers.pexp[ pp->first ] << "\t"
-		<< pp->second << " "
-		       
-		<< kmers.orel[ pp->first ] << " "		
-		<< kmers.pexp_equiv[ pp->first ] << " "
-		<< kmers.pvals_equiv[ pp->first ] << "\n";
-      ++pp;
-    }  
-
-
-
-  // show equivalance classes
-  // pp = kmers.pvals.begin();
-  // while ( pp != kmers.pvals.end() )
-  //   {
-  //     std::string equiv = kmers.obs2equiv.find( pp->first )->second;
-  //     const std::set<std::string> & eqs = kmers.equivs.find( equiv )->second;
-  //     std::cout << pp->first << " --> " << equiv << "\n";
-  //     std::set<std::string>::const_iterator cc = eqs.begin();
-  //     while ( cc != eqs.end() )
-  // 	{
-  // 	  std::cout << " " << *cc ;
-  // 	  ++cc;
-  // 	}
-  //     std::cout << "\n";
-  //     ++pp;
-  //   }
-
-  
-  
+  if ( kmers_nreps )
+    stats.kmers.run( runs.d , kmers_min , kmers_max , kmers_nreps );
+   
   return stats;
 }
 
 
 
-ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
+void ms_kmer_t::run( const std::vector<int> & l , int k1 , int k2 , int nreps )
 {
 
   // ensure bounded if using this naive algorithm
@@ -1098,29 +1202,31 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
 
       // for convenienc of output, track size of equiv set directly
       equiv_set_size[ ee->first ] = equivs[ ee->second ].size();
-      std::cout << "MAIN = " <<  ee->first << " --> " << ee->second << "\n";
+      //std::cout << "MAIN = " <<  ee->first << " --> " << ee->second << "\n";
 
       // orel stats : obs / obs-group 
       const std::set<std::string> & s = equivs[ ee->second ];
       std::set<std::string>::const_iterator qq = s.begin();
       while ( qq != s.end() )
 	{
-	  std::cout << " adding " << *qq << " " << obs[*qq ] << "\n";
+	  //std::cout << " adding " << *qq << " " << obs[*qq ] << "\n";
 	  orel[ ee->first ] += obs[ *qq ];
 	  ++qq;
 	}
       
-      std::cout << " OREL = " << " " << obs[ ee->first ] << " / " << orel[ ee->first ] ;
+      //      std::cout << " OREL = " << " " << obs[ ee->first ] << " / " << orel[ ee->first ] ;
       orel[ ee->first ] = obs[ ee->first ] / orel[ ee->first ];
-      std::cout << " = " << orel[ ee->first ] << "\n";
+      //std::cout << " = " << orel[ ee->first ] << "\n";
 
       
       // and track for output
       tot += equivs[ ee->second ].size();
       ++ee;
     }
-    
-  logger << "  for " << obs.size() << " sequences, " << equivs.size() << " equivalence groups, " << tot << " total sequences\n";
+
+  logger << "  kmers: considering length " << k1 << " to " << k2 << "\n";
+  
+  logger << "  kmers: for " << obs.size() << " sequences, " << equivs.size() << " equivalence groups, " << tot << " total sequences\n";
 
   //
   // Permute: for each equiv group, what is the highest # of occurrecnes of a given sequence?  Compare each observed to that (based on their
@@ -1144,10 +1250,12 @@ ms_kmer_t::ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
   
   pexp.clear();
   pexp_equiv.clear();  
+
+  logger << "  kmers: running " << nreps << " replicates...\n";
   
   for (int r = 0 ; r < nreps ; r++)
     {
-      logger << "  replicate " << r+1 << " of " << nreps << "\n";
+      
 
       // rather than standard CRandom::random_draw(), this ensures
       // no similar states are contiguous
@@ -1321,7 +1429,7 @@ void ms_prototypes_t::read( const std::string & filename )
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not find " + filename );
 
-  A.clear();
+  A.resize(0,0);
   chs.clear();
   bool first = true;
   std::vector<double> t;
@@ -1451,7 +1559,7 @@ void microstates_t::aggregate2edf( const Data::Matrix<double> & X ,
   if ( ! exists ) 
     {
       
-      logger << "  writing an aggregated GPF-peak SEDF to " << edfname << "\n";
+      logger << "  writing an aggregated GPF-peak EDF to " << edfname << "\n";
       
       edf_t agg_edf;
       
@@ -1464,7 +1572,7 @@ void microstates_t::aggregate2edf( const Data::Matrix<double> & X ,
       //
       
       agg_edf.header.version = "0";
-      agg_edf.header.patient_id = "GFP-peaks";
+      agg_edf.header.patient_id = "GFP";
       agg_edf.header.recording_info = ".";
       agg_edf.header.startdate = ".";
       agg_edf.header.starttime = ".";
@@ -1679,3 +1787,37 @@ std::vector<int> ms_kmer_t::modified_random_draw( const std::vector<int> & l )
 }
 
 
+
+
+Data::Matrix<double> microstates_t::eig2mat( const Eigen::MatrixXd & E )
+  {
+    const int rows = E.rows();
+    const int cols = E.cols();
+    Data::Matrix<double> M( rows , cols );
+    for (int r=0;r<rows;r++)
+      for (int c=0;c<cols;c++)
+	M(r,c) = E(r,c);
+    return M;
+  }
+
+Eigen::Matrix3d microstates_t::mat2eig( const Data::Matrix<double> & M )
+{
+  const int rows = M.dim1();
+  const int cols = M.dim2();
+  Eigen::MatrixXd E( rows , cols );
+  for (int r=0;r<rows;r++)
+    for (int c=0;c<cols;c++)
+      E(r,c) = M(r,c);
+  return E;
+}
+
+Eigen::Matrix3d microstates_t::mat2eig_tr( const Data::Matrix<double> & M )
+{
+  const int rows = M.dim1();
+  const int cols = M.dim2();
+  Eigen::MatrixXd E( cols , rows );
+  for (int r=0;r<rows;r++)
+    for (int c=0;c<cols;c++)
+      E(c,r) = M(r,c);
+ return E;
+}

@@ -29,6 +29,7 @@ struct signal_list_t;
 
 #include <vector>
 #include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 #include "edf/signal-list.h"
 
 namespace dsptools
@@ -44,12 +45,12 @@ struct ms_prototypes_t {
 
   ms_prototypes_t() { }
   
-  ms_prototypes_t( const signal_list_t & signals , const Data::Matrix<double> A_ )
+  ms_prototypes_t( const signal_list_t & signals , const Eigen::MatrixXd  A_ )
   {
     A = A_;
     C = signals.size();
-    K = A_.dim2();
-    if ( A_.dim1() != C ) Helper::halt( "internal inconsistency in ms_prototypes_t()" );    
+    K = A_.cols();
+    if ( A_.rows() != C ) Helper::halt( "internal inconsistency in ms_prototypes_t()" );    
     chs.resize( C );
     for (int s=0;s<C; s++) chs[s] = signals.label(s);
   }
@@ -60,25 +61,8 @@ struct ms_prototypes_t {
   int K;
   int C;
   std::vector<std::string> chs; // C
-  Data::Matrix<double> A; // C x K
+  Eigen::MatrixXd A; // C x K
 };
-
-
-/* struct ms_t { */
-  
-/*   // for a given clustering solution: */
-
-/*   // for all sample-points:: */
-/*   std::vector<int> state; // 0 is missing / unknown */
-/*   std::vector<bool> is_peak; */
-
-/*   // fit  */
-/*   Data::Matrix<double> means; // channels x clusters */
-
-/*   // count of assignments (class --> # of points assigned) */
-/*   std::map<int,int> counts; */
-  
-/* }; */
 
 
 
@@ -162,6 +146,37 @@ struct ms_rle_t {
   std::vector<int> c;
 };
 
+
+struct ms_kmer_t {
+  ms_kmer_t() { }
+  
+  ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
+  {
+    run(l,k1,k2,nreps);
+  }
+
+  void run( const std::vector<int> & l , int k1 , int k2 , int nreps );
+  
+  std::set<std::string> permute( std::string str );
+  std::string first_permute( std::string str );
+  std::vector<int> modified_random_draw( const std::vector<int> & );
+  int pick( const std::map<int,int> & urns , int skip = -1 );
+  std::string s;
+
+  std::map<std::string,int> obs; 
+  std::map<std::string,double> orel; // obs / group-obs 
+
+  std::map<std::string,double> pexp;
+  std::map<std::string,double> pexp_equiv;
+  std::map<std::string,double> pvals;
+  std::map<std::string,double> pvals_equiv;
+  std::map<std::string,int> equiv_set_size;
+  std::map<std::string,std::string> obs2equiv;
+  std::map<std::string,std::set<std::string> > equivs;
+
+};
+
+
 struct ms_stats_t {
 
   // global statistics
@@ -183,33 +198,10 @@ struct ms_stats_t {
   double lwz_points, lwz_states;
 
   // k-mers
-  
-  // ....
-  
-
+  ms_kmer_t kmers;
+    
 };
 
-
-struct ms_kmer_t {
-  ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps );
-  std::set<std::string> permute( std::string str );
-  std::string first_permute( std::string str );
-  std::vector<int> modified_random_draw( const std::vector<int> & );
-  int pick( const std::map<int,int> & urns , int skip = -1 );
-  std::string s;
-
-  std::map<std::string,int> obs; 
-  std::map<std::string,double> orel; // obs / group-obs 
-
-  std::map<std::string,double> pexp;
-  std::map<std::string,double> pexp_equiv;
-  std::map<std::string,double> pvals;
-  std::map<std::string,double> pvals_equiv;
-  std::map<std::string,int> equiv_set_size;
-  std::map<std::string,std::string> obs2equiv;
-  std::map<std::string,std::set<std::string> > equivs;
-
-};
 
 struct microstates_t {
   
@@ -220,7 +212,11 @@ struct microstates_t {
 
   // track whether a header has been written or not yet, from aggrgetae2edf()
   static bool wrote_header;
-  
+
+  static Data::Matrix<double> eig2mat( const Eigen::MatrixXd & E );
+  static Eigen::Matrix3d mat2eig( const Data::Matrix<double> & M );
+  static Eigen::Matrix3d mat2eig_tr( const Data::Matrix<double> & M );
+
   static void aggregate2edf( const Data::Matrix<double> & X ,
 			     const signal_list_t & signals ,
 			     const std::vector<int> & peak_idx ,	
@@ -233,16 +229,16 @@ struct microstates_t {
 			    const signal_list_t & signals ,
 			    const std::vector<int> & peaks );
   
-  ms_backfit_t backfit( const Data::Matrix<double> & X_ ,
-			const Data::Matrix<double> & A_ ,
+  ms_backfit_t backfit( const Data::Matrix<double> & X_ , 
+			const Data::Matrix<double> & A_ , 
 			bool return_GMD );
   
   ms_backfit_t smooth_reject( const ms_backfit_t & labels ,
 			      int minTime  );  // in samples
   
   ms_backfit_t smooth_windowed( const ms_backfit_t & labels ,
-				const Data::Matrix<double> & X_ ,
-				const Data::Matrix<double> & A_ ,
+				const Eigen::MatrixXd & X_ ,
+				const Eigen::MatrixXd & A_ ,
 				int smooth_width = 3 ,
 				double smooth_weight = 5 ,
 				int max_iterations = 1000 ,
@@ -250,8 +246,8 @@ struct microstates_t {
   
   ms_rle_t rle( const std::vector<int> & x );
 
-  ms_stats_t stats( const Data::Matrix<double> & X ,
-		    const Data::Matrix<double> & A ,
+  ms_stats_t stats( const Data::Matrix<double> & X , 
+		    const Data::Matrix<double> & A , 
 		    const std::vector<int> & L );
   
   static std::map<int,std::pair<int,double> > counts( const std::vector<int> & l )
@@ -309,6 +305,10 @@ struct microstates_t {
   
   double min_peak_dist;
 
+  int kmers_nreps;
+  int kmers_min;
+  int kmers_max;
+  
 };
 
 #endif

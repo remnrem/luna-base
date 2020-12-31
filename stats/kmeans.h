@@ -24,11 +24,9 @@
 #define __KMEANS_H__
 
 #include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 #include <vector>
 
-//#include "stats/Eigen/Dense"
-
-// https://rosettacode.org/wiki/K-means%2B%2B_clustering
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -130,13 +128,13 @@ struct modkmeans_out_t {
   //             microstates defined in K_range. The dimensions of each cell
   //                 is (K x samples).
   
-  Data::Matrix<double> Z;
+  Eigen::MatrixXd Z;
     
   //     .A_all    - Cell containing the spatial distribution for each number of
   //                 microstates defined in K_range. The dimensions of each cell
   //                 is (channels x K).
   
-  Data::Matrix<double> A;
+  Eigen::MatrixXd A;
   
   //     .L_all    - Cell containing the labels for each number of microstates
   //                 defined in K_range. The dimensions of each cell is
@@ -170,11 +168,11 @@ struct modkmeans_all_out_t {
   int K;
 
   // A_opt   - Spatial distribution of microstates (channels x K)                                                                                                                     
-  Data::Matrix<double> A;
-
+  Eigen::MatrixXd A;
+  
   // L_opt   - Label of the most active microstate at each timepoint (1 x samples).                                                                                                   
   std::vector<int> L;
-
+  
   //
   // Verbose info for each K
   //
@@ -208,17 +206,32 @@ struct modkmeans_t {
 
 private:
 
-  modkmeans_out_t segmentation( const Data::Matrix<double> & X ,
+  modkmeans_out_t segmentation( const Eigen::MatrixXd & , 
 				int K , 
 				double const1 );
   
+
+  double eigen_correlation( const Eigen::VectorXd & a , const Eigen::VectorXd & b )
+  {
+    const int n = a.size();
+    if ( b.size() != n ) return 0;
+    if ( n < 2 ) return 0;    
+    // r = cov(1,2) / sqrt( var(1).var(2) )    
+    Eigen::MatrixXd mat(n,2);
+    mat.col(0) = a;
+    mat.col(1) = b;
+    Eigen::MatrixXd centered = mat.rowwise() - mat.colwise().mean();
+    Eigen::MatrixXd cov = (centered.adjoint() * centered) / double(mat.rows() - 1);
+    return cov(0,1) / sqrt( cov(0,0) * cov(1,1) ) ;    
+  }
+
   
   //
   // Members
   //
 
-  //Eigen::MatrixXd X;
-  Data::Matrix<double> X;
+  Eigen::MatrixXd X;
+  //Data::Matrix<double> X;
   
   // K to try
   std::vector<int> ks;

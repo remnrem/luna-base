@@ -26,7 +26,6 @@
 #include "stats/kmeans.h"
 #include "stats/statistics.h"
 #include "miscmath/crandom.h"
-
 #include "helper/logger.h"
 
 extern logger_t logger;
@@ -301,7 +300,7 @@ std::vector<kmeans_t::point_t> kmeans_t::lloyd( std::vector<kmeans_t::point_t> &
     
   } while ( changed > (len >> 10)); /* stop when 99.9% of points are good */
   
-  std::cout << "completed in " << niter << " iterations\n";
+  logger << "completed in " << niter << " iterations\n";
   
   // populate class assignments    
   int i = 0;
@@ -390,10 +389,11 @@ void kmeans_t::variance_explained( const std::vector<point_t> & pts , const std:
 
 
 
+//======================================================================================
 //
 // EEG modified K means
 //
-
+//======================================================================================
 
 modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
 {
@@ -413,35 +413,44 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
   // (e.g. can be helpful if pooling across individuals)
   //
   
+  // if ( normalize )
+  //   {
+  //     Data::Vector<double> sdev = Statistics::sdev( X , Statistics::mean( data ) ) ;
+  //     double fac = Statistics::mean( sdev );
+  //     for (int r=0; r<N; r++)
+  // 	for (int c=0;c<C;c++)
+  // 	  X(r,c) /= fac;	
+  //   }
+
   if ( normalize )
     {
-      Data::Vector<double> sdev = Statistics::sdev( X , Statistics::mean( data ) ) ;
-      double fac = Statistics::mean( sdev );
-      for (int r=0; r<N; r++)
-	for (int c=0;c<C;c++)
-	  X(r,c) /= fac;	
+      Eigen::Array<double, 1, Eigen::Dynamic> means = X.colwise().mean();
+      Eigen::Array<double, 1, Eigen::Dynamic> std_dev = ((X.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
+      X.array().rowwise() -= means;
+      X.array().rowwise() /= std_dev;
     }
-
+  
   
   //
   // We need channels x samples 
   //
+  
+  //X = Statistics::transpose( X );
+  X.transposeInPlace();
 
-  //X.transposeInPlace();
-  X = Statistics::transpose( X );
 
   
   //
   // constant total SS
   //
     
-  double const1 = 0;
+  // double const1 = 0;
+  // for (int i=0; i<C; i++)
+  //   for (int j=0; j<N; j++)
+  //     const1 += X(i,j) * X(i,j);
 
-  for (int i=0; i<C; i++)
-    for (int j=0; j<N; j++)
-      const1 += X(i,j) * X(i,j);
+  double const1 = X.array().square().sum();
   
-    
   //
   // Use GEV as the goodness of fit metric
   //
@@ -451,11 +460,17 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
   // Global field power GFP
   //
 
-  Data::Vector<double> GFP = Statistics::sdev( X , Statistics::mean( X ) );
-  double GFP_const = Statistics::sum_squares( GFP );
+  // Data::Vector<double> GFP = Statistics::sdev( X , Statistics::mean( X ) );
+  // double GFP_const = Statistics::sum_squares( GFP );
+
+  // nb. X transposed, and so C-1 is the N of each column for GFP
+
+  Eigen::Array<double, 1, Eigen::Dynamic> means = X.colwise().mean();
+  Eigen::Array<double, 1, Eigen::Dynamic> GFP = ( (X.array().rowwise() - means ).square().colwise().sum()/(C-1)).sqrt();
+  double GFP_const = GFP.square().sum();
+
   double GEV_opt = 0;
 
-  
   // else
   // case 'CV'
   // sig2_mcv_opt = inf;
@@ -479,7 +494,7 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
     {
 
       const int K = ks[ki];
-      
+
       // K_ind is just index for --> == ki
 
       // Finding best fit amongst a given number of restarts based on selected
@@ -520,20 +535,23 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
 
 	  // map_corr = columncorr(X,A(:,L));
 
-	  Data::Vector<double> map_corr( N );
+	  Eigen::ArrayXd map_corr( N );
 	  
 	  for (int j=0;j<N;j++)
 	    {
-	      double r = Statistics::correlation( X.col(j) , result.A.col( result.L[j] ) );
-	      if  ( r < -1 ) Helper::halt( "problem with modkmeans" );
-	      map_corr[j] = r;
+	      double r = eigen_correlation( X.col(j) , result.A.col( result.L[j] ) );
+	      //if  ( r < -1 ) Helper::halt( "problem with modkmeans" );
+	      map_corr(j) = r;
 	    }
-
+	  
 	  //GEV = sum((GFP.*map_corr).^2) / GFP_const;
-	  double GEV = 0;
-	  for (int j=0; j<N; j++)
-	    GEV += ( GFP[j] * map_corr[j] ) * ( GFP[j] * map_corr[j] ) ;
-	  GEV /= GFP_const;
+
+	  double GEV = (GFP.transpose() * map_corr).square().sum() / GFP_const;
+		  
+	  // double GEV = 0;
+	  // for (int j=0; j<N; j++)
+	  //   GEV += ( GFP[j] * map_corr[j] ) * ( GFP[j] * map_corr[j] ) ;
+	  // GEV /= GFP_const;
 	  	  
 	  if ( GEV > GEV_best )
 	    {
@@ -573,6 +591,7 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
 		  
 	} 
 
+	  
       //
       // After finishing all replicates for this K 
       //
@@ -612,11 +631,11 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
 
 
 
-modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int K , double const1 )
+modkmeans_out_t modkmeans_t::segmentation( const Eigen::MatrixXd & X , int K , double const1 )
 {	  
   
-  const int C = X.dim1();
-  const int N = X.dim2();
+  const int C = X.rows();
+  const int N = X.cols();
   
   // Step 1
 
@@ -626,7 +645,8 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
   // Step 2a
 
   // selecting K random timepoints (0 to N-1)  to use as initial microstate maps
-  Data::Matrix<double> A( C , K );
+  Eigen::MatrixXd A( C , K );
+
   std::vector<int> L( N );
   
   std::set<int> selected;
@@ -640,43 +660,27 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
     if ( selected.size() == K ) break; 
   }
 
-  // fixed 
-  // 105907        4775       41538
-  // if ( K == 3 )
-  //   {
-  //     std::vector<int> picks = { 105907     ,   4775   ,    41538  } ;
-  //     for (int p=0;p<3;p++)
-  // 	for (int i=0; i<C; i++)
-  // 	  A(i,p) = X(i,picks[p]-1);	      
-  //   }
-  // else if ( K == 4 )
-  //   {
-  //     std::cout << " K4!\n";
-  //     std::vector<int> picks = { 22222 , 105907     ,   4775   ,    41538  } ;
-  //     for (int p=0;p<4;p++)
-  // 	for (int i=0; i<C; i++)
-  // 	  A(i,p) = X(i,picks[p]-1);	      
-  //   }
-  
-
   //
   // normalize each channel
   //
   
   // A = bsxfun(@rdivide,A,sqrt(diag(A*A')));% normalising
-  // CxK . KxC -> CxC, but only need to evaluate the diagonal elements
+
+  A = A.array().colwise() / (A*A.transpose()).diagonal().array().sqrt();
+
+  // // CxK . KxC -> CxC, but only need to evaluate the diagonal elements  
+  // for (int i=0; i<C; i++)
+  //   {
+  //     // for the i'th diagonal element, get the normalization factor (for channel/row of A)
+  //     double norm = 0;
+  //     for (int k=0; k<K; k++)
+  // 	norm += A(i,k) * A(i,k); 
+  //     norm = sqrt( norm );
+  //     for (int k=0;k<K;k++)
+  // 	A(i,k) /= norm;
+  //   }
   
-  for (int i=0; i<C; i++)
-    {
-      // for the i'th diagonal element, get the normalization factor (for channel/row of A)
-      double norm = 0;
-      for (int k=0; k<K; k++)
-	norm += A(i,k) * A(i,k); 
-      norm = sqrt( norm );
-      for (int k=0;k<K;k++)
-	A(i,k) /= norm;
-    }
-  
+
   // initialize
   int ind = 0; // iteration counter
   
@@ -698,46 +702,52 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
       // Step 3
       
       // Z = A'*X;
-      // A'  KxC CxN --> Z = KxN
-      // do transpose in place, by hand rather than two function calls
 
-      std::cout << "S1\n";
+      Eigen::MatrixXd Z = A.transpose() * X;
       
-      Data::Matrix<double> Z( K , N );
-      for (int i=0; i<K; i++)
-	for (int j=0; j<N; j++)
-	  for (int k=0; k<C; k++)
-	    Z(i,j) += A(k,i) * X(k,j); // nb. transpose of A
+      // // A'  KxC CxN --> Z = KxN
+      // // do transpose in place, by hand rather than two function calls
+      // Data::Matrix<double> Z( K , N );
+      // for (int i=0; i<K; i++)
+      // 	for (int j=0; j<N; j++)
+      // 	  for (int k=0; k<C; k++)
+      // 	    Z(i,j) += A(k,i) * X(k,j); // nb. transpose of A
       
-      // std::cout << "SX = " << X.dim1() << " " << X.dim2() << "\n";
-      // std::cout << A.print( "A" , 10 , 0 ) << "\n";
-      // std::cout << X.print( "X" , 10 , 10 ) << "\n";
-      // std::cout << Z.print( "Z" , 0 , 10 ) << "\n";
-      
+
       // [~,L] = max(Z.^2);
       // get max and put in L
 
-      std::cout << "S2\n";
-      
+
       std::map<int,std::vector<int> > K_idx; // track freq of each class, for below
-      for (int j=0; j<N; j++)
-	{
-	  int idx = 0;
-	  double max = Z(0,j) * Z(0,j);
-	  for (int i=1; i<K; i++)
-	    {
-	      double t = Z(i,j) * Z(i,j);
-	      if ( t > max )
-		{
-		  idx = i;
-		  max = t;
-		}
-	    }
-	  L[j] = idx;
-	  K_idx[idx].push_back( j );		  
-	}
+      Eigen::MatrixXd::Index maxIndex;
+      for (int i = 0; i < N; i++)
+        {
+          Z.col(i).array().square().maxCoeff(&maxIndex);
+	  // I(maxIndex,i) = 1;
+          L[i] = maxIndex;
+	  K_idx[maxIndex].push_back( i );
+
+        }
+
+
+      // for (int j=0; j<N; j++)
+      // 	{
+      // 	  int idx = 0;
+      // 	  double max = Z(0,j) * Z(0,j);
+      // 	  for (int i=1; i<K; i++)
+      // 	    {
+      // 	      double t = Z(i,j) * Z(i,j);
+      // 	      if ( t > max )
+      // 		{
+      // 		  idx = i;
+      // 		  max = t;
+      // 		}
+      // 	    }
+      // 	  L[j] = idx;
+      // 	  K_idx[idx].push_back( j );		  
+      // 	}
       
-      std::cout << "S3\n";      
+
       
       // Step 4
       
@@ -748,93 +758,103 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
 	    {
 	      // A =  % no members of this microstate
 	      // A(:,k) = 0;
+
 	      for (int i=0;i<C;i++) A(i,k) = 0;
 	    }
 	  else
 	    {
-	      // extract channel maps for this K into S matrix, which is CxC
-	      Data::Matrix<double> S( C , C );
+
 	      //S = X(:,k_idx)*X(:,k_idx)';
-	      // CxNk x NkxC
 	      
-	      // hmm.  element access via operator() is slow in the inner loop
-	      // need to investigate that.. but for now, use a raw vec/vec array
+	      const int n = K_idx[k].size();
+              const std::vector<int> & cols = K_idx[k];
+              Eigen::MatrixXd XS( C, n );
+              for (int s=0;s<n;s++) XS.col(s) = X.col(cols[s]);
+              Eigen::MatrixXd S = XS * XS.transpose();
+
 	      
-	      const std::vector<int> & kidx = K_idx[k];
-	      const int nk = kidx.size();
+	      // // extract channel maps for this K into S matrix, which is CxC
+	      // Data::Matrix<double> S( C , C );
+
+	      // // CxNk x NkxC
+	      // // hmm.  element access via operator() is slow in the inner loop
+	      // // need to investigate that.. but for now, use a raw vec/vec array
 	      
-	      // SLOW....
+	      // const std::vector<int> & kidx = K_idx[k];
+	      // const int nk = kidx.size();
+	      
+	      // // make XX transpose for potentially faster maxtrix mult
+	      // std::vector<std::vector<double> > XX( C );
+	      
+	      // for (int i=0; i<C; i++)
+	      // 	XX[i].resize( nk );
+	      // for (int i=0; i<C; i++)
+	      // 	for (int j=0; j<nk; j++)
+	      // 	  XX[i][j] = X(i,kidx[j]);
+	      
 	      // for (int i=0; i<C; i++)
 	      // 	for (int j=0; j<C; j++)
-	      // 	  for (int l=0; l<nk; l++)
-	      // 	    S(i,j) += X(i,kidx[l]) * X(j,kidx[l]);
-	      
-	      // make XX transpose for potentially faster maxtrix mult
-	      std::vector<std::vector<double> > XX( C );
-	      
-	      for (int i=0; i<C; i++)
-		XX[i].resize( nk );
-	      for (int i=0; i<C; i++)
-		for (int j=0; j<nk; j++)
-		  XX[i][j] = X(i,kidx[j]);
-	      
-	      for (int i=0; i<C; i++)
-		for (int j=0; j<C; j++)
-		  {
-		    double tmp = 0;
-		    for (int l=0; l<nk; l++)
-		      tmp += XX[i][l] * XX[j][l];
-		    S(i,j) = tmp;
-		  }
+	      // 	  {
+	      // 	    double tmp = 0;
+	      // 	    for (int l=0; l<nk; l++)
+	      // 	      tmp += XX[i][l] * XX[j][l];
+	      // 	    S(i,j) = tmp;
+	      // 	  }
 	      
 	      // finding eigenvector with largest value and normalising it
 	      // [eVecs,eVals] = eig(S,'vector');
 	      // [~,idx] = max(abs(eVals));
 	      // A(:,k) = eVecs(:,idx);
 	      // A(:,k) = A(:,k)./sqrt(sum(A(:,k).^2));
-	      
-	      bool okay = true;
-	      
-	      //std::cout << S.print("S",10,10) << "\n";
-	      
-	      Statistics::Eigen eigen = Statistics::eigenvectors( S , &okay );
 
-	      if ( ! okay ) Helper::halt( "problem in modkmeans()" );
 
+	      // S is symmetric, so can use this solver; largest eigenvalue will be in last slot (C-1)
+	      Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver( S );
+	      if ( eigensolver.info() != Eigen::Success) Helper::halt( "problem in modkmeans()" );
+
+	      // results sorted by increasing eigenvalues, so take the last
+	      // copy into A, and normalize
+
+	      Eigen::ArrayXd V = eigensolver.eigenvectors().col(C-1);
+	      A.col(k) = V / sqrt( V.square().sum() );
+
+	      
+	      // bool okay = true;
+	      // Statistics::Eigen eigen = Statistics::eigenvectors( S , &okay );	      
+	      // if ( ! okay ) Helper::halt( "problem in modkmeans()" );
+	      
 	      // eigen values:
 	      //  eigen.d  (eigenvalues)
 	      //  eigen.z  (eigenvectors)
 	      
-	      int mx_idx = 0;
-	      double mx = fabs( eigen.d[0] ) ;
-	      const int ne = eigen.d.size();
-	      if ( eigen.d.size() != C ) Helper::halt( "problem in modkmeans()" );
-	      for (int i=1; i<C; i++)
-		{
-		  if ( fabs( eigen.d[i] ) > mx )
-		    {
-		      mx = eigen.d[i];
-		      mx_idx = i;
-		    }
-		}
+	      // int mx_idx = 0;
+	      // double mx = fabs( eigen.d[0] ) ;
+	      // const int ne = eigen.d.size();
+	      // if ( eigen.d.size() != C ) Helper::halt( "problem in modkmeans()" );
+	      // for (int i=1; i<C; i++)
+	      // 	{
+	      // 	  if ( fabs( eigen.d[i] ) > mx )
+	      // 	    {
+	      // 	      mx = eigen.d[i];
+	      // 	      mx_idx = i;
+	      // 	    }
+	      // 	}
 	      
 	      // copy into A, and normalize		      
-	      double norm = 0;
-	      for (int i=0; i<C; i++)
-		{
-		  A(i,k) = eigen.z(i,mx_idx);
-		  norm += A(i,k) * A(i,k);
-		}
-	      norm = sqrt(norm);
-	      for (int i=0; i<C; i++)
-		A(i,k) /= norm;
+	      // double norm = 0;
+	      // for (int i=0; i<C; i++)
+	      // 	{
+	      // 	  A(i,k) = eigen.z(i,mx_idx);
+	      // 	  norm += A(i,k) * A(i,k);
+	      // 	}
+	      // norm = sqrt(norm);
+	      // for (int i=0; i<C; i++)
+	      // 	A(i,k) /= norm;
 	      
 	    }
 	  
 	} // next 'k' of K
 
-      std::cout << "S4\n";
-	    
       // Step 5
 
       //sig2 = (const1 - sum( sum( A(:,L). *X ).^2) ) / (N*(C-1));
@@ -855,17 +875,14 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
       
       
     } // end of iterations
-  
+
+
   //%% Saving solution converged on (step 7 and 8)
 	      
   // Step 7
   // Z = A'*X; % NOTE, not setting non-activated microstates to zero
-  
-  Data::Matrix<double> Z( K , N );
-  for (int i=0; i<K; i++)
-    for (int j=0; j<N; j++)
-      for (int k=0; k<C; k++)
-	Z(i,j) += A(k,i) * X(k,j); // nb. transpose of A                                                                                                                    
+
+  Eigen::MatrixXd Z = A.transpose() * X;
 
   // [~,L] = max(Z.^2);
 	  
@@ -885,7 +902,7 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
       L[j] = idx;	      
     }
   
-	  
+
   //  Step 8
   // sig2_D = const1 / (N*(C-1));
   // R2 = 1 - sig2/sig2_D;
@@ -908,28 +925,29 @@ modkmeans_out_t modkmeans_t::segmentation( const Data::Matrix<double> & X , int 
   //  therefore, can reduce the matrix multipleication for: A * activations
   //  and directly go from Z & A 
   
-  Data::Matrix<double> XX = X;
+  Eigen::MatrixXd XX = X;
   for (int i=0;i<C;i++)
     for (int j=0;j<N;j++)
       {
 	XX(i,j) -= A(i,L[j]) * Z(L[j],j);
 	XX(i,j) *= XX(i,j);
       }
-  
-  double MSE = Statistics::mean( Statistics::mean( XX ) );
-  
+
+  //  double MSE = Statistics::mean( Statistics::mean( XX ) );
+  double MSE = XX.array().mean();
+
   //
   // Package up results	  
   //
   
   modkmeans_out_t result;
-  result.A = A;
+  result.A = A;  
   result.L = L;
   result.Z = Z;
   result.R2 = R2;
   result.sig2 = sig2;
   result.MSE = MSE;
-  result.iter = ind;
+  result.iter = ind;  
   return result;
   
 }	  
