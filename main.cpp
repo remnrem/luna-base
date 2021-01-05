@@ -231,7 +231,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_cwt_design = false;
   bool cmdline_proc_pdlib      = false;
   bool cmdline_proc_psc        = false;
-  bool cmdline_proc_ms         = false;
+  bool cmdline_proc_ms_kmer    = false;
   
   //
   // parse command line
@@ -266,6 +266,9 @@ int main(int argc , char ** argv )
 	    cmdline_proc_cwt_design = true;
 	  else if (  strcmp( argv[1] , "--psc" ) == 0 )
 	    cmdline_proc_psc = true;
+	  else if (  strcmp( argv[1] , "--kmer" ) == 0 )
+	    cmdline_proc_ms_kmer = true;
+
 	}
 
       // otherwise, first element will be treated as a file list
@@ -512,6 +515,175 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+  
+
+  //
+  // PSC 
+  //
+
+  if ( cmdline_proc_ms_kmer )
+    {
+      param_t param;
+      build_param_from_cmdline( &param );
+      writer.begin();
+      
+      writer.id( "." , "." );      
+      writer.cmd( "KMER" , 1 , "" );
+      writer.level( "KMER", "_KMER" );
+
+      std::string infile = Helper::expand( param.requires( "file" ) );
+      int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000;
+      int k1 = param.has( "k1" ) ? param.requires_int( "k1" ) : 2;
+      int k2 = param.has( "k2" ) ? param.requires_int( "k2" ) : 6;
+      if ( param.has( "k" ) ) k1 = k2 = param.requires_int( "k" );
+     
+			      
+      // load from STDIN
+      std::map<std::string,std::string> data;
+      std::vector<std::string> ids;
+      if ( ! Helper::fileExists( infile ) ) Helper::halt( "could not open " + infile );
+      std::ifstream IN1( infile.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  std::string id, s;
+	  IN1 >> id >> s;	  
+	  if ( IN1.eof() || id == "" || s.size() == 0 ) continue;
+	  data[ id ] = s;
+	  ids.push_back( id );
+	}
+      IN1.close();
+
+      // phenotypes?      
+      if ( param.has( "vars" ) )
+	cmd_t::attach_ivars( param.value( "vars" ) );
+
+      const std::string phe_label = param.has( "phe" ) ? param.value( "phe" ) : "" ;
+      const bool grp = phe_label != "";
+      
+      std::map<std::string,int> phe;
+
+      if ( grp )
+	{
+	  phe = cmd_t::pull_ivar( ids , phe_label );
+	  int cases = 0 , controls = 0 , missing = 0;
+
+	  std::map<std::string,int>::const_iterator ii = phe.begin();
+	  while ( ii != phe.end() )
+	    {
+	      if ( ii->second == 0 ) ++controls;
+	      else if ( ii->second == 1 ) ++cases;
+	      else ++missing;
+	      ++ii;
+	    }
+
+	  logger << "  of " << ids.size() << " total individuals, for "
+		 << phe_label << " "
+		 << cases << " cases, "
+		 << controls << " controls and "
+		 << missing << " unknown\n"; 	    
+
+	  if ( cases == 0 || controls == 0 )
+	    Helper::halt( "did not observe both cases and controls: cannot run a phenotype-based analysis" );
+	      
+	}
+          
+      // do analysis (w/ or w/out phenotype)
+      ms_kmer_t kmers( data , k1 , k2 , nreps , grp ? &phe : NULL );
+      
+      // report output
+      std::map<std::string,double>::const_iterator pp = kmers.basic.pval.begin();
+      while ( pp != kmers.basic.pval.end() )
+	{
+	  writer.level( pp->first , "KMER" );
+	  writer.level( (int)pp->first.size() , "L" );
+
+	  bool valid_equiv = kmers.equiv_set_size[ pp->first ] > 1;
+	  
+	  writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
+	  writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
+	  
+	  writer.value( "O_OBS" , kmers.basic.obs[ pp->first ] );
+	  writer.value( "O_EXP" , kmers.basic.exp[ pp->first ] );
+	  writer.value( "O_P" , pp->second );
+	  writer.value( "O_Z" , kmers.basic.zscr[ pp->first ] );	  
+
+	  if ( valid_equiv )
+	    {
+	      writer.value( "M_OBS" , kmers.equiv.obs[ pp->first ] );
+	      writer.value( "M_EXP" , kmers.equiv.exp[ pp->first ] );
+	      writer.value( "M_P" , kmers.equiv.pval[ pp->first ] );
+	      writer.value( "M_Z" , kmers.equiv.zscr[ pp->first ] );
+	    }
+	  
+	  // C/C contrasts?
+
+	  if ( grp )
+	    {
+
+	      writer.level( "CASE" , "PHE" );
+
+	      writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
+	      writer.value( "O_OBS" , kmers.basic_cases.obs[ pp->first ] );
+	      writer.value( "O_EXP" , kmers.basic_cases.exp[ pp->first ] );
+	      writer.value( "O_P" , kmers.basic_cases.pval[ pp->first ] );
+	      writer.value( "O_Z" , kmers.basic_cases.zscr[ pp->first ] );
+
+	      if ( valid_equiv )
+		{
+		  writer.value( "M_OBS" , kmers.equiv_cases.obs[ pp->first ] );
+		  writer.value( "M_EXP" , kmers.equiv_cases.exp[ pp->first ] );
+		  writer.value( "M_P" , kmers.equiv_cases.pval[ pp->first ] );
+		  writer.value( "M_Z" , kmers.equiv_cases.zscr[ pp->first ] );
+		}
+	      
+	      writer.level( "CONTROL" , "PHE" );
+	      
+	      writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
+	      writer.value( "O_OBS" , kmers.basic_controls.obs[ pp->first ] );
+	      writer.value( "O_EXP" , kmers.basic_controls.exp[ pp->first ] );
+	      writer.value( "O_P" , kmers.basic_controls.pval[ pp->first ] );
+	      writer.value( "O_Z" , kmers.basic_controls.zscr[ pp->first ] );
+
+	      if ( valid_equiv )
+		{
+		  writer.value( "M_OBS" , kmers.equiv_controls.obs[ pp->first ] );
+		  writer.value( "M_EXP" , kmers.equiv_controls.exp[ pp->first ] );
+		  writer.value( "M_P" , kmers.equiv_controls.pval[ pp->first ] );
+		  writer.value( "M_Z" , kmers.equiv_controls.zscr[ pp->first ] );
+		}
+	      
+	      writer.level( "DIFF" , "PHE" );
+	      
+	      writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
+	      writer.value( "O_OBS" , kmers.basic_diffs.obs[ pp->first ] );
+              writer.value( "O_EXP" , kmers.basic_diffs.exp[ pp->first ] );
+	      writer.value( "O_Z" , kmers.basic_diffs.zscr[ pp->first ] );
+
+	      if ( valid_equiv )
+		{
+		  writer.value( "M_OBS" , kmers.equiv_diffs.obs[ pp->first ] );
+		  writer.value( "M_EXP" , kmers.equiv_diffs.exp[ pp->first ] );
+		  writer.value( "M_Z" , kmers.equiv_diffs.zscr[ pp->first ] );
+		}
+	      
+	      writer.unlevel( "PHE" );
+	    }
+	  
+	  ++pp;
+	}  
+      writer.unlevel( "L" );
+      writer.unlevel( "KMER" );
+      
+      // all done
+      writer.unlevel( "_KMER" );
+      writer.commit();
+      std::exit(0);
+    }
+
+  
   
   if ( cmdline_proc_fir_design )
     {
@@ -1397,12 +1569,12 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       ms_kmer_t kmers( x , 2 , 6 , 1000 );
       
-      std::map<std::string,double>::const_iterator pp = kmers.pvals.begin();
-      while ( pp != kmers.pvals.end() )
+      std::map<std::string,double>::const_iterator pp = kmers.basic.pval.begin();
+      while ( pp != kmers.basic.pval.end() )
 	{
 	  std::cout << pp->first << "\t"
 		    << pp->first.size() << "\t"
-		    << kmers.obs[ pp->first ] << "\t"
+		    << kmers.basic.obs[ pp->first ] << "\t"
 		    << pp->second << "\n";
 	  ++pp;
 	}

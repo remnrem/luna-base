@@ -147,33 +147,99 @@ struct ms_rle_t {
 };
 
 
-struct ms_kmer_t {
-  ms_kmer_t() { }
+struct ms_kmer_results_t {
+
+  // key is sequence as a string
   
-  ms_kmer_t( const std::vector<int> & l , int k1 , int k2 , int nreps )
+  // observed statistic (count / relative freq)
+  std::map<std::string,double>  obs;    // OBS                                                                                                       
+
+  // track all NREP permuted statistics
+  std::map<std::string,std::vector<double> > perm;   
+  
+  // expected statistic (mean of perm)
+  std::map<std::string,double> exp;    // EXP
+  
+  // Z score = ( OBS - mean(perm) ) / sd(perm) 
+  std::map<std::string,double> zscr;   // Z score
+  
+  // (optional) enirhcment (1-sided) empirical p-value ( obs >= perm ) 
+  std::map<std::string,double> pval;   
+
+};
+
+struct ms_kmer_t {
+  
+  ms_kmer_t() { }
+
+  // single obs
+  ms_kmer_t( const std::vector<int> & x , int k1 , int k2 , int nreps )
   {
-    run(l,k1,k2,nreps);
+    run(x,k1,k2,nreps);
   }
 
-  void run( const std::vector<int> & l , int k1 , int k2 , int nreps );
+  // multiple-obs, as strings
+  ms_kmer_t( const std::map<std::string,std::string>  & s , int k1 , int k2 , int nreps ,
+	     const std::map<std::string,int> * grp = NULL ) 
+  {
+    run(s,k1,k2,nreps,grp);
+  }
+  
+  // multi-obs, as int-vectors
+  ms_kmer_t( const std::map<std::string,std::vector<int> > & l , int k1 , int k2 , int nreps , 
+	     const std::map<std::string,int> * grp = NULL )  
+  {
+    run(l,k1,k2,nreps,grp);
+  }
+  
+  // single obs
+  void run( const std::vector<int> & l , int k1 , int k2 , int nreps )
+  {
+    std::map<std::string,std::vector<int> > l1;
+    l1[ "__single_obs" ] = l;
+    run( l1 , k1 , k2 , nreps , NULL );
+  }
+
+  // multiple obs, optional grp variable coded 0/1 
+  void run( const std::map<std::string,std::vector<int> > & l ,
+	    int k1 , int k2 , int nreps ,
+	    const std::map<std::string,int> * grp = NULL );
+  
+  // multiple obs, optional grp variable coded 0/1 
+  void run( const std::map<std::string,std::string> & s ,
+	    int k1 , int k2 , int nreps ,
+	    const std::map<std::string,int> * grp = NULL );
   
   std::set<std::string> permute( std::string str );
   std::string first_permute( std::string str );
-  std::vector<int> modified_random_draw( const std::vector<int> & );
-  int pick( const std::map<int,int> & urns , int skip = -1 );
+  std::string modified_random_draw( const std::string & );
+  char pick( const std::map<char,int> & urns , char skip = '?' );
   std::string s;
+  
+  //
+  // Results
+  // 
 
-  std::map<std::string,int> obs; 
-  std::map<std::string,double> orel; // obs / group-obs 
-
-  std::map<std::string,double> pexp;
-  std::map<std::string,double> pexp_equiv;
-  std::map<std::string,double> pvals;
-  std::map<std::string,double> pvals_equiv;
   std::map<std::string,int> equiv_set_size;
   std::map<std::string,std::string> obs2equiv;
   std::map<std::string,std::set<std::string> > equivs;
 
+  // raw counts
+  ms_kmer_results_t basic;
+  
+  // equivalence group relative enrichment
+  ms_kmer_results_t equiv;
+  
+  // phenotype group comparisons (assumes two groups)
+  ms_kmer_results_t basic_controls;
+  ms_kmer_results_t basic_cases;
+  ms_kmer_results_t basic_diffs;
+  
+  // equivalence group relative enrichment
+  ms_kmer_results_t equiv_controls;
+  ms_kmer_results_t equiv_cases;
+  ms_kmer_results_t equiv_diffs;
+    
 };
 
 
@@ -205,7 +271,7 @@ struct ms_stats_t {
 
 struct microstates_t {
   
-  microstates_t( param_t & param , const int sr_ );
+  microstates_t( param_t & param , const std::string & subj_id , const int sr_ );
   
   std::vector<int>  find_peaks( const Data::Matrix<double> & X , 
 				const signal_list_t & signals );
@@ -266,12 +332,6 @@ struct microstates_t {
   }
   
   
-  /* // */
-  /* // data members: solutions (keyed by number of classes) */
-  /* // */
-  /* std::map<int,ms_t> sol; */
-
-  
   //
   // Options
   //
@@ -292,6 +352,9 @@ struct microstates_t {
 
   // dump GPF matrix prior to clustering?
   std::string dump_file;
+
+  std::string statesfile;
+  std::string subj_id;
 
   bool standardize;
   

@@ -41,7 +41,6 @@ extern logger_t logger;
 //        to specify labels directly for a prototype file (i.e. if diff order)
 //        option to make aggregare EDF out of prototypes (i.e. to subsequently cluster prototypes)
 
-
 // static member to track header of aggrgated EDF in multi-sample mode
 bool microstates_t::wrote_header = false;
 
@@ -74,9 +73,11 @@ void dsptools::microstates( edf_t & edf , param_t & param )
     Helper::halt( "can only specify epoch when running in backfit mode" );
   if ( epoch && param.has( "gfp" ) )
     Helper::halt( "cannot specify epoch and gfp (to dump sample-level GFP) together" );
+  if ( epoch && param.has( "write-states" ) )
+    Helper::halt( "cannot specify epoch and write-states (to dump state order) together" );
   
   int run_kmers = param.has( "kmers" ) ? param.requires_int( "kmers" ) : 0 ;
-    
+  
   //
   // Channels
   //
@@ -105,9 +106,8 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   // If in epoch mode, only read prototypes once
   //
 
-  
   ms_prototypes_t prior_prototypes;
-
+    
   if ( multi_backfit && epoch )
     {
       const std::string filename = Helper::expand( param.value( "backfit" ) );
@@ -156,8 +156,8 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       //
       // Set up microstate class
       //
-      
-      microstates_t mstates( param , sr );      
+          
+      microstates_t mstates( param , edf.id , sr );      
       
 
       //
@@ -266,7 +266,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       
       ms_stats_t stats = mstates.stats( Statistics::transpose( X ) , microstates_t::eig2mat( prototypes.A ) , smoothed.best() );
   
-   
+
 
       //
       // Verbose dumping of GFP and L point by point? (nb. this only works in whole-trace mode)
@@ -353,33 +353,38 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       writer.value( "LZW_ALL" , stats.lwz_points );
       writer.value( "GEV"     , stats.GEV_tot );
       
-      // kmer stats
+      // kmer stats: single obs, so no group differences here
     
       if ( run_kmers )
 	{
-	  std::map<std::string,double>::const_iterator pp = stats.kmers.pvals.begin();
-	  while ( pp != stats.kmers.pvals.end() )
+	  std::map<std::string,double>::const_iterator pp = stats.kmers.basic.pval.begin();
+	  while ( pp != stats.kmers.basic.pval.end() )
 	    {
 	      writer.level( pp->first , "KMER" );
 	      writer.level( (int)pp->first.size() , "L" );
 	      
-	      //writer.value( "EQ"   , kmers.obs2equiv[ pp->first ] );
-	      writer.value( "EQ" , stats.kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "EQ"   , stats.kmers.obs2equiv[ pp->first ] );
+	      writer.value( "EQN"  , stats.kmers.equiv_set_size[ pp->first ] );
 	      
-	      writer.value( "O_OBS" , stats.kmers.obs[ pp->first ] );
-	      writer.value( "O_EXP" , stats.kmers.pexp[ pp->first ] );
+	      writer.value( "O_OBS" , stats.kmers.basic.obs[ pp->first ] );
+	      writer.value( "O_EXP" , stats.kmers.basic.exp[ pp->first ] );
 	      writer.value( "O_P" , pp->second );
+	      writer.value( "O_Z" , stats.kmers.basic.zscr[ pp->first ] );
+
+	      if ( stats.kmers.equiv_set_size[ pp->first ] > 1 )
+		{
+		  writer.value( "M_OBS" , stats.kmers.equiv.obs[ pp->first ] );
+		  writer.value( "M_EXP" , stats.kmers.equiv.exp[ pp->first ] );
+		  writer.value( "M_P" , stats.kmers.equiv.pval[ pp->first ] );
+		  writer.value( "M_Z" , stats.kmers.equiv.zscr[ pp->first ] );
+		}
 	      
-	      writer.value( "M_OBS" , stats.kmers.orel[ pp->first ] );
-	      writer.value( "M_EXP" , stats.kmers.pexp_equiv[ pp->first ] );
-	      writer.value( "M_P" , stats.kmers.pvals_equiv[ pp->first ] );
 	      ++pp;
 	    }  
 	  writer.unlevel( "L" );
 	  writer.unlevel( "KMER" );
 	}
       
-
       //
       // either next epoch or all done
       //
@@ -397,7 +402,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 }
 
 
-microstates_t::microstates_t( param_t & param , const int sr_ )
+microstates_t::microstates_t( param_t & param , const std::string & subj_id_, const int sr_ ) 
 {
 
   //
@@ -405,6 +410,8 @@ microstates_t::microstates_t( param_t & param , const int sr_ )
   //
 
   sr = sr_;
+
+  subj_id = subj_id_;
   
   multi_peaks = param.has( "peaks" );
   
@@ -431,6 +438,9 @@ microstates_t::microstates_t( param_t & param , const int sr_ )
   
   verbose = param.has( "verbose" );
 
+  // write sequence to file? 
+  statesfile = param.has( "write-states" ) ? param.value( "write-states" ) : "" ;
+  
   // all points (i.e. just just GFP peaks)
   skip_peaks = param.has( "all-points" );
   
@@ -652,7 +662,11 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
 
   const int C = Z.dim2();
   const int N = Z.dim1();
- 
+
+  //
+  // Optimal prototype maps
+  //
+
   for (int i=0; i<C; i++)
     {
       writer.level( signals.label(i) , globals::signal_strat );
@@ -666,9 +680,38 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
 	  writer.value( "A" , results.A(i,j) );
 	}
       writer.unlevel( "K" );	    
+      
     }
   writer.unlevel( globals::signal_strat );
+
+  //
+  // All prototype maps (will include optimal A)
+  //
   
+  for (int ki=0; ki<ks.size(); ki++)
+    {
+      const int K = ks[ki];
+
+      writer.level( K , "KN" );
+      
+      for (int i=0; i<C; i++)
+	{
+	  writer.level( signals.label(i) , globals::signal_strat );
+	  
+	  for (int j=0; j<K; j++)
+	    {
+	      std::string s="?";
+	      s[0] = (char)(65+j);
+	      writer.level( s , "K" );
+	      writer.value( "A" , results.kres[K].A(i,j) );
+	    }
+	  writer.unlevel( "K" );
+	  
+	}
+      writer.unlevel( globals::signal_strat );
+    }
+  writer.unlevel( "KN" );
+
   
   //
   // Detailed fit outputs (over all K considered --> NK)
@@ -1140,9 +1183,27 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
   lzw_t lzw2( runs.d , &stats.lwz_states );
 
-   
+
   //
-  // k-mer distributions, optionally
+  // dump sequences to file?
+  //
+
+  if ( statesfile != ""  )
+    {      
+      logger << "  writing sequence order to " << statesfile << "\n";
+      const int n = runs.d.size();      
+      // Encode as A, B, C, ...
+      std::string s = std::string( n , '?' );
+      for (int i=0; i<n; i++)
+        s[ i ] = (char)(65 + runs.d[i] );
+      std::ofstream OUT1( Helper::expand( statesfile ).c_str() , std::ios::out );
+      OUT1 << subj_id << "\t" << s << "\n";
+      OUT1.close();      
+    }
+
+  
+  //
+  // k-mer distributions, optionally (in single-obs mode)
   //
 
   if ( kmers_nreps )
@@ -1153,35 +1214,114 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
 
 
-void ms_kmer_t::run( const std::vector<int> & l , int k1 , int k2 , int nreps )
+void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int k1 , int k2 , int nreps ,
+		     const std::map<std::string,int> * grp )
+{
+  std::map<std::string,std::string> sall;
+  std::map<std::string,std::vector<int> >::const_iterator ii = lall.begin();
+  while ( ii != lall.end() )
+    {
+      const std::vector<int> & l = ii->second;
+      std::string & s = sall[ ii->first ];
+      const int n = l.size();
+      // Encode as A, B, C, ...                                                                                                                                              
+      s = std::string( n , '?' );
+      for (int i=0; i<n; i++)
+        s[ i ] = (char)(65 + l[i] );
+      ++ii;
+    }
+  run( sall , k1 , k2 , nreps , grp );
+}
+
+void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , int k2 , int nreps ,
+		     const std::map<std::string,int> * grp )
 {
 
-  // ensure bounded if using this naive algorithm
+  // single obs mode?
+  bool single_obs = sall.size() == 1;
+
+  // group/phenotype contrast?
+  // must be coded 0 / 1  (any other value == missing ) 
+  bool grp_contrast = grp != NULL;  
+  
+  //
+  // ensure bounded if using this naive algorithm 
+  //
+  
   if ( k1 < 2 ) k1 = 2;
-  if ( k2 > 10 ) k2 = 8;
+  if ( k2 > 8 ) k2 = 8;
 
-  // Encode as A, B, C, ...
-  const int n = l.size();
 
-  s = std::string( n , '?' );
-  for (int i=0; i<n; i++) s[i] = (char)(65 + l[i] ); 
-       
-  for (int i=0; i<n; i++)
-    for (int j=k1; j<=k2; j++)
-      if ( i+j < n ) ++obs[ s.substr( i , j ) ];
+  //
+  // Observed data: basic counts (pooling across all individuals)
+  //
+
+  std::map<std::string,std::string>::const_iterator ii = sall.begin();
+  while ( ii != sall.end() )
+    {
+      // sequences for this individual
+      const std::string & s = ii->second;
+      const int n = s.size();
+
+      // phenotype? (expecting 0/1)
+      int phe = -1;
+      if ( grp != NULL && grp->find( ii->first ) != grp->end() ) 
+	phe = grp->find( ii->first )->second;
+      
+      // count observed sequences (pools across all individuals)
+      for (int i=0; i<n; i++)
+	for (int j=k1; j<=k2; j++)
+	  if ( i+j < n )
+	    {
+	      const std::string ss = s.substr( i , j ) ;
+	      ++basic.obs[ ss ];
+	      if      ( phe == 0 ) ++basic_controls.obs[ ss ];
+	      else if ( phe == 1 ) ++basic_cases.obs[ ss ];
+	    }
+      
+      // next individual
+      ++ii;
+    }
+
+  
+
+  //
+  // Observed data: C/C diffs in the overall counts
+  //
+  
+  if ( grp != NULL )
+    {
+      std::map<std::string,double>::const_iterator cc = basic.obs.begin();
+      while ( cc != basic.obs.end() )
+	{
+	  basic_diffs.obs[ cc->first ] = basic_cases.obs[ cc->first ] - basic_controls.obs[ cc->first ];
+	  ++cc;
+	}
+    }
+  
+
+  //
+  // Observed data: form equivalance groups
+  //
 
   // for each unique sequence, find the equivalance group:
-  //  the other sequences with the same number of each state, and with no
-  //  matching contiguous states (i.e. as the original sequences will not have this feature)
+  //  - the other sequences with the same numbers of each state, and also with no
+  //    matching contiguous states (i.e. like the original sequences)
 
-  // label each equivalance group by the first sorted value 
-  // then permute data, and count the max # of times a
+  // label each equivalance group by the first sorted value then
+  // permute data to calculate the sum counts (i.e. to get a
+  // group-normalized relative frequency )
 
   // observed -->  equiv group key.  e.g.  BCA --> ABC
   obs2equiv.clear();
+
+  // equiv group key --> all members e.g.  ABC -->  ABC, ACB, BAC, BCA, CAB, CBA
+  equivs.clear();
+
   
-  std::map<std::string,int>::const_iterator cc = obs.begin();
-  while ( cc != obs.end() )
+  // for each observed sequence, find the set of equivalent sequences  
+  std::map<std::string,double>::const_iterator cc = basic.obs.begin();
+  while ( cc != basic.obs.end() )
     {
       std::string str = cc->first;
       std::string key = first_permute( str );
@@ -1189,12 +1329,9 @@ void ms_kmer_t::run( const std::vector<int> & l , int k1 , int k2 , int nreps )
       ++cc;
     }
 
-  // equiv group key --> all members e.g.  ABC -->  ABC, ACB, BAC, BCA, CAB, CBA
-  equivs.clear();
-  orel.clear(); // tracked observed obs / group-obs ratio
-  
+  // count up for each equivalence group
   std::map<std::string,std::string>::const_iterator ee = obs2equiv.begin();
-  int tot = 0;
+
   while ( ee != obs2equiv.end() )
     {
       // based just on the keys, get the corresponding equiv. group
@@ -1202,167 +1339,310 @@ void ms_kmer_t::run( const std::vector<int> & l , int k1 , int k2 , int nreps )
 
       // for convenienc of output, track size of equiv set directly
       equiv_set_size[ ee->first ] = equivs[ ee->second ].size();
-      //std::cout << "MAIN = " <<  ee->first << " --> " << ee->second << "\n";
 
-      // orel stats : obs / obs-group 
-      const std::set<std::string> & s = equivs[ ee->second ];
-      std::set<std::string>::const_iterator qq = s.begin();
-      while ( qq != s.end() )
-	{
-	  //std::cout << " adding " << *qq << " " << obs[*qq ] << "\n";
-	  orel[ ee->first ] += obs[ *qq ];
+      // denominator for : obs / obs-group 
+      const std::set<std::string> & st = equivs[ ee->second ];
+      std::set<std::string>::const_iterator qq = st.begin();
+      while ( qq != st.end() )
+	{	  
+	  equiv.obs[ ee->first ] += basic.obs[ *qq ];
+	  if ( grp != NULL )
+	    {
+	      equiv_cases.obs[ ee->first ] += basic_cases.obs[ *qq ];
+	      equiv_controls.obs[ ee->first ] += basic_controls.obs[ *qq ];	      
+	    }
 	  ++qq;
 	}
-      
-      //      std::cout << " OREL = " << " " << obs[ ee->first ] << " / " << orel[ ee->first ] ;
-      orel[ ee->first ] = obs[ ee->first ] / orel[ ee->first ];
-      //std::cout << " = " << orel[ ee->first ] << "\n";
 
+      // express as proportion of total (equiv.obs is set to sum of equiv groups above)
+
+      equiv.obs[ ee->first ] = basic.obs[ ee->first ] / equiv.obs[ ee->first ];
       
-      // and track for output
-      tot += equivs[ ee->second ].size();
+      if ( grp != NULL )
+	{
+	  equiv_cases.obs[ ee->first ] = basic_cases.obs[ ee->first ] / equiv_cases.obs[ ee->first ];
+	  equiv_controls.obs[ ee->first ] = basic_controls.obs[ ee->first ] / equiv_controls.obs[ ee->first ];
+	  // diffs based on difference in these two relative freqs
+	  equiv_diffs.obs[ ee->first ] = equiv_cases.obs[ ee->first ] - equiv_controls.obs[ ee->first ];
+	}
+	      
       ++ee;
     }
-
+  
   logger << "  kmers: considering length " << k1 << " to " << k2 << "\n";
   
-  logger << "  kmers: for " << obs.size() << " sequences, " << equivs.size() << " equivalence groups, " << tot << " total sequences\n";
-
-  //
-  // Permute: for each equiv group, what is the highest # of occurrecnes of a given sequence?  Compare each observed to that (based on their
-  // equivalence group)
-  //
-
-  pvals.clear();           // nominal p-value for that sequence
-  pvals_equiv.clear();     // based on max count of all in the equivalance set... do as ratio, i.e. to condition on total of set counts?
-
-  std::map<std::string,int>::const_iterator oo = obs.begin();
-  while ( oo != obs.end() )
-    {
-      pvals[ oo->first ] = 0;
-      pvals_equiv[ oo->first ] = 0;
-      ++oo;
-    }
+  logger << "  kmers: for " << basic.obs.size() << " sequences, "
+	 << equivs.size() << " equivalence groups\n";
+	
   
 
-  // track expected counts (of that sequence, and of the most common sequence in its
-  // equivalence set)
   
-  pexp.clear();
-  pexp_equiv.clear();  
+  //
+  // Begin permutations 
+  //
+    
 
   logger << "  kmers: running " << nreps << " replicates...\n";
   
+
   for (int r = 0 ; r < nreps ; r++)
     {
       
-
+      //
+      // Permutation stratified by individual, although all counting is
+      // pooled across individuals
+      //
+      
       // rather than standard CRandom::random_draw(), this ensures
-      // no similar states are contiguous
-      std::vector<int> pl = modified_random_draw( l );
+      // no (*) similar states are contiguous
+      // ... actually, there may be one or two contiguous sequences
+      // at the end, but in the big picture, this should not matter 
+
+      std::map<std::string,int> stat_basic, stat_basic_cases, stat_basic_controls;
+      std::map<std::string,double> stat_equiv, stat_equiv_cases, stat_equiv_controls;
       
-      // std::cout << " RAND: ";
-      // for (int i=0; i<n; i++) std::cout << pl[i] ;
-      // std::cout << "\n";
+      //
+      // Iterate over individuals, accumulating statistics (i.e. summed over individuals)
+      //
+
+      std::map<std::string,std::string>::const_iterator ii = sall.begin();
+      while ( ii != sall.end() )
+	{      
+
+	  //
+	  // Get the optional phenotype
+	  //
+	  
+	  int phe = -1;
+	  if ( grp != NULL && grp->find( ii->first ) != grp->end() )
+	    phe = grp->find( ii->first )->second;
+
+	  //
+	  // Get a permuted sequence (for this individual only)
+	  //
+	  
+	  std::string ps = modified_random_draw( ii->second );	  
+
+	  const int n = ps.size();
+	  
+	  //
+	  // basic kmer count for this individual/replicate
+	  //
+	  
+	  std::map<std::string,int> perm; // temporary per counts for this individual
+	  
+	  for (int i=0; i<n; i++)
+	    for (int j=k1; j<=k2; j++)
+	      if ( i+j < n )
+		{
+		  const std::string ss = ps.substr( i , j );
+
+		  ++perm[ ss ]; // temporary (for equiv stats)
+		  ++stat_basic[ ss ]; // main aggregators
+		  if      ( phe == 0 ) ++stat_basic_controls[ ss ];
+		  else if ( phe == 1 ) ++stat_basic_cases[ ss ];
+		}
+	  
+	  
+	  //
+	  // next individual
+	  //
+	  
+	  ++ii;
+	  
+	}
+
+
+      //
+      // Normalize equiv group stats (based on total-numer / total-denom , i.e. where total is across all people)
+      //
+
+      //
+      // equivalance group stats: denominators
+      //
       
-      std::string ps = std::string( n , '?' );
-      for (int i=0; i<n; i++) ps[i] = (char)(65 + pl[i] ); 
-      
-      // count kmers
-      std::map<std::string,int> pobs;
-      for (int i=0; i<n; i++)
-	for (int j=k1; j<=k2; j++)
-	  if ( i+j < n ) ++pobs[ ps.substr( i , j ) ];
-      
-      // for each equivalance group, get max count (and sum)
-      std::map<std::string,int> pbest;
-      std::map<std::string,int> psum;
       std::map<std::string,std::set<std::string> >::const_iterator pp = equivs.begin();
       while ( pp != equivs.end() )
 	{
-	  int mx = 0, sum = 0;
+	  int sum = 0 , sum_cases = 0 , sum_controls = 0;
 	  const std::set<std::string>  & eqs = pp->second;
 	  std::set<std::string>::const_iterator ee = eqs.begin();
 	  while ( ee != eqs.end() )
 	    {	      
-	      if ( pobs[ *ee ] > mx ) mx = pobs[ *ee ];
-	      sum += pobs[ *ee ];
+	      sum += stat_basic[ *ee ];
+	      if ( grp != NULL )
+		{
+		  sum_cases += stat_basic_cases[ *ee ];
+		  sum_controls += stat_basic_controls[ *ee ]; 
+		}
 	      ++ee;
 	    }
-
-	  pbest[ pp->first ] = mx;
-	  psum[ pp->first ] = sum;
+	  
+	  // sum across individuals
+	  stat_equiv[ pp->first ] = sum;
+	  if ( grp != NULL )
+	    {
+	      stat_equiv_controls[ pp->first ] = sum_cases;
+	      stat_equiv_cases[ pp->first ] = sum_controls;
+	    }
+	  
 	  ++pp;
 	}
 
-      // now compare each observed sequence to its equivalence group's permuted best
+      
+      //
+      // Track permuted statistics for this replicate
+      //
 
-      std::map<std::string,int>::const_iterator oo = obs.begin();
-      while ( oo != obs.end() )
+      std::map<std::string,double>::const_iterator ss = basic.obs.begin();
+      while ( ss != basic.obs.end() )
 	{
-
-	  // p-value based on exact count for that sequence
-	  // & track expected count
-	  if ( pobs[ oo->first ] >= oo->second ) ++pvals[ oo->first ];
-	  pexp[ oo->first ] += pobs[ oo->first ];
-
-	  // 1) EITHER p-value based on maximum of that equivalance group
-	  // if ( pbest[ obs2equiv[ oo->first ] ] >= oo->second ) ++pvals_equiv[ oo->first ];
-	  // pexp_equiv[ oo->first ] += pbest[ obs2equiv[ oo->first ] ];
-
-	  // 2) OR based on the relative frequency of this obs in its equivalence group
-	  double prel = psum[ obs2equiv[ oo->first ] ]  > 0 ? pobs[ oo->first ]  / (double)psum[ obs2equiv[ oo->first ] ]  : 0 ;
-	  if ( prel >= orel[ oo->first ] ) ++pvals_equiv[ oo->first ];
-	  pexp_equiv[ oo->first ] += prel;
 	  
-	  ++oo;
-	}      
+	  basic.perm[ ss->first ].push_back( stat_basic[ ss->first ] );
 
-    } // next replicate
+	  if ( grp != NULL )
+	    {
+	      basic_cases.perm[ ss->first ].push_back( stat_basic_cases[ ss->first ] );
+	      basic_controls.perm[ ss->first ].push_back( stat_basic_controls[ ss->first ] );
+	      basic_diffs.perm[ ss->first ].push_back( stat_basic_cases[ ss->first ] - stat_basic_controls[ ss->first ] );
+	    }
+
+	  //
+	  // Normalize equiv group stats (based on total-numer / total-denom , i.e. where total is across all people)
+	  //
+
+	  
+	  const std::string & ess = obs2equiv[ ss->first ];
+	  
+	  double estat = stat_equiv[ ess ] > 0 ? stat_basic[ ss->first ]  / (double)stat_equiv[ ess ] : 0 ;
+	  equiv.perm[ ss->first ].push_back( estat );
+	  
+	  if ( grp != NULL )
+	    {
+	      
+	      double estat_cases = stat_equiv_cases[ ess ] > 0 ? stat_basic_cases[ ss->first ]  / (double)stat_equiv_cases[ ess ] : 0 ;
+	      double estat_controls = stat_equiv_controls[ ess ] > 0 ? stat_basic_controls[ ss->first ]  / (double)stat_equiv_controls[ ess ] : 0 ;
+	      double estat_diffs  = estat_cases - estat_controls;
+
+	      equiv_cases.perm[ ss->first ].push_back( estat_cases );
+	      equiv_controls.perm[ ss->first ].push_back( estat_controls );
+	      equiv_diffs.perm[ ss->first ].push_back( estat_diffs );
+
+	    }
+
+	  // next obs sequence
+	  ++ss;
+	}
+      
+      //
+      // Next replicate
+      //
+	  
+    } 
+
+  
+  //
+  // All replicates complete: we have obs and perm[] from which we can get all stats to report;
+  // do separately for each sequence
+  //
+	  
+  std::map<std::string,double>::const_iterator oo = basic.obs.begin();
+  while ( oo != basic.obs.end() )
+    {
+      
+      const std::string & ss = oo->first ;
+
+      const std::vector<double> & pp_basic = basic.perm[ ss ] ;
+      const std::vector<double> & pp_basic_cases = basic_cases.perm[ ss ] ;
+      const std::vector<double> & pp_basic_controls = basic_controls.perm[ ss ] ;
+      const std::vector<double> & pp_basic_diffs = basic_diffs.perm[ ss ] ;
+
+      // expected value
+      basic.exp[ ss ] = MiscMath::mean( pp_basic );
+      
+      // Z score
+      basic.zscr[ ss ] = ( basic.obs[ ss ] - basic.exp[ ss ] ) / MiscMath::sdev( pp_basic , basic.exp[ ss ]  );
+      
+      // Empirical P
+      int pv = 0;
+      for (int r=0; r<nreps; r++) if ( pp_basic[r] >= basic.obs[ ss ] ) ++pv;
+      basic.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+
+      // phenotype-based
+      if ( grp != NULL )
+	{
+	  basic_cases.exp[ ss ] = MiscMath::mean( pp_basic_cases );
+	  basic_controls.exp[ ss ] = MiscMath::mean( pp_basic_controls );
+	  basic_diffs.exp[ ss ] = MiscMath::mean( pp_basic_diffs );      
+
+	  basic_cases.zscr[ ss ] = ( basic_cases.obs[ ss ] - basic_cases.exp[ ss ] ) / MiscMath::sdev( pp_basic_cases , basic_cases.exp[ ss ]  );
+	  basic_controls.zscr[ ss ] = ( basic_controls.obs[ ss ] - basic_controls.exp[ ss ] ) / MiscMath::sdev( pp_basic_controls , basic_controls.exp[ ss ]  );
+	  basic_diffs.zscr[ ss ] = ( basic_diffs.obs[ ss ] - basic_diffs.exp[ ss ] ) / MiscMath::sdev( pp_basic_diffs , basic_diffs.exp[ ss ]  );
+
+	  // C/C only
+	  int pv = 0;
+	  for (int r=0; r<nreps; r++) if ( pp_basic_cases[r] >= basic_cases.obs[ ss ] ) ++pv;
+	  basic_cases.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+	  
+	  pv = 0;
+	  for (int r=0; r<nreps; r++) if ( pp_basic_controls[r] >= basic_controls.obs[ ss ] ) ++pv;
+	  basic_controls.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+	}
+
+      //
+      // Same, for equiv-group stats
+      //
+
+      const std::vector<double> & pp_equiv = equiv.perm[ ss ] ;
+      const std::vector<double> & pp_equiv_cases = equiv_cases.perm[ ss ] ;
+      const std::vector<double> & pp_equiv_controls = equiv_controls.perm[ ss ] ;
+      const std::vector<double> & pp_equiv_diffs = equiv_diffs.perm[ ss ] ;
+
+      // expected value
+      equiv.exp[ ss ] = MiscMath::mean( pp_equiv );
+      
+      // Z score
+      equiv.zscr[ ss ] = ( equiv.obs[ ss ] - equiv.exp[ ss ] ) / MiscMath::sdev( pp_equiv , equiv.exp[ ss ]  );
+      
+      // Empirical P
+      pv = 0;
+      for (int r=0; r<nreps; r++) if ( pp_equiv[r] >= equiv.obs[ ss ] ) ++pv;
+      equiv.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+
+      // phenotype-based
+      if ( grp != NULL )
+	{
+	  equiv_cases.exp[ ss ] = MiscMath::mean( pp_equiv_cases );
+	  equiv_controls.exp[ ss ] = MiscMath::mean( pp_equiv_controls );
+	  equiv_diffs.exp[ ss ] = MiscMath::mean( pp_equiv_diffs );      
+
+	  equiv_cases.zscr[ ss ] = ( equiv_cases.obs[ ss ] - equiv_cases.exp[ ss ] ) / MiscMath::sdev( pp_equiv_cases , equiv_cases.exp[ ss ]  );
+	  equiv_controls.zscr[ ss ] = ( equiv_controls.obs[ ss ] - equiv_controls.exp[ ss ] ) / MiscMath::sdev( pp_equiv_controls , equiv_controls.exp[ ss ]  );
+	  equiv_diffs.zscr[ ss ] = ( equiv_diffs.obs[ ss ] - equiv_diffs.exp[ ss ] ) / MiscMath::sdev( pp_equiv_diffs , equiv_diffs.exp[ ss ]  );
+
+	  // C/C only
+	  int pv = 0;
+	  for (int r=0; r<nreps; r++) if ( pp_equiv_cases[r] >= equiv_cases.obs[ ss ] ) ++pv;
+	  equiv_cases.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+	  
+	  pv = 0;
+	  for (int r=0; r<nreps; r++) if ( pp_equiv_controls[r] >= equiv_controls.obs[ ss ] ) ++pv;
+	  equiv_controls.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+	}
+
+      
+      //
+      // next sequence
+      //
+      
+      ++oo;
+    }      
+
 
   //
-  // empirical  p-values
+  // All done...
   //
   
-  std::map<std::string,double>::iterator pp = pvals.begin();
-  while ( pp != pvals.end() )
-    {
-      pp->second = ( 1 + pp->second ) / (double)( 1 + nreps );
-      ++pp;
-    }
-
-  pp = pvals_equiv.begin();
-  while ( pp != pvals_equiv.end() )
-    {
-      pp->second = ( 1 + pp->second ) / (double)( 1 + nreps );
-      ++pp;
-    }
-
-  //
-  // expected counts under the null
-  //
-
-  pp = pexp.begin();
-  while ( pp != pexp.end() )
-    {
-      pp->second /= (double)nreps;
-      ++pp;
-    }
-  
-  pp = pexp_equiv.begin();
-  while ( pp != pexp_equiv.end() )
-    {
-      pp->second /= (double)nreps;
-      ++pp;
-    }
-
-  // caller can now look at this->pvals
-  
-  // https://math.stackexchange.com/questions/220521/expected-number-of-times-random-substring-occurs-inside-of-larger-random-string
-  // https://www.nature.com/articles/s41598-018-33433-8
-
-  // compare to max of each permutation group
-  //  i.e. if ABCD  then all permutations of A,B,C and D
   
 }
 
@@ -1678,12 +1958,12 @@ void microstates_t::aggregate2edf( const Data::Matrix<double> & X ,
 }
 
 
-int ms_kmer_t::pick( const std::map<int,int> & urns , int skip )
+char ms_kmer_t::pick( const std::map<char,int> & urns , char skip )
 {
   int tot = 0;
-  std::map<int,int>::const_iterator ii = urns.begin();
+  std::map<char,int>::const_iterator ii = urns.begin();
   std::vector<int> counts;
-  std::vector<int> labels;
+  std::vector<char> labels;
   while ( ii != urns.end() )
     {
       if ( ii->first != skip || ii->second == 0 )
@@ -1700,7 +1980,6 @@ int ms_kmer_t::pick( const std::map<int,int> & urns , int skip )
   // be able to satisfy the constraint...  for now, here we have to return
   // the skipped value...
 
-  //if ( tot == 0 ) { std::cout << " SKIPPING...\n" ; return skip; }
   if ( tot == 0 ) return skip;
   
   int rn = CRandom::rand( tot );
@@ -1718,63 +1997,42 @@ int ms_kmer_t::pick( const std::map<int,int> & urns , int skip )
 }
 
 
-std::vector<int> ms_kmer_t::modified_random_draw( const std::vector<int> & l )
+std::string ms_kmer_t::modified_random_draw( const std::string & l )
 {
 
-  // permute 'l' but in such a way that similar states (i.e. values of l, 0, 1, 2, ...)
+  // permute 's' chars but in such a way that similar states (i.e. values of l, 0, 1, 2, ...)
   // are not contiguous
   // first element: pick any element (e.g. of 5)
   // next elemnt: pick from the remaining 5-1 elements, i.e. not the previously selected
   // repeat, until all done
 
-  std::map<int,int> urns;
+  std::map<char,int> urns;
   const int n = l.size();
   for (int i=0;i<n;i++) ++urns[l[i]];
 
-
-  // std::map<int,int>::const_iterator ll = urns.begin();
-  // while ( ll != urns.end() )
-  //   {
-  //     std::cout << " " << ll->first << " " << ll->second << "\n";
-  //     ++ll;
-  //   }
-
-  std::vector<int> p(n);
+  // return string
+  std::string p(n,'?');
   
   // initiate
   p[0] = l[ CRandom::rand( n ) ];
   
-  int last = p[0];
+  char last = p[0];
   --urns[ last ];
-
-  //  std::cout << " picked = " << last << "\n";
 
   for (int i=1;i<n;i++)
     {
-
-      // std::cout << " position = " << i << " of " << n << "\n";
-      
-      // std::map<int,int>::const_iterator ll = urns.begin();
-      // while ( ll != urns.end() )
-      // 	{
-      // 	  std::cout << " " << ll->first << " " << ll->second << "\n";
-      // 	  ++ll;
-      // 	}
-      
       // skip last pick
       p[i] = pick( urns , last );
       --urns[ p[i] ];
       last = p[i];
-      //      std::cout << " picked = " << p[i] << "\n";
       
       // sanity check, can remove
-      if ( urns[p[i]] < 0 ) Helper::halt( "error!" );
-      
+      if ( urns[p[i]] < 0 ) Helper::halt( "error!" );      
       
     }
 
   // sanity check... can remove 
-  std::map<int,int>::const_iterator ll = urns.begin();
+  std::map<char,int>::const_iterator ll = urns.begin();
   while ( ll != urns.end() )
     {
       if ( ll->second != 0 ) Helper::halt( "bad" );

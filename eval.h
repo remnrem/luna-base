@@ -165,6 +165,9 @@ class cmd_t
   // individual-specific vars
   static std::map<std::string,std::map<std::string,std::string> >  ivars;
 
+  static std::map<std::string,int> pull_ivar( const std::vector<std::string> & ids , 
+					      const std::string & phe );
+  
   // id-mapper
   static std::map<std::string,std::string>  idmapper;
   

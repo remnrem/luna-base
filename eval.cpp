@@ -3344,3 +3344,27 @@ void cmd_t::register_specials()
   specials.insert( "include" ) ;
 }
 
+
+std::map<std::string,int> cmd_t::pull_ivar( const std::vector<std::string> & ids , const std::string & phe )
+{
+  
+  std::map<std::string,int> retval;
+  // ivars:  ID -> PHE -> VAL
+
+  for (int i=0;i<ids.size();i++)
+    {
+      if ( ivars.find( ids[i] ) == ivars.end() ) continue;
+
+      const std::map<std::string,std::string> & data = ivars.find( ids[i] )->second;
+
+      if ( data.find( phe ) == data.end() ) continue;
+
+      // attach only valid integer values here
+
+      int x;
+      if ( Helper::str2int( data.find( phe )->second , &x ) )
+	retval[ ids[i] ] = x;
+    }
+
+  return retval;
+}

@@ -2665,6 +2665,11 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
   bool annot_format = param.has( "luna" );
 
   bool xml_format = param.has( "xml" ) || ! annot_format;
+
+  // either for all annots, or just a subset
+  std::set<std::string> annots2write = param.strset( "ann" );
+  if ( annots2write.size() > 0 )
+    logger << "  writing a subset of all annotations, based on " << annots2write.size() << " specified\n";
   
   if ( filename=="" ) Helper::halt( "bad filename for WRITE-ANNOTS" );
 
@@ -2719,7 +2724,12 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	  //     <Variable name="label" type="type">Numeric variable name</Variable>
 	  //     <Variable name="label" type="type">Numeric variable name</Variable>
 	  //   </Class>
-	  
+
+
+	  if ( annots2write.size()
+	       && annots2write.find( anames[a] ) == annots2write.end() )
+	    continue;
+	  	  
 	  annot_t * annot = find( anames[a] );
 	  
 	  if ( annot == NULL ) continue;
@@ -2865,6 +2875,10 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
       for (int a=0;a<anames.size();a++)
 	{
 	  
+	  if ( annots2write.size()
+	       && annots2write.find( anames[a] ) == annots2write.end() )
+	    continue;
+	  
 	  annot_t * annot = find( anames[a] );
 	  
 	  if ( annot == NULL ) continue;
@@ -2959,12 +2973,16 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	  const annot_t * annot = instance_idx.parent;
 
 	  if ( annot == NULL ) { ++ee; continue; } 
+
+	  if ( annots2write.size()
+	       && annots2write.find( annot->name ) == annots2write.end() )
+	    continue;
+	  
 	  
 	  annot_map_t::const_iterator ii = annot->interval_events.find( instance_idx );
           if ( ii == annot->interval_events.end() )  { ++ee; continue; } 
 	  instance_t * inst = ii->second;
 	  
-
 	  // skip special variables
 	  
 	  if ( annot->name == "start_hms" ) { ++ee; continue; } 
