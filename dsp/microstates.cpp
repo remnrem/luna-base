@@ -1576,8 +1576,8 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
 	  stat_equiv[ pp->first ] = sum;
 	  if ( grp != NULL )
 	    {
-	      stat_equiv_controls[ pp->first ] = sum_cases;
-	      stat_equiv_cases[ pp->first ] = sum_controls;
+	      stat_equiv_controls[ pp->first ] = sum_controls;
+	      stat_equiv_cases[ pp->first ] = sum_cases;
 	    }
 	  
 	  ++pp;
