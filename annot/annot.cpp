@@ -2659,22 +2659,20 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
   
   // write all annotations here as a single file; 
   // either XML or .annot file format
-  // default is as XML  
+  // default is as .annot
   // order by time
-  
-  bool annot_format = param.has( "luna" );
 
-  bool xml_format = param.has( "xml" ) || ! annot_format;
+  bool xml_format = param.has( "xml" ) || Helper::file_extension( filename , "xml" ) ;
 
   // either for all annots, or just a subset
-  std::set<std::string> annots2write = param.strset( "ann" );
+  std::set<std::string> annots2write = param.strset( "annot" );
   if ( annots2write.size() > 0 )
     logger << "  writing a subset of all annotations, based on " << annots2write.size() << " specified\n";
   
-  if ( filename=="" ) Helper::halt( "bad filename for WRITE-ANNOTS" );
+  if ( filename == "" ) Helper::halt( "bad filename for WRITE-ANNOTS" );
 
   logger << "  writing annotations (" 
-	 << ( annot_format ? ".annot" : ".xml" ) 
+	 << ( xml_format ? ".xml" : ".annot" ) 
 	 << " format) to " 
 	 << filename << "\n";
 
@@ -2857,7 +2855,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
     }
 
 
-  if ( annot_format ) 
+  if ( ! xml_format ) 
     {
 
       //

@@ -602,6 +602,8 @@ public:
   
   void drop_time_track();
 
+  void drop_annots();
+
   //
   // Annotations
   //
@@ -613,7 +615,7 @@ public:
   // Write EDF(Z) back to file
   //
   
-  bool write( const std::string & f , bool edfz = false );
+  bool write( const std::string & f , bool edfz = false , bool null_starttime = false );
   
     
   // given a mask, change the representation in memory, 

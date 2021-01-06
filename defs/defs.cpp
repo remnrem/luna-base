@@ -403,7 +403,7 @@ void globals::init_defs()
   skip_edf_annots = false;
   skip_nonedf_annots = false;
 
-  set_annot_inst2hms = true;
+  set_annot_inst2hms = false;
   set_annot_inst2hms_force = false;
    
   current_tag = "";

@@ -1777,10 +1777,18 @@ bool edf_record_t::write( edfz_t * edfz )
 
 
 
-bool edf_t::write( const std::string & f , bool as_edfz )
+bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
 {
 
-  reset_start_time();
+  if ( null_starttime ) 
+    {
+      logger << "  setting EDF starttime to null (00.00.00)\n";
+      header.starttime = "00.00.00";
+    }
+  else
+    {
+      reset_start_time();
+    }
 
   filename = f;
 
@@ -3493,6 +3501,18 @@ void edf_t::set_edf()
 
   set_continuous(); 
   drop_time_track();
+  drop_annots();
+}
+
+void edf_t::drop_annots()
+{
+  // drop all 'EDF Annot' signals from in-memory EDF
+  // (i.e. part of making an EDF from an EDF+
+  
+  for (int s=0;s<header.ns;s++)
+    if ( header.is_annotation_channel(s) )
+      drop_signal( s );
+
 }
 
 void edf_t::drop_time_track()

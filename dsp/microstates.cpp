@@ -41,8 +41,6 @@ extern logger_t logger;
 //        to specify labels directly for a prototype file (i.e. if diff order)
 //        option to make aggregare EDF out of prototypes (i.e. to subsequently cluster prototypes)
 
-// static member to track header of aggrgated EDF in multi-sample mode
-bool microstates_t::wrote_header = false;
 
 void dsptools::microstates( edf_t & edf , param_t & param )
 {
@@ -77,6 +75,15 @@ void dsptools::microstates( edf_t & edf , param_t & param )
     Helper::halt( "cannot specify epoch and write-states (to dump state order) together" );
   
   int run_kmers = param.has( "kmers" ) ? param.requires_int( "kmers" ) : 0 ;
+  
+  bool add_annot = param.has( "add-annot" );
+  const std::string annot_tag = add_annot ? param.value( "add-annot" ) : "" ;
+
+  bool add_sig = param.has( "add-sig" );
+  const std::string sig_tag = add_sig   ? param.value( "add-sig" ) : "" ;
+  
+  if ( ( add_sig || add_sig ) && epoch ) 
+    Helper::halt( "cannot use add-annot or add-sig in epoch mode" );
   
   //
   // Channels
@@ -295,10 +302,87 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   
 
       //
-      // Output all final stats
+      // Add new annotations and/or channels
       //
+    
+      if ( add_annot || add_sig )
+	{
+	  std::vector<int> states = smoothed.best();
+	  const int N = states.size();
 
+	  //
+	  // Add annotations
+	  //
+
+	  if ( add_annot )
+	    {
+	      
+	      const std::vector<uint64_t> * tp = mslice.ptimepoints();
+	      if ( tp->size() != N ) 
+		Helper::halt( "internal error in add-annot" );
+	      
+	      // for each class
+	      std::vector<annot_t*> k2a( prototypes.K );
+	      std::vector<std::string> k2l( prototypes.K );
+	      for (int k=0; k<prototypes.K; k++)
+		{
+		  std::string s="?";
+                  s[0] = (char)(65+k);
+                  const std::string alab = annot_tag + s;                  
+		  k2l[k] = alab;
+		  logger << "  adding annotation " << alab << "\n";		  
+		  annot_t * a = edf.timeline.annotations.add( alab );
+		  a->description = "MS " + alab;
+		  k2a[k] = a;
+		}
+	
+	      // iterate over points
+	      int curr = states[0];
+	      int idx = 0;
+
+	      for (int i=1;i<N; i++)
+		{
+		  // point marks end of a state?
+		  if ( states[i] != curr || i == N-1 )
+		    {
+		      // i.e. annotation is right up to the start of the next one
+		      // so end == start of new internal in end+1 encoding
+		      interval_t interval( (*tp)[idx] , (*tp)[i] );
+		      // add annot to the appropriate annotation
+		      k2a[curr]->add( k2l[curr] , interval , "." );		      
+		      // reset new state
+		      curr = states[i];
+		      idx = i;
+		    }
+		}	      
+	    }
+	  
+	  //
+	  // Add as signals
+	  //
+
+	  if ( add_sig ) 
+	    {
+	      
+	      for (int k=0; k<prototypes.K; k++)
+		{
+		  std::string s="?";
+		  s[0] = (char)(65+k);
+		  const std::string clab = sig_tag + s;		  
+		  logger << "  adding channel " << clab << " (" << sr << "Hz)\n";
+		  std::vector<double> dat( N , 0 );
+		  for (int i=0; i<N; i++) if ( states[i] == k ) dat[i] = 1;
+		  edf.add_signal( clab , sr , dat );
+		}
+		
+	    }
+	  
+	}
       
+
+
+      //
+      // Output all final stats
       //
       // By class 'K'
       //
@@ -1185,6 +1269,16 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
 
   //
+  // MSE 
+  //
+
+  // consider m=1 to m=10
+  // r=0.1 (i.e. fixed)
+  // scale = 1 to 10 , step 5 
+  // code sequence as double
+
+
+  //
   // dump sequences to file?
   //
 
@@ -1787,21 +1881,8 @@ void microstates_t::aggregate2edf( const Data::Matrix<double> & X ,
   //  as we might write from multiple processes... and so user has to delete file
   //  if they want to overwrite
   
-  // possibilities:
-  // 1) ! exists                     --> write header & records
-  // 2)   exists && ! wrote_header   --> overwrite, as above
-  // 3)   exists &&   wrote_header   --> append to end of existing EDF
-
   //
-  // this case should not happen
-  //
-  
-  if ( ( !exists )  && microstates_t::wrote_header )
-    Helper::halt( "problem writing EDF " + edfname );
-
-
-  //
-  // Exract peaks
+  // Extract peaks
   //
 
   bool has_peak_list = peak_idx.size() > 0 ;

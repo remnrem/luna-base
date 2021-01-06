@@ -58,7 +58,7 @@ libluna: libluna.a $(SHARED_LIB)
 
 ifeq ($(ARCH),MAC)
 $(SHARED_LIB) : $(OBJS)
-	$(LD) -dynamiclib $(LDFLAGS) -o $(SHARED_LIB)  $(OBJS)
+	$(LD) -dynamiclib $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
 else ifeq ($(ARCH),LINUX)
 $(SHARED_LIB) : $(OBJS)
 	$(LD) -shared $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
@@ -88,4 +88,4 @@ merge: utils/merge.o utils/merge-helpers.o
 
 clean:
 	-$(RM) $(TARGETS) libluna.dylib libluna.so libluna.a main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
-	-$(RM) utils/*.o utils/*.d utils/*~ 
+	-$(RM) utils/*.o utils/*.d utils/*~

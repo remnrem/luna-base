@@ -165,6 +165,11 @@ class matslice_t {
   
   std::string label(const int s) const { return labels[s]; } 
 
+  const std::vector<uint64_t> * ptimepoints() const 
+  { 
+    return &time_points; 
+  }
+
   void clear()
   { 
     data.clear();

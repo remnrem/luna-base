@@ -276,9 +276,6 @@ struct microstates_t {
   std::vector<int>  find_peaks( const Data::Matrix<double> & X , 
 				const signal_list_t & signals );
 
-  // track whether a header has been written or not yet, from aggrgetae2edf()
-  static bool wrote_header;
-
   static Data::Matrix<double> eig2mat( const Eigen::MatrixXd & E );
   static Eigen::Matrix3d mat2eig( const Data::Matrix<double> & M );
   static Eigen::Matrix3d mat2eig_tr( const Data::Matrix<double> & M );
@@ -350,12 +347,20 @@ struct microstates_t {
   
   // misc options
 
+  //
   // dump GPF matrix prior to clustering?
+  //
+  
   std::string dump_file;
+
+  //
+  // write sequences to file (i.e. for subsequent grouped KMER analysis)
+  //
 
   std::string statesfile;
   std::string subj_id;
 
+  
   bool standardize;
   
   bool verbose;

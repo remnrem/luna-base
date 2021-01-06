@@ -37,7 +37,9 @@ struct mse_t
 
   double SD( const std::vector<double> & x );
   
-  double sampen( const std::vector<double> y , int M , double r );
+  double sampen( const std::vector<double> & y , int M , double r );
+
+  double sampen( const std::string & s , int M );
 
   // MSE
   

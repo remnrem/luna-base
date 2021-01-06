@@ -12,8 +12,8 @@ endif
 ## the DEP variable will be set on the command line
 ##
 
-DEP_INCLUDES = 
-DEP_LIB = 
+DEP_INCLUDES=
+DEP_LIB=
 
 ifdef ZLIB
 DEP_INCLUDES += -I$(ZLIB)/include
@@ -37,16 +37,16 @@ CXX = g++
 
 CC = gcc
 
-CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. 
+CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I..
 
-CXXFLAGS += $(DEP_INCLUDES) 
+CXXFLAGS +=$(DEP_INCLUDES)
 
 ifeq ($(ARCH),MAC)
 CXXFLAGS += -I/usr/local/include
 endif
 
 ifeq ($(ARCH),WINDOWS)
-CXXFLAGS += -DWINDOWS 
+CXXFLAGS += -DWINDOWS
 endif
 
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
@@ -58,14 +58,14 @@ CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
 LD = g++ 
 
-LDFLAGS = $(DEP_LIB) -L. -L..  
+LDFLAGS = $(DEP_LIB) -L. -L..
 
 # assuming mingw64 for windows build:
 
 ifeq ($(ARCH),WINDOWS)
 LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3 -lz -static -static-libgcc -static-libstdc++
 else
-LDFLAGS += -L/usr/local/lib -lfftw3 -lz 
+LDFLAGS += -L/usr/local/lib -lfftw3 -lz
 endif
 
 ##

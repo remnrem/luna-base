@@ -1667,7 +1667,19 @@ void proc_write( edf_t & edf , param_t & param )
   // if a mask has been set, this will restructure the mask
   edf.restructure(); 
 
-  bool saved = edf.write( filename , edfz );
+  //
+  // Force as EDF (i.e. even if restructured), and set starttime = 0;
+  //
+
+  bool write_as_edf = param.has( "force-edf" );
+  
+  if ( write_as_edf ) edf.set_edf();
+  
+  //
+  // Save data (write_as_edf flag forces starttime to 00.00.00)
+  //
+
+  bool saved = edf.write( filename , edfz , write_as_edf );
 
   if ( saved ) 
     logger << " saved new EDF" << ( edf.header.edfplus ? "+" : "" ) << ", " << filename << "\n";
