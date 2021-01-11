@@ -171,18 +171,18 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
 
   //
-  // output stage probailities 
+  // output stage probabilities 
   //
 
   const double epoch_sec = edf.timeline.epoch_length();
   const int ne_all = edf.timeline.num_epochs();
 
-  summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
-
   std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
 
   summarize_kappa( final_pred , true );
 
+  summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
+  
   if ( epoch_level_output )
     summarize_epochs( pp , model.labels , ne_all , edf );
   

@@ -4361,6 +4361,8 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
   // read in definitions
   std::map<std::string,std::vector< std::vector<std::string> > >sigs, refs;
   std::map<std::string,std::vector<std::string> > srs, notes;
+
+  bool found_group = false;
   
   std::ifstream IN1( file.c_str() , std::ios::in );
   while ( ! IN1.eof() )
@@ -4376,9 +4378,11 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 		      + file + "\nline: [" + line + "]\n" );
       if ( tok[0] != group ) continue;
 
+      found_group = true;
+      
       // if cs not specified, take all canonical signals as given in 
       // the file
-  
+      
       if ( cs == NULL ) canons.insert( "cs_" + tok[1] );
 
       // skip if a specific list requested?
@@ -4392,7 +4396,9 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       
     }
   
- 
+  if ( ! found_group )
+    Helper::halt( "could not find group " + group + " in file " + file );
+  
   if ( cs != NULL ) 
     {
       std::set<std::string>::const_iterator ss = cs->begin();

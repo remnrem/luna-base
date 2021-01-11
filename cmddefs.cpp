@@ -66,6 +66,7 @@ void cmddefs_t::init()
   add_domain( "filter"   , "FIR filters"     , "FIR filter design and application" );
   add_domain( "artifact" , "Artifacts"       , "Artifacts detection/correction routines" );
   add_domain( "hypno"    , "Hypnograms"      , "Characterizations of hypnograms" );
+  add_domain( "suds"     , "SUDS"            , "Automated staging/stage evaluation" );
   add_domain( "power"    , "Power spectra"   , "Power spectral density estimation" );
   add_domain( "transients" , "Spindles and SO" , "Spindles and slow oscillations" );
   add_domain( "topo"     , "Cross-signal"    , "Coherence and other topographical analyses" );
@@ -917,6 +918,59 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" );
 
 
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // SUDS
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+
+  add_cmd( "suds"   , "SOAP-SUDS" , "Single Observation Accuracies and Probabilities" );
+  add_url( "SOAP-SUDS" , "suds/#soap-suds" );
+
+  add_param( "SOAP-SUDS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "SOAP-SUDS" , "nc" , "10" , "Number of principal components" );
+  
+  add_table( "SOAP-SUDS" , "" , "Overall accuracies" );
+  add_var( "SOAP-SUDS" , "" , "ACC" , "Accuracy" );
+  add_var( "SOAP-SUDS" , "" , "ACC_3" , "Accuracy, 3-class" );
+  add_var( "SOAP-SUDS" , "" , "F1" , "F1 metric" );
+  add_var( "SOAP-SUDS" , "" , "F1_3" , "F1 metric, 3-class" );
+  add_var( "SOAP-SUDS" , "" , "F1_WGT" , "F1 metric, weighted" );
+  add_var( "SOAP-SUDS" , "" , "K" , "Kappa" );
+  add_var( "SOAP-SUDS" , "" , "K_3" , "Kappa, 3-class" );
+  add_var( "SOAP-SUDS" , "" , "MCC" , "Matthews correlation coef" );
+  add_var( "SOAP-SUDS" , "" , "MCC_3" , "Matthews correlation coef, 3-class" );
+  add_var( "SOAP-SUDS" , "" , "PREC" , "Precision" );
+  add_var( "SOAP-SUDS" , "" , "PREC_3" , "Precision, 3-class" );  
+  add_var( "SOAP-SUDS" , "" , "RECALL" , "Recall" );
+  add_var( "SOAP-SUDS" , "" , "RECALL_3" , "Recall, 3-class" );
+  add_var( "SOAP-SUDS" , "" , "RECALL_WGT" , "Recall, weighted" );
+  
+  add_table( "SOAP-SUDS" , "E" , "Epoch-level output" );
+  add_var( "SOAP-SUDS" , "E" , "DISC" , "Discordant epoch" );
+  add_var( "SOAP-SUDS" , "E" , "DISC3" , "Discordant epoch, 3-class" );
+  add_var( "SOAP-SUDS" , "E" , "INC" , "Epoch included" );
+  add_var( "SOAP-SUDS" , "E" , "PP_N1" , "N1 posterior probability" );
+  add_var( "SOAP-SUDS" , "E" , "PP_N2" , "N2 posterior probability" );
+  add_var( "SOAP-SUDS" , "E" , "PP_N3" , "N3 posterior probability" );
+  add_var( "SOAP-SUDS" , "E" , "PP_NR" , "NR posterior probability" );
+  add_var( "SOAP-SUDS" , "E" , "PP_R" , "REM posterior probability" );
+  add_var( "SOAP-SUDS" , "E" , "PP_W" , "Wake posterior probability" );
+  add_var( "SOAP-SUDS" , "E" , "PRED" , "Predicted stage" );
+  add_var( "SOAP-SUDS" , "E" , "PRIOR" , "Original stage" );
+  
+  add_table( "SOAP-SUDS" , "S" , "Stage-level output" );
+  add_var( "SOAP-SUDS" , "S" , "DUR_OBS" , "Observed stage duration (for included epochs)" );
+  add_var( "SOAP-SUDS" , "S" , "DUR_PRD" , "Predicted stage duration (for included epochs)" );
+  add_var( "SOAP-SUDS" , "S" , "F1" , "Stage-specific F1" );
+  add_var( "SOAP-SUDS" , "S" , "PREC" , "Stage-specific precision" );
+  add_var( "SOAP-SUDS" , "S" , "RECALL" , "Stage-specific recall" );
+
+  add_table( "SOAP-SUDS" , "VAR" , "PSC info" );
+  add_var( "SOAP-SUDS" , "VAR" , "INC" , "Componeont included" );
+  add_var( "SOAP-SUDS" , "VAR" , "PV" , "1-way ANOVA p-value for association w/ observed stage" );
+  
 
   /////////////////////////////////////////////////////////////////////////////////
   //
