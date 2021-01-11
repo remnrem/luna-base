@@ -22,11 +22,10 @@
 
 
 #include "mse.h"
+#include "miscmath/miscmath.h"  
 
-#include "miscmath/miscmath.h"
-
-  
 #include <iostream>
+
 
 /* file: mse.c			M. Costa		1 August 2004
 				Last revised:		4 August 2004 (GBM)
@@ -163,8 +162,18 @@ double mse_t::sample_entropy( const std::vector<double> & y , double sd )
 }
 
 
+double mse_t::sampen( const std::vector<int> & s , int M )
+{
+  m = M;  r = 0.1;
+  const int n = s.size();
+  std::vector<double> y( n );
+  for (int i=0; i<n; i++) y[i] = s[i] ;
+  return sampen( y , M , 0.1 );
+}
+
 double mse_t::sampen( const std::string & s , int M )
 {
+  m = M;  r = 0.1;
   const int n = s.size();
   std::vector<double> y( n );
   // i.e. actual ASCII coding doesn't really matter here

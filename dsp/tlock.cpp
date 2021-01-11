@@ -86,11 +86,13 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   int points = 1 + 2 * half_points;
   
   std::vector<double> t;
-  for ( double w = -half_window ; w <= half_window ; w += 1.0/Fs[0] ) 
+  // nb. fudge for floating point issues (allowing tenth of inc for stop 'w')
+  const double inc = 1.0/Fs[0];
+  for ( double w = -half_window ; w <= half_window + inc/10.0   ; w += inc ) 
     t.push_back(w);
 
   if ( t.size() != points ) 
-    Helper::halt( "internal error constructing window" );
+    Helper::halt( "internal error constructing window:" + Helper::int2str( points ) + " vs " + Helper::int2str( (int) t.size() )  );
 
   //
   // Normalisation: e.g. 0.2 means 20% + 20% of window, i.e. skip middle 60%

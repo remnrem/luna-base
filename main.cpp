@@ -587,32 +587,36 @@ int main(int argc , char ** argv )
 	      
 	}
           
-      // do analysis (w/ or w/out phenotype)
-      ms_kmer_t kmers( data , k1 , k2 , nreps , grp ? &phe : NULL );
+      // do analysis (w/ or w/out phenotype) ; second true means verbose output
+      ms_kmer_t kmers( data , k1 , k2 , nreps , grp ? &phe : NULL , true );
       
-      // report output
+      //
+      // report output: OBS and WITHIN-GROUP
+      //
+
       std::map<std::string,double>::const_iterator pp = kmers.basic.pval.begin();
       while ( pp != kmers.basic.pval.end() )
 	{
-	  writer.level( pp->first , "KMER" );
+	  
 	  writer.level( (int)pp->first.size() , "L" );
+	  writer.level( pp->first , "S" );
 
 	  bool valid_equiv = kmers.equiv_set_size[ pp->first ] > 1;
 	  
-	  writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
-	  writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
+	  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	  writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
 	  
-	  writer.value( "O_OBS" , kmers.basic.obs[ pp->first ] );
-	  writer.value( "O_EXP" , kmers.basic.exp[ pp->first ] );
-	  writer.value( "O_P" , pp->second );
-	  writer.value( "O_Z" , kmers.basic.zscr[ pp->first ] );	  
+	  writer.value( "OBS" , kmers.basic.obs[ pp->first ] );
+	  writer.value( "EXP" , kmers.basic.exp[ pp->first ] );
+	  writer.value( "P" , pp->second );
+	  writer.value( "Z" , kmers.basic.zscr[ pp->first ] );	  
 
 	  if ( valid_equiv )
 	    {
-	      writer.value( "M_OBS" , kmers.equiv.obs[ pp->first ] );
-	      writer.value( "M_EXP" , kmers.equiv.exp[ pp->first ] );
-	      writer.value( "M_P" , kmers.equiv.pval[ pp->first ] );
-	      writer.value( "M_Z" , kmers.equiv.zscr[ pp->first ] );
+	      writer.value( "W_OBS" , kmers.equiv.obs[ pp->first ] );
+	      writer.value( "W_EXP" , kmers.equiv.exp[ pp->first ] );
+	      writer.value( "W_P" , kmers.equiv.pval[ pp->first ] );
+	      writer.value( "W_Z" , kmers.equiv.zscr[ pp->first ] );
 	    }
 	  
 	  // C/C contrasts?
@@ -622,51 +626,51 @@ int main(int argc , char ** argv )
 
 	      writer.level( "CASE" , "PHE" );
 
-	      writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
-	      writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
-	      writer.value( "O_OBS" , kmers.basic_cases.obs[ pp->first ] );
-	      writer.value( "O_EXP" , kmers.basic_cases.exp[ pp->first ] );
-	      writer.value( "O_P" , kmers.basic_cases.pval[ pp->first ] );
-	      writer.value( "O_Z" , kmers.basic_cases.zscr[ pp->first ] );
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      writer.value( "OBS" , kmers.basic_cases.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.basic_cases.exp[ pp->first ] );
+	      writer.value( "P" , kmers.basic_cases.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.basic_cases.zscr[ pp->first ] );
 
 	      if ( valid_equiv )
 		{
-		  writer.value( "M_OBS" , kmers.equiv_cases.obs[ pp->first ] );
-		  writer.value( "M_EXP" , kmers.equiv_cases.exp[ pp->first ] );
-		  writer.value( "M_P" , kmers.equiv_cases.pval[ pp->first ] );
-		  writer.value( "M_Z" , kmers.equiv_cases.zscr[ pp->first ] );
+		  writer.value( "W_OBS" , kmers.equiv_cases.obs[ pp->first ] );
+		  writer.value( "W_EXP" , kmers.equiv_cases.exp[ pp->first ] );
+		  writer.value( "W_P" , kmers.equiv_cases.pval[ pp->first ] );
+		  writer.value( "W_Z" , kmers.equiv_cases.zscr[ pp->first ] );
 		}
 	      
 	      writer.level( "CONTROL" , "PHE" );
 	      
-	      writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
-	      writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
-	      writer.value( "O_OBS" , kmers.basic_controls.obs[ pp->first ] );
-	      writer.value( "O_EXP" , kmers.basic_controls.exp[ pp->first ] );
-	      writer.value( "O_P" , kmers.basic_controls.pval[ pp->first ] );
-	      writer.value( "O_Z" , kmers.basic_controls.zscr[ pp->first ] );
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      writer.value( "OBS" , kmers.basic_controls.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.basic_controls.exp[ pp->first ] );
+	      writer.value( "P" , kmers.basic_controls.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.basic_controls.zscr[ pp->first ] );
 
 	      if ( valid_equiv )
 		{
-		  writer.value( "M_OBS" , kmers.equiv_controls.obs[ pp->first ] );
-		  writer.value( "M_EXP" , kmers.equiv_controls.exp[ pp->first ] );
-		  writer.value( "M_P" , kmers.equiv_controls.pval[ pp->first ] );
-		  writer.value( "M_Z" , kmers.equiv_controls.zscr[ pp->first ] );
+		  writer.value( "W_OBS" , kmers.equiv_controls.obs[ pp->first ] );
+		  writer.value( "W_EXP" , kmers.equiv_controls.exp[ pp->first ] );
+		  writer.value( "W_P" , kmers.equiv_controls.pval[ pp->first ] );
+		  writer.value( "W_Z" , kmers.equiv_controls.zscr[ pp->first ] );
 		}
 	      
 	      writer.level( "DIFF" , "PHE" );
 	      
-	      writer.value( "EQN" , kmers.equiv_set_size[ pp->first ] );
-	      writer.value( "EQ" ,  kmers.obs2equiv[ pp->first ] );
-	      writer.value( "O_OBS" , kmers.basic_diffs.obs[ pp->first ] );
-              writer.value( "O_EXP" , kmers.basic_diffs.exp[ pp->first ] );
-	      writer.value( "O_Z" , kmers.basic_diffs.zscr[ pp->first ] );
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      //writer.value( "OBS" , kmers.basic_diffs.obs[ pp->first ] );
+              //writer.value( "EXP" , kmers.basic_diffs.exp[ pp->first ] );
+	      writer.value( "Z" , kmers.basic_diffs.zscr[ pp->first ] );
 
 	      if ( valid_equiv )
 		{
-		  writer.value( "M_OBS" , kmers.equiv_diffs.obs[ pp->first ] );
-		  writer.value( "M_EXP" , kmers.equiv_diffs.exp[ pp->first ] );
-		  writer.value( "M_Z" , kmers.equiv_diffs.zscr[ pp->first ] );
+		  writer.value( "W_OBS" , kmers.equiv_diffs.obs[ pp->first ] );
+		  writer.value( "W_EXP" , kmers.equiv_diffs.exp[ pp->first ] );
+		  writer.value( "W_Z" , kmers.equiv_diffs.zscr[ pp->first ] );
 		}
 	      
 	      writer.unlevel( "PHE" );
@@ -674,9 +678,64 @@ int main(int argc , char ** argv )
 	  
 	  ++pp;
 	}  
+
+      writer.unlevel( "S" );
       writer.unlevel( "L" );
-      writer.unlevel( "KMER" );
       
+      //
+      // repeat for EQ groups
+      //
+
+      pp = kmers.group.pval.begin();
+      while ( pp != kmers.group.pval.end() )
+	{
+	  writer.level( (int)pp->first.size() , "L" );
+	  writer.level( pp->first , "SG" );
+ 
+	  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+		  
+	  writer.value( "OBS" , kmers.group.obs[ pp->first ] );
+	  writer.value( "EXP" , kmers.group.exp[ pp->first ] );
+	  writer.value( "P" , pp->second );
+	  writer.value( "Z" , kmers.group.zscr[ pp->first ] );	  
+
+	  // C/C contrasts?
+
+	  if ( grp )
+	    {
+
+	      writer.level( "CASE" , "PHE" );
+
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );	      
+	      writer.value( "OBS" , kmers.group_cases.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.group_cases.exp[ pp->first ] );
+	      writer.value( "P" , kmers.group_cases.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.group_cases.zscr[ pp->first ] );
+	      
+	      writer.level( "CONTROL" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "OBS" , kmers.group_controls.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.group_controls.exp[ pp->first ] );
+	      writer.value( "P" , kmers.group_controls.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.group_controls.zscr[ pp->first ] );
+	      
+	      writer.level( "DIFF" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      // writer.value( "OBS" , kmers.group_diffs.obs[ pp->first ] );
+              // writer.value( "EXP" , kmers.group_diffs.exp[ pp->first ] );
+	      writer.value( "Z" , kmers.group_diffs.zscr[ pp->first ] );
+	      
+	      writer.unlevel( "PHE" );
+	    }
+	  
+	  ++pp;
+	}        
+      
+      writer.unlevel( "SG" );
+      writer.unlevel( "L" );
+
       // all done
       writer.unlevel( "_KMER" );
       writer.commit();

@@ -24,9 +24,9 @@
 #ifndef __MSE_H__
 #define __MSE_H__
 
-
 #include <vector>
 #include <map>
+#include <string>
 
 struct mse_t
 {
@@ -39,8 +39,10 @@ struct mse_t
   
   double sampen( const std::vector<double> & y , int M , double r );
 
+  double sampen( const std::vector<int> & y , int M  );
+  
   double sampen( const std::string & s , int M );
-
+  
   // MSE
   
   mse_t( const int scale_min = 1 , 

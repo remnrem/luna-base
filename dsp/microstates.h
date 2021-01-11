@@ -56,7 +56,7 @@ struct ms_prototypes_t {
   }
 		   
   void write( const std::string & filename );
-  void read( const std::string & filename );
+  void read( const std::vector<std::string> & fvec ); // filename + oiptional A,B,C,D order
   
   int K;
   int C;
@@ -173,42 +173,44 @@ struct ms_kmer_t {
   ms_kmer_t() { }
 
   // single obs
-  ms_kmer_t( const std::vector<int> & x , int k1 , int k2 , int nreps )
+  ms_kmer_t( const std::vector<int> & x , int k1 , int k2 , int nreps , bool verbose = false )
   {
-    run(x,k1,k2,nreps);
+    run(x,k1,k2,nreps, verbose );
   }
 
   // multiple-obs, as strings
   ms_kmer_t( const std::map<std::string,std::string>  & s , int k1 , int k2 , int nreps ,
-	     const std::map<std::string,int> * grp = NULL ) 
+	     const std::map<std::string,int> * grp = NULL , bool verbose = false ) 
   {
-    run(s,k1,k2,nreps,grp);
+    run(s,k1,k2,nreps,grp, verbose );
   }
   
   // multi-obs, as int-vectors
   ms_kmer_t( const std::map<std::string,std::vector<int> > & l , int k1 , int k2 , int nreps , 
-	     const std::map<std::string,int> * grp = NULL )  
+	     const std::map<std::string,int> * grp = NULL , bool verbose = false )  
   {
-    run(l,k1,k2,nreps,grp);
+    run(l,k1,k2,nreps,grp, verbose );
   }
   
   // single obs
-  void run( const std::vector<int> & l , int k1 , int k2 , int nreps )
+  void run( const std::vector<int> & l , int k1 , int k2 , int nreps , bool verbose = false )
   {
     std::map<std::string,std::vector<int> > l1;
     l1[ "__single_obs" ] = l;
-    run( l1 , k1 , k2 , nreps , NULL );
+    run( l1 , k1 , k2 , nreps , NULL , verbose );
   }
 
   // multiple obs, optional grp variable coded 0/1 
   void run( const std::map<std::string,std::vector<int> > & l ,
 	    int k1 , int k2 , int nreps ,
-	    const std::map<std::string,int> * grp = NULL );
+	    const std::map<std::string,int> * grp = NULL , 
+	    bool verbose = false );
   
   // multiple obs, optional grp variable coded 0/1 
   void run( const std::map<std::string,std::string> & s ,
 	    int k1 , int k2 , int nreps ,
-	    const std::map<std::string,int> * grp = NULL );
+	    const std::map<std::string,int> * grp = NULL , 
+	    bool verbose = false );
   
   std::set<std::string> permute( std::string str );
   std::string first_permute( std::string str );
@@ -227,6 +229,9 @@ struct ms_kmer_t {
   // raw counts
   ms_kmer_results_t basic;
   
+  // equivalence group sum counts
+  ms_kmer_results_t group;
+
   // equivalence group relative enrichment
   ms_kmer_results_t equiv;
   
@@ -235,6 +240,11 @@ struct ms_kmer_t {
   ms_kmer_results_t basic_cases;
   ms_kmer_results_t basic_diffs;
   
+  // as above, but for sum of E-group
+  ms_kmer_results_t group_controls;
+  ms_kmer_results_t group_cases;
+  ms_kmer_results_t group_diffs;
+
   // equivalence group relative enrichment
   ms_kmer_results_t equiv_controls;
   ms_kmer_results_t equiv_cases;
@@ -261,7 +271,10 @@ struct ms_stats_t {
   Data::Matrix<double> tr;
 
   // LWZ complexity
-  double lwz_points, lwz_states;
+  double lwz_states;
+
+  // SE (M)
+  std::map<int,double> samplen;
 
   // k-mers
   ms_kmer_t kmers;

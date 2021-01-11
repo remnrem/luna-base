@@ -28,6 +28,7 @@
 #include "helper/logger.h"
 #include "stats/kmeans.h"
 #include "dsp/lzw.h"
+#include "dsp/mse.h"
 #include "miscmath/crandom.h"
 #include <limits>
 
@@ -117,10 +118,13 @@ void dsptools::microstates( edf_t & edf , param_t & param )
     
   if ( multi_backfit && epoch )
     {
-      const std::string filename = Helper::expand( param.value( "backfit" ) );
-      prior_prototypes.read( filename );
+      const std::vector<std::string> fvec = param.strvector( "backfit" );
+      if ( fvec.size() < 1 ) Helper::halt( "bad backfit options" );
+      const std::string filename = fvec[0];
+      prior_prototypes.read( fvec ); // filename + optional col order
       
-      // check channels line up                                                                                                                                                 
+      // check channels line up
+      
       if ( signals.size() != prior_prototypes.C )
 	Helper::halt( "number of channels in " + filename + " does not match current signal selection" );
       for (int s=0; s<signals.size(); s++)
@@ -228,15 +232,17 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	   }
 	 else
 	   {
-	     const std::string filename = Helper::expand( param.value( "backfit" ) );
-	     prototypes.read( filename );
-	     
+	     const std::vector<std::string> fvec = param.strvector( "backfit" );
+	     if ( fvec.size() < 1 ) Helper::halt( "bad backfit options" );
+	     const std::string filename = fvec[0];
+	     prototypes.read( fvec ); // filename + optional col order                                                             
 	     // check channels line up 
 	     if ( signals.size() != prototypes.C )
 	       Helper::halt( "number of channels in " + filename + " does not match current signal selection" );
 	     for (int s=0; s<signals.size(); s++)
 	       if ( ! Helper::iequals( signals.label(s) , prototypes.chs[s] ) )
-		 Helper::halt( signals.label(s) + " does not match " + prototypes.chs[s]  + " for slot " + Helper::int2str( s+1) );
+		 Helper::halt( signals.label(s) + " does not match " 
+			       + prototypes.chs[s]  + " for slot " + Helper::int2str( s+1) );
 	   }
        }
 
@@ -434,41 +440,74 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       // Overall stats: complexity
       
       writer.value( "LZW"     , stats.lwz_states );
-      writer.value( "LZW_ALL" , stats.lwz_points );
+
       writer.value( "GEV"     , stats.GEV_tot );
+
+      // Entropy
+
+      for (int m=1;m<=8;m++)
+	writer.value( "SE" + Helper::int2str(m)  , stats.samplen[m] );
+
       
       // kmer stats: single obs, so no group differences here
     
       if ( run_kmers )
 	{
+
+	  //
+	  // output by obserevd sequence (OBS and OBS / GROUP ) 
+	  //
+
 	  std::map<std::string,double>::const_iterator pp = stats.kmers.basic.pval.begin();
 	  while ( pp != stats.kmers.basic.pval.end() )
 	    {
-	      writer.level( pp->first , "KMER" );
 	      writer.level( (int)pp->first.size() , "L" );
+	      writer.level( pp->first , "S" );
+	      	      
+	      writer.value( "NG"  , stats.kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG"  , stats.kmers.obs2equiv[ pp->first ] );
 	      
-	      writer.value( "EQ"   , stats.kmers.obs2equiv[ pp->first ] );
-	      writer.value( "EQN"  , stats.kmers.equiv_set_size[ pp->first ] );
-	      
-	      writer.value( "O_OBS" , stats.kmers.basic.obs[ pp->first ] );
-	      writer.value( "O_EXP" , stats.kmers.basic.exp[ pp->first ] );
-	      writer.value( "O_P" , pp->second );
-	      writer.value( "O_Z" , stats.kmers.basic.zscr[ pp->first ] );
+	      writer.value( "OBS" , stats.kmers.basic.obs[ pp->first ] );
+	      writer.value( "EXP" , stats.kmers.basic.exp[ pp->first ] );
+	      writer.value( "P" , pp->second );
+	      writer.value( "Z" , stats.kmers.basic.zscr[ pp->first ] );
 
 	      if ( stats.kmers.equiv_set_size[ pp->first ] > 1 )
 		{
-		  writer.value( "M_OBS" , stats.kmers.equiv.obs[ pp->first ] );
-		  writer.value( "M_EXP" , stats.kmers.equiv.exp[ pp->first ] );
-		  writer.value( "M_P" , stats.kmers.equiv.pval[ pp->first ] );
-		  writer.value( "M_Z" , stats.kmers.equiv.zscr[ pp->first ] );
+		  writer.value( "W_OBS" , stats.kmers.equiv.obs[ pp->first ] );
+		  writer.value( "W_EXP" , stats.kmers.equiv.exp[ pp->first ] );
+		  writer.value( "W_P" , stats.kmers.equiv.pval[ pp->first ] );
+		  writer.value( "W_Z" , stats.kmers.equiv.zscr[ pp->first ] );
 		}
 	      
 	      ++pp;
 	    }  
+	  
+	  writer.unlevel( "S" );
 	  writer.unlevel( "L" );
-	  writer.unlevel( "KMER" );
+
+	  //
+	  // Output by EQ group 
+	  //
+	  
+	  pp = stats.kmers.group.pval.begin();
+	  while ( pp != stats.kmers.group.pval.end() )
+	    {
+	      writer.level( (int)pp->first.size() , "L" );	      
+	      writer.level( pp->first , "SG" );
+	      writer.value( "NG"  , stats.kmers.equiv_set_size[ pp->first ] );	      
+	      writer.value( "OBS" , stats.kmers.group.obs[ pp->first ] );
+	      writer.value( "EXP" , stats.kmers.group.exp[ pp->first ] );
+	      writer.value( "P" , pp->second );
+	      writer.value( "Z" , stats.kmers.group.zscr[ pp->first ] );	      
+	      ++pp;
+	    }  
+	  writer.unlevel( "SG" );
+	  writer.unlevel( "L" );
+	
 	}
       
+
       //
       // either next epoch or all done
       //
@@ -805,7 +844,6 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
     {
       const int K = ks[ki];      
       writer.level( K , "NK" );
-      writer.value( "MSE" , results.kres[K].MSE );
       writer.value( "R2" , results.kres[K].R2 );
       writer.value( "MSE" , results.kres[K].MSE );
       writer.value( "SIG2" , results.kres[K].sig2 );
@@ -1260,23 +1298,16 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
 
   //
-  // LZW complexity
+  // LZW complexity & SE
   //
 
-  lzw_t lzw( L , &stats.lwz_points );
+  lzw_t lzw( runs.d , &stats.lwz_states );
 
-  lzw_t lzw2( runs.d , &stats.lwz_states );
+  mse_t se;
 
-
-  //
-  // MSE 
-  //
-
-  // consider m=1 to m=10
-  // r=0.1 (i.e. fixed)
-  // scale = 1 to 10 , step 5 
-  // code sequence as double
-
+  for (int m=1; m<=8; m++)
+    stats.samplen[m] = se.sampen( runs.d , m );
+  
 
   //
   // dump sequences to file?
@@ -1309,7 +1340,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
 
 void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int k1 , int k2 , int nreps ,
-		     const std::map<std::string,int> * grp )
+		     const std::map<std::string,int> * grp , bool verbose )
 {
   std::map<std::string,std::string> sall;
   std::map<std::string,std::vector<int> >::const_iterator ii = lall.begin();
@@ -1324,11 +1355,11 @@ void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int 
         s[ i ] = (char)(65 + l[i] );
       ++ii;
     }
-  run( sall , k1 , k2 , nreps , grp );
+  run( sall , k1 , k2 , nreps , grp , verbose );
 }
 
 void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , int k2 , int nreps ,
-		     const std::map<std::string,int> * grp )
+		     const std::map<std::string,int> * grp , bool verbose )
 {
 
   // single obs mode?
@@ -1395,7 +1426,7 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
   
 
   //
-  // Observed data: form equivalance groups
+  // Observed data: form equivalance groups, and get both sums (group) and within-group diffs (equiv)
   //
 
   // for each unique sequence, find the equivalance group:
@@ -1412,7 +1443,6 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
   // equiv group key --> all members e.g.  ABC -->  ABC, ACB, BAC, BCA, CAB, CBA
   equivs.clear();
 
-  
   // for each observed sequence, find the set of equivalent sequences  
   std::map<std::string,double>::const_iterator cc = basic.obs.begin();
   while ( cc != basic.obs.end() )
@@ -1423,9 +1453,7 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
       ++cc;
     }
 
-  // count up for each equivalence group
   std::map<std::string,std::string>::const_iterator ee = obs2equiv.begin();
-
   while ( ee != obs2equiv.end() )
     {
       // based just on the keys, get the corresponding equiv. group
@@ -1433,36 +1461,65 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
 
       // for convenienc of output, track size of equiv set directly
       equiv_set_size[ ee->first ] = equivs[ ee->second ].size();
+     
+      ++ee;
+    }
 
-      // denominator for : obs / obs-group 
-      const std::set<std::string> & st = equivs[ ee->second ];
+
+  //
+  // Group statistics (by e-label)
+  //
+  
+  std::map<std::string,std::set<std::string> >::const_iterator ll = equivs.begin();
+  while ( ll != equivs.end() )
+    {
+      // 'group' = denominator for : obs / obs-group 
+      const std::set<std::string> & st = ll->second;
       std::set<std::string>::const_iterator qq = st.begin();
       while ( qq != st.end() )
 	{	  
-	  equiv.obs[ ee->first ] += basic.obs[ *qq ];
+	  group.obs[ ll->first ] += basic.obs[ *qq ];
 	  if ( grp != NULL )
 	    {
-	      equiv_cases.obs[ ee->first ] += basic_cases.obs[ *qq ];
-	      equiv_controls.obs[ ee->first ] += basic_controls.obs[ *qq ];	      
+	      group_cases.obs[ ll->first ] += basic_cases.obs[ *qq ];
+	      group_controls.obs[ ll->first ] += basic_controls.obs[ *qq ];	      
 	    }
-	  ++qq;
-	}
+	  ++qq;	  
+	}      
 
-      // express as proportion of total (equiv.obs is set to sum of equiv groups above)
+      // C/C difference stat
+      if ( grp != NULL )
+	group_diffs.obs[ ll->first ] = group_cases.obs[ ll->first ] - group_controls.obs[ ll->first ];
+      
+      ++ll;
+    }
 
-      equiv.obs[ ee->first ] = basic.obs[ ee->first ] / equiv.obs[ ee->first ];
+
+  //
+  // count up for OBS - GROUP (within group diffs)
+  //
+
+  ee = obs2equiv.begin();
+  while ( ee != obs2equiv.end() )
+    {
+     
+      // within-group enrichment: express as proportion of total (group.obs is set to sum of equiv groups above)      
+      const std::string ess = obs2equiv[ ee->first ] ;
+
+      equiv.obs[ ee->first ] = basic.obs[ ee->first ] / group.obs[ ess ];
       
       if ( grp != NULL )
 	{
-	  equiv_cases.obs[ ee->first ] = basic_cases.obs[ ee->first ] / equiv_cases.obs[ ee->first ];
-	  equiv_controls.obs[ ee->first ] = basic_controls.obs[ ee->first ] / equiv_controls.obs[ ee->first ];
-	  // diffs based on difference in these two relative freqs
+	  equiv_cases.obs[ ee->first ] = basic_cases.obs[ ee->first ] / group_cases.obs[ ess ];
+	  equiv_controls.obs[ ee->first ] = basic_controls.obs[ ee->first ] / group_controls.obs[ ess ];	  
+	  // diffs based on difference in these two relative freqs	  
 	  equiv_diffs.obs[ ee->first ] = equiv_cases.obs[ ee->first ] - equiv_controls.obs[ ee->first ];
 	}
 	      
       ++ee;
     }
-  
+
+
   logger << "  kmers: considering length " << k1 << " to " << k2 << "\n";
   
   logger << "  kmers: for " << basic.obs.size() << " sequences, "
@@ -1482,6 +1539,14 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
   for (int r = 0 ; r < nreps ; r++)
     {
       
+      if ( verbose ) 
+	{
+	  if ( r == 0 ) logger << "  ";
+	  logger << ".";
+	  if ( r % 10 == 9 ) logger << ". " << r+1 << " of " << nreps << " replicates done\n  ";
+	}
+
+
       //
       // Permutation stratified by individual, although all counting is
       // pooled across individuals
@@ -1493,6 +1558,7 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
       // at the end, but in the big picture, this should not matter 
 
       std::map<std::string,int> stat_basic, stat_basic_cases, stat_basic_controls;
+      std::map<std::string,int> stat_group, stat_group_cases, stat_group_controls;
       std::map<std::string,double> stat_equiv, stat_equiv_cases, stat_equiv_controls;
       
       //
@@ -1545,14 +1611,10 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
 	  ++ii;
 	  
 	}
-
-
+      
+      
       //
-      // Normalize equiv group stats (based on total-numer / total-denom , i.e. where total is across all people)
-      //
-
-      //
-      // equivalance group stats: denominators
+      // Group sum statistics under the null
       //
       
       std::map<std::string,std::set<std::string> >::const_iterator pp = equivs.begin();
@@ -1572,12 +1634,12 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
 	      ++ee;
 	    }
 	  
-	  // sum across individuals
-	  stat_equiv[ pp->first ] = sum;
+	  // sum across individuals; e-groups are labelled by pp->first, the group key
+	  stat_group[ pp->first ] = sum;
 	  if ( grp != NULL )
 	    {
-	      stat_equiv_controls[ pp->first ] = sum_controls;
-	      stat_equiv_cases[ pp->first ] = sum_cases;
+	      stat_group_controls[ pp->first ] = sum_controls;
+	      stat_group_cases[ pp->first ] = sum_cases;
 	    }
 	  
 	  ++pp;
@@ -1602,20 +1664,19 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
 	    }
 
 	  //
-	  // Normalize equiv group stats (based on total-numer / total-denom , i.e. where total is across all people)
+	  // Group relative diffs ( equiv = base / group )
 	  //
-
 	  
 	  const std::string & ess = obs2equiv[ ss->first ];
 	  
-	  double estat = stat_equiv[ ess ] > 0 ? stat_basic[ ss->first ]  / (double)stat_equiv[ ess ] : 0 ;
+	  double estat = stat_group[ ess ] > 0 ? stat_basic[ ss->first ]  / (double)stat_group[ ess ] : 0 ;
 	  equiv.perm[ ss->first ].push_back( estat );
 	  
 	  if ( grp != NULL )
 	    {
 	      
-	      double estat_cases = stat_equiv_cases[ ess ] > 0 ? stat_basic_cases[ ss->first ]  / (double)stat_equiv_cases[ ess ] : 0 ;
-	      double estat_controls = stat_equiv_controls[ ess ] > 0 ? stat_basic_controls[ ss->first ]  / (double)stat_equiv_controls[ ess ] : 0 ;
+	      double estat_cases = stat_group_cases[ ess ] > 0 ? stat_basic_cases[ ss->first ]  / (double)stat_group_cases[ ess ] : 0 ;
+	      double estat_controls = stat_group_controls[ ess ] > 0 ? stat_basic_controls[ ss->first ]  / (double)stat_group_controls[ ess ] : 0 ;
 	      double estat_diffs  = estat_cases - estat_controls;
 
 	      equiv_cases.perm[ ss->first ].push_back( estat_cases );
@@ -1627,6 +1688,29 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
 	  // next obs sequence
 	  ++ss;
 	}
+
+
+      //
+      // Group sums (keyed on equiv-group label, not the obs label) 
+      //
+      
+      std::map<std::string,std::set<std::string> >::const_iterator ee = equivs.begin();
+      while ( ee != equivs.end() )
+        {
+	  
+	  group.perm[ ee->first ].push_back( stat_group[ ee->first ] );
+	  
+	  if ( grp != NULL )
+	    {
+	      group_cases.perm[ ee->first ].push_back( stat_group_cases[ ee->first ] );
+	      group_controls.perm[ ee->first ].push_back( stat_group_controls[ ee->first ] );
+	      group_diffs.perm[ ee->first ].push_back( stat_group_cases[ ee->first ] - stat_group_controls[ ee->first ] );
+	    }
+	  
+	  // next obs equiv-group 
+	  ++ee;
+	}
+
       
       //
       // Next replicate
@@ -1730,9 +1814,151 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
       //
       
       ++oo;
-    }      
+    }
 
 
+
+  //
+  // Finally, report for GROUP statistics
+  //
+
+  oo = group.obs.begin();
+  while ( oo != group.obs.end() )
+    {
+      
+      const std::string & ss = oo->first ;
+
+      const std::vector<double> & pp_group = group.perm[ ss ] ;
+      const std::vector<double> & pp_group_cases = group_cases.perm[ ss ] ;
+      const std::vector<double> & pp_group_controls = group_controls.perm[ ss ] ;
+      const std::vector<double> & pp_group_diffs = group_diffs.perm[ ss ] ;
+      
+      // expected value
+      group.exp[ ss ] = MiscMath::mean( pp_group );
+      
+      // Z score
+      group.zscr[ ss ] = ( group.obs[ ss ] - group.exp[ ss ] ) / MiscMath::sdev( pp_group , group.exp[ ss ]  );
+      
+      // Empirical P
+      int pv = 0;
+      for (int r=0; r<nreps; r++) if ( pp_group[r] >= group.obs[ ss ] ) ++pv;
+      group.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+
+      // phenotype-based
+      if ( grp != NULL )
+	{
+	  group_cases.exp[ ss ] = MiscMath::mean( pp_group_cases );
+	  group_controls.exp[ ss ] = MiscMath::mean( pp_group_controls );
+	  group_diffs.exp[ ss ] = MiscMath::mean( pp_group_diffs );      
+
+	  group_cases.zscr[ ss ] = ( group_cases.obs[ ss ] - group_cases.exp[ ss ] ) / MiscMath::sdev( pp_group_cases , group_cases.exp[ ss ]  );
+	  group_controls.zscr[ ss ] = ( group_controls.obs[ ss ] - group_controls.exp[ ss ] ) / MiscMath::sdev( pp_group_controls , group_controls.exp[ ss ]  );
+	  group_diffs.zscr[ ss ] = ( group_diffs.obs[ ss ] - group_diffs.exp[ ss ] ) / MiscMath::sdev( pp_group_diffs , group_diffs.exp[ ss ]  );
+
+	  // C/C only
+	  int pv = 0;
+	  for (int r=0; r<nreps; r++) if ( pp_group_cases[r] >= group_cases.obs[ ss ] ) ++pv;
+	  group_cases.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+	  
+	  pv = 0;
+	  for (int r=0; r<nreps; r++) if ( pp_group_controls[r] >= group_controls.obs[ ss ] ) ++pv;
+	  group_controls.pval[ ss ] = ( 1 + pv ) / (double)( 1 + nreps );
+	}
+
+      // next e-group
+      ++oo;
+    }
+
+  //
+  // Scale OBS and EXP rto be frequencies (within L, kmer size)
+  //
+
+  std::map<int,double> sum;
+
+  // basic, OBS
+  std::map<std::string,double>::iterator nn = basic.obs.begin();
+  while ( nn != basic.obs.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+  nn = basic.obs.begin();
+  while ( nn != basic.obs.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+  
+  // basic, EXP
+  sum.clear(); nn = basic.exp.begin();
+  while ( nn != basic.exp.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+  nn = basic.exp.begin();
+  while ( nn != basic.exp.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+
+  if ( grp != NULL )
+    {
+      // basic, cases, OBS
+      sum.clear(); nn = basic_cases.obs.begin();
+      while ( nn != basic_cases.obs.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = basic_cases.obs.begin();
+      while ( nn != basic_cases.obs.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+      
+      // basic, cases, EXP
+      sum.clear(); nn = basic_cases.exp.begin();
+      while ( nn != basic_cases.exp.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = basic_cases.exp.begin();
+      while ( nn != basic_cases.exp.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+
+      // basic, controls, OBS
+      sum.clear(); nn = basic_controls.obs.begin();
+      while ( nn != basic_controls.obs.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = basic_controls.obs.begin();
+      while ( nn != basic_controls.obs.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+      
+      // basic, controls, EXP
+      sum.clear(); nn = basic_controls.exp.begin();
+      while ( nn != basic_controls.exp.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = basic_controls.exp.begin();
+      while ( nn != basic_controls.exp.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+      
+    }
+
+  // ----- GROUP STATS -----
+
+  // group, OBS
+  sum.clear(); nn = group.obs.begin();
+  while ( nn != group.obs.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+  nn = group.obs.begin();
+  while ( nn != group.obs.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+  
+  // group, EXP
+  sum.clear(); nn = group.exp.begin();
+  while ( nn != group.exp.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+  nn = group.exp.begin();
+  while ( nn != group.exp.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+
+  if ( grp != NULL )
+    {
+      // group, cases, OBS
+      sum.clear(); nn = group_cases.obs.begin();
+      while ( nn != group_cases.obs.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = group_cases.obs.begin();
+      while ( nn != group_cases.obs.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+      
+      // group, cases, EXP
+      sum.clear(); nn = group_cases.exp.begin();
+      while ( nn != group_cases.exp.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = group_cases.exp.begin();
+      while ( nn != group_cases.exp.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+
+      // group, controls, OBS
+      sum.clear(); nn = group_controls.obs.begin();
+      while ( nn != group_controls.obs.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = group_controls.obs.begin();
+      while ( nn != group_controls.obs.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+      
+      // group, controls, EXP
+      sum.clear(); nn = group_controls.exp.begin();
+      while ( nn != group_controls.exp.end() ) { sum[ nn->first.size() ] += nn->second; ++nn; }
+      nn = group_controls.exp.begin();
+      while ( nn != group_controls.exp.end() ) { nn->second /= sum[ nn->first.size() ] ; ++nn; }
+      
+    }
+
+
+ 
   //
   // All done...
   //
@@ -1798,8 +2024,46 @@ void ms_prototypes_t::write( const std::string & filename )
   O1.close();
 }
 
-void ms_prototypes_t::read( const std::string & filename )
+void ms_prototypes_t::read( const std::vector<std::string > & fvec )
 {
+  if ( fvec.size() < 1 ) 
+    Helper::halt( "bad input for read-prototypes()" );
+
+  const std::string & filename = Helper::expand( fvec[0] );
+
+  // i.e. if 0 means nothing set, assume A,B,C,etc 
+  const int implied = fvec.size() - 1 ; 
+  std::vector<char> labels( implied );
+  for (int i=0; i<implied; i++)
+    {
+      if ( fvec[i+1].size() != 1 ) Helper::halt( "bad label: should be A, B, C, etc" );
+      labels[i] = fvec[i+1][0];
+    }
+
+  // file col --> internal slot
+  std::vector<int> slots( implied , -1 );
+
+  if ( implied )
+    {
+      for (int i=0; i<implied; i++) // searching for A, then B, etc
+	{
+	  const int s = 65 + i;
+	  if ( s < 0 ) Helper::halt( "bad A, B, C, ... encoding" );
+	  for (int j=0; j<implied; j++)
+	    {
+	      if ( labels[j] == s ) 
+		{ 
+		  slots[j] = i; 
+		  break;
+		} 
+	    }
+	}
+
+      // should all have a set slot by now 
+      for (int i=0; i<implied; i++) 
+	if ( slots[i] == -1 ) Helper::halt( "bad A, B, C, ... encoding" );	  
+    }
+  
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not find " + filename );
 
@@ -1825,6 +2089,11 @@ void ms_prototypes_t::read( const std::string & filename )
 	{
 	  K = tok.size() - 1;
 	  first = false;
+
+	  // must match, if a specific A,B,C,D order was given to this function
+	  if ( implied && implied != K ) 
+	    Helper::halt( "implied class order does not match number of columns in " + filename );
+	  
 	  logger << "  assuming " << K << " classes in " << filename << "\n";
 	}
       else if ( tok.size() - 1 != K )
@@ -1832,9 +2101,15 @@ void ms_prototypes_t::read( const std::string & filename )
 
       for (int i=1;i<tok.size();i++)
 	{
+	  // nb. effective +1 encoding in file, due to channel col 0 
+	  const std::string & inp = implied ? tok[ slots[i-1] + 1 ] : tok[i];
+
 	  double x;
-	  if ( ! Helper::str2dbl( tok[i] , &x ) )
-	    Helper::halt( "problem reading prototypes from " + filename + "\n in coversion to numeric: " + tok[i] + "\n" + line );
+	  
+	  if ( ! Helper::str2dbl( inp , &x ) )
+	    Helper::halt( "problem reading prototypes from " 
+			  + filename + "\n in coversion to numeric: " 
+			  + inp + "\n" + line );
 	  t.push_back(x);	    
 	}
 

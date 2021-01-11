@@ -909,6 +909,14 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "E" , "CYCLE_POS_REL" , "Relative position of this epoch in the current NREM cycle (0-1)" );
   add_var( "HYPNO" , "E" , "PERIOD" , "Cycle period: NREMP or REMP, or missing if not in a cycle" );
 
+  add_table( "HYPNO" , "C" , "NREM cycle-level output" );
+
+  add_table( "HYPNO" , "PRE,POST" , "Stage transitions" );
+  add_var( "HYPNO", "PRE,POST" , "N" , "Number of transitions" );
+  add_var( "HYPNO" , "PRE,POST" , "P_POST_COND_PRE" , "P( S+1 | S )" );
+  add_var( "HYPNO" , "PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" );
+
+
 
   /////////////////////////////////////////////////////////////////////////////////
   //
