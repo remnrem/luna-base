@@ -1012,7 +1012,7 @@ void  chep_mask( edf_t & edf , param_t & param )
 
   for (int si=0; si < ns; si++ )
     {
-      
+
       const std::string clabel = edf.header.label[ sdata[si] ];
 
       //

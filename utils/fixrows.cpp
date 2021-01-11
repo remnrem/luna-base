@@ -207,7 +207,7 @@ int main(int argc , char ** argv )
 	  
 	  if ( data.size() != col ) 
 	    {
-	      std::cerr << "read bad line...\n";
+	      std::cerr << "fixrows: read bad line...\n";
 	      std::exit(0);
 	    }
 	      
@@ -221,9 +221,6 @@ int main(int argc , char ** argv )
 	  
 	}
     }
-  
-
-  std::cerr << "read " << store.size() << " rows\n";
   
   
   //
@@ -256,7 +253,7 @@ int main(int argc , char ** argv )
 	      std::map<std::string,std::string>::const_iterator vv = ss->first.faclvl.find( v );
 	      if ( vv == ss->first.faclvl.end() )
 		{
-		  std::cerr << "internal error: this should not happen\n";
+		  std::cerr << "fixrows: internal error, this should not happen...\n";
 		  std::exit(1);
 		}
 	      std::cout << vv->second;
