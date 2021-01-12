@@ -1441,50 +1441,100 @@ int annot_t::load_features( const std::string & f )
 bool annot_t::save( const std::string & t)
 {
 
-  std::ofstream FOUT( t.c_str() , std::ios::out );
+  
+  std::ofstream O1( t.c_str() , std::ios::out );
+  
+  bool has_vars = types.size() > 0 ;
 
-  FOUT << "# "
-       << name << " | "
-       << description ;
+  //
+  // Headers
+  //
 
-  std::map<std::string,globals::atype_t>::const_iterator aa = types.begin();
+  O1 << "# " << name;
+  
+  if ( description != "" )
+    O1 << " | " << description;
+  else if ( has_vars ) // need a dummy description here 
+    O1 << " | " << description ;
+  if ( has_vars ) 
+    O1 << " |";
+  
+  std::map<std::string, globals::atype_t>::const_iterator aa = types.begin();
   while ( aa != types.end() )
     {
-      if ( aa == types.begin() ) FOUT << " |";
-      FOUT << " " << aa->first << "[" << globals::type_name[ aa->second ] << "]";
+      O1 << " " << aa->first 
+	 << "[" 
+	 << globals::type_name[ aa->second ] 
+	 << "]";	      
       ++aa;
     }
   
-  FOUT << std::fixed << std::setprecision(4);
+  O1 << "\n";
+  
   
   //
   // Interval-based annotation
   //
-    
+
+
   annot_map_t::const_iterator ii = interval_events.begin();
   while ( ii != interval_events.end() )
     {
       
       const instance_idx_t & instance_idx = ii->first;
-      const instance_t * instance = ii->second;
-      
-      FOUT << name << "\t"
-	   << instance_idx.id << "\t"
-	   << instance_idx.interval.start/(double)globals::tp_1sec << "\t" 
-	   << (instance_idx.interval.stop-1LLU)/(double)globals::tp_1sec;  // note.. taking off the +1 end point
-      
-      std::map<std::string,avar_t*>::const_iterator ti = instance->data.begin();
-      while ( ti != instance->data.end() )
-	{
-	  FOUT << "\t" << ti->second->text_value();
-	  ++ti;
-	}
 
-      FOUT << "\n";
+      const instance_t * inst = ii->second;
+
+      O1 << name << "\t";
+      
+      if ( instance_idx.id != "." && instance_idx.id != "" ) 
+	O1 << instance_idx.id << "\t";
+      else 
+	O1 << ".\t";
+      
+      if ( instance_idx.ch_str != "." && instance_idx.ch_str != "" )
+	O1 << instance_idx.ch_str << "\t";
+      else
+	O1 << ".\t";
+
+      // start/stop in seconds, with 4 d.p.
+
+      O1 << Helper::dbl2str( instance_idx.interval.start_sec() , globals::time_format_dp ) << "\t"
+	 << Helper::dbl2str( instance_idx.interval.stop_sec() , globals::time_format_dp );
+      
+      if ( inst->data.size() == 0 ) 
+	O1 << "\t.";
+      else
+	{
+	  O1 << "\t";
+	  
+	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	  
+	  while ( dd != inst->data.end() )
+	    {
+	      // pipe-delimiter
+	      if ( dd != inst->data.begin() ) O1 << "|";
+	      // meta-data value
+	      O1 << *dd->second;
+	      ++dd;
+	    }
+	}
+      
+      O1 << "\n";
+
+      //
+      // next annotation
+      //
+      
       ++ii;
     }
-  
-  FOUT.close();
+	  
+  //
+  // All done
+  //
+    
+  O1.close();
+
   return true;
 }  
 

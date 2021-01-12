@@ -408,7 +408,7 @@ struct timeline_t
     return mask[e]; 
   }
 
-  void mask2annot( const std::string & path , const std::string & tag );
+  void mask2annot( const std::string & path , const std::string & tag , const bool with_id = true );
 
   void dumpmask();
 

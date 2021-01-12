@@ -565,6 +565,10 @@ void cmddefs_t::init()
   add_url( "FLIP" , "manipulations/#flip" );
   add_param( "FLIP" , "sig" , "C3,C4" , "List of signals to flip" );
 
+  add_table( "FLIP" , "CH" , "Tracking flipped channels" );
+  add_var( "FLIP" , "CH" , "FLIP" , "Channel flipped" );
+  
+  
   // RECORD-SIZE
 
   add_cmd( "manip" , "RECORD-SIZE" , "Alters the record size of an EDF, and writes a new EDF" );
@@ -593,8 +597,13 @@ void cmddefs_t::init()
   add_param( "WRITE" , "edf-dir" , "edfs/" , "Set folder where new EDFs should be written" );
   add_param( "WRITE" , "edf-tag" , "v2" , "Add a tag to each new EDF filename" );
   add_param( "WRITE" , "sample-list" , "v2.lst" , "Name of the new sample-list" );
-
-
+  
+  add_table( "WRITE", "" , "Misc output from pre-WRITE restructure" );
+  add_var( "WRITE", "" , "NR1" , "Pre-restructure number of records" );
+  add_var( "WRITE", "" , "NR2" , "Post-restructure number of records" );
+  add_var( "WRITE", "" , "DUR1" , "Pre-restructure duration (seconds)" );
+  add_var( "WRITE", "" , "DUR2" , "Post-restructure duration (seconds)" );
+    
   // MATRIX
 
   add_cmd( "output" , "MATRIX" , "Dumps signal information to a file" );

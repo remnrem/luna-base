@@ -191,8 +191,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool     verbose_time_phase_locking = param.has( "verbose-coupling" );
 
   // generate a feature file of spindles
-  const bool     ftr_output               = param.has("ftr-dir") || param.has("ftr");
-
+  const bool     save_annots                = param.has( "annot" );
+  std::map<annot_t*,std::string> afiles;
   
   // show verbose ENRICH output
   const bool     enrich_output            = param.has( "enrich" );
@@ -282,21 +282,18 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
  
   //
-  // Set up annotation, skip this...  use FTR instead...
+  // Set up annotation
   //
-
-//   if ( 0 ) 
-//     {
+  
   std::string sp_label = "spindles";
-//       annot_t * a = edf.timeline.annotations.add( sp_label );
-//       a->description = "Wavelet spindle detector";
-      
-//       std::string sp_label2 = "pre-spindles";
-//       annot_t * a2 = edf.timeline.annotations.add( sp_label2 );
-//       a2->description = "Wavelet spindle detector (pre)" ;
-//     }
 
+  if ( save_annots ) 
+    {
+      if ( param.value( "annot" ) != "" )
+	sp_label = param.value( "annot" );       
+    }
 
+  
   //
   // Add new channels?
   //
@@ -1880,49 +1877,36 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	
 	  //
-	  // Record as a .ftr file
+	  // Record as an .annot file?
 	  //
 
-	  if ( ftr_output )
+	  if ( save_annots )
 	    {
-	      const std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;	      
-	      const std::string ftr_tag    = "-" + analysis_label
-		+ ( param.has("ftr") ? "-" + param.value( "ftr" ) : "" ) ;
-	      const std::string ftr_folder = param.has("ftr-dir") ? param.value( "ftr-dir" ) : "./";
-	      const std::string delim = ftr_folder[ ftr_folder.size() - 1 ] != '/' ? "/" : "";
-	      
-	      // create folder if it does not exist
-	      // (will need to change for windows...)
-	      
-	      std::string syscmd = globals::mkdir_command + " " + ftr_folder ;
+
+	      // folder (create if necessary)
+
+	      const std::string annot_folder = param.has("annot-dir") ? param.value( "annot-dir" ) : "./";
+	      const std::string delim = annot_folder[ annot_folder.size() - 1 ] != '/' ? "/" : "";
+	      std::string syscmd = globals::mkdir_command + " " + annot_folder ;
 	      int retval = system( syscmd.c_str() );
-	      
-	      // id_<id>_feature_<feature name>.ftr
-	      // tab-delim:
-	      // tp1 tp2 label key=value key2=value2 ...
 
-	      const std::string ftr_name = ftr_folder + delim + "id_" + edf.id + "_feature_" 
-		+ sp_label + "-" + signals.label(s) + ftr_tag + ".ftr";
-
-	      logger << " writing " << spindles.size() << " spindles to " << ftr_name << "\n";
-	      std::ofstream OUT1( ftr_name.c_str() , std::ios::out );
-	      if ( OUT1.bad() ) Helper::halt( "could not open " + ftr_name + " for writing" );
+	      // annot label
+	      const std::string analysis_label = Helper::dbl2str(frq[fi]) ;
+	      const std::string aname = sp_label + "-" + analysis_label;
+		
+	      annot_t * a = edf.timeline.annotations.add( aname );
+	      a->description = "Spindle intervals";
 	      
+	      const std::string a_filename = annot_folder + delim + aname + ".annot";
+	      logger << " writing " << spindles.size() << " spindles to " << a_filename << "\n";
+
+	      // use F_C as instance label
 	      for (int i=0;i<spindles.size();i++)
-		{
-		  OUT1 << spindles[i].tp.start << "\t"
-		       << spindles[i].tp.stop << "\t"
-		       << "sp" << i+1 << "\t"
-		       << "dur=" << spindles[i].dur << "\t"
-		       << "amp=" << spindles[i].amp << "\n";
-		}
+		instance_t * instance = a->add( analysis_label , spindles[i].tp , signals.label(s) );
 	      
-	      OUT1.close();
-
+	      afiles[ a ] = a_filename;
+	      
 	    }
-	  
-
-
 	  
 
 	  //
@@ -2020,7 +2004,17 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
     }
 
+  //
+  // Save all annotations
+  //
 
+  std::map<annot_t*,std::string>::const_iterator aa = afiles.begin();
+  while ( aa != afiles.end() )
+    {
+      aa->first->save( aa->second );
+      ++aa;
+    }
+    
   //
   // If we added new channels, then we need to save a new EDF
   //

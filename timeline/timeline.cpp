@@ -1287,7 +1287,7 @@ void timeline_t::dump_chep_mask( signal_list_t signals , bool write_out )
 {
 
   const int ne = first_epoch();
-  
+
   // for report to console
   int total_masked = 0;
   int total_total = 0;
@@ -1395,7 +1395,7 @@ void timeline_t::dump_chep_mask( signal_list_t signals , bool write_out )
   // report to console
   //
 
-  int partial_masks = 0; // ignores if epoich or channels complelety masked
+  int partial_masks = 0; // ignores if epoch or channels complelety masked
   int partial_masks2 = 0; // should match the above..
 
   int epochs_totally_masked = 0 , channels_totally_masked = 0;
@@ -1415,21 +1415,25 @@ void timeline_t::dump_chep_mask( signal_list_t signals , bool write_out )
       ++jj;
     }
 
+  // ne is the current number of unmasked epochs
+
+  // total epoch count
+  const int ne_all = num_total_epochs();
 
   logger << "  CHEP summary:\n"
 	 << "   " << total_masked << " of " << total_total << " channel/epoch pairs masked (" 
 	 << round( 100 * ( total_masked / double(total_total ) ) ) << "%)\n"
 	 
-    
-
-	 << "   " << track_epochs.size() << " of " << ne << " epochs with 1+ masked channel, " 
+	 << "   " << track_epochs.size() << " of " << ne_all << " epochs with 1+ masked channel, " 
 	 << epochs_totally_masked << " with all channels masked\n"
+
 	 << "   " << track_channels.size() << " of " << ns << " channels with 1+ masked epoch, " 
 	 << channels_totally_masked << " with all epochs masked\n";
-  
+
+  // Hmmm... need to revisit this, not clear   
   // ignore totally masked channels/epochs.. how much is left?
-  logger << "   " << partial_masks  << " (" << round( 100 * ( partial_masks / double(total_total ) ) )  << "%) channels/epochs partially masked\n";
-  logger << "   " << partial_masks2 << " (" << round( 100 * ( partial_masks2 / double(total_total ) ) )  << "%) channels/epochs partially masked\n";
+  // logger << "   " << partial_masks  << " (" << round( 100 * ( partial_masks / double(total_total ) ) )  << "%) channels/epochs partially masked\n";
+  // logger << "   " << partial_masks2 << " (" << round( 100 * ( partial_masks2 / double(total_total ) ) )  << "%) channels/epochs partially masked\n";
 
 }
 
@@ -2153,7 +2157,7 @@ uint64_t timeline_t::timepoint( int r , int s , int nsamples ) const
 // }
 
 
-void timeline_t::mask2annot( const std::string & path , const std::string & tag ) 
+void timeline_t::mask2annot( const std::string & path , const std::string & tag , bool with_id ) 
 {
 
   if ( ! mask_set ) return;
@@ -2162,11 +2166,11 @@ void timeline_t::mask2annot( const std::string & path , const std::string & tag 
     ? path + globals::folder_delimiter 
     : path ; 
   
-  std::string filename = path2 + tag + "-" + edf->id + ".annot"; 
+  std::string filename = with_id ? ( path2 + tag + "-" + edf->id + ".annot" ) : ( path2 + tag + ".annot" ) ;
   
   annot_t * a = annotations.add( tag );
-  a->description = tag + "-mask" ;  
-  a->types[ "M" ] = globals::A_BOOL_T;
+  a->description = "Mask based on " + tag ;
+  //a->types[ "M" ] = globals::A_BOOL_T;
   
   const int ne = mask.size();
   
@@ -2175,7 +2179,7 @@ void timeline_t::mask2annot( const std::string & path , const std::string & tag 
       if ( mask[e] )
 	{
 	  instance_t * instance = a->add( tag , epoch(e) , "." );
-	  instance->set( "M" , true );
+	  //instance->set( "M" , true );
 	}
     }
 

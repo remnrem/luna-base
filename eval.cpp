@@ -2000,7 +2000,8 @@ void proc_dump_mask( edf_t & edf , param_t & param )
   // otherwise, create an ANNOT file from the MASK, i.e. for viewing
   std::string tag = param.requires( "tag" );
   std::string path = param.has( "path" ) ? param.value("path") : ".";
-  edf.timeline.mask2annot( path, tag );
+  bool no_id = ! param.has( "no-id" );
+  edf.timeline.mask2annot( path, tag , no_id ); 
 }
 
 // CHEP : dump, or convert from CHEP->MASK
@@ -2584,8 +2585,15 @@ void proc_flip( edf_t & edf , param_t & param  )
   std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
   const int ns = signals.size();  
+
+  // track which signals are flipped
   for (int s=0;s<ns;s++) 
-    edf.flip( signals(s) );
+    {
+      writer.level( signals.label(s) , globals::signal_strat );
+      writer.value( "FLIP" , 1 );
+      edf.flip( signals(s) );
+    }
+  writer.unlevel( globals::signal_strat );
 }
 
 
