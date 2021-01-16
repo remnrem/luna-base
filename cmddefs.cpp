@@ -1033,7 +1033,7 @@ void cmddefs_t::init()
 
 
   //
-  // PSC
+  // PSC  (nb. --psc uses PSC command label internally)
   //
 
   add_cmd( "cmdline" , "--psc" , "Create PSC from power spectra from multiple individuals" );
@@ -1050,6 +1050,22 @@ void cmddefs_t::init()
   add_url( "PSC" , "psc/#project-psc" );
   add_param( "PSC" , "proj" , "proj1.txt" , "PSC projection file (from --psc) ");
   add_param( "PSC" , "nc" , "5" , "Number of components (if subset of projection desired (default all)" );
+
+  add_table( "PSC" , "PSC" , "Principal spectral components" );
+  add_var( "PSC", "PSC" , "U" , "Principal spectral component value" );
+
+  add_table( "PSC" , "I" , "Singular values/variance explained" );
+  add_var( "PSC", "I" , "W" , "Singular value" );
+  add_var( "PSC", "I" , "VE" , "Variance explained" );
+
+  add_table( "PSC" , "J" , "Variable labels" );
+  add_var( "PSC" , "J" , "CH" , "Channel label" );
+  add_var( "PSC" , "J" , "F" , "Frequency" );
+  add_var( "PSC" , "J" , "VAR" , "Variable" );
+  
+  add_table( "PSC" , "I,J" , "V matrix" );
+  add_var( "PSC" , "I,J" , "V" , "V" );
+  
 
   //
   // MTM

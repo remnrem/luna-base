@@ -2,7 +2,7 @@ include Makefile.inc
 ifeq ($(ARCH),WINDOWS)
   TARGETS = luna destrat behead tocol
 else
-  TARGETS = luna libluna destrat behead merge tocol fixrows
+  TARGETS = luna libluna destrat behead dmerge tocol fixrows
 endif
 
 SRCS = globals.cpp eval.cpp cmddefs.cpp \
@@ -84,7 +84,7 @@ fixrows: utils/fixrows.o
 behead: utils/behead.o
 	$(CXX) -o $@ $^  $(LDFLAGS)
 
-merge: utils/merge.o utils/merge-helpers.o
+dmerge: utils/merge.o utils/merge-helpers.o
 	$(CXX) -o $@ $^ 
 
 .PHONY: clean

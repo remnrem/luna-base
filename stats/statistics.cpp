@@ -125,10 +125,9 @@ Data::Vector<double> Statistics::variance( const Data::Matrix<double> & d )
 
 Data::Vector<double> Statistics::variance( const Data::Matrix<double> & d , const Data::Vector<double> & u )
 {
-  Data::Vector<double> v( d.dim2() ); 
-  Data::Matrix<double> s = covariance_matrix( d , u , d , u );
-  for (int i=0; i<d.dim2(); i++) v(i) = s(i,i);
-  return v;
+  Data::Vector<double> s = sdev( d , u );
+  for (int i=0; i<s.size(); i++) s(i) = s[i] * s[i];
+  return s;
 }
 
 Data::Vector<double> Statistics::sdev( const Data::Matrix<double> & d , const Data::Vector<double> & u )

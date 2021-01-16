@@ -45,8 +45,10 @@
 
 #include "tinyxml/xmlreader.h"
 
+#include "stats/Eigen/Dense"
 #include "stats/cluster.h"
 #include "stats/kmeans.h"
+
 
 #include "miscmath/miscmath.h"
 

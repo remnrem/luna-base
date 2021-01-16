@@ -24,7 +24,7 @@
 #define __KMEANS_H__
 
 #include "stats/matrix.h"
-#include "stats/Eigen/Dense"
+#include "Eigen/Dense"
 #include <vector>
 
 #include <cstdio>

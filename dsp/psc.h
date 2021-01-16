@@ -26,7 +26,7 @@
 struct edf_t;
 struct param_t;
 
-#include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 
 #include <vector>
 
@@ -38,23 +38,18 @@ struct psc_t {
   
   void project( edf_t & edf , param_t & );
 
+  // members
 
-  // data
-  static std::vector<std::string> vname;
-  static Data::Vector<double> vmean;
-  static Data::Vector<double> vsd;
+  static std::vector<std::string> vname;  
+  static Eigen::Array<double, 1, Eigen::Dynamic> means;
+  static Eigen::Array<double, 1, Eigen::Dynamic> sds;
 
   // number of PSC
-  int nc;
-  
-  static Data::Vector<double> W;
+  int nc;  
 
-  static Data::Matrix<double> DW; // 1/W as diag matrix
-
-  static Data::Matrix<double> V;
-
+  static Eigen::VectorXd W;
+  static Eigen::MatrixXd V;   
   const double EPS = 1e-6;
-
   
 };
 

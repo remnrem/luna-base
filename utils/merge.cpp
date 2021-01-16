@@ -43,8 +43,9 @@ options_t options;
 
 int main( int argc , char ** argv )
 {
-
-  // merge derived/domains /studies/Study2 merged/study2.txt                                                                    
+  
+  // merge derived/domains /studies/Study2 merged/study2.txt
+  
   if ( argc < 4 )
     {
       std::cerr << "usage: merge [options] path/to/domains path/to/study path/to/outputfile  {domains domain-groups}\n";

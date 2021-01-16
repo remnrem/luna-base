@@ -27,14 +27,11 @@
 #include "edf/slice.h"
 #include "db/db.h"
 
-
-Data::Vector<double> psc_t::W;
-Data::Matrix<double> psc_t::DW;
-Data::Matrix<double> psc_t::V;
-
 std::vector<std::string> psc_t::vname;
-Data::Vector<double> psc_t::vmean;
-Data::Vector<double> psc_t::vsd;
+Eigen::Array<double, 1, Eigen::Dynamic> psc_t::means;
+Eigen::Array<double, 1, Eigen::Dynamic> psc_t::sds;
+Eigen::VectorXd psc_t::W;
+Eigen::MatrixXd psc_t::V;   
 
 extern writer_t writer;
 
@@ -105,9 +102,21 @@ void psc_t::construct( param_t & param )
   double fupr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 0 ;
   
   //
-  // Save projection?
+  // Epoch level input?  (in which case,  ID ==>  ID:E internally
   //
 
+  bool epoch = param.has( "epoch" );
+
+  //
+  // Output signed means (i.e. for LCOH)
+  //
+
+  bool signed_stats = param.has( "signed-stats" );
+  
+  //
+  // Save projection?
+  //
+  
   std::string projection = param.has( "proj" ) ? param.value( "proj" ) : "" ;
 
   //
@@ -115,6 +124,19 @@ void psc_t::construct( param_t & param )
   //
 
   bool output_input = param.has( "output-input" );
+  
+  //
+  // Only output U matrix 
+  //
+
+  bool only_u = param.has( "only-u" );
+
+
+  //
+  // Dump component definitions in a separate text file
+  //
+
+  std::string vdump = param.has( "v-matrix" ) ? param.value( "v-matrix" ) : "" ;
   
   //
   // PSC parameters
@@ -140,7 +162,6 @@ void psc_t::construct( param_t & param )
   // expect file to contain multiple individuals
   
   // in output, one row per individual; columns are CH x F (xCH1/CH2)
-
   
   // id -> ch -> f -> var -> value
   
@@ -150,7 +171,7 @@ void psc_t::construct( param_t & param )
     {
       std::string infile = Helper::expand( infiles[i] );
 
-      logger << "  reading from " << infile << "\n";
+      logger << "  reading spectra from " << infile << "\n";
       
       std::ifstream IN1( infile.c_str() , std::ios::in );
 
@@ -179,21 +200,24 @@ void psc_t::construct( param_t & param )
       //
 
       if ( cols.find( "ID" ) == cols.end() ) Helper::halt( "no ID column in " + infile );
+      if ( epoch && cols.find( "E" ) == cols.end() ) Helper::halt( "no E column in " + infile );
       bool ch1 = cols.find( "CH" ) != cols.end();
       bool ch2 = cols.find( "CH1" ) != cols.end() && cols.find( "CH2" ) != cols.end();
       if ( ch1 == ch2 ) Helper::halt( "require either CH or CH1 & CH2 in " + infile );
       if ( cols.find( "F" ) == cols.end() ) Helper::halt( "no F column in " + infile );
 
       int id_slot = -1;
+      int e_slot = -1;
       int ch_slot = -1;
       int ch1_slot = -1;
       int ch2_slot = -1;
-      int f_slot = -1;
-      
+      int f_slot = -1;      
+
       std::map<int,std::string> slot2var;
       for (int i=0;i<tok.size();i++)
 	{
 	  if ( tok[i] == "ID" ) id_slot = i;
+	  if ( tok[i] == "E" ) e_slot = i;
 	  if ( tok[i] == "F" ) f_slot = i;
 	  if ( tok[i] == "CH" ) ch_slot = i;
 	  if ( tok[i] == "CH1" ) ch1_slot = i;
@@ -201,18 +225,21 @@ void psc_t::construct( param_t & param )
 	  if ( vars.find( tok[i] ) != vars.end() ) slot2var[i] = tok[i];
 	}
       
-      if ( slot2var.size() == 0 ) Helper::halt( "no variables v=<...> in " + infile );
+      if ( slot2var.size() == 0 ) 
+	Helper::halt( "no variables v=<...> in " + infile );
 
       const int ncols = tok.size();
       
       //
-      // all set, not start reading
+      // all set, now start reading
       //
 
       while ( ! IN1.eof() )
 	{
 	  // looking for ID F CH         --> PSD 
 	  //  OR         ID F CH1 CH2    --> LCOH (default)  
+
+	  // in epoch mode, looking for ID and E... we merge these to ID = ID:E
 
 	  std::string line;
 
@@ -223,9 +250,11 @@ void psc_t::construct( param_t & param )
 	  if ( IN1.eof() || tok.size() == 0 ) continue;
 	  
 	  if ( tok.size() != ncols ) Helper::halt( "incorrect number of columns in " + infile );
-
-	  std::string id = tok[ id_slot ];
-
+	  
+	  std::string id = epoch ? 
+	    tok[ id_slot ] + ":" + tok[ e_slot ] : 
+	    tok[ id_slot ] ;
+	  
 	  // skip if person not on an include list
 	  if ( id_includes.size() != 0 && id_includes.find( id ) == id_includes.end() ) continue;
 
@@ -347,7 +376,7 @@ void psc_t::construct( param_t & param )
   // Populate matrix
   //
   
-  Data::Matrix<double> U( rows.size() , cols.size() );
+  Eigen::MatrixXd U( rows.size() , cols.size() );
   
   std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss1 = slot.begin();
   while ( ss1 != slot.end() )
@@ -393,14 +422,20 @@ void psc_t::construct( param_t & param )
   logger << "  good, all expected observations found, no missing data\n";
 
   //
+  // free up main memory store
+  //
+
+  i2c2f2v.clear();
+
+  //
   // Check for invariant columns
   //
 
-  Data::Vector<double> colvars = Statistics::variance( U );
-
-  for (int i=0;i<colvars.size(); i++)
-    if ( colvars[i] < EPS ) Helper::halt( "invariant column in input\n" );
-					    
+  int N = U.rows();
+  means = U.colwise().mean();
+  sds = ((U.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
+  for (int i=0; i < sds.size(); i++)
+    if ( sds[i] < EPS ) Helper::halt( "invariant column in input\n" );
   
   //
   // Outliers?
@@ -419,48 +454,100 @@ void psc_t::construct( param_t & param )
       
       for (int j=0; j<nv; j++)
 	{
+	  // urgh, for now copy vector from Eigen to muse outliers() function... 
+	  // this is not a big timesink in the flow of the PSC option, so 
+	  // should not matter... we will clean up later converting all matrix/;vector helpers
+	  // to assume Eigen objects
+	  
 	  // this sets 'inc' values to missing, but uses the same prior for all channels
-	  int removed = MiscMath::outliers( U.col(j).data_pointer() , th[t] , &inc , &prior);
+	  
+	  std::vector<double> tmp(ni);
+	  Eigen::VectorXd::Map(&tmp[0], ni ) = U.col(j);
+
+	  int removed = MiscMath::outliers( &tmp , th[t] , &inc , &prior);
+	  
 	  //logger << "  removing " << removed << " var " << j << " round " << t << "\n";
 	}
       
     }
 
   
-  Data::Matrix<double> U2 = U;
+  //
+  // Remove rows from input U
+  //
+
+  Eigen::MatrixXd U2 = U;
+
   std::vector<std::string> id2 = id;
 
-  U.clear();
+  U.resize(0,0);
   id.clear();
 
   ni = 0;
   for (int i=0;i<inc.size();i++)
     if ( inc[i] ) ++ni;
-
+  
   logger << "  after outlier removal, " << ni << " individuals remaining\n";
-
+  
   U.resize( ni , nv );
   id.resize( ni );
   int r = 0;
-  for (int i=0;i<U2.dim1();i++)
+  for (int i=0;i<U2.rows();i++)
     if ( inc[i] )
       {
-	for (int j=0;j<nv;j++) U(r,j) = U2(i,j);
+	for (int j=0;j<nv;j++) 
+	  U(r,j) = U2(i,j);
 	id[r] = id2[i];
 	++r;
       }
+
+  //
+  // Track new means / SDs of the nv input variables
+  //
+  
+  N = ni;
+  means = U.colwise().mean();
+  sds = ((U.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
+
+  //
+  // for directional (coherence) terms, also optionally track means separately for positive and 
+  // negative components;  0 if not defined.
+  //
+
+  std::vector<double> pos_means, neg_means;
+
+  if ( signed_stats )
+    {
+      pos_means.resize( nv , 0 );
+      neg_means.resize( nv , 0 );
+      
+      for (int k=0; k<nv; k++)
+	{
+	  double psum = 0 , nsum = 0;
+	  int    pcnt = 0 , ncnt = 0;
+
+	  const Eigen::VectorXd & col = U.col( k );
+	  
+	  for (int i=0; i<ni; i++)
+	    {
+	      if      ( col(i) > 0 ) { psum += col(i) ; ++pcnt; }
+	      else if ( col(i) < 0 ) { nsum += col(i) ; ++ncnt; }
+	    }
+	  
+	  pos_means[k] = pcnt == 0 ? 0 : psum / (double)pcnt;
+	  neg_means[k] = ncnt == 0 ? 0 : nsum / (double)ncnt;
+
+	}
+      
+    }
 
 
   //
   // Output input data ?
   //
 
-  Data::Matrix<double> X;
+  Eigen::MatrixXd X;
 
-  // track means / SDs
-  vmean = Statistics::mean( U );
-  vsd = Statistics::sdev( U , vmean );
-  
   if ( output_input ) X = U;
   
   //
@@ -479,71 +566,46 @@ void psc_t::construct( param_t & param )
   
   if ( standardize_inputs )
     {
-      Statistics::standardize( U );
+      logger << "  standardizing data matrix\n";      
+      U.array().rowwise() -= means;
+      U.array().rowwise() /= sds;
     }
   else
     {
-      Statistics::mean_center_cols( U );
+      logger << "  mean-centering data matrix\n";
+      U.array().rowwise() -= means;      
     }
 
-  
-  Data::Vector<double> mm = Statistics::mean( U );
-  
-  W.clear(); V.clear();
-  W.resize( nv );
-  V.resize( nv , nv );
+  //
+  // SVD
+  //
 
-  bool okay = Statistics::svdcmp( U , W , V );
-  if ( ! okay ) Helper::halt( "problem with SVD" );
-  
-  int rank = Statistics::orderSVD( U , W , V );
-  if ( rank == 0 ) Helper::halt( "problem with input data, rank 0" );
+  logger << "  about to perform SVD...\n";
 
+  Eigen::BDCSVD<Eigen::MatrixXd> svd( U , Eigen::ComputeThinU | Eigen::ComputeThinV );
+  U = svd.matrixU();
+  V = svd.matrixV();
+  W = svd.singularValues();
+
+  logger << "  done... now writing output\n";
+  
+  // components are already sorted in decreasing order, so so just take the first 'nc' components
+  //  assuming ni << nv , and so ni components returned, of which we take nc (which is less than ni )
+
+  //  U[ ni x ni ]  -->   U[ ni x nc ]
+  //  V[ nv x ni ]  -->   V[ nv x nc ]
+  //  W[ ni ]       -->   W[ nc ]
 
   //
   // Output
   //
 
-  // W
-
-  double wsumsq = 0;
-  for (int j=0;j<nv;j++) wsumsq += W[j] * W[j];
+  
 
   writer.id( "." , "." );
-  
-  for (int j=0;j<nv;j++)
-    {
-      writer.level( j+1 , "I" );
-      writer.value( "W" , W[j] );
-      writer.value( "VE" , (W[j]*W[j])/wsumsq );
-    }
-  writer.unlevel( "W" );
-  
-  // V (transpose) (only first 'nc' components
-  for (int j=0;j<nc;j++)
-    {
-      writer.level( j+1 , "I" );
-      for (int k=0;k<nv;k++)
-	{
-	  writer.level( vname[k] , "J" );
-	  writer.value( "V" , V(k,j) );	// nb transpose
-	}
-        writer.unlevel( "J" );
-    }
-  writer.unlevel( "I" );
-  
-  // VARS
-  for (int j=0;j<nv;j++)
-    {
-      writer.level( vname[j] , "J" );
-      writer.value( "CH" , col2ch[ vname[j] ] );
-      writer.value( "F" , col2f[ vname[j] ] );
-      writer.value( "VAR" , col2var[ vname[j] ] );
-    }
-  writer.unlevel( "J" );
-
 
   // U ( x ID )
+
   for (int i=0;i<ni;i++)    
     {
       writer.id( id[i] , "." );
@@ -556,8 +618,134 @@ void psc_t::construct( param_t & param )
       writer.unlevel( "PSC" );
     }
 
+
+  //
+  // Output V to a file, along with variable information (channel, variable, freq)
+  //
+
+  if ( vdump != "" ) 
+    {
+      
+      logger << "  dumping V and meta-information to file: " << vdump << "\n";
+
+      std::ofstream V1( vdump.c_str() , std::ios::out );
+      
+      // V : first nc component
+      
+      V1 << "VAR\tCH\tCH1\tCH2\tF";
+
+      V1 << "\tMN\tSD";
+      
+      if ( signed_stats ) 
+	V1 << "\tPOS\tNEG";
+
+      for (int c=0;c<nc; c++ )
+	V1 << "\tV" << c+1 ;      
+      V1 << "\n";
+      
+      for (int k=0;k<nv;k++)
+	{
+	  // ch ~ f ~ var
+	  // ch1.ch2 ~ f ~ var
+
+	  // variable name
+	  V1 << col2var[ vname[k] ];
+
+	  // channel(s)
+	  std::vector<std::string> ctok = Helper::parse( col2ch[ vname[k] ] , "." ) ;
+	  if ( ctok.size() == 1 ) 
+	    V1 << "\t" << ctok[0] << "\t.\t.";
+	  else if ( ctok.size() == 2 )  
+	    V1 << "\t." << "\t" << ctok[0] << "\t" << ctok[1] ;
+	  else 
+	    Helper::halt( "bad format in vname/channel");
+	  
+	  // freq
+	  V1 << "\t" << col2f[ vname[k] ];
+	  
+	  // means / SD from raw data 
+	  V1 << "\t" << means[ k ]
+	     << "\t" << sds[ k ];
+
+	  // signed stats?
+	  if ( signed_stats )
+	    {
+	      V1 <<"\t" << pos_means[ k ]
+		 <<"\t" << neg_means[ k ];
+	    }
+
+	  // V coefficients
+	  for (int c=0;c<nc; c++ )
+	    V1 << "\t" << V(k,c);
+
+	  V1 << "\n";
+	}
+      V1.close();
+
+    }
+
+
+  //
+  // Output to standard DB
+  //
+
+  if ( ! only_u )
+    {
+      
+      // W
+      
+      double wsumsq = W.array().square().sum();
+
+      double cve = 0;
+      
+      for (int j=0;j< W.size(); j++)
+	{
+	  writer.level( j+1 , "I" );
+	  writer.value( "W" , W(j) );
+	  double ve = ( W(j) * W(j) ) / wsumsq;
+	  cve += ve;
+	  writer.value( "VE" , ve );
+	  writer.value( "CVE" , cve );	  
+	  writer.value( "INC" , j < nc ? 1 : 0 );
+	}
+
+      writer.unlevel( "W" );
+      
+
+      // V (transpose) (only first 'nc' components, as U/V etc are sorted 
+      // in decreasing order
+      
+      if ( vdump == "" ) 
+	{
+	  for (int j=0;j<nc;j++)
+	    {
+	      writer.level( j+1 , "I" );
+	      for (int k=0;k<nv;k++)
+		{
+		  writer.level( vname[k] , "J" );
+		  writer.value( "V" , V(k,j) );	// nb transpose
+		}
+	      writer.unlevel( "J" );
+	    }
+	  writer.unlevel( "I" );
+	  
+	  // VARS
+	  for (int j=0;j<nv;j++)
+	    {
+	      writer.level( vname[j] , "J" );
+	      writer.value( "CH" , col2ch[ vname[j] ] );
+	      writer.value( "F" , col2f[ vname[j] ] );
+	      writer.value( "VAR" , col2var[ vname[j] ] );
+	    }
+	  writer.unlevel( "J" );      
+	}
+    }
+  
+  //
   // data
-  if ( output_input ) 
+  //
+  
+  if ( output_input && ! only_u ) 
     {
       for (int i=0;i<ni;i++)
 	{
@@ -589,8 +777,8 @@ void psc_t::construct( param_t & param )
       OUT1 << "NV: " << nv ;
       for (int j=0;j<nv;j++)
 	OUT1 << " " << vname[j]
-	     << " " << vmean[j]
-	     << " " << vsd[j];
+	     << " " << means[j]
+	     << " " << sds[j];
       OUT1 << "\n";
 
       // means/SDs in reference population
@@ -600,7 +788,7 @@ void psc_t::construct( param_t & param )
       
       OUT1 << "W:";
       for (int i=0;i<nc;i++)
-	OUT1 << " " << W[i];
+	OUT1 << " " << W(i);
       OUT1 << "\n";
       
       OUT1 << "V:";
@@ -622,7 +810,7 @@ void psc_t::attach( param_t & param )
   // check if already attached
   //
 
-  if ( W.dim1() != 0 ) return;
+  if ( W.size() != 0 ) return;
 
   //
   // Read W and V matrices in this file
@@ -643,12 +831,12 @@ void psc_t::attach( param_t & param )
   
   IN1 >> dummy >> nv;
   vname.resize( nv );
-  vmean.resize( nv );
-  vsd.resize( nv );
+  means.resize( nv );
+  sds.resize( nv );
   
   for (int j=0;j<nv;j++)
-    IN1 >> vname[j] >> vmean[j] >> vsd[j];
-    
+    IN1 >> vname[j] >> means(j) >> sds(j);
+  
   // components
   IN1 >> dummy >> nc;
       
@@ -680,7 +868,7 @@ void psc_t::attach( param_t & param )
   for (int i=0;i<nc;i++)
     {
       IN1 >> inp;
-      if ( i < k ) W[i] = inp;
+      if ( i < k ) W(i) = inp;
     }
   
   // V
@@ -699,17 +887,12 @@ void psc_t::attach( param_t & param )
   nc = k;
   
   // reformat of W for projection
-  DW.resize( nc , nc );
-  for (int i=0; i<nc; i++)
-    DW(i,i) = 1.0 / W[i];
+  
+  std::cout << "W = " << W << "\n";
 
-  
-  if ( 0 )
-    {
-      std::cout << "W\n" << W.print() << "\n";
-      std::cout << "V\n" << V.print() << "\n";
-    }
-  
+  W = W.inverse();
+
+  std::cout << "1/W = " << W << "\n";  
   
 }
 
@@ -742,7 +925,7 @@ void psc_t::project( edf_t & edf , param_t & param )
 
   int nv = vname.size();
 
-  Data::Matrix<double> X( 1 , nv );
+  Eigen::VectorXd X( nv );
   
   for (int i=0; i<nv; i++)
     {
@@ -764,25 +947,30 @@ void psc_t::project( edf_t & edf , param_t & param )
       if ( cx.size() != 1 )
 	Helper::halt( "could not find cached variable: " + vname[i] );
 
-      X(0,i) = cx[0];
+      X(i) = cx[0];
     }
   
   logger << "  all " << nv << " features found in the cache\n";
 
+
+  // ----->>>>> TODO
   
   //
   // Mean center data
   //
-  
-  Statistics::subtract_cols( X , vmean );
-  
-  
+
+  // remove original mean
+
+  X.array() -= means;
+
+    
   //
   // Project given W and V to get U, PSCs for this individual
   //
   
-  Data::Matrix<double> U_proj = X * V * DW;
+  //  Data::Matrix<double> U_proj = X * V * DW;
 
+  Eigen::MatrixXd U_proj = X * V * W;
 
   //
   // Output
