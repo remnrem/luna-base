@@ -203,6 +203,15 @@ void proc_mask( edf_t & edf , param_t & param )
       edf.timeline.select_epoch_until_isnot( param.value( "leading" ) );
     }
 
+
+  if ( param.has( "regional" ) ) 
+    {
+      std::vector<int> r = param.intvector( "regional" );
+      if ( r.size() != 2 ) Helper::halt( "expecting regional=x,y" );
+      // on both sides of epoch E, requires that at least x of y flanking epochs are good
+      edf.timeline.regional_mask( r[0] , r[1] );
+    }
+
   if ( param.has( "first" ) )
     {
       int n = param.requires_int( "first" );

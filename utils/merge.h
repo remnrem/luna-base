@@ -42,19 +42,24 @@ struct options_t {
     missing_data_symbol.insert(  "?" );
     missing_data_symbol.insert(  "." );
     missing_data_symbol.insert(  "NaN" );
+    missing_data_symbol.insert(  "nan" );
+    missing_data_symbol.insert(  "-nan" );
 
     domain_includes.clear();
     file_excludes.clear();
     var_excludes.clear();
     hms_delim = ":.";
-    date_delim = "/-";
+    date_delim = "/-.";
     show_fac = true;
     verbose = false;
-    
+    strict = false;
+    assume_txt = true;
     max_var_len = 100;
   }
 
   bool verbose;
+  bool strict; // F skip bad stuff / T halt if bad stuff found
+  bool assume_txt; // only look at .txt files (i.e. requires that extension)
   int max_var_len;
   std::set<std::string> skip_folders;
   std::string missing_data_outsymbol; // NA for output
@@ -223,7 +228,7 @@ struct domain_t {
   domain_t( const std::string & name , const std::string & group )
     : name(name) , group(group) 
   {
-    missing = "";
+    missing.clear();
   }
   
   domain_t( const std::string & filename )
@@ -241,8 +246,8 @@ struct domain_t {
   // domain-specific aliases for variable names
   alias_t aliases;
   
-  // domain-specific missing data symbol?
-  std::string missing;
+  // domain-specific missing data symbol(s)?
+  std::set<std::string> missing;
   
   bool has( const std::string & varname) const
   {
@@ -257,8 +262,7 @@ struct domain_t {
     if ( var == NULL ) return false;
     return var->type == type;
   }
-  
-  
+    
   const var_t * variable( const std::string & varname ) const
   {
     std::map<std::string,var_t>::const_iterator ii = variables.find( varname );
@@ -378,11 +382,16 @@ struct dataset_t {
     }
 
     //
-    // already done expansion?
+    // already done expansion? HMM.. this is problematic, e.g. if the same ROOT variable
+    // can feature with different strata (e.g. NREM_MINS baseline and NREM_MINS/C
+    // so, skip this step, always force evaluation
     //
-    
-    if ( xvars.find( var ) != xvars.end() )
-      return var;
+
+    if ( false ) 
+      {
+	if ( xvars.find( var ) != xvars.end() )
+	  return var;
+      }
 
     //
     // expand variable name given factors

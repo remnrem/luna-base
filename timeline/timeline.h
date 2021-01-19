@@ -370,6 +370,9 @@ struct timeline_t
   // other masks : randomly select up to 'n' epochs from the current set 
   void select_epoch_randomly( int n );
 
+  // regional mask
+  void regional_mask( int x , int y );
+
   // mask all after 'n' epochs
   void select_epoch_first( int n );
 

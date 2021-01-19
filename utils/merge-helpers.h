@@ -34,6 +34,7 @@ std::string sanitize( const std::string & s );
 std::vector<std::string> parse(const std::string & item, const std::string & s , bool empty = false );
 std::vector<std::string> char_split( const std::string & s , const char c , bool empty = false  );
 std::vector<std::string> char_split( const std::string & s , const char c , const char c2 , bool empty = false );
+std::vector<std::string> char_split( const std::string & s , const char c , const char c2 , const char c3 , bool empty = false );
 void halt( const std::string & msg );
 std::string expand( const std::string & f );
 bool file_extension( const std::string & f, const std::string & ext );

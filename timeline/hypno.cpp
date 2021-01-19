@@ -1539,15 +1539,17 @@ void hypnogram_t::output( const bool verbose )
 		  writer.level(  ss_str[ss2] , "POST" );
 		  writer.value( "N" , transitions[ ss[ss1] ][ ss[ss2] ] );
 
-
 		  // probabilities: joint 
-		  writer.value( "P" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)tot );
+		  if ( tot > 0 ) 
+		    writer.value( "P" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)tot );
 		  
 		  // P( post | pre ) 
-		  writer.value( "P_POST_COND_PRE" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_pre[ ss[ss1] ] );
+		  if ( marg_pre[ ss[ss1] ] > 0 )
+		    writer.value( "P_POST_COND_PRE" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_pre[ ss[ss1] ] );
 
 		  // P( pre | post )
-		  writer.value( "P_PRE_COND_POST" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_post[ ss[ss2] ] );
+		  if ( marg_post[ ss[ss2] ] > 0 ) 
+		    writer.value( "P_PRE_COND_POST" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_post[ ss[ss2] ] );
 
 		}
 	      writer.unlevel( "POST" );

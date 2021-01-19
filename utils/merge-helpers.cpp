@@ -128,6 +128,7 @@ std::vector<std::string> parse(const std::string & item, const std::string & s ,
 {  
   if ( s.size() == 1 ) return char_split( item , s[0] , empty ); 
   if ( s.size() == 2 ) return char_split( item , s[0] , s[1] , empty ); 
+  if ( s.size() == 3 ) return char_split( item , s[0] , s[1] , s[2] , empty ); 
   halt("silly internal error in parse/char_split");
   std::vector<std::string> dummy;
   return dummy;
@@ -175,6 +176,38 @@ std::vector<std::string> char_split( const std::string & s , const char c , cons
   for (int j=0; j<s.size(); j++)
     {	        
       if ( s[j] == c || s[j] == c2 ) 
+	{ 	      
+	  if ( j == p ) // empty slot?
+	    {
+	      if (empty) strs.push_back( "." );
+	      ++p;
+	    }
+	  else
+	    {
+	      strs.push_back(s.substr(p,j-p)); 
+	      p=j+1; 
+	    }
+	}	  
+    }
+  
+  if ( empty && p == s.size() ) 
+    strs.push_back( "." );
+  else if ( p < s.size() )
+    strs.push_back( s.substr(p) );
+  
+  return strs;
+}
+
+
+std::vector<std::string> char_split( const std::string & s , const char c , const char c2 , const char c3 , bool empty )
+{
+  std::vector<std::string> strs;  
+  if ( s.size() == 0 ) return strs;
+  int p=0;
+
+  for (int j=0; j<s.size(); j++)
+    {	        
+      if ( s[j] == c || s[j] == c2 || s[j] == c3 ) 
 	{ 	      
 	  if ( j == p ) // empty slot?
 	    {

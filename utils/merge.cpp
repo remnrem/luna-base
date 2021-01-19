@@ -73,15 +73,19 @@ int main( int argc , char ** argv )
 	  
 	  int n = options.parse_opt( t , &key , &val);
 
-	  if ( n == 0 ) halt("problem with format of option " + t );
+	  if ( n == 0 ) halt( "problem with format of option " + t );
 	  
-	  // -exclude=ROOT
-	  if ( key == "exclude" ) 
+	  // -e=<root> or --exclude=ROOT
+	  if ( key == "e" || key == "-exclude" ) 
 	    options.file_excludes.insert( t.substr(1) );
 
-	  // verbose
+	  // verbose (-v or --verbose) 
 	  if ( key == "v" || key == "-verbose" )
 	    options.verbose = true;
+	  
+	  // strict  (-s or --strict)
+	  if ( key == "s" || key == "-strict" ) 
+	    options.strict = true;
 
 	  // do not show factors
 	  if ( key == "nf" )
@@ -233,8 +237,15 @@ int domain_t::read( const std::string & filename )
     {
       std::string line;
       safe_getline( IN1 , line ) ;
+      if ( line == "" ) continue;
       std::vector<std::string> tok = parse(  line , "\t" );
       if ( tok.size() == 0 ) continue;
+
+      //
+      // allow comments, starting %
+      //
+
+      if ( line[0] == '%' ) continue; 
 
       //
       // make all upper case for varname
@@ -243,19 +254,19 @@ int domain_t::read( const std::string & filename )
       std::string varname = toupper( tok[0] );
       
       //
-      // special missing data code?
+      // special missing data code?  (only two cols)
       //
 
-      if ( tok.size() == 3 && iequals( tok[1] , "missing" ) )
+      if ( tok.size() == 2 && iequals( tok[0] , "missing" ) )
 	{
-	  missing = tok[2];
+	  missing.insert( tok[1] );
 	  continue;
 	}
 
       //
       // special alias code?
       //
-
+    
       if ( tok.size() == 3 && iequals( tok[1] , "alias" ) )
 	{
 	  // {alias}  ALIAS   {canonical}
@@ -337,6 +348,16 @@ void dataset_t::read( const std::string & filename )
 {
 
 
+  //
+  // Only consider .txt files?
+  //
+
+  if ( options.assume_txt ) 
+    {
+      if ( ! file_extension( filename , "txt" ) ) return;
+    }
+
+
   if ( options.verbose )
     std::cerr << "reading " << filename << "\n";
 
@@ -347,7 +368,8 @@ void dataset_t::read( const std::string & filename )
   // i.e.   study1/domain1/indiv1/file.txt   OKAY
   // i.e.   study1/indiv1/domain1/file.txt   NOT OKAY
   
-  if ( ! fileExists( filename ) ) halt( "could not open " + filename );
+  if ( ! fileExists( filename ) ) 
+    halt( "could not open " + filename );
 
   //
   // get ID from subfolder 
@@ -367,10 +389,12 @@ void dataset_t::read( const std::string & filename )
       return;
     }
   
+
+
   //
   // Get domain and factors from filename
   //
-  
+
   // filename format:  {domain}-{group}-{tag}{_fac1}{_fac2}{_f3=l3}{.txt}
   // the 'tag' and factors/lvls can have '-' characters in them; i.e.
   // we just delimit based on the first two '-' characters;  everything after is 
@@ -383,7 +407,14 @@ void dataset_t::read( const std::string & filename )
   if ( tok3.size() < 3 )
     {
       std::cerr << "found " << tok3.size() << " '-'-delimited items, expecting at least 3: " << fname << "\n";
-      halt( "err1: expecting {domain}-{group}-{tag-name}{_fac1}{_fac2}{_f3-l3}{.txt}\n" );
+      
+      if ( options.strict )
+	halt( "err1: expecting {domain}-{group}-{tag-name}{_fac1}{_fac2}{_f3-l3}{.txt}\n" );
+      
+      // ignore this file
+      if ( options.verbose )
+	std::cerr << " -- skipping (unrecognized name convention): " << filename << "\n";
+      return;
     }
 
   //
@@ -407,11 +438,19 @@ void dataset_t::read( const std::string & filename )
 	++dd;
       }
     
-
-    halt( "could not find a dictionary for ["
-	  + domain_name + "] :: [" + group_name
-	  + "]\n --> searching for that based on data file " + filename + "\n" + ss.str() );
+    if ( options.strict )
+      halt( "could not find a dictionary for ["
+	    + domain_name + "] :: [" + group_name
+	    + "]\n --> searching for that based on data file " + filename + "\n" + ss.str() );
+    
+    if ( options.verbose )
+      std::cerr << "could not find a dictionary for [" << domain_name << "] :: [" << group_name << "]\n"
+		<< " --> searching for that based on data file " << filename << "\n";
+    
+    // give up on this file
+    return;
   }
+
   
   // i.e. strip 'domain-group-' off start of filename
   std::string remainder = fname.substr( domain_name.size() + group_name.size() + 2 );
@@ -435,7 +474,7 @@ void dataset_t::read( const std::string & filename )
   // domain-specific missing data code?
   //
   
-  bool missing_code = domain->missing != "";
+  bool missing_code = domain->missing.size();
 
   //
   // split off tag-name (hyphen delim), then any factors (underscore delimited)
@@ -467,10 +506,28 @@ void dataset_t::read( const std::string & filename )
       // check it was specified /as a factor/ in the data dictionary
       if ( ! domain->has( factor , FACTOR ) )
 	{
-	  if ( factor != tokfl[0] )
-	    halt( "when parsing " + filename + "\n  " + tokfl[0] + " ( --> " + factor + ") not specified as a factor " );
+
+	  if ( options.strict )
+	    {
+	      if ( factor != tokfl[0] )
+		halt( "when parsing " + filename + "\n  " + tokfl[0] + " ( --> " + factor + ") not specified as a factor " );
+	      else
+		halt( "when parsing " + filename + "\n  " + factor + " not specified as a factor " );
+	    }
 	  else
-	    halt( "when parsing " + filename + "\n  " + factor + " not specified as a factor " );
+	    {
+	      // complain, if being verbose
+	      if ( options.verbose ) 
+		{
+		  if ( factor != tokfl[0] )
+		    std::cerr << " ** when parsing " << filename << "\n  " << tokfl[0] << " ( --> " << factor<< ") not specified as a factor\n";
+		  else
+		    std::cerr << " ** when parsing " << filename << "\n  " << factor << " not specified as a factor\n";		  
+		}
+	      // but either way, give up on this file
+	      return;
+	    }
+
 	}
       
       if ( tokfl.size() == 1 )
@@ -540,18 +597,19 @@ void dataset_t::read( const std::string & filename )
 		  if ( options.var_excludes.find( varname ) != options.var_excludes.end() )
 		    donotread.insert( i );
 
-		  // check it exists in the dictionary
-		  if ( ! domain->has( varname ) )
-		    halt( varname + " not specified in data-dictionary for " + filename );
-		  
-		  // for checking factors exist
-		  colcheck.insert( varname );
-		  
-		  if ( domain->has( varname , FACTOR ) )
+		  // check it exists in the dictionary 
+		  if ( domain->has( varname ) )
 		    {
-		      fac2col[ varname ] = i;
-		      //std::cerr << "adding factor " << varname << " column " << i << "\n";
+		      // for checking factors exist
+		      colcheck.insert( varname );
+		      
+		      if ( domain->has( varname , FACTOR ) ) fac2col[ varname ] = i;
 		    }
+		  else if ( options.strict ) // a problem in strict mode
+		    halt( varname + " not specified in data-dictionary for " + filename );
+		  else // otherwise, just skip this col below
+		    donotread.insert( i );
+
 		}
 
 	    } // next header col
@@ -560,10 +618,22 @@ void dataset_t::read( const std::string & filename )
 
 
 	  //
-	  // Check that ID col was present
+	  // Check that ID col was present: deal breaker strict or no
 	  //
 
-	  if ( id == "" ) halt( "no ID column specified" );
+	  if ( id == "" ) 
+	    {
+
+	      if ( options.strict )
+		halt( "no ID column specified in " + filename );
+	      
+	      // otherwise, assume this is not a valid 'results' file.. just give up on this file
+	      IN1.close();
+	      if ( options.verbose )
+		std::cerr << "  no ID header in " << filename << "... skipping\n";
+
+	      return;
+	    }
 
 	  //
 	  // Check all factors that should be present are present
@@ -651,7 +721,7 @@ void dataset_t::read( const std::string & filename )
 	      var_t xvar = data.xvar( *var , facs , lvls );
 	      
 	      // missing value?
-	      if ( missing_code && tok[i] == domain->missing ) continue;
+	      if ( missing_code && domain->missing.find( tok[i] ) != domain->missing.end() ) continue;
 
 	      // also NA and '.' as missing codes
 	      if ( options.is_missing( tok[i] ) ) continue;
@@ -666,7 +736,7 @@ void dataset_t::read( const std::string & filename )
 	      
 	      // insert	      
 	      indiv.add( xvar , value );
-	      
+
 	      // and track	      
 	      obscount[ xvar.name ]++;
 	    }
@@ -1000,8 +1070,8 @@ bool type_check( const std::string & value , type_t type )
 
   if ( type == DATE )
     {
-      // requires M/Y (or M-Y)
-      //  or D/M/Y (or D-M-Y)
+      // requires M/Y (or M-Y) (or M.Y)
+      //  or D/M/Y (or D-M-Y) (or D.M.Y)
       // **does not check for exact ordering** e..g valid date 
       std::vector<std::string> tok = parse( value , options.date_delim );
       if ( tok.size() < 2 || tok.size() > 3 ) return false;

@@ -1752,6 +1752,105 @@ void timeline_t::flip_epoch_mask()
 
 }
 
+
+void timeline_t::regional_mask( int x , int y )
+{
+
+  // look back / forward y epochs;
+  // require that at least x of y are 'good' on at least one side
+  // if both sides fail criterion, set this epoch to be masked
+  // nb. out-of-range counts as 'bad'  (i.e. not a 'good' epoch)
+
+  if ( y < 1 || x > y || x < 1 ) 
+    Helper::halt( "invalid values for regional mask" );
+  
+  const int ne = epochs.size();
+  
+  std::set<int> tomask;
+  std::vector<bool> putative_mask( ne , false );
+  
+  for (int e=0;e<ne;e++)
+    {
+      // nothing to do
+      if ( mask[e] ) 
+	{
+	  putative_mask[e] = true;
+	  continue;
+	}
+
+      int backward = 0 , forward = 0;
+      
+      int curr = e;
+      for (int i=0;i<y;i++)
+	{
+	  --curr;
+	  if ( curr < 0 ) break;
+	  if ( ! mask[ curr ] ) ++backward;
+	}
+
+      curr = e;
+      for (int i=0;i<y;i++)
+	{
+	  ++curr;
+	  if ( curr == ne ) break;
+	  if ( ! mask[ curr ] ) ++forward;
+	}
+      
+      // a bad outcome?
+      if ( ! ( forward >= x || backward >= x ) )
+	{
+	  tomask.insert( e );
+	  putative_mask[e] = true;
+	}
+
+    }
+  
+  // additionally, do not allow any 'island' bad masks 
+  // which are possible given the simple heuristic above
+  // i.e. for any epoch flanked by two bad epochs, mask
+
+  for (int e=0;e<ne;e++)
+    {
+      if ( putative_mask[e] ) continue;
+      int bad = 0;
+      if ( e == 0 || putative_mask[e-1] ) ++bad;
+      if ( e == ne-1 || putative_mask[e+1] ) ++bad;
+      if ( bad == 2 ) tomask.insert( e );
+    }
+
+  //
+  // now we have list of epochs that need masking in 'tomask'
+  //
+
+  int cnt_mask_set = 0;
+  int cnt_mask_unset = 0;
+  int cnt_unchanged = 0;
+  int cnt_now_unmasked = 0;
+
+  std::set<int>::const_iterator ee = tomask.begin();
+  while ( ee != tomask.end() )
+    {
+      int mc = set_epoch_mask( *ee , true );
+      if ( mc == +1 ) ++cnt_mask_set;
+      else if ( mc == -1 ) ++cnt_mask_unset;
+      else ++cnt_unchanged;
+      ++ee;
+    }
+  
+  for (int e=0;e<ne;e++)
+    if ( ! mask[e] ) ++cnt_now_unmasked; 
+
+  logger << " based on regional smoothing ("<<x << "/" << y << " good), ";
+
+  logger << cnt_mask_set << " newly masked " 
+	 << cnt_mask_unset << " unmasked and " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  
+}
+
+
+
 // other masks : randomly select up to 'n' epochs from the current set 
 void timeline_t::select_epoch_randomly( int n )
 {
@@ -2095,7 +2194,6 @@ void timeline_t::annotate_epochs( const std::string & label ,
       int e = next_epoch_ignoring_mask();      
 
       if ( e == -1 ) break;
-
 
       // use 'e' for look-up here; but need to use orginal EDF
       // encoding for eannots, internally i.e. the zero-based version

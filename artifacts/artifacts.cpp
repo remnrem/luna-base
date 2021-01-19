@@ -733,7 +733,7 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
   if ( calc_flat )
     {
       std::vector<double> x = param.dblvector( "flat" );
-      if ( x.size() != 1 && x.size() != 2 ) Helper::halt( "flat requires 1 or 2 param: flat=<pct>,<eps>" );
+      if ( x.size() != 1 && x.size() != 2 ) Helper::halt( "flat requires 1 or 2 param: flat=<prop>,<eps>" );
       flat_threshold = x[0];
       if ( x.size() == 2 ) flat_eps = x[1];
       logger << "  flagging epochs with " << flat_threshold << " proportion |X[i]-X[i-1]| < " << flat_eps << "\n";

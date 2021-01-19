@@ -133,7 +133,7 @@ double suds_t::hjorth_outlier_th = 5;
 
 
 //
-// Self evaluation of staging/signals using SUDS ('SELF-SUDS')
+// Self evaluation of staging/signals using SUDS ('SOAP-SUDS')
 //
 
 void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
@@ -185,6 +185,18 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   
   if ( epoch_level_output )
     summarize_epochs( pp , model.labels , ne_all , edf );
+
+
+  //
+  // Output annotations (of discordant epochs)
+  //
+
+  if ( param.has( "annot" ) )
+    {
+      const std::string annot_folder = param.has("annot-dir") ? param.value( "annot-dir" ) : "./";      
+      write_annots( annot_folder , param.value( "annot" ) , pp , model.labels , ne_all , edf );
+    }
+      
   
 }
 
@@ -2856,10 +2868,96 @@ Data::Vector<double> suds_indiv_t::wgt_kl() const {
 }
 
 
+void suds_indiv_t::write_annots( const std::string & annot_folder , const std::string & aname , 
+				 const Data::Matrix<double> & pp , const std::vector<std::string> & labels , 
+				 int ne_all , edf_t & edf )
+{
+
+  bool prior_staging = obs_stage.size() != 0 ;
+  if ( ! prior_staging ) return;
+
+  const std::string delim = annot_folder[ annot_folder.size() - 1 ] != '/' ? "/" : "";
+  
+  if ( annot_folder != "" && annot_folder != "./" ) 
+    {
+      std::string syscmd = globals::mkdir_command + " " + annot_folder ;
+      int retval = system( syscmd.c_str() );
+    }
+  
+  // annot label
+  annot_t * a_disc3 = edf.timeline.annotations.add( aname + "_disc3" );
+  a_disc3->description = "SOAP-SUDS NR/R/W discordance";
+
+  annot_t * a_disc5 = NULL;
+  if ( suds_t::n_stages == 5 )
+    {
+      a_disc5 = edf.timeline.annotations.add( aname + "_disc5" );
+      a_disc5->description = "SOAP-SUDS N1/N2/N3/R/W discordance";
+    }
+
+  annot_t * a_unscr = edf.timeline.annotations.add( aname + "_unscr" );
+  a_unscr->description = "SOAP-SUDS unscored epoch";
+
+  const std::string a_filename3 = annot_folder + delim + aname + "_disc3.annot";
+  const std::string a_filename5 = annot_folder + delim + aname + "_disc5.annot";
+  const std::string a_filenameU = annot_folder + delim + aname + "_unscr.annot";
+
+  logger << "  writing NR/R/W discordant epochs to " << a_filename3 << "\n";
+  if ( suds_t::n_stages == 5 )
+    logger << "  writing N1/N2/N3/R/W discordant epochs to " << a_filename5 << "\n";  
+  logger << "  writing unscored epochs to " << a_filenameU << "\n";
+   
+  // epochs[] contains the codes of epochs actually present in the model/valid
+  std::map<int,int> e2e;
+  for (int i=0; i < epochs.size(); i++) 
+    e2e[ epochs[i] ] = i ;  
+  
+  for ( int i=0;i<ne_all;i++)
+    {
+      int e = -1;
+      if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+            
+      // track interval
+      interval_t interval = edf.timeline.epoch( i );
+
+      // value found in scoring?
+      if ( e != -1 ) 
+	{
+	  std::string predss = suds_t::max( pp.row(e) , labels );
+
+	  if ( suds_t::n_stages == 5 )
+	    {
+	      if ( predss !=  suds_t::str( obs_stage[i] ) )
+		a_disc5->add( suds_t::str( obs_stage[i] ) + "->" + predss , interval , "." );
+	      
+	      if ( suds_t::NRW( predss ) != suds_t::NRW( suds_t::str( obs_stage[i] ) ) )
+		a_disc3->add( suds_t::NRW( suds_t::str( obs_stage[i] ) ) + "->" + suds_t::NRW( predss ) , interval , "." );
+	    }
+	  else
+	    {
+	      if ( predss !=  suds_t::str( obs_stage[i] ) )
+		a_disc3->add( suds_t::str( obs_stage[i] ) + "->" + predss , interval , "." );
+	    }
+	}
+      else
+       	{
+	  a_unscr->add( "." , interval , "." );
+	}
+      
+    }
+
+  a_disc3->save( a_filename3 );
+
+  if ( a_disc5 ) 
+    a_disc5->save( a_filename5 );
+
+  a_unscr->save( a_filenameU );
+
+}
+
 void suds_indiv_t::summarize_epochs( const Data::Matrix<double> & pp , // posterior probabilities
 				     const std::vector<std::string> & labels, // column labels
-				     int ne_all ,
-				     edf_t & edf ) // total number of epochs in EDF
+				     int ne_all , edf_t & edf ) // total number of epochs in EDF
 {
   // output epoch-level results: most likely stage, PP, observed stage, flag for discordance, missing/unknown
 

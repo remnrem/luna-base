@@ -91,7 +91,13 @@ struct suds_indiv_t {
   
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
-  void summarize_epochs( const Data::Matrix<double> & , const std::vector<std::string> & , int , edf_t & );
+  void summarize_epochs( const Data::Matrix<double> & , 
+			 const std::vector<std::string> & , 
+			 int , edf_t & );
+  
+  // write to an .annot
+  void write_annots( const std::string & folder , const std::string & aname ,
+		     const Data::Matrix<double> & , const std::vector<std::string> & , int , edf_t & );
 
   // output obs vs prd kappas (5 and 3 level)
   void summarize_kappa( const std::vector<std::string> & prd , const bool to_console = false );
