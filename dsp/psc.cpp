@@ -35,6 +35,7 @@ Eigen::MatrixXd psc_t::V;
 
 extern writer_t writer;
 
+
 void psc_t::construct( param_t & param )
 {
 
@@ -108,10 +109,10 @@ void psc_t::construct( param_t & param )
   bool epoch = param.has( "epoch" );
 
   //
-  // Output signed means (i.e. for LCOH)
+  // Notes that all features are 1) signed, and 2) pairwise (CH1xCH2)
   //
 
-  bool signed_stats = param.has( "signed-stats" );
+  bool signed_stats = param.has( "signed-pairwise" );
   
   //
   // Save projection?
@@ -129,14 +130,28 @@ void psc_t::construct( param_t & param )
   // Only output U matrix 
   //
 
-  bool only_u = param.has( "only-u" );
-
+  bool only_u = ! param.has( "not-only-u" );
+    
 
   //
   // Dump component definitions in a separate text file
   //
 
   std::string vdump = param.has( "v-matrix" ) ? param.value( "v-matrix" ) : "" ;
+  
+  
+  //
+  // Report input variables by quantile of each PSC? (for v-dump only)
+  //
+  
+  int q = param.has( "q" ) ? param.requires_int( "q" ) : 0;
+  
+  // if ( q && vdump == "" ) 
+  //   Helper::halt( "can only report feature quantile-stratified medians in v-matrix=<file> mode" );
+  
+  if ( q < 0 || q > 10 ) 
+    Helper::halt( "q should be between 1 and 10" );
+  
   
   //
   // PSC parameters
@@ -147,9 +162,8 @@ void psc_t::construct( param_t & param )
   std::vector<double> th;
   if ( param.has( "th" ) ) th = param.dblvector( "th" );
   
-  const int q = param.has( "q" ) ? param.requires_int( "q" ) : 5 ; 
-
   const bool standardize_inputs = param.has( "norm" ) ;
+
 		 
   //
   // Read spectra into matrix X
@@ -172,7 +186,10 @@ void psc_t::construct( param_t & param )
       std::string infile = Helper::expand( infiles[i] );
 
       logger << "  reading spectra from " << infile << "\n";
-      
+
+      if ( ! Helper::fileExists( infile ) ) 
+	Helper::halt( "could not find " + infile );
+
       std::ifstream IN1( infile.c_str() , std::ios::in );
 
       // header row
@@ -326,6 +343,7 @@ void psc_t::construct( param_t & param )
   
   std::map<std::string,std::map<std::string,std::map<std::string,int> > > slot;
   std::map<std::string,std::string> col2ch, col2var;
+  std::map<std::string,std::string> col2ch1, col2ch2; 
   std::map<std::string,double> col2f;
   std::set<std::string> rows, cols;
   std::vector<std::string> id;
@@ -349,6 +367,10 @@ void psc_t::construct( param_t & param )
 		  std::string col_name = ii2->first + "~" + ii3->first + "~" + ii4->first ;
 
 		  col2ch[ col_name ] = ii2->first;
+		  std::vector<std::string> ctok = Helper::parse( ii2->first , "." );
+		  col2ch1[ col_name ] = ctok[0];
+		  col2ch2[ col_name ] = ctok.size() == 2 ? ctok[1] : "." ; 
+		  
 		  double ff;
 		  if ( ! Helper::str2dbl( ii3->first , &ff ) ) Helper::halt( "problem with F non-numeric value" );
 		  col2f[ col_name ] = ff;
@@ -371,6 +393,8 @@ void psc_t::construct( param_t & param )
 
   logger << "  found " << rows.size() << " rows (individuals) and " << cols.size() << " columns (features)\n";
 
+  if ( rows.size() == 0 || cols.size() == 0 ) 
+    return;
   
   //
   // Populate matrix
@@ -421,11 +445,13 @@ void psc_t::construct( param_t & param )
 
   logger << "  good, all expected observations found, no missing data\n";
 
+
   //
   // free up main memory store
   //
 
   i2c2f2v.clear();
+
 
   //
   // Check for invariant columns
@@ -437,6 +463,7 @@ void psc_t::construct( param_t & param )
   for (int i=0; i < sds.size(); i++)
     if ( sds[i] < EPS ) Helper::halt( "invariant column in input\n" );
   
+
   //
   // Outliers?
   //
@@ -462,7 +489,7 @@ void psc_t::construct( param_t & param )
 	  // this sets 'inc' values to missing, but uses the same prior for all channels
 	  
 	  std::vector<double> tmp(ni);
-	  Eigen::VectorXd::Map(&tmp[0], ni ) = U.col(j);
+	  Eigen::VectorXd::Map( &tmp[0], ni ) = U.col(j);
 
 	  int removed = MiscMath::outliers( &tmp , th[t] , &inc , &prior);
 	  
@@ -543,12 +570,30 @@ void psc_t::construct( param_t & param )
 
 
   //
+  // Get copy of original input data, before normalization
+  //
+
+  Eigen::MatrixXd O = U;
+
+
+  //
   // Output input data ?
   //
 
-  Eigen::MatrixXd X;
+  if ( output_input && ! only_u ) 
+    {
+      for (int i=0;i<ni;i++)
+	{
+	  writer.id( id[i] , "." );
+	  for (int j=0;j<nv;j++)
+	    {
+	      writer.level( j+1 , "VAR" );
+	      writer.value( "X" , U(i,j) );
+	    }
+	  writer.unlevel( "VAR" );
+	}
+    }
 
-  if ( output_input ) X = U;
   
   //
   // SVD
@@ -600,8 +645,6 @@ void psc_t::construct( param_t & param )
   // Output
   //
 
-  
-
   writer.id( "." , "." );
 
   // U ( x ID )
@@ -620,6 +663,390 @@ void psc_t::construct( param_t & param )
 
 
   //
+  // PSC frequency peaks, and channel means: 
+  //  a) based on MEAN, SD, then PSCs
+  //    sum over channels/channel pairs
+  // to get the frequencies of maximal variability for that PSC
+  //
+  
+  double s=0 , s_sd = 0 ;
+  std::map<double,double> sfrqs, sfrqs_sd;
+  std::map<std::string,double> schs, schs_sd;
+  for (int k=0; k<nv; k++)
+    {
+
+      sfrqs[ col2f[ vname[k] ] ] += means[k] * means[k];
+      sfrqs_sd[ col2f[ vname[k] ] ] += sds[k] * sds[k];
+
+      const std::string & ch1 = col2ch1[ vname[k] ];
+      schs[ ch1 ] += means[k] * means[k];
+      schs_sd[ ch1 ] += sds[k] * sds[k];
+
+      const std::string & ch2 = col2ch2[ vname[k] ];
+      if ( ch2 != "." ) 
+	{
+	  schs[ ch2 ] += means[k] * means[k];
+	  schs_sd[ ch2 ] += sds[k] * sds[k];
+	}
+    }
+
+  // normalize each to 1.0
+  double sf = 0 , sf_sd = 0 , sc = 0 , sc_sd = 0;
+  
+  // report by frequency
+  std::map<double,double>::iterator kk = sfrqs.begin();
+  {
+    sf += kk->second;
+    sf_sd += sfrqs_sd[ kk->first ];
+    ++kk;
+  }
+  
+  kk = sfrqs.begin();
+  while ( kk != sfrqs.end() )
+    {
+      writer.level( kk->first , globals::freq_strat );
+      writer.value( "FW" , kk->second / sf );
+      writer.value( "FW_SD" , kk->second / sf_sd );
+      ++kk;
+    }
+  writer.unlevel( globals::freq_strat );
+  
+  // report by channels
+  std::map<std::string,double>::iterator cc = schs.begin();
+  while ( cc != schs.end() )
+    {
+      sc += cc->second;
+      sc_sd += schs_sd[ cc->first ];
+      ++cc;
+    }
+  
+  cc = schs.begin();
+  while ( cc != schs.end() )
+    {
+      writer.level( cc->first , globals::signal_strat );
+      writer.value( "FW" , cc->second / sc );
+      writer.value( "FW_SD" , cc->second / sc_sd );
+      ++cc;
+    }
+  
+
+  //
+  // Same by PSC
+  //
+  
+  for (int j=0;j<nc;j++)
+    {
+      writer.level( j+1 , "PSC" );
+      
+      const Eigen::VectorXd & vec = V.col(j);
+      
+      // add squared term across channels for each freq
+      double s =0;
+      std::map<double,double> sfrqs;
+      for (int k=0; k<nv; k++)
+	{
+	  s += vec(k) * vec(k);
+	  sfrqs[ col2f[ vname[k] ] ] += vec(k) * vec(k);
+	}
+
+      std::map<double,double>::const_iterator kk = sfrqs.begin();
+      while ( kk != sfrqs.end() )
+	{
+	  writer.level( kk->first , globals::freq_strat );
+	  writer.value( "FW" , kk->second / s );
+	  ++kk;
+	}
+      writer.unlevel( globals::freq_strat );
+      
+    }
+  writer.unlevel( "PSC" );
+
+
+  //
+  // Repeat for PSC by channel summaries
+  //
+
+  for (int j=0;j<nc;j++)
+    {
+      writer.level( j+1 , "PSC" );
+      
+      const Eigen::VectorXd & vec = V.col(j);
+      
+      std::map<std::string,double> schs;
+      for (int k=0; k<nv; k++)
+	{
+	  const std::string & ch1 = col2ch1[ vname[k] ];
+	  schs[ ch1 ] += vec(k) * vec(k);
+	  
+	  const std::string & ch2 = col2ch2[ vname[k] ];
+	  if ( ch2 != "." )
+	    schs[ ch2 ] += vec(k) * vec(k);	  
+	}
+      
+      double sum = 0;
+      std::map<std::string,double>::const_iterator cc = schs.begin();
+      while ( cc != schs.end() )
+	{
+	  sum += cc->second;
+	  ++cc;
+	}
+      
+      cc = schs.begin();
+      while ( cc != schs.end() )
+	{
+	  writer.level( cc->first , globals::signal_strat );
+	  writer.value( "FW" , cc->second / sum );
+	  ++cc;
+	}
+      writer.unlevel( globals::signal_strat );
+      
+    }
+  writer.unlevel( "PSC" );
+
+
+  //
+  // Make quantile summaries
+  //
+
+  // variable --> PSC --> QUANTILE --> mean
+  // if this is populated below, will be output in vdump
+  std::map<std::string,std::map<int,std::map<int,double> > > qsumms;
+
+  if ( q && ! signed_stats )
+    {
+
+      // loop over each PSC
+      //  for each quantile, - get mean value of features
+      
+      // col2ch[ vname[k] ] 
+
+      //
+      // For each PSC
+      //
+
+      for (int j=0; j<nc; j++)
+	{
+	  
+	  //
+	  // 1) get PSC across all individuals
+	  //
+	  
+	  const Eigen::VectorXd & psc = U.col(j);
+	  	  
+	  // helper to get quantiles;
+	  std::set<psc_sort_t> sp;
+	  for (int i=0; i<ni; i++)
+	    sp.insert( psc_sort_t( i , psc(i) ) );
+	  	  
+	  std::vector<int> qt = psc_sort_t::quantile( sp , q );
+
+	  //
+	  // 2) for each quantile, then:
+	  //    get means across all quantiles
+	  //
+
+	  for (int qq=0; qq<q; qq++)
+	    {
+	      
+	      int nq = 0;
+	      for (int i=0;i<ni; i++) 
+		if ( qt[i] == qq ) ++nq;
+	      
+	      // get means for this quantile
+	      std::vector<double> xx( nv , 0 );
+	      for (int i=0; i<ni; i++)
+		{
+		  if ( qt[i] == qq ) 
+		    for (int k=0; k<nv; k++) xx[k] += O(i,k);
+		}	      
+	      for (int k=0; k<nv; k++) 
+		xx[k] /= (double)nq;
+	      
+	      // output
+	      for (int k=0; k<nv; k++) 
+		qsumms[ vname[ k ] ][ j ][ qq ] = xx[k] ;
+	      
+	    } // next quantile
+	  	  
+	} // next PSC     
+      
+    }
+
+
+  //
+  // Special case: Signed stats & coherence: make POS and NEG channel-level summaries
+  //
+
+  if ( q && signed_stats )
+    {
+      // loop over each PSC
+      //  for each quantile, - get median values of features (pairwise)
+      //                     - collapse to channel-level summaries (POS/NEG separately)
+      
+      // this assumes that ALL features of CH1 x CH2 
+      // get these channels now:
+      
+      std::map<std::string,int> ch2slot;
+      std::map<int,std::string> slot2ch;
+
+      std::vector<int> ch1( nv ), ch2( nv );
+      std::vector<double> frq( nv );
+
+      for (int k=0; k<nv; k++)
+	{
+	  std::vector<std::string> ctok = Helper::parse( col2ch[ vname[k] ] , "." ) ;
+	  
+	  if ( ctok.size() != 2 ) 
+	    Helper::halt( "q & signed-stats requires that all features are pairwise stats: CH1 x CH2" );
+
+	  if ( ch2slot.find( ctok[0] ) == ch2slot.end() ) 
+	    {
+	      int sz = ch2slot.size();
+	      ch2slot[ ctok[0] ] = sz;
+	      slot2ch[ sz ] = ctok[0];
+	    }
+	  
+	  if ( ch2slot.find( ctok[1] ) == ch2slot.end() )
+            {
+	      int sz = ch2slot.size();
+              ch2slot[ ctok[1] ] = sz;
+              slot2ch[ sz ] = ctok[1];
+            }
+	  
+	  ch1[ k ] = ch2slot[ ctok[0] ];
+	  ch2[ k ] = ch2slot[ ctok[1] ];	  
+
+	  // store just for quick lookup below (prob. no diff/not needed)
+	  frq[ k ] = col2f[ vname[k] ];
+	  
+	}
+      
+      const int nch = ch2slot.size();
+
+      //
+      // For each PSC
+      //
+
+      for (int j=0; j<nc; j++)
+	{
+	  
+	  writer.level( j+1 , "PSC" );
+
+	  //
+	  // 1) get PSC across all individuals
+	  //
+
+	  const Eigen::VectorXd & psc = U.col(j);
+
+	  // helper to get quantiles;
+	  std::set<psc_sort_t> sp;
+	  for (int i=0; i<ni; i++)
+	    sp.insert( psc_sort_t( i , psc(i) ) );
+	  
+	  std::vector<int> qt = psc_sort_t::quantile( sp , q );
+	  
+	  	  
+	  //
+	  // 2) for each quantile, then:
+	  //
+	  // 2a) get means across all quantiles
+	  // 2b) Collapse to frequency-specific, channel-level summaries
+	  // 2c) Output the channel level summaries
+	  //
+	  
+	  for (int qq=0; qq<q; qq++)
+	    {
+	      
+	      writer.level( qq+1 , "Q"  );
+	      
+	      int nq = 0;
+	      for (int i=0;i<ni; i++) 
+		if ( qt[i] == qq ) ++nq;
+	      
+	      // get means for this quantile
+	      std::vector<double> xx( nv , 0 );
+	      for (int i=0; i<ni; i++)
+		{
+		  if ( qt[i] == qq ) 
+		    for (int k=0; k<nv; k++) 
+		      xx[k] += O(i,k);
+		}	      
+
+	      for (int k=0; k<nv; k++) 
+		xx[k] /= (double)nq;
+	      
+	      // collapse to [ch][freq]
+	      std::vector<std::map<double,double> > pos( nch );
+	      std::vector<std::map<double,double> > neg( nch );
+	      for (int k=0; k<nv; k++)
+		{
+		  if ( xx[k] > 0 ) 
+		    {
+		      // +ve:   A -> B   means A=POS, B=NEG
+		      pos[ ch1[k] ][ frq[k] ] += xx[k]; 
+		      neg[ ch2[k] ][ frq[k] ] -= xx[k]; 
+		    }
+		  else
+		    {
+		      // -ve: A -> means A=NEG, B=POS
+		      neg[ch1[k]][ frq[k] ] += xx[k]; // i.e. adds a negative value for A
+		      pos[ch2[k]][ frq[k] ] -= xx[k]; //      adds a positive value for B		      
+		    }
+		}
+	      
+	      //
+	      // normalize within ch/freq combo
+	      //
+
+	      for (int c=0;c<nch;c++) 
+		{
+		  writer.level( slot2ch[ c ] , globals::signal_strat );  
+
+		  int nn = pos[c].size();
+		  
+		  std::map<double,double>::const_iterator ff = pos[c].begin();
+		  while ( ff != pos[c].end() )
+		    {		      
+		      writer.level( ff->first , globals::freq_strat ); 		      
+		      writer.value( "POS" , ff->second / (double)nn );
+		      writer.value( "NEG" , neg[ c ][ ff->first ] / (double)nn  );		  
+		      ++ff;
+		    }
+		  writer.unlevel( globals::freq_strat );
+		}
+	      writer.unlevel( globals::signal_strat );
+	    }
+	  writer.unlevel( "Q" );
+	}
+      writer.unlevel( "PSC" );
+    }
+  
+
+//   par(mfcol=c(2,3))
+//    p=8
+//    pcol = colorRampPalette( c("white","red") )(101) 
+//     ncol = colorRampPalette( c("blue","white") )(101) 
+//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$POS.Q.1[ d$PSC == p ] / d$POS.Q.2[ d$PSC == p ] )  , col = pcol , sz=2,lwr=0,upr=x ) 
+//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$NEG.Q.1[ d$PSC == p ] , col = ncol , sz=2,upr=0,lwr=-x)
+
+//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$POS.Q.2[ d$PSC == p ] , col = pcol , sz=2,lwr=0,upr=x ) 
+//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$NEG.Q.2[ d$PSC == p ] , col = ncol , sz=2,upr=0,lwr=-x)
+
+//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$POS.Q.3[ d$PSC == p ] , col = pcol , sz=2,lwr=0,upr=x ) 
+//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$NEG.Q.3[ d$PSC == p ] , col = ncol , sz=2,upr=0,lwr=-x)
+
+
+//     col =colorRampPalette( c("blue","white","red") )(101)
+// x=2
+// p=1
+//     par(mfcol=c(2,2))
+//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$POS.Q.1[ d$PSC == p ] / d$POS.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
+//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$NEG.Q.1[ d$PSC == p ] / d$NEG.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
+
+//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$POS.Q.3[ d$PSC == p ] / d$POS.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
+//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$NEG.Q.3[ d$PSC == p ] / d$NEG.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
+
+  //
   // Output V to a file, along with variable information (channel, variable, freq)
   //
 
@@ -636,13 +1063,21 @@ void psc_t::construct( param_t & param )
 
       V1 << "\tMN\tSD";
       
-      if ( signed_stats ) 
-	V1 << "\tPOS\tNEG";
-
       for (int c=0;c<nc; c++ )
 	V1 << "\tV" << c+1 ;      
+      
+      // quantiles for each variable?
+      if ( q > 0 ) 
+	for (int c=0;c<nc; c++ )
+	  for (int qq=0;qq<q; qq++ )
+	    V1 << "\tV" << c+1 << ".Q" << qq+1 ;
+      
       V1 << "\n";
       
+      //
+      // Data rows
+      //
+
       for (int k=0;k<nv;k++)
 	{
 	  // ch ~ f ~ var
@@ -666,23 +1101,24 @@ void psc_t::construct( param_t & param )
 	  // means / SD from raw data 
 	  V1 << "\t" << means[ k ]
 	     << "\t" << sds[ k ];
-
-	  // signed stats?
-	  if ( signed_stats )
-	    {
-	      V1 <<"\t" << pos_means[ k ]
-		 <<"\t" << neg_means[ k ];
-	    }
-
+	  
 	  // V coefficients
 	  for (int c=0;c<nc; c++ )
 	    V1 << "\t" << V(k,c);
 
+	  // Quantile means?
+	  if ( q > 0 ) 
+	    for (int c=0;c<nc; c++ )
+	      for (int qq=0;qq<q; qq++ )
+		V1 << "\t" << qsumms[ vname[k] ][ c ][ qq ] ;
+
+	  // done
 	  V1 << "\n";
 	}
       V1.close();
 
     }
+
 
 
   //
@@ -741,24 +1177,6 @@ void psc_t::construct( param_t & param )
 	}
     }
   
-  //
-  // data
-  //
-  
-  if ( output_input && ! only_u ) 
-    {
-      for (int i=0;i<ni;i++)
-	{
-	  writer.id( id[i] , "." );
-	  for (int j=0;j<nv;j++)
-	    {
-	      writer.level( j+1 , "VAR" );
-	      writer.value( "X" , X(i,j) );
-	    }
-	  writer.unlevel( "VAR" );
-	}
-    }
-
   
   //
   // Output projection to a separate file?

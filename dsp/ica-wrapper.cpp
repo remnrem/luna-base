@@ -49,7 +49,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   bool do_not_add_channels = param.has( "no-new-channels" );
 
   //
-  // Fetch all data signals (specified via sig=,  which defaults to all signals if not given)
+  // Fetch all data signals from 'sig'
   //
 
   const bool no_annotations = true;

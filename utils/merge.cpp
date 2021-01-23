@@ -61,10 +61,10 @@ int main( int argc , char ** argv )
       std::string t = argv[i];
       if ( t[0] != '-' )
 	{
-	  if ( p == 0 ) domain_dir = t;
-	  else if ( p == 1 ) study_dir = t;
-	  else if ( p == 2 ) outfile = t;
-	  else options.include_domain( t );
+	  if      ( p == 0 ) domain_dir = t;   // first (non-option) slot = variable definitions
+	  else if ( p == 1 ) study_dir = t;    // second (non-option) slot = input folder
+	  else if ( p == 2 ) outfile = t;      // third (non-option) slot = output file
+	  else options.include_domain( t );    // additional (non-option) slots
 	  ++p;
 	}
       else
@@ -208,10 +208,10 @@ int domain_t::read( const std::string & filename )
   std::vector<std::string> tok = parse( filename , "/" );
   if ( tok.size() == 0 ) halt( "invalid " + filename );  
   
-  // 2) name should be in 'domain-group' form, i.e. two hypen-delimited words
+  // 2) name should be in 'domain_group' form, i.e. two underscore-delimited words
   std::string domain_group = remove_extension( tok[ tok.size() - 1 ] , "txt" );
-  tok = parse( domain_group , "-" );
-  if ( tok.size() != 2 ) halt( "expected 'domain-group' naming for " + domain_group + " in " + filename );
+  tok = parse( domain_group , "_" );
+  if ( tok.size() != 2 ) halt( "expected 'domain_group' naming for " + domain_group + " in " + filename );
   
   // all good, assign:
   name = tok[0];
@@ -395,21 +395,19 @@ void dataset_t::read( const std::string & filename )
   // Get domain and factors from filename
   //
 
-  // filename format:  {domain}-{group}-{tag}{_fac1}{_fac2}{_f3=l3}{.txt}
-  // the 'tag' and factors/lvls can have '-' characters in them; i.e.
-  // we just delimit based on the first two '-' characters;  everything after is 
-  // taken 'as is'
+  // filename format:  {domain}_{group}_{tag}{_fac1}{_fac2}{_f3-l3}{.txt}
+  // requires at least: {domain}_{group}_{tag}{.txt}
 
   std::string fname = remove_extension( tok[ tok.size() - 1 ] , "txt" );
     
-  std::vector<std::string> tok3 = parse( fname , "-" );
+  std::vector<std::string> tok3 = parse( fname , "_" );
 
   if ( tok3.size() < 3 )
     {
-      std::cerr << "found " << tok3.size() << " '-'-delimited items, expecting at least 3: " << fname << "\n";
+      std::cerr << "found " << tok3.size() << " '_'-delimited items, expecting at least 3: " << fname << "\n";
       
       if ( options.strict )
-	halt( "err1: expecting {domain}-{group}-{tag-name}{_fac1}{_fac2}{_f3-l3}{.txt}\n" );
+	halt( "err1: expecting {domain}_{group}_{tag-name}{_fac1}{_fac2}{_f3-l3}{.txt}\n" );
       
       // ignore this file
       if ( options.verbose )
@@ -452,7 +450,7 @@ void dataset_t::read( const std::string & filename )
   }
 
   
-  // i.e. strip 'domain-group-' off start of filename
+  // i.e. strip 'domain_group_' off start of filename
   std::string remainder = fname.substr( domain_name.size() + group_name.size() + 2 );
 
   
@@ -477,17 +475,18 @@ void dataset_t::read( const std::string & filename )
   bool missing_code = domain->missing.size();
 
   //
-  // split off tag-name (hyphen delim), then any factors (underscore delimited)
+  // split off tag-name, then any factors (all underscore delimited)
   //
   
-  std::vector<std::string> toktag = parse( remainder , "-" );
+  std::vector<std::string> toktag = parse( remainder , "_" );
   std::string tag_name = toktag[0];
 
-  // any further factors?
+  // any further factors? -> tokb
   std::vector<std::string> tokb;
-  if ( remainder.size() > tag_name.size() ) 
-    tokb = parse( remainder.substr( tag_name.size() +1 ) , "_" );
-  
+  if ( toktag.size() > 1 ) 
+    for (int i=1;i<toktag.size();i++)
+      tokb.push_back( toktag[i] );
+
   // any factors [ and optionally, levels , set w/ '-' ] 
   std::vector<std::string> facs;
   std::map<std::string,int> fac2col;
@@ -498,7 +497,7 @@ void dataset_t::read( const std::string & filename )
 
       // edge case? if single delim? -->  "_-_" would have 0 size tokfl
       if ( tokfl.size() == 0 ) 
-	halt( "expecting {domain}-{group}-{tag}{_fac1}{_fac2}{_f3-l3}{.txt}\n" + filename );
+	halt( "expecting {domain}_{group}_{tag}{_fac1}{_fac2}{_f3-l3}{.txt}\n" + filename );
 
       // get (unaliased) factor name
       std::string factor = domain->aliases.unalias( toupper( tokfl[0] ) );

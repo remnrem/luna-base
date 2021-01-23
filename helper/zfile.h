@@ -268,12 +268,17 @@ private:
 
     // create a new file, store a pointer to it, and return that pointer
     //  prepend-COMMAND-F1_F2_F3{_append}.txt{.gz}
-    
+ 
+    // COMM.txt
+    // COMM_F1_F2.txt
+    // COMM_F1-V1.txt  // sets F1 to "V1"
+    // {prepend}COMM{_FAC_FAC}{append}.txt
+
     std::string filename = folder 
-      + ( globals::txt_table_prepend != "" ? globals::txt_table_prepend + "-" : "" ) 
+      + globals::txt_table_prepend 
       + cmd 
-      + ( table == "" ? "" : "-" + table ) 
-      + (  globals::txt_table_append != "" ? "_" + globals::txt_table_append : "" )
+      + ( table == "" ? "" : "_" + table ) 
+      + globals::txt_table_append 
       + ( compressed ? ".txt.gz" : ".txt" ) ;
 
     zfile_t * p = new zfile_t( this , filename , indiv , cmd , table , param , compressed );

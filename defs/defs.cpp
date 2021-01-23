@@ -368,7 +368,7 @@ void globals::init_defs()
 
   freq_strat   = "F";
   signal_strat = "CH";
-  stage_strat  = "S";
+  stage_strat  = "SS";
   cycle_strat  = "C";
   band_strat   = "B";
   annot_strat  = "ANNOT";

@@ -2414,7 +2414,7 @@ Data::Matrix<double> microstates_t::eig2mat( const Eigen::MatrixXd & E )
     return M;
   }
 
-Eigen::Matrix3d microstates_t::mat2eig( const Data::Matrix<double> & M )
+Eigen::MatrixXd microstates_t::mat2eig( const Data::Matrix<double> & M )
 {
   const int rows = M.dim1();
   const int cols = M.dim2();
@@ -2425,7 +2425,7 @@ Eigen::Matrix3d microstates_t::mat2eig( const Data::Matrix<double> & M )
   return E;
 }
 
-Eigen::Matrix3d microstates_t::mat2eig_tr( const Data::Matrix<double> & M )
+Eigen::MatrixXd microstates_t::mat2eig_tr( const Data::Matrix<double> & M )
 {
   const int rows = M.dim1();
   const int cols = M.dim2();

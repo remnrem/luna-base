@@ -4186,7 +4186,7 @@ void edf_t::guess_canonicals( param_t & param )
 	  if ( signals.label(s) == ts ) { eeg = s ; break; } 
 	}
 
-      if ( eeg == -1 ) logger << "  could not find " <<  param.value( "eeg" ) << " -- will try to guess cs_EEG\n";
+      if ( eeg == -1 ) logger << "  could not find " <<  param.value( "eeg" ) << " -- will try to guess csEEG\n";
     }
 
   // still not found? then guess
@@ -4260,9 +4260,9 @@ void edf_t::guess_canonicals( param_t & param )
 
   if ( eeg == -1 )
     {
-      logger << "  could not guess the canonical cs_EEG from any matching signals\n";
+      logger << "  could not guess the canonical csEEG from any matching signals\n";
 
-      std::string canon = "cs_EEG";
+      std::string canon = "csEEG";
       writer.level( canon , "CS" );      
       writer.value( "DEFINED" , 0 );
       writer.unlevel( "CS" );
@@ -4291,13 +4291,13 @@ void edf_t::guess_canonicals( param_t & param )
   signal_list_t ref;
   if ( refstr != "." ) ref = header.signal_list( refstr );
 
-  logger << "  creating cs_EEG using signal [" << sigstr << "] and reference [" << refstr << "]\n";
+  logger << "  creating csEEG using signal [" << sigstr << "] and reference [" << refstr << "]\n";
   
   //
   // Rerefence and make canonical signal
   //
   
-  std::string canon = "cs_EEG";
+  std::string canon = "csEEG";
   
   reference( sig , ref , true , canon , sr );
   
@@ -4312,7 +4312,7 @@ void edf_t::guess_canonicals( param_t & param )
 	  
   std::string units = "uV";
   
-  if ( canon == "cs_ECG" ) units = "mV" ;
+  if ( canon == "csECG" ) units = "mV" ;
   
   if ( units == "uV" || units == "mV" ) 
     rescale( canonical_signal(0) , units );
@@ -4344,7 +4344,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
   
   // GROUP   CANONICAL   CH   REF   SR  NOTES
   // looking for EEG, LOC, ROC, EMG, ECG, etc
-  // but actually reading these from the file, adding 'cs_' to each
+  // but actually reading these from the file, adding 'cs' to each
 
   // if cs is non-null, only make the CS in that set ('EEG')
 
@@ -4383,16 +4383,16 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       // if cs not specified, take all canonical signals as given in 
       // the file
       
-      if ( cs == NULL ) canons.insert( "cs_" + tok[1] );
+      if ( cs == NULL ) canons.insert( "cs" + tok[1] );
 
       // skip if a specific list requested?
       if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
 
       // otherwise, add to the set of things to be calculated
-      sigs[ "cs_" + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
-      refs[ "cs_" + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
-      srs[ "cs_" + tok[1] ].push_back( tok[4] ) ;
-      notes[ "cs_" + tok[1] ].push_back( tok.size() == 6 ? tok[5] : "." );
+      sigs[ "cs" + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
+      refs[ "cs" + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
+      srs[ "cs" + tok[1] ].push_back( tok[4] ) ;
+      notes[ "cs" + tok[1] ].push_back( tok.size() == 6 ? tok[5] : "." );
       
     }
   
@@ -4404,7 +4404,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       std::set<std::string>::const_iterator ss = cs->begin();
       while ( ss != cs->end() )
 	{
-	  canons.insert( "cs_" + *ss );
+	  canons.insert( "cs" + *ss );
 	  ++ss;
 	}
     }
@@ -4522,7 +4522,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  
 	  std::string units = "uV";
 	  
-	  if ( canon == "cs_ECG" ) units = "mV" ;
+	  if ( canon == "csECG" ) units = "mV" ;
 	  
 	  if ( units == "uV" || units == "mV" ) 
 	    rescale(  canonical_signal(0) , units );

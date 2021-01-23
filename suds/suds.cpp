@@ -239,10 +239,10 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
   // get predictions
   //
 
-  lda_posteriors_t prediction = lda_t::predict( model , U );
+  lda_posteriors_t prediction = lda_t::predict( model , Data::mat2eig( U )  );
 
   // save posteriors?
-  if ( pp != NULL ) *pp = prediction.pp;
+  if ( pp != NULL ) *pp = Data::eig2mat( prediction.pp ) ;
 
   double kappa = MiscMath::kappa( prediction.cl , y , suds_t::str( SUDS_UNKNOWN )  );
 
@@ -663,7 +663,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
       const int ncol = frq.size();
 
-      if ( ncol != PSD.dim2() ) Helper::halt( "problem" );
+      if ( ncol != PSD.cols() ) Helper::halt( "problem" );
       
       for (int j=0; j<ncol ; j++ )
 	{
@@ -813,7 +813,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   epochs.clear();
   
   int r = 0;
-  for (int i=0;i<PSD2.dim1() ; i++)
+  for (int i=0;i<PSD2.rows() ; i++)
     {      
       if ( valid[i] )
 	{
@@ -851,13 +851,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( suds_t::use_bands )
     {
       // and make as log
-      int nbands = B.dim2();
+      int nbands = B.cols();
       Data::Matrix<double> B2 = B;
       B.clear();
       B.resize( nve , nbands );
 
       int r = 0;
-      for (int i=0;i<B2.dim1() ; i++)
+      for (int i=0;i<B2.rows() ; i++)
 	{      
 	  if ( valid[i] )
 	    {
@@ -963,7 +963,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       if ( suds_t::use_bands )
 	{
-	  int nbands = B.dim2();
+	  int nbands = B.cols();
 	  for (int j=0; j<nbands; j++)
 	    {
 	      std::vector<double> * col = B.col_nonconst_pointer(j)->data_nonconst_pointer();
@@ -1015,7 +1015,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	{
 	  
 	 
-	  int nbands = B.dim2();
+	  int nbands = B.cols();
 
 	  // fix, for now just assume always has SLOW band... 
 	  std::vector<std::string> bands7 = { "SLOW" , "DELTA" , "THETA" , "ALPHA" , "SIGMA" , "BETA" , "GAMMA" } ;
@@ -1086,8 +1086,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       Data::Matrix<double> VV = V;
       V.clear();
-      V.resize( VV.dim1() , nc2 );
-      for (int i=0;i<VV.dim1();i++)
+      V.resize( VV.rows() , nc2 );
+      for (int i=0;i<VV.rows();i++)
 	{
 	  int cc = 0;
 	  for (int j=0;j<nc;j++)
@@ -1110,7 +1110,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // component selection step)
   //
   
-  if ( U.dim2() != nc )
+  if ( U.cols() != nc )
     {
       Data::Matrix<double> U2 = U;
       U.clear();
@@ -1122,8 +1122,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       W.resize( nc );
       Data::Matrix<double> VV = V;
       V.clear();
-      V.resize( VV.dim1() , nc );
-      for (int i=0;i<VV.dim1();i++)
+      V.resize( VV.rows() , nc );
+      for (int i=0;i<VV.rows();i++)
 	for (int j=0;j<nc;j++)
 	  V(i,j) = VV(i,j);
     }
@@ -1181,16 +1181,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
       
       // fit based on PSC
-      lda_t lda1( y , U );      
+      lda_t lda1( y , Data::mat2eig( U )  );      
       lda_model_t m1 = lda1.fit( suds_t::flat_priors );
-      lda_posteriors_t prediction1 = lda_t::predict( m1 , U );
+      lda_posteriors_t prediction1 = lda_t::predict( m1 , Data::mat2eig( U )  );
       double kappa1 = MiscMath::kappa( prediction1.cl , y , suds_t::str( SUDS_UNKNOWN ) );
 
       
       // fit based on band power
-      lda_t lda2( y , B );
+      lda_t lda2( y , Data::mat2eig( B ) );
       lda_model_t m2 = lda2.fit( suds_t::flat_priors );
-      lda_posteriors_t prediction2 = lda_t::predict( m2 , B );
+      lda_posteriors_t prediction2 = lda_t::predict( m2 , Data::mat2eig( B )  );
       double kappa2 = MiscMath::kappa( prediction2.cl , y , suds_t::str( SUDS_UNKNOWN ) );
 
       writer.value( "K_PSC" , kappa1 );
@@ -1800,7 +1800,7 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
 void suds_indiv_t::fit_lda()
 {
 
-  lda_t lda( y , U );      
+  lda_t lda( y , Data::mat2eig( U ) );      
 
   model = lda.fit( suds_t::flat_priors );
 
@@ -1854,7 +1854,7 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   // predict using trainer model
   //
 
-  lda_posteriors_t pp = lda_t::predict( trainer.model , U_projected );
+  lda_posteriors_t pp = lda_t::predict( trainer.model , Data::mat2eig( U_projected ) ) ;
 
   return pp;
 }
@@ -2082,7 +2082,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // (we ignore the U_projected which is based on the trainer model)
 	  //
 
-	  lda_t lda( prediction.cl , target.U );
+	  lda_t lda( prediction.cl , Data::mat2eig( target.U ) ) ;
       
 	  // set target model for use w/ all different weight-trainers
 
@@ -2418,7 +2418,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( w > 0 ) 
 	tot_unwgt++;
 
-      if ( pp.dim1() != m.dim1() || pp.dim2() != m.dim2() )
+      if ( pp.rows() != m.rows() || pp.cols() != m.cols() )
 	Helper::halt( "internal error in compiling posteriors across trainers" );
 
       for (int i=0;i<ne;i++)
@@ -2585,10 +2585,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       OUT1 << "ID\tE";
 
-      for (int i=0;i<target.PSD.dim2();i++)
+      for (int i=0;i<target.PSD.cols();i++)
 	OUT1 << "\t" << "X" << (i+1);
 
-      for (int i=0;i<target.U.dim2();i++)
+      for (int i=0;i<target.U.cols();i++)
 	OUT1 << "\t" << "PSC" << (i+1);
 
       if ( suds_t::n_stages == 5 )
@@ -2624,13 +2624,13 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  OUT1 << target.id << "\t"
 	       << edf.timeline.display_epoch( i ) ;
 	  
-	  for (int j=0;j<target.PSD.dim2();j++)
+	  for (int j=0;j<target.PSD.cols();j++)
 	    OUT1 << "\t" << target.PSD(e,j); 
 	  
-	  for (int j=0;j<target.U.dim2();j++)
+	  for (int j=0;j<target.U.cols();j++)
 	    OUT1 << "\t" << target.U(e,j); 
 	  
-	  for (int j=0;j<pp.dim2();j++)
+	  for (int j=0;j<pp.cols();j++)
 	    OUT1 << "\t" << pp(e,j); 
 	  
 	  OUT1 << "\t" << final_prediction[e] ;
@@ -2696,7 +2696,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 void suds_indiv_t::add( const std::string & trainer_id , const lda_posteriors_t & prediction )
 {
   
-  target_posteriors[ trainer_id ] = prediction.pp;
+  target_posteriors[ trainer_id ] = Data::eig2mat( prediction.pp );
 
   target_predictions[ trainer_id ] = suds_t::type( prediction.cl );
   

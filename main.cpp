@@ -1564,7 +1564,8 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   if ( p == "lda" )
     {
       std::vector<std::string> y;
-      Data::Matrix<double> X(500,10);
+
+      Eigen::MatrixXd X(500,10);
       
       std::ifstream INY( Helper::expand("~/y.txt" ).c_str() , std::ios::in );
       int k = 0;
@@ -1597,9 +1598,9 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       lda_posteriors_t pp = lda.predict( fit , X );
 
-      for (int i=0;i<pp.pp.dim1() ;i++)
+      for (int i=0;i<pp.pp.rows() ;i++)
 	{
-	  for (int j=0;j<pp.pp.dim2();j++)
+	  for (int j=0;j<pp.pp.cols();j++)
 	    std::cout << " " << pp.pp(i,j);
 	  std::cout << "\t" << pp.cl[i] << "\n";
 

@@ -290,8 +290,8 @@ struct microstates_t {
 				const signal_list_t & signals );
 
   static Data::Matrix<double> eig2mat( const Eigen::MatrixXd & E );
-  static Eigen::Matrix3d mat2eig( const Data::Matrix<double> & M );
-  static Eigen::Matrix3d mat2eig_tr( const Data::Matrix<double> & M );
+  static Eigen::MatrixXd mat2eig( const Data::Matrix<double> & M );
+  static Eigen::MatrixXd mat2eig_tr( const Data::Matrix<double> & M );
 
   static void aggregate2edf( const Data::Matrix<double> & X ,
 			     const signal_list_t & signals ,

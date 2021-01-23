@@ -23,10 +23,13 @@
 #ifndef __LDA_H__
 #define __LDA_H__
 
-#include "matrix.h"
+//#include "matrix.h"
+#include "stats/Eigen/Dense"
+
 #include <vector>
 #include <map>
 
+typedef Eigen::Array<double, 1, Eigen::Dynamic> ArrayXd;
 
 struct lda_model_t {
   
@@ -41,17 +44,17 @@ struct lda_model_t {
 
   std::string errmsg;
   
-  Data::Vector<double> prior;
+  ArrayXd prior;
   std::map<std::string,int> counts;
-  Data::Matrix<double> means;
-  Data::Matrix<double> scaling;
+  Eigen::MatrixXd means;
+  Eigen::MatrixXd scaling; // diagonal matrix
   int n;
-  Data::Vector<double> svd;
+  ArrayXd svd;
   std::vector<std::string> labels;
 
-  Data::Vector<double> prop_trace() const
+  ArrayXd prop_trace() const
   {
-    Data::Vector<double> t( svd.size() );
+    ArrayXd t( svd.size() );
 
     double sum = 0;
 
@@ -75,7 +78,7 @@ struct lda_posteriors_t {
   // cols = classes
   // rows = observations
   
-  Data::Matrix<double> pp;
+  Eigen::MatrixXd pp;
   
   // most likely class label for each observation
   std::vector<std::string> cl;
@@ -90,7 +93,7 @@ class lda_t {
  public:
   
  lda_t( const std::vector<std::string> y ,
-	const Data::Matrix<double> & X )
+	const Eigen::MatrixXd & X )
     : y(y) , X(X)
     {
       tol = 1e-4;
@@ -98,13 +101,13 @@ class lda_t {
   
   lda_model_t fit( const bool flat_priors = false );
   
-  static lda_posteriors_t predict( const lda_model_t & , const Data::Matrix<double> & X );
+  static lda_posteriors_t predict( const lda_model_t & , const Eigen::MatrixXd & X );
 
  private:
   
   std::vector<std::string> y;
 
-  Data::Matrix<double> X;
+  Eigen::MatrixXd X;
 
   double tol;
   

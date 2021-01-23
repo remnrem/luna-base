@@ -27,8 +27,10 @@ struct edf_t;
 struct param_t;
 
 #include "stats/Eigen/Dense"
+#include "helper/helper.h"
 
 #include <vector>
+#include <set>
 
 struct psc_t {
 
@@ -52,5 +54,62 @@ struct psc_t {
   const double EPS = 1e-6;
   
 };
+
+
+struct psc_sort_t {
+
+  psc_sort_t( int idx , double value ) : idx(idx) , value(value) { } 
+
+  int idx;
+
+  double value;
+
+  bool operator<( const psc_sort_t & rhs ) const 
+  {
+    return value < rhs.value;
+  }
+
+  static std::vector<int> quantile( const std::set<psc_sort_t> & d , const int q )
+  {
+    
+    const int n = d.size();
+    const int nq = n / q ;
+    // need to add +1 to this many groups?, i.e. if not a perfect division
+    int ex = n - ( q * nq );
+    
+    std::vector<int> r(n);
+    
+    int curr = 0;
+    int curr_q = 0;
+    int curr_n = 0;
+    
+    std::set<psc_sort_t>::const_iterator qq = d.begin();
+    while ( qq != d.end() )
+      {
+	// sanity check
+	if ( qq->idx < 0 || qq->idx >= n ) 
+	  Helper::halt( "internal error in psc_t" );
+	
+	r[ qq->idx ] = curr_q;
+	
+	// updates?
+	
+	++curr_n;
+	
+	if ( curr_n == nq + ( ex > 0 ? 1 : 0 ) )
+	  {
+	    ++curr_q;
+	    curr_n = 0;
+	    --ex; // we've used up this remainder
+	  }
+	
+	++qq;
+      }
+    
+    return r;
+  }
+};
+
+
 
 #endif

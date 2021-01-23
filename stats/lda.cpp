@@ -34,20 +34,28 @@ extern logger_t logger;
 
 lda_model_t lda_t::fit( const bool flat_priors )
 {
+
   lda_model_t model;
 
-  const int n = X.dim1();
-  const int p = X.dim2();
+  const int n = X.rows();
+  const int p = X.cols();
+
+  //
+  // count group labels
+  //
 
   std::map<std::string,int> counts;
-  for (int i=0;i<y.size();i++) counts[ y[i] ]++;
+  for (int i=0;i<y.size();i++) 
+    counts[ y[i] ]++;
 
-  // assign index to groups
+  //
+  // assign index to groups (integer 0, 1, ...)
+  //
+
   std::map<std::string,int> gidx;
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() )
-    {
-      //      std::cout << " cc -> " << cc->first << " " << cc->second << "\n";
+    {      
       const int sz = gidx.size();
       gidx[ cc->first ] = sz;
       ++cc;
@@ -57,29 +65,40 @@ lda_model_t lda_t::fit( const bool flat_priors )
   for (int i=0;i<n;i++) { 
     yi[i] = gidx[y[i]];    
   }
-    
-  // number of classes
-  const int ng = counts.size();
 
+  //
+  // number of classes
+  //
+
+  const int ng = counts.size();
+  
   if ( ng == 1 ) 
     Helper::halt( "no variation in group labels in lda_t::fit()" );
 
-
+  //
   // priors
-  std::vector<double> prior;
+  //
+
+  ArrayXd prior( ng );
+
+  int cidx = 0;
   cc = counts.begin();
   while ( cc != counts.end() )
     {
       if ( flat_priors )
-	prior.push_back( 1.0 / (double) counts.size() );
+	prior[ cidx ] = 1.0 / (double) counts.size() ;
       else
-	prior.push_back( cc->second / (double)n );
-      ++cc;
+	prior[ cidx ] = cc->second / (double)n ;
+      ++cc; 
+      ++cidx;
     }
+  
 
+  //
+  // group means () ng x p ( groups x predictors )
+  //
 
-  // group means
-  Data::Matrix<double> group_means( ng , p );
+  Eigen::MatrixXd group_means = Eigen::MatrixXd::Zero( ng , p );
   for ( int i = 0 ; i < n ; i++ )
     for ( int j = 0 ; j < p ; j++ )
       group_means( yi[i], j ) += X(i,j);
@@ -88,15 +107,21 @@ lda_model_t lda_t::fit( const bool flat_priors )
     for ( int j = 0 ; j < p ; j++ )
       group_means( i, j ) /= n * prior[i];
   
-  //  std::cout << "GM\n" << group_means.print() << "\n";
-  
-  // adjust X by group mean; get variance of each measure (i.e. looking for within-group variability)
+  //
+  // adjust X by group mean; get variance of each measure
+  // (i.e. looking for within-group variability)
+  //
+
   std::vector<double> f1(p);
+  
   for (int j=0;j<p;j++)
     {
       std::vector<double> xa(n);
-      for (int i=0;i<n;i++) xa[i] = X(i,j) - group_means( yi[i] , j ) ;
-      f1[j] = MiscMath::sdev( xa );      
+      for (int i=0;i<n;i++) 
+	xa[i] = X(i,j) - group_means( yi[i] , j ) ;
+      
+      f1[j] = MiscMath::sdev( xa );
+      
       if ( f1[j] < tol ) {
 	model.valid = false;
 	model.errmsg = "variable " + Helper::int2str(j) + " is constant within group ";
@@ -105,71 +130,63 @@ lda_model_t lda_t::fit( const bool flat_priors )
     }
 
   
-  // scaling matrix (diagonal)... can keep as vector
-  Data::Matrix<double> scaling( p , p , 0 );
-  for (int j=0;j<p;j++) scaling(j,j) = 1.0 / f1[j] ;
+  // scaling matrix (diagonal)... 
+  Eigen::MatrixXd scaling = Eigen::MatrixXd::Zero( p , p );
+  for (int j=0;j<p;j++) 
+    scaling(j,j) = 1.0 / f1[j] ;
   
   double fac = 1.0 / double( n - ng );
-  double sqrt_fac = sqrt( fac );
   
+  double sqrt_fac = sqrt( fac );
+
+  //
   // scaled X
-  Data::Matrix<double> X1( n , p );
+  //
+
+  Eigen::MatrixXd X1( n , p );
   for (int i=0;i<n;i++)
     for (int j=0;j<p;j++)      
       X1(i,j) = sqrt_fac * ( X(i,j) - group_means( yi[i] , j ) ) * scaling(j,j); 
   
+  //
+  // SVD
+  //
 
-  Data::Vector<double> W(p);
-  Data::Matrix<double> V(p,p);
-  
-  bool okay = Statistics::svdcmp( X1 , W , V );
+  // bool okay = Statistics::svdcmp( X1 , W , V );
+  // if ( ! okay ) Helper::halt( "problem in lda_t, initial SVD\n" );
 
-  if ( ! okay ) Helper::halt( "problem in lda_t, initial SVD\n" );
+  Eigen::BDCSVD<Eigen::MatrixXd> svd( X1 , Eigen::ComputeThinU | Eigen::ComputeThinV );  
+  Eigen::MatrixXd V = svd.matrixV();
+  ArrayXd W = svd.singularValues();
   
-  // SVD (no left singular vectors needed)
+  // components are already sorted in decreasing order
+  
   // X.s <- svd(X1, nu = 0L)
-
-  // order so that we have descending singular values
-
-  std::vector<int> o;
-  std::vector<bool> in( W.size() , false ) ;
-  for (int i=0;i<W.size();i++) 
-    {
-      int mxi = 0;
-      for (int j=0;j<W.size();j++) { if ( ! in[j] ) { mxi = j ; break; } }
-      for (int j=0;j<W.size();j++) if ( (!in[j]) && W[j] >= W[mxi] ) mxi = j ;      
-      o.push_back( mxi );
-      in[ mxi ] = true;
-    }
-
-  Data::Vector<double> W2 = W;
-  Data::Matrix<double> V2 = V;
-  for (int i=0;i<W.size();i++)
-    W[i] = W2[ o[i] ];
   
-  // swap cols of V
-  for (int i=0;i<p;i++)
-    for (int j=0;j<p;j++)
-      V(i,j) = V2( i , o[j] );
-  
+  //
   // rank
+  //
+  
   int rank = 0;
-  for (int j=0;j<p;j++) if ( W[j] > tol ) ++rank;
-
+  for (int j=0;j<p;j++) 
+    if ( W(j) > tol ) ++rank;
+  
   if ( rank == 0 ) {
     model.valid = false;
     model.errmsg = "problem with collinearity/constant values in input data" ;
     return model;
   }
 
-  if ( rank < p ) logger << " warning... rank < p\n"; 
+  if ( rank < p ) 
+    logger << " warning... rank < p\n"; 
 
+
+  //
   // get new scaling matrix p x rank , possibly of rank < p
   // scaling <- scaling %*% X.s$v[, 1L:rank] %*% diag(1/X.s$d[1L:rank],,rank)
+  //
 
-
-    
-  Data::Matrix<double> scaling2( p , rank );
+  Eigen::MatrixXd scaling2 = Eigen::MatrixXd::Zero( p , rank );
   for (int i=0;i<p;i++)
     for (int j=0;j<rank;j++)
       for (int k=0;k<p;k++)
@@ -178,9 +195,14 @@ lda_model_t lda_t::fit( const bool flat_priors )
   for (int i=0;i<p;i++)
     for (int j=0;j<rank;j++)
       scaling2(i,j) /= W[j];
-	  
-   // mean values of each measure
-  Data::Vector<double> xbar( p );
+
+  //
+  // mean values of each measure
+  //
+  
+  ArrayXd xbar( p );
+  for (int j=0;j<p;j++) xbar[j] = 0;
+
   for (int i=0;i<ng;i++)
     for (int j=0;j<p;j++)
       xbar[j] += prior[i] * group_means(i,j);
@@ -188,89 +210,71 @@ lda_model_t lda_t::fit( const bool flat_priors )
   
   fac = 1.0/(double)(ng - 1);
   
+  
   //X <- sqrt((n * prior)*fac) * scale(group.means, center = xbar, scale = FALSE) %*% scaling
   //  1xg gxp pxr
   // -->  first is element-wise row multiplication
   //  results in a g x r matrix
 
-  Data::Vector<double> x1( ng );
+  ArrayXd x1( ng );
   for (int i=0;i<ng;i++)
     x1[i] = sqrt( ( n * prior[i] ) * fac );
 
+  
   // sqrt((n * prior)*fac) * scale(group.means, center = xbar, scale = FALSE)
-  Data::Matrix<double> group_means_centered( ng , p );
+  Eigen::MatrixXd group_means_centered( ng , p );
   for (int i=0;i<ng;i++)
     for (int j=0;j<p;j++)
       group_means_centered(i,j) = x1[i] * ( group_means(i,j) - xbar[j] ) ;
   
-  Data::Matrix<double> X2( ng , rank );
+  Eigen::MatrixXd X2 = Eigen::MatrixXd::Zero( ng , rank );
   for (int i=0;i<ng;i++)
     for (int j=0;j<rank;j++)
       for (int k=0;k<p;k++)
 	X2(i,j) += group_means_centered(i,k) * scaling2(k,j); 
-  
 
+  
+  //
   // SVD of X2, g x r matrix
+  //
+
+
+  //okay = Statistics::svdcmp( X2 , W , V );     
   
-  W.clear();
-  V.clear();
-  
-  W.resize( rank );
-  V.resize( rank , rank );
-        
-  okay = Statistics::svdcmp( X2 , W , V );
-  
-  if ( ! okay ) 
-    {
-      std::cout << "group means\n"
-		<< group_means.print() << "\n";
-      std::cout << "X\n" << X2.print() << "\n";
-      Helper::halt( "problem in lda_t, SVD 2" );
-    }
+  Eigen::BDCSVD<Eigen::MatrixXd> svd2( X2 , Eigen::ComputeThinU | Eigen::ComputeThinV );
+
+  V = svd2.matrixV();
+  W = svd2.singularValues();
+ 
+  // if ( ! okay ) 
+  //   {
+  //     std::cout << "group means\n"
+  // 		<< group_means.print() << "\n";
+  //     std::cout << "X\n" << X2.print() << "\n";
+  //     Helper::halt( "problem in lda_t, SVD 2" );
+  //   }
 
   int rank2 = 0;
-  for (int j=0;j<rank;j++) if ( W[j] > tol ) ++rank2;
+  for (int j=0;j<W.size();j++) 
+    if ( W[j] > ( tol * W[0] ) ) ++rank2;
   
-  // re-order elements once more
-  o.clear();
-  in.clear();
-  in.resize( W.size() , false ) ;
-  for (int i=0;i<W.size();i++) 
-    {
-      int mxi = -1;
-      for (int j=0;j<W.size();j++) { if ( ! in[j] ) { mxi = j ; break; } } 
-      for (int j=0;j<W.size();j++) if ( (!in[j]) && W[j] >= W[mxi] ) mxi = j ;      
-      o.push_back( mxi );
-      in[ mxi ] = true;
-    }
-
-  W2 = W;
-  V2 = V;
-
-  for (int i=0;i<W.size();i++)
-    W[i] = W2[ o[i] ]; 
-  
-  // for V
-  for (int i=0;i<rank;i++)
-    for (int j=0;j<rank;j++)
-      V(i,j) = V2( i , o[j] );
-    
   if ( rank2 == 0 ) {
     model.valid = false;
     model.errmsg = "group means are numerically identical" ;
     return model;
   }
-
   
+  //
   // ( p x r ) . ( r , r2 ) 
   // scaling <- scaling %*% X.s$v[, 1L:rank]
+  //
 
-  Data::Matrix<double> scaling3( p , rank2 );
+  Eigen::MatrixXd scaling3 = Eigen::MatrixXd::Zero( p , rank2 );
   for (int i=0;i<p;i++)
     for (int j=0;j<rank2;j++)
       for (int k=0;k<rank;k++)
 	scaling3(i,j) += scaling2(i,k) * V(k,j);
-
+  
   model.valid = true;
   model.prior = prior;
   model.counts = counts;
@@ -278,7 +282,8 @@ lda_model_t lda_t::fit( const bool flat_priors )
   model.scaling = scaling3;
   model.n = n;
   model.svd.resize( rank2 );
-  for (int i=0;i<rank2;i++) model.svd[i] = W[i];
+  for (int i=0;i<rank2;i++) 
+    model.svd[i] = W[i];
 
   model.labels.clear();
   
@@ -288,48 +293,51 @@ lda_model_t lda_t::fit( const bool flat_priors )
       model.labels.push_back( ll->first );
       ++ll;
     }
-
+  
   return model;
 }
   
 
-lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<double> & X )
+lda_posteriors_t lda_t::predict( const lda_model_t & model , const Eigen::MatrixXd & X )
 {
 
-  const int p = X.dim2();
-  const int n = X.dim1();
+  const int p = X.cols();
+  const int n = X.rows();
 
-  //  std::cout << "p = " << p << " " << n << " " << model.means.dim2() << "\n";
+  //  std::cout << "p = " << p << " " << n << " " << model.means.cols() << "\n";
   
-  if ( p != model.means.dim2() )
+  if ( p != model.means.cols() )
     Helper::halt( "wrong number of columns in lda_t::predict()" );  
 
   // use prior from training/model
   const int ng = model.prior.size();
   
   // remove overall means to keep distances small
-  Data::Vector<double> means( p );
+  ArrayXd means( p );
+  for (int j=0;j<p;j++)
+    means[j] = 0;
+
   for (int i=0;i<ng;i++)
     for (int j=0;j<p;j++)
       means[j] += model.prior[i] * model.means(i,j) ;
-
-  Data::Matrix<double> X1(n,p); 
+  
+  Eigen::MatrixXd X1(n,p); 
   for (int i=0;i<n;i++)
     for (int j=0;j<p;j++)
       X1(i,j) = X(i,j) - means(j);
 
   // n.p X p.r --> n.r
   // x <- scale(x, center = means, scale = FALSE) %*% scaling
-  Data::Matrix<double> X2 = X1 * model.scaling;
+  Eigen::MatrixXd X2 = X1 * model.scaling;
     
-  Data::Matrix<double> M1(ng,p); 
+  Eigen::MatrixXd M1(ng,p); 
   for (int i=0;i<ng;i++)
     for (int j=0;j<p;j++)
       M1(i,j) = model.means(i,j) - means(j);
   
   
   // dm <- scale(object$means, center = means, scale = FALSE) %*% scaling
-  Data::Matrix<double> DM = M1 * model.scaling;
+  Eigen::MatrixXd DM = M1 * model.scaling;
 
   // can be a lower dimension, of first N components if needed
   // for now, fix to N components
@@ -345,14 +353,20 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
   //   ( NxNG ) - ( n x dimen ) . ( dimen x NG   )   
   // --> NxNG
 
-  Data::Matrix<double> dist( n , ng );
+  Eigen::MatrixXd dist( n , ng );
   // priors
   Data::Vector<double> rowSums( ng );
+  
   for (int i=0;i<ng;i++)
-    for (int k=0;k<dimen;k++) rowSums[i] += DM(i,k) * DM(i,k);
-
+    {
+      rowSums[i] = 0;
+      for (int k=0;k<dimen;k++) 
+	rowSums[i] += DM(i,k) * DM(i,k);
+    }
+  
   Data::Vector<double> p0( ng );
-  for (int i=0;i<ng;i++) p0[i] = 0.5 * rowSums[i] - log( model.prior[i] );
+  for (int i=0;i<ng;i++) 
+    p0[i] = 0.5 * rowSums[i] - log( model.prior[i] );
 
   for (int i=0;i<n;i++)
     for (int j=0;j<ng;j++)
@@ -363,8 +377,8 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
       for (int k=0;k<dimen;k++)
 	dist(i,j) -= X2(i,k) * DM( j , k ) ; // io.e. t(DM)
   
-    //     dist <- exp( -(dist - apply(dist, 1L, min, na.rm=TRUE)))
-
+  //     dist <- exp( -(dist - apply(dist, 1L, min, na.rm=TRUE)))
+  
   // normalize to 0 each indiv.
   for (int i=0;i<n;i++)
     {
@@ -385,12 +399,16 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
       cl[i] = model.labels[ mxi ];
     }
   
+
+  //
+  // Construct final return object
+  //
   			      
   lda_posteriors_t pp;
 
   // posterior probs
   pp.pp = dist;
-
+  
   // most likely class assignment (idx)
   pp.cli = cli;
   
@@ -399,6 +417,4 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Data::Matrix<
   
   return pp;
 
-}
-  
-
+} 

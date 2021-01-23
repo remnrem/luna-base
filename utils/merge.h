@@ -120,10 +120,10 @@ struct options_t {
 
   void include_domain( const std::string & t )
   {
-    std::vector<std::string> tok = parse( t , "-" );
+    std::vector<std::string> tok = parse( t , "_" );
 	  
     if ( tok.size() > 2 || tok.size() == 0 ) 
-      halt( "invalid domain-group specification: " + t );
+      halt( "invalid domain_group specification: " + t );
 	  
     if ( tok.size() == 1 ) 
       {
@@ -240,6 +240,7 @@ struct domain_t {
 
   std::string name; // e.g. 'eeg'
   std::string group; // e.g. 'spindles'
+  // combined to eeg_spindles : i.e. enfore underscore delimiter
 
   std::map<std::string,var_t> variables;
 

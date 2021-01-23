@@ -969,12 +969,12 @@ void cmddefs_t::init()
   add_var( "SOAP-SUDS" , "E" , "PRED" , "Predicted stage" );
   add_var( "SOAP-SUDS" , "E" , "PRIOR" , "Original stage" );
   
-  add_table( "SOAP-SUDS" , "S" , "Stage-level output" );
-  add_var( "SOAP-SUDS" , "S" , "DUR_OBS" , "Observed stage duration (for included epochs)" );
-  add_var( "SOAP-SUDS" , "S" , "DUR_PRD" , "Predicted stage duration (for included epochs)" );
-  add_var( "SOAP-SUDS" , "S" , "F1" , "Stage-specific F1" );
-  add_var( "SOAP-SUDS" , "S" , "PREC" , "Stage-specific precision" );
-  add_var( "SOAP-SUDS" , "S" , "RECALL" , "Stage-specific recall" );
+  add_table( "SOAP-SUDS" , "SS" , "Stage-level output" );
+  add_var( "SOAP-SUDS" , "SS" , "DUR_OBS" , "Observed stage duration (for included epochs)" );
+  add_var( "SOAP-SUDS" , "SS" , "DUR_PRD" , "Predicted stage duration (for included epochs)" );
+  add_var( "SOAP-SUDS" , "SS" , "F1" , "Stage-specific F1" );
+  add_var( "SOAP-SUDS" , "SS" , "PREC" , "Stage-specific precision" );
+  add_var( "SOAP-SUDS" , "SS" , "RECALL" , "Stage-specific recall" );
 
   add_table( "SOAP-SUDS" , "VAR" , "PSC info" );
   add_var( "SOAP-SUDS" , "VAR" , "INC" , "Componeont included" );

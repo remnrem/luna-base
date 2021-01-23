@@ -25,7 +25,10 @@
 #define __SUDS_H__
 
 #include <string>
+
 #include "stats/matrix.h"
+//#include "stats/Eigen/Dense"
+
 #include <vector>
 #include <set>
 #include <map>
@@ -38,6 +41,7 @@ struct edf_t;
 
 struct param_t;
 
+//typedef Eigen::Array<double, 1, Eigen::Dynamic> ArrayXd;
 
 enum suds_stage_t
   {
@@ -83,7 +87,7 @@ struct suds_indiv_t {
   void add( const std::string & id , const lda_posteriors_t & );
 
   // self-classify (which epochs are not self-predicted?)
-  std::vector<bool> self_classify( int * count , const bool verbose = false , Data::Matrix<double> * pp = NULL );
+  std::vector<bool> self_classify( int * count , const bool verbose = false , Data::Matrix<double> *  pp = NULL );
 
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
@@ -492,8 +496,8 @@ public:
   //
   
   static void make01( Data::Matrix<double> & r ) { 
-    const int n = r.dim1();
-    const int ns = r.dim2();
+    const int n = r.rows();
+    const int ns = r.cols();
     for (int i=0;i<n;i++)
       {
 	int m = 0;
@@ -530,7 +534,7 @@ public:
 
   static std::vector<std::string> max( const Data::Matrix<double> & r , const std::vector<std::string> & labels ) {
 
-    const int ne = r.dim1();
+    const int ne = r.rows();
 
     std::vector<std::string> p( ne );
 
