@@ -209,6 +209,87 @@ matslice_t::matslice_t( edf_t & edf ,
 
 
 //
+// eigen_matslice_t : only for equal SR data, returns a single matrix
+//
+
+
+eigen_matslice_t::eigen_matslice_t( edf_t & edf , 
+				    const signal_list_t & signals , 
+				    const interval_t & interval )
+{
+
+  
+  data.resize(0,0);
+  
+  time_points.clear();
+  
+  labels.clear();
+
+  //
+  // Empty?
+  //
+
+  const int ns = signals.size();
+  
+  if ( ns == 0 ) return;
+  
+  if ( interval.empty() ) return;
+  
+  
+  //
+  // Get labels and check SR
+  //
+
+  const int Fs = edf.header.n_samples[ signals(0) ];
+
+  labels.push_back( signals.label(0) );
+  
+  for (int s=1;s<ns;s++)
+    {
+      if ( edf.header.n_samples[ signals(s) ] != Fs )
+	Helper::halt( "unequal sample rates in matslice_t: use RESAMPLE" );
+      labels.push_back( signals.label(s) );
+    }
+
+
+  
+  //
+  // use fixed channel/signal sampling rate (i.e. array can be ragged), and populate time-points
+  //
+
+  std::vector<double> ch1 = edf.fixedrate_signal( interval.start , 
+						  interval.stop , 
+						  signals(0) ,    // first channel
+						  1 ,             // no downsampling
+						  &time_points ,  // get TPs for first channel only
+						  NULL ) ;        // no records
+
+  const int nr = ch1.size();
+
+  // size output matrix, and assign first row:
+  data.resize( nr , ns );
+
+  data.col(0) = Eigen::VectorXd::Map( &ch1[0] , nr );
+  
+    
+  
+  //
+  // get all other channels (w/out time-points)
+  //
+  
+  for (int s=1;s<ns;s++) 
+    {
+      // TODO: add a version of fixedrate_signal() that directly outputs to Eigen matrix class
+      std::vector<double> tmp = edf.fixedrate_signal( interval.start , interval.stop , signals(s) , 1 , NULL , NULL ) ;
+      data.col(s) = Eigen::VectorXd::Map( &tmp[0] , nr );
+    }
+  
+  
+}
+
+
+
+//
 // Non-epoch based slicer
 //
 

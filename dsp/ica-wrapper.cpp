@@ -38,7 +38,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 
   std::string signal_label = param.requires( "sig" );
 
-  std::string component_tag = param.has( "tag" ) ? param.value( "tag" ) : "ICA";
+  std::string component_tag = param.has( "tag" ) ? param.value( "tag" ) : "IC";
 
   bool write_S_matrix = param.has( "file" );
   
@@ -78,80 +78,81 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
   // Fetch sample matrix
   //
   
-  matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
+  eigen_matslice_t mslice( edf , signals , edf.timeline.wholetrace() );
   
   // nb. fastICA() this will modify X/mslice...
-  Data::Matrix<double> & X = mslice.nonconst_data_ref();
-    
+  Eigen::MatrixXd & X = mslice.nonconst_data_ref();
+
+  const int rows = X.rows();
+  const int cols = X.cols();
 
   //
-  // Number of components
+  // Number of components 'nc' parameter
   //
 
-  int compc = param.has( "compc" ) ? param.requires_int( "compc" ) : ns ;
+  int nc = param.has( "nc" ) ? param.requires_int( "nc" ) : ns ;
 
 
   //
-  // ICA
+  // ICA: note, this alters input 'X'
   //
   
-  ica_t ica( X , compc );
+  eigen_ica_t ica( X , nc );
 
 
   //
   // Add new signals
   //
-
+  
   if ( ! do_not_add_channels ) 
     {
-      logger << "  adding " << compc << " new signals to EDF\n";
+      logger << "  adding " << nc << " new signals to EDF:";
     
-      for (int c=0;c<compc;c++)
-	edf.add_signal( component_tag + "_" + Helper::int2str( c+1 ) , sr , *ica.S.col(c).data_pointer() );
-      
+      for (int c=0;c<nc;c++)
+	{
+	  std::vector<double> copy( rows );
+	  Eigen::VectorXd::Map( &copy[0], rows ) = ica.S.col(c);
+	  logger << " " << component_tag + Helper::int2str( c+1 ) ;
+	  edf.add_signal( component_tag + Helper::int2str( c+1 ) , sr , copy );	  
+	}
+      logger << "\n";
     }
- 
+  
   
   
   //
   // Output mixing matrix, etc
   //
 
-  const int rows = X.dim1();
-
-  const int cols = X.dim2();
-
-
-  // K : cols x compc
-  // A : compc x compc
-  // W : compc x compc
+  // K : cols x nc
+  // A : nc x nc
+  // W : nc x nc
   
-  for (int i=0;i<compc;i++)
+  for (int i=0;i<nc;i++)
     {
       writer.level( i+1 , "IC1" );
-      for (int j=0;j<compc;j++)
+      for (int j=0;j<nc;j++)
 	{
 	  writer.level( j+1 , "IC2" );	  
-	  writer.value( "A" , ica.A[i][j] );
-	  writer.value( "W" , ica.W[i][j] );
+	  writer.value( "A" , ica.A(i,j) );
+	  writer.value( "W" , ica.W(i,j) );
 	}
       writer.unlevel( "IC2" );
     }
   writer.unlevel( "IC1" );
 
-
   for (int i=0;i<cols;i++)
     {
       writer.level( signals.label(i) , globals::signal_strat );
-      for (int j=0;j<compc;j++)
+      for (int j=0;j<nc;j++)
 	{
 	  writer.level( j+1 , "IC" );	  
-	  writer.value( "K" , ica.K[i][j] );
+	  writer.value( "K" , ica.K(i,j) );
 	}
       writer.unlevel( "IC" );
     }
   writer.unlevel( globals::signal_strat );
-
+  
 
   //
   // File-based output
@@ -163,11 +164,11 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
       std::string froot = S_matrix_fileroot + "_" ;
       
       std::ofstream S( (froot + "S.txt").c_str() , std::ios::out );
-      for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << "S" << j+1;
+      for (int j=0;j<nc;j++) S << ( j ? "\t" : "" ) << "S" << j+1;
       S << "\n";  
       for (int i=0;i<rows;i++)
 	{
-	  for (int j=0;j<compc;j++) S << ( j ? "\t" : "" ) << ica.S[i][j] ;      
+	  for (int j=0;j<nc;j++) S << ( j ? "\t" : "" ) << ica.S(i,j) ;      
 	  S << "\n";
 	}
       S.close();
@@ -179,7 +180,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 	  F << "\n";
 	  for (int i=0;i<rows;i++)
 	    {
-	      for (int j=0;j<cols;j++) F << ( j ? "\t" : "" ) << X[i][j];
+	      for (int j=0;j<cols;j++) F << ( j ? "\t" : "" ) << X(i,j);
 	      F << "\n";
 	    }
 	  F.close();
@@ -189,31 +190,31 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
       // other matrices
       //
 
-      // K : cols x compc
-      // A : compc x compc
-      // W : compc x compc
+      // K : cols x nc
+      // A : nc x nc
+      // W : nc x nc
       // S : as original data      
       
       std::ofstream K( (froot + "K.txt").c_str() , std::ios::out );
       for (int i=0;i<cols;i++)
 	{
-	  for (int j=0;j<compc;j++) K << ( j ? "\t" : "" ) << ica.K[i][j];
+	  for (int j=0;j<nc;j++) K << ( j ? "\t" : "" ) << ica.K(i,j);
 	  K << "\n";
 	}
       K.close();
       
       std::ofstream W( (froot + "W.txt").c_str() , std::ios::out );
-      for (int i=0;i<compc;i++)
+      for (int i=0;i<nc;i++)
 	{
-	  for (int j=0;j<compc;j++) W << ( j ? "\t" : "" ) << ica.W[i][j];
+	  for (int j=0;j<nc;j++) W << ( j ? "\t" : "" ) << ica.W(i,j);
 	  W << "\n";
 	}
       W.close();
             
       std::ofstream A( (froot + "A.txt").c_str() , std::ios::out );
-      for (int i=0;i<compc;i++)
+      for (int i=0;i<nc;i++)
 	{
-	  for (int j=0;j<compc;j++) A << ( j ? "\t" : "" ) << ica.A[i][j];
+	  for (int j=0;j<nc;j++) A << ( j ? "\t" : "" ) << ica.A(i,j);
 	  A << "\n";
 	}
       A.close();

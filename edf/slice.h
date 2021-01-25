@@ -28,6 +28,7 @@
 #include <string>
 
 #include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 
 struct signal_list_t;
 struct interval_t;
@@ -187,6 +188,55 @@ class matslice_t {
 
   
 };
+
+
+
+class eigen_matslice_t {
+  
+ public:
+  
+  eigen_matslice_t( edf_t & edf , 
+		    const signal_list_t & , 
+		    const interval_t & interval );
+  
+  ~eigen_matslice_t()
+  {
+    clear();      
+  }
+  
+  
+  const Eigen::MatrixXd & data_ref() const { return data; } 
+
+  Eigen::MatrixXd & nonconst_data_ref() { return data; } 
+
+  int size() const { return labels.size(); } 
+  
+  std::string label(const int s) const { return labels[s]; } 
+
+  const std::vector<uint64_t> * ptimepoints() const 
+  { 
+    return &time_points; 
+  }
+
+  void clear()
+  { 
+    data.resize(0,0);
+    labels.clear();
+    time_points.clear();
+  }
+
+ private:
+
+  Eigen::MatrixXd data;  
+
+  std::vector<uint64_t> time_points;
+
+  std::vector<std::string> labels; 
+
+  
+};
+
+
 
 
 

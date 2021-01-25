@@ -814,6 +814,8 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
       else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
+      else if ( is( c, "ADJUST" ) )       proc_adjust( edf , param(c) ); 
+
       else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
       else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
@@ -2494,6 +2496,13 @@ void proc_canonical( edf_t & edf , param_t & param )
       const std::set<std::string> cs = param.strset( "cs" );
       edf.make_canonicals( file, group , &cs );
     }
+}
+
+
+// Adjust signals by other signals (similar to REFERENCE but different syntax)
+void proc_adjust( edf_t & edf , param_t & param )
+{
+  edf.adjust( param );
 }
 
 // Reference tracks

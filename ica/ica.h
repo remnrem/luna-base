@@ -19,50 +19,55 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __ICA_H__
-#define __ICA_H__
+#ifndef __EIGEN_ICA_H__
+#define __EIGEN_ICA_H__
 
-#include "ica/lica_matrix.h"
-#include "ica/lica_fastICA.h"
-
-#include <vector>
-#include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 #include "helper/helper.h"
 
-
-// Notes
-// https://en.wikipedia.org/wiki/FastICA
-// http://research.ics.aalto.fi/ica/book/
-
-// Code here modified from C/C++ implementation of R fastICA package
-// http://tumic.wz.cz/fel/online/libICA/
+// C/C++ & Eigen implementation of the fastICA R package
+// https://cran.r-project.org/web/packages/fastICA/
 
 struct edf_t; 
 struct param_t; 
 
-void ica_wrapper0( edf_t & , param_t & ); 
+void eigen_ica_wrapper0( edf_t & , param_t & ); 
 
-struct ica_t {
+struct eigen_ica_t {
   
-  ica_t( Data::Matrix<double> & X , int compc )
+  eigen_ica_t( Eigen::MatrixXd & X , int compc )
   {        
-    if ( ! proc(X,compc) ) Helper::halt( "problem in ica_t" );    
+    maxit = 200;
+    tol = 0.0001;
+    alpha = 1;
+    row_norm = false;
+    if ( ! proc(X,compc) ) Helper::halt( "problem in eigen_ica_t" );    
   }
-
-  Data::Matrix<double> K;
-  Data::Matrix<double> W;
-  Data::Matrix<double> A;
-  Data::Matrix<double> S;
   
-  bool proc( Data::Matrix<double> & , int compc );
-
-
-  //
-  // Helper functions
-  //
+  Eigen::MatrixXd K;
+  Eigen::MatrixXd W;
+  Eigen::MatrixXd A;
+  Eigen::MatrixXd S;
   
-  static void cpp_svdcmp( Data::Matrix<double> & A, Data::Vector<double> & W, Data::Matrix<double> & V);
-   
+  bool proc( Eigen::MatrixXd & , int compc );
+
+  void fastICA( Eigen::MatrixXd & X , 
+		const int compc , 
+		Eigen::MatrixXd & W , 
+		Eigen::MatrixXd & A , 
+		Eigen::MatrixXd & K , 
+		Eigen::MatrixXd & S ) ;
+
+  Eigen::MatrixXd ica_parallel( const Eigen::MatrixXd & X ,
+				const int nc );
+				
+
+  
+  int    maxit;
+  double tol;
+  int    alpha;
+  bool   row_norm; // standardize input 
+  
 };
 
 
