@@ -25,6 +25,23 @@
 
 #include "miscmath/crandom.h"
 
+
+// nb. using Eigen:::Ref<>
+// for a writable reference:    Eigen::Ref<Eigen::VectorXd> 
+// for a const ref:             const Eigen::Ref<const Eigen::VectorXd> & 
+
+std::vector<double> eigen_ops::copy( const Eigen::VectorXd & e ) 
+{
+  std::vector<double> v( &e[0] , e.data() + e.size() );
+  return v;
+}
+
+std::vector<double> eigen_ops::copy( const Eigen::ArrayXd & e ) 
+{
+  std::vector<double> v( &e[0] , e.data() + e.size() );
+  return v;
+}
+
 void eigen_ops::random_normal( Eigen::MatrixXd & M )
 {
   const int rows = M.rows();
@@ -34,7 +51,7 @@ void eigen_ops::random_normal( Eigen::MatrixXd & M )
       M(r,c) = Statistics::ltqnorm( CRandom::rand() );
 }
 
-void eigen_ops::scale( Eigen::MatrixXd & M , bool normalize )
+void eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
 {
   const int N = M.rows();
 
@@ -53,151 +70,170 @@ void eigen_ops::scale( Eigen::MatrixXd & M , bool normalize )
 }
 
 
-/* 
-
-void eigen_ops::zeroize( Eigen::MatrixXd & M , const int rows , const int cols )
+double eigen_ops::sdev( const Eigen::VectorXd & x )
 {
-  M = Eigen::MatrixXd::Zero( rows , cols );
+  const int N = x.size();
+  double mean = x.mean();
+  return sqrt( ( x.array() - mean ).square().sum()/(N-1) );
 }
 
-void eigen_ops::random_normal( Eigen::MatrixXd & M , const int rows , const int cols )
+
+
+// unit_scale, specifying min/max and truncating at 0 and 1
+Eigen::VectorXd eigen_ops::unit_scale( const Eigen::VectorXd & x , double xmin , double xmax )
 {
-  M = Eigen::MatrixXd::Random( rows , cols );
+  const int n = x.size();
+  if ( n == 0 ) return x;
+  if ( xmin >= xmax ) return x;
   
+  Eigen::VectorXd r( n );
+  for (int i=0;i<n;i++) 
+    {
+      if ( x[i] <= xmin ) r[i] = 0;
+      else if ( x[i] >= xmax ) r[i] = 1;
+      else r[i] = ( x[i] - xmin ) / ( xmax - xmin );
+    }
+  return r;
+
+}
+
+
+Eigen::VectorXd eigen_ops::unit_scale( const Eigen::VectorXd & x )
+{
+
+  const int n = x.size();
+  if ( n == 0 ) return x;
+
+  double xmin = x[0] , xmax = x[0];
+  for (int i=0;i<n;i++)
+    {
+      if ( x[i] < xmin ) xmin = x[i];
+      else if ( x[i] > xmax ) xmax = x[i];
+    }  
+
+  if ( xmin == xmax ) return x;
+
+  Eigen::VectorXd r( n );
+  for (int i=0;i<n;i++) r[i] = ( x[i] - xmin ) / ( xmax - xmin );
+  return r;
+}
+
+
+
+// // apply function fx() with parameter param, to each matrix element
+
+// void eigen_ops::apply_fx( Eigen::MatrixXd & M, double (*fx)(double,double), double param)
+// {
+//   const int rows = M.rows();
+//   const int cols = M.cols();  
+//   for (int i=0; i<rows; i++)
+//     for (int j=0; j<cols; j++)
+//       M[i][j] = (*fx)(M[i][j], param);
+// }
+
+
+// // row means
+// void eigen_ops::mat_mean_rows( Eigen::MatrixXd & M, Eigen::ArrayXd & v)
+// {
+
+//   const int rows = M.dim1();
+//   const int cols = M.dim2();
   
-}
-
-void eigen_ops::vect_zeroize( Eigen::ArrayXd & v , const int cols )
-{
-  v = Eigen::ArrayXd::Zero( cols );
-}
-
-
-// apply function fx() with parameter param, to each array element
-
-void eigen_ops::apply_fx( Eigen::ArrayXd & v, double (*fx)(double,double), double param)
-{
-  const int n = v.size();
-
-  for (int i=0; i<n; i++)
-    v[i] = (*fx)(v[i], param);
-
-}
-
-// apply function fx() with parameter param, to each matrix element
-
-void eigen_ops::apply_fx( Eigen::MatrixXd & M, double (*fx)(double,double), double param)
-{
-  const int rows = M.rows();
-  const int cols = M.cols();  
-  for (int i=0; i<rows; i++)
-    for (int j=0; j<cols; j++)
-      M[i][j] = (*fx)(M[i][j], param);
-}
-
-
-// row means
-void eigen_ops::mat_mean_rows( Eigen::MatrixXd & M, Eigen::ArrayXd & v)
-{
-
-  const int rows = M.dim1();
-  const int cols = M.dim2();
+//   double sum;
   
-  double sum;
-  
-  for (int i=0; i< rows; i++) {
-    sum = 0;
-    for (int j=0; j<cols; j++)
-      sum += M[i][j];
-    v[i] = sum / cols;
-  }
+//   for (int i=0; i< rows; i++) {
+//     sum = 0;
+//     for (int j=0; j<cols; j++)
+//       sum += M[i][j];
+//     v[i] = sum / cols;
+//   }
 
-}
+// }
 
- // * Returns the maximal element on the diagonal
- // * of the matrix M.
+//  // * Returns the maximal element on the diagonal
+//  // * of the matrix M.
 
-double eigen_ops::mat_max_diag( Eigen::MatrixXd & M )
-{
+// double eigen_ops::mat_max_diag( Eigen::MatrixXd & M )
+// {
 
-  const int rows = M.dim1();
-  double max = M[0][0];
-  for (int i=1; i<rows; i++)
-    if (M[i][i] > max)
-      max = M[i][i];
-  return max;
-}
+//   const int rows = M.dim1();
+//   double max = M[0][0];
+//   for (int i=1; i<rows; i++)
+//     if (M[i][i] > max)
+//       max = M[i][i];
+//   return max;
+// }
 
- // Returns the maximal absolute element on the diagonal
- // of the matrix M.
+//  // Returns the maximal absolute element on the diagonal
+//  // of the matrix M.
  
-double eigen_ops::mat_max_abs_diag(Eigen::MatrixXd & M )
-{
-  const int rows = M.dim1();
-  double max = fabs( M[0][0] ) ;
-  for (int i=1; i<rows; i++)
-    if ( fabs( M[i][i] ) > max)
-      max = fabs( M[i][i] );
-  return max;
-}
+// double eigen_ops::mat_max_abs_diag(Eigen::MatrixXd & M )
+// {
+//   const int rows = M.dim1();
+//   double max = fabs( M[0][0] ) ;
+//   for (int i=1; i<rows; i++)
+//     if ( fabs( M[i][i] ) > max)
+//       max = fabs( M[i][i] );
+//   return max;
+// }
 
-// Creates a diagonal matrix from vector v.
+// // Creates a diagonal matrix from vector v.
  
-void eigen_ops::mat_diag( Eigen::ArrayXd & v , Eigen::MatrixXd & R )
-{
-  const int n = v.size();
-  mat_zeroize( R );
-  for (int i=0; i<n; i++)
-    R[i][i] = v[i];
-}
+// void eigen_ops::mat_diag( Eigen::ArrayXd & v , Eigen::MatrixXd & R )
+// {
+//   const int n = v.size();
+//   mat_zeroize( R );
+//   for (int i=0; i<n; i++)
+//     R[i][i] = v[i];
+// }
 
-// Transponse matrix M.
+// // Transponse matrix M.
 
-void eigen_ops::mat_transpose( Eigen::MatrixXd & M , Eigen::MatrixXd & R )
-{
-  const int rows = M.dim1();
-  const int cols = M.dim2();
-  for (int i=0; i<rows; i++)
-    for(int j=0; j<cols; j++)
-      R[j][i] = M[i][j]; 
-}
+// void eigen_ops::mat_transpose( Eigen::MatrixXd & M , Eigen::MatrixXd & R )
+// {
+//   const int rows = M.dim1();
+//   const int cols = M.dim2();
+//   for (int i=0; i<rows; i++)
+//     for(int j=0; j<cols; j++)
+//       R[j][i] = M[i][j]; 
+// }
 
-// Centers mat M. (Subtracts the mean from every column)
+// // Centers mat M. (Subtracts the mean from every column)
 
-void eigen_ops::mat_center( Eigen::MatrixXd & M )
-{
-  //
-}
+// void eigen_ops::mat_center( Eigen::MatrixXd & M )
+// {
+//   //
+// }
 
-void eigen_ops::mat_center( Eigen::MatrixXd & M , Eigen::ArrayXd & means )
-{
+// void eigen_ops::mat_center( Eigen::MatrixXd & M , Eigen::ArrayXd & means )
+// {
 
-  // int rows = M.dim1();
-  // int cols = M.dim2();
+//   // int rows = M.dim1();
+//   // int cols = M.dim2();
   
-  // vect_zeroize( means, cols );
+//   // vect_zeroize( means, cols );
   
-  // for (int i=0; i<rows; i++)
-  //   for(int j=0; j<cols; j++)
-  //     means[j] += M[i][j];		
-  // for (int i=0; i<cols; i++)
-  //   means[i] /= rows; 
-  // for (int i=0; i<rows; i++)
-  //   for(int j=0; j<cols; j++)
-  //     M[i][j] -= means[j];	
-}
+//   // for (int i=0; i<rows; i++)
+//   //   for(int j=0; j<cols; j++)
+//   //     means[j] += M[i][j];		
+//   // for (int i=0; i<cols; i++)
+//   //   means[i] /= rows; 
+//   // for (int i=0; i<rows; i++)
+//   //   for(int j=0; j<cols; j++)
+//   //     M[i][j] -= means[j];	
+// }
 
 
-void eigen_op::mat_decenter( Eigen::MatrixXd & M , Eigen::ArrayXd &  means )
-{
+// void eigen_op::mat_decenter( Eigen::MatrixXd & M , Eigen::ArrayXd &  means )
+// {
 
-  const int rows = M.dim1();
-  const int cols = M.dim2();
+//   const int rows = M.dim1();
+//   const int cols = M.dim2();
   
-  for(int i=0; i<rows; i++)
-    for(int j=0; j<cols; j++)
-      M[i][j] += means[j]; 
-}
+//   for(int i=0; i<rows; i++)
+//     for(int j=0; j<cols; j++)
+//       M[i][j] += means[j]; 
+// }
 
 
-*/
+

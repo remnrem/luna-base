@@ -28,6 +28,7 @@ struct param_t;
 
 #include <vector>
 #include <stdint.h>
+#include "stats/Eigen/Dense"
 
 namespace dsptools 
 {  
@@ -38,6 +39,8 @@ namespace dsptools
   std::vector<double> TV1D_denoise_copy(const std::vector<double> & input, const double lambda);
 
   void TV1D_denoise(std::vector<double> & input, const double lambda);
+
+  void TV1D_denoise( Eigen::Ref<Eigen::VectorXd> input , const double lambda);
   
   // alternate method, also w/ sparsity + smoothness
   void fused_lasso(double* input, double* output, const int width, const double lambda, const double mu);

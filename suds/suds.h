@@ -26,8 +26,7 @@
 
 #include <string>
 
-#include "stats/matrix.h"
-//#include "stats/Eigen/Dense"
+#include "stats/Eigen/Dense"
 
 #include <vector>
 #include <set>
@@ -73,9 +72,20 @@ struct suds_indiv_t {
   
   // write trainers to file
   void write( edf_t & edf , param_t & param ) const;
+  void binary_write( edf_t & edf , param_t & param ) const;
 
   // read trainer data from disk
   void reload( const std::string & filename , bool load_rawx = false );
+  void binary_reload( const std::string & filename , bool load_rawx = false );
+
+  // read/write helpers
+  inline static void bwrite( std::ofstream & O , const std::string & s );
+  inline static void bwrite( std::ofstream & O , int );
+  inline static void bwrite( std::ofstream & O , double );
+
+  inline static std::string bread_str( std::ifstream & );
+  inline static int bread_int( std::ifstream & );
+  inline static double bread_dbl( std::ifstream & );
 
   // fit LDA, io.e. after reloading U
   void fit_lda();
@@ -87,27 +97,27 @@ struct suds_indiv_t {
   void add( const std::string & id , const lda_posteriors_t & );
 
   // self-classify (which epochs are not self-predicted?)
-  std::vector<bool> self_classify( int * count , const bool verbose = false , Data::Matrix<double> *  pp = NULL );
+  std::vector<bool> self_classify( int * count , const bool verbose = false , Eigen::MatrixXd *  pp = NULL );
 
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
-  void summarize_stage_durations( const Data::Matrix<double> & , const std::vector<std::string> & , int , double );
+  void summarize_stage_durations( const Eigen::MatrixXd & , const std::vector<std::string> & , int , double );
   
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
-  void summarize_epochs( const Data::Matrix<double> & , 
+  void summarize_epochs( const Eigen::MatrixXd & , 
 			 const std::vector<std::string> & , 
 			 int , edf_t & );
   
   // write to an .annot
   void write_annots( const std::string & folder , const std::string & aname ,
-		     const Data::Matrix<double> & , const std::vector<std::string> & , int , edf_t & );
+		     const Eigen::MatrixXd & , const std::vector<std::string> & , int , edf_t & );
 
   // output obs vs prd kappas (5 and 3 level)
   void summarize_kappa( const std::vector<std::string> & prd , const bool to_console = false );
 
   // get KL weights across trainers
-  Data::Vector<double> wgt_kl() const;
+  Eigen::ArrayXd wgt_kl() const;
 
   // individual ID
   std::string id;
@@ -127,19 +137,19 @@ struct suds_indiv_t {
   
   // spectral data: only loaded for 'weight trainers'
   // not needed to be reloaded for standard trainers
-  Data::Matrix<double> PSD;
+  Eigen::MatrixXd PSD;
   
   // SVD
-  Data::Matrix<double> U;  // based on own data
-  Data::Matrix<double> U_projected; // can be projected into this space
-  Data::Vector<double> W;
-  Data::Matrix<double> V;
+  Eigen::MatrixXd U;  // based on own data
+  Eigen::MatrixXd U_projected; // can be projected into this space
+  Eigen::ArrayXd W;
+  Eigen::MatrixXd V;
 
   // Hjorth (mean/variance, per signal)
-  Data::Vector<double> mean_h2, sd_h2;
-  Data::Vector<double> mean_h3, sd_h3;
+  Eigen::Array<double, 1, Eigen::Dynamic> mean_h2, sd_h2;
+  Eigen::Array<double, 1, Eigen::Dynamic> mean_h3, sd_h3;
   // for targets only, keep epoch level Hjorths (epoch x signal)
-  Data::Matrix<double> h2, h3;
+  Eigen::MatrixXd h2, h3;
 
   // LDA
   std::vector<std::string> y;
@@ -162,7 +172,7 @@ struct suds_indiv_t {
   // target predictions/staging
   //
   
-  std::map<std::string,Data::Matrix<double> > target_posteriors;
+  std::map<std::string,Eigen::MatrixXd > target_posteriors;
   std::map<std::string,std::vector<suds_stage_t> > target_predictions;
   
   bool operator<( const suds_indiv_t & rhs ) const {
@@ -174,12 +184,12 @@ struct suds_indiv_t {
 
 struct suds_t { 
 
-  //  friend struct suds_indiv_t;
-    
-  static void attach_db( const std::string & , bool );
+  static void attach_db( const std::string & , bool , bool );
   
-  static void score( edf_t & edf , param_t & param );
+  // convert from text --> binary format for a whole library
+  static void copy_db( const std::string & , const std::string & );
 
+  static void score( edf_t & edf , param_t & param );
 
   static void set_options( param_t & param )
   {
@@ -495,7 +505,7 @@ public:
   // Misc helpers 
   //
   
-  static void make01( Data::Matrix<double> & r ) { 
+  static void make01( Eigen::MatrixXd & r ) { 
     const int n = r.rows();
     const int ns = r.cols();
     for (int i=0;i<n;i++)
@@ -511,14 +521,14 @@ public:
   }
 
 
-  static double maxpp( const Data::Vector<double> & r ) { 
+  static double maxpp( const Eigen::ArrayXd & r ) { 
     double mx = r[0];    
     for (int j=1;j<suds_t::n_stages;j++) 
       if ( r[j] > mx ) mx = r[j] ;
     return mx;
   }
 
-  static std::string max( const Data::Vector<double> & r , const std::vector<std::string> & labels ) { 
+  static std::string max_inrow( const Eigen::ArrayXd & r , const std::vector<std::string> & labels ) { 
     const int ns = r.size();
     if ( ns != labels.size() )
       Helper::halt( "internal error, max()" );
@@ -532,14 +542,14 @@ public:
   }
 
 
-  static std::vector<std::string> max( const Data::Matrix<double> & r , const std::vector<std::string> & labels ) {
+  static std::vector<std::string> max( const Eigen::MatrixXd & r , const std::vector<std::string> & labels ) {
 
     const int ne = r.rows();
 
     std::vector<std::string> p( ne );
 
     for (int i=0; i<ne; i++) 
-      p[i] = max( r.row(i) , labels );
+      p[i] = max_inrow( r.row(i) , labels );
 
     return p;
   }
@@ -646,7 +656,7 @@ public:
 								    const bool print = false );
 
   static void trainer_1x1_evals( const suds_indiv_t & , 
-				 const Data::Vector<double> & wgt , 
+				 const Eigen::ArrayXd & wgt , 
 				 const std::vector<std::string> & );
     
 };

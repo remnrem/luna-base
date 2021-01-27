@@ -31,9 +31,9 @@ extern writer_t writer;
 
 extern logger_t logger;
 
+
 int main(int argc , char ** argv )
 {
-
 
   //
   // display version info?
@@ -51,6 +51,8 @@ int main(int argc , char ** argv )
   //
   // initiate global defintions
   //
+
+  std::set_new_handler(NoMem);
 
   global.init_defs();
 
@@ -2540,5 +2542,18 @@ std::string luna_base_version()
   ss << "luna-base version " << globals::version << " (release date " << globals::date << ")\n";
   ss << "luna-base build date/time " << __DATE__ << " " << __TIME__ << "\n";
   return ss.str();
+}
+
+
+void NoMem()
+{
+  std::cerr << "*****************************************************\n"
+	    << "* FATAL ERROR    Exhausted system memory            *\n"
+	    << "*                                                   *\n"
+	    << "* You need a smaller dataset or a bigger computer...*\n"
+	    << "*                                                   *\n"
+	    << "* Forced exit now...                                *\n"
+	    << "*****************************************************\n\n";
+  std::exit(1);
 }
 

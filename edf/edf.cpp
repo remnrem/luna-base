@@ -4367,7 +4367,7 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
 
 
 
-void edf_t::guess_canonicals( param_t & param )
+void edf_t::guess_canonicals( param_t & param , bool make_signals )
 {
 
   // get available signals
@@ -4478,6 +4478,7 @@ void edf_t::guess_canonicals( param_t & param )
       return;
     }
       
+
   //
   // Sample rate (default 100 Hz)
   //
@@ -4500,14 +4501,16 @@ void edf_t::guess_canonicals( param_t & param )
   if ( refstr != "." ) ref = header.signal_list( refstr );
 
   logger << "  creating csEEG using signal [" << sigstr << "] and reference [" << refstr << "]\n";
+
   
   //
   // Rerefence and make canonical signal
   //
   
   std::string canon = "csEEG";
-  
-  reference( sig , ref , true , canon , sr );
+
+  if ( make_signals ) 
+    reference( sig , ref , true , canon , sr );
   
   signal_list_t canonical_signal = header.signal_list( canon );
 
@@ -4522,15 +4525,18 @@ void edf_t::guess_canonicals( param_t & param )
   
   if ( canon == "csECG" ) units = "mV" ;
   
-  if ( units == "uV" || units == "mV" ) 
-    rescale( canonical_signal(0) , units );
-    
+  if ( make_signals ) 
+    if ( units == "uV" || units == "mV" ) 
+      rescale( canonical_signal(0) , units );
+  
+  
+
   //
   // output
   //
-
+  
   writer.level( canon , "CS" );
-
+  
   writer.value( "DEFINED" , 1 );
   writer.value( "SIG" , sigstr );
   writer.value( "REF" , refstr );
@@ -4542,7 +4548,7 @@ void edf_t::guess_canonicals( param_t & param )
 }
 
 
-void edf_t::make_canonicals( const std::string & file0, const std::string &  group , const std::set<std::string> * cs )
+void edf_t::make_canonicals( const std::string & file0, const std::string &  group , bool make_signals , const std::set<std::string> * cs )
 {
   
   std::string file = Helper::expand( file0 );
@@ -4711,11 +4717,13 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  
 	  signal_list_t sig = header.signal_list( sigstr );
 
+
 	  //
 	  // Rerefence and make canonical signal
 	  //
 
-	  reference( sig , ref , true , canon , sr );
+	  if ( make_signals ) 
+	    reference( sig , ref , true , canon , sr );
 	  
 	  signal_list_t canonical_signal = header.signal_list( canon );
 
@@ -4732,9 +4740,10 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  
 	  if ( canon == "csECG" ) units = "mV" ;
 	  
-	  if ( units == "uV" || units == "mV" ) 
-	    rescale(  canonical_signal(0) , units );
-
+	  if ( make_signals ) 
+	    if ( units == "uV" || units == "mV" ) 
+	      rescale(  canonical_signal(0) , units );
+	  
       
 	  //
 	  // output

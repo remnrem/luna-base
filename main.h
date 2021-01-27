@@ -29,9 +29,12 @@
 #include <set>
 #include <sstream>
 #include <iostream>
+#include <new>
 
 class param_t;
 class cmd_t;
+
+void NoMem();
 
 void proc_dummy( const std::string & , const std::string & p2 );
 void proc_eval_tester( const bool );

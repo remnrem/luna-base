@@ -24,12 +24,25 @@
 #define __EIGEN_OPS_H__
 
 #include "stats/Eigen/Dense"
+#include <vector>
 
 namespace eigen_ops { 
 
   void random_normal( Eigen::MatrixXd & m );  
 
-  void scale( Eigen::MatrixXd & m , bool );  
+  void scale( Eigen::Ref<Eigen::MatrixXd> m , bool );  
+  //  void scale( Eigen::Ref<Eigen::VectorXd> m , bool );  
+
+  double sdev( const Eigen::VectorXd & x );
+
+
+  Eigen::VectorXd unit_scale( const Eigen::VectorXd & x , double xmin , double xmax );
+
+  Eigen::VectorXd unit_scale( const Eigen::VectorXd & x );
+
+  std::vector<double> copy( const Eigen::VectorXd & e );
+
+  std::vector<double> copy( const Eigen::ArrayXd & e );
   
 }
 

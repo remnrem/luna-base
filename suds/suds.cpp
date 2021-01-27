@@ -38,9 +38,9 @@
 
 #include "dirent.h"
 
-#include "stats/matrix.h"
-#include "stats/statistics.h"
+#include "stats/eigen_ops.h"
 #include "stats/lda.h"
+#include "stats/statistics.h"
 #include "miscmath/miscmath.h"
 
 #include "edf/edf.h"
@@ -160,12 +160,11 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
   int good_epochs = 0;
 
-
   //
   // fit LDA, and extract posteriors (pp)
   //
 
-  Data::Matrix<double> pp;
+  Eigen::MatrixXd pp;
 
   self_classify( &good_epochs , true , &pp );
 
@@ -175,6 +174,7 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   //
 
   const double epoch_sec = edf.timeline.epoch_length();
+
   const int ne_all = edf.timeline.num_epochs();
 
   std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
@@ -214,13 +214,16 @@ void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
   // only include recordings that have all five/three stages included  
   if ( n_unique_stages != suds_t::n_stages ) return;
   
-  // save to disk
-  write( edf , param ); 
+  // save to disk: text or binary format?
+  if ( param.has( "text" ) )
+    write( edf , param ); 
+  else
+    binary_write( edf , param ); 
 
 }
 
 
-std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose , Data::Matrix<double> * pp )
+std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose , Eigen::MatrixXd * pp )
 {
 
   if ( ! trainer )
@@ -239,10 +242,10 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
   // get predictions
   //
 
-  lda_posteriors_t prediction = lda_t::predict( model , Data::mat2eig( U )  );
+  lda_posteriors_t prediction = lda_t::predict( model , U );
 
   // save posteriors?
-  if ( pp != NULL ) *pp = Data::eig2mat( prediction.pp ) ;
+  if ( pp != NULL ) *pp = prediction.pp ;
 
   double kappa = MiscMath::kappa( prediction.cl , y , suds_t::str( SUDS_UNKNOWN )  );
 
@@ -303,10 +306,6 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
 	}
     }
    
-  // logger << "  self-classification yields " << okay << " of " << nve << " epochs\n";
-  // logger << "\n  Confusion matrix: " << suds_t::n_stages << "-level classification: kappa = " << kappa << "\n";
-  // suds_t::tabulate(  prediction.cl , y , true );
-
   if ( count != NULL ) *count = okay;
 
   return included;
@@ -371,12 +370,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   const int ne = edf.timeline.first_epoch();
 
-  // nb.  below:
-  //   ne   total number of epochs
-  //   nge  num of epochs with 'valid' staging (i.e. no UNKNOWN, etc)
-  //   nve  of nge, number that are a) not statistical outliers for 1+ PSC [ stored in output ]
+  // nb. below:
+  //
+  //   ne     total number of epochs
+  //
+  //   nge    num of epochs with 'valid' staging (i.e. no UNKNOWN, etc)
+  //
+  //   nve    of nge, number that are a) not statistical outliers for 1+ PSC [ stored in output ]
   //                and optionally, b) correctly self-classified 
 								      
+
   //
   // PSD
   //
@@ -503,7 +506,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
 
   std::vector<double> frq;
-  Data::Matrix<double> R; // --> B, raw power (PSD is 10log10(R))
+  Eigen::MatrixXd R; // --> B, raw power (PSD is 10log10(R))
   
   //
   // iterate over (retained) epochs
@@ -597,8 +600,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	  double activity = 0 , mobility = 0 , complexity = 0;
 	  MiscMath::hjorth( d , &activity , &mobility , &complexity );
-	  h2[en_good][s] = mobility ;
-	  h3[en_good][s] = complexity ;
+	  h2(en_good,s) = mobility ;
+	  h3(en_good,s) = complexity ;
 	  
 	  
 	} // next signal
@@ -636,7 +639,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // Collapse PSD to bands instead:  
   //
 
-  Data::Matrix<double> B;
+  Eigen::MatrixXd B;
   
   if ( suds_t::use_bands )
     {
@@ -659,7 +662,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       if ( has_slow ) ++nbands;
       if ( has_gamma ) ++nbands;      
 
-      B.resize( nge , nbands );
+      B = Eigen::MatrixXd::Zero( nge , nbands );
 
       const int ncol = frq.size();
 
@@ -690,7 +693,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( suds_t::standardize_psd )
     {
       logger << "  standardizing PSD\n";
-      Statistics::standardize( PSD );
+      eigen_ops::scale( PSD , true );
     }
   
 
@@ -698,23 +701,22 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // Get PSC initially (we look for outliers and then remove epochs, and redo the SVD)
   //
 
-  // mean-center columns
+  // mean-centre columns if not already done via standardization
   
-  U = PSD;
-  
-  Statistics::mean_center_cols( U );
-  
+  if ( ! suds_t::standardize_psd )
+    eigen_ops::scale( U , false );
+
+  //
   // SVD
+  //
+
+  // W.resize( nbins ); 
+  // V.resize( nbins , nbins );
   
-  W.clear(); V.clear();
-  W.resize( nbins ); 
-  V.resize( nbins , nbins );
-  
-  bool okay = Statistics::svdcmp( U , W , V );
-  if ( ! okay ) Helper::halt( "problem with SVD" );
-  
-  int rank = Statistics::orderSVD( U , W , V );
-  if ( rank == 0 ) Helper::halt( "problem with input data, rank 0" );
+  Eigen::BDCSVD<Eigen::MatrixXd> svd( PSD , Eigen::ComputeThinU | Eigen::ComputeThinV );
+  U = svd.matrixU();
+  V = svd.matrixV();
+  W = svd.singularValues();
   
   //
   // Outliers/smoothing
@@ -806,8 +808,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   nve = included;
 
-  Data::Matrix<double> PSD2 = PSD;
-  PSD.clear();
+  Eigen::MatrixXd PSD2 = PSD;
   PSD.resize( nve , nbins );
   std::vector<int> epochs2 = epochs;
   epochs.clear();
@@ -852,10 +853,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
       // and make as log
       int nbands = B.cols();
-      Data::Matrix<double> B2 = B;
-      B.clear();
+      Eigen::MatrixXd B2 = B;      
       B.resize( nve , nbands );
-
+      
       int r = 0;
       for (int i=0;i<B2.rows() ; i++)
 	{      
@@ -873,10 +873,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // splice out bad epochs for Hjorth parameters
   //
   
-  Data::Matrix<double> hh2 = h2;
-  Data::Matrix<double> hh3 = h3;
-  h2.clear(); h3.clear();
-  h2.resize( nve , ns ); h3.resize( nve , ns );
+  Eigen::MatrixXd hh2 = h2;
+  Eigen::MatrixXd hh3 = h3;
+  h2.resize( nve , ns ); 
+  h3.resize( nve , ns );
 
   for (int s=0;s<ns;s++)
     {
@@ -899,14 +899,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
       logger << "  re-standardizing PSD after removing bad epochs\n";
 
-      Statistics::standardize( PSD );
-
-      if ( suds_t::use_bands ) Statistics::standardize( B );      
+      eigen_ops::scale( PSD , true );
+      
+      if ( suds_t::use_bands ) eigen_ops::scale( B , true );      
     }
   else // just ensure we mean-center in any case
     {
       // mean-center columns (PSD)  
-      Statistics::mean_center_cols( PSD );
+      eigen_ops::scale( PSD , false );
+      
+      if ( suds_t::use_bands ) eigen_ops::scale( B , false );
       
     }
 
@@ -916,22 +918,14 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // Get PSC (post outlier removal)
   //
 
-  // copy to U
-  
-  U  = PSD;
-  
-  // get PSCs
-  
-  W.clear(); V.clear();
-  W.resize( nbins ); 
-  V.resize( nbins , nbins );
-  
-  okay = Statistics::svdcmp( U , W , V );
-  if ( ! okay ) Helper::halt( "problem with SVD" );
-  
-  rank = Statistics::orderSVD( U , W , V );
-  if ( rank == 0 ) Helper::halt( "problem with input data, rank 0" );
+  // W.resize( nbins ); 
+  // V.resize( nbins , nbins );
 
+  Eigen::BDCSVD<Eigen::MatrixXd> svd2( PSD , Eigen::ComputeThinU | Eigen::ComputeThinV );
+  U = svd2.matrixU();
+  V = svd2.matrixV();
+  W = svd2.singularValues();
+  
 
   //
   // Standardize PSC 
@@ -940,7 +934,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( suds_t::standardize_psc )
     {
       logger << "  standardizing PSC\n";
-      Statistics::standardize( U );
+      eigen_ops::scale( U , true );
     }  
 
   
@@ -951,14 +945,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( suds_t::denoise_fac > 0 ) 
     {      
       logger << "  smoothing PSCs lambda=" << suds_t::denoise_fac << " * SD\n";
-
+      
       for (int j=0;j<nc;j++)
 	{
-	  std::vector<double> * col = U.col_nonconst_pointer(j)->data_nonconst_pointer();
-	  double sd = suds_t::standardize_psc ? 1 : MiscMath::sdev( *col );
-	  double lambda = suds_t::denoise_fac * sd;
-	  //logger << "  smoothing PSC" << j+1 << " with lambda=" << suds_t::denoise_fac << " * " << sd << " = " << lambda << "\n";
-	  dsptools::TV1D_denoise( *col , lambda );
+	  //std::vector<double> * col = U.col_nonconst_pointer(j)->data_nonconst_pointer();
+	  double sd = suds_t::standardize_psc ? 1 : eigen_ops::sdev( U.col(j) );
+	  double lambda = suds_t::denoise_fac * sd;	  
+	  dsptools::TV1D_denoise( U.col(j) , lambda );
 	}
       
       if ( suds_t::use_bands )
@@ -966,10 +959,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  int nbands = B.cols();
 	  for (int j=0; j<nbands; j++)
 	    {
-	      std::vector<double> * col = B.col_nonconst_pointer(j)->data_nonconst_pointer();
-	      double sd = MiscMath::sdev( *col );
+	      //std::vector<double> * col = B.col_nonconst_pointer(j)->data_nonconst_pointer();
+	      double sd = eigen_ops::sdev( B.col(j) );
 	      double lambda = suds_t::denoise_fac * sd;
-	      dsptools::TV1D_denoise( *col , lambda );
+	      dsptools::TV1D_denoise( B.col(j) , lambda );
 	    }
 	  
 	}
@@ -1000,7 +993,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       std::set<int> incl_comp;
       for (int j=0;j<nc;j++)
 	{	  
-	  double pv = Statistics::anova( ss_str  ,  Statistics::standardize( U.col(j) ) );
+	  // standardize column
+	  Eigen::VectorXd c = U.col(j);
+	  eigen_ops::scale( c , true );
+	  double pv = Statistics::anova( ss_str  , eigen_ops::copy( c ) );
 	  if ( pv >= 0 && pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
 	  writer.level( "PSC_" + Helper::int2str( j+1 ) , "VAR");
 	  writer.value( "PV", pv );
@@ -1024,12 +1020,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  
 	  for (int j=0;j< nbands ;j++)
 	    {	      
-
-	      const Data::Vector<double> & V = B.col(j);
+	      
+	      Eigen::VectorXd c = B.col(j);
 	      
 	      if ( 1 ) // no variance check here now (might need to add back in)
 		{
-		  double pv = Statistics::anova( ss_str  ,  Statistics::standardize( V ) );
+		  eigen_ops::scale( c , true );
+		  double pv = Statistics::anova( ss_str  , eigen_ops::copy( c ) );
 		  writer.level( bands[j] , "VAR" );
 		  writer.value( "PV" , pv  );
 		  writer.value( "INC" , pv >= 0 && pv <  suds_t::required_comp_p ); 
@@ -1061,14 +1058,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       //
       // and prune U and V down here
       //
-
 	  
       const int nc2 = incl_comp.size();
       std::vector<bool> incl( nc );
       for (int j=0;j<nc;j++) incl[j] = incl_comp.find( j ) != incl_comp.end();
       
-      Data::Matrix<double> U2 = U;
-      U.clear();
+      Eigen::MatrixXd U2 = U;
       U.resize( nve , nc2 );
       for (int i=0;i<nve;i++)
 	{
@@ -1077,15 +1072,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    if ( incl[j] ) U(i,cc++) = U2(i,j);
 	}
       
-      Data::Vector<double> W2 = W;
-      W.clear();
+      Eigen::ArrayXd W2 = W;
       W.resize( nc2 );
       int cc = 0;
       for (int j=0;j<nc;j++)
 	if ( incl[j] ) W[ cc++ ] = W2[ j ];
       
-      Data::Matrix<double> VV = V;
-      V.clear();
+      Eigen::MatrixXd VV = V;
       V.resize( VV.rows() , nc2 );
       for (int i=0;i<VV.rows();i++)
 	{
@@ -1112,16 +1105,15 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   if ( U.cols() != nc )
     {
-      Data::Matrix<double> U2 = U;
-      U.clear();
+      Eigen::MatrixXd U2 = U;
       U.resize( nve , nc );
       for (int i=0;i<nve;i++)
 	for (int j=0;j<nc;j++)
 	  U(i,j) = U2(i,j);
       
-      W.resize( nc );
-      Data::Matrix<double> VV = V;
-      V.clear();
+      W.conservativeResize( nc );
+      
+      Eigen::MatrixXd VV = V;
       V.resize( VV.rows() , nc );
       for (int i=0;i<VV.rows();i++)
 	for (int j=0;j<nc;j++)
@@ -1136,7 +1128,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( suds_t::standardize_psc )
     {
       logger << "  re-standardizing PSC\n";
-      Statistics::standardize( U );
+      eigen_ops::scale( U , true );
     }  
     
 
@@ -1181,16 +1173,15 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
       
       // fit based on PSC
-      lda_t lda1( y , Data::mat2eig( U )  );      
+      lda_t lda1( y , U );      
       lda_model_t m1 = lda1.fit( suds_t::flat_priors );
-      lda_posteriors_t prediction1 = lda_t::predict( m1 , Data::mat2eig( U )  );
+      lda_posteriors_t prediction1 = lda_t::predict( m1 , U );
       double kappa1 = MiscMath::kappa( prediction1.cl , y , suds_t::str( SUDS_UNKNOWN ) );
-
       
       // fit based on band power
-      lda_t lda2( y , Data::mat2eig( B ) );
+      lda_t lda2( y , B );
       lda_model_t m2 = lda2.fit( suds_t::flat_priors );
-      lda_posteriors_t prediction2 = lda_t::predict( m2 , Data::mat2eig( B )  );
+      lda_posteriors_t prediction2 = lda_t::predict( m2 , B );
       double kappa2 = MiscMath::kappa( prediction2.cl , y , suds_t::str( SUDS_UNKNOWN ) );
 
       writer.value( "K_PSC" , kappa1 );
@@ -1268,12 +1259,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       //   U  PSD  epochs  y  h2  h3
       
-      Data::Matrix<double> UU = U;
-      U.clear();
+      Eigen::MatrixXd UU = U;      
       U.resize( nve2 , nc );      
 
-      Data::Matrix<double> PSD2 = PSD;
-      PSD.clear();
+      Eigen::MatrixXd PSD2 = PSD;
       PSD.resize( nve2 , nbins );
 
       std::vector<int> epochs2 = epochs;
@@ -1283,12 +1272,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       if ( has_prior_staging )
 	obs_stage_valid.clear();
 
-      Data::Matrix<double> hh2 = h2;
-      h2.clear(); 
+      Eigen::MatrixXd hh2 = h2;
       h2.resize( nve , ns );
       
-      Data::Matrix<double> hh3 = h3;
-      h3.clear();
+      Eigen::MatrixXd hh3 = h3;
       h3.resize( nve , ns );
             
       int r = 0;
@@ -1370,15 +1357,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // Summarize mean/SD for per-signal Hjorth parameters
   //
 
-  mean_h2 = Statistics::mean( h2 );
-  mean_h3 = Statistics::mean( h3 );
+  mean_h2 = h2.colwise().mean();
+  mean_h3 = h3.colwise().mean();
 
-  sd_h2 = Statistics::sdev( h2 , mean_h2 ) ;
-  sd_h3 = Statistics::sdev( h3 , mean_h3 ) ;
-
-
-  // std::cout << "h2\n" << h2.print() << "\n";
-  // std::cout << "h3\n" << h3.print() << "\n";
+  sd_h2 = ((h2.array().rowwise() - mean_h2 ).square().colwise().sum()/(h2.rows()-1)).sqrt();
+  sd_h3 = ((h3.array().rowwise() - mean_h3 ).square().colwise().sum()/(h3.rows()-1)).sqrt();
 
   
   // for trainers, returns number of observed stages w/ at least suds_t::required_epoch_n 
@@ -1506,11 +1489,269 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
 
 }
 
+void suds_indiv_t::bwrite( std::ofstream & O , const std::string & s ) 
+{
+  uint8_t l = s.size();
+  O.write( (char*)( &l ), sizeof(uint8_t) );
+  O.write( s.c_str(), l );
+}
+
+void suds_indiv_t::bwrite( std::ofstream & O , int i ) 
+{
+  O.write( (char*)( &i ), sizeof(int) );
+}
+
+void suds_indiv_t::bwrite( std::ofstream & O , double d ) 
+{
+  O.write( (char*)( &d ), sizeof(double) );
+}
+
+std::string suds_indiv_t::bread_str( std::ifstream & I )
+{
+  uint8_t len;
+  I.read( (char*)( &len ), sizeof(uint8_t) );
+  std::vector<char> b( len );
+  I.read( &b[0] , len );
+  std::string s( b.begin() , b.end() );
+  return s;
+}
+
+int suds_indiv_t::bread_int( std::ifstream & I )
+{
+  int i;
+  I.read( (char*)( &i ), sizeof(int) );
+  return i;
+}
+
+double suds_indiv_t::bread_dbl( std::ifstream & I )
+{
+  double d;
+  I.read( (char*)( &d ), sizeof(double) );
+  return d;
+}
+
+
+void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
+{
+  
+  // same as write(), except the file is binary 
+  
+  const std::string folder = param.requires( "db" );
+  const int ns = suds_t::ns;
+  
+  // create output folder if it does not exist
+  std::string syscmd = globals::mkdir_command + " " + folder ;
+  int retval = system( syscmd.c_str() );
+
+  // for saving trainers: EDF ID versus a dummy ID (e.g. 'ids=suds')
+  std::string suds_id = suds_t::fake_ids ? suds_t::fake_id_root + "_" + Helper::int2str( suds_t::fake_ids++ ) : edf.id;
+  
+  std::string filename = folder + globals::folder_delimiter + suds_id ;
+  
+  logger << "  writing binary-format trainer data to " << filename << "\n";
+  
+  std::ofstream OUT1( filename.c_str() , std::ios::binary | std::ios::out );
+
+  //
+  // file version code
+  //
+
+  bwrite( OUT1 , "SUDS1" );
+  bwrite( OUT1 , suds_id );
+  bwrite( OUT1 , nve );
+  bwrite( OUT1 , nbins );
+  bwrite( OUT1 , ns );
+  bwrite( OUT1 , nc );
+
+  // channels , SR [ for comparability w/ other data ] 
+
+  for (int s=0;s<ns;s++)
+     {
+       bwrite( OUT1 , suds_t::siglab[s] );
+       bwrite( OUT1 , suds_t::sr[s] );
+       bwrite( OUT1 , suds_t::lwr[s] );
+       bwrite( OUT1 , suds_t::upr[s] );
+       bwrite( OUT1 , mean_h2[s] );
+       bwrite( OUT1 , sd_h2[s]  );
+       bwrite( OUT1 , mean_h3[s] );
+       bwrite( OUT1 , sd_h3[s]  );
+     }
+
+  // stages (N)
+  bwrite( OUT1 , (int)counts.size() );
+  
+  std::map<std::string,int>::const_iterator ss = counts.begin();
+  while ( ss != counts.end() )
+    {
+      bwrite( OUT1 , ss->first );
+      bwrite( OUT1 , ss->second );
+      ++ss;
+    }
+  
+  // W [nc]
+  for (int j=0;j<nc;j++)
+    bwrite( OUT1 , W[j] );
+  
+   // V [nbins x nc ]
+  for (int i=0;i<nbins;i++)
+    for (int j=0;j<nc;j++)
+      bwrite( OUT1 , V(i,j) );
+  
+  
+  // stages (nve)
+  for (int i=0;i<nve;i++)
+    {
+      bwrite( OUT1 , epochs[i] );
+      bwrite( OUT1 , y[i] );
+    }
+      
+  // U (to reestimate LDA model upon loading, i.e
+  //  to use lda.predict() on target   ; only needs to be nc rather than nbins
+  // U [ nve x nc ] 
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nc;j++)
+      bwrite( OUT1 , U(i,j) );
+  
+  // X, RAW DATA (e.g. mean-centered PSD, but possibly other things)
+  // i.e. if this trainer is being used as a 'weight trainer',
+  // i.e. will project this individuals raw data into the target space
+  //  X [ nve x nbins ]
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nbins;j++)
+      bwrite( OUT1 , PSD(i,j) );
+  
+  OUT1.close();
+  
+  //
+  // All done
+  //
+  
+}
+
+void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx )
+{
+
+  std::ifstream IN1( filename.c_str() , std::ios::binary | std::ios::in );
+
+  std::string dummy;
+  std::string suds = bread_str( IN1 );
+
+  if ( suds != "SUDS1" )
+    Helper::halt( "bad file format for " + filename );
+  
+  id = bread_str( IN1 );
+  nve = bread_int( IN1 );
+  nbins = bread_int( IN1 );
+  int this_ns = bread_int( IN1 );
+  int this_nc = bread_int( IN1 );
+
+  if ( this_nc == 0 )
+    Helper::halt( "0 PSCs for " + filename );
+  
+  if (this_ns != suds_t::ns )
+    Helper::halt( "different trainer ns=" + Helper::int2str( this_ns )
+		  + " in " + filename
+		  + ", expecting " + Helper::int2str( suds_t::ns ) ) ; 
+  
+  // set 'nc' for this individual
+  nc = this_nc;
+
+  // ns should be fixed across all individuals
+  const int ns = suds_t::ns;
+  
+  mean_h2.resize(ns); mean_h3.resize(ns);
+  sd_h2.resize(ns); sd_h3.resize(ns);
+  
+  for (int s=0;s<ns;s++)
+    {
+      std::string this_siglab = bread_str( IN1 );
+      int this_sr = bread_int( IN1 );      
+
+      double this_lwr =  bread_dbl( IN1 );
+      double this_upr =  bread_dbl( IN1 );
+      
+      mean_h2[s] = bread_dbl( IN1 );
+      sd_h2[s] = bread_dbl( IN1 );
+      
+      mean_h3[s] = bread_dbl( IN1 );
+      sd_h3[s] = bread_dbl( IN1 );
+
+      if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "different signals: " + this_siglab
+							    + ", but expecting " + suds_t::siglab[s] );
+      if ( this_sr != suds_t::sr[s] ) Helper::halt( "different SR: " + this_siglab
+						    + ", but expecting " + suds_t::siglab[s] );
+      if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "different lower-freq: " + Helper::dbl2str( this_lwr )
+						      + ", but expecting " + Helper::dbl2str( suds_t::lwr[s] ) );
+      if ( this_upr != suds_t::upr[s] ) Helper::halt( "different upper-freq: " + Helper::dbl2str( this_upr )
+						      + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;      
+    }
+
+  // stages
+  int nstages = bread_int( IN1 );
+
+  for (int i=0;i<nstages;i++)
+    {
+      std::string sname = bread_str( IN1 );
+      int scnt = bread_int( IN1 );
+      counts[ sname ] = scnt;
+    }
+  
+  
+  // check that these equal suds_t values?
+  
+  // W [ only nc ]
+  W.resize( nc );
+  for (int j=0;j<nc;j++)
+    W[j] = bread_dbl( IN1 );
+
+  // V [ only nc cols ] 
+  V.resize( nbins, nc );
+  for (int i=0;i<nbins;i++)
+    for (int j=0;j<nc;j++)
+      V(i,j) = bread_dbl( IN1 );
+
+  // stages
+  y.resize( nve );
+  epochs.resize( nve );
+  for (int i=0;i<nve;i++)
+    {
+      epochs[i] = bread_int( IN1 );
+      y[i] = bread_str( IN1 );
+    }
+
+  obs_stage = suds_t::type( y );
+  
+  // U (to reestimate LDA model upon loading, i.e
+  //  to use lda.predict() on target 
+  U.resize( nve , nc );
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nc;j++)
+      U(i,j) = bread_dbl( IN1 );
+  
+  // X values (e.g. mean-centered PSD)
+  // i.e. if this trainer is being used as a 'weight trainer',
+  // i.e. will project this individuals raw data into the target space
+  
+  if ( load_rawx )
+    {      
+      // PSD      
+      PSD.resize( nve , nbins );
+      for (int i=0;i<nve;i++)
+	for (int j=0;j<nbins;j++)
+	  PSD(i,j) = bread_dbl( IN1 );
+    }
+  
+  IN1.close();
+  
+  //
+  // All done
+  //
+
+}
+
 
 void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
 {
-  
-  //  logger << "  reloading trainer data from " << filename << "\n";
   
   std::ifstream IN1( filename.c_str() , std::ios::in );
 
@@ -1550,26 +1791,20 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
   // ns should be fixed across all individuals
   const int ns = suds_t::ns;
   
-  mean_h2.clear(); mean_h3.clear();
-  sd_h2.clear(); sd_h3.clear();
+  mean_h2.resize( ns ); mean_h3.resize( ns );
+  sd_h2.resize( ns ); sd_h3.resize( ns );
   
   for (int s=0;s<ns;s++)
     {
       std::string this_siglab;
       double this_lwr, this_upr;
       int this_sr;
-      double this_h2m, this_h2sd, this_h3m, this_h3sd;
       IN1 >> dummy >> this_siglab
 	  >> dummy >> this_sr 
 	  >> dummy >> this_lwr
 	  >> dummy >> this_upr	  
-	  >> dummy >> this_h2m >> dummy >> this_h2sd 
-	  >> dummy >> this_h3m >> dummy >> this_h3sd;
-
-      mean_h2.push_back( this_h2m );
-      mean_h3.push_back( this_h3m );
-      sd_h2.push_back( this_h2sd );
-      sd_h3.push_back( this_h3sd );
+	  >> dummy >> mean_h2[s] >> dummy >> sd_h2[s]
+	  >> dummy >> mean_h3[s] >> dummy >> sd_h3[s];
 
       if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "different signals: " + this_siglab
 							    + ", but expecting " + suds_t::siglab[s] );
@@ -1647,7 +1882,7 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
 }
 
 
-void suds_t::attach_db( const std::string & folder , bool read_psd )
+void suds_t::attach_db( const std::string & folder , bool binary , bool read_psd )
 {
 
   std::map<std::string,suds_indiv_t*> * b = read_psd ? &wbank : &bank ;
@@ -1692,10 +1927,10 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
   // for primary trainers only (! read_psd ) track H2 and H3 distributions
   //
 
-  Data::Matrix<double> h2m( trainer_ids.size() , suds_t::ns );
-  Data::Matrix<double> h2sd( trainer_ids.size() , suds_t::ns );
-  Data::Matrix<double> h3m( trainer_ids.size() , suds_t::ns );
-  Data::Matrix<double> h3sd( trainer_ids.size() , suds_t::ns );
+  Eigen::MatrixXd h2m( trainer_ids.size() , suds_t::ns );
+  Eigen::MatrixXd h2sd( trainer_ids.size() , suds_t::ns );
+  Eigen::MatrixXd h3m( trainer_ids.size() , suds_t::ns );
+  Eigen::MatrixXd h3sd( trainer_ids.size() , suds_t::ns );
 
   
   //
@@ -1708,6 +1943,10 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
       // is this person the other bank?  we always attach wdb first
       // (i.e. to make sure PSD data are included, if these are
       // needed).  So, check against wbank in that case:
+
+      if ( i % 50 == 0 ) logger << "\n ";
+      if ( i % 10 == 0 ) logger << " ";
+      logger << ".";
 
       bool already_loaded =  ( ! read_psd ) && wbank.find( trainer_ids[i] ) != wbank.end() ; 
 
@@ -1725,7 +1964,10 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
 
 	  trainer = new suds_indiv_t;
 	  
-	  trainer->reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd );      
+	  if ( binary ) 
+	    trainer->binary_reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd );
+	  else
+	    trainer->reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd ); 
 
 	  trainer->fit_lda();
 	  
@@ -1749,10 +1991,11 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
 	}
           
     }
-      
-
+     
   
-  logger << "  attached " << b->size() << " trainers ("
+  logger << "\n"
+	 << "  attached " << b->size() << " trainers ("
+	 << ( binary ? "binary" : "text" ) << " format, "
 	 << ( read_psd ? "with spectra" : "w/out spectra" )
 	 << ") from " << folder << "\n";
 
@@ -1769,10 +2012,10 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
       suds_t::lwr_h3.resize( suds_t::ns );
       suds_t::upr_h3.resize( suds_t::ns );
       
-      Data::Vector<double> mean_h2m = Statistics::mean( h2m );
-      Data::Vector<double> mean_h2sd = Statistics::mean( h2sd );
-      Data::Vector<double> mean_h3m = Statistics::mean( h3m );
-      Data::Vector<double> mean_h3sd = Statistics::mean( h3sd );
+      Eigen::ArrayXd mean_h2m = h2m.colwise().mean();
+      Eigen::ArrayXd mean_h2sd = h2sd.colwise().mean();
+      Eigen::ArrayXd mean_h3m = h3m.colwise().mean();
+      Eigen::ArrayXd mean_h3sd = h3sd.colwise().mean();
 
       for (int s=0;s<suds_t::ns;s++)
 	{
@@ -1795,12 +2038,89 @@ void suds_t::attach_db( const std::string & folder , bool read_psd )
 
 
 
+void suds_t::copy_db( const std::string & tfolder , 
+		      const std::string & bfolder )
+{
+  
+  // copy from a text folder --> binary folder
+
+  // find all files in this folder (tfolder)
+  std::vector<std::string> trainer_ids;
+
+  DIR *dir;
+  struct dirent *ent;
+  if ( (dir = opendir ( tfolder.c_str() ) )  != NULL )
+    {
+      /* print all the files and directories within directory */
+      while ( (ent = readdir (dir)) != NULL) {
+
+#ifdef _DIRENT_HAVE_D_TYPE
+        if ( ent->d_type != DT_REG ) continue;
+#endif
+
+        std::string fname = ent->d_name;
+        if (  fname == "." || fname == ".." ) continue;
+
+        // otherwise, we have not yet come across this person, so load
+        // up...
+
+	trainer_ids.push_back( fname );
+	
+      }
+      closedir (dir);
+    }
+  else
+    {
+      Helper::halt( "could not open directory " + tfolder );      
+    }
+  
+
+  //
+  // Ensure target folder exists
+  //
+  
+  // ----> TODO
+  
+  //
+  // Read/write each trainer
+  //
+
+  for ( int i=0; i<trainer_ids.size() ; i++)
+    {
+
+      // is this person the other bank?  we always attach wdb first
+      // (i.e. to make sure PSD data are included, if these are
+      // needed).  So, check against wbank in that case:
+
+      suds_indiv_t * trainer = new suds_indiv_t;
+      
+      //
+      // read text
+      //
+
+      trainer->reload( tfolder + globals::folder_delimiter + trainer_ids[i] , true ); 
+
+      //
+      // write binary 
+      //
+      
+    }
+
+  logger << "  copied " << trainer_ids.size() << " trainers from text to binary format\n"
+	 << "    from folder " << tfolder << "\n"
+	 << "    to folder " << bfolder << "\n";
+
+}
+
+
+
+
 // fit LDA, io.e. after reloading U
 
 void suds_indiv_t::fit_lda()
 {
 
-  lda_t lda( y , Data::mat2eig( U ) );      
+  lda_t lda( y , U );
 
   model = lda.fit( suds_t::flat_priors );
 
@@ -1819,11 +2139,20 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   // subsetting to # of columns
   //
 
-  Data::Matrix<double> trainer_DW( trainer.nc , trainer.nc );  
+  // std::cout << " targ = " << id << " triner = " << trainer.id << "\n";
+  // std::cout << " tr nc = " << trainer.nc << " " << trainer.W.size() << "\n";
+  // std::cout << "trainer W \n" << trainer.W << "\n";
+
+  Eigen::MatrixXd trainer_DW = Eigen::MatrixXd::Zero( trainer.nc , trainer.nc );  
+
   for (int i=0;i< trainer.nc; i++)
     trainer_DW(i,i) = 1.0 / trainer.W[i];
   
   U_projected = PSD * trainer.V * trainer_DW;
+
+  // std::cout //<< " INIT : PSD \n" << PSD << "\n\n"
+  // 	    //<< " INIT : trainer.V " << trainer.V << "\n\n"
+  // 	    << " INIT : trainer_DW " << trainer_DW << "\n\n";
   
   //
   // Normalize PSC?
@@ -1831,7 +2160,7 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 
   if ( suds_t::standardize_psc ) 
     {
-      Statistics::standardize( U_projected );
+      eigen_ops::scale( U_projected , true );
     }
 
 
@@ -1842,19 +2171,18 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   if ( suds_t::denoise_fac > 0 ) 
     for (int j=0; j< trainer.nc; j++)
       {
-	std::vector<double> * col = U_projected.col_nonconst_pointer(j)->data_nonconst_pointer();
-	double sd = suds_t::standardize_psc ? 1 : MiscMath::sdev( *col );
-	double lambda = suds_t::denoise_fac * sd;
-	//	logger << "  (in predict) smoothing projected PSC" << j+1 << " with lambda=" << suds_t::denoise_fac << " * " << sd << " = " << lambda << "\n";
-	dsptools::TV1D_denoise( *col , lambda );
-      }
+	double sd = suds_t::standardize_psc ? 1 : eigen_ops::sdev( U_projected.col(j) );
+	double lambda = suds_t::denoise_fac * sd;	
+	dsptools::TV1D_denoise( U_projected.col(j) , lambda );
+      }  
 
+  //  std::cout << "U proj " << U_projected << "\n";
 
   //
   // predict using trainer model
   //
 
-  lda_posteriors_t pp = lda_t::predict( trainer.model , Data::mat2eig( U_projected ) ) ;
+  lda_posteriors_t pp = lda_t::predict( trainer.model , U_projected ) ;
 
   return pp;
 }
@@ -1916,18 +2244,18 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   //
 
   // either kappa or MCC (if 'mcc' option)
-  Data::Vector<double> wgt_mean( bank_size ) ;
+  Eigen::ArrayXd wgt_mean = Eigen::ArrayXd::Zero( bank_size ) ;
 
   // kappa; not used in any calcs
-  Data::Vector<double> wgt_max( bank_size ) ;
-  Data::Vector<double> wgt_n50( bank_size ) ;
+  Eigen::ArrayXd wgt_max = Eigen::ArrayXd::Zero( bank_size ) ;
+  Eigen::ArrayXd wgt_n50 = Eigen::ArrayXd::Zero( bank_size ) ;
 
 
   //
   // Store Kappa3 for each trainer (valid w/ prior staging only)
   //
   
-  Data::Vector<double> k3_prior( bank_size ) ;
+  Eigen::ArrayXd k3_prior = Eigen::ArrayXd::Zero( bank_size ) ;
   
 
   //
@@ -2082,7 +2410,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // (we ignore the U_projected which is based on the trainer model)
 	  //
 
-	  lda_t lda( prediction.cl , Data::mat2eig( target.U ) ) ;
+	  lda_t lda( prediction.cl , target.U ) ;
       
 	  // set target model for use w/ all different weight-trainers
 
@@ -2108,6 +2436,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      weight_trainer->prd_stage = suds_t::type( reprediction.cl );
 	      
 	      // obs_stage for predicted/valid epochs only
+
+	      // for (int ii=0;ii<reprediction.cl.size();ii++)
+	      // 	{
+	      // 	  std::cout << " CK " << reprediction.cl[ii] << " " << str(  weight_trainer->obs_stage[ii] ) << "\n";
+	      // 	}
 	      
 	      double kappa = 0 ; 
 	      if ( use_5class_repred ) 
@@ -2162,7 +2495,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  // swap in MCC
 		  kappa = mcc;
 		}
-
+	      
+	      //	      std::cout << " kappa = " << kappa << "\n";
 	      
 	      ++n_kappa_all;
 	      if ( kappa > 0.5 ) n_kappa50++;
@@ -2187,6 +2521,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       if ( use_repred_weights && wbank.size() > 0 && okay_to_fit_model ) 
 	{
+	  //	  std::cout << " cntr, etc " << cntr << " " << wgt_mean.size() << " " <<  ( mean_kappa ) / (double)n_kappa_all << "\n";
 	  wgt_max[ cntr ] = max_kappa;
 	  wgt_mean[ cntr ] = ( mean_kappa ) / (double)n_kappa_all ;
 	  wgt_n50[ cntr ] = n_kappa50;
@@ -2211,15 +2546,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   // normalized from 0..1 
 
-  Data::Vector<double> wgt_kl;
+  Eigen::ArrayXd wgt_kl;
   if ( use_kl_weights )
-    wgt_kl = Statistics::unit_scale( target.wgt_kl() );
+    wgt_kl = eigen_ops::unit_scale( target.wgt_kl() );
+  
+  
 
   //
   // Output all weights, and generate 'final' weigth
   //
   
-  Data::Vector<double> wgt( bank_size );
+  Eigen::ArrayXd wgt = Eigen::ArrayXd::Zero( bank_size );
   std::vector<std::string> used_trainers;
   
   tt = bank.begin();
@@ -2275,6 +2612,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   writer.unlevel( "TRAINER" );
 
 
+  //  std::cout << "WGT\n" << wgt << "\n";
+
   
   
   //
@@ -2306,7 +2645,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   if ( has_wgt && suds_t::wgt_mean_normalize ) 
     {
       logger << "  normalizing repred weights around trainer mean\n";
-      double mean_wgt = Statistics::mean( wgt );
+      double mean_wgt = wgt.mean();
       for ( int i=0; i<wgt.size();i++)
 	{	  
 	  if ( wgt[i] < 0 ) wgt[i] = 0;
@@ -2316,6 +2655,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	}      
     }
   
+  //  std::cout << "WGT (V2)\n" << wgt << "\n";
 
   //
   // Unit scale exponential 
@@ -2347,7 +2687,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     {
       
       // get value X = top N% and set to 0/1 if below/above X
-      double threshold = MiscMath::percentile( *wgt.data_pointer() , 1.0 - suds_t::wgt_percentile / 100.0 ) ;
+      std::vector<double> cc = eigen_ops::copy( wgt ) ;
+      double threshold = MiscMath::percentile( cc , 1.0 - suds_t::wgt_percentile / 100.0 ) ;
       
       // binarize wgt (if only 1 or 2 trainers, then assign equal weight) 
       if ( wgt.size() < 3 || suds_t::equal_wgt_in_selected ) 
@@ -2361,7 +2702,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	    wgt[i] = wgt[i] >= threshold ? wgt[i] : 0 ;
 
 	  // unit-scale between /threshold/ and max
-	  wgt = Statistics::unit_scale( wgt , threshold , 1.0 );
+	  wgt = eigen_ops::unit_scale( wgt , threshold , 1.0 );
 	}
       
     }
@@ -2388,19 +2729,19 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // target.prd_stage.clear();
   // target.prd_stage.resize( SUDS_UNKNOWN );
 
-  Data::Matrix<double> pp( ne , suds_t::n_stages );
+  Eigen::MatrixXd pp = Eigen::MatrixXd::Zero( ne , suds_t::n_stages );
 
   int ntrainers = 0;
   double tot_wgt = 0;
   int tot_unwgt = 0;
 
-  std::map<std::string,Data::Matrix<double> >::iterator ii = target.target_posteriors.begin();
+  std::map<std::string,Eigen::MatrixXd >::iterator ii = target.target_posteriors.begin();
   while ( ii != target.target_posteriors.end() )
     {
       
       // get posteriors from this trainer 
 
-      Data::Matrix<double> & m = ii->second;
+      Eigen::MatrixXd & m = ii->second;
 
       // force 0/1 encoding? i.e. 100% weight placed on most likely
       
@@ -2479,7 +2820,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( e != -1 ) 
 	{
 	  // most likely value
-	  std::string predss = max( pp.row(e) , suds_t::labels );
+	  std::string predss = max_inrow( pp.row(e) , suds_t::labels );
 	  //writer.value( "PRED" , predss );
 	  final_prediction.push_back( predss );
 	}
@@ -2515,21 +2856,23 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // also, given correlations between weights and trainer kappas
       //
 
+      // TODO ; not critical code, so lazy conversion to use Stats correl function, but should add eigen_ops::correlation()
+
       if ( k3_prior.size() > 2 )
 	{
 	  if ( use_kl_weights )
-	    writer.value( "R_K3_KL" , Statistics::correlation( wgt_kl , k3_prior) ); 
+	    writer.value( "R_K3_KL" , Statistics::correlation( eigen_ops::copy( wgt_kl ) , eigen_ops::copy( k3_prior) ) ); 
 	  
 	  if ( use_repred_weights && wbank.size() > 0 ) 
 	    {
-	      writer.value( "R_K3_MAX" , Statistics::correlation( wgt_max  , k3_prior) ); 
-	      writer.value( "R_K3_MEAN" , Statistics::correlation( wgt_mean , k3_prior) ); 
-	      writer.value( "R_K3_N50" , Statistics::correlation( wgt_n50  , k3_prior) ); 
-
+	      writer.value( "R_K3_MAX" , Statistics::correlation( eigen_ops::copy( wgt_max ) , eigen_ops::copy( k3_prior ) ) ); 
+	      writer.value( "R_K3_MEAN" , Statistics::correlation( eigen_ops::copy(wgt_mean) , eigen_ops::copy(k3_prior) ) ); 
+	      writer.value( "R_K3_N50" , Statistics::correlation( eigen_ops::copy(wgt_n50)  , eigen_ops::copy(k3_prior) ) ); 
+	      
 	      if ( use_kl_weights )
 		{
-		  writer.value( "R_MEAN_KL" , Statistics::correlation( wgt_mean , wgt_kl ) );
-		  writer.value( "R_K3_CMB" , Statistics::correlation( wgt , wgt_kl ) );
+		  writer.value( "R_MEAN_KL" , Statistics::correlation( eigen_ops::copy( wgt_mean ) , eigen_ops::copy( wgt_kl ) ) );
+		  writer.value( "R_K3_CMB" , Statistics::correlation( eigen_ops::copy(wgt) , eigen_ops::copy(wgt_kl) ) );
 		  
 		}
 	      
@@ -2696,7 +3039,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 void suds_indiv_t::add( const std::string & trainer_id , const lda_posteriors_t & prediction )
 {
   
-  target_posteriors[ trainer_id ] = Data::eig2mat( prediction.pp );
+  target_posteriors[ trainer_id ] = prediction.pp ;
 
   target_predictions[ trainer_id ] = suds_t::type( prediction.cl );
   
@@ -2800,16 +3143,16 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
 
 
 
-Data::Vector<double> suds_indiv_t::wgt_kl() const { 
+Eigen::ArrayXd suds_indiv_t::wgt_kl() const { 
 
   // returned weights
   const int nt = target_predictions.size();  
 
-  Data::Vector<double> W( nt );
+  Eigen::ArrayXd W( nt );
 
   if ( nt == 0 ) return W;
 
-  Data::Matrix<double> Q( nt , suds_t::n_stages ) ;  
+  Eigen::MatrixXd Q( nt , suds_t::n_stages ) ;  
 
   int r = 0;
   std::map<std::string,std::vector<suds_stage_t> >::const_iterator ii = target_predictions.begin();
@@ -2847,7 +3190,7 @@ Data::Vector<double> suds_indiv_t::wgt_kl() const {
   
   // Means
 
-  Data::Vector<double> P = Statistics::mean( Q );
+  Eigen::ArrayXd P = Q.colwise().mean();
 
   // divergence for each trainer from the mean
   r = 0;
@@ -2869,7 +3212,7 @@ Data::Vector<double> suds_indiv_t::wgt_kl() const {
 
 
 void suds_indiv_t::write_annots( const std::string & annot_folder , const std::string & aname , 
-				 const Data::Matrix<double> & pp , const std::vector<std::string> & labels , 
+				 const Eigen::MatrixXd & pp , const std::vector<std::string> & labels , 
 				 int ne_all , edf_t & edf )
 {
 
@@ -2923,7 +3266,7 @@ void suds_indiv_t::write_annots( const std::string & annot_folder , const std::s
       // value found in scoring?
       if ( e != -1 ) 
 	{
-	  std::string predss = suds_t::max( pp.row(e) , labels );
+	  std::string predss = suds_t::max_inrow( pp.row(e) , labels );
 
 	  if ( suds_t::n_stages == 5 )
 	    {
@@ -2955,7 +3298,7 @@ void suds_indiv_t::write_annots( const std::string & annot_folder , const std::s
 
 }
 
-void suds_indiv_t::summarize_epochs( const Data::Matrix<double> & pp , // posterior probabilities
+void suds_indiv_t::summarize_epochs( const Eigen::MatrixXd & pp , // posterior probabilities
 				     const std::vector<std::string> & labels, // column labels
 				     int ne_all , edf_t & edf ) // total number of epochs in EDF
 {
@@ -2995,7 +3338,7 @@ void suds_indiv_t::summarize_epochs( const Data::Matrix<double> & pp , // poster
 	    writer.value( "PP_NR" , pp_nr );
 	
 	  // most likely value
-	  std::string predss = suds_t::max( pp.row(e) , labels );
+	  std::string predss = suds_t::max_inrow( pp.row(e) , labels );
 	  writer.value( "PRED" , predss );
 
 	  if ( prior_staging )
@@ -3030,7 +3373,7 @@ void suds_indiv_t::summarize_epochs( const Data::Matrix<double> & pp , // poster
   
 }
 
-void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , const std::vector<std::string> & labels, int ne_all , double epoch_sec )
+void suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const std::vector<std::string> & labels, int ne_all , double epoch_sec )
 {
   
   bool prior_staging = obs_stage.size() != 0 ;
@@ -3082,7 +3425,7 @@ void suds_indiv_t::summarize_stage_durations( const Data::Matrix<double> & pp , 
 	{
 	
 	  // most likely value
-	  std::string predss = suds_t::max( pp.row(e) , labels );
+	  std::string predss = suds_t::max_inrow( pp.row(e) , labels );
 
 	  // track stage duration (based on probabilistic calls)
 	  // nb. we do not assume all five/three stages are present here
@@ -3241,7 +3584,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 
 
 void suds_t::trainer_1x1_evals( const suds_indiv_t & target , 
-				const Data::Vector<double> & wgt, 
+				const Eigen::ArrayXd & wgt, 
 				const std::vector<std::string> & obs_stages )
 {
  
@@ -3267,7 +3610,7 @@ void suds_t::trainer_1x1_evals( const suds_indiv_t & target ,
 
   int ntrainers = 0;
 
-  std::map<std::string,Data::Matrix<double> >::const_iterator ii = target.target_posteriors.begin();
+  std::map<std::string,Eigen::MatrixXd >::const_iterator ii = target.target_posteriors.begin();
   while ( ii != target.target_posteriors.end() )
     {
       otrainers.insert( trainer_ord_t( wgt[ ntrainers ] , ii->first ) );
@@ -3282,7 +3625,7 @@ void suds_t::trainer_1x1_evals( const suds_indiv_t & target ,
 
   const int ne = target.prd_stage.size();
 
-  Data::Matrix<double> pp( ne , suds_t::n_stages );
+  Eigen::MatrixXd pp = Eigen::MatrixXd::Zero( ne , suds_t::n_stages );
 
   double cum_wgt = 0; 
 
@@ -3301,7 +3644,7 @@ void suds_t::trainer_1x1_evals( const suds_indiv_t & target ,
       ++nt;
 
       // get posteriors from this trainer
-      Data::Matrix<double> m = target.target_posteriors.find( oo->id )->second;
+      Eigen::MatrixXd m = target.target_posteriors.find( oo->id )->second;
       
       // force 0/1 encoding? i.e. 100% weight placed on most likely                                                                                                                                  
       if ( suds_t::use_best_guess ) suds_t::make01( m );
@@ -3323,7 +3666,7 @@ void suds_t::trainer_1x1_evals( const suds_indiv_t & target ,
       std::vector<std::string> current_prediction;
       
       for (int i=0;i<ne;i++)
-	current_prediction.push_back( max( pp.row(i) , suds_t::labels ) );	
+	current_prediction.push_back( max_inrow( pp.row(i) , suds_t::labels ) );	
       
       //
       // Eval

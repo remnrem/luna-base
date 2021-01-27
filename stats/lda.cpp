@@ -313,9 +313,7 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Eigen::Matrix
   const int ng = model.prior.size();
   
   // remove overall means to keep distances small
-  ArrayXd means( p );
-  for (int j=0;j<p;j++)
-    means[j] = 0;
+  ArrayXd means = Eigen::ArrayXd::Zero( p );
 
   for (int i=0;i<ng;i++)
     for (int j=0;j<p;j++)

@@ -1107,8 +1107,20 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 {  
   suds_t::set_options( param );  
   suds_indiv_t trainer;
+  // will either generate text or binary library (param/text)
   trainer.add_trainer( edf , param );  
 }
+
+
+// // COPY-SUDS :: make --copy-suds
+
+// void proc_copy_suds( edf_t & edf , param_t & param )
+// {
+//   suds_t suds;
+//   std::string f1 = param.requires( "text-db" );
+//   std::string f2 = param.requires( "bin-db" );
+//   suds.copy_db( f1, f2 );
+// }
 
 
 // SUDS : stageing
@@ -1136,6 +1148,12 @@ void proc_suds( edf_t & edf , param_t & param )
   // bank, these are not needed/loaded
 
   //
+  // File format
+  //
+
+  bool binary = ! param.has( "text" );
+
+  //
   // Weight trainers
   //
 
@@ -1144,9 +1162,9 @@ void proc_suds( edf_t & edf , param_t & param )
   // used to retrain the trainer weights
   
   if ( param.has( "wdb" ) ) 
-    suds.attach_db( param.value( "wdb" ) , true );
+    suds.attach_db( param.value( "wdb" ) , binary , true );
   else // else, use the same training panel (but also loading raw features)
-    suds.attach_db( param.value( "db" ) , true );
+    suds.attach_db( param.value( "db" ) , binary , true );
 
  
   //
@@ -1155,7 +1173,7 @@ void proc_suds( edf_t & edf , param_t & param )
   //
 
   // attaach_db() F -> do not load PSD (not needed)
-  suds.attach_db( param.requires( "db" ) , false );
+  suds.attach_db( param.requires( "db" ) , binary , false );
 
   
   // do actual scoring  
@@ -2479,22 +2497,27 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
 void proc_canonical( edf_t & edf , param_t & param )
 {
 
+  // dry-run or make the actual signals?
+  bool make_signals = ! param.has( "check" );
+
   // just try to guess... no file specification
   if ( param.has( "guess" ) )
     {
-      edf.guess_canonicals( param );
+      edf.guess_canonicals( param , make_signals );
       return;
     }
   
   std::string file = param.requires( "file" );
   std::string group = param.requires( "group" );
 
+
+
   if ( ! param.has( "cs" ) )    
-    edf.make_canonicals( file, group );
+    edf.make_canonicals( file, group , make_signals );
   else
     {
       const std::set<std::string> cs = param.strset( "cs" );
-      edf.make_canonicals( file, group , &cs );
+      edf.make_canonicals( file, group , make_signals , &cs );
     }
 }
 
