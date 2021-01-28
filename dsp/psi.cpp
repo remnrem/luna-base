@@ -77,7 +77,19 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
   logger << "  running within " << ne << " " << edf.timeline.epoch_length() << " second epochs\n";
 
-  
+  //
+  // Frequency bins?
+  //
+
+  std::vector<int> lwr = param.intvector( "f-lwr" );
+  std::vector<int> upr = param.intvector( "f-upr" );
+  if ( lwr.size() != upr.size() ) 
+    Helper::halt( "f-lwr and f-upr have different sizes" );
+  for (int i=0;i<lwr.size();i++)
+    if ( lwr[i] >= upr[i] ) Helper::halt( "f-lwr >= f-upr" );
+  bool has_freqs = lwr.size() > 0 ;
+
+
   //
   // PSI epoch/segment lengths 
   //
@@ -104,7 +116,11 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       const Data::Matrix<double> & X = mslice.data_ref();
 
       psi_t psi( &X , eplen , seglen );
-    
+      
+      if ( has_freqs )
+	for (int i=0;i<lwr.size();i++)
+	  psi.add_freqbin( lwr[i] , upr[i] );
+
       psi.calc();
   
       psi.report( signals );
@@ -133,6 +149,10 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       const Data::Matrix<double> & X = mslice.data_ref();
       
       psi_t psi( &X , eplen , seglen );
+
+      if ( has_freqs )
+	for (int i=0;i<lwr.size();i++)
+	  psi.add_freqbin( lwr[i] , upr[i] );
       
       psi.calc();
       
