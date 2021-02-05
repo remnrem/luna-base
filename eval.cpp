@@ -2060,7 +2060,7 @@ void proc_list_annots( edf_t & edf , param_t & param )
 
 void proc_write_annots( edf_t & edf , param_t & param )
 {
-  edf.timeline.annotations.write( param.requires( "file" ) , param );
+  edf.timeline.annotations.write( param.requires( "file" ) , param , edf );
 }
 
 // A2S : make signbal from ANNOTS

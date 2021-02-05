@@ -3190,8 +3190,8 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  present2.advance( tp2_sec / 3600.0 );
 	  double tp2_extra = tp2_sec - (long)tp2_sec;
 	   
-	  writer.value( "START_HMS"  , present1.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
-	  writer.value( "STOP_HMS"   , present2.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
+	  writer.value( "START_HMS"  , present1.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp  ).substr(1) );
+	  writer.value( "STOP_HMS"   , present2.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp  ).substr(1) );
 
 	  // elapsed time (00:00:00 is start of EDF)
 	  clocktime_t present3;
@@ -3203,8 +3203,8 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  present4.advance( tp2_sec / 3600.0 );
 	  tp2_extra = tp2_sec - (long)tp2_sec;
 	   
-	  writer.value( "START_ELAPSED_HMS"  , present3.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
-	  writer.value( "STOP_ELAPSED_HMS"   , present4.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
+	  writer.value( "START_ELAPSED_HMS"  , present3.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
+	  writer.value( "STOP_ELAPSED_HMS"   , present4.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
 
 
 	}

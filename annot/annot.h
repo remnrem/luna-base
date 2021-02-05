@@ -800,7 +800,7 @@ struct annotation_set_t
 
   double first( const std::vector<std::string> & names ) const;
 
-  void write( const std::string & filename , param_t & param );
+  void write( const std::string & filename , param_t & param , edf_t & edf );
 
   // Attempt to create a single SLEEP STAGE annotation from multiple
   // other annotations

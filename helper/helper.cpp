@@ -246,8 +246,10 @@ std::string Helper::dbl2str_fixed(double n, int ch )
   s3 << std::fixed
      << std::setprecision( ch );
   s3 << n;
-  std::string retstr = s3.str();
-  return retstr.substr(0,ch);
+  
+  return s3.str();
+  // std::string retstr = s3.str();
+  // return retstr.substr(0,ch);
 
 }
 

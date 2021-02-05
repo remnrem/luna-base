@@ -1528,7 +1528,11 @@ int annot_t::load_features( const std::string & f )
 bool annot_t::save( const std::string & t)
 {
 
-  
+  //
+  // Note: would prefer 'write()' option from annotation_set_t::write()
+  //  as this better handles all new formats, etc.
+  //
+
   std::ofstream O1( t.c_str() , std::ios::out );
   
   bool has_vars = types.size() > 0 ;
@@ -2791,7 +2795,7 @@ void proc_eval( edf_t & edf , param_t & param )
 
 
 
-void annotation_set_t::write( const std::string & filename , param_t & param )
+void annotation_set_t::write( const std::string & filename , param_t & param , edf_t & edf )
 {
   
   // write all annotations here as a single file; 
@@ -2801,7 +2805,27 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 
   bool xml_format = param.has( "xml" ) || Helper::file_extension( filename , "xml" ) ;
 
+  //
+  // use hh:mm:ss instead of elapsed seconds (for .annot only)
+  //
+
+  bool hms = param.has( "hms" );
+  
+  // for complete XML compatibility
+  bool add_specials = ! param.has( "no-specials" );
+  
+  clocktime_t starttime( edf.header.starttime );
+
+  if ( hms && ! starttime.valid ) 
+    {
+      logger << " ** could not find valid start-time in EDF header **\n";
+      hms = false;
+    }
+
+  //
   // either for all annots, or just a subset
+  //
+
   std::set<std::string> annots2write = param.strset( "annot" );
   if ( annots2write.size() > 0 )
     logger << "  writing a subset of all annotations, based on " << annots2write.size() << " specified\n";
@@ -3070,30 +3094,46 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
       // dummy markers first 
       //
 
-      // O1 << "<StartTime>" << start_hms << "</StartTime>\n";
-      // O1 << "<Duration>" << duration_hms << "</Duration>\n";
-      // O1 << "<DurationSeconds>" << duration_sec << "</DurationSeconds>\n";
-      // O1 << "<EpochLength>" << epoch_sec << "</EpochLength>\n";
+      if ( add_specials )
+	{
+	  if ( start_hms != "." ) 
+	    O1 << "# start_hms | EDF start time\n";
+	  if ( duration_hms != "." )
+	    O1 << "# duration_hms | EDF duration (hh:mm:ss)\n";
+	  if ( duration_sec != 0 )
+	    O1 << "# duration_sec | EDF duration (seconds)\n";
+	  if ( epoch_sec != 0 )
+	    O1 << "# epoch_sec | Default epoch duration (seconds)\n";
+	}
 
-      if ( start_hms != "." ) 
-	O1 << "# start_hms | EDF start time\n";
-      if ( duration_hms != "." )
-	O1 << "# duration_hms | EDF duration (hh:mm:ss)\n";
-      if ( duration_sec != 0 )
-	O1 << "# duration_sec | EDF duration (seconds)\n";
-      if ( epoch_sec != 0 )
-	O1 << "# epoch_sec | Default epoch duration (seconds)\n";
+      //
+      // (optional, but nice to have) header row for data 
+      //
+
+      O1 << "class" << "\t"
+	 << "instance" << "\t"
+	 << "channel" << "\t"
+	 << "start" << "\t"
+	 << "stop" << "\t"
+	 << "meta" << "\n";
+
+      //
+      // Now, the data rows
+      //
 
       // ensure 6-col format for .annot output
 
-      if ( start_hms != "." )  
- 	O1 << "start_hms\t" << start_hms << "\t.\t.\t.\t.\n";
-      if ( duration_hms != "." )
-	O1 << "duration_hms\t" << duration_hms << "\t.\t.\t.\t.\n";
-      if ( duration_sec != 0 )
-	O1 << "duration_sec\t" << duration_sec << "\t.\t.\t.\t.\n";
-      if ( epoch_sec != 0 )
-	O1 << "epoch_sec\t" << epoch_sec << "\t.\t.\t.\t.\n";
+      if ( add_specials )
+	{
+	  if ( start_hms != "." )  
+	    O1 << "start_hms\t" << start_hms << "\t.\t.\t.\t.\n";
+	  if ( duration_hms != "." )
+	    O1 << "duration_hms\t" << duration_hms << "\t.\t.\t.\t.\n";
+	  if ( duration_sec != 0 )
+	    O1 << "duration_sec\t" << duration_sec << "\t.\t.\t.\t.\n";
+	  if ( epoch_sec != 0 )
+	    O1 << "epoch_sec\t" << epoch_sec << "\t.\t.\t.\t.\n";
+	}
 
       //
       // Loop over all annotation instances
@@ -3144,9 +3184,37 @@ void annotation_set_t::write( const std::string & filename , param_t & param )
 	  // std::cout << "instance_idx.interval = " << instance_idx.interval.start << "\t" << instance_idx.interval.start_sec() << "\n";
 	  // std::cout << "instance_idx.interval.stop = " << instance_idx.interval.stop << "\t" << instance_idx.interval.stop_sec() << "\n";
 	  // std::cout << "\n";
+	  
 
-	  O1 << Helper::dbl2str( instance_idx.interval.start_sec() , globals::time_format_dp ) << "\t"
-	     << Helper::dbl2str( instance_idx.interval.stop_sec() , globals::time_format_dp );
+	  // write in hh:mm:ss format
+	  if ( hms ) 
+	    {
+
+	      double tp1_sec =  instance_idx.interval.start / (double)globals::tp_1sec;
+	      clocktime_t present1 = starttime;
+	      present1.advance( tp1_sec / 3600.0 );
+	      // add down to 1/100th of a second
+	      double tp1_extra = tp1_sec - (long)tp1_sec;
+	   
+	      double tp2_sec =  instance_idx.interval.stop / (double)globals::tp_1sec;
+	      clocktime_t present2 = starttime;
+	      present2.advance( tp2_sec / 3600.0 );
+	      double tp2_extra = tp2_sec - (long)tp2_sec;
+
+	      // hh:mm:ss.ssss
+	      if ( globals::time_format_dp ) 
+		O1 << present1.as_string(':') << Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp  ).substr(1) << "\t"
+		   << present2.as_string(':') << Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp  ).substr(1) ;
+	      else // or truncate to hh:mm:ss
+		O1 << present1.as_string(':') << "\t"
+		   << present2.as_string(':') ;
+	      
+	    }
+	  else // write as elapsed seconds
+	    {
+	      O1 << Helper::dbl2str( instance_idx.interval.start_sec() , globals::time_format_dp ) << "\t"
+		 << Helper::dbl2str( instance_idx.interval.stop_sec() , globals::time_format_dp );
+	    }
 
 	  if ( inst->data.size() == 0 ) 
 	    O1 << "\t.";

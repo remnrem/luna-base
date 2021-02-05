@@ -192,7 +192,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   // generate a feature file of spindles
   const bool     save_annots                = param.has( "annot" );
-  std::map<annot_t*,std::string> afiles;
   
   // show verbose ENRICH output
   const bool     enrich_output            = param.has( "enrich" );
@@ -1883,28 +1882,21 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  if ( save_annots )
 	    {
 
-	      // folder (create if necessary)
-
-	      const std::string annot_folder = param.has("annot-dir") ? param.value( "annot-dir" ) : "./";
-	      const std::string delim = annot_folder[ annot_folder.size() - 1 ] != '/' ? "/" : "";
-	      std::string syscmd = globals::mkdir_command + " " + annot_folder ;
-	      int retval = system( syscmd.c_str() );
-
 	      // annot label
 	      const std::string analysis_label = Helper::dbl2str(frq[fi]) ;
-	      const std::string aname = sp_label + "-" + analysis_label;
+
+	      const std::string aname = sp_label;// + "-" + analysis_label;
 		
 	      annot_t * a = edf.timeline.annotations.add( aname );
 	      a->description = "Spindle intervals";
 	      
-	      const std::string a_filename = annot_folder + delim + aname + ".annot";
-	      logger << " writing " << spindles.size() << " spindles to " << a_filename << "\n";
+	      logger << "  creating annotation class: " << aname 
+		     << ", instance: " << analysis_label 
+		     << ", channel: " << signals.label(s) << "\n";
 
 	      // use F_C as instance label
 	      for (int i=0;i<spindles.size();i++)
 		instance_t * instance = a->add( analysis_label , spindles[i].tp , signals.label(s) );
-	      
-	      afiles[ a ] = a_filename;
 	      
 	    }
 	  
@@ -2004,17 +1996,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
     }
 
-  //
-  // Save all annotations
-  //
 
-  std::map<annot_t*,std::string>::const_iterator aa = afiles.begin();
-  while ( aa != afiles.end() )
-    {
-      aa->first->save( aa->second );
-      ++aa;
-    }
-    
   //
   // If we added new channels, then we need to save a new EDF
   //
@@ -2664,8 +2646,8 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	   present2.advance( tp2_sec / 3600.0 );
 	   double tp2_extra = tp2_sec - (long)tp2_sec;
 	   
-	   writer.value( "START_HMS"  , present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );
-	   writer.value( "STOP_HMS"   , present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , 4  ).substr(1) );
+	   writer.value( "START_HMS"  , present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
+	   writer.value( "STOP_HMS"   , present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
 	   
 	 }
        
