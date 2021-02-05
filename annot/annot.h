@@ -304,9 +304,9 @@ struct instance_t {
 
   globals::atype_t type( const std::string & s ) const;
   
-  avar_t * find( const std::string & name ) 
+  avar_t * find( const std::string & name ) const
   { 
-    std::map<std::string,avar_t*>::iterator aa = data.find( name );
+    std::map<std::string,avar_t*>::const_iterator aa = data.find( name );
     if ( aa == data.end() ) return NULL;
     return aa->second;
   } 
@@ -766,14 +766,12 @@ struct annotation_set_t
     return find( name );
   }
 
-  annot_t * find( const std::string & name ) 
+  annot_t * find( const std::string & name ) const 
   {     
-    if ( annots.find( name ) != annots.end() )
-      return annots[name];
-    else 
-      return NULL;
+    std::map<std::string,annot_t*>::const_iterator aa = annots.find( name ) ;
+    return aa != annots.end() ? aa->second : NULL ;   
   }
-
+  
   annot_t * from_EDF( edf_t & edf );
   
   void clear() ;
@@ -799,6 +797,8 @@ struct annotation_set_t
       }
     return n;
   }
+
+  double first( const std::vector<std::string> & names ) const;
 
   void write( const std::string & filename , param_t & param );
 

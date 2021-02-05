@@ -42,7 +42,7 @@ cmddefs_t globals::cmddefs;
 
 std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
-bool globals::allow_space_delim = false;
+bool globals::allow_space_delim = true;
 
 int globals::time_format_dp;
 

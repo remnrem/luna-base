@@ -1374,8 +1374,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       if ( cc->second >= suds_t::required_epoch_n ) ++nr;      
       ++cc;
     }
+
   
-  return nr;
+  return trainer ? nr : nve ;
   
 }
 
@@ -2207,9 +2208,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   //
 
   suds_indiv_t target( edf.id ) ;
+  
+  int n_obs = target.proc( edf , param );
 
-  target.proc( edf , param );
-
+  if ( n_obs == 0 ) return;
+  
 
   //
   // Do we have prior staging available for this target?

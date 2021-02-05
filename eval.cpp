@@ -1701,8 +1701,8 @@ void proc_write( edf_t & edf , param_t & param )
 
   bool saved = edf.write( filename , edfz , write_as_edf );
 
-  if ( saved ) 
-    logger << " saved new EDF" << ( edf.header.edfplus ? "+" : "" ) << ", " << filename << "\n";
+  if ( ! saved ) 
+    Helper::halt( "problem trying to save " + filename );
 
 }
 
@@ -1771,25 +1771,43 @@ void proc_epoch( edf_t & edf , param_t & param )
     }
 
 
+  //
+  // Epochs start at 0, or something else?
+  //
+  
+  double offset = param.has( "offset" ) ? param.requires_dbl( "offset" ) : 0 ;
+  
+  if ( param.has( "start-annot" ) )
+    {
+      if ( param.has( "offset" ) ) 
+	Helper::halt( "cannot specify both offset and start-annot" );
+      
+      std::vector<std::string> annots = param.strvector( "start-annot" );
+      // find the first of these annotations
+      offset = edf.timeline.annotations.first( annots );
+    }
+
+
   // if already EPOCH'ed for a different record size, or increment,
   // then we should first remove all epochs; this will remove the
   // EPOCH-to-record mapping too
   
   if ( edf.timeline.epoched() 
        && ( ( ! Helper::similar( edf.timeline.epoch_length() , dur ) )
-	    || ( ! Helper::similar( edf.timeline.epoch_inc() , inc ) ) ) )
+	    || ( ! Helper::similar( edf.timeline.epoch_inc() , inc ) )
+	    || ( ! Helper::similar( edf.timeline.epoch_offset() , offset ) ) ) )
     {
       logger << " epoch definitions have changed: original epoch mappings will be lost\n";
       edf.timeline.unepoch();
     }
-
+  
   //
   // basic log info
   //
-
   
-  int ne = edf.timeline.set_epoch( dur , inc );  
-
+  
+  int ne = edf.timeline.set_epoch( dur , inc , offset );  
+  
 
   //
   // minimal output to stdout
@@ -1801,13 +1819,16 @@ void proc_epoch( edf_t & edf , param_t & param )
       return;
     }
   
-  logger << " set epochs, length " << dur << " (step " << inc << "), " << ne << " epochs\n";
-
+  logger << " set epochs, length " << dur 
+	 << " (step " << inc 
+	 << ", offset " << offset 
+	 <<  "), " << ne << " epochs\n";
+  
   writer.value( "NE" , ne );
   writer.value( "DUR" , dur );
   writer.value( "INC" , inc );
   
-
+  
   //
   // write more verbose information to db
   //
@@ -1833,8 +1854,6 @@ void proc_epoch( edf_t & edf , param_t & param )
 	  
 	  interval_t interval = edf.timeline.epoch( epoch );
 	  
-	  //      std::cout << "epoch " << epoch << "\t" << interval.as_string() << "\n";
-	  
 	  // original encoding (i.e. to allows epochs to be connected after the fact
 	  writer.epoch( edf.timeline.display_epoch( epoch ) );
 	  
@@ -1853,7 +1872,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	      const double sec0 = interval.start * globals::tp_duration;
 	      clocktime_t present = starttime;
 	      present.advance( sec0 / 3600.0 );
-	      std::string clocktime = present.as_string();
+	      std::string clocktime = present.as_string( ':' );
 	      writer.value( "HMS" , clocktime );
 	    }
 	

@@ -448,11 +448,10 @@ int timeline_t::calc_epochs()
 
   // Also populate rec2epoch and epoch2rec mappings
   
-
   // **Epoch size has to be a multiple of EDF record size**
 
   //
-  // currently, epoch length and duration must be multiples of the EDF record size
+  // currently, epoch length, duration and offset must be multiples of the EDF record size
   // we can likely free this constraint easily, as we allow a one-to-many mapping of 
   // epochs to records and records to epochs, i.e. one record could be in > 1 epoch
   //
@@ -462,14 +461,17 @@ int timeline_t::calc_epochs()
   // In all cases, epoch length must be >= record length
   //
   
-   if ( epoch_length_tp < edf->header.record_duration_tp )
-     Helper::halt( "epoch duration must be greater or equal to EDF record size\n         which is currently "
+  if ( epoch_length_tp < edf->header.record_duration_tp )
+    Helper::halt( "epoch duration must be greater or equal to EDF record size\n         which is currently "
    		  + Helper::dbl2str( edf->header.record_duration_tp * globals::tp_duration ) + " second(s); "
    		  + "see RECORD-SIZE command to change this" );
-
-   if ( epoch_length_tp < epoch_inc_tp ) Helper::halt( "epoch increment cannot be larger than epoch duration" );
-
   
+  if ( epoch_length_tp < epoch_inc_tp ) 
+    Helper::halt( "epoch increment cannot be larger than epoch duration" );
+  
+  if ( epoch_offset_tp != 0 && epoch_offset_tp < edf->header.record_duration_tp )
+    Helper::halt( "epoch offset cannot be smaller than EDF record size: see RECORD-SIZE command" );
+
   epochs.clear();
   
   mask.clear();
@@ -486,8 +488,8 @@ int timeline_t::calc_epochs()
   if ( edf->header.continuous )
     {
 
-      // set first timepoint
-      uint64_t s = 0;
+      // set first timepoint (if any offset)
+      uint64_t s = epoch_offset_tp;
       
       while ( 1 ) 
 	{
@@ -527,8 +529,9 @@ int timeline_t::calc_epochs()
       // Epochs for the discontinuous case:
       //
       
-      //      std::cout << "HERE\t" << epoch_length_tp << "\t" << epoch_inc_tp << "\n";
-
+      if ( epoch_offset_tp != 0 ) 
+	Helper::halt( "currently, can not have an EPOCH offset with a discontinuous EDF" );
+      
       int r = first_record();
 
       if ( r == -1 ) return 0;

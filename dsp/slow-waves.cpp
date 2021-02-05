@@ -661,13 +661,13 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   std::vector<slow_wave_t> waves; 
 
   // get intervals that are within the time threshold
-
+  
   for (int i=1;i<zc.size();i++)
     {
       
       // check that interval is not discontinuous
       
-      if ( timeline_t::discontinuity( tp , sr , zc[i-1] , zc[i] ) ) continue;
+      if ( timeline_t::discontinuity( tp , sr , zc[i-1] , zc[i] ) ) continue;  
  
       // get duration of interval
 
@@ -791,7 +791,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     acc_slope_n1 , acc_slope_n2 , acc_slope_p1 , acc_slope_p2 ;
   
   sw.clear();
-  
+
   for (int i = 0; i < waves.size(); i++)
     {
       slow_wave_t & w = waves[i];
@@ -855,7 +855,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   median_slope_p2 = acc_slope_p2.size() > 0 ? MiscMath::median( acc_slope_p2 ) : 0 ;
   median_slope_n1 = acc_slope_n1.size() > 0 ? MiscMath::median( acc_slope_n1 ) : 0 ; 
   median_slope_n2 = acc_slope_n2.size() > 0 ? MiscMath::median( acc_slope_n2 ) : 0 ; 
-    
+
   logger << ", of which " << sw.size() << " met criteria";
   if ( thr > 0 ) logger << " (thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
   logger << "\n";

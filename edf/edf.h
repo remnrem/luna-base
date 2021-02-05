@@ -209,7 +209,7 @@ struct edf_header_t
   
   int time_track() const { return t_track; }
   int time_track_offset() const { return t_track_edf_offset; }
-  
+
   std::vector<double> sampling_freq( const signal_list_t & ) const;
   
   void rename_channel( const std::string & o , const std::string & n );
@@ -600,6 +600,8 @@ public:
   
   void set_discontinuous();
 
+  bool is_actually_discontinuous(); // asks 'but is this /really/ discontinuous?'...
+  
   int add_continuous_time_track();
   
   void drop_time_track();

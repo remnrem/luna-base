@@ -200,7 +200,7 @@ void psi_t::report( const signal_list_t & signals )
 		    
 	  for (int j=0;j<nchan;j++)
 	    {
-	      if ( i == j ) continue;
+	      if ( i >= j ) continue;
 	      writer.level( signals.label(j) , "CH2" );
 
 	      writer.value( "PSI_RAW" , psi[m](i,j) );

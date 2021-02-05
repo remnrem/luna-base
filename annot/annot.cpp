@@ -500,8 +500,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   bool is_eannot = Helper::file_extension( f , "eannot" ) ;
   bool is_annot = Helper::file_extension( f , "annot" ) ;
   
-  if ( is_eannot && ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) ) 
-    Helper::halt( "cannot use .eannot files with (discontinuous) EDF+ files" );
+  if ( is_eannot && ! parent_edf.header.continuous ) 
+    Helper::halt( "cannot use .eannot files with discontinuous (EDF+) files" );
 
   // otherwise, need to figure this out by looking at the file?
   
@@ -600,7 +600,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
   
   std::ifstream FIN( f.c_str() , std::ios::in );
-  
+
   // header with # character
   
   // types: int, str, dbl, bool
@@ -615,7 +615,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // # name3 | description                              [ just means a bool ] 
   
   // then rows are either interval or epoch-based, but must **always** have 6 tab-delim columns 
-  
+  // exception: if we find 4 (old format, make channel and meta missing)
+
   // name  id1  ch  sec1  sec2  { vars }
   // name  id   .   e:1   {e:2} { vars } 
   // name  id   ch  hh:mm:ss  hh:mm:ss { vars }
@@ -670,7 +671,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       //
       // header or data row? , or type header (optionally, this is skipped)  
       //
-   
+
       if ( line[0] == '#' ) 
 	{
 	  
@@ -783,6 +784,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	}
       
+      
 
       //
       // optional case-insensitive header (e.g. for stats package, that is skipped); if an annotation 
@@ -792,13 +794,25 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       else if ( line_count == 0 && (! has_class_class) && line.size() > 5 && Helper::iequals( line.substr(0,5) , "class" ) )
 	{
 	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
-	  if ( tok.size() !=6 ) Helper::halt( "invalid header line:\n" + line );
-	  if ( ! Helper::iequals( tok[0] , "class" ) ) Helper::halt( "expecting column 1 to be 'class':\n" + line );
-	  if ( ! Helper::iequals( tok[1] , "instance" ) ) Helper::halt( "expecting column 2 to be 'instance':\n" + line );
-	  if ( ! Helper::iequals( tok[2] , "channel" ) ) Helper::halt( "expecting column 3 to be 'channel':\n" + line );
-	  if ( ! Helper::iequals( tok[3] , "start" ) ) Helper::halt( "expecting column 4 to be 'start':\n" + line );
-	  if ( ! Helper::iequals( tok[4] , "stop" ) ) Helper::halt( "expecting column 5 to be 'stop':\n" + line );
-	  if ( ! Helper::iequals( tok[5] , "meta" ) ) Helper::halt( "expecting column 6 to be 'meta':\n" + line );
+	  if ( tok.size() ==6 ) 
+	    {
+	      if ( ! Helper::iequals( tok[0] , "class" ) ) Helper::halt( "expecting column 1 to be 'class':\n" + line );
+	      if ( ! Helper::iequals( tok[1] , "instance" ) ) Helper::halt( "expecting column 2 to be 'instance':\n" + line );
+	      if ( ! Helper::iequals( tok[2] , "channel" ) ) Helper::halt( "expecting column 3 to be 'channel':\n" + line );
+	      if ( ! Helper::iequals( tok[3] , "start" ) ) Helper::halt( "expecting column 4 to be 'start':\n" + line );
+	      if ( ! Helper::iequals( tok[4] , "stop" ) ) Helper::halt( "expecting column 5 to be 'stop':\n" + line );
+	      if ( ! Helper::iequals( tok[5] , "meta" ) ) Helper::halt( "expecting column 6 to be 'meta':\n" + line );
+	    } 
+	  else if ( tok.size() == 4 ) // exception: still allowing old .annot format
+	    {
+	      if ( ! Helper::iequals( tok[0] , "class" ) ) Helper::halt( "expecting column 1 to be 'class':\n" + line );
+	      if ( ! Helper::iequals( tok[1] , "instance" ) ) Helper::halt( "expecting column 2 to be 'instance':\n" + line );
+	      if ( ! Helper::iequals( tok[2] , "start" ) ) Helper::halt( "expecting column 3 to be 'start':\n" + line );
+	      if ( ! Helper::iequals( tok[3] , "stop" ) ) Helper::halt( "expecting column 4 to be 'stop':\n" + line );	      
+	    }
+	  else
+	    Helper::halt( "invalid header line:\n" + line );
+	  
 	}
 
       //
@@ -807,7 +821,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
       else 
 	{
-
+	  
 	  // data-rows are tab-delimited
 	  
 	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
@@ -853,11 +867,35 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      aa = annot_map.find( aname );
 	    }
 
+
+	  //
+	  // Check size
+	  //
+
+	  if ( tok.size() != 6 ) 
+	    {
+	      
+	      // exception: allow old 4-col formatting
+	      if ( tok.size() == 4 ) 
+		{
+		  tok.resize( 6 );
+		  // 0  1  2  3  4  5
+		  // cl in ch bg ed mt
+		  // cl in bg end		  
+		  tok[5] = ".";
+		  tok[4] = tok[3];
+		  tok[3] = tok[2];
+		  tok[2] = ".";
+		}
+	      else
+		Helper::halt ( "expecting 6 columns, but found " 
+			       + Helper::int2str( (int) tok.size() ) 
+			       + "\n  (use tab-only option to ignore space delimiters)" );
+	    }
 	  
 	  annot_t * a = aa->second; 			
 	  
 	  std::string id = tok[1];
-
 
 	  //
 	  // Get interval implied 
@@ -870,13 +908,25 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  bool readon = false;
 	  
 	  std::string ch; 
-
+	  
 	  interval_t interval = get_interval( line , tok ,
 					      &ch , 
 					      &readon , 
 					      parent_edf , a , starttime , f );
-
-
+	  
+	  //
+	  // Check this isn't prior to EDF start, i.e. can happen
+	  // if hh:mm:ss format is given, but EDF start if after 
+	  // that time;  in this case, get_interval() returns a special code
+	  // of 
+	  //
+	  
+	  if ( interval.start == 1 && interval.stop == 0 ) 
+	    {
+	      continue;
+	    }
+	  
+	  	  
 	  //
 	  // a single time-point
 	  //
@@ -901,7 +951,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		{
 		  std::vector<std::string> ntok = Helper::parse( buffer , globals::allow_space_delim ? " \t" : "\t" );
 		  
-		  if ( ntok.size() == 0 ) Helper::halt( "invalid line following '...' end timepoint" );
+		  if ( ntok.size() == 0 ) 
+		    Helper::halt( "invalid line following '...' end timepoint" );
 
 		  std::string nch;
 		  bool dummy;
@@ -916,7 +967,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  // Check for valid ordering: i.e. start of next cannot be before start of prior
 		  
 		  if ( interval.start >= ninterval.start )
-		    Helper::halt( "invalid '...' interval, next line starts too soon: " + line );
+		    Helper::halt( "invalid '...' interval, next line starts too soon: \n" 
+				  + line + "\n"
+				  + buffer + "\n"
+				  + Helper::int2str( interval.start ) + " >= " 
+				  + Helper::int2str( ninterval.start ) );
 
 		  // update with start of next annotation
 		  // (i.e. as stop is encoded as +1 end, this will
@@ -950,6 +1005,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  const int n = tok.size();
 	  
+
 	  //
 	  // We now fix to 6 columns; the fifth column can contain pipe-delimited values
 	  //
@@ -1066,7 +1122,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 				  const std::string & f
 				  )
 {
-  
+
   // 0 class
   // 1 instance
   // 2 channel
@@ -1105,7 +1161,17 @@ interval_t annot_t::get_interval( const std::string & line ,
   
   interval_t interval;
 
+  
+  // if hh:mm:ss is given that is before the EDF start::
+  //  assign a special code to the returned interval, so that is can be skipped
+  //   interval_t(1,0) 
+          
+  bool before_edf_start = false;
+
+  //
   // for special annotations, can use thisL just insert at start of recording
+  //
+
   if ( tok[3] == "." && tok[4] == "." )
     {  
       interval.start = 0LLU;
@@ -1216,10 +1282,10 @@ interval_t annot_t::get_interval( const std::string & line ,
       //  1) allow microseconds to be specified
       //  2) allow optional dd prefix 
       //  3) assume 24-hour clock time...
-      //  4) ... unless it starts with [00:01:20]
-      
-      bool is_elapsed_hhmmss_start = tok[3][0] == '0' && tok[3][1] == '+';
-      bool is_elapsed_hhmmss_stop  = tok[4][0] == '0' && tok[4][1] == '+';
+      //  4) ... unless it starts with 0+00:01:20, in which case it means elapsed
+
+      bool is_elapsed_hhmmss_start = tok[3].size() > 2 && tok[3][0] == '0' && tok[3][1] == '+';
+      bool is_elapsed_hhmmss_stop  = tok[4].size() > 2 && tok[4][0] == '0' && tok[4][1] == '+';
 
       std::string start_str = is_elapsed_hhmmss_start ? 
 	tok[3].substr(2) : tok[3] ;
@@ -1245,7 +1311,7 @@ interval_t annot_t::get_interval( const std::string & line ,
       if ( is_hms2 && (!is_elapsed_hhmmss_stop) && ( !starttime.valid) )
 	Helper::halt( "specifying hh:mm:ss clocktime stop, but no valid EDF header starttime" );
 
-      
+    
       // convert to / read as seconds 
       
       double dbl_start = 0 , dbl_stop = 0;
@@ -1256,17 +1322,31 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  clocktime_t atime( start_str );
 
 	  if ( is_elapsed_hhmmss_start )
-	    dbl_start = atime.seconds(); 
+	    {
+	      dbl_start = atime.seconds(); 
+	    }
 	  else
-	    dbl_start = clocktime_t::difference_seconds( starttime , atime ) ;
-	  
+	    {
+	      // 1: EDF start comes before ANNOT start
+	      // 2: annot start comes before EDF start --> need to ignore by 
+	      //    setting special flag interval_t(1,0) 
+	      
+	      int earlier = clocktime_t::earlier( starttime , atime );
+	      
+	      if ( earlier == 2 ) 
+		before_edf_start = true;
+	      else 
+		dbl_start = clocktime_t::difference_seconds( starttime , atime ) ;
+	      
+	    }
+
 	}
       else 
 	{
 	  // if here, we are assuming this is not a hh:mm:ss format time, 
 	  // so assume this is seconds 
 	  if ( ! Helper::str2dbl( start_str , &dbl_start ) )
-	    Helper::halt( "invalid interval: " + line );
+	    Helper::halt( "invalid interval (start) : " + line );
 	}
 
       // stop time:
@@ -1290,7 +1370,7 @@ interval_t annot_t::get_interval( const std::string & line ,
       else if ( ! *readon )
 	{	  
 	  if ( ! Helper::str2dbl( tok[4] , &dbl_stop ) )
-	    Helper::halt( "invalid interval: " + line );
+	    Helper::halt( "invalid interval (stop): " + line );
 	}
       
       if ( dbl_start < 0 )
@@ -1330,7 +1410,14 @@ interval_t annot_t::get_interval( const std::string & line ,
 	Helper::halt( "invalid interval: stop is before start\n" + line );
 
     }
-    
+
+  // special code for interval that starts before EDF start (have to ignore)
+  if ( before_edf_start ) 
+    {
+      interval.start = 1LL;
+      interval.stop  = 0LL;
+    }
+
   return interval;
   
 }
@@ -3271,7 +3358,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
     
       if ( ! Helper::str2dbl( start->value , &dbl_start ) )
 	Helper::halt( "invalid interval: " + start->value );
-		  
+    
       if ( ! Helper::str2dbl( duration->value , &dbl_dur ) ) 
 	Helper::halt( "invalid interval: " +  duration->value );
       
@@ -3536,5 +3623,34 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
     } // next record
   
   return a;
+}
+
+
+
+      
+// of a list of annotations, find the first start time 
+// i.e. for aligning staging with a start that is not 0-seconds
+
+double annotation_set_t::first(const std::vector<std::string> & requested ) const
+{
+  std::set<double> starts;
+  
+  for (int a=0; a < requested.size(); a++)
+    {
+      // find this annotation
+      annot_t * annot = find( requested[a] );
+      if ( annot == NULL ) continue;
+      // sorted first by time
+      annot_map_t::const_iterator ii = annot->interval_events.begin();
+      if (  ii == annot->interval_events.end() ) continue;
+      starts.insert( ii->first.interval.start_sec() );
+    }
+  
+  // none found: return 0
+  if ( starts.size() == 0 ) return 0;
+  
+  // return smallest
+  return *starts.begin();
+  
 }
 

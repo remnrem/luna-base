@@ -1420,7 +1420,14 @@ bool edf_t::attach( const std::string & f ,
 	logger << "  " << header.nr_all  << " records, each of " << header.record_duration << " second(s)\n";
       
       logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
-      logger << "in " << ( header.edfplus ? "an EDF+" : "a standard EDF" ) << " file:" ;
+      
+      if ( header.edfplus & header.continuous ) 
+	logger << "in an EDF+C file:" ;
+      else if ( header.edfplus & ! header.continuous ) 
+	logger << "in an EDF+D file:" ;
+      else
+	logger << "in a standard EDF file:" ;
+
       for (int s=0;s<header.ns;s++) 
 	logger << ( s % 8 == 0 ? "\n  " : " | " ) << header.label[s]; 
       logger << "\n";
@@ -1776,9 +1783,73 @@ bool edf_record_t::write( edfz_t * edfz )
 }
 
 
+bool edf_t::is_actually_discontinuous() 
+{
+  // definitely continuous
+  if ( header.continuous ) return false;
+  
+  // otherwise, check whether any gaps actually present 
+  // (i.e. versus start/end missing, which Luna will still treat
+  // as 'discontinuous' for internal reasons
+  
+  int num_segments = 0;
+
+  int r = timeline.first_record();
+  
+  uint64_t tp0 = timeline.rec2tp[r];
+
+  uint64_t tp_start = tp0;  
+
+  while ( r != -1 )
+    {
+      
+      // next record
+      r = timeline.next_record( r );
+      
+      // start of this next record
+      uint64_t tp;
+
+      bool segend = false;
+      
+      // end?
+      if ( r == -1 )
+	{
+	  // make this the 'previous'
+	   tp0 = tp;
+	   segend = true;
+	}
+      else
+	{
+	  tp = timeline.rec2tp[r] ;
+
+	  // discontinuity / end of segment?
+	  segend = tp - tp0 != header.record_duration_tp ;
+	}
+
+      // record this segment 
+
+      if ( segend )
+	{
+	  ++num_segments ;	  
+	  // current point becomes start of the next segment
+	  tp_start = tp;	  
+	}      
+      // current point becomes the last one, for next lookup
+      tp0 = tp;
+    }
+  
+  // is this discontinuous?
+  return num_segments > 1;
+      
+}
+
 
 bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
 {
+
+  //
+  // Deal with start time
+  //
 
   if ( null_starttime ) 
     {
@@ -1789,6 +1860,18 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
     {
       reset_start_time();
     }
+  
+  //
+  // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is set after any RESTRUCTURE
+  // We'll keep this as is here, but for the purpose of WRITE-ing an EDF+ (only), we'll first check 
+  // whether it is truly discontinuous (i.e. versus only the start/end was removed)
+  //
+
+  bool make_EDFC = (!header.continuous) && (!is_actually_discontinuous() ); 
+
+  //
+  // Write to file
+  //
 
   filename = f;
 
@@ -1802,9 +1885,16 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
 	  logger << " ** could not open " << filename << " for writing **\n";
 	  return false;
 	}
-      
+
+      // temporarily change, just for benefit of written header 
+      if ( make_EDFC ) set_continuous();
+
+      // write header
       header.write( outfile );
       
+      // change back if needed, as subsequent commands after will be happier
+      if ( make_EDFC ) set_discontinuous();
+
       int r = timeline.first_record();
       while ( r != -1 ) 
 	{
@@ -1839,8 +1929,12 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
 	  return false;
 	}
 
+      
+      if ( make_EDFC ) set_continuous();
       // write header (as EDFZ)
       header.write( &edfz );
+      if ( make_EDFC ) set_discontinuous();
+
       
       int r = timeline.first_record();
       while ( r != -1 ) 
@@ -1885,7 +1979,11 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
 
     }
   
-
+  logger << " saved new EDF" 
+	 << ( header.edfplus ? "+" : "" ) 
+	 << ( header.edfplus & make_EDFC ? "C" : "D" )        
+	 << ", " << filename << "\n";
+    
   return true;
 }
 

@@ -178,7 +178,7 @@ struct timeline_t
 
     if ( epoched() ) return num_epochs();
 
-    // otherwise, set to default
+    // otherwise, set to defaults
 
     int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
 
@@ -198,6 +198,7 @@ struct timeline_t
     // No EPOCHs
     epoch_length_tp = 0L;
     epoch_inc_tp = 0L;
+    epoch_offset_tp = 0L;
     epochs.clear();
     
     // Masks
@@ -229,14 +230,16 @@ struct timeline_t
 
   int whole_recording_epoch_dur(); 
 
-  int set_epoch(const double s, const double o ) 
+  int set_epoch(const double s, const double o , const double offset = 0 ) 
   { 
-    if ( s <= 0 || o < 0 ) 
-      Helper::halt( "cannot specify negative epoch durations/increments");
+    if ( s <= 0 || o < 0 || offset < 0 ) 
+      Helper::halt( "cannot specify negative epoch durations/increments/offsets");
     
     clear_epoch_annotations();
     epoch_length_tp = s * globals::tp_1sec;
     epoch_inc_tp = o * globals::tp_1sec;
+    epoch_offset_tp = offset * globals::tp_1sec;
+
     if ( epoch_length_tp == 0 || epoch_inc_tp == 0 ) 
       Helper::halt( "invalid epoch parameters" );
     first_epoch();
@@ -248,6 +251,9 @@ struct timeline_t
   
   double epoch_inc() const 
   { return (double)epoch_inc_tp / globals::tp_1sec; }
+
+  double epoch_offset() const 
+  { return (double)epoch_offset_tp / globals::tp_1sec; }
 
   bool exactly_contiguous_epochs() const
   { return epoch_length_tp == epoch_inc_tp; } 
@@ -712,6 +718,8 @@ struct timeline_t
   uint64_t     epoch_length_tp;  
   
   uint64_t     epoch_inc_tp;    
+
+  uint64_t     epoch_offset_tp;
   
   std::vector<interval_t> epochs;
 

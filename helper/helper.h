@@ -483,7 +483,21 @@ struct clocktime_t
         
   }
 
-  
+  // this *tests* whether t1 comes before t2 (return 1 or 2 for which comes first)
+  //  based on smallest difference going from t1 --> t2   or t1 --> 2
+  //    i.e. all these would have t1 first 
+  //       09:00 09:10
+  //       22:00 02:00    ( as 4 < 20 ) 
+  static int earlier( const clocktime_t & t1 , const clocktime_t & t2 )
+  {
+    double d1 = difference( t1 , t2 );
+    double d2 = difference( t2 , t1 );
+    if ( d1 < d2 ) return 1;
+    if ( d2 < d1 ) return 2;
+    return 0;
+  }
+    
+  // this *assumes* that t1 comes before t2
   static double difference( const clocktime_t & t1 , const clocktime_t & t2 )
   {
     // we assume t1 happens before t2
