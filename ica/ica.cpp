@@ -161,6 +161,11 @@ void eigen_ica_t::fastICA( Eigen::MatrixXd & X ,
   A.transposeInPlace();
   S.transposeInPlace();
 
+  std::cout << "K dims = " << K.rows() << " " << K.cols() << "\n";
+  std::cout << "W dims = " << W.rows() << " " << W.cols() << "\n";
+  std::cout << "A dims = " << A.rows() << " " << A.cols() << "\n";
+  std::cout << "S dims = " << S.rows() << " " << S.cols() << "\n";
+  
   std::cerr << " all done\n";
 }
 

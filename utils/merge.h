@@ -55,12 +55,14 @@ struct options_t {
     strict = false;
     assume_txt = true;
     max_var_len = 100;
+    numeric_strata_encoding = false;
   }
 
   bool verbose;
   bool strict; // F skip bad stuff / T halt if bad stuff found
   bool assume_txt; // only look at .txt files (i.e. requires that extension)
   int max_var_len;
+  bool numeric_strata_encoding; // VAR.1, VAR.2 instead of VAR.FAC_LVL_FAC_LVL
   std::set<std::string> skip_folders;
   std::string missing_data_outsymbol; // NA for output
   std::set<std::string> missing_data_symbol; // for input
@@ -361,11 +363,13 @@ struct dataset_t {
 
   std::set<domain_t> domains;
 
-  std::set<var_t> xvars; // expanded vars, e.g. DENS.F_11_CH_C3_SS_N2
+  std::set<var_t> xvars; // expanded vars, e.g. DENS.F_11_CH_C3_SS_N2, or DENS.1, DENS.2 etc
   
   std::map<std::string,int> obscount; // count non-missing obs
   
   std::map<std::string,std::string> faclabels; // track labels for factors (for dict output)
+
+  std::map<std::string,int> strata2number; // for numeric strata encoding
   
   var_t xvar( const var_t & var , const std::vector<std::string> & fac , const std::vector<std::string> & lvl )
   {
@@ -425,6 +429,19 @@ struct dataset_t {
     xv.domain_name = var.domain_name;
     xv.domain_group = var.domain_group;
 
+    // change to numeric encoding instead (but keeping all other info
+    // for the data dictionary?)
+    if ( options.numeric_strata_encoding )
+      {
+	int n = strata2number.size();
+	if ( strata2number.find( xv.name ) == strata2number.end() )
+	  strata2number[ xv.name ] = n+1;
+
+	std::stringstream ss;
+	ss << var.name << "." << strata2number[  xv.name ] ;
+	xv.name = ss.str();
+      }
+    
     // store
     xvars.insert( xv );      
 

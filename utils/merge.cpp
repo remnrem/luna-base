@@ -88,7 +88,7 @@ int main( int argc , char ** argv )
 	    options.strict = true;
 
 	  // do not show factors
-	  if ( key == "nf" )
+	  if ( key == "nofac" )
 	    options.show_fac = false;
 
 	  // set max var len
@@ -97,6 +97,10 @@ int main( int argc , char ** argv )
 	      if ( n != 2 || ! str2int( val , &options.max_var_len ) )
 		halt("problem with format of option " + t );
 	    }
+
+	  // enforce numeric strata encoding
+	  if ( key == "ns" )
+	    options.numeric_strata_encoding = true;
 	}
 
     }
@@ -1107,7 +1111,8 @@ void dataset_t::check_variable_lengths()
   if ( problem )
     halt( "variables too long... options:\n"
 	  " - change max. allowed length with -ml=999 option\n"
-	  " - do not show factors with -nf\n"
-	  " - use aliases in data dictionaries");
+	  " - do not show factors with -nofac\n"
+	  " - use aliases in data dictionaries\n"
+	  " - or use numeric strata codes with -ns" );
 }
       
