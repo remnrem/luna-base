@@ -219,6 +219,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	    }
 	}
       
+
       //
       // Or read prototypes from a previous segmentation, and check that channels match
       //
@@ -407,7 +408,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	  writer.value( "SPC" , stats.m_spc[k] );
 	  writer.value( "GEV" , stats.m_gev[k] );      
 	  writer.value( "N" , cnts[k].first );
-	  writer.value( "F" , cnts[k].second );
+	  //writer.value( "F" , cnts[k].second );
 	}
       writer.unlevel( "K" );
       
@@ -655,7 +656,9 @@ std::vector<int> microstates_t::find_peaks( const Data::Matrix<double> & X ,
 	if ( GFP[ peak_idx[r] ] <= th )
 	  peak_idx2.push_back( peak_idx[r] );
 
-      logger << "  applying GFP threshold mean + " << gfp_threshold << "SDs, keeping " << peak_idx2.size() << " of " << n_peaks << " peaks\n";
+      logger << "  applying GFP threshold mean + " << gfp_threshold 
+	     << "SDs, keeping " << peak_idx2.size() 
+	     << " of " << n_peaks << " peaks\n";
       
       n_peaks = peak_idx2.size();
       peak_idx = peak_idx2;
@@ -705,8 +708,6 @@ std::vector<int> microstates_t::find_peaks( const Data::Matrix<double> & X ,
 	 << round( 100 * ( n_peaks / (double)np ) ) << "%)\n";  
   
   return peak_idx;
-  
-  
   
 }
 
@@ -763,14 +764,8 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
 
   modkmeans_t kmeans( ks , false , 10 , 1000 , 1e-6 , verbose );
 
-  // modkmeans_t( const std::vector<int> & ks ,
-  // 	       const bool normalize = false ,
-  // 	       const int nreps = 10 ,
-  // 	       const int max_iterations = 1000 ,
-  // 	       const double threshold = 1e-6 ,
-  // 	       const bool verbose = false )
-
   modkmeans_all_out_t results = kmeans.fit( Z );
+
 
   //
   // optimal K selected
@@ -1219,6 +1214,10 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   // copy GFP (per point -- needed?)
   
   stats.GFP = GFP;
+
+  // Get spatial correlations
+  
+  stats.SpatCorr = SpatCorr;
   
   // means
   stats.m_gfp.resize(K);

@@ -46,14 +46,13 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   
   const int ns = signals.size();
 
+  // analysis per epoch: report mean
+
   // other parameters
-  bool whole_signal_analysis = true;
   bool epoch_level_output = param.has( "epoch" );
-  if ( param.has( "epoch-only" ) )
-    {
-      whole_signal_analysis = false;
-      epoch_level_output = true;
-    }
+
+  // rather than average epochs, do MT on entire signal
+  bool whole_signal_analysis = param.has( "whole-signal" );
 
   // MTM parameters (tw or nw)
   double npi = 3;
@@ -170,16 +169,13 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       
     }
 
+
+  if ( whole_signal_analysis ) return;
+
   
   //
   // Epoch-wise analyses
   //
-  
-
-  if ( ! epoch_level_output )
-    return;
-
- 
    
   //
   // Get each signal
@@ -210,7 +206,14 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       
 
       //
-      // for each each epoch 
+      // average over epochs
+      //
+      
+      std::vector<double> frq;
+      std::vector<double> spec; 
+
+      //
+      // for each epoch 
       //
 
       int total_epochs = 0;
@@ -233,7 +236,8 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  // stratify output by epoch
 	  //
 	  
-	  writer.epoch( edf.timeline.display_epoch( epoch ) );
+	  if ( epoch_level_output)
+	    writer.epoch( edf.timeline.display_epoch( epoch ) );
 
 	  ++total_epochs;
 	  
@@ -272,47 +276,85 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  //
 	  // Ouput
 	  //
-
+	  
 	  if ( fac_f > 1 )  // binned output
 	    {	       
 	      
-	      // wid_f (default 1) Hz bins
-	      bin_t bin( min_f , max_f , fac_f );
-	      
-	      bin.bin( mtm.f , mtm.spec );
-	      
-	      // output	       
-	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
+	      if ( epoch_level_output)
 		{
-		  //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
-		  writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
-		  writer.value( "MTM" , bin.bspec[i] );
-		  if ( bin.nominal[i] != "" )
-		    writer.value( "INT" , bin.nominal[i] );
+		  // wid_f (default 1) Hz bins
+		  bin_t bin( min_f , max_f , fac_f );
+		  
+		  bin.bin( mtm.f , mtm.spec );
+		  
+		  // output	       
+		  for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
+		    {
+		      //writer.level( Helper::dbl2str( bin.bfa[i] ) + "-" + Helper::dbl2str( bin.bfb[i] ) ,  globals::freq_strat  );
+		      writer.level(  ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		      writer.value( "MTM" , bin.bspec[i] );
+		      if ( bin.nominal[i] != "" )
+			writer.value( "INT" , bin.nominal[i] );
+		    }
+		  writer.unlevel( globals::freq_strat );
 		}
-	      writer.unlevel( globals::freq_strat );
-	      
+
 	    }
 	  
 	  else // full-spectrum output
 	    {
 	      
-	      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+	      if ( epoch_level_output)
 		{
-		  if ( mtm.f[i] <= max_f ) 
+		  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
 		    {
-		      writer.level( mtm.f[i] , globals::freq_strat  );
-		      writer.value( "MTM" , mtm.spec[i] );
+		      if ( mtm.f[i] <= max_f ) 
+			{
+			  writer.level( mtm.f[i] , globals::freq_strat  );
+			  writer.value( "MTM" , mtm.spec[i] );
+			}
 		    }
+		  
+		  writer.unlevel( globals::freq_strat );
 		}
-	      
-	      writer.unlevel( globals::freq_strat );
+
+		  
+	      // store epoch-level results
+	      if ( total_epochs  == 1 )
+		{
+		  frq = mtm.f;
+		  spec = mtm.spec;
+		}
+	      else
+		{
+		  for ( int i = 0 ; i < mtm.spec.size() ; i++ )
+		    spec[i] += mtm.spec[i] ;
+		}	      
 	      
 	    }
 	  
 	} // next epoch
       
-      writer.unepoch();
+
+      if ( epoch_level_output )
+	writer.unepoch();
+
+
+      //
+      // Report averages
+      //
+            
+      for ( int i = 0 ; i < frq.size() ; i++ )
+	{
+	  if ( frq[i] <= max_f )
+	    {
+	      writer.level( frq[i] , globals::freq_strat  );
+	      writer.value( "MTM" , spec[i] / (double)total_epochs );
+	    }
+	}
+
+      writer.unlevel( globals::freq_strat );
+
       
     } // next signal
   
