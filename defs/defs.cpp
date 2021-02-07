@@ -712,6 +712,7 @@ void globals::init_channel_types()
 {
   channel_type( "EEG" , EEG );
   channel_type( "REF" , REF );
+  channel_type( "IC"  , IC );
   channel_type( "EOG" , EOG );
   channel_type( "GENERIC" , GENERIC );
   channel_type( "ECG" , ECG );
@@ -798,6 +799,9 @@ void globals::init_channel_types()
   add_channel_map( "A1" , REF );
   add_channel_map( "M2" , REF );
   add_channel_map( "A2" , REF );
+
+  // IC
+  add_channel_map( "IC_" , IC );
 
   // EOG
   add_channel_map( "EOG" , EOG );

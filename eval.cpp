@@ -814,7 +814,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
       else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
-      else if ( is( c, "ADJUST" ) )       proc_adjust( edf , param(c) ); 
+
 
       else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
       else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
@@ -909,7 +909,10 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "PSI" ) )          proc_psi( edf , param(c) );
       else if ( is( c, "ACF" ) )          proc_acf( edf , param(c) );
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
+
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
+      else if ( is( c, "ADJUST" ) )       proc_adjust( edf , param(c) ); 
+
       else if ( is( c, "CLOCS" ) )        proc_attach_clocs( edf , param(c) );
       else if ( is( c, "L1OUT" ) )        proc_leave_one_out( edf , param(c) );
       else if ( is( c, "INTERPOLATE" ) )  proc_chep_based_interpolation( edf, param(c) );
@@ -2541,10 +2544,10 @@ void proc_canonical( edf_t & edf , param_t & param )
 }
 
 
-// Adjust signals by other signals (similar to REFERENCE but different syntax)
+// Adjust signals by ICs 
 void proc_adjust( edf_t & edf , param_t & param )
 {
-  edf.adjust( param );
+  dsptools::ica_adjust( edf , param );
 }
 
 // Reference tracks
@@ -3143,6 +3146,9 @@ void cmd_t::define_channel_type_variables( edf_t & edf )
   std::string ref = globals::list_channels( REF , edf.header.label );
   //if ( eeg != "" )
   cmd_t::ivars[ edf.id ][ "ref" ] = ref;
+
+  std::string ic = globals::list_channels( IC , edf.header.label );
+  cmd_t::ivars[ edf.id ][ "ic" ] = ic;
 
   std::string eog = globals::list_channels( EOG , edf.header.label );
   //if ( eog != "" )

@@ -106,10 +106,11 @@ enum channel_type_t
     POSITION ,  //
     LIGHT , 
     SNORE ,      
-    HR ,     // heart rate/pulse, i.e. if derived/non-ECG
+    HR ,      // heart rate/pulse, i.e. if derived/non-ECG
+    IC  ,     // independent components
     GENERIC , // i.e. unknown
-    REF , // A1, A2, M1, M2
-    EEG      // any EEG
+    REF ,     // A1, A2, M1, M2
+    EEG       // any EEG
     
   };
 

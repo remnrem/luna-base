@@ -67,8 +67,11 @@ struct ms_prototypes_t {
 
 
 struct ms_assignment_t {
+
   ms_assignment_t( int l , double g ) : label(l) , gmd(g) { } 
+
   int label;
+
   double gmd;
 
   bool operator<( const ms_assignment_t & rhs ) const {
@@ -85,6 +88,7 @@ struct ms_assignments_t {
 
   // original, ordered values
   std::set<ms_assignment_t> assignments;
+
   void add( int l , double g )
   {
     assignments.insert( ms_assignment_t( l , g ) );
@@ -92,6 +96,7 @@ struct ms_assignments_t {
 
   // populate ordered 
   std::vector<int> picks;
+
   void set_picks()
   {
     picks.clear();
@@ -124,6 +129,7 @@ struct ms_assignments_t {
 };
 
 struct ms_backfit_t {
+
   ms_backfit_t( const int N ) { labels.resize(N); } 
 
   // class to keep track of best (and 2nd, 3rd, etc) best picks, for each N
@@ -259,6 +265,8 @@ struct ms_stats_t {
   double GEV_tot;
 
   Data::Vector<double> GFP;
+
+  Data::Matrix<double> SpatCorr;
 
   Data::Vector<double> m_gfp;
   Data::Vector<double> m_dur;

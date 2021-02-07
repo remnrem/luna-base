@@ -161,7 +161,7 @@ void eigen_ica_t::fastICA( Eigen::MatrixXd & X ,
   A.transposeInPlace();
   S.transposeInPlace();
 
-  std::cerr << " all done\n";
+  logger << " all done\n";
 }
 
 
@@ -206,7 +206,7 @@ Eigen::MatrixXd eigen_ica_t::ica_parallel( const Eigen::MatrixXd & X ,
   // iteration counter
   int it = 0;
 
-  logger << "  starting iteraatons (symmetric FastICA using logcosh approx. to neg-entropy function)";
+  logger << "  starting iterations (symmetric FastICA using logcosh approx. to neg-entropy function)";
   
   while ( lim[it] > tol && it < (maxit-1) )
     {

@@ -32,6 +32,7 @@ struct param_t;
 namespace dsptools {
 
   void ica_wrapper( edf_t & edf , param_t & param );
+  void ica_adjust( edf_t & edf , param_t & param );
 
 }
 
