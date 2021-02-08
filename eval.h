@@ -345,6 +345,7 @@ void proc_rems( edf_t & , param_t & );
 
 void proc_dump_cache( edf_t & , param_t & );
 
+void proc_siggen( edf_t & , param_t & );
 void proc_spike( edf_t & , param_t & );
 void proc_shift( edf_t & , param_t & );
 

@@ -29,6 +29,8 @@
 #include "eval.h"
 #include "db/db.h"
 
+#include "stats/eigen_ops.h"
+
 #include <map>
 #include <set>
 
@@ -262,7 +264,10 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 void dsptools::ica_adjust( edf_t & edf , param_t & param )
 {
   
+  //
   // requires an un-mixing matrix A 
+  //
+  
   std::string Af = param.requires( "A" );
   if ( ! Helper::fileExists( Af ) ) 
     Helper::halt( "could not find matrix A: " + Af );
@@ -299,12 +304,17 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
   // (putative) ICs to adjust for (i.e. subtract) i.e. IC_1, IC_2, 
   signal_list_t adjs = edf.header.signal_list( param.value( "adj" ) );
 
+   
   // nothing to do
   if ( signals.size() == 0 || adjs.size() == 0 ) return;
 
   const int ns = signals.size();
   const int na = adjs.size();
 
+  // track SR
+  const int sigsr = (int)edf.header.sampling_freq( signals(0) );
+
+  
   // check all requested signals exist in A
   for (int s=0; s<ns; s++)
     if ( chs.find( signals.label(s) ) == chs.end() ) 
@@ -315,9 +325,63 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
     if ( ics.find( adjs.label(a) ) == ics.end() )
       Helper::halt( "could not find " + adjs.label(a) + " in " + Af );
 
-  // track SR
-  const int sigsr = (int)edf.header.sampling_freq( signals(0) );
+  double spatial = param.has( "spatial" ) ? param.requires_dbl( "spatial" ) : 0 ;
 
+  //
+  // If certain (logical OR) criteria are proposed, then instead of taking all IC, we only select
+  // those that meet one or more criterion:  e.g.
+
+  //   a) time-domain: correlation w/ another signal,
+  //   b) spatial:     extreme spatial topography,
+  //   c) frequency:   extreme frequency domain spikes (to be added) 
+  //   d) time-domain: extreme time source of S  (to be added)
+  //  but also allow for some to be forced in:   force=IC_X
+  
+  std::set<std::string> selected = param.strset( "force" );
+  
+  if ( spatial > 0 )
+    {
+      //std::map<std::string,std::map<std::string,double> > Am;
+
+      Eigen::MatrixXd Az = Eigen::MatrixXd::Zero( chs.size() , ics.size() );
+      
+
+      int cnt_ic = 0;
+      std::map<std::string,std::map<std::string,double> >::const_iterator aa = Am.begin();
+      while ( aa != Am.end() )
+	{
+	  int cnt_ch = 0;
+	  std::map<std::string,double>::const_iterator cc = aa->second.begin();
+	  while ( cc != aa->second.end() )
+	    {
+	      Az(cnt_ch,cnt_ic) = cc->second ;
+	      ++cnt_ch;
+	      ++cc;
+	    }
+	  ++cnt_ic;
+	  ++aa;
+	}
+
+      // normalize
+      eigen_ops::scale( Az , true );
+      
+      Eigen::ArrayXd mx = Az.array().cwiseAbs().colwise().maxCoeff();
+
+      cnt_ic = 0;
+      aa = Am.begin();
+      while ( aa != Am.end() )
+        {
+	  if ( mx[cnt_ic] >= spatial )
+	    {
+	      logger << "  selecting " << aa->first << " based on spatial variance, max |Z| = " << mx[cnt_ic] << "\n";
+	      selected.insert( aa->first );
+	    }	  
+	  ++aa;
+	  ++cnt_ic;
+	}
+    }
+
+  
   //
   // correlative factors?
   //
@@ -419,7 +483,13 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
       rec = edf.timeline.next_record(rec);       
     }
 
-    
+
+  //
+  // Spatial spread of the component (variance of A matrix) 
+  //
+
+  
+  
   //
   // now we have all data in:
   //   sigdata
@@ -428,14 +498,12 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
   //  go through signals and make any adjustments needed
   //
   
-  logger << "  adjusting " << ns << " signals based on " << na << " adjustment-signals\n";
 
   //
   // Identify only adjustment factors that are signficiantly (time-domain)
   // correlated with one of more other channels
   //
-  
-  std::set<std::string> excludes;
+
   if ( corrsigs.size() != 0 )
     {
       for (int a=0;a<na; a++)
@@ -452,22 +520,28 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
 		{
 		  logger << "   including " << adjs.label(a) << " based on its absolute correlation with "
 			 << corrsigs.label(c) << ", r = " << correl << "\n";
-		  flagged = true;
+		  flagged = true;		  
 		  break;
 		}
 	    }
+	  
 	  // was this factor flagged? (i.e. based on strength of correlation with at least one corr-sig ? (above corr-th)
-	  if ( ! flagged )
-	    excludes.insert( adjs.label(a) );
+	  if ( flagged )
+	    selected.insert( adjs.label(a) );
 	}
     }
 
   
-  if ( nc > 0 )
-    logger << "  " << na-excludes.size() << " adjustment-signals retained based on correlations with " << nc << " correlative-signals\n";
 
+  //
+  //
+  //
 
-    
+  logger << "  adjusting " << ns
+	 << " signals based on "
+	 << ( selected.size() ? selected.size() : na )
+	 << " adjustment-signals\n";
+  
   //
   // Process each signal
   //
@@ -482,13 +556,16 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
       // reference to the original data
       std::vector<double> & d = sigdata[s];
       const int np = d.size();
-      
-            
+
+      // copy
+      std::vector<double> orig = d;
+
       // adjust for each adjusting signal
       for (int a=0; a<na; a++)
 	{
+
 	  // skip?
-	  if ( excludes.find( adjs.label(a) ) != excludes.end() )
+	  if ( selected.size() != 0 && selected.find( adjs.label(a) ) == selected.end() )
 	    continue;
 	  
 	  std::vector<double> & adj = adjdata[a];
@@ -503,11 +580,18 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
 	    d[p] -= adj[p] * aval;
 	  
 	}
+
+      // correlation between old and new signal?
+      double r = Statistics::correlation( orig , d );
+      writer.level( signals.label(s) , globals::signal_strat );
+      writer.value( "R" , r );
       
       // update signal                                                                                                                                
       edf.update_signal( signals(s) , &d );
-
+      
     } // next signal
+
+  writer.unlevel( globals::signal_strat );
 
   // all done
 }

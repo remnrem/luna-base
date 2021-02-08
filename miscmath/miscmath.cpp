@@ -660,6 +660,15 @@ int MiscMath::position2rightepoch( uint64_t p , uint64_t e_length , uint64_t e_o
 // Median filter
 //
 
+std::vector<double> MiscMath::remove_median_filter( const std::vector<double> & x , int n , std::vector<double> * p )
+{
+  std::vector<double> f = MiscMath::median_filter( x , n );
+  if ( p != NULL ) *p = f; 
+  for (int i=0; i<f.size(); i++)
+    f[i] = x[i] - f[i];
+  return f;
+}
+  
 std::vector<double> MiscMath::median_filter( const std::vector<double> & x , int n )
 {
 

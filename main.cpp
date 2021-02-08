@@ -22,7 +22,7 @@
 
 #include "luna.h"
 #include "main.h"
-
+#include "miscmath/crandom.h"
 #include <fstream>
 
 extern globals global;
@@ -1474,7 +1474,27 @@ void proc_eval_tester( const bool verbose )
 
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
-   
+
+  if ( p == "peaks" )
+    {
+      std::vector<double> x(100);
+      for (int i=0;i<100;i++) x[i] = i*i;
+      x[9] += 2000;
+      x[20] += 2000;
+      double m1, m2;
+      std::vector<double> s1, s2, s3;
+      psd_shape_metrics( x , x , 5 , &m1, &m2, &s1, &s2, &s3 );
+      for (int i=0;i<s1.size();i++)
+	std::cout << x[i] << "\t"
+		  << s1[i] << "\t"
+		  << s2[i] << "\t"
+		  << s3[i] << "\n";
+
+      std::cout << "m1\t" << m1 << "\n"
+		<< "m2\t" << m2 << "\n";
+     
+      std::exit(0);
+    }
   
   if ( p == "kmeans" )
     {

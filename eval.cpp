@@ -938,6 +938,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "CACHE" ) )        proc_dump_cache( edf , param(c) );
       
+      else if ( is( c, "SIGGEN" ) )       proc_siggen( edf , param(c) );
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
       else if ( is( c, "SHIFT" ) )        proc_shift( edf , param(c) );
       
@@ -2303,6 +2304,13 @@ void proc_dump_cache( edf_t & edf , param_t & param )
   
 }
 
+
+// SIGGEN : add/generate artificial signals to 1+ channels
+ 
+void proc_siggen( edf_t & edf , param_t & param )
+{
+  dsptools::siggen( edf, param );
+}
 
 
 // SPIKE : spike in a new bit of signal

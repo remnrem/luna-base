@@ -26,6 +26,8 @@
 #include "timeline/timeline.h"
 #include "miscmath/miscmath.h"
 
+#include "helper/helper.h"
+
 #include "defs/defs.h"
 
 void FFT::init( int Ndata_, int Nfft_, int Fs_ , fft_t type_ , window_function_t window_ )
@@ -632,4 +634,71 @@ int bin_t::bin( const std::vector<double> & f ,
   
   //   return bspec.size();
 
+}
+
+
+
+
+void psd_shape_metrics( const std::vector<double> & f , // frq
+			const std::vector<double> & x , // log(power)
+			const int w , 
+			double * m1 ,
+			double * m2 ,
+			std::vector<double> * detrended ,
+			std::vector<double> * smoothed , 
+			std::vector<double> * difference )
+{
+
+  const int n = f.size();
+  if ( x.size() != n )
+    {
+      std::cerr << f.size() << "\t" << x.size() << "\n";
+      Helper::halt( "f and x of different sizes" );
+    }
+
+  // assume p = log power
+  
+  // put on 0..1 scale
+
+  double xmin, xmax;
+  MiscMath::minmax( x , &xmin, &xmax );
+
+  std::vector<double> p(n);
+  for (int i=0; i<n; i++)
+    p[i] = ( x[i] - xmin ) / ( xmax - xmin );
+
+  // overall linear detrend (nb. lin/log scale)
+  // and Z-normalize
+
+  double pa, pb;
+  p = MiscMath::detrend( p , &pa, &pb ) ;
+
+  // get smoothed: ss = smoothed, pp = p - ss 
+  std::vector<double> ss; 
+  std::vector<double> pp = MiscMath::remove_median_filter( p , w , &ss );  
+    
+  double ppmin, ppmax;
+  MiscMath::minmax( pp , &ppmin, &ppmax );
+  
+  // peak-to-peak of difference
+  *m1 = ( ppmax - ppmin ) ; 
+  
+  // kurtosis of delta (i.e. assume mean = 0 )
+  double numer = 0 , denom = 0;
+  for (int i=0; i<n; i++)
+    {
+      numer += pow( pp[i] , 4 );
+      denom += pow( pp[i] , 2 );
+    }
+
+  numer /= (double)n;
+  denom /= (double)n;
+  denom *= denom;
+  *m2 = numer / denom - 3.0;
+    
+  // verbose reports?
+  if ( detrended != NULL ) *detrended = p;
+  if ( smoothed != NULL ) *smoothed = ss;
+  if ( difference != NULL ) *difference = pp;
+   
 }

@@ -46,6 +46,15 @@ struct edf_t;
 
 std::map<double,double> fft_spectrum( const std::vector<double> * d , int Fs );
 
+void psd_shape_metrics( const std::vector<double> & f , // frq
+			const std::vector<double> & p , // log(power)
+			const int w ,
+			double * m1 ,
+			double * m2 ,
+			std::vector<double> * detrended = NULL ,
+			std::vector<double> * smoothed = NULL , 
+			std::vector<double> * difference = NULL );
+
 class FFT
 {
   

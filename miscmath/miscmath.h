@@ -245,7 +245,7 @@ namespace MiscMath
   // Median filter
 
   std::vector<double> median_filter( const std::vector<double> & x , int n );
-  
+  std::vector<double> remove_median_filter( const std::vector<double> & x , int n , std::vector<double> * f = NULL );
   
   
   /*

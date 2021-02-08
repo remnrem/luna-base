@@ -69,6 +69,10 @@ annot_t * spectral_power( edf_t & edf ,
 
   bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
+  // peak diagnostics
+  bool peak_diagnostics = param.has( "peaks" );
+  int peak_median_filter_n = param.has( "peaks-window" ) ? param.requires_int( "peaks-window" ) : 11 ; 
+  
   // truncate spectra
   double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
   double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
@@ -478,7 +482,6 @@ annot_t * spectral_power( edf_t & edf ,
 	  if ( okay )
 	    {	  
 	      
-
 	      //
 	      // cache spectrum? (e.g. for PSC)
 	      //
@@ -502,10 +505,15 @@ annot_t * spectral_power( edf_t & edf ,
 
 	      bin.bin( freqs , means );
 
+	      std::vector<double> f0;
+	      
 	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 		{
+
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  //writer.level( bin.bfa[i] , globals::freq_strat );
+		  
+		  f0.push_back( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 );
 
 		  double x = dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] ;
 		  writer.value( "PSD" , x );
@@ -517,6 +525,42 @@ annot_t * spectral_power( edf_t & edf ,
 		    writer.value( "INT" , bin.nominal[i] );
 		}
 	      writer.unlevel( globals::freq_strat );
+
+
+	      //
+	      // Report metrics on the PSD
+	      //
+
+	      if ( peak_diagnostics )
+		{
+		  double m1, m2;
+		  
+		  // detrended / smoothed / difference
+		  std::vector<double> shape1, shape2, shape3;
+		  
+		  std::vector<double> logged = bin.bspec;
+		  for (int i=0; i<logged.size(); i++)
+		    logged[i] = 10*log10( logged[i] );
+		  
+		  psd_shape_metrics( f0 ,
+				     logged , 
+				     peak_median_filter_n , 
+				     &m1, &m2 ,
+				     &shape1, &shape2, &shape3);
+		  
+		  writer.value( "PK" , m1 );
+		  writer.value( "SPK" , m2 );
+		  
+		  for (int i=0; i<f0.size(); i++)
+		    {		      
+		      writer.level( f0[i] , globals::freq_strat );
+		      writer.value( "DT" , shape1[i] );
+		      writer.value( "SM" , shape2[i] );
+		      writer.value( "DF" , shape3[i] );		      
+		    }
+		  writer.unlevel( globals::freq_strat );		  
+
+		}
 	      
 	    }
 	  
