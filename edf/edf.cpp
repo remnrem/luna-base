@@ -281,8 +281,8 @@ void edf_t::description( const param_t & param )
   clocktime_t et( header.starttime );
   if ( et.valid )
     {
-      double time_hrs = ( timeline.last_time_point_tp * globals::tp_duration ) / 3600.0 ; 
-      et.advance( time_hrs );
+      double time_sec = ( timeline.last_time_point_tp * globals::tp_duration ) ; 
+      et.advance_seconds( time_sec );
     }
   
   std::cout << "EDF filename      : " << filename << "\n"
@@ -1408,8 +1408,8 @@ bool edf_t::attach( const std::string & f ,
       clocktime_t et( header.starttime );
       if ( et.valid )
 	{
-	  double time_hrs = ( timeline.last_time_point_tp * globals::tp_duration ) / 3600.0 ;
-	  et.advance( time_hrs );
+	  double time_sec = ( timeline.last_time_point_tp * globals::tp_duration ) ;
+	  et.advance_seconds( time_sec );
 	  logger << " ( clocktime " << header.starttime << " - " << et.as_string() << " )";
 	}
       logger << "\n";
@@ -2169,8 +2169,12 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   header.prefiltering.push_back( "n/a" );
   header.n_samples.push_back( n_samples );  
   header.signal_reserved.push_back( "" );  
+
+  // add to TYPES, by recallig this
+  cmd_t::define_channel_type_variables( *this );
   
 }
+
 
 std::vector<double> edf_record_t::get_pdata( const int s )
 {
@@ -3545,8 +3549,8 @@ void edf_t::reset_start_time()
   clocktime_t et( header.starttime );
   if ( et.valid )
     {
-      double time_hrs = ( interval.start * globals::tp_duration ) / 3600.0 ; 
-      et.advance( time_hrs );
+      double time_sec = ( interval.start * globals::tp_duration ) ; 
+      et.advance_seconds( time_sec );
     }
 
   header.starttime = et.as_string();;
@@ -4444,7 +4448,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
   if ( ! Helper::fileExists( file ) )
     Helper::halt( "could not find " + file );
   
-  // GROUP   CANONICAL   CH   REF   SR  NOTES
+  // GROUP   CANONICAL   CH   REF   SR  UNITS    NOTES
   // looking for EEG, LOC, ROC, EMG, ECG, etc
   // but actually reading these from the file, adding 'cs' to each
 
@@ -4462,7 +4466,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 
   // read in definitions
   std::map<std::string,std::vector< std::vector<std::string> > >sigs, refs;
-  std::map<std::string,std::vector<std::string> > srs, notes;
+  std::map<std::string,std::vector<std::string> > srs, notes, units;
 
   bool found_group = false;
   
@@ -4475,8 +4479,8 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       if ( IN1.eof() ) break;
       if ( line[0] == '%' ) continue;
       std::vector<std::string> tok = Helper::parse( line , "\t" );
-      if ( tok.size() != 5 && tok.size() != 6 ) 
-	Helper::halt( "bad format, expecting 5 or 6 tab-delimited columns\nfile: " 
+      if ( tok.size() != 6 && tok.size() != 7 ) 
+	Helper::halt( "bad format, expecting 6 or 7 tab-delimited columns\nfile: " 
 		      + file + "\nline: [" + line + "]\n" );
       if ( tok[0] != group ) continue;
 
@@ -4494,7 +4498,8 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       sigs[ "cs" + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
       refs[ "cs" + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
       srs[ "cs" + tok[1] ].push_back( tok[4] ) ;
-      notes[ "cs" + tok[1] ].push_back( tok.size() == 6 ? tok[5] : "." );
+      units[ "cs" + tok[1] ].push_back( tok[5] );
+      notes[ "cs" + tok[1] ].push_back( tok.size() == 6 ? tok[6] : "." );
       
     }
   
@@ -4589,14 +4594,16 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	
 	  logger << "  generating canonical signal " << canon 
 		 << " from " << sigstr << "/" << refstr << "\n";
-	  	  
+	  	  	  
 	  std::string srstr = srs.find( canon )->second[j];
-
+	  
 	  std::string notesstr = notes.find( canon )->second[j];
-	    
+	  
+	  // if SR == '.' means do not change SR
 	  int sr = 0;
-	  if ( ! Helper::str2int( srstr , &sr ) )
-	    Helper::halt( "could not determine integer SR from " + file );
+	  if ( srstr != "." )
+	    if ( ! Helper::str2int( srstr , &sr ) )
+	      Helper::halt( "could not determine integer SR from " + file );
 	  
 
 	  // copy signal --> canonical form
@@ -4617,20 +4624,14 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 
 	  
 	  //
-	  // rescale units?
+	  // rescale units? ignore if other than V/uV/mV
 	  //
 	  
-	  // EEG, EOG, EMG all uV
-	  // ECG in mV
-	  // others?
-	  
-	  std::string units = "uV";
-	  
-	  if ( canon == "csECG" ) units = "mV" ;
+	  std::string ustr = units.find( canon )->second[j];
 	  
 	  if ( make_signals ) 
-	    if ( units == "uV" || units == "mV" ) 
-	      rescale(  canonical_signal(0) , units );
+	    if ( ustr == "V" || ustr == "uV" || ustr == "mV" ) 
+	      rescale(  canonical_signal(0) , ustr );
 	  
       
 	  //
@@ -4641,7 +4642,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  writer.value( "SIG" , sigstr );
 	  writer.value( "REF" , refstr );
 	  writer.value( "SR" , srstr );
-	  writer.value( "UNITS" , units );
+	  writer.value( "UNITS" , ustr );
 	  
 	  if ( notesstr != "" )
 	    writer.value( "NOTES" , notesstr );

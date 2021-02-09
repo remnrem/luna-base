@@ -3175,7 +3175,9 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  
 	  double tp1_sec = interval.start_sec();
 	  clocktime_t present1 = starttime;
-	  present1.advance( tp1_sec / 3600.0 );
+	  //present1.advance( tp1_sec / 3600.0 );
+	  present1.advance_seconds( tp1_sec );
+	  
 	  // add down to 1/100th of a second
 	  double tp1_extra = tp1_sec - (long)tp1_sec;
 
@@ -3187,7 +3189,9 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  double tp2_sec = interval.stop_sec();
 
 	  clocktime_t present2 = starttime;
-	  present2.advance( tp2_sec / 3600.0 );
+	  //present2.advance( tp2_sec / 3600.0 );
+	  present2.advance_seconds( tp2_sec );
+	  
 	  double tp2_extra = tp2_sec - (long)tp2_sec;
 	   
 	  writer.value( "START_HMS"  , present1.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp  ).substr(1) );
@@ -3195,14 +3199,21 @@ void timeline_t::list_all_annotations( const param_t & param )
 
 	  // elapsed time (00:00:00 is start of EDF)
 	  clocktime_t present3;
-	  present3.advance( tp1_sec / 3600.0 );
+	  present3.advance_seconds( tp1_sec );	  	  
 	  // add down to 1/100th of a second
 	  tp1_extra = tp1_sec - (long)tp1_sec;
 
-	  clocktime_t present4;
-	  present4.advance( tp2_sec / 3600.0 );
+	  clocktime_t present4;	  
+	  present4.advance_seconds( tp2_sec );	  
 	  tp2_extra = tp2_sec - (long)tp2_sec;
-	   
+	   	  
+	  // std::cout << "xx\t" << present3.as_string(':') 
+	  // 	    << "\t" 
+	  // 	    << tp1_sec << "\t" 
+	  // 	    << (long)tp1_sec << "\t"
+	  // 	    << tp1_extra << "\t" 
+	  // 	    << Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ) << "\n";
+
 	  writer.value( "START_ELAPSED_HMS"  , present3.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
 	  writer.value( "STOP_ELAPSED_HMS"   , present4.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
 

@@ -246,7 +246,7 @@ struct clocktime_t
   clocktime_t( const std::string & t );
   
   // assume from hours, fractional
-  clocktime_t( double ); 
+  //  clocktime_t( double ); 
   
   clocktime_t( int h, int m, double s ) 
   : valid(true) , d(0) , h(h), m(m), s(s)
@@ -326,16 +326,6 @@ struct clocktime_t
     return h*60*60 + m*60 + si ;
   }
   
-  double difference( const clocktime_t & t )
-  {
-    // difference between this and another time
-    // -ve means THIS happens before
-    // +ve means THIS happens afterwards
-    std::cerr << "**warning:: clocktime_t::difference() not implemented\n";
-    return 0;
-
-  }
-  
   void advance_1second()
   {
     ++s;
@@ -372,16 +362,6 @@ struct clocktime_t
     m = floor(t_mins);
     s = t_secs;
     
-    /* if ( 0 )  */
-    /*   { */
-    /* 	// to deal w/ numerical imprecision, round to the nearest second */
-    /* 	f = t_secs - floor( t_secs );     */
-    
-    /* 	// round to nearest second? */
-    /* 	if ( f > 0.5 ) advance_1second(); */
-    /* 	f = 0.0; */
-    /*   } */
- 
     return true;
 
   }
@@ -408,25 +388,25 @@ struct clocktime_t
 
   }
 
-  void advance( uint64_t tp );
+  void advance_tp( uint64_t tp );
 
-  void advance( double hrs )
-  {
-    double t_hrs = hours();
-
-    t_hrs += hrs;
+  void advance_hrs( double hrs ) 
+  { 
+    double t_hrs = hours(); 
     
-    // need to wrap? 
-    while ( 1 )
-      {
-	if ( t_hrs >= 0 && t_hrs < 24 ) break;
-	if ( t_hrs < 0 ) t_hrs += 24.0;
-	else if ( t_hrs >= 24 ) t_hrs -= 24.0;
-      }    
+    t_hrs += hrs; 
     
-    // update this time back to usual format
-    convert( t_hrs );
-  }
+    // need to wrap?  
+    while ( 1 ) 
+      { 
+   	if ( t_hrs >= 0 && t_hrs < 24 ) break; 
+   	if ( t_hrs < 0 ) t_hrs += 24.0; 
+   	else if ( t_hrs >= 24 ) t_hrs -= 24.0; 
+      }     
+    
+    // update this time back to usual format 
+    convert( t_hrs ); 
+  } 
   
   void advance_seconds( double secs )
   {
@@ -490,15 +470,15 @@ struct clocktime_t
   //       22:00 02:00    ( as 4 < 20 ) 
   static int earlier( const clocktime_t & t1 , const clocktime_t & t2 )
   {
-    double d1 = difference( t1 , t2 );
-    double d2 = difference( t2 , t1 );
+    double d1 = difference_seconds( t1 , t2 );
+    double d2 = difference_seconds( t2 , t1 );
     if ( d1 < d2 ) return 1;
     if ( d2 < d1 ) return 2;
     return 0;
   }
     
   // this *assumes* that t1 comes before t2
-  static double difference( const clocktime_t & t1 , const clocktime_t & t2 )
+  static double difference_hours( const clocktime_t & t1 , const clocktime_t & t2 )
   {
     // we assume t1 happens before t2
     // thus  22 8   means from 22 to 8

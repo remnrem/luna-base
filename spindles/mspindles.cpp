@@ -261,13 +261,13 @@ void mspindles_t::output( const signal_list_t & signals )
 
 	   double tp1_sec =  M[i].start / (double)globals::tp_1sec;
 	   clocktime_t present1 = starttime;
-	   present1.advance( tp1_sec / 3600.0 );
+	   present1.advance_seconds( tp1_sec );
 	   // add down to 1/100th of a second
 	   double tp1_extra = tp1_sec - (long)tp1_sec;
 	   
 	   double tp2_sec =  M[i].stop / (double)globals::tp_1sec;
 	   clocktime_t present2 = starttime;
-	   present2.advance( tp2_sec / 3600.0 );
+	   present2.advance_seconds( tp2_sec );
 	   double tp2_extra = tp2_sec - (long)tp2_sec;
 	   
 	   writer.value( "MSP_START_HMS"  , present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , 4  ).substr(1) );

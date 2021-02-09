@@ -3192,13 +3192,13 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
 	      double tp1_sec =  instance_idx.interval.start / (double)globals::tp_1sec;
 	      clocktime_t present1 = starttime;
-	      present1.advance( tp1_sec / 3600.0 );
+	      present1.advance_seconds( tp1_sec );
 	      // add down to 1/100th of a second
 	      double tp1_extra = tp1_sec - (long)tp1_sec;
 	   
 	      double tp2_sec =  instance_idx.interval.stop / (double)globals::tp_1sec;
 	      clocktime_t present2 = starttime;
-	      present2.advance( tp2_sec / 3600.0 );
+	      present2.advance_seconds( tp2_sec );
 	      double tp2_extra = tp2_sec - (long)tp2_sec;
 
 	      // hh:mm:ss.ssss

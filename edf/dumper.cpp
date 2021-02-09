@@ -1167,7 +1167,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 		    }
 		  else
 		    {
-		      present.advance( tp_sec / 3600.0 );
+		      present.advance_seconds( tp_sec );
 		      OUT << "\t" << present.as_string();
 		    }
 		}
@@ -1247,7 +1247,7 @@ void edf_t::seg_dumper( param_t & param )
       if ( valid_hms )
 	{
 	  clocktime_t stoptime = starttime;
-	  stoptime.advance( secs / 3600.0 );
+	  stoptime.advance_seconds( secs );
 	  writer.value( "START_HMS" , starttime.as_string() );
 	  writer.value( "STOP_HMS" ,  stoptime.as_string() );
 	}
@@ -1314,11 +1314,11 @@ void edf_t::seg_dumper( param_t & param )
 	    {
 	      
 	      clocktime_t starttime2 = starttime;
-	      starttime2.advance( secs1 / 3600.0 );
+	      starttime2.advance_seconds( secs1 );
 	      writer.value( "START_HMS" , starttime2.as_string() );
 
 	      clocktime_t stoptime = starttime;
-	      stoptime.advance( secs2 / 3600.0 );
+	      stoptime.advance_seconds( secs2 );
 	      writer.value( "STOP_HMS" ,  stoptime.as_string() );
 	      
 	    }

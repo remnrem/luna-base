@@ -776,34 +776,34 @@ clocktime_t::clocktime_t( const std::string & t )
 
 bool clocktime_t::midpoint( const clocktime_t & t1 , const clocktime_t & t2 )
 {
-
+  
   if ( ! ( t1.valid && t2.valid ) )
     {
       valid = false;
       return false;
     }
- 
+  
   // copy first time
   h=t1.h; m=t1.m; s=t1.s;
   
   // time difference (from t1 to t2)
   // we assume that t1 is earlier, so +ve means 
-  double diff = difference( t1 , t2 );
+  double diff = difference_seconds( t1 , t2 );
   
   // get midpoint
   diff /= 2.0;
   
   // advance this time by the required amount
-  advance( diff );
-
+  advance_seconds( diff );
+  
   return true;
 }
 
-void clocktime_t::advance( uint64_t tp )
+void clocktime_t::advance_tp( uint64_t tp )
 {
   // convert to hours
   double sec = tp / globals::tp_1sec;
-  advance( sec / 3600.0 );
+  advance_seconds( sec );
 }
 
 
@@ -865,6 +865,8 @@ std::string Helper::timestring( uint64_t a , char delim , bool fractional )
 
 std::string Helper::timestring( int h , int m , double sec , char delim , bool fractional )
 {
+  // adjust any small rounding error
+  if ( sec < 0 ) sec = 0;
   
   // return 00:00:00 or 00:00:00.00 format
   std::stringstream ss;
@@ -1377,14 +1379,14 @@ bool Helper::hhmmss( const clocktime_t & ct ,
   
   double tp1_sec =  interval.start / (double)globals::tp_1sec;
   clocktime_t present1 = ct;
-  present1.advance( tp1_sec / 3600.0 );
+  present1.advance_seconds( tp1_sec );
   // add down to 1/100th of a second                                                                                                                                               
   double tp1_extra = tp1_sec - (long)tp1_sec;
   
   // rewind stop by 1 unit
   double tp2_sec =  (interval.stop-1LLU) / (double)globals::tp_1sec;
   clocktime_t present2 = ct;
-  present2.advance( tp2_sec / 3600.0 );
+  present2.advance_seconds( tp2_sec );
   double tp2_extra = tp2_sec - (long)tp2_sec;
   
   *t1 = present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , dp  ).substr(1) ;

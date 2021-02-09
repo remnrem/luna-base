@@ -169,9 +169,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v0.25.1";
+  version = "v0.25.2";
   
-  date    = "01-Dec-2020";
+  date    = "09-Feb-2021";
   
 
   //

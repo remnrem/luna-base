@@ -1875,7 +1875,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	    {
 	      const double sec0 = interval.start * globals::tp_duration;
 	      clocktime_t present = starttime;
-	      present.advance( sec0 / 3600.0 );
+	      present.advance_seconds( sec0 );
 	      std::string clocktime = present.as_string( ':' );
 	      writer.value( "HMS" , clocktime );
 	    }
@@ -3148,67 +3148,52 @@ void cmd_t::define_channel_type_variables( edf_t & edf )
   // add these even if blank, so that scripts can always use
   
   std::string eeg = globals::list_channels( EEG , edf.header.label );
-  //if ( eeg != "" )
   cmd_t::ivars[ edf.id ][ "eeg" ] = eeg;
     
   std::string ref = globals::list_channels( REF , edf.header.label );
-  //if ( eeg != "" )
   cmd_t::ivars[ edf.id ][ "ref" ] = ref;
 
   std::string ic = globals::list_channels( IC , edf.header.label );
   cmd_t::ivars[ edf.id ][ "ic" ] = ic;
 
   std::string eog = globals::list_channels( EOG , edf.header.label );
-  //if ( eog != "" )
   cmd_t::ivars[ edf.id ][ "eog" ] = eog;
 
   std::string ecg = globals::list_channels( ECG , edf.header.label );
-  //if ( ecg != "" )
   cmd_t::ivars[ edf.id ][ "ecg" ] = ecg;
 
   std::string emg = globals::list_channels( EMG , edf.header.label );
-  //if ( emg != "" )
-    cmd_t::ivars[ edf.id ][ "emg" ] = emg;
+  cmd_t::ivars[ edf.id ][ "emg" ] = emg;
 
   std::string leg = globals::list_channels( LEG , edf.header.label );
-  //if ( leg != "" )
-    cmd_t::ivars[ edf.id ][ "leg" ] = leg;
+  cmd_t::ivars[ edf.id ][ "leg" ] = leg;
 
   std::string generic = globals::list_channels( GENERIC , edf.header.label );
-  //if ( generic != "" )
-    cmd_t::ivars[ edf.id ][ "generic" ] = generic;
+  cmd_t::ivars[ edf.id ][ "generic" ] = generic;
   
   std::string airflow = globals::list_channels( AIRFLOW , edf.header.label );
-  //if ( airflow != "" )
-    cmd_t::ivars[ edf.id ][ "airflow" ] = airflow;
-
+  cmd_t::ivars[ edf.id ][ "airflow" ] = airflow;
+  
   std::string effort = globals::list_channels( EFFORT , edf.header.label );
-  //if ( effort != "" )
-    cmd_t::ivars[ edf.id ][ "effort" ] = effort;
+  cmd_t::ivars[ edf.id ][ "effort" ] = effort;
 
   std::string oxygen = globals::list_channels( OXYGEN , edf.header.label );
-  //if ( oxygen != "" )
-    cmd_t::ivars[ edf.id ][ "oxygen" ] = oxygen;
+  cmd_t::ivars[ edf.id ][ "oxygen" ] = oxygen;
 
   std::string position = globals::list_channels( POSITION , edf.header.label );
-  //if ( position != "" )
-    cmd_t::ivars[ edf.id ][ "position" ] = position;
-
+  cmd_t::ivars[ edf.id ][ "position" ] = position;
+  
   std::string light = globals::list_channels( LIGHT , edf.header.label );
-  //if ( light != "" )
-    cmd_t::ivars[ edf.id ][ "light" ] = light;
-
+  cmd_t::ivars[ edf.id ][ "light" ] = light;
+  
   std::string snore = globals::list_channels( SNORE , edf.header.label );
-  //if ( snore != "" )
-    cmd_t::ivars[ edf.id ][ "snore" ] = snore;
-
+  cmd_t::ivars[ edf.id ][ "snore" ] = snore;
+  
   std::string hr = globals::list_channels( HR , edf.header.label );
-  // if ( hr != "" )
-    cmd_t::ivars[ edf.id ][ "hr" ] = hr;
-
+  cmd_t::ivars[ edf.id ][ "hr" ] = hr;
+  
   std::string ignore = globals::list_channels( IGNORE , edf.header.label );
-  //if ( ignore != "" )
-    cmd_t::ivars[ edf.id ][ "ignore" ] = ignore;
+  cmd_t::ivars[ edf.id ][ "ignore" ] = ignore;
 
 }
 
@@ -3427,6 +3412,25 @@ void cmd_t::register_specials()
   specials.insert( "total" ) ;
   specials.insert( "exclude" ) ;
   specials.insert( "include" ) ;
+
+  specials.insert( "eeg" );
+  specials.insert( "ref" );
+  specials.insert( "ic" );
+  specials.insert( "eog" );
+  specials.insert( "ecg" );
+  specials.insert( "emg" );
+  specials.insert( "leg" );  
+  specials.insert( "generic" );
+  specials.insert( "airflow" );
+  specials.insert( "effort" );  
+  specials.insert( "oxygen" );
+
+  specials.insert( "position" );
+  specials.insert( "light" );
+  specials.insert( "snore" );
+  specials.insert( "hr" );
+  specials.insert( "ignore" );
+
 }
 
 

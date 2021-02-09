@@ -1335,13 +1335,13 @@ void hypnogram_t::calc_stats( const bool verbose )
       double epoch_hrs = epoch_mins / 60.0;
 
       clock_sleep_onset    = starttime;
-      clock_sleep_onset.advance( epoch_hrs * first_sleep_epoch );
+      clock_sleep_onset.advance_hrs( epoch_hrs * first_sleep_epoch );
       
       clock_wake_time      = starttime;
-      clock_wake_time.advance( epoch_hrs * final_wake_epoch );
+      clock_wake_time.advance_hrs( epoch_hrs * final_wake_epoch );
       
       clock_lights_on      = starttime;
-      clock_lights_on.advance( epoch_hrs * ne );
+      clock_lights_on.advance_hrs( epoch_hrs * ne );
     
       clock_sleep_midpoint.midpoint( clock_sleep_onset , clock_wake_time );      
       
@@ -1590,7 +1590,8 @@ void hypnogram_t::output( const bool verbose )
   // epoch size (in minutes)
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
   const double epoch_hrs = epoch_mins / 60.0;
-  
+  const double epoch_sec = timeline->epoch_length();
+
   const int ne = timeline->num_epochs();
   
   clocktime_t starttime( clock_lights_out );
@@ -1619,7 +1620,7 @@ void hypnogram_t::output( const bool verbose )
 	    {
 	      clocktime_t current_clock_time = starttime;
 	      
-	      current_clock_time.advance( epoch_hrs * epoch_n[e] );
+	      current_clock_time.advance_seconds( epoch_sec * epoch_n[e] );
 	      
 	      writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
 	      
@@ -1744,7 +1745,7 @@ void hypnogram_t::output( const bool verbose )
 	{
 	  clocktime_t current_clock_time = starttime;
 	  
-	  current_clock_time.advance( epoch_hrs * e );
+	  current_clock_time.advance_seconds( epoch_sec * e );
 	  
 	  writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
 	  
