@@ -24,13 +24,11 @@
 // (1995): Multiple-taper spectral analysis: A stand-alone
 // C-subroutine: Computers & Geology: 21, 199-236.
 
-#include "mtm.h"
-
 #include <cmath>
 
 #define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
 
-void mtm::jfour1(double data[], unsigned long nn, int isign)
+void jfour1(double data[], unsigned long nn, int isign)
 {
   unsigned long n,mmax,m,j,istep,i;
   double wtemp,wr,wpr,wpi,wi,theta;

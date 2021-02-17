@@ -1075,18 +1075,25 @@ void cmddefs_t::init()
   add_url( "MTM" , "power-spectra/#mtm" );
 
   add_param( "MTM" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-  add_param( "MTM" , "epoch" , "" , "Calculate per-epoch statistics" );
-  add_param( "MTM" , "max" , "100" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "min" , "0.5" ,   "Lower frequency range" );
+  add_param( "MTM" , "max" , "100" ,   "Upper frequency range" );
+  add_param( "MTM" , "segment-sec" , "30" , "Segment size, seconds" );
+  add_param( "MTM" , "segment-inc" , "30" ,   "Segment step, seconds" );
   add_param( "MTM" , "dB" , "" , "Decibel scale output" );
-  add_param( "MTM" , "spectrum" , "" , "Calculate per-epoch statistics" );
-  add_param( "MTM" , "epoch-spectrum" , "" , "Calculate per-epoch statistics" );
+  add_param( "MTM" , "epoch" , "" , "Report per-epoch statistics" );
   
   add_table( "MTM" , "CH,F" , "Whole-night, per-channel power" );
   add_var( "MTM" , "CH,F" , "MTM" , "Power" );
 
-  add_table( "MTM" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
-  add_var( "MTM" , "CH,F,E" , "MTM" , "Power" );
-  set_compressed( "MTM" , tfac_t( "CH,F,E" ) );
+  add_table( "MTM" , "CH,SP,TAPER" , "Taper coefficients" );
+  add_var( "MTM" , "CH,SP,TAPER" , "W" , "Weight" );
+
+  add_table( "MTM" , "CH,TAPER" , "Taper lambdas" );
+  add_var( "MTM" , "CH,TAPER" , "LAMBDA" , "Lambda" );
+
+  add_table( "MTM" , "CH,F,SEG" , "Whole-night, per-channel per-epoch power" );
+  add_var( "MTM" , "CH,F,SEG" , "MTM" , "Power" );
+  set_compressed( "MTM" , tfac_t( "CH,F,SEG" ) );
 
   //
   // MSE

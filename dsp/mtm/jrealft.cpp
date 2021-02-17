@@ -20,13 +20,11 @@
 //
 //    --------------------------------------------------------------------
 
-#include "mtm.h"
-
 #include <cmath>
 
-void mtm::jrealft(double data[], unsigned long n, int isign)
+void jrealft(double data[], unsigned long n, int isign)
 {
-  //void jfour1(double data[], unsigned long nn, int isign);
+  void jfour1(double data[], unsigned long nn, int isign);
   unsigned long i,i1,i2,i3,i4,np3;
   double c1=0.5,c2,h1r,h1i,h2r,h2i;
   double wr,wi,wpr,wpi,wtemp,theta;
