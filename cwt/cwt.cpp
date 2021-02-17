@@ -167,7 +167,7 @@ void CWT::run()
   // Initial FFT of data 
   //
 
-  FFT eegfft;
+  real_FFT eegfft;
   std::vector<dcomp> eegfftX;
 
   if ( fixed_wlen ) 
@@ -227,9 +227,9 @@ void CWT::run()
       //
       // First FFT
       //
-
-      FFT fft1( w.size() , n_conv_pow2 , 1 , FFT_FORWARD );
-
+      
+      FFT fft1( w.size() , n_conv_pow2 , 1 );
+      
       fft1.apply( w );
 
       std::vector<dcomp> wt = fft1.transform();

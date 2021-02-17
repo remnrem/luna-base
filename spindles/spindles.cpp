@@ -2066,7 +2066,12 @@ void characterize_spindles( edf_t & edf ,
 	  dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
 			       1 , // 1 = Kaiser window
 			       0.02 , 4 , // ripple , transition width
-			       target_f - window_f * 0.5 , target_f + window_f * 0.5 );
+			       target_f - window_f * 0.5 ,
+			       target_f + window_f * 0.5 ,
+			       0, // order (if not Kaiser win)
+			       fir_t::RECTANGULAR , // large window, no window
+			       true  // use FFT convolution
+			       );
 	  
 	}
       
@@ -2389,7 +2394,7 @@ void characterize_spindles( edf_t & edf ,
       // (performed on bandpass filtered data)
       //
 
-      FFT fft( npoints , MiscMath::nextpow2( npoints ) , Fs , FFT_FORWARD , WINDOW_HANN );     
+      real_FFT fft( npoints , MiscMath::nextpow2( npoints ) , Fs , WINDOW_HANN );     
       fft.apply( d );
       int cutoff = fft.cutoff;
       

@@ -78,7 +78,7 @@ int clocs_t::load_cart( const std::string & filename , bool verbose )
       Helper::safe_getline( IN1 , s );
       if ( IN1.eof() ) break;
       if ( s == "" ) continue;	  
-      if ( s[0] == '#' ) continue; // skip comments
+      if ( s[0] == '#' || s[0] == '%' ) continue; // skip comments
       
       // expecting 4 columnds
       std::vector<std::string> tok = Helper::parse( s , "\t ," );

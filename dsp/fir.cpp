@@ -1165,11 +1165,11 @@ std::vector<double> fir_impl_t::fft_filter( const std::vector<double> * px )
   h.resize( Nfft , 0 );
 
   // FFT
-  FFT fftx( Nfft , Nfft , 1 , FFT_FORWARD );
+  real_FFT fftx( Nfft , Nfft , 1 );
   fftx.apply( x );
   std::vector<dcomp> rfftx = fftx.transform();
   
-  FFT ffth( Nfft , Nfft , 1 , FFT_FORWARD );
+  real_FFT ffth( Nfft , Nfft , 1 );
   ffth.apply( h );
   std::vector<dcomp> rffth = ffth.transform();
   

@@ -3413,23 +3413,23 @@ void cmd_t::register_specials()
   specials.insert( "exclude" ) ;
   specials.insert( "include" ) ;
 
-  specials.insert( "eeg" );
-  specials.insert( "ref" );
-  specials.insert( "ic" );
-  specials.insert( "eog" );
-  specials.insert( "ecg" );
-  specials.insert( "emg" );
-  specials.insert( "leg" );  
-  specials.insert( "generic" );
-  specials.insert( "airflow" );
-  specials.insert( "effort" );  
-  specials.insert( "oxygen" );
-
-  specials.insert( "position" );
-  specials.insert( "light" );
-  specials.insert( "snore" );
-  specials.insert( "hr" );
-  specials.insert( "ignore" );
+  
+  // specials.insert( "eeg" );
+  // specials.insert( "ref" );
+  // specials.insert( "ic" );
+  // specials.insert( "eog" );
+  // specials.insert( "ecg" );
+  // specials.insert( "emg" );
+  // specials.insert( "leg" );  
+  // specials.insert( "generic" );
+  // specials.insert( "airflow" );
+  // specials.insert( "effort" );  
+  // specials.insert( "oxygen" );
+  // specials.insert( "position" );
+  // specials.insert( "light" );
+  // specials.insert( "snore" );
+  // specials.insert( "hr" );
+  // specials.insert( "ignore" );
 
 }
 

@@ -55,6 +55,12 @@ void psd_shape_metrics( const std::vector<double> & f , // frq
 			std::vector<double> * smoothed = NULL , 
 			std::vector<double> * difference = NULL );
 
+
+
+//
+// Complex FFT
+//
+
 class FFT
 {
   
@@ -170,6 +176,127 @@ class FFT
     } 
     
 };
+
+
+
+
+
+//
+// Real 1D DFT
+//
+
+class real_FFT
+{
+  
+  friend struct coherence_t;
+  friend struct precoh_t;
+  
+ public:
+  
+  real_FFT() { } 
+
+  real_FFT( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE ) 
+    {
+      init( Ndata , Nfft , Fs , window );
+    }
+  
+  void init( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE );
+  
+  void reset() 
+  {
+    fftw_destroy_plan(p);
+    fftw_free(in);
+    fftw_free(out);
+  }
+  
+  ~real_FFT() 
+    {    
+      fftw_destroy_plan(p);
+      fftw_free(in);
+      fftw_free(out);
+    }
+  
+ private:
+
+  // Size of data 
+  int Ndata;
+  
+  // Sampling rate, so we can construct the appropriate Hz for the PSD
+  int Fs;
+
+  // Forward or inverse FFT?
+  fft_t type;
+  
+  // Optional windowing function
+  window_function_t window;
+  std::vector<double> w;
+
+  // Input signal (real)
+  double * in;
+
+  // Output signal
+  fftw_complex *out;
+  
+  // FFT plan from FFTW3
+  fftw_plan p;
+  
+  // Size (NFFT)
+  int Nfft;
+  
+  // Normalisation factor given the window
+  double normalisation_factor;
+
+
+  //
+  // Power band helper functions
+  //
+
+  static bool add( frequency_band_t band , double f );
+  
+  double width( frequency_band_t band );
+  
+ public:
+  
+  int cutoff;
+  std::vector<double> X;
+  std::vector<double> mag;
+  std::vector<double> frq;
+  
+ public:
+  
+  bool apply( const std::vector<double> & x );
+  bool apply( const double * x , const int n );
+    
+  // Extract the raw transform
+  std::vector<std::complex<double> > transform() const;
+
+  // Extract the raw transform scaled by 1/n
+  std::vector<std::complex<double> > scaled_transform() const;
+  
+  std::vector<double> inverse() const;
+
+  // Misc helper function: average adjacent PSD values
+
+  void average_adjacent();
+
+  std::vector<double> power_bands( const std::vector<double> & lwr , const std::vector<double> & upr ) 
+    { 
+      // Sum power over band intervals 
+      if ( lwr.size() != upr.size() ) Helper::halt( "incorrectly specified bands()" ); 
+      std::vector<double> pwr( lwr.size() ); 
+      for (int j=0;j<cutoff;j++) 
+	{ 
+	  const double & f = frq[j]; 
+	  for (int i=0;i<lwr.size();i++) 
+	    if ( f >= lwr[i] && f < upr[i] ) pwr[i] += X[j];	 
+	}     
+      return pwr; 
+    } 
+    
+};
+
+
+
 
 
 //

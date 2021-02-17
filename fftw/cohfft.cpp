@@ -45,7 +45,7 @@ void precoh_t::prepare( coherence_t * coh ,
 
   if ( frq.size() == 0 )
     {
-      FFT fft0( coh->segment_points , coh->segment_points , coh->Fs , FFT_FORWARD , coh->window );
+      real_FFT fft0( coh->segment_points , coh->segment_points , coh->Fs , coh->window );
       if ( coh->average_adj ) fft0.average_adjacent();
 
       coh->N = fft0.cutoff;
@@ -55,7 +55,7 @@ void precoh_t::prepare( coherence_t * coh ,
       for (int f=0;f< coh->N;f++) frq[f] = fft0.frq[f];
     }
   
-
+  
   //
   // Accumulate PSD for X
   //
@@ -69,14 +69,16 @@ void precoh_t::prepare( coherence_t * coh ,
   // Iterate over segments, performing individual FFT in each
   //
 
+  real_FFT fftx( coh->segment_points ,  coh->segment_points , coh->Fs , coh->window );
+  
   for (int p = 0; p <= coh->total_points - coh->segment_points ; p += coh->segment_increment_points )
     {
       
       if ( p + coh->segment_points > coh->total_points )
 	Helper::halt( "internal error in coherence()" );
-      
-      FFT fftx( coh->segment_points ,  coh->segment_points , coh->Fs , FFT_FORWARD , coh->window );
-      
+
+      // do FFT 
+
       if ( coh->detrend || coh->zerocenter )
  	{	  
  	  std::vector<double> x1( coh->segment_points );
@@ -94,8 +96,7 @@ void precoh_t::prepare( coherence_t * coh ,
 	{
 	  fftx.average_adjacent();
 	}
-      
-    
+          
       cutoff = fftx.cutoff;
       
       // x2 is to get full spectrum  

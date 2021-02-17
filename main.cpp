@@ -25,6 +25,7 @@
 #include "miscmath/crandom.h"
 #include <fstream>
 
+
 extern globals global;
 
 extern writer_t writer;
@@ -1785,7 +1786,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   std::vector<double> x;
   
-  if ( p == "fir" || p == "fft" || p == "mtm" || p == "tv" || p == "psi" 
+  if ( p == "fir" || p == "fft" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "fip" || p == "sl" || p == "acf" || p == "otsu" ) 
     {
 
@@ -1934,12 +1935,116 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     }
 
 
+  if ( p == "fft-test" )
+    {
+
+      // test 1 : equivalence w/ mt_get_spec() and real_FFT
+      
+      //mtm::mt_get_spec ( b, npoints, klen, amp);  
+      int fs = 256;
+      double dt = 1/(double)fs;
+      double * series = &(x)[0];
+      int inum = x.size();
+      int npoints = inum;
+      int klen = MiscMath::nextpow2( inum );
+      int num_freqs = 1 + klen/2;
+      std::vector<double> amp( klen , 0 );
+      
+      //void  mtm::mt_get_spec(double *series, int inum, int klength, double *amp)
+      // series = input time series
+      // inum   = length of time series
+      // klength = number of elements in power spectrum (a power of 2)
+      // amp = returned power spectrum
+
+      int             i, j, isign = 1;  
+      unsigned long   nn;
+      double          tsv;    
+      nn = klen;
+      
+      /* copy amp onto series and apply zero padding to  klength */
+      amp = x;
+      amp.resize( klen );
+      // for (i = 0; i < inum; i++) { amp[i] = series[i];  }
+      // zero_pad(amp, inum, klength);
+  
+      
+      /*  Fast Fourier Transform Routine:  here we are using the Numerical Recipes
+	  routine jrealft which returns the fft in the 1-D input array
+	  packed as pairs of real numbers.
+	  The jrealft routine requires the input array to start at index=1
+	  so we must decrement the index of amp
+      */
+
+      void jrealft(double data[], unsigned long n, int isign);
+      double * pamp = &(amp)[0];
+      jrealft(pamp-1, nn, isign);
+      double anrm = sqrt(npoints/dt);  
+      double sum = 0.0;
+
+      // get spectrum from real fourier transform      
+      double norm = 1.0/(anrm*anrm);
+      
+      for(int i=1; i<num_freqs-1; i++)
+	{
+	  if( 2*i+1 > klen) Helper::halt( "mtm_t error in index");  
+	  double sqramp = pow( amp[2*i+1] , 2 ) + pow( amp[2*i] , 2 );
+	  std::cout << 2 * norm * (sqramp) << "\n";
+	  
+	  // sqr_spec[i+kf] = norm * (sqramp);	   == real_FFT()
+	  // sum += sqr_spec[i+kf];
+	}
+
+      std::cout << "DC " << norm * pow(fabs(amp[0]),2) << "\n"
+		<< "NQ " << norm * pow(fabs(amp[1]),2) << "\n";
+      
+      // sqr_spec[0+kf] = norm * pow(fabs(amp[0]),2);
+      // sqr_spec[num_freqs-1+kf] = norm * pow(fabs(amp[1]),2);
+  
+      std::exit(0);
+
+      // test 2 : real_FFT()
+
+      
+      int index_length = x.size();	    
+      int my_Fs = 256; // arbitrary
+
+      std::cout << index_length << " is size\n";
+
+      int index_start = 0;
+      
+      //FFT fftseg( index_length , index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
+      real_FFT fftseg( index_length , index_length , my_Fs , WINDOW_NONE );
+      
+      const int reps = 5000;
+
+      for ( int i=0; i<reps; i++)
+	{
+	  std::cout << "i\t" << i << "\n";
+	  fftseg.apply( &(x[index_start]) , index_length );
+	  
+	  int my_N = fftseg.cutoff;
+	  
+	  // for (int f=0;f<my_N;f++)
+	  //   {	  
+	  //     // t : raw transform
+	  //     // t2 : scaled by 1/N
+	  //     // 
+	  //     std::cout << f << "\t"
+	  // 		<< fftseg.frq[f] << "\t"		    
+	  // 		<< fftseg.X[f] << "\n";
+
+	  //   }
+	}
+      std::exit(1);
+    }
+
+  
   if ( p == "fft" )
     {
       
       int index_length = x.size();
 
-      int my_Fs = 400; // arbitrary
+      int my_Fs = 256; // arbitrary
 
       if ( p2 != "" )
 	if ( ! Helper::str2int( p2 , &my_Fs ) ) Helper::halt( "expecting integer sample rate as second parameter" );
@@ -2178,15 +2283,16 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   
   if ( p == "mtm" )
     {
-      const int npi = 3;
+      const int npi = 5;
       
-      const int nwin = 5;
+      const int nwin = 9;
+
+      const double segment_sec = 5;
+      const double segment_step = 1;
       
       mtm_t mtm( npi , nwin );
       
-      mtm.display_tapers = false;
-      
-      mtm.apply( &x , 20 );
+      mtm.apply( &x , 256 , 256 * segment_sec , 256 * segment_step , true );
       
       std::cout << mtm.f.size() << "\t" << mtm.spec.size() << "\n";
       

@@ -70,8 +70,8 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   bool epoch = param.has( "epoch" );
   if ( epoch && ! multi_backfit )
     Helper::halt( "can only specify epoch when running in backfit mode" );
-  if ( epoch && param.has( "gfp" ) )
-    Helper::halt( "cannot specify epoch and gfp (to dump sample-level GFP) together" );
+  if ( epoch && param.has( "dump-gfp" ) )
+    Helper::halt( "cannot specify epoch and dump-gfp (to dump sample-level GFP) together" );
   if ( epoch && param.has( "write-states" ) )
     Helper::halt( "cannot specify epoch and write-states (to dump state order) together" );
   
