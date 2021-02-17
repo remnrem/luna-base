@@ -4475,6 +4475,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
     {
       std::string line;
       Helper::safe_getline( IN1 , line );
+
       if ( line == "" ) continue;
       if ( IN1.eof() ) break;
       if ( line[0] == '%' ) continue;
@@ -4499,7 +4500,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       refs[ "cs" + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
       srs[ "cs" + tok[1] ].push_back( tok[4] ) ;
       units[ "cs" + tok[1] ].push_back( tok[5] );
-      notes[ "cs" + tok[1] ].push_back( tok.size() == 6 ? tok[6] : "." );
+      notes[ "cs" + tok[1] ].push_back( tok.size() == 7 ? tok[6] : "." );
       
     }
   
@@ -4516,7 +4517,6 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	}
     }
 
-
   //
   // For each canonical signal
   //
@@ -4525,7 +4525,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
   while ( cc != canons.end() )
     {
       //for (int i=0; i<canons.size(); i++)
-      
+
       std::string canon = *cc;
 
       writer.level( canon , "CS" );

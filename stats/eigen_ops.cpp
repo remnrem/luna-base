@@ -21,8 +21,9 @@
 //    --------------------------------------------------------------------
 
 #include "stats/eigen_ops.h"
+#include "miscmath/miscmath.h"
 #include "stats/statistics.h"
-
+#include <vector>
 #include "miscmath/crandom.h"
 
 
@@ -30,13 +31,13 @@
 // for a writable reference:    Eigen::Ref<Eigen::VectorXd> 
 // for a const ref:             const Eigen::Ref<const Eigen::VectorXd> & 
 
-std::vector<double> eigen_ops::copy( const Eigen::VectorXd & e ) 
+std::vector<double> eigen_ops::copy_vector( const Eigen::VectorXd & e ) 
 {
   std::vector<double> v( &e[0] , e.data() + e.size() );
   return v;
 }
 
-std::vector<double> eigen_ops::copy( const Eigen::ArrayXd & e ) 
+std::vector<double> eigen_ops::copy_array( const Eigen::ArrayXd & e ) 
 {
   std::vector<double> v( &e[0] , e.data() + e.size() );
   return v;
@@ -68,6 +69,54 @@ void eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
       M.array().rowwise() -= means;
     }
 }
+
+
+void eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w )
+{
+  // 1) winsorize at +/- w 
+  // 2) 
+  const int rows = m.rows();
+  const int cols = m.cols();
+  for (int c=0;c<cols;c++)
+    {
+      std::vector<double> v = copy_vector( m.col(c) );
+      double median = MiscMath::median( v );
+      double iqr = MiscMath::iqr( v );
+      
+      double robust_sd = 0.7413 * iqr;
+
+     
+      // winsorize?
+
+      if ( w > 0 )
+	{
+	  double lwr = MiscMath::percentile( v , w );
+	  double upr = MiscMath::percentile( v , 1-w );
+	  if ( lwr >= upr ) 
+	    Helper::halt( "cannot robust_scale().. pls fix me" );
+
+	  for (int i=0; i<rows; i++)
+	    {	      
+	      if      ( m(i,c) < lwr ) m(i,c) = lwr;
+	      else if ( m(i,c) > upr ) m(i,c) = upr;
+	    }
+	}
+
+      // median / IQR normalize
+      for (int i=0; i<rows; i++)	
+	m(i,c) = ( m(i,c) - median ) / robust_sd;
+      
+    }
+
+  // hmm... a bad idea, or unnecessary?
+  
+  // finally, also scale by mean/variance too, just to ensure correct 
+  // overall scale
+
+  scale( m , true );
+
+}
+
 
 
 double eigen_ops::sdev( const Eigen::VectorXd & x )

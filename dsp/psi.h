@@ -55,7 +55,7 @@ struct psi_t {
     return m;
   }
      
-  void add_freqbin( const int l , const int u )
+  void add_freqbin( const double l , const double u )
   {
     std::vector<int> t;
     for (int f=l;f<=u;f++) t.push_back(f);

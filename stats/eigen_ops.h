@@ -33,6 +33,8 @@ namespace eigen_ops {
   void scale( Eigen::Ref<Eigen::MatrixXd> m , bool );  
   //  void scale( Eigen::Ref<Eigen::VectorXd> m , bool );  
 
+  void robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double );  
+
   double sdev( const Eigen::VectorXd & x );
 
 
@@ -40,9 +42,9 @@ namespace eigen_ops {
 
   Eigen::VectorXd unit_scale( const Eigen::VectorXd & x );
 
-  std::vector<double> copy( const Eigen::VectorXd & e );
+  std::vector<double> copy_vector( const Eigen::VectorXd & e );
 
-  std::vector<double> copy( const Eigen::ArrayXd & e );
+  std::vector<double> copy_array( const Eigen::ArrayXd & e );
   
 }
 

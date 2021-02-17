@@ -860,12 +860,12 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "LZW" ) )          proc_lzw( edf, param(c) );
       else if ( is( c, "ZR" ) )           proc_zratio( edf , param(c) );
       else if ( is( c, "ANON" ) )         proc_anon( edf , param(c) );
-      else if ( is( c ,"EPOCH" ) )        proc_epoch( edf, param(c) );
-      else if ( is( c ,"SLICE" ) )        proc_slice( edf , param(c) , 1 );
+      else if ( is( c, "EPOCH" ) )        proc_epoch( edf, param(c) );
+      else if ( is( c, "SLICE" ) )        proc_slice( edf , param(c) , 1 );
 
-      else if ( is( c , "SUDS" ) )        proc_suds( edf , param(c) );
-      else if ( is( c , "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
-      else if ( is( c , "SOAP-SUDS" ) )   proc_self_suds( edf , param(c) );
+      else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
+      else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
+      else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
 
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );

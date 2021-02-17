@@ -69,6 +69,7 @@ std::vector<double> suds_t::upr;
 std::vector<int> suds_t::sr;
 
 bool suds_t::use_kl_weights;
+bool suds_t::use_soap_weights;
 bool suds_t::use_repred_weights;
 bool suds_t::use_mcc;
 bool suds_t::use_5class_repred;
@@ -80,9 +81,13 @@ bool suds_t::wgt_mean_normalize;
 double suds_t::wgt_mean_th;
 
 bool suds_t::cheat;
+std::string suds_t::single_trainer = "";
 double suds_t::denoise_fac;
 bool suds_t::standardize_psd = true;
-bool suds_t::standardize_psc = true;
+bool suds_t::standardize_psc = false;
+bool suds_t::robust_standardization = false;
+double suds_t::winsor1 = 0;
+double suds_t::winsor2 = 0;
 bool suds_t::use_best_guess = true;
 bool suds_t::ignore_target_priors = false;
 std::vector<double> suds_t::outlier_ths;
@@ -133,7 +138,7 @@ double suds_t::hjorth_outlier_th = 5;
 
 
 //
-// Self evaluation of staging/signals using SUDS ('SOAP-SUDS')
+// Self evaluation of staging/signals using SUDS ('SOAP')
 //
 
 void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
@@ -185,6 +190,8 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   
   if ( epoch_level_output )
     summarize_epochs( pp , model.labels , ne_all , edf );
+
+
 
 
   //
@@ -261,6 +268,7 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
       if ( kappa < suds_t::self_classification_kappa )
 	{
 	  if ( count != NULL ) *count = 0;
+	  logger << "  trainer does not meet SOAP kappa " << kappa << " < " << suds_t::self_classification_kappa << "\n";
 	  return included;  // all false at this point
 	}
     }
@@ -692,8 +700,18 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   if ( suds_t::standardize_psd )
     {
-      logger << "  standardizing PSD\n";
-      eigen_ops::scale( PSD , true );
+      if ( suds_t::robust_standardization )
+	{
+	  logger << "  robust standardizing PSD";
+	  if ( suds_t::winsor1 > 0 ) logger << ", winsorizing at " << suds_t::winsor1;
+	  logger << "\n";
+	  eigen_ops::robust_scale( PSD , suds_t::winsor1 );
+	}
+      else
+	{
+	  logger << "  standardizing PSD\n";
+	  eigen_ops::scale( PSD , true );
+	}
     }
   
 
@@ -897,11 +915,20 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   if ( suds_t::standardize_psd )
     {
-      logger << "  re-standardizing PSD after removing bad epochs\n";
 
-      eigen_ops::scale( PSD , true );
-      
-      if ( suds_t::use_bands ) eigen_ops::scale( B , true );      
+      if ( suds_t::robust_standardization )
+	{
+	  logger << "  robust re-standardizing PSD after removing bad epochs\n";
+	  // nb. not repeating winsorization of PSD here
+	  eigen_ops::robust_scale( PSD , 0 );
+	  if ( suds_t::use_bands ) eigen_ops::robust_scale( B , 0 );
+	}
+      else
+	{      
+	  logger << "  re-standardizing PSD after removing bad epochs\n";	  
+	  eigen_ops::scale( PSD , true );
+	  if ( suds_t::use_bands ) eigen_ops::scale( B , true );      
+	}
     }
   else // just ensure we mean-center in any case
     {
@@ -933,10 +960,17 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   if ( suds_t::standardize_psc )
     {
-      logger << "  standardizing PSC\n";
-      eigen_ops::scale( U , true );
-    }  
-
+      if ( suds_t::robust_standardization )
+	{
+	  logger << "  robust standardizing PSC\n";
+	  eigen_ops::robust_scale( U , 0 ); // no repeated winsorization here
+	}
+      else
+	{
+	  logger << "  standardizing PSC\n";
+	  eigen_ops::scale( U , true );
+	}  
+    }
   
   //
   // Smooth PSCs?
@@ -996,7 +1030,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  // standardize column
 	  Eigen::VectorXd c = U.col(j);
 	  eigen_ops::scale( c , true );
-	  double pv = Statistics::anova( ss_str  , eigen_ops::copy( c ) );
+	  double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
 	  if ( pv >= 0 && pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
 	  writer.level( "PSC_" + Helper::int2str( j+1 ) , "VAR");
 	  writer.value( "PV", pv );
@@ -1026,7 +1060,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      if ( 1 ) // no variance check here now (might need to add back in)
 		{
 		  eigen_ops::scale( c , true );
-		  double pv = Statistics::anova( ss_str  , eigen_ops::copy( c ) );
+		  double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
 		  writer.level( bands[j] , "VAR" );
 		  writer.value( "PV" , pv  );
 		  writer.value( "INC" , pv >= 0 && pv <  suds_t::required_comp_p ); 
@@ -1127,9 +1161,20 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   if ( suds_t::standardize_psc )
     {
-      logger << "  re-standardizing PSC\n";
-      eigen_ops::scale( U , true );
-    }  
+
+      if ( suds_t::robust_standardization )
+	{
+	  logger << "  robust re-standardizing PSC";
+	  if ( suds_t::winsor2 > 0 ) logger << ", winsorizing at " << suds_t::winsor2;
+	  logger << "\n";
+	  eigen_ops::robust_scale( U , suds_t::winsor2 );
+	}
+      else
+	{
+	  logger << "  re-standardizing PSC\n";
+	  eigen_ops::scale( U , true );
+	}  
+    }
     
 
   //
@@ -1231,6 +1276,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	}
            
     }
+
+
+  //
+  // Verbose output of PSC  (todo)
+  //
 
   
   //
@@ -1911,6 +1961,11 @@ void suds_t::attach_db( const std::string & folder , bool binary , bool read_psd
         std::string fname = ent->d_name;
         if (  fname == "." || fname == ".." ) continue;
 
+	// in 'single-trainer' test mode, only attach one trainer
+	// from all 
+	
+	if ( single_trainer != "" && single_trainer != fname ) continue;
+
         // otherwise, we have not yet come across this person, so load
         // up...
 
@@ -2151,17 +2206,20 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   
   U_projected = PSD * trainer.V * trainer_DW;
 
-  // std::cout //<< " INIT : PSD \n" << PSD << "\n\n"
-  // 	    //<< " INIT : trainer.V " << trainer.V << "\n\n"
-  // 	    << " INIT : trainer_DW " << trainer_DW << "\n\n";
-  
   //
   // Normalize PSC?
   //
 
   if ( suds_t::standardize_psc ) 
     {
-      eigen_ops::scale( U_projected , true );
+      if ( suds_t::robust_standardization )
+	{
+	  eigen_ops::robust_scale( U_projected , suds_t::winsor2 );
+	}
+      else
+	{
+	  eigen_ops::scale( U_projected , true );
+	}
     }
 
 
@@ -2177,7 +2235,50 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 	dsptools::TV1D_denoise( U_projected.col(j) , lambda );
       }  
 
-  //  std::cout << "U proj " << U_projected << "\n";
+  //
+  // Verbose output?
+  //
+  
+  if ( suds_t::mat_dump_file != "" ) 
+    {
+      
+      // Target U
+      std::string filename = Helper::expand( suds_t::mat_dump_file ) + ".target.U";
+      logger << "  writing target's U matrix to " << filename << "\n";      
+      std::ofstream OUT4( filename.c_str() , std::ios::out );      
+      OUT4 << U << "\n";
+      OUT4.close();
+
+      // Projected U
+      filename = Helper::expand( suds_t::mat_dump_file ) + ".projected.U";
+      logger << "  writing target's projected U matrix to " << filename << "\n";      
+      std::ofstream OUT1( filename.c_str() , std::ios::out );      
+      OUT1 << U_projected << "\n";
+      OUT1.close();
+      
+      // Target V
+      filename = Helper::expand( suds_t::mat_dump_file ) + ".target.V";
+      logger << "  writing target's V matrix to " << filename << "\n";      
+      std::ofstream OUT2( filename.c_str() , std::ios::out );      
+      OUT2 << V << "\n";
+      OUT2.close();
+
+      // Trainer V
+      filename = Helper::expand( suds_t::mat_dump_file ) + ".trainer.V";
+      logger << "  writing trainer's V matrix to " << filename << "\n";      
+      std::ofstream OUT3( filename.c_str() , std::ios::out );      
+      OUT3 << trainer.V << "\n";
+      OUT3.close();
+
+      // Trainer U
+      filename = Helper::expand( suds_t::mat_dump_file ) + ".trainer.U";
+      logger << "  writing trainer's U matrix to " << filename << "\n";      
+      std::ofstream OUT5( filename.c_str() , std::ios::out );      
+      OUT5 << trainer.U << "\n";
+      OUT5.close();
+    
+    }
+
 
   //
   // predict using trainer model
@@ -2253,6 +2354,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   Eigen::ArrayXd wgt_max = Eigen::ArrayXd::Zero( bank_size ) ;
   Eigen::ArrayXd wgt_n50 = Eigen::ArrayXd::Zero( bank_size ) ;
 
+  // soap weights
+  Eigen::ArrayXd wgt_soap = Eigen::ArrayXd::Zero( bank_size ) ;
+
+  
 
   //
   // Store Kappa3 for each trainer (valid w/ prior staging only)
@@ -2266,7 +2371,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   //
 
   std::map<std::string,double> nr_trainer; // number of unique imputed stages 
-
+  std::map<std::string,std::map<std::string,double> > stg_cnt_trainer;  // cnt of each SS for target given this trainer
 
   //
   // Stats on weight trainers
@@ -2275,13 +2380,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   std::map<std::string,double> wtrainer_mean_k3;
   std::map<std::string,int> wtrainer_count_k3;
   
-  
+  bool w0 = use_soap_weights;
   bool w1 = wbank.size() > 0 && use_repred_weights;
   bool w2 = use_kl_weights;
 
   if ( w1 && w2 ) logger << "  using mean of repred-weights & KL-weights\n";
   else if ( w1 ) logger << "  using repred-weights only\n";
   else if ( w2 ) logger << "  using KL-weights only\n";
+  else if ( w0 ) logger << "  using SOAP-weights only\n";
   else logger << "  not applying any weights\n";
   
   //
@@ -2375,12 +2481,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      ++nr;
 	      //std::cout << "  inc " << cc->first << "\n";
 	    }
+	  
+	  // save output for this trainer: stage epoch counts
+	  stg_cnt_trainer[ trainer->id ][ cc->first ] += cc->second;
+	  
 	  ++cc;
 	}
 
       // save for output
       nr_trainer[ trainer->id ] = nr;
-
+      
+      
 
       //
       // If prior staging is available, report on kappa for this single trainer
@@ -2399,6 +2510,20 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  
 	}
       
+
+      //
+      // Single-trainer verbose matrix dump mode: rename output root
+      // so we see trainer --> trainer
+      //  then     target --> trainer  (always back to same)  w/ .repred tag
+      //
+
+      if ( mat_dump_file != "" ) 
+	mat_dump_file += ".repred";
+    
+
+      //
+      // Loop of re-prediction targets
+      //
       
       bool okay_to_fit_model = nr > 1;
 
@@ -2418,7 +2543,16 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // set target model for use w/ all different weight-trainers
 
 	  target.model = lda.fit( suds_t::flat_priors );
-	  
+
+
+
+	  //
+	  // Consider one or more weight-trainers for this trainer
+	  //   Generally: P_C|B|A
+	  //   Or, only considering seflf:   P_A|B|A
+	  //
+	  //   where A = trainer, B = target, C is weight-trainer (may have C == A as above)
+
 	  std::map<std::string,suds_indiv_t*>::iterator ww = wbank.begin();
 	  while ( use_repred_weights && ww != wbank.end() )
 	    {
@@ -2431,7 +2565,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  if ( trainer->id != weight_trainer->id ) { ++ww; continue; } 
 		}
 
-	      // do not use target as a weight-trainer
+	      // do not use target as a weight-trainer (unless we are 'cheating' ;-) 
 	      if ( weight_trainer->id == target.id && ! suds_t::cheat ) { ++ww; continue; } 
 	      
 	      lda_posteriors_t reprediction = weight_trainer->predict( target );
@@ -2440,11 +2574,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      
 	      // obs_stage for predicted/valid epochs only
 
-	      // for (int ii=0;ii<reprediction.cl.size();ii++)
-	      // 	{
-	      // 	  std::cout << " CK " << reprediction.cl[ii] << " " << str(  weight_trainer->obs_stage[ii] ) << "\n";
-	      // 	}
-	      
 	      double kappa = 0 ; 
 	      if ( use_5class_repred ) 
 		kappa = MiscMath::kappa( reprediction.cl , str( weight_trainer->obs_stage ) , suds_t::str( SUDS_UNKNOWN )  ) ;
@@ -2453,16 +2582,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      else
 		kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) , suds_t::str( SUDS_UNKNOWN )  );
 	      
-	      // if ( use_rem_repred ) 
-	      // 	{
-	      // 	  logger << "\n  REM REPRED:\n";
-	      // 	  suds_t::tabulate(  suds_t::NRW( reprediction.cl ) , suds_t::NRW(  str( weight_trainer->obs_stage ) ) , true );
-	      // 	  logger << "Rnot...\n";
-	      // 	  suds_t::tabulate(  suds_t::Rnot( reprediction.cl ) , suds_t::Rnot(  str( weight_trainer->obs_stage ) ) , true );		  
-	      // 	}
-
-	      //	      std::cout << "\nids: " << target.id << "\t" << trainer->id << "\t" << weight_trainer->id << "\n";
-
 	      // swap in MCC instead of kappa?
 	      if ( use_mcc )
 		{		  
@@ -2499,7 +2618,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  kappa = mcc;
 		}
 	      
-	      //	      std::cout << " kappa = " << kappa << "\n";
 	      
 	      ++n_kappa_all;
 	      if ( kappa > 0.5 ) n_kappa50++;
@@ -2529,6 +2647,43 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  wgt_mean[ cntr ] = ( mean_kappa ) / (double)n_kappa_all ;
 	  wgt_n50[ cntr ] = n_kappa50;
 	}
+
+
+      //
+      // SOAP-based trainer weights
+      //
+      // i.e. given a prediction for target B from trainer A , P_B|A
+      //   just do SOAP procedure, as if these were the real values for the target
+      //   (and using the target's own U, not the trainer-projected value)
+
+      if ( use_soap_weights )
+	{
+
+	  // from above, we already have the model fit:
+
+	  //  i.e. these lines of code above:
+	  // lda_t lda( prediction.cl , target.U ) ;
+	  // target.model = lda.fit( suds_t::flat_priors );
+
+	  // following the self-evaluation (SOAP) procedure, we get kappa
+	  // as follows:
+
+	  lda_posteriors_t prediction1 = lda_t::predict( target.model , target.U );
+
+
+	  double kappa1 = 0 ;
+
+	  if ( use_5class_repred )
+	    kappa1 = MiscMath::kappa( prediction1.cl , prediction.cl , suds_t::str( SUDS_UNKNOWN ) );
+	  else if ( use_rem_repred )
+	    kappa1 = MiscMath::kappa( Rnot( prediction1.cl ) , Rnot( prediction.cl ) , suds_t::str( SUDS_UNKNOWN ) );
+	  else 
+	    kappa1 = MiscMath::kappa( NRW( prediction1.cl ) , NRW( prediction.cl ) , suds_t::str( SUDS_UNKNOWN ) );
+
+	  wgt_soap[ cntr ] = kappa1;
+
+	}
+
       
       //
       // Next trainer
@@ -2539,8 +2694,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
     }
 
-
-
+    
       
   //
   // Derive weights for each trainer based on KL divergence from trainer stage distribition to the mean
@@ -2556,7 +2710,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   
 
   //
-  // Output all weights, and generate 'final' weigth
+  // Output all weights, and generate 'final' weights
   //
   
   Eigen::ArrayXd wgt = Eigen::ArrayXd::Zero( bank_size );
@@ -2577,11 +2731,21 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
       writer.value( "NS" , nr_trainer[ trainer->id ] );
 
+      int sum = 0;
+      for (int j=0;j<labels.size();j++)
+	sum += stg_cnt_trainer[ trainer->id ][ labels[j] ] ;
+
+      for (int j=0;j<labels.size();j++)
+	writer.value( "N_" + labels[j] , stg_cnt_trainer[ trainer->id ][labels[j] ] / (double) sum ) ;
+
       if ( prior_staging )
 	writer.value( "K3" , k3_prior[ cntr ] );
 
       if ( use_kl_weights )
 	writer.value( "WGT_KL"   , wgt_kl[ cntr ] );
+
+      if ( use_soap_weights )
+	writer.value( "WGT_SOAP"  , wgt_soap[ cntr ] );
       
       if ( use_repred_weights && wbank.size() > 0 ) 
 	{
@@ -2594,7 +2758,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // define 'final' weight: if weight trainers exist, 
       // using WGT_MEAN, otherwise WGT_KL
       //
-    
+
+      bool w0 = use_soap_weights;
       bool w1 = wbank.size() > 0 && use_repred_weights;
       bool w2 = use_kl_weights;
 
@@ -2604,6 +2769,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	wgt[ cntr ] = wgt_mean[ cntr ] ;
       else if ( w2 )
 	wgt[ cntr ] = wgt_kl[ cntr ] ;
+      else if ( w0 )
+	wgt[ cntr ] = wgt_soap[ cntr ];
       else
 	wgt[ cntr ] = 1 ; 
 
@@ -2615,9 +2782,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   writer.unlevel( "TRAINER" );
 
 
-  //  std::cout << "WGT\n" << wgt << "\n";
-
-  
   
   //
   // Verbose output: mean weight trainer values
@@ -2643,22 +2807,21 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Normalize wgt / truncate at percentile?
   //
 
-  bool has_wgt = ( wbank.size() > 0 && use_repred_weights ) || use_kl_weights ;
+  bool has_wgt = ( wbank.size() > 0 && use_repred_weights ) || use_kl_weights || use_soap_weights ;
 
   if ( has_wgt && suds_t::wgt_mean_normalize ) 
     {
-      logger << "  normalizing repred weights around trainer mean\n";
+      logger << "  normalizing weights by the trainer mean\n";
       double mean_wgt = wgt.mean();
       for ( int i=0; i<wgt.size();i++)
 	{	  
 	  if ( wgt[i] < 0 ) wgt[i] = 0;
-	  else wgt[i] /= mean_wgt;	  
+	  else wgt[i] /= mean_wgt;       
 	  // default threshold = 1 (i.e. only take values above the mean)
 	  if ( wgt[i] < suds_t::wgt_mean_th ) wgt[i] = 0;
 	}      
     }
   
-  //  std::cout << "WGT (V2)\n" << wgt << "\n";
 
   //
   // Unit scale exponential 
@@ -2690,7 +2853,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     {
       
       // get value X = top N% and set to 0/1 if below/above X
-      std::vector<double> cc = eigen_ops::copy( wgt ) ;
+      std::vector<double> cc = eigen_ops::copy_array( wgt ) ;
       double threshold = MiscMath::percentile( cc , 1.0 - suds_t::wgt_percentile / 100.0 ) ;
       
       // binarize wgt (if only 1 or 2 trainers, then assign equal weight) 
@@ -2781,7 +2944,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     logger << "  constructed posteriors using top "
 	   << suds_t::wgt_percentile << " percentile, "
 	   << (int)tot_unwgt << " (of " << ntrainers << ") trainers (weighted N = " << tot_wgt << ")\n";
-  else if ( has_wgt )
+  else if ( has_wgt ) 
     logger << "  constructed posteriors using " << ntrainers << " trainers (weighted N = " << tot_wgt << ")\n";
   else
     logger << "  constructed posteriors using " << ntrainers << " trainers\n";
@@ -2864,19 +3027,21 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( k3_prior.size() > 2 )
 	{
 	  if ( use_kl_weights )
-	    writer.value( "R_K3_KL" , Statistics::correlation( eigen_ops::copy( wgt_kl ) , eigen_ops::copy( k3_prior) ) ); 
+	    writer.value( "R_K3_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_kl ) , eigen_ops::copy_array( k3_prior) ) ); 
 	  
+	  if ( use_soap_weights )
+	    writer.value( "R_K3_SOAP" , Statistics::correlation( eigen_ops::copy_array( wgt_soap ) , eigen_ops::copy_array( k3_prior ) ) ); 
+
 	  if ( use_repred_weights && wbank.size() > 0 ) 
 	    {
-	      writer.value( "R_K3_MAX" , Statistics::correlation( eigen_ops::copy( wgt_max ) , eigen_ops::copy( k3_prior ) ) ); 
-	      writer.value( "R_K3_MEAN" , Statistics::correlation( eigen_ops::copy(wgt_mean) , eigen_ops::copy(k3_prior) ) ); 
-	      writer.value( "R_K3_N50" , Statistics::correlation( eigen_ops::copy(wgt_n50)  , eigen_ops::copy(k3_prior) ) ); 
+	      writer.value( "R_K3_MAX" , Statistics::correlation( eigen_ops::copy_array( wgt_max ) , eigen_ops::copy_array( k3_prior ) ) ); 
+	      writer.value( "R_K3_MEAN" , Statistics::correlation( eigen_ops::copy_array(wgt_mean) , eigen_ops::copy_array(k3_prior) ) ); 
+	      writer.value( "R_K3_N50" , Statistics::correlation( eigen_ops::copy_array(wgt_n50)  , eigen_ops::copy_array(k3_prior) ) ); 
 	      
 	      if ( use_kl_weights )
 		{
-		  writer.value( "R_MEAN_KL" , Statistics::correlation( eigen_ops::copy( wgt_mean ) , eigen_ops::copy( wgt_kl ) ) );
-		  writer.value( "R_K3_CMB" , Statistics::correlation( eigen_ops::copy(wgt) , eigen_ops::copy(wgt_kl) ) );
-		  
+		  writer.value( "R_MEAN_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_mean ) , eigen_ops::copy_array( wgt_kl ) ) );
+		  writer.value( "R_K3_CMB" , Statistics::correlation( eigen_ops::copy_array(wgt) , eigen_ops::copy_array(wgt_kl) ) );		  
 		}
 	      
 	    }
@@ -2923,12 +3088,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   if ( suds_t::mat_dump_file != "" ) 
     {
+
+      // more versbose INFO including staging 
+      // nb. use 'orig' name, w/out .repred tag, so remove last 7 characters
+
+      if ( mat_dump_file.substr( mat_dump_file.size() - 7 ) == ".repred" )
+	mat_dump_file = mat_dump_file.substr( 0 , mat_dump_file.size() - 7 );
       
-      std::string filename = Helper::expand( suds_t::mat_dump_file );
+      std::string filename = Helper::expand( mat_dump_file ) ;
       std::ofstream OUT1( filename.c_str() , std::ios::out );
       
-      logger << "  writing epoch-wise matrix to " << filename << "\n";
-
+      logger << "  writing target epoch-wise matrix to " << filename << "\n";
       OUT1 << "ID\tE";
 
       for (int i=0;i<target.PSD.cols();i++)
@@ -3232,17 +3402,17 @@ void suds_indiv_t::write_annots( const std::string & annot_folder , const std::s
   
   // annot label
   annot_t * a_disc3 = edf.timeline.annotations.add( aname + "_disc3" );
-  a_disc3->description = "SOAP-SUDS NR/R/W discordance";
+  a_disc3->description = "SOAP NR/R/W discordance";
 
   annot_t * a_disc5 = NULL;
   if ( suds_t::n_stages == 5 )
     {
       a_disc5 = edf.timeline.annotations.add( aname + "_disc5" );
-      a_disc5->description = "SOAP-SUDS N1/N2/N3/R/W discordance";
+      a_disc5->description = "SOAP N1/N2/N3/R/W discordance";
     }
 
   annot_t * a_unscr = edf.timeline.annotations.add( aname + "_unscr" );
-  a_unscr->description = "SOAP-SUDS unscored epoch";
+  a_unscr->description = "SOAP unscored epoch";
 
   const std::string a_filename3 = annot_folder + delim + aname + "_disc3.annot";
   const std::string a_filename5 = annot_folder + delim + aname + "_disc5.annot";

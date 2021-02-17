@@ -46,6 +46,7 @@
 #include "tinyxml/xmlreader.h"
 
 #include "stats/Eigen/Dense"
+#include "stats/eigen_ops.h"
 #include "stats/cluster.h"
 #include "stats/kmeans.h"
 

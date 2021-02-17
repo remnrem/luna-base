@@ -81,14 +81,45 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   // Frequency bins?
   //
 
-  std::vector<int> lwr = param.intvector( "f-lwr" );
-  std::vector<int> upr = param.intvector( "f-upr" );
-  if ( lwr.size() != upr.size() ) 
-    Helper::halt( "f-lwr and f-upr have different sizes" );
-  for (int i=0;i<lwr.size();i++)
-    if ( lwr[i] >= upr[i] ) Helper::halt( "f-lwr >= f-upr" );
-  bool has_freqs = lwr.size() > 0 ;
+  std::vector<double> lwr, upr;
 
+  if ( param.has( "f-lwr" ) && param.has( "f-upr" ) && param.has( "w" ) && param.has( "r" ) )
+    {
+      double w = param.requires_dbl( "w" );
+      double r = param.requires_dbl( "r" );
+      double fl = param.requires_dbl( "f-lwr" );
+      double fu = param.requires_dbl( "f-upr" );
+      for (double ff = fl ; ff <= (fu+0.5*r) ; ff += r )
+	{
+	  lwr.push_back( ff - w );
+	  upr.push_back( ff + w );
+	}	
+    }
+  else if ( param.has( "f-lwr" ) && param.has( "f-upr" ) )
+    {
+      lwr = param.dblvector( "f-lwr" );
+      upr = param.dblvector( "f-upr" );
+      if ( lwr.size() != upr.size() ) 
+	Helper::halt( "f-lwr and f-upr have different sizes" );
+      for (int i=0;i<lwr.size();i++)
+	if ( lwr[i] >= upr[i] ) Helper::halt( "f-lwr >= f-upr" );
+    }
+  else if ( param.has( "f" ) && param.has( "w" ) )
+    {
+      lwr = upr = param.dblvector( "f" );
+      double w = param.requires_dbl( "w" );
+      for (int i=0; i<lwr.size(); i++) 
+	{
+	  lwr[i] -= w;
+	  upr[i] += w;
+	  if ( lwr[i] <= 0 ) 
+	    Helper::halt( "frequency below 0 Hz specified" );
+	}
+    }
+  
+
+  bool has_freqs = lwr.size() > 0 ;
+  
 
   //
   // PSI epoch/segment lengths 
@@ -416,12 +447,11 @@ void psi_t::calc()
 	  std::vector<double> xx;
 	  for (int b=0;b<nepochjack;b++)
 	    {
-	      xx.push_back( pssumloc[b][ii](i) );
-	      //	      std::cout << " xx = " << pssumloc[b][ii](i) << "\n";
+	      xx.push_back( pssumloc[b][ii](i) );	      
 	    }
 	      V(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
 	}
-      //      std::cout << "V std = " << V.print() << "\n";
+
       std_psi_sum.push_back( V );
       
     }
@@ -513,9 +543,6 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 									int maxfreqbin )
 {
 
-
-  
-
   // from main: 
   //  para.segave=1;   YES : AVERAGE ACROSS SEGMENTS
   //  para.subave=0;   NO  : SUBTRACTION OF AVERAGE ACROSS EPOCHS
@@ -600,22 +627,21 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 	  for (int j=0; j<nchan; j++)
 	    {
 
-	      int my_Fs = 400; // arbitrary
+	      int my_Fs = 500; // arbitrary
 	      int index_length = seglen;
 	      int index_start = 0;
 
 	      FFT fftseg( index_length , index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
-
+	      
 	      const std::vector<double> * pd = dataloc.col(j).data_pointer();
 	      //fftseg.apply( &(x[index_start]) , index_length );
 	      fftseg.apply( &((*pd)[0]) , index_length );
 
 	      // Extract the raw transform
 	      datalocfft.push_back( fftseg.transform() );
-	      
-	      
+	      	      
 	    }
-
+	  
 	  // std::cout << "FFT\n";
 	  // for (int f=0; f<maxfreqbin; f++)
 	  //   for (int j=0; j<nchan;j++)
@@ -628,6 +654,9 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 	 // for each frequency (from 1 Hz to MX)
          for (int f=0; f<maxfreqbin; f++) 
 	   {
+	     
+	     // for (int ff=0; ff < fftseg.cutoff ; ff++)
+	     //   std::cout << "adding F\t" << fftseg.frq[ff] << "\n";
 
 	     // cs(:,:,f)= cs(:,:,f)+conj(datalocfft(f,:)'*datalocfft(f,:));
 	     for (int i=0; i<nchan; i++)

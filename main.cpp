@@ -1786,7 +1786,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   std::vector<double> x;
   
   if ( p == "fir" || p == "fft" || p == "mtm" || p == "tv" || p == "psi" 
-       || p == "dynam" || p == "ica" || p == "fip" || p == "sl" || p == "acf" || p == "otsu" ) 
+       || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu" ) 
     {
 
       int cnt= 0;
@@ -1827,6 +1827,18 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(0);
     }
   
+  if ( p == "robust" )
+    {
+      
+      const int n = x.size();
+      Eigen::MatrixXd m( n , 1 );
+      for (int i=0;i<n;i++) m(i,0) = x[i];
+  
+      eigen_ops::robust_scale( m , 0.05 );
+      std::cout << "\n" << m  << "\n";
+      std::exit(0);
+    }
+
   if ( p == "otsu" )
     {
       double w = 0;

@@ -227,6 +227,23 @@ struct suds_t {
     
     standardize_psd  = param.has( "norm-psd" ) ? Helper::yesno( param.value( "norm-psd" ) ) : true ;
     standardize_psc  = param.has( "norm-psc" ) ? Helper::yesno( param.value( "norm-psc" ) ) : false ;
+    
+    // use a robust scaler
+    robust_standardization = param.has( "robust" );
+    // and winsorization (winsor quantiles, q and 1-q)
+    if ( robust_standardization )
+      {
+	std::vector<double> ww = param.dblvector( "robust" );
+	if ( ww.size() > 2 ) Helper::halt( "robust requires 1 or 2 numeric args" ); 
+	winsor1 = ww.size() == 0 ? 0 : ww[0];
+	winsor2 = ww.size() == 2 ? ww[1] : 0 ;
+	if ( winsor1 < 0 || winsor1 > 1 ) Helper::halt( "robust parameter(s) should be between 0 and (e.g.) 0.1" );
+	if ( winsor1 > 0.5 ) winsor1 = 1 - winsor1;
+
+	if ( winsor2 < 0 || winsor2 > 1 ) Helper::halt( "robust parameter(s) should be between 0 and (e.g.) 0.1" );
+	if ( winsor2 > 0.5 ) winsor2 = 1 - winsor1;
+
+      }
 
     // how to combine predictions across trainers?  by default, use weighted PP (rather than set max to 1 vs 0)
     use_best_guess = param.has( "best-guess" ) ? Helper::yesno( param.value( "best-guess" ) ) : false;
@@ -234,49 +251,58 @@ struct suds_t {
     // if target staging present, ignore ; e.g. if it is all 'UNKNOWN'
     ignore_target_priors = param.has( "ignore-prior" );
     
+    //
+    // Weights 
+    //
+
     // weights: take top N % (if 0 use all) based on the weighting
-    wgt_percentile = param.has( "pct" ) ? param.requires_dbl( "pct" ) : 0 ;
-    if ( wgt_percentile < 0 || wgt_percentile > 100 ) Helper::halt( "pct should be between 0 and 100" );
+    wgt_percentile = param.has( "wgt-pct" ) ? param.requires_dbl( "wgt-pct" ) : 0 ;
+    if ( wgt_percentile < 0 || wgt_percentile > 100 ) Helper::halt( "wgt-pct should be between 0 and 100" );
 
     // among selected, (pct) weight equally
-    equal_wgt_in_selected = param.has( "equalize-weights" );
+    equal_wgt_in_selected = param.has( "wgt-equal" );
     
     // instead of normalizing to 0..1 range, X / mean( X ) 
-    wgt_mean_normalize = param.has( "repred-mean" );    
+    wgt_mean_normalize = param.has( "wgt-mean" );    
 
     // threshold on the means (only take above average scorers, default = 1) 
-    wgt_mean_th = ( param.has( "repred-mean" ) && param.value( "repred-mean" ) != "T" ) ? param.requires_dbl( "repred-mean" ) : 1 ;
+    wgt_mean_th = ( param.has( "wgt-mean" ) && param.value( "wgt-mean" ) != "T" ) ? param.requires_dbl( "wgt-mean" ) : 1 ;
 
     if ( wgt_mean_normalize && ( wgt_percentile > 0 || equal_wgt_in_selected  ) ) 
-      Helper::halt( "cannot specify pct and/or equalize-weights and repred-mean together" );
+      Helper::halt( "cannot specify wgt-pct and/or wgt-equal and wgt-mean together" );
 
     // exponential on weight
     wgt_exp = param.has( "wgt-exp" ) ? param.requires_int( "wgt-exp" ) : 0 ;
     if ( wgt_exp < 0 ) Helper::halt( "wgt-exp must be a positive integer" );
 
     if ( param.has( "wgt-exp" ) && ( wgt_mean_normalize || ( wgt_percentile > 0 || equal_wgt_in_selected  ) ) )
-      Helper::halt( "cannot specify wgt-exp along with pct, or repred-mean" );
+      Helper::halt( "cannot specify wgt-exp along with pct, or wgt-mean" );
     
     // wgt1: (do not) use backskip re-weighting
-    use_repred_weights = param.has( "repred-weights" ) ? Helper::yesno( param.value( "repred-weights" ) ) : true ;
+    use_repred_weights = param.has( "wgt-repred" ) ? Helper::yesno( param.value( "wgt-repred" ) ) : true ;
 
     // use MCC instead of kappa for weighting
-    use_mcc = param.has( "mcc" );
+    use_mcc = param.has( "wgt-mcc" );
     
     // repred uses 5 classes, not NRW
-    use_5class_repred = param.has( "repred5" );
+    use_5class_repred = param.has( "wgt-5" );
     
     // repred uses only REM vs non-REM
-    use_rem_repred = param.has( "repredR" ) ;
+    use_rem_repred = param.has( "wgt-rem" ) ;
 
     // wgt2: use kl_weights
-    use_kl_weights = param.has( "kl-weights" ) ? Helper::yesno( param.value( "kl-weights" ) ) : false ;
+    use_kl_weights = param.has( "wgt-kl" ) ? Helper::yesno( param.value( "wgt-kl" ) ) : false ;
 
-    // total weight is either wgt1, wgt2 or a simple average of both wgt1+wgt2
+    // SOAP-weights? 
+    use_soap_weights = param.has( "wgt-soap" ) ? Helper::yesno( param.value( "wgt-soap" ) ) : false ; 
+    if ( use_soap_weights ) use_repred_weights = false;
 
     // allow cheating (trainer is target)
     cheat = param.has( "cheat" );
     
+    // only pick 1 trainer of all db (i.e. for testing purposes w/ mat /verbose output    
+    single_trainer = param.has( "single-trainer" ) ? param.value( "single-trainer" ) : "" ;
+
     // NR/R/W or N1/N2/N3/R/W classification?
     n_stages = param.has( "3-stage" ) ? 3 : 5;
 
@@ -290,7 +316,7 @@ struct suds_t {
       labels = labels5;
     
     // by default, requires at least 5 of each 5 epochs to include a trainer
-    required_epoch_n = 5;
+    required_epoch_n = 10;
     if ( param.has( "req-epochs" ) ) required_epoch_n = param.requires_int( "req-epochs" );
 
     // select /exactly/ N epochs (at random) from each stage/trainer
@@ -362,9 +388,15 @@ struct suds_t {
     eannot_ints = param.has( "stage-numbers" );
     
     eannot_prepend = param.has( "prefix" ) ? ( param.value( "prefix" ) + "_" ) : "" ;
-    
+
+    // this only works in single-trainer mode
+    // shows both predictions:    target | trainer
+    //                            trainer | target
     mat_dump_file = param.has( "mat" ) ? param.value( "mat" ) : "" ;
 
+    if ( mat_dump_file != "" && single_trainer == "" )
+      Helper::halt( "can only specifiy verbose 'mat' output in single-trainer mode" );
+    
   }
 
   
@@ -420,6 +452,8 @@ struct suds_t {
 
   static bool use_kl_weights;
     
+  static bool use_soap_weights;
+
   static double wgt_percentile;
   
   static int wgt_exp;
@@ -430,11 +464,18 @@ struct suds_t {
 
   static bool cheat;
 
+  static std::string single_trainer;
+
   static double denoise_fac;
 
   static bool standardize_psd;
 
   static bool standardize_psc;
+  
+  static bool robust_standardization;
+
+  static double winsor1; // initial PSD
+  static double winsor2; // final PSC
   
   static bool use_best_guess;
   
