@@ -28,6 +28,7 @@ struct param_t;
 struct signal_list_t;
 
 #include "stats/matrix.h"
+#include "fftw/fftwrap.h"
 #include <complex>
 #include <vector>
 
@@ -39,15 +40,23 @@ namespace dsptools
   
 struct psi_t {
   
-  psi_t( const Data::Matrix<double> * data , int eplen , int seglen )
-    : data(data) , eplen( eplen ) , seglen( seglen ) 
+  psi_t( const Data::Matrix<double> * data , int eplen , int seglen , const int fs )
+    : data(data) , eplen( eplen ) , seglen( seglen ) , fs(fs)
   {
     if ( seglen > eplen )
       Helper::halt( "epoch length is smaller than segment length" );
+
+    // populate frequency index given fs and seglen
+    // windowing is done manually by PSI routine
+    fftseg.init( seglen , seglen , fs , WINDOW_NONE );
+    frqs.clear();
+    for (int i=0; i<fftseg.cutoff; i++)
+      frqs.push_back( fftseg.frq[i] );
   }
   
-  int max_freq()
+  int max_freq_idx()
   {
+    // max index
     int m = 0;
     for (int i=0;i<freqbins.size();i++)
       for (int j=0;j<freqbins[i].size();j++)
@@ -55,10 +64,22 @@ struct psi_t {
     return m;
   }
      
+
+  void add_freqbin()
+  {
+    // add all except DC term
+    std::vector<int> t;
+    for (int f=0;f<frqs.size(); f++)
+      if ( frqs[f] > 0 ) t.push_back( f ); // store index     
+    freqbins.push_back(t);
+  }
+
   void add_freqbin( const double l , const double u )
   {
     std::vector<int> t;
-    for (int f=l;f<=u;f++) t.push_back(f);
+    for (int f=0;f<frqs.size(); f++)
+      if ( frqs[f] >= l && frqs[f] <= u )
+	t.push_back( f ); // store index   
     freqbins.push_back(t);
   }
 
@@ -82,7 +103,9 @@ struct psi_t {
   int eplen;
   int seglen;
   int segshift;
-
+  int fs;
+  
+  std::vector<double> frqs;
   std::vector<std::vector<int> > freqbins;
 
   //
@@ -90,6 +113,8 @@ struct psi_t {
   //
 
   int nchan; // number of channels
+
+  real_FFT fftseg;
   
   //
   // Outputs

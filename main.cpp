@@ -1816,7 +1816,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 	  data(i,1) = x[ r++ ];
 	}
 
-      psi_t psi( &data , 100 , 200 );
+      psi_t psi( &data , 100 , 200 , 200 );
 
       psi.calc();
 

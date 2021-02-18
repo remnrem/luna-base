@@ -70,7 +70,10 @@ int clocs_t::load_cart( const std::string & filename , bool verbose )
   // assume LABEL X Y Z 
   std::ifstream IN1( filename.c_str() , std::ios::in );
 
+  // stor channel labels (if needed for verbose output)
 
+  std::vector<std::string> channels;
+  
   while ( !IN1.eof() )
     {
 
@@ -86,7 +89,8 @@ int clocs_t::load_cart( const std::string & filename , bool verbose )
       
       // store all channel names as upper case
       std::string lab = Helper::toupper( tok[0] );
-
+      channels.push_back( lab );
+      
       double x,y,z;
       if ( ! ( Helper::str2dbl( tok[1] , &x ) 
 	       && Helper::str2dbl( tok[2] , &y ) 
@@ -100,6 +104,16 @@ int clocs_t::load_cart( const std::string & filename , bool verbose )
   IN1.close();
 
   logger << " read " << cloc.size() << " channel locations\n"; 
+
+  //
+  // Convert to unit sphere
+  //
+
+  convert_to_unit_sphere();
+
+  //
+  // Output
+  //
 
   if ( verbose ) 
     {
@@ -136,6 +150,35 @@ int clocs_t::load_cart( const std::string & filename , bool verbose )
 	}
       
       writer.unlevel( globals::signal_strat );
+    }
+
+  
+  //
+  // Calculate and dump pairwise similarities/distances? 
+  //
+
+  if ( verbose )
+    {
+      signal_list_t signals;
+      for (int i=0; i<channels.size(); i++)
+	signals.add( i , channels[i] );
+
+      // mode = 1 , 2 : returns difference distance / similarity measures
+      Data::Matrix<double> D1 = interelectrode_distance_matrix( signals , 1 );
+      Data::Matrix<double> D2 = interelectrode_distance_matrix( signals , 2 );
+
+      for (int i=0; i<channels.size(); i++)
+	{
+	  writer.level( channels[i] , globals::signal1_strat );
+	  for (int j=0; j<channels.size(); j++)
+	    {
+	      writer.level( channels[j] , globals::signal2_strat );
+	      writer.value( "S" , D1(i,j) ); // similarity measure
+	      writer.value( "D" , D2(i,j) );	      
+	    }
+	  writer.unlevel( globals::signal2_strat );
+	}
+      writer.unlevel( globals::signal1_strat );      
     }
 
   return cloc.size();

@@ -243,6 +243,8 @@ struct globals
   static std::string time_strat;
   static std::string freq_strat;
   static std::string signal_strat;
+  static std::string signal1_strat;
+  static std::string signal2_strat;
   static std::string stage_strat;
   static std::string cycle_strat;
   static std::string band_strat;

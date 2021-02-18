@@ -24,7 +24,6 @@
 #include "miscmath/miscmath.h"
 #include <iostream>
 #include "defs/defs.h"
-#include "fftw/fftwrap.h"
 #include "stats/matrix.h"
 #include "stats/statistics.h"
 
@@ -75,7 +74,6 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   
   int ne = edf.timeline.first_epoch();
 
-  logger << "  running within " << ne << " " << edf.timeline.epoch_length() << " second epochs\n";
 
   //
   // Frequency bins?
@@ -91,9 +89,12 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       double fu = param.requires_dbl( "f-upr" );
       for (double ff = fl ; ff <= (fu+0.5*r) ; ff += r )
 	{
-	  lwr.push_back( ff - w );
-	  upr.push_back( ff + w );
-	}	
+	  if ( ff - w/2.0 > 0 )
+	    {
+	      lwr.push_back( ff - w/2.0 );
+	      upr.push_back( ff + w/2.0 );
+	    }
+	}
     }
   else if ( param.has( "f-lwr" ) && param.has( "f-upr" ) )
     {
@@ -146,14 +147,14 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       const Data::Matrix<double> & X = mslice.data_ref();
 
-      psi_t psi( &X , eplen , seglen );
+      psi_t psi( &X , eplen , seglen , sr );
       
       if ( has_freqs )
 	for (int i=0;i<lwr.size();i++)
 	  psi.add_freqbin( lwr[i] , upr[i] );
-
+      
       psi.calc();
-  
+      
       psi.report( signals );
 
       return; 
@@ -164,6 +165,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   // By epoch
   //
 
+  logger << "  running within " << ne << " " << edf.timeline.epoch_length() << " second epochs\n";
   
   while ( 1 ) 
     {
@@ -179,8 +181,8 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       const Data::Matrix<double> & X = mslice.data_ref();
       
-      psi_t psi( &X , eplen , seglen );
-
+      psi_t psi( &X , eplen , seglen , sr );
+      
       if ( has_freqs )
 	for (int i=0;i<lwr.size();i++)
 	  psi.add_freqbin( lwr[i] , upr[i] );
@@ -209,11 +211,14 @@ void psi_t::report( const signal_list_t & signals )
   
   for (int m=0; m<n_models; m++)
     {
-      writer.level( m+1 , "M" );
+      // use mean frequency as factor for all PSI output
+      double mean_f = ( frqs[ freqbins[m][0] ] + frqs[ freqbins[m][ freqbins[m].size()-1 ] ] ) / 2.0;
+      writer.level( mean_f , globals::freq_strat );
+      //writer.value( "M" , m + 1 );
+      writer.value( "F1" , frqs[ freqbins[m][0] ] );
+      writer.value( "F2" , frqs[ freqbins[m][ freqbins[m].size()-1 ] ] );
+      writer.value( "NF" ,  (int)freqbins[m].size() );
 
-      writer.value( "F1" , freqbins[m][0] );
-      writer.value( "F2" , freqbins[m][ freqbins[m].size()-1 ] );
-      
       // channel sums
       for (int i=0;i<nchan;i++)
 	{
@@ -227,23 +232,21 @@ void psi_t::report( const signal_list_t & signals )
       // channel pairs
       for (int i=0;i<nchan;i++)
 	{
-	  writer.level( signals.label(i) , "CH1" );
+	  writer.level( signals.label(i) , globals::signal1_strat );
 		    
 	  for (int j=0;j<nchan;j++)
 	    {
 	      if ( i >= j ) continue;
-	      writer.level( signals.label(j) , "CH2" );
-
+	      writer.level( signals.label(j) , globals::signal2_strat);	      
 	      writer.value( "PSI_RAW" , psi[m](i,j) );
 	      writer.value( "STD" , std_psi[m](i,j) );
 	      writer.value( "PSI" , psi[m](i,j)  / ( EPS + std_psi[m](i,j) ) );
 	    }
-	  writer.unlevel("CH2");
+	  writer.unlevel(globals::signal2_strat);
 	}
-      writer.unlevel("CH1");
+      writer.unlevel(globals::signal1_strat);
     }
-  writer.unlevel( "M" );
-
+  writer.unlevel( globals::freq_strat );
   
 }
 
@@ -268,12 +271,13 @@ void psi_t::calc()
   // if no specified frequency bins, get highest frequency based on segment length
   //  (seglen = seglen in sample points)
   
-  int maxfreqbin = floor( seglen/2 ) + 1;
+  //  int maxfreqbin = floor( seglen/2 ) + 1;
   
   if ( freqbins.size() == 0 )
-    add_freqbin( 1 , maxfreqbin );
-  else
-    maxfreqbin = max_freq();
+    add_freqbin(); // adds all (skips DC) to NQ
+
+  // get max bin
+  int maxfreqbin = max_freq_idx();
     
   // store
   n_models = freqbins.size();
@@ -289,18 +293,12 @@ void psi_t::calc()
   // fbin / MxM 
   std::vector<Data::Matrix<std::complex<double> > > cs = data2cs_event( data , maxfreqbin );
   
-   // for (int i=0;i<cs.size();i++)
-   //   {
-   //     Data::Matrix<dcomp> r = cs[i];
-   //     std::cout << "CS " << i << " " << r.print() << "\n";
-   //   }
-
   const int nm = freqbins.size();
-
-  const int nf = freqbins[0].size();
+  
+  //  const int nf = freqbins[0].size();  
   // nb. this assumes that if there are multiple freqbins, they
   // all need to be the same size.
-
+  
   // psall=zeros(nchan,nchan,nm);
   std::vector<Data::Matrix<double> > psall( nm );
   for (int i=0;i<nm;i++) psall[i].resize( nchan , nchan );
@@ -398,7 +396,7 @@ void psi_t::calc()
       
       for (int ii=0; ii<nm; ii++)
 	{
-
+	  const int nf = freqbins[ii].size();
 	  //psloc(:,:,b,ii)=cs2ps(cs(:,:,freqbins(ii,:)));
 	  std::vector<Data::Matrix<std::complex<double> > > tt(nf);
 	  for (int f = 0 ; f < nf ; f++) tt[f] = cs[ freqbins[ii][f] - 1 ] ;
@@ -626,57 +624,49 @@ std::vector<Data::Matrix<std::complex<double> > > psi_t::data2cs_event( const Da
 	  std::vector<std::vector<dcomp> > datalocfft;
 	  for (int j=0; j<nchan; j++)
 	    {
-
-	      int my_Fs = 500; // arbitrary
-	      int index_length = seglen;
-	      int index_start = 0;
-
-	      FFT fftseg( index_length , index_length , my_Fs , FFT_FORWARD , WINDOW_NONE );
-	      
 	      const std::vector<double> * pd = dataloc.col(j).data_pointer();
-	      //fftseg.apply( &(x[index_start]) , index_length );
-	      fftseg.apply( &((*pd)[0]) , index_length );
+
+	      fftseg.apply( &((*pd)[0]) , seglen );
 
 	      // Extract the raw transform
 	      datalocfft.push_back( fftseg.transform() );
-	      	      
+	      
 	    }
 	  
 	  // std::cout << "FFT\n";
 	  // for (int f=0; f<maxfreqbin; f++)
 	  //   for (int j=0; j<nchan;j++)
 	  //     std::cout << "FFT\t" << f+1 << "\t" << j+1 << "\t" << datalocfft[j][f] << "\n";
-
 	  
-	 // OR.. optionally, detrend segment
-	 //datalocfft=fft(detrend(dataloc,0).*mywindow);
+	  // OR.. optionally, detrend segment
+	  //datalocfft=fft(detrend(dataloc,0).*mywindow);
+	  
+	  // for each frequency
+	  for (int f=0; f<maxfreqbin; f++) 
+	    {
+	      
+	      // for (int ff=0; ff < fftseg.cutoff ; ff++)
+	      //   std::cout << "adding F\t" << fftseg.frq[ff] << "\n";
+	      
+	      // cs(:,:,f)= cs(:,:,f)+conj(datalocfft(f,:)'*datalocfft(f,:));
+	      for (int i=0; i<nchan; i++)
+		for (int j=0; j<nchan; j++)
+		  cs[f](i,j) += conj( conj(datalocfft[i][f] ) * datalocfft[j][f] ) ;
+	      
 
-	 // for each frequency (from 1 Hz to MX)
-         for (int f=0; f<maxfreqbin; f++) 
-	   {
-	     
-	     // for (int ff=0; ff < fftseg.cutoff ; ff++)
-	     //   std::cout << "adding F\t" << fftseg.frq[ff] << "\n";
+	      // av(:,f)=av(:,f)+conj(datalocfft(f,:)');
+	    }
+	  
+	} // next segment
+      
+      nave=nave+1;
 
-	     // cs(:,:,f)= cs(:,:,f)+conj(datalocfft(f,:)'*datalocfft(f,:));
-	     for (int i=0; i<nchan; i++)
-	       for (int j=0; j<nchan; j++)
-	      	 cs[f](i,j) += conj( conj(datalocfft[i][f] ) * datalocfft[j][f] ) ;
-	     
-
-	     // av(:,f)=av(:,f)+conj(datalocfft(f,:)');
-	   }
-	 
-       } // next segment
-
-     nave=nave+1;
-
-   } // next epoch
-
-
- // averageing 
- nave = nave * nseg;  
- 
+    } // next epoch
+  
+  
+  // averageing 
+  nave = nave * nseg;  
+  
  // std::cout << " nave = " << nave << "\n";
 
  for (int f=0;f<maxfreqbin;f++)   
