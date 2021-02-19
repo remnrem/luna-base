@@ -57,11 +57,13 @@ void eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
   const int N = M.rows();
 
   Eigen::Array<double, 1, Eigen::Dynamic> means = M.colwise().mean();
-  
+
   if ( normalize )
     {
       Eigen::Array<double, 1, Eigen::Dynamic> sds = ((M.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
       M.array().rowwise() -= means;
+      // for (int i=0;i<sds.size();i++) 
+      // 	if ( sds[i] == 0 ) sds[i] = 1;
       M.array().rowwise() /= sds;
     }
   else

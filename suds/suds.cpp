@@ -473,10 +473,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	       || edf.timeline.hypnogram.stages[ ss ] == UNKNOWN ) obs_stage[ss] = SUDS_UNKNOWN;
 	  
 	  else if ( edf.timeline.hypnogram.stages[ ss ] == WAKE ) obs_stage[ss] = SUDS_WAKE;
-	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM1 ) obs_stage[ss] = SUDS_N1;
-	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM2 ) obs_stage[ss] = SUDS_N2;
+	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM1 ) obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N1;
+	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM2 ) obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N2;
 	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM3
-		    || edf.timeline.hypnogram.stages[ ss ] == NREM4 )  obs_stage[ss] = SUDS_N3;
+		    || edf.timeline.hypnogram.stages[ ss ] == NREM4 )  obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N3;
 	  
 	  else if ( edf.timeline.hypnogram.stages[ ss ] == REM ) obs_stage[ss] = SUDS_REM;
 
@@ -581,14 +581,28 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  
 	  bin.bin( pwelch.freq , pwelch.psd );
 
+	  bool has_zeros = false;
+
 	  for ( int i = 0 ; i < bin.bfa.size() ; i++ )
 	    {
 	      
 	      if ( bin.bfa[i] >= suds_t::lwr[s] && bin.bfb[i] <= suds_t::upr[s] )
 		{
+		  
+		  // fudge: for now, if find 0 power value, set to a small value;
+		  // and ensure that mobility = 0 so that this epoch will be removed
+		  // this may skew the first SVD / outlier removal, but should not 
+		  // be too bad.... really should remove these epochs first.
+		  
+		  if ( bin.bspec[i] <= 0 ) 
+		    {
+		      has_zeros = true;
+		      bin.bspec[i] = 1e-4; // -40dB
+		    }
+		  
 		  if ( en_good == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
 		  else PSD( en_good , col ) = 10*log10( bin.bspec[i] ) ; 		  
-
+		  
 		  if ( suds_t::use_bands )
 		    {
 		      if ( en_good == 0 ) firstrow2.push_back( bin.bspec[i] );
@@ -608,13 +622,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	  double activity = 0 , mobility = 0 , complexity = 0;
 	  MiscMath::hjorth( d , &activity , &mobility , &complexity );
-	  h2(en_good,s) = mobility ;
+	  h2(en_good,s) = has_zeros ? 0 : mobility ; // ensure epoch removed if any 0 in the PSD
 	  h3(en_good,s) = complexity ;
-	  
 	  
 	} // next signal
 
-      
+    
       // store/shape output if first go around
       nbins = col;
       if ( en_good == 0 )
@@ -692,7 +705,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	}
     }
-  
+
   
   //
   // Rescale PSD?
@@ -909,6 +922,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     }
 
 
+
   //
   // Rescale PSD?
   //
@@ -1030,6 +1044,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  // standardize column
 	  Eigen::VectorXd c = U.col(j);
 	  eigen_ops::scale( c , true );
+	  
 	  double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
 	  if ( pv >= 0 && pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
 	  writer.level( "PSC_" + Helper::int2str( j+1 ) , "VAR");

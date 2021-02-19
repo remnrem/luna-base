@@ -621,7 +621,6 @@ public:
     
   }
 
-  
 
   // downcast (but handle case where ss is already downcast / 3-stage too)
   static std::string NRW( const std::string & ss ) {     
