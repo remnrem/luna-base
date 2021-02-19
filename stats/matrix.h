@@ -415,27 +415,27 @@ namespace Data {
 
   
 
-  static Data::Matrix<double> eig2mat( const Eigen::MatrixXd & E )
-  {
-    const int rows = E.rows();
-    const int cols = E.cols();
-    Data::Matrix<double> M( rows , cols );
-    for (int r=0;r<rows;r++)
-      for (int c=0;c<cols;c++)
-	M(r,c) = E(r,c);
-    return M;
-  }
+  // static Data::Matrix<double> eig2mat( const Eigen::MatrixXd & E )
+  // {
+  //   const int rows = E.rows();
+  //   const int cols = E.cols();
+  //   Data::Matrix<double> M( rows , cols );
+  //   for (int r=0;r<rows;r++)
+  //     for (int c=0;c<cols;c++)
+  // 	M(r,c) = E(r,c);
+  //   return M;
+  // }
   
-  static Eigen::MatrixXd mat2eig( const Data::Matrix<double> & M )
-  {
-    const int rows = M.dim1();
-    const int cols = M.dim2();
-    Eigen::MatrixXd E( rows , cols );
-    for (int r=0;r<rows;r++)
-      for (int c=0;c<cols;c++)
-	E(r,c) = M(r,c);
-    return E;
-  }
+  // static Eigen::MatrixXd mat2eig( const Data::Matrix<double> & M )
+  // {
+  //   const int rows = M.dim1();
+  //   const int cols = M.dim2();
+  //   Eigen::MatrixXd E( rows , cols );
+  //   for (int r=0;r<rows;r++)
+  //     for (int c=0;c<cols;c++)
+  // 	E(r,c) = M(r,c);
+  //   return E;
+  // }
   
 }
 

@@ -79,7 +79,6 @@ struct psc_sort_t {
     
     std::vector<int> r(n);
     
-    int curr = 0;
     int curr_q = 0;
     int curr_n = 0;
     
