@@ -235,7 +235,8 @@ int main(int argc , char ** argv )
   bool cmdline_proc_pdlib      = false;
   bool cmdline_proc_psc        = false;
   bool cmdline_proc_ms_kmer    = false;
-  
+  bool cmdline_proc_copy_suds  = false;
+
   //
   // parse command line
   //
@@ -267,11 +268,12 @@ int main(int argc , char ** argv )
 	  else if ( strcmp( argv[1] , "--cwt-design" ) == 0 ||  
 		    strcmp( argv[1] , "--cwt" ) == 0 ) 	   
 	    cmdline_proc_cwt_design = true;
-	  else if (  strcmp( argv[1] , "--psc" ) == 0 )
+	  else if ( strcmp( argv[1] , "--psc" ) == 0 )
 	    cmdline_proc_psc = true;
-	  else if (  strcmp( argv[1] , "--kmer" ) == 0 )
+	  else if ( strcmp( argv[1] , "--kmer" ) == 0 )
 	    cmdline_proc_ms_kmer = true;
-
+	  else if ( strcmp( argv[1] , "--copy-suds" ) == 0 ) 
+	    cmdline_proc_copy_suds = true;
 	}
 
       // otherwise, first element will be treated as a file list
@@ -784,6 +786,14 @@ int main(int argc , char ** argv )
 
     }
 
+  
+  if ( cmdline_proc_copy_suds )
+    {
+      // expects input from std::cin                                                                                                                                                               
+      proc_copy_suds_cmdline();
+      std::exit(0);
+    }
+  
   
   
   //

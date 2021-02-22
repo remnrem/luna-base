@@ -76,7 +76,9 @@ struct suds_indiv_t {
   
   // write trainers to file
   void write( edf_t & edf , param_t & param ) const;
+  void write( const std::string & ) const; // for use in binary->text copy
   void binary_write( edf_t & edf , param_t & param ) const;
+  void binary_write( const std::string & filename ) const; // for use in text->binary copy
 
   // read trainer data from disk
   void reload( const std::string & filename , bool load_rawx = false );
@@ -198,7 +200,7 @@ struct suds_t {
   static void attach_db( const std::string & , bool , bool );
   
   // convert from text --> binary format for a whole library
-  static void copy_db( const std::string & , const std::string & );
+  static void copy_db( const std::string & , const std::string & , bool from_text );
 
   static void score( edf_t & edf , param_t & param );
   
@@ -420,8 +422,10 @@ struct suds_t {
   // SUDS parameters, needed to be the same across all individuals
   //
 
-  static bool soap_mode;
-
+  static int soap_mode;
+  
+  static bool copy_db_mode; // diffs in read/write
+  
   static bool verbose;
 
   static bool epoch_lvl_output;

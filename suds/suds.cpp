@@ -55,9 +55,12 @@ extern logger_t logger;
 extern writer_t writer;
 
 
-bool suds_t::soap_mode = false;
+// 0, 1, 2 = SUDS, SOAP, RESOAP
+int suds_t::soap_mode = 0; 
 bool suds_t::cache_target = false;
 suds_indiv_t suds_t::cached;
+
+bool suds_t::copy_db_mode = false;
 bool suds_t::verbose = false;
 bool suds_t::epoch_lvl_output = false;
 bool suds_t::one_by_one = false;
@@ -152,7 +155,7 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   id = edf.id;
 
   // this impacts whether epochs w/ missing values are dropped or not  
-  suds_t::soap_mode = true;
+  suds_t::soap_mode = 1;
 
   // ensure we do not call self_classify() from proc
   suds_t::self_classification = false;
@@ -241,142 +244,144 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
 {
   
- logger << "  re-SOAPing...\n";
+  logger << "  re-SOAPing...\n";
+  
+  // this impacts format of epoch-level output
+  suds_t::soap_mode = 2;
+  
+  // actual number of epochs
+  
+  const int ne_all = edf.timeline.num_epochs();
+  
+  // for SOAP, number of included epochs based on good signal data 
+  // (i.e. as all epochs are included for SOAP targets, irrespective for 
+  // ovserved stage being known or not)
+  
+  const int ne_included = obs_stage_valid.size();
+  
+  // nb. 'epoch' is 1-based , given by the user
+  if ( epoch < 1 || epoch > ne_all ) 
+    Helper::halt( "bad epoch value, outside range" );
+  
+  // some epochs may be skipped, e.g. due to signal outliers
+  
+  // valid epochs  : std::vector<int> epochs;   
+  // all stages    : std::vector<suds_stage_t> obs_stage; 
+  // valid stages  : std::vector<suds_stage_t> obs_stage_valid; 
+  // same, but str : std::vector<std::string> y;   (send to lda_t() 
+  
+  // we need to update all of these (obs_stage, obs_stage_valid and y)
+  // as they are used in summarize_kappa() and summarize_epochs()
+  
+  
+  //
+  // Update 'y' and check we have en
+  //
+  
+  // epochs[] contains the codes of epochs actually present in the model/valid                                                                                                                      
+  //  (in 0, ... encoding)
+  
+  bool updated = false;
+  
+  for (int i=0; i < epochs.size(); i++) 
+    {
+      
+      // internal epoch number = epochs[i]
+      // display epoch = edf.timeline.display_epoch( i )
+      // nb. in SOAP context, with no restructuring of the EDF, the display epoch
+      // will typically be +1 the internal epoch, i.e. not expecting discontinous
+      // codes;  the user is expected to 
+      
+      // for y and obs_stage_valid
+      int e0 = i;
+      
+      // for obs_stage
+      int e1 = epochs[i];
+      
+      // for user disokay epoch (1-based)
+      int e2 = edf.timeline.display_epoch( e1 );
+
+      // update this single 'observed' stage
+      if ( epoch == e2 ) 
+	{
+	  logger << "  changing epoch " << epoch << " from " << y[e0] << " to " << suds_t::str( stage ) << "\n";
+	  y[e0] = suds_t::str( stage );
+	  obs_stage_valid[ e0 ] = stage;
+	  obs_stage[ e1 ] = stage;
+	  updated = true;
+	}
+      
+      // track what we have     
+    }
+  
+  if ( ! updated ) 
+    logger << "  no updates made: did not find epoch " << epoch << " (with valid signal data)\n";
+  
  
- // actual number of epochs
+  //
+  // Count "observed" stages
+  //
+  
+  const int n = y.size();
+  
+  std::map<std::string,int> ycounts;
+  for (int i=0; i<n; i++) ++ycounts[ y[i] ];
+  
 
- const int ne_all = edf.timeline.num_epochs();
+  //
+  // requires at leasrt two stages w/ at least 3 observations, and has to 
+  // be greater than the number of PSCs
+  //
+  
+  const int required_n = 3;
+  
+  logger << "  epoch counts:";
+  int s = 0;
+  int t = 0;
+  std::map<std::string,int>::const_iterator yy = ycounts.begin();
+  while ( yy != ycounts.end() )
+    {
+      logger << " " << yy->first << ":" << yy->second;     
+      if ( yy->first != "?" && yy->second >= required_n ) 
+	{
+	  ++s;
+	  t += yy->second;
+	}
+      ++yy;
+    }
+  logger << "\n";
+  
+  bool okay = s >= 2 ;
+  
+  // for p predictors, require at least p+2 observations
+  if ( ! ( t > nc+1 ) ) okay = false;
+  
+  if ( ! okay )
+    {
+      logger << "  not enough non-missing stages for LDA with " << nc << " predictors\n";
+      writer.value( "FIT" , 0 );
+      return;
+    }
+  
+  writer.value( "FIT" , 1 );
+  
+  //
+  // Re-fit the LDA
+  //
+  
+  Eigen::MatrixXd pp;
+  
+  int dummy = self_classify( NULL , &pp );
+  
 
- // for SOAP, number of included epochs based on good signal data 
- // (i.e. as all epochs are included for SOAP targets, irrespective for 
- // ovserved stage being known or not)
-
- const int ne_included = obs_stage_valid.size();
- 
- // nb. 'epoch' is 1-based , given by the user
- if ( epoch < 1 || epoch > ne_all ) 
-   Helper::halt( "bad epoch value, outside range" );
-
- // some epochs may be skipped, e.g. due to signal outliers
-
- // valid epochs  : std::vector<int> epochs;   
- // all stages    : std::vector<suds_stage_t> obs_stage; 
- // valid stages  : std::vector<suds_stage_t> obs_stage_valid; 
- // same, but str : std::vector<std::string> y;   (send to lda_t() 
- 
- // we need to update all of these (obs_stage, obs_stage_valid and y)
- // as they are used in summarize_kappa() and summarize_epochs()
-
-
- //
- // Update 'y' and check we have en
- //
- 
- // epochs[] contains the codes of epochs actually present in the model/valid                                                                                                                      
- //  (in 0, ... encoding)
- 
- bool updated = false;
- 
- for (int i=0; i < epochs.size(); i++) 
-   {
-     
-     // internal epoch number = epochs[i]
-     // display epoch = edf.timeline.display_epoch( i )
-     // nb. in SOAP context, with no restructuring of the EDF, the display epoch
-     // will typically be +1 the internal epoch, i.e. not expecting discontinous
-     // codes;  the user is expected to 
-     
-     // for y and obs_stage_valid
-     int e0 = i;
-     
-     // for obs_stage
-     int e1 = epochs[i];
-     
-     // for user disokay epoch (1-based)
-     int e2 = edf.timeline.display_epoch( e1 );
-     //     std::cout << "e012\t" << e0 << "\t" << e1 << "\t" << e2 << "\n";
-
-     // update this single 'observed' stage
-     if ( epoch == e2 ) 
-       {
-	 logger << "  changing epoch " << epoch << " from " << y[e0] << " to " << suds_t::str( stage ) << "\n";
-	 y[e0] = suds_t::str( stage );
-	 obs_stage_valid[ e0 ] = stage;
-	 obs_stage[ e1 ] = stage;
-	 updated = true;
-       }
-     
-     // track what we have     
-   }
- 
- if ( ! updated ) 
-   logger << "  no updates made: did not find epoch " << epoch << " (with valid signal data)\n";
- 
- 
- //
- // Count "observed" stages
- //
- 
- const int n = y.size();
-
- std::map<std::string,int> ycounts;
- for (int i=0; i<n; i++) ++ycounts[ y[i] ];
- 
-
- //
- // requires at leasrt two stages w/ at least 3 observations, and has to 
- // be greater than the number of PSCs
- //
-
- const int required_n = 3;
-
- logger << "  epoch counts:";
- int s = 0;
- int t = 0;
- std::map<std::string,int>::const_iterator yy = ycounts.begin();
- while ( yy != ycounts.end() )
-   {
-     logger << " " << yy->first << ":" << yy->second;     
-     if ( yy->first != "?" && yy->second >= required_n ) 
-       {
-	 ++s;
-	 t += yy->second;
-       }
-     ++yy;
-   }
- logger << "\n";
-
- bool okay = s >= 2 ;
-
- // for p predictors, require at least p+2 observations
- if ( ! ( t > nc+1 ) ) okay = false;
- 
- if ( ! okay )
-   {
-     logger << "  not enough non-missing stages for LDA with " << nc << " predictors\n";
-     writer.value( "FIT" , 0 );
-     return;
-   }
- 
- writer.value( "FIT" , 1 );
- 
- //
- // Re-fit the LDA
- //
-
- Eigen::MatrixXd pp;
-
- int dummy = self_classify( NULL , &pp );
- 
-
- //
- // output stage probabilities 
- //
-
+  //
+  // output stage probabilities 
+  //
+  
   const double epoch_sec = edf.timeline.epoch_length();
-
+  
   std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
-
+  
   summarize_kappa( final_pred , true );
 
   summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
@@ -389,14 +394,15 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
 void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
 {
 
-  // build a trainer; returns number of 'valid'/usable stages
-  // mihght be 0 if, e.g. none of the components associate w/ stage
-  // (so nc == 0 ), i.e. we don't want to be using this individual
-  
+  // build a trainer; returns number of 'valid'/usable stages  
   int n_unique_stages = proc( edf , param , true );
-      
+ 
   // only include recordings that have all five/three stages included  
-  if ( n_unique_stages != suds_t::n_stages ) return;
+  if ( n_unique_stages != suds_t::n_stages ) 
+    {
+      logger << "  only found " << n_unique_stages << " of " << suds_t::n_stages << " stages, so not adding as a trainer\n";
+      return;
+    }  
   
   // save to disk: text or binary format?
   if ( param.has( "text" ) )
@@ -1785,6 +1791,95 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
 
 }
 
+
+void suds_indiv_t::write( const std::string & filename ) const
+{
+
+  const int ns = suds_t::ns;
+  
+  logger << "  writing trainer data to " << filename << "\n";
+  
+  std::ofstream OUT1( filename.c_str() , std::ios::out );
+
+  // file version code
+  OUT1 << "SUDS\t1\n";
+  
+  OUT1 << "ID\t" << id << "\n"
+       << "N_VALID_EPOCHS\t" << nve << "\n"
+       << "N_X\t" << nbins << "\n"
+       << "N_SIGS\t" << ns << "\n"
+       << "N_COMP\t" << nc << "\n";
+
+  // channels , SR [ for comparability w/ other data ] 
+
+  for (int s=0;s<ns;s++)
+    {
+      OUT1 << "\nCH\t" << suds_t::siglab[s] << "\n"
+	   << "SR\t" << suds_t::sr[s] << "\n"
+	   << "LWR\t" << suds_t::lwr[s] << "\n"
+	   << "UPR\t" << suds_t::upr[s] << "\n"	   
+	   << "H2_MN\t" << mean_h2[s] << "\n"
+	   << "H2_SD\t" << sd_h2[s] << "\n"
+	   << "H3_MN\t" << mean_h3[s] << "\n"
+	   << "H3_SD\t" << sd_h3[s] << "\n";
+    }
+
+
+  // stages
+  OUT1 << "\nN_STAGES\t" << counts.size() << "\n";
+  
+  std::map<std::string,int>::const_iterator ss = counts.begin();
+  while ( ss != counts.end() )
+    {
+      OUT1 << ss->first << "\t" << ss->second << "\n";
+      ++ss;
+    }
+  
+  // W
+  OUT1 << "\nW[" << nc << "]";
+  for (int j=0;j<nc;j++)
+    OUT1 << " " << W[j];
+  OUT1 << "\n";
+
+  // V
+  OUT1 << "\nV[" << nbins << "," << nc << "]";
+  for (int i=0;i<nbins;i++)
+    for (int j=0;j<nc;j++)
+      OUT1 << " " << V(i,j);
+  OUT1 << "\n";
+  
+  // stages
+  OUT1 << "\nEPOCH_STAGE";
+  for (int i=0;i<nve;i++)
+    OUT1 << " " << epochs[i] << " " << y[i] ;
+  OUT1 << "\n\n";
+
+  // U (to reestimate LDA model upon loading, i.e
+  //  to use lda.predict() on target   ; only needs to be nc rather than nbins
+  OUT1 << "U[" << nve << "," << nc << "]";
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nc;j++)
+      OUT1 << " " << U(i,j);
+  OUT1 << "\n\n";
+  
+  // X, RAW DATA (e.g. mean-centered PSD, but possibly other things)
+  // i.e. if this trainer is being used as a 'weight trainer',
+  // i.e. will project this individuals raw data into the target space
+  OUT1 << "X[" << nve << "," << nbins << "]";
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nbins;j++)
+      OUT1 << " " << PSD(i,j);
+  OUT1 << "\n\n";
+  
+  OUT1.close();
+
+  //
+  // All done
+  //
+
+}
+
+
 void suds_indiv_t::bwrite( std::ofstream & O , const std::string & s ) 
 {
   uint8_t l = s.size();
@@ -1924,6 +2019,97 @@ void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
   
 }
 
+
+void suds_indiv_t::binary_write( const std::string & filename ) const
+{
+  
+  // same as binary_write(), except a different interface (for
+  // use w/ --copy-suds command;   in future we should make this
+  // a single function...)
+
+  const int ns = suds_t::ns;
+  
+  logger << "  writing binary-format trainer data to " << filename << "\n";
+  
+  std::ofstream OUT1( filename.c_str() , std::ios::binary | std::ios::out );
+
+  //
+  // file version code
+  //
+
+  bwrite( OUT1 , "SUDS1" );
+  bwrite( OUT1 , id );
+  bwrite( OUT1 , nve );
+  bwrite( OUT1 , nbins );
+  bwrite( OUT1 , ns );
+  bwrite( OUT1 , nc );
+
+  // channels , SR [ for comparability w/ other data ] 
+
+  for (int s=0;s<ns;s++)
+     {
+       bwrite( OUT1 , suds_t::siglab[s] );
+       bwrite( OUT1 , suds_t::sr[s] );
+       bwrite( OUT1 , suds_t::lwr[s] );
+       bwrite( OUT1 , suds_t::upr[s] );
+       bwrite( OUT1 , mean_h2[s] );
+       bwrite( OUT1 , sd_h2[s]  );
+       bwrite( OUT1 , mean_h3[s] );
+       bwrite( OUT1 , sd_h3[s]  );
+     }
+
+  // stages (N)
+  bwrite( OUT1 , (int)counts.size() );
+  
+  std::map<std::string,int>::const_iterator ss = counts.begin();
+  while ( ss != counts.end() )
+    {
+      bwrite( OUT1 , ss->first );
+      bwrite( OUT1 , ss->second );
+      ++ss;
+    }
+  
+  // W [nc]
+  for (int j=0;j<nc;j++)
+    bwrite( OUT1 , W[j] );
+  
+   // V [nbins x nc ]
+  for (int i=0;i<nbins;i++)
+    for (int j=0;j<nc;j++)
+      bwrite( OUT1 , V(i,j) );
+  
+  
+  // stages (nve)
+  for (int i=0;i<nve;i++)
+    {
+      bwrite( OUT1 , epochs[i] );
+      bwrite( OUT1 , y[i] );
+    }
+      
+  // U (to reestimate LDA model upon loading, i.e
+  //  to use lda.predict() on target   ; only needs to be nc rather than nbins
+  // U [ nve x nc ] 
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nc;j++)
+      bwrite( OUT1 , U(i,j) );
+  
+  // X, RAW DATA (e.g. mean-centered PSD, but possibly other things)
+  // i.e. if this trainer is being used as a 'weight trainer',
+  // i.e. will project this individuals raw data into the target space
+  //  X [ nve x nbins ]
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nbins;j++)
+      bwrite( OUT1 , PSD(i,j) );
+  
+  OUT1.close();
+  
+  //
+  // All done
+  //
+  
+}
+
+
 void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx )
 {
 
@@ -1943,8 +2129,21 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
 
   if ( this_nc == 0 )
     Helper::halt( "0 PSCs for " + filename );
-  
-  if (this_ns != suds_t::ns )
+
+  // reading or just copying?
+  if ( suds_t::copy_db_mode )
+    {
+      // these will not get used, so can set to whatever;
+      // they will be set for this person being read, and will
+      // be available for the next operation, which is to write
+      // the data back for the same person, in a different format (binary/text)
+      suds_t::ns = this_ns;
+      suds_t::siglab.resize( this_ns );
+      suds_t::sr.resize( this_ns );
+      suds_t::lwr.resize( this_ns );
+      suds_t::upr.resize( this_ns );
+    }
+  else if (this_ns != suds_t::ns )
     Helper::halt( "different trainer ns=" + Helper::int2str( this_ns )
 		  + " in " + filename
 		  + ", expecting " + Helper::int2str( suds_t::ns ) ) ; 
@@ -1952,7 +2151,7 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
   // set 'nc' for this individual
   nc = this_nc;
 
-  // ns should be fixed across all individuals
+  // ns should be fixed across all individuals (unless in copy mode)
   const int ns = suds_t::ns;
   
   mean_h2.resize(ns); mean_h3.resize(ns);
@@ -1972,14 +2171,24 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
       mean_h3[s] = bread_dbl( IN1 );
       sd_h3[s] = bread_dbl( IN1 );
 
-      if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "different signals: " + this_siglab
-							    + ", but expecting " + suds_t::siglab[s] );
-      if ( this_sr != suds_t::sr[s] ) Helper::halt( "different SR: " + this_siglab
-						    + ", but expecting " + suds_t::siglab[s] );
-      if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "different lower-freq: " + Helper::dbl2str( this_lwr )
-						      + ", but expecting " + Helper::dbl2str( suds_t::lwr[s] ) );
-      if ( this_upr != suds_t::upr[s] ) Helper::halt( "different upper-freq: " + Helper::dbl2str( this_upr )
-						      + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;      
+      if( suds_t::copy_db_mode )
+	{
+	  suds_t::siglab[s] = this_siglab;
+	  suds_t::sr[s] = this_sr;
+	  suds_t::lwr[s] = this_lwr;
+	  suds_t::upr[s] = this_upr;
+	}
+      else
+	{      
+	  if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "different signals: " + this_siglab
+								+ ", but expecting " + suds_t::siglab[s] );
+	  if ( this_sr != suds_t::sr[s] ) Helper::halt( "different SR: " + Helper::int2str( this_sr )
+							+ ", but expecting " + Helper::int2str( suds_t::sr[s] ) );
+	  if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "different lower-freq: " + Helper::dbl2str( this_lwr )
+							  + ", but expecting " + Helper::dbl2str( suds_t::lwr[s] ) );
+	  if ( this_upr != suds_t::upr[s] ) Helper::halt( "different upper-freq: " + Helper::dbl2str( this_upr )
+							  + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;      
+	}
     }
 
   // stages
@@ -2070,13 +2279,16 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
   if ( this_nc == 0 )
     Helper::halt( "0 PSCs for " + filename );
   
-  // if ( this_nc > suds_t::nc )
-  //   Helper::halt( "trainer nc="
-  // 		  + Helper::int2str( this_nc )
-  // 		  + " in " + filename
-  // 		  + " exceeds max " + Helper::int2str( suds_t::nc ) ); 
   
-  if (this_ns != suds_t::ns )
+  if ( suds_t::copy_db_mode )
+    {
+      suds_t::ns = this_ns;
+      suds_t::siglab.resize( this_ns );
+      suds_t::sr.resize( this_ns );
+      suds_t::lwr.resize( this_ns );
+      suds_t::upr.resize( this_ns );
+    }
+  else if (this_ns != suds_t::ns )
     Helper::halt( "different trainer ns=" + Helper::int2str( this_ns )
 		  + " in " + filename
 		  + ", expecting " + Helper::int2str( suds_t::ns ) ) ; 
@@ -2102,14 +2314,25 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
 	  >> dummy >> mean_h2[s] >> dummy >> sd_h2[s]
 	  >> dummy >> mean_h3[s] >> dummy >> sd_h3[s];
 
-      if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "different signals: " + this_siglab
-							    + ", but expecting " + suds_t::siglab[s] );
-      if ( this_sr != suds_t::sr[s] ) Helper::halt( "different SR: " + this_siglab
-						    + ", but expecting " + suds_t::siglab[s] );
-      if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "different lower-freq: " + Helper::dbl2str( this_lwr )
-						      + ", but expecting " + Helper::dbl2str( suds_t::lwr[s] ) );
-      if ( this_upr != suds_t::upr[s] ) Helper::halt( "different upper-freq: " + Helper::dbl2str( this_upr )
-						      + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;      
+
+      if( suds_t::copy_db_mode )
+        {
+	  suds_t::siglab[s] = this_siglab;
+	  suds_t::sr[s] = this_sr;
+	  suds_t::lwr[s] = this_lwr;
+	  suds_t::upr[s] = this_upr;
+        }
+      else
+        {
+	  if ( this_siglab != suds_t::siglab[s] ) Helper::halt( "different signals: " + this_siglab
+								+ ", but expecting " + suds_t::siglab[s] );
+	  if ( this_sr != suds_t::sr[s] ) Helper::halt( "different SR: " + Helper::int2str( this_sr )
+							+ ", but expecting " + Helper::int2str( suds_t::sr[s] ) );
+	  if ( this_lwr != suds_t::lwr[s] ) Helper::halt( "different lower-freq: " + Helper::dbl2str( this_lwr )
+							  + ", but expecting " + Helper::dbl2str( suds_t::lwr[s] ) );
+	  if ( this_upr != suds_t::upr[s] ) Helper::halt( "different upper-freq: " + Helper::dbl2str( this_upr )
+							  + ", but expecting " + Helper::dbl2str( suds_t::upr[s] )) ;      
+	}
     }
 
   // stages
@@ -2339,18 +2562,35 @@ void suds_t::attach_db( const std::string & folder , bool binary , bool read_psd
 
 
 
-void suds_t::copy_db( const std::string & tfolder , 
-		      const std::string & bfolder )
+void suds_t::copy_db( const std::string & folder1 , 
+		      const std::string & folder2 , 
+		      bool from_text )
 {
   
-  // copy from a text folder --> binary folder
+  // will set SUDS variables to whatever is just read, i.e. no checking with 
+  // the attached EDF, as there is no attached EDF
+  
+  suds_t::copy_db_mode = true;
+  
+  // text folder
+  std::string tfolder = from_text ? folder1 : folder2;
+  
+  // binary folder
+  std::string bfolder = from_text ? folder2 : folder1;
+
+  logger << "  copying from " << ( from_text ? "[text]" : "[binary]" ) << " " << folder1 << "\n"
+	 << "            to " << ( !from_text ? "[text]" : "[binary]" ) << " " << folder2 << "\n";
+
+  //
+  // copy from one folder to another, either text->binary or binary->text
+  //
 
   // find all files in this folder (tfolder)
   std::vector<std::string> trainer_ids;
 
   DIR *dir;
   struct dirent *ent;
-  if ( (dir = opendir ( tfolder.c_str() ) )  != NULL )
+  if ( (dir = opendir ( folder1.c_str() ) )  != NULL )
     {
       /* print all the files and directories within directory */
       while ( (ent = readdir (dir)) != NULL) {
@@ -2372,44 +2612,56 @@ void suds_t::copy_db( const std::string & tfolder ,
     }
   else
     {
-      Helper::halt( "could not open directory " + tfolder );      
+      Helper::halt( "could not open directory " + folder1 );      
     }
   
 
   //
   // Ensure target folder exists
   //
-  
-  // ----> TODO
+
+  std::string syscmd = globals::mkdir_command + " " + folder2 ;
+  int retval = system( syscmd.c_str() );
   
   //
   // Read/write each trainer
   //
 
-  for ( int i=0; i<trainer_ids.size() ; i++)
+  for ( int i=0; i< trainer_ids.size() ; i++)
     {
-
-      // is this person the other bank?  we always attach wdb first
-      // (i.e. to make sure PSD data are included, if these are
-      // needed).  So, check against wbank in that case:
-
+      
       suds_indiv_t * trainer = new suds_indiv_t;
       
       //
-      // read text
+      // read text --> write binary 
       //
+      
+      if ( from_text )
+	{
+	  trainer->reload( tfolder + globals::folder_delimiter + trainer_ids[i] , true ); 
 
-      trainer->reload( tfolder + globals::folder_delimiter + trainer_ids[i] , true ); 
+	  trainer->binary_write( bfolder + globals::folder_delimiter + trainer_ids[i] );
+	}
+      else
+	{
+	  //
+	  // read  binary --> write text
+	  //
+	  
+	  trainer->binary_reload( bfolder + globals::folder_delimiter + trainer_ids[i] , true ); 
 
-      //
-      // write binary 
-      //
+	  trainer->write( tfolder + globals::folder_delimiter + trainer_ids[i] );
+
+	}
+	  
       
     }
 
-  logger << "  copied " << trainer_ids.size() << " trainers from text to binary format\n"
-	 << "    from folder " << tfolder << "\n"
-	 << "    to folder " << bfolder << "\n";
+  logger << "  copied " << trainer_ids.size() << " trainers from " 
+	 << ( from_text ? "text to binary" : "binary to text" )
+	 << " format\n"
+	 << "   from folder: " << folder1 << "\n"
+	 << "     to folder: " << folder2 << "\n";
 
 }
 
@@ -3774,12 +4026,15 @@ void suds_indiv_t::summarize_epochs( const Eigen::MatrixXd & pp , // posterior p
 	      
 	      writer.value( "PRIOR" ,  suds_t::str( obs_stage[i] ) );
 	      
+	      if ( suds_t::soap_mode == 2 ) 
+		writer.value( "PROPOSAL" ,  y[e] );
+	      
 	    }
 	}
       else
 	{
 	  writer.value( "INC" , 0 );
-
+	  
 	  // lookup from all stages
 	  if ( prior_staging )
 	    writer.value( "PRIOR" ,  suds_t::str( obs_stage[i] ) );	  

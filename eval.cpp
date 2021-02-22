@@ -1154,17 +1154,6 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 }
 
 
-// // COPY-SUDS :: make --copy-suds
-
-// void proc_copy_suds( edf_t & edf , param_t & param )
-// {
-//   suds_t suds;
-//   std::string f1 = param.requires( "text-db" );
-//   std::string f2 = param.requires( "bin-db" );
-//   suds.copy_db( f1, f2 );
-// }
-
-
 // SUDS : stageing
 
 void proc_suds( edf_t & edf , param_t & param )
@@ -1320,6 +1309,28 @@ void proc_cwt_design_cmdline()
   
 }
 
+
+// -copy-suds-db  from the command line
+void proc_copy_suds_cmdline()
+{
+  // expect parameters on STDIN
+  param_t param;
+  while ( ! std::cin.eof() )
+    {
+      std::string x;
+      std::cin >> x;      
+      if ( std::cin.eof() ) break;
+      if ( x == "" ) continue;
+      param.parse( x ); 
+    }  
+
+  std::string f1 = param.requires( "from" );
+  std::string f2 = param.requires( "to" );
+  
+  bool from_text = ! param.has( "binary-to-text" );
+  
+  suds_t::copy_db( f1 , f2 , from_text );
+}
 
 // FILTER-DESIGN : general FIR design
 
