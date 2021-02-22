@@ -268,6 +268,8 @@ void proc_sleep_stage( edf_t & , param_t & , bool verbose = false );
 void proc_suds( edf_t & , param_t & );
 void proc_make_suds( edf_t & , param_t & );
 void proc_self_suds( edf_t & , param_t & );
+void proc_resoap( edf_t & , param_t & );
+
 void proc_annot2signal( edf_t & , param_t & );
 
 

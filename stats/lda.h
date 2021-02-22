@@ -25,6 +25,7 @@
 
 //#include "matrix.h"
 #include "stats/Eigen/Dense"
+#include "helper/helper.h"
 
 #include <vector>
 #include <map>
@@ -92,12 +93,16 @@ class lda_t {
   
  public:
   
- lda_t( const std::vector<std::string> y ,
-	const Eigen::MatrixXd & X )
-    : y(y) , X(X)
-    {
-      tol = 1e-4;
-    } 
+ lda_t( const std::vector<std::string> & y ,
+	const Eigen::MatrixXd & X )	
+   : y(y) , X(X)
+  {
+    
+    tol = 1e-4;
+    
+    missing = "?";
+    
+  } 
   
   lda_model_t fit( const bool flat_priors = false );
   
@@ -110,6 +115,8 @@ class lda_t {
   Eigen::MatrixXd X;
 
   double tol;
+  
+  std::string missing;
   
 };
 

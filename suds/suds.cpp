@@ -54,6 +54,10 @@ extern logger_t logger;
 
 extern writer_t writer;
 
+
+bool suds_t::soap_mode = false;
+bool suds_t::cache_target = false;
+suds_indiv_t suds_t::cached;
 bool suds_t::verbose = false;
 bool suds_t::epoch_lvl_output = false;
 bool suds_t::one_by_one = false;
@@ -144,34 +148,62 @@ double suds_t::hjorth_outlier_th = 5;
 void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 {
 
-  bool epoch_level_output = param.has( "epoch" );
+  // track ID (needed if caching for RESOAP)
+  id = edf.id;
+
+  // this impacts whether epochs w/ missing values are dropped or not  
+  suds_t::soap_mode = true;
 
   // ensure we do not call self_classify() from proc
-
   suds_t::self_classification = false;
 
-  // assume that we have manual staging ('true') or else no point in this...
-  int n_unique_stages = proc( edf , param , true );
+  // verbose output
+  bool epoch_level_output = param.has( "epoch" );
 
-  if ( n_unique_stages == 0 )
+  //
+  // assume that we have manual staging ('true') 
+  //
+
+  int n_unique_stages = proc( edf , param , true );
+  
+  //
+  // Cache for RESOAP?
+  //
+
+  if ( suds_t::cache_target ) 
     {
-      logger << "  *** no valid epochs/staging for this individual, cannot complete SELF-SUDS\n";
+
+      logger << "\n  caching " << id << " for a subsequent RESOAP\n";
+
+      // copy
+      suds_t::cached = *this;
+      
+      // also, make a copy of the original observed stages
+      // i.e. as RESOAP will change these
+      suds_t::cached.resoap_true_obs_stage = obs_stage;
+      suds_t::cached.resoap_true_obs_stage_valid = obs_stage_valid;
+
+    }
+
+
+  //
+  // Perhaps no observed stages?
+  //
+
+  if ( n_unique_stages < 2 )
+    {
+      logger << "  *** fewer than 2 non-missing stages for this individual, cannot complete SOAP\n";
       return;
     }
 
-  //
-  // self-classify, and report discordant calls, etc ('true' -> verbose output)
-  //
-
-  int good_epochs = 0;
 
   //
-  // fit LDA, and extract posteriors (pp)
+  // fit LDA, and extract posteriors (pp) 
   //
 
   Eigen::MatrixXd pp;
-
-  self_classify( &good_epochs , true , &pp );
+  
+  int dummy = self_classify( NULL , &pp );
 
 
   //
@@ -192,8 +224,6 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
     summarize_epochs( pp , model.labels , ne_all , edf );
 
 
-
-
   //
   // Output annotations (of discordant epochs)
   //
@@ -204,9 +234,156 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
       write_annots( annot_folder , param.value( "annot" ) , pp , model.labels , ne_all , edf );
     }
       
-  
+
 }
 
+
+void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
+{
+  
+ logger << "  re-SOAPing...\n";
+ 
+ // actual number of epochs
+
+ const int ne_all = edf.timeline.num_epochs();
+
+ // for SOAP, number of included epochs based on good signal data 
+ // (i.e. as all epochs are included for SOAP targets, irrespective for 
+ // ovserved stage being known or not)
+
+ const int ne_included = obs_stage_valid.size();
+ 
+ // nb. 'epoch' is 1-based , given by the user
+ if ( epoch < 1 || epoch > ne_all ) 
+   Helper::halt( "bad epoch value, outside range" );
+
+ // some epochs may be skipped, e.g. due to signal outliers
+
+ // valid epochs  : std::vector<int> epochs;   
+ // all stages    : std::vector<suds_stage_t> obs_stage; 
+ // valid stages  : std::vector<suds_stage_t> obs_stage_valid; 
+ // same, but str : std::vector<std::string> y;   (send to lda_t() 
+ 
+ // we need to update all of these (obs_stage, obs_stage_valid and y)
+ // as they are used in summarize_kappa() and summarize_epochs()
+
+
+ //
+ // Update 'y' and check we have en
+ //
+ 
+ // epochs[] contains the codes of epochs actually present in the model/valid                                                                                                                      
+ //  (in 0, ... encoding)
+ 
+ bool updated = false;
+ 
+ for (int i=0; i < epochs.size(); i++) 
+   {
+     
+     // internal epoch number = epochs[i]
+     // display epoch = edf.timeline.display_epoch( i )
+     // nb. in SOAP context, with no restructuring of the EDF, the display epoch
+     // will typically be +1 the internal epoch, i.e. not expecting discontinous
+     // codes;  the user is expected to 
+     
+     // for y and obs_stage_valid
+     int e0 = i;
+     
+     // for obs_stage
+     int e1 = epochs[i];
+     
+     // for user disokay epoch (1-based)
+     int e2 = edf.timeline.display_epoch( e1 );
+     //     std::cout << "e012\t" << e0 << "\t" << e1 << "\t" << e2 << "\n";
+
+     // update this single 'observed' stage
+     if ( epoch == e2 ) 
+       {
+	 logger << "  changing epoch " << epoch << " from " << y[e0] << " to " << suds_t::str( stage ) << "\n";
+	 y[e0] = suds_t::str( stage );
+	 obs_stage_valid[ e0 ] = stage;
+	 obs_stage[ e1 ] = stage;
+	 updated = true;
+       }
+     
+     // track what we have     
+   }
+ 
+ if ( ! updated ) 
+   logger << "  no updates made: did not find epoch " << epoch << " (with valid signal data)\n";
+ 
+ 
+ //
+ // Count "observed" stages
+ //
+ 
+ const int n = y.size();
+
+ std::map<std::string,int> ycounts;
+ for (int i=0; i<n; i++) ++ycounts[ y[i] ];
+ 
+
+ //
+ // requires at leasrt two stages w/ at least 3 observations, and has to 
+ // be greater than the number of PSCs
+ //
+
+ const int required_n = 3;
+
+ logger << "  epoch counts:";
+ int s = 0;
+ int t = 0;
+ std::map<std::string,int>::const_iterator yy = ycounts.begin();
+ while ( yy != ycounts.end() )
+   {
+     logger << " " << yy->first << ":" << yy->second;     
+     if ( yy->first != "?" && yy->second >= required_n ) 
+       {
+	 ++s;
+	 t += yy->second;
+       }
+     ++yy;
+   }
+ logger << "\n";
+
+ bool okay = s >= 2 ;
+
+ // for p predictors, require at least p+2 observations
+ if ( ! ( t > nc+1 ) ) okay = false;
+ 
+ if ( ! okay )
+   {
+     logger << "  not enough non-missing stages for LDA with " << nc << " predictors\n";
+     writer.value( "FIT" , 0 );
+     return;
+   }
+ 
+ writer.value( "FIT" , 1 );
+ 
+ //
+ // Re-fit the LDA
+ //
+
+ Eigen::MatrixXd pp;
+
+ int dummy = self_classify( NULL , &pp );
+ 
+
+ //
+ // output stage probabilities 
+ //
+
+  const double epoch_sec = edf.timeline.epoch_length();
+
+  std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
+
+  summarize_kappa( final_pred , true );
+
+  summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
+  
+  summarize_epochs( pp , model.labels , ne_all , edf );
+    
+}
 
 
 void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
@@ -230,12 +407,12 @@ void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
 }
 
 
-std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose , Eigen::MatrixXd * pp )
+int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd * pp )
 {
 
   if ( ! trainer )
     Helper::halt( "can only self-classify trainers (those w/ observed staging" );
-
+  
   // assume putative 'y' and 'U' will have been constructed, and 'nve' set
   // i.e. this will be called after proc(), or from near the end of proc() 
 
@@ -251,12 +428,24 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
 
   lda_posteriors_t prediction = lda_t::predict( model , U );
 
+
   // save posteriors?
   if ( pp != NULL ) *pp = prediction.pp ;
 
+  
+  //
+  // In SOAP mode, all done (we only needed the PP)
+  //
+  
+  if ( suds_t::soap_mode || included == NULL ) return 0; // not used by SOAP
+
+  //
+  // Get kappa 
+  //
+
   double kappa = MiscMath::kappa( prediction.cl , y , suds_t::str( SUDS_UNKNOWN )  );
 
-  std::vector<bool> included( nve , false );
+  included->resize( nve , false );
   
   //
   // Optionally, ask whether trainer passes self-classification kappa threshold.  If not
@@ -267,12 +456,11 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
     {
       if ( kappa < suds_t::self_classification_kappa )
 	{
-	  if ( count != NULL ) *count = 0;
 	  logger << "  trainer does not meet SOAP kappa " << kappa << " < " << suds_t::self_classification_kappa << "\n";
-	  return included;  // all false at this point
-	}
+	  return 0;  // all 'included' false at this point
+	}      
     }
-  
+
   //
   // Determine 'bad' epochs
   //
@@ -285,8 +473,8 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
     {
       for (int i=0;i<nve;i++)
 	{
-	  included[i] = prediction.cl[i] == y[i] ; 
-	  if ( included[i] ) ++okay;
+	  (*included)[i] = prediction.cl[i] == y[i] ; 
+	  if ( (*included)[i] ) ++okay;
 	}
     }
   else
@@ -308,15 +496,13 @@ std::vector<bool> suds_indiv_t::self_classify( int * count , const bool verbose 
 	    Helper::halt( "internal error in suds_indiv_t::self_classify() , unrecognized label" );
 	  if ( prediction.pp( i , ii->second ) >= suds_t::self_classification_prob )
 	    {
-	      included[i] = true;
+	      (*included)[i] = true;
 	      ++okay;
 	    }
 	}
     }
-   
-  if ( count != NULL ) *count = okay;
 
-  return included;
+  return okay;
 }
 
 
@@ -418,8 +604,22 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   std::vector<bool> retained( ne , true );
 
   bool has_prior_staging = false;
-  
-  if ( trainer )
+
+  // for SUDS trainers, always load observed stages
+  // for SUDS target, load unless told not to
+
+  // for SOAP mode, always load unless told not to ( here, 'target' is 'trainer' and so trainer is T)
+  // but in this case, set obs_stage, just make it all missing (i.e. as trainers need to have this
+  // populated
+
+  if ( suds_t::soap_mode && suds_t::ignore_target_priors )
+    {
+      has_prior_staging = false; // nb. this is set back to 'true'  after the following 
+      // section, i.e. to do read from annotations, but we need to say we have stages
+      // (albeit all unknown ones) for downstream code) 
+      obs_stage.resize( ne , SUDS_UNKNOWN );
+    }
+  else if ( trainer )
     {
       edf.timeline.annotations.make_sleep_stage();
       
@@ -429,7 +629,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // total number of epochs does not match?
       if ( ne != edf.timeline.hypnogram.stages.size() )
 	Helper::halt( "problem extracting stage information for trainer" );
-
+      
       has_prior_staging = true;
       
     }
@@ -459,7 +659,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // number of good (retained) epochs
 
   int nge = 0 ;
-  
+
   if ( has_prior_staging )
     {
       
@@ -480,11 +680,31 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  
 	  else if ( edf.timeline.hypnogram.stages[ ss ] == REM ) obs_stage[ss] = SUDS_REM;
 
+	  
 	  // expand retained class to exclude unknown staging info
 	  // note: even for targets, this means we will not try to guess epochs
 	  // that have an UNKNOWN value for the 
-	  if ( obs_stage[ss] == SUDS_UNKNOWN ) { retained[ss] = false; } 
-	  else ++nge;
+
+	  // note: however, if in 'self-classification' mode
+	  // (i.e. running SOAP), then we allow these, i.e. to enable
+	  // 'auto-completion' staging (i.e. if some small proportion
+	  // is staged, and we want to complete the rest)
+	  
+	  // lda_t will ignore '?' in fitting the model; i.e. so we can process
+	  // just the 'full' dataset (as will be used in the prediction part) 
+	  // and that way we are sure that we are doing the SOAP part right
+
+	  if ( suds_t::soap_mode )
+	    {
+	      ++nge;
+	    }
+	  else
+	    {	      
+	      if ( obs_stage[ss] == SUDS_UNKNOWN ) 
+		retained[ss] = false; 
+	      else ++nge;
+	    }
+
 	}
     }
   else 
@@ -498,7 +718,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
     }
 
-
+  
+  //
+  // See note above
+  //
+  
+  if ( suds_t::soap_mode && suds_t::ignore_target_priors )
+    {
+      has_prior_staging = true;
+    }
+  
   //
   // for QC, estimate Hjorth parameters (only 2nd and 3rd used) over
   // epochs (for each signal) 
@@ -863,7 +1092,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( has_prior_staging )
     {
       obs_stage_valid.clear();
-
+      
       r = 0;
       for (int i=0;i<ne;i++)
 	{
@@ -1017,12 +1246,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
     }
   
+  
   //
   // For trainers, optionally only retain PSCs (or bands) that are significantly
   // associated with observed stage in this individual
   //
 
-  if ( trainer && suds_t::required_comp_p < 1 ) 
+  if ( trainer && suds_t::required_comp_p < 1 && ! ( suds_t::soap_mode && suds_t::ignore_target_priors ) ) 
     {
 
       // pull out currently retained epochs
@@ -1037,7 +1267,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
               ++c;
             }
         }
-      
+
       std::set<int> incl_comp;
       for (int j=0;j<nc;j++)
 	{	  
@@ -1057,8 +1287,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       //
 
       if ( suds_t::use_bands )
-	{
-	  
+	{	  
 	 
 	  int nbands = B.cols();
 
@@ -1141,7 +1370,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // set new 'nc' for this individual (which may be less than suds_t::nc)
       //
       
-      logger << "  retaining " << incl_comp.size() << " of " << nc << " PSCs, based on ANOVA p<" << suds_t::required_comp_p << "\n";
+      logger << "  retaining " << incl_comp.size() << " of " << nc 
+	     << " PSCs, based on ANOVA p<" << suds_t::required_comp_p << "\n";
 
       nc = incl_comp.size();
       
@@ -1169,7 +1399,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  V(i,j) = VV(i,j);
     }
 
-  
+
+ 
   //
   // Re-Standardize PSC 
   //
@@ -1307,9 +1538,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( trainer && suds_t::self_classification )
     {
 
-      int nve2 = 0;
+      std::vector<bool> okay ;
 
-      std::vector<bool> okay = self_classify( &nve2 );
+      int nve2 = self_classify( &okay );
       
       if ( nve2 == 0 )
 	{
@@ -1436,11 +1667,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() )
     {
-      if ( cc->second >= suds_t::required_epoch_n ) ++nr;      
+      if ( cc->first != "?" && cc->second >= suds_t::required_epoch_n ) ++nr;      
       ++cc;
     }
 
-  
   return trainer ? nr : nve ;
   
 }
@@ -2186,7 +2416,7 @@ void suds_t::copy_db( const std::string & tfolder ,
 
 
 
-// fit LDA, io.e. after reloading U
+// fit LDA, i.e. after reloading U
 
 void suds_indiv_t::fit_lda()
 {
@@ -3532,13 +3762,13 @@ void suds_indiv_t::summarize_epochs( const Eigen::MatrixXd & pp , // posterior p
 	  if ( prior_staging )
 	    {
 	      // discordance if prior/obs staging available
-	      bool disc = predss !=  suds_t::str( obs_stage[i] ) ;
+	      bool disc = obs_stage[i] != SUDS_UNKNOWN && predss !=  suds_t::str( obs_stage[i] ) ;
 	      writer.value( "DISC" , disc );
 
 	      // collapse 5->3 ?
 	      if ( suds_t::n_stages == 5 )
 		{
-		  bool disc3 = suds_t::NRW( predss ) != suds_t::NRW( suds_t::str( obs_stage[i] ) ) ;
+		  bool disc3 =  obs_stage[i] != SUDS_UNKNOWN && suds_t::NRW( predss ) != suds_t::NRW( suds_t::str( obs_stage[i] ) ) ;
 		  writer.value( "DISC3" , disc3 );
 		}
 	      
@@ -3657,7 +3887,7 @@ void suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const
     }  
   
   // unknown/missed epochs
-  writer.level( "UNKNOWN" , globals::stage_strat );
+  writer.level( suds_t::str( SUDS_UNKNOWN ) , globals::stage_strat );
   writer.value( "DUR_OBS" , unknown / 60.0 );
 
   // and done

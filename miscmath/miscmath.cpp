@@ -1261,7 +1261,7 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
   std::map<std::string,std::map<std::string,int> > table;
   std::map<std::string,int> rows, cols;
   std::set<std::string> obs;
-  
+  int n_obs = 0;
   for (int i=0;i<n;i++)
     {
       // only consider known cells
@@ -1275,6 +1275,7 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
 	  ++cols[ b[i] ];
 	  obs.insert( a[i] );
 	  obs.insert( b[i] );      
+	  ++n_obs;
 	}
     }
 
@@ -1362,8 +1363,9 @@ double MiscMath::accuracy( const std::vector<std::string> & a , const std::vecto
       *mcc_val = mcc( table , obsvec );
     }
 
-  // overall accuracy
-  return m / (double)n;
+  // overall accuracy (considering only non-missing obs)
+  if ( n_obs == 0 ) return 0;
+  return m / (double)n_obs;
   
 }
 

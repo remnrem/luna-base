@@ -61,9 +61,13 @@ struct suds_indiv_t {
 
   suds_indiv_t( const std::string & id ) : id(id) { } 
 
-  // 'SELF-SUDS", i.e. fit model to self and track performance; no new prediction
+  // 'SOAP', i.e. fit model to self and track performance; no new prediction
   void evaluate( edf_t & edf , param_t & param );
 		
+  // 'RESOAP', i.e. change one stage and refit model (will only be 
+  // called on suds_t::cached object, populated after a prior SOAP
+  void resoap( edf_t & , int epoch , suds_stage_t stage );
+
   // wrapper to add a trainer and save to the libary
   void add_trainer( edf_t & edf , param_t & param );
 
@@ -87,18 +91,18 @@ struct suds_indiv_t {
   inline static int bread_int( std::ifstream & );
   inline static double bread_dbl( std::ifstream & );
 
-  // fit LDA, io.e. after reloading U
+  // fit LDA, i.e. after reloading U
   void fit_lda();
 
-  // make predictions given a different individuals signal data
+  // make predictions given a different individual's signal data
   lda_posteriors_t predict( const suds_indiv_t & trainer );
 
   // add a prediction from one trainer
   void add( const std::string & id , const lda_posteriors_t & );
 
-  // self-classify (which epochs are not self-predicted?)
-  std::vector<bool> self_classify( int * count , const bool verbose = false , Eigen::MatrixXd *  pp = NULL );
-
+  // self-classify / run SOAP (which epochs are not self-predicted?)
+  int self_classify( std::vector<bool> *  , Eigen::MatrixXd *  pp = NULL );
+  
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
   void summarize_stage_durations( const Eigen::MatrixXd & , const std::vector<std::string> & , int , double );
@@ -159,8 +163,15 @@ struct suds_indiv_t {
   std::vector<suds_stage_t> obs_stage;       // always all epochs
   std::vector<suds_stage_t> obs_stage_valid; // will match prd_stage
   std::vector<suds_stage_t> prd_stage;
-  
+
   std::map<std::string,int> counts;
+  
+  // RESOAP only: copy 'original obsered' stages 
+  // i.e. as we will iteratvely change the 'observed' ones
+  // this lets us track performance, if 'true' stages are known
+  std::vector<suds_stage_t> resoap_true_obs_stage;
+  std::vector<suds_stage_t> resoap_true_obs_stage_valid; 
+  
 
   //
   // retained epochs
@@ -190,6 +201,8 @@ struct suds_t {
   static void copy_db( const std::string & , const std::string & );
 
   static void score( edf_t & edf , param_t & param );
+  
+  static suds_indiv_t cached;
 
   static void set_options( param_t & param )
   {
@@ -203,6 +216,9 @@ struct suds_t {
     // bands instead of PSC? 
     use_bands = param.has( "bands" );
     
+    // store target (for subsequent SOAP updates?)
+    cache_target = param.has( "save" );
+
     // require p<T for each component, in oneway ANOVA a/ stage ( default = 1 );
     required_comp_p = param.has( "pc" ) ? param.requires_dbl( "pc" ) : 0.01;
     if ( param.has( "all-c" ) ) required_comp_p = 99;
@@ -394,8 +410,8 @@ struct suds_t {
     //                            trainer | target
     mat_dump_file = param.has( "mat" ) ? param.value( "mat" ) : "" ;
 
-    if ( mat_dump_file != "" && single_trainer == "" )
-      Helper::halt( "can only specifiy verbose 'mat' output in single-trainer mode" );
+    if ( mat_dump_file != "" && single_trainer == "" ) 
+      Helper::halt( "can only specifiy verbose 'mat' output in single-trainer or soap mode" ); 
     
   }
 
@@ -403,6 +419,8 @@ struct suds_t {
   //
   // SUDS parameters, needed to be the same across all individuals
   //
+
+  static bool soap_mode;
 
   static bool verbose;
 
@@ -499,9 +517,10 @@ struct suds_t {
   static std::string mat_dump_file;
 
   static bool use_bands;  // no PSC, bands instead 
+
+  static bool cache_target; // for iterative SOAP updates
   
 private: 
-
 
   // trainer library
   static std::map<std::string,suds_indiv_t*> bank;
@@ -626,6 +645,7 @@ public:
   static std::string NRW( const std::string & ss ) {     
     if ( ss == "REM" || ss == "R" ) return "R";
     if ( ss == "N1" || ss == "N2" || ss == "N3" || ss == "NR" ) return "NR";
+    if ( ss == "?" ) return "?";
     return "W";
   }
 
@@ -639,9 +659,10 @@ public:
   // for repred: reduce to just REM versus not , for example
   static std::string Rnot( const std::string & ss ) {     
     if ( ss == "REM" || ss == "R" ) return "R";
+    if ( ss == "?" ) return "?";
     return "NOT";
   }
-
+  
   static std::vector<std::string> Rnot( const std::vector<std::string> & ss ) { 
     std::vector<std::string> s( ss.size() );
     for (int i=0;i<ss.size();i++) s[i] = Rnot( ss[i] );

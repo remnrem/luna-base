@@ -866,6 +866,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
       else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
+      else if ( is( c, "RESOAP" ) )      proc_resoap( edf , param(c) );
 
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
@@ -1103,6 +1104,43 @@ void proc_self_suds( edf_t & edf , param_t & param  )
   suds_t::set_options( param );  
   suds_indiv_t self;
   self.evaluate( edf , param );  
+}
+
+// RESOAP : single observation accuracies and probabilities;
+//  given a previous call to SOAP, can update observed stages
+//  and model/predictions (i.e. for iterative staging)
+
+void proc_resoap( edf_t & edf , param_t & param  )
+{  
+  // check that this same individual has been cached by 
+  // a previous SOAP run
+  if ( suds_t::cached.id != edf.id ) 
+    Helper::halt( "need to SOAP w/ 'save' option before running RESOAP" );
+  
+  // scrub all stages?
+  // need to reset, y[], obs_stage[] and obs_stage_valid[]
+  if ( param.has( "scrub" ) )
+    {
+      for (int i=0; i < suds_t::cached.y.size(); i++)
+	suds_t::cached.y[i] = suds_t::str( SUDS_UNKNOWN );
+
+      for (int i=0; i < suds_t::cached.obs_stage.size(); i++)
+	suds_t::cached.obs_stage[i] = SUDS_UNKNOWN;
+
+      for (int i=0; i < suds_t::cached.obs_stage_valid.size(); i++)
+	suds_t::cached.obs_stage_valid[i] = SUDS_UNKNOWN;
+      
+      return;
+    }
+
+  // which epoch is being updated...
+  int epoch = param.requires_int( "epoch" );
+  // ...to which stage?
+  suds_stage_t stage = suds_t::type( param.requires( "stage" ) );
+
+  // update and refit model based on set PSC 
+  suds_t::cached.resoap( edf , epoch , stage );
+    
 }
 
 // MAKE-SUDS : populate folder 'db' with trainers

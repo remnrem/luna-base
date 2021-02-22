@@ -37,21 +37,66 @@ lda_model_t lda_t::fit( const bool flat_priors )
 
   lda_model_t model;
 
-  const int n = X.rows();
+  //
+  // Some observatons can be 'missing' and will be skipped 
+  // in generating the model
+  //
+  
+  int nm = 0;
+  std::vector<bool> mi( X.rows() , false );
+  for (int i=0; i<y.size(); i++)
+    if ( y[i] == missing ) 
+      { ++nm; mi[i] = true; }
+  
+  const int n = X.rows() - nm;
   const int p = X.cols();
+  
+  if ( n < 3 ) Helper::halt( "not enough nonmissing obs in lda_t()" );
+
+  //  std::cout << " X " << X.rows() << " " << X.cols() << "\n";
+
+  if ( nm )
+    {      
+      //std::cout << "nm = " << nm << "\n";
+      std::vector<std::string> y2 = y;
+      Eigen::MatrixXd X2 = X;
+      
+      y.resize( n );
+
+      X.resize( n , p );
+      int n0 = y2.size();
+      int c = 0;
+      for (int i=0; i<n0; i++)
+	{
+	  if ( mi[i] ) continue;
+	  y[c] = y2[i];
+	  for (int j=0; j<p; j++)
+	    X(c,j) = X2(i,j);
+	  ++c;
+	}
+    }
+
+  //  std::cout << " X " << X.rows() << " " << X.cols() << "\n";
 
   //
-  // count group labels
+  // At this point, any missing values will have been removed, and we can 
+  // fit the LDA model w/out worrying about missing values
+  //
+
+
+  //
+  // count group label
   //
 
   std::map<std::string,int> counts;
   for (int i=0;i<y.size();i++) 
     counts[ y[i] ]++;
 
+  
   //
   // assign index to groups (integer 0, 1, ...)
   //
-
+  
   std::map<std::string,int> gidx;
   std::map<std::string,int>::const_iterator cc = counts.begin();
   while ( cc != counts.end() )
@@ -62,10 +107,9 @@ lda_model_t lda_t::fit( const bool flat_priors )
     }
 
   std::vector<int> yi( n );
-  for (int i=0;i<n;i++) { 
+  for (int i=0;i<n;i++) 
     yi[i] = gidx[y[i]];    
-  }
-
+    
   //
   // number of classes
   //
@@ -102,11 +146,13 @@ lda_model_t lda_t::fit( const bool flat_priors )
   for ( int i = 0 ; i < n ; i++ )
     for ( int j = 0 ; j < p ; j++ )
       group_means( yi[i], j ) += X(i,j);
-
+  
   for ( int i = 0 ; i < ng ; i++ )
     for ( int j = 0 ; j < p ; j++ )
       group_means( i, j ) /= n * prior[i];
   
+  //  std::cout << "group means = " << group_means << "\n";
+
   //
   // adjust X by group mean; get variance of each measure
   // (i.e. looking for within-group variability)
@@ -290,6 +336,7 @@ lda_model_t lda_t::fit( const bool flat_priors )
   std::map<std::string,int>::const_iterator ll = counts.begin();
   while ( ll != counts.end() )
     {
+      //std::cout << " LAB " << ll->first << " = " << ll->second << "\n";
       model.labels.push_back( ll->first );
       ++ll;
     }
@@ -312,6 +359,10 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Eigen::Matrix
   // use prior from training/model
   const int ng = model.prior.size();
   
+  // std::cout << "ng = " << ng << "\n";
+  // std::cout << "model.prior " << model.prior << "\n";
+  // std::cout << "model.means " << model.means << "\n";
+
   // remove overall means to keep distances small
   ArrayXd means = Eigen::ArrayXd::Zero( p );
 
