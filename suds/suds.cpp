@@ -181,11 +181,6 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
       // copy
       suds_t::cached = *this;
       
-      // also, make a copy of the original observed stages
-      // i.e. as RESOAP will change these
-      suds_t::cached.resoap_true_obs_stage = obs_stage;
-      suds_t::cached.resoap_true_obs_stage_valid = obs_stage_valid;
-
     }
 
 
@@ -207,7 +202,12 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   Eigen::MatrixXd pp;
   
   int dummy = self_classify( NULL , &pp );
-
+  
+  if ( dummy == 0 ) 
+    {
+      logger << "  *** not enough data/variability to fit LDA\n";
+      return;
+    }
 
   //
   // output stage probabilities 
@@ -236,7 +236,6 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
       const std::string annot_folder = param.has("annot-dir") ? param.value( "annot-dir" ) : "./";      
       write_annots( annot_folder , param.value( "annot" ) , pp , model.labels , ne_all , edf );
     }
-      
 
 }
 
@@ -270,10 +269,8 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
   // valid stages  : std::vector<suds_stage_t> obs_stage_valid; 
   // same, but str : std::vector<std::string> y;   (send to lda_t() 
   
-  // we need to update all of these (obs_stage, obs_stage_valid and y)
-  // as they are used in summarize_kappa() and summarize_epochs()
-  
-  
+  // we need to update only y[i]; so the 'original' is kept in obs_stage(_valid)
+    
   //
   // Update 'y' and check we have en
   //
@@ -306,8 +303,8 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
 	{
 	  logger << "  changing epoch " << epoch << " from " << y[e0] << " to " << suds_t::str( stage ) << "\n";
 	  y[e0] = suds_t::str( stage );
-	  obs_stage_valid[ e0 ] = stage;
-	  obs_stage[ e1 ] = stage;
+	  // obs_stage_valid[ e0 ] = stage;
+	  // obs_stage[ e1 ] = stage;
 	  updated = true;
 	}
       
@@ -363,7 +360,6 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
       return;
     }
   
-  writer.value( "FIT" , 1 );
   
   //
   // Re-fit the LDA
@@ -372,7 +368,21 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
   Eigen::MatrixXd pp;
   
   int dummy = self_classify( NULL , &pp );
-  
+
+  if ( dummy == 0 )
+    {
+      logger << "  LDA model could not converge with the current stage proposal\n";
+      writer.value( "FIT" , 0 );      
+      return;
+    }
+
+
+  //
+  // Model okay
+  //
+
+  writer.value( "FIT" , 1 );
+
 
   //
   // output stage probabilities 
@@ -425,16 +435,19 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   //
   // fit the LDA to self
   //
-
+  
   fit_lda();
-
+  
+  if ( ! model.valid )
+    return 0;
+  
   //
   // get predictions
   //
 
   lda_posteriors_t prediction = lda_t::predict( model , U );
 
-
+  
   // save posteriors?
   if ( pp != NULL ) *pp = prediction.pp ;
 
@@ -443,8 +456,9 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   // In SOAP mode, all done (we only needed the PP)
   //
   
-  if ( suds_t::soap_mode || included == NULL ) return 0; // not used by SOAP
-
+  if ( suds_t::soap_mode || included == NULL )
+    return 1;  // SOAP only cares about a non-zero return value
+  
   //
   // Get kappa 
   //
@@ -2676,7 +2690,7 @@ void suds_indiv_t::fit_lda()
   lda_t lda( y , U );
 
   model = lda.fit( suds_t::flat_priors );
-
+    
 }
 
 

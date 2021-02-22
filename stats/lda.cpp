@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -216,7 +217,7 @@ lda_model_t lda_t::fit( const bool flat_priors )
   int rank = 0;
   for (int j=0;j<p;j++) 
     if ( W(j) > tol ) ++rank;
-  
+
   if ( rank == 0 ) {
     model.valid = false;
     model.errmsg = "problem with collinearity/constant values in input data" ;
@@ -340,7 +341,7 @@ lda_model_t lda_t::fit( const bool flat_priors )
       model.labels.push_back( ll->first );
       ++ll;
     }
-  
+
   return model;
 }
   

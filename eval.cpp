@@ -1118,17 +1118,19 @@ void proc_resoap( edf_t & edf , param_t & param  )
     Helper::halt( "need to SOAP w/ 'save' option before running RESOAP" );
   
   // scrub all stages?
-  // need to reset, y[], obs_stage[] and obs_stage_valid[]
+  // need to reset only y[]
+  // keep obs_stage[] and obs_stage_valid[] as is (i.e. any 'original' true staging)
+
   if ( param.has( "scrub" ) )
     {
       for (int i=0; i < suds_t::cached.y.size(); i++)
 	suds_t::cached.y[i] = suds_t::str( SUDS_UNKNOWN );
+      
+      // for (int i=0; i < suds_t::cached.obs_stage.size(); i++)
+      // 	suds_t::cached.obs_stage[i] = SUDS_UNKNOWN;
 
-      for (int i=0; i < suds_t::cached.obs_stage.size(); i++)
-	suds_t::cached.obs_stage[i] = SUDS_UNKNOWN;
-
-      for (int i=0; i < suds_t::cached.obs_stage_valid.size(); i++)
-	suds_t::cached.obs_stage_valid[i] = SUDS_UNKNOWN;
+      // for (int i=0; i < suds_t::cached.obs_stage_valid.size(); i++)
+      // 	suds_t::cached.obs_stage_valid[i] = SUDS_UNKNOWN;
       
       return;
     }

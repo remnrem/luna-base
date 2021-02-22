@@ -167,13 +167,7 @@ struct suds_indiv_t {
   std::vector<suds_stage_t> prd_stage;
 
   std::map<std::string,int> counts;
-  
-  // RESOAP only: copy 'original obsered' stages 
-  // i.e. as we will iteratvely change the 'observed' ones
-  // this lets us track performance, if 'true' stages are known
-  std::vector<suds_stage_t> resoap_true_obs_stage;
-  std::vector<suds_stage_t> resoap_true_obs_stage_valid; 
-  
+    
 
   //
   // retained epochs
