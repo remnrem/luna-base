@@ -854,7 +854,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
       else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
-
+      else if ( is( c, "CONTAINS" ) )     proc_has_signals( edf , param(c) );
+      
       else if ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) proc_rms( edf, param(c) );
       else if ( is( c, "MSE" ) )          proc_mse( edf, param(c) );
       else if ( is( c, "LZW" ) )          proc_lzw( edf, param(c) );
@@ -1116,33 +1117,46 @@ void proc_resoap( edf_t & edf , param_t & param  )
   // a previous SOAP run
   if ( suds_t::cached.id != edf.id ) 
     Helper::halt( "need to SOAP w/ 'save' option before running RESOAP" );
-  
-  // scrub all stages?
+
   // need to reset only y[]
   // keep obs_stage[] and obs_stage_valid[] as is (i.e. any 'original' true staging)
 
+  //
+  // scrub all stages?
+  //
+  
   if ( param.has( "scrub" ) )
     {
       for (int i=0; i < suds_t::cached.y.size(); i++)
-	suds_t::cached.y[i] = suds_t::str( SUDS_UNKNOWN );
-      
-      // for (int i=0; i < suds_t::cached.obs_stage.size(); i++)
-      // 	suds_t::cached.obs_stage[i] = SUDS_UNKNOWN;
-
-      // for (int i=0; i < suds_t::cached.obs_stage_valid.size(); i++)
-      // 	suds_t::cached.obs_stage_valid[i] = SUDS_UNKNOWN;
-      
+	suds_t::cached.y[i] = suds_t::str( SUDS_UNKNOWN );            
+      return;
+    }
+  
+  //
+  // pick N of each epoch at random?
+  //
+  
+  if ( param.has( "pick" ) )
+    {
+      int n = param.requires_int( "pick" );
+      suds_t::cached.resoap_pickN( edf , n );
+      suds_t::cached.resoap( edf , param.has( "verbose" ) );
       return;
     }
 
+  //
+  // else, alter a single epoch
+  //
+  
   // which epoch is being updated...
   int epoch = param.requires_int( "epoch" );
   // ...to which stage?
   suds_stage_t stage = suds_t::type( param.requires( "stage" ) );
 
   // update and refit model based on set PSC 
-  suds_t::cached.resoap( edf , epoch , stage );
-    
+  suds_t::cached.resoap_alter1( edf , epoch , stage );
+  suds_t::cached.resoap( edf , param.has( "verbose" ) );
+  
 }
 
 // MAKE-SUDS : populate folder 'db' with trainers
@@ -3508,3 +3522,49 @@ std::map<std::string,int> cmd_t::pull_ivar( const std::vector<std::string> & ids
 
   return retval;
 }
+
+
+void proc_has_signals( edf_t & edf , param_t & param )
+{
+
+  // check this EDF has the signals
+ 
+  // return codes: 0   all EDFs have all signals
+  //               1   all EDFs have at least one of these signals
+  //               2   at least some EDFs do not have any of these signals
+
+  // 0  ALL channels in all EDFs
+  // 1  only SOME channels in one or more EDFs
+  // 2  NO channels in one or more EDFs
+  
+  // retcode starts at 0
+  // if EDF has all : do not change
+  // if EDF has some : retcode == 1
+  // if EDF has none : retcode == 2
+  // & retcode never gets smaller
+
+  int count = 0;
+
+  std::vector<std::string> signals = param.strvector( "sig" );
+
+  const int ns = signals.size();
+  
+  for (int s=0; s<ns; s++)
+    {
+      writer.level( signals[s] , globals::signal_strat );
+      bool found = edf.header.has_signal( signals[s] );
+      writer.value( "PRESENT" , found ); 
+      if ( found ) ++count;
+    }
+  writer.unlevel( globals::signal_strat );
+
+  writer.value( "NS_REQ" , ns );
+  writer.value( "NS_OBS" , count );
+  writer.value( "NS_TOT" , edf.header.ns );
+  				
+  // adjust return code
+  if ( count == 0 ) globals::retcode = 2;
+  else if ( count < ns && globals::retcode == 0 ) globals::retcode = 1;
+
+}
+

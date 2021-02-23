@@ -127,6 +127,9 @@ struct globals
   // command definitions
 
   static cmddefs_t cmddefs;
+
+  // return code (e.g. for CONTAINS)
+  static int retcode;
   
   // global variables
   static std::map<frequency_band_t,freq_range_t> freq_band;

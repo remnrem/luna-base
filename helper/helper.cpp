@@ -146,6 +146,7 @@ void Helper::halt( const std::string & msg )
   
   // generic bail function (not using logger)
   std::cerr << "error : " << msg << "\n";   
+
   std::exit(1);
 }
 

@@ -42,6 +42,7 @@
 #include "stats/lda.h"
 #include "stats/statistics.h"
 #include "miscmath/miscmath.h"
+#include "miscmath/crandom.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -240,13 +241,9 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 }
 
 
-void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
+void suds_indiv_t::resoap_alter1( edf_t & edf , int epoch , suds_stage_t stage )
 {
   
-  logger << "  re-SOAPing...\n";
-  
-  // this impacts format of epoch-level output
-  suds_t::soap_mode = 2;
   
   // actual number of epochs
   
@@ -314,7 +311,83 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
   if ( ! updated ) 
     logger << "  no updates made: did not find epoch " << epoch << " (with valid signal data)\n";
   
- 
+  
+}
+
+
+void suds_indiv_t::resoap_pickN( edf_t & edf , int pick )
+{
+  // for evaluation of SOAP only: 
+
+  // pick N each of 'labels', using the original observed stages
+  if ( obs_stage_valid.size() != y.size() )
+    Helper::halt( "cannot use RESOAP pick without original staging" );
+  
+  // first scrub
+  for (int i=0; i < suds_t::cached.y.size(); i++)
+    suds_t::cached.y[i] = suds_t::str( SUDS_UNKNOWN );
+  
+  const int nss = suds_t::labels.size();
+
+  std::map<std::string,int> scounts;
+
+  // N or more  versus exactly N
+  bool exact = pick < 0 ;
+  if ( exact ) pick = -pick;
+
+  const int n = y.size();
+
+  // Yates-Fisher shuffle to get a random ordering
+  std::vector<int> a( n );
+  CRandom::random_draw( a );
+  
+  std::set<std::string> done;
+  for (int i=0; i<n; i++)
+    {
+      
+      int p = a[i]; // random draw
+
+      std::string ss = suds_t::str( obs_stage_valid[p] );
+      if ( ss == "?" ) continue;
+	       
+      if ( exact )
+	{
+	  // only add if fewer than needed?
+	  int c = scounts[ ss ];	  
+	  if ( c < pick )
+	    {
+	      y[p] = ss;
+	      ++scounts[ ss];	      
+	    }
+	}
+      else
+	{	    
+	  y[p] = ss;
+	  ++scounts[ ss ];
+	}
+      
+      // done for this stage?
+      if ( scounts[ y[p] ] == pick )
+	done.insert( y[p] );
+
+      // all done?
+      if ( done.size() == nss ) break;	
+    }
+
+}
+
+
+void suds_indiv_t::resoap( edf_t & edf , bool epoch_level_output )
+{
+
+  logger << "  re-SOAPing...\n";
+
+  //
+  // this impacts format of epoch-level output
+  //
+
+  suds_t::soap_mode = 2;
+  
   //
   // Count "observed" stages
   //
@@ -335,10 +408,12 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
   logger << "  epoch counts:";
   int s = 0;
   int t = 0;
+  int tt = 0;
   std::map<std::string,int>::const_iterator yy = ycounts.begin();
   while ( yy != ycounts.end() )
     {
       logger << " " << yy->first << ":" << yy->second;     
+      tt += yy->second;
       if ( yy->first != "?" && yy->second >= required_n ) 
 	{
 	  ++s;
@@ -347,6 +422,11 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
       ++yy;
     }
   logger << "\n";
+
+  writer.value( "S" , s );
+  writer.value( "OBS_N" , t ); // need at least 3 of each for 't'
+  writer.value( "OBS_P" , t/(double)tt );
+
   
   bool okay = s >= 2 ;
   
@@ -393,11 +473,15 @@ void suds_indiv_t::resoap( edf_t & edf , int epoch , suds_stage_t stage )
   std::vector<std::string> final_pred = suds_t::max( pp , model.labels );
   
   summarize_kappa( final_pred , true );
+  
+  // actual number of epochs
+  const int ne_all = edf.timeline.num_epochs();
 
   summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
+
+  if ( epoch_level_output )
+    summarize_epochs( pp , model.labels , ne_all , edf );
   
-  summarize_epochs( pp , model.labels , ne_all , edf );
-    
 }
 
 
@@ -3232,9 +3316,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   while ( tt != bank.end() )
     {
-
+      
       const suds_indiv_t * trainer = tt->second;
-
+      
       // skip if target is in the trainer bank [ i.e. do not inc. cntr ]
       if ( trainer->id == target.id && ! suds_t::cheat ) { ++tt; continue; } 
       
@@ -3395,6 +3479,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     }
   writer.unlevel( "TRAINER" );
   
+  
+  //
+  // Construct for reporting epoch-level stats below (final, and optionally per-trainer)
+  //
+ 
+  std::map<int,int> e2e;
+  for (int i=0; i<target.epochs.size(); i++) e2e[target.epochs[i]] = i ;  
+  const int ne_all = edf.timeline.num_epochs();
 
 
   //
@@ -3423,12 +3515,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // force 0/1 encoding? i.e. 100% weight placed on most likely
       
       if ( suds_t::use_best_guess ) 
-	{
-	  suds_t::make01( m );
-	}
-
-      //      const suds_indiv_t * trainer = bank.find( ii->first )->second ;
-            
+	suds_t::make01( m );
+      
       double w = wgt[ ntrainers ];
 
       tot_wgt += w;
@@ -3439,14 +3527,39 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       if ( pp.rows() != m.rows() || pp.cols() != m.cols() )
 	Helper::halt( "internal error in compiling posteriors across trainers" );
 
+      // accumulate final posterior set
+      
       for (int i=0;i<ne;i++)
 	for (int j=0;j<suds_t::n_stages;j++)
 	  pp(i,j) += w * m(i,j);
-      
+
+      // verbose output
+      if ( suds_t::verbose )
+	{
+	  const suds_indiv_t * trainer = bank.find( ii->first )->second ;	  
+	  writer.level( trainer->id , "TRAINER" );
+	  
+	  for (int i=0;i<ne_all;i++)
+	    {
+	      int e = -1;
+	      if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+	      if ( e != -1 ) 
+		{
+		  writer.epoch( edf.timeline.display_epoch( i ) );
+		  std::string predss1 = max_inrow( m.row(e) , suds_t::labels );
+		  writer.value( "PRED" , predss1 );		  
+		}
+	    }
+	  writer.unepoch();
+	}
+
+      // next trainer
       ++ntrainers;
       ++ii;
     }
-
+  
+  if ( suds_t::verbose )
+    writer.unlevel( "TRAINER" );
 
   if ( ntrainers == 0 ) 
     Helper::halt( "no valid trainers, quitting" );
@@ -3484,9 +3597,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Report epoch-level stats
   //
  
-  std::map<int,int> e2e;
-  for (int i=0; i<target.epochs.size(); i++) e2e[target.epochs[i]] = i ;  
-  const int ne_all = edf.timeline.num_epochs();
+  // std::map<int,int> e2e;
+  // for (int i=0; i<target.epochs.size(); i++) e2e[target.epochs[i]] = i ;  
+  // const int ne_all = edf.timeline.num_epochs();
 
   std::vector<std::string> final_prediction;
 

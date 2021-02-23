@@ -66,7 +66,12 @@ struct suds_indiv_t {
 		
   // 'RESOAP', i.e. change one stage and refit model (will only be 
   // called on suds_t::cached object, populated after a prior SOAP
-  void resoap( edf_t & , int epoch , suds_stage_t stage );
+  // alter a single epoch 
+  void resoap_alter1( edf_t & , int epoch , suds_stage_t stage );
+  // pick N of each stage at random
+  void resoap_pickN( edf_t & , int );
+  // re-fit actual model after making above types of changes
+  void resoap( edf_t & , bool ); 
 
   // wrapper to add a trainer and save to the libary
   void add_trainer( edf_t & edf , param_t & param );

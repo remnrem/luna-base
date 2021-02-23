@@ -38,6 +38,8 @@ extern logger_t logger;
 std::string globals::version;
 std::string globals::date;
 
+int globals::retcode;
+
 cmddefs_t globals::cmddefs;
 
 std::string globals::annot_folder;
@@ -173,9 +175,14 @@ void globals::init_defs()
   
   version = "v0.25.2";
   
-  date    = "09-Feb-2021";
-  
+  date    = "23-Feb-2021";
 
+  //
+  // Return code
+  //
+
+  retcode = 0;
+  
   //
   // Set up RNG
   //
@@ -243,7 +250,7 @@ void globals::init_defs()
 
   sl_visit_edf = true;
   
-
+  
   //
   // By default, read and extract all FTR; if this is a pain, can be turned off (ftr=0)
   //

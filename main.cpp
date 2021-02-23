@@ -61,7 +61,7 @@ int main(int argc , char ** argv )
     {
       global.api();
       std::cerr << luna_base_version() ;
-      std::exit(0);
+      std::exit( globals::retcode );
     }
 
   
@@ -75,7 +75,7 @@ int main(int argc , char ** argv )
       std::string p2 = argc >= 4 ? argv[3] : "";
       global.api();
       proc_dummy( p , p2 ); 
-      exit(0); 
+      std::exit( globals::retcode ); 
     } 
   
 
@@ -850,8 +850,8 @@ int main(int argc , char ** argv )
   logger << "...processed " << processed << " command set(s), ";
   if ( failed == 0 ) logger << " all of which passed" << "\n";
   else logger << failed << " of which failed\n";
-
-  exit(0);
+  
+  std::exit( globals::retcode );
   
 }
 
