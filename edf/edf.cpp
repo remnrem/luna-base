@@ -1783,6 +1783,24 @@ bool edf_record_t::write( edfz_t * edfz )
 }
 
 
+bool  edf_t::is_actually_standard_edf()
+{
+  if ( ! header.edfplus ) return true;
+  
+  // EDF Annotations (other than time track)?
+  for (int s=0;s<header.ns;s++)
+    {
+      if ( ! header.is_data_channel(s) )
+	if ( s != header.t_track ) return false;
+    }
+
+  // discontinuous?
+  if ( is_actually_discontinuous() ) return false;
+  
+  return true;
+}
+
+
 bool edf_t::is_actually_discontinuous() 
 {
   // definitely continuous
@@ -1844,31 +1862,53 @@ bool edf_t::is_actually_discontinuous()
 }
 
 
-bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
+bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bool always_edfd )
 {
+  
+  //
+  // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is set after any RESTRUCTURE
+  // We'll keep this as is here, but for the purpose of WRITE-ing an EDF+ (only), we'll first check 
+  // whether it is truly discontinuous (i.e. versus only the start/end was removed).
+  //  If always_edfd == T, do not make this change from EDF+D --> EDF+C when writing however.
+  //  i.e. this may be desirable if we want offset times always from the EDF+D start
+  //
+
+  bool actually_EDFD = is_actually_discontinuous();
+  
+  bool make_EDFC = (!always_edfd) && (!header.continuous) && (! actually_EDFD ); 
 
   //
-  // Deal with start time
+  // Reset start-time to NULL (i.e. to writing as standard EDF but is actually discontinuous, then)
+  // clocktimes will not make sense
   //
 
+  bool null_starttime = write_as_edf && actually_EDFD; 
+  
+  //
+  // Force as standard EDF? 
+  //
+
+  if ( write_as_edf )
+    set_edf();
+
+  
+  //
+  // Deal with start time?  If writing as a truly discontinuous EDF+D, then
+  // keep start-time as is (i.e. first epoch might not be 0 seconds).  But if
+  // writing as a EDF+C, then make start time == 
+  //
+    
   if ( null_starttime ) 
     {
       logger << "  setting EDF starttime to null (00.00.00)\n";
       header.starttime = "00.00.00";
     }
-  else
-    {
+  else if ( make_EDFC )  // no changes for EDF+D
+    {      
       reset_start_time();
     }
   
-  //
-  // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is set after any RESTRUCTURE
-  // We'll keep this as is here, but for the purpose of WRITE-ing an EDF+ (only), we'll first check 
-  // whether it is truly discontinuous (i.e. versus only the start/end was removed)
-  //
-
-  bool make_EDFC = (!header.continuous) && (!is_actually_discontinuous() ); 
-
+  
   //
   // Write to file
   //
@@ -1979,7 +2019,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool null_starttime )
 
     }
   
-  logger << " saved new EDF" 
+  logger << "  saved new EDF" 
 	 << ( header.edfplus ? ( make_EDFC ? "+C" : "+D" ) : "" )        
 	 << ", " << filename << "\n";
     
@@ -3542,7 +3582,7 @@ void edf_t::reset_start_time()
   int r = timeline.first_record();
   if ( r == -1 ) return;
   // interval for this record
-  logger << "  resetting EDF start time from " << header.starttime ;
+  logger << "  setting EDF start time from " << header.starttime ;
 
   interval_t interval = timeline.record2interval(r); 
 
@@ -3875,13 +3915,13 @@ void edf_t::rescale( const int s , const std::string & sc )
   // update headers
   if ( rescale_from_mV_to_uV || rescale_from_V_to_uV ) 
     {
-      logger << " rescaled " << header.label[s] << " to uV\n";
+      logger << "  rescaled " << header.label[s] << " to uV\n";
       header.phys_dimension[s] = "uV";     
     }
   
   if ( rescale_from_uV_to_mV || rescale_from_V_to_mV ) 
     {
-      logger << " rescaled " << header.label[s] << " to mV\n";
+      logger << "  rescaled " << header.label[s] << " to mV\n";
       header.phys_dimension[s] = "mV";
     }
 }

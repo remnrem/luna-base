@@ -599,6 +599,8 @@ public:
   void set_discontinuous();
 
   bool is_actually_discontinuous(); // asks 'but is this /really/ discontinuous?'...
+
+  bool is_actually_standard_edf(); // i.e. effectively continuous AND no EDF Annots (other than time-track)
   
   int add_continuous_time_track();
   
@@ -617,7 +619,7 @@ public:
   // Write EDF(Z) back to file
   //
   
-  bool write( const std::string & f , bool edfz = false , bool null_starttime = false );
+  bool write( const std::string & f , bool edfz = false , bool null_starttime = false , bool always_edfd = false );
   
     
   // given a mask, change the representation in memory, 

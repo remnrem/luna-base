@@ -1351,7 +1351,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 
 }
 
-void hypnogram_t::output( const bool verbose )
+void hypnogram_t::output( const bool verbose , const std::string & eannot )
 {
 
   // currently, this routine is hard-coded to assume 30-second epochs,
@@ -1597,11 +1597,24 @@ void hypnogram_t::output( const bool verbose )
   clocktime_t starttime( clock_lights_out );
 
 
-  
+  //
   // output in non-verbsoe mode (STAGES command)
-
+  //
+  
   if ( ! verbose )
     {
+
+      if ( eannot != "" )
+	{
+	  logger << "  writing epoch-level sleep stages to " << eannot << "\n";
+	  std::ofstream EOUT( Helper::expand( eannot ).c_str() , std::ios::out );
+	  for (int e=0;e<ne;e++)
+	    EOUT << globals::stage( stages[e] ) << "\n";
+	  EOUT.close();
+	  return;
+	}
+      
+      // Typical STAGE command
       
       for (int e=0;e<ne;e++)
 	{

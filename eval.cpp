@@ -72,11 +72,15 @@ void param_t::update( const std::string & id , const std::string & wc )
 
   // replace all instances of 'globals::indiv_wildcard' with 'id'
   // for all values
-  
+
+  // TODO: amend this so that we can edit keys (or generic text)
+  // with variables and includes;  currently, only the values of keys
+  //  e.g.  for x=y, only y can be a variable/include  
+
   std::map<std::string,std::string>::iterator ii = opt.begin();
   while ( ii != opt.end() ) 
     {
-
+      
       std::string v = ii->second;
       bool changed = false;
 
@@ -105,7 +109,6 @@ void param_t::update( const std::string & id , const std::string & wc )
       
       ++ii;
     }
-  
   
 }
 
@@ -1755,21 +1758,28 @@ void proc_write( edf_t & edf , param_t & param )
 
   // if a mask has been set, this will restructure the mask
   edf.restructure(); 
-
+  
   //
   // Force as EDF (i.e. even if restructured), and set starttime = 0;
   //
 
   bool write_as_edf = param.has( "force-edf" );
   
-  if ( write_as_edf ) edf.set_edf();
   
   //
-  // Save data (write_as_edf flag forces starttime to 00.00.00)
+  // Do not write 'quasi-discontinuous' (i.e. single-segment EDF+D) as EDF+D
+  // Rather, write as EDF+C
   //
 
-  bool saved = edf.write( filename , edfz , write_as_edf );
+  bool always_EDFD = param.has( "EDF+D" );
 
+
+  //
+  // Save data (write_as_edf flag forces starttime to 00.00.00 if really EDF+D)
+  //
+  
+  bool saved = edf.write( filename , edfz , write_as_edf , always_EDFD );
+  
   if ( ! saved ) 
     Helper::halt( "problem trying to save " + filename );
 
@@ -2197,6 +2207,7 @@ void proc_record_table( edf_t & edf , param_t & param )
 }
 
 // STAGE : set and display sleep stage labels (verbose = F)
+// STAGE : + eannot=<file> option --> write as .eannot
 // HYPNO : verbose report on sleep STAGES     (verbose = F)
 
 void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
@@ -2210,6 +2221,9 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   std::string rem    = param.has( "REM" )  ? param.value("REM")  : "" ; 
   std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
 
+  std::string eannot = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
+  if ( eannot != "" && verbose ) Helper::halt( "cannot use eannot with HYPNO" );
+  
   // either read these from a file, or display
   
   if ( param.has( "file" ) )
@@ -2225,7 +2239,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
     }
 
   // and output...
-  edf.timeline.hypnogram.output( verbose );
+  edf.timeline.hypnogram.output( verbose , eannot );
 
 }
 

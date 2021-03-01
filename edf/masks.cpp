@@ -284,33 +284,80 @@ void proc_mask( edf_t & edf , param_t & param )
       t2 -= globals::tp_duration;
       int epoch1 = 1 + floor( t1 / edf.timeline.epoch_length() );
       int epoch2 = 1 + floor( t2 / edf.timeline.epoch_length() );
-      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );      
+      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
     }
+
 
   if ( param.has( "hms" ) ) 
     {
       // convert to nearest epochs
       std::vector<std::string> tok = param.strvector( "hms" , "-" );
       if ( tok.size() != 2 ) Helper::halt( "expecting sec=<time1>-<time2> where <time> is in hh:mm:ss format" );
-
+      
       clocktime_t starttime( edf.header.starttime );
       bool invalid_hms = ! starttime.valid;
       if ( invalid_hms ) Helper::halt( "EDF does not have valid start-time in header" );
       clocktime_t t1( tok[0] );
       clocktime_t t2( tok[1] );
       
-      double h1 = clocktime_t::difference_seconds( starttime , t1 ) / 3600.0 ;
-      double h2 = clocktime_t::difference_seconds( starttime , t2 ) / 3600.0 ;
-      
-      h2 -= globals::tp_duration;
-      
-      int epoch1 = 1 + floor( ( h1 * 3600 ) / edf.timeline.epoch_length() );
-      int epoch2 = 1 + floor( ( h2 * 3600 ) / edf.timeline.epoch_length() );
-      
-      if ( epoch1 > epoch2 ) Helper::halt( "misspecified hms times: implies start after end" );
+      double s1 = clocktime_t::difference_seconds( starttime , t1 ) ;
+      double s2 = clocktime_t::difference_seconds( starttime , t2 ) ;
+      s2 -= globals::tp_duration;
 
-      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
+      // for the continuous case:
+      if ( edf.header.continuous )
+	{
+	  int epoch1 = 1 + floor( s1 / edf.timeline.epoch_length() );
+	  int epoch2 = 1 + floor( s2 / edf.timeline.epoch_length() );	  
+	  if ( epoch1 > epoch2 ) Helper::halt( "misspecified hms times: implies start after end" );	  
+	  edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
+	}
+
+      // for the discontinuous case, select all epochs that are spanned by this interval
+      if ( ! edf.header.continuous )
+	{
+	  int epoch1 = -1 , epoch2 = -1;
+
+	  // look at each epoch
+	  edf.timeline.first_epoch();	  
+	  while ( 1 ) 
+	    {
+	      int epoch = edf.timeline.next_epoch();      
+	      if ( epoch == -1 ) break;
+	      interval_t interval = edf.timeline.epoch( epoch );
+
+	      // std::cout << "epoch "
+	      // 		<< interval.start << "\t"
+	      // 		<< interval.stop << "\t"
+	      // 		<< interval.start_sec() << "\t"
+	      // 		<< interval.stop_sec_exact() << "\t"
+	      // 		<< s1 << "\t"
+	      // 		<< s2 << "\t"
+	      // 		<< epoch1 << "\t"
+	      // 		<< epoch2 << "\n";
+
+	      // is this epoch spanned by this hms range? track first / last spanned
+	      if ( interval.start_sec() <= s2 && interval.stop_sec_exact() >= s1 ) 
+		{
+		  std::cout << "  ADDING.....\n";
+		  if ( epoch1 != -1 )
+		    epoch2 = epoch;
+		  else
+		    epoch1 = epoch;
+		}
+	    }
+
+	  // if only a single epoch flagged
+	  if ( epoch2 == -1 ) epoch2 = epoch1;
+	  
+	  // nb. 1-based selection here
+	  if ( epoch1 != -1 )
+	    edf.timeline.select_epoch_range( 1+epoch1 , 1+epoch2 , true );
+
+	}
+      
     }
+  
 
 
 

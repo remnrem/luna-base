@@ -935,25 +935,25 @@ void cmddefs_t::init()
   /////////////////////////////////////////////////////////////////////////////////
 
   add_cmd( "suds"   , "SOAP" , "Single Observation Accuracies and Probabilities" );
-  add_url( "SOAP" , "suds/#soap-suds" );
+  add_url( "SOAP" , "suds/#soap" );
 
   add_param( "SOAP" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
   add_param( "SOAP" , "nc" , "10" , "Number of principal components" );
   
   add_table( "SOAP" , "" , "Overall accuracies" );
   add_var( "SOAP" , "" , "ACC" , "Accuracy" );
-  add_var( "SOAP" , "" , "ACC_3" , "Accuracy, 3-class" );
+  add_var( "SOAP" , "" , "ACC3" , "Accuracy, 3-class" );
   add_var( "SOAP" , "" , "F1" , "F1 metric" );
-  add_var( "SOAP" , "" , "F1_3" , "F1 metric, 3-class" );
+  add_var( "SOAP" , "" , "F13" , "F1 metric, 3-class" );
   add_var( "SOAP" , "" , "F1_WGT" , "F1 metric, weighted" );
   add_var( "SOAP" , "" , "K" , "Kappa" );
-  add_var( "SOAP" , "" , "K_3" , "Kappa, 3-class" );
+  add_var( "SOAP" , "" , "K3" , "Kappa, 3-class" );
   add_var( "SOAP" , "" , "MCC" , "Matthews correlation coef" );
-  add_var( "SOAP" , "" , "MCC_3" , "Matthews correlation coef, 3-class" );
+  add_var( "SOAP" , "" , "MCC3" , "Matthews correlation coef, 3-class" );
   add_var( "SOAP" , "" , "PREC" , "Precision" );
-  add_var( "SOAP" , "" , "PREC_3" , "Precision, 3-class" );  
+  add_var( "SOAP" , "" , "PREC3" , "Precision, 3-class" );  
   add_var( "SOAP" , "" , "RECALL" , "Recall" );
-  add_var( "SOAP" , "" , "RECALL_3" , "Recall, 3-class" );
+  add_var( "SOAP" , "" , "RECALL3" , "Recall, 3-class" );
   add_var( "SOAP" , "" , "RECALL_WGT" , "Recall, weighted" );
   
   add_table( "SOAP" , "E" , "Epoch-level output" );
@@ -979,8 +979,84 @@ void cmddefs_t::init()
   add_table( "SOAP" , "VAR" , "PSC info" );
   add_var( "SOAP" , "VAR" , "INC" , "Componeont included" );
   add_var( "SOAP" , "VAR" , "PV" , "1-way ANOVA p-value for association w/ observed stage" );
-  
 
+
+  //
+  // SUDS
+  //
+
+  add_cmd( "suds"   , "SUDS" , "Staging Using the Dynamics of Sleep" );
+  add_url( "SUDS" , "suds/#suds" );
+
+  add_param( "SUDS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "SUDS" , "nc" , "10" , "Number of principal components" );
+  add_param( "SUDS" , "lambda" , "2" , "Regularization factor" );
+  add_param( "SUDS" , "th" , "5,3" , "Statistical outlier removal" );
+  add_param( "SUDS" , "robust" , "0.1" , "Robust standardization" );
+  add_param( "SUDS" , "Wgt-exp" , "4" , "Expoential weighting" );
+
+  add_table( "SUDS" , "" , "SUDS metrics" );
+  add_var( "SUDS", "" , "ACC" , "Accuracy" );
+  add_var( "SUDS", "" , "ACC3" , "Accuracy for 3-class model" );  
+  add_var( "SUDS", "" , "K" , "Kappa statistic" );
+  add_var( "SUDS", "" , "K3" , "Kappa for 3-class model" );
+  add_var( "SUDS", "" , "F1" , "F1 statistic" );
+  add_var( "SUDS", "" , "F13" , "F1 for 3-class model" );
+  add_var( "SUDS", "" , "F1_WGT" , "F1 weighted" );
+  add_var( "SUDS", "" , "MAXPP" , "Mean maximum posterior" );
+  add_var( "SUDS", "" , "MCC" , "Matthews correlation coefficient" );
+  add_var( "SUDS", "" , "MCC3" , "Matthews correlation coefficient, 3-class" );
+  add_var( "SUDS", "" , "PREC" , "Precision" );
+  add_var( "SUDS", "" , "PREC_WGT" , "Precision, weighted" );
+  add_var( "SUDS", "" , "PREC3" , "Precision, 3-class" );
+  add_var( "SUDS", "" , "RECALL" , "Recall" );
+  add_var( "SUDS", "" , "RECALL3" , "Recall, 3-class" );
+  add_var( "SUDS", "" , "RECALL_WGT" , "Recall,weighted" );
+  add_var( "SUDS", "" , "R_K3_WGT" , "Correlation between weight and K3" );
+
+  add_table( "SUDS" , "E" , "Epoch-level SUDS predictions" );
+  add_var( "SUDS" , "E" , "DISC" , "Discordant prior/predicted w.r.t 5-classes" );
+  add_var( "SUDS" , "E" , "DISC3" , "Discordant prior/predicted w.r.t 3-classes" );
+  add_var( "SUDS" , "E" , "INC" , "0/1 for whether epoch was included in analysis" );
+  add_var( "SUDS" , "E" , "PP_N1" , "Posterior probability of N1" );
+  add_var( "SUDS" , "E" , "PP_N2" , "Posterior probability of N2" );
+  add_var( "SUDS" , "E" , "PP_N3" , "Posterior probability of N3" );
+  add_var( "SUDS" , "E" , "PP_REM" , "Posterior probability of REM" );
+  add_var( "SUDS" , "E" , "PP_W" , "Posterior probability of wake" );
+  add_var( "SUDS" , "E" , "PRED", "Predicted stage" );
+  add_var( "SUDS" , "E" , "PRIOR" , "Observed stage (if known)" );
+  
+  add_table( "SUDS" , "SS" , "Sleep-stage summaries" );
+  add_var( "SUDS" , "SS" , "DUR_OBS" , "Observed stage duration (for included epochs)");
+  add_var( "SUDS" , "SS" , "DUR_PRD" , "Predicted stage duration, weighted" );
+  add_var( "SUDS" , "SS" , "DUR_PRD2" , "Predicted stage duration, based on most likely" );
+  add_var( "SUDS" , "SS" , "F1" , "F1 statistic" );
+  add_var( "SUDS" , "SS" , "RECALL" , "Recall" );
+  add_var( "SUDS" , "SS" , "PREC" , "Precision" );
+
+  add_table( "SUDS" , "TRAINER" , "Trainer-level metrics" );
+  add_var( "SUDS" , "TRAINER" , "K3" , "3-class kappa" );
+  add_var( "SUDS" , "TRAINER" , "NS" , "Number of unique stages in prediction" );
+  add_var( "SUDS" , "TRAINER" , "N_N1" , "N1 duration" );
+  add_var( "SUDS" , "TRAINER" , "N_N2" , "N2 duration" );
+  add_var( "SUDS" , "TRAINER" , "N_N3" , "N3 duration" );
+  add_var( "SUDS" , "TRAINER" , "N_REM" , "REM duration" );
+  add_var( "SUDS" , "TRAINER" , "N_W" , "Wake duration" );
+  add_var( "SUDS" , "TRAINER" , "WGT" , "Trainer weight" );
+  
+  add_table( "SUDS" , "WTRAINER" , "Weight-trainer metrics" );
+  add_var( "SUDS" , "WTRAINER" , "K3" , "Mean weight trainer K3" );
+
+  add_table( "SUDS" , "E,TRAINER" , "Verbose trainer metrics" );
+  add_var( "SUDS" , "E,TRAINER" , "PP_N1" , "Posterior probability of N1" );
+  add_var( "SUDS" , "E,TRAINER" , "PP_N2" , "Posterior probability of N2" );
+  add_var( "SUDS" , "E,TRAINER" , "PP_N3" , "Posterior probability of N3" );
+  add_var( "SUDS" , "E,TRAINER" , "PP_REM" , "Posterior probability of REM" );
+  add_var( "SUDS" , "E,TRAINER" , "PP_W" , "Posterior probability of wake" );
+  add_var( "SUDS" , "E,TRAINER" , "PRED" , "Predicted (most likely) stage" );
+
+
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // SPECTRAL

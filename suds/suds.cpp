@@ -1784,7 +1784,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 void suds_indiv_t::write( edf_t & edf , param_t & param ) const
 {
 
-  const std::string folder = param.requires( "db" );
+  const std::string folder = Helper::expand( param.requires( "db" ) );
 
   const int ns = suds_t::ns;
     
@@ -2025,7 +2025,7 @@ void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
   
   // same as write(), except the file is binary 
   
-  const std::string folder = param.requires( "db" );
+  const std::string folder = Helper::expand( param.requires( "db" ) );
   const int ns = suds_t::ns;
   
   // create output folder if it does not exist
@@ -2499,9 +2499,11 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
 }
 
 
-void suds_t::attach_db( const std::string & folder , bool binary , bool read_psd )
+void suds_t::attach_db( const std::string & folder0 , bool binary , bool read_psd )
 {
 
+  const std::string folder = Helper::expand( folder0 );
+  
   std::map<std::string,suds_indiv_t*> * b = read_psd ? &wbank : &bank ;
     
   // already done?
@@ -3330,25 +3332,30 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       for (int j=0;j<labels.size();j++)
 	sum += stg_cnt_trainer[ trainer->id ][ labels[j] ] ;
 
+
       for (int j=0;j<labels.size();j++)
 	writer.value( "N_" + labels[j] , stg_cnt_trainer[ trainer->id ][labels[j] ] / (double) sum ) ;
-
+      
       if ( prior_staging )
 	writer.value( "K3" , k3_prior[ cntr ] );
 
-      if ( use_kl_weights )
-	writer.value( "WGT_KL"   , wgt_kl[ cntr ] );
-
-      if ( use_soap_weights )
-	writer.value( "WGT_SOAP"  , wgt_soap[ cntr ] );
-      
-      if ( use_repred_weights && wbank.size() > 0 ) 
+      // only output final WGT (below)
+      if ( 0 )
 	{
-	  writer.value( "WGT_N50"  , wgt_n50[ cntr ] );
-	  writer.value( "WGT_MAX"  , wgt_max[ cntr ] );
-	  writer.value( "WGT_MEAN" , wgt_mean[ cntr ] ); // normalized	  
+	  if ( use_kl_weights )
+	    writer.value( "WGT_KL"   , wgt_kl[ cntr ] );
+	  
+	  if ( use_soap_weights )
+	    writer.value( "WGT_SOAP"  , wgt_soap[ cntr ] );
+	  
+	  if ( use_repred_weights && wbank.size() > 0 ) 
+	    {
+	      writer.value( "WGT_N50"  , wgt_n50[ cntr ] );
+	      writer.value( "WGT_MAX"  , wgt_max[ cntr ] );
+	      writer.value( "WGT_MEAN" , wgt_mean[ cntr ] ); // normalized	  
+	    }
 	}
-
+      
       //
       // define 'final' weight: if weight trainers exist, 
       // using WGT_MEAN, otherwise WGT_KL
@@ -3548,6 +3555,20 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  writer.epoch( edf.timeline.display_epoch( i ) );
 		  std::string predss1 = max_inrow( m.row(e) , suds_t::labels );
 		  writer.value( "PRED" , predss1 );		  
+		  
+		  double pp_nr = 0;
+		  bool has_nr = false;
+		  for (int j=0;j<labels.size();j++)
+		    {
+		      if ( labels[j] == "NR" ) has_nr = true;
+		      if ( labels[j] == "N1" || labels[j] == "N2" || labels[j] == "N3" ) pp_nr += m(e,j);
+		      writer.value( "PP_" + labels[j] , m(e,j) );
+		    }
+		  
+		  // automatically aggregate N1+N2+N3 under the 5-class model (or whatever NREM stages are present)
+		  if ( ! has_nr )
+		    writer.value( "PP_NR" , pp_nr );
+		  
 		}
 	    }
 	  writer.unepoch();
@@ -3645,34 +3666,42 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //
       // also, given correlations between weights and trainer kappas
       //
-
+      
+      writer.value( "R_K3_WGT" ,
+		    Statistics::correlation( eigen_ops::copy_array( wgt ) ,
+					     eigen_ops::copy_array( k3_prior) ) ); 
+      
       // TODO ; not critical code, so lazy conversion to use Stats correl function, but should add eigen_ops::correlation()
 
-      if ( k3_prior.size() > 2 )
+      if ( 0 )
 	{
-	  if ( use_kl_weights )
-	    writer.value( "R_K3_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_kl ) , eigen_ops::copy_array( k3_prior) ) ); 
 	  
-	  if ( use_soap_weights )
-	    writer.value( "R_K3_SOAP" , Statistics::correlation( eigen_ops::copy_array( wgt_soap ) , eigen_ops::copy_array( k3_prior ) ) ); 
-
-	  if ( use_repred_weights && wbank.size() > 0 ) 
+	  if ( k3_prior.size() > 2 )
 	    {
-	      writer.value( "R_K3_MAX" , Statistics::correlation( eigen_ops::copy_array( wgt_max ) , eigen_ops::copy_array( k3_prior ) ) ); 
-	      writer.value( "R_K3_MEAN" , Statistics::correlation( eigen_ops::copy_array(wgt_mean) , eigen_ops::copy_array(k3_prior) ) ); 
-	      writer.value( "R_K3_N50" , Statistics::correlation( eigen_ops::copy_array(wgt_n50)  , eigen_ops::copy_array(k3_prior) ) ); 
-	      
 	      if ( use_kl_weights )
-		{
-		  writer.value( "R_MEAN_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_mean ) , eigen_ops::copy_array( wgt_kl ) ) );
-		  writer.value( "R_K3_CMB" , Statistics::correlation( eigen_ops::copy_array(wgt) , eigen_ops::copy_array(wgt_kl) ) );		  
-		}
+		writer.value( "R_K3_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_kl ) , eigen_ops::copy_array( k3_prior) ) ); 
 	      
-	    }
-	}				          
-
+	      if ( use_soap_weights )
+		writer.value( "R_K3_SOAP" , Statistics::correlation( eigen_ops::copy_array( wgt_soap ) , eigen_ops::copy_array( k3_prior ) ) ); 
+	      
+	      if ( use_repred_weights && wbank.size() > 0 ) 
+		{
+		  //	      writer.value( "R_K3_MAX" , Statistics::correlation( eigen_ops::copy_array( wgt_max ) , eigen_ops::copy_array( k3_prior ) ) ); 
+		  writer.value( "R_K3_WGT" , Statistics::correlation( eigen_ops::copy_array(wgt_mean) , eigen_ops::copy_array(k3_prior) ) ); 
+		  //writer.value( "R_K3_N50" , Statistics::correlation( eigen_ops::copy_array(wgt_n50)  , eigen_ops::copy_array(k3_prior) ) ); 
+	      
+		  if ( use_kl_weights )
+		    {
+		      writer.value( "R_MEAN_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_mean ) , eigen_ops::copy_array( wgt_kl ) ) );
+		      writer.value( "R_K3_CMB" , Statistics::correlation( eigen_ops::copy_array(wgt) , eigen_ops::copy_array(wgt_kl) ) );		  
+		    }
+		  
+		}
+	    }				          
+	  
+	}
     }
-
+  
 
   //
   // Misc other output
@@ -4364,13 +4393,13 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 					&macro_precision, &macro_recall, &macro_f1 ,
 					&wgt_precision, &wgt_recall, &wgt_f1 , &mcc );
       
-      writer.value( "K_3" , kappa3 );
-      writer.value( "ACC_3" , acc3 );
+      writer.value( "K3" , kappa3 );
+      writer.value( "ACC3" , acc3 );
       
-      writer.value( "F1_3" , macro_f1 );
-      writer.value( "MCC_3" , mcc );
-      writer.value( "PREC_3", macro_precision );
-      writer.value( "RECALL_3" , macro_recall );
+      writer.value( "F13" , macro_f1 );
+      writer.value( "MCC3" , mcc );
+      writer.value( "PREC3", macro_precision );
+      writer.value( "RECALL3" , macro_recall );
 
       if ( to_console )
 	{
@@ -4493,7 +4522,7 @@ void suds_t::trainer_1x1_evals( const suds_indiv_t & target ,
       writer.value( "WGT" , oo->w );
       writer.value( "CUM_WGT" , cum_wgt );
       writer.value( "K" , kappa );
-      writer.value( "K_3" , kappa3 );
+      writer.value( "K3" , kappa3 );
 
       // next best trainer
       

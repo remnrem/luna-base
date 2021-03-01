@@ -1114,7 +1114,7 @@ void Helper::expand_numerics( std::string * t )
 
 void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars )
 {
-  
+
   // variable must be in the form   ${var} 
   // definitions can be as ${var=values,etc}
     
@@ -1189,7 +1189,7 @@ bool Helper::swap_in_includes( std::string * t ,
   for (int i=0;i<t->size();i++)
     {
       
-      if ( (*t)[i] != '@' ) { s = s + (*t)[i]; continue; } 
+      if ( (*t)[i] != '@' ) { s = s + (*t)[i]; continue; }       
       ++i;
       changed = true;
 
