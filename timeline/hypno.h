@@ -58,7 +58,7 @@ struct hypnogram_t
   bool construct( timeline_t * t , param_t & param , const bool verbose , const std::vector<std::string> & s );
   bool construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel = "SleepStage" );
   void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
-  void output( const bool verbose , const std::string & eannot = "" );
+  void output( const bool verbose , const bool epoch_lvl_output , const std::string & eannot = "" );
 
   // special case, if analysing a hypnogram with no EDF
   void fudge( double es, int ne );

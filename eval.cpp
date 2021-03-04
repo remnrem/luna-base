@@ -2238,8 +2238,11 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
       if ( ! okay ) return; // i.e. if no valid annotations found
     }
 
+  // epoch level output for HYPNO?
+  bool epoch_lvl_output =param.has( "epoch" );
+  
   // and output...
-  edf.timeline.hypnogram.output( verbose , eannot );
+  edf.timeline.hypnogram.output( verbose , epoch_lvl_output , eannot );
 
 }
 

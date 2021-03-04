@@ -156,11 +156,15 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   // We should be able to use current 0..ne epoch naming as epoch-annotations
   // still work after a restructure
   //
-  
+
+  int n_conflicts = 0;
+
   while ( 1 ) 
     {
 
       int e = timeline->next_epoch();
+    
+      writer.epoch( timeline->display_epoch( e ) );
       
       if ( e == -1 ) break;
 
@@ -176,8 +180,28 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 
       bool other = ! ( wake || n1 || n2 || n3 || n4 || rem );
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem ) > 1;
-      if ( conflict ) other = true;
 
+      //
+      // track any conflicts (i.e. if epochs not aligned to staging annotations)
+      //
+      
+      if ( conflict )
+	{
+	  other = true;
+	  ++n_conflicts;
+
+	  std::stringstream ss;
+	  bool delim = false;
+	  if ( n1 ) { ss << "N1"; delim = true; }
+	  if ( n2 ) { ss << ( delim ? "," : "" ) << "N2"; delim = true; }
+	  if ( n3 ) { ss << ( delim ? "," : "" ) << "N3"; delim = true; }
+	  if ( n4 ) { ss << ( delim ? "," : "" ) << "N4"; delim = true; }
+	  if ( rem ) { ss << ( delim ? "," : "" ) << "R"; delim = true; }
+	  if ( wake ) { ss << ( delim ? "," : "" ) << "W"; delim = true; }	  
+	  writer.value( "CONFLICT" , ss.str() );
+	}
+      
+      
       if      ( conflict ) stages.push_back( UNSCORED );
       else if ( other ) stages.push_back( UNSCORED );
       else if ( wake ) stages.push_back( WAKE );
@@ -193,6 +217,13 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       
     }
 
+  writer.unepoch();
+    
+  if ( n_conflicts )
+    logger << "  *** found " << n_conflicts << " epoch(s) of " << ne << " with conflicting spanning annotations\n"
+	   << "  *** check that epochs and annotations align as intended\n"
+	   << "  *** see EPOCH 'start-annot' or 'offset' options\n"; 
+  
    calc_stats( verbose );
 
    return true;
@@ -1351,9 +1382,9 @@ void hypnogram_t::calc_stats( const bool verbose )
 
 }
 
-void hypnogram_t::output( const bool verbose , const std::string & eannot )
+void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , const std::string & eannot )
 {
-
+  
   // currently, this routine is hard-coded to assume 30-second epochs,
   // so for now flag if this is not the case (we can fix downstream)
 
@@ -1691,56 +1722,17 @@ void hypnogram_t::output( const bool verbose , const std::string & eannot )
       }
 
 
+  //
+  // output epoch level data ?
+  //
+
+  if ( ! epoch_lvl_output ) return;
+
+  
   double elapsed_n1 = 0 , elapsed_n2 = 0 , elapsed_n34 = 0 , elapsed_rem = 0;
     
   double elapsed_sleep = 0 , elapsed_wake = 0 , elapsed_waso = 0 ;
-
   
-  // header
-
-  // writer.var( "CLOCK_HOURS" , "Clock time [0,24) hours" );
-        
-  // writer.var( "E_WAKE" , "Elapsed wake (mins)" );
-  // writer.var( "E_WASO" , "Elapsed WASO (mins)" );
-  // writer.var( "E_SLEEP" , "Elapsed sleep (mins)" );
-
-  // writer.var( "E_N1" , "Elapsed N1 (mins)" );
-  // writer.var( "E_N2" , "Elapsed N2 (mins)" );
-  // writer.var( "E_N3" , "Elapsed N3 (mins)" );
-  // writer.var( "E_REM" , "Elapsed REM (mins)" );
-
-  // writer.var( "PCT_E_SLEEP" , "Elapsed sleep (percent of all sleep)" );
-  // writer.var( "PCT_E_N1" , "Elapsed N1 (percent of all N1)" );
-  // writer.var( "PCT_E_N2" , "Elapsed N2 (percent of all N2)" );
-  // writer.var( "PCT_E_N3" , "Elapsed N3 (percent of all N3)" );
-  // writer.var( "PCT_E_REM" , "Elapsed REM (percent of all REM)" );
-
-  // writer.var( "PERSISTENT_SLEEP" , "Persistent sleep yes/no? (1=Y)" );
-
-  // writer.var( "CYCLE" , "NREMC number" );
-  // writer.var( "PERIOD" , "NREMC period (NREM/REM)" );
-  
-  // writer.var( "CYCLE_POS_REL" , "Position within NREMC, relative" );
-  // writer.var( "CYCLE_POS_ABS" , "Position within NREMC, absolute (mins)" );
-
-  // writer.var( "FLANKING_SIM" , "Number of similar epochs w.r.t. stage" );
-  // writer.var( "NEAREST_WAKE" , "Number of epochs until the nearest wake" );
-
-  // writer.var( "WASO" , "Epoch is WASO (1=Y)" );
-    
-  
-  // these next four are all reported for the  NREM epoch
-  // writer.var( "NREM2REM" , "If NREM epoch, number of NREM if next non-NREM is REM" );
-  // writer.var( "NREM2REM_TOTAL" , "If NREM epoch, total number of contiguous NREM if next non-NREM is REM" );
-
-  // writer.var( "NREM2WAKE" , "If NREM epoch, number of NREM if next non-NREM is WAKE" );
-  // writer.var( "NREM2WAKE_TOTAL" , "If NREM epoch, total number of contiguous NREM if next non-NREM is WAKE" );
-
-  //  writer.var ("N2_WGT" , "Score for descending/ascending N2 epochs (-1 to +1)" );
-
-  
-  
-  // output
   for (int e=0;e<ne;e++)
     {
       
@@ -1887,7 +1879,7 @@ void dummy_hypno()
   h.fudge( 30 , h.stages.size() );
 
   h.calc_stats( true );
-  h.output( true ); // verbose mode == T 
+  h.output( true , true ); // verbose mode == T 
 
 }
 

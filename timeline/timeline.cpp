@@ -468,9 +468,10 @@ int timeline_t::calc_epochs()
   
   if ( epoch_length_tp < epoch_inc_tp ) 
     Helper::halt( "epoch increment cannot be larger than epoch duration" );
-  
-  if ( epoch_offset_tp != 0 && epoch_offset_tp < edf->header.record_duration_tp )
-    Helper::halt( "epoch offset cannot be smaller than EDF record size: see RECORD-SIZE command" );
+
+  // not necessary....
+  // if ( epoch_offset_tp != 0 && epoch_offset_tp < edf->header.record_duration_tp )
+  //   Helper::halt( "epoch offset cannot be smaller than EDF record size: see RECORD-SIZE command" );
 
   epochs.clear();
   
