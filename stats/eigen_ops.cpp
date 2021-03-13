@@ -43,6 +43,13 @@ std::vector<double> eigen_ops::copy_array( const Eigen::ArrayXd & e )
   return v;
 }
 
+Eigen::ArrayXd eigen_ops::copy_array( const std::vector<double> & e ) 
+{
+  Eigen::ArrayXd v = Eigen::ArrayXd::Zero( e.size() );
+  for ( int i=0; i<e.size(); i++) v[i] = e[i];
+  return v;
+}
+
 void eigen_ops::random_normal( Eigen::MatrixXd & M )
 {
   const int rows = M.rows();

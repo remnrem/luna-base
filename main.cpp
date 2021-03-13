@@ -36,6 +36,7 @@ extern logger_t logger;
 int main(int argc , char ** argv )
 {
 
+
   //
   // display version info?
   //
@@ -1798,7 +1799,8 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   
 
   if ( p == "fir" || p == "fft" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
-       || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu" ) 
+       || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
+       || p == "desats" ) 
     {
 
       int cnt= 0;
@@ -1815,6 +1817,18 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
     }
 
+  if ( p == "desats" )
+    {
+      hb_find_desats_t r = hb_t::find_desats( eigen_ops::copy_array( x ) , 32 , 1.5 );
+
+      std::cout << r.MagDown << "\n\n";
+
+      std::cout << r.dsatStEnd << "\n\n";
+
+      std::exit(1);
+    }
+
+ 
   if ( p == "psi" )
     {
       const int n = x.size() / 2 ;

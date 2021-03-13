@@ -884,6 +884,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EPOCH-ANNOT" ) )  proc_file_annot( edf , param(c) );
       else if ( is( c, "EPOCH-MASK" ) )   proc_epoch_mask( edf, param(c) );
       
+      else if ( is( c, "HB" ) )           proc_hypoxic_burden( edf, param(c) );
       
       else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );      
       else if ( is( c, "FILTER-DESIGN" )) proc_filter_design( edf, param(c) );
@@ -2454,6 +2455,13 @@ void proc_pac( edf_t & edf , param_t & param )
 void proc_cfc( edf_t & edf , param_t & param )
 {
   dsptools::cfc( edf , param );
+}
+
+// HB : Hypoxic burden
+
+void proc_hypoxic_burden( edf_t & edf , param_t & param )
+{
+  hb_t hb( edf , param );
 }
 
 // SUPPRESS-ECG : ECG supression
