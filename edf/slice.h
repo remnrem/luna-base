@@ -45,7 +45,8 @@ class slice_t
   slice_t( edf_t & edf , 
 	   int signal , 
 	   const interval_t & interval , 
-	   int    downsample = 1 );
+	   int    downsample = 1 , 
+	   bool digital = false );
   
   const std::vector<double> * pdata() const 
   { 
@@ -55,6 +56,17 @@ class slice_t
   std::vector<double> * nonconst_pdata() 
   { 
     return &data; 
+  }
+
+  // digitial (16-bit) EDF type
+  const std::vector<int16_t> * ddata() const 
+  { 
+    return &dig_data; 
+  }
+  
+  std::vector<int16_t> * nonconst_ddata() 
+  { 
+    return &dig_data; 
   }
 
   const std::vector<uint64_t> * ptimepoints() const 
@@ -77,6 +89,7 @@ class slice_t
   void clear()
   {
     data.clear();
+    dig_data.clear();
     time_points.clear();
     records.clear();
     start = stop = 0;
@@ -91,7 +104,8 @@ class slice_t
   const int downsample;
   
   // output
-  std::vector<double> data;
+  std::vector<double> data; // unless digital == T 
+  std::vector<int16_t> dig_data;// optional, if digital == T
   std::vector<uint64_t> time_points;
   std::vector<int> records;
   

@@ -759,7 +759,8 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
     }
 
   //
-  // time-track absolute offset in record
+  // time-track absolute offset in record (we only care about this 
+  //  when reading from disk)
   //
 
   if ( t_track != -1 )
@@ -1456,7 +1457,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					     const int signal , 
 					     const int downsample ,
 					     std::vector<uint64_t> * tp , 
-					     std::vector<int> * rec ) 
+					     std::vector<int> * rec , 
+					     std::vector<int16_t> * ddata ) 
 {
 
 
@@ -1467,6 +1469,9 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 
   if ( rec != NULL ) 
     rec->clear();
+
+  if ( ddata != NULL )
+    ddata->clear();
 
   //
   // Ensure we are within bounds
@@ -1552,19 +1557,25 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
       
       for (int s=start;s<=stop;s+=downsample)
 	{
-	  // convert from digital to physical on-the-fly
-	  ret.push_back( edf_record_t::dig2phys( record->data[ signal ][ s ] , bitvalue , offset ) );
 	  
 	  if ( tp != NULL ) 
 	    tp->push_back( timeline.timepoint( r , s , n_samples_per_record ) );
 	  if ( rec != NULL ) 
 	    rec->push_back( r );
+
+	  // just return digital values...
+	  if ( ddata != NULL )
+	    ddata->push_back( record->data[ signal ][ s ] );
+	  else // ... or convert from digital to physical on-the-fly? (the default)
+	    ret.push_back( edf_record_t::dig2phys( record->data[ signal ][ s ] , bitvalue , offset ) );
+
 	}
       
       r = timeline.next_record(r);
       if ( r == -1 ) break;
     }
 
+  // will be length==0 if digital == T 
   return ret;  
 }
 

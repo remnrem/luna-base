@@ -48,7 +48,8 @@ interval_t slice_t::duration() const
 slice_t::slice_t( edf_t & edf , 
 		  int signal ,
 		  const interval_t & interval ,
-		  int downsample )   
+		  int downsample , 
+		  bool digital )
   : edf(edf) , signal(signal) , interval(interval) , downsample(downsample) 
 {
 
@@ -60,6 +61,7 @@ slice_t::slice_t( edf_t & edf ,
   data.clear();
   time_points.clear();
   records.clear();
+  dig_data.clear();
 
   //
   // Empty?
@@ -89,12 +91,22 @@ slice_t::slice_t( edf_t & edf ,
   // use fixed channel/signal sampling rate (i.e. array can be ragged)
   //
 
-  data = edf.fixedrate_signal( interval.start , 
-			       interval.stop , 
-			       signal , 
-			       downsample , 
-			       &time_points , 
-			       &records );
+  if ( ! digital ) 
+    data = edf.fixedrate_signal( interval.start , 
+				 interval.stop , 
+				 signal , 
+				 downsample , 
+				 &time_points , 
+				 &records );
+  else
+    data = edf.fixedrate_signal( interval.start , 
+				 interval.stop , 
+				 signal , 
+				 downsample , 
+				 &time_points , 
+				 &records , 
+				 &dig_data ); // requests digital value; here 'data' will be empty   
+  
 
 }
  

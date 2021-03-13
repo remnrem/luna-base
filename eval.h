@@ -281,6 +281,7 @@ void proc_record_table( edf_t & , param_t & );
 void proc_dump_segs( edf_t & , param_t & );
 
 void proc_intervals( param_t & , const std::string & );
+void proc_align( edf_t & edf , param_t & param );
 void proc_epoch_dump( edf_t & , param_t & );
 void proc_epoch_matrix( edf_t & , param_t & );
 void proc_epoch_mask( edf_t & , param_t & );

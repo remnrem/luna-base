@@ -398,7 +398,9 @@ public:
 					const int signal , 
 					const int downsample , 
 					std::vector<uint64_t> * tp , 
-					std::vector<int> * rec );
+					std::vector<int> * rec , 
+					std::vector<int16_t> * ddata = NULL );
+  
   
   tal_t tal( const int signal , const int rec );
 
@@ -627,6 +629,12 @@ public:
   // needs to update header as well (and timeline)
   
   bool restructure();
+
+  //
+  // extract and realign samples based on a set of annotations
+  //
+  
+  bool align( const std::vector<std::string> & annots ); 
 
   // empirical recalculate the physical min/max from data (i.e. 
   // instead of relying on the EDF header;  replace the header values

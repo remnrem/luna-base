@@ -728,8 +728,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       edf.timeline.annotations.make_sleep_stage();
       
       if ( ! edf.timeline.hypnogram.construct( &edf.timeline , param , false ) )
-	Helper::halt( "problem extracting stage information for trainer" );
-      
+	{
+	  if ( suds_t::soap_mode ) return 0; // okay to skip for SOAP
+	  // but flag as major prob if a trainer
+	  Helper::halt( "problem extracting stage information for trainer" );
+	}
+
       // total number of epochs does not match?
       if ( ne != edf.timeline.hypnogram.stages.size() )
 	Helper::halt( "problem extracting stage information for trainer" );

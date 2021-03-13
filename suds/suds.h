@@ -592,15 +592,20 @@ public:
   }
 
   static std::string max_inrow( const Eigen::ArrayXd & r , const std::vector<std::string> & labels ) { 
+
     const int ns = r.size();
+    
     if ( ns != labels.size() )
       Helper::halt( "internal error, max()" );
-    int m = 0;
+    
+    // any : return most likely of 5 classes
+    // nr  : calc NR / R /W 
+    int m = 0;    
     double mx = r[0];
-
+    
     for (int j=1; j<ns; j++) 
       if ( r[j] > mx ) { mx = r[j] ; m = j; } 
-
+    
     return labels[m];        
   }
 

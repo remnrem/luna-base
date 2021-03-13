@@ -865,6 +865,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ZR" ) )           proc_zratio( edf , param(c) );
       else if ( is( c, "ANON" ) )         proc_anon( edf , param(c) );
       else if ( is( c, "EPOCH" ) )        proc_epoch( edf, param(c) );
+      else if ( is( c, "ALIGN" ) )        proc_align( edf , param(c) );
       else if ( is( c, "SLICE" ) )        proc_slice( edf , param(c) , 1 );
 
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
@@ -1565,6 +1566,28 @@ void proc_dump( edf_t & edf , param_t & param )
   edf.data_dumper( signal , param );	  
 }
       
+
+// ALIGN
+
+void proc_align( edf_t & edf , param_t & param )
+{
+  // requires one or more annotation codes;
+  // find only annotations that completely span the signal (i.e. taking discontinuous EDFs into account)
+  // remove samples that aren't spanned
+  // align remaining samples to be in whole EDF records, 
+  // and rewrite the EDF, i.e. like 
+
+  // only pull out samples that overlap with these annotations, where a 
+
+  if ( ! param.has( "annot" ) ) Helper::halt( "no annot specified" );
+
+  std::vector<std::string> a = param.strvector( "annot" );
+
+  logger << "  realigning EDF based on annotation list: " << param.value( "annot" ) << "\n";
+
+  edf.align( a );
+
+}
 
 
 // EPOCH DUMP 
