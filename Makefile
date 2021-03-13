@@ -18,6 +18,7 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
 	$(wildcard artifacts/*.cpp) \
 	$(wildcard spindles/*.cpp) \
 	$(wildcard intervals/*.cpp) \
+	$(wildcard resp/*.cpp) \
 	$(wildcard fftw/*.cpp) \
 	$(wildcard cwt/*.cpp) \
         $(wildcard stats/*.cpp) \

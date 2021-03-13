@@ -103,6 +103,8 @@
 
 #include "sstore/sstore.h"
 
+#include "resp/hb.h"
+
 #include <iostream>
 #include <unistd.h>
 #include <dirent.h>

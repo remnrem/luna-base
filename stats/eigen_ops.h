@@ -44,6 +44,8 @@ namespace eigen_ops {
 
   std::vector<double> copy_vector( const Eigen::VectorXd & e );
 
+  Eigen::ArrayXd copy_array( const std::vector<double> & e );
+
   std::vector<double> copy_array( const Eigen::ArrayXd & e );
   
 }
