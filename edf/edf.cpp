@@ -1887,8 +1887,11 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   bool actually_EDFD = is_actually_discontinuous();
   
   bool make_EDFC = (!always_edfd) && (!header.continuous) && (! actually_EDFD ); 
-  std::cout << "actually_EDFD =  " << actually_EDFD << "\n";
-  std::cout << "make_EDFC = " << make_EDFC << "\n";
+
+  bool actually_EDF = is_actually_standard_edf();
+
+  if ( actually_EDF && actually_EDFD )
+    Helper::halt( "internal error in write() when determining EDF type" );
   
   //
   // Reset start-time to NULL (i.e. to writing as standard EDF but is actually discontinuous, then)
@@ -1901,7 +1904,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   // Force as standard EDF? 
   //
 
-  if ( write_as_edf )
+  if ( write_as_edf || actually_EDF )
     set_edf();
 
   
@@ -3143,8 +3146,7 @@ bool edf_t::restructure()
 
   if ( ! header.edfplus ) 
     {
-      logger << "  restructuring as an EDF+ : ";
-      
+      logger << "  restructuring as an EDF+: ";
       set_edfplus();
     }
       
@@ -3594,10 +3596,14 @@ void edf_t::reset_start_time()
   // get time of first record
   int r = timeline.first_record();
   if ( r == -1 ) return;
+
+  interval_t interval = timeline.record2interval(r);
+
+  // keep as is?
+  if ( interval.start == 0 ) return;
+  
   // interval for this record
   logger << "  setting EDF start time from " << header.starttime ;
-
-  interval_t interval = timeline.record2interval(r); 
 
   clocktime_t et( header.starttime );
   if ( et.valid )
@@ -3606,7 +3612,7 @@ void edf_t::reset_start_time()
       et.advance_seconds( time_sec );
     }
 
-  header.starttime = et.as_string();;
+  header.starttime = et.as_string();
   logger << " to " << header.starttime  << "\n"; 
 }
 

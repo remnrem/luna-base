@@ -141,7 +141,6 @@ bool edf_t::align( const std::vector<std::string> & annots )
   //  4(b) 1.8                                                            1(c)    2.05 
 
 
-
   //
   // Drop any other EDF annotations also, as it doesn't make sense
   // to try to keep those in the re-aligned EDF
@@ -158,10 +157,10 @@ bool edf_t::align( const std::vector<std::string> & annots )
   
   // buffer for new records
   edf_record_t new_record( this );
-
+  
   // track time-point of each new record (versus EDF header start)
   std::vector<uint64_t> tps;
-  
+    
   // allocate space
   for (int r=0;r<new_nr;r++) 
     new_records.insert( std::map<int,edf_record_t>::value_type( r , new_record ) );
@@ -187,7 +186,16 @@ bool edf_t::align( const std::vector<std::string> & annots )
       
       while ( aa != aset.end() )
 	{
+
+	  // as we enforce that ANNOTs should be multiples of EDF record size, when starting a new
+	  // annot block, we should always also be starting a new record;   use in_annot_rec to track the
+	  // offset (relative to the start of this annotation) for each added EDF record
 	  
+	  int in_annot_rec = 0;
+	  
+	  if ( curr_smp != 0 )
+	    Helper::halt( "internal logic error in ALIGN: new annotation not aligning with new EDF record\n" );
+	    
 	  const int downsample = 1; // i.e. no downsampling
 	  const bool return_ddata = true ;
 
@@ -206,23 +214,18 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	  // fetch record:
 	  std::map<int,edf_record_t>::iterator rr = new_records.find( curr_rec );
 
-	  if ( rr == new_records.end() ) Helper::halt( "internal error" );
+	  if ( rr == new_records.end() ) Helper::halt( "internal error1" );
 
-	  edf_record_t & new_record = rr->second;
-	  
 	  for ( int i=0; i<n; i++)
 	    {
-	      //	      std::cout << " rec_ " << curr_rec << " " << curr_smp << " " << (*d)[i] << "\n";
+
 	      // add data point
-	      new_record.data[ s ][ curr_smp ] = (*d)[i]; 
+	      rr->second.data[ s ][ curr_smp ] = (*d)[i]; 
 	      
 	      // add time-point for EDF record?
 	      if ( curr_smp == 0 && ! got_tps ) 
 		{
-		  uint64_t rec_offset = aa->start + (uint64_t)curr_rec * header.record_duration_tp ;
-		  
-		  //		  std::cerr << " adding tps " << i << " " << rec_offset << "\t" << globals::tp_duration * rec_offset << "\n";
-		  
+		  uint64_t rec_offset = aa->start + (uint64_t)in_annot_rec * header.record_duration_tp ;
 		  tps.push_back( rec_offset );
 		}
 	      
@@ -234,11 +237,12 @@ bool edf_t::align( const std::vector<std::string> & annots )
 		{
 		  curr_smp = 0;
 		  ++curr_rec;
+		  ++in_annot_rec;
 		  // fetch record:
 		  if ( curr_rec < new_nr )
 		    {
 		      rr = new_records.find( curr_rec );
-		      if ( rr == new_records.end() ) Helper::halt( "internal error" );
+		      if ( rr == new_records.end() ) Helper::halt( "internal error2" );
 		      new_record = rr->second;
 		    }
 		}	      
@@ -250,8 +254,6 @@ bool edf_t::align( const std::vector<std::string> & annots )
 
       // check that we correctly loaded all the annotations as expected
       
-      //      std::cout << "curr_rec curr_smp = " << curr_rec << " " << curr_smp << " " << new_nr << "\n";
-
       if ( ! ( curr_rec == new_nr && curr_smp == 0 ) )
 	Helper::halt( "problem loading up newly ALIGN'ed records" );
       
@@ -263,6 +265,10 @@ bool edf_t::align( const std::vector<std::string> & annots )
   if ( tps.size() != new_nr ) 
     Helper::halt( "internal error in ALIGN: time-point and record counts do not align" );
 
+
+
+   
+  
 
   //
   // Update EDF headers; only changing number of records here
@@ -278,8 +284,8 @@ bool edf_t::align( const std::vector<std::string> & annots )
 
   records = new_records;
   new_records.clear();
-
-
+  
+  
   //
   // Add time-track back?  We'll do this as a special case, rather
   // than use existing functions (i.e. as the core rec->timeline
@@ -291,6 +297,54 @@ bool edf_t::align( const std::vector<std::string> & annots )
   timeline.rec2tp_end.clear();
   timeline.clear_epoch_mapping();
 
+  //
+  // Note that EDF start times can only be in exact seconds::: so, if the new implied EDF start time is not a fraction of a second,
+  // remove this extra part;   but then also remove for a) all other records (tps[] prior to writing) , and b) all annotations
+  //
+
+  uint64_t edf_start_tp = tps[0];
+  //  uint64_t edf_start_fraction = edf_start_tp % globals::tp_1sec;
+
+  logger << "  to obtain an EDF starting on an exact second, adjusting this and any annotations by -"
+	 << edf_start_tp * globals::tp_duration << " seconds\n";
+  
+  // adjust all records to start at zero
+  for ( int r = 0;r < new_nr; r++)
+    tps[r] -= edf_start_tp;
+  
+  // adjust all loaded annotations for subseuent WRITE-ANNOTS
+  // that will be called; this ensures they will start at elapsed time = 0 
+      
+  timeline.annotations.set_annot_offset( edf_start_tp );
+
+  // change EDF header starttime also
+
+  clocktime_t et( header.starttime );
+  if ( et.valid )
+    {
+      double time_sec = ( edf_start_tp * globals::tp_duration ) ;
+      et.advance_seconds( time_sec );
+      header.starttime = et.as_string();
+      logger << "  resetting EDF header starttime to " << header.starttime << "\n";
+    }
+  else
+    {
+      logger << "  no valid EDF header startime: setting to null 00.00.00\n";
+      header.starttime = "00.00.00";
+    }
+
+  // and fix any special variables in the annotation_set_t
+  
+  timeline.annotations.duration_sec = new_nr * header.record_duration ;
+
+  // no fractional seconds                                                     
+  timeline.annotations.duration_hms = Helper::timestring( globals::tp_1sec * timeline.annotations.duration_sec , '.' , false ); 
+
+  timeline.annotations.start_hms = header.starttime ;
+
+  timeline.annotations.epoch_sec = timeline.epoched() ? timeline.epoch_length() : globals::default_epoch_len ;
+  
+  
   // 
   // Iterate over all new records
   //
@@ -314,23 +368,20 @@ bool edf_t::align( const std::vector<std::string> & annots )
   
   if ( ! header.edfplus )
     {
-      logger << "  restructuring as an EDF+ : ";
+      logger << "  restructuring as an EDF+\n";
       set_edfplus();
     }
   
   set_discontinuous();
   
-
   int tt = header.time_track();  
   if ( tt == -1 ) Helper::halt( "internal error: could not find time-track" );
 
-  std::cerr << "  updating header time-track: " << tt << "\n";
-
-  // need to set a record size -- this should be enough?
-  // by default 15-> up to 30 characters
+  // global variable stores size of time-track to use
+  //  by default = 15 (up to 30 chars, so plenty)
   const int n_samples = globals::edf_timetrack_size;
-  const int chars = 9;
-
+  const int chars = 5; // number of DP
+  
   // for each new record
   int r = timeline.first_record();
   
@@ -342,16 +393,8 @@ bool edf_t::align( const std::vector<std::string> & annots )
 
       double onset = globals::tp_duration * tps[ r ]; 
       
-      //std::string ts = "+" + Helper::dbl2str_fixed( onset , chars) + "\x14\x14\x00";
-
       std::string ts = "+" + Helper::dbl2str( onset , chars) + "\x14\x14\x00";
-
-      if ( r < 100 ) 
-	std::cerr << "tps [" << tps[r] << "]\n";
       
-	// std::cerr << "adding rec " << r << "\t" << "+" << Helper::dbl2str( onset , chars ) << "\n";
-      //x      std::cout << "header = " << header.t_track << "  .. " << onset << "\n";
-
       records.find(r)->second.add_annot( ts , header.t_track );
       
       r = timeline.next_record(r);

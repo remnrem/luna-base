@@ -1572,6 +1572,7 @@ void proc_dump( edf_t & edf , param_t & param )
 
 void proc_align( edf_t & edf , param_t & param )
 {
+
   // requires one or more annotation codes;
   // find only annotations that completely span the signal (i.e. taking discontinuous EDFs into account)
   // remove samples that aren't spanned
@@ -1580,13 +1581,24 @@ void proc_align( edf_t & edf , param_t & param )
 
   // only pull out samples that overlap with these annotations, where a 
 
-  if ( ! param.has( "annot" ) ) Helper::halt( "no annot specified" );
+  if ( ! param.has( "align" ) ) Helper::halt( "no 'align' annotations specified" );
+  
+  std::vector<std::string> a = param.strvector( "align" );
 
-  std::vector<std::string> a = param.strvector( "annot" );
-
-  logger << "  realigning EDF based on annotation list: " << param.value( "annot" ) << "\n";
+  logger << "  realigning EDF based on annotation list: " << param.value( "align" ) << "\n";
 
   edf.align( a );
+
+  logger << "  now WRITE'ing realigned EDF (and annotations if 'annot-out' set) to disk\n"
+	 << "  note:  this will will set the 'problem' flag to skip to next EDF\n";
+  
+  proc_write( edf , param );
+  
+  if ( param.has( "annot-out" ) )
+    edf.timeline.annotations.write( param.requires( "annot-out" ) , param , edf );
+  
+  // force this to be the last command executed for this EDF, i.e. no it is saved
+  globals::problem = true;
 
 }
 
@@ -1760,7 +1772,7 @@ void proc_write( edf_t & edf , param_t & param )
       bool append_annots = param.has( "with-annots" );
 
       // open/append
-      logger << " appending " << filename << " to sample-list " << file << ( append_annots ? " (with annotations)" : " (dropping any annotations)" ) << "\n";
+      logger << "  appending " << filename << " to sample-list " << file << ( append_annots ? " (with annotations)" : " (dropping any annotations)" ) << "\n";
       
       std::ofstream FL( file.c_str() , std::ios_base::app );
       FL << edf.id << "\t"
@@ -1880,12 +1892,12 @@ void proc_epoch( edf_t & edf , param_t & param )
   
   double offset = param.has( "offset" ) ? param.requires_dbl( "offset" ) : 0 ;
   
-  if ( param.has( "start-annot" ) )
+  if ( param.has( "align" ) )
     {
       if ( param.has( "offset" ) ) 
-	Helper::halt( "cannot specify both offset and start-annot" );
+	Helper::halt( "cannot specify both offset and align" );
       
-      std::vector<std::string> annots = param.strvector( "start-annot" );
+      std::vector<std::string> annots = param.strvector( "align" );
       // find the first of these annotations
       offset = edf.timeline.annotations.first( annots );
     }
@@ -2729,8 +2741,8 @@ void proc_rerecord( edf_t & edf , param_t & param )
 
     logger << " now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF\n";
 
-  proc_write( edf , param );
-  globals::problem = true;
+    proc_write( edf , param );
+    globals::problem = true;
 }
 
 // uV or mV : set units for tracks

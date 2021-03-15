@@ -721,6 +721,8 @@ struct annotation_set_t
     duration_sec = 0 ;
     
     epoch_sec = 0 ; 
+
+    annot_offset = 0LLU;
     
   }
   
@@ -745,6 +747,16 @@ struct annotation_set_t
 
   int epoch_sec;
 
+  // potentially set by ALIGN, to adjust all annotations when writing
+  // i.e. so a new EDF can line up w/ an exact second EDF start time 
+  // this ONLY impacts the WRITE-ANNOTS set of commands
+  uint64_t annot_offset; 
+
+  void set_annot_offset( uint64_t a )
+  {
+    annot_offset = a;
+  }
+  
   // track alias swaps for this person
   std::map<std::string,std::string> aliasing;
   

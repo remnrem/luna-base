@@ -2823,6 +2823,15 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
     }
 
   //
+  // Any offsets specified to annotations for output? (i.e. via ALIGN)
+  //
+
+  if ( annot_offset )
+    logger << "  applying a offset of -"
+	   << annot_offset * globals::tp_duration
+	   << " to all annotations when writing out\n";
+
+  //
   // either for all annots, or just a subset
   //
 
@@ -2967,9 +2976,19 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  
 	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
 	    O1 << " <Name>" << instance_idx.id << "</Name>\n";
+
+	  // adjuts by offset, if needed (ALIGN)
+	  interval_t interval = instance_idx.interval;
+	  if ( annot_offset )
+	    {
+	      if ( interval.start < annot_offset ) interval.start = 0;
+	      else interval.start -= annot_offset;
+	      if ( interval.stop < annot_offset ) interval.stop = 0;
+	      else interval.stop -= annot_offset;
+	    }
 	  
-	  O1 << " <Start>" << instance_idx.interval.start_sec() << "</Start>\n"
-	     << " <Duration>" << instance_idx.interval.duration_sec() << "</Duration>\n";
+	  O1 << " <Start>" << interval.start_sec() << "</Start>\n"
+	     << " <Duration>" << interval.duration_sec() << "</Duration>\n";
 	  	  
 	  if ( instance_idx.ch_str != "." && instance_idx.ch_str != "" )
 	    O1 << " <Channel>" << instance_idx.ch_str << "</Channel>\n";
@@ -3179,24 +3198,31 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
           else
             O1 << ".\t";
 
+
 	  // start/stop in seconds, with 4 d.p.
 
-	  // std::cout << "instance_idx.interval = " << instance_idx.interval.start << "\t" << instance_idx.interval.start_sec() << "\n";
-	  // std::cout << "instance_idx.interval.stop = " << instance_idx.interval.stop << "\t" << instance_idx.interval.stop_sec() << "\n";
-	  // std::cout << "\n";
-	  
+	  // any re-ALIGNment ? 
+	  interval_t interval = instance_idx.interval;
+
+          if ( annot_offset )
+            {
+	      if ( interval.start < annot_offset ) interval.start = 0;
+              else interval.start -= annot_offset;
+              if ( interval.stop < annot_offset ) interval.stop	= 0;
+              else interval.stop -= annot_offset;
+            }
 
 	  // write in hh:mm:ss format
 	  if ( hms ) 
 	    {
 
-	      double tp1_sec =  instance_idx.interval.start / (double)globals::tp_1sec;
+	      double tp1_sec =  interval.start / (double)globals::tp_1sec;
 	      clocktime_t present1 = starttime;
 	      present1.advance_seconds( tp1_sec );
 	      // add down to 1/100th of a second
 	      double tp1_extra = tp1_sec - (long)tp1_sec;
 	   
-	      double tp2_sec =  instance_idx.interval.stop / (double)globals::tp_1sec;
+	      double tp2_sec =  interval.stop / (double)globals::tp_1sec;
 	      clocktime_t present2 = starttime;
 	      present2.advance_seconds( tp2_sec );
 	      double tp2_extra = tp2_sec - (long)tp2_sec;
@@ -3212,8 +3238,8 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	    }
 	  else // write as elapsed seconds
 	    {
-	      O1 << Helper::dbl2str( instance_idx.interval.start_sec() , globals::time_format_dp ) << "\t"
-		 << Helper::dbl2str( instance_idx.interval.stop_sec() , globals::time_format_dp );
+	      O1 << Helper::dbl2str( interval.start_sec() , globals::time_format_dp ) << "\t"
+		 << Helper::dbl2str( interval.stop_sec() , globals::time_format_dp );
 	    }
 
 	  if ( inst->data.size() == 0 ) 
@@ -3570,7 +3596,8 @@ void annotation_set_t::clear()
   duration_sec = 0 ;
   
   epoch_sec = 0 ; 
-  
+
+  annot_offset = 0LLU;
 }
 
 
