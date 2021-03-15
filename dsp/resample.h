@@ -24,6 +24,10 @@
 #define __RESAMPLE_H__
 
 #include <vector>
+#include <string>
+
+#include "libsamplerate/samplerate.h"
+
 
 // interface to SRC libsamplerate (which must be installed on system)
 // http://www.mega-nerd.com/SRC/
@@ -36,10 +40,15 @@ namespace dsptools
 
   void resample_channel( edf_t & , param_t & );
 
-  void resample_channel( edf_t & , const int , const int );
+  void resample_channel( edf_t & , const int , const int , const int converter = SRC_SINC_FASTEST );
 
-  std::vector<double> resample( const std::vector<double> * d , int sr1 , int sr2 );
+  std::vector<double> resample( const std::vector<double> * d , int sr1 , int sr2 , int converter = SRC_SINC_FASTEST );
+
+  int converter( const std::string & m );
+
+  std::string converter( int m );
+
 }
 
-
+  
 #endif

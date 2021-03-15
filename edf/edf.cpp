@@ -1887,7 +1887,9 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   bool actually_EDFD = is_actually_discontinuous();
   
   bool make_EDFC = (!always_edfd) && (!header.continuous) && (! actually_EDFD ); 
-
+  std::cout << "actually_EDFD =  " << actually_EDFD << "\n";
+  std::cout << "make_EDFC = " << make_EDFC << "\n";
+  
   //
   // Reset start-time to NULL (i.e. to writing as standard EDF but is actually discontinuous, then)
   // clocktimes will not make sense

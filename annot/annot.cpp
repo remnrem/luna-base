@@ -1382,7 +1382,7 @@ interval_t annot_t::get_interval( const std::string & line ,
       // convert to uint64_t time-point units
       
       interval.start = Helper::sec2tp( dbl_start );
-      
+
       // assume stop is already specified as 1 past the end, e.g. 30 60
       // a zero-duration interval will therefore have start == stop (i.e. duration = 0)
       // which should be fine

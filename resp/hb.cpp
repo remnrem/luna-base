@@ -77,6 +77,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
     {
       logger << "  could not find oxygen desaturation signal " << oxy_label << "\n";
       res.valid = false;
+      return;
     }
 
   
@@ -89,6 +90,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
     {
       logger << "  could not find heart-rate signal " << hr_label << "\n";
       res.valid = false;
+      return;
     }
 
   
@@ -104,34 +106,51 @@ hb_t::hb_t( edf_t & edf , param_t & param )
   
     
   // 
-  // Resample as needed (e.g. 32 Hz in example data)
+  // Resample as needed (e.g. 32 Hz in example data); use ZOH resampling by default
   //
 
-  if ( edf.header.sampling_freq( oxy_n ) != fs ) 
-    dsptools::resample_channel( edf, oxy_n  , fs );
+  int converter = param.has( "method" ) ? dsptools::converter( param.value( "method" ) ) : dsptools::converter( "ZOH" );
   
-  if ( edf.header.sampling_freq( hr_n ) != fs ) 
-    dsptools::resample_channel( edf, hr_n  , fs );
+  
 
+  if ( edf.header.sampling_freq( oxy_n ) != fs ) 
+    {
+      logger << "  resampling oxygen channel using method '" << dsptools::converter( converter ) << "'\n"; 
+      dsptools::resample_channel( edf, oxy_n  , fs , converter );
+    }
+  
+  if ( edf.header.sampling_freq( hr_n ) != fs )
+    {
+      logger << "  resampling HR channel using method '" << dsptools::converter( converter ) << "'\n";
+      dsptools::resample_channel( edf, hr_n  , fs , converter );
+    }
   
   //
   // Annotations
   //
 
   const std::string annot_arousal   = param.has( "arousal" )   ? param.value( "arousal" )   : "arousal_standard" ;
-  const std::string annot_obs_ap    = param.has( "apnea-obs" ) ? param.value( "apnea-ap" )  : "apnea_obstructive" ;
-  const std::string annot_obs_cen   = param.has( "apnea-cen" ) ? param.value( "apnea-cen" ) : "apnea_central";
-  const std::string annot_obs_mixed = param.has( "apnea-mix" ) ? param.value( "apeaa-mix" ) : "apnea_mixed";
-  const std::string annot_hypop_50  = param.has( "hypopnea-50" ) ? param.value( "hypopnea-50" ) : "hypopnea";
-  const std::string annot_hypop_30  = param.has( "hypopnea-30" ) ? param.value( "hypopnea-30" ) : "hypopnea";
   
   std::vector<std::string> event_labels;
-  event_labels.push_back( annot_obs_ap );
-  event_labels.push_back( annot_obs_cen );
-  event_labels.push_back( annot_obs_mixed );
-  event_labels.push_back( annot_hypop_50 );
-  event_labels.push_back( annot_hypop_30 );
 
+  if ( param.has( "events" ) )
+    event_labels = param.strvector( "events" );
+  else
+    {
+      const std::string annot_obs_ap    = param.has( "apnea-obs" ) ? param.value( "apnea-ap" )  : "apnea_obstructive" ;
+      const std::string annot_obs_cen   = param.has( "apnea-cen" ) ? param.value( "apnea-cen" ) : "apnea_central";
+      const std::string annot_obs_mixed = param.has( "apnea-mix" ) ? param.value( "apeaa-mix" ) : "apnea_mixed";
+      const std::string annot_hypop_50  = param.has( "hypopnea-50" ) ? param.value( "hypopnea-50" ) : "hypopnea";
+      const std::string annot_hypop_30  = param.has( "hypopnea-30" ) ? param.value( "hypopnea-30" ) : "hypopnea";
+      
+      event_labels.push_back( annot_obs_ap );
+      event_labels.push_back( annot_obs_cen );
+      event_labels.push_back( annot_obs_mixed );
+      event_labels.push_back( annot_hypop_50 );
+      event_labels.push_back( annot_hypop_30 );
+
+    }
+  
   
   //
   // Extract sleep staging
@@ -199,7 +218,9 @@ hb_t::hb_t( edf_t & edf , param_t & param )
 	}      
       
     }
-
+  else
+    logger << "  no arousal annotation track found\n";
+  
   logger << "  " << a_cnt << " arousals found, spanning " << a_dur << " secs (" << a_dur/60.0 << " mins)\n";
   
 
@@ -235,6 +256,8 @@ hb_t::hb_t( edf_t & edf , param_t & param )
 
   int ne = events.size();
 
+  logger << "  " << ne << " matching event annotations found\n";
+  
   if ( 0 )
     {
       annot_map_t::const_iterator aa = events.begin();
@@ -299,7 +322,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
 	  while ( 1 )
 	    {
 	      ++upr_idx;
-	      if ( upr_idx == n ) break;
+	      if ( upr_idx == n ) { --upr_idx; break; }
 	      if ( SaO2[ upr_idx ] >= sao2_threshold )
 		{
 		  upr_val = SaO2[ upr_idx ];
@@ -400,11 +423,11 @@ hb_t::hb_t( edf_t & edf , param_t & param )
      }
    
    //
-   // Create window/time track (in sample-points)
+   // Create window/time track (in seconds )
    //
   
    std::vector<double> t_sp;
-   for (int t=-rangeX*fs; t<= rangeX*fs; t+= dT*fs )
+   for (int t=-rangeX ; t<= rangeX ; t+= dT )
      t_sp.push_back(t);
    
    const int nt = t_sp.size();
@@ -449,9 +472,9 @@ hb_t::hb_t( edf_t & edf , param_t & param )
    //
    
    Eigen::MatrixXd SaO2Ve = Eigen::MatrixXd::Zero( ne , nt );
-   Eigen::MatrixXd SleepStageVe = Eigen::MatrixXd::Zero( ne , nt );
+   Eigen::MatrixXi SleepStageVe = Eigen::MatrixXi::Zero( ne , nt );
    Eigen::MatrixXd HRVe = Eigen::MatrixXd::Zero( ne , nt );
-   Eigen::MatrixXd ArousalVe = Eigen::MatrixXd::Zero( ne , nt );
+   Eigen::MatrixXi ArousalVe = Eigen::MatrixXi::Zero( ne , nt );
    
    // checks
    // nb. SaO2 and HR may be slightly longer, as they may include a final, incomplete epoch
@@ -516,19 +539,22 @@ hb_t::hb_t( edf_t & edf , param_t & param )
    // [HypoxicBurden,BaselineSat,HypoxicBurdenAll,BaselineSatAll,searchWin] =
    // 	FindBurden(SaO2Ve,SpO2Mean,Time_new,TST,MaxWin);
    
-   logger << "  original hypoxic burden\n";
+   logger << "  estimating hypoxic burden for all events";
    
    hb_find_burden_t burden = find_burden( SaO2Ve , SpO2Mean , t_sp , res.TST , MaxWin );
-   
-   
+
    //
    // Overall output
    //
 
    writer.value( "TST" , res.TST );
    writer.value( "AHI" , res.TotalAHI );
-   writer.value( "HB" , burden.HB );
-   writer.value( "BLSAT" , burden.BaselineSat );
+   
+   if ( burden.valid )
+     {
+       writer.value( "HB" , burden.HB );
+       writer.value( "BLSAT" , burden.BaselineSat );
+     }
    
    
    //
@@ -541,7 +567,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
    for (int e=0; e<ne; e++)
      ss_mode[e] = modal_stage( SleepStageVe.row(e) );
    
-   logger << "  stratifying by sleep stage\n";
+   logger << ", also stratifying by sleep stage\n";
 
    
    //
@@ -671,7 +697,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
     
    const int n_desats = desats.dsatStEnd.rows();
 
-   logger << "  identified " << n_desats << " desats\n";
+   logger << "  identified " << n_desats << " desats: ";
    
    // desats.dsstStEnd( ,0-2) = start, nadir, end
    const Eigen::ArrayXi & DesatSt = desats.dsatStEnd.col(0);
@@ -709,8 +735,6 @@ hb_t::hb_t( edf_t & edf , param_t & param )
    // Construct lists of 3% and 4% events
    //
    
-   logger << "  linking events to desats\n";
-   
    // Events: EvIdx(:,1);
    // Desats linked to Respiratory events: EvIdx(:,2)
    
@@ -738,7 +762,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
        double e_mid = ( e_start + e_end ) / 2.0;
        double e_next = i < ne - 1 ? evtSt[i+1] : seconds[ seconds.size() - 1 ];
 
-       std::cerr << " dets " << e_start << " " << e_end << " " << e_mid << " " << e_next << "\n";
+       //       std::cerr << " dets " << e_start << " " << e_end << " " << e_mid << " " << e_next << "\n";
 
        // idx = find(  DesatNadir_t >= (evtSt(ii) + evtEnd(ii) ) / 2
        // 		  &
@@ -783,7 +807,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
 	      // DesatMag=[DesatMag;[ii MagDown(idx(1))]];	      
 	      EvIdx[ i ] = idx; 
 	      DesatMag[ i ] = desats.MagDown[ idx ];	      
-	      std::cerr << " adding " << DesatMag[i] << "\n";
+	      //std::cerr << " adding " << DesatMag[i] << "\n";
 	      last_desat = idx;
 	    }
 	}
@@ -811,13 +835,12 @@ hb_t::hb_t( edf_t & edf , param_t & param )
     {
       // Q. note: as EDF can have lots of 2.99999 etc, use round() here in the comparison...
       double desat = round( DesatMag[ ee->first ] );
-      if ( desat >= 3 ) { incl_3pct[ ee->second ] = true; ++cnt3; }
-      if ( desat >= 4 ) { incl_4pct[ ee->second ] = true; ++cnt4; }
+      if ( desat >= 3 ) { incl_3pct[ ee->first ] = true; ++cnt3; }
+      if ( desat >= 4 ) { incl_4pct[ ee->first ] = true; ++cnt4; }
       ++ee;
     }
 
-
-  logger << "  " << cnt3 << " 3% desats, " << cnt4 << " 4% desats\n";
+  logger << cnt3 << " 3% and " << cnt4 << " 4% desats\n";
 
   //
   // Repeat HB analyses: total, NREM and REM for either 3% or 4%
@@ -825,13 +848,15 @@ hb_t::hb_t( edf_t & edf , param_t & param )
 
   writer.level( 3 , "DESAT" );
 
+    
   // HB3=FindBurden(SaO2Ve(Idx3p==1,:),SpO2Mean,Time_new,TST,MaxWin);
   // HB3_REM=FindBurden(SaO2Ve(Idx3p==1 & MostFreqStage==5,:),SpO2Mean_REM,Time_new,TST_REM,MaxWin);
   // HB3_NREM=FindBurden(SaO2Ve(Idx3p==1 & MostFreqStage>0 & MostFreqStage<5,:),SpO2Mean_NREM,Time_new,TST_NREM,MaxWin);
   
   // nb. which_events() can take 3rd arg to specify baseline set (only T from that included, AND logic)
 
-  logger << "  HB at 3% desat...\n";
+
+  logger << "  estimating HB only for events linked to 3%/4% desats\n";
     
   //
   // All, 3%
@@ -881,8 +906,6 @@ hb_t::hb_t( edf_t & edf , param_t & param )
   
   writer.unlevel( globals::stage_strat );
 
-
-  logger << "  HB at 4% desat...\n";
 
   //
   // 4% events
@@ -944,14 +967,97 @@ hb_t::hb_t( edf_t & edf , param_t & param )
   writer.unlevel( globals::stage_strat );
   
   writer.unlevel( "DESAT" );
-  
-  
 
 
+  //
+  // All desats including non-event ones
+  //
+
+  
+  // Total Area all desats
+  double Dsat_area_REM = 0 , Dsat_area_REM_3 = 0;
+  double Dsat_area_NREM = 0 , Dsat_area_NREM_3 = 0;
+
+  // requires at least 3 desats 
+  if ( n_desats > 2 )
+    {
+      for ( int ii=0; ii<n_desats; ii++ )
+	{
+	  // track 3pct desats separately
+	  bool is_3pct = round( desats.MagDown[ ii ] ) >= 3.0;
+	  
+	  // temporary SpO2 signal during this desat
+	  // Dsat_temp=SaO2Sig(dsatStEnd(ii,1):dsatStEnd(ii,3));
+	  const int len = DesatEnd[ ii ] - DesatSt[ ii ] + 1;
+	  Eigen::ArrayXd Dsat_temp = Eigen::ArrayXd::Zero( len );
+	  int cnt = 0;
+	  for (int t = DesatSt[ ii ]; t <= DesatEnd[ ii ]; t++)
+	    Dsat_temp[cnt++] = SaO2[t];
+	  
+	  // sum, max, 
+	  double sum = Dsat_temp.sum();
+	  double max = Dsat_temp.maxCoeff();
+
+	  // check # of missing values..
+	  // nb. these are currently not tracked in SaO2
+	  //	  if ( sum(isnan(Dsat_temp))/length(Dsat_temp)<=0.5 )
+
+	  if ( true )
+	    {
+
+	      // SleepStageTemp = mode( SleepStageSig( dsatStEnd(ii,1) : dsatStEnd(ii,3) ) );
+	      
+	      Eigen::ArrayXi ss_temp = Eigen::ArrayXi::Zero( len );
+	      cnt = 0;
+	      for (int t = DesatSt[ ii ]; t <= DesatEnd[ ii ]; t++)
+		ss_temp[cnt++] = ss[t];
+	      sleep_stage_t mss = modal_stage( ss_temp );
+	      
+	      // area_temp=nansum(max(Dsat_temp)-Dsat_temp)*(1/Fs);
+	      double area_temp = (max - Dsat_temp).sum() * (1.0 / fs );
+	      
+	      if ( mss == NREM1 || mss == NREM2 || mss == NREM3 || mss == NREM4 )
+		{		  
+		  Dsat_area_NREM += area_temp;
+		  if ( is_3pct ) Dsat_area_NREM_3 += area_temp;
+		}
+	      else if ( mss == REM )
+		{
+		  Dsat_area_REM += area_temp;
+		  if ( is_3pct ) Dsat_area_REM_3 += area_temp;
+		}
+	    }
+	}  
+    }
+  
+  double Dsat_area_Tot   = Dsat_area_NREM   + Dsat_area_REM;
+  double Dsat_area_Tot_3 = Dsat_area_NREM_3 + Dsat_area_REM_3;
+
+  // HB based on all desats 
+  writer.value( "HB_TOT" , Dsat_area_Tot / res.TST );
+  writer.level( "REM" , globals::stage_strat );
+  writer.value( "HB_TOT" , Dsat_area_REM / res.TST_REM );  
+  writer.level( "NREM" , globals::stage_strat );
+  writer.value( "HB_TOT" , Dsat_area_NREM / res.TST_NREM );
+  writer.unlevel( globals::stage_strat );
+
+  // HB based only on 3% + desats
+  writer.level( 3 , "DESAT" );
+  writer.value( "HB_TOT" , Dsat_area_Tot_3 / res.TST );
+  writer.level( "REM" , globals::stage_strat );
+  writer.value( "HB_TOT" , Dsat_area_REM_3 / res.TST_REM );  
+  writer.level( "NREM" , globals::stage_strat );
+  writer.value( "HB_TOT" , Dsat_area_NREM_3 / res.TST_NREM );
+  writer.unlevel( globals::stage_strat );
+  writer.unlevel( "DESAT" );
+  
+  
   //
   // delta-HR function
   //
 
+  logger << "  estimating event-related delta HR metrics\n";
+  
   std::vector<double> dHR_start( ne );
   std::vector<double> dHR_end( ne );
 
@@ -967,13 +1073,13 @@ hb_t::hb_t( edf_t & edf , param_t & param )
     }  
 
   // [dHR_meanbsline,dHR_minbsline,IndHRRep_mean,IndHRRep_min,N,meanbsline,minbsline]=SummarizeHR_AA(HRVe,Start,End,Time_new);
-
+  
   delta_hr_t dHR = SummarizeHR_AA( HRVe , dHR_start, dHR_end , t_sp );
-
+   
   writer.value( "DHR_MEAN_BL" , dHR.dHR_meanbsline );
   writer.value( "DHR_MIN_BL" , dHR.dHR_minbsline );
   writer.value( "DHR_N" , dHR.ne );
-
+  
   // do we want these??
   // evtLevelSummary.dHR_meanBsln_PU=IndHRRep_mean;
   // evtLevelSummary.dHR_minBsln_PU=IndHRRep_min;
@@ -1056,7 +1162,7 @@ hb_find_burden_t hb_t::find_burden( const Eigen::MatrixXd & SpO2Mtx_orig ,
 				    const int MaxWin ,
 				    const std::vector<bool> * incl )
 {
-  
+
   hb_find_burden_t r;
   r.valid = false;
   
@@ -1095,8 +1201,12 @@ hb_find_burden_t hb_t::find_burden( const Eigen::MatrixXd & SpO2Mtx_orig ,
 	if ( (*incl)[i] ) ++nn;
 
       // no valid events
-      if ( nn == 0 ) return r;
-
+      if ( nn == 0 )
+	{
+	  logger << "  no valid events in find_burden()\n";
+	  return r;
+	}
+      
       const int rows = SpO2Mtx.rows();
       
       Eigen::MatrixXd copy = SpO2Mtx;      
@@ -1115,6 +1225,9 @@ hb_find_burden_t hb_t::find_burden( const Eigen::MatrixXd & SpO2Mtx_orig ,
     }
   
 
+  // std::cerr << "Mean\n"
+  // 	    << SpO2Mean << "\n\n";
+  
   // Q. how NaNs get here..
   //    currently, no artifact removal on SaO2
   //    and out-of-range values replaced w/ the last/first value
@@ -1133,26 +1246,35 @@ hb_find_burden_t hb_t::find_burden( const Eigen::MatrixXd & SpO2Mtx_orig ,
   hb_peakdet_t peaks = peakdet( SpO2Mean, 0.1, Time );
   
   // Q. flag here?
-  if ( peaks.minX.size() == 0 || peaks.maxX.size() == 0 ) return r;
-    
+  if ( peaks.minX.size() == 0 || peaks.maxX.size() == 0 )
+    {
+      logger << "  problem finding min/max peaks\n";
+      return r;
+    }
+  
   // Search for minimum SpO2 in [eventEnd-10 to EvenEnd+MaxWin]  
   // max_resp=maxS(maxS(:,1)>=-10 & maxS(:,1)<=MaxWin,:);
   // max_resp=max_resp(max_resp(:,2)==max(max_resp(:,2)),:);
-  
+
   double max_resp = -1;
   int max_resp_idx = -1;
   for (int i = 0 ; i < peaks.maxV.size() ; i++)
-    if ( peaks.maxX[i] >= -10 && peaks.maxX[i] <= MaxWin )
-      if ( peaks.maxV[i] >= max_resp )
+    {      
+      if ( peaks.maxX[i] >= -10 && peaks.maxX[i] <= MaxWin )
+	if ( peaks.maxV[i] >= max_resp )
 	{
 	  max_resp = peaks.maxV[i];
 	  max_resp_idx = peaks.maxX[i];
 	}
+    }
   
   // if a minimum SpO2 in the ensemble-averaged signal is found
   // not found, bail
   if ( max_resp_idx == -1 )
-    return r; 
+    {
+      logger << "  no minimum found in SpO2 average\n";
+      return r; 
+    }
 
   // find the pre-min maximum in the ensemble-averaged SpO2
   // min_pre=minS(minS(:,1)<max_resp(1,1),:); 
@@ -1183,7 +1305,11 @@ hb_find_burden_t hb_t::find_burden( const Eigen::MatrixXd & SpO2Mtx_orig ,
 
   // Requires that both pre and post minimum are defined
 
-  if ( min_pre < 0 || min_post < 0 ) return r;
+  if ( min_pre < 0 || min_post < 0 )
+    {
+      logger << "  requires both pre/post minima are defined\n";
+      return r;
+    }
   
   // Spo2 Matrix during search window : only consider rows within min_pre/post
   //  SpO2MtxSrchWin=SpO2Mtx(Time>=min_pre(1,1) & Time <= min_post(1,1),:); 
@@ -1259,7 +1385,7 @@ hb_find_burden_t hb_t::find_burden( const Eigen::MatrixXd & SpO2Mtx_orig ,
 }
 
 
-sleep_stage_t hb_t::modal_stage( const Eigen::ArrayXd & d )
+sleep_stage_t hb_t::modal_stage( const Eigen::ArrayXi & d )
 {
   // 0=W/other; 1,2,3=NR; 5=R
   // if ties, call W > R > NR
@@ -1352,7 +1478,7 @@ hb_find_desats_t hb_t::find_desats( const Eigen::ArrayXd & s ,
   std::deque<int> SaO2MaxIdx( p.minX.begin() , p.minX.end() ); // nb. swapping min/max
   std::deque<int> SaO2MinIdx( p.maxX.begin() , p.maxX.end() ); // nb. swapping min/max
 
-  std::cerr << SaO2MinIdx.size() << " " << SaO2MaxIdx.size() << "\n";
+  //  std::cerr << SaO2MinIdx.size() << " " << SaO2MaxIdx.size() << "\n";
 
   // while SaO2MaxIdx(1)<0
   //        SaO2MaxIdx(1)=[];
@@ -1390,7 +1516,8 @@ hb_find_desats_t hb_t::find_desats( const Eigen::ArrayXd & s ,
 
   // n_min should be 1 less than n_max
 
-  std::cerr << " n_min, n_max = " << n_min << " " << n_max << "\n";
+  //  std::cerr << " n_min, n_max = " << n_min << " " << n_max << "\n";
+  if ( n_max - n_min != 1 ) logger << "  *** hmm, warning ... need to check find_desats() implementation ***\n";
   
   // these should be the same; guess that must be
   // guaranteed by peakdet()
@@ -1425,8 +1552,6 @@ hb_find_desats_t hb_t::find_desats( const Eigen::ArrayXd & s ,
       double minVT = minVTinspexp <= minVTinverted ? minVTinspexp : minVTinverted;
       int VTpattern = minVTinspexp <= minVTinverted ? 1 : 2 ;
 
-      std::cerr << " minVT = " << minVT << "\n";
-      
       // all done?
       if ( minVT > MagAv_thres ) break;
 
@@ -1452,7 +1577,7 @@ hb_find_desats_t hb_t::find_desats( const Eigen::ArrayXd & s ,
 
       // recalculate
       n_min = SaO2MinIdx.size();
-      std::cerr << " n_min = " << n_min << "\n";
+
       MagDown.clear();
       MagUp.clear();
       MagAv.clear();
@@ -1584,9 +1709,6 @@ hb_find_desats_t hb_t::find_desats( const Eigen::ArrayXd & s ,
        r.dsatStEnd(i,2) = SpO2posti[i];       
      }
 
-   std::cout << " FOUND " << n << " DESATS\n";
-   std::cout << r.MagDown << "\n";
-   
      
   return r;
 }

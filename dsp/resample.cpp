@@ -24,8 +24,6 @@
 #include "resample.h"
 #include <iostream>
 
-#include "libsamplerate/samplerate.h"
-
 #include "eval.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -35,8 +33,31 @@
 
 extern logger_t logger;
 
+
+int dsptools::converter( const std::string & m )
+{
+  if ( m == "best" ) return SRC_SINC_BEST_QUALITY;
+  if ( m == "medium" ) return SRC_SINC_MEDIUM_QUALITY;
+  if ( m == "fastest" ) return SRC_SINC_FASTEST;  // default                                                                                           
+  if ( m == "zoh" || m == "ZOH" ) return SRC_ZERO_ORDER_HOLD;
+  if ( m == "linear" ) return SRC_LINEAR;
+  return 0;
+}
+
+std::string dsptools::converter( int m )
+{
+  if ( m == SRC_SINC_BEST_QUALITY ) return "best";
+  if ( m == SRC_SINC_MEDIUM_QUALITY ) return "medium";
+  if ( m == SRC_SINC_FASTEST ) return "fastest";
+  if ( m == SRC_ZERO_ORDER_HOLD ) return "ZOH";
+  if ( m == SRC_LINEAR ) return "linear";
+  return "?";
+}
+
+
 std::vector<double> dsptools::resample( const std::vector<double> * d , 
-					int sr1 , int sr2 )
+					int sr1 , int sr2 ,
+					int converter )
 {
 
 
@@ -62,7 +83,8 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
   src.output_frames = n2;
   src.src_ratio = ratio;
 
-  int r = src_simple( &src, SRC_SINC_FASTEST , 1 );
+  //  int r = src_simple( &src, SRC_SINC_FASTEST , 1 );
+  int r = src_simple( &src, converter , 1 );
   
   // problem?
   if ( r ) 
@@ -78,7 +100,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
 }
 
 
-void dsptools::resample_channel( edf_t & edf , const int s , const int nsr )
+void dsptools::resample_channel( edf_t & edf , const int s , const int nsr , const int converter )
 {
   
   // s is in 0..ns space  (not 0..ns_all)  
@@ -115,7 +137,7 @@ void dsptools::resample_channel( edf_t & edf , const int s , const int nsr )
   // Resample to new SR
   //
 
-  std::vector<double> resampled = resample( d , Fs , nsr );
+  std::vector<double> resampled = resample( d , Fs , nsr , converter );
   
   // 
   // Ensure that resultant signal is the exact correct length 
@@ -154,8 +176,19 @@ void dsptools::resample_channel( edf_t & edf , param_t & param )
   int sr = param.requires_int("sr");
 
   const int ns = signals.size();
-  
-  for (int s=0;s<ns;s++)
-    resample_channel( edf , signals(s) , sr );
+
+  int converter = SRC_SINC_FASTEST;
+  if ( param.has( "method" ) )
+    {
+      if      ( param.value( "method" ) == "best" ) converter = SRC_SINC_BEST_QUALITY;
+      else if ( param.value( "method" ) == "medium" ) converter = SRC_SINC_MEDIUM_QUALITY;
+      else if ( param.value( "method" ) == "zoh" ) converter = SRC_ZERO_ORDER_HOLD;
+      else if ( param.value( "method" ) == "fastest" ) converter = SRC_SINC_FASTEST;
+      else if ( param.value( "method" ) == "linear" ) converter = SRC_LINEAR;
+      else Helper::halt( "did not recognize method " + param.value( "method" ) );
+    }
+
+ for (int s=0;s<ns;s++)
+    resample_channel( edf , signals(s) , sr , converter );
 
 }

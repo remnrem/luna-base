@@ -168,7 +168,7 @@ struct hb_t {
 				       const std::vector<bool> * incl = NULL );
   
 
-  static sleep_stage_t modal_stage( const Eigen::ArrayXd & );
+  static sleep_stage_t modal_stage( const Eigen::ArrayXi & );
   
   static std::vector<bool> which_events( const std::vector<sleep_stage_t> & , const std::string & s ,
 					 const std::vector<bool> * orig = NULL );

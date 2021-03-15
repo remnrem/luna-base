@@ -345,8 +345,11 @@ bool edf_t::align( const std::vector<std::string> & annots )
       //std::string ts = "+" + Helper::dbl2str_fixed( onset , chars) + "\x14\x14\x00";
 
       std::string ts = "+" + Helper::dbl2str( onset , chars) + "\x14\x14\x00";
+
+      if ( r < 100 ) 
+	std::cerr << "tps [" << tps[r] << "]\n";
       
-      std::cerr << "adding rec " << r << "\t" << "+" << Helper::dbl2str( onset , chars ) << "\n";
+	// std::cerr << "adding rec " << r << "\t" << "+" << Helper::dbl2str( onset , chars ) << "\n";
       //x      std::cout << "header = " << header.t_track << "  .. " << onset << "\n";
 
       records.find(r)->second.add_annot( ts , header.t_track );
