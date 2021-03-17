@@ -214,6 +214,12 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	  
 	  const int n = d->size();
 
+	  //std::cout << "n = " << n << "\n";
+	  
+	  // const std::vector<uint64_t> * tpp = slice.ptimepoints();
+	  // for (int ii=0; ii<tpp->size(); ii++)
+	  //   std::cout << "  " << (*tpp)[ii] << "\n";
+	  	  
 	  // add to records
 	  
 	  // fetch record:
@@ -270,8 +276,6 @@ bool edf_t::align( const std::vector<std::string> & annots )
   if ( tps.size() != new_nr ) 
     Helper::halt( "internal error in ALIGN: time-point and record counts do not align" );
 
-
-  
 
   //
   // Update EDF headers; only changing number of records here

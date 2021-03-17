@@ -1493,7 +1493,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   int start_sample, stop_sample;
 
   //  std::cerr << "looking for " << start << " to " << stop << "\n";
-
+  
   bool okay = timeline.interval2records( interval_t( start , stop ) , 
 					 n_samples_per_record , 
 					 &start_record, &start_sample , 
