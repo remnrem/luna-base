@@ -56,36 +56,40 @@ bool edf_t::align( const std::vector<std::string> & annots )
   for (int a=0; a<annots.size(); a++)
     {
       annot_t * annot = timeline.annotations.find( annots[ a ] );
-      annot_map_t::const_iterator ii = annot->interval_events.begin();
-      while ( ii != annot->interval_events.end() )
+
+      if ( annot != NULL ) 
 	{
-	  
-	  // only consider this annotation is it is completely within a valid time-point
-	  // range (i.e. no discontinuities, not out-of-range)
-	  uint64_t adur =  ii->first.interval.duration();
-	  
-	  if ( timeline.valid_tps( ii->first.interval ) != adur ) 
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  while ( ii != annot->interval_events.end() )
 	    {
-	      //std::cerr << "  skipping " << ii->first.interval << "\n";
-	      ++skipped_disc;
+	      
+	      // only consider this annotation is it is completely within a valid time-point
+	      // range (i.e. no discontinuities, not out-of-range)
+	      uint64_t adur =  ii->first.interval.duration();
+	      
+	      if ( timeline.valid_tps( ii->first.interval ) != adur ) 
+		{
+		  //std::cerr << "  skipping " << ii->first.interval << "\n";
+		  ++skipped_disc;
+		  ++ii;
+		  continue;
+		}
+	      
+	      // check duration is a multiple of the EDF record duration
+	      if ( adur % header.record_duration_tp ) 
+		{
+		  //std::cerr << "  skipping, not an exact multiple of EDF recdur: " << ii->first.interval << "\n";
+		  ++skipped_dur;
+		  ++ii;
+		  continue;
+		}
+	      
+	      // track number of implied new records
+	      new_nr += adur / header.record_duration_tp; 
+	      
+	      aset.insert( ii->first.interval );
 	      ++ii;
-	      continue;
 	    }
-	  
-	  // check duration is a multiple of the EDF record duration
-	  if ( adur % header.record_duration_tp ) 
-	    {
-	      //std::cerr << "  skipping, not an exact multiple of EDF recdur: " << ii->first.interval << "\n";
-	      ++skipped_dur;
-	      ++ii;
-	      continue;
-	    }
-
-	  // track number of implied new records
-	  new_nr += adur / header.record_duration_tp; 
-
-	  aset.insert( ii->first.interval );
-	  ++ii;
 	}
     }
 
@@ -95,7 +99,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
 
   if ( skipped_disc ) logger << "  skipped " << skipped_disc << " annotations that span discontinuities\n";
   if ( skipped_dur ) logger << "  skipped " << skipped_dur << " annotations that do not align with EDF record size\n";
-
+  
   if ( new_nr == 0 ) 
     {
       logger << "  leaving ALIGN, nothing to do (leaving dataset as is)\n";

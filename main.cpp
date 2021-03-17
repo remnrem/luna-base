@@ -35,6 +35,9 @@ extern logger_t logger;
 
 int main(int argc , char ** argv )
 {
+
+  // for (int f=9;f<=18;f++)
+  //   std::cout << f << "\t" << CWT::pick_fwhm( f ) << "\n";
   
   //
   // display version info?
@@ -353,39 +356,43 @@ int main(int argc , char ** argv )
 	  
 	  else if ( argv[i][0] == '@' )
 	    {
-
 	      // an 'include' 
 	      std::string filename = argv[i];
+	      
+	      // allow missing parameter file "." i.e. to make scripting 
+	      // easier for LSF submission script that need to pass this 
 
-	      if ( filename.size() == 1 ) Helper::halt( "no include file specified after @" );
-	      
-	      // expand() expands out any ~/ notation to full path
-	      filename = Helper::expand( filename.substr(1).c_str() );
-	      if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not open " + filename );
-	      
-	      std::ifstream INC( filename.c_str() , std::ios::in );
-	      if ( INC.bad() ) Helper::halt("could not open file: " + filename );
-	      while ( ! INC.eof() )
+	      if ( filename.size() > 1 && filename != "@." ) 
 		{
-
-		  std::string line;
 		  
-		  //std::getline( INC , line);		  
-		  Helper::safe_getline( INC , line );
+		  // expand() expands out any ~/ notation to full path
+		  filename = Helper::expand( filename.substr(1).c_str() );
+		  if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not open " + filename );
 		  
-		  if ( INC.eof() || line == "" ) continue;
+		  std::ifstream INC( filename.c_str() , std::ios::in );
+		  if ( INC.bad() ) Helper::halt("could not open file: " + filename );
+		  while ( ! INC.eof() )
+		    {
+		      
+		      std::string line;
+		      
+		      //std::getline( INC , line);		  
+		      Helper::safe_getline( INC , line );
+		      
+		      if ( INC.eof() || line == "" ) continue;
+		      
+		      // skip % comments
+		      if ( line[0] == '%' ) continue;
+		      
+		      std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
+		      if ( tok.size() != 2 ) Helper::halt("badly formatted line in " + filename );
+		      
+		      cmd_t::parse_special( tok[0] , tok[1] );
+		      
+		    }
 		  
-		  // skip % comments
-		  if ( line[0] == '%' ) continue;
-
-		  std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
-		  if ( tok.size() != 2 ) Helper::halt("badly formatted line in " + filename );
-		  
-		  cmd_t::parse_special( tok[0] , tok[1] );
-
+		  INC.close();
 		}
-	     	      
-	      INC.close();
 	    }
 	  else
 	    {
