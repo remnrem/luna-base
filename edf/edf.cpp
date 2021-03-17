@@ -1460,7 +1460,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					     std::vector<int> * rec , 
 					     std::vector<int16_t> * ddata ) 
 {
-
+  
 
   std::vector<double> ret;
 
@@ -1492,7 +1492,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   int start_record, stop_record;
   int start_sample, stop_sample;
 
-  //    std::cerr << "looking for " << start << " to " << stop << "\n";
+  //  std::cerr << "looking for " << start << " to " << stop << "\n";
 
   bool okay = timeline.interval2records( interval_t( start , stop ) , 
 					 n_samples_per_record , 
@@ -1500,9 +1500,9 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					 &stop_record, &stop_sample );
   
   
-   // std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
-   // std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
-
+  // std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
+  // std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
+  
   //
   // If the interval is too small (or is applied to a signal with a low sampling rate)
   // we might not find any sample-points in this region.   Not an error per se, but flag

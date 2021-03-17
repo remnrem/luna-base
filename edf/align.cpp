@@ -192,10 +192,11 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	  // offset (relative to the start of this annotation) for each added EDF record
 	  
 	  int in_annot_rec = 0;
-	  
+
 	  if ( curr_smp != 0 )
-	    Helper::halt( "internal logic error in ALIGN: new annotation not aligning with new EDF record\n" );
-	    
+	    Helper::halt( "internal logic error in ALIGN: new annotation not aligning with new EDF record;"
+			  " potential floating-point inconistencies in interval specifications?\n" );
+	  
 	  const int downsample = 1; // i.e. no downsampling
 	  const bool return_ddata = true ;
 
@@ -208,7 +209,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	  std::vector<int16_t> * d = slice.nonconst_ddata();
 	  
 	  const int n = d->size();
-	  
+
 	  // add to records
 	  
 	  // fetch record:
@@ -266,8 +267,6 @@ bool edf_t::align( const std::vector<std::string> & annots )
     Helper::halt( "internal error in ALIGN: time-point and record counts do not align" );
 
 
-
-   
   
 
   //

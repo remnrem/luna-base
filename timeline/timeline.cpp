@@ -220,7 +220,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       return false;
     }
 
-  //    std::cout << "i2r: interval = " << interval << "\n";
+  //  std::cout << "i2r: interval = " << interval << "\n";
   
   //
   // Note: here we want to find records/samples that are inclusive w.r.t. the interval
@@ -250,15 +250,25 @@ bool timeline_t::interval2records( const interval_t & interval ,
     {
       //      std::cout << "EDF-C\n";
 
-      // get initial records/samples, nb. use ceil() to get nearest sample *after* start of interval
+      // old version:  get initial records/samples, nb. use ceil() to get nearest sample *after* start of interval
+
+      // now (v0.25+) for fractionally split things (i.e. if interval boundary does not align w/ a sample point exactly)
+      // for both start and end, take the point prior to the fractional point;  this should preserve the number of samples
+      // selected, i.e. in ALIGN
 
       uint64_t start_record = interval.start / edf->header.record_duration_tp;
       uint64_t start_offset = interval.start % edf->header.record_duration_tp;
+
+      // prior to v0.25
+      // uint64_t start_sample = 
+      // 	ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+
+      // change in v0.25 
       uint64_t start_sample = 
-	ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
-      
-      //      std::cout << "othr = " << edf->header.record_duration_tp << " " << n_samples_per_record << "\n";
-      //      std::cout << "start = " << start_record << " " << start_offset << " " << start_sample << "\n";
+	floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+  
+      // std::cout << "othr = " << edf->header.record_duration_tp << " " << n_samples_per_record << "\n";
+      // std::cout << "start = " << start_record << " " << start_offset << " " << start_sample << "\n";
       
       // get final records/samples, nb. use floor() to get the nearest sample *prior* to end
       
@@ -347,8 +357,15 @@ bool timeline_t::interval2records( const interval_t & interval ,
       else
 	{	
 	  uint64_t start_offset = interval.start % edf->header.record_duration_tp;
+
+	  // nb: old code prior to v0.25
+	  // uint64_t start_sample = 
+	  //   ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+
+	  // nb: new version: floor() not ceil() , same behavior as for the end-points
 	  uint64_t start_sample = 
-	    ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+	    floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+	  
 	  //if ( start_sample >= n_samples_per_record ) start_sample = n_samples_per_record - 1LLU; 
 	  *start_smp = (int)start_sample;
 	}
