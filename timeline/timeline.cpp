@@ -220,7 +220,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       return false;
     }
 
-  //  std::cout << "i2r: interval = " << interval << "\n";
+  //    std::cout << "i2r: interval = " << interval << "\n";
   
   //
   // Note: here we want to find records/samples that are inclusive w.r.t. the interval
@@ -230,10 +230,29 @@ bool timeline_t::interval2records( const interval_t & interval ,
   if ( interval.stop == 0 ) 
     Helper::halt( "internal error in timeline()" );
 
-  // subtract 1 off this timepoint
+  //
+  // Interval defines one-past-the end;   we therefore subtract 1-tp unit from it;
+  //  Hpwever, if matching fractional intervals (i.e. interval.start and .stop do not
+  //  fall exactly on a sample point, then we will get 1 extra sample point;  we therefore
+  //  track both stop+1 and stop, and if they give the same implied sample point, we subtract one
+  //
+  //  e.g.  if 100 Hz sample
+  //   okay     0.02    0.92
+  //                    = 9200000000 is one past  (of whatever, 1e9 tp = 1sec)
+  //                    = 9199999999 is exact end
+  //                    = means we get samples #3 (0.02) to #92 (0.91)
 
+  //  not okay: 0.025   0.925
+  //                   = 9255000000
+  //                   = 9254999999
+  //                   = implies #3 to #93 (0.92) .. and so one extra; therefore, here subtract 1
+  //   
+
+  uint64_t stop_plus1_tp = interval.stop;
+  
   uint64_t stop_tp = interval.stop - 1LLU;
-
+  
+  
   // allow 0-duration annotations, but note that these often
   // need fixes if end if 1 TP before the start (as can happen if the
   // annotation start/stop fall between sample-points); this is handled at
@@ -262,11 +281,12 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // prior to v0.25
       // uint64_t start_sample = 
       // 	ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
-
+      
       // change in v0.25 
+
       uint64_t start_sample = 
-	floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
-  
+       	floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+      
       // std::cout << "othr = " << edf->header.record_duration_tp << " " << n_samples_per_record << "\n";
       // std::cout << "start = " << start_record << " " << start_offset << " " << start_sample << "\n";
       
@@ -276,12 +296,29 @@ bool timeline_t::interval2records( const interval_t & interval ,
       uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
       uint64_t stop_sample = 
 	floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
+
+      uint64_t stop_plus1_record = stop_plus1_tp / edf->header.record_duration_tp;
+      uint64_t stop_plus1_offset = stop_plus1_tp % edf->header.record_duration_tp;
+      uint64_t stop_plus1_sample = 
+	floor( ( stop_plus1_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
+
+      // move one sample back (i.e. if the spanning interval did not exactly land on a sample point)
+      if ( stop_sample == stop_plus1_sample )
+	{
+	  if ( stop_sample == 0 )
+	    {
+	      --stop_record;
+	      stop_sample = n_samples_per_record;
+	    }
+	  else
+	    --stop_sample;	  
+	}
       
       // pass back to calling function
       
       *start_rec = (int)start_record;
       *start_smp = (int)start_sample;
-
+      
       *stop_rec = (int)stop_record;
       *stop_smp = (int)stop_sample;
 
@@ -371,6 +408,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       
       
+
       //
       // for upper bound, find the record whose end is equal/greater *greater* 
       // 
@@ -411,6 +449,12 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       
     }
+
+
+  //
+  // TODO?     fix for the fractional spanning intervals in the case of an EDF+C?
+  //
+  
   
   //
   // If the interval is in a gap, we will not get any records here, and 
@@ -421,8 +465,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // by adding the 1LLU to stop_smp when start_rec and stop_rec are the same
   //
 
-    
-    // allow for off-by-one (i.e. if 0-duration point falls between time-points)
+  
+  // allow for off-by-one (i.e. if 0-duration point falls between time-points)
 
   if ( *start_rec == *stop_rec && *start_smp == *stop_smp + 1LLU )
     {
