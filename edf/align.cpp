@@ -210,12 +210,12 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	  
 	  const int n = d->size();
 
-	  //std::cout << "n = " << n << "\n";
+	  // std::cout << "n = " << n << "\n";
 	  
 	  // const std::vector<uint64_t> * tpp = slice.ptimepoints();
 	  // for (int ii=0; ii<tpp->size(); ii++)
 	  //   std::cout << "  " << (*tpp)[ii] << "\n";
-	  	  
+	  
 	  // add to records
 	  
 	  // fetch record:

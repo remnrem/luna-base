@@ -304,11 +304,11 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
       // move one sample back (i.e. if the spanning interval did not exactly land on a sample point)
       if ( stop_sample == stop_plus1_sample )
-	{
+	{	  
 	  if ( stop_sample == 0 )
 	    {
 	      --stop_record;
-	      stop_sample = n_samples_per_record;
+	      stop_sample = n_samples_per_record - 1;
 	    }
 	  else
 	    --stop_sample;	  

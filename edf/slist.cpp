@@ -304,7 +304,8 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   // Check 
   //
   
-  std::vector<std::string> annot_wout_edf;
+  std::vector<std::string> annot_wout_edf; // annots w/out EDFs
+  std::set<std::string> dumped_annot; // annots we wrote
   std::map<int,int> edf_annot_count;
   int edfs = 0;
   
@@ -348,7 +349,10 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	{
 	  
 	  if ( has_edf ) 
-	    std::cout << "\t" << Helper::quote_spaced( *jj ) ;
+	    {
+	      std::cout << "\t" << Helper::quote_spaced( *jj ) ;
+	      dumped_annot.insert( *jj );
+	    }
 	  else
 	    annot_wout_edf.push_back( *jj );
 	  
@@ -372,13 +376,26 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   
   if ( annot_wout_edf.size() > 0 ) 
     {
-      std::cerr << "\nWarning: also found " 
-		<< annot_wout_edf.size() 
-		<< " annotation files without a matching EDF:\n";
-      for (int i=0;i<annot_wout_edf.size() ; i++) 
-	std::cerr << annot_wout_edf[i] << "\n";
-    }
+      // need to exclude e.g.
+      //     file.edf    file.eannot
+      //  --> this will think there is a   'file.e.edf'  w/out ?
 
+      std::vector<std::string> annot_wout_edf2;
+      for (int i=0;i<annot_wout_edf.size() ; i++)
+	if ( dumped_annot.find( annot_wout_edf[i] ) == dumped_annot.end() )
+	  annot_wout_edf2.push_back( annot_wout_edf[i] );
+
+      if ( annot_wout_edf2.size() > 0 )
+	{
+	  std::cerr << "\nWarning: also found " 
+		    << annot_wout_edf2.size() 
+		    << " annotation files without a matching EDF:\n";
+	  
+	  for (int i=0;i<annot_wout_edf2.size() ; i++) 
+	    std::cerr << annot_wout_edf2[i] << "\n";
+	}
+    }
+  
   if ( dupes ) 
     std::cerr << "\nWarning: duplicate IDs encountered\n";
 }

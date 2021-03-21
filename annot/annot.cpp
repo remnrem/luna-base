@@ -810,6 +810,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      if ( ! Helper::iequals( tok[2] , "start" ) ) Helper::halt( "expecting column 3 to be 'start':\n" + line );
 	      if ( ! Helper::iequals( tok[3] , "stop" ) ) Helper::halt( "expecting column 4 to be 'stop':\n" + line );	      
 	    }
+	  else if ( tok.size() == 3 ) // exception: still allowing old .annot format minus instance
+	    {
+	      if ( ! Helper::iequals( tok[0] , "class" ) ) Helper::halt( "expecting column 1 to be 'class':\n" + line );
+	      if ( ! Helper::iequals( tok[1] , "start" ) ) Helper::halt( "expecting column 2 to be 'start':\n" + line );
+	      if ( ! Helper::iequals( tok[2] , "stop" ) ) Helper::halt( "expecting column 3 to be 'stop':\n" + line );	      
+	    }
+
 	  else
 	    Helper::halt( "invalid header line:\n" + line );
 	  
@@ -875,7 +882,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( tok.size() != 6 ) 
 	    {
 	      
-	      // exception: allow old 4-col formatting
+	      // exception #1 : allow old 4-col formatting
 	      if ( tok.size() == 4 ) 
 		{
 		  tok.resize( 6 );
@@ -887,8 +894,22 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  tok[3] = tok[2];
 		  tok[2] = ".";
 		}
+	      else if (  tok.size() == 3 )
+		{
+		  // just class start stop		  
+		  tok.resize( 6 );
+		  // 0  1  2  3  4  5
+		  // cl in ch bg ed mt
+		  // cl       bg end
+		  
+                  tok[5] = ".";
+                  tok[4] = tok[2];
+                  tok[3] = tok[1];
+                  tok[2] = ".";
+		  tok[1] = ".";
+		}
 	      else
-		Helper::halt ( "expecting 6 columns, but found " 
+		Helper::halt ( "expecting 6/4/3 columns, but found " 
 			       + Helper::int2str( (int) tok.size() ) 
 			       + "\n  (use tab-only option to ignore space delimiters)" );
 	    }
@@ -1040,15 +1061,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      const std::string & label = cols[a][j];	      
 
 	      globals::atype_t t = a->types[label];
-
-	      // this is now commented out... not
-	      // clear how it would be used in context
-	      // of meta-data...
-
-	      // if ( t == globals::A_FLAG_T ) 
-	      // 	{
-	      // 	  instance->set( label );
-	      // 	}
 	      
 	      if ( t == globals::A_MASK_T )
 		{
