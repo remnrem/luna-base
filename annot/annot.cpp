@@ -1347,6 +1347,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  // so assume this is seconds 
 	  if ( ! Helper::str2dbl( start_str , &dbl_start ) )
 	    Helper::halt( "invalid interval (start) : " + line );
+
 	}
 
       // stop time:
@@ -1382,7 +1383,7 @@ interval_t annot_t::get_interval( const std::string & line ,
       // convert to uint64_t time-point units
       
       interval.start = Helper::sec2tp( dbl_start );
-
+      
       // assume stop is already specified as 1 past the end, e.g. 30 60
       // a zero-duration interval will therefore have start == stop (i.e. duration = 0)
       // which should be fine
@@ -3209,7 +3210,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	      if ( interval.start < annot_offset ) interval.start = 0;
               else interval.start -= annot_offset;
               if ( interval.stop < annot_offset ) interval.stop	= 0;
-              else interval.stop -= annot_offset;
+              else interval.stop -= annot_offset;	      
             }
 
 	  // write in hh:mm:ss format

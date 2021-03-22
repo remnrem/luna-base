@@ -266,10 +266,13 @@ uint64_t Helper::sec2tp( double s )
       logger << "warning -- cannot have negative time-points, setting to 0 (from " << Helper::dbl2str( s ) << "\n";
       return 0; 
     }
-
-  uint64_t si = 1000 * s;
-
-  return globals::tp_1000thsec * si;
+  
+  int si = floor( s );
+  double frac = 1000.0 * ( s - si );
+  int ifrac = round( frac * 1000.0 ) / 1000.0;  
+  uint64_t retval = si * globals::tp_1sec + ifrac * globals::tp_1000thsec ;   
+  //std::cout << std::setprecision(10) << s << "\t" << retval << "\n";
+  return retval;
 }
 
 

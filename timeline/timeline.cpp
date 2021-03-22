@@ -308,7 +308,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  if ( stop_sample == 0 )
 	    {
 	      --stop_record;
-	      stop_sample = n_samples_per_record;
+	      stop_sample = n_samples_per_record - 1;
 	    }
 	  else
 	    --stop_sample;	  

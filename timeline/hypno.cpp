@@ -157,7 +157,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   // still work after a restructure
   //
 
-  int n_conflicts = 0;
+  n_conflicts = 0;
 
   while ( 1 ) 
     {
@@ -1461,7 +1461,9 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
       writer.value( "TST" , TST );
       writer.value( "TPST" , TpST );
       writer.value( "TWT" , TWT );
-      
+      writer.value( "OTHR" , mins_other );
+      writer.value( "CONF" , n_conflicts );
+
       if ( any_sleep )
 	{
 	  writer.value( "WASO" , WASO );

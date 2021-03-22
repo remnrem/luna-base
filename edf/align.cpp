@@ -62,6 +62,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	  annot_map_t::const_iterator ii = annot->interval_events.begin();
 	  while ( ii != annot->interval_events.end() )
 	    {
+	      //std::cout << "ANNOT = " << ii->first.interval << "\t" << ii->first.interval.duration() << "\n";
 	      
 	      // only consider this annotation is it is completely within a valid time-point
 	      // range (i.e. no discontinuities, not out-of-range)
@@ -69,7 +70,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	      
 	      if ( timeline.valid_tps( ii->first.interval ) != adur ) 
 		{
-		  //std::cerr << "  skipping " << ii->first.interval << "\n";
+		  std::cerr << "  skipping " << ii->first.interval << "\n";
 		  ++skipped_disc;
 		  ++ii;
 		  continue;
@@ -78,7 +79,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	      // check duration is a multiple of the EDF record duration
 	      if ( adur % header.record_duration_tp ) 
 		{
-		  //std::cerr << "  skipping, not an exact multiple of EDF recdur: " << ii->first.interval << "\n";
+		  std::cerr << "  skipping, not an exact multiple of EDF recdur: " << ii->first.interval << "\n";
 		  ++skipped_dur;
 		  ++ii;
 		  continue;
@@ -214,8 +215,9 @@ bool edf_t::align( const std::vector<std::string> & annots )
 	  
 	  const int n = d->size();
 
-	  //std::cout << "n = " << n << "\n";
-	  
+	  // std::cout << "n = " << n << "\n";
+	  // std::cout << "annot " << *aa << "\tdur = " << aa->duration() << "\n";
+
 	  // const std::vector<uint64_t> * tpp = slice.ptimepoints();
 	  // for (int ii=0; ii<tpp->size(); ii++)
 	  //   std::cout << "  " << (*tpp)[ii] << "\n";
@@ -272,6 +274,10 @@ bool edf_t::align( const std::vector<std::string> & annots )
       
       // next signal
     }
+
+  
+  // no signal channels? --> all done here
+  if ( ! got_tps ) return false;
   
   if ( tps.size() != new_nr ) 
     Helper::halt( "internal error in ALIGN: time-point and record counts do not align" );
@@ -321,7 +327,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
   
   // adjust all loaded annotations for subseuent WRITE-ANNOTS
   // that will be called; this ensures they will start at elapsed time = 0 
-      
+  
   timeline.annotations.set_annot_offset( edf_start_tp );
 
   // change EDF header starttime also

@@ -69,6 +69,9 @@ struct hypnogram_t
   std::vector<sleep_stage_t> stages;
   std::vector<int> epoch_n;
   
+  // number of conflicting epochs (set to missing)
+  int n_conflicts;
+
   // times 
   clocktime_t clock_lights_out;
   clocktime_t clock_lights_on;
@@ -90,7 +93,7 @@ struct hypnogram_t
 
   double TIB;  // time in bed : length of entire record, ignoring all staging
   double TRT;  // total recording time : from lights out to lights on
-
+  
   double TWT;  // total wake time
   double TST;  // total sleep time
   double TpST;  // total persistent sleep time

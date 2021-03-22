@@ -806,6 +806,7 @@ bool cmd_t::eval( edf_t & edf )
       //
       
       if      ( is( c, "WRITE" ) )        proc_write( edf, param(c) );
+      else if ( is( c, "EDF" ) )          proc_force_edf( edf , param(c) );
       else if ( is( c, "SUMMARY" ) )      proc_summaries( edf , param(c) );
       else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
       else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
@@ -1587,8 +1588,15 @@ void proc_align( edf_t & edf , param_t & param )
 
   logger << "  realigning EDF based on annotation list: " << param.value( "align" ) << "\n";
 
-  edf.align( a );
-
+  bool okay = edf.align( a );
+  
+  if ( ! okay ) 
+    {
+      logger << "  problem in creating the aligned EDF, bailing...\n"
+	     << "  (check there are 1+ valid channels)\n";      
+      return;
+    }
+  
   logger << "  now WRITE'ing realigned EDF (and annotations if 'annot-out' set) to disk\n"
 	 << "  note:  this will will set the 'problem' flag to skip to next EDF\n";
   
@@ -1703,6 +1711,56 @@ void proc_slowwaves( edf_t & edf , param_t & param )
   // find slow-waves
   slow_waves_t sw( edf , param );
   
+}
+
+// EDF : convert from EDF+D to EDF or EDF+C
+//               or EDF+C to EDF
+
+void proc_force_edf( edf_t & edf , param_t & param )
+{
+
+  bool force = param.has( "force" );
+
+  if ( ! edf.header.edfplus ) 
+    {
+      logger << "  already a standard EDF, nothing to do\n";
+      return;
+    }
+
+  if ( edf.header.continuous )
+    {
+      logger << "  converting from EDF+C to standard EDF\n";
+      edf.set_edf();      
+      edf.reset_start_time();
+      return;
+    }
+  
+  // if here, it is nominally EDF+D
+  
+  if ( ! edf.is_actually_discontinuous() )
+    {
+      logger << "  converting from EDF+D that is actually continuous, to standard EDF\n";
+      edf.set_edf();
+      edf.reset_start_time();
+      return;
+    }
+  
+  if ( force )
+    {
+      logger << "  forcing EDF+D to standard EDF: will lose discontinuity/time information\n";
+      edf.set_edf();
+
+      // set start time to NULL
+      logger << "  setting EDF starttime to null (00.00.00)\n";
+      edf.header.starttime = "00.00.00";
+
+      return;
+    }
+  
+  // otherwise, note that no changes made
+  logger << "  could not downcast the EDF+D [ add 'force' option to force ]\n";  
+  return;
+
 }
 
 
@@ -2542,8 +2600,8 @@ void proc_drop_signals( edf_t & edf , param_t & param )
   if ( param.has( "keep" ) && param.has( "drop" ) )
     Helper::halt( "can only specify keep or drop with SIGNALS" );
   
-  if ( ! ( param.has( "keep" ) || param.has( "drop" ) ) ) 
-    Helper::halt( "need to specify keep or drop with SIGNALS" );
+  if ( ! ( param.has( "keep" ) || param.has( "drop" ) || param.has( "req" ) ) ) 
+    Helper::halt( "need to specify keep, drop or req with SIGNALS" );
 
   // if a keep list is specified, means we keep 
   if ( keeps.size() > 0 )
@@ -2559,7 +2617,12 @@ void proc_drop_signals( edf_t & edf , param_t & param )
 	  while ( ss != keeps.end() )
 	    {
 	      if ( ! edf.header.has_signal( *ss ) )
-		Helper::halt( "could not find requested keep signal: " + *ss );
+		{
+		  logger << "  *** could not find requested signal: " << *ss << "\n";
+		  logger << "  *** quitting for this individual\n";
+		  globals::problem = true;
+		  return; 
+		}
 	      ++ss;
 	    }
 	}
