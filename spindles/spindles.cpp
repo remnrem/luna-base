@@ -24,6 +24,7 @@
 #include "spindles.h"
 #include "mspindles.h"
 #include "plot-spindles.h"
+#include "propag.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -208,6 +209,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const std::string cache_peaks_name = cache_peaks ? param.value( "cache-peaks" ) : "";
 
   
+  
+  //
+  // Spindle propagation
+  //
+
+  const bool do_prop = param.has( "prop" );
+  
+  sp_props_t props;
   
   //
   // Intersection of multiple wavelets/spindles/channels   ( by default, do not merge across channels)
@@ -910,9 +919,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			  spindles.push_back( spindle_t( previous_start , previous_stop , 
 							 previous_start_sp , previous_stop_sp ) );
 			  
-// 			  spindles.push_back( interval_t( previous_start , previous_stop ) );		      
-// 			  spindles_start.push_back( previous_start_sp );
-// 			  spindles_stop.push_back( previous_stop_sp );
 			}
 		      extending = false;
 		    }
@@ -953,9 +959,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  int nspindles_postmerge = spindles.size();
 
 	  logger << " pruned spindle count from " 
-		    << spindles1.size() << " to " 
+		 << spindles1.size() << " to " 
 		 << spindles.size() << "\n";
 	  
+
 	  
 	  //
 	  // Track whether each SP is in a spindle or not
@@ -1035,6 +1042,23 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  	  
 	  if ( characterize ) 
 	    spindle_stats( spindles , means );
+	  
+
+
+	  //
+	  // Save spindle locations and CWT coefficients for subsequent propagation analyses?
+	  //
+	  
+	  if ( do_prop ) 
+	    {
+	      // only adds time-points once -- but will check that size matches on 
+	      // subsequent goes around
+	      props.add_tp( *tp );
+	      
+	      // add the actuall dta
+	      props.add( frq[fi] , signals.label(s) , spindles , averaged_corr );
+	    }
+	  
 	  
 
 	  
@@ -1952,6 +1976,42 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
     }
   
   
+
+  //
+  // Spindle propagation analysis?
+  //
+
+  if ( do_prop ) 
+    {
+      
+      const double w = 1.0; // 1 sec window
+
+      // all channels
+      std::set<std::string> c;
+      for (int s = 0 ; s < ns ; s++ )
+	{
+	  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+	  c.insert( signals.label(s) );
+	}
+      
+      // freqs one-at-a-time
+      for ( int fi=0; fi<frq.size(); fi++ )
+	{
+	  std::set<double> f;
+	  f.insert( frq[fi] );	  
+	  
+	  // take each channel as seed
+	  for (int s = 0 ; s < ns ; s++ )
+	    {
+	      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+	      	  
+	      // do analysis
+	      props.analyse( f , c , signals.label(s) , w );
+	    }
+	}
+      
+    }
+
   //
   // Collation of spindles across any frequencies/channels 
   //

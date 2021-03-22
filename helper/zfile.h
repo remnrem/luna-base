@@ -170,7 +170,7 @@ struct zfiles_t {
     // create folder if it does not exist (will need to change for windows...)
     std::string syscmd = "mkdir -p " + folder ; 
     
-    (void)system( syscmd.c_str() );
+    int dummy = system( syscmd.c_str() );
     
     //std::cerr << "Writing to " << folder << "\n";
     
