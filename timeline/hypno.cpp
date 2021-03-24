@@ -222,7 +222,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   if ( n_conflicts )
     logger << "  *** found " << n_conflicts << " epoch(s) of " << ne << " with conflicting spanning annotations\n"
 	   << "  *** check that epochs and annotations align as intended\n"
-	   << "  *** see EPOCH 'start-annot' or 'offset' options\n"; 
+	   << "  *** see EPOCH 'align' or 'offset' options\n"; 
   
    calc_stats( verbose );
 

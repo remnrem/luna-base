@@ -116,7 +116,13 @@ bool edf_t::align( const std::vector<std::string> & annots )
   while ( ii != aset.end() )
     {
       if ( ii->start < last.stop ) 
-	Helper::halt( "cannot specify overlapping annotations to EDF re-ALIGN-ment" );
+	{
+	  logger << "  *** annotation overlapped prior:\n"
+		 << last << "\n"
+		 << *ii << "\n";
+
+	  Helper::halt( "cannot specify overlapping annotations to EDF re-ALIGN-ment" );
+	}
       last = *ii;
       ++ii;
     }

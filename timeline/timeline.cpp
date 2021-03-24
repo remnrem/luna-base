@@ -2790,19 +2790,18 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   if ( ! edf->header.continuous )
     Helper::halt( "currently, can only run SPANNING on continuous EDF" );
   
-
   // given a /set/ of annotations, determine 
   //   - seconds outside of EDF
   //   - total duration of signal covered by these (seconds)
   //   - coverage as a proportion of EDF file
   //   - coverage as a proportion of in-memory representation
+  //   - number of contiguous blocks of the requested annotations
   // etc
   
 
   //
   // which signals: either look at all, or the requested set
   //
-
 
   std::vector<std::string> requested = param.has( "annot" ) 
     ? param.strvector( "annot" ) 
@@ -2858,10 +2857,11 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 
   int over_extended = 0;
 
+  int annot_blocks = 0;
 
   // keep track of where longest spanning annot reaches to 
   // or 0 if past the previous spanning annot
-
+  
   uint64_t earliest = 0;
 
   uint64_t furthest = 0;
@@ -2920,6 +2920,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 	    {
 	      earliest = interval.start;
 	      furthest = interval.stop;
+	      ++annot_blocks;
 	    }
 	  else // we already have at least one region counted
 	    {
@@ -2930,6 +2931,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 		  total_collapsed += furthest - earliest ;
 		  earliest = interval.start;
 		  furthest = interval.stop;
+		  ++annot_blocks; // track that this starts a new block
 		}
 	      else // add to current region 
 		{
@@ -2964,12 +2966,16 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   writer.value( "ANNOT_HMS" , Helper::timestring( total , ':' )  );
 
   // do any (valid) annots overlap each other?
-  writer.value( "ANNOT_OVERLAP" , total_collapsed < total );
+  writer.value( "ANNOT_OVERLAP" , ( total_collapsed < total ? "YES" : "NO" )  );
 
   // how many annots over-extended beyond range of EDF?
   writer.value( "INVALID_N" , over_extended );
   writer.value( "VALID_N" , (int)events.size() - over_extended );
-
+  
+  // number of annotation segments, i.e. annotation-based analog of 
+  // the SEGMENTS command  
+  writer.value( "NSEGS" , annot_blocks );
+  
   // extent of this over-extension
   writer.value( "INVALID_SEC" , Helper::tp2sec( invalid_tps ) );
   

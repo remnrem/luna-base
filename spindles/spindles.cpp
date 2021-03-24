@@ -1997,20 +1997,63 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       // freqs one-at-a-time
       for ( int fi=0; fi<frq.size(); fi++ )
 	{
+	  
+	  writer.level( frq[fi] , globals::freq_strat );
+
 	  std::set<double> f;
 	  f.insert( frq[fi] );	  
 	  
+	  std::vector<double> avgs;
+
 	  // take each channel as seed
 	  for (int s = 0 ; s < ns ; s++ )
 	    {
 	      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
-	      	  
+	      
 	      // do analysis
-	      props.analyse( f , c , signals.label(s) , w );
+	      avgs.push_back( props.analyse( f , c , signals.label(s) , w ) );
+	      
+	      // report average
 	    }
-	}
-      
+	  
+	  // scale seed values
+	  if ( avgs.size() )
+	    {
+	      // report both original means, and rescaled versions
+	      // i.e. in raw seconds, plus relative to earliest/latest
+	      std::vector<double> orig = avgs;
+
+	      double seed_min = avgs[0];
+	      double seed_max = avgs[0];
+	      for ( int s=0; s<avgs.size(); s++)
+		{
+		  if ( avgs[s] < seed_min ) seed_min = avgs[s];
+		  if ( avgs[s] > seed_max ) seed_max = avgs[s];
+		}
+
+	      // scale
+	      if ( seed_max - seed_min > 0 )
+		for ( int s=0; s<avgs.size(); s++)
+		  avgs[s] = ( avgs[s] - seed_min ) / ( seed_max - seed_min );
+	      
+	      // report
+	      int ss = 0;
+	      for (int s = 0 ; s < ns ; s++ )
+		{
+		  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+		  // track which channel we are seeding on
+		  writer.level(  signals.label(s) , "SEED" );
+		  writer.value( "T" , orig[ss] ); // nb. ss not s
+		  writer.value( "R" , avgs[ss] ); // nb. ss not s
+		  ++ss;
+		}
+	      writer.unlevel( "SEED" );
+	    } 
+	} // next freq bin      
+     
+      writer.unlevel( globals::freq_strat );
     }
+
 
   //
   // Collation of spindles across any frequencies/channels 

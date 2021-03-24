@@ -358,7 +358,12 @@ void edf_t::terse_summary( param_t & param )
   const int ns1 = signals.size();
 
   const bool write_signals = param.has( "signals" );
-  
+
+  // write EDF type
+  std::string edf_type = "EDF";
+  if ( header.edfplus ) edf_type = header.continuous ? "EDF+C" : "EDF+D" ; 
+  writer.value( "EDF_TYPE" , edf_type ); 
+
   // write output
   writer.value( "NS_ALL" , header.ns );
   writer.value( "NS" , ns1 );

@@ -44,10 +44,10 @@ void sp_props_t::add( double f , const std::string & ch , const std::vector<spin
   data[ idx ] = dat;
 }
 
-void sp_props_t::analyse( const std::set<double> & f , 
-			  const std::set<std::string> & c , 
-			  const std::string & seed , 			  
-			  const double w )
+double sp_props_t::analyse( const std::set<double> & f , 
+			    const std::set<std::string> & c , 
+			    const std::string & seed , 			  
+			    const double w )
 {
   
   // frequencies in data[] to consider
@@ -59,9 +59,7 @@ void sp_props_t::analyse( const std::set<double> & f ,
 
   uint64_t frq = *f.begin() * 1e9;
   
-  //
-  
-  logger << "  spindle propagation analysis, seeding on " << seed << "\n";
+  //logger << "  spindle propagation analysis, seeding on " << seed << "\n";
   
   // check we have everything as needed 
   
@@ -89,9 +87,7 @@ void sp_props_t::analyse( const std::set<double> & f ,
       cmap0[ ii->first.ch ] = 0;
       ++ii;
     }
-  
-
-  
+    
   //
   // for all other channels, record the nearest peak, and save the offset relative to midx
   // search within a +/- w window
@@ -101,7 +97,6 @@ void sp_props_t::analyse( const std::set<double> & f ,
   std::map<std::string,double> cmap_amp = cmap0;
   std::map<std::string,double> cmap_n   = cmap0;
   
-
   //
   // get all spindle peaks (based on max CWT) within spindle window
   //
@@ -210,29 +205,59 @@ void sp_props_t::analyse( const std::set<double> & f ,
   //
   
   writer.level( seed , "SEED" );
-  writer.level( *f.begin() , globals::freq_strat );
-  
+
+  //      CH   ...  SEED   ...    CH 
+  //  T        -ve   0     +ve    
+
+  //  i.e. so get average of -1 value for the seed average
+  //   that way a higher number means it occurs later (versus other channels)
+  //   return this value for the seed from this function ( analyse() ) 
+  //   and then take the set for all seeds (for a given spindle frequency) 
+  //   and scale from 0..1 to indicate whether that channel tends to start 
+  //   earlier (0.0) or later (1.0)
+  //   
+
   std::map<std::string,double>::iterator cc = cmap.begin();
   
+  double seed_avg = 0;
+  int    seed_cnt = 0;
+
   while ( cc != cmap.end() )
     {
-
+      
       writer.level( cc->first , globals::signal_strat );
+  
       writer.value( "N" , cmap_n[ cc->first ] );
-	
-	if ( cmap_n[ cc->first ] > 0 ) 
+      writer.value( "P" , cmap_n[ cc->first ] / (double)np ); 
+
+      if ( cmap_n[ cc->first ] > 0 ) 
 	  {
-	  cmap[ cc->first ] /= cmap_n[ cc->first ];
-	  cmap_amp[ cc->first ] /= cmap_n[ cc->first ];
-	  writer.value( "T" , cmap[ cc->first ] );
-	  writer.value( "P" , cmap_amp[ cc->first ] );	    
-	}
+	    
+	    cmap[ cc->first ] /= cmap_n[ cc->first ];
+	    cmap_amp[ cc->first ] /= cmap_n[ cc->first ];
+	    
+	    // mean time-offset of paired channel, relatve to seed spindle peak
+	    writer.value( "T" , cmap[ cc->first ] );
+
+	    // mean amplitude of paired-channel at seed spindle
+	    writer.value( "A" , cmap_amp[ cc->first ] );	    
+	    
+	    // track for seed-level average (nb. take negative value
+	    //  as we'll interpret this in terms of the seed being 
+	    //  earlier or later ) 
+
+	    seed_avg += -1 * cmap[ cc->first ] ; 
+	    ++seed_cnt;
+	  }
       
       ++cc;
     }
-  
-  writer.unlevel( globals::signal_strat );
-  writer.unlevel( globals::freq_strat );
-  writer.unlevel( "SEED" );
 
+  // report average over all other channels for this seed
+
+  writer.unlevel( globals::signal_strat );
+  writer.unlevel( "SEED" );
+  
+  return seed_cnt > 0 ? seed_avg / (double) seed_cnt : 0 ; 
+  
 }

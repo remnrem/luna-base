@@ -71,11 +71,11 @@ struct sp_props_t {
   void add( double f , const std::string & ch , const std::vector<spindle_t> & sp, 
 	    const std::vector<double> & cwt );
 
-  void analyse( const std::set<double> & f , 
-		const std::set<std::string> & c , 
-		const std::string & seed , 
-		const double w = 1.0 
-		);
+  double analyse( const std::set<double> & f , 
+		  const std::set<std::string> & c , 
+		  const std::string & seed , 
+		  const double w = 1.0 
+		  );
   
   // members
   std::vector<uint64_t> tps;
