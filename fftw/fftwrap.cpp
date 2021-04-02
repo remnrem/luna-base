@@ -280,7 +280,7 @@ double FFT::width( frequency_band_t band )
 
 // --------------------------------------------------------------------------
 //
-// Real 1D DFT
+// Real 1D DFT (real to complex) 
 //
 // --------------------------------------------------------------------------
 
@@ -468,6 +468,135 @@ bool real_FFT::add( frequency_band_t band , double f )
 double real_FFT::width( frequency_band_t band )
 {
   return globals::freq_band[ band ].second - globals::freq_band[ band ].first;
+}
+
+
+
+// --------------------------------------------------------------------------
+//
+// Real 1D inverse DFT  (complex -> real)
+//
+// --------------------------------------------------------------------------
+
+void real_iFFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_ )
+{
+  
+  Ndata = Ndata_;
+  Nfft = Nfft_;
+  Fs = Fs_;
+  window = window_;
+
+  if ( Ndata > Nfft ) Helper::halt( "Ndata cannot be larger than Nfft" );
+
+  // Allocate storage for input/output
+  in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * Nfft);
+  if ( in == NULL ) Helper::halt( "FFT failed to allociate output buffer" );
+
+  out = (double*) fftw_malloc(sizeof(double) * Nfft);
+  if ( out == NULL ) Helper::halt( "FFT failed to allocate input buffer" );
+  
+  // Initialise (probably not necessary, but do anyway)
+  for (int i=0;i<Nfft;i++) { in[i][0] = in[i][1] = 0; }
+  
+  // Generate plan: nb. c2r 1D plan
+  p = fftw_plan_dft_c2r_1d( Nfft, in, out , FFTW_ESTIMATE );
+
+  // We want to return only the positive spectrum, so set the cut-off  
+  cutoff = Nfft % 2 == 0 ? Nfft/2+1 : (Nfft+1)/2 ;
+  X.resize(cutoff,0);
+  mag.resize(cutoff,0);
+  frq.resize(cutoff,0);
+
+  //
+  // Scale frequencies appropriately (not used in calculation, just for output)
+  //
+
+  double T = Nfft/(double)Fs;
+
+  for (int i=0;i<cutoff;i++) frq[i] = i/T;
+  
+  //
+  // Normalisation factor for PSD  (1/value)
+  // i.e. equiv. to 1/(N.Fs) in unweighted case, otherwise
+  // we take the window into account
+  //
+
+  w.resize( Ndata , 1 ); // i.e. default of no window
+  
+  normalisation_factor = 0;  
+  if      ( window == WINDOW_TUKEY50 ) w = MiscMath::tukey_window(Ndata,0.5);
+  else if ( window == WINDOW_HANN )    w = MiscMath::hann_window(Ndata);
+  else if ( window == WINDOW_HAMMING ) w = MiscMath::hamming_window(Ndata);
+  
+  for (int i=0;i<Ndata;i++) normalisation_factor += w[i] * w[i];
+  normalisation_factor *= Fs;  
+  normalisation_factor = 1.0/normalisation_factor;
+    
+} 
+
+
+bool real_iFFT::apply( const std::vector<std::complex<double> > & x )
+{
+
+  const int n = x.size();
+  
+  if ( n > Nfft ) Helper::halt( "error in FFT" );
+  
+  for (int i=0;i<Ndata;i++)
+    {
+      in[i][0] = std::real( x[i] );
+      in[i][1] = std::imag( x[i] );	
+    }    
+
+  // zero-pad any remainder
+  for (int i=Ndata;i<Nfft;i++)
+    {
+      in[i][0] =  in[i][1] = 0;
+    }
+
+  fftw_execute(p);
+
+  //
+  // Calculate PSD
+  //
+
+  //
+  // psdx = (1/(Fs*N)) * abs(xdft).^2;
+  // where abs() is complex sqrt(a^2+b^2)
+  //
+
+  // for (int i=0;i<cutoff;i++)
+  //   {
+      
+  //     double a = out[i][0];
+  //     double b = out[i][1];
+      
+  //     X[i] =  ( a*a + b*b ) * normalisation_factor;
+  //     mag[i] = sqrt( a*a + b*b );
+
+  //     // not for DC and Nyquist, but otherwise
+  //     // double all entries (i.e. to preserve
+  //     // total power, as here we have the one-
+  //     // sided PSD
+      
+  //     if ( i > 0 && i < cutoff-1 ) X[i] *= 2;
+      
+  //    }
+
+  return true;
+
+}
+
+
+
+
+std::vector<double> real_iFFT::inverse() const
+{
+  // from an IFFT, get the REAL values and divide by N, i.e. this
+  // should mirror the input data when the input data are REAL  
+  std::vector<double> r(Nfft);
+  for (int i=0;i<Nfft;i++) r[i] = out[i] / (double)Nfft;
+  return r;
 }
 
 

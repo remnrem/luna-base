@@ -1480,4 +1480,5 @@ void writer_t::set_types()
   numeric_factor( "MSEC" );
   numeric_factor( "PHASE" );
   numeric_factor( "PSC" );
+  numeric_factor( "SEG" );
 }

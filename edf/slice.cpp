@@ -162,7 +162,6 @@ matslice_t::matslice_t( edf_t & edf ,
 			const interval_t & interval )
 {
 
-
   data.clear();
   
   time_points.clear();

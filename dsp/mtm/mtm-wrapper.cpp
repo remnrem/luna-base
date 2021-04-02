@@ -94,7 +94,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   //
 
   interval_t interval = edf.timeline.wholetrace();
-      
+
   //
   // Get each signal
   //

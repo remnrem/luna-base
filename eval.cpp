@@ -934,7 +934,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CFC" ) )          proc_cfc( edf , param(c) );
       else if ( is( c, "TAG" ) )          proc_tag( param(c) );
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
-      
+      else if ( is( c, "LINE-DENOISE" ) ) dsptools::line_denoiser( edf, param(c) );
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
       else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
