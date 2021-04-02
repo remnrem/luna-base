@@ -296,6 +296,83 @@ class real_FFT
 };
 
 
+//
+// 1D C->R inverse DFT
+//
+
+//
+// Real 1D DFT
+//
+
+class real_iFFT
+{
+  
+ public:
+  
+  real_iFFT() { } 
+
+  real_iFFT( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE ) 
+  {
+    init( Ndata , Nfft , Fs , window );
+  }
+  
+  void init( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE );
+  
+  void reset() 
+  {
+    fftw_destroy_plan(p);
+    fftw_free(in);
+    fftw_free(out);
+  }
+  
+  ~real_iFFT() 
+  {    
+    fftw_destroy_plan(p);
+    fftw_free(in);
+    fftw_free(out);
+  }
+
+ private:
+  
+  // Size of data 
+  int Ndata;
+  
+  // Sampling rate, so we can construct the appropriate Hz for the PSD
+  int Fs;
+  
+  // Optional windowing function
+  window_function_t window;
+  std::vector<double> w;
+
+  // Input signal (complex)
+  fftw_complex *in;
+
+  // Output signal (real)
+  double *out;
+  
+  // FFT plan from FFTW3
+  fftw_plan p;
+  
+  // Size (NFFT)
+  int Nfft;
+  
+  // Normalisation factor given the window
+  double normalisation_factor;
+
+ public:
+  
+  int cutoff;
+  std::vector<double> X;
+  std::vector<double> mag;
+  std::vector<double> frq;
+  
+ public:
+  
+  bool apply( const std::vector<std::complex<double> > & x );   
+  std::vector<double> inverse() const;
+    
+};
+
 
 
 

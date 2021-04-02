@@ -20,44 +20,27 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#ifndef __LINEDENOISE_H__
+#define __LINEDENOISE_H__
 
-#include "mtm/mtm.h"
-#include "siggen.h"
-#include "psi.h"
-#include "microstates.h"
-#include "tlock.h"
-#include "peaks.h"
-#include "psc.h"
-#include "spectral_norm.h"
-#include "tv.h"
-#include "rems.h"
-#include "cfc.h"
-#include "acf.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conncoupl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
-#include "linedenoiser.h"
+#include <vector>
+
+struct edf_t;
+struct param_t;
+
+// wrapper
+namespace dsptools { 
+
+  void line_denoiser( edf_t & edf , param_t & param );
+
+}
+
+// core function
+std::vector<double> line_denosier( const std::vector<double> * x ,
+				   const int Fs ,
+				   const std::vector<double> & fl ,
+				   const double w_noise ,
+				   const double w_neighbour );
+                                                                                       \
 
 #endif

@@ -105,10 +105,10 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       for (int i=0;i<lwr.size();i++)
 	if ( lwr[i] >= upr[i] ) Helper::halt( "f-lwr >= f-upr" );
     }
-  else if ( param.has( "f" ) && param.has( "w" ) )
+  else if ( param.has( "f" ) )
     {
       lwr = upr = param.dblvector( "f" );
-      double w = param.requires_dbl( "w" );
+      double w = param.has( "w" ) ? param.requires_dbl( "w" ) : 3 ; // plus/minus 3 Hz by default
       for (int i=0; i<lwr.size(); i++) 
 	{
 	  lwr[i] -= w;
