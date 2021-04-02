@@ -1234,7 +1234,8 @@ void edf_t::seg_dumper( param_t & param )
     {
       
       writer.value( "NSEGS" , 1 );
-
+      writer.value( "NGAPS" , 0 );
+      
       writer.level( 1 , "SEG" );
       double secs = header.nr * header.record_duration;
       writer.value( "START" , 0 );
@@ -1269,8 +1270,13 @@ void edf_t::seg_dumper( param_t & param )
   uint64_t tp0 = timeline.rec2tp[r];
 
   uint64_t tp_start = tp0;
-  
 
+  // also explicitly track gaps
+  std::set<interval_t> gaps;
+
+  uint64_t gap_start = 0; // i.e. always start at EDF starttime
+
+  
   while ( r != -1 )
     {
       
@@ -1327,6 +1333,15 @@ void edf_t::seg_dumper( param_t & param )
 	  writer.value( "DUR_MIN" , ( secs2 - secs1 ) / 60.0);
 	  writer.value( "DUR_HR"  , ( secs2 - secs1 ) / ( 3600.0 ) );
 	  
+	  // did we observe a gap prior to this?
+	  if ( tp_start > gap_start )
+	    {
+	      gaps.insert( interval_t( gap_start , tp_start ) );	      
+	    }
+
+	  // reset start of next gap to end to this segment	      
+	  gap_start = tp0 + header.record_duration_tp;
+
 	  // current point becomes start of the next segment
 	  tp_start = tp;
 	  
@@ -1338,8 +1353,43 @@ void edf_t::seg_dumper( param_t & param )
     }
 
   writer.unlevel( "SEG" );
-  
+
   writer.value( "NSEGS" , num_segments );
-    
+  writer.value( "NGAPS" , (int)gaps.size() );
+  
+  // output any gaps
+  std::set<interval_t>::const_iterator gg = gaps.begin();
+  int g = 0;
+  while ( gg != gaps.end() )
+    {
+      writer.level( ++g , "GAP" );
+
+      double secs1 = gg->start * globals::tp_duration;
+      double secs2 = gg->stop  * globals::tp_duration;
+      
+      writer.value( "START" , secs1 );
+      writer.value( "STOP" ,  secs2 );
+
+      if ( valid_hms )
+	{
+	  
+	  clocktime_t starttime2 = starttime;
+	  starttime2.advance_seconds( secs1 );
+	  writer.value( "START_HMS" , starttime2.as_string() );
+
+	  clocktime_t stoptime = starttime;
+	  stoptime.advance_seconds( secs2 );
+	  writer.value( "STOP_HMS" ,  stoptime.as_string() );
+
+	}
+
+      writer.value( "DUR_SEC" , secs2 - secs1 );
+      writer.value( "DUR_MIN" , ( secs2 - secs1 ) / 60.0);
+      writer.value( "DUR_HR"  , ( secs2 - secs1 ) / ( 3600.0 ) );
+
+      ++gg;
+    }
+
+  writer.unlevel( "GAP" );
   
 }

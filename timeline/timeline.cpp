@@ -220,8 +220,6 @@ bool timeline_t::interval2records( const interval_t & interval ,
       return false;
     }
 
-  //    std::cout << "i2r: interval = " << interval << "\n";
-  
   //
   // Note: here we want to find records/samples that are inclusive w.r.t. the interval
   // so change coding of stop being 1 unit past the end below
@@ -270,11 +268,11 @@ bool timeline_t::interval2records( const interval_t & interval ,
       //      std::cout << "EDF-C\n";
 
       // old version:  get initial records/samples, nb. use ceil() to get nearest sample *after* start of interval
-
+      
       // now (v0.25+) for fractionally split things (i.e. if interval boundary does not align w/ a sample point exactly)
       // for both start and end, take the point prior to the fractional point;  this should preserve the number of samples
       // selected, i.e. in ALIGN
-
+      
       uint64_t start_record = interval.start / edf->header.record_duration_tp;
       uint64_t start_offset = interval.start % edf->header.record_duration_tp;
 
@@ -303,8 +301,9 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	floor( ( stop_plus1_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
 
       // move one sample back (i.e. if the spanning interval did not exactly land on a sample point)
-      if ( stop_sample == stop_plus1_sample )
-	{	  
+      // fixed: added 'record' check in instance of SR == 1 Hz
+      if ( stop_sample == stop_plus1_sample && stop_record == stop_plus1_record )  
+	{	
 	  if ( stop_sample == 0 )
 	    {
 	      --stop_record;
@@ -325,8 +324,6 @@ bool timeline_t::interval2records( const interval_t & interval ,
     }
   else
     {
-      
-      // std::cout << "in EDF+D\n";
       
       //
       // For a discontinuous EDF+ we need to search 
@@ -452,7 +449,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 
   //
-  // TODO?     fix for the fractional spanning intervals in the case of an EDF+C?
+  // ?TODO: potentially, also require fix for the case of fractional spanning intervals in the case of an EDF+C?
   //
   
   
@@ -1337,7 +1334,7 @@ signal_list_t timeline_t::collapse_chep2ch( signal_list_t signals ,
 	      {
 		int e1 = display_epoch( e );
 		std::set<std::string>::iterator ii = chep[ e1 ].find( label );
-		if ( ii != chep[e].end() ) chep[ e1 ].erase( ii );
+		if ( ii != chep[e1].end() ) chep[ e1 ].erase( ii );
 	      }
 	}
     }
@@ -1618,21 +1615,31 @@ uint64_t timeline_t::valid_tps(  const interval_t & interval )
     {      
       std::set<int> records = records_in_interval( interval );
       std::set<int>::const_iterator rr = records.begin();
-      int tpin = 0;//, tpout = 0;
+
+      uint64_t tpin = 0;
+
       while ( rr != records.end() )
 	{
+	  
 	  // start/stop for this record	(as above, does not use 1-past-end encoding here)
 	  interval_t rec = record2interval( *rr );
 	  
-	  // all out? (last time point tp is  dur - 1 , so GT rather than GE )
-	  //if ( interval.start > rec.stop ) tpout += rec.duration() + 1LLU;
+	  // make +1 encoding for record (same as interval)
+	  ++rec.stop;
 	  
 	  // all in?  stop is 1 past last interval
-	  if ( interval.stop <= rec.stop + 1LLU ) tpin += rec.duration() + 1LLU;
-	  
-	  // otherwise, we have partial overlap
-	  tpin += rec.stop - interval.start + 1LLU;
-	  //tpout += interval.stop - ( rec.stop + 1LLU );
+	  if ( rec.start >= interval.start &&  interval.stop <= rec.stop ) 
+	    {	      
+	      tpin += rec.duration() ;	  
+	    }
+	  else // otherwise, we have partial overlap 
+	    {
+	      uint64_t partial = 
+		( interval.stop < rec.stop ? interval.stop : rec.stop ) - 
+		( interval.start > rec.start ? interval.start : rec.start ) ;
+	      
+	      tpin += partial;
+	    }
 
 	  ++rr;
 	}
@@ -2785,10 +2792,11 @@ void timeline_t::list_spanning_annotations( const param_t & param )
     
   if ( mask_set ) 
     Helper::halt( "cannot run SPANNING with a MASK set... use RE" );
+
   
   // currently, SPANNING only for continuous EDFs
-  if ( ! edf->header.continuous )
-    Helper::halt( "currently, can only run SPANNING on continuous EDF" );
+  // if ( ! edf->header.continuous )
+  //   Helper::halt( "currently, can only run SPANNING on continuous EDF" );
   
   // given a /set/ of annotations, determine 
   //   - seconds outside of EDF
@@ -2851,6 +2859,8 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 
   uint64_t total = 0;
   
+  uint64_t total_all = 0;
+
   uint64_t total_collapsed = 0;
   
   uint64_t invalid_tps = 0;
@@ -2865,7 +2875,9 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   uint64_t earliest = 0;
 
   uint64_t furthest = 0;
-
+  
+  // TODO: track parts of recording that are not spanned
+  //std::set<interval_t> unspanned;
 
   std::set<instance_idx_t>::const_iterator aa = events.begin();
   while ( aa != events.end() )
@@ -2875,9 +2887,10 @@ void timeline_t::list_spanning_annotations( const param_t & param )
       
       //
       // track total (uncollapsed) duration across all ANNOTs
+      // i.e. whether valid or not
       //
 
-      total += interval.duration();
+      total_all += interval.duration();
       
       // 
       // what overlap, if any?
@@ -2913,6 +2926,12 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 
       if ( is_valid ) 
 	{
+	  
+	  // only count whole annotations for this total 
+	  // (i.e. entire annot must be contained in a contiguous segment
+	  //   of the record )
+
+	  total += interval.duration();
 
 	  // start of a 'new' region?
 	  
@@ -2965,6 +2984,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   writer.value( "ANNOT_SEC" , Helper::tp2sec( total )  );
   writer.value( "ANNOT_HMS" , Helper::timestring( total , ':' )  );
 
+  
   // do any (valid) annots overlap each other?
   writer.value( "ANNOT_OVERLAP" , ( total_collapsed < total ? "YES" : "NO" )  );
 
@@ -2975,6 +2995,9 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   // number of annotation segments, i.e. annotation-based analog of 
   // the SEGMENTS command  
   writer.value( "NSEGS" , annot_blocks );
+
+  // // total annotation duration, whether overlaping or not
+  // writer.value( "ALL_ANNOT_SEC" , Helper::tp2sec( total_all )  );
   
   // extent of this over-extension
   writer.value( "INVALID_SEC" , Helper::tp2sec( invalid_tps ) );

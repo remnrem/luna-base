@@ -225,9 +225,14 @@ void timeline_t::proc_chep( edf_t & edf , param_t & param )
       else 
 	{
 	  // just alter CHEP mask, retain signal (i.e. for INTERPOLATE)
+	  
+	  // by default:
 	  // true, false implies -- set all bad channels to all bad:  YES
 	  //                        set all good channels to all good: NO
-	  edf.timeline.collapse_chep2ch( signals , p[0] , p[1] , true , false ); 
+	  
+	  // but let this second option be modified
+	  bool black_and_white = param.has( "black-and-white" );
+	  edf.timeline.collapse_chep2ch( signals , p[0] , p[1] , true , black_and_white ); 
 	}
 
     }

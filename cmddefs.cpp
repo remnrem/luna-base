@@ -1054,6 +1054,8 @@ void cmddefs_t::init()
   add_var( "SUDS" , "E,TRAINER" , "PP_REM" , "Posterior probability of REM" );
   add_var( "SUDS" , "E,TRAINER" , "PP_W" , "Posterior probability of wake" );
   add_var( "SUDS" , "E,TRAINER" , "PRED" , "Predicted (most likely) stage" );
+  set_compressed( "SUDS" , tfac_t( "E,TRAINER" ) );
+
 
 
   
@@ -1078,7 +1080,7 @@ void cmddefs_t::init()
   add_param( "PSD" , "spectrum" , "" , "Calculate power spectra" );
   add_param( "PSD" , "epoch-spectrum" , "" , "Calculate per-epoch power spectra" );
   add_param( "PSD" , "dB" , "" , "Report power in decibel units" );
-
+  add_param( "PSD" , "peaks" , "" , "Estimate of spectral peaks/artifacts" );
 
   add_param( "PSD" , "no-window" , "" , "No windowing on FFT segments" );
   add_param( "PSD" , "hann"    , "" , "Use Hann window" );

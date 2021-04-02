@@ -668,67 +668,69 @@ void psc_t::construct( param_t & param )
   //    sum over channels/channel pairs
   // to get the frequencies of maximal variability for that PSC
   //
-  
-  double s=0 , s_sd = 0 ;
-  std::map<double,double> sfrqs, sfrqs_sd;
-  std::map<std::string,double> schs, schs_sd;
-  for (int k=0; k<nv; k++)
+
+  if ( 0 ) 
     {
-
-      sfrqs[ col2f[ vname[k] ] ] += means[k] * means[k];
-      sfrqs_sd[ col2f[ vname[k] ] ] += sds[k] * sds[k];
-
-      const std::string & ch1 = col2ch1[ vname[k] ];
-      schs[ ch1 ] += means[k] * means[k];
-      schs_sd[ ch1 ] += sds[k] * sds[k];
-
-      const std::string & ch2 = col2ch2[ vname[k] ];
-      if ( ch2 != "." ) 
+      double s=0 , s_sd = 0 ;
+      std::map<double,double> sfrqs, sfrqs_sd;
+      std::map<std::string,double> schs, schs_sd;
+      for (int k=0; k<nv; k++)
 	{
-	  schs[ ch2 ] += means[k] * means[k];
-	  schs_sd[ ch2 ] += sds[k] * sds[k];
+	  
+	  sfrqs[ col2f[ vname[k] ] ] += means[k] * means[k];
+	  sfrqs_sd[ col2f[ vname[k] ] ] += sds[k] * sds[k];
+	  
+	  const std::string & ch1 = col2ch1[ vname[k] ];
+	  schs[ ch1 ] += means[k] * means[k];
+	  schs_sd[ ch1 ] += sds[k] * sds[k];
+	  
+	  const std::string & ch2 = col2ch2[ vname[k] ];
+	  if ( ch2 != "." ) 
+	    {
+	      schs[ ch2 ] += means[k] * means[k];
+	      schs_sd[ ch2 ] += sds[k] * sds[k];
+	    }
 	}
-    }
-
-  // normalize each to 1.0
-  double sf = 0 , sf_sd = 0 , sc = 0 , sc_sd = 0;
-  
-  // report by frequency
-  std::map<double,double>::iterator kk = sfrqs.begin();
-  {
-    sf += kk->second;
-    sf_sd += sfrqs_sd[ kk->first ];
-    ++kk;
-  }
-  
-  kk = sfrqs.begin();
-  while ( kk != sfrqs.end() )
-    {
-      writer.level( kk->first , globals::freq_strat );
-      writer.value( "FW" , kk->second / sf );
-      writer.value( "FW_SD" , kk->second / sf_sd );
-      ++kk;
-    }
-  writer.unlevel( globals::freq_strat );
-  
-  // report by channels
-  std::map<std::string,double>::iterator cc = schs.begin();
-  while ( cc != schs.end() )
-    {
-      sc += cc->second;
-      sc_sd += schs_sd[ cc->first ];
-      ++cc;
-    }
-  
-  cc = schs.begin();
-  while ( cc != schs.end() )
-    {
-      writer.level( cc->first , globals::signal_strat );
-      writer.value( "FW" , cc->second / sc );
-      writer.value( "FW_SD" , cc->second / sc_sd );
-      ++cc;
-    }
-  
+      
+      // normalize each to 1.0
+      double sf = 0 , sf_sd = 0 , sc = 0 , sc_sd = 0;
+      
+      // report by frequency
+      std::map<double,double>::iterator kk = sfrqs.begin();
+      {
+	sf += kk->second;
+	sf_sd += sfrqs_sd[ kk->first ];
+	++kk;
+      }
+      
+      kk = sfrqs.begin();
+      while ( kk != sfrqs.end() )
+	{
+	  writer.level( kk->first , globals::freq_strat );
+	  writer.value( "FW" , kk->second / sf );
+	  writer.value( "FW_SD" , kk->second / sf_sd );
+	  ++kk;
+	}
+      writer.unlevel( globals::freq_strat );
+      
+      // report by channels
+      std::map<std::string,double>::iterator cc = schs.begin();
+      while ( cc != schs.end() )
+	{
+	  sc += cc->second;
+	  sc_sd += schs_sd[ cc->first ];
+	  ++cc;
+	}
+      
+      cc = schs.begin();
+      while ( cc != schs.end() )
+	{
+	  writer.level( cc->first , globals::signal_strat );
+	  writer.value( "FW" , cc->second / sc );
+	  writer.value( "FW_SD" , cc->second / sc_sd );
+	  ++cc;
+	}
+          
 
   //
   // Same by PSC
@@ -802,6 +804,9 @@ void psc_t::construct( param_t & param )
       
     }
   writer.unlevel( "PSC" );
+  
+  
+    }
 
 
   //
@@ -1022,29 +1027,6 @@ void psc_t::construct( param_t & param )
     }
   
 
-//   par(mfcol=c(2,3))
-//    p=8
-//    pcol = colorRampPalette( c("white","red") )(101) 
-//     ncol = colorRampPalette( c("blue","white") )(101) 
-//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$POS.Q.1[ d$PSC == p ] / d$POS.Q.2[ d$PSC == p ] )  , col = pcol , sz=2,lwr=0,upr=x ) 
-//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$NEG.Q.1[ d$PSC == p ] , col = ncol , sz=2,upr=0,lwr=-x)
-
-//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$POS.Q.2[ d$PSC == p ] , col = pcol , sz=2,lwr=0,upr=x ) 
-//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$NEG.Q.2[ d$PSC == p ] , col = ncol , sz=2,upr=0,lwr=-x)
-
-//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$POS.Q.3[ d$PSC == p ] , col = pcol , sz=2,lwr=0,upr=x ) 
-//    ltopo.heat( c = d$CH[ d$PSC == p ] , z = d$NEG.Q.3[ d$PSC == p ] , col = ncol , sz=2,upr=0,lwr=-x)
-
-
-//     col =colorRampPalette( c("blue","white","red") )(101)
-// x=2
-// p=1
-//     par(mfcol=c(2,2))
-//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$POS.Q.1[ d$PSC == p ] / d$POS.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
-//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$NEG.Q.1[ d$PSC == p ] / d$NEG.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
-
-//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$POS.Q.3[ d$PSC == p ] / d$POS.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
-//     ltopo.heat( c = d$CH[ d$PSC == p ] , z = log( d$NEG.Q.3[ d$PSC == p ] / d$NEG.Q.2[ d$PSC == p ] )  , col = col , sz=2,lwr=-x,upr=x)
 
   //
   // Output V to a file, along with variable information (channel, variable, freq)

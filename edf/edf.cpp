@@ -2148,7 +2148,7 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
       return;
     }
 
-  //    std::cout << "nd = " << ndata << " " << header.nr << " " << n_samples << "\n";
+  //  std::cout << "nd = " << ndata << " " << header.nr << " " << n_samples << "\n";
 
   // sanity check -- ie. require that the data is an appropriate length
   if ( ndata != header.nr * n_samples ) 
@@ -2534,13 +2534,14 @@ void edf_t::reference( const signal_list_t & signals0 ,
       // make copy
       copy_signal( header.label[ signals(0) ] , new_channel );
 
+      
       // switch to re-reference this copy now
       signals = header.signal_list( new_channel );
 
       // do we need to resample? 
     
       const int sig_sr = (int)header.sampling_freq( signals(0) );
-      
+     
       // resample sig, if needed (only one)
       // this slot is the 'new' one, so original signal untouched
       if ( new_sr != 0 && sig_sr != new_sr )
@@ -4479,8 +4480,6 @@ void edf_t::guess_canonicals( param_t & param , bool make_signals )
 	  
   std::string units = "uV";
   
-  if ( canon == "csECG" ) units = "mV" ;
-  
   if ( make_signals ) 
     if ( units == "uV" || units == "mV" ) 
       rescale( canonical_signal(0) , units );
@@ -4504,7 +4503,10 @@ void edf_t::guess_canonicals( param_t & param , bool make_signals )
 }
 
 
-void edf_t::make_canonicals( const std::string & file0, const std::string &  group , bool make_signals , const std::set<std::string> * cs )
+void edf_t::make_canonicals( const std::string & file0, const std::string &  group , 
+			     bool make_signals , 
+			     const std::string & prefix , 
+			     const std::set<std::string> * cs )
 {
   
   std::string file = Helper::expand( file0 );
@@ -4552,19 +4554,18 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       found_group = true;
       
       // if cs not specified, take all canonical signals as given in 
-      // the file
-      
-      if ( cs == NULL ) canons.insert( "cs" + tok[1] );
+      // the file      
+      if ( cs == NULL ) canons.insert( prefix + tok[1] );
 
       // skip if a specific list requested?
       if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
 
       // otherwise, add to the set of things to be calculated
-      sigs[ "cs" + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
-      refs[ "cs" + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
-      srs[ "cs" + tok[1] ].push_back( tok[4] ) ;
-      units[ "cs" + tok[1] ].push_back( tok[5] );
-      notes[ "cs" + tok[1] ].push_back( tok.size() == 7 ? tok[6] : "." );
+      sigs[ prefix + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
+      refs[ prefix + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
+      srs[ prefix + tok[1] ].push_back( tok[4] ) ;
+      units[ prefix + tok[1] ].push_back( tok[5] );
+      notes[ prefix + tok[1] ].push_back( tok.size() == 7 ? tok[6] : "." );
       
     }
   
@@ -4576,7 +4577,7 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
       std::set<std::string>::const_iterator ss = cs->begin();
       while ( ss != cs->end() )
 	{
-	  canons.insert( "cs" + *ss );
+	  canons.insert( *ss );
 	  ++ss;
 	}
     }

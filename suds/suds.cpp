@@ -2887,6 +2887,8 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 
   lda_posteriors_t pp = lda_t::predict( trainer.model , U_projected ) ;
 
+
+
   return pp;
 }
 
@@ -3174,7 +3176,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      weight_trainer->prd_stage = suds_t::type( reprediction.cl );
 	      
 	      // obs_stage for predicted/valid epochs only
-
+	      
 	      double kappa = 0 ; 
 	      if ( use_5class_repred ) 
 		kappa = MiscMath::kappa( reprediction.cl , str( weight_trainer->obs_stage ) , suds_t::str( SUDS_UNKNOWN )  ) ;
@@ -3224,12 +3226,50 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      if ( kappa > 0.5 ) n_kappa50++;
 	      if ( kappa > max_kappa ) max_kappa = kappa;
 	      mean_kappa +=  kappa  ;
-	      
+	 
+	      //
+	      // Verbose outputs?
+	      //
+
 	      if ( suds_t::verbose ) 
 		{
 		  wtrainer_mean_k3[ weight_trainer->id ] += kappa;
 		  wtrainer_count_k3[ weight_trainer->id ]++;
 		}
+	      
+	      //
+	      // For single trainer verbose output mode only:
+	      //
+	      
+	      if ( suds_t::single_trainer != "" && suds_t::mat_dump_file != "" )
+		{
+		  // re-predicted wtrainer : PP, predicted class
+		  
+		  std::string filename = Helper::expand( suds_t::mat_dump_file ) + ".wtrainer.pp";
+		  logger << "  writing wtrainer's PP | target matrix to " << filename << "\n";
+		  std::ofstream OUT1( filename.c_str() , std::ios::out );
+		  // header
+		  if ( target.model.labels.size() != reprediction.pp.cols() ) 
+		    Helper::halt( "internal error" );
+		  for (int i=0; i<reprediction.pp.cols(); i++) OUT1 << target.model.labels[i] << " ";
+		  OUT1 << "\n";
+		  OUT1 << reprediction.pp << "\n";
+		  OUT1.close();
+
+		  filename = Helper::expand( suds_t::mat_dump_file ) + ".wtrainer.pred";
+		  logger << "  writing wtrainer's predicted stages | target matrix to " << filename << "\n";
+		  if ( weight_trainer->epochs.size() != reprediction.cl.size() ) 
+		    Helper::halt( "internal error" );
+
+		  std::ofstream OUT2( filename.c_str() , std::ios::out );
+		  for (int i=0; i<reprediction.cl.size(); i++) OUT2 << weight_trainer->epochs[i] << "\t" << reprediction.cl[i] << "\n";
+		  OUT2.close();
+
+		}
+
+	      //
+	      // Next weight trainer
+	      //
 	      
 	      ++ww;
 	    }
@@ -3399,9 +3439,13 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       while ( ww != wbank.end() )
 	{	  
 	  suds_indiv_t * weight_trainer = ww->second;
-	  writer.level( weight_trainer->id , "WTRAINER" );
-	  double m = wtrainer_mean_k3[ weight_trainer->id ] / (double)wtrainer_count_k3[ weight_trainer->id ];
-	  writer.value( "K3" , m );
+	  
+	  if ( weight_trainer->id != target.id ) 
+	    {
+	      writer.level( weight_trainer->id , "WTRAINER" );
+	      double m = wtrainer_mean_k3[ weight_trainer->id ] / (double)wtrainer_count_k3[ weight_trainer->id ];
+	      writer.value( "K3" , m );
+	    }
 	  ++ww;
 	}
       writer.unlevel( "WTRAINER" );
@@ -3452,7 +3496,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     }
   
   //
-  // Percentile based sclaing (subsetting) 
+  // Percentile based scaling (subsetting) 
   //
 
   if ( has_wgt && suds_t::wgt_percentile > 0 ) 
@@ -3655,7 +3699,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   
   //
-  // Confiusion matrics and kappa w/ observed staging
+  // Confusion matrics and kappa w/ observed staging
   //
 
   if ( prior_staging )
@@ -3706,6 +3750,38 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	}
     }
   
+  
+  //
+  // Final SOAP evaluation of /predicted/ stages
+  //
+  
+  // lda_t lda( prediction.cl , target.U ) ; 
+  // target.model = lda.fit( suds_t::flat_priors );
+  
+  // following the self-evaluation (SOAP) procedure, we get kappa
+  // as follows:
+  
+  // build model based on predicted stages
+  
+  // assume putative 'y' and 'U' will have been constructed, and 'nve' set
+  // i.e. this will be called after proc(), or from near the end of proc()
+  
+  lda_t self_lda( final_prediction , target.U );
+  lda_model_t self_model = self_lda.fit( );
+  
+  if ( self_model.valid )
+    {
+      // get predictions: SOAP model (fitting to self)
+      lda_posteriors_t soap_final_prediction = lda_t::predict( self_model , target.U );
+      
+      double kappa5 = MiscMath::kappa( soap_final_prediction.cl , final_prediction , suds_t::str( SUDS_UNKNOWN ) );
+      double kappa3 = MiscMath::kappa( NRW( soap_final_prediction.cl ) , NRW( final_prediction ) , suds_t::str( SUDS_UNKNOWN ) );
+
+      writer.value( "SOAP" , kappa5 );
+      writer.value( "SOAP3" , kappa3 );
+    }
+
+
 
   //
   // Misc other output

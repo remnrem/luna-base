@@ -447,7 +447,7 @@ public:
 
   void guess_canonicals( param_t & , bool make_signals );
 
-  void make_canonicals( const std::string & file, const std::string &  group , bool make_signals , const std::set<std::string> * cs = NULL );
+  void make_canonicals( const std::string & file, const std::string &  group , bool make_signals , const std::string & prefix , const std::set<std::string> * cs = NULL );
     
   void flip( const int s ); 
 

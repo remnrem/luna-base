@@ -2728,14 +2728,14 @@ void proc_canonical( edf_t & edf , param_t & param )
   std::string file = param.requires( "file" );
   std::string group = param.requires( "group" );
 
-
+  std::string prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "" ;
 
   if ( ! param.has( "cs" ) )    
-    edf.make_canonicals( file, group , make_signals );
+    edf.make_canonicals( file, group , make_signals , prefix );
   else
     {
       const std::set<std::string> cs = param.strset( "cs" );
-      edf.make_canonicals( file, group , make_signals , &cs );
+      edf.make_canonicals( file, group , make_signals , prefix , &cs );
     }
 }
 
