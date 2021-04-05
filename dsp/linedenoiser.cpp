@@ -38,8 +38,8 @@ void dsptools::line_denoiser( edf_t & edf , param_t & param )
   std::vector<double> f = param.dblvector( "f" );
 
   // do by epoch?
-  bool epoch = param.has( "epoch" );
-  if ( epoch ) logger << "  iterating over epochs\n";
+  bool by_epoch = param.has( "epoch" );
+  if ( by_epoch ) logger << "  iterating over epochs\n";
   else logger << "  correcting for entire signal\n";
 	 
   // options
@@ -57,7 +57,7 @@ void dsptools::line_denoiser( edf_t & edf , param_t & param )
   logger << "  running line denoiser for " << f.size() << " target frequencies\n"
 	 << "  noise/neighbour band width " << w_noise << " and " << w_neigh << " Hz respectively\n";
 
-  // process each signal
+   // process each signal
   for (int s=0; s<ns; s++)
     {
       // only process data channels
@@ -73,7 +73,7 @@ void dsptools::line_denoiser( edf_t & edf , param_t & param )
       std::vector<double> orig = * slice0.pdata();
   
       // do by epoch
-      int ne = epoch ? edf.timeline.first_epoch() : 1 ; 
+      int ne = by_epoch ? edf.timeline.first_epoch() : 1 ; 
 	
       // iterate over each epoch
       
@@ -84,13 +84,13 @@ void dsptools::line_denoiser( edf_t & edf , param_t & param )
 	{
 	  
 	  // next epoch
-	  int epoch = epoch ? edf.timeline.next_epoch() : 1 ; 
+	  int epoch = by_epoch ? edf.timeline.next_epoch() : 1 ; 
 
 	  // all done?
 	  if ( epoch == -1 ) break;
 	  
 	  // get data
-	  interval_t interval = epoch ? edf.timeline.epoch( epoch ) : edf.timeline.wholetrace();
+	  interval_t interval = by_epoch ? edf.timeline.epoch( epoch ) : edf.timeline.wholetrace();
 
 	  slice_t slice( edf , signals(s) , interval );
 
@@ -98,7 +98,10 @@ void dsptools::line_denoiser( edf_t & edf , param_t & param )
 	  
 	  // do procedure, and store
 	  filt.push_back( line_denosier( data , sr , f , w_noise , w_neigh ) );
-	  
+
+	  // done?
+	  if ( ! by_epoch ) break;
+
 	  // next epoch
 	}
       
@@ -112,9 +115,8 @@ void dsptools::line_denoiser( edf_t & edf , param_t & param )
       logger << "  updating " << signals.label(s) << "\n";
 
       // and send back to the EDF
-      edf.update_signal( signals(s) , &orig );
-
-      if ( ! epoch ) break;
+      edf.update_signal( signals(s) , &orig );      
+      
     }
 			    
   
@@ -126,7 +128,7 @@ std::vector<double> line_denosier( const std::vector<double> * x ,
 				   const double w_noise ,
 				   const double w_neigh )
 {
-  
+
   const int n = x->size();
   // DFT of data
   real_FFT eegfft;
@@ -187,7 +189,8 @@ std::vector<double> line_denosier( const std::vector<double> * x ,
 	  mn += eegfft.mag[j];
 	  ++nn;
 	}
-      
+
+  
       mn /= nn;
 
       //% Eulers formula: replace noise components with new mean amplitude combined with phase, that is retained from the original data
@@ -206,8 +209,9 @@ std::vector<double> line_denosier( const std::vector<double> * x ,
 
   real_iFFT ifft( n, n , Fs );
   ifft.apply( eegfftX );
-    
+
   std::vector<double> f = ifft.inverse();
+
   return f;
 
 }

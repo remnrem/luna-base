@@ -405,6 +405,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
       cwt.run();
 
+
       //
       // Run baseline FFT on the entire signal 
       //

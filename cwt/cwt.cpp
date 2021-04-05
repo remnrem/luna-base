@@ -177,7 +177,6 @@ void CWT::run()
       eegfft.apply( *data );
       eegfftX = eegfft.transform();
     }
-  
 
   //
   // loop through frequencies and compute synchronization
@@ -206,8 +205,8 @@ void CWT::run()
 	{
 	  if ( fi != 0 ) eegfft.reset();
 	  eegfft.init( data->size() ,  n_conv_pow2 , srate );
-	  eegfft.apply( *data );
-	  eegfftX = eegfft.transform();
+	  eegfft.apply( *data );	  
+	  eegfftX = eegfft.transform();	  
 	}
 
       
@@ -218,23 +217,23 @@ void CWT::run()
       std::vector<dcomp> w = alt_spec ? alt_wavelet(fi) : wavelet(fi);
       
       // std::cerr << "n_conv_pow2 = " << n_conv_pow2 << "\n"
-      // 	    << "n_data = " << n_data << "\n"
-      // 	    << "n_convolution " << n_convolution << "\n"
-      // 	    << "half_of_wavelet_size " << half_of_wavelet_size << "\n"
-      // 	    << "n_wavelet " << n_wavelet << "\n";
-
-
+      // 		<< "n_data = " << n_data << "\n"
+      // 		<< "n_convolution " << n_convolution << "\n"
+      // 		<< "half_of_wavelet_size " << half_of_wavelet_size << "\n"
+      // 		<< "n_wavelet " << n_wavelet << "\n";
+      
+      
       //
       // First FFT
       //
       
+      
       FFT fft1( w.size() , n_conv_pow2 , 1 );
       
       fft1.apply( w );
-
+      
       std::vector<dcomp> wt = fft1.transform();
-
-
+      
 
       //
       // Scaling factor to ensure similar amplitudes of original traces and wavelet-filtered signal
@@ -251,15 +250,15 @@ void CWT::run()
 	    wt[i] = ( dcomp( 2, 0 ) * wt[i] ) / max;
 	}
 
+
       
       //
       // Convolution in the frequency domain 
       //
-
       std::vector<dcomp> y( n_conv_pow2 );
+
       for (int i=0;i<eegfftX.size();i++) y[i] = eegfftX[i] * wt[i]; 
 
-      
       //
       // Inverse FFT, normalized by 1/Nfft, back to time-domain
       //
@@ -269,7 +268,7 @@ void CWT::run()
       ifft.apply( y );
 
       std::vector<dcomp> eegconv_tmp = ifft.scaled_transform() ;
-     
+      
       
       //
       // Trim
@@ -289,8 +288,8 @@ void CWT::run()
 
       for (int i=0; i<num_pnts*num_trials; i++)
 	ph[fi][i] = atan2( eegconv[i].imag() , eegconv[i].real() );
-
-
+      
+      
       //
       // optionally, extract real/imag parts
       //
@@ -320,6 +319,7 @@ void CWT::run()
 	  ++cnt;
 	  temppower[i] = num_trials > 1 ? x / (double)num_trials : x ;
 	}
+
 
       //
       // Record in freq x time-point matrix; use the 'baseline

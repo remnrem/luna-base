@@ -1015,9 +1015,17 @@ void psd_shape_metrics( const std::vector<double> & f , // frq
   double ppmin, ppmax;
   MiscMath::minmax( pp , &ppmin, &ppmax );
   
-  // peak-to-peak of difference
-  *m1 = ( ppmax - ppmin ) ; 
+  // sum( abs(diff(pp)) ) 
+  *m1 = 0; 
+  for (int i=1; i<n; i++)
+    *m1 += abs( pp[i] - pp[i-1] ) ; 
   
+  // peak-to-peak of difference
+  if ( 0 ) 
+    {
+      *m1 = ( ppmax - ppmin ) ; 
+    }  
+
   // kurtosis of delta (i.e. assume mean = 0 )
   double numer = 0 , denom = 0;
   for (int i=0; i<n; i++)
