@@ -167,7 +167,7 @@ void CWT::run()
   // Initial FFT of data 
   //
 
-  real_FFT eegfft;
+  FFT eegfft;
   std::vector<dcomp> eegfftX;
 
   if ( fixed_wlen ) 

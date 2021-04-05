@@ -59,6 +59,11 @@ void dsptools::design_cwt( param_t & param )
   
   cwt.set_sampling_rate( fs );
 
+  // load dummy (empty) data : we only want to get the wavelet out (no data here)
+  // but the n_data needs to get initialized before doing anything
+  std::vector<double> dummy(0);
+  cwt.load( &dummy );
+
   if ( alt_spec )
     {
       cwt.set_timeframe( 50.0 / timelength );
