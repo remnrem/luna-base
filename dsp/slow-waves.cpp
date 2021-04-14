@@ -355,6 +355,12 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf )
 
 
   //
+  // Verbose per-SO and per-epoch information next
+  //
+
+  if ( ! verbose ) return;
+
+  //
   // Per SO output
   //
 

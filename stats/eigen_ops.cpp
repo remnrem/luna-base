@@ -80,7 +80,7 @@ void eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
 }
 
 
-void eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w )
+void eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool second_rescale )
 {
   // 1) winsorize at +/- w 
   // 2) 
@@ -122,7 +122,8 @@ void eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w )
   // finally, also scale by mean/variance too, just to ensure correct 
   // overall scale
 
-  scale( m , true );
+  if ( second_rescale ) 
+    scale( m , true );
 
 }
 

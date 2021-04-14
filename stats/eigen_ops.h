@@ -33,7 +33,7 @@ namespace eigen_ops {
   void scale( Eigen::Ref<Eigen::MatrixXd> m , bool );  
   //  void scale( Eigen::Ref<Eigen::VectorXd> m , bool );  
 
-  void robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double );  
+  void robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double , bool second_rescale = true );  
 
   double sdev( const Eigen::VectorXd & x );
 

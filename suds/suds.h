@@ -298,6 +298,9 @@ struct suds_t {
     // wgt1: (do not) use backskip re-weighting
     use_repred_weights = param.has( "wgt-repred" ) ? Helper::yesno( param.value( "wgt-repred" ) ) : true ;
 
+    // use median (not mean) repred weights for multiple w-trainers
+    use_median_repred_weights = param.has( "wgt-repred-median" );
+
     // use MCC instead of kappa for weighting
     use_mcc = param.has( "wgt-mcc" );
     
@@ -319,6 +322,7 @@ struct suds_t {
     
     // only pick 1 trainer of all db (i.e. for testing purposes w/ mat /verbose output    
     single_trainer = param.has( "single-trainer" ) ? param.value( "single-trainer" ) : "" ;
+    single_wtrainer = param.has( "single-wtrainer" ) ? param.value( "single-wtrainer" ) : "" ;
 
     // NR/R/W or N1/N2/N3/R/W classification?
     n_stages = param.has( "3-stage" ) ? 3 : 5;
@@ -336,6 +340,14 @@ struct suds_t {
     required_epoch_n = 10;
     if ( param.has( "req-epochs" ) ) required_epoch_n = param.requires_int( "req-epochs" );
 
+    max_epoch_n = -1;
+    if ( param.has( "max-epochs" ) ) max_epoch_n = param.requires_int( "max-epochs" );
+
+    // enfore the same # of each epoch 
+    // (i.e. drop to the min) 
+    equalize_stages = param.has( "equalize-stages" );
+
+    
     // select /exactly/ N epochs (at random) from each stage/trainer
     // N1, N2, N3, REM, W (or 3 stages if with have '3-stage'
     use_fixed_trainer_req = param.has( "fixed-epochs" );
@@ -362,6 +374,11 @@ struct suds_t {
     
     verbose = param.has( "verbose" );
   
+    // use MTM instead of Welch  : sets 'tw' , and # tapers = 2*tw-1 , e.g. mtm=15
+    use_mtm = param.has( "mtm" );
+    mt_tw = use_mtm ? param.requires_int( "mtm" ) : 0 ;
+    mt_nt = 2 * mt_tw - 1 ; 
+    
     // ultra verbose -- add each TRAINER one at a time and report kappa/MCC
     one_by_one = param.has( "1x1" );
 
@@ -455,6 +472,12 @@ struct suds_t {
   
   static std::vector<std::string> siglab;
 
+  static bool use_mtm;
+
+  static double mt_tw;
+  
+  static int mt_nt;
+  
   static std::vector<double> lwr;
 
   static std::vector<double> upr;
@@ -463,6 +486,8 @@ struct suds_t {
 
   static bool use_repred_weights;
 
+  static bool use_median_repred_weights;
+  
   static bool equal_wgt_in_selected;
 
   static bool use_mcc;
@@ -486,6 +511,7 @@ struct suds_t {
   static bool cheat;
 
   static std::string single_trainer;
+  static std::string single_wtrainer;
 
   static double denoise_fac;
 
@@ -503,6 +529,8 @@ struct suds_t {
   static bool ignore_target_priors;
 
   static int required_epoch_n;
+  static int max_epoch_n;
+  static bool equalize_stages;
 
   static double required_comp_p;
   

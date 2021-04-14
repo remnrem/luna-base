@@ -79,6 +79,12 @@ void psc_t::construct( param_t & param )
 
   if ( id_includes.size() > 0 ) logger << "  read " << id_includes.size() << " IDs to include\n";
   if ( id_excludes.size() > 0 ) logger << "  read " << id_excludes.size() << " IDs to exclude\n";
+
+  //
+  // Require all obs, versus case-wise dropping
+  //
+  
+  bool drop_incomplete_rows = param.has( "drop-incomplete-rows" );
   
   //
   // make any variables absolute values
@@ -120,24 +126,12 @@ void psc_t::construct( param_t & param )
   
   std::string projection = param.has( "proj" ) ? param.value( "proj" ) : "" ;
 
-  //
-  // Output input matrix too?
-  //
-
-  bool output_input = param.has( "output-input" );
-  
-  //
-  // Only output U matrix 
-  //
-
-  bool only_u = ! param.has( "not-only-u" );
     
-
   //
-  // Dump component definitions in a separate text file
+  // Dump component definitions and raw data in a separate text file
   //
 
-  std::string vdump = param.has( "v-matrix" ) ? param.value( "v-matrix" ) : "" ;
+  std::string vdump = param.has( "dump" ) ? param.value( "dump" ) : "" ;
   
   
   //
@@ -220,8 +214,11 @@ void psc_t::construct( param_t & param )
       if ( epoch && cols.find( "E" ) == cols.end() ) Helper::halt( "no E column in " + infile );
       bool ch1 = cols.find( "CH" ) != cols.end();
       bool ch2 = cols.find( "CH1" ) != cols.end() && cols.find( "CH2" ) != cols.end();
-      if ( ch1 == ch2 ) Helper::halt( "require either CH or CH1 & CH2 in " + infile );
-      if ( cols.find( "F" ) == cols.end() ) Helper::halt( "no F column in " + infile );
+      bool frq = cols.find( "F" ) != cols.end() ;
+      
+      // channel and frequency are optional
+      // if ( ch1 == ch2 ) Helper::halt( "require either CH or CH1 & CH2 in " + infile );
+      // if ( cols.find( "F" ) == cols.end() ) Helper::halt( "no F column in " + infile );
 
       int id_slot = -1;
       int e_slot = -1;
@@ -255,6 +252,7 @@ void psc_t::construct( param_t & param )
 	{
 	  // looking for ID F CH         --> PSD 
 	  //  OR         ID F CH1 CH2    --> LCOH (default)  
+	  //  OR         ID              --> HYPNO
 
 	  // in epoch mode, looking for ID and E... we merge these to ID = ID:E
 
@@ -278,8 +276,8 @@ void psc_t::construct( param_t & param )
 	  // skip if person is on an exclude list
 	  if ( id_excludes.size() != 0 && id_excludes.find( id ) != id_excludes.end() ) continue;	  
 	  
-	  // channels                                                                                                          
-          if ( chs.size() != 0 )
+	  // channels requested (if channels present in this file)
+          if ( chs.size() != 0 && ( ch1 || ch2 ) )
             {
               bool okay = true;
               if ( ch_slot == -1 )
@@ -292,16 +290,19 @@ void psc_t::construct( param_t & param )
             }
 
 	  std::string ch = "";
-	  	  
-	  if ( ch_slot == -1 )
+	  
+	  if ( ch_slot != -1 )
+	    ch = tok[ ch_slot ];
+	  else if ( ch1_slot != -1 && ch2_slot != -1 )
 	    ch = tok[ ch1_slot ] + "." + tok[ ch2_slot ];
 	  else
-	    ch = tok[ ch_slot ];
+	    ch = "-"; // or '-' if no CH vars
 
-	  // store as string and also numeric (for output)
-	  std::string f = tok[ f_slot ] ; 
+	  // store as string and also numeric (for output) [ or '0' if no F variable ] 
+	  std::string f = f_slot != -1 ? tok[ f_slot ] : "0" ; 
 
-	  if ( flwr > 0 || fupr > 0 )
+	  // filter on frequency, if present
+	  if ( f_slot != -1 && ( flwr > 0 || fupr > 0 ) ) 
 	    {
 	      double fn;
 	      if ( ! Helper::str2dbl( f , &fn ) )
@@ -310,16 +311,31 @@ void psc_t::construct( param_t & param )
 	      if ( flwr > 0 && fn < flwr ) continue;
 	      if ( fupr > 0 && fn > fupr ) continue;
 	    }
-		  
+
+	  
+	  // Get values into the map 
 	  std::map<int,std::string>::const_iterator ii = slot2var.begin();
 	  while ( ii != slot2var.end() )
 	    {
+	      
+	      // is this missing? 
+	      if ( Helper::iequals( tok[ ii->first ] , "NA" ) 
+		   || Helper::iequals( tok[ ii->first ] , "nan" ) 
+		   || Helper::iequals( tok[ ii->first ] , "inf" ) ) 
+		{
+		  ++ii;
+		  continue;
+		}
+		   
+	      
 	      double x;
-	      if ( ! Helper::str2dbl( tok[ ii->first ] , &x ) ) Helper::halt( "bad value in " + infile );
+	      if ( ! Helper::str2dbl( tok[ ii->first ] , &x ) ) 
+		Helper::halt( "bad value in " + infile + "\n" 
+			      + ii->second + " --> [" + tok[ ii->first ] + "]" );
 
 	      // make absolute?
 	      if ( toabs.find( ii->second ) != toabs.end() ) x = fabs( x );
-
+	      
 	      // take log?
 	      if ( tolog.find( ii->second ) != tolog.end() ) x = 10 * log10( x ) ;
 
@@ -346,6 +362,7 @@ void psc_t::construct( param_t & param )
   std::map<std::string,std::string> col2ch1, col2ch2; 
   std::map<std::string,double> col2f;
   std::set<std::string> rows, cols;
+  std::set<std::string> drop_indivs;
   std::vector<std::string> id;
   std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > >::const_iterator ii1 = i2c2f2v.begin();
   while ( ii1 != i2c2f2v.end() )
@@ -368,7 +385,7 @@ void psc_t::construct( param_t & param )
 
 		  col2ch[ col_name ] = ii2->first;
 		  std::vector<std::string> ctok = Helper::parse( ii2->first , "." );
-		  col2ch1[ col_name ] = ctok[0];
+		  col2ch1[ col_name ] = ctok[0] ;
 		  col2ch2[ col_name ] = ctok.size() == 2 ? ctok[1] : "." ; 
 		  
 		  double ff;
@@ -395,14 +412,109 @@ void psc_t::construct( param_t & param )
 
   if ( rows.size() == 0 || cols.size() == 0 ) 
     return;
+
+
+  //
+  // Find individuals to drop (prior to populating the matrix
+  //
   
+  std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss1 = slot.begin();
+  while ( ss1 != slot.end() )
+    {
+      std::map<std::string,std::map<std::string,int> >::const_iterator ss2 = ss1->second.begin();
+      while ( ss2 != ss1->second.end() )
+	{
+	  std::map<std::string,int>::const_iterator ss3 = ss2->second.begin();
+	  while ( ss3 != ss2->second.end() )
+	    {
+
+	      // get all individuals for this column?	      
+	      std::set<std::string>::const_iterator ii = rows.begin();
+	      while ( ii != rows.end() )
+		{
+		 
+		  // find channel?
+		  const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & dat = i2c2f2v.find( *ii )->second;
+		  if ( dat.find( ss1->first ) == dat.end() ) 
+		    {
+		      if ( drop_incomplete_rows )
+			{
+			  drop_indivs.insert( *ii );
+			  ++ii; continue; 
+			}
+		      Helper::halt( "no channel " + ss1->first + " for individual " + *ii );
+		    }
+
+		  // find frequency?
+		  const std::map<std::string,std::map<std::string,double> > & dat2 = dat.find( ss1->first )->second;
+		  if ( dat2.find( ss2->first ) == dat2.end() ) 
+		    {
+		      if ( drop_incomplete_rows )
+			{
+			  drop_indivs.insert( *ii );
+			  ++ii; continue; 
+			}
+		      Helper::halt( "no frequency " + ss2->first + " for individual " + *ii );
+		    }
+
+		  // find variable?
+		  const std::map<std::string,double> & dat3 = dat2.find( ss2->first )->second;
+		  if ( dat3.find( ss3->first ) == dat3.end() ) 
+		    {
+		      if ( drop_incomplete_rows )
+			{
+			  drop_indivs.insert( *ii );
+			  ++ii; continue; 
+			}
+		      Helper::halt( "no variable " + ss3->first + " for individual " + *ii );
+		    }
+		  
+		  ++ii;
+		}
+	      
+	      ++ss3;
+	    }
+	  ++ss2;
+	}
+      ++ss1;
+    }
+
+
+  if ( drop_incomplete_rows )
+    logger << "  identified " << drop_indivs.size() << " of " << rows.size() << " individuals with at least some missing data\n";
+  
+  if ( rows.size() - drop_indivs.size() <= 2 ) 
+    Helper::halt( "not enough observationns for PSC analysis" );
+
+  // clean up rows
+  if ( drop_indivs.size() > 0 ) 
+    {
+      std::set<std::string>::const_iterator dd = drop_indivs.begin();
+      while ( dd != drop_indivs.end() )
+	{
+	  rows.erase( rows.find( *dd ) );
+	  ++dd;
+	}
+      
+      // re-populate ID list
+      id.clear();
+      dd = rows.begin();
+      while ( dd != rows.end() )
+	{
+	  id.push_back( *dd );
+	  ++dd;
+	}
+    }
+
+
   //
   // Populate matrix
   //
   
   Eigen::MatrixXd U( rows.size() , cols.size() );
   
-  std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss1 = slot.begin();
+  //std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss1 (above)
+  ss1 = slot.begin();
   while ( ss1 != slot.end() )
     {
       std::map<std::string,std::map<std::string,int> >::const_iterator ss2 = ss1->second.begin();
@@ -417,20 +529,20 @@ void psc_t::construct( param_t & param )
 	      std::set<std::string>::const_iterator ii = rows.begin();
 	      while ( ii != rows.end() )
 		{
-
+		 		  
 		  // find channel?
 		  const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & dat = i2c2f2v.find( *ii )->second;
-		  if ( dat.find( ss1->first ) == dat.end() ) Helper::halt( "no channel " + ss1->first + " for individual " + *ii );
+		  //if ( dat.find( ss1->first ) == dat.end() ) Helper::halt( "no channel " + ss1->first + " for individual " + *ii );
 
 		  // find frequency?
 		  const std::map<std::string,std::map<std::string,double> > & dat2 = dat.find( ss1->first )->second;
-		  if ( dat2.find( ss2->first ) == dat2.end() ) Helper::halt( "no frequency " + ss2->first + " for individual " + *ii );
+		  //if ( dat2.find( ss2->first ) == dat2.end() ) Helper::halt( "no frequency " + ss2->first + " for individual " + *ii );
 		    		    
 		  // find variable?
 		  const std::map<std::string,double> & dat3 = dat2.find( ss2->first )->second;
-		  if ( dat3.find( ss3->first ) == dat3.end() ) Helper::halt( "no variable " + ss3->first + " for individual " + *ii );
+		  //if ( dat3.find( ss3->first ) == dat3.end() ) Helper::halt( "no variable " + ss3->first + " for individual " + *ii );
 		  
-		  // all okay, store
+		  // these have all been checked now: should be okay to add to the store
 		  U( row, ss3->second ) = dat3.find( ss3->first)->second;
 		  ++row;
 		  ++ii;
@@ -443,7 +555,8 @@ void psc_t::construct( param_t & param )
       ++ss1;
     }
 
-  logger << "  good, all expected observations found, no missing data\n";
+  logger << "  finished making regular data matrix on " << rows.size()  << " individuals\n";
+
 
 
   //
@@ -451,7 +564,7 @@ void psc_t::construct( param_t & param )
   //
 
   i2c2f2v.clear();
-
+  
 
   //
   // Check for invariant columns
@@ -461,8 +574,11 @@ void psc_t::construct( param_t & param )
   means = U.colwise().mean();
   sds = ((U.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
   for (int i=0; i < sds.size(); i++)
-    if ( sds[i] < EPS ) Helper::halt( "invariant column in input\n" );
-  
+    if ( sds[i] < EPS ) 
+      {
+	Helper::halt( "at least one invariant column in input; first = : " + vname[i] );
+      }
+
 
   //
   // Outliers?
@@ -575,24 +691,6 @@ void psc_t::construct( param_t & param )
 
   Eigen::MatrixXd O = U;
 
-
-  //
-  // Output input data ?
-  //
-
-  if ( output_input && ! only_u ) 
-    {
-      for (int i=0;i<ni;i++)
-	{
-	  writer.id( id[i] , "." );
-	  for (int j=0;j<nv;j++)
-	    {
-	      writer.level( j+1 , "VAR" );
-	      writer.value( "X" , U(i,j) );
-	    }
-	  writer.unlevel( "VAR" );
-	}
-    }
 
   
   //
@@ -1035,9 +1133,9 @@ void psc_t::construct( param_t & param )
   if ( vdump != "" ) 
     {
       
-      logger << "  dumping V and meta-information to file: " << vdump << "\n";
+      logger << "  dumping V and meta-information to file: " << vdump << ".vars \n";
 
-      std::ofstream V1( vdump.c_str() , std::ios::out );
+      std::ofstream V1( (vdump+".vars").c_str() , std::ios::out );
       
       // V : first nc component
       
@@ -1045,9 +1143,10 @@ void psc_t::construct( param_t & param )
 
       V1 << "\tMN\tSD";
       
+      // components
       for (int c=0;c<nc; c++ )
 	V1 << "\tV" << c+1 ;      
-      
+            
       // quantiles for each variable?
       if ( q > 0 ) 
 	for (int c=0;c<nc; c++ )
@@ -1087,7 +1186,7 @@ void psc_t::construct( param_t & param )
 	  // V coefficients
 	  for (int c=0;c<nc; c++ )
 	    V1 << "\t" << V(k,c);
-
+	  	  
 	  // Quantile means?
 	  if ( q > 0 ) 
 	    for (int c=0;c<nc; c++ )
@@ -1099,65 +1198,105 @@ void psc_t::construct( param_t & param )
 	}
       V1.close();
 
+      
+
+      //
+      // Input matrix (and PSC)
+      //
+      
+      logger << "  dumping U and PSCs to file: " << vdump << ".data\n";
+      
+      std::ofstream V2( (vdump+".data").c_str() , std::ios::out );
+      
+      V2 << "ID";
+      
+      // components
+      for (int c=0;c<nc; c++ )
+	V2 << "\tPSC" << c+1 ;      
+      
+      // variables
+      for (int c=0; c<nv; c++)
+	V2 << "\t" << vname[ c ] ; 
+      
+      V2 << "\n";
+      
+      //
+      // Data rows
+      //
+           
+      for (int i=0;i<ni;i++)
+	{
+	  
+	  V2 << id[i] ;
+	  
+	  // components
+	  for (int j=0;j<nc;j++)
+	    V2 << "\t" << U(i,j);
+	  
+	  // variables  (O is original data)
+	  for (int c=0;c<nv; c++ )
+	    V2 << "\t" << O(i,c);	      
+
+	  V2 << "\n";
+	}
+      
+      V2.close();
+        
     }
-
-
+  
 
   //
   // Output to standard DB
   //
-
-  if ( ! only_u )
+  
+  // W
+  
+  double wsumsq = W.array().square().sum();
+  
+  double cve = 0;
+  
+  for (int j=0;j< W.size(); j++)
     {
-      
-      // W
-      
-      double wsumsq = W.array().square().sum();
-
-      double cve = 0;
-      
-      for (int j=0;j< W.size(); j++)
+      writer.level( j+1 , "I" );
+      writer.value( "W" , W(j) );
+      double ve = ( W(j) * W(j) ) / wsumsq;
+      cve += ve;
+      writer.value( "VE" , ve );
+      writer.value( "CVE" , cve );	  
+      writer.value( "INC" , j < nc ? 1 : 0 );
+    }
+  
+  writer.unlevel( "W" );
+  
+  
+  // V (transpose) (only first 'nc' components, as U/V etc are sorted 
+  // in decreasing order
+  
+  if ( 1 || vdump == "" ) 
+    {
+      for (int j=0;j<nc;j++)
 	{
 	  writer.level( j+1 , "I" );
-	  writer.value( "W" , W(j) );
-	  double ve = ( W(j) * W(j) ) / wsumsq;
-	  cve += ve;
-	  writer.value( "VE" , ve );
-	  writer.value( "CVE" , cve );	  
-	  writer.value( "INC" , j < nc ? 1 : 0 );
+	  for (int k=0;k<nv;k++)
+	    {
+	      writer.level( vname[k] , "J" );
+	      writer.value( "V" , V(k,j) );	// nb transpose
+	    }
+	  writer.unlevel( "J" );
 	}
-
-      writer.unlevel( "W" );
+      writer.unlevel( "I" );
       
-
-      // V (transpose) (only first 'nc' components, as U/V etc are sorted 
-      // in decreasing order
-      
-      if ( vdump == "" ) 
+      // VARS
+      for (int j=0;j<nv;j++)
 	{
-	  for (int j=0;j<nc;j++)
-	    {
-	      writer.level( j+1 , "I" );
-	      for (int k=0;k<nv;k++)
-		{
-		  writer.level( vname[k] , "J" );
-		  writer.value( "V" , V(k,j) );	// nb transpose
-		}
-	      writer.unlevel( "J" );
-	    }
-	  writer.unlevel( "I" );
-	  
-	  // VARS
-	  for (int j=0;j<nv;j++)
-	    {
-	      writer.level( vname[j] , "J" );
-	      writer.value( "CH" , col2ch[ vname[j] ] );
-	      writer.value( "F" , col2f[ vname[j] ] );
-	      writer.value( "VAR" , col2var[ vname[j] ] );
-	    }
-	  writer.unlevel( "J" );      
+	  writer.level( vname[j] , "J" );
+	  writer.value( "CH" , col2ch[ vname[j] ] );
+	  writer.value( "F" , col2f[ vname[j] ] );
+	  writer.value( "VAR" , col2var[ vname[j] ] );
 	}
+      writer.unlevel( "J" );      
     }
+  
   
   
   //

@@ -49,6 +49,7 @@
 
 #include "dsp/resample.h"
 #include "fftw/fftwrap.h"
+#include "dsp/mtm/mtm.h"
 #include "dsp/tv.h"
 
 extern logger_t logger;
@@ -75,10 +76,14 @@ std::vector<std::string> suds_t::siglab;
 std::vector<double> suds_t::lwr;
 std::vector<double> suds_t::upr;
 std::vector<int> suds_t::sr;
+bool suds_t::use_mtm; 
+double suds_t::mt_tw = 15;
+int suds_t::mt_nt = 2 * suds_t::mt_tw - 1 ; 
 
 bool suds_t::use_kl_weights;
 bool suds_t::use_soap_weights;
 bool suds_t::use_repred_weights;
+bool suds_t::use_median_repred_weights;
 bool suds_t::use_mcc;
 bool suds_t::use_5class_repred;
 bool suds_t::use_rem_repred;
@@ -90,6 +95,7 @@ double suds_t::wgt_mean_th;
 
 bool suds_t::cheat;
 std::string suds_t::single_trainer = "";
+std::string suds_t::single_wtrainer = "";
 double suds_t::denoise_fac;
 bool suds_t::standardize_psd = true;
 bool suds_t::standardize_psc = false;
@@ -100,6 +106,8 @@ bool suds_t::use_best_guess = true;
 bool suds_t::ignore_target_priors = false;
 std::vector<double> suds_t::outlier_ths;
 int suds_t::required_epoch_n = 5;
+int suds_t::max_epoch_n = -1;
+bool suds_t::equalize_stages = false;
 double suds_t::required_comp_p = 0.05;
 bool suds_t::self_classification = false;
 double suds_t::self_classification_prob = 99;
@@ -896,66 +904,128 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  // mean centre epoch
 	  MiscMath::centre( d );
 	  
-	  // pwelch() to obtain full PSD
-	  const double overlap_sec = fft_segment_overlap;
-	  const double segment_sec  = fft_segment_size;
-	  const int total_points = d->size();
-	  const int segment_points = segment_sec * suds_t::sr[s];
-	  const int noverlap_points  = overlap_sec * suds_t::sr[s];
-	  
-	  // implied number of segments
-	  int noverlap_segments = floor( ( total_points - noverlap_points) 
-					 / (double)( segment_points - noverlap_points ) );
-	  
-	  PWELCH pwelch( *d , 
-			 suds_t::sr[s] , 
-			 segment_sec , 
-			 noverlap_segments , 
-			 window_function );
-	  	  	  
-	  // using bin_t, 1 means no binning
-	  bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , 1 ); 
-	  
-	  bin.bin( pwelch.freq , pwelch.psd );
+	  //
+	  // Welch of MTM to get spectra
+	  //
 
 	  bool has_zeros = false;
 
-	  for ( int i = 0 ; i < bin.bfa.size() ; i++ )
+	  if ( suds_t::use_mtm ) // use MTM PSD
 	    {
+
+	      // suds_t::lwr[s] suds_t::upr[s]
 	      
-	      if ( bin.bfa[i] >= suds_t::lwr[s] && bin.bfb[i] <= suds_t::upr[s] )
+	      double segment_size_sec = 30;
+	      double segment_step_sec = 30;
+	      const int segment_size = suds_t::sr[s] * segment_size_sec;
+	      const int segment_step = suds_t::sr[s] * segment_step_sec;
+	      
+	      mtm_t mtm( suds_t::mt_tw , suds_t::mt_nt );
+	      mtm.dB = false;
+	      mtm.opt_remove_mean = true;
+	      mtm.opt_remove_trend = false;
+      
+	      // false --> no versbose output
+	      mtm.apply( d , suds_t::sr[s] , segment_size , segment_step , false );
+	      
+	      // get PSD
+	      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+		{
+		  if ( mtm.f[i] >= suds_t::lwr[s]  && mtm.f[i] <= suds_t::upr[s] )
+		    {
+		      
+		      // see note below : also, converson to dB here too
+                      if ( mtm.spec[i] <= 0 )
+                        {
+                          has_zeros = true;
+                          mtm.spec[i] = -40 ; // -40dB                                                                                                                                 
+                        }
+		      else
+			mtm.spec[i] = 10*log10( mtm.spec[i] );
+		      
+		      // PSD
+		      if ( en_good == 0 ) firstrow.push_back( mtm.spec[i] );
+		      else PSD( en_good , col ) =  mtm.spec[i] ;
+		      
+		      // bands?
+		      if ( suds_t::use_bands )
+			{
+			  if ( en_good == 0 ) firstrow2.push_back( mtm.spec[i] );
+			  else R( en_good , col ) = mtm.spec[i] ;
+			  
+			  // only track on first epoch                                                                                                                                  
+			  if ( en_good == 0 )
+			    frq.push_back( mtm.f[i] );			  
+			}
+		      
+		      // next column in matrix being constructed
+		      ++col;		      
+		    }
+		}
+	      
+	    }
+	  else // use Welch PSD
+ 	    {
+
+	      const double overlap_sec = fft_segment_overlap;
+	      const double segment_sec  = fft_segment_size;
+	      const int total_points = d->size();
+	      const int segment_points = segment_sec * suds_t::sr[s];
+	      const int noverlap_points  = overlap_sec * suds_t::sr[s];
+	  
+	      // implied number of segments
+	      int noverlap_segments = floor( ( total_points - noverlap_points) 
+					     / (double)( segment_points - noverlap_points ) );
+	  
+	      PWELCH pwelch( *d , 
+			     suds_t::sr[s] , 
+			     segment_sec , 
+			     noverlap_segments , 
+			     window_function );
+	  	  	  
+	      // using bin_t, 1 means no binning
+	      bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , 1 ); 
+	      bin.bin( pwelch.freq , pwelch.psd );	      
+	      
+	      for ( int i = 0 ; i < bin.bfa.size() ; i++ )
 		{
 		  
-		  // fudge: for now, if find 0 power value, set to a small value;
-		  // and ensure that mobility = 0 so that this epoch will be removed
-		  // this may skew the first SVD / outlier removal, but should not 
-		  // be too bad.... really should remove these epochs first.
-		  
-		  if ( bin.bspec[i] <= 0 ) 
+		  if ( bin.bfa[i] >= suds_t::lwr[s] && bin.bfb[i] <= suds_t::upr[s] )
 		    {
-		      has_zeros = true;
-		      bin.bspec[i] = 1e-4; // -40dB
-		    }
-		  
-		  if ( en_good == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
-		  else PSD( en_good , col ) = 10*log10( bin.bspec[i] ) ; 		  
-		  
-		  if ( suds_t::use_bands )
-		    {
-		      if ( en_good == 0 ) firstrow2.push_back( bin.bspec[i] );
-		      else R( en_good , col ) = bin.bspec[i] ;
-
-		      // only track on first epoch 
-		      if ( en_good == 0 )
-			frq.push_back( bin.bfa[i] );
 		      
-		    }
-		  ++col;		  
-		}	      
+		      // fudge: for now, if find 0 power value, set to a small value;
+		      // and ensure that mobility = 0 so that this epoch will be removed
+		      // this may skew the first SVD / outlier removal, but should not 
+		      // be too bad.... really should remove these epochs first.
+		      
+		      if ( bin.bspec[i] <= 0 ) 
+			{
+			  has_zeros = true;
+			  bin.bspec[i] = 1e-4; // -40dB
+			}
+		      
+		      if ( en_good == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
+		      else PSD( en_good , col ) = 10*log10( bin.bspec[i] ) ; 		  
+		      
+		      if ( suds_t::use_bands )
+			{
+			  if ( en_good == 0 ) firstrow2.push_back( bin.bspec[i] );
+			  else R( en_good , col ) = bin.bspec[i] ;
+			  
+			  // only track on first epoch 
+			  if ( en_good == 0 )
+			    frq.push_back( bin.bfa[i] );
+			  
+			}
+		      ++col;		  
+		    }	      
+		}
+	      
 	    }
-	  
 
+	  //
 	  // Hjorth parameters
+	  //
 
 	  double activity = 0 , mobility = 0 , complexity = 0;
 	  MiscMath::hjorth( d , &activity , &mobility , &complexity );
@@ -963,8 +1033,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  h3(en_good,s) = complexity ;
 	  
 	} // next signal
-
     
+      
       // store/shape output if first go around
       nbins = col;
       if ( en_good == 0 )
@@ -1157,6 +1227,21 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    }
 	}
     }
+
+
+  //
+  // For trainers, drop epochs to equalize counts?
+  //
+  
+  if ( suds_t::equalize_stages && has_prior_staging ) 
+    {
+      // TODO 
+    }
+
+
+  //
+  // Summarize dropped epochs and remove 
+  //
 
   int included = 0;
   for (int i=0;i<nge;i++)
@@ -2508,6 +2593,8 @@ void suds_t::attach_db( const std::string & folder0 , bool binary , bool read_ps
 
   const std::string folder = Helper::expand( folder0 );
   
+  if ( folder == "" ) Helper::halt( "cannot open folder " + folder );
+
   std::map<std::string,suds_indiv_t*> * b = read_psd ? &wbank : &bank ;
     
   // already done?
@@ -2534,9 +2621,10 @@ void suds_t::attach_db( const std::string & folder0 , bool binary , bool read_ps
         if (  fname == "." || fname == ".." ) continue;
 
 	// in 'single-trainer' test mode, only attach one trainer
-	// from all 
+	// from all (or weight-trainer)
 	
-	if ( single_trainer != "" && single_trainer != fname ) continue;
+	if ( (!read_psd) && single_trainer  != "" && single_trainer  != fname ) continue;
+	if (   read_psd  && single_wtrainer != "" && single_wtrainer != fname ) continue;
 
         // otherwise, we have not yet come across this person, so load
         // up...
@@ -2952,6 +3040,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   // either kappa or MCC (if 'mcc' option)
   Eigen::ArrayXd wgt_mean = Eigen::ArrayXd::Zero( bank_size ) ;
+  Eigen::ArrayXd wgt_median = Eigen::ArrayXd::Zero( bank_size ) ;
 
   // kappa; not used in any calcs
   Eigen::ArrayXd wgt_max = Eigen::ArrayXd::Zero( bank_size ) ;
@@ -3070,6 +3159,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
       double max_kappa = 0;
       double mean_kappa = 0;
+      std::vector<double> track_median_kappa;
       int n_kappa50 = 0;
       int n_kappa_all = 0;
       
@@ -3226,7 +3316,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      if ( kappa > 0.5 ) n_kappa50++;
 	      if ( kappa > max_kappa ) max_kappa = kappa;
 	      mean_kappa +=  kappa  ;
-	 
+	      track_median_kappa.push_back( kappa );
+
 	      //
 	      // Verbose outputs?
 	      //
@@ -3241,7 +3332,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      // For single trainer verbose output mode only:
 	      //
 	      
-	      if ( suds_t::single_trainer != "" && suds_t::mat_dump_file != "" )
+	      if ( suds_t::single_wtrainer != "" && suds_t::mat_dump_file != "" )
 		{
 		  // re-predicted wtrainer : PP, predicted class
 		  
@@ -3286,6 +3377,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  //	  std::cout << " cntr, etc " << cntr << " " << wgt_mean.size() << " " <<  ( mean_kappa ) / (double)n_kappa_all << "\n";
 	  wgt_max[ cntr ] = max_kappa;
 	  wgt_mean[ cntr ] = ( mean_kappa ) / (double)n_kappa_all ;
+	  wgt_median[ cntr ] = track_median_kappa.size() == 1 ? mean_kappa : MiscMath::median( track_median_kappa );
 	  wgt_n50[ cntr ] = n_kappa50;
 	}
 
@@ -3396,6 +3488,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	    {
 	      writer.value( "WGT_N50"  , wgt_n50[ cntr ] );
 	      writer.value( "WGT_MAX"  , wgt_max[ cntr ] );
+	      writer.value( "WGT_MED"  , wgt_median[ cntr ] );
 	      writer.value( "WGT_MEAN" , wgt_mean[ cntr ] ); // normalized	  
 	    }
 	}
@@ -3404,15 +3497,15 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // define 'final' weight: if weight trainers exist, 
       // using WGT_MEAN, otherwise WGT_KL
       //
-
+      
       bool w0 = use_soap_weights;
       bool w1 = wbank.size() > 0 && use_repred_weights;
       bool w2 = use_kl_weights;
-
+      
       if ( w1 && w2 )
 	wgt[ cntr ] = ( wgt_mean[ cntr ] +  wgt_kl[ cntr ] ) / 2.0 ; 
       else if ( w1 )
-	wgt[ cntr ] = wgt_mean[ cntr ] ;
+	wgt[ cntr ] = use_median_repred_weights ? wgt_median[ cntr ] : wgt_mean[ cntr ] ;
       else if ( w2 )
 	wgt[ cntr ] = wgt_kl[ cntr ] ;
       else if ( w0 )
@@ -3719,35 +3812,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		    Statistics::correlation( eigen_ops::copy_array( wgt ) ,
 					     eigen_ops::copy_array( k3_prior) ) ); 
       
-      // TODO ; not critical code, so lazy conversion to use Stats correl function, but should add eigen_ops::correlation()
-
-      if ( 0 )
-	{
-	  
-	  if ( k3_prior.size() > 2 )
-	    {
-	      if ( use_kl_weights )
-		writer.value( "R_K3_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_kl ) , eigen_ops::copy_array( k3_prior) ) ); 
-	      
-	      if ( use_soap_weights )
-		writer.value( "R_K3_SOAP" , Statistics::correlation( eigen_ops::copy_array( wgt_soap ) , eigen_ops::copy_array( k3_prior ) ) ); 
-	      
-	      if ( use_repred_weights && wbank.size() > 0 ) 
-		{
-		  //	      writer.value( "R_K3_MAX" , Statistics::correlation( eigen_ops::copy_array( wgt_max ) , eigen_ops::copy_array( k3_prior ) ) ); 
-		  writer.value( "R_K3_WGT" , Statistics::correlation( eigen_ops::copy_array(wgt_mean) , eigen_ops::copy_array(k3_prior) ) ); 
-		  //writer.value( "R_K3_N50" , Statistics::correlation( eigen_ops::copy_array(wgt_n50)  , eigen_ops::copy_array(k3_prior) ) ); 
-	      
-		  if ( use_kl_weights )
-		    {
-		      writer.value( "R_MEAN_KL" , Statistics::correlation( eigen_ops::copy_array( wgt_mean ) , eigen_ops::copy_array( wgt_kl ) ) );
-		      writer.value( "R_K3_CMB" , Statistics::correlation( eigen_ops::copy_array(wgt) , eigen_ops::copy_array(wgt_kl) ) );		  
-		    }
-		  
-		}
-	    }				          
-	  
-	}
     }
   
   
@@ -4021,17 +4085,25 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
       while ( uu != uniq.end() )
 	{
 	  logger << "\t" << *uu;
+	  writer.level( *uu , "PRED" );
+
 	  std::set<std::string>::const_iterator jj = uniq.begin();
 	  while ( jj != uniq.end() )
 	    {
 	      logger << "\t" << res[ *uu ][ *jj ];
+	      writer.level( *jj , "OBS" );
+	      writer.value( "N" , res[ *uu ][ *jj ] );
 	      ++jj;
 	    }
+	  writer.unlevel( "OBS" );
+	  
 	  // row sums
 	  logger << "\t" << rows[ *uu ]/tot;
 	  logger << "\n";
 	  ++uu;
 	}
+      writer.unlevel( "PRED" );
+
       // col sums
       logger << "\tTot:";
       std::set<std::string>::const_iterator jj = uniq.begin();
@@ -4041,6 +4113,25 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
 	  ++jj;
 	}
       logger << "\t1.00\n";
+
+      
+      // conditional probabilties  / res[][] / cols[] 
+      uu = uniq.begin();
+      while ( uu != uniq.end() )
+        {
+	  writer.level(*uu , "PRED" );
+	  std::set<std::string>::const_iterator jj = uniq.begin();
+          while ( jj != uniq.end() )
+	    {
+	      writer.level( *jj , "OBS" );
+	      if ( cols[ *uu ] > 0 ) 
+		writer.value( "P" , res[ *uu ][ *jj ] / cols[ *jj ] );
+	      ++jj;
+	    }
+	  writer.unlevel( "OBS" );
+	  ++uu;
+	}
+      writer.unlevel( "PRED" );
     }
 
   
@@ -4451,7 +4542,9 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
     {
       logger << "\n  Confusion matrix: " << suds_t::n_stages
 	     << "-level classification: kappa = " << kappa << ", acc = " << acc << ", MCC = " << mcc << "\n";
+      writer.level( 5 , "NSS" );
       suds_t::tabulate(  prd , suds_t::str( obs_stage_valid ) , true );
+      writer.unlevel( "NSS" );
     }      
   
   // collapse 5->3?
@@ -4484,7 +4577,9 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
       if ( to_console )
 	{
 	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << ", acc = " << acc3 << ", MCC = " << mcc << "\n";
+	  writer.level( 3 , "NSS" );
 	  suds_t::tabulate(  suds_t::NRW( prd ) , suds_t::NRW( suds_t:: str( obs_stage_valid ) ) , true );
+	  writer.unlevel( "NSS" );
 	}
     }
 }

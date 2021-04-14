@@ -45,9 +45,13 @@ struct mtm_t
   
   mtm_t( const double npi = 3 , const int nwin = 5 );
   
+  // pre-compute tapers once for fixed size segment
+  void store_tapers( const int seg_size );
+  
+  // do actual MT (optionally. passing pre-computed tapers in mt_tapers)
   void apply( const std::vector<double> * , const int fs ,
 	      const int seg_size , const int seg_step ,
-	      bool verbose = false );
+	      bool verbose = false , mtm_t * mt_tapers = NULL );
   
   //
   // MTM parameters

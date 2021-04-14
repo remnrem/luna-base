@@ -53,10 +53,26 @@ mtm_t::mtm_t( const double npi , const int nwin ) : npi(npi) , nwin(nwin)
 }
 
 
+void mtm_t::store_tapers( const int seg_size ) 
+{
+  
+  // Vector of eigenvalues
+  lam    = Eigen::VectorXd::Zero( nwin );
+  
+  // Sum of each taper (used in adaptive weighting)
+  tapsum = Eigen::VectorXd::Zero( nwin );
+
+  // samples x tapers
+  tapers = Eigen::MatrixXd::Zero( seg_size , nwin );
+  
+  // calculate Slepian tapers                                                                                                                                                 
+  generate_tapers( seg_size, nwin, npi );
+  
+}
 
 
 void mtm_t::apply( const std::vector<double> * d , const int fs , 
-		   const int seg_size , const int seg_step , bool verbose )
+		   const int seg_size , const int seg_step , bool verbose , mtm_t * precomputed )
 {
 
   const double dt = 1.0/(double)fs;
@@ -117,11 +133,17 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 
 
   //
-  // calculate or read in Slepian tapers
+  // calculate (or attached pre-computed) Slepian tapers
   //
 
-  generate_tapers( npoints, nwin, npi );
-
+  if ( precomputed == NULL ) 
+    generate_tapers( npoints, nwin, npi );
+  else
+    {
+      lam = precomputed->lam;
+      tapsum = precomputed->tapsum;
+      tapers = precomputed->tapers;
+    }
   
   //
   // Spectrogram output
@@ -257,12 +279,6 @@ void  mtm_t::generate_tapers( int num_points, int nwin, double npi )
   //  tapsum = sum of each taper, saved for use in adaptive weighting  
   //  tapers =  matrix of slepian tapers, packed in a 1D double array
 
-  
-  // int             i, j, k, kk;
-  // double         *z, ww, cs, ai, an, eps, rlu, rlb, aa;
-  // double          dfac, drat, gamma, bh, tapsq, TWOPI, DPI;
-  
-  
   /* need to initialize iwflag = 0 */
 
   int             key, nbin, npad;

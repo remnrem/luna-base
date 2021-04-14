@@ -1375,7 +1375,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		
 		  if ( eperm ) 
 		    {
-		      if ( ! edf.timeline.epoched() ) Helper::halt( "data not epoched" );
+		      if ( ! edf.timeline.epoched() ) edf.timeline.ensure_epoched();
 		      epoch_sec = edf.timeline.epoch_length();
 		    }
 

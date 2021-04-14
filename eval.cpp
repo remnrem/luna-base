@@ -826,6 +826,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
       else if ( is( c, "MINMAX" ) )       proc_minmax( edf , param(c) );
       
+      else if ( is( c, "STANDARDIZE" ) )  proc_standardize( edf , param(c) );
+
       else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
       
       else if ( is( c, "TIME-TRACK" ) )   proc_timetrack( edf, param(c) );
@@ -859,7 +861,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
       else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
       else if ( is( c, "CONTAINS" ) )     proc_has_signals( edf , param(c) );
-      
+
       else if ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) proc_rms( edf, param(c) );
       else if ( is( c, "MSE" ) )          proc_mse( edf, param(c) );
       else if ( is( c, "LZW" ) )          proc_lzw( edf, param(c) );
@@ -2828,6 +2830,14 @@ void proc_minmax( edf_t & edf , param_t & param )
   edf.minmax( signals );
 }
 
+// STANDARDIZE : robust winsorization and norming for each signal (done per whole signal or epoch) 
+
+void proc_standardize( edf_t & edf , param_t & param )
+{
+  dsptools::standardize( edf , param );
+}
+
+
 // FLIP : change polarity of signal
 
 void proc_flip( edf_t & edf , param_t & param  )
@@ -3650,11 +3660,47 @@ std::map<std::string,int> cmd_t::pull_ivar( const std::vector<std::string> & ids
 void proc_has_signals( edf_t & edf , param_t & param )
 {
 
-  // check this EDF has the signals
+  // check this EDF has the signals OR annots OR stage infoimation
+  
+  bool check_stages = param.has( "stages" );
+  //  bool check_annots = param.has( "annots" ) || param.has( "annot" );
+  bool check_signals = param.has( "sig" );
  
-  // return codes: 0   all EDFs have all signals
-  //               1   all EDFs have at least one of these signals
-  //               2   at least some EDFs do not have any of these signals
+  if ( check_stages ) 
+    {
+      // try to make and extract stages
+      edf.timeline.annotations.make_sleep_stage();
+      
+      globals::retcode = 0;
+
+      // by default, this sets sslabel to SleepStage
+
+      annot_t * annot = edf.timeline.annotations( "SleepStage" );
+
+      if ( annot != NULL )
+	{
+	  
+	  bool has_stages = edf.timeline.hypnogram.construct( &edf.timeline , param , false ) ;
+
+	  if ( has_stages ) 
+	    {
+	      int ne = edf.timeline.num_epochs();
+	      if ( ne == edf.timeline.hypnogram.stages.size() )
+		globals::retcode = 1;
+	    }
+	}
+      
+      writer.value( "STAGES" , globals::retcode );
+
+      return;
+    }
+   
+
+  // TODO: annot check
+
+  // return codes: 0   all EDFs have all signals/annots
+  //               1   all EDFs have at least one of these signals/annots
+  //               2   at least some EDFs do not have any of these signals/annots
 
   // 0  ALL channels in all EDFs
   // 1  only SOME channels in one or more EDFs
