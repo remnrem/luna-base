@@ -89,6 +89,8 @@ struct suds_indiv_t {
   void reload( const std::string & filename , bool load_rawx = false );
   void binary_reload( const std::string & filename , bool load_rawx = false );
 
+  // resample epochs for trainers (after loading)
+
   // read/write helpers
   inline static void bwrite( std::ofstream & O , const std::string & s );
   inline static void bwrite( std::ofstream & O , int );
@@ -112,7 +114,8 @@ struct suds_indiv_t {
   
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
-  void summarize_stage_durations( const Eigen::MatrixXd & , const std::vector<std::string> & , int , double );
+  // return number of excluded ('bad') epochs
+  int summarize_stage_durations( const Eigen::MatrixXd & , const std::vector<std::string> & , int , double );
   
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
@@ -156,6 +159,9 @@ struct suds_indiv_t {
   Eigen::ArrayXd W;
   Eigen::MatrixXd V;
 
+  // time-track
+  Eigen::MatrixXd time_track;
+
   // Hjorth (mean/variance, per signal)
   Eigen::Array<double, 1, Eigen::Dynamic> mean_h2, sd_h2;
   Eigen::Array<double, 1, Eigen::Dynamic> mean_h3, sd_h3;
@@ -172,7 +178,9 @@ struct suds_indiv_t {
   std::vector<suds_stage_t> prd_stage;
 
   std::map<std::string,int> counts;
-    
+
+  // set priors?
+  std::vector<double> get_priors( const std::vector<double> & p ) const;
 
   //
   // retained epochs
@@ -205,15 +213,25 @@ struct suds_t {
   
   static suds_indiv_t cached;
 
+  static Eigen::MatrixXd add_time_track( const int nr , const int tt );
+  
   static void set_options( param_t & param )
   {
 
     // total/max number of PSC components
     nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 20 ;
 
+    // add time-track as a predictor?
+    time_track = param.has( "tt" ) ? param.requires_int( "tt" ) : 0 ;
+    
     // flat priors?
     flat_priors = param.has( "flat-priors" );
 
+    // fixed priors?
+    fixed_priors.clear();
+    if ( param.has( "fixed-priors" ) )
+      fixed_priors = param.dblvector( "fixed-priors" ) ;
+    
     // bands instead of PSC? 
     use_bands = param.has( "bands" );
     
@@ -324,6 +342,9 @@ struct suds_t {
     single_trainer = param.has( "single-trainer" ) ? param.value( "single-trainer" ) : "" ;
     single_wtrainer = param.has( "single-wtrainer" ) ? param.value( "single-wtrainer" ) : "" ;
 
+    // debug code: flip weights
+    wgt_flip = param.has( "wgt-flip" );
+    
     // NR/R/W or N1/N2/N3/R/W classification?
     n_stages = param.has( "3-stage" ) ? 3 : 5;
 
@@ -345,9 +366,9 @@ struct suds_t {
 
     // enfore the same # of each epoch 
     // (i.e. drop to the min) 
-    equalize_stages = param.has( "equalize-stages" );
-
+    equalize_stages = param.has( "equalize-stages" ) ? param.requires_int( "equalize-stages" ) : 0 ; 
     
+     
     // select /exactly/ N epochs (at random) from each stage/trainer
     // N1, N2, N3, REM, W (or 3 stages if with have '3-stage'
     use_fixed_trainer_req = param.has( "fixed-epochs" );
@@ -449,9 +470,13 @@ struct suds_t {
   static bool one_by_one;
 
   static int nc;
-
+  
+  static int time_track;
+  
   static bool flat_priors;
-
+  
+  static std::vector<double> fixed_priors;
+  
   static int ns;
 
   static int n_stages; // 5 or 3 class problem
@@ -508,6 +533,8 @@ struct suds_t {
 
   static double wgt_mean_th;
 
+  static bool wgt_flip;
+
   static bool cheat;
 
   static std::string single_trainer;
@@ -530,7 +557,7 @@ struct suds_t {
 
   static int required_epoch_n;
   static int max_epoch_n;
-  static bool equalize_stages;
+  static int equalize_stages;
 
   static double required_comp_p;
   

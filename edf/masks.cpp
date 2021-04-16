@@ -218,8 +218,25 @@ void proc_mask( edf_t & edf , param_t & param )
       if ( n < 1 ) Helper::halt( "first value must be >= 1" );
       edf.timeline.select_epoch_first( n );
     }
+  
+  if ( param.has( "trim" ) )
+    {
+      std::vector<std::string> ss = param.strvector( "trim" );
+      int n = 0;
+      std::string label = "";
+      if ( ss.size() == 1 ) label = ss[0];
+      else if ( ss.size() == 2 ) 
+	{
+	  label = ss[0];
+	  if ( ! Helper::str2int( ss[1] , &n ) ) 
+	    Helper::halt( "expecting positive integer for trim" );	  
+	}
+      else Helper::halt( "bad syntax for trim" );
 
-
+      if ( n < 0 )  Helper::halt( "trim value must be >= 0" );
+      edf.timeline.trim_epochs( label , n );
+    }
+  
   if ( param.has( "epoch" ) || param.has( "mask-epoch" ) )
     {
       // epoch --> 'force' mode (i.e. set all)

@@ -376,6 +376,9 @@ struct timeline_t
   // other masks : randomly select up to 'n' epochs from the current set 
   void select_epoch_randomly( int n );
 
+  // trim leading and trailing epochs (allow only n)
+  void trim_epochs( std::string & , int );
+
   // regional mask
   void regional_mask( int x , int y );
 

@@ -1112,6 +1112,112 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
 }
 
 
+void timeline_t::trim_epochs( std::string & label , int n )
+{
+
+  // find leading and trailing epochs with this 'label' annotation (e.g. "W")
+  // and allow only up to 'n'
+  // i.e. trimming from the start/end of the epochs
+
+  annot_t * annot = annotations( Helper::unquote( label ) );
+
+  if ( annot == NULL ) return;
+
+  mask_set = true;
+  
+  const int ne = epochs.size();
+
+  std::vector<bool> x( ne , false );
+  
+  for (int e=0;e<ne;e++)
+    {
+      interval_t interval = epoch( e );
+      annot_map_t events = annot->extract( interval );
+      x[e] = events.size() > 0 ;
+    }
+  
+  // find first non-matching epoch
+  // -1 if no leading matches
+  int leading_end = -1;
+  for (int e=0;e<ne;e++)
+    {      
+      if ( ! x[e] ) 
+	{
+	  leading_end = e - 1;
+	  break;
+	}
+    }
+  
+  // find last nonmatching
+  int trailing_start = ne;
+  // ne if no trailing matches
+  for (int e=ne-1;e>=0;e--)
+    {      
+      if ( ! x[e] ) 
+	{	  
+	  trailing_start = e + 1;
+	  break;
+	}
+    }
+  
+  // allow up to 'n' trailing/leading matches
+  leading_end -= n;
+  trailing_start += n;
+
+  if ( leading_end > 0 ) logger << "  trimming from start to epoch " << leading_end + 1 << "\n";
+  if ( trailing_start < ne-1 ) logger << "  trimming from epoch " << trailing_start + 1 << " to end\n";
+
+  int cnt_mask_set = 0;
+  int cnt_mask_unset = 0;
+  int cnt_unchanged = 0;
+  int cnt_now_unmasked = 0;
+  int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not                                                                                
+  // blank out any ones needed
+  for ( int e=0; e<ne; e++)
+    {
+      if ( e <= leading_end || e >= trailing_start )
+	{
+	  ++cnt_basic_match;
+	  
+	  // set new potential mask, depending on match_mode
+	  
+	  bool new_mask = true;
+	  
+	  int mc = set_epoch_mask( e , new_mask );
+	  
+	  if      ( mc == +1 ) ++cnt_mask_set;
+	  else if ( mc == -1 ) ++cnt_mask_unset;
+	  else                 ++cnt_unchanged;
+	}
+    
+      if ( !mask[e] ) ++cnt_now_unmasked;
+    
+    }
+  
+  logger << " based on leading/trailing " << label << " (w/ up to " << n << " epochs) " 
+	 << cnt_basic_match << " epochs match; ";
+  
+  logger << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  
+  // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
+  
+  writer.level( label , "EMASK" );
+  writer.value( "N_MATCHES"    , cnt_basic_match  );
+  writer.value( "N_MASK_SET"   , cnt_mask_set     );
+  writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
+  writer.value( "N_UNCHANGED"  , cnt_unchanged    );
+  writer.value( "N_RETAINED"   , cnt_now_unmasked );
+  writer.value( "N_TOTAL"      , (int)epochs.size()    );
+
+  writer.unlevel( "EMASK" );
+
+}
+
+
+
 signal_list_t timeline_t::masked_channels_sl( const int e0 , const signal_list_t & signals ) const
 {
   const bool silent_mode = true;

@@ -138,7 +138,17 @@ lda_model_t lda_t::fit( const bool flat_priors )
       ++cidx;
     }
   
+  // sqrt transform
+  // double ss = 0;
+  // for (int i=0; i<prior.size(); i++)
+  //   {
+  //     prior[i] = sqrt( prior[i] );
+  //     ss += prior[i] ;
+  //   }
+  // for (int i=0;i<prior.size();i++)
+  //   prior[i] /= ss;
 
+  
   //
   // group means () ng x p ( groups x predictors )
   //

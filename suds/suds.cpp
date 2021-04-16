@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -70,7 +71,9 @@ std::map<std::string,suds_indiv_t*> suds_t::bank;
 std::map<std::string,suds_indiv_t*> suds_t::wbank;
 int suds_t::nc;
 int suds_t::ns;
+int suds_t::time_track;
 bool suds_t::flat_priors;
+std::vector<double> suds_t::fixed_priors;
 bool suds_t::use_bands;
 std::vector<std::string> suds_t::siglab;
 std::vector<double> suds_t::lwr;
@@ -92,6 +95,7 @@ int suds_t::wgt_exp;
 bool suds_t::equal_wgt_in_selected;
 bool suds_t::wgt_mean_normalize;
 double suds_t::wgt_mean_th;
+bool suds_t::wgt_flip;
 
 bool suds_t::cheat;
 std::string suds_t::single_trainer = "";
@@ -107,7 +111,7 @@ bool suds_t::ignore_target_priors = false;
 std::vector<double> suds_t::outlier_ths;
 int suds_t::required_epoch_n = 5;
 int suds_t::max_epoch_n = -1;
-bool suds_t::equalize_stages = false;
+int suds_t::equalize_stages = 0;
 double suds_t::required_comp_p = 0.05;
 bool suds_t::self_classification = false;
 double suds_t::self_classification_prob = 99;
@@ -230,7 +234,7 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
   summarize_kappa( final_pred , true );
 
-  summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
+  const int bad_epochs = summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
   
   if ( epoch_level_output )
     summarize_epochs( pp , model.labels , ne_all , edf );
@@ -485,7 +489,7 @@ void suds_indiv_t::resoap( edf_t & edf , bool epoch_level_output )
   // actual number of epochs
   const int ne_all = edf.timeline.num_epochs();
 
-  summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
+  const int bad_epochs = summarize_stage_durations( pp , model.labels , ne_all , epoch_sec );
 
   if ( epoch_level_output )
     summarize_epochs( pp , model.labels , ne_all , edf );
@@ -1230,14 +1234,51 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 
   //
-  // For trainers, drop epochs to equalize counts?
+  // Also improse a max number of epochs per stage? 
   //
   
-  if ( suds_t::equalize_stages && has_prior_staging ) 
+  if ( has_prior_staging && suds_t::max_epoch_n != -1 )
     {
-      // TODO 
-    }
 
+      std::map<suds_stage_t,std::vector<int> > counts;
+
+      int cc = 0;
+      for (int i=0;i<ne;i++)
+	{
+	  if ( retained[i] )
+	    {
+	      // track counts in valid index space
+	      if ( valid[cc] )
+		counts[ obs_stage[ i ] ].push_back( cc );
+	      ++cc;
+	    }
+	}
+      
+      std::map<suds_stage_t,std::vector<int> >::const_iterator qq = counts.begin();
+      while ( qq != counts.end() )
+	{
+	  if ( qq->second.size() > suds_t::max_epoch_n )
+	    {
+	      logger << "  reducing " << suds_t::str( qq->first ) 
+		     << " from " << qq->second.size() 
+		     << " to " << suds_t::max_epoch_n << " epochs\n";
+	      int tot = qq->second.size();
+	      int rem = tot - suds_t::max_epoch_n;
+	      while ( rem ) 
+		{
+		  int pick = CRandom::rand( tot );
+		  if ( valid[ qq->second[ pick ] ] )
+		    {
+		      valid[ qq->second[ pick ] ] = false;
+		      --rem;
+		    }
+		}	      
+	    }
+	  ++qq;
+	}
+
+    }
+      
 
   //
   // Summarize dropped epochs and remove 
@@ -1342,6 +1383,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    ++r;
 	  }
     }
+  
 
 
 
@@ -1717,9 +1759,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     }
 
 
-  //
-  // Verbose output of PSC  (todo)
-  //
 
   
   //
@@ -1840,6 +1879,15 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
       logger << "  final count of valid epochs is " << nve << "\n";
     }
+
+
+
+  //
+  // Add time-track column(s)? 
+  //
+
+  if ( suds_t::time_track ) 
+    time_track = suds_t::add_time_track( nve , suds_t::time_track );
 
   
   //
@@ -3075,8 +3123,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   bool w0 = use_soap_weights;
   bool w1 = wbank.size() > 0 && use_repred_weights;
   bool w2 = use_kl_weights;
-
-  if ( w1 && w2 ) logger << "  using mean of repred-weights & KL-weights\n";
+  
+  if ( w0 && w1 ) Helper::halt( "cannot use both SOAP-weights and repred-weights\n" );
+  if      ( w1 && w2 ) logger << "  using mean of repred-weights & KL-weights\n";
+  else if ( w0 && w2 ) logger << "  using mean of SOAP-weights & KL-weights\n";
   else if ( w1 ) logger << "  using repred-weights only\n";
   else if ( w2 ) logger << "  using KL-weights only\n";
   else if ( w0 ) logger << "  using SOAP-weights only\n";
@@ -3503,7 +3553,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       bool w2 = use_kl_weights;
       
       if ( w1 && w2 )
-	wgt[ cntr ] = ( wgt_mean[ cntr ] +  wgt_kl[ cntr ] ) / 2.0 ; 
+	wgt[ cntr ] = ( ( use_median_repred_weights ? wgt_median[ cntr ] : wgt_mean[ cntr ] ) +  wgt_kl[ cntr ] ) / 2.0 ; 
+      else if ( w0 && w2 ) 
+	wgt[ cntr ] = ( wgt_soap[ cntr ] +  wgt_kl[ cntr ] ) / 2.0 ; 
       else if ( w1 )
 	wgt[ cntr ] = use_median_repred_weights ? wgt_median[ cntr ] : wgt_mean[ cntr ] ;
       else if ( w2 )
@@ -3512,7 +3564,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	wgt[ cntr ] = wgt_soap[ cntr ];
       else
 	wgt[ cntr ] = 1 ; 
-
+      
       used_trainers.push_back( trainer->id );
 			     
       ++tt;
@@ -3587,7 +3639,18 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	}
       
     }
-  
+
+  //
+  // Testing only: flip weights?
+  //
+
+  if ( suds_t::wgt_flip )
+    {
+      logger << "  debug code: flipping weights\n";
+      for (int i=0;i<wgt.size();i++)
+	wgt[i] = 1 - wgt[i] ;
+    }
+
   //
   // Percentile based scaling (subsetting) 
   //
@@ -3787,10 +3850,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   const double epoch_sec = edf.timeline.epoch_length();
 
-  target.summarize_stage_durations( pp , suds_t::labels , ne_all , epoch_sec );
-
-
+  const int bad_epochs = target.summarize_stage_durations( pp , suds_t::labels , ne_all , epoch_sec );
   
+  writer.value( "BAD_N" , bad_epochs );
+  writer.value( "BAD_P" , bad_epochs/(double) ne_all );
+
   //
   // Confusion matrics and kappa w/ observed staging
   //
@@ -3808,12 +3872,15 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // also, given correlations between weights and trainer kappas
       //
       
-      writer.value( "R_K3_WGT" ,
+      writer.value( "R_WGT" ,
 		    Statistics::correlation( eigen_ops::copy_array( wgt ) ,
 					     eigen_ops::copy_array( k3_prior) ) ); 
       
     }
   
+
+
+
   
   //
   // Final SOAP evaluation of /predicted/ stages
@@ -3831,7 +3898,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // i.e. this will be called after proc(), or from near the end of proc()
   
   lda_t self_lda( final_prediction , target.U );
-  lda_model_t self_model = self_lda.fit( );
+  lda_model_t self_model = self_lda.fit( suds_t::flat_priors );
   
   if ( self_model.valid )
     {
@@ -4142,14 +4209,15 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
 
 Eigen::ArrayXd suds_indiv_t::wgt_kl() const { 
 
+
   // returned weights
   const int nt = target_predictions.size();  
 
-  Eigen::ArrayXd W( nt );
+  Eigen::ArrayXd W = Eigen::ArrayXd::Zero( nt );
 
   if ( nt == 0 ) return W;
 
-  Eigen::MatrixXd Q( nt , suds_t::n_stages ) ;  
+  Eigen::MatrixXd Q = Eigen::MatrixXd::Zero( nt , suds_t::n_stages ) ;  
 
   int r = 0;
   std::map<std::string,std::vector<suds_stage_t> >::const_iterator ii = target_predictions.begin();
@@ -4188,8 +4256,11 @@ Eigen::ArrayXd suds_indiv_t::wgt_kl() const {
   // Means
 
   Eigen::ArrayXd P = Q.colwise().mean();
+  
+  const double KL_EPS = 1e-6;
 
   // divergence for each trainer from the mean
+
   r = 0;
   ii = target_predictions.begin();
   while ( ii != target_predictions.end() ) 
@@ -4197,13 +4268,14 @@ Eigen::ArrayXd suds_indiv_t::wgt_kl() const {
       // negative KL
       double ss = 0;
       for ( int s = 0 ; s < suds_t::n_stages ; s++ )
-	if ( Q(r,s) > 0 ) ss += P[s] * log( P[s] / Q(r,s) );  
+	if ( Q(r,s) > KL_EPS ) ss += P[s] * log( P[s] / Q(r,s) );  
+
       W[r] = -ss;
       
       ++r;
       ++ii;
     }
-    
+  
   return W;
 }
 
@@ -4373,7 +4445,7 @@ void suds_indiv_t::summarize_epochs( const Eigen::MatrixXd & pp , // posterior p
   
 }
 
-void suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const std::vector<std::string> & labels, int ne_all , double epoch_sec )
+int suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const std::vector<std::string> & labels, int ne_all , double epoch_sec )
 {
   
   bool prior_staging = obs_stage.size() != 0 ;
@@ -4408,7 +4480,8 @@ void suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const
   std::string rem_out = suds_t::n_stages == 5 ? "REM" : "R";
   
   double unknown = 0;
-  
+  int unknown_epochs = 0; 
+
   //
   // Aggregate over epochs
   //
@@ -4449,6 +4522,7 @@ void suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const
 	{
 	  // track extent of 'bad' epochs
 	  unknown += epoch_sec;
+	  ++unknown_epochs;
 	}
 
     }
@@ -4491,6 +4565,8 @@ void suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const
 	}
       writer.unlevel( globals::stage_strat );
     }
+
+  return unknown_epochs;
   
 }
 
@@ -4705,5 +4781,30 @@ void suds_t::trainer_1x1_evals( const suds_indiv_t & target ,
     }
 
   writer.unlevel( "NTRAINER" );
+
+}
+
+
+std::vector<double> suds_indiv_t::get_priors( const std::vector<double> & p ) const
+{
+  // take N1 N2 N3 R W priors and rescale to whatever categories exist for this person
+  std::vector<double> dummy;
+  return dummy;
+}
+
+
+
+Eigen::MatrixXd suds_t::add_time_track( const int nr , const int tt )
+{
+
+  if ( nr <= 0 || tt <= 0 ) Helper::halt( "internal error in add_time_track()" );
+
+  Eigen::MatrixXd T = Eigen::MatrixXd::Zero( nr , tt );
+
+  for (int r=0; r<nr; r++) 
+    for ( int c=0; c<tt; c++)
+      T(r,c) = pow( ( r / (double)nr ) - 0.5 , c+1 );   
+
+  return T;
 
 }

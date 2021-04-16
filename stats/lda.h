@@ -103,10 +103,53 @@ class lda_t {
     missing = "?";
     
   } 
+
+  // support for adding extra columns (i.e. without caller having to remake X)
+ lda_t( const std::vector<std::string> & y ,
+	const Eigen::MatrixXd & X1 , 
+	const Eigen::MatrixXd & X2 
+	)
+   : y(y) 
+  {
+    
+    const int nr = X1.rows() ;
+    if ( nr != X2.rows() ) Helper::halt( "internal error in lda_t" );
+    
+    const int nc1 = X1.cols();
+    const int nc2 = X2.cols();
+    
+    X = Eigen::MatrixXd::Zero( nr , nc1 + nc2 );
+    
+    for (int c=0; c<nc1; c++)
+      X.col( c ) = X1.col( c );
+    for (int c=0; c<nc2; c++)
+      X.col( nc1 + c ) = X2.col( c );
+    
+    tol = 1e-4;
+
+    missing = "?";
+
+  }
   
   lda_model_t fit( const bool flat_priors = false );
   
   static lda_posteriors_t predict( const lda_model_t & , const Eigen::MatrixXd & X );
+
+  static lda_posteriors_t predict( const lda_model_t & model , const Eigen::MatrixXd & X , const Eigen::MatrixXd & X2 )
+  {
+    const int nr = X.rows() ;
+    if ( nr != X2.rows() ) Helper::halt( "internal error in lda_t" );
+    const int nc1 = X.cols();
+    const int nc2 = X2.cols();
+    Eigen::MatrixXd XX = Eigen::MatrixXd::Zero( nr , nc1 + nc2 );
+
+    for (int c=0; c<nc1; c++)
+      XX.col( c ) = X.col( c );
+    for (int c=0; c<nc2; c++)
+      XX.col( nc1 + c ) = X2.col( c );
+
+    return predict( model , XX );
+  }
 
  private:
   
