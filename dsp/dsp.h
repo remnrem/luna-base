@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "sync.h"
 #include "standardize.h"
 #include "mtm/mtm.h"
 #include "siggen.h"

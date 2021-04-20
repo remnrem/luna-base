@@ -894,7 +894,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CWT-DESIGN" ) )   proc_cwt_design( edf , param(c) );
       else if ( is( c, "CWT" ) )          proc_cwt( edf , param(c) );
       else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
-
+      else if ( is( c, "SYNC" ) )         proc_sync( edf , param(c) ); 
+      
       else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
       
       else if ( is( c, "COVAR" ) )        proc_covar( edf, param(c) );
@@ -1311,6 +1312,12 @@ void proc_cwt( edf_t & edf , param_t & param )
 void proc_hilbert( edf_t & edf , param_t & param )
 {
   dsptools::hilbert( edf , param );
+}
+
+// SYNC
+void proc_sync( edf_t & edf , param_t & param )
+{
+  dsptools::sync( edf , param );
 }
 
 // -cwt  from the command line
@@ -3393,6 +3400,7 @@ void cmd_t::define_channel_type_variables( edf_t & edf )
   std::string ignore = globals::list_channels( IGNORE , edf.header.label );
   cmd_t::ivars[ edf.id ][ "ignore" ] = ignore;
 
+  
 }
 
 

@@ -311,7 +311,7 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   // straight Hilbert , no filter
   hilbert_t hilbert( data );
   
-  *mag = *(hilbert.magnitude());
+  if ( mag != NULL ) *mag = *(hilbert.magnitude());
   
   if ( phase != NULL ) *phase = *(hilbert.phase());
   
@@ -339,7 +339,9 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   
   // filter-Hilbert 
   hilbert_t hilbert( data , Fs , flwr , fupr , ripple , tw );
-  *mag = *(hilbert.magnitude());
+
+  if ( mag != NULL ) *mag = *(hilbert.magnitude());
+
   if ( phase != NULL ) *phase = *(hilbert.phase());
   
   if ( angle != NULL )
@@ -364,7 +366,8 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   
   hilbert_t hilbert( data , Fs , fir_file );
 
-  *mag = *(hilbert.magnitude());
+  if ( mag != NULL ) *mag = *(hilbert.magnitude());
+
   if ( phase != NULL ) *phase = *(hilbert.phase());
   
   if ( angle != NULL )
@@ -390,7 +393,9 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   
   // filter-Hilbert 
   hilbert_t hilbert( data , Fs , flwr , fupr , order , window );
-  *mag = *(hilbert.magnitude());
+
+  if ( mag != NULL ) *mag = *(hilbert.magnitude());
+
   if ( phase != NULL ) *phase = *(hilbert.phase());
   
   if ( angle != NULL )
