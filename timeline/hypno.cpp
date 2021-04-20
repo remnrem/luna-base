@@ -49,6 +49,7 @@ bool is_nrem234( sleep_stage_t s ) { return s == NREM2 || s == NREM3 || s == NRE
 bool is_wake( sleep_stage_t s ) { return s == WAKE; }
 bool is_wake_or_lights( sleep_stage_t s ) { return s == WAKE || s == LIGHTS_ON; } 
 bool is_sleep( sleep_stage_t s ) { return s == NREM1 || s == NREM2 || s == NREM3 || s == NREM4 || s == REM ; } 
+bool is_absent( sleep_stage_t s ) { return s == UNSCORED || s == UNKNOWN || s == MOVEMENT || s == LIGHTS_ON || s == ARTIFACT ; } 
 
 bool is_same_3class( sleep_stage_t s1 , sleep_stage_t s2 ) 
 { 
@@ -99,24 +100,28 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   //
   
   std::set<std::string> values;
-  values.clear(); values.insert( "wake" );
+  values.clear(); values.insert( "W" );
   timeline->annotate_epochs(  globals::stage( WAKE ) , "SleepStage" , values );
   
-  values.clear(); values.insert( "NREM1" );
+  values.clear(); values.insert( "N1" );
   timeline->annotate_epochs(  globals::stage( NREM1  )  , "SleepStage" , values );
 
-  values.clear(); values.insert( "NREM2" );
+  values.clear(); values.insert( "N2" );
   timeline->annotate_epochs(  globals::stage( NREM2  )  , "SleepStage" , values );
 
-  values.clear(); values.insert( "NREM3" );
+  values.clear(); values.insert( "N3" );
+  if ( collapse_nrem34 ) { values.insert( "NREM4" ); values.insert( "N4" ); }
   timeline->annotate_epochs(  globals::stage( NREM3  )  , "SleepStage" , values );
+  
+  if ( ! collapse_nrem34 ) 
+    {
+      values.clear(); values.insert( "NREM4" ); values.insert( "N4" );
+      timeline->annotate_epochs(  globals::stage( NREM4 )  , "SleepStage" , values );
+    }
 
-  values.clear(); values.insert( "NREM4" );
-  timeline->annotate_epochs(  globals::stage( NREM4 )  , "SleepStage" , values );
-
-  values.clear(); values.insert( "REM" );
+  values.clear(); values.insert( "R" );
   timeline->annotate_epochs(  globals::stage( REM ) , "SleepStage" , values );
-
+  
 
   //
   // If we've masked the data, epoch count may not start at 0...
@@ -171,16 +176,16 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       // for output of STAGES or HYPNO, use original EDF annotations though
       int e2 = timeline->original_epoch(e) ;
       
-      bool wake = timeline->epoch_annotation( "wake"  , e );
-      bool n1   = timeline->epoch_annotation( "NREM1" , e );
-      bool n2   = timeline->epoch_annotation( "NREM2" , e );
-      bool n3   = timeline->epoch_annotation( "NREM3" , e );
+      bool wake = timeline->epoch_annotation( "W"  , e );
+      bool n1   = timeline->epoch_annotation( "N1" , e );
+      bool n2   = timeline->epoch_annotation( "N2" , e );
+      bool n3   = timeline->epoch_annotation( "N3" , e );
       bool n4   = timeline->epoch_annotation( "NREM4" , e );
-      bool rem  = timeline->epoch_annotation( "REM"   , e );      
-
+      bool rem  = timeline->epoch_annotation( "R"   , e );      
+      
       bool other = ! ( wake || n1 || n2 || n3 || n4 || rem );
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem ) > 1;
-
+      
       //
       // track any conflicts (i.e. if epochs not aligned to staging annotations)
       //
@@ -195,22 +200,22 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 	  if ( n1 ) { ss << "N1"; delim = true; }
 	  if ( n2 ) { ss << ( delim ? "," : "" ) << "N2"; delim = true; }
 	  if ( n3 ) { ss << ( delim ? "," : "" ) << "N3"; delim = true; }
-	  if ( n4 ) { ss << ( delim ? "," : "" ) << "N4"; delim = true; }
+	  if ( n4 ) { ss << ( delim ? "," : "" ) << ( collapse_nrem34 ? "N3" : "N4" ); delim = true; }
 	  if ( rem ) { ss << ( delim ? "," : "" ) << "R"; delim = true; }
 	  if ( wake ) { ss << ( delim ? "," : "" ) << "W"; delim = true; }	  
 	  writer.value( "CONFLICT" , ss.str() );
 	}
       
-      
-      if      ( conflict ) stages.push_back( UNSCORED );
-      else if ( other ) stages.push_back( UNSCORED );
+      // here (internally in hypno_t) we use UNKNOWN for all cases 
+      if      ( conflict ) stages.push_back( UNKNOWN );
+      else if ( other ) stages.push_back( UNKNOWN );
       else if ( wake ) stages.push_back( WAKE );
       else if ( n1 ) stages.push_back( NREM1 );
       else if ( n2 ) stages.push_back( NREM2 );
       else if ( n3 ) stages.push_back( NREM3 );
-      else if ( n4 ) stages.push_back( NREM4 );
+      else if ( n4 ) stages.push_back( collapse_nrem34 ? NREM3 : NREM4 );
       else if ( rem ) stages.push_back( REM );
-      else stages.push_back( UNSCORED );
+      else stages.push_back( UNKNOWN );
       
       // store original EDF 0-based encoding, to be passed to calc_stats()
       epoch_n.push_back( e2 );
@@ -248,14 +253,14 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   for (int e =0; e < ne ; e++)
     {
-      if ( stages[e] == UNSCORED ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNSCORED && stages[e] != LIGHTS_ON ) break;
+      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
+      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
     }
   
   for (int e = ne - 1 ; e != 0 ; e--)
     {
-      if ( stages[e] == UNSCORED ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNSCORED && stages[e] != LIGHTS_ON ) break;
+      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
+      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
     }
 
   
@@ -541,7 +546,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   for (int e=0;e<ne;e++)
     {
       
-      if ( stages[ e ] == WAKE || stages[ e ] == LIGHTS_ON || stages[e] == UNSCORED )
+      if ( stages[ e ] == WAKE || stages[ e ] == LIGHTS_ON || stages[e] == UNKNOWN )
 	{
 	  persistent_sleep[e] = "W";
 	  continue;
@@ -1401,43 +1406,43 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
 
   if ( verbose )
     {
-      writer.var( "T1_LIGHTS_OFF"     , "Lights out time [0,24)" );
-      writer.var( "T2_SLEEP_ONSET"    , "Sleep onset time [0,24)" );
-      writer.var( "T3_SLEEP_MIDPOINT" , "Sleep mid-point time [0,24)" );
-      writer.var( "T4_FINAL_WAKE"     , "Final wake time [0,24)" );
-      writer.var( "T5_LIGHTS_ON"      , "Lights on time [0,24)" );
+      // writer.var( "T1_LIGHTS_OFF"     , "Lights out time [0,24)" );
+      // writer.var( "T2_SLEEP_ONSET"    , "Sleep onset time [0,24)" );
+      // writer.var( "T3_SLEEP_MIDPOINT" , "Sleep mid-point time [0,24)" );
+      // writer.var( "T4_FINAL_WAKE"     , "Final wake time [0,24)" );
+      // writer.var( "T5_LIGHTS_ON"      , "Lights on time [0,24)" );
       
-      writer.var( "NREMC" , "Number of NREM cycles" );
-      writer.var( "NREMC_MINS" , "Average NREM cycle duration (mins)" );
+      // writer.var( "NREMC" , "Number of NREM cycles" );
+      // writer.var( "NREMC_MINS" , "Average NREM cycle duration (mins)" );
       
-      writer.var( "TIB" , "Time in Bed (hours): EDF start --> EDF stop" );
-      writer.var( "TRT" , "Total Recording Time (hours): LIGHTS_OUT --> LIGHTS_ON" );
-      writer.var( "TST" , "Total Sleep Time (hours): SLEEP_ONSET --> FINAL_WAKE" );
-      writer.var( "TPST" , "Total persistent Sleep Time (hours): PERSISTENT_SLEEP_ONSET --> FINAL_WAKE" );
+      // writer.var( "TIB" , "Time in Bed (hours): EDF start --> EDF stop" );
+      // writer.var( "TRT" , "Total Recording Time (hours): LIGHTS_OUT --> LIGHTS_ON" );
+      // writer.var( "TST" , "Total Sleep Time (hours): SLEEP_ONSET --> FINAL_WAKE" );
+      // writer.var( "TPST" , "Total persistent Sleep Time (hours): PERSISTENT_SLEEP_ONSET --> FINAL_WAKE" );
       
-      writer.var( "TWT" , "Total Wake Time (hours): all WAKE" );
-      writer.var( "WASO" , "Wake After Sleep Onset (hours)" );
+      // writer.var( "TWT" , "Total Wake Time (hours): all WAKE" );
+      // writer.var( "WASO" , "Wake After Sleep Onset (hours)" );
       
-      writer.var( "SLP_LAT" , "Sleep latency" );
-      writer.var( "PER_SLP_LAT" , "Persistent sleep latency" );
+      // writer.var( "SLP_LAT" , "Sleep latency" );
+      // writer.var( "PER_SLP_LAT" , "Persistent sleep latency" );
       
-      writer.var( "SLP_EFF"      , "Sleep efficiency: LIGHTS_OUT --> LIGHTS_ON" );
-      writer.var( "SLP_MAIN_EFF" , "Sleep maintenance efficiency: LIGHTS_OUT --> LIGHTS_ON" );
-      writer.var( "SLP_EFF2"     , "Sleep efficiency: SLEEP_ONSET --> FINAL_WAKE" );
+      // writer.var( "SLP_EFF"      , "Sleep efficiency: LIGHTS_OUT --> LIGHTS_ON" );
+      // writer.var( "SLP_MAIN_EFF" , "Sleep maintenance efficiency: LIGHTS_OUT --> LIGHTS_ON" );
+      // writer.var( "SLP_EFF2"     , "Sleep efficiency: SLEEP_ONSET --> FINAL_WAKE" );
 
-      writer.var( "REM_LAT" , "REM latency (from SLEEP_ONSET)" );
+      // writer.var( "REM_LAT" , "REM latency (from SLEEP_ONSET)" );
       
-      writer.var( "PCT_N1" , "Proportion of sleep that is N1" );
-      writer.var( "PCT_N2" , "Proportion of sleep that is N2" );
-      writer.var( "PCT_N3" , "Proportion of sleep that is N3" );
-      writer.var( "PCT_N4" , "Proportion of sleep that is N4" );
-      writer.var( "PCT_REM" , "Proportion of sleep that is REM" );
+      // writer.var( "PCT_N1" , "Proportion of sleep that is N1" );
+      // writer.var( "PCT_N2" , "Proportion of sleep that is N2" );
+      // writer.var( "PCT_N3" , "Proportion of sleep that is N3" );      
+      // writer.var( "PCT_N4" , "Proportion of sleep that is N4" );
+      // writer.var( "PCT_REM" , "Proportion of sleep that is REM" );
       
-      writer.var( "MINS_N1" , "Proportion of sleep that is N1" );
-      writer.var( "MINS_N2" , "Proportion of sleep that is N2" );
-      writer.var( "MINS_N3" , "Proportion of sleep that is N3" );
-      writer.var( "MINS_N4" , "Proportion of sleep that is N4" );
-      writer.var( "MINS_REM" , "Proportion of sleep that is REM" );
+      // writer.var( "MINS_N1" , "Proportion of sleep that is N1" );
+      // writer.var( "MINS_N2" , "Proportion of sleep that is N2" );
+      // writer.var( "MINS_N3" , "Proportion of sleep that is N3" );
+      // writer.var( "MINS_N4" , "Proportion of sleep that is N4" );
+      // writer.var( "MINS_REM" , "Proportion of sleep that is REM" );
       
       // values
       writer.value(  "T1_LIGHTS_OFF" , clock_lights_out.as_numeric_string() );
@@ -1482,14 +1487,16 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
 	  writer.value( "PCT_N1" , pct_n1 );
 	  writer.value( "PCT_N2" , pct_n2 );
 	  writer.value( "PCT_N3" , pct_n3 );
-	  writer.value( "PCT_N4" , pct_n4 );
+	  if ( ! collapse_nrem34 ) 
+	    writer.value( "PCT_N4" , pct_n4 );
 	  writer.value( "PCT_REM" , pct_rem);
 	}
-
+      
       writer.value( "MINS_N1" , mins_n1 );
       writer.value( "MINS_N2" , mins_n2 );
       writer.value( "MINS_N3" , mins_n3 );
-      writer.value( "MINS_N4" , mins_n4 );
+      if ( ! collapse_nrem34 ) 
+	writer.value( "MINS_N4" , mins_n4 );
       writer.value( "MINS_REM" , mins_rem);
       
 
@@ -1541,11 +1548,11 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
 	  // Transitions
 	  //
 	  
-	  std::vector<sleep_stage_t> ss = { NREM1 , NREM2 , NREM3 , NREM4 , REM , WAKE };
-	  std::vector<std::string> ss_str = { "NREM1" , "NREM2" , "NREM3" , "NREM4" , "REM" , "WAKE" };
+	  std::vector<sleep_stage_t> ss = { NREM1 , NREM2 , NREM3 , REM , WAKE };
+	  std::vector<std::string> ss_str = { "N1" , "N2" , "N3" , "R" , "W" };
 
 	  std::vector<sleep_stage_t> ss3 = { NREM2 , REM , WAKE };
-	  std::vector<std::string> ss3_str = { "NREM" , "REM" , "WAKE" };
+	  std::vector<std::string> ss3_str = { "NR" , "R" , "W" };
 	  
 	  if ( flanking_3class ) 
 	    {
@@ -1607,9 +1614,11 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
   stagen[ NREM1 ] = -1;
   stagen[ NREM2 ] = -2;
   stagen[ NREM3 ] = -3;
-  stagen[ NREM4 ] = -4;
-  stagen[ UNSCORED ] = 2;
-  stagen[ UNKNOWN ] = 2; // this should not happen
+  stagen[ NREM4 ] = collapse_nrem34 ? -3 : -4;
+  
+  // all 'bad' here -- treat as 'UNKNOWN'
+  stagen[ UNKNOWN ] = 2; 
+  stagen[ UNSCORED ] = 2; // these others should not happen, but in case...
   stagen[ MOVEMENT ] = 2;
   stagen[ ARTIFACT ] = 2;
   stagen[ LIGHTS_ON ] = 2;
@@ -1865,10 +1874,10 @@ void dummy_hypno()
       else if ( s == "N1" ) h.stages.push_back( NREM1 );
       else if ( s == "N2" ) h.stages.push_back( NREM2 );
       else if ( s == "N3" ) h.stages.push_back( NREM3 );
-      else if ( s == "N4" ) h.stages.push_back( NREM4 );
+      //else if ( s == "N4" ) h.stages.push_back( NREM4 );
       else if ( s == "R"  ) h.stages.push_back( REM );
       else if ( s == "L"  ) h.stages.push_back( LIGHTS_ON );
-      else if ( s == "?"  ) h.stages.push_back( UNSCORED );
+      else if ( s == "?"  ) h.stages.push_back( UNKNOWN );
       else logger << "did not recognize " << s << "\n";
     }
 

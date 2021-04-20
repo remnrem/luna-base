@@ -54,7 +54,13 @@ void dummy_hypno();
 struct hypnogram_t
 {
   
-  hypnogram_t() { } 
+  hypnogram_t( bool collapse = true ) 
+  { 
+    collapse_nrem34 = collapse;
+  } 
+  
+  bool collapse_nrem34;
+  
   bool construct( timeline_t * t , param_t & param , const bool verbose , const std::vector<std::string> & s );
   bool construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel = "SleepStage" );
   void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO

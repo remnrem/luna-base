@@ -281,17 +281,28 @@ void globals::init_defs()
   // Primary sleep stage encoding 
   //
   
-  sleep_stage[ WAKE  ]     = "wake";
+  sleep_stage[ WAKE  ]     = "W";
   sleep_stage[ LIGHTS_ON ] = "L";
-  sleep_stage[ NREM1 ]     = "NREM1";
-  sleep_stage[ NREM2 ]     = "NREM2";
-  sleep_stage[ NREM3 ]     = "NREM3";
-  sleep_stage[ NREM4 ]     = "NREM4";
-  sleep_stage[ REM   ]     = "REM";
+  sleep_stage[ NREM1 ]     = "N1";
+  sleep_stage[ NREM2 ]     = "N2";
+  sleep_stage[ NREM3 ]     = "N3";
+  sleep_stage[ NREM4 ]     = "NREM4"; // redundant
+  sleep_stage[ REM   ]     = "R";
   sleep_stage[ MOVEMENT ]  = "M";
-  sleep_stage[ UNSCORED ]  = "?";
-  sleep_stage[ UNKNOWN ]   = ".";
+  sleep_stage[ UNSCORED ]  = "U"; // ambiguous - 'unscorable'
+  sleep_stage[ UNKNOWN ]   = "?"; // missing
 
+  // minimal: default
+  sleep_stage_labels[ "W" ]     = WAKE;  
+  sleep_stage_labels[ "N1" ]    = NREM1;  
+  sleep_stage_labels[ "N2" ]    = NREM2;  
+  sleep_stage_labels[ "N3" ]    = NREM3;  
+  sleep_stage_labels[ "N4" ]    = NREM4; // should not encounter
+  sleep_stage_labels[ "R" ]     = REM;
+  sleep_stage_labels[ "U" ]     = UNSCORED;
+  sleep_stage_labels[ "?" ]     = UNKNOWN;
+  sleep_stage_labels[ "M" ]     = MOVEMENT;  
+  sleep_stage_labels[ "L" ]     = LIGHTS_ON;
 
   //
   // Common/NSRR labels
@@ -332,17 +343,7 @@ void globals::init_defs()
   sleep_stage_labels[ "REM" ]      = REM;
   sleep_stage_labels[ "Movement" ] = MOVEMENT;
   sleep_stage_labels[ "Unscored" ] = UNSCORED;
-  sleep_stage_labels[ "L" ] = LIGHTS_ON;
 
-  // minimal 
-  sleep_stage_labels[ "W" ]     = WAKE;  
-  sleep_stage_labels[ "N1" ]    = NREM1;  
-  sleep_stage_labels[ "N2" ]    = NREM2;  
-  sleep_stage_labels[ "N3" ]    = NREM3;  
-  sleep_stage_labels[ "N4" ]    = NREM4;  
-  sleep_stage_labels[ "R" ]     = REM;
-  sleep_stage_labels[ "?" ]     = UNSCORED;
-  sleep_stage_labels[ "M" ]     = MOVEMENT;  
   
   // mouse: make generic 'NR' -> NREM2
   sleep_stage_labels[ "W" ]     = WAKE;  

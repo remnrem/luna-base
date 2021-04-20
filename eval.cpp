@@ -3611,7 +3611,91 @@ void cmd_t::register_specials()
   specials.insert( "exclude" ) ;
   specials.insert( "include" ) ;
 
+
+  // register and define these topographical special variables:
+  specials.insert( "left" );
+  specials.insert( "midline" );
+  specials.insert( "right" );
+  specials.insert( "anterior" );
+  specials.insert( "central" );
+  specials.insert( "posterior" );
+  specials.insert( "anterio-frontal" );  
+  specials.insert( "mid-central" );  
+  specials.insert( "centro-parietal" );  
+  specials.insert( "frontal" );  
+  specials.insert( "fronto-central" ); 
+  specials.insert( "occiptital" );  
+  specials.insert( "parietal" );  
+  specials.insert( "parieto-occipital" );  
+  specials.insert( "pre-frontal" );  
+  specials.insert( "temporal" );
+
+  //
+  // EEG topographical groupings
+  //
+
+  //
+  // Left/right
+  //
+
+  vars[ "left" ] 
+    = "FP1,AF7,AF3,F1,F3,F5,F7,FT7,FC5,FC3,FC1,C1,C3,C5,T7,TP7,CP5,CP3,CP1,P1,P3,P5,P7,P9,PO7,PO3,O1";
   
+  vars[ "midline" ] 
+    = "IZ,OZ,POZ,PZ,CPZ,FPZ,AFZ,FZ,FCZ,CZ";
+  
+  vars[ "right" ] 
+    = "FP2,AF8,AF4,F2,F4,F6,F8,FT8,FC6,FC4,FC2,C2,C4,C6,T8,TP8,CP6,CP4,CP2,P2,P4,P6,P8,P10,PO8,PO4,O2";
+
+  // 
+  // Anterior/posterior
+  //
+
+  vars[ "anterior" ] 
+    = "FP1,AF7,AF3,F1,F3,F5,F7,FPZ,AFZ,FZ,FP2,AF8,AF4,F2,F4,F6,F8";
+
+  vars[ "central" ] 
+    = "FT7,FC5,FC3,FC1,C1,C3,C5,T7,TP7,CP5,CP3,CP1,CPZ,FCZ,CZ,FT8,FC6,FC4,FC2,C2,C4,C6,T8,TP8,CP6,CP4,CP2";
+  
+  vars[ "posterior" ] 
+    = "P1,P3,P5,P7,P9,PO7,PO3,O1,IZ,OZ,POZ,PZ,P2,P4,P6,P8,P10,PO8,PO4,O2";
+  
+
+  // 
+  // Regions
+  //
+
+  vars[ "pre-frontal" ]  
+    = "FP1,FPZ,FP2";
+
+  vars[ "anterio-frontal" ]
+    = "AF7,AF3,AFZ,AF8,AF4";
+
+  vars[ "mid-central" ]  
+    = "C1,C3,C5,CZ,C2,C4,C6";
+    
+  vars[ "centro-parietal" ]  
+    = "CP5,CP3,CP1,CPZ,CP6,CP4,CP2";
+
+  vars[ "frontal" ]  
+    = "F1,F3,F5,F7,FZ,F2,F4,F6,F8";
+  
+  vars[ "fronto-central" ]  
+    = "FC5,FC3,FC1,FCZ,FC6,FC4,FC2";
+
+  vars[ "occiptital" ]  
+    = "O1,IZ,OZ,O2";
+
+  vars[ "parietal" ]  
+    = "P1,P3,P5,P7,P9,PZ,P2,P4,P6,P8,P10";
+  
+  vars[ "parieto-occipital" ]  
+    = "PO7,PO3,POZ,PO8,PO4";
+    
+  vars[ "temporal" ]  
+    = "FT7,T7,TP7,FT8,T8,TP8";
+
+
   // specials.insert( "eeg" );
   // specials.insert( "ref" );
   // specials.insert( "ic" );

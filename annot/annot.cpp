@@ -1810,13 +1810,13 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 
 	  if ( e->name != "SleepStage" ) continue;
 	  
-	  std::string stg = "Unscored";
-	  if      ( e->value == "0" ) stg = "wake";
-	  else if ( e->value == "1" ) stg = "NREM1";
-	  else if ( e->value == "2" ) stg = "NREM2";
-	  else if ( e->value == "3" ) stg = "NREM3";
+	  std::string stg = "?";
+	  if      ( e->value == "0" ) stg = "W";
+	  else if ( e->value == "1" ) stg = "N1";
+	  else if ( e->value == "2" ) stg = "N2";
+	  else if ( e->value == "3" ) stg = "N3";
 	  else if ( e->value == "4" ) stg = "NREM4";
-	  else if ( e->value == "5" ) stg = "REM";	 
+	  else if ( e->value == "5" ) stg = "R";	 
 
 	  // remap?
 	  stg = nsrr_t::remap( stg );
@@ -2340,8 +2340,7 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
       // if ss == UNKNOWN means this is not a Sleep Stage
       ++ii;
     }
-
-
+  
   std::vector<std::string> v_wake  = Helper::parse( a_wake , "," );
   std::vector<std::string> v_n1    = Helper::parse( a_n1 , "," );
   std::vector<std::string> v_n2    = Helper::parse( a_n2 , "," );
