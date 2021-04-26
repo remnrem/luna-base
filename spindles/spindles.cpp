@@ -121,7 +121,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   bool use_empirical_thresholds = param.has( "set-empirical" );
 
   bool verbose_empirical = param.has("verbose-empirical");
-  
+
+  // use local peak-finding threshold method ( still uses th/min0 and th2/min, and max
+  const bool use_zpks = param.has( "zpks" );
+  const double zpks_window_sec = use_zpks ? param.requires_dbl( "zpks" ) : 0;
+  const double zpks_influence = param.has( "influence" ) ? param.requires_dbl( "influence" ) : 0.01;
+
   // default multiplicative threshold for spindle core, = 4.5 
   double   multiplicative_threshold = param.has( "th" ) ? param.requires_dbl( "th" ) : 4.5 ;
   
@@ -158,7 +163,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const uint64_t min0_dur_tp = min0_dur_sec * globals::tp_1sec;
   const uint64_t min_dur_tp  = min_dur_sec * globals::tp_1sec;
   const uint64_t max_dur_tp  = max_dur_sec * globals::tp_1sec;
-
+  
 
   //
   // Analysis/output parameters
@@ -333,7 +338,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   if ( param.has( "out" ) )
     {
       annotfile = param.value("out");
-      logger << " writing annotation files [" << annotfile << "]\n";
+      logger << "  writing annotation files [" << annotfile << "]\n";
     }
 
   
@@ -556,14 +561,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       for (int fi=0; fi<frq.size(); fi++)
 	{
 	  
-	  logger << "\n detecting spindles around F_C " << frq[fi] << "Hz for " << signals.label(s) << "\n";
+	  logger << "\n  detecting spindles around F_C " << frq[fi] << "Hz for " << signals.label(s) << "\n";
 
 	  if ( alt_spec ) 
-	    logger << " wavelet with FWHM(T) " << fwhm[fi] << "\n";       
+	    logger << "  wavelet with FWHM(T) " << fwhm[fi] << "\n";       
 	  else
-	    logger << " wavelet with " << num_cycles << " cycles\n";       
+	    logger << "  wavelet with " << num_cycles << " cycles\n";       
 
-	  logger << " smoothing window = " << moving_window_sec << "s\n";
+	  logger << "  smoothing window = " << moving_window_sec << "s\n";
 
 	  //
 	  // Output stratifier: F_C
@@ -612,11 +617,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    std::cout << "AV\t" << adj_vals[i] << "\n";
 		}
 
-	      logger << " estimated empirical thresholds as " << empirical_threshold << "\n";
+	      logger << "  estimated empirical thresholds as " << empirical_threshold << "\n";
 
 	      if ( use_empirical_thresholds )
 		{
-		  logger << " setting thresholds to empirical value, " << empirical_threshold << "\n";
+		  logger << "  setting thresholds to empirical value, " << empirical_threshold << "\n";
 		  multiplicative_threshold = empirical_threshold;
 		  boundary_threshold = multiplicative_threshold * 0.5;
 		  maximal_threshold = multiplicative_threshold * 10;
@@ -655,17 +660,24 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		}
 	      writer.unlevel( "TH" );
 	      
-	    }
+	      
+	      // if just estimating thresholds, we should skip the actual spindle detection part
+	      // go on to next frequency/channel
 
+	      if ( ! use_empirical_thresholds ) 
+		continue;
+	      
+	    }
+	
 	  // report thresholds
 
-	  logger << " detection thresholds (core, flank, max)  = " << multiplicative_threshold << ", "
+	  logger << "  detection thresholds (core, flank, max)  = " << multiplicative_threshold << ", "
 		    << boundary_threshold;
 	  if ( maximal_threshold > 0 ) 	 
 	    logger << ", " << maximal_threshold;
 	  logger << "x" << "\n";
 	  
-	  logger << " core duration threshold (core, min, max) = " << min0_dur_sec << ", " << min_dur_sec << ", " << max_dur_sec << "s" << "\n";	  
+	  logger << "  core duration threshold (core, min, max) = " << min0_dur_sec << ", " << min_dur_sec << ", " << max_dur_sec << "s" << "\n";	  
 
 	  // Set up threshold values as a matrix;  typically, these will use the same mean, 
 	  // and so every value will be identical, but allow for the case where we have
@@ -754,119 +766,163 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  //
 	  // Find above threshold regions
 	  //
-
-	  int start = 0;
-	  int stop = 0;
-	  int scnt = 0;
-	 	  
-	  uint64_t dt = 1.0/(double)Fs[s] * globals::tp_1sec; // time in tp-units
 	  
 	  std::vector<interval_t> spindles1;
 	  std::vector<int> spindles1_start; // sample-points
 	  std::vector<int> spindles1_stop; // sample-points
-	  
 
-	  if ( averaged.size() != tp->size() ) Helper::halt( "internal error in cwt()\n" );
-
-	  for (int i=0; i<averaged.size(); i++)
+	  if ( use_zpks )
 	    {
 	      
-	      if ( averaged[i] > threshold[i] ) 
-		{		  
+	      logger << "  robust detection of local peaks\n"; 
 
-		  if ( scnt == 0 ) start = i;
-		  stop = i+1;
-		  ++scnt;
+	      // all durations for smoothedZ() in sample-points:
+
+	      // prior window to consider ( in sample-points) 
+	      const int lag_sp = Fs[s] * zpks_window_sec ; 
+	      const uint64_t min0_dur_sp = min0_dur_sec * Fs[s];
+	      const uint64_t min_dur_sp  = min_dur_sec * Fs[s];
+	      const uint64_t max_dur_sp  = max_dur_sec * Fs[s];
+	      	      
+	      const bool ignore_negatives = true; 
+	      
+	      std::vector<interval_t> spindles0;
+	      
+	      std::vector<int> pk = MiscMath::smoothedZ( averaged , lag_sp , multiplicative_threshold , zpks_influence , min0_dur_sp , 
+							 maximal_threshold > 0 ? maximal_threshold : 0 , 
+							 boundary_threshold , min_dur_sp , ignore_negatives , &spindles0 );
+	      
+	      // check total duration <= max_dur_sp
+	      
+	      for (int i=0; i<spindles0.size(); i++)
+		{
+		  const interval_t & s = spindles0[i];
+		  if ( s.stop - s.start > max_dur_sp ) continue;
+		  
+		  // tp: use +1 end encoding
+		  spindles1.push_back( interval_t( (*tp)[s.start] , (*tp)[s.stop] + 1LLU  ) );
+
+		  // sp: already uses +1 end encoding
+		  spindles1_start.push_back( s.start );
+		  spindles1_stop.push_back( s.stop );
 		}
-	      else
+
+	    }
+	  else
+	    {
+	      
+	      logger << "  basic " << ( use_median ? "median" : "mean" ) << "-based multiplicative threshold rule\n";
+
+	      int start = 0;
+	      int stop = 0;
+	      int scnt = 0;
+	      
+	      uint64_t dt = 1.0/(double)Fs[s] * globals::tp_1sec; // time in tp-units
+	  
+	      if ( averaged.size() != tp->size() ) Helper::halt( "internal error in cwt()\n" );
+
+	      for (int i=0; i<averaged.size(); i++)
 		{
 		  
-		  if ( scnt > 0 ) 
-		    {
-
-		      uint64_t start_tp = (*tp)[ start ];
-		      uint64_t stop_tp  = (*tp)[ stop ];
-		      uint64_t dur_tp   = stop_tp - start_tp + 1;
+		  if ( averaged[i] > threshold[i] ) 
+		    {		  
 		      
-		      // does peak area meet duration requirements?
-		      
-		      if ( dur_tp > min0_dur_tp && dur_tp < max_dur_tp ) 
-			{
-
-			  // core is identified as a spindle, but now extend 
-			  // to define boundaries using a lower threshold
-			  
-			  // prior
-			  int j = start;
-			  while ( 1 )
-			    {
-			      --j;
-			      if ( j <= 0 ) break;
-			      if ( averaged[j] < threshold2[j] ) break;
-			      start = j;
-			    }
-			  
-			  // after
-			  j = stop;
-			  while ( 1 )
-			    {
-			      ++j;
-			      if ( j >= averaged.size() ) break;
-			      if ( averaged[j] < threshold2[j] ) break;
-			      stop = j;
-			    }
-			  
-			  // re-adjusted start/stop times
-			  start_tp = (*tp)[ start ];
-			  stop_tp  = (*tp)[ stop ];
-
-			  //
-			  // Some final checks on whether we should call a spindle here
-			  //
-			  
-			  bool okay = true;
-
-			  //
-			  // check that expanded spindle meets the broader definition
-			  //
-
-			  uint64_t dur2_tp = stop_tp - start_tp + 1;
-			  
-			  if ( dur2_tp < min_dur_tp ) okay = false;
-			  if ( dur2_tp > max_dur_tp ) okay = false;			  
-
-			  //
-			  // check for any max. threshold condition
-			  //
-			  			  
-			  if ( maximal_threshold > 0 )			  
-			    {
-			      for ( int j = start ; j <= stop ; j++ )
-				{
-				  if ( averaged[j] > threshold_max[j] ) { okay = false; break; }
-				}			      
-			    }
-			  
-			  
-			  //
-			  // save this spindle ?
-			  //
-
-			  if ( okay )
-			    {
-			      spindles1.push_back( interval_t( start_tp , stop_tp ) );
-			      spindles1_start.push_back( start );
-			      spindles1_stop.push_back( stop );
-			    }
-			  
-			}
-		      
-		      scnt = 0;
+		      if ( scnt == 0 ) start = i;
+		      stop = i+1; 
+		      ++scnt;
 		    }
+		  else
+		    {
+		      
+		      if ( scnt > 0 ) 
+			{
+			  
+			  uint64_t start_tp = (*tp)[ start ];
+			  uint64_t stop_tp  = (*tp)[ stop ]; // is 1-past end already
+			  uint64_t dur_tp   = stop_tp - start_tp ;
+			  
+			  // does peak area meet duration requirements?
+			  
+			  if ( dur_tp > min0_dur_tp && dur_tp < max_dur_tp ) 
+			    {
+			      
+			      // core is identified as a spindle, but now extend 
+			      // to define boundaries using a lower threshold
+			      
+			      // prior
+			      int j = start;
+			      while ( 1 )
+				{
+				  --j;
+				  if ( j <= 0 ) break;
+				  if ( averaged[j] < threshold2[j] ) break;
+				  start = j;
+				}
+			      
+			      // after
+			      j = stop;
+			      while ( 1 )
+				{
+				  ++j;
+				  if ( j >= averaged.size() ) break;
+				  if ( averaged[j] < threshold2[j] ) break;
+				  stop = j+1; // one past end encoding
+				}
+			      
+			      // re-adjusted start/stop times
+			      start_tp = (*tp)[ start ];
+			      stop_tp  = (*tp)[ stop ];
+			      
+			      //
+			      // Some final checks on whether we should call a spindle here
+			      //
+			      
+			      bool okay = true;
+			      
+			      //
+			      // check that expanded spindle meets the broader definition
+			      //
+			      
+			      uint64_t dur2_tp = stop_tp - start_tp;
+			      
+			      if ( dur2_tp < min_dur_tp ) okay = false;
+			      if ( dur2_tp > max_dur_tp ) okay = false;			  
+			      
+			      //
+			      // check for any max. threshold condition
+			      //
+			      
+			      if ( maximal_threshold > 0 )			  
+				{
+				  for ( int j = start ; j <= stop ; j++ )
+				    {
+				      if ( averaged[j] > threshold_max[j] ) { okay = false; break; }
+				    }			      
+				}
+			      
+			  
+			      //
+			      // save this spindle ?
+			      //
+			      
+			      if ( okay )
+				{
+				  spindles1.push_back( interval_t( start_tp , stop_tp ) );
+				  spindles1_start.push_back( start );
+				  spindles1_stop.push_back( stop );
+				}
+			      
+			    }
+			  
+			  scnt = 0;
+			}
 		  
+		    }
 		}
-	    }
 	  
+	    }
+
+
 	  
 	  //
 	  // Merge rule
@@ -959,9 +1015,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  int nspindles_postmerge = spindles.size();
 
-	  logger << " pruned spindle count from " 
+	  logger << "  merged nearby intervals: from " 
 		 << spindles1.size() << " to " 
-		 << spindles.size() << "\n";
+		 << spindles.size() << " unique events\n";
 	  
 
 	  
@@ -1621,7 +1677,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	    {
 	      std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;
 	      std::string fname = param.value( "pdf" ) + "-" + signals.label(s) + "-" + analysis_label + ".pdf";
-	      logger << " writing PDF of spindle traces to " << fname << "\n";
+	      logger << "  writing PDF of spindle traces to " << fname << "\n";
 	      std::map<uint64_t,double> avgmap;
 	      for (int j=0;j<averaged.size();j++) avgmap[ (*tp)[j] ] = averaged[j] ;
 	      draw_spindles( edf , param , fname , signals(s) , spindles, &avgmap );
@@ -1659,7 +1715,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  bool empty = spindles.size() == 0; 
 	  
 	  if ( ! empty )
-	    logger << " estimated spindle density is " << spindles.size() / t_minutes << "\n";
+	    logger << "  estimated spindle density is " << spindles.size() / t_minutes << "\n";
   
 
 
@@ -2160,7 +2216,7 @@ void characterize_spindles( edf_t & edf ,
       if ( ! bandpass_filtered ) 
 	{
 	  
-	  logger << " filtering at " << target_f - window_f * 0.5  << " to " << target_f + window_f * 0.5 << "\n";
+	  logger << "  filtering at " << target_f - window_f * 0.5  << " to " << target_f + window_f * 0.5 << "\n";
 	  
 	  // default above is 4 Hz, i.e. +/- 2 Hz    ~ 9-13Hz for slow spindles,    13-17Hz for fast spindles
 
@@ -2682,7 +2738,7 @@ void characterize_spindles( edf_t & edf ,
        spindles->clear();
        for (int i=0;i<copy_spindles.size();i++)
 	 if ( copy_spindles[i].include ) spindles->push_back( copy_spindles[i] );
-       logger << " QC'ed spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
+       logger << "  QC'ed spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
      }
       
    

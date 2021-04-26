@@ -65,6 +65,7 @@ int globals::default_epoch_len;
 
 std::map<frequency_band_t,freq_range_t> globals::freq_band;
 
+std::string globals::sleep_stage_prefix;
 sleep_stage_label_t globals::sleep_stage;
 sleep_stage_label_lookup_t globals::sleep_stage_labels;
 
@@ -280,6 +281,9 @@ void globals::init_defs()
   //
   // Primary sleep stage encoding 
   //
+
+  // i.e. to track different schemes, SUDS_N1,  sleep_stage_prefix == "SUDS" 
+  sleep_stage_prefix       = ""; // by default not  
   
   sleep_stage[ WAKE  ]     = "W";
   sleep_stage[ LIGHTS_ON ] = "L";
@@ -544,6 +548,7 @@ std::string globals::band( frequency_band_t b )
 
 std::string globals::stage( sleep_stage_t s )
 {
+
   if ( sleep_stage.find(s) == sleep_stage.end() ) return "?";
   return sleep_stage[s];
 }
@@ -563,10 +568,21 @@ std::string globals::stage( int s )
 
 sleep_stage_t globals::stage( const std::string & s )
 {
-  sleep_stage_label_lookup_t::const_iterator ii = sleep_stage_labels.find( s );
+  if ( sleep_stage_prefix == "" ) 
+    {
+      sleep_stage_label_lookup_t::const_iterator ii = sleep_stage_labels.find( s );
+      if ( ii == sleep_stage_labels.end() ) return UNKNOWN;
+      return ii->second;
+    }
+  
+  // otherwise, we are expecting to see the prefix at the string start
+  if ( sleep_stage_prefix != s.substr( 0 , sleep_stage_prefix.size() ) ) return UNKNOWN;
+  sleep_stage_label_lookup_t::const_iterator ii = sleep_stage_labels.find( s.substr( sleep_stage_prefix.size() ) );
   if ( ii == sleep_stage_labels.end() ) return UNKNOWN;
   return ii->second;
+									   
 }
+
 
 double globals::band_width( frequency_band_t b )
 {

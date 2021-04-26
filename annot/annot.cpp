@@ -2314,6 +2314,12 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
   
   if ( find( "SleepStage" ) != NULL ) return false; 
 
+  
+  //
+  // Is a prefix specified? 
+  //
+
+  bool has_prefix = globals::sleep_stage_prefix != "" ;
 
   //
   // Use default annotation labels, if not otherwise specified
@@ -2324,7 +2330,8 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
   std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
   while ( ii != annots.end() )
     {
-      const std::string & s = ii->first;
+
+      const std::string & s = has_prefix ? globals::sleep_stage_prefix + "_" + ii->first : ii->first;
       
       sleep_stage_t ss = globals::stage( s );
       

@@ -133,8 +133,11 @@ struct globals
   
   // global variables
   static std::map<frequency_band_t,freq_range_t> freq_band;
+
   static sleep_stage_label_t sleep_stage;
-  
+
+  static std::string sleep_stage_prefix; // to track multiple schemes, e.g. manual + SUDS
+
   static sleep_stage_label_lookup_t sleep_stage_labels;
   
   static char folder_delimiter;
@@ -313,7 +316,7 @@ struct globals
 
   static std::string stage( int );
 
-  static sleep_stage_t stage( const std::string &  );
+  static sleep_stage_t stage( const std::string & );
 
 
   static double band_width( frequency_band_t b );

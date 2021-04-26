@@ -1806,7 +1806,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "fir" || p == "fft" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
-       || p == "desats" ) 
+       || p == "desats" || p == "zpks" ) 
     {
 
       int cnt= 0;
@@ -1834,6 +1834,28 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(1);
     }
 
+
+  if ( p == "zpks" ) 
+    {
+      std::vector<interval_t> ints;
+      //std::vector<int> s = MiscMath::smoothedZ( x , 30*256 , 3 , 0 , 128 , 20 , 2 , 256 , true , &ints) ;
+      std::vector<int> s = MiscMath::smoothedZ( x , 400 , 3 , 0 , 96 , 0 , 0 , 0 , true , &ints , true ) ;
+      
+      for (int i=0; i<ints.size(); i++)
+	std::cout << i << "\t" << ints[i].start << " -- " << ints[i].stop << "  " << ints[i].stop - ints[i].start << " " << ( ints[i].stop - ints[i].start ) / 256.0 << "\n";
+
+      // std::vector<int> smoothedZ( const std::vector<double> & x , int lag , double threshold , double influence = 0 , 
+      // 				  int mindur = 0 , double max = 0 , 
+      // 				  double threshold2 = 0 , int mindur2 = 0 , 
+      // 				  bool noneg = false , 
+      // 				  std::vector<interval_t> * regions = NULL );
+      
+
+      //std::vector<int> s = MiscMath::smoothedZ( x , 30 , 5 ) ;
+      // for (int i=0; i<s.size(); i++)
+      // 	std::cout << x[i] << "\t" << s[i] << "\n";
+       std::exit(1);
+    }
  
   if ( p == "psi" )
     {

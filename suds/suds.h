@@ -219,9 +219,9 @@ struct suds_t {
   {
 
     // total/max number of PSC components
-    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 20 ;
+    nc = param.has( "nc" ) ? param.requires_int( "nc" ) : 10 ;
 
-    // add time-track as a predictor?
+    // add time-track as a predictor? value N terms = T^N
     time_track = param.has( "tt" ) ? param.requires_int( "tt" ) : 0 ;
     
     // flat priors?

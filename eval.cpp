@@ -2946,7 +2946,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	Helper::halt( "expecting integer for sec-dp=N" );
       return;
     }
-  
+    
   // add signals?
   if ( Helper::iequals( tok0 , "sig" ) )
     {		  
@@ -2985,6 +2985,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::replace_channel_spaces = false;
     }
   
+  // sleep stage prefix
+  if (  Helper::iequals( tok0 , "ss-prefix" ) )
+    {
+      globals::sleep_stage_prefix = tok1; 
+      return;
+    }
+
   // individual-specific variables
   if ( Helper::iequals( tok0 , "vars" ) ) 
     {
@@ -3578,6 +3585,8 @@ void cmd_t::register_specials()
   specials.insert( "vars" );
   specials.insert( "ids" );    
   specials.insert( "add" ) ;
+  specials.insert( "ss-prefix" );
+
   specials.insert( "fail-list" ) ;
   specials.insert( "compressed" ) ;
   specials.insert( "nsrr-remap" ) ;
@@ -3621,22 +3630,22 @@ void cmd_t::register_specials()
 
 
   // register and define these topographical special variables:
-  specials.insert( "left" );
-  specials.insert( "midline" );
-  specials.insert( "right" );
-  specials.insert( "anterior" );
-  specials.insert( "central" );
-  specials.insert( "posterior" );
-  specials.insert( "anterio-frontal" );  
-  specials.insert( "mid-central" );  
-  specials.insert( "centro-parietal" );  
-  specials.insert( "frontal" );  
-  specials.insert( "fronto-central" ); 
-  specials.insert( "occiptital" );  
-  specials.insert( "parietal" );  
-  specials.insert( "parieto-occipital" );  
-  specials.insert( "pre-frontal" );  
-  specials.insert( "temporal" );
+  // specials.insert( "left" );
+  // specials.insert( "midline" );
+  // specials.insert( "right" );
+  // specials.insert( "anterior" );
+  // specials.insert( "central" );
+  // specials.insert( "posterior" );
+  // specials.insert( "anterio-frontal" );  
+  // specials.insert( "mid-central" );  
+  // specials.insert( "centro-parietal" );  
+  // specials.insert( "frontal" );  
+  // specials.insert( "fronto-central" ); 
+  // specials.insert( "occiptital" );  
+  // specials.insert( "parietal" );  
+  // specials.insert( "parieto-occipital" );  
+  // specials.insert( "pre-frontal" );  
+  // specials.insert( "temporal" );
 
   //
   // EEG topographical groupings
@@ -3763,7 +3772,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
       // try to make and extract stages
       edf.timeline.annotations.make_sleep_stage();
       
-      globals::retcode = 0;
+      globals::retcode = 1;
 
       // by default, this sets sslabel to SleepStage
 
@@ -3778,7 +3787,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
 	    {
 	      int ne = edf.timeline.num_epochs();
 	      if ( ne == edf.timeline.hypnogram.stages.size() )
-		globals::retcode = 1;
+		globals::retcode = 0;
 	    }
 	}
       

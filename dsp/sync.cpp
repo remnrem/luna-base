@@ -23,6 +23,7 @@
 #include "dsp/sync.h"
 
 #include "dsp/hilbert.h"
+#include "fftw/fftwrap.h"
 #include "dsp/wrappers.h"
 #include "stats/eigen_ops.h"
 #include "edf/edf.h"
@@ -50,6 +51,131 @@ void dsptools::sync( edf_t & edf , param_t & param )
   const int ns = signals.size();
 
   if ( ns < 2 ) return;
+
+  //
+  // Options
+  //
+
+  bool do_not_add_channels = param.has( "no-new-channels" );
+
+  std::string kop_tag = param.has( "tag" ) ? param.value( "tag" ) : "KOP" ; 
+
+  double fmin = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5; 
+  double fmax = param.has( "max" ) ? param.requires_dbl( "max" ) : 20 ; 
+  
+
+  //
+  // Epoch-wise FFT or full HT? 
+  //
+  
+  bool do_ht = param.has( "w" );
+
+  bool do_fft = param.has( "fft" );
+  
+  
+  //
+  // Check sample rates
+  //  
+  
+  const int sr = edf.header.sampling_freq( signals(0) );
+  
+  for (int i=1;i<ns;i++)
+    {      
+      if ( edf.header.sampling_freq( signals(i) ) != sr ) 
+	Helper::halt( "all signals must have similar SR for ICA" );
+    }
+
+
+  //
+  // First pass FFT (epoch-wise) 
+  //
+  
+  if ( do_fft )
+    {
+      edf.timeline.first_epoch();
+ 
+      // set up FFT
+      slice_t slice( edf , signals(0) , edf.timeline.epoch( 0 ) );
+      const std::vector<double> * d = slice.pdata();
+      int index_length = d->size();
+      real_FFT fftseg( index_length , index_length , sr , WINDOW_NONE );
+      fftseg.apply( &((*d)[0]) , index_length );
+      int my_N = fftseg.cutoff;
+      
+      while ( 1 ) 
+	{
+	  int epoch = edf.timeline.next_epoch();
+	  
+	  if ( epoch == -1 ) break;
+	  
+	  interval_t interval = edf.timeline.epoch( epoch );
+	  
+	  Eigen::MatrixXd ekop = Eigen::MatrixXd::Zero( my_N , ns );
+	  
+	  writer.epoch( edf.timeline.display_epoch( epoch ) );
+	  
+	  // all channels
+	  
+	  for ( int s=0; s<ns; s++ )
+	    {
+	      
+	      slice_t slice( edf , signals(s) , interval );
+	      
+	      const std::vector<double> * d = slice.pdata();
+	      
+	      if ( index_length != d->size() ) Helper::halt( "internal error in sync() " );
+	      
+	      fftseg.apply( &((*d)[0]) , index_length );
+	      
+	      // Extract the raw transform
+	      std::vector<std::complex<double> > t = fftseg.transform();
+
+	      if ( my_N != fftseg.cutoff ) Helper::halt( "internal error in sync() " );
+	      
+	      // Extract the raw transform scaled by 1/n
+	      //	  std::vector<std::complex<double> > t2 = fftseg.scaled_transform();
+	      
+	      for (int f=0;f<my_N;f++)
+		ekop( f , s ) = std::arg( t[f] );
+	      
+	      // next signal
+	    }
+      
+	  // get KOP for this 
+	  Eigen::ArrayXd skop = Eigen::ArrayXd::Zero( my_N );
+      
+	  for (int f=0; f<my_N; f++)
+	    {
+	      
+	      if ( fftseg.frq[f] >= fmin && fftseg.frq[f] <= fmax )
+		{
+		  dcomp k( 0, 0 );
+		  
+		  for (int s=0; s<ns; s++)
+		    k += exp( dcomp ( 0 , ekop(f,s) ) );
+		  k /= (double)ns;
+		  skop[f] = abs( k );
+		  
+		  writer.level( fftseg.frq[f] , globals::freq_strat );
+		  writer.value( "KOP" , skop[f] );
+		}
+	    }
+	  writer.unlevel( globals::freq_strat );
+	  
+	  // next epoch
+	}
+      writer.unepoch();
+      
+    }
+
+
+  //
+  // filter-Hilbert approach 
+  //
+
+
+  if ( ! do_ht ) return;
+
 
   //
   // Get frequencies
@@ -93,22 +219,9 @@ void dsptools::sync( edf_t & edf , param_t & param )
 	    Helper::halt( "frequency below 0 Hz specified" );
 	}
     }
-  
+  else
+    Helper::halt( "no frequency bins specified" );
 
-  bool has_freqs = lwr.size() > 0 ;
-
-  
-  //
-  // Check sample rates
-  //  
-  
-  const int sr = edf.header.sampling_freq( signals(0) );
-  
-  for (int i=1;i<ns;i++)
-    {      
-      if ( edf.header.sampling_freq( signals(i) ) != sr ) 
-	Helper::halt( "all signals must have similar SR for ICA" );
-    }
 
 
   //
@@ -129,6 +242,8 @@ void dsptools::sync( edf_t & edf , param_t & param )
 
   for (int f=0; f<nf; f++)
     {
+      
+      logger << "  filter-Hilbert " << lwr[f] << "-" << upr[f] << "Hz:";
 
       //
       // filter-Hilbert 
@@ -142,6 +257,7 @@ void dsptools::sync( edf_t & edf , param_t & param )
       
       for (int s = 0; s < cols; s++)
 	{
+	  logger << ".";
 	  
 	  const std::vector<double> d = eigen_ops::copy_vector( X.col(s) );
 	  
@@ -153,6 +269,7 @@ void dsptools::sync( edf_t & edf , param_t & param )
 	  
 	}
      
+      logger << "\n";
       
       //
       // Kuramoto order parameter
@@ -169,11 +286,67 @@ void dsptools::sync( edf_t & edf , param_t & param )
 
     }
   
-  std::cout << "KOP\n" << kop << "\n";
+  //
+  // Add new signals
+  //
+  
+  if ( ! do_not_add_channels )
+    {
+      logger << "  adding " << nf << " new signals to EDF:";
+      for (int c=0;c<nf;c++)
+	{
+	  std::vector<double> copy( rows );
+	  Eigen::VectorXd::Map( &copy[0], rows ) = kop.col(c);
+          logger << " " << kop_tag + Helper::int2str( c+1 ) ;
+          edf.add_signal( kop_tag + Helper::int2str( c+1 ) , sr , copy );
+        }
+      logger << "\n";
+    }
 
+  //
+  // Epoch-level summaries
+  //
+
+  edf.timeline.ensure_epoched();
+
+  const uint64_t epoch_sp = sr * edf.timeline.epoch_length();
+  
+  const int ne = edf.timeline.num_epochs();
+
+  const int expected_ne = rows / epoch_sp;
+  
+  if ( ne != expected_ne ) 
+    logger << "  warning : expecting " << expected_ne << " but found " << ne << "\n";
+
+  
+  uint64_t pos = 0;
+  int epoch = 0;
+  for (int pos = 0 ; pos < rows ; pos += epoch_sp )
+    {
+      
+      writer.epoch( edf.timeline.display_epoch( epoch ) );
+      
+      for (int f=0; f<nf; f++)
+	{
+	  
+	  double m = 0 ; 
+	  uint64_t pos2 = pos + epoch_sp ; 
+	  for (int p = pos ; p < pos2; p++ )
+	    m += kop(p,f);
+	  m /= epoch_sp;
+	  
+	  writer.level( f+1 , globals::freq_strat );
+	  writer.value( "KOP" , m );
+	}
+      writer.unlevel( globals::freq_strat );
+      ++epoch;
+    }
+  writer.unepoch();
+  
   //
   // Group calcs  (region vars) 
   //
+
 
   //
   // Permuation / time-shuffle for original values 

@@ -30,6 +30,8 @@
 #include "dsp/lzw.h"
 #include "dsp/mse.h"
 #include "miscmath/crandom.h"
+#include "timeline/cache.h"
+
 #include <limits>
 
 extern writer_t writer;
@@ -82,6 +84,9 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 
   bool add_sig = param.has( "add-sig" );
   const std::string sig_tag = add_sig   ? param.value( "add-sig" ) : "" ;
+  
+  bool save_transitions = param.has( "cache" );
+  const std::string cache_name = save_transitions ? param.value( "cache" ) : "" ; 
   
   if ( ( add_sig || add_sig ) && epoch ) 
     Helper::halt( "cannot use add-annot or add-sig in epoch mode" );
@@ -311,16 +316,17 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       //
       // Add new annotations and/or channels
       //
-    
-      if ( add_annot || add_sig )
+      
+      if ( add_annot || add_sig || save_transitions )
 	{
+	  
 	  std::vector<int> states = smoothed.best();
 	  const int N = states.size();
 
 	  //
 	  // Add annotations
 	  //
-
+	  
 	  if ( add_annot )
 	    {
 	      
@@ -384,10 +390,34 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 		
 	    }
 	  
+	  
+	  //
+	  // Save transitions
+	  //
+	  
+	  if ( save_transitions )
+	    {
+	      
+	      cache_t<int> * cache = edf.timeline.cache.find_int( cache_name );
+	      //cache_t<int> * cache = edf.timeline.cache.find_int( cache_name );
+	      
+	      int idx = 0;
+	      
+	      // save first sample-point in a new state
+	      std::vector<int> transitions;
+	      for (int i=1; i<N; i++) 
+		if ( states[i] != states[i-1] ) 
+		  {
+		    transitions.push_back( i );
+		  }
+	      
+	      // cache sample-points: transitions 
+	      cache->add( ckey_t( "points" , writer.faclvl() ) , transitions );
+	    }
+	  	
 	}
-      
 
-
+  
       //
       // Output all final stats
       //

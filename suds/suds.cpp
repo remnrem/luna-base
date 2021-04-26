@@ -1117,6 +1117,29 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	}
     }
 
+
+
+  //
+  // Add time-track to data matrix? (PSD only)
+  //
+
+  if ( suds_t::time_track ) 
+    {      
+      logger << "  adding " << suds_t::time_track << " time-tracks\n";
+
+      time_track = suds_t::add_time_track( PSD.rows() , suds_t::time_track );
+      
+      PSD.conservativeResize( PSD.rows() , nbins + suds_t::time_track ) ;
+      
+      for (int c=0; c<suds_t::time_track ; c++)
+	PSD.col( nbins + c ) = time_track.col(c);
+
+      // increment nbins
+      nbins += suds_t::time_track;
+
+    }
+
+  logger << "  based on " << nbins << " features over " << PSD.rows() << " epochs, extracting " << nc << " components\n";
   
   //
   // Rescale PSD?
@@ -1146,14 +1169,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // mean-centre columns if not already done via standardization
   
   if ( ! suds_t::standardize_psd )
-    eigen_ops::scale( U , false );
+    eigen_ops::scale( PSD , false );
 
   //
   // SVD
   //
 
-  // W.resize( nbins ); 
-  // V.resize( nbins , nbins );
   
   Eigen::BDCSVD<Eigen::MatrixXd> svd( PSD , Eigen::ComputeThinU | Eigen::ComputeThinV );
   U = svd.matrixU();
@@ -1338,6 +1359,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    }
 	}
     }
+
 
   //
   // optional, band-power per epoch tracking
@@ -1882,13 +1904,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 
 
-  //
-  // Add time-track column(s)? 
-  //
-
-  if ( suds_t::time_track ) 
-    time_track = suds_t::add_time_track( nve , suds_t::time_track );
-
   
   //
   // Summarize mean/SD for per-signal Hjorth parameters
@@ -2009,7 +2024,7 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
       OUT1 << " " << U(i,j);
   OUT1 << "\n\n";
   
-  // X, RAW DATA (e.g. mean-centered PSD, but possibly other things)
+  // X, RAW DATA (e.g. mean-centered PSD, but possibly other things --> e.g. time-track)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
   OUT1 << "X[" << nve << "," << nbins << "]";
@@ -4152,24 +4167,20 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
       while ( uu != uniq.end() )
 	{
 	  logger << "\t" << *uu;
-	  writer.level( *uu , "PRED" );
 
 	  std::set<std::string>::const_iterator jj = uniq.begin();
 	  while ( jj != uniq.end() )
 	    {
 	      logger << "\t" << res[ *uu ][ *jj ];
-	      writer.level( *jj , "OBS" );
-	      writer.value( "N" , res[ *uu ][ *jj ] );
 	      ++jj;
-	    }
-	  writer.unlevel( "OBS" );
+	    }	  
 	  
 	  // row sums
 	  logger << "\t" << rows[ *uu ]/tot;
 	  logger << "\n";
 	  ++uu;
 	}
-      writer.unlevel( "PRED" );
+
 
       // col sums
       logger << "\tTot:";
@@ -4191,6 +4202,7 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
           while ( jj != uniq.end() )
 	    {
 	      writer.level( *jj , "OBS" );
+	      writer.value( "N" , res[ *uu ][ *jj ] );
 	      if ( cols[ *uu ] > 0 ) 
 		writer.value( "P" , res[ *uu ][ *jj ] / cols[ *jj ] );
 	      ++jj;

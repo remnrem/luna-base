@@ -1040,7 +1040,7 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
   
   grand_mean /= (double)n;
 
-  std::cout << "grand mean = " << grand_mean << "\n";
+  //  std::cout << "grand mean = " << grand_mean << "\n";
   
   double cum_sum = 0;
   double cum_f = 0;
@@ -1054,8 +1054,8 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
   // previous 't' (i.e. lowest possible value)
   double last_t = l.begin()->first;
   
-  std::cout << "starting t = " << t << "\n"
-	    << "last (previous) t = " << last_t << "\n";
+  // std::cout << "starting t = " << t << "\n"
+  // 	    << "last (previous) t = " << last_t << "\n";
 
 
   // iterate over all observed values
@@ -1066,28 +1066,28 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
       
       const double this_t = ii->first;
       
-      std::cerr << "observed value " << this_t << "\n";
+      //      std::cerr << "observed value " << this_t << "\n";
       
       // check we don't skip a category
       if ( this_t > t + inc )
 	{
-	  std::cerr << "updating t... from " << t << "\n";
+	  //std::cerr << "updating t... from " << t << "\n";
 	  while ( 1 ) 
 	    {
 	      t += inc;
 	      if ( this_t <= t ) break;
 	      
 	    }
-	  std::cerr << "t is now " << t << "\n";
+	  //std::cerr << "t is now " << t << "\n";
 	}
 
       
-      std::cout << "test threshold t = " << t << "\n";
+      //std::cout << "test threshold t = " << t << "\n";
       
       cum_f += ii->second;
       cum_sum += this_t * ii->second;
 
-      std::cout << "updating cumulative sum = " << cum_sum << "\n";	    
+      //std::cout << "updating cumulative sum = " << cum_sum << "\n";	    
            
       // a test-point?
       // i.e. if we've gone one past (or equal to) the current threshold
@@ -1095,12 +1095,12 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
       if ( this_t >= t && last_t < t )
 	{
 
-	  std::cout << "  -- triggering evaluation\n";
+	  //std::cout << "  -- triggering evaluation\n";
 	  
 	  const double f = cum_f / (double)n;
 	  const double m = cum_sum / cum_f;
 	  
- 	  std::cerr << "w = " << f << "\n";
+ 	  //std::cerr << "w = " << f << "\n";
  	  // std::cerr << "m = " << m << "\n";
 	  
 	  if ( f >= 0 || f <= 1 ) 
@@ -1117,8 +1117,8 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
 		}
 	      
 	      if ( tvals != NULL ) (*tvals)[ t ] = sigma_b;
-
-	      std::cout << " sigma_B\t" << sigma_b << "\n";
+	      
+	      //std::cout << " sigma_B\t" << sigma_b << "\n";
 	      
  	      // std::cout << "details " << t << "\t"
 	      // 		<< f << "\t"
@@ -1152,7 +1152,7 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
   // i.e. threshold is x > t 
   //      rather than x >= t
 
-    std::cerr << "maximum threshold is " << max_t << " " << max_t2 << "\n";
+  //std::cerr << "maximum threshold is " << max_t << " " << max_t2 << "\n";
   if ( w != NULL ) *w = 1 - best_f;
   return max_t2;
    
@@ -1705,3 +1705,339 @@ int MiscMath::outliers( const std::vector<double> * x , double th ,
 
 }
 
+
+std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x , 
+				      int lag , double threshold , double influence ,
+				      int mindur , double max  ,
+				      double threshold2 , int mindur2 , 
+				      bool noneg , 
+				      std::vector<interval_t> * regions , 
+				      bool verbose )
+{
+  const int n = x.size();
+
+  // populate lag window with lag .. 2lag-1  for evaluation of the first 0 .. lag - 1 elements
+  // i.e. start going backwards in time, otherwise we have to skip the first region
+  // nb. this will not ignore influence of signals/peaks in the second window, but 
+  // neither does the original version...
+  
+  // get global robust SD (to fill in , in case the window has no / little variation ) 
+
+  double global_median = MiscMath::median( x );
+  double global_iqr = MiscMath::iqr( x );
+  double global_robust_sd = 0.7413 * global_iqr;
+  const double sd_eps = global_robust_sd * 1e-3;
+
+  std::vector<int> s( n , 0 );
+  
+  if ( n <= 2 * lag + 1 ) return s;
+  
+  std::vector<double> y = x;
+  double sum = 0 , sumsq = 0; 
+
+  // track values? in abs SD units: only used if
+  bool rec_values = max > 0 || threshold2 > 0 || mindur2 > 0 ;
+  std::vector<double> scaled( rec_values ? n : 0 );
+
+  // use "second" window e.g. 30 - 60 seconds to burn-in window
+  
+  for (int i=lag; i<2*lag; i++)
+    {
+      sum  += x[i];
+      sumsq += x[i] * x[i];
+    }
+  
+  double avg = sum / (double)lag;
+  double sd = sqrt( ( lag * sumsq - sum * sum ) / ( (double)((lag-1)*lag) ) );
+  if ( sd < sd_eps ) sd = global_robust_sd;
+
+  // starts at 0 now
+  for (int i=0; i<n; i++)
+    {
+
+      // value in |SD units|
+      const double value = std::abs( x[i] - avg ) / sd; 
+      
+      if ( value > 10000 ) std::cerr << "  warning: large " << i << "  " << x[i] << " " << avg << " " << sd << " " << sd_eps << " " << global_robust_sd << "\n";
+
+      // save scaled value? (for any second round of max/expanded thresholding)
+      if ( rec_values ) scaled[i] = value;
+      
+      // track direction, ercord in s[] and update filtered measure [y] 
+      if ( value > threshold ) 
+	{
+	  s[i] = x[i] > avg ? +1 : -1; 
+	  y[i] = influence * x[i] + (1 - influence) * y[i-1] ;
+	}
+      
+      // update sums (respecting that first window 0..lag-1 will be using lag..2lag-1 rather than i - lag 
+      int rem = i < lag ? 2 * lag - i - 1 : i - lag; 
+      sum = sum - y[ rem ] + y[i] ; 
+      sumsq = sumsq - ( y[ rem ] * y[ rem ] ) + ( y[i] * y[i] ) ; 
+
+      // get mean/SD
+      // nb. formulate for sample S = (  n * SUMSQ - SUM^2 ) / n(n-1) 
+      avg = sum / (double)lag; 
+      sd = sqrt( ( lag * sumsq - sum * sum ) / ( (double)((lag-1)*lag) ) );  
+
+      // if the window has no variation, copy over the previous
+      if ( sd < sd_eps ) sd = global_robust_sd;
+
+      if ( verbose ) 
+	   std::cout << x[i] << "\t" << value << "\t" << s[i] << "\t" << avg - threshold * sd << "\t" << avg + threshold * sd << "\n";
+      
+    }
+
+  // 
+  // Ignore negative peaks?
+  //
+
+  if ( noneg ) 
+    {
+      for (int i=0; i<n; i++)
+	if ( s[i] == -1 ) s[i] = 0; 
+    }
+
+
+  //
+  // Post-processing to get a) min duration (in sample points) and b) reject any intervals above max threshold
+  //
+
+  if ( mindur > 0 ) 
+    {
+      bool in = s[0] != 0;
+      int start = 0;
+      for (int i=1; i<n; i++)
+	{
+	  
+	  if ( s[i] != 0 && ! in )
+	    {
+	      // start new? 
+	      start = i;
+	      in = true;
+	    }
+	  else if ( in && ( s[i] == 0 || i == n-1 ) )
+	    {
+	      
+	      // 1-past end
+	      int end = s[i] == 0 ? i : n ; 
+	      
+	      // ending a region
+	      if ( end - start < mindur ) // 1 past end so no +1
+		for ( int j=start; j<end; j++) s[j] = 0;
+
+	      in = false;
+	    }
+	}
+      
+      // did we have a new interval start at the last point? 
+      // cannot have a single point, i.e. if mindur is > 
+      if ( in && mindur > 1 ) 
+	s[ n-1 ] = 0;
+
+    }
+
+
+  //
+  // Above-max events? Consider SD outlier threshold based on MAX of detected regions 
+  // only.  i.e. given we have 100 intervals detected, are any > X SD units above the 
+  // mean?   Base MAX on the original values, not the scaled ones
+  //
+
+  if ( max > 0 ) 
+    {
+      
+      std::vector<double> mxs;
+      std::vector<int> starts, stops;
+
+      // first round to get the means
+
+      bool in = s[0] != 0;
+      int start= 0;
+      double mx = x[0];
+      for (int i=1; i<n; i++)
+	{
+
+          if ( s[i] != 0 && ! in )
+            {
+	      // start new?                                                                                                                                                                     
+              start = i;
+              in = true;
+	      mx = x[i];
+            }
+          else if ( in && ( s[i] == 0 || i == n-1 ) )
+            {
+	      // include this point in max? (if last)
+	      if ( s[i] != 0 ) 
+		if ( x[i] > mx ) mx = x[i];
+	      
+	      // 1 past end
+	      int end = s[i] != 0 ? n : i ; 
+	      
+	      // save the max/start/stop
+	      mxs.push_back( mx );
+	      starts.push_back( start );
+	      stops.push_back( end ); 
+	      
+	      in = false;
+            }
+	  else if ( in ) 
+	    {
+	      if ( x[i] > mx ) mx = x[i];
+	    }
+	}
+      
+      // just started one?
+      if ( in )
+	{
+	  mxs.push_back( x[n-1] );
+	  starts.push_back( n-1 );
+	  stops.push_back( n ); // one-past-end
+	}
+            
+      
+      // 
+      // Get distribution of peaks
+      //
+
+      if ( mxs.size() > 1 ) 
+	{
+
+	  // robust norms:
+
+	  double median = MiscMath::median( mxs );
+	  double iqr = MiscMath::iqr( mxs );
+	  double robust_sd = 0.7413 * iqr;
+	  
+	  for (int j=0; j<mxs.size(); j++)
+	    {	      
+	      // wipe this region if above threshold
+	      if ( mxs[j] > median + robust_sd * max ) 
+		for (int k=starts[j]; k<stops[j]; k++)
+		  s[k] = 0;
+	    }
+	}
+      
+    }
+
+
+  //
+  // Expanded regions (core vs flanking)
+  //
+  
+  if ( threshold2 > 0 ) 
+    {
+      
+      std::vector<int> s2 = s;
+
+      bool in = s[0] != 0;
+
+      int start= 0;
+      
+      for (int i=0; i<n; i++)
+	{
+	  
+	  if ( s[i] != 0 && ! in )
+	    {
+	      // start new?
+	      start = i;
+	      in = true;
+	    }
+	  else if ( in && ( s[i] == 0 || i == n-1 ) )
+	    {  
+	      // use exact-end encoding here, not 1-past-end
+              int end = s[i] != 0 ? n-1 : i-1 ;
+
+	      int start2 = start;
+	      int end2 = end;
+	      in = false;
+	      
+	      // for (int ss=start - 10 ; ss < end + 10 ; ss++ ) 
+	      //  	std::cout << "ss " << ss << "\t" << scaled[ss] << "\t" << ( ss >= start && ss <= end ) << "\n";
+	      
+	      while ( 1 )
+		{
+		  if ( start2 == 0 ) break;	
+		  if ( scaled[ start2 - 1 ] < threshold2 ) break;	      		  
+		  --start2;	
+		  s2[start2] = s[start];
+		}
+
+	      while ( 1 )
+		{
+		  if ( end2 == n-1 ) break;
+		  if ( scaled[end2+1] < threshold2 ) break;	      
+		  ++end2;		  
+		  s2[end2] = s[end];
+		}
+	      
+	      // new putative event is start2 to end2 [inclusive]
+	      // is this long enough? 
+
+	      int fill = s[ start ];
+
+	      if ( mindur2 > 0 && end2 - start2 + 1 < mindur2 ) 
+		fill = 0;
+	      
+	      //std::cout << "fill = " << s[ start ] << " --> " << fill << " " << start << " " << end << " --> " << start2 << " " << end2 << "\n"; 
+	      	      
+	      // either wipes all, or sets all to an event
+	      for (int j=start2; j<=end2; j++)
+		{
+		  //		  std::cout << " sc = " << scaled[j] << "\n";
+		  s2[j] = fill;
+		}
+
+	    } // end of core interval	 	  
+	} // next sample-point
+      
+      // copy back over
+      s = s2;
+    }
+  
+  
+  //
+  // Record as intervals?
+  //
+
+  if ( regions != NULL ) 
+    {
+      regions->clear();
+      
+      bool in = s[0] != 0;
+
+      int start= 0;
+
+      for (int i=1; i<n; i++)
+        {
+
+          if ( s[i] != 0 && ! in )
+            {
+              // start new?
+	      start = i;
+              in = true;
+              
+            }
+          else if ( in && ( s[i] == 0 || i == n-1 ) )
+            {
+              // 1 past end
+              int end = s[i] != 0 ? n : i ;
+	      
+	      // but record as sample-points (usual start, end+1 encoding)
+	      regions->push_back( interval_t( start , end ) );
+
+              in = false;
+            }
+
+        }
+      
+      // just started one?
+
+      if ( in )
+	regions->push_back( interval_t( start , n ) );
+      
+    }
+
+  return s;
+  
+}

@@ -977,8 +977,12 @@ void cmddefs_t::init()
   add_var( "SOAP" , "SS" , "RECALL" , "Stage-specific recall" );
 
   add_table( "SOAP" , "VAR" , "PSC info" );
-  add_var( "SOAP" , "VAR" , "INC" , "Componeont included" );
+  add_var( "SOAP" , "VAR" , "INC" , "Component included" );
   add_var( "SOAP" , "VAR" , "PV" , "1-way ANOVA p-value for association w/ observed stage" );
+
+  add_table( "SOAP" , "NSS,PRED,OBS" , "Confusion matrix" );
+  add_var( "SOAP" , "NSS,PRED,OBS" , "N" , "Number" );
+  add_var( "SOAP" , "NSS,PRED,OBS" , "P" , "Proportion" );
 
 
   //
@@ -1693,6 +1697,20 @@ void cmddefs_t::init()
   set_compressed( "COH" , tfac_t( "CH1,CH2,B,E" ) );
   set_compressed( "COH" , tfac_t( "CH1,CH2,F,E" ) );
       
+  //
+  // SYNC
+  //
+
+  add_cmd( "topo" , "SYNC" , "Global phase synchrony" );
+  add_url( "SYNC" , "cross-signal-analysis/#sync" );
+  
+  add_param( "SYNC" , "sig" , "C3,C4" , "Restrict analysis to these channel" );
+
+  add_table( "SYNC" , "E,F" , "Epoch-wise analysis" );
+  add_var( "SYNC" , "E,F" , "KOP" , "Magnitude-squared coherence" );
+  set_compressed( "SYNC" , tfac_t( "E,F" ) );
+
+  
   //
   // CORREL
   //

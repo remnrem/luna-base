@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <complex>
 #include <algorithm>
+#include "intervals/intervals.h"
 
 #include <stdint.h>
 #include <map>
@@ -237,6 +238,14 @@ namespace MiscMath
   // chi-sq goodness of fit test
   double chisq( const std::vector<double> & obs , const std::vector<double> & expected );
 
+  // peak detector
+  std::vector<int> smoothedZ( const std::vector<double> & x , int lag , double threshold , double influence = 0 , 
+			      int mindur = 0 , double max = 0 , 
+			      double threshold2 = 0 , int mindur2 = 0 , 
+			      bool noneg = false , 
+			      std::vector<interval_t> * regions = NULL , bool verbose = false );
+
+   
   // Moving average
   
   std::vector<double> moving_average( const std::vector<double> & x , int n );
