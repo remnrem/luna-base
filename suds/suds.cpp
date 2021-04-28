@@ -125,6 +125,11 @@ std::vector<std::string> suds_t::labels3;
 std::vector<std::string> suds_t::labels5;
 std::vector<std::string> suds_t::labelsR;
 
+// first classify NR/R/W then N1/N2/N3 if NR is most likely
+//  i.e. to avoid R < NR being selected as R just reflecting fact that
+//       there are more NR classes
+bool suds_t::pick3then5;
+
 bool suds_t::use_fixed_trainer_req;
 std::vector<int> suds_t::fixed_trainer_req;
 int suds_t::fake_ids;
@@ -4484,12 +4489,9 @@ int suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const 
       else if ( labels[i] == "N3" ) n3_slot = i;
       else if ( labels[i] == "NR" ) nr_slot = i;
       else if ( labels[i] == "R" ) rem_slot = i;
-      else if ( labels[i] == "REM" ) rem_slot = i;
       else if ( labels[i] == "W" ) wake_slot = i;      
     }
 
-  // for output, below
-  std::string rem_out = suds_t::n_stages == 5 ? "REM" : "R";
   
   double unknown = 0;
   int unknown_epochs = 0; 
@@ -4519,7 +4521,7 @@ int suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const 
 	  if ( n2_slot != -1 ) prd_dur[ "N2" ]  += pp(e,n2_slot) * epoch_sec ;
 	  if ( n3_slot != -1 ) prd_dur[ "N3" ]  += pp(e,n3_slot) * epoch_sec ;
 	  if ( nr_slot != -1 ) prd_dur[ "NR" ]  += pp(e,nr_slot) * epoch_sec ;
-	  if ( rem_slot != -1 ) prd_dur[ rem_out ]  += pp(e,rem_slot) * epoch_sec ;
+	  if ( rem_slot != -1 ) prd_dur[ "R" ]  += pp(e,rem_slot) * epoch_sec ;
 	  if ( wake_slot != -1 ) prd_dur[ "W" ]  += pp(e,wake_slot) * epoch_sec ;
 	  
 	  // duration based on MAP estimate
@@ -4571,8 +4573,11 @@ int suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const 
       std::map<std::string,double>::const_iterator ss = obs_dur.begin();
       while ( ss != obs_dur.end() )
 	{
-	  writer.level( ss->first , globals::stage_strat );
-	  writer.value( "DUR_OBS" , ss->second / 60.0 );
+	  if ( ss->first != "?" )
+	    {
+	      writer.level( ss->first , globals::stage_strat );
+	      writer.value( "DUR_OBS" , ss->second / 60.0 );
+	    }
 	  ++ss;
 	}
       writer.unlevel( globals::stage_strat );

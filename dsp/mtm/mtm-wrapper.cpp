@@ -77,7 +77,13 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   else if ( param.has( "tw" ) ) npi = param.requires_dbl( "tw" );
   
   int nwin = param.has( "t" ) ? param.requires_int( "t" ) : 2*floor(npi)-1 ;
-  
+
+  //
+  // Required minimum SR to attempt MTM
+  //
+
+  int min_sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ; 
+
   //
   // Reporting full spectrum? (default 0.5 to 25 Hz)
   //
@@ -109,7 +115,13 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       if ( edf.header.is_annotation_channel( signals(s) ) )
 	continue;
       
+      //
+      // Min. required SR?
+      //
 
+      if ( min_sr && Fs[s] < min_sr )
+	continue;
+      
       //
       // Stratify output by channel
       //

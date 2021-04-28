@@ -1016,7 +1016,7 @@ void cmddefs_t::init()
   add_var( "SUDS", "" , "RECALL" , "Recall" );
   add_var( "SUDS", "" , "RECALL3" , "Recall, 3-class" );
   add_var( "SUDS", "" , "RECALL_WGT" , "Recall,weighted" );
-  add_var( "SUDS", "" , "R_K3_WGT" , "Correlation between weight and K3" );
+  add_var( "SUDS", "" , "R_WGT" , "Correlation between weight and K3" );
 
   add_table( "SUDS" , "E" , "Epoch-level SUDS predictions" );
   add_var( "SUDS" , "E" , "DISC" , "Discordant prior/predicted w.r.t 5-classes" );
@@ -1025,7 +1025,7 @@ void cmddefs_t::init()
   add_var( "SUDS" , "E" , "PP_N1" , "Posterior probability of N1" );
   add_var( "SUDS" , "E" , "PP_N2" , "Posterior probability of N2" );
   add_var( "SUDS" , "E" , "PP_N3" , "Posterior probability of N3" );
-  add_var( "SUDS" , "E" , "PP_REM" , "Posterior probability of REM" );
+  add_var( "SUDS" , "E" , "PP_R" , "Posterior probability of REM" );
   add_var( "SUDS" , "E" , "PP_W" , "Posterior probability of wake" );
   add_var( "SUDS" , "E" , "PRED", "Predicted stage" );
   add_var( "SUDS" , "E" , "PRIOR" , "Observed stage (if known)" );
@@ -1055,10 +1055,14 @@ void cmddefs_t::init()
   add_var( "SUDS" , "E,TRAINER" , "PP_N1" , "Posterior probability of N1" );
   add_var( "SUDS" , "E,TRAINER" , "PP_N2" , "Posterior probability of N2" );
   add_var( "SUDS" , "E,TRAINER" , "PP_N3" , "Posterior probability of N3" );
-  add_var( "SUDS" , "E,TRAINER" , "PP_REM" , "Posterior probability of REM" );
+  add_var( "SUDS" , "E,TRAINER" , "PP_R" , "Posterior probability of REM" );
   add_var( "SUDS" , "E,TRAINER" , "PP_W" , "Posterior probability of wake" );
   add_var( "SUDS" , "E,TRAINER" , "PRED" , "Predicted (most likely) stage" );
   set_compressed( "SUDS" , tfac_t( "E,TRAINER" ) );
+
+  add_table( "SUDS" , "NSS,PRED,OBS" , "Confusion matrix" );
+  add_var( "SUDS" , "NSS,PRED,OBS" , "N" , "Number" );
+  add_var( "SUDS" , "NSS,PRED,OBS" , "P" , "Proportion" );
 
 
 

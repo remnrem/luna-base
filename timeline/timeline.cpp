@@ -23,6 +23,7 @@
 #include "timeline.h"
 
 #include "edf/edf.h"
+#include "edf/slice.h"
 #include "defs/defs.h"
 #include "db/db.h"
 #include "miscmath/crandom.h"
@@ -2888,6 +2889,210 @@ void timeline_t::annot2signal( const param_t & param )
       
       edf->add_signal( labels[a]  , sr , adat );
 
+    }
+      
+}
+
+
+
+void timeline_t::signal2annot( const param_t & param )
+{
+
+  // create a new annotation based on a (discrete) signal 
+  std::string aname = param.requires( "annot" );
+
+  //
+  // signal to use
+  //
+
+  std::string signal_label = param.requires( "sig" );
+  
+  signal_list_t signal = edf->header.signal_list( signal_label );
+  
+  if ( signal.size() != 1 ) Helper::halt( "could not find " + signal_label );
+
+  const int s = signal(0);
+  
+  if ( edf->header.is_annotation_channel( s ) )
+    Helper::halt( "can only use S2A for data channels" );
+  
+  //
+  // S2A encoding
+  //
+
+  // encoding=LABEL,lwr,upr
+  // encoding=label,val,+win
+
+  //  VALUE :  X    // --> X+EPS
+  //           X-Y
+  //           X+Y  // eps
+
+  if ( ! ( param.has( "encoding" ) || param.has( "encoding2" ) ) )
+    Helper::halt( "no encoding=label,value,... or encoding2=label,value1,value2,..." );
+
+  bool e2 = param.has( "encoding" );
+  bool e3 = param.has( "encoding2" );
+  if ( e2 == e3 ) Helper::halt( "must either specify encoding or encoding2");
+  
+  std::vector<std::string> enc = e2 ? param.strvector( "encoding" ) : param.strvector( "encoding2" );
+
+  const int nxy = e2 ? 2 : 3;
+    
+  if ( enc.size() % nxy != 0 )
+    Helper::halt( "requires " + Helper::int2str( nxy) + " args per encoding value" );
+
+  //
+  // Either make one annot class (and labels are instances)
+  //  or each label --> a distinct class
+  //
+
+  bool use_class = param.has( "class" );
+  
+  std::string class_name = use_class ? param.value( "class" ) : "" ; 
+
+  //
+  // Span EDF discontinuities or no?
+  //
+
+  bool span_disc = param.has( "span-gaps" );
+
+  
+  //
+  // Parse encodings
+  //
+
+  std::map<std::string,std::pair<double,double> > e;
+
+  for (int i=0; i<enc.size(); i += nxy )
+    {
+      std::string label = enc[i];
+      
+      double ex = 0 ;
+      if ( ! Helper::str2dbl( enc[i+1] , &ex ) )
+	Helper::halt( "bad numeric value for encoding" + enc[i+1] );
+
+      // default window
+      bool window = true;
+      double ey = 0.05;
+      
+      if ( e3 )
+	{
+	  if ( ! Helper::str2dbl( enc[i+2] , &ey ) )
+	    Helper::halt( "bad numeric value for encoding" + enc[i+2] );
+	  
+	  window = enc[i+2].substr(0,1) == "+" ;
+      
+	  if ( ! window ) 
+	    {
+	      if ( ey < ex )
+		{
+		  double t = ex;
+		  ex = ey;
+		  ey = t;
+		}
+	    }
+	}
+
+      if ( window )
+	{
+	  double w = ey;
+	  ey = ex + w;
+	  ex -= w;	  
+	}           
+      
+      // record
+      e[ label ] = std::make_pair( ex , ey );
+
+    }
+
+  logger << "  encoding " << e.size() << " annotation instances\n";
+    
+    
+  //
+  // get signal data
+  //
+  
+  slice_t slice( *edf , s , wholetrace() );  
+
+  std::vector<double> * d = slice.nonconst_pdata();  
+
+  const std::vector<uint64_t> * tp = slice.ptimepoints();
+
+  //
+  // Add annot class?
+  //
+  
+  if ( use_class )
+    annotations.add( class_name );
+
+  int sr = edf->header.sampling_freq( s );
+  
+  std::map<std::string,std::pair<double,double> >::const_iterator ee = e.begin();
+
+  while ( ee != e.end() )
+    {
+      const std::string & label = ee->first; 
+      double ex = ee->second.first;
+      double ey = ee->second.second;
+
+      // get annot_t to add to
+      annot_t * a = use_class ? annotations.find( class_name ) : annotations.add( label );
+      
+      if ( a == NULL ) Helper::halt( "internal error in signal2annot()" );
+
+      // iterate over signal points, find in-range intervals
+
+      const int n = d->size();
+      if ( n == 0 ) {++ee; continue; }
+
+      bool in = (*d)[0] >= ex && (*d)[0] <= ey;
+      uint64_t start = (*tp)[0];
+      
+      int cnt = 0;
+      
+      for (int i=0; i<n; i++)
+	{
+	  // did we just cross a gap, or is this the last data-point?
+	  bool gap = span_disc ? false : ( i != 0 ? discontinuity( *tp , sr , i-1 , i ) : false ) ; 
+	  
+	  // last observed sample?
+	  bool end = i == n - 1;
+
+	  // still in region?
+	  bool in1 = (*d)[i] >= ex && (*d)[i] <= ey; 
+	  
+	  // end of an interval? 
+	  if ( in && ( gap || end || ! in1 ) ) 
+	    {	      
+	      // 1-past-end encoding
+	      uint64_t stop = end ? last_time_point_tp + 1LLU : (*tp)[i] ;
+	      a->add( use_class ? label : "." , interval_t( start , stop ) , signal_label );
+
+	      // update status (i.e. may still be a new interval after a gap)
+	      in = in1;
+	      
+	      if ( gap && in1 ) 
+		{
+		  start = (*tp)[i];
+		  // unlikely, but could be gap and then last single sample
+		  if ( end )
+		    a->add( use_class ? label : "." , interval_t( start , last_time_point_tp + 1LLU ) , signal_label );		  
+		}	      
+	      ++cnt;
+	    }
+	  else if ( in1 && ! in ) // ... or start a new interval
+	    {
+	      start = (*tp)[i];
+	      in = true;
+	      if ( i == n - 1 ) // single point interval?
+		a->add( use_class ? label : "." , interval_t( start , last_time_point_tp + 1LLU ) , signal_label );
+	    }
+	}
+      
+      logger << " added " << cnt << " intervals for " << label << " based on " << ex << " <= " << signal_label << " <= " << ey << "\n";
+      
+      // next label
+      ++ee;
     }
       
 }

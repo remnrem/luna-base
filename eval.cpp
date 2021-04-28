@@ -852,6 +852,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
       else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
       else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
+      else if ( is( c, "S2A" ) )          proc_signal2annot( edf, param(c) );
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
@@ -2250,6 +2251,13 @@ void proc_write_annots( edf_t & edf , param_t & param )
 void proc_annot2signal( edf_t & edf , param_t & param )
 {
   edf.timeline.annot2signal( param );
+}
+
+// S2A : make annot from a signal
+
+void proc_signal2annot( edf_t & edf , param_t & param )
+{
+  edf.timeline.signal2annot( param );
 }
 
 // ANNOTS : list all annotations

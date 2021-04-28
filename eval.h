@@ -277,6 +277,7 @@ void proc_copy_suds_cmdline();
 void proc_hypoxic_burden( edf_t & , param_t & );
 
 void proc_annot2signal( edf_t & , param_t & );
+void proc_signal2annot( edf_t & , param_t & );
 
 
 void proc_record_dump( edf_t & , param_t & );

@@ -335,6 +335,9 @@ struct suds_t {
     use_soap_weights = param.has( "wgt-soap" ) ? Helper::yesno( param.value( "wgt-soap" ) ) : false ; 
     if ( use_soap_weights ) use_repred_weights = false;
 
+    // turn off 3-then-5 classification
+    pick3then5 = param.has( "pick-3-5" ) ? Helper::yesno( param.value( "pick-3-5" ) ) : true ;
+    
     // allow cheating (trainer is target)
     cheat = param.has( "cheat" );
     
@@ -348,7 +351,7 @@ struct suds_t {
     // NR/R/W or N1/N2/N3/R/W classification?
     n_stages = param.has( "3-stage" ) ? 3 : 5;
 
-    labels5 = { "N1" , "N2" , "N3" , "REM" , "W" };
+    labels5 = { "N1" , "N2" , "N3" , "R" , "W" };
     labels3 = { "NR" , "R" , "W" };
     labelsR = { "R" , "NOT" }; // just for repred special case
 
@@ -480,6 +483,8 @@ struct suds_t {
   static int ns;
 
   static int n_stages; // 5 or 3 class problem
+
+  static bool pick3then5;
   
   static int fake_ids;
 
@@ -652,16 +657,35 @@ public:
     
     if ( ns != labels.size() )
       Helper::halt( "internal error, max()" );
-    
+
+    // track NR/R/W decision first
+    double pp_n1 = 0 , pp_n2 = 0 , pp_n3 = 0 , pp_rem = 0 , pp_wake = 0;
+      
     // any : return most likely of 5 classes
     // nr  : calc NR / R /W 
-    int m = 0;    
-    double mx = r[0];
+    // int m = 0;    
+    // double mx = r[0];
     
-    for (int j=1; j<ns; j++) 
-      if ( r[j] > mx ) { mx = r[j] ; m = j; } 
+    for (int j=0; j<ns; j++) 
+      {
+	if      ( labels[j] == "N2" ) pp_n2 = r[j];
+	else if ( labels[j] == "R" ) pp_rem = r[j];
+	else if ( labels[j] == "W" ) pp_wake = r[j];
+	else if ( labels[j] == "N1" ) pp_n1 = r[j];
+	else if ( labels[j] == "N3" ) pp_n3 = r[j];
+      }
     
-    return labels[m];        
+    // NR most likely?
+    double pp_nr = pp_n1 + pp_n2 + pp_n3;
+    if ( pp_nr > pp_rem && pp_nr > pp_wake )
+      {
+	if ( pp_n1 >= pp_n2 && pp_n1 >= pp_n3 ) return "N1";
+	if ( pp_n2 >= pp_n1 && pp_n2 >= pp_n3 ) return "N2";
+	return "N3";
+      }
+
+    return pp_rem > pp_wake ? "R" : "W" ; 
+
   }
 
 
@@ -690,7 +714,7 @@ public:
 	if ( ss == "N1" ) return -1;
 	if ( ss == "N2" ) return -2;
 	if ( ss == "N3" ) return -3;
-	if ( ss == "REM" ) return 0;
+	if ( ss == "R" ) return 0;
 	if ( ss == "W" ) return 1;
 	return 2; // unknown/bad/missing
       }
@@ -706,7 +730,7 @@ public:
 
   // downcast (but handle case where ss is already downcast / 3-stage too)
   static std::string NRW( const std::string & ss ) {     
-    if ( ss == "REM" || ss == "R" ) return "R";
+    if ( ss == "R" ) return "R";
     if ( ss == "N1" || ss == "N2" || ss == "N3" || ss == "NR" ) return "NR";
     if ( ss == "?" ) return "?";
     return "W";
@@ -721,7 +745,7 @@ public:
 
   // for repred: reduce to just REM versus not , for example
   static std::string Rnot( const std::string & ss ) {     
-    if ( ss == "REM" || ss == "R" ) return "R";
+    if ( ss == "R" ) return "R";
     if ( ss == "?" ) return "?";
     return "NOT";
   }
@@ -755,7 +779,7 @@ public:
     if ( s == SUDS_N2 ) return "N2";
     if ( s == SUDS_N3 ) return "N3";
     if ( s == SUDS_NR ) return "NR";
-    if ( s == SUDS_REM ) return "REM";
+    if ( s == SUDS_REM ) return "R";
     if ( s == SUDS_ARTIFACT ) return "BAD";
     if ( s == SUDS_UNKNOWN ) return "?";       
     return "?";
@@ -768,7 +792,7 @@ public:
     if ( s == "N2" ) return SUDS_N2;
     if ( s == "N3" ) return SUDS_N3;
     if ( s == "NR" ) return SUDS_NR;
-    if ( s == "REM" ) return SUDS_REM;
+    if ( s == "R" ) return SUDS_REM;
     if ( s == "BAD" ) return SUDS_ARTIFACT;
     if ( s == "?" ) return SUDS_UNKNOWN;
     return SUDS_UNKNOWN;

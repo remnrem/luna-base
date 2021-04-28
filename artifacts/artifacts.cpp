@@ -341,6 +341,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   bool calc_maxxed = param.has( "max" );
 
+  int required_sr = param.has( "sr-over" ) ? param.requires_int( "sr-over" ) : 0 ; 
 
   bool calc_hjorth2 = param.has( "hjorth2" );
 
@@ -391,15 +392,19 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   const int ns_all = signals.size();
 
-  // data channels
+  
+  // data channels (& optional required sampling-rate)
   std::vector<int> sdata;
   for (int s=0;s<ns_all;s++)
     if ( ! edf.header.is_annotation_channel( signals(s) ) )
-      sdata.push_back(s);
+      if ( required_sr == 0 || edf.header.sampling_freq( signals( s ) ) >= required_sr )	
+	sdata.push_back(s);
   
   int ns = 0;
   for (int s=0;s<ns_all;s++)
-    if ( ! edf.header.is_annotation_channel( signals(s) ) ) ++ns;
+    if ( ! edf.header.is_annotation_channel( signals(s) ) )
+      if ( required_sr == 0 || edf.header.sampling_freq( signals( s ) ) >= required_sr ) 
+	++ns;
   
   if ( ns == 0 ) return;
 
@@ -441,6 +446,16 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       //
       
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+
+      //
+      // and any SR requirements
+      //
+
+      if ( required_sr != 0 && edf.header.sampling_freq( signals( s ) ) < required_sr ) continue;
+
+      //
+      // what's left here should match the stores defined above
+      //
 
       ++si;
 

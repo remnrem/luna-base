@@ -4029,17 +4029,25 @@ bool edf_t::basic_stats( param_t & param )
   const int ns = signals.size();
   
   bool calc_median = true;
-
+  
+  int required_sr = param.has( "sr-under" ) ? param.requires_int( "sr-under" ) : 0 ; 
+  
   for (int s=0; s<ns; s++)
     {
-               
+      
       //
       // skip annotation channels
       //
 
       if ( header.is_annotation_channel( signals(s) ) ) continue;
 
+      //
+      // SR requirements?
+      //
 
+      if ( required_sr != 0 && header.sampling_freq( signals(s) ) > required_sr ) continue;
+
+	   
       //
       // Output signal
       //
