@@ -210,7 +210,7 @@ namespace MiscMath
 
   // mean-centre
   std::vector<double> centre( const std::vector<double> & x );
-  void centre( std::vector<double> * x );
+  double centre( std::vector<double> * x );
 
   // detrend
   std::vector<double> detrend( const std::vector<double> & x , double * pa = NULL , double * pb = NULL );

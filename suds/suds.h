@@ -99,7 +99,7 @@ struct suds_indiv_t {
   inline static std::string bread_str( std::ifstream & );
   inline static int bread_int( std::ifstream & );
   inline static double bread_dbl( std::ifstream & );
-
+  
   // fit LDA, i.e. after reloading U
   void fit_lda();
 
@@ -205,7 +205,7 @@ struct suds_indiv_t {
 struct suds_t { 
 
   static void attach_db( const std::string & , bool , bool );
-  
+
   // convert from text --> binary format for a whole library
   static void copy_db( const std::string & , const std::string & , bool from_text );
 
@@ -214,6 +214,24 @@ struct suds_t {
   static suds_indiv_t cached;
 
   static Eigen::MatrixXd add_time_track( const int nr , const int tt );
+
+  // final stage/elapsed sleep model
+  static void read_elapsed_stages( const std::string & f );
+
+  static bool is_mean_feature( const std::string & s )
+  {
+    return extra_mean.find( s ) != extra_mean.end() ;
+  }
+  
+  static bool is_hjorth_feature( const std::string & s )
+  {
+    return extra_hjorth.find( s ) != extra_hjorth.end() ;
+  }
+  
+  static bool is_spectral_feature( const std::string & s )
+  {
+    return ! ( is_hjorth_feature(s) || is_mean_feature(s) ) ;
+  }
   
   static void set_options( param_t & param )
   {
@@ -223,10 +241,20 @@ struct suds_t {
 
     // add time-track as a predictor? value N terms = T^N
     time_track = param.has( "tt" ) ? param.requires_int( "tt" ) : 0 ;
+
+    // add other signals in: based on per-epoch mean
+    if ( param.has( "mean-feature" ) ) extra_mean = param.strset("mean-feature");
     
+    // add Hjorth features in for a given signal
+    if ( param.has( "hjorth-feature" ) ) extra_hjorth = param.strset("hjorth-feature");
+ 
     // flat priors?
     flat_priors = param.has( "flat-priors" );
 
+    // apply final elapsed stage model
+    es_model = param.has( "es-model" );
+    es_filename = es_model ? param.value( "es-model" ) : "" ;
+    
     // fixed priors?
     fixed_priors.clear();
     if ( param.has( "fixed-priors" ) )
@@ -475,11 +503,19 @@ struct suds_t {
   static int nc;
   
   static int time_track;
+
+  static std::set<std::string> extra_mean;
+
+  static std::set<std::string> extra_hjorth;
   
   static bool flat_priors;
   
   static std::vector<double> fixed_priors;
-  
+
+  static bool es_model;
+
+  static std::string es_filename;
+
   static int ns;
 
   static int n_stages; // 5 or 3 class problem
@@ -590,7 +626,13 @@ private:
 
   // weight-trainer library
   static std::map<std::string,suds_indiv_t*> wbank;
+  
+  // precomputed ES model weights:  ES , N1 , N2 , N3 , R , W 
+  static Eigen::MatrixXd ES_probs;
+  static std::vector<double> ES_mins;
 
+  static Eigen::MatrixXd apply_es_model( const Eigen::MatrixXd & , const std::vector<std::string> & stg );
+  
 public:
 
   // clear library

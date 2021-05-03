@@ -813,13 +813,14 @@ std::vector<double> MiscMath::centre( const std::vector<double> & x )
   return r;
 }
 
-void MiscMath::centre( std::vector<double> * x )
+double MiscMath::centre( std::vector<double> * x )
 {
   const int n = x->size();
   double s = 0;
   for (int i=0;i<n;i++) s += (*x)[i];
   double mean = s / (double)n;
   for (int i=0;i<n;i++) (*x)[i] -= mean;
+  return mean;
 }
 
 

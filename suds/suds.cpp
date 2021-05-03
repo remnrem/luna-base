@@ -72,6 +72,14 @@ std::map<std::string,suds_indiv_t*> suds_t::wbank;
 int suds_t::nc;
 int suds_t::ns;
 int suds_t::time_track;
+std::set<std::string> suds_t::extra_mean;
+std::set<std::string> suds_t::extra_hjorth;
+
+bool suds_t::es_model;
+std::string suds_t::es_filename;
+Eigen::MatrixXd suds_t::ES_probs;
+std::vector<double> suds_t::ES_mins;
+
 bool suds_t::flat_priors;
 std::vector<double> suds_t::fixed_priors;
 bool suds_t::use_bands;
@@ -664,7 +672,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     }
   
   //
-  // Resample as needed
+  // Resample as needed (only for SPEC measures)
   //
   
   for (int s=0;s<ns;s++)
@@ -672,6 +680,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       if ( edf.header.is_annotation_channel( signals(s) ) )
 	Helper::halt( "cannot specificy annotation channel: " + signals.label(s) );
+
+      if ( suds_t::is_mean_feature( signals.label(s) ) )
+	continue;
+	   
+      if ( suds_t::is_hjorth_feature( signals.label(s) ) ) 
+	continue;
       
       if ( edf.header.sampling_freq( signals(s) ) != suds_t::sr[s] ) 
 	dsptools::resample_channel( edf, signals(s) , suds_t::sr[s] );
@@ -882,175 +896,256 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   while ( 1 ) 
     {
-      
+
+      //
       // select epoch
+      //
+      
       int epoch = edf.timeline.next_epoch();      	  
       
       if ( epoch == -1 ) break;
       
       if ( en == ne ) Helper::halt( "internal error: over-counted epochs" );
 
+      //
       // retained? if not, skip
+      //
+      
       if ( ! retained[ en ] ) 
 	{
 	  ++en;
 	  continue;
 	}
 
-      // col counter for PSD aggregation matrix
+      //
+      // col counter for PSD/feature aggregation matrix
+      //
+      
       int col = 0;
       std::vector<double> firstrow;
       std::vector<double> firstrow2; // if use_bands, for R matrix (raw power)
-      
+
+      //
       // iterate over signals      
+      //
+      
       for (int s = 0 ; s < ns; s++ )
 	{
+
+	  //
 	  // get data
+	  //
+
 	  interval_t interval = edf.timeline.epoch( epoch );	  
 	  slice_t slice( edf , signals(s) , interval );
 	  std::vector<double> * d = slice.nonconst_pdata();
 
+	  //
 	  // mean centre epoch
-	  MiscMath::centre( d );
+	  //
+	  
+	  double mean = MiscMath::centre( d );
+
+
+	  //
+	  // Track mean/Hjorth of this? 
+	  //
+
+	  bool do_mean = suds_t::is_mean_feature( signals.label(s) ) ;
+	  bool do_hjorth = suds_t::is_hjorth_feature( signals.label(s) ) ;
+	  bool do_psd = suds_t::is_spectral_feature( signals.label(s) ) ;
 	  
 	  //
 	  // Welch of MTM to get spectra
 	  //
 
 	  bool has_zeros = false;
-
-	  if ( suds_t::use_mtm ) // use MTM PSD
+	  
+	  if ( do_psd )
 	    {
-
-	      // suds_t::lwr[s] suds_t::upr[s]
 	      
-	      double segment_size_sec = 30;
-	      double segment_step_sec = 30;
-	      const int segment_size = suds_t::sr[s] * segment_size_sec;
-	      const int segment_step = suds_t::sr[s] * segment_step_sec;
-	      
-	      mtm_t mtm( suds_t::mt_tw , suds_t::mt_nt );
-	      mtm.dB = false;
-	      mtm.opt_remove_mean = true;
-	      mtm.opt_remove_trend = false;
-      
-	      // false --> no versbose output
-	      mtm.apply( d , suds_t::sr[s] , segment_size , segment_step , false );
-	      
-	      // get PSD
-	      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
-		{
-		  if ( mtm.f[i] >= suds_t::lwr[s]  && mtm.f[i] <= suds_t::upr[s] )
-		    {
-		      
-		      // see note below : also, converson to dB here too
-                      if ( mtm.spec[i] <= 0 )
-                        {
-                          has_zeros = true;
-                          mtm.spec[i] = -40 ; // -40dB                                                                                                                                 
-                        }
-		      else
-			mtm.spec[i] = 10*log10( mtm.spec[i] );
-		      
-		      // PSD
-		      if ( en_good == 0 ) firstrow.push_back( mtm.spec[i] );
-		      else PSD( en_good , col ) =  mtm.spec[i] ;
-		      
-		      // bands?
-		      if ( suds_t::use_bands )
-			{
-			  if ( en_good == 0 ) firstrow2.push_back( mtm.spec[i] );
-			  else R( en_good , col ) = mtm.spec[i] ;
-			  
-			  // only track on first epoch                                                                                                                                  
-			  if ( en_good == 0 )
-			    frq.push_back( mtm.f[i] );			  
-			}
-		      
-		      // next column in matrix being constructed
-		      ++col;		      
-		    }
-		}
-	      
-	    }
-	  else // use Welch PSD
- 	    {
-
-	      const double overlap_sec = fft_segment_overlap;
-	      const double segment_sec  = fft_segment_size;
-	      const int total_points = d->size();
-	      const int segment_points = segment_sec * suds_t::sr[s];
-	      const int noverlap_points  = overlap_sec * suds_t::sr[s];
-	  
-	      // implied number of segments
-	      int noverlap_segments = floor( ( total_points - noverlap_points) 
-					     / (double)( segment_points - noverlap_points ) );
-	  
-	      PWELCH pwelch( *d , 
-			     suds_t::sr[s] , 
-			     segment_sec , 
-			     noverlap_segments , 
-			     window_function );
-	  	  	  
-	      // using bin_t, 1 means no binning
-	      bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , 1 ); 
-	      bin.bin( pwelch.freq , pwelch.psd );	      
-	      
-	      for ( int i = 0 ; i < bin.bfa.size() ; i++ )
+	      if ( suds_t::use_mtm ) // use MTM PSD
 		{
 		  
-		  if ( bin.bfa[i] >= suds_t::lwr[s] && bin.bfb[i] <= suds_t::upr[s] )
+		  // suds_t::lwr[s] suds_t::upr[s]
+		  
+		  double segment_size_sec = 30;
+		  double segment_step_sec = 30;
+		  const int segment_size = suds_t::sr[s] * segment_size_sec;
+		  const int segment_step = suds_t::sr[s] * segment_step_sec;
+		  
+		  mtm_t mtm( suds_t::mt_tw , suds_t::mt_nt );
+		  mtm.dB = false;
+		  mtm.opt_remove_mean = true;
+		  mtm.opt_remove_trend = false;
+		  
+		  // false --> no versbose output
+		  mtm.apply( d , suds_t::sr[s] , segment_size , segment_step , false );
+		  
+		  // get PSD
+		  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+		    {
+		      if ( mtm.f[i] >= suds_t::lwr[s]  && mtm.f[i] <= suds_t::upr[s] )
+			{
+			  
+			  // see note below : also, converson to dB here too
+			  if ( mtm.spec[i] <= 0 )
+			    {
+			      has_zeros = true;
+			      mtm.spec[i] = -40 ; // -40dB                                                                                                                                 
+			    }
+			  else
+			    mtm.spec[i] = 10*log10( mtm.spec[i] );
+			  
+			  // PSD
+			  if ( en_good == 0 ) firstrow.push_back( mtm.spec[i] );
+			  else PSD( en_good , col ) =  mtm.spec[i] ;
+			  
+			  // bands?
+			  if ( suds_t::use_bands )
+			    {
+			      if ( en_good == 0 ) firstrow2.push_back( mtm.spec[i] );
+			      else R( en_good , col ) = mtm.spec[i] ;
+			      
+			      // only track on first epoch                                                                                                                                  
+			      if ( en_good == 0 )
+				frq.push_back( mtm.f[i] );			  
+			    }
+			  
+			  // next column in matrix being constructed
+			  ++col;		      
+			}
+		    }
+		  
+		}
+	      else // use Welch PSD
+		{
+		  
+		  const double overlap_sec = fft_segment_overlap;
+		  const double segment_sec  = fft_segment_size;
+		  const int total_points = d->size();
+		  const int segment_points = segment_sec * suds_t::sr[s];
+		  const int noverlap_points  = overlap_sec * suds_t::sr[s];
+		  
+		  // implied number of segments
+		  int noverlap_segments = floor( ( total_points - noverlap_points) 
+						 / (double)( segment_points - noverlap_points ) );
+		  
+		  PWELCH pwelch( *d , 
+				 suds_t::sr[s] , 
+				 segment_sec , 
+				 noverlap_segments , 
+				 window_function );
+		  
+		  // using bin_t, 1 means no binning
+		  bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , 1 ); 
+		  bin.bin( pwelch.freq , pwelch.psd );	      
+		  
+		  for ( int i = 0 ; i < bin.bfa.size() ; i++ )
 		    {
 		      
-		      // fudge: for now, if find 0 power value, set to a small value;
-		      // and ensure that mobility = 0 so that this epoch will be removed
-		      // this may skew the first SVD / outlier removal, but should not 
-		      // be too bad.... really should remove these epochs first.
-		      
-		      if ( bin.bspec[i] <= 0 ) 
+		      if ( bin.bfa[i] >= suds_t::lwr[s] && bin.bfb[i] <= suds_t::upr[s] )
 			{
-			  has_zeros = true;
-			  bin.bspec[i] = 1e-4; // -40dB
-			}
-		      
-		      if ( en_good == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
-		      else PSD( en_good , col ) = 10*log10( bin.bspec[i] ) ; 		  
-		      
-		      if ( suds_t::use_bands )
-			{
-			  if ( en_good == 0 ) firstrow2.push_back( bin.bspec[i] );
-			  else R( en_good , col ) = bin.bspec[i] ;
 			  
-			  // only track on first epoch 
-			  if ( en_good == 0 )
-			    frq.push_back( bin.bfa[i] );
+			  // fudge: for now, if find 0 power value, set to a small value;
+			  // and ensure that mobility = 0 so that this epoch will be removed
+			  // this may skew the first SVD / outlier removal, but should not 
+			  // be too bad.... really should remove these epochs first.
 			  
-			}
-		      ++col;		  
-		    }	      
+			  if ( bin.bspec[i] <= 0 ) 
+			    {
+			      has_zeros = true;
+			      bin.bspec[i] = 1e-4; // -40dB
+			    }
+			  
+			  if ( en_good == 0 ) firstrow.push_back(  10*log10( bin.bspec[i] ) );
+			  else PSD( en_good , col ) = 10*log10( bin.bspec[i] ) ; 		  
+			  
+			  if ( suds_t::use_bands )
+			    {
+			      if ( en_good == 0 ) firstrow2.push_back( bin.bspec[i] );
+			      else R( en_good , col ) = bin.bspec[i] ;
+			      
+			      // only track on first epoch 
+			      if ( en_good == 0 )
+				frq.push_back( bin.bfa[i] );
+			      
+			    }
+			  ++col;		  
+			}	      
+		    }
+		  
 		}
-	      
 	    }
-
+	  
 	  //
 	  // Hjorth parameters
 	  //
-
+	  
 	  double activity = 0 , mobility = 0 , complexity = 0;
 	  MiscMath::hjorth( d , &activity , &mobility , &complexity );
 	  h2(en_good,s) = has_zeros ? 0 : mobility ; // ensure epoch removed if any 0 in the PSD
 	  h3(en_good,s) = complexity ;
+
+	  //
+	  // Add in mean / Hjorth features?
+	  //
+
+	  if ( do_mean )
+	    {
+	      if ( en_good == 0 ) firstrow.push_back( mean );
+	      else PSD( en_good , col ) = mean;
+
+	      // just incase band power is used : set frq to 0 so this value is always skipped
+	      if ( suds_t::use_bands && en_good == 0 ) frq.push_back( 0 );
+	      ++col;	      
+	    }
+
+	  if ( do_hjorth )
+	    {
+
+	      if ( en_good == 0 )
+		{
+		  firstrow.push_back( activity );
+		  firstrow.push_back( mobility );
+		  firstrow.push_back( complexity );
+		}
+	      else
+		{
+		  PSD( en_good , col ) = activity;
+		  PSD( en_good , col ) = mobility;
+		  PSD( en_good , col ) = complexity;
+		}
+	      
+	      // just incase band power is used : set frq to 0 so this value is always skipped                                                                                             
+              if ( suds_t::use_bands && en_good == 0 )
+		{
+		  frq.push_back( 0 ); frq.push_back( 0 ); frq.push_back( 0 );
+		}
+	      
+	    }
+
+
+	  //
+	  // Done for this signal for this epoch
+	  //
+	  
 	  
 	} // next signal
     
-      
+
+      //
       // store/shape output if first go around
+      //
+      
+
       nbins = col;
+
       if ( en_good == 0 )
 	{
 	  PSD.resize( nge , col );
 	  for (int i=0;i<col;i++) PSD(0,i) = firstrow[i];
-
+	  
 	  if ( suds_t::use_bands )
 	    {
 	      R.resize( nge , col );
@@ -1059,15 +1154,19 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  
 	}
 
-      
+      //
       // increase epoch-number
+      //
+      
       ++en;
       ++en_good;
       epochs.push_back( epoch );
     
     } // next epoch
   
+  //
   // all done: check
+  //
 
   if ( en_good != nge ) Helper::halt( "internal error: under-counted epochs" );
 
@@ -1143,6 +1242,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       nbins += suds_t::time_track;
 
     }
+      
+  
+  //
+  // Finalize input feature matrix
+  //
 
   logger << "  based on " << nbins << " features over " << PSD.rows() << " epochs, extracting " << nc << " components\n";
   
@@ -1968,8 +2072,8 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   
   std::ofstream OUT1( filename.c_str() , std::ios::out );
 
-  // file version code
-  OUT1 << "SUDS\t1\n";
+  // file version code == 2
+  OUT1 << "SUDS\t2\n";
   
   OUT1 << "ID\t" << suds_id << "\n"
        << "N_VALID_EPOCHS\t" << nve << "\n"
@@ -1982,16 +2086,25 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   for (int s=0;s<ns;s++)
     {
       OUT1 << "\nCH\t" << suds_t::siglab[s] << "\n"
-	   << "SR\t" << suds_t::sr[s] << "\n"
-	   << "LWR\t" << suds_t::lwr[s] << "\n"
-	   << "UPR\t" << suds_t::upr[s] << "\n"	   
-	   << "H2_MN\t" << mean_h2[s] << "\n"
+	   << "SR\t" << suds_t::sr[s] << "\n";
+
+      if ( suds_t::is_mean_feature( suds_t::siglab[s] ) )
+	OUT1 << "STYPE\tMEAN\n";
+      else if ( suds_t::is_hjorth_feature( suds_t::siglab[s] ) )
+	OUT1 << "STYPE\tHJORTH\n";
+      else
+	OUT1 << "STYPE\tSPEC\n";
+      
+      OUT1 << "LWR\t" << suds_t::lwr[s] << "\n"
+	   << "UPR\t" << suds_t::upr[s] << "\n";
+      
+      OUT1 << "H2_MN\t" << mean_h2[s] << "\n"
 	   << "H2_SD\t" << sd_h2[s] << "\n"
 	   << "H3_MN\t" << mean_h3[s] << "\n"
 	   << "H3_SD\t" << sd_h3[s] << "\n";
     }
-
-
+  
+  
   // stages
   OUT1 << "\nN_STAGES\t" << counts.size() << "\n";
   
@@ -2056,8 +2169,8 @@ void suds_indiv_t::write( const std::string & filename ) const
   
   std::ofstream OUT1( filename.c_str() , std::ios::out );
 
-  // file version code
-  OUT1 << "SUDS\t1\n";
+  // file version code == 2
+  OUT1 << "SUDS\t2\n";
   
   OUT1 << "ID\t" << id << "\n"
        << "N_VALID_EPOCHS\t" << nve << "\n"
@@ -2070,15 +2183,24 @@ void suds_indiv_t::write( const std::string & filename ) const
   for (int s=0;s<ns;s++)
     {
       OUT1 << "\nCH\t" << suds_t::siglab[s] << "\n"
-	   << "SR\t" << suds_t::sr[s] << "\n"
-	   << "LWR\t" << suds_t::lwr[s] << "\n"
-	   << "UPR\t" << suds_t::upr[s] << "\n"	   
-	   << "H2_MN\t" << mean_h2[s] << "\n"
+	   << "SR\t" << suds_t::sr[s] << "\n";
+
+      if ( suds_t::extra_mean.find( suds_t::siglab[s] ) != suds_t::extra_mean.end() )
+	OUT1 << "STYPE\tMEAN\n";
+      else if ( suds_t::extra_hjorth.find( suds_t::siglab[s] ) != suds_t::extra_hjorth.end() )
+        OUT1 << "STYPE\tHJORTH\n";
+      else
+	OUT1 << "STYPE\tSPEC\n";
+      
+      OUT1 << "LWR\t" << suds_t::lwr[s] << "\n"
+	   << "UPR\t" << suds_t::upr[s] << "\n";	   
+
+      OUT1 << "H2_MN\t" << mean_h2[s] << "\n"
 	   << "H2_SD\t" << sd_h2[s] << "\n"
 	   << "H3_MN\t" << mean_h3[s] << "\n"
 	   << "H3_SD\t" << sd_h3[s] << "\n";
     }
-
+  
 
   // stages
   OUT1 << "\nN_STAGES\t" << counts.size() << "\n";
@@ -2202,7 +2324,7 @@ void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
   // file version code
   //
 
-  bwrite( OUT1 , "SUDS1" );
+  bwrite( OUT1 , "SUDS2" );
   bwrite( OUT1 , suds_id );
   bwrite( OUT1 , nve );
   bwrite( OUT1 , nbins );
@@ -2212,16 +2334,31 @@ void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
   // channels , SR [ for comparability w/ other data ] 
 
   for (int s=0;s<ns;s++)
-     {
-       bwrite( OUT1 , suds_t::siglab[s] );
-       bwrite( OUT1 , suds_t::sr[s] );
-       bwrite( OUT1 , suds_t::lwr[s] );
-       bwrite( OUT1 , suds_t::upr[s] );
-       bwrite( OUT1 , mean_h2[s] );
-       bwrite( OUT1 , sd_h2[s]  );
-       bwrite( OUT1 , mean_h3[s] );
-       bwrite( OUT1 , sd_h3[s]  );
-     }
+    {
+      bool mean_feature = suds_t::extra_mean.find( suds_t::siglab[s] ) != suds_t::extra_mean.end() ;
+      
+      bool hjorth_feature = suds_t::extra_hjorth.find( suds_t::siglab[s] ) != suds_t::extra_hjorth.end() ;
+      
+      bwrite( OUT1 , suds_t::siglab[s] );
+
+      bwrite( OUT1 , suds_t::sr[s] );
+
+      if ( mean_feature )
+	bwrite( OUT1, "MEAN" );
+      else if ( hjorth_feature )
+	bwrite( OUT1, "HJORTH" );
+      else 
+	bwrite( OUT1, "SPEC" );
+
+      // if not SPEC, does not matter what these are
+      bwrite( OUT1 , suds_t::lwr[s] );
+      bwrite( OUT1 , suds_t::upr[s] );
+      
+      bwrite( OUT1 , mean_h2[s] );
+      bwrite( OUT1 , sd_h2[s]  );
+      bwrite( OUT1 , mean_h3[s] );
+      bwrite( OUT1 , sd_h3[s]  );
+    }
 
   // stages (N)
   bwrite( OUT1 , (int)counts.size() );
@@ -2292,7 +2429,7 @@ void suds_indiv_t::binary_write( const std::string & filename ) const
   // file version code
   //
 
-  bwrite( OUT1 , "SUDS1" );
+  bwrite( OUT1 , "SUDS2" );
   bwrite( OUT1 , id );
   bwrite( OUT1 , nve );
   bwrite( OUT1 , nbins );
@@ -2303,10 +2440,22 @@ void suds_indiv_t::binary_write( const std::string & filename ) const
 
   for (int s=0;s<ns;s++)
      {
+       bool mean_feature = suds_t::extra_mean.find( suds_t::siglab[s] ) != suds_t::extra_mean.end() ;
+       bool hjorth_feature = suds_t::extra_hjorth.find( suds_t::siglab[s] ) != suds_t::extra_hjorth.end() ;
+       
        bwrite( OUT1 , suds_t::siglab[s] );
        bwrite( OUT1 , suds_t::sr[s] );
+
+       if ( mean_feature )
+	 bwrite( OUT1 , "MEAN" );       
+       else if ( hjorth_feature )
+	 bwrite( OUT1 , "HJORTH" );       
+       else
+	 bwrite( OUT1 , "SPEC" );              
+
        bwrite( OUT1 , suds_t::lwr[s] );
        bwrite( OUT1 , suds_t::upr[s] );
+
        bwrite( OUT1 , mean_h2[s] );
        bwrite( OUT1 , sd_h2[s]  );
        bwrite( OUT1 , mean_h3[s] );
@@ -2373,7 +2522,7 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
   std::string dummy;
   std::string suds = bread_str( IN1 );
 
-  if ( suds != "SUDS1" )
+  if ( suds != "SUDS2" )
     Helper::halt( "bad file format for " + filename );
   
   id = bread_str( IN1 );
@@ -2522,7 +2671,9 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
   
   if ( suds != "SUDS" )
     Helper::halt( "bad file format for " + filename );
-  
+  if ( version != 2 )
+    Helper::halt( "Expecting SUDS reformat version 2" );
+    
   int this_ns, this_nc;
 
   IN1 >> dummy >> id 
@@ -2560,20 +2711,29 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
   for (int s=0;s<ns;s++)
     {
       std::string this_siglab;
-      double this_lwr, this_upr;
-      int this_sr;
-      IN1 >> dummy >> this_siglab
-	  >> dummy >> this_sr 
-	  >> dummy >> this_lwr
-	  >> dummy >> this_upr	  
-	  >> dummy >> mean_h2[s] >> dummy >> sd_h2[s]
-	  >> dummy >> mean_h3[s] >> dummy >> sd_h3[s];
+      double this_lwr = 0, this_upr = 0;
+      int this_sr = 0;
+      std::string stype;
 
+      IN1 >> dummy >> this_siglab
+	  >> dummy >> this_sr
+	  >> dummy >> stype;
+
+      if ( stype == "MEAN" )
+	suds_t::extra_mean.insert( this_siglab );
+      else if ( stype == "HJORTH" )
+	suds_t::extra_hjorth.insert( this_siglab );
+      
+      IN1 >> dummy >> this_lwr
+	  >> dummy >> this_upr;
+
+      IN1 >> dummy >> mean_h2[s] >> dummy >> sd_h2[s]
+	  >> dummy >> mean_h3[s] >> dummy >> sd_h3[s];
 
       if( suds_t::copy_db_mode )
         {
 	  suds_t::siglab[s] = this_siglab;
-	  suds_t::sr[s] = this_sr;
+	  suds_t::sr[s] = this_sr;	  
 	  suds_t::lwr[s] = this_lwr;
 	  suds_t::upr[s] = this_upr;
         }
@@ -3839,6 +3999,30 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
 
   //
+  // Revised estimates based on ES model?
+  //
+
+  if ( suds_t::es_model )
+    {
+      std::vector<std::string> current_prediction;
+      
+      for (int i=0;i<ne_all;i++)
+	{
+	  int e = -1;
+	  if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+	  if ( e != -1 ) 
+	    current_prediction.push_back( max_inrow( pp.row(e) , suds_t::labels ) );
+	}
+  
+      // does notjing is ES model is already attacged
+      suds_t::read_elapsed_stages( es_filename );
+      logger << "  applying ES model to revised final predictions\n";
+      // update
+      pp = suds_t::apply_es_model( pp , current_prediction );
+    }
+  
+  
+  //
   // Report epoch-level stats
   //
  
@@ -4824,4 +5008,155 @@ Eigen::MatrixXd suds_t::add_time_track( const int nr , const int tt )
 
   return T;
 
+}
+
+
+void suds_t::read_elapsed_stages( const std::string & f )
+{
+  // alraady attached?
+  if ( ES_probs.rows() != 0 ) return;
+
+  // expecting format: PP(N1) PP(N2) PP(N3) PP(R) PP(W)
+  // where ES is the prior number of elapsed sleep epochs before this one (minutes)
+  // and the probabilities are based on the average in this range (i.e. up to the next ES)
+
+  if ( ! Helper::fileExists( f ) )
+    Helper::halt( "could not find ES model file " + f );
+  
+  std::vector<double> pp_n1, pp_n2, pp_n3, pp_r, pp_w;
+
+  ES_mins.clear();
+  
+  std::ifstream IN1( f.c_str() , std::ios::in );
+  
+  while ( ! IN1.eof() )
+    {
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.eof() ) break;
+      if ( line == "" ) continue;
+      if ( line[0] == '#' || line[0] == '%' ) continue;
+      std::vector<std::string> tok = Helper::parse( line , "\t " );
+      if ( tok.size() != 6 ) Helper::halt( "bad format for " + f );
+      if ( tok[0] == "ES" ) continue;
+      
+      double c1,c2,c3,c4,c5,c6;
+      if ( ! Helper::str2dbl( tok[0] , &c1 ) ) Helper::halt( "bad value in " + f );
+      if ( ! Helper::str2dbl( tok[1] , &c2 ) ) Helper::halt( "bad value in " + f );
+      if ( ! Helper::str2dbl( tok[2] , &c3 ) ) Helper::halt( "bad value in " + f );
+      if ( ! Helper::str2dbl( tok[3] , &c4 ) ) Helper::halt( "bad value in " + f );
+      if ( ! Helper::str2dbl( tok[4] , &c5 ) ) Helper::halt( "bad value in " + f );
+      if ( ! Helper::str2dbl( tok[5] , &c6 ) ) Helper::halt( "bad value in " + f );
+      if ( c1 < 0 )  Helper::halt( "bad value in " + f );
+      if ( c2 < 0 || c2 > 1 ) Helper::halt( "bad value in " + f );
+      if ( c3 < 0 || c3 > 1 ) Helper::halt( "bad value in " + f );
+      if ( c4 < 0 || c4 > 1 ) Helper::halt( "bad value in " + f );
+      if ( c5 < 0 || c5 > 1 ) Helper::halt( "bad value in " + f );
+      if ( c6 < 0 || c6 > 1 ) Helper::halt( "bad value in " + f );
+      
+      ES_mins.push_back( c1 );
+      pp_n1.push_back( c2 );
+      pp_n2.push_back( c3 );
+      pp_n3.push_back( c4 );
+      pp_r.push_back( c5 );
+      pp_w.push_back( c6 );
+    }
+
+  if ( ES_mins.size() < 1 ) Helper::halt( "could not read data from " + f );
+  
+  IN1.close();
+  
+  // P(ES|stage) should sum to 1.0 but just in case... 
+  const int nbins = pp_n1.size();
+  double s1 = 0 ,s2 = 0 ,s3 = 0 ,sr = 0 ,sw = 0;
+  for (int i=0; i<nbins; i++)
+    {
+      s1 += pp_n1[i];
+      s2 += pp_n2[i];
+      s3 += pp_n3[i];
+      sr += pp_r[i];
+      sw += pp_w[i];
+    }
+  if ( s1 <= 0 || s2 <= 0 || s3 <= 0 || sr <= 0 || sw <= 0 ) Helper::halt( "bad format in " + f );
+  
+  for (int i=0; i<nbins; i++)
+    {
+      pp_n1[i] /= s1;
+      pp_n2[i] /= s2;
+      pp_n3[i] /= s3;
+      pp_r[i] /= sr;
+      pp_w[i] /= sw;
+    }
+
+  ES_probs = Eigen::MatrixXd::Zero( nbins , 5 );
+
+  for (int i=0; i<nbins; i++)
+    {
+      ES_probs(i,0) = pp_n1[i];
+      ES_probs(i,1) = pp_n2[i];
+      ES_probs(i,2) = pp_n3[i];
+      ES_probs(i,3) = pp_r[i];
+      ES_probs(i,4) = pp_w[i];    
+    }
+  
+  logger << "  read " << nbins << "-bin ES model from " << f << "\n";
+  
+}
+
+
+Eigen::MatrixXd suds_t::apply_es_model( const Eigen::MatrixXd & pp ,
+					const std::vector<std::string> & stg )
+{
+  // current posterior probailities
+  Eigen::MatrixXd revised = pp ; 
+
+  // current best-guess stage = stg (i.e. to calculate elapsed sleep) 
+
+  // nb. if there are very large gaps in the valid record (i.e. big chunks of bad data)
+  // then the elapsed sleep estimates will be off (obviously), so probably should
+  // give a note that es-model=X might not be wanted in that scenario
+
+  const int nr = pp.rows();
+  
+  std::vector<int> es_bin( nr );
+
+  const int nbins = ES_mins.size();
+  
+  double elapsed_sleep = 0 ;
+
+  // Note: **assumes** 30 second epochs and 5-class classification here
+  
+  double epoch_duration_mins = 0.5;
+  
+  // nb: this **assumes** that elapsed sleep bins should start at 0 
+  int curr_bin = 0;
+  
+  for (int i=0; i<nr; i++)
+    {
+      
+      if ( curr_bin < nbins - 1 && elapsed_sleep >= ES_mins[ curr_bin + 1 ] )
+	++curr_bin;
+      
+      revised(i,0) *= revised(i,0) * ES_probs(curr_bin,0);
+      revised(i,1) *= revised(i,1) * ES_probs(curr_bin,1);
+      revised(i,2) *= revised(i,2) * ES_probs(curr_bin,2);
+      revised(i,3) *= revised(i,3) * ES_probs(curr_bin,3);
+      revised(i,4) *= revised(i,4) * ES_probs(curr_bin,4);
+
+      // scale to sum to 1.0
+      const double row_sum = revised(i,0) + revised(i,1) + revised(i,2) + revised(i,3) + revised(i,4);
+
+      revised(i,0) /= row_sum;
+      revised(i,1) /= row_sum;
+      revised(i,2) /= row_sum;
+      revised(i,3) /= row_sum;
+      revised(i,4) /= row_sum;
+
+      // get next ES value for next epoch
+      if ( stg[i] != "W" ) elapsed_sleep += epoch_duration_mins;
+    }
+
+  // all done
+			  
+  return revised;
 }
