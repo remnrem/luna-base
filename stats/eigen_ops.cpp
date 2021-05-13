@@ -59,31 +59,35 @@ void eigen_ops::random_normal( Eigen::MatrixXd & M )
       M(r,c) = Statistics::ltqnorm( CRandom::rand() );
 }
 
-void eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
+bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
 {
   const int N = M.rows();
-
+  
   Eigen::Array<double, 1, Eigen::Dynamic> means = M.colwise().mean();
 
   if ( normalize )
     {
       Eigen::Array<double, 1, Eigen::Dynamic> sds = ((M.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
+
+      for (int i=0;i<sds.size();i++) 
+       	if ( sds[i] == 0 ) return false;
+      
       M.array().rowwise() -= means;
-      // for (int i=0;i<sds.size();i++) 
-      // 	if ( sds[i] == 0 ) sds[i] = 1;
       M.array().rowwise() /= sds;
     }
   else
     {
       M.array().rowwise() -= means;
     }
+
+  return true;
 }
 
 
-void eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool second_rescale )
+bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool second_rescale )
 {
   // 1) winsorize at +/- w 
-  // 2) 
+
   const int rows = m.rows();
   const int cols = m.cols();
   for (int c=0;c<cols;c++)
@@ -91,9 +95,8 @@ void eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool se
       std::vector<double> v = copy_vector( m.col(c) );
       double median = MiscMath::median( v );
       double iqr = MiscMath::iqr( v );
-      
+      if ( iqr <= 1e-8 ) return false;
       double robust_sd = 0.7413 * iqr;
-
      
       // winsorize?
 
@@ -122,9 +125,12 @@ void eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool se
   // finally, also scale by mean/variance too, just to ensure correct 
   // overall scale
 
+  bool okay = true;
+  
   if ( second_rescale ) 
-    scale( m , true );
+    okay = scale( m , true );
 
+  return okay;
 }
 
 

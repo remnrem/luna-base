@@ -239,6 +239,8 @@ int main(int argc , char ** argv )
   bool cmdline_proc_psc        = false;
   bool cmdline_proc_ms_kmer    = false;
   bool cmdline_proc_copy_suds  = false;
+  bool cmdline_proc_cperm_test = false;
+
 
   //
   // parse command line
@@ -273,6 +275,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_cwt_design = true;
 	  else if ( strcmp( argv[1] , "--psc" ) == 0 )
 	    cmdline_proc_psc = true;
+	  else if ( strcmp( argv[1] , "--cpt" ) == 0 )
+	    cmdline_proc_cperm_test = true;
 	  else if ( strcmp( argv[1] , "--kmer" ) == 0 )
 	    cmdline_proc_ms_kmer = true;
 	  else if ( strcmp( argv[1] , "--copy-suds" ) == 0 ) 
@@ -528,9 +532,27 @@ int main(int argc , char ** argv )
     }
 
   
+  //
+  // Cluster permitation test (CPT)
+  //
+
+  if ( cmdline_proc_cperm_test )
+    {      
+      param_t param;
+      build_param_from_cmdline( &param );      
+      writer.begin();      
+      writer.cmd( "CPT" , 1 , "" );
+      writer.level( "CPT", "_CPT" );      
+      cpt_t cpt( param );
+      writer.unlevel( "_CPT" );
+      writer.commit();
+      std::exit(0);
+    }
+
+
 
   //
-  // PSC 
+  // KMER analysis
   //
 
   if ( cmdline_proc_ms_kmer )

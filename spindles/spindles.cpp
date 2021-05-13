@@ -458,7 +458,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // relative magnitude 
 	  double mag  = param.has( "mag" ) ? param.requires_dbl( "mag" ) : 0 ;
 	  bool   use_mean = param.has( "so-mean" ); 
-	  
+	  bool   ignore_neg_peak = param.has( "ignore-neg-peak" );
+
 	  // for full wave detection, count based on positive-to-negative zero-crossings 
 	  // (i.e. negative wave first), or the other way
 
@@ -480,7 +481,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  std::vector<bool> sw_peak;
 	  
 	  // find slow-waves	      
-	  p_sw = new slow_waves_t( *d , *tp , Fs[s] , mag, use_mean , uV_neg , uV_p2p , flwr, fupr, 
+	  p_sw = new slow_waves_t( *d , *tp , Fs[s] , mag, ignore_neg_peak , use_mean , uV_neg , uV_p2p , flwr, fupr, 
 				   tlwr, tupr, t_neg_lwr , t_neg_upr ,  
 				   use_alternate_neg2pos_zero_crossing , so_type );
 

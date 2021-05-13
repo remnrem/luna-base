@@ -270,22 +270,30 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       
       // smooth_reject takes minTime in sample points
       
-      double minTime_msec = param.has( "min-msec" ) ? param.requires_dbl( "min-msec" ) : 20 ; 
-      
-      int minTime_samples = round( minTime_msec * sr/1000.0 );
-      
-      logger << "  smoothing: rejecting segments <= " << minTime_msec << " msec\n";
-      
-      ms_backfit_t smoothed = mstates.smooth_reject( bf , minTime_samples );
-      
+
+      ms_backfit_t smoothed = bf;
+  
+      if ( ! param.has( "no-smoothing" )  )
+	{
+	  double minTime_msec = param.has( "min-msec" ) ? param.requires_dbl( "min-msec" ) : 20 ; 
+	  
+	  int minTime_samples = round( minTime_msec * sr/1000.0 );
+	  
+	  logger << "  smoothing: rejecting segments <= " << minTime_msec << " msec\n";
+	  
+	  smoothed = mstates.smooth_reject( bf , minTime_samples );
+
+	}      
+
   
       //
       // Final stats
       //
       
+      logger << "  getting final microstate statistics\n";
+
       ms_stats_t stats = mstates.stats( Statistics::transpose( X ) , microstates_t::eig2mat( prototypes.A ) , smoothed.best() );
   
-
 
       //
       // Verbose dumping of GFP and L point by point? (nb. this only works in whole-trace mode)
@@ -474,10 +482,10 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 
       writer.value( "GEV"     , stats.GEV_tot );
 
-      // Entropy
-
-      for (int m=1;m<=8;m++)
-	writer.value( "SE" + Helper::int2str(m)  , stats.samplen[m] );
+      // Entropy: skip for now
+      
+      // for (int m=1;m<=8;m++)
+      // 	writer.value( "SE" + Helper::int2str(m)  , stats.samplen[m] );
 
       
       // kmer stats: single obs, so no group differences here
@@ -598,9 +606,15 @@ microstates_t::microstates_t( param_t & param , const std::string & subj_id_, co
   // all points (i.e. just just GFP peaks)
   skip_peaks = param.has( "all-points" );
   
-  // reject peaks > T times std(GFP) above the mean GFP if T>0 
-  gfp_threshold = param.has( "gfp-th" ) ? param.requires_dbl( "gfp-th" ) : 0 ;
-  
+  // reject peaks > T times std(GFP) above the mean GFP if (T>0)
+  gfp_max_threshold = param.has( "gfp-max" ) ? param.requires_dbl( "gfp-max" ) : 0 ;
+
+  // reject peaks < T times std(GFP) below the mean GFP (if T>0)
+  gfp_min_threshold = param.has( "gfp-min" ) ? param.requires_dbl( "gfp-min" ) : 0 ; 
+
+  // reject peaks if skewness is > T SD from the mean kurtosis of all GFP peaks (if T>0)
+  gfp_kurt_threshold = param.has( "gfp-kurt" ) ? param.requires_dbl( "gfp-kurt" ) : 0 ;
+
   // if > 0 , select (randomly) only this many peaks per observation
   restrict_npeaks = param.has( "npeaks" ) ? param.requires_int( "npeaks" ) : 0; 
 
@@ -668,35 +682,120 @@ std::vector<int> microstates_t::find_peaks( const Data::Matrix<double> & X ,
       
 
   //
-  // GFP threshold
+  // GFP thresholding: round 1) min/max values
   //
 
-  if ( gfp_threshold > 0 )
+  if ( gfp_max_threshold > 0 || gfp_min_threshold > 0 )
     {
+      
       Data::Vector<double> peak_gfp( n_peaks );
+      
       for (int r=0; r<n_peaks; r++)
 	peak_gfp[r] = GFP[ peak_idx[r] ];
       
       double mean = Statistics::mean( peak_gfp );
       double sd = sqrt( Statistics::variance( peak_gfp , 1 ) ); // use N-1 denom
-      double th = mean + gfp_threshold * sd;
+      double th_max = mean + gfp_max_threshold * sd;
+      double th_min = mean - gfp_min_threshold * sd;
+      
+      bool has_max_th = gfp_max_threshold > 0 ; 
+      bool has_min_th = gfp_min_threshold > 0 ;
+      int cnt_min = 0 , cnt_max = 0;
+      std::vector<int> peak_idx2;
+      for (int r=0; r<n_peaks; r++)
+	{
+	  bool okay = true;
+	  if ( has_max_th && GFP[ peak_idx[r] ] > th_max ) { ++cnt_max; okay = false; } 
+	  if ( has_min_th && GFP[ peak_idx[r] ] < th_min ) { ++cnt_min; okay = false; }
+	  if ( okay ) 
+	    peak_idx2.push_back( peak_idx[r] );
+	}
+      
+      logger << "  given mean GFP of " << mean << ", applying threshold to require:\n";
+      if ( has_max_th ) logger << "  - GFP < " << th_max << " [ mean(GFP) + " << gfp_max_threshold << " * SD(GFP) ]\n";
+      if ( has_min_th ) logger << "  - GFP > " << th_min << " [ mean(GFP) - " << gfp_min_threshold << " * SD(GFP) ]\n";
+      logger << "  keeping " << peak_idx2.size() << " of " << n_peaks << " peaks";
+      if ( has_max_th ) logger << ", dropping " << cnt_max << " for gfp-max";
+      if ( has_min_th ) logger << ", dropping " << cnt_min << " for gfp-min";
+      logger << "\n";
+      
+      writer.value( "GFP_MEAN" , mean );
+      writer.value( "GFP_SD" , sd );
+      
+      writer.value( "NP0" , (int)peak_idx.size() );
+
+      n_peaks = peak_idx2.size();
+      peak_idx = peak_idx2;
+      
+      
+    }
+
+  
+  //
+  // Round 2: exclude peaks based on abberrant skewness/mean
+  //
+  
+  //  bool has_skew_th = gfp_skew_threshold > 0;
+  bool has_kurt_th = gfp_kurt_threshold > 0;
+  
+  if ( has_kurt_th )
+    {
+      
+      std::vector<double> k( n_peaks );
+      
+      for (int i=0; i<n_peaks; i++)
+	{
+	  
+	  const int idx = peak_idx[i];
+
+	  // get time-points across channels
+	  Data::Vector<double> p = X.row( idx );
+	  
+	  const int n = p.size();
+
+	  // should be 0, but just in case
+	  double mn = Statistics::mean( p );
+	  for (int j=0; j<n; j++)
+	    p[j] -= mn;
+
+	  // get kurtosis (assumes mean = 0)
+	  double numer = 0 , denom = 0;
+	  for (int j=0; j<n; j++)
+	    {
+	      numer += pow( p[j] , 4 );
+	      denom += pow( p[j] , 2 );
+	    }
+	  
+	  numer /= (double)n;
+	  denom /= (double)n;
+	  denom *= denom;
+	  
+	  k[i] = numer / denom - 3.0;
+
+	} // next peak
+      
+      // get mean/SD of kurtosis
+      
+      double mean = Statistics::mean( k );
+      double sd = sqrt( Statistics::variance( k  , 1 ) ); // use N-1 denom
+      double th_kurt = mean + gfp_kurt_threshold * sd;
 
       std::vector<int> peak_idx2;
       for (int r=0; r<n_peaks; r++)
-	if ( GFP[ peak_idx[r] ] <= th )
-	  peak_idx2.push_back( peak_idx[r] );
+	if ( k[r] <= th_kurt ) peak_idx2.push_back( peak_idx[r] );
 
-      logger << "  applying GFP threshold mean + " << gfp_threshold 
-	     << "SDs, keeping " << peak_idx2.size() 
-	     << " of " << n_peaks << " peaks\n";
-      
+      logger << "  applying GFP kurtosis threshold, to require "
+	     << ": kurtosis < mean(kurtosis) + " << gfp_kurt_threshold << " * SD(kurtosis)\n";
+      logger << "  dropping " << peak_idx.size() - peak_idx2.size() << " GFP peaks, to leave " << peak_idx2.size() << "\n";
+
       n_peaks = peak_idx2.size();
       peak_idx = peak_idx2;
       
     }
 
+
   //
-  // Only select (at most) N peaks?
+  // Round 3: Only select (at most) N peaks?
   //
 
   if ( restrict_npeaks > 0 )
@@ -714,8 +813,13 @@ std::vector<int> microstates_t::find_peaks( const Data::Matrix<double> & X ,
 	  logger << "  randomly selected " << restrict_npeaks << " of " << peak_idx2.size() << " peaks\n";
 	}
     }
-  
-  
+
+  //
+  // final # GFP peaks 
+  //
+
+  writer.value( "NP" , (int)peak_idx.size() );
+
   //
   // Output full GFP
   //
@@ -1152,7 +1256,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   // Normalize X and A (by mean / set GFP = 1 )
   // (same code as backfit()
   //
-  
+
   Data::Vector<double> GFP( N );
   Data::Vector<double> GFP_minus1( N ); // also get w/ N-1 denom for comparability 
   Data::Vector<double> avg( N );
@@ -1302,7 +1406,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
       // next K
     }
-  
+
   
   //
   // transition probs
@@ -1332,15 +1436,17 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
   lzw_t lzw( runs.d , &stats.lwz_states );
 
-  mse_t se;
 
-  for (int m=1; m<=8; m++)
-    stats.samplen[m] = se.sampen( runs.d , m );
+  // mse_t se;
+
+  // for (int m=1; m<=8; m++)
+  //   stats.samplen[m] = se.sampen( runs.d , m );
   
 
   //
   // dump sequences to file?
   //
+
 
   if ( statesfile != ""  )
     {      
@@ -1362,6 +1468,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
   if ( kmers_nreps )
     stats.kmers.run( runs.d , kmers_min , kmers_max , kmers_nreps );
+
    
   return stats;
 }

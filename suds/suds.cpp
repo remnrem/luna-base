@@ -529,6 +529,7 @@ void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
   else
     binary_write( edf , param ); 
 
+
 }
 
 
@@ -637,6 +638,7 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
 
 int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 {
+
 
   //
   // Is this individual a trainer (with known stages) or no?
@@ -906,6 +908,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       if ( epoch == -1 ) break;
       
       if ( en == ne ) Helper::halt( "internal error: over-counted epochs" );
+      
 
       //
       // retained? if not, skip
@@ -917,6 +920,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  continue;
 	}
 
+      
       //
       // col counter for PSD/feature aggregation matrix
       //
@@ -931,6 +935,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       for (int s = 0 ; s < ns; s++ )
 	{
+
 
 	  //
 	  // get data
@@ -954,7 +959,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  bool do_mean = suds_t::is_mean_feature( signals.label(s) ) ;
 	  bool do_hjorth = suds_t::is_hjorth_feature( signals.label(s) ) ;
 	  bool do_psd = suds_t::is_spectral_feature( signals.label(s) ) ;
-	  
+
 	  //
 	  // Welch of MTM to get spectra
 	  //
@@ -1020,13 +1025,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		}
 	      else // use Welch PSD
 		{
-		  
+
 		  const double overlap_sec = fft_segment_overlap;
 		  const double segment_sec  = fft_segment_size;
 		  const int total_points = d->size();
 		  const int segment_points = segment_sec * suds_t::sr[s];
 		  const int noverlap_points  = overlap_sec * suds_t::sr[s];
-		  
+
 		  // implied number of segments
 		  int noverlap_segments = floor( ( total_points - noverlap_points) 
 						 / (double)( segment_points - noverlap_points ) );
@@ -1071,13 +1076,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 				frq.push_back( bin.bfa[i] );
 			      
 			    }
+			  
 			  ++col;		  
+
 			}	      
 		    }
 		  
 		}
 	    }
-	  
+	  	  
+
 	  //
 	  // Hjorth parameters
 	  //
@@ -1100,7 +1108,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      if ( suds_t::use_bands && en_good == 0 ) frq.push_back( 0 );
 	      ++col;	      
 	    }
-
+	  
 	  if ( do_hjorth )
 	    {
 
@@ -1109,12 +1117,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		  firstrow.push_back( activity );
 		  firstrow.push_back( mobility );
 		  firstrow.push_back( complexity );
+		  col += 3;
 		}
 	      else
 		{
-		  PSD( en_good , col ) = activity;
-		  PSD( en_good , col ) = mobility;
-		  PSD( en_good , col ) = complexity;
+		  PSD( en_good , col++ ) = activity;
+		  PSD( en_good , col++ ) = mobility;
+		  PSD( en_good , col++ ) = complexity;
 		}
 	      
 	      // just incase band power is used : set frq to 0 so this value is always skipped                                                                                             
@@ -1122,15 +1131,15 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		{
 		  frq.push_back( 0 ); frq.push_back( 0 ); frq.push_back( 0 );
 		}
-	      
-	    }
 
+	    }
+	  
 
 	  //
 	  // Done for this signal for this epoch
 	  //
 	  
-	  
+
 	} // next signal
     
 
@@ -1143,7 +1152,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
       if ( en_good == 0 )
 	{
+
 	  PSD.resize( nge , col );
+
 	  for (int i=0;i<col;i++) PSD(0,i) = firstrow[i];
 	  
 	  if ( suds_t::use_bands )
@@ -1161,7 +1172,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       ++en;
       ++en_good;
       epochs.push_back( epoch );
-    
+
+
     } // next epoch
   
   //
@@ -1261,12 +1273,22 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  logger << "  robust standardizing PSD";
 	  if ( suds_t::winsor1 > 0 ) logger << ", winsorizing at " << suds_t::winsor1;
 	  logger << "\n";
-	  eigen_ops::robust_scale( PSD , suds_t::winsor1 );
+
+	  if ( ! eigen_ops::robust_scale( PSD , suds_t::winsor1  ) )
+	    {
+	      logger << "  one or more features with no variability, quitting\n";
+	      return 0;
+	    }
 	}
       else
 	{
 	  logger << "  standardizing PSD\n";
-	  eigen_ops::scale( PSD , true );
+	  if ( ! eigen_ops::scale( PSD , true ) ) 
+	    {
+	      logger <<"  one or more features with no variability, quitting\n";
+              return 0;
+	    }
+	  
 	}
     }
   
@@ -1280,10 +1302,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( ! suds_t::standardize_psd )
     eigen_ops::scale( PSD , false );
 
+
   //
   // SVD
   //
-
   
   Eigen::BDCSVD<Eigen::MatrixXd> svd( PSD , Eigen::ComputeThinU | Eigen::ComputeThinV );
   U = svd.matrixU();
@@ -1529,13 +1551,25 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	{
 	  logger << "  robust re-standardizing PSD after removing bad epochs\n";
 	  // nb. not repeating winsorization of PSD here
-	  eigen_ops::robust_scale( PSD , 0 );
+
+	  if ( ! eigen_ops::robust_scale( PSD , 0 ) ) 
+	    {
+	      logger << "  one or more features with no variability, quitting\n";
+	      return 0;
+	    }
+
 	  if ( suds_t::use_bands ) eigen_ops::robust_scale( B , 0 );
 	}
       else
 	{      
 	  logger << "  re-standardizing PSD after removing bad epochs\n";	  
-	  eigen_ops::scale( PSD , true );
+
+	  if ( ! eigen_ops::scale( PSD , true ) )
+	    {
+	      logger <<"  one or more features with no variability, quitting\n";
+              return 0;
+	    }
+
 	  if ( suds_t::use_bands ) eigen_ops::scale( B , true );      
 	}
     }
@@ -1572,12 +1606,22 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       if ( suds_t::robust_standardization )
 	{
 	  logger << "  robust standardizing PSC\n";
-	  eigen_ops::robust_scale( U , 0 ); // no repeated winsorization here
+	  
+	  // no repeated winsorization here
+	  if ( ! eigen_ops::robust_scale( U , 0 ) )
+	    {
+	      logger <<"  one or more features with no variability, quitting\n";
+              return 0;
+	    }
 	}
       else
 	{
 	  logger << "  standardizing PSC\n";
-	  eigen_ops::scale( U , true );
+	  if ( ! eigen_ops::scale( U , true ) )
+	    {
+	      logger <<"  one or more features with no variability, quitting\n";
+              return 0;
+	    }
 	}  
     }
   
@@ -2335,10 +2379,11 @@ void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
 
   for (int s=0;s<ns;s++)
     {
-      bool mean_feature = suds_t::extra_mean.find( suds_t::siglab[s] ) != suds_t::extra_mean.end() ;
+
+      bool mean_feature = suds_t::is_mean_feature( suds_t::siglab[s] );
       
-      bool hjorth_feature = suds_t::extra_hjorth.find( suds_t::siglab[s] ) != suds_t::extra_hjorth.end() ;
-      
+      bool hjorth_feature = suds_t::is_hjorth_feature(  suds_t::siglab[s] );
+
       bwrite( OUT1 , suds_t::siglab[s] );
 
       bwrite( OUT1 , suds_t::sr[s] );
@@ -2375,11 +2420,10 @@ void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
   for (int j=0;j<nc;j++)
     bwrite( OUT1 , W[j] );
   
-   // V [nbins x nc ]
+  // V [nbins x nc ]
   for (int i=0;i<nbins;i++)
     for (int j=0;j<nc;j++)
       bwrite( OUT1 , V(i,j) );
-  
   
   // stages (nve)
   for (int i=0;i<nve;i++)
@@ -2440,12 +2484,13 @@ void suds_indiv_t::binary_write( const std::string & filename ) const
 
   for (int s=0;s<ns;s++)
      {
-       bool mean_feature = suds_t::extra_mean.find( suds_t::siglab[s] ) != suds_t::extra_mean.end() ;
-       bool hjorth_feature = suds_t::extra_hjorth.find( suds_t::siglab[s] ) != suds_t::extra_hjorth.end() ;
+
+       bool mean_feature = suds_t::is_mean_feature( suds_t::siglab[s] );
+       bool hjorth_feature = suds_t::is_hjorth_feature( suds_t::siglab[s] );
        
        bwrite( OUT1 , suds_t::siglab[s] );
        bwrite( OUT1 , suds_t::sr[s] );
-
+       
        if ( mean_feature )
 	 bwrite( OUT1 , "MEAN" );       
        else if ( hjorth_feature )
@@ -2563,12 +2608,42 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
   
   for (int s=0;s<ns;s++)
     {
+
+      // std::string this_siglab;
+      // double this_lwr = 0, this_upr = 0;
+      // int this_sr = 0;
+      // std::string stype;
+
+      // IN1 >> dummy >> this_siglab
+      //     >> dummy >> this_sr
+      //     >> dummy >> stype;
+
+      // if ( stype == "MEAN" )
+      // 	suds_t::extra_mean.insert( this_siglab );
+      // else if ( stype == "HJORTH" )
+      // 	suds_t::extra_hjorth.insert( this_siglab );
+
+      // IN1 >> dummy >> this_lwr
+      //     >> dummy >> this_upr;
+
+      // IN1 >> dummy >> mean_h2[s] >> dummy >> sd_h2[s]
+      //     >> dummy >> mean_h3[s] >> dummy >> sd_h3[s];
+
+
       std::string this_siglab = bread_str( IN1 );
+
       int this_sr = bread_int( IN1 );      
 
+      std::string stype = bread_str( IN1 );
+      
+      if ( stype == "MEAN" )
+	  suds_t::extra_mean.insert( this_siglab );
+      else if ( stype == "HJORTH" )
+	suds_t::extra_hjorth.insert( this_siglab ); 
+      
       double this_lwr =  bread_dbl( IN1 );
       double this_upr =  bread_dbl( IN1 );
-      
+      	
       mean_h2[s] = bread_dbl( IN1 );
       sd_h2[s] = bread_dbl( IN1 );
       
@@ -4100,22 +4175,30 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   
   // assume putative 'y' and 'U' will have been constructed, and 'nve' set
   // i.e. this will be called after proc(), or from near the end of proc()
-  
-  lda_t self_lda( final_prediction , target.U );
-  lda_model_t self_model = self_lda.fit( suds_t::flat_priors );
-  
-  if ( self_model.valid )
+
+  std::set<std::string> nstages;
+  for (int i=0; i<final_prediction.size(); i++) 
+    nstages.insert( final_prediction[i] );
+
+  if ( nstages.size() > 1 ) 
     {
-      // get predictions: SOAP model (fitting to self)
-      lda_posteriors_t soap_final_prediction = lda_t::predict( self_model , target.U );
       
-      double kappa5 = MiscMath::kappa( soap_final_prediction.cl , final_prediction , suds_t::str( SUDS_UNKNOWN ) );
-      double kappa3 = MiscMath::kappa( NRW( soap_final_prediction.cl ) , NRW( final_prediction ) , suds_t::str( SUDS_UNKNOWN ) );
-
-      writer.value( "SOAP" , kappa5 );
-      writer.value( "SOAP3" , kappa3 );
+      lda_t self_lda( final_prediction , target.U );
+      lda_model_t self_model = self_lda.fit( suds_t::flat_priors );
+      
+      if ( self_model.valid )
+	{
+	  // get predictions: SOAP model (fitting to self)
+	  lda_posteriors_t soap_final_prediction = lda_t::predict( self_model , target.U );
+	  
+	  double kappa5 = MiscMath::kappa( soap_final_prediction.cl , final_prediction , suds_t::str( SUDS_UNKNOWN ) );
+	  double kappa3 = MiscMath::kappa( NRW( soap_final_prediction.cl ) , NRW( final_prediction ) , suds_t::str( SUDS_UNKNOWN ) );
+	  
+	  writer.value( "SOAP" , kappa5 );
+	  writer.value( "SOAP3" , kappa3 );
+	}
+      
     }
-
 
 
   //

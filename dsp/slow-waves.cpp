@@ -107,6 +107,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   //
 
   const double thr   = param.has( "mag" ) ? param.requires_dbl( "mag" )       : 0 ;
+  const bool ignore_neg_peak = param.has( "ignore-neg-peak" ) ? Helper::yesno( param.value( "ignore-neg-peak" ) ) : false; 
 
   const double f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.2  ; 
   const double f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.5  ; 
@@ -179,7 +180,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       // Detect slow waves
       //
       
-      detect_slow_waves( *d , *tp , sr , thr, use_mean , 
+      detect_slow_waves( *d , *tp , sr , thr, ignore_neg_peak , use_mean , 
 			 uV_neg , uV_p2p , 
 			 f_lwr , f_upr , 
 			 t_lwr , t_upr , 
@@ -557,6 +558,7 @@ slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered ,
 			    const std::vector<uint64_t> & tp ,
 			    const int sr , 
 			    const double thr ,
+			    const bool ignore_neg_peak , 
 			    const bool   use_mean , 
 			    const double uV_neg , 
 			    const double uV_p2p , 
@@ -572,7 +574,7 @@ slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered ,
   
   report_median_stats = false;
   
-  detect_slow_waves( unfiltered, tp , sr , thr, use_mean , uV_neg , uV_p2p , f_lwr, f_upr, 
+  detect_slow_waves( unfiltered, tp , sr , thr, ignore_neg_peak, use_mean , uV_neg , uV_p2p , f_lwr, f_upr, 
 		     t_lwr, t_upr , t_neg_lwr , t_neg_upr , neg2pos , type );
 }
 
@@ -581,6 +583,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 				     const std::vector<uint64_t> & _tp ,
 				     const int sr , 
 				     const double thr ,
+				     const bool ignore_neg_peak , 
 				     const bool   use_mean , 
 				     const double uV_neg , 
 				     const double uV_p2p , 
@@ -608,7 +611,11 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   if ( t_lwr > 0 ) logger << "  - duration " << t_lwr << "-" << t_upr << "s\n"; 
   if ( t_neg_lwr > 0 ) logger << "  - negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << "\n";
 
-  if ( thr > 0 ) logger << "  - relative threshold " << thr  << "x " <<  ( use_mean ? "mean" : "median" ) << "\n";
+  if ( thr > 0 ) 
+    {
+      logger << "  - relative threshold " << thr  << "x " <<  ( use_mean ? "mean" : "median" ) << "\n";
+      logger << "  - (based on " << ( ignore_neg_peak ? "only P2P amplitude" : "both P2P and negative peak amplitude" ) << "\n";
+    }
 
   if ( uV_neg < 0 ) logger << "  - absolute threshold based on " 
 			      << uV_neg << " uV for negative peak, " 
@@ -642,7 +649,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   //  std::cout << MiscMath::mean( d ) << " is the mean \n";
   
   const int n = filtered.size();
-  
+
   // get zero crossings
   std::vector<int> zc;
   
@@ -663,6 +670,9 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
   logger << " " << zc.size() << " zero crossings";
   
+  // flat signal? no ZCs?  just return if fewer than 10 SOs found
+  if ( zc.size() <= 10 ) return 0;
+      
   // putative waves
   std::vector<slow_wave_t> waves; 
 
@@ -772,6 +782,10 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     } // next putative SW
   
 
+  // no remaining SWs?
+
+  if ( cnt == 0 ) return 0;
+
   // either use mean or median (default) as baseline
 
   if ( use_mean ) 
@@ -804,7 +818,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       
       bool accepted = true;
       //logger << "thr " << w.down_amplitude  << " " << th_x << " " << uV_neg << " " << w.down_amplitude  << " " << uV_p2p << " " <<w.up_amplitude - w.down_amplitude << "\n";
-      if ( thr > 0 && w.down_amplitude > th_x ) accepted = false; // i.e. negative value, should be more neg.
+      if ( (!ignore_neg_peak) && thr > 0 && w.down_amplitude > th_x ) accepted = false; // i.e. negative value, should be more neg.
       if ( thr > 0 && w.up_amplitude - w.down_amplitude < th_yminusx ) accepted = false; // pos threshold
       if ( uV_neg < 0 && w.down_amplitude > uV_neg ) accepted = false;
       if ( uV_p2p > 0 && w.up_amplitude - w.down_amplitude < uV_p2p ) accepted = false;

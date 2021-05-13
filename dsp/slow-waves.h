@@ -121,6 +121,7 @@ struct slow_waves_t
 		const std::vector<uint64_t> & tp ,
 		const int sr , 
 		const double thr   = 0.75 , 
+		const bool ignore_neg_peak = false ,
 		const bool   use_mean = false , 
 		const double uv_neg = 0 , 
 		const double uv_p2p = 0 ,
@@ -143,12 +144,16 @@ struct slow_waves_t
 			 const int sr , 
 
 			 // relative threshold based on mean of 
-			 // all SOs (based on negative peak)
+			 // all SOs (based on negative peak & P2P )
 			 // this might not be used (i.e. set to 0) 
 			 // if only using absolute criteria
 			 
 			 const double thr   = 0.75 , 
 			 
+			 // if using thr, then only base on P2P (i.e. 
+			 // i.e. for POL tests, if unknown )
+			 const bool ignore_neg_peak = false , 
+
 			 // use mean versus median 
 			 const bool   use_mean = false , 
 			 

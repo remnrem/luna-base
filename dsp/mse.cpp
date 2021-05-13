@@ -168,7 +168,13 @@ double mse_t::sampen( const std::vector<int> & s , int M )
   const int n = s.size();
   std::vector<double> y( n );
   for (int i=0; i<n; i++) y[i] = s[i] ;
-  return sampen( y , M , 0.1 );
+ 
+  // old slow version
+  //return sampen( y , M , 0.1 );
+  
+  // fast version
+  return sample_entropy( y , 1.0 );
+  
 }
 
 double mse_t::sampen( const std::string & s , int M )
@@ -178,7 +184,10 @@ double mse_t::sampen( const std::string & s , int M )
   std::vector<double> y( n );
   // i.e. actual ASCII coding doesn't really matter here
   for (int i=0; i<n; i++) y[i] = (int)s[i] ;
-  return sampen( y , M , 0.1 );
+  // old slow version
+  //return sampen( y , M , 0.1 );
+  // fast version
+  return sample_entropy( y , 1.0 );;
 }
 
 // sampen() calculates an estimate of sample entropy 

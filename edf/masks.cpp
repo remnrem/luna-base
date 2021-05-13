@@ -241,10 +241,14 @@ void proc_mask( edf_t & edf , param_t & param )
     {
       // epoch --> 'force' mode (i.e. set all)
       // mask-epoch --> 'mask' mode
-      
+      // if 'end' means last epoch 
+
       bool include_mode = param.has( "epoch" );
       
       std::string label = include_mode ? "epoch" : "mask-epoch" ; 
+      
+      // for epoch=222-end 
+      const int end_epoch = edf.timeline.num_total_epochs();
 
       std::vector<std::string> toks = Helper::parse( param.value( label ) , "," );
       
@@ -264,7 +268,11 @@ void proc_mask( edf_t & edf , param_t & param )
 	    {
 	      int v1=-1 , v2 = -1;
 	      if ( ! Helper::str2int( val[0] , &v1 ) ) Helper::halt( label + " value must be integer" );
-	      if ( ! Helper::str2int( val[1] , &v2 ) ) Helper::halt( label + " value must be integer" );
+	      
+	      if ( val[1] == "end" ) 
+		v2 = end_epoch;
+	      else  
+		if ( ! Helper::str2int( val[1] , &v2 ) ) Helper::halt( label + " value must be integer" );
 	      
 	      if ( v1 > v2 ) Helper::halt( label + "=a-b requires a <= b");
 	      for (int i=v1; i<= v2; i++) epochs.insert( i );

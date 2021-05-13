@@ -1797,7 +1797,18 @@ void proc_write( edf_t & edf , param_t & param )
        Helper::file_extension( filename, "EDFZ" ) ) 
     filename = filename.substr(0 , filename.size() - 5 );
 
-  filename += "-" + param.requires( "edf-tag" ) + ".edf";
+  // make edf-tag optional
+  if ( param.has( "edf-tag" ) ) 
+    filename += "-" + param.requires( "edf-tag" ) + ".edf";
+  else
+    {
+      // but here, must specify a folder explicitly in that case...
+      if ( ! param.has( "edf-dir" ) )
+	Helper::halt( "if not adding edf-tag, must explicitly specify edf-dir" );
+      
+      filename += ".edf";
+    }
+  
   if ( edfz ) filename += "z";
   
   //
@@ -1806,10 +1817,13 @@ void proc_write( edf_t & edf , param_t & param )
 
   if ( param.has( "edf-dir" ) )
     {
-      const std::string outdir = param.value("edf-dir");
+      
+      std::string outdir = param.value("edf-dir");
       
       if ( outdir[ outdir.size() - 1 ] != globals::folder_delimiter ) 
-	Helper::halt("edf-dir value must end in '" + std::string(1,globals::folder_delimiter) + "' to specify a folder" );
+	outdir += globals::folder_delimiter;
+
+      //Helper::halt("edf-dir value must end in '" + std::string(1,globals::folder_delimiter) + "' to specify a folder" );
 
       int p=filename.size()-1;
       int v = 0;

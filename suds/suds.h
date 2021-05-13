@@ -450,25 +450,56 @@ struct suds_t {
     upr.resize( ns , 20 );
     sr.resize( ns , 100 );
     
+    
     if ( param.has( "lwr" ) )
       {
-	lwr = param.dblvector( "lwr" );
-	if ( lwr.size() != ns ) Helper::halt( "incorrect number of values for lwr" );
+	std::vector<double> tt = param.dblvector( "lwr" );
+
+	if ( tt.size() == ns )
+	  lwr = tt;
+	else
+	  {
+	    if ( tt.size() == 1 ) // assume all same
+	      for (int i=0; i<ns; i++) lwr[i] = tt[0];
+	    else
+	      Helper::halt( "incorrect number of values for lwr" );	    
+	  }
       }
-    
+
+
     if ( param.has( "upr" ) )
       {
-	upr = param.dblvector( "upr" );
-	if ( upr.size() != ns ) Helper::halt( "incorrect number of values for upr" );
+	std::vector<double> tt = param.dblvector( "upr" );
+
+	if ( tt.size() == ns )
+	  upr = tt;
+	else
+	  {
+	    if ( tt.size() == 1 ) // assume all same
+	      for (int i=0; i<ns; i++) upr[i] = tt[0];
+	    else
+	      Helper::halt( "incorrect number of values for upr" );	    
+	  }
       }
         
+
     if ( param.has( "sr" ) )
       {
-	sr = param.intvector( "sr" );
-	if ( sr.size() != ns ) Helper::halt( "incorrect number of values for sr" );
-      }
-    
+	std::vector<int> tt = param.intvector( "sr" );
 
+	if ( tt.size() == ns )
+	  sr = tt;
+	else
+	  {
+	    if ( tt.size() == 1 ) // assume all same
+	      for (int i=0; i<ns; i++) sr[i] = tt[0];
+	    else
+	      Helper::halt( "incorrect number of values for sr" );	    
+	  }
+      }
+
+
+    
     eannot_file = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
 
     eannot_ints = param.has( "stage-numbers" );

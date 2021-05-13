@@ -49,7 +49,7 @@
 #include "stats/eigen_ops.h"
 #include "stats/cluster.h"
 #include "stats/kmeans.h"
-
+#include "stats/cpt.h"
 
 #include "miscmath/miscmath.h"
 

@@ -388,7 +388,9 @@ struct microstates_t {
 
   bool skip_peaks;
   
-  double gfp_threshold;
+  double gfp_max_threshold;
+  double gfp_min_threshold;
+  double gfp_kurt_threshold;
   
   int restrict_npeaks;
   

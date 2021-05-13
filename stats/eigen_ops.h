@@ -30,10 +30,9 @@ namespace eigen_ops {
 
   void random_normal( Eigen::MatrixXd & m );  
 
-  void scale( Eigen::Ref<Eigen::MatrixXd> m , bool );  
-  //  void scale( Eigen::Ref<Eigen::VectorXd> m , bool );  
+  bool scale( Eigen::Ref<Eigen::MatrixXd> m , bool );  
 
-  void robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double , bool second_rescale = true );  
+  bool robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double , bool second_rescale = true );  
 
   double sdev( const Eigen::VectorXd & x );
 
