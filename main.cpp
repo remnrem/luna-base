@@ -543,7 +543,7 @@ int main(int argc , char ** argv )
       writer.begin();      
       writer.cmd( "CPT" , 1 , "" );
       writer.level( "CPT", "_CPT" );      
-      cpt_t cpt( param );
+      cpt_wrapper( param );
       writer.unlevel( "_CPT" );
       writer.commit();
       std::exit(0);

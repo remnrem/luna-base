@@ -95,6 +95,8 @@ struct clocs_t {
   Data::Matrix<double> interelectrode_distance_matrix( const signal_list_t & signals1 , 
 						       const signal_list_t & signals2 ) const;
 
+  double distance( const std::string & ch1 , const std::string & ch2 , const int mode = 1 ) const ; 
+  
   bool make_interpolation_matrices( const signal_list_t & good_signals , 
 				    const signal_list_t & bad_signals , 
 				    Data::Matrix<double> * G , 

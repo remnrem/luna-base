@@ -59,12 +59,14 @@ polar_t::polar_t( sph_t & sph )
 }
 
 
-int clocs_t::load_cart( const std::string & filename , bool verbose )
+int clocs_t::load_cart( const std::string & f0 , bool verbose )
 {
 
+  std::string filename = Helper::expand( f0 );
+  
   if ( ! Helper::fileExists( filename ) ) 
     Helper::halt( "could not find clocs file; " + filename );
-
+  
   cloc.clear();
 
   // assume LABEL X Y Z 
@@ -103,7 +105,7 @@ int clocs_t::load_cart( const std::string & filename , bool verbose )
     }
   IN1.close();
 
-  logger << " read " << cloc.size() << " channel locations\n"; 
+  logger << "  read " << cloc.size() << " channel locations from " << filename << "\n"; 
 
   //
   // Convert to unit sphere
@@ -207,6 +209,20 @@ void clocs_t::convert_to_unit_sphere()
     }
 }
 
+
+double clocs_t::distance( const std::string & ch1 , const std::string & ch2 , const int mode ) const
+{
+
+  cart_t c1 = cart( ch1 );
+  cart_t c2 = cart( ch2 );
+  return mode == 1 ?      
+    1 - ( ( (c1.x-c2.x)*(c1.x-c2.x) +
+	    (c1.y-c2.y)*(c1.y-c2.y) +
+	    (c1.z-c2.z)*(c1.z-c2.z) ) / 2.0 )
+    : 
+    sqrt( (c1.x-c2.x)*(c1.x-c2.x) + (c1.y-c2.y)*(c1.y-c2.y) + (c1.z-c2.z)*(c1.z-c2.z) );
+  
+}
 
 
 Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_t & signals , const int mode ) const
