@@ -132,7 +132,10 @@ struct slow_waves_t
 		const double t_neg_lwr = 0 , 
 		const double t_neg_upr = 0 , 
 		const bool   neg2pos = true , 
-		const slow_wave_type type = SO_FULL );
+		const slow_wave_type type = SO_FULL ,
+		const std::string * cach_name = NULL ,
+		edf_t * edf = NULL 
+		);
 
 		
   // actual detection
@@ -183,6 +186,11 @@ struct slow_waves_t
 			 
 			 const slow_wave_type type = SO_FULL ,
 
+			 // add peaks to a cache? (if label is non-null)
+			 // (requires edf-> also)
+			 const std::string * cache_name = NULL , 
+			 edf_t * edf = NULL ,
+			 
 			 // default FIR settings for filter-Hilbert
 			 const double fir_ripple = 0.01 ,
 			 const double fir_tw = 0.5 			 

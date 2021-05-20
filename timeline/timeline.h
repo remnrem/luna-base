@@ -164,6 +164,9 @@ struct timeline_t
 
   void signal2annot( const param_t & param );
 
+  void signal_means_by_annot( const param_t & param );
+
+  
   //
   // Hypnogram
   //

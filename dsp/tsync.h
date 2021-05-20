@@ -20,47 +20,55 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
 
-#include "tsync.h"
-#include "sync.h"
-#include "standardize.h"
-#include "mtm/mtm.h"
-#include "siggen.h"
-#include "psi.h"
-#include "microstates.h"
-#include "tlock.h"
-#include "peaks.h"
-#include "psc.h"
-#include "spectral_norm.h"
-#include "tv.h"
-#include "rems.h"
-#include "cfc.h"
-#include "acf.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conncoupl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
-#include "linedenoiser.h"
+#ifndef __LUNA_TSYNC_H__
+#define __LUNA_TSYNC_H__
+
+#include "stats/Eigen/Dense"
+#include <map>
+
+struct edf_t;
+struct param_t;
+
+namespace dsptools {
+  void tsync( edf_t & , param_t & );
+}  
+
+struct tsync_t {
+
+  // xcorr
+  tsync_t( const Eigen::MatrixXd & X ,
+	   double sr ,
+	   int w
+	   );
+
+  std::map<int,std::map<int,std::map<int,double> > > xcorr;
+  std::map<int,std::map<int,int> > delay;
+
+  // phase-based measures (assuming HT X -> A & P )
+  tsync_t( const Eigen::MatrixXd & P ,
+	   const Eigen::MatrixXd & A ,
+	   double sr ,
+	   int w
+	   );
+  
+  double pdiff( double a1 , double a2 )
+  {
+    double d = a1 - a2;
+    if ( fabs(d) > M_PI )
+      {
+	if ( d < 0 ) d += 2 * M_PI;
+	else d -= 2 * M_PI;      
+      }
+    return d;
+  }
+
+  std::map<int,std::map<int,std::map<int,double> > > phase_diff;
+  std::map<int,std::map<int,std::map<int,double> > > phase_lock;
+  
+    
+  
+};
+
 
 #endif

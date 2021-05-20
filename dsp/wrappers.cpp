@@ -89,7 +89,7 @@ void dsptools::cwt( edf_t & edf , param_t & param )
 	    run_cwt( *d , Fs , fc[fi] , num_cycles , &mag , return_phase ? &phase : NULL );
       
 	  std::string new_mag_label = signals.label(s) + tag + "_cwt_mag";
-	  std::string new_phase_label = signals.label(s) + tag + "_cwt_phase";
+	  std::string new_phase_label = signals.label(s) + tag + "_cwt_ph";
 
 	  if ( fc.size() > 1 ) 
 	    {
@@ -199,10 +199,10 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
       // labels for new EDF channel(s)
       //
 
-      std::string new_mag_label = signals.label(s) + tag + "_hilbert_mag";
-      std::string new_phase_label = signals.label(s) + tag + "_hilbert_phase";
-      std::string new_angle_label = signals.label(s) + tag + "_hilbert_angle";
-      std::string new_ifrq_label = signals.label(s) + tag + "_hilbert_ifrq";
+      std::string new_mag_label = signals.label(s) + tag + "_ht_mag";
+      std::string new_phase_label = signals.label(s) + tag + "_ht_ph";
+      std::string new_angle_label = signals.label(s) + tag + "_ht_ang";
+      std::string new_ifrq_label = signals.label(s) + tag + "_ht_ifrq";
 
       logger << " Hilbert transform for " << signals.label(s) << " --> " << new_mag_label ;      
 

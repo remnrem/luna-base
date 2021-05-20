@@ -278,7 +278,7 @@ void proc_hypoxic_burden( edf_t & , param_t & );
 
 void proc_annot2signal( edf_t & , param_t & );
 void proc_signal2annot( edf_t & , param_t & );
-
+void proc_sig_annot_mean( edf_t & , param_t & );
 
 void proc_record_dump( edf_t & , param_t & );
 void proc_record_table( edf_t & , param_t & );
@@ -319,6 +319,7 @@ void proc_tv_denoise( edf_t & , param_t & );
 void proc_cwt( edf_t & , param_t & );
 void proc_hilbert( edf_t & , param_t & );
 void proc_sync(edf_t & , param_t & );
+void proc_tsync(edf_t & , param_t & );
 void proc_psc( edf_t & , param_t & );
 void proc_microstates( edf_t & , param_t & );
 void proc_tlock( edf_t & , param_t & );

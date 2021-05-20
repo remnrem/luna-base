@@ -541,6 +541,7 @@ int main(int argc , char ** argv )
       param_t param;
       build_param_from_cmdline( &param );      
       writer.begin();      
+      writer.id( "." , "." );
       writer.cmd( "CPT" , 1 , "" );
       writer.level( "CPT", "_CPT" );      
       cpt_wrapper( param );

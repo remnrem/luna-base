@@ -2922,6 +2922,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	  r.add( s, lb );
 	}
     }
+
   
   // comma-delimited; but within a signal, can have options
   // that are pipe-delimited  

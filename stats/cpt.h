@@ -35,7 +35,22 @@ void cpt_wrapper( param_t & ) ;
 
 
 struct cpt_results_t {
-  //
+
+  // point-wise empirical p-values
+
+  
+  std::map<std::string,double> beta;
+  std::map<std::string,double> t;
+  std::map<std::string,double> emp;
+  std::map<std::string,double> emp_corrected;  
+
+  // point is in a cluster?
+  std::map<std::string,int> inclst;
+  
+  std::map<std::string,double> cluster_emp; // seed -> p-value
+  std::map<std::string,std::set<std::string> > cluster_members; // seed-> members
+  
+  
 };
 
 
@@ -81,7 +96,7 @@ struct cpt_clusters_t {
   // populate
   double max_stat;
   std::set<cpt_cluster_t> clusters;
-  std::vector<int> perm;
+  std::vector<double> perm;
   
 };
 
@@ -130,7 +145,7 @@ struct cpt_t {
   // Do the work 
   //
 
-  cpt_results_t run( int , double ) ;
+  cpt_results_t run( int , double , bool ) ;
 
   Eigen::VectorXd get_tstats( const Eigen::VectorXd & B ,
 			      const Eigen::MatrixXd & Yres ,

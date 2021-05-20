@@ -855,7 +855,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "S2A" ) )          proc_signal2annot( edf, param(c) );
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
-
+      else if ( is( c, "MEANS" ) )        proc_sig_annot_mean( edf, param(c) );
+		    
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
       else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
@@ -896,6 +897,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CWT" ) )          proc_cwt( edf , param(c) );
       else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
       else if ( is( c, "SYNC" ) )         proc_sync( edf , param(c) ); 
+      else if ( is( c, "TSYNC" ) )        proc_tsync( edf , param(c) );
       
       else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
       
@@ -1319,6 +1321,12 @@ void proc_hilbert( edf_t & edf , param_t & param )
 void proc_sync( edf_t & edf , param_t & param )
 {
   dsptools::sync( edf , param );
+}
+
+// TSYNC
+void proc_tsync( edf_t & edf , param_t & param )
+{
+  dsptools::tsync( edf , param );
 }
 
 // -cwt  from the command line
@@ -2273,6 +2281,14 @@ void proc_signal2annot( edf_t & edf , param_t & param )
 {
   edf.timeline.signal2annot( param );
 }
+
+// MEANS : signal means conditional on annotations
+
+void proc_sig_annot_mean( edf_t & edf , param_t & param )
+{
+  edf.timeline.signal_means_by_annot( param );
+}
+
 
 // ANNOTS : list all annotations
 

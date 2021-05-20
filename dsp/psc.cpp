@@ -1427,11 +1427,11 @@ void psc_t::attach( param_t & param )
   
   // reformat of W for projection
   
-  std::cout << "W = " << W << "\n";
+  // std::cout << "W = " << W << "\n";
 
-  W = W.inverse();
+  W = W.cwiseInverse();
 
-  std::cout << "1/W = " << W << "\n";  
+  //  std::cout << "1/W = " << W << "\n";  
   
 }
 
@@ -1509,8 +1509,9 @@ void psc_t::project( edf_t & edf , param_t & param )
   
   //  Data::Matrix<double> U_proj = X * V * DW;
 
-  Eigen::MatrixXd U_proj = X * V * W;
 
+  Eigen::MatrixXd U_proj = X.transpose() * V * W.asDiagonal();
+  
   //
   // Output
   //

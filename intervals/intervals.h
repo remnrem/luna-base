@@ -78,6 +78,19 @@ struct interval_t
     stop += w;
   }
 
+  void shift_left( uint64_t w )
+  {
+    if ( start >= w ) start -= w;
+    else start = 0;
+    stop -= w;
+  }
+
+  void shift_right( uint64_t w )
+  {
+    start += w;
+    stop += w;
+  }
+  
   uint64_t start;
   
   uint64_t stop;

@@ -2807,6 +2807,190 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
 }
 
 
+void timeline_t::signal_means_by_annot( const param_t & param )
+{
+
+  //
+  // annots
+  //
+
+  if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
+  std::vector<std::string> anames = param.strvector( "annot" );
+
+  //
+  // ignore annotation instannce IDs?
+  //
+
+  const bool ignore_instance_ids = ! param.has( "by-instance" );
+
+  //
+  // flanking windows
+  //
+
+  const bool flanking = param.has( "w" );
+
+  const double flanking_tp = flanking ? param.requires_dbl( "w" ) * globals::tp_1sec : 0 ;
+  
+  //
+  // signals
+  //
+  
+  std::string signal_label = param.requires( "sig" );
+  const bool no_annotations = true;
+  signal_list_t signals = edf->header.signal_list( signal_label , no_annotations );  
+  const int ns = signals.size();
+
+  if ( ns == 0 ) return;
+  
+  const int Fs = edf->header.sampling_freq( signals(0) );
+  for (int s=1; s<ns; s++)
+    if ( edf->header.sampling_freq( signals(s) ) != Fs )
+      Helper::halt( "signals must have similar sampling rates" );
+  
+    
+  //
+  // stores
+  //
+
+  // class -> [instance] -> N   [ assumes same SR across channel ]
+  // class -> [instance] -> channel -> sum 
+  
+  std::map<std::string,std::map<std::string,int> > an;
+  std::map<std::string,std::map<std::string,std::map<int,double> > > ax;
+
+  // flanking : prior
+  std::map<std::string,std::map<std::string,int> > left_an;
+  std::map<std::string,std::map<std::string,int> > right_an;
+
+  std::map<std::string,std::map<std::string,std::map<int,double> > > left_ax;
+  std::map<std::string,std::map<std::string,std::map<int,double> > > right_ax;
+
+  //
+  // iterate over annots
+  //
+
+
+  for (int a=0; a<anames.size(); a++)
+    {
+
+      // does annot exist?
+      annot_t * annot = edf->timeline.annotations( anames[a] );
+      if ( annot == NULL ) continue;
+      const std::string & class_name = anames[a];
+	  
+      // get all events
+      const annot_map_t & events = annot->interval_events;
+
+      annot_map_t::const_iterator aa = events.begin();
+      while ( aa != events.end() )
+	{
+	  // instance ID (or not)
+	  const std::string inst_id = ignore_instance_ids ? "." : aa->first.id ;
+	  
+	  // get main interval
+	  const interval_t & interval = aa->first.interval;
+	  eigen_matslice_t mslice( *edf , signals , interval );	  
+          const Eigen::MatrixXd & X = mslice.data_ref();
+          const int rows = X.rows();
+          const int cols = X.cols();
+
+	  // add to count, accumulate mean
+	  an[ class_name ][ inst_id ] += rows;	  
+	  Eigen::ArrayXd sum = X.array().colwise().sum();	  
+	  for (int s=0; s<ns; s++)
+	    ax[ class_name ][ inst_id ][ s ] += sum[ s ];
+
+	  // repeat for flanking regions?
+	  if ( flanking )
+	    {
+	      // left
+	      interval_t left = interval;
+	      left.shift_left( flanking_tp );	      
+	      eigen_matslice_t left_mslice( *edf , signals , left );
+	      const Eigen::MatrixXd & left_X = left_mslice.data_ref();
+	      left_an[ class_name ][ inst_id ] += left_X.rows();
+	      Eigen::ArrayXd left_sum = left_X.array().colwise().sum();
+	      for (int s=0; s<ns; s++)
+		left_ax[ class_name ][ inst_id ][ s ] += left_sum[ s ];
+
+	      // right
+	      interval_t right = interval;
+	      right.shift_right( flanking_tp );	      
+	      eigen_matslice_t right_mslice( *edf , signals , right );
+	      const Eigen::MatrixXd & right_X = right_mslice.data_ref();
+	      right_an[ class_name ][ inst_id ] += right_X.rows();
+	      Eigen::ArrayXd right_sum = right_X.array().colwise().sum();
+	      for (int s=0; s<ns; s++)
+		right_ax[ class_name ][ inst_id ][ s ] += right_sum[ s ];	      	      
+	    }
+	  
+	  // next annotation
+	  ++aa;
+	}
+
+    } // next annotation
+
+
+  //
+  // Report means
+  //
+
+  // by annotation class
+  std::map<std::string,std::map<std::string,int> >::const_iterator ii = an.begin();
+  while ( ii != an.end() )
+    {
+      writer.level( ii->first , globals::annot_strat );
+
+      // by instance ID 
+      
+      std::map<std::string,int>::const_iterator jj = ii->second.begin();
+      while ( jj != ii->second.end() )
+	{
+
+	  // if ignoring instance IDs, then only a single '.' here, so skip
+	  // adding as a factor
+	  if ( ! ignore_instance_ids ) 
+	    writer.level( ii->first , globals::annot_instance_strat );
+
+	  // by channel
+	  const std::map<int,double> & chs = ax[ ii->first ][ jj->first ];
+	  std::map<int,double>::const_iterator kk = chs.begin();
+	  while ( kk != chs.end() )
+	    {	      
+
+	      writer.level( signals.label( kk->first ) , globals::signal_strat );
+
+	      // main mean
+	      writer.value( "M" , kk->second / (double)jj->second );
+
+	      // flanking regions?
+	      if ( flanking )
+		{
+		  writer.value( "L" , left_ax[ ii->first ][ jj->first ][ kk->first ] / (double)left_an[ ii->first ][ jj->first ] ) ;
+		  writer.value( "R" , right_ax[ ii->first ][ jj->first ][ kk->first ] / (double)right_an[ ii->first ][ jj->first ] ) ;
+		}
+
+	      // next signal
+	      ++kk;
+	    }
+
+	  writer.unlevel( globals::signal_strat );
+	  ++jj;
+	}
+      
+      if ( ! ignore_instance_ids )
+	writer.unlevel( globals::annot_instance_strat );
+      
+      // next class
+      ++ii;	  
+    }
+  
+  writer.unlevel( globals::annot_strat );
+  
+  // all done
+}
+    
+
 void timeline_t::annot2signal( const param_t & param )
 {
   // create a new signal based on one or more annotations

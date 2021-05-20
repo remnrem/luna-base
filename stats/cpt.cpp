@@ -35,7 +35,6 @@ extern writer_t writer;
 extern logger_t logger;
 
 // notes: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4010955/
-
 // TODO:   two-sided tests
 // TODO:   more efficient adjacency detection
 
@@ -66,6 +65,8 @@ void cpt_wrapper( param_t & param )
   //
   
   double cl_threshold = param.has( "th-cluster" ) ? param.requires_dbl( "th-cluster" ) : -1 ; 
+
+  bool one_sided_test = param.has( "1-sided" ) || param.has( "one-sided" );
   
   //
   // Covariate and IV : assume a single file
@@ -186,7 +187,6 @@ void cpt_wrapper( param_t & param )
   std::vector<double> th;
   if ( param.has( "th" ) ) th = param.dblvector( "th" );
   
-  const bool standardize_inputs = param.has( "norm" ) ;
 
   //
   // any frequencies limits?
@@ -241,6 +241,7 @@ void cpt_wrapper( param_t & param )
     }
 
   const int iv_coln = tok.size();
+
   
   //
   // now read rest of data : one row per individual
@@ -839,29 +840,86 @@ void cpt_wrapper( param_t & param )
   // Define adjacencies
   //
 
+  logger << "  defining adjacent variables...\n";
+  
   cpt.calc_adjacencies( vname , col2var , col2f , col2ch1 , col2ch2 ,
 			freq_threshold ,
 			clocs_file == "" ? NULL : &clocs ,
 			spatial_threshold );
-  
-  
-  
+      
   
   //
   // Run permutations
   //
+
+  logger << "  running permutations, assuming a " << ( one_sided_test ? "one" : "two" ) << "-sided test...\n";
   
-  cpt_results_t results = cpt.run( nreps , cl_threshold );
+  cpt_results_t results = cpt.run( nreps , cl_threshold , ! one_sided_test );
   
+  logger << "  all done.\n";
   
   //
   // Report results
   //
+
+  for (int y=0; y<vname.size(); y++)
+    {
+      const std::string & var =  vname[y] ;
+      writer.level( var , globals::var_strat );
+      writer.value( "B"  , results.beta[ var ] );
+      writer.value( "T"  , results.t[ var ] );
+      writer.value( "PU" , results.emp[ var ] );
+      writer.value( "PC" , results.emp_corrected[ var ] );      
+      writer.value( "CLST" , results.inclst[ var ] ); // 0 if not in a cluster
+
+      // extra information on CH, F (or CH1, CH2)
+      if ( col2ch2[ var ] != "." )
+	{
+	  writer.value( "CH1" ,  col2ch1[ var ] );
+	  writer.value( "CH2" ,  col2ch2[ var ] );		  
+	}
+      else
+	{
+	  writer.value( "CH" ,  col2ch[ var ] );
+	}
+
+      if ( col2f[ var ] > 0 )
+	writer.value( "F" ,  col2f[ var ] );
+      
+    }
+  writer.unlevel( globals::var_strat );
   
+  // clusters
+  int cln = 0;
+  std::map<std::string,double>::const_iterator qq = results.cluster_emp.begin();
+  while ( qq != results.cluster_emp.end() )
+    {
+      const std::set<std::string> & members = results.cluster_members.find( qq->first )->second;
+
+      writer.level( ++cln , globals::cluster_strat );
+
+      writer.value( "SEED" , qq->first );
+      writer.value( "P" ,  qq->second );
+      writer.value( "N" , (int)members.size() );
+      
+      // members
+      int memn = 0;
+      std::set<std::string>::const_iterator mm = members.begin();
+      while ( mm != members.end() )
+	{
+	  writer.level( ++memn , "M" );
+	  writer.value( "VAR" , *mm );
+	  ++mm;
+	}
+      writer.unlevel( "M" );
+      ++qq;
+    }
+  writer.unlevel( globals::cluster_strat );
 
   //
   // All done
   //
+
   
 
 }
@@ -975,22 +1033,24 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 
   // pre-calculate distance matrix
   std::map<std::string,std::map<std::string,double> > dist_matrix;
-  std::set<std::string>::const_iterator cc1 = chs.begin();
-  while ( cc1 != chs.end() )
+  if ( clocs != NULL )
     {
-      if ( *cc1 != "." )
+      std::set<std::string>::const_iterator cc1 = chs.begin();
+      while ( cc1 != chs.end() )
 	{
-	  std::set<std::string>::const_iterator cc2 = chs.begin();
-	  while ( cc2 != chs.end() )
+	  if ( *cc1 != "." )
 	    {
-	      if ( *cc2 != "." ) 
-		dist_matrix[ *cc1 ][ *cc2 ] = clocs->distance( *cc1 , *cc2 , 2 );
-	      ++cc2;
+	      std::set<std::string>::const_iterator cc2 = chs.begin();
+	      while ( cc2 != chs.end() )
+		{
+		  if ( *cc2 != "." ) 
+		    dist_matrix[ *cc1 ][ *cc2 ] = clocs->distance( *cc1 , *cc2 , 2 );
+		  ++cc2;
+		}
 	    }
+	  ++cc1;
 	}
-      ++cc1;
     }
-
   
 
   //
@@ -1051,30 +1111,15 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 		    {
 		      if ( clocs != NULL )
 			{		
-			  // C1 x F1
-			  //  -> can match C3 x F3
-			  //               C1 x F3
-			  //               F1 x O1
-			  //               F3 x O2  [ as F3 -- adjacent to F1 ]
-			  
-			  // OR ... we can impose that both channels need to be adjacent ? [ not implement ] 
-			  
+
+			  // single channels matching
 			  if ( ci == 1 )
-			    {
-			      // Euclidean (rather than cosine) distance)
-			      //double d11 = clocs->distance( ch1[i] , ch1[*jj] , 2 );		    
-			      if ( dist_matrix[ ch1[i] ][ ch1[ *jj ] ] < sth ) spatial_adjacent = true;
+			    {			      			      
+			      if ( dist_matrix[ ch1[i] ][ ch1[ *jj ] ] < sth )
+				spatial_adjacent = true;
 			    }
-			  else // pair of channe.s
-			    {
-			      // scenario 1:
-			      // double d11 = clocs->distance( ch1[i] , ch1[*jj] , 2);
-			      // double d22 = clocs->distance( ch2[i] , ch2[*jj] , 2);
-			      
-			      // // scenario 2: (flipped)
-			      // double d12 = clocs->distance( ch1[i] , ch2[*jj] , 2);
-			      // double d21 = clocs->distance( ch2[i] , ch1[*jj] , 2);
-			      
+			  else // or this is for a pair of channels
+			    {			      
 			      // scenario 1:
 			      double d11 = dist_matrix[ ch1[i] ][ ch1[*jj] ];
 			      double d22 = dist_matrix[ ch2[i] ][ ch2[*jj] ];
@@ -1082,6 +1127,10 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 			      // scenario 2: (flipped)
 			      double d12 = dist_matrix[ ch1[i] ][ ch2[*jj] ];
 			      double d21 = dist_matrix[ ch2[i] ][ ch1[*jj] ];
+
+			      // i.e. for A1-B1 and A2-B2, then
+			      //  either A1/A2 AND B1/B2 must match
+			      //      OR A1/B2 AND A2/B1
 
 			      if ( ( d11 < sth && d22 < sth ) || ( d12 < sth || d21 < sth ) ) 
 				spatial_adjacent = true;
@@ -1120,7 +1169,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
       if ( dump ) 
 	std::cout << vname[ ss->first ] << "\t" 
 		  << adj.size() << "\n";
-
+      
       mean_adjn += adj.size();
 
       if ( dump )
@@ -1137,6 +1186,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
     }
   
   logger << "  on average, each variable has " << mean_adjn / (double)vname.size() << " adjacencies\n"; 
+
   logger << "  " << vname.size() - adjacencies.size() << " variable(s) have no adjacencies\n";
   
   
@@ -1144,14 +1194,10 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 }
 
 
-cpt_results_t cpt_t::run( int nreps , double cl_threshold )
+cpt_results_t cpt_t::run( int nreps , double cl_threshold , bool two_sided_test )
 {
 
-  cpt_results_t res;
-
-  logger << "  Y: " << Y.rows() << " " << Y.cols() << "\n";
-  logger << "  X: " << X.rows() << " " << X.cols() << "\n";
-  logger << "  Z: " << Z.rows() << " " << Z.cols() << "\n";
+  cpt_results_t results;
 
   ni = Y.rows();
   ny = Y.cols();
@@ -1160,14 +1206,6 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold )
 
   if ( X.cols() != 1 ) Helper::halt( "cpt_t not set up yet for multiple X" );
 
-  // test
-  //  Eigen::VectorXd YY = Y.col(0);
-  // Eigen::MatrixXd XX( ni , 1 + 1 );
-  // XX << II , Z.col(0);   
-  //  Eigen::VectorXd B = ( XX.transpose() * XX ).inverse() * XX.transpose() * YY ; 
-  //  b = (XT X)-1 XT Y -
-  // std::cout << "The least-squares solution is:\n"
-  // 	    << XX.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(YY) << "\n";
 
   //
   // Permutation matrix
@@ -1181,6 +1219,7 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold )
   //
   
   // intercept
+
   Eigen::VectorXd II = Eigen::VectorXd::Ones( ni );
 
   //
@@ -1231,9 +1270,11 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold )
   // Get clusters
   //
 
-  cpt_clusters_t clusters( T , cl_threshold , adjacencies ); 
+  cpt_clusters_t clusters( T , cl_threshold , adjacencies , two_sided_test ); 
   
-  logger << "  found " << clusters.clusters.size() << " clusters, maximum statistic is " << clusters.max_stat << "\n";
+  logger << "  found " << clusters.clusters.size()
+	 << " clusters, maximum statistic is "
+	 << clusters.max_stat << "\n";
   
   //
   // Initiate permutation counters
@@ -1245,9 +1286,12 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold )
   // family-wise
   Eigen::ArrayXd F = Eigen::ArrayXd::Ones( ny );  
 
+  logger << "  ";
   for (int r=0; r<nreps; r++)
     {
-      std::cerr << " perm " << r << "\n";
+      logger << ".";
+      if ( (r+1) % 10 == 0 ) logger << " ";
+      if ( (r+1) % 50 == 0 ) logger << " " << r+1 << " perms\n" << ( r+1 == nreps ? "" : "  " ) ;
 
       // shuffle
       std::vector<int> pord( ni );
@@ -1285,8 +1329,8 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold )
       //
       // clustering
       //
-
-      cpt_clusters_t perm_clusters( T_perm , cl_threshold , adjacencies );
+      
+      cpt_clusters_t perm_clusters( T_perm , cl_threshold , adjacencies , two_sided_test );
       
       clusters.update( perm_clusters.max_stat );
 
@@ -1302,13 +1346,13 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold )
   
   Eigen::MatrixXd R( ny , 4 );
   R << B.row(idx).transpose() , T , U , F ;
+
+  //
+  // Store results
+  //
+
   
-  // std::cout << "RESULTS\n"
-  // 	    << R << "\n";
-
-
   
-
   //
   // Report significant clusters 
   //
@@ -1319,52 +1363,53 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold )
   std::set<cpt_cluster_t>::const_iterator cc = clusters.clusters.begin();
   while ( cc != clusters.clusters.end() )
     {
-      if ( clusters.perm[ cnt ] / (double)( nreps+1 ) <= 0.05 )
+
+      // get cluster-corrected p-value
+      clusters.perm[ cnt ] /= (double)( nreps+1 ) ;
+      
+      // only track # of significant clusters
+      if ( clusters.perm[ cnt ] <= 0.05 )
 	{
-	  ++pos;
-	  std::cerr << "Cluster #" << pos << " P = " <<  clusters.perm[ cnt ] / (double)( nreps+1 )  << "  seed " << vname[ cc->seed ]  << " with " << cc->members.size() << " members\n";
-	  inclst[ cc->seed ] = pos;
+	  ++pos;	      
+	  
+	  results.cluster_emp[ vname[ cc->seed ] ] = clusters.perm[ cnt ] ;
+	  
 	  std::set<int>::const_iterator ii = cc->members.begin();
 	  while ( ii != cc->members.end() )
-	    {
-	      inclst[ *ii ] = pos;
-	      std::cerr << "\t" << vname[ *ii ] << "\n";
+	    {	      
+	      inclst[ *ii ] = pos;	      
+	      results.cluster_members[ vname[ cc->seed ] ].insert( vname[ *ii ] );
 	      ++ii;
 	    }
-	  std::cerr << "\n";
 	}
+      
       ++cnt;
       ++cc;
     }
 
-
-
-    for (int y=0; y<ny; y++)
-    {
-      std::cout << y+1 << "\t"
-		<< vname[y] << "\t"
-		<< R(y,0) << "\t"
-		<< R(y,1) << "\t"
-		<< R(y,2) << "\t"
-		<< R(y,3) ;
-      if ( R(y,3) < 0.05 ) std::cout << "\t***" ; else std::cout << "\t.";
-      
-      if ( inclst.find( y ) != inclst.end() ) std::cout << "\tC #" << inclst[y] ; else std::cout << "\t.";
-      std::cout << "\n";
-    }
+  logger << "  " << pos << " clusters significant at corrected empirical P<0.05\n";
+  
 
   
-  return res;
+  //
+  // Point-wise results
+  //
+  
+  for (int y=0; y<ny; y++)
+    {
+      
+      results.beta[ vname[y] ] = R(y,0);
+      results.t[ vname[y] ] = R(y,1);		  
+      results.emp[ vname[y] ] = R(y,2);
+      results.emp_corrected[ vname[y] ] = R(y,3);
+      // cluster membership?
+      if ( inclst.find( y ) != inclst.end() )
+	results.inclst[ vname[y] ] =  inclst[y];      
+    }
+  
+  return results;
 }
 
-
-// void cpt_t::residuals( )
-// {
-
-// Eigen::MatrixXd A = ... // fill in A
-// Eigen::MatrixXd pinv = A.completeOrthogonalDecomposition().pseudoInverse();
-
-// }
 
 
 Eigen::VectorXd cpt_t::get_tstats( const Eigen::VectorXd & B ,
@@ -1407,6 +1452,7 @@ struct cpt_sorter_t {
     return v < rhs.v;
   }
 };
+
 
 cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
 				double threshold ,
@@ -1460,9 +1506,13 @@ cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
 	      if ( clustered.find( *ff ) == clustered.end() &&
 		   fabs( T[ *ff ] ) >= threshold )
 		{
-		  cluster.members.insert( *ff );
-		  cluster.stat += fabs( T[ *ff ] );
-		  clustered.insert( *ff );
+		  // if two-sided, only cluster groups that have same direction of effect
+		  if ( (!two_sided) || ( T[ *ff ] <= 0 == T[ cluster.seed ] <= 0 ) )
+		    {
+		      cluster.members.insert( *ff );
+		      cluster.stat += fabs( T[ *ff ] );
+		      clustered.insert( *ff );
+		    }
 		}
 	      ++ff;
 	    }	  
@@ -1491,3 +1541,5 @@ cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
   
   
 }
+
+

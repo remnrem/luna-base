@@ -144,7 +144,11 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   else if ( param.has( "negative-half-wave" ) ) type = SO_NEGATIVE_HALF;
   else if ( param.has( "positive-half-wave" ) ) type = SO_POSITIVE_HALF;
 
+  // cache negative peaks?
+  const bool cache = param.has( "cache" );
+  const std::string cache_name = cache ? param.value( "cache" ) : "" ;
 
+    
   //
   // iterate over signals
   //
@@ -185,7 +189,8 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 			 f_lwr , f_upr , 
 			 t_lwr , t_upr , 
 			 t_neg_lwr, t_neg_upr , 
-			 use_alternate_neg2pos_zc , type ); 
+			 use_alternate_neg2pos_zc , type ,
+			 cache ? &cache_name : NULL , cache ? &edf : NULL ); 
       
       
       //
@@ -569,13 +574,15 @@ slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered ,
 			    const double t_neg_lwr , 
 			    const double t_neg_upr , 
 			    const bool neg2pos , 
-			    const slow_wave_type type )
+			    const slow_wave_type type ,
+			    const std::string * cache_name ,
+			    edf_t * edf )
 {
   
   report_median_stats = false;
   
   detect_slow_waves( unfiltered, tp , sr , thr, ignore_neg_peak, use_mean , uV_neg , uV_p2p , f_lwr, f_upr, 
-		     t_lwr, t_upr , t_neg_lwr , t_neg_upr , neg2pos , type );
+		     t_lwr, t_upr , t_neg_lwr , t_neg_upr , neg2pos , type , cache_name , edf );
 }
 
 
@@ -595,10 +602,18 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 				     const double t_neg_upr , 
 				     const bool use_alternate_neg2pos_zc , 
 				     const slow_wave_type type ,
+				     const std::string * cache_name , 
+				     edf_t * edf , 
 				     const double fir_ripple ,
 				     const double fir_tw )
 {
-  
+
+  // cache peaks
+  bool cache = cache_name != NULL ; 
+
+  // store negative peaks only for now
+  cache_t<int> * cache_peaks = cache ? edf->timeline.cache.find_int( *cache_name ) : NULL ;
+      
   // track Fs for later
   Fs = sr;
   tp = _tp;
@@ -880,6 +895,16 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   if ( thr > 0 ) logger << " (thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
   logger << "\n";
 
+  if ( cache )
+    {
+      logger << "  caching negative peaks in " << *cache_name << "\n";
+      std::vector<int> peaks( sw.size() );      
+      for (int i = 0; i < sw.size(); i++)
+	peaks[ i ] = sw[i].down_peak_sp ; 
+      cache_peaks->add( ckey_t( "points" , writer.faclvl() ) , peaks );      
+    }
+
+  
   return sw.size();
 }
 
