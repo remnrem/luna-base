@@ -2354,16 +2354,19 @@ void proc_record_table( edf_t & edf , param_t & param )
 void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 {
   
-  std::string wake   = param.has( "wake" )  ? param.value("wake")  : "" ; 
+  std::string wake   = param.has( "W" )  ? param.value("W")  : "" ; 
   std::string nrem1  = param.has( "N1" ) ? param.value("N1") : "" ; 
   std::string nrem2  = param.has( "N2" ) ? param.value("N2") : "" ; 
   std::string nrem3  = param.has( "N3" ) ? param.value("N3") : "" ; 
   std::string nrem4  = param.has( "N4" ) ? param.value("N4") : "" ; 
-  std::string rem    = param.has( "REM" )  ? param.value("REM")  : "" ; 
+  std::string rem    = param.has( "R" )  ? param.value("R")  : "" ; 
   std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
 
   std::string eannot = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
   if ( eannot != "" && verbose ) Helper::halt( "cannot use eannot with HYPNO" );
+
+  // simmple dump to standard out for STAGE
+  if ( param.has( "min" ) ) eannot = "."; // code --> std::cout
   
   // either read these from a file, or display
   

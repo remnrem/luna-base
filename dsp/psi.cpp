@@ -134,6 +134,14 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   
   logger << "  running PSI with " << eplen << " samples per epoch, " << seglen << " per segment\n";
 
+
+  //
+  // Cache?
+  //
+
+  cache_t<double> * cache = param.has( "cache-metrics" ) ? edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
+  
+  
   //
   // Get data
   //
@@ -155,7 +163,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       psi.calc();
       
-      psi.report( signals );
+      psi.report( signals , cache );
 
       return; 
     }
@@ -191,7 +199,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       writer.epoch( edf.timeline.display_epoch( epoch ) );
       
-      psi.report( signals );
+      psi.report( signals , cache );
 
     }
 
@@ -201,7 +209,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
 
 
-void psi_t::report( const signal_list_t & signals )
+void psi_t::report( const signal_list_t & signals , cache_t<double> * cache )
 {
   const double EPS = 1e-8;
 
@@ -225,7 +233,11 @@ void psi_t::report( const signal_list_t & signals )
 	  writer.level( signals.label(i) , globals::signal_strat );
 	  writer.value( "PSI_RAW" , psi_sum[m][i] );
 	  writer.value( "STD" , std_psi_sum[m][i] );
-	  writer.value( "PSI" , psi_sum[m][i]  / ( EPS + std_psi_sum[m][i] ) );
+
+	  double psi1 = psi_sum[m][i]  / ( EPS + std_psi_sum[m][i] );
+	  writer.value( "PSI" , psi1 );	  
+	  if ( cache ) cache->add( ckey_t( "PSI" , writer.faclvl() ) , psi1 );
+
 	}
       writer.unlevel( globals::signal_strat );
       
@@ -240,7 +252,11 @@ void psi_t::report( const signal_list_t & signals )
 	      writer.level( signals.label(j) , globals::signal2_strat);	      
 	      writer.value( "PSI_RAW" , psi[m](i,j) );
 	      writer.value( "STD" , std_psi[m](i,j) );
-	      writer.value( "PSI" , psi[m](i,j)  / ( EPS + std_psi[m](i,j) ) );
+
+	      double psi2 = psi[m](i,j)  / ( EPS + std_psi[m](i,j) );
+	      writer.value( "PSI" , psi2 );
+	      if ( cache ) cache->add( ckey_t( "PSI" , writer.faclvl() ) , psi2 );
+
 	    }
 	  writer.unlevel(globals::signal2_strat);
 	}

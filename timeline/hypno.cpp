@@ -1390,9 +1390,18 @@ void hypnogram_t::calc_stats( const bool verbose )
 void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , const std::string & eannot )
 {
   
+  
+  //
+  // Minimal output (stages .eannot style) to std::cout only?
+  //
+
+  bool minimal = eannot == ".";
+
+  //
   // currently, this routine is hard-coded to assume 30-second epochs,
   // so for now flag if this is not the case (we can fix downstream)
-
+  //
+  
   if ( verbose )
     {
       if ( ! Helper::similar( timeline->epoch_length() , 30 , 0.001 ) ) 
@@ -1406,44 +1415,7 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
 
   if ( verbose )
     {
-      // writer.var( "T1_LIGHTS_OFF"     , "Lights out time [0,24)" );
-      // writer.var( "T2_SLEEP_ONSET"    , "Sleep onset time [0,24)" );
-      // writer.var( "T3_SLEEP_MIDPOINT" , "Sleep mid-point time [0,24)" );
-      // writer.var( "T4_FINAL_WAKE"     , "Final wake time [0,24)" );
-      // writer.var( "T5_LIGHTS_ON"      , "Lights on time [0,24)" );
-      
-      // writer.var( "NREMC" , "Number of NREM cycles" );
-      // writer.var( "NREMC_MINS" , "Average NREM cycle duration (mins)" );
-      
-      // writer.var( "TIB" , "Time in Bed (hours): EDF start --> EDF stop" );
-      // writer.var( "TRT" , "Total Recording Time (hours): LIGHTS_OUT --> LIGHTS_ON" );
-      // writer.var( "TST" , "Total Sleep Time (hours): SLEEP_ONSET --> FINAL_WAKE" );
-      // writer.var( "TPST" , "Total persistent Sleep Time (hours): PERSISTENT_SLEEP_ONSET --> FINAL_WAKE" );
-      
-      // writer.var( "TWT" , "Total Wake Time (hours): all WAKE" );
-      // writer.var( "WASO" , "Wake After Sleep Onset (hours)" );
-      
-      // writer.var( "SLP_LAT" , "Sleep latency" );
-      // writer.var( "PER_SLP_LAT" , "Persistent sleep latency" );
-      
-      // writer.var( "SLP_EFF"      , "Sleep efficiency: LIGHTS_OUT --> LIGHTS_ON" );
-      // writer.var( "SLP_MAIN_EFF" , "Sleep maintenance efficiency: LIGHTS_OUT --> LIGHTS_ON" );
-      // writer.var( "SLP_EFF2"     , "Sleep efficiency: SLEEP_ONSET --> FINAL_WAKE" );
-
-      // writer.var( "REM_LAT" , "REM latency (from SLEEP_ONSET)" );
-      
-      // writer.var( "PCT_N1" , "Proportion of sleep that is N1" );
-      // writer.var( "PCT_N2" , "Proportion of sleep that is N2" );
-      // writer.var( "PCT_N3" , "Proportion of sleep that is N3" );      
-      // writer.var( "PCT_N4" , "Proportion of sleep that is N4" );
-      // writer.var( "PCT_REM" , "Proportion of sleep that is REM" );
-      
-      // writer.var( "MINS_N1" , "Proportion of sleep that is N1" );
-      // writer.var( "MINS_N2" , "Proportion of sleep that is N2" );
-      // writer.var( "MINS_N3" , "Proportion of sleep that is N3" );
-      // writer.var( "MINS_N4" , "Proportion of sleep that is N4" );
-      // writer.var( "MINS_REM" , "Proportion of sleep that is REM" );
-      
+       
       // values
       writer.value(  "T1_LIGHTS_OFF" , clock_lights_out.as_numeric_string() );
 
@@ -1623,11 +1595,6 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
   stagen[ ARTIFACT ] = 2;
   stagen[ LIGHTS_ON ] = 2;
 
-  writer.var( "MINS" , "Elapsed time since start of recording (minutes)" );
-  writer.var( "CLOCK_TIME" , "Clock time (hh:mm:ss)" );
-
-  writer.var( "STAGE" , "Sleep stage, string label" );
-  writer.var( "STAGE_N" , "Sleep stage, numeric encoding" );
 
   // epoch size (in minutes)
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
@@ -1646,7 +1613,14 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
   if ( ! verbose )
     {
 
-      if ( eannot != "" )
+      if ( eannot == "." )
+	{
+	  logger << "  writing epoch-level sleep stages to standard out\n";
+	  for (int e=0;e<ne;e++)
+	    std::cout << globals::stage( stages[e] ) << "\n";
+	  return;
+	}      
+      else if ( eannot != "" )
 	{
 	  logger << "  writing epoch-level sleep stages to " << eannot << "\n";
 	  std::ofstream EOUT( Helper::expand( eannot ).c_str() , std::ios::out );

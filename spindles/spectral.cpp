@@ -81,8 +81,8 @@ annot_t * spectral_power( edf_t & edf ,
   bool calc_mse = param.has( "mse" ); 
 
   // cache PSD for other analyses (e.g. PSC)
-  const bool cache_data = param.has( "cache" );
-  const std::string cache_name = cache_data ? param.value( "cache" ) : "" ;
+  const bool cache_data = param.has( "cache-metrics" );
+  const std::string cache_name = cache_data ? param.value( "cache-metrics" ) : "" ;
 
 
   //

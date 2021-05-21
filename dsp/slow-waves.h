@@ -25,10 +25,12 @@
 #define __SLOW_WAVES_H__
 
 #include "intervals/intervals.h"
+#include "timeline/cache.h"
 
 #include <vector>
 #include <iostream>
 #include <sstream>
+
 
 struct edf_t;
 struct param_t;
@@ -199,7 +201,7 @@ struct slow_waves_t
   
   // output
 
-  void display_slow_waves( const bool verbose = false , edf_t * edf = NULL );
+  void display_slow_waves( const bool verbose = false , edf_t * edf = NULL , cache_t<double> * cache = NULL );
 
   // analysis of slow waves
   

@@ -31,6 +31,7 @@ struct signal_list_t;
 #include "fftw/fftwrap.h"
 #include <complex>
 #include <vector>
+#include "timeline/cache.h"
 
 namespace dsptools
 {
@@ -85,7 +86,7 @@ struct psi_t {
 
   void calc();
 
-  void report( const signal_list_t & );
+  void report( const signal_list_t & , cache_t<double> * cache = NULL );
   
   std::vector<Data::Matrix<std::complex<double> > > data2cs_event( const Data::Matrix<double> * , int maxfreqbin );
 

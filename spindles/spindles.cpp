@@ -204,7 +204,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
   //
-  // Cache spindle peaks (and wavelet power) for downstream COUPL analyses
+  // Caches:
+  //   - spindle peaks (cache-peaks)
+  //   - wavelet power (cache)
+  //   - metrics (DENS, etc)
   //
   
   const bool cache_data                   = param.has( "cache" );
@@ -213,7 +216,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool cache_peaks                  = param.has( "cache-peaks" );
   const std::string cache_peaks_name = cache_peaks ? param.value( "cache-peaks" ) : "";
 
-  
+  cache_t<double> * cache_metrics = param.has( "cache-metrics" ) ? edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
+
   
   //
   // Spindle propagation
@@ -488,8 +492,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // and phase
 	  p_sw->phase_slow_waves();
 	  
-	  // and display
-	  p_sw->display_slow_waves( param.has( "verbose" ) , &edf );
+	  // and display (& potentially cache)
+	  p_sw->display_slow_waves( param.has( "verbose" ) , &edf , cache_metrics );
 	  
 
 	  if ( verbose_time_phase_locking ) 
@@ -1873,6 +1877,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.var( "SYMM2"  , "Mean spindle folded symmetry index" );
 	      writer.var( "CHIRP" , "Mean spindle chirp index" );
 	      
+	      
 	      writer.value( "N01" , nspindles_premerge );  // original
 	      writer.value( "N02" , nspindles_postmerge ); // post merging
 	      writer.value( "N" ,  (int)spindles.size()  ) ;    // post merging and QC	    
@@ -1893,8 +1898,18 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "SYMM" , means["SYMM"] );
 	      writer.value( "SYMM2" , means["SYMM2"] );
 	      writer.value( "CHIRP" , means["CHIRP"] );
-
 	      
+	      // cache main metrics also?
+	      if ( cache_metrics )
+		{
+		  std::map<std::string,std::string> faclvl = writer.faclvl() ;
+		  cache_metrics->add( ckey_t( "DENS" ,  faclvl ) , means["DENS"]  );
+		  cache_metrics->add( ckey_t( "AMP" ,   faclvl ) , means["AMP"]  );
+		  cache_metrics->add( ckey_t( "DUR" ,   faclvl ) , means["DUR"]  );
+		  cache_metrics->add( ckey_t( "ISA_S" , faclvl ) , means["ISA_S"]  );
+		  cache_metrics->add( ckey_t( "CHIRP" , faclvl ) , means["CHIRP"]  );	      
+		}
+
 	      writer.value( "DISPERSION" , means[ "DISPERSION" ] );
 	      writer.value( "DISPERSION_P" , means[ "DISPERSION_P" ] );
 	      writer.value( "NE" , means[ "NE" ] );
