@@ -1451,8 +1451,8 @@ void psc_t::project( edf_t & edf , param_t & param )
   //
   // COH vnames are in the format  CH1.CH2_F_VAR  [not yet implemented]
   // which would correspond to cache[ COH ] , ckey( "CH1" ,"CH2" ,  "F" )
+  // etc...
 
-  // TODO: allow multiple cache here?
   std::string cache_name = param.requires( "cache" );
 
   if ( ! edf.timeline.cache.has_num( cache_name ) )
@@ -1460,6 +1460,8 @@ void psc_t::project( edf_t & edf , param_t & param )
 
   cache_t<double> * cache = edf.timeline.cache.find_num( cache_name );
 
+  const bool norm = param.has( "norm" );
+  
   // see which variables exist, i.e. psc_t::vname[] 
 
   int nv = vname.size();
@@ -1469,31 +1471,56 @@ void psc_t::project( edf_t & edf , param_t & param )
   for (int i=0; i<nv; i++)
     {
       std::vector<std::string> tok = Helper::parse( vname[i] , "~" );
-      if ( tok.size() != 3 ) Helper::halt( "bad format for PSC vnames, expecting 3 fields, '~'-delimited" );
-      std::string ch = tok[0];
-      double f;
-      if ( ! Helper::str2dbl( tok[1] , &f ) ) Helper::halt( "bad frequency value in PSC vname" );
-      std::string var = tok[2];
-      
-      // can we find this value in the cache?
+      if ( tok.size() != 3 ) 
+	Helper::halt( "bad format for PSC vnames, expecting 3 fields, '~'-delimited" );
 
-      ckey_t key( var );
-      key.add( "CH" , ch );
-      key.add( "F" , f );
+
+      // can we find this value in the cache?  
+
+      // variable =  tok[2]
+
+      ckey_t key( tok[2] );
+
+      // channel(s) = tok[0]
+      
+      std::vector<std::string> tokch = Helper::parse( tok[0] , "." );
+
+      if ( tokch.size() == 2 )
+	{
+	  key.add( "CH1" , tokch[0] );
+	  key.add( "CH2" , tokch[1] );
+	}
+      else if ( tokch.size() == 1 )
+	{
+	  key.add( "CH" , tok[0] );
+	}
+      else
+	Helper::halt( "bad format for PSC vname: ch " + tok[0] );
+      
+      // frequency = tok[1] 
+
+      if ( tok[1] != "0" ) 
+	{
+	  double f;
+	  if ( ! Helper::str2dbl( tok[1] , &f ) ) 
+	    Helper::halt( "bad frequency value in PSC vname" );
+	  
+	  key.add( "F" , f );
+	}
+
+      // fetch 
 
       std::vector<double> cx = cache->fetch( key );
-
+      
       if ( cx.size() != 1 )
 	Helper::halt( "could not find cached variable: " + vname[i] );
-
+      
       X(i) = cx[0];
     }
   
   logger << "  all " << nv << " features found in the cache\n";
 
 
-  // ----->>>>> TODO
-  
   //
   // Mean center data
   //
@@ -1502,15 +1529,19 @@ void psc_t::project( edf_t & edf , param_t & param )
 
   X.array() -= means;
 
+  // optionally, scale by original population SD
+
+  if ( norm ) 
+    X.array() /= sds;
+
     
   //
   // Project given W and V to get U, PSCs for this individual
   //
   
-  //  Data::Matrix<double> U_proj = X * V * DW;
-
 
   Eigen::MatrixXd U_proj = X.transpose() * V * W.asDiagonal();
+
   
   //
   // Output

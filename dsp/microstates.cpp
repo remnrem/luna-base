@@ -37,6 +37,8 @@
 extern writer_t writer;
 extern logger_t logger;
 
+std::vector<char> ms_prototypes_t::ms_labels;
+
 
 //
 // TODO:  to add annot from states;
@@ -126,7 +128,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       const std::vector<std::string> fvec = param.strvector( "backfit" );
       if ( fvec.size() < 1 ) Helper::halt( "bad backfit options" );
       const std::string filename = fvec[0];
-      prior_prototypes.read( fvec ); // filename + optional col order
+      prior_prototypes.read( fvec ); // filename + optional col order (sets static ms_label)
       
       // check channels line up
       
@@ -234,6 +236,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	 if ( epoch )
 	   {
 	     // already read... no need to re-read
+	     // ms_labels will stay as is
 	     prototypes = prior_prototypes;
 	   }
 	 else
@@ -315,11 +318,11 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	  std::vector<int> states = smoothed.best();
 	  if ( states.size() != N ) Helper::halt( "hmmm" );
 	  for (int i=0;i<N;i++)
-	    O1 << (char)(states[i] + 65 ) << "\t"
+	    O1 << ms_prototypes_t::ms_labels[ states[i] ] << "\t"
 	       << stats.GFP[i] << "\n";
 	  O1.close();
 	}
-  
+    
 
       //
       // Add new annotations and/or channels
@@ -348,7 +351,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	      for (int k=0; k<prototypes.K; k++)
 		{
 		  std::string s="?";
-                  s[0] = (char)(65+k);
+                  s[0] = ms_prototypes_t::ms_labels[k];
                   const std::string alab = annot_tag + s;                  
 		  k2l[k] = alab;
 		  logger << "  adding annotation " << alab << "\n";		  
@@ -388,7 +391,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	      for (int k=0; k<prototypes.K; k++)
 		{
 		  std::string s="?";
-		  s[0] = (char)(65+k);
+		  s[0] = ms_prototypes_t::ms_labels[k];
 		  const std::string clab = sig_tag + s;		  
 		  logger << "  adding channel " << clab << " (" << sr << "Hz)\n";
 		  std::vector<double> dat( N , 0 );
@@ -437,7 +440,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       for (int k=0; k < prototypes.K ; k++)
 	{
 	  std::string s="?";
-	  s[0] = (char)(65+k);
+	  s[0] = ms_prototypes_t::ms_labels[k];
 	  writer.level( s , "K" );
 	  writer.value( "GFP" , stats.m_gfp[k] );
 	  writer.value( "OCC" , stats.m_occ[k] );
@@ -459,14 +462,16 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       for (int k=0; k < prototypes.K ; k++)
 	{
 	  std::string s1="?";
-	  s1[0] = (char)(65+k);
+	  s1[0] = ms_prototypes_t::ms_labels[k];
+
 	  writer.level( s1 , "PRE" );
 	  for (int k2=0; k2 < prototypes.K ; k2++)
 	    {
 	      if ( k != k2 )
 		{
 		  std::string s2="?";
-		  s2[0] = (char)(65+k2);
+		  s2[0] = ms_prototypes_t::ms_labels[k2];
+		  
 		  writer.level( s2 , "POST" );
 		  writer.value( "P" , stats.tr(k,k2) );
 		}
@@ -927,7 +932,7 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
       for (int j=0; j<results.K; j++)
 	{
 	  std::string s="?";
-	  s[0] = (char)(65+j);
+	  s[0] = ms_prototypes_t::ms_labels[j];
 	  writer.level( s , "K" );
 	  writer.value( "A" , results.A(i,j) );
 	}
@@ -952,8 +957,8 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
 	  
 	  for (int j=0; j<K; j++)
 	    {
-	      std::string s="?";
-	      s[0] = (char)(65+j);
+	      std::string s="?";	      
+	      s[0] = ms_prototypes_t::ms_labels[j];
 	      writer.level( s , "K" );
 	      writer.value( "A" , results.kres[K].A(i,j) );
 	    }
@@ -1455,7 +1460,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
       // Encode as A, B, C, ...
       std::string s = std::string( n , '?' );
       for (int i=0; i<n; i++)
-        s[ i ] = (char)(65 + runs.d[i] );
+        s[ i ] = ms_prototypes_t::ms_labels[ runs.d[i] ];
       std::ofstream OUT1( Helper::expand( statesfile ).c_str() , std::ios::out );
       OUT1 << subj_id << "\t" << s << "\n";
       OUT1.close();      
@@ -1488,7 +1493,7 @@ void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int 
       // Encode as A, B, C, ...                                                                                                                                              
       s = std::string( n , '?' );
       for (int i=0; i<n; i++)
-        s[ i ] = (char)(65 + l[i] );
+        s[ i ] = ms_prototypes_t::ms_labels[ l[i] ];
       ++ii;
     }
   run( sall , k1 , k2 , nreps , grp , verbose );
@@ -2167,39 +2172,20 @@ void ms_prototypes_t::read( const std::vector<std::string > & fvec )
 
   const std::string & filename = Helper::expand( fvec[0] );
 
-  // i.e. if 0 means nothing set, assume A,B,C,etc 
+  // this many states: if implied == 0, means
+  // we are not assigning labels, and so assumes A, B, C, D, etc
+  
   const int implied = fvec.size() - 1 ; 
-  std::vector<char> labels( implied );
+  
+  ms_labels.resize( implied, '?' );
+  
   for (int i=0; i<implied; i++)
     {
-      if ( fvec[i+1].size() != 1 ) Helper::halt( "bad label: should be A, B, C, etc" );
-      labels[i] = fvec[i+1][0];
+      if ( fvec[i+1].size() != 1 ) 
+	Helper::halt( "bad label: should be a single char: A, B, C, etc" );
+	  ms_labels[i] = fvec[i+1][0];
     }
 
-  // file col --> internal slot
-  std::vector<int> slots( implied , -1 );
-
-  if ( implied )
-    {
-      for (int i=0; i<implied; i++) // searching for A, then B, etc
-	{
-	  const int s = 65 + i;
-	  if ( s < 0 ) Helper::halt( "bad A, B, C, ... encoding" );
-	  for (int j=0; j<implied; j++)
-	    {
-	      if ( labels[j] == s ) 
-		{ 
-		  slots[j] = i; 
-		  break;
-		} 
-	    }
-	}
-
-      // should all have a set slot by now 
-      for (int i=0; i<implied; i++) 
-	if ( slots[i] == -1 ) Helper::halt( "bad A, B, C, ... encoding" );	  
-    }
-  
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not find " + filename );
 
@@ -2238,30 +2224,38 @@ void ms_prototypes_t::read( const std::vector<std::string > & fvec )
       for (int i=1;i<tok.size();i++)
 	{
 	  // nb. effective +1 encoding in file, due to channel col 0 
-	  const std::string & inp = implied ? tok[ slots[i-1] + 1 ] : tok[i];
-
 	  double x;
 	  
-	  if ( ! Helper::str2dbl( inp , &x ) )
+	  if ( ! Helper::str2dbl( tok[i] , &x ) )
 	    Helper::halt( "problem reading prototypes from " 
 			  + filename + "\n in coversion to numeric: " 
-			  + inp + "\n" + line );
+			  + tok[i] + "\n" + line );
 	  t.push_back(x);	    
 	}
-
-      chs.push_back( tok[0] );
+      
+    chs.push_back( tok[0] );
       
       ++C;
     }
-
+  
   IN1.close();
 
   if ( K == 0 || C == 0 )
     Helper::halt( "problem reading prototypes from " + filename + ": K or C == 0" );
-
+  
   if ( t.size() != K * C )
     Helper::halt( "problem reading prototypes from " + filename + ": KC != # data points" );
 
+
+  // using defaults for cols : A, B, C, D, .... 
+  if ( implied == 0 ) 
+    {
+      ms_labels.resize( K );
+      for (int k=0;k<K;k++)
+	ms_labels[k] = (char)(65 + k); 
+    }
+
+  // store MAP in A
   A.resize( C , K );
   int tc = 0;
   for (int c=0; c<C; c++)

@@ -176,7 +176,7 @@ void globals::init_defs()
   
   version = "v0.25.5";
   
-  date    = "21-May-2021";
+  date    = "24-May-2021";
 
   //
   // Return code

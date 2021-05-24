@@ -1837,7 +1837,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      double pval = 0;
 	      double stat = MiscMath::overdispersion( epoch_counts , &pval );
 	      
-	      writer.var( "DISPERSION" ,"Spindle epoch-dispersion index" );
+	      writer.var( "DSPERSION" ,"Spindle epoch-dispersion index" );
 	      writer.var( "DISPERSION_P" , "Spindle epoch-dispersion index p-value" );
 	      writer.var( "NE" , "Number of epochs for spindle detection" );
 	      
@@ -1903,10 +1903,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      if ( cache_metrics )
 		{
 		  std::map<std::string,std::string> faclvl = writer.faclvl() ;
-		  cache_metrics->add( ckey_t( "DENS" ,  faclvl ) , means["DENS"]  );
+		  cache_metrics->add( ckey_t( "DENS" ,  faclvl ) , spindles.size() / t_minutes );
 		  cache_metrics->add( ckey_t( "AMP" ,   faclvl ) , means["AMP"]  );
 		  cache_metrics->add( ckey_t( "DUR" ,   faclvl ) , means["DUR"]  );
-		  cache_metrics->add( ckey_t( "ISA_S" , faclvl ) , means["ISA_S"]  );
+		  cache_metrics->add( ckey_t( "ISA_S" , faclvl ) , means["ISA_PER_SPINDLE"] );
 		  cache_metrics->add( ckey_t( "CHIRP" , faclvl ) , means["CHIRP"]  );	      
 		}
 

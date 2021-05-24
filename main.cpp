@@ -35,9 +35,6 @@ extern logger_t logger;
 
 int main(int argc , char ** argv )
 {
-
-  // for (int f=9;f<=18;f++)
-  //   std::cout << f << "\t" << CWT::pick_fwhm( f ) << "\n";
   
   //
   // display version info?

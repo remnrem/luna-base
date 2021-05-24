@@ -2488,46 +2488,71 @@ void proc_shift( edf_t & edf , param_t & param )
 
 void proc_dump_cache( edf_t & edf , param_t & param )
 {
-  // cache types: int, num and tp
-  int int_cache = param.has( "int" );
-  int str_cache = param.has( "str" );
-  int num_cache = param.has( "num" );
-  int tp_cache = param.has( "tp" );
+  
+  // clear / load / dump 
 
-  if ( str_cache + int_cache + num_cache + tp_cache != 1 )
-    Helper::halt( "need to specify one of int, str, num or tp cache types" );
-
-  std::string cname;
-  if ( int_cache ) cname = param.value( "int" );
-  else if ( str_cache ) cname = param.value( "str" );
-  else if ( num_cache ) cname = param.value( "num" );
-  else cname = param.value( "tp" );
-
-  if ( int_cache )
+  if ( param.has( "clear" ) )
     {
-      cache_t<int> * cache = edf.timeline.cache.find_int( cname );
-      if ( cache == NULL ) Helper::halt( "could not find int-cache " + cname );
-      std::cout << cache->print();
+      // clear all caches
+      edf.timeline.cache.clear();
     }
-  else if ( str_cache )
+
+  if ( param.has( "load" ) )
     {
-      cache_t<std::string> * cache = edf.timeline.cache.find_str( cname );
-      if ( cache == NULL ) Helper::halt( "could not find str-cache " + cname );
-      std::cout << cache->print();
-    }  
-  else if ( num_cache )
-    {
-      cache_t<double> * cache = edf.timeline.cache.find_num( cname );
-      if ( cache == NULL ) Helper::halt( "could not find num-cache " + cname );
-      std::cout << cache->print();
-    }
-  else if ( tp_cache )
-    {
-      cache_t<uint64_t> * cache = edf.timeline.cache.find_tp( cname );
-      if ( cache == NULL ) Helper::halt( "could not find tp-cache " + cname );
-      std::cout << cache->print();
+      const std::string & filename = param.value( "load" );
+      if ( ! Helper::fileExists( filename ) ) 
+	Helper::halt( "cannot find " + filename );
+      edf.timeline.cache.load( filename );
     }
   
+  if ( param.has( "dump" ) )
+    {
+
+      // cache types: int, num and tp
+      int int_cache = param.has( "int" );
+      int str_cache = param.has( "str" );
+      int num_cache = param.has( "num" );
+      int tp_cache = param.has( "tp" );
+      
+      if ( str_cache + int_cache + num_cache + tp_cache != 1 )
+	Helper::halt( "need to specify one of int, str, num or tp cache types" );
+      
+      std::string cname;
+      if ( int_cache ) cname = param.value( "int" );
+      else if ( str_cache ) cname = param.value( "str" );
+      else if ( num_cache ) cname = param.value( "num" );
+      else cname = param.value( "tp" );
+      
+      if ( int_cache )
+	{
+	  cache_t<int> * cache = edf.timeline.cache.find_int( cname );
+	  if ( cache == NULL ) Helper::halt( "could not find int-cache " + cname );
+	  std::cout << "cache: " << cname << "[int]\n";
+	  std::cout << cache->print();
+	}
+      else if ( str_cache )
+	{
+	  cache_t<std::string> * cache = edf.timeline.cache.find_str( cname );
+	  if ( cache == NULL ) Helper::halt( "could not find str-cache " + cname );
+	  std::cout << "cache: " << cname << "[str]\n";
+	  std::cout << cache->print();
+	}  
+      else if ( num_cache )
+	{
+	  cache_t<double> * cache = edf.timeline.cache.find_num( cname );
+	  if ( cache == NULL ) Helper::halt( "could not find num-cache " + cname );
+	  std::cout << "cache: " << cname << "[num]\n";
+	  std::cout << cache->print();	  
+	}
+      else if ( tp_cache )
+	{
+	  cache_t<uint64_t> * cache = edf.timeline.cache.find_tp( cname );
+	  if ( cache == NULL ) Helper::halt( "could not find tp-cache " + cname );
+	  std::cout << "cache: " << cname << "[tp]\n";
+	  std::cout << cache->print();
+	}
+      
+    }
 }
 
 

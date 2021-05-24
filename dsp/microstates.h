@@ -53,11 +53,18 @@ struct ms_prototypes_t {
     if ( A_.rows() != C ) Helper::halt( "internal inconsistency in ms_prototypes_t()" );    
     chs.resize( C );
     for (int s=0;s<C; s++) chs[s] = signals.label(s);
+    // set default A, B, C, ... encoding
+    ms_labels.resize( K );
+    for (int k=0;k<K;k++) ms_labels[k] = 65 + k;
   }
 		   
   void write( const std::string & filename );
-  void read( const std::vector<std::string> & fvec ); // filename + oiptional A,B,C,D order
+  void read( const std::vector<std::string> & fvec ); // filename + optional A,B,C,D order
   
+  // i.e. store explicitly, as might not be A, B, C, D (i.e. if skips A, C, E, F ) 
+  // enfore that these are single chars, i.e. to make the sequence analysis work
+  static std::vector<char> ms_labels;
+
   int K;
   int C;
   std::vector<std::string> chs; // C

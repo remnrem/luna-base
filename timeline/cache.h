@@ -169,18 +169,21 @@ struct cache_t {
   
   std::string print() const {
     std::stringstream oo;
-    oo << "cache: " << name << "\n";
+
     typename std::map<ckey_t,std::vector<T> >::const_iterator ss = store.begin();
     while ( ss != store.end() )
       {
-	oo << "\t" << ss->first.name << "\n";
+	//	oo << "\t" << ss->first.name << "\n";
 	std::map<std::string,std::string>::const_iterator kk = ss->first.stratum.begin();
 	while ( kk != ss->first.stratum.end() )
 	  {
-	    oo << "\t" << kk->first << " --> " << kk->second << "\n";
+	    oo << "strata: " << kk->first << "=" << kk->second << "\n";
 	    ++kk;
 	  }
-	oo << "\tdata: " << ss->second.size() << " element vector\n";
+	if ( ss->second.size() == 1 ) 
+	  oo << "value: " << ss->first.name << "=" << ss->second[0] << "\n";
+	else
+	  oo << "value: (" << ss->second.size() << " element vector)\n";
 	++ss;
       }
     return oo.str();
@@ -209,6 +212,8 @@ struct caches_t {
     cache_tp.clear();
   }
   
+  void load( const std::string & f );
+
   bool has_int( const std::string & n ) const { return cache_int.find(n) != cache_int.end(); }
   bool has_str( const std::string & n ) const { return cache_str.find(n) != cache_str.end(); }
   bool has_num( const std::string & n ) const { return cache_num.find(n) != cache_num.end(); }
