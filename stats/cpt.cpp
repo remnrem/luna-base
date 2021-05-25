@@ -835,6 +835,11 @@ void cpt_wrapper( param_t & param )
   if ( clocs_file != "" )
     clocs.load_cart( clocs_file );
 
+  //
+  // Verbose output for adjacencies
+  //
+
+  const bool verbose = param.has( "dump-adj" ) || param.has( "verbose" );
   
   //
   // Define adjacencies
@@ -845,7 +850,8 @@ void cpt_wrapper( param_t & param )
   cpt.calc_adjacencies( vname , col2var , col2f , col2ch1 , col2ch2 ,
 			freq_threshold ,
 			clocs_file == "" ? NULL : &clocs ,
-			spatial_threshold );
+			spatial_threshold , 
+			verbose ) ;
       
   
   //
@@ -854,8 +860,8 @@ void cpt_wrapper( param_t & param )
 
   logger << "  running permutations, assuming a " << ( one_sided_test ? "one" : "two" ) << "-sided test...\n";
   
-  cpt_results_t results = cpt.run( nreps , cl_threshold , ! one_sided_test );
-  
+  cpt_results_t results = cpt.run( nreps , cl_threshold , ! one_sided_test , verbose );
+
   logger << "  all done.\n";
   
   //
@@ -972,7 +978,8 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 			      const std::map<std::string,std::string> & col2ch2,
 			      double fth ,
 			      clocs_t * clocs ,
-			      double sth )
+			      double sth , 
+			      bool dump_adj )
 {
 
   // store these for output
@@ -1156,9 +1163,11 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 	} // next freq bin 
     } // outer loop, next 'i' variable
   
-  // dump adjacencies
-  const bool dump = false;
 
+  //
+  // dump adjacencies
+  //
+  
   double mean_adjn = 0;
   int cnt = 0;
 
@@ -1166,13 +1175,13 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
   while ( ss != adjacencies.end() )
     {
       const std::set<int> & adj = ss->second;
-      if ( dump ) 
+      if ( dump_adj ) 
 	std::cout << vname[ ss->first ] << "\t" 
 		  << adj.size() << "\n";
       
       mean_adjn += adj.size();
 
-      if ( dump )
+      if ( dump_adj )
 	{
 	  std::set<int>::const_iterator qq = adj.begin();
 	  while ( qq != adj.end() )
@@ -1181,7 +1190,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 	      ++qq;
 	    }
 	}
-      if ( dump ) std::cout << "\n";
+      if ( dump_adj ) std::cout << "\n";
       ++ss;
     }
   
@@ -1194,7 +1203,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 }
 
 
-cpt_results_t cpt_t::run( int nreps , double cl_threshold , bool two_sided_test )
+cpt_results_t cpt_t::run( int nreps , double cl_threshold , bool two_sided_test , bool verbose )
 {
 
   cpt_results_t results;
@@ -1270,7 +1279,7 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold , bool two_sided_test 
   // Get clusters
   //
 
-  cpt_clusters_t clusters( T , cl_threshold , adjacencies , two_sided_test ); 
+  cpt_clusters_t clusters( T , cl_threshold , adjacencies , two_sided_test , verbose , &vname ); 
   
   logger << "  found " << clusters.clusters.size()
 	 << " clusters, maximum statistic is "
@@ -1457,7 +1466,9 @@ struct cpt_sorter_t {
 cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
 				double threshold ,
 				const std::map<int,std::set<int> > & adj , 
-				bool two_sided )
+				bool two_sided , 
+				bool verbose , 
+				const std::vector<std::string> * labels )
 {
   
   max_stat = 0;
@@ -1478,12 +1489,17 @@ cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
   std::set<int> clustered;
   while ( oo != o.end() )
     {
+    
+      
       // if below thresjold, all done
       if ( oo->stat < threshold ) break;
       
+      if ( verbose ) std::cout << "  flagging " << (*labels)[ oo->v ] << " = " << oo->stat << " > threshold = " << threshold << "\n";
+
       // is this variable already spoken for? go to next 
       if ( clustered.find( oo->v ) != clustered.end() )
 	{
+	  if ( verbose ) std::cout << "  --- already spoken for\n";  
 	  ++oo;
 	  continue;
 	}
@@ -1495,27 +1511,68 @@ cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
       cluster.stat = oo->stat; // start sum
       clustered.insert( cluster.seed );
       
-      // add all members
+      // add all friends -- and then friends of friends
       if ( adj.find( cluster.seed ) != adj.end() )
 	{
-	  const std::set<int> & friends = adj.find( cluster.seed )->second ;
-
-	  std::set<int>::const_iterator ff = friends.begin();
-	  while ( ff != friends.end() )
+	  // individuals to test
+	  std::set<int> friends = adj.find( cluster.seed )->second ;
+	  
+	  while ( friends.size() ) 
 	    {
-	      if ( clustered.find( *ff ) == clustered.end() &&
-		   fabs( T[ *ff ] ) >= threshold )
+	      
+	      std::set<int> newfriends;
+
+	      if ( verbose ) 
+		std::cout << "  --- considering " << friends.size() << " friends\n";
+	  
+	      std::set<int>::const_iterator ff = friends.begin();
+	      while ( ff != friends.end() )
 		{
-		  // if two-sided, only cluster groups that have same direction of effect
-		  if ( (!two_sided) || ( T[ *ff ] <= 0 == T[ cluster.seed ] <= 0 ) )
+		  
+		  if ( verbose ) std::cout << "     -- " << (*labels)[ *ff ] << " ";
+		  
+		  if ( clustered.find( *ff ) == clustered.end() &&
+		       fabs( T[ *ff ] ) >= threshold )
 		    {
-		      cluster.members.insert( *ff );
-		      cluster.stat += fabs( T[ *ff ] );
-		      clustered.insert( *ff );
+		      
+		      if ( verbose ) std::cout << " above threshold ";
+		      
+		      // if two-sided, only cluster groups that have same direction of effect
+		      if ( (!two_sided) || ( T[ *ff ] <= 0 == T[ cluster.seed ] <= 0 ) )
+			{
+			  if ( verbose ) std::cout << "  adding ";
+			  cluster.members.insert( *ff );
+			  cluster.stat += fabs( T[ *ff ] );
+			  clustered.insert( *ff );
+			  
+			  // loop in new friends
+			  const std::set<int> nf = adj.find( *ff )->second;
+			  std::set<int>::const_iterator nn = nf.begin();
+			  while ( nn != nf.end() )
+			    {
+			      if ( clustered.find( *nn ) == clustered.end() )
+				{
+				  bool above_threshold = fabs( T[ *nn ] ) >= threshold ;
+				  bool direction = (!two_sided) || ( T[ *nn ] <= 0 == T[ cluster.seed ] <= 0 );
+				  if ( above_threshold && direction ) 
+				    newfriends.insert( *nn );
+				}
+			      ++nn;
+			    }
+			}
 		    }
-		}
-	      ++ff;
-	    }	  
+		  
+		  if ( verbose ) std::cout << "\n";
+		  
+		  ++ff;
+		}	  
+	      
+	      // go back and loop in friends of friends
+	      
+	      friends = newfriends;
+	      
+	    }
+
 	}
       
       // save this cluster 

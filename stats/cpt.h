@@ -76,7 +76,11 @@ struct cpt_clusters_t {
   cpt_clusters_t( const Eigen::VectorXd & T ,
 		  double threshold ,
 		  const std::map<int,std::set<int> > & adj , 
-		  bool two_sided = true );
+		  bool two_sided = true , 
+		  bool verbose = false , 
+		  const std::vector<std::string> * labels = NULL 
+		  ); 
+
   
   void update( double pt )
   {
@@ -136,7 +140,8 @@ struct cpt_t {
 			 const std::map<std::string,std::string> & col2ch2,
 			 double fth ,
 			 clocs_t * clocs ,
-			 double sth );
+			 double sth , 
+			 bool dump_adj );
   
   
 
@@ -145,7 +150,7 @@ struct cpt_t {
   // Do the work 
   //
 
-  cpt_results_t run( int , double , bool ) ;
+  cpt_results_t run( int , double , bool , bool ) ;
 
   Eigen::VectorXd get_tstats( const Eigen::VectorXd & B ,
 			      const Eigen::MatrixXd & Yres ,
