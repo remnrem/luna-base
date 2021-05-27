@@ -20,48 +20,55 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#ifndef __GC_H__
+#define __GC_H__
 
-#include "gc.h"
-#include "tsync.h"
-#include "sync.h"
-#include "standardize.h"
-#include "mtm/mtm.h"
-#include "siggen.h"
-#include "psi.h"
-#include "microstates.h"
-#include "tlock.h"
-#include "peaks.h"
-#include "psc.h"
-#include "spectral_norm.h"
-#include "tv.h"
-#include "rems.h"
-#include "cfc.h"
-#include "acf.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conncoupl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
-#include "linedenoiser.h"
+#include "stats/Eigen/Dense"
+#include <map>
+#include <vector>
+
+struct edf_t;
+struct param_t;
+struct signal_list_t;
+
+void gc_wrapper( edf_t & edf , param_t & param );
+
+struct gc_t { 
+  
+  gc_t( const Eigen::MatrixXd & X ,
+	const signal_list_t & signals ,
+	int sr , 
+	double timewin_ms , 	
+	double order_ms ,
+	const std::vector<double> * frqs = NULL , 
+	int compute_bic = 0 
+	);
+  
+  void report();
+  
+  // time-domain
+  double y2x, x2y;
+
+  // frequency-stratified  
+  std::map<double,double> tf_y2x, tf_x2y;
+  
+};
+
+
+
+struct armorf_t {
+
+  armorf_t( const Eigen::MatrixXd & X , 
+	    const int Nr , 
+	    const int Nl , 
+	    const int p ) ;
+  
+  Eigen::MatrixXd coeff;
+  Eigen::MatrixXd E;
+  Eigen::MatrixXd K;
+  
+};
+
+
 
 #endif

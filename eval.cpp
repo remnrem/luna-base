@@ -922,6 +922,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
       else if ( is( c, "PSI" ) )          proc_psi( edf , param(c) );
       else if ( is( c, "ACF" ) )          proc_acf( edf , param(c) );
+      else if ( is( c, "GP" ) )           gc_wrapper( edf , param(c) ); 
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
 
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );

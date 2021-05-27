@@ -36,6 +36,8 @@ namespace eigen_ops {
 
   double sdev( const Eigen::VectorXd & x );
 
+  // remove linear trend of each column by linear regression
+  bool detrend( Eigen::Ref<Eigen::MatrixXd> m );
 
   Eigen::VectorXd unit_scale( const Eigen::VectorXd & x , double xmin , double xmax );
 

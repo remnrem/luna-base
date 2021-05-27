@@ -1826,7 +1826,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "fir" || p == "fft" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
-       || p == "desats" || p == "zpks" ) 
+       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" ) 
     {
 
       int cnt= 0;
@@ -1852,6 +1852,76 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::cout << r.dsatStEnd << "\n\n";
 
       std::exit(1);
+    }
+
+
+  if ( p == "detrend" )
+    {
+      const int n = x.size();
+      Eigen::VectorXd T( n );
+      for (int i=0; i<n; i++) T[i] = x[i];
+      
+      std::cout << "orig T\n" << T << "\n";
+
+      std::cout << "DT\n";
+      eigen_ops::detrend( T ) ;
+      std::cout << T << "\n";
+      
+    }
+
+  if ( p == "gc" )
+    {
+      
+      int order = 3;
+
+      if ( p2 != "" )
+        if ( ! Helper::str2int( p2 , &order ) ) Helper::halt( "expecting integer model order as second parameter" );
+
+      Eigen::MatrixXd X( x.size() / 2 , 2 );
+      int cnt = 0;
+      for (int r=0; r< x.size() / 2 ; r++)
+	{
+	  X(r,0) = x[cnt++] ;
+	  X(r,1) = x[cnt++] ; 
+	}
+
+      std::cerr << "read " << x.size() / 2 << " observations (pairs)\n";
+
+      // fix
+      const int Nr = 99;
+      const int Nl = 51;
+      
+      order = 15; 
+
+      // armorf_t ar1( X.col(0) , Nr , Nl , order );
+      
+      // std::cout << "ar1.coeff\n" << ar1.coeff << "\n"
+      // 		<< "ar1.E\n" << ar1.E << "\n";
+
+      // armorf_t ar2( X.col(1) , Nr , Nl , order );
+      
+      // std::cout << "ar2.coeff\n" << ar2.coeff << "\n"
+      // 		<< "ar2.E\n" << ar2.E << "\n";
+
+      // armorf_t ar12( X , Nr , Nl , order );
+
+      // std::cout << "ar12.coeff\n" << ar12.coeff << "\n"
+      // 		<< "ar12.E\n" << ar12.E << "\n";
+
+      signal_list_t signals;
+      signals.add( 0, "S1" );
+      signals.add( 1, "S2" );
+      const int sr = 256;
+      // std::vector<double> frqs(3);
+      // frqs[0] = 1; frqs[30] ; frqs[2] = 10;
+
+      std::vector<double> frqs = MiscMath::logspace( 10 , 40 , 15 );
+
+      gc_t gc( X , signals , sr , 200 , 60 , &frqs );
+
+      gc.report();
+      std::exit(0);
+
     }
 
 

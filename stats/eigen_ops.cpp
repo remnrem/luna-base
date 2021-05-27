@@ -59,6 +59,41 @@ void eigen_ops::random_normal( Eigen::MatrixXd & M )
       M(r,c) = Statistics::ltqnorm( CRandom::rand() );
 }
 
+
+bool eigen_ops::detrend( Eigen::Ref<Eigen::MatrixXd> M )
+{
+
+  // linear regression by hand for univariate case (detrending)
+  const int n = M.rows();
+  const int c = M.cols();
+  
+  // sum of 1.. n = n(n+1) / 2
+  const double pmean = ( n + 1 ) / 2.0 ;
+  Eigen::ArrayXd p( n , 1 );
+  for (int i=0; i<n; i++) 
+    p[i] = (i+1) - pmean;
+  
+  double pvar = p.square().sum()/(double)(n-1);
+
+  for (int j=0; j<c; j++)
+    {
+      
+      // mean center DV 
+      const double intercept =  M.col(j).mean();
+      Eigen::ArrayXd y = M.col(j).array() - intercept;
+      
+      // just need slope       
+      double beta = ( ( y * p ).sum()/(double)(n-1) ) / pvar ; 
+
+      // get residuals
+      M.col(j) = y - ( p * beta );
+      
+    }
+
+  return true;
+}
+
+
 bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
 {
   const int N = M.rows();
