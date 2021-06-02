@@ -24,16 +24,18 @@
 
 #include "edf/slice.h"
 #include "edf/edf.h"
-
 #include <iostream>
-#include "stats/Eigen/Cholesky"
-#include "stats/Eigen/SVD"
 #include <vector>
 
 #include "stats/eigen_ops.h"
-
 #include "db/db.h"
 #include "helper/logger.h"
+
+std::map<int,std::map<int,double> > gc_t::y2x_sum;
+std::map<int,std::map<int,double> > gc_t::x2y_sum;
+std::map<int,std::map<int,std::map<double,double> > > gc_t::tf_x2y_sum;
+std::map<int,std::map<int,std::map<double,double> > > gc_t::tf_y2x_sum;
+int gc_t::ne;
 
 extern logger_t logger;
 extern writer_t writer;
@@ -63,8 +65,6 @@ void gc_wrapper( edf_t & edf , param_t & param )
     if ( Fs[s] != sr )
       Helper::halt( "all sampling rates must be similar for PSI" );
 
-
-
   
   //
   // Analysis parameters
@@ -88,31 +88,44 @@ void gc_wrapper( edf_t & edf , param_t & param )
   // Frequency
   //
   
-  bool has_frqs = param.has( "f" );
+  bool has_frqs = param.has( "f-log" ) || param.has( "f" );
+  bool take_logs = param.has( "f-log" );
 
   std::vector<double> frqs;
   if ( has_frqs ) 
     {
-      frqs = param.dblvector( "f" );
-      if ( frqs.size() != 3 ) Helper::halt( "expecting f=lwr,upr,n" );
-      frqs = MiscMath::logspace( frqs[0] , frqs[1] , frqs[2] );
-    }
+      frqs = take_logs ? param.dblvector( "f-log" ) : param.dblvector( "f" )  ;
+      if ( frqs.size() != 3 ) Helper::halt( "expecting f=lwr,upr,n or f-log=lwr,upr,n" );
+      
+      frqs = take_logs ? 
+	MiscMath::logspace( frqs[0] , frqs[1] , frqs[2] ) :
+	MiscMath::linspace( frqs[0] , frqs[1] , frqs[2] );
+	}
+
+
+  //
+  // Clear tracker
+  //
+
+  gc_t::init();
 
 
   //
   // Get data, epoch by epoch
   //
 
-  const int ne = edf.timeline.first_epoch();
+  gc_t::ne = edf.timeline.first_epoch();
   
   bool first = true;
 
   while ( 1 ) 
     {
-
+      
       int epoch = edf.timeline.next_epoch();
       
       if ( epoch == -1 ) break;
+
+      writer.epoch( edf.timeline.display_epoch( epoch ) );
 
       interval_t interval = edf.timeline.epoch( epoch );
 
@@ -134,17 +147,20 @@ void gc_wrapper( edf_t & edf , param_t & param )
 	       timewin_ms , order_ms , 	       
 	       has_frqs ? &frqs : NULL , 
 	       compute_bic );
-
-      // outputs
-
-      writer.epoch( edf.timeline.display_epoch( epoch ) );
       
-      gc.report();
-
     }
+
   writer.unepoch();
 
+  
+  //
+  // Report final averages (non-epoch level)
+  //
+
+  gc_t::report( signals );
+
 }
+
 
 
 gc_t::gc_t( const Eigen::MatrixXd & X , 
@@ -191,8 +207,6 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
   
   int pnt = 0;
 
-  //  std::cout << "Z1\n" << Z << "\n\n";
-
   for (int block=0; block < Nr; block++)
     {      
       eigen_ops::detrend( Z.block( pnt , 0 , timewin , ns )  );      
@@ -200,7 +214,6 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
       pnt += timewin;
     }
 
-  //  std::cout << "Z2\n" << Z << "\n\n";
 
   //
   // check for stationarity (in this epoch)
@@ -215,14 +228,11 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
   //
   
   std::vector<double> uniE( ns );
-  //  std::cout << "Nr " << Nr << " " << timewin << " " << Nr * timewin << " " << np << " " << Z.rows() << " " << order << "\n";
 
   for (int s=0; s<ns; s++)
     {	  
-      
       armorf_t arm1( Z.col(s) , Nr , timewin , order );
       uniE[s] = arm1.E(0,0) ; 
-      //      std::cout << "EE" <<  arm1.E(0,0) << "\n";
     }
   
   //
@@ -247,16 +257,12 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 	  
 	  // fit AR models : two univariate autoregressive models, one bivariate autoregressive model
 	  
-	  // % fit AR models (model estimation from bsmart toolbox)
-	  // 	  [Ax,Ex] = armorf(tempdata(1,:),EEG.trials,timewin_points,order_points);
-	  // [Ay,Ey] = armorf(tempdata(2,:),EEG.trials,timewin_points,order_points);
-	  // [Axy,E] = armorf(tempdata     ,EEG.trials,timewin_points,order_points);
-	      	      
+	  // fit AR models (armorf_t is a straight C/C++ implementation 
+	  // if armorf.m from the BSMART toolbox
+	  	      	      
 	  armorf_t arm12( ZZ  , Nr , timewin , order );
 	  
-	  // % time-domain causal estimate
-	  // 	  y2x(timei)=log(Ex/E(1,1));
-	  // x2y(timei)=log(Ey/E(2,2));
+	  // time-domain causal estimate
 	  
 	  y2x = log( uniE[s1] / arm12.E(0,0) );
 	  x2y = log( uniE[s2] / arm12.E(1,1) );
@@ -269,33 +275,28 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 	    {
 	      
 	      int idx = -1;
-	      double min = 0; 
-
+	      bic = 0; 
+	      
 	      for (int o=1; o<=compute_bic; o++)
 		{		  
-		  // [Axy,E] = armorf(tempdata,EEG.trials,timewin_points,bici);
+		  
 		  armorf_t arm12( ZZ  , Nr , timewin , o );
 		  
 		  // compute BIC 
 		  // bic(timei,bici) = log(det(E)) + (log(length(tempdata))*bici*2^2)/length(tempdata);
-
-		  double bic =  log( arm12.E.determinant() ) + ( log( np ) * o * 4 ) / (double)np ;
 		  
-		  std::cout << "bic = " << bic << "\n";
-
-		  if ( o == 1 || bic < min )
+		  double this_bic =  log( arm12.E.determinant() ) + ( log( np ) * o * 4 ) / (double)np ;
+		  
+		  if ( o == 1 || this_bic < bic )
 		    {
 		      idx = o;
-		      min = bic;
+		      bic = this_bic;
 		    }
-		 
-		  
 		}
 	      
-	      // report best model order
-	      writer.value( "BIC" , idx );
-	      
+	      writer.value( "BIC" , bic );
 	    }
+	  
 	  
 	  //
 	  // Frequency-dependent GC
@@ -304,11 +305,8 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 	  if ( frqs != NULL )
 	    {
 	      
-	      // % code below is adapted from bsmart toolbox function pwcausal.m
-	      // % corrected covariance
-	      //    eyx = E(2,2) - E(1,2)^2/E(1,1);
-	      //    exy = E(1,1) - E(2,1)^2/E(2,2);
-	      //    N = size(E,1);
+	      // code below is adapted from bsmart toolbox function pwcausal.m
+	      // corrected covariance
 	      
 	      double eyx = arm12.E(1,1) - arm12.E(0,1) * arm12.E(0,1) / arm12.E( 0,0 );
 	      double exy = arm12.E(0,0) - arm12.E(1,0) * arm12.E(1,0) / arm12.E( 1,1 );
@@ -317,36 +315,23 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 
 	      Eigen::MatrixXcd Ec = arm12.E;
 
-	      // for fi=1:length(frequencies)
-
 	      for (int fi=0; fi<frqs->size(); fi++)
 		{
 		  
 		  double f = (*frqs)[fi];
 		  	      
 		  // transfer matrix
-		  // H = eye(N);
-
 		  Eigen::MatrixXcd H = Eigen::MatrixXd::Identity( N , N );
-
-		  // for m = 1:order_points
-		  //     H = H + Axy(:,(m-1)*N+1:m*N)*exp(-1i*m*2*pi*frequencies(fi)/EEG.srate);
-		  // end
 	      
 		  for (int m=1; m<= order; m++)
-		    H += (arm12.coeff.block( 0 , (m-1)*N , N , N ).array() * exp( dcomp( 0 , -m * 2 * M_PI * f / (double)sr ) )).matrix();
+		    H += (arm12.coeff.block( 0 , (m-1)*N , N , N ).array() 
+			  * exp( dcomp( 0 , -m * 2 * M_PI * f / (double)sr ) )).matrix();
 		  
-		  // 	  Hi = inv(H);
        		  Eigen::MatrixXcd Hi = H.inverse();
 		  		  
-		  //       S  = H\E*Hi'/EEG.srate;
 		  Eigen::MatrixXcd S = H.lu().solve( Ec ) * Hi.adjoint() ;
 		  S /= (double)sr;
 		  
-		  // granger prediction per frequency
-		  //  tf_granger(1,fi,timei) = log( abs(S(2,2))/abs(S(2,2)-(Hi(2,1)*exy*conj(Hi(2,1)))/EEG.srate) );
-		  //  tf_granger(2,fi,timei) = log( abs(S(1,1))/abs(S(1,1)-(Hi(1,2)*eyx*conj(Hi(1,2)))/EEG.srate) );
-		 
 		  tf_x2y[f] = log( abs( S(1,1) ) / abs( S(1,1) - ( Hi(1,0) * exy * std::conj( Hi(1,0) ) ) / (double)sr ) );
 		  tf_y2x[f] = log( abs( S(0,0) ) / abs( S(0,0) - ( Hi(0,1) * eyx * std::conj( Hi(0,1) ) ) / (double)sr ) );
 		  
@@ -355,6 +340,44 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 	      
 	    }
 	  
+	  //
+	  // Outputs
+	  //
+	  
+	  // time-domain
+
+	  writer.value( "Y2X" , y2x );  
+	  writer.value( "X2Y" , x2y );
+	  
+	  y2x_sum[ s1 ][ s2 ] += y2x;  
+	  x2y_sum[ s1 ][ s2 ] += x2y;  
+
+	  // frequency-stratified
+	  
+	  if ( frqs != NULL )
+	    {
+  
+	      std::map<double,double>::const_iterator ff = tf_y2x.begin();
+	      while ( ff != tf_y2x.end() )
+		{      
+		  writer.level( ff->first , globals::freq_strat );
+		  writer.value( "Y2X" , ff->second );
+		  tf_y2x_sum[ s1 ][ s2 ][ ff->first ] += ff->second;
+		  ++ff;
+		}
+	      
+	      ff = tf_x2y.begin();
+	      while ( ff != tf_x2y.end() )
+		{      
+		  writer.level( ff->first , globals::freq_strat );
+		  writer.value( "X2Y" , ff->second );
+		  tf_x2y_sum[ s1 ][ s2 ][ ff->first ] += ff->second;
+		  ++ff;
+		}
+	      writer.unlevel( globals::freq_strat );
+
+	    }	  
+
 	} // next s2
       writer.unlevel( globals::signal2_strat );  	      
     } // next s1 
@@ -362,30 +385,60 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 }
 
 
-
-
-void gc_t::report()
+void gc_t::report( const signal_list_t & signals )
 {
   
-  writer.value( "Y2X" , y2x );
+  // s1
+  std::map<int,std::map<int,double> >::const_iterator ss1 = y2x_sum.begin();
+  while ( ss1 != y2x_sum.end() )
+    {
+      const int s1 = ss1->first;
+      
+      writer.level( signals.label( s1 ) , globals::signal1_strat );
 
-  writer.value( "X2Y" , x2y );
+      const std::map<int,double> & sum2 = ss1->second;
 
-  std::map<double,double>::const_iterator ff = tf_y2x.begin();
-  while ( ff != tf_y2x.end() )
-    {      
-      writer.level( ff->first , globals::freq_strat );
-      writer.value( "Y2X" , ff->second );
-      ++ff;
+      std::map<int,double>::const_iterator ss2 = sum2.begin();
+      while( ss2 != sum2.end() )
+	{
+	  const int s2 = ss2->first;
+
+	  writer.level( signals.label( s2 ) , globals::signal2_strat );
+
+	  // time-domain outputs 
+	  writer.value( "Y2X" , y2x_sum[ s1 ][ s2 ] / (double)ne ); 
+	  writer.value( "X2Y" , x2y_sum[ s1 ][ s2 ] / (double)ne ); 
+	  
+	  // frequency domain outputs
+	  const std::map<double,double> & fres = tf_x2y_sum[ s1 ][ s2 ];
+	  
+	  std::map<double,double>::const_iterator ff = fres.begin();
+	  while ( ff != fres.end() )
+	    {
+	      writer.level( ff->first , globals::freq_strat );
+	      writer.value( "X2Y" , ff->second / (double)ne ); 
+	      ++ff;
+	    }
+	  
+          const std::map<double,double> & fres2 = tf_y2x_sum[ s1 ][ s2 ];
+	  ff = fres2.begin();
+	  while ( ff != fres2.end() )
+	    {
+	      writer.level( ff->first , globals::freq_strat );
+	      writer.value( "Y2X" , ff->second / (double)ne ); 
+	      ++ff;
+	    }
+	  writer.unlevel( globals::freq_strat );
+	 
+	  // next channel pair
+	  ++ss2;
+	}
+      writer.unlevel( globals::signal2_strat );
+
+      ++ss1;
     }
-
-  ff = tf_x2y.begin();
-  while ( ff != tf_x2y.end() )
-    {      
-      writer.level( ff->first , globals::freq_strat );
-      writer.value( "X2Y" , ff->second );
-      ++ff;
-    }
-  writer.unlevel( globals::freq_strat );
-
+  writer.unlevel( globals::signal1_strat );
 }
+
+
+

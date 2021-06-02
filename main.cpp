@@ -1919,7 +1919,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       gc_t gc( X , signals , sr , 200 , 60 , &frqs );
 
-      gc.report();
+      gc.report( signals );
       std::exit(0);
 
     }

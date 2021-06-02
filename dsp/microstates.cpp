@@ -29,6 +29,7 @@
 #include "stats/kmeans.h"
 #include "dsp/lzw.h"
 #include "dsp/mse.h"
+#include "dsp/tv.h"
 #include "miscmath/crandom.h"
 #include "timeline/cache.h"
 
@@ -36,6 +37,8 @@
 
 extern writer_t writer;
 extern logger_t logger;
+
+#include "stats/eigen_ops.h"
 
 std::vector<char> ms_prototypes_t::ms_labels;
 
@@ -85,12 +88,18 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   const std::string annot_tag = add_annot ? param.value( "add-annot" ) : "" ;
 
   bool add_sig = param.has( "add-sig" );
-  const std::string sig_tag = add_sig   ? param.value( "add-sig" ) : "" ;
+  const std::string sig_tag = add_sig ? param.value( "add-sig" ) : "" ;
+  
+  bool add_corrs = param.has( "add-spc-sig" );
+  const std::string sig_corr_tag = add_corrs ? param.value( "add-spc-sig" ) : "" ; 
+
+  bool add_conf = param.has( "add-conf" ); // only applies for 'add-spc-sig'
+  const std::string sig_conf = add_conf ? param.value( "add-conf" ) : "" ;
   
   bool save_transitions = param.has( "cache" );
   const std::string cache_name = save_transitions ? param.value( "cache" ) : "" ; 
   
-  if ( ( add_sig || add_sig ) && epoch ) 
+  if ( ( add_annot || add_sig || add_corrs ) && epoch ) 
     Helper::halt( "cannot use add-annot or add-sig in epoch mode" );
   
   //
@@ -125,15 +134,13 @@ void dsptools::microstates( edf_t & edf , param_t & param )
     
   if ( multi_backfit && epoch )
     {
-      const std::vector<std::string> fvec = param.strvector( "backfit" );
-      if ( fvec.size() < 1 ) Helper::halt( "bad backfit options" );
-      const std::string filename = fvec[0];
-      prior_prototypes.read( fvec ); // filename + optional col order (sets static ms_label)
+      const std::string filename = param.value( "backfit" ); 
+      prior_prototypes.read( filename );
       
-      // check channels line up
-      
+      // check channels line up      
       if ( signals.size() != prior_prototypes.C )
 	Helper::halt( "number of channels in " + filename + " does not match current signal selection" );
+
       for (int s=0; s<signals.size(); s++)
 	if ( ! Helper::iequals( signals.label(s) , prior_prototypes.chs[s] ) )
 	  Helper::halt( signals.label(s) + " does not match " + prior_prototypes.chs[s]  + " for slot " + Helper::int2str( s+1) );      
@@ -209,12 +216,27 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       
       if ( single_sample || multi_segment )
 	{
-	  logger << "  segmenting peaks to microstrates\n";
+	  logger << "  segmenting peaks to microstates\n";
 	  
+	  // optional 'canonical' file to use in assigning labels
+          const bool has_canonicals = param.has( "canonical" ) ;	  
+	  std::string canonical_file = has_canonicals ? param.value( "canonical" ) : "" ;
+
+
 	  // nb, if peaks is empty, just takes all rows
 	  // of X;  i.e. if coming from an aggregate peak EDF
 	  
-	  prototypes = mstates.segment( X , signals , peaks );
+	  prototypes = mstates.segment( X , signals , peaks , 
+					has_canonicals ? &canonical_file : NULL );
+
+	  // re-assign labels based on a canonical set? 
+	  // (based on spatial correlations) 
+	  if ( param.has( "canonical" ) )
+	    {
+	      const std::string filename = Helper::expand( param.value( "canonical" ) );
+	      
+	    }
+	  
 	  
 	  // In multi-sample mode, just save prototypes and move on
 	  
@@ -241,10 +263,9 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	   }
 	 else
 	   {
-	     const std::vector<std::string> fvec = param.strvector( "backfit" );
-	     if ( fvec.size() < 1 ) Helper::halt( "bad backfit options" );
-	     const std::string filename = fvec[0];
-	     prototypes.read( fvec ); // filename + optional col order                                                             
+	     const std::string filename = param.value( "backfit" );
+	     prototypes.read( filename );
+
 	     // check channels line up 
 	     if ( signals.size() != prototypes.C )
 	       Helper::halt( "number of channels in " + filename + " does not match current signal selection" );
@@ -257,26 +278,54 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 
       
       //
-      // Backfitting
+      // Backfitting (w/ optional smoothing via TV)
       //
       
-      const bool store_GMD = true; // not sure this is needed...    
+      const bool store_GMD = true; 
       
       logger << "  back-fitting solution to all time points\n";
       
-      ms_backfit_t bf = mstates.backfit( Statistics::transpose( X ) , microstates_t::eig2mat( prototypes.A ) , store_GMD );
+      ms_backfit_t bf = mstates.backfit( Statistics::transpose( X ) , 
+					 microstates_t::eig2mat( prototypes.A ) , 
+					 param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 0 , 
+					 store_GMD );
       
+      //
+      // Set ambiguous points to missing?
+      //
+
+      if ( param.has( "ambig" ) )
+	{
+	  std::vector<double> pr = param.dblvector( "ambig" );
+	  //if ( ! ( pr.size() == 1 || pr.size() == 2 ) ) Helper::halt( "ambig expects two args" );
+	  if ( pr.size() != 2 ) Helper::halt( "ambig expects two args" );
+
+	  // e.g. 1.1 --> 10% increase in best over second best
+	  const double th1 = pr[0] ;
+
+	  // absolute value of max SPC (e.g. needs to be at least 0.5) 
+	  const double th2 = pr[1] ;
+
+	  // NOT IMPLEMENTED YET
+	  // if ambiguous intervals < this threshold AND they are flanked by 
+	  // two similar states, then fill-in this ambiguous region to be the
+	  // same as the flanking regions
+	  
+	  // default = 20 msec (4 samples)
+	  // const double fillin_msec = pr.size() == 2 ? pr[1] : 20 ;
+	  // const int fillin_samples = round( fillin_msec * sr/1000.0 );
+	  
+	  bf.determine_ambiguity( th1 , th2 ); //, fillin_samples ); 
+	}
+
   
       //
       // Smoothing / rejection of small intervals
       //
       
-      // smooth_reject takes minTime in sample points
-      
-
       ms_backfit_t smoothed = bf;
   
-      if ( ! param.has( "no-smoothing" )  )
+      if ( param.has( "min-msec" ) ) 
 	{
 	  double minTime_msec = param.has( "min-msec" ) ? param.requires_dbl( "min-msec" ) : 20 ; 
 	  
@@ -285,18 +334,23 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	  logger << "  smoothing: rejecting segments <= " << minTime_msec << " msec\n";
 	  
 	  smoothed = mstates.smooth_reject( bf , minTime_samples );
+	  
+	} 
+      else
+	logger << "  no minimum segment duration specified (e.g. min-msec=20)\n";
 
-	}      
-
-  
+      
+      
       //
       // Final stats
       //
       
       logger << "  getting final microstate statistics\n";
-
-      ms_stats_t stats = mstates.stats( Statistics::transpose( X ) , microstates_t::eig2mat( prototypes.A ) , smoothed.best() );
-  
+      
+      ms_stats_t stats = mstates.stats( Statistics::transpose( X ) , 
+					microstates_t::eig2mat( prototypes.A ) , 
+					smoothed.best() );
+      
 
       //
       // Verbose dumping of GFP and L point by point? (nb. this only works in whole-trace mode)
@@ -318,17 +372,17 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	  std::vector<int> states = smoothed.best();
 	  if ( states.size() != N ) Helper::halt( "hmmm" );
 	  for (int i=0;i<N;i++)
-	    O1 << ms_prototypes_t::ms_labels[ states[i] ] << "\t"
+	    O1 << ( states[i] != -1 ? ms_prototypes_t::ms_labels[ states[i] ] : '?' ) << "\t"
 	       << stats.GFP[i] << "\n";
 	  O1.close();
 	}
     
-
+      
       //
       // Add new annotations and/or channels
       //
       
-      if ( add_annot || add_sig || save_transitions )
+      if ( add_annot || add_sig || add_corrs || save_transitions )
 	{
 	  
 	  std::vector<int> states = smoothed.best();
@@ -345,14 +399,17 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	      if ( tp->size() != N ) 
 		Helper::halt( "internal error in add-annot" );
 	      
-	      // for each class
-	      std::vector<annot_t*> k2a( prototypes.K );
-	      std::vector<std::string> k2l( prototypes.K );
-	      for (int k=0; k<prototypes.K; k++)
+	      // for each class (+ ambig)
+	      std::vector<annot_t*> k2a( prototypes.K + 1 );
+	      std::vector<std::string> k2l( prototypes.K + 1 );
+
+	      for (int k=0; k<prototypes.K + 1 ; k++)
 		{
 		  std::string s="?";
-                  s[0] = ms_prototypes_t::ms_labels[k];
-                  const std::string alab = annot_tag + s;                  
+		  if ( k < prototypes.K )
+		    s[0] = ms_prototypes_t::ms_labels[k];
+                  
+		  const std::string alab = annot_tag + s;                  
 		  k2l[k] = alab;
 		  logger << "  adding annotation " << alab << "\n";		  
 		  annot_t * a = edf.timeline.annotations.add( alab );
@@ -363,7 +420,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	      // iterate over points
 	      int curr = states[0];
 	      int idx = 0;
-
+	      	      
 	      for (int i=1;i<N; i++)
 		{
 		  // point marks end of a state?
@@ -372,8 +429,10 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 		      // i.e. annotation is right up to the start of the next one
 		      // so end == start of new internal in end+1 encoding
 		      interval_t interval( (*tp)[idx] , (*tp)[i] );
-		      // add annot to the appropriate annotation
-		      k2a[curr]->add( k2l[curr] , interval , "." );		      
+		      
+		      // add annot to the appropriate annotation (decoding -1 to K for ambig states)
+		      k2a[ curr == -1 ? prototypes.K : curr  ]->add( k2l[ curr == -1 ? prototypes.K : curr ] , interval , "." );
+
 		      // reset new state
 		      curr = states[i];
 		      idx = i;
@@ -384,21 +443,102 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	  //
 	  // Add as signals
 	  //
-
-	  if ( add_sig ) 
+	  
+	  if ( add_sig || add_corrs ) 
 	    {
 	      
+	      // fetch spatial correlations (from GMDs)  [ add-spc-sig ]
+	      Data::Matrix<double> SPC;	      
+	      
+	      // optionally, add 'confidence' score of max versus next best
+	      std::vector<double> conf;
+
+	      if ( add_corrs )
+		{		  
+		  SPC = bf.GMD; // K x N matrix (i.e. original, pre-smoothing)
+
+		  for (int k=0; k< prototypes.K; k++)		    
+		    for (int i=0; i<N; i++) 
+		      SPC(k,i) = 1 - ( SPC(k,i) * SPC(k,i) ) / 2.0; 		  
+		  
+		  if ( add_conf ) 
+		    {
+		      conf.resize( N );
+		      for (int i=0; i<N; i++)
+			{ 
+			  double best = 0;
+			  double next = 0;
+			  for (int k=0; k<prototypes.K; k++)
+			    {
+			      if ( SPC(k,i) > best )
+				{
+				  next = best;
+				  best = SPC(k,i);				  
+				}
+			      else if ( SPC(k,i) > next )
+				next = SPC(k,i); 
+			    }			  
+			  
+			  // set to 100 as max
+			  conf[i] = next > 0 ? best / next : 100; 
+			  if ( conf[i] > 100 ) conf[i] = 100;
+			}
+		      
+		      logger << "  adding confidence channel " << sig_conf << "\n";
+		      edf.add_signal( sig_conf , sr , conf );
+
+		    }
+		  
+		}
+
+	      //
+	      // for SPC and binary flags (new channels), only do this for
+	      // unambiguous states currently
+	      //
+
+	      logger << "  adding" ;
+	      if ( add_corrs ) logger << " spatial correlations";
+	      if ( add_sig ) logger << ( add_corrs ? "," : "" ) << " assigned states";
+	      logger << " as channels (" << sr << "Hz) :";
+
 	      for (int k=0; k<prototypes.K; k++)
 		{
 		  std::string s="?";
 		  s[0] = ms_prototypes_t::ms_labels[k];
 		  const std::string clab = sig_tag + s;		  
-		  logger << "  adding channel " << clab << " (" << sr << "Hz)\n";
-		  std::vector<double> dat( N , 0 );
-		  for (int i=0; i<N; i++) if ( states[i] == k ) dat[i] = 1;
-		  edf.add_signal( clab , sr , dat );
+		  const std::string clab_corrs = sig_corr_tag + s;		  
+		  
+		  if ( add_sig ) logger << " " << clab;
+		  if ( add_corrs ) logger << " " << clab_corrs;
+		  
+		  std::vector<double> dat( N );
+		  
+		  //
+		  // add spatial correlations as new channel in EDF
+		  //
+
+		  if ( add_corrs )
+		    {
+		      for (int i=0; i<N; i++) 
+			dat[i] = SPC(k,i);
+		      
+		      edf.add_signal( clab_corrs , sr , dat );
+
+		    }
+
+		  //
+		  // add binary 0/1 for assigned state in EDF
+		  //
+		  
+		  if ( add_sig )
+		    {
+		      for (int i=0; i<N; i++) 
+			dat[i] = states[i] == k ? 1 : 0 ;		      
+		      edf.add_signal( clab , sr , dat );
+		    }
+		  
 		}
-		
+	      logger << "\n";
 	    }
 	  
 	  
@@ -443,10 +583,18 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	  s[0] = ms_prototypes_t::ms_labels[k];
 	  writer.level( s , "K" );
 	  writer.value( "GFP" , stats.m_gfp[k] );
+	  
+	  writer.value( "COV" , stats.m_cov[k] ); // denom = all time-points
+	  writer.value( "COV2" , stats.m_cov_unambig[k] ); // denom = all unambiguous time-points	  
+
 	  writer.value( "OCC" , stats.m_occ[k] );
+	  writer.value( "OCC2" , stats.m_occ_unambig[k] );
+	  		  	  
 	  writer.value( "DUR" , stats.m_dur[k] );
-	  writer.value( "COV" , stats.m_cov[k] );
-	  writer.value( "SPC" , stats.m_spc[k] );
+
+	  writer.value( "WGT" , stats.m_wcov[k] ); // mean SPC for all samples (i.e. probabilistic coverage)
+	  writer.value( "SPC" , stats.m_spc[k] );  // mean SPC for K=k assigned maps
+	  
 	  writer.value( "GEV" , stats.m_gev[k] );      
 	  writer.value( "N" , cnts[k].first );
 	  //writer.value( "F" , cnts[k].second );
@@ -456,21 +604,23 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 
   
       //
-      // State transition probabilities
+      // State transition probabilities: up to K+1 for ambig
       //
       
-      for (int k=0; k < prototypes.K ; k++)
+      for (int k=0; k < prototypes.K + 1 ; k++)
 	{
 	  std::string s1="?";
-	  s1[0] = ms_prototypes_t::ms_labels[k];
-
+	  if ( k < prototypes.K ) 
+	    s1[0] = ms_prototypes_t::ms_labels[k];
+	  
 	  writer.level( s1 , "PRE" );
-	  for (int k2=0; k2 < prototypes.K ; k2++)
+	  for (int k2=0; k2 < prototypes.K + 1 ; k2++)
 	    {
 	      if ( k != k2 )
 		{
 		  std::string s2="?";
-		  s2[0] = ms_prototypes_t::ms_labels[k2];
+		  if ( k2 < prototypes.K ) 
+		    s2[0] = ms_prototypes_t::ms_labels[k2];
 		  
 		  writer.level( s2 , "POST" );
 		  writer.value( "P" , stats.tr(k,k2) );
@@ -852,7 +1002,8 @@ std::vector<int> microstates_t::find_peaks( const Data::Matrix<double> & X ,
 
 ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X , 
 					const signal_list_t & signals ,
-					const std::vector<int> & peak_idx )
+					const std::vector<int> & peak_idx , 
+					const std::string * canonical_file )
 {
 
   
@@ -912,6 +1063,34 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
   
   writer.value( "OPT_K" , results.K );
 
+  //
+  // Set default labels: 1, 2, 3, etc (i.e. not 'canonical')
+  //
+
+  ms_prototypes_t::ms_labels.resize( results.K , '?' );
+  for (int i=0; i<results.K; i++)
+    ms_prototypes_t::ms_labels[i] = (char)(49 + i);
+  
+
+
+  //
+  // Normalize A results
+  //
+  
+  eigen_ops::scale( results.A , true );
+
+
+  //
+  // Or, overwrite with 'best guess' labels given a canonical file;
+  // NOTE: this only changes the 'optimal' labels (and not same K in the
+  // more verbose output);   if states are written with 'sol' they will 
+  // have these assigned labels
+  //
+
+  ms_prototypes_t prototypes( signals , results.A ) ;
+  
+  if ( canonical_file != NULL ) 
+    prototypes.map_to_canonicals( *canonical_file ) ;
 
   //
   // Maps
@@ -930,7 +1109,7 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
 
       // optimal solution
       for (int j=0; j<results.K; j++)
-	{
+	{	  
 	  std::string s="?";
 	  s[0] = ms_prototypes_t::ms_labels[j];
 	  writer.level( s , "K" );
@@ -940,6 +1119,30 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
       
     }
   writer.unlevel( globals::signal_strat );
+
+  
+  //
+  // Correlations between maps (optimal solution)
+  //
+
+  for (int k1=0; k1<results.K; k1++)
+    {
+      std::string s="?";
+      s[0] = ms_prototypes_t::ms_labels[k1];
+      writer.level( s , "K1" );
+
+      for (int k2=0; k2<results.K; k2++)
+	{
+	  std::string s2="?";
+	  s2[0] = ms_prototypes_t::ms_labels[k2];
+	  writer.level( s2 , "K2" );      
+      
+	  writer.value( "SPC" , ms_prototypes_t::spatial_correlation( results.A.col(k1) , results.A.col(k2) ) );
+	}
+      writer.unlevel( "K2" );
+    }
+  writer.unlevel( "K1" );
+  
 
   //
   // All prototype maps (will include optimal A)
@@ -985,12 +1188,11 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
     }
   writer.unlevel( "NK" );
 
+
   //
   // Save prototypes
   //
 
-
-  ms_prototypes_t prototypes( signals , results.A ) ;
   return prototypes;
   
 }
@@ -998,6 +1200,7 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
 
 ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
 				     const Data::Matrix<double> & A_ ,
+				     const double lambda , 
 				     bool return_GMD )
 {
   
@@ -1012,14 +1215,6 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
   const int C = A.dim1();
   const int K = A.dim2();
   const int N = X.dim2(); // assumes X is already transposed as C x N 
-  
-  //
-  // Standardize EEG first?  hmm check polarity here, etc
-  //
-  
-  // if ( 0 )
-  //   Statistics::standardize( X );
-
 
   //
   // GMD: global map dissimilarity
@@ -1097,8 +1292,27 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
 	}
     }
 
+  //
+  // Smooth GMDs? 
+  //
+  
+  if ( lambda > 0 )     
+    {
+      logger << "  applying total-variation denoiser on GMDs, lambda = " << lambda << "\n";
+      for (int k=0; k<K; k++)
+	{
+	  std::vector<double> row = *GMD.row(k).data_pointer();
+	  dsptools::TV1D_denoise( row , lambda );
+	  for (int i=0;i<N;i++) GMD(k,i) = row[i];
+	}
+      
+    }
 
-  // get matching labels (min. GMD)
+
+  
+  //
+  // Get matching labels, i.e. assign states (min. GMD)
+  //
 
   ms_backfit_t bf(N);
 
@@ -1131,7 +1345,7 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
 ms_backfit_t microstates_t::smooth_reject( const ms_backfit_t & sol , 
 					   int minTime )
 {
-
+  
   const int N = sol.labels.size();
 
   if ( N == 0 )
@@ -1142,30 +1356,72 @@ ms_backfit_t microstates_t::smooth_reject( const ms_backfit_t & sol ,
   
   ms_backfit_t bf(N);
   bf.labels = sol.labels;
-    
+  bf.ambiguous = sol.ambiguous;
+  
   for (int k=1; k <= minTime; k++)
     {
       // track changes
       std::vector<int> cruns( N , k );      
-      while ( 1 )
+      int iter_num = 0;
+      while ( 1 && iter_num < 1000 ) 
 	{
+
+	  // should not happen, but set upper limit (1000 iterations) 
+	  // for any edge cases...
+
+	  ++iter_num;
+
+	  //
+	  // count remaining short unambiguous segments
+	  //
+
 	  int sum_cruns = 0;
 	  for (int c=0; c<cruns.size(); c++)
-	    if ( cruns[c] <= k ) ++sum_cruns;
+	    if ( (!bf.ambiguous[c]) && cruns[c] <= k ) ++sum_cruns;
 	  if ( sum_cruns == 0 ) break;
-	  //	  std::cout << " iter " << k << "\t" << sum_cruns << "\n";
 	  
+	  //
+	  // perform run-length encoding (RLE)
+	  //
+
 	  ms_rle_t runs = rle( bf.best() );
+
+	  //
+	  // for any short segment that is flanked by ambiguous segments (or start/stop + an ambig segment)
+	  // this will never get expanded, and so set this to be amiguous too.
+	  //
 	  
 	  int cnt = 0;
 	  for (int r=0; r<runs.c.size(); r++)
-	    for (int j=0; j<runs.c[r]; j++)
-	      {
-		// shift if segment is too short
-		if ( runs.c[r] <= k ) bf.labels[cnt].shift();
-		cruns[cnt] = runs.c[r];
-		++cnt;
-	      }  
+	    {
+	      const bool start = r == 0 ;
+	      const bool last  = r == runs.c.size() - 1 ;
+	      const bool unsalvageable = ( start || runs.d[r-1] == -1 ) && ( last || runs.d[r+1] == -1 ) ; 
+
+	      const bool too_short = runs.c[r] <= k;
+	      const bool ambig = runs.d[r] == -1 ;
+
+	      for (int j=0; j<runs.c[r]; j++)
+		{		
+		  		  
+		  // shift if any (non-ambiguous) segment is too short
+		  
+		  if ( too_short && ! ambig ) 
+		    {
+		      // check that this segment is salvageable 
+		      // i.e. not already flanked by ambiguous segments
+		      //  or the start/stop		      
+		      
+		      if ( ! unsalvageable ) 
+			bf.labels[cnt].shift();
+		      else
+			bf.ambiguous[cnt] = true;
+		    }
+
+		  cruns[cnt] = runs.c[r];
+		  ++cnt;
+		}
+	    }
 	}
     }
     
@@ -1323,7 +1579,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
     for (int j=0;j<N;j++)
       SpatCorr(i,j) = 1 - ( GMD(i,j) * GMD(i,j) ) / 2.0;
 
-  // Total GEV (nb. bsed on un-normalized X_)..
+  // Total GEV (nb. based on un-normalized X_)..
   
   Data::Vector<double> var = Statistics::sdev( X_ ,Statistics::mean(  X_ ) );
   double denom = 0;
@@ -1335,7 +1591,8 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 
   stats.GEV_tot = 0;
   for (int j=0;j<N;j++)
-    stats.GEV_tot += SpatCorr( L[j] , j ) * var[j] ;
+    if ( L[j] != -1 ) // for unambiguous assignments...
+      stats.GEV_tot += SpatCorr( L[j] , j ) * var[j] ;
   stats.GEV_tot /= denom;
   
   //   .Gfp        - Global field power
@@ -1362,13 +1619,24 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   stats.m_gfp.resize(K);
   stats.m_dur.resize(K);
   stats.m_occ.resize(K);
+  stats.m_occ_unambig.resize(K);
   stats.m_cov.resize(K);
+  stats.m_cov_unambig.resize(K);
+  stats.m_wcov.resize(K);
   stats.m_gev.resize(K);
   stats.m_spc.resize(K);
 
+  // track ambiguous points
+
+  int ambig = 0;
+  for (int j=0;j<N;j++)
+    if ( L[j] == -1 ) ++ambig;
+  
+  writer.value( "AMBIG" , ambig / (double)N );
+  
+  // stats for each class
   for (int k=0; k<K; k++)
     {
-
       // Mean GFP (nb. uses /n-1 version here only to match ML Toolbox
       // but we will swap to /n
       
@@ -1386,6 +1654,13 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
       stats.m_occ[k] = times.size() / (double) N * sr;
       stats.m_dur[k] = MiscMath::mean( times );
       stats.m_cov[k] = ( stats.m_occ[k] * stats.m_dur[k] ) / 1000.0;
+
+      // versions w/ denominator as only unambiguously assigned points
+      stats.m_occ_unambig[k] = stats.m_occ[k] / ( 1.0 - ambig / (double)N );
+      stats.m_cov_unambig[k] = stats.m_cov[k] / ( 1.0 - ambig / (double)N );
+      
+      // weighted coverage (mean spatial correlation across /all/ points)
+      stats.m_wcov[k] = MiscMath::mean( *SpatCorr.row(k).data_pointer() );
 
       // mean spatial correl
       std::vector<double> spc_k;
@@ -1409,9 +1684,9 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
       
       stats.m_gev[k] = numer / denom;
 
+      
       // next K
     }
-
   
   //
   // transition probs
@@ -1420,27 +1695,30 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   // runs.d contains sequence of states
 
   const int seqlen = runs.d.size();
+  
+  // count ambig (-1) as the class 'K+1' here 
 
-  stats.tr.resize(K,K);
-  Data::Vector<double> row(K);
+  stats.tr.resize(K+1,K+1);
+  Data::Vector<double> row(K+1);
   
   for (int s = 0 ; s < seqlen - 1 ; s++)
     {
-      ++stats.tr( runs.d[s] , runs.d[s+1] );
-      ++row( runs.d[s] );
+      const int klabel1 = runs.d[s] != -1 ? runs.d[s] : K ;
+      const int klabel2 = runs.d[s+1] != -1 ? runs.d[s+1] : K ;
+      ++stats.tr( klabel1 , klabel2 );
+      ++row( klabel1 );
     }
 
-  for (int i=0;i<K;i++)
-    for (int j=0;j<K;j++)
-      if ( i != j ) stats.tr(i,j) /= row[i];
-
+  for (int i=0;i<K+1;i++)
+    for (int j=0;j<K+1;j++)
+      if ( i != j && row[i] > 0 ) 
+	stats.tr(i,j) /= row[i];
 
   //
   // LZW complexity & SE
   //
 
   lzw_t lzw( runs.d , &stats.lwz_states );
-
 
   // mse_t se;
 
@@ -1456,13 +1734,25 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   if ( statesfile != ""  )
     {      
       logger << "  writing sequence order to " << statesfile << "\n";
-      const int n = runs.d.size();      
-      // Encode as A, B, C, ...
-      std::string s = std::string( n , '?' );
-      for (int i=0; i<n; i++)
-        s[ i ] = ms_prototypes_t::ms_labels[ runs.d[i] ];
+
+      // only write unambiguous state sequences
+      // as we are splicing out ambiguous segments, we need to manually check 
+      // that we do not have a duplicate sequence here...
       std::ofstream OUT1( Helper::expand( statesfile ).c_str() , std::ios::out );
-      OUT1 << subj_id << "\t" << s << "\n";
+      OUT1 << subj_id << "\t";
+
+      char last = '?';
+      for (int i=0; i<runs.d.size(); i++) 
+	if ( runs.d[i] != -1 )
+	  {
+	    char curr = ms_prototypes_t::ms_labels[ runs.d[i] ];
+	    if ( curr != last ) 
+	      {
+		OUT1 << curr;
+		last = curr; 
+	      }
+	  }
+      OUT1 << "\n";
       OUT1.close();      
     }
 
@@ -1470,11 +1760,10 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   //
   // k-mer distributions, optionally (in single-obs mode)
   //
-
-  if ( kmers_nreps )
+  
+  if ( kmers_nreps )    
     stats.kmers.run( runs.d , kmers_min , kmers_max , kmers_nreps );
-
-   
+     
   return stats;
 }
 
@@ -1490,10 +1779,29 @@ void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int 
       const std::vector<int> & l = ii->second;
       std::string & s = sall[ ii->first ];
       const int n = l.size();
-      // Encode as A, B, C, ...                                                                                                                                              
-      s = std::string( n , '?' );
+      
+      std::vector<char> newseq;
+      char last = '?';
       for (int i=0; i<n; i++)
-        s[ i ] = ms_prototypes_t::ms_labels[ l[i] ];
+        if ( l[i]  != -1 ) 
+	  {
+            char curr = ms_prototypes_t::ms_labels[ l[i] ];
+            if ( curr != last )
+              {
+                newseq.push_back( curr );
+                last = curr;
+              }
+	  }
+            
+      // do not allow for ambiguous labels here
+      // as we are splicing out '?' codes, we need to manually make sure we don't 
+      // have additional repeats  A?A --> A  not AA
+
+      const int n2 = newseq.size();
+      s = std::string( n2 , '?' );
+      for (int i=0; i<n2; i++)
+	s[i] = newseq[i];
+      
       ++ii;
     }
   run( sall , k1 , k2 , nreps , grp , verbose );
@@ -2154,7 +2462,14 @@ std::set<std::string> ms_kmer_t::permute( std::string str )
 void ms_prototypes_t::write( const std::string & filename )
 {
   logger << "  writing " << K << "-class prototypes to " << filename << "\n";
+
+  // now have a header
   std::ofstream O1( filename.c_str() , std::ios::out );
+  O1 << "CH";
+  for (int k=0;k<K;k++) O1 << "\t" << ms_labels[k];
+  O1 << "\n";
+  
+  // channels
   for (int c=0; c<C; c++)
     {
       O1 << chs[c];
@@ -2165,62 +2480,64 @@ void ms_prototypes_t::write( const std::string & filename )
   O1.close();
 }
 
-void ms_prototypes_t::read( const std::vector<std::string > & fvec )
+void ms_prototypes_t::read( const std::string & f )
 {
-  if ( fvec.size() < 1 ) 
-    Helper::halt( "bad input for read-prototypes()" );
 
-  const std::string & filename = Helper::expand( fvec[0] );
-
-  // this many states: if implied == 0, means
-  // we are not assigning labels, and so assumes A, B, C, D, etc
-  
-  const int implied = fvec.size() - 1 ; 
-  
-  ms_labels.resize( implied, '?' );
-  
-  for (int i=0; i<implied; i++)
-    {
-      if ( fvec[i+1].size() != 1 ) 
-	Helper::halt( "bad label: should be a single char: A, B, C, etc" );
-	  ms_labels[i] = fvec[i+1][0];
-    }
+  const std::string & filename = Helper::expand( f );
 
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not find " + filename );
 
   A.resize(0,0);
   chs.clear();
-  bool first = true;
-  std::vector<double> t;
-
   C = 0;
+
+  std::vector<double> t;
   
   std::ifstream IN1( filename.c_str() , std::ios::in );
+
+  // get header row
+  std::string line;
+  Helper::safe_getline( IN1 , line );
+  if ( line == "" || IN1.eof() ) 
+    Helper::halt( "bad format for " + filename );
+
+  std::vector<std::string> tok = Helper::parse( line );
+  if ( tok.size() < 3 )
+    Helper::halt( "problem reading prototypes from " + filename + "\n fewer than 2 classes\n" + line );
+  
+  if ( tok[0] != "CH" )
+    Helper::halt( "expecting first column to be 'CH' in " + filename );
+  
+
+  // set class labels
+
+  K = tok.size() - 1 ;
+  
+  logger << "  found " << K << " classes:" ;
+  ms_labels.resize( K );
+  for (int k=0; k<K; k++)
+    {
+      if ( tok[ k+1 ].size() != 1 ) 
+	Helper::halt( "state label cannot be >1 char : " + tok[k+1] );
+      ms_labels[ k ] = tok[ k+1 ][ 0 ];
+      logger << " " << ms_labels[ k ] ;
+    }
+  logger << "\n";
+  
+
   while ( ! IN1.eof() )
     {
       std::string line;
       Helper::safe_getline( IN1 , line );
       if ( IN1.eof() ) break;
       if ( line == "" ) break;
+      
       std::vector<std::string> tok = Helper::parse( line );
-      if ( tok.size() < 2 ) 
-	Helper::halt( "problem reading prototypes from " + filename + "\n fewer than 2 tokens\n" + line );
 
-      if ( first )
-	{
-	  K = tok.size() - 1;
-	  first = false;
-
-	  // must match, if a specific A,B,C,D order was given to this function
-	  if ( implied && implied != K ) 
-	    Helper::halt( "implied class order does not match number of columns in " + filename );
-	  
-	  logger << "  assuming " << K << " classes in " << filename << "\n";
-	}
-      else if ( tok.size() - 1 != K )
-	Helper::halt( "problem reading prototypes from " + filename + "\n col-1 != K\n" + line );
-
+      if ( tok.size() != K + 1 ) 
+	Helper::halt( "problem reading prototypes (bad column number) from " + filename );
+      
       for (int i=1;i<tok.size();i++)
 	{
 	  // nb. effective +1 encoding in file, due to channel col 0 
@@ -2230,31 +2547,22 @@ void ms_prototypes_t::read( const std::vector<std::string > & fvec )
 	    Helper::halt( "problem reading prototypes from " 
 			  + filename + "\n in coversion to numeric: " 
 			  + tok[i] + "\n" + line );
-	  t.push_back(x);	    
+	  t.push_back(x);
 	}
       
-    chs.push_back( tok[0] );
+      chs.push_back( tok[0] );
       
       ++C;
     }
   
   IN1.close();
-
+  
   if ( K == 0 || C == 0 )
     Helper::halt( "problem reading prototypes from " + filename + ": K or C == 0" );
   
   if ( t.size() != K * C )
     Helper::halt( "problem reading prototypes from " + filename + ": KC != # data points" );
-
-
-  // using defaults for cols : A, B, C, D, .... 
-  if ( implied == 0 ) 
-    {
-      ms_labels.resize( K );
-      for (int k=0;k<K;k++)
-	ms_labels[k] = (char)(65 + k); 
-    }
-
+  
   // store MAP in A
   A.resize( C , K );
   int tc = 0;
@@ -2497,7 +2805,7 @@ std::string ms_kmer_t::modified_random_draw( const std::string & l )
   for (int i=0;i<n;i++) ++urns[l[i]];
 
   // return string
-  std::string p(n,'?');
+  std::string p(n,'.');
   
   // initiate
   p[0] = l[ CRandom::rand( n ) ];
@@ -2565,3 +2873,234 @@ Eigen::MatrixXd microstates_t::mat2eig_tr( const Data::Matrix<double> & M )
       E(c,r) = M(r,c);
  return E;
 }
+
+
+void ms_prototypes_t::map_to_canonicals( const std::string & filename )
+{
+  // spatial correlation
+  // expect prototype file with headers that are labels
+  // take current maps A[][] and for each figure out the closest canonical state 
+  // (based on canonicals) 
+  // canonical file need not have the same channels
+
+  std::string filename2 = Helper::expand( filename );
+  if ( ! Helper::fileExists( filename2 ) ) 
+    Helper::halt( "could not find canonical prototype file " + filename2 );
+  
+  // tmp store
+ 
+  std::map<std::string,std::map<char,double> > ch2k2a;
+  
+
+  //
+  // get header
+  //
+
+  std::ifstream IN1( filename2.c_str() , std::ios::in );
+
+  std::string line;
+  Helper::safe_getline( IN1 , line );
+  if ( IN1.eof() || line == "" ) Helper::halt( "invalid header for " + filename2 );
+  std::vector<std::string> tok = Helper::parse( line , "\t " );  
+  if ( tok.size() < 2 ) Helper::halt( "bad format for " + filename2 );
+  const int nmaps = tok.size() - 1 ; 
+  
+  if ( tok[0] != "CH" ) 
+    Helper::halt( "column 1 should have header 'CH'" );
+  
+  std::vector<std::string> classes;
+
+  for (int i=1; i<tok.size(); i++)
+    {
+      if ( tok[i].size() != 1 ) 
+	Helper::halt( tok[i] + " -- state labels can only be single characters," + filename2 );
+      classes.push_back( tok[i] );
+    }
+
+  // canonical map names are tok[]  (starting from X=1 to X <= nmaps)  
+
+  while ( ! IN1.eof() )
+    {
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.eof() ) break;
+      if ( line == "" ) continue;
+      std::vector<std::string> tok = Helper::parse( line , "\t " );
+      if ( tok.size() != nmaps + 1 ) Helper::halt( "bad ... " );
+      
+      const std::string & channel = tok[0];
+
+      for (int i=1; i<tok.size(); i++)
+	{
+	  double a;
+	  if ( ! Helper::str2dbl( tok[i] , &a ) )
+	    Helper::halt( "problem reading value: " + tok[i] );
+	  ch2k2a[ channel ][ classes[ i-1 ][0] ] = a;
+	}
+      
+    }
+  IN1.close();
+
+  // 
+  // Create matrix in same order as A[][] 
+  //
+
+  const int canK = classes.size();
+  
+  Eigen::MatrixXd CA = Eigen::MatrixXd::Zero( C , canK );
+
+  for (int c=0; c<C; c++)
+    {
+      // was this channel specified?
+      if ( ch2k2a.find( chs[ c ] ) == ch2k2a.end() )
+	Helper::halt( "could not find channel " + chs[c] + " in " + filename2 );
+      
+      for (int k=0; k<canK; k++)
+	CA(c,k) = ch2k2a[ chs[c] ][ classes[k][0] ];
+
+    }
+
+  //
+  // Now we have CA with canK 'canonical' prototypes
+  // and our estimated/observed prototypes with K maps
+  // and these are oriented for the same channels
+  
+  
+  //
+  // Find each observed map, find best match in canA
+  //
+
+  
+  //
+  // Normalize both maprs 
+  //
+
+  Eigen::MatrixXd ZA = A;
+  eigen_ops::scale( ZA , true );  
+  eigen_ops::scale( CA , true );
+
+  Eigen::MatrixXd R( K , canK );
+
+  for (int k=0; k<K; k++)
+    for (int k2=0; k2<canK; k2++)
+      R(k,k2) = spatial_correlation( ZA.col(k) , CA.col(k2) );
+  
+  std::cout << R << "\n";
+
+  
+  
+  // For each 
+  
+  //
+  // Re-order A to 
+  //
+
+  // Eigen::MatrixXd::Index maxIndex[2];
+  // VectorXf maxVal(2);
+  // for(int i=0;i<2;++i)
+  //   maxVal(i) = mat.row(i).maxCoeff( &maxIndex[i] );
+
+
+  // Eigen::MatrixXd A; // C x K                                                                                                                  
+
+}
+
+
+double ms_prototypes_t::spatial_correlation( const Eigen::VectorXd & M1, const Eigen::VectorXd & M2 )
+{
+
+  // calculate spatial correlation between two maps 
+
+  const int nc = M1.size();
+  
+  if ( M2.size() != nc ) 
+    Helper::halt( "internal error in spatial_correlation() : different channel N" );
+  
+  // Global Map Dissimilarity (GMD)
+  
+  double t = 0 , t2 = 0;
+  for (int i=0; i<nc; i++)
+    {
+      t +=  ( M1[i] - M2[i] ) * ( M1[i] - M2[i] ) ;
+      t2 += ( M1[i] + M2[i] ) * ( M1[i] + M2[i] ) ;
+    }
+  
+  t = sqrt( t / (double)nc );
+  t2 = sqrt( t2 / (double)nc );
+
+  // pick smallest distance to ensure polarity invariance
+  double gmd = t < t2 ? t : t2 ;
+
+  // return spatial correlation
+  return 1 - ( gmd * gmd ) / 2.0; 
+  
+}
+
+
+// confidence threshold 
+void ms_backfit_t::determine_ambiguity( double conf , double th2 ) 
+{
+  const int K = GMD.dim1();
+  const int N = GMD.dim2();
+
+  ambiguous.resize( N , false );
+
+  // note: lots of redundancy here... streamline these calcs...
+
+  // get SPC
+  Data::Matrix<double> SPC = GMD;
+  for (int k=0; k<K; k++)
+    for (int i=0; i<N; i++)
+      SPC(k,i) = 1 - ( SPC(k,i) * SPC(k,i) ) / 2.0;
+  
+  int cnt = 0; 
+
+  // get CONF
+  for (int i=0; i<N; i++)
+    { 
+      double best = 0;
+      double next = 0;
+      for (int k=0; k<K; k++)
+	{
+	  if ( SPC(k,i) > best )
+	    {
+	      next = best;
+	      best = SPC(k,i);				  
+	    }
+	  else if ( SPC(k,i) > next )
+	    next = SPC(k,i); 
+	}			  
+      
+      // set to 100 as max
+      double c = next > 0 ? best / next : 100; 
+      
+      // mark as ambiguous
+      if ( c < conf || best < th2 ) 
+	{ ambiguous[i] = true; ++cnt; } 
+    }
+
+  // // 
+  // // any fill-ins?
+  // // 
+
+  // if ( fillin_samples )
+  //   {
+  //     int prior = -1;
+  //     for (int i=1; i<N-1; i++)
+  // 	{
+  // 	  if ( ! ambiguous[i] ) 
+  // 	    prior = 
+
+  // 	  if ( ambiguous[i] ) 
+	    
+  // 	}
+
+  //   }
+
+  logger << "  set " << Helper::dbl2str_fixed( 100 * cnt / (double)N , 2 ) << "% points as ambiguous\n";
+  
+}
+  
+
+
+

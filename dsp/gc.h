@@ -44,13 +44,33 @@ struct gc_t {
 	int compute_bic = 0 
 	);
   
-  void report();
-  
   // time-domain
   double y2x, x2y;
+  
+  // BIC-determined model order
+  int bic;
 
   // frequency-stratified  
   std::map<double,double> tf_y2x, tf_x2y;
+
+  // track averages over epochs (i.e. over different gc_t instances, so static)
+  // channel-specific [ch1][ch2]->value
+  static std::map<int,std::map<int,double> > y2x_sum;
+  static std::map<int,std::map<int,double> > x2y_sum;
+  static std::map<int,std::map<int,std::map<double,double> > > tf_x2y_sum;
+  static std::map<int,std::map<int,std::map<double,double> > > tf_y2x_sum;
+  static int ne;
+
+  static void init() 
+  {
+    y2x_sum.clear();
+    x2y_sum.clear();
+    tf_x2y_sum.clear();
+    tf_x2y_sum.clear();
+    ne = 0;
+  }
+
+  static void report( const signal_list_t & signals );
   
 };
 

@@ -224,14 +224,19 @@ lzw_t::lzw_t( const std::vector<int> & x , double * ratio )
 {
   // use labels A, B, C, etc as states
   // asssume x is 0 to 25
+  //  -1 --->  ?  (ambiguous state) 
+  //  otherwise here assume max value of x[] will not be more than 26 (i.e. K)
+  //  and so we can 
   
   std::string s( x.size() , '?' );
   
   for (int i=0; i<x.size(); i++)
     {
-      if ( x[i] < 0 || x[i] > 25 )
+      if ( x[i] > 25 )
 	Helper::halt( "bad state sequence in lzw_t() - cannot have more than 26 states" );
-      s[i] = (char)(65+x[i]);
+
+      if ( x[i] > 0 )  // i.e. retain '?' for ambiguous states
+	s[i] = (char)(65+x[i]);
     }
   
   std::vector<int> compressed;

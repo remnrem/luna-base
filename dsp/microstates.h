@@ -53,18 +53,22 @@ struct ms_prototypes_t {
     if ( A_.rows() != C ) Helper::halt( "internal inconsistency in ms_prototypes_t()" );    
     chs.resize( C );
     for (int s=0;s<C; s++) chs[s] = signals.label(s);
-    // set default A, B, C, ... encoding
+    // set default 1, 2, 3, ... encoding
     ms_labels.resize( K );
-    for (int k=0;k<K;k++) ms_labels[k] = 65 + k;
+    for (int k=0;k<K;k++) ms_labels[k] = 49 + k;
   }
-		   
+  
   void write( const std::string & filename );
-  void read( const std::vector<std::string> & fvec ); // filename + optional A,B,C,D order
+  void read( const std::string & filename );
   
   // i.e. store explicitly, as might not be A, B, C, D (i.e. if skips A, C, E, F ) 
   // enfore that these are single chars, i.e. to make the sequence analysis work
   static std::vector<char> ms_labels;
 
+  void map_to_canonicals( const std::string & filename );
+  
+  static double spatial_correlation( const Eigen::VectorXd & M1 , const Eigen::VectorXd & M2 );
+  
   int K;
   int C;
   std::vector<std::string> chs; // C
@@ -137,17 +141,27 @@ struct ms_assignments_t {
 
 struct ms_backfit_t {
 
-  ms_backfit_t( const int N ) { labels.resize(N); } 
+  ms_backfit_t( const int N ) { labels.resize(N); ambiguous.resize( N, false ); } 
 
   // class to keep track of best (and 2nd, 3rd, etc) best picks, for each N
   std::vector<ms_assignments_t> labels;
 
+  // return -1 for an ambiguous assignment
   std::vector<int> best() const {
     const int n = labels.size();
     std::vector<int> L( n );
-    for (int i=0;i<n;i++) L[i] = labels[i].best();      
+    for (int i=0;i<n;i++) 
+      {
+	if ( ambiguous[i] ) L[i] = -1;
+	else L[i] = labels[i].best();
+      }
     return L;
   }
+  
+  // confidence threshold 
+  void determine_ambiguity( double conf , double th2 );
+  
+  std::vector<bool> ambiguous;
   
   // and also store full GMD for best class separately
   Data::Matrix<double> GMD;
@@ -228,7 +242,7 @@ struct ms_kmer_t {
   std::set<std::string> permute( std::string str );
   std::string first_permute( std::string str );
   std::string modified_random_draw( const std::string & );
-  char pick( const std::map<char,int> & urns , char skip = '?' );
+  char pick( const std::map<char,int> & urns , char skip = '.' );
   std::string s;
   
   //
@@ -278,7 +292,10 @@ struct ms_stats_t {
   Data::Vector<double> m_gfp;
   Data::Vector<double> m_dur;
   Data::Vector<double> m_occ;
+  Data::Vector<double> m_occ_unambig;
   Data::Vector<double> m_cov;
+  Data::Vector<double> m_cov_unambig;
+  Data::Vector<double> m_wcov; // weighted coverage
   Data::Vector<double> m_gev;
   Data::Vector<double> m_spc;
 
@@ -318,10 +335,12 @@ struct microstates_t {
   
   ms_prototypes_t  segment( const Data::Matrix<double> & X , 
 			    const signal_list_t & signals ,
-			    const std::vector<int> & peaks );
+			    const std::vector<int> & peaks , 
+			    const std::string * canonical_file );
   
   ms_backfit_t backfit( const Data::Matrix<double> & X_ , 
 			const Data::Matrix<double> & A_ , 
+			const double lambda , 
 			bool return_GMD );
   
   ms_backfit_t smooth_reject( const ms_backfit_t & labels ,
