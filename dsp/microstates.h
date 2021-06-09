@@ -68,7 +68,7 @@ struct ms_prototypes_t {
   void map_to_canonicals( const std::string & filename );
   
   static double spatial_correlation( const Eigen::VectorXd & M1 , const Eigen::VectorXd & M2 );
-  
+
   int K;
   int C;
   std::vector<std::string> chs; // C
@@ -179,8 +179,8 @@ struct ms_kmer_results_t {
   // key is sequence as a string
   
   // observed statistic (count / relative freq)
-  std::map<std::string,double>  obs;    // OBS                                                                                                       
-
+  std::map<std::string,double>  obs;    // OBS
+  
   // track all NREP permuted statistics
   std::map<std::string,std::vector<double> > perm;   
   
@@ -407,6 +407,13 @@ struct microstates_t {
   std::string statesfile;
   std::string subj_id;
 
+  //
+  // write individual prototype maps (for --compare-maps)
+  //
+
+  std::string mapsfile;
+
+  
   
   bool standardize;
   
@@ -427,5 +434,42 @@ struct microstates_t {
   int kmers_max;
   
 };
+
+
+
+struct ms_cmp_maps_t {
+
+  ms_cmp_maps_t( const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & d ,
+		 const Eigen::MatrixXd * fixed ,
+		 const std::vector<std::string> * fixed_chs , 
+		 const std::map<std::string,int> & phe ,
+		 const int nreps ,
+		 const bool brute_force = false );
+
+  double cmp_maps( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B );
+
+  double cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B );
+
+  double cmp_maps_template( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B , std::vector<int> * best = NULL );
+
+  double statistic( const std::vector<int> & phe ,
+		    const std::vector<int> & perm ,
+		    const Eigen::MatrixXd & R ,
+		    Eigen::VectorXd * ires );
+
+  double het_statistic( const std::vector<int> & phe ,
+			const std::vector<int> & perm ,
+			const Eigen::MatrixXd & R ,
+			double *within );
+
+  double het_template_statistic( const std::vector<int> & phe ,
+				 const std::vector<int> & perm ,
+				 const Eigen::VectorXd & R ,
+				 double *within );
+				 
+
+  
+};
+
 
 #endif

@@ -34,6 +34,7 @@
 #include "timeline/cache.h"
 
 #include <limits>
+#include <algorithm>
 
 extern writer_t writer;
 extern logger_t logger;
@@ -3104,3 +3105,588 @@ void ms_backfit_t::determine_ambiguity( double conf , double th2 )
 
 
 
+
+ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & data ,
+			      const Eigen::MatrixXd * fixed , 
+			      const std::vector<std::string> * fixed_chs , 
+			      const std::map<std::string,int> & phe ,
+			      const int nreps ,
+			      const bool brute_force ) 
+{
+
+  // if fixed is non-NULL, then do a C/C comparison against this fixed map
+  // otherwise, compare all concordant pairs / all discordant pairs
+  
+  // d: id -> k -> ch -> a 
+  
+  std::vector<int> g;
+  
+  // track channels and K's (i.e. to check that all is the same)
+  std::set<std::string> chs;
+  std::set<std::string> ks;
+  std::vector<std::string> ids;
+  
+  std::map<std::string,int>::const_iterator ii = phe.begin();
+  while ( ii != phe.end() )
+    {
+      // no data?
+      if ( data.find( ii->first ) == data.end() )
+	{ ++ii; continue; } 
+
+      // missing phenotye? (not 0 or 1)
+      if ( ii->second != 0 && ii->second != 1 ) { ++ii; continue; }
+
+      // track 0 or 1 phenotype
+      g.push_back( ii->second );
+
+      ids.push_back( ii->first );
+      
+      // make matrix
+      // track channels
+      const std::map<std::string,std::map<std::string,double> > & dat = data.find( ii->first )->second;
+      
+      // track # of classes
+      std::map<std::string,std::map<std::string,double> >::const_iterator kk = dat.begin();
+      while ( kk != dat.end() )
+	{
+	  ks.insert( kk->first ); // track class
+	  const std::map<std::string,double> & dat2 = kk->second;
+	  std::map<std::string,double>::const_iterator cc = dat2.begin();
+	  while ( cc != dat2.end() )
+	    {
+	      chs.insert( cc->first );
+	      ++cc;
+	    }
+	  ++kk;
+	}
+      
+      ++ii;
+    }
+
+  //
+  // size of the problem 
+  //
+
+  const int ni = g.size();  
+  const int nc = chs.size();
+  const int nk = ks.size();
+
+  //
+  // the actual data
+  //
+
+  std::vector<Eigen::MatrixXd> m( ni );
+
+  for (int i=0; i<ni; i++)
+    {
+      Eigen::MatrixXd X = Eigen::MatrixXd::Zero( nc , nk );
+
+      const std::map<std::string,std::map<std::string,double> > & dat = data.find( ids[i] )->second;      
+      if ( dat.size() != nk ) Helper::halt( "uneven data1") ;
+
+      // classes = columns
+      int c = 0;
+      std::set<std::string>::const_iterator kk = ks.begin();
+      while ( kk != ks.end() )
+	{
+	  
+	  const std::map<std::string,double> & dat2 = dat.find( *kk )->second;	  
+	  if ( dat2.size() != nc ) Helper::halt( "uneven data2") ;
+
+	  
+	  int r = 0;
+	  std::set<std::string>::const_iterator cc = chs.begin();
+	  while ( cc != chs.end() )
+	    {
+	      X( r , c ) = dat2.find( *cc )->second;
+	      // next row/channel
+	      ++r;
+	      ++cc;
+	    }
+	  // next column/class
+	  ++kk;
+	  ++c; 
+	}
+
+      // store data for this individual...
+      m[i] = X;
+      
+      // next individual
+
+    }
+  
+  //
+  // Now all data should be nicely loaded in and squared off
+  //
+
+
+  //
+  // Individual vs. template comparisons? 
+  //
+
+  if ( fixed != NULL )
+    {
+      
+      logger << "  comparing individuals to a fixed template\n";
+     
+      Eigen::MatrixXd FX;
+      
+      const int nt = fixed->cols();
+      if ( nt < nk ) Helper::halt( "template contains fewer prototypes than data" );
+      if ( fixed->rows() != nc ) Helper::halt( "fixed map has bad # of channels" );
+      FX = Eigen::MatrixXd::Zero( nc , nt );
+      std::map<std::string,int> ch2row;
+      for (int r=0; r<nc; r++) ch2row[ (*fixed_chs)[r] ] = r;
+      std::set<std::string>::const_iterator cc = chs.begin();
+      int rn = 0;
+      while ( cc != chs.end() )
+	{
+	  if ( ch2row.find( *cc ) == ch2row.end() )
+	    Helper::halt( "mismatch of channel labels" );	  
+	  for (int j=0; j<nt; j++)
+	    FX(rn,j) = (*fixed)(ch2row[*cc],j);
+	  ++rn;
+	  ++cc;
+	}
+      
+      Eigen::VectorXd R = Eigen::VectorXd::Zero( ni );
+      
+      // store best matches?
+      // after reading template, (with prototypes::read())
+      // the static ms_prototypes_t::ms_labels[] will contain
+      // the T canonical labels
+      // nb, we allow for the template to have more classes than
+      // the data;  we use a special comparison function cmp_map_templates()
+      // that returns the optimal match returnning a subset of nk of the total nt
+      
+      std::vector<std::vector<int> > best(ni);
+      for (int i=0;i<ni; i++) best[i].resize( nk );
+      
+      // always brute-force ; special comparison as we
+      // allow FX to have more classes than 'm'
+      for (int i=0;i<ni; i++)
+	R[i] = cmp_maps_template( m[i] , FX , &(best[i]) ) ;
+
+      //
+      // Statistics on R
+      //
+      
+
+      // Original data
+
+      std::vector<int> perm( ni );
+      for (int i=0;i<ni;i++) perm[i] = i;
+      
+      // | case-F - control-F |
+      double within[2]; // also , mean 11, and mean 00 groups
+      double het_between = het_template_statistic( g , perm , R , within );
+  
+      // Permutations      
+      int r_het = 0 , r_w_cas = 0 , r_w_con = 0;
+      for (int p = 0; p < nreps ; p++ )
+	{
+	  // shuffle
+	  CRandom::random_draw( perm );
+	  
+	  // within group stats
+	  double pwithin[2];
+	  double phet = het_template_statistic( g , perm , R , pwithin );
+	  if ( phet >= het_between ) ++r_het;      
+	  if ( pwithin[0] >= within[0] ) ++r_w_cas;
+	  if ( pwithin[1] >= within[1] ) ++r_w_con;
+	}
+      
+      double p_het = ( r_het + 1 ) / (double)( nreps + 1 );
+      double p_cas = ( r_w_cas + 1 ) / (double)( nreps + 1 );
+      double p_con = ( r_w_con + 1 ) / (double)( nreps + 1 );  
+      
+      logger << "  case-template similarity                         : " << within[0] << " p = " << p_cas   << "\n";
+      logger << "  control-template similarity                      : " << within[1] << " p = " << p_con   << "\n";
+      logger << "  | case-template - control-template | similarity  : " << het_between << " p = " << p_het   << "\n";
+      
+      // writer.value( "P_TEMPLATE_HET" , p_het );
+      // writer.value( "P_TEMPLATE_CAS" , p_cas );
+      // writer.value( "P_TEMPLATE_CON" , p_con );  
+  
+      for (int i=0;i<ni; i++)
+	{
+	  writer.id( ids[i] , "." );
+	  writer.value( "S" , R[i] );
+
+	  // matches w/ the canonical template
+	  for (int k=0;k<nk;k++)
+	    {
+	      writer.level( k , "SLOT" );
+	      writer.value( "T" , std::string( 1, ms_prototypes_t::ms_labels[ best[i][k] ] ) );
+	    }
+	  writer.unlevel( "SLOT" );
+	}
+      
+      // all done now
+      return;
+    }
+
+  
+  
+  //
+  // Otherwise, report pairwise comparisons
+  //
+  
+  logger << "  creating individual-by-individual global similarity matrix\n";
+    
+  Eigen::MatrixXd R = Eigen::MatrixXd::Zero( ni, ni );
+
+  for (int i=0;i<ni; i++)
+    for (int j=i+1;j<ni;j++)
+      R(i,j) = R(j,i) = brute_force ? cmp_maps_bf( m[i] , m[j] ) : cmp_maps( m[i] , m[j] );
+  
+  //
+  // Original data
+  //
+
+  std::vector<int> perm( ni );
+  for (int i=0;i<ni;i++) perm[i] = i;
+
+  // individual-level summary statistics
+  Eigen::VectorXd ires( ni );
+
+  // concordant pairs / discordant pairs
+  double pobs = statistic( g , perm , R , &ires );
+
+  // | case-pairs - control-pairs |
+  double within[2]; // also , mean 11, and mean 00 groups
+  double het_between = het_statistic( g , perm , R , within );
+  
+  
+  //
+  // Permutations
+  //
+
+  int r = 0 ; 
+  int r_het = 0 , r_w_cas = 0 , r_w_con = 0;
+  
+  for (int p = 0; p < nreps ; p++ )
+    {
+      // shuffle
+      CRandom::random_draw( perm );
+
+      // pairwise stats
+      double pst = statistic( g , perm , R , NULL );
+      if ( pst >= pobs ) ++r;      
+
+      // within group stats
+      double pwithin[2];
+      double phet = het_statistic( g , perm , R , pwithin );
+      if ( phet >= het_between ) ++r_het;      
+      if ( pwithin[0] >= within[0] ) ++r_w_cas;
+      if ( pwithin[1] >= within[1] ) ++r_w_con;
+    }
+  
+  double p_pairs = ( r + 1 ) / (double)( nreps + 1 );
+  double p_het = ( r_het + 1 ) / (double)( nreps + 1 );
+  double p_cas = ( r_w_cas + 1 ) / (double)( nreps + 1 );
+  double p_con = ( r_w_con + 1 ) / (double)( nreps + 1 );  
+  
+  logger << "  within-case similarity                       : " << within[0] << " p = " << p_cas   << "\n";
+  logger << "  within-control similarity                    : " << within[1] << " p = " << p_con   << "\n";
+  logger << "  | within-case - within-control | similarity  : " << het_between << " p = " << p_het   << "\n";
+  logger << "  concordant / discordant pair similarity      : " << pobs  << " p = " << p_pairs << "\n";
+  
+  // writer.value( "P_PAIRS" , p_pairs );
+  // writer.value( "P_HET" , p_het );
+  // writer.value( "P_CAS" , p_cas );
+  // writer.value( "P_CON" , p_con );  
+  
+  for (int i=0;i<ni; i++)
+    {
+      writer.id( ids[i] , "." );
+      writer.value( "S" , ires[i] );
+    }
+  
+}
+
+//
+// Get statistic (C/C and also for each person) given R
+//
+
+double ms_cmp_maps_t::statistic( const std::vector<int> & phe ,
+				 const std::vector<int> & perm ,
+				 const Eigen::MatrixXd & R ,
+				 Eigen::VectorXd * ires )
+{
+
+  // if ires != NULL, return summary statistic for mean similarity of each
+  // person to all others
+
+  if ( ires != NULL )
+    {
+      *ires = R.array().colwise().sum();
+      *ires /= (double)(R.rows() - 1);
+    }
+
+  
+  // C/C permutation
+  // only count discordant C/C pairs
+  // return sum
+
+  double st = 0;
+  double st_within = 0;
+  
+  const int ni = R.rows();
+
+  int n_disc = 0 , n_conc = 0;
+  
+  for (int i=0; i<ni; i++)
+    {
+      for (int j=0; j<ni; j++)
+	{
+      
+	  // if only looking at discordant pairs, we don't
+	  // need to worry abount count self matches (although
+	  // those should be set to 0.0 in any case)
+	  
+	  if ( phe[ perm[ i ] ] != phe[ perm[ j ] ]  )
+	    {
+	      st += R( i , j );
+	      ++n_disc;
+	    }
+	  else
+	    {
+	      st_within += R( i , j );
+	      ++n_conc;
+	    }
+	}
+    }
+  
+  // concordant pairs / discordant pairs similarity 
+  return ( st_within/(double)n_conc) / (st/(double)n_disc )  ; 
+  
+}
+
+
+double ms_cmp_maps_t::het_statistic( const std::vector<int> & phe ,
+				     const std::vector<int> & perm ,
+				     const Eigen::MatrixXd & R ,
+				     double *within )
+{
+
+  
+  // this only looks at case-case and control-control pairs
+  //  (versus the other statistic is based on case-control versus other pairs)
+  
+  double st = 0;
+  double st_cas = 0 , st_con = 0;
+  int n_cas_pairs = 0 , n_con_pairs = 0;  
+
+  const int ni = R.rows();
+  
+  for (int i=0; i<ni; i++)
+    for (int j=0; j<ni; j++)
+      {
+
+	// here, ignore discordant pairs
+	if ( phe[ perm[ i ] ] != phe[ perm[ j ] ]  ) continue;
+	
+	if ( phe[ perm[ i ] ] == 1 )
+	  {
+	    st_cas += R( i , j );
+	    ++n_cas_pairs;
+	  }
+	else
+	  {
+	    st_con += R( i , j );
+            ++n_con_pairs;
+	  }
+      }
+
+  // mean within-case simularity
+  within[0] = st_cas / (double)n_cas_pairs;
+
+  // mean within-control similarity
+  within[1] = st_con / (double)n_con_pairs;
+  
+  // | case-case - control-control |
+  return fabs( within[0] - within[1] );
+  
+  
+}
+
+
+
+double ms_cmp_maps_t::het_template_statistic( const std::vector<int> & phe ,
+					      const std::vector<int> & perm ,
+					      const Eigen::VectorXd & R ,					      
+					      double *within )
+
+{
+
+  
+  // this only looks at case-case and control-control pairs
+  //  (versus the other statistic is based on case-control versus other pairs)
+  
+  double st = 0;
+  double st_cas = 0 , st_con = 0;
+  int n_cas = 0 , n_con = 0;  
+
+  const int ni = R.rows();
+  
+  for (int i=0; i<ni; i++)
+    {
+      if ( phe[ perm[ i ] ] == 1 )
+	{
+	  st_cas += R[i] ;
+	  ++n_cas;
+	}
+      else
+	{
+	  st_con += R[i];
+	  ++n_con;
+	}
+    }
+  
+  // mean case-template similarity
+  within[0] = st_cas / (double)n_cas;
+  
+  // mean control-template similarity
+  within[1] = st_con / (double)n_con;
+  
+  // | case-case - control-control |
+  return fabs( within[0] - within[1] );
+  
+  
+}
+
+
+
+
+
+
+//
+// Get spatial correlation given two maps, and find the best join: greedy
+//
+
+double ms_cmp_maps_t::cmp_maps( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B )
+{
+
+  // here, we can assume that A and B are of the same dimension
+  // we can also assume that maps are normalized
+  
+  const int nk = A.cols();
+
+  // get matrix of spatial correlations
+  
+  Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nk );
+  for (int i=0; i<nk; i++)
+    for (int j=0; j<nk; j++)
+      R(i,j) = ms_prototypes_t::spatial_correlation( A.col(i) , B.col(j) );
+  
+
+  // find best match, greedily
+  
+  double res = 0;
+  for (int k=0; k<nk; k++)
+    {
+      Eigen::Index r0, c0;      
+      R.maxCoeff(&r0,&c0);
+      res += R(r0,c0);
+      R.row(r0) = Eigen::VectorXd::Zero( nk );
+      R.col(c0) = Eigen::VectorXd::Zero( nk );      
+    }
+
+  return res / (double)nk;
+  
+}
+
+
+
+//
+// Get spatial correlation given two maps, and find the best join: brute-force
+//
+
+double ms_cmp_maps_t::cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B )
+{
+
+  const int nk = A.cols();
+  Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nk );
+  for (int i=0; i<nk; i++)
+    for (int j=0; j<nk; j++)
+      R(i,j) = ms_prototypes_t::spatial_correlation( A.col(i) , B.col(j) );
+  
+  // find best match, brute-force over all combinations
+  //  for K pairs , find all possible matches
+
+  // keep person 'A' fixed (1, 2, 3, ..., K)
+  // then make all possible permutations of 'B' vector
+
+  std::vector<int> kb( nk );
+  for (int i=0; i<nk; i++) kb[i] = i;
+
+  double max_res = 0;
+  
+  do {
+    double res = 0;
+    for (int k=0; k<nk; k++)
+      res += R(k,kb[k]);
+    if ( res > max_res )
+      max_res = res;
+    
+  } while ( std::next_permutation( kb.begin() , kb.end() ) );
+    
+  return max_res / (double)nk;
+  
+}
+
+
+//
+// Get spatial correlation given a map and a 'template' set;
+// Using brute-force enumeration of all possibilities, here we allow the template (T)
+// to have more columns than than map "A" and we select the best
+//
+
+double ms_cmp_maps_t::cmp_maps_template( const Eigen::MatrixXd & A , const Eigen::MatrixXd & T , std::vector<int> * best )
+{
+
+  const int nk = A.cols();
+  const int nt = T.cols(); 
+
+  // nk x nt correlation matrix:
+  Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nt );
+  for (int i=0; i<nk; i++)
+    for (int j=0; j<nt; j++)
+      R(i,j) = ms_prototypes_t::spatial_correlation( A.col(i) , T.col(j) );
+  
+  // find best match, brute-force over all combinations
+  //  for K pairs , find all possible matches
+
+  // keep person 'A' fixed (1, 2, 3, ..., K)
+  // then make all possible permutations of 'B' vector
+  //  by permuting all 'nt' labels, but only selecting the first 'nk'
+  // involves redundant work, but should not be an issue really
+  
+  std::vector<int> kt( nt );
+  for (int i=0; i<nt; i++) kt[i] = i;
+  
+  double max_res = 0;
+
+  do {
+    double res = 0;    
+
+    // nb, here only looking at the first nk of nt
+    for (int k=0; k<nk; k++) 
+      res += R(k,kt[k]);
+    
+    if ( res > max_res )
+      {
+	max_res = res;
+	if ( best != NULL ) *best = kt; 
+      }
+
+  } while ( std::next_permutation( kt.begin() , kt.end() ) );
+
+  // reduce 'best' down to the first nk elements from nt
+  if ( best != NULL )
+    best->resize( nk );
+  
+  return max_res / (double)nk;
+  
+}

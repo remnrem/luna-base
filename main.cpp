@@ -230,13 +230,14 @@ int main(int argc , char ** argv )
   // iterating through a sample list
   //
 
-  bool cmdline_proc_fir_design = false;
-  bool cmdline_proc_cwt_design = false;
-  bool cmdline_proc_pdlib      = false;
-  bool cmdline_proc_psc        = false;
-  bool cmdline_proc_ms_kmer    = false;
-  bool cmdline_proc_copy_suds  = false;
-  bool cmdline_proc_cperm_test = false;
+  bool cmdline_proc_fir_design  = false;
+  bool cmdline_proc_cwt_design  = false;
+  bool cmdline_proc_pdlib       = false;
+  bool cmdline_proc_psc         = false;
+  bool cmdline_proc_ms_kmer     = false;
+  bool cmdline_proc_ms_cmp_maps = false;
+  bool cmdline_proc_copy_suds   = false;
+  bool cmdline_proc_cperm_test  = false;
 
 
   //
@@ -276,6 +277,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_cperm_test = true;
 	  else if ( strcmp( argv[1] , "--kmer" ) == 0 )
 	    cmdline_proc_ms_kmer = true;
+	  else if ( strcmp( argv[1] , "--cmp-maps" ) == 0 )
+	    cmdline_proc_ms_cmp_maps = true;
 	  else if ( strcmp( argv[1] , "--copy-suds" ) == 0 ) 
 	    cmdline_proc_copy_suds = true;
 	}
@@ -774,8 +777,152 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
-  
-  
+
+
+
+  //
+  // MS compare maps
+  //
+
+
+  if ( cmdline_proc_ms_cmp_maps )
+    {
+      param_t param;
+      build_param_from_cmdline( &param );
+      writer.begin();
+      
+      writer.id( "." , "." );      
+      writer.cmd( "CMP-MAPS" , 1 , "" );
+      writer.level( "CMP-MAPS", "_CMP-MAPS" );
+
+      logger << " running CMP-MAPS\n";
+      
+      //
+      // number of permutations to perform 
+      //
+
+      int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000;
+
+      //
+      // to define global similarity: greedy or brute-force (default) enumeration of all possibilities?
+      //
+      
+      const bool brute_force = ! param.has( "greedy" );
+      
+      //
+      // Either all-case compared to all-controls : stat = d( concordant pairs ) / d( discordant pairs )
+      // OR given a fixed map=M: stat =  ( d( case - X ) - d( control - X )^2 
+      // 
+
+      bool use_fixed = param.has( "template" );
+
+      ms_prototypes_t fixed;
+
+      if ( use_fixed )
+	{
+	  // read a standard prototype map file (sol format, i.e. no ID)
+	  std::string fixed_map = Helper::expand( param.value( "template" ) );	  
+	  fixed.read( fixed_map );
+	}
+      
+      //
+      // Load maps
+      //
+
+      // expect a file as output from MS A matrix in long format
+      // ID	CH	K	A
+      
+      std::string infile = Helper::expand( param.requires( "file" ) );
+
+      // ID -> K -> CH -> 'A'
+
+      std::map<std::string,std::map<std::string,std::map<std::string,double> > > data;
+      if ( ! Helper::fileExists( infile ) ) Helper::halt( "could not open " + infile );
+      std::ifstream IN1( infile.c_str() , std::ios::in );
+      // header...
+      std::string id, ch, k, dummy;
+      IN1 >> id >> ch >> k >> dummy;
+      if ( id != "ID" || ch != "CH" || k != "K" || dummy != "A" )
+	Helper::halt( "bad format" );
+      
+      while ( ! IN1.eof() )
+	{
+	  std::string id, ch, k;
+	  double a;
+	  IN1 >> id >> ch >> k >> a;
+	  if ( IN1.eof() || id == "" ) continue;
+	  data[ id ][ k ][ ch ] = a;	  
+	}
+      IN1.close();
+
+      
+      //
+      // phenotypes?      
+      //
+
+      if ( param.has( "vars" ) )
+	cmd_t::attach_ivars( param.value( "vars" ) );
+      
+      const std::string phe_label = param.has( "phe" ) ? param.value( "phe" ) : "" ;
+      const bool grp = phe_label != "";
+      
+      std::map<std::string,int> phe;
+      
+      if ( grp )
+	{
+	  std::vector<std::string> ids;
+	  std::map<std::string,std::map<std::string,std::map<std::string,double> > >::const_iterator qq =  data.begin();
+	  while ( qq != data.end() ) { ids.push_back( qq->first ); ++qq; } 
+		
+	  phe = cmd_t::pull_ivar( ids , phe_label );
+	  int cases = 0 , controls = 0 , missing = 0;
+	  
+	  std::map<std::string,int>::const_iterator ii = phe.begin();
+	  while ( ii != phe.end() )
+	    {
+	      if ( ii->second == 0 ) ++controls;
+	      else if ( ii->second == 1 ) ++cases;
+	      else ++missing;
+	      ++ii;
+	    }
+
+	  logger << "  of " << data.size() << " total individuals, for "
+		 << phe_label << " "
+		 << cases << " cases, "
+		 << controls << " controls and "
+		 << missing << " unknown\n";
+
+	  if ( cases == 0 || controls == 0 )
+	    Helper::halt( "did not observe both cases and controls: cannot run a phenotype-based analysis" );
+	      
+	}
+
+      //
+      // do analysis (& writes output too)
+      //
+      
+      ms_cmp_maps_t cmp_maps( data ,
+			      use_fixed ? &(fixed.A) : NULL ,
+			      use_fixed ? &(fixed.chs) : NULL ,
+			      phe ,
+			      nreps ,
+			      brute_force );
+      
+      //
+      // all done
+      //
+      
+      writer.unlevel( "_CMP-MAPS" );
+      writer.commit();
+      std::exit(0);
+    }
+
+
+
+  //
+  // FIR design
+  //
+
   if ( cmdline_proc_fir_design )
     {
 
