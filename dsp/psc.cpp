@@ -84,7 +84,7 @@ void psc_t::construct( param_t & param )
   // Require all obs, versus case-wise dropping
   //
   
-  bool drop_incomplete_rows = param.has( "drop-incomplete-rows" );
+  bool drop_incomplete_rows = param.yesno( "drop-incomplete-rows" );
   
   //
   // make any variables absolute values
@@ -112,13 +112,13 @@ void psc_t::construct( param_t & param )
   // Epoch level input?  (in which case,  ID ==>  ID:E internally
   //
 
-  bool epoch = param.has( "epoch" );
+  bool epoch = param.yesno( "epoch" );
 
   //
   // Notes that all features are 1) signed, and 2) pairwise (CH1xCH2)
   //
 
-  bool signed_stats = param.has( "signed-pairwise" );
+  bool signed_stats = param.yesno( "signed-pairwise" );
   
   //
   // Save projection?
@@ -156,7 +156,7 @@ void psc_t::construct( param_t & param )
   std::vector<double> th;
   if ( param.has( "th" ) ) th = param.dblvector( "th" );
   
-  const bool standardize_inputs = param.has( "norm" ) ;
+  const bool standardize_inputs = param.yesno( "norm" ) ;
 
 		 
   //
@@ -350,7 +350,23 @@ void psc_t::construct( param_t & param )
       // next input file
     }
 
+  //
+  // output on transformations
+  //
 
+  if ( param.has( "dB" ) )
+    logger << "  taking 10log10(X) of " << param.value( "dB" ) << "\n";
+
+  if ( flwr > 0 || fupr > 0 )
+    {
+      logger << "  restricting to ";
+      if ( flwr > 0 ) logger << flwr << " <= ";
+      logger << "F";
+      if ( fupr > 0 ) logger << " <= " << fupr;
+      logger << "\n";
+    }
+  
+  
   //
   // Construct data matrix
   //
@@ -719,6 +735,18 @@ void psc_t::construct( param_t & param )
       U.array().rowwise() -= means;      
     }
 
+
+  //
+  // need to change 'nc' ? 
+  //
+
+  int maxk = U.rows() < U.cols() ? U.rows() : U.cols();
+  if ( nc > maxk )
+    {
+      logger << "  reducing nc to " << maxk << "\n";
+      nc = maxk;
+    }
+      
   //
   // SVD
   //
