@@ -269,6 +269,9 @@ struct timeline_t
   double epoch_increment_tp() const 
   { return epoch_inc_tp ; } 
 
+  uint64_t epoch_len_tp_uint64_t() const
+  { return epoch_length_tp ; }
+
 
   int calc_epochs();
 

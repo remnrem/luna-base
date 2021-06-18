@@ -63,8 +63,11 @@ struct suds_indiv_t {
 
   // 'SOAP', i.e. fit model to self and track performance; no new prediction
   void evaluate( edf_t & edf , param_t & param );
-		
-  // 'RESOAP', i.e. change one stage and refit model (will only be 
+	
+  // 'REBASE' i.e. call SOAP but change epoch duration after building the model
+  void rebase( edf_t & edf , param_t & param , double );
+  
+  // 'RESOAP-FILL', i.e. change one stage and refit model (will only be 
   // called on suds_t::cached object, populated after a prior SOAP
   // alter a single epoch 
   void resoap_alter1( edf_t & , int epoch , suds_stage_t stage );
@@ -112,6 +115,7 @@ struct suds_indiv_t {
   // self-classify / run SOAP (which epochs are not self-predicted?)
   int self_classify( std::vector<bool> *  , Eigen::MatrixXd *  pp = NULL );
   
+
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
   // return number of excluded ('bad') epochs

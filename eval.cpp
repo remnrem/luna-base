@@ -876,8 +876,9 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
       else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
-      else if ( is( c, "RESOAP" ) )      proc_resoap( edf , param(c) );
-
+      else if ( is( c, "RESOAP" ) ) proc_resoap( edf , param(c) );
+      else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
+      
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
 
@@ -1110,7 +1111,7 @@ void proc_lzw( edf_t & edf , param_t & param )
 
 
 
-// SOAP-SUDS : single observation accuracies and probabilities;
+// SOAP : single observation accuracies and probabilities;
 //   i.e. use SUDS on self, to evaluate staging/signal quality
 
 void proc_self_suds( edf_t & edf , param_t & param  )
@@ -1119,6 +1120,36 @@ void proc_self_suds( edf_t & edf , param_t & param  )
   suds_indiv_t self;
   self.evaluate( edf , param );  
 }
+
+
+// REBASE : change epoch duration 
+void proc_rebase_soap( edf_t & edf , param_t & param  )
+{
+  // desired epoch (must be a multiple of current epoch length)
+  //  e.g. if wanting 20 -> 30 (or vice versa) set epoch length to 10
+  //  EPOCH dur=10 & RESOAP dur=30 
+
+  if ( ! edf.timeline.epoched() ) 
+    Helper::halt( "REBASE requires that EPOCH was explicitly set beforehand" );
+  
+  uint64_t e1_tp = edf.timeline.epoch_len_tp_uint64_t();
+  
+  double e2 = param.requires_dbl( "dur" );
+  uint64_t e2_tp = e2 * globals::tp_1sec ; 
+
+  // assumption is that the set epoch length is the GCD (greatest common divisor) of the 
+  // original and target epoch duration
+  
+  if ( e2_tp % e1_tp != 0 ) 
+    Helper::halt( "dur must be an exact multiple of current epoch length" );
+  
+  suds_t::set_options( param );
+  suds_indiv_t self;
+  self.rebase( edf , param , e2 );
+    
+  
+}
+
 
 // RESOAP : single observation accuracies and probabilities;
 //  given a previous call to SOAP, can update observed stages

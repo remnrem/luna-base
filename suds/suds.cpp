@@ -266,6 +266,103 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 }
 
 
+
+
+//
+// Attempt to change epoch duration ( e.g. from 20 to 30 seconds) using SOAP 
+//
+
+void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
+{
+
+  // track ID (needed if caching for RESOAP)
+  id = edf.id;
+
+  // this impacts whether epochs w/ missing values are dropped or not  
+  suds_t::soap_mode = 1;
+
+  // ensure we do not call self_classify() from proc
+  suds_t::self_classification = false;
+
+  // cannot ignore existig staging in REBASE mode (in first run)
+  suds_t::ignore_target_priors = false;
+
+  // assume that we have manual staging ('true') 
+
+  int n_unique_stages = proc( edf , param , true );
+  
+  // Perhaps no observed stages?
+
+  if ( n_unique_stages < 2 )
+    {
+      logger << "  *** fewer than 2 non-missing stages for this individual, cannot complete REBASE\n";
+      return;
+    }
+  
+  // fit LDA: populates suds_indiv_t::model object
+
+  fit_lda();
+
+  if ( ! model.valid )
+    {
+      logger << "  *** not enough data/variability to fit LDA\n";
+      return;
+    }
+
+  
+  // save this old self
+  
+  suds_indiv_t old_self = *this;
+  
+  // now change epoch size to target
+  
+  edf.timeline.set_epoch( elen , elen , 0 ) ;
+  
+  // and re-estimate PSD assuming no known staging ('false')
+  // (this will also calculate PSC, but we will ignore this... add option to skip that in proc() in future)
+  
+  suds_t::ignore_target_priors = true;
+
+  // also clear this , as 'summarize_epochs() will try to use it otherwise in output)
+  obs_stage.clear();
+  
+  n_unique_stages = proc( edf , param , true ); 
+
+  // true means has staging (I.e. not a 'target' in the SUDS sense, but 
+  // but the suds_t::ignore_target_priors means this is ignored (i.e. we do 
+  // not try to reference the staging (which presumably no longer matches the epoch 
+  // duration)
+  
+  // now project & predict into self's prior PSC space;  i.e. use same model. but will just be
+  // based on PSD estimated from differently-sized epochs
+
+
+  lda_posteriors_t new_staging = predict( old_self );
+  
+  //
+  // output stage probabilities ( new_staging.pp ) 
+  //
+
+  const double epoch_sec = edf.timeline.epoch_length();
+
+  const int ne_all = edf.timeline.num_epochs();
+
+  std::vector<std::string> final_pred = suds_t::max( new_staging.pp , model.labels );
+
+  const int bad_epochs = summarize_stage_durations( new_staging.pp , model.labels , ne_all , epoch_sec );
+
+  summarize_epochs( new_staging.pp , model.labels , ne_all , edf );
+
+  //
+  // Output new staging / add as an annotation?
+  //
+
+
+
+}
+
+
+
 void suds_indiv_t::resoap_alter1( edf_t & edf , int epoch , suds_stage_t stage )
 {
   

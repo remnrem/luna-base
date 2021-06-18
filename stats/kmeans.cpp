@@ -527,7 +527,7 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
 	  //
 	  //             [L,sig2,R2,MSE,ind] = smoothing(X,A,K,const1,opts);
 
-	  // <<-- ignore... we'll do smoothing / rejection of small intervals afterwards --->
+	  // <<-- smoothing / rejection of small intervals afterwards --->
 
 	  //
 	  // Check for better fit
@@ -547,12 +547,7 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
 	  //GEV = sum((GFP.*map_corr).^2) / GFP_const;
 
 	  double GEV = (GFP.transpose() * map_corr).square().sum() / GFP_const;
-		  
-	  // double GEV = 0;
-	  // for (int j=0; j<N; j++)
-	  //   GEV += ( GFP[j] * map_corr[j] ) * ( GFP[j] * map_corr[j] ) ;
-	  // GEV /= GFP_const;
-	  	  
+	  
 	  if ( GEV > GEV_best )
 	    {
 	      new_best = true;
@@ -572,13 +567,6 @@ modkmeans_all_out_t modkmeans_t::fit( const Data::Matrix<double> & data )
 	      
 	      results.kres[K] = result;
 	      
-	      // final.A[K] = resuA;
-	      // res.L_all[K] = L;
-	      // res.sig2_all[K] = sig2;
-	      // res.Z_all[K] = Z;
-	      // res.R2_all[K] = R2;
-	      // res.MSE_all[K] = MSE;
-
 	      new_best = false;
 	    }
 
@@ -667,21 +655,9 @@ modkmeans_out_t modkmeans_t::segmentation( const Eigen::MatrixXd & X , int K , d
   // A = bsxfun(@rdivide,A,sqrt(diag(A*A')));% normalising
 
   A = A.array().colwise() / (A*A.transpose()).diagonal().array().sqrt();
-
-  // // CxK . KxC -> CxC, but only need to evaluate the diagonal elements  
-  // for (int i=0; i<C; i++)
-  //   {
-  //     // for the i'th diagonal element, get the normalization factor (for channel/row of A)
-  //     double norm = 0;
-  //     for (int k=0; k<K; k++)
-  // 	norm += A(i,k) * A(i,k); 
-  //     norm = sqrt( norm );
-  //     for (int k=0;k<K;k++)
-  // 	A(i,k) /= norm;
-  //   }
   
-
   // initialize
+  
   int ind = 0; // iteration counter
   
   // Iterations (step 3 to 6)	  
@@ -704,21 +680,13 @@ modkmeans_out_t modkmeans_t::segmentation( const Eigen::MatrixXd & X , int K , d
       // Z = A'*X;
 
       Eigen::MatrixXd Z = A.transpose() * X;
-      
-      // // A'  KxC CxN --> Z = KxN
-      // // do transpose in place, by hand rather than two function calls
-      // Data::Matrix<double> Z( K , N );
-      // for (int i=0; i<K; i++)
-      // 	for (int j=0; j<N; j++)
-      // 	  for (int k=0; k<C; k++)
-      // 	    Z(i,j) += A(k,i) * X(k,j); // nb. transpose of A
-      
-
+            
       // [~,L] = max(Z.^2);
       // get max and put in L
 
 
-      std::map<int,std::vector<int> > K_idx; // track freq of each class, for below
+      // track freq of each class, for below
+      std::map<int,std::vector<int> > K_idx; 
       Eigen::MatrixXd::Index maxIndex;
       for (int i = 0; i < N; i++)
         {
@@ -729,26 +697,7 @@ modkmeans_out_t modkmeans_t::segmentation( const Eigen::MatrixXd & X , int K , d
 
         }
 
-
-      // for (int j=0; j<N; j++)
-      // 	{
-      // 	  int idx = 0;
-      // 	  double max = Z(0,j) * Z(0,j);
-      // 	  for (int i=1; i<K; i++)
-      // 	    {
-      // 	      double t = Z(i,j) * Z(i,j);
-      // 	      if ( t > max )
-      // 		{
-      // 		  idx = i;
-      // 		  max = t;
-      // 		}
-      // 	    }
-      // 	  L[j] = idx;
-      // 	  K_idx[idx].push_back( j );		  
-      // 	}
-      
-
-      
+          
       // Step 4
       
       for (int k=0; k<K; k++)
@@ -771,36 +720,7 @@ modkmeans_out_t modkmeans_t::segmentation( const Eigen::MatrixXd & X , int K , d
               Eigen::MatrixXd XS( C, n );
               for (int s=0;s<n;s++) XS.col(s) = X.col(cols[s]);
               Eigen::MatrixXd S = XS * XS.transpose();
-
-	      
-	      // // extract channel maps for this K into S matrix, which is CxC
-	      // Data::Matrix<double> S( C , C );
-
-	      // // CxNk x NkxC
-	      // // hmm.  element access via operator() is slow in the inner loop
-	      // // need to investigate that.. but for now, use a raw vec/vec array
-	      
-	      // const std::vector<int> & kidx = K_idx[k];
-	      // const int nk = kidx.size();
-	      
-	      // // make XX transpose for potentially faster maxtrix mult
-	      // std::vector<std::vector<double> > XX( C );
-	      
-	      // for (int i=0; i<C; i++)
-	      // 	XX[i].resize( nk );
-	      // for (int i=0; i<C; i++)
-	      // 	for (int j=0; j<nk; j++)
-	      // 	  XX[i][j] = X(i,kidx[j]);
-	      
-	      // for (int i=0; i<C; i++)
-	      // 	for (int j=0; j<C; j++)
-	      // 	  {
-	      // 	    double tmp = 0;
-	      // 	    for (int l=0; l<nk; l++)
-	      // 	      tmp += XX[i][l] * XX[j][l];
-	      // 	    S(i,j) = tmp;
-	      // 	  }
-	      
+	      	      
 	      // finding eigenvector with largest value and normalising it
 	      // [eVecs,eVals] = eig(S,'vector');
 	      // [~,idx] = max(abs(eVals));
@@ -818,39 +738,7 @@ modkmeans_out_t modkmeans_t::segmentation( const Eigen::MatrixXd & X , int K , d
 	      Eigen::ArrayXd V = eigensolver.eigenvectors().col(C-1);
 	      A.col(k) = V / sqrt( V.square().sum() );
 
-	      
-	      // bool okay = true;
-	      // Statistics::Eigen eigen = Statistics::eigenvectors( S , &okay );	      
-	      // if ( ! okay ) Helper::halt( "problem in modkmeans()" );
-	      
-	      // eigen values:
-	      //  eigen.d  (eigenvalues)
-	      //  eigen.z  (eigenvectors)
-	      
-	      // int mx_idx = 0;
-	      // double mx = fabs( eigen.d[0] ) ;
-	      // const int ne = eigen.d.size();
-	      // if ( eigen.d.size() != C ) Helper::halt( "problem in modkmeans()" );
-	      // for (int i=1; i<C; i++)
-	      // 	{
-	      // 	  if ( fabs( eigen.d[i] ) > mx )
-	      // 	    {
-	      // 	      mx = eigen.d[i];
-	      // 	      mx_idx = i;
-	      // 	    }
-	      // 	}
-	      
-	      // copy into A, and normalize		      
-	      // double norm = 0;
-	      // for (int i=0; i<C; i++)
-	      // 	{
-	      // 	  A(i,k) = eigen.z(i,mx_idx);
-	      // 	  norm += A(i,k) * A(i,k);
-	      // 	}
-	      // norm = sqrt(norm);
-	      // for (int i=0; i<C; i++)
-	      // 	A(i,k) /= norm;
-	      
+	      	      
 	    }
 	  
 	} // next 'k' of K
@@ -915,14 +803,13 @@ modkmeans_out_t modkmeans_t::segmentation( const Eigen::MatrixXd & X , int K , d
   double sig2_D = const1 / (double)(N*(C-1));
 	  
   double R2 = 1.0 - sig2/sig2_D; 
-
   
   // MSE = mean(mean((X-A*activations).^2));
   //    X - A * act
   //    CxN -  CxK * KxN  
   
   // but only one row of 'act' is non-zero for a given column;
-  //  therefore, can reduce the matrix multipleication for: A * activations
+  //  therefore, can reduce the matrix multiplication for: A * activations
   //  and directly go from Z & A 
   
   Eigen::MatrixXd XX = X;

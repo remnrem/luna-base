@@ -822,11 +822,11 @@ void globals::init_channel_types()
   add_channel_map( "PO3" , EEG );
   add_channel_map( "PO7" , EEG );
 
-  // REF
-  add_channel_map( "M1" , REF );
-  add_channel_map( "A1" , REF );
-  add_channel_map( "M2" , REF );
-  add_channel_map( "A2" , REF );
+  // REF : note, use exact encoding, as C3-M1 is an EEG channel
+  add_channel_map_exact( "M1" , REF );
+  add_channel_map_exact( "A1" , REF );
+  add_channel_map_exact( "M2" , REF );
+  add_channel_map_exact( "A2" , REF );
 
   // IC
   add_channel_map( "IC_" , IC );
