@@ -242,7 +242,7 @@ struct clocktime_t
     s=0.0;
   }
 
-  // assumes 24-hour clock
+  // convert time-string to internal 
   clocktime_t( const std::string & t );
   
   // assume from hours, fractional

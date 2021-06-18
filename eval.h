@@ -54,6 +54,10 @@ struct param_t
   
   bool has(const std::string & s ) const;
 
+  // if ! has(X) return F
+  // else return yesno(value(X))
+  bool yesno(const std::string & s ) const;
+
   std::string value( const std::string & s ) const;
  
   bool single() const;  

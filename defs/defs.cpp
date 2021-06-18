@@ -275,7 +275,7 @@ void globals::init_defs()
   freq_band[ BETA  ] = freq_range_t( 15  , 30   );
   freq_band[ GAMMA ] = freq_range_t( 30  , 50 );
 
-  freq_band[ TOTAL ] = freq_range_t( 0  , 50 );
+  freq_band[ TOTAL ] = freq_range_t( 0.5  , 50 );
   
 
   //

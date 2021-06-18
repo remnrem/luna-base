@@ -123,6 +123,12 @@ bool param_t::has(const std::string & s ) const
   return opt.find(s) != opt.end(); 
 } 
 
+bool param_t::yesno(const std::string & s ) const
+{
+  if ( ! has( s ) ) return false;
+  return Helper::yesno( opt.find( s )->second ) ; 
+}
+
 std::string param_t::value( const std::string & s ) const 
 { 
   if ( has( s ) )
