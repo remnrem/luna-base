@@ -164,6 +164,7 @@ struct globals
   static bool set_annot_inst2hms_force;
 
   static bool replace_channel_spaces;
+  static bool uppercase_channels;
   static bool replace_annot_spaces;
   static char space_replacement;
   

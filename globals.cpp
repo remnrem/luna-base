@@ -49,3 +49,4 @@ std::set<std::string>              cmd_t::specials;
 std::set<std::string>              cmd_t::signallist;
 std::map<std::string,std::string>  cmd_t::label_aliases;
 std::map<std::string,std::vector<std::string> >  cmd_t::primary_alias;
+std::map<std::string,std::string>  cmd_t::primary_upper2orig;

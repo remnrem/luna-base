@@ -58,13 +58,13 @@ struct param_t
   // else return yesno(value(X))
   bool yesno(const std::string & s ) const;
 
-  std::string value( const std::string & s ) const;
+  std::string value( const std::string & s , const bool uppercase = false ) const;
  
   bool single() const;  
 
   std::string single_value() const ;
   
-  std::string requires( const std::string & s ) const;
+  std::string requires( const std::string & s , const bool uppercase = false ) const;
   
   int requires_int( const std::string & s ) const;
   
@@ -72,9 +72,9 @@ struct param_t
 
   std::string dump( const std::string & indent = "  ", const std::string & delim = "\n" ) const;
 
-  std::set<std::string> strset( const std::string & k , const std::string delim = "," ) const;
+  std::set<std::string> strset( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
   
-  std::vector<std::string> strvector( const std::string & k , const std::string delim = "," ) const;
+  std::vector<std::string> strvector( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
 
   std::vector<double> dblvector( const std::string & k , const std::string delim = "," ) const;
 
@@ -189,6 +189,7 @@ class cmd_t
   
   static std::map<std::string,std::string> label_aliases;
   static std::map<std::string,std::vector<std::string> > primary_alias;
+  static std::map<std::string,std::string> primary_upper2orig;
 
   static void signal_alias( const std::string & s );
 

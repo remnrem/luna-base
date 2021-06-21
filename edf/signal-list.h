@@ -29,31 +29,40 @@ struct signal_list_t
   std::vector<int> signals;  
 
   std::vector<std::string> signal_labels;  
-
-  int size() const { return signals.size(); } 
-
-  int operator()(int i) const { return signals[i]; } 
-
-  std::string label(const int i) const { return signal_labels[i]; } 
   
-  int find( const std::string & label ) const
+  // OZ -> Oz ; for case-insensitive matching
+  std::map<std::string,std::string> upper2orig;
+  
+  int size() const { return signals.size(); } 
+  
+  int operator()(int i) const { return signals[i]; } 
+  
+  std::string label(const int i) const { return signal_labels[i]; } 
+   
+  // case-insensitive find
+  int find( const std::string & label ) const 
   { 
     for (int j=0;j<signal_labels.size();j++) 
-      if ( signal_labels[j] == label ) return j;
+      if ( ! Helper::iequals( signal_labels[j] , label ) ) return j;
     return -1;
   }
 
   void add(int i , const std::string & label ) 
   { 
-    //    std::cout << "adding " << i << " to " << label << "\n";
-    for (int j=0;j<signals.size();j++) if ( signals[j] == i ) return;
+    // key on upper-case variant
+    const std::string uc = Helper::toupper( label ); 
+
+    // already exists?
+    if ( upper2orig.find( uc ) != upper2orig.end() ) return;
+
+    // add: slot, original label, and track upper-case mapping
     signals.push_back(i); 
     signal_labels.push_back(label); 
+    upper2orig[ uc ] = label;
+    std::cout << " adding : " << label << "\tUC=" << uc << "\n";
   }
 
-  void clear() { signals.clear(); signal_labels.clear(); }
-
-   
+  void clear() { signals.clear(); signal_labels.clear(); upper2orig.clear(); }
   
   static bool match( const std::set<std::string> * inp_signals , std::string * l , const std::set<std::string> & slabels );
   

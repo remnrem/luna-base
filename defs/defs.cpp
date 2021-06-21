@@ -70,6 +70,7 @@ sleep_stage_label_t globals::sleep_stage;
 sleep_stage_label_lookup_t globals::sleep_stage_labels;
 
 bool globals::replace_channel_spaces;
+bool globals::uppercase_channels;
 bool globals::replace_annot_spaces;
 char globals::space_replacement;
 
@@ -225,6 +226,8 @@ void globals::init_defs()
 
   replace_channel_spaces = true;
 
+  uppercase_channels = false;
+  
   replace_annot_spaces = true;
    
   space_replacement = '_';

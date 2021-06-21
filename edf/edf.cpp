@@ -588,24 +588,29 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   for (int s=0;s<ns_all;s++)
     {
       
-      // signal label
+      // signal label, trim leading/trailing spaces
       std::string l = Helper::trim( edf_t::get_string( &p , 16 ) );
 
-      // trim spaces
-      
-      // remove spaces? (not for special EDF Annotations channel)
+      // swap internal spaces? (not for special EDF Annotations channel)
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
       if ( globals::replace_channel_spaces && ! annotation )
 	l = Helper::search_replace( l , ' ' , globals::space_replacement );
-	   
+
+      // make all data-channels upper case?
+      if ( globals::uppercase_channels && ! annotation )
+	l = Helper::toupper( l );
+
+      // key on UC version
+      std::string uc_l = Helper::toupper( l );
+      
       // does this exist already? if so, uniqify 
-      if ( slabels.find( l ) != slabels.end() )
+      if ( slabels.find( uc_l ) != slabels.end() )
 	{
 	  int inc = 1;
 	  while ( 1 ) 
 	    {
 	      // new unique label?
-	      if ( slabels.find( l + "." + Helper::int2str( inc )  ) == slabels.end() )
+	      if ( slabels.find( uc_l + "." + Helper::int2str( inc )  ) == slabels.end() )
 		{
 		  logger << " uniqifying " << l ;
 		  l = l + "." + Helper::int2str( inc );
@@ -619,11 +624,11 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       
       // store temporary
       tlabels.push_back( l );
-      slabels.insert( l );
+      slabels.insert( uc_l );
 
-      // track original label position
-      label_all[ l ] = s ;
-
+      // track original LABEL position
+      label_all[ uc_l ] = s ;
+      
     }
   
   // for each signal, does it match?
@@ -634,7 +639,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       
       // retrieve temp label
       std::string l = tlabels[s];
-      
+
+      // this match function will change 'l' to match any primary aliase
+      // it does a case-insensitive match, but returns the correct (preferred-case) version
+
       bool include = inp_signals == NULL || signal_list_t::match( inp_signals , &l , slabels );
       
       // imatch allows for case-insensitive match of 'edf annotation*'  (i.e. 14 chars)
@@ -668,7 +676,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
 	  // label mapping only to non-annotation channels
 	  if ( ! annotation ) 
-	    label2header[ l ] = label.size(); 
+	    label2header[ Helper::toupper( l ) ] = label.size(); 
 	  
 	  label.push_back( l );	  
 	  
@@ -2065,9 +2073,6 @@ void edf_t::drop_signal( const int s )
   //      via an initial sig= specification, i.e. inp_signals for edf_t::attach()
   //      so then we can remove it from edf.inp_signals_n[]
   
-  // old; does not respect alias use
-  //bool present_in_EDF_file = header.label_all.find( header.label[s] ) != header.label_all.end() ;
-  //int os = present_in_EDF_file = ? header.label_all[ header.label[ s ] ] : -1 ;
 
   // get original signal slot number (-1 if not present)
   int os = header.original_signal( header.label[ s ] ) ;
@@ -2097,8 +2102,6 @@ void edf_t::drop_signal( const int s )
   
   if ( os != -1 ) // i.e. present in original signal list
     {
-//       std::cout << "inp sz = " << inp_signals_n.size() << "\n";
-//       std::cout << "in " << (inp_signals_n.find(os) != inp_signals_n.end() ) << "\n";
       inp_signals_n.erase( inp_signals_n.find(os) );
     }
   
@@ -2106,7 +2109,7 @@ void edf_t::drop_signal( const int s )
   header.label2header.clear();
   for (int l=0;l<header.label.size();l++)     
     if ( header.is_data_channel(l) ) 
-      header.label2header[ header.label[l] ] = l;      
+      header.label2header[ Helper::toupper( header.label[l] ) ] = l;      
   
   // records
   int r = timeline.first_record();
@@ -2211,8 +2214,8 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   header.label.push_back( label );
   
   if ( ! Helper::imatch( label , "EDF Annotation" , 14 ) )
-    header.label2header[label] = header.label.size()-1;     
-
+    header.label2header[ Helper::toupper( label ) ] = header.label.size()-1;     
+  
   header.annotation_channel.push_back( ( header.edfplus ? 
 					 Helper::imatch( label , "EDF Annotation" , 14 ) :
 					 false ) ) ;
@@ -2834,11 +2837,11 @@ bool  edf_header_t::has_signal( const std::string & s )
   for (int t=0;t<tok.size();t++)
     {
       // primary name (that might be an alias)?
-      if ( label2header.find(tok[t]) != label2header.end() )
+      if ( label2header.find( Helper::toupper( tok[t] ) ) != label2header.end() )
 	return true;
       
       // using aliased (i.e. original) name?
-      if ( cmd_t::label_aliases.find( tok[t] ) != cmd_t::label_aliases.end() )
+      if ( cmd_t::label_aliases.find( Helper::toupper( tok[t] ) ) != cmd_t::label_aliases.end() )
 	return true;
     }
   return false;
@@ -2847,7 +2850,7 @@ bool  edf_header_t::has_signal( const std::string & s )
 
 int  edf_header_t::original_signal_no_aliasing( const std::string & s  )
 {  
-  std::map<std::string,int>::const_iterator ff = label_all.find( s );
+  std::map<std::string,int>::const_iterator ff = label_all.find( Helper::toupper( s ) );
   if ( ff != label_all.end() ) return ff->second;
   return -1;
 }
@@ -2858,22 +2861,30 @@ int  edf_header_t::original_signal( const std::string & s  )
 
   // look up, with aliases, in original
   // label_all[ ]
+
+  const std::string uc_s = Helper::toupper( s );
   
-  std::map<std::string,int>::const_iterator ff = label_all.find( s );
+  std::map<std::string,int>::const_iterator ff = label_all.find( uc_s );
   
   if ( ff != label_all.end() ) return ff->second;
   
   // otherwise, consider if we have aliases
-  if ( cmd_t::label_aliases.find( s ) != cmd_t::label_aliases.end() )
+  if ( cmd_t::label_aliases.find( uc_s ) != cmd_t::label_aliases.end() )
     {
-      const std::string & s2 = cmd_t::label_aliases[ s ];
-      ff = label_all.find( s2 );
+      const std::string & s2 = cmd_t::label_aliases[ uc_s ];
+
+      ff = label_all.find( Helper::toupper( s2 ) );
+
       if ( ff != label_all.end() ) return ff->second;
     }
 
-  if ( cmd_t::primary_alias.find( s ) != cmd_t::primary_alias.end() )
+  // otherwise, look to a primary term
+  
+  if ( cmd_t::primary_upper2orig.find( uc_s ) != cmd_t::primary_upper2orig.end() )
     {
-      std::vector<std::string> & a = cmd_t::primary_alias.find( s )->second;
+      // swap PRIMARY -> Primary, and then pull all aliases
+      // this returns ALIASES , so we can use w/ label_all[] directly
+      std::vector<std::string> & a = cmd_t::primary_alias.find( cmd_t::primary_upper2orig[ uc_s ] )->second;
       for (int i=0;i<a.size();i++)
 	{
 	  ff = label_all.find( a[i] );
@@ -2888,7 +2899,7 @@ int  edf_header_t::original_signal( const std::string & s  )
 
 signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotation_channels , bool show_warnings )
 {
-  
+
   signal_list_t r;
   
   // wildcard means all signals '*'
@@ -2904,18 +2915,19 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	       is_annotation_channel( s ) ) continue;
 	  
 	  std::string lb = label[s];
-	  	  
-	  // swap in alias?
-	  if ( cmd_t::label_aliases.find( lb ) != cmd_t::label_aliases.end() ) 
+	  
+	  std::string uppercase_lb = Helper::toupper( lb );
+	  
+	  // swap in alias? [ aliases are always stored as UPPERCASE ]
+	  if ( cmd_t::label_aliases.find( uppercase_lb ) != cmd_t::label_aliases.end() ) 
 	    {
 	      // track
-	      aliasing[ cmd_t::label_aliases[ lb ] ] = lb;
-
-	      //swap
-	      lb = cmd_t::label_aliases[ lb ];
-	      label2header[ lb ] = s;
+	      aliasing[ cmd_t::label_aliases[ uppercase_lb ] ] = lb;
+	      
+	      // swap in the primary
+	      lb = cmd_t::label_aliases[ uppercase_lb ];
+	      label2header[ Helper::toupper( lb ) ] = s;
 	      label[s] = lb;
-
 	      
 	    }
 	  
@@ -2923,47 +2935,60 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	}
     }
 
-  
-  // comma-delimited; but within a signal, can have options
-  // that are pipe-delimited  
-  
+  //
+  // comma-delimited; but within a single signal specification,
+  // we allow a pipe-delimited list, where we pick the first that matches
+  //  
+  //  A,B|C,D|E|F,G  - mean A and ( B or C ) and ( D or E or F ) and G 
+  //  
+
   std::vector<std::string> tok = Helper::quoted_parse( s , "," );    
+  
   for (int t=0;t<tok.size();t++)    
     {
 
       std::vector<std::string> tok2_ = Helper::quoted_parse( tok[t] , "|" );    
-
+      
       // first swap in any aliases, and place those at the front of the list
       // then continue as before
 
       // swap in alias first? -- this may double alias, but fine.
       
-      // eig. 
+      // e.g. 
       // alias   sigX|sigY|sigZ
       // signal  sigY|sigZ|sig0
       // will make all --> sigX (which is correct)
 
       std::string alias = "";
+
       for (int t2=0;t2<tok2_.size();t2++)    
 	{
-	  if ( cmd_t::primary_alias.find( tok2_[t2] ) != cmd_t::primary_alias.end() )
+	  const std::string uc_lb = Helper::toupper( tok2_[t2] );
+	  
+	  if ( cmd_t::primary_upper2orig.find( uc_lb ) != cmd_t::primary_upper2orig.end() )
 	    {
-	      //	      std::cout << "tok2_ " << tok2_[t2] << "and alias ["<<alias<< "]\n";
-	      if ( alias == "" ) alias = tok2_[t2];
-	      else if ( alias != tok2_[t2] )
-		Helper::halt( "more than one alias implied" );
-	      //std::cout << "tok2_ " << tok2_[t2] << "and alias ["<<alias<< "]\n";
+	      if ( cmd_t::primary_alias.find( cmd_t::primary_upper2orig[ uc_lb ] ) != cmd_t::primary_alias.end() )
+		{
+		  //std::cout << "tok2_ " << tok2_[t2] << "and alias ["<<alias<< "]\n";
+		  if ( alias == "" ) alias = cmd_t::primary_upper2orig[ uc_lb ] ;  //  OLD = tok2_[t2];
+		  else if ( ! Helper::iequals( alias , uc_lb ) )
+		    Helper::halt( "more than one alias implied" );
+		  //std::cout << "tok2_ " << tok2_[t2] << "and alias ["<<alias<< "]\n";
+		}
 	    }
-	  else if ( cmd_t::label_aliases.find( tok2_[t2] ) != cmd_t::label_aliases.end() ) 
+	  else if ( cmd_t::label_aliases.find( uc_lb ) != cmd_t::label_aliases.end() ) 
 	    {
 	      if ( alias == "" ) 
-		alias = cmd_t::label_aliases[ tok2_[t2] ];	  
-	      else if ( alias != cmd_t::label_aliases[ tok2_[t2] ] )
+		alias = cmd_t::label_aliases[ uc_lb ];	  
+	      else if ( ! Helper::iequals( alias , cmd_t::label_aliases[ uc_lb ] ) )
 		Helper::halt( "more than one alias implied" );
 	    }
 	}
       
+      //
       // update list if needed
+      //
+
       std::vector<std::string> tok2;
       if ( alias != "" ) 
 	{
@@ -2971,8 +2996,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	  const std::vector<std::string> & avec = cmd_t::primary_alias.find( alias )->second;
 	  std::vector<std::string>::const_iterator aa = avec.begin();
 	  while ( aa != avec.end() )
-	    {
-	      //std::cout << "adding " << *aa << "\n";
+	    {	      
 	      tok2.push_back( *aa );
 	      ++aa;
 	    }	  
@@ -2986,34 +3010,44 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	tok2 = tok2_;
       
       std::set<int> added;
+
       
+      //
       // proceed as before
+      //
+
+      //      std::cout << " tok2 = " << tok2.size() << "\n";
+
       for (int t2=0;t2<tok2.size();t2++)    
 	{
-// 	  std::cout << "t2 = " << t2 << "\t" << tok2[t2] << "\n";
-// 	  std::cout << "label2header.find size " << label2header.size() << "\n";
-
+	  
+	  // std::cout << "t2 = " << t2 << "\t" << tok2[t2] << "\n";
+	  // std::cout << "label2header.find size " << label2header.size() << "\n";
+	  
 	  // add first match found 
-	  if ( label2header.find(tok2[t2]) != label2header.end() ) 
+	  if ( label2header.find( Helper::toupper( tok2[t2] ) )  != label2header.end() ) 
 	    {
-
-	      const int l = label2header[tok2[t2]];
 	      
-	      //std::cout << "found match " << l << "\n";
-
+	      const int l = label2header[ Helper::toupper( tok2[t2] ) ];
+	      
+	      // std::cout << "found match " << l << "\n";
+	      
 	      if ( t2 > 0 ) // relabel if wasn't first choice?
 		{
-		  label2header[ tok2[0] ] = l;
-		  label[l] = tok2[0];
+		  label2header[ Helper::toupper( tok2[0] ) ] = l;
+		  //label[l] = tok2[0];
 		}	  
 	      
-	      //std::cout << "adding N " << label2header[tok2[0]]  << "\n";
-	      if ( added.find( label2header[tok2[0]] ) == added.end() )
+	      //std::cout << "adding N " << label2header[ Helper::toupper( tok2[0] ) ]  << "\n";
+	      
+	      const int l0 = label2header[ Helper::toupper( tok2[0] ) ] ;
+	      
+	      if ( added.find( l0 ) == added.end() )
 		{
-		  r.add( label2header[tok2[0]] , tok2[0] ); 
-		  added.insert( label2header[tok2[0]] ) ;
-		}		  
-
+		  r.add( l0 , label[l] );
+		  added.insert( l0 );
+		}
+	      
 	      break;
 	    }
 	}
@@ -3027,8 +3061,8 @@ void edf_header_t::rename_channel( const std::string & old_label , const std::st
 {
   // expects exact match (i.e. this only called from XML <Signals> / <CanonicalLabel> information  
   for (int s=0;s<label.size();s++) if ( label[s] == old_label ) label[s] = new_label;
-  label_all[ new_label ] = label_all[ old_label ];
-  label2header[ new_label ] = label2header[ old_label ];
+  label_all[ Helper::toupper( new_label ) ] = label_all[ Helper::toupper( old_label ) ];
+  label2header[ Helper::toupper( new_label ) ] = label2header[ Helper::toupper( old_label ) ];
   
 }
 
@@ -3057,6 +3091,7 @@ void edf_header_t::check_channels()
   // e.g. 
   //   A|B,C
   // but EDF has both "B" and "C" 
+
   // therefore, for each cmd_t::primary_alias[term].vector[] we need to make sure that 
   // we do not see more than one instance
 
@@ -4293,15 +4328,37 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
 			   std::string * l ,
 			   const std::set<std::string> & slabels )
 {
-    
-  // exact match? (i.e. no "|" alternatives specified)
-  if ( inp_signals->find(*l) != inp_signals->end() ) return true; 
+
+  //  std::cout << " IN signal_list_t::match() \n";
   
-  // as an alias?
-  if ( cmd_t::label_aliases.find( *l ) != cmd_t::label_aliases.end() )
+  // inp_signals : list of input signals (EDF or subset of) / any-CASE
+  // l           : label to match : any-case, and we want to preserve this, but matching is done in case-insensitive manner
+  // slabels     : 
+  
+  // exact match? (i.e. no "|" alternatives specified)
+  // old:   if ( inp_signals->find(*l) != inp_signals->end() ) return true; 
+  // new: for case-insensitive match, we need to explicitly consider each
+  std::set<std::string>::const_iterator cc = inp_signals->begin();
+  while ( cc != inp_signals->end() )
     {
-      *l = cmd_t::label_aliases[ *l ];
-      return inp_signals->find(*l) != inp_signals->end() ;
+      if ( Helper::iequals( *l , *cc ) ) return true;
+      ++cc;
+    }
+  
+  // alternatively, as an alias?  
+  if ( cmd_t::label_aliases.find( Helper::toupper( *l ) ) != cmd_t::label_aliases.end() )
+    {
+      *l = cmd_t::label_aliases[ Helper::toupper( *l ) ];
+      // now, does this matc
+      // old: return inp_signals->find(*l) != inp_signals->end() ;
+      // new: loop over each (as above)
+      std::set<std::string>::const_iterator cc = inp_signals->begin();
+      while ( cc != inp_signals->end() )
+	{
+	  if ( Helper::iequals( *l , *cc ) ) return true;
+	  ++cc;
+	}
+      return false;
     }
   
   // subset match (i.e. one of x|y|z)
