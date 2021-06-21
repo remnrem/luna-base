@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -129,10 +130,10 @@ bool param_t::yesno(const std::string & s ) const
   return Helper::yesno( opt.find( s )->second ) ; 
 }
 
-std::string param_t::value( const std::string & s ) const 
+std::string param_t::value( const std::string & s , const bool uppercase ) const 
 { 
   if ( has( s ) )
-    return opt.find( s )->second;
+    return uppercase ? Helper::toupper( opt.find( s )->second ) : opt.find( s )->second ;
   else
     return "";
 }
@@ -156,10 +157,10 @@ std::string param_t::single_value() const
   return ""; // should not happen
 }
 
-std::string param_t::requires( const std::string & s ) const
+std::string param_t::requires( const std::string & s , const bool uppercase ) const
 {
   if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
-  return value(s);
+  return value(s, uppercase );
 }
 
 int param_t::requires_int( const std::string & s ) const
@@ -198,21 +199,23 @@ std::string param_t::dump( const std::string & indent , const std::string & deli
   return ss.str();
 }
 
-std::set<std::string> param_t::strset( const std::string & k , const std::string delim ) const
+std::set<std::string> param_t::strset( const std::string & k , const std::string delim , const bool uppercase ) const
 {
   std::set<std::string> s;
   if ( ! has(k) ) return s;
-  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
-  for (int i=0;i<tok.size();i++) s.insert( Helper::unquote( tok[i]) );
+  std::vector<std::string> tok = Helper::quoted_parse( value(k , uppercase ) , delim );
+  for (int i=0;i<tok.size();i++)
+    s.insert( Helper::unquote( tok[i]) );
   return s;
 }
 
-std::vector<std::string> param_t::strvector( const std::string & k , const std::string delim ) const
+std::vector<std::string> param_t::strvector( const std::string & k , const std::string delim , const bool uppercase ) const
 {
   std::vector<std::string> s;
   if ( ! has(k) ) return s;
-  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
-  for (int i=0;i<tok.size();i++) s.push_back( Helper::unquote( tok[i]) );
+  std::vector<std::string> tok = Helper::quoted_parse( value(k,uppercase) , delim );
+  for (int i=0;i<tok.size();i++)
+    s.push_back( Helper::unquote( tok[i]) );
   return s;
 }
 
@@ -308,6 +311,7 @@ void cmd_t::clear_static_members()
   signallist.clear();
   label_aliases.clear();
   primary_alias.clear();
+  primary_upper2orig.clear();
 }
 
 bool cmd_t::empty() const 
@@ -389,40 +393,67 @@ void cmd_t::signal_alias( const std::string & s )
 
   // the primary alias can occur multiple times, and have multiple 
   // labels that are mapped to it
+
+  // label_aliases[ ALIAS ] -> primary;
+  // primary_alias[ primary ] -> [ ALIASES ] 
+  // primary_upper2orig[ PRIMARY ] -> primary
   
   // however: two rules
   // 1. many-to-one mapping means the same label cannot have multiple primary aliases
   // 2. following, and on principle of no transitive properties, alias cannot have alias
 
-  // X|Y|Z
-  // X|A|B
+  // X|Y|Z    
+  // X|A|B    okay
   
   // W|A  bad, A already mapped
   // V|X  bad, X already mapped
-  // i.e. things can only occur once in the RHS, or multiple times in the LHS
+  // i.e. things can only occur once in the RHS, but multiple times in the LHS
+
+  // keep all RHS aliases as UPPERCASE
+  // but with case-insensitive matches
   
-  
+  // x|Y|Y
+    
   // format canonical|alias1|alias2 , etc.
   std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
   if ( tok.size() < 2 ) Helper::halt( "bad format for signal alias:  canonical|alias 1|alias 2\n" + s );
   const std::string primary = Helper::unquote( tok[0] );
+
+  // has the LHS primary already been an alias?
+  if ( label_aliases.find( Helper::toupper( primary ) ) != label_aliases.end() )
+    Helper::halt( primary + " specified as both primary alias and mapped term" );
+
   for (int j=1;j<tok.size();j++) 
     {
 
-      // impose rules
-      const std::string mapped = Helper::unquote( tok[j] ) ;
+      // impose rules, use upper case version of all aliases
+      const std::string mapped = Helper::unquote( tok[j] );
+      const std::string uc_mapped = Helper::toupper( mapped );
       
-      if ( primary_alias.find( mapped ) != primary_alias.end() )
+      if ( primary_upper2orig.find( uc_mapped ) != primary_upper2orig.end() )
 	Helper::halt( mapped + " specified as both primary alias and mapped term" );
 
-      if ( label_aliases.find( mapped ) != label_aliases.end() )
-	if ( primary != label_aliases[ mapped ] )  
-	  Helper::halt( mapped + " specified twice in alias file w/ different primary aliases" );
+      // same alias cannot have multiple, different primaries
+      // although we track the case of the primary, do case-insensitive match
+      
+      if ( label_aliases.find( uc_mapped ) != label_aliases.end() )
+	if ( ! Helper::iequals( primary , label_aliases[ uc_mapped ] ) )
+	  Helper::halt( mapped + " specified twice (case-insensitive) in alias file w/ different primary aliases" );
+      
+      // otherwise, set this alias, using UC version of the mapped term
+      label_aliases[ uc_mapped ] = primary;
+      
+      primary_alias[ primary ].push_back( uc_mapped );
 
-      // otherwise, set 
-      label_aliases[ mapped ] = primary;
-
-      primary_alias[ primary ].push_back( mapped );
+      // also, for lookup/checks, track UC primary for case-insensitive matches
+      // but first check, if we have seen the primary before, it needs to be identical w.r.t. case
+      if ( primary_upper2orig.find( Helper::toupper( primary ) ) != primary_upper2orig.end() )
+	{
+	  if ( primary_upper2orig[ Helper::toupper( primary ) ] != primary )
+	    Helper::halt( "primary alias specified with varying case:" + primary_upper2orig[ Helper::toupper( primary ) ]  + " and " + primary );
+	    }
+      else
+	primary_upper2orig[ Helper::toupper( primary ) ] = primary;
     }
     
 }
@@ -3070,13 +3101,21 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::space_replacement = tok1[0];
     }
 
+  // set channel names as all UPPERCASE
+  if ( Helper::iequals( tok0 , "upper" ) )
+    {
+      globals::uppercase_channels = Helper::yesno( tok1 );      
+      return;
+    }
+
+ 
   // keep spaces
   if ( Helper::iequals( tok0 , "keep-spaces" ) )
     {
       globals::replace_channel_spaces = false;
       globals::replace_annot_spaces = false;
     }
-
+  
   // keep spaces (annots only) 
   if ( Helper::iequals( tok0 , "keep-annot-spaces" ) )
     {

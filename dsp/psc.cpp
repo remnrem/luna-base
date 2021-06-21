@@ -1392,7 +1392,12 @@ void psc_t::attach( param_t & param )
   
   std::ifstream IN1( infile.c_str() , std::ios::in );
 
+
+  
+  //
   // variables
+  //
+
   std::string dummy;
   int nv;
   
@@ -1406,61 +1411,85 @@ void psc_t::attach( param_t & param )
   
   // components
   IN1 >> dummy >> nc;
-      
-
-  // all PSC (0) or a subset?
-
-  logger << "  found " << nc << " PSCs based on " << nv << " variables\n";
+        
+  W.resize( nc );
+  V.resize( nv , nc );
+    
   
-  int k = param.has( "nc" ) ? param.requires_int( "nc" ) : 0 ;   
-
-  if ( k >= 1 && k < nc )
-    logger << "  subsetting to the first " << k << " of " << nc << " PSCs\n";
-  else if ( k > nc )
-    {
-      logger << "  requested " << k << " PSCs but only " << nc << " present\n";
-      k = nc;
-    }
-  else
-    k = nc;
-  
-  W.resize( k );
-  V.resize( nv , k );
-
-  // buffer
-  double inp;
-
   // W 
   IN1 >> dummy;
   for (int i=0;i<nc;i++)
-    {
-      IN1 >> inp;
-      if ( i < k ) W(i) = inp;
-    }
+    IN1 >> W(i);
   
   // V
   IN1 >> dummy;
   for (int i=0;i<nv;i++)
     for (int j=0;j<nc;j++)
-      {
-	IN1 >> inp;
-	if ( j < k ) V(i,j) = inp;
-      }
+      IN1 >> V(i,j);
   
   IN1.close();
 
 
-  // set actual 'nc' to the desired value (i.e. if less than nc in file)
-  nc = k;
-  
+  //
   // reformat of W for projection
+  //
   
-  // std::cout << "W = " << W << "\n";
-
   W = W.cwiseInverse();
 
-  //  std::cout << "1/W = " << W << "\n";  
+  //
+  // Set some components to zero potential?
+  //
+
+  //
+  // all PSC or a subset (via 'nc=' or 'drop/keep=')
+  //
   
+  logger << "  found " << nc << " PSCs based on " << nv << " variables\n";
+
+  if ( param.has( "nc" ) )
+    {
+      int k = param.requires_int( "nc" ) ;
+
+      if ( k > nc )
+	Helper::halt( "requested " + Helper::int2str( k )
+		      + " PSCs but only " + Helper::int2str( nc ) + " present" );
+
+      // set to zero
+      logger << "  subsetting to the first " << k << " of " << nc << " PSCs\n";
+      for (int i=k;i<nc;i++) W[i] = 0;
+    }
+
+  std::vector<int> drop, keep;
+  if ( param.has( "drop" ) ) drop = param.intvector( "drop" );
+  if ( param.has( "keep" ) ) keep = param.intvector( "keep" );
+
+  if ( drop.size() != 0 && keep.size() != 0 )
+    Helper::halt( "cannot specify both drop and keep" );
+
+  // if 'keep', start with all set to drop (T)
+  // else if 'drop' start with none set to drop (F)
+  std::vector<int> to0( nc , keep.size() != 0 );
+  for (int i=0; i<drop.size(); i++)
+    {
+      if ( drop[i] < 1 || drop[i] > nc ) Helper::halt( "drop parameter out of range" );
+      to0[ drop[i] - 1 ] = true; // nb. convert 1-based input to 0-base
+    }
+  
+  for (int i=0; i<keep.size(); i++)
+    {
+      if ( keep[i] < 1 || keep[i] > nc ) Helper::halt( "keep parameter out of range" );
+      to0[ keep[i] - 1 ] = false; // nb. convert 1-based input to 0-base 
+    }  
+
+  if ( drop.size() ) logger << "  dropping " << drop.size() << " of " << nc << " components\n";
+  if ( keep.size() ) logger << "  retainging only " << keep.size() << " of " << nc << " components\n";
+  
+  if ( drop.size() + keep.size() != 0 )
+    for (int i=0; i<to0.size(); i++)
+      if ( to0[i] ) W(i) = 0;
+  
+  //  std::cout << "1/W = " << W << "\n";  
+    
 }
 
 
@@ -1488,7 +1517,7 @@ void psc_t::project( edf_t & edf , param_t & param )
 
   cache_t<double> * cache = edf.timeline.cache.find_num( cache_name );
 
-  const bool norm = param.has( "norm" );
+  const bool norm = param.yesno( "norm" );
   
   // see which variables exist, i.e. psc_t::vname[] 
 

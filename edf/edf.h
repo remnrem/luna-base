@@ -85,8 +85,8 @@ struct edf_header_t
   // For each of 'ns' signals (i.e. selected ones only)
   //
 
-  std::vector<std::string> label;           // e.g. EEG or BodyTemp
-  std::map<std::string,int> label_all;      // still need to track orig. for read() records
+  std::vector<std::string> label;           // e.g. actual (case-sensitive) label EEG or BodyTemp
+  std::map<std::string,int> label_all;      // still need to track orig. for read() records ; use UPPER
 
   std::vector<std::string> transducer_type; // e.g. AgAgCl electrode
   
