@@ -1040,46 +1040,76 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  
 	  if ( tok[5] == "." || cols[a].size() == 0 ) continue;
-
+	  
 	  //
 	  // Otherwise, parse |-delimited values, that should match the header
 	  //
-
-	  std::vector<std::string> vartok = Helper::parse( tok[5] , "|" );
-
-	  const int nv = vartok.size();
-	  	  
-	  if ( nv != cols[a].size() ) 
-	    Helper::halt( "expecting " + Helper::int2str( (int)cols[a].size() ) + " |-delimited fields for " + aname );
 	  
-	  for (int j=0; j<nv; j++)
+	  std::vector<std::string> vartok = Helper::parse( tok[5] , "|" );
+	  
+	  const int nobs = vartok.size();
+	  const int nexp = cols[a].size();
+	  
+	  //
+	  // Are meta-data in key=value pair mode?
+	  //
+
+	  bool key_value = vartok[0].find( "=" ) != std::string::npos; 
+
+	  //
+	  // need at least this many fields, i.e. if we've pre-specifed above	  
+	  //
+	  
+	  if ( nobs > nexp )
+	    Helper::halt( "expecting at most " + Helper::int2str( nexp ) + " |-delimited fields for " + aname + "\n" + line );
+	  
+	  // 
+	  // Read expected fields, with specified types
+	  //
+	  
+	  for (int j=0; j<nobs; j++)
 	    {
 	      
 	      // skip missing values
 	      if ( vartok[j] == "." ) continue;
 	      
-	      const std::string & label = cols[a][j];	      
+	      // key=value pair?
+	      std::vector<std::string> kv;
+	      if ( key_value ) 
+		{
+		  kv = Helper::parse( vartok[j] , "=" );
+		  if ( kv.size() != 2 ) 
+		    Helper::halt( "expecting key=value pair: " + vartok[j] );
+		}
 
+	      // get label
+	      const std::string & label = key_value ? kv[0] : cols[a][j];	      
+
+	      // either way, the meta-data needs to have been specified in the header	     
+	      if ( key_value && a->types.find( label ) == a->types.end() )
+		Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
+	      
+	      // get type
 	      globals::atype_t t = a->types[label];
 	      
 	      if ( t == globals::A_MASK_T )
 		{
 		  // accepts F and T as well as long forms (false, true)
-		  bool value = Helper::yesno( vartok[j] );
+		  bool value = Helper::yesno( key_value ? kv[1] : vartok[j] );
 		  instance->set_mask( label , value );		
 		}
 	      
 	      else if ( t == globals::A_BOOL_T )
 		{
 		  // accepts F and T as well as long forms (false, true)
-		  bool value = Helper::yesno( vartok[j] );
+		  bool value = Helper::yesno( key_value ? kv[1] : vartok[j] );
 		  instance->set( label , value );
 		}
 
 	      else if ( t == globals::A_INT_T )
 		{
 		  int value = 0;
-		  if ( ! Helper::str2int( vartok[j] , &value ) )
+		  if ( ! Helper::str2int( key_value ? kv[1] : vartok[j] , &value ) )
 		    Helper::halt( "invalid E line, bad numeric value" );
 		  instance->set( label , value );
 		}
@@ -1088,7 +1118,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		{
 		  double value = 0;
 		  
-		  if ( Helper::str2dbl( vartok[j] , &value ) )		    
+		  if ( Helper::str2dbl( key_value ? kv[1] : vartok[j] , &value ) )		    
 		    instance->set( label , value );
 		  else
 		    if ( vartok[j] != "NA" ) 
@@ -1097,7 +1127,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	      else if ( t == globals::A_TXT_T )
 		{		  
-		  instance->set( label , vartok[j] );
+		  instance->set( label , key_value ? kv[1] : vartok[j] );
 		}
 	      
 	      //
@@ -1106,7 +1136,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      
 	      else
 		logger << "could not read undefined type from annotation file for " << label << "\n";
-	     	      
+	      
 	      //
 	      // next value
 	      //
@@ -2652,16 +2682,42 @@ std::vector<std::string> annot_t::as_txt_vec( const std::vector<double> & x ) {
 void proc_eval( edf_t & edf , param_t & param )
 {
   
-  // expects a single parameter: 
+  // expects:
   //   annot=name
   //   expr=# expression #
   //   globals=J,K,L
+
+  // create a new annotaiton 'name' 
+  // EITHER epoch-by-epoch (i.e. evaluate the expression once per epoch) 
+  // OR for each unqiue set of annotations, i.e. whereby the new annotation may span several sets)
   
+  // Epoch mode: annot (and meta-data) is either present or not
+  // E1   Y 
+  // E2   N
+  // E3   N
+  // E4   Y
+
+  // Interval mode:  (if expression is A3 = A1 && A2)
+  // A1
+  // A1  A2  --> A3
+  //     A2
+  // A1  A2  --> A3
+  // A1  A2      A3
+  // A1
+  // 
+  // i.e. here two new A3 annotations, that start stop at the respective junctions
+  // n.b. currently, this will consider intervals based on ALL existing annotations
+  //      this may not be desirable, e.g. may cause redundant evaluations, but should
+  //      be okay for now
   
-  std::string new_annot_class = param.requires( "annot" );
+  // epoch versus interval mode?
+  bool interval_mode = param.has( "interval" );
+  
+  std::string new_annot_class = interval_mode ? param.value( "interval" ) : param.requires( "annot" );
   
   std::string expression = Helper::unquote( param.requires( "expr" ) , '#' );
-   
+
+  
   std::set<std::string> acc_vars;
   
   bool use_globals = param.has( "globals" );
@@ -2713,84 +2769,258 @@ void proc_eval( edf_t & edf , param_t & param )
 	}
     }
 
-  //
-  // Iterate over epochs
-  //
 
-  edf.timeline.first_epoch();
   
-  int acc_total = 0 , acc_retval = 0 , acc_valid = 0; 
+  //
+  // Iterate over epochs? Or Intervals?
+  //
 
-  while ( 1 ) 
+  int acc_total = 0 , acc_retval = 0 , acc_valid = 0; 
+  int added_intervals = 0; // post concatenation
+
+  if ( ! interval_mode ) 
+    {
+  
+      edf.timeline.first_epoch();
+      
+      while ( 1 ) 
+	{
+	  
+	  // consider _ALL_ epochs
+	  
+	  int e = edf.timeline.next_epoch_ignoring_mask() ;
+	  
+	  if ( e == -1 ) break;
+	  
+	  interval_t interval = edf.timeline.epoch( e );
+	  
+	  std::map<std::string,annot_map_t> inputs;
+	  
+	  // get each annotations
+	  for (int a=0;a<names.size();a++)
+	    {
+	      
+	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      
+	      // get overlapping annotations for this epoch
+	      annot_map_t events = annot->extract( interval );
+	      
+	      // store
+	      inputs[ names[a] ] = events;
+	    }
+	  
+	  
+	  //
+	  // create new annotation
+	  //
+	  
+	  instance_t * new_instance = new_annot->add( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval , "." );
+	  
+	  //
+	  // evaluate the expression
+	  //
+	  
+	  Eval tok( expression );
+	  
+	  tok.bind( inputs , new_instance , accumulator , &acc_vars );
+	  
+	  bool is_valid = tok.evaluate();
+	  
+	  bool retval;
+	  
+	  if ( ! tok.value( retval ) ) is_valid = false;
+	  
+	  //
+	  // Output
+	  //
+	  
+	  acc_total++;
+	  
+	  acc_valid += is_valid;
+	  
+	  if ( is_valid ) 
+	    acc_retval += retval;
+	  
+	  // remove instance if expression was F or invalid
+	  if ( ( ! is_valid ) || ( ! retval ) ) 
+	    {
+	      new_annot->remove( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval , "." );
+	    }
+	  
+	  // next epoch
+	} 
+      
+    }
+
+
+  //
+  // Interval-level evaluation
+  //
+
+  if ( interval_mode )
     {
 
-      // consider _ALL_ epochs
-      
-      int e = edf.timeline.next_epoch_ignoring_mask() ;
-      
-      if ( e == -1 ) break;
-      
-      interval_t interval = edf.timeline.epoch( e );
-	  
-      std::map<std::string,annot_map_t> inputs;
-
-      // get each annotations
-      for (int a=0;a<names.size();a++)
-	{
-	  
-	  annot_t * annot = edf.timeline.annotations.find( names[a] );
-	  
-	  // get overlapping annotations for this epoch
-	  annot_map_t events = annot->extract( interval );
-	  
-	  // store
-	  inputs[ names[a] ] = events;
-	}
-      
-     
       //
-      // create new annotation
+      // step 1: get all sets of annotation change-points
       //
       
-      instance_t * new_instance = new_annot->add( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval , "." );
+      // sort by time, collapse across events
 
-      //
-      // evaluate the expression
-      //
-
-      Eval tok( expression );
-      
-      tok.bind( inputs , new_instance , accumulator , &acc_vars );
-      
-      bool is_valid = tok.evaluate();
-      
-      bool retval;
-      
-      if ( ! tok.value( retval ) ) is_valid = false;
-      
-      //
-      // Output
-      //
-  
-      acc_total++;
-
-      acc_valid += is_valid;
-
-      if ( acc_valid ) 
-	{
-	  
-	  acc_retval += retval;
-
-	}
-      
-      // remove instance if expression was F or invalid
-      if ( ( ! acc_valid ) || ( ! retval ) ) 
-	{
-	  new_annot->remove( "e:" + Helper::int2str( edf.timeline.display_epoch(e) ) , interval , "." );
-	}
+      std::set<uint64_t> changepoints;
             
-      // next epoch
-    } 
+      for (int a = 0 ; a < names.size() ; a++ ) 
+	{	  
+	  annot_t * annot = edf.timeline.annotations.find( names[a] );	  
+	  if ( annot == NULL ) Helper::halt( "internal problem in eval, cannot map annot " + names[a] );	  
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  while ( ii != annot->interval_events.end() )
+	    {	  
+	      changepoints.insert( ii->first.interval.start );
+	      changepoints.insert( ii->first.interval.stop ); // 1-past end, == start of new segment
+	      //std::cout << " adding start, stop = " << ii->first.interval.start << "  " << ii->first.interval.stop << "\n";
+	      ++ii;
+	    }
+	}
+      
+      //
+      // start and end of recording also
+      //
+      
+      changepoints.insert( 0LLU );
+      changepoints.insert( edf.timeline.last_time_point_tp );
+
+      //
+      // Get all unique intervals
+      //
+      
+      std::set<interval_t> uniq;
+      uint64_t prior_start = 0LLU;
+      std::set<uint64_t>::const_iterator pp = changepoints.begin();
+      ++pp; // skip start
+      while ( pp != changepoints.end() )
+	{
+	  uniq.insert( interval_t( prior_start , *pp ) );
+	  prior_start = *pp;
+	  ++pp;
+	}
+      
+      //
+      // iterate over each unique interval (i.e. will be spanned by the same annotations)
+      // note: how we are doing this will not automatically merge contiguous regions of 
+      // the new annotation; that should be fine, & if needed, we can add a 'MERGE' function
+      // to apply to any generic set of annotations (i.e. if the same annot class/instance 
+      // are found to be contiguous)
+      //
+      
+      
+      std::set<interval_t> new_annots;
+
+      std::set<interval_t>::const_iterator uu = uniq.begin();
+      while ( uu != uniq.end() )
+	{
+	  //	  std::cout << " uniq = " << uu->start << " " << uu->stop << "\n";
+
+	  interval_t interval = *uu;
+	  
+	  std::map<std::string,annot_map_t> inputs;
+	  
+	  // get each annotations for this interval
+
+	  for (int a=0;a<names.size();a++)
+	    {
+	      
+	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      
+	      // get overlapping annotations for this interval
+	      annot_map_t events = annot->extract( interval );
+	      
+	      // store
+	      inputs[ names[a] ] = events;
+	    }
+
+	  //
+	  // create new annotation (here we don't allow assignments to the new VAR.. so not needed)
+	  //
+	  
+	  // instance_t * new_instance = new_annot->add( "." , interval , "." );
+	  instance_t dummy_instance;
+
+	  //
+	  // evaluate the expression
+	  //
+	  
+	  Eval tok( expression );
+	  
+	  //tok.bind( inputs , new_instance , accumulator , &acc_vars );
+	  tok.bind( inputs , &dummy_instance , accumulator , &acc_vars );
+	  
+	  bool is_valid = tok.evaluate();
+	  
+	  bool retval;
+	  
+	  if ( ! tok.value( retval ) ) is_valid = false;
+	  
+	  //
+	  // Output
+	  //
+	  
+	  acc_total++;
+	  
+	  acc_valid += is_valid;
+	  
+	  if ( is_valid ) 
+	    acc_retval += retval;
+	  
+	  // add if valid and T
+	  if ( is_valid && retval )
+	    {
+	      //	      std::cout << " adding NEW ANNOT " << interval.start << " " << interval.stop << "\n";
+	      new_annots.insert( interval );
+	    }
+	  
+	  // next unique interval
+	  
+	  ++uu;
+	}
+
+      //
+      // now concatenate and add new annotations
+      //
+      
+      if ( new_annots.size() != 0 ) 
+	{
+	  std::set<interval_t>::const_iterator nn = new_annots.begin();
+	  interval_t curr = *nn;
+	  ++nn;
+	  while ( nn != new_annots.end() )
+	    {
+	       // std::cout << "\n\n";
+	       // std::cout << "CURR = " << curr.start << " - " << curr.stop  << "\n";
+	       // std::cout << "THIS = " << nn->start << " - " << nn->stop  << "\n";
+
+	      // if this is contiguous w/ the prior one, extend
+	      // current interval
+	      if ( curr.stop == nn->start ) 
+		{
+		  //std::cout << " extending " << curr.start << " - " << curr.stop << "    to    " << nn->stop << "\n";
+		  curr.stop = nn->stop;
+		}
+	      else // add current interval
+		{
+		  //std::cout << "adding " << curr.start << " - " << curr.stop << "\n";
+		  new_annot->add( "." , curr , "." );
+		  ++added_intervals;
+		  curr = *nn;
+		}
+	      ++nn;
+	    }
+
+	  // and add final one
+	  //std::cout << "adding final " << curr.start << " - " << curr.stop <<"\n";	  
+	  new_annot->add( "." , curr , "." );	  
+	  ++added_intervals;
+	}
+    }
   
 
   //
@@ -2801,8 +3031,9 @@ void proc_eval( edf_t & edf , param_t & param )
 	 << acc_total << " ("
 	 << acc_valid << " valid, " 
 	 << acc_retval << " true)\n";
+  if ( interval_mode ) 
+    logger << "  added " << added_intervals << " distinct " << new_annot_class << " interval-annotations\n";
   logger << "  global variables (if any):\n" << accumulator->print( "\n" , "\t" ) ;
-  
   logger << "\n";
 
   // all done 
@@ -3273,8 +3504,9 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		{
 		  // pipe-delimiter
 		  if ( dd != inst->data.begin() ) O1 << "|";
-		  // meta-data value
-		  O1 << *dd->second;
+		  // meta-data value, always key/value pairing
+		  // as there may be missing data
+		  O1 << dd->first << "=" << *dd->second;
 		  ++dd;
 		}
 	    }

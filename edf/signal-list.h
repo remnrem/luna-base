@@ -59,7 +59,7 @@ struct signal_list_t
     signals.push_back(i); 
     signal_labels.push_back(label); 
     upper2orig[ uc ] = label;
-    std::cout << " adding : " << label << "\tUC=" << uc << "\n";
+    //    std::cout << " adding : " << label << "\tUC=" << uc << "\n";
   }
 
   void clear() { signals.clear(); signal_labels.clear(); upper2orig.clear(); }

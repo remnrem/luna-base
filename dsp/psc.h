@@ -39,6 +39,15 @@ struct psc_t {
   void attach( param_t & );
   
   void project( edf_t & edf , param_t & );
+  
+  static void clear_proj() 
+  {
+    vname.clear();
+    means.resize(0);
+    sds.resize(0);
+    W.resize(0);
+    V.resize(0,0);
+  }
 
   // members
 

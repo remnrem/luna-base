@@ -170,3 +170,106 @@ void caches_t::load( const std::string & filename )
   
 }
 
+
+
+void caches_t::import( const std::string & filename , 
+		       const std::string & cache_name , 
+		       const std::string & id , 
+		       const std::set<std::string> & factors , 
+		       const std::set<std::string> * variables )
+{
+  
+  // we assume all values are NUMERIC   
+  cache_t<double> * num_cache = find_num( cache_name );
+  
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+  
+  // process headers
+  std::map<std::string,int> fslot, vslot;
+  
+  std::string line;
+  
+  Helper::safe_getline( IN1 , line );
+
+  if ( IN1.eof() ) Helper::halt( "problem reading " + filename );
+  if ( line == "" ) Helper::halt( "problem reading " + filename );
+  std::vector<std::string> tok = Helper::parse( line , "\t " );
+  if ( tok.size() <= 2 ) Helper::halt( "problem with imported format: need at least two cols:\n" + line );
+  if ( tok[0] != "ID" ) Helper::halt( "bad header row: first col should be ID" );
+  
+  for (int i=1;i<tok.size();i++)
+    {
+      if ( factors.find( tok[i] ) != factors.end() )
+	fslot[ tok[i] ] = i;
+      else
+	{
+	  if ( variables == NULL || variables->find( tok[i] ) != variables->end() ) 
+	    vslot[ tok[i] ] = i;
+	}
+    }
+  
+  // all factors found?
+  if ( fslot.size() != factors.size() ) 
+    Helper::halt( "problem finding all factors in " + filename );
+  
+  if ( vslot.size() == 0 ) 
+    Helper::halt( "no variables to import in " + filename );
+  
+  // extract individual with ID == 'id' only
+  
+  int cnt = 0 , cnt2 = 0 ;
+  
+  while ( ! IN1.eof() )
+    {      
+      std::string line;
+      Helper::safe_getline( IN1 , line );      
+      if ( IN1.eof() ) break;
+      if ( line == "" ) continue;
+      std::vector<std::string> tok = Helper::parse( line , "\t " );
+      if ( tok.size() <= 2 ) Helper::halt( "problem with imported format: need at least two cols:\n" + line );      
+      
+      // only read for this individual ; do not assume sorted, so will have to parse all lines
+      // (repeatedly).   This should not be too bad for most purposes, but if needed we can 
+      // store a static version of the file in memory
+
+      if ( tok[0] != id ) continue;
+      
+      //
+      // build strata
+      //
+
+      std::map<std::string,std::string> curr_strata;      
+      std::map<std::string,int>::const_iterator ff = fslot.begin();
+      while ( ff != fslot.end() ) 
+	{
+	  curr_strata[ ff->first ] = tok[ ff->second ];
+	  ++ff;
+	}
+
+      //
+      // insert variables
+      //
+
+      std::map<std::string,int>::const_iterator vv = vslot.begin();
+      while ( vv != vslot.end() )
+        {
+	  double x;
+	  if ( Helper::str2dbl( tok[ vv->second ] , &x ) )
+	    {
+	      num_cache->add( ckey_t( vv->first , curr_strata ) , x );
+	      ++cnt2;
+	    }
+          ++vv;
+        }
+      ++cnt;
+
+      // next row
+    }
+  
+  IN1.close();
+  
+  logger << "  read " << cnt << " strata (" << cnt2 << " distinct values) for " << id << " from " << filename << "\n";
+  
+}
+
+

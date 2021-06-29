@@ -60,8 +60,8 @@ void psc_t::construct( param_t & param )
   std::set<std::string> chs;
   if ( param.has( "ch" ) )    
     {
-      chs = param.strset( "ch" );
-      logger << "  expecting to retrain only " << chs.size() << " channels\n";
+      chs = param.strset( "ch" , "," , true ); // make UPPERCASE
+      logger << "  expecting to retain only " << chs.size() << " channels\n";
     }
   
   
@@ -277,13 +277,14 @@ void psc_t::construct( param_t & param )
 	  if ( id_excludes.size() != 0 && id_excludes.find( id ) != id_excludes.end() ) continue;	  
 	  
 	  // channels requested (if channels present in this file)
+	  // case-insensitive match
           if ( chs.size() != 0 && ( ch1 || ch2 ) )
             {
-              bool okay = true;
+	      bool okay = true;
               if ( ch_slot == -1 )
-		okay = chs.find( tok[ ch1_slot ] ) != chs.end() && chs.find( tok[ ch2_slot ] ) != chs.end() ;
+		okay = chs.find( Helper::toupper( tok[ ch1_slot ] ) ) != chs.end() && chs.find( Helper::toupper( tok[ ch2_slot ] ) ) != chs.end() ;
               else
-                okay = chs.find( tok[ ch_slot ] ) != chs.end() ;
+                okay = chs.find( Helper::toupper( tok[ ch_slot ] ) ) != chs.end() ;
               // skip if channel(s) not found
 	      
               if ( ! okay ) continue;
@@ -1377,7 +1378,7 @@ void psc_t::attach( param_t & param )
   // check if already attached
   //
 
-  if ( W.size() != 0 ) return;
+  if ( vname.size() != 0 ) return;
 
   //
   // Read W and V matrices in this file
@@ -1409,13 +1410,17 @@ void psc_t::attach( param_t & param )
   for (int j=0;j<nv;j++)
     IN1 >> vname[j] >> means(j) >> sds(j);
   
+  // make all VNAMES upper case
+
+  for (int j=0;j<nv;j++)
+    vname[j] = Helper::toupper( vname[j] );
+
   // components
   IN1 >> dummy >> nc;
         
   W.resize( nc );
   V.resize( nv , nc );
-    
-  
+      
   // W 
   IN1 >> dummy;
   for (int i=0;i<nc;i++)
@@ -1482,7 +1487,7 @@ void psc_t::attach( param_t & param )
     }  
 
   if ( drop.size() ) logger << "  dropping " << drop.size() << " of " << nc << " components\n";
-  if ( keep.size() ) logger << "  retainging only " << keep.size() << " of " << nc << " components\n";
+  if ( keep.size() ) logger << "  retaining only " << keep.size() << " of " << nc << " components\n";
   
   if ( drop.size() + keep.size() != 0 )
     for (int i=0; i<to0.size(); i++)
@@ -1495,7 +1500,13 @@ void psc_t::attach( param_t & param )
 
 void psc_t::project( edf_t & edf , param_t & param )
 {
-  
+
+  // 'nc' is encoded in the static 'W' vector
+
+  nc = W.size() ;
+
+  //  std::cout << "nc = " << nc << "\n";
+
   //
   // Cache w/ spectral data for this individual 
   //
@@ -1516,8 +1527,21 @@ void psc_t::project( edf_t & edf , param_t & param )
     Helper::halt( "cache not found for this individual: " + cache_name );
 
   cache_t<double> * cache = edf.timeline.cache.find_num( cache_name );
+  
+  //
+  // Norm (based on external mean/SD)
+  //
 
   const bool norm = param.yesno( "norm" );
+
+  //
+  // For paired CH1-CH2,, metrics, is it signed?
+  //  i.e.  match A-B with -ve value if find B-A
+  //        otherwise, if we do not find A-B, then look for B-A as is
+  //
+
+  bool signed_pairs = param.yesno( "signed" );
+
   
   // see which variables exist, i.e. psc_t::vname[] 
 
@@ -1537,15 +1561,22 @@ void psc_t::project( edf_t & edf , param_t & param )
       // variable =  tok[2]
 
       ckey_t key( tok[2] );
+      ckey_t key_flipped( tok[2] ); // for CH1-CH2 pairs only
 
       // channel(s) = tok[0]
       
       std::vector<std::string> tokch = Helper::parse( tok[0] , "." );
 
-      if ( tokch.size() == 2 )
+      bool pairs = tokch.size() == 2 ; 
+
+      if ( pairs )
 	{
 	  key.add( "CH1" , tokch[0] );
 	  key.add( "CH2" , tokch[1] );
+
+	  key_flipped.add( "CH1" , tokch[1] );
+	  key_flipped.add( "CH2" , tokch[0] );
+
 	}
       else if ( tokch.size() == 1 )
 	{
@@ -1563,15 +1594,30 @@ void psc_t::project( edf_t & edf , param_t & param )
 	    Helper::halt( "bad frequency value in PSC vname" );
 	  
 	  key.add( "F" , f );
+	  
+	  if ( pairs ) key_flipped.add( "F" , f );
 	}
-
+      
       // fetch 
-
+      
       std::vector<double> cx = cache->fetch( key );
       
       if ( cx.size() != 1 )
-	Helper::halt( "could not find cached variable: " + vname[i] );
-      
+	{
+	  if ( pairs ) 
+	    {
+	      // look for B-A
+	      cx = cache->fetch( key_flipped );
+	      
+	      if ( cx.size() != 1 )
+		Helper::halt( "could not find cached variable (or flipped pair): " + vname[i] );
+
+	      // signed?  i.e.  if so, flip sign
+	      if ( signed_pairs ) cx[0] *= -1; 
+	    }
+	  Helper::halt( "could not find cached variable: " + vname[i] );
+	}
+
       X(i) = cx[0];
     }
   
@@ -1596,8 +1642,13 @@ void psc_t::project( edf_t & edf , param_t & param )
   // Project given W and V to get U, PSCs for this individual
   //
   
-
+  // std::cout << " X , V , W " << X.rows() << " " << X.cols() << " " 
+  // 	    << V.rows() << "  " << V.cols() << " " 
+  // 	    << W.size() << "\n";
+  
   Eigen::MatrixXd U_proj = X.transpose() * V * W.asDiagonal();
+
+  //  std::cout << "U_proj = " << U_proj.rows() << " " << U_proj.cols() << "\n";
 
   
   //

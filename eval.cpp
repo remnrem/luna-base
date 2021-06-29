@@ -1496,6 +1496,19 @@ void proc_sedf( edf_t & edf , param_t & param )
 void proc_psc( edf_t & edf , param_t & param )
 {
 
+  // optionally, we can clear the attached W/V store, e.g. if 
+  // applying the same cached metrics to multiple projections: 
+  
+  // PSI sig=... cache-metrics=c1
+  // TAG P/1
+  // PSC cache=p1 proj=proj1.txt 
+  // PSC clear
+  // TAG P/2
+  // PSC cache=p1 proj=proj2.txt 
+
+  if ( param.has( "clear" ) )
+    psc_t::clear_proj();
+  
   // note:  PSC contruct() is called w/out an EDF from the command line
   //  luna --psc <args>
 
@@ -2566,6 +2579,8 @@ void proc_dump_cache( edf_t & edf , param_t & param )
       edf.timeline.cache.clear();
     }
 
+  // load from prior CACHE save 
+
   if ( param.has( "load" ) )
     {
       const std::string & filename = param.value( "load" );
@@ -2573,6 +2588,35 @@ void proc_dump_cache( edf_t & edf , param_t & param )
 	Helper::halt( "cannot find " + filename );
       edf.timeline.cache.load( filename );
     }
+
+  // load from long-format output (destrat out.db +COMMAND -r F1 F2)
+  // expects ID, factors, variables... 
+  // only load from that individual
+  
+  if ( param.has( "import" ) ) 
+    {
+      const std::string & filename = param.value( "import" );
+
+      if ( ! Helper::fileExists( filename ) )
+	Helper::halt( "cannot find " + filename );
+      
+      std::set<std::string> factors;
+
+      if ( param.has( "factors" ) ) 
+	factors = param.strset( "factors" );
+
+      std::set<std::string> vars;
+      if ( param.has( "v" ) ) 
+	vars = param.strset( "v" );
+      
+      edf.timeline.cache.import( filename , 
+				 param.requires( "cache" ) , 				 
+				 edf.id , 
+				 factors ,
+				 param.has( "v" ) ? &vars : NULL );
+      
+    }
+
   
   if ( param.has( "dump" ) )
     {

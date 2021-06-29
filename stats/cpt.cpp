@@ -67,6 +67,10 @@ void cpt_wrapper( param_t & param )
   double cl_threshold = param.has( "th-cluster" ) ? param.requires_dbl( "th-cluster" ) : -1 ; 
 
   bool one_sided_test = param.has( "1-sided" ) || param.has( "one-sided" );
+
+  bool no_clustering = cl_threshold < 0 || param.has( "no-clustering" ); 
+
+
   
   //
   // Covariate and IV : assume a single file
@@ -845,14 +849,21 @@ void cpt_wrapper( param_t & param )
   // Define adjacencies
   //
 
-  logger << "  defining adjacent variables...\n";
-  
-  cpt.calc_adjacencies( vname , col2var , col2f , col2ch1 , col2ch2 ,
-			freq_threshold ,
-			clocs_file == "" ? NULL : &clocs ,
-			spatial_threshold , 
-			verbose ) ;
+  if ( ! no_clustering ) 
+    {
+      logger << "  defining adjacent variables...\n";
       
+      cpt.calc_adjacencies( vname , col2var , col2f , col2ch1 , col2ch2 ,
+			    freq_threshold ,
+			    clocs_file == "" ? NULL : &clocs ,
+			    spatial_threshold , 
+			    verbose ) ;
+    }
+  else
+    {
+      // but need to store these
+      cpt.vname = vname;
+    }
   
   //
   // Run permutations
@@ -894,33 +905,37 @@ void cpt_wrapper( param_t & param )
       
     }
   writer.unlevel( globals::var_strat );
-  
-  // clusters
-  int cln = 0;
-  std::map<std::string,double>::const_iterator qq = results.cluster_emp.begin();
-  while ( qq != results.cluster_emp.end() )
+
+  if ( ! no_clustering ) 
     {
-      const std::set<std::string> & members = results.cluster_members.find( qq->first )->second;
-
-      writer.level( ++cln , globals::cluster_strat );
-
-      writer.value( "SEED" , qq->first );
-      writer.value( "P" ,  qq->second );
-      writer.value( "N" , (int)members.size() );
-      
-      // members
-      int memn = 0;
-      std::set<std::string>::const_iterator mm = members.begin();
-      while ( mm != members.end() )
+      // clusters
+      int cln = 0;
+      std::map<std::string,double>::const_iterator qq = results.cluster_emp.begin();
+      while ( qq != results.cluster_emp.end() )
 	{
-	  writer.level( ++memn , "M" );
-	  writer.value( "VAR" , *mm );
-	  ++mm;
+	  const std::set<std::string> & members = results.cluster_members.find( qq->first )->second;
+	  
+	  writer.level( ++cln , globals::cluster_strat );
+	  
+	  writer.value( "SEED" , qq->first );
+	  writer.value( "P" ,  qq->second );
+	  writer.value( "N" , (int)members.size() );
+	  
+	  // members
+	  int memn = 0;
+	  std::set<std::string>::const_iterator mm = members.begin();
+	  while ( mm != members.end() )
+	    {
+	      writer.level( ++memn , "M" );
+	      writer.value( "VAR" , *mm );
+	      ++mm;
+	    }
+	  writer.unlevel( "M" );
+	  ++qq;
 	}
-      writer.unlevel( "M" );
-      ++qq;
+      writer.unlevel( globals::cluster_strat );
     }
-  writer.unlevel( globals::cluster_strat );
+
 
   //
   // All done
