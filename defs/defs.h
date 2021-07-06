@@ -310,6 +310,10 @@ struct globals
   // allow spaces in .annot files, or only tab delimited?
   static bool allow_space_delim;
 
+  // combine class and instance annotations (to a single class?)
+  static char annot_class_inst_combiner;
+  static bool combine_annot_class_inst;
+
   // helper functions to pull out global values
   static std::string band( frequency_band_t b );
 

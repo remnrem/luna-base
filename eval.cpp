@@ -3143,6 +3143,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       // globals::replace_annot_spaces = true;
       if ( tok1.size() != 1 ) Helper::halt( "expecting single character after spaces" );
       globals::space_replacement = tok1[0];
+      return;
     }
 
   // set channel names as all UPPERCASE
@@ -3158,20 +3159,31 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     {
       globals::replace_channel_spaces = false;
       globals::replace_annot_spaces = false;
+      return;
     }
   
   // keep spaces (annots only) 
   if ( Helper::iequals( tok0 , "keep-annot-spaces" ) )
     {
       globals::replace_annot_spaces = false;
+      return;
     }
   
   // keep spaces (annots only) 
   if ( Helper::iequals( tok0 , "keep-channel-spaces" ) )
     {
       globals::replace_channel_spaces = false;
+      return;
     }
-  
+
+  // combine annot class and instance IDs
+  if ( Helper::iequals( tok0 , "combine-annots" ) )
+    {
+        globals::combine_annot_class_inst = true;
+      if ( tok1 != "" ) globals::annot_class_inst_combiner = tok1[0];
+      return;
+    }
+    
   // sleep stage prefix
   if (  Helper::iequals( tok0 , "ss-prefix" ) )
     {
@@ -3270,6 +3282,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   else if ( Helper::iequals( tok0 , "tab-only" ) )
     {
       globals::allow_space_delim = ! Helper::yesno( tok1 );
+      return;
     }
 
   // default annot folder

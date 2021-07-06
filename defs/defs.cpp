@@ -45,7 +45,9 @@ cmddefs_t globals::cmddefs;
 std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
 bool globals::allow_space_delim = true;
-
+char globals::annot_class_inst_combiner = '_';
+bool globals::combine_annot_class_inst = false;
+  
 int globals::time_format_dp;
 
 bool globals::read_ftr;
