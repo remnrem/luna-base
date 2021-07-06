@@ -89,6 +89,7 @@ int globals::assume_pm_starttime_hour;
 
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
+
 int globals::anon_idroot_cnt;
 
 bool globals::force_edf;

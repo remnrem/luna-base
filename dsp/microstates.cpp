@@ -1969,22 +1969,21 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
       ++ee;
     }
 
-
-  logger << "  kmers: considering length " << k1 << " to " << k2 << "\n";
   
-  logger << "  kmers: for " << basic.obs.size() << " sequences, "
-	 << equivs.size() << " equivalence groups\n";
-	
-  
+  if ( verbose ) 
+    {
+      logger << "  kmers: considering length " << k1 << " to " << k2 << "\n";
+      
+      logger << "  kmers: for " << basic.obs.size() << " sequences, "
+	     << equivs.size() << " equivalence groups\n";
+      
+      logger << "  kmers: running " << nreps << " replicates...\n";
+    }
 
   
   //
   // Begin permutations 
   //
-    
-
-  logger << "  kmers: running " << nreps << " replicates...\n";
-  
 
   for (int r = 0 ; r < nreps ; r++)
     {
@@ -2816,10 +2815,82 @@ std::string ms_kmer_t::modified_random_draw( const std::string & l )
 
   for (int i=1;i<n;i++)
     {
-      // skip last pick
-      p[i] = pick( urns , last );
-      --urns[ p[i] ];
-      last = p[i];
+      // attempt to skip last pick
+      char c = pick( urns , last );
+      
+      // typically, we expect to be able to pick one 
+      // that is not equal to the last pick:
+      if ( c != last ) 
+	{
+	  p[i] = c;
+	  --urns[ c ];
+	  last = c;
+	}
+      else // however, this might not always be the case...
+	{
+	  // std::cout << "\n\nfound issue:\n";
+	  // std::cout << "pick i = " << i << " " << c << "\n";
+	  // std::cout << "currenrt:\n" << p.substr(0,i) << "?\n";
+
+	  // i.e. if being forced to pick something the same as the prior, 
+	  //   ABCABA[A]
+	  //   012345 6
+	  // we want to randomly find a prior spot where the 'A' can fit (i.e. between B and C)
+	  // and insert it there, and move everything else forward by one...
+	  //  nb; this issue should neve happen with only two classes: i.e. as sequence stats
+	  //      don't make sense there in any case... 
+	  
+	  // pick a random starting slot between 0 and i-2
+	  //  i.e. could go in slot 4 above; (as slot 5 (i-1) == i candidate) 
+	  
+	  int search = CRandom::rand( i - 2 );
+
+	  // should not need this... but in case of weird
+	  // edge cases, makes sure we bail rather than get stuck in 
+	  // an infinite loop
+
+	  bool looped = false;
+
+	  while ( 1 ) 
+	    {
+	      //std::cout << " searching = " << search << "\n";
+
+	      // valid position?
+	      bool okay = search == 0 ? p[0] != c : ( p[search-1] != c &&  p[search] != c ) ;
+
+	      if ( ! okay ) 
+		{ 
+		  ++search;
+		  if ( search == i-1 ) 
+		    {
+		      if ( looped ) 
+			Helper::halt( "internal problem in modified_random_draw()... cannot create sequence" );
+		      search = 0 ; 
+		      looped = true;
+		    }
+		  continue;
+		}
+	      
+	      // otherwise, shift everything else /after/ search forward by 1, and then insert at search spot
+	      
+	      for (int s = i ; s != search; s-- )
+		p[s] = p[s-1];
+	      
+	      p[search] = c;
+	      
+	      // std::cout << "placed\n"
+	      // 		<< p.substr( 0 , i+1 ) << "\n";
+	      break;
+		  
+	    }
+	  
+	  // still need to drop urn count:
+	  --urns[ c ];
+	  
+	  // and the last will still be 'c' (i.e. as this was also the prior pick)
+	  last = c;
+	  
+	}
       
       // sanity check, can remove
       if ( urns[p[i]] < 0 ) Helper::halt( "error!" );      

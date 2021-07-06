@@ -502,13 +502,23 @@ void cmd_t::populate_commands()
 void cmd_t::replace_wildcards( const std::string & id )
 {
   
+  
   //
   // get copy of original script;  comments, newlines vesrus '&' will already have
   // been taken care of
   //
   
   std::string iline = line;
-
+  
+  //
+  // If the script contains an ID wildcard, confirm that ID does not already contain the wildcard 
+  //
+  
+  if ( iline.find( globals::indiv_wildcard ) != std::string::npos && 
+       id.find( globals::indiv_wildcard ) != std::string::npos ) 
+    Helper::halt( "ID " + id + " contains ID-wildcard character " 
+		  + globals::indiv_wildcard + " (i.e. use wildcard=X to specify in a different one)" );
+ 
 
   //
   // Copy a set of variables, where any i-vars will overwrite an existing var
@@ -895,6 +905,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "MEANS" ) )        proc_sig_annot_mean( edf, param(c) );
 		    
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
+      else if ( is( c, "HEAD" ) )         proc_head_matrix( edf , param(c) );
+
       else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
@@ -980,6 +992,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "TAG" ) )          proc_tag( param(c) );
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
       else if ( is( c, "LINE-DENOISE" ) ) dsptools::line_denoiser( edf, param(c) );
+      else if ( is( c, "ZC" ) )           dsptools::detrend( edf, param(c) );
+
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
       else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
@@ -1732,6 +1746,14 @@ void proc_epoch_dump( edf_t & edf , param_t & param )
 void proc_epoch_matrix( edf_t & edf , param_t & param )
 {  
   edf.epoch_matrix_dumper( param );
+}
+
+
+// HEAD
+
+void proc_head_matrix( edf_t & edf , param_t & param )
+{
+  edf.head_matrix_dumper( param );
 }
 
 
@@ -3117,7 +3139,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::sample_list_id = tok1;
       return;
     }
-  
+
+  // specify indiv-wildcard (other than ^)
+  // which is needed if file ID actually contains ^
+  if ( Helper::iequals( tok0 , "wildcard" ) )
+    {
+      globals::indiv_wildcard = tok1;
+      return;
+    }
+    
+
   // dp for time output
   if ( Helper::iequals( tok0, "sec-dp" ) )
     {
@@ -3961,22 +3992,73 @@ std::map<std::string,int> cmd_t::pull_ivar( const std::vector<std::string> & ids
 void proc_has_signals( edf_t & edf , param_t & param )
 {
 
-  // check this EDF has the signals OR annots OR stage infoimation
+  // operates in two modes:  
+  //    - alters return code (default)
+  //    - skips to next EDF (if skip option is given) 
+
+  bool skip = param.has( "skip" );
+  
+  // check this EDF has the signals OR annots OR stage information
   
   bool check_stages = param.has( "stages" );
-  //  bool check_annots = param.has( "annots" ) || param.has( "annot" );
-  bool check_signals = param.has( "sig" );
- 
-  if ( check_stages ) 
+
+  bool check_annots = param.has( "annots" ) || param.has( "annot" );
+
+  // will always have a default signal value: if not specified, means everything
+  bool check_signals = param.value( "sig" ) != "*" ;
+
+  if ( ( check_stages && check_annots ) ||
+       ( check_stages && check_signals ) ||
+       ( check_annots && check_signals ) ) 
+    Helper::halt( "can only only specify stages OR annots OR sig for CONTAINS" );
+
+  // return codes: 0   all EDFs have all signals/annots
+  //               1   all EDFs have at least one of these signals/annots
+  //               2   at least some EDFs do not have any of these signals/annots
+  
+  // 0  ALL channels in all EDFs
+  // 1  only SOME channels in one or more EDFs
+  // 2  NO channels in one or more EDFs
+  
+  // retcode starts at 0
+  // if EDF has all  : do not change retcode == 0 
+  // if EDF has some : retcode == 1
+  // if EDF has none : retcode == 2
+  // & retcode never gets smaller
+  
+
+  if ( check_stages )
     {
+      
+      //
       // try to make and extract stages
+      // by default, this sets sslabel to SleepStage
+      //
+      
       edf.timeline.annotations.make_sleep_stage();
       
-      globals::retcode = 1;
-
-      // by default, this sets sslabel to SleepStage
-
       annot_t * annot = edf.timeline.annotations( "SleepStage" );
+      
+      bool present = true;
+      
+      if ( annot == NULL )
+	{
+
+	  present = false;
+
+	  if ( skip ) 
+	    {
+	      globals::problem = true;
+	      return;
+	    }
+	  
+	  // otherwise, flag a problem 
+	  globals::retcode = 2;
+	 	 
+	}
+
+
+      // Stages present, but not the correct amount?
 
       if ( annot != NULL )
 	{
@@ -3986,32 +4068,122 @@ void proc_has_signals( edf_t & edf , param_t & param )
 	  if ( has_stages ) 
 	    {
 	      int ne = edf.timeline.num_epochs();
-	      if ( ne == edf.timeline.hypnogram.stages.size() )
-		globals::retcode = 0;
+
+	      if ( ne != edf.timeline.hypnogram.stages.size() )
+		{
+
+		  present = false; 
+		  
+		  if ( skip ) 
+		    {
+		      globals::problem = true;
+		      return;
+		    }		  
+		  
+		  // otherwise, flag a problem: partial staging means 
+		  if ( globals::retcode == 0 ) 
+		    globals::retcode = 1;
+		  
+		}
+
+	      int s_n1 = 0 , s_n2 = 0 , s_n3 = 0 , s_rem = 0 , s_wake = 0 , s_other = 0;
+	      
+	      const int ss = edf.timeline.hypnogram.stages.size();
+	      
+	      for (int s=0; s<ss; s++)
+		{	  
+		  
+		  if      ( edf.timeline.hypnogram.stages[ s ] == WAKE ) ++s_wake;
+		  else if ( edf.timeline.hypnogram.stages[ s ] == NREM1 ) ++s_n1;
+		  else if ( edf.timeline.hypnogram.stages[ s ] == NREM2 ) ++s_n2;
+		  else if ( edf.timeline.hypnogram.stages[ s ] == NREM3 ) ++s_n3;
+		  else if ( edf.timeline.hypnogram.stages[ s ] == NREM4 ) ++s_n3;
+		  else if ( edf.timeline.hypnogram.stages[ s ] == REM ) ++s_rem;
+		  else ++s_other;
+		}
+	      
+	      std::stringstream sss ;
+	      sss << "N1:" << s_n1 << ","
+		  << "N2:" << s_n2 << ","
+		  << "N3:" << s_n3 << ","
+		  << "R:" << s_rem << ","
+		  << "W:" << s_wake << ","
+		  << "?:" << s_other ;
+	      
+	      writer.value( "STAGE_COUTS" , sss.str() );
+	      
+	      bool has_nrem =  ( s_n1 + s_n2 + s_n3 ) > 0 ;
+	      bool has_rem  =  s_rem > 0 ;
+	      bool has_wake = s_wake > 0 ;
+	      
+	      const int n_stages = has_rem + has_nrem + has_wake;
+	      writer.value( "UNIQ_STAGES" , n_stages );
+	      
 	    }
 	}
       
-      writer.value( "STAGES" , globals::retcode );
-
+      writer.value( "STAGES" , present );
+      
       return;
     }
-   
-
-  // TODO: annot check
-
-  // return codes: 0   all EDFs have all signals/annots
-  //               1   all EDFs have at least one of these signals/annots
-  //               2   at least some EDFs do not have any of these signals/annots
-
-  // 0  ALL channels in all EDFs
-  // 1  only SOME channels in one or more EDFs
-  // 2  NO channels in one or more EDFs
   
-  // retcode starts at 0
-  // if EDF has all : do not change
-  // if EDF has some : retcode == 1
-  // if EDF has none : retcode == 2
-  // & retcode never gets smaller
+  
+  //
+  // annotations
+  //
+
+  if ( check_annots ) 
+    {
+
+      std::vector<std::string> annots = param.has( "annot" ) ? 
+	param.strvector( "annot" ) : param.strvector( "annots" );
+
+      const int na = annots.size();
+
+      int count = 0 ;
+
+      for (int a=0; a<na; a++)
+	{
+	  
+	  annot_t * annot = edf.timeline.annotations( annots[a] ) ;
+	  bool found = annot != NULL ; 	  
+	  writer.level( annots[a] , globals::annot_strat );	  
+	  writer.value( "PRESENT" , found );
+	  if ( found ) ++count;
+	}
+      writer.unlevel( globals::annot_strat );
+
+      writer.value( "NA_REQ" , na );
+      writer.value( "NA_OBS" , count );
+      
+      // behavior based on absence?
+
+
+      //
+      // in skip mode, bail if none present
+      //
+
+      if ( skip && count == 0 )
+	{
+	  globals::problem = true;
+	  return;
+	}
+      
+      //
+      // otherwise adjust return code
+      //
+      
+      if ( count == 0 ) globals::retcode = 2;
+      else if ( count < na && globals::retcode == 0 ) globals::retcode = 1;
+      
+      return;
+    }
+  
+
+  //
+  // otherwise, check signals
+  //
+  
 
   int count = 0;
 
@@ -4031,8 +4203,21 @@ void proc_has_signals( edf_t & edf , param_t & param )
   writer.value( "NS_REQ" , ns );
   writer.value( "NS_OBS" , count );
   writer.value( "NS_TOT" , edf.header.ns );
-  				
-  // adjust return code
+
+  //
+  // in skip mode, bail if none present
+  //
+  
+  if ( skip && count == 0 )
+    {
+      globals::problem = true;
+      return;
+    }
+  
+  //
+  // otherwise adjust return code
+  //
+
   if ( count == 0 ) globals::retcode = 2;
   else if ( count < ns && globals::retcode == 0 ) globals::retcode = 1;
 

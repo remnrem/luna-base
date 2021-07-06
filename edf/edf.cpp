@@ -3132,12 +3132,6 @@ bool edf_t::restructure()
   
   timeline.set_epoch_mapping();
 
-  // output headers
-  writer.var( "NR1" , "Number of records prior to restructuring" );
-  writer.var( "NR2" , "Number of records after restructuring" );
-  writer.var( "DUR1" , "Duration (sec) prior to restructuring" );
-  writer.var( "DUR2" , "Duration (sec) after restructuring" );
-
   // Check that we have anything to do
   
   if ( ! timeline.is_epoch_mask_set() ) 
@@ -3281,6 +3275,21 @@ bool edf_t::restructure()
   
   writer.value( "DUR1" , copy.size() * header.record_duration );
   writer.value( "DUR2" , records.size() * header.record_duration );
+
+  int n_data_channels = 0 , n_annot_channels = 0;
+
+  for (int s=0;s<header.ns;s++)
+    {
+      if ( header.is_data_channel(s) )
+        ++n_data_channels;
+      else
+        ++n_annot_channels;
+    }
+
+  // signal info -- total number of channels (data / annot )
+  writer.value( "NS" , n_data_channels );
+  writer.value( "NA" , n_annot_channels );
+  
 
   // update EDF header
   // nb. header.nr_all stays the same, reflecting the 
@@ -4216,21 +4225,31 @@ bool edf_t::basic_stats( param_t & param )
       if ( n == 0 ) { continue; } 
  
       double mean = MiscMath::mean( *d );
-      double median = calc_median ? MiscMath::median( *d ) : 0 ;
-      double sd = MiscMath::sdev( *d );
+      //double median = calc_median ? MiscMath::median( *d ) : 0 ;
       double rms  = MiscMath::rms( *d );
+      double sd = MiscMath::sdev( *d );
       double skew = MiscMath::skewness( *d , mean , sd );
 				    
       double min = (*d)[0];
       double max = (*d)[0];
+
       
       for (int i = 0 ; i < n ; i++ )
 	{
 	  if ( (*d)[i] < min ) min = (*d)[i];
 	  if ( (*d)[i] > max ) max = (*d)[i];
 	}
-
       
+      std::map<int,double> pct;
+      pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
+      pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
+      pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
+      pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
+      pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
+      pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
+      for (int pp=0;pp<9;pp++)
+	pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
+
       //
       // Output
       //
@@ -4240,9 +4259,17 @@ bool edf_t::basic_stats( param_t & param )
       writer.value( "MIN"  , min  );      
       writer.value( "MEAN" , mean );
       writer.value( "SKEW" , skew );
-      if ( calc_median ) writer.value( "MEDIAN" , median );
-      writer.value( "RMS"  , rms  );
+      //if ( calc_median ) writer.value( "MEDIAN" , median );
 
+      writer.value( "RMS"  , rms  );
+      writer.value( "SD"  , sd  );
+
+      std::map<int,double>::const_iterator pp = pct.begin() ;
+      while ( pp != pct.end() ) 
+	{
+	  writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
+	  ++pp;
+	}
       
       //
       // Also, same strata:  summaries of epoch-level statistics
