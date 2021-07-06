@@ -20,49 +20,18 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
+#ifndef __DETRENDER_H__
+#define __DETRENDER_H__
 
-#include "gc.h"
-#include "tsync.h"
-#include "sync.h"
-#include "standardize.h"
-#include "mtm/mtm.h"
-#include "siggen.h"
-#include "psi.h"
-#include "microstates.h"
-#include "tlock.h"
-#include "peaks.h"
-#include "psc.h"
-#include "spectral_norm.h"
-#include "tv.h"
-#include "rems.h"
-#include "cfc.h"
-#include "acf.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conncoupl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
-#include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
-#include "linedenoiser.h"
-#include "detrend.h"
+struct edf_t;
+struct param_t;
+
+// wrapper
+namespace dsptools { 
+
+  void detrend( edf_t & edf , param_t & param );
+
+}
+                                                                                       \
 
 #endif

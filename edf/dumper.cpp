@@ -1220,6 +1220,107 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 }
 
 
+void edf_t::head_matrix_dumper( param_t & param )
+{
+
+  //
+  // Get signals
+  //  
+  
+  const bool no_annotations = true;
+  
+  signal_list_t signals = header.signal_list(  param.requires( "sig" ) , no_annotations );  
+  
+  const int ns = signals.size();
+
+  if ( ns == 0 ) return;
+
+  //
+  // Epochs? 
+  //
+  
+  int epoch = param.has( "epoch" ) ? param.requires_int( "epoch" ) : 1 ; 
+  
+  timeline.ensure_epoched();
+  
+  const int ne = timeline.num_epochs();
+
+  if ( epoch < 1 || epoch > ne ) Helper::halt( "invalid epoch specified" );
+
+  //
+  // Check FS for all signals
+  //
+  
+  double fs = header.sampling_freq( signals(0) );
+  
+  for (int s=1; s<ns; s++) 
+    if ( fabs( header.sampling_freq( signals(s) ) - fs ) > 1e-4 ) 
+      Helper::halt( "HEAD requires uniform sampling rate across signals" ); 
+  
+  //
+  // Fixed number of seconds?
+  //
+
+  double sec_lim = param.has( "sec" ) ? param.requires_dbl( "sec" ) : -1 ;
+    
+  //
+  // Header
+  //
+  
+  // time (elapsed seconds, since start of EDF);
+
+  std::cout << "T\tSEC\tSP";
+  
+  for (int s = 0 ; s < ns ; s++ )
+    std::cout << "\t" << header.label[ signals(s) ] ;
+  std::cout << "\n";
+  
+  //
+  // Get data 
+  //
+
+  // nb, request epoch using base-0 counting
+  interval_t interval = timeline.epoch( epoch - 1 );
+
+  eigen_matslice_t mslice( *this , signals , interval );
+
+  const Eigen::MatrixXd & X = mslice.data_ref();
+  
+  const int rows = X.rows();
+  const int cols = X.cols();
+  
+  const std::vector<uint64_t> * tp = mslice.ptimepoints();
+
+  std::cout.precision(6);
+
+  for (int t=0;t<rows;t++)
+    {
+      
+      double tp_sec = (*tp)[t] * globals::tp_duration;
+      
+      double tp_sec_past_estart = ( (*tp)[t] - interval.start) / (double)globals::tp_1sec; 
+      
+      // all done?
+      if ( sec_lim > 0 && tp_sec_past_estart > sec_lim ) break;
+
+      std::cout << tp_sec << "\t"
+		<< tp_sec_past_estart << "\t"
+		<< t ;
+
+      // signals
+      for (int s=0;s<ns;s++) std::cout << "\t" << X(t,s);
+      
+      // done, next row/time-point
+      std::cout << "\n";
+
+      
+    } // next time-point
+  
+  return;
+  
+}
+
+
 
 void edf_t::seg_dumper( param_t & param )
 {

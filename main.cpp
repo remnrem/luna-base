@@ -572,36 +572,62 @@ int main(int argc , char ** argv )
       int k2 = param.has( "k2" ) ? param.requires_int( "k2" ) : 6;
       if ( param.has( "k" ) ) k1 = k2 = param.requires_int( "k" );
      
-			      
+      // require at least L sequences; only take the first L
+      const int req_len = param.has( "req-len" ) ? param.requires_int( "req-len" ) : 0 ; 
+
+      
       // load from STDIN
       std::map<std::string,std::string> data;
       std::vector<std::string> ids;
       if ( ! Helper::fileExists( infile ) ) Helper::halt( "could not open " + infile );
       std::ifstream IN1( infile.c_str() , std::ios::in );
+      int rejected = 0; 
       while ( ! IN1.eof() )
 	{
 	  std::string id, s;
 	  IN1 >> id >> s;	  
-	  if ( IN1.eof() || id == "" || s.size() == 0 ) continue;
-	  data[ id ] = s;
+	  if ( IN1.eof() || id == "" || s.size() < 2 ) continue;
+
+	  bool okay = req_len == 0 || s.size() >= req_len ; 	  
+	  if ( ! okay ) { ++rejected; continue;  } 
+
+	  // add, either whole sequence, or subset (1..s)
+	  data[ id ] = req_len ? s.substr( 0 , req_len ) : s;
 	  ids.push_back( id );
 	}
       IN1.close();
 
+      if ( req_len ) 
+	logger << "  " << data.size() << " of " 
+	       << data.size() + rejected 
+	       << " individuals included (analysis of first " << req_len << " states only)\n";
+
+      //
+      // report indiv-level enrichment? (versus group?)
+      //
+
+      const bool indiv_enrichment = param.has( "indiv-enrichment" );
+      
+      //
       // phenotypes?      
+      //
+
       if ( param.has( "vars" ) )
 	cmd_t::attach_ivars( param.value( "vars" ) );
-
+      
       const std::string phe_label = param.has( "phe" ) ? param.value( "phe" ) : "" ;
       const bool grp = phe_label != "";
-      
+
+      if ( grp && indiv_enrichment ) 
+	Helper::halt( "cannot specify both indiv-enrichment and phe" );
+
       std::map<std::string,int> phe;
 
       if ( grp )
 	{
 	  phe = cmd_t::pull_ivar( ids , phe_label );
 	  int cases = 0 , controls = 0 , missing = 0;
-
+	  
 	  std::map<std::string,int>::const_iterator ii = phe.begin();
 	  while ( ii != phe.end() )
 	    {
@@ -619,165 +645,242 @@ int main(int argc , char ** argv )
 
 	  if ( cases == 0 || controls == 0 )
 	    Helper::halt( "did not observe both cases and controls: cannot run a phenotype-based analysis" );
-	      
+	  
 	}
-          
-      // do analysis (w/ or w/out phenotype) ; second true means verbose output
-      ms_kmer_t kmers( data , k1 , k2 , nreps , grp ? &phe : NULL , true );
       
+
       //
-      // report output: OBS and WITHIN-GROUP
+      // show within equivalence-group stats? (W_)
       //
-
-      std::map<std::string,double>::const_iterator pp = kmers.basic.pval.begin();
-      while ( pp != kmers.basic.pval.end() )
-	{
-	  
-	  writer.level( (int)pp->first.size() , "L" );
-	  writer.level( pp->first , "S" );
-
-	  bool valid_equiv = kmers.equiv_set_size[ pp->first ] > 1;
-	  
-	  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
-	  writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
-	  
-	  writer.value( "OBS" , kmers.basic.obs[ pp->first ] );
-	  writer.value( "EXP" , kmers.basic.exp[ pp->first ] );
-	  writer.value( "P" , pp->second );
-	  writer.value( "Z" , kmers.basic.zscr[ pp->first ] );	  
-
-	  if ( valid_equiv )
-	    {
-	      writer.value( "W_OBS" , kmers.equiv.obs[ pp->first ] );
-	      writer.value( "W_EXP" , kmers.equiv.exp[ pp->first ] );
-	      writer.value( "W_P" , kmers.equiv.pval[ pp->first ] );
-	      writer.value( "W_Z" , kmers.equiv.zscr[ pp->first ] );
-	    }
-	  
-	  // C/C contrasts?
-
-	  if ( grp )
-	    {
-
-	      writer.level( "CASE" , "PHE" );
-
-	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
-	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
-	      writer.value( "OBS" , kmers.basic_cases.obs[ pp->first ] );
-	      writer.value( "EXP" , kmers.basic_cases.exp[ pp->first ] );
-	      writer.value( "P" , kmers.basic_cases.pval[ pp->first ] );
-	      writer.value( "Z" , kmers.basic_cases.zscr[ pp->first ] );
-
-	      if ( valid_equiv )
-		{
-		  writer.value( "W_OBS" , kmers.equiv_cases.obs[ pp->first ] );
-		  writer.value( "W_EXP" , kmers.equiv_cases.exp[ pp->first ] );
-		  writer.value( "W_P" , kmers.equiv_cases.pval[ pp->first ] );
-		  writer.value( "W_Z" , kmers.equiv_cases.zscr[ pp->first ] );
-		}
-	      
-	      writer.level( "CONTROL" , "PHE" );
-	      
-	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
-	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
-	      writer.value( "OBS" , kmers.basic_controls.obs[ pp->first ] );
-	      writer.value( "EXP" , kmers.basic_controls.exp[ pp->first ] );
-	      writer.value( "P" , kmers.basic_controls.pval[ pp->first ] );
-	      writer.value( "Z" , kmers.basic_controls.zscr[ pp->first ] );
-
-	      if ( valid_equiv )
-		{
-		  writer.value( "W_OBS" , kmers.equiv_controls.obs[ pp->first ] );
-		  writer.value( "W_EXP" , kmers.equiv_controls.exp[ pp->first ] );
-		  writer.value( "W_P" , kmers.equiv_controls.pval[ pp->first ] );
-		  writer.value( "W_Z" , kmers.equiv_controls.zscr[ pp->first ] );
-		}
-	      
-	      writer.level( "DIFF" , "PHE" );
-	      
-	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
-	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
-	      //writer.value( "OBS" , kmers.basic_diffs.obs[ pp->first ] );
-              //writer.value( "EXP" , kmers.basic_diffs.exp[ pp->first ] );
-	      writer.value( "Z" , kmers.basic_diffs.zscr[ pp->first ] );
-
-	      if ( valid_equiv )
-		{
-		  writer.value( "W_OBS" , kmers.equiv_diffs.obs[ pp->first ] );
-		  writer.value( "W_EXP" , kmers.equiv_diffs.exp[ pp->first ] );
-		  writer.value( "W_Z" , kmers.equiv_diffs.zscr[ pp->first ] );
-		}
-	      
-	      writer.unlevel( "PHE" );
-	    }
-	  
-	  ++pp;
-	}  
-
-      writer.unlevel( "S" );
-      writer.unlevel( "L" );
       
+      const bool wstats = param.has( "w-stats" );
+      
+      
+
       //
-      // repeat for EQ groups
+      // only show verbose mode for group level analysis 
       //
 
-      pp = kmers.group.pval.begin();
-      while ( pp != kmers.group.pval.end() )
+      const bool verbose_output = ! indiv_enrichment ; 
+
+      //
+      // Run analyses (either group level, in which case do once)
+      //  or individual-level, in which case, we will iterate
+      //  other all groups
+      //
+
+      std::map<std::string,std::string>::const_iterator ii = data.begin();
+
+      while ( 1 ) 
 	{
-	  writer.level( (int)pp->first.size() , "L" );
-	  writer.level( pp->first , "SG" );
- 
-	  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	  //
+	  // copy over data for this analysis
+	  //
+	  
+	  std::map<std::string,std::string> data1;
+	  
+	  if ( indiv_enrichment ) 
+	    data1[ ii->first ] = ii->second;
+	  else
+	    data1 = data;
+
+	  //
+	  // do kmer enrichment: indiv, or group (w/ or w/out phenotype)
+	  //
+
+	  ms_kmer_t kmers( data1 , k1 , k2 , nreps , grp ? &phe : NULL , verbose_output );
+      
+	  
+	  //
+	  // individual level output?
+	  //
+	  
+	  if ( indiv_enrichment )
+	    {
+	      logger << "  processing " << ii->first << ", L=" << ii->second.size() << " sequence length\n";
+	      writer.id( ii->first , "." ); // ID, EDF
+	      // track sequence length for each indiv
+	      writer.value( "N" , (int)ii->second.size() );
+	    }
+
+	  //
+	  // report output: OBS and WITHIN-GROUP
+	  //
+	  
+	  std::map<std::string,double>::const_iterator pp = kmers.basic.pval.begin();
+	  while ( pp != kmers.basic.pval.end() )
+	    {
+	      
+	      writer.level( (int)pp->first.size() , "L" );
+	      writer.level( pp->first , "S" );
+	      
+	      bool valid_equiv = kmers.equiv_set_size[ pp->first ] > 1;
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      
+	      writer.value( "OBS" , kmers.basic.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.basic.exp[ pp->first ] );
+	      writer.value( "RAT" , kmers.basic.obs[ pp->first ] / (double) kmers.basic.exp[ pp->first ] );	      
+	      writer.value( "P" , pp->second );
+	      writer.value( "Z" , kmers.basic.zscr[ pp->first ] );	  
+	      
+	      if ( valid_equiv && wstats )
+		{
+		  writer.value( "W_OBS" , kmers.equiv.obs[ pp->first ] );
+		  writer.value( "W_EXP" , kmers.equiv.exp[ pp->first ] );
+		  writer.value( "W_RAT" , kmers.equiv.obs[ pp->first ] / (double)kmers.equiv.exp[ pp->first ]);
+		  writer.value( "W_P" , kmers.equiv.pval[ pp->first ] );
+		  writer.value( "W_Z" , kmers.equiv.zscr[ pp->first ] );
+		}
+	      
+	      // C/C contrasts?
+	      
+	      if ( grp )
+		{
 		  
-	  writer.value( "OBS" , kmers.group.obs[ pp->first ] );
-	  writer.value( "EXP" , kmers.group.exp[ pp->first ] );
-	  writer.value( "P" , pp->second );
-	  writer.value( "Z" , kmers.group.zscr[ pp->first ] );	  
-
-	  // C/C contrasts?
-
-	  if ( grp )
-	    {
-
-	      writer.level( "CASE" , "PHE" );
-
-	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );	      
-	      writer.value( "OBS" , kmers.group_cases.obs[ pp->first ] );
-	      writer.value( "EXP" , kmers.group_cases.exp[ pp->first ] );
-	      writer.value( "P" , kmers.group_cases.pval[ pp->first ] );
-	      writer.value( "Z" , kmers.group_cases.zscr[ pp->first ] );
+		  writer.level( "CASE" , "PHE" );
+		  
+		  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+		  writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+		  writer.value( "OBS" , kmers.basic_cases.obs[ pp->first ] );
+		  writer.value( "EXP" , kmers.basic_cases.exp[ pp->first ] );
+		  writer.value( "RAT" , kmers.basic_cases.obs[ pp->first ] /(double)kmers.basic_cases.exp[ pp->first ] );
+		  writer.value( "P" , kmers.basic_cases.pval[ pp->first ] );
+		  writer.value( "Z" , kmers.basic_cases.zscr[ pp->first ] );
+		  
+		  if ( valid_equiv && wstats )
+		    {
+		      writer.value( "W_OBS" , kmers.equiv_cases.obs[ pp->first ] );
+		      writer.value( "W_EXP" , kmers.equiv_cases.exp[ pp->first ] );
+		      writer.value( "W_RAT" , kmers.equiv_cases.obs[ pp->first ] /(double)kmers.equiv_cases.exp[ pp->first ] );
+		      writer.value( "W_P" , kmers.equiv_cases.pval[ pp->first ] );
+		      writer.value( "W_Z" , kmers.equiv_cases.zscr[ pp->first ] );
+		    }
+		  
+		  writer.level( "CONTROL" , "PHE" );
+		  
+		  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+		  writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+		  writer.value( "OBS" , kmers.basic_controls.obs[ pp->first ] );
+		  writer.value( "EXP" , kmers.basic_controls.exp[ pp->first ] );
+		  writer.value( "RAT" , kmers.basic_controls.obs[ pp->first ] /(double)kmers.basic_controls.exp[ pp->first ] );
+		  writer.value( "P" , kmers.basic_controls.pval[ pp->first ] );
+		  writer.value( "Z" , kmers.basic_controls.zscr[ pp->first ] );
+		  
+		  if ( valid_equiv && wstats )
+		    {
+		      writer.value( "W_OBS" , kmers.equiv_controls.obs[ pp->first ] );
+		      writer.value( "W_EXP" , kmers.equiv_controls.exp[ pp->first ] );
+		      writer.value( "W_RAT" , kmers.equiv_controls.obs[ pp->first ] /(double)kmers.equiv_controls.exp[ pp->first ] );
+		      writer.value( "W_P" , kmers.equiv_controls.pval[ pp->first ] );
+		      writer.value( "W_Z" , kmers.equiv_controls.zscr[ pp->first ] );
+		    }
+		  
+		  writer.level( "DIFF" , "PHE" );
+		  
+		  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+		  writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+		  //writer.value( "OBS" , kmers.basic_diffs.obs[ pp->first ] );
+		  //writer.value( "EXP" , kmers.basic_diffs.exp[ pp->first ] );
+		  writer.value( "Z" , kmers.basic_diffs.zscr[ pp->first ] );
+		  
+		  if ( valid_equiv && wstats )
+		    {
+		      // writer.value( "W_OBS" , kmers.equiv_diffs.obs[ pp->first ] );
+		      // writer.value( "W_EXP" , kmers.equiv_diffs.exp[ pp->first ] );
+		      writer.value( "W_Z" , kmers.equiv_diffs.zscr[ pp->first ] );
+		    }
+		  
+		  writer.unlevel( "PHE" );
+		}
 	      
-	      writer.level( "CONTROL" , "PHE" );
-	      
-	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
-	      writer.value( "OBS" , kmers.group_controls.obs[ pp->first ] );
-	      writer.value( "EXP" , kmers.group_controls.exp[ pp->first ] );
-	      writer.value( "P" , kmers.group_controls.pval[ pp->first ] );
-	      writer.value( "Z" , kmers.group_controls.zscr[ pp->first ] );
-	      
-	      writer.level( "DIFF" , "PHE" );
-	      
-	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
-	      // writer.value( "OBS" , kmers.group_diffs.obs[ pp->first ] );
-              // writer.value( "EXP" , kmers.group_diffs.exp[ pp->first ] );
-	      writer.value( "Z" , kmers.group_diffs.zscr[ pp->first ] );
-	      
-	      writer.unlevel( "PHE" );
-	    }
+	      ++pp;
+	    }  
 	  
-	  ++pp;
-	}        
+	  writer.unlevel( "S" );
+	  writer.unlevel( "L" );
+	  
+	  //
+	  // repeat for EQ groups
+	  //
+	  
+	  pp = kmers.group.pval.begin();
+	  while ( pp != kmers.group.pval.end() )
+	    {
+	      writer.level( (int)pp->first.size() , "L" );
+	      writer.level( pp->first , "SG" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      
+	      writer.value( "OBS" , kmers.group.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.group.exp[ pp->first ] );
+	      writer.value( "RAT" , kmers.group.obs[ pp->first ] / (double)kmers.group.exp[ pp->first ] );
+	      writer.value( "P" , pp->second );
+	      writer.value( "Z" , kmers.group.zscr[ pp->first ] );	  
+	      
+	      // C/C contrasts?
+	      
+	      if ( grp )
+		{
+		  
+		  writer.level( "CASE" , "PHE" );
+		  
+		  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );	      
+		  writer.value( "OBS" , kmers.group_cases.obs[ pp->first ] );
+		  writer.value( "EXP" , kmers.group_cases.exp[ pp->first ] );
+		  writer.value( "RAT" , kmers.group_cases.obs[ pp->first ] / (double) kmers.group_cases.exp[ pp->first ] );
+		  writer.value( "P" , kmers.group_cases.pval[ pp->first ] );
+		  writer.value( "Z" , kmers.group_cases.zscr[ pp->first ] );
+		  
+		  writer.level( "CONTROL" , "PHE" );
+		  
+		  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+		  writer.value( "OBS" , kmers.group_controls.obs[ pp->first ] );
+		  writer.value( "EXP" , kmers.group_controls.exp[ pp->first ] );
+		  writer.value( "RAT" , kmers.group_controls.obs[ pp->first ] / (double) kmers.group_controls.exp[ pp->first ] );
+		  writer.value( "P" , kmers.group_controls.pval[ pp->first ] );
+		  writer.value( "Z" , kmers.group_controls.zscr[ pp->first ] );
+		  
+		  writer.level( "DIFF" , "PHE" );
+		  
+		  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+		  // writer.value( "OBS" , kmers.group_diffs.obs[ pp->first ] );
+		  // writer.value( "EXP" , kmers.group_diffs.exp[ pp->first ] );
+		  writer.value( "Z" , kmers.group_diffs.zscr[ pp->first ] );
+		  
+		  writer.unlevel( "PHE" );
+		}
+	      
+	      ++pp;
+	    }        
+	  
+	  writer.unlevel( "SG" );
+	  writer.unlevel( "L" );
+	  
+	  //
+	  // if processing indiv-by-indiv, loop back
+	  //
+	  
+	  if ( indiv_enrichment ) 
+	    {
+	      ++ii;
+	      if ( ii == data.end() ) break;
+	    }
+	  else // if group mode, all done 
+	    break;
+	  
+	}
       
-      writer.unlevel( "SG" );
-      writer.unlevel( "L" );
-
+      //
       // all done
+      //
+      
       writer.unlevel( "_KMER" );
       writer.commit();
       std::exit(0);
     }
-
-
+  
 
 
   //
