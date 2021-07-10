@@ -445,11 +445,17 @@ public:
 		  bool make_new ,
 		  const std::string & new_channel ,
 		  const int new_channel_sr , // ignored if not make_new
-		  const bool dereference = false );
+		  const bool dereference = false ,
+		  const bool verbose = true );
 
   void guess_canonicals( param_t & , bool make_signals );
 
-  void make_canonicals( const std::string & file, const std::string &  group , bool make_signals , const std::string & prefix , const std::set<std::string> * cs = NULL );
+  void make_canonicals( const std::vector<std::string> & files,
+			const std::string &  group ,
+			const bool make_signals ,
+			const bool drop_originals , 
+			const std::string & prefix ,
+			const std::set<std::string> * cs = NULL );
     
   void flip( const int s ); 
 

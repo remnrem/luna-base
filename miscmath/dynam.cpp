@@ -319,11 +319,14 @@ bool dynam_t::linear_trend( double * beta , double * rsq )
 
   *beta = ( mxy - ( mx *  my ) ) / varx ; 
 
-  if ( vary == 0 ) rsq = 0;
-  else  
+  if ( rsq != NULL )
     {
-      *rsq = ( mxy - mx * my ) / sqrt( varx * vary );
-      *rsq *= *rsq;
+      if ( vary == 0 ) rsq = 0;
+      else  
+	{
+	  *rsq = ( mxy - mx * my ) / sqrt( varx * vary );
+	  *rsq *= *rsq;
+	}
     }
   return true;
 }

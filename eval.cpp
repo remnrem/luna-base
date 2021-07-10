@@ -2791,12 +2791,14 @@ void proc_copy_signal( edf_t & edf , param_t & param )
     }
 }
 
-// DROP : drop a signal
+// SIGNALS : drop one or more signal
 
 void proc_drop_signals( edf_t & edf , param_t & param )
 {
   
   std::set<std::string> keeps, drops;
+  std::vector<std::string> picks; // order matters here
+
   if ( param.has( "keep" ) ) keeps = param.strset( "keep" );
 
   if ( param.has( "keep" ) && param.has( "req" ) ) 
@@ -2804,15 +2806,51 @@ void proc_drop_signals( edf_t & edf , param_t & param )
 
   bool req = param.has( "req" ) ;
   if ( param.has( "req" ) ) keeps = param.strset( "req" );
+
+  bool pick = param.has( "pick" );
+  if ( pick && req ) Helper::halt( "cannot specify pick and req together" );
+  if ( pick && param.has("drop") ) Helper::halt( "cannot specify pick and drop together" );
+  if ( pick && param.has("keep") ) Helper::halt( "cannot specify pick and keep together" );
+  if ( pick ) picks = param.strvector( "pick" );
+  std::string pick_choice = "";
+
+  std::string pick_rename = param.has( "rename" ) ? param.value( "rename" ) : "" ; 
+  if ( edf.header.has_signal( pick_rename ) )
+    Helper::halt( "rename choice already exists" );
   
   if ( param.has( "drop" ) ) drops = param.strset( "drop" );
   
   if ( param.has( "keep" ) && param.has( "drop" ) )
     Helper::halt( "can only specify keep or drop with SIGNALS" );
   
-  if ( ! ( param.has( "keep" ) || param.has( "drop" ) || param.has( "req" ) ) ) 
-    Helper::halt( "need to specify keep, drop or req with SIGNALS" );
+  if ( ! ( param.has( "pick" ) || param.has( "keep" ) || param.has( "drop" ) || param.has( "req" ) ) ) 
+    Helper::halt( "need to specify keep, drop, pick or req with SIGNALS" );
 
+  //
+  // pick list?  iuse this to define a drop list
+  //
+
+  if ( picks.size() > 0 )
+    {
+      bool picked = false; 
+      for (int p=0; p<picks.size(); p++)
+	{
+	  if ( edf.header.has_signal( picks[p] ) )
+	    {
+	      if ( ! picked )
+		{
+		  logger << "  picked " << picks[p] << "\n";
+		  picked = true;
+		  pick_choice = picks[p];
+		}
+	      else // add to the drop list
+		{
+		  drops.insert( picks[p] );
+		}
+	    }
+	}
+    }
+  
   // if a keep list is specified, means we keep 
   if ( keeps.size() > 0 )
     {
@@ -2883,6 +2921,16 @@ void proc_drop_signals( edf_t & edf , param_t & param )
 	++dd;
     }
   if ( drops.size() > 0 ) logger << "\n";
+
+  //
+  // rename picked channel to something else?
+  //
+
+  if ( pick_choice != "" && pick_rename != "" )
+    {
+      logger << "  renaming pick, from " << pick_choice << " to " << pick_rename << "\n";
+      edf.header.rename_channel( pick_choice , pick_rename ) ; 
+    }
   
 }
 
@@ -2934,18 +2982,32 @@ void proc_canonical( edf_t & edf , param_t & param )
       edf.guess_canonicals( param , make_signals );
       return;
     }
+
+  // canonical signal file
+  if ( ! ( param.has( "file" ) || param.has( "files" ) ) )
+    Helper::halt( "one or more definition files required, file=cs1.txt,cs2.txt" );
   
-  std::string file = param.requires( "file" );
-  std::string group = param.requires( "group" );
+  const std::vector<std::string> files = param.strvector( param.has( "file" ) ? "file" : "files" );
+  
+  // (optional) group for the canonical file?
+  const std::string group = param.has( "group" ) ? param.value( "group" ) : "." ; 
 
-  std::string prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "" ;
+  // add prefix to canonical labels? 
+  const std::string prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "" ;
 
+  // drop all non-canonical signals from EDF after processing?
+  const bool drop_originals = param.has( "drop-originals" );
+
+  if ( drop_originals && ! make_signals )
+    Helper::halt( "cannot have drop-originals and check options together for CANONICAL" );
+
+  // cs = additional subset of canonical signals to focus on
   if ( ! param.has( "cs" ) )    
-    edf.make_canonicals( file, group , make_signals , prefix );
+    edf.make_canonicals( files , group , make_signals , drop_originals , prefix );
   else
     {
       const std::set<std::string> cs = param.strset( "cs" );
-      edf.make_canonicals( file, group , make_signals , prefix , &cs );
+      edf.make_canonicals( files , group , make_signals , drop_originals , prefix , &cs );
     }
 }
 
@@ -3133,6 +3195,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  if ( Helper::iequals( tok0 , "devel" ) )
+    {
+      globals::devel = Helper::yesno( tok1 );
+      return;
+    }
+
   // specify indiv (i.e. can be used if ID is numeric)
   if ( Helper::iequals( tok0 , "id" ) )
     {
@@ -3204,6 +3272,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "keep-channel-spaces" ) )
     {
       globals::replace_channel_spaces = false;
+      return;
+    }
+
+  // split class/annot remappings (ABC/DEF|XYZ)
+  if ( Helper::iequals( tok0 , "class-instance-delimiter" ) )
+    {
+      if ( tok1 != "" ) globals::class_inst_delimiter = tok1[0];
       return;
     }
 
@@ -3342,9 +3417,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // not enforce epoch check for .eannot
-  else if ( Helper::iequals( tok0 , "no-epoch-check" ) )
+  // default = 5 ... (arbitrary, but allow the occassional off-by-one issue)
+  else if ( Helper::iequals( tok0 , "epoch-check" ) )
     {
-      globals::enforce_epoch_check = false; 
+      if ( ! Helper::str2int( tok1 , &globals::enforce_epoch_check ) )
+        Helper::halt( "epoch-check requires integer value, e.g. epoch-check=10" );
+      globals::enforce_epoch_check = abs( globals::enforce_epoch_check );
       return;
     }
 
@@ -3687,14 +3765,14 @@ std::string cmd_t::resolved_outdb( const std::string & id , const std::string & 
 
 
 //
-// Attach i-vars from a file
+// Attach i-vars from one or more files
 //
 
 void cmd_t::attach_ivars( const std::string & file )
 {
-
+  
   std::vector<std::string> files = Helper::parse( file , "," );
-
+  
   for ( int f = 0; f < files.size() ; f++ )
     {
       std::string filename = Helper::expand( files[f] );
@@ -3811,6 +3889,7 @@ void cmd_t::register_specials()
   specials.insert( "silent" ) ;
   specials.insert( "id" );
   specials.insert( "verbose" ) ;
+  specials.insert( "devel" );
   specials.insert( "sec-dp" );
   specials.insert( "sig" ) ;
   specials.insert( "vars" );
@@ -3822,6 +3901,8 @@ void cmd_t::register_specials()
   specials.insert( "compressed" ) ;
   specials.insert( "nsrr-remap" ) ;
   specials.insert( "remap" ) ;
+  specials.insert( "combine-annots");
+  specials.insert( "class-instance-delimiter");
   specials.insert( "tab-only" );
   specials.insert( "annot-folder" ) ;
   specials.insert( "annots-folder" ) ; 
@@ -4110,7 +4191,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
 		  << "W:" << s_wake << ","
 		  << "?:" << s_other ;
 	      
-	      writer.value( "STAGE_COUTS" , sss.str() );
+	      writer.value( "STAGE_COUNTS" , sss.str() );
 	      
 	      bool has_nrem =  ( s_n1 + s_n2 + s_n3 ) > 0 ;
 	      bool has_rem  =  s_rem > 0 ;

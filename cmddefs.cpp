@@ -532,6 +532,9 @@ void cmddefs_t::init()
   add_var( "CANONICAL" , "CS" , "UNITS" , "Units for canonical signal" );
   add_var( "CANONICAL" , "CS" , "NOTES" , "Optional, notes" );
 
+  add_table( "CANONICAL" , "CH" , "EDF channel information" );
+  add_var( "CANONICAL" , "CH" , "DROPPED" , "Original channel dropped" );
+  add_var( "CANONICAL" , "CH" , "USED" , "Not used in constructing canonical signals" );
 
   // RESAMPLE 
 

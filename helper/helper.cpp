@@ -937,9 +937,11 @@ bool Helper::add_clocktime( int *h , int *m , double *s , uint64_t a  )
   return true;
 }
 
-bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
+bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
 {
-  *h = *m = 0;
+  // primary function to parse a time-string (text) to internal format
+
+  *h = *m = 0;  
   *s = 0.0;
 
   // because of EDF spec, '.' a valid delimiter for hh.mm.ss
@@ -951,15 +953,48 @@ bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
   //                    hh:mm:ss.ss    hh.mm.ss.ss
   //                 dd:hh:mm:ss.ss   
 
+  //
+  // allow AM/PM modifiers, otherwise default assumption is the 24-hour clock
+  // (both upper and lower case)
+  //
+  
+  bool am = t0.find( "AM" ) != std::string::npos || t0.find( "am" ) != std::string::npos ;
+  bool pm = t0.find( "PM" ) != std::string::npos || t0.find( "pm" ) != std::string::npos ;
+  if ( am && pm ) return false;
+
+  std::string t = ( am || pm ) ? "" : t0;
+
+  // strip AM/PM and any spaces
+  if ( am || pm )
+    {
+      for (int c=0;c<t0.size();c++)
+	{
+	  if ( t0[c] == ' ' ) continue;
+	  if ( t0[c] == 'P' || t0[c] == 'A' || t0[c] == 'M' ) continue;
+	  if ( t0[c] == 'p' || t0[c] == 'a' || t0[c] == 'm' ) continue;
+	  t += t0[c];	  
+	}
+    }
+  
+  //
+  // is this colon-delimited, or period-delimited?
+  //
+  
   std::vector<std::string> tokc = Helper::parse( t , ":" );
 
   // colon-delimited?
   if ( tokc.size() > 1 ) 
     {
       if ( tokc.size() == 2 ) // hh:mm
-	{
+	{	  
 	  if ( ! Helper::str2int( tokc[0] , h ) ) return false;
 	  if ( ! Helper::str2int( tokc[1] , m ) ) return false;
+	  if ( am || pm )
+	    {
+	      if ( *h < 1 || *h > 12 ) return false;
+	      if ( pm ) *h += 12;
+	      if ( *h == 24 ) *h = 0;
+	    }
 	  return true;
 	}
       else if ( tokc.size() == 3 ) // hh:mm:ss
@@ -967,6 +1002,12 @@ bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
 	  if ( ! Helper::str2int( tokc[0] , h ) ) return false;
 	  if ( ! Helper::str2int( tokc[1] , m ) ) return false;
 	  if ( ! Helper::str2dbl( tokc[2] , s ) ) return false;
+	  if ( am || pm )
+	    {
+	      if ( *h < 1 || *h > 12 ) return false;
+	      if ( pm ) *h += 12;
+	      if ( *h == 24 ) *h = 0;
+	    }
 	  return true;
 	}
       else if ( tokc.size() == 4 ) // dd:hh:mm:ss
@@ -976,11 +1017,20 @@ bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
 	  if ( ! Helper::str2int( tokc[1] , h ) ) return false;
 	  if ( ! Helper::str2int( tokc[2] , m ) ) return false;
 	  if ( ! Helper::str2dbl( tokc[3] , s ) ) return false;
+
+	  if ( am || pm )
+	    {
+	      if ( *h < 1 || *h > 12 ) return false;
+	      if ( pm ) *h += 12;
+	      if ( *h == 24 ) *h = 0;
+	    }
+
+	  // adjust by day
 	  h += 24 * day;
 	  return true;
 	}
       else 
-	return false;
+	return false;      
     }
   
 
@@ -994,6 +1044,12 @@ bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
     {
       if ( ! Helper::str2int( tok[0] , h ) ) return false;
       if ( ! Helper::str2int( tok[1] , m ) ) return false;
+      if ( am || pm )
+	{
+	  if ( *h < 1 || *h > 12 ) return false;
+	  if ( pm ) *h += 12;
+	  if ( *h == 24 ) *h = 0;
+	}
       return true;
     }
   else if ( tok.size() == 3 ) // hh.mm.ss
@@ -1001,6 +1057,12 @@ bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
       if ( ! Helper::str2int( tok[0] , h ) ) return false;
       if ( ! Helper::str2int( tok[1] , m ) ) return false;
       if ( ! Helper::str2dbl( tok[2] , s ) ) return false;        
+      if ( am || pm )
+	{
+	  if ( *h < 1 || *h > 12 ) return false;
+	  if ( pm ) *h += 12;
+	  if ( *h == 24 ) *h = 0;
+	}      
       return true;
     }
   else if ( tok.size() == 4 ) // hh.mm.ss.ss
@@ -1008,6 +1070,12 @@ bool Helper::timestring( const std::string & t, int * h, int *m , double *s )
       if ( ! Helper::str2int( tok[0] , h ) ) return false;
       if ( ! Helper::str2int( tok[1] , m ) ) return false;
       if ( ! Helper::str2dbl( tok[2] + "." + tok[3] , s ) ) return false;
+      if ( am || pm )
+	{
+	  if ( *h < 1 || *h > 12 ) return false;
+	  if ( pm ) *h += 12;
+	  if ( *h == 24 ) *h = 0;
+	}
       return true;
     }
   

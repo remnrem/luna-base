@@ -2510,7 +2510,8 @@ void edf_t::reference( const signal_list_t & signals0 ,
 		       bool make_new ,
 		       const std::string & new_channel , 
 		       const int new_sr ,
-		       bool dereference )
+		       bool dereference ,
+		       const bool verbose )
 {
 
   // copy as we may modify this
@@ -2570,7 +2571,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
   // Console logging 
   //
 
-  if ( nr > 0 )
+  if ( verbose && nr > 0 )
     {
       logger << ( dereference ? "  dereferencing" : "  referencing" );
       for (int s=0;s<ns;s++) logger << " " << header.label[ signals(s) ];
@@ -2680,7 +2681,8 @@ void edf_t::reference( const signal_list_t & signals0 ,
       // do not reference to self
       if ( nr == 1 && signals(s) == refs(0) ) 
 	{
-	  logger << " skipping " << refs.label(0) << " to not re-reference to self\n"; 
+	  if ( verbose )
+	    logger << " skipping " << refs.label(0) << " to not re-reference to self\n"; 
 	  continue;
 	}
       
@@ -3060,6 +3062,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 void edf_header_t::rename_channel( const std::string & old_label , const std::string & new_label )
 {
   // expects exact match (i.e. this only called from XML <Signals> / <CanonicalLabel> information  
+  // also by SIGNALS pick/rename
   for (int s=0;s<label.size();s++) if ( label[s] == old_label ) label[s] = new_label;
   label_all[ Helper::toupper( new_label ) ] = label_all[ Helper::toupper( old_label ) ];
   label2header[ Helper::toupper( new_label ) ] = label2header[ Helper::toupper( old_label ) ];
@@ -4596,74 +4599,136 @@ void edf_t::guess_canonicals( param_t & param , bool make_signals )
 }
 
 
-void edf_t::make_canonicals( const std::string & file0, const std::string &  group , 
-			     bool make_signals , 
+void edf_t::make_canonicals( const std::vector<std::string> & files,
+			     const std::string &  group , 
+			     const bool make_signals , 
+			     const bool drop_originals , 
 			     const std::string & prefix , 
 			     const std::set<std::string> * cs )
-{
-  
-  std::string file = Helper::expand( file0 );
-  
-  if ( ! Helper::fileExists( file ) )
-    Helper::halt( "could not find " + file );
-  
+{  
+      
   // GROUP   CANONICAL   CH   REF   SR  UNITS    NOTES
-  // looking for EEG, LOC, ROC, EMG, ECG, etc
-  // but actually reading these from the file, adding 'cs' to each
-
+  
   // if cs is non-null, only make the CS in that set ('EEG')
-
+  // if group is != '.' then only attach rows matching
+  // if the fist row has . then it matches any value;  but
+  // if a group is specified, then only match for that
+  // i.e. put group at the front
+  
   // can have multiple versions of a rule, will pick the first match
-
-  //  EEG   C4,EEG1      M1,A1   100  
-  //  EEG   C3,EEG2      M2,A2   100  Using C3, not C4
-  //  EEG   C4_A1,C4_M1  .       100
-  //  EEG   C3_A2,C3_M2  .       100  Using C3, not C4
-
+  // nb. use of first group column:: if a group is specified on the command line,
+  //     then will be preferentially picked
+  
+  //  STUDY_A  csEEG   EEG3         .       100
+  //  STUDY_B  csEEG   C4-REF       M1-REF  100  
+  //  .        csEEG   C4,EEG1      M1,A1   100  
+  //  .        csEEG   C3,EEG2      M2,A2   100  Using C3, not C4
+  //  .        csEEG   C4_A1,C4_M1  .       100
+  //  .        csEEG   C3_A2,C3_M2  .       100  Using C3, not C4
+  
   // the to-be-created CS go here:
   std::set<std::string> canons;
+  
+  // if we are dropping originals later, get a list of those now
+  const bool only_data_signals = true;
+  signal_list_t osignals = header.signal_list( "*" , only_data_signals );
+  
+  // but, if existing signal is canonical already, flag not to drop
+  // (this is allowed if no other transformations, i.e. keep as is)
+  std::set<std::string> do_not_drop;
+  
+  // also, track whether a signal was used or not (i.e. might
+  // be dropped, 'C3' but 'C3' --> 'C3-M1' in which was it was
+  // still 'used' in the canonical set (versus original channels
+  // that basically do not feature at all)
+  
+  std::set<std::string> used;
 
+  // if group is non-null, do not process any generic rules after coming
+  // across some group-specific rules (whether these worked or not)
+  // i.e. if over-riding, must specify the full complement
+
+  std::set<std::string> ignore_generics;
+
+  //
   // read in definitions
+  //
+  
   std::map<std::string,std::vector< std::vector<std::string> > >sigs, refs;
   std::map<std::string,std::vector<std::string> > srs, notes, units;
-
-  bool found_group = false;
   
-  std::ifstream IN1( file.c_str() , std::ios::in );
-  while ( ! IN1.eof() )
+  //
+  // iterate over files
+  //
+  
+  for (int f = 0 ; f < files.size() ; f++ )
     {
-      std::string line;
-      Helper::safe_getline( IN1 , line );
-
-      if ( line == "" ) continue;
-      if ( IN1.eof() ) break;
-      if ( line[0] == '%' ) continue;
-      std::vector<std::string> tok = Helper::parse( line , "\t" );
-      if ( tok.size() != 6 && tok.size() != 7 ) 
-	Helper::halt( "bad format, expecting 6 or 7 tab-delimited columns\nfile: " 
-		      + file + "\nline: [" + line + "]\n" );
-      if ( tok[0] != group ) continue;
-
-      found_group = true;
       
-      // if cs not specified, take all canonical signals as given in 
-      // the file      
-      if ( cs == NULL ) canons.insert( prefix + tok[1] );
-
-      // skip if a specific list requested?
-      if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
-
-      // otherwise, add to the set of things to be calculated
-      sigs[ prefix + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
-      refs[ prefix + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
-      srs[ prefix + tok[1] ].push_back( tok[4] ) ;
-      units[ prefix + tok[1] ].push_back( tok[5] );
-      notes[ prefix + tok[1] ].push_back( tok.size() == 7 ? tok[6] : "." );
+      std::string file = Helper::expand( files[f] );
       
+      if ( ! Helper::fileExists( file ) )
+	Helper::halt( "could not find " + file );
+      
+      std::ifstream IN1( file.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  std::string line;
+	  Helper::safe_getline( IN1 , line );
+	  
+	  if ( line == "" ) continue;
+	  if ( IN1.eof() ) break;
+	  if ( line[0] == '%' ) continue;
+	  std::vector<std::string> tok = Helper::parse( line , "\t" );
+	  if ( tok.size() != 6 && tok.size() != 7 ) 
+	    Helper::halt( "bad format, expecting 6 or 7 tab-delimited columns\nfile: " 
+			  + file + "\nline: [" + line + "]\n" );
+	  
+	  // ignore group-specific rules that do not match the specified group
+	  //  (if a group has been specified on the CANONICAL group=g1 ) 
+	  if ( group != "." && tok[0] != "." && tok[0] != group ) continue;
+	  
+	  // track that we are seeing a matching group-specific rule
+	  if ( group != "." && tok[0] == group ) ignore_generics.insert( tok[1] );
+	  
+	  // ignore any generic rules for a canonical signal if we have
+	  // already encountered a matching group-specific rule for that
+	  // canonical signal
+	  if ( group != "." && tok[0] == "."
+	       && ignore_generics.find( tok[1] ) != ignore_generics.end() )
+	    continue;
+	  
+	  // if cs not specified, take all canonical signals as given in 
+	  // the file      
+	  if ( cs == NULL ) canons.insert( prefix + tok[1] );
+	  
+	  // skip if a specific list requested?
+	  if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
+	  
+	  // otherwise, add to the set of things to be calculated
+	  sigs[ prefix + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
+	  refs[ prefix + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
+	  srs[ prefix + tok[1] ].push_back( tok[4] ) ;
+	  units[ prefix + tok[1] ].push_back( tok[5] );
+	  notes[ prefix + tok[1] ].push_back( tok.size() == 7 ? tok[6] : "." );
+	  
+	}
+      
+      IN1.close();
+      
+      // read in the next file
     }
   
-  if ( ! found_group )
-    Helper::halt( "could not find group " + group + " in file " + file );
+  //
+  // no valid rules found?
+  //
+  
+  if ( sigs.size() == 0 ) 
+    Helper::halt( "no valid rules (given group " + group + ")" );
+  
+  
+  //
+  // Now apply rules
+  //
   
   if ( cs != NULL ) 
     {
@@ -4674,52 +4739,60 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  ++ss;
 	}
     }
-
+  
   //
   // For each canonical signal
   //
-
+  
   std::set<std::string>::const_iterator cc = canons.begin();
   while ( cc != canons.end() )
     {
       //for (int i=0; i<canons.size(); i++)
-
+      
       std::string canon = *cc;
-
+      
       writer.level( canon , "CS" );
-
+      
       if ( sigs.find( canon ) == sigs.end() )
 	{
 	  writer.value( "DEFINED" , 0 );
 	  ++cc;
 	  continue;
 	}
-
-      // as soon as we find a matching rule, we stop
-      bool done = false;
       
-      const int n_rules = sigs.find( canon )->second.size() ; 
-      
-      for (int j=0; j<n_rules; j++ )
-	{
+	  //
+	  // check whether canonical form already exists
+	  //  - we allow this, but ONLY if no transformations
+	  //    are requested (i.e. no resampling etc)
+	  //    meaning we basically just leave as is
+	  //
 	  
-	  // find best choice of signals
-	  std::string sigstr = "";
-	  std::vector<std::string> v = sigs.find( canon )->second[j];
-	  for (int k=0; k<v.size(); k++)
+	  bool already_present = header.has_signal( canon );      
+	  
+	  // as soon as we find a matching rule, we stop
+	  bool done = false;
+	  
+	  const int n_rules = sigs.find( canon )->second.size() ; 
+	  
+	  for (int j=0; j<n_rules; j++ )
 	    {
-	      if ( header.signal( v[k] ) != -1 ) 
+	      
+	      // find best choice of signals
+	      std::string sigstr = "";
+	      std::vector<std::string> v = sigs.find( canon )->second[j];
+	      for (int k=0; k<v.size(); k++)
 		{
-		  sigstr = v[k];
-		  break;
+		  //if ( header.signal( v[k] ) != -1 )
+		  if ( header.has_signal( v[k] )  ) // case-insensitive match 
+		    {
+		      sigstr = v[k];
+		      break;
+		    }
 		}
-	    }
-	  
-	  if ( sigstr == "" ) 
-	    {
-	      //writer.value( "DEFINED" , 0 );
-	      continue;
-	    }
+	      
+	      if ( sigstr == "" ) 
+		continue;
+	      
 
 	  //
 	  // Reference
@@ -4736,34 +4809,59 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 		  if ( v[k] == "." ) 
 		    Helper::halt( "cannot mix '.' and non-'.' references" );
 		  
-		  if ( header.signal( v[k] ) != -1 )
+		  //if ( header.signal( v[k] ) != -1 )
+		  if ( header.has_signal( v[k] ) ) // case-insensitve, alias-aware match
 		    {
 		      refstr = v[k];
 		      break;
 		    }
 		}
 	    }
+
+	  
 	  
 	  if ( sigstr == "" || refstr == "" )
-	    {
-	      //writer.value( "DEFINED" , 0 );	      
-	      continue;
-	    }      
-	
+	    continue;
+
+	  if ( already_present && refstr != "." )
+	    Helper::halt( "cannot specify existing canonical name "
+			  + canon + " and a re-reference" );
+	  
 	  logger << "  generating canonical signal " << canon 
 		 << " from " << sigstr << "/" << refstr << "\n";
-	  	  	  
+
+	  //
+	  // track that we are using these channels
+	  //
+	  
+	  used.insert( sigstr );
+	  used.insert( refstr );
+
+	  //
+	  // Track that the original should not be dropped, as it features
+	  //
+	  
+	  if ( drop_originals && already_present )
+	    do_not_drop.insert( Helper::toupper( canon ) );
+
+	  //
+	  // Sample rate changes?
+	  //
+
 	  std::string srstr = srs.find( canon )->second[j];
 	  
-	  std::string notesstr = notes.find( canon )->second[j];
-	  
 	  // if SR == '.' means do not change SR
+	  
 	  int sr = 0;
 	  if ( srstr != "." )
 	    if ( ! Helper::str2int( srstr , &sr ) )
-	      Helper::halt( "could not determine integer SR from " + file );
+	      Helper::halt( "non-integer SR for " + canon );
 	  
+          if ( already_present && srstr != "." )
+            Helper::halt( "cannot specify existing canonical name "
+                          + canon + " and re-sample" );
 
+	  
 	  // copy signal --> canonical form
 	  signal_list_t ref;
 	  if ( refstr != "." ) ref =  header.signal_list( refstr );
@@ -4772,12 +4870,18 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 
 
 	  //
-	  // Rerefence and make canonical signal
+	  // Generate the new signal (w/ re-referencing optionally)
+	  //   false , false = not dereference , not verbose
+	  // 
+	  
+	  if ( ( ! already_present ) && make_signals ) 
+	    reference( sig , ref , true , canon , sr , false , false );
+
+	  
+	  //
+	  // Get the canonical signal
 	  //
 
-	  if ( make_signals ) 
-	    reference( sig , ref , true , canon , sr );
-	  
 	  signal_list_t canonical_signal = header.signal_list( canon );
 
 	  
@@ -4787,11 +4891,29 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  
 	  std::string ustr = units.find( canon )->second[j];
 	  
+	  if ( already_present && ustr != "." )
+            Helper::halt( "cannot specify existing canonical name "
+                          + canon + " and transform units" );
+
 	  if ( make_signals ) 
 	    if ( ustr == "V" || ustr == "uV" || ustr == "mV" ) 
 	      rescale(  canonical_signal(0) , ustr );
+
+	  //
+	  // If keeping existing channel, update label?
+	  //
+
+	  if ( already_present )
+	    {
+	      // nb. not updating header.label_all[] , but this is now in memory
+	      // and effectively a new, derived channel, so this is not a problem.
+	      // i.e. *should* never be reading this from disk again in any case.
+
+	      header.label[ canonical_signal(0) ] = canon;
+
+	      header.label2header[ canon ] = canonical_signal(0) ;
+	    }
 	  
-      
 	  //
 	  // output
 	  //
@@ -4801,6 +4923,8 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
 	  writer.value( "REF" , refstr );
 	  writer.value( "SR" , srstr );
 	  writer.value( "UNITS" , ustr );
+	  
+	  std::string notesstr = notes.find( canon )->second[j];
 	  
 	  if ( notesstr != "" )
 	    writer.value( "NOTES" , notesstr );
@@ -4830,6 +4954,41 @@ void edf_t::make_canonicals( const std::string & file0, const std::string &  gro
     } 
   
   writer.unlevel( "CS" );
+
+
+  //
+  // Drop original signals?
+  //
+
+  if ( drop_originals )
+    {
+      logger << "  now dropping the original signals\n";
+      const int ns = osignals.size();
+      for (int s=0; s<ns; s++)
+	{
+	  const std::string label = osignals.label(s) ;
+	  
+	  if ( do_not_drop.find( Helper::toupper( label ) ) == do_not_drop.end() )
+	    {
+
+	      int slot = header.signal( label );
+
+	      if ( slot == -1 )
+		Helper::halt( "internal error in edf_t::canonical()" );
+
+	      drop_signal( slot );
+	      
+	      writer.level( label , globals::signal_strat );
+
+	      writer.value( "DROPPED" , 1 );	      
+	      
+	      writer.value( "USED" , used.find( label ) != used.end() ? 1 : 0 ) ; 
+	      	      
+	    }
+	  writer.unlevel( globals::signal_strat ); 
+	}
+    }
+  
   
 }
 

@@ -47,7 +47,8 @@ struct spindle_t
   interval_t tp;
   
   // spindle properties
-  double amp, dur, fwhm, nosc, frq, fft, symm, symm2, trend, abstrend, chirp, isa;
+  double amp, dur, fwhm, nosc, frq, fft, symm, symm2, trend, abstrend, isa;
+  double chirp, posf, negf, posb, negb, posv, negv, allf, allb, allv;
   
   // relative enrichment per frequency range compared to whole trace baseline
   std::map<freq_range_t,double> enrich;

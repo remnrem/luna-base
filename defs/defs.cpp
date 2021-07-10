@@ -47,7 +47,8 @@ std::vector<std::string> globals::annot_files;
 bool globals::allow_space_delim = true;
 char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
-  
+char globals::class_inst_delimiter = '/';
+
 int globals::time_format_dp;
 
 bool globals::read_ftr;
@@ -62,7 +63,7 @@ std::map<std::string,channel_type_t> globals::label2ch;
 std::map<channel_type_t,std::string> globals::ch2label;
 std::map<std::string,channel_type_t> globals::sig2type; 
 
-bool globals::enforce_epoch_check;
+int globals::enforce_epoch_check;
 int globals::default_epoch_len;
 
 std::map<frequency_band_t,freq_range_t> globals::freq_band;
@@ -135,6 +136,7 @@ bool globals::silent;
 bool globals::verbose; 
 bool globals::Rmode;
 bool globals::Rdisp;
+bool globals::devel;
 
 std::string globals::epoch_strat;
 std::string globals::time_strat;
@@ -211,7 +213,9 @@ void globals::init_defs()
   Rdisp = false;
 
   verbose = false; 
-  
+
+  devel = false;
+		 
   time_format_dp = 3;
 
   //
@@ -466,9 +470,9 @@ void globals::init_defs()
   
   
   // whether to assume 30-sec and enfore epoch check when first attaching 
-  // an .eannot file
+  // an .eannot file;   default is allow up to 5 epochs difference
 
-  enforce_epoch_check = true;
+  enforce_epoch_check = 5;
 
   default_epoch_len = 30;
     

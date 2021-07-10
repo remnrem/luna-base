@@ -240,8 +240,8 @@ struct globals
   static bool write_naughty_list;
   static std::string naughty_list;
   
-  // enforce or not the 30-second epoch check
-  static bool enforce_epoch_check;
+  // all this many epoch difference between .eannot and EDF
+  static int enforce_epoch_check;
 
   static int default_epoch_len;
 
@@ -289,6 +289,9 @@ struct globals
 
   static bool bail_on_fail;
 
+  // devel
+  static bool devel;
+  
   // global functions: primary initiation of all globals
   void init_defs();
   
@@ -314,6 +317,9 @@ struct globals
   static char annot_class_inst_combiner;
   static bool combine_annot_class_inst;
 
+  // split annot/inst
+  static char class_inst_delimiter;
+  
   // helper functions to pull out global values
   static std::string band( frequency_band_t b );
 

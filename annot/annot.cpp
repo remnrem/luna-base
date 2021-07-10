@@ -319,17 +319,20 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
   double seconds = (uint64_t)parent_edf.header.nr * parent_edf.header.record_duration ;      
   const int ne = seconds / ( unepoched ? globals::default_epoch_len : elen / globals::tp_1sec );
   
-  if ( globals::enforce_epoch_check )
-    {
-      if ( ne != ann.size() ) 
-	Helper::halt( "expecting " + Helper::int2str(ne) + " epoch annotations, but found " + Helper::int2str( (int)ann.size() ) );
-    }
+  const int delta = abs( (int)( ne - ann.size() ) );
+
+  if ( delta > globals::enforce_epoch_check ) 
+    Helper::halt( "expecting " + Helper::int2str(ne) + " epoch annotations, but found " + Helper::int2str( (int)ann.size() ) );
   
+  if ( delta != 0 )
+    logger << "  ** warning: expecting " << ne << " epochs but found " << ann.size()
+	   << "; will allow given epoch-check=" 
+	   << globals::enforce_epoch_check << "\n";
   
   //
   // because we otherwise might have a discontinuous EDF, we need to look up the proper epoch 
   // intervals below , if epoched 
-
+  //
   
   //
   // map of all labels/annot classes to be added
@@ -835,11 +838,52 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( tok.size() == 0 ) continue; 
 
+	  
 	  //
-	  // Get annot name, optionally remapped
+	  // Get class name, first remapping
 	  //
 
-	  const std::string aname = nsrr_t::remap( tok[0] );
+	  std::string aname = nsrr_t::remap( tok[0] );
+
+	  //
+	  // save original class name (prior to any combining)
+	  // as this is what any in-file header information is based on for meta-data
+	  //
+
+	  const std::string cls_root = aname;
+
+	  //
+	  // Combine class & instance ID?
+	  //
+	  
+	  if ( globals::combine_annot_class_inst && tok[1] != "." )
+	    aname += globals::annot_class_inst_combiner + tok[1];
+	  
+	  //
+	  // Is this an aggregate class/inst form?
+	  //
+
+	  const bool split_annot = aname.find( globals::class_inst_delimiter ) != std::string::npos;
+	  std::string new_inst_id = ".";
+
+	  if ( split_annot ) 
+	    {
+	      // old : class=A/B inst=X
+	      // new : class=A   inst=B    meta:inst=X
+	      // if original inst is null, ignore
+
+	      std::vector<std::string> toks =
+		Helper::parse( aname , std::string( 1 , globals::class_inst_delimiter ) );
+	      if ( toks.size() != 2 ) Helper::halt( "bad format for class/inst pairing: " + aname ); 
+	      
+	      // update class ID now; update meta-data (if needed) below
+	      // any exclusions are based on that / also any meta-data look up 
+	      aname = toks[0];
+	      
+	      // have to save inst ID, as might not be slot[1], e.g. if 3-col format
+	      // so switch that in below also
+	      new_inst_id = toks[1];
+	    }
 	  
 	  //
 	  // are we skipping this annotation anyway?
@@ -859,19 +903,38 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( aa == annot_map.end() ) 
 	    {
+	      // instead of complaining, we now create a new annot, copying over
+	      // any existing header info if availanle from the original class name
+
+	      std::map<std::string,annot_t*>::iterator oo = annot_map.find( cls_root );
+	      const bool has_original = oo != annot_map.end();
 	      
-	      // Helper::halt( "annotation " + aname + " not in header of " + f );
-	      
-	      // instead of complaining, we now create annot 
+	      // make a new annot_t class
 	      annot_t * a = parent_edf.timeline.annotations.add( aname );
+	      
+	      // add to the current map
 	      annot_map[ aname ] = a;
-	      a->description = aname;
+
+	      // copy description, or set to new class name
+	      a->description = has_original ? oo->second->description : aname;
+
+	      // set file code
 	      a->file = f;
 	      a->type = globals::A_FLAG_T; 
-	      a->types.clear();
 
+	      // copy meta-data over
+	      if ( has_original ) 
+		a->types = oo->second->types;
+	      else
+		a->types.clear();
+
+	      // update local tracker of meta-col order
+	      cols[ a ] = cols[ oo->second ] ;
+	      
 	      // and now update this iterator
 	      aa = annot_map.find( aname );
+
+	      
 	    }
 
 
@@ -883,6 +946,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    {
 	      
 	      // exception #1 : allow old 4-col formatting
+	      //   class inst start stop
 	      if ( tok.size() == 4 ) 
 		{
 		  tok.resize( 6 );
@@ -896,12 +960,12 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		}
 	      else if (  tok.size() == 3 )
 		{
-		  // just class start stop		  
+		  // exception #2: 3-col format
+		  //   class start stop		  
 		  tok.resize( 6 );
 		  // 0  1  2  3  4  5
 		  // cl in ch bg ed mt
-		  // cl       bg end
-		  
+		  // cl       bg end		  
                   tok[5] = ".";
                   tok[4] = tok[2];
                   tok[3] = tok[1];
@@ -911,13 +975,39 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      else
 		Helper::halt ( "expecting 6/4/3 columns, but found " 
 			       + Helper::int2str( (int) tok.size() ) 
-			       + "\n  (use tab-only option to ignore space delimiters)" );
+			       + "\n  (hint: use the 'tab-only' option to ignore space delimiters)\n"
+			       + "line [ " + line + "]" );
 	    }
-	  
-	  annot_t * a = aa->second; 			
-	  
-	  std::string id = tok[1];
 
+	  //
+	  // Update instance ID if needed
+	  //
+
+	  std::string original_inst_id = ".";
+		  
+	  if ( split_annot && new_inst_id != "." ) 
+	    {
+	      // save any existing instance ID (--> meta data, below)
+	      original_inst_id = tok[1];
+	      
+	      // update actual instance ID
+	      tok[1] = new_inst_id;
+	    }
+
+	  //
+	  // Get annot_t pointer 
+	  //
+
+	  annot_t * a = aa->second; 			
+
+
+	  //
+	  // Instance ID (unless already combined w/ class)
+	  //
+
+	  const std::string id = globals::combine_annot_class_inst ? "." : tok[1] ;
+	  
+	  
 	  //
 	  // Get interval implied 
 	  //
@@ -1028,12 +1118,25 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 
 	  //
-	  // We now fix to 6 columns; the fifth column can contain pipe-delimited values
+	  // We've now fixed to 6 columns
 	  //
 
 	  if ( n != 6 ) 
 	    Helper::halt( f + " has a non-blank row with other than 6 tab-delimited fields:\n" + line );
-	
+
+	  //
+	  // Special case: if we split a class/inst ID, put any old
+	  // instance ID info into a new meta-field 'inst'
+	  //
+
+	  if ( split_annot && original_inst_id != "." )
+	    {
+	      // ensure this special type is added
+	      a->types[ "_inst" ] = globals::A_TXT_T ;
+	      instance->set( "_inst" , original_inst_id );
+	    }
+
+
 	  //
 	  // If var column is '.' we can skip ahead to next line now (or if
 	  // we are not expecting any variables)
@@ -1141,6 +1244,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      // next value
 	      //
 	    }
+
+
+	  //
+	  // Done processing this line
+	  //
 
 	  ++line_count;
 	}
@@ -1323,9 +1431,10 @@ interval_t annot_t::get_interval( const std::string & line ,
       // Check: are these times? hh:mm:ss or dd:hh:mm:ss 
       //  1) allow microseconds to be specified
       //  2) allow optional dd prefix 
-      //  3) assume 24-hour clock time...
+      //  3) assume 24-hour clock time by default ...      
       //  4) ... unless it starts with 0+00:01:20, in which case it means elapsed
-
+      //  5) ... or unless it has a AM/PM modifier
+      
       bool is_elapsed_hhmmss_start = tok[3].size() > 2 && tok[3][0] == '0' && tok[3][1] == '+';
       bool is_elapsed_hhmmss_stop  = tok[4].size() > 2 && tok[4][0] == '0' && tok[4][1] == '+';
 
