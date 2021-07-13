@@ -363,6 +363,9 @@ int main(int argc , char ** argv )
 	      // an 'include' 
 	      std::string filename = argv[i];
 	      
+	      bool parse_line = true;
+	      std::string last_grp = "";
+	      
 	      // allow missing parameter file "." i.e. to make scripting 
 	      // easier for LSF submission script that need to pass this 
 
@@ -387,9 +390,37 @@ int main(int argc , char ** argv )
 		      
 		      // skip % comments
 		      if ( line[0] == '%' ) continue;
+
+		      // is this an include/exclude section
+		      // +group  include only if matches group, otherwise skip
+		      // -group  exclude if matches group, otherwise parse
+
+		      if ( line[0] == '+' || line[0] == '-' )
+			{
+			  const std::string grp = line.substr(1);
+
+			  if ( grp == "" ) continue;
+			  
+			  if ( last_grp == "" ) last_grp = line;
+			  else if ( last_grp != line )
+			    Helper::halt( "cannot nest +group/-group lines" );
+			  else last_grp = "";
+			  
+			  bool has_grp =
+			    cmd_t::vars.find( grp ) != cmd_t::vars.end() ?
+			    Helper::yesno( cmd_t::vars[ grp ] ) : false ;
+			  if ( line[0] == '-' &&   has_grp ) parse_line = ! parse_line;
+			  if ( line[0] == '+' && ! has_grp ) parse_line = ! parse_line;
+
+			  // skip to next line now
+			  continue;
+			}
 		      
+		      
+		      // otherwise parse as a normal line: i.e. two tab-delim cols		      
 		      std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
-		      if ( tok.size() != 2 ) Helper::halt("badly formatted line in " + filename );
+		      if ( tok.size() != 2 )
+			Helper::halt("badly formatted line ( # tabs != 2 ) in " + filename + "\n" + line );
 		      
 		      cmd_t::parse_special( tok[0] , tok[1] );
 		      
@@ -1246,11 +1277,27 @@ void process_edfs( cmd_t & cmd )
 	    }
 	  
 	  // parse by tabs
-		
+	  
 	  tok = Helper::parse( line , "\t" );      
 	  if ( tok.size() < 2 ) 
 	    Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
 
+	  // allow '.' missing value for annots?
+
+	  if ( tok.size() == 3 && tok[2] == "." ) tok.resize(2);
+	    
+	  // allow annot field to be comma delimited? expand out here
+	  if ( tok.size() == 3 )
+	    {
+	      std::vector<std::string> annot_fields = Helper::parse( tok[2] , globals::file_list_delimiter );
+	      if ( annot_fields.size() > 1 )
+		{
+		  tok.resize( 2 + annot_fields.size() );
+		  for (int a=0; a<annot_fields.size();a++)
+		    tok[a+2] = annot_fields[a];
+		}
+	    }
+		
 	  // add in project path to relative paths?
 	  // (but keep absolute paths as they are)
 

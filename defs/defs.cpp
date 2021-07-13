@@ -48,6 +48,7 @@ bool globals::allow_space_delim = true;
 char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = '/';
+char globals::annot_keyval_delim = '=' ; 
 
 int globals::time_format_dp;
 
@@ -79,6 +80,7 @@ char globals::space_replacement;
 
 char globals::folder_delimiter;
 std::string globals::project_path;
+char globals::file_list_delimiter;
 
 std::string globals::mkdir_command;
 
@@ -422,6 +424,8 @@ void globals::init_defs()
   mkdir_command = "mkdir -p";
 #endif  
 
+  file_list_delimiter = ',';
+  
   txt_table_prepend = "";
   txt_table_append = "";
 

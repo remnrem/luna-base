@@ -28,31 +28,74 @@
 // annotation map
 std::map<std::string,std::string> nsrr_t::amap;
 std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
+std::map<std::string,std::string> nsrr_t::pmap;
+
+// annot list acts as an annot white list
+bool nsrr_t::whitelist = false;
+bool nsrr_t::unmapped = false;
 
 std::string nsrr_t::remap( const std::string & a )
 {
-
-  bool found = amap.find( a ) != amap.end() ;
   
+  std::string a_uc = Helper::toupper( a );
+
+  //
+  // found as a primary? ( return preferred case in pmap )
+  //
+
+  if ( pmap.find( a_uc ) != pmap.end() )
+    {
+      if ( unmapped ) return "";
+      else return pmap[ a_uc ];
+    }
+
+  //
+  // found as an alias?
+  //
+  
+  bool found = amap.find( a_uc ) != amap.end() ;
+
+  //
   // not found as is (or map is empty)
+  //
+  
   if ( ! found )
     {
       std::string ca = a;
       
       // we may still want to swap spaces
       if ( globals::replace_annot_spaces )
-	ca = Helper::search_replace( a , ' ' , globals::space_replacement );
+	ca = Helper::search_replace( ca , ' ' , globals::space_replacement );
+      
+      std::string ca_uc = Helper::toupper( ca );
       
       // recheck that space-swapped version does not have an alias
-      found = amap.find( ca ) != amap.end() ;
+      found = amap.find( ca_uc ) != amap.end() ;
       
-      if ( ! found ) return ca ; 
-      else return amap[ca];
+      if ( ! found )
+	{
+	  // if in white-list mode, we return nothing (i.e. an invalid/skipped annot)
+	  if ( whitelist ) return "";
+
+	  // else leave case of original unchanged and return 
+	  return ca ; 
+	}
+      else
+	{
+	  // skipping whitelisted terms?
+	  if ( unmapped ) return "";
+
+	  return amap[ ca_uc ]; // if using as as a key, must be UC
+
+	}
     }
-  
+
+  // skipping whitelisted terms?
+  if ( unmapped ) return "";
+
   // else return the remapped term (which may contain spaces, if that
   // was so requested...)
-  return amap[ a ] ;
+  return amap[ a_uc ] ;
   
 }
 
@@ -61,14 +104,15 @@ void nsrr_t::annot_remapping( const std::string & s )
 {
   // same structure for annotation re-mappings as for signal channels;
   // code copied from cmd_t::signal_alias()
-
+  
   // the primary alias can occur multiple times, and have multiple 
-  // labels that are mapped to it
+  // labels that are mapped to it; matches are case-insensitive, as
+  // all aliases and checks stored in upper-case
   
   // however: two rules
   // 1. many-to-one mapping means the same label cannot have multiple primary aliases
   // 2. following, and on principle of no transitive properties, alias cannot have alias
-
+  
   // X|Y|Z
   // X|A|B
   
@@ -82,39 +126,61 @@ void nsrr_t::annot_remapping( const std::string & s )
   if ( tok.size() < 2 ) Helper::halt( "bad format for annotation remapping:  canonical|alias 1|alias 2\n" + s );
   
   const std::string primary = Helper::unquote( tok[0] );
+  const std::string uc_primary = Helper::toupper( primary );
+
+  // check that no | characters.. will cause problems downstream, so avoid here
+  if ( primary.find( "|" ) != std::string::npos )
+    Helper::halt( "primary annotation labels cannot contain pipe (|) characters" );
+  
+  // store primary mapping (but only on first occurrence)
+  // i.e. the primary might be listed w/ variable case in the remap file
+  // behavior here is to take the first; error if different
+  if ( pmap.find( uc_primary ) == pmap.end() )
+    pmap[ uc_primary ] = primary;
+  else
+    {
+      if ( pmap[ uc_primary ] != primary )
+	Helper::halt( "inconsistent case in remaps for primary: " + pmap[ uc_primary ] + " & " + primary ); 
+    }
+    
+  // primary already specified
+  if ( amap.find( uc_primary ) != amap.end() )
+    Helper::halt( primary + " specified as both primary annotation and mapped term" );
+  
   for (int j=1;j<tok.size();j++) 
     {
       
       // impose rules
-      const std::string mapped = Helper::unquote( tok[j] ) ;
+      const std::string mapped = Helper::toupper( Helper::unquote( tok[j] ) ) ;
       
       if ( bmap.find( mapped ) != bmap.end() )
 	Helper::halt( mapped + " specified as both primary annotation and mapped term" );
       
       if ( amap.find( mapped ) != amap.end() )
-	if ( primary != amap[ mapped ] )  
+	if ( Helper::toupper( primary ) != Helper::toupper( amap[ mapped ] ) )
 	  Helper::halt( mapped + " specified twice in alias file w/ different primary remaping" );
-
+      
       // otherwise, set 
       amap[ mapped ] = primary;
       
-      bmap[ primary ].push_back( mapped );
+      bmap[ uc_primary ].push_back( mapped );
     }
     
 }
 
 
 // add a new annotation remap
-void nsrr_t::add( const std::string & a , const std::string & b )
-{
-  amap[a] = b;
-}
+// void nsrr_t::add( const std::string & a , const std::string & b )
+// {
+//   amap[ a ] = b;
+// }
 
 // clear all existing 
 void nsrr_t::clear()
 {
   amap.clear();
 }
+
 
 void nsrr_t::init() 
 {

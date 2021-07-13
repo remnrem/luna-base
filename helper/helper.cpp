@@ -360,6 +360,10 @@ std::string Helper::format( const std::string & s , int indent , int width , boo
   return r;  
 }
 
+std::vector<std::string> Helper::parse(const std::string & item, const char s , bool empty )
+{
+  return Helper::char_split( item , s , empty ); 
+}
 
 std::vector<std::string> Helper::parse(const std::string & item, const std::string & s , bool empty )
 {  
@@ -370,6 +374,11 @@ std::vector<std::string> Helper::parse(const std::string & item, const std::stri
   std::vector<std::string> dummy;
   return dummy;
 }  
+
+std::vector<std::string> Helper::quoted_parse(const std::string & item , const char s , const char q , const char q2, bool empty )
+{
+  return Helper::quoted_char_split( item , s , q, q2, empty ); 
+}
 
 std::vector<std::string> Helper::quoted_parse(const std::string & item , const std::string & s , const char q , const char q2, bool empty )
 {

@@ -38,18 +38,27 @@ struct nsrr_t {
   
   // annotation map data (one-to-one)
   static std::map<std::string,std::string> amap; // alias --> orig
-  
+
+  // UC-primary->preferred primary case mapping
+  static std::map<std::string,std::string> pmap; // ALIAS -> Alias
+
   // from primary --> multiple (can be one to many) 
   static std::map<std::string,std::vector<std::string > > bmap; // orig --> alias(es)
 
   // add a new annotation remap (in 'alias/remap' format  canonical|alias1|"alias2 |2"
   static void annot_remapping( const std::string & s );
-
+  
   // add a new annotation remap
-  static void add( const std::string & a , const std::string & b );
+  //static void add( const std::string & a , const std::string & b );
 
   // clear all existing 
   static void clear();
+
+  // only return annots that are white-listed
+  static bool whitelist;
+
+  // only return annots that are non white-listed
+  static bool unmapped;  
 };
 
 #endif

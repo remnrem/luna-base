@@ -3285,11 +3285,27 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // combine annot class and instance IDs
   if ( Helper::iequals( tok0 , "combine-annots" ) )
     {
-        globals::combine_annot_class_inst = true;
+      globals::combine_annot_class_inst = true;
       if ( tok1 != "" ) globals::annot_class_inst_combiner = tok1[0];
       return;
     }
-    
+
+  // skip annots not on the whitelist (remap list)
+  if ( Helper::iequals( tok0 , "annot-whitelist" ) )
+    {
+      nsrr_t::whitelist = Helper::yesno( tok1 );
+      return;      
+    }
+
+  // skip annots on the whitelist (i.e. to get unampped remapings are a whitelist
+  if ( Helper::iequals( tok0 , "annot-unmapped" ) )
+    {
+      nsrr_t::unmapped = Helper::yesno( tok1 );
+      return;
+    }
+
+  
+      
   // sleep stage prefix
   if (  Helper::iequals( tok0 , "ss-prefix" ) )
     {
@@ -3453,6 +3469,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       param_t dummy;     
       dummy.add( "dummy" , tok1 );
       globals::specified_annots = dummy.strset( "dummy" , "," );      
+      return;
+    }
+
+
+  // delimiter char for annot key=value pairs (default '=')
+  if ( Helper::iequals( tok0 , "annot-keyval" ) )
+    {
+      globals::annot_keyval_delim = tok1[0];
       return;
     }
   

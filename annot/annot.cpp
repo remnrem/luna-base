@@ -350,6 +350,14 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       if ( globals::specified_annots.size() > 0 && 
 	   globals::specified_annots.find( ann[e] ) == globals::specified_annots.end() ) 
 	continue;
+
+      //
+      // we may have a null annot here, e.g if a whitelist was
+      // specified
+      //
+
+      if ( ann[e] == "" )
+	continue;
       
       //
       // ignore this annotation if past the end?
@@ -576,8 +584,12 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  // remap? (and if so, track)
 	  std::string y = nsrr_t::remap( x ) ;
-	  if ( y != x ) parent_edf.timeline.annotations.aliasing[ y ] = x ;
 
+	  // empty annots (e.g. from white-list) will be skipped in map_epoch_annotations()
+	  //if ( y == "" ) continue;
+	  
+	  if ( y != x && y != "" ) parent_edf.timeline.annotations.aliasing[ y ] = x ;
+	  
 	  // store
 	  a.push_back( y );
 	}
@@ -688,7 +700,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Get the name and ID 
 	  //
 
-	  std::string name = nsrr_t::remap( Helper::trim( tok[0] ) );
+	  std::string orig_name = Helper::trim( tok[0] ) ;
+	  
+	  std::string name = nsrr_t::remap( orig_name );
+
+	  if ( name == "" ) continue;
 	  
 	  //
 	  // skip this annotation
@@ -705,7 +721,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  annot_t * a = parent_edf.timeline.annotations.add( name );
 
-
+	  //
+	  // track any aliasing
+	  //
+	  
+	  if ( name != orig_name )
+	    parent_edf.timeline.annotations.aliasing[ name ] = orig_name ;
+	  
 	  //
 	  // store a temporary lookup table
 	  //
@@ -844,7 +866,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 
 	  std::string aname = nsrr_t::remap( tok[0] );
-
+	  
+	  if ( aname == "" ) continue;
+	  
 	  //
 	  // save original class name (prior to any combining)
 	  // as this is what any in-file header information is based on for meta-data
@@ -937,7 +961,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      
 	    }
 
-
+	  //
+	  // track any aliasingL nb. this will also flag split/combining instances.. that's okay
+	  //
+	  
+	  if ( cls_root  != tok[0] )
+	    parent_edf.timeline.annotations.aliasing[ cls_root ] = tok[0];
+	  
+	  
 	  //
 	  // Check size
 	  //
@@ -1142,7 +1173,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // we are not expecting any variables)
 	  //
 	  
-	  if ( tok[5] == "." || cols[a].size() == 0 ) continue;
+	  if ( tok[5] == "." ) continue;
+
+	  // relax this assumption for now, i.e. if we let key=value
+	  // pairs be defined on the command line
+	  //if ( cols[a].size() == 0 ) continue;
 	  
 	  //
 	  // Otherwise, parse |-delimited values, that should match the header
@@ -1157,14 +1192,16 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Are meta-data in key=value pair mode?
 	  //
 
-	  bool key_value = vartok[0].find( "=" ) != std::string::npos; 
+	  bool key_value = vartok[0].find( globals::annot_keyval_delim ) != std::string::npos; 
 
 	  //
 	  // need at least this many fields, i.e. if we've pre-specifed above	  
 	  //
 	  
-	  if ( nobs > nexp )
-	    Helper::halt( "expecting at most " + Helper::int2str( nexp ) + " |-delimited fields for " + aname + "\n" + line );
+	  if ( nobs > nexp && ! key_value )
+	    Helper::halt( "expecting at most "
+			  + Helper::int2str( nexp )
+			  + " |-delimited fields for " + aname + "\n" + line );
 	  
 	  // 
 	  // Read expected fields, with specified types
@@ -1180,17 +1217,23 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      std::vector<std::string> kv;
 	      if ( key_value ) 
 		{
-		  kv = Helper::parse( vartok[j] , "=" );
+		  kv = Helper::parse( vartok[j] , std::string(1,globals::annot_keyval_delim ) );
+		  
 		  if ( kv.size() != 2 ) 
-		    Helper::halt( "expecting key=value pair: " + vartok[j] );
+		    Helper::halt( "expecting key"
+				  + std::string(1,globals::annot_keyval_delim)
+				  + "value pair: " + vartok[j] );
 		}
 
 	      // get label
 	      const std::string & label = key_value ? kv[0] : cols[a][j];	      
-
-	      // either way, the meta-data needs to have been specified in the header	     
+	      
+	      // if this key not declare or previously seen, add now as TXT
 	      if ( key_value && a->types.find( label ) == a->types.end() )
-		Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
+		{
+		  a->types[ label ] = globals::A_TXT_T;
+		  //Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
+		}
 	      
 	      // get type
 	      globals::atype_t t = a->types[label];
@@ -1959,6 +2002,8 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 
 	  // remap?
 	  stg = nsrr_t::remap( stg );
+
+	  if ( stg == "" ) continue;
 	  
 	  interval_t interval( Helper::sec2tp( seconds ) , 
 			       Helper::sec2tp( seconds + epoch_sec ) );
@@ -2031,8 +2076,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
   //
   
   // assume all annotations will then be under 'ScoredEvent'
-  // with children: 'EventConcept' , 'Duration' , 'Start' , and optionally 'Notes'
-  
+  // with children: 'EventConcept' , 'Duration' , 'Start' , and optionally 'SignalLocation' and 'Notes'
+  // for all other children, add as meta-data (type = 'str') 
+
   //
   // Profusion format
   //
@@ -2070,6 +2116,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       // annotation remap?
       std::string original_label = concept->value;
       concept->value = nsrr_t::remap( concept->value );
+      if ( concept->value == "" ) continue;
       
       // are we checking whether to add this file or no? 
       if ( globals::specified_annots.size() > 0 && 
@@ -2115,6 +2162,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 
 	  // annotation remap?
 	  ss = nsrr_t::remap( ss );
+	  if ( ss == "" ) continue;
 	  
 	  // are we checking whether to add this file or no? 
 	  
@@ -2158,6 +2206,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 
       element_t * duration = (*e)( "Duration" );
       element_t * notes    = (*e)( "Notes" );
+      element_t * signal   = (*e)( "SignalLocation" );
 
       if ( concept == NULL || start == NULL || duration == NULL ) continue;
       
@@ -2190,13 +2239,41 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       if ( a == NULL ) Helper::halt( "internal error in loadxml()");
 
-      instance_t * instance = a->add( concept->value , interval , channel != NULL ? channel->value : "." );      
+      const std::string sigstr = signal != NULL ? signal->value : ( channel != NULL ? channel->value : "." ) ; 
+      
+      instance_t * instance = a->add( concept->value , interval , sigstr );
       
       // any notes?  set as TXT, otherwise it will be listed as a FLAG
       if ( notes ) 
 	{
 	  instance->set( concept->value , notes->value );  
 	}
+
+      //
+      // any other children of ScoredEvent?  add as string key/value meta-data
+      //
+      
+      const std::vector<element_t*> & kids = e->child;
+      
+      for (int i=0;i<kids.size();i++)
+	{
+          element_t * ee = kids[i];
+	  if ( ee->name == "EventConcept" ) continue;
+	  if ( ee->name == "EventType" ) continue;
+	  if ( ee->name == "Notes" ) continue;
+	  if ( ee->name == "Channel" ) continue;
+	  if ( ee->name == "SignalLocation" ) continue;
+	  if ( ee->name == "Start" ) continue;
+	  if ( ee->name == "Duration" ) continue;
+	  if ( ee->name == "name" ) continue;
+	  if ( ee->name == "time" ) continue;
+
+	  // add as meta-data to this instance
+	  instance->set( ee->name , ee->value );
+
+	}
+
+	       
       
     }
   
@@ -2231,7 +2308,8 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 
 	  // annotation remap?
 	  ss = nsrr_t::remap( ss );
-
+	  if ( ss == "" ) continue;
+	  
 	  // skip if we are not interested in this element
 	  
 	  if ( added.find( ss ) == added.end() ) continue;
@@ -2247,7 +2325,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  interval_t interval( start_tp , stop_tp );	  
 	  
 	  annot_t * a = edf->timeline.annotations.add( ss );
-	  
+		  
 	  // . indicates no associated channel
 	  instance_t * instance = a->add( ss , interval , "." );      
       
@@ -3674,6 +3752,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 
       std::string original_label = cls_name;
       cls_name = nsrr_t::remap( cls_name );
+      if ( cls_name == "" ) continue;
       
       //
       // ignore this annotation?
@@ -3773,6 +3852,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 
       std::string original_label = cls_name;
       cls_name = nsrr_t::remap( cls_name );
+      if ( cls_name == "" ) continue;
       
       //
       // ignore this annotation?
@@ -3785,7 +3865,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       if ( cls_name != original_label )
 	edf->timeline.annotations.aliasing[ cls_name ] = original_label ;
 
-      
+    
       //
       // get a pointer to this class
       //
@@ -4059,12 +4139,16 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		      // trim, and remap (also by default swap spaces)
 		      std::string inst_name = nsrr_t::remap( Helper::trim( te.name ) );
 
-		      instance_t * instance = a->add( inst_name , interval , "." );
-		      
-		      //std::cerr << " adding [" << te.name << "] -- " << te.onset << "\t" << interval.duration() << "\n";
-		      
-		      // track how many annotations we add
-		      edf.aoccur[ globals::edf_annot_label ]++;
+		      if ( inst_name != "" )
+			{
+			  instance_t * instance = a->add( inst_name , interval , "." );
+			  
+			  //std::cerr << " adding [" << te.name << "] -- "
+			  //          << te.onset << "\t" << interval.duration() << "\n";
+			  
+			  // track how many annotations we add
+			  edf.aoccur[ globals::edf_annot_label ]++;
+			}
 		    }
 		  
 		}

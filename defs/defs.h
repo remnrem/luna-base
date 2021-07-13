@@ -142,6 +142,8 @@ struct globals
   
   static char folder_delimiter;
 
+  static char file_list_delimiter;
+  
   static std::string mkdir_command;
 
   // number of decimal places for seconds (e.g. output to .annot)
@@ -167,7 +169,7 @@ struct globals
   static bool uppercase_channels;
   static bool replace_annot_spaces;
   static char space_replacement;
-  
+
   //
   // Annotation types stored here statically;  these can be properties of both 
   // annot_t, in which case they provide a guide for all instance_t.data fields
@@ -198,7 +200,10 @@ struct globals
 
   static std::string current_tag;
   
+  static char annot_keyval_delim;
+  
 
+  
   //
   // Channel types
   //

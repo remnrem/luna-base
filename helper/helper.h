@@ -204,7 +204,10 @@ namespace Helper
   }
 
   std::vector<std::string> parse(const std::string & item, const std::string & s = " \t\n" , bool empty = false );
+  std::vector<std::string> parse(const std::string & item, const char s , bool empty = false );
+  
   std::vector<std::string> quoted_parse(const std::string & item , const std::string & s , const char q = '"' , const char q2 = '\'' , bool empty = false );
+  std::vector<std::string> quoted_parse(const std::string & item , const char s , const char q = '"' , const char q2 = '\'' , bool empty = false );
 
   std::vector<std::string> char_split( const std::string & s , const char c , bool empty );
   std::vector<std::string> char_split( const std::string & s , const char c , const char c2 , bool empty );

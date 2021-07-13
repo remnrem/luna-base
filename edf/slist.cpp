@@ -339,23 +339,28 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	}
 
       if ( has_edf ) 
-	std::cout //<< ii->first << "\t" 
-		  << ii->second.id << "\t"
-		  << Helper::quote_spaced( ii->second.edf ) ;
+	std::cout << ii->second.id << "\t"
+		  << Helper::quote_spaced( ii->second.edf )
+		  << "\t";
       
+      // new sl-format: can add '.' in third slot if no annots
+      if ( ii->second.annots.size() == 0 )
+	std::cout << ".";
       
+      // new sl-format: can add comma (or globals::file_list_delimiter) separated values in one tab slot
+      bool first = true;
       std::set<std::string>::const_iterator jj = ii->second.annots.begin();
       while ( jj != ii->second.annots.end() )
-	{
-	  
+	{	  
 	  if ( has_edf ) 
 	    {
-	      std::cout << "\t" << Helper::quote_spaced( *jj ) ;
+	      if ( ! first ) std::cout << globals::file_list_delimiter;
+	      std::cout << Helper::quote_spaced( *jj ) ;
+	      first = false;
 	      dumped_annot.insert( *jj );
 	    }
 	  else
-	    annot_wout_edf.push_back( *jj );
-	  
+	    annot_wout_edf.push_back( *jj );	  
 	  ++jj;
 	}
 
