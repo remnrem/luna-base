@@ -1181,9 +1181,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  //
 	  // Otherwise, parse |-delimited values, that should match the header
+	  //   - nb. still allow for quoted `|` characters in meta-data
 	  //
 	  
-	  std::vector<std::string> vartok = Helper::parse( tok[5] , "|" );
+	  std::vector<std::string> vartok = Helper::quoted_parse( tok[5] , "|" );
 	  
 	  const int nobs = vartok.size();
 	  const int nexp = cols[a].size();
@@ -3622,7 +3623,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  if ( annot->name == "duration_sec" ) { ++ee; continue; } 
 	  if ( annot->name == "epoch_sec" ) { ++ee; continue; } 
 
-	  // output row
+	  // output row (nb. no need to quote class, `|` allowed here
 	  
 	  O1 << annot->name << "\t";
 
@@ -3692,9 +3693,16 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		{
 		  // pipe-delimiter
 		  if ( dd != inst->data.begin() ) O1 << "|";
+		  
 		  // meta-data value, always key/value pairing
 		  // as there may be missing data
-		  O1 << dd->first << "=" << *dd->second;
+		  // if the meta-data is string and contains a pipe, then
+		  // we need to quote this
+		  
+		  std::stringstream ss;
+		  ss << *dd->second;
+
+		  O1 << dd->first << "=" << Helper::quote_if( ss.str() , '|' ); 
 		  ++dd;
 		}
 	    }

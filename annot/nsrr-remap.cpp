@@ -151,8 +151,15 @@ void nsrr_t::annot_remapping( const std::string & s )
     {
       
       // impose rules
-      const std::string mapped = Helper::toupper( Helper::unquote( tok[j] ) ) ;
+      // optional swap spaces for another character too
+      const std::string mapped = globals::replace_annot_spaces ?
+	Helper::search_replace( Helper::toupper( Helper::unquote( tok[j] ) ) , ' ' , globals::space_replacement ) :
+	Helper::toupper( Helper::unquote( tok[j] ) ) ;
+
+      // if same, skip
+      if ( mapped == uc_primary ) continue;
       
+      // otherwise, check no circular definitions
       if ( bmap.find( mapped ) != bmap.end() )
 	Helper::halt( mapped + " specified as both primary annotation and mapped term" );
       
@@ -172,9 +179,13 @@ void nsrr_t::annot_remapping( const std::string & s )
 // add a new annotation remap
 void nsrr_t::add( const std::string & p , const std::string & a )
 {
-  amap[ Helper::toupper( a ) ] = p;
-  bmap[ Helper::toupper( p ) ].push_back( Helper::toupper( a ) );
-  pmap[ Helper::toupper( p ) ] = p;
+  // swap spaces for another char?
+  const std::string p2 = globals::replace_annot_spaces ? Helper::search_replace( p2 , ' ' , globals::space_replacement ) : p;
+  const std::string a2 = globals::replace_annot_spaces ? Helper::search_replace( a2 , ' ' , globals::space_replacement ) : a;
+
+  amap[ Helper::toupper( a2 ) ] = p2;
+  bmap[ Helper::toupper( p2 ) ].push_back( Helper::toupper( a2 ) );
+  pmap[ Helper::toupper( p2 ) ] = p2;
 }
 
 // clear all existing 
