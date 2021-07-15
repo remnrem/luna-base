@@ -48,7 +48,7 @@ std::string nsrr_t::remap( const std::string & a )
       if ( unmapped ) return "";
       else return pmap[ a_uc ];
     }
-
+  
   //
   // found as an alias?
   //
@@ -170,15 +170,19 @@ void nsrr_t::annot_remapping( const std::string & s )
 
 
 // add a new annotation remap
-// void nsrr_t::add( const std::string & a , const std::string & b )
-// {
-//   amap[ a ] = b;
-// }
+void nsrr_t::add( const std::string & p , const std::string & a )
+{
+  amap[ Helper::toupper( a ) ] = p;
+  bmap[ Helper::toupper( p ) ].push_back( Helper::toupper( a ) );
+  pmap[ Helper::toupper( p ) ] = p;
+}
 
 // clear all existing 
 void nsrr_t::clear()
 {
   amap.clear();
+  bmap.clear();
+  pmap.clear();
 }
 
 
@@ -190,175 +194,114 @@ void nsrr_t::init()
   // later turned off.  not a problem, as the variables will be overwritten by anything specified on
   // the command line, this will not yet have been parsed
   //
-  
-  cmd_t::vars[ "arousal" ] = "arousal_standard,arousal_spontaneous,arousal_external,arousal_respiratory,arousal_plm,arousal_cheshire";
-  
-  cmd_t::vars[ "apnea" ] = "apnea_obstructive,apnea_central,apnea_mixed,hypopnea";
-  
-  cmd_t::vars[ "artifact" ] 
-    = "artifact_respiratory,artifact_proximal_pH,artifact_distal_pH,artifact_blood_pressure,artifact_TcCO2,artifact_SpO2,artifact_EtCO2";
-  
-  cmd_t::vars[ "arrhythmia" ] = "bradycardia,tachycardia,tachycardia_narrowcomplex";
-	       
-  cmd_t::vars[ "plm" ] = "plm_left,plm_right";
-  
-  cmd_t::vars[ "n1" ] = "NREM1";
-  
-  cmd_t::vars[ "n2" ] = "NREM2";
-  
-  cmd_t::vars[ "n3" ] = "NREM3,NREM4";
-  
-  cmd_t::vars[ "rem" ] = "REM";
-  
-  cmd_t::vars[ "wake" ] = "wake";
-  
-  cmd_t::vars[ "sleep" ] = "NREM1,NREM2,NREM3,NREM4,REM";
+
+  // just one for now (given remapping of ANNOTS as below) 
+  // ${sleep}
+
+  cmd_t::vars[ "sleep" ] = "N1,N2,N3,R";
   
   
   //
   // actual remapping terms
   //
-  
-  amap[ "Arousal ()" ] = "arousal_standard";
-  amap[ "Arousal|Arousal ()" ] = "arousal_standard";
-  amap[ "Arousal|Arousal (Arousal)" ] = "arousal_standard";
-  amap[ "Arousal|Arousal (Standard)" ] = "arousal_standard";
-  amap[ "Arousal|Arousal (STANDARD)" ] = "arousal_standard";
-  amap[ "ASDA arousal|Arousal (ADSA)" ] = "arousal_standard";
-  amap[ "ASDA arousal|Arousal (asda)" ] = "arousal_standard";
-  amap[ "ASDA arousal|Arousal (ASDA)" ] = "arousal_standard";
-  amap[ "Arousal (Asda)" ] = "arousal_standard";
-  amap[ "Arousal (ASDA)" ] = "arousal_standard";
 
-  amap[ "Arousal (ARO SPONT)" ] = "arousal_spontaneous";
-  amap[ "Spontaneous arousal|Arousal (apon aro)" ] = "arousal_spontaneous" ;
-  amap[ "Spontaneous arousal|Arousal (ARO SPONT)" ] = "arousal_spontaneous" ;
-  amap[ "Spontaneous arousal|Arousal (spon aro)" ] = "arousal_spontaneous" ;
-  amap[ "Spontaneous arousal|Arousal (SPON ARO)" ] = "arousal_spontaneous";
-
-  amap[ "External arousal|Arousal (External Arousal)" ] = "arousal_external";
+  // this should be kept fairly update-to-date w/ the NSRR NAP file harm.annots
+  // assuming harm.annots only has one line per row, the following will generate the text below:
   
-  amap[ "Arousal resulting from respiratory effort|Arousal (ARO RES)" ] = "arousal_respiratory";
-  amap[ "Arousal resulting from respiratory effort|Arousal (RESP ARO)" ] = "arousal_respiratory";
-  amap[ "RERA" ] = "arousal_respiratory";
-  amap[ "Arousal (ARO RES)" ] = "arousal_respiratory";
-  amap[ "Respiratory effort related arousal|RERA" ] = "arousal_respiratory";
-      
-  amap[ "Arousal resulting from Chin EMG|Arousal (Cheshire)" ] = "arousal_cheshire";
-  amap[ "Arousal resulting from Chin EMG|Arousal (CHESHIRE)" ] = "arousal_cheshire";
-      
-  amap[ "Arousal (ARO Limb)" ] = "arousal_plm";
-  amap[ "Arousal resulting from periodic leg movement|Arousal (PLM)" ] = "arousal_plm";
-  amap[ "Arousal resulting from periodic leg movement|Arousal (PLM ARO)" ] = "arousal_plm";
-    
-  // apnea and hypopnea
-  
-  amap [ "Obstructive Apnea" ] = "apnea_obstructive" ;
-  amap[ "Obstructive apnea|Obstructive Apnea" ] = "apnea_obstructive" ;
-  
-  amap[ "Central Apnea" ] = "apnea_central";
-  amap[ "Central apnea|Central Apnea" ] = "apnea_central";
-  
-  amap[ "Mixed Apnea" ] = "apnea_mixed";
-  amap[ "Mixed apnea|Mixed Apnea" ] = "apnea_mixed";
-  
-  amap[ "Hypopnea" ] = "hypopnea";
-  amap[ "Hypopnea|Hypopnea" ] = "hypopnea";
-
-  // note -- this is some kind of apnea event... need to update
-  amap[ "Unsure" ] = "unsure";
-  amap[ "Unsure|Unsure" ] = "unsure";
-  
-  
-  // sleep staging
-      
-  amap[ "NREM1" ] = "NREM1";
-  amap[ "Stage 1 sleep|1" ] = "NREM1";
-      
-  amap[ "NREM2" ] = "NREM2";
-  amap[ "Stage 2 sleep|2" ] = "NREM2";
-  
-  amap[ "NREM3" ] = "NREM3";
-  amap[ "Stage 3 sleep|3" ] = "NREM3";
-  
-  amap[ "NREM4" ] = "NREM4" ;
-  amap[ "Stage 4 sleep|4" ] = "NREM4";
-  
-  amap[ "REM" ] = "REM";
-  amap[ "REM sleep|5" ] = "REM";
-  
-  amap[ "Unscored" ] = "unscored";
-  amap[ "Unscored|9" ] = "unscored";
-  
-  amap[ "Wake" ] = "wake";
-  amap[ "Wake|0" ] = "wake";
-  
-  amap[ "Movement|6" ] = "movement";
-  
-  
-  
-  // limb movements
-  
-  amap[ "Periodic leg movement - left|PLM (Left)" ] = "plm_left";
-  amap[ "Periodic leg movement - right|PLM (Right)" ] = "plm_right";
-  amap[ "PLM (Left)" ] = "plm_left";
-  amap[ "PLM (Right)" ] = "plm_right";
-  
-  amap[ "Limb Movement (Left)" ] = "plm_left";
-  amap[ "Limb movement - left|Limb Movement (Left)" ] = "plm_left";
-  amap[ "Limb Movement (Right)" ] = "plm_right";      
-  amap[ "Limb movement - right|Limb Movement (Right)" ] = "plm_right";
-      
-      
-  // artifacts 
-  amap[ "Respiratory artifact|Respiratory artifact" ] = "artifact_respiratory";
-
-  amap[ "Respiratory artifact" ] = "artifact_respiratory";
-      
-  amap[ "Proximal pH artifact" ] = "artifact_proximal_pH";
-
-  amap[ "Distal pH artifact" ] = "artifact_distal_pH";
-
-  amap[ "Blood pressure artifact" ] = "artifact_blood_pressure";
-  
-  amap[ "TcCO2 artifact" ] = "artifact_TcCO2" ;       
-  
-  amap[ "SpO2 artifact" ] = "artifact_SpO2";
-     
-  amap[ "SpO2 artifact|SpO2 artifact" ] = "artifact_SpO2";
-
-  amap[ "EtCO2 artifact" ] = "artifact_EtCO2";
-  amap[ "EtCO2 artifact|EtCO2 artifact" ] = "artifact_EtCO2";
-      
-  // respiratory
-
-  amap[ "Periodic Breathing" ] = "periodic_breathing";
-  amap[ "Periodic breathing|Periodic Breathing" ] = "periodic_breathing";
-
-  amap[ "Respiratory Paradox" ] = "respiratory_paradox";
-
-  // desats
-
-  amap[ "SpO2 desaturation" ] = "desat";
-  
-  amap[ "SpO2 desaturation|SpO2 desaturation" ] = "desat";
+  // grep ^remap resources/harm.annots | cut -f2 | cut -d"|" -f1  > tmp.1
+  // grep ^remap resources/harm.annots | cut -f2 | cut -d"|" -f2- | tr -d '"' > tmp.2  
+  // paste tmp.1 tmp.2 | awk -F"\t" ' { printf "add( \"" $1 "\" , \""  $2  "\" ); \n" } '
       
 
-  // cardiac
-
-
-  amap[ "Bradycardia" ] = "bradycardia";
-
-  amap[ "Tachycardia" ] = "tachycardia";
-
-  amap[ "Narrow Complex Tachycardia"] = "tachycardia_narrowcomplex";      
-
-  amap[ "Narrow complex tachycardia|Narrow Complex Tachycardia" ] = "tachycardia_narrowcomplex";
+  add( "arousal" , "Arousal ()" ); 
+  add( "arousal" , "Arousal|Arousal ()" ); 
+  add( "arousal" , "Arousal|Arousal (Standard)" ); 
+  add( "arousal" , "ASDA arousal|Arousal (ADSA)" ); 
+  add( "arousal" , "ASDA arousal|Arousal (ASDA)" ); 
+  add( "arousal" , "Arousal (ASDA)" ); 
+  add( "arousal/spontaneous" , "Arousal (ARO SPONT)" ); 
+  add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (apon aro)" ); 
+  add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (ARO SPONT)" ); 
+  add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (SPON ARO)" ); 
+  add( "arousal/external" , "External arousal|Arousal (External Arousal)" ); 
+  add( "arousal/RERA" , "Arousal resulting from respiratory effort|Arousal (ARO RES)" ); 
+  add( "arousal/RERA" , "RERA" ); 
+  add( "arousal/RERA" , "Arousal (ARO RES)" ); 
+  add( "arousal/RERA" , "Arousal resulting from respiratory effort|Arousal (RESP ARO)" ); 
+  add( "arousal/RERA" , "Respiratory effort related arousal|RERA" ); 
+  add( "arousal/cheshire" , "Arousal resulting from Chin EMG|Arousal (Cheshire)" ); 
+  add( "apnea/obstructive" , "Obstructive apnea|Obstructive Apnea" ); 
+  add( "apnea/obstructive" , "Obstructive Apnea" ); 
+  add( "apnea/central" , "Central Apnea" ); 
+  add( "apnea/central" , "Central apnea|Central Apnea" ); 
+  add( "apnea/mixed" , "Mixed Apnea" ); 
+  add( "apnea/mixed" , "Mixed apnea|Mixed Apnea" ); 
+  add( "apnea/mixed" , "Mixed apnea|APNEA-MIXED" ); 
+  add( "hypopnea" , "Hypopnea" );
+  add( "hypopnea" , "Hypopnea|Hypopnea" ); 
+  add( "periodic_breathing" , "Periodic Breathing" ); 
+  add( "periodic_breathing" , "Periodic breathing|Periodic Breathing" ); 
+  add( "respiratory_paradox" , "Respiratory Paradox" ); 
+  add( "desat" , "SpO2 desaturation" ); 
+  add( "desat" , "SpO2 desaturation|SpO2 desaturation" ); 
+  add( "desat" , "SpO2 desaturation|DESAT" ); 
+  add( "unsure" , "Unsure|Unsure|Unsure" ); 
+  add( "N1" , "NREM1" ); 
+  add( "N1" , "Stage 1 sleep|1" ); 
+  add( "N2" , "NREM2" ); 
+  add( "N2" , "Stage 2 sleep|2" ); 
+  add( "N3" , "NREM3" ); 
+  add( "N3" , "Stage 3 sleep|3" ); 
+  add( "N3" , "N4" ); 
+  add( "N3" , "NREM4" ); 
+  add( "N3" , "Stage 4 sleep|4" ); 
+  add( "R" , "REM" ); 
+  add( "R" , "REM sleep|5" ); 
+  add( "W" , "Wake" ); 
+  add( "W" , "Wake|0" ); 
+  add( "U" , "Unscored" ); 
+  add( "U" , "Unscored|9" ); 
+  add( "?" , "Unknown" ); 
+  add( "M" , "movement" ); 
+  add( "M" , "Movement|6" ); 
+  add( "L" , "Lights" ); 
+  add( "L" , "Lights On" ); 
+  add( "L" , "LightsOn" ); 
+  add( "PLM" , "Periodic leg movement" ); 
+  add( "PLM" , "Periodic leg movement|PLM" ); 
+  add( "PLM/left" , "Periodic leg movement - left|PLM (Left)" ); 
+  add( "PLM/right" , "Periodic leg movement - right|PLM (Right)" ); 
+  add( "PLM/right" , "PLM (Right)" ); 
+  add( "LM" , "Limb Movement" ); 
+  add( "LM" , "Limb movement|Limb Movement" ); 
+  add( "LM/left" , "Limb Movement (Left)" ); 
+  add( "LM/left" , "Limb movement - left|Limb Movement (Left)" ); 
+  add( "LM/right" , "Limb Movement (Right)" ); 
+  add( "LM/right" , "Limb movement - right|Limb Movement (Right)" ); 
+  add( "artifact" , "Signal artifact|SIGNAL-ARTIFACT" ); 
+  add( "artifact/respiratory" , "Respiratory artifact" ); 
+  add( "artifact/respiratory" , "Respiratory artifact|Respiratory artifact" ); 
+  add( "artifact/proximal_pH" , "Proximal pH artifact" ); 
+  add( "artifact/distal_pH" , "Distal pH artifact" ); 
+  add( "artifact/blood_pressure" , "Blood pressure artifact" ); 
+  add( "artifact/TcCO2" , "TcCO2 artifact" ); 
+  add( "artifact/TcCO2" , "TcCO2 artifact|TcCO2 artifact" ); 
+  add( "artifact/SpO2" , "SpO2 artifact" ); 
+  add( "artifact/SpO2" , "SpO2 artifact|SpO2 artifact" ); 
+  add( "artifact/EtCO2" , "EtCO2 artifact" ); 
+  add( "artifact/EtCO2" , "EtCO2 artifact|EtCO2 artifact" ); 
+  add( "position/left" , "Body position change to left|POSITION-LEFT" ); 
+  add( "position/right" , "Body position change to right|POSITION-RIGHT" ); 
+  add( "position/prone" , "Body position change to prone|POSITION-PRONE" ); 
+  add( "position/supine" , "Body position change to supine|POSITION-SUPINE" ); 
+  add( "position/upright" , "Body position change to upright|POSITION-UPRIGHT" ); 
+  add( "arrhythmia/bradycardia" , "Bradycardia" ); 
+  add( "arrhythmia/tachycardia" , "Tachycardia" ); 
+  add( "arrhythmia/narrow_complex_tachycardia" , "Narrow Complex Tachycardia" ); 
+  add( "arrhythmia/narrow_complex_tachycardia" , "Narrow complex tachycardia|Narrow Complex Tachycardia" ); 
+  add( "notes" , "Technician Notes" ); 
   
-  // misc
-
-  amap[ "Technician Notes" ] = "notes";
+  // END of auto-generated code (from NSRR/NAP harm.annots)
   
-
 }
 

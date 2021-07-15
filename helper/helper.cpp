@@ -57,6 +57,14 @@ std::string Helper::quote_spaced( const std::string & s )
   return "\"" + s + "\"";
 }
 
+
+std::string Helper::quote_if( const std::string & s , char q )
+{
+  if ( s.find( q ) == std::string::npos ) return s;
+  return "\"" + s + "\"";
+}
+
+
 std::string Helper::sanitize( const std::string & s )
 {
   std::string j = s;

@@ -4962,7 +4962,9 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 
   if ( drop_originals )
     {
-      logger << "  now dropping the original signals\n";
+      if ( make_signals ) 
+	logger << "  now dropping the original signals\n";
+
       const int ns = osignals.size();
       for (int s=0; s<ns; s++)
 	{
@@ -4976,14 +4978,14 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 	      if ( slot == -1 )
 		Helper::halt( "internal error in edf_t::canonical()" );
 
-	      drop_signal( slot );
-	      
-	      writer.level( label , globals::signal_strat );
+	      if ( make_signals ) 
+		drop_signal( slot );
 
-	      writer.value( "DROPPED" , 1 );	      
-	      
+	      // report output
+	      writer.level( label , globals::signal_strat );	      
+	      writer.value( "DROPPED" , 1 );	      	      
 	      writer.value( "USED" , used.find( label ) != used.end() ? 1 : 0 ) ; 
-	      	      
+	      
 	    }
 	  writer.unlevel( globals::signal_strat ); 
 	}

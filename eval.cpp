@@ -2998,8 +2998,8 @@ void proc_canonical( edf_t & edf , param_t & param )
   // drop all non-canonical signals from EDF after processing?
   const bool drop_originals = param.has( "drop-originals" );
 
-  if ( drop_originals && ! make_signals )
-    Helper::halt( "cannot have drop-originals and check options together for CANONICAL" );
+  // if ( drop_originals && ! make_signals )
+  //   Helper::halt( "cannot have drop-originals and check options together for CANONICAL" );
 
   // cs = additional subset of canonical signals to focus on
   if ( ! param.has( "cs" ) )    
@@ -3462,6 +3462,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  // do not load sample-list annotations
+  if ( Helper::iequals( tok0 , "skip-sl-annots" ) )
+    {
+      globals::skip_sl_annots = Helper::yesno( tok1 );
+      return;
+    }
+  
 
   // specified annots (only load these)
   else if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 

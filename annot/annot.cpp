@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -691,7 +690,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	{
 	  
 	  // skip initial # here
-	  std::vector<std::string> tok = Helper::parse( line.substr(1) , "|" );
+	  // quoted parse, in case annotation class has a `|` character
+	  std::vector<std::string> tok = Helper::quoted_parse( line.substr(1) , "|" );
 	  
 	  if ( tok.size() < 1 || tok.size() > 3 )
 	    Helper::halt( "bad header for format\n" + line );
@@ -962,7 +962,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    }
 
 	  //
-	  // track any aliasingL nb. this will also flag split/combining instances.. that's okay
+	  // track any aliasing nb. this will also flag split/combining instances.. that's okay
 	  //
 	  
 	  if ( cls_root  != tok[0] )
@@ -1264,11 +1264,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		{
 		  double value = 0;
 		  
-		  if ( Helper::str2dbl( key_value ? kv[1] : vartok[j] , &value ) )		    
+		  if ( Helper::str2dbl( key_value ? kv[1] : vartok[j] , &value ) )
 		    instance->set( label , value );
 		  else
-		    if ( vartok[j] != "NA" ) 
-		      Helper::halt( "invalid line, bad numeric value:\n" + line );		  
+		    if ( vartok[j] != "NA" )
+		      Helper::halt( "invalid line, bad numeric value:\n" + line );
 		}
 
 	      else if ( t == globals::A_TXT_T )
@@ -3505,7 +3505,8 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
 	  bool has_vars = annot->types.size() > 0 ;
 
-	  O1 << "# " << annot->name;
+	  // nb. ensure class name is quoted if contains `|` delimiter here 
+	  O1 << "# " << Helper::quote_if( annot->name, '|' ) ; 
 	  
 	  if ( annot->description != "" )
 	    O1 << " | " << annot->description;
@@ -3762,6 +3763,9 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 	   globals::specified_annots.find( cls_name )
 	   == globals::specified_annots.end() ) continue;
 
+      //
+      // track aliasing
+      //
       
       if ( cls_name != original_label )
 	edf->timeline.annotations.aliasing[ cls_name ] = original_label ;
@@ -3782,8 +3786,6 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 	    }
 	  else if ( key == "Variable" ) 
 	    {
-// 	      std::cout << "Var name = " << kids[j]->value << "\n";
-// 	      std::cout << "Var type = " << kids[j]->attr.value( "type" ) << "\n";
 	      atypes[ kids[j]->value ] = kids[j]->attr.value( "type" );
 	    }
 	  
@@ -3853,6 +3855,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       std::string original_label = cls_name;
       cls_name = nsrr_t::remap( cls_name );
       if ( cls_name == "" ) continue;
+
       
       //
       // ignore this annotation?

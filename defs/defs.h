@@ -161,7 +161,8 @@ struct globals
   static bool force_edf;
   static bool skip_edf_annots;
   static bool skip_nonedf_annots;
-
+  static bool skip_sl_annots;
+  
   static bool set_annot_inst2hms;
   static bool set_annot_inst2hms_force;
 

@@ -49,7 +49,7 @@ struct nsrr_t {
   static void annot_remapping( const std::string & s );
   
   // add a new annotation remap
-  //static void add( const std::string & a , const std::string & b );
+  static void add( const std::string & primary , const std::string & alias );
 
   // clear all existing 
   static void clear();
