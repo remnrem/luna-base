@@ -700,12 +700,30 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Get the name and ID 
 	  //
 
-	  std::string orig_name = Helper::trim( tok[0] ) ;
+	  std::string orig_name = Helper::unquote( Helper::trim( tok[0] ) ) ;
 	  
 	  std::string name = nsrr_t::remap( orig_name );
 
 	  if ( name == "" ) continue;
 	  
+	  //
+	  // track any aliasing (pre-split class/inst)
+	  //
+	  
+	  if ( name != orig_name )
+	    {
+	      //	      std::cout << "alias mapping " << name << " --> " << orig_name << "\n";
+	      parent_edf.timeline.annotations.aliasing[ name ] = orig_name ;
+	    }
+
+	  //
+	  // If, post-remapping, this is a clas/inst split, only record the class annot
+	  //
+
+	  if ( name.find( globals::class_inst_delimiter ) != std::string::npos )
+	    name = name.substr( 0 , name.find( globals::class_inst_delimiter ) );
+	  
+	  //
 	  //
 	  // skip this annotation
 	  //
@@ -721,12 +739,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  annot_t * a = parent_edf.timeline.annotations.add( name );
 
-	  //
-	  // track any aliasing
-	  //
-	  
-	  if ( name != orig_name )
-	    parent_edf.timeline.annotations.aliasing[ name ] = orig_name ;
 	  
 	  //
 	  // store a temporary lookup table
@@ -734,7 +746,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  annot_map[ name ] = a;
 	  
-
 	  //
 	  // special case: if an explicit class label is 'class', then do not
 	  // allow a header row starting 'class' also
@@ -895,11 +906,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      // old : class=A/B inst=X
 	      // new : class=A   inst=B    meta:inst=X
 	      // if original inst is null, ignore
-
+	      
 	      std::vector<std::string> toks =
 		Helper::parse( aname , std::string( 1 , globals::class_inst_delimiter ) );
 	      if ( toks.size() != 2 ) Helper::halt( "bad format for class/inst pairing: " + aname ); 
-	      
+
 	      // update class ID now; update meta-data (if needed) below
 	      // any exclusions are based on that / also any meta-data look up 
 	      aname = toks[0];
@@ -922,7 +933,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // a vanilla annot (i.e. same as '# annot' in header row, so implies no 
 	  // meta-data
 	  //
-	  
+
 	  std::map<std::string,annot_t*>::iterator aa = annot_map.find( aname );
 	  
 	  if ( aa == annot_map.end() ) 
@@ -932,7 +943,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	      std::map<std::string,annot_t*>::iterator oo = annot_map.find( cls_root );
 	      const bool has_original = oo != annot_map.end();
-	      
+
 	      // make a new annot_t class
 	      annot_t * a = parent_edf.timeline.annotations.add( aname );
 	      
@@ -1130,7 +1141,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // for a FLAG for this annotation (with same name as primary annotaton)
 	  //
-		  
+
 	  instance_t * instance = a->add( id , interval , ch );
 
 	  
@@ -2240,9 +2251,15 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       if ( a == NULL ) Helper::halt( "internal error in loadxml()");
 
-      const std::string sigstr = signal != NULL ? signal->value : ( channel != NULL ? channel->value : "." ) ; 
+      std::string sigstr = signal != NULL ? signal->value : ( channel != NULL ? channel->value : "." ) ; 
+
+      // swap spaces from sigstr (channel label)?
+      if ( globals::replace_channel_spaces )
+	sigstr = Helper::search_replace( sigstr , ' ' , globals::space_replacement );
       
-      instance_t * instance = a->add( concept->value , interval , sigstr );
+      //instance_t * instance = a->add( concept->value , interval , sigstr );
+      // class name is <ConceptValue> tag, so make instance ID null
+      instance_t * instance = a->add( "."  , interval , sigstr );
       
       // any notes?  set as TXT, otherwise it will be listed as a FLAG
       if ( notes ) 
@@ -3936,10 +3953,10 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       if ( interval.start == interval.stop ) ++interval.stop;
 
       //
-      // Create the instance
+      // Create the instance; only add the instance ID/Name if it is different from the class ID
       //
-      
-      instance_t * instance = a->add( name ? name->value : "." , 
+    
+      instance_t * instance = a->add( name ? ( name->value != cls_name ? name->value : "." ) : "." , 
 				      interval ,
 				      channel ? channel->value : "." );
 
@@ -4149,7 +4166,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 
 		      // trim, and remap (also by default swap spaces)
 		      std::string inst_name = nsrr_t::remap( Helper::trim( te.name ) );
-
+		    
 		      if ( inst_name != "" )
 			{
 			  instance_t * instance = a->add( inst_name , interval , "." );

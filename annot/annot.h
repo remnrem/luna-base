@@ -188,7 +188,8 @@ struct annot_t
   
   uint64_t maximum_tp() const;
 
-
+  bool empty( ) const { return all_instances.size() == 0 ; } 
+  
   //
   // main output function: return pointers to all annotations in a given window
   //
@@ -797,6 +798,25 @@ struct annotation_set_t
 	annots.erase( ii ); 
       }
   }
+
+  void clean()
+  {
+    // remove empty annot classes, i.e. no instances
+    // this cleans up namespace post annotation, esp if remapping, etc
+
+    std::map<std::string,annot_t*> acopy = annots;
+    annots.clear();
+
+    std::map<std::string,annot_t*>::const_iterator ii = acopy.begin();
+    while ( ii != annots.end() )
+      {
+	annot_t * a = ii->second;
+	if ( ! a->empty() ) annots[ ii->first ] = ii->second;
+	else delete ii->second;	
+	++ii;
+      }
+  }
+  
   
   std::vector<std::string> names() const 
   {

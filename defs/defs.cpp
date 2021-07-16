@@ -44,7 +44,7 @@ cmddefs_t globals::cmddefs;
 
 std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
-bool globals::allow_space_delim = true;
+bool globals::allow_space_delim = false;
 char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = '/';
@@ -890,7 +890,7 @@ void globals::init_channel_types()
   add_channel_map( "HR" , HR );
   add_channel_map_exact( "HRate" , HR );
   add_channel_map( "PULSE" , HR );
-  add_channel_map( "PR" , HR );
+  add_channel_map_exact( "PR" , HR );
       
   // POSITION
   add_channel_map( "POS" , POSITION );

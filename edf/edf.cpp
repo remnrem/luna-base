@@ -226,7 +226,8 @@ std::string edf_header_t::summary() const
       if ( is_annotation_channel( s ) ) 
 	ss << "\tannotation channel\n";
       else
-	ss << "\t# samples per record : " << n_samples[s] << "\n"	
+	ss << "\tsampling rate        : " << n_samples[s] / (double)record_duration << " Hz\n"
+	   << "\t# samples per record : " << n_samples[s] << "\n"	
 	   << "\ttransducer type      : " << transducer_type[s] << "\n"
 	   << "\tphysical dimension   : " << phys_dimension[s] << "\n"
 	   << "\tmin/max (phys)       : " << physical_min[s] << "/" << physical_max[s] << "\n"
@@ -3675,7 +3676,11 @@ void edf_t::set_continuous()
 {
   if ( ! header.edfplus ) return;
   header.continuous = true;
-  header.reserved[4] = 'C';    
+  header.reserved[0] = 'E';
+  header.reserved[1] = 'D';
+  header.reserved[2] = 'F';
+  header.reserved[3] = '+';
+  header.reserved[4] = 'C';
 
 }
 
@@ -3683,22 +3688,20 @@ void edf_t::set_discontinuous()
 {
   if ( ! header.edfplus ) return;
   header.continuous = false;
-  header.reserved[4] = 'D';    
+  header.reserved[0] = 'E';
+  header.reserved[1] = 'D';
+  header.reserved[2] = 'F';
+  header.reserved[3] = '+';
+  header.reserved[4] = 'D';
 }
 
 
 void edf_t::set_edfplus()
 {
-
   if ( header.edfplus ) return;
   header.edfplus = true;
-  header.continuous = true;  
-  header.reserved[0] = 'E'; 
-  header.reserved[1] = 'D';
-  header.reserved[2] = 'F';
-  header.reserved[3] = '+';
-  
-  set_continuous();
+  header.continuous = true;    
+  set_continuous(); // this sets reversed field EDF+C
   add_continuous_time_track();
 }
 
@@ -3711,6 +3714,7 @@ void edf_t::set_edf()
   header.reserved[1] = ' ';
   header.reserved[2] = ' ';
   header.reserved[3] = ' ';
+  header.reserved[4] = ' ';
 
   set_continuous(); 
   drop_time_track();

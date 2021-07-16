@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -1285,8 +1286,13 @@ void process_edfs( cmd_t & cmd )
 	  // allow '.' missing value for annots?
 
 	  if ( tok.size() == 3 && tok[2] == "." ) tok.resize(2);
-	    
+
+	  // ignore SL annots?
+
+	  if ( globals::skip_sl_annots ) tok.resize(2);
+	  
 	  // allow annot field to be comma delimited? expand out here
+
 	  if ( tok.size() == 3 )
 	    {
 	      std::vector<std::string> annot_fields = Helper::parse( tok[2] , globals::file_list_delimiter );
@@ -1538,6 +1544,7 @@ void process_edfs( cmd_t & cmd )
 		}
 	      else
 		{
+
 		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
 		  // i.e. skip .sedf files that might also be specified as 
 		  // attached to this EDF
