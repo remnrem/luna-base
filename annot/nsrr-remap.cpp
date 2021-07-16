@@ -180,8 +180,8 @@ void nsrr_t::annot_remapping( const std::string & s )
 void nsrr_t::add( const std::string & p , const std::string & a )
 {
   // swap spaces for another char?
-  const std::string p2 = globals::replace_annot_spaces ? Helper::search_replace( p2 , ' ' , globals::space_replacement ) : p;
-  const std::string a2 = globals::replace_annot_spaces ? Helper::search_replace( a2 , ' ' , globals::space_replacement ) : a;
+  const std::string p2 = globals::replace_annot_spaces ? Helper::search_replace( p , ' ' , globals::space_replacement ) : p;
+  const std::string a2 = globals::replace_annot_spaces ? Helper::search_replace( a , ' ' , globals::space_replacement ) : a;
 
   amap[ Helper::toupper( a2 ) ] = p2;
   bmap[ Helper::toupper( p2 ) ].push_back( Helper::toupper( a2 ) );
