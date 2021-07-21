@@ -50,6 +50,8 @@ bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = '/';
 char globals::annot_keyval_delim = '=' ; 
 
+std::set<std::string> globals::annot_alignment;
+
 int globals::time_format_dp;
 
 bool globals::read_ftr;
@@ -242,7 +244,13 @@ void globals::init_defs()
    
   space_replacement = '_';
 
+  //
+  // Which annots, if any, should be aligned to the starts of EDF records?
+  //
+    
+  annot_alignment.clear();
 
+  
   //
   // Requested to load specific annotations only?
   //
@@ -776,6 +784,33 @@ void globals::init_channel_types()
   add_channel_map( "OFF" , IGNORE );
   add_channel_map( "STATUS" , IGNORE );
 
+  // canonical/base signals
+
+  add_channel_map_exact( "csEEG" , EEG );
+  add_channel_map_exact( "csC3" , EEG );
+  add_channel_map_exact( "csC4" , EEG );
+  add_channel_map_exact( "csF3" , EEG );
+  add_channel_map_exact( "csF4" , EEG );
+  add_channel_map_exact( "csO1" , EEG );
+  add_channel_map_exact( "csO2" , EEG );
+  
+  add_channel_map_exact( "csEOG" , EOG );
+  add_channel_map_exact( "csLOC" , EOG );
+  add_channel_map_exact( "csROC" , EOG );
+
+  add_channel_map_exact( "csEMG" , EMG );
+
+  add_channel_map_exact( "csECG" , ECG );
+
+  add_channel_map_exact( "csCAN" , AIRFLOW );
+  add_channel_map_exact( "csTRM" , AIRFLOW );
+
+  add_channel_map_exact( "csTHX" , EFFORT );
+  add_channel_map_exact( "csABD" , EFFORT );
+
+  add_channel_map_exact( "csOXY" , OXYGEN );
+    
+  
   // EEG --- full 64-EEG montage labels to be added in too
   add_channel_map( "EEG" , EEG );
   add_channel_map( "C3" , EEG );
@@ -843,7 +878,7 @@ void globals::init_channel_types()
   add_channel_map_exact( "A1" , REF );
   add_channel_map_exact( "M2" , REF );
   add_channel_map_exact( "A2" , REF );
-
+  
   // IC
   add_channel_map( "IC_" , IC );
 

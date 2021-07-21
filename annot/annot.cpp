@@ -642,8 +642,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
   // if second time-point is '...' this means go until the next annot (or end of EDF)
   // (note: a single '.' can be a missing variable)
-  
-  
+
+  // align certain epochs to the start of each second (on the assumption that
+  // EDF record size == 1 seconds;   i.e. this is to shift staging annotations forward by <1 sec
+  // to get an aligned EDF;  we can then trim unstaged/unepoched data at the end of the recordig
+
+  const bool align_annots = globals::annot_alignment.size() > 0 ;
+    
   // check EDF starttime, which might be needed
   
   clocktime_t starttime( parent_edf.header.starttime );
@@ -1065,7 +1070,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  interval_t interval = get_interval( line , tok ,
 					      &ch , 
 					      &readon , 
-					      parent_edf , a , starttime , f );
+					      parent_edf , a , starttime , f ,
+					      align_annots );
 	  
 	  //
 	  // Check this isn't prior to EDF start, i.e. can happen
@@ -1114,7 +1120,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  interval_t ninterval = get_interval( line , ntok ,
 						       &nch, 
 						       &dummy, 
-						       parent_edf , NULL , starttime , f );
+						       parent_edf , NULL , starttime , f ,
+						       align_annots );
 		  
 		  
 		  // Check for valid ordering: i.e. start of next cannot be before start of prior
@@ -1324,7 +1331,8 @@ interval_t annot_t::get_interval( const std::string & line ,
 				  const edf_t & parent_edf , 
 				  annot_t * a ,
 				  const clocktime_t & starttime , 
-				  const std::string & f
+				  const std::string & f ,
+				  const bool align_annots 
 				  )
 {
 
@@ -1347,12 +1355,12 @@ interval_t annot_t::get_interval( const std::string & line ,
   if ( eline2 && ! eline ) 
     Helper::halt( "not a valid epoch row if only second field has e:N encoding");
   
-  // if the second timepoint is '...' then this will be set to true
+  // if the second timepoint is '...' or '-' then this will be set to true
   // i.e. indicating that we need to look at the next record in order to
   // figure out the end of this annotation
   
-  *readon = tok[4] == "..." ;
-
+  *readon = tok[4] == "..." || tok[4] == "-";
+  
   //
   // Get channel label
   //
@@ -1585,6 +1593,19 @@ interval_t annot_t::get_interval( const std::string & line ,
       
       if ( ( !*readon ) && dbl_stop < 0 )
 	Helper::halt( f + " contains row(s) with negative time points" ) ;
+
+      // annot(epoch)/record alignment (to the leftmost second)
+      // i.e. to handle staging annots that start at a fractional second onset
+
+      if ( align_annots )
+	{
+	  // shift backwards to start of second
+	  if ( globals::annot_alignment.find( a->name ) !=  globals::annot_alignment.end() )
+	    {
+	      dbl_start = floor( dbl_start );
+	      dbl_stop = floor( dbl_stop );
+	    }	       
+	}
       
       // convert to uint64_t time-point units
       

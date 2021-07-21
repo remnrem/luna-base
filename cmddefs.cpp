@@ -456,7 +456,7 @@ void cmddefs_t::init()
   add_url( "DUMP-MASK" , "masks/#dump-mask" );
 
   add_table( "DUMP-MASK" , "E" , "Epoch-level mask tabulation" );
-  add_var( "EPOCH" , "E" , "EMASK" , "Mask status: 0 is unmasked (included), and 1 is masked (i.e. excluded)" );
+  add_var( "DUMP-MASK" , "E" , "EMASK" , "Mask status: 0=unmasked (included), 1=masked (excluded)" );
  
 
   // RE (or RESTRUCTURE)
@@ -495,6 +495,15 @@ void cmddefs_t::init()
   add_param( "CHEP" , "save" , "file.txt" , "Write CHEP mask to file.txt" );
 
   // CHEP output....  
+  add_table( "CHEP" , "CH" , "CHEP mask channel-wise summaries" );
+  add_var( "CHEP" , "CH" , "CHEP" , "Masked epochs" );
+
+  add_table( "CHEP" , "E" , "CHEP mask epoch-wise summaries" );
+  add_var( "CHEP" , "E" , "CHEP" , "Masked channels" );
+
+  add_table( "CHEP" , "CH,E" , "CHEP mask" );
+  add_var( "CHEP" , "CH,E" , "CHEP" , "CHannel/EPoch mask" );
+  
   
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -581,6 +590,14 @@ void cmddefs_t::init()
   add_param( "RECORD-SIZE" , "edf-tag" , "rec1" , "Tag added to new EDFs" );
   add_param( "RECORD-SIZE" , "sample-list" , "s2.lst" , "Generate a sample-list pointing to the new EDFs" );
 
+  add_table( "RECORD-SIZE" , "" , "Restructured data duration" );
+  add_var( "RECORD-SIZE", "" , "NR1" , "Pre-restructure number of records" );
+  add_var( "RECORD-SIZE", "" , "NR2" , "Post-restructure number of records" );
+  add_var( "RECORD-SIZE", "" , "DUR1" , "Pre-restructure duration (seconds)" );
+  add_var( "RECORD-SIZE", "" , "DUR2" , "Post-restructure duration (seconds)" );
+
+  
+  
   // ANON
 
   add_cmd( "manip" , "ANON" , "Strips EDF ID and and Start Date headers" );
@@ -606,7 +623,8 @@ void cmddefs_t::init()
   add_var( "WRITE", "" , "NR2" , "Post-restructure number of records" );
   add_var( "WRITE", "" , "DUR1" , "Pre-restructure duration (seconds)" );
   add_var( "WRITE", "" , "DUR2" , "Post-restructure duration (seconds)" );
-    
+
+
   // MATRIX
 
   add_cmd( "output" , "MATRIX" , "Dumps signal information to a file" );

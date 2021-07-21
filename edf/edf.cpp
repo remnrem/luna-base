@@ -2175,6 +2175,16 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
     }
 
   //
+  // if no variation set arbitrary pmin / pmax 
+  //
+  
+  if ( fabs( pmin - pmax ) <= 1e-6 )
+    {
+      pmin -= 1.0;
+      pmax += 1.0;
+    }
+  
+  //
   // determine bitvalue and offset
   //
   
@@ -3140,10 +3150,11 @@ bool edf_t::restructure()
   
   if ( ! timeline.is_epoch_mask_set() ) 
     {
+      logger << "  no epoch mask set, no restructuring needed\n";
       
       writer.value( "NR1" , header.nr );
       writer.value( "NR2" , header.nr );
-
+      
       writer.value( "DUR1" , header.nr * header.record_duration );
       writer.value( "DUR2" , header.nr * header.record_duration );
 
@@ -3308,6 +3319,7 @@ bool edf_t::restructure()
   return true;
 
 }
+
 
 
 void edf_t::update_physical_minmax( const int s )
@@ -4667,7 +4679,7 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
   
   for (int f = 0 ; f < files.size() ; f++ )
     {
-      
+
       std::string file = Helper::expand( files[f] );
       
       if ( ! Helper::fileExists( file ) )
@@ -4838,8 +4850,8 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 	  // track that we are using these channels
 	  //
 	  
-	  used.insert( sigstr );
-	  used.insert( refstr );
+	  used.insert( Helper::toupper( sigstr ) );
+	  used.insert( Helper::toupper( refstr ) );
 
 	  //
 	  // Track that the original should not be dropped, as it features
@@ -4988,7 +5000,7 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 	      // report output
 	      writer.level( label , globals::signal_strat );	      
 	      writer.value( "DROPPED" , 1 );	      	      
-	      writer.value( "USED" , used.find( label ) != used.end() ? 1 : 0 ) ; 
+	      writer.value( "USED" , used.find( Helper::toupper( label ) ) != used.end() ? 1 : 0 ) ; 
 	      
 	    }
 	  writer.unlevel( globals::signal_strat ); 

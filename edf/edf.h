@@ -638,6 +638,7 @@ public:
   
   bool restructure();
 
+  
   //
   // extract and realign samples based on a set of annotations
   //

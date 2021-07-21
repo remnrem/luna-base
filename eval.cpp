@@ -3486,6 +3486,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::annot_keyval_delim = tok1[0];
       return;
     }
+
+  // annotation alignment
+  if ( Helper::iequals( tok0 , "align-annots" ) )
+    {
+      globals::annot_alignment = Helper::vec2set( Helper::parse( tok1 , "," ) ) ;
+      return;
+    }
+
   
   // signal alias?
   if ( Helper::iequals( tok0 , "alias" ) )
@@ -3529,7 +3537,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::skip_edf_annots = globals::skip_nonedf_annots = Helper::yesno( tok1 );
       return;
     }
-
+  
   // do not read FTR files 
   if ( Helper::iequals( tok0 , "ftr" ) )
     {

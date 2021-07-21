@@ -205,6 +205,14 @@ namespace Helper
     return (T(0) < val) - (val < T(0));
   }
 
+  // vector --> string
+  template <class T> std::set<T> vec2set( const std::vector<T> & x )
+  {
+    std::set<T> s;
+    for (int i=0; i<x.size(); i++) s.insert(x[i]);
+    return s;
+  }
+
   std::vector<std::string> parse(const std::string & item, const std::string & s = " \t\n" , bool empty = false );
   std::vector<std::string> parse(const std::string & item, const char s , bool empty = false );
   

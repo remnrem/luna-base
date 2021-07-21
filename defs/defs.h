@@ -158,6 +158,8 @@ struct globals
   static bool assume_pm_starttime;
   static int assume_pm_starttime_hour;
   
+  static std::set<std::string> annot_alignment;
+
   static bool force_edf;
   static bool skip_edf_annots;
   static bool skip_nonedf_annots;

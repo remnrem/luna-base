@@ -383,7 +383,7 @@ int main(int argc , char ** argv )
 		    {
 		      
 		      std::string line;
-		      
+
 		      //std::getline( INC , line);		  
 		      Helper::safe_getline( INC , line );
 		      
@@ -391,7 +391,7 @@ int main(int argc , char ** argv )
 		      
 		      // skip % comments
 		      if ( line[0] == '%' ) continue;
-
+		      
 		      // is this an include/exclude section
 		      // +group  include only if matches group, otherwise skip
 		      // -group  exclude if matches group, otherwise parse
@@ -410,11 +410,17 @@ int main(int argc , char ** argv )
 			  bool has_grp =
 			    cmd_t::vars.find( grp ) != cmd_t::vars.end() ?
 			    Helper::yesno( cmd_t::vars[ grp ] ) : false ;
+
 			  if ( line[0] == '-' &&   has_grp ) parse_line = ! parse_line;
 			  if ( line[0] == '+' && ! has_grp ) parse_line = ! parse_line;
 
 			  // skip to next line now
 			  continue;
+			}
+		      else
+			{
+			  // if not a control line +grp or -grp, and if we are not parsing, then skip
+			  if ( ! parse_line ) continue;
 			}
 		      
 		      
