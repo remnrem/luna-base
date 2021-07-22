@@ -2663,7 +2663,6 @@ void characterize_spindles( edf_t & edf ,
 	  // old CHIRP definition: log scaled ratio
 	  spindle->chirp = log( ( int1/(double)cint1 )  / (int2/(double)cint2  )  );
 	  
-	  std::cout << "   chirp = " << f1 << " " << f2 << " " << spindle->chirp_fdif << " " << spindle->chirp << "\n";
 	}
 
 
