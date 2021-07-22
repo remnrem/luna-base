@@ -2524,7 +2524,8 @@ void characterize_spindles( edf_t & edf ,
 
       for (int z=0; z<zc.size()-1; z++)
 	{
-	  double w = zc[z+1] - zc[z];
+	  // transform to frequency 1/SW
+	  double w = 1.0 / ( 2 * ( zc[z+1] - zc[z] ) );
 	  double t = ( zc[z] + zc[z+1] ) / 2.0;
 	  
 	  // neg-halfwave
@@ -2550,15 +2551,12 @@ void characterize_spindles( edf_t & edf ,
       spindle->posf /= (double)posc;
       spindle->negf /= (double)negc;
 
-      // get in seconds;
-      spindle->posf /= (double)posc;
-      spindle->negf /= (double)negc;
 
       //
       // Slope of frequency implied by ZC / stratified by POS and NEG halfwaves
       //
 
-      // Y = duration of halfwave
+      // Y = frequencxy implied by halfwave
       // X = time midpoint of bounding ZC (elapsed seconds from spindle start)
       dynam_t zall( wall , tall ); 
       dynam_t zpos( wpos , tpos ); 
@@ -2946,6 +2944,8 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        writer.value( "SYMM2"  , spindle->symm2    );
        writer.value( "ISA"    , spindle->isa      );
 
+
+	 
        if ( globals::devel )
 	 {
 	   writer.value( "FPOS"    , spindle->posf      );
