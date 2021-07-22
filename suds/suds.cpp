@@ -5196,7 +5196,7 @@ void suds_t::read_elapsed_stages( const std::string & f )
   // alraady attached?
   if ( ES_probs.rows() != 0 ) return;
 
-  // expecting format: PP(N1) PP(N2) PP(N3) PP(R) PP(W)
+  // expecting format: ES PP(N1) PP(N2) PP(N3) PP(R) PP(W)
   // where ES is the prior number of elapsed sleep epochs before this one (minutes)
   // and the probabilities are based on the average in this range (i.e. up to the next ES)
 
