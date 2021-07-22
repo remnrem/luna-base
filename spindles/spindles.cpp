@@ -1939,19 +1939,24 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "SYMM" , means["SYMM"] );
 	      writer.value( "SYMM2" , means["SYMM2"] );
 	      writer.value( "CHIRP" , means["CHIRP"] );
+	      writer.value( "CHIRPF" , means["CHIRPF"] );
+
 	      if ( globals::devel )
 		{
-		  writer.value( "FPOS" , means["FPOS"] );
-		  writer.value( "FNEG" , means["FNEG"] );
-		  writer.value( "FALL" , means["FALL"] ); // should equal FRQ
+		  writer.value( "F_POS" , means["FPOS"] );
+		  writer.value( "F_NEG" , means["FNEG"] );
+		  writer.value( "F_ALL" , means["FALL"] );
+		  writer.value( "F_DIF" , means["FPOS"] - means["FNEG"] ); 
 
-		  writer.value( "BPOS" , means["BPOS"] );
-		  writer.value( "BNEG" , means["BNEG"] );
-		  writer.value( "BALL" , means["BALL"] );
-		  
-		  writer.value( "VPOS" , means["VPOS"] );
-		  writer.value( "VNEG" , means["VNEG"] );
-		  writer.value( "VALL" , means["VALL"] );
+		  writer.value( "B_POS" , means["BPOS"] );
+		  writer.value( "B_NEG" , means["BNEG"] );
+		  writer.value( "B_ALL" , means["BALL"] );
+		  writer.value( "B_DIF" , means["BPOS"] - means["BNEG"] ); 		  
+
+		  writer.value( "V_POS" , means["VPOS"] );
+		  writer.value( "V_NEG" , means["VNEG"] );
+		  writer.value( "V_ALL" , means["VALL"] );
+		  writer.value( "V_DIF" , means["VPOS"] - means["VNEG"]  );
 		}
 	      
 	      // cache main metrics also?
@@ -2361,13 +2366,15 @@ void characterize_spindles( edf_t & edf ,
        
        const int Fs = edf.header.sampling_freq( s );
        
-       const uint64_t period = 1.0/(double)Fs * globals::tp_1sec;
-       
+       const double period_sec = 1.0/(double)Fs;
+
+       const uint64_t period = period_sec * globals::tp_1sec;
+
        const int npoints = d.size();
        
       
        //
-       // ISA
+       // ISA (scale by SR)
        //
        
        spindle->isa = 0;
@@ -2381,8 +2388,10 @@ void characterize_spindles( edf_t & edf ,
 	  for (int s=start;s<=stop;s++)
 	    spindle->isa += (*averaged)[s] ;
 	 }
+       
+       spindle->isa /= (double)Fs;
 
-
+       
        //
        // Sanity check
        //
@@ -2436,7 +2445,7 @@ void characterize_spindles( edf_t & edf ,
 	      if ( (*averaged)[upr] <= half ) break;
 	      ++upr;
 	    }
-
+	  
 	  // *assumes* a contiguous segment... could be problematic 
 	  spindle->fwhm = (1.0/(double)Fs) * ( upr - lwr + 1 );
 	  
@@ -2535,8 +2544,6 @@ void characterize_spindles( edf_t & edf ,
       std::vector<double> zc;  // duration of i to i+1 zero-crossing (i.e. half-waves)
       std::vector<bool> zcp;   // T : pos-neg; F : neg-pos
 
-      const double period_sec = 1.0/(double)Fs; 
-
       for (int p=0;p<npoints-1;p++)
         {
 	  const bool pos2neg = d[p] >= 0 && d[p+1] < 0 ;
@@ -2612,14 +2619,13 @@ void characterize_spindles( edf_t & edf ,
 
       
       //
-      // Simple spindle 'chirp' metrics, based on contrast of first
-      // half to second half of the spindle the signal
+      // Simple spindle 'chirp' metrics
+      //  - contrast of first vs second half of spindle
+      //  - based on peak-to-peak durations (both pos + neg, so F = 1/2T)
       //
       
-      int half1 = 0 , half2 = 0;    // number of peaks in first/second half
-
       double int1 = 0 , int2 = 0;   // mean duration (in sample-points) peaks within each half
-      int   cint1 = 0 , cint2 = 0;  // number of peak-to-peak intervals in each half
+      int   cint1 = 0 , cint2 = 0;  // number of peak-to-peak intervals in each half (pos-neg and neg-pos)
       
       for (int pi = 0 ; pi < peak.size() ; pi++)
 	{
@@ -2627,35 +2633,38 @@ void characterize_spindles( edf_t & edf ,
 	  double pos = peak[pi] / (double)(npoints-1);
 	  if ( pos < 0.5 ) 
 	    { 
-	      ++half1; 
 	      if ( pi > 0 ) { int1 += peak[pi] - peak[pi-1]; cint1++; } 
 	    }
 	  else if ( pos > 0.5 ) 
 	    {
-	      ++half2;
 	      if ( pi < peak.size() -1 ) { int2 += peak[pi+1] - peak[pi]; cint2++; } 
 	    }
 	}
       
       
-
-      // assume we will always have at least 1 peak in each halve, but
+      // assume we will always have at least 2 peaks in each half
+      // i.e. this was a detected spindle, but just in case...
       // just in case give a invalid code
-      
 
-      // first chirp metric (based on number of peaks)
-      double chirp = half1 == 0 || half2 == 0 
-	? -99999 
-	: log( half2 / (double)half1 );
+      spindle->chirp      = -99999;
+      spindle->chirp_fdif = -99999;
       
-      // second (preferred) chirp metric (based on mean peak-to-peak intervals)
-      // reverse order, i.e. faster means smaller intervals
-      double chirp2 = cint1 > 0 && cint2 > 0 
-	? log( ( int1/(double)cint1 )  / (int2/(double)cint2  )  ) 
-	: -99999 ;
+      bool valid_chirp = cint1 > 1 && cint2 > 1 ; 
 
-      // use second defintion only
-      spindle->chirp = chirp2;
+      if ( valid_chirp )
+	{
+	  // go mean from peak-to-peak duration in sample points, to implied frequency, Hz
+	  double f1 = 1.0 / ( 2 * ( period_sec * int1/(double)cint1 ) );
+	  double f2 = 1.0 / ( 2 * ( period_sec * int2/(double)cint2 ) );
+
+	  // +ve means getting faster: absolute diffference (Hz)
+	  spindle->chirp_fdif = f2 - f1 ; 
+	  
+	  // old CHIRP definition: log scaled ratio
+	  spindle->chirp = log( ( int1/(double)cint1 )  / (int2/(double)cint2  )  );
+	  
+	  std::cout << "   chirp = " << f1 << " " << f2 << " " << spindle->chirp_fdif << " " << spindle->chirp << "\n";
+	}
 
 
       //
@@ -2988,22 +2997,29 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	 
        if ( globals::devel )
 	 {
-	   writer.value( "FPOS"    , spindle->posf      );
-	   writer.value( "FNEG"    , spindle->negf      );
-	   writer.value( "FALL"    , spindle->allf      );
+	   writer.value( "F_POS"    , spindle->posf      );
+	   writer.value( "F_NEG"    , spindle->negf      );
+	   writer.value( "F_ALL"    , spindle->allf      );
+	   writer.value( "F_DIF"    , spindle->posf - spindle->negf );
 
-	   writer.value( "BPOS"    , spindle->posb      );
-	   writer.value( "BNEG"    , spindle->negb      );
-	   writer.value( "BALL"    , spindle->allb      );
+	   writer.value( "B_POS"    , spindle->posb      );
+	   writer.value( "B_NEG"    , spindle->negb      );
+	   writer.value( "B_ALL"    , spindle->allb      );
+	   writer.value( "B_DIF"    , spindle->posb - spindle->negb );
 
-	   writer.value( "VPOS"    , spindle->posv      );
-	   writer.value( "VNEG"    , spindle->negv      );
-	   writer.value( "VALL"    , spindle->allv      );
+	   writer.value( "V_POS"    , spindle->posv      );
+	   writer.value( "V_NEG"    , spindle->negv      );
+	   writer.value( "V_ALL"    , spindle->allv      );
+	   writer.value( "V_DIF"    , spindle->posv - spindle->negv );
+	   
 	 }
        
        if ( spindle->chirp > -99998 ) 
 	 writer.value( "CHIRP"  , spindle->chirp );
-       
+
+       if ( spindle->chirp_fdif > -99998 ) 
+	 writer.value( "CHIRPF"  , spindle->chirp_fdif );
+	      
        writer.value( "MAXSTAT" , spindle->max_stat );
        writer.value( "MEANSTAT" , spindle->mean_stat );
        
@@ -3126,7 +3142,7 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 {
 
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , symm = 0 , 
-    symm2 = 0, trend = 0 , abstrend = 0 , chirp = 0 , isa = 0 , qual = 0 ;
+    symm2 = 0, chirp = 0 , chirp_fdif = 0 , isa = 0 , qual = 0 ;
 
   double negf = 0 , posf = 0 , allf = 0;
   double negb = 0 , posb = 0 , allb = 0;
@@ -3153,15 +3169,14 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       fft += ii->fft;
       symm += ii->symm;
       symm2 += ii->symm2;
-      trend += ii->trend;
-      abstrend += ii->abstrend;
 
       chirp += ii->chirp;
+      chirp_fdif += ii->chirp_fdif;
 
       negf += ii->negf;
       posf += ii->posf;
       allf += ii->allf;
-
+      
       negb += ii->negb;
       posb += ii->posb;
       allb += ii->allb;
@@ -3194,9 +3209,9 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   results[ "FFT" ]      = fft / (double)denom;
   results[ "SYMM" ]     = symm / (double)denom;
   results[ "SYMM2" ]    = symm2 / (double)denom;
-//   results[ "TREND" ]    = trend / (double)denom;
-//   results[ "ABSTREND" ] = abstrend / (double)denom;
+
   results[ "CHIRP" ]    = chirp / (double)denom;
+  results[ "CHIRPF" ]    = chirp_fdif / (double)denom;
 
   results[ "FNEG" ]    = negf / (double)denom;
   results[ "FPOS" ]    = posf / (double)denom;
