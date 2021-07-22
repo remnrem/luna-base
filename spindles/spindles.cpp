@@ -188,7 +188,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   // intra-spindle frequency changes via HT
   const bool     ht_chirp                 = param.has( "if" );
-  const double   ht_chirp_frq             = param.has( "if-frq" ) ? param.requires_dbl( "if-frq" ) : 2.0 ;
+  
+  const double   ht_chirp_frq             = param.has( "if-frq" ) ? param.requires_dbl( "if-frq" ) : 2.0;
+  const double   ht_chirp_frq2            = param.has( "if-frq2" ) ? param.requires_dbl( "if-frq2" ) : 0 ;
+  const double   ht_chirp_frq_emp         = param.has( "if-frq-emp" ) ? param.requires_dbl( "if-frq-emp" ) : 0 ;
+
   const int      ht_bins                  = 5; // divide spindle interval into 'n' equal size bins
   const bool     ht_verbose               = param.has( "verbose-if" );
   
@@ -1101,11 +1105,24 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      
 	    }
-	  
+
+
+	  //
+	  // Get mean spindle parameters for this channel/frequency 
+	  //
 	  	  
 	  if ( characterize ) 
 	    spindle_stats( spindles , means );
 	  
+	  //
+	  // If we're doing CHIRP analyses, get the mean observed spindle frequency (which we will
+	  // use of the basis for the filter-Hilbert characterisation of IF (note, this itself is still
+	  // based on some BPF around the target frequency, but not too narrow
+	  //
+	  
+	  double observed_frq = means["FRQ"];
+	  
+	  logger << "  observed spindle frequency is " << observed_frq << "\n";
 
 
 	  //
@@ -1145,11 +1162,19 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // then filter IF on F-2H and F+2H...
 		
 	      // default BPF window is +/- 2Hz 
+	      // 'or' if if-frq2 is set, then use window if-frq .. if-frq2
+	      // 'or' if if-frq-emp=X then use observed spindle freq +/- X
+
 	      // set a broad transition widwth 
-	      double ripple = 0.01;
-	      double tw = 4; 
-  
-	      p_chirp_hilbert = new hilbert_t( *d , Fs[s] , frq[fi] - ht_chirp_frq  , frq[fi] + ht_chirp_frq , ripple , tw );
+	      double ripple = 0.02;
+	      double tw = 2; 
+	      
+	      if ( ht_chirp_frq_emp > 0 ) 
+		p_chirp_hilbert = new hilbert_t( *d , Fs[s] , observed_frq - ht_chirp_frq_emp  , observed_frq + ht_chirp_frq_emp , ripple , tw );
+	      else if ( ht_chirp_frq2 > 0 ) 
+		p_chirp_hilbert = new hilbert_t( *d , Fs[s] , ht_chirp_frq  , ht_chirp_frq2 , ripple , tw );
+	      else
+		p_chirp_hilbert = new hilbert_t( *d , Fs[s] , frq[fi] - ht_chirp_frq  , frq[fi] + ht_chirp_frq , ripple , tw );
 	      
 	      p_chirp_if = new std::vector<double>;
 	      *p_chirp_if = p_chirp_hilbert->instantaneous_frequency( Fs[s] );
@@ -1164,7 +1189,20 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      double ht_lwr =  frq[fi] - 2 * ht_chirp_frq;
 	      double ht_upr =  frq[fi] + 2 * ht_chirp_frq;
-
+	      
+	      // or use empirical? (add 1 Hz window around here)
+	      if ( ht_chirp_frq_emp > 0 ) 
+		{
+		  ht_lwr = observed_frq - ht_chirp_frq_emp - 1;
+                  ht_upr = observed_frq + ht_chirp_frq_emp + 1;
+		}
+	      // or swap in a fixed band?
+	      else if ( ht_chirp_frq2 > 0 ) 
+		{
+		  ht_lwr = ht_chirp_frq;
+		  ht_upr = ht_chirp_frq2;
+		}
+	      
 	      for (int i=0;i<nspindles;i++)
 		{
 		  int b0 = spindles[i].start_sp;
@@ -1259,6 +1297,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		}
               cache->add( ckey_t( "points" , writer.faclvl() ) , peaks );
 	    }
+
 	  
 	  //
 	  // Optional slow-wave coupling?
@@ -1590,25 +1629,26 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 		  std::vector<double> pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_spindle );
 	      	      	      	      
-		  writer.var( "SOPL_CHIRP" , "Slow wave phase-locked average spindle frequency/chirp" );
-	      
 		  double inc = 360 / (double)nbins;
 		  double ph = inc/2.0; // use mid-point of range
 		  
 		  for (int j=0;j<nbins;j++)
 		    {
 		      writer.level( ph  , "PHASE" );
-		      writer.value( "SOPL_CHIRP" , pl_chirp[j] );
+		      writer.value( "IF" , pl_chirp[j] );
 		      ph += inc;
 		    }
 		  writer.unlevel( "PHASE" );
 		  
+		  // time-locked SO spindle IF -- code not used -- phase-locked analysis above should 
+		  // be sufficient
+
 		  if ( 0 ) 
 		    {
 		      // +1/-1 1 second
 		      std::vector<double> tl_chirp = p_sw->time_locked_averaging( p_chirp_if , Fs[s] , 1 , 1 );
 		      
-		      writer.var( "SOTL_CHIRP" , "Slow wave time-locked average spindle frequency/chirp" );
+		      //		      writer.var( "IF" , "Slow wave time-locked average spindle frequency/chirp" );
 		      
 		      int sz = tl_chirp.size();
 		      if ( sz > 0 ) 
@@ -1618,7 +1658,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			  for (int j=0;j<sz;j++)
 			    {
 			      writer.level( sz2 , "SP" );
-			      writer.value( "SOTL_CHIRP" , tl_chirp[j] );
+			      writer.value( "IF" , tl_chirp[j] );
 			      ++sz2;
 			    }
 			  writer.unlevel( "SP" );
@@ -1652,7 +1692,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      for (int j=0;j<nbins;j++)
 			{
 			  writer.level( ph  , "PHASE" );
-			  writer.value( "SOPL_CHIRP" , pl_chirp[j] );
+			  writer.value( "IF" , pl_chirp[j] );
 			  ph += inc;
 			}
 		      writer.unlevel( "PHASE" );
