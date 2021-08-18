@@ -870,9 +870,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       else 
 	{
 	  
-	  // data-rows are tab-delimited
+	  // data-rows are tab-delimited typically, but optionally allow spaces; also allow these to be quoted
 	  
-	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
+	  std::vector<std::string> tok = globals::allow_space_delim ? 
+	    Helper::quoted_parse( line , " \t" ) :
+	    Helper::parse( line , "\t" );
 	  
 	  if ( tok.size() == 0 ) continue; 
 
@@ -1208,10 +1210,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  const int nexp = cols[a].size();
 	  
 	  //
-	  // Are meta-data in key=value pair mode?
+	  // Are meta-data in key=value pair mode? Look at the first |- delimited element, do it contain key=value
+	  // ( Can escape this by quoting the element ) 
 	  //
+	  
+	  bool key_value = Helper::quoted_parse( vartok[0] , std::string(1,globals::annot_keyval_delim ) ).size() == 2 ;
 
-	  bool key_value = vartok[0].find( globals::annot_keyval_delim ) != std::string::npos; 
+	  // vartok[0][0] != '"' && vartok[0].find( globals::annot_keyval_delim ) != std::string::npos; 
 
 	  //
 	  // need at least this many fields, i.e. if we've pre-specifed above	  
@@ -1236,7 +1241,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      std::vector<std::string> kv;
 	      if ( key_value ) 
 		{
-		  kv = Helper::parse( vartok[j] , std::string(1,globals::annot_keyval_delim ) );
+		  kv = Helper::quoted_parse( vartok[j] , std::string(1,globals::annot_keyval_delim ) );
 		  
 		  if ( kv.size() != 2 ) 
 		    Helper::halt( "expecting key"
@@ -1292,7 +1297,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	      else if ( t == globals::A_TXT_T )
 		{		  
-		  instance->set( label , key_value ? kv[1] : vartok[j] );
+		  instance->set( label , key_value ? kv[1] : Helper::unquote( vartok[j] ) );
 		}
 	      
 	      //
@@ -3740,7 +3745,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		  std::stringstream ss;
 		  ss << *dd->second;
 
-		  O1 << dd->first << "=" << Helper::quote_if( ss.str() , '|' ); 
+		  O1 << dd->first << "=" << Helper::quote_if( ss.str() , '|' , '=' );
 		  ++dd;
 		}
 	    }

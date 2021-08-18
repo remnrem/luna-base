@@ -210,7 +210,7 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
   for (int block=0; block < Nr; block++)
     {      
       eigen_ops::detrend( Z.block( pnt , 0 , timewin , ns )  );      
-      eigen_ops::scale( Z.block( pnt , 0 , timewin , ns ) , true );            
+      eigen_ops::scale( Z.block( pnt , 0 , timewin , ns ) , true , true );            
       pnt += timewin;
     }
 

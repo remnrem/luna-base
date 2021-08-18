@@ -1371,7 +1371,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  if ( suds_t::winsor1 > 0 ) logger << ", winsorizing at " << suds_t::winsor1;
 	  logger << "\n";
 
-	  if ( ! eigen_ops::robust_scale( PSD , suds_t::winsor1  ) )
+	  if ( ! eigen_ops::robust_scale( PSD , true , true , suds_t::winsor1  ) )
 	    {
 	      logger << "  one or more features with no variability, quitting\n";
 	      return 0;
@@ -1380,7 +1380,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       else
 	{
 	  logger << "  standardizing PSD\n";
-	  if ( ! eigen_ops::scale( PSD , true ) ) 
+	  if ( ! eigen_ops::scale( PSD , true , true ) ) 
 	    {
 	      logger <<"  one or more features with no variability, quitting\n";
               return 0;
@@ -1397,7 +1397,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // mean-centre columns if not already done via standardization
   
   if ( ! suds_t::standardize_psd )
-    eigen_ops::scale( PSD , false );
+    eigen_ops::scale( PSD , true , false );
 
 
   //
@@ -1541,6 +1541,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   logger << "  of " << ne << " total epochs, valid staging for " << nge
          << ", and of those " << included << " passed outlier removal\n";
 
+
   std::set<int>::const_iterator oo = nout_flat.begin();
   while ( oo != nout_flat.end() ) { nout_tot.insert( *oo ); ++oo; } 
   oo = nout_hjorth.begin();
@@ -1555,6 +1556,17 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	 << nout_tot.size() << "\n";
   
  
+  //
+  // Check we have enough data left
+  // 
+
+  if ( included <= 20 ) 
+    {
+      logger << "  fewer than 20 epochs left after pruning... quitting\n";
+      return 0;
+    }
+
+  
   //
   // Remove bad epochs and repeat (SVD and smoothing)
   //
@@ -1661,33 +1673,33 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  logger << "  robust re-standardizing PSD after removing bad epochs\n";
 	  // nb. not repeating winsorization of PSD here
 
-	  if ( ! eigen_ops::robust_scale( PSD , 0 ) ) 
+	  if ( ! eigen_ops::robust_scale( PSD , true , true , 0 ) ) 
 	    {
 	      logger << "  one or more features with no variability, quitting\n";
 	      return 0;
 	    }
 
-	  if ( suds_t::use_bands ) eigen_ops::robust_scale( B , 0 );
+	  if ( suds_t::use_bands ) eigen_ops::robust_scale( B , true , true , 0 );
 	}
       else
 	{      
 	  logger << "  re-standardizing PSD after removing bad epochs\n";	  
 
-	  if ( ! eigen_ops::scale( PSD , true ) )
+	  if ( ! eigen_ops::scale( PSD , true , true ) )
 	    {
 	      logger <<"  one or more features with no variability, quitting\n";
               return 0;
 	    }
 
-	  if ( suds_t::use_bands ) eigen_ops::scale( B , true );      
+	  if ( suds_t::use_bands ) eigen_ops::scale( B , true , true );      
 	}
     }
   else // just ensure we mean-center in any case
     {
       // mean-center columns (PSD)  
-      eigen_ops::scale( PSD , false );
+      eigen_ops::scale( PSD , true , false );
       
-      if ( suds_t::use_bands ) eigen_ops::scale( B , false );
+      if ( suds_t::use_bands ) eigen_ops::scale( B , true , false );
       
     }
 
@@ -1717,7 +1729,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  logger << "  robust standardizing PSC\n";
 	  
 	  // no repeated winsorization here
-	  if ( ! eigen_ops::robust_scale( U , 0 ) )
+	  if ( ! eigen_ops::robust_scale( U , true , true , 0 ) )
 	    {
 	      logger <<"  one or more features with no variability, quitting\n";
               return 0;
@@ -1726,7 +1738,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       else
 	{
 	  logger << "  standardizing PSC\n";
-	  if ( ! eigen_ops::scale( U , true ) )
+	  if ( ! eigen_ops::scale( U , true , true ) )
 	    {
 	      logger <<"  one or more features with no variability, quitting\n";
               return 0;
@@ -1792,7 +1804,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	{	  
 	  // standardize column
 	  Eigen::VectorXd c = U.col(j);
-	  eigen_ops::scale( c , true );
+	  eigen_ops::scale( c , true , true );
 	  
 	  double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
 	  if ( pv >= 0 && pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
@@ -1822,7 +1834,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      
 	      if ( 1 ) // no variance check here now (might need to add back in)
 		{
-		  eigen_ops::scale( c , true );
+		  eigen_ops::scale( c , true , true );
 		  double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
 		  writer.level( bands[j] , "VAR" );
 		  writer.value( "PV" , pv  );
@@ -1932,12 +1944,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  logger << "  robust re-standardizing PSC";
 	  if ( suds_t::winsor2 > 0 ) logger << ", winsorizing at " << suds_t::winsor2;
 	  logger << "\n";
-	  eigen_ops::robust_scale( U , suds_t::winsor2 );
+	  eigen_ops::robust_scale( U , true, true, suds_t::winsor2 );
 	}
       else
 	{
 	  logger << "  re-standardizing PSC\n";
-	  eigen_ops::scale( U , true );
+	  eigen_ops::scale( U , true , true );
 	}  
     }
     
@@ -3315,11 +3327,11 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
     {
       if ( suds_t::robust_standardization )
 	{
-	  eigen_ops::robust_scale( U_projected , suds_t::winsor2 );
+	  eigen_ops::robust_scale( U_projected , true , true , suds_t::winsor2 );
 	}
       else
 	{
-	  eigen_ops::scale( U_projected , true );
+	  eigen_ops::scale( U_projected , true , true );
 	}
     }
 

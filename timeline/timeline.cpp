@@ -3192,17 +3192,16 @@ void timeline_t::signal2annot( const param_t & param )
 
   for (int s=0; s<ns; s++)
     {
-  
+
       if ( edf->header.is_annotation_channel( signals(s) ) )
 	Helper::halt( "can only use S2A for data channels" );
-        
       
       //
       // get signal data
       //
-      
+
       slice_t slice( *edf , signals(s) , wholetrace() );  
-      
+
       std::vector<double> * d = slice.nonconst_pdata();  
       
       const std::vector<uint64_t> * tp = slice.ptimepoints();
@@ -3220,6 +3219,8 @@ void timeline_t::signal2annot( const param_t & param )
       
       while ( ee != e.end() )
 	{
+	  std::cout << " label = " << ee->first << "\n";
+
 	  const std::string & label = ee->first; 
 	  double ex = ee->second.first;
 	  double ey = ee->second.second;

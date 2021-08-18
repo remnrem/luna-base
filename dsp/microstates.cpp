@@ -1078,7 +1078,7 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
   // Normalize A results
   //
   
-  eigen_ops::scale( results.A , true );
+  eigen_ops::scale( results.A , true , true );
 
 
   //
@@ -3048,8 +3048,8 @@ void ms_prototypes_t::map_to_canonicals( const std::string & filename )
   //
 
   Eigen::MatrixXd ZA = A;
-  eigen_ops::scale( ZA , true );  
-  eigen_ops::scale( CA , true );
+  eigen_ops::scale( ZA , true , true );  
+  eigen_ops::scale( CA , true , true );
 
   Eigen::MatrixXd R( K , canK );
 

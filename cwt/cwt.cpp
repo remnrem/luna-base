@@ -55,6 +55,7 @@ std::vector<dcomp> CWT::wavelet( const int fi )
 	* exp( dcomp( 2 * M_PI * fc[fi] * time[i] , 0 ) * dcomp(0,1) ) 
 	* exp( dcomp(  - (time[i]*time[i]) / fb[fi] , 0 ) );      
     }
+
   return w;
 }
 

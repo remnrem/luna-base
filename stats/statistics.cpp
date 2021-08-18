@@ -2402,6 +2402,51 @@ double Statistics::correlation( const std::vector<double> & x , const std::vecto
 }
 
 
+double Statistics::circular_linear_correlation( const std::vector<double> & a , 
+						const std::vector<double> & x , 
+						const bool radians , 
+						const double eps )
+{
+  
+  // correlation() returns -9 as a failure code
+  
+  // a = angular (radians)
+  // x = linear
+  
+  const int n = a.size();
+  if ( x.size() != n ) return -9;
+  if ( n <=2 ) return -9;
+  
+  std::vector<double> sina( n );
+  std::vector<double> cosa( n );
+  
+  for (int i=0; i<n; i++)
+    {
+      sina[i] = radians ? sin( a[i] ) : sin( deg2rad( a[i] ) ) ;
+      cosa[i] = radians ? cos( a[i] ) : cos( deg2rad( a[i] ) ) ;
+    }
+  
+  // r_sx = r( sin(a) , x ) 
+  // r_cx = r( cos(a) , x ) 
+  // r_cs = r( cos(a) , sin(a) )
+  
+  double r_sx = correlation( sina , x , eps );
+  if ( r_sx < -2 ) return -9;
+  
+  double r_cx = correlation( cosa , x , eps );
+  if ( r_cx < -2 ) return -9;
+  
+  double r_cs = correlation( cosa , sina , eps );  
+  if ( r_cs < -2 ) return -9;
+  
+  // R = sqrt ( ( r_cx^2 + r_sx^2 - 2 r_cx * r_sx * r_cs )  / ( 1 - r_cs^2 ) 
+  double r_cl = sqrt( ( r_cx*r_cs + r_sx*r_sx - 2 * r_cx * r_sx * r_cs )  / ( 1 - r_cs*r_cs )  );   
+  
+  return r_cl; 
+  
+}
+
+
 
 
 

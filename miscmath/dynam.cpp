@@ -268,14 +268,25 @@ bool dynam_t::mean_variance( double * mean , double * var )
 
   double my = 0;
 
-  double myy = 0;
+  // mean only?
+  if ( var == NULL )
+    {
+      if ( n < 1 ) return false;
+      for (int i=0;i<n;i++) 
+	my += y[i];      
+      my /= n;
+      *mean = my;
+      return true;
+    }
 
+  // mean & variance
+  if ( n < 2 ) return false;
+
+  double myy = 0;  
   for (int i=0;i<n;i++) {
     my += y[i];
     myy += y[i] * y[i];
   }
-  
-  if ( n < 2 ) return false;
   
   my /= n;
   myy /= n;
