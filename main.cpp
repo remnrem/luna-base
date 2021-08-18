@@ -2288,7 +2288,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       Eigen::MatrixXd m( n , 1 );
       for (int i=0;i<n;i++) m(i,0) = x[i];
   
-      eigen_ops::robust_scale( m , 0.05 );
+      eigen_ops::robust_scale( m , true , true , 0.05 );
       std::cout << "\n" << m  << "\n";
       std::exit(0);
     }

@@ -39,6 +39,11 @@ namespace Statistics {
   template<class T> inline void SWAP(T &a, T &b) {T dum=a; a=b; b=dum;}
 
   std::vector<double> as_vector( const Data::Vector<double> & );
+
+  // helpers:
+  static inline double rad2deg(double radians) { return radians * (180.0 / M_PI); }  
+  static inline double deg2rad(double degrees) { return degrees * (M_PI / 180.0); }
+
   
   // Singular Value Decomposition
   bool svdcmp( Data::Matrix<double> & , Data::Vector<double> & , Data::Matrix<double> & );
@@ -163,6 +168,11 @@ namespace Statistics {
   
   double correlation( const std::vector<double> & a , const std::vector<double> & b , const double eps = 1e-8 );
   double correlation( const Data::Vector<double> & a , const Data::Vector<double> & b , const double eps = 1e-8 );
+
+  double circular_linear_correlation( const std::vector<double> & a , 
+				      const std::vector<double> & x , 
+				      const bool radians = true , 
+				      const double eps = 1e-8 );
 
   double weighted_variance( const std::map<int,int> & counts );
   double runs_test( const std::vector<std::string> & s );

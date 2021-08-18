@@ -87,6 +87,7 @@ namespace Helper
   std::string quote_spaced( const std::string & s );
 
   std::string quote_if( const std::string & s , char q );
+  std::string quote_if( const std::string & s , char q , char p );
 
   std::string sanitize( const std::string & );
   

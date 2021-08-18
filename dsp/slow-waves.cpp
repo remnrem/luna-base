@@ -644,13 +644,15 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   if ( thr > 0 ) 
     {
       logger << "  - relative threshold " << thr  << "x " <<  ( use_mean ? "mean" : "median" ) << "\n";
-      logger << "  - (based on " << ( ignore_neg_peak ? "only P2P amplitude" : "both P2P and negative peak amplitude" ) << "\n";
+      logger << "  - (based on " << ( ignore_neg_peak ? "only P2P amplitude" : "both P2P and negative peak amplitude" ) << ")\n";
     }
 
-  if ( uV_neg < 0 ) logger << "  - absolute threshold based on " 
-			      << uV_neg << " uV for negative peak, " 
-			      << uV_p2p << " peak-to-peak\n";
-
+  if ( uV_neg < 0 ) 
+    {
+      logger << "  - absolute threshold based on "; 
+      if ( ! ignore_neg_peak ) logger << uV_neg << " uV for negative peak, " ;
+      logger << uV_p2p << " uV peak-to-peak\n";
+    }
 
   if ( type == SO_FULL ) 
     logger << "  - full waves, based on consecutive "  
@@ -985,7 +987,9 @@ int slow_waves_t::getbin( double x , const std::vector<double> & th , int last_b
   return nb-1;
 }
 
-std::vector<double> slow_waves_t::phase_locked_averaging( const std::vector<double> * sig , int nbins , const std::vector<bool> * subset )
+std::vector<double> slow_waves_t::phase_locked_averaging( const std::vector<double> * sig , int nbins , 
+							  const std::vector<bool> * subset , 
+							  std::vector<int> * psigcnt )
 {
 
   if ( sw.size() == 0 ) 
@@ -1005,7 +1009,11 @@ std::vector<double> slow_waves_t::phase_locked_averaging( const std::vector<doub
   std::vector<double> th( nbins );
   for (int i=0;i<nbins;i++) { th[i] = th_; th_ += inc; } 
 
+  
   int nb = nbins;
+
+  // for (int bb=0; bb<nbins; bb++) std::cout << " bin = " << bb << " " << th[bb] << "\n";
+  // std::cout << "\n";
 
   // for each slow wave
 
@@ -1016,15 +1024,18 @@ std::vector<double> slow_waves_t::phase_locked_averaging( const std::vector<doub
       uint64_t right = sw[i].interval.stop;
       
       int last_bin = 0;
+
+      //std::cout << " SW " << i << "/" << sw.size() << " ... " << left << " - " << right << "  subset = " << ( subset == NULL ? "NULL" : "SET" ) << "\n";
       
       for (uint64_t p = left ; p <= right ; p++ ) 
 	{
 	  if ( subset == NULL || (*subset)[p] ) // apply an optional mask
 	    {
 	      int b = getbin( phase[p] , th , last_bin , nbins );
+	      //std::cout << " phase[p] = " << phase[p] << " " << b << "\n";
 	      last_bin = b;
 	      sigmean[b] += (*sig)[p];
-	      ++sigcnt[b];	 
+	      ++sigcnt[b];
 	    }
 	}
 
@@ -1034,6 +1045,10 @@ std::vector<double> slow_waves_t::phase_locked_averaging( const std::vector<doub
   // get mean
   for (int j=0;j<sigmean.size();j++) sigmean[j] /= (double)sigcnt[j];
 
+  // also pass back N?
+  if ( psigcnt != NULL ) *psigcnt = sigcnt;
+  
+  // return means
   return sigmean;
 }
 

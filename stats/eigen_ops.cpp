@@ -94,8 +94,11 @@ bool eigen_ops::detrend( Eigen::Ref<Eigen::MatrixXd> M )
 }
 
 
-bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
+bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const bool normalize )
 {
+
+  if ( ! ( center || normalize ) ) return true;
+       
   const int N = M.rows();
   
   Eigen::Array<double, 1, Eigen::Dynamic> means = M.colwise().mean();
@@ -107,7 +110,8 @@ bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
       for (int i=0;i<sds.size();i++) 
        	if ( sds[i] == 0 ) return false;
       
-      M.array().rowwise() -= means;
+      if ( center ) 
+	M.array().rowwise() -= means;
       M.array().rowwise() /= sds;
     }
   else
@@ -119,7 +123,7 @@ bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , bool normalize )
 }
 
 
-bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool second_rescale )
+bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center , bool normalize , double w , bool second_rescale )
 {
   // 1) winsorize at +/- w 
 
@@ -127,12 +131,16 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool se
   const int cols = m.cols();
   for (int c=0;c<cols;c++)
     {
+
       std::vector<double> v = copy_vector( m.col(c) );
-      double median = MiscMath::median( v );
-      double iqr = MiscMath::iqr( v );
-      if ( iqr <= 1e-8 ) return false;
-      double robust_sd = 0.7413 * iqr;
-     
+      double median = center ? MiscMath::median( v ) : 0 ;
+      
+      double iqr = normalize ? MiscMath::iqr( v ) : 0 ;
+
+      // if no variation, set SD to one
+      if ( normalize && iqr <= 1e-8  ) normalize = false;
+      double robust_sd = normalize ? 0.7413 * iqr : 1 ; 
+      
       // winsorize?
 
       if ( w > 0 )
@@ -150,21 +158,33 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , double w , bool se
 	}
 
       // median / IQR normalize
-      for (int i=0; i<rows; i++)	
-	m(i,c) = ( m(i,c) - median ) / robust_sd;
-      
+      if ( center && normalize )  
+	{
+	  for (int i=0; i<rows; i++)	
+	    m(i,c) = ( m(i,c) - median ) / robust_sd;
+	}
+      else if ( normalize )
+	{
+	  for (int i=0; i<rows; i++)	
+	    m(i,c) = m(i,c) / robust_sd;
+	}
+      else if ( center )
+	{
+	  for (int i=0; i<rows; i++)	
+	    m(i,c) = m(i,c) - median ;
+	}
     }
 
-  // hmm... a bad idea, or unnecessary?
   
   // finally, also scale by mean/variance too, just to ensure correct 
   // overall scale
-
+  // hmm... unnecessary?  
+  
   bool okay = true;
   
   if ( second_rescale ) 
-    okay = scale( m , true );
-
+    okay = scale( m , center , normalize );
+  
   return okay;
 }
 

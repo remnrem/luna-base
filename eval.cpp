@@ -873,7 +873,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
       else if ( is( c, "MINMAX" ) )       proc_minmax( edf , param(c) );
       
-      else if ( is( c, "STANDARDIZE" ) )  proc_standardize( edf , param(c) );
+      else if ( is( c, "ROBUST-NORM" ) )  proc_standardize( edf , param(c) );
 
       else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
       

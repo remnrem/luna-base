@@ -615,6 +615,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 		{
 		  logger << " uniqifying " << l ;
 		  l = l + "." + Helper::int2str( inc );
+		  uc_l = uc_l + "." + Helper::int2str( inc );
 		  logger << " to " << l << "\n";
 		  break;
 		}
@@ -657,7 +658,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
       if ( include ) 
 	{
-	  
+
 	  channels.insert(s);
 	  
 	  annotation_channel.push_back( annotation );
@@ -857,10 +858,10 @@ bool edf_record_t::read( int r )
   std::set<int> & channels = edf->inp_signals_n;
     
   int s = 0;
-  
+
   for (int s0=0; s0<edf->header.ns_all; s0++)
     {
-      
+
       // need to EDF-based header, i.e. if skipped signal still need size to skip
       const int nsamples = edf->header.n_samples_all[s0];
       
@@ -869,18 +870,19 @@ bool edf_record_t::read( int r )
       //
       
       if ( channels.find( s0 ) == channels.end() )
-	{
+	{	  
 	  p += 2 * nsamples;
 	  continue;
 	}
       
+
       //
       // Data or annotation channel? (note: lookup is based on 's' not
       // 's0', i.w. loaded channels, not all EDF channels
       //
       
       bool annotation = edf->header.is_annotation_channel( s );
-      
+
       //
       // s0 : actual signal in EDF
       // s  : where this signal will land in edf_t
@@ -891,13 +893,13 @@ bool edf_record_t::read( int r )
 	  
 	  for (int j=0; j < nsamples ; j++)
 	    {
-	  
+
 	      //int d = tc2dec( **p ,  *((*p)+1)  ); 
 	      int16_t d = tc2dec( *p ,  *(p+1)  ); 
 	      
 	      // advance pointer
 	      p += 2;
-	      
+
 	      // store digital data-point
 	      data[s][j] = d;
 	      
@@ -948,13 +950,15 @@ bool edf_record_t::read( int r )
 	    }	  
 	  
 	}
-
+      
 
       // next signal
+
       ++s;
 
     }
-  
+
+
   //
   // Clean up
   //
@@ -979,13 +983,13 @@ bool edf_t::read_records( int r1 , int r2 )
   if ( r2 < r1 ) r2 = r1;
   if ( r2 > header.nr_all ) r2 = header.nr_all - 1;
 
-  //std::cerr << "edf_t::read_records :: scanning ... r1, r2 " << r1 << "\t" << r2 << "\n";
+  //  std::cerr << "edf_t::read_records :: scanning ... r1, r2 " << r1 << "\t" << r2 << "\n";
   
   for (int r=r1;r<=r2;r++)
     {
 
-//       if ( ! timeline.retained(r) ) 
-// 	std::cerr << "NOT retained " << r << " " << timeline.retained(r) << "\n";
+      // if ( ! timeline.retained(r) ) 
+      // 	std::cerr << "NOT retained " << r << " " << timeline.retained(r) << "\n";
       
       if ( timeline.retained(r) )
 	{
@@ -1475,7 +1479,6 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					     std::vector<int16_t> * ddata ) 
 {
   
-
   std::vector<double> ret;
 
   if ( tp != NULL ) 
@@ -1534,10 +1537,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   // Ensure that these records are loaded into memory
   // (if they are already, they will not be re-read)
   //
-  
+
   bool retval = read_records( start_record , stop_record );
-  
-  //  std::cerr << "read records: " << retval << "\n";
   
   //
   // Copy data into a single vector
@@ -1588,7 +1589,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
       r = timeline.next_record(r);
       if ( r == -1 ) break;
     }
-
+  
   // will be length==0 if digital == T 
   return ret;  
 }

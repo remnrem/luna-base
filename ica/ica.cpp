@@ -97,7 +97,7 @@ void eigen_ica_t::fastICA( Eigen::MatrixXd & X ,
   // Centering
   //
   
-  eigen_ops::scale( X , row_norm );
+  eigen_ops::scale( X , true , row_norm );
   
   //
   // transpose

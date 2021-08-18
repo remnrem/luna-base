@@ -210,7 +210,10 @@ struct slow_waves_t
   // time-locked and phase-locked averaging
   
   std::vector<double> time_locked_averaging( const std::vector<double> * sig , int sr , double left, double right , int position = -1 );
-  std::vector<double> phase_locked_averaging( const std::vector<double> * sig , int bins , const std::vector<bool> * subset = NULL );
+
+  std::vector<double> phase_locked_averaging( const std::vector<double> * sig , int bins , 
+					      const std::vector<bool> * subset = NULL , 
+					      std::vector<int> * psigcnt = NULL );
   
 
   // reporting functions

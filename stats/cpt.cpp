@@ -790,7 +790,7 @@ void cpt_wrapper( param_t & param )
   if ( winsorize )
     {
       
-      if ( ! eigen_ops::robust_scale( Y , winsor_pct ) )
+      if ( ! eigen_ops::robust_scale( Y , true , true , winsor_pct ) )
 	Helper::halt( "one or more features with no variability... quitting\n(better error message hopefully forthcoming..." );      
 
     }

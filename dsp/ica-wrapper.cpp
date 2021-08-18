@@ -363,7 +363,7 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
 	}
 
       // normalize
-      eigen_ops::scale( Az , true );
+      eigen_ops::scale( Az , true , true );
       
       Eigen::ArrayXd mx = Az.array().cwiseAbs().colwise().maxCoeff();
 

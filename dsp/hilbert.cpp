@@ -450,7 +450,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 
   for (int r = 0 ; r < nreps ; r++ ) 
     {
-      
+
       // get permutation shift for unconstrained OR within-epoch permutation; this is applied similarly across
       // all spindles
       
@@ -611,7 +611,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
           double itpc_perm =  abs( s );
           itpc.itpc.perm.push_back( itpc_perm );
-
+	  //	  std::cout << "perm r , s, n = " << r << " "  << itpc_perm << " " << counted << "\n";
 	  // asymptotic significance
 	  double pv = exp( -counted * itpc_perm * itpc_perm ) ;
 	  itpc.pv.perm.push_back( pv ); // nb. not used currently

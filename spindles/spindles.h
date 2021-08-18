@@ -48,8 +48,17 @@ struct spindle_t
   
   // spindle properties
   double amp, dur, fwhm, nosc, frq, fft, symm, symm2, isa;
-  double chirp, chirp_fdif, posf, negf, posb, negb, posv, negv, allf, allb, allv;
-  
+  double chirp, chirp_fdif, frq_h1, frq_h2; 
+
+  // neg/pos defined by HW
+  double posf, negf, posb, negb, posv, negv, allf, allb, allv;
+  double posisa, negisa;
+  int possp, negsp; // track denom for ISA to get an amplitude measure too (i.e. mean amp for pos/neg)
+
+  // neg/pos defined by slope
+  double pos2f, neg2f, pos2b, neg2b, pos2v, neg2v;
+    
+
   // relative enrichment per frequency range compared to whole trace baseline
   std::map<freq_range_t,double> enrich;
 
@@ -97,14 +106,17 @@ void characterize_spindles( edf_t & edf ,
 			    const int s , 
 			    bool bandpass_filtered , 
 			    const double target_f, 
-			    const double window_f , 
 			    const std::string & label, 			    
 			    const std::vector<double> * averaged , 
 			    const std::vector<double> * original_signal , 
 			    std::vector<spindle_t>    * spindles , 			    
 			    clocktime_t * starttime , 
 			    std::map<freq_range_t,double> * baseline = NULL , 
-			    std::map<double,double> * locked = NULL 
+			    std::map<double,double> * locked = NULL , 
+			    std::vector<bool> * in_pos_hw = NULL , 
+			    std::vector<bool> * in_neg_hw = NULL , 
+			    std::vector<bool> * in_pos_slope = NULL , 
+			    std::vector<bool> * in_neg_slope = NULL  
 			    );
 
 

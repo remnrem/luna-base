@@ -26,6 +26,7 @@
 #include "plot-spindles.h"
 #include "propag.h"
 
+
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "eval.h"
@@ -40,6 +41,7 @@
 #include "artifacts/artifacts.h"
 #include "dsp/fir.h"
 #include "dsp/hilbert.h"
+#include "dsp/spline.h"
 #include "dsp/slow-waves.h"
 #include "defs/defs.h"
 #include "db/db.h"
@@ -809,12 +811,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  const interval_t & s = spindles0[i];
 		  if ( s.stop - s.start > max_dur_sp ) continue;
 		  
-		  // tp: use +1 end encoding
-		  spindles1.push_back( interval_t( (*tp)[s.start] , (*tp)[s.stop] + 1LLU  ) );
-
-		  // sp: already uses +1 end encoding
+		  // tp: use +1 end encoding (i.e. as s.stop is +1 end in SP space already)
+		  spindles1.push_back( interval_t( (*tp)[s.start] , (*tp)[s.stop] ) );
+		  
+		  // sp: smoothedZ returns 1 past end encoding; adjust here for sp
 		  spindles1_start.push_back( s.start );
-		  spindles1_stop.push_back( s.stop );
+		  spindles1_stop.push_back( s.stop - 1 );
 		}
 
 	    }
@@ -835,10 +837,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		{
 		  
 		  if ( averaged[i] > threshold[i] ) 
-		    {		  
-		      
+		    {		  		      
 		      if ( scnt == 0 ) start = i;
-		      stop = i+1; 
+		      stop = i; // end encoding for SP
 		      ++scnt;
 		    }
 		  else
@@ -848,7 +849,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			{
 			  
 			  uint64_t start_tp = (*tp)[ start ];
-			  uint64_t stop_tp  = (*tp)[ stop ]; // is 1-past end already
+			  uint64_t stop_tp  = (*tp)[ stop + 1 ] ; 
 			  uint64_t dur_tp   = stop_tp - start_tp ;
 			  
 			  // does peak area meet duration requirements?
@@ -876,12 +877,13 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 				  ++j;
 				  if ( j >= averaged.size() ) break;
 				  if ( averaged[j] < threshold2[j] ) break;
-				  stop = j+1; // one past end encoding
+				  //stop = j+1; // end-encoding	  
+				  stop = j; // end-encoding
 				}
 			      
 			      // re-adjusted start/stop times
 			      start_tp = (*tp)[ start ];
-			      stop_tp  = (*tp)[ stop ];
+			      stop_tp  = (*tp)[ stop + 1 ]; // 1-TP past end encoding
 			      
 			      //
 			      // Some final checks on whether we should call a spindle here
@@ -1037,17 +1039,31 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  //
 	  
 	  std::vector<bool> in_spindle;
-	  
+	  std::vector<bool> in_pos_hw; // (neg2pos ZC - pos2neg ZC)
+	  std::vector<bool> in_neg_hw; // (pos2neg ZC - neg2pos ZC)
+	  std::vector<bool> in_pos_slope; // ( beak peak - pos peak ) 
+	  std::vector<bool> in_neg_slope; // ( beak peak - pos peak ) 
+
 	  if ( ht_chirp ) 
 	    {
 	      in_spindle.resize( averaged.size() , false );
 	      for (int i=0;i<spindles.size();i++) 
 		for (int j=spindles[i].start_sp; j <= spindles[i].stop_sp; j++) 
 		  in_spindle[j] = true;
+
+	      // these get editted later, i.e. to zero out additional terms 
+	      // based on exact popsition in the spindle 
+	      in_pos_hw = in_spindle;
+	      in_neg_hw = in_spindle;
+	      in_pos_slope = in_spindle;
+	      in_neg_slope = in_spindle;	     
 	    }
 	  
-	  
-
+	  std::vector<bool> * p_in_pos_hw = ht_chirp ? &in_pos_hw : NULL ; 
+	  std::vector<bool> * p_in_neg_hw = ht_chirp ? &in_neg_hw : NULL ; 
+	  std::vector<bool> * p_in_pos_slope = ht_chirp ? &in_pos_slope : NULL ; 
+	  std::vector<bool> * p_in_neg_slope = ht_chirp ? &in_neg_slope : NULL ; 
+	 
 
 	  //
 	  // Characterisation (and display) of each spindle
@@ -1088,19 +1104,18 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  if ( characterize && some_data ) 
 	    {	  
-	      
-	      const double window_f = 4;  // +/- 2 Hz around each peak
-	      
+	      	      
 	      characterize_spindles( edf , param , signals(s) , 
 				     bandpass_filtered_status , 				     
-				     frq[fi] , window_f , 
+				     frq[fi] ,
 				     "wavelet-" + Helper::dbl2str(frq[fi]) , 
 				     &averaged_corr ,    // pass as input threshold-normed CWT
 				     d ,                 // original EEG signal 
 				     &spindles ,         // this will be annotated/reduced   
 				     ( hms ? &starttime : NULL) , 
 				     &baseline_fft, 
-				     tlocking ? &locked : NULL      // mean signal around spindle troughs
+				     tlocking ? &locked : NULL ,     // mean signal around spindle troughs
+				     p_in_pos_hw , p_in_neg_hw , p_in_pos_slope , p_in_neg_slope  
 				     );
 	      
 	      
@@ -1122,7 +1137,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  
 	  double observed_frq = means["FRQ"];
 	  
-	  logger << "  observed spindle frequency is " << observed_frq << "\n";
+	  logger << "  estimated spindle frequency is " << observed_frq << "\n";
 
 
 	  //
@@ -1305,7 +1320,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  
 	  if ( sw_coupling )
 	    {
-
+	      
 	      // slow waves have already been detected for this channel (in 'so')
 
 	      std::vector<double> ph_peak;
@@ -1342,7 +1357,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			}
 		      writer.unlevel( "PHASE" );
 		    }
-		  
+
 	      
 		  //
 		  // Time-locked averaging
@@ -1352,6 +1367,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  std::vector<double> tl_spindle = p_sw->time_locked_averaging( &averaged_corr , Fs[s] , 1 , 1 );
 		  
 		  writer.var( "SOTL_CWT" , "Slow wave time-locked average spindle power" );
+
 		  
 		  int sz = tl_spindle.size();
 		  
@@ -1499,7 +1515,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 							  epoch_sec ,  // optionally, within-epoch shuffle
 							  stratify_by_so_phase_bin // optional, overlap by SO-phase bin
 							  );
-		  
+
+
 		  sw_peak = itpc.event_included;
 		  
 		  ph_peak = itpc.phase;
@@ -1617,6 +1634,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		{
 		  
 
+
 		  // look at IF in spindle range, i.e. but not specifically detecting individual spindles
 		  // i.e. parallel to phase and time locked SW analyses above
 
@@ -1627,30 +1645,152 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // Look at spindle IF as a function of SW phase 		  
 		  //
 
-		  std::vector<double> pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_spindle );
-	      	      	      	      
 		  double inc = 360 / (double)nbins;
 		  double ph = inc/2.0; // use mid-point of range
+		  std::vector<double> so_angle( nbins );
+
+
+		  // // ----------------------------------dumm
+		  // std::vector<double> dumm_x( p_chirp_if->size() , 22 );
+
+		  // std::vector<int> dumm_n ; 
+		  // std::vector<bool> dumm_b( in_spindle.size() , true );
+		  // std::vector<double> dumm_dumm = p_sw->phase_locked_averaging( &dumm_x , nbins , 
+		  // 							       &dumm_b , &dumm_n );
+		  // if ( dumm_dumm.size() == nbins )
+		  //   {
+		  //     for (int j=0;j<nbins;j++)
+		  // 	{
+		  // 	  std::cout << " DUM PH " << ph << "\t" << dumm_dumm[j] << "\t" << dumm_n[j] << "\n";
+		  // 	  ph += inc;
+		  // 	}
+		  //   }
+		  // //duumy ---------------------------------
+		      
+		  std::vector<int> pl_chirp_n ; 
+		  std::vector<double> pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , 
+									       &in_spindle , &pl_chirp_n );
 		  
-		  for (int j=0;j<nbins;j++)
+		  // returned empty is no SW
+		  if ( pl_chirp.size() == nbins )
 		    {
-		      writer.level( ph  , "PHASE" );
-		      writer.value( "IF" , pl_chirp[j] );
-		      ph += inc;
+		      for (int j=0;j<nbins;j++)
+			{
+			  writer.level( ph  , "PHASE" );
+			  writer.value( "IF" , pl_chirp[j] );
+			  writer.value( "N" , pl_chirp_n[j] );
+			  so_angle[j] = clocs_t::deg2rad( ph );
+			  ph += inc;
+			}
+		      writer.unlevel( "PHASE" );
+		  		      
+		      // Circular-linear correlation between SO phase and spindle frequency		  
+		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+		      writer.value( "R_PHASE_IF" , r_cl );
 		    }
-		  writer.unlevel( "PHASE" );
+
+
+		  //
+		  // Repeat SO/IF analysis, but stratify by positive/negative HWs / slopes
+		  //
 		  
+		  bool ran_typed = false;
+
+		  // POS HW:
+		  
+		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_pos_hw );		  
+		  
+		  if ( pl_chirp.size() == nbins )		    
+		    {
+		      ran_typed = true;
+		      writer.level( "POS_HW" , "TYPE" );
+		      ph = inc/2.0; // use mid-point of range 
+		      for (int j=0;j<nbins;j++)
+			{
+			  writer.level( ph  , "PHASE" );
+			  writer.value( "IF" , pl_chirp[j] );		      
+			  ph += inc;
+			}
+		      writer.unlevel( "PHASE" );
+		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+		      writer.value( "R_PHASE_IF" , r_cl );
+		    }
+
+		  // NEG HW:	  
+		  
+		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_neg_hw );		  
+		  
+		  if ( pl_chirp.size() == nbins)
+		    {
+		      ran_typed = true;
+		      writer.level( "NEG_HW" , "TYPE" );
+		      ph = inc/2.0; // use mid-point of range
+		      for (int j=0;j<nbins;j++)
+			{
+			  writer.level( ph  , "PHASE" );
+			  writer.value( "IF" , pl_chirp[j] );		      
+			  ph += inc;
+			}
+		      writer.unlevel( "PHASE" );
+		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+		      writer.value( "R_PHASE_IF" , r_cl );
+		    }
+
+		  // POS SLOPE:
+		  
+		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_pos_slope );		 
+		  if ( pl_chirp.size() == nbins)
+		    {
+		      ran_typed = true;
+		      writer.level( "POS_SLOPE" , "TYPE" );
+		      ph = inc/2.0; // use mid-point of range
+		      for (int j=0;j<nbins;j++)
+			{
+			  writer.level( ph  , "PHASE" );
+			  writer.value( "IF" , pl_chirp[j] );		      
+			  ph += inc;
+			}
+		      writer.unlevel( "PHASE" );
+		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+		      writer.value( "R_PHASE_IF" , r_cl );
+		    }
+
+		  // NEG SLOPE:
+		  
+		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_neg_slope );		  
+		  if ( pl_chirp.size() == nbins)
+		    {
+		      ran_typed = true;
+		      writer.level( "NEG_SLOPE" , "TYPE" );
+		      ph = inc/2.0; // use mid-point of range
+		      for (int j=0;j<nbins;j++)
+			{
+			  writer.level( ph  , "PHASE" );
+			  writer.value( "IF" , pl_chirp[j] );		      
+			  ph += inc;
+			}
+		      writer.unlevel( "PHASE" );
+		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+		      writer.value( "R_PHASE_IF" , r_cl );
+		      
+		    }		  
+
+		  if ( ran_typed ) 
+		    writer.unlevel( "TYPE" );
+
+		  
+		  //
 		  // time-locked SO spindle IF -- code not used -- phase-locked analysis above should 
 		  // be sufficient
+		  //
 
-		  if ( 0 ) 
+		  if ( 1 ) 
 		    {
-		      // +1/-1 1 second
+		      // +/- from negative peak 1 second
 		      std::vector<double> tl_chirp = p_sw->time_locked_averaging( p_chirp_if , Fs[s] , 1 , 1 );
 		      
-		      //		      writer.var( "IF" , "Slow wave time-locked average spindle frequency/chirp" );
-		      
 		      int sz = tl_chirp.size();
+		      
 		      if ( sz > 0 ) 
 			{
 			  int sz2 = - (sz-1)/2;
@@ -1664,10 +1804,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			  writer.unlevel( "SP" );
 			}
 		    }
-
+		  
+		  
 		  
 		  //
-		  // Spindle IF as a function of slow wave phase and position in the spindle
+		  // Spindle IF as a function of slow wave phase AND position in the spindle
 		  //
 		  
 		  for (int h=0;h<ht_bins;h++)
@@ -1682,21 +1823,49 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      
 		      int ccc = 0;
 		      for (int i=0;i<in_spindle_and_bin.size(); i++) if ( in_spindle_and_bin[i] ) ++ccc;
-		      //logger << "h etc = " << h << " " << in_spindle_and_bin.size() << " " << ccc << "\n";
 		      
-		      std::vector<double> pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_spindle_and_bin );
+		      std::vector<int> pl_chirp_n ; 
+		      std::vector<double> pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , 
+										   &in_spindle_and_bin , 
+										   &pl_chirp_n );
 		      
-		      double inc = 360 / (double)nbins;
-		      double ph = inc/2.0; // use mid-point of range
 		      
-		      for (int j=0;j<nbins;j++)
+		      if ( pl_chirp.size() == nbins ) 
 			{
-			  writer.level( ph  , "PHASE" );
-			  writer.value( "IF" , pl_chirp[j] );
-			  ph += inc;
+			  double inc = 360 / (double)nbins;
+			  double ph = inc/2.0; // use mid-point of range
+			  
+			  std::vector<double> so_angle;
+			  std::vector<double> pl_chirp2;
+			  
+			  for (int j=0;j<nbins;j++)
+			    {
+			      writer.level( ph  , "PHASE" );
+			      writer.value( "IF" , pl_chirp[j] );
+			      writer.value( "N" , pl_chirp_n[j] );
+			      
+			      if ( pl_chirp_n[j] > 0 )
+				{
+				  so_angle.push_back( clocs_t::deg2rad( ph ) );
+				  pl_chirp2.push_back( pl_chirp[j] );
+				}
+			      
+			      ph += inc;
+			    }
+			  writer.unlevel( "PHASE" );
+			  
+			  // cicular-linear correlation of PHASE and F (i.e. conditional on RELLOC bin)
+			  if ( pl_chirp2.size() >= 5 )
+			    {
+			      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+			      if ( r_cl > -8 ) 
+				writer.value( "R_PHASE_IF" , r_cl );
+			    }
+			  
 			}
-		      writer.unlevel( "PHASE" );
-		    }
+		    }		  
+		  
+		  // next spindle bin
 		  writer.unlevel( "RELLOC" );
 		  
 		}
@@ -1940,26 +2109,67 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "SYMM2" , means["SYMM2"] );
 	      writer.value( "CHIRP" , means["CHIRP"] );
 	      writer.value( "CHIRPF" , means["CHIRPF"] );
-
+	      writer.value( "FRQ1" , means["FRQ1"] );
+	      writer.value( "FRQ2" , means["FRQ2"] );
+	      
 	      if ( globals::devel )
 		{
-		  writer.value( "F_POS" , means["FPOS"] );
-		  writer.value( "F_NEG" , means["FNEG"] );
-		  writer.value( "F_ALL" , means["FALL"] );
-		  writer.value( "F_DIF" , means["FPOS"] - means["FNEG"] ); 
+		  
+		  //
+		  // positive spindle components
+		  //
 
-		  writer.value( "B_POS" , means["BPOS"] );
-		  writer.value( "B_NEG" , means["BNEG"] );
-		  writer.value( "B_ALL" , means["BALL"] );
-		  writer.value( "B_DIF" , means["BPOS"] - means["BNEG"] ); 		  
+		  writer.level( "POS" , "SUBSET" );
+		  writer.value( "F_HW" , means["FPOS"] );
+		  writer.value( "F_S" , means["FSPOS"] );
+		  writer.value( "B_HW" , means["BPOS"] );
+		  writer.value( "B_S" , means["BSPOS"] );
+		  writer.value( "V" , means["VPOS"] );
+		  const double pos_amp = means[ "POSISA_PER_SP" ] ;
+		  writer.value( "AMP" , pos_amp );
+		  
+		  //
+		  // negative spindle components
+		  //
+		  
+		  writer.level( "NEG" , "SUBSET" );
+		  writer.value( "F_HW" , means["FNEG"] );
+		  writer.value( "F_S" , means["FSNEG"] );
+		  writer.value( "B_HW" , means["BNEG"] );
+		  writer.value( "B_S" , means["BSNEG"] );
+		  writer.value( "V" , means["VNEG"] );		  
+		  const double neg_amp = means[ "NEGISA_PER_SP" ] ;
+		  writer.value( "AMP" , neg_amp );
+		  
+		  //
+		  // Avereged (i.e. all, based on HWs)
+		  //
 
-		  writer.value( "V_POS" , means["VPOS"] );
-		  writer.value( "V_NEG" , means["VNEG"] );
-		  writer.value( "V_ALL" , means["VALL"] );
-		  writer.value( "V_DIF" , means["VPOS"] - means["VNEG"]  );
+		  writer.level( "ALL" , "SUBSET" );
+		  writer.value( "F_HW" , means["FALL"] );
+		  writer.value( "B_HW" , means["BALL"] );
+		  writer.value( "V" , means["VALL"] );
+		  
+		  //
+		  // Specific difference contrasts (POS vs NEG)
+		  //
+
+		  writer.level( "DIF" , "SUBSET" );
+		  writer.value( "F_HW" , means["FPOS"] - means["FNEG"] ); 
+		  writer.value( "F_S" , means["FSPOS"] - means["FSNEG"] ); 		  
+		  writer.value( "B_HW" , means["BPOS"] - means["BNEG"] ); 		  
+		  writer.value( "B_S" , means["BSPOS"] - means["BSNEG"] ); 		  
+		  writer.value( "V" , means["VPOS"] - means["VNEG"]  );		  
+		  writer.value( "AMP" , pos_amp - neg_amp );
+		  
+		  writer.unlevel( "SUBSET" );
 		}
-	      
+
+
+	      //
 	      // cache main metrics also?
+	      //
+
 	      if ( cache_metrics )
 		{
 		  std::map<std::string,std::string> faclvl = writer.faclvl() ;
@@ -1990,9 +2200,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      write_if_exists( "COUPL_SIGPV_NULL" , means );
 
 	    }
-
-
-
 
 	  
 	  //
@@ -2254,17 +2461,32 @@ void characterize_spindles( edf_t & edf ,
 			    const int s0 ,
 			    bool bandpass_filtered , 
 			    const double target_f , 
-			    const double window_f ,
 			    const std::string & analysis_label ,
 			    const std::vector<double> * averaged ,
 			    const std::vector<double> * original_signal , 
 			    std::vector<spindle_t>    * spindles ,
 			    clocktime_t               * starttime , 
 			    std::map<freq_range_t,double> * baseline ,
-			    std::map<double,double> * locked 
+			    std::map<double,double> * locked ,
+			    std::vector<bool> * p_in_pos_hw , 
+			    std::vector<bool> * p_in_neg_hw , 
+			    std::vector<bool> * p_in_pos_slope , 
+			    std::vector<bool> * p_in_neg_slope 
 			    )   // input, is 
 {
  
+  //
+  // Filtering parameters
+  //
+
+
+  // default, bandpass width 4 Hz (i.e. +/- 2 Hz around the peak frequency
+  const double window_f = param.has( "char-bp" ) ? param.requires_dbl( "char-bp" ) : 4 ;
+
+  // ripple and transition width
+  const double window_ripple = param.has( "char-ripple" ) ? param.requires_dbl( "char-ripple" ) : 0.02 ;
+  const double window_tw = param.has( "char-tw" ) ? param.requires_dbl( "char-tw" ) : 4 ;
+  
   //
   // Copy key output modes
   //
@@ -2276,7 +2498,8 @@ void characterize_spindles( edf_t & edf ,
   //
   
   const std::string signal_label = edf.header.label[s0];
-  const std::string new_label = signal_label + "_BP" + "_" + Helper::dbl2str( target_f ) + "_" + Helper::dbl2str( window_f );
+  const std::string new_label = signal_label + "_BP" + "_" 
+    + Helper::dbl2str( target_f ) + "_" + Helper::dbl2str( window_f );
 
   if ( ! edf.header.has_signal( new_label ) )
     {
@@ -2292,27 +2515,50 @@ void characterize_spindles( edf_t & edf ,
       if ( ! bandpass_filtered ) 
 	{
 	  
-	  logger << "  filtering at " << target_f - window_f * 0.5  << " to " << target_f + window_f * 0.5 << "\n";
+	  if ( 0 ) 
+	    {
+	      logger << "  filtering at " 
+		     << target_f - window_f * 0.5  << " to " 
+		     << target_f + window_f * 0.5 << ", ripple=" 
+		     << window_ripple << " tw=" << window_tw << "\n";
+	      
+	  // default above is 4 Hz, i.e. +/- 2 Hz
+	  //  ~ 9-13Hz for slow spindles,    13-17Hz for fast spindles
 	  
-	  // default above is 4 Hz, i.e. +/- 2 Hz    ~ 9-13Hz for slow spindles,    13-17Hz for fast spindles
+	  // defaults: 
+	  //  char-ripple = 0.02 char-tw=4 char-bp=4  (i.e. bandpass=9,13 )
+	  //  char-ripple = 0.02 char-tw=4 char-bp=4  (i.e. bandpass=13,17 )
+	      
+	      dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
+				   1 , // 1 = Kaiser window
+				   window_ripple , window_tw , 
+				   target_f - window_f * 0.5 ,
+				   target_f + window_f * 0.5 ,
+				   0, // order (if not Kaiser win)
+				   fir_t::RECTANGULAR , // large window, no window
+				   true  // use FFT convolution
+				   );
+	    }
+	  
+	  logger << "  filtering at "
+		 << target_f - window_f * 0.5  << " to "
+		 << target_f + window_f * 0.5 << ", Hann window, order = 200\n";
 
-	  //  ripple = 0.02 tw=4 bandpass=9,13 
-	  //  ripple = 0.02 tw=4 bandpass=13,17 
-	  
 	  dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
-			       1 , // 1 = Kaiser window
-			       0.02 , 4 , // ripple , transition width
+			       2 , // fixed order
+			       0 , 0 , 
 			       target_f - window_f * 0.5 ,
 			       target_f + window_f * 0.5 ,
-			       0, // order (if not Kaiser win)
-			       fir_t::RECTANGULAR , // large window, no window
+			       200, // --> odd / symmetric FIR
+			       fir_t::HANN , // Hann window
 			       true  // use FFT convolution
 			       );
+
 	  
 	}
       
     }
-
+  
 
   const int s = edf.header.signal( new_label );
 
@@ -2330,6 +2576,20 @@ void characterize_spindles( edf_t & edf ,
    double qc_qmin = 0 , qc_qmax = -1;
    if ( param.has( "q" ) ) { qc_q = true; qc_qmin = param.requires_dbl( "q" ); } 
    if ( param.has( "q-max" ) ) { qc_q = true; qc_qmax = param.requires_dbl( "q-max" ); }
+
+   
+   // if ( 1 ) 
+   //   {
+   //     std::cout << " INT = " <<  edf.timeline.wholetrace() << "\n";
+   //     slice_t slice( edf , s , edf.timeline.wholetrace() );
+   //     const std::vector<double> * d = slice.pdata();
+   //     std::cout << "N = " << d->size() << "\n";
+   //     std::cout << std::setprecision(12); 
+   //     for ( int ii=0; ii < d->size(); ii++ )
+   // 	 {
+   // 	   std::cout << "FXX\t" << ii << "\t" << (*d)[ii] << "\n";
+   // 	 }
+   //   }
    
    //
    // track if we QC any spindles out at this step
@@ -2345,13 +2605,17 @@ void characterize_spindles( edf_t & edf ,
    for (int i=0;i<n;i++)
      {
 
+
        spindle_t * spindle = &(*spindles)[ i ];
        
+       // std::cout << " spindle-> " << spindle->tp.start << " " << spindle->tp.stop << " --- " 
+       // 		 << spindle->start_sp << " " << spindle->stop_sp << "\n";
+	
        //
        // duration
        //
        
-       spindle->dur = (spindle->tp.stop - spindle->tp.start + 1 ) / (double)globals::tp_1sec;
+       spindle->dur = (spindle->tp.stop - spindle->tp.start ) / (double)globals::tp_1sec;
       
        
        //
@@ -2371,7 +2635,10 @@ void characterize_spindles( edf_t & edf ,
        const uint64_t period = period_sec * globals::tp_1sec;
 
        const int npoints = d.size();
-       
+
+
+       // swappy
+       //for (int p=0; p<npoints; p++) d[p] *= -1;
       
        //
        // ISA (scale by SR)
@@ -2382,16 +2649,16 @@ void characterize_spindles( edf_t & edf ,
        if ( averaged != NULL )
 	 {
 	   
-	  int start = spindle->start_sp;
-	  int stop  = spindle->stop_sp;
-	  
-	  for (int s=start;s<=stop;s++)
-	    spindle->isa += (*averaged)[s] ;
+	   int start = spindle->start_sp;
+	   int stop  = spindle->stop_sp;
+	   
+	   for (int s=start;s<=stop;s++)
+	     spindle->isa += (*averaged)[s] ;
 	 }
        
        spindle->isa /= (double)Fs;
-
        
+     
        //
        // Sanity check
        //
@@ -2490,14 +2757,32 @@ void characterize_spindles( edf_t & edf ,
       
       std::vector<int> peak;
       
+      
+      // track signal max/min and 5% of max/min
+      // of the filtered signal
+
+      double fltmax = 0 , fltmin = 0; 
+      
+
+      // 0 nothing; 2 pos peak,  -2 negative peak
+      //            1 neg2pos ZC -1 pos2neg ZC
+      
+      // below, we define halfwaves both :: ZC to ZC     (halfwaves)
+      //                                    peak-to-peak (slopes)
+
+      std::vector<int> landmark( npoints , 0 );
+
       for (int p=2;p<npoints-2;p++)
 	{
 	  
 	  // tied w/ the next point? 
 	  if ( d[p] == d[p+1] ) continue;
 
-	  // peaks  
-
+	  // track max/min
+	  if ( d[p] < fltmin ) fltmin = d[p];
+	  else if ( d[p] > fltmax ) fltmax = d[p];
+	  
+	  // peaks  	  
 	  int gt = 0 , lt = 0;
 	  
 	  // forwards
@@ -2525,9 +2810,17 @@ void characterize_spindles( edf_t & edf ,
 	  if      ( d[p] < d[p-bck-1] ) ++lt;
 	  else if ( d[p] > d[p-bck-1] ) ++gt;
 	  
-	  if ( gt == 4 ) peak.push_back(p); 
-	  else if ( lt == 4 ) peak.push_back(p);
-	  
+	  if ( gt == 4 ) 
+	    {
+	      peak.push_back(p); 
+	      landmark[p] = 2;
+	    }	  
+	  else if ( lt == 4 ) 
+	    {
+	      peak.push_back(p);
+	      landmark[p] = -2;
+	    }
+
 	}
       
       // something strange?  bail
@@ -2537,56 +2830,355 @@ void characterize_spindles( edf_t & edf ,
 	  continue;
 	}
 
+
+      const bool ht_verb = false;
+
+      if ( ht_verb ) 
+	{
+	  std::cout << "\n\nSPIDLE " << i+1 << " npoints = " << npoints << " ::: " <<  spindle->start_sp << " " <<  spindle->stop_sp << "\n";
+	  for (int p=0;p<npoints;p++)
+	    std::cout << p << "\t" <<  p * period_sec << "\t" << d[p] << "\t" << (*original_signal)[ spindle->start_sp + p] << "\n";	  
+	}
+
+
+
+      
       //
       // Zero-crossings, in seconds, with linear interpolation between points
       //
 
       std::vector<double> zc;  // duration of i to i+1 zero-crossing (i.e. half-waves)
       std::vector<bool> zcp;   // T : pos-neg; F : neg-pos
+      std::vector<int> zcs;    // track which sample point (is before the ZC) 
 
       for (int p=0;p<npoints-1;p++)
         {
 	  const bool pos2neg = d[p] >= 0 && d[p+1] < 0 ;
-	  const bool neg2pos = d[p] <= 0 && d[p+1] > 0 ;
+	  const bool neg2pos = d[p] <= 0 && d[p+1] > 0 ;	  
 	  if ( ! ( pos2neg || neg2pos ) ) continue;
-
+	  
+	  // set landmarks
+	  if ( pos2neg ) landmark[p] = -1;
+	  else landmark[p] = +1;
+	  
+	  // linear interpolation between two ZC points
 	  const double s1 = p * period_sec ;
 	  const double frac = fabs( d[p] ) / ( fabs( d[p] ) + fabs( d[p+1] ) );
-
+	  
 	  zc.push_back( s1 + frac * period_sec );
 	  zcp.push_back( pos2neg );
+	  zcs.push_back( p );
+	}
+      
+
+      if ( ht_verb )
+	{
+	  std::cout << "\nINTERPOLATED ZCs (dur. from i to i+1 ZC):\n";
+	  for (int zz=0; zz<zc.size(); zz++)
+	    std::cout << zz << "\t" << zc[zz] << "\t" << ( zcp[zz] ? "P2N" : "N2P" ) << " nearest prior SP " << zcs[zz] << "\n"; 	      
 	}
       
       //
-      // pos/neg halfwave freqs given ZCs
+      // Positive peaks, with cubic interpolation at arbitrary temporal resolution
       //
       
-      spindle->posf = 0;
-      spindle->negf = 0;
-      int posc = 0 , negc = 0;
+      // time_points
+      std::vector<double> t0( npoints );
+      for (int p=0; p<npoints; p++) t0[p] = p * period_sec;
+      
+      tk::spline spline;
+      spline.set_points( t0 , d );
 
-      // duration of halfwaves
+      const double tdur = (npoints-1.0) * period_sec  ;
+      const double tinc = tdur * 0.001;
+
+      // spline interpolation at this resolution
+      std::vector<double> interp;
+      for (double tt = 0 ; tt <= tdur ; tt += tinc )
+	interp.push_back( spline(tt) );
+
+
+      if ( ht_verb && 0 ) 
+	{
+	  std::cout << "\n1000-point interpolated sequence (for peak-to-trough finding)\n";
+	  for (int p=0;p<interp.size(); p++) 
+	    std::cout << "INTERP\t" << p << "\t" << p * tinc << "\t" << interp[p] << "\n";
+	}
+
+      // find peaks/troughs
+
+      const int nint = interp.size();
+      std::vector<double> tpk;
+      std::vector<bool> ppk; // peak / trough 
+      std::vector<double> mpk;  // peak magnitude 
+      double int_fltmin = 0, int_fltmax = 0; // track min/max 
+
+      for (int p=2; p < nint-2;p++)
+	{
+	  
+	  // tied w/ the next point? 
+	  if ( interp[p] == interp[p+1] ) continue;
+
+	  // peaks  	  
+	  int gt = 0 , lt = 0;
+	  
+	  // forwards
+	  if      ( interp[p] < interp[p+1] ) ++lt;
+	  else if ( interp[p] > interp[p+1] ) ++gt;
+	  
+	  if      ( interp[p] < interp[p+2] ) ++lt;
+	  else if ( interp[p] > interp[p+2] ) ++gt;
+	  
+	  // backwards, which might require we skip ties previously skipped
+	  int bck = 0;
+	  bool skip = false;
+	  while ( 1 ) 
+	    {
+	      if ( p - bck < 1 ) { skip = true; break; } 
+	      if ( interp[p] == interp[p-bck] ) ++bck;
+	      else break;
+	    }
+
+	  if ( skip ) continue;
+	  
+	  if      ( interp[p] < interp[p-bck] ) ++lt;
+	  else if ( interp[p] > interp[p-bck] ) ++gt;
+	  
+	  if      ( interp[p] < interp[p-bck-1] ) ++lt;
+	  else if ( interp[p] > interp[p-bck-1] ) ++gt;
+	  
+	  if ( gt == 4 ) 
+	    {	      
+	      tpk.push_back( p * tinc ); 
+	      ppk.push_back( true );
+	      mpk.push_back( interp[p]  );
+	      if ( interp[p] > int_fltmax ) int_fltmax = interp[p] ;
+	    }
+	  else if ( lt == 4 ) 
+	    {
+	      tpk.push_back( p * tinc ); 
+	      ppk.push_back( false );	      
+	      mpk.push_back( interp[p]  );
+	      if ( interp[p] < int_fltmin ) int_fltmin = interp[p] ;
+	    }
+	}
+      
+
+      //
+      // Get intervals from peak-trough, vice-versa
+      //
+
+      // want to get two vectors or intervals: for pos-slopes and neg-slopes
+      std::vector<double> wpos_slope, wneg_slope;  // duration of slope interval 
+      std::vector<double> tpos_slope, tneg_slope;  // time mid-points of slope interval
+      
+      // for (int p=0; p<tpk.size() ; p++)
+      // 	std::cout << "peak = " << p << "/" << tpk.size() << " " << ppk[p] << "\t" << tpk[p] << "\n";
+
+      // by default. needs to be 5% of max peak-to-peak
+      const double req_p2p = ( int_fltmax - int_fltmin ) * 0.05;
+
+      for (int p=0; p<tpk.size() - 1 ; p++)
+	{
+
+	  // skip if consecutive peaks of the same polarity
+	  //  i.e. typically local minima, occassionally happens
+	  if ( ppk[p] == ppk[p+1] ) continue;
+	  
+	  // also, skip if either range is not > % of max peak-to-peak
+	  if ( fabs( mpk[p] ) + fabs( mpk[p+1] ) < req_p2p ) 
+	    {
+	      //std::cerr << "*****************************************************SKIPPY\n";
+	      continue;
+	    }
+
+	  bool pos_slope = ! ppk[p] ; // from NEG to POS
+
+	  const double w1 = tpk[p];
+          const double w2 = tpk[p+1];
+
+          const double w = 1.0 / ( 2 * ( w2 - w1 ) );
+          const double t = ( w1 + w2 ) / 2.0 ;
+
+	  // tracsk diff and midpoint
+	  if ( pos_slope )
+	    {
+	      wpos_slope.push_back( w );
+	      tpos_slope.push_back( t );
+	    }
+	  else
+	    {
+	      wneg_slope.push_back( w );
+	      tneg_slope.push_back( t );
+	    }
+	}
+
+
+      
+      //
+      // populate boolean vectors for use in IF analyses? (if 'if' is set) 
+      //
+      
+      if ( p_in_pos_hw != NULL ) 
+	{
+	  
+	  // determine HW status just by polarity of original signal
+	  // use landmarks to get slopes
+	  
+	  // get first landmark to figure out slope
+	  bool pos_slope = false;
+	  
+	  for (int p=0; p<npoints; p++)
+	    {
+	      if ( landmark[p] == 2 || landmark[p] == -2 ) 
+		{
+		  pos_slope = landmark[p] == 2;
+		  break;
+		}
+	    }
+
+	  
+          int sp = spindle->start_sp;
+
+	  for (int p=0; p<npoints; p++)
+	    {
+
+	      // HW status
+	      
+	      const bool pos_hw = d[p] >= 0;
+
+	      // mask according to state
+	      if ( pos_hw ) 
+		(*p_in_neg_hw)[sp] = false;
+	      else
+		(*p_in_pos_hw)[sp] = false;
+
+	      // determine slope
+	      if ( landmark[p] == 2 ) pos_slope = false;
+	      else if ( landmark[p] == -2 ) pos_slope = true;
+
+	      // mask according to state
+	      if ( pos_slope ) (*p_in_neg_slope)[sp] = false;
+	      else (*p_in_pos_slope)[sp] = false;
+	      	      
+	      // std::cout << " det " << i << "\t" << d[p] << " " << landmark[p] << " " <<  (*p_in_pos_hw)[sp] <<  (*p_in_neg_hw)[sp] << " " <<  (*p_in_pos_slope)[sp] <<  (*p_in_neg_slope)[sp] << "\n";
+
+	      // move along spindle sample point
+	      ++sp;
+
+	    }
+	  //std::cout << "\n npoints = " << npoints << "\n";
+
+	}
+
+
+      //
+      // ISA stratified by pos/neg HWs (currently, yoked to 'if' option)
+      //
+      
+      spindle->posisa = spindle->negisa = 0;
+      spindle->possp = spindle->negsp = 0;
+
+      if ( p_in_pos_hw != NULL &&  averaged != NULL )
+	{
+	  
+	  int start = spindle->start_sp;
+	  int stop  = spindle->stop_sp;
+	  
+	  for (int s=start;s<=stop;s++)
+	    {
+	      if ( (*p_in_pos_hw)[s] )
+		{
+		  spindle->posisa += (*averaged)[s] ;
+		  ++(spindle->possp);
+		  // std::cout << " adding pos " << (*averaged)[s]  << "  " << spindle->posisa << " " << spindle->negisa << " / " 
+		  // 	    << spindle->possp << " " << spindle->negsp << "\n";
+		}
+	      else
+		{
+		  spindle->negisa += (*averaged)[s] ;
+		  ++(spindle->negsp);
+
+		  // std::cout << " adding neg " << (*averaged)[s]  << "  " << spindle->posisa << " " << spindle->negisa << " / " 
+		  // 	    << spindle->possp << " " << spindle->negsp << "\n";
+
+		}
+	    }
+	  
+	  spindle->posisa /= (double)Fs;
+	  spindle->negisa /= (double)Fs;
+
+	  spindle->posisa /= (double)spindle->possp;
+	  spindle->negisa /= (double)spindle->negsp;
+
+	}
+      
+      //      std::cout << " spindle->posisa = " << spindle->posisa << " " << spindle->negisa << "\n";
+
+      //
+      // pos/neg halfwaves freqs; we check to make sure that there
+      // is a sufficient peak between ZCs here: e.g. X% of the max
+      //
+      
+            
+      const double fltmin_th = 0.05 * fltmin;
+      const double fltmax_th = 0.05 * fltmax;
+      
+      if ( ht_verb ) 
+	{	  
+	  std::cout << "\nEXTRACTING HWs for F_* and B_* calculations\n";
+	  std::cout << "fltmin_th (5%) = " << fltmin_th << "\n"; 
+	  std::cout << "fltmax_th (5%) = " << fltmax_th << "\n"; 
+	}
+
+      // frequency of halfwaves
       std::vector<double> wpos, wneg, wall; 
       std::vector<double> tpos, tneg, tall; 
-
+      
       for (int z=0; z<zc.size()-1; z++)
 	{
+
+	  // neg HW (i.e. initiated by post->neg ZC)
+	  const bool neg_halfwave = zcp[z];
+
+	  // is the spanned peak sufficient?
+	  bool okay = false;
+	  
+	  for (int p=zcs[z]; p <= zcs[z+1]; p++)
+	    {	      
+	      if ( neg_halfwave ) 
+		{
+		  if ( d[p] < fltmin_th ) { okay = true; break; }
+		}
+	      else
+		{
+		  if ( d[p] > fltmax_th ) { okay = true; break; }
+		}
+	    }
+	  
+	  //std::cout << " OK = " << okay << "\n";
+	  
+	  // skip?
+	  if ( ! okay ) 
+	    {
+	      if ( ht_verb ) 
+		std::cout << "  *** skipping " << ( neg_halfwave ? "neg" : "pos" ) << " HW from (1-based) " << z+1 << " to " << z+2 << " ZCs\n";
+	      continue;
+	    }
+	  
 	  // transform to frequency 1/SW
 	  double w = 1.0 / ( 2 * ( zc[z+1] - zc[z] ) );
 	  double t = ( zc[z] + zc[z+1] ) / 2.0;
 	  
-	  // neg-halfwave
-	  if ( zcp[z] )
+	  if ( neg_halfwave )
 	    {
-	      spindle->negf += w ;
-	      ++negc;
+	      if ( ht_verb ) std::cout << " +++ adding ZC-defined (NEG HW) = " << zc[z] << " to " << zc[z+1] << " = " << w << " " << t << "\n"; 
 	      wneg.push_back(w);
 	      tneg.push_back(t);
 	    }
 	  else
-	    {
-	      spindle->posf += w ;
-	      ++posc;
+	    {	      
+	      if ( ht_verb ) std::cout << " +++ adding ZC-defined (POS HW) = " << zc[z] << " to " << zc[z+1] << " = " << w << " " << t << "\n"; 
 	      wpos.push_back( w );
 	      tpos.push_back( t );
 	    }
@@ -2594,20 +3186,61 @@ void characterize_spindles( edf_t & edf ,
 	  wall.push_back( w );
 	  tall.push_back( t );
 	}
+
+
+      //
+      // Durations/freqs of slopes -- no need to check things here
+      //
+          
+      std::vector<double> wpos2, wneg2;
+      std::vector<double> tpos2, tneg2; 
       
-      spindle->posf /= (double)posc;
-      spindle->negf /= (double)negc;
+      for (int p=0; p<peak.size()-1; p++)
+	{
+	  // neg-peak to pos-peak :
+	  const bool pos_slope = landmark[ peak[p] ] == -2 ; 
+	  
+	  // slope duration, in Hz
+	  const double w1 = peak[p] * period_sec;
+	  const double w2 = peak[p+1] * period_sec;
 
+	  const double w = 1.0 / ( 2 * ( w2 - w1 ) );
+	  const double t = ( w1 + w2 ) / 2.0 ; 
+	  
+	  // neg-halfwave
+	  if ( pos_slope )
+	    {
+	      wpos2.push_back(w);  
+	      tpos2.push_back(t);
+	    }
+	  else
+	    {
+	      wneg2.push_back(w);	      
+	      tneg2.push_back(t);
+	    }
 
+	}
+      
       //
-      // Slope of frequency implied by ZC / stratified by POS and NEG halfwaves
+      // Slope of frequency (both HWs and slopes) stratified by pos/neg polarity
       //
 
-      // Y = frequencxy implied by halfwave
-      // X = time midpoint of bounding ZC (elapsed seconds from spindle start)
+      // Y = implied frequency
+      // X = time midpoint of halfwave/slope
+
       dynam_t zall( wall , tall ); 
       dynam_t zpos( wpos , tpos ); 
       dynam_t zneg( wneg , tneg ); 
+
+      // if ( i == 10 ) 
+      // 	{
+      // 	  for (int ww=0; ww<wpos.size(); ww++)
+      // 	    std::cout << " pos = " << tpos[ww] << " = " << wpos[ww] << "\n";
+	  
+      // 	  for (int ww=0; ww<wneg.size(); ww++)
+      // 	    std::cout << " neg = " << tneg[ww] << " = " << wneg[ww] << "\n";
+      // 	}
+
 
       zall.linear_trend( &spindle->allb , NULL );
       zpos.linear_trend( &spindle->posb , NULL );
@@ -2616,6 +3249,57 @@ void characterize_spindles( edf_t & edf ,
       zall.mean_variance( &spindle->allf , &spindle->allv );
       zpos.mean_variance( &spindle->posf , &spindle->posv );
       zneg.mean_variance( &spindle->negf , &spindle->negv );
+
+      if ( ht_verb )
+	{
+	  std::cout << "\nFINAL num INTERVALS = POS, NEG, ALL " << zpos.size() << "\t" << zneg.size() << "\t" << zall.size() << "\n";
+	  std::cout << "\nFINAL F_POS = " << spindle->posf << "   and F_NEG = " << spindle->negf << " F_ALL = " << spindle->allf << "\n";
+	  std::cout << "\nFINAL B_POS = " << spindle->posb << "   and B_NEG = " << spindle->negb << " B_ALL = " << spindle->allb << "\n";
+	}
+
+      // if ( i == 10 ) { 
+      // 	std::cout << " MEAN = F_POS, F_NEG = " <<  spindle->posf << " " <<  spindle->negf << "\n";
+      // }
+
+      // slopes
+      
+      // old - based on samples
+      // dynam_t zpos2( wpos2 , tpos2 ); 
+      //  dynam_t zneg2( wneg2 , tneg2 ); 
+       
+      // new - use interpolated variants
+      dynam_t zpos2( wpos_slope , tpos_slope ); 
+      dynam_t zneg2( wneg_slope , tneg_slope ); 
+
+      // ignore variance for the slopes (for now)
+      zpos2.linear_trend( &spindle->pos2b , NULL );
+      zneg2.linear_trend( &spindle->neg2b , NULL );
+      
+      zpos2.mean_variance( &spindle->pos2f , NULL );
+      zneg2.mean_variance( &spindle->neg2f , NULL );
+          
+
+      // VERB
+      // std::cout << "\n\n .... \n\n";
+      // if ( spindle->posf > 1000 ) 
+      // 	{
+
+      // 	  std::cout << "d--> " << d.size() << " " << original_signal->size() << "\n";
+	  
+      // 	  for (int l=0; l<npoints; l++)
+      // 	    {
+      // 	      std::cout << l << "\t" << landmark[l] << "\t" << d[l] << " " << (*original_signal)[ spindle->start_sp + l] << "\n";
+      // 	    }
+
+      // 	  std::cout << " ZC : neg\n";
+      // 	  for (int l=0;l<zneg.size();l++) std::cout << wneg[l] << " " << tneg[l] << "\n";
+
+      // 	  std::cout << " ZC : pos\n";
+      // 	  for (int l=0;l<zpos.size();l++) std::cout << wpos[l] << " " << tpos[l] << "\n";
+	  
+      // 	  std::cout << " DONE>...\n";
+      // 	}
+
 
       
       //
@@ -2648,17 +3332,18 @@ void characterize_spindles( edf_t & edf ,
 
       spindle->chirp      = -99999;
       spindle->chirp_fdif = -99999;
-      
+      spindle->frq_h1 = spindle->frq_h2 = 0;
+
       bool valid_chirp = cint1 > 1 && cint2 > 1 ; 
 
       if ( valid_chirp )
 	{
 	  // go mean from peak-to-peak duration in sample points, to implied frequency, Hz
-	  double f1 = 1.0 / ( 2 * ( period_sec * int1/(double)cint1 ) );
-	  double f2 = 1.0 / ( 2 * ( period_sec * int2/(double)cint2 ) );
+	  spindle->frq_h1 = 1.0 / ( 2 * ( period_sec * int1/(double)cint1 ) );
+	  spindle->frq_h2 = 1.0 / ( 2 * ( period_sec * int2/(double)cint2 ) );
 
 	  // +ve means getting faster: absolute diffference (Hz)
-	  spindle->chirp_fdif = f2 - f1 ; 
+	  spindle->chirp_fdif = spindle->frq_h2 - spindle->frq_h1 ; 
 	  
 	  // old CHIRP definition: log scaled ratio
 	  spindle->chirp = log( ( int1/(double)cint1 )  / (int2/(double)cint2  )  );
@@ -2991,8 +3676,6 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        writer.value( "SYMM"   , spindle->symm     );
        writer.value( "SYMM2"  , spindle->symm2    );
        writer.value( "ISA"    , spindle->isa      );
-
-
 	 
        if ( globals::devel )
 	 {
@@ -3011,14 +3694,32 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	   writer.value( "V_ALL"    , spindle->allv      );
 	   writer.value( "V_DIF"    , spindle->posv - spindle->negv );
 	   
+	   // based on slopes
+	   writer.value( "FS_POS"    , spindle->pos2f      );
+	   writer.value( "FS_NEG"    , spindle->neg2f      );
+	   writer.value( "FS_DIF"    , spindle->pos2f - spindle->neg2f );
+
+	   writer.value( "BS_POS"    , spindle->pos2b      );
+	   writer.value( "BS_NEG"    , spindle->neg2b      );	   
+	   writer.value( "BS_DIF"    , spindle->pos2b - spindle->neg2b );
+
+	   writer.value( "AMP_POS" , spindle->posisa      );
+	   writer.value( "AMP_NEG" , spindle->negisa      );
+	   
+	   writer.value( "SP_POS" , spindle->possp  );
+	   writer.value( "SP_NEG" , spindle->negsp  );
+	   
 	 }
        
-       if ( spindle->chirp > -99998 ) 
-	 writer.value( "CHIRP"  , spindle->chirp );
-
+       
        if ( spindle->chirp_fdif > -99998 ) 
-	 writer.value( "CHIRPF"  , spindle->chirp_fdif );
-	      
+	 {
+	   writer.value( "CHIRPF"  , spindle->chirp_fdif );
+	   writer.value( "CHIRP"  , spindle->chirp );
+	   writer.value( "FRQ1"  , spindle->frq_h1 );
+	   writer.value( "FRQ2"  , spindle->frq_h2 );	   
+	 }
+
        writer.value( "MAXSTAT" , spindle->max_stat );
        writer.value( "MEANSTAT" , spindle->mean_stat );
        
@@ -3140,12 +3841,20 @@ void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_
 void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & results ) 
 {
 
-  double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , symm = 0 , 
-    symm2 = 0, chirp = 0 , chirp_fdif = 0 , isa = 0 , qual = 0 ;
+  double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , isa = 0 , qual = 0 ;
 
+  double symm = 0 , symm2 = 0, chirp = 0 , chirp_fdif = 0 ;
+  double frq1 = 0 , frq2 = 0;
+
+  // HWs
   double negf = 0 , posf = 0 , allf = 0;
   double negb = 0 , posb = 0 , allb = 0;
   double negv = 0 , posv = 0 , allv = 0;
+  double posisa = 0 , negisa = 0 , possp = 0 , negsp = 0;
+
+  // slopes
+  double neg2f = 0 , pos2f = 0 ;
+  double neg2b = 0 , pos2b = 0 ;
 
   int denom = 0;
 
@@ -3172,6 +3881,9 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       chirp += ii->chirp;
       chirp_fdif += ii->chirp_fdif;
 
+      frq1 += ii->frq_h1;
+      frq2 += ii->frq_h2;
+      
       negf += ii->negf;
       posf += ii->posf;
       allf += ii->allf;
@@ -3183,8 +3895,21 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       negv += ii->negv;
       posv += ii->posv;
       allv += ii->allv;
+      
+      // based on slopes
+      neg2f += ii->neg2f;
+      pos2f += ii->pos2f;
+            
+      neg2b += ii->neg2b;
+      pos2b += ii->pos2b;
 
       isa += ii->isa;
+      posisa += ii->posisa;
+      negisa += ii->negisa;
+      
+      possp += ii->possp;
+      negsp += ii->negsp;
+
       qual += ii->qual;
 
       // relative enrichment compared to baseline
@@ -3211,6 +3936,8 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 
   results[ "CHIRP" ]    = chirp / (double)denom;
   results[ "CHIRPF" ]    = chirp_fdif / (double)denom;
+  results[ "FRQ1" ]    = frq1 / (double)denom;
+  results[ "FRQ2" ]    = frq2 / (double)denom;
 
   results[ "FNEG" ]    = negf / (double)denom;
   results[ "FPOS" ]    = posf / (double)denom;
@@ -3224,10 +3951,23 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   results[ "VPOS" ]    = posv / (double)denom;
   results[ "VALL" ]    = allv / (double)denom;
 
+  // slopes
+  results[ "FSNEG" ]    = neg2f / (double)denom;
+  results[ "FSPOS" ]    = pos2f / (double)denom;
+
+  results[ "BSNEG" ]    = neg2b / (double)denom;
+  results[ "BSPOS" ]    = pos2b / (double)denom;
+
   results[ "Q" ]        = qual / (double)denom;
   
   results[ "ISA_PER_SPINDLE" ] = isa / (double)denom;
   results[ "ISA_TOTAL" ] = isa;
+  
+  results[ "POSISA_PER_SP" ] = posisa / (double)denom;
+  results[ "POSSP" ] = possp / (double)denom;
+
+  results[ "NEGISA_PER_SP" ] = negisa / (double)denom;
+  results[ "NEGSP" ] = negsp / (double)denom;
   
   // relative enrichment compared to baseline
   std::map<freq_range_t,double>::iterator ee = enrich.begin();
@@ -3419,9 +4159,9 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
       
       bool bandpass_filtered = true;
       
-      characterize_spindles( edf , param , signals(s) , bandpass_filtered ,  13 , 4 , // i.e. 11 to 15 
+      characterize_spindles( edf , param , signals(s) , bandpass_filtered ,  13 , 
 			     "bandpass" ,
-			     NULL , NULL , &spindles , NULL , NULL );
+			     NULL , NULL , &spindles , NULL , NULL , NULL , NULL , NULL , NULL );
       
       std::map<std::string,double> means;
 
