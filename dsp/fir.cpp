@@ -949,7 +949,10 @@ std::vector<double> fir_t::createKaiserWindow( const std::vector<double> * in, d
   // If input has been given, multiply with out
   if ( in != NULL ) 
     for (int n=0 ; n<windowLength ; n++) 
-      out[n] *= (*in)[n];
+      {
+	//	std::cout << " KW " << n << " " << out[n] << " " << (*in)[n] << " " << out[n] * (*in)[n] << "\n";
+	out[n] *= (*in)[n];
+      }
   
   return out;
 }

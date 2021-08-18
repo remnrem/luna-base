@@ -234,6 +234,11 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   bool specified_extensions = false;
 
   bool show_path = true;
+
+  bool allow_numeric_ids = false;
+
+  // added in ID is a number (i.e. better to have string IDs in Luna)
+  const std::string id_prefix = "id_";
   
   for (int t=0;t<tok0.size();t++)
     {
@@ -246,6 +251,10 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	  // only link EDF and annotation files within the same folder
 	  if ( tok0[t].substr(1) == "nospan" ) globals::sl_link_across_folders = false;
 
+	  // allow numeric IDs?
+	  if ( tok0[t].substr(1) == "allow-numeric-ids" ) allow_numeric_ids = true;
+	  
+	  
 	  // special case for -nsrr.xml extensions
 	  if ( tok0[t].substr(1) == "nsrr" ) {	    
 	    globals::sl_annot_extensions.insert( "-nsrr.xml" ); 
@@ -338,10 +347,33 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	  ++edfs; 
 	}
 
-      if ( has_edf ) 
-	std::cout << ii->second.id << "\t"
-		  << Helper::quote_spaced( ii->second.edf )
-		  << "\t";
+      if ( has_edf )
+	{
+	  // ID
+	  if ( allow_numeric_ids ) 
+	    std::cout << ii->second.id << "\t";
+	  else
+	    {
+	      double num_test; // if this cases to a valiud number
+
+	      bool is_numeric = Helper::str2dbl( ii->second.id , &num_test ) ;
+
+	      // but allow 123-567, etc ; so test for - _ as common delimiters 
+	      if      ( ii->second.id.find( "-" ) != std::string::npos ) is_numeric = false;
+	      else if ( ii->second.id.find( "_" ) != std::string::npos ) is_numeric = false;
+	      else if ( ii->second.id.find( ":" ) != std::string::npos ) is_numeric = false;
+	      else if ( ii->second.id.find( "+" ) != std::string::npos ) is_numeric = false;
+
+	      if ( is_numeric ) 
+		std::cout << id_prefix << ii->second.id << "\t";
+	      else
+		std::cout << ii->second.id << "\t";
+	    }
+	  
+	  // EDF
+	  std::cout << Helper::quote_spaced( ii->second.edf )
+		    << "\t";
+	}
       
       // new sl-format: can add '.' in third slot if no annots
       if ( ii->second.annots.size() == 0 )

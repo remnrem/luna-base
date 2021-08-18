@@ -255,10 +255,11 @@ struct suds_t {
     // flat priors?
     flat_priors = param.has( "flat-priors" );
 
-    // apply final elapsed stage model
+    // apply final elapsed stage model; if passed '.', then ignore
     es_model = param.has( "es-model" );
-    es_filename = es_model ? param.value( "es-model" ) : "" ;
-    
+    es_filename = es_model ? param.value( "es-model" ) : "." ;
+    if ( es_filename == "." ) es_model = false;
+      
     // fixed priors?
     fixed_priors.clear();
     if ( param.has( "fixed-priors" ) )

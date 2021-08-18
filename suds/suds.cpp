@@ -1416,9 +1416,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   std::vector<bool> valid( nge , true );
 
   // track reasons for exclusion
-  int nout_flat = 0;
-  int nout_hjorth = 0;
-  int nout_stat = 0;
+  std::set<int> nout_flat;
+  std::set<int> nout_hjorth;
+  std::set<int> nout_stat;
+  std::set<int> nout_tot;
   
   //
   // Exclusions based on H==0 parameters
@@ -1428,8 +1429,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     {
       for (int i=0;i<nge;i++) 
 	{
-	  if ( h2( i, s ) < 1e-8 ) { valid[i] = false; nout_flat++; }
-	  else if ( h3( i , s ) < 1e-8 ) { valid[i] = false; nout_flat++; } 
+	  if ( h2( i, s ) < 1e-8 ) { valid[i] = false; nout_flat.insert(i); }
+	  else if ( h3( i , s ) < 1e-8 ) { valid[i] = false; nout_flat.insert(i) ; }
 	}
     }
 
@@ -1447,7 +1448,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  for (int i=0;i<nge;i++)
 	    {
 	      if ( h2( i, s ) <= suds_t::lwr_h2[s] || h2(i,s) >= suds_t::upr_h2[s] ||
-		   h3( i, s ) <= suds_t::lwr_h3[s] || h3(i,s) >= suds_t::upr_h3[s] ) { valid[i] = false; nout_hjorth++; } 
+		   h3( i, s ) <= suds_t::lwr_h3[s] || h3(i,s) >= suds_t::upr_h3[s] ) { valid[i] = false; nout_hjorth.insert(i); }
 	    }
 	}
     }
@@ -1474,7 +1475,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	    {
 	      if ( valid[i] )
 		{
-		  if ( x[c] < lwr || x[c] > upr ) { valid[i] = false; nout_stat++; } 
+		  if ( x[c] < lwr || x[c] > upr ) { valid[i] = false; nout_stat.insert(i); } 
 		  ++c;
 		}
 	    }
@@ -1540,9 +1541,20 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   logger << "  of " << ne << " total epochs, valid staging for " << nge
          << ", and of those " << included << " passed outlier removal\n";
 
-  logger << "  outliers counts (flat, Hjorth, components = " << nout_flat << ", " << nout_hjorth << ", " << nout_stat << ")\n";
-
-
+  std::set<int>::const_iterator oo = nout_flat.begin();
+  while ( oo != nout_flat.end() ) { nout_tot.insert( *oo ); ++oo; } 
+  oo = nout_hjorth.begin();
+  while ( oo != nout_hjorth.end() ) { nout_tot.insert( *oo ); ++oo; } 
+  oo = nout_stat.begin();
+  while ( oo != nout_stat.end() ) { nout_tot.insert( *oo ); ++oo; } 
+  
+  logger << "  outliers counts (flat, Hjorth, components, total = "
+	 << nout_flat.size() << ", "
+	 << nout_hjorth.size() << ", "
+	 << nout_stat.size() << ", "
+	 << nout_tot.size() << "\n";
+  
+ 
   //
   // Remove bad epochs and repeat (SVD and smoothing)
   //
@@ -4186,7 +4198,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	    current_prediction.push_back( max_inrow( pp.row(e) , suds_t::labels ) );
 	}
   
-      // does notjing is ES model is already attacged
+      // does nothing is ES model is already attached
       suds_t::read_elapsed_stages( es_filename );
       logger << "  applying ES model to revised final predictions\n";
       // update
