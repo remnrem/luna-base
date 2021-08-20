@@ -1120,8 +1120,10 @@ void cmddefs_t::init()
   
   add_param( "PSD" , "dynamics" , "" , "Power dynamics (experimental/undocumented)" );
   
-  add_table( "PSD" , "CH" , "Number of epochs" );
+  add_table( "PSD" , "CH" , "Channel-level output" );
   add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
+  add_var( "PSD" , "CH" , "PK" , "Peak (PSD skewness)" );
+  add_var( "PSD" , "CH" , "SPK" , "Sum PSD peakedness" );
 
   add_table( "PSD" , "CH,B" , "Whole-night, per-channel band power" );
   add_var( "PSD" , "CH,B" , "PSD" , "Power" );

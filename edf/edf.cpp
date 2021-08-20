@@ -295,7 +295,11 @@ void edf_t::description( const param_t & param )
   else 
     std::cout << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n";
 
-  std::cout << "Duration          : " << Helper::timestring( duration_tp , ':' , false ) << "\n"; // not fractional 
+  std::cout << "Duration          : "
+	    << Helper::timestring( duration_tp , ':' , false )
+	    << "  " 
+	    << header.nr * header.record_duration << " sec" 
+	    << "\n"; // not fractional 
 
   if ( n_data_channels_sel < n_data_channels )
     std::cout << "# signals         : " << n_data_channels_sel << " selected (of " << n_data_channels << ")\n";

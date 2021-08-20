@@ -507,8 +507,16 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // These are not allowed for EDF+ files.
   //
   
-  bool is_eannot = Helper::file_extension( f , "eannot" ) ;
-  bool is_annot = Helper::file_extension( f , "annot" ) ;
+  // nb. by default, file_extension() matches w/ a period
+  // before the extension, so "annot" is different from "eannot"
+  
+  bool is_eannot = Helper::file_extension( f , "eannot" ) 
+  || Helper::file_extension( f , "eannot.txt" );
+
+  // this also matches file.annot.txt , file.txt, file.tsv, etc
+  bool is_annot = Helper::file_extension( f , "annot" )    
+    || Helper::file_extension( f , "txt" ) 
+    || Helper::file_extension( f , "tsv" ); 
   
   if ( is_eannot && ! parent_edf.header.continuous ) 
     Helper::halt( "cannot use .eannot files with discontinuous (EDF+) files" );

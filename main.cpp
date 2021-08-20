@@ -33,9 +33,16 @@ extern writer_t writer;
 
 extern logger_t logger;
 
+void log_commands( int argc , char ** argv );
 
 int main(int argc , char ** argv )
 {
+
+  //
+  // initial check for display of all commands
+  //
+  
+  log_commands( argc , argv );
   
   //
   // display version info?
@@ -3146,5 +3153,68 @@ void NoMem()
 	    << "* Forced exit now...                                *\n"
 	    << "*****************************************************\n\n";
   std::exit(1);
+}
+
+
+void log_commands( int argc , char ** argv )
+{
+  bool dump = false; 
+
+  for (int i=0; i<argc; i++)
+    {
+      if ( strcmp( argv[i] ,"--log" ) == 0 )
+	{
+	  dump = true;
+	  break;
+	}
+    }
+  
+  if ( ! dump ) return;
+
+  bool has_s = false;
+
+  // note - anything in ' ' quotes is read as a single item; need to parse out first;
+  std::string str ;
+  for (int i=0; i<argc; i++)
+    {
+      str.append( argv[i] );
+      str.push_back( ' ' );
+    }
+
+  // remove any tabs and newlines
+  str = Helper::search_replace( str , '\n' , ' ');
+  str = Helper::search_replace( str , '\t' , ' ');
+  
+  std::vector<std::string> tok = Helper::parse( str , ' ' );
+
+  const int n = tok.size();
+  
+  std::cerr << "\n"
+	    << "# " << std::string( 78 , '=' ) << "\n"
+	    << "\n";
+
+  for (int i=0; i<n; i++)
+    {
+      std::string s = tok[i] ;
+      if ( s == "--log" ) continue;
+      
+      std::string spc = i == 0 ? "" : " ";
+      if ( ( ! has_s )  && ( s[0] == '-' || s.find( "=" ) != std::string::npos ) ) spc = " \\\n     ";
+      else if ( s == "&" ) spc = " \n        ";  // no newline '\' char
+
+      // now in command string?
+      if ( s == "-s" ) { s = "-s '"; has_s = true; }
+      
+      std::cerr << spc << s ;
+      
+    }
+
+  if ( has_s ) std::cerr << "'";
+
+  std::cerr << "\n\n"
+	    << "# " << std::string( 78 , '-' ) << "\n"
+	    << "\n";
+
+  
 }
 
