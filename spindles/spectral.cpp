@@ -36,6 +36,8 @@
 extern writer_t writer;
 extern logger_t logger;
 
+
+
 annot_t * spectral_power( edf_t & edf , 
 			  const std::string & signal_label , 
 			  param_t & param )
@@ -57,21 +59,38 @@ annot_t * spectral_power( edf_t & edf ,
 
   // Band power per-epoch
 
-  bool show_epoch = param.has( "epoch" ) || param.has("epoch-spectrum" );
+  const bool show_epoch = param.has( "epoch" ) || param.has("epoch-spectrum" );
 
   // Characterize dynamics: of all epoch-level stats created, get the H1, H2, H3, linear and exponential trend
   // Hjorth stats just consider all points concatenated
   // trend lines are based on observed E numbers 
 
-  bool calc_dynamics = param.has( "dynamics" );
+  const bool calc_dynamics = param.has( "dynamics" );
   
   // Verbose output: full spectrum per epoch
 
-  bool show_epoch_spectrum = param.has( "epoch-spectrum" );
+  const bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
   // peak diagnostics
-  bool peak_diagnostics = param.has( "peaks" );
-  int peak_median_filter_n = param.has( "peaks-window" ) ? param.requires_int( "peaks-window" ) : 11 ; 
+  const bool peak_diagnostics = param.has( "peaks" ) || param.has( "epoch-peaks" );
+  const int peak_median_filter_n = param.has( "peaks-window" ) ? param.requires_int( "peaks-window" ) : 11 ; 
+  const bool peak_per_epoch = param.has( "epoch-peaks" );
+  std::vector<double> peak_range(2); peak_range[0] = 0 ; peak_range[1] = 99999;
+  if ( param.has( "peaks-frq" ) ) peak_range = param.dblvector( "peaks-frq" );
+  if ( peak_range.size() != 2 || peak_range[0] >= peak_range[1] ) Helper::halt( "bad peaks-frq=lwr,upr" );
+
+  // spectral slope?
+  const bool spectral_slope = param.has( "slope" );
+  const std::vector<double> slope_range = param.dblvector( "slope" );
+  if ( spectral_slope )
+    {
+      if ( slope_range.size() != 2 ||  
+	   slope_range[0] >= slope_range[1] ||
+	   slope_range[0] <= 0 ||
+	   slope_range[1] <= 0 )
+	Helper::halt( "expecting slope=lwr,upr" );
+    }
+  const double slope_outlier = param.has( "slope-th" ) ? param.requires_dbl( "slope-th" ) : 3 ;
   
   // truncate spectra
   double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
@@ -431,16 +450,41 @@ annot_t * spectral_power( edf_t & edf ,
 		   bin_t bin( min_power , max_power , bin_fac );
 		   
 		   bin.bin( freqs , pwelch.psd );
+
+		   std::vector<double> f0;
 		   
 		   for ( int i = 0 ; i < bin.bfa.size() ; i++ )
 		     {		     
-		       writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
+		       f0.push_back( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 );		       
+		       writer.level( f0[ f0.size()-1 ] , globals::freq_strat );
 		       //writer.level( bin.bfa[i] , globals::freq_strat );
 		       writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
 		       if ( bin.nominal[i] != "" )
 			 writer.value( "INT" , bin.nominal[i] );
 		     }
 		   writer.unlevel( globals::freq_strat );
+		 }
+	      
+	       
+	       //
+	       // epoch-level peakedness
+	       //
+	       
+	       if ( peak_per_epoch )
+		 {
+		   peakedness( pwelch.psd , pwelch.freq , peak_median_filter_n , peak_range , false );
+		 }
+
+	       //
+	       // epoch-level spectral slope?
+	       //
+
+	       if ( spectral_slope ) 
+		 {		   
+		   spectral_slope_helper( pwelch.psd , 
+					  pwelch.freq , 
+					  slope_range , 
+					  slope_outlier );
 		 }
 	       
 	     }
@@ -475,98 +519,89 @@ annot_t * spectral_power( edf_t & edf ,
       
       writer.value( "NE" , total_epochs );
 
-      
-      if ( show_spectrum )
+      //
+      // report full spectrum, or calculate statistics based on the full 
+      // spectrum
+      //
+
+      if ( okay && ( show_spectrum || peak_diagnostics || spectral_slope ) ) 
 	{	  
+	      
+	  //
+	  // cache spectrum? (e.g. for PSC)
+	  //
 	  
-	  if ( okay )
-	    {	  
+	  cache_t<double> * cache = NULL ; 
+	  if ( cache_data )
+	    cache = edf.timeline.cache.find_num( cache_name );
+	  
+	  //
+	  // get mean power across epochs
+	  //
+	  
+	  if ( track_freq.size() != freqs.size() ) 
+	    Helper::halt( "internal error psd_t" );
+	  
+	  std::vector<double> means;
+	  for (int f=0;f<n;f++) 
+	    means.push_back( MiscMath::mean( track_freq[f] ) );
+	  
+	  bin_t bin( min_power , max_power , bin_fac );
+	  
+	  bin.bin( freqs , means );
+	  
+	  std::vector<double> f0;
+	  
+	  for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
+	    {
+	  
+	      f0.push_back( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 );
 	      
-	      //
-	      // cache spectrum? (e.g. for PSC)
-	      //
-	      
-	      cache_t<double> * cache = NULL ; 
-	      if ( cache_data )
-		cache = edf.timeline.cache.find_num( cache_name );
+	      double x = dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] ;
 
-	      //
-	      // get mean power across epochs
-	      //
-	      
-	      if ( track_freq.size() != freqs.size() ) 
-		Helper::halt( "internal error psd_t" );
-	      
-	      std::vector<double> means;
-	      for (int f=0;f<n;f++) 
-		means.push_back( MiscMath::mean( track_freq[f] ) );
-
-	      bin_t bin( min_power , max_power , bin_fac );
-
-	      bin.bin( freqs , means );
-
-	      std::vector<double> f0;
-	      
-	      for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
+	      if ( show_spectrum ) 
 		{
-
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  //writer.level( bin.bfa[i] , globals::freq_strat );
-		  
-		  f0.push_back( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 );
-
-		  double x = dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] ;
 		  writer.value( "PSD" , x );
-
-		  if ( cache )
-		    cache->add( ckey_t( "PSD" , writer.faclvl() ) , x );
 		  
 		  if ( bin.nominal[i] != "" )
 		    writer.value( "INT" , bin.nominal[i] );
+		  
 		}
-	      writer.unlevel( globals::freq_strat );
-
-
-	      //
-	      // Report metrics on the PSD
-	      //
-
-	      if ( peak_diagnostics )
-		{
-		  double m1, m2;
-		  
-		  // detrended / smoothed / difference
-		  std::vector<double> shape1, shape2, shape3;
-		  
-		  std::vector<double> logged = bin.bspec;
-		  for (int i=0; i<logged.size(); i++)
-		    logged[i] = 10*log10( logged[i] );
-		  
-		  psd_shape_metrics( f0 ,
-				     logged , 
-				     peak_median_filter_n , 
-				     &m1, &m2 ,
-				     &shape1, &shape2, &shape3);
-		  
-		  writer.value( "PK" , m1 );
-		  writer.value( "SPK" , m2 );
-		  
-		  for (int i=0; i<f0.size(); i++)
-		    {		      
-		      writer.level( f0[i] , globals::freq_strat );
-		      writer.value( "DT" , shape1[i] );
-		      writer.value( "SM" , shape2[i] );
-		      writer.value( "DF" , shape3[i] );		      
-		    }
-		  writer.unlevel( globals::freq_strat );		  
-
-		}
+	      
+	      if ( cache )
+		cache->add( ckey_t( "PSD" , writer.faclvl() ) , x );
 	      
 	    }
 	  
+	  if ( show_spectrum )
+	    writer.unlevel( globals::freq_strat );
+	  
+	  
+	  //
+	  // Report metrics on the PSD
+	  //
+	  
+	  if ( peak_diagnostics )
+	    peakedness( bin.bspec , f0 , peak_median_filter_n , peak_range , true ); 
+	  
+	  //
+	  // spectral slope?
+	  //
+	  
+	  if ( spectral_slope ) 
+	    {		   
+	      spectral_slope_helper( bin.bspec , 
+				     f0 , 
+				     slope_range , 
+				     slope_outlier );
+	    }
+	  
+	  
 	}
 
-
+	      
 
       //
       // mean total power
@@ -751,5 +786,6 @@ annot_t * spectral_power( edf_t & edf ,
   return NULL;
 
 }
+
 
 

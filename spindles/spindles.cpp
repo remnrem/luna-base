@@ -2486,7 +2486,8 @@ void characterize_spindles( edf_t & edf ,
   // ripple and transition width
   const double window_ripple = param.has( "char-ripple" ) ? param.requires_dbl( "char-ripple" ) : 0.02 ;
   const double window_tw = param.has( "char-tw" ) ? param.requires_dbl( "char-tw" ) : 4 ;
-  
+  const int hann = param.has( "hann" ) ? param.requires_int( "hann" ) : 0 ; 
+    
   //
   // Copy key output modes
   //
@@ -2511,23 +2512,28 @@ void characterize_spindles( edf_t & edf ,
       const int s = edf.header.signal( new_label );
 
       // and do we need to band-pass filter this new signal?
-	
+      
       if ( ! bandpass_filtered ) 
 	{
-	  
-	  if ( 0 ) 
+
+	  //
+	  // Kaiser window 
+	  //
+
+	  if ( hann == 0 ) 
 	    {
+	      
 	      logger << "  filtering at " 
 		     << target_f - window_f * 0.5  << " to " 
 		     << target_f + window_f * 0.5 << ", ripple=" 
 		     << window_ripple << " tw=" << window_tw << "\n";
 	      
-	  // default above is 4 Hz, i.e. +/- 2 Hz
-	  //  ~ 9-13Hz for slow spindles,    13-17Hz for fast spindles
-	  
-	  // defaults: 
-	  //  char-ripple = 0.02 char-tw=4 char-bp=4  (i.e. bandpass=9,13 )
-	  //  char-ripple = 0.02 char-tw=4 char-bp=4  (i.e. bandpass=13,17 )
+	      // default above is 4 Hz, i.e. +/- 2 Hz
+	      //  ~ 9-13Hz for slow spindles,    13-17Hz for fast spindles
+	      
+	      // defaults: 
+	      //  char-ripple = 0.02 char-tw=4 char-bp=4  (i.e. bandpass=9,13 )
+	      //  char-ripple = 0.02 char-tw=4 char-bp=4  (i.e. bandpass=13,17 )
 	      
 	      dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
 				   1 , // 1 = Kaiser window
@@ -2540,20 +2546,27 @@ void characterize_spindles( edf_t & edf ,
 				   );
 	    }
 	  
-	  logger << "  filtering at "
-		 << target_f - window_f * 0.5  << " to "
-		 << target_f + window_f * 0.5 << ", Hann window, order = 200\n";
+	  //
+	  // Hann window 
+	  //
 
-	  dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
-			       2 , // fixed order
-			       0 , 0 , 
-			       target_f - window_f * 0.5 ,
-			       target_f + window_f * 0.5 ,
-			       200, // --> odd / symmetric FIR
-			       fir_t::HANN , // Hann window
-			       true  // use FFT convolution
-			       );
-
+	  else
+	    {
+	      
+	      logger << "  filtering at "
+		     << target_f - window_f * 0.5  << " to "
+		     << target_f + window_f * 0.5 << ", Hann window, order = " << hann << "\n";
+	      
+	      dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
+				   2 , // fixed order
+				   0 , 0 , 
+				   target_f - window_f * 0.5 ,
+				   target_f + window_f * 0.5 ,
+				   hann, // --> even order: odd / symmetric FIR
+				   fir_t::HANN , // Hann window
+				   true  // use FFT convolution
+				   );
+	    }
 	  
 	}
       

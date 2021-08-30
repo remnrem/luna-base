@@ -71,30 +71,46 @@ struct suds_indiv_t {
   // called on suds_t::cached object, populated after a prior SOAP
   // alter a single epoch 
   void resoap_alter1( edf_t & , int epoch , suds_stage_t stage );
+
   // pick N of each stage at random
   void resoap_pickN( edf_t & , int );
+
   // re-fit actual model after making above types of changes
   void resoap( edf_t & , bool ); 
 
+  //
   // wrapper to add a trainer and save to the libary
+  //
+
   void add_trainer( edf_t & edf , param_t & param );
 
+  //
   // process either trainer or target;
+  //
+
   int proc( edf_t & edf , param_t & param , bool trainer = false );
   
+
+  //
   // write trainers to file
+  //
+  
   void write( edf_t & edf , param_t & param ) const;
   void write( const std::string & ) const; // for use in binary->text copy
   void binary_write( edf_t & edf , param_t & param ) const;
   void binary_write( const std::string & filename ) const; // for use in text->binary copy
-
+  
+  //
   // read trainer data from disk
+  //
+  
   void reload( const std::string & filename , bool load_rawx = false );
   void binary_reload( const std::string & filename , bool load_rawx = false );
 
-  // resample epochs for trainers (after loading)
-
+  //
   // read/write helpers
+  //
+  
   inline static void bwrite( std::ofstream & O , const std::string & s );
   inline static void bwrite( std::ofstream & O , int );
   inline static void bwrite( std::ofstream & O , double );
@@ -103,39 +119,79 @@ struct suds_indiv_t {
   inline static int bread_int( std::ifstream & );
   inline static double bread_dbl( std::ifstream & );
   
+  //
   // fit LDA, i.e. after reloading U
+  //
+
   void fit_lda();
 
+
+  //
   // make predictions given a different individual's signal data
+  //
+
   lda_posteriors_t predict( const suds_indiv_t & trainer );
 
+  //
   // add a prediction from one trainer
+  //
+
   void add( const std::string & id , const lda_posteriors_t & );
 
+
+  //
   // self-classify / run SOAP (which epochs are not self-predicted?)
+  //
+
   int self_classify( std::vector<bool> *  , Eigen::MatrixXd *  pp = NULL );
   
-
+  //
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
   // return number of excluded ('bad') epochs
+  //
+
   int summarize_stage_durations( const Eigen::MatrixXd & , const std::vector<std::string> & , int , double );
-  
+
+
+  //
   // summarize stage durations (based on predictions, and note
   // discordance w/ obs, if present)
+  //
+
   void summarize_epochs( const Eigen::MatrixXd & , 
 			 const std::vector<std::string> & , 
 			 int , edf_t & );
-  
+
+  //
   // write to an .annot
+  //
+
   void write_annots( const std::string & folder , const std::string & aname ,
 		     const Eigen::MatrixXd & , const std::vector<std::string> & , int , edf_t & );
-
+  
+  //
   // output obs vs prd kappas (5 and 3 level)
+  //
+
   void summarize_kappa( const std::vector<std::string> & prd , const bool to_console = false );
 
+  //
+  // dump epoch by predictor matrix (from SOAP verbose)
+  //
+  
+  void dump_predictor_matrix( edf_t & );
+
+  //
   // get KL weights across trainers
+  //
+
   Eigen::ArrayXd wgt_kl() const;
+
+
+  //
+  // Member variables
+  //
 
   // individual ID
   std::string id;
@@ -149,6 +205,9 @@ struct suds_indiv_t {
   // number of spectral variables
   int nbins;
 
+  // number of spectral slopes
+  int nslopes;
+
   // number of retained components (may be < suds_t::nc)
   // but U, V, W etc will have dimension nc
   int nc;
@@ -157,14 +216,20 @@ struct suds_indiv_t {
   // not needed to be reloaded for standard trainers
   Eigen::MatrixXd PSD;
   
+  // Composite predictor matrix ( based on U plus spec_slope or others)
+  Eigen::MatrixXd X;
+  
   // SVD
   Eigen::MatrixXd U;  // based on own data
-  Eigen::MatrixXd U_projected; // can be projected into this space
+  //Eigen::MatrixXd U_projected; // can be projected into this space
   Eigen::ArrayXd W;
   Eigen::MatrixXd V;
 
   // time-track
   Eigen::MatrixXd time_track;
+
+  // spectral slope(s) of EEG
+  Eigen::MatrixXd SS;
 
   // Hjorth (mean/variance, per signal)
   Eigen::Array<double, 1, Eigen::Dynamic> mean_h2, sd_h2;
@@ -218,13 +283,18 @@ struct suds_t {
   static suds_indiv_t cached;
 
   static Eigen::MatrixXd add_time_track( const int nr , const int tt );
-
+  
   // final stage/elapsed sleep model
   static void read_elapsed_stages( const std::string & f );
 
   static bool is_mean_feature( const std::string & s )
   {
     return extra_mean.find( s ) != extra_mean.end() ;
+  }
+
+  static bool is_slope_feature( const std::string & s )
+  {
+    return extra_slope.find( s ) != extra_slope.end() ;
   }
   
   static bool is_hjorth_feature( const std::string & s )
@@ -234,7 +304,8 @@ struct suds_t {
   
   static bool is_spectral_feature( const std::string & s )
   {
-    return ! ( is_hjorth_feature(s) || is_mean_feature(s) ) ;
+    // here 'spectral' implies PSC, or PSC or slope
+    return ! ( is_mean_feature(s) || is_hjorth_feature(s) ) ;
   }
   
   static void set_options( param_t & param )
@@ -245,7 +316,10 @@ struct suds_t {
 
     // add time-track as a predictor? value N terms = T^N
     time_track = param.has( "tt" ) ? param.requires_int( "tt" ) : 0 ;
-
+    
+    // add spectral slope for these signals
+    if ( param.has( "slope" ) ) extra_slope = param.strset("slope");
+    
     // add other signals in: based on per-epoch mean
     if ( param.has( "mean-feature" ) ) extra_mean = param.strset("mean-feature");
     
@@ -540,8 +614,22 @@ struct suds_t {
   
   static int time_track;
 
+  // for a given channel, what do we compute?
+  
+  // can do: ( PSC and/or slope ) OR mean OR Hjorth
+  
+  // spectral slope?
+  static std::set<std::string> extra_slope;
+  
+  static std::vector<double> slope_range;
+  static double slope_th;
+  static double slope_epoch_th;
+
+
+  // just the mean per epoch?
   static std::set<std::string> extra_mean;
 
+  // Hjorth parameters?
   static std::set<std::string> extra_hjorth;
   
   static bool flat_priors;

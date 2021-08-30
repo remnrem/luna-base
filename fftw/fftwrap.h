@@ -56,6 +56,20 @@ void psd_shape_metrics( const std::vector<double> & f , // frq
 			std::vector<double> * difference = NULL );
 
 
+bool spectral_slope_helper( const std::vector<double> & psd , 
+			    const std::vector<double> & f , 
+			    const std::vector<double> & fr , 
+			    const double outlier , 
+			    const bool display = true , 
+			    double * beta = NULL , double * betan = NULL );
+
+void peakedness( const std::vector<double> & p , 
+		 const std::vector<double> & f0 , 
+		 const int peak_median_filter_n , 
+		 const std::vector<double> & pr , 
+		 const bool verbose );
+
+
 
 //
 // Complex FFT

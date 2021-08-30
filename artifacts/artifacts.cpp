@@ -603,7 +603,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		writer.value( "FLAT" , f );
 
 	      if ( calc_maxxed )
-		writer.value( "MAX" , c );
+		writer.value( "MAX" , m );
 	      
 	      // if ( turning_rate ) 
 	      // 	writer.value( "TR" , turning_rate_mean );

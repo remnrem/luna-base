@@ -27,8 +27,14 @@
 #include "miscmath/miscmath.h"
 
 #include "helper/helper.h"
+#include "miscmath/dynam.h"
 
 #include "defs/defs.h"
+
+#include "db/db.h"
+
+extern writer_t writer;
+
 
 //
 // Complex FFT
@@ -1048,3 +1054,148 @@ void psd_shape_metrics( const std::vector<double> & f , // frq
   if ( difference != NULL ) *difference = pp;
    
 }
+
+
+
+
+
+bool spectral_slope_helper( const std::vector<double> & psd , 
+			    const std::vector<double> & freq , 
+			    const std::vector<double> & fr , 
+			    const double outlier , 
+			    const bool display , 
+			    double * b , double * bn )
+{
+  
+  std::vector<double> slope_y, slope_x;
+  
+  for (int f=0; f<psd.size(); f++)
+    {
+      if ( freq[f] < fr[0]  ) continue;
+      if ( freq[f] > fr[1] ) break;
+      if ( psd[f] <= 0 ) Helper::halt( "negative/zero PSD in spectral slope estimation" );
+      slope_x.push_back( log( freq[f] ) );
+      slope_y.push_back( log( psd[f] ) );
+    }
+  
+  const int n = slope_y.size();
+
+  // 
+  // remove outliers (in log-PSD space)?
+  //
+
+  if ( outlier > 0 ) 
+    {
+      double mean_y = MiscMath::mean( slope_y );
+      double sd_y = MiscMath::sdev( slope_y , mean_y );
+      double lwr = mean_y - outlier * sd_y;
+      double upr = mean_y + outlier * sd_y;
+
+      std::vector<bool> exc( n );
+
+      bool remove = false;
+
+      for (int i=0; i<n; i++)
+	{
+	  exc[i] = slope_y[i] < lwr || slope_y[i] > upr  ;
+	  if ( exc[i] ) remove = true; 
+	}
+      
+      if ( remove )
+	{
+	  std::vector<double> cp_y = slope_y;
+	  std::vector<double> cp_x = slope_x;
+	  slope_x.clear(); 
+	  slope_y.clear();
+	  
+	  for (int i=0; i<n; i++)
+	    {
+	      if ( ! exc[i] ) 
+		{
+		  slope_y.push_back( cp_y[i] );
+		  slope_x.push_back( cp_x[i] );		  
+		}
+	    }	  
+	  
+	}
+    }
+
+
+  // not enough data?
+  if ( slope_y.size() < 3 ) return false ;
+  
+  dynam_t spec_slope( slope_y , slope_x );
+  double beta_spec_slope;
+  spec_slope.linear_trend( &beta_spec_slope , NULL );
+
+  if ( display ) 
+    {
+      writer.value( "SPEC_SLOPE" , beta_spec_slope );
+      writer.value( "SPEC_SLOPE_N" , (int)slope_y.size() );
+    }
+  
+  if ( b != NULL ) *b = beta_spec_slope;
+  if ( bn != NULL ) *bn = (int)slope_y.size();
+
+  return true;
+}
+
+
+
+
+
+ void peakedness( const std::vector<double> & p , 
+		  const std::vector<double> & f0 , 
+		  const int peak_median_filter_n , 
+		  const std::vector<double> & peak_range , 
+		  const bool verbose )
+ {
+   
+   double m1, m2;
+   
+   // detrended / smoothed / difference
+   std::vector<double> shape1, shape2, shape3;
+   
+   const int n = p.size();
+   
+   std::vector<double> frq;
+   std::vector<double> logged;
+   
+   for (int i=0; i<n; i++)
+     {
+       if ( f0[i] >= peak_range[0] && f0[i] <= peak_range[1] ) 
+	 {
+	   frq.push_back( f0[i] );
+	   logged.push_back( 10*log10( p[i] ) );
+	   
+	 }
+     }
+
+   // not a wide enough region for median smoothing even?
+   if ( frq.size() < peak_median_filter_n * 1.5 ) return;
+
+   psd_shape_metrics( frq ,
+		      logged , 
+		      peak_median_filter_n , 
+		      &m1, &m2 ,
+		      &shape1, &shape2, &shape3);
+   
+   writer.value( "PK" , m1 );
+   writer.value( "SPK" , m2 );
+   
+   if ( verbose ) 
+     {
+       for (int i=0; i<n; i++)
+	 {		      
+	   writer.level( f0[i] , globals::freq_strat );
+	   writer.value( "DT" , shape1[i] );
+	   writer.value( "SM" , shape2[i] );
+	   writer.value( "DF" , shape3[i] );		      
+	 }
+       writer.unlevel( globals::freq_strat );		  
+       
+     }
+ }
+
+
+

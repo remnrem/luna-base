@@ -73,7 +73,13 @@ int suds_t::nc;
 int suds_t::ns;
 int suds_t::time_track;
 std::set<std::string> suds_t::extra_mean;
+std::set<std::string> suds_t::extra_slope;
 std::set<std::string> suds_t::extra_hjorth;
+
+// these are fixed for now
+std::vector<double> suds_t::slope_range{ 30.0 , 45.0 } ;
+double suds_t::slope_th  = 2;
+double suds_t::slope_epoch_th = 5;
 
 bool suds_t::es_model;
 std::string suds_t::es_filename;
@@ -234,6 +240,16 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
       logger << "  *** not enough data/variability to fit LDA\n";
       return;
     }
+
+  //
+  // dump predictor matrix?
+  //
+
+  if ( param.has( "dump-features" ) || param.has( "feature-matrix" ) )
+    {
+      dump_predictor_matrix( edf );
+    }
+  
 
   //
   // output stage probabilities 
@@ -652,7 +668,7 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   // get predictions
   //
 
-  lda_posteriors_t prediction = lda_t::predict( model , U );
+  lda_posteriors_t prediction = lda_t::predict( model , X );
 
   
   // save posteriors?
@@ -771,7 +787,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
     }
   
   //
-  // Resample as needed (only for SPEC measures)
+  // Resample as needed (only for SPEC and SLOPE measures)
   //
   
   for (int s=0;s<ns;s++)
@@ -1024,7 +1040,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
       int col = 0;
       std::vector<double> firstrow;
+      
       std::vector<double> firstrow2; // if use_bands, for R matrix (raw power)
+
+      int ss_col = 0; // if tracking spectral slopes separately
+      std::vector<double> firstrowS; // if spectral slope, for SS matrix
+
 
       //
       // iterate over signals      
@@ -1055,8 +1076,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	  bool do_mean = suds_t::is_mean_feature( signals.label(s) ) ;
 	  bool do_hjorth = suds_t::is_hjorth_feature( signals.label(s) ) ;
-	  bool do_psd = suds_t::is_spectral_feature( signals.label(s) ) ;
 
+	  // otherwise will dor PSD->PSC;  optionally, may add slope as well as PSC
+	  bool do_psd = suds_t::is_spectral_feature( signals.label(s) ) ;
+	  bool do_slope = suds_t::is_slope_feature( signals.label(s) ) ;
+	  
 	  //
 	  // Welch of MTM to get spectra
 	  //
@@ -1084,7 +1108,27 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		  // false --> no versbose output
 		  mtm.apply( d , suds_t::sr[s] , segment_size , segment_step , false );
 		  
-		  // get PSD
+
+		  // get spectral slope? (nb. this is done before any logging of the power spectra)
+		  
+		  if ( do_slope ) 
+		    {
+		      double bslope, bn;
+		      
+		      bool okay = spectral_slope_helper( mtm.spec ,
+							 mtm.f , 
+							 suds_t::slope_range ,
+							 suds_t::slope_th , 
+							 false ,  // do not output value
+							 &bslope , &bn ); 
+		      
+		      if ( en_good == 0 ) firstrowS.push_back( bslope );
+		      else SS( en_good , ss_col ) =  bslope;
+		      ++ss_col;
+		    }
+		  
+		  // get PSD (for PSC) and log
+		  
 		  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
 		    {
 		      if ( mtm.f[i] >= suds_t::lwr[s]  && mtm.f[i] <= suds_t::upr[s] )
@@ -1101,15 +1145,15 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 			  
 			  // PSD
 			  if ( en_good == 0 ) firstrow.push_back( mtm.spec[i] );
-			  else PSD( en_good , col ) =  mtm.spec[i] ;
-			  
+			  else PSD( en_good , col ) =  mtm.spec[i] ;			 			  
+
 			  // bands?
 			  if ( suds_t::use_bands )
 			    {
 			      if ( en_good == 0 ) firstrow2.push_back( mtm.spec[i] );
 			      else R( en_good , col ) = mtm.spec[i] ;
 			      
-			      // only track on first epoch                                                                                                                                  
+			      // only track on first epoch                                                                                                                                 
 			      if ( en_good == 0 )
 				frq.push_back( mtm.f[i] );			  
 			    }
@@ -1119,6 +1163,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 			}
 		    }
 		  
+
 		}
 	      else // use Welch PSD
 		{
@@ -1143,6 +1188,27 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		  bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , 1 ); 
 		  bin.bin( pwelch.freq , pwelch.psd );	      
 		  
+		  //
+		  // get spectral slope? (nb. this is done before any logging of the power spectra)
+		  //
+
+		  if ( do_slope ) 
+		    {
+		      double bslope, bn;
+		      
+		      bool okay = spectral_slope_helper( pwelch.psd , 
+							 pwelch.freq , 
+							 suds_t::slope_range ,
+							 suds_t::slope_th , 
+							 false ,  // do not output value		
+							 &bslope , &bn ); 
+
+		      if ( en_good == 0 ) firstrowS.push_back( bslope );
+                      else SS( en_good , ss_col ) =  bslope;
+		      ++ss_col;
+		    }
+
+
 		  for ( int i = 0 ; i < bin.bfa.size() ; i++ )
 		    {
 		      
@@ -1251,9 +1317,19 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	{
 
 	  PSD.resize( nge , col );
-
-	  for (int i=0;i<col;i++) PSD(0,i) = firstrow[i];
 	  
+	  for (int i=0;i<col;i++) 
+	    PSD(0,i) = firstrow[i];
+	  
+	  if ( firstrowS.size() != 0 )
+	    {
+	      const int s = firstrowS.size();
+
+	      SS.resize( nge , s );
+	      for (int i=0;i<s ; i++)
+		SS(0,i) = firstrowS[i];
+	    }
+
 	  if ( suds_t::use_bands )
 	    {
 	      R.resize( nge , col );
@@ -1277,9 +1353,19 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // all done: check
   //
 
-  if ( en_good != nge ) Helper::halt( "internal error: under-counted epochs" );
+  if ( en_good != nge ) 
+    Helper::halt( "internal error: under-counted epochs" );
 
 
+  //
+  // Has spectral slope info?
+  //
+
+  const bool has_spectral_slopes = SS.cols() != 0 ; 
+
+  if ( has_spectral_slopes && SS.rows() != PSD.rows() ) 
+    Helper::halt( "internal error: epoch count for PSD and SS differ" );
+  
   //
   // Collapse PSD to bands instead:  
   //
@@ -1357,8 +1443,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // Finalize input feature matrix
   //
 
-  logger << "  based on " << nbins << " features over " << PSD.rows() << " epochs, extracting " << nc << " components\n";
   
+  logger << "  based on " << nbins << " spectral features over " << PSD.rows() << " epochs, extracting " << nc << " components\n";
+
+  nslopes = has_spectral_slopes ? SS.cols() : 0 ; 
+  if ( has_spectral_slopes ) logger << "  and also " << nslopes << " spectral slope features\n";
+    
+
   //
   // Rescale PSD?
   //
@@ -1484,6 +1575,35 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 
   //
+  // Spectral slope based epoch removal?
+  //
+  
+  if ( has_spectral_slopes )
+    {
+      logger << "  removing epochs +/-" << suds_t::slope_epoch_th << " from spectral slope means\n";
+      for ( int j=0;j<SS.cols();j++)
+	{
+	  std::vector<double> x;
+	  for (int i=0;i<nge;i++) if ( valid[i] ) x.push_back( SS(i,j) );
+	  if ( x.size() < 2 ) Helper::halt( "no epochs left" );
+	  double mean = MiscMath::mean( x );
+	  double sd = MiscMath::sdev( x , mean );
+	  double lwr = mean -  suds_t::slope_epoch_th * sd ; 
+	  double upr = mean +  suds_t::slope_epoch_th * sd;
+	  int c = 0;
+	  for (int i=0;i<nge;i++)
+	    {
+	      if ( valid[i] )
+		{
+		  if ( x[c] < lwr || x[c] > upr ) { valid[i] = false; nout_stat.insert(i); } 
+		  ++c;
+		}
+	    }
+	}
+    }
+
+
+  //
   // Also improse a max number of epochs per stage? 
   //
   
@@ -1579,6 +1699,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   PSD.resize( nve , nbins );
   std::vector<int> epochs2 = epochs;
   epochs.clear();
+
+  Eigen::MatrixXd SS2 = SS;
+  if ( nslopes ) SS.resize( nve , nslopes );      
   
   int r = 0;
   for (int i=0;i<PSD2.rows() ; i++)
@@ -1588,12 +1711,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  for (int j=0;j<nbins;j++)
 	    PSD(r,j) = PSD2(i,j);
 	  
+	  for (int j=0;j<nslopes;j++)
+	    SS(r,j) = SS2(i,j);
+
 	  epochs.push_back( epochs2[i] );
 	  
 	  ++r;
 	}
     }
   
+
   // only retain nve obs labels from obs_stage[ne] originals
 
   if ( has_prior_staging )
@@ -1752,7 +1879,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   if ( suds_t::denoise_fac > 0 ) 
     {      
-      logger << "  smoothing PSCs lambda=" << suds_t::denoise_fac << " * SD\n";
+      logger << "  smoothing features, lambda=" << suds_t::denoise_fac << " * SD\n";
       
       for (int j=0;j<nc;j++)
 	{
@@ -1761,7 +1888,17 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  double lambda = suds_t::denoise_fac * sd;	  
 	  dsptools::TV1D_denoise( U.col(j) , lambda );
 	}
+
+      // smooth spectral slopes
+      for (int j=0;j<nslopes;j++)
+        {
+          double sd = suds_t::standardize_psc ? 1 : eigen_ops::sdev( SS.col(j) );
+          double lambda = suds_t::denoise_fac * sd;
+	  dsptools::TV1D_denoise( SS.col(j) , lambda );
+        }
+
       
+      // smooth bands
       if ( suds_t::use_bands )
 	{
 	  int nbands = B.cols();
@@ -1994,7 +2131,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   if ( suds_t::use_bands )
     {
       
-      // fit based on PSC
+      // fit based on PSC (only)
       lda_t lda1( y , U );      
       lda_model_t m1 = lda1.fit( suds_t::flat_priors );
       lda_posteriors_t prediction1 = lda_t::predict( m1 , U );
@@ -2013,13 +2150,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	{
 
 	  std::map<int,int> e2e;
+
 	  for (int i=0; i< epochs.size(); i++) e2e[ epochs[i] ] = i ;  
-	  const int ne_all = edf.timeline.num_epochs();
-	  //if ( prediction1.cl.size() != ne_all ) Helper::halt( "need to adjust in bands lda_t() " );
-	  // std::cout << "ne all = " << ne_all << "\n";
-	  // std::cout << prediction1.cl.size()  << "\n";
-	  // std::cout << epochs.size() << "\n";
 	  
+	  const int ne_all = edf.timeline.num_epochs();
+
 	  for (int i=0; i< ne_all; i++)
 	    {
 	      int e = -1;
@@ -2028,24 +2163,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	      // show display epoch 'i'
 	      writer.epoch( edf.timeline.display_epoch( i ) ) ;
-
-	      //std::cout << "check " << i << " " << edf.timeline.display_epoch( i ) << " " << e << " " << prediction1.cl.size() << "\n";
 	      
 	      writer.value( "PRED_PSC" , prediction1.cl[e]  );
 	      writer.value( "PRED_BAND" , prediction2.cl[e]  );
-
-	      //     	  std::cout << "PSC\n";
-	      // std::cout << U.print() << "\n";
-	      
-	      // std::cout << "PSC POSTERIORS\n";
-	      // std::cout << prediction1.pp.print() << "\n";	  
-	      
-	      // std::cout << "BANDS\n";
-	      // std::cout << B.print() << "\n";
-	      
-	      // std::cout << "BANDS POSTERIORS\n";
-	      // std::cout << prediction2.pp.print() << "\n";	  
-	      
 	      
 	    }
 	  writer.unepoch();
@@ -2054,9 +2174,21 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
            
     }
 
-
-
   
+  //
+  // Make final feature matrix X, combines both PSC and spectral slopes
+  //
+
+  if ( nslopes == 0 ) 
+    {
+      X = U;
+    }
+  else
+    {
+      X.resize( U.rows() , U.cols() + SS.cols() );
+      X << U , SS;
+    }
+
   //
   // Attempt self-classification, to remove epochs that aren't well self-classified (i.e.
   // do not fit the model) and possible to reject a trainer, if their kappa is sufficiently
@@ -2081,16 +2213,22 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // Subset epochs:
       //
       
-      //   U  PSD  epochs  y  h2  h3
+      //   U  PSD SS  X=PSD+SS epochs  y  h2  h3
       
       Eigen::MatrixXd UU = U;      
       U.resize( nve2 , nc );      
+
+      Eigen::MatrixXd XX = X;      
+      X.resize( nve2 , X.cols() );      
 
       Eigen::MatrixXd PSD2 = PSD;
       PSD.resize( nve2 , nbins );
 
       std::vector<int> epochs2 = epochs;
       epochs.clear();
+
+      Eigen::MatrixXd SS2 = SS;
+      SS.resize( nve2 , nslopes );
 
       std::vector<suds_stage_t> obs_stage_valid2 = obs_stage_valid;
       if ( has_prior_staging )
@@ -2112,18 +2250,24 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      for (int j=0;j<nc;j++)
 		U(r,j) = UU(i,j);
 
-	      // X (PSD)
+	      // PSD
 	      for (int j=0;j<nbins;j++)
 		PSD(r,j) = PSD2(i,j);
+	      
+	      // SS (spectral slope) 
+	      for (int j=0;j<nslopes;j++)
+                SS(r,j) = SS2(i,j);
+	      
+	      // Composite X = PSD + SS
+	      for (int j=0;j<nc+nslopes;j++)
+		X(r,j) = XX(i,j);
 
 	      // Epoch tracking
 	      epochs.push_back( epochs2[i] );
 
 	      // nb. take from already-pruned set, obs_stage_valid[] ) 
 	      if ( has_prior_staging )
-		{
-		  // std::cout << "hmm " << i << " " 
-		  // 	    << obs_stage_valid.size() << " " << obs_stage_valid2.size() << " " << nve << "\n";
+		{		  
 		  obs_stage_valid.push_back( obs_stage_valid2[i] );
 		}
 
@@ -2150,7 +2294,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	if ( okay[i] ) y.push_back( yy[i] );
 
       // just in case...?
-      if ( y.size() != obs_stage_valid.size() ) Helper::halt( "internal error in proc()" );
+      if ( y.size() != obs_stage_valid.size() ) 
+	Helper::halt( "internal error in proc()" );
 
       //
       // update nve
@@ -2352,6 +2497,8 @@ void suds_indiv_t::write( const std::string & filename ) const
 
       if ( suds_t::extra_mean.find( suds_t::siglab[s] ) != suds_t::extra_mean.end() )
 	OUT1 << "STYPE\tMEAN\n";
+      else if ( suds_t::extra_slope.find( suds_t::siglab[s] ) != suds_t::extra_slope.end() )
+	OUT1 << "STYPE\tSLOPE\n";
       else if ( suds_t::extra_hjorth.find( suds_t::siglab[s] ) != suds_t::extra_hjorth.end() )
         OUT1 << "STYPE\tHJORTH\n";
       else
@@ -2758,7 +2905,9 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
       std::string stype = bread_str( IN1 );
       
       if ( stype == "MEAN" )
-	  suds_t::extra_mean.insert( this_siglab );
+	suds_t::extra_mean.insert( this_siglab );
+      else if ( stype == "SLOPE" )
+	suds_t::extra_slope.insert( this_siglab );
       else if ( stype == "HJORTH" )
 	suds_t::extra_hjorth.insert( this_siglab ); 
       
@@ -2917,6 +3066,8 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
 
       if ( stype == "MEAN" )
 	suds_t::extra_mean.insert( this_siglab );
+      else if ( stype == "SLOPE" )
+	suds_t::extra_slope.insert( this_siglab );
       else if ( stype == "HJORTH" )
 	suds_t::extra_hjorth.insert( this_siglab );
       
@@ -3284,12 +3435,12 @@ void suds_t::copy_db( const std::string & folder1 ,
 
 
 
-// fit LDA, i.e. after reloading U
+// fit LDA, i.e. after reloading X = U + SS
 
 void suds_indiv_t::fit_lda()
 {
 
-  lda_t lda( y , U );
+  lda_t lda( y , X );
 
   model = lda.fit( suds_t::flat_priors );
     
@@ -3317,8 +3468,9 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   for (int i=0;i< trainer.nc; i++)
     trainer_DW(i,i) = 1.0 / trainer.W[i];
   
-  U_projected = PSD * trainer.V * trainer_DW;
+  Eigen::MatrixXd U_projected = PSD * trainer.V * trainer_DW;
 
+  
   //
   // Normalize PSC?
   //
@@ -3398,7 +3550,6 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   //
 
   lda_posteriors_t pp = lda_t::predict( trainer.model , U_projected ) ;
-
 
 
   return pp;
@@ -4304,7 +4455,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   if ( nstages.size() > 1 ) 
     {
       
+      //      MatrixXd Y( target.U.rows(), target.U.cols()
+// A.cols()+B.cols());
+//       C << A, B;
+
       lda_t self_lda( final_prediction , target.U );
+
       lda_model_t self_model = self_lda.fit( suds_t::flat_priors );
       
       if ( self_model.valid )
@@ -5364,3 +5520,35 @@ Eigen::MatrixXd suds_t::apply_es_model( const Eigen::MatrixXd & pp ,
 			  
   return revised;
 }
+
+
+
+void suds_indiv_t::dump_predictor_matrix( edf_t & edf )
+{
+  
+  const int cols = X.cols();
+
+  std::map<int,int> e2e;
+  for (int i=0; i< epochs.size(); i++) e2e[ epochs[i] ] = i ;
+  
+  const int ne_all = edf.timeline.num_epochs();
+
+  for (int i=0; i< ne_all; i++)
+    {
+      int e = -1;
+      if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+      if ( e == -1 ) continue;
+      
+      writer.epoch( edf.timeline.display_epoch( i ) ) ;
+      
+      for (int c=0; c<cols; c++)
+	{
+	  writer.level( "P" + Helper::int2str( c+1 ) , "FEAT" );
+	  writer.value( "P" , X(e,c) );
+	}
+      writer.unlevel( "FEAT" );
+    }
+  writer.unepoch();
+
+}
+

@@ -1124,6 +1124,8 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
   add_var( "PSD" , "CH" , "PK" , "Peak (PSD skewness)" );
   add_var( "PSD" , "CH" , "SPK" , "Sum PSD peakedness" );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
 
   add_table( "PSD" , "CH,B" , "Whole-night, per-channel band power" );
   add_var( "PSD" , "CH,B" , "PSD" , "Power" );
@@ -1139,6 +1141,12 @@ void cmddefs_t::init()
   add_table( "PSD" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
   add_var( "PSD" , "CH,F,E" , "PSD" , "Power" );
   set_compressed( "PSD" , tfac_t( "CH,F,E" ) );
+
+  add_table( "PSD" , "CH,E", "Epoch/channel level stats" );
+  add_var( "PSD" , "CH,E" , "PK" , "Peak (PSD skewness)" );
+  add_var( "PSD" , "CH,E" , "SPK" , "Sum PSD peakedness" );
+  add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
+  add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
 
 
   //
