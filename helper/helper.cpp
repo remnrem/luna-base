@@ -1579,7 +1579,7 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
   if ( cmap != "" )
     {
       std::ifstream INC( cmap.c_str() , std::ios::in );
-      if ( INC.bad() ) Helper::halt( "could not open file: " + filename );
+      if ( INC.bad() ) Helper::halt( "could not open file: " + cmap );
       
       while ( ! INC.eof() )
 	{		      
@@ -1608,7 +1608,7 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
   if ( amap != "" )
     {
       std::ifstream INC( amap.c_str() , std::ios::in );
-      if ( INC.bad() ) Helper::halt( "could not open file: " + filename );
+      if ( INC.bad() ) Helper::halt( "could not open file: " + amap );
       
       while ( ! INC.eof() )
         {
