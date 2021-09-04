@@ -1533,3 +1533,103 @@ bool Helper::contains( const std::string & a , const std::string & b )
   return au.find( bu ) != std::string::npos;
 }
 
+
+
+void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool html )
+{
+  
+  const int n = tok.size(); 
+
+  std::string cmap = "" , amap = "";
+
+  std::set<std::string> chs, anns;
+
+  for (int i=0; i<n; i++)
+    {
+      std::vector<std::string> tok2 = Helper::quoted_parse( tok[i] , "=" );
+      
+      // ignore bad stuff
+      if ( tok.size() != 2 ) continue;
+      
+      if ( tok[0] == "cmap" ) cmap = Helper::expand( tok[1] );
+      else if ( tok[0] == "amap" ) amap = Helper::expand( tok[1] );
+      else if ( tok[0] == "c" ) chs.insert( tok[1] );
+      else if ( tok[0] == "a" ) anns.insert( tok[1] );
+      
+    }
+  
+  //
+  // expecting canonical cmap and amap to be in simple form, i.e.  
+  //
+
+  if ( cmap != "" &&  ! Helper::fileExists( cmap ) ) cmap = "";
+  if ( amap != "" &&  ! Helper::fileExists( amap ) ) amap = "";
+  
+  if ( cmap == "" && amap == "" ) 
+    {
+      std::cout << "no mappings given, quitting\n";
+      return;
+    }
+
+  
+  //
+  // Annotations
+  //
+  
+  if ( cmap != "" )
+    {
+      std::ifstream INC( cmap.c_str() , std::ios::in );
+      if ( INC.bad() ) Helper::halt( "could not open file: " + filename );
+      
+      while ( ! INC.eof() )
+	{		      
+	  std::string line;	  
+	  Helper::safe_getline( INC , line );		      
+	  if ( INC.eof() || line == "" ) continue;
+		      
+	  // skip % comments and, here, conditionals
+	  if ( line[0] == '%' ) continue;
+	  if ( line[0] == '+' || line[0] == '-' ) continue;
+	  
+	  // otherwise parse as a normal line: i.e. two tab-delim cols
+	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
+	  if ( tok.size() != 2 ) continue;	
+	  if ( tok[0] != "alias" ) continue;
+	  cmd_t::parse_special( tok[0] , tok[1] );
+	}
+      
+      INC.close();
+    }
+
+  //
+  // Annotations
+  //
+
+  if ( amap != "" )
+    {
+      std::ifstream INC( amap.c_str() , std::ios::in );
+      if ( INC.bad() ) Helper::halt( "could not open file: " + filename );
+      
+      while ( ! INC.eof() )
+        {
+	  std::string line;
+	  Helper::safe_getline( INC , line );
+          if ( INC.eof() || line == "" ) continue;
+
+          // skip % comments and, here, conditionals                                                                                        
+          if ( line[0] == '%' ) continue;
+          if ( line[0] == '+' || line[0] == '-' ) continue;
+
+          // otherwise parse as a normal line: i.e. two tab-delim cols                                                                      
+	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
+          if ( tok.size() != 2 ) continue;
+	  if ( tok[0] != "alias" ) continue;
+	  cmd_t::parse_special( tok[0] , tok[1] );
+        }
+
+      INC.close();
+    }
+
+  
+}
+

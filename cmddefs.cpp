@@ -196,6 +196,23 @@ void cmddefs_t::init()
   add_var( "STATS" , "CH" , "MEDIAN" , "Signal median" );
   add_var( "STATS" , "CH" , "RMS" , "Signal root mean square" );
 
+  add_var( "STATS" , "CH" , "P01" , "1st percentile" );
+  add_var( "STATS" , "CH" , "P02" , "2nd percentile" );
+  add_var( "STATS" , "CH" , "P05" , "5th percentile" );
+  add_var( "STATS" , "CH" , "P10" , "10th percentile" );
+  add_var( "STATS" , "CH" , "P20" , "20th percentile" );
+  add_var( "STATS" , "CH" , "P30" , "30th percentile" );
+  add_var( "STATS" , "CH" , "P40" , "40th percentile" );
+  add_var( "STATS" , "CH" , "P50" , "50th percentile" );
+  add_var( "STATS" , "CH" , "P60" , "60th percentile" );
+  add_var( "STATS" , "CH" , "P70" , "70th percentile" );
+  add_var( "STATS" , "CH" , "P80" , "80th percentile" );
+  add_var( "STATS" , "CH" , "P90" , "90th percentile" );
+  add_var( "STATS" , "CH" , "P95" , "95th percentile" );
+  add_var( "STATS" , "CH" , "P98" , "98th percentile" );
+  add_var( "STATS" , "CH" , "P99" , "99th percentile" );
+
+
   add_var( "STATS" , "CH" , "MAX_ENCODING" , "Possible # of unique values" );
   add_var( "STATS" , "CH" , "OBS_ENCODING" , "Observed # of unique values" );
   add_var( "STATS" , "CH" , "PCT_ENCODING" , "Obs/possible unique values" );
@@ -215,6 +232,22 @@ void cmddefs_t::init()
   add_var( "STATS" , "CH,E" , "MEAN" , "Signal mean" );
   add_var( "STATS" , "CH,E" , "MEDIAN" , "Signal median" );
   add_var( "STATS" , "CH,E" , "RMS" , "Signal root mean square" );
+
+  add_var( "STATS" , "CH,E" , "P01" , "1st percentile" );
+  add_var( "STATS" , "CH,E" , "P02" , "2nd percentile" );
+  add_var( "STATS" , "CH,E" , "P05" , "5th percentile" );
+  add_var( "STATS" , "CH,E" , "P10" , "10th percentile" );
+  add_var( "STATS" , "CH,E" , "P20" , "20th percentile" );
+  add_var( "STATS" , "CH,E" , "P30" , "30th percentile" );
+  add_var( "STATS" , "CH,E" , "P40" , "40th percentile" );
+  add_var( "STATS" , "CH,E" , "P50" , "50th percentile" );
+  add_var( "STATS" , "CH,E" , "P60" , "60th percentile" );
+  add_var( "STATS" , "CH,E" , "P70" , "70th percentile" );
+  add_var( "STATS" , "CH,E" , "P80" , "80th percentile" );
+  add_var( "STATS" , "CH,E" , "P90" , "90th percentile" );
+  add_var( "STATS" , "CH,E" , "P95" , "95th percentile" );
+  add_var( "STATS" , "CH,E" , "P98" , "98th percentile" );
+  add_var( "STATS" , "CH,E" , "P99" , "99th percentile" );
 
 
 
@@ -1122,17 +1155,23 @@ void cmddefs_t::init()
   
   add_table( "PSD" , "CH" , "Channel-level output" );
   add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
-  add_var( "PSD" , "CH" , "PK" , "Peak (PSD skewness)" );
+  add_var( "PSD" , "CH" , "KURT" , "Peak (PSD kurtosis)" );
   add_var( "PSD" , "CH" , "SPK" , "Sum PSD peakedness" );
   add_var( "PSD" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
   add_var( "PSD" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
 
   add_table( "PSD" , "CH,B" , "Whole-night, per-channel band power" );
   add_var( "PSD" , "CH,B" , "PSD" , "Power" );
   add_var( "PSD" , "CH,B" , "RELPSD" , "Relative power" );
 
   add_table( "PSD" , "CH,F" , "Whole-night, per-channel power" );
-  add_var( "PSD" , "CH,F" , "PSD" , "Power" );
+  add_var( "PSD" , "CH,F" , "PSD" , "Power (mean over epochs)" );
+  add_var( "PSD" , "CH,F" , "PSD_MD" , "Power (median over epochs)" );
+  add_var( "PSD" , "CH,F" , "PSD_SD" , "Power (SD over epochs)" );
+
 
   add_table( "PSD" , "CH,B,E" , "Whole-night, per-channel per-epoch band power" );
   add_var( "PSD" , "CH,B,E" , "PSD" , "Power" );
@@ -1143,7 +1182,7 @@ void cmddefs_t::init()
   set_compressed( "PSD" , tfac_t( "CH,F,E" ) );
 
   add_table( "PSD" , "CH,E", "Epoch/channel level stats" );
-  add_var( "PSD" , "CH,E" , "PK" , "Peak (PSD skewness)" );
+  add_var( "PSD" , "CH,E" , "KURT" , "Peak (PSD kurtosis)" );
   add_var( "PSD" , "CH,E" , "SPK" , "Sum PSD peakedness" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );

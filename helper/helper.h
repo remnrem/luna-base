@@ -110,7 +110,9 @@ namespace Helper
   bool is_folder( const std::string & f );
 
   void build_sample_list( const std::vector<std::string> & );
-
+  
+  void channel_annot_mapper( const std::vector<std::string> & , const bool html );
+  
   void compile_txttabs( const std::string & );
 
   std::vector<std::string> file2strvector( const std::string & );
@@ -543,3 +545,4 @@ struct clocktime_t
 
 
 #endif
+

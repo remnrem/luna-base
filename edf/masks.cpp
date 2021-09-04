@@ -203,6 +203,16 @@ void proc_mask( edf_t & edf , param_t & param )
       edf.timeline.select_epoch_until_isnot( param.value( "leading" ) );
     }
 
+  // to add
+  // if ( param.has( "mask-leading" ) )
+  //   {
+  //     edf.timeline.mask_leading_trailing( param.value( "mask-leading" ) , true , false ) ;
+  //   }
+  
+  // if ( param.has( "mask-trailing" ) )
+  //   {
+  //     edf.timeline.mask_leading_trailing( param.value( "mask-leading" ) , false , true ) ;
+  //   }
 
   if ( param.has( "regional" ) ) 
     {

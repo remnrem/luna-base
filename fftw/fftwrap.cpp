@@ -1035,7 +1035,7 @@ void psd_shape_metrics( const std::vector<double> & f , // frq
     }  
 
   // kurtosis of delta (i.e. assume mean = 0 )
-  // m2 --> PK 
+  // m2 --> KURT
   double numer = 0 , denom = 0;
   for (int i=0; i<n; i++)
     {
@@ -1073,9 +1073,12 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
     {
       if ( freq[f] < fr[0]  ) continue;
       if ( freq[f] > fr[1] ) break;
-      if ( psd[f] <= 0 ) Helper::halt( "negative/zero PSD in spectral slope estimation" );
+
       slope_x.push_back( log( freq[f] ) );
+      
+      if ( psd[f] <= 0 ) Helper::halt( "negative/zero PSD in spectral slope estimation" );
       slope_y.push_back( log( psd[f] ) );
+
     }
   
   const int n = slope_y.size();
@@ -1180,8 +1183,8 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
 		      &m1, &m2 ,
 		      &shape1, &shape2, &shape3);
    
-   writer.value( "PK" , m1 );
-   writer.value( "SPK" , m2 );
+   writer.value( "SPK" , m1 );
+   writer.value( "KURT" , m2 );
    
    if ( verbose ) 
      {

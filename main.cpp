@@ -216,6 +216,36 @@ int main(int argc , char ** argv )
     }
 
 
+  //
+  // map channels/ annots
+  //
+
+  if ( argc >=2 && strcmp( argv[1] , "--mapper" ) == 0 )
+    {
+      global.api();
+      
+      // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::channel_annot_mapper( tok , false ) ;
+      std::exit(0);
+    }
+
+  //
+  // map channels/ annots, HTML style output
+  //
+
+  if ( argc >=2 && strcmp( argv[1] , "--mapper-html" ) == 0 )
+    {
+      global.api();
+      
+      // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::channel_annot_mapper( tok , true ) ;
+      std::exit(0);
+    }
+
 
       
   //
@@ -1542,10 +1572,11 @@ void process_edfs( cmd_t & cmd )
 			{
 			  std::string fname2 = ent->d_name;
 			  // only annot files (.xml, .ftr, .annot, .eannot)
-			  if ( Helper::file_extension( fname2 , "ftr" ) ||
+			  if ( Helper::file_extension( fname2 , "annot" ) ||
+			       Helper::file_extension( fname2 , "txt" ) ||
+			       Helper::file_extension( fname2 , "tsv" ) ||
 			       Helper::file_extension( fname2 , "xml" ) ||
-			       Helper::file_extension( fname2 , "eannot" ) ||
-			       Helper::file_extension( fname2 , "annot" ) )
+			       Helper::file_extension( fname2 , "eannot" ) )   
 			    {
 			      edf.load_annotations( fname + fname2 );	 			   
 			    }
@@ -1557,16 +1588,21 @@ void process_edfs( cmd_t & cmd )
 		}
 	      else
 		{
-
+		  
 		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
 		  // i.e. skip .sedf files that might also be specified as 
 		  // attached to this EDF
-		  if ( Helper::file_extension( fname , "ftr" ) ||
+		  if ( Helper::file_extension( fname , "annot" ) ||
+		       Helper::file_extension( fname , "txt" ) ||
+		       Helper::file_extension( fname , "tsv" ) ||
 		       Helper::file_extension( fname , "xml" ) ||
-		       Helper::file_extension( fname , "eannot" ) ||
-		       Helper::file_extension( fname , "annot" ) )
-		    edf.load_annotations( fname );	 
-		}
+		       Helper::file_extension( fname , "eannot" ) )
+		    {
+		      edf.load_annotations( fname );	 
+		    }
+		  else
+		    Helper::halt( "did not recognize annotation file extension: " + fname );
+		} 
 	      
 	    }
 	}
