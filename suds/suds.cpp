@@ -2844,6 +2844,9 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
   int this_ns = bread_int( IN1 );
   int this_nc = bread_int( IN1 );
 
+  // temp
+  nslopes = 0; 
+  
   if ( this_nc == 0 )
     Helper::halt( "0 PSCs for " + filename );
 
@@ -2981,6 +2984,13 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
   for (int i=0;i<nve;i++)
     for (int j=0;j<nc;j++)
       U(i,j) = bread_dbl( IN1 );
+
+  //
+  // final prediction matrix: X , which is same as U currently
+  //
+
+  if ( nslopes != 0 ) Helper::halt( "cannot use slopes for SUDS yet" );
+  X = U;
   
   // X values (e.g. mean-centered PSD)
   // i.e. if this trainer is being used as a 'weight trainer',
@@ -3018,7 +3028,10 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
     Helper::halt( "bad file format for " + filename );
   if ( version != 2 )
     Helper::halt( "Expecting SUDS reformat version 2" );
-    
+
+  // temp
+  nslopes = 0;
+  
   int this_ns, this_nc;
 
   IN1 >> dummy >> id 
@@ -3139,7 +3152,10 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
   for (int i=0;i<nve;i++)
     for (int j=0;j<nc;j++)
       IN1 >> U(i,j) ;	
-
+  
+  if ( nslopes != 0 ) Helper::halt( "cannot use nslopes and SUDS yet" );
+  X = U;
+    
   // X values (e.g. mean-centered PSD)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
@@ -3261,7 +3277,7 @@ void suds_t::attach_db( const std::string & folder0 , bool binary , bool read_ps
 	    trainer->reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd ); 
 
 	  trainer->fit_lda();
-	  
+
 	}
 
       // store in the relevant bank:

@@ -1383,14 +1383,6 @@ bool edf_t::attach( const std::string & f ,
     }
   
 
-  //
-  // Create timeline (relates time-points to records and vice-versa)
-  // Here we assume a continuous EDF, but timeline is set up so that 
-  // this need not be the case
-  //
-
-  timeline.init_timeline();
-
 
   //
   // Check remaining file size, based on header information
@@ -1404,19 +1396,61 @@ bool edf_t::attach( const std::string & f ,
 	{
 
 	  std::stringstream msg;
-	  msg << "num signals = " << header.ns_all << "\n"
-	      << "header size ( = 256 + # signals * 256 ) = " << header_size << "\n"
-	      << "record size = " << record_size << "\n"
-	      << "number of records = " << header.nr_all << "\n"
-	      << "implied EDF size from header = " << header_size << " + " << record_size << " * " << header.nr_all << " = " << implied << "\n"
-	      << "assuming header correct, means observed has " <<  (double)(fileSize-header_size)/(double)record_size - (double)(implied-header_size)/(double)record_size 
+
+	  msg << "details:\n"
+	      << "  header size ( = 256 + # signals * 256 ) = " << header_size << "\n"
+	      << "  num signals = " << header.ns_all << "\n"	      
+	      << "  record size = " << record_size << "\n"
+	      << "  number of records = " << header.nr_all << "\n"
+	      << "  implied EDF size from header = "
+	      << header_size << " + " << record_size << " * " << header.nr_all << " = " << implied << "\n\n"
+
+	      << "  assuming header correct, implies the file has "
+	      <<  (double)(fileSize-header_size)/(double)record_size - (double)(implied-header_size)/(double)record_size 
 	      << " records too many\n"
 	      << "  (where one record is " << header.record_duration << " seconds)\n";
 	  
-	  Helper::halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
-			+ " but observed " + Helper::int2str( fileSize) + " bytes" + "\n" + msg.str() );
+	  if ( ! globals::autofix_edf )
+	    {
+	      msg << "\nIF you're confident about the remaining data you can add the option:\n\n"
+		  << "    luna s.lst fix-edf=T ... \n\n"
+		  << "  to attempt to fix this.  This may be appropriate under some circumstances, e.g.\n"
+		  << "  if just the last one or two records were clipped.  However, if other EDF header\n"
+		  << "  information is incorrect (e.g. number of signals, sample rates), then you'll be\n"
+		  << "  dealing with GIGO... so be sure to carefully check all signals for expected properties;\n"
+		  << "  really you should try to determine why the EDF was invalid in the first instance, though\n";
+
+	      Helper::halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
+			    + " but observed " + Helper::int2str( fileSize) + " bytes" + "\n" + msg.str() );
+	    }
+	  else
+	    {
+	      logger << "  warning: EDF has incorrect file size given header information:\n"
+		     << msg.str() << "\n";
+	      
+	      int nr_from_data = floor( (fileSize-header_size)/(double)record_size );
+	      
+	      logger << "  attempting to fix this, changing the header number of records from " << header.nr_all
+		     << " to " << nr_from_data << " ... good luck!\n";
+	      
+	      // update EDF header internally.
+	      header.nr_all = header.nr = nr_from_data;
+	      	      
+	    }
+
+	  
 	}
     }
+
+  
+  
+  //
+  // Create timeline (relates time-points to records and vice-versa)
+  // Here we assume a continuous EDF, but timeline is set up so that 
+  // this need not be the case
+  //
+
+  timeline.init_timeline();
 
 
   //

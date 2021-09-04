@@ -151,6 +151,8 @@ struct globals
 
   static std::string project_path; 
 
+  static bool autofix_edf;
+
   // in -t output mode:   folder/indiv-id/{value}COMMAND-F{value}.txt{.gz}
   static std::string txt_table_prepend;
   static std::string txt_table_append;

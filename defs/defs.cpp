@@ -51,6 +51,7 @@ char globals::class_inst_delimiter = '/';
 char globals::annot_keyval_delim = '=' ; 
 
 std::set<std::string> globals::annot_alignment;
+bool globals::autofix_edf;
 
 int globals::time_format_dp;
 
@@ -256,6 +257,13 @@ void globals::init_defs()
   //
 
   specified_annots.clear();
+
+  //
+  // try to fix EDF if 'corrupt'
+  //
+
+  autofix_edf = false;
+
   
   //
   // Automatically remap NSRR annotations; 
