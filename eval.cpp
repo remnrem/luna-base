@@ -3215,8 +3215,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::indiv_wildcard = tok1;
       return;
     }
-    
-
+  
+  // "auto-correct" truncated/over-long EDFs
+  if ( Helper::iequals( tok0, "fix-edf" ) )
+    {
+      globals::autofix_edf = Helper::yesno( tok1 );
+      return;
+    }
+  
   // dp for time output
   if ( Helper::iequals( tok0, "sec-dp" ) )
     {
