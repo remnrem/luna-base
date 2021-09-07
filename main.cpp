@@ -26,6 +26,7 @@
 #include "miscmath/crandom.h"
 #include <fstream>
 
+#include "utils/cgi-utils.h"
 
 extern globals global;
 
@@ -215,6 +216,36 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+
+    //
+  // map channels/ annots
+  //
+
+  if ( argc >=2 && strcmp( argv[1] , "--mapper" ) == 0 )
+    {
+      global.api();
+      
+      // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::channel_annot_mapper( tok , false ) ;
+      std::exit(0);
+    }
+
+  //
+  // map channels/ annots, HTML style output
+  //
+
+  if ( argc >=2 && strcmp( argv[1] , "--mapper-html" ) == 0 )
+    {
+      global.api();
+      
+      // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::channel_annot_mapper( tok , true ) ;
+      std::exit(0);
+    }
 
 
       
@@ -1830,6 +1861,18 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  if ( p == "cgi" )
+    {
+      std::string res = exec_system( "ls -l" );
+
+      std::cout << " my result\n"
+		<< "----------\n"
+		<< res
+		<< "\n-----------\n";
+      
+      std::exit(0);
+    }
+  
   if ( p == "peaks" )
     {
       std::vector<double> x(100);

@@ -648,9 +648,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
       // this match function will change 'l' to match any primary aliase
       // it does a case-insensitive match, but returns the correct (preferred-case) version
-
-      bool include = inp_signals == NULL || signal_list_t::match( inp_signals , &l , slabels );
       
+      bool include = inp_signals == NULL || signal_list_t::match( inp_signals , &l , slabels );
+      //std::cout << " l = " << include << " " << l << "\n";
+	    
       // imatch allows for case-insensitive match of 'edf annotation*'  (i.e. 14 chars)
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
 
@@ -3040,7 +3041,9 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
       //
       // update list if needed
       //
-
+      // std::cout << " alias = [" << alias << "]\n";
+      // std::cout << " primary alias size = " <<  cmd_t::primary_alias.size() << "\n";
+      
       std::vector<std::string> tok2;
       if ( alias != "" ) 
 	{
@@ -3082,7 +3085,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	      
 	      const int l = label2header[ Helper::toupper( tok2[t2] ) ];
 	      
-	      // std::cout << "found match " << l << "\n";
+	      //	      std::cout << "found match " << l << "\n";
 	      
 	      if ( t2 > 0 ) // relabel if wasn't first choice?
 		{
@@ -3103,7 +3106,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	      break;
 	    }
 	}
-      
+     
     }
 
   return r;
@@ -4654,14 +4657,19 @@ void edf_t::guess_canonicals( param_t & param , bool make_signals )
 }
 
 
-void edf_t::make_canonicals( const std::vector<std::string> & files,
-			     const std::string &  group , 
-			     const bool make_signals , 
-			     const bool drop_originals , 
-			     const std::string & prefix , 
-			     const std::set<std::string> * cs )
+cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
+				  const std::string &  group , 
+				  const bool make_signals , 
+				  const bool drop_originals , 
+				  const std::string & prefix , 
+				  const std::set<std::string> * cs ,
+				  const bool only_check_labels )
 {  
-      
+
+  cansigs_t retval;
+
+  if ( files.size() == 0 ) return retval;
+    
   // GROUP   CANONICAL   CH   REF   SR  UNITS    NOTES
   
   // if cs is non-null, only make the CS in that set ('EEG')
@@ -4683,7 +4691,7 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
   
   // the to-be-created CS go here:
   std::set<std::string> canons;
-  
+
   // if we are dropping originals later, get a list of those now
   const bool only_data_signals = true;
   signal_list_t osignals = header.signal_list( "*" , only_data_signals );
@@ -4802,53 +4810,58 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
   std::set<std::string>::const_iterator cc = canons.begin();
   while ( cc != canons.end() )
     {
+      
       //for (int i=0; i<canons.size(); i++)
       
       std::string canon = *cc;
-      
-      writer.level( canon , "CS" );
+
+      if ( ! only_check_labels ) 
+	writer.level( canon , "CS" );
+      else
+	retval.okay[ canon ] = false;
       
       if ( sigs.find( canon ) == sigs.end() )
 	{
-	  writer.value( "DEFINED" , 0 );
+	  if ( ! only_check_labels ) 
+	    writer.value( "DEFINED" , 0 );
 	  ++cc;
 	  continue;
 	}
       
-	  //
-	  // check whether canonical form already exists
-	  //  - we allow this, but ONLY if no transformations
-	  //    are requested (i.e. no resampling etc)
-	  //    meaning we basically just leave as is
-	  //
+      //
+      // check whether canonical form already exists
+      //  - we allow this, but ONLY if no transformations
+      //    are requested (i.e. no resampling etc)
+      //    meaning we basically just leave as is
+      //
+      
+      bool already_present = header.has_signal( canon );      
 	  
-	  bool already_present = header.has_signal( canon );      
+      // as soon as we find a matching rule, we stop
+      bool done = false;
+      
+      const int n_rules = sigs.find( canon )->second.size() ; 
+      
+      for (int j=0; j<n_rules; j++ )
+	{
 	  
-	  // as soon as we find a matching rule, we stop
-	  bool done = false;
-	  
-	  const int n_rules = sigs.find( canon )->second.size() ; 
-	  
-	  for (int j=0; j<n_rules; j++ )
+	  // find best choice of signals
+	  std::string sigstr = "";
+	  std::vector<std::string> v = sigs.find( canon )->second[j];
+	  for (int k=0; k<v.size(); k++)
 	    {
-	      
-	      // find best choice of signals
-	      std::string sigstr = "";
-	      std::vector<std::string> v = sigs.find( canon )->second[j];
-	      for (int k=0; k<v.size(); k++)
+	      //if ( header.signal( v[k] ) != -1 )
+	      if ( header.has_signal( v[k] )  ) // case-insensitive match 
 		{
-		  //if ( header.signal( v[k] ) != -1 )
-		  if ( header.has_signal( v[k] )  ) // case-insensitive match 
-		    {
-		      sigstr = v[k];
-		      break;
-		    }
+		  sigstr = v[k];
+		  break;
 		}
-	      
-	      if ( sigstr == "" ) 
-		continue;
-	      
-
+	    }
+	  
+	  if ( sigstr == "" ) 
+	    continue;
+	  
+	  
 	  //
 	  // Reference
 	  //
@@ -4877,13 +4890,14 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 	  
 	  if ( sigstr == "" || refstr == "" )
 	    continue;
-
+	  
 	  if ( already_present && refstr != "." )
 	    Helper::halt( "cannot specify existing canonical name "
 			  + canon + " and a re-reference" );
-	  
-	  logger << "  generating canonical signal " << canon 
-		 << " from " << sigstr << "/" << refstr << "\n";
+
+	  if ( ! only_check_labels ) 
+	    logger << "  generating canonical signal " << canon 
+		   << " from " << sigstr << "/" << refstr << "\n";
 
 	  //
 	  // track that we are using these channels
@@ -4892,6 +4906,10 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 	  used.insert( Helper::toupper( sigstr ) );
 	  used.insert( Helper::toupper( refstr ) );
 
+	  retval.used.insert( Helper::toupper( sigstr ) );
+	  retval.used.insert( Helper::toupper( refstr ) );
+	  
+	  
 	  //
 	  // Track that the original should not be dropped, as it features
 	  //
@@ -4972,18 +4990,28 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 	  //
 	  // output
 	  //
-	  
-	  writer.value( "DEFINED" , 1 );
-	  writer.value( "SIG" , sigstr );
-	  writer.value( "REF" , refstr );
-	  writer.value( "SR" , srstr );
-	  writer.value( "UNITS" , ustr );
-	  
-	  std::string notesstr = notes.find( canon )->second[j];
-	  
-	  if ( notesstr != "" )
-	    writer.value( "NOTES" , notesstr );
-	 
+
+	  if ( ! only_check_labels )
+	    {
+	      writer.value( "DEFINED" , 1 );
+	      writer.value( "SIG" , sigstr );
+	      writer.value( "REF" , refstr );
+	      writer.value( "SR" , srstr );
+	      writer.value( "UNITS" , ustr );
+	      
+	      std::string notesstr = notes.find( canon )->second[j];
+	      
+	      if ( notesstr != "" )
+		writer.value( "NOTES" , notesstr );
+	    }
+
+
+	  if ( only_check_labels )
+	    {
+	      retval.okay[ canon ] = true;
+	      retval.sig[ canon ] = sigstr;
+	      retval.ref[ canon ] = refstr;
+	    }
 	  
 	  //
 	  // at this point, rule was found, so quit
@@ -4998,8 +5026,9 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
 
       // if we failed to get a match, flag here
 
-      if ( ! done ) 
-	writer.value( "DEFINED" , 0 );
+      if ( ! only_check_labels ) 
+	if ( ! done ) 
+	  writer.value( "DEFINED" , 0 );
 
       
       // next CS
@@ -5008,14 +5037,15 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
       
     } 
   
-  writer.unlevel( "CS" );
+  if ( ! only_check_labels )
+    writer.unlevel( "CS" );
 
 
   //
   // Drop original signals?
   //
 
-  if ( drop_originals )
+  if ( drop_originals && ! only_check_labels )
     {
       if ( make_signals ) 
 	logger << "  now dropping the original signals\n";
@@ -5047,6 +5077,7 @@ void edf_t::make_canonicals( const std::vector<std::string> & files,
     }
   
   
+  return retval;
 }
 
 

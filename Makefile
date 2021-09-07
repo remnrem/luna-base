@@ -2,7 +2,7 @@ include Makefile.inc
 ifeq ($(ARCH),WINDOWS)
   TARGETS = luna destrat behead tocol
 else
-  TARGETS = luna libluna destrat behead dmerge tocol fixrows
+  TARGETS = luna libluna destrat behead dmerge tocol fixrows cgi-mapper
 endif
 
 SRCS = globals.cpp eval.cpp cmddefs.cpp \
@@ -80,6 +80,9 @@ tocol: utils/tocol.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 fixrows: utils/fixrows.o 
+	$(CXX) -o $@ $^ $(LDFLAGS)
+
+cgi-mapper: utils/cgi-mapper.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 behead: utils/behead.o
