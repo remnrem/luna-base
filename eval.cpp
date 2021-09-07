@@ -3003,11 +3003,11 @@ void proc_canonical( edf_t & edf , param_t & param )
 
   // cs = additional subset of canonical signals to focus on
   if ( ! param.has( "cs" ) )    
-    edf.make_canonicals( files , group , make_signals , drop_originals , prefix );
+    cansigs_t cs0 = edf.make_canonicals( files , group , make_signals , drop_originals , prefix );
   else
     {
       const std::set<std::string> cs = param.strset( "cs" );
-      edf.make_canonicals( files , group , make_signals , drop_originals , prefix , &cs );
+      cansigs_t cs0 = edf.make_canonicals( files , group , make_signals , drop_originals , prefix , &cs );
     }
 }
 

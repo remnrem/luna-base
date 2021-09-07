@@ -42,6 +42,8 @@ struct param_t;
 
 struct edf_t;
 
+struct cansigs_t;
+
 struct edf_header_t
 {
   
@@ -450,12 +452,13 @@ public:
 
   void guess_canonicals( param_t & , bool make_signals );
 
-  void make_canonicals( const std::vector<std::string> & files,
-			const std::string &  group ,
-			const bool make_signals ,
-			const bool drop_originals , 
-			const std::string & prefix ,
-			const std::set<std::string> * cs = NULL );
+  cansigs_t make_canonicals( const std::vector<std::string> & files,
+			     const std::string &  group ,
+			     const bool make_signals ,
+			     const bool drop_originals , 
+			     const std::string & prefix ,
+			     const std::set<std::string> * cs = NULL ,
+			     const bool only_check_labels = false );
     
   void flip( const int s ); 
 
@@ -674,5 +677,14 @@ public:
 
 void dump_intervals( const std::string & edfs , 
 		     const std::string & ints );
+
+
+struct cansigs_t {
+  std::set<std::string> used;
+  std::map<std::string,bool> okay;
+  std::map<std::string,std::string> sig;
+  std::map<std::string,std::string> ref;
+};
+
 
 #endif

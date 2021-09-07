@@ -38,6 +38,7 @@
 #include "helper/logger.h"
 #include "helper/xml-parser.h"
 #include "helper/json.h"
+#include "helper/mapper.h"
 
 #include "tinyxml/tinyxml.h"
 

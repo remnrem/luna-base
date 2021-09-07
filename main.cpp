@@ -26,6 +26,7 @@
 #include "miscmath/crandom.h"
 #include <fstream>
 
+#include "utils/cgi-utils.h"
 
 extern globals global;
 
@@ -1835,6 +1836,18 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  if ( p == "cgi" )
+    {
+      std::string res = exec_system( "ls -l" );
+
+      std::cout << " my result\n"
+		<< "----------\n"
+		<< res
+		<< "\n-----------\n";
+      
+      std::exit(0);
+    }
+  
   if ( p == "peaks" )
     {
       std::vector<double> x(100);
