@@ -86,7 +86,7 @@ fixrows: utils/fixrows.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 cgi-mapper: utils/cgi-mapper.o
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(CXX)  -o $@ $^ 
 
 behead: utils/behead.o
 	$(CXX) -o $@ $^  $(LDFLAGS)
