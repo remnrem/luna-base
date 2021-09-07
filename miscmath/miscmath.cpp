@@ -1654,6 +1654,26 @@ void MiscMath::hjorth2( const std::vector<double> * x , double * r , int w , int
   
 }
 
+std::vector<double> MiscMath::outliers( const std::vector<double> * x , double th )
+{
+
+  if ( th <= 0 ) return *x;
+
+  const int n = x->size();
+
+  std::vector<bool> inc( n , true );
+  
+  int removed = MiscMath::outliers( x , th , &inc );
+
+  if ( removed == 0 ) return *x;
+
+  std::vector<double> y;
+  for (int i=0; i<n; i++) 
+    if ( inc[i] ) y.push_back( (*x)[i] );  
+  return y;
+
+}
+
 
 int MiscMath::outliers( const std::vector<double> * x , double th ,
 			std::vector<bool> * inc , 

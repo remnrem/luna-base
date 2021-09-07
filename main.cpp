@@ -217,7 +217,7 @@ int main(int argc , char ** argv )
     }
 
 
-    //
+  //
   // map channels/ annots
   //
 
@@ -1573,10 +1573,11 @@ void process_edfs( cmd_t & cmd )
 			{
 			  std::string fname2 = ent->d_name;
 			  // only annot files (.xml, .ftr, .annot, .eannot)
-			  if ( Helper::file_extension( fname2 , "ftr" ) ||
+			  if ( Helper::file_extension( fname2 , "annot" ) ||
+			       Helper::file_extension( fname2 , "txt" ) ||
+			       Helper::file_extension( fname2 , "tsv" ) ||
 			       Helper::file_extension( fname2 , "xml" ) ||
-			       Helper::file_extension( fname2 , "eannot" ) ||
-			       Helper::file_extension( fname2 , "annot" ) )
+			       Helper::file_extension( fname2 , "eannot" ) )   
 			    {
 			      edf.load_annotations( fname + fname2 );	 			   
 			    }
@@ -1588,16 +1589,21 @@ void process_edfs( cmd_t & cmd )
 		}
 	      else
 		{
-
+		  
 		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
 		  // i.e. skip .sedf files that might also be specified as 
 		  // attached to this EDF
-		  if ( Helper::file_extension( fname , "ftr" ) ||
+		  if ( Helper::file_extension( fname , "annot" ) ||
+		       Helper::file_extension( fname , "txt" ) ||
+		       Helper::file_extension( fname , "tsv" ) ||
 		       Helper::file_extension( fname , "xml" ) ||
-		       Helper::file_extension( fname , "eannot" ) ||
-		       Helper::file_extension( fname , "annot" ) )
-		    edf.load_annotations( fname );	 
-		}
+		       Helper::file_extension( fname , "eannot" ) )
+		    {
+		      edf.load_annotations( fname );	 
+		    }
+		  else
+		    Helper::halt( "did not recognize annotation file extension: " + fname );
+		} 
 	      
 	    }
 	}

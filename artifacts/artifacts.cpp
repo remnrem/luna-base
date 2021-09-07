@@ -734,7 +734,8 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
   bool calc_clipped = param.has( "clipped" );
   bool calc_flat = param.has( "flat" );
   bool calc_maxxed = param.has( "max" );
-  
+  bool calc_minmax = param.has( "min-max" );
+
   // nothing to do...
   if ( !( calc_clipped || calc_flat || calc_maxxed ) ) return;
   
@@ -763,6 +764,14 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
       max_value = x[0];
       max_threshold = x[1];
       logger << "  flagging epochs with " << max_threshold << " proportion |X| > " << max_value << "\n";
+    }
+  
+  // reject if MAX is *below* a set threshold
+  const double minmax_threshold = calc_minmax ? param.requires_dbl( "min-max" ) : 0 ;
+  if ( calc_minmax )
+    {
+      if ( minmax_threshold <= 0 )  Helper::halt( "expecting min-max to be > 0" );
+      logger << "  flagging epochs with a max |X| less than " << minmax_threshold << "\n";
     }
 
 
@@ -822,7 +831,7 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
       // Track what we remove
       //
 
-      int cnt_clp = 0 , cnt_flt = 0 , cnt_max = 0 , cnt_any = 0;
+      int cnt_clp = 0 , cnt_flt = 0 , cnt_max = 0 , cnt_minmax = 0 , cnt_any = 0;
       
 
       //
@@ -864,7 +873,7 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 
 	  double f = calc_flat ? MiscMath::flat( *d , flat_eps ) : 0 ;
 	  
-	  double m = calc_maxxed ? MiscMath::max( *d , max_value ) : 0 ; 
+	  double m = calc_maxxed || calc_minmax ? MiscMath::max( *d , max_value ) : 0 ; 
 
 	  //
 	  // Mask?
@@ -885,12 +894,19 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 	      ++cnt_flt;
 	    }
 	  
+	  
 	  if ( calc_maxxed && m > max_threshold ) 
 	    {
 	      set_mask = true;
 	      ++cnt_max;
-	    }
+	    }	  
 	  
+	  if ( calc_minmax && m < minmax_threshold )
+	    {
+	      set_mask = true;
+              ++cnt_minmax;      
+	    }
+	       
 	  if ( set_mask ) 
 	    {	      
 	      edf.timeline.set_chep_mask( epoch , signals.label(s) );	      

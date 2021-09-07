@@ -43,23 +43,27 @@ annot_t * spectral_power( edf_t & edf ,
 			  param_t & param )
 {
   
-  // Report dull spectrum as well as band power
-  bool show_spectrum = param.has( "spectrum" ) || param.has("epoch-spectrum" );
+  // Report full spectrum as well as band power
+  const bool show_spectrum = param.has( "spectrum" ) || param.has("epoch-spectrum" );
 
   // Report dB scale ?
-  bool dB = param.has( "dB" );
+  const bool dB = param.has( "dB" );
   
   // Mean center data first? 
-  bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" );
+  const bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" );
   
   // Spectrum bin width (0 means no binning, default)
 
   //double bin_width = param.has( "bin" ) ? param.requires_dbl( "bin" ) : 0;
-  double bin_fac = param.has( "fac" ) ? param.requires_int( "fac" ) : 1;
+  const double bin_fac = param.has( "fac" ) ? param.requires_int( "fac" ) : 1;
 
   // Band power per-epoch
-
   const bool show_epoch = param.has( "epoch" ) || param.has("epoch-spectrum" );
+  
+  // report variance of PSD across epochs (SD)
+  const bool aggregate_psd_sd       = param.has( "sd" );
+  const double aggregate_psd_th     = param.has( "th" ) ? param.requires_dbl( "th" ) : 0 ; 
+  const bool aggregate_psd_med      = param.has( "median" );
 
   // Characterize dynamics: of all epoch-level stats created, get the H1, H2, H3, linear and exponential trend
   // Hjorth stats just consider all points concatenated
@@ -74,14 +78,21 @@ annot_t * spectral_power( edf_t & edf ,
   // peak diagnostics
   const bool peak_diagnostics = param.has( "peaks" ) || param.has( "epoch-peaks" );
   const int peak_median_filter_n = param.has( "peaks-window" ) ? param.requires_int( "peaks-window" ) : 11 ; 
-  const bool peak_per_epoch = param.has( "epoch-peaks" );
+  const bool verbose_peaks = param.has( "peaks-verbose" );
+  const bool peak_per_epoch = param.has( "epoch-peaks" ) || param.has( "peaks-epoch" );
   std::vector<double> peak_range(2); peak_range[0] = 0 ; peak_range[1] = 99999;
   if ( param.has( "peaks-frq" ) ) peak_range = param.dblvector( "peaks-frq" );
   if ( peak_range.size() != 2 || peak_range[0] >= peak_range[1] ) Helper::halt( "bad peaks-frq=lwr,upr" );
 
-  // spectral slope?
+  //
+  // spectral slope
+  //
+
   const bool spectral_slope = param.has( "slope" );
   const std::vector<double> slope_range = param.dblvector( "slope" );
+  const bool spectral_slope_show_epoch = param.has( "epoch-slope" ) || param.has( "slope-epoch" );
+  
+
   if ( spectral_slope )
     {
       if ( slope_range.size() != 2 ||  
@@ -90,14 +101,19 @@ annot_t * spectral_power( edf_t & edf ,
 	   slope_range[1] <= 0 )
 	Helper::halt( "expecting slope=lwr,upr" );
     }
+
+  // outlier threshold to remove individual PSD points when calculating a single slope
   const double slope_outlier = param.has( "slope-th" ) ? param.requires_dbl( "slope-th" ) : 3 ;
+
+  // threshold to reove epochs when summarizing slopes over all epochs 
+  const double slope_th2     = param.has( "slope-th2" ) ? param.requires_dbl( "slope-th2" ) : 3 ;
   
   // truncate spectra
-  double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
-  double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
+  const double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
+  const double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
 
   // Calculate MSE
-  bool calc_mse = param.has( "mse" ); 
+  const bool calc_mse = param.has( "mse" ); 
 
   // cache PSD for other analyses (e.g. PSC)
   const bool cache_data = param.has( "cache-metrics" );
@@ -112,13 +128,13 @@ annot_t * spectral_power( edf_t & edf ,
     ? param.requires_dbl( "segment-sec" ) : 4 ;
 
   double fft_segment_overlap = param.has( "segment-overlap" ) 
-    ? param.requires_dbl( "segment-overlap" ) : 2 ;
+     ? param.requires_dbl( "segment-overlap" ) : 2 ;
        
   //
   // Option to average adjacent points in the power spectra (default = T)
   //
   
-  bool average_adj = param.has( "average-adj" ) ;
+  const bool average_adj = param.has( "average-adj" ) ;
 
   
   //
@@ -135,7 +151,7 @@ annot_t * spectral_power( edf_t & edf ,
   // Use nextpow2 for NFFT
   //
 
-  bool use_nextpow2 = param.has( "pow2" );
+  const bool use_nextpow2 = param.has( "pow2" );
   
   //
   // Define standard band summaries
@@ -195,21 +211,18 @@ annot_t * spectral_power( edf_t & edf ,
   //
   
 
-  bool epoch_level_output = show_epoch || show_epoch_spectrum ;
-  
+  bool epoch_level_output = show_epoch || show_epoch_spectrum || peak_per_epoch || spectral_slope_show_epoch ;
   
   
   //
   // Get each signal
   //
   
-
   logger << "  calculating PSD for " << ns << " signals\n"; 
 
   for (int s = 0 ; s < ns; s++ )
     {
       
-
       //
       // only consider data tracks
       //
@@ -239,9 +252,12 @@ annot_t * spectral_power( edf_t & edf ,
       // band and F results
       std::map<frequency_band_t,std::vector<double> > track_band;
       std::map<int,std::vector<double> > track_freq;
+      std::map<int,std::vector<double> > track_freq_logged;
+
       
-
-
+      // store spectral slope per epoch for this channel?
+      std::vector<double> slopes;
+      
       
       //
       // Set first epoch
@@ -436,11 +452,14 @@ annot_t * spectral_power( edf_t & edf ,
 	   if ( freqs.size() == pwelch.psd.size() )
 	     {
 	       
-	       // accumulate for entire night means
+	       // accumulate for entire night means; store as dB and raw
 	       if ( show_spectrum )
 		 for (int f=0;f<pwelch.psd.size();f++)
-		   track_freq[ f ].push_back( pwelch.psd[f] );
-	       
+		   {
+		     track_freq[ f ].push_back( pwelch.psd[f] );
+		     track_freq_logged[ f ].push_back( 10*log10( pwelch.psd[f] ) );
+		   }
+
 	       // epoch-level output?
 	       
 	       if ( show_epoch_spectrum )
@@ -464,7 +483,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     }
 		   writer.unlevel( globals::freq_strat );
 		 }
-	      
+	     	      
 	       
 	       //
 	       // epoch-level peakedness
@@ -481,10 +500,18 @@ annot_t * spectral_power( edf_t & edf ,
 
 	       if ( spectral_slope ) 
 		 {		   
-		   spectral_slope_helper( pwelch.psd , 
-					  pwelch.freq , 
-					  slope_range , 
-					  slope_outlier );
+		   
+		   double es1 = 0 ;
+		   
+		   bool okay = spectral_slope_helper( pwelch.psd ,
+						      pwelch.freq ,
+						      slope_range ,
+						      slope_outlier ,
+						      spectral_slope_show_epoch , 
+						      &es1 );
+		   
+		   if ( okay ) slopes.push_back( es1 );
+		   
 		 }
 	       
 	     }
@@ -542,13 +569,44 @@ annot_t * spectral_power( edf_t & edf ,
 	  if ( track_freq.size() != freqs.size() ) 
 	    Helper::halt( "internal error psd_t" );
 	  
-	  std::vector<double> means;
+	  std::vector<double> means, medians, sds;
+	  
+	  int ne_valid = track_freq[0].size();
+	  int ne_min = ne_valid;
+
 	  for (int f=0;f<n;f++) 
-	    means.push_back( MiscMath::mean( track_freq[f] ) );
+	    {
+	      // wanting to get stats of dB or raw?
+	      const std::vector<double> & yy = dB ? track_freq_logged[f] : track_freq[f] ;
+
+	      // any outlier removal of epochs?	      	      
+	      std::vector<double> xx = aggregate_psd_th > 0 && ne_valid > 2 ? 
+		MiscMath::outliers( &yy , aggregate_psd_th ) : yy ; 
+	      
+	      // track min size
+	      if ( xx.size() < ne_min ) 
+		ne_min = xx.size();
+	      	      
+	      means.push_back( MiscMath::mean( xx ) );
+	      
+	      if ( aggregate_psd_sd && xx.size() > 2 )
+		sds.push_back( MiscMath::sdev( xx ) );
+	      
+	      if ( aggregate_psd_med && xx.size() > 2 )
+		medians.push_back(  MiscMath::median( xx ) );
+	    }
 	  
-	  bin_t bin( min_power , max_power , bin_fac );
-	  
+	  bin_t bin( min_power , max_power , bin_fac );	  
 	  bin.bin( freqs , means );
+
+	  bin_t bin_med( min_power , max_power , bin_fac );	  
+	  if ( aggregate_psd_med && ne_min > 2 )
+	    bin_med.bin( freqs , medians );
+
+	  bin_t bin_sds( min_power , max_power , bin_fac );	  
+	  if ( aggregate_psd_sd && ne_min > 2 ) 
+	    bin_sds.bin( freqs , sds );
+
 	  
 	  std::vector<double> f0;
 	  
@@ -557,14 +615,22 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	      f0.push_back( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 );
 	      
-	      double x = dB ? 10*log10( bin.bspec[i] ) : bin.bspec[i] ;
-
+	      double x = bin.bspec[i] ;
+	      
 	      if ( show_spectrum ) 
 		{
 		  writer.level( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 , globals::freq_strat );
 		  //writer.level( bin.bfa[i] , globals::freq_strat );
+		  
+		  // these stats will aleady be dB-scaled if requested
 		  writer.value( "PSD" , x );
 		  
+		  if ( aggregate_psd_med && ne_min > 2 )
+		    writer.value( "PSD_MD" , bin_med.bspec[i]  );
+		  
+		  if ( aggregate_psd_sd && ne_min > 2 )
+		    writer.value( "PSD_SD" , bin_sds.bspec[i]  );
+		  		  
 		  if ( bin.nominal[i] != "" )
 		    writer.value( "INT" , bin.nominal[i] );
 		  
@@ -579,20 +645,26 @@ annot_t * spectral_power( edf_t & edf ,
 	    writer.unlevel( globals::freq_strat );
 	  
 	  
+	  std::vector<double> raw_mean_psd = bin.bspec;
+	  if ( dB ) 
+	    for (int i=0; i<raw_mean_psd.size(); i++) 
+	      raw_mean_psd[i] = pow( 10 , raw_mean_psd[i]/10.0) ;
+	  
 	  //
-	  // Report metrics on the PSD
+	  // Report metrics on the PSD: expecting a raw PSD
 	  //
 	  
 	  if ( peak_diagnostics )
-	    peakedness( bin.bspec , f0 , peak_median_filter_n , peak_range , true ); 
+	    peakedness( raw_mean_psd , f0 , peak_median_filter_n , peak_range , verbose_peaks ); 
+
 	  
 	  //
-	  // spectral slope?
+	  // spectral slope? (expecting a raw PSD) 
 	  //
-	  
+	
 	  if ( spectral_slope ) 
 	    {		   
-	      spectral_slope_helper( bin.bspec , 
+	      spectral_slope_helper( raw_mean_psd , 
 				     f0 , 
 				     slope_range , 
 				     slope_outlier );
@@ -601,7 +673,24 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	}
 
-	      
+      
+      //
+      // spectral slope based on distribution of epoch-level slopes?
+      //
+
+      if ( spectral_slope ) 
+	{
+	  if ( slopes.size() > 2 )
+	    {
+	      std::vector<double> s2 = MiscMath::outliers( &slopes , slope_th2 );
+	      double s_mean = MiscMath::mean( s2 );
+	      double s_med  = MiscMath::median( s2 );
+	      double s_sd   = MiscMath::sdev( s2 , s_mean );
+	      writer.value( "SPEC_SLOPE_MN" , s_mean );
+	      writer.value( "SPEC_SLOPE_MD" , s_med );
+	      writer.value( "SPEC_SLOPE_SD" , s_sd );
+	    }
+	}
 
       //
       // mean total power
@@ -711,7 +800,7 @@ annot_t * spectral_power( edf_t & edf ,
 		  
 		  if ( freqs[ ii->first ] > max_power )  { ++ii; continue; } 
 		  
-		  writer.level( freqs[ ii->first ] , globals::freq_strat );
+		  writer.level( freqs[ ii->first ] , globals::freq_strat );		  
 		  
 		  if ( has_cycles )
 		    dynam_report_with_log( ii->second , epochs , &cycle );
@@ -728,6 +817,10 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	}
       
+
+      //
+      // Multi-scale entropy
+      //
       
 
       if ( calc_mse )

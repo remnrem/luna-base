@@ -65,7 +65,7 @@ $(SHARED_LIB) : $(OBJS)
 	$(LD) -shared $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
 endif
 
-# onjects
+# objects
 libluna.a : $(OBJS)
 	$(AR) $(ARFLAGS) $@ $?
 	$(RANLIB) $@
@@ -75,6 +75,9 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 
 destrat: utils/reader.o libluna.a
 	$(CXX) -o $@ $^ -L. -lz  $(LDFLAGS)
+
+#mapper: utils/mapper.o helper/helper.o
+#	$(CXX) -o $@ $^ -L. -lz $(LDFLAGS)
 
 tocol: utils/tocol.o 
 	$(CXX) -o $@ $^ $(LDFLAGS)

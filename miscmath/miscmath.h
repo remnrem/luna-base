@@ -127,6 +127,8 @@ namespace MiscMath
   int outliers( const std::vector<double> * x , double th , 
 		std::vector<bool> * inc , const std::vector<bool> * prior = NULL );  
   
+  std::vector<double> outliers( const std::vector<double> * x , double th );
+
   double kappa( const std::vector<int> & a , const std::vector<int> & b , const int unknown = -1 );
   double kappa( const std::vector<std::string> & a , const std::vector<std::string> & b , const std::string & unknown = "?" );
 

@@ -2213,14 +2213,25 @@ void timeline_t::select_epoch_first( int n )
 
 // select only EPOCHs that are in contiguous runs of EPOCH /str/ (i.e. +1 means one either side)
 
-void timeline_t::select_epoch_within_run( const std::string & str , int b )
+void timeline_t::select_epoch_within_run( const std::string & label , int b )
 {
 
   if ( b < 1 ) Helper::halt( "epoch border must be 1 or greater" );
 
-  mask_set = true;
+  annot_t * annot = annotations( Helper::unquote( label ) );
+  if ( annot == NULL ) return;
 
-  const int ne = epochs.size();  
+  mask_set = true;
+  
+  // get epoch annots for this label:
+  const int ne = epochs.size();
+  std::vector<bool> x( ne , false );
+  for (int e=0;e<ne;e++)
+    {
+      interval_t interval = epoch( e );
+      annot_map_t events = annot->extract( interval );
+      x[e] = events.size() > 0 ;
+    }
 
   int cnt_mask_set = 0;
   int cnt_mask_unset = 0;
@@ -2232,29 +2243,36 @@ void timeline_t::select_epoch_within_run( const std::string & str , int b )
       
       bool set_mask = false;
 
-      if ( ! epoch_annotation( str , e ) ) 
+      // if ( ! epoch_annotation( str , e ) ) 
+      // 	set_mask = true;
+      if ( ! x[e] )
 	set_mask = true;
       
       if ( ! set_mask )
 	{	  
+	  
 	  int cnt = 0;
 	  
 	  int current = e;
 	  for (int bwk=0;bwk<b;bwk++)
 	    {
-	      --current;
-	      if ( epoch_annotation( str , current ) ) ++cnt;
+	      if ( current == 0 ) continue;
+	      --current;	      
+	      //if ( epoch_annotation( str , current ) ) ++cnt;
+	      if ( x[ current] ) ++cnt;
 	    }
 	  
 	  current = e;
 	  for (int fwd=0;fwd<b;fwd++)
 	    {
+	      if ( current == ne-1 ) continue;
 	      ++current;
-	      if ( epoch_annotation( str , current ) ) ++cnt;
+	      //if ( epoch_annotation( str , current ) ) ++cnt;
+	      if ( x[ current ] ) ++cnt;
 	    }
-	  
+	  	  
 	  if ( cnt < b * 2 ) set_mask = true;
-      
+
 	}
       
       int mc = set_epoch_mask( e , set_mask );
@@ -2266,7 +2284,7 @@ void timeline_t::select_epoch_within_run( const std::string & str , int b )
       
     }
   
-  logger << " based on " << str << " with " << b << " flanking epochs; ";
+  logger << " based on " << label << " with " << b << " flanking epochs; ";
   logger << cnt_mask_set << " newly masked, " 
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
