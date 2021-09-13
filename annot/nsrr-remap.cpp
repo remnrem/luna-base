@@ -42,13 +42,13 @@ std::string nsrr_t::remap( const std::string & a )
   //
   // found as a primary? ( return preferred case in pmap )
   //
-
+    
   if ( pmap.find( a_uc ) != pmap.end() )
-    {
+    {  
       if ( unmapped ) return "";
       else return pmap[ a_uc ];
     }
-  
+
   //
   // found as an alias?
   //
@@ -132,11 +132,15 @@ void nsrr_t::annot_remapping( const std::string & s )
   if ( primary.find( "|" ) != std::string::npos )
     Helper::halt( "primary annotation labels cannot contain pipe (|) characters" );
   
+  
+  
   // store primary mapping (but only on first occurrence)
   // i.e. the primary might be listed w/ variable case in the remap file
   // behavior here is to take the first; error if different
   if ( pmap.find( uc_primary ) == pmap.end() )
-    pmap[ uc_primary ] = primary;
+    {
+      pmap[ uc_primary ] = primary;
+    }
   else
     {
       if ( pmap[ uc_primary ] != primary )

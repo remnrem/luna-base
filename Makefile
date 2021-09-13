@@ -76,17 +76,14 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 destrat: utils/reader.o libluna.a
 	$(CXX) -o $@ $^ -L. -lz  $(LDFLAGS)
 
-#mapper: utils/mapper.o helper/helper.o
-#	$(CXX) -o $@ $^ -L. -lz $(LDFLAGS)
-
 tocol: utils/tocol.o 
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 fixrows: utils/fixrows.o 
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
-cgi-mapper: utils/cgi-mapper.o
-	$(CXX)  -o $@ $^ 
+cgi-mapper: utils/cgi-mapper.o libluna.a
+	$(CXX)  -o $@ $^ $(LDFLAGS)
 
 behead: utils/behead.o
 	$(CXX) -o $@ $^  $(LDFLAGS)
