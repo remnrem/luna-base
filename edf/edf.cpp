@@ -138,7 +138,7 @@ std::vector<char> edf_t::get_bytes( byte_t ** p , int sz )
 
 
 inline double edf_record_t::dig2phys( int16_t d , double bv , double offset )
-{
+{  
   return bv * ( offset + d ) ; 
 }
 
@@ -2172,7 +2172,11 @@ void edf_record_t::drop( const int s )
 //   pdata.erase( pdata.begin() + s );
 }
 
-void edf_t::add_signal( const std::string & label , const int Fs , const std::vector<double> & data , double pmin , double pmax )
+void edf_t::add_signal( const std::string & label ,
+			const int Fs ,
+			const std::vector<double> & data ,
+			double pmin , double pmax ,
+			int16_t dmin , int16_t dmax )
 {
 
   const int ndata = data.size();
@@ -2228,10 +2232,13 @@ void edf_t::add_signal( const std::string & label , const int Fs , const std::ve
   // determine bitvalue and offset
   //
   
-  //header
-  const int16_t dmax = 32767;
-  const int16_t dmin = -32768;
-
+  // if not otherwise specified, set dmin/dmax 
+  if ( dmax == dmin ) // i.e. 0 == 0 if not set 
+    {
+      dmax = 32767;
+      dmin = -32768;
+    }
+  
   double bv = ( pmax - pmin ) / (double)( dmax - dmin );
   double os = ( pmax / bv ) - dmax;
 
@@ -2387,7 +2394,8 @@ void edf_t::reset_record_size( const double new_record_duration )
       int   new_nsamples1 = implied;
 
       if ( fabs( (double)new_nsamples1 - implied ) > 0 ) 
-	Helper::halt( "bad value of ns" );
+	Helper::halt( "signal " + header.label[s] + " has sample rate " + Helper::int2str( nsamples ) + " per record, "
+		      + "\n which cannot be represented in a record of " + Helper::dbl2str( new_record_duration ) );
       
       new_nsamples.push_back( new_nsamples1 );
 
@@ -3471,12 +3479,16 @@ void edf_t::copy_signal( const std::string & from_label , const std::string & to
   interval_t interval = timeline.wholetrace();  
   slice_t slice( *this , s1 , interval );
   const std::vector<double> * d = slice.pdata();
-  
-  //
-  // add signal
-  //
 
-  add_signal( to_label , header.sampling_freq(s1) , *d );
+
+  //
+  // add signal (w/ same pmin/pmax and dmin/dmax)
+  //
+  
+  add_signal( to_label , header.sampling_freq(s1) , *d ,
+	      header.physical_min[s1] , header.physical_max[s1] ,
+	      header.digital_min[s1] , header.digital_max[s1] 
+	      );
   
   //
   // and copy the header values that would not have been properly set by add_signal()
@@ -3562,6 +3574,17 @@ void edf_t::update_records( int a , int b , int s , const std::vector<double> * 
 }
 
   
+void edf_t::update_signal_retain_range( int s , const std::vector<double> * d )
+{
+  if ( s < 0 || s > header.ns ) Helper::halt( "bad 's' value in update_signal_retain_range()" );
+
+  int16_t dmin = header.digital_min[s];
+  int16_t dmax = header.digital_max[s];
+  double pmin = header.physical_min[s];
+  double pmax = header.physical_max[s];
+  
+  update_signal( s , d , &dmin, &dmax, &pmin, &pmax );
+}
 
 void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmin_ , int16_t * dmax_ , double * pmin_ , double * pmax_ )
 {
@@ -4391,9 +4414,6 @@ bool edf_t::basic_stats( param_t & param )
 	  
 	  // largest possible EDF digital span
 	  
-	  // -32767 for "digital minimum" and +32767 for "digital maximum"? 
-	  //	  int span_max = 32767 - ( -32767 );
-	  
 	  int span_obs = header.digital_max[ signals(s) ] - header.digital_min[ signals(s) ] + 1;
 	  
 	  int zero_cells = span_obs - counts.size();
@@ -4709,8 +4729,9 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
   //  .        csEEG   C3_A2,C3_M2  .       100  Using C3, not C4
   
   // the to-be-created CS go here:
-  std::set<std::string> canons;
-
+  std::vector<std::string> canons;
+  std::set<std::string> canons_uniq;
+    
   // if we are dropping originals later, get a list of those now
   const bool only_data_signals = true;
   signal_list_t osignals = header.signal_list( "*" , only_data_signals );
@@ -4760,10 +4781,13 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  if ( line == "" ) continue;
 	  if ( IN1.eof() ) break;
 	  if ( line[0] == '%' ) continue;
-	  std::vector<std::string> tok = Helper::parse( line , "\t" );
-	  if ( tok.size() != 6 && tok.size() != 7 ) 
-	    Helper::halt( "bad format, expecting 6 or 7 tab-delimited columns\nfile: " 
+	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
+	  if ( tok.size() < 3 && tok.size() > 7 ) 
+	    Helper::halt( "expecting 3 to 7 white-delimited columns (use quotes for values with spaces)\nfile: " 
 			  + file + "\nline: [" + line + "]\n" );
+
+	  // ensure we have full set - populating w/ '.' as needed
+	  if ( tok.size() < 6 ) tok.resize( 6 , "." );
 	  
 	  // ignore group-specific rules that do not match the specified group
 	  //  (if a group has been specified on the CANONICAL group=g1 ) 
@@ -4781,7 +4805,16 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  
 	  // if cs not specified, take all canonical signals as given in 
 	  // the file      
-	  if ( cs == NULL ) canons.insert( prefix + tok[1] );
+	  if ( cs == NULL || cs->find( tok[1] ) != cs->end() )
+	    {
+	      // only add once to canons[], but preserved file order (first seen)
+	      if ( canons_uniq.find( prefix + tok[1] ) == canons_uniq.end() )
+		{
+		  canons.push_back( prefix + tok[1] );
+		  canons_uniq.insert( prefix + tok[1] ); 
+		}
+	      
+	    }
 	  
 	  // skip if a specific list requested?
 	  if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
@@ -4807,26 +4840,12 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
   if ( sigs.size() == 0 ) 
     Helper::halt( "no valid rules (given group " + group + ")" );
   
-  
+    
   //
-  // Now apply rules
-  //
-  
-  if ( cs != NULL ) 
-    {
-      std::set<std::string>::const_iterator ss = cs->begin();
-      while ( ss != cs->end() )
-	{
-	  canons.insert( *ss );
-	  ++ss;
-	}
-    }
-  
-  //
-  // For each canonical signal
+  // For each canonical signal (ie the order in which we encountered them)
   //
   
-  std::set<std::string>::const_iterator cc = canons.begin();
+  std::vector<std::string>::const_iterator cc = canons.begin();
   while ( cc != canons.end() )
     {
       

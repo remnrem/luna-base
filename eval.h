@@ -254,6 +254,7 @@ void proc_anon( edf_t & , param_t & );
 void proc_write( edf_t & , param_t & );
 void proc_restructure( edf_t & , param_t & );
 void proc_drop_signals( edf_t & , param_t & );
+void proc_enforce_signals( edf_t & , param_t & );
 void proc_copy_signal( edf_t & , param_t & );
 void proc_order_signals( edf_t & , param_t & );
 void proc_scale( edf_t & , param_t & , const std::string & s );
@@ -314,6 +315,7 @@ void proc_lzw( edf_t & , param_t & );
 void proc_zratio( edf_t & , param_t & );
 
 void proc_resample( edf_t & , param_t & );
+void proc_zoh( edf_t & , param_t & );
 void proc_filter( edf_t & , param_t & );
 void proc_filter_legacy( edf_t & , param_t & );
 void proc_filter_design( edf_t & , param_t & );

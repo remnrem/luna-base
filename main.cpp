@@ -217,6 +217,38 @@ int main(int argc , char ** argv )
     }
 
 
+
+  //
+   // map channels/ annots
+   //
+
+   if ( argc >=2 && strcmp( argv[1] , "--mapper" ) == 0 )
+     {
+       global.api();
+
+       // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+       std::vector<std::string> tok;
+       for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+       Helper::channel_annot_mapper( tok , false ) ;
+       std::exit(0);
+     }
+
+   //
+   // map channels/ annots, HTML style output
+   //
+
+   if ( argc >=2 && strcmp( argv[1] , "--mapper-html" ) == 0 )
+     {
+       global.api();
+
+       // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+       std::vector<std::string> tok;
+       for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+       Helper::channel_annot_mapper( tok , true ) ;
+       std::exit(0);
+     }
+
+  
       
   //
   // compile text-table output across individuals

@@ -909,6 +909,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
+      else if ( is( c, "ENFORCE-SR" ) )   proc_enforce_signals( edf , param(c) );
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
       else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
       else if ( is( c, "CONTAINS" ) )     proc_has_signals( edf , param(c) );
@@ -991,6 +992,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CFC" ) )          proc_cfc( edf , param(c) );
       else if ( is( c, "TAG" ) )          proc_tag( param(c) );
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
+      else if ( is( c, "ZOH" ) )          proc_zoh( edf, param(c) );
       else if ( is( c, "LINE-DENOISE" ) ) dsptools::line_denoiser( edf, param(c) );
       else if ( is( c, "ZC" ) )           dsptools::detrend( edf, param(c) );
 
@@ -1469,8 +1471,14 @@ void proc_cwt_design( edf_t & edf , param_t & param )
   dsptools::design_cwt( param );
 }
 
+// ZOH : special case of upsampling
 
-// RESAMPLE : band-pass filter
+void proc_zoh( edf_t & edf , param_t & param )
+{
+  dsptools::resample_channel_zoh( edf, param );
+}
+
+// RESAMPLE : generic sample-rate conversion 
 
 void proc_resample( edf_t & edf , param_t & param ) 
 {
@@ -2791,6 +2799,80 @@ void proc_copy_signal( edf_t & edf , param_t & param )
     }
 }
 
+// ENFORCE-SR : drop/alter signals based on SR requirements (for record size)
+
+void proc_enforce_signals( edf_t & edf , param_t & param )
+{
+  
+  // to enable clean record-size conversion, this first drops any signals which would not
+  // be represented by a N-second record size (i.e. requires integer Hz sample rate)
+
+  std::set<std::string> drops;
+  
+  const bool no_annotations = true; 
+
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , no_annotations );
+
+  const int ns = signals.size();
+  
+  // default: 1-second EDF record size
+  const double new_record_duration = param.has( "dur" ) ? param.requires_dbl( "dur" ) : 0 ; 
+    
+  std::vector<double> range;
+  if ( param.has( "sr" ) )
+    {
+      range = param.dblvector( "sr" );
+      if ( range.size() != 2 ) Helper::halt( "expecting sr=lwr,upr" ) ;
+      if ( range[0] > range[1] ) Helper::halt( "expecting sr=lwr,upr" ) ;
+    }
+
+    if ( new_record_duration > 0 )
+    logger << "  retaining channels that can be represented in an EDF record of " << new_record_duration << " second\n";
+  if ( range.size() == 2 )
+    logger << "  retaining channels with SR between " << range[0] << " and " << range[1] << "\n";
+
+  for (int s=0; s<ns; s++)
+    {      
+      int    nsamples = edf.header.n_samples[ signals(s) ];      
+      double fs = (double)nsamples / edf.header.record_duration;
+
+      // does new record size contain an integer number of sample points?
+      if ( new_record_duration > 0 )
+	{
+	  double implied = new_record_duration * fs;
+	  int   new_nsamples1 = implied;	  
+	  if ( fabs( (double)new_nsamples1 - implied ) > 0 )
+	    drops.insert( signals.label(s) );
+	}
+      
+      // drop based on whether SR is within range?
+      if ( range.size() == 2 )
+	{
+	  if ( fs < range[0] || fs > range[1] )
+	    drops.insert( signals.label(s) );
+	}
+    }
+
+  //
+  // drop channels as needed
+  //
+  
+  if ( drops.size() > 0 ) logger << "  dropping channels:";
+  std::set<std::string>::const_iterator dd = drops.begin();
+  while ( dd != drops.end() )
+    {
+      if ( edf.header.has_signal( *dd ) )
+	{	  	  
+	  logger << " " << *dd ;
+	  int s = edf.header.signal( *dd );
+	  edf.drop_signal( s );	  
+	}
+	++dd;
+    }
+  if ( drops.size() > 0 ) logger << "\n";
+ 
+}
+
 // SIGNALS : drop one or more signal
 
 void proc_drop_signals( edf_t & edf , param_t & param )
@@ -2826,8 +2908,10 @@ void proc_drop_signals( edf_t & edf , param_t & param )
   if ( ! ( param.has( "pick" ) || param.has( "keep" ) || param.has( "drop" ) || param.has( "req" ) ) ) 
     Helper::halt( "need to specify keep, drop, pick or req with SIGNALS" );
 
+  
+  
   //
-  // pick list?  iuse this to define a drop list
+  // pick list?  use this to define a drop list
   //
 
   if ( picks.size() > 0 )
