@@ -526,8 +526,8 @@ struct suds_t {
     //
     
     lwr.resize( ns , 0.5 );
-    upr.resize( ns , 20 );
-    sr.resize( ns , 100 );
+    upr.resize( ns , 45 );
+    sr.resize( ns , 128 );
     
     
     if ( param.has( "lwr" ) )
