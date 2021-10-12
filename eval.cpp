@@ -868,6 +868,7 @@ bool cmd_t::eval( edf_t & edf )
 
 
       else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
+      else if ( is( c, "REVERSE" ) )      proc_reverse( edf , param(c) );
       else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
@@ -875,6 +876,8 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "ROBUST-NORM" ) )  proc_standardize( edf , param(c) );
 
+      else if ( is( c, "ALTER" ) )      proc_correct( edf , param(c) );
+      
       else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
       
       else if ( is( c, "TIME-TRACK" ) )   proc_timetrack( edf, param(c) );
@@ -1335,6 +1338,14 @@ void proc_zratio( edf_t & edf , param_t & param )
 
   staging_t staging;
   staging.zratio.calc( edf , signal );
+}
+
+
+// CORRECT : use regression or PCA to correct artifacts 
+
+void proc_correct( edf_t & edf , param_t & param )
+{
+  dsptools::artifact_correction( edf , param );
 }
 
 
@@ -3206,6 +3217,24 @@ void proc_flip( edf_t & edf , param_t & param  )
       writer.level( signals.label(s) , globals::signal_strat );
       writer.value( "FLIP" , 1 );
       edf.flip( signals(s) );
+    }
+  writer.unlevel( globals::signal_strat );
+}
+
+// REVERSE : reverse signal in time domain
+
+void proc_reverse( edf_t & edf , param_t & param  )
+{
+  std::string sigstr = param.requires( "sig" );
+  signal_list_t signals = edf.header.signal_list( sigstr );
+  const int ns = signals.size();  
+
+  // track which signals are flipped
+  for (int s=0;s<ns;s++) 
+    {
+      writer.level( signals.label(s) , globals::signal_strat );
+      writer.value( "REVERSE" , 1 );
+      edf.reverse( signals(s) );
     }
   writer.unlevel( globals::signal_strat );
 }

@@ -261,6 +261,7 @@ void proc_scale( edf_t & , param_t & , const std::string & s );
 void proc_minmax( edf_t & , param_t & );
 void proc_standardize( edf_t & , param_t & );
 void proc_flip( edf_t & , param_t & );
+void proc_reverse( edf_t & , param_t & );
 void proc_reference( edf_t & , param_t & );
 void proc_dereference( edf_t & , param_t & );
 void proc_adjust( edf_t & , param_t & );
@@ -308,11 +309,13 @@ void proc_continuous( edf_t & , param_t & );
 
 void proc_covar( edf_t & , param_t & );
 
+
 void proc_artifacts( edf_t & , param_t & );
 void proc_rms( edf_t & , param_t & );
 void proc_mse( edf_t & , param_t & );
 void proc_lzw( edf_t & , param_t & );
 void proc_zratio( edf_t & , param_t & );
+void proc_correct( edf_t & , param_t & );
 
 void proc_resample( edf_t & , param_t & );
 void proc_zoh( edf_t & , param_t & );

@@ -82,7 +82,10 @@ class GLM {
 
   // for permutation
   double statistic() const;
-  
+
+  // get residuals (linear models)
+  Data::Vector<double> get_residuals();
+
  private:
 
   model_t model;
@@ -106,7 +109,6 @@ class GLM {
   Data::Vector<double> pr;
   Data::Vector<double> V;
   Data::Matrix<double> X;
-
   
   // State variables
 

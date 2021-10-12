@@ -688,6 +688,20 @@ double GLM::calc_FTest(GLM * submodel)
     / ( RSSk / (double)(nind - np - 1 ) );
 }
 
+Data::Vector<double> GLM::get_residuals()
+{
+  Data::Vector<double> R( nind );
+  if ( model == LOGISTIC ) return R;
+
+  for (int i=0; i<nind; i++)
+    {
+      double t = 0;
+      for ( int p=0; p<np; p++)
+        t += coef[p] * X(i,p);
+      R[i] = Y[i] - t;
+    }
+  return R;
+}
 
 //
 // Logistic functions

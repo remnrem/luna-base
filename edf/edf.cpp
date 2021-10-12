@@ -3576,13 +3576,13 @@ void edf_t::update_records( int a , int b , int s , const std::vector<double> * 
   
 void edf_t::update_signal_retain_range( int s , const std::vector<double> * d )
 {
-  if ( s < 0 || s > header.ns ) Helper::halt( "bad 's' value in update_signal_retain_range()" );
+  if ( s < 0 || s >= header.ns ) Helper::halt( "bad 's' value in update_signal_retain_range()" );
 
   int16_t dmin = header.digital_min[s];
   int16_t dmax = header.digital_max[s];
   double pmin = header.physical_min[s];
   double pmax = header.physical_max[s];
-  
+
   update_signal( s , d , &dmin, &dmax, &pmin, &pmax );
 }
 
@@ -3617,7 +3617,30 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
       pmin = *pmin_;
       pmax = *pmax_;
       dmin = *dmin_;
-      dmax = *dmax_;      
+      dmax = *dmax_;
+
+      if ( dmin == dmax )
+	{
+	  dmin = -32768;
+	  dmax = 32767;
+	}
+      else if ( dmin > dmax )
+	{
+	  dmin = *dmax_;
+	  dmax = *dmin_;
+	}
+
+      if ( pmin == pmax )
+        {
+          pmin--;
+          pmax++;
+        }
+      else if ( pmin > pmax )
+        {
+          pmin = *pmax_;
+          pmax = *pmin_;
+        }
+
     }
   else
     {
@@ -3628,7 +3651,8 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 	  else if ( (*d)[i] > pmax ) pmax = (*d)[i];
 	}
     }
-  
+
+    
   //
   // update header min/max (but leave orig_physical_min/max unchanged)
   //
@@ -4020,6 +4044,28 @@ void edf_t::flip( const int s )
   update_signal( s , &rescaled );
   
 }
+
+void edf_t::reverse( const int s )
+{
+  if ( s < 0 || s >= header.ns ) return;
+  
+  if ( header.is_annotation_channel(s) ) return;
+  logger << "  reversing  " << header.label[s] << "\n";
+
+  // get all data
+  interval_t interval = timeline.wholetrace();
+  slice_t slice( *this , s , interval );
+  const std::vector<double> * d = slice.pdata();
+  const int np = d->size();
+  std::vector<double> reversed( np );
+  for (int i=0;i<np;i++)
+    {
+      reversed[i] = (*d)[np-i-1];
+      //      std::cout << " reversed[i]  = " << i << "\t" << reversed[i]  << "\n";
+    } 
+  update_signal_retain_range( s , &reversed );  
+}
+
 
 
 void edf_t::rescale( const int s , const std::string & sc )
