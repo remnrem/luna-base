@@ -70,10 +70,10 @@ void input_page( const std::map<std::string,std::string> & vars )
 
   std::string str1, str2, str3, str4;
 
-  if ( vars.find( "f1" ) != vars.end() ) str1 = Helper::search_replace( vars.find( "f1" )->second , '|' , '\n' );
-  if ( vars.find( "f2" ) != vars.end() ) str2 = Helper::search_replace( vars.find( "f2" )->second , '|' , '\n' );
-  if ( vars.find( "f3" ) != vars.end() ) str3 = Helper::search_replace( Helper::search_replace( vars.find( "f3" )->second , '|' , '\n' ) , '=' , ' ' );
-  if ( vars.find( "f4" ) != vars.end() ) str4 = Helper::search_replace( Helper::search_replace( vars.find( "f4" )->second , '|' , '\n' ) , '=' , ' ');
+  if ( vars.find( "f1" ) != vars.end() ) str1 = Helper::search_replace( vars.find( "f1" )->second , '^' , '\n' );
+  if ( vars.find( "f2" ) != vars.end() ) str2 = Helper::search_replace( vars.find( "f2" )->second , '^' , '\n' );
+  if ( vars.find( "f3" ) != vars.end() ) str3 = Helper::search_replace( Helper::search_replace( vars.find( "f3" )->second , '^' , '\n' ) , '=' , ' ' );
+  if ( vars.find( "f4" ) != vars.end() ) str4 = Helper::search_replace( Helper::search_replace( vars.find( "f4" )->second , '^' , '\n' ) , '=' , ' ');
         
   std::cout << "<form action=\"/cgi-bin/cgi-mapper\" method=\"post\">"    
 	    << "<table width=\"100%\" border=0><tr width=\50%\"><td>"
@@ -134,7 +134,7 @@ void output_page( const std::map<std::string,std::string> & vars )
       if ( v != "|" )
 	{
 	  tok.push_back( "c=" + v );
-	  if ( str1 != "" ) str1 += "|";
+	  if ( str1 != "" ) str1 += "^";
 	  str1 += v;
 	}
       
@@ -149,7 +149,7 @@ void output_page( const std::map<std::string,std::string> & vars )
       if ( v != "|" && v.substr(0,1) != "(" )
 	{
 	  tok.push_back( "a=" + v );
-	  if ( str2 != "" ) str2 += "|";
+	  if ( str2 != "" ) str2 += "^";
           str2 += v;
 	}
       
@@ -164,7 +164,7 @@ void output_page( const std::map<std::string,std::string> & vars )
       if ( ttok.size() == 2 )
 	{	  
 	  tok.push_back( "alias=\"" + ttok[1] + "\"|\"" + ttok[0] + "\"" );
-	  if ( str3 != "" ) str3 += "|";
+	  if ( str3 != "" ) str3 += "^";
 	  str3 +=  ttok[0] + "=" + ttok[1];
 	}
 
@@ -179,7 +179,7 @@ void output_page( const std::map<std::string,std::string> & vars )
       if ( ttok.size() == 2 )
 	{
 	  tok.push_back( "remap=\"" + ttok[1] + "\"|\"" + ttok[0] + "\"" );
-	  if ( str4 != "" ) str4 += "|";
+	  if ( str4 != "" ) str4 += "^";
 	  str4 +=  ttok[0] + "=" + ttok[1];
 	}
     }
