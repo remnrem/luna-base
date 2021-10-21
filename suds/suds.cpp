@@ -78,7 +78,7 @@ std::set<std::string> suds_t::extra_hjorth;
 
 // these are fixed for now
 std::vector<double> suds_t::slope_range{ 30.0 , 45.0 } ;
-double suds_t::slope_th  = 2;
+double suds_t::slope_th  = 3;
 double suds_t::slope_epoch_th = 5;
 
 bool suds_t::es_model;
@@ -1200,9 +1200,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 							 pwelch.freq , 
 							 suds_t::slope_range ,
 							 suds_t::slope_th , 
-							 false ,  // do not output value		
+							 false ,  // do not output value
 							 &bslope , &bn ); 
-
+		      
 		      if ( en_good == 0 ) firstrowS.push_back( bslope );
                       else SS( en_good , ss_col ) =  bslope;
 		      ++ss_col;
@@ -1830,6 +1830,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       
     }
 
+  //
+  // Normalize spectral slopes?
+  //
+
+  if ( has_spectral_slopes )
+    {
+      logger << "  normalising spectral slopes\n";
+      eigen_ops::scale( SS , true , true );
+    }
+  
   
 
   //
@@ -1994,7 +2004,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // no usable components --> no usable epochs... quit out (this trainer will be ignored)
       //
       
-      if ( incl_comp.size() == 0 )
+      if ( incl_comp.size() == 0 && ! has_spectral_slopes )
 	{
 	  logger << "  0 components associated with stage at p<" << suds_t::required_comp_p << ", bailing\n";
 	  return 0;
@@ -2424,6 +2434,8 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
       OUT1 << ss->first << "\t" << ss->second << "\n";
       ++ss;
     }
+    
+  // PSC components
   
   // W
   OUT1 << "\nW[" << nc << "]";
@@ -2451,7 +2463,27 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
     for (int j=0;j<nc;j++)
       OUT1 << " " << U(i,j);
   OUT1 << "\n\n";
+
   
+  // spectral slope information
+  OUT1 << "N_SLOPES\t" << nslopes ;
+  std::set<std::string>::const_iterator ssi = suds_t::extra_slope.begin();
+  while ( ssi != suds_t::extra_slope.end() )
+    {
+      OUT1 << " " << *ssi ;
+      ++ssi;
+    }
+  OUT1 << "\nSLOPE_LWR\t" << suds_t::slope_range[0] << "\n"
+       << "SLOPE_UPR\t" << suds_t::slope_range[1] << "\n"
+       << "SLOPE_TH\t" << suds_t::slope_th << "\n"
+       << "SLOPE_EPOCH_TH\t" << suds_t::slope_epoch_th << "\n";
+  OUT1 << "S[" << nve << "," << nslopes << "]";
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nslopes;j++)
+      OUT1 << " " << SS(i,j);
+  OUT1 << "\n\n";
+  
+      
   // X, RAW DATA (e.g. mean-centered PSD, but possibly other things --> e.g. time-track)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
@@ -2497,8 +2529,6 @@ void suds_indiv_t::write( const std::string & filename ) const
 
       if ( suds_t::extra_mean.find( suds_t::siglab[s] ) != suds_t::extra_mean.end() )
 	OUT1 << "STYPE\tMEAN\n";
-      else if ( suds_t::extra_slope.find( suds_t::siglab[s] ) != suds_t::extra_slope.end() )
-	OUT1 << "STYPE\tSLOPE\n";
       else if ( suds_t::extra_hjorth.find( suds_t::siglab[s] ) != suds_t::extra_hjorth.end() )
         OUT1 << "STYPE\tHJORTH\n";
       else
@@ -2550,7 +2580,20 @@ void suds_indiv_t::write( const std::string & filename ) const
     for (int j=0;j<nc;j++)
       OUT1 << " " << U(i,j);
   OUT1 << "\n\n";
-  
+
+  // spectral slope information
+  OUT1 << "\nN_SLOPES\t" << nslopes ;
+  std::set<std::string>::const_iterator ssi = suds_t::extra_slope.begin();
+  while ( ssi != suds_t::extra_slope.end() )
+    {
+      OUT1 << " " << *ssi ;
+      ++ssi;
+    }
+  OUT1 << "\nSLOPE_LWR\t" << suds_t::slope_range[0] << "\n"
+       << "\nSLOPE_UPR\t" << suds_t::slope_range[1] << "\n"
+       << "\nSLOPE_TH\t" << suds_t::slope_th << "\n"
+       << "\nSLOPE_EPOCH_TH\t" << suds_t::slope_epoch_th << "\n";
+
   // X, RAW DATA (e.g. mean-centered PSD, but possibly other things)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
@@ -2706,7 +2749,24 @@ void suds_indiv_t::binary_write( edf_t & edf , param_t & param ) const
   for (int i=0;i<nve;i++)
     for (int j=0;j<nc;j++)
       bwrite( OUT1 , U(i,j) );
-  
+
+  // Spectral slopes?
+  // SS [ nve x nslopes ] 
+  bwrite( OUT1 , nslopes );
+  std::set<std::string>::const_iterator ssi = suds_t::extra_slope.begin();
+  while ( ssi != suds_t::extra_slope.end() )
+    {
+      bwrite( OUT1 , *ssi );
+      ++ssi;
+    }
+  bwrite( OUT1 , suds_t::slope_range[0] );
+  bwrite( OUT1 , suds_t::slope_range[1] );
+  bwrite( OUT1 , suds_t::slope_th );
+  bwrite( OUT1 , suds_t::slope_epoch_th );
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nslopes;j++)
+      bwrite( OUT1 , SS(i,j) );
+	      
   // X, RAW DATA (e.g. mean-centered PSD, but possibly other things)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
@@ -2809,6 +2869,23 @@ void suds_indiv_t::binary_write( const std::string & filename ) const
   for (int i=0;i<nve;i++)
     for (int j=0;j<nc;j++)
       bwrite( OUT1 , U(i,j) );
+
+  // Spectral slopes?
+  // SS [ nve x nslopes ] 
+  bwrite( OUT1 , nslopes );
+  std::set<std::string>::const_iterator ssi = suds_t::extra_slope.begin();
+  while ( ssi != suds_t::extra_slope.end() )
+    {
+      bwrite( OUT1 , *ssi );
+      ++ssi;
+    }
+  bwrite( OUT1 , suds_t::slope_range[0] );
+  bwrite( OUT1 , suds_t::slope_range[1] );
+  bwrite( OUT1 , suds_t::slope_th );
+  bwrite( OUT1 , suds_t::slope_epoch_th );
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nslopes;j++)
+      bwrite( OUT1 , SS(i,j) );
   
   // X, RAW DATA (e.g. mean-centered PSD, but possibly other things)
   // i.e. if this trainer is being used as a 'weight trainer',
@@ -2843,9 +2920,6 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
   nbins = bread_int( IN1 );
   int this_ns = bread_int( IN1 );
   int this_nc = bread_int( IN1 );
-
-  // temp
-  nslopes = 0; 
   
   if ( this_nc == 0 )
     Helper::halt( "0 PSCs for " + filename );
@@ -2909,8 +2983,6 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
       
       if ( stype == "MEAN" )
 	suds_t::extra_mean.insert( this_siglab );
-      else if ( stype == "SLOPE" )
-	suds_t::extra_slope.insert( this_siglab );
       else if ( stype == "HJORTH" )
 	suds_t::extra_hjorth.insert( this_siglab ); 
       
@@ -2985,14 +3057,51 @@ void suds_indiv_t::binary_reload( const std::string & filename , bool load_rawx 
     for (int j=0;j<nc;j++)
       U(i,j) = bread_dbl( IN1 );
 
+
+  // Spectral slopes?
+  // SS [ nve x nslopes ] 
+  // spectral slope?
+  nslopes = bread_int( IN1 );
+  if ( suds_t::extra_slope.size() != nslopes )
+    Helper::halt( Helper::int2str( nslopes )
+		  + " in trainer vs "
+		  + Helper::int2str( (int)suds_t::extra_slope.size() )
+		  + " specified number of spectral slopes" );
+
+  // nb: this *assumes* the channels for slope are the same... fix later...
+  for (int k=0; k<nslopes; k++)
+    {
+      std::string ss = bread_str( IN1 );
+    }
+
+  double this_slope_lwr = bread_dbl( IN1 );
+  double this_slope_upr = bread_dbl( IN1 );
+  double this_slope_th = bread_dbl( IN1 );
+  double this_slope_epoch_th = bread_dbl( IN1 );
+
+  // read slopes
+  SS.resize( nve , nslopes );
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nslopes;j++)
+      SS(i,j) = bread_dbl( IN1 );
+
+
   //
-  // final prediction matrix: X , which is same as U currently
+  // Create X = U | SS 
   //
 
-  if ( nslopes != 0 ) Helper::halt( "cannot use slopes for SUDS yet" );
-  X = U;
+  if ( nslopes == 0 )
+    {
+      X = U;
+    }
+  else
+    {
+      X.resize( U.rows() , U.cols() + SS.cols() );
+      X << U , SS;
+    }
+
   
-  // X values (e.g. mean-centered PSD)
+  // PSD values (e.g. mean-centered PSD)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
   
@@ -3029,8 +3138,6 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
   if ( version != 2 )
     Helper::halt( "Expecting SUDS reformat version 2" );
 
-  // temp
-  nslopes = 0;
   
   int this_ns, this_nc;
 
@@ -3079,8 +3186,6 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
 
       if ( stype == "MEAN" )
 	suds_t::extra_mean.insert( this_siglab );
-      else if ( stype == "SLOPE" )
-	suds_t::extra_slope.insert( this_siglab );
       else if ( stype == "HJORTH" )
 	suds_t::extra_hjorth.insert( this_siglab );
       
@@ -3153,10 +3258,47 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
     for (int j=0;j<nc;j++)
       IN1 >> U(i,j) ;	
   
-  if ( nslopes != 0 ) Helper::halt( "cannot use nslopes and SUDS yet" );
-  X = U;
-    
-  // X values (e.g. mean-centered PSD)
+
+  // spectral slope?
+  IN1 >> dummy;
+  IN1 >> nslopes;
+  if ( suds_t::extra_slope.size() != nslopes )
+    Helper::halt( Helper::int2str( nslopes ) + " in trainer vs " + Helper::int2str( (int)suds_t::extra_slope.size() ) + " specified number of spectral slopes" );
+
+  // nb: this *assumes* the channels for slope are the same... fix later...
+  for (int k=0; k<nslopes; k++)
+    IN1 >> dummy; // i.e. ignore channel names
+
+  // ignore slope ranges, etc
+  IN1 >> dummy >> dummy; // SLOPE_LWR
+  IN1 >> dummy >> dummy; // SLOPE_UPR
+  IN1 >> dummy >> dummy; // SLOPE_TH
+  IN1 >> dummy >> dummy; // SLOPE_EPOCH_TH
+
+  // read slopes
+  IN1 >> dummy;
+  SS.resize( nve , nslopes );
+  for (int i=0;i<nve;i++)
+    for (int j=0;j<nslopes;j++)
+      IN1 >> SS(i,j) ;
+
+  std::cout << "read SS = " << SS << "\n";
+
+  //
+  // Create X = U | SS 
+  //
+
+  if ( nslopes == 0 )
+    {
+      X = U;
+    }
+  else
+    {
+      X.resize( U.rows() , U.cols() + SS.cols() );
+      X << U , SS;
+    }
+  
+  // PSD values (e.g. mean-centered PSD)
   // i.e. if this trainer is being used as a 'weight trainer',
   // i.e. will project this individuals raw data into the target space
   
@@ -3455,7 +3597,9 @@ void suds_t::copy_db( const std::string & folder1 ,
 
 void suds_indiv_t::fit_lda()
 {
-
+  std::cout << " TR = " << id << " " << X.rows() << " " << X.cols() << "\n";
+  std::cout << X << "\n\n";
+  
   lda_t lda( y , X );
 
   model = lda.fit( suds_t::flat_priors );

@@ -820,7 +820,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   for (int s=0; s<ns; s++) 
     {
       
-      if ( header.is_data_channel( s ) )
+      if ( header.is_data_channel( signals(s) ) )
 	{
 	  if ( fs < 0 ) fs = header.sampling_freq( signals(s) );
 	  
@@ -987,7 +987,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 	  
 	  // skip non-data channels
 	  
-	  if ( ! header.is_data_channel( s ) ) continue;
+	  if ( ! header.is_data_channel( signals(s) ) ) continue;
 	  
 	  OUT << "S" << "\t"	  
 	      << header.label[ signals(s) ] ;
@@ -1078,7 +1078,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
     {
       for (int s = 0 ; s < ns ; s++ )
 	{
-	  if ( header.is_data_channel( s ) )
+	  if ( header.is_data_channel( signals(s) ) )
 	    OUT << "\t" << header.label[ signals(s) ] ;
 	}
       OUT << "\n";
@@ -1097,7 +1097,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 
       int epoch = timeline.next_epoch();	   
       if ( epoch == -1 ) break;      
-
+            
       // get all signals for this epoch
       
       interval_t interval = timeline.epoch( epoch );
@@ -1110,7 +1110,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
       int s2 = 0;
       for (int s = 0 ; s < ns ; s++ )
 	{	  	  
-	  if ( header.is_data_channel( s ) )
+	  if ( header.is_data_channel( signals(s) ) )
 	    {
 	      slice_t slice( *this , signals(s) , interval );
 	      const std::vector<double> * signal = slice.pdata();
@@ -1123,7 +1123,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
       // now iterate over all time-points (rows)
       
       const int np = sigdat[0].size();
-      
+
       std::cout.precision(12);
 
       for (int t=0;t<np;t++)
@@ -1290,23 +1290,30 @@ void edf_t::head_matrix_dumper( param_t & param )
   const int cols = X.cols();
   
   const std::vector<uint64_t> * tp = mslice.ptimepoints();
-
+  
+  // std::cout << "ROWS = " << rows << "\n";
+  // std::cout << " TP = " << tp->size() << "\n";
+  
   std::cout.precision(6);
 
   for (int t=0;t<rows;t++)
     {
+      //std::cout << " t = " << t << "\n";
       
       double tp_sec = (*tp)[t] * globals::tp_duration;
-      
+
+      //std::cout << "S2\n";
+
       double tp_sec_past_estart = ( (*tp)[t] - interval.start) / (double)globals::tp_1sec; 
-      
+
+
       // all done?
       if ( sec_lim > 0 && tp_sec_past_estart > sec_lim ) break;
-
+      
       std::cout << tp_sec << "\t"
 		<< tp_sec_past_estart << "\t"
 		<< t ;
-
+      
       // signals
       for (int s=0;s<ns;s++) std::cout << "\t" << X(t,s);
       

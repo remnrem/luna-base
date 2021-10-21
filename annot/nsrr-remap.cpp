@@ -286,6 +286,7 @@ void nsrr_t::init()
   add( "PLM" , "Periodic leg movement|PLM" ); 
   add( "PLM/left" , "Periodic leg movement - left|PLM (Left)" ); 
   add( "PLM/right" , "Periodic leg movement - right|PLM (Right)" ); 
+  add( "PLM/left" , "PLM (Left)" ); 
   add( "PLM/right" , "PLM (Right)" ); 
   add( "LM" , "Limb Movement" ); 
   add( "LM" , "Limb movement|Limb Movement" ); 

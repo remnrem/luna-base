@@ -20,37 +20,20 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __RESAMPLE_H__
-#define __RESAMPLE_H__
-
-#include <vector>
-#include <string>
-
-#include "libsamplerate/samplerate.h"
-
-
-// interface to SRC libsamplerate (which must be installed on system)
-// http://www.mega-nerd.com/SRC/
+#ifndef __CORRECT_H__
+#define __CORRECT_H__
 
 struct edf_t;
 struct param_t;
 
-namespace dsptools 
+namespace dsptools
 {
-
-  void resample_channel( edf_t & , param_t & );
-
-  void resample_channel_zoh( edf_t & , param_t & );
-
-  void resample_channel( edf_t & , const int , const int , const int converter = SRC_SINC_FASTEST );
-
-  std::vector<double> resample( const std::vector<double> * d , int sr1 , int sr2 , int converter = SRC_SINC_FASTEST );
-
-  int converter( const std::string & m );
-
-  std::string converter( int m );
-
+  void artifact_correction( edf_t & edf , param_t & param );
 }
 
+struct correct_t {
   
+};
+
+
 #endif

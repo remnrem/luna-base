@@ -414,12 +414,16 @@ public:
   
   void drop_signal( const int s );
 
-  void add_signal( const std::string & label , const int n_samples , const std::vector<double> & data , double pmin = 0 , double pmax = 0 );
+  void add_signal( const std::string & label , const int n_samples , const std::vector<double> & data ,
+		   double pmin = 0 , double pmax = 0 ,
+		   int16_t dmin = 0 , int16_t dmax = 0 );
   
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
   void set_order( param_t & param );
   
+  void update_signal_retain_range( int s , const std::vector<double> * );
+
   void update_signal( int s , const std::vector<double> * , int16_t * dmin = NULL , int16_t * dmax = NULL , double * pmin = NULL , double * pmax = NULL );
 
   void shift( int s , int tp , bool wrap = true ); 
@@ -460,7 +464,9 @@ public:
 			     const std::set<std::string> * cs = NULL ,
 			     const bool only_check_labels = false );
     
-  void flip( const int s ); 
+  void flip( const int s );
+
+  void reverse( const int s ); 
 
   void minmax( signal_list_t & );
 

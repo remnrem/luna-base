@@ -110,6 +110,8 @@ namespace Helper
   bool is_folder( const std::string & f );
 
   void build_sample_list( const std::vector<std::string> & );
+
+  void merge_EDFs( const std::vector<std::string> & );
   
   void compile_txttabs( const std::string & );
 
