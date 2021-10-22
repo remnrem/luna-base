@@ -217,7 +217,20 @@ int main(int argc , char ** argv )
     }
 
 
+  //
+  // merge EDfs  
+  //
 
+  if ( argc >=2 && strcmp( argv[1] , "--merge" ) == 0 )
+    {
+      global.api();
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::merge_EDFs( tok );
+      std::exit(0);
+    }
+
+  
   //
    // map channels/ annots
    //
@@ -240,7 +253,7 @@ int main(int argc , char ** argv )
    if ( argc >=2 && strcmp( argv[1] , "--mapper-html" ) == 0 )
      {
        global.api();
-
+       
        // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
        std::vector<std::string> tok;
        for (int i=2;i<argc;i++) tok.push_back( argv[i] );
@@ -2193,7 +2206,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "fir" || p == "fft" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
-       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" ) 
+       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" ) 
     {
 
       int cnt= 0;
@@ -2221,6 +2234,24 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(1);
     }
 
+  if ( p == "emd" )
+    {
+
+      emd_t emd;
+      
+      const int nk = emd.proc( &x );
+      const int nr = emd.residual.size();
+      
+      for (int i=0; i<nr; i++)
+	{
+	  std::cout << x[i] ;
+	  for (int j=0; j<nk; j++)
+	    std::cout << "\t" << emd.imf[j][i] ;
+	  std::cout << "\t" << emd.residual[i] << "\n";
+	}
+      
+      std::exit(1);
+    }
 
   if ( p == "detrend" )
     {

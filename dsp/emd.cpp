@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -22,16 +21,15 @@
 //    --------------------------------------------------------------------
 
 
+// EMD based on methods implemented in R 'EMD' package:
 // Notes: https://journal.r-project.org/archive/2009-1/RJournal_2009-1_Kim+Oh.pdf
 
-// for signal 'x'
-// 1. find all extrema
-// 2. cubic spline to get upper and lower envelope 
-
-// TODO:  make extrema robust to clipped/repeated values:: get interval than spans zero-cross / max/min
+// TODO:  make extrema robust to clipped/repeated values: get interval that spans zero-cross / max/min
 //        different stopping rules
 //        boundary effects for IMF
-//        different stopping conditions
+
+// currently set to : boundary condition 'wave'
+//                    stopping rule =    'type1'
 
 // https://fr.mathworks.com/matlabcentral/mlc-downloads/downloads/submissions/55938/versions/6/previews/Clustering_toolbox/utils/emd.m/index.html?access_key=
 
@@ -41,14 +39,94 @@
 #include "miscmath/miscmath.h"
 #include "helper/helper.h"
 
+#include "edf/edf.h"
+#include "edf/slice.h"
+
+#include "helper/logger.h"
+
 #include <iostream>
 #include <set>
 
+extern logger_t logger;
 
 void dsptools::emd_wrapper( edf_t & edf , param_t & param ) 
 {
+  // add IMF by epochs
+
+  std::string signal_label = param.requires( "sig" );
+
+  const bool no_annotations = true;
+
+  signal_list_t signals = edf.header.signal_list( signal_label , no_annotations );
+
+  const int ns = signals.size();
+
+  // if SIG --> SIG_IMF_1 , SIG_IMF_2, ...
+  std::string component_tag = param.has( "tag" ) ? param.value( "tag" ) : "_IMF_";
+
+
+  const int max_sift = param.has( "sift" ) ? param.requires_int( "sift" ) : 20 ;
+  const int max_imf = param.has( "imf" ) ? param.requires_int( "imf" ) : 10 ;
   
   
+  //
+  // iterate over each signal
+  //
+
+  for (int s=0; s<ns; s++)
+    {
+
+      //
+      // iterate over epochs
+      //
+      
+      // int ne = edf.timeline.first_epoch();
+
+      // const bool by_epoch = false;
+      
+      // while ( 1 )
+      // 	{
+	  
+      // 	  int epoch = edf.timeline.next_epoch();
+
+      // 	  if ( epoch == -1 ) break;
+
+	  //interval_t interval = by_epoch ? edf.timeline.epoch( epoch ) : 
+
+      interval_t interval = edf.timeline.wholetrace();
+	  
+      slice_t slice( edf , signals(s) , interval );
+      
+      const std::vector<double> * d = slice.pdata();
+      
+      emd_t emd;
+
+      emd.max_sift = max_sift;
+      emd.max_imf = max_imf;
+      
+      logger << "  processing " << signals.label(s) << "... ";
+
+      const int nimf = emd.proc( d );	  
+      
+      logger << "  adding " << nimf << " IMFs\n";
+
+      //
+      // add signals
+      //
+
+      for (int c=0;c<nimf;c++)
+        {	  
+	  std::string imflab = signals.label(s) + component_tag + Helper::int2str( c+1 );
+          edf.add_signal( imflab , edf.header.sampling_freq( signals(s) ) , emd.imf[c] );
+        }
+
+      // residual 'IMF0'
+      std::string imflab = signals.label(s) + component_tag + "0";
+      edf.add_signal( imflab , edf.header.sampling_freq( signals(s) ) , emd.residual );
+
+
+      
+    } // next signal
 
 }
 
@@ -308,68 +386,93 @@ extrema_t::extrema_t( const std::vector<double> & x )
 std::vector<double> emd_t::sift( const std::vector<double> & x )
 {
 
+  //
   // Extract an IMF from 'x'
+  //
   
-  // number of sifts
-  int j = 1;
-
   const int n = x.size();
 
   std::vector<double> h = x;
-  
-  //  std::cerr << "sifting ...\n";
+
+  //
   // Begin sifting
+  //
+
+  int j = 1;
+
   while ( 1 ) 
     {
 
-      //  std::cerr << " siftung " << j << "\n";;
+      if ( verbose ) 
+	std::cerr << " sifting " << j << "\n";;
       
-           
+      
       //
       // mean of envelope
       //
 
       std::vector<double> m = envelope_mean( h );
       
+
       //
       // require at least 'x' extrema: if this wasn't met, we should have an empty matrix here
       //
-
+      
       if ( m.size() == 0 ) 
-	{ 
-	  break;
-	} 
-
-
-      stop_mode = 2;
+	break;
+    
+      stop_mode = 1;
 
       std::vector<double> h1 = h;
-      for (int i=0;i<n;i++) h1[i] -= m[i];
 
-      // return as IMF is more than max sifts
+      for (int i=0;i<n;i++)
+	h1[i] -= m[i];
+
+      // return as IMF if more than max sifts
+
       if ( j >= max_sift ) 
 	{ 
-	  std::cerr << "required " << j << " sifting iterations\n"; 
 
+	  if ( verbose ) 
+	    std::cerr << "required " << j << " sifting iterations\n"; 
+	  
 	  extrema_t fex( h1 );
-	  std::cerr << "H1 nextrema, zc " << fex.nextrema << " " << fex.ncross << " " << ( fex.nextrema == fex.ncross || fex.nextrema == fex.ncross + 1 ? "Y" : "." ) << "\n";
+
+	  if ( verbose ) 
+	    std::cerr << "H1 nextrema, zc " << fex.nextrema << " " << fex.ncross << " "
+		      << ( fex.nextrema == fex.ncross || fex.nextrema == fex.ncross + 1 ? "Y" : "." ) << "\n";
 
 	  return h1; 
 	} 
       
-      // otherwise, consider other stopping riles
+      
+      // otherwise, consider other stopping rules
       if ( stop_mode == 1 ) 
 	{
+
+	  int cnt = 0;
 	  double mx = 0;	      
-	  for (int i=0;i<n;i++) if ( fabs(m[i]) > mx ) mx = fabs(m[i]);
-	  //	  std::cout << "tol << " << tol << " " << mx << "\n";
+	  for (int i=0;i<n;i++)
+	    if ( fabs(m[i]) > mx )
+	      {
+		mx = fabs(m[i]);
+		++cnt;
+	      }
+	  
+	  if ( verbose ) 
+	    std::cerr << "tol,mx,cnt  << " << tol << " " << mx << " " << cnt << "\n";
 	  
 	  if ( mx < tol )
 	    {
-	      //	      std::cerr << "required " << j << " sifting iterations\n"; 
 
+	      if ( verbose ) 
+		std::cerr << "required " << j << " sifting iterations\n"; 
+	      
 	      extrema_t fex( h1 );
-	      std::cerr << "H1 nextrema, zc " << fex.nextrema << " " << fex.ncross << " " << ( fex.nextrema == fex.ncross || fex.nextrema == fex.ncross + 1 ? "Y" : "." ) << "\n";
+
+	      if ( verbose )
+		std::cerr << "H1 nextrema, zc " << fex.nextrema << " " << fex.ncross
+			  << " " << ( fex.nextrema == fex.ncross || fex.nextrema == fex.ncross + 1 ? "Y" : "." ) << "\n";
 
 	      return h1;
 	    }
@@ -381,22 +484,29 @@ std::vector<double> emd_t::sift( const std::vector<double> & x )
 	  for (int i=1;i<n-1;i++) 
 	    {
 	      sd +=  ( ( h[i] - h1[i] ) * ( h[i] - h1[i] )  ) / (h[i]*h[i]);
-	      //std::cerr << "cum  " << sd << " " << h[i] << " " << h1[i] << "\n";
+
+	      if ( verbose ) 
+		std::cerr << "cum sd " << sd << " " << h[i] << " " << h1[i] << "\n";
 	    }
-	  
-	  //	  std::cerr << "SD= " << sd << " j=" << j << "\n";
+
+	  if ( verbose ) 
+	    std::cerr << "SD= " << sd << " j=" << j << "\n";
       
 	  // stop?
 	  if ( sd < 0.3 ) 
 	    {
-	      //std::cerr << "required " << j << " sifting iterations\n"; 
+	      
+	      if ( verbose ) 
+		std::cerr << "required " << j << " sifting iterations\n"; 
 	      
 	      //
 	      // check extrema and ZC numbers
 	      //
 	      
 	      extrema_t fex( h1 );
-	      std::cerr << "H1 nextrema, zc " << fex.nextrema << " " << fex.ncross << " " << ( fex.nextrema == fex.ncross || fex.nextrema == fex.ncross + 1 ? "Y" : "." ) << "\n";
+
+	      std::cerr << "H1 nextrema, zc " << fex.nextrema << " " << fex.ncross << " "
+			<< ( fex.nextrema == fex.ncross || fex.nextrema == fex.ncross + 1 ? "Y" : "." ) << "\n";
 	      
 	      
 	      return h1;
@@ -408,6 +518,9 @@ std::vector<double> emd_t::sift( const std::vector<double> & x )
       // continue sifting, store previous 
       //
 
+      if ( verbose ) 
+	std::cerr << " going to continue sifting... back for next j\n";
+
       // set to re-sift results of previous sift
 
       h = h1;
@@ -415,27 +528,35 @@ std::vector<double> emd_t::sift( const std::vector<double> & x )
       ++j;
 
     }
-
   
   std::vector<double> dummy;
   return dummy;
   
 }
 
-emd_t::emd_t( const std::vector<double> & d , const double Fs ) : Fs(Fs)
+emd_t::emd_t( const bool v )
+  : verbose( v )
 {
-
+  
   // defaults
-  max_sift = 2000;
-  max_imf  = 100;
+  max_sift = 20;
+  max_imf  = 10;
+  
+}
 
-  std::vector<double> working = d;
+int emd_t::proc( const std::vector<double> * d )
+{
+  
+  std::vector<double> working = *d;
 
   // default for tolerance, and stop mode (==1) (from EMD R package)  
-  tol = MiscMath::sdev( d ) * 0.1*0.1;
-  stop_mode = 2;
+  tol = MiscMath::sdev( working ) * 0.1*0.1;
+
+  stop_mode = 1;
+
+  //  std::cout << " tol = " << tol << "\n";
   
-  const  int n = d.size();
+  const  int n = d->size();
   
   imf.clear();
 
@@ -444,13 +565,14 @@ emd_t::emd_t( const std::vector<double> & d , const double Fs ) : Fs(Fs)
   
   while ( 1 ) 
     {
-      
+
       // Get each IMF
+
       std::vector<double> h = sift( working );
-      //      std::cerr << " got IMF\n";
-      
+
       // not enought extrema on signal/residual: done
-      if ( h.size() == 0 ) { break; } 
+      if ( h.size() == 0 )
+	break;	
       
       // Store
       imf.push_back( h );
@@ -458,39 +580,51 @@ emd_t::emd_t( const std::vector<double> & d , const double Fs ) : Fs(Fs)
       // make residual 
       for (int i=0;i<n;i++)
 	working[i] -= h[i];
-
+      
       // next IMF
       ++k;
       
       if ( k > max_imf ) break;
     }
 
-  std::cerr << "extracted " << k << " IMF\n";
+  if ( verbose )
+    logger << "  extracted " << k << " IMF\n";
 
+  //
   // final residual
-
-  residual = d;
+  //
+  
+  residual = *d;
 
   for (int i=0;i<n;i++)
     {
-      for (int j=0;j<k;j++) residual[i] -= imf[j][i];
+      for (int j=0;j<k;j++)
+	residual[i] -= imf[j][i];
+      
+      // if ( verbose ) 
+      // 	{
+      // 	  std::cout << "EMD: " << i << "\t" << d[i] ;
+      // 	  for (int j=0;j<k;j++) std::cout << "\t" << imf[j][i];
+      // 	  std::cout << "\t" << residual[i] << "\n";
+      // 	}
 
-      if ( 1 ) 
-	{
-	  std::cout << i << "\t" << d[i] ;
-	  
-	  for (int j=0;j<k;j++) std::cout << "\t" << imf[j][i];
-	  std::cout << "\t" << residual[i] << "\n";
-	}
     }
-
-
   
+  return imf.size();
+}
+
+void emd_t::hht( double Fs )
+{
+
+  const int k = imf.size();
+
+  if ( k == 0 ) return;
+    
   //
   // Hilbert transform 
   //
-
-  // now we have IMF's and residual.  apply HHT
+  
+  // now we have IMFs and residual: apply HHT
 
   for (int j=0;j<k;j++)   
     {
@@ -498,8 +632,10 @@ emd_t::emd_t( const std::vector<double> & d , const double Fs ) : Fs(Fs)
       hilbert_t hilbert( imf[j] );
       
       std::vector<double> f = hilbert.instantaneous_frequency( Fs );
-      for (int k=0;k<f.size();k++) std::cout << "IMF " << j << " " << k << " " << f[k] << "\n"; 
 
+      for (int k=0;k<f.size();k++)
+	std::cout << "IMF " << j << " " << k << " " << f[k] << "\n"; 
+      
     }
   
 }
@@ -508,21 +644,26 @@ emd_t::emd_t( const std::vector<double> & d , const double Fs ) : Fs(Fs)
 std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
 {
 
-
+  //
   // get extrema
-  extrema_t extrema( x );
+  //
   
-  // check # of extrema (requires at least 2)
+  extrema_t extrema( x );
+
+  //
+  // check # of extrema (requires at least 2)  
+  //
   
   if ( extrema.nextrema <= 2 ) { std::vector<double> dummy; return dummy; } 
 
   std::vector<int> minindex = extrema.minindex();
   std::vector<int> maxindex = extrema.maxindex();
-  
-  //  std::cerr << "n min/max = " << extrema.nextrema << " " << minindex.size() << " " << maxindex.size() << "\n";
+
+  if ( verbose ) 
+    std::cerr << "n min/max = " << extrema.nextrema << " " << minindex.size() << " " << maxindex.size() << "\n";
   
   //
-  // add a 'periodic' boundary 
+  // handle boundary ('wave' condition)
   //
   
   int first_pt_idx  = 0;
@@ -538,7 +679,10 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
 
   double wavefreq1 = 0;
   bool add_first_min = false , add_first_max = false , add_last_min = false , add_last_max = false;
-  
+
+  if ( verbose ) 
+    std::cerr << " first_min, first_max = " << first_min << " " << first_max << "  " << first_pt << "\n";
+
   if ( first_pt <= first_min && first_pt <= first_max ) 
     {
       add_first_min = true;
@@ -549,7 +693,7 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
       add_first_max = true;
       wavefreq1= 2 * d1;
     }
-  else if ( first_pt >= ( first_min + first_max ) / 2.0 )
+  else if ( first_pt >= (double)( first_min + first_max ) / 2.0 )
     {
       if ( d2 > 2 * d1 ) 
 	wavefreq1 = 2 * d2 ;
@@ -600,8 +744,10 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
       else wavefreq2 = d1 + round(1.5 * d2 );
     }
 
-  //    std::cout << "wavefreqs " << wavefreq1 <<" " << wavefreq2 << "\n";
+  if ( verbose ) 
+    std::cerr << "wavefreqs " << wavefreq1 <<" " << wavefreq2 << "\n";
 
+ 
   //
   // Set extrema and values for cubic spline
   //
@@ -717,6 +863,10 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
   // nb. requires the _idx is pre-sorted
   //
 
+  // std::cout << " max = " << e_max_idx.size() <<" " << e_max_val.size() << "\n";
+  // for (int ii=0; ii<e_max_idx.size() ; ii++)
+  //   std::cout << " ii= " << e_max_idx[ii] << " " << e_max_val[ii] << "\n";
+  
   tk::spline sa;
   sa.set_points( e_max_idx , e_max_val ); 
   
@@ -732,30 +882,9 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
   
   std::vector<double> env( n );
   for (int i=0; i<n; i++)
-      env[i] = ( sa( i ) + sb( i ) ) / 2.0 ; 
+    env[i] = ( sa( i ) + sb( i ) ) / 2.0 ; 
   
   return env;
 
 }
-
-
-
-
-void test_emd( ) 
-{
-
-  std::vector<double> X(5), Y(5);
-  X[0]=1; X[1]=2; X[2]=3; X[3]=4; X[4]=5;
-  Y[0]=12; Y[1]=6; Y[2]=15; Y[3]=9; Y[4]=6;
-  
-  tk::spline s;
-  s.set_points(X,Y);    // currently it is required that X is already sorted
-
-  for (double xx = 1 ; xx <= 5 ; xx+= 0.05 ) 
-    std::cout << xx << "\t" 
-	      << s(xx) << "\n";
-
-  std::cout << "EMD\n";
-}
-
 

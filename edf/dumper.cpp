@@ -1290,23 +1290,30 @@ void edf_t::head_matrix_dumper( param_t & param )
   const int cols = X.cols();
   
   const std::vector<uint64_t> * tp = mslice.ptimepoints();
-
+  
+  // std::cout << "ROWS = " << rows << "\n";
+  // std::cout << " TP = " << tp->size() << "\n";
+  
   std::cout.precision(6);
 
   for (int t=0;t<rows;t++)
     {
+      //std::cout << " t = " << t << "\n";
       
       double tp_sec = (*tp)[t] * globals::tp_duration;
-      
+
+      //std::cout << "S2\n";
+
       double tp_sec_past_estart = ( (*tp)[t] - interval.start) / (double)globals::tp_1sec; 
-      
+
+
       // all done?
       if ( sec_lim > 0 && tp_sec_past_estart > sec_lim ) break;
-
+      
       std::cout << tp_sec << "\t"
 		<< tp_sec_past_estart << "\t"
 		<< t ;
-
+      
       // signals
       for (int s=0;s<ns;s++) std::cout << "\t" << X(t,s);
       

@@ -35,8 +35,6 @@ namespace dsptools {
 }
 
 
-void test_emd();
-
 
 struct extrema_t { 
   extrema_t( const std::vector<double> & d );
@@ -63,7 +61,13 @@ struct emd_t
 {
   
   // Empirical mode decomposition
-  emd_t( const std::vector<double> & d , double );
+  emd_t( const bool v = false );
+
+  // get IMF
+  int proc( const std::vector<double> * d );
+  
+  // HHT (Fs)
+  void hht( double );
   
   // ensemble EMD
   int n_iter() const { return iter; } 
@@ -72,11 +76,11 @@ struct emd_t
   void set_noise_sd( double d ) { noise_sd = d; }
   void set_sd_threshold( double d ) { sd_threshold = d; }
   
-  double Fs;
   double tol;
   int stop_mode;
   int max_sift;
   int max_imf;
+  bool verbose;
   
   std::vector<double> sift( const std::vector<double> & ); 
   std::vector<double> envelope_mean( const std::vector<double> & ); 

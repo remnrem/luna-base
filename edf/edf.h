@@ -464,7 +464,9 @@ public:
 			     const std::set<std::string> * cs = NULL ,
 			     const bool only_check_labels = false );
     
-  void flip( const int s ); 
+  void flip( const int s );
+
+  void reverse( const int s ); 
 
   void minmax( signal_list_t & );
 

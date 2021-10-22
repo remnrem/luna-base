@@ -1,0 +1,255 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
+
+#include "helper/helper.h"
+#include "helper/logger.h"
+#include "db/db.h"
+
+#include "defs/defs.h"
+#include "edf/edf.h"
+#include <iostream>
+
+extern writer_t writer;
+extern logger_t logger;
+
+bool identical_headers( const edf_header_t & h1 , const edf_header_t & h2 ) ;
+
+void Helper::merge_EDFs( const std::vector<std::string> & tok )
+{
+
+  std::vector<edf_t> edfs;
+
+  std::string id = "id";
+  std::string filename = "merged.edf";
+  std::string slist = "";
+  
+  for (int i=0; i<tok.size(); i++)
+    {
+      std::cout << " tok = " << i << "  " << tok[i] << "\n";
+      
+      std::vector<std::string> tok2 = Helper::quoted_parse( tok[i] , "=" );
+      if ( tok2.size() == 2 )
+	{
+	  if ( tok2[0] == "id" ) id = tok2[1];
+	  else if ( tok2[0] == "edf" ) filename = tok2[1];
+	  else if ( tok2[0] == "sample-list" ) slist = tok2[1];
+	  continue;
+	}
+      
+      const std::string & fname = Helper::expand( tok[i] );
+
+      if ( ! Helper::fileExists( fname ) )
+	{
+	  logger << " ** could not attach " << fname << "\n";
+	  continue;
+	}
+      
+      edf_t edf;
+
+      const std::string id = "id" + Helper::int2str( (int)( edfs.size() + 1 ) ) ;
+
+      bool okay = edf.attach( fname , id );
+
+      if ( ! okay )
+	{
+	  logger << " ** could not attach " << filename	<< "\n";
+          continue;	  
+	}
+      
+      edfs.push_back( edf ) ;
+      
+    }
+
+  const int nf = edfs.size();
+  
+  std::cout << "attached " << nf << " EDFs\n";
+  
+  //
+  // Check that all headers are compatible: initially, headers must be identical
+  //
+
+  for (int i=1; i<nf; i++)
+    if ( ! identical_headers( edfs[0].header , edfs[i].header ) )
+      Helper::halt( "headers incompatible:" + edfs[0].filename + " " + edfs[i].filename );
+  
+  std::cout  << "  good, all EDFs have merge-compatible headers\n";
+
+  // get total implied NR for new EDF
+
+  int nr = 0;
+
+  for (int i=0; i<nf; i++)
+    nr += edfs[i].header.nr;
+
+  std::cout << "  expecting " << nr << " records (each of " << edfs[0].header.record_duration << " sec) in the new EDF\n";
+  
+  // check that all segments are contiguous : **currently** no overlaps and no gaps
+
+  // get earliest start time;
+  std::string first_date = edfs[0].header.startdate;
+  for (int i=1; i<nf; i++)
+    if ( edfs[i].header.startdate < first_date ) first_date = edfs[i].header.startdate;
+
+  
+  clocktime_t t1( edfs[0].header.starttime );
+  if ( !t1.valid )
+    Helper::halt( edfs[0].filename + " does not have a valid start time" );
+  
+  for (int i=1; i<nf; i++)
+    {
+      // only check same day 
+      if ( first_date == edfs[i].header.startdate )
+	{
+	  clocktime_t t2( edfs[i].header.starttime );
+	  if ( !t2.valid )
+	    Helper::halt( edfs[i].filename + " does not have a valid start time" );
+
+	  if ( clocktime_t::earlier( t1 , t2 ) == 2 )
+	    t1 = t2;
+	}
+    }
+
+  std::cout << "  first record starts at " << first_date << "  " << t1.as_string() << "\n";
+
+
+  return;
+  
+  //
+  // Create the new merged EDF
+  //
+
+  edf_t medf;
+  
+  //
+  // Set header
+  //
+
+  // medf.header.version = edf.header.version;
+  // medf.header.patient_id = edf.header.patient_id;
+  // medf.header.recording_info = edf.header.recording_info;
+  // medf.header.startdate = edf.header.startdate;
+  // medf.header.starttime = edf.header.starttime;
+  // medf.header.nbytes_header = 256 + ns_summ * 256;
+  // medf.header.ns = 0; // these will be added by add_signal()
+  // medf.header.ns_all = ns; // check this... should only matter for EDF access, so okay... 
+  // medf.header.nr = edf.header.nr_all = nr_summ;  // likewise, value of nr_all should not matter, but set anyway
+  // medf.header.record_duration = recdur_summ; // i.e. epoch length
+  // medf.header.record_duration_tp = edf.header.record_duration * globals::tp_1sec;
+
+  //
+  // create a (continuous) timeline  
+  //
+
+  logger << " adding timeline\n";
+
+  medf.set_edf();
+  medf.set_continuous();
+  medf.timeline.init_timeline();
+
+  //
+  // resize data[][], by adding empty records (one per SEDF record == EDF epoch )
+  //
+  
+  logger << " adding records\n";
+
+  for (int r=0;r<nr;r++)
+    {
+      edf_record_t record( &medf ); 
+      medf.records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
+    }
+
+  logger << " adding signals\n";
+
+  //
+  // add signals (this populates channel-specific 
+  //
+
+  // std::map<std::string,std::vector<double> >::const_iterator ss = stats.begin();
+  // while ( ss != stats.end() )
+  //   {
+
+  //     // -1 implies 1 sample per record, i.e. if positive would be the SR
+  //     // for that signal, but this allows slower channels, by directly specifying
+  //     // the samples per record, (rather than samples per second)
+      
+  //     sedf.add_signal( ss->first , -1  , ss->second );
+
+  //     ++ss;
+  //   }
+
+  // // arbitrary, but need epochs if not set it seems
+  // if ( !edf.timeline.epoched() ) 
+  //   edf.timeline.set_epoch( 30 , 30 );
+
+  // // if a mask has been set, this will restructure the mask
+  // edf.restructure(); 
+
+
+  //
+  // Save this merged EDF
+  //
+
+  bool saved = medf.write( filename );
+
+  if ( ! saved ) Helper::halt( "problem trying to write " + filename );
+
+  //
+  // Sample list?
+  //
+
+  if ( slist != "" )
+    {	  
+      logger << " appending " << filename << " to sample-list " << slist << "\n";
+      std::ofstream FL( slist.c_str() , std::ios_base::app );
+      FL << medf.id << "\t" << filename << "\n";
+      FL.close();
+    }
+  
+
+
+
+  
+}
+
+
+bool identical_headers( const edf_header_t & h1 , const edf_header_t & h2 )
+{
+
+  // compatible for merging?  currently needs to have *identical*
+  // headers (for signal #, SR and EDF record size)
+
+  if ( h1.version != h2.version ) return false;
+  
+  if ( h1.ns != h2.ns ) return false;
+  
+  if ( h1.record_duration_tp != h2.record_duration_tp ) return false;
+
+  for ( int s = 0 ; s < h1.ns; s++ )
+    {
+      if ( h1.label[s] != h2.label[s] ) return false;
+      if ( h1.n_samples[s] != h2.n_samples[s] ) return false;
+    }
+  
+  return true;
+  
+}
