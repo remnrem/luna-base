@@ -23,6 +23,7 @@
 #include "miscmath.h"
 #include "helper/helper.h"
 #include "stats/statistics.h"
+#include "miscmath/dynam.h"
 
 #include <cmath>
 #include <vector>
@@ -795,14 +796,58 @@ std::vector<double> MiscMath::detrend( const std::vector<double> & x , double * 
 void MiscMath::detrend( std::vector<double> * y , double * pa , double * pb )
 {
   const int n = y->size();
+  
+  // assume equal spacing
+  std::vector<double> x( n );
+  for (int i=0; i<n; i++) x[i] = i;
+    
+  // fit line  
+  dynam_t spec_slope( *y , x );
+  double beta, m;
+  spec_slope.linear_trend( &beta , NULL , &m);
+  
+  // adjust 
+  for (int i=0; i<n; i++) (*y)[i] -= m + beta * x[i];
+  
+  if ( pa ) *pa = m;
+  if ( pb ) *pb = beta;
+
+  // OLD
+
+  // // 'x' is 0:(n-1)  
+  // double yfirst = (*y)[0];
+  // double ylast  = (*y)[ y->size() - 1 ];
+  // double b = ( yfirst - ylast ) / (double)( 0 - ( n - 1 ) );
+  // double a = yfirst ; // x[0] = 0 is intercept
+  // // adjust y
+  // for (int i=0;i<n;i++) (*y)[i] = (*y)[i] - ( a + b * i );   
+  // // return estimates
+  // if ( pa ) *pa = a;
+  // if ( pb ) *pb = b;
+
+}
+
+
+std::vector<double> MiscMath::edge_detrend( const std::vector<double> & x , double * pa , double * pb )
+{
+  std::vector<double> r = x;
+  edge_detrend(&r,pa,pb);
+  return r;
+}
+
+void MiscMath::edge_detrend( std::vector<double> * y , double * pa , double * pb )
+{
+  const int n = y->size(); 
   // 'x' is 0:(n-1)  
   double yfirst = (*y)[0];
   double ylast  = (*y)[ y->size() - 1 ];
   double b = ( yfirst - ylast ) / (double)( 0 - ( n - 1 ) );
   double a = yfirst ; // x[0] = 0 is intercept
+  // adjust y
   for (int i=0;i<n;i++) (*y)[i] = (*y)[i] - ( a + b * i );   
-  *pa = a;
-  *pb = b;
+  // return estimates
+  if ( pa ) *pa = a;
+  if ( pb ) *pb = b;  
 }
 
 

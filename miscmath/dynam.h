@@ -59,7 +59,7 @@ struct dynam_t {
   
   bool mean_variance( double * mean , double * var );
   
-  bool linear_trend( double * beta , double * rsq );
+  bool linear_trend( double * beta , double * rsq , double * intercept = NULL );
   
   void hjorth( double * h1 , double *h2 , double *h3 );
 

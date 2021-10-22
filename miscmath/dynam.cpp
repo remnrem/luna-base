@@ -299,7 +299,7 @@ bool dynam_t::mean_variance( double * mean , double * var )
 
 
 
-bool dynam_t::linear_trend( double * beta , double * rsq )
+bool dynam_t::linear_trend( double * beta , double * rsq , double * intercept )
 {
 
   const int n = y.size();
@@ -330,6 +330,9 @@ bool dynam_t::linear_trend( double * beta , double * rsq )
 
   *beta = ( mxy - ( mx *  my ) ) / varx ; 
 
+  if ( intercept != NULL ) 
+    *intercept = my - *beta * mx;
+  
   if ( rsq != NULL )
     {
       if ( vary == 0 ) rsq = 0;

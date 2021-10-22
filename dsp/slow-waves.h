@@ -94,6 +94,17 @@ struct slow_wave_t
   double dur2() const {
     return ( interval_tp.stop - zero_crossing_tp ) * globals::tp_duration ;
   }  
+
+  // neg --> pos
+  double trans() const { 
+    return ( (double)(up_peak - down_peak + 1LL ) * globals::tp_duration );
+  }
+  
+  // neg -> post transition as freq
+  double trans_freq() const {
+    return 1.0 / ( 2 * trans() ) ; 
+  }
+
   
   std::string print() const 
   {
@@ -133,6 +144,8 @@ struct slow_waves_t
 		const double t_upr = 2 , 		
 		const double t_neg_lwr = 0 , 
 		const double t_neg_upr = 0 , 
+		const double t_pos_lwr = 0 , 
+		const double t_pos_upr = 0 , 
 		const bool   neg2pos = true , 
 		const slow_wave_type type = SO_FULL ,
 		const std::string * cach_name = NULL ,
@@ -181,6 +194,10 @@ struct slow_waves_t
 			 // total wave criteria
 			 const double t_neg_lwr = 0 ,  // 0.125
 			 const double t_neg_upr = 0 ,  // 1.5  
+
+			 // as above, but positive half-wave
+			 const double t_pos_lwr = 0 ,  
+			 const double t_pos_upr = 0 ,  
 
 			 // count negative-to-positive zero-crossings
 			 // as opposed to positive-to-negative
@@ -273,6 +290,7 @@ private:
   double avg_slope_n2; // up-going for neg peak     SW_SLOPE_NEG2 ** main
   double avg_slope_p1; // up-going for pos peak     SW_SLOPE_POS1 
   double avg_slope_p2; // down-going for pos peak   SW_SLOPE_POS2
+  double avg_trans, avg_trans_freq;
 
   // median versions
   double median_x; // minimum amplitude  SW_SMP
@@ -284,6 +302,7 @@ private:
   double median_slope_n2; // up-going for neg peak     SW_SLOPE_NEG2 ** main
   double median_slope_p1; // up-going for pos peak     SW_SLOPE_POS1 
   double median_slope_p2; // down-going for pos peak   SW_SLOPE_POS2
+  double median_trans, median_trans_frq; 
 
   int Fs;
 

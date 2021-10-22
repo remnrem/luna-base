@@ -551,6 +551,34 @@ void cmddefs_t::init()
   add_param( "SIGNALS" , "drop" , "EMG,ECG" , "Drop channels EMG and ECG" );
   add_param( "SIGNALS" , "keep" , "C3,C4" , "Drop all channels except C3 and C4" );
 
+  
+  // CONTAINS
+
+  add_cmd( "manip" , "CONTAINS" , "Tests for particular signals/annotations/staging being present" );
+  add_url( "CONTAINS" , "manipulatons/#contains" );
+  add_param( "CONTAINS" , "sig" , "EMG,ECG" , "Test for these signals" );
+  add_param( "CONTAINS" , "annots" , "apnea,hypopnea" , "Test for these annotations" );
+  add_param( "CONTAINS" , "stages" , "" , "Test for valid staging" );
+  add_param( "CONTAINS" , "skip" , "" , "Skip to next EDF on failure" );
+
+  add_table( "CONTAINS" , "" , "Base" );
+  add_var( "CONTAINS" , "" , "STAGE_COUNTS" , "Sleep stage counts" );
+  add_var( "CONTAINS" , "" , "UNIQ_STAGES" , "Number of unique stage labels" );
+  add_var( "CONTAINS" , "" , "NA_REQ" , "Number of required annots" );
+  add_var( "CONTAINS" , "" , "NA_OBS" , "Number of observed annots" );
+
+  add_var( "CONTAINS" , "" , "NS_OBS" , "Number of required channels" );
+  add_var( "CONTAINS" , "" , "NS_REQ" , "Number of observed channels" );
+  add_var( "CONTAINS" , "" , "NS_TOT" , "Tot number of channels" );
+
+  add_table( "CONTAINS" , "ANNOT" , "Annotation informationm" );
+  add_var( "CONTAINS" , "CH" , "PRESENT" , "Annotation resent" );
+
+  add_table( "CONTAINS" , "CH" , "Channel informationm" );
+  add_var( "CONTAINS" , "CH" , "PRESENT" , "Channel present" );
+
+
+  
   // COPY
 
   add_cmd( "manip" , "COPY" , "Duplicate one or more EDF channels" );
@@ -1238,6 +1266,13 @@ void cmddefs_t::init()
   add_param( "MTM" , "dB" , "" , "Decibel scale output" );
   add_param( "MTM" , "epoch" , "" , "Report per-epoch statistics" );
   
+  add_table( "MTM" , "CH" , "Whole-night, per-channel stats" );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
+
   add_table( "MTM" , "CH,F" , "Whole-night, per-channel power" );
   add_var( "MTM" , "CH,F" , "MTM" , "Power" );
 
@@ -1556,6 +1591,8 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH" , "SO_AMP" , "SO amplitude (negative peak)" );
   add_var( "SPINDLES" , "CH" , "SO_P2P" , "SO peak-to-peak amplitude" );
   add_var( "SPINDLES" , "CH" , "SO_DUR" , "SO duration (secs)" );	   
+  add_var( "SPINDLES" , "CH" , "SO_TRANS" , "SO transition (secs)" );
+  add_var( "SPINDLES" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" );
   add_var( "SPINDLES" , "CH" , "SO_NEG_DUR" , "Negative peak SO duration (secs)" );
   add_var( "SPINDLES" , "CH" , "SO_POS_DUR", "Positive peak SO duration (secs)" );
   add_var( "SPINDLES" , "CH" , "SO_P2P" , "Peak-to-peak SO amplitude" );
@@ -1585,7 +1622,11 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" ); 
   add_var( "SPINDLES" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
   add_var( "SPINDLES" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
-  add_var( "SPINDLES" , "CH,N" , "DUR" , "SO duration" ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR" , "SO duration (sec)" ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR1" , "SO HW1 duration (sec)" ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR2" , "SO HW2 duration (sec)" ); 
+  add_var( "SPINDLES" , "CH,N" , "TRANS" , "SO transition (sec)" );
+ 
   add_var( "SPINDLES" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" ); 
   add_var( "SPINDLES" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
   add_var( "SPINDLES" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
@@ -1685,6 +1726,9 @@ void cmddefs_t::init()
   add_var( "SO" , "CH" , "SO_DUR" , "SO duration (secs)" );	   
   add_var( "SO" , "CH" , "SO_NEG_DUR" , "Negative peak duration (secs)" );
   add_var( "SO" , "CH" , "SO_POS_DUR", "Positive peak duration (secs)" );
+  add_var( "SO" , "CH" , "SO_TRANS" , "SO transition (secs)" );	   
+  add_var( "SO" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" );	   
+
   add_var( "SO" , "CH" , "SO_P2P" , "Peak-to-peak amplitude" );
   add_var( "SO" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
   add_var( "SO" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
@@ -1713,6 +1757,9 @@ void cmddefs_t::init()
   add_var( "SO" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
   add_var( "SO" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
   add_var( "SO" , "CH,N" , "DUR" , "SO duration" ); 
+  add_var( "SO" , "CH,N" , "DUR1" , "SO HW1 duration" ); 
+  add_var( "SO" , "CH,N" , "DUR2" , "SO HW2 duration" ); 
+  add_var( "SO" , "CH,N" , "TRANS" , "SO transition (sec)" );
   add_var( "SO" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" ); 
   add_var( "SO" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
   add_var( "SO" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
@@ -1722,7 +1769,7 @@ void cmddefs_t::init()
   add_table( "SO" , "CH,CH2,SP" , "SO time-locked signal averaging [tl]" );
   add_var( "SO" , "CH,CH2,SP" , "SOTL" , "SO time-locked signal average" );
 
-
+  
   
   /////////////////////////////////////////////////////////////////////////////////
   //

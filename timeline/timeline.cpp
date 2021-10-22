@@ -2219,20 +2219,23 @@ void timeline_t::select_epoch_within_run( const std::string & label , int b )
   if ( b < 1 ) Helper::halt( "epoch border must be 1 or greater" );
 
   annot_t * annot = annotations( Helper::unquote( label ) );
-  if ( annot == NULL ) return;
+
+  const bool no_annots = annot == NULL ;
 
   mask_set = true;
   
   // get epoch annots for this label:
   const int ne = epochs.size();
   std::vector<bool> x( ne , false );
-  for (int e=0;e<ne;e++)
-    {
-      interval_t interval = epoch( e );
-      annot_map_t events = annot->extract( interval );
-      x[e] = events.size() > 0 ;
-    }
 
+  if ( ! no_annots )
+    for (int e=0;e<ne;e++)
+      {
+	interval_t interval = epoch( e );
+	annot_map_t events = annot->extract( interval );
+	x[e] = events.size() > 0 ;
+      }
+  
   int cnt_mask_set = 0;
   int cnt_mask_unset = 0;
   int cnt_unchanged = 0;

@@ -462,6 +462,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  double t_neg_lwr = param.has( "t-neg-lwr" ) ? param.requires_dbl( "t-neg-lwr" ) : 0;
 	  double t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 0;
 
+	  // time of negative peak only
+	  double t_pos_lwr = param.has( "t-pos-lwr" ) ? param.requires_dbl( "t-pos-lwr" ) : 0;
+	  double t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 0;
+
 	  // absolute magnitude
 	  double uV_neg = param.has( "uV-neg" ) ? param.requires_dbl( "uV-neg" ) : 0 ;
 	  double uV_p2p = param.has( "uV-p2p" ) ? param.requires_dbl( "uV-p2p" ) : 0 ;
@@ -493,7 +497,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  
 	  // find slow-waves	      
 	  p_sw = new slow_waves_t( *d , *tp , Fs[s] , mag, ignore_neg_peak , use_mean , uV_neg , uV_p2p , flwr, fupr, 
-				   tlwr, tupr, t_neg_lwr , t_neg_upr ,  
+				   tlwr, tupr, t_neg_lwr , t_neg_upr , t_pos_lwr , t_pos_upr ,   
 				   use_alternate_neg2pos_zero_crossing , so_type );
 
 	  // and phase
@@ -2177,7 +2181,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  cache_metrics->add( ckey_t( "AMP" ,   faclvl ) , means["AMP"]  );
 		  cache_metrics->add( ckey_t( "DUR" ,   faclvl ) , means["DUR"]  );
 		  cache_metrics->add( ckey_t( "ISA_S" , faclvl ) , means["ISA_PER_SPINDLE"] );
-		  cache_metrics->add( ckey_t( "CHIRP" , faclvl ) , means["CHIRP"]  );	      
+		  cache_metrics->add( ckey_t( "CHIRPF" , faclvl ) , means["CHIRPF"]  );	      
 		}
 
 	      writer.value( "DISPERSION" , means[ "DISPERSION" ] );

@@ -2225,10 +2225,20 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   if ( p == "detrend" )
     {
       const int n = x.size();
+      
+      std::vector<double> x2 = x;
+      double beta , intercept;
+      MiscMath::detrend( &x2 , &intercept , &beta );
+      
+      std::cout << "m, b = " << intercept << " " << beta << "\n";
+      for (int i=0; i<n; i++)
+	std::cout << x[i] << "\t" << x2[i] << "\n";
+
+      
       Eigen::VectorXd T( n );
       for (int i=0; i<n; i++) T[i] = x[i];
       
-      std::cout << "orig T\n" << T << "\n";
+      std::cout << "EIGEN\n orig T\n" << T << "\n";
 
       std::cout << "DT\n";
       eigen_ops::detrend( T ) ;

@@ -217,6 +217,11 @@ namespace MiscMath
   // detrend
   std::vector<double> detrend( const std::vector<double> & x , double * pa = NULL , double * pb = NULL );
   void detrend( std::vector<double> * x , double * pa = NULL , double * pb = NULL );
+  
+  // edge-detrend (i.e. based just one setting first and last points to zero)
+  std::vector<double> edge_detrend( const std::vector<double> & x , double * pa = NULL , double * pb = NULL );
+  void edge_detrend( std::vector<double> * y , double * pa = NULL , double * pb = NULL );
+  
 
   // thresholding
   double threshold( const std::vector<double> & , double,double,double, double *, std::map<double,double> * t = NULL );

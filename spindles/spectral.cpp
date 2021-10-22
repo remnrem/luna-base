@@ -109,8 +109,21 @@ annot_t * spectral_power( edf_t & edf ,
   const double slope_th2     = param.has( "slope-th2" ) ? param.requires_dbl( "slope-th2" ) : 3 ;
   
   // truncate spectra
-  const double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
-  const double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
+  double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
+  double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
+
+  // check that slope=X,Y or peaks=X,Y does not necessitate and expanded range
+  if ( slope_range.size() == 2 ) 
+    {
+      if ( min_power > slope_range[0] ) min_power = slope_range[0];
+      if ( max_power < slope_range[1] ) max_power = slope_range[1];
+    }
+
+  if ( param.has( "peaks-frq" ) )
+    {
+      if ( min_power > peak_range[0] ) min_power = peak_range[0];
+      if ( max_power < peak_range[1] ) max_power = peak_range[1];
+    }
 
   // Calculate MSE
   const bool calc_mse = param.has( "mse" ); 
@@ -218,7 +231,7 @@ annot_t * spectral_power( edf_t & edf ,
   // Get each signal
   //
   
-  logger << "  calculating PSD for " << ns << " signals\n"; 
+  logger << "  calculating PSD from " << min_power << " to " << max_power << " for " << ns << " signals\n"; 
 
   for (int s = 0 ; s < ns; s++ )
     {
@@ -453,7 +466,7 @@ annot_t * spectral_power( edf_t & edf ,
 	     {
 	       
 	       // accumulate for entire night means; store as dB and raw
-	       if ( show_spectrum )
+	       if ( show_spectrum || spectral_slope )
 		 for (int f=0;f<pwelch.psd.size();f++)
 		   {
 		     track_freq[ f ].push_back( pwelch.psd[f] );
@@ -644,11 +657,15 @@ annot_t * spectral_power( edf_t & edf ,
 	  if ( show_spectrum )
 	    writer.unlevel( globals::freq_strat );
 	  
-	  
+	
 	  std::vector<double> raw_mean_psd = bin.bspec;
+	  
+	  // kludge... urgh
 	  if ( dB ) 
-	    for (int i=0; i<raw_mean_psd.size(); i++) 
-	      raw_mean_psd[i] = pow( 10 , raw_mean_psd[i]/10.0) ;
+	    {	      
+	      for (int i=0; i<raw_mean_psd.size(); i++) 
+		raw_mean_psd[i] = pow( 10 , raw_mean_psd[i]/10.0) ;	      
+	    }
 	  
 	  //
 	  // Report metrics on the PSD: expecting a raw PSD

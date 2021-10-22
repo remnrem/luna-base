@@ -78,7 +78,7 @@ lda_model_t lda_t::fit( const bool flat_priors )
     }
 
   //  std::cout << " X " << X.rows() << " " << X.cols() << "\n";
-
+  
   //
   // At this point, any missing values will have been removed, and we can 
   // fit the LDA model w/out worrying about missing values
@@ -365,7 +365,7 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Eigen::Matrix
   //  std::cout << "p = " << p << " " << n << " " << model.means.cols() << "\n";
   
   if ( p != model.means.cols() )
-    Helper::halt( "wrong number of columns in lda_t::predict()" );  
+    Helper::halt( "wrong number of columns in lda_t::predict(): expecting " + Helper::int2str((int) model.means.cols() ) + " but found " + Helper::int2str( p ) );  
 
   // use prior from training/model
   const int ng = model.prior.size();

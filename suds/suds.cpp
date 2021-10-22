@@ -982,6 +982,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       has_prior_staging = true;
     }
   
+
   //
   // for QC, estimate Hjorth parameters (only 2nd and 3rd used) over
   // epochs (for each signal) 
@@ -1108,24 +1109,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		  // false --> no versbose output
 		  mtm.apply( d , suds_t::sr[s] , segment_size , segment_step , false );
 		  
-
-		  // get spectral slope? (nb. this is done before any logging of the power spectra)
-		  
-		  if ( do_slope ) 
-		    {
-		      double bslope, bn;
-		      
-		      bool okay = spectral_slope_helper( mtm.spec ,
-							 mtm.f , 
-							 suds_t::slope_range ,
-							 suds_t::slope_th , 
-							 false ,  // do not output value
-							 &bslope , &bn ); 
-		      
-		      if ( en_good == 0 ) firstrowS.push_back( bslope );
-		      else SS( en_good , ss_col ) =  bslope;
-		      ++ss_col;
-		    }
 		  
 		  // get PSD (for PSC) and log
 		  
@@ -1163,6 +1146,25 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 			}
 		    }
 		  
+		  
+		  // get spectral slope? (nb. this is done before any logging of the power spectra)
+		  
+		  if ( do_slope ) 
+		    {
+		      double bslope = 0, bn = 0;
+		      
+		      bool okay = has_zeros ? false : spectral_slope_helper( mtm.spec ,
+									     mtm.f , 
+									     suds_t::slope_range ,
+									     suds_t::slope_th , 
+									     false ,  // do not output value
+									     &bslope , &bn ); 
+		      
+		      if ( en_good == 0 ) firstrowS.push_back( bslope );
+		      else SS( en_good , ss_col ) =  bslope;
+		      ++ss_col;
+		    }
+
 
 		}
 	      else // use Welch PSD
@@ -1188,25 +1190,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		  bin_t bin( suds_t::lwr[s] , suds_t::upr[s] , 1 ); 
 		  bin.bin( pwelch.freq , pwelch.psd );	      
 		  
-		  //
-		  // get spectral slope? (nb. this is done before any logging of the power spectra)
-		  //
-
-		  if ( do_slope ) 
-		    {
-		      double bslope, bn;
-		      
-		      bool okay = spectral_slope_helper( pwelch.psd , 
-							 pwelch.freq , 
-							 suds_t::slope_range ,
-							 suds_t::slope_th , 
-							 false ,  // do not output value
-							 &bslope , &bn ); 
-		      
-		      if ( en_good == 0 ) firstrowS.push_back( bslope );
-                      else SS( en_good , ss_col ) =  bslope;
-		      ++ss_col;
-		    }
 
 
 		  for ( int i = 0 ; i < bin.bfa.size() ; i++ )
@@ -1245,9 +1228,36 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 			}	      
 		    }
 		  
+		  
+		  //
+		  // get spectral slope? (nb. this is done before any logging of the power spectra)
+		  //
+		  
+		  if ( do_slope ) 
+		    {
+
+		      double bslope = 0, bn = 0;
+		      
+		      // for (int ff=0; ff<pwelch.psd.size(); ff++)
+		      // 	std::cout << pwelch.freq[ff] << "\t" << pwelch.psd[ff] << "\n";
+		      
+		      bool okay = has_zeros ? false : spectral_slope_helper( pwelch.psd , 
+									     pwelch.freq , 
+									     suds_t::slope_range ,
+									     suds_t::slope_th , 
+									     false ,  // do not output value
+									     &bslope , &bn ); 
+		      
+		      
+		      if ( en_good == 0 ) firstrowS.push_back( bslope );
+                      else SS( en_good , ss_col ) =  bslope;
+		      ++ss_col;
+		    }
+
+ 
 		}
 	    }
-	  	  
+	  
 
 	  //
 	  // Hjorth parameters
@@ -1673,7 +1683,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	 << nout_flat.size() << ", "
 	 << nout_hjorth.size() << ", "
 	 << nout_stat.size() << ", "
-	 << nout_tot.size() << "\n";
+	 << nout_tot.size() << ")\n";
   
  
   //
@@ -3282,7 +3292,6 @@ void suds_indiv_t::reload( const std::string & filename , bool load_rawx )
     for (int j=0;j<nslopes;j++)
       IN1 >> SS(i,j) ;
 
-  std::cout << "read SS = " << SS << "\n";
 
   //
   // Create X = U | SS 
@@ -3419,7 +3428,7 @@ void suds_t::attach_db( const std::string & folder0 , bool binary , bool read_ps
 	    trainer->reload( folder + globals::folder_delimiter + trainer_ids[i] , read_psd ); 
 
 	  trainer->fit_lda();
-
+	  
 	}
 
       // store in the relevant bank:
@@ -3597,13 +3606,11 @@ void suds_t::copy_db( const std::string & folder1 ,
 
 void suds_indiv_t::fit_lda()
 {
-  std::cout << " TR = " << id << " " << X.rows() << " " << X.cols() << "\n";
-  std::cout << X << "\n\n";
   
   lda_t lda( y , X );
-
+  
   model = lda.fit( suds_t::flat_priors );
-    
+  
 }
 
 
@@ -3613,15 +3620,14 @@ void suds_indiv_t::fit_lda()
 
 lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 {
-
+  
   //
   // Project target (this) into trainer space:   U_targ = X_targ * V_trainer * D_trainer^{-1} 
   // subsetting to # of columns
   //
 
-  // std::cout << " targ = " << id << " triner = " << trainer.id << "\n";
-  // std::cout << " tr nc = " << trainer.nc << " " << trainer.W.size() << "\n";
-  // std::cout << "trainer W \n" << trainer.W << "\n";
+  // std::cout << " this    : " <<         id << " nc = " <<         nc << " " <<         W.size() << "\n";
+  // std::cout << " trainer : " << trainer.id << " nc = " << trainer.nc << " " << trainer.W.size() << "\n";
 
   Eigen::MatrixXd trainer_DW = Eigen::MatrixXd::Zero( trainer.nc , trainer.nc );  
 
@@ -3656,7 +3662,7 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
     for (int j=0; j< trainer.nc; j++)
       {
 	double sd = suds_t::standardize_psc ? 1 : eigen_ops::sdev( U_projected.col(j) );
-	double lambda = suds_t::denoise_fac * sd;	
+	double lambda = suds_t::denoise_fac * sd;
 	dsptools::TV1D_denoise( U_projected.col(j) , lambda );
       }  
 
@@ -3706,11 +3712,27 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 
 
   //
+  // Add slopes in?
+  // 
+
+  Eigen::MatrixXd X_projected = Eigen::MatrixXd::Zero( U_projected.rows() , U_projected.cols() + SS.cols() );
+
+  if ( nslopes == 0 ) 
+    {
+      X_projected = U_projected;
+    }
+  else
+    {
+      //      X.resize( U_projected.rows() , U_projected.cols() + SS.cols() );
+      X_projected << U_projected , SS;
+    }
+
+  
+  //
   // predict using trainer model
   //
-
-  lda_posteriors_t pp = lda_t::predict( trainer.model , U_projected ) ;
-
+  
+  lda_posteriors_t pp = lda_t::predict( trainer.model , X_projected );
 
   return pp;
 }
@@ -3963,12 +3985,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  
 	  //
 	  // Generate model for prediction based on 'dummy' target (imputed) stages
-	  // but U basd on the target's own SVD (i.e. not projected into trainer space);  
+	  // but X = U + SS  basd on the target's own SVD (i.e. not projected into trainer space);  
 	  // This we use target.U, which is the original for the target, based on their own data
 	  // (we ignore the U_projected which is based on the trainer model)
 	  //
 
-	  lda_t lda( prediction.cl , target.U ) ;
+	  lda_t lda( prediction.cl , target.X ) ;
       
 	  // set target model for use w/ all different weight-trainers
 
@@ -4597,9 +4619,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Final SOAP evaluation of /predicted/ stages
   //
   
-  // lda_t lda( prediction.cl , target.U ) ; 
-  // target.model = lda.fit( suds_t::flat_priors );
-  
   // following the self-evaluation (SOAP) procedure, we get kappa
   // as follows:
   
@@ -4616,17 +4635,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     {
       
       //      MatrixXd Y( target.U.rows(), target.U.cols()
-// A.cols()+B.cols());
-//       C << A, B;
-
-      lda_t self_lda( final_prediction , target.U );
+      // A.cols()+B.cols());
+      //       C << A, B;
+      
+      lda_t self_lda( final_prediction , target.X );
 
       lda_model_t self_model = self_lda.fit( suds_t::flat_priors );
       
       if ( self_model.valid )
 	{
 	  // get predictions: SOAP model (fitting to self)
-	  lda_posteriors_t soap_final_prediction = lda_t::predict( self_model , target.U );
+	  lda_posteriors_t soap_final_prediction = lda_t::predict( self_model , target.X );
 	  
 	  double kappa5 = MiscMath::kappa( soap_final_prediction.cl , final_prediction , suds_t::str( SUDS_UNKNOWN ) );
 	  double kappa3 = MiscMath::kappa( NRW( soap_final_prediction.cl ) , NRW( final_prediction ) , suds_t::str( SUDS_UNKNOWN ) );

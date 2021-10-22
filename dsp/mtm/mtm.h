@@ -83,7 +83,10 @@ struct mtm_t
   // hold results here
   std::vector<double> f;
   std::vector<double> spec; // average over segments
+  std::vector<double> raw_spec; // average over segments (not dB)
+
   std::vector<std::vector<double> > espec; // spectrogram
+  std::vector<std::vector<double> > raw_espec; // spectrogram
   
   // mean center / detrend
   bool opt_remove_mean;

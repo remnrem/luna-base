@@ -1012,7 +1012,7 @@ void psd_shape_metrics( const std::vector<double> & f , // frq
   // and Z-normalize
 
   double pa, pb;
-  p = MiscMath::detrend( p , &pa, &pb ) ;
+  p = MiscMath::edge_detrend( p , &pa, &pb ) ;
 
   // get smoothed: ss = smoothed, pp = p - ss 
   std::vector<double> ss; 
@@ -1068,9 +1068,9 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
 {
   
   std::vector<double> slope_y, slope_x;
-  
+
   for (int f=0; f<psd.size(); f++)
-    {
+    {      
       if ( freq[f] < fr[0]  ) continue;
       if ( freq[f] > fr[1] ) break;
 
@@ -1078,19 +1078,24 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
       
       if ( psd[f] <= 0 ) Helper::halt( "negative/zero PSD in spectral slope estimation" );
       slope_y.push_back( log( psd[f] ) );
-
+      
     }
   
   const int n = slope_y.size();
 
   // 
-  // remove outliers (in log-PSD space)?
+  // remove outliers (in log-PSD space after fitting initial regression line)?
   //
 
   if ( outlier > 0 ) 
     {
-      double mean_y = MiscMath::mean( slope_y );
-      double sd_y = MiscMath::sdev( slope_y , mean_y );
+      // first detrend, i.e. fit initial slope
+      // n.b. assumes uniform spacing in frequencies
+      
+      std::vector<double> dt_y = MiscMath::detrend( slope_y );
+
+      double mean_y = MiscMath::mean( dt_y );
+      double sd_y = MiscMath::sdev( dt_y , mean_y );
       double lwr = mean_y - outlier * sd_y;
       double upr = mean_y + outlier * sd_y;
 
@@ -1100,8 +1105,8 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
 
       for (int i=0; i<n; i++)
 	{
-	  exc[i] = slope_y[i] < lwr || slope_y[i] > upr  ;
-	  if ( exc[i] ) remove = true; 
+	  exc[i] = dt_y[i] < lwr || dt_y[i] > upr  ;
+	  if ( exc[i] ) remove = true; 	  
 	}
       
       if ( remove )
@@ -1122,7 +1127,6 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
 	  
 	}
     }
-
 
   // not enough data?
   if ( slope_y.size() < 3 ) return false ;

@@ -123,6 +123,9 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 
   const double t_neg_lwr = param.has( "t-neg-lwr" ) ? param.requires_dbl( "t-neg-lwr" ) : 0;
   const double t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 10;
+
+  const double t_pos_lwr = param.has( "t-pos-lwr" ) ? param.requires_dbl( "t-pos-lwr" ) : 0;
+  const double t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 10;
   
   // for full waves, default is to find positive to negative zero-crossings
   const bool   use_alternate_neg2pos_zc = param.has( "neg2pos" ) ;
@@ -192,6 +195,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 			 f_lwr , f_upr , 
 			 t_lwr , t_upr , 
 			 t_neg_lwr, t_neg_upr , 
+			 t_pos_lwr, t_pos_upr , 
 			 use_alternate_neg2pos_zc , type ,
 			 cache ? &cache_name : NULL , cache ? &edf : NULL ); 
       
@@ -330,6 +334,10 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 	  writer.value( "SO_DUR" , avg_duration_sec );    
 	  writer.value( "SO_NEG_DUR" , avg_negative_duration_sec );    
 	  writer.value( "SO_POS_DUR" , avg_positive_duration_sec );    
+	  
+	  writer.value( "SO_TRANS" , avg_trans );
+	  writer.value( "SO_TRANS_FREQ" , avg_trans_freq );
+
 	  writer.value( "SO_AMP" , avg_x );
 	  writer.value( "SO_P2P" , avg_yminusx );
 	  
@@ -350,6 +358,10 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 	  writer.value( "SO_DUR" , median_duration_sec );    
 	  writer.value( "SO_NEG_DUR" , median_negative_duration_sec );    
 	  writer.value( "SO_POS_DUR" , median_positive_duration_sec );    
+
+	  writer.value( "SO_TRANS" , median_trans );
+	  writer.value( "SO_TRANS_FREQ" , median_trans_frq );
+
 	  writer.value( "SO_AMP" , median_x );
 	  writer.value( "SO_P2P" , median_yminusx );
       
@@ -402,6 +414,9 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 	writer.value( "DUR_CHK"  , w.dur() );
 	writer.value( "DUR1"  , w.dur1() );
 	writer.value( "DUR2"  , w.dur2() );
+
+	writer.value( "TRANS" , w.trans() );
+	writer.value( "TRANS_FREQ" , w.trans_freq() );
 	
 	writer.value( "UP_AMP" , w.up_amplitude );
 	writer.value( "DOWN_AMP" , w.down_amplitude );
@@ -588,6 +603,8 @@ slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered ,
 			    const double t_upr , 
 			    const double t_neg_lwr , 
 			    const double t_neg_upr , 
+			    const double t_pos_lwr , 
+			    const double t_pos_upr , 
 			    const bool neg2pos , 
 			    const slow_wave_type type ,
 			    const std::string * cache_name ,
@@ -597,7 +614,8 @@ slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered ,
   report_median_stats = false;
   
   detect_slow_waves( unfiltered, tp , sr , thr, ignore_neg_peak, use_mean , uV_neg , uV_p2p , f_lwr, f_upr, 
-		     t_lwr, t_upr , t_neg_lwr , t_neg_upr , neg2pos , type , cache_name , edf );
+		     t_lwr, t_upr , t_neg_lwr , t_neg_upr , t_pos_lwr , t_pos_upr , 
+		     neg2pos , type , cache_name , edf );
 }
 
 
@@ -615,6 +633,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 				     const double t_upr , 
 				     const double t_neg_lwr , 
 				     const double t_neg_upr , 
+				     const double t_pos_lwr , 
+				     const double t_pos_upr , 	
 				     const bool use_alternate_neg2pos_zc , 
 				     const slow_wave_type type ,
 				     const std::string * cache_name , 
@@ -639,7 +659,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   logger << "\n detecting slow waves: " << f_lwr << "-" << f_upr << "Hz\n";
   
   if ( t_lwr > 0 ) logger << "  - duration " << t_lwr << "-" << t_upr << "s\n"; 
-  if ( t_neg_lwr > 0 ) logger << "  - negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << "\n";
+  if ( t_neg_lwr > 0 || t_neg_upr > 0 ) logger << "  - negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << "\n";
+  if ( t_pos_lwr > 0 || t_pos_upr > 0 ) logger << "  - positive half-wave duration " << t_pos_lwr << "-" << t_pos_upr << "\n";
 
   if ( thr > 0 ) 
     {
@@ -784,7 +805,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       
       // duration criteria on negative half wave? 
 
-      if ( t_neg_lwr > 0 ) 
+      if ( t_neg_lwr > 0 || t_neg_upr ) 
 	{
 	  
 	  if ( use_alternate_neg2pos_zc ) // negative half wave is mid -- stop
@@ -792,17 +813,42 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 	      interval_t hwint( w.zero_crossing_tp , tp[ zc[i] ] - 1 );
 	      const double t = hwint.duration_sec();
 	      // duration criteria on negative half-wave?
-	      if ( t < t_neg_lwr || t > t_neg_upr ) continue;
+	      if ( t < t_neg_lwr ) continue;
+	      if ( t_neg_upr > 0 && t > t_neg_upr ) continue;
 	    }
 	  else // or (DEFAULT) : negative half-wave is start to mid
 	    {
 	      interval_t hwint( tp[ zc[i-1] ] , w.zero_crossing_tp - 1 );
 	      const double t = hwint.duration_sec();
 	      // duration criteria on negative half-wave?
-	      if ( t < t_neg_lwr || t > t_neg_upr ) continue;
+	      if ( t < t_neg_lwr ) continue;
+	      if ( t_neg_upr > 0 && t > t_neg_upr ) continue;
 	    }
 	}
       
+      // duration criteria on positive half wave? 
+      
+      if ( t_pos_lwr > 0 ) 
+	{
+	  
+	  if ( ! use_alternate_neg2pos_zc ) // DEFAULT: pos HW is start to mid
+	    {	      
+	      interval_t hwint( w.zero_crossing_tp , tp[ zc[i] ] - 1 );
+	      const double t = hwint.duration_sec();
+	      // duration criteria on positive half-wave?
+	      if ( t < t_pos_lwr ) continue;
+	      if ( t_pos_upr > 0 && t > t_pos_upr ) continue;
+	    }
+	  else // or : pos HW is mid to end
+	    {
+	      interval_t hwint( tp[ zc[i-1] ] , w.zero_crossing_tp - 1 );
+	      const double t = hwint.duration_sec();
+	      // duration criteria on positive half-wave?
+	      if ( t < t_pos_lwr ) continue;
+	      if ( t_pos_upr > 0 && t > t_pos_upr ) continue;
+	    }
+	}
+
       // accumulate averages for filtering 
       tmp_x.push_back( x );
       tmp_yminusx.push_back( y - x );
@@ -840,7 +886,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   
   std::vector<double> acc_yminusx, acc_x, 
     acc_duration_sec, acc_negative_duration_sec, acc_positive_duration_sec, 
-    acc_slope_n1 , acc_slope_n2 , acc_slope_p1 , acc_slope_p2 ;
+    acc_slope_n1 , acc_slope_n2 , acc_slope_p1 , acc_slope_p2 , 
+    acc_trans , acc_trans_freq ;
   
   sw.clear();
 
@@ -871,6 +918,9 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 	  acc_negative_duration_sec.push_back( ( w.zero_crossing_tp - w.interval_tp.start ) * globals::tp_duration );
 	  acc_positive_duration_sec.push_back( ( w.interval_tp.stop - w.zero_crossing_tp ) * globals::tp_duration );
 
+	  acc_trans.push_back( w.trans() );
+	  acc_trans_freq.push_back( w.trans_freq() );
+
 	  // slopes ( returns 0 is not calculated, i.e. because looking at half-waves)
 	  const double sn1 = w.slope_n1();
 	  const double sn2 = w.slope_n2();
@@ -892,6 +942,10 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   avg_duration_sec = acc_duration_sec.size() > 0 ? MiscMath::mean( acc_duration_sec ) : 0 ;
   avg_negative_duration_sec = acc_negative_duration_sec.size() > 0 ? MiscMath::mean( acc_negative_duration_sec ) : 0 ;
   avg_positive_duration_sec = acc_positive_duration_sec.size() > 0 ? MiscMath::mean( acc_positive_duration_sec ) : 0 ;
+
+  avg_trans = acc_trans.size() > 0 ? MiscMath::mean( acc_trans ) : 0 ;
+  avg_trans_freq = acc_trans_freq.size() > 0 ? MiscMath::mean( acc_trans_freq ) : 0 ;
+
   avg_slope_p1 = acc_slope_p1.size() > 0 ? MiscMath::mean( acc_slope_p1 ) : 0 ; 
   avg_slope_p2 = acc_slope_p2.size() > 0 ? MiscMath::mean( acc_slope_p2 ) : 0 ;
   avg_slope_n1 = acc_slope_n1.size() > 0 ? MiscMath::mean( acc_slope_n1 ) : 0 ;
@@ -903,6 +957,10 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   median_duration_sec = acc_duration_sec.size() > 0 ? MiscMath::median( acc_duration_sec ) : 0 ;
   median_negative_duration_sec = acc_negative_duration_sec.size() > 0 ? MiscMath::median( acc_negative_duration_sec ) : 0 ;
   median_positive_duration_sec = acc_positive_duration_sec.size() > 0 ? MiscMath::median( acc_positive_duration_sec ) : 0 ;
+
+  median_trans = acc_trans.size() > 0 ? MiscMath::median( acc_trans ) : 0 ;
+  median_trans_frq = acc_trans_freq.size() > 0 ? MiscMath::median( acc_trans_freq ) : 0 ;
+
   median_slope_p1 = acc_slope_p1.size() > 0 ? MiscMath::median( acc_slope_p1 ) : 0 ;
   median_slope_p2 = acc_slope_p2.size() > 0 ? MiscMath::median( acc_slope_p2 ) : 0 ;
   median_slope_n1 = acc_slope_n1.size() > 0 ? MiscMath::median( acc_slope_n1 ) : 0 ; 

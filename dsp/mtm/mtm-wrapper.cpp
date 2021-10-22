@@ -90,6 +90,30 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
   double min_f = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5; 
   double max_f = param.has( "max" ) ? param.requires_dbl( "max" ) : 25;  
+
+  //
+  // Spectral slope
+  //
+  
+  const bool spectral_slope = param.has( "slope" );
+  const std::vector<double> slope_range = param.dblvector( "slope" );
+  const bool spectral_slope_show_epoch = param.has( "epoch-slope" ) || param.has( "slope-epoch" );
+  
+  if ( spectral_slope )
+    {
+      if ( slope_range.size() != 2 ||
+           slope_range[0] >= slope_range[1] ||
+           slope_range[0] <= 0 ||
+           slope_range[1] <= 0 )
+	Helper::halt( "expecting slope=lwr,upr" );
+    }
+
+  // outlier threshold to remove individual PSD points when calculating a single slope  
+  const double slope_outlier = param.has( "slope-th" ) ? param.requires_dbl( "slope-th" ) : 3 ;
+
+  // threshold to reove epochs when summarizing slopes over all epochs  
+  const double slope_th2     = param.has( "slope-th2" ) ? param.requires_dbl( "slope-th2" ) : 3 ;
+
     
   // output
   
@@ -202,29 +226,107 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	}
       writer.unlevel( globals::freq_strat );
 
+
+      //
+      // display spectral slope?
+      //
+      
+      // if dB mode, then based on the mean of db-scaled power (where
+      // we need to convert back to raw); otherwise, just use raw
+
+      if ( spectral_slope ) 
+	{		   
+	  
+	  std::vector<double> xx = dB ? mtm.spec : mtm.raw_spec;
+	  
+	  if ( dB ) 
+	    for (int i=0; i<xx.size(); i++) 
+	      xx[i] = pow( 10 , xx[i]/10.0) ;	      
+	  
+	  spectral_slope_helper( xx , 
+				 mtm.f , 
+				 slope_range , 
+				 slope_outlier );
+	}
+      
+      
+      
+      //
       // segment-wise output? (do not call 'epoch' as this is typically different
       // i.e. not using epoch encoding etc
+      //
 
-      if ( epoch_level_output )
+      // store spectral slope per epoch for this channel?                                                                                                               
+      std::vector<double> slopes;
+      
+      if ( epoch_level_output || spectral_slope )
 	{
 	  const int nsegs = mtm.espec.size();
 	  
-	  for ( int j = 0 ; j < nsegs ; j++)
+	  if ( epoch_level_output ) 
 	    {
-	      writer.level( j+1 , "SEG" );	  
-	      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+	      for ( int j = 0 ; j < nsegs ; j++)
 		{
-		  if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+		  writer.level( j+1 , "SEG" );	  
+		  
+		  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
 		    {
-		      writer.level( mtm.f[i] , globals::freq_strat  );
-		      writer.value( "MTM" , mtm.espec[j][i] );
+		      if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+			{
+			  writer.level( mtm.f[i] , globals::freq_strat  );
+			  writer.value( "MTM" , mtm.espec[j][i] );
+			}
 		    }
+		  writer.unlevel( globals::freq_strat );	      
 		}
-	      writer.unlevel( globals::freq_strat );	      
 	    }
-	  writer.unlevel( "SEG" );
+	  
+	  // epoch level spectral slope? (based on the raw power )
+	  
+	  if ( spectral_slope )
+	    {		  
+	      
+	      for ( int j = 0 ; j < nsegs ; j++)
+		{
+		  double es1 = 0 ;
+		  
+		  bool okay = spectral_slope_helper( mtm.raw_espec[j] , 
+						     mtm.f ,						     
+						     slope_range ,
+						     slope_outlier ,
+						     spectral_slope_show_epoch ,
+						     &es1 );
+		  
+		  if ( okay ) slopes.push_back( es1 );
+		}
+	    }
+	  
+	  
 	}
       
+      if ( epoch_level_output ) 
+	writer.unlevel( "SEG" );
+      
+      
+
+      //
+      // spectral slope based on distribution of epoch-level slopes?
+      //
+      
+      if ( spectral_slope ) 
+	{
+	  if ( slopes.size() > 2 )
+	    {
+	      std::vector<double> s2 = MiscMath::outliers( &slopes , slope_th2 );
+	      double s_mean = MiscMath::mean( s2 );
+	      double s_med  = MiscMath::median( s2 );
+	      double s_sd   = MiscMath::sdev( s2 , s_mean );
+	      writer.value( "SPEC_SLOPE_MN" , s_mean );
+	      writer.value( "SPEC_SLOPE_MD" , s_med );
+	      writer.value( "SPEC_SLOPE_SD" , s_sd );
+	    }
+	}
+
       
     } // next signal
 

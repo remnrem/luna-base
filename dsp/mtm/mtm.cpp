@@ -150,6 +150,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   //
   
   espec.resize( n_segs );
+  raw_espec.resize( n_segs );
 
   //
   // Initiate FFT (no window, as tapers applied to data beforehand)
@@ -195,20 +196,24 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
       
       // allocate storage for spectra
       espec[sn].resize( klen ,  0 );  
+      
+      // track raw spectra too 
+      raw_espec[sn].resize( klen ,  0 );  
 
       // do actual MTM analysis
       do_mtap_spec( &fftseg,
 		    &(segment)[0],
 		    npoints ,
 		    kind, nwin, npi, inorm, dt,
-		    &(espec)[sn][0],  klen );      
+		    &(raw_espec)[sn][0],  klen );      
       
       //
       // shrink to positive spectrum (already scled x2)?
       // 
       
+      raw_espec[sn].resize( nfreqs );
       espec[sn].resize( nfreqs );
-
+      
       if ( sn == 0 ) 
 	f.resize( nfreqs , 0 );
       
@@ -220,8 +225,9 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	  
 	  // report dB?
 	  if ( dB )
-	    espec[sn][i] = 10 * log10( espec[sn][i] );
-	  
+	    espec[sn][i] = 10 * log10( raw_espec[sn][i] );
+	  else
+	    espec[sn][i] = raw_espec[sn][i] ;	  
 	}  
       
 
@@ -238,12 +244,17 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   //
 
   spec.resize( nfreqs , 0 );
+  raw_spec.resize( nfreqs , 0 );
   
   for (int f=0; f<nfreqs; f++)
     {
       for (int i=0; i<n_segs; i++)
-	spec[f] += espec[i][f];
-      spec[f] /= (double)n_segs;
+	{
+	  spec[f] += espec[i][f];
+	  raw_spec[f] += raw_espec[i][f];
+	}
+      spec[f] /= (double)n_segs;      
+      raw_spec[f] /= (double)n_segs;
     }
  
 }
