@@ -50,6 +50,8 @@ bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = '/';
 char globals::annot_keyval_delim = '=' ; 
 
+bool globals::sanitize_everything = false;
+
 std::set<std::string> globals::annot_alignment;
 bool globals::autofix_edf;
 

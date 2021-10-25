@@ -932,6 +932,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RESOAP" ) ) proc_resoap( edf , param(c) );
       else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
       
+      else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
 
@@ -3326,6 +3327,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "wildcard" ) )
     {
       globals::indiv_wildcard = tok1;
+      return;
+    }
+
+  // always sanitize labels (channels, annots) on first reading?
+  if ( Helper::iequals( tok0 , "sanitize" ) )
+    {
+      // NB: not implemented yet... see Helper::sanitize() but then
+      // need to add to channel reader, and annot reader
+      // (and take care of aliases/remappings/case-insensitivity, etc)
+      globals::sanitize_everything = Helper::yesno( tok1 );
       return;
     }
   

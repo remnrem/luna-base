@@ -44,7 +44,6 @@ void Eval::init( bool na )
   no_assignments = na;
 
   errs = "";
-
 }
 
 bool Eval::get_token( std::string & input ,  Token & tok )
@@ -760,6 +759,9 @@ bool Eval::execute( const std::vector<Token> & input )
 	      else if ( c.name() == "log" )    res = func.fn_log( args[0] );
 	      else if ( c.name() == "log10" )  res = func.fn_log10( args[0] );
 	      
+	      else if ( c.name() == "floor" )  res = func.fn_floor( args[0] );
+	      else if ( c.name() == "round" )  res = func.fn_round( args[0] );
+				      
 	      else if ( c.name() == "ifelse" ) res = func.fn_ifelse( args[2], args[1], args[0] );
 	      
 	      // vector functions
@@ -771,9 +773,10 @@ bool Eval::execute( const std::vector<Token> & input )
 	      	      
 	      else if ( c.name() == "min" )      res = func.fn_vec_min( args[0] );	      
 	      else if ( c.name() == "max" )      res = func.fn_vec_maj( args[0] );
-	      
+		
 	      else if ( c.name() == "sum" )      res = func.fn_vec_sum( args[0] );
 	      else if ( c.name() == "mean" )     res = func.fn_vec_mean( args[0] );
+	      else if ( c.name() == "sd" )       res = func.fn_vec_sd( args[0] );
 	      else if ( c.name() == "sort" )     res = func.fn_vec_sort( args[0] );
 
 	      else if ( c.name() == "num_func" )  res = func.fn_vec_new_float( args );
@@ -786,8 +789,6 @@ bool Eval::execute( const std::vector<Token> & input )
 	      else if ( c.name() == "all" )       res = func.fn_vec_all( args[0] );	      
 	      else if ( c.name() == "contains" )  res = func.fn_vec_any( args[1] , args[0] );
 	      else if ( c.name() == "countif" )   res = func.fn_vec_count( args[1] , args[0] );
-	      
-
 	      	    	      
 	      else Helper::halt( "did not recognize function " + c.name() );
 
@@ -902,20 +903,20 @@ bool Eval::execute( const std::vector<Token> & input )
 
 bool Eval::parse( const std::string & input )
 {
-  
+
   delete_symbols();    
   
   std::string input2 = input;
-  
+
   if ( ! expand_indices( &input2 ) ) return false;
 
   if ( ! expand_vargs( &input2 ) ) return false;
-
+  
   // this may contain several statements, delimited by ";"
   // evaluate each sequential, to perform any assignments into
   // meta data, but only the last will be reflected in the 'e' 
   // endpoint
-  
+
   std::vector<std::string> etok0 = Helper::parse( input2, ";" );
   
   // strip out any empty expressions (e.g. if there was a final ; but no expression after)
@@ -928,7 +929,6 @@ bool Eval::parse( const std::string & input )
        if ( j.size() > 0 ) etok.push_back( j );
      }
   
-
   // set number of evals we need to do
 
   neval = etok.size();
@@ -948,13 +948,14 @@ bool Eval::parse( const std::string & input )
 	is_valid = false;
       
     }
-  
+
   // set pointers to all variables now construction of tokens is complete
   for (int i=0; i<etok.size(); i++)  
     locate_symbols( output[i] ); 
   
   return is_valid;
 
+  
 }
 
 void Eval::assign_to( instance_t & m )
@@ -1194,6 +1195,94 @@ void Eval::bind( const std::map<std::string,annot_map_t> & inputs ,
 
 
 
+void Eval::bind( const std::map<std::string,std::vector<double> > & inputs , 
+		 instance_t * outputs )
+{
+  
+  // assuming input from signal data, i.e. numeric vector(s) 
+  reset_symbols();  
+  
+  //
+  // create a single instance that organizes all the information in
+  // the annot_map_t above in a sane variable naming scheme
+  // 
+  // nb. some redundancy here, as we copy stuff over that we might not need in the 
+  // expression;  can edit here to only copy variables that are in the vartb (i.e. 
+  // those that will actually be used in evaluating the expression)
+  //
+  
+  std::map<std::string,std::vector<double> > accum_dbl;
+  
+
+  //
+  // add 'inputs' to a single instance_t to hand to the token parser
+  //
+
+  instance_t m;
+  
+  std::map<std::string,std::vector<double> >::const_iterator ii = inputs.begin();
+  while ( ii != inputs.end() )
+    {
+      m.set( ii->first , ii->second );
+      ++ii;
+    }
+  
+  
+  //
+  // Two scenarios: 
+  //  1) a value might already exist (in which case we use that type and value to specify the token )
+  //  2) this could be used as part of an assignment to an instance; here we would not know the 
+  //     type of the to-be-assigned field yet [ IF we are allowing assignments ] 
+  //
+  
+  std::map<std::string,std::set<Token*> >::iterator i = vartb.begin();
+  while ( i != vartb.end() )
+    { 
+      
+      const std::string & var_name = i->first;
+
+      std::set<Token*>::iterator tok = i->second.begin();
+      
+      while ( tok != i->second.end() )
+	{
+	  
+	  globals::atype_t mt = m.type( var_name );
+	  
+	  avar_t * a = m.find( var_name );
+	  
+	  // numeric, int, text and bool scalars
+	  // also allow vectors downstream
+	  
+	  if ( a == NULL ) (*tok)->set(); // UNDEFINED
+	  
+	  else if ( a->atype() == globals::A_INT_T  )  { (*tok)->set( a->int_value() ) ;  }
+	  else if ( a->atype() == globals::A_DBL_T  )  { (*tok)->set( a->double_value() ); }
+	  else if ( a->atype() == globals::A_TXT_T  )  { (*tok)->set( a->text_value() ); }
+	  else if ( a->atype() == globals::A_BOOL_T )  { (*tok)->set( a->bool_value() );   }	      
+
+	  else if ( a->atype() == globals::A_INTVEC_T  )  { (*tok)->set( a->int_vector() ) ;  }
+	  else if ( a->atype() == globals::A_DBLVEC_T  )  { (*tok)->set( a->double_vector() ); }
+	  else if ( a->atype() == globals::A_TXTVEC_T  )  { (*tok)->set( a->text_vector() ); }
+	  else if ( a->atype() == globals::A_BOOLVEC_T )  { (*tok)->set( a->bool_vector() );   }	      
+	  
+	  else (*tok)->set(); // UNDEFINED
+	    	  
+	  ++tok;
+	}
+      ++i;
+    }    
+
+  //
+  // For assignment
+  //
+  
+  func.attach( outputs );
+  
+}
+
+
+
+
 void Eval::bind( const Token * ntok )
 {
 
@@ -1227,8 +1316,19 @@ bool Eval::evaluate( const bool v )
 {
   verbose = v;
   for (int i=0; i<neval; i++)
-    if ( is_valid ) 
-      is_valid = execute( output[i] );
+    {
+      if ( verbose )
+	std::cerr << " Prior to expression " << i+1 << " status = " << ( is_valid ? "VALID" : "INVALID" ) << "\n";
+
+      if ( is_valid ) 
+	is_valid = execute( output[i] );
+
+      if ( verbose )
+	std::cerr << " Post to expression " << i+1 << " status = " << ( is_valid ? "VALID" : "INVALID" ) << "\n";
+
+    }
+  
+  if ( verbose ) std::cerr << " returning " << ( is_valid ? "VALID" : "INVALID" ) << " token\n";
   return is_valid;
 }
 

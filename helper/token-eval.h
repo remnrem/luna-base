@@ -51,10 +51,17 @@ struct Eval {
   // constructors
 
   Eval( const bool na = false ) 
-    { init( na ); }
+  {
+    Token::init();
+    init( na );
+  }
 
   Eval( const std::string & input , const bool na = false ) 
-    { init( na ); parse(input); }
+  {
+    Token::init();
+    init( na );
+    parse(input);
+  }
   
   void init( const bool ); 
 
@@ -64,12 +71,17 @@ struct Eval {
 
   void assign_to( instance_t & m );
 
+  // if passing annotation data
   void bind( const std::map<std::string,annot_map_t> & inputs , 
 	     instance_t * outputs , 
 	     instance_t * accumulator = NULL , 
 	     const std::set<std::string> * global_vars = NULL , 
 	     bool reset = true );
-  
+
+  // if passing signal data
+  void bind( const std::map<std::string,std::vector<double> > & inputs , 
+	     instance_t * outputs ); 
+
   void bind( const Token * );
 
   bool evaluate( const bool v = false );
@@ -91,7 +103,20 @@ struct Eval {
   // what does this return?
   Token::tok_type rtype() const;
   Token value() const;
-  
+
+  // get symbol table
+  std::set<std::string> symbols() const
+  {
+    std::set<std::string> s;
+    std::map<std::string,std::set<Token*> >::const_iterator ii = vartb.begin();
+    while ( ii != vartb.end() )
+      {
+	s.insert( ii->first );
+	++ii;
+      }
+    return s;
+  }
+    
  private:
   
   //work horses

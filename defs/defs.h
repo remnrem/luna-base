@@ -323,6 +323,9 @@ struct globals
   // allow spaces in .annot files, or only tab delimited?
   static bool allow_space_delim;
 
+  // always sanitize labels (e.g. for eval expressions)
+  static bool sanitize_everything;
+  
   // combine class and instance annotations (to a single class?)
   static char annot_class_inst_combiner;
   static bool combine_annot_class_inst;
