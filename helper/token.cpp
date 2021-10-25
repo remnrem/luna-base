@@ -222,19 +222,17 @@ void Token::update( const std::vector<int> & i )
     {
       for (int j=0; j<ve.size(); j++)
 	{
-	  std::cout << " updaing " << ve[j] << " with " << i[j] << "\n";
+	  //	  std::cout << " updaing " << ve[j] << " with " << i[j] << "\n";
 	  fvec[ ve[j] ] = i[j];
 	}
     }
   else
     Helper::halt( "type conflict" );
 
-  std::cout << " NOW(b4 um) = " << fvec.size() << " " << fullsize() <<  " " << size() << " " << *this << "\n";
-    
   // after update, unmask
   unmask();
 
-  std::cout << " NOW = " << fvec.size() << " " << fullsize() <<  " " << size() << " " << *this << "\n";
+
 }
 
 void Token::update( const std::vector<bool> & b )
