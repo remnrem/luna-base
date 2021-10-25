@@ -754,14 +754,15 @@ bool Eval::execute( const std::vector<Token> & input )
 
 	      else if ( c.name() == "rnd" )    res = func.fn_rnd();
 	      else if ( c.name() == "rand" )   res = func.fn_rnd( args[0] );
-
+	     			
 	      else if ( c.name() == "exp" )    res = func.fn_exp( args[0] );
 	      else if ( c.name() == "log" )    res = func.fn_log( args[0] );
 	      else if ( c.name() == "log10" )  res = func.fn_log10( args[0] );
-	      
+
+	      else if ( c.name() == "abs" )    res = func.fn_abs( args[0] );
 	      else if ( c.name() == "floor" )  res = func.fn_floor( args[0] );
 	      else if ( c.name() == "round" )  res = func.fn_round( args[0] );
-				      
+	      
 	      else if ( c.name() == "ifelse" ) res = func.fn_ifelse( args[2], args[1], args[0] );
 	      
 	      // vector functions

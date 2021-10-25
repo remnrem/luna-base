@@ -318,6 +318,7 @@ void Token::init()
 
   fn_map[ "round" ]  = 1;
   fn_map[ "floor" ]  = 1;  
+  fn_map[ "abs" ]    = 1;
   fn_map[ "sqr"  ]   = 1;  // X^2
   fn_map[ "log"  ]   = 1;
   fn_map[ "log10"]   = 1;
@@ -2650,6 +2651,32 @@ Token TokenFunctions::fn_floor( const Token & tok ) const
   return Token();
 }
 
+
+Token TokenFunctions::fn_abs( const Token & tok ) const
+{
+  // only applies to numeric data
+  if ( tok.is_float() )
+    return Token( fabs( tok.as_float() ) );
+  
+  if ( tok.is_int() )
+    return Token( abs( tok.as_int() ) );
+
+  if ( tok.is_float_vector() ) 
+    {
+      std::vector<double> ans = tok.as_float_vector();
+      for (int i=0; i<ans.size(); i++) ans[i] = fabs( ans[i] );
+      return Token( ans );
+    }
+
+  if ( tok.is_int_vector() ) 
+    {
+      std::vector<int> ans = tok.as_int_vector();
+      for (int i=0; i<ans.size(); i++) ans[i] = abs( ans[i] );
+      return Token( ans );
+    }
+
+  return Token();
+}
 
 Token TokenFunctions::fn_round( const Token & tok ) const
 {

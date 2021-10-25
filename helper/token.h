@@ -310,7 +310,8 @@ struct  TokenFunctions{
   Token fn_log10( const Token & tok ) const;
   Token fn_exp( const Token & tok ) const;
   Token fn_pow( const Token & tok , const Token & tok2 ) const;
-
+  Token fn_abs( const Token & tok ) const;
+  
   Token fn_rnd( ) const;
   Token fn_rnd( const Token & tok  ) const;
 
