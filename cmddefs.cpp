@@ -1915,8 +1915,42 @@ void cmddefs_t::init()
 
   
   //
-  // PAC
+  // CC
   //
+
+  add_cmd( "topo" , "CC" , "Calculates dPAC and wPLI" );
+  add_url( "CC" , "cc/#cc" );
+
+  add_param( "CC" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
+  add_param( "CC" , "pac" , "" , "Estimate within-channel phase-amplitude coupling metrics" );
+  add_param( "CC" , "xch" , "" , "Estimate between-channel connectivity metrics" );
+  add_param( "CC" , "nreps" , "1000" , "Number of replications" );
+  add_param( "CC" , "fc" , "11,15" , "Wavelet center frequency/frequencies (phase)" );
+  add_param( "CC" , "fwhm" , "1,1" , "Wavelet FWHM value(s) (phase)" );
+  add_param( "CC" , "fc2" , "11,15" , "For PAC: as fc for amplitude" );
+  add_param( "CC" , "fwhm2" , "1,1" , "For PAC: as fwhm for amplitude" );
+  add_param( "CC" , "fc-range" , "1,20" , "Range of fc values" );
+  add_param( "CC" , "num" , "10" , "Number of steps for fc-range" );
+  add_param( "CC" , "linear" , "" , "Uniform ranged fc in linear space (versus log)" );
+  add_param( "CC" , "fc2-range" , "20,40" , "Range of fc2 values" );
+  add_param( "CC" , "fwhm-range" , "5,0.25" , "Range of fwhm values" );
+  add_param( "CC" , "fwhm2-range" , "5,0.25" , "Range of fwhm2 values" );
+  add_param( "CC" , "no-epoch-output" , "" , "Do not output epoch-level results" );
+
+  add_table( "CC" , "CH1,CH2,F1,F2" , "Primary CC output" );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "XCH" , "Cross-channel coupling 0/1" );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "dPAC" , "dPAC metric" );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "dPAC_Z" , "Z-normalized dPAC metric" );
+
+  add_table( "CC" , "E,CH1,CH2,F1,F2" , "Epoch-level CC output" );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "XCH" , "Cross-channel coupling 0/1" );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "dPAC" , "dPAC metric" );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "dPAC_Z" , "Z-normalized dPAC metric" );
+  set_compressed( "CC" , tfac_t( "E,CH1,CH2,F1,F2" ) );
   
   
   //
