@@ -38,21 +38,27 @@ class Token {
   {
     if ( tok.is_vector() )
       {
-	int l = tok.size() > 5 ? 5 : tok.size() ;
 
+	int l = tok.size() > 5 ? 5 : tok.size() ;
+	int full = tok.fullsize();
+	
 	out << "[";
 	
 	for ( int i=0; i<l; i++ ) 
 	  {
 	    if ( i ) out << "," ; 
-	    if      ( tok.is_bool_vector() ) out << ( tok.bvec[i] ? "true" : "false" );
-	    else if ( tok.is_int_vector() ) out << tok.ivec[i];
-	    else if ( tok.is_float_vector() ) out << tok.fvec[i];
-	    else if ( tok.is_string_vector() ) out << tok.svec[i];
+	    if      ( tok.is_bool_vector() ) out << ( tok.bvec[tok.ve[i]] ? "true" : "false" );
+	    else if ( tok.is_int_vector() ) out << tok.ivec[tok.ve[i]];
+	    else if ( tok.is_float_vector() ) out << tok.fvec[tok.ve[i]];
+	    else if ( tok.is_string_vector() ) out << tok.svec[tok.ve[i]];
 	  }
 
-	if ( tok.size() > l ) out << "... ("<< tok.size()<< " elements) ";
-	
+	if ( tok.size() > l )
+	  {
+	    out << "... (" << tok.size();
+	    if ( full > tok.size() ) out << " of " << full;
+	    out << " elements) ";
+	  }	      	
 	if      ( tok.is_bool_vector() ) out << "]b";
 	else if ( tok.is_int_vector() ) out << "]i";
 	else if ( tok.is_float_vector() ) out << "]f";
@@ -111,7 +117,7 @@ class Token {
   
   // Constructors
   
-  Token() { ttype = UNDEF; init(); }
+  Token() { ttype = UNDEF; }
   
   Token( const std::string & s );
   Token( const double d );
@@ -138,6 +144,18 @@ class Token {
   void set( const std::vector<double> & d );
   void set( const std::vector<int> & i );
   void set( const std::vector<bool> & b );
+
+  // with masks
+  void set( const std::vector<std::string> & s , const std::vector<int> & m );
+  void set( const std::vector<double> & d , const std::vector<int> & m );
+  void set( const std::vector<int> & i , const std::vector<int> & m );
+  void set( const std::vector<bool> & b , const std::vector<int> & m );
+
+  // update : like set() but only going into a mask; not changing rest
+  void update( const std::vector<std::string> & s );
+  void update( const std::vector<double> & d );
+  void update( const std::vector<int> & i );
+  void update( const std::vector<bool> & b );
 
   void set();
   void function( const std::string & fn );
@@ -181,7 +199,8 @@ class Token {
   // Queries
 
   int size() const;
-
+  int fullsize() const;
+  
   bool is_bool(bool * b = NULL) const ;
   bool is_string(std::string * s = NULL) const;
   bool is_float(double * f = NULL) const;
@@ -190,6 +209,13 @@ class Token {
   bool is_scalar() const;
   bool is_vector() const;
 
+  // vector subsetting
+  bool is_masked() const { return size() < fullsize(); } 
+  void unmask();
+  void subset( const std::vector<int> & );
+  void prune();
+  std::vector<int> get_subset_index() const { return ve; } 
+  
   bool is_bool_vector( std::vector<bool> * b = NULL ) const;
   bool is_string_vector( std::vector<std::string> * s = NULL ) const;
   bool is_float_vector( std::vector<double> * f = NULL ) const;
@@ -204,7 +230,6 @@ class Token {
   bool is_left_paren() const { return ttype == LEFT_PARENTHESIS; }
   bool is_right_paren() const { return ttype == RIGHT_PARENTHESIS; }
   bool is_set() const { return ttype != UNDEF; } 
-
   
   // fetch actual data
   int         as_int()     const;
@@ -251,11 +276,18 @@ class Token {
   double        fval;
   std::string   sval;
   bool          bval;
-
+  
+  // vectors (which may be masked)
   std::vector<int>          ivec;
   std::vector<double>       fvec;
   std::vector<std::string>  svec;
   std::vector<bool>         bvec;
+
+  // vector elements
+  //  i.e. if unmasked, ve.size() = *vec.size() = 0,1,2,3,4...,N-1
+  //       otherwise, if subsetting, then ve.size() < *vec.size();
+  std::vector<int> ve;
+  
   
   // helper func
   bool string2bool( const std::string & sval ) const ;
@@ -270,11 +302,16 @@ struct  TokenFunctions{
   Token fn_set( const Token & tok ) const;    
   Token fn_notset( const Token & tok ) const;    
   Token fn_sqrt( const Token & tok ) const;    
+
+  Token fn_floor( const Token & tok ) const;
+  Token fn_round( const Token & tok ) const;
+  
   Token fn_log( const Token & tok ) const;
   Token fn_log10( const Token & tok ) const;
   Token fn_exp( const Token & tok ) const;
   Token fn_pow( const Token & tok , const Token & tok2 ) const;
-
+  Token fn_abs( const Token & tok ) const;
+  
   Token fn_rnd( ) const;
   Token fn_rnd( const Token & tok  ) const;
 
@@ -288,6 +325,7 @@ struct  TokenFunctions{
   Token fn_vec_maj( const Token & tok ) const;
   Token fn_vec_sum( const Token & tok ) const;
   Token fn_vec_mean( const Token & tok ) const;
+  Token fn_vec_sd( const Token & tok ) const;
   Token fn_vec_sort( const Token & tok ) const;
 
   Token fn_vec_new_float( const std::vector<Token> & tok ) const;

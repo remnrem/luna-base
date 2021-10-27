@@ -2198,6 +2198,75 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     }
 
   //
+  // TRANS
+  //
+
+  if ( p == "trans" )
+    {      
+      std::string line;
+      Helper::safe_getline( std::cin , line );
+      std::vector<std::string> hdr = Helper::parse( line );
+      const int k = hdr.size();
+      
+      std::cerr << " expr [" << p2 << "]\n";
+      
+      std::map<std::string,std::vector<double> > inputs;
+
+      int rows = 0;
+      
+      while ( 1 )
+	{
+	  std::string line;
+	  Helper::safe_getline( std::cin , line );
+	  if ( line == "" ) break;
+	  if ( std::cin.eof() || std::cin.bad() ) break;
+	  std::vector<std::string> tok = Helper::parse( line );
+	  if ( tok.size() != k ) Helper::halt( "wrong numbr of columns" );
+	  for (int i=0; i<k; i++)
+	    {
+	      double d;
+	      if ( ! Helper::str2dbl( tok[i] , &d ) ) Helper::halt( "bad numeric value" );
+	      inputs[hdr[i]].push_back( d );
+	    }
+	  ++rows;
+	}
+      
+      std::cerr << "read " << rows << "\n";
+      
+      // output
+      instance_t out;
+      
+      // expression
+      Eval expr( p2 );
+      
+      // bind input/output data to token evaluator
+      expr.bind( inputs , &out );
+
+      // evaluate
+      bool is_valid = expr.evaluate( );
+
+      // returned a valid bool? (single value)
+      bool retval;      
+      bool is_valid_retval = true;
+      if ( ! expr.value( retval ) ) is_valid_retval = false;
+
+      std::cerr << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
+      if ( is_valid_retval ) 
+	std::cerr << "boolean return value         : " << ( retval ? "true" : "false" ) << "\n";
+      std::cerr << "assigned meta-data           : " << out.print() << "\n";  
+
+      //
+      // actual output
+      //
+      
+      std::vector<double> rr = expr.value().as_float_vector();
+      for (int i=0; i<rr.size();i++)
+	std::cout << rr[i] << "\n";
+
+      std::exit(1);
+    }
+  
+  //
   // Straight FFT of stdin
   //
 

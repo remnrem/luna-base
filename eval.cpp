@@ -932,6 +932,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RESOAP" ) ) proc_resoap( edf , param(c) );
       else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
       
+      else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
 
@@ -3328,6 +3329,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::indiv_wildcard = tok1;
       return;
     }
+
+  // always sanitize labels (channels, annots) on first reading?
+  if ( Helper::iequals( tok0 , "sanitize" ) )
+    {
+      // NB: not implemented yet... see Helper::sanitize() but then
+      // need to add to channel reader, and annot reader
+      // (and take care of aliases/remappings/case-insensitivity, etc)
+      globals::sanitize_everything = Helper::yesno( tok1 );
+      return;
+    }
   
   // "auto-correct" truncated/over-long EDFs
   if ( Helper::iequals( tok0, "fix-edf" ) )
@@ -3834,6 +3845,9 @@ void cmd_t::define_channel_type_variables( edf_t & edf )
 
   std::string ic = globals::list_channels( IC , edf.header.label );
   cmd_t::ivars[ edf.id ][ "ic" ] = ic;
+
+  std::string imf = globals::list_channels( IMF , edf.header.label );
+  cmd_t::ivars[ edf.id ][ "imf" ] = imf;
 
   std::string eog = globals::list_channels( EOG , edf.header.label );
   cmd_t::ivars[ edf.id ][ "eog" ] = eog;

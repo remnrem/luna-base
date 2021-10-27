@@ -123,11 +123,10 @@ void dsptools::emd_wrapper( edf_t & edf , param_t & param )
       // residual 'IMF0'
       std::string imflab = signals.label(s) + component_tag + "0";
       edf.add_signal( imflab , edf.header.sampling_freq( signals(s) ) , emd.residual );
-
-
       
     } // next signal
 
+    
 }
 
 

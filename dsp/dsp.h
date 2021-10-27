@@ -23,7 +23,6 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
-#include "correct.h"
 #include "gc.h"
 #include "tsync.h"
 #include "sync.h"
