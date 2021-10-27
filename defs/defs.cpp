@@ -188,9 +188,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v0.25.5";
+  version = "v0.26";
   
-  date    = "24-May-2021";
+  date    = "27-Oct-2021";
 
   //
   // Return code
@@ -205,7 +205,7 @@ void globals::init_defs()
   CRandom::srand(time(0));
 
   //
-  // OPtional bail function after halt() is called
+  // Optional bail function after halt() is called
   //
   
   bail_function = NULL;
@@ -775,6 +775,7 @@ void globals::init_channel_types()
   channel_type( "EEG" , EEG );
   channel_type( "REF" , REF );
   channel_type( "IC"  , IC );
+  channel_type( "IMF" , IMF );
   channel_type( "EOG" , EOG );
   channel_type( "GENERIC" , GENERIC );
   channel_type( "ECG" , ECG );
@@ -892,6 +893,9 @@ void globals::init_channel_types()
   // IC
   add_channel_map( "IC_" , IC );
 
+  // IMF
+  add_channel_map( "IMF_" , IMF );
+  
   // EOG
   add_channel_map( "EOG" , EOG );
   add_channel_map( "LOC" , EOG );

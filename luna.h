@@ -86,6 +86,8 @@
 
 #include "artifacts/artifacts.h"
 
+#include "artifacts/correct.h"
+
 #include "cwt/cwt.h"
 
 #include "pdc/pdc.h"

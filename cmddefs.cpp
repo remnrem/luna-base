@@ -865,6 +865,30 @@ void cmddefs_t::init()
   add_var( "SUPPRESS-ECG" , "CH,SP" , "ART_RMS" , "Estimate correction factor, for each sample point in a 2-second window" );
 
 
+  // EMD
+
+  add_cmd( "power" , "EMD" , "Empirical mode decomposition" );
+  add_url( "EMD" , "power-spectra/#emd" );
+  add_param( "EMD" , "sig" , "C3,C4" , "Select signals for EMD" );
+  add_param( "EMD" , "tag" , "_C_" , "IMF channel tag, if not _IMF_" );
+  add_param( "EMD" , "sift" , "20" , "Maximum number of sifting operations" );
+  add_param( "EMD" , "imf" , "10" , "Maximum number of IMF to extract" );
+    
+
+  // ALTER
+
+  add_cmd( "artifact" , "ALTER" , "Regression- or EMD-based artifact correction" );
+  add_url( "ALTER" , "artifacts/#alter" ); 
+  add_param( "ALTER" , "sig" , "C3,C4" , "Signals for analysis" );
+  add_param( "ALTER" , "corr" , "EOG-R,EOG-L" , "Template signal(s)" );
+  add_param( "ALTER" , "emd" , "" , "Use EMD instead of raw regression" );
+  add_param( "ALTER" , "th" , "0.9" , "Threshold" );
+  add_param( "ALTER" , "emd-corr" , "" , "Run EMD of corrector channels" );
+
+  add_param( "ALTER" , "segment-sec" , "4" , "Segment size" );
+  add_param( "ALTER" , "segment-step" , "2" , "Segment step (half size by default)" );
+  
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // HYPNOGRAMS

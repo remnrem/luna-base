@@ -428,11 +428,12 @@ bool Eval::shunting_yard( const std::string & oinput,
   unsigned int sl = 0;
   
   previous_value = false;
-
+  
   // Parse input string token by token
   
   while( 1 )
     {
+
       Token c;
       
       // get next token -- if end of input break

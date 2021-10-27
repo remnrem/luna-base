@@ -72,6 +72,14 @@ void proc_trans( edf_t & edf , param_t & param )
   
   const bool update_existing_channel = channel_mode && edf.header.has_signal( siglab ); 
 
+
+  //
+  // annotation mode: create an annotation track based on true values
+  //
+
+  const std::string annot = ! channel_mode ? param.requires( "annot" ) : "" ; 
+  
+  
   //
   // get the expression to evaluate
   //
@@ -80,14 +88,15 @@ void proc_trans( edf_t & edf , param_t & param )
 
   //
   // if evaluating a channel, ensure that the final return value is for that channel
+  // (and ensuree it is sanitized, just in case this is needed)
   //
-
-  if ( channel_mode ) expression += " ; " + siglab ;
+  
+  if ( channel_mode ) expression += " ; " + Helper::sanitize( siglab ) ;
   
   //
   // options:
   //
-
+  
   const bool verbose = param.has( "verbose" );
 
 
@@ -121,19 +130,36 @@ void proc_trans( edf_t & edf , param_t & param )
   //
   // inputs: get & bind any symbols (i.e. channel vevtors) required by the expression
   //
+
+  // i.e. incase C3-M2, etc, Helper::sanitize all labels .. i.e. C3_M2
   
+  std::map<std::string,std::string> clean2dirty, dirty2clean;
+  for (int s=0; s<edf.header.ns; s++)
+    {
+      if ( edf.header.is_annotation_channel( s ) ) continue;
+      dirty2clean[ edf.header.label[s] ] = Helper::sanitize( edf.header.label[s] );
+      clean2dirty[ Helper::sanitize( edf.header.label[s] ) ] = edf.header.label[s] ;
+    }
+    
   std::map<std::string,std::vector<double> > inputs;
   
   std::set<std::string> symbols = tok.symbols();
 
+  std::vector<uint64_t> tp;
+    
   std::set<std::string>::const_iterator ss = symbols.begin();
   while ( ss != symbols.end() )
     {
       
-      if ( edf.header.has_signal( *ss ) )
+      // assume expression should use the clean form
+
+      if ( clean2dirty.find( *ss ) != clean2dirty.end() )
 	{
+
+	  // in case the original label is different
+	  const std::string ch_label = clean2dirty[ *ss ] ; 
 	  
-	  int slot = edf.header.signal( *ss );
+	  int slot = edf.header.signal( ch_label );
 
 	  // this should not happen... but just in case... skip here,
 	  // the expr will return the error
@@ -147,16 +173,21 @@ void proc_trans( edf_t & edf , param_t & param )
 	  else
 	    sr = sr1;
 	  
-	  logger << "  attaching " << *ss << "...\n";
-	  
           slice_t slice( edf , slot , edf.timeline.wholetrace() );
-
-          const std::vector<double> * d = slice.pdata();
-
-	  logger << "  bind " << *ss << " " << d->size() << " sample-points\n";
 	  
+          const std::vector<double> * d = slice.pdata();
+	  
+	  if ( ( ! channel_mode ) && tp.size() == 0 )
+	    tp = *slice.ptimepoints();
+	  
+	  if ( ch_label != *ss ) 
+	    logger << "  attaching " << ch_label << " (mapped to " << *ss << ") for " << d->size() << " sample-points...\n";
+	  else
+	    logger << "  attaching " << ch_label << " for " << d->size() << " sample-points...\n";
+	  
+	  // here, original (clean) encoding expected by Eval()
 	  inputs[ *ss ] = *d;
-
+	  
 	}
       ++ss;
     }
@@ -206,6 +237,52 @@ void proc_trans( edf_t & edf , param_t & param )
 	{
 	  logger << "  creating new channel " << siglab << "...\n";
           edf.add_signal( siglab , sr , rdat );
+	}
+      
+    }
+
+
+  //
+  // else, add as an annotation
+  //
+
+  if ( ! channel_mode )
+    {
+      std::vector<bool> b;      
+      
+      if ( ! tok.value().is_bool_vector(&b) )  
+	Helper::halt( "expression does not evaluate to a boolean vector" );
+      
+      if ( b.size() != tp.size() )
+	Helper::halt( "problem aligning time-points and length of return value" );
+
+      uint64_t start = 0;
+
+      bool inseg = false;
+
+      const int np = b.size();
+
+      annot_t * a = edf.timeline.annotations.add( annot );
+      
+      for (int i=0; i<np; i++)
+	{
+	  if ( b[i] && ! inseg )
+	    {
+	      inseg = true;
+	      start = tp[i];
+	    }
+	  else if ( inseg && ! b[i] )
+	    {
+	      // i.e. +1 encoding for ends already
+	      a->add( annot , interval_t( start , tp[i] ) , "." );
+	      inseg = false;
+	    }
+	}
+
+      if ( inseg ) 
+	{
+	  // i.e. one-past end of last point
+	  a->add( annot , interval_t( start , tp[ tp.size() - 1 ] + 1LLU  ) , "." );
 	}
       
     }

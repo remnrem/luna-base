@@ -20,7 +20,8 @@
 //
 //    --------------------------------------------------------------------
 
-#include "dsp/correct.h"
+#include "artifacts/correct.h"
+
 #include "helper/helper.h"
 
 #include "dsp/emd.h"
@@ -58,7 +59,7 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 
   const int emd_mode = param.has( "emd" ) ? param.requires_int( "emd" ) : 0; 
   const double emd_th = param.has( "th" ) ? param.requires_dbl( "th" ) : 0.9;
-  const int emd_corr = param.has( "emd-corr" ) ; 
+  const bool emd_corr = param.has( "emd-corr" ) ; 
   
   const int max_sift = 20;
   const int max_imf = 10;
@@ -285,7 +286,7 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 		  
 		}
 
-	      std::cout << " going to remove " << remove.size() << " components\n";
+	      logger << " going to remove " << remove.size() << " components\n";
 	      
 	      //
 	      // remove y components
@@ -294,7 +295,7 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 	      std::set<int>::const_iterator rr = remove.begin();
 	      while ( rr != remove.end() )
 		{
-		  std::cout << "  rr = " << *rr << "\n";
+		  logger << "  rr = " << *rr << "\n";
 		  for (int i=0; i<segment_points ; i++)
 		    y[i] -= *rr == 0 ? emd.residual[i] : emd.imf[*rr-1][i];
 		  ++rr;
@@ -308,7 +309,6 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 	      
 	    }
 	  
-	  //std::cout << " end of SEG\n";
 	  
 	} // next segment
 	  
@@ -317,7 +317,8 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
       //
       // Create the final signal : as we have 50% overlap, always add weights 0..1
       //
-      std::cout << " making the final sig\n";
+
+      logger << " making the final signal\n";
       
       std::vector<int> cnt( total_points , 0 );
       std::vector<double> val( total_points , 0 );
@@ -353,7 +354,7 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 	  else if ( cnt[i] > 1 ) val[i] /= (double)cnt[i];
 	}
 
-      std::cout << " updating signal\n";
+      logger << " updating signal\n";
       
       //
       // Update signal in EDF

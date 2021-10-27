@@ -22,30 +22,39 @@
 
 
 #include "helper/helper.h"
-#include "helper/logger.h"
 #include "db/db.h"
 
 #include "defs/defs.h"
 #include "edf/edf.h"
+#include "edf/slice.h"
+
 #include <iostream>
 
 extern writer_t writer;
-extern logger_t logger;
 
 bool identical_headers( const edf_header_t & h1 , const edf_header_t & h2 ) ;
 
 void Helper::merge_EDFs( const std::vector<std::string> & tok )
 {
 
+  // ignore times:: assume that first file is the start, then just append all subsequent in order
+
+  const bool use_fixed_order = false;
+  
   std::vector<edf_t> edfs;
 
   std::string id = "id";
   std::string filename = "merged.edf";
   std::string slist = "";
+
+  // expecting a list of file names 
+  // but can also include key=value pairs, with keys:
+  //   id
+  //   edf
+  //   sample-list
   
   for (int i=0; i<tok.size(); i++)
     {
-      std::cout << " tok = " << i << "  " << tok[i] << "\n";
       
       std::vector<std::string> tok2 = Helper::quoted_parse( tok[i] , "=" );
       if ( tok2.size() == 2 )
@@ -57,10 +66,10 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	}
       
       const std::string & fname = Helper::expand( tok[i] );
-
+      
       if ( ! Helper::fileExists( fname ) )
 	{
-	  logger << " ** could not attach " << fname << "\n";
+	  std::cout << " ** could not attach " << fname << "\n";
 	  continue;
 	}
       
@@ -72,7 +81,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 
       if ( ! okay )
 	{
-	  logger << " ** could not attach " << filename	<< "\n";
+	  std::cout << " ** could not attach " << filename	<< "\n";
           continue;	  
 	}
       
@@ -81,39 +90,82 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
     }
 
   const int nf = edfs.size();
-  
-  std::cout << "attached " << nf << " EDFs\n";
+
+
+  //
+  // list all
+  //
+
+  for (int i=0; i<nf; i++)
+    std::cerr << "  EDF " << i+1 << "\t"
+	      << edfs[i].id << "\t"
+	      << edfs[i].header.startdate << "\t"
+	      << edfs[i].header.starttime << "\n";
+
   
   //
-  // Check that all headers are compatible: initially, headers must be identical
+  // Some outputs
+  //
+
+  std::cout << "\n  attached " << nf << " EDFs\n";
+
+  std::cout << "   writing with ID: " << id << "\n"
+	 << "   EDF filename   : " << filename << "\n";
+
+  if ( slist != "" )
+    std::cout << "   sample-list    : " << slist << "\n"; 
+  
+  
+  //
+  // Check that all headers are compatible
+  //   -- initially, headers must be identical
+  //   -- this can be relaxed in the future.
   //
 
   for (int i=1; i<nf; i++)
     if ( ! identical_headers( edfs[0].header , edfs[i].header ) )
       Helper::halt( "headers incompatible:" + edfs[0].filename + " " + edfs[i].filename );
   
-  std::cout  << "  good, all EDFs have merge-compatible headers\n";
+  std::cout << "  good, all EDFs have merge-compatible headers\n";
 
-  // get total implied NR for new EDF
 
+  //
+  // Get total implied NR for new EDF
+  //
+  
   int nr = 0;
 
   for (int i=0; i<nf; i++)
     nr += edfs[i].header.nr;
 
-  std::cout << "  expecting " << nr << " records (each of " << edfs[0].header.record_duration << " sec) in the new EDF\n";
-  
-  // check that all segments are contiguous : **currently** no overlaps and no gaps
+  std::cout << "  expecting " << nr
+	 << " records (each of "
+	 << edfs[0].header.record_duration << " sec) in the new EDF\n";
 
+  //
+  // check that all segments are contiguous
+  //   -- NOT IMPLEMENTED YET
+  //   -- initially, we will not allow overlaps or gaps
+  //   -- downstream, can allow gaps and overlaps (i.e. if different channels for same time)
+  //
+
+  // <---- TODO ----->
+
+  
+  //
   // get earliest start time;
+  //
+  
   std::string first_date = edfs[0].header.startdate;
   for (int i=1; i<nf; i++)
-    if ( edfs[i].header.startdate < first_date ) first_date = edfs[i].header.startdate;
-
+    if ( edfs[i].header.startdate < first_date )
+      first_date = edfs[i].header.startdate;
+  
   
   clocktime_t t1( edfs[0].header.starttime );
   if ( !t1.valid )
     Helper::halt( edfs[0].filename + " does not have a valid start time" );
+
   
   for (int i=1; i<nf; i++)
     {
@@ -123,92 +175,109 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  clocktime_t t2( edfs[i].header.starttime );
 	  if ( !t2.valid )
 	    Helper::halt( edfs[i].filename + " does not have a valid start time" );
-
+	  
 	  if ( clocktime_t::earlier( t1 , t2 ) == 2 )
 	    t1 = t2;
 	}
     }
 
   std::cout << "  first record starts at " << first_date << "  " << t1.as_string() << "\n";
-
-
-  return;
   
   //
   // Create the new merged EDF
   //
-
+  
   edf_t medf;
   
   //
   // Set header
   //
 
-  // medf.header.version = edf.header.version;
-  // medf.header.patient_id = edf.header.patient_id;
-  // medf.header.recording_info = edf.header.recording_info;
-  // medf.header.startdate = edf.header.startdate;
-  // medf.header.starttime = edf.header.starttime;
-  // medf.header.nbytes_header = 256 + ns_summ * 256;
-  // medf.header.ns = 0; // these will be added by add_signal()
-  // medf.header.ns_all = ns; // check this... should only matter for EDF access, so okay... 
-  // medf.header.nr = edf.header.nr_all = nr_summ;  // likewise, value of nr_all should not matter, but set anyway
-  // medf.header.record_duration = recdur_summ; // i.e. epoch length
-  // medf.header.record_duration_tp = edf.header.record_duration * globals::tp_1sec;
+  medf.header.version = edfs[0].header.version;
+  medf.header.patient_id = edfs[0].header.patient_id;
+  medf.header.recording_info = edfs[0].header.recording_info;
+  medf.header.startdate = first_date;
+  medf.header.starttime = t1.as_string();
+  medf.header.nbytes_header = edfs[0].header.nbytes_header;
+  medf.header.ns = 0; // this is popuilated by edf_t::add_signal()
+  medf.header.ns_all = 0; // this is popuilated by edf_t::add_signal()
+  medf.header.nr = medf.header.nr_all = nr; // this is sum across all EDFs computed above
+  medf.header.record_duration = edfs[0].header.record_duration;
+  medf.header.record_duration_tp = edfs[0].header.record_duration_tp;
 
+  
   //
   // create a (continuous) timeline  
   //
 
-  logger << " adding timeline\n";
+  std::cout << " adding timeline\n";
 
   medf.set_edf();
   medf.set_continuous();
   medf.timeline.init_timeline();
 
+
   //
-  // resize data[][], by adding empty records (one per SEDF record == EDF epoch )
+  // resize data[][], by adding empty records 
   //
-  
-  logger << " adding records\n";
+
+  std::cout << " adding " << nr << " empty records...\n";
 
   for (int r=0;r<nr;r++)
     {
       edf_record_t record( &medf ); 
       medf.records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
     }
-
-  logger << " adding signals\n";
+  
 
   //
-  // add signals (this populates channel-specific 
+  // add signals 
   //
 
-  // std::map<std::string,std::vector<double> >::const_iterator ss = stats.begin();
-  // while ( ss != stats.end() )
-  //   {
+  const int ns = edfs[0].header.ns ;
+  
+  for (int s=0; s<ns; s++)
+    {
 
-  //     // -1 implies 1 sample per record, i.e. if positive would be the SR
-  //     // for that signal, but this allows slower channels, by directly specifying
-  //     // the samples per record, (rather than samples per second)
+      // skip annotations
+      if ( edfs[0].header.is_annotation_channel( s ) ) continue;
       
-  //     sedf.add_signal( ss->first , -1  , ss->second );
+      std::cout << "  compiling " << edfs[0].header.label[s] << "\n";
 
-  //     ++ss;
-  //   }
+      std::vector<double> dt;
 
-  // // arbitrary, but need epochs if not set it seems
-  // if ( !edf.timeline.epoched() ) 
-  //   edf.timeline.set_epoch( 30 , 30 );
+      for (int j=0; j<nf; j++)
+	{
 
-  // // if a mask has been set, this will restructure the mask
-  // edf.restructure(); 
+	  edf_t & edf = edfs[j];
+	  
+	  // get whole signal
+	  slice_t slice( edf , s , edf.timeline.wholetrace() );
 
+	  std::vector<double> * d = slice.nonconst_pdata();
+
+	  for (int k=0; k<d->size(); k++) dt.push_back( (*d)[k] ) ;
+	  
+	} // next EDF
+
+      const int np_obs = dt.size();
+      const int np_exp = nr * edfs[0].header.sampling_freq(s);
+      
+      if ( np_obs != np_exp )
+	Helper::halt( "expected and observed number of sample points did not align" );
+      
+      // add the signal to the merged EDF
+      medf.add_signal( edfs[0].header.label[ s ] , edfs[0].header.sampling_freq( s ) , dt );
+            
+    } // next channel
+  
 
   //
   // Save this merged EDF
   //
 
+  std::cout << "  writing merged EDF as " << filename << "\n";
+  
   bool saved = medf.write( filename );
 
   if ( ! saved ) Helper::halt( "problem trying to write " + filename );
@@ -219,16 +288,12 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 
   if ( slist != "" )
     {	  
-      logger << " appending " << filename << " to sample-list " << slist << "\n";
+      std::cout << " appending " << filename << " to sample-list " << slist << "\n";
       std::ofstream FL( slist.c_str() , std::ios_base::app );
       FL << medf.id << "\t" << filename << "\n";
       FL.close();
     }
-  
-
-
-
-  
+    
 }
 
 

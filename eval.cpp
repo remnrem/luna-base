@@ -3846,6 +3846,9 @@ void cmd_t::define_channel_type_variables( edf_t & edf )
   std::string ic = globals::list_channels( IC , edf.header.label );
   cmd_t::ivars[ edf.id ][ "ic" ] = ic;
 
+  std::string imf = globals::list_channels( IMF , edf.header.label );
+  cmd_t::ivars[ edf.id ][ "imf" ] = imf;
+
   std::string eog = globals::list_channels( EOG , edf.header.label );
   cmd_t::ivars[ edf.id ][ "eog" ] = eog;
 
