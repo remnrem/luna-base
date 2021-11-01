@@ -415,6 +415,10 @@ void edf_t::terse_summary( param_t & param )
       std::string pdim = Helper::trim( header.phys_dimension[s]  );
       writer.value( "PDIM" , pdim != "" ? pdim : "." );
 
+      // transducer type
+      std::string transtype = Helper::trim( header.transducer_type[s] );
+      writer.value( "TRANS" , transtype != "" ? transtype : "." );
+
       // physical min/max
       writer.value( "PMIN" , header.physical_min[s] );
       writer.value( "PMAX" , header.physical_max[s] );
