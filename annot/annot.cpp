@@ -3383,7 +3383,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		  std::stringstream ss;
 		  ss << *dd->second;
 
-		  O1 << dd->first << "=" << Helper::quote_if( ss.str() , '|' , '=' );
+		  O1 << dd->first << "=" << Helper::quote_spaced( Helper::quote_if( ss.str() , '|' , '=' ) );
 		  ++dd;
 		}
 	    }

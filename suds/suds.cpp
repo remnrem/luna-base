@@ -3597,8 +3597,8 @@ void suds_t::copy_db( const std::string & folder1 ,
 
 void suds_indiv_t::fit_lda()
 {
-  std::cout << " TR = " << id << " " << X.rows() << " " << X.cols() << "\n";
-  std::cout << X << "\n\n";
+  // std::cout << " TR = " << id << " " << X.rows() << " " << X.cols() << "\n";
+  // std::cout << X << "\n\n";
   
   lda_t lda( y , X );
 
