@@ -154,6 +154,7 @@ void cmddefs_t::init()
   add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
   add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
   add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" );
 
   add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
   add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );

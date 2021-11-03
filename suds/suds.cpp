@@ -3606,6 +3606,11 @@ void suds_t::copy_db( const std::string & folder1 ,
 
 void suds_indiv_t::fit_lda()
 {
+<<<<<<< HEAD
+=======
+  // std::cout << " TR = " << id << " " << X.rows() << " " << X.cols() << "\n";
+  // std::cout << X << "\n\n";
+>>>>>>> eff760ef1863d2da3aaf26eea404714027bb72a0
   
   lda_t lda( y , X );
   
