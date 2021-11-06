@@ -122,6 +122,28 @@ std::string Helper::search_replace( const std::string & s , char a , char b )
   return j;
 }
 
+std::string Helper::search_replace( std::string s , const std::string & a , const std::string & b , const bool only_root )
+{
+  // if only_root == T then only replace if 'a' matches from the start of 's' (i.e. pos == 0 )
+ 
+  
+  size_t pos = s.find(a);
+
+  if ( only_root )
+    {
+      if ( pos == 0 ) s.replace(pos, a.size(), b );
+      return s;
+    }
+  
+  while( pos != std::string::npos)
+    {
+      s.replace(pos, a.size(), b );
+      pos = s.find( a, pos + b.size() );
+    }
+
+  return s;
+}
+
 std::string Helper::expand( const std::string & f )
 {
 #ifdef WINDOWS
@@ -1533,3 +1555,39 @@ bool Helper::contains( const std::string & a , const std::string & b )
   return au.find( bu ) != std::string::npos;
 }
 
+
+
+
+
+void Helper::repath_SL( const std::vector<std::string> & tok )
+{
+  // A -- B and use std::cin for SL
+  if ( tok.size() != 2 )
+    Helper::halt( "expecting exactly two arguments: old-path new-path < s.lst > new.lst" );
+  
+  const std::string s1 = tok[0];
+  const std::string s2 = tok[1];
+  
+  while ( 1 )
+    {
+      std::string line;
+      Helper::safe_getline( std::cin , line );
+      if ( std::cin.bad() || std::cin.eof() ) break;
+      if ( line == "" ) continue;
+
+      // expect 2+ cols
+      std::vector<std::string> tok2 = Helper::parse( line , "\t" );
+      if ( tok2.size() < 2 )
+	Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
+
+      // replace cols 2+ ( true in search_replace() implies we only match roots of strings)
+      for (int i=1; i<tok2.size(); i++)
+	tok2[i] = Helper::search_replace( tok2[i] , s1 , s2 , true );
+      
+      for (int i=0; i<tok2.size(); i++)
+	std::cout << ( i != 0 ? "\t" : "" ) << tok2[i] ;
+      std::cout << "\n";
+    }
+
+  return;
+}

@@ -210,6 +210,7 @@ void fiplot_t::set_f( double lwr , double upr , double inc , bool logspace , int
 
 void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t> * tp , const int fs )
 {
+
   
   // time points (secs)
   nt = ( t_upr - t_lwr ) / t_inc + 1; 
@@ -229,9 +230,9 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
       // get CWT 
 
       std::vector<double> c = cwt( x , fs , f , num_cycles );
-
-      for (int i=0;i<c.size();i++)
-	std::cout << c[i] << "\t" << x[i] << "\n";
+      
+      // for (int i=0;i<c.size();i++)
+      //  	std::cout << c[i] << "\t" << x[i] << "\n";
       
       // get intervals
       fibin_t r = intervalize( c , tp , fs , t_lwr , t_upr , t_inc , cycles , f ); 
@@ -264,10 +265,10 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   fibin_t r;
   
   //
-  // number of time/cycle points
+  // number of time/cycle points (intervals/bins)
   //
   
-  int nt = 1 + ( t_upr - t_lwr ) / t_inc ;
+  int nt = ( t_upr - t_lwr ) / t_inc ;
   
   //
   // time-bin increment; dt2 defined to find discontinuities
@@ -444,7 +445,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       //std::cerr << "dets = " << x[i] << "\n";
     }
 
-  std::cerr << " of " << n << " points, " << n_disc << " disc, " << n_above_th << " (" << (n_above_th/double(n))*100.0 << ") above threshold\n";
+  logger << " of " << n << " points, " << n_disc << " discordancies, "
+	 << n_above_th << " (" << (n_above_th/double(n))*100.0 << "%) above threshold\n";
   
   // fipoint_t (i,h,t)  
   
@@ -505,11 +507,11 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   if ( 0 )
     {
       
-      std::cout << "decomposed signal into " << pts.size() << " elements\n";
+      logger << "decomposed signal into " << pts.size() << " elements\n";
       std::set<fipoint_t>::const_iterator ff = pts.begin();
       while ( ff != pts.end() ) 
 	{
-	  std::cout << ff->t << "\t"
+	  std::cout << "EL\t" << ff->t << "\t"
 		    << ff->i << " - " << ff->j << "\t"
 		    << ff->h << "\n";
 	  ++ff;
@@ -546,20 +548,43 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       //
 
       if ( plot_by_cycles ) t *= fc;
-      
-      
+
       //
-      // Inside range?
+      // As testing in descending order, if this interval is lower, then we're all done
       //
-      
-      if ( t >= t_lwr && t < t_upr )
+
+      if ( t < t_lwr ) break;
+
+      //
+      // If interval is longer, we still need to adjust 'used'  ( both note add to a bin
+      //
+
+      if ( t >= t_upr )
 	{
+	  // for each spanned sample-point
+	  for (int i = ff->i ; i <= ff->j ; i++ ) 
+	    {
+	      // this is as below, i.e.
+	      //   part = ff->h - used[i]
+	      //   used += part
+	      // which just implies  used = ff->h if we don't need to track
+	      used[i] = ff->h; 
+	    }
+	}
+	   
+      //
+      // ... otherwise, impllies inside the range, so add to a bin
+      //
+      
+      else
+	{
+
 	  
 	  int bin = ( t - t_lwr ) / t_inc; 
 	  
 	  // TMP
- 	  //double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  	  
- 	  //std::cerr  << "bin = " << nt << "\t" << bin << " " << tbin << "\n";
+ 	  // double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  	  
+ 	  // std::cerr  << "bin = " << nt << "\t" << bin << " " << tbin << "\n";
 	  // TMP
 	  
 	  //
@@ -571,7 +596,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  
 	  // for each spanned sample-point
 
-	  for (int i= ff->i ; i <= ff->j ; i++ ) 
+	  for (int i = ff->i ; i <= ff->j ; i++ ) 
 
 	    {
 	      // the additional height beyond what is already accounted for 
@@ -593,6 +618,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  r.r[ bin ].n += amt;
 	  
 	}
+      
 
       // bin       
       ++ff;

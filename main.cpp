@@ -216,6 +216,19 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+  //
+  // change paths
+  //
+
+  if ( argc >=2 && strcmp( argv[1] , "--repath" ) == 0 )
+    {
+      global.api();
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::repath_SL( tok );
+      std::exit(0);
+    }
+
 
   //
   // merge EDfs  
