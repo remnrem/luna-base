@@ -94,6 +94,8 @@ namespace Helper
   bool yesno( const std::string & );
   
   std::string search_replace( const std::string & , char a , char b );
+
+  std::string search_replace( std::string s , const std::string & a , const std::string & b , const bool only_root = false );
   
   void swap_in_variables( std::string * , std::map<std::string,std::string> * );
 
@@ -112,6 +114,8 @@ namespace Helper
   void build_sample_list( const std::vector<std::string> & );
 
   void merge_EDFs( const std::vector<std::string> & );
+
+  void repath_SL( const std::vector<std::string> & );
   
   void compile_txttabs( const std::string & );
 
