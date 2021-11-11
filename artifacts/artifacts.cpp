@@ -774,7 +774,7 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
       logger << "  flagging epochs with a max |X| less than " << minmax_threshold << "\n";
     }
 
-
+  
   //
   // Attach signals
   //
@@ -873,8 +873,17 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 
 	  double f = calc_flat ? MiscMath::flat( *d , flat_eps ) : 0 ;
 	  
-	  double m = calc_maxxed || calc_minmax ? MiscMath::max( *d , max_value ) : 0 ; 
+	  double m = calc_maxxed ? MiscMath::max( *d , max_value ) : 0 ; 
 
+	  // actual max(|X|)
+	  double mxval = 0;
+	  if ( calc_minmax )
+	    {
+	      double mx = 0 , mn = 0;
+	      MiscMath::minmax( *d , &mn , &mx );
+	      mxval = fabs(mx) > fabs(mn) ? fabs(mx) : fabs(mn) ;
+	    }
+	  
 	  //
 	  // Mask?
 	  //
@@ -901,12 +910,12 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 	      ++cnt_max;
 	    }	  
 	  
-	  if ( calc_minmax && m < minmax_threshold )
+	  if ( calc_minmax && mxval < minmax_threshold )
 	    {
 	      set_mask = true;
               ++cnt_minmax;      
 	    }
-	       
+	  
 	  if ( set_mask ) 
 	    {	      
 	      edf.timeline.set_chep_mask( epoch , signals.label(s) );	      
@@ -923,7 +932,13 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
       //
       // Report signal level stats
       //
-      
+
+
+      logger << "  for " << signals.label(s) << ", clipped: " << cnt_clp 
+	     << " flat: " << cnt_flt
+	     << " max: " << cnt_max
+	     << " min-max: " << cnt_minmax << "\n";
+
       // writer.level( signals.label(s) , globals::signal_strat );
       
       // // channel-level output about # of epochs being masked
@@ -943,9 +958,9 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 
   //  writer.unlevel( globals::signal_strat );
   
+  
   logger << "  masked " << count_masked << " epoch/channel pairs of "
 	 << count_unmasked << " previously unmasked (" << count_all << " in total)\n";
-  
   
 }
 

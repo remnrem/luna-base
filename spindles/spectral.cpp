@@ -750,7 +750,16 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  // do we have any _CYCLE epoch-annotations ?
 	  
-	  bool has_cycles = edf.timeline.epoch_annotation( "_NREMC_1" );
+	  bool has_cycles = edf.timeline.epoch_annotation( "_NREMC_1" ) 
+	    || edf.timeline.epoch_annotation( "_NREMC_2" )
+	    || edf.timeline.epoch_annotation( "_NREMC_3" )
+	    || edf.timeline.epoch_annotation( "_NREMC_4" )
+	    || edf.timeline.epoch_annotation( "_NREMC_5" )
+	    || edf.timeline.epoch_annotation( "_NREMC_6" )
+	    || edf.timeline.epoch_annotation( "_NREMC_7" )
+	    || edf.timeline.epoch_annotation( "_NREMC_8" )
+	    || edf.timeline.epoch_annotation( "_NREMC_9" )
+	    || edf.timeline.epoch_annotation( "_NREMC_10" );
 	  
 	  std::vector<std::string> cycle;
 	  

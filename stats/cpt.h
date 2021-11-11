@@ -136,9 +136,11 @@ struct cpt_t {
   void calc_adjacencies( const std::vector<std::string> & vname ,
 			 const std::map<std::string,std::string> & col2var,
 			 const std::map<std::string,double> & col2f,
+			 const std::map<std::string,double> & col2t,
 			 const std::map<std::string,std::string> & col2ch1,
 			 const std::map<std::string,std::string> & col2ch2,
 			 double fth ,
+			 double tth , 
 			 clocs_t * clocs ,
 			 double sth , 
 			 bool dump_adj );
