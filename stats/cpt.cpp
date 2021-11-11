@@ -45,6 +45,7 @@ void cpt_wrapper( param_t & param )
   // Similar input structure as for PSC; currently, 
   //   - specify a single IV 
   //   - F, CH or CH1+CH2 are the valid stratifiers currently
+  //   - also allow T (or TBIN) her --cpt (nb. PSC currently does not support that)
   //   - an ID-linked covariate table that includes a DV
   //   - a model specification (linear / logistic) 
   //   - adjacent frequencies defined in the obvious manner
@@ -58,8 +59,8 @@ void cpt_wrapper( param_t & param )
   double spatial_threshold = param.has( "th-spatial" ) ? param.requires_dbl( "th-spatial" ) : 0 ;
   
   double freq_threshold = param.has( "th-freq" ) ? param.requires_dbl( "th-freq" ) : 0 ; 
-
-
+  
+  double time_threshold = param.has( "th-time" ) ? param.requires_dbl( "th-time" ) : 0 ;
   //
   // Clustering threshold  (-ve means no clustering done)
   //
@@ -200,6 +201,13 @@ void cpt_wrapper( param_t & param )
   double fupr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 0 ;
 
 
+  //
+  // any time limits?
+  //
+
+  double tlwr = param.has( "t-lwr" ) ? param.requires_dbl( "t-lwr" ) : 0 ;
+  double tupr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 0 ;
+
   
   //
   // Attach covariates, define main IV: note, this sets the total
@@ -308,22 +316,20 @@ void cpt_wrapper( param_t & param )
 
 
   //
-  // Read in sleep metrics : multiple metrics, multiple stratifications (F and/or CH, or CH1+CH2)
-  // Same approach as for --psc command
+  // Read in sleep metrics : multiple metrics, multiple stratifications (F and/or CH, or CH1+CH2, and also T/TBIN
+  // Similar approach as for --psc command
   //
 
-  // can stratify by channel, frequency (columns)
-  // expect input 
+  // can stratify by channel, frequency (columns), and time
   // can also have coherence (CH1/CH2) values too
   // expect file to contain multiple individuals
   
-  // in output, one row per individual; columns are CH x F (xCH1/CH2)
+  // in output, one row per individual; columns are CH x F x T  or (xCH1/CH2)
   
-  // id -> ch -> f -> var -> value
+  // id -> ch -> f -> t -> var -> value
 
 
-
-  std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > > i2c2f2v;
+  std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > > > i2c2f2t2v;
   
   for (int i=0; i<dv_files.size(); i++)
     {
@@ -364,14 +370,18 @@ void cpt_wrapper( param_t & param )
       bool ch1 = cols.find( "CH" ) != cols.end();
       bool ch2 = cols.find( "CH1" ) != cols.end() && cols.find( "CH2" ) != cols.end();
       bool frq = cols.find( "F" ) != cols.end() ;
+      bool t = cols.find( "T" ) != cols.end() ||  cols.find( "TBIN" ) != cols.end();
+      if (  cols.find( "T" ) != cols.end() &&  cols.find( "TBIN" ) != cols.end() )
+	Helper::halt( "cannot specify both T and TBIN columns" );
       
       // channel and frequency are optional
-
+	
       int id_slot = -1;      
       int ch_slot = -1;
       int ch1_slot = -1;
       int ch2_slot = -1;
       int f_slot = -1;      
+      int t_slot = -1;
       
       std::map<int,std::string> slot2var;
       for (int i=0;i<tok.size();i++)
@@ -381,12 +391,13 @@ void cpt_wrapper( param_t & param )
 	  if ( tok[i] == "CH" ) ch_slot = i;
 	  if ( tok[i] == "CH1" ) ch1_slot = i;
 	  if ( tok[i] == "CH2" ) ch2_slot = i;	  
+	  if ( tok[i] == "T" || tok[i] == "TBIN" ) t_slot = i;
 	  if ( dvars.find( tok[i] ) != dvars.end() ) slot2var[i] = tok[i];
 	}
       
       if ( slot2var.size() == 0 ) 
 	Helper::halt( "no variables dvars=<...> in " + infile );
-
+      
       const int ncols = tok.size();
       
       //
@@ -398,7 +409,8 @@ void cpt_wrapper( param_t & param )
 	  // looking for ID F CH         --> PSD 
 	  //  OR         ID F CH1 CH2    --> LCOH (default)  
 	  //  OR         ID              --> HYPNO
-
+	  //  OR         ID F CH T/TBIN  --> FIP
+	  
 	  std::string line;
 
 	  Helper::safe_getline( IN1 , line );
@@ -436,9 +448,10 @@ void cpt_wrapper( param_t & param )
 	  else
 	    ch = "-"; // or '-' if no CH vars
 
-	  // store as string and also numeric (for output) [ or '0' if no F variable ] 
+	  // store as string and also numeric (for output) [ or '0' if no F/T variable ] 
 	  std::string f = f_slot != -1 ? tok[ f_slot ] : "0" ; 
-
+          std::string tstr = t_slot != -1 ? tok[ t_slot ] : "0" ;
+	  
 	  // filter on frequency, if present
 	  if ( f_slot != -1 && ( flwr > 0 || fupr > 0 ) ) 
 	    {
@@ -449,6 +462,17 @@ void cpt_wrapper( param_t & param )
 	      if ( flwr > 0 && fn < flwr ) continue;
 	      if ( fupr > 0 && fn > fupr ) continue;
 	    }
+
+	  // filter on time, if present
+	  if ( t_slot != -1 && ( tlwr > 0 || tupr > 0 ) )
+	    {
+              double tn;
+              if ( ! Helper::str2dbl( tstr , &tn ) )
+                Helper::halt( "problem with time value: " + tstr );
+              // skip this frequency?                                                                                                                                    
+              if ( tlwr > 0 && tn < tlwr ) continue;
+              if ( tupr > 0 && tn > tupr ) continue;
+            }
 
 	  
 	  // Get values into the map 
@@ -478,7 +502,7 @@ void cpt_wrapper( param_t & param )
 	      if ( tolog.find( ii->second ) != tolog.end() ) x = 10 * log10( x ) ;
 
 	      // save
-	      i2c2f2v[ id ][ ch ][ f ][ ii->second ] = x;
+	      i2c2f2t2v[ id ][ ch ][ f ][ tstr ][ ii->second ] = x;
 	      ++ii;
 	    }
 	  
@@ -496,47 +520,65 @@ void cpt_wrapper( param_t & param )
   logger << "  converting input files to a single matrix\n";
     
   std::vector<std::string> vname;  
-  std::map<std::string,std::map<std::string,std::map<std::string,int> > > slot;
+  std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,int> > > > slot;
   std::map<std::string,std::string> col2ch, col2var;
   std::map<std::string,std::string> col2ch1, col2ch2; 
   std::map<std::string,double> col2f;
+  std::map<std::string,double> col2t;
   std::set<std::string> rows, cols;
   std::set<std::string> drop_indivs;
   std::vector<std::string> id;
-  std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > >::const_iterator ii1 = i2c2f2v.begin();
-  while ( ii1 != i2c2f2v.end() )
+  std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > > >::const_iterator ii1 = i2c2f2t2v.begin();
+
+  while ( ii1 != i2c2f2t2v.end() )
     {
       // unique individual IDs
       rows.insert( ii1->first );
       id.push_back( ii1->first );
 
       // make col names
-      std::map<std::string,std::map<std::string,std::map<std::string,double> > >::const_iterator ii2 = ii1->second.begin();
+      std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > >::const_iterator ii2 = ii1->second.begin();
       while ( ii2 != ii1->second.end() )
 	{
-	  std::map<std::string,std::map<std::string,double> >::const_iterator ii3 = ii2->second.begin();
+	  std::map<std::string,std::map<std::string,std::map<std::string,double> > >::const_iterator ii3 = ii2->second.begin();
 	  while ( ii3 != ii2->second.end() )
 	    {
-	      std::map<std::string,double>::const_iterator ii4 = ii3->second.begin();
+	      std::map<std::string,std::map<std::string,double> >::const_iterator ii4 = ii3->second.begin();
 	      while ( ii4 != ii3->second.end() )
 		{
-		  std::string col_name = ii2->first + "~" + ii3->first + "~" + ii4->first ;
-
-		  col2ch[ col_name ] = ii2->first;
-		  std::vector<std::string> ctok = Helper::parse( ii2->first , "." );
-		  col2ch1[ col_name ] = ctok[0] ;
-		  col2ch2[ col_name ] = ctok.size() == 2 ? ctok[1] : "." ; 
-		  
-		  double ff;
-		  if ( ! Helper::str2dbl( ii3->first , &ff ) ) Helper::halt( "problem with F non-numeric value" );
-		  col2f[ col_name ] = ff;
-		  col2var[ col_name ] = ii4->first;
-
-		  if ( cols.find( col_name ) == cols.end() )
+		  std::map<std::string,double>::const_iterator ii5 = ii4->second.begin();
+		  while ( ii5 != ii4->second.end() )
 		    {
-		      cols.insert( col_name );
-		      vname.push_back( col_name );
-		      slot[ ii2->first ][ ii3->first ][ ii4->first ] = cols.size() - 1 ;
+		      
+		      // ch ~ frq ~ time ~ var 
+		      std::string col_name = ii2->first + "~" + ii3->first + "~" + ii4->first + "~" + ii4->first ;
+
+		      // cols
+		      col2ch[ col_name ] = ii2->first;
+		      std::vector<std::string> ctok = Helper::parse( ii2->first , "." );
+		      col2ch1[ col_name ] = ctok[0] ;
+		      col2ch2[ col_name ] = ctok.size() == 2 ? ctok[1] : "." ; 
+
+		      // freqs
+		      double ff;
+		      if ( ! Helper::str2dbl( ii3->first , &ff ) ) Helper::halt( "problem with F non-numeric value" );
+		      col2f[ col_name ] = ff;
+
+		      // time
+		      double tt;
+		      if ( ! Helper::str2dbl( ii4->first , &tt ) ) Helper::halt( "problem with T non-numeric value" );
+		      col2t[ col_name ] = tt;
+
+		      // vars
+		      col2var[ col_name ] = ii5->first;
+		      
+		      if ( cols.find( col_name ) == cols.end() )
+			{
+			  cols.insert( col_name );
+			  vname.push_back( col_name );
+			  slot[ ii2->first ][ ii3->first ][ ii4->first ][ ii5->first ] = cols.size() - 1 ;
+			}
+		      ++ii5;
 		    }
 		  ++ii4;
 		}
@@ -546,78 +588,95 @@ void cpt_wrapper( param_t & param )
 	}
       ++ii1;
     }
-
+  
   logger << "  found " << rows.size() << " rows (individuals) and " << cols.size() << " columns (features)\n";
-
+  
   if ( rows.size() == 0 || cols.size() == 0 ) 
     return;
-
+  
 
   //
-  // Find individuals to drop (prior to populating the matrix
+  // Find individuals to drop (prior to populating the matrix)
   //
   
-  std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss1 = slot.begin();
+  std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,int> > > >::const_iterator ss1 = slot.begin();
   while ( ss1 != slot.end() )
     {
-      std::map<std::string,std::map<std::string,int> >::const_iterator ss2 = ss1->second.begin();
+      std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss2 = ss1->second.begin();
       while ( ss2 != ss1->second.end() )
 	{
-	  std::map<std::string,int>::const_iterator ss3 = ss2->second.begin();
+	  std::map<std::string,std::map<std::string,int> >::const_iterator ss3 = ss2->second.begin();
 	  while ( ss3 != ss2->second.end() )
 	    {
-
-	      // get all individuals for this column?	      
-	      std::set<std::string>::const_iterator ii = rows.begin();
-	      while ( ii != rows.end() )
+	      std::map<std::string,int>::const_iterator ss4 = ss3->second.begin();
+	      while ( ss4 != ss3->second.end() )
 		{
+
+		  // get all individuals for this column?	      
+		  std::set<std::string>::const_iterator ii = rows.begin();
+		  while ( ii != rows.end() )
+		    {
 		 
-		  // find channel?
-		  const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & dat = i2c2f2v.find( *ii )->second;
-		  if ( dat.find( ss1->first ) == dat.end() ) 
-		    {
-		      if ( drop_incomplete_rows )
+		      // qfind channel?
+		      const std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > > & dat = i2c2f2t2v.find( *ii )->second;
+		      if ( dat.find( ss1->first ) == dat.end() ) 
 			{
-			  drop_indivs.insert( *ii );
-			  ++ii; continue; 
+			  if ( drop_incomplete_rows )
+			    {
+			      drop_indivs.insert( *ii );
+			      ++ii; continue; 
+			    }
+			  Helper::halt( "no channel " + ss1->first + " for individual " + *ii );
 			}
-		      Helper::halt( "no channel " + ss1->first + " for individual " + *ii );
+		      
+		      // find frequency?
+		      const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & dat2 = dat.find( ss1->first )->second;
+		      if ( dat2.find( ss2->first ) == dat2.end() ) 
+			{
+			  if ( drop_incomplete_rows )
+			    {
+			      drop_indivs.insert( *ii );
+			      ++ii; continue; 
+			    }
+			  Helper::halt( "no frequency " + ss2->first + " for individual " + *ii );
+			}
+		      
+		      // find time?
+		      const std::map<std::string,std::map<std::string,double> > & dat3 = dat2.find( ss2->first )->second;
+		      if ( dat3.find( ss3->first ) == dat3.end() )
+			{
+			  if ( drop_incomplete_rows )
+			    {
+			      drop_indivs.insert( *ii );
+			      ++ii; continue;
+			    }
+			  Helper::halt( "no time " + ss3->first + " for individual " + *ii );
+			}
+		      
+		      // find variable?
+		      const std::map<std::string,double> & dat4 = dat3.find( ss3->first )->second;
+		      if ( dat4.find( ss4->first ) == dat4.end() ) 
+			{
+			  if ( drop_incomplete_rows )
+			    {
+			      drop_indivs.insert( *ii );
+			      ++ii; continue; 
+			    }
+			  Helper::halt( "no variable " + ss4->first + " for individual " + *ii );
+			}
+		      
+		      ++ii;
 		    }
 
-		  // find frequency?
-		  const std::map<std::string,std::map<std::string,double> > & dat2 = dat.find( ss1->first )->second;
-		  if ( dat2.find( ss2->first ) == dat2.end() ) 
-		    {
-		      if ( drop_incomplete_rows )
-			{
-			  drop_indivs.insert( *ii );
-			  ++ii; continue; 
-			}
-		      Helper::halt( "no frequency " + ss2->first + " for individual " + *ii );
-		    }
-
-		  // find variable?
-		  const std::map<std::string,double> & dat3 = dat2.find( ss2->first )->second;
-		  if ( dat3.find( ss3->first ) == dat3.end() ) 
-		    {
-		      if ( drop_incomplete_rows )
-			{
-			  drop_indivs.insert( *ii );
-			  ++ii; continue; 
-			}
-		      Helper::halt( "no variable " + ss3->first + " for individual " + *ii );
-		    }
-		  
-		  ++ii;
+		  ++ss4;
 		}
-	      
 	      ++ss3;
 	    }
 	  ++ss2;
 	}
       ++ss1;
     }
-
+  
 
   if ( drop_incomplete_rows )
     logger << "  identified " << drop_indivs.size() << " of " << rows.size() << " individuals with at least some missing data\n";
@@ -652,38 +711,45 @@ void cpt_wrapper( param_t & param )
   
   Eigen::MatrixXd Y( rows.size() , cols.size() );
   
-  //std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss1 (above)
   ss1 = slot.begin();
   while ( ss1 != slot.end() )
     {
-      std::map<std::string,std::map<std::string,int> >::const_iterator ss2 = ss1->second.begin();
+      std::map<std::string,std::map<std::string,std::map<std::string,int> > >::const_iterator ss2 = ss1->second.begin();
       while ( ss2 != ss1->second.end() )
 	{
-	  std::map<std::string,int>::const_iterator ss3 = ss2->second.begin();
+	  std::map<std::string,std::map<std::string,int> >::const_iterator ss3 = ss2->second.begin();
 	  while ( ss3 != ss2->second.end() )
 	    {
 
-	      // get all individuals for this column?
-	      int row = 0;
-	      std::set<std::string>::const_iterator ii = rows.begin();
-	      while ( ii != rows.end() )
+	      std::map<std::string,int>::const_iterator ss4 = ss3->second.begin();
+	      while ( ss4 != ss3->second.end() )
 		{
-		  
-		  // find channel
-		  const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & dat = i2c2f2v.find( *ii )->second;
-		  
-		  // find frequency
-		  const std::map<std::string,std::map<std::string,double> > & dat2 = dat.find( ss1->first )->second;
-		  
-		  // find variable
-		  const std::map<std::string,double> & dat3 = dat2.find( ss2->first )->second;
-		  
-		  // these have all been checked now: should be okay to add to the store
-		  Y( row, ss3->second ) = dat3.find( ss3->first)->second;
-		  ++row;
-		  ++ii;
-		}
 
+		  // get all individuals for this column?
+		  int row = 0;
+		  std::set<std::string>::const_iterator ii = rows.begin();
+		  while ( ii != rows.end() )
+		    {
+		      
+		      // find channel
+		      const std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string, double> > > > & dat = i2c2f2t2v.find( *ii )->second;
+		      
+		      // find frequency
+		      const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & dat2 = dat.find( ss1->first )->second;
+		 	      		  
+		      // find time
+		      const std::map<std::string,std::map<std::string,double> > & dat3 = dat2.find( ss2->first )->second;
+
+		      // find variable
+		      const std::map<std::string,double> & dat4 = dat3.find( ss3->first )->second;
+		  
+		      // these have all been checked now: should be okay to add to the store
+		      Y( row, ss4->second ) = dat4.find( ss4->first )->second;
+		      ++row;
+		      ++ii;
+		    }
+		  ++ss4;
+		}
 	      ++ss3;
 	    }
 	  ++ss2;
@@ -699,7 +765,7 @@ void cpt_wrapper( param_t & param )
   // free up main memory store
   //
 
-  i2c2f2v.clear();
+  i2c2f2t2v.clear();
   
 
   //
@@ -736,10 +802,12 @@ void cpt_wrapper( param_t & param )
 	  
 	  for (int j=0; j<nv; j++)
 	    {
-	      // urgh, for now copy vector from Eigen to muse outliers() function... 
-	      // this is not a big timesink in the flow of the PSC option, so 
-	      // should not matter... we will clean up later converting all matrix/;vector helpers
-	      // to assume Eigen objects
+
+	      // urgh, for now copy vector from Eigen to muse
+	      // outliers() function...  this is not a big timesink in
+	      // the flow of this command, so should not matter... we
+	      // will clean up later converting all matrix/;vector
+	      // helpers to assume Eigen objects
 	      
 	      // this sets 'inc' values to missing, but uses the same prior for all channels
 	      
@@ -747,8 +815,7 @@ void cpt_wrapper( param_t & param )
 	      Eigen::VectorXd::Map( &tmp[0], ni ) = Y.col(j);
 	      
 	      int removed = MiscMath::outliers( &tmp , th[t] , &inc , &prior);
-	      
-	      //	  logger << "  removing " << removed << " var " << j << " round " << t << "\n";
+	      	      
 	    }
 	  
 	}
@@ -853,8 +920,8 @@ void cpt_wrapper( param_t & param )
     {
       logger << "  defining adjacent variables...\n";
       
-      cpt.calc_adjacencies( vname , col2var , col2f , col2ch1 , col2ch2 ,
-			    freq_threshold ,
+      cpt.calc_adjacencies( vname , col2var , col2f , col2t, col2ch1 , col2ch2 ,
+			    freq_threshold , time_threshold , 
 			    clocs_file == "" ? NULL : &clocs ,
 			    spatial_threshold , 
 			    verbose ) ;
@@ -884,7 +951,7 @@ void cpt_wrapper( param_t & param )
       const std::string & var =  vname[y] ;
       writer.level( var , globals::var_strat );
       writer.value( "B"  , results.beta[ var ] );
-      writer.value( "T"  , results.t[ var ] );
+      writer.value( "STAT"  , results.t[ var ] );
       writer.value( "PU" , results.emp[ var ] );
       writer.value( "PC" , results.emp_corrected[ var ] );      
       writer.value( "CLST" , results.inclst[ var ] ); // 0 if not in a cluster
@@ -902,6 +969,9 @@ void cpt_wrapper( param_t & param )
 
       if ( col2f[ var ] > 0 )
 	writer.value( "F" ,  col2f[ var ] );
+
+      if ( col2t.find( var ) != col2t.end() )
+      	writer.value( "T" ,  col2t[ var ] );
       
     }
   writer.unlevel( globals::var_strat );
@@ -989,9 +1059,10 @@ void cpt_t::set_Z( const Eigen::MatrixXd & Z_ )
 void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ , 
 			      const std::map<std::string,std::string> & col2var,
 			      const std::map<std::string,double> & col2f,
+			      const std::map<std::string,double> & col2t,
 			      const std::map<std::string,std::string> & col2ch1,
 			      const std::map<std::string,std::string> & col2ch2,
-			      double fth ,
+			      double fth , double tth, 
 			      clocs_t * clocs ,
 			      double sth , 
 			      bool dump_adj )
@@ -1008,6 +1079,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
   //  - different root variables (e.g. PSD and COH) cannot be adjacent (i.e. clusters only defined temporally and spatially within root variable)
   //     ( we still want the multiple test correction to potentially operate over multiple variables though, thus the inclusion of multiple root vars)
   //  - variables have 0 or 1 associated frequency
+  //  - variables have 0 or 1 associated times
   //  - variables either have 0, 1 or 2 associated channels; adjacencies are only defined within these groups
   //  -  for 2 channel variables, adjacncy means both pairs are adjacent: but can be flipped,
   //  -   i.e. for pairs A1-B1   and A2-B2       adj if : A1 adj to A2 AND B1 adj to B2 ... OR  A1 adj B2 AND A2 adj B1 
@@ -1024,28 +1096,32 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 
   std::vector<std::string> var( nv );
   std::vector<double> freq( nv , -1 ); // -1 means 'not defined'
+  std::vector<double> time( nv , -999 ); // -999 means 'not defined'
   std::vector<std::string> ch1( nv , "." ); // '.' means 'not defined'
   std::vector<std::string> ch2( nv , "." ); // '.' means 'not defined'
 
-  // to speed up seaerch, store all frequencyes, and so we only look at other variables where we
-  // know the frequency may match
-  // use string for F key (numerical precision)
-  std::map<std::string,std::set<int> > f2slot;
-  std::map<std::string,double> f2num;
+  // to speed up seaerch, store all frequencieses/times, and so we only look at other variables where we
+  // know the frequency/time may match
+  // use string for F & T key (numerical precision)
+  std::map<std::string,std::set<int> > ft2slot;
+  std::map<std::string,double> f2num, t2num;
 
   std::set<std::string> chs;
 
   for (int i=0; i<nv; i++)
     {      
       freq[i] = col2f.find( vname[i] )->second <= 0 ? -1 : col2f.find( vname[i] )->second;
+      time[i] = col2t.find( vname[i] )->second <= 0 ? -999 : col2t.find( vname[i] )->second;
+
       ch1[i] = col2ch1.find( vname[i] )->second ;
       ch2[i] = col2ch2.find( vname[i] )->second ;      
       var[i] = col2var.find( vname[i] )->second ;
       
-      // for speeding up search below
-      std::string s = Helper::dbl2str( freq[i] );
-      f2slot[ s ].insert( i );
+      // for speeding up search below: "F+T"
+      std::string s = Helper::dbl2str( freq[i] ) + "+" + Helper::dbl2str( time[i] );
+      ft2slot[ s ].insert( i );
       f2num[ s ] = freq[i];
+      t2num[ s ] = time[i];
 
       // track channels
       chs.insert( ch1[i] );
@@ -1087,23 +1163,25 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
       while ( ff != f2num.end() )
 	{
 	  
-	  // freq adjacent?
+	  // freq/time adjacent?
 	  bool freq_adjacent = false;
-	  if ( freq[i] <= 0 && ff->second <= 0 ) freq_adjacent = true;  // if F not defined, then they are 'adjacent'
+	  if      ( freq[i] <= 0 && ff->second <= 0 ) freq_adjacent = true;  // if F not defined, then they are 'adjacent'
 	  else if ( freq[i] <= 0 != ff->second <= 0 ) freq_adjacent = false; // but both variables must be freq agnostic
 	  else if ( fabs( freq[i]  - ff->second ) <= fth ) freq_adjacent = true;
-	  	  	  
-	  if ( freq_adjacent )
+
+	  std::map<std::string,double>::const_iterator tt = t2num.find( ff->first );
+          bool time_adjacent = false;
+          if      ( time[i] <= -998 && tt->second <= -998 ) time_adjacent = true;  // if F not defined, then they are 'adjacent'
+          else if ( freq[i] <= -998 != tt->second <= -998 ) time_adjacent = false; // but both variables must be freq agnostic
+          else if ( fabs( time[i]  - tt->second ) <= tth ) time_adjacent = true;
+	  
+	  if ( freq_adjacent && time_adjacent )
 	    {
 
 	      // we need to check the following variables
 	      
-	      const std::set<int> & tocheck = f2slot[ ff->first ];
+	      const std::set<int> & tocheck = ft2slot[ ff->first ];
 	      
-	      // rather than all pairs
-	      //for (int j=i+1;j<nv; j++)
-	      //
-
 	      std::set<int>::const_iterator jj = tocheck.begin();
 
 	      while ( jj != tocheck.end() )
@@ -1115,14 +1193,8 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 		  // different root variable? 
 		  if ( var[i] != var[*jj] ) { ++jj; continue; } 
 
-		  // we know this will be freq adjacent 
-		  // // freq adjacent?
-		  // bool freq_adjacent = false;
-		  // if      ( freq[i] <= 0 && freq[j] <= 0 ) freq_adjacent = true;  // if F not defined, then they are 'adjacent'
-		  // else if ( freq[i] <= 0 != freq[j] <= 0 ) freq_adjacent = false; // but both variables must be freq agnostic
-		  // else if ( fabs( freq[i]  - freq[j] ) <= fth ) freq_adjacent = true;  	
-	
-		  // spatial match
+		  // we know this will be freq & time adjacent 	
+		  // spatial match?
 		  bool spatial_adjacent = false;
 		  int ci = ch1[i] == "." ? 0 : ( ch2[i] == "." ? 1 : 2 );
 		  int cj = ch1[*jj] == "." ? 0 : ( ch2[*jj] == "." ? 1 : 2 );
@@ -1131,7 +1203,22 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
  		  else if ( ci == 0 ) spatial_adjacent = true; // no spatial info
 		  else
 		    {
-		      if ( clocs != NULL )
+
+		      if ( clocs == NULL ) // no CLOCS specified.. only match same channels
+			{
+			  if      ( ci == 1 && ch1[i] == ch1[ *jj ] )
+			    spatial_adjacent = true;
+			  else if ( ci == 2 )
+			    {
+			      if ( ( ch1[i] == ch1[*jj] && ch2[i] == ch2[*jj] ) ||
+				   ( ch1[i] == ch2[*jj] && ch2[i] == ch1[*jj] ) )
+				spatial_adjacent = true;
+			    }
+			  else
+			    spatial_adjacent = false;
+			  
+			}		      
+		      else  // else, do a spatial match
 			{		
 
 			  // single channels matching
@@ -1158,13 +1245,12 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 				spatial_adjacent = true;
 			    }
 			}
-		      else
-			Helper::halt( "no clocs supplied" );
+
 		    }
 		  
 		  // so... are these two variables adjacent or no?
-		  
-		  if ( spatial_adjacent && freq_adjacent )
+				  
+		  if ( spatial_adjacent )
 		    {
 		      adjacencies[ i ].insert( *jj );
 		      adjacencies[ *jj ].insert( i );	    
@@ -1278,7 +1364,7 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold , bool two_sided_test 
   Eigen::MatrixXd Rm = Eigen::MatrixXd::Identity( Hm.rows() , Hm.cols() ) - Hm ;
   
   //
-  // Get get obserevd statistics
+  // Get get observed statistics
   //
 
   Eigen::MatrixXd YZres = Rz * Y;

@@ -2040,9 +2040,35 @@ void proc_write( edf_t & edf , param_t & param )
 
 void proc_epoch( edf_t & edf , param_t & param )
 {
+  
+  const bool opt_clear = param.has( "clear" );
+  const bool opt_req   = param.has( "require" );
+  const bool opt_len   = param.has( "len" ) || param.has( "dur" ) || param.has( "epoch" ) || param.has( "inc" );
+  const bool opt_align = param.has( "offset" ) || param.has( "align" );
+  
+  //
+  // just check we have the required number of epochs, but otherwise do not touch/re-epoch?
+  // i.e. this keeps the epoch annotations intact
+  //
+  
+  if ( opt_req && ! ( opt_clear || opt_len || opt_align ) )
+    {
+      int r = param.requires_int( "require" );
+      if ( edf.timeline.num_epochs() < r ) 
+	{	  
+	  logger << " ** warning for "  
+		 << edf.id << " when setting EPOCH: "
+		 << "required=" << r << "\t"
+		 << "but observed=" << edf.timeline.num_epochs()  << "\n";
+	  globals::problem = true;
+	}
+      return;
+    }
 
+  
+  
   // unepoch?
-  if ( param.has( "clear" ) )
+  if ( opt_clear )
     {
       logger << "  clearing all epochs: signals are now unepoched\n";
       edf.timeline.unepoch();
@@ -2052,7 +2078,7 @@ void proc_epoch( edf_t & edf , param_t & param )
   double dur = 0 , inc = 0;
   
   // default = 30 seconds, non-overlapping
-  if ( ! ( param.has( "len" ) || param.has("dur") || param.has( "epoch" ) ) )
+  if ( ! opt_len )
     {
       dur = 30; inc = 30;
     }
@@ -2218,7 +2244,7 @@ void proc_epoch( edf_t & edf , param_t & param )
   // any constraints on the min. number of epochs required? 
   //
 
-  if ( param.has("require") )
+  if ( param.has( "require" ) )
     {
       int r = param.requires_int( "require" );
       if ( ne < r ) 
