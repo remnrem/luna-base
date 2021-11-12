@@ -552,14 +552,17 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       //
       // As testing in descending order, if this interval is lower, then we're all done
       //
-
+      
       if ( t < t_lwr ) break;
-
+      
       //
       // If interval is longer, we still need to adjust 'used'  ( both note add to a bin
       //
 
-      if ( t >= t_upr )
+      // check both for floating point misses?
+      int bin = ( t - t_lwr ) / t_inc;
+
+      if ( t >= t_upr || bin >= nt )
 	{
 	  // for each spanned sample-point
 	  for (int i = ff->i ; i <= ff->j ; i++ ) 
@@ -578,9 +581,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       
       else
 	{
-
-	  
-	  int bin = ( t - t_lwr ) / t_inc; 
+	 
 	  
 	  // TMP
  	  // double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  	  

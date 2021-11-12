@@ -1240,6 +1240,37 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
 
+  //
+  // FIP 
+  //
+
+  add_cmd( "power" , "FIP" , "Frequency/interval transformation" );
+  add_url( "FIP" , "psc/#fip" );
+
+  add_param( "FIP" , "sig" , "C3,C4" , "Channels to analyse" );
+  add_param( "FIP" , "t-lwr" , "0.1" , "Lower time bound" );
+  add_param( "FIP" , "t-upr" , "4" , "Upper time bound" );
+  add_param( "FIP" , "t-inc" , "0.1" , "Time increment" );
+
+  add_param( "FIP" , "f-lwr" , "0.1" , "Lower frequency bound" );
+  add_param( "FIP" , "f-upr" , "0.1" , "Lower frequency bound" );
+  add_param( "FIP" , "f-inc" , "0.1" , "Frequecy increment (Hz), linear" );
+  add_param( "FIP" , "f-log" , "20" , "Instead of f-inc, uniform on log scale, e.g. 20 steps" );
+
+
+  add_param( "FIP" , "by-cycles" , "" , "Use cycles instead of time" );
+  add_param( "FIP" , "c-lwr" , "1" , "Lower cycle value" );
+  add_param( "FIP" , "c-upr" , "7" , "Upper cycle value" );
+  add_param( "FIP" , "c-inc" , "1" , "Cycle increment" );
+  add_param( "FIP" , "cycles" , "12" , "Set CWT cycles" );
+
+  add_param( "FIP" , "th" , "2" , "Set Z-scale (CWT) threshold" );
+  add_param( "FIP" , "log" , "" , "Log-scale Z (CWT)" );
+  add_param( "FIP" , "norm" , "" , "Set CWT cycles" );
+
+  add_table( "FIP" , "CH,TBIN,F" , "F/I plot" );
+  add_var( "FIP", "CH,TBIN,F" , "FIP" , " FIP value" );
+  
 
   //
   // PSC  (nb. --psc uses PSC command label internally)
