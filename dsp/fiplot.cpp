@@ -238,12 +238,26 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
       fibin_t r = intervalize( c , tp , fs , t_lwr , t_upr , t_inc , cycles , f ); 
       
       // report
+
+      // FIP : sum-FIP / number of seconds
+      // ZIP : sum-FIP normalized to sum to 1.0 across the row (F)
+
+      const double tsec = c.size() / (double)fs;
+      
+      double fsum = 0;
       std::map<int,fipair_t>::const_iterator rr = r.r.begin();
       while ( rr != r.r.end() )
 	{
+	  fsum += rr->second.w;
+	  ++rr;
+	}
+      
+      rr = r.r.begin();
+      while ( rr != r.r.end() )
+	{
 	  writer.level( r.t[ rr->first ] , "TBIN" );
-	  writer.value ( "FIP" , rr->second.w );
-	  //writer.value ( "FIPN" , rr->second.n );
+	  writer.value ( "FIP" , rr->second.w / tsec );
+	  writer.value ( "ZIP" , rr->second.w / fsum );
 	  ++rr;
 	}
       writer.unlevel( "TBIN" );
@@ -335,10 +349,11 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   
   if ( th > 0 ) 
     {
-      yt = th * MiscMath::mean( x );
-      logger << " setting " << th << "x threshold to " << yt << "\n";      
+      double m0 = MiscMath::mean( x );
+      yt = th * m0;
+      logger << " setting " << th << "x threshold to " << yt
+	     << " ( = " << th << " * mean of " << m0 << ")\n";
     }
-
   
   //
   // rule of thumb: only consider intervals that are at least twice
@@ -361,7 +376,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   std::vector<bool> disc( n , false ); 
   
   //
-  // track how of the total time interval gets excluded (i.e. if intervals longer than epochs)
+  // track how of the total time interval gets excluded (i.e. if
+  // intervals longer than epochs)
   //
   
   double included_seconds = 0;
@@ -412,7 +428,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	}
     }
   
-  logger << "  including " << ( included_seconds / all_seconds ) * 100 << "% of " << all_seconds << " seconds\n";
+  logger << "  including " << ( included_seconds / all_seconds ) * 100
+	 << "% of " << all_seconds << " seconds\n";
   
 
   //
