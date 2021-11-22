@@ -1014,6 +1014,61 @@ bool edf_t::read_records( int r1 , int r2 )
 }
 
 
+bool edf_t::init_empty( const std::string & i ,
+			const int nr ,
+			const int rs ,
+			const std::string & startdate ,
+			const std::string & starttime )
+{
+
+  if ( nr == 0 || rs == 0 ) return false;
+
+  id = i;
+  
+  //
+  // Set header
+  //
+
+  header.version = "0";
+  header.patient_id = id;
+  header.recording_info = "";
+  header.startdate = startdate;
+  header.starttime = starttime;
+  header.nbytes_header = 256 + 0 * 256;  // i.e. no signals
+  header.ns = 0; // these will be added by add_signal()
+  header.ns_all = 0; // check this... should only matter for EDF access, so okay... 
+  header.nr = header.nr_all = nr;  // likewise, value of nr_all should not matter, but set anyway
+  header.record_duration = rs;
+  header.record_duration_tp = header.record_duration * globals::tp_1sec;
+  
+  //
+  // create a timeline
+  //
+
+  set_edf();
+
+  set_continuous();
+
+  timeline.init_timeline();
+
+
+  //
+  // resize data[][], by adding empty records
+  //
+
+  for (int r=0;r<nr;r++)
+    {
+      edf_record_t record( this ); 
+      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
+    }
+
+  logger << "  created an empty EDF of duration " << rs * nr << " seconds\n";
+  
+  return true;
+
+}
+
+
 bool edf_t::read_from_ascii( const std::string & f , // filename
 			     const std::string & i , // id
 			     const int Fs , // fixed Fs for all signals
@@ -2204,7 +2259,10 @@ void edf_t::add_signal( const std::string & label ,
 
   // sanity check -- ie. require that the data is an appropriate length
   if ( ndata != header.nr * n_samples ) 
-    Helper::halt( "internal error: problem with length of input data" );  
+    {
+      logger << " observed n = " << ndata << " but expected = " << header.nr << " * " <<  n_samples << " = " << header.nr * n_samples << "\n";
+      Helper::halt( "internal error: problem with length of input data" );  
+    }
 
   //
   // if not othewise specified, get physical signal min/max to determine scaling

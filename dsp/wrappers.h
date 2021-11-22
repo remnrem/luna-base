@@ -38,7 +38,8 @@ namespace dsptools
   void cwt( edf_t & , param_t & );
 
   void hilbert( edf_t & , param_t & );
-  
+
+   
   void run_cwt( const std::vector<double> & data , const int ,
 		const double fc , const int num_cycles , 
 		std::vector<double> * mag , 
@@ -84,6 +85,12 @@ namespace dsptools
 		    std::vector<double> * phase = NULL ,
 		    std::vector<double> * angle = NULL , 
 		    std::vector<double> * frequency = NULL ); 
+
+
+  // FFT
+
+  void fft( edf_t & , param_t & );
+
 
 }
 

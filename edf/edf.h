@@ -592,7 +592,14 @@ public:
 			const std::string & starttime = "00.00.00" 
 			) ;
 
+  //
+  // Initiate empty (but fixed duration) EDF
+  //
 
+  bool init_empty( const std::string & id , const int nr , const int rs ,
+		   const std::string & startdate ,
+		   const std::string & starttime );
+  
   //
   // Utility to append to an EDF (static function)
   //

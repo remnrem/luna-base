@@ -328,6 +328,7 @@ void proc_filter_design_cmdline();
 void proc_cwt_design( edf_t & , param_t & );
 void proc_cwt_design_cmdline();
 void proc_psd( edf_t & , param_t & );
+void proc_fft( edf_t & , param_t & );
 void proc_mtm( edf_t & , param_t & );
 void proc_1overf_norm( edf_t & , param_t & );
 void proc_tv_denoise( edf_t & , param_t & );
@@ -373,6 +374,7 @@ void proc_rems( edf_t & , param_t & );
 void proc_dump_cache( edf_t & , param_t & );
 
 void proc_siggen( edf_t & , param_t & );
+void proc_simul( edf_t & , param_t & );
 void proc_spike( edf_t & , param_t & );
 void proc_shift( edf_t & , param_t & );
 

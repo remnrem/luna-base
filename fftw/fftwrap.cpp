@@ -241,6 +241,13 @@ std::vector<double> FFT::inverse() const
   return r;
 }
 
+std::vector<double> FFT::unscaled_inverse() const
+{
+  std::vector<double> r(Nfft);
+  for (int i=0;i<Nfft;i++) r[i] = out[i][0] ;
+  return r;
+}
+
 
 void FFT::average_adjacent()
 {
@@ -602,6 +609,13 @@ std::vector<double> real_iFFT::inverse() const
   // should mirror the input data when the input data are REAL  
   std::vector<double> r(Nfft);
   for (int i=0;i<Nfft;i++) r[i] = out[i] / (double)Nfft;
+  return r;
+}
+
+std::vector<double> real_iFFT::unscaled_inverse() const
+{
+  std::vector<double> r(Nfft);
+  for (int i=0;i<Nfft;i++) r[i] = out[i] ;
   return r;
 }
 
