@@ -166,6 +166,7 @@ class FFT
   std::vector<std::complex<double> > scaled_transform() const;
   
   std::vector<double> inverse() const;
+  std::vector<double> unscaled_inverse() const;
 
   //
   // Misc helper function: average adjacent PSD values
@@ -384,6 +385,7 @@ class real_iFFT
   
   bool apply( const std::vector<std::complex<double> > & x );   
   std::vector<double> inverse() const;
+  std::vector<double> unscaled_inverse() const;
     
 };
 

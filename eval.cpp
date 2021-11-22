@@ -958,6 +958,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "COVAR" ) )        proc_covar( edf, param(c) );
       else if ( is( c, "PSD" ) )          proc_psd( edf, param(c) );	  
+      else if ( is( c, "FFT" ) )          proc_fft( edf , param(c) );
       else if ( is( c, "MTM" ) )          proc_mtm( edf, param(c) );
       else if ( is( c, "1FNORM" ) )       proc_1overf_norm( edf, param(c) );
 
@@ -1012,6 +1013,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "CACHE" ) )        proc_dump_cache( edf , param(c) );
       
       else if ( is( c, "SIGGEN" ) )       proc_siggen( edf , param(c) );
+      else if ( is( c, "SIMUL" ) )        proc_simul( edf , param(c) );
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
       else if ( is( c, "SHIFT" ) )        proc_shift( edf , param(c) );
       
@@ -1557,12 +1559,19 @@ void proc_psc( edf_t & edf , param_t & param )
 
 }
 
-// PSD : calculate PSD 
+// PSD : calculate PSD via Welch
 
 void proc_psd( edf_t & edf , param_t & param )	  
 {  
   std::string signal = param.requires( "sig" );
   annot_t * power = spectral_power( edf , signal , param );  
+}
+
+// FFT : caclulate basic FFT
+
+void proc_fft( edf_t & edf , param_t & param )
+{
+  dsptools::fft( edf , param );
 }
 
 // MTM : calculate MTM 
@@ -2742,6 +2751,13 @@ void proc_dump_cache( edf_t & edf , param_t & param )
 void proc_siggen( edf_t & edf , param_t & param )
 {
   dsptools::siggen( edf, param );
+}
+
+// SIMUL : simulate a time series from a PSD
+
+void proc_simul( edf_t & edf , param_t & param )
+{
+  dsptools::simul( edf , param );
 }
 
 

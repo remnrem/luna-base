@@ -26,6 +26,13 @@
 #include "edf/slice.h"
 #include "cwt/cwt.h"
 #include "dsp/hilbert.h"
+#include "fftw/fftwrap.h"
+
+#include "db/db.h"
+#include "helper/logger.h"
+
+extern writer_t writer;
+extern logger_t logger;
 
 #include <vector>
   
@@ -408,3 +415,89 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
 
 }
+
+
+
+void dsptools::fft( edf_t & edf , param_t & param )
+{
+
+  //
+  // whole signal FFT
+  //
+
+  //
+  // show real/imaginary frequency-domain values
+  //
+
+  const bool verbose = param.has( "verbose" );
+  
+
+  //
+  // iterate over signals
+  //
+
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  
+  const int ns = signals.size();
+
+  logger << "  calculating DFT:";
+
+  for (int s=0; s<ns; s++)
+    {
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) ) 
+	continue;
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+
+      logger << " " << signals.label(s) ;
+      
+      const int Fs = edf.header.sampling_freq( signals(s) );
+      
+      interval_t interval = edf.timeline.wholetrace();
+      
+      slice_t slice( edf , signals(s) , interval );
+
+      const std::vector<double> * d = slice.pdata();
+
+      int index_length = d->size();
+
+      FFT fftseg( index_length , index_length , Fs , FFT_FORWARD , WINDOW_NONE );
+      
+      fftseg.apply( &((*d)[0]) , index_length );
+      
+      // Extract the raw transform
+      std::vector<std::complex<double> > t = fftseg.transform();
+      
+      // Extract the raw transform scaled by 1/n
+      std::vector<std::complex<double> > t2 = fftseg.scaled_transform();
+      
+      int my_N = fftseg.cutoff;      
+
+      for (int f=0;f<my_N;f++)
+	{
+	  writer.level( fftseg.frq[f] , globals::freq_strat );
+
+	  if ( verbose )
+	    {
+	      writer.value( "RE" , std::real( t[f] ) );
+	      writer.value( "IM" , std::imag( t[f] ) );
+	      writer.value( "UNNORM_AMP" , fftseg.mag[f] );
+	      writer.value( "NORM_AMP" , ( f == 0 ? 1 : 2 ) * fftseg.mag[f] / (double)index_length );
+	    }
+	  
+	  writer.value( "PSD" , fftseg.X[f] );
+	  
+	  if ( fftseg.X[f] > 0 ) 
+	    writer.value( "DB" , log10( fftseg.X[f] )  );
+	}
+      writer.unlevel( globals::freq_strat );
+            
+    } // next signal
+
+  writer.unlevel( globals::signal_strat );
+
+  logger << "\n";
+  
+}
+

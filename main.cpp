@@ -1262,7 +1262,7 @@ void process_edfs( cmd_t & cmd )
   // use .edf (or .EDF extension) to indicate 'single EDF' mode, '.rec'
   f = f.substr( (int)f.size() - 4 >= 0 ? (int)f.size() - 4 : 0 );
   bool single_edf = Helper::iequals( f , ".edf" ) || Helper::iequals( f , ".rec" ) ;
-
+  
   // also allow .sedf for Luna summary EDF
   if ( ! single_edf )
     {
@@ -1275,6 +1275,10 @@ void process_edfs( cmd_t & cmd )
   bool single_txt = globals::param.has( "-fs" );
   if ( single_txt ) single_edf = true;
 
+  // use presence of '.' name to indicate an empty EDF
+  bool empty_edf = f == "." ;
+  if ( empty_edf ) single_edf = true;
+    
   std::ifstream EDFLIST;
   
   if ( ! single_edf ) 
@@ -1523,8 +1527,18 @@ void process_edfs( cmd_t & cmd )
 				      startdate , starttime );
 
 	}
+      else if ( empty_edf )
+	{	  
+	  const int nr = globals::param.requires_int( "-nr" );
+	  const int rs = globals::param.requires_int( "-rs" ); // in full seconds (integer)
+	  const std::string startdate = globals::param.has("-date") ? globals::param.value( "-date" ) : "01.01.00" ;
+          const std::string starttime = globals::param.has("-time") ? globals::param.value( "-time" ) : "00.00.00" ;
+          const std::string id = globals::param.has("-id") ? globals::param.value( "-id" ) : rootname ;
+	  okay = edf.init_empty( id , nr , rs , startdate , starttime );
+	}
       else
 	okay = edf.attach( edffile , rootname , inp_signals ); // read EDF
+
       
       if ( ! okay ) 
 	{
@@ -2697,7 +2711,11 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::vector<std::complex<double> > t2 = fftseg.scaled_transform();
       
       int my_N = fftseg.cutoff;      
-
+      
+      //std::cout << "t sz = " << t.size() << " " << my_N << "\n";
+      //for ( int i=0;i<t.size(); i++) std::cout << i << "\t" << std::real( t[i] ) << "\t" << std::imag( t[i] ) << "\n";
+      //std::exit(0);
+	    
       std::cout << "N" << "\t"
 		<< "F" << "\t"
 		<< "RE" << "\t"
