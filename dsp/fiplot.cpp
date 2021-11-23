@@ -92,6 +92,12 @@ void fiplot_wrapper( edf_t & edf , const param_t & param , const std::vector<dou
   const bool logit = param.has( "log" );
 
   //
+  // Output options
+  //
+
+  const bool verbose = param.has( "verbose" );
+  
+  //
   // Input data 
   //
 
@@ -139,7 +145,8 @@ void fiplot_wrapper( edf_t & edf , const param_t & param , const std::vector<dou
 	  fiplot_t fp( *d , tp , Fs[s] , 
 		       th , normalize , logit , 
 		       t_lwr, t_upr, t_inc , cycles , 
-		       f_lwr, f_upr, f_inc , num_cyc , logspace );
+		       f_lwr, f_upr, f_inc , num_cyc , logspace , 
+		       verbose );
 	  
 	  
 	  //
@@ -177,7 +184,8 @@ void fiplot_wrapper( edf_t & edf , const param_t & param , const std::vector<dou
       fiplot_t fp( *raw , &tp , *sr , 
 		   th, normalize , logit , 
 		   t_lwr, t_upr, t_inc , cycles ,
-		   f_lwr, f_upr, f_inc , num_cyc , logspace );
+		   f_lwr, f_upr, f_inc , num_cyc , logspace ,
+		   verbose );
 
 
       writer.unlevel( globals::signal_strat );
@@ -230,11 +238,13 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
       // get CWT 
 
       std::vector<double> c = cwt( x , fs , f , num_cycles );
-      
-      // for (int i=0;i<c.size();i++)
-      //  	std::cout << c[i] << "\t" << x[i] << "\n";
+
+      if ( verbose ) 
+	for (int i=0;i<c.size();i++)
+	  std::cout << "CWT\t" << c[i] << "\t" << x[i] << "\n";
       
       // get intervals
+
       fibin_t r = intervalize( c , tp , fs , t_lwr , t_upr , t_inc , cycles , f ); 
       
       // report
@@ -394,7 +404,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       if ( first_idx == -1 ) first_idx = i;
       
       //
-      // discontinuity?
+      // discontinuity? (or last point)
       //
 
       if ( i == n-1 ) disc[i] = true;
@@ -412,8 +422,7 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	    : (*tp)[i+1] - (*tp)[first_idx];
 	  
 	  // duration of segment
-	  all_seconds += length * globals::tp_duration ; 
-	  
+	  all_seconds += length * globals::tp_duration ; 	  
 	  
 	  if ( length < required_tp ) 
 	    {	 
@@ -428,8 +437,10 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	}
     }
   
-  logger << "  including " << ( included_seconds / all_seconds ) * 100
-	 << "% of " << all_seconds << " seconds\n";
+
+  if ( verbose ) 
+    logger << "  including " << ( included_seconds / all_seconds ) * 100
+	   << "% of " << all_seconds << " seconds\n";
   
 
   //
@@ -454,18 +465,24 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
   // point
   //
 
-  int n_disc = 0 , n_above_th = 0;
-  for (int i=0;i<n;i++)
-    { 
-      if ( disc[i] ) ++n_disc;
-      if ( x[i] >= yt ) ++n_above_th;
-      //std::cerr << "dets = " << x[i] << "\n";
+  if ( verbose )
+    {
+      int n_disc = 0 , n_above_th = 0;
+      for (int i=0;i<n;i++)
+	{ 
+	  if ( disc[i] ) ++n_disc;
+	  if ( x[i] >= yt ) ++n_above_th;
+	  //std::cerr << "dets = " << x[i] << "\n";
+	}
+      
+      logger << " of " << n << " points, " << n_disc << " discordancies, "
+	     << n_above_th << " (" << (n_above_th/double(n))*100.0 << "%) above threshold\n";
     }
 
-  logger << " of " << n << " points, " << n_disc << " discordancies, "
-	 << n_above_th << " (" << (n_above_th/double(n))*100.0 << "%) above threshold\n";
-  
+
+  //
   // fipoint_t (i,h,t)  
+  //
   
   std::set<fipoint_t> pts;
   
@@ -483,48 +500,62 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       //
 
       if ( disc[i] ) continue;
-
-
+      
+      bool rising_slope = false;
+	
       for (int j=i+1;j<n;j++)
 	{
-
-	  // did we meet the returning down-slope? 
-	  if ( ! disc[j] )
+	  
+	  // hit a discontinuity? (or last point)
+	  // still need to add, so that any higher
+	  // points that are within this longer, lower
+	  // truncated interval are still baseline-corrected
+	  
+	  if ( disc[j] )
 	    {
-	      if ( x[j] < x[i] ) 
-		{
-		  fipoint_t f( i , j , x[i] ) ;
-		  pts.insert( f ) ;
-		  break;
-		}
+	      if ( rising_slope )
+                {
+		  // true --> implies a truncated interval
+		  // (is not added to summ stats below)
+                  fipoint_t f( i , j , x[i] , true ) ;
+                  pts.insert( f ) ;
+                }	      
+	      break;
 	    }
-	  else
+
+
+	  //
+	  // do we see any rising slope here?
+	  //
+	  
+	  if ( ( ! rising_slope ) && x[j] >= x[i] )
+	    rising_slope = true;
+	  
+	  // did we meet the returning down-slope? 
+	  // need to have spanned at least one other point
+	  // i.e. else on a down-slope
+	  
+	  if ( x[j] < x[i] ) 
 	    {
-	      // or, we hit end/discontinuity?
-	      
-	      // v0.25: do not add if hit a disc. 
-	      if ( 0 )
+	      if ( rising_slope )
 		{
 		  fipoint_t f( i , j , x[i] ) ;
 		  pts.insert( f ) ;
 		}
-	      
-	      break;	      
+	      break;
 	    }
 	}
     }
 
-  logger << " decomposed signal into " << pts.size() << " elements\n";
-
   // last point: ignore
   // fipoint_t f( n-1 , n-1 , x[n-1] ) ;
   // pts.insert( f ) ;
-
   
-  if ( 0 )
+  if ( verbose )
     {
       
       logger << "decomposed signal into " << pts.size() << " elements\n";
+
       std::set<fipoint_t>::const_iterator ff = pts.begin();
       while ( ff != pts.end() ) 
 	{
@@ -534,14 +565,14 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  ++ff;
 	}
     }
-
+  
   
   //
   // Build the frequency/interval map
   //
   
-  // track how many 'height' values for each point actually are represented in a
-  // all intervals spanning that position (should be ~all)
+  // track how many 'height' values for each point are represented across
+  // all intervals spanning that position
 
   std::vector<double> used( n , 0 );
 
@@ -559,6 +590,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       //
       
       double t = (double)( ff->j - ff->i + 1 ) * dt;
+
+      //      std::cout << " considering " << t << " " << ff->i << "\t" << ff->j << "\t" << ff->h << "\n";
       
       //
       // or in cycles?
@@ -573,10 +606,11 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
       if ( t < t_lwr ) break;
 
       //
-      // If interval is longer, we still need to adjust 'used'  ( both note add to a bin
+      // If interval is longer, *and/or* if it is truncated, we still need to adjust 'used' so
+      // that subsequent added intervals are appropriately baseline-adjusted
       //
 
-      if ( t >= t_upr )
+      if ( ff->trunc || t >= t_upr )
 	{
 	  // for each spanned sample-point
 	  for (int i = ff->i ; i <= ff->j ; i++ ) 
@@ -584,13 +618,14 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	      // this is as below, i.e.
 	      //   part = ff->h - used[i]
 	      //   used += part
-	      // which just implies  used = ff->h if we don't need to track
+	      // i.e. implies:
+	      // used = ff->h, if we don't need to track
 	      used[i] = ff->h; 
 	    }
 	}
 	   
       //
-      // ... otherwise, impllies inside the range, so add to a bin
+      // ... otherwise, implies inside the range, so add to a bin
       //
       
       else
@@ -600,8 +635,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  int bin = ( t - t_lwr ) / t_inc; 
 	  
 	  // TMP
- 	  // double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  	  
- 	  // std::cerr  << "bin = " << nt << "\t" << bin << " " << tbin << "\n";
+	  // double tbin = t_lwr + bin * t_inc + 0.5 * t_inc;  	  
+	  // std::cout  << "adding bin = " << nt << "\t" << bin << " " << tbin << "\n";
 	  // TMP
 	  
 	  //
@@ -614,7 +649,6 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	  // for each spanned sample-point
 
 	  for (int i = ff->i ; i <= ff->j ; i++ ) 
-
 	    {
 	      // the additional height beyond what is already accounted for 
 	      // by longer spanning intervals
@@ -629,7 +663,8 @@ fibin_t fiplot_t::intervalize( const std::vector<double> & x_ ,
 	      
 	      ++amt;
 	    }
-	  
+
+	  //std::cout << " int " << tbin << "\t" << ff->i << "\t" << ff->j << "\t" << ff->h << "\t" << add << "\n";
 	  // store in F/I bin
 	  r.r[ bin ].w += add;
 	  r.r[ bin ].n += amt;
