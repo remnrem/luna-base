@@ -737,7 +737,7 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
   bool calc_minmax = param.has( "min-max" );
 
   // nothing to do...
-  if ( !( calc_clipped || calc_flat || calc_maxxed ) ) return;
+  if ( !( calc_clipped || calc_flat || calc_maxxed || calc_minmax ) ) return;
   
   // e.g. exclude EPOCH is more than 5% of points are clipped  
   double clip_threshold = calc_clipped ? param.requires_dbl( "clipped" ) : 0.05 ;
@@ -872,9 +872,9 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 	  double c = calc_clipped ? MiscMath::clipped( *d ) : 0 ;
 
 	  double f = calc_flat ? MiscMath::flat( *d , flat_eps ) : 0 ;
-	  
-	  double m = calc_maxxed ? MiscMath::max( *d , max_value ) : 0 ; 
 
+	  double m = calc_maxxed ? MiscMath::max( *d , max_value ) : 0 ; 
+	  
 	  // actual max(|X|)
 	  double mxval = 0;
 	  if ( calc_minmax )
@@ -896,16 +896,15 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 	      set_mask = true;
 	      ++cnt_clp;
 	    }
-	  
+	  	  
 	  if ( calc_flat && f > flat_threshold ) 
 	    {
 	      set_mask = true;
 	      ++cnt_flt;
 	    }
 	  
-	  
 	  if ( calc_maxxed && m > max_threshold ) 
-	    {
+	    {	      
 	      set_mask = true;
 	      ++cnt_max;
 	    }	  
@@ -927,13 +926,13 @@ void  chep_mask_fixed( edf_t & edf , param_t & param )
 	  // Next epoch
 	  //
 
-	} 
+	}
 
       //
       // Report signal level stats
       //
 
-
+      
       logger << "  for " << signals.label(s) << ", clipped: " << cnt_clp 
 	     << " flat: " << cnt_flt
 	     << " max: " << cnt_max

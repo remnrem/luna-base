@@ -1270,6 +1270,7 @@ void cmddefs_t::init()
 
   add_table( "FIP" , "CH,TBIN,F" , "F/I plot" );
   add_var( "FIP", "CH,TBIN,F" , "FIP" , " FIP value" );
+  add_var( "FIP", "CH,TBIN,F" , "ZIP" , " ZIP value" );
   
 
   //

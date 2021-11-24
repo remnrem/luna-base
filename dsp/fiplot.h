@@ -58,16 +58,18 @@ struct fibin_t
 
 struct fipoint_t 
 { 
-  fipoint_t( int _i, int _j , double _h )
+  fipoint_t( int _i, int _j , double _h , bool _trunc = false )
   {
     i = _i; j = _j; h = _h; t = j - i + 1 ;
+    trunc = _trunc;
   }
 
   int i; 
   int j;
   int t;
   double h; 
-
+  bool trunc; // if truncated, will not add to final stats
+  
   bool operator< ( const fipoint_t & rhs ) const 
   {
     // sort by duration, longest first
@@ -82,7 +84,8 @@ struct fiplot_t
   fiplot_t( const std::vector<double> & x , const std::vector<uint64_t> * tp , const int _fs  , 
 	    const int _th , const bool norm_ , const bool logit_ ,  
 	    double t_lwr , double t_upr , double t_inc , bool cycles , 
-	    double f_lwr , double f_upr , double f_inc , int num_cyc , bool logspace = true )
+	    double f_lwr , double f_upr , double f_inc , int num_cyc , bool logspace = true ,
+	    bool _verb = false )
   {
     fs = _fs;
     th = _th;
@@ -90,6 +93,7 @@ struct fiplot_t
     logit = logit_;
     set_t( t_lwr, t_upr, t_inc , cycles );
     set_f( f_lwr, f_upr, f_inc , logspace , num_cyc );
+    verbose = _verb;
     proc(x,tp,fs);
   }
   
@@ -114,7 +118,9 @@ struct fiplot_t
   double th; // multiplicative threshold
   bool normalize; // 0..1 normalization?
   bool logit;  // use log-space values
- 
+
+  bool verbose;
+  
   std::vector<double> frqs;
   double f_lwr, f_upr, f_inc;
   
