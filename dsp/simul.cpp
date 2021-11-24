@@ -89,6 +89,9 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
   const bool from_file = param.has( "file" );
 
+  if ( from_file && ( functional || simple ) )
+    Helper::halt( "cannot specify alpha/frq as well as file" );
+  
   //
   // sample rate & frequency resolution
   //
@@ -132,8 +135,15 @@ void dsptools::simul( edf_t & edf , param_t & param )
   // Generate PSD to be simulated
   //
 
+  
   std::vector<double> frqs , psds;
 
+  if ( ! from_file )
+    {
+      frqs.resize( m , 0 );
+      psds.resize( m , 0 );
+    }
+  
   //
   // Read from a file?
   //
@@ -245,9 +255,6 @@ void dsptools::simul( edf_t & edf , param_t & param )
     {
       const double alpha = param.requires_dbl( "alpha" );
       const double intercept = param.requires_dbl( "intercept" );
-	
-      frqs.resize( m , 0 );
-      psds.resize( m , 0 );
       
       for (int i=0; i<m; i++)
 	{
@@ -273,10 +280,7 @@ void dsptools::simul( edf_t & edf , param_t & param )
       if ( pwidth < 0 ) Helper::halt( "cannot have negative w");
       
       if ( f.size() != a.size() || f.size() == 0 ) Helper::halt( "bad frq=X,Y,Z psd=X,Y,Z specification" );
-      
-      frqs.resize( m , 0 );
-      psds.resize( m , 0 );
-      
+            
       // fixed points (no variance)
       
       if ( ! param.has( "w" ) )
@@ -335,7 +339,18 @@ void dsptools::simul( edf_t & edf , param_t & param )
       for (int i=0; i < psds.size(); i++)
 	{
 	  writer.level( frqs[i] , globals::freq_strat );
-	  writer.value( "GEN" , psds[i] );
+
+	  if ( frqs[i] > 0 )
+	    writer.value( "LF" , log( frqs[i] ) );
+	  
+	  writer.value( "P" , psds[i] );
+	  
+	  if ( psds[i] >= 0 ) 
+	    {
+	      writer.value( "LP" , log( psds[i] ) );
+	      writer.value( "DB" , 10 * log10( psds[i] ) );
+	    }
+	  
 	}
       writer.unlevel( globals::freq_strat );
     }
@@ -431,32 +446,38 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
       for (int i=0; i<pn; i++)
 	{
+
 	  int try1 = 0;
+
 	  while ( 1 ) 
 	    {
 	      ++try1;
-
+	      
 	      if ( try1 > mxtry )
 		Helper::halt( "could not apply all pulses (w/out overlap)... reduce pulse number or duration" );
 	      
-	      int p = CRandom::rand( n );
-	      if ( ! pmask[p] ) continue;
+	      int p0 = CRandom::rand( n );
+	      if ( ! pmask[p0] ) continue;
 		
 	      bool okay = true;
+	      int p = p0;
 	      for (int j=0; j<plen; j++)
 		{
 		  ++p;
 		  if ( p == n ) { okay = false; break; }
 		  if ( ! pmask[p] ) { okay = false; break; }		  
 		}
+	      //std::cout << " okay = " << okay << "\n";
 
 	      // failed. try again
 	      if ( ! okay ) continue;
+	      
+	      // std::cout << " Setting... p = " << p << " " << try1 << "\n";
 
 	      // else, mark this pulse
 	      for (int j=0; j<plen; j++)
-		pmask[ p + j ] = false;
-
+		pmask[ p0 + j ] = false;
+	      
 	      // place next pulse 
 	      break;
 	    }
