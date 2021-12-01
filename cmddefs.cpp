@@ -1212,6 +1212,23 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
 
+  //
+  // FFT
+  //
+
+  add_cmd( "power"   , "FFT" , "Discrete Fourier Transform" );
+  add_url( "FFT" , "power-spectra/#fft" );  
+  add_param( "FFT" , "sig" , "C3,C4" , "Channels to analyse" );
+  add_param( "FFT" , "verbose" , "" , "Additional output variables" );
+
+  add_table( "FFT" , "CH,F", "Channel-wise power spectra" );
+  add_var( "FFT" , "CH,F" , "PSD" , "Power spectral density" );
+  add_var( "FFT" , "CH,F" , "DB" , "10log10(PSD)" );
+  add_var( "FFT" , "CH,F" , "RE" , "Real value of transform" );
+  add_var( "FFT" , "CH,F" , "IM" , "Imaginary value of transform" );
+  add_var( "FFT" , "CH,F" , "UNNORM_AMP" , "Unnormalized amplitude" );
+  add_var( "FFT" , "CH,F" , "NORM_AMP" , "Normalized amplitude" );
+
 
   //
   // PSC  (nb. --psc uses PSC command label internally)

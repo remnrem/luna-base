@@ -182,9 +182,15 @@ struct request_t
 {
   request_t( const std::string & r )
   {
+    // split on first '/' only 
     std::vector<std::string> tok = Helper::parse( r , "/" );
     if ( tok.size() == 1 ) { fac = r; return; }
-    if ( tok.size() > 2 ) Helper::halt( "bad format for " + r );
+    // merge back, e.g. ANNOT/apnea/obstructive,apnea/central
+    if ( tok.size() > 2 )
+      {
+	for (int i=2;i<tok.size();i++)
+	  tok[1] += "/" + tok[i];	
+      }
     std::vector<std::string> tok2 = Helper::parse( tok[1] , "," );
     fac = tok[0];
     for (int i=0;i<tok2.size();i++) levels.insert(tok2[i]);

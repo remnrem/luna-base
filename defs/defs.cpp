@@ -42,7 +42,7 @@ int globals::retcode;
 
 cmddefs_t globals::cmddefs;
 
-std::string globals::annot_folder;
+//std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
 bool globals::allow_space_delim = false;
 char globals::annot_class_inst_combiner = '_';
@@ -50,7 +50,7 @@ bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = '/';
 char globals::annot_keyval_delim = '=' ; 
 
-bool globals::sanitize_everything = false;
+bool globals::sanitize_everything = true;
 
 std::set<std::string> globals::annot_alignment;
 bool globals::autofix_edf;
@@ -230,7 +230,7 @@ void globals::init_defs()
   // Annotation folder
   //
   
-  annot_folder = "";
+  //  annot_folder = "";
 
   annot_files.clear();
   

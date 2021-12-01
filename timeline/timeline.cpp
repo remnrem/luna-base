@@ -3237,8 +3237,8 @@ void timeline_t::signal2annot( const param_t & param )
       
       while ( ee != e.end() )
 	{
-	  std::cout << " label = " << ee->first << "\n";
-
+	  //std::cout << " label = " << ee->first << "\n";
+	  
 	  const std::string & label = ee->first; 
 	  double ex = ee->second.first;
 	  double ey = ee->second.second;

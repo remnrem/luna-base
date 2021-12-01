@@ -583,7 +583,7 @@ int emd_t::proc( const std::vector<double> * d )
       // next IMF
       ++k;
       
-      if ( k > max_imf ) break;
+      if ( k >= max_imf ) break;
     }
 
   if ( verbose )

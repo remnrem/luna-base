@@ -1501,7 +1501,6 @@ void process_edfs( cmd_t & cmd )
       
       if ( cmd.signals().size() > 0 ) inp_signals = &cmd.signals();
       
-
       //
       // load EDF
       //

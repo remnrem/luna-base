@@ -602,7 +602,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	}
       writer.unlevel( "K" );
       
-
+    
   
       //
       // State transition probabilities: up to K+1 for ambig

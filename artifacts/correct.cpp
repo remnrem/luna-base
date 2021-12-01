@@ -94,10 +94,10 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
   int sr = Fs[0];
   for (int s=1;s<ns;s++)
     if ( Fs[s] != sr )
-      Helper::halt( "all sampling rates must be similar for CORRECT" );
+      Helper::halt( "all sampling rates must be similar for ALTER" );
   for (int c=0;c<nc;c++)
     if ( FsC[c] != sr )
-      Helper::halt( "all sampling rates must be similar for CORRECT" );
+      Helper::halt( "all sampling rates must be similar for ALTER" );
 
 
 
@@ -145,19 +145,25 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
       //
       // Process segment-wise
       //
-
+      
       const int total_points = d->size();
-
+      
       const int segment_points = segment_size_sec * sr;
-
+      
       const int step_points  = segment_step_sec * sr;
-           
+
+      //
+      // keep track of what was done
+      //
+
+      std::map<int,int> emd_tracker;
+      
       //
       // Iterate over segments
       //
-
+      
       std::map<int,Data::Vector<double> > res;
-
+      
       for (int p = 0; p < total_points ; p += step_points )
 	{
 
@@ -286,7 +292,9 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 		  
 		}
 
-	      logger << " going to remove " << remove.size() << " components\n";
+	      //logger << " going to remove " << remove.size() << " components\n";
+	      emd_tracker[ remove.size() ]++;
+	      
 	      
 	      //
 	      // remove y components
@@ -294,8 +302,7 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 
 	      std::set<int>::const_iterator rr = remove.begin();
 	      while ( rr != remove.end() )
-		{
-		  logger << "  rr = " << *rr << "\n";
+		{		  
 		  for (int i=0; i<segment_points ; i++)
 		    y[i] -= *rr == 0 ? emd.residual[i] : emd.imf[*rr-1][i];
 		  ++rr;
@@ -311,7 +318,7 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 	  
 	  
 	} // next segment
-	  
+      
 
 
       //
@@ -362,6 +369,22 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
 
       edf.update_signal_retain_range( signals(s) , &val );
 
+      //
+      // update EMD mode?
+      //
+
+      if ( emd_tracker.size() )
+	{
+	  std::map<int,int>::const_iterator ii = emd_tracker.begin();
+	  while ( ii != emd_tracker.end() )
+	    {
+	      writer.level( ii->first , "NC" );
+	      writer.value( "REMOVED" , ii->second );
+	      ++ii;
+	    }
+	  writer.unlevel( "NC" );
+	}
+      
     }
 
 }

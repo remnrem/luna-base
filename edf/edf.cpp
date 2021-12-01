@@ -605,6 +605,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       if ( globals::replace_channel_spaces && ! annotation )
 	l = Helper::search_replace( l , ' ' , globals::space_replacement );
 
+      // global sanitization of channel labels?
+      if ( globals::sanitize_everything )
+	l = Helper::sanitize( l );
+	
       // make all data-channels upper case?
       if ( globals::uppercase_channels && ! annotation )
 	l = Helper::toupper( l );
@@ -3651,6 +3655,8 @@ void edf_t::update_signal_retain_range( int s , const std::vector<double> * d )
 void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmin_ , int16_t * dmax_ , double * pmin_ , double * pmax_ )
 {
 
+  const bool debug = false;
+  
   // if non-null, use these dmax/dmin pmax/pmin values to update signal 
   
   if ( header.is_annotation_channel(s) ) 
@@ -3665,6 +3671,8 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
   if ( n != header.nr * points_per_record )
     Helper::halt( "internal error in update_signal()" );
 
+  if ( debug ) std::cout << " n = " << n << "\n";
+  
   bool set_minmax = dmin_ != NULL ; 
   
   // use full digital min/max scale if not otherwise specified
@@ -3714,7 +3722,13 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 	}
     }
 
-    
+  if ( debug )
+    {
+      std::cout << " pmin, pmax = " << pmin << " " << pmax << "\n";
+      std::cout << " dmin, dmax = " << dmin << " " << dmax << "\n";
+    }
+
+  
   //
   // update header min/max (but leave orig_physical_min/max unchanged)
   //
@@ -3738,13 +3752,23 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
   header.offset[s] = os;
   
   int cnt = 0;
+
+  if ( debug ) std::cout << " records[] size = " << records.size() << "\n";
   
   int r = timeline.first_record();
   while ( r != -1 ) 
     {
-      
-      // find records
 
+      if ( debug )
+	{
+	  std::cout << " r = " << r << "\n";
+	  if ( records.find(r) == records.end() ) std::cout << " could not find record\n";
+	  std::cout << records.find(r)->second.data.size() << " is data[] size\n";
+	  std::cout << " s = " << s << "\n";
+	}
+		  
+      // find records
+      
       //      std::vector<double> & pdata = records.find(r)->second.pdata[ s ];
       std::vector<int16_t>    & data  = records.find(r)->second.data[ s ];
       

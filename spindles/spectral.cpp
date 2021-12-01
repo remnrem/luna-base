@@ -76,7 +76,9 @@ annot_t * spectral_power( edf_t & edf ,
   const bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
   // peak diagnostics
-  const bool peak_diagnostics = param.has( "peaks" ) || param.has( "epoch-peaks" );
+  const bool peak_diagnostics = param.has( "peaks" )
+    || param.has( "epoch-peaks" ) || param.has( "peaks-epoch" )
+    || param.has( "peaks-verbose") || param.has( "peaks-frq" ) ;
   const int peak_median_filter_n = param.has( "peaks-window" ) ? param.requires_int( "peaks-window" ) : 11 ; 
   const bool verbose_peaks = param.has( "peaks-verbose" );
   const bool peak_per_epoch = param.has( "epoch-peaks" ) || param.has( "peaks-epoch" );
@@ -91,8 +93,7 @@ annot_t * spectral_power( edf_t & edf ,
   const bool spectral_slope = param.has( "slope" );
   const std::vector<double> slope_range = param.dblvector( "slope" );
   const bool spectral_slope_show_epoch = param.has( "epoch-slope" ) || param.has( "slope-epoch" );
-  
-
+ 
   if ( spectral_slope )
     {
       if ( slope_range.size() != 2 ||  
@@ -453,7 +454,7 @@ annot_t * spectral_power( edf_t & edf ,
 	     {
 	       
 	       // accumulate for entire night means; store as dB and raw
-	       if ( show_spectrum )
+	       if ( show_spectrum || spectral_slope )
 		 for (int f=0;f<pwelch.psd.size();f++)
 		   {
 		     track_freq[ f ].push_back( pwelch.psd[f] );
@@ -567,7 +568,10 @@ annot_t * spectral_power( edf_t & edf ,
 	  //
 	  
 	  if ( track_freq.size() != freqs.size() ) 
-	    Helper::halt( "internal error psd_t" );
+	    {
+	      std::cout << "track_freq = " << track_freq.size() << " vs freqs = " << freqs.size() << "\n";
+	      Helper::halt( "internal error psd_t" );
+	    }
 	  
 	  std::vector<double> means, medians, sds;
 	  

@@ -56,7 +56,26 @@ std::string Helper::quote_spaced( const std::string & s )
   return quote_if( s , ' ' );
 }
 
+std::string Helper::remove_all_quotes(const std::string &s , const char q2 )
+{
+  const int n = s.size();
+  int n2 = 0;
+  for (int i=0; i<n; i++) { if ( ! ( s[i] == '"' || s[i] == q2 ) ) ++n2; } 
+  if ( n2 == n ) return s;
+  std::string r( n2 , ' ' );
+  int j = 0;
+  for	(int i=0; i<n; i++)
+    {
+      if ( ! ( s[i] == '"' || s[i] == q2 ) )
+	{
+	  r[j] = s[i];
+	  ++j;
+	}
+    }
+  return r;
+}
 
+    
 std::string Helper::quote_if( const std::string & s , char q )
 {
   // empty strings stay as is
@@ -88,11 +107,55 @@ std::string Helper::quote_if( const std::string & s , char q , char p )
   return "\"" + s + "\"";
 }
 
-std::string Helper::sanitize( const std::string & s )
+std::set<std::string> Helper::sanitize( const std::set<std::string> & s ,
+					const char except )
 {
+  std::set<char> x;
+  x.insert( except );
+  return Helper::sanitize( s , &x );
+}
+
+
+std::set<std::string> Helper::sanitize( const std::set<std::string> & s ,
+					const std::set<char> * except )
+{
+  std::set<std::string> r;
+  std::set<std::string>::const_iterator ss = s.begin();
+  while ( ss != s.end() )
+    {
+      r.insert( Helper::sanitize( *ss , except ) );
+      ++ss;
+    }
+  return r;
+}
+
+
+std::string Helper::sanitize( const std::string & s ,
+                              const char except )
+{
+  std::set<char> x;
+  x.insert( except );
+  return Helper::sanitize( s , &x );
+}
+
+
+std::string Helper::sanitize( const std::string & s ,
+			      const std::set<char> * except )
+{
+
+  // nb. does not sanitize comma or pipe or quotes or period
+
+  // i.e. and so can be used on expressions that include
+  // these operators around labels sig="EEG C3-M2","EEG C4-M1"
+  //  --> sig="EEG_C3_M2","EEG_C4_M1"
+  
   std::string j = s;
   for (int i=0;i<j.size();i++)
     {
+      // an  exception?
+      if ( except != NULL && except->find( j[i] ) != except->end() )
+	continue;
+
       if ( j[i] == '-' ) j[i] = '_';
       if ( j[i] == '+' ) j[i] = '_';
       if ( j[i] == ' ' ) j[i] = '_';

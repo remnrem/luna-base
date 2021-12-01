@@ -133,7 +133,9 @@ bool param_t::yesno(const std::string & s ) const
 std::string param_t::value( const std::string & s , const bool uppercase ) const 
 { 
   if ( has( s ) )
-    return uppercase ? Helper::toupper( opt.find( s )->second ) : opt.find( s )->second ;
+    return uppercase ?
+      Helper::remove_all_quotes( Helper::toupper( opt.find( s )->second ) )
+      : Helper::remove_all_quotes( opt.find( s )->second );
   else
     return "";
 }
@@ -151,7 +153,8 @@ std::string param_t::single_value() const
       
   while ( ii != opt.end() ) 
     {
-      if ( hidden.find( ii->first ) == hidden.end() ) return ii->first;
+      if ( hidden.find( ii->first ) == hidden.end() )
+	return Helper::remove_all_quotes( ii->first );
       ++ii;
     }
   return ""; // should not happen
@@ -3375,9 +3378,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // always sanitize labels (channels, annots) on first reading?
   if ( Helper::iequals( tok0 , "sanitize" ) )
     {
-      // NB: not implemented yet... see Helper::sanitize() but then
-      // need to add to channel reader, and annot reader
-      // (and take care of aliases/remappings/case-insensitivity, etc)
       globals::sanitize_everything = Helper::yesno( tok1 );
       return;
     }
@@ -3402,7 +3402,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     {		  
       std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );		        
       for (int s=0;s<tok2.size();s++) 
-	cmd_t::signallist.insert(Helper::unquote(tok2[s]));		  
+	cmd_t::signallist.insert( globals::sanitize_everything ?
+				  Helper::sanitize( Helper::unquote(tok2[s] ) ) :				  
+				  Helper::unquote(tok2[s]) );
       return;
     }
 
@@ -3420,7 +3422,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // set channel names as all UPPERCASE
   if ( Helper::iequals( tok0 , "upper" ) )
     {
-      globals::uppercase_channels = Helper::yesno( tok1 );      
+      globals::uppercase_channels = Helper::yesno( tok1 );
       return;
     }
 
@@ -3428,22 +3430,22 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // keep spaces
   if ( Helper::iequals( tok0 , "keep-spaces" ) )
     {
-      globals::replace_channel_spaces = false;
-      globals::replace_annot_spaces = false;
+      globals::replace_channel_spaces = ! Helper::yesno( tok1 );
+      globals::replace_annot_spaces = ! Helper::yesno( tok1 );
       return;
     }
   
   // keep spaces (annots only) 
   if ( Helper::iequals( tok0 , "keep-annot-spaces" ) )
     {
-      globals::replace_annot_spaces = false;
+      globals::replace_annot_spaces = ! Helper::yesno( tok1 );
       return;
     }
   
-  // keep spaces (annots only) 
+  // keep spaces (channels only) 
   if ( Helper::iequals( tok0 , "keep-channel-spaces" ) )
     {
-      globals::replace_channel_spaces = false;
+      globals::replace_channel_spaces = ! Helper::yesno( tok1 );
       return;
     }
 
@@ -3567,7 +3569,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // generic annotation re-labelling, same format as 'alias'
   else if ( Helper::iequals( tok0 , "remap" ) )
     {
-      nsrr_t::annot_remapping( tok1 );
+      nsrr_t::annot_remapping( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
       return;
     }
 
@@ -3580,15 +3582,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // default annot folder
-  else if ( Helper::iequals( tok0 , "annot-folder" ) ||
-	    Helper::iequals( tok0 , "annots-folder" ) ) 
-    {
-      if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
-	globals::annot_folder = tok1 + globals::folder_delimiter ;
-      else
-	globals::annot_folder = tok1;		      
-      return;
-    }
+  // else if ( Helper::iequals( tok0 , "annot-folder" ) ||
+  // 	    Helper::iequals( tok0 , "annots-folder" ) ) 
+  //   {
+  //     if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
+  // 	globals::annot_folder = tok1 + globals::folder_delimiter ;
+  //     else
+  // 	globals::annot_folder = tok1;		      
+  //     return;
+  //   }
 
   // if annot INST ID black, add hh:mm:ss
   else if ( Helper::iequals( tok0 , "inst-hms" ) )
@@ -3646,7 +3648,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   else if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
     {
       param_t dummy;     
-      dummy.add( "dummy" , tok1 );
+      dummy.add( "dummy" , globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
       globals::specified_annots = dummy.strset( "dummy" , "," );      
       return;
     }
@@ -3670,7 +3672,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // signal alias?
   if ( Helper::iequals( tok0 , "alias" ) )
     {
-      cmd_t::signal_alias( tok1 );
+      cmd_t::signal_alias( globals::sanitize_everything? Helper::sanitize( tok1 ) : tok1 );
       return;
     }
   
@@ -3711,12 +3713,11 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
   
   // do not read FTR files 
-  if ( Helper::iequals( tok0 , "ftr" ) )
-    {
-      globals::read_ftr = Helper::yesno( tok1 );
-      return;
-    }
-
+  // if ( Helper::iequals( tok0 , "ftr" ) )
+  //   {
+  //     globals::read_ftr = Helper::yesno( tok1 );
+  //     return;
+  //   }
 	
   // project path
   if ( Helper::iequals( tok0 , "path" ) )

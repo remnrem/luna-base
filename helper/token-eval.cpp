@@ -872,6 +872,12 @@ bool Eval::execute( const std::vector<Token> & input )
   
   if ( sl != 1 || stack.size() != 1 ) 
     {
+      std::cout << " problem:: expecting a single value on the stack to return...\n";
+      std::cout << " current stack size n=" << stack.size() << "\n";
+      for (int ss = 0 ; ss < stack.size() ; ss++ )
+	std::cout << "  " << stack[ss] << "\n";
+      std::cout << "\n\n";
+
       Helper::halt( "badly formed eval expression" );
       return false;
     }
