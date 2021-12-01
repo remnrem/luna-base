@@ -589,6 +589,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( IN1.eof() ) break;
 	  if ( x == "" ) continue;
 
+	  // sanitize?
+	  if ( globals::sanitize_everything )
+	    x = Helper::sanitize( x );
+	  
 	  // remap? (and if so, track)
 	  std::string y = nsrr_t::remap( x ) ;
 
@@ -715,8 +719,12 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  std::string orig_name = Helper::unquote( Helper::trim( tok[0] ) ) ;
 	  
+	  // want to keep '/' symbol here though...
+	  if ( globals::sanitize_everything )
+	    orig_name = Helper::sanitize( orig_name , globals::class_inst_delimiter );
+	  
 	  std::string name = nsrr_t::remap( orig_name );
-
+	  
 	  if ( name == "" ) continue;
 	  
 	  //
@@ -725,7 +733,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( name != orig_name )
 	    {
-	      //	      std::cout << "alias mapping " << name << " --> " << orig_name << "\n";
+	      //std::cout << "alias mapping " << name << " --> " << orig_name << "\n";
 	      parent_edf.timeline.annotations.aliasing[ name ] = orig_name ;
 	    }
 
@@ -769,7 +777,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // Other details
 	  //
-	  
+		  
 	  a->description = tok.size() >= 2 ? Helper::trim( tok[1] ) : name ; 
 	  
 	  a->file = f;
@@ -894,7 +902,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  std::string aname = nsrr_t::remap( tok[0] );
 	  
 	  if ( aname == "" ) continue;
-	  
+
+	  //
+	  // Sanitize, but keep '/' and '.' symbol here though...
+	  //
+
+	  if ( globals::sanitize_everything )
+	    aname = Helper::sanitize( aname , globals::class_inst_delimiter );
+
 	  //
 	  // save original class name (prior to any combining)
 	  // as this is what any in-file header information is based on for meta-data
@@ -903,19 +918,33 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  const std::string cls_root = aname;
 
 	  //
+	  // Instance label
+	  //
+
+	  std::string iname = tok[1];
+
+	  //
+	  // Sanitize instance ID?
+	  //
+
+	  if ( globals::sanitize_everything )
+	    iname = Helper::sanitize( iname );
+	  
+	  //
 	  // Combine class & instance ID?
 	  //
 	  
-	  if ( globals::combine_annot_class_inst && tok[1] != "." )
-	    aname += globals::annot_class_inst_combiner + tok[1];
+	  if ( globals::combine_annot_class_inst && iname != "." )
+	    aname += globals::annot_class_inst_combiner + iname ;
 	  
 	  //
 	  // Is this an aggregate class/inst form?
 	  //
 
 	  const bool split_annot = aname.find( globals::class_inst_delimiter ) != std::string::npos;
+	  
 	  std::string new_inst_id = ".";
-
+	  
 	  if ( split_annot ) 
 	    {
 	      // old : class=A/B inst=X
@@ -924,6 +953,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      
 	      std::vector<std::string> toks =
 		Helper::parse( aname , std::string( 1 , globals::class_inst_delimiter ) );
+
 	      if ( toks.size() != 2 ) Helper::halt( "bad format for class/inst pairing: " + aname ); 
 
 	      // update class ID now; update meta-data (if needed) below
@@ -988,7 +1018,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    }
 
 	  //
-	  // track any aliasing nb. this will also flag split/combining instances.. that's okay
+	  // track any aliasing and/or sanitizing
+	  // nb. this will also flag split/combining instances.. that's okay
 	  //
 	  
 	  if ( cls_root  != tok[0] )
@@ -1009,7 +1040,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  tok.resize( 6 );
 		  // 0  1  2  3  4  5
 		  // cl in ch bg ed mt
-		  // cl in bg end		  
+		  // cl in    bg ed    	  
 		  tok[5] = ".";
 		  tok[4] = tok[3];
 		  tok[3] = tok[2];
@@ -1022,7 +1053,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  tok.resize( 6 );
 		  // 0  1  2  3  4  5
 		  // cl in ch bg ed mt
-		  // cl       bg end		  
+		  // cl       bg ed		  
                   tok[5] = ".";
                   tok[4] = tok[2];
                   tok[3] = tok[1];
@@ -1045,10 +1076,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( split_annot && new_inst_id != "." ) 
 	    {
 	      // save any existing instance ID (--> meta data, below)
-	      original_inst_id = tok[1];
+	      original_inst_id = iname;
 	      
 	      // update actual instance ID
-	      tok[1] = new_inst_id;
+	      iname = new_inst_id;
 	    }
 
 	  //
@@ -1062,7 +1093,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Instance ID (unless already combined w/ class)
 	  //
 
-	  const std::string id = globals::combine_annot_class_inst ? "." : tok[1] ;
+	  const std::string id = globals::combine_annot_class_inst ? "." : iname ;
 	  
 	  
 	  //
@@ -1378,7 +1409,7 @@ interval_t annot_t::get_interval( const std::string & line ,
   // Get channel label
   //
   
-  *ch = tok[2];
+  *ch = globals::sanitize_everything ? Helper::sanitize( tok[2] ) : tok[2] ;
 
 
   //

@@ -1206,9 +1206,10 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
    
    if ( verbose ) 
      {
-       for (int i=0; i<n; i++)
-	 {		      
-	   writer.level( f0[i] , globals::freq_strat );
+       const int n2 = frq.size();
+       for (int i=0; i<n2; i++)
+	 {
+	   writer.level( frq[i] , globals::freq_strat );
 	   writer.value( "DT" , shape1[i] );
 	   writer.value( "SM" , shape2[i] );
 	   writer.value( "DF" , shape3[i] );		      

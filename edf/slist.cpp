@@ -289,7 +289,8 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
       globals::sl_annot_extensions.insert( "xml" );
       globals::sl_annot_extensions.insert( "annot" );
       globals::sl_annot_extensions.insert( "eannot" );
-      globals::sl_annot_extensions.insert( "ftr" );
+      globals::sl_annot_extensions.insert( "txt" );
+      globals::sl_annot_extensions.insert( "tsv" );
     }
 
   //

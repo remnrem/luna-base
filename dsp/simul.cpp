@@ -496,26 +496,31 @@ void dsptools::simul( edf_t & edf , param_t & param )
   
   if ( update_existing_channel )
     {
-
+      
       const int slot = edf.header.signal( siglab );
       
       if ( edf.header.is_annotation_channel( slot ) )
 	Helper::halt( "cannot modify an EDF Annotation channel" );
+
+      // whether adding, or completely changing, we need to make sure we have 'read'
+      // this channel (i.e. to appropriately populate the edf_record_t stores.  otherwise,
+      // update_signal() will try to modify something that has not been read.   i.e.
+      // previously, we always *ASSumed* that if we were to update something, we would
+      // have read it first, but this is not the case if add_to_existing == false 
+      // (unless we specifically read it)
+      
+      slice_t slice( edf , slot , edf.timeline.wholetrace() );
+      
+      const std::vector<double> * d = slice.pdata();
+      
+      if ( d->size() != rdat.size() )
+	Helper::halt( "internal error in simul()" );
       
       if ( add_to_existing )
 	{
-
-	  slice_t slice( edf , slot , edf.timeline.wholetrace() );
-	  
-	  const std::vector<double> * d = slice.pdata();
-	  
-	  if ( d->size() != rdat.size() )
-	    Helper::halt( "internal error in simul()" );
-
 	  // add existing to simulated signal:
 	  for (int i=0; i<d->size(); i++)
-	    rdat[i] += (*d)[i];
-	  
+	    rdat[i] += (*d)[i];	  
 	}
 
       // now update the channel
@@ -524,7 +529,7 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
     }
   else
-    {
+    {      
       logger << "  creating new channel " << siglab << "...\n";
       edf.add_signal( siglab , fs , rdat );
     }

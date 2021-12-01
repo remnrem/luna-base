@@ -84,12 +84,16 @@ namespace Helper
     return s.substr(a,s.size()-a-b);
   }
 
+  std::string remove_all_quotes(const std::string &s , const char q2 = '"' );
   std::string quote_spaced( const std::string & s );
 
   std::string quote_if( const std::string & s , char q );
   std::string quote_if( const std::string & s , char q , char p );
 
-  std::string sanitize( const std::string & );
+  std::string sanitize( const std::string & , const char except );
+  std::set<std::string> sanitize( const std::set<std::string> & , const char except  ); 
+  std::string sanitize( const std::string & , const std::set<char> * except = NULL );
+  std::set<std::string> sanitize( const std::set<std::string> & , const std::set<char> * except = NULL ); 
   
   bool yesno( const std::string & );
   
