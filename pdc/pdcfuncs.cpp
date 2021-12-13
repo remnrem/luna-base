@@ -109,6 +109,25 @@ double pdc_t::entropy( const std::vector<double> & x )
 }
 
 
+double pdc_t::permutation_entropy( const std::vector<double> & x )
+{
+  
+  double e = 0;
+
+  const int n = x.size();
+
+  if ( n == 0 ) return 0;
+  
+  for ( int i = 0 ; i < n ; i++ )
+    {
+      if ( x[i] != 0 ) 
+	e -= x[i] * log2( x[i] ) ;
+    }
+  
+  return e / log2( n );
+
+}
+
 
 
 

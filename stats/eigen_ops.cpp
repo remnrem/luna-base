@@ -94,11 +94,12 @@ bool eigen_ops::detrend( Eigen::Ref<Eigen::MatrixXd> M )
 }
 
 
-bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const bool normalize )
+bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const bool normalize ,
+		       const bool ignore_invariants , std::vector<int> * zeros )
 {
 
   if ( ! ( center || normalize ) ) return true;
-       
+  
   const int N = M.rows();
   
   Eigen::Array<double, 1, Eigen::Dynamic> means = M.colwise().mean();
@@ -108,7 +109,14 @@ bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const
       Eigen::Array<double, 1, Eigen::Dynamic> sds = ((M.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
 
       for (int i=0;i<sds.size();i++) 
-       	if ( sds[i] == 0 ) return false;
+       	if ( sds[i] == 0 )
+	  {
+	    if ( ! ignore_invariants ) 
+	      return false;
+	    if ( zeros != NULL )
+	      zeros->push_back( i );
+	    sds[i] = 1.0; // make harmless
+	  }
       
       if ( center ) 
 	M.array().rowwise() -= means;
@@ -118,12 +126,13 @@ bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const
     {
       M.array().rowwise() -= means;
     }
-
+  
   return true;
 }
 
 
-bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center , bool normalize , double w , bool second_rescale )
+bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center , bool normalize , double w , bool second_rescale ,
+			      const bool ignore_invariants , std::vector<int> * zeros )
 {
   // 1) winsorize at +/- w 
 
@@ -138,7 +147,12 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
       double iqr = normalize ? MiscMath::iqr( v ) : 0 ;
 
       // if no variation, set SD to one
-      if ( normalize && iqr <= 1e-8  ) normalize = false;
+      if ( normalize && iqr <= 1e-8  )
+	{
+	  normalize = false;
+	  if ( ! ignore_invariants ) return false;
+	  if ( zeros != NULL ) zeros->push_back( c );
+	}
       double robust_sd = normalize ? 0.7413 * iqr : 1 ; 
       
       // winsorize?
@@ -183,7 +197,7 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
   bool okay = true;
   
   if ( second_rescale ) 
-    okay = scale( m , center , normalize );
+    okay = scale( m , center , normalize , ignore_invariants );
   
   return okay;
 }
@@ -238,6 +252,86 @@ Eigen::VectorXd eigen_ops::unit_scale( const Eigen::VectorXd & x )
   return r;
 }
 
+
+Eigen::VectorXd eigen_ops::moving_average( const Eigen::VectorXd & x , int s )
+{
+  
+  if ( s == 1 ) return x;
+
+  const int n = x.size();
+
+  if ( n == 0 ) return x;
+
+  if ( s >= n ) 
+    {
+      std::cerr << "warning: in moving_average(), vector size is less than window size\n";
+      s = n-1; 
+      if ( s % 2 == 0 ) --s; // check that it remains odd
+      if ( s < 2 ) return x; // bail out
+    }
+
+  if ( s % 2 == 0 ) Helper::halt( "require an odd-number for moving average" );
+
+  double z = 0;
+  
+  const int edge = (s-1)/2;  
+  const int start = edge;
+  const int stop  = n - edge - 1;
+
+  Eigen::VectorXd a = Eigen::VectorXd::Zero( n ) ;
+  const double fac = 1.0/(double)s;
+  for (int i=0;i<n;i++) a[i] = fac;
+  
+  // accumulate first sum
+  for (int i=0;i<s;i++) z += x[i];
+
+  // the main sets
+  for (int i=start; i<=stop; i++)
+    {
+      a[i] *= z;
+      if ( i == stop ) break;
+      z -= x[i-edge];
+      z += x[i+edge+1];      
+    }
+
+  // fill in at ends  
+  for (int i=0;i<start;i++) a[i] = a[start];
+  for (int i=stop+1;i<n;i++) a[i] = a[stop];
+  return a;
+  
+}
+
+
+Eigen::VectorXd eigen_ops::median_filter( const Eigen::VectorXd & x , const int n )
+{
+
+  bool odd = n % 2 ; 
+  
+  // For N odd, Y(k) is the median of X( k-(N-1)/2 : k+(N-1)/2 ).
+  // For N even, Y(k) is the median of X( k-N/2 : k+N/2-1 ).
+  
+  const int t = x.size();
+
+  Eigen::VectorXd ret( t );
+
+  int v1 = odd ? (n-1)/2 : n/2;
+  int v2 = odd ? (n-1)/2 : n/2-1;
+  
+  for (int i = 0 ; i < t ; i++ ) 
+    {
+      std::vector<double> y(n,0);
+      int cnt = 0;
+      for ( int j = i - v1 ; j <= i + v2 ; j++ )
+	if ( j >= 0 && j < t ) y[cnt++] = x[j] ;
+      
+      // get median
+      ret[i] = median_destroy( &y[0] , cnt );
+      
+    }
+  
+  return ret;
+  
+}
 
 
 // // apply function fx() with parameter param, to each matrix element
@@ -354,6 +448,8 @@ Eigen::VectorXd eigen_ops::unit_scale( const Eigen::VectorXd & x )
 //     for(int j=0; j<cols; j++)
 //       M[i][j] += means[j]; 
 // }
+
+
 
 
 

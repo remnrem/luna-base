@@ -445,15 +445,19 @@ class PWELCH
 	 double M , 
 	 int noverlap_segments , 
 	 window_function_t W = WINDOW_TUKEY50 , 
+	 bool use_median = false ,
+	 bool calc_seg_sd = false , 
 	 bool average_adj = false ,
 	 bool use_nextpow2 = false ) 
    : data(data) , Fs(Fs) , M(M) , noverlap_segments(noverlap_segments) , 
-     window(W), average_adj(average_adj) , use_nextpow2( use_nextpow2 )
+     window(W),
+     use_median(use_median), calc_seg_sd(calc_seg_sd),
+     average_adj(average_adj) , use_nextpow2( use_nextpow2 )
   {
 
-    // calculate implied overlap in actual data-points
-    // the above specifies how many segments (of size 'M' seconds) we want in the 
-    // window
+    // calculate implied overlap in actual data-points the above
+    // specifies how many segments (of size 'M' seconds) we want in
+    // the window
 
     process(); 
   } 
@@ -466,6 +470,9 @@ class PWELCH
   int N;
 
   std::vector<double> psd;
+
+  // optionally, SD of segments
+  std::vector<double> psdsd; 
   
   std::vector<double> freq;
   
@@ -516,6 +523,12 @@ class PWELCH
   
   // window function (default Tukey 50% window)
   window_function_t window; 
+
+  // median-averaging instead of mean
+  bool use_median;
+
+  // get SD of segments
+  bool calc_seg_sd;
   
   // option to average adjacent frequency bins (default=F)
   bool average_adj;

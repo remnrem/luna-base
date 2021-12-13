@@ -660,16 +660,35 @@ void PWELCH::process()
       
   if ( average_adj ) 
     fft0.average_adjacent();
-  
+
   psd.resize( fft0.cutoff , 0 );
   N = fft0.cutoff;
-
+  
   freq.resize(N);
   for (int f=0;f<N;f++)
+    freq[f] = fft0.frq[f];
+  
+  //
+  // Median/SD 
+  //
+  
+  std::vector<std::vector<double> > tracker;
+  if ( calc_seg_sd || use_median )
     {
-      freq[f] = fft0.frq[f];
-      //      std::cout << "Wf " << f << "\t" << freq[f] << "\n" ;
+      int segments = 0;
+      for (int p = 0; p <= total_points - segment_size_points ; p += segment_increment_points )
+	++segments;
+      
+      // freq x segment
+      tracker.resize(N);
+      for (int i=0; i<N; i++)
+	tracker[i].resize( segments );
+      
+      if ( calc_seg_sd )
+	psdsd.resize( N );
+      
     }
+
 
   //
   // Iterate over segments, performing individual FFT in each
@@ -730,18 +749,36 @@ void PWELCH::process()
       
       for (int i=0;i<fft0.cutoff;i++)
 	psd[i] += fft0.X[i];
+
+      if ( use_median || calc_seg_sd )
+	{
+	  for (int i=0;i<fft0.cutoff;i++)
+	    tracker[i][segments-1] = fft0.X[i];
+	}
       
     } // next segment
   
 
   //
-  // take average over segments
+  // take average (mean or median) over segments
   //
 
   for (int i=0;i<psd.size();i++)
     {
-      psd[i] /= (double)segments;      
-      //std::cout << "PWELCH " << fft0.frq[i] << " --> " << psd[i] << "\n";     
+      const double mn = psd[i] / (double)segments;
+      
+      if ( calc_seg_sd )
+	{	  
+	  const double sd = MiscMath::sdev( tracker[i] , mn );
+	  // CV
+	  psdsd[i] = mn > 0 ? sd / mn : 0 ;
+	}
+
+      if ( use_median )
+	psd[i] = MiscMath::median( tracker[i] );
+      else	
+	psd[i] = mn;
+      
     }
   
 }

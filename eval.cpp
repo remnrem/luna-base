@@ -934,6 +934,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
       else if ( is( c, "RESOAP" ) ) proc_resoap( edf , param(c) );
       else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
+      else if ( is( c, "PLACE" ) )       proc_place_soap( edf , param(c) ); // e.g. find where should go
       
       else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
@@ -1177,12 +1178,41 @@ void proc_lzw( edf_t & edf , param_t & param )
 //   i.e. use SUDS on self, to evaluate staging/signal quality
 
 void proc_self_suds( edf_t & edf , param_t & param  )
-{  
+{
+
+  // set options
   suds_t::set_options( param );  
+
+  // load model, if not already done                                                                                                     
+  if ( ! suds_t::model.loaded() )
+    {
+      suds_t::model.read( param.requires( "model" ) ,
+			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
+			  param.has( "write-weights" ) ? param.value( "write-weights" ) : ""  
+			  );
+    }
+  
   suds_indiv_t self;
   self.evaluate( edf , param );  
 }
 
+
+// PLACE : find where stages should go
+void proc_place_soap( edf_t & edf , param_t & param  )
+{
+  // expected .eannot style file
+  std::string stagefile = param.requires( "stages" );  
+
+  suds_t::set_options( param );
+
+  // load model, if not already done                                                                                                     
+  if ( ! suds_t::model.loaded() )
+    suds_t::model.read( param.requires( "model" ) );
+
+  suds_indiv_t self;
+  self.place( edf , param , stagefile );
+
+}
 
 // REBASE : change epoch duration 
 void proc_rebase_soap( edf_t & edf , param_t & param  )
@@ -1206,10 +1236,14 @@ void proc_rebase_soap( edf_t & edf , param_t & param  )
     Helper::halt( "dur must be an exact multiple of current epoch length" );
   
   suds_t::set_options( param );
+
+  // load model, if not already done                                                                                                     
+  if ( ! suds_t::model.loaded() )
+    suds_t::model.read( param.requires( "model" ) );
+
   suds_indiv_t self;
   self.rebase( edf , param , e2 );
-    
-  
+      
 }
 
 
@@ -1268,10 +1302,16 @@ void proc_resoap( edf_t & edf , param_t & param  )
 // MAKE-SUDS : populate folder 'db' with trainers
 
 void proc_make_suds( edf_t & edf , param_t & param  )
-{  
+{
+  // misc options
   suds_t::set_options( param );  
+  
+  // load model, if not already done
+  if ( ! suds_t::model.loaded() ) 
+    suds_t::model.read( param.requires( "model" ) );
+  
+  // load this individual's data, process and output text-format in 'db' folder
   suds_indiv_t trainer;
-  // will either generate text or binary library (param/text)
   trainer.add_trainer( edf , param );  
 }
 
@@ -1291,20 +1331,17 @@ void proc_suds( edf_t & edf , param_t & param )
   // set up global parameters (i.e. should apply to target /and/ all trainers)
   suds_t suds;
   suds_t::set_options( param );
-  
-  // this is only done once per session, i.e. even if multiple targets
-  // are scored
 
+  // load model, if not already done                                                                                                     
+  if ( ! suds_t::model.loaded() )
+    suds_t::model.read( param.requires( "model" ) );
+
+  // load trainers, if not already done
+  //
   // bank() and wbank() can share the same individuals (they will only
   // be loaded once) load wbank() first, as that also involves loading
   // the PSD (i.e. raw features). If the an individual is only in the
   // bank, these are not needed/loaded
-
-  //
-  // File format
-  //
-
-  bool binary = ! param.has( "text" );
 
   //
   // Weight trainers
@@ -1314,24 +1351,22 @@ void proc_suds( edf_t & edf , param_t & param )
   // 'wdb' is given explicitly, then ALL indivs in that database will be
   // used to retrain the trainer weights
   
-  if ( param.has( "wdb" ) ) 
-    suds.attach_db( param.value( "wdb" ) , binary , true );
-  else // else, use the same training panel (but also loading raw features)
-    suds.attach_db( param.value( "db" ) , binary , true );
-
- 
-  //
-  // Trainers (if not already loaded by wbank; in this case,
-  // attach_db() will just skip that person
-  //
-
-  // attaach_db() F -> do not load PSD (not needed)
-  suds.attach_db( param.requires( "db" ) , binary , false );
-
+  if ( param.has( "wdb" ) )
+    {
+      // load as separate files (i.e. duplicate) 
+      suds.attach_db( param.value( "db" ) , true , false );
+      suds.attach_db( param.value( "wdb" ) , false , true );
+    }
+  else
+    {
+      // default, is to use self-trainer as the weight trainer; thus
+      // a 1-to-1 correspondence between db and wdb, so only load once      
+      suds.attach_db( param.requires( "db" ) , true , true );
+    }
   
   // do actual scoring  
   suds.score( edf , param );
-
+  
 }
 
 
@@ -1455,6 +1490,17 @@ void proc_cwt_design_cmdline()
 // -copy-suds-db  from the command line
 void proc_copy_suds_cmdline()
 {
+
+  // this takes a SINGLE text-format file,
+  // (which may contain multiple individuals)
+  // and writes out a SINGLE binary file
+
+  // we now have the following functions only
+  //  MAKE-SUDS   : write a library ( text format, one file per trainer only, written to a folder)
+  //  cat         : merge library (multiple individuals to single library)
+  //  --copy-suds : reformat text->binary single 
+  //  SUDS        : read a single binary format file
+  
   // expect parameters on STDIN
   param_t param;
   while ( ! std::cin.eof() )
@@ -1468,10 +1514,8 @@ void proc_copy_suds_cmdline()
 
   std::string f1 = param.requires( "from" );
   std::string f2 = param.requires( "to" );
+  suds_t::text2binary( f1 , f2 ) ;
   
-  bool from_text = ! param.has( "binary-to-text" );
-  
-  suds_t::copy_db( f1 , f2 , from_text );
 }
 
 // FILTER-DESIGN : general FIR design

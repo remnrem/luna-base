@@ -162,6 +162,18 @@ annot_t * spectral_power( edf_t & edf ,
   else if ( param.has( "tukey50" ) ) window_function = WINDOW_TUKEY50;
 
   //
+  // Median vs mean to get eppch PSD (i.e. averaging over segments in Welch)
+  //
+
+  const bool use_seg_median = param.has( "segment-median" );
+
+  //
+  // Return SD of segments (actually CV)
+  //
+
+  const bool calc_seg_sd = param.has( "segment-sd" );
+  
+  //
   // Use nextpow2 for NFFT
   //
 
@@ -345,11 +357,11 @@ annot_t * spectral_power( edf_t & edf ,
 			  segment_sec , 
 			  noverlap_segments , 
 			  window_function , 
+			  use_seg_median,
+			  calc_seg_sd,
 			  average_adj ,
 			  use_nextpow2 );
 	   
-	   //	   std::cout << "done\n";
-
 
 	   double this_slowwave   = pwelch.psdsum( SLOW )  ;      /// globals::band_width( SLOW );
 	   double this_delta      = pwelch.psdsum( DELTA ) ;      /// globals::band_width( DELTA );
@@ -466,7 +478,10 @@ annot_t * spectral_power( edf_t & edf ,
 	   if ( freqs.size() == pwelch.psd.size() )
 	     {
 	       
+	       //
 	       // accumulate for entire night means; store as dB and raw
+	       //
+	       
 	       if ( show_spectrum || spectral_slope )
 		 for (int f=0;f<pwelch.psd.size();f++)
 		   {
@@ -474,26 +489,38 @@ annot_t * spectral_power( edf_t & edf ,
 		     track_freq_logged[ f ].push_back( 10*log10( pwelch.psd[f] ) );
 		   }
 
+	       //
 	       // epoch-level output?
+	       //
 	       
 	       if ( show_epoch_spectrum )
 		 {		 
-		   
+
 		   // using bin_t 	      
 		   bin_t bin( min_power , max_power , bin_fac );
-		   
 		   bin.bin( freqs , pwelch.psd );
 
+		   bin_t binsd( min_power , max_power , bin_fac );
+		   if ( calc_seg_sd )
+		     binsd.bin( freqs, pwelch.psdsd );
+		   
 		   std::vector<double> f0;
 		   
 		   for ( int i = 0 ; i < bin.bfa.size() ; i++ )
 		     {		     
 		       f0.push_back( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 );		       
 		       writer.level( f0[ f0.size()-1 ] , globals::freq_strat );
+
 		       //writer.level( bin.bfa[i] , globals::freq_strat );
 		       writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
+
 		       if ( bin.nominal[i] != "" )
 			 writer.value( "INT" , bin.nominal[i] );
+
+		       // CV?
+		       if ( calc_seg_sd )
+			 writer.value( "CV" , binsd.bspec[i] );
+		       		       
 		     }
 		   writer.unlevel( globals::freq_strat );
 		 }

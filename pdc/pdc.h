@@ -104,6 +104,7 @@ struct pdc_obs_t {
 
   // get entropy of current PD(s)
   std::vector<double> entropy() const;
+
   
   void init(int q)
   {
@@ -329,6 +330,14 @@ struct pdc_t {
   
   void external( param_t & );
 
+
+  //
+  // Used elsewhere
+  //
+
+  static double permutation_entropy( const std::vector<double> & );
+  
+  
 private: 
 
 
@@ -376,8 +385,10 @@ private:
   // primary function to get the PD from a particular time-series
   // if sum set to 0, store integers (unnormalized) 
   // if sum !=0 , then automatically normalize (i.e. return vector with sum of 1.0)
+public:
   static std::vector<double> calc_pd( const std::vector<double> & x , int m , int t , int * sum );
-
+private:
+  
   static int num_pd(int m);
   
   static double entropy( const std::vector<double> & );

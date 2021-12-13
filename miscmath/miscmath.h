@@ -59,6 +59,12 @@ namespace MiscMath
   
   double skewness( const std::vector<double> & x );
   double skewness( const std::vector<double> & x , double m , double sd );
+
+  double kurtosis0( const std::vector<double> & x );
+  double kurtosis( const std::vector<double> & x );
+  double kurtosis( const std::vector<double> & x , double m );
+  
+  double petrosian_FD( const std::vector<double> & x );
   
   double median( const std::vector<double> & x );
   double iqr( const std::vector<double> & x );

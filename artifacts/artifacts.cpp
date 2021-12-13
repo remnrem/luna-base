@@ -25,6 +25,7 @@
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "annot/annot.h"
+#include "pdc/pdc.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"
@@ -328,6 +329,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   // Hjorth parameters: H1, H2, H3
   // Second-order Hjorth
   // Optional: RMS, % clipped signals
+  // Optional: permutation entropy
+  // Optional: fractal dimensions
   
   std::string signal_label = param.requires( "sig" );  
 
@@ -343,6 +346,13 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   int required_sr = param.has( "sr-over" ) ? param.requires_int( "sr-over" ) : 0 ; 
 
+  bool calc_pfd = param.has( "pfd" ) ;
+  
+  bool calc_pe = param.has( "pe" ) || param.has( "pe-m" ) || param.has( "pe-t" );
+  std::vector<int> pe_m = { 3,4,5,6,7 };
+  if ( param.has( "pe-m" ) ) pe_m = param.intvector( "pe-m" ) ;
+  int pe_t = param.has( "pe-t" ) ? param.requires_int( "pe-t" ) : 1 ; 
+  
   bool calc_hjorth2 = param.has( "hjorth2" );
 
   double hjorth2_win = param.has( "hjorth2-win" ) ? param.requires_dbl( "hjorth2-win" ) : 1 ;
@@ -520,6 +530,30 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  
 	  double x = calc_rms ? MiscMath::rms( *d ) : 0 ;
 	  	  
+
+	  //
+	  // Permutation entropy
+	  //
+
+	  std::vector<double> pe( pe_m.size() );
+
+	  if ( calc_pe )
+	    {
+	      for ( int p=0; p<pe_m.size(); p++)
+		{
+		  int sum1 = 1;
+		  std::vector<double> pd = pdc_t::calc_pd( *d , pe_m[p] , pe_t , &sum1 );
+		  pe[p] = pdc_t::permutation_entropy( pd );
+		}
+	    }
+
+	  //
+	  // Fractal dimension
+	  //
+
+	  double pfd = 0;
+	  if ( calc_pfd )
+	    pfd = MiscMath::petrosian_FD( *d );
 	  
 	  //
 	  // Hjorth parameters
@@ -595,7 +629,14 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      
 	      if ( calc_rms )
 		writer.value( "RMS" , x );
-	      
+
+	      if ( calc_pe )
+		for (int p=0;p<pe_m.size();p++)
+		  writer.value( "PE" + Helper::int2str( pe_m[p] ) , pe[p] ) ;
+
+	      if ( calc_pfd )
+		writer.value( "PFD" , pfd );
+
 	      if ( calc_clipped )
 		writer.value( "CLIP" , c );
 
@@ -709,6 +750,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
       if ( calc_rms )
 	writer.value( "RMS"   , rms[si] / (double)n[si] );
+      
     }
 
   writer.unlevel( globals::signal_strat );

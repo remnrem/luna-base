@@ -29,16 +29,20 @@
 namespace eigen_ops { 
 
   void random_normal( Eigen::MatrixXd & m );  
+  
+  bool scale( Eigen::Ref<Eigen::MatrixXd> m , const bool,  const bool , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );  
 
-  bool scale( Eigen::Ref<Eigen::MatrixXd> m , const bool,  const bool );  
-
-  bool robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool , bool , double , bool second_rescale = true );  
+  bool robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool , bool , double , bool second_rescale = true , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );    
 
   double sdev( const Eigen::VectorXd & x );
 
   // remove linear trend of each column by linear regression
   bool detrend( Eigen::Ref<Eigen::MatrixXd> m );
 
+  Eigen::VectorXd median_filter( const Eigen::VectorXd & x , const int );
+
+  Eigen::VectorXd moving_average( const Eigen::VectorXd & x , int s );
+  
   Eigen::VectorXd unit_scale( const Eigen::VectorXd & x , double xmin , double xmax );
 
   Eigen::VectorXd unit_scale( const Eigen::VectorXd & x );

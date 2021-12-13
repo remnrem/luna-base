@@ -227,6 +227,56 @@ std::complex<double> MiscMath::mean( const std::vector<std::complex<double> > & 
 }
 
 
+double MiscMath::petrosian_FD( const std::vector<double> & x )
+{
+  const int n = x.size();
+  // not defined
+  if ( n < 3 ) return 0;
+  std::vector<bool> b(n-1);  
+  for (int i=1;i<n; i++)
+    b[i-1] = x[i] - x[i-1] > 0 ;  
+  int n_delta = 0;
+  for (int i=1;i<n-1; i++)
+    if ( b[i] != b[i-1] ) ++n_delta;    
+  double fd = log10(n) / ( log10(n) + log10( n / (double)( n + 0.4 * n_delta ) ) ) ;
+  return fd;
+}
+
+double MiscMath::kurtosis( const std::vector<double> & x )
+{
+  std::vector<double> d = x;
+  const double m = MiscMath::mean( d ) ;
+  for (int i=0; i<d.size(); i++) d[i] -= m;
+  return kurtosis0( d );
+}
+
+double MiscMath::kurtosis0( const std::vector<double> & x )
+{  
+  // kurtosis ( assume mean = 0 )
+  // assumes mean = 0
+
+  const int n = x.size();
+  
+  double numer = 0 , denom = 0;
+  for (int i=0; i<n; i++)
+    {
+      numer += pow( x[i] , 4 );
+      denom += pow( x[i] , 2 );
+    }
+  numer /= (double)n;
+  denom /= (double)n;
+  denom *= denom;
+  return numer / denom - 3.0;
+  
+}
+
+double MiscMath::kurtosis( const std::vector<double> & x , double m )
+{
+  std::vector<double> d = x;
+  for (int i=0; i<d.size(); i++) d[i] -= m;
+  return kurtosis0( d );
+}
+
 double MiscMath::skewness( const std::vector<double> & x )
 {
   double m    = MiscMath::mean( x );
@@ -690,13 +740,10 @@ std::vector<double> MiscMath::median_filter( const std::vector<double> & x , int
       std::vector<double> y( n , 0 );
       int cnt = 0;
       for ( int j = i - v1 ; j <= i + v2 ; j++ )
-	{
-	  if ( j >= 0 && j < t ) y[cnt] = x[j];
-	  ++cnt;
-	}
-
+	if ( j >= 0 && j < t ) y[cnt++] = x[j];
+      
       // get median
-      ret[i] = median_destroy( &y[0] , y.size() );
+      ret[i] = median_destroy( &y[0] , cnt );
       
     }
   
