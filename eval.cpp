@@ -1338,23 +1338,15 @@ void proc_suds( edf_t & edf , param_t & param )
 
   // load trainers, if not already done
   //
-  // bank() and wbank() can share the same individuals (they will only
-  // be loaded once) load wbank() first, as that also involves loading
-  // the PSD (i.e. raw features). If the an individual is only in the
-  // bank, these are not needed/loaded
-
+  // bank() and wbank() can share the same individuals 
+  // (but nore, they are loaded twice, currently... need to fix)
   //
-  // Weight trainers
-  //
-
-  // by default, use self-trainer as the weight trainer; if param
-  // 'wdb' is given explicitly, then ALL indivs in that database will be
-  // used to retrain the trainer weights
+  // The feature matrix X is only loaded for wdb members
   
   if ( param.has( "wdb" ) )
     {
       // load as separate files (i.e. duplicate) 
-      suds.attach_db( param.value( "db" ) , true , false );
+      suds.attach_db( param.requires( "db" ) , true , false );
       suds.attach_db( param.value( "wdb" ) , false , true );
     }
   else
@@ -1514,7 +1506,7 @@ void proc_copy_suds_cmdline()
 
   std::string f1 = param.requires( "from" );
   std::string f2 = param.requires( "to" );
-  suds_t::text2binary( f1 , f2 ) ;
+  suds_t::text2binary( f1 , f2 , param.has( "with-features" ) ) ;
   
 }
 

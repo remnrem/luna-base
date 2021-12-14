@@ -895,12 +895,15 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    //
    // --------------------------------------------------------------------------------
 
-   std::vector<std::string> ll = suds_t::model.labels();
-   for (int ii=0;ii<ll.size();ii++)
-     std::cout << ( ii != 0 ? "\t" : "" ) << ll[ii] ;
-   std::cout << "\n";
-   
-   std::cout << X << "\n";
+   if ( 0 ) 
+     {
+       std::vector<std::string> ll = suds_t::model.labels();
+       for (int ii=0;ii<ll.size();ii++)
+	 std::cout << ( ii != 0 ? "\t" : "" ) << ll[ii] ;
+       std::cout << "\n";
+       
+       std::cout << X << "\n";
+     }
 
 
    // --------------------------------------------------------------------------------
@@ -982,8 +985,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    for (int o=0;o< suds_t::outlier_ths.size();o++)
      {
 
-       logger << "  removing epochs +/-" << suds_t::outlier_ths[o] << " from U means\n";
-
+       logger << "  ";
+       if ( o != 0 ) logger << "(repeatedly) ";
+       logger << "removing epochs +/-" << suds_t::outlier_ths[o] << " from U means\n";
+       
        for ( int j=0;j<nc;j++)
 	 {
 	   std::vector<double> x;

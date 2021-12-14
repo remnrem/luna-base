@@ -369,8 +369,8 @@ struct suds_t {
   
   static std::vector<suds_indiv_t*> binary_reload( const std::string & filename , bool load_rawx = false );
   
-  // convert from text --> binary format for a library file
-  static void text2binary( const std::string & , const std::string & );
+  // convert from text --> binary format for a library file [ +/- feature matrix ] 
+  static void text2binary( const std::string & , const std::string & , const bool );
   
   static void score( edf_t & edf , param_t & param );
   

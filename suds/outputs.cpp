@@ -573,6 +573,10 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 	  writer.unlevel( "NSS" );
 	}
     }
+
+  if ( to_console ) 
+    logger << std::defaultfloat << std::setprecision(6);
+  
 }
 
 

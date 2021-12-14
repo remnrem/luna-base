@@ -637,8 +637,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   bool bank_contains_target = bank.find( target.id ) != bank.end();
 
   // if 'cheating' (i.e. allow target to be trainer), then say we don't care 
-  // about this (i.e. amnd vectors will be properly +1 sized to accomodate 
-  // all trainers
+  // about this (i.e. and vectors will be properly +1 sized to accommodate 
+  // all trainers)
 
   if ( suds_t::cheat ) bank_contains_target = false;
 
@@ -723,13 +723,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //      std::cout << "considering " << trainer->id << "\n";
 
       //
-      // Predict target given trainer, after project target PSD into trainer-defined space 
-      // ( i.e. this generates target.U_projected based on trainer, and then uses it to 
-      //        predict target class given the trainer model )
+      // Predict target given trainer, after projecting target X into
+      // the trainer-defined space ( i.e. this generates
+      // target.U_projected based on trainer, and then uses it to
+      // predict target classes, given the trainer model )
       //
       
       lda_posteriors_t prediction = target.predict( *trainer );
-
+      
       
       //
       // Save predictions
@@ -776,17 +777,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       int n_kappa_all = 0;
       
       std::map<std::string,int> counts;
-      for (int i=0;i<prediction.cl.size();i++) counts[ prediction.cl[ i ] ]++;
+      for (int i=0;i<prediction.cl.size();i++) 
+	counts[ prediction.cl[ i ] ]++;
+
       int nr= 0 ; 
       std::map<std::string,int>::const_iterator cc = counts.begin();
       while ( cc != counts.end() )
 	{
-	  if ( cc->second >= suds_t::required_epoch_n ) 
-	    { 
-	      ++nr;
-	      //std::cout << "  inc " << cc->first << "\n";
-	    }
-	  
+	  if ( cc->second >= suds_t::required_epoch_n ) ++nr;	  
 	  // save output for this trainer: stage epoch counts
 	  stg_cnt_trainer[ trainer->id ][ cc->first ] += cc->second;
 	  
@@ -803,10 +801,13 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //
 
       double k3;
+
       if ( prior_staging )
 	{
 	  // obs_stage for valid epochs only
-	  double kappa3 =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , NRW( str( target.obs_stage_valid ) ) , suds_t::str( SUDS_UNKNOWN ) );	  
+	  double kappa3 =  MiscMath::kappa( NRW( str( target.prd_stage ) ) , 
+					    NRW( str( target.obs_stage_valid ) ) , 
+					    suds_t::str( SUDS_UNKNOWN ) );	  
 	  
 	  k3_prior[ cntr ] = kappa3;
 	  
@@ -854,7 +855,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  //
 	  // Consider one or more weight-trainers for this trainer
 	  //   Generally: P_C|B|A
-	  //   Or, only considering seflf:   P_A|B|A
+	  //   Or, only considering self:   P_A|B|A
 	  //
 	  //   where A = trainer, B = target, C is weight-trainer (may have C == A as above)
 
@@ -881,11 +882,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	      
 	      double kappa = 0 ; 
 	      if ( use_5class_repred ) 
-		kappa = MiscMath::kappa( reprediction.cl , str( weight_trainer->obs_stage ) , suds_t::str( SUDS_UNKNOWN )  ) ;
+		kappa = MiscMath::kappa( reprediction.cl , 
+					 str( weight_trainer->obs_stage ) , 
+					 suds_t::str( SUDS_UNKNOWN )  ) ;
 	      else if ( use_rem_repred ) 
-		kappa = MiscMath::kappa( Rnot( reprediction.cl ) , Rnot( str( weight_trainer->obs_stage ) ) , suds_t::str( SUDS_UNKNOWN )  );
+		kappa = MiscMath::kappa( Rnot( reprediction.cl ) , 
+					 Rnot( str( weight_trainer->obs_stage ) ) , 
+					 suds_t::str( SUDS_UNKNOWN )  );
 	      else
-		kappa = MiscMath::kappa( NRW( reprediction.cl ) , NRW( str( weight_trainer->obs_stage ) ) , suds_t::str( SUDS_UNKNOWN )  );
+		kappa = MiscMath::kappa( NRW( reprediction.cl ) , 
+					 NRW( str( weight_trainer->obs_stage ) ) , 
+					 suds_t::str( SUDS_UNKNOWN )  );
 	      
 	      // swap in MCC instead of kappa?
 	      if ( use_mcc )
@@ -903,7 +910,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 					      &macro_precision, &macro_recall, &macro_f1 ,
 					      &wgt_precision, &wgt_recall, &wgt_f1 , &mcc);
 		  else if ( use_rem_repred ) // just accuracy on REM
-		    		    acc = MiscMath::accuracy( Rnot( str( weight_trainer->obs_stage ) ) , 
+		    acc = MiscMath::accuracy( Rnot( str( weight_trainer->obs_stage ) ) , 
 					      Rnot( reprediction.cl ) , 
 					      suds_t::str( SUDS_UNKNOWN ) , 
 					      &suds_t::labelsR ,
@@ -1019,11 +1026,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  double kappa1 = 0 ;
 
 	  if ( use_5class_repred )
-	    kappa1 = MiscMath::kappa( prediction1.cl , prediction.cl , suds_t::str( SUDS_UNKNOWN ) );
+	    kappa1 = MiscMath::kappa( prediction1.cl , 
+				      prediction.cl , 
+				      suds_t::str( SUDS_UNKNOWN ) );
 	  else if ( use_rem_repred )
-	    kappa1 = MiscMath::kappa( Rnot( prediction1.cl ) , Rnot( prediction.cl ) , suds_t::str( SUDS_UNKNOWN ) );
+	    kappa1 = MiscMath::kappa( Rnot( prediction1.cl ) , 
+				      Rnot( prediction.cl ) , 
+				      suds_t::str( SUDS_UNKNOWN ) );
 	  else 
-	    kappa1 = MiscMath::kappa( NRW( prediction1.cl ) , NRW( prediction.cl ) , suds_t::str( SUDS_UNKNOWN ) );
+	    kappa1 = MiscMath::kappa( NRW( prediction1.cl ) , 
+				      NRW( prediction.cl ) , 
+				      suds_t::str( SUDS_UNKNOWN ) );
 
 	  wgt_soap[ cntr ] = kappa1;
 

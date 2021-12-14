@@ -175,15 +175,22 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   
 }
 
-void next(int * p, int n )
+bool next( std::ifstream & IN1 , std::string * line )
 {
-  (*p)++;
-  if ( *p >= n )
-    Helper::halt( "problem with internal file formats in copying text-to-binary" );
+  while ( 1 ) 
+    {
+      Helper::safe_getline( IN1 , *line );
+      if ( IN1.eof() ) return false; 
+      if ( *line == "" ) continue;
+      if ( (*line)[0] == '%' ) continue;
+      break;
+    }
+  return true;
 }
 
 void suds_t::text2binary( const std::string & texfile ,
-			  const std::string & binfile )
+			  const std::string & binfile , 
+			  const bool with_features )
   
 {
   
@@ -200,81 +207,67 @@ void suds_t::text2binary( const std::string & texfile ,
   std::ofstream OUT1( Helper::expand( binfile ).c_str() , std::ios::binary | std::ios::out );
   
   logger << "  copying from " << texfile << " to " << binfile << " (text2binary conversion)\n";
+  if ( with_features ) logger << "  including feature matrices in final output\n";
+  else logger << "  not including feature matrices in final output\n";
   
-  //
-  // strip out comments and any blank lines, read everything into memory
-  //
   
-  std::vector<std::string> lines;
-  while ( ! IN1.eof() )
-    {
-      std::string line;
-      Helper::safe_getline( IN1 , line );
-      if ( line == "" ) continue;
-      if ( line[0] == '%' ) continue;
-      lines.push_back( line );
-    }
-  IN1.close();
-  
-  const int n = lines.size();
- 
-  logger << "  read " << n << " data-points from " << texfile << "\n";
-
   //
   // Write out
   //
 
   int p = -1;
   int n_indiv = 0;
-  uint ecnt = 0;
+  uint64_t ecnt = 0;
   
   while ( 1 )
     {
 
       int i;
       double d;
-            
-      // SUDX code
-      next(&p,n);
-      suds_indiv_t::bwrite( OUT1 , lines[p] );
+      std::string line;
+      
+      // SUDX code (w/ 'f' suffix for features)
+      if ( ! next(IN1 , &line ) ) break;
+      
+      suds_indiv_t::bwrite( OUT1 , with_features ? line + "f" : line );
       
       // ID
-      next(&p,n);
-      suds_indiv_t::bwrite( OUT1 , lines[p] );
+      next(IN1,&line);
+      suds_indiv_t::bwrite( OUT1 , line );
 
       // NVE
       int tnve = 0 , tns = 0, tnf = 0 , tnc = 0;
-      next(&p,n);
-      if ( ! Helper::str2int( lines[p] , &i ) )
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
 	Helper::halt( "bad numeric" );
       tnve = i;
       suds_indiv_t::bwrite( OUT1 , i );      
       ecnt += tnve;
       
       // NS
-      next(&p,n);
-      if ( ! Helper::str2int( lines[p] , &i ) )
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
 	Helper::halt( "bad numeric" );
       tns = i;
       suds_indiv_t::bwrite( OUT1 , i );      
 
       // NF
-      next(&p,n);
-      if ( ! Helper::str2int( lines[p] , &i ) )
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
 	Helper::halt( "bad numeric" );
       tnf = i;
       suds_indiv_t::bwrite( OUT1 , i );      
 
       // NC
-      next(&p,n);
-      if ( ! Helper::str2int( lines[p] , &i ) )
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
 	Helper::halt( "bad numeric" );
       tnc = i;
       suds_indiv_t::bwrite( OUT1 , i );
       
       // Stage counts
-      next(&p,n);      
-      if ( ! Helper::str2int( lines[p] , &i ) )
+      next(IN1,&line);      
+      if ( ! Helper::str2int( line , &i ) )
         Helper::halt( "bad numeric" );      
       int tstages = i;
       suds_indiv_t::bwrite( OUT1 , i );
@@ -283,12 +276,12 @@ void suds_t::text2binary( const std::string & texfile ,
       for (int j=0;j<tstages; j++)
 	{
 	  // stage label
-	  next(&p,n);
-	  suds_indiv_t::bwrite( OUT1 , lines[p] );	  
+	  next(IN1,&line);
+	  suds_indiv_t::bwrite( OUT1 , line );	  
 
 	  // stage count
-	  next(&p,n);
-	  if ( ! Helper::str2int( lines[p] , &i ) )
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
 	    Helper::halt( "bad numeric(2)" );
 	  suds_indiv_t::bwrite( OUT1 , i );
 	  
@@ -298,14 +291,14 @@ void suds_t::text2binary( const std::string & texfile ,
       for (int j=0;j<tnve; j++)
 	{
 	  // epoch number
-          next(&p,n);
-	  if ( ! Helper::str2int( lines[p] , &i ) )
+          next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
             Helper::halt( "bad numeric(3)" );
           suds_indiv_t::bwrite( OUT1 , i );
           
 	  // stage label
-          next(&p,n);
-	  suds_indiv_t::bwrite( OUT1 , lines[p] );
+          next(IN1,&line);
+	  suds_indiv_t::bwrite( OUT1 , line );
           
 	}
       
@@ -315,14 +308,14 @@ void suds_t::text2binary( const std::string & texfile ,
 	  for (int h=0; h<3; h++ )
 	    {
 	      // feature mean (over epochs)
-	      next(&p,n);
-	      if ( ! Helper::str2dbl( lines[p] , &d ) )
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
 		Helper::halt( "bad numeric(4)" );
 	      suds_indiv_t::bwrite( OUT1 , d );          
 	      
 	      // feature SD (over epochs)
-	      next(&p,n);
-	      if ( ! Helper::str2dbl( lines[p] , &d ) )
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
 		Helper::halt( "bad numeric(5)" );
 	      suds_indiv_t::bwrite( OUT1 , d );          
 	    }
@@ -332,8 +325,8 @@ void suds_t::text2binary( const std::string & texfile ,
       // SVD components: W
       for (int j=0;j<tnc; j++)
 	{
-          next(&p,n);
-	  if ( ! Helper::str2dbl( lines[p] , &d ) )
+          next(IN1,&line);
+	  if ( ! Helper::str2dbl( line , &d ) )
             Helper::halt( "bad numeric(6)" );
           suds_indiv_t::bwrite( OUT1 , d );          
 	}
@@ -342,8 +335,8 @@ void suds_t::text2binary( const std::string & texfile ,
       for (int j=0;j<tnf; j++)
         for (int k=0;k<tnc; k++)
 	  {
-	    next(&p,n);
-	    if ( ! Helper::str2dbl( lines[p] , &d ) )
+	    next(IN1,&line);
+	    if ( ! Helper::str2dbl( line , &d ) )
 	      Helper::halt( "bad numeric(7)" );
 	    suds_indiv_t::bwrite( OUT1 , d );	    
 	  }
@@ -352,29 +345,29 @@ void suds_t::text2binary( const std::string & texfile ,
       for (int i=0;i<tnve;i++)
 	for (int j=0;j<tnc;j++)
 	  {
-	    next(&p,n);
-	    if ( ! Helper::str2dbl( lines[p] , &d ) )
+	    next(IN1,&line);
+	    if ( ! Helper::str2dbl( line , &d ) )
               Helper::halt( "bad numeric(8)" );
             suds_indiv_t::bwrite( OUT1 , d );            
 	  }
       
-      // Original features: X
+      // Original features: X  (optional)
       for (int i=0;i<tnve;i++)
         for (int j=0;j<tnf;j++)
 	  {
-	    next(&p,n);
-	    if ( ! Helper::str2dbl( lines[p] , &d ) )
-              Helper::halt( "bad numeric(9)" );
-            suds_indiv_t::bwrite( OUT1 , d );            
+	    next(IN1,&line);
+	    
+	    if ( with_features ) // i.e. might skip in output
+	      {
+		if ( ! Helper::str2dbl( line , &d ) )
+		  Helper::halt( "bad numeric(9)" );
+		suds_indiv_t::bwrite( OUT1 , d );            
+	      }
 	  }
 
       ++n_indiv;
 
       logger << "  " << n_indiv << " trainers compiled...\n";
-
-      // all done...?
-      if ( p+1 == n )
-	break;
       
     }
 
@@ -390,6 +383,7 @@ void suds_t::text2binary( const std::string & texfile ,
   //
 
   OUT1.close();
+  IN1.close();
 
   logger << "  in total, converted " << n_indiv << " trainers (" << ecnt << " epochs)\n";
   
@@ -466,9 +460,12 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
       if ( suds == "_END_" ) break;
 
       // otherwise, check format 
-      if ( suds != "SUDS3" )
+      if ( suds != "SUDS3" && suds != "SUDS3f" )
 	Helper::halt( "bad file format for " + filename );
       
+      if ( suds == "SUDS3f" && ! load_rawx ) Helper::halt( "library has features, load as 'wdb' " );
+      if ( suds == "SUDS3"  &&   load_rawx ) Helper::halt( "library does not have features, load as 'db' " );
+
       // adding a new individual
       suds_indiv_t * person = new suds_indiv_t;
 
@@ -567,13 +564,13 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 	    for (int j=0;j<person->nf;j++)
 	      person->X(i,j) = suds_indiv_t::bread_dbl( IN1 );
 	}
-      else
-	{
-	  std::cout << "  trying to skip...\n";
-	  // we need to skip these elements
-	  suds_indiv_t::bskip_dbl( IN1 , person->nve * person->nf );
-	  std::cout << " nah\n";
-	}
+
+      // else
+      // 	{
+      // 	  // we need to skip these elements
+      // 	  suds_indiv_t::bskip_dbl( IN1 , person->nve * person->nf );
+      // 	  std::cout << " nah\n";
+      // 	}
 
       //
       // add this person
@@ -603,6 +600,10 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 void suds_t::attach_db( const std::string & file0 , bool read_db , bool read_wdb )
 {
 
+  // already populated?
+  if ( read_db && bank.size() > 0 ) return;
+  if ( read_wdb && wbank.size() > 0 ) return;
+  
   if ( ! ( read_db || read_wdb ) )
     Helper::halt( "bad call to suds_t::attach_db()" );
   
@@ -615,13 +616,13 @@ void suds_t::attach_db( const std::string & file0 , bool read_db , bool read_wdb
   std::map<std::string,suds_indiv_t*> * b1 = read_db  ? &bank  : NULL ;
   std::map<std::string,suds_indiv_t*> * b2 = read_wdb ? &wbank : NULL ;
   
-  logger << "  attaching training data from " << filename << " ...\n";
+  logger << "  attaching training data from " << filename ;
   
   //
   // Read all data from binary file 
   //
 
-  std::vector<suds_indiv_t*> trainers = binary_reload( filename , true );
+  std::vector<suds_indiv_t*> trainers = binary_reload( filename , read_wdb );
   
   const int nt = trainers.size();
   
@@ -680,9 +681,8 @@ void suds_t::attach_db( const std::string & file0 , bool read_db , bool read_wdb
     } 
   
   logger << "\n"
-	 << "  attached " << trainers.size() << " trainers "
-    //	 << ( read_features ? "with original feature matrices" : "w/out original feature matrices" )
-	 << " from " << filename << "\n";
+	 << "  attached " << trainers.size() << " trainers\n";
+
 
   
   //
