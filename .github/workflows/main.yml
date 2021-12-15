@@ -45,8 +45,11 @@ jobs:
           cd ${GITHUB_WORKSPACE}
       - name: Make
         run: |
-             make arch=MAC FFTW=${HOME}/fftw-3.3.8
+             g++ -v
+             make ARCH=MAC FFTW=${HOME}/fftw-3.3.8
              tar cvzf mac-luna.tar.gz luna behead destrat
+             ./luna -v
+             ls -lh luna destrat
       - uses: actions/upload-artifact@v2
         with:
           name: mac-luna.tar.gz

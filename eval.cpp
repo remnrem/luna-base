@@ -1353,7 +1353,7 @@ void proc_suds( edf_t & edf , param_t & param )
     {
       // default, is to use self-trainer as the weight trainer; thus
       // a 1-to-1 correspondence between db and wdb, so only load once      
-      suds.attach_db( param.requires( "db" ) , true , true );
+      suds.attach_db( param.requires( "db" ) , true , false );
     }
   
   // do actual scoring  
