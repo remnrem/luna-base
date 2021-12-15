@@ -240,7 +240,7 @@ bool suds_model_t::read( const std::string & modelfile ,
   // or write (i.e. template to be editted for next read-weights
   if ( woutfile != "" )
     write_weights( woutfile ) ;
-  
+
   return true;
 }
       

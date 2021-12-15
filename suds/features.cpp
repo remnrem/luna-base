@@ -309,9 +309,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // epochs, for each signal
   //
   
-  h1 = Eigen::VectorXd::Zero( nge , ns );
-  h2 = Eigen::VectorXd::Zero( nge , ns );
-  h3 = Eigen::VectorXd::Zero( nge , ns );
+  h1 = Eigen::MatrixXd::Zero( nge , ns );
+  h2 = Eigen::MatrixXd::Zero( nge , ns );
+  h3 = Eigen::MatrixXd::Zero( nge , ns );
   
   //
   // Track bad epochs 
@@ -336,7 +336,8 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       //
       // select epoch
       //
-      
+
+
       int epoch = edf.timeline.next_epoch();      	  
       
       if ( epoch == -1 ) break;
@@ -369,7 +370,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       //
       // Iterate over signals
       //
-      
+
       for (int s = 0 ; s < ns; s++ )
 	{
 
@@ -388,7 +389,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  slice_t slice( edf , signals(s) , interval );
 	  
 	  const int sr = edf.header.sampling_freq( signals(s) ); 
-	  
+
 	  //
 	  // get data & mean-center
 	  //
@@ -424,7 +425,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  
 	  const bool do_pfd = suds_t::model.has( suds_feature_t::SUDS_FD , siglab );
 	  	  	  
-	   
+
 	  //
 	  // PSD (Welch)
 	  //
@@ -479,7 +480,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      // track that this is bad / to be removed below?
 	      if ( bad_epoch ) bad_epochs.insert( en_good );
 	      
-	      
+
 	      //
 	      // log-PSD?
 	      //
@@ -617,7 +618,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		}
 	      
 	    }
-
+	  
 
 	   //
 	   // Time domain features
@@ -690,7 +691,6 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		 }
 	     }
 
-	   
 	   //
 	   // Next signal
 	   //
