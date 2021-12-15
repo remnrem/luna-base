@@ -693,6 +693,16 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   else if ( w2 ) logger << "  using KL-weights only\n";
   else if ( w0 ) logger << "  using SOAP-weights only\n";
   else logger << "  not applying any weights\n";
+
+
+  //
+  // dump trainer predictions
+  //
+
+  
+  std::map<trkap_t,std::vector<suds_stage_t> > alltpreds;
+  
+  const bool dump_trainer_preds = param.has( "dump-preds" );
   
   //
   // iterate over trainers
@@ -815,8 +825,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  k3 = kappa3;
 	  
 	}
+
+
+      //
+      // Dump trainer outputs?
+      //
+      
+      if ( dump_trainer_preds )
+	alltpreds[ trkap_t( trainer->id , ( prior_staging ? k3 : 0 ) ) ] = target.prd_stage ; 
       
 
+      
       //
       // Single-trainer verbose matrix dump mode: rename output root
       // so we see trainer --> trainer
@@ -1052,8 +1071,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
     }
 
-    
-      
+
+  
   //
   // Derive weights for each trainer based on KL divergence from trainer stage distribition to the mean
   // over all trainers
@@ -1073,6 +1092,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   
   Eigen::ArrayXd wgt = Eigen::ArrayXd::Zero( bank_size );
   std::vector<std::string> used_trainers;
+  std::map<std::string,double> twgts;
   
   tt = bank.begin();
   cntr = 0;
@@ -1139,6 +1159,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	wgt[ cntr ] = wgt_soap[ cntr ];
       else
 	wgt[ cntr ] = 1 ; 
+
+      if ( dump_trainer_preds )
+	twgts[ trainer->id ] = wgt[ cntr ] ;
       
       used_trainers.push_back( trainer->id );
 			     
@@ -1148,6 +1171,15 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   writer.unlevel( "TRAINER" );
 
 
+  //
+  // Verbose output: Dump individual trainer predictions 
+  //
+
+  if ( dump_trainer_preds )
+    {
+      logger << "  writing epoch-level individual-trainer predictions to " << param.value( "dump-preds" ) << "\n";
+      target.dump_trainer_epoch_matrix( edf , alltpreds , twgts, param.value( "dump-preds" ) ) ; 
+    }
   
   //
   // Verbose output: mean weight trainer values

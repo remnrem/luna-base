@@ -88,6 +88,18 @@ struct suds_channel_t {
   int sr;
 };
 
+// for sorting trainers
+struct trkap_t {
+  trkap_t( const std::string & id , const double k ) : id(id) , k(k) { }
+  std::string id;
+  double k;
+  bool operator<( const trkap_t & rhs ) const {
+    if ( k < rhs.k ) return true;
+    if ( k > rhs.k ) return false;
+    return id < rhs.id ; 			 
+  }
+};
+
 
 struct suds_model_t {
   
@@ -265,6 +277,12 @@ struct suds_indiv_t {
   void dump_predictor_matrix( edf_t & , const std::string & filename );
 
 
+  //
+  // dump trainer matrix
+  //
+  
+  void dump_trainer_epoch_matrix( edf_t & , std::map<trkap_t,std::vector<suds_stage_t> > & , std::map<std::string,double> & wgt , const std::string & filename );
+  
   
   //
   // dump SVD components into separate files

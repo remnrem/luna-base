@@ -668,3 +668,65 @@ void suds_indiv_t::write_annots( const std::string & annot_folder , const std::s
 }
 
 
+
+void suds_indiv_t::dump_trainer_epoch_matrix( edf_t & edf ,
+					      std::map<trkap_t,std::vector<suds_stage_t> > & p ,
+					      std::map<std::string,double> & wgt ,
+					      const std::string & filename )
+{
+
+  if ( filename == "" ) Helper::halt( "empty file name" );
+  
+  std::ofstream P1( Helper::expand( filename ).c_str() , std::ios::out );
+
+  // header
+  
+  std::map<int,int> e2e;
+  for (int i=0; i<epochs.size(); i++)
+    e2e[ epochs[i] ] = i ;  
+  const int ne_all = edf.timeline.num_epochs();
+
+  // do all epochs
+  P1 << "TRAINER\tK\tWGT";
+  for (int i=0; i< ne_all; i++)
+    P1 << "\tE" << i+1;
+  P1 << "\n";
+  
+  // iterator over trainers
+  std::map<trkap_t,std::vector<suds_stage_t> >::const_iterator pp = p.begin();
+  
+  while ( pp != p.end() )
+    {
+      P1 << pp->first.id << "\t" << pp->first.k;
+
+      if ( wgt.find( pp->first.id ) != wgt.end() )
+	P1 << "\t" << wgt[ pp->first.id ];
+      else
+	P1 << "\tNA";
+	  
+      for (int i=0; i< ne_all; i++)
+	{
+	  int e = -1;
+	  if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+	  if ( e == -1 )
+	    {
+	      P1 << "\t?";
+	    }
+	  else
+	    {
+	      P1 << "\t" << suds_t::str( pp->second[ e ] );
+	    }
+	}
+
+      P1 << "\n";
+      
+      // next trainer
+      ++pp;
+    }
+  
+  // all done
+  P1.close();
+  
+}
+
+
