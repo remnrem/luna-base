@@ -606,7 +606,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	l = Helper::search_replace( l , ' ' , globals::space_replacement );
 
       // global sanitization of channel labels?
-      if ( globals::sanitize_everything )
+      if ( globals::sanitize_everything && ! annotation )
 	l = Helper::sanitize( l );
 	
       // make all data-channels upper case?
