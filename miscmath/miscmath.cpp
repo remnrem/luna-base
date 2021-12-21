@@ -1262,6 +1262,32 @@ double MiscMath::deg2rad(double degrees)
   return degrees * (M_PI / 180.0); 
 }
 
+double MiscMath::angle_difference( double a , double b )
+{
+  // get signed distance from a --> b, allowing for wrapping
+  // assumes input = 0..360
+
+  if ( a < 0 || a > 360 || b < 0 || b > 360 )
+    Helper::halt(" angle_difference expecting 0 - 360 " );
+
+  //   0     45   50    360
+  if ( a == b ) return 0;
+
+  // assuming in same region
+  double d1 = fabs( b - a );
+
+  // if wraps
+  double d2 = a > b ? b + 360 - a : -( a + 360 - b ) ;
+  
+  // standard metric 
+  if ( d1 < fabs( d2 ) ) 
+    return b - a ; 
+  
+  return d2;
+  
+}
+
+
 double MiscMath::shift_degrees( double d , double x ) 
 {
   d += x;

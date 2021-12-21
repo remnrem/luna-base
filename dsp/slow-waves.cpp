@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -102,36 +101,8 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   signal_list_t signals = edf.header.signal_list( signal_label );  
   
  
-  //
-  // default parameters from Latchoumane et al (2017) (nb. mouse EEG)
-  //
-
-  const double thr   = param.has( "mag" ) ? param.requires_dbl( "mag" )       : 0 ;
-  const bool ignore_neg_peak = param.has( "ignore-neg-peak" ) ? Helper::yesno( param.value( "ignore-neg-peak" ) ) : false; 
-
-  const double f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.2  ; 
-  const double f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.5  ; 
-
-  const double t_lwr = param.has( "t-lwr" ) ? param.requires_dbl( "t-lwr" ) : 0 ;
-  const double t_upr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 10 ;
-  
-  const double uV_neg = param.has("uV-neg" ) ? param.requires_dbl( "uV-neg" ) : 0 ; 
-  if ( uV_neg > 0 ) Helper::halt( "uV-neg should be negative" ) ;
-
-  const double uV_p2p = param.has("uV-p2p" ) ? param.requires_dbl( "uV-p2p" ) : 0 ; 
-  if ( uV_p2p < 0 ) Helper::halt( "uV-p2p should be positive" ) ;
-
-  const double t_neg_lwr = param.has( "t-neg-lwr" ) ? param.requires_dbl( "t-neg-lwr" ) : 0;
-  const double t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 10;
-
-  const double t_pos_lwr = param.has( "t-pos-lwr" ) ? param.requires_dbl( "t-pos-lwr" ) : 0;
-  const double t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 10;
-  
-  // for full waves, default is to find positive to negative zero-crossings
-  const bool   use_alternate_neg2pos_zc = param.has( "neg2pos" ) ;
-  
-  // use mean instead of median for thresholds
-  const bool use_mean = param.has( "th-mean" ) ;
+  // SW detection param
+  slow_wave_param_t par( param );
 
   // use mean instead of median for report
   report_median_stats = param.has( "stats-median" ) ;
@@ -140,19 +111,16 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 	 << ( report_median_stats ? "median" : "mean" ) 
 	 << " over SOs\n";
 
-  // type of SO to detect: full, half (and negative or positive only)
-
-  slow_wave_type type = SO_FULL;
-  if      ( param.has( "half-wave" ) ) type = SO_HALF;
-  else if ( param.has( "negative-half-wave" ) ) type = SO_NEGATIVE_HALF;
-  else if ( param.has( "positive-half-wave" ) ) type = SO_POSITIVE_HALF;
-
-  // cache negative peaks?
-  const bool cache = param.has( "cache" );
-  const std::string cache_name = cache ? param.value( "cache" ) : "" ;
-
+  // cache negative/positive peaks?
+  const bool cache_pos = param.has( "cache-pos" );
+  const bool cache_neg = param.has( "cache-neg" );
+  // name + "_pos",  name + "_neg" 
+  const std::string cache_name_pos = cache_pos ? param.value( "cache-pos" ) : "" ;
+  const std::string cache_name_neg = cache_neg ? param.value( "cache-neg" ) : "" ;
+  
   // cache metrics? (SO_DUR, SO_AMP, etc)
-  cache_t<double> * cache_metrics = param.has( "cache-metrics" ) ? edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
+  cache_t<double> * cache_metrics = param.has( "cache-metrics" ) ?
+    edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
   
   
   //
@@ -190,14 +158,10 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       // Detect slow waves
       //
       
-      detect_slow_waves( *d , *tp , sr , thr, ignore_neg_peak , use_mean , 
-			 uV_neg , uV_p2p , 
-			 f_lwr , f_upr , 
-			 t_lwr , t_upr , 
-			 t_neg_lwr, t_neg_upr , 
-			 t_pos_lwr, t_pos_upr , 
-			 use_alternate_neg2pos_zc , type ,
-			 cache ? &cache_name : NULL , cache ? &edf : NULL ); 
+      detect_slow_waves( *d , *tp , sr , par , 
+			 cache_neg ? &cache_name_neg : NULL ,
+			 cache_pos ? &cache_name_pos : NULL ,
+			 cache_pos || cache_neg ? &edf : NULL ); 
       
       
       //
@@ -224,8 +188,8 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 	  
 	  int position = -1;
 	  
-	  if ( param.has("onset" ) ) position = 0;
-	  else if ( param.has("pos" ) ) position = +1;
+	  if ( param.has( "onset" ) ) position = 0;
+	  else if ( param.has( "pos" ) ) position = +1;
 	  
 	  double twin = param.has("window") ? param.requires_dbl( "window" ) : 3.0 ; 
 	  
@@ -296,23 +260,6 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 {
 
   //
-  // Variables
-  //
-
-  writer.var( "SO" , "Number of slow waves" );
-  writer.var( "SO_RATE" , "Slow waves per minute" );
-  
-  writer.var( "SO_DUR" , "Median slow wave duration (sec)" );
-  writer.var( "SO_NEG_DUR" , "Median negative half-wave duration (sec)" );
-  writer.var( "SO_POS_DUR" , "Median positive half-wave duration (sec)" );
-  writer.var( "SO_AMP" , "Median slow wave minimim peak amplitude" );
-  writer.var( "SO_P2P" , "Median slow wave peak-to-peak amplitude" );
-  writer.var( "SO_SLOPE_NEG1" , "Median slow wave down-going slope on negative peak (uV/sec)" );
-  writer.var( "SO_SLOPE_NEG2" , "Median slow wave up-going slope on negative peak (uV/sec)" );
-  writer.var( "SO_SLOPE_POS1" , "Median slow wave up-going slope on positive peak (uV/sec)" );
-  writer.var( "SO_SLOPE_POS2" , "Median slow wave down-going slope on positive peak (uV/sec)" );
-
-  //
   // Output 
   //
 
@@ -338,7 +285,8 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 	  writer.value( "SO_TRANS" , avg_trans );
 	  writer.value( "SO_TRANS_FREQ" , avg_trans_freq );
 
-	  writer.value( "SO_AMP" , avg_x );
+	  writer.value( "SO_NEG_AMP" , avg_x );
+	  writer.value( "SO_POS_AMP" , avg_x );
 	  writer.value( "SO_P2P" , avg_yminusx );
 	  
 	  // may not be calculated, i.e.  if looking at half-waves  
@@ -415,6 +363,12 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 	writer.value( "DUR1"  , w.dur1() );
 	writer.value( "DUR2"  , w.dur2() );
 
+	if ( w.SO_delta != 0 )
+	  {
+	    writer.value( "SO" , w.SO_delta == 1 );
+	    writer.value( "DELTA" , w.SO_delta == 2 );	    
+	  }
+	
 	writer.value( "TRANS" , w.trans() );
 	writer.value( "TRANS_FREQ" , w.trans_freq() );
 	
@@ -592,62 +546,49 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered , 
 			    const std::vector<uint64_t> & tp ,
 			    const int sr , 
-			    const double thr ,
-			    const bool ignore_neg_peak , 
-			    const bool   use_mean , 
-			    const double uV_neg , 
-			    const double uV_p2p , 
-			    const double f_lwr , 
-			    const double f_upr ,
-			    const double t_lwr ,
-			    const double t_upr , 
-			    const double t_neg_lwr , 
-			    const double t_neg_upr , 
-			    const double t_pos_lwr , 
-			    const double t_pos_upr , 
-			    const bool neg2pos , 
-			    const slow_wave_type type ,
-			    const std::string * cache_name ,
+			    const slow_wave_param_t & par , 
+			    const std::string * cache_name_neg ,
+			    const std::string * cache_name_pos ,
 			    edf_t * edf )
 {
   
   report_median_stats = false;
   
-  detect_slow_waves( unfiltered, tp , sr , thr, ignore_neg_peak, use_mean , uV_neg , uV_p2p , f_lwr, f_upr, 
-		     t_lwr, t_upr , t_neg_lwr , t_neg_upr , t_pos_lwr , t_pos_upr , 
-		     neg2pos , type , cache_name , edf );
+  detect_slow_waves( unfiltered, tp , sr , par, 
+		     cache_name_neg, cache_name_pos , edf );
 }
 
 
 int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered , 
 				     const std::vector<uint64_t> & _tp ,
 				     const int sr , 
-				     const double thr ,
-				     const bool ignore_neg_peak , 
-				     const bool   use_mean , 
-				     const double uV_neg , 
-				     const double uV_p2p , 
-				     const double f_lwr , 
-				     const double f_upr ,
-				     const double t_lwr ,
-				     const double t_upr , 
-				     const double t_neg_lwr , 
-				     const double t_neg_upr , 
-				     const double t_pos_lwr , 
-				     const double t_pos_upr , 	
-				     const bool use_alternate_neg2pos_zc , 
-				     const slow_wave_type type ,
-				     const std::string * cache_name , 
-				     edf_t * edf , 
-				     const double fir_ripple ,
-				     const double fir_tw )
+				     const slow_wave_param_t & par , 
+				     const std::string * cache_name_neg ,
+				     const std::string * cache_name_pos , 
+				     edf_t * edf ) 
 {
 
-  // cache peaks
-  bool cache = cache_name != NULL ; 
+  // helpers
+
+  
+  const bool using_rel = par.thr > 0;
+  
+  const bool using_pct_pos = par.pct_pos > 0;
+  const bool using_pct_neg = par.pct_neg > 0;
+  const bool using_pct = using_pct_pos || using_pct_neg;
+  
+  const bool using_p2p_mintime = par.t_p2p_min > 0 ;
+  const bool using_p2p_maxtime = par.t_p2p_max > 0 ;
+  const bool using_delta = par.SO_delta_mode == 2;
+  const bool using_SO = par.SO_delta_mode == 1;
+  
+  // cache peaks?
+  bool cache_neg = cache_name_neg != NULL ;
+  bool cache_pos = cache_name_pos != NULL ; 
 
   // store negative peaks only for now
-  cache_t<int> * cache_peaks = cache ? edf->timeline.cache.find_int( *cache_name ) : NULL ;
+  cache_t<int> * cache_neg_peaks = cache_neg ? edf->timeline.cache.find_int( *cache_name_neg ) : NULL ;
+  cache_t<int> * cache_pos_peaks = cache_pos ? edf->timeline.cache.find_int( *cache_name_pos ) : NULL ;
       
   // track Fs for later
   Fs = sr;
@@ -656,36 +597,38 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // track total signal duration
   signal_duration_sec = unfiltered.size() / (double)sr ; 
 
-  logger << "\n detecting slow waves: " << f_lwr << "-" << f_upr << "Hz\n";
+  logger << "\n detecting slow waves: " << par.f_lwr << "-" << par.f_upr << "Hz\n";
   
-  if ( t_lwr > 0 ) logger << "  - duration " << t_lwr << "-" << t_upr << "s\n"; 
-  if ( t_neg_lwr > 0 || t_neg_upr > 0 ) logger << "  - negative half-wave duration " << t_neg_lwr << "-" << t_neg_upr << "\n";
-  if ( t_pos_lwr > 0 || t_pos_upr > 0 ) logger << "  - positive half-wave duration " << t_pos_lwr << "-" << t_pos_upr << "\n";
-
-  if ( thr > 0 ) 
+  if ( par.t_lwr > 0 )
+    logger << "  - duration " << par.t_lwr << "-" << par.t_upr << "s\n"; 
+  if ( par.t_neg_lwr > 0 || par.t_neg_upr > 0 )
+    logger << "  - negative half-wave duration " << par.t_neg_lwr << "-" << par.t_neg_upr << "\n";
+  if ( par.t_pos_lwr > 0 || par.t_pos_upr > 0 )
+    logger << "  - positive half-wave duration " << par.t_pos_lwr << "-" << par.t_pos_upr << "\n";
+  
+  if ( using_rel )
     {
-      logger << "  - relative threshold " << thr  << "x " <<  ( use_mean ? "mean" : "median" ) << "\n";
-      logger << "  - (based on " << ( ignore_neg_peak ? "only P2P amplitude" : "both P2P and negative peak amplitude" ) << ")\n";
+      logger << "  - relative threshold " << par.thr  << "x " <<  ( par.use_mean ? "mean" : "median" ) << "\n";
+      logger << "  - (based on "
+	     << ( par.ignore_neg_peak ? "only P2P amplitude" : "both P2P and negative peak amplitude" ) << ")\n";
     }
-
-  if ( uV_neg < 0 ) 
+  
+  if ( par.uV_neg < 0 ) 
     {
       logger << "  - absolute threshold based on "; 
-      if ( ! ignore_neg_peak ) logger << uV_neg << " uV for negative peak, " ;
-      logger << uV_p2p << " uV peak-to-peak\n";
+      if ( ! par.ignore_neg_peak ) logger << par.uV_neg << " uV for negative peak, " ;
+      logger << par.uV_p2p << " uV peak-to-peak\n";
     }
 
-  if ( type == SO_FULL ) 
+  if ( par.type == SO_FULL ) 
     logger << "  - full waves, based on consecutive "  
-	      << ( use_alternate_neg2pos_zc ? "negative-to-positive" : "positive-to-negative" ) << " zero-crossings\n";
-  else if ( type == SO_HALF ) 
+	   << ( ! par.pos2neg_zc ? "negative-to-positive" : "positive-to-negative" ) << " zero-crossings\n";
+  else if ( par.type == SO_HALF ) 
     logger << "  - all half waves\n";
-  else if ( type == SO_NEGATIVE_HALF ) 
+  else if ( par.type == SO_NEGATIVE_HALF ) 
     logger << "  - all negative half waves\n";
-  else if ( type == SO_POSITIVE_HALF ) 
+  else if ( par.type == SO_POSITIVE_HALF ) 
     logger << "  - all positive half waves\n";
-
-
   
     
   //
@@ -695,8 +638,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   
   filtered = dsptools::apply_fir( unfiltered , sr , fir_t::BAND_PASS ,
 				  1 , // use Kaiser window
-				  fir_ripple , fir_tw ,
-				  f_lwr , f_upr );
+				  par.fir_ripple , par.fir_tw ,
+				  par.f_lwr , par.f_upr );
   
   //filtered = band_pass_filter( unfiltered , sr , filter_order , f_lwr , f_upr );  
   //  std::cout << MiscMath::mean( d ) << " is the mean \n";
@@ -706,22 +649,22 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // get zero crossings
   std::vector<int> zc;
   
-  if ( use_alternate_neg2pos_zc ) 
+  if ( par.pos2neg_zc ) // default (pairs of pos2neg ZC define DOWN then UP SW)
     {
-      for (int i=1;i<n;i++) if ( filtered[i] >= 0 && filtered[i-1] < 0 ) zc.push_back(i);
+      for (int i=1;i<n;i++) if ( filtered[i] < 0 && filtered[i-1] >= 0 ) zc.push_back(i);      
     }
   else
     {
-      for (int i=1;i<n;i++) if ( filtered[i] < 0 && filtered[i-1] >= 0 ) zc.push_back(i);
+      for (int i=1;i<n;i++) if ( filtered[i] >= 0 && filtered[i-1] < 0 ) zc.push_back(i);
     }
   
   // averages/medians
-  std::vector<double> tmp_x, tmp_yminusx;
+  std::vector<double> tmp_x, tmp_y, tmp_yminusx;
 
   // # of putative SOs
   int cnt = 0;  
 
-  logger << " " << zc.size() << " zero crossings";
+  logger << "  " << zc.size() << " zero crossings detected\n";
   
   // flat signal? no ZCs?  just return if fewer than 10 SOs found
   if ( zc.size() <= 10 ) return 0;
@@ -746,15 +689,15 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       
       // duration criteria on whole wave? 
 
-      if ( t_lwr > 0 && 
-	   ( t < t_lwr || t > t_upr ) ) continue;
+      if ( par.t_lwr > 0 && 
+	   ( t < par.t_lwr || t > par.t_upr ) ) continue;
       
       
       // find negative and positive peaks
       
       double x = 100;
       double y = -99;
-      int xi = 0, yi = 0, n2pi = 0;
+      int xi = 0, yi = 0, mid_zc_idx = 0;
       
       for (int j=zc[i-1];j<zc[i];j++)
 	{	  
@@ -766,7 +709,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       // build putative SO object 
       
       slow_wave_t w;
-      w.type = type;
+      w.type = par.type;
       w.interval = interval_t( zc[i-1] , zc[i] );
       w.interval_tp = interval_t( tp[zc[i-1]] , tp[zc[i]] );
       w.down_amplitude = x;
@@ -785,72 +728,75 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       
       for (int j=peak1;j<=peak2;j++)
 	{	  
-	  // neg-to-pos crossing
-	  if ( use_alternate_neg2pos_zc ) // look for pos-to-neg
+	  
+	  if ( par.pos2neg_zc ) // default bounding pos2neg ZCs
 	    {
-	      if ( filtered[j-1] >= 0 && filtered[j] < 0 ) n2pi = j;
+	      // middle ZC is then neg2pos
+	      if ( filtered[j-1] < 0 && filtered[j] >= 0 ) mid_zc_idx = j;
 	    }
-	  else // else neg-to-pos for the middle ZC
+	  else // else middle ZC is pos2neg
 	    {
-	      if ( filtered[j-1] < 0 && filtered[j] >= 0 ) n2pi = j;
+	      if ( filtered[j-1] >= 0 && filtered[j] < 0 ) mid_zc_idx = j;
 	    }
 	}
 
       // should not happen
-      if ( n2pi == 0 ) Helper::halt( "problem" );
+      if ( mid_zc_idx == 0 ) Helper::halt( "problem" );
 
-      w.zero_crossing = n2pi ; 
-      w.zero_crossing_tp = tp[n2pi] ; 
+      w.zero_crossing = mid_zc_idx;
+      w.zero_crossing_tp = tp[ mid_zc_idx ] ; 
       
       
       // duration criteria on negative half wave? 
 
-      if ( t_neg_lwr > 0 || t_neg_upr ) 
+      if ( par.t_neg_lwr > 0 || par.t_neg_upr ) 
 	{
 	  
-	  if ( use_alternate_neg2pos_zc ) // negative half wave is mid -- stop
-	    {	      
-	      interval_t hwint( w.zero_crossing_tp , tp[ zc[i] ] - 1 );
-	      const double t = hwint.duration_sec();
-	      // duration criteria on negative half-wave?
-	      if ( t < t_neg_lwr ) continue;
-	      if ( t_neg_upr > 0 && t > t_neg_upr ) continue;
-	    }
-	  else // or (DEFAULT) : negative half-wave is start to mid
+	  if ( par.pos2neg_zc ) // default, negative half-wave is start to mid
 	    {
 	      interval_t hwint( tp[ zc[i-1] ] , w.zero_crossing_tp - 1 );
 	      const double t = hwint.duration_sec();
 	      // duration criteria on negative half-wave?
-	      if ( t < t_neg_lwr ) continue;
-	      if ( t_neg_upr > 0 && t > t_neg_upr ) continue;
+	      if ( t < par.t_neg_lwr ) continue;
+	      if ( par.t_neg_upr > 0 && t > par.t_neg_upr ) continue;
 	    }
+	  else // negative half wave is mid -- stop
+	    {	      
+	      interval_t hwint( w.zero_crossing_tp , tp[ zc[i] ] - 1 );
+	      const double t = hwint.duration_sec();
+	      // duration criteria on negative half-wave?
+	      if ( t < par.t_neg_lwr ) continue;
+	      if ( par.t_neg_upr > 0 && t > par.t_neg_upr ) continue;
+	    }
+	  
 	}
       
       // duration criteria on positive half wave? 
       
-      if ( t_pos_lwr > 0 ) 
+      if ( par.t_pos_lwr > 0 ) 
 	{
 	  
-	  if ( ! use_alternate_neg2pos_zc ) // DEFAULT: pos HW is start to mid
+	  if ( par.pos2neg_zc ) // default, pos HW is mid-to-end 
 	    {	      
 	      interval_t hwint( w.zero_crossing_tp , tp[ zc[i] ] - 1 );
 	      const double t = hwint.duration_sec();
 	      // duration criteria on positive half-wave?
-	      if ( t < t_pos_lwr ) continue;
-	      if ( t_pos_upr > 0 && t > t_pos_upr ) continue;
+	      if ( t < par.t_pos_lwr ) continue;
+	      if ( par.t_pos_upr > 0 && t > par.t_pos_upr ) continue;
 	    }
-	  else // or : pos HW is mid to end
+	  else // else, pos HW is start to mid
 	    {
 	      interval_t hwint( tp[ zc[i-1] ] , w.zero_crossing_tp - 1 );
 	      const double t = hwint.duration_sec();
 	      // duration criteria on positive half-wave?
-	      if ( t < t_pos_lwr ) continue;
-	      if ( t_pos_upr > 0 && t > t_pos_upr ) continue;
+	      if ( t < par.t_pos_lwr ) continue;
+	      if ( par.t_pos_upr > 0 && t > par.t_pos_upr ) continue;
 	    }
 	}
 
       // accumulate averages for filtering 
       tmp_x.push_back( x );
+      tmp_y.push_back( y );
       tmp_yminusx.push_back( y - x );
 
       ++cnt;
@@ -864,23 +810,59 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
   if ( cnt == 0 ) return 0;
 
-  // either use mean or median (default) as baseline
 
-  if ( use_mean ) 
+  //
+  // (Relative) amplitude thresholds? 
+  //
+
+  if ( using_rel )
     {
-      avg_x = MiscMath::mean( tmp_x );
-      avg_yminusx = MiscMath::mean( tmp_yminusx );
+      if ( par.use_mean ) 
+	{
+	  avg_x = MiscMath::mean( tmp_x );
+	  avg_yminusx = MiscMath::mean( tmp_yminusx );
+	}
+      else
+	{
+	  avg_x = MiscMath::median( tmp_x );
+	  avg_yminusx = MiscMath::median( tmp_yminusx );
+	}
     }
-  else
+
+  //
+  // get amplitude thresholds, based on relative values
+  //  (either multiple factor of mean, median,
+  //   or a percentile value)
+  //
+
+  // negative peak
+  th_x       = avg_x * par.thr;
+
+  // peak to peak
+  th_yminusx = avg_yminusx * par.thr;
+  
+
+  //
+  // Percentile-based thresholds?
+  //
+
+  if ( using_pct )
     {
-      avg_x = MiscMath::median( tmp_x );
-      avg_yminusx = MiscMath::median( tmp_yminusx );
+      // e.g. from Kim et al, (the top 15 percentile of the peaks)
+      // (the bottom 40 percentile of the troughs) 
+      // nb. -ve scaling for neg vs pos peaks, that 1 - par.pct_pos only
+      // as these are defined as the "top percentiles" 
+      th_pct_x = using_pct_neg ? MiscMath::percentile( tmp_x , par.pct_neg ) : 0 ;
+      th_pct_y = using_pct_pos ? MiscMath::percentile( tmp_y , 1.0 - par.pct_pos ) : 0 ; 
+
+      if ( using_pct_neg ) 
+	logger << "  thresholding negative half-waves at bottom "
+	       << 100* par.pct_neg << " percentile ( < " << th_pct_x << ")\n";
+      if ( using_pct_pos ) 
+	logger << "  thresholding positive half-waves at top "
+	       << 100* par.pct_pos << " percentile ( > " << th_pct_y << ")\n";
+      
     }
-
-  // get threshold
-  th_x       = avg_x * thr;
-  th_yminusx = avg_yminusx * thr;
-
   
   // accumulators for final averages/medians
   
@@ -890,17 +872,78 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     acc_trans , acc_trans_freq ;
   
   sw.clear();
-
+  
   for (int i = 0; i < waves.size(); i++)
     {
       slow_wave_t & w = waves[i];
       
       bool accepted = true;
-      //logger << "thr " << w.down_amplitude  << " " << th_x << " " << uV_neg << " " << w.down_amplitude  << " " << uV_p2p << " " <<w.up_amplitude - w.down_amplitude << "\n";
-      if ( (!ignore_neg_peak) && thr > 0 && w.down_amplitude > th_x ) accepted = false; // i.e. negative value, should be more neg.
-      if ( thr > 0 && w.up_amplitude - w.down_amplitude < th_yminusx ) accepted = false; // pos threshold
-      if ( uV_neg < 0 && w.down_amplitude > uV_neg ) accepted = false;
-      if ( uV_p2p > 0 && w.up_amplitude - w.down_amplitude < uV_p2p ) accepted = false;
+
+      //logger << "thr " << w.down_amplitude  << " " << th_x << " " << uV_neg << " "
+      // << w.down_amplitude  << " " << uV_p2p << " " <<w.up_amplitude - w.down_amplitude << "\n";
+
+      // relative negative peak amplitude (nb. scaled negative, so needs to be lower (more negative)
+      if ( ( !par.ignore_neg_peak ) && using_rel && w.down_amplitude > th_x ) accepted = false;
+
+      // relative peak-to-peak amplitude?
+      if ( using_rel && w.up_amplitude - w.down_amplitude < th_yminusx ) accepted = false;
+
+      // fixed negative-peak amplitude threshold (nb. negative scaling)
+      if ( par.uV_neg < 0 && w.down_amplitude > par.uV_neg ) accepted = false;
+
+      // fixed peak-to-peak threshold
+      if ( par.uV_p2p > 0 && w.up_amplitude - w.down_amplitude < par.uV_p2p ) accepted = false;
+
+      
+      // make percentile-based SO/delta distinction?
+      w.SO_delta = 0; // not defined
+
+      if ( using_pct )
+	{
+	  // both SO and delta require large UP state 
+	  // percentile-based postive peak threshold
+	  if ( using_pct_pos && w.up_amplitude < th_pct_y ) accepted = false;
+            	  
+	  // percentile-based negative peak threshold (nb. negative scaling) 
+	  // a SO is a large enough DOWN state also 
+	  if ( using_pct_neg && w.down_amplitude < th_pct_x ) w.SO_delta = 1;
+
+	  // but DOWN state must be within time-range for SO 
+	  // SO -- negative peak must be within time range of postive peak
+	  if ( accepted && w.SO_delta == 1 )
+	    {
+	      const double p2p_t = w.trans();
+	      if ( using_p2p_mintime && p2p_t < par.t_p2p_min ) accepted = false;
+	      if ( using_p2p_maxtime && p2p_t > par.t_p2p_max ) accepted = false;	      
+	    }
+
+	  // Delta -- must check that max value of all points in prior 0.5 seconds were below
+	  // threshold
+	  if ( w.SO_delta != 1 )
+	    {
+	      double mxneg = w.up_amplitude ; // start at positive peak, and go back 0,5 secs to find lowest
+	      int pnts = sr * par.t_p2p_max ;
+	      int idx = w.up_peak_sp;
+	      while ( pnts >= 0 )
+		{
+		  if ( idx == 0 ) break;
+		  --idx;
+		  --pnts;
+		  if ( filtered[ idx ] < mxneg ) mxneg = filtered[ idx ]; 
+		}
+	      // if the most -ve value 
+	      if ( mxneg < th_pct_x ) accepted = false;
+
+	      // otherwise, set as a delta wave
+	      w.SO_delta = 2;
+	    }
+
+	  // restrict to one class?
+	  if ( using_SO && w.SO_delta != 1 ) accepted = false;
+	  if ( using_delta && w.SO_delta != 2 ) accepted = false;
+	  if ( w.SO_delta == 0 ) accepted = false;
+	}
+            
       
       // save this wave?
       if ( accepted ) 
@@ -966,19 +1009,27 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   median_slope_n1 = acc_slope_n1.size() > 0 ? MiscMath::median( acc_slope_n1 ) : 0 ; 
   median_slope_n2 = acc_slope_n2.size() > 0 ? MiscMath::median( acc_slope_n2 ) : 0 ; 
 
-  logger << ", of which " << sw.size() << " met criteria";
-  if ( thr > 0 ) logger << " (thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
+  logger << "  " << sw.size() << " SWs met criteria";
+  if ( using_rel ) logger << " (thresholds (<x, >p2p) " << th_x << " " << th_yminusx << ")";
   logger << "\n";
 
-  if ( cache )
+  if ( cache_neg )
     {
-      logger << "  caching negative peaks in " << *cache_name << "\n";
+      logger << "  caching negative peaks in " << *cache_name_neg << "\n";
       std::vector<int> peaks( sw.size() );      
       for (int i = 0; i < sw.size(); i++)
 	peaks[ i ] = sw[i].down_peak_sp ; 
-      cache_peaks->add( ckey_t( "points" , writer.faclvl() ) , peaks );      
+      cache_neg_peaks->add( ckey_t( "points" , writer.faclvl() ) , peaks );      
     }
 
+  if ( cache_pos )
+    {
+      logger << "  caching positive peaks in " << *cache_name_pos << "\n";
+      std::vector<int> peaks( sw.size() );      
+      for (int i = 0; i < sw.size(); i++)
+	peaks[ i ] = sw[i].up_peak_sp ; 
+      cache_pos_peaks->add( ckey_t( "points" , writer.faclvl() ) , peaks );      
+    }
   
   return sw.size();
 }
@@ -987,7 +1038,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 void slow_waves_t::phase_slow_waves()
 {
   
-  logger << " running Hilbert transform\n";
+  logger << "  running Hilbert transform on filtered signal\n";
   
   const int n = filtered.size();
 

@@ -971,6 +971,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "MS" ) )           proc_microstates( edf , param(c) );
 
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
+      else if ( is( c, "TCLST" ) )        proc_tclst( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
 
       else if ( is( c, "SEDF" ) )         proc_sedf( edf , param(c) );
@@ -1549,6 +1550,13 @@ void proc_tlock( edf_t & edf  , param_t & param )
 {
   // get mean time-locked value of one signal against a set of annotations (time-points)
   dsptools::tlock( edf , param );
+}
+
+// TCLST
+void proc_tclst( edf_t & edf  , param_t & param )
+{
+  // designed for SW analysis, given a set of points, cluster the channels/signals around them  
+  dsptools::tclst( edf , param );
 }
 
 // PEAKS

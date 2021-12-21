@@ -33,6 +33,7 @@
 #include "psi.h"
 #include "microstates.h"
 #include "tlock.h"
+#include "tclst.h"
 #include "peaks.h"
 #include "psc.h"
 #include "spectral_norm.h"

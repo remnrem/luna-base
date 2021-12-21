@@ -81,12 +81,12 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
     {
 
 
-      double dmin = 999;
+      double dmin = 99999999;
       
       int imin=-1;
       int jmin=-1;
       
-	  
+      
       // 1. Find min/max distance between pairable clusters
       
       for (int i=0; i<cl.size()-1; i++)
@@ -114,7 +114,7 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
   
       if (imin==-1) {
 	done=true;
-	//	std::cerr << "Cannot make clusters that satisfy constraints at step " << c << " " << cl.size() << "\n";
+	//std::cerr << "Cannot make clusters that satisfy constraints at step " << c << " " << cl.size() << "\n";
 	goto done_making_clusters;
       }
 	  
@@ -126,11 +126,12 @@ cluster_solution_t cluster_t::build( const Data::Matrix<double> & D , const int 
       for(int j=0;j<cl[jmin].size();j++)
 	cl[imin].push_back(cl[jmin][j]);
       cl.erase(cl.begin()+jmin);
+      //std::cout << " CLsize = " << cl.size() << "\n";
       if (cl.size()==1 || cl.size()==max_cluster_N) done=true;
       
 
       // List entire sample
-      //      std::cout << "Merge step " << c << "\t" << hist[c] << "\n";
+      //std::cout << "Merge step " << c << "\t" << hist[c] << "\n";
 	  
       // Build solution
       for (int i=0; i<cl.size(); i++)

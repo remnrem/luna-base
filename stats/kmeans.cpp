@@ -300,7 +300,7 @@ std::vector<kmeans_t::point_t> kmeans_t::lloyd( std::vector<kmeans_t::point_t> &
     
   } while ( changed > (len >> 10)); /* stop when 99.9% of points are good */
   
-  logger << "completed in " << niter << " iterations\n";
+  //  logger << "completed in " << niter << " iterations\n";
   
   // populate class assignments    
   int i = 0;

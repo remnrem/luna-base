@@ -239,6 +239,8 @@ namespace MiscMath
 
   double deg2rad(double degrees);
 
+  double angle_difference( double a, double b );
+  
   double shift_degrees( double degree , double x );
 
   double as_angle_0_pos2neg( const double r );

@@ -134,7 +134,21 @@ struct hypnogram_t
   double pct_rem;  // 
   double pct_other;
 
+  // stage distribution stats (devel=T)
 
+  // mean time (i.e. central point, in mins from start) = mt
+  // normalized mean time (0..1)                        = zmt
+  
+  // double mt_n1, mt_n2, mt_n3, mt_r, mt_w;
+  // double zmt_n1, zmt_n2, zmt_n3, zmt_r, zmt_w;
+
+  // conditional on stage, what proportion of +/-1, +/-2, +/-3, etc are of the same stage?
+  //  -then can summarize those distributions
+  //  -i.e. how to get at clumps? 
+  
+  // int locwin;
+  // std::vector<double> loc_n1, loc_n2, loc_n3, loc_r, loc_w;
+  
   // runs-test 
   double runs_pv5, runs_pv3;
   

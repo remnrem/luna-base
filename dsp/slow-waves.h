@@ -35,7 +35,148 @@
 struct edf_t;
 struct param_t;
 
-enum slow_wave_type { SO_FULL , SO_HALF, SO_NEGATIVE_HALF , SO_POSITIVE_HALF } ; 
+enum slow_wave_type { SO_FULL , SO_HALF, SO_NEGATIVE_HALF , SO_POSITIVE_HALF } ;
+
+struct slow_wave_param_t {
+
+  slow_wave_param_t( const param_t & param )
+  {
+
+    // freq.
+    f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.2  ; 
+    f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.5  ; 
+    
+    // time - for full wave
+    t_lwr = param.has( "t-lwr" ) ? param.requires_dbl( "t-lwr" ) : 0 ;
+    t_upr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 10 ;
+
+    // time - separately for neg and pos HWs
+    t_neg_lwr = param.has( "t-neg-lwr" ) ? param.requires_dbl( "t-neg-lwr" ) : 0;
+    t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 10;
+
+    t_pos_lwr = param.has( "t-pos-lwr" ) ? param.requires_dbl( "t-pos-lwr" ) : 0;
+    t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 10;
+
+    // amplitude thresholds
+
+    // relative: magnitude threshold, e.g. 2 = twice the mean for a) p2p amp. AND , b) negative peak amp
+    thr = param.has( "mag" ) ? param.requires_dbl( "mag" )       : 0 ;
+
+    // or, base this on median of all events rather than mean
+    use_mean = param.has( "th-mean" ) ;
+
+    // only look at p2p AMP
+    ignore_neg_peak = param.has( "ignore-neg-peak" ) ? Helper::yesno( param.value( "ignore-neg-peak" ) ) : false; 
+
+    // fixed
+    uV_neg = param.has("uV-neg" ) ? param.requires_dbl( "uV-neg" ) : 0 ; 
+    if ( uV_neg > 0 ) Helper::halt( "uV-neg should be negative" ) ;
+
+    uV_p2p = param.has("uV-p2p" ) ? param.requires_dbl( "uV-p2p" ) : 0 ; 
+    if ( uV_p2p < 0 ) Helper::halt( "uV-p2p should be positive" ) ;
+
+
+    //
+    // SO/delta distinctions
+    //
+
+    // e.g. Kim et al neg bottom 15% (of -ve values),  pos = top 40% (of +ve values)
+    pct_neg = param.has( "pct-neg" ) ? param.requires_dbl( "pct-neg" ) / 100.0 : -1 ;
+    pct_pos = param.has( "pct-pos" ) ? param.requires_dbl( "pct-pos" ) / 100.0 : -1 ; 
+    
+    if ( pct_neg > 1 ) Helper::halt( "pct-neg should be between 0 and 100" );
+    if ( pct_pos > 1 ) Helper::halt( "pct-pos should be between 0 and 100" );
+
+    // Kim et al. peak-to-peak time interval : 0.15  0.5 
+    t_p2p_min = param.has( "t-p2p-min" ) ? param.requires_dbl( "t-p2p-min" ) : 0 ;
+    t_p2p_max = param.has( "t-p2p-max" ) ? param.requires_dbl( "t-p2p-max" ) : 0 ;
+
+    SO_delta_mode = 0;
+    if ( param.has( "SO-only" ) ) SO_delta_mode = 1 ;
+    if ( param.has( "delta-only" ) )
+      {
+	if ( SO_delta_mode == 1 ) 
+	  Helper::halt( "cannot specify both SO-only and delta-only" );
+	SO_delta_mode = 2 ;
+      }
+
+    // default FIR settings for filter-Hilbert
+    fir_ripple = param.has( "sw-ripple" ) ? param.requires_dbl( "sw-ripple" ) : 0.01 ;
+    fir_tw = param.has( "sw-tw" ) ? param.requires_dbl( "sw-tw" ) : 0.5 ; 
+    
+    // legacy/ignored
+    pos2neg_zc = ! param.has( "neg2pos" ) ;
+    
+    // legacy/ignored
+    type = SO_FULL;
+    if      ( param.has( "half-wave" ) ) type = SO_HALF;
+    else if ( param.has( "negative-half-wave" ) ) type = SO_NEGATIVE_HALF;
+    else if ( param.has( "positive-half-wave" ) ) type = SO_POSITIVE_HALF;
+
+  }
+  
+  // relative threshold based on mean of 
+  // all SOs (based on negative peak & P2P )
+  // this might not be used (i.e. set to 0) 
+  // if only using absolute criteria
+  
+  double thr ; // 0.75 
+  
+  // if using thr, then only base on P2P
+  // i.e. if signal polarity is uncertain
+  
+  bool ignore_neg_peak ; // = false , 
+
+  // use mean versus median 
+  bool   use_mean ; // = false , 
+  
+  // absolute uV threshold for the negative peak (x < th ) 
+  double uV_neg ; // = 0    
+  
+  // absolute uV threshold for peak-to-peak
+  double uV_p2p ; // = 0 ,   
+  
+  // transition frequencies for BPF signal
+  double f_lwr ; // = 0.5 , 
+  double f_upr ; // = 4 , 
+    
+  // duration thresholds for entire SW
+  double t_lwr = 0.8;
+  double t_upr = 2; 
+  
+  // duration of negative deflection only
+  // probably not used if using the above
+  // total wave criteria
+  double t_neg_lwr ; // = 0 ,  // 0.125
+  double t_neg_upr; //  = 0 ,  // 1.5  
+  
+  // as above, but positive half-wave
+  double t_pos_lwr; // = 0 ,  
+  double t_pos_upr; // = 0 ,  
+
+  // based on SO/delta distinction
+  double pct_neg ; // = 0 ,  // DOWN percentile
+  double pct_pos; //  = 0 ,  // UP percentile
+  double t_p2p_min; //  = 0  ,  // DOWN peak - UP peak min time
+  double t_p2p_max; //  = 0  ,  // DOWN peak - UP peak max time 
+  int    SO_delta_mode; // = 0 , // 0 ignore, 1=SO, 2=Delta
+			 			 
+  // default FIR settings for filter-Hilbert
+  double fir_ripple ; // = 0.01 ,
+  double fir_tw ; // = 0.5 			 
+
+  // redundant/ignored for now
+
+  // default is to find ZC pairs that are pos2neg (i.e. DOWN, then UP)
+  bool pos2neg_zc ;  // = T 
+  
+  // SW type (ignored)
+  slow_wave_type type; // = SO_FULL ,
+
+};
+  
+
+
 
 struct slow_wave_t
 {
@@ -54,12 +195,16 @@ struct slow_wave_t
   uint64_t   down_peak, up_peak;
   int        down_peak_sp, up_peak_sp;
 
-  //  bool       neg2pos;   // find neg-to-pos zerocrossing?   otherwise, pos-to-negative
-
+  int        SO_delta; // 0=NA, 1=SO, 2=delta
+  
   std::vector<double> phase;
 
-  double amplitude() const { return fabs( up_amplitude ) + fabs( down_amplitude ) ; } 
+  double amplitude() const { return up_amplitude + fabs( down_amplitude ) ; }
 
+  double pos_amplitude() const { return up_amplitude ; }
+
+  double neg_amplitude() const { return fabs( down_amplitude ) ; }
+  
   double slope_n1() const { 
     if ( type == SO_POSITIVE_HALF ) return 0;
     return down_amplitude / ( (double)(down_peak - interval_tp.start + 1LL ) * globals::tp_duration ); 
@@ -105,7 +250,10 @@ struct slow_wave_t
     return 1.0 / ( 2 * trans() ) ; 
   }
 
-  
+  bool is_SO() const { return SO_delta == 1; }
+
+  bool is_delta() const { return SO_delta == 2; }
+    
   std::string print() const 
   {
     std::stringstream ss;
@@ -133,22 +281,9 @@ struct slow_waves_t
   slow_waves_t( const std::vector<double> & d , 
 		const std::vector<uint64_t> & tp ,
 		const int sr , 
-		const double thr   = 0.75 , 
-		const bool ignore_neg_peak = false ,
-		const bool   use_mean = false , 
-		const double uv_neg = 0 , 
-		const double uv_p2p = 0 ,
-		const double f_lwr = 0.5 ,    
-		const double f_upr = 4 , 
-		const double t_lwr = 0.8 ,
-		const double t_upr = 2 , 		
-		const double t_neg_lwr = 0 , 
-		const double t_neg_upr = 0 , 
-		const double t_pos_lwr = 0 , 
-		const double t_pos_upr = 0 , 
-		const bool   neg2pos = true , 
-		const slow_wave_type type = SO_FULL ,
-		const std::string * cach_name = NULL ,
+		const slow_wave_param_t & par , 
+		const std::string * cach_name_neg = NULL ,
+		const std::string * cach_name_pos = NULL ,
 		edf_t * edf = NULL 
 		);
 
@@ -161,58 +296,16 @@ struct slow_waves_t
 			 // sample rate
 			 const int sr , 
 
-			 // relative threshold based on mean of 
-			 // all SOs (based on negative peak & P2P )
-			 // this might not be used (i.e. set to 0) 
-			 // if only using absolute criteria
+			 // SW detection parameters
+			 const slow_wave_param_t & par ,			 
 			 
-			 const double thr   = 0.75 , 
-			 
-			 // if using thr, then only base on P2P (i.e. 
-			 // i.e. for POL tests, if unknown )
-			 const bool ignore_neg_peak = false , 
-
-			 // use mean versus median 
-			 const bool   use_mean = false , 
-			 
-			 // absolute uV threshold for the negative peak (x < th ) 
-			 const double uV_neg = 0 ,   
-
-			 // absolute uV threshold for peak-to-peak
-			 const double uV_p2p = 0 ,   
-			 
-			 // transition frequencies for BPF signal
-			 const double f_lwr = 0.5 , 
-			 const double f_upr = 4 , 
-			 
-			 // duration thresholds for entire SW
-			 const double t_lwr = 0.8 ,
-			 const double t_upr = 2 , 
-			 
-			 // duration of negative deflection only
-			 // probably not used if using the above
-			 // total wave criteria
-			 const double t_neg_lwr = 0 ,  // 0.125
-			 const double t_neg_upr = 0 ,  // 1.5  
-
-			 // as above, but positive half-wave
-			 const double t_pos_lwr = 0 ,  
-			 const double t_pos_upr = 0 ,  
-
-			 // count negative-to-positive zero-crossings
-			 // as opposed to positive-to-negative
-			 const bool neg2pos = true , 
-			 
-			 const slow_wave_type type = SO_FULL ,
-
 			 // add peaks to a cache? (if label is non-null)
 			 // (requires edf-> also)
-			 const std::string * cache_name = NULL , 
-			 edf_t * edf = NULL ,
+			 const std::string * cache_name_neg = NULL ,
+
+			 const std::string * cache_name_pos = NULL , 
 			 
-			 // default FIR settings for filter-Hilbert
-			 const double fir_ripple = 0.01 ,
-			 const double fir_tw = 0.5 			 
+			 edf_t * edf = NULL
 			 
 			 );
   
@@ -272,8 +365,13 @@ private:
   
   // detection thresholds
   double th_x;        // negative peak (-ve)
+  double th_y;        // positive peak (+ve)
   double th_yminusx;  // p2p
 
+  // percentiles
+  double th_pct_x;       // neg peak (-ve value)
+  double th_pct_y;       // pos peak (+ve value)
+  
   // total signal time in seconds (i.e. denonimnator for SW rate)
   double signal_duration_sec;
   
@@ -281,7 +379,8 @@ private:
   
   bool report_median_stats;
   
-  double avg_x; // minimum amplitude  SW_SMP
+  double avg_x; // minimum amplitude  SW_NEG_AMP
+  double avg_y; // maximum amplitude  SW_POS_AMP
   double avg_yminusx; // peak-to-peak SW_P2P
   double avg_duration_sec; // length  SW_DUR
   double avg_negative_duration_sec; // length, negative half-wave  SW_NEG_DUR
@@ -293,7 +392,8 @@ private:
   double avg_trans, avg_trans_freq;
 
   // median versions
-  double median_x; // minimum amplitude  SW_SMP
+  double median_x; // minimum amplitude  SW_NEG_AMP
+  double median_y; // maximum amplitude  SW_POS_AMP
   double median_yminusx; // peak-to-peak SW_P2P
   double median_duration_sec; // length  SW_DUR
   double median_negative_duration_sec; // length, negative half-wave  SW_NEG_DUR

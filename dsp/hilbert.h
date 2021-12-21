@@ -111,10 +111,14 @@ struct hilbert_t
 		       const bool by_phase = false 
 		       ) const;
   
-private:
+  static void unwrap(std::vector<double> * );
 
+  static double angle_difference( const double , const double );
+  
+private:
+  
   void proc();
-  void unwrap(std::vector<double> * ) const;
+  
   void bin( double ph , int bs , std::vector<int> * acc ) const;
   std::vector<double> input;
   std::vector<double> ph;

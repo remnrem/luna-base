@@ -43,7 +43,7 @@ struct signal_list_t
   int find( const std::string & label ) const 
   { 
     for (int j=0;j<signal_labels.size();j++) 
-      if ( ! Helper::iequals( signal_labels[j] , label ) ) return j;
+      if ( Helper::iequals( signal_labels[j] , label ) ) return j;
     return -1;
   }
 

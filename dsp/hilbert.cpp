@@ -649,7 +649,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 
 
 
-void hilbert_t::unwrap( std::vector<double> * p ) const 
+void hilbert_t::unwrap( std::vector<double> * p )
 {
   
   // http://homepages.cae.wisc.edu/~brodskye/mr/phaseunwrap/unwrap.c
