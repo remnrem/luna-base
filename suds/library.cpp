@@ -648,7 +648,7 @@ void suds_t::attach_db( const std::string & file0 , bool read_db , bool read_wdb
       
       suds_indiv_t * trainer = trainers[i];	  
 
-      trainer->fit_lda();
+      trainer->fit_qlda();
       
       //
       // store in the relevant bank(s):

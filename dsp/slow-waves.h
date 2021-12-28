@@ -43,19 +43,19 @@ struct slow_wave_param_t {
   {
 
     // freq.
-    f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.2  ; 
-    f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.5  ; 
+    f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.5  ; 
+    f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.0  ; 
     
     // time - for full wave
     t_lwr = param.has( "t-lwr" ) ? param.requires_dbl( "t-lwr" ) : 0 ;
-    t_upr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 10 ;
+    t_upr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 2 ;
 
     // time - separately for neg and pos HWs
     t_neg_lwr = param.has( "t-neg-lwr" ) ? param.requires_dbl( "t-neg-lwr" ) : 0;
-    t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 10;
+    t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 0;
 
     t_pos_lwr = param.has( "t-pos-lwr" ) ? param.requires_dbl( "t-pos-lwr" ) : 0;
-    t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 10;
+    t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 0;
 
     // amplitude thresholds
 

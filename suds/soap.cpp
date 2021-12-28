@@ -103,7 +103,7 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   Eigen::MatrixXd pp;
   
   int dummy = self_classify( NULL , &pp );
-  
+
   if ( dummy == 0 ) 
     {
       logger << "  *** not enough data/variability to fit LDA\n";
@@ -145,14 +145,16 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
   const int ne_all = edf.timeline.num_epochs();
 
-  std::vector<std::string> final_pred = suds_t::max( pp , lda_model.labels );
+  const std::vector<std::string> & labels = suds_t::qda ? qda_model.labels : lda_model.labels ; 
+  
+  std::vector<std::string> final_pred = suds_t::max( pp , labels );
 
   summarize_kappa( final_pred , true );
 
-  const int bad_epochs = summarize_stage_durations( pp , lda_model.labels , ne_all , epoch_sec );
+  const int bad_epochs = summarize_stage_durations( pp , labels , ne_all , epoch_sec );
   
   if ( epoch_level_output )
-    summarize_epochs( pp , lda_model.labels , ne_all , edf );
+    summarize_epochs( pp , labels , ne_all , edf );
 
 
   //
@@ -162,9 +164,9 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   if ( param.has( "annot" ) )
     {
       const std::string annot_folder = param.has("annot-dir") ? param.value( "annot-dir" ) : "./";      
-      write_annots( annot_folder , param.value( "annot" ) , pp , lda_model.labels , ne_all , edf );
+      write_annots( annot_folder , param.value( "annot" ) , pp , labels , ne_all , edf );
     }
-
+  
 }
 
 
@@ -183,18 +185,24 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   // fit the LDA to self
   //
   
-  fit_lda();
+  fit_qlda();
   
-  if ( ! lda_model.valid )
+  if ( suds_t::qda && ! qda_model.valid )
+    return 0;
+  
+  if ( (!suds_t::qda) && ! lda_model.valid )
     return 0;
   
   //
   // get predictions
   //
-
-  lda_posteriors_t prediction = lda_t::predict( lda_model , U );
-
   
+  posteriors_t prediction;
+  if ( suds_t::qda )
+    prediction = posteriors_t( qda_t::predict( qda_model , U ) ) ; 
+  else
+    prediction = posteriors_t( lda_t::predict( lda_model , U ) ) ; 
+
   // save posteriors?
   if ( pp != NULL ) *pp = prediction.pp ;
 
@@ -250,10 +258,12 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
 
       // map labels to slots in PP matrix (this might be non-standard, e.g. no REM) for a
       // given trainer, and so we cannot assume canonical slot positions
-
+      
+      std::vector<std::string> labels = suds_t::qda ? qda_model.labels : lda_model.labels;
+      
       std::map<std::string,int> label2slot;
-      for (int j=0;j<lda_model.labels.size();j++)
-	label2slot[ lda_model.labels[j] ] = j ;
+      for (int j=0;j< labels.size();j++)
+	label2slot[ labels[j] ] = j ;
       
       // check PP for the observated stage
       for (int i=0;i<nve;i++)

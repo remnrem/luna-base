@@ -59,6 +59,7 @@
 #include "stats/glm.h"
 
 #include "stats/lda.h"
+#include "stats/qda.h"
 
 #include "annot/annot.h"
 

@@ -2026,6 +2026,63 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(1);
     }
 
+
+  if ( p == "qda" )
+    {
+      std::vector<std::string> y;
+      const int nrows = 1257;
+      const int nvars = 18;
+      
+      Eigen::MatrixXd X( nrows , nvars );
+      
+      std::ifstream INY( Helper::expand("~/y.txt" ).c_str() , std::ios::in );
+      int k = 0;
+      while ( ! INY.eof() )
+	{
+	  std::string s;
+	  INY >> s;
+	  if ( INY.eof() ) break;
+	  y.push_back(s);
+	}
+
+      INY.close();
+      int i = 0 , j = 0;
+      std::ifstream INX( Helper::expand( "~/x.txt" ).c_str() , std::ios::in );
+      while ( ! INX.eof() )
+        {
+          double d;
+          INX >> d;
+          if ( INX.eof() ) break;
+          X(i,j) = d;
+	  ++j;
+	  if ( j == nvars ) { ++i; j=0; }
+	}
+      INX.close();
+      std::cerr << "done reading\n";
+
+      std::cout << " set up ..\n";
+      qda_t qda( y , X );
+
+      std::cout << " fitting...\n";
+      
+      qda_model_t fit = qda.fit();
+
+      std::cout << " predictiong...\n";
+
+      qda_posteriors_t pp = qda.predict( fit , X );
+
+      for (int i=0;i<pp.pp.rows() ;i++)
+	{
+	  for (int j=0;j<pp.pp.cols();j++)
+	    std::cout << " " << pp.pp(i,j);
+	  std::cout << "\t" << pp.cl[i] << "\n";
+
+	}      
+      
+      std::exit(1);
+      
+    }
+
   
   if ( p == "lda" )
     {

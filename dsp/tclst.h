@@ -61,6 +61,9 @@ struct tclst_t {
   // time axis
   std::vector<double> t;
 
+  // means (total)
+  std::vector<double> tm;
+  
   void cluster( const int k );
     
   // cluster solution: number of clustrers
@@ -72,7 +75,8 @@ struct tclst_t {
   // size
   // hierarchical cluster solution
   cluster_solution_t sol;
-
+  std::map<int,std::vector<double> > clmeans;
+  
   // solution from K-means (K --> X maps) 
   std::map<int,Data::Matrix<double> > kmeans;
   std::map<int,std::vector<int> > ksol;

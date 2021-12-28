@@ -3811,9 +3811,8 @@ void annotation_set_t::set( edf_t * edf )
 annot_t * annotation_set_t::from_EDF( edf_t & edf )
 {
   
-  logger << "  extracting 'EDF Annotations' track\n";
+  logger << "  extracting 'EDF Annotations' track\n";  
   
-
   // create a single annotation (or bind to it, if it already exists)
   
   annot_t * a = edf.timeline.annotations.add( globals::edf_annot_label );
@@ -3827,7 +3826,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
   
   while ( r != -1 )
     {
-
+      
       for ( int s = 0 ; s < edf.header.ns; s ++ )
 	{
 	  
@@ -3852,13 +3851,13 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		      
 		      // stop is one past the end 
 		      uint64_t stop_tp  = start_tp + dur_tp ;
-
+		      
 		      // CHANGE: zero-lengh annot is [a,a), so comment out the below
 		      // ensure at least one tp (i.e. zero-length annotation is (a,a+1)
 		      // if ( stop_tp == start_tp ) stop_tp += 1LLU;
 		      
 		      interval_t interval( start_tp , stop_tp );
-
+		      
 		      // trim, and remap (also by default swap spaces)
 		      std::string inst_name = nsrr_t::remap( Helper::trim( te.name ) );
 		    

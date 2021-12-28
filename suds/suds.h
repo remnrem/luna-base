@@ -32,9 +32,37 @@
 #include <set>
 #include <map>
 #include "stats/lda.h"
+#include "stats/qda.h"
 
 #include "eval.h"
 #include "helper/helper.h"
+
+
+// helper to get posteriors from either LDA or QDA
+
+struct posteriors_t {
+  
+  posteriors_t() { } 
+  
+  posteriors_t( const lda_posteriors_t & rhs )
+  {
+    pp = rhs.pp;
+    cl = rhs.cl;
+    cli = rhs.cli;
+  }
+  
+  posteriors_t( const qda_posteriors_t & rhs )
+  {
+    pp = rhs.pp;
+    cl = rhs.cl;
+    cli = rhs.cli;    
+  }  
+  Eigen::MatrixXd pp;
+  std::vector<std::string> cl;
+  std::vector<int> cli; // as above, but index
+    
+};
+
 
 struct edf_t;
 
@@ -111,6 +139,9 @@ struct suds_model_t {
   bool read( const std::string & ,
 	     const std::string & winfile = "" , 
 	     const std::string & woutfile = "" );
+
+  // use default
+  void default_model();
   
   bool write( const std::string & ); // why?
 
@@ -214,25 +245,25 @@ struct suds_indiv_t {
   inline static void bskip_dbl( std::ifstream & , const int n);
 				
   //
-  // fit LDA, i.e. after reloading U
+  // fit LDA/QDA, i.e. after reloading U
   //
 
-  void fit_lda();
+  void fit_qlda();
 
 
   //
   // make predictions given a different individual's signal data
   //
-
-  lda_posteriors_t predict( const suds_indiv_t & trainer );
-
+  
+  posteriors_t predict( const suds_indiv_t & trainer );
+  
   //
   // add a prediction from one trainer
   //
 
-  void add( const std::string & id , const lda_posteriors_t & );
-
-
+  void add( const std::string & id , const posteriors_t & );  
+  
+  
   //
   // self-classify / run SOAP (which epochs are not self-predicted?)
   //
@@ -337,9 +368,11 @@ struct suds_indiv_t {
   Eigen::MatrixXd h1, h2, h3;
 
   
-  // LDA
+  // LDA/QDA
   std::vector<std::string> y;
   lda_model_t lda_model; // calculated on reload for trainers
+  qda_model_t qda_model; // calculated on reload for trainers
+  
   
   // staging
   std::vector<suds_stage_t> obs_stage;       // always all epochs
@@ -400,7 +433,13 @@ struct suds_t {
   static void read_elapsed_stages( const std::string & f );
   
   static void set_options( param_t & param );
-  
+
+  //
+  // LDA/QDA
+  //
+
+  static bool qda;
+
   //
   // SUDS parameters, needed to be the same across all individuals
   //

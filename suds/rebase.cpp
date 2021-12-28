@@ -85,7 +85,7 @@ void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
   
   // fit LDA: populates suds_indiv_t::model object
 
-  fit_lda();
+  fit_qlda();
 
   if ( ! lda_model.valid )
     {
@@ -121,7 +121,7 @@ void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
   // based on PSD estimated from differently-sized epochs
 
 
-  lda_posteriors_t new_staging = predict( old_self );
+  posteriors_t new_staging = predict( old_self );
   
   //
   // output stage probabilities ( new_staging.pp ) 

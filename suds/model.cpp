@@ -244,6 +244,156 @@ bool suds_model_t::read( const std::string & modelfile ,
   return true;
 }
       
+void suds_model_t::default_model()
+{
+  //  channels used, and sample rates  (CH)
+  //  the number of SVD components that will be extracted (NC)
+  //  the features to construct the raw matrix (SPEC, etc)
+
+  // suds_t::nc = 0;
+  
+  // // ensure we have initiated the maps
+  // init();
+  
+  // if ( ! Helper::fileExists( modelfile ) )
+  //   Helper::halt( "could not open " + modelfile );
+
+  // // clear any current specifications
+  // specs.clear();
+  
+  // std::ifstream IN1( modelfile.c_str() , std::ios::in );
+  // while ( ! IN1.eof() )
+  //   {
+  //     std::string line;
+  //     Helper::safe_getline( IN1 , line );
+  //     if ( line == "" ) continue;
+  //     if ( line[0] == '%' ) continue;
+      
+  //     // expecting format:
+  //     //  CHANNEL CH SR 
+  //     //  FEATURE  { CH } { KEY=VAL }
+  //     //  i.e. either a channel, or (if has an '=') an argument
+
+  //     std::vector<std::string> tok = Helper::parse( line , " \t" );
+      
+  //     if ( tok.size() < 2 ) Helper::halt( "bad format for line: " + line );
+
+  //     // channel specifier?
+  //     if ( Helper::toupper( tok[0] ) == "CH" )
+  // 	{
+  // 	  if ( tok.size() != 3 )
+  // 	    Helper::halt( "expecing: CH label SR" );
+	  
+  // 	  int sr ;
+  // 	  if ( ! Helper::str2int( tok[2] , &sr ) )
+  // 	    Helper::halt( "bad format: " + line );
+	  
+  // 	  // store
+  // 	  chs[ tok[1] ] = suds_channel_t( tok[1] , sr ) ;
+
+  // 	  // next line
+  // 	  continue;
+  // 	}
+
+  //     // component (NC) specifier?
+  //     if ( Helper::toupper( tok[0] ) == "NC" )
+  // 	{
+  // 	  if ( tok.size() != 2 )
+  //           Helper::halt( "expecing: NC value" );
+
+  // 	  int nc ;
+  // 	  if ( ! Helper::str2int( tok[1] , &nc ) )
+  //           Helper::halt( "bad format: " + line );
+  // 	  if ( nc < 1 )
+  // 	    Helper::halt( "bad format: " + line );
+
+  // 	  suds_t::nc = nc;
+  // 	  continue;
+  // 	}
+
+      
+  //     // feature specifier?
+
+  //     if ( lab2ftr.find( Helper::toupper( tok[0] ) ) == lab2ftr.end() )
+  // 	Helper::halt( "feature not recognized: " + tok[0] );
+
+  //     // get list of channels, args separately
+  //     std::vector<std::string> tchs;
+  //     std::map<std::string,double> targs;
+
+  //     for (int i=1; i<tok.size(); i++)
+  // 	{
+  // 	  std::vector<std::string> tok2 = Helper::parse( tok[i] , '=' );
+	  
+  // 	  if ( tok2.size() > 2 ) Helper::halt( "bad format: " + tok[i] );
+	  
+  // 	  // add as a channel
+  // 	  if ( tok2.size() == 1 )
+  // 	    {
+  // 	      // has the channel already been specified via CH?
+  // 	      if ( tok2[0] != "." && chs.find( tok2[0] ) == chs.end() )
+  // 		Helper::halt( tok2[0] + " not specified via 'CH' yet: " + line );	      
+  // 	      tchs.push_back( tok2[0] );
+  // 	    }
+  // 	  else
+  // 	    {
+  // 	      double val = 0;
+  // 	      if ( ! Helper::str2dbl( tok2[1] , &val ) )
+  // 		Helper::halt( "bad numeric input: " + tok[i] );
+  // 	      targs[ tok2[0] ] = val;
+  // 	    }
+  // 	}
+
+  //     // if no channels, e.g. could be a time-track; denote that it is empty
+  //     if ( tchs.size() == 0 )
+  // 	tchs.push_back( "." );
+  //     // add each channel separately (w/ the same args)
+      
+  //     for (int c=0; c<tchs.size(); c++)
+  // 	{
+  // 	  suds_spec_t spec;	  
+  // 	  spec.ftr = lab2ftr[ Helper::toupper( tok[0] ) ];
+  // 	  spec.ch = tchs[c];
+  // 	  spec.arg = targs;
+
+  // 	  // but check we only have each feature/channel pair specified
+  // 	  // not more than once
+  // 	  if ( fcmap.find( spec.ftr ) != fcmap.end() )
+  // 	    {
+  // 	      std::map<std::string,suds_spec_t>::const_iterator ff = fcmap.find( spec.ftr )->second.find( spec.ch );
+  // 	      if ( ff != fcmap.find( spec.ftr )->second.end() )
+  // 		Helper::halt( "cannot specify feature/channel pair more than once" );
+  // 	    }
+
+  // 	  // track we've done this feature/channel combo
+  // 	  fcmap[ spec.ftr ][ spec.ch ] = spec;
+	  
+  // 	  // add to the main list (in order)
+  // 	  specs.push_back( spec );
+  // 	}
+  //   }
+
+  // // check that NC was specified
+  // if ( suds_t::nc == 0 )
+  //   Helper::halt( "model file did not specify the number of components (NC)" );
+
+  // // make sure commands have the required arguments
+  // check_args();
+
+  // // track the implied total # of features
+  // suds_t::nf = cols();
+  // suds_t::ns = chs.size();
+    
+  // logger << "  using default model, with " << specs.size() << " feature specifications ("
+  // 	 << suds_t::nf << " total features on " << suds_t::ns << " channels)\n";
+  
+  // // construct the map of specs/channels to feature columns
+  // build_colmap();
+  
+  // // use default weights
+  // set_weights();  
+  
+}
 
 bool suds_model_t::write( const std::string & modelfile )
 {

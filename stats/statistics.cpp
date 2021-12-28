@@ -2876,3 +2876,43 @@ double Statistics::runs_test( const std::vector<std::string> & s )
 
 
 
+std::map<int,std::vector<double> > Statistics::group_means( const Data::Matrix<double> & x , const std::vector<int> & g )
+{
+  std::map<int,std::vector<double> > m;
+  std::map<int,int> c;
+
+  const int n = g.size();
+  if ( n != x.dim1() )
+    Helper::halt( "bad inputs to Statistics::group_means()" );
+
+  if ( n == 0 )
+    Helper::halt( "empty Statistics::group_means()" );
+
+  const int p = x.dim2();
+
+  // initialize
+  std::vector<double> t(p,0);
+  for (int i=0; i<n; i++)
+    if ( m.find(g[i]) == m.end() )
+      m[g[i]] = t;
+
+  // count
+  for (int i=0; i<n; i++)
+    {
+      c[g[i]]++;
+      std::vector<double> t(p,0);
+      for (int j=0; j<p; j++)
+	m[g[i]][j] += x(i,j);      
+    }
+
+  std::map<int,std::vector<double> >::iterator gg = m.begin();
+  while ( gg != m.end() )
+    {
+      for (int j=0; j<p; j++)
+	gg->second[j] /= (double)c[ gg->first ];
+      ++gg;
+    }
+  
+  return m;
+  
+}

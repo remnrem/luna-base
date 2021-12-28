@@ -20,8 +20,8 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __LDA_H__
-#define __LDA_H__
+#ifndef __QDA_H__
+#define __QDA_H__
 
 #include "stats/Eigen/Dense"
 #include "helper/helper.h"
@@ -31,49 +31,31 @@
 
 typedef Eigen::Array<double, 1, Eigen::Dynamic> ArrayXd;
 
-struct lda_model_t {
+struct qda_model_t {
   
-  lda_model_t()
+  qda_model_t()
   {
     valid = false;
     errmsg = "";
   }
 
    
-  bool valid;
-
+  bool valid;  
   std::string errmsg;
   
   ArrayXd prior;
   std::map<std::string,int> counts;
+  ArrayXd rows;
   Eigen::MatrixXd means;
-  Eigen::MatrixXd scaling; // diagonal matrix
-  int n;
-  ArrayXd svd;
+  std::vector<Eigen::MatrixXd> scaling;
+  std::vector<double> ldet;
+  int n; 
   std::vector<std::string> labels;
-
-  ArrayXd prop_trace() const
-  {
-    ArrayXd t( svd.size() );
-
-    double sum = 0;
-
-    for (int i=0;i<svd.size();i++)
-      {
-	t[i] = svd[i] *	svd[i];
-	sum += svd[i] * svd[i];
-      }
-
-    for	(int i=0;i<svd.size();i++)
-      t[i] /= sum;
-
-    return t;
-  }
   
 };
 
 
-struct lda_posteriors_t {
+struct qda_posteriors_t {
 
   // cols = classes
   // rows = observations
@@ -88,31 +70,31 @@ struct lda_posteriors_t {
 };
 
 
-class lda_t {
+class qda_t {
   
  public:
   
- lda_t( const std::vector<std::string> & y ,
+ qda_t( const std::vector<std::string> & y ,
 	const Eigen::MatrixXd & X )	
    : y(y) , X(X)
   {
     
-    tol = 1e-4;
+    tol = 1e-8;
     
     missing = "?";
     
   } 
-
+  
   // support for adding extra columns (i.e. without caller having to remake X)
- lda_t( const std::vector<std::string> & y ,
-	const Eigen::MatrixXd & X1 , 
-	const Eigen::MatrixXd & X2 
-	)
-   : y(y) 
+  qda_t( const std::vector<std::string> & y ,
+	 const Eigen::MatrixXd & X1 , 
+	 const Eigen::MatrixXd & X2 
+	 )
+    : y(y) 
   {
     
     const int nr = X1.rows() ;
-    if ( nr != X2.rows() ) Helper::halt( "internal error in lda_t" );
+    if ( nr != X2.rows() ) Helper::halt( "internal error in qda_t" );
     
     const int nc1 = X1.cols();
     const int nc2 = X2.cols();
@@ -130,14 +112,14 @@ class lda_t {
 
   }
   
-  lda_model_t fit( const bool flat_priors = false );
+  qda_model_t fit( const bool flat_priors = false );
   
-  static lda_posteriors_t predict( const lda_model_t & , const Eigen::MatrixXd & X );
+  static qda_posteriors_t predict( const qda_model_t & , const Eigen::MatrixXd & X );
 
-  static lda_posteriors_t predict( const lda_model_t & model , const Eigen::MatrixXd & X , const Eigen::MatrixXd & X2 )
+  static qda_posteriors_t predict( const qda_model_t & model , const Eigen::MatrixXd & X , const Eigen::MatrixXd & X2 )
   {
     const int nr = X.rows() ;
-    if ( nr != X2.rows() ) Helper::halt( "internal error in lda_t" );
+    if ( nr != X2.rows() ) Helper::halt( "internal error in qda_t" );
     const int nc1 = X.cols();
     const int nc2 = X2.cols();
     Eigen::MatrixXd XX = Eigen::MatrixXd::Zero( nr , nc1 + nc2 );
@@ -155,7 +137,7 @@ class lda_t {
   std::vector<std::string> y;
 
   Eigen::MatrixXd X;
-
+  
   double tol;
   
   std::string missing;

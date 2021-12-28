@@ -133,6 +133,8 @@ namespace Statistics {
   Data::Vector<double> row_sums( const Data::Matrix<double> & );
   Data::Vector<double> col_sums( const Data::Matrix<double> & );
 
+  std::map<int,std::vector<double> > group_means( const Data::Matrix<double> & x , const std::vector<int> & g );
+  
   double mean( const Data::Vector<double> & );
   double variance( const Data::Vector<double> & , int w = 0 );
 

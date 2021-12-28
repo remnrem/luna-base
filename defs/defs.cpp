@@ -829,6 +829,8 @@ void globals::init_channel_types()
   add_channel_map( "F3" , EEG );
   add_channel_map( "F4" , EEG );
   add_channel_map( "T3" , EEG );
+  add_channel_map( "T5" , EEG );
+  add_channel_map( "T6" , EEG );
   add_channel_map( "T4" , EEG );
   add_channel_map( "O1" , EEG );
   add_channel_map( "O2" , EEG );

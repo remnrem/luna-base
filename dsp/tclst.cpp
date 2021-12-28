@@ -66,7 +66,12 @@ void dsptools::tclst( edf_t & edf , param_t & param )
   // default:
   if ( ! ( use_complex_dist || use_amp || use_phase ) ) { use_amp = use_phase = true; }
 
+  //
+  // Verbose report for one SW? (1-based syntax)
+  //
 
+  const int verbose_interval = param.has( "report" ) ? param.requires_int( "report" ) - 1 : -1; 
+  
   //
   // clustering
   //
@@ -87,9 +92,10 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 
   //
   // hierarchical complete-linkage clustering
+  // (if -1, use silhouette, and replace hcK w/ selected value)
   //
 
-  const int hcK = param.has( "hc" ) ? param.requires_int( "hc" ) : 0 ;
+  int hcK = param.has( "hc" ) ? param.requires_int( "hc" ) : 0 ;
   
 
   //
@@ -247,12 +253,21 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       //
       
       // peaks/intervals (ni) * time-points (points) * signals (ns) 
-      std::vector<Eigen::MatrixXd> X(ni); // signal amplitudes (filtered)
-      std::vector<Eigen::MatrixXd> P(ni); // phases
+      //                                     complex | non-complex
+      std::vector<Eigen::MatrixXd> X(ni); // real    | signal amplitudes (filtered)
+      std::vector<Eigen::MatrixXd> P(ni); // imag    | phases
+      std::vector<Eigen::MatrixXd> P2(ni); // store phases for output, if in complex mode
+      std::vector<Eigen::MatrixXd> ZP2(ni); // store phases for output, if in complex mode
+
       for (int i=0; i<ni; i++)
 	{
 	  X[i] = Eigen::MatrixXd::Zero( points , ns );
 	  P[i] = Eigen::MatrixXd::Zero( points , ns );
+	  if ( use_complex_dist )
+	    {
+	      P2[i] = Eigen::MatrixXd::Zero( points , ns );
+	      ZP2[i] = Eigen::MatrixXd::Zero( points , ns );
+	    }
 	}
       
       //
@@ -282,8 +297,12 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 
 	  if ( use_complex_dist )
 	    {
+	      
 	      const std::vector<dcomp> cmp = ht.get_complex();
 
+	      // also store phase for outputs
+	      const std::vector<double> * phase = ht.phase();
+	      
 	      // populate each interval
 	      //   X = real, P = imag
               for (int i=0; i<ni; i++)
@@ -293,6 +312,8 @@ void dsptools::tclst( edf_t & edf , param_t & param )
                     {
                       X[i](p,s) = std::real( cmp[s1] );
                       P[i](p,s) = std::imag( cmp[s1] );
+		      P2[i](p,s) = (*phase)[s1];
+		      ZP2[i](p,s) = (*phase)[s1];
                       ++s1;
                     }
                 }	      
@@ -308,142 +329,247 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	      // populate each interval
 	      for (int i=0; i<ni; i++)
 		{	      	      
-		  std::vector<double> ph( points );
-		  
 		  int s1 = starts[i];
 		  for (int p=0; p<points; p++)
 		    {		  
+		      //std::cout << "det " << p << " " << (*signal)[s1] << " " << (*phase)[s1] << "\n";
 		      P[i](p,s) = (*phase)[s1];
 		      X[i](p,s) = (*signal)[s1];
 		      ++s1;
 		    }	      
 		}
 	    }
-	  
-
-
+	 
 	  
 	  // next signal
 	}
+
+      //
+      // Save originals if verbose-reporting for one interval?
+      //
+
+      if ( verbose_interval >= ni )
+	Helper::halt( "bad report=interval specified" );
       
-      
-      //      std::vector<Eigen::MatrixXd> P2 = P;
-      
+      Eigen::MatrixXd P0, X0;
+      if ( verbose_interval >= 0 )
+	{
+	  P0 = P[verbose_interval];
+	  X0 = X[verbose_interval];	  
+	}
+    
       //
       // Normalize phases by the seed channel (i.e. relative phase,
       // shortest distance wrapping angles)
       //
+
+
+      // phase : 0      = positive peak       
+      //         +pi/2  = pos-2-neg ZC
+      //         +/- pi = negative peak
+      //         -pi/2  = neg-2-pos ZC
+
+      // +ve phase difference: A-B --> A comes first 
+      // -ve phase difference: A-B --> B comes first
       
       if ( ! use_complex_dist )
 	{
+
+	  //
+	  // Normalize amplitudes by mean of seed at peak
+	  //
+
+	  double amp_mean = 0;
+	  for (int i=0; i<ni; i++)
+	    amp_mean += X[i](half_points1,seed_n);
+	  amp_mean /= (double)ni;
 	  
 	  for (int i=0; i<ni; i++)
+	    X[i] /= amp_mean;
+
+	}
+
+      
+      //
+      // Normalize phases 
+      //
+      
+      std::vector<double> mean_phase( ni , 0 );
+      std::vector<double> mean_phase_normed( ni , 0 );
+      
+      for (int i=0; i<ni; i++)
+	{
+
+	  // nb. given mode, point to correct lot
+	  Eigen::MatrixXd & m = use_complex_dist ? P2[i] : P[i];
+	  
+	  const int r = m.rows();
+	  const int midp = half_points1;
+	  
+	  std::vector<double> midp_diff( ns );
+	  
+	  // get difference between seed and each channel at mid-points
+	  for ( int s=0; s<ns; s++)
 	    {
 	      
-	      Eigen::MatrixXd & m = P[i];
+	      midp_diff[s] =
+		MiscMath::deg2rad( MiscMath::angle_difference( MiscMath::rad2deg( M_PI + m(midp,seed_n) ) ,
+							       MiscMath::rad2deg( M_PI + m(midp,s) ) ) );
 	      
-	      const int r = m.rows();
-	      const int midp = half_points1;
+	      mean_phase[s] += m(midp,s);
+	      mean_phase_normed[s] += midp_diff[s];
 	      
-	      std::vector<double> midp_diff( ns );
-
-	      // get difference between seed and each channel at mid-points
-	      for ( int s=0; s<ns; s++)
-		{
-		  writer.level( signals.label(s) , globals::signal_strat );
-		  writer.value( "PH" , m(midp,s) );
-
-		  midp_diff[s] =
-		    MiscMath::deg2rad( MiscMath::angle_difference( MiscMath::rad2deg( M_PI + m(midp,s) ) ,
-								   MiscMath::rad2deg( M_PI + m(midp,seed_n) ) ) );
-		  
-		  //midp_diff[s] = m(midp,s) - m(midp,seed_n) ;
-
-		}
-
-	      writer.unlevel( globals::signal_strat );
-
-
-	      //
-	      // unwrap each channel
-	      //
-	      
-	      for ( int s=0; s<ns; s++)
-		{
-		  std::vector<double> pp = eigen_ops::copy_array( m.col(s) ) ;
-		  hilbert_t::unwrap( &pp );
-		  
-		  const double midph = pp[midp];
-		  
-		  // normalize by midpoint for this channel, but adding in offset of seed mid-point too
-		  for (int p=0; p<r; p++)
-		    pp[p] = pp[p] - midph + midp_diff[s] ;	      
-		  
-		  m.col(s) = eigen_ops::copy_array( pp );
-		}
-
-	      //                  XXX
-	      // SEED   1    1.5   2   2.5  3    0   
-	      // CH     1.1  1.6   2.1 2.6  3.2  0.2 
-	      
-	      //        -1   -0.5  0   0.5  1    PI         
-	      //                   0.1 0.6  1.2  
-	      
-	      // next interval
 	    }
 	  
+	  //
+	  // unwrap each channel
+	  //
+	  
+	  for ( int s=0; s<ns; s++)
+	    {
+	      std::vector<double> pp = eigen_ops::copy_array( m.col(s) ) ;
+	      hilbert_t::unwrap( &pp );
+	      
+	      // mid-point for this channel
+	      const double midph = pp[midp];
+	      
+	      // normalize by midpoint for this channel
+	      //  but also scale relative to seed channel ( midp_diff[] )
+	      for (int p=0; p<r; p++)
+		pp[p] = pp[p] - midph + midp_diff[s] ;	      
+	      
+	      m.col(s) = eigen_ops::copy_array( pp );
+	    }
+	  
+	  //                  XXX
+	  // SEED   1    1.5   2   2.5  3    0   
+	  // CH     1.1  1.6   2.1 2.6  3.2  0.2 
+	  
+	  //        -1   -0.5  0   0.5  1    PI         
+	  //                   0.1 0.6  1.2  
+	  
+	  // next interval
 	}
       
-      
-      // show raw data for a random point 
-      // if ( 0 )
-      // 	{
-      // 	  for (int p=0; p<points; p++)
-      // 	    {
-      // 	      std::cout << "EX " << p << "\t"
-      // 			<< t[p] << "\t"
-      // 			<< (p == half_points1 ? 1 : 0 ) ; 
-      // 	      for (int s=0; s<ns; s++)
-      // 		std::cout << "\t" << X[21](p,s)
-      // 			  << "\t" << P[21](p,s)
-      // 			  << "\t" << P2[21](p,s);
-      // 	      std::cout << "\n";
-      // 	    }
-      // 	}
-      
 
+      // make ZPH for complex mode (output)
+
+      if ( use_complex_dist )
+	{
+	  for (int i=0;i<ni;i++)
+	    {
+	      Eigen::VectorXd seed = ZP2[i].col(seed_n);
+	      for (int s=0;s<ns;s++)
+		for (int p=0;p<points;p++)
+		  {
+		    ZP2[i](p,s) = MiscMath::deg2rad( MiscMath::angle_difference( MiscMath::rad2deg( M_PI + ZP2[i](p,seed_n) ) ,
+										 MiscMath::rad2deg( M_PI + ZP2[i](p,s) ) ) ) ;
+		  }
+	    }
+	}
+      
+      // report phase means (at seed points)
+      
+      for ( int s=0; s<ns; s++)
+	{
+	  writer.level( signals.label(s) , globals::signal_strat );
+	  writer.value( "PH" , mean_phase[s] / (double) ni );
+	  writer.value( "ZPH" , mean_phase_normed[s] / (double) ni );
+	}
+      writer.unlevel( globals::signal_strat );
       
       
       //
-      // now, initiate distance calculation and clustering for this set of intervals
+      // verbose report?
+      //
+
+      if ( verbose_interval >= 0 )
+	{
+	  const Eigen::MatrixXd & XX = X[ verbose_interval ];
+	  const Eigen::MatrixXd & PP = P[ verbose_interval ];
+	  	  
+	  for (int s=0; s<ns; s++)
+	    for (int p=0; p<points; p++)
+	      std::cout << chs[s] << "\t"
+			<< p - half_points1 << "\t"
+			<< X0(p,s) << "\t"
+			<< XX(p,s) << "\t"
+			<< P0(p,s) << "\t"
+			<< PP(p,s) << "\n";
+	}
+      
+      //
+      // initiate distance calculation and clustering for this set of intervals
       //
 
       
-      tclst_t tc( use_amp ? &X : NULL ,
-		  use_phase ? &P : NULL ,
+      tclst_t tc( use_complex_dist || use_amp ? &X : NULL ,
+		  use_complex_dist || use_phase ? &P : NULL ,
 		  chs , t , k1 , k2 ,
 		  hcK,
 		  use_complex_dist );
      
       //
-      // Outputs
+      // output overall feature means
       //
 
+      int c = 0;
+      for (int s=0; s<ns; s++)
+	{
+	  writer.level( signals.label(s) , globals::signal_strat );
+	  
+	  for (int p=0; p<points; p++)
+	    {
+	      writer.level( p - half_points1 , globals::sample_strat );
+	      if ( use_amp ) writer.value( "A" , tc.tm[ c++ ] );
+	      if ( use_phase ) writer.value( "P" , tc.tm[ c++ ] );      
+	    }	      
+	  writer.unlevel( globals::sample_strat );
+	}
+      writer.unlevel( globals::signal_strat );	      
 
+      
+      //
       // k-means features
-
+      //
+      
+      Data::Matrix<double> Pa, ZPa;
+      if ( use_complex_dist )
+	{
+	  Pa.resize( ni , ns * points );
+	  ZPa.resize( ni , ns * points );
+	  for (int i=0; i<ni; i++)
+	    {
+	      int c = 0;
+	      for (int s=0; s<ns; s++)
+		for (int p=0; p<points; p++)
+		  {
+		    Pa(i,c) = P2[i](p,s);
+		    ZPa(i,c) = ZP2[i](p,s);
+		    ++c;
+		  }
+	      
+	    }	  	  
+	}
+      
       for (int kn=k1; kn<=k2; kn++)
 	{
 	  writer.level( kn , "KN" );
-
-	  const Data::Matrix<double> & km = tc.kmeans[kn];
-	  //	  std::cout << " dim km " << km.dim1() << " " << km.dim2() << "\n";
+	  
+	  const Data::Matrix<double> & km = tc.kmeans[kn];	  
+	  
+	  std::map<int,std::vector<double> > pclmeans, zpclmeans;
+	  if ( use_complex_dist )
+	    {
+	      pclmeans = Statistics::group_means( Pa , tc.ksol[kn] );
+	      zpclmeans = Statistics::group_means( ZPa , tc.ksol[kn] );
+	    }
 	  
 	  for (int k=0; k<kn; k++)
 	    {
 	      writer.level( k+1, globals::cluster_strat );
 	      
-	      int c = 0;
+	      int c = 0, c2 = 0;
 	      for (int s=0; s<ns; s++)
 		{
 		  writer.level( signals.label(s) , globals::signal_strat );
@@ -451,9 +577,10 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 		  for (int p=0; p<points; p++)
 		    {
 		      writer.level( p - half_points1 , globals::sample_strat );
-		      if ( use_amp ) writer.value( "A" , km( c++ , k ) );
-		      if ( use_phase ) writer.value( "P" , km( c++ , k ) );
-		      
+		      if ( use_complex_dist || use_amp ) writer.value(  use_complex_dist ? "REAL" : "A"  , km( c++ , k ) );
+		      if ( use_complex_dist || use_phase ) writer.value(  use_complex_dist ? "IMAG" : "P"  , km( c++ , k ) );
+		      if ( use_complex_dist ) writer.value( "PH" , pclmeans[k][c2++] );
+		      if ( use_complex_dist ) writer.value( "ZPH" , zpclmeans[k][c2++] );
 		    }	      
 		  writer.unlevel( globals::sample_strat );
 		}
@@ -465,6 +592,43 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       writer.unlevel( "KN" );
 
 
+      //
+      // hierarchical clustering group means
+      //
+
+      hcK = tc.sol.k;
+
+      std::map<int,std::vector<double> > pclmeans, zpclmeans;
+      if ( use_complex_dist )
+	{
+	  pclmeans = Statistics::group_means( Pa , tc.sol.best );
+	  zpclmeans = Statistics::group_means( ZPa , tc.sol.best );
+	}
+      
+      for (int k=0; k<hcK ; k++)
+	{
+	  writer.level( k+1, globals::cluster_strat );
+	  
+	  int c = 0, c2 = 0;
+	  for (int s=0; s<ns; s++)
+	    {
+	      writer.level( signals.label(s) , globals::signal_strat );
+	      
+	      for (int p=0; p<points; p++)
+		{
+		  writer.level( p - half_points1 , globals::sample_strat );
+		  if ( use_complex_dist || use_amp ) writer.value( use_complex_dist ? "REAL" : "A" , tc.clmeans[k][ c++ ] );
+		  if ( use_complex_dist || use_phase ) writer.value( use_complex_dist ? "IMAG" : "P" , tc.clmeans[k][ c++ ]);
+		  if ( use_complex_dist ) writer.value( "PH" , pclmeans[k][ c2++ ] );
+		  if ( use_complex_dist ) writer.value( "ZPH" , zpclmeans[k][ c2++ ] );		  
+		}	      
+	      writer.unlevel( globals::sample_strat );
+	    }
+	  writer.unlevel( globals::signal_strat );	      
+	}
+      writer.unlevel( globals::cluster_strat );
+      
+      
       //
       // Class frequencies/assignments
       //
@@ -536,43 +700,28 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	    }
 	  O1.close();
 	}
-    
-      
 
-      
-      // int c = 0;
-      // for (int s=0; s<ns; s++)
-      // 	for (int p=0; p<np; p++)
-      // 	  {
-      // 	    std::cout << "KM\t"
-      // 		      << chs[s] << "\t"
-      // 		      << t[p] << "\t"
-      // 		      << "A" << "\t"
-      // 		      << Statistics::mean( XPa.col(c) );
-      // 	    for (int k=0;k<2;k++)
-      // 	      std::cout << "\t" << m(c,k);
-      // 	    ++c;
-      // 	    std::cout << "\n";
-      // 	  }
-	          
-      // for (int s=0; s<ns; s++)
-      //   for (int p=0; p<np; p++)
-      // 	  {
-      // 	    std::cout << "KM\t"
-      // 		      << chs[s]<< "\t"
-      // 		      << t[p] << "\t"
-      // 		      << "P" << "\t"
-      // 		      << Statistics::mean( XPa.col(c) );
-      // 	    for (int k=0;k<2;k++)
-      // 	      std::cout << "\t" << m(c,k);
-      // 	    ++c;
-      // 	    std::cout << "\n";
-      // 	  }
-      
-            
-      // for (int i=0;i<ksol.size();i++)
-      //  	std::cout << "KSOL\t" << ksol[i] << "\n"; 
+      //
+      // If in complex mode, output phases
+      //
 
+      if ( use_complex_dist )
+	{
+	  // P2[i](p,s) contains the transformed phase information
+	  // get means by K 
+	  if ( hcK )
+	    {
+	      
+	    }
+
+	  // kmeans
+	  if ( k1 )
+	    {
+
+	    }
+	}
+      
+      
       //
       // Next cache seed
       //
@@ -637,7 +786,7 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
   
   if ( hcK )
     {
-      
+
       //
       // Make distance matrix
       //
@@ -653,7 +802,7 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 	    
 	    if ( i > j )
 	      {
-		D(i,j) = D(j,i); 
+		D(i,j) = D(j,i);
 		continue;
 	      }
 	    
@@ -696,12 +845,25 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 		  px = sqrt( px );
 		
 		// take (weighted?) sum of these two measures?
-		D(i,j) = dx + px ; 
+		D(i,j) = dx + px;
 	      }
 	    
 	  }
-      
 
+      // scale and combine ?
+      if ( ! use_complex_dist )
+	{
+	  // const double dn = D.sum() / (n*n);
+	  // conat double d2n = D2.sum() / (n*n);
+	  // std::cerr << " scalibg " << dn <<" " << d2n << "\n";
+	  // D /= dn;
+	  // D2 /= d2n;
+	  // D = D + D2;
+	  // D /= 2;
+	  // std::cout << " now " << D.sum() /	(n*n) << "\n";
+	  
+	}
+      
       //
       // do clustering
       //
@@ -712,11 +874,20 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
       int maxS = 0;
       
       sol = cluster.build( D , hcK , maxS );
-      
+
+      // cluster means
+
+      clmeans = Statistics::group_means( XPa , sol.best );
+
     }
   
-  
 
+  //
+  // Total means
+  //
+      
+  tm = Statistics::mean( XPa ).extract();
+  
   //
   // k-means clustering on original data 
   //

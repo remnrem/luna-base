@@ -25,6 +25,7 @@
 
 #include "stats/Eigen/Dense"
 #include <vector>
+#include <map>
 
 namespace eigen_ops { 
 
@@ -52,6 +53,8 @@ namespace eigen_ops {
   Eigen::ArrayXd copy_array( const std::vector<double> & e );
 
   std::vector<double> copy_array( const Eigen::ArrayXd & e );
+  
+  std::map<int,std::vector<double> > group_means( const Eigen::MatrixXd & x , const std::vector<int> & g );
   
 }
 

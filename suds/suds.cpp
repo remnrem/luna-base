@@ -69,6 +69,12 @@ bool suds_t::cache_target = false;
 suds_indiv_t suds_t::cached;
 
 //
+// LDA/QDA
+//
+
+bool suds_t::qda = true;
+
+//
 // Model specification
 //
 
@@ -230,7 +236,10 @@ bool suds_t::use_bands;
 
 void suds_t::set_options( param_t & param )
 {
-    
+  
+  // LDA vs QDA (default)?
+  if ( param.has( "lda" ) ) qda = false;
+  
   // spectral resolution for Welch
   spectral_resolution = param.has( "segment-sec" ) ? 1 / param.requires_dbl( "segment-sec" ) : 0.25;
   
@@ -478,12 +487,19 @@ void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
 // fit LDA, i.e. after reloading 
 //
 
-void suds_indiv_t::fit_lda()
+void suds_indiv_t::fit_qlda()
 {
-  
-  lda_t lda( y , U );
-  
-  lda_model = lda.fit( suds_t::flat_priors );
+
+  if ( suds_t::qda )
+    {
+      qda_t qda( y , U );     
+      qda_model = qda.fit( suds_t::flat_priors );
+    }
+  else
+    {
+      lda_t lda( y , U );     
+      lda_model = lda.fit( suds_t::flat_priors );
+    }
   
 }
 
@@ -492,7 +508,7 @@ void suds_indiv_t::fit_lda()
 // make predictions given a trainer's data & model
 //
 
-lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
+posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
 {
   
   //
@@ -585,8 +601,13 @@ lda_posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   // predict using trainer model
   //
   
-  lda_posteriors_t pp = lda_t::predict( trainer.lda_model , U_projected );
+  posteriors_t pp;
 
+  if ( suds_t::qda )
+    pp = posteriors_t( qda_t::predict( trainer.qda_model , U_projected ) );
+  else
+    pp = posteriors_t( lda_t::predict( trainer.lda_model , U_projected ) );
+  
   return pp;
 }
 
@@ -739,7 +760,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // predict target classes, given the trainer model )
       //
       
-      lda_posteriors_t prediction = target.predict( *trainer );
+      posteriors_t prediction = target.predict( *trainer );
       
       
       //
@@ -863,12 +884,18 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // (we ignore the U_projected which is based on the trainer model)
 	  //
 
-	  lda_t lda( prediction.cl , target.U ) ;
-      
 	  // set target model for use w/ all different weight-trainers
 
-	  target.lda_model = lda.fit( suds_t::flat_priors );
-
+	  if ( suds_t::qda )
+	    {
+	      qda_t qda( prediction.cl , target.U ) ;
+	      target.qda_model = qda.fit( suds_t::flat_priors );
+	    }
+	  else
+	    {
+	      lda_t lda( prediction.cl , target.U ) ;
+	      target.lda_model = lda.fit( suds_t::flat_priors );
+	    }
 
 
 	  //
@@ -892,8 +919,9 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
 	      // do not use target as a weight-trainer (unless we are 'cheating' ;-) 
 	      if ( weight_trainer->id == target.id && ! suds_t::cheat ) { ++ww; continue; } 
-	      
-	      lda_posteriors_t reprediction = weight_trainer->predict( target );
+
+	      // either LDA or QDA used to make same posteriors_t class
+	      posteriors_t reprediction( weight_trainer->predict( target ) );
 	      
 	      weight_trainer->prd_stage = suds_t::type( reprediction.cl );
 	      
@@ -977,10 +1005,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  std::string filename = Helper::expand( suds_t::mat_dump_file ) + ".wtrainer.pp";
 		  logger << "  writing wtrainer's PP | target matrix to " << filename << "\n";
 		  std::ofstream OUT1( filename.c_str() , std::ios::out );
+
 		  // header
-		  if ( target.lda_model.labels.size() != reprediction.pp.cols() ) 
+		  if ( suds_t::qda ? target.qda_model.labels.size() : target.lda_model.labels.size() != reprediction.pp.cols() ) 
 		    Helper::halt( "internal error" );
-		  for (int i=0; i<reprediction.pp.cols(); i++) OUT1 << target.lda_model.labels[i] << " ";
+		  if ( suds_t::qda )
+		    for (int i=0; i<reprediction.pp.cols(); i++)
+		      OUT1 << target.qda_model.labels[i] << " ";
+		  else
+		    for (int i=0; i<reprediction.pp.cols(); i++)
+		      OUT1 << target.lda_model.labels[i] << " ";
+		  
 		  OUT1 << "\n";
 		  OUT1 << reprediction.pp << "\n";
 		  OUT1.close();
@@ -1039,11 +1074,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // following the self-evaluation (SOAP) procedure, we get kappa
 	  // as follows:
 
-	  lda_posteriors_t prediction1 = lda_t::predict( target.lda_model , target.U );
-
+	  posteriors_t prediction1;
+	  if ( suds_t::qda )
+	    prediction1 = posteriors_t( qda_t::predict( target.qda_model , target.U  ) );
+	  else
+	    prediction1 = posteriors_t( lda_t::predict( target.lda_model , target.U  ) );
 
 	  double kappa1 = 0 ;
-
+	  
 	  if ( use_5class_repred )
 	    kappa1 = MiscMath::kappa( prediction1.cl , 
 				      prediction.cl , 
@@ -1531,21 +1569,35 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   if ( nstages.size() > 1 ) 
     {
-            
-      lda_t self_lda( final_prediction , target.U );
+      bool valid = false;
 
-      lda_model_t self_model = self_lda.fit( suds_t::flat_priors );
-      
-      if ( self_model.valid )
+      if ( suds_t::qda )
 	{
-	  // get predictions: SOAP model (fitting to self)
-	  lda_posteriors_t soap_final_prediction = lda_t::predict( self_model , target.U );
-	  
-	  double kappa5 = MiscMath::kappa( soap_final_prediction.cl , final_prediction , suds_t::str( SUDS_UNKNOWN ) );
-	  double kappa3 = MiscMath::kappa( NRW( soap_final_prediction.cl ) , NRW( final_prediction ) , suds_t::str( SUDS_UNKNOWN ) );
-	  
-	  writer.value( "SOAP" , kappa5 );
-	  writer.value( "SOAP3" , kappa3 );
+	  qda_t self_qda( final_prediction , target.U );
+	  qda_model_t self_model = self_qda.fit( suds_t::flat_priors );
+	  if ( self_model.valid )
+	    {
+	      // get predictions: SOAP model (fitting to self)
+	      qda_posteriors_t soap_final_prediction = qda_t::predict( self_model , target.U );	      
+	      double kappa5 = MiscMath::kappa( soap_final_prediction.cl , final_prediction , suds_t::str( SUDS_UNKNOWN ) );
+	      double kappa3 = MiscMath::kappa( NRW( soap_final_prediction.cl ) , NRW( final_prediction ) , suds_t::str( SUDS_UNKNOWN ) );	      
+	      writer.value( "SOAP" , kappa5 );
+	      writer.value( "SOAP3" , kappa3 );
+	    }
+	}
+      else
+	{
+	  lda_t self_lda( final_prediction , target.U );
+	  lda_model_t self_model = self_lda.fit( suds_t::flat_priors );
+	  if ( self_model.valid )
+	    {
+	      // get predictions: SOAP model (fitting to self)
+	      posteriors_t soap_final_prediction = lda_t::predict( self_model , target.U );	      
+	      double kappa5 = MiscMath::kappa( soap_final_prediction.cl , final_prediction , suds_t::str( SUDS_UNKNOWN ) );
+	      double kappa3 = MiscMath::kappa( NRW( soap_final_prediction.cl ) , NRW( final_prediction ) , suds_t::str( SUDS_UNKNOWN ) );	      
+	      writer.value( "SOAP" , kappa5 );
+	      writer.value( "SOAP3" , kappa3 );
+	    }
 	}
       
     }
@@ -1710,11 +1762,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
 
 
-void suds_indiv_t::add( const std::string & trainer_id , const lda_posteriors_t & prediction )
+void suds_indiv_t::add( const std::string & trainer_id , const posteriors_t & prediction )
 {
   
   target_posteriors[ trainer_id ] = prediction.pp ;
-
+  
   target_predictions[ trainer_id ] = suds_t::type( prediction.cl );
   
 }
