@@ -121,7 +121,7 @@ void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
   // based on PSD estimated from differently-sized epochs
 
 
-  posteriors_t new_staging = predict( old_self );
+  posteriors_t new_staging = predict( old_self , suds_t::qda );
   
   //
   // output stage probabilities ( new_staging.pp ) 

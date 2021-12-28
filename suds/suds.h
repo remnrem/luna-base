@@ -255,7 +255,7 @@ struct suds_indiv_t {
   // make predictions given a different individual's signal data
   //
   
-  posteriors_t predict( const suds_indiv_t & trainer );
+  posteriors_t predict( const suds_indiv_t & trainer , const bool use_qda );
   
   //
   // add a prediction from one trainer

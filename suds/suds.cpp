@@ -239,7 +239,9 @@ void suds_t::set_options( param_t & param )
   
   // LDA vs QDA (default)?
   if ( param.has( "lda" ) ) qda = false;
-  
+  if ( qda ) logger << "  using QDA for all predictions\n";
+  else logger << "  using LDA for all predictions\n";
+
   // spectral resolution for Welch
   spectral_resolution = param.has( "segment-sec" ) ? 1 / param.requires_dbl( "segment-sec" ) : 0.25;
   
@@ -508,24 +510,24 @@ void suds_indiv_t::fit_qlda()
 // make predictions given a trainer's data & model
 //
 
-posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
+posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool use_qda )
 {
   
   //
   // Project target (this) into trainer space:   U_targ = X_targ * V_trainer * D_trainer^{-1} 
   // subsetting to # of columns
   //
-
+  
   // std::cout << " this    : " <<         id << " nc = " <<         nc << " " <<         W.size() << "\n";
   // std::cout << " trainer : " << trainer.id << " nc = " << trainer.nc << " " << trainer.W.size() << "\n";
 
   Eigen::MatrixXd trainer_DW = Eigen::MatrixXd::Zero( trainer.nc , trainer.nc );  
-
+  
   for (int i=0;i< trainer.nc; i++)
     trainer_DW(i,i) = 1.0 / trainer.W[i];
   
   Eigen::MatrixXd U_projected = X * trainer.V * trainer_DW;
-
+  
   
   //
   // Normalize PSC?
@@ -602,8 +604,8 @@ posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer )
   //
   
   posteriors_t pp;
-
-  if ( suds_t::qda )
+  
+  if ( use_qda )
     pp = posteriors_t( qda_t::predict( trainer.qda_model , U_projected ) );
   else
     pp = posteriors_t( lda_t::predict( trainer.lda_model , U_projected ) );
@@ -760,14 +762,15 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       // predict target classes, given the trainer model )
       //
       
-      posteriors_t prediction = target.predict( *trainer );
-      
+      posteriors_t prediction = target.predict( *trainer , suds_t::qda );
+
       
       //
       // Save predictions
       //
            
       target.add( trainer->id , prediction );
+      
 
       // we can likely remove/change this next step: prediction.cl is
       // stored above for this trainer, but use this slot as a temp so
@@ -873,7 +876,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
       bool okay_to_fit_model = nr > 1;
 
-
       if ( okay_to_fit_model )
 	{
 	  
@@ -883,21 +885,21 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // Thus we use target.U, which is the original for the target, based on their own data
 	  // (we ignore the U_projected which is based on the trainer model)
 	  //
-
+	  
 	  // set target model for use w/ all different weight-trainers
-
-	  if ( suds_t::qda )
+	  
+	  if ( false  && suds_t::qda )  // always use LDA  (rather than QDA) for re-prediction, as some cells may be small
 	    {
 	      qda_t qda( prediction.cl , target.U ) ;
-	      target.qda_model = qda.fit( suds_t::flat_priors );
+	      target.qda_model = qda.fit( suds_t::flat_priors );	      	      
 	    }
 	  else
 	    {
 	      lda_t lda( prediction.cl , target.U ) ;
 	      target.lda_model = lda.fit( suds_t::flat_priors );
 	    }
-
-
+	  
+	  
 	  //
 	  // Consider one or more weight-trainers for this trainer
 	  //   Generally: P_C|B|A
@@ -916,12 +918,13 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		{
 		  if ( trainer->id != weight_trainer->id ) { ++ww; continue; } 
 		}
-
+	      
 	      // do not use target as a weight-trainer (unless we are 'cheating' ;-) 
 	      if ( weight_trainer->id == target.id && ! suds_t::cheat ) { ++ww; continue; } 
-
-	      // either LDA or QDA used to make same posteriors_t class
-	      posteriors_t reprediction( weight_trainer->predict( target ) );
+	      
+	      // always use LDA
+	      const bool use_qda = false;
+	      posteriors_t reprediction( weight_trainer->predict( target , use_qda ) );
 	      
 	      weight_trainer->prd_stage = suds_t::type( reprediction.cl );
 	      
@@ -1007,8 +1010,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  std::ofstream OUT1( filename.c_str() , std::ios::out );
 
 		  // header
-		  if ( suds_t::qda ? target.qda_model.labels.size() : target.lda_model.labels.size() != reprediction.pp.cols() ) 
+		  if ( ( target.qda_model.labels.size() > 0 ? target.qda_model.labels.size() : target.lda_model.labels.size() ) != reprediction.pp.cols() ) 
 		    Helper::halt( "internal error" );
+
+		  // DO.. need to change this (I.e. LDA/QDA choice depends on context now)
 		  if ( suds_t::qda )
 		    for (int i=0; i<reprediction.pp.cols(); i++)
 		      OUT1 << target.qda_model.labels[i] << " ";
@@ -1039,7 +1044,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	    }
 	  
 	}
-                    
+      
      
       //
       // Trainer weights
@@ -1074,12 +1079,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // following the self-evaluation (SOAP) procedure, we get kappa
 	  // as follows:
 
+	  // always use LDA for SOAP
+
 	  posteriors_t prediction1;
-	  if ( suds_t::qda )
+	  if ( false && suds_t::qda )
 	    prediction1 = posteriors_t( qda_t::predict( target.qda_model , target.U  ) );
 	  else
 	    prediction1 = posteriors_t( lda_t::predict( target.lda_model , target.U  ) );
-
+	  
 	  double kappa1 = 0 ;
 	  
 	  if ( use_5class_repred )
@@ -1096,7 +1103,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 				      suds_t::str( SUDS_UNKNOWN ) );
 
 	  wgt_soap[ cntr ] = kappa1;
-
+	  
 	}
 
       
@@ -1571,7 +1578,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     {
       bool valid = false;
 
-      if ( suds_t::qda )
+      // always use SOAP here
+      if ( false && suds_t::qda )
 	{
 	  qda_t self_qda( final_prediction , target.U );
 	  qda_model_t self_model = self_qda.fit( suds_t::flat_priors );
@@ -1601,8 +1609,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	}
       
     }
-
-
+  
+  
   //
   // Misc other output
   //

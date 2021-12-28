@@ -127,6 +127,10 @@ qda_model_t qda_t::fit( const bool flat_priors )
   cc = counts.begin();
   while ( cc != counts.end() )
     {
+      
+      if ( cc->second < p + 1 ) 
+	Helper::halt( "group size too small for QDA... bailing" );
+
       if ( flat_priors )
 	prior[ cidx ] = 1.0 / (double) counts.size() ;
       else
@@ -139,7 +143,7 @@ qda_model_t qda_t::fit( const bool flat_priors )
       ++cidx;
     }
   
-  
+
   //
   // group means () ng x p ( groups x predictors )
   //
@@ -162,8 +166,8 @@ qda_model_t qda_t::fit( const bool flat_priors )
   std::vector<double> ldet( ng );
   
   for (int i = 0 ; i < ng ; i++ )
-    {
-
+    {      
+      
       const double sqrt_nk = sqrt( nc[i]  - 1 );
       
       // mean-centered, group-specific X matrix ('X1')
@@ -192,11 +196,12 @@ qda_model_t qda_t::fit( const bool flat_priors )
 	      return model;
 	    }      
 	}
-
+      
+      
       //
       // QR decomposition to get scaling matrix (to whiten X)
       //
-      
+
       Eigen::HouseholderQR<Eigen::MatrixXd> qr( X1 );      
       
       Eigen::MatrixXd R = qr.matrixQR().topRows( p );
