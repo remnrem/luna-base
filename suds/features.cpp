@@ -1277,15 +1277,21 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    // --------------------------------------------------------------------------------
    //
    // For trainers, optionally only retain PSCs (or bands) that are significantly
-   // associated with observed stage in this individual
+   // associated with observed stage in this individual AND/OR do not have any stages
+   // with greater within-stage variance than between stage variance
    //
    // --------------------------------------------------------------------------------
-   
-   if ( trainer && suds_t::required_comp_p < 1 && ! ( suds_t::soap_mode && suds_t::ignore_target_priors ) ) 
-     {
-       
-       // pull out currently retained epochs
 
+   if ( trainer && ( suds_t::required_comp_p < 1 || suds_t::betwithin_ratio > 0 ) && ! ( suds_t::soap_mode && suds_t::ignore_target_priors ) ) 
+     {
+
+       const bool do_anova = suds_t::required_comp_p < 1 ;
+       const bool do_bw    = suds_t::betwithin_ratio > 0 ;
+       
+       //
+       // pull out currently retained epochs
+       //
+       
        std::vector<std::string> ss_str;
        int c = 0;
        for ( int i = 0 ; i < ne ; i++ )
@@ -1298,23 +1304,42 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
              }
          }
        
+
        std::set<int> incl_comp;
+       
        for (int j=0;j<nc;j++)
 	 {	  
-   	  // standardize column
+	   // standardize column
 	   Eigen::VectorXd c = U.col(j);
 	   eigen_ops::scale( c , true , true );
-	   
-	   double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
-	   if ( pv >= 0 && pv <  suds_t::required_comp_p  ) incl_comp.insert( j );
+
+	   bool okay = true;
+
 	   writer.level( "PSC_" + Helper::int2str( j+1 ) , "VAR");
-	   writer.value( "PV", pv );
-	   writer.value( "INC" , pv >= 0 && pv <  suds_t::required_comp_p ); 
+	   
+	   if ( do_anova )
+	     {
+	       double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
+	       writer.value( "PV", pv );	       
+	       if ( pv < 0 || pv > suds_t::required_comp_p ) okay = false;
+	     }
+
+	   // may have signif stage/group differences, but check that no one stage has a big variance difference also 
+	   if ( do_bw )
+	     {
+	       // nb. c is standardized
+	       double wb = eigen_ops::between_within_group_variance( ss_str , c );
+	       writer.value( "WMAX", wb );
+	       if ( wb > suds_t::betwithin_ratio ) okay = false;	       
+	     }
+	   
+	   if ( okay ) incl_comp.insert( j );
+	   writer.value( "INC" , okay );
+	   
 	 }
     
        writer.unlevel( "VAR" );
 
-      
        // no usable components? --> no usable epochs...
        // quit out (this trainer will be ignored)
     

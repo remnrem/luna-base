@@ -37,6 +37,8 @@ namespace eigen_ops {
 
   double sdev( const Eigen::VectorXd & x );
 
+  double between_within_group_variance( const std::vector<std::string> & grp , const Eigen::VectorXd & x );
+  
   // remove linear trend of each column by linear regression
   bool detrend( Eigen::Ref<Eigen::MatrixXd> m );
 

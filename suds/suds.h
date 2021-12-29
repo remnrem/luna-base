@@ -554,6 +554,7 @@ struct suds_t {
   static int equalize_stages;
 
   static double required_comp_p;
+  static double betwithin_ratio;
   
   static std::vector<double> outlier_ths;
   

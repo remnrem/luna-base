@@ -497,4 +497,62 @@ std::map<int,std::vector<double> > eigen_ops::group_means( const Eigen::MatrixXd
 
 
 
+double eigen_ops::between_within_group_variance( const std::vector<std::string> & g , const Eigen::VectorXd & x )
+{
+  // this routine is ONLY to be used by SUDS as a special case.
+  // note - here we know 'x' is already standardized.   Just get the max within-class variance and return
+  // i.e. want to check it is not (e.g. ) more than twece the total variance (implies too)
+  // note - function name is now misleading.... change in future.. this is simpoly the max within-group variance
+  // (given X is normalized overall)
+  
+  const int n = x.size();
+  const double grand_mean = x.sum() / (double)n;
+  const double grand_sumsq = x.array().square().sum();
+  
+  // group means/ sumsqs  
+  std::map<std::string,double> group_s;
+  std::map<std::string,int> group_n;
+  std::map<std::string,double> group_sumsq;;
+  std::map<std::string,double> group_mean;
+  for (int i=0; i<n; i++)
+    {
+      group_s[ g[i] ] += x[i];
+      group_sumsq[ g[i] ] += x[i] * x[i];
+      group_n[ g[i] ]++;      
+    }
+
+  const int ng = group_n.size();
+  
+  // not enough valid groups
+  if ( ng < 2 ) return 0;
+
+  std::map<std::string,double>::iterator gg = group_s.begin();
+  while ( gg != group_s.end() )
+    {      
+      group_mean[ gg->first ] = group_s[ gg->first ] / (double) group_n[ gg->first ] ;      
+      ++gg;
+    }
+        
+  //
+  // each group variance
+  //
+  
+  double wmax = 0;
+  
+  gg = group_sumsq.begin();
+  while ( gg != group_sumsq.end() )
+    {
+      if ( group_n[ gg->first ] >= 2 )
+	{
+	  double within_variance = gg->second - group_n[ gg->first ] * group_mean[ gg->first ] * group_mean[ gg->first ] ;
+	  within_variance /= (double) group_n[ gg->first ] - 1 ; 	  
+	  if ( within_variance > wmax ) wmax = within_variance ;
+	}
+      ++gg;
+    }
+  
+  return wmax ;
+    
+}
+
 

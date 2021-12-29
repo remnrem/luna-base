@@ -176,6 +176,7 @@ int suds_t::required_epoch_n = 5;
 int suds_t::max_epoch_n = -1;
 int suds_t::equalize_stages = 0;
 double suds_t::required_comp_p = 0.05;
+double suds_t::betwithin_ratio = -1 ; 
 bool suds_t::self_classification = false;
 double suds_t::self_classification_prob = 99;
 double suds_t::self_classification_kappa = 0;
@@ -238,9 +239,13 @@ void suds_t::set_options( param_t & param )
 {
   
   // LDA vs QDA (default)?
-  if ( param.has( "lda" ) ) qda = false;
-  if ( qda ) logger << "  using QDA for all predictions\n";
-  else logger << "  using LDA for all predictions\n";
+  if ( param.has( "lda" ) )
+    qda = ! Helper::yesno( param.value( "lda" ) ) ; 
+  else if ( param.has( "qda" ) )
+    qda = Helper::yesno( param.value( "qda" ) ) ;
+  
+  if ( qda ) logger << "  using QDA for primary predictions\n";
+  else logger << "  using LDA for primary predictions\n";
 
   // spectral resolution for Welch
   spectral_resolution = param.has( "segment-sec" ) ? 1 / param.requires_dbl( "segment-sec" ) : 0.25;
@@ -264,6 +269,9 @@ void suds_t::set_options( param_t & param )
   // require p<T for each component, in oneway ANOVA a/ stage ( default = 1 );
   required_comp_p = param.has( "pc" ) ? param.requires_dbl( "pc" ) : 0.01;
   if ( param.has( "all-c" ) ) required_comp_p = 99;
+  
+  // within/total variance ratio
+  betwithin_ratio = param.has( "within" ) ? param.requires_dbl( "within" ) : -1 ;
   
   // // smoothing factor (multiple of SD)
   // denoise_fac = param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 2 ; 
@@ -595,7 +603,15 @@ posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool us
       std::ofstream OUT5( filename.c_str() , std::ios::out );      
       OUT5 << trainer.U << "\n";
       OUT5.close();
-    
+
+      // Trainer sleep stages
+      filename = Helper::expand( suds_t::mat_dump_file ) + ".trainer.S";
+      logger << "  writing trainer's sleep stages " << filename << "\n";
+      std::ofstream OUT6( filename.c_str() , std::ios::out );
+      for (int i=0;i<trainer.obs_stage.size();i++)
+	OUT6 << suds_t::str( trainer.obs_stage[i] ) << "\n"; 
+      OUT6.close();
+      
     }
 
   
@@ -1010,21 +1026,18 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  std::ofstream OUT1( filename.c_str() , std::ios::out );
 
 		  // header
-		  if ( ( target.qda_model.labels.size() > 0 ? target.qda_model.labels.size() : target.lda_model.labels.size() ) != reprediction.pp.cols() ) 
+		  std::vector<std::string> labels = target.qda_model.labels;
+		  if ( labels.size() == 0 ) labels = target.lda_model.labels;		  
+		  if ( labels.size() != reprediction.pp.cols() ) 
 		    Helper::halt( "internal error" );
-
-		  // DO.. need to change this (I.e. LDA/QDA choice depends on context now)
-		  if ( suds_t::qda )
-		    for (int i=0; i<reprediction.pp.cols(); i++)
-		      OUT1 << target.qda_model.labels[i] << " ";
-		  else
-		    for (int i=0; i<reprediction.pp.cols(); i++)
-		      OUT1 << target.lda_model.labels[i] << " ";
+		  
+		  for (int i=0; i<reprediction.pp.cols(); i++)
+		    OUT1 << labels[i] << " ";
 		  
 		  OUT1 << "\n";
 		  OUT1 << reprediction.pp << "\n";
 		  OUT1.close();
-
+		  
 		  filename = Helper::expand( suds_t::mat_dump_file ) + ".wtrainer.pred";
 		  logger << "  writing wtrainer's predicted stages | target matrix to " << filename << "\n";
 		  if ( weight_trainer->epochs.size() != reprediction.cl.size() ) 
