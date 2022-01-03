@@ -213,7 +213,7 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   
   if ( suds_t::soap_mode || included == NULL )
     return 1;  // SOAP only cares about a non-zero return value
-  
+
   //
   // Get kappa 
   //

@@ -116,6 +116,8 @@ bool suds_t::use_mtm;
 double suds_t::mt_tw = 15;
 int suds_t::mt_nt = 2 * suds_t::mt_tw - 1 ; 
 
+int suds_t::trim_wake_epochs = -1; 
+
 //
 // Hjorth 95% confidence intervals (per channel) from trainers
 //
@@ -253,6 +255,9 @@ void suds_t::set_options( param_t & param )
   // flat priors?
   flat_priors = param.has( "flat-priors" );
   
+  // trim leading/trailing wake? -1 means no, otherwise keep N epochs before/after first/final sleep 
+  if ( param.has( "trim" ) ) trim_wake_epochs = param.requires_int( "trim" );
+
   // apply final elapsed stage model; if passed '.', then ignore
   es_model = param.has( "es-model" );
   es_filename = es_model ? param.value( "es-model" ) : "." ;
@@ -536,7 +541,8 @@ posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool us
   
   Eigen::MatrixXd U_projected = X * trainer.V * trainer_DW;
   
-  
+  //  std::cout << " U_projected \n" << U_projected << "\n";
+
   //
   // Normalize PSC?
   //
@@ -779,7 +785,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //
       
       posteriors_t prediction = target.predict( *trainer , suds_t::qda );
-
+      
       
       //
       // Save predictions

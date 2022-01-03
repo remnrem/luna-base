@@ -1350,11 +1350,17 @@ void proc_suds( edf_t & edf , param_t & param )
       suds.attach_db( param.requires( "db" ) , true , false );
       suds.attach_db( param.value( "wdb" ) , false , true );
     }
-  else
+  else if ( param.has( "db" ) )
     {
-      suds.attach_db( param.requires( "db" ) , true , false );
+      suds.attach_db( param.value( "db" ) , true , false );
     }
-  
+  else if ( param.has( "lib" ) ) 
+    {
+      suds.attach_lib( param.value( "lib" ) );
+    }
+  else
+    Helper::halt( "no library attached" );
+	   
   // do actual scoring  
   suds.score( edf , param );
   
@@ -1506,6 +1512,40 @@ void proc_copy_suds_cmdline()
   std::string f1 = param.requires( "from" );
   std::string f2 = param.requires( "to" );
   suds_t::text2binary( f1 , f2 , param.has( "with-features" ) ) ;
+  
+}
+
+// --combine-suds  from the command line
+void proc_combine_suds_cmdline()
+{
+
+  // this takes a SINGLE text-format file,
+  // (which may contain multiple individuals)
+  //  1) extracts the features and stages 
+  //  2) creates a single 'collated' individual (based on the existing features)
+  //  3) runs SVD as usual
+  //  4) writes the output as a single text-format file
+  //   (i.e.  which can then be transformed w/ --copy-suds)
+
+  // we now have the following functions only
+  //  MAKE-SUDS   : write a library ( text format, one file per trainer only, written to a folder)
+  //  cat         : merge library (multiple individuals to single library)
+  //  --combine-suds : merge feature matrics across individuals and recompute SVD
+  //  --copy-suds : reformat text->binary single  
+  //  SUDS        : read a single binary format file
+  
+  // expect parameters on STDIN
+  param_t param;
+  while ( ! std::cin.eof() )
+    {
+      std::string x;
+      std::cin >> x;      
+      if ( std::cin.eof() ) break;
+      if ( x == "" ) continue;
+      param.parse( x ); 
+    }  
+
+  suds_t::combine_trainers( param );
   
 }
 

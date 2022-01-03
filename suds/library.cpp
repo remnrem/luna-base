@@ -725,3 +725,506 @@ void suds_t::attach_db( const std::string & file0 , bool read_db , bool read_wdb
 
 }
 
+
+
+void suds_t::attach_lib( const std::string & infile ) 
+{
+  // already populated?
+  if ( bank.size() != 0 ) return;
+  
+  // look for infile.fit, infile.svd and infile.hjorth
+  // (can extend this to have multiple .fit and .svd pairs too)
+ 
+  logger << "  attaching pre-fit trainer library " << infile << "\n";
+
+  attach_db_prefit( infile );
+  
+  attach_hjorth_limits( infile + ".hjorth" );
+  
+  logger << "  bank size = " << bank.size() << "\n";
+
+}
+
+
+//
+// attach a single prefit trainer model (i.e. no indiv. level data)
+//
+
+void suds_t::attach_db_prefit( const std::string & infile )
+{
+  
+  // reads infile.fit
+  //       infile.svd
+  //  also, function below will read static values of infile.hjorth 
+  //  
+
+  //
+  // LDA/QDA model (i.e. based on 1 or more real trainers)
+  //
+  
+  suds_indiv_t * trainer = new suds_indiv_t;
+  
+  trainer->qda_model.read( infile + ".fit" ) ; 
+  
+  bank[ trainer->id ] = trainer;
+  
+  //
+  // V and W matrices from SVD (for target projection)
+  //
+  std::string svdfile = Helper::expand( infile + ".svd" ) ;
+  if ( ! Helper::fileExists( svdfile ) )
+    Helper::halt( "could not find " + svdfile );
+  
+  std::ifstream I1( svdfile.c_str() , std::ios::in );
+
+  int vw;
+  I1 >> vw;
+  trainer->W.resize( vw );
+  for (int i=0; i<vw; i++) 
+    I1 >> trainer->W[i];
+  
+  trainer->nc = trainer->W.size();
+
+  int vr , vc;
+  I1 >> vr >> vc;
+  trainer->V.resize( vr , vc );
+  for (int i=0; i<vr; i++) 
+    for (int j=0; j<vc; j++) 
+      I1 >> trainer->V(i,j);
+  
+  I1.close();
+  
+}
+
+
+void suds_t::attach_hjorth_limits( const std::string & hjorthfile )
+{
+
+  // this file is created only by --combine-suds
+
+  // i.e.  to read back in pre-fit data, we will call attach_db_prefit() above [ with the QDA/LDA model ]
+  //       and then this function to set the lower/upper 95% CI limits
+
+  if ( ! Helper::fileExists( Helper::expand( hjorthfile ) ) )
+    Helper::halt( "could not open " + hjorthfile );
+
+  std::ifstream I1( Helper::expand( hjorthfile ).c_str() , std::ios::in ) ;
+  
+  int ns0;
+  I1 >> ns0;
+  if ( suds_t::ns != ns0 ) 
+    {
+      logger << "  expecting " << ns << " signals, but " << hjorthfile << " has " << ns0 << "\n";
+      Helper::halt( "bad hjorthfile" );
+    }
+  
+  suds_t::hjorth1_lwr95.resize( suds_t::ns );
+  suds_t::hjorth1_upr95.resize( suds_t::ns );      
+  
+  suds_t::hjorth2_lwr95.resize( suds_t::ns );
+  suds_t::hjorth2_upr95.resize( suds_t::ns );      
+  
+  suds_t::hjorth3_lwr95.resize( suds_t::ns );
+  suds_t::hjorth3_upr95.resize( suds_t::ns );      
+      
+  for (int s=0; s<suds_t::ns; s++)
+    {
+      double h1_m, h2_m, h3_m;
+      double h1_s, h2_s, h3_s;
+      I1 >> h1_m >> h1_s 
+	 >> h2_m >> h2_s 
+	 >> h3_m >> h3_s;
+
+      suds_t::hjorth1_lwr95[s] = h1_m - h1_s * suds_t::hjorth_outlier_th;
+      suds_t::hjorth1_upr95[s] = h1_m + h1_s * suds_t::hjorth_outlier_th;
+
+      suds_t::hjorth2_lwr95[s] = h2_m - h2_s * suds_t::hjorth_outlier_th;
+      suds_t::hjorth2_upr95[s] = h2_m + h2_s * suds_t::hjorth_outlier_th;
+
+      suds_t::hjorth3_lwr95[s] = h3_m - h3_s * suds_t::hjorth_outlier_th;
+      suds_t::hjorth3_upr95[s] = h3_m + h3_s * suds_t::hjorth_outlier_th;
+
+    }
+   
+  I1.close();
+  
+}
+
+
+
+void suds_t::combine_trainers( param_t & param )
+{
+
+  logger << "  combining multiple trainer feature sets...\n";
+
+  suds_t::set_options( param );
+  
+  // we must have NC explicitly set here (i.e. as we are not reading a model specification at this point)
+  suds_t::nc = param.requires_int( "nc" );
+  if ( nc < 1 || nc > 50 ) Helper::halt( "bad nc value" );
+
+  std::string infile = param.requires( "from" );
+  std::string outfile  = param.requires( "to" );
+  
+  // convert format from text to binary 
+  // read text in: note, may be concatenated
+  
+  if ( ! Helper::fileExists( Helper::expand( infile ) ) )
+    Helper::halt( "could not open " + Helper::expand( infile ) );
+  
+  // read text from here...
+  std::ifstream IN1( Helper::expand( infile ).c_str() , std::ios::in );
+  
+  int p = -1;
+  int n_indiv = 0;
+
+  // epoch-level
+  std::vector<std::string> stages;
+  
+  // indiv-summaries
+  std::vector<std::vector<double> > h1_means, h2_means, h3_means;
+  std::vector<std::vector<double> > h1_vars, h2_vars, h3_vars;
+  
+  // check that number of features matches 
+  int first_nf = 0;
+  int first_ns = 0;
+
+  //
+  // A new mega-indiv to be created
+  //  
+  
+  suds_indiv_t mega;
+  mega.id = param.requires( "id" );
+  mega.trainer = true;
+  mega.nve = 0;
+  mega.nf = 0;
+  mega.nc = suds_t::nc;
+  mega.X = Eigen::MatrixXd::Zero( 0 , 0 );
+  
+  // staging
+  std::vector<suds_stage_t> obs_stage; 
+  
+  // std::vector<suds_stage_t> obs_stage_valid; // will match prd_stage
+  // std::vector<suds_stage_t> prd_stage;
+  // std::map<std::string,int> counts;
+  // std::vector<int> epochs;
+  // std::vector<std::string> y;
+    
+
+  
+  //
+  // Iterate over files
+  //
+  
+  while ( 1 )
+    {
+
+      int i;
+      double d;
+      std::string line;
+      
+      // SUDX code (w/ 'f' suffix for features)
+      if ( ! next(IN1 , &line ) ) break;
+      
+      // ID
+      next(IN1,&line);
+      
+      // NVE
+      int tnve = 0 , tns = 0, tnf = 0 , tnc = 0;
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
+	Helper::halt( "bad numeric" );
+      tnve = i;
+            
+      // NS
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
+	Helper::halt( "bad numeric" );
+      tns = i;
+      if ( n_indiv == 0 ) 
+	{
+	  first_ns = tns;
+	  h1_means.resize( first_ns );
+	  h2_means.resize( first_ns );	  
+	  h3_means.resize( first_ns );
+	  h1_vars.resize( first_ns );
+	  h2_vars.resize( first_ns );	  
+	  h3_vars.resize( first_ns );
+	}
+      else if ( first_ns != tns ) 
+	Helper::halt( "all inputs must have same # of signals" );
+
+      // NF
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
+	Helper::halt( "bad numeric" );
+      tnf = i;
+      if ( n_indiv == 0 ) first_nf = tnf;
+      else if ( first_nf != tnf ) Helper::halt( "all inputs must have same # of features" );
+
+      // NC
+      next(IN1,&line);
+      if ( ! Helper::str2int( line , &i ) )
+	Helper::halt( "bad numeric" );
+      tnc = i;
+      
+      // Stage counts
+      next(IN1,&line);      
+      if ( ! Helper::str2int( line , &i ) )
+        Helper::halt( "bad numeric" );      
+      int tstages = i;
+      
+      // Each stage count
+      for (int j=0;j<tstages; j++)
+	{
+	  // stage label
+	  next(IN1,&line);
+
+	  // stage count
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric(2)" );	  
+	  
+	}
+      
+      // Stages epoch-by-epoch
+      for (int j=0;j<tnve; j++)
+	{
+	  // epoch number
+          next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+            Helper::halt( "bad numeric(3)" );
+                    
+	  // stage label
+          next(IN1,&line);
+	  
+	  // add stages
+	  mega.obs_stage.push_back( suds_t::type( line ) );
+	}
+      
+      // Hjorth summary statistics
+      for (int j=0;j<tns; j++)
+	{
+	  for (int h=0; h<3; h++ )
+	    {
+	      // feature mean (over epochs)
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
+		Helper::halt( "bad numeric(4)" );
+	      
+	      if ( h == 0 ) h1_means[j].push_back( d );
+	      else if ( h == 1 ) h2_means[j].push_back( d );
+	      else h3_means[j].push_back( d );
+
+	      // feature SD (over epochs)
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
+		Helper::halt( "bad numeric(5)" );
+	      if ( h == 0 ) h1_vars[j].push_back( d*d );
+	      else if ( h == 1 ) h2_vars[j].push_back( d*d );
+	      else h3_vars[j].push_back( d*d );
+
+	    }
+	}
+      
+      // skip SVD components (these will be recalculated) 
+      // SVD components: W
+      for (int j=0;j<tnc; j++)
+          next(IN1,&line);
+      // SVD components: V 
+      for (int j=0;j<tnf; j++)
+        for (int k=0;k<tnc; k++)
+	  next(IN1,&line);
+      
+      // SVD components: U
+      for (int i=0;i<tnve;i++)
+	for (int j=0;j<tnc;j++)
+	  next(IN1,&line);
+      
+      //
+      // Original features: X
+      //
+
+      // make space for new data 
+      int r = mega.X.rows();      
+      int r1 = r;
+
+      if ( n_indiv == 0 )  // need to set cols too the first time
+	mega.X = Eigen::MatrixXd::Zero( tnve , first_nf );
+      else	
+	mega.X.conservativeResize( r + tnve , Eigen::NoChange );
+
+      for (int i=0;i<tnve;i++)
+	{
+	  for (int j=0;j<tnf;j++)
+	    {
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
+		Helper::halt( "bad numeric(9)" );
+	      mega.X(r,j) = d;
+	    }
+	  ++r; // next row
+	}
+
+      //
+      // Ensure prior rows are mean centered
+      //
+
+      // Eigen::MatrixXd mm = mega.X.middleRows( r1 , r - r1 );
+
+      // std::cout << "indiv means = " << mm.colwise().mean() << "\n";
+
+      //
+      // next individual
+      //
+      
+      ++n_indiv;
+
+      logger << "  " << n_indiv << " trainers compiled...\n";
+      
+    }
+
+  IN1.close();
+
+
+  std::cout << " means\n" << mega.X.colwise().mean() << "\n";
+
+  //
+  // Done reading and combining features
+  //
+  
+  int ecnt = mega.obs_stage.size();
+  logger << "  read " << ecnt << " epochs " << mega.X.rows() << " x " << mega.X.cols() << "\n";
+  
+  // set labels 
+  mega.y = suds_t::str( mega.obs_stage );
+  
+  mega.counts.clear();
+  for (int i=0;i<mega.y.size();i++) mega.counts[mega.y[i]]++;
+  std::map<std::string,int>::const_iterator cc = mega.counts.begin();
+  logger << "  epoch counts:";
+  while ( cc != mega.counts.end() )
+    {
+      logger << " " << cc->first << ":" << cc->second ;
+      ++cc;
+    }
+  logger << "\n";
+
+
+  
+  //
+  // Perform SVD 
+  //
+  
+  int rc = 0;
+
+  edf_t dummy; // this is not used/needed in any of the proc_() calls below
+  // i.e. as the feature matrix and stages are already built/compiled
+  mega.nve = ecnt;
+
+  suds_helper_t helper( dummy , param );
+  helper.ne = helper.nge = ecnt;
+  helper.ns = 0; // should not matter
+  helper.has_prior_staging = true;
+  helper.retained.resize( ecnt , true );
+  helper.valid.resize( ecnt , true );
+
+  logger << "  performing primary SVD " << suds_t::nc << " components\n";
+  rc = mega.proc_main_svd( &helper );
+  if ( rc == 0 ) Helper::halt( "problem in proc_main_svd()" );
+
+  //
+  // drop components that do not track well w/ stage
+  //
+
+  logger << "  dropping uninformative columns...\n";
+  rc = mega.proc_prune_cols( &helper );
+  if ( rc == 0 ) Helper::halt( "problem in proc_prune_cols()" );
+
+  //
+  // get class label counts
+  //
+  logger << "  compiling stage labels...\n";
+  rc = mega.proc_class_labels( &helper );
+  if ( rc == 0 ) Helper::halt( "problem in proc_class_labels()" );
+
+  //
+  // some final metrics
+  //
+
+  int ne = mega.proc_coda( &helper );
+  
+  
+  //
+  // Fit trainer model
+  //
+  
+  logger << "  fitting QDA model...\n";
+
+  qda_t qda( mega.y , mega.U );
+
+  qda_model_t fit = qda.fit( suds_t::flat_priors );
+  
+  //
+  // Save trainer model
+  //
+
+  logger << "  writing model fit to " << outfile << ".fit \n";
+  
+  fit.write( outfile + ".fit" );
+
+
+  //
+  // Write Hjorth 95% limits for this entire set
+  //
+
+  logger << "  writing Hjorth outlier values to " << outfile << ".hjorth\n";
+
+  std::ofstream H1( ( outfile + ".hjorth" ).c_str() , std::ios::out );
+
+  H1 << first_ns << "\n"; 
+  
+  for (int s=0; s<first_ns; s++)
+    {
+      double h1_mean = MiscMath::mean( h1_means[s] );
+      double h2_mean = MiscMath::mean( h2_means[s] );
+      double h3_mean = MiscMath::mean( h3_means[s] );
+      
+      double h1_sd = sqrt( MiscMath::mean( h1_vars[s] ) );
+      double h2_sd = sqrt( MiscMath::mean( h2_vars[s] ) );
+      double h3_sd = sqrt( MiscMath::mean( h3_vars[s] ) );
+      
+      H1 << h1_mean << " " << h1_sd << " "
+	 << h2_mean << " " << h2_sd << " " 
+	 << h3_mean << " " << h3_sd << "\n";
+      
+    }
+  
+  
+  H1.close();
+
+  //
+  // Write V and W matrices for this SVD 
+  //
+
+  logger << "  writing SVD V and W matrices to " << outfile << ".svd\n";
+
+  std::ofstream SVD1( ( outfile + ".svd" ).c_str() , std::ios::out );
+
+  SVD1 << mega.W.size() << "\n"
+       << mega.W << "\n"
+       << mega.V.rows() << " " << mega.V.cols() << "\n"       
+       << mega.V << "\n";
+  
+  SVD1.close();
+
+  //
+  // All done
+  //
+
+
+  logger << "  in total, converted " << n_indiv << " trainers (" << ecnt << " epochs)\n";
+
+  
+  
+}

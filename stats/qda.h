@@ -52,6 +52,9 @@ struct qda_model_t {
   int n; 
   std::vector<std::string> labels;
   
+  void write( const std::string & filename ) const;
+  void read( const std::string & filename );
+
 };
 
 

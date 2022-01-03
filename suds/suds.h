@@ -36,6 +36,7 @@
 
 #include "eval.h"
 #include "helper/helper.h"
+#include "edf/signal-list.h"
 
 
 // helper to get posteriors from either LDA or QDA
@@ -67,6 +68,26 @@ struct posteriors_t {
 struct edf_t;
 
 struct param_t;
+
+struct suds_helper_t { 
+  
+  suds_helper_t(   edf_t & edf,  param_t & param ) 
+    : edf(edf) , param(param) , nge(0) , ne(0), ns(0) { } 
+  
+  edf_t & edf;
+  
+  param_t & param;
+  
+  int nge;
+  int ne;
+  int ns;
+  std::vector<bool> retained;
+  signal_list_t signals;
+  std::string siglab;
+  bool has_prior_staging;
+  std::vector<bool> valid;
+};
+
 
 enum suds_stage_t
   {
@@ -179,6 +200,8 @@ struct suds_model_t {
   
 };
 
+struct suds_helper_t;
+
 struct suds_indiv_t {
 
   suds_indiv_t() { } 
@@ -209,18 +232,53 @@ struct suds_indiv_t {
   // re-fit actual model after making above types of changes
   void resoap( edf_t & , bool ); 
 
+  // update 'ambiguous' epochs (given a confidence threshold)
+  // using SOAP; assumes U matrix etc already calculated, i.e.
+  // as this is only called from SUDS
+  
+  int resoap_update_pp( std::vector<suds_stage_t> * , 
+			const double th , 
+			Eigen::MatrixXd & pp );
+  
   //
   // wrapper to add a trainer and save to the libary
   //
 
   void add_trainer( edf_t & edf , param_t & param );
-
-
+  
   //
-  // process either trainer or target; (wrapper)
+  // wrapper to add as a model (i.e. not w/ data, so no re-preds) 
   //
-
+  
+  void add_fit( const std::string & fit );
+  
+  //
+  // main driver: process either trainer or target; (wrapper)
+  //
+  
   int proc( edf_t & edf , param_t & param , bool trainer = false );
+  
+  //
+  // modules called by proc()
+  //
+  
+  int proc_check_channels( suds_helper_t * );
+  
+  int proc_extract_observed_stages( suds_helper_t * );
+  
+  int proc_build_feature_matrix( suds_helper_t * );
+
+  int proc_initial_svd_and_qc( suds_helper_t * );
+
+  int proc_main_svd( suds_helper_t * );
+  
+  int proc_prune_cols( suds_helper_t * );
+  
+  int proc_prune_rows( suds_helper_t * );
+  
+  int proc_class_labels( suds_helper_t * );
+
+  int proc_coda( suds_helper_t * );
 
   
   //
@@ -418,11 +476,19 @@ struct suds_t {
   
   static void attach_db( const std::string & , bool , bool );
   
+  static void attach_lib( const std::string & );
+  
+  static void attach_db_prefit( const std::string & fitfile );
+  
+  static void attach_hjorth_limits( const std::string & hjorthfile );
+  
   static std::vector<suds_indiv_t*> binary_reload( const std::string & filename , bool load_rawx = false );
   
   // convert from text --> binary format for a library file [ +/- feature matrix ] 
   static void text2binary( const std::string & , const std::string & , const bool );
   
+  static void combine_trainers( param_t & param );
+
   static void score( edf_t & edf , param_t & param );
   
   static suds_indiv_t cached;
@@ -456,6 +522,9 @@ struct suds_t {
   
   static double spectral_resolution;
 
+  // trim leading/trailing wake in trainers?
+  static int trim_wake_epochs;
+  
   // slope parameters
   static std::vector<double> slope_range;
   static double slope_th;

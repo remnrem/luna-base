@@ -296,14 +296,15 @@ int main(int argc , char ** argv )
   // iterating through a sample list
   //
 
-  bool cmdline_proc_fir_design  = false;
-  bool cmdline_proc_cwt_design  = false;
-  bool cmdline_proc_pdlib       = false;
-  bool cmdline_proc_psc         = false;
-  bool cmdline_proc_ms_kmer     = false;
-  bool cmdline_proc_ms_cmp_maps = false;
-  bool cmdline_proc_copy_suds   = false;
-  bool cmdline_proc_cperm_test  = false;
+  bool cmdline_proc_fir_design   = false;
+  bool cmdline_proc_cwt_design   = false;
+  bool cmdline_proc_pdlib        = false;
+  bool cmdline_proc_psc          = false;
+  bool cmdline_proc_ms_kmer      = false;
+  bool cmdline_proc_ms_cmp_maps  = false;
+  bool cmdline_proc_copy_suds    = false;
+  bool cmdline_proc_combine_suds = false;
+  bool cmdline_proc_cperm_test   = false;
 
 
   //
@@ -347,8 +348,10 @@ int main(int argc , char ** argv )
 	    cmdline_proc_ms_cmp_maps = true;
 	  else if ( strcmp( argv[1] , "--copy-suds" ) == 0 ) 
 	    cmdline_proc_copy_suds = true;
+	  else if ( strcmp( argv[1] , "--combine-suds" ) == 0 ) 
+	    cmdline_proc_combine_suds = true;
 	}
-
+      
       // otherwise, first element will be treated as a file list
       
       cmd_t::input = argv[1];
@@ -1171,6 +1174,14 @@ int main(int argc , char ** argv )
     {
       // expects input from std::cin                                                                                                                                                               
       proc_copy_suds_cmdline();
+      std::exit(0);
+    }
+
+
+  if ( cmdline_proc_combine_suds )
+    {
+      // expects input from std::cin                                                                                                                                                              
+      proc_combine_suds_cmdline();
       std::exit(0);
     }
   

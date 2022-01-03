@@ -296,3 +296,111 @@ void suds_indiv_t::resoap( edf_t & edf , bool epoch_level_output )
   
 }
 
+
+
+int suds_indiv_t::resoap_update_pp( std::vector<suds_stage_t> * st , 
+				    const double th , 
+				    Eigen::MatrixXd & pp ) 
+{
+  
+  const int rows = pp.rows();
+  const int cols = pp.cols();
+  if ( st->size() != rows ) 
+    Helper::halt( "internal error in resoap_update_pp()" );
+
+  std::vector<suds_stage_t> st2 = *st;
+  
+  // counts: (high-conf) stages, epochs 
+  std::set<suds_stage_t> stgs;
+  std::map<suds_stage_t,int> stgs2;
+  int blanked = 0;
+  for (int i=0; i<rows; i++)
+    {
+      stgs.insert( st2[i] );
+      const double mx = pp.row(i).maxCoeff();
+      if ( mx < th ) 
+	{
+	  ++blanked;
+	  st2[i] = SUDS_UNKNOWN;
+	}
+      else
+	stgs2[ st2[i] ]++;
+    }
+  
+  const int kept = rows - blanked;
+  const int nstg = stgs.size();
+  const int nstg2 = stgs2.size();
+  
+  logger << " nstg, kep, blanked = " 
+	 << nstg << " " << nstg2 << " " 
+	 << kept << " " << blanked << "\n";
+  
+  
+  //
+  // Check we have sufficient number of high-confidence assignments;
+  //
+
+  // not sure we need this... if impacts only output (not done here)
+  //suds_t::soap_mode = 2;
+  
+  bool okay = nstg == nstg2;
+  
+  //
+  // requires at leasrt two stages w/ at least 3 observations, and has to 
+  // be greater than the number of PSCs
+  //
+  
+  // Rule 1; stages present each need X high-conf. values 
+  // const int required_n = 3;
+  
+  // Rule 2: for p predictors, require at least p+2 observations
+  // if ( ! ( t > nc+1 ) ) okay = false;
+  
+  if ( ! okay ) return 0;
+  
+  //
+  // Re-fit the LDA
+  //
+
+  posteriors_t prediction;
+
+  if ( 0 && suds_t::qda )
+    {
+      qda_t qda( suds_t::str( st2 ) , U );     
+      qda_model = qda.fit( suds_t::flat_priors );
+      if ( ! qda_model.valid ) return 0;
+      prediction = posteriors_t( qda_t::predict( qda_model , U ) ) ; 
+    }
+  else
+    {
+      lda_t lda( suds_t::str( st2 ) , U );     
+      lda_model = lda.fit( suds_t::flat_priors );      
+      if ( ! lda_model.valid ) return 0;
+      prediction = posteriors_t( lda_t::predict( lda_model , U ) ) ; 
+    }
+  
+  //
+  // get predictions
+  //
+  
+  //
+  // output stage probabilities 
+  //
+  
+  // needed?
+  //std::vector<std::string> pp2 = suds_t::str( suds_t::max( prediction.pp , lda_model.labels ) );
+  //  if ( pp2.size() != st->size() ) Helper::halt( "internal error" );
+  
+  int nchanged = 0;
+ 
+  //
+  // Update
+  //
+
+  //
+  // All done
+  //
+  
+  return nchanged;
+}
+

@@ -30,6 +30,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <fstream>
 
 extern logger_t logger;
 
@@ -240,16 +241,22 @@ qda_model_t qda_t::fit( const bool flat_priors )
 
 qda_posteriors_t qda_t::predict( const qda_model_t & model , const Eigen::MatrixXd & X )
 {
-    
+
   const int p = X.cols();
   const int n = X.rows();
+
+  //  std::cout << "qda_t::predict() " << p << " " << n << "\n";
   
   if ( p != model.means.cols() )
     Helper::halt( "wrong number of columns in qda_t::predict(): expecting "
 		  + Helper::int2str((int) model.means.cols() ) + " but found " + Helper::int2str( p ) );  
   
   const int ng = model.prior.size();
-  
+
+  // std::cout << "ng = " << ng << "\n";
+
+  // std::cout << " means " << model.means << "\n\n"
+  // 	    << " ldet " << model.ldet[0] << " " << model.ldet[1] << " .. " << model.ldet.size() << "\n";
   //
   // Predict 
   //
@@ -294,6 +301,7 @@ qda_posteriors_t qda_t::predict( const qda_model_t & model , const Eigen::Matrix
       for (int k=1;k<ng;k++) if ( D(i,k) > D(i,mxi) ) mxi = k;
       cli[i] = mxi;
       cl[i] = model.labels[ mxi ];
+      //std::cout << " cl " << cl[i] << "\n";
     }
   
   //
@@ -313,7 +321,121 @@ qda_posteriors_t qda_t::predict( const qda_model_t & model , const Eigen::Matrix
   
   return pp;
 
-  
-  return pp;
-
 } 
+
+
+void qda_model_t::write( const std::string & filename ) const
+{
+  if ( ! valid ) Helper::halt( "cannot write an invalid model" );
+  std::ofstream O1( Helper::expand( filename ).c_str() , std::ios::out );
+  
+  O1 << "QDA\n";
+  O1 << "ng: " << prior.size() << "\n";
+  O1 << "nf: " << means.cols() << "\n";
+  
+  O1 << "priors:";
+  for (int i=0;i<prior.size();i++) O1 << " " << prior[i] ;
+  O1 << "\n";
+
+  O1 << "rows:";
+  for (int i=0;i<rows.size();i++) O1 << " " << rows[i] ;
+  O1 << "\n";
+
+  O1 << "counts:";
+  std::map<std::string,int>::const_iterator ii = counts.begin();
+  while ( ii != counts.end() ) 
+    {
+      O1 << " " << ii->first << " " << ii->second;
+      ++ii;
+    }
+  O1 << "\n";
+
+  O1 << "means:\n" << means
+     << "\n";
+  
+  O1 << "scaling:\n";
+  for (int i=0; i<scaling.size(); i++)
+    O1 << scaling[i] << "\n";
+  
+  O1 << "ldet:";
+  for (int i=0;i<ldet.size();i++) O1 << " " << ldet[i] ;
+  O1 << "\n";
+
+  O1 << "n: " << n << "\n";
+  
+  O1 << "labels:";
+  for (int i=0;i<labels.size();i++) O1 << " " << labels[i] ;
+  O1 << "\n";
+  
+  O1.close();
+}
+
+
+void qda_model_t::read( const std::string & filename )
+{
+  if ( ! Helper::fileExists( Helper::expand( filename ) ) )
+    Helper::halt( "could not open " + filename );
+
+  valid = true;
+  errmsg = "";
+  
+  std::ifstream I1( Helper::expand( filename ).c_str() , std::ios::in );
+  std::string dummy;
+
+  int ng, nf;
+  
+  I1 >> dummy; // QDA
+  
+  I1 >> dummy >> ng 
+     >> dummy >> nf;
+  
+  // size up 
+  prior.resize( ng );
+  rows.resize( ng );
+  means.resize( ng , nf );
+  scaling.resize( ng );
+  for (int i=0;i<ng;i++) scaling[i].resize( nf, nf );
+  ldet.resize( ng );
+  labels.resize( ng );
+  
+  // read in 
+  I1 >> dummy;
+  for (int i=0;i<prior.size();i++) I1 >> prior[i] ;
+
+  I1 >> dummy;
+  for (int i=0;i<rows.size();i++) I1 >> rows[i] ;
+  
+  I1 >> dummy;
+  counts.clear();
+  for (int i=0;i<ng;i++)
+    {
+      std::string l;
+      int c;
+      I1 >> l >> c;
+      counts[l] = c ;
+    }
+
+  I1 >> dummy;
+  for (int i=0;i<ng;i++) 
+    for (int j=0;j<nf;j++)
+      I1 >> means(i,j);
+
+  I1 >> dummy;
+  for (int i=0;i<ng;i++) 
+    for (int j=0;j<nf;j++)
+      for (int k=0;k<nf;k++)
+	I1 >> scaling[i](j,k);
+
+  I1 >> dummy;
+  for (int i=0;i<ldet.size();i++) I1 >> ldet[i] ;
+
+  I1 >> dummy;
+  I1 >> n;
+  
+  I1 >> dummy;
+  for (int i=0;i<labels.size();i++) I1 >> labels[i] ;
+    
+  I1.close();
+
+
+}

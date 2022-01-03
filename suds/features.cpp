@@ -53,16 +53,23 @@ extern logger_t logger;
 extern writer_t writer;
 
 
+
 int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 {
 
-
   //
-  // Is this individual a trainer (with known stages) or no?
+  // helper struct to connect the proc modules
+  //
+
+  suds_helper_t helper (edf , param );
+
+  
+  //
+  // Is this individual a trainer (i.e. with known stages) or no?
   //
 
   trainer = is_trainer;
-
+  
   //
   // Initial/total number of components to extract
   // from PSC (although we may only retain nc2 <= nc
@@ -71,39 +78,123 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   nc = suds_t::nc;
 
+  int rc = 0;
+
+
+  //
+  // Check required signals
+  //
+
+  rc = proc_check_channels( &helper );
+  if ( rc == 0 ) return 0;
+
+  
+  //
+  // For trainers, get the observed stages
+  //
+  
+  rc = proc_extract_observed_stages( &helper ) ;
+  if ( rc == 0 ) return 0;
+
+  
+  //
+  // Build feature matrix given a model
+  //
+  
+  rc = proc_build_feature_matrix( &helper );
+  if ( rc == 0 ) return 0;  
+  
+  
+  //
+  // epoch-level QC (also performs an initial SVD) 
+  //
+  
+  rc = proc_initial_svd_and_qc( &helper );
+  if ( rc == 0 ) return 0;
+
+  
+  //
+  // re-do main SVD on final dataset
+  //
+
+  rc = proc_main_svd( &helper );
+  if ( rc == 0 ) return 0;
+
+    
+  //
+  // For SUDS trainers, drop any components that do not track well w/ stage
+  //
+  
+  rc = proc_prune_cols( &helper );
+  if ( rc == 0 ) return 0;
+
+  
+  //
+  // get class label counts
+  //
+
+  rc = proc_class_labels( &helper );
+  if ( rc == 0 ) return 0;
+
+
+  //
+  // For SUDS trainers, drop epochs that are not well-classified (i.e. outliers in the current model)
+  //
+
+  rc = proc_prune_rows( &helper );
+  if ( rc == 0 ) return 0;
+
+
+  //
+  // some final metrics
+  //
+  
+  return proc_coda( &helper );
+  
+}
+
+
+int suds_indiv_t::proc_check_channels( suds_helper_t * helper )
+{
+
+
   //
   // Signals (and optionally, resampling)
   //
   
-  const int ns = suds_t::model.chs.size();
+  helper->ns = suds_t::model.chs.size();
 
   // check that all model channels are also present
   // in the EDF
   std::vector<std::string> slabs;
   std::vector<int> slots;
 
-  signal_list_t signals;
-  int si = 0;
-
   std::map<std::string,suds_channel_t>::const_iterator ss =  suds_t::model.chs.begin(); 
   while ( ss != suds_t::model.chs.end() )
     {
-      int slot = edf.header.signal( ss->first );
+      int slot = helper->edf.header.signal( ss->first );
       if ( slot == -1 ) Helper::halt( "could not find " + ss->first );
-
-      if ( edf.header.is_annotation_channel( slot ) )
+      
+      if ( helper->edf.header.is_annotation_channel( slot ) )
 	Helper::halt( "cannot specificy annotation channel: " + ss->first );
       
       // need to resample?
-      if ( edf.header.sampling_freq( slot ) != ss->second.sr )
-        dsptools::resample_channel( edf, slot , ss->second.sr );
-
+      if ( helper->edf.header.sampling_freq( slot ) != ss->second.sr )
+        dsptools::resample_channel( helper->edf, slot , ss->second.sr );
+      
       // build signal_list_t
-      signals.add( si , ss->first );
-
-      ++si;
+      helper->signals.add( slot , ss->first );
+      
       ++ss;
     }
+  
+  return 1;
+}
+
+
+
+int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
+{
 
 
   //
@@ -117,43 +208,17 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //               a) not statistical outliers for any components
   //               b) optionally, correctly self-classified 
 
-  const int ne = edf.timeline.first_epoch();
-  
-  //
-  // PSD (Welch) parameters 
-  //
-
-  double fft_segment_size = param.has( "segment-sec" ) 
-    ? param.requires_dbl( "segment-sec" ) : 4 ;
-  
-  double fft_segment_overlap = param.has( "segment-overlap" ) 
-    ? param.requires_dbl( "segment-overlap" ) : 2 ;
-  
-  if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
-    {
-      fft_segment_overlap = 0;
-      fft_segment_size = edf.timeline.epoch_length();
-    }
-
-  window_function_t window_function = WINDOW_TUKEY50;	   
-  if      ( param.has( "no-window" ) ) window_function = WINDOW_NONE;
-  else if ( param.has( "hann" ) ) window_function = WINDOW_HANN;
-  else if ( param.has( "hamming" ) ) window_function = WINDOW_HAMMING;
-  else if ( param.has( "tukey50" ) ) window_function = WINDOW_TUKEY50;
+  helper->ne = helper->edf.timeline.first_epoch();
 
 
-  logger << "  applying Welch with " << fft_segment_size << "s segments ("
-	 << fft_segment_overlap << "s overlap), using "
-	 << ( suds_t::use_seg_median ? "median" : "mean" )
-	 << " over segments\n";  
-  
+
   //
   // Get stage information (for trainers only)
   //
   
-  std::vector<bool> retained( ne , true );
+  helper->retained.resize( helper->ne , true );
   
-  bool has_prior_staging = false;
+  helper->has_prior_staging = false;
 
   // for SUDS trainers, always load observed stages
   // for SUDS target, load unless told not to
@@ -164,28 +229,28 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   if ( suds_t::soap_mode && suds_t::ignore_target_priors )
     {
-      has_prior_staging = false;
+      helper->has_prior_staging = false;
       // nb. this is set back to 'true'  after the following 
       // section, i.e. to do read from annotations, but we need to say we have stages
       // (albeit all unknown ones) for downstream code) 
-      obs_stage.resize( ne , SUDS_UNKNOWN );
+      obs_stage.resize( helper->ne , SUDS_UNKNOWN );
     }
   else if ( trainer )
     {
-      edf.timeline.annotations.make_sleep_stage();
+      helper->edf.timeline.annotations.make_sleep_stage();
       
-      if ( ! edf.timeline.hypnogram.construct( &edf.timeline , param , false ) )
+      if ( ! helper->edf.timeline.hypnogram.construct( &(helper->edf.timeline) , helper->param , false ) )
 	{
 	  if ( suds_t::soap_mode ) return 0; // okay to skip for SOAP
 	  // but flag as major prob if a trainer
 	  Helper::halt( "problem extracting stage information for trainer" );
 	}
-
+      
       // total number of epochs does not match?
-      if ( ne != edf.timeline.hypnogram.stages.size() )
+      if ( helper->ne != helper->edf.timeline.hypnogram.stages.size() )
 	Helper::halt( "problem extracting stage information for trainer" );
       
-      has_prior_staging = true;
+      helper->has_prior_staging = true;
       
     }
   else if ( ! suds_t::ignore_target_priors )
@@ -194,14 +259,14 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // for targets, manual/prior staging may exist, in which case we'll want to track it for comparison
       // unless we've been explicitly told to ignore it (ignore-prior --> suds_t::ignore_target_priors )
 
-      edf.timeline.annotations.make_sleep_stage();
+      helper->edf.timeline.annotations.make_sleep_stage();
 
-      has_prior_staging = edf.timeline.hypnogram.construct( &edf.timeline , param , false ) ;
+      helper->has_prior_staging = helper->edf.timeline.hypnogram.construct( &(helper->edf.timeline) , helper->param , false ) ;
       
-      if ( has_prior_staging )
+      if ( helper->has_prior_staging )
 	{
 	  // total number of epochs does not match?
-	  if ( ne != edf.timeline.hypnogram.stages.size() )
+	  if ( helper->ne != helper->edf.timeline.hypnogram.stages.size() )
 	    Helper::halt( "problem extracting stage information for trainer" );
 	}
       
@@ -214,35 +279,35 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // number of good (retained) epochs
   //
   
-  int nge = 0 ;
+  helper->nge = 0 ;
 
-  if ( has_prior_staging )
+  if ( helper->has_prior_staging )
     {
       
-      obs_stage.resize( ne , SUDS_UNKNOWN );
+      obs_stage.resize( helper->ne , SUDS_UNKNOWN );
       
-      for (int ss=0; ss < ne ; ss++ )
+      for (int ss=0; ss < helper->ne ; ss++ )
 	{
-	  if ( edf.timeline.hypnogram.stages[ ss ] == UNSCORED
-	       || edf.timeline.hypnogram.stages[ ss ] == LIGHTS_ON
-	       || edf.timeline.hypnogram.stages[ ss ] == MOVEMENT
-	       || edf.timeline.hypnogram.stages[ ss ] == UNKNOWN )
+	  if ( helper->edf.timeline.hypnogram.stages[ ss ] == UNSCORED
+	       || helper->edf.timeline.hypnogram.stages[ ss ] == LIGHTS_ON
+	       || helper->edf.timeline.hypnogram.stages[ ss ] == MOVEMENT
+	       || helper->edf.timeline.hypnogram.stages[ ss ] == UNKNOWN )
 	    obs_stage[ss] = SUDS_UNKNOWN;
 	  
-	  else if ( edf.timeline.hypnogram.stages[ ss ] == WAKE )
+	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == WAKE )
 	    obs_stage[ss] = SUDS_WAKE;
 
-	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM1 )
+	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == NREM1 )
 	    obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N1;
 
-	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM2 )
+	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == NREM2 )
 	    obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N2;
 
-	  else if ( edf.timeline.hypnogram.stages[ ss ] == NREM3
-		    || edf.timeline.hypnogram.stages[ ss ] == NREM4 )
+	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == NREM3
+		    || helper->edf.timeline.hypnogram.stages[ ss ] == NREM4 )
 	    obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N3;
 	  
-	  else if ( edf.timeline.hypnogram.stages[ ss ] == REM )
+	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == REM )
 	    obs_stage[ss] = SUDS_REM;
 
 	  
@@ -261,16 +326,96 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	  if ( suds_t::soap_mode )
 	    {
-	      ++nge;
+	      ++helper->nge;
 	    }
 	  else
 	    {	      
 	      if ( obs_stage[ss] == SUDS_UNKNOWN ) 
-		retained[ss] = false; 
-	      else ++nge;
+		helper->retained[ss] = false; 
+	      else ++helper->nge;
 	    }
 
+	  // next epoch	 
 	}
+
+
+      //
+      // trim leading/trailing wake epochs? (only for SUDS)
+      //
+      
+      if ( suds_t::soap_mode == 0 && suds_t::trim_wake_epochs >= 0 ) 
+	{
+	  int first_sleep = -1;
+	  for (int ss=0; ss < helper->ne; ss++)
+	    {
+	      if ( obs_stage[ss] == SUDS_N1 ||
+		   obs_stage[ss] == SUDS_N2 ||
+		   obs_stage[ss] == SUDS_N3 ||
+		   obs_stage[ss] == SUDS_NR ||
+		   obs_stage[ss] == SUDS_REM ) 
+		{
+		  first_sleep = ss;
+		  break;
+		}
+	    }
+	  
+	  int last_sleep = helper->ne - 1;
+	  for (int ss = helper->ne - 1; ss >=0 ; ss--)
+	    {
+	      if ( obs_stage[ss] == SUDS_N1 ||
+		   obs_stage[ss] == SUDS_N2 ||
+		   obs_stage[ss] == SUDS_N3 ||
+		   obs_stage[ss] == SUDS_NR ||
+		   obs_stage[ss] == SUDS_REM ) 
+		{
+		  last_sleep = ss;
+		  break;
+		}
+	    }
+	  
+	  // trim front
+	  if ( first_sleep > 0 ) 
+	    {
+	      //         *
+	      // 0 1 2 3 4
+	      // if allow 2
+	      // X X Y Y S
+
+	      first_sleep -= suds_t::trim_wake_epochs + 1 ; 	      
+	      int t = 0;
+	      // note, inclusive counting up to X
+	      for (int ss=0; ss<= first_sleep; ss++)
+		{
+		  obs_stage[ss] == SUDS_UNKNOWN; 
+		  helper->retained[ss] = false;
+		  --helper->nge;
+		  ++t;
+		}
+	      if ( t ) logger << "  trimmed " << t << " leading wake epochs\n";
+	    }
+	  
+	  // trim end
+	  if ( last_sleep < helper->ne - 1 ) 
+	    {
+	      // * *               
+	      // 4 5 6 7 8 9
+	      //         X X
+	      
+	      last_sleep += suds_t::trim_wake_epochs + 1 ;
+	      int t=0;
+	      for (int ss= helper->ne - 1 ; ss >= last_sleep; ss--)
+		{
+		  obs_stage[ss] == SUDS_UNKNOWN;
+                  helper->retained[ss] = false;
+                  --helper->nge;
+		  ++t;
+		}
+	      if ( t ) logger << "  trimmed " << t << " trailing wake epochs\n";
+	    }
+	  
+	} // end of wake trimming option
+
+
     }
   else 
     {
@@ -279,7 +424,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // for target individuals without staging, include all epochs
       //
       
-      nge = ne;
+      helper->nge = helper->ne;
       
     }
 
@@ -290,18 +435,59 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   if ( suds_t::soap_mode && suds_t::ignore_target_priors )
     {
-      has_prior_staging = true;
+      helper->has_prior_staging = true;
     }
   
+  return 1;
+
+}
+
+
+
+
+int suds_indiv_t::proc_build_feature_matrix( suds_helper_t * helper )
+{
+  
+  
+  //
+  // PSD (Welch) parameters 
+  //
+
+  double fft_segment_size = helper->param.has( "segment-sec" ) 
+    ? helper->param.requires_dbl( "segment-sec" ) : 4 ;
+  
+  double fft_segment_overlap = helper->param.has( "segment-overlap" ) 
+    ? helper->param.requires_dbl( "segment-overlap" ) : 2 ;
+  
+  if ( helper->edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
+    {
+      fft_segment_overlap = 0;
+      fft_segment_size = helper->edf.timeline.epoch_length();
+    }
+
+  window_function_t window_function = WINDOW_TUKEY50;	   
+  if      ( helper->param.has( "no-window" ) ) window_function = WINDOW_NONE;
+  else if ( helper->param.has( "hann" ) ) window_function = WINDOW_HANN;
+  else if ( helper->param.has( "hamming" ) ) window_function = WINDOW_HAMMING;
+  else if ( helper->param.has( "tukey50" ) ) window_function = WINDOW_TUKEY50;
+
+
+  logger << "  applying Welch with " << fft_segment_size << "s segments ("
+	 << fft_segment_overlap << "s overlap), using "
+	 << ( suds_t::use_seg_median ? "median" : "mean" )
+	 << " over segments\n";  
+  
+
+
   //
   // Size feature matrix X
   //
 
   nf = suds_t::nf;
 
-  X.resize( nge , nf );
+  X.resize( helper->nge , nf );
 
-  logger << "  expecting " << nf << " features (for " << nge << " epochs) and " << ns << " channels\n";
+  logger << "  expecting " << nf << " features (for " << helper->nge << " epochs) and " << helper->ns << " channels\n";
 
   
   //
@@ -309,9 +495,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   // epochs, for each signal
   //
   
-  h1 = Eigen::MatrixXd::Zero( nge , ns );
-  h2 = Eigen::MatrixXd::Zero( nge , ns );
-  h3 = Eigen::MatrixXd::Zero( nge , ns );
+  h1 = Eigen::MatrixXd::Zero( helper->nge , helper->ns );
+  h2 = Eigen::MatrixXd::Zero( helper->nge , helper->ns );
+  h3 = Eigen::MatrixXd::Zero( helper->nge , helper->ns );
   
   //
   // Track bad epochs 
@@ -326,7 +512,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   int en = 0 , en_good = 0;
   
-  edf.timeline.first_epoch();
+  helper->edf.timeline.first_epoch();
   
   epochs.clear();
   
@@ -338,18 +524,18 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       //
 
 
-      int epoch = edf.timeline.next_epoch();      	  
+      int epoch = helper->edf.timeline.next_epoch();      	  
       
       if ( epoch == -1 ) break;
       
-      if ( en == ne ) Helper::halt( "internal error: over-counted epochs" );
+      if ( en == helper->ne ) Helper::halt( "internal error: over-counted epochs" );
       
       
       //
       // retained? if not, skip
       //
       
-      if ( ! retained[ en ] ) 
+      if ( ! helper->retained[ en ] ) 
    	{
    	  ++en;
    	  continue;
@@ -359,7 +545,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // Process this epoch, signal-by-signal, then feature-spec by feature-spec.
       //
       
-      interval_t interval = edf.timeline.epoch( epoch );
+      interval_t interval = helper->edf.timeline.epoch( epoch );
       
       //
       // is this a bad epoch?
@@ -371,7 +557,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
       // Iterate over signals
       //
 
-      for (int s = 0 ; s < ns; s++ )
+      for (int s = 0 ; s < helper->ns; s++ )
 	{
 
 	  //
@@ -384,17 +570,18 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  // Get data
 	  //
 
-	  const std::string siglab = signals.label(s) ;
+	  helper->siglab = helper->signals.label(s) ;
 	  
-	  slice_t slice( edf , signals(s) , interval );
+	  slice_t slice( helper->edf , helper->signals(s) , interval );
 	  
-	  const int sr = edf.header.sampling_freq( signals(s) ); 
-
+	  const int sr = helper->edf.header.sampling_freq( helper->signals(s) ); 
+	  
 	  //
 	  // get data & mean-center
 	  //
 	  
 	  std::vector<double> * d = slice.nonconst_pdata();
+	  
 	  
 	  //
 	  // mean centre epoch
@@ -407,23 +594,23 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	  // extract these channel-specific features 
 	  //     
 	  
-	  const bool do_mean = suds_t::model.has( suds_feature_t::SUDS_MEAN , siglab ) ;
+	  const bool do_mean = suds_t::model.has( suds_feature_t::SUDS_MEAN , helper->siglab ) ;
 	  
 	  const bool do_spectral =
-	    suds_t::model.has( suds_feature_t::SUDS_LOGPSD , siglab ) ||
-	    suds_t::model.has( suds_feature_t::SUDS_RELPSD , siglab ) ||
-	    suds_t::model.has( suds_feature_t::SUDS_SLOPE , siglab ) ||
-	    suds_t::model.has( suds_feature_t::SUDS_CVPSD , siglab );
+	    suds_t::model.has( suds_feature_t::SUDS_LOGPSD , helper->siglab ) ||
+	    suds_t::model.has( suds_feature_t::SUDS_RELPSD , helper->siglab ) ||
+	    suds_t::model.has( suds_feature_t::SUDS_SLOPE , helper->siglab ) ||
+	    suds_t::model.has( suds_feature_t::SUDS_CVPSD , helper->siglab );
 	  
-	  const bool do_skew = suds_t::model.has( suds_feature_t::SUDS_SKEW , siglab );
+	  const bool do_skew = suds_t::model.has( suds_feature_t::SUDS_SKEW , helper->siglab );
 	  
-	  const bool do_kurt = suds_t::model.has( suds_feature_t::SUDS_KURTOSIS , siglab );
+	  const bool do_kurt = suds_t::model.has( suds_feature_t::SUDS_KURTOSIS , helper->siglab );
 	  
-	  const bool do_hjorth = suds_t::model.has( suds_feature_t::SUDS_HJORTH , siglab );
+	  const bool do_hjorth = suds_t::model.has( suds_feature_t::SUDS_HJORTH , helper->siglab );
 	  
-	  const bool do_pe = suds_t::model.has( suds_feature_t::SUDS_PE , siglab );
+	  const bool do_pe = suds_t::model.has( suds_feature_t::SUDS_PE , helper->siglab );
 	  
-	  const bool do_pfd = suds_t::model.has( suds_feature_t::SUDS_FD , siglab );
+	  const bool do_pfd = suds_t::model.has( suds_feature_t::SUDS_FD , helper->siglab );
 	  	  	  
 
 	  //
@@ -448,7 +635,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 					     / (double)( segment_points - noverlap_points ) );
 	      
 	      // also calculate SD over segments for this channel?
-	      const bool get_segment_sd = suds_t::model.has( suds_feature_t::SUDS_CVPSD , siglab ) ;
+	      const bool get_segment_sd = suds_t::model.has( suds_feature_t::SUDS_CVPSD , helper->siglab ) ;
 	      
 	      PWELCH pwelch( *d , 
 			     sr , 
@@ -480,20 +667,19 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      // track that this is bad / to be removed below?
 	      if ( bad_epoch ) bad_epochs.insert( en_good );
 	      
-
 	      //
 	      // log-PSD?
 	      //
 	      
-	      if ( suds_t::model.has( suds_feature_t::SUDS_LOGPSD , siglab ) && ! bad_epoch )
+	      if ( suds_t::model.has( suds_feature_t::SUDS_LOGPSD , helper->siglab ) && ! bad_epoch )
 		{
 		  
-		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_LOGPSD , siglab ) ;
+		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_LOGPSD , helper->siglab ) ;
 		  const int ncols = cols.size();
 		  
 		  // this *should* map exactly onto the number of bins between the lwr and upr bounds
 		  
-		  suds_spec_t spec = suds_t::model.fcmap[ suds_feature_t::SUDS_LOGPSD ][ siglab ];
+		  suds_spec_t spec = suds_t::model.fcmap[ suds_feature_t::SUDS_LOGPSD ][ helper->siglab ];
 		  
 		  // these have been checked and will be present/valid 
 		  const double lwr = spec.arg[ "lwr" ];
@@ -521,12 +707,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      // rel-PSD?
 	      //
 	      
-	      if ( suds_t::model.has( suds_feature_t::SUDS_RELPSD , siglab ) && ! bad_epoch )
+	      if ( suds_t::model.has( suds_feature_t::SUDS_RELPSD , helper->siglab ) && ! bad_epoch )
 		{
-		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_RELPSD , siglab ) ;
+		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_RELPSD , helper->siglab ) ;
 		  const int ncols = cols.size();
 		  
-		  suds_spec_t spec = suds_t::model.fcmap[ suds_feature_t::SUDS_RELPSD ][ siglab ];
+		  suds_spec_t spec = suds_t::model.fcmap[ suds_feature_t::SUDS_RELPSD ][ helper->siglab ];
 		  const double lwr = spec.arg[ "lwr" ];
 		  const double upr = spec.arg[ "upr" ];
 		  
@@ -564,13 +750,13 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      // cv-PSD?
 	      //
 	      
-	      if ( suds_t::model.has( suds_feature_t::SUDS_CVPSD , siglab ) && ! bad_epoch )
+	      if ( suds_t::model.has( suds_feature_t::SUDS_CVPSD , helper->siglab ) && ! bad_epoch )
 		{
 		  
-		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_CVPSD , siglab ) ;
+		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_CVPSD , helper->siglab ) ;
 		  const int ncols = cols.size();
 		  
-		  suds_spec_t spec = suds_t::model.fcmap[ suds_feature_t::SUDS_CVPSD ][ siglab ];
+		  suds_spec_t spec = suds_t::model.fcmap[ suds_feature_t::SUDS_CVPSD ][ helper->siglab ];
 		  const double lwr = spec.arg[ "lwr" ];
 		  const double upr = spec.arg[ "upr" ];
 		  
@@ -596,7 +782,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	      // Spectral slope?
 	      //
 	      
-	      if ( suds_t::model.has( suds_feature_t::SUDS_SLOPE , siglab ) && ! bad_epoch )
+	      if ( suds_t::model.has( suds_feature_t::SUDS_SLOPE , helper->siglab ) && ! bad_epoch )
 		{
 		   
 		  double bslope = 0, bn = 0;
@@ -610,7 +796,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 		  if ( ! okay ) bad_epoch = true;
 		  
 		  // will be exactly size == 1 
-		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_SLOPE , siglab ) ;
+		  std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_SLOPE , helper->siglab ) ;
 		  
 		  // save slope
 		  X( en_good , cols[0] ) = bslope;
@@ -626,33 +812,33 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
 	   if ( do_mean && ! bad_epoch )
 	     {
-	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_MEAN , siglab ) ;
+	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_MEAN , helper->siglab ) ;
 	       X( en_good , cols[0] ) = mean; // calculated above when mean-centering
 	     }
 	   
 	   if ( do_skew && ! bad_epoch )
 	     {
-	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_SKEW , siglab ) ;
+	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_SKEW , helper->siglab ) ;
 	       X( en_good , cols[0] ) = MiscMath::skewness( *d , 0 , MiscMath::sdev( *d , 0 ) );
 	     }
 
 	   if ( do_kurt && ! bad_epoch )
 	     {
-	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_KURTOSIS , siglab ) ;
+	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_KURTOSIS , helper->siglab ) ;
 	       X( en_good , cols[0] ) = MiscMath::kurtosis0( *d ); // assumes mean-centered
 	     }
 	   
 	   // fractal dimension
 	   if ( do_pfd && ! bad_epoch )
 	     {
-	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_FD , siglab ) ;
+	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_FD , helper->siglab ) ;
 	       X( en_good , cols[0] ) = MiscMath::petrosian_FD( *d );
 	     }
 	   
 	   // permutation entropy
 	   if ( do_pe && ! bad_epoch )
 	     {
-	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_PE , siglab ) ;
+	       std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_PE , helper->siglab ) ;
 	       
 	       int sum1 = 1;
 	       std::vector<double> pd3 = pdc_t::calc_pd( *d , 3 , 1 , &sum1 );
@@ -678,14 +864,14 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	     {
 	       double activity = 0 , mobility = 0 , complexity = 0;
 	       MiscMath::hjorth( d , &activity , &mobility , &complexity );
-	       
+
 	       h1( en_good , s ) = activity ;
 	       h2( en_good , s ) = mobility ;
 	       h3( en_good , s ) = complexity ; 
 	       
 	       if ( do_hjorth ) // only take H2 and H3
 		 {
-		   std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_HJORTH , siglab ) ;
+		   std::vector<int> cols = suds_t::model.cols( suds_feature_t::SUDS_HJORTH , helper->siglab ) ;
 		   X( en_good , cols[0] ) = mobility;
 		   X( en_good , cols[1] ) = complexity;
 		 }
@@ -905,46 +1091,53 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
        std::cout << X << "\n";
      }
 
+   return 1;
+}
 
-   // --------------------------------------------------------------------------------
-   //
-   // Get PSC initially (we look for outliers and then remove epochs, and redo the SVD)
-   //
-   // --------------------------------------------------------------------------------
-   
-   
-   Eigen::BDCSVD<Eigen::MatrixXd> svd( X , Eigen::ComputeThinU | Eigen::ComputeThinV );
-   U = svd.matrixU();
-   V = svd.matrixV();
-   W = svd.singularValues();
 
+
+int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
+{
+  
+  // --------------------------------------------------------------------------------
+  //
+  // Get PSC initially (we look for outliers and then remove epochs, and redo the SVD)
+  //
+  // --------------------------------------------------------------------------------
+  
+  
+  Eigen::BDCSVD<Eigen::MatrixXd> svd( X , Eigen::ComputeThinU | Eigen::ComputeThinV );
+  U = svd.matrixU();
+  V = svd.matrixV();
+  W = svd.singularValues();
+  
+  
+  // --------------------------------------------------------------------------------
+  //
+  // Outliers in PSC space? 
+  //
+  // --------------------------------------------------------------------------------
    
-   // --------------------------------------------------------------------------------
-   //
-   // Outliers in PSC space? 
-   //
-   // --------------------------------------------------------------------------------
-   
-   std::vector<bool> valid( nge , true );
-   
-   // track reasons for exclusion
-   std::set<int> nout_flat;
-   std::set<int> nout_hjorth;
-   std::set<int> nout_stat;
-   std::set<int> nout_tot;
+  helper->valid.resize( helper->nge , true );
+  
+  // track reasons for exclusion
+  std::set<int> nout_flat;
+  std::set<int> nout_hjorth;
+  std::set<int> nout_stat;
+  std::set<int> nout_tot;
 
    
    //
    // Exclusions based on H==0 parameters
    //
    
-   for ( int s=0;s<ns;s++)
+   for ( int s=0;s<helper->ns;s++)
      {
-       for (int i=0;i<nge;i++) 
+       for (int i=0;i<helper->nge;i++) 
 	 {
-	   if      ( h1( i , s ) < 1e-8 ) { valid[i] = false; nout_flat.insert(i); }
-	   else if ( h2( i , s ) < 1e-8 ) { valid[i] = false; nout_flat.insert(i) ; }
-	   else if ( h3( i , s ) < 1e-8 ) { valid[i] = false; nout_flat.insert(i) ; }
+	   if      ( h1( i , s ) < 1e-8 ) { helper->valid[i] = false; nout_flat.insert(i); }
+	   else if ( h2( i , s ) < 1e-8 ) { helper->valid[i] = false; nout_flat.insert(i) ; }
+	   else if ( h3( i , s ) < 1e-8 ) { helper->valid[i] = false; nout_flat.insert(i) ; }
 	 }
      }
    
@@ -959,16 +1152,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    if ( ! trainer )
      {
        logger << "  removing epochs +/-" << suds_t::hjorth_outlier_th << " SD units from Hjorth parameter trainer means\n";
-
-       for ( int s=0;s<ns;s++)
+ 
+       for ( int s=0;s<helper->ns;s++)
 	 {
-   	  for (int i=0;i<nge;i++)
+   	  for (int i=0;i<helper->nge;i++)
    	    {
    	      if ( h1( i, s ) <= suds_t::hjorth1_lwr95[s] || h1(i,s) >= suds_t::hjorth1_upr95[s] ||
 		   h2( i, s ) <= suds_t::hjorth2_lwr95[s] || h2(i,s) >= suds_t::hjorth2_upr95[s] ||
 		   h3( i, s ) <= suds_t::hjorth3_lwr95[s] || h3(i,s) >= suds_t::hjorth3_upr95[s] )
 		{
-		  valid[i] = false;
+		  helper->valid[i] = false;
 		  nout_hjorth.insert(i);
 		}
    	    }
@@ -992,18 +1185,18 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
        for ( int j=0;j<nc;j++)
 	 {
 	   std::vector<double> x;
-	   for (int i=0;i<nge;i++) if ( valid[i] ) x.push_back( U(i,j) );
+	   for (int i=0;i<helper->nge;i++) if ( helper->valid[i] ) x.push_back( U(i,j) );
 	   if ( x.size() < 2 ) Helper::halt( "no epochs left" );
 	   double mean = MiscMath::mean( x );
 	   double sd = MiscMath::sdev( x , mean );
 	   double lwr = mean - suds_t::outlier_ths[o] * sd;
 	   double upr = mean + suds_t::outlier_ths[o] * sd;
 	   int c = 0;
-	   for (int i=0;i<nge;i++)
+	   for (int i=0;i<helper->nge;i++)
 	     {
-	       if ( valid[i] )
+	       if ( helper->valid[i] )
 		 {
-		   if ( x[c] < lwr || x[c] > upr ) { valid[i] = false; nout_stat.insert(i); } 
+		   if ( x[c] < lwr || x[c] > upr ) { helper->valid[i] = false; nout_stat.insert(i); } 
 		   ++c;
 		 }
 	     }
@@ -1018,25 +1211,25 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    //
    // --------------------------------------------------------------------------------
    
-   if ( has_prior_staging && suds_t::max_epoch_n != -1 )
+   if ( helper->has_prior_staging && suds_t::max_epoch_n != -1 )
      {
    
-       std::map<suds_stage_t,std::vector<int> > counts;
+       std::map<suds_stage_t,std::vector<int> > cnts;
    
        int cc = 0;
-       for (int i=0;i<ne;i++)
+       for (int i=0;i<helper->ne;i++)
 	 {
-	   if ( retained[i] )
+	   if ( helper->retained[i] )
 	     {
 	       // track counts in valid index space
-	       if ( valid[cc] )
-		 counts[ obs_stage[ i ] ].push_back( cc );
+	       if ( helper->valid[cc] )
+		 cnts[ obs_stage[ i ] ].push_back( cc );
 	       ++cc;
 	     }
 	 }
        
-       std::map<suds_stage_t,std::vector<int> >::const_iterator qq = counts.begin();
-       while ( qq != counts.end() )
+       std::map<suds_stage_t,std::vector<int> >::const_iterator qq = cnts.begin();
+       while ( qq != cnts.end() )
 	 {
 	   if ( qq->second.size() > suds_t::max_epoch_n )
 	     {
@@ -1048,9 +1241,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	       while ( rem ) 
 		 {
 		   int pick = CRandom::rand( tot );
-		   if ( valid[ qq->second[ pick ] ] )
+		   if ( helper->valid[ qq->second[ pick ] ] )
 		     {
-		       valid[ qq->second[ pick ] ] = false;
+		       helper->valid[ qq->second[ pick ] ] = false;
 		       --rem;
 		     }
 		 }	      
@@ -1069,10 +1262,10 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    
    int included = 0;
 
-   for (int i=0;i<nge;i++)
-     if ( valid[i] ) ++included;
+   for (int i=0;i<helper->nge;i++)
+     if ( helper->valid[i] ) ++included;
    
-   logger << "  of " << ne << " total epochs, valid staging for " << nge
+   logger << "  of " << helper->ne << " total epochs, valid staging for " << helper->nge
           << ", and of those " << included << " passed outlier removal\n";
    
    
@@ -1083,7 +1276,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    oo = nout_stat.begin();
    while ( oo != nout_stat.end() ) { nout_tot.insert( *oo ); ++oo; } 
    
-   logger << "  outliers counts (flat, Hjorth, components, total = "
+   logger << "  outlier counts (flat, Hjorth, components, total = "
    	 << nout_flat.size() << ", "
 	  << nout_hjorth.size() << ", "
 	  << nout_stat.size() << ", "
@@ -1112,7 +1305,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    // nve = number of valid epochs ( ne > nge > nve ) 
   
    nve = included;
-   
+
    Eigen::MatrixXd X2 = X;
    X.resize( nve , nf );
    std::vector<int> epochs2 = epochs;
@@ -1121,7 +1314,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    int r = 0;
    for (int i=0;i<X2.rows() ; i++)
      {      
-       if ( valid[i] )
+       if ( helper->valid[i] )
 	 {	   
 	   for (int j=0;j<nf;j++)
 	      X(r,j) = X2(i,j);
@@ -1135,16 +1328,16 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
    // only retain nve obs labels from obs_stage[ne] originals
 
-   if ( has_prior_staging )
+   if ( helper->has_prior_staging )
      {
        obs_stage_valid.clear();
     
        r = 0;
-       for (int i=0;i<ne;i++)
+       for (int i=0;i<helper->ne;i++)
    	{
-   	  if ( retained[i] )
+   	  if ( helper->retained[i] )
    	    {
-   	      if ( valid[r] )
+   	      if ( helper->valid[r] )
    		obs_stage_valid.push_back( obs_stage[ i ] );
    	      ++r;
    	    }
@@ -1159,15 +1352,15 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    Eigen::MatrixXd hh1 = h1;
    Eigen::MatrixXd hh2 = h2;
    Eigen::MatrixXd hh3 = h3;
-   h1.resize( nve , ns );
-   h2.resize( nve , ns ); 
-   h3.resize( nve , ns );
+   h1.resize( nve , helper->ns );
+   h2.resize( nve , helper->ns ); 
+   h3.resize( nve , helper->ns );
 
-   for (int s=0;s<ns;s++)
+   for (int s=0;s<helper->ns;s++)
      {
        int r = 0;      
-       for (int i=0; i < valid.size(); i++ )
-	 if ( valid[i] )
+       for (int i=0; i < helper->valid.size(); i++ )
+	 if ( helper->valid[i] )
 	   {
 	     h1(r,s) = hh1(i,s);
 	     h2(r,s) = hh2(i,s);
@@ -1227,23 +1420,29 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    for (int c=0; c<suds_t::nf; c++)
      X.col(c) *= suds_t::model.W[c];
 
-   
-   
-   // --------------------------------------------------------------------------------
-   //
-   // Get PSC (post outlier removal)
-   //
-   // --------------------------------------------------------------------------------
-   
-   // W.resize( nbins ); 
-   // V.resize( nbins , nbins );
-   
-   Eigen::BDCSVD<Eigen::MatrixXd> svd2( X , Eigen::ComputeThinU | Eigen::ComputeThinV );
-   U = svd2.matrixU();
-   V = svd2.matrixV();
-   W = svd2.singularValues();
-   
-   
+
+   return 1;
+}
+
+
+int suds_indiv_t::proc_main_svd( suds_helper_t * helper )
+{
+  
+  // --------------------------------------------------------------------------------
+  //
+  // Get PSC (post outlier removal)
+  //
+  // --------------------------------------------------------------------------------
+  
+  // W.resize( nbins ); 
+  // V.resize( nbins , nbins );
+  
+  Eigen::BDCSVD<Eigen::MatrixXd> svd2( X , Eigen::ComputeThinU | Eigen::ComputeThinV );
+  U = svd2.matrixU();
+  V = svd2.matrixV();
+  W = svd2.singularValues();
+  
+  
    //
    // Standardize U
    //
@@ -1272,77 +1471,83 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	 }  
      }
    
+   return 1;
+}
+
+
       
-   
-   // --------------------------------------------------------------------------------
-   //
-   // For trainers, optionally only retain PSCs (or bands) that are significantly
-   // associated with observed stage in this individual AND/OR do not have any stages
-   // with greater within-stage variance than between stage variance
-   //
-   // --------------------------------------------------------------------------------
+ 
+int suds_indiv_t::proc_prune_cols( suds_helper_t * helper )
+{
+  
+  // --------------------------------------------------------------------------------
+  //
+  // For trainers, optionally only retain PSCs (or bands) that are significantly
+  // associated with observed stage in this individual AND/OR do not have any stages
+  // with greater within-stage variance than between stage variance
+  //
+  // --------------------------------------------------------------------------------
+  
+  if ( trainer && ( suds_t::required_comp_p < 1 || suds_t::betwithin_ratio > 0 ) && ! ( suds_t::soap_mode && suds_t::ignore_target_priors ) ) 
+    {
+      
+      const bool do_anova = suds_t::required_comp_p < 1 ;
+      const bool do_bw    = suds_t::betwithin_ratio > 0 ;
+      
+      //
+      // pull out currently retained epochs
+      //
+      
+      std::vector<std::string> ss_str;
+      int c = 0;
+      for ( int i = 0 ; i < helper->ne ; i++ )
+	{
+	  if ( helper->retained[i] )
+	    {
+	      if ( helper->valid[c] )
+		ss_str.push_back( suds_t::str( obs_stage[i] ) );
+	      ++c;
+	    }
+	}
 
-   if ( trainer && ( suds_t::required_comp_p < 1 || suds_t::betwithin_ratio > 0 ) && ! ( suds_t::soap_mode && suds_t::ignore_target_priors ) ) 
-     {
+      std::set<int> incl_comp;
+      
+      for (int j=0;j<nc;j++)
+	{	  
+	  // standardize column
+	  Eigen::VectorXd c = U.col(j);
+	  eigen_ops::scale( c , true , true );
+	  
+	  bool okay = true;
+	  
+	  writer.level( "PSC_" + Helper::int2str( j+1 ) , "VAR");
+	  
+	  if ( do_anova )
+	    {
+	      double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
+	      writer.value( "PV", pv );	       
+	      if ( pv < 0 || pv > suds_t::required_comp_p ) okay = false;
+	    }
+	  
+	  // may have signif stage/group differences, but check that no one stage has a big variance difference also 
+	  if ( do_bw )
+	    {
+	      // nb. c is standardized
+	      double wb = eigen_ops::between_within_group_variance( ss_str , c );
+	      writer.value( "WMAX", wb );
+	      if ( wb > suds_t::betwithin_ratio ) okay = false;	       
+	    }
+	  
+	  if ( okay ) incl_comp.insert( j );
+	  writer.value( "INC" , okay );
+	  
+	}
+      
+      writer.unlevel( "VAR" );
 
-       const bool do_anova = suds_t::required_comp_p < 1 ;
-       const bool do_bw    = suds_t::betwithin_ratio > 0 ;
-       
-       //
-       // pull out currently retained epochs
-       //
-       
-       std::vector<std::string> ss_str;
-       int c = 0;
-       for ( int i = 0 ; i < ne ; i++ )
-         {
-           if ( retained[i] )
-             {
-               if ( valid[c] )
-                 ss_str.push_back( suds_t::str( obs_stage[i] ) );
-               ++c;
-             }
-         }
-       
-
-       std::set<int> incl_comp;
-       
-       for (int j=0;j<nc;j++)
-	 {	  
-	   // standardize column
-	   Eigen::VectorXd c = U.col(j);
-	   eigen_ops::scale( c , true , true );
-
-	   bool okay = true;
-
-	   writer.level( "PSC_" + Helper::int2str( j+1 ) , "VAR");
-	   
-	   if ( do_anova )
-	     {
-	       double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
-	       writer.value( "PV", pv );	       
-	       if ( pv < 0 || pv > suds_t::required_comp_p ) okay = false;
-	     }
-
-	   // may have signif stage/group differences, but check that no one stage has a big variance difference also 
-	   if ( do_bw )
-	     {
-	       // nb. c is standardized
-	       double wb = eigen_ops::between_within_group_variance( ss_str , c );
-	       writer.value( "WMAX", wb );
-	       if ( wb > suds_t::betwithin_ratio ) okay = false;	       
-	     }
-	   
-	   if ( okay ) incl_comp.insert( j );
-	   writer.value( "INC" , okay );
-	   
-	 }
-    
-       writer.unlevel( "VAR" );
-
-       // no usable components? --> no usable epochs...
-       // quit out (this trainer will be ignored)
-    
+      // no usable components? --> no usable epochs...
+      // quit out (this trainer will be ignored)
+      
        if ( incl_comp.size() == 0 )
 	 {
 	   logger << "  0 p<" << suds_t::required_comp_p << " stage-associated components, bailing\n";
@@ -1419,49 +1624,31 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	 for (int j=0;j<nc;j++)
 	   V(i,j) = VV(i,j);
      }
-   
 
-   // --------------------------------------------------------------------------------
-   //
-   // Re-Standardize U 
-   //
-   // --------------------------------------------------------------------------------
-   
-   if ( suds_t::standardize_U )
-     {
-       
-       if ( suds_t::robust_standardization )
-	 {
-	   logger << "  robust re-standardizing U";
-	   if ( suds_t::winsor2 > 0 ) logger << ", winsorizing at " << suds_t::winsor2;
-	   logger << "\n";
-	   eigen_ops::robust_scale( U , true, true, suds_t::winsor2 );
-	 }
-       else
-   	{
-   	  logger << "  re-standardizing U\n";
-   	  eigen_ops::scale( U , true , true );
-   	}  
-     }
+   return 1;
+}
 
-   
-   // --------------------------------------------------------------------------------
-   //
-   // make class labels ( trainer only )
-   //
-   // --------------------------------------------------------------------------------
-   
-   if ( trainer )
+
+int suds_indiv_t::proc_class_labels( suds_helper_t * helper )
+{
+  
+  // --------------------------------------------------------------------------------
+  //
+  // make class labels ( trainer only )
+  //
+  // --------------------------------------------------------------------------------
+  
+  if ( trainer )
      {
        
        y.clear();
        
        int c = 0;
-       for ( int i = 0 ; i < ne ; i++ )
+       for ( int i = 0 ; i < helper->ne ; i++ )
 	 {
-	   if ( retained[i] )
+	   if ( helper->retained[i] )
 	     {
-	       if ( valid[c] )
+	       if ( helper->valid[c] )
 		 y.push_back( suds_t::str( obs_stage[i] ) );
 	       ++c;
 	     }
@@ -1478,9 +1665,18 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 	 }
        logger << "\n";
      }
-   
+  
+  return 1;
+}
 
-   // --------------------------------------------------------------------------------
+
+
+
+int suds_indiv_t::proc_prune_rows( suds_helper_t * helper ) 
+{
+  
+  
+  // --------------------------------------------------------------------------------
    //
    // Self-classification (i.e. SOAP) to remove epochs that aren't well self-classified
    //  - possibly reject a trainer, if their SOAP kappa is poor
@@ -1518,17 +1714,17 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
        epochs.clear();
        
        std::vector<suds_stage_t> obs_stage_valid2 = obs_stage_valid;
-       if ( has_prior_staging )
+       if ( helper->has_prior_staging )
 	 obs_stage_valid.clear();
        
        Eigen::MatrixXd hh1 = h1;
-       h1.resize( nve , ns );
+       h1.resize( nve , helper->ns );
 
        Eigen::MatrixXd hh2 = h2;
-       h2.resize( nve , ns );
+       h2.resize( nve , helper->ns );
        
        Eigen::MatrixXd hh3 = h3;
-       h3.resize( nve , ns );
+       h3.resize( nve , helper->ns );
        
        int r = 0;
        for (int i=0;i< nve; i++)
@@ -1548,12 +1744,12 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
    	      epochs.push_back( epochs2[i] );
 	      
    	      // nb. take from already-pruned set, obs_stage_valid[] ) 
-   	      if ( has_prior_staging )
+   	      if ( helper->has_prior_staging )
 		obs_stage_valid.push_back( obs_stage_valid2[i] );
 
 	      
 	      // Hjorth (per signal)
-	      for (int s=0;s<ns;s++)
+	      for (int s=0;s<helper->ns;s++)
    	       	{
 		  h1(r,s) = hh1(i,s);
    	       	  h2(r,s) = hh2(i,s);
@@ -1602,13 +1798,23 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
        
        logger << "  final count of valid epochs is " << nve << "\n";
      }
-   
-   
-   
-   //
-   // Summarize mean/SD for per-signal Hjorth parameters
-   //
 
+
+   return 1;
+}
+
+ 
+
+
+int suds_indiv_t::proc_coda( suds_helper_t * helper )
+{
+   
+  // --------------------------------------------------------------------------------
+  //
+  // Summarize mean/SD for per-signal Hjorth parameters
+  //
+  // --------------------------------------------------------------------------------
+   
    mean_h1 = h1.colwise().mean();
    mean_h2 = h2.colwise().mean();
    mean_h3 = h3.colwise().mean();
@@ -1629,11 +1835,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
    std::map<std::string,int>::const_iterator cc = counts.begin();
    while ( cc != counts.end() )
-     {
+     {       
        if ( cc->first != "?" && cc->second >= suds_t::required_epoch_n ) ++nr;      
        ++cc;
      }
-   
+
    return trainer ? nr : nve ;
    
 }
