@@ -140,6 +140,8 @@ struct globals
   static std::string sleep_stage_prefix; // to track multiple schemes, e.g. manual + SUDS
 
   static sleep_stage_label_lookup_t sleep_stage_labels;
+
+  static bool sleep_stage_assume_epoch_duration;
   
   static char folder_delimiter;
 
@@ -175,6 +177,8 @@ struct globals
   static bool uppercase_channels;
   static bool replace_annot_spaces;
   static char space_replacement;
+
+  static bool set_0dur_as_ellipsis;
 
   //
   // Annotation types stored here statically;  these can be properties of both 
@@ -343,6 +347,7 @@ struct globals
 
   static sleep_stage_t stage( const std::string & );
 
+  static bool is_stage_annotation( const std::string & );
 
   static double band_width( frequency_band_t b );
   

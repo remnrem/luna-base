@@ -556,3 +556,47 @@ double eigen_ops::between_within_group_variance( const std::vector<std::string> 
 }
 
 
+
+Eigen::VectorXd eigen_ops::canonical_correlation( const Eigen::MatrixXd & X , const Eigen::MatrixXd & Y )
+{
+
+  if ( X.rows() != Y.rows() )
+    Helper::halt("different number of individuals on left and right hand of canonical correlation");
+  
+  const int nr = X.rows();  
+  const int ncx = X.cols();
+  const int ncy = Y.cols();
+
+  if ( !nr || !ncx || !ncy) 
+    Helper::halt( "0 rows/cols in canonical_correlation" );
+
+  Eigen::HouseholderQR<Eigen::MatrixXd> qX( X.rowwise() - X.colwise().mean() );
+  Eigen::HouseholderQR<Eigen::MatrixXd> qY( Y.rowwise() - Y.colwise().mean() );
+  
+  // qr.qty =  ‘t(Q) %*% y’ 
+  //  z <- svd(qr.qty(qx, qr.qy(qy, diag(1, nr, dy)))[1L:dx, , drop = FALSE], dx, dy)
+
+  // *assume* will be full rank, as this only used for PCs from SUDS
+  const int dx = ncx;
+  const int dy = ncy;
+
+  // z <- svd( qr.qty( qx,
+  // 		      qr.qy( qy , diag(1, nr, dy)))[1L:dx, , drop = FALSE], dx, dy)
+
+  Eigen::BDCSVD<Eigen::MatrixXd> svd( ( qX.householderQ().transpose()
+					* ( qY.householderQ() * Eigen::MatrixXd::Identity( nr , dy ) ) ).topRows(dx) , 
+				      Eigen::ComputeThinU | Eigen::ComputeThinV );
+
+  // only need the CCs for now (these will be sorted in decreasing order)
+  return svd.singularValues();
+
+      
+  //   xcoef <- backsolve((qx$qr)[1L:dx, 1L:dx, drop = FALSE], z$u)
+  //   rownames(xcoef) <- colnames(x)[qx$pivot][1L:dx]
+  //   ycoef <- backsolve((qy$qr)[1L:dy, 1L:dy, drop = FALSE], z$v)
+  //   rownames(ycoef) <- colnames(y)[qy$pivot][1L:dy]
+  //   list(cor = z$d, xcoef = xcoef, ycoef = ycoef, xcenter = xcenter, 
+  //       ycenter = ycenter)
+
+}
+

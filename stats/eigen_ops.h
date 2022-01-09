@@ -57,7 +57,9 @@ namespace eigen_ops {
   std::vector<double> copy_array( const Eigen::ArrayXd & e );
   
   std::map<int,std::vector<double> > group_means( const Eigen::MatrixXd & x , const std::vector<int> & g );
-  
+
+  Eigen::VectorXd canonical_correlation( const Eigen::MatrixXd & X , const Eigen::MatrixXd & Y );
+
 }
 
   // inline double min( double a, double b) { return a<b ? a : b; } 

@@ -126,7 +126,17 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
       dump_predictor_matrix( edf , param.value( "dump-features" ) );
     }
 
+  //
+  // dump associations w/ stages
+  //
 
+  if ( param.has( "dump-stage-assocs" ) )
+    {
+      logger << "  dumping feature/SVD component stage associations to " << param.value( "dump-stage-assocs" )  << "\n";
+      dump_stage_associations( param.value( "dump-stage-assocs" ) );
+    }
+
+  
   //
   // dump components
   //
@@ -141,6 +151,8 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   // output stage probabilities 
   //
 
+  logger << "\n";
+  
   const double epoch_sec = edf.timeline.epoch_length();
 
   const int ne_all = edf.timeline.num_epochs();

@@ -54,6 +54,12 @@ extern writer_t writer;
 
 
 //
+// library version
+//
+
+std::string suds_t::suds_lib_version = "SUDS1";
+
+//
 // Signals
 //
 
@@ -72,7 +78,7 @@ suds_indiv_t suds_t::cached;
 // LDA/QDA
 //
 
-bool suds_t::qda = true;
+bool suds_t::qda = false;
 
 //
 // Model specification
@@ -100,6 +106,16 @@ int suds_t::nf = 0;
 std::vector<double> suds_t::slope_range{ 30.0 , 45.0 } ;
 double suds_t::slope_th  = 3;
 double suds_t::slope_epoch_th = 5;
+
+// SOAP-update threshold
+// (of final prediction, of indiv trainer predictions)
+double suds_t::soap_global_update_th = -1;
+double suds_t::soap_update_th = -1;
+
+// +5 : if stage has << 5 high confidence epochs, then leave as is
+// -5 : if stage has << 5 high confidence epochs, set all to missing (i.e. drop that stage)
+int suds_t::soap_update_min_epochs = 5;
+int suds_t::soap_global_update_min_epochs = 5;
 
 
 //
@@ -248,6 +264,23 @@ void suds_t::set_options( param_t & param )
   
   if ( qda ) logger << "  using QDA for primary predictions\n";
   else logger << "  using LDA for primary predictions\n";
+
+  // use SOAP to fix up predictions? of indiv trainers and/or globally (on final prediction set)?
+  if ( param.has( "soap1" ) )
+    {
+      std::vector<double> p = param.dblvector( "soap1" );
+      if ( p.size() != 2 ) Helper::halt( "requires soap1=th,n" );
+      soap_update_th = p[0];
+      soap_update_min_epochs = round( p[1] );
+    }
+
+  if ( param.has( "soap" ) )
+    {
+      std::vector<double> p = param.dblvector( "soap" );
+      if ( p.size() != 2 ) Helper::halt( "requires soap=th,n" );
+      soap_global_update_th = p[0];
+      soap_global_update_min_epochs = round( p[1] );
+    }
 
   // spectral resolution for Welch
   spectral_resolution = param.has( "segment-sec" ) ? 1 / param.requires_dbl( "segment-sec" ) : 0.25;
@@ -523,7 +556,7 @@ void suds_indiv_t::fit_qlda()
 // make predictions given a trainer's data & model
 //
 
-posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool use_qda )
+posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool use_qda , double * cancor_u , double * cancor_vw )
 {
   
   //
@@ -539,10 +572,41 @@ posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool us
   for (int i=0;i< trainer.nc; i++)
     trainer_DW(i,i) = 1.0 / trainer.W[i];
   
+  // target's projected U matrix, given trainer V and W 
+
   Eigen::MatrixXd U_projected = X * trainer.V * trainer_DW;
   
-  //  std::cout << " U_projected \n" << U_projected << "\n";
+  
+  //
+  // Canonical correlation of U or V between target and trainer ? 
+  //
 
+  if ( cancor_u != NULL || cancor_vw != NULL )
+    {
+
+      Eigen::IOFormat fmt1( Eigen::StreamPrecision, Eigen::DontAlignCols );
+
+      Eigen::MatrixXd DW = Eigen::MatrixXd::Zero( nc , nc );
+
+      for (int i=0;i< nc; i++)
+	DW(i,i) = 1.0 / W[i];
+      
+      if ( cancor_u != NULL )
+	{
+	  Eigen::VectorXd CCAU = eigen_ops::canonical_correlation( U , U_projected );
+	  *cancor_u = CCAU.mean();
+	  //std::cout << "CCAU " << CCAU.sum() << "\t" << CCAU.transpose() << "\n";
+	}
+
+      if ( cancor_vw != NULL )
+	{
+	  Eigen::VectorXd CCA = eigen_ops::canonical_correlation( V * DW , trainer.V * trainer_DW );
+	  *cancor_vw = CCA.mean();
+	  //std::cout << "CCA " << CCA.sum() << "\t" << CCA.transpose() << "\n";
+	}
+    }
+  
+  
   //
   // Normalize PSC?
   //
@@ -775,23 +839,39 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     
       if ( trainer->id == target.id && ! suds_t::cheat ) { ++tt; continue; } 
       
-      //      std::cout << "considering " << trainer->id << "\n";
+      //
+      // Primary prediction call here.  i.e. predict target given
+      // trainer, after projecting target X into the trainer-defined
+      // space ( i.e. this generates target.U_projected based on
+      // trainer, and then uses it to predict target classes, given
+      // the trainer model )
+      //
 
-      //
-      // Predict target given trainer, after projecting target X into
-      // the trainer-defined space ( i.e. this generates
-      // target.U_projected based on trainer, and then uses it to
-      // predict target classes, given the trainer model )
-      //
+      double cancor_u = 0 , cancor_vw = 0; 
       
-      posteriors_t prediction = target.predict( *trainer , suds_t::qda );
+      posteriors_t prediction = target.predict( *trainer , suds_t::qda , &cancor_u , &cancor_vw );
+
+      
+      //
+      // Update these predictions by RESOAP-ing on unambiguous epochs?
+      // (probably not a good idea!)
+      //
+
+      if ( suds_t::soap_update_th > 0 )
+	{
+	  int changed = target.resoap_update_pp( &prediction.cl , 
+						 &prediction.pp ,
+						 suds_t::labels , 
+						 false  ); // F --> not in global mode      
+	  std::cerr << "  TRAINER ...  changed " << changed << " epochs\n";      
+	}
       
       
       //
       // Save predictions
       //
            
-      target.add( trainer->id , prediction );
+      target.add( trainer->id , prediction , &cancor_u , &cancor_vw );
       
 
       // we can likely remove/change this next step: prediction.cl is
@@ -905,7 +985,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  // Generate model for prediction based on 'dummy' target (imputed) stages
 	  // but U is based on the target's own SVD (i.e. not projected into trainer space);  
 	  // Thus we use target.U, which is the original for the target, based on their own data
-	  // (we ignore the U_projected which is based on the trainer model)
 	  //
 	  
 	  // set target model for use w/ all different weight-trainers
@@ -1183,7 +1262,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       
       if ( prior_staging )
 	writer.value( "K3" , k3_prior[ cntr ] );
-
+    
+      // canconical corrs
+      writer.value( "CCA_U" , target.cancor_u[ trainer->id ] );
+      writer.value( "CCA_VW" , target.cancor_vw[ trainer->id ] );
+      
       // only output final WGT (below)
       if ( 0 )
 	{
@@ -1224,6 +1307,11 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       else
 	wgt[ cntr ] = 1 ; 
 
+      // TMP KLUDGE
+      //wgt [ cntr ] = target.cancor_u[ trainer->id ] ;
+      // TMP KLUDGE END
+	
+      
       if ( dump_trainer_preds )
 	twgts[ trainer->id ] = wgt[ cntr ] ;
       
@@ -1275,6 +1363,10 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
   bool has_wgt = ( wbank.size() > 0 && use_repred_weights ) || use_kl_weights || use_soap_weights ;
 
+  // KLUDGE
+  //has_wgt = true;
+  // KLUDGE
+  
   if ( has_wgt && suds_t::wgt_mean_normalize ) 
     {
       logger << "  normalizing weights by the trainer mean\n";
@@ -1536,6 +1628,33 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	}
     }
 
+
+  //
+  // Update final predictions based on SOAP?
+  //
+
+  target.summarize_kappa( final_prediction , true );
+
+  if ( suds_t::soap_global_update_th > 0 )
+    {
+      //std::vector<std::string> ss = suds_t::str( target.obs_stage_valid );
+      int changed = target.resoap_update_pp( &final_prediction ,
+					     &pp ,
+					     suds_t::labels , 
+					     true  ); // T --> in global mode      
+      logger << "  changed " << changed << " epochs\n";      
+    }
+
+  
+  //
+  // All done w/ SUDS ... now output summaries
+  //
+
+  
+  //
+  // Output epoch-level information
+  //
+  
   target.summarize_epochs( pp , suds_t::labels , ne_all , edf );
   
 
@@ -1574,8 +1693,6 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     }
   
 
-
-
   
   //
   // Final SOAP evaluation of /predicted/ stages
@@ -1597,7 +1714,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     {
       bool valid = false;
 
-      // always use SOAP here
+      // always use LDA w/ SOAP
       if ( false && suds_t::qda )
 	{
 	  qda_t self_qda( final_prediction , target.U );
@@ -1789,12 +1906,17 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 
 
 
-void suds_indiv_t::add( const std::string & trainer_id , const posteriors_t & prediction )
+void suds_indiv_t::add( const std::string & trainer_id , const posteriors_t & prediction ,
+			double * cu , double * cvw )
 {
   
   target_posteriors[ trainer_id ] = prediction.pp ;
   
   target_predictions[ trainer_id ] = suds_t::type( prediction.cl );
+
+  if ( cu != NULL ) cancor_u[ trainer_id ] = *cu;
+
+  if ( cvw != NULL ) cancor_vw[ trainer_id ] = *cvw;
   
 }
 

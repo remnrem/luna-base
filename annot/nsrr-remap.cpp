@@ -34,6 +34,8 @@ std::map<std::string,std::string> nsrr_t::pmap;
 bool nsrr_t::whitelist = false;
 bool nsrr_t::unmapped = false;
 
+std::set<std::string> nsrr_t::edf_class;
+
 std::string nsrr_t::remap( const std::string & a )
 {
   
@@ -227,97 +229,157 @@ void nsrr_t::init()
   // grep ^remap resources/harm.annots | cut -f2 | cut -d"|" -f2- | tr -d '"' > tmp.2  
   // paste tmp.1 tmp.2 | awk -F"\t" ' { printf "add( \"" $1 "\" , \""  $2  "\" ); \n" } '
       
-
   add( "arousal" , "Arousal ()" ); 
-  add( "arousal" , "Arousal|Arousal ()" ); 
-  add( "arousal" , "Arousal|Arousal (Standard)" ); 
-  add( "arousal" , "ASDA arousal|Arousal (ADSA)" ); 
-  add( "arousal" , "ASDA arousal|Arousal (ASDA)" ); 
-  add( "arousal" , "Arousal (ASDA)" ); 
-  add( "arousal/spontaneous" , "Arousal (ARO SPONT)" ); 
-  add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (apon aro)" ); 
-  add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (ARO SPONT)" ); 
-  add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (SPON ARO)" ); 
-  add( "arousal/external" , "External arousal|Arousal (External Arousal)" ); 
-  add( "arousal/RERA" , "Arousal resulting from respiratory effort|Arousal (ARO RES)" ); 
-  add( "arousal/RERA" , "RERA" ); 
-  add( "arousal/RERA" , "Arousal (ARO RES)" ); 
-  add( "arousal/RERA" , "Arousal resulting from respiratory effort|Arousal (RESP ARO)" ); 
-  add( "arousal/RERA" , "Respiratory effort related arousal|RERA" ); 
-  add( "arousal/cheshire" , "Arousal resulting from Chin EMG|Arousal (Cheshire)" ); 
-  add( "apnea/obstructive" , "Obstructive apnea|Obstructive Apnea" ); 
-  add( "apnea/obstructive" , "Obstructive Apnea" ); 
-  add( "apnea/central" , "Central Apnea" ); 
-  add( "apnea/central" , "Central apnea|Central Apnea" ); 
-  add( "apnea/mixed" , "Mixed Apnea" ); 
-  add( "apnea/mixed" , "Mixed apnea|Mixed Apnea" ); 
-  add( "apnea/mixed" , "Mixed apnea|APNEA-MIXED" ); 
-  add( "hypopnea" , "Hypopnea" );
-  add( "hypopnea" , "Hypopnea|Hypopnea" ); 
-  add( "periodic_breathing" , "Periodic Breathing" ); 
-  add( "periodic_breathing" , "Periodic breathing|Periodic Breathing" ); 
-  add( "respiratory_paradox" , "Respiratory Paradox" ); 
-  add( "desat" , "SpO2 desaturation" ); 
-  add( "desat" , "SpO2 desaturation|SpO2 desaturation" ); 
-  add( "desat" , "SpO2 desaturation|DESAT" ); 
-  add( "unsure" , "Unsure|Unsure|Unsure" ); 
-  add( "N1" , "NREM1" ); 
-  add( "N1" , "Stage 1 sleep|1" ); 
-  add( "N2" , "NREM2" ); 
-  add( "N2" , "Stage 2 sleep|2" ); 
-  add( "N3" , "NREM3" ); 
-  add( "N3" , "Stage 3 sleep|3" ); 
-  add( "N3" , "N4" ); 
-  add( "N3" , "NREM4" ); 
-  add( "N3" , "Stage 4 sleep|4" ); 
-  add( "R" , "REM" ); 
-  add( "R" , "REM sleep|5" ); 
-  add( "W" , "Wake" ); 
-  add( "W" , "Wake|0" ); 
-  add( "U" , "Unscored" ); 
-  add( "U" , "Unscored|9" ); 
-  add( "?" , "Unknown" ); 
-  add( "M" , "movement" ); 
-  add( "M" , "Movement|6" ); 
-  add( "L" , "Lights" ); 
-  add( "L" , "Lights On" ); 
-  add( "L" , "LightsOn" ); 
-  add( "PLM" , "Periodic leg movement" ); 
-  add( "PLM" , "Periodic leg movement|PLM" ); 
-  add( "PLM/left" , "Periodic leg movement - left|PLM (Left)" ); 
-  add( "PLM/right" , "Periodic leg movement - right|PLM (Right)" ); 
-  add( "PLM/left" , "PLM (Left)" ); 
-  add( "PLM/right" , "PLM (Right)" ); 
-  add( "LM" , "Limb Movement" ); 
-  add( "LM" , "Limb movement|Limb Movement" ); 
-  add( "LM/left" , "Limb Movement (Left)" ); 
-  add( "LM/left" , "Limb movement - left|Limb Movement (Left)" ); 
-  add( "LM/right" , "Limb Movement (Right)" ); 
-  add( "LM/right" , "Limb movement - right|Limb Movement (Right)" ); 
-  add( "artifact" , "Signal artifact|SIGNAL-ARTIFACT" ); 
-  add( "artifact/respiratory" , "Respiratory artifact" ); 
-  add( "artifact/respiratory" , "Respiratory artifact|Respiratory artifact" ); 
-  add( "artifact/proximal_pH" , "Proximal pH artifact" ); 
-  add( "artifact/distal_pH" , "Distal pH artifact" ); 
-  add( "artifact/blood_pressure" , "Blood pressure artifact" ); 
-  add( "artifact/TcCO2" , "TcCO2 artifact" ); 
-  add( "artifact/TcCO2" , "TcCO2 artifact|TcCO2 artifact" ); 
-  add( "artifact/SpO2" , "SpO2 artifact" ); 
-  add( "artifact/SpO2" , "SpO2 artifact|SpO2 artifact" ); 
-  add( "artifact/EtCO2" , "EtCO2 artifact" ); 
-  add( "artifact/EtCO2" , "EtCO2 artifact|EtCO2 artifact" ); 
-  add( "position/left" , "Body position change to left|POSITION-LEFT" ); 
-  add( "position/right" , "Body position change to right|POSITION-RIGHT" ); 
-  add( "position/prone" , "Body position change to prone|POSITION-PRONE" ); 
-  add( "position/supine" , "Body position change to supine|POSITION-SUPINE" ); 
-  add( "position/upright" , "Body position change to upright|POSITION-UPRIGHT" ); 
-  add( "arrhythmia/bradycardia" , "Bradycardia" ); 
-  add( "arrhythmia/tachycardia" , "Tachycardia" ); 
-  add( "arrhythmia/narrow_complex_tachycardia" , "Narrow Complex Tachycardia" ); 
-  add( "arrhythmia/narrow_complex_tachycardia" , "Narrow complex tachycardia|Narrow Complex Tachycardia" ); 
-  add( "notes" , "Technician Notes" ); 
+add( "arousal" , "Arousal|Arousal ()" ); 
+add( "arousal" , "Arousal|Arousal (Standard)" ); 
+add( "arousal" , "Arousal_(STANDARD)" ); 
+add( "arousal" , "Arousal|Arousal_(Arousal)" ); 
+add( "arousal" , "ASDA arousal|Arousal (ADSA)" ); 
+add( "arousal" , "ASDA arousal|Arousal (ASDA)" ); 
+add( "arousal" , "Arousal (ASDA)" ); 
+add( "arousal" , "Arousal_(Asda)" ); 
+add( "arousal" , "EEG arousal" );
+add( "arousal/spontaneous" , "Arousal (ARO SPONT)" ); 
+add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (apon aro)" ); 
+add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (ARO SPONT)" ); 
+add( "arousal/spontaneous" , "Spontaneous arousal|Arousal (SPON ARO)" ); 
+add( "arousal/respiratory" , "Arousal resulting from respiratory effort|Arousal (ARO RES)" ); 
+add( "arousal/respiratory" , "RERA" ); 
+add( "arousal/respiratory" , "Arousal (ARO RES)" ); 
+add( "arousal/respiratory" , "Arousal resulting from respiratory effort|Arousal (RESP ARO)" ); 
+add( "arousal/respiratory" , "Respiratory effort related arousal|RERA" ); 
+add( "arousal/external" , "External arousal|Arousal (External Arousal)" ); 
+add( "arousal/external" , "Arousal_(External_Arousal)" ); 
+add( "arousal/cheshire" , "Arousal resulting from Chin EMG|Arousal (Cheshire)" ); 
+add( "arousal/cheshire" , "Arousal_(CHESHIRE)" ); 
+add( "arousal/lm" , "arousal_lm" ); 
+add( "arousal/lm" , "lml_arousal" ); 
+add( "arousal/lm" , "lmr_arousal" ); 
+add( "arousal/lm" , "lmb_arousal" ); 
+add( "arousal/lm" , "Arousal_(ARO_Limb)" ); 
+add( "arousal/plm" , "arousal_plm" ); 
+add( "arousal/plm" , "Arousal_resulting_from_periodic_leg_movement|Arousal_(PLM)" ); 
+add( "arousal/plm" , "Arousal_resulting_from_periodic_leg_movement|Arousal_(PLM_ARO)" ); 
+add( "apnea" , "Apnea" ); 
+add( "apnea/obstructive" , "Obstructive apnea|Obstructive Apnea" ); 
+add( "apnea/obstructive" , "Obstructive Apnea" ); 
+add( "apnea/obstructive" , "apnea_obstructive" ); 
+add( "apnea/obstructive" , "Obstructive_apnea|APNEA-OBSTRUCTIVE" ); 
+add( "apnea/central" , "Central Apnea" ); 
+add( "apnea/central" , "apnea_central" ); 
+add( "apnea/central" , "Central apnea|Central Apnea" ); 
+add( "apnea/central" , "Central_apnea|APNEA-CENTRAL" ); 
+add( "apnea/mixed" , "Mixed Apnea" ); 
+add( "apnea/mixed" , "apnea_mixed" ); 
+add( "apnea/mixed" , "Mixed apnea|Mixed Apnea" ); 
+add( "apnea/mixed" , "Mixed apnea|APNEA-MIXED" ); 
+add( "hypopnea" , "Hypopnea|Hypopnea" ); 
+add( "hypopnea/obstructive" , "hypopnea_obstructive" ); 
+add( "hypopnea/obstructive" , "Obstructive_Hypopnea" ); 
+add( "hypopnea/central" , "hypopnea_central" ); 
+add( "periodic_breathing" , "Periodic Breathing" ); 
+add( "periodic_breathing" , "Periodic breathing|Periodic Breathing" ); 
+add( "respiratory_paradox" , "Respiratory Paradox" ); 
+add( "snoring" , "Snoring" ); 
+add( "cheynestokes_breathing" , "cheynestokes_breathing" ); 
+add( "desat" , "SpO2 desaturation" ); 
+add( "desat" , "SpO2 desaturation|SpO2 desaturation" ); 
+add( "desat" , "SpO2 desaturation|DESAT" ); 
+add( "unsure" , "Unsure|Unsure|Unsure" ); 
+add( "N1" , "NREM1" ); 
+add( "N1" , "Stage 1 sleep|1" ); 
+add( "N1" , "Sleep stage N1" ); 
+add( "N2" , "NREM2" ); 
+add( "N2" , "Stage 2 sleep|2" ); 
+add( "N2" , "Sleep stage N2" ); 
+add( "N3" , "NREM3" ); 
+add( "N3" , "Stage 3 sleep|3" ); 
+add( "N3" , "Sleep stage N3" ); 
+add( "N3" , "N4" ); 
+add( "N3" , "NREM4" ); 
+add( "N3" , "Stage 4 sleep|4" ); 
+add( "N3" , "Sleep stage N4" ); 
+add( "R" , "REM" ); 
+add( "R" , "REM sleep|5" ); 
+add( "R" , "Sleep stage R" ); 
+add( "W" , "Wake" ); 
+add( "W" , "Wake|0" ); 
+add( "W" , "Sleep stage W" ); 
+add( "U" , "Unscored" ); 
+add( "U" , "Unscored|9" ); 
+add( "?" , "Unknown" ); 
+add( "M" , "Movement|6" ); 
+add( "L" , "Lights" ); 
+add( "lights_on" , "Lights On" ); 
+add( "lights_on" , "LightsOn" ); 
+add( "lights_off" , "LightsOff" ); 
+add( "lights_off" , "Lights Off" ); 
+add( "movement" , "Movement" ); 
+add( "PLM" , "Periodic leg movement" ); 
+add( "PLM" , "Periodic leg movement|PLM" ); 
+add( "PLM/left" , "Periodic leg movement - left|PLM (Left)" ); 
+add( "PLM/left" , "PLM (Left)" ); 
+add( "PLM/right" , "Periodic leg movement - right|PLM (Right)" ); 
+add( "PLM/right" , "PLM (Right)" ); 
+add( "LM" , "Limb Movement" ); 
+add( "LM" , "Limb movement|Limb Movement" ); 
+add( "LM/left" , "Limb Movement (Left)" ); 
+add( "LM/left" , "Limb movement - left|Limb Movement (Left)" ); 
+add( "LM/right" , "Limb Movement (Right)" ); 
+add( "LM/right" , "Limb movement - right|Limb Movement (Right)" ); 
+add( "artifact" , "Signal artifact|SIGNAL-ARTIFACT" ); 
+add( "artifact/respiratory" , "Respiratory artifact" ); 
+add( "artifact/respiratory" , "Respiratory artifact|Respiratory artifact" ); 
+add( "artifact/proximal_pH" , "Proximal pH artifact" ); 
+add( "artifact/proximal_pH" , "Proximal_pH_artifact|Proximal_pH_artifact" ); 
+add( "artifact/distal_pH" , "Distal pH artifact" ); 
+add( "artifact/pH" , "Proximal_pH|Distal_pH_artifact" ); 
+add( "artifact/blood_pressure" , "Blood pressure artifact" ); 
+add( "artifact/blood_pressure" , "Blood_pressure_artifact|Blood_pressure_artifact" ); 
+add( "artifact/TcCO2" , "TcCO2 artifact" ); 
+add( "artifact/TcCO2" , "TcCO2 artifact|TcCO2 artifact" ); 
+add( "artifact/SpO2" , "SpO2 artifact" ); 
+add( "artifact/SpO2" , "SpO2 artifact|SpO2 artifact" ); 
+add( "artifact/EtCO2" , "EtCO2 artifact" ); 
+add( "artifact/EtCO2" , "EtCO2 artifact|EtCO2 artifact" ); 
+add( "artifact/body_temperature" , "Body_temperature_artifact|Body_temperature_artifact" ); 
+add( "position/left" , "Body position change to left|POSITION-LEFT" ); 
+add( "position/right" , "Body position change to right|POSITION-RIGHT" ); 
+add( "position/prone" , "Body position change to prone|POSITION-PRONE" ); 
+add( "position/supine" , "Body position change to supine|POSITION-SUPINE" ); 
+add( "position/upright" , "Body position change to upright|POSITION-UPRIGHT" ); 
+add( "arrhythmia/bradycardia" , "Bradycardia" ); 
+add( "arrhythmia/bradycardia" , "Bradycardia|Bradycardia" ); 
+add( "arrhythmia/tachycardia" , "Tachycardia" ); 
+add( "arrhythmia/tachycardia" , "Tachycardia|Tachycardia" ); 
+add( "arrhythmia/narrow_complex_tachycardia" , "Narrow Complex Tachycardia" ); 
+add( "arrhythmia/narrow_complex_tachycardia" , "Narrow complex tachycardia|Narrow Complex Tachycardia" ); 
+add( "notes" , "Technician Notes" ); 
   
   // END of auto-generated code (from NSRR/NAP harm.annots)
-  
+
+
+ //
+ // EDF+ annotations
+ //   - by default, take sleep stages (remapped) and arousals as class-level vars
+ //   - can be over-ridden with edf-annot-class=X,Y,Z
+
+ edf_annot_class( "N1,N2,N3,R,W,arousal,LM" );
+
 }
+
+
+void nsrr_t::edf_annot_class( const std::string & s )
+{
+  edf_class.clear();
+  std::vector<std::string> tok = Helper::parse( s , "," );
+  for (int i=0; i<tok.size(); i++)
+    edf_class.insert( tok[i] );
+}
+
+bool nsrr_t::as_edf_class(  const std::string & s )
+{
+  return edf_class.find( s ) != edf_class.end() ;
+}
+
 

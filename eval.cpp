@@ -2130,7 +2130,7 @@ void proc_write( edf_t & edf , param_t & param )
 }
 
 
-// EPOCH : set epoch 
+// EPOCH : set epochs 
 
 void proc_epoch( edf_t & edf , param_t & param )
 {
@@ -2268,7 +2268,7 @@ void proc_epoch( edf_t & edf , param_t & param )
       return;
     }
   
-  logger << " set epochs, length " << dur 
+  logger << "  set epochs, length " << dur 
 	 << " (step " << inc 
 	 << ", offset " << offset 
 	 <<  "), " << ne << " epochs\n";
@@ -3530,7 +3530,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::replace_channel_spaces = ! Helper::yesno( tok1 );
       return;
     }
-
+  
+  // on WRITE-ANNOTS .annot (only), set 0-duration intervals to '...' markers
+  if ( Helper::iequals( tok0 , "add-ellipsis" ) ) 
+    {
+      globals::set_0dur_as_ellipsis =  Helper::yesno( tok1 );;
+      return;
+    }
+  
   // split class/annot remappings (ABC/DEF|XYZ)
   if ( Helper::iequals( tok0 , "class-instance-delimiter" ) )
     {
@@ -3547,6 +3554,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // skip annots not on the whitelist (remap list)
+  // also applies to EDF Annots 
   if ( Helper::iequals( tok0 , "annot-whitelist" ) )
     {
       nsrr_t::whitelist = Helper::yesno( tok1 );
@@ -3568,7 +3576,18 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::sleep_stage_prefix = tok1; 
       return;
     }
+  
+  // assume 0-dur sleep stage annots are of epoch-duration (change on loading)
+  // (by default, true)
+  if (  Helper::iequals( tok0 , "assume-stage-duration" ) )
+    {
+      globals::sleep_stage_assume_epoch_duration = Helper::yesno( tok1 );
+      return;
+    }
 
+      
+
+      
   // individual-specific variables
   if ( Helper::iequals( tok0 , "vars" ) ) 
     {
@@ -3655,6 +3674,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  // for EDF-annots only, set these to be a class rather than an annotation
+  // (and apply any remappings)
+  // if annot-whitelist=T then we *only* add EDF Annots if they are named here 
+  else if ( Helper::iequals( tok0 , "edf-annot-class" ) )
+    {
+      nsrr_t::edf_annot_class( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
+      return;
+    }
+
+  
   // fix delimiter to tab only for .annot
   // default T --> tab-only=F is option to allow spaces  
   else if ( Helper::iequals( tok0 , "tab-only" ) )

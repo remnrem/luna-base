@@ -386,7 +386,7 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
 	      // note, inclusive counting up to X
 	      for (int ss=0; ss<= first_sleep; ss++)
 		{
-		  obs_stage[ss] == SUDS_UNKNOWN; 
+		  obs_stage[ss] = SUDS_UNKNOWN; 
 		  helper->retained[ss] = false;
 		  --helper->nge;
 		  ++t;
@@ -405,7 +405,7 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
 	      int t=0;
 	      for (int ss= helper->ne - 1 ; ss >= last_sleep; ss--)
 		{
-		  obs_stage[ss] == SUDS_UNKNOWN;
+		  obs_stage[ss] = SUDS_UNKNOWN;
                   helper->retained[ss] = false;
                   --helper->nge;
 		  ++t;
@@ -1071,8 +1071,9 @@ int suds_indiv_t::proc_build_feature_matrix( suds_helper_t * helper )
    //
    // --------------------------------------------------------------------------------
 
-   for (int c=0; c<suds_t::nf; c++)
-     X.col(c) *= suds_t::model.W[c];
+   if ( 0 ) 
+     for (int c=0; c<suds_t::nf; c++)
+       X.col(c) *= suds_t::model.W[c];
    
    
    // --------------------------------------------------------------------------------
@@ -1416,13 +1417,24 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
    // Re-weight
    //
    // --------------------------------------------------------------------------------
-      
-   for (int c=0; c<suds_t::nf; c++)
-     X.col(c) *= suds_t::model.W[c];
 
+   if ( 0 ) 
+     for (int c=0; c<suds_t::nf; c++)
+       X.col(c) *= suds_t::model.W[c];
+   
 
    return 1;
 }
+
+
+// int suds_indiv_t::proc_eval_feature_matrix( suds_helper_t * helper )
+// {
+
+//   // do ANOVA of each feature by stage (all , and also correlation of each stage by each feature)
+//   xxx ---> TODO
+    
+//   return 1;
+// }
 
 
 int suds_indiv_t::proc_main_svd( suds_helper_t * helper )
@@ -1842,5 +1854,171 @@ int suds_indiv_t::proc_coda( suds_helper_t * helper )
 
    return trainer ? nr : nve ;
    
+}
+
+
+void suds_indiv_t::dump_stage_associations( const std::string & filename )
+{
+  //logger << "  dumping stage <-> feature/component associations to " << filename << "\n";
+
+  std::ofstream O1( Helper::expand( filename ).c_str() , std::ios::out );
+  
+  // 5-level ANOVA
+  //  each versus all other 2-level tests
+  //  ?? stage N versus stage Y tests (25/2 pairs)
+  
+  // grousp  ; 'y'
+  //  xxxxxx
+  const int n = y.size();
+  std::vector<double> is_n1( n );
+  std::vector<double> is_n2( n );
+  std::vector<double> is_n3( n );
+  std::vector<double> is_r( n );
+  std::vector<double> is_w( n );
+
+  for (int i=0; i<n; i++)
+    {
+      is_n1[i] = y[i] == "N1" ;
+      is_n2[i] = y[i] == "N2" ;
+      is_n3[i] = y[i] == "N3" ;
+      is_r[i] = y[i] == "R" ;
+      is_w[i] = y[i] == "W" ;
+    }
+  
+  //
+  // for each feature
+  //
+  
+  const std::vector<std::string> vars = suds_t::model.labels();
+
+  const int nf = vars.size();
+
+  if ( nf != X.cols() )
+    Helper::halt( "internal error in suds_indiv_t::dump_stage_associations()" );
+
+  //
+  // header
+  //
+  
+  O1 << "VAR\tU\tP\tF\tPS\tFS"
+     << "\tN1\tN2\tN3\tR\tW";
+
+  O1 << "\tN1_N2" 
+     << "\tN1_N3"
+     << "\tN1_R"
+     << "\tN1_W"
+     << "\tN2_N3"
+     << "\tN2_R"
+     << "\tN2_W"
+     << "\tN3_R"
+     << "\tN3_W"
+     << "\tR_W";
+    
+  // correlation with var(row) and U components
+  
+  for (int u=0; u<U.cols(); u++)
+    O1 << "\tU" << u+1 ;
+  O1 << "\n";
+  
+  //
+  // features
+  //
+
+  const int nn = nf + U.cols();
+    
+  for (int c=0; c<nn; c++)
+    {
+
+      const int is_U = c >= nf;
+
+      // pick row
+      std::vector<double> xx = eigen_ops::copy_vector( is_U ? U.col( c - nf ) : X.col(c) );
+      const int n = xx.size();
+      
+      double f = 0 , b = 0 , w = 0;
+
+      double pv = Statistics::anova( y  , xx , &f , &b , &w );
+
+      O1 << ( is_U ? "U" + Helper::int2str( c - nf + 1 ) : vars[c] )
+	 << "\t" << is_U ;
+      
+      if ( pv < 0 ) O1  << "\tNA\tNA";
+      else O1 << "\t" << pv
+	      << "\t" << f;
+
+      //
+      // sleep-stage (4-way test)
+      //
+
+      std::vector<double> xs;
+      std::vector<std::string> ss;
+      for (int k=0; k<n; k++)
+	{
+	  if ( y[k] != "W" ) 
+	    {
+	      xs.push_back( xx[k] );
+	      ss.push_back( y[k] );
+	    }
+	}
+
+      f = 0 , b = 0 , w = 0;
+      
+      pv = Statistics::anova( ss  , xs , &f , &b , &w );
+      
+      if ( pv < 0 ) O1  << "\tNA\tNA";
+      else O1 << "\t" << pv
+              << "\t" << f;
+      
+      
+      //
+      // stage-specific
+      //
+
+      O1 << "\t" << ( Statistics::correlation( xx , is_n1 ) )
+	 << "\t" << ( Statistics::correlation( xx , is_n2 ) )
+	 << "\t" << ( Statistics::correlation( xx , is_n3 ) )
+	 << "\t" << ( Statistics::correlation( xx , is_r ) ) 
+	 << "\t" << ( Statistics::correlation( xx , is_w ) );
+
+      std::vector<std::vector<double> *> p( 5 );
+      p[0] = &is_n1;
+      p[1] = &is_n2;
+      p[2] = &is_n3;
+      p[3] = &is_r;
+      p[4] = &is_w;
+	
+      // pairwise
+      for (int i=0; i<4; i++)
+	for (int j=i+1;j<5;j++)
+	  {
+	    std::vector<double> xf, xs;
+	    int g1 = 0 , g2 = 0;
+	    for (int k=0; k<n; k++)
+	      {
+		if ( (*p[i])[k] > 0.5 || (*p[j])[k] > 0.5 )
+		  {
+		    xf.push_back( xx[k] );
+		    xs.push_back( (*p[i])[k] );
+		    g1 += (*p[i])[k];
+		    g2 += (*p[j])[k];		    
+		  }
+	      }
+
+	    if ( g1 > 10 && g2 > 10 )
+	      O1 << "\t" << ( Statistics::correlation( xf , xs ) ) ;
+	    else
+	      O1 << "\t.";
+
+	  }
+
+      // Corr w/ U
+      for (int u=0; u<U.cols(); u++)
+	O1  << "\t" <<  ( Statistics::correlation( xx , eigen_ops::copy_vector( U.col(u) ) ) );
+      
+      // all done
+      O1 << "\n";
+    }  
+
+  O1.close();
 }
 

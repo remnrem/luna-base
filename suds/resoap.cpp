@@ -297,106 +297,314 @@ void suds_indiv_t::resoap( edf_t & edf , bool epoch_level_output )
 }
 
 
+// struct suds_pp_sorter_t {
+//   suds_pp_sorter_t( double p , int e ) : p(p) , e(e) { } 
+//   double p;
+//   int e;
+//   bool operator<( suds_pp_sorter_t & rhs ) const
+//   {
+//     // flip, to get highest first
+//     if ( p > rhs.p ) return true;
+//     if ( p < rhs.p ) return false;
+//     return e < rhs.e;
+//   }
+// };
 
-int suds_indiv_t::resoap_update_pp( std::vector<suds_stage_t> * st , 
-				    const double th , 
-				    Eigen::MatrixXd & pp ) 
+int suds_indiv_t::resoap_update_pp( std::vector<std::string> * st , 
+				    Eigen::MatrixXd * pp ,
+				    const std::vector<std::string> & labels , 
+				    const bool global_mode ) 
 {
-  
-  const int rows = pp.rows();
-  const int cols = pp.cols();
-  if ( st->size() != rows ) 
-    Helper::halt( "internal error in resoap_update_pp()" );
 
-  std::vector<suds_stage_t> st2 = *st;
+  //
+  // Inputs:: proposal staging       st[] - all epochs will be non-missing
+  //          posterior probs        pp[,]
+  //          labels for posteriors  labels
+  //          global_mode            allow different params based on condition
+
+  //          target.U
   
+  //          suds_t::soap_[global]_update_th            soap=0.8,5  soap1=0.8
+  //          suds_t::soap_[global]_update_min_epochs     or soap=0.9,-5 
+
+  //
+  // Outputs  -- modified stages (st) and posterior (pp) based on SOAP
+  //          -- ret val = number of epochs changed
+  
+  //  SOAP model only inlcudes 'ambiguously' assigned epochs (i.e. above thresholds)
+  //          -- for epochs without ambiguous assignment:::
+  //            1) if most likely stage has enough (e.g. min_epochs = 5 above) unambiguous epochs, we just set to ? (so SOAP fills in)
+  //            2a) otherwise, we *either* leave those as is, and only do SOAP on the other stages (minus those cols)
+  //            2b) OR, we drop that entire class label, and do SOAP for all epochs  
+  //            3) OR, if min_epochs == 0 
+    
+  // global_mode :  whether called for the final set (T)
+  //                or per trainer individual prediction (F)
+  //    i.e. we might want to treat edge cases differently (whether to drop things, etc)
+
+  
+  const double th   = global_mode ? suds_t::soap_global_update_th : suds_t::soap_update_th ;
+  const int    mine = global_mode ? abs( suds_t::soap_global_update_min_epochs ) : abs( suds_t::soap_update_min_epochs );
+  const bool   leave_rare_asis = global_mode ? suds_t::soap_global_update_min_epochs > 0 : suds_t::soap_update_min_epochs > 0;
+  
+  const int rows = pp->rows();
+  const int cols = pp->cols();
+  
+  if ( st->size() != rows ) 
+    Helper::halt( "internal error in resoap_update_pp(), w/ rows" );
+  std::cout << " labels.siize + " << labels.size() << " " << cols << "\n";
+  if ( labels.size() != cols )
+    Helper::halt( "internal error in resoap_update_pp(), w/ cols" );
+
   // counts: (high-conf) stages, epochs 
-  std::set<suds_stage_t> stgs;
-  std::map<suds_stage_t,int> stgs2;
+  std::set<std::string> stgs;
+  std::map<std::string,int> stgs2;
+
+  // track most confident epochs within each class
+  //std::map<std::string,std::set<suds_pp_sorter_t> > stgpp;
+
+  // make a copy of st, which (below) may have epochs flagged as unknown if ambiguous
+  std::vector<std::string> st2 = *st; 
+    
+  //
+  // flag low-confidence assignments
+  //
+  
   int blanked = 0;
+
   for (int i=0; i<rows; i++)
     {
-      stgs.insert( st2[i] );
-      const double mx = pp.row(i).maxCoeff();
-      if ( mx < th ) 
+      
+      const double mx = pp->row(i).maxCoeff();
+      
+      if ( mx >= th ) 
+	stgs2[ st2[i] ]++;
+      else // this epoch was not 'unambiguous'
 	{
 	  ++blanked;
-	  st2[i] = SUDS_UNKNOWN;
+	  st2[i] = suds_t::str( SUDS_UNKNOWN );	  
 	}
-      else
-	stgs2[ st2[i] ]++;
+
+      // also, total number of stages seen      
+      stgs.insert( st2[i] );
+
+      // also, track best pp from each stage
+      // for (int j=0;j<cols;j++)	
+      // 	stgpp[ st2[i] ].insert( suds_pp_sorter_t( (*pp)(i,j) , i ) ); 
+      
     }
+  
+  
+  //
+  // Flag stages/classes that do not have enough unambiguous epochs
+  //
+  
+  std::vector<bool> col_included( cols , true );
+  std::set<std::string> asis;
+  int drop_cols = 0;
+  
+  for (int s=0; s<cols; s++)
+    if ( stgs2[ labels[s] ] < mine )
+      {
+	col_included[s] = false;
+	asis.insert( labels[s] );
+	drop_cols++;
+      }
+
+  //
+  // Any columns flagged above will be dropped; the question here is
+  // whether the rows containing those stages (as most-likely
+  // assignment) will also be excluded from SOAP (i.e. left as-is, and
+  // keep that stage in the final answer) or whether we will let them
+  // be assigned to another most likely class (i.e. drop that stage
+  // from the final answer)
+  //
+  
+  std::vector<bool> row_included( rows , true );
+  int drop_rows = 0;
+
+  if ( leave_rare_asis )
+    {      
+      for (int i=0; i<rows; i++)
+	{
+	  // if we want to leave this class as is, remove the column and then
+	  // put the original labels back into stg2; these will be spliced back
+	  // into the final, adjusted staging
+	  
+	  if ( asis.find( (*st)[i] ) != asis.end() )
+	    {
+	      // copy back original 
+	      st2[i] = (*st)[i] ;
+
+	      // but flag to drop this from SOAP
+	      row_included[i] = false;
+	      ++drop_rows;
+	    }
+	}
+    }
+  
+  //
+  // Splice out columns and rows that will not go into SOAP
+  //
+
+  Eigen::MatrixXd U2 = U;
+  
+  std::vector<std::string> S = st2;
+  
+  //
+  // Splice out any rare epochs (i.e. leave those as is)
+  //
+  
+  if ( drop_cols || drop_rows )
+    {
+      U2.resize( rows - drop_rows , cols - drop_cols );
+      S.resize( rows - drop_rows );
+      
+      int r = 0;
+      for (int i=0; i<rows; i++)
+	{
+	  if ( row_included[i] )
+	    {
+	      if ( drop_cols )
+		{
+		  int q=0;
+		  for (int j=0; j<cols; j++)
+		    {
+		      if ( col_included[j] )
+			{
+			  U2(r,q) = U(i,j);
+			  ++q;
+			}
+		    }
+		}
+	      else		
+		U2.row(r) = U.row(i);
+
+	      // add stage in
+	      S[r] = st2[i];
+	      ++r;
+	    }
+	} // next row
+    }
+
   
   const int kept = rows - blanked;
   const int nstg = stgs.size();
   const int nstg2 = stgs2.size();
   
-  logger << " nstg, kep, blanked = " 
-	 << nstg << " " << nstg2 << " " 
-	 << kept << " " << blanked << "\n";
-  
-  
   //
-  // Check we have sufficient number of high-confidence assignments;
+  // if leaves less than two good classes, just bail, change nothing
   //
 
-  // not sure we need this... if impacts only output (not done here)
-  //suds_t::soap_mode = 2;
-  
-  bool okay = nstg == nstg2;
-  
+  if ( U2.cols() < 2 ) return 0;
+
+  if ( U2.rows() < 10 ) return 0;
+
   //
-  // requires at leasrt two stages w/ at least 3 observations, and has to 
-  // be greater than the number of PSCs
-  //
-  
-  // Rule 1; stages present each need X high-conf. values 
-  // const int required_n = 3;
-  
-  // Rule 2: for p predictors, require at least p+2 observations
-  // if ( ! ( t > nc+1 ) ) okay = false;
-  
-  if ( ! okay ) return 0;
-  
-  //
-  // Re-fit the LDA
+  // LDA-based SOAP
   //
 
-  posteriors_t prediction;
+  const int rows2 = U2.rows();
 
-  if ( 0 && suds_t::qda )
+  std::cout << " S.dim = " << S.size() << " " << U2.rows() <<" " << U2.cols() << "\n";
+  
+  lda_t lda( S  , U2 );     
+
+  // note: second st param means to set priors based on the full/original st[] rather
+  // than the subset of unambiguous values
+  
+  lda_model = lda.fit( suds_t::flat_priors , st );       
+
+  std::cout << "grops means = \n" << lda_model.means << "\n\n";
+  std::cout << "grops scaling = \n" << lda_model.scaling << "\n\n";
+  
+  if ( ! lda_model.valid ) return 0;
+  
+  posteriors_t prediction = posteriors_t( lda_t::predict( lda_model , U2 ) ) ; 
+
+  //
+  // Output
+  //
+
+  if ( 0 )
     {
-      qda_t qda( suds_t::str( st2 ) , U );     
-      qda_model = qda.fit( suds_t::flat_priors );
-      if ( ! qda_model.valid ) return 0;
-      prediction = posteriors_t( qda_t::predict( qda_model , U ) ) ; 
+      int r1 = 0;
+      for (int i=0; i<rows; i++)
+	{
+	  std::cout << (*st)[i] ;
+	  
+	  for (int j=0; j<cols; j++)
+	    std::cout << " " << (*pp)(i,j);
+	  
+	  std::cout << " -> ";
+	  
+	  if ( row_included[i] )
+	    {
+	      std::cout << " " << prediction.cl[r1]
+			<< " " << ( (*st)[i] != prediction.cl[r1] ? "X" : "." );
+	      
+	      for (int j=0; j<prediction.pp.cols(); j++)
+		std::cout << " " << prediction.pp(r1,j);
+	      
+	      ++r1;
+	    }
+	  else
+	    std::cout << " < -- NA -- > ";
+	  
+	  std::cout << "\n";
+	}
     }
-  else
-    {
-      lda_t lda( suds_t::str( st2 ) , U );     
-      lda_model = lda.fit( suds_t::flat_priors );      
-      if ( ! lda_model.valid ) return 0;
-      prediction = posteriors_t( lda_t::predict( lda_model , U ) ) ; 
-    }
   
   //
-  // get predictions
+  // Update (optionally, splicing back in prior epochs & posteriors)
   //
-  
-  //
-  // output stage probabilities 
-  //
-  
-  // needed?
-  //std::vector<std::string> pp2 = suds_t::str( suds_t::max( prediction.pp , lda_model.labels ) );
-  //  if ( pp2.size() != st->size() ) Helper::halt( "internal error" );
   
   int nchanged = 0;
- 
+
+  int r = 0;
+
+  for (int i=0; i<rows; i++)
+    {
+
+      if ( row_included[i] )
+	{
+
+	  // replace if most-likely call has changed
+	  if ( (*st)[i] != prediction.cl[r] )
+	    {
+	      ++nchanged;
+	      (*st)[i] = prediction.cl[r] ;
+	    }
+	  
+	  // copy posteriors back... but if cols dropped, set to 0
+	  int q=0;
+	  for (int j=0; j<cols; j++)
+	    {
+	      if ( col_included[j] )
+		{
+		  (*pp)(i,j) = prediction.pp(r,q);
+		  ++q;
+		}
+	    }
+	  
+	  ++r;
+	}
+    }
+  
+
+  
   //
-  // Update
+  // only output this in global mode
   //
 
+  if ( 1 || global_mode )
+    logger << " nstg, kep, blanked = " 
+	   << nstg << " " << nstg2 << " " 
+	   << kept << " " << blanked << " (tot " << ( kept + blanked ) << "\n";
+
+
+  
+  
   //
   // All done
   //

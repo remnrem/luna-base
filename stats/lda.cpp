@@ -33,7 +33,7 @@
 extern logger_t logger;
 
 
-lda_model_t lda_t::fit( const bool flat_priors )
+lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> * pr )
 {
 
   lda_model_t model;
@@ -77,7 +77,7 @@ lda_model_t lda_t::fit( const bool flat_priors )
 	}
     }
 
-  //  std::cout << " X " << X.rows() << " " << X.cols() << "\n";
+  //  std::cout << " X (post removals) = " << X.rows() << " " << X.cols() << "\n";
   
   //
   // At this point, any missing values will have been removed, and we can 
@@ -126,28 +126,46 @@ lda_model_t lda_t::fit( const bool flat_priors )
 
   ArrayXd prior( ng );
 
-  int cidx = 0;
-  cc = counts.begin();
-  while ( cc != counts.end() )
-    {
-      if ( flat_priors )
-	prior[ cidx ] = 1.0 / (double) counts.size() ;
-      else
-	prior[ cidx ] = cc->second / (double)n ;
-      ++cc; 
-      ++cidx;
-    }
-  
-  // sqrt transform
-  // double ss = 0;
-  // for (int i=0; i<prior.size(); i++)
-  //   {
-  //     prior[i] = sqrt( prior[i] );
-  //     ss += prior[i] ;
-  //   }
-  // for (int i=0;i<prior.size();i++)
-  //   prior[i] /= ss;
+  // compute priors from y, or make flat
 
+  if ( pr == NULL )
+    {
+      int cidx = 0;
+      cc = counts.begin();
+      while ( cc != counts.end() )
+	{
+	  if ( flat_priors )
+	    prior[ cidx ] = 1.0 / (double) counts.size() ;
+	  else
+	    prior[ cidx ] = cc->second / (double)n ;
+	  ++cc; 
+	  ++cidx;
+	}
+    }
+
+  if ( pr != NULL )
+    {
+      // get priors from another 'y' (may have different length than actual y)
+      // this *assumes* that 'pr' will contain at least one observation of each class
+      // i.e. use case is for when this is a superset of y :: resoap_update_tt()
+      
+      const int n2 = pr->size();
+      std::map<std::string,int> c2;
+      for (int i=0; i<n2; i++)
+	c2[ (*pr)[i] ]++;
+
+      int cidx = 0;
+      cc = counts.begin();
+      while ( cc != counts.end() )
+        {
+          if ( c2.find( cc->first ) != c2.end() )	    
+            prior[ cidx ] = c2[ cc->first ] / (double)n2;
+          else
+            prior[ cidx ] = 0;
+          ++cc;
+          ++cidx;
+        }
+    }
   
   //
   // group means () ng x p ( groups x predictors )

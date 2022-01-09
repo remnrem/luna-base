@@ -53,7 +53,7 @@ namespace Statistics {
 
   // 1-way ANOVA (returns p-value)
   double anova( const Data::Vector<int> & y , const Data::Vector<double> & x );
-  double anova( const std::vector<std::string> & y , const Data::Vector<double> & x );
+  double anova( const std::vector<std::string> & y , const Data::Vector<double> & x , double * retf = NULL , double * retb = NULL , double * retw = NULL );
 
   // 1-dimensional numerical integration
   double integrate(double a, double b, double (*f)(double x,void*,bool*), bool * , void*d = NULL , double eps = 10e-15 );  

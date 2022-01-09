@@ -2658,7 +2658,7 @@ double Statistics::anova( const Data::Vector<int> & y , const Data::Vector<doubl
   return anova( label , x );
   }
 
-double Statistics::anova( const std::vector<std::string> & y , const Data::Vector<double> & x )
+double Statistics::anova( const std::vector<std::string> & y , const Data::Vector<double> & x , double * retf , double * retb , double * retw )
 {
   std::map<std::string,double> group_means;
   std::map<std::string,int> group_n;
@@ -2736,6 +2736,10 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
   // std::cout << "W: " << SSW << " " << MSW << "\n";
   // std::cout << "F , p = " << F << " "  << "\n";
 
+  if ( retf ) *retf = F ;
+  if ( retb ) *retb = MSB;
+  if ( retw ) *retw = MSW;
+  
   double p = MiscMath::pF( F , dfB , dfW );
 
 

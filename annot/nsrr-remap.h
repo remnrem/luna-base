@@ -25,6 +25,7 @@
 #define __NSRR_REMAP_H__
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -58,7 +59,13 @@ struct nsrr_t {
   static bool whitelist;
 
   // only return annots that are non white-listed
-  static bool unmapped;  
+  static bool unmapped;
+
+  // for EDF+ annotations only: make as class instead of edt_annot_t --> inst.
+  static void edf_annot_class( const std::string & s );
+  static std::set<std::string> edf_class;
+  static bool as_edf_class( const std::string & s );
+  
 };
 
 #endif

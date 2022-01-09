@@ -59,7 +59,7 @@ extern writer_t writer;
 //
 
 // Format
-//   - version number (SUDS3)
+//   - version number (SUDS4)
 //   - trainer ID
 //   - nf  = number of features (expected to match the corresponding model file)
 //   - nc  = number of components
@@ -93,17 +93,26 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   std::string suds_id = suds_t::fake_ids ? suds_t::fake_id_root + "_" + Helper::int2str( suds_t::fake_ids++ ) : edf.id;
   
   std::string filename = folder + globals::folder_delimiter + suds_id;
-
+  
   logger << "  writing trainer data to " << filename << "\n";
+
+  const bool output_features = param.yesno( "output-X" );
+  const bool output_lda = param.yesno( "output-LDA" ) && lda_model.valid ;
+  const bool output_qda = param.yesno( "output-QDA" ) && qda_model.valid ;
   
   std::ofstream OUT1( filename.c_str() , std::ios::out );
-
-  // file version code == 3
-  OUT1 << "SUDS3\n";
-
+  
+  // file version code
+  OUT1 << suds_t::suds_lib_version << "\n";
+  
   // ID
   OUT1 << suds_id << "\n";
 
+  // contents
+  OUT1 << "X:" << ( output_features ? "Y" : "N" ) << "\n";
+  OUT1 << "LDA:" << ( output_lda ? "Y" : "N" ) << "\n";
+  OUT1 << "QDA:" << ( output_qda ? "Y" : "N" ) << "\n";
+  
   // NVE, NS, NF, NC
   OUT1 << "% number of 1) valid epochs, 2) signals, 3) features, 4) SVD components\n";
   OUT1 << nve << "\n"
@@ -122,11 +131,11 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
       ++ss;
     }
   
-  // Stages by epoch-by-epoch
+  // Stages by epoch-by-epoch 
   OUT1 << "% Epoch-wise stage assignments ( epoch # --> stage )\n";
   for (int i=0;i<nve;i++)
-    OUT1 << epochs[i] << "\n"
-	 << y[i] << "\n";
+    OUT1 //<< epochs[i] << "\n"  --> no need for trainer epoch numbers
+      << y[i] << "\n";
 
   // Feature summary statistics
   OUT1 << "% Hjorth parameter summary stats (mean, SD) for H1, H2, H3\n";
@@ -152,20 +161,130 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   // U (to re-estimate LDA model upon loading, i.e
   //  to use lda.predict() on target
   //  only needs to be nc rather than nf
-  OUT1 << "% SVD U matric (" << nve << " by " << nc << ")\n";
-  for (int i=0;i<nve;i++)
-    for (int j=0;j<nc;j++)
-      OUT1 << U(i,j) << "\n";
+  // OUT1 << "% SVD U matric (" << nve << " by " << nc << ")\n";
+  // for (int i=0;i<nve;i++)
+  //   for (int j=0;j<nc;j++)
+  //     OUT1 << U(i,j) << "\n";
 
   
+  //
+  // LDA model
+  //
+
+  if ( output_lda )
+    {
+      OUT1 << "%LDA model\n";
+      
+      // number of groups
+      OUT1 << lda_model.prior.size() << "\n";
+      
+      // number of predictors/variables
+      OUT1 << lda_model.means.cols() << "\n";
+      
+      // priors
+      for (int i=0;i<lda_model.prior.size();i++)
+	OUT1 << lda_model.prior[i] << "\n";
+            
+      // counts
+      std::map<std::string,int>::const_iterator ii = lda_model.counts.begin();
+      while ( ii != lda_model.counts.end() ) 
+	{
+	  OUT1 << ii->first << "\n"
+	       << ii->second << "\n";
+	  ++ii;
+	}
+
+      // means
+      for (int i=0; i<lda_model.means.rows(); i++)
+	for (int j=0; j<lda_model.means.cols(); j++)
+	  OUT1 << lda_model.means(i,j) << "\n";
+
+      // scaling
+      for (int j=0; j < lda_model.scaling.rows(); j++)
+	for (int k=0; k < lda_model.scaling.cols(); k++)
+	  OUT1 << lda_model.scaling(j,k) << "\n";
+	      
+      // n
+      OUT1 << lda_model.n << "\n";
+
+      // labels
+      for (int i=0;i<lda_model.labels.size();i++)
+	OUT1 << lda_model.labels[i] << "\n";
+      
+    }
+  
+  
+  //
+  // QDA model
+  //
+  
+  if ( output_qda )
+    {
+      
+      OUT1 << "%QDA model\n";
+
+      // number of groups
+      OUT1 << qda_model.prior.size() << "\n";
+      
+      // number of predictors/variables
+      OUT1 << qda_model.means.cols() << "\n";
+      
+      // priors
+      for (int i=0;i<qda_model.prior.size();i++)
+	OUT1 << qda_model.prior[i] << "\n";
+      
+      // rows (redundant, but keep)
+      for (int i=0;i<qda_model.rows.size();i++)
+	OUT1 << qda_model.rows[i] << "\n";
+      
+      // counts
+      std::map<std::string,int>::const_iterator ii = qda_model.counts.begin();
+      while ( ii != qda_model.counts.end() ) 
+	{
+	  OUT1 << ii->first << "\n"
+	       << ii->second << "\n";
+	  ++ii;
+	}
+
+      // means
+      for (int i=0; i<qda_model.means.rows(); i++)
+	for (int j=0; j<qda_model.means.cols(); j++)
+	  OUT1 << qda_model.means(i,j) << "\n";
+
+      // scaling
+      for (int i=0; i<qda_model.scaling.size(); i++)
+	{
+	  const Eigen::MatrixXd & m = qda_model.scaling[i];
+	  for (int j=0; j < m.rows(); j++)
+	    for (int k=0; k < m.cols(); k++)
+	      OUT1 << m(j,k) << "\n";
+	}
+      
+      // ldet
+      for (int i=0;i<qda_model.ldet.size();i++)
+	OUT1 << qda_model.ldet[i] << "\n";
+
+      // n
+      OUT1 << qda_model.n << "\n";
+
+      // labels
+      for (int i=0;i<qda_model.labels.size();i++)
+	OUT1 << qda_model.labels[i] << "\n";
+      
+    }
+  
+  // 
   // X, raw feature data, as defined by the model-file
   //  --> if this trainer, this is being used as a 'weight trainer' (re-prediction)
   //  --> i.e. will project this individual's raw data into the target space
 
-  OUT1 << "% Feature matrix X (" << nve << " by " << nf << ")\n";
-  for (int i=0;i<nve;i++)
-    for (int j=0;j<nf;j++)
-      OUT1 << X(i,j) << "\n";
+  if ( output_features )
+    {
+      OUT1 << "% Feature matrix X (" << nve << " by " << nf << ")\n";
+      for (int i=0;i<nve;i++)
+	for (int j=0;j<nf;j++)
+	  OUT1 << X(i,j) << "\n";
+    }
   
   //
   // All done
@@ -190,12 +309,15 @@ bool next( std::ifstream & IN1 , std::string * line )
 
 void suds_t::text2binary( const std::string & texfile ,
 			  const std::string & binfile , 
-			  const bool with_features )
+			  const bool with_features )  // ignored for now
   
 {
   
   // convert format from text to binary 
   // read text in: note, may be concatenated
+
+  // old version could drop features from the text version (with_features = F) 
+  // this is ignored for now ... i..e. create originals w/ or w/out features as desired
   
   if ( ! Helper::fileExists( Helper::expand( texfile ) ) )
     Helper::halt( "could not open " + Helper::expand( texfile ) );
@@ -209,8 +331,7 @@ void suds_t::text2binary( const std::string & texfile ,
   logger << "  copying from " << texfile << " to " << binfile << " (text2binary conversion)\n";
   if ( with_features ) logger << "  including feature matrices in final output\n";
   else logger << "  not including feature matrices in final output\n";
-  
-  
+    
   //
   // Write out
   //
@@ -226,13 +347,28 @@ void suds_t::text2binary( const std::string & texfile ,
       double d;
       std::string line;
       
-      // SUDX code (w/ 'f' suffix for features)
-      if ( ! next(IN1 , &line ) ) break;
-      
-      suds_indiv_t::bwrite( OUT1 , with_features ? line + "f" : line );
+      // SUDX code 
+      if ( ! next(IN1 , &line ) ) break;      
+      suds_indiv_t::bwrite( OUT1 , line );
       
       // ID
       next(IN1,&line);
+      suds_indiv_t::bwrite( OUT1 , line );
+
+      // Contents:
+      // X:?
+      next(IN1,&line);
+      const bool has_features = line == "X:Y";
+      suds_indiv_t::bwrite( OUT1 , line );
+      
+      // LDA:?
+      next(IN1,&line);
+      const bool has_lda = line == "LDA:Y";
+      suds_indiv_t::bwrite( OUT1 , line );
+
+      // QDA:?
+      next(IN1,&line);
+      const bool has_qda = line == "QDA:Y";
       suds_indiv_t::bwrite( OUT1 , line );
 
       // NVE
@@ -278,7 +414,7 @@ void suds_t::text2binary( const std::string & texfile ,
 	  // stage label
 	  next(IN1,&line);
 	  suds_indiv_t::bwrite( OUT1 , line );	  
-
+	  
 	  // stage count
 	  next(IN1,&line);
 	  if ( ! Helper::str2int( line , &i ) )
@@ -290,11 +426,12 @@ void suds_t::text2binary( const std::string & texfile ,
       // Stages epoch-by-epoch
       for (int j=0;j<tnve; j++)
 	{
-	  // epoch number
-          next(IN1,&line);
-	  if ( ! Helper::str2int( line , &i ) )
-            Helper::halt( "bad numeric(3)" );
-          suds_indiv_t::bwrite( OUT1 , i );
+
+	  // epoch number  [ NOT USED ANY MORE ]
+          // next(IN1,&line);
+	  // if ( ! Helper::str2int( line , &i ) )
+          //   Helper::halt( "bad numeric(3)" );
+          // suds_indiv_t::bwrite( OUT1 , i );
           
 	  // stage label
           next(IN1,&line);
@@ -342,29 +479,112 @@ void suds_t::text2binary( const std::string & texfile ,
 	  }
       
       // SVD components: U
-      for (int i=0;i<tnve;i++)
-	for (int j=0;j<tnc;j++)
-	  {
-	    next(IN1,&line);
-	    if ( ! Helper::str2dbl( line , &d ) )
-              Helper::halt( "bad numeric(8)" );
-            suds_indiv_t::bwrite( OUT1 , d );            
-	  }
+      // for (int i=0;i<tnve;i++)
+      // 	for (int j=0;j<tnc;j++)
+      // 	  {
+      // 	    next(IN1,&line);
+      // 	    if ( ! Helper::str2dbl( line , &d ) )
+      //         Helper::halt( "bad numeric(8)" );
+      //       suds_indiv_t::bwrite( OUT1 , d );            
+      // 	  }
       
-      // Original features: X  (optional)
-      for (int i=0;i<tnve;i++)
-        for (int j=0;j<tnf;j++)
-	  {
-	    next(IN1,&line);
-	    
-	    if ( with_features ) // i.e. might skip in output
+
+      if ( has_lda )
+	{
+	  // number of groups
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric" );
+	  int ng = i;
+	  suds_indiv_t::bwrite( OUT1 , i );
+	  
+	  // number of variables
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric" );
+	  int nv = i;
+	  suds_indiv_t::bwrite( OUT1 , i );
+      
+	  // priors
+	  for (int i=0; i<ng; i++)
+	    {
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
+		Helper::halt( "bad numeric(6)" );
+	      suds_indiv_t::bwrite( OUT1 , d );
+	    }
+	  
+	  // counts (str --> int )
+	  for (int i=0;i<ng;i++)
+	    {
+	      // group label (str)
+	      next(IN1,&line);
+	      suds_indiv_t::bwrite( OUT1 , line );
+	      
+	      // count (int)
+	      next(IN1,&line);
+	      if ( ! Helper::str2int( line , &i ) )
+		Helper::halt( "bad numeric(3)" );
+	      suds_indiv_t::bwrite( OUT1 , i );	      
+	    }
+	  
+	  // means
+	  for (int i=0;i<ng;i++)
+	    {
+	      next(IN1,&line);
+              if ( ! Helper::str2dbl( line , &d ) )
+		Helper::halt( "bad numeric(3)" );
+              suds_indiv_t::bwrite( OUT1 , d );
+	    }
+	  
+	  // scaling
+	  for (int i=0; i<nv; i++)
+	    for (int i=0; i<nv; i++)
 	      {
+		next(IN1,&line);
+		if ( ! Helper::str2dbl( line , &d ) )
+		  Helper::halt( "bad numeric(3)" );
+		suds_indiv_t::bwrite( OUT1 , d );
+	      }
+	  
+	  // n
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric(3)" );
+	  suds_indiv_t::bwrite( OUT1 , i );
+	  
+	  // labels
+	  for (int i=0;i<ng;i++)
+	    {
+	      next(IN1,&line);
+	      suds_indiv_t::bwrite( OUT1 , line );	      
+	    }
+	  
+	}
+
+      if ( has_qda )
+	{
+
+	}
+      
+      //
+      // Original features: X  (optional)
+      //
+
+      if ( has_features )
+	{
+	  for (int i=0;i<tnve;i++)
+	    for (int j=0;j<tnf;j++)
+	      {
+		next(IN1,&line);
+		
 		if ( ! Helper::str2dbl( line , &d ) )
 		  Helper::halt( "bad numeric(9)" );
 		suds_indiv_t::bwrite( OUT1 , d );            
+	      
 	      }
-	  }
-
+	}
+      
       ++n_indiv;
 
       logger << "  " << n_indiv << " trainers compiled...\n";
@@ -454,29 +674,40 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
     {
 
       // SUDSX magic number
-      std::string suds = suds_indiv_t::bread_str( IN1 );
+      const std::string suds = suds_indiv_t::bread_str( IN1 );
 
       // all done?
       if ( suds == "_END_" ) break;
 
-      // otherwise, check format 
-      if ( suds != "SUDS3" && suds != "SUDS3f" )
-	Helper::halt( "bad file format for " + filename );
-      
-      if ( suds == "SUDS3f" && ! load_rawx ) Helper::halt( "library has features, load as 'wdb' " );
-      if ( suds == "SUDS3"  &&   load_rawx ) Helper::halt( "library does not have features, load as 'db' " );
-
-      // adding a new individual
-      suds_indiv_t * person = new suds_indiv_t;
+      // otherwise, check format version
+      if ( suds != suds_t::suds_lib_version ) 
+	Helper::halt( "bad file format for " + filename
+		      + ", expecting " + suds_t::suds_lib_version
+		      + " but found " + suds );
 
       // track progress
       if ( bank.size() % 50 == 0 ) logger << "\n ";
       if ( bank.size() % 10 == 0 ) logger << " ";
       logger << ".";
+      
+      // adding a new individual
+      suds_indiv_t * person = new suds_indiv_t;
 
       // ID
       person->id = suds_indiv_t::bread_str( IN1 );
 
+      // get contents::
+      //    - features (X) included Y/N
+      //    - LDA model included Y/N
+      //    - QDA model included Y/N
+
+      const bool has_features = suds_indiv_t::bread_str( IN1 ) == "X:Y";
+      const bool has_lda = suds_indiv_t::bread_str( IN1 ) == "LDA:Y";
+      const bool has_qda = suds_indiv_t::bread_str( IN1 ) == "QDA:Y";
+    
+      if ( has_features    && ! load_rawx ) Helper::halt( "library has features, load as 'wdb' " );
+      if ( (!has_features) &&   load_rawx ) Helper::halt( "library does not have features, load as 'db' " );
+      
       // NVE
       person->nve = suds_indiv_t::bread_int( IN1 );
 
@@ -512,11 +743,17 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
       person->epochs.resize( person->nve );
       for (int i=0;i<person->nve;i++)
 	{
-	  person->epochs[i] = suds_indiv_t::bread_int( IN1 );
+	  
+
+	  // note: do not read epoch numbers any more, we don't need
+	  //  these in non-targets (and so they are not stored)
+	  //person->epochs[i] = suds_indiv_t::bread_int( IN1 );
+	  person->epochs[i] = i+1; 
+
 	  person->y[i] = suds_indiv_t::bread_str( IN1 );
 	}
       person->obs_stage = suds_t::type( person->y );
-
+      
       // Hjorth summary stats (mean/SD)
       person->mean_h1.resize( suds_t::ns );
       person->sd_h1.resize( suds_t::ns ) ;
@@ -545,32 +782,138 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
       for (int i=0;i<person->nf;i++)
 	for (int j=0;j<person->nc;j++)
 	  person->V(i,j) = suds_indiv_t::bread_dbl( IN1 );
-      
+
+      // not needed now
       // U (to reestimate LDA model upon loading, i.e
       //  to use lda.predict() on target 
-      person->U.resize( person->nve , person->nc );
-      for (int i=0;i<person->nve;i++)
-	for (int j=0;j<person->nc;j++)
-	  person->U(i,j) = suds_indiv_t::bread_dbl( IN1 );
+      // person->U.resize( person->nve , person->nc );
+      // for (int i=0;i<person->nve;i++)
+      // 	for (int j=0;j<person->nc;j++)
+      // 	  person->U(i,j) = suds_indiv_t::bread_dbl( IN1 );
+
+
+      //
+      // LDA model?
+      //
+
+      if ( has_lda )
+	{
+	  // number of groups
+	  const int ng = suds_indiv_t::bread_int( IN1 );
+
+	  // number of variables
+	  const int nv = suds_indiv_t::bread_int( IN1 );
       
-      // X original feature matrix [ nve x nf ]
-      // i.e. if this trainer is being used as a 'weight trainer',
-      // i.e. will project this individuals raw data into the target space
+	  // priors
+	  person->lda_model.prior.resize( ng );
+	  for (int i=0;i<ng;i++)
+	    person->lda_model.prior[i] = suds_indiv_t::bread_dbl( IN1 );
+	  	  
+	  // counts
+	  for (int i=0;i<ng;i++)
+	    {
+	      const std::string s = suds_indiv_t::bread_str( IN1 );
+	      person->lda_model.counts[ s ] = suds_indiv_t::bread_int( IN1 );
+	    }
+	  
+	  // means
+	  person->lda_model.means.resize( ng , nv );
+	  for (int i=0; i<ng; i++)
+	    for (int j=0; j<nv; j++)
+	      person->lda_model.means(i,j) = suds_indiv_t::bread_dbl( IN1 );
+
+	  // scaling
+	  person->lda_model.scaling.resize( nv , nv );
+	  for (int j=0; j < nv; j++)
+	    for (int k=0; k < nv; k++)
+	      person->lda_model.scaling(j,k) = suds_indiv_t::bread_dbl( IN1 );
+	  
+	  
+	  // n
+	  person->lda_model.n = suds_indiv_t::bread_int( IN1 );
+	  
+	  // labels
+	  person->lda_model.labels.resize( ng );
+	  for (int i=0;i<person->lda_model.labels.size();i++)
+	    person->lda_model.labels[i] =  suds_indiv_t::bread_str( IN1 );
+	  
+	}
+	  
+      //
+      // QDA model?
+      //
       
-      if ( load_rawx )
+      if ( has_qda )
+	{
+
+	  // number of groups
+	  const int ng = suds_indiv_t::bread_int( IN1 );
+
+	  // number of variables
+	  const int nv = suds_indiv_t::bread_int( IN1 );
+      
+	  // priors
+	  person->qda_model.prior.resize( ng );
+	  for (int i=0;i<ng;i++)
+	    person->qda_model.prior[i] = suds_indiv_t::bread_dbl( IN1 );
+	  
+	  // rows (redundant, but keep)
+	  person->qda_model.rows.resize( ng );
+	  for (int i=0;i<ng;i++)
+	    person->qda_model.rows[i] = suds_indiv_t::bread_dbl( IN1 );
+	  
+	  // counts
+	  for (int i=0;i<ng;i++)
+	    {
+	      const std::string s = suds_indiv_t::bread_str( IN1 );
+	      person->qda_model.counts[ s ] = suds_indiv_t::bread_int( IN1 );
+	    }
+	  
+	  // means
+	  person->qda_model.means.resize( ng , nv );
+	  for (int i=0; i<ng; i++)
+	    for (int j=0; j<nv; j++)
+	      person->qda_model.means(i,j) = suds_indiv_t::bread_dbl( IN1 );
+
+	  // scaling
+	  person->qda_model.scaling.resize( ng );
+	  for (int i=0; i<ng; i++)
+	    {
+	      person->qda_model.scaling[i].resize( nv , nv );
+	      Eigen::MatrixXd & m = person->qda_model.scaling[i];
+	      for (int j=0; j < m.rows(); j++)
+		for (int k=0; k < m.cols(); k++)
+		  m(j,k) = suds_indiv_t::bread_dbl( IN1 );
+	    }
+	  
+	  // ldet
+	  person->qda_model.ldet.resize( ng );
+	  for (int i=0;i<ng;i++)
+	    person->qda_model.ldet[i] = suds_indiv_t::bread_dbl( IN1 );
+	  
+	  // n
+	  person->qda_model.n = suds_indiv_t::bread_int( IN1 );
+
+	  // labels
+	  person->qda_model.labels.resize( ng );
+	  for (int i=0;i<person->qda_model.labels.size();i++)
+	    person->qda_model.labels[i] =  suds_indiv_t::bread_str( IN1 );
+	  
+	}
+      
+      
+      // Features (X) ? 
+      //  - feature matrix [ nve x nf ]
+      //    only need this is trainer is to be used as a 'weight trainer'
+      //     (i.e. will project this individual's raw data into the target SVD space)
+      
+      if ( has_features )
 	{            
 	  person->X.resize( person->nve , person->nf );
 	  for (int i=0;i<person->nve;i++)
 	    for (int j=0;j<person->nf;j++)
 	      person->X(i,j) = suds_indiv_t::bread_dbl( IN1 );
 	}
-
-      // else
-      // 	{
-      // 	  // we need to skip these elements
-      // 	  suds_indiv_t::bskip_dbl( IN1 , person->nve * person->nf );
-      // 	  std::cout << " nah\n";
-      // 	}
 
       //
       // add this person

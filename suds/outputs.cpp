@@ -217,7 +217,7 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
   if ( print )
     {
 
-      logger << "\t  Obs:\n\t";
+      logger << "\t   Obs:";
       std::set<std::string>::const_iterator uu = uniq.begin();
       while ( uu != uniq.end() )
 	{
@@ -254,7 +254,7 @@ std::map<std::string,std::map<std::string,int> > suds_t::tabulate( const std::ve
 	  logger << "\t" << cols[ *jj ]/tot;
 	  ++jj;
 	}
-      logger << "\t1.00\n";
+      logger << "\t1.00\n\n";
 
       
       // conditional probabilties  / res[][] / cols[] 
@@ -531,8 +531,8 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
   
   if ( to_console ) 
     {
-      logger << "\n  Confusion matrix: " << suds_t::n_stages
-	     << "-level classification: kappa = " << kappa << ", acc = " << acc << ", MCC = " << mcc << "\n";
+      logger << "  Confusion matrix: " << suds_t::n_stages
+	     << "-level classification: kappa = " << kappa << ", acc = " << acc << ", MCC = " << mcc << "\n\n";
       writer.level( 5 , "NSS" );
       suds_t::tabulate(  prd , suds_t::str( obs_stage_valid ) , true );
       writer.unlevel( "NSS" );
@@ -567,7 +567,7 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 
       if ( to_console )
 	{
-	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << ", acc = " << acc3 << ", MCC = " << mcc << "\n";
+	  logger << "\n  Confusion matrix: 3-level classification: kappa = " << kappa3 << ", acc = " << acc3 << ", MCC = " << mcc << "\n\n";
 	  writer.level( 3 , "NSS" );
 	  suds_t::tabulate(  suds_t::NRW( prd ) , suds_t::NRW( suds_t:: str( obs_stage_valid ) ) , true );
 	  writer.unlevel( "NSS" );

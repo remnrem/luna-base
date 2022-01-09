@@ -1422,6 +1422,10 @@ void process_edfs( cmd_t & cmd )
 	  edffile = cmd.data();
 	  rootname = edffile;
 
+	  // remove .edf from ID, making file name ==> ID 
+	  if ( Helper::file_extension( rootname , "edf" ) )
+	    rootname = rootname.substr( 0 , rootname.size() - 4 );
+
 	  tok.resize(2);
 	  tok[0] = rootname;
 	  tok[1] = edffile;
@@ -2037,7 +2041,51 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(1);
     }
 
+  if ( p == "cancor" )
+    {
+      const int nrows = 100;
+      const int nvars = 10;
 
+      Eigen::MatrixXd X( nrows , nvars );
+      Eigen::MatrixXd Y( nrows , nvars );
+
+      int i = 0 , j = 0;
+      std::ifstream INX( Helper::expand( "~/x.txt" ).c_str() , std::ios::in );
+      while ( ! INX.eof() )
+        {
+          double d;
+          INX >> d;
+          if ( INX.eof() ) break;
+          X(i,j) = d;
+	  ++j;
+	  if ( j == nvars ) { ++i; j=0; }
+	}
+      INX.close();
+      
+      i = j = 0;
+      std::ifstream INY( Helper::expand( "~/y.txt" ).c_str() , std::ios::in );
+      while ( ! INY.eof() )
+        {
+          double d;
+          INY >> d;
+          if ( INY.eof() ) break;
+          Y(i,j) = d;
+	  ++j;
+	  if ( j == nvars ) { ++i; j=0; }
+	}
+      INY.close();
+
+      // std::cout << "X\n" << X << "\n\n";
+      // std::cout << "Y\n" << Y << "\n\n";
+      
+      Eigen::VectorXd CCA = eigen_ops::canonical_correlation( X , Y );
+      
+      std::cout << " CCA \n"
+       		<< CCA << "\n";
+      
+      std::exit(1);
+    }
+  
   if ( p == "qda" )
     {
       std::vector<std::string> y;

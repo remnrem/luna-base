@@ -130,8 +130,8 @@ class lda_t {
 
   }
   
-  lda_model_t fit( const bool flat_priors = false );
-  
+  lda_model_t fit( const bool flat_priors = false , const  std::vector<std::string> * pr = NULL );
+
   static lda_posteriors_t predict( const lda_model_t & , const Eigen::MatrixXd & X );
 
   static lda_posteriors_t predict( const lda_model_t & model , const Eigen::MatrixXd & X , const Eigen::MatrixXd & X2 )

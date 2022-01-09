@@ -2599,6 +2599,18 @@ annot_map_t annot_t::extract( const interval_t & window )
 }
 
 
+bool globals::is_stage_annotation( const std::string & s )
+{
+  // try to guess if this is a stage duration;
+  // this will be called on loading annotations, but after any remapping
+  // thus, we should be safe to use canonical forms  
+
+  sleep_stage_t ss = globals::stage( s );
+  return ss != UNKNOWN ;
+
+}
+
+
 bool annotation_set_t::make_sleep_stage( const std::string & a_wake , 
 					 const std::string & a_n1 , 
 					 const std::string & a_n2 , 
@@ -3210,12 +3222,17 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  annot_t * annot = find( anames[a] );
 	  
 	  if ( annot == NULL ) continue;
-	  
+
+	  // skip 'specials'
 	  if ( annot->name == "start_hms" ) continue; 
 	  if ( annot->name == "duration_hms" ) continue;
 	  if ( annot->name == "duration_sec" ) continue;
 	  if ( annot->name == "epoch_sec" ) continue; 
 
+	  
+	  // skip if empty
+	  if ( annot->interval_events.size() == 0 ) continue;
+	  
 	  bool has_vars = annot->types.size() > 0 ;
 
 	  // nb. ensure class name is quoted if contains `|` delimiter here 
@@ -3363,6 +3380,11 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
               else interval.stop -= annot_offset;	      
             }
 
+	  // write an ... instead of the second time-poimt (for 0-duration intervals)
+	  const bool add_ellipsis = globals::set_0dur_as_ellipsis && interval.start == interval.start ;
+
+	  //std::cout << " xx " << interval.start <<  " " << interval.stop << " " << interval.stop - interval.start << "   .... " << add_ellipsis << "\n";
+	  
 	  // write in hh:mm:ss format
 	  if ( hms ) 
 	    {
@@ -3381,16 +3403,16 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	      // hh:mm:ss.ssss
 	      if ( globals::time_format_dp ) 
 		O1 << present1.as_string(':') << Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp  ).substr(1) << "\t"
-		   << present2.as_string(':') << Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp  ).substr(1) ;
+		   << ( add_ellipsis ? "..." : present2.as_string(':') + Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp  ).substr(1) ) ;
 	      else // or truncate to hh:mm:ss
 		O1 << present1.as_string(':') << "\t"
-		   << present2.as_string(':') ;
+		   << ( add_ellipsis ? "..." : present2.as_string(':') ) ;
 	      
 	    }
 	  else // write as elapsed seconds
 	    {
 	      O1 << Helper::dbl2str( interval.start_sec() , globals::time_format_dp ) << "\t"
-		 << Helper::dbl2str( interval.stop_sec() , globals::time_format_dp );
+		 << ( add_ellipsis ? "..." : Helper::dbl2str( interval.stop_sec() , globals::time_format_dp ) ) ;
 	    }
 
 	  if ( inst->data.size() == 0 ) 
@@ -3814,14 +3836,24 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
   logger << "  extracting 'EDF Annotations' track\n";  
   
   // create a single annotation (or bind to it, if it already exists)
+  // by default, this is edf_annot_t and the entries here are added as the instance ID
+
+  // however, we can specify that certain EDF annotations are entered as a class
+  //  these will be remapped etc as above
   
-  annot_t * a = edf.timeline.annotations.add( globals::edf_annot_label );
+  annot_t * a =  edf.timeline.annotations.add( globals::edf_annot_label );
   
   a->name = globals::edf_annot_label;
   a->description = "EDF Annotations";
   a->file = edf.filename;
   a->type = globals::A_FLAG_T; 
 
+  // if we need to expand 0-duration stages
+  uint64_t epoch_len = globals::tp_1sec *
+    ( edf.timeline.epoch_len_tp_uint64_t() == 0 ?
+      globals::default_epoch_len :
+      edf.timeline.epoch_len_tp_uint64_t() );
+    
   int r = edf.timeline.first_record();
   
   while ( r != -1 )
@@ -3850,31 +3882,66 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		      uint64_t dur_tp = Helper::sec2tp( te.duration );
 		      
 		      // stop is one past the end 
+		      // NOTE: zero-lengh annot is [a,a),
 		      uint64_t stop_tp  = start_tp + dur_tp ;
 		      
-		      // CHANGE: zero-lengh annot is [a,a), so comment out the below
-		      // ensure at least one tp (i.e. zero-length annotation is (a,a+1)
-		      // if ( stop_tp == start_tp ) stop_tp += 1LLU;
+		      // get the annotation label
+		      std::string aname = Helper::trim( te.name );
+
+		      // sanitize?
+ 		      if ( globals::sanitize_everything )
+			aname = Helper::sanitize( aname );
 		      
+		      // do any remapping
+		      aname = nsrr_t::remap( aname );
+			
+		      // fix stage duration (if 0-dur point)?
+		      // (unless adding ellipsis, i.e. here change points might not map to even epochs... 30, 90, 30, 180, etc... ) 
+		      if ( globals::sleep_stage_assume_epoch_duration
+			   && globals::is_stage_annotation( aname )
+			   && ( ! globals::set_0dur_as_ellipsis )
+			   && start_tp == stop_tp )
+			stop_tp += epoch_len;
+				      
+		      // make interval
 		      interval_t interval( start_tp , stop_tp );
 		      
-		      // trim, and remap (also by default swap spaces)
-		      std::string inst_name = nsrr_t::remap( Helper::trim( te.name ) );
-		    
-		      if ( inst_name != "" )
+		      // is this a class?
+		      bool edf_class =  nsrr_t::as_edf_class( aname );
+		      // if not, do we ignore? : nsrr_t::only_add_named_EDF_annots 
+		      		      
+		      if ( aname != "" )
 			{
-			  instance_t * instance = a->add( inst_name , interval , "." );
-			  
-			  //std::cerr << " adding [" << te.name << "] -- "
-			  //          << te.onset << "\t" << interval.duration() << "\n";
-			  
-			  // track how many annotations we add
-			  edf.aoccur[ globals::edf_annot_label ]++;
+
+			  // add as standard edf_annot_t ?
+			  if ( ! edf_class )
+			    {
+			      
+			      if ( ! nsrr_t::whitelist )
+				{
+				  instance_t * instance = a->add( aname , interval , "." );
+				  
+				  //std::cerr << " adding [" << te.name << "] -- "
+				  //          << te.onset << "\t" << interval.duration() << "\n";
+				  
+				  // track how many annotations we add
+				  edf.aoccur[ globals::edf_annot_label ]++;
+				}
+			    }
+			  else // ... else add as a class
+			    {
+
+			      // add as a new class
+			      // (no meta-info)
+			      annot_t * a = edf.timeline.annotations.add( aname );
+			      instance_t * instance = a->add( "." , interval , "." );
+			      edf.aoccur[ aname ]++;
+			    }
 			}
 		    }
 		  
 		}
-
+	      
 	    } 
 	  
 	} // next signal

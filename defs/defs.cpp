@@ -77,11 +77,13 @@ std::map<frequency_band_t,freq_range_t> globals::freq_band;
 std::string globals::sleep_stage_prefix;
 sleep_stage_label_t globals::sleep_stage;
 sleep_stage_label_lookup_t globals::sleep_stage_labels;
+bool globals::sleep_stage_assume_epoch_duration;
 
 bool globals::replace_channel_spaces;
 bool globals::uppercase_channels;
 bool globals::replace_annot_spaces;
 char globals::space_replacement;
+bool globals::set_0dur_as_ellipsis;
 
 char globals::folder_delimiter;
 std::string globals::project_path;
@@ -248,6 +250,13 @@ void globals::init_defs()
   space_replacement = '_';
 
   //
+  // On writing .annot (only), set 0 duration events to '...' 
+  //
+
+  set_0dur_as_ellipsis = false;
+
+  
+  //
   // Which annots, if any, should be aligned to the starts of EDF records?
   //
     
@@ -315,6 +324,9 @@ void globals::init_defs()
 
   // i.e. to track different schemes, SUDS_N1,  sleep_stage_prefix == "SUDS" 
   sleep_stage_prefix       = ""; // by default not  
+
+  // if we find 0-duration annots, assume epoch length
+  sleep_stage_assume_epoch_duration = true;
   
   sleep_stage[ WAKE  ]     = "W";
   sleep_stage[ LIGHTS_ON ] = "L";
@@ -959,6 +971,20 @@ void globals::init_channel_types()
   add_channel_map( "etco2" , GENERIC );
   add_channel_map( "etc02" , GENERIC );
 
+  add_channel_map( "DIF5" , GENERIC );
+  add_channel_map( "DIF6" , GENERIC );
+
+  add_channel_map( "DC1" , GENERIC );
+  add_channel_map( "DC2" , GENERIC );
+  add_channel_map( "DC3" , GENERIC );
+  add_channel_map( "DC4" , GENERIC );
+  add_channel_map( "DC5" , GENERIC );
+  add_channel_map( "DC6" , GENERIC );
+  add_channel_map( "DC7" , GENERIC );
+  add_channel_map( "DC8" , GENERIC );
+  add_channel_map( "DC9" , GENERIC );
+  add_channel_map( "DC10" , GENERIC );
+  
 }
 
 
