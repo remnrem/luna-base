@@ -392,6 +392,7 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
 		  ++t;
 		}
 	      if ( t ) logger << "  trimmed " << t << " leading wake epochs\n";
+	      helper->trimmed += t;
 	    }
 	  
 	  // trim end
@@ -411,6 +412,7 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
 		  ++t;
 		}
 	      if ( t ) logger << "  trimmed " << t << " trailing wake epochs\n";
+	      helper->trimmed += t;
 	    }
 	  
 	} // end of wake trimming option
@@ -1214,7 +1216,7 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
    
    if ( helper->has_prior_staging && suds_t::max_epoch_n != -1 )
      {
-   
+       
        std::map<suds_stage_t,std::vector<int> > cnts;
    
        int cc = 0;
@@ -1245,6 +1247,7 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
 		   if ( helper->valid[ qq->second[ pick ] ] )
 		     {
 		       helper->valid[ qq->second[ pick ] ] = false;
+		       helper->trimmed++;
 		       --rem;
 		     }
 		 }	      
@@ -1277,11 +1280,12 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
    oo = nout_stat.begin();
    while ( oo != nout_stat.end() ) { nout_tot.insert( *oo ); ++oo; } 
    
-   logger << "  outlier counts (flat, Hjorth, components, total = "
+   logger << "  outlier counts: flat, Hjorth, components, trimmed -> total : "
    	 << nout_flat.size() << ", "
 	  << nout_hjorth.size() << ", "
 	  << nout_stat.size() << ", "
-	  << nout_tot.size() << ")\n";
+	  << helper->trimmed << " -> "
+	  << nout_tot.size() + helper->trimmed << "\n";
    
 
    // --------------------------------------------------------------------------------

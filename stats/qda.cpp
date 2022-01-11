@@ -54,7 +54,12 @@ qda_model_t qda_t::fit( const bool flat_priors )
   const int n = X.rows() - nm;
   const int p = X.cols();
   
-  if ( n < 3 ) Helper::halt( "not enough nonmissing obs in qda_t()" );
+  if ( n < 3 ) 
+    {
+      logger << "  *** not enough nonmissing obs for QDA\n" ;
+      model.valid = false;
+      return model;      
+    }
 
   if ( nm )
     {      
@@ -115,12 +120,16 @@ qda_model_t qda_t::fit( const bool flat_priors )
   const int ng = counts.size();
   
   if ( ng == 1 ) 
-    Helper::halt( "no variation in group labels in qda_t::fit()" );
+    {
+      logger << "  *** no variation in group labels for QDA\n";
+      model.valid = false;
+      return model;      
+    }
 
   //
   // priors
   //
-
+  
   ArrayXd prior( ng );
   ArrayXd nc( ng );
   
@@ -128,9 +137,13 @@ qda_model_t qda_t::fit( const bool flat_priors )
   cc = counts.begin();
   while ( cc != counts.end() )
     {
-      
+    
       if ( cc->second < p + 1 ) 
-	Helper::halt( "group size too small for QDA... bailing" );
+	{
+	  logger << "  ** group size too small for QDA\n";
+	  model.valid = false;
+	  return model;
+	}
 
       if ( flat_priors )
 	prior[ cidx ] = 1.0 / (double) counts.size() ;
@@ -241,6 +254,9 @@ qda_model_t qda_t::fit( const bool flat_priors )
 
 qda_posteriors_t qda_t::predict( const qda_model_t & model , const Eigen::MatrixXd & X )
 {
+  
+  if ( ! model.valid ) 
+    Helper::halt( "internal error: QDA predict() is being passed an invalid model" );
 
   const int p = X.cols();
   const int n = X.rows();

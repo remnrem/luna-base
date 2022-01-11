@@ -61,13 +61,14 @@ void suds_indiv_t::dump_svd( const std::string & froot )
   const std::string file_V = Helper::expand( froot ) + ".V";
   
   std::ofstream U1( file_U.c_str() , std::ios::out );
-  U1 << "E";
+  U1 << "E\tSS";
+
   for (int i=0; i<nc; i++) U1 << "\tC" << i+1 ;
   U1 << "\n";
-
+  
   for (int e=0; e<nve; e++)
     {
-      U1 << e+1 ;
+      U1 << e+1 << "\t" << y[e] ;
       for (int i=0; i<nc; i++)
 	U1 << "\t" << U( e , i ) ;
       U1 << "\n";

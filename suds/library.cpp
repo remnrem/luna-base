@@ -59,18 +59,20 @@ extern writer_t writer;
 //
 
 // Format
-//   - version number (SUDS4)
+//   - version number (SUDS1)
 //   - trainer ID
+//   -  hasX, hasLDA, hasQDA?
 //   - nf  = number of features (expected to match the corresponding model file)
 //   - nc  = number of components
 //   - nve = number of (valid) epochs
 //   - observed stages [ nve ]
 //   - feature (X) means (over epochs) [ nf ]
 //   - feature (X) SDs (over epochs) [ nf ]
-//   - U [ nve x nc ]
 //   - D [ nc ]
 //   - V [ nc x nc ]
-//   - X [ nve x nf ]  :: original features, nb. this only needs to be read for weight-trainers
+//   - optional: LDA model
+//   - optional: QDA model
+//   - optional: X [ nve x nf ]  :: original features, nb. this only needs to be read for weight-trainers
 
 // Information on the signals (SR, lwr/frq, features, etc) is now in the model-file
 // Optionally, there can also be a weights-file that gives weights for each feature
@@ -194,12 +196,14 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
 	  ++ii;
 	}
 
-      // means
+      // means      
       for (int i=0; i<lda_model.means.rows(); i++)
 	for (int j=0; j<lda_model.means.cols(); j++)
 	  OUT1 << lda_model.means(i,j) << "\n";
-
+      
       // scaling
+      OUT1 << lda_model.scaling.rows() << "\n"
+	   << lda_model.scaling.cols() << "\n";
       for (int j=0; j < lda_model.scaling.rows(); j++)
 	for (int k=0; k < lda_model.scaling.cols(); k++)
 	  OUT1 << lda_model.scaling(j,k) << "\n";
@@ -300,8 +304,10 @@ bool next( std::ifstream & IN1 , std::string * line )
     {
       Helper::safe_getline( IN1 , *line );
       if ( IN1.eof() ) return false; 
+      //std::cout << " line [" << *line << "]\n";
       if ( *line == "" ) continue;
       if ( (*line)[0] == '%' ) continue;
+      
       break;
     }
   return true;
@@ -329,8 +335,6 @@ void suds_t::text2binary( const std::string & texfile ,
   std::ofstream OUT1( Helper::expand( binfile ).c_str() , std::ios::binary | std::ios::out );
   
   logger << "  copying from " << texfile << " to " << binfile << " (text2binary conversion)\n";
-  if ( with_features ) logger << "  including feature matrices in final output\n";
-  else logger << "  not including feature matrices in final output\n";
     
   //
   // Write out
@@ -350,7 +354,7 @@ void suds_t::text2binary( const std::string & texfile ,
       // SUDX code 
       if ( ! next(IN1 , &line ) ) break;      
       suds_indiv_t::bwrite( OUT1 , line );
-      
+
       // ID
       next(IN1,&line);
       suds_indiv_t::bwrite( OUT1 , line );
@@ -504,9 +508,9 @@ void suds_t::text2binary( const std::string & texfile ,
 	    Helper::halt( "bad numeric" );
 	  int nv = i;
 	  suds_indiv_t::bwrite( OUT1 , i );
-      
+	  
 	  // priors
-	  for (int i=0; i<ng; i++)
+	  for (int k=0; k<ng; k++)
 	    {
 	      next(IN1,&line);
 	      if ( ! Helper::str2dbl( line , &d ) )
@@ -515,7 +519,7 @@ void suds_t::text2binary( const std::string & texfile ,
 	    }
 	  
 	  // counts (str --> int )
-	  for (int i=0;i<ng;i++)
+	  for (int k=0;k<ng;k++)
 	    {
 	      // group label (str)
 	      next(IN1,&line);
@@ -529,18 +533,31 @@ void suds_t::text2binary( const std::string & texfile ,
 	    }
 	  
 	  // means
-	  for (int i=0;i<ng;i++)
-	    {
-	      next(IN1,&line);
-              if ( ! Helper::str2dbl( line , &d ) )
-		Helper::halt( "bad numeric(3)" );
-              suds_indiv_t::bwrite( OUT1 , d );
-	    }
+	  for (int k=0;k<ng;k++)
+	    for (int m=0; m<nv; m++)
+	      {		
+		next(IN1,&line);
+		if ( ! Helper::str2dbl( line , &d ) )
+		  Helper::halt( "bad numeric(3)" );
+		suds_indiv_t::bwrite( OUT1 , d );
+	      }
 	  
-	  // scaling
-	  for (int i=0; i<nv; i++)
-	    for (int i=0; i<nv; i++)
-	      {
+	  // scaling (get row/col size explicitly)
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric(3)" );
+	  if ( i != nv ) Helper::halt( "format problem" );
+	  suds_indiv_t::bwrite( OUT1 , i );
+
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric(3)" );
+	  const int nr = i;	  
+	  suds_indiv_t::bwrite( OUT1 , i );
+	  
+	  for (int k=0; k<nv; k++)
+	    for (int m=0; m<nr; m++)
+	      {		
 		next(IN1,&line);
 		if ( ! Helper::str2dbl( line , &d ) )
 		  Helper::halt( "bad numeric(3)" );
@@ -552,20 +569,111 @@ void suds_t::text2binary( const std::string & texfile ,
 	  if ( ! Helper::str2int( line , &i ) )
 	    Helper::halt( "bad numeric(3)" );
 	  suds_indiv_t::bwrite( OUT1 , i );
-	  
+
 	  // labels
-	  for (int i=0;i<ng;i++)
+	  for (int k=0;k<ng;k++)
 	    {
 	      next(IN1,&line);
 	      suds_indiv_t::bwrite( OUT1 , line );	      
 	    }
 	  
 	}
-
+      
+      
       if ( has_qda )
 	{
+	  
+	  // number of groups
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric" );
+	  int ng = i;
+	  suds_indiv_t::bwrite( OUT1 , i );
+	  
+	  // number of variables
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric" );
+	  int nv = i;
+	  suds_indiv_t::bwrite( OUT1 , i );
+	  
+	  // priors
+	  for (int k=0; k<ng; k++)
+	    {
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
+		Helper::halt( "bad numeric(6)" );
+	      suds_indiv_t::bwrite( OUT1 , d );
+	    }
+	  
+	  // rows
+	  for (int k=0; k<ng; k++)
+	    {
+	      next(IN1,&line);
+	      if ( ! Helper::str2int( line , &i ) )
+		Helper::halt( "bad numeric(6)" );
+	      suds_indiv_t::bwrite( OUT1 , i );
+	    }
+
+	  // counts (str --> int )
+	  for (int k=0;k<ng;k++)
+	    {
+	      // group label (str)
+	      next(IN1,&line);
+	      suds_indiv_t::bwrite( OUT1 , line );
+	      
+	      // count (int)
+	      next(IN1,&line);
+	      if ( ! Helper::str2int( line , &i ) )
+		Helper::halt( "bad numeric(3)" );
+	      suds_indiv_t::bwrite( OUT1 , i );	      
+	    }
+	  
+	  // means
+	  for (int k=0;k<ng;k++)
+	    for (int m=0; m<nv; m++)
+	      {		
+		next(IN1,&line);
+		if ( ! Helper::str2dbl( line , &d ) )
+		  Helper::halt( "bad numeric(3)" );
+		suds_indiv_t::bwrite( OUT1 , d );
+	      }
+	  
+	  // scaling (get row/col size explicitly)
+	  for (int g=0; g<ng; g++)
+	    for (int k=0; k<nv; k++)
+	      for (int m=0; m<nv; m++)
+	      {
+		next(IN1,&line);
+		if ( ! Helper::str2dbl( line , &d ) )
+		  Helper::halt( "bad numeric(3)" );
+		suds_indiv_t::bwrite( OUT1 , d );
+	      }
+	  
+	  // ldet
+	  for (int k=0; k<ng; k++)
+	    {
+	      next(IN1,&line);
+	      if ( ! Helper::str2dbl( line , &d ) )
+		Helper::halt( "bad numeric(6)" );
+	      suds_indiv_t::bwrite( OUT1 , d );
+	    }
+	  
+	  // n
+	  next(IN1,&line);
+	  if ( ! Helper::str2int( line , &i ) )
+	    Helper::halt( "bad numeric(3)" );
+	  suds_indiv_t::bwrite( OUT1 , i );
+	  
+	  // labels
+	  for (int k=0;k<ng;k++)
+	    {
+	      next(IN1,&line);
+	      suds_indiv_t::bwrite( OUT1 , line );	      
+	    }
 
 	}
+
       
       //
       // Original features: X  (optional)
@@ -573,8 +681,8 @@ void suds_t::text2binary( const std::string & texfile ,
 
       if ( has_features )
 	{
-	  for (int i=0;i<tnve;i++)
-	    for (int j=0;j<tnf;j++)
+	  for (int j=0;j<tnve;j++)
+	    for (int k=0;k<tnf;k++)
 	      {
 		next(IN1,&line);
 		
@@ -594,7 +702,7 @@ void suds_t::text2binary( const std::string & texfile ,
   //
   // mark EOF explicitly (i.e. as 'SUDSX' version number for next indiv.
   //
-  
+
   suds_indiv_t::bwrite( OUT1 , "_END_" );
   
 
@@ -675,10 +783,10 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 
       // SUDSX magic number
       const std::string suds = suds_indiv_t::bread_str( IN1 );
-
+      
       // all done?
       if ( suds == "_END_" ) break;
-
+      
       // otherwise, check format version
       if ( suds != suds_t::suds_lib_version ) 
 	Helper::halt( "bad file format for " + filename
@@ -744,7 +852,6 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
       for (int i=0;i<person->nve;i++)
 	{
 	  
-
 	  // note: do not read epoch numbers any more, we don't need
 	  //  these in non-targets (and so they are not stored)
 	  //person->epochs[i] = suds_indiv_t::bread_int( IN1 );
@@ -803,12 +910,12 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 
 	  // number of variables
 	  const int nv = suds_indiv_t::bread_int( IN1 );
-      
+	  
 	  // priors
 	  person->lda_model.prior.resize( ng );
 	  for (int i=0;i<ng;i++)
 	    person->lda_model.prior[i] = suds_indiv_t::bread_dbl( IN1 );
-	  	  
+	  
 	  // counts
 	  for (int i=0;i<ng;i++)
 	    {
@@ -822,13 +929,15 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 	    for (int j=0; j<nv; j++)
 	      person->lda_model.means(i,j) = suds_indiv_t::bread_dbl( IN1 );
 
+
 	  // scaling
-	  person->lda_model.scaling.resize( nv , nv );
-	  for (int j=0; j < nv; j++)
-	    for (int k=0; k < nv; k++)
+	  int s1 = suds_indiv_t::bread_int( IN1 );
+	  int s2 = suds_indiv_t::bread_int( IN1 );
+	  person->lda_model.scaling.resize( s1 , s2 );
+	  for (int j=0; j < s1; j++)
+	    for (int k=0; k < s2; k++)
 	      person->lda_model.scaling(j,k) = suds_indiv_t::bread_dbl( IN1 );
-	  
-	  
+	  	  
 	  // n
 	  person->lda_model.n = suds_indiv_t::bread_int( IN1 );
 	  
@@ -851,7 +960,7 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 
 	  // number of variables
 	  const int nv = suds_indiv_t::bread_int( IN1 );
-      
+	  
 	  // priors
 	  person->qda_model.prior.resize( ng );
 	  for (int i=0;i<ng;i++)
@@ -860,7 +969,7 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 	  // rows (redundant, but keep)
 	  person->qda_model.rows.resize( ng );
 	  for (int i=0;i<ng;i++)
-	    person->qda_model.rows[i] = suds_indiv_t::bread_dbl( IN1 );
+	    person->qda_model.rows[i] = suds_indiv_t::bread_int( IN1 );
 	  
 	  // counts
 	  for (int i=0;i<ng;i++)
@@ -898,6 +1007,7 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
 	  person->qda_model.labels.resize( ng );
 	  for (int i=0;i<person->qda_model.labels.size();i++)
 	    person->qda_model.labels[i] =  suds_indiv_t::bread_str( IN1 );
+	      
 	  
 	}
       
@@ -908,18 +1018,26 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
       //     (i.e. will project this individual's raw data into the target SVD space)
       
       if ( has_features )
-	{            
+	{ 
 	  person->X.resize( person->nve , person->nf );
 	  for (int i=0;i<person->nve;i++)
 	    for (int j=0;j<person->nf;j++)
 	      person->X(i,j) = suds_indiv_t::bread_dbl( IN1 );
 	}
-
+      
       //
-      // add this person
+      // add this person 
       //
       
-      bank.push_back( person );
+      if ( suds_t::single_trainer == "" )
+	bank.push_back( person );
+      else
+	{
+	  if ( person->id == suds_t::single_trainer ) 
+	    bank.push_back( person );
+	  else
+	    delete person;
+	}
 
       //
       // get the next person
@@ -968,7 +1086,8 @@ void suds_t::attach_db( const std::string & file0 , bool read_db , bool read_wdb
   std::vector<suds_indiv_t*> trainers = binary_reload( filename , read_wdb );
   
   const int nt = trainers.size();
-  
+
+
   //
   // for primary trainers only (! read_psd ) track Hjorth distributions
   //
@@ -990,9 +1109,14 @@ void suds_t::attach_db( const std::string & file0 , bool read_db , bool read_wdb
     {
       
       suds_indiv_t * trainer = trainers[i];	  
-
-      trainer->fit_qlda();
       
+      // LDA/QDA models now precomputed and stored in the library
+      // no U matrix, so no need/ability to recompte, so comment 
+      // out this line:
+
+      //trainer->fit_qlda();
+      
+
       //
       // store in the relevant bank(s):
       //
@@ -1215,8 +1339,8 @@ void suds_t::combine_trainers( param_t & param )
   if ( ! Helper::fileExists( Helper::expand( infile ) ) )
     Helper::halt( "could not open " + Helper::expand( infile ) );
   
-  // read text from here...
-  std::ifstream IN1( Helper::expand( infile ).c_str() , std::ios::in );
+  // read binary file here (w/ multiple indivs)
+  std::ifstream IN1( Helper::expand( infile ).c_str() , std::ios::binary | std::ios::in );
   
   int p = -1;
   int n_indiv = 0;
@@ -1247,14 +1371,6 @@ void suds_t::combine_trainers( param_t & param )
   // staging
   std::vector<suds_stage_t> obs_stage; 
   
-  // std::vector<suds_stage_t> obs_stage_valid; // will match prd_stage
-  // std::vector<suds_stage_t> prd_stage;
-  // std::map<std::string,int> counts;
-  // std::vector<int> epochs;
-  // std::vector<std::string> y;
-    
-
-  
   //
   // Iterate over files
   //
@@ -1262,28 +1378,39 @@ void suds_t::combine_trainers( param_t & param )
   while ( 1 )
     {
 
-      int i;
-      double d;
-      std::string line;
+      // SUDSX magic number
+      const std::string suds = suds_indiv_t::bread_str( IN1 );
       
-      // SUDX code (w/ 'f' suffix for features)
-      if ( ! next(IN1 , &line ) ) break;
+      // all done?
+      if ( suds == "_END_" ) break;
+      
+      // otherwise, check format version
+      if ( suds != suds_t::suds_lib_version ) 
+	Helper::halt( "bad file format for " + infile
+		      + ", expecting " + suds_t::suds_lib_version
+		      + " but found " + suds );
       
       // ID
-      next(IN1,&line);
+      std::string id = suds_indiv_t::bread_str( IN1 );
+
+      // get contents::
+      //    - features (X) included Y/N
+      //    - LDA model included Y/N
+      //    - QDA model included Y/N
+
+      const bool has_features = suds_indiv_t::bread_str( IN1 ) == "X:Y";
+      const bool has_lda = suds_indiv_t::bread_str( IN1 ) == "LDA:Y";
+      const bool has_qda = suds_indiv_t::bread_str( IN1 ) == "QDA:Y";
       
-      // NVE
-      int tnve = 0 , tns = 0, tnf = 0 , tnc = 0;
-      next(IN1,&line);
-      if ( ! Helper::str2int( line , &i ) )
-	Helper::halt( "bad numeric" );
-      tnve = i;
+      if ( ! has_features ) 
+	Helper::halt( "file " + id + " does not contain raw features:: cannot compile into a single trainer\nrun MAKE-SUDS with output-X=T" );
             
-      // NS
-      next(IN1,&line);
-      if ( ! Helper::str2int( line , &i ) )
-	Helper::halt( "bad numeric" );
-      tns = i;
+      int tnve = suds_indiv_t::bread_int( IN1 );
+      int tns = suds_indiv_t::bread_int( IN1 );
+      int tnf = suds_indiv_t::bread_int( IN1 );
+      int tnc = suds_indiv_t::bread_int( IN1 );
+      
+      // on first individual, set space
       if ( n_indiv == 0 ) 
 	{
 	  first_ns = tns;
@@ -1296,53 +1423,22 @@ void suds_t::combine_trainers( param_t & param )
 	}
       else if ( first_ns != tns ) 
 	Helper::halt( "all inputs must have same # of signals" );
-
-      // NF
-      next(IN1,&line);
-      if ( ! Helper::str2int( line , &i ) )
-	Helper::halt( "bad numeric" );
-      tnf = i;
-      if ( n_indiv == 0 ) first_nf = tnf;
-      else if ( first_nf != tnf ) Helper::halt( "all inputs must have same # of features" );
-
-      // NC
-      next(IN1,&line);
-      if ( ! Helper::str2int( line , &i ) )
-	Helper::halt( "bad numeric" );
-      tnc = i;
       
+
       // Stage counts
-      next(IN1,&line);      
-      if ( ! Helper::str2int( line , &i ) )
-        Helper::halt( "bad numeric" );      
-      int tstages = i;
+      int tstages = suds_indiv_t::bread_int( IN1 );
       
-      // Each stage count
-      for (int j=0;j<tstages; j++)
+      for (int i=0; i<tstages; i++)
 	{
-	  // stage label
-	  next(IN1,&line);
-
-	  // stage count
-	  next(IN1,&line);
-	  if ( ! Helper::str2int( line , &i ) )
-	    Helper::halt( "bad numeric(2)" );	  
-	  
+	  const std::string sname = suds_indiv_t::bread_str( IN1 );
+	  const int scnt = suds_indiv_t::bread_int( IN1 );	  
 	}
-      
+
       // Stages epoch-by-epoch
       for (int j=0;j<tnve; j++)
-	{
-	  // epoch number
-          next(IN1,&line);
-	  if ( ! Helper::str2int( line , &i ) )
-            Helper::halt( "bad numeric(3)" );
-                    
-	  // stage label
-          next(IN1,&line);
-	  
-	  // add stages
-	  mega.obs_stage.push_back( suds_t::type( line ) );
+	{                    
+	  // add stages to mega indiv.
+	  mega.obs_stage.push_back( suds_t::type( suds_indiv_t::bread_str( IN1 ) ) );
 	}
       
       // Hjorth summary statistics
@@ -1350,42 +1446,159 @@ void suds_t::combine_trainers( param_t & param )
 	{
 	  for (int h=0; h<3; h++ )
 	    {
-	      // feature mean (over epochs)
-	      next(IN1,&line);
-	      if ( ! Helper::str2dbl( line , &d ) )
-		Helper::halt( "bad numeric(4)" );
+	      double d = suds_indiv_t::bread_dbl( IN1 ); 
 	      
 	      if ( h == 0 ) h1_means[j].push_back( d );
 	      else if ( h == 1 ) h2_means[j].push_back( d );
 	      else h3_means[j].push_back( d );
 
 	      // feature SD (over epochs)
-	      next(IN1,&line);
-	      if ( ! Helper::str2dbl( line , &d ) )
-		Helper::halt( "bad numeric(5)" );
+	      d = suds_indiv_t::bread_dbl( IN1 ); 	      
 	      if ( h == 0 ) h1_vars[j].push_back( d*d );
 	      else if ( h == 1 ) h2_vars[j].push_back( d*d );
 	      else h3_vars[j].push_back( d*d );
-
 	    }
 	}
       
       // skip SVD components (these will be recalculated) 
       // SVD components: W
       for (int j=0;j<tnc; j++)
-          next(IN1,&line);
+	{
+	  double d =  suds_indiv_t::bread_dbl( IN1 );
+	}
+      
       // SVD components: V 
       for (int j=0;j<tnf; j++)
         for (int k=0;k<tnc; k++)
-	  next(IN1,&line);
+	  {
+	    double d =  suds_indiv_t::bread_dbl( IN1 );
+	  }      
       
       // SVD components: U
-      for (int i=0;i<tnve;i++)
-	for (int j=0;j<tnc;j++)
-	  next(IN1,&line);
+      // for (int i=0;i<tnve;i++)
+      // 	for (int j=0;j<tnc;j++)
+      // 	  next(IN1,&line);
       
       //
-      // Original features: X
+      // LDA : ignore 
+      //
+      
+      if ( has_lda ) 
+	{
+
+	  // number of groups
+	  const int ng = suds_indiv_t::bread_int( IN1 );
+	  
+	  // number of variables
+	  const int nv = suds_indiv_t::bread_int( IN1 );
+	  
+	  // priors
+	  for (int i=0;i<ng;i++)
+	    {
+	      double d = suds_indiv_t::bread_dbl( IN1 );
+	    }	  
+
+	  // counts
+	  for (int i=0;i<ng;i++)
+	    {
+	      const std::string s = suds_indiv_t::bread_str( IN1 );
+	      int j = suds_indiv_t::bread_int( IN1 );
+	    }
+	  
+	  // means
+	  for (int i=0; i<ng; i++)
+	    for (int j=0; j<nv; j++)
+	      {
+		double d = suds_indiv_t::bread_dbl( IN1 );
+	      }
+
+	  // scaling
+	  int s1 = suds_indiv_t::bread_int( IN1 );
+	  int s2 = suds_indiv_t::bread_int( IN1 );
+	  for (int j=0; j < s1; j++)
+	    for (int k=0; k < s2; k++)
+	      {
+		double d = suds_indiv_t::bread_dbl( IN1 );
+	      }  
+
+	  // n
+	  int j = suds_indiv_t::bread_int( IN1 );
+	  
+	  // labels
+	  for (int i=0;i<ng;i++)
+	    {
+	      std::string s = suds_indiv_t::bread_str( IN1 );
+	    }	  
+	}
+      
+      //
+      // QDA model?
+      //
+      
+      if ( has_qda )
+	{
+	  
+	  // number of groups
+	  const int ng = suds_indiv_t::bread_int( IN1 );
+	  
+	  // number of variables
+	  const int nv = suds_indiv_t::bread_int( IN1 );
+	  
+	  // priors	  
+	  for (int i=0;i<ng;i++)
+	    {
+	      double d = suds_indiv_t::bread_dbl( IN1 );
+	    }
+
+	  // rows (redundant, but keep)
+	  for (int i=0;i<ng;i++)
+	    {
+	      int j = suds_indiv_t::bread_int( IN1 );
+	    }
+	  
+	  // counts
+	  for (int i=0;i<ng;i++)
+	    {
+	      const std::string s = suds_indiv_t::bread_str( IN1 );
+	      int j = suds_indiv_t::bread_int( IN1 );
+	    }
+	  
+	  // means
+	  for (int i=0; i<ng; i++)
+	    for (int j=0; j<nv; j++)
+	      {
+		double d = suds_indiv_t::bread_dbl( IN1 );
+	      }
+
+	  // scaling
+	  for (int i=0; i<ng; i++)
+	    {
+	      for (int j=0; j < nv; j++)
+		for (int k=0; k < nv; k++)
+		  {
+		    double d = suds_indiv_t::bread_dbl( IN1 );
+		  }
+	    }
+	  
+	  // ldet	  
+	  for (int i=0;i<ng;i++)
+	    {
+	      double d = suds_indiv_t::bread_dbl( IN1 );
+	    }	  
+
+	  // n
+	  int j = suds_indiv_t::bread_int( IN1 );
+
+	  // labels
+	  for (int i=0;i<ng;i++)
+	    {
+	      std::string l1 = suds_indiv_t::bread_str( IN1 );
+	    }
+	}
+
+      
+      //
+      // Original features: X 
       //
 
       // make space for new data 
@@ -1401,21 +1614,11 @@ void suds_t::combine_trainers( param_t & param )
 	{
 	  for (int j=0;j<tnf;j++)
 	    {
-	      next(IN1,&line);
-	      if ( ! Helper::str2dbl( line , &d ) )
-		Helper::halt( "bad numeric(9)" );
-	      mega.X(r,j) = d;
+	      mega.X(r,j) = suds_indiv_t::bread_dbl( IN1 );
 	    }
 	  ++r; // next row
 	}
 
-      //
-      // Ensure prior rows are mean centered
-      //
-
-      // Eigen::MatrixXd mm = mega.X.middleRows( r1 , r - r1 );
-
-      // std::cout << "indiv means = " << mm.colwise().mean() << "\n";
 
       //
       // next individual
@@ -1429,8 +1632,6 @@ void suds_t::combine_trainers( param_t & param )
 
   IN1.close();
 
-
-  std::cout << " means\n" << mega.X.colwise().mean() << "\n";
 
   //
   // Done reading and combining features

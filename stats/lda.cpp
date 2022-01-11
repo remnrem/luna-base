@@ -380,7 +380,7 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Eigen::Matrix
   const int p = X.cols();
   const int n = X.rows();
 
-  //  std::cout << "p = " << p << " " << n << " " << model.means.cols() << "\n";
+  //std::cout << "p = " << p << " " << n << " " << model.means.cols() << "\n";
   
   if ( p != model.means.cols() )
     Helper::halt( "wrong number of columns in lda_t::predict(): expecting " + Helper::int2str((int) model.means.cols() ) + " but found " + Helper::int2str( p ) );  
@@ -404,10 +404,11 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Eigen::Matrix
     for (int j=0;j<p;j++)
       X1(i,j) = X(i,j) - means(j);
 
+
   // n.p X p.r --> n.r
   // x <- scale(x, center = means, scale = FALSE) %*% scaling
   Eigen::MatrixXd X2 = X1 * model.scaling;
-    
+  
   Eigen::MatrixXd M1(ng,p); 
   for (int i=0;i<ng;i++)
     for (int j=0;j<p;j++)
@@ -416,14 +417,16 @@ lda_posteriors_t lda_t::predict( const lda_model_t & model , const Eigen::Matrix
   
   // dm <- scale(object$means, center = means, scale = FALSE) %*% scaling
   Eigen::MatrixXd DM = M1 * model.scaling;
-
+  
   // can be a lower dimension, of first N components if needed
   // for now, fix to N components
   // dimen <- if(missing(dimen)) length(object$svd) else min(dimen, length(object$svd))
   //     dm <- dm[, 1L:dimen, drop = FALSE]
   // for now, we keep all dimensions, and so no changes to DM
 
-  const int dimen = model.svd.size();
+  //  const int dimen = model.svd.size();
+  const int dimen = DM.cols();
+  //  std::cout << " dimen = " << dimen << "\n";
 
   //     dist <- matrix(0.5 * rowSums(dm^2) - log(prior), nrow(x),
   //                    length(prior), byrow = TRUE) - x[, 1L:dimen, drop=FALSE] %*% t(dm)

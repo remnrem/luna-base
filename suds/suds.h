@@ -72,7 +72,7 @@ struct param_t;
 struct suds_helper_t { 
   
   suds_helper_t(   edf_t & edf,  param_t & param ) 
-    : edf(edf) , param(param) , nge(0) , ne(0), ns(0) { } 
+  : edf(edf) , param(param) , nge(0) , ne(0), ns(0) , trimmed(0) { } 
   
   edf_t & edf;
   
@@ -86,6 +86,7 @@ struct suds_helper_t {
   std::string siglab;
   bool has_prior_staging;
   std::vector<bool> valid;
+  int trimmed;
 };
 
 

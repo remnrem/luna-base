@@ -524,7 +524,14 @@ void suds_indiv_t::add_trainer( edf_t & edf , param_t & param )
 	     << " stages, so not adding as a trainer\n";
       return;
     }  
+
+  // fit models
+  qda_t qda( y , U );
+  qda_model = qda.fit( suds_t::flat_priors );
   
+  lda_t lda( y , U );
+  lda_model = lda.fit( suds_t::flat_priors );
+    
   // save to disk (as text format)
   write( edf , param ); 
   
@@ -575,7 +582,6 @@ posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool us
   // target's projected U matrix, given trainer V and W 
 
   Eigen::MatrixXd U_projected = X * trainer.V * trainer_DW;
-  
   
   //
   // Canonical correlation of U or V between target and trainer ? 
@@ -1633,7 +1639,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Update final predictions based on SOAP?
   //
 
-  target.summarize_kappa( final_prediction , true );
+  //  target.summarize_kappa( final_prediction , true );
 
   if ( suds_t::soap_global_update_th > 0 )
     {
