@@ -33,9 +33,11 @@
 #include <map>
 #include "stats/lda.h"
 #include "stats/qda.h"
+#include "stats/eigen_ops.h"
 
 #include "eval.h"
 #include "helper/helper.h"
+#include "miscmath/miscmath.h"
 #include "edf/signal-list.h"
 
 
@@ -72,7 +74,7 @@ struct param_t;
 struct suds_helper_t { 
   
   suds_helper_t(   edf_t & edf,  param_t & param ) 
-  : edf(edf) , param(param) , nge(0) , ne(0), ns(0) , trimmed(0) { } 
+  : edf(edf) , param(param) , nge(0) , ne(0), ns(0) , trimmed(0) , ambig(0) { } 
   
   edf_t & edf;
   
@@ -86,7 +88,10 @@ struct suds_helper_t {
   std::string siglab;
   bool has_prior_staging;
   std::vector<bool> valid;
-  int trimmed;
+
+  int trimmed; // by leading/trailing wake & max-epoch reqs
+  int ambig;   // by self-prob (SOAP) on trainers
+
 };
 
 
@@ -282,6 +287,7 @@ struct suds_indiv_t {
 
   int proc_coda( suds_helper_t * );
 
+  void report_epoch_counts( const std::string & l = "" );
   
   //
   // write trainers to file (text only) 
@@ -733,6 +739,22 @@ public:
 
   }
 
+
+  static double mean_maxpp( const Eigen::MatrixXd & pp ) {
+    // mean maxpp 
+    const int n = pp.rows();
+    Eigen::VectorXd m = Eigen::VectorXd::Zero( n );
+    for (int i=0; i<n; i++) m[i] = maxpp( pp.row(i).array() );
+    return m.mean();
+  }
+
+  static double median_maxpp( const Eigen::MatrixXd & pp ) {
+    // mean maxpp 
+    const int n = pp.rows();
+    Eigen::VectorXd m = Eigen::VectorXd::Zero( n );
+    for (int i=0; i<n; i++) m[i] = maxpp( pp.row(i).array() );
+    return MiscMath::median( eigen_ops::copy_vector( m ) ) ;
+  }
 
   static double maxpp( const Eigen::ArrayXd & r ) { 
     double mx = r[0];    

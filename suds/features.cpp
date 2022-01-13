@@ -103,18 +103,41 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   rc = proc_build_feature_matrix( &helper );
   if ( rc == 0 ) return 0;  
-  
-  
+
   //
-  // epoch-level QC (also performs an initial SVD) 
+  // epoch-level QC (also performs an initial SVD) ( nge --> nve ) 
   //
   
   rc = proc_initial_svd_and_qc( &helper );
   if ( rc == 0 ) return 0;
 
-  
+
   //
-  // re-do main SVD on final dataset
+  // populate 'y'
+  //
+  
+  rc = proc_class_labels( &helper );
+  if ( rc == 0 ) return 0;
+  
+
+  //
+  // re-do SVD on dataset w/ bad epochs removed
+  //
+
+  rc = proc_main_svd( &helper );
+  if ( rc == 0 ) return 0;
+
+
+  //
+  // For SUDS trainers, drop epochs that are not well-classified (i.e. outliers in the current model)
+  //
+  
+  rc = proc_prune_rows( &helper );
+  if ( rc == 0 ) return 0;
+
+
+  //
+  // re-do (third time) main SVD on final dataset
   //
 
   rc = proc_main_svd( &helper );
@@ -127,23 +150,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   rc = proc_prune_cols( &helper );
   if ( rc == 0 ) return 0;
-
-  
-  //
-  // get class label counts
-  //
-
-  rc = proc_class_labels( &helper );
-  if ( rc == 0 ) return 0;
-
-
-  //
-  // For SUDS trainers, drop epochs that are not well-classified (i.e. outliers in the current model)
-  //
-
-  rc = proc_prune_rows( &helper );
-  if ( rc == 0 ) return 0;
-
+ 
 
   //
   // some final metrics
@@ -1111,8 +1118,15 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
   
   Eigen::BDCSVD<Eigen::MatrixXd> svd( X , Eigen::ComputeThinU | Eigen::ComputeThinV );
   U = svd.matrixU();
+  U.conservativeResize( Eigen::NoChange , suds_t::nc );
+
   V = svd.matrixV();
+  V.conservativeResize( Eigen::NoChange , suds_t::nc );
+
   W = svd.singularValues();
+  W.conservativeResize( suds_t::nc );
+  
+  //  std::cout << " sizes = " << U.rows() <<  " " << U.cols() << " ... " << V.rows() << " " << V.cols() << "\n";
   
   
   // --------------------------------------------------------------------------------
@@ -1205,58 +1219,7 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
 	     }
 	 }
      }
-   
-   
-   
-   // --------------------------------------------------------------------------------
-   //
-   // Impose a max number of epochs per stage? 
-   //
-   // --------------------------------------------------------------------------------
-   
-   if ( helper->has_prior_staging && suds_t::max_epoch_n != -1 )
-     {
-       
-       std::map<suds_stage_t,std::vector<int> > cnts;
-   
-       int cc = 0;
-       for (int i=0;i<helper->ne;i++)
-	 {
-	   if ( helper->retained[i] )
-	     {
-	       // track counts in valid index space
-	       if ( helper->valid[cc] )
-		 cnts[ obs_stage[ i ] ].push_back( cc );
-	       ++cc;
-	     }
-	 }
-       
-       std::map<suds_stage_t,std::vector<int> >::const_iterator qq = cnts.begin();
-       while ( qq != cnts.end() )
-	 {
-	   if ( qq->second.size() > suds_t::max_epoch_n )
-	     {
-	       logger << "  reducing " << suds_t::str( qq->first ) 
-		      << " from " << qq->second.size() 
-		      << " to " << suds_t::max_epoch_n << " epochs\n";
-	       int tot = qq->second.size();
-	       int rem = tot - suds_t::max_epoch_n;
-	       while ( rem ) 
-		 {
-		   int pick = CRandom::rand( tot );
-		   if ( helper->valid[ qq->second[ pick ] ] )
-		     {
-		       helper->valid[ qq->second[ pick ] ] = false;
-		       helper->trimmed++;
-		       --rem;
-		     }
-		 }	      
-	     }
-	   ++qq;
-	 }
-       
-     }
-   
+      
    
    // --------------------------------------------------------------------------------
    //
@@ -1271,8 +1234,7 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
    
    logger << "  of " << helper->ne << " total epochs, valid staging for " << helper->nge
           << ", and of those " << included << " passed outlier removal\n";
-   
-   
+      
    std::set<int>::const_iterator oo = nout_flat.begin();
    while ( oo != nout_flat.end() ) { nout_tot.insert( *oo ); ++oo; } 
    oo = nout_hjorth.begin();
@@ -1431,15 +1393,6 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
 }
 
 
-// int suds_indiv_t::proc_eval_feature_matrix( suds_helper_t * helper )
-// {
-
-//   // do ANOVA of each feature by stage (all , and also correlation of each stage by each feature)
-//   xxx ---> TODO
-    
-//   return 1;
-// }
-
 
 int suds_indiv_t::proc_main_svd( suds_helper_t * helper )
 {
@@ -1454,44 +1407,50 @@ int suds_indiv_t::proc_main_svd( suds_helper_t * helper )
   // V.resize( nbins , nbins );
   
   Eigen::BDCSVD<Eigen::MatrixXd> svd2( X , Eigen::ComputeThinU | Eigen::ComputeThinV );
+
   U = svd2.matrixU();
   V = svd2.matrixV();
   W = svd2.singularValues();
+
+  U.conservativeResize( Eigen::NoChange , suds_t::nc );
+  V.conservativeResize( Eigen::NoChange , suds_t::nc );
+  W.conservativeResize( suds_t::nc );
   
+  //  std::cout << " (MAIN) sizes = " << U.rows() <<  " " << U.cols() << " ... " << V.rows() << " " << V.cols() << "\n";
+
+  //
+  // Standardize U
+  //
   
-   //
-   // Standardize U
-   //
-   
-   if ( suds_t::standardize_U )
-     {
-       if ( suds_t::robust_standardization )
-	 {
-	   logger << "  robust standardizing U\n";
-	   
-	   // no repeated winsorization here
-	   if ( ! eigen_ops::robust_scale( U , true , true , 0 ) )
-	     {
-	       logger <<"  one or more features with no variability, quitting\n";
-               return 0;
-	     }
-	 }
-       else
-	 {
-	   logger << "  standardizing U\n";
-	   if ( ! eigen_ops::scale( U , true , true ) )
-	     {
-	       logger <<"  one or more features with no variability, quitting\n";
-               return 0;
-	     }
-	 }  
-     }
-   
-   return 1;
+  if ( suds_t::standardize_U )
+    {
+      if ( suds_t::robust_standardization )
+	{
+	  logger << "  robust standardizing U\n";
+	  
+	  // no repeated winsorization here
+	  if ( ! eigen_ops::robust_scale( U , true , true , 0 ) )
+	    {
+	      logger <<"  one or more features with no variability, quitting\n";
+	      return 0;
+	    }
+	}
+      else
+	{
+	  logger << "  standardizing U\n";
+	  if ( ! eigen_ops::scale( U , true , true ) )
+	    {
+	      logger <<"  one or more features with no variability, quitting\n";
+	      return 0;
+	    }
+	}  
+    }
+  
+  return 1;
 }
 
 
-      
+
  
 int suds_indiv_t::proc_prune_cols( suds_helper_t * helper )
 {
@@ -1506,25 +1465,13 @@ int suds_indiv_t::proc_prune_cols( suds_helper_t * helper )
   
   if ( trainer && ( suds_t::required_comp_p < 1 || suds_t::betwithin_ratio > 0 ) && ! ( suds_t::soap_mode && suds_t::ignore_target_priors ) ) 
     {
-      
+
       const bool do_anova = suds_t::required_comp_p < 1 ;
       const bool do_bw    = suds_t::betwithin_ratio > 0 ;
       
       //
       // pull out currently retained epochs
       //
-      
-      std::vector<std::string> ss_str;
-      int c = 0;
-      for ( int i = 0 ; i < helper->ne ; i++ )
-	{
-	  if ( helper->retained[i] )
-	    {
-	      if ( helper->valid[c] )
-		ss_str.push_back( suds_t::str( obs_stage[i] ) );
-	      ++c;
-	    }
-	}
 
       std::set<int> incl_comp;
       
@@ -1540,7 +1487,7 @@ int suds_indiv_t::proc_prune_cols( suds_helper_t * helper )
 	  
 	  if ( do_anova )
 	    {
-	      double pv = Statistics::anova( ss_str  , eigen_ops::copy_vector( c ) );
+	      double pv = Statistics::anova( y  , eigen_ops::copy_vector( c ) );
 	      writer.value( "PV", pv );	       
 	      if ( pv < 0 || pv > suds_t::required_comp_p ) okay = false;
 	    }
@@ -1549,7 +1496,7 @@ int suds_indiv_t::proc_prune_cols( suds_helper_t * helper )
 	  if ( do_bw )
 	    {
 	      // nb. c is standardized
-	      double wb = eigen_ops::between_within_group_variance( ss_str , c );
+	      double wb = eigen_ops::between_within_group_variance( y , c );
 	      writer.value( "WMAX", wb );
 	      if ( wb > suds_t::betwithin_ratio ) okay = false;	       
 	    }
@@ -1690,23 +1637,45 @@ int suds_indiv_t::proc_class_labels( suds_helper_t * helper )
 
 int suds_indiv_t::proc_prune_rows( suds_helper_t * helper ) 
 {
-  
+
+  // this only applies for trainers
+
+  if ( ! trainer ) return 1;
+
+  // retained == size ne,  nge +pos elements
+  // valid    == size nge, nve +pos elements
+  // okay     == size nve, nve2 +pos elements
+
+  int n0 = 0 , n1 = 0;
+  for (int i=0;i<helper->valid.size(); i++) 
+    if ( helper->valid[i] ) ++n1 ; else ++n0;
+
+  std::vector<bool> okay( nve , true );
   
   // --------------------------------------------------------------------------------
-   //
-   // Self-classification (i.e. SOAP) to remove epochs that aren't well self-classified
-   //  - possibly reject a trainer, if their SOAP kappa is poor
-   //
-   // --------------------------------------------------------------------------------
-   
+  //
+  // Self-classification (i.e. SOAP) to remove epochs that aren't well self-classified
+  //  - possibly reject a trainer, if their SOAP kappa is poor
+  //
+  // --------------------------------------------------------------------------------
+    
    if ( trainer && suds_t::self_classification )
      {
-
-       std::vector<bool> okay ;
-
+          
        // this returns the number of 'good' epochs 
+       
+       // std::cout << " nve " << nve << "\n";
+       // std::cout << " y " << y.size() << "\n";
+       // std::cout << " U " << U.rows() << " " << U.cols() << "\n";
+       // std::cout << " epochs " << epochs.size() << "\n";
 
        int nve2 = self_classify( &okay );
+       
+       // std::cout << " done , nve2 = " << nve2 << "\n";
+       // std::cout << " okay size = " << okay.size() << "\n";
+       // std::cout << " retained size = " << helper->retained.size() << "\n";
+       // std::cout << " valid size = " << helper->valid.size() << "\n";
+       // std::cout << " nve2 = " << nve << " " << nve2 << "\n";
        
        if ( nve2 == 0 )
 	 {
@@ -1715,112 +1684,195 @@ int suds_indiv_t::proc_prune_rows( suds_helper_t * helper )
 	 }
        
        //
-       // Subset epochs
+       // track # of ambiguous epochs flagged here
        //
        
-       //   U X epochs  y  h1 h2  h3
-    
-       Eigen::MatrixXd UU = U;      
-       U.resize( nve2 , nc );      
+       helper->ambig = nve - nve2; 
        
-       Eigen::MatrixXd XX = X;      
-       X.resize( nve2 , X.cols() );      
-       
-       std::vector<int> epochs2 = epochs;
-       epochs.clear();
-       
-       std::vector<suds_stage_t> obs_stage_valid2 = obs_stage_valid;
-       if ( helper->has_prior_staging )
-	 obs_stage_valid.clear();
-       
-       Eigen::MatrixXd hh1 = h1;
-       h1.resize( nve , helper->ns );
-
-       Eigen::MatrixXd hh2 = h2;
-       h2.resize( nve , helper->ns );
-       
-       Eigen::MatrixXd hh3 = h3;
-       h3.resize( nve , helper->ns );
-       
-       int r = 0;
-       for (int i=0;i< nve; i++)
-   	{      
-   	  if ( okay[i] )
-   	    {
-
-   	      // U
-   	      for (int j=0;j<nc;j++)
-   		U(r,j) = UU(i,j);
-
-      	      // X original features
-   	      for (int j=0;j<nf;j++)
-   		X(r,j) = XX(i,j);
-	      
-   	      // Epoch tracking
-   	      epochs.push_back( epochs2[i] );
-	      
-   	      // nb. take from already-pruned set, obs_stage_valid[] ) 
-   	      if ( helper->has_prior_staging )
-		obs_stage_valid.push_back( obs_stage_valid2[i] );
-
-	      
-	      // Hjorth (per signal)
-	      for (int s=0;s<helper->ns;s++)
-   	       	{
-		  h1(r,s) = hh1(i,s);
-   	       	  h2(r,s) = hh2(i,s);
-   	       	  h3(r,s) = hh3(i,s);		  
-   	       	}
-	      
-   	      // next good epoch
-   	      ++r;
-   	    }
-   	}
-  
-
-       //
-       // Redo labels
-       //
-       
-       std::vector<std::string> yy = y;
-       y.clear();
-       for ( int i = 0 ; i < nve ; i++ )
-	 if ( okay[i] ) y.push_back( yy[i] );
-       
-       // just in case...?
-       if ( y.size() != obs_stage_valid.size() ) 
-	 Helper::halt( "internal error in proc()" );
-       
-       //
-       // update nve
-       //
-
-       nve = nve2;
-       
-       //
-       // recount stages
-       //
-
-       counts.clear();
-       for (int i=0;i<y.size();i++) counts[y[i]]++;
-       std::map<std::string,int>::const_iterator cc = counts.begin();
-       logger << "  updated epoch counts:";
-       while ( cc != counts.end() )
-	 {
-	   logger << " " << cc->first << ":" << cc->second ;
-	   ++cc;
-	 }
-       logger << "\n";
-       
-       logger << "  final count of valid epochs is " << nve << "\n";
      }
+   
+   
+   // --------------------------------------------------------------------------------
+   //
+   // Impose a max number of epochs per stage? 
+   //
+   // --------------------------------------------------------------------------------
+   
+   if ( helper->has_prior_staging && suds_t::max_epoch_n != -1 )
+     {
+       
+       // reset this
+       helper->trimmed = 0;
 
+       std::map<suds_stage_t,std::vector<int> > cnts;
+              
+       int cc = 0 , cc2 = 0;
+       for (int i=0;i<helper->ne;i++)
+	 {
+	   if ( helper->retained[i] )
+	     {
+	       // track counts in valid index space
+	       if ( helper->valid[cc] )
+		 {
+		   // and check was not flagged above
+		   // store okay[] idx
+		   if ( okay[ cc2 ] )
+		     cnts[ obs_stage[ i ] ].push_back( cc2 );
+		   ++cc2;
+		 }
+	       ++cc;
+	     }
+	 }
+       
+       std::map<suds_stage_t,std::vector<int> >::const_iterator qq = cnts.begin();
+       while ( qq != cnts.end() )
+	 {
+	   if ( qq->second.size() > suds_t::max_epoch_n )
+	     {
+	       logger << "  reducing " << suds_t::str( qq->first ) 
+		      << " from " << qq->second.size() 
+		      << " to " << suds_t::max_epoch_n << " epochs\n";
+	       int tot = qq->second.size();
+	       int rem = tot - suds_t::max_epoch_n;
+	       while ( rem ) 
+		 {
+		   int pick = CRandom::rand( tot );
+		   if ( okay[ qq->second[ pick ] ] )
+		     {
+		       okay[ qq->second[ pick ] ] = false;
+		       helper->trimmed++;
+		       --rem;
+		     }
+		 }	      
+	     }
+	   ++qq;
+	 }       
+     }
+   
+   
+   // --------------------------------------------------------------------------------
+   //
+   // Drop epochs that were either ambig and/or extraneous
+   //
+   // --------------------------------------------------------------------------------       
 
-   return 1;
+   
+   int nve2 = 0;
+
+   for (int i=0;i<okay.size();i++)
+     if ( okay[i] ) ++nve2;
+   
+   // std::cout << " nve2 = " << nve2 << "\n";
+   // std::cout << "  --> ambig, trim " << helper->ambig << " " << helper->trimmed << "\n";
+
+   //   U X epochs  y  h1 h2  h3
+   
+   Eigen::MatrixXd UU = U;      
+   U.resize( nve2 , nc );      
+   
+   Eigen::MatrixXd XX = X;      
+   X.resize( nve2 , X.cols() );      
+   
+   std::vector<int> epochs2 = epochs;
+   epochs.clear();
+   
+   std::vector<suds_stage_t> obs_stage_valid2 = obs_stage_valid;
+   if ( helper->has_prior_staging )
+     obs_stage_valid.clear();
+   
+   Eigen::MatrixXd hh1 = h1;
+   h1.resize( nve2 , helper->ns );
+   
+   Eigen::MatrixXd hh2 = h2;
+   h2.resize( nve2 , helper->ns );
+   
+   Eigen::MatrixXd hh3 = h3;
+   h3.resize( nve2 , helper->ns );
+
+   std::vector<std::string> yy = y;
+   y.clear();
+   
+   int r = 0;
+   for (int i=0;i < nve; i++)
+     {      
+       if ( okay[i] )
+	 {
+	   // U
+	   for (int j=0;j<nc;j++)
+	     U(r,j) = UU(i,j);
+	   
+	   // X original features
+	   for (int j=0;j<nf;j++)
+	     X(r,j) = XX(i,j);
+	   
+	   // Epoch tracking
+	   epochs.push_back( epochs2[i] );
+	   
+	   // nb. take from already-pruned set, obs_stage_valid[] ) 
+	   if ( helper->has_prior_staging )
+	     obs_stage_valid.push_back( obs_stage_valid2[i] );	   
+
+	   // labels (as text)
+	   y.push_back( yy[i] );
+
+	   // Hjorth (per signal)
+	   for (int s=0;s<helper->ns;s++)
+	     {
+	       h1(r,s) = hh1(i,s);
+	       h2(r,s) = hh2(i,s);
+	       h3(r,s) = hh3(i,s);		  
+	     }
+	   
+	   // next good epoch
+	   ++r;
+	 }
+     }
+        
+   //
+   // update nve
+   //
+   
+   nve = nve2;
+   
+     
+   
+   
+   // --------------------------------------------------------------------------------
+   //
+   // Recount stages
+   //
+   // --------------------------------------------------------------------------------
+   
+   if (  trainer && suds_t::self_classification ) 
+     logger << "  removed " << helper->ambig << " epochs (posterior < " << suds_t::self_classification_prob << ")\n";
+   
+   if (  helper->has_prior_staging && suds_t::max_epoch_n != -1 ) 
+     logger << "  removed " << helper->trimmed << " epochs to satisfy max-epoch requirements\n";
+   
+   report_epoch_counts( "final" );
+   
+   logger << "  final count of valid epochs is " << nve << "\n";
+      
+   return nve <= 10 ? 0 : 1;
 }
 
  
-
+void suds_indiv_t::report_epoch_counts( const std::string & l )
+{
+  counts.clear();
+  for (int i=0;i<y.size();i++) counts[y[i]]++;
+  std::map<std::string,int>::const_iterator cc = counts.begin();
+  if ( l == "" ) 
+    logger << "  epoch counts:";
+  else
+    logger << "  " << l << " epoch counts:";
+  while ( cc != counts.end() )
+    {
+      logger << " " << cc->first << ":" << cc->second ;
+      ++cc;
+    }
+  logger << "\n";  
+}
 
 int suds_indiv_t::proc_coda( suds_helper_t * helper )
 {

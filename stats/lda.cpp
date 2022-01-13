@@ -77,7 +77,7 @@ lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> 
 	}
     }
 
-  //  std::cout << " X (post removals) = " << X.rows() << " " << X.cols() << "\n";
+  //std::cout << " X (post removals) = " << X.rows() << " " << X.cols() << "\n";
   
   //
   // At this point, any missing values will have been removed, and we can 
@@ -180,7 +180,7 @@ lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> 
     for ( int j = 0 ; j < p ; j++ )
       group_means( i, j ) /= n * prior[i];
   
-  //  std::cout << "group means = " << group_means << "\n";
+  //std::cout << "group means = " << group_means << "\n";
 
   //
   // adjust X by group mean; get variance of each measure
@@ -197,6 +197,8 @@ lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> 
       
       f1[j] = MiscMath::sdev( xa );
       
+      //std::cout << "sd " << ( f1[j] < tol ) << " " << f1[j] << " " << tol << "\n";
+
       if ( f1[j] < tol ) {
 	model.valid = false;
 	model.errmsg = "variable " + Helper::int2str(j) + " is constant within group ";

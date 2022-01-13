@@ -317,15 +317,15 @@ void suds_t::set_options( param_t & param )
   // epoch-level outlier removal for trainers
   if ( param.has( "th" ) ) outlier_ths = param.dblvector( "th" );
   
-  // self-classification threshold? only use trainer epochs where self-classification == observed score
-  self_classification = param.has( "self" ); // epoch-level pruning
-  
   // require posterior > threshold rather than most likely call
   self_classification_prob = param.has( "self-prob" ) ? param.requires_dbl( "self-prob" ) : 99;
   
   // require this individual level kappa for self-prediction to keep a trainer
   self_classification_kappa = param.has( "self-kappa" ) ? param.requires_dbl( "self-kappa" ) : 0;
   
+  // self-classification threshold? only use trainer epochs where self-classification == observed score
+  self_classification =  param.has( "self-kappa" ) || param.has( "self-prob" )  ; 
+
   // must be within X SD units of trainer distribution for target epoch to be included 
   hjorth_outlier_th = param.has( "th-hjorth" ) ? param.requires_dbl( "th-hjorth" ) : 5 ;
   
@@ -1163,7 +1163,15 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  wgt_n50[ cntr ] = n_kappa50;
 	}
 
-
+      // KLUDGE ... 
+      //  use "SOAP -- so UNDO below 0 && 
+      if ( use_soap_weights ) 
+	{	  
+	  wgt_soap[ cntr ] = suds_t::mean_maxpp( prediction.pp ) ;
+	  std::cout << " setting max " << wgt_soap[ cntr ]  << "\n";
+	}
+      
+      
       //
       // SOAP-based trainer weights
       //
@@ -1171,7 +1179,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //   just do SOAP procedure, as if these were the real values for the target
       //   (and using the target's own U, not the trainer-projected value)
 
-      if ( use_soap_weights )
+      // KLUDGE
+      if ( 0 && use_soap_weights )
 	{
 
 	  // from above, we already have the model fit:

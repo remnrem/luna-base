@@ -153,13 +153,14 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   OUT1 << "% SVD W diagonals\n"; 
   for (int j=0;j<nc;j++)
     OUT1 << W[j] << "\n";
-  
+
   // V
   OUT1 << "% SVD V matrix (" << nf << " by " << nc << ")\n";
   for (int i=0;i<nf;i++)
     for (int j=0;j<nc;j++)
       OUT1 << V(i,j) << "\n";
-  
+
+
   // U (to re-estimate LDA model upon loading, i.e
   //  to use lda.predict() on target
   //  only needs to be nc rather than nf
@@ -1341,9 +1342,19 @@ void suds_t::combine_trainers( param_t & param )
   
   // read binary file here (w/ multiple indivs)
   std::ifstream IN1( Helper::expand( infile ).c_str() , std::ios::binary | std::ios::in );
-  
+
+
+  // only take first n individuals
+
+  const int n_start = param.has( "first" ) ? param.requires_int( "first" ) : -1 ; 
+  const int n_stop = param.has( "last" ) ? param.requires_int( "last" ) : 0 ; 
+
+
+
+  // start
   int p = -1;
   int n_indiv = 0;
+  int added = 0; 
 
   // epoch-level
   std::vector<std::string> stages;
@@ -1378,6 +1389,12 @@ void suds_t::combine_trainers( param_t & param )
   while ( 1 )
     {
 
+      // all done?
+      if ( n_stop != 0 && n_indiv == n_stop ) break;
+      
+      // add this person, or skip? 
+      const bool add_person = n_start == -1 || n_start <= n_indiv ; 
+
       // SUDSX magic number
       const std::string suds = suds_indiv_t::bread_str( IN1 );
       
@@ -1391,8 +1408,9 @@ void suds_t::combine_trainers( param_t & param )
 		      + " but found " + suds );
       
       // ID
-      std::string id = suds_indiv_t::bread_str( IN1 );
-
+      std::string id = suds_indiv_t::bread_str( IN1 );      
+      std::cout << n_indiv + 1 << "\t" << id << "\t" << ( add_person ? "added" : "skipped" ) << "\n";
+      
       // get contents::
       //    - features (X) included Y/N
       //    - LDA model included Y/N
@@ -1411,7 +1429,7 @@ void suds_t::combine_trainers( param_t & param )
       int tnc = suds_indiv_t::bread_int( IN1 );
       
       // on first individual, set space
-      if ( n_indiv == 0 ) 
+      if ( added == 0 ) 
 	{
 	  first_ns = tns;
 	  h1_means.resize( first_ns );
@@ -1605,7 +1623,7 @@ void suds_t::combine_trainers( param_t & param )
       int r = mega.X.rows();      
       int r1 = r;
 
-      if ( n_indiv == 0 )  // need to set cols too the first time
+      if ( added == 0 )  // need to set cols too the first time
 	mega.X = Eigen::MatrixXd::Zero( tnve , first_nf );
       else	
 	mega.X.conservativeResize( r + tnve , Eigen::NoChange );
@@ -1624,9 +1642,11 @@ void suds_t::combine_trainers( param_t & param )
       // next individual
       //
       
+      if ( add_person ) ++added;
+      
       ++n_indiv;
-
-      logger << "  " << n_indiv << " trainers compiled...\n";
+      
+      logger << "  " << added << " trainer compiled (" << n_indiv << " considered)\n";
       
     }
 

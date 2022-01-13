@@ -196,19 +196,21 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   //
   // fit the LDA to self
   //
-  
+
+
   fit_qlda();
-  
+
   if ( suds_t::qda && ! qda_model.valid )
     return 0;
   
   if ( (!suds_t::qda) && ! lda_model.valid )
     return 0;
+
   
   //
   // get predictions
   //
-  
+
   posteriors_t prediction;
   if ( suds_t::qda )
     prediction = posteriors_t( qda_t::predict( qda_model , U ) ) ; 
@@ -218,7 +220,7 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   // save posteriors?
   if ( pp != NULL ) *pp = prediction.pp ;
 
-  
+
   //
   // In SOAP mode, all done (we only needed the PP)
   //
@@ -233,6 +235,7 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
   double kappa = MiscMath::kappa( prediction.cl , y , suds_t::str( SUDS_UNKNOWN )  );
 
   included->resize( nve , false );
+
   
   //
   // Optionally, ask whether trainer passes self-classification kappa threshold.  If not
@@ -248,6 +251,7 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
 	}      
     }
 
+  
   //
   // Determine 'bad' epochs
   //
@@ -283,10 +287,23 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
 	  std::map<std::string,int>::const_iterator ii = label2slot.find( y[i] );
 	  if ( ii == label2slot.end() )
 	    Helper::halt( "internal error in suds_indiv_t::self_classify() , unrecognized label" );
-	  if ( prediction.pp( i , ii->second ) >= suds_t::self_classification_prob )
+	  
+	  //	  std::cout << " i " << i << "/" << nve << "  " << prediction.pp( i , ii->second ) << " " << suds_t::self_classification_prob << "\n";
+	  
+	  // must match hard call::: 
+	  (*included)[i] = prediction.cl[i] == y[i] ;
+	  
+	  if ( (*included)[i] ) 
+	    ++okay;
+	  else // but also, must be above threshold
 	    {
-	      (*included)[i] = true;
-	      ++okay;
+	      if ( prediction.pp( i , ii->second ) >= suds_t::self_classification_prob )
+		{
+		  (*included)[i] = true;
+		  ++okay;
+		}
+	      else
+		(*included)[i] = false;
 	    }
 	}
     }
