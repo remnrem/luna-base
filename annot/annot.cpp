@@ -511,8 +511,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // before the extension, so "annot" is different from "eannot"
   
   bool is_eannot = Helper::file_extension( f , "eannot" ) 
-  || Helper::file_extension( f , "eannot.txt" );
-
+    || Helper::file_extension( f , "stages" )
+    || Helper::file_extension( f , "eannot.txt" );
+  
   // this also matches file.annot.txt , file.txt, file.tsv, etc
   bool is_annot = Helper::file_extension( f , "annot" )    
     || Helper::file_extension( f , "txt" ) 
