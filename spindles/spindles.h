@@ -48,7 +48,7 @@ struct spindle_t
   
   // spindle properties
   double amp, dur, fwhm, nosc, frq, fft, symm, symm2, isa;
-  double chirp, chirp_fdif, frq_h1, frq_h2; 
+  double chirp, frq_h1, frq_h2, frq_range; 
 
   // neg/pos defined by HW
   double posf, negf, posb, negb, posv, negv, allf, allb, allv;

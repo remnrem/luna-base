@@ -1146,9 +1146,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		
 	      // default BPF window is +/- 2Hz 
 	      // 'or' if if-frq2 is set, then use window if-frq .. if-frq2
-	      // 'or' if if-frq-emp=X then use observed spindle freq +/- X
+	      // 'or' if if-frq-emp=X then use observed spindle freq +/- X  <<- best option
 
-	      // set a broad transition widwth 
+	      // set a broad transition width 
 	      double ripple = 0.02;
 	      double tw = 2; 
 	      
@@ -1241,13 +1241,23 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      for (int j=0;j<ht_bins;j++)
 		{
 		  writer.level( j+1  , "RELLOC" );
-		  writer.value( "IF" , isf[j] / (double)isfn[j] );		  
+		  isf[j] /= (double)isfn[j] ;
+		  writer.value( "IF" , isf[j] );
 		}
 	      writer.unlevel( "RELLOC" );
+	      
+	      // variance of RELLOC freq
+	      double vbin = MiscMath::sdev( isf );
+	      writer.value( "FVAR" , vbin );
 
+	      double fmin = 0;
+	      double fmax = 0;	      
+	      MiscMath::minmax( isf , &fmin , &fmax );
+	      writer.value( "FRNG" , fmax - fmin );
+	      
 	    }
-
 	
+
 	  //
 	  // Cache spindle infor
 	  //
@@ -1662,97 +1672,103 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // Repeat SO/IF analysis, but stratify by positive/negative HWs / slopes
 		  //
 		  
-		  bool ran_typed = false;
-
-		  // POS HW:
-		  
-		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_pos_hw );		  
-		  
-		  if ( pl_chirp.size() == nbins )		    
+		  if ( 0 ) 
 		    {
-		      ran_typed = true;
-		      writer.level( "POS_HW" , "TYPE" );
-		      ph = inc/2.0; // use mid-point of range 
-		      for (int j=0;j<nbins;j++)
-			{
-			  writer.level( ph  , "PHASE" );
-			  writer.value( "IF" , pl_chirp[j] );		      
-			  ph += inc;
-			}
-		      writer.unlevel( "PHASE" );
-		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
-		      writer.value( "R_PHASE_IF" , r_cl );
-		    }
 
-		  // NEG HW:	  
-		  
-		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_neg_hw );		  
-		  
-		  if ( pl_chirp.size() == nbins)
-		    {
-		      ran_typed = true;
-		      writer.level( "NEG_HW" , "TYPE" );
-		      ph = inc/2.0; // use mid-point of range
-		      for (int j=0;j<nbins;j++)
-			{
-			  writer.level( ph  , "PHASE" );
-			  writer.value( "IF" , pl_chirp[j] );		      
-			  ph += inc;
-			}
-		      writer.unlevel( "PHASE" );
-		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
-		      writer.value( "R_PHASE_IF" , r_cl );
-		    }
-
-		  // POS SLOPE:
-		  
-		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_pos_slope );		 
-		  if ( pl_chirp.size() == nbins)
-		    {
-		      ran_typed = true;
-		      writer.level( "POS_SLOPE" , "TYPE" );
-		      ph = inc/2.0; // use mid-point of range
-		      for (int j=0;j<nbins;j++)
-			{
-			  writer.level( ph  , "PHASE" );
-			  writer.value( "IF" , pl_chirp[j] );		      
-			  ph += inc;
-			}
-		      writer.unlevel( "PHASE" );
-		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
-		      writer.value( "R_PHASE_IF" , r_cl );
-		    }
-
-		  // NEG SLOPE:
-		  
-		  pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_neg_slope );		  
-		  if ( pl_chirp.size() == nbins)
-		    {
-		      ran_typed = true;
-		      writer.level( "NEG_SLOPE" , "TYPE" );
-		      ph = inc/2.0; // use mid-point of range
-		      for (int j=0;j<nbins;j++)
-			{
-			  writer.level( ph  , "PHASE" );
-			  writer.value( "IF" , pl_chirp[j] );		      
-			  ph += inc;
-			}
-		      writer.unlevel( "PHASE" );
-		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
-		      writer.value( "R_PHASE_IF" , r_cl );
+		      bool ran_typed = false;
 		      
-		    }		  
-
-		  if ( ran_typed ) 
-		    writer.unlevel( "TYPE" );
-
+		      // POS HW:
+		      
+		      pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_pos_hw );		  
+		      
+		      if ( pl_chirp.size() == nbins )		    
+			{
+			  ran_typed = true;
+			  writer.level( "POS_HW" , "TYPE" );
+			  ph = inc/2.0; // use mid-point of range 
+			  for (int j=0;j<nbins;j++)
+			    {
+			      writer.level( ph  , "PHASE" );
+			      writer.value( "IF" , pl_chirp[j] );		      
+			      ph += inc;
+			    }
+			  writer.unlevel( "PHASE" );
+			  double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+			  writer.value( "R_PHASE_IF" , r_cl );
+			}
+		      
+		      // NEG HW:	  
+		      
+		      pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_neg_hw );		  
+		      
+		      if ( pl_chirp.size() == nbins)
+			{
+			  ran_typed = true;
+			  writer.level( "NEG_HW" , "TYPE" );
+			  ph = inc/2.0; // use mid-point of range
+			  for (int j=0;j<nbins;j++)
+			    {
+			      writer.level( ph  , "PHASE" );
+			      writer.value( "IF" , pl_chirp[j] );		      
+			      ph += inc;
+			    }
+			  writer.unlevel( "PHASE" );
+			  double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+			  writer.value( "R_PHASE_IF" , r_cl );
+			}
+		      
+		      // POS SLOPE:
+		      
+		      pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_pos_slope );		 
+		      if ( pl_chirp.size() == nbins)
+			{
+			  ran_typed = true;
+			  writer.level( "POS_SLOPE" , "TYPE" );
+			  ph = inc/2.0; // use mid-point of range
+			  for (int j=0;j<nbins;j++)
+			    {
+			      writer.level( ph  , "PHASE" );
+			      writer.value( "IF" , pl_chirp[j] );		      
+			      ph += inc;
+			    }
+			  writer.unlevel( "PHASE" );
+			  double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+			  writer.value( "R_PHASE_IF" , r_cl );
+			}
+		      
+		      // NEG SLOPE:
+		      
+		      pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , &in_neg_slope );		  
+		      if ( pl_chirp.size() == nbins)
+			{
+			  ran_typed = true;
+			  writer.level( "NEG_SLOPE" , "TYPE" );
+			  ph = inc/2.0; // use mid-point of range
+			  for (int j=0;j<nbins;j++)
+			    {
+			      writer.level( ph  , "PHASE" );
+			      writer.value( "IF" , pl_chirp[j] );		      
+			      ph += inc;
+			    }
+			  writer.unlevel( "PHASE" );
+			  double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
+			  writer.value( "R_PHASE_IF" , r_cl );
+			  
+			}		  
+		      
+		      if ( ran_typed ) 
+			writer.unlevel( "TYPE" );
+		      
+		    }
+		  
 		  
 		  //
-		  // time-locked SO spindle IF -- code not used -- phase-locked analysis above should 
-		  // be sufficient
+		  // time-locked SO spindle IF
+		  //  in general, phase-locked analysis above should be sufficient		  
+		  //  but include this for now
 		  //
 
-		  if ( 1 ) 
+		  if ( globals::devel ) 
 		    {
 		      // +/- from negative peak 1 second
 		      std::vector<double> tl_chirp = p_sw->time_locked_averaging( p_chirp_if , Fs[s] , 1 , 1 );
@@ -2054,8 +2070,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.var( "SYMM"  , "Mean spindle symmetry index" );
 	      writer.var( "SYMM2"  , "Mean spindle folded symmetry index" );
 	      writer.var( "CHIRP" , "Mean spindle chirp index" );
-	      
-	      
+	      	      
 	      writer.value( "N01" , nspindles_premerge );  // original
 	      writer.value( "N02" , nspindles_postmerge ); // post merging
 	      writer.value( "N" ,  (int)spindles.size()  ) ;    // post merging and QC	    
@@ -2066,19 +2081,23 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "ISA_M" , means[ "ISA_TOTAL" ] / t_minutes );
 	      writer.value( "ISA_T" , means[ "ISA_TOTAL" ] );
 	      writer.value( "Q"     , means[ "Q" ] );
-
+	      
 	      writer.value( "AMP" , means["AMP"] );
 	      writer.value( "DUR" , means["DUR"] );
 	      writer.value( "FWHM" , means["FWHM"] );
 	      writer.value( "NOSC" , means["NOSC"] );
-	      writer.value( "FRQ" , means["FRQ"] );
-	      writer.value( "FFT" , means["FFT"] );
 	      writer.value( "SYMM" , means["SYMM"] );
 	      writer.value( "SYMM2" , means["SYMM2"] );
-	      writer.value( "CHIRP" , means["CHIRP"] );
-	      writer.value( "CHIRPF" , means["CHIRPF"] );
+
+	      // spindle frequency
+	      writer.value( "FRQ" , means["FRQ"] );
+	      writer.value( "FFT" , means["FFT"] );	      
+	      writer.value( "CHIRP" , means["CHIRP"] );	      
+	      writer.value( "FVAR2" , means["FVAR2"] ); // spindle variance
+	      writer.value( "FRNG2" , means["FRNG2"] ); // spindle freq range
 	      writer.value( "FRQ1" , means["FRQ1"] );
 	      writer.value( "FRQ2" , means["FRQ2"] );
+	      
 	      
 	      if ( globals::devel )
 		{
@@ -2095,6 +2114,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  writer.value( "V" , means["VPOS"] );
 		  const double pos_amp = means[ "POSISA_PER_SP" ] ;
 		  writer.value( "AMP" , pos_amp );
+
 		  
 		  //
 		  // negative spindle components
@@ -2108,6 +2128,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  writer.value( "V" , means["VNEG"] );		  
 		  const double neg_amp = means[ "NEGISA_PER_SP" ] ;
 		  writer.value( "AMP" , neg_amp );
+
 		  
 		  //
 		  // Avereged (i.e. all, based on HWs)
@@ -2145,7 +2166,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  cache_metrics->add( ckey_t( "AMP" ,   faclvl ) , means["AMP"]  );
 		  cache_metrics->add( ckey_t( "DUR" ,   faclvl ) , means["DUR"]  );
 		  cache_metrics->add( ckey_t( "ISA_S" , faclvl ) , means["ISA_PER_SPINDLE"] );
-		  cache_metrics->add( ckey_t( "CHIRPF" , faclvl ) , means["CHIRPF"]  );	      
+		  cache_metrics->add( ckey_t( "CHIRP" , faclvl ) , means["CHIRP"]  );	      
 		}
 
 	      writer.value( "DISPERSION" , means[ "DISPERSION" ] );
@@ -3168,6 +3189,19 @@ void characterize_spindles( edf_t & edf ,
 	  tall.push_back( t );
 	}
 
+      //
+      // F min/max
+      //
+
+      double fmin = wall[0];
+      double fmax = wall[0];
+      for (int z=1; z<wall.size(); z++)
+	{
+	  if ( wall[z] < fmin ) fmin = wall[z];
+	  else if ( wall[z] > fmax ) fmax = wall[z];
+	}
+      
+      spindle->frq_range += fmax - fmin;
 
       //
       // Durations/freqs of slopes -- no need to check things here
@@ -3310,9 +3344,8 @@ void characterize_spindles( edf_t & edf ,
       // assume we will always have at least 2 peaks in each half
       // i.e. this was a detected spindle, but just in case...
       // just in case give a invalid code
-
-      spindle->chirp      = -99999;
-      spindle->chirp_fdif = -99999;
+      
+      spindle->chirp = -99999;
       spindle->frq_h1 = spindle->frq_h2 = 0;
 
       bool valid_chirp = cint1 > 1 && cint2 > 1 ; 
@@ -3324,10 +3357,10 @@ void characterize_spindles( edf_t & edf ,
 	  spindle->frq_h2 = 1.0 / ( 2 * ( period_sec * int2/(double)cint2 ) );
 
 	  // +ve means getting faster: absolute diffference (Hz)
-	  spindle->chirp_fdif = spindle->frq_h2 - spindle->frq_h1 ; 
+	  spindle->chirp = spindle->frq_h2 - spindle->frq_h1 ; 
 	  
 	  // old CHIRP definition: log scaled ratio
-	  spindle->chirp = log( ( int1/(double)cint1 )  / (int2/(double)cint2  )  );
+	  //spindle->chirp = log( ( int1/(double)cint1 )  / (int2/(double)cint2  )  );
 	  
 	}
 
@@ -3693,9 +3726,8 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	 }
        
        
-       if ( spindle->chirp_fdif > -99998 ) 
-	 {
-	   writer.value( "CHIRPF"  , spindle->chirp_fdif );
+       if ( spindle->chirp > -99998 ) 
+	 {	   
 	   writer.value( "CHIRP"  , spindle->chirp );
 	   writer.value( "FRQ1"  , spindle->frq_h1 );
 	   writer.value( "FRQ2"  , spindle->frq_h2 );	   
@@ -3824,8 +3856,8 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , isa = 0 , qual = 0 ;
 
-  double symm = 0 , symm2 = 0, chirp = 0 , chirp_fdif = 0 ;
-  double frq1 = 0 , frq2 = 0;
+  double symm = 0 , symm2 = 0, chirp = 0 ;
+  double frq1 = 0 , frq2 = 0 , frq_range;
 
   // HWs
   double negf = 0 , posf = 0 , allf = 0;
@@ -3860,11 +3892,11 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       symm2 += ii->symm2;
 
       chirp += ii->chirp;
-      chirp_fdif += ii->chirp_fdif;
-
+      
       frq1 += ii->frq_h1;
       frq2 += ii->frq_h2;
-      
+      frq_range += ii->frq_range;
+
       negf += ii->negf;
       posf += ii->posf;
       allf += ii->allf;
@@ -3915,10 +3947,11 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   results[ "SYMM" ]     = symm / (double)denom;
   results[ "SYMM2" ]    = symm2 / (double)denom;
 
-  results[ "CHIRP" ]    = chirp / (double)denom;
-  results[ "CHIRPF" ]    = chirp_fdif / (double)denom;
+  results[ "CHIRP" ]   = chirp / (double)denom;
   results[ "FRQ1" ]    = frq1 / (double)denom;
   results[ "FRQ2" ]    = frq2 / (double)denom;
+  results[ "FVAR2" ]    = allv / (double)denom;
+  results[ "FRNG2" ]    = frq_range / (double)denom;
 
   results[ "FNEG" ]    = negf / (double)denom;
   results[ "FPOS" ]    = posf / (double)denom;

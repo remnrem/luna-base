@@ -932,9 +932,9 @@ void globals::init_channel_types()
   // ECG
   add_channel_map( "ECG" , ECG );
   add_channel_map( "EKG" , ECG );
-  add_channel_map( "LA" , ECG );
-  add_channel_map( "RA" , ECG );
-  add_channel_map( "LL" , ECG );
+  add_channel_map_exact( "LA" , ECG );
+  add_channel_map_exact( "RA" , ECG );
+  add_channel_map_exact( "LL" , ECG );
 
   // EMG
   add_channel_map( "EMG" , EMG );
