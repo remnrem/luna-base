@@ -90,9 +90,8 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   annot_t * annot = timeline->annotations( sslabel );
   if ( annot == NULL ) 
     {
-      logger << " could not find any valid sleep stage annotations... quitting\n";
+      logger << " did not find any existing, valid sleep stage annotations...\n";
       return false;
-      //Helper::halt( "[" + sslabel + "] not set" );
     }
 
   //

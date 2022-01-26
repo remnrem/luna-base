@@ -60,6 +60,8 @@ namespace eigen_ops {
 
   Eigen::VectorXd canonical_correlation( const Eigen::MatrixXd & X , const Eigen::MatrixXd & Y );
 
+  Eigen::MatrixXd load_mat( const std::string & file );
+  
 }
 
   // inline double min( double a, double b) { return a<b ? a : b; } 

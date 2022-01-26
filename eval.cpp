@@ -904,6 +904,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
       else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
+      else if ( is( c, "EXTEND" ) )       proc_extend_annots( edf, param(c) );
       else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
       else if ( is( c, "S2A" ) )          proc_signal2annot( edf, param(c) );
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
@@ -2511,6 +2512,14 @@ void proc_write_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.annotations.write( param.requires( "file" ) , param , edf );
 }
+
+// EXTEND : make single point annots longer
+
+void proc_extend_annots( edf_t & edf , param_t & param )
+{
+  edf.timeline.annotations.extend( param );
+}
+
 
 // A2S : make signbal from ANNOTS
 

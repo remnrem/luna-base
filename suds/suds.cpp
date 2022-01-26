@@ -156,6 +156,7 @@ double suds_t::hjorth_outlier_th = 5;
 
 bool suds_t::use_kl_weights;
 bool suds_t::use_soap_weights;
+bool suds_t::use_maxpp_weights;
 bool suds_t::use_repred_weights;
 bool suds_t::use_median_repred_weights;
 bool suds_t::use_mcc;
@@ -236,6 +237,7 @@ bool suds_t::one_by_one = false;
 std::string suds_t::eannot_file = "";
 bool suds_t::eannot_ints = false;
 std::string suds_t::eannot_prepend = "";
+bool suds_t::mem_annot = true;
 std::string suds_t::mat_dump_file = "";
 
 
@@ -404,6 +406,10 @@ void suds_t::set_options( param_t & param )
   use_soap_weights = param.has( "wgt-soap" ) ? Helper::yesno( param.value( "wgt-soap" ) ) : false ; 
   if ( use_soap_weights ) use_repred_weights = false;
   
+  // MAXPP-weights? 
+  use_maxpp_weights = param.has( "wgt-maxpp" ) ? Helper::yesno( param.value( "wgt-maxpp" ) ) : false ; 
+  if ( use_maxpp_weights ) use_repred_weights = false;
+  
   // turn off 3-then-5 classification
   pick3then5 = param.has( "pick-3-5" ) ? Helper::yesno( param.value( "pick-3-5" ) ) : true ;
     
@@ -488,11 +494,15 @@ void suds_t::set_options( param_t & param )
   //
   
   eannot_file = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
+
+  // unless 'eannot' specified, always add predicted stages to in-memory annots
+  mem_annot = ! param.has( "eannot" ) ;
   
   eannot_ints = param.has( "stage-numbers" );
   
-  eannot_prepend = param.has( "prefix" ) ? ( param.value( "prefix" ) + "_" ) : "" ;
+  eannot_prepend = param.has( "prefix" ) ? ( param.value( "prefix" ) + "_" ) : "s" ;
   
+  // sW, sN1, sN2, sN3, sR, s?
   
   // this only works in single-trainer mode
   // shows both predictions:    target | trainer
@@ -774,7 +784,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // soap weights
   Eigen::ArrayXd wgt_soap = Eigen::ArrayXd::Zero( bank_size ) ;
 
-  
+  // maxpp weights
+  Eigen::ArrayXd wgt_maxpp = Eigen::ArrayXd::Zero( bank_size ) ;
 
   //
   // Store Kappa3 for each trainer (valid w/ prior staging only)
@@ -800,6 +811,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   bool w0 = use_soap_weights;
   bool w1 = wbank.size() > 0 && use_repred_weights;
   bool w2 = use_kl_weights;
+  bool w3 = use_maxpp_weights;
   
   if ( w0 && w1 ) Helper::halt( "cannot use both SOAP-weights and repred-weights\n" );
   if      ( w1 && w2 ) logger << "  using mean of repred-weights & KL-weights\n";
@@ -807,6 +819,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   else if ( w1 ) logger << "  using repred-weights only\n";
   else if ( w2 ) logger << "  using KL-weights only\n";
   else if ( w0 ) logger << "  using SOAP-weights only\n";
+  else if ( w3 ) logger << "  using MAXPP-weights only\n";
   else logger << "  not applying any weights\n";
 
 
@@ -1163,12 +1176,12 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  wgt_n50[ cntr ] = n_kappa50;
 	}
 
-      // KLUDGE ... 
-      //  use "SOAP -- so UNDO below 0 && 
-      if ( use_soap_weights ) 
+      //
+      // Weights are baed on median (over epochs) of the max PP (over stages)
+      //  
+      if ( use_maxpp_weights ) 
 	{	  
-	  wgt_soap[ cntr ] = suds_t::mean_maxpp( prediction.pp ) ;
-	  std::cout << " setting max " << wgt_soap[ cntr ]  << "\n";
+	  wgt_maxpp[ cntr ] = suds_t::median_maxpp( prediction.pp ) ;	  
 	}
       
       
@@ -1179,8 +1192,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       //   just do SOAP procedure, as if these were the real values for the target
       //   (and using the target's own U, not the trainer-projected value)
 
-      // KLUDGE
-      if ( 0 && use_soap_weights )
+      if ( use_soap_weights )
 	{
 
 	  // from above, we already have the model fit:
@@ -1308,6 +1320,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
       bool w0 = use_soap_weights;
       bool w1 = wbank.size() > 0 && use_repred_weights;
       bool w2 = use_kl_weights;
+      bool w3 = use_maxpp_weights;
       
       if ( w1 && w2 )
 	wgt[ cntr ] = ( ( use_median_repred_weights ? wgt_median[ cntr ] : wgt_mean[ cntr ] ) +  wgt_kl[ cntr ] ) / 2.0 ; 
@@ -1319,6 +1332,8 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	wgt[ cntr ] = wgt_kl[ cntr ] ;
       else if ( w0 )
 	wgt[ cntr ] = wgt_soap[ cntr ];
+      else if ( w3 )
+	wgt[ cntr ] = wgt_maxpp[ cntr ];
       else
 	wgt[ cntr ] = 1 ; 
 
@@ -1376,11 +1391,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
   // Normalize wgt / truncate at percentile?
   //
 
-  bool has_wgt = ( wbank.size() > 0 && use_repred_weights ) || use_kl_weights || use_soap_weights ;
-
-  // KLUDGE
-  //has_wgt = true;
-  // KLUDGE
+  bool has_wgt = ( wbank.size() > 0 && use_repred_weights ) || use_kl_weights || use_soap_weights || use_maxpp_weights;
   
   if ( has_wgt && suds_t::wgt_mean_normalize ) 
     {
@@ -1874,8 +1885,46 @@ void suds_t::score( edf_t & edf , param_t & param ) {
     }
 
 
+  //
+  // Add stage predictions to in-memory annotation class
+  //
+  
+  if ( suds_t::mem_annot )
+    {
 
+      // epochs[] contains the codes of epochs actually present in the model/valid
+      std::map<int,int> e2e;
+      for (int i=0; i<target.epochs.size(); i++) e2e[target.epochs[i]] = i ;
+      const int ne_all = edf.timeline.num_epochs();
 
+      std::set<std::string> opreds;
+      
+      for (int i=0; i < ne_all; i++)
+	{
+	  int e = -1;
+	  if ( e2e.find( i ) != e2e.end() ) e = e2e[i];
+	  
+	  // epoch interval
+	  interval_t interval = edf.timeline.epoch( i );
+
+	  // no prediction?
+	  if ( e == -1 ) 
+	    {
+	      std::string predss = suds_t::str( SUDS_UNKNOWN );
+	      annot_t * a = edf.timeline.annotations.add( predss );
+	      instance_t * instance = a->add( "." , interval , "." );
+	    }
+	  else
+	    {
+	      // most likely value
+	      std::string predss = suds_t::eannot_prepend + suds_t::max_inrow( pp.row(e) , labels );
+	      annot_t * a = edf.timeline.annotations.add( predss );
+	      instance_t * instance = a->add( "." , interval , "." );
+	    }
+	}
+    }
+
+  
   //
   // Write .eannot file?
   //

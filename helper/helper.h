@@ -170,6 +170,7 @@ namespace Helper
 /*   std::string stringize( const std::vector<std::string> & ); */
 /*   std::string stringize( const std::set<std::string> & , const std::string & delim = "," ); */
 
+  std::string readfile( const std::string & file );
 
   void ascii7( std::string * s , char repl );
   void ascii7( std::vector<char> * s , char repl );

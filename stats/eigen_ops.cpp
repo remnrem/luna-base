@@ -25,7 +25,7 @@
 #include "stats/statistics.h"
 #include <vector>
 #include "miscmath/crandom.h"
-
+#include <fstream>
 
 // nb. using Eigen:::Ref<>
 // for a writable reference:    Eigen::Ref<Eigen::VectorXd> 
@@ -600,3 +600,40 @@ Eigen::VectorXd eigen_ops::canonical_correlation( const Eigen::MatrixXd & X , co
 
 }
 
+Eigen::MatrixXd eigen_ops::load_mat( const std::string & f )
+{
+
+  std::string filename = Helper::expand( f );
+  if ( ! Helper::fileExists( filename ) )
+    Helper::halt( "could not load " + filename );
+
+  std::vector<double> d;
+
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+  while ( ! IN1.eof() )
+    {
+      double d1;
+      IN1 >> d1;
+      if ( IN1.eof() || IN1.bad() ) break;
+      d.push_back( d1 );      
+    }  
+  IN1.close();
+  
+  // get cols from first row
+  std::ifstream IN2( filename.c_str() , std::ios::in );
+  std::string line;
+  Helper::safe_getline( IN2 , line );   
+  IN2.close();
+
+  const int ncols = Helper::parse( line , "\t" ).size();
+  const int nrows = d.size() / ncols;
+
+  Eigen::MatrixXd X = Eigen::MatrixXd::Zero( nrows , ncols );
+
+  int p = 0;
+  for (int i=0; i<nrows; i++)
+    for (int j=0; j<ncols; j++)
+      X(i,j) = d[p++];
+
+  return X;
+}

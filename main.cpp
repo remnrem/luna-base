@@ -2339,6 +2339,53 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
     }
 
+
+  //
+  // LightGBM
+  //
+
+  if ( p == "lgbm" )
+    {
+#ifdef HAS_LGBM
+      
+      lgbm_t lgbm;
+      std::cout << "step 1\n";
+      lgbm.load_training_data( "binary.train" );
+      lgbm.load_validation_data( "binary.test" );
+      std::cout << "step 2\n";
+      lgbm.create_booster();
+      
+      std::cout << " all done\n";
+      lgbm.save_model( "my-model.1" );
+      
+      
+#endif
+      std::exit(0);
+    }
+
+
+
+  if ( p == "lgbm2" )
+    {
+#ifdef HAS_LGBM
+
+      Eigen::MatrixXd X = eigen_ops::load_mat( "binary.test" );
+      
+      lgbm_t lgbm;
+
+      lgbm.load_model_file( "my-model.1" );
+      //lgbm.load_model_file( "/Users/smp37/dropbox/projects/lightgbm/LightGBM/examples/binary_classification/LightGBM_model.txt" );
+
+      lgbm.predict( X );
+      
+#endif
+      std::exit(0);
+    }
+
+
+
+  
+
   //
   // TRANS
   //

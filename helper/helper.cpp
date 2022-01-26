@@ -1654,3 +1654,28 @@ void Helper::repath_SL( const std::vector<std::string> & tok )
 
   return;
 }
+
+std::string Helper::readfile( const std::string & f )
+{
+  std::string s;
+
+  std::string filename = Helper::expand( f );
+
+  if ( ! Helper::fileExists( filename ) ) return s;
+
+  std::ifstream IN1( f.c_str() , std::ios::in );
+
+  while ( 1 )
+    {
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.bad() || IN1.eof() ) break;
+      if ( line == "" ) continue;
+
+      s += line + "\n";
+    }
+  IN1.close();
+  
+  return s;
+  
+}

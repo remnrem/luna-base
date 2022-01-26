@@ -612,6 +612,8 @@ struct suds_t {
     
   static bool use_soap_weights;
 
+  static bool use_maxpp_weights;
+
   static double wgt_percentile;
   
   static int wgt_exp;
@@ -666,7 +668,8 @@ struct suds_t {
   static std::string eannot_file;
   static bool        eannot_ints;
   static std::string eannot_prepend;
-
+  static bool        mem_annot;
+  
   static std::string mat_dump_file;
 
   static bool use_bands;  // no PSC, bands instead 

@@ -352,6 +352,18 @@ void globals::init_defs()
   sleep_stage_labels[ "L" ]     = LIGHTS_ON;
 
   //
+  // SUDS predictions
+  //
+  
+  sleep_stage_labels[ "sW" ]  = WAKE;
+  sleep_stage_labels[ "sN1" ] = NREM1;
+  sleep_stage_labels[ "sN2" ] = NREM2;
+  sleep_stage_labels[ "sN3" ] = NREM3;
+  sleep_stage_labels[ "sR" ]  = REM;
+  sleep_stage_labels[ "s?" ]  = UNKNOWN;
+  
+
+  //
   // Common/NSRR labels
   //
 

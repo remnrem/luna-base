@@ -3982,3 +3982,15 @@ double annotation_set_t::first(const std::vector<std::string> & requested ) cons
   
 }
 
+
+void annotation_set_t::extend( param_t & param )
+{
+  // for a set of annotations, if 0-duration, extend it until the
+  // next set instance: e.g. for staging
+
+  if ( ! param.has( "annots" ) )
+    Helper::halt( "requires annots argument" ) ;
+  std::set<std::string> a = param.strset( "annots" );
+
+  
+}

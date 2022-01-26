@@ -8,7 +8,7 @@ ARCH=LINUX
 endif
 
 ##
-## If dependencies (FFTW, if needed, and optionally, libhpdf and libpng) are installed locally, 
+## If dependencies (FFTW, LGBM) are installed locally, 
 ## the DEP variable will be set on the command line
 ##
 
@@ -28,13 +28,17 @@ DEP_LIB	+= -Wl,-rpath,$(FFTW)/lib
 endif
 endif
 
+ifdef LGBM_PATH
+DEP_INCLUDES += -I$(LGBM_PATH)/include
+DEP_LIB = -L$(LGBM_PATH)/lib
+endif
+
 
 ##
 ## Compiler flags
 ##
 
 CXX = g++
-
 CC = gcc
 
 CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I..
@@ -50,8 +54,11 @@ ifeq ($(ARCH),WINDOWS)
 CXXFLAGS += -DWINDOWS
 endif
 
+ifeq ($(LGBM),1)
+CXXFLAGS += -DHAS_LGBM
+endif
+
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
-#CFLAGS = -O0 -g -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
 
 ##
@@ -69,6 +76,11 @@ LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3 -lz -static 
 else
 LDFLAGS += -L/usr/local/lib -lfftw3 -lz
 endif
+
+ifeq ($(LGBM),1)
+LDFLAGS += -l_lightgbm
+endif
+
 
 ##
 ## Static binary: 'make static STATIC=1', otherwise set PIC code
