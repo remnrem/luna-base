@@ -98,6 +98,8 @@
 
 #include "suds/suds.h"
 
+#include "pops/pops.h"
+
 #include "clocs/topo.h"
 
 #include "clocs/clocs.h"

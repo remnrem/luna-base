@@ -283,6 +283,8 @@ void proc_resoap( edf_t & , param_t & );
 void proc_rebase_soap( edf_t & , param_t & );
 void proc_place_soap( edf_t & , param_t & );
 
+void proc_pops( edf_t & , param_t & );
+
 void proc_copy_suds_cmdline();
 void proc_combine_suds_cmdline();
 

@@ -600,40 +600,102 @@ Eigen::VectorXd eigen_ops::canonical_correlation( const Eigen::MatrixXd & X , co
 
 }
 
-Eigen::MatrixXd eigen_ops::load_mat( const std::string & f )
+// optional: <header> row
+// <ID> <label> <matrix>
+Eigen::MatrixXd eigen_ops::load_mat( const std::string & f ,				     
+				     std::vector<std::string> * header ,
+				     std::vector<std::string> * ids , 
+				     std::vector<std::string> * labels )
 {
 
   std::string filename = Helper::expand( f );
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not load " + filename );
 
-  std::vector<double> d;
-
   std::ifstream IN1( filename.c_str() , std::ios::in );
+
+  int ncols = 0;
+
+  int skip = 0;
+  if ( ids ) ++skip;
+  if ( labels ) ++skip;
+
+  // header row?
+  if ( header )
+    {
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      std::vector<std::string> tok = Helper::parse( line , "\t " );
+      ncols = tok.size() - skip;      
+      header->resize( ncols );
+      int p = 0;
+      for (int i=skip; i<tok.size(); i++)
+	(*header)[p++] = tok[i];
+    }
+  
+  //
+  // data
+  //
+
+  if ( ids ) ids->clear();
+  if ( labels ) labels->clear();
+  
+  std::vector<double> d;
+  int nrows = 0;
+  
   while ( ! IN1.eof() )
     {
-      double d1;
-      IN1 >> d1;
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( line == "" ) continue;
       if ( IN1.eof() || IN1.bad() ) break;
-      d.push_back( d1 );      
-    }  
-  IN1.close();
+      
+      std::vector<std::string> tok = Helper::parse( line , "\t " );
+      
+      // check size
+      if ( ncols != 0 )
+	{
+	  if ( tok.size() != ncols + skip )
+	    Helper::halt( "bad number of columns:\n" + line );
+	}
+      else
+	{
+	  ncols = tok.size() - skip; 
+	}
+
+      int p = 0;
+      
+      if ( ids ) ids->push_back( tok[p++] );
+      if ( labels ) labels->push_back( tok[p++] );
+      for (int i=0;i<ncols;i++)
+	{
+	  double x;
+	  if ( ! Helper::str2dbl( tok[p++] , &x ) )
+	    Helper::halt( "problem converting to a numeric: " + tok[p-1] );
+	  d.push_back( x );
+	}
+
+      // next row
+      ++nrows;
+    }
+
+  if ( d.size() != nrows * ncols )
+    Helper::halt( "internal error in load_mat()" );
   
-  // get cols from first row
-  std::ifstream IN2( filename.c_str() , std::ios::in );
-  std::string line;
-  Helper::safe_getline( IN2 , line );   
-  IN2.close();
-
-  const int ncols = Helper::parse( line , "\t" ).size();
-  const int nrows = d.size() / ncols;
-
+  // create and return Eigen matrix
   Eigen::MatrixXd X = Eigen::MatrixXd::Zero( nrows , ncols );
-
   int p = 0;
   for (int i=0; i<nrows; i++)
     for (int j=0; j<ncols; j++)
       X(i,j) = d[p++];
-
+  
   return X;
 }
+
+
+bool eigen_ops::p95_logmod( Eigen::Ref<Eigen::MatrixXd> m )
+{
+  // x = sign(x) . log( abs(x) / p_95(x) + 1 )  
+  return true;
+}
+

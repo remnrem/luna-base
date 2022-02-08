@@ -936,6 +936,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RESOAP" ) ) proc_resoap( edf , param(c) );
       else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
       else if ( is( c, "PLACE" ) )       proc_place_soap( edf , param(c) ); // e.g. find where should go
+
+      else if ( is( c, "POPS" ) )        proc_pops( edf , param(c) );
       
       else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
@@ -1318,7 +1320,29 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 }
 
 
-// SUDS : stageing
+// POPS : population-level staging
+void proc_pops( edf_t & edf , param_t & param )
+{
+  pops_t pops;  
+
+  //
+  // set up features to calculate ('.' = internal defaults)
+  //
+  
+  const std::string ftr_file = param.has( "features" ) ? param.value( "features" ) : "." ; 
+  
+  pops_t::specs.read( ftr_file );
+
+  //
+  // process individual (either trainer, or target)
+  //
+  
+  pops_indiv_t indiv( edf , param );
+    
+}
+
+
+// SUDS : staging
 
 void proc_suds( edf_t & edf , param_t & param )
 {

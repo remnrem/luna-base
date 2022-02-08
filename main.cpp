@@ -305,8 +305,9 @@ int main(int argc , char ** argv )
   bool cmdline_proc_copy_suds    = false;
   bool cmdline_proc_combine_suds = false;
   bool cmdline_proc_cperm_test   = false;
-
-
+  bool cmdline_proc_lgbm         = false;
+  bool cmdline_proc_pops         = false;
+    
   //
   // parse command line
   //
@@ -350,6 +351,10 @@ int main(int argc , char ** argv )
 	    cmdline_proc_copy_suds = true;
 	  else if ( strcmp( argv[1] , "--combine-suds" ) == 0 ) 
 	    cmdline_proc_combine_suds = true;
+	  else if ( strcmp( argv[1] , "--lgbm" ) == 0 )
+	    cmdline_proc_lgbm = true;
+	  else if ( strcmp( argv[1] , "--pops" ) == 0 )
+	    cmdline_proc_pops = true;
 	}
       
       // otherwise, first element will be treated as a file list
@@ -637,6 +642,53 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+
+  //
+  // POPS
+  //
+  
+  if ( cmdline_proc_pops )
+    {
+#ifdef HAS_LGBM
+      param_t param;
+      build_param_from_cmdline( &param );      
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "POPS" , 1 , "" );
+      writer.level( "POPS", "_POPS" );
+      pops_t pops;
+      pops.make_level2_library( param );      
+      writer.unlevel( "_POPS" );
+      writer.commit();
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+      std::exit(0);
+    }
+
+  
+  //
+  // LGBM wrapper
+  //
+
+  if ( cmdline_proc_lgbm )
+    {
+#ifdef HAS_LGBM
+      param_t param;
+      build_param_from_cmdline( &param );      
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "LGBM" , 1 , "" );
+      writer.level( "LGBM", "_LGBM" );
+      lgbm_cli_wrapper( param );      
+      writer.unlevel( "_LGBM" );
+      writer.commit();
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+      std::exit(0);
+    }
+  
   
   //
   // Cluster permitation test (CPT)
@@ -2350,16 +2402,31 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     {
 #ifdef HAS_LGBM
       
-      lgbm_t lgbm;
-      std::cout << "step 1\n";
+      lgbm_t lgbm( "train.conf" ) ;
+      
       lgbm.load_training_data( "binary.train" );
+
+      const int n1 = lgbm_t::rows( lgbm.training );
+      const int n2 = lgbm_t::cols( lgbm.training );
+
+      lgbm_label_t labels( "luna.wgt" );
+      std::cout << " from luna.wgt " << labels.n << "\n";
+
+      lgbm.apply_label_weights( lgbm.training , labels );
+      
+      //lgbm.load_weights( lgbm.training , "RENAMED_binary.train.weight" );
+
+      std::vector<int> l = lgbm_t::labels( lgbm.training );
+      std::vector<double> w = lgbm_t::weights( lgbm.training );
+      
+      std::cout << " l = " << l.size() << " ... \n";
+      for (int i=0; i<30; i++) std::cout << l[i] << "\t" << w[i] << "\n";
+                 
       lgbm.load_validation_data( "binary.test" );
-      std::cout << "step 2\n";
+      
       lgbm.create_booster();
       
-      std::cout << " all done\n";
-      lgbm.save_model( "my-model.1" );
-      
+      lgbm.save_model( "my-model.1" );      
       
 #endif
       std::exit(0);
@@ -2372,11 +2439,15 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 #ifdef HAS_LGBM
 
       Eigen::MatrixXd X = eigen_ops::load_mat( "binary.test" );
-      
+
+      // remove first col
+      X = X.rightCols( X.cols() - 1 );
+
       lgbm_t lgbm;
 
-      lgbm.load_model_file( "my-model.1" );
-      //lgbm.load_model_file( "/Users/smp37/dropbox/projects/lightgbm/LightGBM/examples/binary_classification/LightGBM_model.txt" );
+      lgbm.load_model( "my-model.1" );
+      //lgbm.load_model( "LightGBM_model.txt" );
+      //lgbm.load_model( "R.bst" );
 
       lgbm.predict( X );
       

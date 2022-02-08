@@ -34,7 +34,9 @@ namespace eigen_ops {
   bool scale( Eigen::Ref<Eigen::MatrixXd> m , const bool,  const bool , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );  
 
   bool robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool , bool , double , bool second_rescale = true , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );    
-
+  
+  bool p95_logmod( Eigen::Ref<Eigen::MatrixXd> m );
+  
   double sdev( const Eigen::VectorXd & x );
 
   double between_within_group_variance( const std::vector<std::string> & grp , const Eigen::VectorXd & x );
@@ -60,7 +62,10 @@ namespace eigen_ops {
 
   Eigen::VectorXd canonical_correlation( const Eigen::MatrixXd & X , const Eigen::MatrixXd & Y );
 
-  Eigen::MatrixXd load_mat( const std::string & file );
+  Eigen::MatrixXd load_mat( const std::string & file ,
+			    std::vector<std::string> * header = NULL ,
+			    std::vector<std::string> * ids = NULL ,
+			    std::vector<std::string> * labels = NULL );
   
 }
 

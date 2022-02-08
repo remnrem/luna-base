@@ -29,8 +29,8 @@ endif
 endif
 
 ifdef LGBM_PATH
-DEP_INCLUDES += -I$(LGBM_PATH)/include
-DEP_LIB = -L$(LGBM_PATH)/lib
+DEP_INCLUDES +=-I$(LGBM_PATH)/include
+DEP_LIB =-L$(LGBM_PATH)/lib
 endif
 
 
@@ -47,18 +47,18 @@ CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I..
 CXXFLAGS +=$(DEP_INCLUDES)
 
 ifeq ($(ARCH),MAC)
-CXXFLAGS += -I/usr/local/include
+CXXFLAGS+=-I/usr/local/include
 endif
 
 ifeq ($(ARCH),WINDOWS)
-CXXFLAGS += -DWINDOWS
+CXXFLAGS+=-DWINDOWS
 endif
 
 ifeq ($(LGBM),1)
-CXXFLAGS += -DHAS_LGBM
+CXXFLAGS+=-DHAS_LGBM
 endif
 
-CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
+CFLAGS=-O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
 
 ##
