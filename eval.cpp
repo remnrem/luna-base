@@ -1323,6 +1323,9 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 // POPS : population-level staging
 void proc_pops( edf_t & edf , param_t & param )
 {
+
+#ifdef HAS_LGBM
+
   pops_t pops;  
 
   //
@@ -1338,6 +1341,10 @@ void proc_pops( edf_t & edf , param_t & param )
   //
   
   pops_indiv_t indiv( edf , param );
+
+#else
+  Helper::halt( "no LGBM support compiled in" );
+#endif
     
 }
 

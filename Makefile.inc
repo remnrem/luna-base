@@ -30,7 +30,7 @@ endif
 
 ifdef LGBM_PATH
 DEP_INCLUDES +=-I$(LGBM_PATH)/include
-DEP_LIB =-L$(LGBM_PATH)/lib
+DEP_LIB =-L$(LGBM_PATH)
 endif
 
 
@@ -78,8 +78,9 @@ LDFLAGS += -L/usr/local/lib -lfftw3 -lz
 endif
 
 ifeq ($(LGBM),1)
-LDFLAGS += -l_lightgbm
+LDFLAGS += -Wl,-rpath=${LGBM_PATH} -l_lightgbm
 endif
+
 
 
 ##

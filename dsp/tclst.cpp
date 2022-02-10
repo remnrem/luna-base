@@ -174,8 +174,8 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       ++cnt;
     }
   
-  // for (int w=0; w<points; w++)
-  //   std::cout << " win = " << t[w] << "\n";
+  for (int w=0; w<points; w++)
+    std::cout << " win = " << t[w] << "\n";
   
   //
   // Get seed sample-points from cache
@@ -502,13 +502,14 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       // initiate distance calculation and clustering for this set of intervals
       //
 
-      
+      std::cout << " anout to cluster \n";
       tclst_t tc( use_complex_dist || use_amp ? &X : NULL ,
 		  use_complex_dist || use_phase ? &P : NULL ,
 		  chs , t , k1 , k2 ,
 		  hcK,
 		  use_complex_dist );
      
+      std::cout << " anout to cluster DONE \n";
       //
       // output overall feature means
       //
@@ -779,6 +780,7 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 	  }
     }
   
+  std::cout << " S1\n";
 
   //
   // hierarchical clustering on D
@@ -896,12 +898,13 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
     {
       for (int k=k1; k<=k2; k++)
 	{
+	  std::cout << "K = " << k << "\n";
 	  kmeans_t km;      
 	  std::vector<int> ksol1;      
 	  Data::Matrix<double> m = km.kmeans( XPa , k , &ksol1 );
 	  
 	  varexp[ k ] = km.between / ( km.within + km.between );	  
-	  //	  logger << "  fit k-means, K = " << k << ", " << varexp[ k ] << " variance explained\n";
+	  logger << "  fit k-means, K = " << k << ", " << varexp[ k ] << " variance explained\n";
 	  
 	  // save assignments
 	  ksol[ k ] = ksol1;
@@ -913,6 +916,6 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
       
     }
        
-  
+  std::cout << " done..\n";
 }
 

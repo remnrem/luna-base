@@ -347,10 +347,11 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
 
 
       //
-      // trim leading/trailing wake epochs? (only for SUDS)
+      // trim leading/trailing wake epochs? (only for SUDS?)
       //
       
-      if ( suds_t::soap_mode == 0 && suds_t::trim_wake_epochs >= 0 ) 
+      //if ( suds_t::soap_mode == 0 && suds_t::trim_wake_epochs >= 0 ) 
+      if ( suds_t::trim_wake_epochs >= 0 ) 
 	{
 	  int first_sleep = -1;
 	  for (int ss=0; ss < helper->ne; ss++)

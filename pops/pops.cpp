@@ -72,7 +72,7 @@ pops_specs_t pops_t::specs;
 //
 // create a level 2 feature library and save
 // i.e. for trainer and/or validation library
-//
+// 
 
 void pops_t::make_level2_library( param_t & param )
 {
@@ -126,9 +126,9 @@ void pops_t::make_level2_library( param_t & param )
 // derive level 2 stats (from pops_t::specs)
 //
 
-void pops_t::level2()
+void pops_t::level2( const bool training )
 {
-
+  
   // go through all level2 blocks in order
   
   for (int s=0; s<pops_t::specs.specs.size(); s++)
@@ -250,7 +250,7 @@ void pops_t::level2()
         }
       
       //
-      // SVD
+      // SVD  - done differently for trainers versus targets
       //
       
       if ( spec.ftr == POPS_SVD )
@@ -267,39 +267,89 @@ void pops_t::level2()
 	  for (int i=0; i<ni; i++)
 	    eigen_ops::scale( D.middleRows( Istart[i] , Iend[i] - Istart[i] + 1 ) , true , false );
 	  
-	  // SVD
-	  Eigen::BDCSVD<Eigen::MatrixXd> svd( D , Eigen::ComputeThinU | Eigen::ComputeThinV );
-	  Eigen::MatrixXd U = svd.matrixU();
-	  Eigen::MatrixXd V = svd.matrixV();
-	  Eigen::VectorXd W = svd.singularValues();
+	  // trainer SVD
+	  if ( training )
+	    {
+	      Eigen::BDCSVD<Eigen::MatrixXd> svd( D , Eigen::ComputeThinU | Eigen::ComputeThinV );
+	      Eigen::MatrixXd U = svd.matrixU();
+	      Eigen::MatrixXd V = svd.matrixV();
+	      Eigen::VectorXd W = svd.singularValues();
+	      
+	      // copy U back to X1
+	      for (int j=0; j<nto; j++) X1.col( to_cols[j] ) = U.col(j);
+	      
+	      // save W and V to a file (i.e. for use later in prediction models, to project
+	      // test cases into this space)
+	      std::ofstream OUT1( Helper::expand( wvfile ).c_str() , std::ios::out );
+	      OUT1 << V.rows() << " " << nc << "\n";
+	      for (int i=0;i<V.rows(); i++)
+		for (int j=0;j<nc; j++)
+		  OUT1 << " " << V(i,j) ;
+	      OUT1 << "\n";
+	      for (int j=0;j<nc; j++)
+		OUT1 << " " << W[j] ;
+	      OUT1 << "\n";
+	      OUT1.close();
+	      
+	    }
+	  else
+	    {
+	      // projection of target 
+	      
+	      if ( V.rows() == 0 )  // do once
+		{
+		  std::cout << " in 1\n";
+		  std::ifstream IN1( Helper::expand( wvfile ).c_str() , std::ios::in );
+		  int nrow, ncol;
+		  IN1 >> nrow >> ncol;
+		  V.resize( nrow , ncol );
+		  W = Eigen::MatrixXd::Zero( ncol , ncol );
+		  if ( ncol != nc ) Helper::halt( "internal mismatch in SVD nc" );
 
-	  // copy U back to X1
-          for (int j=0; j<nto; j++) X1.col( to_cols[j] ) = U.col(j);
-	  
-	  // save W and V to a file (i.e. for use later in prediction models, to project
-	  // test cases into this space)
-	  std::ofstream OUT1( Helper::expand( wvfile ).c_str() , std::ios::out );
-	  OUT1 << V.rows() << " " << nc << "\n";
-	  for (int i=0;i<V.rows(); i++)
-	    for (int j=0;j<nc; j++)
-	      OUT1 << " " << V(i,j) ;
-	  OUT1 << "\n";
-	  for (int j=0;j<nc; j++)
-	    OUT1 << " " << W[j] ;
-	  OUT1 << "\n";
-	  OUT1.close();
-	  
+		  for (int i=0;i<nrow; i++)
+		    for (int j=0;j<ncol; j++)
+		      IN1 >> V(i,j) ;
+		  for (int j=0;j<ncol; j++)
+		    {
+		      IN1 >> W(j,j) ;
+		      W(j,j) = 1.0 / W(j,j); // nb. take 1/W here
+		    }
+		  IN1.close();
+		}	    
+	      
+	      std::cout << "  finds = " << V.rows() << " " << V.cols() << " " << W.size() << "\n";
+	      std::cout << " D = " << D.rows() << " " << D.cols() << "\n";
+
+
+	      //
+	      // project 
+	      //
+	      
+	      Eigen::MatrixXd U_proj = D * V * W;
+	      std::cout << " U " << U_proj.rows() << " " << U_proj.cols() << "\n";
+	      std::cout << " X1 " << X1.rows() << " " << X1.cols() << "\n";
+
+	      // copy back
+	      for (int j=0; j<nto; j++) 
+		{
+		  std::cout << " j = " << j << " " << to_cols[j] << "\n";
+		  X1.col( to_cols[j] ) = U_proj.col(j);
+		}
+	      std::cout << " done\n";
+
+	    }
 	}
-      
+    
     }
-
+  
+  
   //
   // Select FINAL feature set  (pops_t::specs.nf)
   //
-
+  
   if ( pops_t::specs.nf != pops_t::specs.final2orig.size() )
     Helper::halt( "internal error (1) in level2()" );
-       
+  
   std::map<int,int>::const_iterator ff = pops_t::specs.final2orig.begin();
   while ( ff != pops_t::specs.final2orig.end() )
     {
@@ -315,7 +365,7 @@ void pops_t::level2()
   // Dump final feature matrix
   //
 
-  if ( 1 )
+  if ( 0 )
     {
       std::ofstream OUT2( "X1.mat" , std::ios::out );
       OUT2 << X1 << "\n";
@@ -401,5 +451,21 @@ void pops_t::outliers( const Eigen::VectorXd & x ,
     }
     
 }
+
+
+void pops_t::from_single_target( const pops_indiv_t & indiv )
+{
+  X1 = indiv.X1;
+  S = indiv.S;
+  E = indiv.E;  
+  Istart.resize( 1 , 0 );
+  Iend.resize( 1 , S.size() - 1 );
+}
+
+void pops_t::copy_back( pops_indiv_t * indiv )
+{
+  indiv->X1 = X1;
+}
+
 
 #endif

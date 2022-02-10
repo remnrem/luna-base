@@ -36,6 +36,8 @@ struct edf_t;
 #include "pops/spec.h"
 #include "pops/indiv.h"
 
+struct pops_indiv_t;
+
 enum pops_stage_t
   {
     POPS_WAKE = 0 ,
@@ -51,10 +53,9 @@ enum pops_stage_t
 struct pops_t {
   
   // two main entry points
-
+  
   // 1) when predicting, we need to load the LGBM model
   void load_model( param_t & );
-
   
   // 2) main wrapper:: create a level 2 feature library and save
   // i.e. for trainer and/or validation library
@@ -64,13 +65,15 @@ struct pops_t {
   void load1( const std::string & f );
 
   // derive level 2 stats (from pops_t::specs)
-  void level2();
+  // this is also co-opted by prediction mode 
+  void level2( const bool training = true );
 
   // fit and save a LGBM model (--> pops_t::lgbm)
   void fit_model( const std::string & f );
 
-    
-
+  // for using level2() in the context of prediction
+  void from_single_target( const pops_indiv_t & );
+  void copy_back( pops_indiv_t * );  
   
   static pops_opt_t opt;
   
@@ -83,8 +86,8 @@ struct pops_t {
   //
 
   Eigen::MatrixXd X1;
-  Eigen::MatrixXd X2;
-  Eigen::MatrixXd X;
+  Eigen::MatrixXd V; // when reading in level2 SVD scoring
+  Eigen::MatrixXd W;
   std::vector<int> S;
   std::vector<int> E;
   std::vector<int> Istart, Iend;

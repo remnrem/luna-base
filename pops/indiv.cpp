@@ -50,10 +50,9 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    param_t & param )
 {
 
-  const bool training1 = param.has( "train" );
-  const bool testing   = param.has( "test" );
+  const bool training_mode = param.has( "train" );
 
-  trainer = training1;
+  trainer = training_mode;
   
   // training (1) : make level-1 stats, stages, save (binary features, BFTR)
   
@@ -73,16 +72,17 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   staging( edf , param );
   
   // derive level-1 statistics (both training and prediction)
-  if ( training1 )
+  if ( training_mode )
     {
       level1( edf );
       save1( edf.id , param.requires( "data" ) );      
     }
   
-  if ( testing )
+  if ( ! training_mode )
     {
       level1( edf );
       level2();
+      pops_t::lgbm.load_model( param.requires( "model" ) );
       predict();
       summarize();
     }
@@ -750,30 +750,38 @@ void pops_indiv_t::level1( edf_t & edf )
 
 void pops_indiv_t::level2()
 {
-  // X1 -> X2
-  X2.resize( ne , pops_t::specs.na );
+
+  // co-opt pops_t::level2() to do this (i.e. same
+  // code as used for trainers.   the only difference is 
+  // that the SVD W/V will be read from the file, and a 
+  // project done
+  
+  // need to set up duplicates in pops_t and hen copy back
+  // bit of a kludge, but this is better than using
+  // a duplicated copy of core level 2 features (i.e. if
+  // we add stuff
+
+  // expand X1 to include space for level-2 features                                                                                                                                          
+  X1.conservativeResize( Eigen::NoChange , pops_t::specs.na );
+
+  pops_t pops;
+  pops.from_single_target( *this );
+  pops.level2( false ); // false --> not training sample
+  pops.copy_back( this );
+
+
 }
 
 
 void pops_indiv_t::predict()
 {
-  // X1 + X2 (selected) --> X  
-  X.resize( ne , pops_t::specs.nf );
-
-  //pops_t::lgbm.load_config( "test.conf" );
-
-  pops_t::lgbm.load_model( "m1" );
-
   P = pops_t::lgbm.predict( X1 );
-
-  std::cout << " PP\n" << P << "\n";
 }
 
 
 void pops_indiv_t::summarize()
 {
-  std::cout << P << "\n";
-  
+  std::cout << P << "\n";  
 }
 
 #endif

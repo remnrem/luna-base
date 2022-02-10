@@ -57,12 +57,6 @@ struct pops_indiv_t {
   // level 1 features
   Eigen::MatrixXd X1;
   
-  // level 2 features
-  Eigen::MatrixXd X2;
-
-  // final feature set (used on LGBM)
-  Eigen::MatrixXd X;
-
   // staging
   std::vector<int> S;
 
