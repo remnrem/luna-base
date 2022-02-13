@@ -37,6 +37,8 @@ struct pops_opt_t {
     verbose = true;
 
     spectral_resolution = 0.25;
+    
+    epoch_len = 30;
 
     n_stages = 5;
 
@@ -55,6 +57,8 @@ struct pops_opt_t {
   static bool verbose;
 
   static double spectral_resolution;
+
+  static double epoch_len;
 
   static int n_stages;
 

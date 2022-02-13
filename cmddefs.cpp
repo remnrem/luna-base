@@ -56,24 +56,24 @@ void cmddefs_t::init()
   // Domains
   //
 
-  add_domain( "summ"     , "Summaries"       , "Basic summary commands" );
-  add_domain( "annot"    , "Annotations"     , "Adding and displaying annotations" );
-  add_domain( "expr"     , "Expressions"     , "Evaluating more advanced annotation-based expressions" );
-  add_domain( "epoch"    , "Epochs"          , "Epoching signals and epoch-level annotations" );
-  add_domain( "mask"     , "Masks"           , "Masking epochs based on annotations and other criteria" );
-  add_domain( "manip"    , "Manipulations"   , "Manipulating signal data" );
-  add_domain( "output"   , "Outputs"         , "Commands to output signals in different formats" );
-  add_domain( "filter"   , "FIR filters"     , "FIR filter design and application" );
-  add_domain( "artifact" , "Artifacts"       , "Artifacts detection/correction routines" );
-  add_domain( "hypno"    , "Hypnograms"      , "Characterizations of hypnograms" );
-  add_domain( "suds"     , "SUDS"            , "Automated staging/stage evaluation" );
-  add_domain( "power"    , "Power spectra"   , "Power spectral density estimation" );
+  add_domain( "summ"       , "Summaries"       , "Basic summary commands" );
+  add_domain( "annot"      , "Annotations"     , "Adding and displaying annotations" );
+  add_domain( "expr"       , "Expressions"     , "Evaluating more advanced annotation-based expressions" );
+  add_domain( "epoch"      , "Epochs"          , "Epoching signals and epoch-level annotations" );
+  add_domain( "mask"       , "Masks"           , "Masking epochs based on annotations and other criteria" );
+  add_domain( "manip"      , "Manipulations"   , "Manipulating signal data" );
+  add_domain( "output"     , "Outputs"         , "Commands to output signals in different formats" );
+  add_domain( "filter"     , "FIR filters"     , "FIR filter design and application" );
+  add_domain( "artifact"   , "Artifacts"       , "Artifacts detection/correction routines" );
+  add_domain( "hypno"      , "Hypnograms"      , "Characterizations of hypnograms" );
+  add_domain( "staging"    , "Staging"         , "Automated staging/stage evaluation" );
+  add_domain( "power"      , "Power spectra"   , "Power spectral density estimation" );
   add_domain( "transients" , "Spindles and SO" , "Spindles and slow oscillations" );
-  add_domain( "topo"     , "Cross-signal"    , "Coherence and other topographical analyses" );
-  add_domain( "cfc"      , "Cross-frequency" , "Phase-amplitude coupling" );
-  add_domain( "misc"     , "Misc"            , "Misc. commands" );
-  add_domain( "exp"      , "Experimental"    , "Experimental features: under heavy development, for internal use only" );
-  add_domain( "cmdline"  , "Command-line"    , "Functions that do not operate on EDFs" );  
+  add_domain( "topo"       , "Cross-signal"    , "Coherence and other topographical analyses" );
+  add_domain( "cfc"        , "Cross-frequency" , "Phase-amplitude coupling" );
+  add_domain( "misc"       , "Misc"            , "Misc. commands" );
+  add_domain( "exp"        , "Experimental"    , "Experimental features: under heavy development, for internal use only" );
+  add_domain( "cmdline"    , "Command-line"    , "Functions that do not operate on EDFs" );  
    
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -1041,7 +1041,7 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
-  add_cmd( "suds"   , "SOAP" , "Single Observation Accuracies and Probabilities" );
+  add_cmd( "staging"   , "SOAP" , "Single Observation Accuracies and Probabilities" );
   add_url( "SOAP" , "suds/#soap" );
 
   add_param( "SOAP" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
@@ -1096,7 +1096,7 @@ void cmddefs_t::init()
   // SUDS
   //
 
-  add_cmd( "suds"   , "SUDS" , "Staging Using the Dynamics of Sleep" );
+  add_cmd( "staging"   , "SUDS" , "Staging Using the Dynamics of Sleep" );
   add_url( "SUDS" , "suds/#suds" );
 
   add_param( "SUDS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
@@ -1104,7 +1104,7 @@ void cmddefs_t::init()
   add_param( "SUDS" , "lambda" , "2" , "Regularization factor" );
   add_param( "SUDS" , "th" , "5,3" , "Statistical outlier removal" );
   add_param( "SUDS" , "robust" , "0.1" , "Robust standardization" );
-  add_param( "SUDS" , "Wgt-exp" , "4" , "Expoential weighting" );
+  add_param( "SUDS" , "wgt-exp" , "4" , "Expoential weighting" );
 
   add_table( "SUDS" , "" , "SUDS metrics" );
   add_var( "SUDS", "" , "ACC" , "Accuracy" );
@@ -1172,6 +1172,59 @@ void cmddefs_t::init()
   add_var( "SUDS" , "NSS,PRED,OBS" , "P" , "Proportion" );
 
 
+  //
+  // POPS
+  //
+
+  add_cmd( "staging"   , "POPS" , "Population-based staging" );
+  add_url( "POPS" , "staging/#pops" );
+
+  add_param( "POPS" , "train" , "" , "Build POPS training datasets" );
+  add_param( "POPS" , "features" , "m1.ftr" , "Feature specification file" );
+  add_param( "POPS" , "data" , "pops/lib/^" , "Filename for bimary training files" );
+  add_param( "POPS" , "model" , "m1.model" , "LGBM model file to write to/read from" );
+  add_param( "POPS" , "config" , "m1.config" , "LGBM configuration file" );
+
+  add_table( "POPS" , "" , "POPS metrics" );
+  add_var( "POPS", "" , "ACC" , "Accuracy" );
+  add_var( "POPS", "" , "ACC3" , "Accuracy for 3-class model" );
+  add_var( "POPS", "" , "K" , "Kappa statistic" );
+  add_var( "POPS", "" , "K3" , "Kappa for 3-class model" );
+  add_var( "POPS", "" , "F1" , "F1 statistic" );
+  add_var( "POPS", "" , "F13" , "F1 for 3-class model" );
+  add_var( "POPS", "" , "F1_WGT" , "F1 weighted" );
+  add_var( "POPS", "" , "MAXPP" , "Mean maximum posterior" );
+  add_var( "POPS", "" , "MCC" , "Matthews correlation coefficient" );
+  add_var( "POPS", "" , "MCC3" , "Matthews correlation coefficient, 3-class" );
+  add_var( "POPS", "" , "PREC" , "Precision" );
+  add_var( "POPS", "" , "PREC_WGT" , "Precision, weighted" );
+  add_var( "POPS", "" , "PREC3" , "Precision, 3-class" );
+  add_var( "POPS", "" , "RECALL" , "Recall" );
+  add_var( "POPS", "" , "RECALL3" , "Recall, 3-class" );
+  add_var( "POPS", "" , "RECALL_WGT" , "Recall,weighted" );
+
+  add_table( "POPS" , "E" , "POPS predictions" );
+  add_var( "POPS" , "E" , "FLAG" , "-1/0/1/2 excluded/match/disc5/disc3" );
+  add_var( "POPS" , "E" , "PP_N1" , "Posterior probability of N1" );
+  add_var( "POPS" , "E" , "PP_N2" , "Posterior probability of N2" );
+  add_var( "POPS" , "E" , "PP_N3" , "Posterior probability of N3" );
+  add_var( "POPS" , "E" , "PP_R" , "Posterior probability of REM" );
+  add_var( "POPS" , "E" , "PP_W" , "Posterior probability of wake" );
+  add_var( "POPS" , "E" , "PRED", "Predicted stage" );
+  add_var( "POPS" , "E" , "PRIOR" , "Observed stage (if known)" );
+  
+  add_table( "POPS" , "SS" , "Sleep-stage summaries" );
+  add_var( "POPS" , "SS" , "OBS" , "Observed stage duration (for included epochs)");
+  add_var( "POPS" , "SS" , "ORIG" , "Observed stage duration (all epochs)");
+  add_var( "POPS" , "SS" , "PRF" , "Predicted stage duration, weighted" );
+  add_var( "POPS" , "SS" , "PR1" , "Predicted stage duration, based on most likely" );
+  add_var( "POPS" , "SS" , "F1" , "F1 statistic" );
+  add_var( "POPS" , "SS" , "RECALL" , "Recall" );
+  add_var( "POPS" , "SS" , "PREC" , "Precision" );
+
+  // SHAP
+  //set_compressed( "POPS" , tfac_t( "E" ) );
+ 
 
   
   /////////////////////////////////////////////////////////////////////////////////

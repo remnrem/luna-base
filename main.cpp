@@ -38,7 +38,7 @@ void log_commands( int argc , char ** argv );
 
 int main(int argc , char ** argv )
 {
-  
+
   //
   // initial check for display of all commands
   //

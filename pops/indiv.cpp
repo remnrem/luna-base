@@ -51,6 +51,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 {
 
   const bool training_mode = param.has( "train" );
+  
+  const bool do_SHAP = param.has( "SHAP" );
 
   trainer = training_mode;
   
@@ -70,20 +72,42 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   
   // get any staging
   staging( edf , param );
+
+
+  //
+  // training mode: derive level-1 stats and then quit
+  //
   
-  // derive level-1 statistics (both training and prediction)
   if ( training_mode )
     {
       level1( edf );
       save1( edf.id , param.requires( "data" ) );      
     }
+
   
+  //
+  // Predict: level 1 & 2 states, then fit 
+  //
+
   if ( ! training_mode )
     {
+
       level1( edf );
+
       level2();
-      pops_t::lgbm.load_model( param.requires( "model" ) );
+
+      if ( ! pops_t::lgbm_model_loaded )
+	{
+	  pops_t::lgbm.load_model( param.requires( "model" ) );
+	  if ( param.has( "config" ) ) 
+	    pops_t::lgbm.load_config( param.value( "config" ) );	  
+	  pops_t::lgbm_model_loaded = true;
+	}
+      
       predict();
+      
+      if ( do_SHAP  ) SHAP();
+
       summarize();
     }
   
@@ -148,6 +172,11 @@ void pops_indiv_t::staging( edf_t & edf , param_t & param )
           
     } // next epoch 
 
+  //
+  // copy original staging  (i.e. as S is set to POPS_UNKNOWN for bad signals, trimming etc)
+  //
+  
+  Sorig = S;
   
   //
   // trim leading/trailing wake epochs? 
@@ -270,8 +299,28 @@ void pops_indiv_t::level1( edf_t & edf )
   std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin(); 
   while ( ss != pops_t::specs.chs.end() )
     {
+      
+      // primary?
       int slot = edf.header.signal( ss->first );
-      if ( slot == -1 ) Helper::halt( "could not find " + ss->first );
+
+      // match on an alias?
+      if ( slot == -1 ) 
+	{
+	  
+	  const std::set<std::string> & aliases = ss->second.aliases;
+	  
+	  std::set<std::string>::const_iterator aa = aliases.begin();
+	  while ( aa != aliases.end() )
+	    {
+	      slot = edf.header.signal( *aa );
+	      if ( slot != -1 ) break;
+	      ++aa;
+	    }
+	}
+
+      // still no match?
+      if ( slot == -1 ) 
+	Helper::halt( "could not find " + ss->first + " (or any specified aliases)" );
       
       if ( edf.header.is_annotation_channel( slot ) )
 	Helper::halt( "cannot specificy annotation channel: " + ss->first );
@@ -778,10 +827,206 @@ void pops_indiv_t::predict()
   P = pops_t::lgbm.predict( X1 );
 }
 
+void pops_indiv_t::SHAP()
+{
+  
+  Eigen::MatrixXd SHAP = pops_t::lgbm.SHAP_values( X1 );
+
+  const int n_classes = pops_opt_t::n_stages;
+  const int n_features = pops_t::specs.nf;
+  
+  // get means
+  Eigen::MatrixXd C = Eigen::MatrixXd::Zero( n_features , n_classes );
+  
+  std::vector<std::string> labels = pops_t::specs.select_labels();
+  if ( labels.size() != n_features )
+    Helper::halt( "internal error in getting labels" );
+
+  int p = 0;
+  for (int c = 0 ; c < n_classes ; c++)
+    {
+
+      if ( pops_opt_t::n_stages == 5 ) 
+	writer.level( pops_t::labels5[ c ] , globals::stage_strat );
+      else
+	writer.level( pops_t::labels3[ c ] , globals::stage_strat );
+      
+      for (int r = 0; r < n_features ; r++)
+	{
+	  writer.level( labels[r] , globals::feature_strat );
+
+	  C(r,c) = SHAP.col(p++).cwiseAbs().mean();
+	  writer.value( "SHAP" , C(r,c) );
+	}
+      writer.unlevel( globals::feature_strat );
+    }
+  writer.unlevel( globals::stage_strat );
+
+}
 
 void pops_indiv_t::summarize()
 {
-  std::cout << P << "\n";  
+  
+  std::map<int,double> dur_obs, dur_obs_orig, dur_predf, dur_pred1;
+  std::vector<int> preds;
+  
+  int slp_lat_obs = -1 , slp_lat_prd = -1;
+  int rem_lat_obs = -1 , rem_lat_prd = -1;
+
+  //
+  // epoch-level output (posteriors & predictions)
+  //  
+  
+  for (int e=0; e<ne; e++)
+    {
+      
+      writer.epoch( E[e] + 1 );
+      
+      // format always: W R N1 N2 N3
+      writer.value( "PP_W" , P(e,0) );   // 0 W 
+      writer.value( "PP_R" , P(e,1) );   // 1 R
+      writer.value( "PP_N1" , P(e,2) );  // 2 NR
+      writer.value( "PP_N2" , P(e,3) );
+      writer.value( "PP_N3" , P(e,4) );
+      
+      // prior
+      writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
+      
+      // original - note, uses other index back to the orignal epoch-count
+      //writer.value( "ORIG" , pops_t::label( (pops_stage_t)Sorig[ E[e] ] ) );
+      
+      // predicted (original)
+      int predx;
+      double pmax = P.row(e).maxCoeff(&predx);
+      preds.push_back( predx );
+      writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
+  
+      // slp/rem latency
+      if ( slp_lat_obs == -1 && S[e] != POPS_WAKE && S[e] != POPS_UNKNOWN ) 
+	slp_lat_obs = E[e];
+      
+      if ( slp_lat_prd == -1 && predx != POPS_WAKE )
+	slp_lat_prd = E[e];
+
+      if ( rem_lat_obs == -1 && S[e] == POPS_REM )
+	rem_lat_obs = E[e] - slp_lat_obs ; 
+      
+      if ( rem_lat_prd == -1 && predx == POPS_REM )
+	rem_lat_prd = E[e] - slp_lat_prd ; 
+
+	
+      // durations
+      dur_obs[ S[e] ]++;
+      dur_pred1[ predx ]++;
+
+      for (int ss=0; ss< pops_opt_t::n_stages; ss++)
+	dur_predf[ ss ] += P(e,ss);
+    }
+
+  writer.unepoch();
+
+  
+  //
+  // Summaries
+  //  
+
+  // durations in minutes, so get scaling factor
+  const double fac = pops_opt_t::epoch_len / 60.0 ; 
+  
+  
+  // 5-class stats
+  pops_stats_t stats( S, preds , 5 );
+
+  // 3-class stats
+  pops_stats_t stats3( pops_t::NRW( S ) , pops_t::NRW( preds ) , 3 );
+
+  
+  // outputs
+
+  writer.value( "K" , stats.kappa );
+  writer.value( "K3" , stats3.kappa );
+
+  writer.value( "ACC" , stats.acc );
+  writer.value( "ACC3" , stats3.acc );
+  
+  writer.value( "MCC" , stats.mcc );
+  writer.value( "MCC3" , stats3.mcc );
+
+  writer.value( "F1" , stats.macro_f1 );
+  writer.value( "PREC" , stats.macro_precision );
+  writer.value( "RECALL" , stats.macro_recall );
+  
+  writer.value( "F1_WGT" , stats.avg_weighted_f1 );
+  writer.value( "PREC_WGT" , stats.avg_weighted_precision );
+  writer.value( "RECALL_WGT" , stats.avg_weighted_recall );
+  
+  writer.value( "F13" , stats3.macro_f1 );
+  writer.value( "PREC3" , stats3.macro_precision );
+  writer.value( "RECALL3" , stats3.macro_recall );
+  
+  // stage specific precision/recall
+  
+  for ( int l=0;l<pops_opt_t::n_stages; l++)
+    {
+      writer.level( pops_t::labels5[l] , globals::stage_strat );
+      writer.value( "F1" , stats.f1[l] );
+      writer.value( "PREC" , stats.precision[l] );
+      writer.value( "RECALL" , stats.recall[l] );
+    }
+  writer.unlevel( globals::stage_strat );
+
+
+
+  // sleep and REM latencies
+  if ( slp_lat_obs >= 0 ) 
+    writer.value( "SLP_LAT_OBS" , slp_lat_obs * fac );
+  if ( slp_lat_prd >= 0 ) 
+    writer.value( "SLP_LAT_PRD" , slp_lat_prd * fac );
+  if ( rem_lat_obs >= 0 )
+    writer.value( "REM_LAT_OBS" , rem_lat_obs * fac );
+  if ( rem_lat_prd >= 0 )
+    writer.value( "REM_LAT_PRD" , rem_lat_prd * fac );
+
+
+  //
+  // Stage level durations
+  //
+
+  
+  // unknown : dropped epochs going from 
+  for (int e=0; e<Sorig.size(); e++)
+    dur_obs_orig[ Sorig[e] ]++;
+  
+  for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
+    {
+      writer.level( pops_t::label( (pops_stage_t)ss ) , "SS" ); 
+      writer.value( "OBS" ,  fac * dur_obs[ss] );
+      writer.value( "ORIG" , fac * dur_obs_orig[ss] );
+      writer.value( "PRF" ,  fac * dur_predf[ss] );
+      writer.value( "PR1" ,  fac * dur_pred1[ss] );
+    }
+ 
+  int masked = Sorig.size() - S.size();
+  writer.level( pops_t::label( POPS_UNKNOWN ) , "SS" );
+  writer.value( "OBS" ,  fac * masked );
+  writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
+  writer.value( "PRF" ,  fac * masked );
+  writer.value( "PR1" ,  fac * masked );
+  writer.unlevel( "SS" );
+
+  //
+  // Confusion matrix, to console
+  //
+
+  logger << "  \n  Final kappa = " << stats.kappa << "; 3-class kappa = " << stats3.kappa << "\n";
+  logger << "  Confusion matrix: \n";
+  std::map<int,std::map<int,int> > table = pops_t::tabulate( S , preds , true );
+  logger << "\n";
+
 }
+
+
+
+
 
 #endif

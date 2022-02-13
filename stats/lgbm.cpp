@@ -519,6 +519,77 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X )
 }
 
 
+Eigen::MatrixXd lgbm_t::SHAP_values( const Eigen::MatrixXd & X )
+{
+
+  const void * p = static_cast<const void*>(X.data());
+  
+  int64_t out_len;
+
+  int flag = LGBM_BoosterCalcNumPredict( booster , 
+					 1 ,  // number of rows- i.e. just a multiplicative factor
+					 C_API_PREDICT_CONTRIB , // SHAP values
+					 0 ,  // start iteration
+					 0 ,  // end (0 -> no limit)
+					 &out_len );
+  
+  if ( flag )
+    Helper::halt( "issue w/ getting SHAP values" );
+  
+  // for feature contributions, its length is equal to num_class * num_data * (num_feature + 1).
+  int num_classes = lgbm_t::classes( booster );
+  int num_obs = X.rows();
+  int num_features = X.cols();
+  int64_t out_len2 = num_classes * num_obs * ( num_features - 1 );
+  int64_t out_len3;
+  
+  std::vector<double> R( out_len * num_obs , 0 );
+  
+  double * out_result = R.data();
+
+  flag = LGBM_BoosterPredictForMat( booster ,
+				    p ,
+				    C_API_DTYPE_FLOAT64 , // or C_API_DTYPE_FLOAT32
+				    X.rows() ,
+				    X.cols() ,
+				    0 , // 1=row_major, 0=col-major
+				    C_API_PREDICT_CONTRIB , // SHAP values
+				    0 , // start_iteration
+				    0 , // Number of iteration for prediction, <= 0 means no limit
+				    params.c_str() ,
+				    &out_len3 ,
+				    out_result );
+
+  
+  std::cout << " got " << out_len3 << "\n";
+
+  if ( flag )
+    Helper::halt( "issue w/ getting SHAP values" );
+  
+  
+  // Epoch
+  //  then class
+  //    then features... (last col = expected value)
+  
+  //  std::cout << "nums " << out_len3 <<  " " << num_obs << " " << num_classes << " " <<  num_features  << "\n";
+  if ( out_len3 != num_obs * num_classes * (num_features+1) )
+    Helper::halt( "internal error in SHAP()" );
+  
+  Eigen::MatrixXd SV = Eigen::MatrixXd( num_obs , num_classes * (num_features+1) );
+  
+  int cnt = 0;
+  for (int i=0; i<num_obs; i++)
+    for (int j=0; j<num_classes; j++)
+      for (int k=0; k<num_features+1; k++)
+	SV(i,j*num_features+k) = R[cnt++];
+
+  return SV;
+
+}
+
+
+
+
 std::string lgbm_t::parse_config( const std::string & f )
 {
   

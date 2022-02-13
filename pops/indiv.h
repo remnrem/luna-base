@@ -44,6 +44,8 @@ struct pops_indiv_t {
   void level2();
   
   void predict( );
+  
+  void SHAP();
 
   void summarize( );
 
@@ -59,6 +61,7 @@ struct pops_indiv_t {
   
   // staging
   std::vector<int> S;
+  std::vector<int> Sorig;
 
   // epoch number
   std::vector<int> E;

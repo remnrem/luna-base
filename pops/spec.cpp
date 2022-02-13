@@ -26,6 +26,7 @@
 
 #include "helper/helper.h"
 #include "helper/logger.h"
+#include "db/db.h"
 
 std::map<std::string,pops_feature_t> pops_specs_t::lab2ftr;
 std::map<pops_feature_t,std::string> pops_specs_t::ftr2lab;
@@ -34,6 +35,7 @@ std::map<std::string,int> pops_specs_t::blocksize;
 std::vector<std::string> pops_specs_t::defaults;
 
 extern logger_t logger;
+extern writer_t writer;
 
 void pops_specs_t::read( const std::string & f )
 {
@@ -62,8 +64,8 @@ void pops_specs_t::read( const std::string & f )
   std::ifstream IN1;
 
   if ( ! use_default )
-    {
-      std::cout << " opening...\n";
+    {      
+      logger << "  reading feature specification from " << f << "\n";
       IN1.open( Helper::expand( f ).c_str() , std::ios::in );
     }
   
@@ -87,28 +89,32 @@ void pops_specs_t::read( const std::string & f )
       if ( line[0] == '%' ) continue;
       
       // format
-      // CH <label> <sample-rate>
+      // CH <label1> <label2> ... <sample-rate>
       // SELECT <blocks>
       // block: <feature> <channel-label> <key=val>
       
       std::vector<std::string> tok = Helper::parse( line , " \t" );
       if ( tok.size() < 2 ) Helper::halt( "bad format for line: " + line );
-
+      
       //
-      // Channel specifier?
+      // Channel specifier? find first that matches
       //
       
       if ( Helper::toupper( tok[0] ) == "CH" )
         {	  
-	  if ( tok.size() != 3 )
-            Helper::halt( "expecing: CH label SR" );
+	  if ( tok.size() < 3 )
+            Helper::halt( "expecing: CH label {label2} {label3} ... SR" );
 	  
+	  // last entry must be sample rate
           int sr ;
-          if ( ! Helper::str2int( tok[2] , &sr ) )
+          if ( ! Helper::str2int( tok[tok.size()-1] , &sr ) )
             Helper::halt( "bad format: " + line );
 	  
-	  // store	  
-          chs[ tok[1] ] = pops_channel_t( tok[1] , sr ) ;
+	  // store any aliases
+	  std::set<std::string> aliases;
+	  for (int i=2;i<tok.size()-1;i++)
+	    aliases.insert( tok[i] );
+	  chs[ tok[1] ] = pops_channel_t( tok[1] , aliases , sr ) ;
 	  
           // next line
 	  continue;
@@ -197,7 +203,7 @@ void pops_specs_t::read( const std::string & f )
 	Helper::halt( "cannot specify a level-1 feature after level-2 feature(s)" );
       
       // check block names
-      if ( level1 )
+      if ( level1 || ftr == "TIME" )
 	{
 	  bmap.insert( block );
 	  
@@ -211,6 +217,7 @@ void pops_specs_t::read( const std::string & f )
 	}
 	else
 	  {
+
 	    // requires 'block' arg
 	    if ( targs.find( "block" ) == targs.end() )
 	      Helper::halt( "no block argument for " + ftr );
@@ -228,14 +235,14 @@ void pops_specs_t::read( const std::string & f )
 	      Helper::halt( "specified block " + targs[ "block" ] + " not found" );
 	    
 	    // not self-replacement
-	  if ( from_block != block ) 
-	    {
-	      if ( bmap.find( block ) != bmap.end() )
-		Helper::halt( "cannot specify an existing non-self block for a level-2 feature:\n" + line  );
-	      // but now insert to track other lvl2 features
-	      bmap.insert( block );
-	    }	  
-	}
+	    if ( from_block != block ) 
+	      {
+		if ( bmap.find( block ) != bmap.end() )
+		  Helper::halt( "cannot specify an existing non-self block for a level-2 feature:\n" + line  );
+		// but now insert to track other lvl2 features
+		bmap.insert( block );
+	      }	  
+	  }
       
       
       // add each channel separately (w/ the same args)      
@@ -245,8 +252,7 @@ void pops_specs_t::read( const std::string & f )
 	  spec.block = block;
 	  spec.ftr = lab2ftr[ Helper::toupper( ftr ) ];
 	  spec.ch = tchs[c];
-	  spec.arg = targs;
-	  
+	  spec.arg = targs;	  
 	  fcmap[ spec.ftr ][ spec.ch ] = spec;
 	  specs.push_back( spec );	  	  
 	}
@@ -268,11 +274,7 @@ void pops_specs_t::read( const std::string & f )
 
   int nf = total_cols();
   // int nf_selected = select_cols();
-  
-  logger << "  read " << specs.size() << " feature specifications ("
-	 << nf << " total features on "
-	 << ns << " channels) from " << f << "\n";
-  
+    
   // & construct the map of specs/channels to feature columns
   build_colmap();
 
@@ -383,7 +385,8 @@ void pops_specs_t::check_args()
       if ( spec.ftr == pops_feature_t::POPS_TIME )
 	{
 	  if ( spec.arg.find( "order" ) == spec.arg.end() )
-            Helper::halt( ftr2lab[ pops_feature_t::POPS_TIME ] + " requires 'order' arg" );
+	    spec.arg[ "order" ] = 1;
+	  // Helper::halt( ftr2lab[ pops_feature_t::POPS_TIME ] + " requires 'order' arg" );
 	}
 
       // smoothing/denoising
@@ -491,7 +494,6 @@ void pops_specs_t::build_colmap()
   na = 0; // level 1 + level 2 features (all)
   nf = 0; // final number of selected features
   
-  std::cout << " features " << col_block.size() << "\n";
   int p = 0;
   for (int f=0; f<col_block.size(); f++)
     {
@@ -512,24 +514,27 @@ void pops_specs_t::build_colmap()
       // only seleted (l1+l2) features
       if ( col_select[f] ) ++nf;
       
-      std::cout << f+1 << "\t"
-		<< col_block[f] << "\t"
-		<< col_select[f] << "\t";
+      //
+      // dump to output
+      //
 
-      if (  col_select[f] )
-	std::cout << orig2final[ f ] << "\t"
-		  << final2orig[ orig2final[ f ] ] << "\t";
-      else
-	std::cout << ".\t.\t";
-
-      std::cout << col_level[f] << "\t"
-		<< col_label[f] << "\n";
+      writer.level( f+1 , globals::feature_strat );
+      writer.value( "BLOCK" , col_block[f]  );
+      writer.value( "INC" , (int)col_select[f] );
+      if ( col_select[f] )
+	{
+	  writer.value( "FINAL" , orig2final[ f ] + 1 );
+	  //writer.value( "ORIG" , final2orig[ orig2final[ f ] ] + 1 );
+	}      
+      writer.value( "LEVEL" , col_level[f] );
+      writer.value( "LABEL" , col_label[f] );
+      writer.unlevel( globals::feature_strat );
 
     }
 
-  logger << "  " << n1 << " level-1 features\n"
-	 << "  " << na-n1 << " level-2 features\n"
-	 << "  " << nf << " of " << na << " features selected\n";
+  logger << "   " << n1 << " level-1 features, "
+	 << na-n1 << " level-2 features\n"
+	 << "   " << nf << " of " << na << " features selected in the final feature set\n";
   
 }
 
@@ -557,11 +562,19 @@ std::vector<int> pops_specs_t::cols( pops_feature_t ftr , const std::string & ch
 std::vector<std::string> pops_specs_t::select_labels()
 {
   std::vector<std::string> s;
+  std::map<int,int>::const_iterator ii = final2orig.begin();
+  while ( ii != final2orig.end() )
+    {
+      s.push_back( col_label[ ii->second ] );
+      ++ii;
+    }
   return s;
+
 }
 
 std::vector<std::string> pops_specs_t::total_labels() 
 {
+  // not used...  CAN DELETE ME
   std::vector<std::string> l;
   
   for (int i=0; i<specs.size(); i++)

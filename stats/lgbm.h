@@ -115,6 +115,7 @@ struct lgbm_t {
   
   Eigen::MatrixXd predict( const Eigen::MatrixXd & X );
   
+  Eigen::MatrixXd SHAP_values( const Eigen::MatrixXd & X );
 
   
   //

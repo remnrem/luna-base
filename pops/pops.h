@@ -79,6 +79,8 @@ struct pops_t {
   
   static lgbm_t lgbm;
 
+  static bool lgbm_model_loaded;
+
   static pops_specs_t specs;
 
   //
@@ -86,8 +88,8 @@ struct pops_t {
   //
 
   Eigen::MatrixXd X1;
-  Eigen::MatrixXd V; // when reading in level2 SVD scoring
-  Eigen::MatrixXd W;
+  std::map<std::string,Eigen::MatrixXd> V; // when reading in level2 SVD scoring
+  std::map<std::string,Eigen::MatrixXd> W;  
   std::vector<int> S;
   std::vector<int> E;
   std::vector<int> Istart, Iend;
@@ -96,6 +98,8 @@ struct pops_t {
   // helpers
   //
   
+  static Eigen::MatrixXd add_time_track( const int , const int );
+
   static void outliers( const Eigen::VectorXd & x ,
 			const double d ,
 			const std::vector<int> & staging , 
@@ -111,10 +115,63 @@ struct pops_t {
     return "?";
   }
 
+  static std::string label5( pops_stage_t s )
+  {
+    if ( s == POPS_N1 ) return "N1" ;
+    if ( s == POPS_N2 ) return "N2";
+    if ( s == POPS_N3 ) return "N3";
+    if ( s == POPS_REM ) return "R";
+    if ( s == POPS_WAKE ) return "W";
+    return "?";
+  }
+
+  static std::string label3( pops_stage_t s )
+  {
+    if ( s == POPS_N1 ) return "NR" ;
+    if ( s == POPS_REM ) return "R";
+    if ( s == POPS_WAKE ) return "W";
+    return "?";
+  }
+
+  static std::vector<std::string> labels5; 
+  static std::vector<std::string> labels3; 
+  
+  static std::map<int,std::map<int,int> > tabulate( const std::vector<int> & a , 
+						    const std::vector<int> & b , 
+						    const bool print  );
+	     
+	     
+
+  static std::vector<int> NRW( const std::vector<int> & s ) 
+  {
+    std::vector<int> r = s;
+    for (int i=0; i<s.size(); i++)
+      if ( r[i] == POPS_N2 || r[i] == POPS_N3 ) 
+	r[i] = POPS_N1;
+    return r;  
+  }
   
 };
 
 
+
+
+struct pops_stats_t { 
+
+  pops_stats_t( const std::vector<int> & obs , 
+		const std::vector<int> & pred , 
+		const int nstages = 5 ); 
+  
+  
+  bool valid;
+  int n;
+  double kappa, acc, mcc;
+  
+  double macro_precision, macro_recall, macro_f1 ;
+  double avg_weighted_precision, avg_weighted_recall, avg_weighted_f1;  
+  std::vector<double> precision, recall, f1;
+
+};
 
 #endif
 #endif

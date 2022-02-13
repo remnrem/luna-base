@@ -92,15 +92,37 @@ struct pops_spec_t {
 
 struct pops_channel_t {
 
-  pops_channel_t( const std::string & ch , const int sr )
-    : ch(ch) , sr(sr) { }
-
+  pops_channel_t( const std::string & label , 
+		  const std::set<std::string> & aliases , 
+		  const int sr )
+  : ch(ch) , aliases(aliases), sr(sr) { }
+  
   pops_channel_t() { }
-
+  
+  // main label
   std::string ch;
-
+  // other aliases
+  std::set<std::string> aliases;
   int sr;
+  
+  bool match( const std::string & s , std::string * label ) const
+  {
+    if ( s == ch ) 
+      {
+	*label = ch;
+	return true;
+      }
+    
+    std::set<std::string>::const_iterator ii = aliases.find( s );
+    if ( ii == aliases.end() )
+      return false;
+    *label = *ii;
+    return true;
+    
+  }
 
+
+  
 };
 
 

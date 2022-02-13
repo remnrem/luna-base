@@ -55,6 +55,7 @@
 #include "pops/spec.h"
 
 #include "stats/lgbm.h"
+#include "miscmath/miscmath.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "stats/eigen_ops.h"
@@ -66,8 +67,11 @@ extern writer_t writer;
 
 pops_opt_t pops_t::opt;
 lgbm_t pops_t::lgbm;
+bool pops_t::lgbm_model_loaded = false;
 pops_specs_t pops_t::specs;
 
+std::vector<std::string> pops_t::labels5 = { "W" , "R" , "N1" , "N2" , "N3" };
+std::vector<std::string> pops_t::labels3 = { "W" , "R" , "NR" };
   
 //
 // create a level 2 feature library and save
@@ -147,23 +151,24 @@ void pops_t::level2( const bool training )
       const bool inplace = from_block == to_block;      
       std::vector<int> from_cols = pops_t::specs.block_cols( from_block , pops_t::specs.na );
       std::vector<int> to_cols = pops_t::specs.block_cols( to_block , pops_t::specs.na );
-      
-      logger << "  level-2 features: " << l2ftr << " ( " << from_block << " --> " << to_block << " )\n";
 
-      logger << "  from cols (N=" << from_cols.size() << ")\n";
-      for (int j=0;j<from_cols.size();j++) logger << " " << from_cols[j] ;
-      logger << "\n";
       
-      logger << "  to cols (N=" << to_cols.size() << ")\n";
-      for (int j=0;j<to_cols.size();j++) logger << " " << to_cols[j] ;
-      logger << "\n\n";
+      logger << "   - adding level-2 feature " << l2ftr << ": " 
+	     << from_block << " (n=" << from_cols.size() 
+	     << ") --> " 
+	     << to_block << " (n=" << to_cols.size() << ", cols:" << to_cols[0] << "-" << to_cols[to_cols.size()-1] << ") \n";
+
+      // for (int j=0;j<from_cols.size();j++) logger << " " << from_cols[j] ;
+      // logger << "\n";
+      
+      // for (int j=0;j<to_cols.size();j++) logger << " " << to_cols[j] ;
+      // logger << "\n\n";
 
       const int nfrom = from_cols.size();
       const int nto   = to_cols.size();
       const int ne    = X1.rows();     
       const int ni    = Istart.size();
-
-
+      
       //
       // SMOOTH
       //
@@ -249,6 +254,7 @@ void pops_t::level2( const bool training )
 
         }
       
+      
       //
       // SVD  - done differently for trainers versus targets
       //
@@ -258,7 +264,7 @@ void pops_t::level2( const bool training )
 
 	  const int nc = spec.narg( "nc" );
 	  const std::string wvfile = spec.arg[ "file" ];
-
+	  
 	  // copy to a temporary
 	  Eigen::MatrixXd D = Eigen::MatrixXd::Zero( ne , nfrom );	  
 	  for (int j=0; j<nfrom; j++) D.col(j) = X1.col( from_cols[j] ) ;
@@ -272,22 +278,25 @@ void pops_t::level2( const bool training )
 	    {
 	      Eigen::BDCSVD<Eigen::MatrixXd> svd( D , Eigen::ComputeThinU | Eigen::ComputeThinV );
 	      Eigen::MatrixXd U = svd.matrixU();
-	      Eigen::MatrixXd V = svd.matrixV();
-	      Eigen::VectorXd W = svd.singularValues();
+	      Eigen::MatrixXd V1 = svd.matrixV();
+	      Eigen::VectorXd W1 = svd.singularValues();
 	      
 	      // copy U back to X1
 	      for (int j=0; j<nto; j++) X1.col( to_cols[j] ) = U.col(j);
 	      
 	      // save W and V to a file (i.e. for use later in prediction models, to project
 	      // test cases into this space)
+	      
+	      logger << "   - writing SVD W and V to " << wvfile << "\n";
+
 	      std::ofstream OUT1( Helper::expand( wvfile ).c_str() , std::ios::out );
-	      OUT1 << V.rows() << " " << nc << "\n";
-	      for (int i=0;i<V.rows(); i++)
+	      OUT1 << V1.rows() << " " << nc << "\n";
+	      for (int i=0;i<V1.rows(); i++)
 		for (int j=0;j<nc; j++)
-		  OUT1 << " " << V(i,j) ;
+		  OUT1 << " " << V1(i,j) ;
 	      OUT1 << "\n";
 	      for (int j=0;j<nc; j++)
-		OUT1 << " " << W[j] ;
+		OUT1 << " " << W1[j] ;
 	      OUT1 << "\n";
 	      OUT1.close();
 	      
@@ -296,46 +305,41 @@ void pops_t::level2( const bool training )
 	    {
 	      // projection of target 
 	      
-	      if ( V.rows() == 0 )  // do once
+	      if ( V.find( wvfile ) == V.end() ) // do once
 		{
-		  std::cout << " in 1\n";
+		  logger << "   - reading SVD W and V from " << wvfile << "\n";
 		  std::ifstream IN1( Helper::expand( wvfile ).c_str() , std::ios::in );
 		  int nrow, ncol;
 		  IN1 >> nrow >> ncol;
-		  V.resize( nrow , ncol );
-		  W = Eigen::MatrixXd::Zero( ncol , ncol );
+		  
+		  Eigen::MatrixXd V0 = Eigen::MatrixXd::Zero( nrow , ncol );
+		  Eigen::MatrixXd W0 = Eigen::MatrixXd::Zero( ncol , ncol );
 		  if ( ncol != nc ) Helper::halt( "internal mismatch in SVD nc" );
 
 		  for (int i=0;i<nrow; i++)
 		    for (int j=0;j<ncol; j++)
-		      IN1 >> V(i,j) ;
+		      IN1 >> V0(i,j) ;
 		  for (int j=0;j<ncol; j++)
 		    {
-		      IN1 >> W(j,j) ;
-		      W(j,j) = 1.0 / W(j,j); // nb. take 1/W here
+		      IN1 >> W0(j,j) ;
+		      W0(j,j) = 1.0 / W0(j,j); // nb. take 1/W here
 		    }
 		  IN1.close();
+		  
+		  V[ wvfile ] = V0;
+		  W[ wvfile ] = W0;
 		}	    
 	      
-	      std::cout << "  finds = " << V.rows() << " " << V.cols() << " " << W.size() << "\n";
-	      std::cout << " D = " << D.rows() << " " << D.cols() << "\n";
-
 
 	      //
 	      // project 
 	      //
+	      	      
+	      Eigen::MatrixXd U_proj = D * V[ wvfile ] * W[ wvfile ];
 	      
-	      Eigen::MatrixXd U_proj = D * V * W;
-	      std::cout << " U " << U_proj.rows() << " " << U_proj.cols() << "\n";
-	      std::cout << " X1 " << X1.rows() << " " << X1.cols() << "\n";
-
 	      // copy back
 	      for (int j=0; j<nto; j++) 
-		{
-		  std::cout << " j = " << j << " " << to_cols[j] << "\n";
-		  X1.col( to_cols[j] ) = U_proj.col(j);
-		}
-	      std::cout << " done\n";
+		X1.col( to_cols[j] ) = U_proj.col(j);
 
 	    }
 	}
@@ -381,15 +385,11 @@ void pops_t::level2( const bool training )
 
 void pops_t::fit_model( const std::string & modelfile )
 {
-  std::cout << "S1\n";
   // trainging data
   lgbm.attach_training_matrix( X1 );
 
-  std::cout << "S2\n";
   // labels
   lgbm.attach_training_labels( S );
-
-  std::cout << "S3\n";
 
   // fit model
   lgbm.create_booster();
@@ -407,10 +407,12 @@ void pops_t::fit_model( const std::string & modelfile )
 
 void pops_t::load_model( param_t & param )
 {
-
-  lgbm.load_config( param.requires( "config" ) );
-  lgbm.load_model( param.requires( "model" ) );
-
+  if ( ! lgbm_model_loaded )
+    {
+      lgbm.load_config( param.requires( "config" ) );
+      lgbm.load_model( param.requires( "model" ) );
+      lgbm_model_loaded = true;  
+    }
 }
 
 void pops_t::outliers( const Eigen::VectorXd & x ,
@@ -468,4 +470,171 @@ void pops_t::copy_back( pops_indiv_t * indiv )
 }
 
 
+pops_stats_t::pops_stats_t( const std::vector<int> & obs , 
+			    const std::vector<int> & pred,
+			    const int nstages )
+{
+  
+  // save either 3-class or 5-class stats
+  // i.e. inputs obs and pred may be 5 or 3-class
+  n = nstages;
+  
+  // kappa
+  kappa = MiscMath::kappa( obs , pred , POPS_UNKNOWN );
+  
+  std::vector<int> l5 = { 0 , 1 , 2 , 3 , 4 };
+  std::vector<int> l3 = { 0 , 1 , 2 };
+  
+  // other metrics
+  acc = MiscMath::accuracy( obs , pred , 
+			    POPS_UNKNOWN , 
+			    n == 5 ? &l5 : &l3 ,
+			    &precision , &recall , &f1 , 
+			    &macro_precision , 
+			    &macro_recall , 
+			    &macro_f1 , 
+			    &avg_weighted_precision , 
+			    &avg_weighted_recall ,
+			    &avg_weighted_f1 ,
+			    &mcc  );
+  
+}
+
+
+std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a , 
+						   const std::vector<int> & b , 
+						   const bool print  )
+{
+  
+  std::map<int,std::map<int,int> > res;
+  
+  const int n = a.size();
+  
+  if ( n != b.size() ) 
+    Helper::halt( "internal error: unequal vectors in tabulate()" );
+
+  // includes unknown stages POPS_UNKNOWN, '?' in table
+  //  (but these will be removed from kappa and other stats)
+
+  std::set<int> uniq;
+  for (int i=0;i<n;i++)
+    {      
+      res[ a[i] ][ b[i] ]++;
+      uniq.insert( a[i] );
+      uniq.insert( b[i] );
+    }
+
+  std::map<int,double> rows, cols;
+  double tot = 0;
+  std::set<int>::const_iterator uu = uniq.begin();
+  while ( uu != uniq.end() )
+    {
+      std::set<int>::const_iterator jj = uniq.begin();
+      while ( jj != uniq.end() )
+	{
+	  if ( res.find( *uu ) == res.end() )
+	    res[ *uu ][ *jj ] = 0;
+	  else
+	    {
+	      std::map<int,int> & rjj = res.find(*uu)->second;
+	      if ( rjj.find( *jj ) == rjj.end() )
+		res[ *uu ][ *jj ] = 0;
+	    }	      
+	  
+	  // col/row marginals
+	  rows[ *uu ] += res[ *uu ][ *jj ] ;
+	  cols[ *jj ] += res[ *uu ][ *jj ] ;
+	  tot += res[ *uu ][ *jj ];
+	  
+	  ++jj;
+	}
+      ++uu;
+    }
+  
+  
+  if ( print )
+    {
+
+      logger << "\t   Obs:";
+      std::set<int>::const_iterator uu = uniq.begin();
+      while ( uu != uniq.end() )
+	{
+	  logger << "\t" << pops_t::label( (pops_stage_t)(*uu) );
+	  ++uu;
+	}
+      logger << "\tTot\n";	
+      
+      logger << "  Pred:";
+      uu = uniq.begin();
+      while ( uu != uniq.end() )
+	{
+	  logger << "\t" <<  pops_t::label( (pops_stage_t)(*uu) ); 
+
+	  std::set<int>::const_iterator jj = uniq.begin();
+	  while ( jj != uniq.end() )
+	    {
+	      logger << "\t" << res[ *uu ][ *jj ];
+	      ++jj;
+	    }	  
+	  
+	  // row sums
+	  logger << "\t" << Helper::pp( rows[ *uu ]/tot );
+	  logger << "\n";
+	  ++uu;
+	}
+
+
+      // col sums
+      logger << "\tTot:";
+      std::set<int>::const_iterator jj = uniq.begin();
+      while ( jj != uniq.end() )
+	{
+	  logger << "\t" << Helper::pp( cols[ *jj ]/tot );
+	  ++jj;
+	}
+      logger << "\t1.00\n\n";
+
+      
+      // conditional probabilties  / res[][] / cols[] 
+      uu = uniq.begin();
+      while ( uu != uniq.end() )
+        {
+	  writer.level( pops_t::label( (pops_stage_t)(*uu) ) , "PRED" );
+	  std::set<int>::const_iterator jj = uniq.begin();
+          while ( jj != uniq.end() )
+	    {
+	      writer.level( pops_t::label( (pops_stage_t)(*jj) ) , "OBS" );
+	      writer.value( "N" , res[ *uu ][ *jj ] );
+	      if ( cols[ *uu ] > 0 ) 
+		writer.value( "P" , res[ *uu ][ *jj ] / cols[ *jj ] );
+	      ++jj;
+	    }
+	  writer.unlevel( "OBS" );
+	  ++uu;
+	}
+      writer.unlevel( "PRED" );
+    }
+  
+  return res;
+}
+
+
+Eigen::MatrixXd pops_t::add_time_track( const int nr , const int tt )
+{
+  if ( nr <= 0 || tt <= 0 ) Helper::halt( "internal error in add_time_track()" );
+  
+  Eigen::MatrixXd T = Eigen::MatrixXd::Zero( nr , tt );
+  
+  for (int r=0; r<nr; r++)
+    for ( int c=0; c<tt; c++)
+      T(r,c) = pow( ( r / (double)nr ) - 0.5 , c+1 );
+  
+  return T;
+  
+}
+
 #endif
+
+
+
+

@@ -165,6 +165,7 @@ std::string globals::sample_strat;
 std::string globals::cluster_strat;
 std::string globals::var_strat;
 std::string globals::value_strat;
+std::string globals::feature_strat;
 
 std::string & globals::SQLITE_SCRATCH_FOLDER() { static std::string s = ""; return s; }
 
@@ -452,7 +453,8 @@ void globals::init_defs()
   cluster_strat = "K";
   var_strat     = "VAR";
   value_strat   = "VAL";
-  
+  feature_strat     = "FTR";
+
   //
   // Misc.
   //

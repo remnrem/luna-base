@@ -41,6 +41,7 @@ int pops_opt_t::trim_wake_epochs;
 int pops_opt_t::n_stages;
 bool pops_opt_t::welch_median;
 
+double pops_opt_t::epoch_len;
 double pops_opt_t::lwr;
 double pops_opt_t::upr;
 

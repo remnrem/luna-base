@@ -1679,3 +1679,11 @@ std::string Helper::readfile( const std::string & f )
   return s;
   
 }
+
+
+std::string Helper::pp( double x )
+{
+  // print a proportion 0 .. 1  w/ only 2 dps
+  int x2 = round( 100 * x );
+  return Helper::dbl2str( x2 / 100.0 );
+}
