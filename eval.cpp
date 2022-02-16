@@ -1326,16 +1326,22 @@ void proc_pops( edf_t & edf , param_t & param )
 
 #ifdef HAS_LGBM
 
-  pops_t pops;  
-
   //
-  // set up features to calculate ('.' = internal defaults)
+  // set up parameters
+  //
+
+  pops_t pops( param );    
+  pops_opt_t::epoch_len = edf.timeline.epoch_length();
+  pops_opt_t::epoch_inc = edf.timeline.epoch_inc();
+  
+  //
+  // set up features ('.' = use internal defaults)
   //
   
   const std::string ftr_file = param.has( "features" ) ? param.value( "features" ) : "." ; 
-  
-  pops_t::specs.read( ftr_file );
 
+  pops_t::specs.read( ftr_file );
+ 
   //
   // process individual (either trainer, or target)
   //

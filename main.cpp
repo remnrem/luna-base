@@ -656,7 +656,9 @@ int main(int argc , char ** argv )
       writer.id( "." , "." );
       writer.cmd( "POPS" , 1 , "" );
       writer.level( "POPS", "_POPS" );
-      pops_t pops;
+      pops_t pops( param );
+      pops_opt_t::epoch_len = globals::default_epoch_len;
+      pops_opt_t::epoch_inc = globals::default_epoch_len;
       pops.make_level2_library( param );      
       writer.unlevel( "_POPS" );
       writer.commit();
@@ -1627,7 +1629,7 @@ void process_edfs( cmd_t & cmd )
 	  continue;
 	}
       
-
+      
       //
       // Check labels are still unique given aliases
       //
@@ -1654,7 +1656,6 @@ void process_edfs( cmd_t & cmd )
 	    tok.push_back( globals::project_path + globals::annot_files[i] );
 	}
     
-          
       //
       // Attach annotations
       //

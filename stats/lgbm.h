@@ -194,12 +194,22 @@ struct lgbm_label_t {
     weight.resize(n,1.0);
   }
 
-  lgbm_label_t( const std::vector<std::string> label ) : label(label)
+  lgbm_label_t( const std::vector<std::string> & label ) : label(label)
   {
     n = label.size();
     weight.resize(n,1.0);
   }
 
+  // from map ( label -> weight )
+  lgbm_label_t( const std::vector<std::string> & l , const std::vector<double> & w )
+  {
+    if ( l.size() != w.size() )
+      Helper::halt( "problem in lgbm_label_t()" );
+    label = l;
+    weight = w;
+    n = label.size();
+  }
+  
   // from file
   lgbm_label_t( const std::string & f )
   {
@@ -226,6 +236,8 @@ struct lgbm_label_t {
       }
     IN1.close();
   }
+
+
 
   int n; // 5 : 0,1,2,3,4
   std::vector<std::string> label;

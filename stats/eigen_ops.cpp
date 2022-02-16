@@ -699,3 +699,112 @@ bool eigen_ops::p95_logmod( Eigen::Ref<Eigen::MatrixXd> m )
   return true;
 }
 
+
+void eigen_ops::deriv( Eigen::Ref<Eigen::VectorXd> m , const int hw )
+{
+  int n = m.size();
+  
+  // copy
+  Eigen::VectorXd d = m; 
+  
+  for (int i=0; i<n; i++)
+    {
+      // get spanning window
+      const int left = i - hw < 0 ? 0 : i - hw ;
+      const int right = i + hw >= n ? n-1 : i + hw ;        
+      const int k = right - left + 1 ; 
+      
+      // get slope
+      double mx = 0;
+      double my = 0;
+      double mxy = 0;
+      double mxx = 0;
+      double myy = 0;
+      
+      int t = 0;
+      for (int j=left; j<= right; j++) 
+	{
+	  my += d[j];
+	  mx += t;
+	  mxy += d[j] * t;
+	  mxx += t * t;
+	  myy += d[j] * d[j];
+	  ++t;
+	}
+      
+      mx /= (double)k;
+      my /= (double)k;
+      mxy /= (double)k;
+      mxx /= (double)k;
+      myy /= (double)k;
+
+      double varx = mxx - mx*mx;
+      double vary = myy - my*my;
+
+      // beta --> m[i]
+      m[i] = ( mxy - ( mx *  my ) ) / varx ; 
+
+    }
+    
+}
+
+void eigen_ops::accumulate( Eigen::Ref<Eigen::VectorXd> m , const int ctype )
+{
+  // ctype: 0  normed (0..1) --> cum --> (0..1)
+  //        -1 take negative values only
+  //        2  take abs values
+  //        +1 take positive values only 
+
+  const int n = m.size();
+  
+  if ( ctype == 0 ) 
+    {
+      // rescale first to 0..1 scaling 
+      const double min = m.minCoeff();
+      const double max = m.maxCoeff();
+      const double rng = max - min;
+      
+      if ( rng == 0 ) 
+	{
+	  m = Eigen::VectorXd::Zero( n );
+	  return;	    
+	}
+      
+      for (int i=0; i<n; i++)
+	m[i] = ( m[i] - min ) / rng;
+      
+      // now cumulative sum
+      for (int i=1; i<n; i++)
+        m[i] = m[i-1] + m[i] ;
+    }
+  else if ( ctype == 2 ) // abs. components
+    {
+      m[0] = fabs( m[0] );
+      for (int i=1; i<n; i++)
+	m[i] = m[i-1] + fabs( m[i] );
+    }
+  else if ( ctype == -1 ) // neg components only
+    {
+      if ( m[0] > 0 ) m[0] = 0;
+      for (int i=1; i<n; i++)
+	m[i] = m[i] < 0 ? m[i-1] - m[i] : m[i-1]; 
+    }
+  else // positive components only , ctype == +1 
+    {
+      if ( m[0] < 0 ) m[0] = 0;
+      for (int i=1; i<n; i++)
+        m[i] = m[i] > 0 ? m[i-1] + m[i] : m[i-1] ;
+    }
+  
+  // scale final values to 0..1
+  const double min = m.minCoeff();
+  const double max = m.maxCoeff();
+  const double rng = max - min;
+  if ( rng == 0 ) return;
+
+  for (int i=0; i<n; i++)
+    m[i] = ( m[i] - min ) / rng; 
+  
+  // all done
+}
+

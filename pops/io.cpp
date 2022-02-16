@@ -30,6 +30,7 @@ extern logger_t logger;
 
 void pops_indiv_t::save1( const std::string & id , const std::string & f )
 {
+
   // ID, ne, nf { features , row-major }   
   std::ofstream OUT1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::out );
   bwrite( OUT1, id ) ;
@@ -51,11 +52,17 @@ void pops_indiv_t::save1( const std::string & id , const std::string & f )
 
 void pops_t::load1( const std::string & f )
 {
+  
+    
   std::ifstream IN1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
 
   int total_epochs = 0;
   int n_indiv = 0;
   
+  int ni_validation = 0;
+  int ne_validation = 0;
+  int ne_training = 0;
+
   // get size of data first 
   while ( 1 )
     {
@@ -65,6 +72,15 @@ void pops_t::load1( const std::string & f )
       
       int ne1 = pops_indiv_t::bread_int( IN1 );
       total_epochs += ne1;
+      
+      if ( holdouts.find( id ) != holdouts.end() )
+	{
+	  ne_validation += ne1;
+	  ++ni_validation;
+	}
+      else
+	ne_training += ne1;
+      
       
       int nf1 = pops_indiv_t::bread_int( IN1 );
       if ( nf1 != pops_t::specs.n1 )
@@ -79,50 +95,98 @@ void pops_t::load1( const std::string & f )
     }
   IN1.close();
 
-  logger << "  reading " << total_epochs << " epochs from " << n_indiv << " individuals\n";
+  logger << "  reading " << total_epochs << " epochs from " << n_indiv << " individuals"
+	 << " (" << ni_validation << " of whom held back for model validation)\n";
+
+  // store these for splitting X1 later when passing to LGBM
+  nrows_training = ne_training;
+  nrows_validation = ne_validation;
   
+  // store : note, here set to total (training + validation size) for X1 (only)
   X1.resize( total_epochs , pops_t::specs.n1 );
-  S.resize( total_epochs );
-  E.resize( total_epochs );
+  S.resize( ne_training ); // will push_back() below
+  E.resize( ne_training ); // ...
   
   // track when indivs start/stop
   Istart.clear();
   Iend.clear();
-  
+
+  // validation people (will be added to end of X1, S and E, etc
+  Eigen::MatrixXd X2 = Eigen::MatrixXd::Zero( ne_validation , pops_t::specs.n1 );
+  std::vector<int> S2( ne_validation );
+  std::vector<int> E2( ne_validation );
+  std::vector<int> Istart2, Iend2;
+
   // re-read
   std::ifstream IN2( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
-  total_epochs = 0;
-  
+
+  int offset = ne_training; // i.e. for ultimate Istart[i] -> for appended validations
+  ne_training = 0;
+  ne_validation = 0;
+
   while ( 1 )
     {
       std::string id = pops_indiv_t::bread_str( IN2 );
       if ( IN2.eof() || IN2.bad() ) break;
       
+      const bool is_training = holdouts.find( id ) == holdouts.end();
+
       int ne1 = pops_indiv_t::bread_int( IN2 );      
       int nf1 = pops_indiv_t::bread_int( IN2 );
       
-      Istart.push_back( total_epochs );
-	    
-      for (int i=0; i<ne1; i++)
+      if ( is_training )
 	{
-
-	  // epoch
-	  E[ total_epochs ] = pops_indiv_t::bread_int( IN2 );
-
-	  // stage
-	  S[ total_epochs ] = pops_indiv_t::bread_int( IN2 );
-
-	  // features
-	  for (int j=0; j<pops_t::specs.n1; j++)
-	    X1( total_epochs , j ) = pops_indiv_t::bread_dbl( IN2 );	  
-	  ++total_epochs;
+	  Istart.push_back( ne_training );
+	  for (int i=0; i<ne1; i++)
+	    {
+	      // epoch
+	      E[ ne_training ] = pops_indiv_t::bread_int( IN2 );
+	      // stage
+	      S[ ne_training ] = pops_indiv_t::bread_int( IN2 );
+	      // features
+	      for (int j=0; j<pops_t::specs.n1; j++)
+		X1( ne_training , j ) = pops_indiv_t::bread_dbl( IN2 );	  
+	      ++ne_training;
+	    }
+	  Iend.push_back( ne_training - 1 );
 	}
-      
-      Iend.push_back( total_epochs - 1 );
-      
+      else  // validation individul
+	{
+	  Istart2.push_back( offset + ne_validation );
+	  for (int i=0; i<ne1; i++)
+	    {
+	      // epoch
+	      E2[ ne_validation ] = pops_indiv_t::bread_int( IN2 );
+	      // stage
+	      S2[ ne_validation ] = pops_indiv_t::bread_int( IN2 );
+	      // features
+	      for (int j=0; j<pops_t::specs.n1; j++)
+		X2( ne_validation , j ) = pops_indiv_t::bread_dbl( IN2 );	  
+	      ++ne_validation;
+	    }
+	  Iend2.push_back( offset + ne_validation - 1 );
+	}
     }
   IN2.close();
   
+  // now concatenate training and validation samples  
+  
+  // space was already pre-allocated for X1
+  X1.bottomRows( ne_validation ) = X2; 
+  
+  // extend indiv-level stores
+  for (int i=0; i<Istart2.size(); i++)
+    {
+      Istart.push_back( Istart2[i] );
+      Iend.push_back( Iend2[i] );      
+    }
+
+  for (int i=0; i<ne_validation; i++)
+    {
+      S.push_back( S2[i] );
+      E.push_back( E2[i] );
+    }
+
 }
 
 

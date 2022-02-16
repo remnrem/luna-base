@@ -65,7 +65,7 @@
 extern logger_t logger;
 extern writer_t writer;
 
-pops_opt_t pops_t::opt;
+//pops_opt_t pops_t::opt;
 lgbm_t pops_t::lgbm;
 bool pops_t::lgbm_model_loaded = false;
 pops_specs_t pops_t::specs;
@@ -83,45 +83,71 @@ void pops_t::make_level2_library( param_t & param )
 
   std::string lgbm_model  = param.requires( "model" );
   std::string data_file   = param.requires( "data" );
-
+  
   std::string lgbm_config   = param.has( "config" ) ? param.value( "config" ) : ".";
   std::string feature_file  = param.has( "features" ) ? param.value( "features" ) : "." ;
   
   // feature specifications (used to generate l1-data)
   pops_t::specs.read( feature_file );
-
+  
+  // validation dataset for LGBM (expected in main set, but will be partitioned off)
+  if ( param.has( "hold-outs" ) )
+    load_validation_ids( param.value( "hold-outs" ) );
+  
   // get previous data: assume single file, concatenated
   // this will populate: X1, S, E and Istart/Iend
+  // validation IDs will be at the end
   load1( data_file );
 
   // expand X1 to include space for level-2 features
   X1.conservativeResize( Eigen::NoChange , pops_t::specs.na );
   
-  // std::cout << " Is " << Istart.size();
-  // for (int i=0; i<Istart.size(); i++)
-  //   std::cout << "i " << i+1 << " " << Istart[i] << " ... " << Iend[i] << "\n";
-
-  const int n = S.size();
-  std::map<int,int> ss;
-  for (int i=0; i<n; i++) ss[S[i]]++;
-  std::map<int,int>::const_iterator ii = ss.begin();
-  while ( ii != ss.end() )
+  
+  // summarize training and validation dataset counts  
+  std::map<int,int> ss_training, ss_valid;
+  for (int i=0; i<nrows_training; i++) 
+    ss_training[S[i]]++;
+  for (int i=nrows_training; i<nrows_validation+nrows_training; i++) 
+    ss_valid[S[i]]++;
+  
+  logger << "  in nT=" << Istart.size() - holdouts.size() << " training individuals, and nV=" 
+	 << holdouts.size() << " validation individuals, stage epoch counts:\n";
+  std::map<int,int>::const_iterator ii = ss_training.begin();
+  while ( ii != ss_training.end() )
     {
-      logger << "  " << pops_t::label( (pops_stage_t)ii->first ) << " = " << ii->second << "\n";
+      logger << "  " << pops_t::label( (pops_stage_t)ii->first ) << "\t" 
+	     << " train = " << ii->second << "\t"
+	     << " validation = " << ss_valid[ ii->first ] << "\n";
       ++ii;
     }
   
-  // derive level-2 stats
+  // derive level-2 stats (jointly in *all* indiv. training + valid ) 
   level2();
-
+  
   // LGBM config (user-specified, or default for POPS)
   if ( lgbm_config == "." )
     lgbm.load_pops_default_config();
   else    
     lgbm.load_config( lgbm_config );
 
+  // set number of iterations?
+  if ( param.has( "iterations" ) ) 
+    lgbm.n_iterations = param.requires_int( "iterations" );
+  
+  // stage weights?    
+  std::vector<double> wgts(  pops_opt_t::n_stages , 1.0 );
+  
+  if ( param.has( "weights" ) ) // order must be W, R, NR...
+    {
+      wgts = param.dblvector( "weights" );
+      if ( wgts.size() != pops_opt_t::n_stages )
+	Helper::halt( "expecting " + Helper::int2str( pops_opt_t::n_stages ) + " stage weights" );
+    }
+  
+  lgbm_label_t weights( pops_opt_t::n_stages == 5 ? pops_t::labels5 : pops_t::labels3 , wgts );
+  
   // do training
-  fit_model( lgbm_model );
+  fit_model( lgbm_model , weights );
   
 }
 
@@ -151,13 +177,16 @@ void pops_t::level2( const bool training )
       const bool inplace = from_block == to_block;      
       std::vector<int> from_cols = pops_t::specs.block_cols( from_block , pops_t::specs.na );
       std::vector<int> to_cols = pops_t::specs.block_cols( to_block , pops_t::specs.na );
-
       
-      logger << "   - adding level-2 feature " << l2ftr << ": " 
-	     << from_block << " (n=" << from_cols.size() 
-	     << ") --> " 
-	     << to_block << " (n=" << to_cols.size() << ", cols:" << to_cols[0] << "-" << to_cols[to_cols.size()-1] << ") \n";
+      logger << "   - adding level-2 feature " << l2ftr << ": "; 
 
+      if ( from_cols.size() > 0 )  // time track does not have "from" cols
+	logger << from_block << " (n=" << from_cols.size() << ") ";
+      
+      logger << "--> " 
+	     << to_block << " (n=" << to_cols.size() << ", cols:" 
+	     << to_cols[0] << "-" << to_cols[to_cols.size()-1] << ") \n";
+      
       // for (int j=0;j<from_cols.size();j++) logger << " " << from_cols[j] ;
       // logger << "\n";
       
@@ -196,6 +225,7 @@ void pops_t::level2( const bool training )
 	    }
 	}
 
+
       //
       // DENOSIE 
       //
@@ -223,6 +253,81 @@ void pops_t::level2( const bool training )
 	      X1.col( to_cols[j] ) = D;
 	    }	  
         }
+
+
+      //
+      // DERIV
+      //
+
+      if ( spec.ftr == POPS_DERIV )
+        {
+	  const int hw = spec.narg( "half-window" ) ;
+	  
+	  // these should always match
+	  if ( nfrom != nto )
+	    Helper::halt( "internal error (2) in level2()" );
+	  
+	  for (int j=0; j<nfrom; j++)
+	    {
+	      
+	      Eigen::VectorXd D = X1.col( from_cols[j] ) ;
+
+	      // need to go person-by-person
+	      for (int i=0; i<ni; i++)
+		{
+		  int fromi = Istart[i];
+		  int sz    = Iend[i] - Istart[i] + 1;
+		  
+		  // place back as slope of [ -hw , X , +hw ] epoch interval
+		  eigen_ops::deriv( D.segment( fromi , sz ) , hw );
+		  
+		}
+	      // place back 
+	      X1.col( to_cols[j] ) = D;
+	    }	  
+
+	}
+
+      //
+      // CUMUL
+      //
+      
+      if ( spec.ftr == POPS_CUMUL )
+	{
+	  
+	  // -1 and +1  for neg and pos accumulators
+	  // 0 = norm (default) .. scale to 0..1 first then add; then scale 0..1 again
+	  // 2 = abs() values
+
+	  int ctype = 0;
+	  if ( spec.arg[ "type" ] == "pos" ) ctype = 1;
+	  else if ( spec.arg[ "type" ] == "neg" ) ctype = -1;
+	  else if ( spec.arg[ "type" ] == "abs" ) ctype = 2; // abs
+	  
+	  // these should always match
+	  if ( nfrom != nto )
+	    Helper::halt( "internal error (2) in level2()" );
+	  
+	  // need to go person-by-person
+	  for (int j=0; j<nfrom; j++)
+	    {
+
+	      Eigen::VectorXd D = X1.col( from_cols[j] ) ;
+
+	      for (int i=0; i<ni; i++)
+		{
+		  int fromi = Istart[i];
+		  int sz    = Iend[i] - Istart[i] + 1;
+		  
+		  // place back as a 0..1 variable 
+		  eigen_ops::accumulate( D.segment( fromi , sz ) , ctype );
+		  
+		}
+	      // place back 
+	      X1.col( to_cols[j] ) = D;
+	    }	  
+        }
+
 
       //
       // NORM (within person)
@@ -307,8 +412,12 @@ void pops_t::level2( const bool training )
 	      
 	      if ( V.find( wvfile ) == V.end() ) // do once
 		{
-		  logger << "   - reading SVD W and V from " << wvfile << "\n";
-		  std::ifstream IN1( Helper::expand( wvfile ).c_str() , std::ios::in );
+		  // allow for 'path' option to modify where this file is
+		  std::string filename = pops_t::update_filepath( wvfile );
+		  logger << "   - reading SVD W and V from " << filename << "\n";
+		  if ( ! Helper::fileExists( filename ) ) 
+		    Helper::halt( "cannot find " + filename + "\n (hint: add a 'path' arg to point to the .svd file" );
+		  std::ifstream IN1( filename.c_str() , std::ios::in );
 		  int nrow, ncol;
 		  IN1 >> nrow >> ncol;
 		  
@@ -343,9 +452,32 @@ void pops_t::level2( const bool training )
 
 	    }
 	}
-    
+      
+      
+      //
+      // TIME 
+      //
+      
+      if ( spec.ftr == POPS_TIME )
+	{
+	  
+          const int order = spec.narg( "order" );
+	  
+          // need to go person-by-person                                                                                                                                                    
+	  for (int i=0; i<ni; i++)
+	    {
+	      int fromi = Istart[i];
+	      int sz    = Iend[i] - Istart[i] + 1;
+	      X1.block( fromi , to_cols[0] , sz , nto ) = pops_t::add_time_track( sz , order );
+	    }
+	  
+	}
+      
+
     }
   
+  
+
   
   //
   // Select FINAL feature set  (pops_t::specs.nf)
@@ -383,13 +515,41 @@ void pops_t::level2( const bool training )
 // fit and save a LGBM model
 //
 
-void pops_t::fit_model( const std::string & modelfile )
+void pops_t::fit_model( const std::string & modelfile , const lgbm_label_t & weights )
 {
-  // trainging data
-  lgbm.attach_training_matrix( X1 );
+  // training   X1.topRows( nrows_training )   -->   S1
+  // validaiton X1.bottomRows( nrows_validation )   --> S2
+
+  // split stages 
+  std::vector<int> S1 = S;
+  S1.resize( nrows_training );
+
+  std::vector<int> S2;
+  for (int i=nrows_training; i<nrows_training+nrows_validation; i++)
+    S2.push_back(S[i]);
+  
+  // training data
+  lgbm.attach_training_matrix( X1.topRows( nrows_training ) );
 
   // labels
-  lgbm.attach_training_labels( S );
+  lgbm.attach_training_labels( S1 );
+
+  // training weights
+  lgbm.apply_label_weights( lgbm.training , weights );
+  
+ 
+  // validation data?
+  if ( nrows_validation ) 
+    {
+      lgbm.attach_validation_matrix( X1.bottomRows( nrows_validation) );
+
+      // labels
+      lgbm.attach_validation_labels( S2 );
+      
+      // training weights
+      lgbm.apply_label_weights( lgbm.validation , weights );
+      
+    }
 
   // fit model
   lgbm.create_booster();
@@ -628,12 +788,53 @@ Eigen::MatrixXd pops_t::add_time_track( const int nr , const int tt )
   for (int r=0; r<nr; r++)
     for ( int c=0; c<tt; c++)
       T(r,c) = pow( ( r / (double)nr ) - 0.5 , c+1 );
-  
+   
   return T;
   
 }
 
+
+void pops_t::load_validation_ids( const std::string & f )
+{
+  holdouts.clear();
+  
+  if ( ! Helper::fileExists( Helper::expand( f ) ) )
+    Helper::halt( "could not open " + f );
+  
+  std::ifstream IN1( Helper::expand( f ).c_str() , std::ios::in );
+  while ( ! IN1.eof() ) 
+    {
+      std::string id;
+      IN1 >> id;
+      if ( id == "" || IN1.eof() ) break;
+      holdouts.insert( id );
+    }
+  IN1.close();
+
+  logger << "  read " << holdouts.size() 
+	 << " validation dataset individuals from " 
+	 << f << "\n";
+  
+}
+
+std::string pops_t::update_filepath( const std::string & f )
+{
+  if ( f == "" ) Helper::halt( "empty file name" );
+  std::string f2 = Helper::expand( f );
+
+  if ( pops_opt_t::pops_path == "" ) return f2;
+  
+  // add a path before hand (unless we're already given an absolute path)
+  if ( f2[0] != globals::folder_delimiter && pops_opt_t::pops_path != "" )
+    f2 = globals::folder_delimiter + pops_opt_t::pops_path + f2;
+  
+  return f2;
+}
+
+
 #endif
+
+
 
 
 

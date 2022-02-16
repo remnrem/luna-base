@@ -52,6 +52,13 @@ enum pops_stage_t
 
 struct pops_t {
   
+  pops_t() { } 
+  
+  pops_t( param_t & param ) 
+  {
+    pops_opt_t::set_options( param );
+  }
+
   // two main entry points
   
   // 1) when predicting, we need to load the LGBM model
@@ -61,6 +68,9 @@ struct pops_t {
   // i.e. for trainer and/or validation library
   void make_level2_library( param_t & );
 
+  // load list of validation (vs training) IDs
+  void load_validation_ids( const std::string & );
+
   // load level 1 data
   void load1( const std::string & f );
 
@@ -69,18 +79,18 @@ struct pops_t {
   void level2( const bool training = true );
 
   // fit and save a LGBM model (--> pops_t::lgbm)
-  void fit_model( const std::string & f );
+  void fit_model( const std::string & f , const lgbm_label_t & w );
 
   // for using level2() in the context of prediction
   void from_single_target( const pops_indiv_t & );
   void copy_back( pops_indiv_t * );  
   
-  static pops_opt_t opt;
+  //  static pops_opt_t opt;
   
   static lgbm_t lgbm;
 
   static bool lgbm_model_loaded;
-
+  
   static pops_specs_t specs;
 
   //
@@ -90,13 +100,18 @@ struct pops_t {
   Eigen::MatrixXd X1;
   std::map<std::string,Eigen::MatrixXd> V; // when reading in level2 SVD scoring
   std::map<std::string,Eigen::MatrixXd> W;  
+  
   std::vector<int> S;
   std::vector<int> E;
   std::vector<int> Istart, Iend;
+  std::set<std::string> holdouts; // validation IDs
+  int nrows_training, nrows_validation;
 
   //
   // helpers
   //
+
+  static std::string update_filepath( const std::string & s );
   
   static Eigen::MatrixXd add_time_track( const int , const int );
 

@@ -52,7 +52,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
   const bool training_mode = param.has( "train" );
   
-  const bool do_SHAP = param.has( "SHAP" );
+  const bool dump_features = param.has( "dump" );
 
   trainer = training_mode;
   
@@ -74,6 +74,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   staging( edf , param );
 
 
+  
   //
   // training mode: derive level-1 stats and then quit
   //
@@ -95,6 +96,28 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       level1( edf );
 
       level2();
+      
+      logger << "  final feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
+      
+      if ( dump_features ) 
+	{
+	  std::string dfile = Helper::expand( param.value( "dump" ) );
+	  logger << "  dumping feature matrix to " << dfile << "\n";
+	  std::ofstream O1( dfile.c_str() , std::ios::out );
+	  O1 << "SS";
+	  std::vector<std::string> labels = pops_t::specs.select_labels();
+	  for (int i=0; i<labels.size(); i++) O1 << "\t" << labels[i];
+	  O1 << "\n";
+	  for (int i=0; i<X1.rows(); i++)
+	    {
+	      O1 << pops_t::label( (pops_stage_t)S[i] );
+	      for (int j=0; j<X1.cols(); j++)
+		O1 << "\t" << X1(i,j);
+	      O1 << "\n";
+	    }
+	  O1.close();
+	}
+
 
       if ( ! pops_t::lgbm_model_loaded )
 	{
@@ -106,7 +129,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       
       predict();
       
-      if ( do_SHAP  ) SHAP();
+      SHAP();
 
       summarize();
     }
@@ -270,8 +293,8 @@ void pops_indiv_t::level1( edf_t & edf )
   // PSD (Welch) parameters 
   //
 
-  double fft_segment_size = 4;  
-  double fft_segment_overlap = 2;
+  double fft_segment_size = pops_opt_t::fft_seg_sec ;  // 4
+  double fft_segment_overlap = pops_opt_t::fft_inc_sec ; // 2
   
   if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
     {
@@ -293,6 +316,7 @@ void pops_indiv_t::level1( edf_t & edf )
 
   std::vector<std::string> slabs;
   std::vector<int> slots;
+  const bool silent_signal_search = true;
 
   signal_list_t signals;
   
@@ -301,18 +325,18 @@ void pops_indiv_t::level1( edf_t & edf )
     {
       
       // primary?
-      int slot = edf.header.signal( ss->first );
+      int slot = edf.header.signal( ss->first , silent_signal_search );
 
       // match on an alias?
       if ( slot == -1 ) 
 	{
-	  
+
 	  const std::set<std::string> & aliases = ss->second.aliases;
-	  
+
 	  std::set<std::string>::const_iterator aa = aliases.begin();
 	  while ( aa != aliases.end() )
 	    {
-	      slot = edf.header.signal( *aa );
+	      slot = edf.header.signal( *aa , silent_signal_search );
 	      if ( slot != -1 ) break;
 	      ++aa;
 	    }
@@ -329,6 +353,15 @@ void pops_indiv_t::level1( edf_t & edf )
       if ( edf.header.sampling_freq( slot ) != ss->second.sr )
         dsptools::resample_channel( edf, slot , ss->second.sr );
       
+      // need to rescale?
+      if ( Helper::toupper( edf.header.phys_dimension[ slot ] ) != Helper::toupper( ss->second.unit ) )
+	{
+	  logger << "  rescaling " << ss->first 
+		 << " from " << edf.header.phys_dimension[ slot ] 
+		 << " to " << ss->second.unit << "\n";
+	  edf.rescale( slot , ss->second.unit );
+	}
+
       // build signal_list_t
       signals.add( slot , ss->first );
       
@@ -413,10 +446,13 @@ void pops_indiv_t::level1( edf_t & edf )
 	  
 	  const bool do_spectral =
 	    pops_t::specs.has( pops_feature_t::POPS_LOGPSD , siglab ) ||
-	    pops_t::specs.has( pops_feature_t::POPS_RELPSD , siglab ) ||
-	    pops_t::specs.has( pops_feature_t::POPS_SLOPE , siglab ) ||
-	    pops_t::specs.has( pops_feature_t::POPS_CVPSD , siglab );
-	  
+	    pops_t::specs.has( pops_feature_t::POPS_RELPSD , siglab ) ||	    
+	    pops_t::specs.has( pops_feature_t::POPS_CVPSD , siglab ) || 
+	    pops_t::specs.has( pops_feature_t::POPS_BANDS , siglab ) ||
+	    pops_t::specs.has( pops_feature_t::POPS_RBANDS , siglab ) ||	    
+	    pops_t::specs.has( pops_feature_t::POPS_VBANDS , siglab ) || 	  
+	    pops_t::specs.has( pops_feature_t::POPS_SLOPE , siglab );
+
 	  const bool do_skew = pops_t::specs.has( pops_feature_t::POPS_SKEW , siglab );
 	  
 	  const bool do_kurt = pops_t::specs.has( pops_feature_t::POPS_KURTOSIS , siglab );
@@ -597,6 +633,82 @@ void pops_indiv_t::level1( edf_t & edf )
 		  
 		}
 	      
+
+	      //
+	      // Band power? (abs, rel or CV)
+	      //
+	      
+	      const bool do_bands = pops_t::specs.has( pops_feature_t::POPS_BANDS , siglab )  
+		|| pops_t::specs.has( pops_feature_t::POPS_RBANDS , siglab )  
+		|| pops_t::specs.has( pops_feature_t::POPS_VBANDS , siglab );
+
+	      if ( do_bands && ! bad_epoch )
+		{
+		  
+		  // fixed 6 bands: 
+		  if (  pops_t::specs.has( pops_feature_t::POPS_BANDS , siglab ) 
+			|| pops_t::specs.has( pops_feature_t::POPS_RBANDS , siglab ) )
+		    {
+
+		      double p_slow = pwelch.psdsum( SLOW );
+		      double p_delta = pwelch.psdsum( DELTA );
+		      double p_theta = pwelch.psdsum( THETA );
+		      double p_alpha = pwelch.psdsum( ALPHA );
+		      double p_sigma = pwelch.psdsum( SIGMA );
+		      double p_beta = pwelch.psdsum( BETA );
+
+		      if ( pops_t::specs.has( pops_feature_t::POPS_BANDS , siglab ) )
+			{
+			  std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_BANDS , siglab ) ;
+			  const int ncols = cols.size();
+			  if ( ncols != 6 ) Helper::halt( "internal error in bands" );
+			  // abs power PSD bands
+			  X1( en , cols[0] ) = log( p_slow );
+			  X1( en , cols[1] ) = log( p_delta );
+			  X1( en , cols[2] ) = log( p_theta );
+			  X1( en , cols[3] ) = log( p_alpha );
+			  X1( en , cols[4] ) = log( p_sigma );
+			  X1( en , cols[5] ) = log( p_beta );
+			}
+		      
+		      if ( pops_t::specs.has( pops_feature_t::POPS_RBANDS , siglab ) )
+			{
+			  std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_RBANDS , siglab ) ;
+                          const int ncols = cols.size();
+                          if ( ncols != 6 ) Helper::halt( "internal error in rbands" );
+			  const double p_total = p_slow + p_delta + p_theta + p_alpha + p_sigma + p_beta;
+			  // rel power PSD bands
+                          X1( en , cols[0] ) = p_slow / p_total ;
+                          X1( en , cols[1] ) = p_delta / p_total ;
+                          X1( en , cols[2] ) = p_theta / p_total ;
+                          X1( en , cols[3] ) = p_alpha / p_total ;
+                          X1( en , cols[4] ) = p_sigma / p_total ;
+                          X1( en , cols[5] ) = p_beta / p_total ;
+                        }
+		    }
+
+
+		  // VBANDS 
+
+		  if ( pops_t::specs.has( pops_feature_t::POPS_VBANDS , siglab ) )
+		    {		      
+		      std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_VBANDS , siglab ) ;
+		      const int ncols = cols.size();
+		      if ( ncols != 6 ) Helper::halt( "internal error in vbands" );
+		      // save CV of PSD bands
+		      X1( en , cols[0] ) = pwelch.psdsdsum( SLOW );
+		      X1( en , cols[1] ) = pwelch.psdsdsum( DELTA );
+		      X1( en , cols[2] ) = pwelch.psdsdsum( THETA );
+		      X1( en , cols[3] ) = pwelch.psdsdsum( ALPHA );
+		      X1( en , cols[4] ) = pwelch.psdsdsum( SIGMA );
+		      X1( en , cols[5] ) = pwelch.psdsdsum( BETA );
+		    }
+
+
+		}
+
+	      
+
 	      //
 	      // Spectral slope?
 	      //
@@ -660,18 +772,18 @@ void pops_indiv_t::level1( edf_t & edf )
 	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_PE , siglab ) ;
 	       
 	       int sum1 = 1;
-	       std::vector<double> pd3 = pdc_t::calc_pd( *d , 3 , 1 , &sum1 );
-	       std::vector<double> pd4 = pdc_t::calc_pd( *d , 4 , 1 , &sum1 );
-	       std::vector<double> pd5 = pdc_t::calc_pd( *d , 5 , 1 , &sum1 );
-	       std::vector<double> pd6 = pdc_t::calc_pd( *d , 6 , 1 , &sum1 );
-	       std::vector<double> pd7 = pdc_t::calc_pd( *d , 7 , 1 , &sum1 );
-	       
-	       X1( en , cols[0] ) = pdc_t::permutation_entropy( pd3 );
-	       X1( en , cols[1] ) = pdc_t::permutation_entropy( pd4 );
-	       X1( en , cols[2] ) = pdc_t::permutation_entropy( pd5 );
-	       X1( en , cols[3] ) = pdc_t::permutation_entropy( pd6 );
-	       X1( en , cols[4] ) = pdc_t::permutation_entropy( pd7 );
-	       
+	       pops_spec_t spec = pops_t::specs.fcmap[ pops_feature_t::POPS_PE ][ siglab ];
+	       int n1 = spec.narg( "from" );
+	       int n2 = spec.narg( "to" );
+	       if ( cols.size() != n2 - n1 + 1 ) 
+		 Helper::halt("internal error in PE cols" );
+
+	       int k = 0;
+	       for (int j=n1; j<=n2; j++)
+		 {
+		   std::vector<double> pd = pdc_t::calc_pd( *d , j , 1 , &sum1 );		   
+		   X1( en , cols[k++] ) = pdc_t::permutation_entropy( pd );
+		 }	       
 	     }
 
 	   //
@@ -835,7 +947,10 @@ void pops_indiv_t::SHAP()
   const int n_classes = pops_opt_t::n_stages;
   const int n_features = pops_t::specs.nf;
   
-  // get means
+  //
+  // always report get means 
+  //
+
   Eigen::MatrixXd C = Eigen::MatrixXd::Zero( n_features , n_classes );
   
   std::vector<std::string> labels = pops_t::specs.select_labels();
@@ -845,7 +960,6 @@ void pops_indiv_t::SHAP()
   int p = 0;
   for (int c = 0 ; c < n_classes ; c++)
     {
-
       if ( pops_opt_t::n_stages == 5 ) 
 	writer.level( pops_t::labels5[ c ] , globals::stage_strat );
       else
@@ -862,6 +976,45 @@ void pops_indiv_t::SHAP()
     }
   writer.unlevel( globals::stage_strat );
 
+
+  //
+  // Verbose mode: epoch level SHAP (i.e. do for single indiv)
+  //
+  
+  if ( pops_opt_t::epoch_level_SHAP )
+    {
+      logger << "  reporting epoch-level SHAP values...\n";
+      
+      int p = 0;
+      for (int c = 0 ; c < n_classes ; c++)
+	{	  
+	  if ( pops_opt_t::n_stages == 5 ) 
+	    writer.level( pops_t::labels5[ c ] , globals::stage_strat );
+	  else
+	    writer.level( pops_t::labels3[ c ] , globals::stage_strat );
+	  
+	  for (int r = 0; r < n_features ; r++)
+	    {
+	      writer.level( labels[r] , globals::feature_strat );
+	      
+	      // epoch	     
+	      for (int e = 0; e < ne ; e++) 
+		{
+		  writer.epoch( e+1 );
+		  writer.value( "SHAP" , SHAP(e,p) );
+		}
+	      writer.unepoch();
+	      
+	      // next column for SHAP
+	      p++;
+	      
+	    } // next feature
+	  writer.unlevel( globals::feature_strat );
+	}
+      
+      writer.unlevel( globals::stage_strat );
+    }
+  
 }
 
 void pops_indiv_t::summarize()
@@ -872,11 +1025,13 @@ void pops_indiv_t::summarize()
   
   int slp_lat_obs = -1 , slp_lat_prd = -1;
   int rem_lat_obs = -1 , rem_lat_prd = -1;
-
+  
   //
   // epoch-level output (posteriors & predictions)
   //  
   
+  double avg_pmax = 0;
+
   for (int e=0; e<ne; e++)
     {
       
@@ -898,6 +1053,8 @@ void pops_indiv_t::summarize()
       // predicted (original)
       int predx;
       double pmax = P.row(e).maxCoeff(&predx);
+      writer.value( "CONF" , pmax );
+      avg_pmax += pmax;
       preds.push_back( predx );
       writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
   
@@ -925,15 +1082,13 @@ void pops_indiv_t::summarize()
 
   writer.unepoch();
 
-  
   //
   // Summaries
   //  
 
   // durations in minutes, so get scaling factor
   const double fac = pops_opt_t::epoch_len / 60.0 ; 
-  
-  
+    
   // 5-class stats
   pops_stats_t stats( S, preds , 5 );
 
@@ -948,7 +1103,9 @@ void pops_indiv_t::summarize()
 
   writer.value( "ACC" , stats.acc );
   writer.value( "ACC3" , stats3.acc );
-  
+
+  writer.value( "CONF" , avg_pmax / (double)ne );
+    
   writer.value( "MCC" , stats.mcc );
   writer.value( "MCC3" , stats3.mcc );
 
@@ -963,9 +1120,11 @@ void pops_indiv_t::summarize()
   writer.value( "F13" , stats3.macro_f1 );
   writer.value( "PREC3" , stats3.macro_precision );
   writer.value( "RECALL3" , stats3.macro_recall );
-  
+
+  //
   // stage specific precision/recall
-  
+  //
+
   for ( int l=0;l<pops_opt_t::n_stages; l++)
     {
       writer.level( pops_t::labels5[l] , globals::stage_strat );
@@ -976,8 +1135,10 @@ void pops_indiv_t::summarize()
   writer.unlevel( globals::stage_strat );
 
 
-
+  //
   // sleep and REM latencies
+  //
+
   if ( slp_lat_obs >= 0 ) 
     writer.value( "SLP_LAT_OBS" , slp_lat_obs * fac );
   if ( slp_lat_prd >= 0 ) 

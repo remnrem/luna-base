@@ -264,10 +264,34 @@ bool lgbm_t::create_booster( )
 				  0 ,  //  dataset index == 0 training, 1 = 1st validation dataset, etc
 				  &out_len ,
 				  eval.data() );
+
+      if ( flag ) 
+	Helper::halt( "problem evaluating training data" );
+
+      int out_len_valid;
+      std::vector<double> eval_valid( num_validation_eval_metrics , 0 );
       
-      
-      logger << " iteration " << i+1 << ":";
-      for (int i=0; i<out_len; i++) logger << " " << eval[i];
+      if ( has_validation )
+	{
+	  flag = LGBM_BoosterGetEval( booster ,
+				      1 ,  //  dataset index == 0 training, 1 = 1st validation dataset, etc
+				      &out_len_valid ,
+				      eval_valid.data() );
+
+	  if ( flag ) 
+	    Helper::halt( "problem evaluating validation data" );
+	}
+
+      logger << " iteration " << i+1 << ": training =";
+
+      for (int i=0; i<out_len; i++) 
+	logger << " " << eval[i];
+      if ( has_validation ) 
+	{
+	  logger << " validation =";
+	  for (int i=0; i<out_len_valid; i++)
+	    logger << " " << eval_valid[i];
+	}
       logger << "\n";
       
     }
@@ -561,8 +585,6 @@ Eigen::MatrixXd lgbm_t::SHAP_values( const Eigen::MatrixXd & X )
 				    out_result );
 
   
-  std::cout << " got " << out_len3 << "\n";
-
   if ( flag )
     Helper::halt( "issue w/ getting SHAP values" );
   
@@ -748,7 +770,7 @@ bool lgbm_t::apply_label_weights( DatasetHandle d , const lgbm_label_t & l )
   const int n = lgbm_t::rows( d );
 
   std::vector<float> w( n , 1.0 );
-
+  
   for (int i=0; i<n; i++)
     {
       if ( lab[i] < 0 || lab[i] >= l.n )

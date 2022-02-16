@@ -522,6 +522,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   if ( is_eannot && ! parent_edf.header.continuous ) 
     Helper::halt( "cannot use .eannot files with discontinuous (EDF+) files" );
 
+
   // otherwise, need to figure this out by looking at the file?
   
   if ( ! ( is_eannot || is_annot ) )
@@ -572,6 +573,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	Helper::halt( "unable to determine whether " + f + " is .annot or .eannot format" );
       
     }
+  
 
 
   //
@@ -625,7 +627,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // Otherwise, this is an .annot file   
   //
 
-  
   std::ifstream FIN( f.c_str() , std::ios::in );
 
   // header with # character
@@ -699,6 +700,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	Helper::safe_getline( FIN , line );      
 
       if ( FIN.eof() || line == "" ) continue;
+
       
       //
       // header or data row? , or type header (optionally, this is skipped)  
@@ -761,7 +763,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  annot_t * a = parent_edf.timeline.annotations.add( name );
 
-	  
+
 	  //
 	  // store a temporary lookup table
 	  //
@@ -874,7 +876,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      if ( ! Helper::iequals( tok[1] , "start" ) ) Helper::halt( "expecting column 2 to be 'start':\n" + line );
 	      if ( ! Helper::iequals( tok[2] , "stop" ) ) Helper::halt( "expecting column 3 to be 'stop':\n" + line );	      
 	    }
-
 	  else
 	    Helper::halt( "invalid header line:\n" + line );
 	  
@@ -894,7 +895,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    Helper::parse( line , "\t" );
 	  
 	  if ( tok.size() == 0 ) continue; 
-
+	  
+	  if ( tok.size() == 1 ) 
+	    Helper::halt( "invalid data line:\n" + line + "\n (hint: use the 'tab-only' option to ignore space delimiters)" );
 	  
 	  //
 	  // Get class name, first remapping
@@ -903,13 +906,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  std::string aname = nsrr_t::remap( tok[0] );
 	  
 	  if ( aname == "" ) continue;
-
+	  
 	  //
 	  // Sanitize, but keep '/' and '.' symbol here though...
 	  //
 
 	  if ( globals::sanitize_everything )
 	    aname = Helper::sanitize( aname , globals::class_inst_delimiter );
+
 
 	  //
 	  // save original class name (prior to any combining)
@@ -923,6 +927,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 
 	  std::string iname = tok[1];
+
 
 	  //
 	  // Sanitize instance ID?
@@ -941,6 +946,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // Is this an aggregate class/inst form?
 	  //
+
 
 	  const bool split_annot = aname.find( globals::class_inst_delimiter ) != std::string::npos;
 	  
@@ -965,7 +971,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      // so switch that in below also
 	      new_inst_id = toks[1];
 	    }
-	  
+
+
 	  //
 	  // are we skipping this annotation anyway?
 	  //

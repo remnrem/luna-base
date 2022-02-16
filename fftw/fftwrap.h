@@ -492,6 +492,24 @@ class PWELCH
     return r * fbin;
 
   }
+
+  double psdsdsum( double lwr , double upr )
+  {
+    // add is l <= x < y 
+    double r = 0;
+    for (int i=0;i<N;i++) 
+      {
+	if ( freq[i] >= upr ) break;
+	if ( freq[i] >= lwr ) r += psdsd[i];
+      }
+
+    // area under the curve, multiple by bin width for each area
+    double fbin = freq[1] - freq[0];
+
+    return r * fbin;
+
+  }
+
   
   double psdsum( frequency_band_t b )    
   {
@@ -501,6 +519,14 @@ class PWELCH
     return psdsum( f.first , f.second );
   }
  
+  double psdsdsum( frequency_band_t b )    
+  {
+    if ( globals::freq_band.find( b ) == globals::freq_band.end() ) 
+      return 0;    
+    freq_range_t f = globals::freq_band[ b ];
+    return psdsdsum( f.first , f.second );
+  }
+
   void psdsum( std::map<freq_range_t,double> * );
 
   void psdmean( std::map<freq_range_t,double> * );

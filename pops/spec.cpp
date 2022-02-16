@@ -102,20 +102,23 @@ void pops_specs_t::read( const std::string & f )
       
       if ( Helper::toupper( tok[0] ) == "CH" )
         {	  
-	  if ( tok.size() < 3 )
-            Helper::halt( "expecing: CH label {label2} {label3} ... SR" );
+	  if ( tok.size() < 4 )
+            Helper::halt( "expecing: CH label {label2} {label3} ... SR UNIT" );
 	  
-	  // last entry must be sample rate
+	  // last two entries must be sample rate & unit
           int sr ;
-          if ( ! Helper::str2int( tok[tok.size()-1] , &sr ) )
+          if ( ! Helper::str2int( tok[tok.size()-2] , &sr ) )
             Helper::halt( "bad format: " + line );
 	  
-	  // store any aliases
-	  std::set<std::string> aliases;
-	  for (int i=2;i<tok.size()-1;i++)
+	  std::string unit = tok[ tok.size()-1 ];
+
+	  // store any aliases (first fetching from the commad line)
+	  std::set<std::string> aliases = pops_opt_t::aliases[ tok[1] ];
+	  for (int i=2;i<tok.size()-2;i++)
 	    aliases.insert( tok[i] );
-	  chs[ tok[1] ] = pops_channel_t( tok[1] , aliases , sr ) ;
 	  
+	  chs[ tok[1] ] = pops_channel_t( tok[1] , aliases , sr , unit ) ;
+
           // next line
 	  continue;
         }
@@ -205,15 +208,18 @@ void pops_specs_t::read( const std::string & f )
       // check block names
       if ( level1 || ftr == "TIME" )
 	{
-	  bmap.insert( block );
-	  
 	  // special case: lvl1 outliers command -- set 'channel' as the new block
 	  if ( ftr == "OUTLIERS" )
-	    {	      
+	    {	      	      
+	      // requires that we've seen this block already
+	      if ( bmap.find( block ) == bmap.end() )
+		Helper::halt( "OUTLIERS specified block " + block + " not found" );
 	      tchs.clear();
 	      tchs.push_back( block );
 	    }
 	  
+	  // mark that we've seen this block
+	  bmap.insert( block );
 	}
 	else
 	  {
@@ -274,10 +280,10 @@ void pops_specs_t::read( const std::string & f )
 
   int nf = total_cols();
   // int nf_selected = select_cols();
-    
+  
   // & construct the map of specs/channels to feature columns
   build_colmap();
-
+  
 }
 
 
@@ -287,6 +293,11 @@ void pops_specs_t::init()
   lab2ftr[ "SPEC" ] = POPS_LOGPSD;
   lab2ftr[ "RSPEC" ] = POPS_RELPSD;
   lab2ftr[ "VSPEC" ] = POPS_CVPSD;
+
+  lab2ftr[ "BAND" ] = POPS_BANDS;
+  lab2ftr[ "RBAND" ] = POPS_RBANDS;
+  lab2ftr[ "VBAND" ] = POPS_VBANDS;
+  
   lab2ftr[ "SLOPE" ] = POPS_SLOPE;
   lab2ftr[ "SKEW" ] = POPS_SKEW;
   lab2ftr[ "KURTOSIS" ] = POPS_KURTOSIS;
@@ -302,10 +313,16 @@ void pops_specs_t::init()
   lab2ftr[ "SVD" ] = POPS_SVD;
   lab2ftr[ "NORM" ] = POPS_NORM;
   lab2ftr[ "RESCALE" ] = POPS_RESCALE;
+  lab2ftr[ "CUMUL" ] = POPS_CUMUL;
+  lab2ftr[ "DERIV" ] = POPS_DERIV;
 
   ftr2lab[ POPS_LOGPSD ] = "SPEC";
   ftr2lab[ POPS_RELPSD ] = "RSPEC";
   ftr2lab[ POPS_CVPSD ] = "VSPEC";
+  ftr2lab[ POPS_BANDS ] = "BAND";
+  ftr2lab[ POPS_RBANDS ] = "RBAND";
+  ftr2lab[ POPS_VBANDS ] = "VBAND";
+
   ftr2lab[ POPS_SLOPE ] = "SLOPE";   
   ftr2lab[ POPS_SKEW ] = "SKEW";
   ftr2lab[ POPS_KURTOSIS ] = "KURTOSIS";
@@ -321,6 +338,9 @@ void pops_specs_t::init()
   ftr2lab[ POPS_SVD ] = "SVD";
   ftr2lab[ POPS_NORM ] = "NORM";
   ftr2lab[ POPS_RESCALE ] = "RESCALE";
+  ftr2lab[ POPS_CUMUL ] = "CUMUL";
+  ftr2lab[ POPS_DERIV ] = "DERIV";
+
 
   // track level-2 features
   lvl2.insert( "TIME" );
@@ -329,7 +349,9 @@ void pops_specs_t::init()
   lvl2.insert( "SVD" );
   lvl2.insert( "NORM" );
   lvl2.insert( "RESCALE" );
-    
+  lvl2.insert( "CUMUL" );
+  lvl2.insert( "DERIV" );
+
 }
 
 
@@ -380,7 +402,22 @@ void pops_specs_t::check_args()
           if ( spec.narg( "z-lwr" ) <= 0 || spec.narg( "z-upr" ) <= 0 )
             Helper::halt( ftr2lab[ pops_feature_t::POPS_LOGPSD ] + " requires 'z-lwr' and 'z-upr' to be > 0 " );
 	}
+      
+      // PE
+      if ( spec.ftr == pops_feature_t::POPS_PE )
+        {
+	  // default, m = 5
+          if ( spec.arg.find( "from" ) == spec.arg.end() )
+            spec.arg[ "from" ] = "5";
+	  if ( spec.arg.find( "to" ) == spec.arg.end() )
+            spec.arg[ "to" ] = "5";
+	  int n1 = spec.narg( "from" );
+	  int n2 = spec.narg( "to" );
+	  if ( n2 < n1 || n1 < 3 || n1 > 7 || n2 < 3 || n2 > 7 )
+	    Helper::halt( "from=x and to=y must be between 3 and 7" );	  
+        }
 
+      
       // time-tracks
       if ( spec.ftr == pops_feature_t::POPS_TIME )
 	{
@@ -402,6 +439,29 @@ void pops_specs_t::check_args()
             Helper::halt( ftr2lab[ pops_feature_t::POPS_SMOOTH ] + " requires 'half-window' (epochs) arg" );
 	}
 
+      // CUMUL
+      if ( spec.ftr == pops_feature_t::POPS_CUMUL )
+	{	  
+	  if ( spec.arg.find( "type" ) == spec.arg.end() )
+	    {
+	      spec.arg[ "type" ] = "norm" ; 
+	    }
+	  else if ( ! ( spec.arg[ "type" ] == "pos" 
+			|| spec.arg[ "type" ] == "neg" 
+			|| spec.arg[ "type" ] == "abs" ) )
+	    Helper::halt( ftr2lab[ pops_feature_t::POPS_CUMUL ] + " requires 'type' as pos,neg or abs" );
+	}
+      
+      // DERIV
+      if ( spec.ftr == pops_feature_t::POPS_DERIV )
+	{
+	  if ( spec.arg.find( "half-window" ) == spec.arg.end() )
+	    Helper::halt( ftr2lab[ pops_feature_t::POPS_DERIV ] + " requires 'half-window' (epochs) ");	  
+	  const int hw = spec.narg( "half-window" );
+	  if ( hw <= 0 || hw > 100 ) Helper::halt( "expecting half-window between 1 and 100 for DERIV" );
+	}
+
+      
       // SVD
       if ( spec.ftr == pops_feature_t::POPS_SVD )
 	{
@@ -572,86 +632,13 @@ std::vector<std::string> pops_specs_t::select_labels()
 
 }
 
-std::vector<std::string> pops_specs_t::total_labels() 
-{
-  // not used...  CAN DELETE ME
-  std::vector<std::string> l;
-  
-  for (int i=0; i<specs.size(); i++)
-    {
-      
-      const pops_feature_t ftr = specs[i].ftr; 
-      const std::string & ch = specs[i].ch;      
-      const std::string l0 = pops_specs_t::ftr2lab[ ftr ];
-      
-      if ( ftr == POPS_LOGPSD
-	   || ftr == POPS_RELPSD
-	   || ftr == POPS_CVPSD )
-	{
-	  double lwr = specs[i].narg( "lwr" ) ;
-	  double upr = specs[i].narg( "upr" ) ;
-	  int n = ( upr - lwr ) / pops_opt_t::spectral_resolution + 1;	  	  
-	  for (int i=0; i<n; i++)
-	    l.push_back( l0 + "_" + ch + "_" + Helper::dbl2str( lwr + i * pops_opt_t::spectral_resolution ) );
-	}
-      
-      
-      else if ( ftr == POPS_SLOPE
-		|| ftr == POPS_SKEW
-		|| ftr == POPS_KURTOSIS
-		|| ftr == POPS_FD
-		|| ftr == POPS_MEAN )
-	{	  
-	    l.push_back( l0 + "_" + ch );
-	}
-
-      else if ( ftr == POPS_HJORTH )
-	{
-	  l.push_back( l0 + "1_" + ch );
-	  l.push_back( l0 + "2_" + ch );
-	  l.push_back( l0 + "3_" + ch );	  
-	}
-      
-      else if ( ftr == POPS_PE )
-	{
-	  l.push_back( l0 + "3_" + ch );
-	  l.push_back( l0 + "4_" + ch );
-	  l.push_back( l0 + "5_" + ch );
-	  l.push_back( l0 + "6_" + ch );
-	  l.push_back( l0 + "7_" + ch );	
-	}
-      
-
-      // // duplicate current set :
-
-      // // replace current set 
-      // if ( ftr == POPS_SMOOTH || ftr == POPS_DENOISE )
-      // 	{
-      // 	  for (int i=0; i<l.size(); i++)
-      // 	    l[i] = pops_model_t::ftr2lab[ ftr ] + "_" + l[i] ;
-      // 	}
-      
-      // time-track
-      if ( ftr == POPS_TIME )
-	{	  
-	  int n = specs[i].narg( "order" ) ;
-	  for (int i=0; i<n; i++)
-	    l.push_back( l0 + Helper::int2str( i+1 ) );
-	}      
-
-    }
-      
-   return l;    
-}
-
-
 
 // return implied number of columns
 
 int pops_spec_t::cols( int * t )
 {
   
-  // PSD is stratified by frequencu
+  // PSD is stratified by frequency
   if ( ftr == POPS_LOGPSD
        || ftr == POPS_RELPSD
        || ftr == POPS_CVPSD )
@@ -664,6 +651,16 @@ int pops_spec_t::cols( int * t )
       return n;
     }
   
+  // 6 fixed bands
+  if ( ftr == POPS_BANDS 
+       || ftr == POPS_RBANDS 
+       || ftr == POPS_VBANDS )
+    {
+      *t += 6;
+      size = 6;
+      return size;
+    }
+    
   // 1 column per channel
   if ( ftr == POPS_SLOPE
        || ftr == POPS_SKEW
@@ -684,10 +681,12 @@ int pops_spec_t::cols( int * t )
       return size ;
     }
   
-  // PE is 3..7
+  // PE is 3..7 
   if ( ftr == POPS_PE )
     {
-      size = 5;
+      int n1 = narg( "from" );
+      int n2 = narg( "to" );
+      size = n2 - n1 + 1 ;
       *t += size ;
       return size ;
     }
@@ -696,10 +695,10 @@ int pops_spec_t::cols( int * t )
   if ( ftr == POPS_TIME )
     {
       int n = narg( "order" );
-      if ( n < 0 )
-	Helper::halt( "invalid value for TIME order (0-10)" );
-      if ( n > 10 )
-	Helper::halt( "invalid value for TIME order (0-10)" );
+      if ( n < 1 )
+	Helper::halt( "invalid value for TIME order (1-4)" );
+      if ( n > 4 )
+	Helper::halt( "invalid value for TIME order (1-4)" );
       *t += n;
       return n;
     }
@@ -723,6 +722,8 @@ int pops_spec_t::cols( int * t )
   if ( ftr == POPS_SMOOTH ||
        ftr == POPS_DENOISE ||
        ftr == POPS_RESCALE ||
+       ftr == POPS_CUMUL || 
+       ftr == POPS_DERIV || 
        ftr == POPS_NORM )
     {
 

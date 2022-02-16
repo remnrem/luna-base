@@ -37,6 +37,10 @@ namespace eigen_ops {
   
   bool p95_logmod( Eigen::Ref<Eigen::MatrixXd> m );
   
+  void accumulate( Eigen::Ref<Eigen::VectorXd> m , const int ctype );
+
+  void deriv( Eigen::Ref<Eigen::VectorXd> m , const int hw );
+  
   double sdev( const Eigen::VectorXd & x );
 
   double between_within_group_variance( const std::vector<std::string> & grp , const Eigen::VectorXd & x );
@@ -66,6 +70,8 @@ namespace eigen_ops {
 			    std::vector<std::string> * header = NULL ,
 			    std::vector<std::string> * ids = NULL ,
 			    std::vector<std::string> * labels = NULL );
+
+  
   
 }
 

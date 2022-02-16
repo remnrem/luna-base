@@ -36,6 +36,9 @@ enum pops_feature_t
     POPS_LOGPSD ,   // LWR , UPR (fixed 0.25 Hz intervals) 
     POPS_RELPSD ,   // LWR , UPR , NORM-LWR , NORM-UPR ( scale PSD by sum of NORM )  
     POPS_CVPSD ,    // LWR , UPR 
+    POPS_BANDS ,    // fixed power bands
+    POPS_RBANDS ,   // relative bands
+    POPS_VBANDS ,   // variance 
     POPS_SLOPE ,    // Fixed 30-45 Hz ; fixed other param
     POPS_SKEW , 
     POPS_KURTOSIS ,
@@ -51,7 +54,9 @@ enum pops_feature_t
     POPS_SVD ,     
     POPS_NORM ,    
     POPS_RESCALE, // -1, +1 sigmoid encoding
-
+    POPS_CUMUL, 
+    POPS_DERIV, 
+    
     // not a feature, but a rule to remove epochs
     POPS_EPOCH_OUTLIER 
 
@@ -92,19 +97,27 @@ struct pops_spec_t {
 
 struct pops_channel_t {
 
-  pops_channel_t( const std::string & label , 
+  pops_channel_t( const std::string & ch , 
 		  const std::set<std::string> & aliases , 
-		  const int sr )
-  : ch(ch) , aliases(aliases), sr(sr) { }
+		  const int sr , 
+		  const std::string unit )
+  : ch(ch), aliases(aliases), sr(sr) , unit(unit)
+  { } 
   
-  pops_channel_t() { }
-  
+  pops_channel_t() {
+    ch = "";
+    sr = 0;
+    aliases.clear();
+    unit = "uV";
+  } 
+
   // main label
   std::string ch;
   // other aliases
   std::set<std::string> aliases;
   int sr;
-  
+  std::string unit;
+
   bool match( const std::string & s , std::string * label ) const
   {
     if ( s == ch ) 
@@ -186,7 +199,7 @@ struct pops_specs_t {
   int select_cols() const;
 
   // get feature labels
-  std::vector<std::string> total_labels();
+  //  std::vector<std::string> total_labels();
   std::vector<std::string> select_labels();
     
 };

@@ -27,53 +27,39 @@
 #define __LUNA_POPS_OPTIONS_H__
 
 #include <vector>
+#include <map>
+#include <set>
 
 struct param_t;
 
 struct pops_opt_t {
-  
-  pops_opt_t( )
-  {
-    verbose = true;
-
-    spectral_resolution = 0.25;
     
-    epoch_len = 30;
-
-    n_stages = 5;
-
-    trim_wake_epochs = -1;
-
-    welch_median = true;
-
-    lwr = 0.5;
-    upr = 45;
-
-    
-  }
+  static void set_options( param_t & );
   
-  void set_options( param_t & );
-  
+  static std::map<std::string,std::set<std::string> > aliases;
+
+  static std::string pops_path;
+  static std::string pops_root;
+
   static bool verbose;
-
-  static double spectral_resolution;
-
-  static double epoch_len;
-
   static int n_stages;
-
   static int trim_wake_epochs;
 
-  static bool welch_median;
+  static double epoch_len;
+  static double epoch_inc;
 
+  static bool welch_median;
   static double lwr;
   static double upr;
-
+  static double fft_seg_sec;
+  static double fft_inc_sec;
+  static double spectral_resolution;
   static std::vector<double> slope_range;
   static double slope_th;
   static double slope_epoch_th;
-
   
+  // outputs
+  static bool epoch_level_SHAP;
 };
 
 #endif
