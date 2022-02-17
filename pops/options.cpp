@@ -24,7 +24,7 @@
 
 #include "pops/options.h"
 
-#include "stats/lgbm.h"
+#include "lgbm/lgbm.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "stats/eigen_ops.h"

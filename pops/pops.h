@@ -26,7 +26,7 @@
 #ifndef __LUNA_POPS_H__
 #define __LUNA_POPS_H__
 
-#include "stats/lgbm.h"
+#include "lgbm/lgbm.h"
 #include "stats/Eigen/Dense"
 
 struct param_t;

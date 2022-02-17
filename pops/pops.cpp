@@ -54,7 +54,7 @@
 #include "pops/options.h"
 #include "pops/spec.h"
 
-#include "stats/lgbm.h"
+#include "lgbm/lgbm.h"
 #include "miscmath/miscmath.h"
 #include "helper/helper.h"
 #include "helper/logger.h"

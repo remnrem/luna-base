@@ -3019,8 +3019,11 @@ void timeline_t::annot2signal( const param_t & param )
   std::vector<std::string> anames = param.strvector( "annot" );
 
   // SR of new signals
-  int sr = param.requires_int( "sr" );
+  const int sr = param.requires_int( "sr" );
 
+  // use instance ID as a numeric value e.g. for NREMC 1 , 2 , 3 
+  const bool numeric_instance = param.has( "numeric-inst" );
+  
   // if not otherwise specified, use annot names as new channel labels
   std::vector<std::string> labels = param.has( "label" ) ? param.strvector( "label" ) : anames;
 
@@ -3060,9 +3063,23 @@ void timeline_t::annot2signal( const param_t & param )
 	  
 	  if ( start < 0 || stop >= np )
 	    Helper::halt( "internal error in timeline_t::annot2signal()" );
+
+	  double value = 1;
+	  if ( numeric_instance )
+	    {
+	      if ( aa->first.id == "" || aa->first.id == "." )
+		value = 0;
+	      else
+		{
+		  // set value to to numeric
+		  if ( ! Helper::str2dbl( aa->first.id , &value ) )
+		    Helper::halt( "requires numeric instance IDs" ); 
+		}
+	    }
 	  
 	  // populate (up to and including the start/stop, as we removed the final +1 TP above)
-	  for (int p=start; p<=stop; p++) adat[p] = true;
+	  for (int p=start; p<=stop; p++)
+	    adat[p] = value;
 
 	  // next annotation
 	  ++aa;
@@ -3077,9 +3094,7 @@ void timeline_t::annot2signal( const param_t & param )
       double seconds = points / sr;
       int minutes = seconds / 60.0;
       if ( minutes > 0 )
-	{
-	  seconds -= minutes * 60.0;
-	}
+	seconds -= minutes * 60.0;
 
       
       //
@@ -3090,7 +3105,11 @@ void timeline_t::annot2signal( const param_t & param )
 	     << anames[a] << " annotations (spanning ";
       if ( minutes > 0 ) logger << minutes << " min " << seconds << " sec)";
       else logger << seconds << " sec)";
-      logger << " as 0/1 signal " << labels[a] << "\n";
+
+      if ( numeric_instance )
+	logger << " as numeric instance-ID signal " << labels[a] << "\n";
+      else
+	logger << " as 0/1 signal " << labels[a] << "\n";
       
       edf->add_signal( labels[a]  , sr , adat );
 

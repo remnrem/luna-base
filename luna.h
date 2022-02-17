@@ -51,7 +51,8 @@
 #include "stats/cluster.h"
 #include "stats/kmeans.h"
 #include "stats/cpt.h"
-#include "stats/lgbm.h"
+
+#include "lgbm/lgbm.h"
 
 #include "miscmath/miscmath.h"
 

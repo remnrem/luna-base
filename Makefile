@@ -33,7 +33,8 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
 	$(wildcard dsp/libsamplerate/*.cpp)
 
 ifeq ($(LGBM),1)
-SRCS += $(wildcard pops/*.cpp) 
+SRCS += $(wildcard pops/*.cpp)
+SRCS += $(wildcard lgbm/*.cpp) 
 endif
 
 CSRCS = $(wildcard db/*.c) \
