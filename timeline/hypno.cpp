@@ -1386,7 +1386,10 @@ void hypnogram_t::calc_stats( const bool verbose )
 
 }
 
-void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , const std::string & eannot )
+void hypnogram_t::output( const bool verbose ,
+			  const bool epoch_lvl_output ,
+			  const std::string & eannot ,
+			  const std::string & cycle_prefix )
 {
   
   
@@ -1394,8 +1397,56 @@ void hypnogram_t::output( const bool verbose , const bool epoch_lvl_output , con
   // Minimal output (stages .eannot style) to std::cout only?
   //
 
-  bool minimal = eannot == ".";
+  const bool minimal = eannot == ".";
 
+
+  //
+  // Add annotation to denote NREM cycle?  Do here, before output,
+  // so that annot-cycles works w/ both STAGE and HYPNO
+  //
+
+  const bool annotate_cycles = cycle_prefix != "";
+
+
+  if ( annotate_cycles )
+    {
+      logger << "  creating NREM cycle annotation " << cycle_prefix << "\n";
+    
+      annot_t * a = timeline->annotations.add( cycle_prefix );
+      a->description = "NREMC";
+      
+      std::map<int,double>::iterator cc = nremc_duration.begin();
+      while ( cc != nremc_duration.end() )
+	{
+	  
+	  // cc->first  : 1-based cycle #
+	  // nremc_start_epoch[ cc->first ] : 1-based epoch start
+	  // nremc_epoch_duration[ cc->first ] : cycle length ( in epochs )
+
+	  // NREMC number
+	  std::string cn = Helper::int2str( cc->first );
+	  
+	  // epoch number start (adjust for 1-base encoding)
+	  int start_epoch = nremc_start_epoch[ cc->first ] - 1;
+
+	  // length of cycle (in epochs) , minus 1 as we'll add this to stop of first
+	  int length = nremc_epoch_duration[ cc->first ] - 1;
+	  
+	  // get interval
+	  interval_t interval = timeline->epoch( start_epoch );
+	  
+	  // adjust end-point -> convert to time-points
+	  interval.stop += (uint64_t)(timeline->epoch_length_tp * length ) ;
+
+	  // add annotation
+	  instance_t * instance = a->add( cn , interval , "." );
+	  
+	  ++cc;
+	}
+      
+    }
+
+  
   //
   // currently, this routine is hard-coded to assume 30-second epochs,
   // so for now flag if this is not the case (we can fix downstream)

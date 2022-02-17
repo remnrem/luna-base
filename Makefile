@@ -28,10 +28,13 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
 	$(wildcard ica/*.cpp) \
 	$(wildcard clocs/*.cpp) \
         $(wildcard pdc/*.cpp) \
-        $(wildcard pops/*.cpp) \
 	$(wildcard sstore/*.cpp) \
 	$(wildcard dsp/mtm/*.cpp) \
 	$(wildcard dsp/libsamplerate/*.cpp)
+
+ifeq ($(LGBM),1)
+SRCS += $(wildcard pops/*.cpp) 
+endif
 
 CSRCS = $(wildcard db/*.c) \
 	$(wildcard stats/*.c) \

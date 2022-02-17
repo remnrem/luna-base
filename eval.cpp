@@ -2675,8 +2675,21 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   // epoch level output for HYPNO?
   bool epoch_lvl_output =param.has( "epoch" );
   
+  
+  // optionally, add cycle annotation
+  std::string cycle_annot = "";
+  if ( param.has( "annot-cycles" ) )
+    {
+      if ( param.value( "annot-cycles" ) == "T" )
+	cycle_annot = "NREMC";
+      else
+	cycle_annot = param.value( "annot-cycles" );
+    }
+  
+  
   // and output...
-  edf.timeline.hypnogram.output( verbose , epoch_lvl_output , eannot );
+
+  edf.timeline.hypnogram.output( verbose , epoch_lvl_output , eannot , cycle_annot );
 
 }
 
