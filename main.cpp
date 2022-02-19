@@ -657,8 +657,6 @@ int main(int argc , char ** argv )
       writer.cmd( "POPS" , 1 , "" );
       writer.level( "POPS", "_POPS" );
       pops_t pops( param );
-      pops_opt_t::epoch_len = globals::default_epoch_len;
-      pops_opt_t::epoch_inc = globals::default_epoch_len;
       pops.make_level2_library( param );      
       writer.unlevel( "_POPS" );
       writer.commit();

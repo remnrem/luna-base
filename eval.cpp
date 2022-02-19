@@ -1330,9 +1330,7 @@ void proc_pops( edf_t & edf , param_t & param )
   // set up parameters
   //
 
-  pops_t pops( param );    
-  pops_opt_t::epoch_len = edf.timeline.epoch_length();
-  pops_opt_t::epoch_inc = edf.timeline.epoch_inc();
+  pops_t pops( param );   
   
   //
   // set up features ('.' = use internal defaults)

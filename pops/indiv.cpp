@@ -1094,9 +1094,10 @@ void pops_indiv_t::summarize()
 
   // 3-class stats
   pops_stats_t stats3( pops_t::NRW( S ) , pops_t::NRW( preds ) , 3 );
-
   
+  //
   // outputs
+  //
 
   writer.value( "K" , stats.kappa );
   writer.value( "K3" , stats3.kappa );
@@ -1122,6 +1123,156 @@ void pops_indiv_t::summarize()
   writer.value( "RECALL3" , stats3.macro_recall );
 
   //
+  // sleep and REM latencies
+  //
+
+  if ( slp_lat_obs >= 0 ) 
+    writer.value( "SLP_LAT_OBS" , slp_lat_obs * fac );
+  if ( slp_lat_prd >= 0 ) 
+    writer.value( "SLP_LAT_PRD" , slp_lat_prd * fac );
+  if ( rem_lat_obs >= 0 )
+    writer.value( "REM_LAT_OBS" , rem_lat_obs * fac );
+  if ( rem_lat_prd >= 0 )
+    writer.value( "REM_LAT_PRD" , rem_lat_prd * fac );
+
+
+  //
+  // restricted set summaries
+  //
+
+  // 5-class stats, but on 'restricted' epoch sets
+  // here, do all obs stage types
+
+  pops_stats_t stats_AAA( S, preds , 5 , 1 );
+  pops_stats_t stats_XAB( S, preds , 5 , 2 );
+  pops_stats_t stats_BAX( S, preds , 5 , 3 );
+  pops_stats_t stats_BAB( S, preds , 5 , 4 );
+  pops_stats_t stats_BAC( S, preds , 5 , 5 );
+
+  bool set_etype = false;
+
+  if ( stats_AAA.nobs > 10 ) 
+    {
+      set_etype = true;
+      writer.level( "AAA" , "ETYPE" );
+      writer.value( "N" , stats_AAA.nobs );
+      writer.value( "ACC" , stats_AAA.acc );
+    }
+  
+  if ( stats_XAB.nobs >10 )
+    {
+      set_etype = true;
+      writer.level( "XAB" , "ETYPE" );
+      writer.value( "N" , stats_XAB.nobs );
+      writer.value( "ACC" , stats_XAB.acc );
+    }   
+
+  if ( stats_BAX.nobs >10 )
+    {
+      set_etype = true;
+      writer.level( "BAX" , "ETYPE" );
+      writer.value( "N" , stats_BAX.nobs );
+      writer.value( "ACC" , stats_BAX.acc );
+    }   
+
+  if ( stats_BAB.nobs >10 )
+    {
+      set_etype = true;
+      writer.level( "BAB" , "ETYPE" );
+      writer.value( "N" , stats_BAB.nobs );
+      writer.value( "ACC" , stats_BAB.acc );
+    }
+
+  if ( stats_BAC.nobs >10 )
+    {
+      set_etype = true;
+      writer.level( "BAC" , "ETYPE" );
+      writer.value( "N" , stats_BAC.nobs );
+      writer.value( "ACC" , stats_BAC.acc );
+    }
+
+  if ( set_etype )
+    writer.unlevel( "ETYPE" );
+  
+  
+  //
+  // Second round of restricted evaluations: condition on A == particular stage too
+  //
+
+  for ( int ss = 0 ; ss < pops_opt_t::n_stages; ss++ )
+    {
+
+      if ( pops_opt_t::n_stages == 5 )
+        writer.level( pops_t::labels5[ ss ] , globals::stage_strat );
+      else
+        writer.level( pops_t::labels3[ ss ] , globals::stage_strat );
+      
+      pops_stats_t stats_XAX( S, preds , 5 , 0 , ss );
+      pops_stats_t stats_AAA( S, preds , 5 , 1 , ss );
+      pops_stats_t stats_XAB( S, preds , 5 , 2 , ss );
+      pops_stats_t stats_BAX( S, preds , 5 , 3 , ss );
+      pops_stats_t stats_BAB( S, preds , 5 , 4 , ss );
+      pops_stats_t stats_BAC( S, preds , 5 , 5 , ss );
+
+      bool set_etype = false;
+      
+      if ( stats_XAX.nobs > 10 ) 
+	{
+	  set_etype = true;
+	  writer.level( "XAX" , "ETYPE" );
+	  writer.value( "N" , stats_XAX.nobs );
+	  writer.value( "ACC" , stats_XAX.acc );
+	}
+      
+      if ( stats_AAA.nobs > 10 ) 
+	{
+	  set_etype = true;
+	  writer.level( "AAA" , "ETYPE" );
+	  writer.value( "N" , stats_AAA.nobs );
+	  writer.value( "ACC" , stats_AAA.acc );
+	}
+      
+      if ( stats_XAB.nobs >10 )
+	{
+	  set_etype = true;
+	  writer.level( "XAB" , "ETYPE" );
+	  writer.value( "N" , stats_XAB.nobs );
+	  writer.value( "ACC" , stats_XAB.acc );
+	}   
+      
+      if ( stats_BAX.nobs >10 )
+	{
+	  set_etype = true;
+	  writer.level( "BAX" , "ETYPE" );
+	  writer.value( "N" , stats_BAX.nobs );
+	  writer.value( "ACC" , stats_BAX.acc );
+	}   
+      
+      if ( stats_BAB.nobs >10 )
+	{
+	  set_etype = true;
+	  writer.level( "BAB" , "ETYPE" );
+	  writer.value( "N" , stats_BAB.nobs );
+	  writer.value( "ACC" , stats_BAB.acc );
+	}
+      
+      if ( stats_BAC.nobs >10 )
+	{
+	  set_etype = true;
+	  writer.level( "BAC" , "ETYPE" );
+	  writer.value( "N" , stats_BAC.nobs );
+	  writer.value( "ACC" , stats_BAC.acc );
+	}
+      
+      if ( set_etype )
+	writer.unlevel( "ETYPE" );
+
+    }
+
+  writer.unlevel( globals::stage_strat );
+  
+  
+  //
   // stage specific precision/recall
   //
 
@@ -1134,19 +1285,6 @@ void pops_indiv_t::summarize()
     }
   writer.unlevel( globals::stage_strat );
 
-
-  //
-  // sleep and REM latencies
-  //
-
-  if ( slp_lat_obs >= 0 ) 
-    writer.value( "SLP_LAT_OBS" , slp_lat_obs * fac );
-  if ( slp_lat_prd >= 0 ) 
-    writer.value( "SLP_LAT_PRD" , slp_lat_prd * fac );
-  if ( rem_lat_obs >= 0 )
-    writer.value( "REM_LAT_OBS" , rem_lat_obs * fac );
-  if ( rem_lat_prd >= 0 )
-    writer.value( "REM_LAT_PRD" , rem_lat_prd * fac );
 
 
   //

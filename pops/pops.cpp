@@ -62,6 +62,8 @@
 #include "db/db.h"
 #include "dsp/tv.h"
 
+#include "helper/zfile.h"
+
 extern logger_t logger;
 extern writer_t writer;
 
@@ -76,34 +78,88 @@ std::vector<std::string> pops_t::labels3 = { "W" , "R" , "NR" };
 //
 // create a level 2 feature library and save
 // i.e. for trainer and/or validation library
-// 
+//  however, with the dump=training|test 
+//  option set, instead of fitting the LGBM model, 
+//  here we just compute the full feature matrix
+//  and write to a file; either the training, validation
+//  or test dataset;  if the test dataset, we will still read
+//  the SVD solutions;  if training, it computes them, but dumps
+//  all (i.e. will be both training + validation, but ordered
+//   - as per usual, the SVD solution is based on training + validation
+//     
 
 void pops_t::make_level2_library( param_t & param )
 {
 
-  std::string lgbm_model  = param.requires( "model" );
-  std::string data_file   = param.requires( "data" );
+  // always requires data input
+  const std::string data_file   = param.requires( "data" );
+
+  // needs a feature file, but will use default/internal ('.') if one is not specified
+  const std::string feature_file  = param.has( "features" ) ? param.value( "features" ) : "." ;
+
+  //
+  // *either*, dump features after constructing feature matrix, or run LGBM
+  //
+
+  std::string lgbm_model = "";
+  std::string lgbm_config = "";
+    
+  const bool dump_feature_matrix = param.has( "dump" );
+  bool is_trainer = true;
+  std::string dump_file = "";
+
+  if ( dump_feature_matrix ) 
+    {      
+      if ( param.has( "model" ) || param.has( "config" ) )
+	Helper::halt( "cannot specify both dump and model/config" );
+      if ( param.value( "dump" ) == "test" )
+	is_trainer = false;
+      else if ( param.value("dump" ) != "training" )
+	Helper::halt( "'dump' must be set to 'training' or 'test'" );
+      dump_file = param.requires( "file" );
+    }
+  else 
+    {
+      // else we need LGBM configs - always needs a model
+      lgbm_model = param.requires( "model" );
+      // can have a default config file
+      lgbm_config = param.has( "config" ) ? param.value( "config" ) : ".";
+    }
   
-  std::string lgbm_config   = param.has( "config" ) ? param.value( "config" ) : ".";
-  std::string feature_file  = param.has( "features" ) ? param.value( "features" ) : "." ;
-  
+
+  //
   // feature specifications (used to generate l1-data)
+  //
+
   pops_t::specs.read( feature_file );
   
+  
+  //  
   // validation dataset for LGBM (expected in main set, but will be partitioned off)
+  //
+   
   if ( param.has( "hold-outs" ) )
     load_validation_ids( param.value( "hold-outs" ) );
-  
+
+  //  
   // get previous data: assume single file, concatenated
   // this will populate: X1, S, E and Istart/Iend
   // validation IDs will be at the end
+  //
+
   load1( data_file );
 
+  //
   // expand X1 to include space for level-2 features
+  //
+
   X1.conservativeResize( Eigen::NoChange , pops_t::specs.na );
+
   
-  
+  // 
   // summarize training and validation dataset counts  
+  //
+
   std::map<int,int> ss_training, ss_valid;
   for (int i=0; i<nrows_training; i++) 
     ss_training[S[i]]++;
@@ -120,11 +176,32 @@ void pops_t::make_level2_library( param_t & param )
 	     << " validation = " << ss_valid[ ii->first ] << "\n";
       ++ii;
     }
-  
+
+  //  
   // derive level-2 stats (jointly in *all* indiv. training + valid ) 
-  level2();
+  //  -- typically trainer, but allow for test individuals here if we
+  //     are using the --pops command not to train, but with dump=test
+  //     (this will instruct level2() to read the SVD rather than create)
+  //
   
+  level2( is_trainer );
+  
+  
+  //
+  // output the the feature matrix 
+  //
+
+  if ( dump_feature_matrix ) 
+    {
+      dump_matrix( dump_file );
+      return;
+    }
+
+
+  //
   // LGBM config (user-specified, or default for POPS)
+  //
+
   if ( lgbm_config == "." )
     lgbm.load_pops_default_config();
   else    
@@ -133,8 +210,11 @@ void pops_t::make_level2_library( param_t & param )
   // set number of iterations?
   if ( param.has( "iterations" ) ) 
     lgbm.n_iterations = param.requires_int( "iterations" );
-  
+
+  //  
   // stage weights?    
+  //
+
   std::vector<double> wgts(  pops_opt_t::n_stages , 1.0 );
   
   if ( param.has( "weights" ) ) // order must be W, R, NR...
@@ -145,8 +225,11 @@ void pops_t::make_level2_library( param_t & param )
     }
   
   lgbm_label_t weights( pops_opt_t::n_stages == 5 ? pops_t::labels5 : pops_t::labels3 , wgts );
-  
+
+  //
   // do training
+  //
+ 
   fit_model( lgbm_model , weights );
   
 }
@@ -630,33 +713,101 @@ void pops_t::copy_back( pops_indiv_t * indiv )
 }
 
 
-pops_stats_t::pops_stats_t( const std::vector<int> & obs , 
-			    const std::vector<int> & pred,
-			    const int nstages )
+pops_stats_t::pops_stats_t( const std::vector<int> & obs_ , 
+			    const std::vector<int> & pred_ ,
+			    const int nstages ,
+			    const int type , 
+			    const int ostage )
 {
   
   // save either 3-class or 5-class stats
   // i.e. inputs obs and pred may be 5 or 3-class
   n = nstages;
   
-  // kappa
-  kappa = MiscMath::kappa( obs , pred , POPS_UNKNOWN );
+  // any restrictions of epochs to look at? 
+  // type:
+  //   0 all epochs   A
+  //   1 only epochs with similar flanking observed stages (i.e. 'consistent' sleep)  A-A-A
+  //   2 only left-epochs at a transition (i.e. if the following obs epoch is not the same)  A-B
+  //   3 only right-epochs at a transition (i.e. if the prior obs epoch was not the same)  B-A
+  //   4 only 'singleton' epochs flanked by the same epoch on both sides  B-A-B
+  //   5 only 'singleton' epochs, with any flanking epochs  B-A-C
+
+  //  further, if ostage != -1, then oonly lookat epochs with that obs stage type
   
-  std::vector<int> l5 = { 0 , 1 , 2 , 3 , 4 };
-  std::vector<int> l3 = { 0 , 1 , 2 };
+  std::vector<int> obs; 
+  std::vector<int> pred;
   
-  // other metrics
-  acc = MiscMath::accuracy( obs , pred , 
-			    POPS_UNKNOWN , 
-			    n == 5 ? &l5 : &l3 ,
-			    &precision , &recall , &f1 , 
-			    &macro_precision , 
-			    &macro_recall , 
-			    &macro_f1 , 
-			    &avg_weighted_precision , 
-			    &avg_weighted_recall ,
-			    &avg_weighted_f1 ,
-			    &mcc  );
+  const int ne = obs_.size();
+
+  if ( type == 0 ) 
+    {
+      obs = obs_;
+      pred = pred_;
+    }
+  else 
+    {
+      for (int i=0; i<ne; i++)
+	{
+	  const bool left_disc = i != 0 && obs_[i-1] !=obs_[i] ;
+	  const bool right_disc = i < ne-1 && obs_[i+1] != obs_[i] ;
+	  const bool left_right_disc = i == 0 || i == ne - 1 ? false : obs_[i-1] != obs_[i+1] ;
+	  
+	  bool add = true;
+	  
+	  if ( type == 1 ) // A-A-A
+	    add = ! ( left_disc || right_disc ) ;
+	  else if ( type == 2 ) // *-A-B 
+	    add = right_disc;
+	  else if ( type == 3 ) // B-A-*
+	    add = left_disc;
+	  else if ( type == 4 ) // B-A-B
+	    add = left_disc && ! left_right_disc ;	    
+	  else if ( type == 5 ) // B-A-C
+	    add = left_disc && left_right_disc ;
+	  
+	  // restrict to a particular class of observed stages too?
+	  if ( ostage != -1 && ostage != obs_[i] ) 
+	    add = false;
+
+	  if ( add ) 
+	    {
+	      obs.push_back( obs_[i] );
+	      pred.push_back( pred_[i] );
+	    }	  
+	}
+    }
+
+  // track n 
+  nobs = obs.size();
+
+  // only calculate stats if at least 10 obs of this type
+  if ( nobs < 10 ) return;
+      
+  // other metrics: full set
+  if ( ostage == -1 && type == 0 )  
+    {
+      // kappa
+      kappa = MiscMath::kappa( obs , pred , POPS_UNKNOWN );
+      
+      std::vector<int> l5 = { 0 , 1 , 2 , 3 , 4 };
+      std::vector<int> l3 = { 0 , 1 , 2 };
+      
+      acc = MiscMath::accuracy( obs , pred , 
+			      POPS_UNKNOWN , 
+			      n == 5 ? &l5 : &l3 ,
+			      &precision , &recall , &f1 , 
+			      &macro_precision , 
+			      &macro_recall , 
+			      &macro_f1 , 
+			      &avg_weighted_precision , 
+			      &avg_weighted_recall ,
+			      &avg_weighted_f1 ,
+			      &mcc  );
+    }
+  else // we only need accuracy for the restricted sets for now
+    acc = MiscMath::accuracy( obs , pred , POPS_UNKNOWN );
+  
   
 }
 
@@ -829,6 +980,30 @@ std::string pops_t::update_filepath( const std::string & f )
     f2 = globals::folder_delimiter + pops_opt_t::pops_path + f2;
   
   return f2;
+}
+
+
+void pops_t::dump_matrix( const std::string & f )
+{
+  std::string dfile = Helper::expand( f );
+  logger << "  dumping feature matrix to " << dfile << "\n";
+  
+  gzofstream Z1( dfile.c_str() , std::ios_base::out );
+  
+  Z1 << "SS";
+  std::vector<std::string> labels = pops_t::specs.select_labels();
+  for (int i=0; i< labels.size(); i++) 
+    Z1 << "\t" << labels[i];
+  Z1 << "\n";
+
+  for (int i=0; i<X1.rows(); i++)
+    {
+      Z1 << pops_t::label( (pops_stage_t)S[i] );
+      for (int j=0; j< X1.cols(); j++)
+	Z1 << "\t" << X1(i,j);
+      Z1 << "\n";
+    }
+  Z1.close();
 }
 
 

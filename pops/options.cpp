@@ -95,9 +95,9 @@ void pops_opt_t::set_options( param_t & param )
   
   spectral_resolution = 1.0 / fft_seg_sec ; 
 
-  // these set via main epoch mechanism (edf.timeline) [ eval.cpp ] prior to calling pops_t
-  epoch_len = 30;  
-  epoch_inc = 30;
+  // if data already epoched, these set via main epoch mechanism (edf.timeline) [ eval.cpp ] prior to calling pops_t
+  epoch_len = globals::default_epoch_len;
+  epoch_inc = globals::default_epoch_len;
   
   // channel aliases
   //  (added when reading spec.) 

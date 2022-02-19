@@ -78,6 +78,9 @@ struct pops_t {
   // this is also co-opted by prediction mode 
   void level2( const bool training = true );
 
+  // dump feature matrix
+  void dump_matrix( const std::string & f );
+
   // fit and save a LGBM model (--> pops_t::lgbm)
   void fit_model( const std::string & f , const lgbm_label_t & w );
 
@@ -175,11 +178,14 @@ struct pops_stats_t {
 
   pops_stats_t( const std::vector<int> & obs , 
 		const std::vector<int> & pred , 
-		const int nstages = 5 ); 
+		const int nstages = 5 , 
+		const int type = 0 , 
+		const int ostage = -1 );
   
   
   bool valid;
-  int n;
+  int n; // 5 or 3 (stage numbers)
+  int nobs; // number of valid epochs
   double kappa, acc, mcc;
   
   double macro_precision, macro_recall, macro_f1 ;
