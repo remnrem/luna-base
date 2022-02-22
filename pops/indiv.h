@@ -52,6 +52,9 @@ struct pops_indiv_t {
 
   // trainer/target?
   bool trainer;
+
+  // has manual staging?
+  bool has_staging;
   
   // number of epochs
   int ne;

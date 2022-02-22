@@ -406,11 +406,9 @@ void pops_specs_t::check_args()
       // PE
       if ( spec.ftr == pops_feature_t::POPS_PE )
         {
-	  // default, m = 5
-          if ( spec.arg.find( "from" ) == spec.arg.end() )
-            spec.arg[ "from" ] = "5";
-	  if ( spec.arg.find( "to" ) == spec.arg.end() )
-            spec.arg[ "to" ] = "5";
+	  if ( spec.arg.find( "from" ) == spec.arg.end() ||
+	       spec.arg.find( "to" ) == spec.arg.end() )
+	    Helper::halt( "requires from=X to=Y" );
 	  int n1 = spec.narg( "from" );
 	  int n2 = spec.narg( "to" );
 	  if ( n2 < n1 || n1 < 3 || n1 > 7 || n2 < 3 || n2 > 7 )

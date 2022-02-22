@@ -166,8 +166,9 @@ void pops_t::make_level2_library( param_t & param )
   for (int i=nrows_training; i<nrows_validation+nrows_training; i++) 
     ss_valid[S[i]]++;
   
-  logger << "  in nT=" << Istart.size() - holdouts.size() << " training individuals, and nV=" 
-	 << holdouts.size() << " validation individuals, stage epoch counts:\n";
+  logger << "  nT=" << Istart.size() - ni_validation << " training individuals, "
+	 << "nV=" << ni_validation << " (of " << holdouts.size() << " listed) validation individuals\n";
+  logger << "  stage epoch counts:\n";
   std::map<int,int>::const_iterator ii = ss_training.begin();
   while ( ii != ss_training.end() )
     {

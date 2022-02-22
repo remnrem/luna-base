@@ -59,7 +59,7 @@ void pops_t::load1( const std::string & f )
   int total_epochs = 0;
   int n_indiv = 0;
   
-  int ni_validation = 0;
+  ni_validation = 0;
   int ne_validation = 0;
   int ne_training = 0;
 

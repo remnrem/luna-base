@@ -145,25 +145,39 @@ void pops_indiv_t::staging( edf_t & edf , param_t & param )
   // get staging
   edf.timeline.annotations.make_sleep_stage();
   
-  bool valid_training = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
+  has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
   
   // trainer
-  if ( trainer && ! valid_training )
+  if ( trainer && ! has_staging )
     Helper::halt( "no valid staging for trainer " + edf.id );
   
   // check epochs line up, if staging present
-  if ( valid_training && ne != edf.timeline.hypnogram.stages.size() )    
+  if ( has_staging && ne != edf.timeline.hypnogram.stages.size() )    
     Helper::halt( "problem extracting stage information for trainer" );
-
+  
   // store staging information here
-  S.resize( ne , POPS_UNKNOWN );
+  // n.b. if we don't have any staging (for a test subject)
+  // we are tracking this in 'has_staging' and so we will not
+  // try to compute kappa, etc.   But rather than set to POPS_UNKNOWN, 
+  // we will call everything POPS_WAKE, as POPS_UNKNOWN flag is used
+  // to prune epochs (e.g. for being statistical outliers)
+
+  S.resize( ne , has_staging ? POPS_UNKNOWN : POPS_WAKE );
   E.resize( ne );
   
   // for targets w/ no existing staging, all done
-  if ( ! valid_training ) return;
+  if ( ! has_staging ) 
+    {
+      Sorig = S;
+      for (int ss=0; ss < ne; ss++ )
+	E[ss] = ss;
+      return;
+    }
 
+  //
   // convert 
-      
+  //
+
   for (int ss=0; ss < ne; ss++ )
     {
 
@@ -769,15 +783,14 @@ void pops_indiv_t::level1( edf_t & edf )
 	   // permutation entropy
 	   if ( do_pe && ! bad_epoch )
 	     {
-	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_PE , siglab ) ;
-	       
+	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_PE , siglab ) ;	       
 	       int sum1 = 1;
 	       pops_spec_t spec = pops_t::specs.fcmap[ pops_feature_t::POPS_PE ][ siglab ];
 	       int n1 = spec.narg( "from" );
 	       int n2 = spec.narg( "to" );
 	       if ( cols.size() != n2 - n1 + 1 ) 
 		 Helper::halt("internal error in PE cols" );
-
+	       
 	       int k = 0;
 	       for (int j=n1; j<=n2; j++)
 		 {
@@ -1045,7 +1058,8 @@ void pops_indiv_t::summarize()
       writer.value( "PP_N3" , P(e,4) );
       
       // prior
-      writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
+      if ( has_staging )
+	writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
       
       // original - note, uses other index back to the orignal epoch-count
       //writer.value( "ORIG" , pops_t::label( (pops_stage_t)Sorig[ E[e] ] ) );
@@ -1059,28 +1073,32 @@ void pops_indiv_t::summarize()
       writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
   
       // slp/rem latency
-      if ( slp_lat_obs == -1 && S[e] != POPS_WAKE && S[e] != POPS_UNKNOWN ) 
-	slp_lat_obs = E[e];
+      if ( has_staging ) 
+	{
+	  if ( slp_lat_obs == -1 && S[e] != POPS_WAKE && S[e] != POPS_UNKNOWN ) 
+	    slp_lat_obs = E[e];
+	  if ( rem_lat_obs == -1 && S[e] == POPS_REM )
+	    rem_lat_obs = E[e] - slp_lat_obs ; 
+	}
       
       if ( slp_lat_prd == -1 && predx != POPS_WAKE )
 	slp_lat_prd = E[e];
-
-      if ( rem_lat_obs == -1 && S[e] == POPS_REM )
-	rem_lat_obs = E[e] - slp_lat_obs ; 
       
       if ( rem_lat_prd == -1 && predx == POPS_REM )
 	rem_lat_prd = E[e] - slp_lat_prd ; 
-
-	
+      
       // durations
-      dur_obs[ S[e] ]++;
-      dur_pred1[ predx ]++;
+      if ( has_staging ) 
+	dur_obs[ S[e] ]++;
 
+      dur_pred1[ predx ]++;
+      
       for (int ss=0; ss< pops_opt_t::n_stages; ss++)
 	dur_predf[ ss ] += P(e,ss);
     }
 
   writer.unepoch();
+
 
   //
   // Summaries
@@ -1088,6 +1106,50 @@ void pops_indiv_t::summarize()
 
   // durations in minutes, so get scaling factor
   const double fac = pops_opt_t::epoch_len / 60.0 ; 
+
+  
+  //
+  // Initially, output information that is not dependent 
+  //
+
+  if ( ! has_staging ) 
+    {
+      
+      // indiv-level
+      writer.value( "CONF" , avg_pmax / (double)ne );
+      
+      if ( slp_lat_prd >= 0 ) 
+	writer.value( "SLP_LAT_PRD" , slp_lat_prd * fac );
+      if ( rem_lat_prd >= 0 )
+	writer.value( "REM_LAT_PRD" , rem_lat_prd * fac );
+      
+      //
+      // Stage level durations
+      //
+      
+      for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
+	{
+	  writer.level( pops_t::label( (pops_stage_t)ss ) , "SS" ); 
+	  writer.value( "PRF" ,  fac * dur_predf[ss] );
+	  writer.value( "PR1" ,  fac * dur_pred1[ss] );
+	}
+      
+      int masked = Sorig.size() - S.size();
+      writer.level( pops_t::label( POPS_UNKNOWN ) , "SS" );
+      writer.value( "PRF" ,  fac * masked );
+      writer.value( "PR1" ,  fac * masked );
+      writer.unlevel( "SS" );
+      
+      // now quit
+      return;
+    }
+  
+  
+  //
+  // Following is only defined is we had (manual) staging for
+  // this person
+  //
+
     
   // 5-class stats
   pops_stats_t stats( S, preds , 5 );
@@ -1312,6 +1374,7 @@ void pops_indiv_t::summarize()
   writer.value( "PRF" ,  fac * masked );
   writer.value( "PR1" ,  fac * masked );
   writer.unlevel( "SS" );
+
 
   //
   // Confusion matrix, to console
