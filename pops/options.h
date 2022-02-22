@@ -29,6 +29,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <string>
 
 struct param_t;
 
