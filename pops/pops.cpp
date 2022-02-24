@@ -72,6 +72,9 @@ lgbm_t pops_t::lgbm;
 bool pops_t::lgbm_model_loaded = false;
 pops_specs_t pops_t::specs;
 
+Eigen::MatrixXd pops_t::ES_probs;
+std::vector<double> pops_t::ES_mins;
+
 std::vector<std::string> pops_t::labels5 = { "W" , "R" , "N1" , "N2" , "N3" };
 std::vector<std::string> pops_t::labels3 = { "W" , "R" , "NR" };
   

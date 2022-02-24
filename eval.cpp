@@ -3879,14 +3879,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::skip_edf_annots = globals::skip_nonedf_annots = Helper::yesno( tok1 );
       return;
     }
-  
-  // do not read FTR files 
-  // if ( Helper::iequals( tok0 , "ftr" ) )
-  //   {
-  //     globals::read_ftr = Helper::yesno( tok1 );
-  //     return;
-  //   }
-	
+  	
   // project path
   if ( Helper::iequals( tok0 , "path" ) )
     {
@@ -4305,7 +4298,6 @@ void cmd_t::register_specials()
   specials.insert( "skip-edf-annots" ) ;
   specials.insert( "skip-annots" ) ;
   specials.insert( "skip-all-annots" ) ;
-  specials.insert( "ftr" ) ;
   specials.insert( "path" ) ;
   specials.insert( "tt-prepend" );
   specials.insert( "tt-prefix" ) ;

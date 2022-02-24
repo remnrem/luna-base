@@ -1630,7 +1630,7 @@ void Helper::repath_SL( const std::vector<std::string> & tok )
   
   const std::string s1 = tok[0];
   const std::string s2 = tok[1];
-  
+
   while ( 1 )
     {
       std::string line;
@@ -1642,10 +1642,24 @@ void Helper::repath_SL( const std::vector<std::string> & tok )
       std::vector<std::string> tok2 = Helper::parse( line , "\t" );
       if ( tok2.size() < 2 )
 	Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
-
-      // replace cols 2+ ( true in search_replace() implies we only match roots of strings)
-      for (int i=1; i<tok2.size(); i++)
-	tok2[i] = Helper::search_replace( tok2[i] , s1 , s2 , true );
+      
+      // if s1 is '.' then means just append this prefix (unless starts /)
+      if ( s1 == "." )
+	{
+	  // ensure we have a folder delim at end of s2
+	  std::string xdelim = "";
+	  if ( s2[ s2.size() - 1 ] != globals::folder_delimiter )
+	    xdelim = globals::folder_delimiter ;
+	  
+	  for (int i=1; i<tok2.size(); i++)
+            if ( tok2[i][0] != globals::folder_delimiter )
+	      tok2[i] = s2 + xdelim + tok2[i];
+	}
+      else // replace cols 2+ ( true in search_replace() implies we only match roots of strings)
+	{
+	  for (int i=1; i<tok2.size(); i++)
+	    tok2[i] = Helper::search_replace( tok2[i] , s1 , s2 , true );
+	}
       
       for (int i=0; i<tok2.size(); i++)
 	std::cout << ( i != 0 ? "\t" : "" ) << tok2[i] ;

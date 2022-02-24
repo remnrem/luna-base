@@ -36,46 +36,63 @@ extern logger_t logger;
 
 void dsptools::tclst( edf_t & edf , param_t & param )
 {
+
+  const bool dmode = false;
   
+  // --------------------------------------------------------------------------------
+  //
+  // Check signals and sample rates
+  //
+  // --------------------------------------------------------------------------------
+
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
-  
   if ( signals.size() < 1 ) return;
   
   const int ns = signals.size();
   
-  // check sample rates: must be similar across all 
-  
-  std::vector<double> Fs = edf.header.sampling_freq( signals );
-  
+  std::vector<double> Fs = edf.header.sampling_freq( signals );  
   for (int s=1;s<Fs.size();s++) 
     if ( Fs[s] != Fs[0] ) 
       Helper::halt( "sample rates must be similar across signals for TCLST" );
+  
 
+  // --------------------------------------------------------------------------------
   //
-  // complex
+  // Cluster on complex distance
   //
-
+  // --------------------------------------------------------------------------------
+  
   const bool use_complex_dist = param.has( "complex" );
   
   bool use_amp = param.has( "amp" );
   bool use_phase = param.has( "phase" );
   
-  if ( use_amp && use_complex_dist ) Helper::halt( "can only specify complex OR amp" );
-  if ( use_phase && use_complex_dist ) Helper::halt( "can only specify complex OR phase" );
+  if ( use_amp && use_complex_dist )
+    Helper::halt( "can only specify complex OR amp" );
+
+  if ( use_phase && use_complex_dist )
+    Helper::halt( "can only specify complex OR phase" );
 
   // default:
-  if ( ! ( use_complex_dist || use_amp || use_phase ) ) { use_amp = use_phase = true; }
+  if ( ! ( use_complex_dist || use_amp || use_phase ) )
+    { use_amp = use_phase = true; }
 
+  // --------------------------------------------------------------------------------
   //
-  // Verbose report for one SW? (1-based syntax)
+  // Output verbosity
   //
-
-  const int verbose_interval = param.has( "report" ) ? param.requires_int( "report" ) - 1 : -1; 
+  // --------------------------------------------------------------------------------
   
-  //
-  // clustering
-  //
+  // report for one particular interval (1-based)
+  const int verbose_interval = param.has( "report" ) ? param.requires_int( "report" ) - 1 : -1; 
 
+  
+  // --------------------------------------------------------------------------------
+  //
+  // Clustering parameters
+  //
+  // --------------------------------------------------------------------------------
+  
   int k1 = 0;
   int k2 = 0;
   
@@ -90,18 +107,18 @@ void dsptools::tclst( edf_t & edf , param_t & param )
   if ( k1 > k2 || k1 < 0 || k2 < 0 )
     Helper::halt( "bad specification of k/k1/k2" );
 
-  //
   // hierarchical complete-linkage clustering
   // (if -1, use silhouette, and replace hcK w/ selected value)
-  //
 
   int hcK = param.has( "hc" ) ? param.requires_int( "hc" ) : 0 ;
   
 
+  // --------------------------------------------------------------------------------
   //
-  // specify a seed channel, i.e. against which the phase of over channels will be measured
+  // Seed channel (against which the phase of channels will be measured)
   //
-
+  // --------------------------------------------------------------------------------
+  
   const std::string seed = param.requires( "seed" );
   if ( signals.find( seed ) == -1 )
     Helper::halt( "seed " + seed + " not specified in sig" );  
@@ -113,16 +130,17 @@ void dsptools::tclst( edf_t & edf , param_t & param )
     Helper::halt( "internal error in tclst_t sig/seed selection" );
   
   
+
+  // --------------------------------------------------------------------------------
   //
-  // get time-points: expecting a cache in sample-point units (i.e. 
-  // to ensure same number of points per window; i.e. this is also why
-  // all signals must have the same SR
+  // Window around seed points
   //
-  
-  //
-  // get window
-  //
-  
+  // --------------------------------------------------------------------------------
+
+  // expecting a cache in sample-point units (i.e.  to ensure same
+  // number of points per window; i.e. this is also why all signals
+  // must have the same SR
+
   const double half_window1 = param.has( "w" ) ? param.requires_dbl( "w" ) : param.requires_dbl( "w1" );
   const double half_window2 = param.has( "w" ) ? param.requires_dbl( "w" ) : param.requires_dbl( "w2" );
 
@@ -133,22 +151,11 @@ void dsptools::tclst( edf_t & edf , param_t & param )
   const int half_points2 = half_window2 * Fs[0] ;
   const int points = 1 + half_points1 + half_points2;
 
-  logger << "  using a window of " << half_window1 + half_window2 << " seconds, "
+  logger << "  using a window of "
+	 << half_window1 + half_window2 << " seconds, "
 	 << points << " sample points\n";
-  
-  //
-  // filter-hilbert
-  //
-  
-  const bool filter = param.has( "f-lwr" );
-  
-  const double f_lwr = filter ? param.requires_dbl( "f-lwr" ) : 0 ;
-  const double f_upr = filter ? param.requires_dbl( "f-upr" ) : 100 ;
-  if ( f_lwr >= f_upr ) Helper::halt( "f-lwr must be lower than f-upr" );
-  const double fir_ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.01;
-  const double fir_tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 0.5;
-  
-  // build 
+
+    // build 
   std::vector<double> t(points,0);
   
   const double inc = 1.0/Fs[0];
@@ -173,13 +180,32 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       ++idx;
       ++cnt;
     }
+
+  if ( dmode )
+    for (int w=0; w<points; w++)
+      std::cout << " win = " << t[w] << "\n";
+
   
-  for (int w=0; w<points; w++)
-    std::cout << " win = " << t[w] << "\n";
+  // --------------------------------------------------------------------------------
+  //
+  // filter-hilbert parameters
+  //
+  // --------------------------------------------------------------------------------
   
+  const bool filter = param.has( "f-lwr" );
+  
+  const double f_lwr = filter ? param.requires_dbl( "f-lwr" ) : 0 ;
+  const double f_upr = filter ? param.requires_dbl( "f-upr" ) : 100 ;
+  if ( f_lwr >= f_upr ) Helper::halt( "f-lwr must be lower than f-upr" );
+  const double fir_ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.01;
+  const double fir_tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 0.5;
+
+ 
+  // --------------------------------------------------------------------------------
   //
   // Get seed sample-points from cache
   //
+  // --------------------------------------------------------------------------------
   
   std::string cache_name = param.requires( "cache" );
   
@@ -214,11 +240,10 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       logger << "  found " << ni << " intervals in the cache " << cache_name << "\n";
       
       //
-      // Get time-line
+      // Get first channel (just for time-points)
       //
 
       if ( signals.size() == 0 ) Helper::halt( "no signals specified" );
-      
       slice_t slice( edf , signals(0) , edf.timeline.wholetrace() );
       const std::vector<uint64_t> * tp = slice.ptimepoints();                                                     
       
@@ -247,18 +272,23 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	}
       
 
-      
+      // --------------------------------------------------------------------------------
       //
-      // build up data stores
+      // Build up interval tables
       //
+      // --------------------------------------------------------------------------------
       
       // peaks/intervals (ni) * time-points (points) * signals (ns) 
-      //                                     complex | non-complex
-      std::vector<Eigen::MatrixXd> X(ni); // real    | signal amplitudes (filtered)
-      std::vector<Eigen::MatrixXd> P(ni); // imag    | phases
-      std::vector<Eigen::MatrixXd> P2(ni); // store phases for output, if in complex mode
-      std::vector<Eigen::MatrixXd> ZP2(ni); // store phases for output, if in complex mode
 
+      //                                     complex | non-complex
+      //                                     -------------------------------------------
+      std::vector<Eigen::MatrixXd> X(ni); //    real | signal amplitudes (filtered)
+      std::vector<Eigen::MatrixXd> P(ni); //    imag | phases
+
+      // store phases for output, if in complex mode
+      std::vector<Eigen::MatrixXd> P2(ni); 
+      std::vector<Eigen::MatrixXd> ZP2(ni); // normalized against the seed
+      
       for (int i=0; i<ni; i++)
 	{
 	  X[i] = Eigen::MatrixXd::Zero( points , ns );
@@ -285,7 +315,8 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	  slice_t slice( edf , signals(s) , edf.timeline.wholetrace() );
 	  const std::vector<double> * d = slice.pdata();	  
 
-	  if ( ! filter ) Helper::halt( "requires f-lwr, f-upr" );
+	  if ( ! filter )
+	    Helper::halt( "requires f-lwr, f-upr" );
 
 	  // filter-hilbert
 	  hilbert_t ht( *d , Fs[s] , f_lwr , f_upr , fir_ripple , fir_tw , use_complex_dist );
@@ -344,10 +375,13 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	  // next signal
 	}
 
-      //
-      // Save originals if verbose-reporting for one interval?
-      //
 
+      // --------------------------------------------------------------------------------
+      //
+      // Save originals, if verbose-reporting for one interval
+      //
+      // --------------------------------------------------------------------------------
+      
       if ( verbose_interval >= ni )
 	Helper::halt( "bad report=interval specified" );
       
@@ -357,12 +391,14 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	  P0 = P[verbose_interval];
 	  X0 = X[verbose_interval];	  
 	}
-    
+
+
+      // --------------------------------------------------------------------------------
       //
       // Normalize phases by the seed channel (i.e. relative phase,
       // shortest distance wrapping angles)
       //
-
+      // --------------------------------------------------------------------------------
 
       // phase : 0      = positive peak       
       //         +pi/2  = pos-2-neg ZC
@@ -374,7 +410,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       
       if ( ! use_complex_dist )
 	{
-
+	  
 	  //
 	  // Normalize amplitudes by mean of seed at peak
 	  //
@@ -780,7 +816,6 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 	  }
     }
   
-  std::cout << " S1\n";
 
   //
   // hierarchical clustering on D
@@ -897,8 +932,7 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
   if ( k1 ) 
     {
       for (int k=k1; k<=k2; k++)
-	{
-	  std::cout << "K = " << k << "\n";
+	{	  
 	  kmeans_t km;      
 	  std::vector<int> ksol1;      
 	  Data::Matrix<double> m = km.kmeans( XPa , k , &ksol1 );

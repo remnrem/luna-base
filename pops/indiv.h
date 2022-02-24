@@ -47,6 +47,8 @@ struct pops_indiv_t {
   
   void SHAP();
 
+  void apply_espriors( const std::string & f );
+  
   void summarize( );
 
 

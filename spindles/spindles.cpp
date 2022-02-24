@@ -370,10 +370,17 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
     {
       
       //
-      // Only consider raw signal channels
+      // Only consider raw signal channels, with at least 50 Hz SR
       //
       
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+
+      if ( Fs[s] < 50 )
+	{
+	  logger << "  skipping channel " <<  signals.label(s) << " with sample rate of " << Fs[s] << " < 50 Hz\n";
+	  continue;
+	}
+
       
       //
       // Output

@@ -9,36 +9,33 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard edf/*.cpp) \
         $(wildcard edfz/*.cpp) \
         $(wildcard defs/*.cpp) \
-	$(wildcard tinyxml/*.cpp) \
-	$(wildcard helper/*.cpp) \
-	$(wildcard timeline/*.cpp) \
-	$(wildcard annot/*.cpp) \
-	$(wildcard dsp/*.cpp) \
-	$(wildcard miscmath/*.cpp) \
-	$(wildcard artifacts/*.cpp) \
-	$(wildcard spindles/*.cpp) \
-	$(wildcard intervals/*.cpp) \
-	$(wildcard resp/*.cpp) \
-	$(wildcard fftw/*.cpp) \
-	$(wildcard cwt/*.cpp) \
+        $(wildcard tinyxml/*.cpp) \
+        $(wildcard helper/*.cpp) \
+        $(wildcard timeline/*.cpp) \
+        $(wildcard annot/*.cpp) \
+        $(wildcard dsp/*.cpp) \
+        $(wildcard miscmath/*.cpp) \
+        $(wildcard artifacts/*.cpp) \
+        $(wildcard spindles/*.cpp) \
+        $(wildcard intervals/*.cpp) \
+        $(wildcard resp/*.cpp) \
+        $(wildcard fftw/*.cpp) \
+        $(wildcard cwt/*.cpp) \
         $(wildcard stats/*.cpp) \
-	$(wildcard staging/*.cpp) \
-	$(wildcard suds/*.cpp) \
-	$(wildcard db/*.cpp) \
-	$(wildcard ica/*.cpp) \
-	$(wildcard clocs/*.cpp) \
+        $(wildcard staging/*.cpp) \
+        $(wildcard suds/*.cpp) \
+        $(wildcard db/*.cpp) \
+        $(wildcard ica/*.cpp) \
+        $(wildcard clocs/*.cpp) \
         $(wildcard pdc/*.cpp) \
-	$(wildcard sstore/*.cpp) \
-	$(wildcard dsp/mtm/*.cpp) \
-	$(wildcard dsp/libsamplerate/*.cpp)
-
-ifeq ($(LGBM),1)
-SRCS += $(wildcard pops/*.cpp)
-SRCS += $(wildcard lgbm/*.cpp) 
-endif
+        $(wildcard sstore/*.cpp) \
+        $(wildcard dsp/mtm/*.cpp) \
+        $(wildcard dsp/libsamplerate/*.cpp) \
+        $(wildcard pops/*.cpp) \
+        $(wildcard lgbm/*.cpp) 
 
 CSRCS = $(wildcard db/*.c) \
-	$(wildcard stats/*.c) \
+        $(wildcard stats/*.c) \
         $(wildcard dsp/libsamplerate/*.c)
 
 OBJS = $(SRCS:.cpp=.o) $(CSRCS:.c=.o) 

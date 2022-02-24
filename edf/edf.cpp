@@ -4850,7 +4850,8 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 
   if ( files.size() == 0 ) return retval;
     
-  // GROUP   CANONICAL   CH   REF   SR  UNITS    NOTES
+  // GROUP   CANONICAL|trans   CH   REF   SR  UNITS    NOTES
+  // alias=v1,v2,v3
   
   // if cs is non-null, only make the CS in that set ('EEG')
   // if group is != '.' then only attach rows matching
@@ -4872,34 +4873,43 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
   // the to-be-created CS go here:
   std::vector<std::string> canons;
   std::set<std::string> canons_uniq;
-    
+  
   // if we are dropping originals later, get a list of those now
   const bool only_data_signals = true;
   signal_list_t osignals = header.signal_list( "*" , only_data_signals );
   
   // but, if existing signal is canonical already, flag not to drop
   // (this is allowed if no other transformations, i.e. keep as is)
+
   std::set<std::string> do_not_drop;
   
   // also, track whether a signal was used or not (i.e. might
   // be dropped, 'C3' but 'C3' --> 'C3-M1' in which was it was
   // still 'used' in the canonical set (versus original channels
-  // that basically do not feature at all)
-  
-  std::set<std::string> used;
+  // that basically do not feature at all)  
 
+  std::set<std::string> used;
+  
   // if group is non-null, do not process any generic rules after coming
   // across some group-specific rules (whether these worked or not)
   // i.e. if over-riding, must specify the full complement
 
   std::set<std::string> ignore_generics;
 
+  // on-the-fly defined aliases (w/in the canonical sigs file)
+  // n.b. these append, so second line adds to first, not overwrites
+  //  M1=M1-ref,M1_ref
+  //  M1=A1,A1_ref,A1-ref
+
+  std::map<std::string,std::vector<std::string> > aliases;
+
+    
   //
   // read in definitions
   //
   
-  std::map<std::string,std::vector< std::vector<std::string> > >sigs, refs;
-  std::map<std::string,std::vector<std::string> > srs, notes, units;
+  std::map<std::string,std::vector< std::vector<std::string> > > sigs, refs;
+  std::map<std::string,std::vector<std::string> > srs, notes, units, trns;
   
   //
   // iterate over files
@@ -4920,19 +4930,45 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  Helper::safe_getline( IN1 , line );
 	  
 	  if ( line == "" ) continue;
+	  if ( Helper::toupper( line ) == "STOP" ) break;
 	  if ( IN1.eof() ) break;
 	  if ( line[0] == '%' ) continue;
+
+	  // white-space quoted parsing of this line
 	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
+	  
+	  // is this an aliases line? if so, add then skip
+	  if ( tok.size() == 1 )
+	    {
+	      std::vector<std::string> tok2 = Helper::quoted_parse( tok[0] , "=" );
+	      if ( tok2.size() != 2 )		
+		Helper::halt( "expecting 1 column for ch=x,y,z aliases fields:\n" + line );
+	      std::vector<std::string> tok3 = Helper::quoted_parse( tok2[1] , "," );
+	      for (int a=0; a<tok3.size(); a++) aliases[ tok2[0] ].push_back( tok3[a] ) ;
+	      continue;
+	    }
+	  
+	  // otherwise, a rule requires normal columns
 	  if ( tok.size() < 3 && tok.size() > 7 ) 
 	    Helper::halt( "expecting 3 to 7 white-delimited columns (use quotes for values with spaces)\nfile: " 
 			  + file + "\nline: [" + line + "]\n" );
-
+	  
+	  
 	  // ensure we have full set - populating w/ '.' as needed
 	  if ( tok.size() < 6 ) tok.resize( 6 , "." );
 	  
-	  // ignore group-specific rules that do not match the specified group
-	  //  (if a group has been specified on the CANONICAL group=g1 ) 
-	  if ( group != "." && tok[0] != "." && tok[0] != group ) continue;
+	  // ignore group-specific rules, unless that group has been specifically requested
+	  if ( tok[0] != "." && tok[0] != group ) continue;
+
+	  // process transducer type:  canonical|trans_text
+	  std::string transducer = ".";
+	  std::vector<std::string> st = Helper::parse( tok[1] , "|" );
+	  if ( st.size() > 2 ) Helper::halt( "expecting canonical|transducer" );
+	  if ( st.size() == 2 )
+	    {
+	      tok[1] = st[0]; // extract label only
+	      transducer = st[1];
+	    }
 	  
 	  // track that we are seeing a matching group-specific rule
 	  if ( group != "." && tok[0] == group ) ignore_generics.insert( tok[1] );
@@ -4961,8 +4997,9 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  if ( cs != NULL && cs->find( tok[1] ) == cs->end() ) continue;
 	  
 	  // otherwise, add to the set of things to be calculated
-	  sigs[ prefix + tok[1] ].push_back( Helper::parse( tok[2] , "," ) );
-	  refs[ prefix + tok[1] ].push_back( Helper::parse( tok[3] , "," ) );
+	  sigs[ prefix + tok[1] ].push_back( Helper::quoted_parse( tok[2] , "," ) );
+	  refs[ prefix + tok[1] ].push_back( Helper::quoted_parse( tok[3] , "," ) );
+	  trns[ prefix + tok[1] ].push_back( transducer );
 	  srs[ prefix + tok[1] ].push_back( tok[4] ) ;
 	  units[ prefix + tok[1] ].push_back( tok[5] );
 	  notes[ prefix + tok[1] ].push_back( tok.size() == 7 ? tok[6] : "." );
@@ -4990,10 +5027,8 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
   while ( cc != canons.end() )
     {
       
-      //for (int i=0; i<canons.size(); i++)
-      
       std::string canon = *cc;
-
+      
       if ( ! only_check_labels ) 
 	writer.level( canon , "CS" );
       else
@@ -5029,20 +5064,34 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  std::vector<std::string> v = sigs.find( canon )->second[j];
 	  for (int k=0; k<v.size(); k++)
 	    {
-	      //if ( header.signal( v[k] ) != -1 )
+	      
 	      if ( header.has_signal( v[k] )  ) // case-insensitive match 
 		{
 		  sigstr = v[k];
 		  break;
+		}
+
+	      // or, is this an alias, in which case check (in order)
+	      // the equivalent terms
+	      if ( aliases.find( v[k] ) != aliases.end() )
+		{
+		  std::vector<std::string> av =  aliases.find( v[k] )->second;
+		  for (int ak=0; ak<av.size(); ak++)
+		    {
+		      if ( header.has_signal( av[ak] )  ) 
+			{
+			  sigstr = av[ak];
+			  break;
+			}
+		    }
 		}
 	    }
 	  
 	  if ( sigstr == "" ) 
 	    continue;
 	  
-	  
 	  //
-	  // Reference
+	  // Reference: nb. if we get quoted "A1,A2", then check both and flag to take average of those
 	  //
 	  
 	  std::string refstr = "";
@@ -5053,31 +5102,109 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	    {
 	      for (int k=0; k<v.size(); k++)
 		{
+		  //std::cout << " RESTING [" << v[k] << "]\n";
 		  if ( v[k] == "." ) 
 		    Helper::halt( "cannot mix '.' and non-'.' references" );
-		  
-		  //if ( header.signal( v[k] ) != -1 )
-		  if ( header.has_signal( v[k] ) ) // case-insensitve, alias-aware match
+
+		  // if this quoted (averagig?)
+		  if ( v[k][0] == '"' )
 		    {
-		      refstr = v[k];
-		      break;
+		      std::string reftarget = Helper::unquote( v[k] );
+		      // we need to find /all/ members of this "ref1,ref2,..." term
+		      // typically, for PSG, expectring this will just be two (linked mastoids)
+		      std::vector<std::string> rtok = Helper::parse( reftarget , "," );
+
+		      std::vector<std::string> refstr_vec;
+			
+		      bool okay = true;
+		      for (int r=0; r<rtok.size();r++)
+			{
+			  bool match1 = false;
+			  // self-match?
+			  if ( header.has_signal( rtok[r] ) )
+			    {
+			      refstr_vec.push_back( rtok[r] );
+			      match1 = true;
+			    }
+			  else
+			    {
+			      if ( aliases.find( rtok[r] ) != aliases.end() )
+				{
+				  //std::cout << "found aliases for " << rtok[r]  << "\n";
+				  std::vector<std::string> av =  aliases.find( rtok[r] )->second;
+				  for (int ak=0; ak<av.size(); ak++)
+				    {
+				      //std::cout << " --> " << av[ak] << "\n";
+				      if ( header.has_signal( av[ak] )  )
+					{
+					  match1 = true;
+					  refstr_vec.push_back( av[ak] );
+					  break;
+					}
+				    }
+				}
+			    }
+			  
+			  // if this one term does not match, then the whole match is bad
+			  if ( ! match1 ) okay = false;
+			}
+		      
+		      // found a match here -- pass in the whole comma-delimited string (i.e. this will work w/ reference() )
+		      if ( okay )
+			{
+			  refstr = "";
+			  for (int i=0;i<refstr_vec.size(); i++)
+			    {
+			      if ( i ) refstr += ",";
+			      refstr += refstr_vec[i];
+			    }
+			  break;
+			}
+		      
 		    }
-		}
+		  else // not averaged - same checks as above
+		    {
+		      
+		      if ( header.has_signal( v[k] ) ) // case-insensitve, alias-aware match
+			{
+			  refstr = v[k];
+			  break;
+			}
+		  
+		      // or, is this an alias, in which case check (in order)
+		      // the equivalent terms
+		      
+		      if ( aliases.find( v[k] ) != aliases.end() )
+			{
+			  std::vector<std::string> av =  aliases.find( v[k] )->second;
+			  for (int ak=0; ak<av.size(); ak++)
+			    {
+			      if ( header.has_signal( av[ak] )  )
+				{
+				  refstr = av[ak];
+				  break;
+				}
+			    }
+			}
+		    }
+		}      
 	    }
 
-	  
+	  //
+	  // matches?
+	  //
 	  
 	  if ( sigstr == "" || refstr == "" )
 	    continue;
 	  
-	  if ( already_present && refstr != "." )
-	    Helper::halt( "cannot specify existing canonical name "
-			  + canon + " and a re-reference" );
-
+	  // if ( already_present && refstr != "." )
+	  //   Helper::halt( "cannot specify existing canonical name "
+	  // 		  + canon + " and a re-reference" );
+	  
 	  if ( ! only_check_labels ) 
 	    logger << "  generating canonical signal " << canon 
 		   << " from " << sigstr << "/" << refstr << "\n";
-
+	  
 	  //
 	  // track that we are using these channels
 	  //
@@ -5109,14 +5236,14 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	    if ( ! Helper::str2int( srstr , &sr ) )
 	      Helper::halt( "non-integer SR for " + canon );
 	  
-          if ( already_present && srstr != "." )
-            Helper::halt( "cannot specify existing canonical name "
-                          + canon + " and re-sample" );
+          // if ( already_present && srstr != "." )
+          //   Helper::halt( "cannot specify existing canonical name "
+          //                 + canon + " and re-sample" );
 
 	  
 	  // copy signal --> canonical form
 	  signal_list_t ref;
-	  if ( refstr != "." ) ref =  header.signal_list( refstr );
+	  if ( refstr != "." ) ref = header.signal_list( refstr );
 	  
 	  signal_list_t sig = header.signal_list( sigstr );
 
@@ -5125,17 +5252,51 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  // Generate the new signal (w/ re-referencing optionally)
 	  //   false , false = not dereference , not verbose
 	  // 
-	  
-	  if ( ( ! already_present ) && make_signals ) 
-	    reference( sig , ref , true , canon , sr , false , false );
 
+	  if ( make_signals )
+	    {
+
+	      // create a new channel?
+
+	      if ( ! already_present )
+		{
+		  reference( sig ,    // original channel
+			     ref ,    // reference (or "." for none)
+			     true ,   // create a new channel? 
+			     canon ,  // new channel name
+			     sr ,     // new channel SR
+			     false ,  // do not de-reference		       
+			     false ); // not in verbose mode
+		}
+	      
+	    }
 	  
 	  //
 	  // Get the canonical signal
 	  //
-
+	  
 	  signal_list_t canonical_signal = header.signal_list( canon );
 
+
+	  //
+	  // re-reference existing channel?
+	  //
+	  
+	  // or modify an existing one?
+	  if ( refstr != "." && already_present )
+	    {
+	      // do not make a new channel
+	      reference( sig , ref , false , "" , 0 );
+	    }
+
+	  //
+	  // resample an existing channel? (i.e. if not already done above)
+	  //
+
+	  if ( sr != 0 && already_present )
+	    {
+	      dsptools::resample_channel( *this , canonical_signal(0) , sr );
+	    }
 	  
 	  //
 	  // rescale units? ignore if other than V/uV/mV
@@ -5143,14 +5304,22 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  
 	  std::string ustr = units.find( canon )->second[j];
 	  
-	  if ( already_present && ustr != "." )
-            Helper::halt( "cannot specify existing canonical name "
-                          + canon + " and transform units" );
+	  // if ( already_present && ustr != "." )
+          //   Helper::halt( "cannot specify existing canonical name "
+          //                 + canon + " and transform units" );
 
 	  if ( make_signals ) 
 	    if ( ustr == "V" || ustr == "uV" || ustr == "mV" ) 
 	      rescale(  canonical_signal(0) , ustr );
 
+	  //
+	  // add transducer label?
+	  //
+
+	  std::string transducer = trns.find( canon )->second[j];
+	  if ( make_signals && transducer != "." )
+	    header.transducer_type[ canonical_signal(0) ] = transducer;	  
+	  
 	  //
 	  // If keeping existing channel, update label?
 	  //

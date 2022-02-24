@@ -96,6 +96,11 @@ struct pops_t {
   
   static pops_specs_t specs;
 
+  // elapsed-sleep priors
+
+  static Eigen::MatrixXd ES_probs;
+  static std::vector<double> ES_mins;
+  
   //
   // cohort-level data 
   //

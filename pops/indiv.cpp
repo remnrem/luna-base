@@ -54,6 +54,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   
   const bool dump_features = param.has( "dump" );
 
+  const bool elapsed_sleep_priors = param.has( "es-priors" ) && param.value( "es-priors" ) != "." ; 
+  
   trainer = training_mode;
   
   // training (1) : make level-1 stats, stages, save (binary features, BFTR)
@@ -131,10 +133,14 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       
       SHAP();
 
+      if ( elapsed_sleep_priors )
+	apply_espriors( param.value( "es-priors" ) );
+      
       summarize();
     }
   
 }
+
 
 void pops_indiv_t::staging( edf_t & edf , param_t & param )
 {
@@ -1057,10 +1063,7 @@ void pops_indiv_t::summarize()
       writer.value( "PP_N2" , P(e,3) );
       writer.value( "PP_N3" , P(e,4) );
       
-      // prior
-      if ( has_staging )
-	writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
-      
+
       // original - note, uses other index back to the orignal epoch-count
       //writer.value( "ORIG" , pops_t::label( (pops_stage_t)Sorig[ E[e] ] ) );
       
@@ -1071,7 +1074,42 @@ void pops_indiv_t::summarize()
       avg_pmax += pmax;
       preds.push_back( predx );
       writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
-  
+
+      // priors
+      if ( has_staging )
+	{
+	  writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
+
+	  int flag = 0;
+	  if ( S[e] != predx )
+	    {
+	      const bool obs_w  = S[e] == POPS_WAKE ;
+	      const bool obs_r  = S[e] == POPS_REM ;
+	      const bool obs_nr = S[e] == POPS_N1 || S[e] == POPS_N2 || S[e] == POPS_N3 ;
+
+	      const bool prd_w  = predx == POPS_WAKE ;
+	      const bool prd_r  = predx == POPS_REM ;
+	      const bool prd_nr = predx == POPS_N1 || predx == POPS_N2 || predx == POPS_N3 ;
+
+	      // at least disc5
+	      flag = 1;
+
+	      // but also disc3?
+	      if ( obs_w  && ( prd_r || prd_nr ) ) flag = 2;
+	      if ( obs_r  && ( prd_w || prd_nr ) ) flag = 2;
+	      if ( obs_nr && ( prd_w || prd_r  ) ) flag = 2;
+	      		  
+	    }	  
+
+	  // conc  --> 0
+	  // disc5 --> 1
+	  // disc3 --> 2
+	  
+	  writer.value( "FLAG" , flag );
+	 
+	}
+
+          
       // slp/rem latency
       if ( has_staging ) 
 	{
@@ -1335,24 +1373,8 @@ void pops_indiv_t::summarize()
   
   
   //
-  // stage specific precision/recall
+  // Stage-specific outputs
   //
-
-  for ( int l=0;l<pops_opt_t::n_stages; l++)
-    {
-      writer.level( pops_t::labels5[l] , globals::stage_strat );
-      writer.value( "F1" , stats.f1[l] );
-      writer.value( "PREC" , stats.precision[l] );
-      writer.value( "RECALL" , stats.recall[l] );
-    }
-  writer.unlevel( globals::stage_strat );
-
-
-
-  //
-  // Stage level durations
-  //
-
   
   // unknown : dropped epochs going from 
   for (int e=0; e<Sorig.size(); e++)
@@ -1360,7 +1382,14 @@ void pops_indiv_t::summarize()
   
   for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
     {
-      writer.level( pops_t::label( (pops_stage_t)ss ) , "SS" ); 
+      writer.level( pops_t::label( (pops_stage_t)ss ) ,  globals::stage_strat ); 
+      
+      // F1/prec-recall
+      writer.value( "F1" , stats.f1[ss] );
+      writer.value( "PREC" , stats.precision[ss] );
+      writer.value( "RECALL" , stats.recall[ss] );
+      
+      // stag durations
       writer.value( "OBS" ,  fac * dur_obs[ss] );
       writer.value( "ORIG" , fac * dur_obs_orig[ss] );
       writer.value( "PRF" ,  fac * dur_predf[ss] );
@@ -1368,12 +1397,13 @@ void pops_indiv_t::summarize()
     }
  
   int masked = Sorig.size() - S.size();
-  writer.level( pops_t::label( POPS_UNKNOWN ) , "SS" );
+  writer.level( pops_t::label( POPS_UNKNOWN ) ,  globals::stage_strat  );
   writer.value( "OBS" ,  fac * masked );
   writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
   writer.value( "PRF" ,  fac * masked );
   writer.value( "PR1" ,  fac * masked );
-  writer.unlevel( "SS" );
+
+  writer.unlevel(  globals::stage_strat  );
 
 
   //
@@ -1388,7 +1418,175 @@ void pops_indiv_t::summarize()
 }
 
 
+void pops_indiv_t::apply_espriors( const std::string & f )
+{
 
+  //
+  // only load priors once
+  //
+  
+  if ( pops_t::ES_probs.rows() == 0 )
+    {
+
+      const std::string filename = Helper::expand( f );
+      if ( ! Helper::fileExists( filename ) )
+	Helper::halt( "could not open " + filename );
+      
+      // expecting format: ES PP(N1) PP(N2) PP(N3) PP(R) PP(W)
+      // where ES is the prior number of elapsed sleep epochs before this one (minutes)
+      // and the probabilities are based on the average in this range (i.e. up to the next ES)
+      
+      std::vector<double> pp_n1, pp_n2, pp_n3, pp_r, pp_w;
+      
+      pops_t::ES_mins.clear();
+      
+      std::ifstream IN1( filename.c_str() , std::ios::in );
+      
+      while ( ! IN1.eof() )
+	{
+	  std::string line;
+	  Helper::safe_getline( IN1 , line );
+	  if ( IN1.eof() ) break;
+	  if ( line == "" ) continue;
+	  if ( line[0] == '#' || line[0] == '%' ) continue;
+	  std::vector<std::string> tok = Helper::parse( line , "\t " );
+	  if ( tok.size() != 6 ) Helper::halt( "bad format for " + filename );
+	  if ( tok[0] == "ES" ) continue;
+
+	  double c1,c2,c3,c4,c5,c6;
+	  if ( ! Helper::str2dbl( tok[0] , &c1 ) ) Helper::halt( "bad value in " + filename );
+	  if ( ! Helper::str2dbl( tok[1] , &c2 ) ) Helper::halt( "bad value in " + filename );
+	  if ( ! Helper::str2dbl( tok[2] , &c3 ) ) Helper::halt( "bad value in " + filename );
+	  if ( ! Helper::str2dbl( tok[3] , &c4 ) ) Helper::halt( "bad value in " + filename );
+	  if ( ! Helper::str2dbl( tok[4] , &c5 ) ) Helper::halt( "bad value in " + filename );
+	  if ( ! Helper::str2dbl( tok[5] , &c6 ) ) Helper::halt( "bad value in " + filename );
+	  
+	  if ( c1 < 0 )  Helper::halt( "bad value in " + filename );
+	  if ( c2 < 0 || c2 > 1 ) Helper::halt( "bad value in " + filename );
+	  if ( c3 < 0 || c3 > 1 ) Helper::halt( "bad value in " + filename );
+	  if ( c4 < 0 || c4 > 1 ) Helper::halt( "bad value in " + filename );
+	  if ( c5 < 0 || c5 > 1 ) Helper::halt( "bad value in " + filename );
+	  if ( c6 < 0 || c6 > 1 ) Helper::halt( "bad value in " + filename );
+	  
+	  pops_t::ES_mins.push_back( c1 );
+	  pp_n1.push_back( c2 );
+	  pp_n2.push_back( c3 );
+	  pp_n3.push_back( c4 );
+	  pp_r.push_back( c5 );
+	  pp_w.push_back( c6 );
+	}
+      
+      if ( pops_t::ES_mins.size() < 1 )
+	Helper::halt( "could not read data from " + filename );
+      
+      IN1.close();
+      
+      // we can assume that P(ES|stage) should sum to 1.0 but just in case...                                                                                                                    
+      const int nbins = pp_n1.size();
+      double s1 = 0 ,s2 = 0 ,s3 = 0 ,sr = 0 ,sw = 0;
+      for (int i=0; i<nbins; i++)
+	{
+	  s1 += pp_n1[i];
+	  s2 += pp_n2[i];
+	  s3 += pp_n3[i];
+	  sr += pp_r[i];
+	  sw += pp_w[i];
+	}
+      if ( s1 <= 0 || s2 <= 0 || s3 <= 0 || sr <= 0 || sw <= 0 )
+	Helper::halt( "bad format in " + f );
+      
+      for (int i=0; i<nbins; i++)
+	{
+	  pp_n1[i] /= s1;
+	  pp_n2[i] /= s2;
+	  pp_n3[i] /= s3;
+	  pp_r[i] /= sr;
+	  pp_w[i] /= sw;
+	}
+      
+      pops_t::ES_probs = Eigen::MatrixXd::Zero( nbins , 5 );
+
+      // Note -- align columns in same order as P for POPS:
+      //   W R N1 N2 N3
+      for (int i=0; i<nbins; i++)
+	{
+	  pops_t::ES_probs(i,0) = pp_w[i];	  
+	  pops_t::ES_probs(i,1) = pp_r[i];
+	  pops_t::ES_probs(i,2) = pp_n1[i];
+	  pops_t::ES_probs(i,3) = pp_n2[i];
+	  pops_t::ES_probs(i,4) = pp_n3[i];
+	}
+      
+      logger << "  read " << nbins << "-bin ES model from " << filename << "\n";
+      
+    }
+
+  
+  //
+  // apply ES priors model
+  //
+
+  // inputs: P  =  posteriors P( stage | signals ) 
+  //         S  =  assigned stage
+
+
+  //
+  
+  // revise the current posterior probailities, given elapsed sleep priors
+
+  Eigen::MatrixXd revised = P ;
+  
+  // use the current best-guess stage (S) to calculate elapsed sleep
+  
+  // nb. if there are very large gaps in the valid record (i.e. big chunks of bad data)  
+  // then the elapsed sleep estimates will be off (obviously), so probably should
+  // give a note that es-model=X might not be wanted in that scenario
+  
+  const int nr = revised.rows();
+  
+  std::vector<int> es_bin( nr );
+  
+  const int nbins = pops_t::ES_mins.size();
+  
+  double elapsed_sleep = 0 ;
+  
+  // Note: **assumes** 30 second epochs and 5-class classification here
+  
+  double epoch_duration_mins = 0.5;
+  
+  // nb: this **assumes** that elapsed sleep bins should start at 0 
+  int curr_bin = 0;
+  
+  for (int i=0; i<nr; i++)
+    {
+      
+      if ( curr_bin < nbins - 1 && elapsed_sleep >= pops_t::ES_mins[ curr_bin + 1 ] )
+	++curr_bin;
+      
+      revised(i,0) *= revised(i,0) * pops_t::ES_probs(curr_bin,0);
+      revised(i,1) *= revised(i,1) * pops_t::ES_probs(curr_bin,1);
+      revised(i,2) *= revised(i,2) * pops_t::ES_probs(curr_bin,2);
+      revised(i,3) *= revised(i,3) * pops_t::ES_probs(curr_bin,3);
+      revised(i,4) *= revised(i,4) * pops_t::ES_probs(curr_bin,4);
+
+      // scale to sum to 1.0
+      const double row_sum = revised(i,0) + revised(i,1) + revised(i,2) + revised(i,3) + revised(i,4);
+      
+      revised(i,0) /= row_sum;
+      revised(i,1) /= row_sum;
+      revised(i,2) /= row_sum;
+      revised(i,3) /= row_sum;
+      revised(i,4) /= row_sum;
+
+      // get next ES value for next epoch
+      if ( S[i] != pops_stage_t::POPS_WAKE )
+	elapsed_sleep += epoch_duration_mins;
+    }
+
+  // all done  
+  P = revised;
+  
+}
 
 
 #endif

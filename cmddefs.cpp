@@ -1193,7 +1193,7 @@ void cmddefs_t::init()
   add_var( "POPS", "" , "F1" , "F1 statistic" );
   add_var( "POPS", "" , "F13" , "F1 for 3-class model" );
   add_var( "POPS", "" , "F1_WGT" , "F1 weighted" );
-  add_var( "POPS", "" , "MAXPP" , "Mean maximum posterior" );
+  add_var( "POPS", "" , "CONF" , "Mean confidence (max. posterior)" );
   add_var( "POPS", "" , "MCC" , "Matthews correlation coefficient" );
   add_var( "POPS", "" , "MCC3" , "Matthews correlation coefficient, 3-class" );
   add_var( "POPS", "" , "PREC" , "Precision" );
@@ -1203,8 +1203,16 @@ void cmddefs_t::init()
   add_var( "POPS", "" , "RECALL3" , "Recall, 3-class" );
   add_var( "POPS", "" , "RECALL_WGT" , "Recall,weighted" );
 
+  add_var( "POPS", "" , "SLP_LAT_OBS" , "Observed sleep latency" );
+  add_var( "POPS", "" , "SLP_LAT_PRD" , "Predicted sleep latency" );
+  add_var( "POPS", "" , "REM_LAT_OBS" , "Observed REM latency" );
+  add_var( "POPS", "" , "REM_LAT_PRD" , "Predicted REM latency" );
+  
+  
+ 
   add_table( "POPS" , "E" , "POPS predictions" );
   add_var( "POPS" , "E" , "FLAG" , "-1/0/1/2 excluded/match/disc5/disc3" );
+  add_var( "POPS" , "E" , "CONF" , "Confidence score" );
   add_var( "POPS" , "E" , "PP_N1" , "Posterior probability of N1" );
   add_var( "POPS" , "E" , "PP_N2" , "Posterior probability of N2" );
   add_var( "POPS" , "E" , "PP_N3" , "Posterior probability of N3" );
@@ -1222,9 +1230,32 @@ void cmddefs_t::init()
   add_var( "POPS" , "SS" , "RECALL" , "Recall" );
   add_var( "POPS" , "SS" , "PREC" , "Precision" );
 
-  // SHAP
-  //set_compressed( "POPS" , tfac_t( "E" ) );
+  add_table( "POPS" , "FTR" , "Feature definitions" );
+  add_var( "POPS" , "FTR" , "BLOCK" , "Block label" );
+  add_var( "POPS" , "FTR" , "FINAL" , "Column, if included" );
+  add_var( "POPS" , "FTR" , "INC" , "Included?" );
+  add_var( "POPS" , "FTR" , "LABEL" , "Feature label" );
+  add_var( "POPS" , "FTR" , "LEVEL" , "Level (1/2)" );
+
+  add_table( "POPS" , "ETYPE" , "Error type" );
+  add_var( "POPS" , "ETYPE" , "ACC" , "Accuracy" );
+  add_var( "POPS" , "ETYPE" , "N" , "Count" );
+
+  add_table( "POPS" , "SS,ETYPE" , "Stage-specific error type" );
+  add_var( "POPS" , "SS,ETYPE" , "ACC" , "Accuracy" );
+  add_var( "POPS" , "SS,ETYPE" , "N" , "Count" );
+
+  add_table( "POPS" , "SS,FTR" , "SHAP values" );
+  add_var( "POPS" , "SS,FTR" , "SHAP" , "SHAP values" );
  
+  add_table( "POPS" , "E,SS,FTR" , "Epoch-level SHAP values" );
+  add_var( "POPS" , "E,SS,FTR" , "SHAP" , "SHAP values" );
+  set_compressed( "POPS" , tfac_t( "E,SS,FTR" ) );
+  
+  add_table( "POPS" , "PRED,OBS" , "Confusion matrix" );
+  add_var( "POPS" , "PRED,OBS" , "N" , "Count" );
+  add_var( "POPS" , "PRED,OBS" , "P" , "Proportion" );
+
 
   
   /////////////////////////////////////////////////////////////////////////////////
