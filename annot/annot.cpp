@@ -592,6 +592,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( IN1.eof() ) break;
 	  if ( x == "" ) continue;
 
+	  x = Helper::unquote( x );
+	  
 	  // sanitize?
 	  if ( globals::sanitize_everything )
 	    x = Helper::sanitize( x );
@@ -746,6 +748,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  if ( name.find( globals::class_inst_delimiter ) != std::string::npos )
 	    name = name.substr( 0 , name.find( globals::class_inst_delimiter ) );
+
+
+	  std::cout << " name " << name << "\n"
+		    << " orig " << orig_name << "\n";
 	  
 	  //
 	  //
@@ -899,21 +905,25 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( tok.size() == 1 ) 
 	    Helper::halt( "invalid data line:\n" + line + "\n (hint: use the 'tab-only' option to ignore space delimiters)" );
 	  
+
 	  //
-	  // Get class name, first remapping
+	  // Sanitize class name, but keep '/' and '.' symbol 
 	  //
 
-	  std::string aname = nsrr_t::remap( tok[0] );
+	  std::string aname = globals::sanitize_everything
+	    ? Helper::sanitize( Helper::unquote( tok[0] ) , globals::class_inst_delimiter )
+	    : Helper::unquote( tok[0] );
+	    
+
+	  //
+	  // Remap term?
+	  //
+
+	  
+	  aname = nsrr_t::remap( tok[0] );
 	  
 	  if ( aname == "" ) continue;
 	  
-	  //
-	  // Sanitize, but keep '/' and '.' symbol here though...
-	  //
-
-	  if ( globals::sanitize_everything )
-	    aname = Helper::sanitize( aname , globals::class_inst_delimiter );
-
 
 	  //
 	  // save original class name (prior to any combining)
@@ -2619,7 +2629,8 @@ bool globals::is_stage_annotation( const std::string & s )
 }
 
 
-bool annotation_set_t::make_sleep_stage( const std::string & a_wake , 
+bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
+					 const std::string & a_wake , 
 					 const std::string & a_n1 , 
 					 const std::string & a_n2 , 
 					 const std::string & a_n3 , 
@@ -2645,8 +2656,8 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
   // Use default annotation labels, if not otherwise specified
   // 
 
-  std::string dwake, dn1, dn2, dn3, dn4, drem, dother;
-  
+  std::string dwake, dn1, dn2, dn3, dn4, drem, dother, dunknown;
+
   std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
   while ( ii != annots.end() )
     {
@@ -2664,7 +2675,6 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
       else if ( ss == UNSCORED ) dother = s;
       else if ( ss == MOVEMENT ) dother = s;
       else if ( ss == ARTIFACT ) dother = s;
-      // if ss == UNKNOWN means this is not a Sleep Stage
       ++ii;
     }
   
@@ -2720,135 +2730,194 @@ bool annotation_set_t::make_sleep_stage( const std::string & a_wake ,
   //
 
   int assigned = 0;
-
   for (int a=0;a<n1s.size();a++) if ( n1s[a] != NULL ) ++assigned;
   for (int a=0;a<n2s.size();a++) if ( n2s[a] != NULL ) ++assigned;
   for (int a=0;a<n3s.size();a++) if ( n3s[a] != NULL ) ++assigned;
   for (int a=0;a<rems.size();a++) if ( rems[a] != NULL ) ++assigned;
   for (int a=0;a<wakes.size();a++) if ( wakes[a] != NULL ) ++assigned;
+  if ( assigned == 0 ) return false;
 
-  if ( assigned == 0 )
-    return false;
+  //
+  // Align all putative stages, and if we see point markers, extend to the next (end) annot
+  //
+  
+  std::map<interval_t,sleep_stage_t> stages;
+
+  for ( int i=0; i<wakes.size(); i++ )
+    {
+      annot_t * wake = wakes[i];
+      if ( wake )
+	{
+	  annot_map_t & events = wake->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = WAKE;
+              ++ee;
+            }
+	}
+    }
 
   
+  for ( int i=0; i<n1s.size(); i++ )
+    {
+      annot_t * stg = n1s[i];
+      if ( stg )
+        {
+          annot_map_t & events = stg->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = NREM1;
+              ++ee;
+            }
+	}
+    }
+
+  for ( int i=0; i<n2s.size(); i++ )
+    {
+      annot_t * stg = n2s[i];
+      if ( stg )
+        {
+          annot_map_t & events = stg->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = NREM2;
+              ++ee;
+            }
+	}
+    }
+
+  for ( int i=0; i<n3s.size(); i++ )
+    {
+      annot_t * stg = n3s[i];
+      if ( stg )
+        {
+          annot_map_t & events = stg->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = NREM3;
+              ++ee;
+            }
+        }
+    }
+
+  for ( int i=0; i<n4s.size(); i++ )
+    {
+      annot_t * stg = n4s[i];
+      if ( stg )
+        {
+          annot_map_t & events = stg->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = NREM4;
+              ++ee;
+            }
+        }
+    }
+
+  for ( int i=0; i<rems.size(); i++ )
+    {
+      annot_t * stg = rems[i];
+      if ( stg )
+	{
+          annot_map_t & events = stg->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = REM;
+              ++ee;
+            }
+        }
+    }
+  
+  for ( int i=0; i<others.size(); i++ )
+    {
+      annot_t * stg = others[i];
+      if ( stg )
+        {
+          annot_map_t & events = stg->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = UNSCORED;
+              ++ee;
+            }
+        }
+    }
+
+
   //
-  // Create the 'SleepStage' unified annotation (used by HYPNO, STAGE, and SUDS)
+  // Now, look through stages[] and extend any zero-point stages; also, flag conflicts 
+  //
+
+  interval_t prior;
+  std::vector<interval_t> vec_intervals;
+  std::vector<sleep_stage_t> vec_stages;
+  
+  std::map<interval_t,sleep_stage_t>::const_iterator jj = stages.begin();
+  while ( jj != stages.end() )
+    {
+      
+      interval_t curr = jj->first;
+
+      // ensure no overlaps
+      if ( jj != stages.begin() )
+	{
+	  if ( curr.start < prior.stop )
+	    Helper::halt( "bad, overlapping sleep stages" );
+	}
+      
+      vec_intervals.push_back( curr );
+      vec_stages.push_back( jj->second );
+      
+      // save prior interval
+      prior = curr;
+      
+      ++jj;
+    }
+
+  
+  std::cout	<<  "stg " << vec_intervals[0].start <<	" -- " << vec_intervals[0].stop << "\t" << vec_stages[0] << "\n";
+
+  // start from the second entry
+  for (int j=1; j<vec_stages.size(); j++)
+    {
+      std::cout <<  "stg " << vec_intervals[j].start <<  " -- " << vec_intervals[j].stop << "\t" << vec_stages[j] << "\n";
+      if ( vec_intervals[j-1].duration() == 0 )
+	{
+	  std::cout << " adjusting...\n";
+	  vec_intervals[j-1].stop = vec_intervals[j].start; // i.e. 1-tp past end
+	}
+    }
+  
+  // also handle 'all wake' condition
+  if ( vec_stages.size() == 1 )
+    {
+      if ( vec_intervals[0].duration() == 0 )
+	{
+	  // set to end (1 past the last TP)
+	  vec_intervals[0].stop = tl.last_time_point_tp + 1LLU;
+	}
+    }
+  
+  
+  
+  //
+  // Create the 'SleepStage' unified annotation (used by HYPNO, STAGE, and POPS)
   //
   
   annot_t * ss = add( "SleepStage" );
 
   ss->description = "SleepStage";
-
-  for ( int i=0; i<wakes.size(); i++ )
-    {
-      annot_t * wake = wakes[i];
-      if ( wake ) 
-	{
-	  annot_map_t & events = wake->interval_events;
-	  annot_map_t::const_iterator ee = events.begin();
-	  while ( ee != events.end() )
-	    {	  
-	      instance_t * instance = ss->add( globals::stage( WAKE ) , ee->first.interval , "." );
-	      ++ee;
-	    }
-	}
-    }
-
-
-  for ( int i=0; i<n1s.size(); i++ )
-    {
-      annot_t * n1 = n1s[i];
-      if ( n1 ) 
-	{
-	  annot_map_t & events = n1->interval_events;
-	  annot_map_t::const_iterator ee = events.begin();
-	  while ( ee != events.end() )
-	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM1 ) , ee->first.interval , "." );
-	      ++ee;
-	    }
-	}
-    }
-
-
-  for ( int i=0; i<n2s.size(); i++ )
-    {
-      annot_t * n2 = n2s[i];      
-      if ( n2 ) 
-	{
-	  annot_map_t & events = n2->interval_events;
-	  annot_map_t::const_iterator ee = events.begin();
-	  while ( ee != events.end() )
-	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM2 ) , ee->first.interval , "." );
-	      ++ee;
-	    }
-	}
-    }
-
   
-  for ( int i=0; i<n3s.size(); i++ )
-    {
-      annot_t * n3 = n3s[i];
-      if ( n3 ) 
-	{
-	  annot_map_t & events = n3->interval_events;
-	  annot_map_t::const_iterator ee = events.begin();
-	  while ( ee != events.end() )
-	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM3 ) , ee->first.interval , "." );
-	      ++ee;
-	    }
-	}
-    }
-
-
-  for ( int i=0; i<n4s.size(); i++ )
-    {
-      annot_t * n4 = n4s[i];
-      if ( n4 ) 
-	{
-	  annot_map_t & events = n4->interval_events;
-	  annot_map_t::const_iterator ee = events.begin();
-	  while ( ee != events.end() )
-	    {	  
-	      instance_t * instance = ss->add( globals::stage( NREM4 ) , ee->first.interval , "." );
-	      ++ee;
-	    }
-	}
-    }
-
-
-  for ( int i=0; i<rems.size(); i++ )
-    {
-      annot_t * rem = rems[i];
-      if ( rem ) 
-	{
-	  annot_map_t & events = rem->interval_events;
-	  annot_map_t::const_iterator ee = events.begin();
-	  while ( ee != events.end() )
-	    {
-	      instance_t * instance = ss->add( globals::stage( REM ) , ee->first.interval , "." );
-	      ++ee;
-	    }
-	}
-    }
+  for ( int i=0; i<vec_stages.size(); i++ )
+    ss->add( globals::stage( vec_stages[i] ) , vec_intervals[i] , "." );
   
-  for ( int i=0; i<others.size(); i++ )
-    {
-      annot_t * other = others[i];
-      if ( other ) 
-	{
-	  annot_map_t & events = other->interval_events;
-	  annot_map_t::const_iterator ee = events.begin();
-	  while ( ee != events.end() )
-	    {	  
-	      instance_t * instance = ss->add( globals::stage( UNSCORED ) , ee->first.interval , "." );
-	      ++ee;
-	    }
-	}
-    }
-  
+
   return true;
   
 }

@@ -2665,7 +2665,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
     }
   else
     {      
-      edf.timeline.annotations.make_sleep_stage( wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , misc );
+      edf.timeline.annotations.make_sleep_stage( edf.timeline, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , misc );
       bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
       if ( ! okay ) return; // i.e. if no valid annotations found
     }
@@ -4491,7 +4491,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
       // by default, this sets sslabel to SleepStage
       //
       
-      edf.timeline.annotations.make_sleep_stage();
+      edf.timeline.annotations.make_sleep_stage( edf.timeline );
       
       annot_t * annot = edf.timeline.annotations( "SleepStage" );
       

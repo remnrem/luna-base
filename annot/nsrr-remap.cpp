@@ -39,8 +39,12 @@ std::set<std::string> nsrr_t::edf_class;
 std::string nsrr_t::remap( const std::string & a )
 {
   
-  std::string a_uc = Helper::toupper( a );
-
+  std::string a_uc;
+  if ( globals::sanitize_everything )
+    a_uc = Helper::sanitize(  Helper::toupper( Helper::unquote( a ) ) );
+  else
+    a_uc = Helper::toupper( Helper::unquote( a ) );
+    
   //
   // found as a primary? ( return preferred case in pmap )
   //
@@ -152,15 +156,19 @@ void nsrr_t::annot_remapping( const std::string & s )
   // primary already specified
   if ( amap.find( uc_primary ) != amap.end() )
     Helper::halt( primary + " specified as both primary annotation and mapped term" );
-  
+
+  // add mappings
   for (int j=1;j<tok.size();j++) 
     {
       
       // impose rules
       // optional swap spaces for another character too
-      const std::string mapped = globals::replace_annot_spaces ?
-	Helper::search_replace( Helper::toupper( Helper::unquote( tok[j] ) ) , ' ' , globals::space_replacement ) :
-	Helper::toupper( Helper::unquote( tok[j] ) ) ;
+	  const std::string mapped = globals::sanitize_everything 
+	    ? Helper::sanitize(  Helper::toupper( Helper::unquote( tok[j] ) ) )
+	    : ( globals::replace_annot_spaces
+		? Helper::search_replace( Helper::toupper( Helper::unquote( tok[j] ) ) , ' ' , globals::space_replacement )
+		: Helper::toupper( Helper::unquote( tok[j] ) )
+		);		
 
       // if same, skip
       if ( mapped == uc_primary ) continue;

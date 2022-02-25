@@ -706,6 +706,7 @@ struct annotation_set_t;
 struct edf_t;
 struct param_t;
 struct clocktime_t;
+struct timeline_t;
 
 void summarize_annotations( edf_t & edf , param_t & param );
 
@@ -840,7 +841,8 @@ struct annotation_set_t
   // Attempt to create a single SLEEP STAGE annotation from multiple
   // other annotations
   
-  bool make_sleep_stage( const std::string & a_wake = "" , 
+  bool make_sleep_stage( const timeline_t & tl ,
+			 const std::string & a_wake = "" , 
 			 const std::string & a_n1 = "", 
 			 const std::string & a_n2 = "", 
 			 const std::string & a_n3 = "", 

@@ -149,7 +149,7 @@ void pops_indiv_t::staging( edf_t & edf , param_t & param )
   ne = edf.timeline.first_epoch();
   
   // get staging
-  edf.timeline.annotations.make_sleep_stage();
+  edf.timeline.annotations.make_sleep_stage( edf.timeline );
   
   has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
   

@@ -156,7 +156,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
   // Extract sleep staging
   //
 
-  edf.timeline.annotations.make_sleep_stage();
+  edf.timeline.annotations.make_sleep_stage( edf.timeline );
       
   if ( ! edf.timeline.hypnogram.construct( &edf.timeline , param , false ) )
     Helper::halt( "problem extracting stage annotations" );
