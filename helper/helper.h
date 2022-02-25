@@ -79,6 +79,7 @@ namespace Helper
   }
 
   static inline std::string unquote(const std::string &s , const char q2 = '"' ) {
+    if ( s.size() == 0 ) return s;
     int a = ( s[0] == '"' || s[0] == q2 ) ? 1 : 0;
     int b = ( s[s.size()-1] == '"' || s[s.size()-1] == q2 ) ? 1 : 0 ;
     return s.substr(a,s.size()-a-b);

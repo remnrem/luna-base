@@ -591,7 +591,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  Helper::safe_getline( IN1 , x );
 	  if ( IN1.eof() ) break;
 	  if ( x == "" ) continue;
-
+	  
 	  x = Helper::unquote( x );
 	  
 	  // sanitize?
@@ -748,10 +748,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  if ( name.find( globals::class_inst_delimiter ) != std::string::npos )
 	    name = name.substr( 0 , name.find( globals::class_inst_delimiter ) );
-
-
-	  std::cout << " name " << name << "\n"
-		    << " orig " << orig_name << "\n";
+	  
 	  
 	  //
 	  //
@@ -909,18 +906,18 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // Sanitize class name, but keep '/' and '.' symbol 
 	  //
-
+	  
 	  std::string aname = globals::sanitize_everything
 	    ? Helper::sanitize( Helper::unquote( tok[0] ) , globals::class_inst_delimiter )
 	    : Helper::unquote( tok[0] );
-	    
-
+	  
+	  
 	  //
 	  // Remap term?
 	  //
 
 	  
-	  aname = nsrr_t::remap( tok[0] );
+	  aname = nsrr_t::remap( aname );
 	  
 	  if ( aname == "" ) continue;
 	  
@@ -956,7 +953,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  // Is this an aggregate class/inst form?
 	  //
-
 
 	  const bool split_annot = aname.find( globals::class_inst_delimiter ) != std::string::npos;
 	  
@@ -2881,15 +2877,15 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
     }
 
   
-  std::cout	<<  "stg " << vec_intervals[0].start <<	" -- " << vec_intervals[0].stop << "\t" << vec_stages[0] << "\n";
+  //  std::cout	<<  "stg " << vec_intervals[0].start <<	" -- " << vec_intervals[0].stop << "\t" << vec_stages[0] << "\n";
 
   // start from the second entry
   for (int j=1; j<vec_stages.size(); j++)
     {
-      std::cout <<  "stg " << vec_intervals[j].start <<  " -- " << vec_intervals[j].stop << "\t" << vec_stages[j] << "\n";
+      //std::cout <<  "stg " << vec_intervals[j].start <<  " -- " << vec_intervals[j].stop << "\t" << vec_stages[j] << "\n";
       if ( vec_intervals[j-1].duration() == 0 )
 	{
-	  std::cout << " adjusting...\n";
+	  //std::cout << " adjusting...\n";
 	  vec_intervals[j-1].stop = vec_intervals[j].start; // i.e. 1-tp past end
 	}
     }
