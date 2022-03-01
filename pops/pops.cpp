@@ -235,6 +235,19 @@ void pops_t::make_level2_library( param_t & param )
   //
  
   fit_model( lgbm_model , weights );
+ 
+  //
+  // write elapsed-sleep priors?
+  //
+
+  if ( param.has( "es-priors" ) )
+    {
+      double tbin = param.has( "es-min" ) ? param.requires_dbl( "es-min" ) : 20 ;
+      double tmax = param.has( "es-max" ) ? param.requires_dbl( "es-max" ) : 380 ;
+      double c    = param.has( "es-c" )   ? param.requires_dbl( "es-c" ) : 0.01 ;
+      write_elapsed_sleep_priors( param.value( "es-priors" ) , tbin ,tmax , c );
+      
+    }
   
 }
 
@@ -1011,7 +1024,113 @@ void pops_t::dump_matrix( const std::string & f )
 }
 
 
+
+void pops_t::write_elapsed_sleep_priors( const std::string & f , double tbin, double tmax, double c )
+{
+  
+  // Given S and E, calculate overall elapsed sleep prior distribution 
+  // and then P(ES|stage) from training data;  save to a file that 
+  // POPS es-priors=X can use during testing 
+
+  // 
+  // c    : constant, i.e. to ensure some weight all values
+  // tbin : bin size (e.g. 20 mins default) 
+  // tmax : maximum limit (default = 400 mins, 6.6 hrs)
+
+  
+  const int ne = S.size();
+
+  // new indiv can be inferred if E[i] <= E[i-1] 
+  
+  int prior_epoch = 999999;
+  const double epoch_mins = pops_opt_t::epoch_inc / 60.0 ;
+  double elpased_sleep_mins;
+
+  std::map<int,std::map<int,double> > ES; // stg -> bin -> count 
+
+  // last bin is that value plus (e..g 400+)
+  const int nbins = floor( tmax / tbin ) + 1;
+  
+  for (int i=0; i<ne; i++)
+    {
+      
+      // new indiv? reset ES counter
+      if ( E[i] < prior_epoch )
+	elpased_sleep_mins = 0;
+
+      // track elapsed sleep
+      elpased_sleep_mins += S[i] == POPS_WAKE ? 0 : epoch_mins ;
+
+      // W, R, N1, N2, N3
+      if ( S[i] >= 0 && S[i] <= 5 ) 
+	{      
+	  // bin (making the equal to or greater than for the max bin)
+	  int bin = floor( elpased_sleep_mins / tbin ) ;
+	  
+	  // record
+	  if ( bin < nbins ) 
+	    ES[ S[i] ][ bin ]++;
+	}
+
+      // track epoch for next 
+      prior_epoch = E[i];
+      
+    }
+
+  Eigen::MatrixXd P = Eigen::MatrixXd::Zero( nbins , pops_opt_t::n_stages );
+  
+  // require at least 
+  
+  std::map<int,std::map<int, double> >::const_iterator ss = ES.begin();
+  while ( ss != ES.end() ) 
+    {
+      std::map<int,double>::const_iterator bb = ss->second.begin();
+      while ( bb != ss->second.end() )
+	{	  
+	  P( bb->first , ss->first ) += bb->second;
+	  ++bb;
+	}
+      
+      // normalize within stage
+      P.col( ss->first ) /= P.col( ss->first ).sum();
+      
+      // add offset, re-normalize
+      P.col( ss->first ).array() += c;
+      P.col( ss->first ) /= P.col( ss->first ).sum();
+      
+      ++ss;
+    }
+  
+  std::string filename = Helper::expand( f );
+
+  std::ofstream OUT1( filename.c_str() , std::ios::out );
+  
+  logger << "  writing P( elapsed sleep | stg ) to " << filename << "\n";
+  
+  OUT1 << "ES\t"
+       << "PP(N1)\t"
+       << "PP(N2)\t"
+       << "PP(N3)\t"
+       << "PP(R)\t"
+       << "PP(W)\n";
+
+  // to get output format: N1 N2 N3 R W
+  std::vector<int> sidx = { 2 , 3 , 4 , 1 , 0 };
+  
+  for (int r=0; r<P.rows(); r++)
+    {
+      OUT1 << r * tbin ;
+      for (int s=0; s<5; s++)
+	OUT1 << "\t" << P(r,sidx[s]);
+      OUT1 << "\n";
+    }
+
+  OUT1.close();
+
+}
+
 #endif
+
 
 
 

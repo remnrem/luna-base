@@ -84,6 +84,9 @@ struct pops_t {
   // fit and save a LGBM model (--> pops_t::lgbm)
   void fit_model( const std::string & f , const lgbm_label_t & w );
 
+  // write elapsed-sleep priors
+  void write_elapsed_sleep_priors( const std::string & f , double , double, double );
+
   // for using level2() in the context of prediction
   void from_single_target( const pops_indiv_t & );
   void copy_back( pops_indiv_t * );  
