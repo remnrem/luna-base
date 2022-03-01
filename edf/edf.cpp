@@ -1338,7 +1338,7 @@ bool edf_t::attach( const std::string & f ,
 
   edfz = NULL;
 
-  bool edfz_mode = Helper::file_extension( filename , "edfz" );
+  bool edfz_mode = Helper::file_extension( filename , "edfz" ); 
   
   
   //
@@ -1442,8 +1442,12 @@ bool edf_t::attach( const std::string & f ,
   
   if ( edfz ) 
     {
-      if ( record_size != edfz->record_size ) 
-	Helper::halt( "internal error, different record size in EDFZ header versus index" );      
+      if ( record_size != edfz->record_size )
+	{
+	  logger << "  EDFZ idx record size = " << edfz->record_size << "\n"
+		 << "  EDF record size = " << record_size << "\n";
+	  Helper::halt( "internal error, different record size in EDFZ header versus index" );
+	}
     }
   
 
@@ -2140,7 +2144,14 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
       
       logger << "  writing EDFZ index to " << filename << ".idx\n";
 
-      edfz.write_index( record_size );
+      // update record_size (e.g. if channels dropped)
+      // at this point, we will have read all information in from
+      // the existing 
+      int new_record_size = 0;
+
+      for (int s=0;s<header.ns;s++)
+	new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
+      edfz.write_index( new_record_size );
 
       
       //

@@ -2046,7 +2046,7 @@ void proc_write( edf_t & edf , param_t & param )
 {
   
   // write a .edfz and .edfz.idx
-  bool edfz = param.has( "edfz" );
+  bool edfz = param.yesno( "edfz" );
     
   // add 'tag' to new EDF
   std::string filename = edf.filename;
