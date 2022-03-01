@@ -244,7 +244,7 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
     }
   else if ( trainer )
     {
-      helper->edf.timeline.annotations.make_sleep_stage();
+      helper->edf.timeline.annotations.make_sleep_stage( helper->edf.timeline );
       
       if ( ! helper->edf.timeline.hypnogram.construct( &(helper->edf.timeline) , helper->param , false ) )
 	{
@@ -266,7 +266,7 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
       // for targets, manual/prior staging may exist, in which case we'll want to track it for comparison
       // unless we've been explicitly told to ignore it (ignore-prior --> suds_t::ignore_target_priors )
 
-      helper->edf.timeline.annotations.make_sleep_stage();
+      helper->edf.timeline.annotations.make_sleep_stage( helper->edf.timeline );
 
       helper->has_prior_staging = helper->edf.timeline.hypnogram.construct( &(helper->edf.timeline) , helper->param , false ) ;
       
