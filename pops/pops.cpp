@@ -743,21 +743,21 @@ pops_stats_t::pops_stats_t( const std::vector<int> & obs_ ,
   
   // any restrictions of epochs to look at? 
   // type:
-  //   0 all epochs   A
+  //   0 all epochs   X-A-X
   //   1 only epochs with similar flanking observed stages (i.e. 'consistent' sleep)  A-A-A
   //   2 only left-epochs at a transition (i.e. if the following obs epoch is not the same)  A-B
   //   3 only right-epochs at a transition (i.e. if the prior obs epoch was not the same)  B-A
   //   4 only 'singleton' epochs flanked by the same epoch on both sides  B-A-B
   //   5 only 'singleton' epochs, with any flanking epochs  B-A-C
 
-  //  further, if ostage != -1, then oonly lookat epochs with that obs stage type
+  //  further, if ostage != -1, then only look at epochs with that obs stage type
   
   std::vector<int> obs; 
   std::vector<int> pred;
   
   const int ne = obs_.size();
 
-  if ( type == 0 ) 
+  if ( type == 0 && ostage == -1 ) 
     {
       obs = obs_;
       pred = pred_;

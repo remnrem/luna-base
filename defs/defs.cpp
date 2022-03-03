@@ -824,6 +824,8 @@ void globals::init_channel_types()
   // canonical/base signals
 
   add_channel_map_exact( "csEEG" , EEG );
+  add_channel_map_exact( "csCEN" , EEG );
+  add_channel_map_exact( "csFRT" , EEG );
   add_channel_map_exact( "csC3" , EEG );
   add_channel_map_exact( "csC4" , EEG );
   add_channel_map_exact( "csF3" , EEG );
@@ -840,7 +842,7 @@ void globals::init_channel_types()
   add_channel_map_exact( "csECG" , ECG );
 
   add_channel_map_exact( "csCAN" , AIRFLOW );
-  add_channel_map_exact( "csTRM" , AIRFLOW );
+  add_channel_map_exact( "csTHM" , AIRFLOW );
 
   add_channel_map_exact( "csTHX" , EFFORT );
   add_channel_map_exact( "csABD" , EFFORT );

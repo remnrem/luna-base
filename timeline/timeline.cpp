@@ -967,11 +967,11 @@ void timeline_t::apply_empty_epoch_mask( const std::string & label , bool includ
       
     }
 
-  logger << " based on " << label << " " << cnt_basic_match << " epochs match; ";
+  logger << "  based on " << label << " " << cnt_basic_match << " epochs match; ";
   logger << cnt_mask_set << " newly masked, "   
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
@@ -2499,7 +2499,7 @@ void timeline_t::dumpmask()
 
   first_epoch();
   
-  logger << " dumping MASK\n";
+  logger << "  dumping MASK\n";
 
   while ( 1 ) 
     {
@@ -2650,11 +2650,11 @@ void timeline_t::load_mask( const std::string & f , bool exclude )
   
   FIN.close();
 
-  logger << " processed " << e
+  logger << "  processed " << e
 	    << " lines, with "
 	    << cnt_mask0 << " masked epochs\n";
 
-  logger << " changed mask for " << cnt_mask1
+  logger << "  changed mask for " << cnt_mask1
 	    << " of " << cnt_total << " epochs\n";
 
   return;
