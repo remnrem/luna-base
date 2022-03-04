@@ -1244,10 +1244,10 @@ void pops_indiv_t::summarize()
   // here, do all obs stage types
 
   pops_stats_t stats_AAA( S, preds , 5 , 1 );
-  pops_stats_t stats_XAB( S, preds , 5 , 2 );
-  pops_stats_t stats_BAX( S, preds , 5 , 3 );
-  pops_stats_t stats_BAB( S, preds , 5 , 4 );
-  pops_stats_t stats_BAC( S, preds , 5 , 5 );
+  pops_stats_t stats_AAX( S, preds , 5 , 2 );
+  pops_stats_t stats_XAA( S, preds , 5 , 3 );
+  pops_stats_t stats_XAX( S, preds , 5 , 4 );
+  pops_stats_t stats_TRN( S, preds , 5 , 5 );
 
   bool set_etype = false;
 
@@ -1259,36 +1259,36 @@ void pops_indiv_t::summarize()
       writer.value( "ACC" , stats_AAA.acc );
     }
   
-  if ( stats_XAB.nobs >10 )
+  if ( stats_AAX.nobs >10 )
     {
       set_etype = true;
-      writer.level( "XAB" , "ETYPE" );
-      writer.value( "N" , stats_XAB.nobs );
-      writer.value( "ACC" , stats_XAB.acc );
+      writer.level( "AAX" , "ETYPE" );
+      writer.value( "N" , stats_AAX.nobs );
+      writer.value( "ACC" , stats_AAX.acc );
     }   
 
-  if ( stats_BAX.nobs >10 )
+  if ( stats_XAA.nobs >10 )
     {
       set_etype = true;
-      writer.level( "BAX" , "ETYPE" );
-      writer.value( "N" , stats_BAX.nobs );
-      writer.value( "ACC" , stats_BAX.acc );
+      writer.level( "XAA" , "ETYPE" );
+      writer.value( "N" , stats_XAA.nobs );
+      writer.value( "ACC" , stats_XAA.acc );
     }   
 
-  if ( stats_BAB.nobs >10 )
+  if ( stats_XAX.nobs >10 )
     {
       set_etype = true;
-      writer.level( "BAB" , "ETYPE" );
-      writer.value( "N" , stats_BAB.nobs );
-      writer.value( "ACC" , stats_BAB.acc );
+      writer.level( "XAX" , "ETYPE" );
+      writer.value( "N" , stats_XAX.nobs );
+      writer.value( "ACC" , stats_XAX.acc );
     }
 
-  if ( stats_BAC.nobs >10 )
+  if ( stats_TRN.nobs >10 )
     {
       set_etype = true;
-      writer.level( "BAC" , "ETYPE" );
-      writer.value( "N" , stats_BAC.nobs );
-      writer.value( "ACC" , stats_BAC.acc );
+      writer.level( "TRN" , "ETYPE" );
+      writer.value( "N" , stats_TRN.nobs );
+      writer.value( "ACC" , stats_TRN.acc );
     }
 
   if ( set_etype )
@@ -1305,23 +1305,23 @@ void pops_indiv_t::summarize()
       if ( pops_opt_t::n_stages == 5 )
         writer.level( pops_t::labels5[ ss ] , globals::stage_strat );
       else
-        writer.level( pops_t::labels3[ ss ] , globals::stage_strat );
+        writer.level( pops_t::labels3[ ss ] , globals::stage_strat );      
       
-      pops_stats_t stats_XAX( S, preds , 5 , 0 , ss );
+      pops_stats_t stats_OAO( S, preds , 5 , 0 , ss );
       pops_stats_t stats_AAA( S, preds , 5 , 1 , ss );
-      pops_stats_t stats_XAB( S, preds , 5 , 2 , ss );
-      pops_stats_t stats_BAX( S, preds , 5 , 3 , ss );
-      pops_stats_t stats_BAB( S, preds , 5 , 4 , ss );
-      pops_stats_t stats_BAC( S, preds , 5 , 5 , ss );
+      pops_stats_t stats_AAX( S, preds , 5 , 2 , ss );
+      pops_stats_t stats_XAA( S, preds , 5 , 3 , ss );
+      pops_stats_t stats_XAX( S, preds , 5 , 4 , ss );
+      pops_stats_t stats_TRN( S, preds , 5 , 5 , ss );
 
       bool set_etype = false;
       
-      if ( stats_XAX.nobs > 10 ) 
+      if ( stats_OAO.nobs > 10 ) 
 	{
 	  set_etype = true;
-	  writer.level( "XAX" , "ETYPE" );
-	  writer.value( "N" , stats_XAX.nobs );
-	  writer.value( "ACC" , stats_XAX.acc );
+	  writer.level( "OAO" , "ETYPE" );
+	  writer.value( "N" , stats_OAO.nobs );
+	  writer.value( "ACC" , stats_OAO.acc );
 	}
       
       if ( stats_AAA.nobs > 10 ) 
@@ -1332,36 +1332,36 @@ void pops_indiv_t::summarize()
 	  writer.value( "ACC" , stats_AAA.acc );
 	}
       
-      if ( stats_XAB.nobs >10 )
+      if ( stats_AAX.nobs >10 )
 	{
 	  set_etype = true;
-	  writer.level( "XAB" , "ETYPE" );
-	  writer.value( "N" , stats_XAB.nobs );
-	  writer.value( "ACC" , stats_XAB.acc );
+	  writer.level( "AAX" , "ETYPE" );
+	  writer.value( "N" , stats_AAX.nobs );
+	  writer.value( "ACC" , stats_AAX.acc );
 	}   
       
-      if ( stats_BAX.nobs >10 )
+      if ( stats_XAA.nobs >10 )
 	{
 	  set_etype = true;
-	  writer.level( "BAX" , "ETYPE" );
-	  writer.value( "N" , stats_BAX.nobs );
-	  writer.value( "ACC" , stats_BAX.acc );
+	  writer.level( "XAA" , "ETYPE" );
+	  writer.value( "N" , stats_XAA.nobs );
+	  writer.value( "ACC" , stats_XAA.acc );
 	}   
       
-      if ( stats_BAB.nobs >10 )
+      if ( stats_XAX.nobs >10 )
 	{
 	  set_etype = true;
-	  writer.level( "BAB" , "ETYPE" );
-	  writer.value( "N" , stats_BAB.nobs );
-	  writer.value( "ACC" , stats_BAB.acc );
+	  writer.level( "XAX" , "ETYPE" );
+	  writer.value( "N" , stats_XAX.nobs );
+	  writer.value( "ACC" , stats_XAX.acc );
 	}
       
-      if ( stats_BAC.nobs >10 )
+      if ( stats_TRN.nobs >10 )
 	{
 	  set_etype = true;
-	  writer.level( "BAC" , "ETYPE" );
-	  writer.value( "N" , stats_BAC.nobs );
-	  writer.value( "ACC" , stats_BAC.acc );
+	  writer.level( "TRN" , "ETYPE" );
+	  writer.value( "N" , stats_TRN.nobs );
+	  writer.value( "ACC" , stats_TRN.acc );
 	}
       
       if ( set_etype )

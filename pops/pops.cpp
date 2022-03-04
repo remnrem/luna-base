@@ -743,12 +743,12 @@ pops_stats_t::pops_stats_t( const std::vector<int> & obs_ ,
   
   // any restrictions of epochs to look at? 
   // type:
-  //   0 all epochs   X-A-X
-  //   1 only epochs with similar flanking observed stages (i.e. 'consistent' sleep)  A-A-A
-  //   2 only left-epochs at a transition (i.e. if the following obs epoch is not the same)  A-B
-  //   3 only right-epochs at a transition (i.e. if the prior obs epoch was not the same)  B-A
-  //   4 only 'singleton' epochs flanked by the same epoch on both sides  B-A-B
-  //   5 only 'singleton' epochs, with any flanking epochs  B-A-C
+  //   0 OAO  all epochs 
+  //   1 AAA only epochs with similar flanking observed stages (i.e. 'consistent' sleep)  A-A-A
+  //   2 AAX only left-epochs at a transition (i.e. if the following obs epoch is not the same)  A-B
+  //   3 XAA only right-epochs at a transition (i.e. if the prior obs epoch was not the same)  B-A
+  //   4 XAX only 'singleton' epochs flanked by different epochs on both sides
+  //   5 TRN any transitions
 
   //  further, if ostage != -1, then only look at epochs with that obs stage type
   
@@ -774,14 +774,14 @@ pops_stats_t::pops_stats_t( const std::vector<int> & obs_ ,
 	  
 	  if ( type == 1 ) // A-A-A
 	    add = ! ( left_disc || right_disc ) ;
-	  else if ( type == 2 ) // *-A-B 
-	    add = right_disc;
-	  else if ( type == 3 ) // B-A-*
-	    add = left_disc;
-	  else if ( type == 4 ) // B-A-B
-	    add = left_disc && ! left_right_disc ;	    
-	  else if ( type == 5 ) // B-A-C
-	    add = left_disc && left_right_disc ;
+	  else if ( type == 2 ) // A-A-X 
+	    add = right_disc && ! left_disc ;
+	  else if ( type == 3 ) // X-A-A
+	    add = left_disc && ! right_disc ;
+	  else if ( type == 4 ) // X-A-X
+	    add = left_disc && right_disc ;
+	  else if ( type == 5 ) // TRN (not AAA)
+	    add = left_disc || right_disc;
 	  
 	  // restrict to a particular class of observed stages too?
 	  if ( ostage != -1 && ostage != obs_[i] ) 

@@ -368,6 +368,12 @@ struct suds_indiv_t {
   void summarize_kappa( const std::vector<std::string> & prd , const bool to_console = false );
 
   //
+  // stage & context specific accuracies
+  //
+
+  void summarize_acc( const std::vector<std::string> & prd );
+  
+  //
   // dump epoch by predictor matrix (from SOAP verbose)
   //
   
@@ -921,7 +927,15 @@ public:
   static void trainer_1x1_evals( const suds_indiv_t & , 
 				 const Eigen::ArrayXd & wgt , 
 				 const std::vector<std::string> & );
+  
+  static std::pair<double,int> context_acc_stats( const std::vector<int> & obs_ ,
+						  const std::vector<int> & pred_ ,
+						  const std::vector<int> & epochs_ ,
+						  const int type ,
+						  const int ostage );
     
+  
+  
 };
 
 

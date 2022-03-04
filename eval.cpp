@@ -1187,10 +1187,11 @@ void proc_self_suds( edf_t & edf , param_t & param  )
   // set options
   suds_t::set_options( param );  
 
-  // load model, if not already done                                                                                                     
+  // load model, if not already done
+
   if ( ! suds_t::model.loaded() )
     {
-      suds_t::model.read( param.requires( "model" ) ,
+      suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
 			  param.has( "write-weights" ) ? param.value( "write-weights" ) : ""  
 			  );

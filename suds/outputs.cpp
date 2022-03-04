@@ -487,6 +487,72 @@ int suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const 
 }
 
 
+void suds_indiv_t::summarize_acc( const std::vector<std::string> & prd )
+{
+
+  // epochs[i]         epoch number
+  // obs_stage_valid    
+
+
+  if ( prd.size() != obs_stage_valid.size() )
+    Helper::halt( "interal error in summarize_acc()" );
+
+  if ( prd.size() != epochs.size() )
+    Helper::halt( "interal error in summarize_acc()" );
+
+  // get two main vectors (may include missing data)
+  std::vector<int> p, o;
+  for (int i=0; i<prd.size(); i++)
+    {
+      p.push_back( suds_t::type( prd[i] ) );
+      o.push_back( obs_stage_valid[i] );
+    }
+
+
+  //   O = anything
+  //   A = target epoch
+  //   X = not A
+  
+  //   0 OAO  all epochs
+  //   1 AAA  only epochs with similar flanking observed stages
+  //   2 AAX  only left-epochs at a transition (i.e. if the following obs epoch is not the same)
+  //   3 XAA  only right-epochs at a transition (i.e. if the prior obs epoch was not the same)  
+  //   4 XAX  only 'singleton' epochs
+  //   5 TRN  any transition (AAX, XAA or XAX)
+  
+  std::vector<std::string> etypes = { "OAO" , "AAA", "AAX", "XAA" , "XAX" , "TRN" } ;
+  
+  // all stages
+  for (int et = 0; et < 6; et++)
+    {
+      writer.level( etypes[et] , "ETYPE" );
+      
+      // all stages
+      writer.level( "ALL" , globals::stage_strat );
+      std::pair<double,int> a = suds_t::context_acc_stats( o , p , epochs , et , -1 ) ;
+      if ( a.first >= 0 ) writer.value( "ACC" , a.first );
+      writer.value( "N" , a.second );
+
+      // stage-specific: 
+      const int nss = suds_t::labels.size();
+      for (int ss=0; ss<nss; ss++)
+	{
+	  writer.level( suds_t::labels[ss] , globals::stage_strat );
+	  std::pair<double,int> a = suds_t::context_acc_stats(o, p, epochs,
+							      et,
+							      suds_t::type( suds_t::labels[ss] ) );
+	  if ( a.first >= 0 ) writer.value( "ACC" , a.first );
+	  writer.value( "N" , a.second );
+
+	}
+      
+      writer.unlevel( globals::stage_strat );
+    }
+  
+  writer.unlevel( "ETYPE" );
+  
+}
+
 
 void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const bool to_console )
 {
@@ -731,3 +797,93 @@ void suds_indiv_t::dump_trainer_epoch_matrix( edf_t & edf ,
 }
 
 
+std::pair<double,int> suds_t::context_acc_stats( const std::vector<int> & obs_ , 
+						 const std::vector<int> & pred_ ,
+						 const std::vector<int> & epochs_ , 
+						 const int type , 
+						 const int ostage )
+{
+
+  // nb. we ignore epochs[] for now.. i.e. just take all contiguous, even if some gaps
+  
+  // any restrictions of epochs to look at? 
+  
+  //   O = anything
+  //   A = target epoch
+  //   X = not A
+  
+  //   0 OAO  all epochs
+  //   1 AAA  only epochs with similar flanking observed stages
+  //   2 AAX  only left-epochs at a transition (i.e. if the following obs epoch is not the same)
+  //   3 XAA  only right-epochs at a transition (i.e. if the prior obs epoch was not the same)
+  //   4 XAX  only 'singleton' epochs
+    
+  //  further, if ostage != -1, then only look at epochs with that obs stage type
+  
+  std::vector<int> obs; 
+  std::vector<int> pred;
+  std::vector<int> epochs;
+  
+  const int ne = obs_.size();
+
+  if ( type == 0 && ostage == -1 ) 
+    {
+      obs = obs_;
+      pred = pred_;
+      epochs = epochs_;
+    }
+  else 
+    {
+      for (int i=0; i<ne; i++)
+	{
+	  const bool left_disc = i != 0 && obs_[i-1] !=obs_[i] ;
+	  const bool right_disc = i < ne-1 && obs_[i+1] != obs_[i] ;
+	  const bool left_right_disc = i == 0 || i == ne - 1 ? false : obs_[i-1] != obs_[i+1] ;
+	  
+	  bool add = true;
+
+	  //   0 OAO
+	  //   1 AAA
+	  //   2 AAX
+	  //   3 XAA
+	  //   4 XAX
+	  //   5 TRN at /some/ transition  -- AAX|XAA|XAX     any of AAX, XAA or XAX (i.e. not AAA) 
+	  
+	  if ( type == 1 ) // A-A-A
+	    add = ! ( left_disc || right_disc ) ;
+	  else if ( type == 2 ) // A-A-X 
+	    add = right_disc && ! left_disc;
+	  else if ( type == 3 ) // X-A-A
+	    add = left_disc && ! right_disc;
+	  else if ( type == 4 ) // X-A-X
+	    add = left_disc && right_disc ; 
+	  else if ( type == 5 ) // not AAA
+	    add = left_disc || right_disc ;
+	  
+	  // restrict to a particular class of observed stages too?
+	  if ( ostage != -1 && ostage != obs_[i] ) 
+	    add = false;
+
+	  if ( add ) 
+	    {
+	      obs.push_back( obs_[i] );
+	      pred.push_back( pred_[i] );
+	      epochs.push_back( epochs_[i] );
+	    }	  
+	}
+    }
+
+  // only calculate stats if at least 10 obs of this type
+  if ( obs.size() < 10 )
+    {
+      return std::make_pair( (double)(-1.0) , (int)obs.size() );
+    }
+  
+  // we only need accuracy for the restricted sets for now  
+  double acc = MiscMath::accuracy( obs , pred , SUDS_UNKNOWN );
+  
+  std::pair<double,int> retval = std::make_pair( (double)acc , (int)obs.size() ); 
+  
+  return retval;
+  
+}

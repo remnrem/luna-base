@@ -132,7 +132,8 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
   if ( param.has( "dump-stage-assocs" ) )
     {
-      logger << "  dumping feature/SVD component stage associations to " << param.value( "dump-stage-assocs" )  << "\n";
+      logger << "  dumping feature/SVD component stage associations to "
+	     << param.value( "dump-stage-assocs" )  << "\n";
       dump_stage_associations( param.value( "dump-stage-assocs" ) );
     }
 
@@ -162,6 +163,9 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   std::vector<std::string> final_pred = suds_t::max( pp , labels );
 
   summarize_kappa( final_pred , true );
+
+  // context & stage-specific accuracies
+  summarize_acc( final_pred );
 
   const int bad_epochs = summarize_stage_durations( pp , labels , ne_all , epoch_sec );
   

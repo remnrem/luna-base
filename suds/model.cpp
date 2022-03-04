@@ -86,6 +86,10 @@ bool suds_model_t::read( const std::string & modelfile ,
 			 const std::string & woutfile )
 {
 
+
+  if ( modelfile == "" ) 
+    Helper::halt( "error specifying SOAP model file: empty model file name" );
+  
   // this file needs to specify:
   //  channels used, and sample rates  (CH)
   //  the number of SVD components that will be extracted (NC)
@@ -96,26 +100,68 @@ bool suds_model_t::read( const std::string & modelfile ,
   // ensure we have initiated the maps
   init();
   
-  if ( ! Helper::fileExists( modelfile ) )
-    Helper::halt( "could not open " + modelfile );
 
   // clear any current specifications
   specs.clear();
-  
-  std::ifstream IN1( modelfile.c_str() , std::ios::in );
-  while ( ! IN1.eof() )
+
+  std::vector<std::string> lines;
+
+  if ( modelfile[0] != '_' ) 
     {
-      std::string line;
-      Helper::safe_getline( IN1 , line );
-      if ( line == "" ) continue;
-      if ( line[0] == '%' ) continue;
+      if ( ! Helper::fileExists( modelfile ) )
+	Helper::halt( "could not open " + modelfile );
       
+      // read from a file
+      std::ifstream IN1( modelfile.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  std::string line;
+	  Helper::safe_getline( IN1 , line );
+	  if ( line == "" ) continue;
+	  if ( line[0] == '%' ) continue;
+	  lines.push_back( line );
+	}
+      IN1.close();
+    }
+  else
+    {
+      // populate 'default' SOAP model
+
+      lines.push_back( "CH C4_M1 128" );	
+
+      if ( modelfile == "_1" )
+	{
+	  lines.push_back( "SPEC C4_M1 lwr=0.5 upr=25" );
+	}
+      else if ( modelfile == "_2" )
+	{
+	  lines.push_back( "SPEC C4_M1 lwr=0.5 upr=25" );
+	  lines.push_back( "RSPEC C4_M1 lwr=5 upr=20 z-lwr=30 z-upr=45" );
+	  lines.push_back( "SLOPE C4_M1" );
+	  lines.push_back( "SKEW C4_M1" );
+	  lines.push_back( "KURTOSIS C4_M1" );
+	  lines.push_back( "FD C4_M1" );
+	  lines.push_back( "PE C4_M1" );
+	  lines.push_back( "DENOISE2 lambda=0.5" );
+	  //%SMOOTH2 half-window=15
+	  lines.push_back( "TIME order=4" );	  
+	}
+      
+      lines.push_back( "NC 10" );
+    }  
+  
+  for (int l=0; l<lines.size(); l++)
+    {
+
+      // get line
+      const std::string & line = lines[l];
+      
+      std::vector<std::string> tok = Helper::parse( line , " \t" );
+
       // expecting format:
       //  CHANNEL CH SR 
       //  FEATURE  { CH } { KEY=VAL }
       //  i.e. either a channel, or (if has an '=') an argument
-
-      std::vector<std::string> tok = Helper::parse( line , " \t" );
       
       if ( tok.size() < 2 ) Helper::halt( "bad format for line: " + line );
 
@@ -212,9 +258,15 @@ bool suds_model_t::read( const std::string & modelfile ,
 	  // add to the main list (in order)
 	  specs.push_back( spec );
 	}
-    }
 
+      // process next line of model file
+    } 
+
+  
+  //
   // check that NC was specified
+  //
+  
   if ( suds_t::nc == 0 )
     Helper::halt( "model file did not specify the number of components (NC)" );
 
