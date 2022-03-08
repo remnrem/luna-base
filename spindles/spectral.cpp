@@ -413,51 +413,41 @@ annot_t * spectral_power( edf_t & edf ,
 		 + this_sigma  
 		 + this_beta
 		 + this_gamma;
-	       
-	       writer.level( globals::band( SLOW ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
-	       writer.value( "RELPSD" , this_slowwave / this_total );
-	       
-	       writer.level( globals::band( DELTA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_delta ) : this_delta );
-	       writer.value( "RELPSD" , this_delta / this_total );
 
-	       writer.level( globals::band( THETA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_theta ) : this_theta  );
-	       writer.value( "RELPSD" , this_theta / this_total );
-
-	       writer.level( globals::band( ALPHA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_alpha ) : this_alpha );
-	       writer.value( "RELPSD" , this_alpha / this_total );
-
-	       writer.level( globals::band( SIGMA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_sigma ) : this_sigma );
-	       writer.value( "RELPSD" , this_sigma / this_total );
-
-	       if ( 0 )
+	       if ( this_total > 0 )
 		 {
-		   writer.level( globals::band( LOW_SIGMA ) , globals::band_strat );
-		   writer.value( "PSD" , dB ? 10*log10( this_low_sigma ) : this_low_sigma  );
-		   writer.value( "RELPSD" , this_low_sigma / this_total );
+		   writer.level( globals::band( SLOW ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
+		   writer.value( "RELPSD" , this_slowwave / this_total );
 		   
-		   writer.level( globals::band( HIGH_SIGMA ) , globals::band_strat );
-		   writer.value( "PSD" , dB ? 10*log10( this_high_sigma ) : this_high_sigma );
-		   writer.value( "RELPSD" , this_high_sigma / this_total );
+		   writer.level( globals::band( DELTA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_delta ) : this_delta );
+		   writer.value( "RELPSD" , this_delta / this_total );
+		   
+		   writer.level( globals::band( THETA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_theta ) : this_theta  );
+		   writer.value( "RELPSD" , this_theta / this_total );
+		   
+		   writer.level( globals::band( ALPHA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_alpha ) : this_alpha );
+		   writer.value( "RELPSD" , this_alpha / this_total );
+		   
+		   writer.level( globals::band( SIGMA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_sigma ) : this_sigma );
+		   writer.value( "RELPSD" , this_sigma / this_total );
+	       
+		   writer.level( globals::band( BETA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_beta ) : this_beta  );
+		   writer.value( "RELPSD" , this_beta / this_total );
+		   
+		   writer.level( globals::band( GAMMA ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_gamma ) : this_gamma );
+		   writer.value( "RELPSD" , this_gamma / this_total );
+		   
+		   writer.level( globals::band( TOTAL ) , globals::band_strat );
+		   writer.value( "PSD" , dB ? 10*log10( this_total ) : this_total );
+		   writer.unlevel( globals::band_strat );
 		 }
-	       
-	       writer.level( globals::band( BETA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_beta ) : this_beta  );
-	       writer.value( "RELPSD" , this_beta / this_total );
-
-	       writer.level( globals::band( GAMMA ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_gamma ) : this_gamma );
-	       writer.value( "RELPSD" , this_gamma / this_total );
-
-	       writer.level( globals::band( TOTAL ) , globals::band_strat );
-	       writer.value( "PSD" , dB ? 10*log10( this_total ) : this_total );
-	       
-	       writer.unlevel( globals::band_strat );
-	       
 	     }
 	   
 	   
@@ -486,7 +476,9 @@ annot_t * spectral_power( edf_t & edf ,
 		 for (int f=0;f<pwelch.psd.size();f++)
 		   {
 		     track_freq[ f ].push_back( pwelch.psd[f] );
-		     track_freq_logged[ f ].push_back( 10*log10( pwelch.psd[f] ) );
+		     // only track if power > 0
+		     if ( pwelch.psd[f] > 0 ) 
+		       track_freq_logged[ f ].push_back( 10*log10( pwelch.psd[f] ) );
 		   }
 
 	       //
@@ -499,7 +491,7 @@ annot_t * spectral_power( edf_t & edf ,
 		   // using bin_t 	      
 		   bin_t bin( min_power , max_power , bin_fac );
 		   bin.bin( freqs , pwelch.psd );
-
+		   
 		   bin_t binsd( min_power , max_power , bin_fac );
 		   if ( calc_seg_sd )
 		     binsd.bin( freqs, pwelch.psdsd );
@@ -512,7 +504,8 @@ annot_t * spectral_power( edf_t & edf ,
 		       writer.level( f0[ f0.size()-1 ] , globals::freq_strat );
 
 		       //writer.level( bin.bfa[i] , globals::freq_strat );
-		       writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
+		       if ( bin.bspec[i] > 0 || ! dB ) 
+			 writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
 
 		       if ( bin.nominal[i] != "" )
 			 writer.value( "INT" , bin.nominal[i] );
@@ -609,28 +602,28 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  if ( track_freq.size() != freqs.size() ) 
 	    {
-	      std::cout << "track_freq = " << track_freq.size() << " vs freqs = " << freqs.size() << "\n";
+	      std::cerr << "track_freq = " << track_freq.size() << " vs freqs = " << freqs.size() << "\n";
 	      Helper::halt( "internal error psd_t" );
 	    }
 	  
 	  std::vector<double> means, medians, sds;
 	  
-	  int ne_valid = track_freq[0].size();
+	  int ne_valid = dB ? track_freq_logged[0].size() : track_freq[0].size();
 	  int ne_min = ne_valid;
 
 	  for (int f=0;f<n;f++) 
 	    {
 	      // wanting to get stats of dB or raw?
 	      const std::vector<double> & yy = dB ? track_freq_logged[f] : track_freq[f] ;
-
-	      // any outlier removal of epochs?	      	      
+	      
+	      // any outlier removal of epochs?  	      
 	      std::vector<double> xx = aggregate_psd_th > 0 && ne_valid > 2 ? 
 		MiscMath::outliers( &yy , aggregate_psd_th ) : yy ; 
 	      
 	      // track min size
 	      if ( xx.size() < ne_min ) 
 		ne_min = xx.size();
-	      	      
+	      
 	      means.push_back( MiscMath::mean( xx ) );
 	      
 	      if ( aggregate_psd_sd && xx.size() > 2 )

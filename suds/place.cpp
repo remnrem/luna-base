@@ -86,7 +86,18 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   
   const int nstages = allstages.size();
 
-  const int nedf = edf.timeline.num_epochs();
+  //
+  // Output best fit .eannot file , i.e. that matches the original EDF
+  //
+
+  const std::string ostages = param.has( "out" ) ? param.value( "out" ) : "" ; 
+  
+  
+  //
+  // get # EDF epochs (and set, if needed)
+  //
+
+  const int nedf = edf.timeline.ensure_epoched();
 
   logger << "  read " << nstages << " epochs from " << stagefile << "\n";
   logger << "  based on EDF, there are " << nedf << " " << edf.timeline.epoch_length() << "-s epochs\n";
@@ -96,28 +107,35 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       logger << "  nothing to do, epoch and EDF epoch counts are equal\n"; 
       return;
     }
+
+  //
+  // Required extent of overlap (by default, 10%)
+  //
+  
+  double req_overlap = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0.1 ; 
   
   
   //
-  // Run initial 
+  // Initial EDF processing
   //
-
-  // // track ID (needed for caching)
-  // id = edf.id;
-
-  // // this impacts whether epochs w/ missing values are dropped or not  
-  // // 0 SUDS
-  // // 1 SOAP
-  // // 2 RESOAP/PLACE .. i.e. allow missing
-  // suds_t::soap_mode = 2;
-
+  
+  // track ID (needed for caching)
+  id = edf.id;
+  
+  // this impacts whether epochs w/ missing values are dropped or not  
+  // 0 SUDS
+  // 1 SOAP
+  // 2 RESOAP/PLACE .. i.e. allow missing
+  suds_t::soap_mode = 1;
+  
   // // ensure we do not call self_classify() from proc
-  // suds_t::self_classification = false;
-
-  // // assume that we do /not/ have manual staging initially ('false') 
-  // int n_unique_stages = proc( edf , param , false );
+  suds_t::self_classification = false;
   
-
+  // true = 'is a trainer' 
+  int n_unique_stages = proc( edf , param , true );
+  
+  std::cout << "n_uniq = " << n_unique_stages << "\n";
+  
   // //
   // // Shift... start from leftmost and go all way to rightmost
   // //   stages might be longer than EDF, or shorter
@@ -147,116 +165,259 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   // //  STAGES           .01.
   // //  STAGES           ..01
   // //  STAGES           ...0 1
+  
+  int estart = - ( nstages - 1 );
+  int estop   = nedf - 1 ; // inclusive
 
-  // int estart = - ( nstages - 1 );
-  // int estop   = nedf - 1 ; // inclusive
+  //
+  // Track outputs
+  //
 
-  // for (int s=estart; s<= estop; s++)
-  //   {
-  //     int p = estart;
+  std::vector<int> vec_fit, vec_nst, vec_ne, vec_overlap, vec_offset;
+  std::vector<double> vec_k, vec_k3;
+  std::vector<std::string> vec_ss;
+  
+  double max_kappa = -1 ;
+  int best_offset = -1;
+  bool matched = false;
+  
+  //
+  // Iterate over alignments
+  //
+  
+  for (int s1=estart; s1<= estop; s1++)
+    {
 
-  //     std::vector<std::string> trial( nedf , "." );
+      // putative offset
 
-  //     for (int i=0; i<nstages; i++)
-  // 	{
-  // 	  if ( p >= 0 && p < nedf )
-  // 	    {
-  // 	      trial[p] = allstages[i];
-  // 	      std::cout << " edf " << p << " --> stage " << i << "\n";
-  // 	    }
-  // 	  ++p;
-  // 	}
+      int p = s1;
+
+      //
+      // construct trail staging 
+      //
+
+      std::vector<std::string> trial( nedf , "?" );
       
-  //     // now evaliate this set of stages in trial
+      int cnt = 0;
+      int mine = 9999999;
+      int maxe = -9999999;
+      int p1 = p;
+      
+      for (int i=0; i<nstages; i++)
+       	{
+       	  if ( p >= 0 && p < nedf )
+       	    {
+	      ++cnt;	      
+	      if ( p < mine ) mine = p;
+	      if ( p > maxe ) maxe = p;	      
+	      trial[p] = allstages[i];       	      
+       	    }
+       	  ++p;
+       	}
+      
+      const int overlap = maxe  - mine + 1;
+      
+      std::cout << " FROM : " << p1 << "  ----  "
+		<< " ACT " << mine << " " << maxe << " OL = " << overlap << " " << overlap/(double)nedf << "\n";
 
-  //   }
+      //
+      // Evaluate this set of stages in trial
+      //
 
-  // //
-  // // fit LDA, and extract posteriors ( --> pp ) 
-  // //
-
-  // Eigen::MatrixXd pp;
+      y = trial;
+      
+      const int n = y.size();     
+      std::map<std::string,int> ycounts;
+      for (int i=0; i<n; i++) ++ycounts[ y[i] ];
+        
+      //
+      // requires at least two stages w/ at least 3 observations, and has to 
+      // be greater than the number of PSCs
+      //
+      
+      const int required_n = 3;
   
-  // int dummy = self_classify( NULL , &pp );
+      int s = 0;
+      int t = 0;
+      int tt = 0;
+      std::stringstream ss;
+      std::map<std::string,int>::const_iterator yy = ycounts.begin();
+      while ( yy != ycounts.end() )
+	{
+	  ss << ( yy != ycounts.begin() ? "," : "" ) << yy->first << ":" << yy->second;     
+	  tt += yy->second;
+	  if ( yy->first != "?" && yy->second >= required_n ) 
+	    {
+	      ++s;
+	      t += yy->second;
+	    }
+	  ++yy;
+	}
+
+      
+      //
+      // Outputs 
+      //
+
+      vec_offset.push_back( p1 );
+      vec_nst.push_back( s );
+      vec_ne.push_back( t );	  
+      vec_ss.push_back( ss.str() );
+      vec_overlap.push_back( overlap );
+      
+      bool okay = s >= 2 ;
+      
+      // for p predictors, require at least p+2 observations
+      if ( ! ( t > nc+1 ) )
+	okay = false;
   
-  // if ( dummy == 0 ) 
-  //   {
-  //     logger << "  *** not enough data/variability to fit LDA\n";
-  //     return;
-  //   }
+      if ( ! okay )
+	{	  
+	  vec_fit.push_back( 0 );
+	  vec_k.push_back( -1 );
+	  vec_k3.push_back( -1 );
+			 
+	  // shift to the next window
+	  continue;
+	}
+      
+      //
+      // Re-fit the LDA
+      //
+
+      Eigen::MatrixXd pp;
+  
+      int dummy = self_classify( NULL , &pp );
+
+      if ( dummy == 0 )
+	{
+
+	  vec_fit.push_back( 0 );	
+	  vec_k.push_back( -1 );
+	  vec_k3.push_back( -1 );
+	  
+	  continue;
+	}
+      
+      //
+      // Model okay
+      //
+      
+      vec_fit.push_back( 1 );
+
+      //
+      // Get alignment kappa
+      //
+      
+      std::vector<std::string> prd = suds_t::max( pp , lda_model.labels );
+      
+      double kappa = MiscMath::kappa( prd ,
+				      trial ,
+				      suds_t::str( SUDS_UNKNOWN ) );
+      
+      double kappa3 = MiscMath::kappa( suds_t::NRW( prd ) ,
+				       suds_t::NRW( trial ) ,
+				       suds_t::str( SUDS_UNKNOWN ) );
+
+      
+      vec_k.push_back( kappa );
+      vec_k3.push_back( kappa3 );
+
+
+      //
+      // track as a solution?
+      //
+
+      double overlap_fraction = overlap/(double)nedf;
+
+      if ( overlap_fraction >= req_overlap )
+	{
+	  matched = true;
+	  if ( kappa > max_kappa )
+	    {
+	      best_offset = p1;
+	      max_kappa = kappa;
+	    }
+	}
+      
+      
+    }
+
+
+  //
+  // Outputs
+  //
+
+  double max_k = 0, max_k3 = 0;
+  for (int i=0; i<vec_k.size(); i++)
+    {
+      if ( vec_k[i] > max_k ) max_k = vec_k[i];
+      if ( vec_k3[i] > max_k3 ) max_k3 = vec_k3[i];
+    }
+
+  for (int i=0; i<vec_k.size(); i++)
+    {
+      writer.level( vec_offset[i] , "OFFSET" );
+
+      writer.value( "FIT" , vec_fit[i] );
+      writer.value( "NS"  , vec_nst[i] );
+      writer.value( "NE"  , vec_ne[i] );
+      writer.value( "SS"  , vec_ss[i] );      
+      
+      writer.value( "OLAP_N" , vec_overlap[i] );
+      writer.value( "OLAP_P" , vec_overlap[i]/(double)nedf );
+
+      writer.value( "K" , vec_k[i] );
+      writer.value( "K3" , vec_k3[i] );
+
+      writer.value( "S" , vec_k[i] / max_k );
+      writer.value( "S3" , vec_k3[i] / max_k3 );
+    }
+
+  writer.unlevel( "OFFSET" );
+  
+      
+  //
+  // did we find an optimal point?
+  //
+  
+  if ( ! matched )
+    {
+      logger << "  not able to find an optimal alignment that satisfies the overlap requirement\n" ; 
+      return;
+    }
+
+  //
+  // write datafiles out
+  //
+
+  if ( ostages != "" )
+    {
+
+      std::vector<std::string> trial( nedf , "?" );      
+      int cnt = 0;
+      int p = best_offset;
+      for (int i=0; i<nstages; i++)
+       	{
+       	  if ( p >= 0 && p < nedf )
+       	    {
+	      ++cnt;	      
+	      trial[p] = allstages[i];       	      
+       	    }
+       	  ++p;
+       	}
+
+      logger << "  writing aligned stage file (.eannot) to " << ostages << "\n";
+      std::ofstream OUT1( Helper::expand( ostages ).c_str() , std::ios::out );
+      for (int i=0; i<trial.size(); i++)
+	OUT1 << trial[i] << "\n";      
+      OUT1.close();
+
+      
+    }
+  
+  
 
   
-  // //
-  // // output stage probabilities 
-  // //
-
-  // const double epoch_sec = edf.timeline.epoch_length();
-
-  // const int ne_all = edf.timeline.num_epochs();
-
-  // std::vector<std::string> final_pred = suds_t::max( pp , lda_model.labels );
-
-  // summarize_kappa( final_pred , true );
-
-  // const int bad_epochs = summarize_stage_durations( pp , lda_model.labels , ne_all , epoch_sec );
-  
-  // if ( epoch_level_output )
-  //   summarize_epochs( pp , lda_model.labels , ne_all , edf );
-
-
-
-  // //
-  // // RESOAP... 
-  // //
-
-  // if ( suds_t::cached.id != edf.id )
-  //   Helper::halt( "need to SOAP w/ 'save' option before running RESOAP" );
-
-  // // check that this same individual has been cached by 
-  // // a previous SOAP run
-  // if ( suds_t::cached.id != edf.id ) 
-  //   Helper::halt( "need to SOAP w/ 'save' option before running RESOAP" );
-
-  // // need to reset only y[]
-  // // keep obs_stage[] and obs_stage_valid[] as is (i.e. any 'original' true staging)
-
-  // //
-  // // scrub all stages?
-  // //
-  
-  // if ( param.has( "scrub" ) )
-  //   {
-  //     for (int i=0; i < suds_t::cached.y.size(); i++)
-  // 	suds_t::cached.y[i] = suds_t::str( SUDS_UNKNOWN );            
-  //     return;
-  //   }
-  
-  // //
-  // // pick N of each epoch at random?
-  // //
-  
-  // if ( param.has( "pick" ) )
-  //   {
-  //     int n = param.requires_int( "pick" );
-  //     suds_t::cached.resoap_pickN( edf , n );
-  //     suds_t::cached.resoap( edf , param.has( "verbose" ) );
-  //     return;
-  //   }
-
-  // //
-  // // else, alter a single epoch
-  // //
-  
-  // // which epoch is being updated...
-  // int epoch = param.requires_int( "epoch" );
-  // // ...to which stage?
-  // suds_stage_t stage = suds_t::type( param.requires( "stage" ) );
-
-  // // update and refit model based on set PSC 
-  // suds_t::cached.resoap_alter1( edf , epoch , stage );
-  // suds_t::cached.resoap( edf , param.has( "verbose" ) );
-
-
-
 }
 

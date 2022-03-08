@@ -107,10 +107,9 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
   // epoch-level QC (also performs an initial SVD) ( nge --> nve ) 
   //
-  
+
   rc = proc_initial_svd_and_qc( &helper );
   if ( rc == 0 ) return 0;
-
 
   //
   // populate 'y'
@@ -118,7 +117,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   rc = proc_class_labels( &helper );
   if ( rc == 0 ) return 0;
-  
+
 
   //
   // re-do SVD on dataset w/ bad epochs removed
@@ -135,7 +134,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   rc = proc_prune_rows( &helper );
   if ( rc == 0 ) return 0;
 
-
+  
   //
   // re-do (third time) main SVD on final dataset
   //
@@ -1126,8 +1125,9 @@ int suds_indiv_t::proc_initial_svd_and_qc( suds_helper_t * helper )
 
   W = svd.singularValues();
   W.conservativeResize( suds_t::nc );
-  
-  //  std::cout << " sizes = " << U.rows() <<  " " << U.cols() << " ... " << V.rows() << " " << V.cols() << "\n";
+
+  // std::cout << " NC = " << suds_t::nc << "\n";
+  // std::cout << " sizes = " << U.rows() <<  " " << U.cols() << " ... " << V.rows() << " " << V.cols() << "\n";
   
   
   // --------------------------------------------------------------------------------

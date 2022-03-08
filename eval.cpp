@@ -932,12 +932,13 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
-      else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
-      else if ( is( c, "RESOAP" ) ) proc_resoap( edf , param(c) );
-      else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
-      else if ( is( c, "PLACE" ) )       proc_place_soap( edf , param(c) ); // e.g. find where should go
 
       else if ( is( c, "POPS" ) )        proc_pops( edf , param(c) );
+
+      else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
+      else if ( is( c, "RESOAP" ) )      proc_resoap( edf , param(c) );
+      else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
+      else if ( is( c, "PLACE" ) )       proc_place_soap( edf , param(c) ); // e.g. find where should go
       
       else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
@@ -1210,10 +1211,11 @@ void proc_place_soap( edf_t & edf , param_t & param  )
 
   suds_t::set_options( param );
 
-  // load model, if not already done                                                                                                     
-  if ( ! suds_t::model.loaded() )
-    suds_t::model.read( param.requires( "model" ) );
+  // load model, if not already done (or default) (_1 or _2)
 
+  if ( ! suds_t::model.loaded() )
+    suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" );
+  
   suds_indiv_t self;
   self.place( edf , param , stagefile );
 
@@ -1242,9 +1244,9 @@ void proc_rebase_soap( edf_t & edf , param_t & param  )
   
   suds_t::set_options( param );
 
-  // load model, if not already done                                                                                                     
+  // load model, if not already done
   if ( ! suds_t::model.loaded() )
-    suds_t::model.read( param.requires( "model" ) );
+    suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" );
 
   suds_indiv_t self;
   self.rebase( edf , param , e2 );

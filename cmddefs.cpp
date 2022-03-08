@@ -1087,6 +1087,14 @@ void cmddefs_t::init()
   add_var( "SOAP" , "VAR" , "INC" , "Component included" );
   add_var( "SOAP" , "VAR" , "PV" , "1-way ANOVA p-value for association w/ observed stage" );
 
+  add_table( "SOAP" , "ETYPE" , "Epoch-type accuracy" );
+  add_var( "SOAP" , "ETYPE" , "ACC" , "Accuracy" );
+  add_var( "SOAP" , "ETYPE" , "N" , "Epoch count" );
+
+  add_table( "SOAP" , "ETYPE,SS" , "Stage-specific epoch-type accuracy" );
+  add_var( "SOAP" , "ETYPE,SS" , "ACC" , "Accuracy" );
+  add_var( "SOAP" , "ETYPE,SS" , "N" , "Epoch count" );
+
   add_table( "SOAP" , "NSS,PRED,OBS" , "Confusion matrix" );
   add_var( "SOAP" , "NSS,PRED,OBS" , "N" , "Number" );
   add_var( "SOAP" , "NSS,PRED,OBS" , "P" , "Proportion" );
