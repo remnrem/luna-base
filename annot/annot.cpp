@@ -2864,7 +2864,12 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
       if ( jj != stages.begin() )
 	{
 	  if ( curr.start < prior.stop )
-	    Helper::halt( "bad, overlapping sleep stages" );
+	    {
+	      std::cerr << " current interval : " << curr.start << " .. " << curr.stop << "  S = " << jj->second << "\n"
+			<< " prior            : " << prior.start << " .. " << prior.stop << "  S = " << "\n";
+	      
+	      Helper::halt( "bad, overlapping sleep stages" );
+	    }
 	}
       
       vec_intervals.push_back( curr );
