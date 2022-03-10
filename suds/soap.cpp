@@ -172,7 +172,34 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   if ( epoch_level_output )
     summarize_epochs( pp , labels , ne_all , edf );
 
+  
+  // transition reports?
+  // summary of transitions
+  
+  if ( param.has( "trans" ) )
+    {
+      // specify in epochs counts
+      // e.g. if 5-second epochs
 
+      // requirements for a transition, specified in terms of old # of epochs
+      const int req_left = param.has( "req-left" ) ? param.requires_int( "req-left" ) : 2 ; 
+      const int req_right = param.has( "req-right" ) ? param.requires_int( "req-right" ) : 2 ;       
+      
+      // new epochs in seconds
+      const double elen = param.requires_dbl( "trans" )  ; 
+
+      const int show_left = param.has( "left" ) ? param.requires_int( "left" ) : 6 ; // e.g. 6 * 5 = 30 seconds
+      const int show_right = param.has( "right" ) ? param.requires_int( "right" ) : 6 ; // e.g. 6 * 5 = 30 seconds
+            
+      summarize_transitions( pp , 
+			     labels ,
+			     show_left , req_left ,
+			     show_right , req_right ,				      
+			     elen , 
+			     ne_all , edf , param );
+    }
+  
+  
   //
   // Output annotations (of discordant epochs)
   //
@@ -184,6 +211,7 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
     }
   
 }
+
 
 
 
@@ -314,4 +342,301 @@ int suds_indiv_t::self_classify( std::vector<bool> * included , Eigen::MatrixXd 
 
   return okay;
 }
+
+
+
+
+void suds_indiv_t::summarize_transitions( const Eigen::MatrixXd & pp , // posterior probabilities					  					 
+					  const std::vector<std::string> & labels, // column labels
+					  const int show_left, const int req_left ,
+					  const int show_right, const int req_right ,
+					  const double elen , // new epoch length 
+					  const int ne_all ,
+					  edf_t & edf , param_t & param ) // total number of epochs in EDF
+{
+  
+  // require prior staging
+  const bool prior_staging = obs_stage.size() != 0 ;
+  if ( ! prior_staging ) return;
+
+  // new epoch size must be a factor of old size:
+  //  i.e. integer # of new epochs in each old epoch
+  const double epoch_sec = edf.timeline.epoch_length();
+
+  double ratio = epoch_sec / elen;
+  if ( fabs( ratio - round( ratio ) ) > 0.0001 )
+    Helper::halt( "'trans' epoch length must be a factor of parent epoch size" );  
+    
+  // save this old self  
+  suds_indiv_t old_self = *this;
+  
+  // now change epoch size to target  
+  edf.timeline.set_epoch( elen , elen , 0 ) ;
+  
+  // and re-estimate PSD assuming no known staging ('false')
+  // (this will also calculate PSC, but we will ignore this... add option to skip that in proc() in future)  
+  suds_t::ignore_target_priors = true;
+  
+  // also clear this , as 'summarize_epochs()' will try to use it otherwise in output)
+  obs_stage.clear();
+  
+  // re-process file
+  int n_unique_stages = proc( edf , param , true ); 
+
+  // true means has staging (i.e. not a 'target' in the SUDS sense, but 
+  // but the suds_t::ignore_target_priors means this is ignored (i.e. we do 
+  // not try to reference the staging (which presumably no longer matches the epoch 
+  // duration)
+  
+  // now project & predict into self's prior PSC space;  i.e. use same model, but will just be
+  // based on PSD estimated from differently-sized epochs
+
+  posteriors_t new_staging = predict( old_self , suds_t::qda );
+  
+  // new posteriors : rows = epochs
+  const Eigen::MatrixXd & npp = new_staging.pp;
+  
+  // std::cout << " npp.rows() = " << npp.rows() << "\n"
+  // 	    << " es = " << epochs.size() << " " << old_self.epochs.size() << "\n";
+  // Eigen::IOFormat fmt1( Eigen::StreamPrecision, Eigen::DontAlignCols );
+  // std::cout << "PP\n" << npp.format( fmt1 ) << "\n";
+
+  const std::vector<int> & e1 = old_self.epochs;
+  const std::vector<int> & e2 = epochs;
+
+  const int ne1 = ne_all;
+  const int ne2 = edf.timeline.num_epochs();
+
+  std::vector<int> ee1( ne1 , -1 );
+  std::vector<int> ee2( ne2 , -1 );
+  
+  for (int i=0; i<e1.size(); i++) ee1[ e1[i] ] = i;
+  for (int i=0; i<e2.size(); i++) ee2[ e2[i] ] = i; 
+
+  // original staging
+  const std::vector<suds_stage_t> & stages = old_self.obs_stage;
+  
+  int rr = ratio;
+
+  if ( req_left < 1 || req_right < 1 )
+    Helper::halt( "invalid req-left, req-right" );
+
+  if ( show_left < 1 || show_right < 1 )
+    Helper::halt( "invalid left, right" );
+
+  // in original, flag points of transition  
+  std::vector<bool> transitions( ne1 , false );
+  for (int i=req_left-1; i<ne1-req_right; i++)
+    {
+      // set T if /next/ epoch(s) show a transition
+      // N=5
+      
+      //     X T
+      // 0 1 2 | 3 4 
+
+      // not a transition?
+      if ( stages[i] == stages[i+1] ) continue;
+
+      // not a valid stage?
+      if ( stages[i] == SUDS_UNKNOWN || stages[i] == SUDS_ARTIFACT ) continue;
+      if ( stages[i+1] == SUDS_UNKNOWN || stages[i+1] == SUDS_ARTIFACT ) continue;
+      
+      // not a valid segment?
+      if ( ee1[i] == -1 || ee1[i+1] == -1 ) continue;
+      
+      bool okay = true;
+
+      // left 
+      for (int j=1; j<req_left; j++)
+	{
+	  if ( ee1[ i-j ] == -1 )
+	    {
+	      okay = false;
+	      continue;
+	    }
+	  
+	  if ( stages[ i - j ] != stages[ i ] )
+	    {
+	      okay = false;
+	      continue;
+	    }
+	  
+	  if ( stages[ i - 1 - j ] == SUDS_UNKNOWN || stages[ i - 1 - j ] == SUDS_ARTIFACT )
+	    {
+	      okay = false;
+              continue;
+	    }
+
+	}
+      
+      if ( ! okay ) continue;
+      
+      // right
+      for (int j=1; j<req_right; j++)
+	{
+	  
+	  if ( ee1[ i + 1 + j ] == -1 )
+            {
+              okay = false;
+              continue;
+            }
+	  
+	  if ( stages[ i + 1 + j ] != stages[ i + 1 ] )
+	    {
+	      okay = false;
+	      continue;
+	    }
+	  
+	  if ( stages[ i + 1 + j ] == SUDS_UNKNOWN || stages[ i + 1 + j ] == SUDS_ARTIFACT )
+	    {
+	      okay = false;
+              continue;
+	    }
+	}
+      
+      
+      if ( okay ) transitions[ i ] = true;      
+      
+    }
+
+  
+  //
+  // show build transition tables
+  //
+
+  std::vector<std::string> ttype;
+  std::vector<std::pair<int,int> > left, right;
+  std::vector<int> left2, right2;
+
+  int cnt = 0;
+  for (int i=0; i<ne1; i++)
+    {
+
+      //std::cout << " XX " << i << "\t" << ee1[i] << "\t" << suds_t::str( stages[i] ) << "\t" << transitions[i] << "\n";	
+      
+      if ( transitions[i] )
+	{
+	  ttype.push_back( suds_t::str( stages[i] ) + "-" + suds_t::str( stages[i+1] ) );
+	  left.push_back( std::make_pair( i - (req_left-1) , i ) );
+	  right.push_back( std::make_pair( i + 1 , i + 1 + (req_right-1) ) );
+
+	  // ee2 epochs
+	  //  0 1 2 | 3 4 5 + 6 7 8 | 9 10 11
+	  //        |       +       | 
+	  //    0       1       2       3 
+	  
+	  // get smaller-sized epoch as the one just before the original transition
+	  int key_epoch = i * rr + rr - 1 ; 
+	  int key_left  = key_epoch - ( show_left - 1 );
+	  int key_right = key_epoch + show_right;
+
+	  left2.push_back( key_left );
+	  right2.push_back( key_right );
+			  
+	  // std::cout << " ---> " << suds_t::str( stages[i] ) + "-" + suds_t::str( stages[i+1] )
+	  // 	    << " -- " <<  i - (req_left-1) << " " <<  i
+	  //  	    << " | " << i + 1 << " " <<  i + 1 + (req_right-1) << "\n";
+	  
+	  // std::cout << " ++ " << key_left << " " << key_epoch << " " << key_right << "\n";
+	  
+	  ++cnt;
+	}
+    }
+  
+  logger << "  found " << cnt << " valid transitions\n";
+  
+
+  //
+  // now build the transition-offset means/summs
+  //
+
+
+  // transition type --> offset --> stage -> sum
+  // transition type --> offset --> count
+  
+  std::map<std::string,std::map<int,std::map<std::string,double> > > tr_sums;
+  std::map<std::string,std::map<int,double> > tr_counts;
+  const int ns1 = labels.size();
+  if ( ns1 != npp.cols() )
+    Helper::halt("internal error in trans" );
+    
+  for (int i=0; i<cnt; i++)
+    {
+      //std::cout << " tr = " << i << "\n";
+      
+      // left
+      int l = left2[i];
+      int p = -show_left;
+      for (int j=0; j<show_left; j++)
+	{
+	  //std::cout << "ee2[l] = " << ee2[l] << " p = " << p << " " << npp.rows() << " " << npp.cols() << " " << ns1 << "\n";
+	  if ( ee2[l] != -1 )
+	    {
+	      for (int s=0; s<ns1; s++)
+		tr_sums[ ttype[i] ][ p ][ labels[s] ] = npp( ee2[l] , s ); 
+	      tr_counts[ ttype[i] ][ p ]++;
+	    }
+	  ++l;
+	  ++p;
+	}
+      
+      // right
+      int r = right2[i];
+      p = show_right;
+      for (int j=0; j<show_right; j++)
+	{
+	  //std::cout << "ee2[r] = " << ee2[r] << " p = " << p << " " << npp.rows() << " " << npp.cols() << " " << ns1 << "\n";
+	  if ( ee2[r] != -1 )
+	    {
+	      for (int s=0; s<ns1; s++)
+		tr_sums[ ttype[i] ][ p ][ labels[s] ] = npp( ee2[r] , s ); 
+	      tr_counts[ ttype[i] ][ p ]++;
+	    }
+	  --r;
+	  --p;
+	}
+      
+      // next transition
+    }
+  
+
+  //
+  // Now summarize
+  //
+  //  std::cout << " this far ... \n";
+  std::map<std::string,std::map<int,std::map<std::string,double> > >::const_iterator tt = tr_sums.begin();
+  while ( tt != tr_sums.end() )
+    {
+      writer.level( tt->first , "TTYPE" );
+      
+      const std::map<int,std::map<std::string,double> > & t2 = tt->second;
+      std::map<int,std::map<std::string,double> >::const_iterator tt2 = t2.begin();
+      while ( tt2 != t2.end() )
+	{
+	  writer.level( tt2->first , "OFFSET" );
+	  double count = tr_counts[ tt->first ][ tt2->first ];
+	  writer.value( "N" , count );
+	  const std::map<std::string,double> & t3 = tt2->second;
+	  std::map<std::string,double>::const_iterator tt3 = t3.begin();
+	  while ( tt3 != t3.end() )
+	    {
+	      writer.level( tt3->first , globals::stage_strat );
+	      writer.value( "PP" , tt3->second / count );
+	      ++tt3;
+	    }
+	  writer.unlevel( globals::stage_strat );
+	  ++tt2;
+	}
+      writer.unlevel( "OFFSET" );
+      ++tt;
+    }
+  writer.unlevel( "TTYPE" );
+
+  //
+  // all done
+  //
+
+  
+}
+
 

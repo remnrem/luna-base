@@ -361,6 +361,8 @@ void suds_indiv_t::summarize_epochs( const Eigen::MatrixXd & pp , // posterior p
   
 }
 
+
+
 int suds_indiv_t::summarize_stage_durations( const Eigen::MatrixXd & pp , const std::vector<std::string> & labels, int ne_all , double epoch_sec )
 {
   

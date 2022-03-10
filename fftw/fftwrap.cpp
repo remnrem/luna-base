@@ -630,26 +630,145 @@ std::vector<double> real_iFFT::unscaled_inverse() const
 
 void PWELCH::process()
 {
+
+  //
+  // note:  for 'PSD' we specify the segment overlap (note increment)
+  //   from that, we get the implied number of segments;
+  //   but here, we take only the implied number of segments, and recalculate
+  //   the overlap/increment;  here, we stretch the increment out if needed -
+  //   it will be good as long as we can have an integer number of points
+  //    i.e. 128 Hz
+  //      segement-sec=5 segment-overlap=2  w/ a 30-second epoch
+  //      implies a 3-second increment ( = 3 * 128 = 384 samople points)
+
+  //      0 - 5
+  //      3 - 8
+  //      6 - 11
+  //      9 - 14
+  //      12 - 17
+  //      15 - 20
+  //      18 - 23
+  //      21 - 26
+  //      24 - 29
+  //
+  //  so, this would be short, i.e. needs to go to 30;  however, '9' segments is passed to PWELCH, which
+  //  then figures that a 3.125 second = 400 (integer) sample point increment makes this work;  so, changes
+  //  the actual extent of overlap.
+
+  //segment 1; p = 0 .. 640
+  //segment 2; p = 400 .. 1040
+  //segment 3; p = 800 .. 1440
+  //segment 4; p = 1200 .. 1840
+  //segment 5; p = 1600 .. 2240
+  //segment 6; p = 2000 .. 2640
+  //segment 7; p = 2400 .. 3040
+  //segment 8; p = 2800 .. 3440
+  //segment 9; p = 3200 .. 3840
+
+  // i.e. given 9 segments, changes increment to 3.125 (400 points) rather than 3 seconds, which
+  // evenly takes us to the end of the 30-sec window;
   
+  // in contrast, if we asked for: segement-sec=5 segment-overlap=3  w/ a 30-second epoch
+  //   implies a 2-second increment: however, here it is not possible to get an integer number
+  //   of sample points to span the whole region...
+  //   Luna will then complain.   Does this really matter?  Probably not, i.e. as edge segments
+  //   get less weight in the Welch averages than the central segments in any case... but seems
+  //   awkward to completely skip regions, and so to keep things simple we insist on a fixed, integer
+  //   increment value.
+  
+  //
+  // segment 1; p = 0 .. 640
+  // segment 2; p = 266 .. 906
+  // segment 3; p = 532 .. 1172
+  // segment 4; p = 798 .. 1438
+  // segment 5; p = 1064 .. 1704
+  // segment 6; p = 1330 .. 1970
+  // segment 7; p = 1596 .. 2236
+  // segment 8; p = 1862 .. 2502
+  // segment 9; p = 2128 .. 2768
+  // segment 10; p = 2394 .. 3034
+  // segment 11; p = 2660 .. 3300
+  // segment 12; p = 2926 .. 3566
+  // segment 13; p = 3192 .. 3832
+  //specified Welch segment parameters:
+  //   - segment size    = 640 sample points
+  //   - segment overlap = 374 sample points
+  //   - implied increment = 266 sample points
+  //   - last covered point = 3832 (of 3840)
+  // error : Welch segment size/increment does not span epoch fully
+	      
+
+  //
   // From MATLAB parameterizatopm:
   //  K = (M-NOVERLAP)/(L-NOVERLAP)
   //    M = total_points = epoch size (in data-points)
   //    L = segment_size_points = segment size (in data-points)
   //    K = noverlap_segments = desired number of (overlapping) segments of size 'L' within 'M'
   //    NOVERLAP = noverlap_points 
-    
+  //
+  
   int total_points             = data.size();
   int segment_size_points      = M * Fs;   // 'nfft' in Matlab
 
+  // handle special case: if only one segment, which is shorter than the total,
+  // then allow for one extra segment (e.g. 5-sec epoch but 4-second window) 
+
+  if ( segment_size_points < total_points && noverlap_segments == 1 )
+    ++noverlap_segments;  
+  
   int noverlap_points          = noverlap_segments > 1 
     ? ceil( ( noverlap_segments*segment_size_points - total_points  ) / double( noverlap_segments - 1 ) )
     : 0 ;
-
+  
   int segment_increment_points = segment_size_points - noverlap_points;
   
   // std::cout << "segment_size_points = " << segment_size_points << "\n"
   // 	    << "noverlap_points = " << noverlap_points << "\n"
   //   	    << "segment_increment_points = " << segment_increment_points << "\n";
+  
+
+  //
+  // Check segment coverage: by default, all points must be covered
+  //  
+    
+  int seg_cnt = 1;
+  int last_point_plus_one = 0;
+  for (int p = 0; p <= total_points - segment_size_points ; p += segment_increment_points )
+    {
+      //std::cout << "segment " << seg_cnt << "; p = " << p << " .. " << segment_size_points + p << "\n"; 
+      last_point_plus_one = p + segment_size_points;
+      ++seg_cnt;
+    }
+    
+
+  if ( last_point_plus_one != total_points )
+    {
+
+      logger << "  specified Welch segment parameters:\n"
+	     << "     - segment size    = " << segment_size_points << " sample points\n"
+	     << "     - segment overlap = " << noverlap_points << " sample points\n"
+	     << "     - implied increment = " << segment_increment_points << " sample points\n"
+	     << "     - last covered point = " << last_point_plus_one << " (of " << total_points << ")\n";
+      
+      logger << " implied segments (in sample points): nb: overlap/increment may have been altered to fit\n"
+	     << " which is fine - Luna just requires an increment of an *integer* number of samples\n"
+	     << " (for a fixed total signal length, number of segments and segment length) can span the\n"
+	     << " whole region\n";
+	
+	
+      int seg_cnt = 1;
+      int last_point_plus_one = 0;
+      for (int p = 0; p <= total_points - segment_size_points ; p += segment_increment_points )
+	{
+	  logger << "segment " << seg_cnt << "; p = " << p << " .. " << segment_size_points + p << "\n"; 
+	  last_point_plus_one = p + segment_size_points;
+	  ++seg_cnt;
+	}
+
+
+      Helper::halt( "Welch segment size/increment does not span epoch fully" );
+      
+    }
 
   
   //
@@ -689,8 +808,8 @@ void PWELCH::process()
       
     }
 
-
-  //
+  
+      //
   // Iterate over segments, performing individual FFT in each
   //
 
@@ -705,7 +824,6 @@ void PWELCH::process()
     {
       
       ++segments;
-
       
 //       std::cout << "seg " << segments << "\t" 
 //        		<< p << " -- " << p + segment_size_points - 1 << "\n";

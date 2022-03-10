@@ -468,12 +468,9 @@ int suds_indiv_t::proc_build_feature_matrix( suds_helper_t * helper )
   double fft_segment_overlap = helper->param.has( "segment-overlap" ) 
     ? helper->param.requires_dbl( "segment-overlap" ) : 2 ;
   
-  if ( helper->edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
-    {
-      fft_segment_overlap = 0;
-      fft_segment_size = helper->edf.timeline.epoch_length();
-    }
-
+  if ( helper->edf.timeline.epoch_length() < fft_segment_size )
+    Helper::halt( "Welch segment size (segment-sec) cannot be greater than epoch length" );
+  
   window_function_t window_function = WINDOW_TUKEY50;	   
   if      ( helper->param.has( "no-window" ) ) window_function = WINDOW_NONE;
   else if ( helper->param.has( "hann" ) ) window_function = WINDOW_HANN;
@@ -700,6 +697,7 @@ int suds_indiv_t::proc_build_feature_matrix( suds_helper_t * helper )
 		    {
 		      if (  bin.bfa[i] >= lwr && bin.bfa[i] <= upr )
 			{
+			  //std::cout << " b " << b << " " << bin.bfa[i]  << " " << ncols <<  " " << lwr << " " << upr << "\n";
 			  if ( b == ncols ) Helper::halt( "internal error... bad sizes for SPEC" );
 			  
 			  // save log-scaled power
@@ -1620,14 +1618,18 @@ int suds_indiv_t::proc_class_labels( suds_helper_t * helper )
        
        counts.clear();
        for (int i=0;i<y.size();i++) counts[y[i]]++;
-       std::map<std::string,int>::const_iterator cc = counts.begin();
-       logger << "  epoch counts:";
-       while ( cc != counts.end() )
+
+       if ( ! suds_t::ignore_target_priors )
 	 {
-	   logger << " " << cc->first << ":" << cc->second ;
-	   ++cc;
+	   std::map<std::string,int>::const_iterator cc = counts.begin();
+	   logger << "  epoch counts:";
+	   while ( cc != counts.end() )
+	     {
+	       logger << " " << cc->first << ":" << cc->second ;
+	       ++cc;
+	     }
+	   logger << "\n";
 	 }
-       logger << "\n";
      }
   
   return 1;
@@ -1851,8 +1853,9 @@ int suds_indiv_t::proc_prune_rows( suds_helper_t * helper )
      logger << "  removed " << helper->trimmed << " epochs to satisfy max-epoch requirements\n";
    
    report_epoch_counts( "final" );
-   
-   logger << "  final count of valid epochs is " << nve << "\n";
+
+   if ( ! suds_t::ignore_target_priors ) 
+     logger << "  final count of valid epochs is " << nve << "\n";
       
    return nve <= 10 ? 0 : 1;
 }
@@ -1863,16 +1866,20 @@ void suds_indiv_t::report_epoch_counts( const std::string & l )
   counts.clear();
   for (int i=0;i<y.size();i++) counts[y[i]]++;
   std::map<std::string,int>::const_iterator cc = counts.begin();
-  if ( l == "" ) 
-    logger << "  epoch counts:";
-  else
-    logger << "  " << l << " epoch counts:";
-  while ( cc != counts.end() )
+
+  if ( ! suds_t::ignore_target_priors )
     {
-      logger << " " << cc->first << ":" << cc->second ;
-      ++cc;
+      if ( l == "" ) 
+	logger << "  epoch counts:";
+      else
+	logger << "  " << l << " epoch counts:";
+      while ( cc != counts.end() )
+	{
+	  logger << " " << cc->first << ":" << cc->second ;
+	  ++cc;
+	}
+      logger << "\n";  
     }
-  logger << "\n";  
 }
 
 int suds_indiv_t::proc_coda( suds_helper_t * helper )

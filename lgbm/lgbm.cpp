@@ -20,6 +20,12 @@
 //
 //    --------------------------------------------------------------------
 
+
+// compilation notes on ERIS
+// module load cmake/3.16.0
+// export CXX=/apps/lib-osver/gcc/6.3.0/bin/g++ CC=/apps/lib-osver/gcc/6.3.0/bin/gcc
+//  prior to cmake/make process as outlined
+
 #ifdef HAS_LGBM
 
 #include "lgbm/lgbm.h"

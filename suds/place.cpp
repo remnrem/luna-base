@@ -101,20 +101,25 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
 
   logger << "  read " << nstages << " epochs from " << stagefile << "\n";
   logger << "  based on EDF, there are " << nedf << " " << edf.timeline.epoch_length() << "-s epochs\n";
-  
-  if ( nstages == nedf ) 
-    {
-      logger << "  nothing to do, epoch and EDF epoch counts are equal\n"; 
-      return;
-    }
 
   //
   // Required extent of overlap (by default, 10%)
   //
   
   double req_overlap = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0.1 ; 
+  logger << "  requiring " << req_overlap << " proportion overlap\n\n";
+
+
+  // force alignment even for equal epochs sizes?
+  const bool force_align = param.has( "force" );
   
-  
+  if ( nstages == nedf && ! force_align ) 
+    {
+      logger << "  nothing to do, epoch and EDF epoch counts are equal\n"; 
+      return;
+    }
+
+    
   //
   // Initial EDF processing
   //
@@ -134,7 +139,6 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   // true = 'is a trainer' 
   int n_unique_stages = proc( edf , param , true );
   
-  std::cout << "n_uniq = " << n_unique_stages << "\n";
   
   // //
   // // Shift... start from leftmost and go all way to rightmost
@@ -217,8 +221,8 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       
       const int overlap = maxe  - mine + 1;
       
-      std::cout << " FROM : " << p1 << "  ----  "
-		<< " ACT " << mine << " " << maxe << " OL = " << overlap << " " << overlap/(double)nedf << "\n";
+      // std::cout << " FROM : " << p1 << "  ----  "
+      // 		<< " ACT " << mine << " " << maxe << " OL = " << overlap << " " << overlap/(double)nedf << "\n";
 
       //
       // Evaluate this set of stages in trial
@@ -299,51 +303,58 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
 	  continue;
 	}
       
+
       //
-      // Model okay
+      // track as a solution?
       //
       
-      vec_fit.push_back( 1 );
+      double overlap_fraction = overlap/(double)nedf;
 
+      
+
+      //
+      // Model okay?
+      //
+      
+      vec_fit.push_back( overlap_fraction >= req_overlap  ? 1 : 0  );
+      
       //
       // Get alignment kappa
       //
       
       std::vector<std::string> prd = suds_t::max( pp , lda_model.labels );
       
-      double kappa = MiscMath::kappa( prd ,
-				      trial ,
-				      suds_t::str( SUDS_UNKNOWN ) );
+      double kappa = -1 , kappa3 = -1;
       
-      double kappa3 = MiscMath::kappa( suds_t::NRW( prd ) ,
-				       suds_t::NRW( trial ) ,
-				       suds_t::str( SUDS_UNKNOWN ) );
-
-      
-      vec_k.push_back( kappa );
-      vec_k3.push_back( kappa3 );
-
-
-      //
-      // track as a solution?
-      //
-
-      double overlap_fraction = overlap/(double)nedf;
-
       if ( overlap_fraction >= req_overlap )
 	{
+	  
+	  kappa = MiscMath::kappa( prd ,
+				   trial ,
+				   suds_t::str( SUDS_UNKNOWN ) );
+	  
+	  kappa3 = MiscMath::kappa( suds_t::NRW( prd ) ,
+				    suds_t::NRW( trial ) ,
+				    suds_t::str( SUDS_UNKNOWN ) );
+	  
 	  matched = true;
+	  
 	  if ( kappa > max_kappa )
 	    {
 	      best_offset = p1;
 	      max_kappa = kappa;
-	    }
+	    }	  
+	  
 	}
       
+      // record 
+      
+      vec_k.push_back( kappa );
+      vec_k3.push_back( kappa3 );
       
     }
 
-
+  
   //
   // Outputs
   //
@@ -355,27 +366,40 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       if ( vec_k3[i] > max_k3 ) max_k3 = vec_k3[i];
     }
 
+  int best_idx = -1;
+  
   for (int i=0; i<vec_k.size(); i++)
     {
       writer.level( vec_offset[i] , "OFFSET" );
 
+      // take first best match
+      if ( matched && best_idx == -1 && vec_offset[i] == best_offset )
+	best_idx = i;
+      
       writer.value( "FIT" , vec_fit[i] );
       writer.value( "NS"  , vec_nst[i] );
       writer.value( "NE"  , vec_ne[i] );
       writer.value( "SS"  , vec_ss[i] );      
       
       writer.value( "OLAP_N" , vec_overlap[i] );
-      writer.value( "OLAP_P" , vec_overlap[i]/(double)nedf );
+      writer.value( "OLAP_EDF" , vec_overlap[i]/(double)nedf );
+      writer.value( "OLAP_INP" , vec_overlap[i]/(double)nstages );
 
-      writer.value( "K" , vec_k[i] );
-      writer.value( "K3" , vec_k3[i] );
-
-      writer.value( "S" , vec_k[i] / max_k );
-      writer.value( "S3" , vec_k3[i] / max_k3 );
+      if ( vec_k[i] >= 0 )
+	{
+	  writer.value( "K" , vec_k[i] );
+	  writer.value( "S" , vec_k[i] / max_k );
+	}
+      
+      if ( vec_k3[i] >= 0 )
+	{
+	  writer.value( "K3" , vec_k3[i] );
+	  writer.value( "S3" , vec_k3[i] / max_k3 );
+	}
     }
 
   writer.unlevel( "OFFSET" );
-  
+
       
   //
   // did we find an optimal point?
@@ -387,6 +411,9 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       return;
     }
 
+  logger << "\n  optimal epoch offset = " << ( best_offset >= 0 ? "+" : "-" ) << best_offset << " epochs (kappa = " << max_kappa << ")\n"
+	 << "  which spans " << vec_overlap[ best_idx ] << " epochs (of " << nedf << " in the EDF, and of " << nstages << " in the input stages)\n";
+  
   //
   // write datafiles out
   //

@@ -354,6 +354,22 @@ struct suds_indiv_t {
 			 const std::vector<std::string> & , 
 			 int , edf_t & );
 
+
+  //
+  // in context of REBASE typically, given short-epoch summaries around (observed)
+  // stage transitions: i.e. more detailed look around stage transitions, w/ 4 or 5 second
+  // epochs
+  //
+
+  void summarize_transitions( const Eigen::MatrixXd & pp , 
+			      const std::vector<std::string> & labels, 
+			      const int show_left, const int req_left ,
+			      const int show_right, const int req_right ,
+			      const double epoch_sec , 
+			      const int ne_all ,
+			      edf_t & edf , param_t & param );
+
+  
   //
   // write to an .annot
   //

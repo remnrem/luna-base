@@ -58,7 +58,7 @@ extern writer_t writer;
 
 void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
 {
-
+    
   // track ID (needed if caching for RESOAP)
   id = edf.id;
 
@@ -72,11 +72,9 @@ void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
   suds_t::ignore_target_priors = false;
 
   // assume that we have manual staging ('true') 
-
   int n_unique_stages = proc( edf , param , true );
   
   // Perhaps no observed stages?
-
   if ( n_unique_stages < 2 )
     {
       logger << "  *** fewer than 2 non-missing stages for this individual, cannot complete REBASE\n";
@@ -84,7 +82,6 @@ void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
     }
   
   // fit LDA: populates suds_indiv_t::model object
-
   fit_qlda();
 
   if ( ! lda_model.valid )
@@ -94,35 +91,33 @@ void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
     }
 
   
-  // save this old self
-  
+  // save this old self  
   suds_indiv_t old_self = *this;
   
-  // now change epoch size to target
-  
+  // now change epoch size to target  
   edf.timeline.set_epoch( elen , elen , 0 ) ;
   
   // and re-estimate PSD assuming no known staging ('false')
-  // (this will also calculate PSC, but we will ignore this... add option to skip that in proc() in future)
-  
+  // (this will also calculate PSC, but we will ignore this... add option to skip that in proc() in future)  
   suds_t::ignore_target_priors = true;
 
   // also clear this , as 'summarize_epochs() will try to use it otherwise in output)
   obs_stage.clear();
-  
+
+  // re-process file
   n_unique_stages = proc( edf , param , true ); 
 
-  // true means has staging (I.e. not a 'target' in the SUDS sense, but 
+  // true means has staging (i.e. not a 'target' in the SUDS sense, but 
   // but the suds_t::ignore_target_priors means this is ignored (i.e. we do 
   // not try to reference the staging (which presumably no longer matches the epoch 
   // duration)
   
-  // now project & predict into self's prior PSC space;  i.e. use same model. but will just be
+  // now project & predict into self's prior PSC space;  i.e. use same model, but will just be
   // based on PSD estimated from differently-sized epochs
-
 
   posteriors_t new_staging = predict( old_self , suds_t::qda );
   
+
   //
   // output stage probabilities ( new_staging.pp ) 
   //
@@ -136,6 +131,6 @@ void suds_indiv_t::rebase( edf_t & edf , param_t & param , double elen )
   const int bad_epochs = summarize_stage_durations( new_staging.pp , lda_model.labels , ne_all , epoch_sec );
 
   summarize_epochs( new_staging.pp , lda_model.labels , ne_all , edf );
-
+  
 }
 
