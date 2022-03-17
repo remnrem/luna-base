@@ -60,14 +60,14 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
 					int converter )
 {
 
-
   int n = d->size();
   std::vector<float> f( n );
   for (int i=0;i<n;i++) f[i] = (*d)[i];
   
   double ratio = sr2 / (double)sr1;
   const int n2 = n * ratio;
-  std::vector<float> f2( n2 );
+
+  std::vector<float> f2( n2 , 0 );
 
   // pad a little at end (probably not necessary)
   for (int i=0;i<10;i++) 
@@ -75,7 +75,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
       ++n;
       f.push_back(0);
     }
-
+  
   SRC_DATA src;
   src.data_in = &(f[0]);
   src.input_frames = n;
@@ -95,7 +95,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
 
   std::vector<double> out( n2 );
   for (int i=0;i<n2;i++) out[i] = f2[i];
-
+  
   return out;
 }
 

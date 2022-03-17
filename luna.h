@@ -53,6 +53,7 @@
 #include "stats/cpt.h"
 
 #include "lgbm/lgbm.h"
+#include "lgbm/assoc.h"
 
 #include "miscmath/miscmath.h"
 

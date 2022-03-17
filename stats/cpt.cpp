@@ -61,6 +61,7 @@ void cpt_wrapper( param_t & param )
   double freq_threshold = param.has( "th-freq" ) ? param.requires_dbl( "th-freq" ) : 0 ; 
   
   double time_threshold = param.has( "th-time" ) ? param.requires_dbl( "th-time" ) : 0 ;
+
   //
   // Clustering threshold  (-ve means no clustering done)
   //
@@ -208,6 +209,12 @@ void cpt_wrapper( param_t & param )
   double tlwr = param.has( "t-lwr" ) ? param.requires_dbl( "t-lwr" ) : 0 ;
   double tupr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 0 ;
 
+
+  //
+  // Dump data files (DVs) as a matrix
+  //
+
+  const std::string dump_dv_matrix = param.has( "dv-mat" ) ? Helper::expand( param.value( "dv-mat" ) ) : "" ; 
   
   //
   // Attach covariates, define main IV: note, this sets the total
@@ -396,7 +403,7 @@ void cpt_wrapper( param_t & param )
 	}
       
       if ( slot2var.size() == 0 ) 
-	Helper::halt( "no variables dvars=<...> in " + infile );
+	Helper::halt( "no variables dv=<...> in " + infile );
       
       const int ncols = tok.size();
       
@@ -890,6 +897,23 @@ void cpt_wrapper( param_t & param )
   logger << "  final datasets contains " << Y.cols() << " DVs on " << X.rows() << " individuals, "
 	 << X.cols() << " primary IV(s), and " << Z.cols() << " covariate(s)\n";
   
+
+  //
+  // Dump DV matrix?
+  //
+  
+  if ( dump_dv_matrix != "" )
+    {
+      logger << "  writing DV matrix to " << dump_dv_matrix << "\n";
+      Eigen::IOFormat fmt1( Eigen::StreamPrecision, Eigen::DontAlignCols );
+      std::ofstream O1( dump_dv_matrix.c_str() , std::ios::out );
+      if ( vname.size() != Y.cols() ) Helper::halt( "internal logic error" );
+      for (int v=0; v<vname.size(); v++)
+	O1 << ( v != 0 ? "\t" : "" ) << vname[v];
+      O1 << "\n";
+      O1 << Y.format( fmt1 ) << "\n";
+      O1.close();
+    }
   
   //
   // Perform CPT 
