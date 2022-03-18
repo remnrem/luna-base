@@ -741,9 +741,10 @@ void PWELCH::process()
     }
     
 
-  if ( last_point_plus_one != total_points )
+  if ( last_point_plus_one > total_points )
+    //      if ( last_point_plus_one != total_points ) // i.e. allow if slightly shorter
     {
-
+      
       logger << "  specified Welch segment parameters:\n"
 	     << "     - segment size    = " << segment_size_points << " sample points\n"
 	     << "     - segment overlap = " << noverlap_points << " sample points\n"
@@ -754,8 +755,7 @@ void PWELCH::process()
 	     << " which is fine - Luna just requires an increment of an *integer* number of samples\n"
 	     << " (for a fixed total signal length, number of segments and segment length) can span the\n"
 	     << " whole region\n";
-	
-	
+      
       int seg_cnt = 1;
       int last_point_plus_one = 0;
       for (int p = 0; p <= total_points - segment_size_points ; p += segment_increment_points )
@@ -764,11 +764,11 @@ void PWELCH::process()
 	  last_point_plus_one = p + segment_size_points;
 	  ++seg_cnt;
 	}
-
-
+      
       Helper::halt( "Welch segment size/increment does not span epoch fully" );
       
     }
+
 
   
   //

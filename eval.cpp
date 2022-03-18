@@ -968,6 +968,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "PSD" ) )          proc_psd( edf, param(c) );	  
       else if ( is( c, "FFT" ) )          proc_fft( edf , param(c) );
       else if ( is( c, "MTM" ) )          proc_mtm( edf, param(c) );
+      else if ( is( c, "IRASA" ) )        proc_irasa( edf, param(c) );
       else if ( is( c, "1FNORM" ) )       proc_1overf_norm( edf, param(c) );
 
       else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
@@ -1703,6 +1704,13 @@ void proc_fft( edf_t & edf , param_t & param )
 void proc_mtm( edf_t & edf , param_t & param )	  
 {  
   mtm::wrapper( edf , param );
+}
+
+// IRASA : calculate IRASA
+
+void proc_irasa( edf_t & edf , param_t & param )
+{  
+  //wrapper_irasa( edf , param );
 }
 
 // 1FNORM : normalization of signals for the 1/f trend

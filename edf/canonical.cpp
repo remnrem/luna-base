@@ -94,6 +94,8 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 				  const bool only_check_labels )
 {  
 
+  std::cout << " makingsignals = " << make_signals << "\n";
+  
   cansigs_t retval;
 
   if ( files.size() == 0 ) return retval;
@@ -184,16 +186,21 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
       std::ifstream IN1( file.c_str() , std::ios::in );
       while ( ! IN1.eof() )
 	{
-	  std::string line;
+	  std::string line = "";
 	  Helper::safe_getline( IN1 , line );
 	  
 	  if ( line == "" ) continue;
 	  if ( Helper::toupper( line ) == "STOP" ) break;
 	  if ( IN1.eof() ) break;
-	  if ( line[0] == '%' ) continue;
+	  if ( line.size() >= 1 && line[0] == '%' ) continue;
+	  
+	  std::cout << " line[" << line << "]\n";
 
 	  // white-space quoted parsing of this line
 	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
+	  if ( tok.size() == 0 ) continue;
+	  
+	  std::cout << "tok s " << tok.size() << "\n";
 	  
 	  // is this an aliases line? if so, add then skip
 	  if ( tok.size() == 1 )
@@ -214,7 +221,7 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 
 	      std::string label = label_trans[0];
 	      std::string trans = label_trans.size() == 2 ? label_trans[1] : "." ; 
-	      
+	      std::cout << " labe, trans = " << label << " " << trans << "\n";
 	      if ( label_trans.size() > 2 )
 		Helper::halt( "bad format label|transducer" );
 
@@ -235,9 +242,12 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 		    Helper::halt( "cannot specify '.' as the primary unit if others specified" );
 						     
 		  for (int i=3; i<tok.size(); i++)
-                    req_unit[ std::make_pair( label , trans ) ][ Helper::toupper( tok[i] ) ] = tok[3] ;  
+		    {
+		      //std::cout << " [" << tok[i]  << "] [" << tok[3] << "]...\n";
+		      req_unit[ std::make_pair( label , trans ) ][ Helper::toupper( tok[i] ) ] = tok[3] ;  
+		    }
 		}
-
+	      
 	      else if ( req == "SR" )
 		{
 		  if ( tok.size() != 5 )
@@ -718,9 +728,11 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  //   false , false = not dereference , not verbose
 	  // 
 
+	  //std::cout << "MS = " << make_signals << "\n";
+	  
 	  if ( make_signals )
 	    {
-
+	      
 	      // create a new channel?
 
 	      if ( ! already_present )
@@ -772,13 +784,15 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  // if ( already_present && ustr != "." )
           //   Helper::halt( "cannot specify existing canonical name "
           //                 + canon + " and transform units" );
-
+	  
 	  if ( make_signals && req_unit.find( key ) != req_unit.end() )
             {
 	      // get implied canonical unit
 	      std::string can_unit = Helper::toupper( header.phys_dimension[ canonical_signal(0) ] );
 	      // get the preferred value	      
 	      std::string pref_unit = req_unit[ key ][ can_unit ];
+	      logger << "  swapping " << can_unit << " to " << pref_unit << "\n";
+
 	      // set the new EDF header
 	      header.phys_dimension[ canonical_signal(0) ] = pref_unit;
 	    }

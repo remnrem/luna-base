@@ -486,7 +486,7 @@ class PWELCH
 	if ( freq[i] >= lwr ) r += psd[i];
       }
 
-    // area under the curve, multiple by bin width for each area
+    // area under the curve, scale by bin width for each area
     double fbin = freq[1] - freq[0];
 
     return r * fbin;
@@ -503,7 +503,7 @@ class PWELCH
 	if ( freq[i] >= lwr ) r += psdsd[i];
       }
 
-    // area under the curve, multiple by bin width for each area
+    // area under the curve, scale by bin width for each area
     double fbin = freq[1] - freq[0];
 
     return r * fbin;
