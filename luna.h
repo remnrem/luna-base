@@ -52,8 +52,7 @@
 #include "stats/kmeans.h"
 #include "stats/cpt.h"
 
-#include "lgbm/lgbm.h"
-#include "lgbm/assoc.h"
+
 
 #include "miscmath/miscmath.h"
 
@@ -100,7 +99,11 @@
 
 #include "suds/suds.h"
 
+#include "lgbm/lgbm.h"
+
 #include "pops/pops.h"
+
+#include "assoc/assoc.h"
 
 #include "clocs/topo.h"
 

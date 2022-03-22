@@ -126,6 +126,19 @@ namespace Helper
 
   std::vector<std::string> file2strvector( const std::string & );
 
+  // binary I/O
+  
+  void bwrite( std::ofstream & O , const std::string & s );
+  void bwrite( std::ofstream & O , int i );
+  void bwrite( std::ofstream & O , double d );
+  std::string bread_str( std::ifstream & I );
+  int bread_int( std::ifstream & I );
+  double bread_dbl( std::ifstream & I );
+  void bskip_dbl( std::ifstream & I , const int n );
+  void bskip_int( std::ifstream & I , const int n );
+
+   
+  
   // case insenstive string comparison
   bool iequals(const std::string& a, const std::string& b);
 

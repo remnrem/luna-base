@@ -4456,6 +4456,24 @@ std::map<std::string,int> cmd_t::pull_ivar( const std::vector<std::string> & ids
 }
 
 
+bool cmd_t::pull_ivar( const std::string & id , const std::string & phe , double * x )
+{
+  
+  // ivars:  ID -> PHE -> VAL
+
+  // ID
+  if ( ivars.find( id ) == ivars.end() ) return false;
+
+  // var
+  const std::map<std::string,std::string> & data = ivars.find( id )->second;
+  if ( data.find( phe ) == data.end() ) return false;
+
+  // attach only valid doubles
+  return Helper::str2dbl( data.find( phe )->second , x ); 
+
+}
+
+
 void proc_has_signals( edf_t & edf , param_t & param )
 {
 

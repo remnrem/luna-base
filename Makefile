@@ -32,6 +32,7 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard dsp/mtm/*.cpp) \
         $(wildcard dsp/libsamplerate/*.cpp) \
         $(wildcard pops/*.cpp) \
+        $(wildcard assoc/*.cpp) \
         $(wildcard lgbm/*.cpp) 
 
 CSRCS = $(wildcard db/*.c) \

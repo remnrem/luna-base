@@ -1701,3 +1701,62 @@ std::string Helper::pp( double x )
   int x2 = round( 100 * x );
   return Helper::dbl2str( x2 / 100.0 );
 }
+
+
+
+
+
+void Helper::bwrite( std::ofstream & O , const std::string & s ) 
+{
+  uint8_t l = s.size();
+  O.write( (char*)( &l ), sizeof(uint8_t) );
+  O.write( s.c_str(), l );
+}
+
+void Helper::bwrite( std::ofstream & O , int i ) 
+{
+  O.write( (char*)( &i ), sizeof(int) );
+}
+
+void Helper::bwrite( std::ofstream & O , double d ) 
+{
+  O.write( (char*)( &d ), sizeof(double) );
+}
+
+std::string Helper::bread_str( std::ifstream & I )
+{
+  uint8_t len;
+  I.read( (char*)( &len ), sizeof(uint8_t) );
+  std::vector<char> b( len );
+  I.read( &b[0] , len );
+  std::string s( b.begin() , b.end() );
+  return s;
+}
+
+int Helper::bread_int( std::ifstream & I )
+{
+  int i;
+  I.read( (char*)( &i ), sizeof(int) );
+  return i;
+}
+
+double Helper::bread_dbl( std::ifstream & I )
+{
+  double d;
+  I.read( (char*)( &d ), sizeof(double) );
+  return d;
+}
+
+void Helper::bskip_dbl( std::ifstream & I , const int n )
+{
+  std::vector<double> dummy( n ) ;
+  I.read( (char*)( &dummy[0] ), n * sizeof(double) );
+}
+
+void Helper::bskip_int( std::ifstream & I , const int n )
+{
+  std::vector<double> dummy( n ) ;
+  I.read( (char*)( &dummy[0] ), n * sizeof(int) );
+}
+
+

@@ -306,6 +306,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_combine_suds = false;
   bool cmdline_proc_cperm_test   = false;
   bool cmdline_proc_lgbm         = false;
+  bool cmdline_proc_assoc        = false;
   bool cmdline_proc_pops         = false;
     
   //
@@ -353,6 +354,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_combine_suds = true;
 	  else if ( strcmp( argv[1] , "--lgbm" ) == 0 )
 	    cmdline_proc_lgbm = true;
+	  else if ( strcmp( argv[1] , "--assoc" ) == 0 )
+	    cmdline_proc_assoc = true;	  
 	  else if ( strcmp( argv[1] , "--pops" ) == 0 )
 	    cmdline_proc_pops = true;
 	}
@@ -668,7 +671,7 @@ int main(int argc , char ** argv )
 
   
   //
-  // LGBM wrapper
+  // Simple LGBM wrapper
   //
 
   if ( cmdline_proc_lgbm )
@@ -689,7 +692,29 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
   
-  
+
+  //
+  // LGBM-based ASSOC
+  //
+
+  if ( cmdline_proc_assoc )
+    {
+#ifdef HAS_LGBM
+      param_t param;
+      build_param_from_cmdline( &param );      
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "ASSOC" , 1 , "" );
+      writer.level( "ASSOC", "_ASSOC" );
+      assoc_t assoc( param );
+      writer.unlevel( "_ASSOC" );
+      writer.commit();
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+      std::exit(0);
+    }
+
   //
   // Cluster permitation test (CPT)
   //

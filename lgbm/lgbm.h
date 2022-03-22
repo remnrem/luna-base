@@ -44,17 +44,20 @@ struct lgbm_t {
   lgbm_t( const int n_iterations = 100 )
     : has_booster(false) , has_training(false ) , has_validation(false), n_iterations(n_iterations)
   {
+    qt_mode = false;
     params = "";
   }
   
   lgbm_t( const std::string & config_file , const int n_iterations = 100 )
     : has_booster(false) , has_training(false ) , has_validation(false) , n_iterations(n_iterations)
   {
+    qt_mode = false;
     load_config( config_file );
   }
   
   void load_config( const std::string & config_file )
   {
+    qt_mode = false;
     params = parse_config( config_file );
   }
 
@@ -74,6 +77,8 @@ struct lgbm_t {
   
   bool attach_training_labels( const std::vector<int> & labels );
 
+  bool attach_training_qts( const std::vector<double> & qts );
+
   
   bool load_validation_data( const std::string & filename );
 
@@ -81,6 +86,8 @@ struct lgbm_t {
   
   bool attach_validation_labels( const std::vector<int> & labels );
 
+  bool attach_validation_qts( const std::vector<double> & qts );
+      
   //
   // Weights
   //
@@ -93,7 +100,7 @@ struct lgbm_t {
   // Set up a booster 
   //
 
-  bool create_booster();
+  bool create_booster( const bool verbose = false );
   
 
   //
@@ -113,9 +120,9 @@ struct lgbm_t {
   
   bool train(  );
   
-  Eigen::MatrixXd predict( const Eigen::MatrixXd & X );
+  Eigen::MatrixXd predict( const Eigen::MatrixXd & X , const int final_iter = 0 );
   
-  Eigen::MatrixXd SHAP_values( const Eigen::MatrixXd & X );
+  Eigen::MatrixXd SHAP_values( const Eigen::MatrixXd & X , const int final_iter = 0 );
 
   
   //
@@ -131,7 +138,9 @@ struct lgbm_t {
   static int label_column( DatasetHandle d );
 
   static std::vector<int> labels( DatasetHandle d );
-  
+
+  static std::vector<double> qts( DatasetHandle d );
+
   static std::vector<double> weights( DatasetHandle d );
 
   static std::vector<std::string> features( DatasetHandle d );
@@ -176,6 +185,9 @@ struct lgbm_t {
   bool has_validation;
   DatasetHandle validation;
 
+  // classification (labels) versus regression (qts) mode
+  bool qt_mode;
+  
   // not used yet
   FastConfigHandle fastconfig;
   // then needs LGBM_FastConfigFree

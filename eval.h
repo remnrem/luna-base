@@ -171,6 +171,8 @@ class cmd_t
 
   static std::map<std::string,int> pull_ivar( const std::vector<std::string> & ids , 
 					      const std::string & phe );
+
+  static bool pull_ivar( const std::string & id , const std::string & phe , double * x );
   
   // id-mapper
   static std::map<std::string,std::string>  idmapper;

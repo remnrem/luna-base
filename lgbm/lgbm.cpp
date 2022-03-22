@@ -33,8 +33,10 @@
 #include <fstream>
 
 #include "helper/logger.h"
+#include "db/db.h"
 
 extern logger_t logger;
+extern writer_t writer;
 
 void lgbm_cli_wrapper( param_t & param )
 {
@@ -69,6 +71,7 @@ void lgbm_cli_wrapper( param_t & param )
   const std::string model_file = param.requires( "model" );
 
   const bool out_shap = param.has( "SHAP" ) || param.has( "shap" );
+  const bool qt_mode = param.has( "qt" );
   
   if ( has_training && has_test ) Helper::halt( "can only specify train or test" );
   if ( ! ( has_training || has_test ) ) Helper::halt( "no train or test data attached" );
@@ -81,6 +84,12 @@ void lgbm_cli_wrapper( param_t & param )
   
   lgbm_t lgbm;
 
+  // 
+  // classification or regression?
+  //
+
+  lgbm.qt_mode = qt_mode;
+  
   //
   // attach configuration file
   //
@@ -123,6 +132,9 @@ void lgbm_cli_wrapper( param_t & param )
 
   if ( has_label_weights )
     {
+      if ( qt_mode )
+	Helper::halt( "cannot apply label weights in QT mode" );
+      
       lgbm_label_t labels( param.value( "weights" ) );
       logger << "  applying label-weights from " << param.value( "weights" ) << "\n";
       
@@ -204,7 +216,7 @@ void lgbm_cli_wrapper( param_t & param )
 // https://github.com/microsoft/LightGBM/blob/master/tests/c_api_test/test_.py
 // https://github.com/microsoft/LightGBM/issues/2625
 
-bool lgbm_t::create_booster( )
+bool lgbm_t::create_booster( const bool verbose )
 {
   // LGBM_BoosterCreate
   // LGBM_BoosterAddValidData(booster, test)
@@ -287,20 +299,38 @@ bool lgbm_t::create_booster( )
 	  if ( flag ) 
 	    Helper::halt( "problem evaluating validation data" );
 	}
-
+    
       logger << " iteration " << i+1 << ": training =";
-
-      for (int i=0; i<out_len; i++) 
-	logger << " " << eval[i];
+      
+      for (int j=0; j<out_len; j++) 
+	logger << " " << eval[j];
       if ( has_validation ) 
 	{
 	  logger << " validation =";
-	  for (int i=0; i<out_len_valid; i++)
-	    logger << " " << eval_valid[i];
+	  for (int j=0; j<out_len_valid; j++)
+	    logger << " " << eval_valid[j];
 	}
       logger << "\n";
       
+      
+      // track in DB?
+      if ( verbose )
+	{
+	  writer.level( i+1 , "ITER" );
+	  for (int j=0; j<out_len; j++)
+	    {
+	      writer.level( j+1 , "METRIC" );
+	      writer.value( "TRAINING" ,  eval[j] );
+	      if ( has_validation )
+		writer.value( "VALIDATION" ,  eval_valid[j] );
+	    }
+	  writer.unlevel( "METRIC" );
+	}
+      
     }
+
+  if ( verbose )
+    writer.unlevel( "ITER" );
   
   //  - LGBM_BoosterGetEvalNames first to get the names of evaluation metrics
   //  - pre-allocate memory for out_results (length by LGBM_BoosterGetEvalCounts)
@@ -417,6 +447,25 @@ bool lgbm_t::attach_training_labels( const std::vector<int> & labels )
   return true;
 }
 
+
+bool lgbm_t::attach_training_qts( const std::vector<double> & qts )
+{
+  const int n = qts.size();
+  std::vector<float> fl( n );
+  for (int i=0; i<n; i++) fl[i] = qts[i];
+  
+  int res = LGBM_DatasetSetField( training , 
+				  "label" ,
+				  fl.data() ,
+				  n ,
+				  C_API_DTYPE_FLOAT32 );
+
+  if ( res )
+    Helper::halt( "problem attaching training labels" );
+
+  return true;
+}
+
 bool lgbm_t::attach_validation_labels( const std::vector<int> & labels )
 {
   const int n = labels.size();
@@ -435,9 +484,27 @@ bool lgbm_t::attach_validation_labels( const std::vector<int> & labels )
   return true;
 }
 
+bool lgbm_t::attach_validation_qts( const std::vector<double> & qts )
+{
+  const int n = qts.size();
+  std::vector<float> fl( n );
+  for (int i=0; i<n; i++) fl[i] = qts[i];
+
+  int res = LGBM_DatasetSetField( validation ,
+				  "label" ,
+				  fl.data() ,
+				  n ,
+				  C_API_DTYPE_FLOAT32 );
+
+  if ( res )
+    Helper::halt( "problem attaching validation labels" );
+
+  return true;
+}
+
 bool lgbm_t::attach_validation_matrix( const Eigen::MatrixXd & X )
 {
-
+  
   int res = LGBM_DatasetCreateFromMat( X.data() , 
 				       C_API_DTYPE_FLOAT64 ,
 				       X.rows() ,
@@ -498,7 +565,7 @@ bool lgbm_t::save_model( const std::string & filename )
 
 
 
-Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X )
+Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_iter )
 {
 
 
@@ -508,7 +575,7 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X )
   const void * p = static_cast<const void*>(X.data());
   
   // results
-  int num_classes = lgbm_t::classes( booster );
+  int num_classes = qt_mode ? 1 : lgbm_t::classes( booster );
   int num_obs = X.rows();
   
   int64_t out_len = num_classes * num_obs;
@@ -527,7 +594,7 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X )
 					0 , // 1=row_major, 0=col-major
 					C_API_PREDICT_NORMAL , //
 					0 , // start_iteration
-					0 , // Number of iteration for prediction, <= 0 means no limit
+					final_iter , // Number of iteration for prediction, <= 0 means no limit
 					params.c_str() ,
 					&out_len ,
 					out_result );
@@ -537,7 +604,7 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X )
 
   // for binary classificaiton, make a two-col matrix
   // (i.e. same as for multiclass)
-  if ( num_classes == 1 )
+  if ( num_classes == 1 && ! qt_mode )
     {
       R.conservativeResize( 2 , Eigen::NoChange );
       for (int i=0; i<R.cols(); i++)
@@ -549,7 +616,7 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X )
 }
 
 
-Eigen::MatrixXd lgbm_t::SHAP_values( const Eigen::MatrixXd & X )
+Eigen::MatrixXd lgbm_t::SHAP_values( const Eigen::MatrixXd & X , const int final_iter )
 {
 
   const void * p = static_cast<const void*>(X.data());
@@ -560,14 +627,14 @@ Eigen::MatrixXd lgbm_t::SHAP_values( const Eigen::MatrixXd & X )
 					 1 ,  // number of rows- i.e. just a multiplicative factor
 					 C_API_PREDICT_CONTRIB , // SHAP values
 					 0 ,  // start iteration
-					 0 ,  // end (0 -> no limit)
+					 final_iter ,  // end (0 -> no limit)
 					 &out_len );
   
   if ( flag )
     Helper::halt( "issue w/ getting SHAP values" );
   
   // for feature contributions, its length is equal to num_class * num_data * (num_feature + 1).
-  int num_classes = lgbm_t::classes( booster );
+  int num_classes = qt_mode ? 1 : lgbm_t::classes( booster );
   int num_obs = X.rows();
   int num_features = X.cols();
   int64_t out_len2 = num_classes * num_obs * ( num_features - 1 );
@@ -585,7 +652,7 @@ Eigen::MatrixXd lgbm_t::SHAP_values( const Eigen::MatrixXd & X )
 				    0 , // 1=row_major, 0=col-major
 				    C_API_PREDICT_CONTRIB , // SHAP values
 				    0 , // start_iteration
-				    0 , // Number of iteration for prediction, <= 0 means no limit
+				    final_iter , // Number of iteration for prediction, <= 0 means no limit
 				    params.c_str() ,
 				    &out_len3 ,
 				    out_result );
@@ -715,6 +782,47 @@ std::vector<int> lgbm_t::labels( DatasetHandle d )
     {
       int * pp = (int*)out_ptr;
       for (int i=0; i<n; i++) rv[i] = *(pp++);      
+    }
+
+  return rv;
+}
+
+
+std::vector<double> lgbm_t::qts( DatasetHandle d )
+{
+  const int n = rows(d);
+  int out_len = 0;
+  const void * out_ptr;
+  int out_type;
+  
+  int res = LGBM_DatasetGetField( d ,
+				  "label" , 
+				  &out_len ,
+				  &out_ptr ,
+				  &out_type );
+  
+  if ( res ) Helper::halt( "problem in lgbm_t::labels" );
+  if ( out_len != n ) Helper::halt( "internal error in lgbm_t::labels()" );
+  
+  // return labels as doubles
+  std::vector<double> rv(n);
+  
+  if ( out_type == C_API_DTYPE_FLOAT32 )
+    {
+      float * pp = (float*)out_ptr;      
+      for (int i=0; i<n; i++) rv[i] = (double)(*(pp++));
+    }
+  
+  if ( out_type == C_API_DTYPE_FLOAT64 )
+    {
+      double * pp = (double*)out_ptr;
+      for (int i=0; i<n; i++) rv[i] = (double)(*(pp++));
+    }
+
+  if ( out_type == C_API_DTYPE_INT32 )
+    {
+      int * pp = (int*)out_ptr;
+      for (int i=0; i<n; i++) rv[i] = (double)(*(pp++));
     }
 
   return rv;
