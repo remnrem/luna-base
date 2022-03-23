@@ -3944,7 +3944,9 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 	    {	      
 	      
 	      tal_t t = edf.tal( s , r );
-	      
+
+	      //std::cout << " edf-annot s,r = " << s << " " << r << "\n" << t << "\n";
+
 	      const int na = t.size();
 	      
 	      for (int i=0; i<na; i++)

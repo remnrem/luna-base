@@ -174,7 +174,7 @@ assoc_t::assoc_t( param_t & param )
   predict( param );
 
   // SHAP values
-  if ( param.has( "SHAP" ) )
+  if ( param.has( "SHAP" ) || param.has( "shap" ) )
     SHAP( param );
   
   // all done
@@ -1083,12 +1083,14 @@ void assoc_t::SHAP( param_t & param )
   
   Eigen::MatrixXd S = lgbm.SHAP_values( X , iter );
   
-  const int n = Y.rows();
-  const int nv = Y.cols();
+  const int n = S.rows();
+  const int nv = S.cols() - 1; // nb last col is expected value
   
   if ( test_ids.size() != n )
     Helper::halt( "internal error in predict()" );
 
+  //  std::cout << " nv = " << nv << " " << varlist.size() << "\n";
+    
   if ( nv != varlist.size() )
     Helper::halt( "internal error in predict(), varlist size" );
   

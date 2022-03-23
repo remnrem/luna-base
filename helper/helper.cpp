@@ -379,7 +379,7 @@ uint64_t Helper::sec2tp( double s )
   
   if ( s < 0 ) 
     {
-      logger << "warning -- cannot have negative time-points, setting to 0 (from " << Helper::dbl2str( s ) << "\n";
+      logger << "warning -- cannot have negative time-points, setting to tp=0 (from s=" << Helper::dbl2str( s ) << ")\n";
       return 0; 
     }
   
