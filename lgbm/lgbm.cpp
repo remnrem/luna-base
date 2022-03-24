@@ -532,7 +532,7 @@ bool lgbm_t::load_model( const std::string & f )
 					      &out_num_iterations ,
 					      &booster );
   has_booster = true;  
-  logger << "  read model from " << filename << " ( " << out_num_iterations << " iterations)\n";
+  logger << "  read model from " << filename << " (" << out_num_iterations << " iterations)\n";
   return true;
 }
 

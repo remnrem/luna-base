@@ -147,7 +147,7 @@ assoc_t::assoc_t( param_t & param )
       
       save_model( param );
       
-
+	
       // all done for training mode
       return;
     }
@@ -161,8 +161,11 @@ assoc_t::assoc_t( param_t & param )
   // load model (w/ includes variable list)
   load_model( param );
   
-  // import test data (from long text format)
-  import_testdata( param );
+  // load or import test data (from long text format)
+  if ( param.has( "load" ) )
+    load_testdata( param );
+  else
+    import_testdata( param );
   
   // covariates
   attach_covariates( param );
@@ -192,7 +195,7 @@ void assoc_t::import_training( param_t & param )
   // variables to import?
   std::set<std::string> vars = param.strset( "vars" );
 
-  // straifiers?
+  // stratifiers?
   std::set<std::string> strats = param.strset( "factors" );
   
   // individuals to include/exclude
@@ -205,7 +208,7 @@ void assoc_t::import_training( param_t & param )
   // pass through all files to get the total variable list
   //
   
-  std::map<std::string,int> var2col;
+  var2col.clear();
   std::map<std::string,int> ind2row;
   
   for (int f=0; f<files.size(); f++)
@@ -213,7 +216,7 @@ void assoc_t::import_training( param_t & param )
       if ( ! Helper::fileExists( Helper::expand( files[f] ) ) )
 	Helper::halt( "could not open " + files[f] );
 
-      logger << "  importing " << files[f] << "\n";
+      logger << "  initial scan of " << files[f] << "\n";
       
       std::ifstream IN1( files[f].c_str() , std::ios::in );
 
@@ -351,7 +354,7 @@ void assoc_t::import_training( param_t & param )
       ++kk;
     }
 
-  logger << "  expecting a total of " << nc << " variables on " << ni_train << " training individuals, " << ni_valid << " validation individuals\n";
+  logger << "  expecting " << nc << " features on " << ni_train << " training and " << ni_valid << " validation observations\n";
   //  req_vars.clear();
   varlist.resize( nc );
   
@@ -495,12 +498,17 @@ void assoc_t::attach_test_phenotypes( param_t & param )
   if ( ! param.has( "phe" ) ) return;
   
   phenotype_label = param.value( "phe" );
-
+  int n_miss = 0;
   test_phe.resize( test_ids.size() );  
   for (int i=0; i<test_ids.size(); i++)
     if ( ! cmd_t::pull_ivar( test_ids[i] , phenotype_label , &(test_phe)[i] ) )
-      Helper::halt( "not phenotype " + phenotype_label + " found for " + test_ids[i] );
-  logger << "  attached " << phenotype_label << " for the test dataset\n";  
+      {
+	test_phe[i] = -999;
+	n_miss++;
+      }
+  logger << "  attached " << phenotype_label << " for the test dataset";
+  if ( n_miss ) logger << " (for " << test_phe.size() -n_miss << " of " << test_phe.size() << " individuals)";
+  logger << "\n";
 }
 
 
@@ -625,7 +633,7 @@ void assoc_t::save( param_t & param )
   const int ntrain = train_ids.size();
   const int nvalid = valid_ids.size();
 
-  logger << " writing " << nv << " " << ntrain <<"  " << nvalid << "\n";
+  logger << " writing binary data matrix, " << nv << " features, " << ntrain << " training and  " << nvalid << " validation observations\n";
   
   // number of trainers, validations
   Helper::bwrite( OUT1, nv ) ;
@@ -709,11 +717,47 @@ void assoc_t::load( param_t & param )
 }
 
 
+void assoc_t::load_testdata( param_t & param )
+{
+  // convenience function, i.e. if wanting to test the same test set under multiple
+  // conditions, avoids the need to import() the text files (slower)
+  
+  const std::string filename = Helper::expand( param.value( "load" ) );
+  
+  // nb. the varlist will already have been populated from the training / load model
+
+  std::ifstream IN1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::in );
+
+  const int nv = Helper::bread_int( IN1 );
+  const int ni = Helper::bread_int( IN1 );     // i.e. if import/save used on TEST samples only, 
+  const int nvalid = Helper::bread_int( IN1 ); // and assume this will be 0 (i.e. not 'validation' specified)
+
+  if ( nvalid != 0 )
+    Helper::halt( "if loading test data, you should not have set any validation samples w/ the prior import/save" );
+  
+  X = Eigen::MatrixXd::Constant( ni, nv,  NaN_value );
+  
+  test_ids.resize( ni );
+  test_phe.resize( ni );
+
+  // test samples
+  for (int i=0; i<ni; i++)
+    {
+      test_ids[i] = Helper::bread_str( IN1 );
+      test_phe[i] = Helper::bread_dbl( IN1 );
+      for (int j=0; j<nv; j++)
+	X(i,j) = Helper::bread_dbl( IN1 );
+    }  
+  
+  IN1.close();
+  
+  logger << "  read " << nv << " variables on " << ni << " test observations\n";
+  
+}
+
 void assoc_t::train( param_t & param )
 {
 
-  logger << " about to train the model...\n";
-  
   // configuration required  
   lgbm.load_config( param.requires( "config" ) );
 
@@ -752,8 +796,6 @@ void assoc_t::save_model( param_t & param )
   
   lgbm.save_model( model_file );
     
-  logger << "  wrote model file to " << model_file << "\n";
-
   //
   // Also save varlist
   //
@@ -825,24 +867,37 @@ void assoc_t::attach_covariates( param_t & param )
   else
     {
 
-      // test sample(s)
-      X.conservativeResize( Eigen::NoChange , nv0 + ncov );
-      
-      for (int i=0; i<test_ids.size(); i++)
-	for (int j=0; j<ncov; j++)
-	  {
-	    double x = NaN_value;
-	    if ( cmd_t::pull_ivar( test_ids[i] , tok[j] , &x ) )
-	      X( i , nv0 + j ) = x;
-	  }
+      // test sample(s) - the model will already include any covariates
+      // and so no need to add.. we just need to match variable name
 
+      for (int j=0; j<ncov; j++)
+	{
+	  const std::string covar_name = tok[j];
+	  // find col/slot tok[j]
+	  if ( var2col.find( covar_name ) == var2col.end() )
+	    Helper::halt( "covariate " + covar_name + " not specified in the model" );
+
+	  const int slot = var2col[ covar_name ];
+	  
+	  for (int i=0; i<test_ids.size(); i++)	  
+	    {
+	      double x = NaN_value;
+	      if ( cmd_t::pull_ivar( test_ids[i] , tok[j] , &x ) )
+		X( i , slot ) = x;
+	    }
+	}
     }
   
-  // add to the varlist
-  for (int j=0; j<ncov; j++)
-    varlist.push_back( tok[j] );
+  // add to the varlist (for training mode only, otherwise, they will
+  // already be in the varlist
+  if ( training_mode )
+    for (int j=0; j<ncov; j++)
+      varlist.push_back( tok[j] );
   
-  logger << "  attached " << ncov << " covariates\n";
+  logger << "  attached " << ncov << " covariate()s: ";
+  for (int j=0; j<ncov; j++)
+    logger << " " << tok[j] ;
+  logger << "\n";
 }
 
 void assoc_t::import_testdata( param_t & param )
@@ -855,6 +910,12 @@ void assoc_t::import_testdata( param_t & param )
   test_ids.clear();
   std::map<std::string,int> ind2row;
   
+
+  // individuals to include/exclude
+  std::set<std::string> incids = param.strset( "inc-ids" );
+  std::set<std::string> excids = param.strset( "exc-ids" );
+  const bool check_incids = incids.size() != 0 ;
+  const bool check_excids = excids.size() != 0 ;
   
   // we have the set of variables read in already
   // first pass to get the # of people
@@ -867,7 +928,7 @@ void assoc_t::import_testdata( param_t & param )
   // std::set<std::string> model_strats; long-format list of strats (e.g. CH B F)
   // std::vector<std::string> varlist: full, expanded wide-format nams P_CH_C3_F_0.5, etc
   
-  std::map<std::string,int> var2col;
+  var2col.clear();
   for (int i=0; i<varlist.size(); i++)
     var2col[ varlist[i] ] = i;
     
@@ -915,9 +976,14 @@ void assoc_t::import_testdata( param_t & param )
 	    Helper::halt( "bad line in, number of fields does not match header: "
 			  + files[f] + "\n" + hline + "\n" + line );
 
-	  // add individual as row
+	  // add individual as row?
 	  const std::string & id = tok[0];
-	  
+
+	  // skip this person?
+          if ( check_incids && incids.find( id ) == incids.end() ) continue;
+          if ( check_excids && excids.find( id ) != excids.end() ) continue;
+
+	  // otherwise, add as a test subject
 	  if ( ind2row.find( id ) == ind2row.end() )
 	    {
 	      const int row = ind2row.size();
@@ -949,7 +1015,8 @@ void assoc_t::import_testdata( param_t & param )
       ++ii;
     }
   
-  
+  logger << "  expecting " << nv << " features on " << ni << " test observations\n";
+
   X = Eigen::MatrixXd::Constant( ni, nv,  NaN_value );
 
   //
@@ -991,8 +1058,12 @@ void assoc_t::import_testdata( param_t & param )
 	  
 	  std::vector<std::string> tok = Helper::parse( line , "\t" );
 
+          // add/skip this indiv?
+          const std::string & id = tok[0];
+          if ( check_incids && incids.find( id ) == incids.end() ) continue;
+          if ( check_excids && excids.find( id ) != excids.end() ) continue;
+
 	  // get indiv row
-	  const std::string & id = tok[0];
 	  const int row = ind2row[ id ];
 	  
 	  // get stratifiers for these variables
@@ -1061,8 +1132,8 @@ void assoc_t::predict( param_t & param )
   for (int i=0;i<n;i++)
     {
       writer.id( test_ids[i] , "." );
-
-      if ( test_phe.size() != 0 )
+      
+      if ( test_phe.size() != 0 && test_phe[i] > -998 )
 	writer.value( "OBS" , test_phe[i] );
 
       writer.value( "PRD" , Y(i,0) );
@@ -1085,7 +1156,7 @@ void assoc_t::SHAP( param_t & param )
   
   const int n = S.rows();
   const int nv = S.cols() - 1; // nb last col is expected value
-  
+
   if ( test_ids.size() != n )
     Helper::halt( "internal error in predict()" );
 
@@ -1095,6 +1166,20 @@ void assoc_t::SHAP( param_t & param )
     Helper::halt( "internal error in predict(), varlist size" );
   
   writer.id( "." , "." );
+  
+  Eigen::VectorXd M = S.cwiseAbs().colwise().mean();
+
+  if ( M.size() != nv + 1 )
+    Helper::halt( "internal error in SHAP" );
+
+  for (int j=0; j<nv; j++)
+    {
+      writer.level( varlist[j] , "VAR" );
+      writer.value( "SHAP" , M[j] );
+    }
+  writer.unlevel( "VAR" );
+
+  // indiv level output
   
   for (int i=0;i<n;i++)
     {

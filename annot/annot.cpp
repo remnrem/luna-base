@@ -3910,8 +3910,11 @@ void annotation_set_t::set( edf_t * edf )
 
 annot_t * annotation_set_t::from_EDF( edf_t & edf )
 {
-  
-  logger << "  extracting 'EDF Annotations' track\n";  
+
+  if ( ! globals::skip_edf_annots ) 
+    logger << "  extracting 'EDF Annotations' track\n";  
+  else
+    logger << "  extracting only EDF+D time-track 'EDF Annotations' track\n";  
   
   // create a single annotation (or bind to it, if it already exists)
   // by default, this is edf_annot_t and the entries here are added as the instance ID
@@ -3944,7 +3947,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 	    {	      
 	      
 	      tal_t t = edf.tal( s , r );
-
+	      
 	      //std::cout << " edf-annot s,r = " << s << " " << r << "\n" << t << "\n";
 
 	      const int na = t.size();

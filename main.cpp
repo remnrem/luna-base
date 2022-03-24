@@ -1746,9 +1746,16 @@ void process_edfs( cmd_t & cmd )
       // Attach EDF Annotations, potentially
       //
 
-      if ( edf.header.edfplus && ! globals::skip_edf_annots )
+      if ( edf.header.edfplus )
 	{
-	  edf.timeline.annotations.from_EDF( edf );
+	  // must read if EDF+D (but only the time-track will be taken in)
+	  // if EDF+C, then look at 'skip-edf-annots' flag
+	  
+	  if ( edf.header.continuous && ! globals::skip_edf_annots )
+	    edf.timeline.annotations.from_EDF( edf );
+	  else if ( ! edf.header.continuous )
+	    edf.timeline.annotations.from_EDF( edf );
+	  
 	}
       
       
