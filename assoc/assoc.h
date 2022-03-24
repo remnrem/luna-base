@@ -57,6 +57,8 @@ private:
   void save( param_t & );
   
   void load( param_t & );
+
+  void load_testdata( param_t & );
   
   void train( param_t & );
 
@@ -89,6 +91,7 @@ private:
 
   // variables (model_ are saved w/ model to help parse test data)
   std::vector<std::string> varlist; // PSD_CH_C3_F_22
+  std::map<std::string,int> var2col;
   std::set<std::string> model_vars; // e.g. PSD
   std::set<std::string> model_strats; // e.g. F 
 

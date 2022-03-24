@@ -37,8 +37,8 @@ struct tal_element_t
 {
 
   tal_element_t( double onset = 0 ,
-                 double duration = 0 ,
-                 const std::string & name1 = "" )
+		 double duration = 0 ,
+		 const std::string & name1 = "" )
   : onset(onset) , duration( duration ) , name(name1)
   {
     // ensure no carriage returns

@@ -663,8 +663,11 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       // imatch allows for case-insensitive match of 'edf annotation*'  (i.e. 14 chars)
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
 
-      // optionally skip all EDF annotation channels?
-      if ( annotation && ( globals::skip_edf_annots || globals::force_edf ) ) 
+      // optionally, skip all EDF annotation channels?
+      // if this is EDF+C, we can just skip altogether;  otherwise,
+      // we need to read the EDF+D time-track (but not other annots)
+      
+      if ( annotation && ( ( globals::skip_edf_annots && ! continuous ) || globals::force_edf ) )
 	{	  
 	  include = false;
 	}

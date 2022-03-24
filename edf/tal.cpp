@@ -158,7 +158,7 @@ void tal_t::decode( const std::string & str )
       
       std::vector<std::string> subs = Helper::char_split( toks[t] , '\x14' , NO_EMPTIES );
       
-      //      std::cout << "subs size = " << subs.size() << "\n";
+      // std::cout << "subs size = " << subs.size() << "\n";
 
       // this should contain at least one field (time)
       if ( subs.size() < 1 ) continue;
@@ -194,13 +194,17 @@ void tal_t::decode( const std::string & str )
 	}
 
       // textual label(s)?
+      //  (we might be here w/ 'skip EDF annots' set to true; which
+      //  means we skip this -- but we'll be here if it is a EDF+D, meaning
+      //  that we need the time-track from the EDF Annots
 
-      for (int j=1;j<subs.size();j++)
-	{
-	  tal_element_t tae( onset , duration , subs[j] );
-	  d.push_back( tae );
-	  //std::cout << "adding TAE : " << tae << "\n";
-	}
+      if ( ! globals::skip_edf_annots )
+	for (int j=1;j<subs.size();j++)
+	  {
+	    tal_element_t tae( onset , duration , subs[j] );
+	    d.push_back( tae );
+	    //std::cout << "adding TAE : " << tae << "\n";
+	  }
       
     }
   
