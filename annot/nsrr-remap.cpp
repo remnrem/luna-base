@@ -372,7 +372,7 @@ add( "notes" , "Technician Notes" );
  //   - by default, take sleep stages (remapped) and arousals as class-level vars
  //   - can be over-ridden with edf-annot-class=X,Y,Z
 
- edf_annot_class( "N1,N2,N3,R,W,arousal,LM" );
+ edf_annot_class( "N1,N2,N3,R,W,?,arousal,LM" );
 
 }
 
