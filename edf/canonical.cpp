@@ -20,6 +20,8 @@
 //
 //    --------------------------------------------------------------------
 
+#include "canonical.h"
+
 #include "edf.h"
 #include "defs/defs.h"
 #include "helper/helper.h"
@@ -33,6 +35,515 @@
 
 extern writer_t writer;
 extern logger_t logger;
+
+std::vector<canon_rule_t> canonical_t::rules;
+
+std::map<std::string,std::string> canonical_t::aliases;
+
+
+canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
+{
+  const int l = lines.size();
+
+  req_sr_min = req_sr_max = 0;
+
+  // 0 none, -1 all NEG, +1 all POS, +2 = NEG & POS
+  req_scale = 0;
+  
+  std::string current_rule = "";
+  
+  for (int i=0; i<l; i++)
+    {
+      const std::string & line = lines[i];
+      
+      if ( Helper::trim(line) == "" ) continue;
+      if ( line[0] == '%' ) continue;
+      
+      // no indentation: new canonical label
+      // will only have one of these
+      if ( line[0] != ' ' )
+	{
+	  canonical_label = line;
+	  // add self name to unless list
+	  // (i.e. only do each rule once)
+	  unless.insert( canonical_label );
+	  current_rule = "";
+	}
+      else
+	{
+	  if ( canonical_label == "" )
+	    Helper::halt( "canonical signal not identified yet:\n" + line );
+
+	  if ( line.size() <= 2 )
+	    Helper::halt( "invalid line:\n" + line );
+	  
+	  const bool rtype = line[1] != ' ';
+	  
+	  // the rule type? 
+	  if ( rtype )
+	    {
+	      std::string r = Helper::trim( Helper::toupper( line ) ) ;
+	      if ( r == "GROUP:" )
+		current_rule = "group";
+	      else if ( r == "REQ:" || r == "REQUIRES:" )
+		current_rule = "req";
+	      else if ( r == "UNLESS:" )
+		current_rule = "unless";
+	      else if ( r == "SET:" || r == "SETS:" )
+		current_rule = "set";
+	      else
+		Helper::halt( "unrecogized type of rule:\n" + r );
+	    }
+	  else
+	    {
+	      if ( current_rule == "" )
+		Helper::halt( "no current rule type (group:, req:, unless: or set:) specified:\n" + line );
+
+	      // values here -- allow aliases to be swapped in for all cases
+
+	      if ( current_rule == "group" )
+		{
+		  std::vector<std::string> tokb = Helper::quoted_parse( line , "," );
+		  for (int j=0; j<tokb.size(); j++)
+		    group.insert( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) );
+		}
+	      else if ( current_rule == "unless" )
+		{
+		  std::vector<std::string> tokb = Helper::quoted_parse( line , "," );
+		  for (int j=0; j<tokb.size(); j++)
+		    unless.insert( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) );
+		}
+	      else if ( current_rule == "req" )
+		{
+		  std::vector<std::string> tok = Helper::quoted_parse( line , "=" );
+		  if ( tok.size() != 2 )
+		    Helper::halt( "expecting key = value format:\n" + line );
+		  
+		  std::string key = Helper::trim( Helper::toupper( tok[0] ) );
+		  std::string value = Helper::trim( tok[1] );
+		  std::vector<std::string> tokb = Helper::quoted_parse( value , "," );
+		  std::vector<std::string> tok2;
+
+		  // swap in aliases?
+		  if ( key == "SIG" || key == "REF" || key == "TRANS" || key == "UNIT" )
+		    for (int j=0; j<tokb.size(); j++)
+		      {
+			std::vector<std::string> tokc =
+			  Helper::quoted_parse( canonical_t::swap_in_alias( tokb[j] ) , "," );
+			for (int k=0; k<tokc.size(); k++)
+			  tok2.push_back( tokc[k] );
+		      }
+		    
+		  // SIG, REF, TRANS, SR-MIN, SR-MAX, UNIT, SCALE
+		  // n.b. signals/references are vectors, as order is important
+		  
+		  if ( key == "SIG" )
+		    {
+		      for (int j=0; j<tok2.size(); j++)
+			req_sig.push_back( Helper::toupper( canonical_t::swap_in_alias( tok2[j] ) ) );
+		    }
+		  else if ( key == "REF" )
+		    {
+		      for (int j=0; j<tok2.size(); j++)
+                        req_ref.push_back( Helper::toupper( canonical_t::swap_in_alias( tok2[j] ) ) );
+		    }
+		  else if ( key == "TRANS" )
+		    {
+		      // n.b. first version cannot be an alias
+		      for (int j=0; j<tok2.size(); j++)
+                        req_transducer[ Helper::toupper( canonical_t::swap_in_alias( tok2[j] ) ) ] = tok2[0];
+		    }
+		  else if ( key == "UNIT" )
+		    {
+		      // n.b. first version cannot be an alias
+		      for (int j=0; j<tok2.size(); j++)
+			req_unit[ canonical_t::swap_in_alias( Helper::toupper( tok2[j] ) ) ] = tok2[0];
+		    }
+		  else if ( key == "SR-MIN" || key == "MIN-SR" )
+		    {
+		      if ( ! Helper::str2int( value , &req_sr_min ) )
+			Helper::halt( "invalid integer minimum sample rate requirement:\n" + line );
+		    }
+		  else if ( key == "SR-MAX" || key == "MAX-SR" )
+		    {
+		      if ( ! Helper::str2int( value , &req_sr_max ) )
+			Helper::halt( "invalid integer maximum sample rate requirement:\n" + line );
+		    }
+		  else if ( key == "SCALE" )
+		    {
+		      std::string value2 = Helper::toupper( value );
+		      
+		      if ( value2 == "POSNEG" || value2 == "AC" )
+			req_scale = 2;
+		      else if ( value2.substr(0,3) == "POS" )
+			req_scale = 1;
+		      else if ( value2.substr(0,3) == "NEG" )
+			req_scale = -1;
+		      else if ( value2 == "NONE" ) // the default
+			req_scale = 0;	      
+		      else
+			Helper::halt( "bad scale requirement code:\n" + line );
+		      
+		    }
+		  else
+		    Helper::halt( "did not recognized required value:\n " + line );
+		}		  
+	      else if ( current_rule == "set" )
+		{
+		  
+		  std::vector<std::string> tok = Helper::quoted_parse( line , "=" );
+		  if ( tok.size() != 2 )
+                    Helper::halt( "expecting key = value format:\n" + line );
+		  
+                  std::string key = Helper::trim( Helper::toupper( tok[0] ) );
+                  std::string value = Helper::trim( tok[1] );
+                  std::vector<std::string> tok2 = Helper::quoted_parse( value , "," );
+		  
+                  // SR, UNIT
+		  if ( key == "UNIT" )
+                    {
+		      set_unit = value;
+		    }
+		  else if ( key == "SR" )
+		    {
+		      if ( ! Helper::str2int( value , &set_sr ) )
+			Helper::halt( "invalid integer sample rate value:\n" + line );		      
+		    }
+		  else
+		    Helper::halt( "did not recognized set value:\n " + line );
+		  
+		}	      
+	    }	  
+	}
+      
+    } // next line
+
+  // all done
+}
+  
+    
+
+canon_edf_signal_t::canon_edf_signal_t( edf_header_t & hdr , const int slot )
+{
+  if ( slot < 0 || slot > hdr.ns )
+    Helper::halt( "bad EDF header slot" );
+  
+  label = Helper::trim( Helper::sanitize( Helper::toupper( hdr.label[ slot ] ) ) );
+  sr = hdr.sampling_freq( slot );
+  unit = Helper::trim( Helper::sanitize( Helper::toupper( hdr.phys_dimension[ slot ] ) ) );
+  transducer = Helper::trim( Helper::sanitize( Helper::toupper( hdr.transducer_type[ slot ] ) ) );
+
+  scale = 0; // -1, 0, +1
+  double phys_min = hdr.physical_min[slot] < hdr.physical_max[slot] ? hdr.physical_min[slot] : hdr.physical_max[slot];
+  double phys_max = hdr.physical_min[slot] < hdr.physical_max[slot] ? hdr.physical_max[slot] : hdr.physical_min[slot];
+  if ( phys_max < 0 ) scale = -1; // all negative
+  else if ( phys_min >= 0 ) scale = 1; // all positive
+  
+ };
+
+
+int canonical_t::read( const std::string & filename )
+{
+  if ( ! Helper::fileExists( filename ) )
+    Helper::halt( "could not open " + filename );
+  
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+
+  std::vector<std::string> lines;
+
+  while ( 1 )
+    {
+      std::string line;
+
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.eof() ) break;
+      if ( line == "" ) continue;
+      if ( line[0] == '%' ) continue;
+      if ( line[0] == '#' ) continue;
+
+      // process any aliases separately
+      std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
+
+      // let XX=A,B,C,D
+      if ( line.size() >= 4
+	   && tok.size() >= 2
+	   && Helper::toupper( line.substr(0,4) ) == "LET " 
+	   && line.find( "=" ) != std::string::npos )
+	{
+	  // comma or space delimited for the second set
+	  std::vector<std::string> str = Helper::quoted_parse( line.substr(4) , " ,=" );
+
+	  if ( str.size() < 2 ) Helper::halt( "requires A=X or A=X,Y,Z or X = X Y Z" ); 
+	  
+	  // build up a single command-delimited list
+	  // (i.e. do not replace if the same key used)
+	  // let s = x,y,z
+	  // let s = a b c
+	  //  s --> is swapped in for 'x,y,z,a,b,c'
+
+	  const std::string & key = str[0];
+	  
+	  for (int i=1; i<str.size(); i++)
+	    {
+	      if ( aliases[ key ] != "" )
+		aliases[ key ] = aliases[ key ] + "," + str[i] ;
+	      else
+		aliases[ key ] = str[i] ;
+	    }
+	  
+	  // this is not needed to be part of a rule now -- aliases are generic across all rules
+	  continue;
+	}
+
+      //
+      // process line as part of a rule
+      //
+
+      const bool is_name = line[0] != ' ';
+      
+      if ( is_name )
+	{
+	  if ( lines.size() == 0 )
+	    lines.push_back( line );
+	  else
+	    rules.push_back( canon_rule_t( lines ) );
+	}
+      else
+	lines.push_back( line );
+    }
+  
+  // flush buffer and add last rule
+  if ( lines.size() != 0 )
+    rules.push_back( canon_rule_t( lines ) );
+  
+  // logger << "  read " << rules.size() << " rule(s), and "
+  // 	 << aliases.size() << " variables\n";
+  
+  IN1.close();
+  
+  return rules.size();
+}
+
+
+canonical_t::canonical_t( edf_t & edf , param_t & param )
+{
+
+  //
+  // read in rules, if not already done, from 1 or more files
+  //
+  
+  if ( rules.size() == 0 )
+    {
+
+      if ( ! param.has( "file" ) )
+	Helper::halt( "CANONICAL requires a 'file' argument" );
+      
+      std::vector<std::string> filenames = param.strvector( "file" ) ;
+      
+      for (int i=0; i<filenames.size(); i++)
+	{
+	  std::string filename = Helper::expand( filenames[i] );
+	  int nrules = read( filename );
+	  logger << "  read " << nrules << " rules from " << filename << "\n";
+	}
+
+      logger << "  in total, read " << rules.size()
+	     << " rules and " << aliases.size() << " variables\n\n";
+    }
+  
+
+  //
+  // Other options
+  //
+
+  if ( param.has( "group" ) )
+    group = param.strset( "group" );
+  
+  drop_originals = param.yesno( "drop-originals" );
+  
+  //
+  // Get info on the available channels
+  //
+
+  const int ns = edf.header.ns;
+
+  for (int s=0; s<ns; s++)
+    {
+      if ( edf.header.is_annotation_channel( s ) ) continue;
+      
+      canon_edf_signal_t sig( edf.header , s );
+      
+      signals.insert( sig );
+      
+    }
+
+  logger << "  " << signals.size() << " signals from EDF\n";
+
+  // 
+  // do the processing
+  //
+  
+  proc();
+
+  return;
+}
+
+
+void canonical_t::add_alias( const std::string & primary , const std::string & terms )
+{
+  std::vector<std::string> tok = Helper::quoted_parse( terms , "," );
+  for (int i=0; i<tok.size(); i++) aliases[ Helper::toupper( tok[i] ) ] = primary;
+  return;
+}
+
+
+void canonical_t::proc( )
+{
+
+  //
+  // track completed canonical signals
+  //
+
+  std::set<std::string> completed;
+  
+  for (int r=0; r<rules.size(); r++)
+    {
+            
+      const canon_rule_t rule = rules[r];
+      
+      //
+      // has this rule already been satisfied?
+      //
+      
+      const bool already_processed = is_in( rule.canonical_label , completed );
+      
+      if ( already_processed ) continue;
+      
+      //
+      // group specifier?
+      //
+      
+      if ( rule.group.size() != 0 )
+       	{
+       	  // if a group has been specified for this rule, then
+       	  // we need to match it (with at least one of the rules)
+       	  if ( ! is_in( group , rule.group ) )
+       	    continue;
+       	}
+      
+
+      //
+      // can we find a matching primary signal?
+      //
+
+      std::string matched_sig = "";
+      
+      bool matched = match( rule.req_sig , signals , &matched_sig );
+
+      if ( ! matched ) continue;
+      
+      std::set<canon_edf_signal_t>::const_iterator sig = signals.find( matched_sig );
+      if ( sig == signals.end() ) Helper::halt( "internal error in canonical match sig" );
+      
+      //
+      // a reference signal, if required
+      //
+      
+      std::string matched_ref = "";
+ 
+      if ( rule.req_ref.size() != 0 )
+	{
+	  
+	  matched = match( rule.req_ref , signals , &matched_ref );
+	  
+	  if ( ! matched ) continue;
+	  
+	}
+      
+      //
+      // transducer rules?
+      //
+
+      if ( rule.req_transducer.size() != 0 )
+	{
+	  if ( rule.req_transducer.find( sig->transducer ) == rule.req_transducer.end() )
+	    continue;
+	}
+
+
+      //
+      // unit rules?
+      //
+
+      if ( rule.req_unit.size() != 0 )
+	{
+          if ( rule.req_unit.find( sig->unit ) == rule.req_unit.end() )
+            continue;
+	}
+
+      //
+      // sample rate rules?
+      //
+
+      if ( rule.req_sr_min != 0 )
+	{
+	  if ( sig->sr < rule.req_sr_min )
+	    continue;
+	}
+
+      if ( rule.req_sr_max != 0 )
+	{
+	  if ( sig->sr > rule.req_sr_max )
+	    continue;
+	}
+
+      //
+      // Scale?
+      //
+
+      if ( rule.req_scale != 0 )
+	{
+	  if ( rule.req_scale != sig->scale ) continue;
+	}
+
+      //
+      // If here, we have a match
+      //
+      
+      logger << "  matced rule for " << rule.canonical_label << "\n";
+
+      //
+      // Construct the CS
+      //
+
+      
+      std::cout << rule.canonical_label << "\n"
+		<< " unless : " << print( rule.unless ) << "\n"
+		<< " group  : " << print( rule.group ) << "\n"
+		<< " req sig: " << print( rule.req_sig ) << "\n"
+		<< " req ref: " << print( rule.req_ref ) << "\n"
+		<< " req trs: " << print( rule.req_transducer ) << "\n"
+		<< " req unt: " << print( rule.req_unit ) << "\n"
+		<< " req scl: " << rule.req_scale << "\n"
+		<< " req sr : " << rule.req_sr_min << " - " << rule.req_sr_max << "\n"
+		<< " set sr : " << rule.set_sr << "\n"
+		<< " set unt: " << rule.set_unit 
+		<< "\n\n";
+      
+    }
+
+  
+  return;
+  
+}
+
+
+
+
+
+
+// END OF NEW SECTION
+// --------------------------------------------------------------------------------
 
 //
 // Canonical file format
@@ -94,8 +605,6 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 				  const bool only_check_labels )
 {  
 
-  std::cout << " makingsignals = " << make_signals << "\n";
-  
   cansigs_t retval;
 
   if ( files.size() == 0 ) return retval;
@@ -200,8 +709,6 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
 	  if ( tok.size() == 0 ) continue;
 	  
-	  std::cout << "tok s " << tok.size() << "\n";
-	  
 	  // is this an aliases line? if so, add then skip
 	  if ( tok.size() == 1 )
 	    {
@@ -277,14 +784,16 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 
 	      else if ( req == "SCALE" )
 		{
-		  if ( Helper::toupper( tok[3] ) == "POS" )
-		    req_scale[ std::make_pair( label , trans ) ] = +1; // requires only POS
-		  else if ( Helper::toupper( tok[3] ) == "NEG" )
-		    req_scale[ std::make_pair( label , trans ) ] = -1; // requires only NEG
-		  else if ( Helper::toupper( tok[3] ) == "POSNEG" )
+		  if ( Helper::toupper( tok[3] ) == "POSNEG" )
 		    req_scale[ std::make_pair( label , trans ) ] = 0; // requires POS /and/ NEG range
+		  else if ( Helper::toupper( tok[3] ).substr(0,3) == "POS" )
+		    req_scale[ std::make_pair( label , trans ) ] = +1; // requires only POS
+		  else if ( Helper::toupper( tok[3] ).substr(0,3) == "NEG" )
+		    req_scale[ std::make_pair( label , trans ) ] = -1; // requires only NEG
 		  else if  ( Helper::toupper( tok[3] ) == "AC" ) // == POSNEG
-		    req_scale[ std::make_pair( label , trans ) ] = 0; 
+		    req_scale[ std::make_pair( label , trans ) ] = 0;
+		  else
+		    Helper::halt( "bad value for scale:\n" + line );
 		}
 	      
 	      else if ( req == "TRANS" )

@@ -67,6 +67,8 @@
 
 #include "edf/edf.h"
 
+#include "edf/canonical.h"
+
 #include "edf/slice.h"
 
 #include "edf/sedf.h"
