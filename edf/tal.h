@@ -36,12 +36,12 @@ struct interval_t;
 struct tal_element_t 
 {
 
-  tal_element_t( double onset = 0 , 
-		 double duration = 0 , 
-		 const std::string & name1 = "" ) 
-    : onset(onset) , duration( duration ) , name(name1)
+  tal_element_t( double onset = 0 ,
+		 double duration = 0 ,
+		 const std::string & name1 = "" )
+  : onset(onset) , duration( duration ) , name(name1)
   {
-    // ensure no carriage returns (can extend 
+    // ensure no carriage returns
     name = Helper::search_replace( name , '\n' , '_' );
     name = Helper::search_replace( name , '\r' , '_' );
   }

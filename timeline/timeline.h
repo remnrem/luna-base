@@ -204,6 +204,8 @@ struct timeline_t
     epoch_length_tp = 0L;
     epoch_inc_tp = 0L;
     epoch_offset_tp = 0L;
+    epoch_align_annots.clear();
+    epoch_align_str = "";
     epochs.clear();
     
     // Masks
@@ -235,7 +237,9 @@ struct timeline_t
 
   int whole_recording_epoch_dur(); 
 
-  int set_epoch(const double s, const double o , const double offset = 0 ) 
+  int set_epoch(const double s, const double o , const double offset = 0 , 
+		const std::string align_str = "" , 
+		const std::vector<std::string> * align_annots = NULL ) 
   { 
     if ( s <= 0 || o < 0 || offset < 0 ) 
       Helper::halt( "cannot specify negative epoch durations/increments/offsets");
@@ -244,7 +248,11 @@ struct timeline_t
     epoch_length_tp = s * globals::tp_1sec;
     epoch_inc_tp = o * globals::tp_1sec;
     epoch_offset_tp = offset * globals::tp_1sec;
-
+    
+    epoch_align_str = epoch_align_str;
+    if ( align_annots != NULL ) 
+      epoch_align_annots = *align_annots;
+    
     if ( epoch_length_tp == 0 || epoch_inc_tp == 0 ) 
       Helper::halt( "invalid epoch parameters" );
     first_epoch();
@@ -260,6 +268,9 @@ struct timeline_t
   double epoch_offset() const 
   { return (double)epoch_offset_tp / globals::tp_1sec; }
 
+  std::string align_string() const 
+  { return epoch_align_str; }
+  
   bool exactly_contiguous_epochs() const
   { return epoch_length_tp == epoch_inc_tp; } 
   
@@ -275,6 +286,7 @@ struct timeline_t
 
   int calc_epochs();
 
+  bool align_epochs( uint64_t * tp , int * rec , const std::set<uint64_t> & annots );
   
   int first_epoch()  
   { 
@@ -732,6 +744,10 @@ struct timeline_t
 
   uint64_t     epoch_offset_tp;
   
+  
+  std::string epoch_align_str; // un-tokenized version of below, for quick check by EVAL when calling proc_epoch()
+  std::vector<std::string> epoch_align_annots; // for EDF+D w/ 'align' (i.e. cannot have a single offset number)
+
   std::vector<interval_t> epochs;
 
   int current_epoch;
