@@ -4065,6 +4065,63 @@ double annotation_set_t::first(const std::vector<std::string> & requested ) cons
   
 }
 
+uint64_t annotation_set_t::first_in_interval( const std::vector<std::string> & requested , 
+					      const interval_t & range ) const
+{
+    
+  // within 'range', get first to of the annots in 'requested'
+  //  - this is initially for making epochs align well for EDF+D
+  //  - i.e. if we have staging and annots
+  
+  //  annot_map_t extract( const interval_t & window );
+  
+  std::set<uint64_t> starts;
+  
+  for (int a=0; a < requested.size(); a++)
+    {
+      // find this annotation
+      annot_t * annot = find( requested[a] );
+      if ( annot == NULL ) continue;
+      
+      // get annots in this window only
+      annot_map_t amap = annot->extract( range );
+      
+      // get the first 
+      annot_map_t::const_iterator ii = annot->interval_events.begin();
+      if (  ii == annot->interval_events.end() ) continue;
+      starts.insert( ii->first.interval.start );
+    }
+  
+  // none found: return 0 (i.e. start of range)
+  if ( starts.size() == 0 ) return range.start;
+  
+  // return smallest
+  return *starts.begin();
+
+}
+
+
+std::set<uint64_t> annotation_set_t::starts( const std::vector<std::string> & requested ) const
+{
+
+  std::set<uint64_t> sts;
+  
+  for (int a=0; a < requested.size(); a++)
+    {
+      // find this annotation                                                                                                                
+      annot_t * annot = find( requested[a] );
+      if ( annot == NULL ) continue;
+      
+      annot_map_t::const_iterator ii = annot->interval_events.begin();
+      while ( ii != annot->interval_events.end() )
+	{
+	  sts.insert( ii->first.interval.start );
+	  ++ii;
+	}
+    }  
+  return sts;
+}
+
 
 void annotation_set_t::extend( param_t & param )
 {

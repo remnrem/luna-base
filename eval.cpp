@@ -2272,15 +2272,21 @@ void proc_epoch( edf_t & edf , param_t & param )
   //
   
   double offset = param.has( "offset" ) ? param.requires_dbl( "offset" ) : 0 ;
-  
+
+  std::vector<std::string> align_annots;
+  std::string align_str = "";
+
   if ( param.has( "align" ) )
     {
       if ( param.has( "offset" ) ) 
 	Helper::halt( "cannot specify both offset and align" );
       
-      std::vector<std::string> annots = param.strvector( "align" );
+      // for EDF+D, this vector is passed to timeline
+      align_str = param.value( "align" );
+      align_annots = param.strvector( "align" );
+      
       // find the first of these annotations
-      offset = edf.timeline.annotations.first( annots );
+      offset = edf.timeline.annotations.first( align_annots );
     }
 
 
@@ -2291,7 +2297,8 @@ void proc_epoch( edf_t & edf , param_t & param )
   if ( edf.timeline.epoched() 
        && ( ( ! Helper::similar( edf.timeline.epoch_length() , dur ) )
 	    || ( ! Helper::similar( edf.timeline.epoch_inc() , inc ) )
-	    || ( ! Helper::similar( edf.timeline.epoch_offset() , offset ) ) ) )
+	    || ( ! Helper::similar( edf.timeline.epoch_offset() , offset ) )
+	    || ( edf.timeline.align_string() != align_str ) ) )
     {
       logger << " epoch definitions have changed: original epoch mappings will be lost\n";
       edf.timeline.unepoch();
@@ -2302,7 +2309,9 @@ void proc_epoch( edf_t & edf , param_t & param )
   //
   
   
-  int ne = edf.timeline.set_epoch( dur , inc , offset );  
+  int ne = edf.timeline.set_epoch( dur , inc , offset , 
+				   align_str , align_annots.size() == 0 ? NULL : &align_annots );  
+				   
   
 
   //

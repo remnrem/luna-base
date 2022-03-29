@@ -667,10 +667,20 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       // if this is EDF+C, we can just skip altogether;  otherwise,
       // we need to read the EDF+D time-track (but not other annots)
       
-      if ( annotation && ( ( globals::skip_edf_annots && ! continuous ) || globals::force_edf ) )
+      if ( annotation )
 	{	  
-	  include = false;
+	  if ( globals::force_edf ) 
+	    include = false;
+
+	  // for EDF+D, will read time-tracks only
+	  // for EDF+C, can skip the whole thing
+	  if ( globals::skip_edf_annots && continuous )
+	    include = false;
 	}
+
+      //
+      // add this channel in 
+      //
 
       if ( include ) 
 	{

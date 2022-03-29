@@ -41,7 +41,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 
   const bool use_fixed_order = false;
   
-  std::vector<edf_t> edfs;
+  std::vector<edf_t*> edfs;
 
   std::string id = "id";
   std::string filename = "merged.edf";
@@ -55,6 +55,8 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   
   for (int i=0; i<tok.size(); i++)
     {
+
+      logger << "processing [" << tok[i] << "]\n";
       
       std::vector<std::string> tok2 = Helper::quoted_parse( tok[i] , "=" );
       if ( tok2.size() == 2 )
@@ -65,55 +67,54 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  continue;
 	}
       
-      const std::string & fname = Helper::expand( tok[i] );
+      const std::string fname = Helper::expand( tok[i] );
       
       if ( ! Helper::fileExists( fname ) )
 	{
-	  std::cout << " ** could not attach " << fname << "\n";
+	  logger << "  ** warning: could not attach " << fname << "\n";
 	  continue;
 	}
       
-      edf_t edf;
-
+      edf_t * edf = new edf_t;
+      
       const std::string id = "id" + Helper::int2str( (int)( edfs.size() + 1 ) ) ;
-
-      bool okay = edf.attach( fname , id );
-
+      
+      
+      bool okay = edf->attach( fname , id );
+      
       if ( ! okay )
 	{
 	  std::cout << " ** could not attach " << filename	<< "\n";
           continue;	  
 	}
-      
+
+      logger << "  attached component EDF " << fname << "\n";
+
       edfs.push_back( edf ) ;
-      
+
     }
 
   const int nf = edfs.size();
 
-
-  //
-  // list all
-  //
-
-  for (int i=0; i<nf; i++)
-    std::cerr << "  EDF " << i+1 << "\t"
-	      << edfs[i].id << "\t"
-	      << edfs[i].header.startdate << "\t"
-	      << edfs[i].header.starttime << "\n";
-
-  
+   
   //
   // Some outputs
   //
 
-  std::cout << "\n  attached " << nf << " EDFs\n";
+  logger << "\n  attached " << nf << " EDFs\n";  
 
-  std::cout << "   writing with ID: " << id << "\n"
-	 << "   EDF filename   : " << filename << "\n";
+  for (int i=0; i<nf; i++)
+    logger << "  EDF " << i+1 << "\t"
+	   << edfs[i]->id << "\t"
+	   << edfs[i]->header.startdate << "\t"
+	   << edfs[i]->header.starttime << "\n";
+
+  logger  << "   writing merged data\n"
+	  << "     ID           : " << id << "\n"
+	  << "     EDF filename : " << filename << "\n";
 
   if ( slist != "" )
-    std::cout << "   sample-list    : " << slist << "\n"; 
+   logger << "     sample-list  : " << slist << "\n"; 
   
   
   //
@@ -123,11 +124,11 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   //
 
   for (int i=1; i<nf; i++)
-    if ( ! identical_headers( edfs[0].header , edfs[i].header ) )
-      Helper::halt( "headers incompatible:" + edfs[0].filename + " " + edfs[i].filename );
+    if ( ! identical_headers( edfs[0]->header , edfs[i]->header ) )
+      Helper::halt( "headers incompatible:" + edfs[0]->filename + " " + edfs[i]->filename );
   
-  std::cout << "  good, all EDFs have merge-compatible headers\n";
-
+  logger  << "  good, all EDFs have merge-compatible headers\n";
+  
 
   //
   // Get total implied NR for new EDF
@@ -136,11 +137,11 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   int nr = 0;
 
   for (int i=0; i<nf; i++)
-    nr += edfs[i].header.nr;
+    nr += edfs[i]->header.nr;
 
-  std::cout << "  expecting " << nr
-	 << " records (each of "
-	 << edfs[0].header.record_duration << " sec) in the new EDF\n";
+  logger  << "  expecting " << nr
+	  << " records (each of "
+	  << edfs[0]->header.record_duration << " sec) in the new EDF\n";
 
   //
   // check that all segments are contiguous
@@ -156,32 +157,32 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // get earliest start time;
   //
   
-  std::string first_date = edfs[0].header.startdate;
+  std::string first_date = edfs[0]->header.startdate;
   for (int i=1; i<nf; i++)
-    if ( edfs[i].header.startdate < first_date )
-      first_date = edfs[i].header.startdate;
+    if ( edfs[i]->header.startdate < first_date )
+      first_date = edfs[i]->header.startdate;
   
   
-  clocktime_t t1( edfs[0].header.starttime );
+  clocktime_t t1( edfs[0]->header.starttime );
   if ( !t1.valid )
-    Helper::halt( edfs[0].filename + " does not have a valid start time" );
+    Helper::halt( edfs[0]->filename + " does not have a valid start time" );
 
   
   for (int i=1; i<nf; i++)
     {
       // only check same day 
-      if ( first_date == edfs[i].header.startdate )
+      if ( first_date == edfs[i]->header.startdate )
 	{
-	  clocktime_t t2( edfs[i].header.starttime );
+	  clocktime_t t2( edfs[i]->header.starttime );
 	  if ( !t2.valid )
-	    Helper::halt( edfs[i].filename + " does not have a valid start time" );
+	    Helper::halt( edfs[i]->filename + " does not have a valid start time" );
 	  
 	  if ( clocktime_t::earlier( t1 , t2 ) == 2 )
 	    t1 = t2;
 	}
     }
 
-  std::cout << "  first record starts at " << first_date << "  " << t1.as_string() << "\n";
+  logger << "  first record starts at " << first_date << "  " << t1.as_string() << "\n";
   
   //
   // Create the new merged EDF
@@ -193,17 +194,17 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // Set header
   //
 
-  medf.header.version = edfs[0].header.version;
-  medf.header.patient_id = edfs[0].header.patient_id;
-  medf.header.recording_info = edfs[0].header.recording_info;
+  medf.header.version = edfs[0]->header.version;
+  medf.header.patient_id = edfs[0]->header.patient_id;
+  medf.header.recording_info = edfs[0]->header.recording_info;
   medf.header.startdate = first_date;
   medf.header.starttime = t1.as_string();
-  medf.header.nbytes_header = edfs[0].header.nbytes_header;
+  medf.header.nbytes_header = edfs[0]->header.nbytes_header;
   medf.header.ns = 0; // this is popuilated by edf_t::add_signal()
   medf.header.ns_all = 0; // this is popuilated by edf_t::add_signal()
   medf.header.nr = medf.header.nr_all = nr; // this is sum across all EDFs computed above
-  medf.header.record_duration = edfs[0].header.record_duration;
-  medf.header.record_duration_tp = edfs[0].header.record_duration_tp;
+  medf.header.record_duration = edfs[0]->header.record_duration;
+  medf.header.record_duration_tp = edfs[0]->header.record_duration_tp;
 
   
   //
@@ -234,22 +235,22 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // add signals 
   //
 
-  const int ns = edfs[0].header.ns ;
+  const int ns = edfs[0]->header.ns ;
   
   for (int s=0; s<ns; s++)
     {
 
       // skip annotations
-      if ( edfs[0].header.is_annotation_channel( s ) ) continue;
+      if ( edfs[0]->header.is_annotation_channel( s ) ) continue;
       
-      std::cout << "  compiling " << edfs[0].header.label[s] << "\n";
+      logger << "  compiling channel " << edfs[0]->header.label[s] << "\n";
 
       std::vector<double> dt;
 
       for (int j=0; j<nf; j++)
 	{
 
-	  edf_t & edf = edfs[j];
+	  edf_t & edf = *(edfs[j]);
 	  
 	  // get whole signal
 	  slice_t slice( edf , s , edf.timeline.wholetrace() );
@@ -261,13 +262,13 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	} // next EDF
 
       const int np_obs = dt.size();
-      const int np_exp = nr * edfs[0].header.sampling_freq(s);
+      const int np_exp = nr * edfs[0]->header.sampling_freq(s);
       
       if ( np_obs != np_exp )
 	Helper::halt( "expected and observed number of sample points did not align" );
       
       // add the signal to the merged EDF
-      medf.add_signal( edfs[0].header.label[ s ] , edfs[0].header.sampling_freq( s ) , dt );
+      medf.add_signal( edfs[0]->header.label[ s ] , edfs[0]->header.sampling_freq( s ) , dt );
             
     } // next channel
   
@@ -276,24 +277,31 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // Save this merged EDF
   //
 
-  std::cout << "  writing merged EDF as " << filename << "\n";
+  logger << "  writing merged EDF as " << filename << "\n";
   
   bool saved = medf.write( filename );
-
+  
   if ( ! saved ) Helper::halt( "problem trying to write " + filename );
-
+  
   //
   // Sample list?
   //
 
   if ( slist != "" )
     {	  
-      std::cout << " appending " << filename << " to sample-list " << slist << "\n";
+      logger << " appending " << filename << " to sample-list " << slist << "\n";
       std::ofstream FL( slist.c_str() , std::ios_base::app );
       FL << medf.id << "\t" << filename << "\n";
       FL.close();
     }
-    
+  
+  //
+  // Clean up
+  //
+  
+  for (int i=0; i<nf; i++)
+    delete edfs[i];      
+  
 }
 
 
