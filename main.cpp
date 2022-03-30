@@ -754,7 +754,9 @@ int main(int argc , char ** argv )
       int k1 = param.has( "k1" ) ? param.requires_int( "k1" ) : 2;
       int k2 = param.has( "k2" ) ? param.requires_int( "k2" ) : 6;
       if ( param.has( "k" ) ) k1 = k2 = param.requires_int( "k" );
-     
+      // global versus local picks
+      int w = param.has( "w" ) ? param.requires_int( "w" ) : 0 ; 
+      
       // require at least L sequences; only take the first L
       const int req_len = param.has( "req-len" ) ? param.requires_int( "req-len" ) : 0 ; 
 
@@ -871,7 +873,7 @@ int main(int argc , char ** argv )
 	  // do kmer enrichment: indiv, or group (w/ or w/out phenotype)
 	  //
 
-	  ms_kmer_t kmers( data1 , k1 , k2 , nreps , grp ? &phe : NULL , verbose_output );
+	  ms_kmer_t kmers( data1 , k1 , k2 , nreps , w, grp ? &phe : NULL , verbose_output );
       
 	  
 	  //
@@ -2007,6 +2009,59 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  if ( p == "randomize-kmer" )
+    {
+
+      // e.g.
+      // awk ' { print $2 } ' seq.1 | sed -e 's/\(.\)/\1\'$'\n/g' | awk ' NF>0 ' | luna -d randomize-kmer > seq.2
+      // from an existing sequence.
+
+      // echo "file=seq.1 k=4 nreps=100 w=5" | luna --kmer -o out-local500-v1.db
+      // echo "file=seq.2 k=4 nreps=100 w=5" | luna --kmer -o out-local500-v2.db 
+      
+      std::vector<char> s;
+      std::map<char,int> u;
+      
+      while ( 1 )
+	{
+	  std::string c;
+	  std::cin >> c;
+	  if ( c == "" || std::cin.eof() ) break;
+	  if ( c.size() != 1 ) break;
+	  s.push_back( c[0] );
+	  ++u[c[0]];
+	}
+
+      const int n = s.size();
+      
+      std::cerr << " read " << n << " elements\n";
+      std::string s1( n , '.' );
+      for (int i=0; i<n; i++)
+	s1[i] = s[i];
+	  
+      std::map<char,int>::const_iterator uu = u.begin();
+      while ( uu != u.end() )
+	{
+	  std::cerr << " " << uu->first << " = " << uu->second << "\n";
+	  ++uu;
+	}
+
+      ms_kmer_t ms1;
+
+      int w = 0;
+      if ( p2 != "" )
+        if ( ! Helper::str2int( p2 , &w ) )
+	  Helper::halt( "expecting integer w as second parameter" );
+
+      std::cerr << " w = " << w << "\n";
+
+      std::string s2 = ms1.modified_random_draw( s1 , w );
+      
+      std::cout << "ID1\t" << s2 << "\n";
+      
+      std::exit(0);
+    }
+
   if ( p == "cgi" )
     {
       std::string res = exec_system( "ls -l" );
@@ -2294,7 +2349,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 	  x.push_back(i);
 	}
 
-      ms_kmer_t kmers( x , 2 , 6 , 1000 );
+      ms_kmer_t kmers( x , 2 , 6 , 1000 , 0 );
       
       std::map<std::string,double>::const_iterator pp = kmers.basic.pval.begin();
       while ( pp != kmers.basic.pval.end() )

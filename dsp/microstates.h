@@ -200,51 +200,53 @@ struct ms_kmer_t {
   ms_kmer_t() { }
 
   // single obs
-  ms_kmer_t( const std::vector<int> & x , int k1 , int k2 , int nreps , bool verbose = false )
+  ms_kmer_t( const std::vector<int> & x , int k1 , int k2 , int nreps , int w , bool verbose = false )
   {
-    run(x,k1,k2,nreps, verbose );
+    run(x,k1,k2,nreps,w, verbose );
   }
 
   // multiple-obs, as strings
-  ms_kmer_t( const std::map<std::string,std::string>  & s , int k1 , int k2 , int nreps ,
+  ms_kmer_t( const std::map<std::string,std::string>  & s , int k1 , int k2 , int nreps , int w , 
 	     const std::map<std::string,int> * grp = NULL , bool verbose = false ) 
   {
-    run(s,k1,k2,nreps,grp, verbose );
+    run(s,k1,k2,nreps,w, grp, verbose );
   }
   
   // multi-obs, as int-vectors
-  ms_kmer_t( const std::map<std::string,std::vector<int> > & l , int k1 , int k2 , int nreps , 
+  ms_kmer_t( const std::map<std::string,std::vector<int> > & l , int k1 , int k2 , int nreps , int w , 
 	     const std::map<std::string,int> * grp = NULL , bool verbose = false )  
   {
-    run(l,k1,k2,nreps,grp, verbose );
+    run(l,k1,k2,nreps,w, grp, verbose );
   }
   
   // single obs
-  void run( const std::vector<int> & l , int k1 , int k2 , int nreps , bool verbose = false )
+  void run( const std::vector<int> & l , int k1 , int k2 , int nreps , int w , bool verbose = false )
   {
     std::map<std::string,std::vector<int> > l1;
     l1[ "__single_obs" ] = l;
-    run( l1 , k1 , k2 , nreps , NULL , verbose );
+    run( l1 , k1 , k2 , nreps , w, NULL , verbose );
   }
 
   // multiple obs, optional grp variable coded 0/1 
   void run( const std::map<std::string,std::vector<int> > & l ,
-	    int k1 , int k2 , int nreps ,
+	    int k1 , int k2 , int nreps , int w, 
 	    const std::map<std::string,int> * grp = NULL , 
 	    bool verbose = false );
   
   // multiple obs, optional grp variable coded 0/1 
   void run( const std::map<std::string,std::string> & s ,
-	    int k1 , int k2 , int nreps ,
+	    int k1 , int k2 , int nreps , int w, 
 	    const std::map<std::string,int> * grp = NULL , 
 	    bool verbose = false );
   
   std::set<std::string> permute( std::string str );
   std::string first_permute( std::string str );
-  std::string modified_random_draw( const std::string & );
+
+  // w==0 global picks, w>0 local picks
+  std::string modified_random_draw( const std::string & , const int w );
   char pick( const std::map<char,int> & urns , char skip = '.' );
   std::string s;
-  
+
   //
   // Results
   // 
@@ -432,6 +434,7 @@ struct microstates_t {
   int kmers_nreps;
   int kmers_min;
   int kmers_max;
+  int kmers_w;
   
 };
 

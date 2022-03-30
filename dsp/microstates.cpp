@@ -781,10 +781,11 @@ microstates_t::microstates_t( param_t & param , const std::string & subj_id_, co
   if ( param.has( "kmers" ) )
     {
       std::vector<int> k = param.intvector( "kmers" );
-      if ( k.size() != 3 ) Helper::halt( "expecting 3 args for kmers=min,max,nreps" );
+      if ( k.size() != 3 && k.size() != 4 ) Helper::halt( "expecting 3 or 4 args for kmers=min,max,nreps(,w)" );
       kmers_min = k[0];
       kmers_max = k[1];
       kmers_nreps = k[2];
+      kmers_w = k.size() == 4 ? k[3] : 0 ;  
     }
   else
     {
@@ -1763,14 +1764,14 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   //
   
   if ( kmers_nreps )    
-    stats.kmers.run( runs.d , kmers_min , kmers_max , kmers_nreps );
+    stats.kmers.run( runs.d , kmers_min , kmers_max , kmers_nreps , kmers_w );
      
   return stats;
 }
 
 
 
-void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int k1 , int k2 , int nreps ,
+void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int k1 , int k2 , int nreps , int w, 
 		     const std::map<std::string,int> * grp , bool verbose )
 {
   std::map<std::string,std::string> sall;
@@ -1805,10 +1806,10 @@ void ms_kmer_t::run( const std::map<std::string,std::vector<int> > & lall , int 
       
       ++ii;
     }
-  run( sall , k1 , k2 , nreps , grp , verbose );
+  run( sall , k1 , k2 , nreps , w, grp , verbose );
 }
 
-void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , int k2 , int nreps ,
+void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , int k2 , int nreps , int w, 
 		     const std::map<std::string,int> * grp , bool verbose )
 {
 
@@ -1977,7 +1978,11 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
       logger << "  kmers: for " << basic.obs.size() << " sequences, "
 	     << equivs.size() << " equivalence groups\n";
       
-      logger << "  kmers: running " << nreps << " replicates...\n";
+      logger << "  kmers: running " << nreps << " replicates, ";
+
+      if ( w == 0 ) logger << "using global picks\n";
+      else logger << "using local picks (w=" <<w << ")\n";
+
     }
 
   
@@ -2030,7 +2035,7 @@ void ms_kmer_t::run( const std::map<std::string,std::string> & sall , int k1 , i
 	  // Get a permuted sequence (for this individual only)
 	  //
 	  
-	  std::string ps = modified_random_draw( ii->second );	  
+	  std::string ps = modified_random_draw( ii->second , w );	  
 
 	  const int n = ps.size();
 	  
@@ -2791,7 +2796,7 @@ char ms_kmer_t::pick( const std::map<char,int> & urns , char skip )
 }
 
 
-std::string ms_kmer_t::modified_random_draw( const std::string & l )
+std::string ms_kmer_t::modified_random_draw( const std::string & l , const int w )
 {
 
   // permute 's' chars but in such a way that similar states (i.e. values of l, 0, 1, 2, ...)
@@ -2800,21 +2805,57 @@ std::string ms_kmer_t::modified_random_draw( const std::string & l )
   // next elemnt: pick from the remaining 5-1 elements, i.e. not the previously selected
   // repeat, until all done
 
-  std::map<char,int> urns;
-  const int n = l.size();
-  for (int i=0;i<n;i++) ++urns[l[i]];
+  // two modes:
+  //  global, then 'urns' is only made once, based on all states in the sequence
+  //  local (W), then 'urns' is based on a window of W states 
+  //    this is updated based on the W+1 state as we shift each
 
+  // A B A C D E A C B A E C B
+  // X
+  // -----------
+
+  //  X
+  // -----------
+
+  const bool global_picks = w == 0 ; 
+   
+  std::map<char,int> urns;
+
+  // ovreall sequence length
+  const int n = l.size();
+
+  // urn total (but cap at total seq. length)
+  const int nurn = global_picks ? n : ( w > n ? n : w )  ; 
+  
+  // fill urn (from start)
+  for (int i=0;i<nurn;i++)
+    ++urns[l[i]];
+  
   // return string
   std::string p(n,'.');
   
-  // initiate
-  p[0] = l[ CRandom::rand( n ) ];
+  // initiate (from first of set, i.e. == urn contents)
+  p[0] = l[ CRandom::rand( nurn ) ];
   
   char last = p[0];
   --urns[ last ];
 
+  int lc = w;
+  
   for (int i=1;i<n;i++)
     {
+
+      // if ( 1 )
+      // 	{
+      // 	  std::cout << " SLOT = " << i << "\n";
+      // 	  std::map<char,int>::const_iterator uu = urns.begin();
+      // 	  while ( uu != urns.end() )
+      // 	    {
+      // 	      std::cout << uu->first << " = " << uu->second << "\n";
+      // 	      ++uu;
+      // 	    }
+      // 	}
+
       // attempt to skip last pick
       char c = pick( urns , last );
       
@@ -2828,9 +2869,9 @@ std::string ms_kmer_t::modified_random_draw( const std::string & l )
 	}
       else // however, this might not always be the case...
 	{
-	  // std::cout << "\n\nfound issue:\n";
-	  // std::cout << "pick i = " << i << " " << c << "\n";
-	  // std::cout << "currenrt:\n" << p.substr(0,i) << "?\n";
+	   // std::cout << "\n\nfound issue:\n";
+	   // std::cout << "pick i = " << i << " " << c << "\n";
+	   // std::cout << "current:\n" << p.substr(0,i) << "?\n";
 
 	  // i.e. if being forced to pick something the same as the prior, 
 	  //   ABCABA[A]
@@ -2854,7 +2895,7 @@ std::string ms_kmer_t::modified_random_draw( const std::string & l )
 	  while ( 1 ) 
 	    {
 	      //std::cout << " searching = " << search << "\n";
-
+	      
 	      // valid position?
 	      bool okay = search == 0 ? p[0] != c : ( p[search-1] != c &&  p[search] != c ) ;
 
@@ -2894,6 +2935,15 @@ std::string ms_kmer_t::modified_random_draw( const std::string & l )
       
       // sanity check, can remove
       if ( urns[p[i]] < 0 ) Helper::halt( "error!" );      
+
+      // in local mode, we need to fill up the urn
+      if ( ! global_picks )
+	{
+	  if ( lc < n ) 
+	    ++urns[l[lc++]];
+	}
+      
+      // next pick
       
     }
 
