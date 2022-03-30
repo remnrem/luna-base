@@ -553,13 +553,9 @@ public:
 
   void init()
   {
-    std::cerr << "in init...\n";
-    std::cout << "file is NULL ? " << ( file == NULL ) << "\n";
     if ( file != NULL ) 
       fclose(file);
     file = NULL;
-
-    std::cout << "edfz is NULL ? " << (edfz ==NULL ) << "\n";
 
     if ( edfz != NULL ) 
       {
@@ -567,11 +563,11 @@ public:
 	delete edfz;
       }
     edfz = NULL;
-    std::cerr << " DONE0\n";
+    
     header.init();
     records.clear();    
     inp_signals_n.clear();
-    std::cerr << " DONE\n";
+    
   }
   
   

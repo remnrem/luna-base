@@ -120,6 +120,10 @@ struct timeline_t
   std::map<uint64_t,int> tp2rec;
   std::map<int,uint64_t>  rec2tp;
   std::map<int,uint64_t>  rec2tp_end;
+
+  // for internal EDF+D, map 'file' rec --> implied rec (if iterating
+  // through only retained records)
+  std::map<int,int>  rec2orig_rec;
   
   bool interval2records( const interval_t & interval , 
 			 uint64_t srate , 
@@ -133,8 +137,10 @@ struct timeline_t
 
   interval_t record2interval( int r ) const;
   
+  // collapse edf+d time --> edf standard time-point (from EDF start)
+  interval_t collapse( const interval_t & interval ) const;
+		     
   
-
   // for a given record/sample pair, give the time-point (in tp)
 
   uint64_t timepoint( int r , int s = 0 , int nsamples = 0 ) const;
@@ -249,7 +255,7 @@ struct timeline_t
     epoch_inc_tp = o * globals::tp_1sec;
     epoch_offset_tp = offset * globals::tp_1sec;
     
-    epoch_align_str = epoch_align_str;
+    epoch_align_str = align_str;
     if ( align_annots != NULL ) 
       epoch_align_annots = *align_annots;
     

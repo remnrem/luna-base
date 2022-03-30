@@ -80,7 +80,8 @@ void timeline_t::init_timeline( bool okay_to_reinit )
   tp2rec.clear();
   rec2tp.clear();
   rec2tp_end.clear();
-
+  
+  rec2orig_rec.clear();
   
   clear_epoch_mapping();
   
@@ -102,6 +103,7 @@ void timeline_t::init_timeline( bool okay_to_reinit )
 	{	  
 	  tp2rec[tp] = r;	
        	  rec2tp[r] = tp;
+	  rec2orig_rec[ r ] = r; // 1-to-1 mapping in the continuous case
 	  rec2tp_end[r] = tp + edf->header.record_duration_tp - 1LLU;
 	  tp += edf->header.record_duration_tp;
 	}            
@@ -127,6 +129,7 @@ void timeline_t::init_timeline( bool okay_to_reinit )
 	  uint64_t tp = edf->timepoint_from_EDF(r);
 	  tp2rec[tp] = r;
 	  rec2tp[r] = tp;
+	  rec2orig_rec[ r ] = r; // 1-to-1 mapping before any RE
 	  rec2tp_end[r] = last_time_point_tp = tp + edf->header.record_duration_tp - 1LLU;
 	  // last_time_point_tp will be updated, 
 	  // and end up being thelast (i.e. record nr-1).
@@ -176,6 +179,15 @@ void timeline_t::restructure( const std::set<int> & keep )
   rec2tp     = copy_rec2tp;
   rec2tp_end = copy_rec2tp_end;
 
+  // set rec2orig_rec
+  int cnt = 0;
+  std::map<int,uint64_t>::const_iterator rr = rec2tp.begin();
+  while ( rr != rec2tp.end() )
+    {
+      rec2orig_rec[ rr->first ] = cnt++;
+      ++rr;
+    }
+  
   // reset epochs (but retain epoch-level annotations)
   reset_epochs();
 
@@ -1922,6 +1934,32 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
   
 }
 
+
+interval_t timeline_t::collapse( const interval_t & interval ) const
+{
+  int start_rec = 0 , stop_rec = 0;
+  int start_smp = 0 , stop_smp = 0;
+  
+  // to get 1/100,000 second resolution
+  const int srate = 100000;  
+  
+  bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
+
+  // interval has to fall completely in a valid area
+  if ( ! any ) return interval_t( 1LLU , 0LLU );
+
+  if ( rec2orig_rec.find( start_rec ) == rec2orig_rec.end() ) return interval_t( 1LLU , 0LLU );
+  if ( rec2orig_rec.find( stop_rec ) == rec2orig_rec.end() ) return interval_t( 1LLU , 0LLU );
+
+  start_rec = rec2orig_rec.find(  start_rec )->second;
+  stop_rec = rec2orig_rec.find( stop_rec )->second;
+  
+  uint64_t start = start_rec * edf->header.record_duration_tp + ( start_smp / (double)srate ) * globals::tp_1sec ;
+  uint64_t stop = stop_rec * edf->header.record_duration_tp + ( stop_smp / (double)srate ) * globals::tp_1sec ;
+
+  return interval_t( start , stop );
+    
+}
 
 
 std::set<int> timeline_t::records_in_interval( const interval_t & interval ) const

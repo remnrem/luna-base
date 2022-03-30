@@ -3043,16 +3043,26 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   // default is as .annot
   // order by time
 
-  bool xml_format = param.has( "xml" ) || Helper::file_extension( filename , "xml" ) ;
-
+  const bool xml_format = param.has( "xml" ) || Helper::file_extension( filename , "xml" ) ;
+  
   //
-  // use hh:mm:ss instead of elapsed seconds (for .annot only)
+  // use hh:mm:ss, if possible, instead of elapsed seconds (for .annot only)
   //
 
   bool hms = param.has( "hms" );
+
+  //
+  // If from internal EDF+D, write w/ time-stamps for standard EDF
+  // i.e. collapse times
+  //
+
+  const bool collapse_disc = param.has( "collapse" );
   
+  //
   // for complete XML compatibility
-  bool add_specials = ! param.has( "no-specials" );
+  //
+
+  const bool add_specials = ! param.has( "no-specials" );
   
   clocktime_t starttime( edf.header.starttime );
 
@@ -3430,23 +3440,10 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  if ( annot->name == "duration_sec" ) { ++ee; continue; } 
 	  if ( annot->name == "epoch_sec" ) { ++ee; continue; } 
 
-	  // output row (nb. no need to quote class, `|` allowed here
-	  
-	  O1 << annot->name << "\t";
-
-	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
-	    O1 << instance_idx.id << "\t";
-	  else 
-	    O1 << ".\t";
-
-	  if ( instance_idx.ch_str != "." && instance_idx.ch_str != "" )
-            O1 << instance_idx.ch_str << "\t";
-          else
-            O1 << ".\t";
-
-
+	  //
 	  // start/stop in seconds, with 4 d.p.
-
+	  //
+	  
 	  // any re-ALIGNment ? 
 	  interval_t interval = instance_idx.interval;
 
@@ -3458,10 +3455,41 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
               else interval.stop -= annot_offset;	      
             }
 
+	  // collapse from EDF+D to elapsed time in standard EDF ?
+
+	  if ( collapse_disc && ! edf.header.continuous ) 
+	    {
+	      interval = edf.timeline.collapse( interval );
+	      // if the annotation doesn't completely fit in a region, skip it
+	      if ( interval.start == 1LLU && interval.stop == 0LLU )
+		{ ++ee; continue; }
+	      // note -- if start and stop have a gap in the middle, this will still output
+	      // (although duration will be shorter)
+	      //   +++++ START ++++   |---GAP---|   +++++ STOP +++++
+	      //  becomes
+	      //   +++++ START +++++++++ STOP +++++
+	    }
+	  
 	  // write an ... instead of the second time-poimt (for 0-duration intervals)
 	  const bool add_ellipsis = globals::set_0dur_as_ellipsis && interval.start == interval.start ;
 
 	  //std::cout << " xx " << interval.start <<  " " << interval.stop << " " << interval.stop - interval.start << "   .... " << add_ellipsis << "\n";
+
+	  
+	  // output row (nb. no need to quote class, `|` allowed here
+	  
+	  O1 << annot->name << "\t";
+	  
+	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
+	    O1 << instance_idx.id << "\t";
+	  else 
+	    O1 << ".\t";
+
+	  if ( instance_idx.ch_str != "." && instance_idx.ch_str != "" )
+            O1 << instance_idx.ch_str << "\t";
+          else
+            O1 << ".\t";
+
 	  
 	  // write in hh:mm:ss format
 	  if ( hms ) 

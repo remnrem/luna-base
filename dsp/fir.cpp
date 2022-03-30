@@ -1107,10 +1107,11 @@ int fir_t::outputFFT(const std::string & label, const std::vector<double> & wind
   if (plan != NULL) fftw_destroy_plan(plan);
   if (in != NULL) fftw_free(in);
   if (out != NULL) fftw_free(out);
-  
-  return result;
 
   writer.unlevel( "FIR" );
+  
+  return result;
+ 
 
 }
 
