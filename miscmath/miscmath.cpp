@@ -294,14 +294,27 @@ double MiscMath::skewness( const std::vector<double> & x , double m , double sd 
 } 
   
 
-double MiscMath::median( const std::vector<double> & x )
+double MiscMath::median( const std::vector<double> & x , const bool also_upper )
 {
-  //  const double * a = &(x[0]);
+  
   const int n = x.size();  
-  //  return median_preserve( p,n );
+
+  const bool is_odd = n % 2;
+  
   if ( n == 0 ) Helper::halt( "internal problem, taking median of 0 elements");
   if ( n == 1 ) return x[0];
-  return MiscMath::kth_smallest_preserve(x,(((n)&1)?((n)/2):(((n)/2)-1)));
+  
+  if ( is_odd ) 
+    return MiscMath::kth_smallest_preserve( x , ( n - 1 ) / 2 );
+  
+  const double lower_median = MiscMath::kth_smallest_preserve( x , n / 2 - 1 );
+  
+  if ( ! also_upper ) return lower_median;
+  
+  const double upper_median = MiscMath::kth_smallest_preserve( x , n / 2 );
+  
+  return ( lower_median + upper_median ) / 2.0 ;
+      
 }
 
 double MiscMath::iqr( const std::vector<double> & x )

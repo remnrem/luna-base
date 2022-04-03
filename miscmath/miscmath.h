@@ -66,7 +66,7 @@ namespace MiscMath
   
   double petrosian_FD( const std::vector<double> & x );
   
-  double median( const std::vector<double> & x );
+  double median( const std::vector<double> & x , const bool upper = false );
   double iqr( const std::vector<double> & x );
   double percentile( const std::vector<double> & x , double p );
   

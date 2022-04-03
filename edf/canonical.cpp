@@ -429,7 +429,22 @@ void canonical_t::proc( )
        	  // we need to match it (with at least one of the rules)
        	  if ( ! is_in( group , rule.group ) )
        	    continue;
-       	}
+
+
+	  // NEW HERE>... (OLD!)
+          // track that we are seeing a matching group-specific rule                                                         
+          // if ( group != "." && tok[0] == group ) ignore_generics.insert( tok[1] );
+
+          // // ignore any generic rules for a canonical signal if we have                                                      
+          // // already encountered a matching group-specific rule for that                                                     
+          // // canonical signal                                                                                                
+          // if ( group != "." && tok[0] == "."
+          //      && ignore_generics.find( tok[1] ) != ignore_generics.end() )
+          //   continue;
+
+
+
+	}
       
 
       //
@@ -510,8 +525,8 @@ void canonical_t::proc( )
       // If here, we have a match
       //
       
-      logger << "  matced rule for " << rule.canonical_label << "\n";
-
+      logger << "  matched rule for " << rule.canonical_label << "\n";
+      
       //
       // Construct the CS
       //

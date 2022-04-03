@@ -24,7 +24,7 @@
 #define __DSP_H__
 
 #include "gc.h"
-//#include "irasa.h"
+#include "irasa.h"
 #include "tsync.h"
 #include "sync.h"
 #include "standardize.h"

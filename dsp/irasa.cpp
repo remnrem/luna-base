@@ -1,0 +1,330 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
+
+#include "dsp/irasa.h"
+#include "edf/edf.h"
+#include "edf/slice.h"
+#include "dsp/resample.h"
+#include "fftw/fftwrap.h"
+
+#include "helper/helper.h"
+#include "db/db.h"
+
+extern writer_t writer;
+extern logger_t logger;
+
+
+void irasa_wrapper( edf_t & edf , param_t & param )
+{
+
+  //
+  // Get signals
+  //
+
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  
+  if ( signals.size() == 0 ) return;
+
+  const int ns = signals.size();
+  
+  std::vector<double> Fs = edf.header.sampling_freq( signals );
+  
+  //
+  // Analysis parameters
+  //
+
+  const double h_min = param.has( "h-min" ) ? param.requires_dbl( "h-min" ) : 1.05;
+  const double h_max = param.has( "h-max" ) ? param.requires_dbl( "h-max" ) : 1.95;
+  const int    h_cnt = param.has( "h-steps" ) ? param.requires_dbl( "h-steps" ) : 19;
+  
+  const double f_lwr = param.has( "lwr" ) ? param.requires_dbl( "lwr" ) : 1 ;
+  const double f_upr = param.has( "upr" ) ? param.requires_dbl( "upr" ) : 30 ;
+  
+  const bool average_adj = false;
+  const double segment_sec = param.has( "segment-sec" ) ? param.requires_dbl( "segment-sec" ) : 4 ;
+  const double overlap_sec = param.has( "segment-overlap" ) ?  param.requires_dbl( "segment-overlap" ) : 2 ;
+
+  const bool logout = param.has( "dB" );
+  
+  //
+  // Iterate over signals
+  //
+
+  for (int s=0; s<ns; s++)
+    {
+
+      //
+      // Skip non-data channels
+      //
+
+      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+
+      writer.level( signals.label(s) , globals::signal_strat );
+
+      //
+      // Get data
+      //
+
+      slice_t slice( edf , signals(s) , edf.timeline.wholetrace() );
+      
+      const std::vector<double> * d = slice.pdata();
+
+      const int ne = edf.timeline.first_epoch();
+	    
+      //
+      // analysis 
+      //
+
+      irasa_t irasa( *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr , segment_sec , overlap_sec );
+
+      //
+      // output
+      //
+      
+      for (int f=0; f<irasa.n; f++)
+	{
+	  writer.level( irasa.frq[f] , globals::freq_strat );
+	  if ( logout )
+	    {
+	      writer.value( "LOGF" , log( irasa.frq[f] ) );
+	      if ( irasa.periodic[f] > 0 )
+		{
+		  const double logper = 10 * log10( irasa.periodic[f] );
+		  writer.value( "PER" , logper );
+		}
+
+	      if( irasa.aperiodic[f] > 0 )
+		{
+		  const double logaper = 10 * log10( irasa.aperiodic[f] );		  
+		  writer.value( "APER" , logaper );
+		}
+	    }
+	  else
+	    {
+	      writer.value( "PER" , irasa.periodic[f] );
+	      writer.value( "APER" , irasa.aperiodic[f] );	  
+	    }
+	}
+      writer.unlevel( globals::freq_strat );
+            
+      // next signal
+    }
+
+  writer.unlevel( globals::signal_strat );
+
+}
+
+
+irasa_t::irasa_t( const std::vector<double> & d ,
+		  const int sr ,
+		  const double epoch_sec,
+		  const int ne, 
+		  const double h_min ,
+		  const double h_max ,
+		  const int h_cnt ,
+		  const double f_lwr,
+		  const double f_upr ,
+		  const double segment_sec , 
+		  const double overlap_sec  )
+{
+  
+  const double h_inc = ( h_max - h_min ) / (double)(h_cnt-1);
+  
+  const int orig_epoch_smps = sr * epoch_sec;
+
+  const int segment_points = segment_sec * sr;
+  
+  const int noverlap_points  = overlap_sec * sr;
+
+
+  //
+  // Other (fixed....) options
+  //
+
+  
+  window_function_t window_function = WINDOW_TUKEY50;	   
+  // if      ( param.has( "no-window" ) ) window_function = WINDOW_NONE;
+  // else if ( param.has( "hann" ) ) window_function = WINDOW_HANN;
+  // else if ( param.has( "hamming" ) ) window_function = WINDOW_HAMMING;
+  // else if ( param.has( "tukey50" ) ) window_function = WINDOW_TUKEY50;
+
+  //const bool use_seg_median = param.has( "segment-median" );
+  const bool use_seg_median = true;
+
+  
+  //
+  // Get resampled versions of channels
+  //
+  
+  //const int converter = param.has( "fast" ) ? SRC_LINEAR : SRC_SINC_FASTEST ;
+  const int converter = SRC_LINEAR ;
+  
+  std::vector<std::vector<double> > up, down;
+  std::vector<int> up_epoch_smps, down_epoch_smps;
+  
+      for (int hi=0; hi<h_cnt; hi++)
+	{
+	  const double h = h_min + hi * h_inc;	  
+	  //logger << "  creating resampled signals for " << signals.label(s) << " h = " << h << "\n";
+	  
+	  up.push_back( dsptools::resample( &d , sr , sr * h , converter ) );
+	  down.push_back( dsptools::resample( &d , sr , sr / h , converter ) );
+	  
+	  const int up_smps = up[ up.size() - 1 ].size();
+	  const int down_smps = down[ down.size() - 1 ].size();
+	  up_epoch_smps.push_back( up_smps / ne );
+	  down_epoch_smps.push_back( down_smps / ne );	  
+	}      
+
+      //
+      // Process epoch-wise
+      //
+
+      for (int ec = 0; ec < ne ; ec++)
+	{
+	  
+	  // get original 
+	  std::vector<double> x( orig_epoch_smps );
+	  for (int i=0; i<orig_epoch_smps; i++)
+	    x[i] = d[ ec * orig_epoch_smps + i ] ;
+	  	  
+	  MiscMath::centre( x );
+	  
+	  const int total_points = orig_epoch_smps;
+	  
+	  // implied number of segments                                                                                                                                        
+	  const int noverlap_segments = floor( ( total_points - noverlap_points)
+					       / (double)( segment_points - noverlap_points ) );
+	  
+	  PWELCH pwelch( x ,
+	   		 sr, 
+	   		 segment_sec ,
+	   		 noverlap_segments ,
+	   		 window_function ,
+	   		 use_seg_median );
+
+
+	  std::vector<std::vector<double> > updowns( h_cnt );
+	  
+	  //
+	  // Up/down-sampled versions
+	  //
+	  
+	  for (int hi=0; hi<h_cnt; hi++)
+	    {
+	      const double h = h_min + hi * h_inc;
+	      
+	      const std::vector<double> & hup = up[ hi ];
+	      const std::vector<double> & hdown = down[ hi ];
+	      
+	      const int up_smps = up_epoch_smps[ hi ];
+	      const int down_smps = down_epoch_smps[ hi ];
+	      
+	      std::vector<double> up1( up_smps );
+	      for (int i=0; i<up_smps; i++)
+		up1[i] = hup[ ec * up_smps + i ];
+	      
+	      std::vector<double> down1( down_smps );
+	      for (int i=0; i<down_smps; i++)
+		down1[i] = hdown[ ec * down_smps + i ];
+
+	      //
+	      // up
+	      //
+	      
+	      const int up_noverlap_segments = floor( ( up_smps - noverlap_points )
+						      / (double)( segment_points - noverlap_points ) );
+	      
+	      PWELCH up_pwelch( up1 ,
+				sr, 
+				segment_sec ,
+				noverlap_segments ,
+				window_function ,
+				use_seg_median );
+	      
+	      
+	      //
+	      // down
+	      //
+	      
+	      const int down_noverlap_segments = floor( ( down_smps - noverlap_points )
+							/ (double)( segment_points - noverlap_points ) );
+	      
+	      PWELCH down_pwelch( down1 ,
+				  sr, 
+				  segment_sec ,
+				  noverlap_segments ,
+				  window_function ,
+				  use_seg_median );
+
+	      
+	      // for (int i=0; i<up_pwelch.psd.size() ; i++)
+	      //  	{
+	      // 	  if ( pwelch.freq[i] >= f_lwr  && pwelch.freq[i] <= f_upr  ) 
+	      // 	    std::cout << h << "\t" << pwelch.freq[i] << "\t"
+	      // 		      << 10*log10( pwelch.psd[i] ) << "\t"
+	      // 		      << 10*log10( up_pwelch.psd[i] ) << "\t" << 10*log10( down_pwelch.psd[i] )  << "\n";
+	      //  	}
+
+	      //
+	      // collate geometric means (for freq range only)
+	      //
+	      
+	      std::vector<double> ud;
+	      for (int i=0; i<pwelch.psd.size() ; i++)                                                                                                                                    
+		{
+		  //if ( pwelch.freq[ i ] >= f_lwr && pwelch.freq[ i ] <= f_upr )		  
+		  ud.push_back( sqrt( up_pwelch.psd[i] * down_pwelch.psd[i] ) );
+		}	      
+	      updowns[ hi ] = ud;
+	      
+	    }
+
+	  
+	  // take median for each frequency
+	  frq.clear();	  
+	  for (int i=0; i<pwelch.psd.size() ; i++)
+	    {
+	      if ( pwelch.freq[ i ] >= f_lwr && pwelch.freq[ i ] <= f_upr )
+		{
+		  frq.push_back( pwelch.freq[ i ] );
+
+		  std::vector<double> du( h_cnt );
+		  for (int hi=0; hi<h_cnt; hi++) du[hi] = updowns[hi][i];
+		  const double est = MiscMath::median( du , true );
+
+		  const double aper = MiscMath::median( du , true ) ;
+		  aperiodic.push_back( aper);
+		  periodic.push_back( pwelch.psd[ i ] - aper );
+		}
+	      n = frq.size();	      
+	    }
+	  
+	  // next epoch
+	  ++ec;
+	}
+
+      
+}
+
+

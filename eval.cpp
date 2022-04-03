@@ -1706,19 +1706,21 @@ void proc_mtm( edf_t & edf , param_t & param )
   mtm::wrapper( edf , param );
 }
 
-// IRASA : calculate IRASA
-
-void proc_irasa( edf_t & edf , param_t & param )
-{  
-  //wrapper_irasa( edf , param );
-}
-
 // 1FNORM : normalization of signals for the 1/f trend
 
 void proc_1overf_norm( edf_t & edf , param_t & param )	  
 {  
   dsptools::norm_1overf( edf,  param ) ;
 }
+
+// IRASA : calculate IRASA
+
+void proc_irasa( edf_t & edf , param_t & param )
+{  
+  irasa_wrapper( edf , param );
+}
+
+
 
 // FI-plot : frequency/interval plot
 

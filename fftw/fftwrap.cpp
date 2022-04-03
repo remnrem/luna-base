@@ -892,8 +892,14 @@ void PWELCH::process()
 	  psdsd[i] = mn > 0 ? sd / mn : 0 ;
 	}
 
+      
       if ( use_median )
-	psd[i] = MiscMath::median( tracker[i] );
+	{
+	  // true means get avg. of lower & upper medians for even lists 
+	  // slower, (i.e. need to process list twice) but will be more comparable
+	  // to other implementations
+	  psd[i] = MiscMath::median( tracker[i] , true );	  
+	}
       else	
 	psd[i] = mn;
       
