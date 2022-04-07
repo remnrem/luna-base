@@ -22,9 +22,9 @@
 
 #include "helper/mapper.h"
 #include "annot/nsrr-remap.h"
+#include "edf/canonical.h"
 
 extern globals global;
-
 
 void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool html )
 {

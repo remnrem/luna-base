@@ -2,7 +2,7 @@ include Makefile.inc
 ifeq ($(ARCH),WINDOWS)
   TARGETS = luna destrat behead tocol
 else
-  TARGETS = luna libluna destrat behead dmerge tocol fixrows cgi-mapper
+  TARGETS = luna libluna destrat behead dmerge tocol fixrows cgi-mapper simassoc
 endif
 
 SRCS = globals.cpp eval.cpp cmddefs.cpp \
@@ -93,6 +93,9 @@ behead: utils/behead.o
 
 dmerge: utils/merge.o utils/merge-helpers.o
 	$(CXX) -o $@ $^ 
+
+simassoc: utils/simassoc.o libluna.a
+	$(CXX) -o $@ $^  $(LDFLAGS)
 
 .PHONY: clean
 

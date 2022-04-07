@@ -29,10 +29,20 @@
 #include <set>
 #include <sstream>
 
+#include "helper/helper.h"
+
 struct signal_list_t;
 struct edf_t;
 struct edf_header_t;
 struct param_t;
+
+struct cansigs_t {
+  std::set<std::string> used;
+  std::map<std::string,bool> okay;
+  std::map<std::string,std::string> sig;
+  std::map<std::string,std::string> ref;
+};
+
 
 struct canon_rule_t {
   
@@ -58,8 +68,6 @@ struct canon_rule_t {
   // sets
   int set_sr;
   std::string set_unit;
-
-  
   
 };
 
@@ -110,18 +118,28 @@ struct canonical_t
     if ( aliases.find( s ) == aliases.end() ) return s;
     return aliases[ s ]; 
   }
+
+  static std::map<int,std::string> scale_codes;
   
   // for this EDF
+
+  edf_t & edf;
+
   std::set<canon_edf_signal_t> signals;
   
   // options
   bool drop_originals;
-
+  bool dry_run;
+  bool only_check_labels; // no output (for use w/ the mapper utility)
+  bool verbose;
+  
+  // output class used in mapper-cgi-util mode
+  cansigs_t retval;
+  
   // can be assigned to multiple groups
   std::set<std::string> group;
 
   // helpers
-
   bool is_in( const std::set<std::string> & a , const std::set<std::string> & b )
   {
     std::set<std::string>::const_iterator aa = a.begin();
@@ -143,13 +161,25 @@ struct canonical_t
     // find first instance in 'a' (req sig list) that is in b (EDF) 
     for (int i=0; i<a.size(); i++)
       {
-	if ( b.find( canon_edf_signal_t( a[i] ) ) != b.end() )
+	canon_edf_signal_t s1( a[i] );
+	if ( b.find( s1 ) != b.end() )
 	  {
 	    *match = a[i];
 	    return true;
 	  }
       }
     return false;    
+  }
+
+  // special match for a reference -- allows for linked references
+  bool ref_match( const std::vector<std::string> & a , std::set<canon_edf_signal_t> & b , std::string * match );
+
+  static bool empty_field( const std::string & s )
+  {
+    if ( s == "" || s == "." ) return true;
+    const std::string s2 = Helper::trim( s );
+    if ( s2 == "" || s2 == "." ) return true;
+    return false;
   }
   
   std::string print( const std::set<std::string> & s )

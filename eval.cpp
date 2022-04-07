@@ -3274,10 +3274,12 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
 
 void proc_canonical( edf_t & edf , param_t & param )
 {
-
-  // canonical_t canonical( edf , param );
   
-  // return;
+  if ( ! param.has( "legacy" ) )
+    {
+      canonical_t canonical( edf , param );  
+      return;
+    }
   
   // dry-run or make the actual signals?
   bool make_signals = ! param.has( "check" );

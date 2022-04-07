@@ -84,7 +84,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
       
       if ( ! okay )
 	{
-	  std::cout << " ** could not attach " << filename	<< "\n";
+	  logger << " ** could not attach " << filename	<< "\n";
           continue;	  
 	}
 
@@ -211,7 +211,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // create a (continuous) timeline  
   //
 
-  std::cout << " adding timeline\n";
+  logger << " adding timeline\n";
 
   medf.set_edf();
   medf.set_continuous();
@@ -222,7 +222,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // resize data[][], by adding empty records 
   //
 
-  std::cout << " adding " << nr << " empty records...\n";
+  logger << " adding " << nr << " empty records...\n";
 
   for (int r=0;r<nr;r++)
     {

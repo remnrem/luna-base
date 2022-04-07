@@ -693,12 +693,5 @@ void dump_intervals( const std::string & edfs ,
 		     const std::string & ints );
 
 
-struct cansigs_t {
-  std::set<std::string> used;
-  std::map<std::string,bool> okay;
-  std::map<std::string,std::string> sig;
-  std::map<std::string,std::string> ref;
-};
-
 
 #endif

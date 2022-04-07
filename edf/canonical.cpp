@@ -37,18 +37,25 @@ extern writer_t writer;
 extern logger_t logger;
 
 std::vector<canon_rule_t> canonical_t::rules;
-
 std::map<std::string,std::string> canonical_t::aliases;
-
+std::map<int,std::string> canonical_t::scale_codes;
 
 canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 {
   const int l = lines.size();
 
+  // logger << "rule:\n";
+  // for (int i=0; i<l; i++) logger << i << "\t[" << lines[i] << "]\n";
+  
+  // default req values (i.e. do not require)
   req_sr_min = req_sr_max = 0;
-
   // 0 none, -1 all NEG, +1 all POS, +2 = NEG & POS
   req_scale = 0;
+
+  // default set values (i.e. do not change)
+  set_sr = 0; // do not change
+  set_unit = ".";
+
   
   std::string current_rule = "";
   
@@ -82,7 +89,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	  // the rule type? 
 	  if ( rtype )
 	    {
-	      std::string r = Helper::trim( Helper::toupper( line ) ) ;
+	      std::string r = Helper::trim( Helper::toupper( line ) , ' ' , '\t' ) ;
 	      if ( r == "GROUP:" )
 		current_rule = "group";
 	      else if ( r == "REQ:" || r == "REQUIRES:" )
@@ -105,22 +112,30 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		{
 		  std::vector<std::string> tokb = Helper::quoted_parse( line , "," );
 		  for (int j=0; j<tokb.size(); j++)
-		    group.insert( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) );
+		    {
+		      std::vector<std::string> tokc = Helper::quoted_parse( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) , "," );
+		      for (int k=0; k<tokc.size(); k++)
+			group.insert( Helper::trim( tokc[k] )) ;
+		    }
 		}
 	      else if ( current_rule == "unless" )
 		{
 		  std::vector<std::string> tokb = Helper::quoted_parse( line , "," );
 		  for (int j=0; j<tokb.size(); j++)
-		    unless.insert( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) );
-		}
+		    {
+		      std::vector<std::string> tokc = Helper::quoted_parse( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) , "," );
+		      for (int k=0; k<tokc.size(); k++)
+                        unless.insert( Helper::trim( tokc[k] ) );		      
+		    }
+		  }
 	      else if ( current_rule == "req" )
 		{
 		  std::vector<std::string> tok = Helper::quoted_parse( line , "=" );
 		  if ( tok.size() != 2 )
 		    Helper::halt( "expecting key = value format:\n" + line );
 		  
-		  std::string key = Helper::trim( Helper::toupper( tok[0] ) );
-		  std::string value = Helper::trim( tok[1] );
+		  std::string key = Helper::trim( Helper::toupper( tok[0] ) , ' ', '\t' );
+		  std::string value = Helper::trim( tok[1] , ' ', '\t' );
 		  std::vector<std::string> tokb = Helper::quoted_parse( value , "," );
 		  std::vector<std::string> tok2;
 
@@ -131,7 +146,10 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 			std::vector<std::string> tokc =
 			  Helper::quoted_parse( canonical_t::swap_in_alias( tokb[j] ) , "," );
 			for (int k=0; k<tokc.size(); k++)
-			  tok2.push_back( tokc[k] );
+			  {
+			    tok2.push_back( tokc[k] );
+			    //std::cout << " addding [" << tokc[k] << "]\n";
+			  }
 		      }
 		    
 		  // SIG, REF, TRANS, SR-MIN, SR-MAX, UNIT, SCALE
@@ -140,24 +158,48 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		  if ( key == "SIG" )
 		    {
 		      for (int j=0; j<tok2.size(); j++)
-			req_sig.push_back( Helper::toupper( canonical_t::swap_in_alias( tok2[j] ) ) );
+			req_sig.push_back( Helper::unquote( Helper::toupper( tok2[j] ) ) );
 		    }
 		  else if ( key == "REF" )
 		    {
 		      for (int j=0; j<tok2.size(); j++)
-                        req_ref.push_back( Helper::toupper( canonical_t::swap_in_alias( tok2[j] ) ) );
+                        req_ref.push_back( Helper::unquote( Helper::toupper( tok2[j] ) ) );
 		    }
 		  else if ( key == "TRANS" )
 		    {
 		      // n.b. first version cannot be an alias
+		      // n.b. . means missing (empty)
+		      // check that a field hasn't already been specified i.e. cannot have one-to-many mapping
 		      for (int j=0; j<tok2.size(); j++)
-                        req_transducer[ Helper::toupper( canonical_t::swap_in_alias( tok2[j] ) ) ] = tok2[0];
+                        {
+			  std::string str = Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) );
+			  if ( canonical_t::empty_field( str ) )
+			    {
+			      if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label ); 
+			      str = ".";
+			    }
+			  if ( req_transducer.find( str ) != req_transducer.end() )
+			    Helper::halt( "cannot specify a transducer type multiple times: " + str + " for " + canonical_label );
+			  req_transducer[ str ] = Helper::unquote( tok2[0] );
+			}
 		    }
 		  else if ( key == "UNIT" )
 		    {
 		      // n.b. first version cannot be an alias
+		      // n.b. '.' means missing field 
+		      // as above, cannot specify a value multiple times
 		      for (int j=0; j<tok2.size(); j++)
-			req_unit[ canonical_t::swap_in_alias( Helper::toupper( tok2[j] ) ) ] = tok2[0];
+			{
+			  std::string str = Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) );
+			  if ( canonical_t::empty_field( str ) )
+                            {
+                              if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label );
+                              str = ".";
+                            }						    
+			  if ( req_unit.find( str ) != req_unit.end() )
+			    Helper::halt( "cannot specify a unit type multiple times: " + str + " for " + canonical_label );
+			  req_unit[ str ] = Helper::unquote( tok2[0] );
+			}
 		    }
 		  else if ( key == "SR-MIN" || key == "MIN-SR" )
 		    {
@@ -198,22 +240,29 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
                   std::string key = Helper::trim( Helper::toupper( tok[0] ) );
                   std::string value = Helper::trim( tok[1] );
                   std::vector<std::string> tok2 = Helper::quoted_parse( value , "," );
+
+		  //
+                  // SR, UNIT, TRANS
+		  //
 		  
-                  // SR, UNIT
 		  if ( key == "UNIT" )
                     {
 		      set_unit = value;
+		      if ( set_unit != "uV" && set_unit != "mV" && set_unit != "V" )
+			Helper::halt( "currently can only set units to uV, mV or V : " + canonical_label );
 		    }
 		  else if ( key == "SR" )
 		    {
 		      if ( ! Helper::str2int( value , &set_sr ) )
-			Helper::halt( "invalid integer sample rate value:\n" + line );		      
+			Helper::halt( "invalid integer sample rate value:\n" + line );
+		      if ( set_sr <= 0 || set_sr > 10000 )
+			Helper::halt( "invalid value for setting the sample rate for " + canonical_label );
 		    }
 		  else
 		    Helper::halt( "did not recognized set value:\n " + line );
 		  
 		}	      
-	    }	  
+	    } 
 	}
       
     } // next line
@@ -236,10 +285,14 @@ canon_edf_signal_t::canon_edf_signal_t( edf_header_t & hdr , const int slot )
   scale = 0; // -1, 0, +1
   double phys_min = hdr.physical_min[slot] < hdr.physical_max[slot] ? hdr.physical_min[slot] : hdr.physical_max[slot];
   double phys_max = hdr.physical_min[slot] < hdr.physical_max[slot] ? hdr.physical_max[slot] : hdr.physical_min[slot];
-  if ( phys_max < 0 ) scale = -1; // all negative
-  else if ( phys_min >= 0 ) scale = 1; // all positive
-  
- };
+
+  // TODO: ?? need to allow floating-point variation here?
+  // (i.e. non-zero zero constant)
+  const double zero_constant = 0;
+  if ( phys_max < zero_constant ) scale = -1; // all negative
+  else if ( phys_min >= -zero_constant ) scale = 1; // all positive  
+  if ( phys_min < zero_constant && phys_max > zero_constant ) scale = 2;
+};
 
 
 int canonical_t::read( const std::string & filename )
@@ -258,6 +311,7 @@ int canonical_t::read( const std::string & filename )
       Helper::safe_getline( IN1 , line );
       if ( IN1.eof() ) break;
       if ( line == "" ) continue;
+      if ( line == "_quit" ) break;
       if ( line[0] == '%' ) continue;
       if ( line[0] == '#' ) continue;
 
@@ -306,7 +360,11 @@ int canonical_t::read( const std::string & filename )
 	  if ( lines.size() == 0 )
 	    lines.push_back( line );
 	  else
-	    rules.push_back( canon_rule_t( lines ) );
+	    {
+	      rules.push_back( canon_rule_t( lines ) );
+	      lines.clear();
+	      lines.push_back( line );		      
+	    }
 	}
       else
 	lines.push_back( line );
@@ -316,9 +374,6 @@ int canonical_t::read( const std::string & filename )
   if ( lines.size() != 0 )
     rules.push_back( canon_rule_t( lines ) );
   
-  // logger << "  read " << rules.size() << " rule(s), and "
-  // 	 << aliases.size() << " variables\n";
-  
   IN1.close();
   
   return rules.size();
@@ -326,8 +381,18 @@ int canonical_t::read( const std::string & filename )
 
 
 canonical_t::canonical_t( edf_t & edf , param_t & param )
+  : edf(edf)
 {
 
+  //
+  // some set up
+  //
+
+  scale_codes[ 0 ] = "NONE";
+  scale_codes[ 1 ] = "POS";
+  scale_codes[ -1 ] = "NEG";
+  scale_codes[ 2 ] = "AC";
+  
   //
   // read in rules, if not already done, from 1 or more files
   //
@@ -360,6 +425,12 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
     group = param.strset( "group" );
   
   drop_originals = param.yesno( "drop-originals" );
+  
+  dry_run = param.yesno( "check" );
+
+  only_check_labels = param.has( "mapper-util-mode" );
+
+  verbose = param.has( "verbose" );
   
   //
   // Get info on the available channels
@@ -399,17 +470,49 @@ void canonical_t::add_alias( const std::string & primary , const std::string & t
 
 void canonical_t::proc( )
 {
+  
+  //
+  // track attempted & completed canonical signals
+  //
+
+  std::set<std::string> attempted, completed;
+  
+  //
+  // track which original signals were used / should not be used
+  //
+
+  std::set<std::string> used;
+  std::set<std::string> do_not_drop;
 
   //
-  // track completed canonical signals
+  // track that, if a group has been specified, but did not match, then
+  // we do not allow any subsequent generic rules to match for that
+  // target canonical signal
   //
 
-  std::set<std::string> completed;
+  std::set<std::string> ignore_generics;  
+
+  //
+  // in case we are dropping originals later, get a list of those now
+  //
+
+  const bool only_data_signals = true;
+
+  signal_list_t osignals = edf.header.signal_list( "*" , only_data_signals );
+
+  
+  //
+  // sequentially track through each rule
+  //
   
   for (int r=0; r<rules.size(); r++)
     {
-            
+
       const canon_rule_t rule = rules[r];
+
+      if ( verbose ) logger << "\n  - attempting rule " << r+1 << " of " << rules.size() << " : target = " << rule.canonical_label << "\n";
+      
+      attempted.insert( rule.canonical_label );
       
       //
       // has this rule already been satisfied?
@@ -417,33 +520,50 @@ void canonical_t::proc( )
       
       const bool already_processed = is_in( rule.canonical_label , completed );
       
-      if ( already_processed ) continue;
-      
+      if ( already_processed )
+	{
+	  if ( verbose ) logger << "   already processed " << rule.canonical_label << "\n";
+	  continue;
+	}
+            
+
       //
       // group specifier?
       //
       
       if ( rule.group.size() != 0 )
        	{
+
+	  if ( verbose )
+	    logger << "   rule group(s) [ " << print( rule.group ) << " ]\n";
+	  
        	  // if a group has been specified for this rule, then
        	  // we need to match it (with at least one of the rules)
-       	  if ( ! is_in( group , rule.group ) )
-       	    continue;
 
+	  if ( ! is_in( group , rule.group ) )
+       	    {
+	      if ( verbose )
+		logger << "   bailing: EDF group(s) did not match [ " << print( group ) << " ]\n";
+	      continue;
+	    }
+	  
+          // track that we have encountered a group-specific rule for
+	  // a specified group: this means that any generic rules will
+	  // be ignored for this canonical signal
+	  
+	  ignore_generics.insert( rule.canonical_label );
 
-	  // NEW HERE>... (OLD!)
-          // track that we are seeing a matching group-specific rule                                                         
-          // if ( group != "." && tok[0] == group ) ignore_generics.insert( tok[1] );
-
-          // // ignore any generic rules for a canonical signal if we have                                                      
-          // // already encountered a matching group-specific rule for that                                                     
-          // // canonical signal                                                                                                
-          // if ( group != "." && tok[0] == "."
-          //      && ignore_generics.find( tok[1] ) != ignore_generics.end() )
-          //   continue;
-
-
-
+	}
+      else
+	{
+	  // for all generic rules, ensure that we have not already encountered
+	  // an unmatched, non-generic version
+	  
+	  if ( ignore_generics.find( rule.canonical_label ) != ignore_generics.end() )
+	    {
+	      if ( verbose ) logger << "   bailing: did not previously satisfy a group-specific rule\n";
+	      continue;
+	    }
 	}
       
 
@@ -452,12 +572,28 @@ void canonical_t::proc( )
       //
 
       std::string matched_sig = "";
-      
-      bool matched = match( rule.req_sig , signals , &matched_sig );
 
-      if ( ! matched ) continue;
+      // logger << " req [ " << print( rule.req_sig )  << " ]\n";
+      // //      logger << " sig [ " << print( signals )  << " ]\n";
+      // std::set<canon_edf_signal_t>::const_iterator ss = signals.begin();
+      // while ( ss != signals.end() )
+      // 	{
+      // 	  logger << " sig [" << ss->label << "]\n";
+      // 	  ++ss;
+      // 	}
+
+      bool matched = match( rule.req_sig , signals , &matched_sig );
       
+      if ( ! matched )
+	{
+	  if ( verbose ) logger << "   bailing: no EDF channel matched required sig [ " << print( rule.req_sig ) << " ]\n";
+	  continue;
+	}
+      
+      if ( verbose ) logger << "   matched " << matched_sig << " from sig [ " << print( rule.req_sig ) << " ]\n";
+			   
       std::set<canon_edf_signal_t>::const_iterator sig = signals.find( matched_sig );
+
       if ( sig == signals.end() ) Helper::halt( "internal error in canonical match sig" );
       
       //
@@ -469,9 +605,15 @@ void canonical_t::proc( )
       if ( rule.req_ref.size() != 0 )
 	{
 	  
-	  matched = match( rule.req_ref , signals , &matched_ref );
+	  matched = ref_match( rule.req_ref , signals , &matched_ref );
 	  
-	  if ( ! matched ) continue;
+	  if ( ! matched )
+	    {	  
+	      if ( verbose ) logger << "   bailing: no EDF channel matched required ref [ " << print( rule.req_ref ) << " ]\n";
+	      continue;
+	    }
+	  
+	  if ( verbose ) logger << "   matched " << matched_ref << " from ref [ " << print( rule.req_ref ) << " ]\n";	  
 	  
 	}
       
@@ -479,10 +621,31 @@ void canonical_t::proc( )
       // transducer rules?
       //
 
+      bool wild_trans = false;
+      
       if ( rule.req_transducer.size() != 0 )
 	{
 	  if ( rule.req_transducer.find( sig->transducer ) == rule.req_transducer.end() )
-	    continue;
+	    {
+	      
+	      // wildcard?
+	      if ( rule.req_transducer.find( "*" ) != rule.req_transducer.end() )
+		{
+		  if ( verbose )
+		    logger << "   allowing wildcard '*' match for " << sig->transducer << ", will set to "
+			   << rule.req_transducer.find( "*" )->second << "\n";
+		  wild_trans = true;		  
+		}
+	      else
+		{
+		  if ( verbose ) logger << "   bailing: did not match " << sig->transducer
+					<< " from transducer [ " << print( rule.req_transducer ) << " ]\n";
+		  continue;
+		}
+	      
+	    }
+	  if ( verbose ) logger << "   matched " << sig->transducer << " from transducer [ " << print( rule.req_transducer ) << " ]\n";
+
 	}
 
 
@@ -493,7 +656,12 @@ void canonical_t::proc( )
       if ( rule.req_unit.size() != 0 )
 	{
           if ( rule.req_unit.find( sig->unit ) == rule.req_unit.end() )
-            continue;
+	    {
+	      if ( verbose ) logger << "   bailing: did not match " << sig->unit << " from unit [ " << print( rule.req_unit ) << " ]\n";
+	      continue;
+	    }
+	  if ( verbose ) logger << "   matched " << sig->unit << " from unit [ " << print( rule.req_unit ) << " ]\n";
+
 	}
 
       //
@@ -503,13 +671,23 @@ void canonical_t::proc( )
       if ( rule.req_sr_min != 0 )
 	{
 	  if ( sig->sr < rule.req_sr_min )
-	    continue;
+	    {
+	      if ( verbose ) logger << "   bailing: did not satisfy min sr " <<  sig->sr << " < " <<  rule.req_sr_min << "\n";
+	      continue;
+	    }
+	  if ( verbose ) logger << "   sample rate satisfies min sr " << sig->sr << " >= " <<  rule.req_sr_min << "\n";
 	}
 
       if ( rule.req_sr_max != 0 )
 	{
+
 	  if ( sig->sr > rule.req_sr_max )
-	    continue;
+	    {
+	      if ( verbose ) logger << "   bailing: did not satisfy max sr " <<  sig->sr << " > " <<  rule.req_sr_max << "\n";
+	      continue;
+	    }
+	  if ( verbose ) logger << "   sample rate satisfies max sr " << sig->sr << " <= " <<  rule.req_sr_max << "\n";
+
 	}
 
       //
@@ -518,43 +696,424 @@ void canonical_t::proc( )
 
       if ( rule.req_scale != 0 )
 	{
-	  if ( rule.req_scale != sig->scale ) continue;
+	  if ( rule.req_scale != sig->scale )
+	    {
+	      if ( verbose ) logger << "   bailing: did not satisfy scale "
+				    << scale_codes[ sig->scale ]
+				    << " != " << scale_codes[ rule.req_scale ] << "\n";
+	      continue;
+	    }
+	  if ( verbose ) logger << "   satisfies scale "
+				<< scale_codes[ sig->scale ]
+				<< " == " << scale_codes[ rule.req_scale ] << "\n";
+
 	}
+
 
       //
       // If here, we have a match
       //
-      
-      logger << "  matched rule for " << rule.canonical_label << "\n";
-      
+
+      if ( dry_run ) 
+	logger << "  matched rule for " << rule.canonical_label << "\n";
+
       //
       // Construct the CS
       //
 
+      if ( ! dry_run )
+	{
+	  logger << "  + generating canonical signal " << rule.canonical_label
+		 << " from existing signal(s) " << matched_sig;
+	  if ( matched_ref != "" ) logger << " / " << matched_ref ;
+	  logger << "\n";
+	}
       
-      std::cout << rule.canonical_label << "\n"
-		<< " unless : " << print( rule.unless ) << "\n"
-		<< " group  : " << print( rule.group ) << "\n"
-		<< " req sig: " << print( rule.req_sig ) << "\n"
-		<< " req ref: " << print( rule.req_ref ) << "\n"
-		<< " req trs: " << print( rule.req_transducer ) << "\n"
-		<< " req unt: " << print( rule.req_unit ) << "\n"
-		<< " req scl: " << rule.req_scale << "\n"
-		<< " req sr : " << rule.req_sr_min << " - " << rule.req_sr_max << "\n"
-		<< " set sr : " << rule.set_sr << "\n"
-		<< " set unt: " << rule.set_unit 
-		<< "\n\n";
+      //
+      // Does the canonical already exist? 
+      //
+
+      const bool already_present = edf.header.has_signal( rule.canonical_label );
+      
+      
+      //
+      // track that we are using these channels
+      //
+      
+      used.insert( Helper::toupper( matched_sig ) );
+
+      if ( matched_ref != "" )
+	{
+	  // in case we have linked references
+	  //std::cout << " matched ref = " << matched_ref << "\n";
+	  std::vector<std::string> tok = Helper::parse( matched_ref , "," );
+	  for (int i=0; i<tok.size(); i++)
+	    used.insert( Helper::toupper( tok[i] ) );
+	}
+      
+      //
+      // Track that the original should not be dropped, as it features
+      //
+      
+      if ( drop_originals && already_present )
+	do_not_drop.insert( Helper::toupper( rule.canonical_label ) );
+
+
+      //
+      // Copy signal(s)
+      //
+      
+      signal_list_t siglst = edf.header.signal_list( matched_sig );
+      
+      signal_list_t reflst;
+      if ( matched_ref != "" ) 
+	reflst = edf.header.signal_list( matched_ref );
+      
+      //
+      // Generate the new signal (w/ re-referencing optionally)
+      //   false , false = not dereference , not verbose
+      // 
+      
+      if ( ! dry_run )
+	{
+
+	  //
+	  // create a new channel?
+	  //
+	  
+	  if ( ! already_present )
+	    {
+
+	      if ( verbose )
+		logger << "   creating a new EDF signal "
+		       << rule.canonical_label << "\n";
+	      
+	      
+	      edf.reference( siglst ,    // original channel
+			     reflst ,    // reference(s) [ or none ] 
+			     true ,      // create a new channel? 
+			     rule.canonical_label,  // new channel name
+			     rule.set_sr , // new channel SR (0 = do not chang)
+			     false ,  // do not de-reference		       
+			     false ); // not in verbose mode
+	    }
+	  
+	}
+	  
+
+      //
+      // Get the canonical signal (either newly created, or already existing)
+      //
+      
+      signal_list_t canonical_signal = edf.header.signal_list( rule.canonical_label );
+
+      const int canonical_slot = dry_run ? -1 : canonical_signal(0);
+      
+      
+      //
+      // re-reference existing channel?
+      //
+      
+      if ( matched_ref != "" && already_present && ! dry_run )
+	{
+	  // i.e. do not make a new channel, but if we need to re-reference existing one
+	  if ( verbose ) logger << "   re-referencing "
+				<< rule.canonical_label
+				<< " against " << matched_ref << "\n";
+
+	  edf.reference( siglst , reflst , false , "" , 0 );
+	}
+      
+      //
+      // resample an existing channel? (i.e. if not already done above)
+      //
+      
+      if ( rule.set_sr != 0 && already_present && ! dry_run )
+	{
+	  if ( verbose ) logger << "   re-sampling "
+                                << rule.canonical_label
+                                << " to SR = " << rule.set_sr << " Hz\n";
+
+	  dsptools::resample_channel( edf , canonical_slot , rule.set_sr );
+	}
+
+      
+      //
+      // Units
+      //
+
+      if ( ! dry_run )
+	{
+	  // copy existing unit (or if empty, set to '.'
+	  std::string ustr = ".";
+	  
+	  // if unit was a requirement, get the preferred label
+	  if ( rule.req_unit.find( sig->unit ) != rule.req_unit.end() )
+	    ustr = rule.req_unit.find( sig->unit )->second;
+	  else // copy and clean original, if not requirement
+	    ustr = Helper::trim( Helper::sanitize( edf.header.phys_dimension[ canonical_slot ] ) );
+	  
+	  if ( empty_field( ustr ) )
+	    ustr = ".";
+	  
+	  // update EDF header
+	  if ( verbose && edf.header.phys_dimension[ canonical_slot ] != ustr )
+	    logger << "   changing physical unit from "
+		   << edf.header.phys_dimension[ canonical_slot ]
+		   << " to " << ustr << "\n";
+	  edf.header.phys_dimension[ canonical_slot ] = ustr;
+	      
+	  // secondarily, for voltages, convert to either volts, millivolts, microvolts (set-unit)
+	  if ( rule.set_unit != "." ) 
+	    if ( ustr == "V" || ustr == "uV" || ustr == "mV" )
+	      {
+		if ( verbose )
+		  logger << "   setting voltage scale to " << rule.set_unit << "\n";
+		edf.rescale(  canonical_signal(0) , rule.set_unit );
+	      }
+	}
+
+      
+      //
+      // Transducer field
+      //
+
+      if ( ! dry_run )
+	{
+	  
+	  std::string transducer = ".";
+	  // if transducer was a requirement, get the preferred label
+	  if ( wild_trans )
+	    transducer = rule.req_transducer.find( "*" )->second;
+	  else if ( rule.req_transducer.find( sig->transducer ) != rule.req_transducer.end() )
+	    transducer = rule.req_transducer.find( sig->transducer )->second; 
+	  else // copy and clean original, if not requirement
+	    transducer = Helper::trim( Helper::sanitize( edf.header.transducer_type[ canonical_slot ] ) );
+	  
+	  if ( empty_field( transducer ) )
+	    transducer = ".";
+	  
+	  if ( verbose && edf.header.transducer_type[ canonical_slot ]  != transducer )
+	    logger << "   changing transducer field from "
+		   << edf.header.transducer_type[ canonical_slot ]
+		   << " to " << transducer << "\n";
+	  
+	  edf.header.transducer_type[ canonical_slot ] = transducer;	  
+	}
+      
+      
+      //
+      // If keeping existing channel, update label?
+      //
+      
+      if ( already_present && ! dry_run )
+	{
+	  // nb. not updating header.label_all[] , but this is now in memory
+	  // and effectively a new, derived channel, so this is not a problem.
+	  // i.e. *should* never be reading this from disk again in any case.
+	  
+	  edf.header.label[ canonical_slot ] = rule.canonical_label;
+	  
+	  edf.header.label2header[ rule.canonical_label ] = canonical_slot ;
+	}
+      
+      
+      //
+      // output
+      //
+      
+      if ( ! only_check_labels )
+	{
+	  writer.level( rule.canonical_label , "CS" );
+	  writer.value( "DEFINED" , 1 );
+	  writer.value( "SIG" , matched_sig );
+	  if ( matched_ref != "" )
+	    writer.value( "REF" , matched_ref );
+	}
+      
+      if ( only_check_labels )
+	{
+	  retval.okay[ rule.canonical_label ] = true;
+	  retval.sig[ rule.canonical_label ] = matched_sig;
+	  retval.ref[ rule.canonical_label ] = matched_ref == "" ? "." : matched_ref;
+	}
+      
+      
+      //
+      // track that we have completed this rule
+      //
+      
+      completed.insert( rule.canonical_label );
+      
+      //
+      // Verbose output
+      //
+      
+      // logger << "  applied rule: " << rule.canonical_label << "\n"
+      // 	     << " unless : " << print( rule.unless ) << "\n"
+      // 	     << " group  : " << print( rule.group ) << "\n"
+      // 	     << " req sig: " << print( rule.req_sig ) << "\n"
+      // 	     << " req ref: " << print( rule.req_ref ) << "\n"
+      // 	     << " req trs: " << print( rule.req_transducer ) << "\n"
+      // 	     << " req unt: " << print( rule.req_unit ) << "\n"
+      // 	     << " req scl: " << rule.req_scale << "\n"
+      // 	     << " req sr : " << rule.req_sr_min << " - " << rule.req_sr_max << "\n"
+      // 	     << " set sr : " << rule.set_sr << "\n"
+      // 	     << " set unt: " << rule.set_unit 
+      // 	     << "\n\n";
+
+      
+    } // next rule 
+  
+  
+  // tidy if any output
+  if ( ! only_check_labels )
+    {
+      if ( completed.size() != 0 )
+	writer.unlevel( "CS" );
+
+      // some additional summaries
+      writer.value( "CS_SET" , (int)completed.size() );
+      writer.value( "CS_NOT" , (int)(attempted.size() - completed.size()) );
+    }
+  
+  
+
+  if ( verbose )
+    logger << "\n  finished processing all rules\n";
+      
+
+  
+  //
+  // report on any failed canonical signals
+  //
+  
+  if ( ! only_check_labels ) 
+    {
+      bool any_incomplete = false;
+
+      // report on which canonical signals we did not complete
+      std::set<std::string>::const_iterator ii = attempted.begin();
+      while ( ii != attempted.end() )
+	{
+	  if ( completed.find( *ii ) == completed.end() )
+	    {
+	      any_incomplete = true;
+	      writer.level( *ii , "CS" );
+	      writer.value( "DEFINED" , 0 );
+	    }
+	  ++ii;
+	}
+
+      if ( any_incomplete )
+	writer.unlevel( "CS" );
+
       
     }
 
+
   
-  return;
+
+   //
+   // Drop original signals?
+   //
+
+  if ( ! only_check_labels )
+    {
+
+      if ( drop_originals && ! dry_run )
+ 	logger << "  now dropping all (non-canonical) original signals\n";
+
+      const int ns = osignals.size();
+      
+      int sigs_used = 0;
+      int sigs_unused = 0;
+      
+      for (int s=0; s<ns; s++)
+ 	{
+ 	  const std::string label = osignals.label(s) ;
+	  
+ 	  if ( do_not_drop.find( Helper::toupper( label ) ) == do_not_drop.end() )
+ 	    {
+
+ 	      int slot = edf.header.signal( label );
+
+ 	      if ( slot == -1 )
+ 		Helper::halt( "internal error in edf_t::canonical()" );
+
+ 	      if ( drop_originals && ! dry_run )
+		edf.drop_signal( slot );
+	      
+	      bool was_used = used.find( Helper::toupper( label ) ) != used.end() ? 1 : 0 ;
+	      
+	      // report output
+	      writer.level( label , globals::signal_strat );	      
+ 	      writer.value( "DROPPED" , 1 );	      	      
+ 	      writer.value( "USED" , was_used );
+	      
+	      if ( was_used ) ++sigs_used;
+	      else ++sigs_unused;	      
+	      
+ 	    }
+	  else
+	    {
+	      // presumably always 'used' here.. but do this way just in case...
+	      bool was_used = used.find( Helper::toupper( label ) ) != used.end() ? 1 : 0 ;
+	      
+	      writer.level( label , globals::signal_strat );
+              writer.value( "DROPPED" , 0 );
+              writer.value( "USED" , was_used );
+	      
+	      if ( was_used ) ++sigs_used;
+	      else ++sigs_unused;	      
+	      
+	    }
+	  writer.unlevel( globals::signal_strat ); 
+ 	}      
+
+      writer.value( "USED_CH" , sigs_used );
+      writer.value( "UNUSED_CH" , sigs_unused );
+      
+    }
   
 }
 
 
 
 
+bool canonical_t::ref_match( const std::vector<std::string> & a , std::set<canon_edf_signal_t> & b , std::string * match )
+{
+  
+  // find first instance in 'a' (req sig list) that is in b (EDF) 
+  for (int i=0; i<a.size(); i++)
+    {
+      // allow for "M1,M2" linked mastoid matching
+      // (as prior search was a quoted one
+      //std::cout << " checking ref [" << a[i] << "]\n";
+
+      std::vector<std::string> tok = Helper::parse( a[i] , "," );
+
+      // all must match
+      bool all_match = true;
+      for (int j=0; j<tok.size(); j++)
+	{
+	  canon_edf_signal_t s1( tok[j] );
+	  if ( b.find( s1 ) == b.end() )
+	    all_match = false;	  
+	  if ( ! all_match ) break;
+	}
+
+      if ( all_match )
+	{
+	  // i.e. set the string as the original M1,M2 version, if a linked ref.
+	  *match = a[i];
+	  //std::cout << "MATYCHED!\n";
+	  return true;
+	}
+    }
+  //  std::cout << "NOT MATYCHED!\n";
+  return false;    
+}
 
 
 // END OF NEW SECTION
@@ -684,7 +1243,7 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
   // also includes unit-label --> harm-unit mapping at end
   std::map<std::pair<std::string,std::string>,std::map<std::string,std::string> > req_unit;
   std::map<std::pair<std::string,std::string>,std::set<std::string> > req_trans;
-  
+
   std::map<std::pair<std::string,std::string>,int> req_scale;  // -1, 0 , +1 
 
 
@@ -718,7 +1277,7 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  if ( IN1.eof() ) break;
 	  if ( line.size() >= 1 && line[0] == '%' ) continue;
 	  
-	  std::cout << " line[" << line << "]\n";
+	  //	  std::cout << " line[" << line << "]\n";
 
 	  // white-space quoted parsing of this line
 	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
@@ -898,7 +1457,7 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
   //
   // For each canonical signal (ie the order in which we encountered them)
   //
-  
+
   std::vector<std::string>::const_iterator cc = canons.begin();
   while ( cc != canons.end() )
     {
@@ -1103,6 +1662,7 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 		  if ( empty_field && *tt == "." ) { matches = true; break; }
  		  ++tt;
 		}
+	      
 	      if ( ! matches )
 		{
 		  logger << "  did not meet transducer type requirement: EDF = " << edf_transducer << "\n";
@@ -1225,7 +1785,7 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  //
 	  // Sample rate changes?
 	  //
-
+	  
 	  std::string srstr = srs.find( canon )->second[j];
 	  
 	  // if SR == '.' means do not change SR

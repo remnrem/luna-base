@@ -65,6 +65,7 @@ void irasa_wrapper( edf_t & edf , param_t & param )
   const double overlap_sec = param.has( "segment-overlap" ) ?  param.requires_dbl( "segment-overlap" ) : 2 ;
 
   const bool logout = param.has( "dB" );
+  const bool epoch_lvl_output = param.has( "epoch" );
   
   //
   // Iterate over signals
@@ -95,7 +96,8 @@ void irasa_wrapper( edf_t & edf , param_t & param )
       // analysis 
       //
 
-      irasa_t irasa( *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr , segment_sec , overlap_sec );
+      irasa_t irasa( edf , *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
+		     segment_sec , overlap_sec , epoch_lvl_output);
 
       //
       // output
@@ -135,7 +137,8 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 }
 
 
-irasa_t::irasa_t( const std::vector<double> & d ,
+irasa_t::irasa_t( edf_t & edf ,
+		  const std::vector<double> & d ,
 		  const int sr ,
 		  const double epoch_sec,
 		  const int ne, 
@@ -145,7 +148,8 @@ irasa_t::irasa_t( const std::vector<double> & d ,
 		  const double f_lwr,
 		  const double f_upr ,
 		  const double segment_sec , 
-		  const double overlap_sec  )
+		  const double overlap_sec ,
+		  const bool epoch_lvl_output )
 {
   
   const double h_inc = ( h_max - h_min ) / (double)(h_cnt-1);
@@ -162,7 +166,7 @@ irasa_t::irasa_t( const std::vector<double> & d ,
   //
 
   
-  window_function_t window_function = WINDOW_TUKEY50;	   
+  window_function_t window_function = WINDOW_HAMMING;	   
   // if      ( param.has( "no-window" ) ) window_function = WINDOW_NONE;
   // else if ( param.has( "hann" ) ) window_function = WINDOW_HANN;
   // else if ( param.has( "hamming" ) ) window_function = WINDOW_HAMMING;
@@ -182,149 +186,203 @@ irasa_t::irasa_t( const std::vector<double> & d ,
   std::vector<std::vector<double> > up, down;
   std::vector<int> up_epoch_smps, down_epoch_smps;
   
-      for (int hi=0; hi<h_cnt; hi++)
-	{
-	  const double h = h_min + hi * h_inc;	  
-	  //logger << "  creating resampled signals for " << signals.label(s) << " h = " << h << "\n";
-	  
-	  up.push_back( dsptools::resample( &d , sr , sr * h , converter ) );
-	  down.push_back( dsptools::resample( &d , sr , sr / h , converter ) );
-	  
-	  const int up_smps = up[ up.size() - 1 ].size();
-	  const int down_smps = down[ down.size() - 1 ].size();
-	  up_epoch_smps.push_back( up_smps / ne );
-	  down_epoch_smps.push_back( down_smps / ne );	  
-	}      
+  for (int hi=0; hi<h_cnt; hi++)
+    {
+      const double h = h_min + hi * h_inc;	  
+      //logger << "  creating resampled signals for " << signals.label(s) << " h = " << h << "\n";
+      
+      up.push_back( dsptools::resample( &d , sr , sr * h , converter ) );
+      down.push_back( dsptools::resample( &d , sr , sr / h , converter ) );
+      
+      const int up_smps = up[ up.size() - 1 ].size();
+      const int down_smps = down[ down.size() - 1 ].size();
+      up_epoch_smps.push_back( up_smps / ne );
+      down_epoch_smps.push_back( down_smps / ne );	  
+    }      
+  
 
-      //
-      // Process epoch-wise
-      //
+  frq.clear();	  
+  periodic.clear();
+  aperiodic.clear();
+  
+  //
+  // Process epoch-wise
+  //
 
-      for (int ec = 0; ec < ne ; ec++)
-	{
-	  
-	  // get original 
-	  std::vector<double> x( orig_epoch_smps );
-	  for (int i=0; i<orig_epoch_smps; i++)
-	    x[i] = d[ ec * orig_epoch_smps + i ] ;
-	  	  
-	  MiscMath::centre( x );
-	  
-	  const int total_points = orig_epoch_smps;
-	  
-	  // implied number of segments                                                                                                                                        
-	  const int noverlap_segments = floor( ( total_points - noverlap_points)
-					       / (double)( segment_points - noverlap_points ) );
-	  
-	  PWELCH pwelch( x ,
-	   		 sr, 
-	   		 segment_sec ,
-	   		 noverlap_segments ,
-	   		 window_function ,
-	   		 use_seg_median );
+  edf.timeline.first_epoch();
 
 
-	  std::vector<std::vector<double> > updowns( h_cnt );
-	  
-	  //
-	  // Up/down-sampled versions
-	  //
-	  
-	  for (int hi=0; hi<h_cnt; hi++)
-	    {
-	      const double h = h_min + hi * h_inc;
-	      
-	      const std::vector<double> & hup = up[ hi ];
-	      const std::vector<double> & hdown = down[ hi ];
-	      
-	      const int up_smps = up_epoch_smps[ hi ];
-	      const int down_smps = down_epoch_smps[ hi ];
-	      
-	      std::vector<double> up1( up_smps );
-	      for (int i=0; i<up_smps; i++)
-		up1[i] = hup[ ec * up_smps + i ];
-	      
-	      std::vector<double> down1( down_smps );
-	      for (int i=0; i<down_smps; i++)
-		down1[i] = hdown[ ec * down_smps + i ];
-
-	      //
-	      // up
-	      //
-	      
-	      const int up_noverlap_segments = floor( ( up_smps - noverlap_points )
-						      / (double)( segment_points - noverlap_points ) );
-	      
-	      PWELCH up_pwelch( up1 ,
-				sr, 
-				segment_sec ,
-				noverlap_segments ,
-				window_function ,
-				use_seg_median );
-	      
-	      
-	      //
-	      // down
-	      //
-	      
-	      const int down_noverlap_segments = floor( ( down_smps - noverlap_points )
-							/ (double)( segment_points - noverlap_points ) );
-	      
-	      PWELCH down_pwelch( down1 ,
-				  sr, 
-				  segment_sec ,
-				  noverlap_segments ,
-				  window_function ,
-				  use_seg_median );
-
-	      
-	      // for (int i=0; i<up_pwelch.psd.size() ; i++)
-	      //  	{
-	      // 	  if ( pwelch.freq[i] >= f_lwr  && pwelch.freq[i] <= f_upr  ) 
-	      // 	    std::cout << h << "\t" << pwelch.freq[i] << "\t"
-	      // 		      << 10*log10( pwelch.psd[i] ) << "\t"
-	      // 		      << 10*log10( up_pwelch.psd[i] ) << "\t" << 10*log10( down_pwelch.psd[i] )  << "\n";
-	      //  	}
-
-	      //
-	      // collate geometric means (for freq range only)
-	      //
-	      
-	      std::vector<double> ud;
-	      for (int i=0; i<pwelch.psd.size() ; i++)                                                                                                                                    
-		{
-		  //if ( pwelch.freq[ i ] >= f_lwr && pwelch.freq[ i ] <= f_upr )		  
-		  ud.push_back( sqrt( up_pwelch.psd[i] * down_pwelch.psd[i] ) );
-		}	      
-	      updowns[ hi ] = ud;
-	      
-	    }
-
-	  
-	  // take median for each frequency
-	  frq.clear();	  
-	  for (int i=0; i<pwelch.psd.size() ; i++)
-	    {
-	      if ( pwelch.freq[ i ] >= f_lwr && pwelch.freq[ i ] <= f_upr )
-		{
-		  frq.push_back( pwelch.freq[ i ] );
-
-		  std::vector<double> du( h_cnt );
-		  for (int hi=0; hi<h_cnt; hi++) du[hi] = updowns[hi][i];
-		  const double est = MiscMath::median( du , true );
-
-		  const double aper = MiscMath::median( du , true ) ;
-		  aperiodic.push_back( aper);
-		  periodic.push_back( pwelch.psd[ i ] - aper );
-		}
-	      n = frq.size();	      
-	    }
-	  
-	  // next epoch
-	  ++ec;
-	}
+  for (int ec = 0; ec < ne ; ec++)
+    {
 
       
+      int epoch = edf.timeline.next_epoch();
+      
+      if ( epoch == -1 )
+	Helper::halt( "internal error in irasa_t() - we've lost track of epoch counts" );
+
+      // get original 
+      std::vector<double> x( orig_epoch_smps );
+      for (int i=0; i<orig_epoch_smps; i++)
+	x[i] = d[ ec * orig_epoch_smps + i ] ;
+      
+      MiscMath::centre( x );
+      
+      const int total_points = orig_epoch_smps;
+      
+      // implied number of segments                                                                                                                                        
+      const int noverlap_segments = floor( ( total_points - noverlap_points)
+					   / (double)( segment_points - noverlap_points ) );
+      
+      PWELCH pwelch( x ,
+		     sr, 
+		     segment_sec ,
+		     noverlap_segments ,
+		     window_function ,
+		     use_seg_median );
+      
+      
+      std::vector<std::vector<double> > updowns( h_cnt );
+      
+      //
+      // Up/down-sampled versions
+      //
+      
+      for (int hi=0; hi<h_cnt; hi++)
+	{
+	  const double h = h_min + hi * h_inc;
+	  
+	  const std::vector<double> & hup = up[ hi ];
+	  const std::vector<double> & hdown = down[ hi ];
+	      
+	  const int up_smps = up_epoch_smps[ hi ];
+	  const int down_smps = down_epoch_smps[ hi ];
+	  
+	  std::vector<double> up1( up_smps );
+	  for (int i=0; i<up_smps; i++)
+	    up1[i] = hup[ ec * up_smps + i ];
+	  
+	  std::vector<double> down1( down_smps );
+	  for (int i=0; i<down_smps; i++)
+	    down1[i] = hdown[ ec * down_smps + i ];
+	  
+	  //
+	  // up
+	  //
+	  
+	  const int up_noverlap_segments = floor( ( up_smps - noverlap_points )
+						  / (double)( segment_points - noverlap_points ) );
+	  
+	  MiscMath::centre( up1 );
+	  
+	  PWELCH up_pwelch( up1 ,
+			    sr, 
+			    segment_sec ,
+			    noverlap_segments ,
+			    window_function ,
+			    use_seg_median );
+	  
+	      
+	  //
+	  // down
+	  //
+	  
+	  const int down_noverlap_segments = floor( ( down_smps - noverlap_points )
+						    / (double)( segment_points - noverlap_points ) );
+	  
+	  MiscMath::centre( down1 );
+	  
+	  PWELCH down_pwelch( down1 ,
+			      sr, 
+			      segment_sec ,
+			      noverlap_segments ,
+			      window_function ,
+			      use_seg_median );
+	  
+	      
+	  //
+	  // collate geometric means (for freq range only)
+	  //
+	  
+	  std::vector<double> ud;
+	  for (int i=0; i<pwelch.psd.size() ; i++)
+	    ud.push_back( sqrt( up_pwelch.psd[i] * down_pwelch.psd[i] ) );
+	  updowns[ hi ] = ud;
+	  
+	}
+      
+      //
+      // take median for each frequency
+      //
+
+      const bool first_epoch = frq.size() == 0 ;
+
+      int cnt = 0;
+
+      // verbose, epoch level output?
+      if ( epoch_lvl_output )
+	writer.epoch( edf.timeline.display_epoch( epoch ) );
+
+      // get main statistics for this epoch
+      for (int i=0; i<pwelch.psd.size() ; i++)
+	{
+	  if ( pwelch.freq[ i ] >= f_lwr && pwelch.freq[ i ] <= f_upr )
+	    {
+	      
+	      std::vector<double> du( h_cnt );
+	      for (int hi=0; hi<h_cnt; hi++) du[hi] = updowns[hi][i];
+	      
+	      const double aper = MiscMath::median( du , true ) ;
+	      const double per = pwelch.psd[ i ] - aper ;
+		
+	      if ( first_epoch )
+		{
+		  frq.push_back( pwelch.freq[ i ] );	      
+		  aperiodic.push_back( aper );
+		  periodic.push_back( per );
+		}
+	      else
+		{		  
+                  aperiodic[ cnt ] += aper;
+                  periodic[ cnt ] += per ; 
+		  ++cnt;
+		}
+
+	      // verbose, epoch level output?
+	      if ( epoch_lvl_output )
+		{		            
+		  writer.level( pwelch.freq[ i ] , globals::freq_strat );
+		  writer.value( "PER" , per );
+		  writer.value( "APER" , aper );			    
+		}	      
+	    }
+
+	  if ( epoch_lvl_output )
+	    writer.unlevel( globals::freq_strat );
+	  
+	}
+	  
+      // next epoch
+      ++ec;
+    }
+
+  if ( epoch_lvl_output )
+    writer.unepoch();
+  
+  //
+  // average
+  //
+
+  n = frq.size();
+
+  for (int i=0; i<n; i++)
+    {
+      periodic[i] /= (double)n;
+      aperiodic[i] /= (double)n;
+    }
+      
 }
+
+
 
 

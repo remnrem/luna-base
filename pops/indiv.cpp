@@ -376,12 +376,16 @@ void pops_indiv_t::level1( edf_t & edf )
       // need to rescale?
       if ( Helper::toupper( edf.header.phys_dimension[ slot ] ) != Helper::toupper( ss->second.unit ) )
 	{
-	  logger << "  rescaling " << ss->first 
-		 << " from " << edf.header.phys_dimension[ slot ] 
-		 << " to " << ss->second.unit << "\n";
-	  edf.rescale( slot , ss->second.unit );
+	  const std::string & ounit = Helper::toupper( edf.header.phys_dimension[ slot ] );
+	  if ( ounit == "V" || ounit == "MV" || ounit == "UV" )
+	    {
+	      logger << "  rescaling " << ss->first 
+		     << " from " << edf.header.phys_dimension[ slot ] 
+		     << " to " << ss->second.unit << "\n";
+	      edf.rescale( slot , ss->second.unit );
+	    }
 	}
-
+      
       // build signal_list_t
       signals.add( slot , ss->first );
       

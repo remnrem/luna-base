@@ -32,7 +32,8 @@ void irasa_wrapper( edf_t & edf , param_t & param );
 
 struct irasa_t { 
   
-  irasa_t( const std::vector<double> & x ,
+  irasa_t( edf_t & edf ,
+	   const std::vector<double> & x ,
 	   const int sr ,
 	   const double epoch_sec,
 	   const int ne, 
@@ -42,7 +43,8 @@ struct irasa_t {
  	   const double lwr,
 	   const double upr,
 	   const double seg_sec,
-	   const double overlap_sec 
+	   const double overlap_sec,
+	   const bool epoch_lvl_output 
 	   );
 
 

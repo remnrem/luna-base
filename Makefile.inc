@@ -41,7 +41,7 @@ endif
 CXX = g++
 CC = gcc
 
-CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I..
+CXXFLAGS=-O0 -std=gnu++11 -MMD -MP -I. -I..
 #CXXFLAGS=-O0 -std=gnu++11 -MMD -MP -I. -I.. -pg
 
 CXXFLAGS +=$(DEP_INCLUDES)

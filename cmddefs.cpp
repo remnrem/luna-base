@@ -1452,6 +1452,42 @@ void cmddefs_t::init()
   add_var( "MTM" , "CH,F,SEG" , "MTM" , "Power" );
   set_compressed( "MTM" , tfac_t( "CH,F,SEG" ) );
 
+
+  //
+  // IRASA
+  //
+  
+  add_cmd( "power"   , "IRASA" , "Irregular-Resampling Auto-Spectral Analysis (IRASA)" );
+  add_url( "IRASA" , "power-spectra/#irasa" );
+
+  add_param( "IRASA" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "IRASA" , "lwr" , "1" ,   "Lower frequency range" );
+  add_param( "IRASA" , "upr" , "20" ,   "Upper frequency range" );
+  add_param( "IRASA" , "h-min" , "1.05" , "Minimum h" );
+  add_param( "IRASA" , "h-max" , "1.95" , "Maximum h" );
+  add_param( "IRASA" , "h-cnt" , "17" , "Number of h steps (min-max)" );
+  add_param( "IRASA" , "dB" , "" , "Decibel scale output" );
+  add_param( "IRASA" , "epoch" , "" , "Report per-epoch statistics" );
+  
+  add_table( "IRASA" , "CH" , "Whole-night, per-channel stats" );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
+
+  add_table( "IRASA" , "CH,F" , "Whole-night, per-channel stats" );
+  add_var( "IRASA" , "CH,F" , "APER" , "Aperiodic PSD component" );
+  add_var( "IRASA" , "CH,F" , "PER" , "Periodic PSD component" );
+  add_var( "IRASA" , "CH,F" , "LOGF" , "Log-transformed frequency" );
+
+  add_table( "IRASA" , "CH,E,F" , "Epoch-level, per-channel stats" );
+  add_var( "IRASA" , "CH,E,F" , "APER" , "Aperiodic PSD component" );
+  add_var( "IRASA" , "CH,E,F" , "PER" , "Periodic PSD component" );
+  add_var( "IRASA" , "CH,E<F" , "LOGF" , "Log-transformed frequency" );
+
+
+  
   //
   // MSE
   //
