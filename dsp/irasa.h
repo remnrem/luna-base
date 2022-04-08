@@ -45,7 +45,9 @@ struct irasa_t {
 	   const double seg_sec,
 	   const double overlap_sec,
 	   const int converter ,
-	   const bool epoch_lvl_output 
+	   const bool epoch_lvl_output , 
+	   const std::vector<double> & slope_range , 
+	   const double slope_outlier 
 	   );
 
 

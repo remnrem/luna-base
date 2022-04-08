@@ -61,7 +61,10 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
 			    const std::vector<double> & fr , 
 			    const double outlier , 
 			    const bool display = true , 
-			    double * beta = NULL , double * betan = NULL );
+			    double * beta = NULL , 
+			    double * betan = NULL , 
+			    double * intercept = NULL , 
+			    double * rsq = NULL );
 
 void peakedness( const std::vector<double> & p , 
 		 const std::vector<double> & f0 , 

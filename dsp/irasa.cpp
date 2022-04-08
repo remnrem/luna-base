@@ -69,8 +69,15 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 
   const int converter = param.has( "fast" ) ? SRC_LINEAR : SRC_SINC_FASTEST ;
 
+  std::vector<double> slope_range(2);
+  slope_range[0] = f_lwr;
+  slope_range[1] = f_upr;
+  const double slope_outlier = 2 ; 
+
   const double fmin = f_lwr / h_max;
   const double fmax = f_upr * h_max;
+
+  
 
   logger << "  specified frequency range is " << f_lwr << " - " << f_upr << " Hz\n";
   logger << "  full evaluated frequency range given h_max = " << h_max
@@ -122,7 +129,7 @@ void irasa_wrapper( edf_t & edf , param_t & param )
       //
 
       irasa_t irasa( edf , *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
-		     segment_sec , overlap_sec , converter , epoch_lvl_output);
+		     segment_sec , overlap_sec , converter , epoch_lvl_output , slope_range , slope_outlier );
 
       //
       // output
@@ -153,7 +160,17 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 	    }
 	}
       writer.unlevel( globals::freq_strat );
-            
+
+      //
+      // spectral slope?
+      //
+      
+      bool okay = spectral_slope_helper( irasa.aperiodic , 
+					 irasa.frq ,
+					 slope_range ,
+					 slope_outlier ,
+					 true );
+      
       // next signal
     }
 
@@ -175,7 +192,9 @@ irasa_t::irasa_t( edf_t & edf ,
 		  const double segment_sec , 
 		  const double overlap_sec ,
 		  const int converter, 
-		  const bool epoch_lvl_output )
+		  const bool epoch_lvl_output , 
+		  const std::vector<double> & slope_range , 
+		  const double slope_outlier )
 {
   
   const double h_inc = ( h_max - h_min ) / (double)(h_cnt-1);
@@ -347,6 +366,8 @@ irasa_t::irasa_t( edf_t & edf ,
 	writer.epoch( edf.timeline.display_epoch( epoch ) );
 
       // get main statistics for this epoch
+      std::vector<double> aper_spectrum, aper_frq;
+
       for (int i=0; i<pwelch.psd.size() ; i++)
 	{
 	  if ( pwelch.freq[ i ] >= f_lwr && pwelch.freq[ i ] <= f_upr )
@@ -370,10 +391,13 @@ irasa_t::irasa_t( edf_t & edf ,
                   periodic[ cnt ] += per ; 
 		  ++cnt;
 		}
-
+	      
 	      // verbose, epoch level output?
 	      if ( epoch_lvl_output )
-		{		            
+		{		            		  
+		  aper_frq.push_back( pwelch.freq[ i ] );
+		  aper_spectrum.push_back( aper );
+		  
 		  writer.level( pwelch.freq[ i ] , globals::freq_strat );
 		  writer.value( "PER" , per );
 		  writer.value( "APER" , aper );			    
@@ -384,7 +408,20 @@ irasa_t::irasa_t( edf_t & edf ,
 	    writer.unlevel( globals::freq_strat );
 	  
 	}
-	  
+
+      //
+      // spectral slope
+      //
+      
+      if ( epoch_lvl_output ) 
+	{
+	  bool okay = spectral_slope_helper( aper_spectrum , 
+					     aper_frq , 
+					     slope_range ,
+					     slope_outlier ,
+					     true );	  
+	}
+
       // next epoch
       ++ec;
     }
