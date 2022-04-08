@@ -57,8 +57,8 @@ void irasa_wrapper( edf_t & edf , param_t & param )
   const double h_max = param.has( "h-max" ) ? param.requires_dbl( "h-max" ) : 1.95;
   const int    h_cnt = param.has( "h-steps" ) ? param.requires_dbl( "h-steps" ) : 19;
   
-  const double f_lwr = param.has( "lwr" ) ? param.requires_dbl( "lwr" ) : 1 ;
-  const double f_upr = param.has( "upr" ) ? param.requires_dbl( "upr" ) : 30 ;
+  const double f_lwr = param.has( "min" ) ? param.requires_dbl( "min" ) : 1 ;
+  const double f_upr = param.has( "max" ) ? param.requires_dbl( "max" ) : 30 ;
   
   const bool average_adj = false;
   const double segment_sec = param.has( "segment-sec" ) ? param.requires_dbl( "segment-sec" ) : 4 ;
@@ -66,6 +66,31 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 
   const bool logout = param.has( "dB" );
   const bool epoch_lvl_output = param.has( "epoch" );
+
+  const int converter = param.has( "fast" ) ? SRC_LINEAR : SRC_SINC_FASTEST ;
+
+  const double fmin = f_lwr / h_max;
+  const double fmax = f_upr * h_max;
+
+  logger << "  specified frequency range is " << f_lwr << " - " << f_upr << " Hz\n";
+  logger << "  full evaluated frequency range given h_max = " << h_max
+	 << " is " << fmin << " - " << fmax << " Hz\n";
+
+  bool problem = false;
+  for (int s=0; s<ns; s++)
+    {
+      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+      if ( fmax > Fs[s] / 2.0 )
+	{
+	  logger << "  for " << signals.label(s) << ", Nyquist = " << Fs[s] / 2.0
+		 << " Hz is less than implied upper evaluated of " << h_max << " * " << f_upr << " = " << fmax << " Hz\n";
+	  problem = true;
+	}
+      
+    }
+
+  if ( problem )
+    logger << "  *** warning *** evaluated frequency range exceeds Nyquist for one or more signals\n";
   
   //
   // Iterate over signals
@@ -97,7 +122,7 @@ void irasa_wrapper( edf_t & edf , param_t & param )
       //
 
       irasa_t irasa( edf , *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
-		     segment_sec , overlap_sec , epoch_lvl_output);
+		     segment_sec , overlap_sec , converter , epoch_lvl_output);
 
       //
       // output
@@ -149,6 +174,7 @@ irasa_t::irasa_t( edf_t & edf ,
 		  const double f_upr ,
 		  const double segment_sec , 
 		  const double overlap_sec ,
+		  const int converter, 
 		  const bool epoch_lvl_output )
 {
   
@@ -179,10 +205,7 @@ irasa_t::irasa_t( edf_t & edf ,
   //
   // Get resampled versions of channels
   //
-  
-  //const int converter = param.has( "fast" ) ? SRC_LINEAR : SRC_SINC_FASTEST ;
-  const int converter = SRC_LINEAR ;
-  
+    
   std::vector<std::vector<double> > up, down;
   std::vector<int> up_epoch_smps, down_epoch_smps;
   
