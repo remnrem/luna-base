@@ -46,15 +46,20 @@ struct irasa_t {
 	   const double overlap_sec,
 	   const int converter ,
 	   const bool epoch_lvl_output ,
-	   const bool logout 	  
+	   const bool logout , 	  
+	   const std::vector<double> & slope_range , 
+ 	   const double slope_outlier ,
+	   const int window , 
+	   const bool segment_median ,
+	   const bool epoch_median 	   
 	   );
-
 
   
   int n;
   std::vector<double> frq;
   std::vector<double> periodic;
   std::vector<double> aperiodic;
+  std::vector<double> aperiodic_raw;
   
 };
 

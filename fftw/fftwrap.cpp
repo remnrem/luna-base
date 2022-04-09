@@ -1239,7 +1239,7 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
 			    const std::vector<double> & fr , 
 			    const double outlier , 
 			    const bool display , 
-			    double * b , double * bn )
+			    double * b , double * bn , double * bi , double * rsq )
 {
   
   std::vector<double> slope_y, slope_x;
@@ -1307,18 +1307,21 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
   if ( slope_y.size() < 3 ) return false ;
   
   dynam_t spec_slope( slope_y , slope_x );
-  double beta_spec_slope;
-  spec_slope.linear_trend( &beta_spec_slope , NULL );
+  double beta_spec_slope, beta_rsq, intercept;
+  spec_slope.linear_trend( &beta_spec_slope , &beta_rsq , &intercept );
 
   if ( display ) 
     {
       writer.value( "SPEC_SLOPE" , beta_spec_slope );
+      writer.value( "SPEC_INTERCEPT" , intercept );
+      writer.value( "SPEC_RSQ" , beta_rsq );
       writer.value( "SPEC_SLOPE_N" , (int)slope_y.size() );
     }
   
   if ( b != NULL ) *b = beta_spec_slope;
   if ( bn != NULL ) *bn = (int)slope_y.size();
-
+  if ( bi != NULL ) *bi = intercept;
+  if ( rsq != NULL ) *rsq = beta_rsq;
   return true;
 }
 
