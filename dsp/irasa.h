@@ -45,7 +45,8 @@ struct irasa_t {
 	   const double seg_sec,
 	   const double overlap_sec,
 	   const int converter ,
-	   const bool epoch_lvl_output 
+	   const bool epoch_lvl_output ,
+	   const bool logout 	  
 	   );
 
 
@@ -54,7 +55,6 @@ struct irasa_t {
   std::vector<double> frq;
   std::vector<double> periodic;
   std::vector<double> aperiodic;
-  
   
 };
 

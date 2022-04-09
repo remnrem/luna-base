@@ -122,8 +122,8 @@ void irasa_wrapper( edf_t & edf , param_t & param )
       //
 
       irasa_t irasa( edf , *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
-		     segment_sec , overlap_sec , converter , epoch_lvl_output);
-
+		     segment_sec , overlap_sec , converter , epoch_lvl_output , logout );
+      
       //
       // output
       //
@@ -131,26 +131,13 @@ void irasa_wrapper( edf_t & edf , param_t & param )
       for (int f=0; f<irasa.n; f++)
 	{
 	  writer.level( irasa.frq[f] , globals::freq_strat );
-	  if ( logout )
-	    {
-	      writer.value( "LOGF" , log( irasa.frq[f] ) );
-	      if ( irasa.periodic[f] > 0 )
-		{
-		  const double logper = 10 * log10( irasa.periodic[f] );
-		  writer.value( "PER" , logper );
-		}
 
-	      if( irasa.aperiodic[f] > 0 )
-		{
-		  const double logaper = 10 * log10( irasa.aperiodic[f] );		  
-		  writer.value( "APER" , logaper );
-		}
-	    }
-	  else
-	    {
-	      writer.value( "PER" , irasa.periodic[f] );
-	      writer.value( "APER" , irasa.aperiodic[f] );	  
-	    }
+	  if ( logout )	    
+	    writer.value( "LOGF" , log( irasa.frq[f] ) );
+	  
+	  writer.value( "APER" , irasa.aperiodic[f] );
+	  writer.value( "PER" , irasa.periodic[f] );	      
+
 	}
       writer.unlevel( globals::freq_strat );
             
@@ -175,7 +162,8 @@ irasa_t::irasa_t( edf_t & edf ,
 		  const double segment_sec , 
 		  const double overlap_sec ,
 		  const int converter, 
-		  const bool epoch_lvl_output )
+		  const bool epoch_lvl_output ,
+		  const bool logout )
 {
   
   const double h_inc = ( h_max - h_min ) / (double)(h_cnt-1);
@@ -227,7 +215,7 @@ irasa_t::irasa_t( edf_t & edf ,
   frq.clear();	  
   periodic.clear();
   aperiodic.clear();
-  
+
   //
   // Process epoch-wise
   //
@@ -237,7 +225,6 @@ irasa_t::irasa_t( edf_t & edf ,
 
   for (int ec = 0; ec < ne ; ec++)
     {
-
       
       int epoch = edf.timeline.next_epoch();
       
@@ -355,40 +342,89 @@ irasa_t::irasa_t( edf_t & edf ,
 	      std::vector<double> du( h_cnt );
 	      for (int hi=0; hi<h_cnt; hi++) du[hi] = updowns[hi][i];
 	      
-	      const double aper = MiscMath::median( du , true ) ;
-	      const double per = pwelch.psd[ i ] - aper ;
-		
-	      if ( first_epoch )
-		{
-		  frq.push_back( pwelch.freq[ i ] );	      
-		  aperiodic.push_back( aper );
-		  periodic.push_back( per );
-		}
-	      else
-		{		  
-                  aperiodic[ cnt ] += aper;
-                  periodic[ cnt ] += per ; 
-		  ++cnt;
-		}
+	      double aper = MiscMath::median( du , true ) ;
+	      double per = pwelch.psd[ i ] - aper ;
+	      
+	      const bool okay = aper > 0 &&  pwelch.psd[ i ] > 0 ;
 
+	      double log_aper, log_per;
+	      
+	      if ( logout && okay )
+		{
+		  log_aper = 10 * log10( aper );
+                  log_per = 10 * log10( pwelch.psd[ i ] ) - log_aper;
+		}
+	      
 	      // verbose, epoch level output?
 	      if ( epoch_lvl_output )
 		{		            
-		  writer.level( pwelch.freq[ i ] , globals::freq_strat );
-		  writer.value( "PER" , per );
-		  writer.value( "APER" , aper );			    
-		}	      
-	    }
 
-	  if ( epoch_lvl_output )
-	    writer.unlevel( globals::freq_strat );
-	  
+		  writer.level( pwelch.freq[ i ] , globals::freq_strat );
+		  
+		  if ( logout )
+		    {
+		      if ( okay )
+			{
+			  writer.value( "PER" , log_per );
+			  writer.value( "APER" , log_aper );			    
+			}
+		    }
+		  else
+		    {
+		      writer.value( "PER" , per );
+		      writer.value( "APER" , aper );
+		    }
+		}
+
+	      //
+	      // track for average over all 
+	      //
+	      
+	      if ( logout )
+		{
+		  if ( okay )
+		    {
+		      if ( first_epoch )
+			{
+			  frq.push_back( pwelch.freq[ i ] );	      
+			  aperiodic.push_back( log_aper );
+			  periodic.push_back( log_per );		  
+			}
+		      else
+			{		  
+			  aperiodic[ cnt ] += log_aper;
+			  periodic[ cnt ] += log_per ; 		  
+			  ++cnt;
+			}
+		    }
+		}
+	      else
+		{
+		  if ( first_epoch )
+		    {
+		      frq.push_back( pwelch.freq[ i ] );	      
+		      aperiodic.push_back( aper );
+		      periodic.push_back( per );		  
+		    }
+		  else
+		    {		  
+		      aperiodic[ cnt ] += aper;
+		      periodic[ cnt ] += per ; 		  
+		      ++cnt;
+		    }
+		  
+		}	    
+	      	  
+	    }
 	}
-	  
+
+      if ( epoch_lvl_output )
+	writer.unlevel( globals::freq_strat );
+      
       // next epoch
       ++ec;
     }
-
+  
   if ( epoch_lvl_output )
     writer.unepoch();
   

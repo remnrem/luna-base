@@ -431,6 +431,8 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
   only_check_labels = param.has( "mapper-util-mode" );
 
   verbose = param.has( "verbose" );
+
+  retain_prefiltering = param.yesno( "prefiltering" );
   
   //
   // Get info on the available channels
@@ -653,15 +655,27 @@ void canonical_t::proc( )
       // unit rules?
       //
 
+      bool wild_unit = false;
+      
       if ( rule.req_unit.size() != 0 )
 	{
           if ( rule.req_unit.find( sig->unit ) == rule.req_unit.end() )
 	    {
-	      if ( verbose ) logger << "   bailing: did not match " << sig->unit << " from unit [ " << print( rule.req_unit ) << " ]\n";
-	      continue;
+	      // wildcard?
+	      if ( rule.req_unit.find( "*" ) != rule.req_unit.end() )
+                {
+                  if ( verbose )
+                    logger << "   allowing wildcard '*' match for " << sig->unit << ", will set to "
+                           << rule.req_unit.find( "*" )->second << "\n";
+                  wild_unit = true;
+                }
+              else
+                {
+		  if ( verbose ) logger << "   bailing: did not match " << sig->unit << " from unit [ " << print( rule.req_unit ) << " ]\n";
+		  continue;
+		}
 	    }
 	  if ( verbose ) logger << "   matched " << sig->unit << " from unit [ " << print( rule.req_unit ) << " ]\n";
-
 	}
 
       //
@@ -848,7 +862,10 @@ void canonical_t::proc( )
 	  std::string ustr = ".";
 	  
 	  // if unit was a requirement, get the preferred label
-	  if ( rule.req_unit.find( sig->unit ) != rule.req_unit.end() )
+
+	  if ( wild_unit )
+            ustr = rule.req_unit.find( "*" )->second;
+	  else if ( rule.req_unit.find( sig->unit ) != rule.req_unit.end() )
 	    ustr = rule.req_unit.find( sig->unit )->second;
 	  else // copy and clean original, if not requirement
 	    ustr = Helper::trim( Helper::sanitize( edf.header.phys_dimension[ canonical_slot ] ) );
@@ -901,6 +918,18 @@ void canonical_t::proc( )
 	  edf.header.transducer_type[ canonical_slot ] = transducer;	  
 	}
       
+      //
+      // Clear pre-filtering field?
+      //
+
+      if ( ! dry_run )
+	{
+	  if ( ! retain_prefiltering )
+	    {
+	      if ( verbose ) logger << "   clearing prefiltering field\n"; 
+	      edf.header.prefiltering[ canonical_slot ] = ".";
+	    }
+	}
       
       //
       // If keeping existing channel, update label?

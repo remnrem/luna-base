@@ -132,7 +132,7 @@ struct canonical_t
   bool dry_run;
   bool only_check_labels; // no output (for use w/ the mapper utility)
   bool verbose;
-  
+  bool retain_prefiltering;
   // output class used in mapper-cgi-util mode
   cansigs_t retval;
   
