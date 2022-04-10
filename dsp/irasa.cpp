@@ -467,10 +467,7 @@ irasa_t::irasa_t( edf_t & edf ,
 					     true );	  
 	}
 
-      
-      
-      // next epoch
-      ++ec;
+            
     }
   
   if ( epoch_lvl_output )
