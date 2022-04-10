@@ -4891,3 +4891,89 @@ bool edf_t::append( const std::string & filename ,
   return true;
 }
 
+
+void edf_t::set_headers( param_t & param )
+{
+
+  
+  if ( param.has( "id" ) )
+    {
+      header.patient_id = param.value( "id" ) ;
+      logger << "  set 'id' to " << header.patient_id << "\n";
+      if ( header.patient_id.size() > 80 )
+	logger << "  *** warning - 'id' will be truncated to 80 characters if saved as EDF\n";
+    }
+  
+  if ( param.has( "recording-info" ) )
+    {
+      header.recording_info = param.value( "recording-info" ) ;
+      logger << "  set 'recording-info' to " << header.recording_info << "\n";
+      if ( header.recording_info.size() > 80 )
+        logger << "  *** warning - 'recording-info' will be truncated to 80 characters if saved as EDF\n";
+    }
+  
+  if ( param.has( "start-date" ) )
+    {
+      header.startdate = param.value( "start-date" );
+      logger << "  set 'start-date' to " << header.startdate << "\n";
+      if ( header.startdate.size() > 8 )
+        logger << "  *** warning - 'start-date' will be truncated to 8 characters if saved as EDF\n";
+    }
+
+  if ( param.has( "start-time" ) )
+    {
+      header.starttime = param.value( "start-time" );
+      logger << "  set 'start-time' to " << header.starttime << "\n";
+      if ( header.starttime.size() > 8 )
+        logger << "  *** warning - 'start-time' will be truncated to 8 characters if saved as EDF\n";
+    }
+
+  const bool no_annot_channels = true;
+  
+  signal_list_t signals = header.signal_list( param.value( "sig" ) , no_annot_channels );  
+  
+  const int ns = signals.size();
+
+  for (int s=0;s<ns;s++)
+    {
+
+      const int slot = signals(s);
+      
+      // transducer_type
+      // phys_dimension
+      // prefiltering
+
+      if ( param.has( "transducer" ) )
+	{
+	  header.transducer_type[ slot ] = param.value( "transducer" );
+	  logger << "  set " << signals.label(s) << " 'transducer' to " << header.transducer_type[ slot ] << "\n";
+	  if ( s == 0 && header.transducer_type[ slot ].size() > 80 )
+	    logger << "  *** warning - 'transducer' will be truncated to 80 characters if saved as EDF\n";	  
+	}
+
+      if ( param.has( "physical-dimension" ) )
+        {
+          header.phys_dimension[ slot ] = param.value( "physical-dimension" );
+	  logger << "  set " << signals.label(s) << " 'physical-dimension' to " << header.phys_dimension[ slot ] << "\n";
+          if ( s == 0 && header.phys_dimension[ slot ].size() > 8 )
+            logger << "  *** warning - 'physical-dimension' will be truncated to 8 characters if saved as EDF\n";
+        }
+      else if ( param.has( "unit" ) )
+	{
+          header.phys_dimension[ slot ] = param.value( "unit" );
+	  logger << "  set " << signals.label(s) << " 'unit' to " << header.phys_dimension[ slot ] << "\n";
+	  if ( s == 0 && header.phys_dimension[ slot ].size() > 8 )
+            logger << "  *** warning - 'unit' will be truncated to 8 characters if saved as EDF\n";
+        }
+
+      if ( param.has( "prefiltering" ) )
+        {
+          header.prefiltering[ slot ] = param.value( "prefiltering" );
+	  logger << "  set " << signals.label(s) << " 'prefiltering' to " << header.prefiltering[ slot ] << "\n";
+          if ( s == 0 && header.prefiltering[ slot ].size() > 80 )
+            logger << "  *** warning - 'prefiltering' will be truncated to 80 characters if saved as EDF\n";
+        }
+      
+    }
+  
+}

@@ -421,6 +421,8 @@ public:
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
   void set_order( param_t & param );
+
+  void set_headers( param_t & param );
   
   void update_signal_retain_range( int s , const std::vector<double> * );
 

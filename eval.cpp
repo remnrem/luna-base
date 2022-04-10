@@ -860,7 +860,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SUMMARY" ) )      proc_summaries( edf , param(c) );
       else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
       else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
-
+      else if ( is( c, "SET-HEADERS" ) )  proc_set_headers( edf , param(c) );
       else if ( is( c, "DESC" ) )         proc_desc( edf , param(c) );
       else if ( is( c, "TYPES" ) )        proc_show_channel_map();
       else if ( is( c, "VARS" ) )         proc_dump_vars( edf , param(c) );
@@ -1085,6 +1085,13 @@ void proc_headers( edf_t & edf , param_t & param )
 {
   // optionally add a SIGNALS col that has a comma-delimited list of all signals
   edf.terse_summary( param );
+}
+
+// SET-HEADERS : set EDF header fields
+
+void proc_set_headers( edf_t & edf , param_t & param )
+{
+  edf.set_headers( param );
 }
 
 // ALIASES : report aliasing of channels and annotations

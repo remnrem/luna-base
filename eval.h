@@ -237,6 +237,7 @@ class cmd_t
 void proc_summaries( edf_t & , param_t & );
 void proc_aliases( edf_t & , param_t & );
 void proc_headers( edf_t & , param_t & );
+void proc_set_headers( edf_t & , param_t & );
 void proc_validate( edf_t & , param_t & );
 void proc_desc( edf_t & , param_t & );
 void proc_dump_vars( edf_t & , param_t & );
