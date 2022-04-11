@@ -2714,7 +2714,13 @@ void edf_t::reference( const signal_list_t & signals0 ,
   // if we've requested a new channel, we need to make this still
   //
   
-  if ( nr == 0 ) return;
+  if ( nr == 0 )
+    {
+      if ( ! make_new ) Helper::halt( "no valid ref channels specified" );
+
+      // else...
+      return;
+    }
 
   //
   // Console logging 
