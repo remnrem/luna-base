@@ -283,6 +283,8 @@ annot_t * spectral_power( edf_t & edf ,
       
       // store spectral slope per epoch for this channel?
       std::vector<double> slopes;
+      std::vector<double> slopes_intercept;
+      std::vector<double> slopes_rsq;
       
       
       //
@@ -535,17 +537,21 @@ annot_t * spectral_power( edf_t & edf ,
 	       if ( spectral_slope ) 
 		 {		   
 		   
-		   double es1 = 0 ;
+		   double es1 = 0 , intercept = 0 , rsq = 0 ;
 		   
 		   bool okay = spectral_slope_helper( pwelch.psd ,
 						      pwelch.freq ,
 						      slope_range ,
 						      slope_outlier ,
 						      spectral_slope_show_epoch , 
-						      &es1 );
+						      &es1 , NULL, &intercept, &rsq );
 		   
-		   if ( okay ) slopes.push_back( es1 );
-		   
+		   if ( okay )
+		     {
+		       slopes.push_back( es1 );
+		       slopes_intercept.push_back( intercept );
+		       slopes_rsq.push_back( rsq );
+		     }
 		 }
 	       
 	     }
@@ -723,6 +729,8 @@ annot_t * spectral_power( edf_t & edf ,
 	{
 	  if ( slopes.size() > 2 )
 	    {
+
+	      // slope
 	      std::vector<double> s2 = MiscMath::outliers( &slopes , slope_th2 );
 	      double s_mean = MiscMath::mean( s2 );
 	      double s_med  = MiscMath::median( s2 );
@@ -730,6 +738,24 @@ annot_t * spectral_power( edf_t & edf ,
 	      writer.value( "SPEC_SLOPE_MN" , s_mean );
 	      writer.value( "SPEC_SLOPE_MD" , s_med );
 	      writer.value( "SPEC_SLOPE_SD" , s_sd );
+
+	      // intercept
+	      std::vector<double> i2 = MiscMath::outliers( &slopes_intercept , slope_th2 );
+	      double i_mean = MiscMath::mean( i2 );
+	      double i_med  = MiscMath::median( i2 );
+	      double i_sd   = MiscMath::sdev( i2 , i_mean );
+	      writer.value( "SPEC_INTERCEPT_MN" , i_mean );
+	      writer.value( "SPEC_INTERCEPT_MD" , i_med );
+	      writer.value( "SPEC_INTERCEPT_SD" , i_sd );
+
+	      	      // intercept
+	      std::vector<double> rsq2 = MiscMath::outliers( &slopes_rsq , slope_th2 );
+	      double rsq_mean = MiscMath::mean( rsq2 );
+	      double rsq_med  = MiscMath::median( rsq2 );	      
+	      writer.value( "SPEC_RSQ_MN" , rsq_mean );
+	      writer.value( "SPEC_RSQ_MD" , rsq_med );
+	      
+
 	    }
 	}
 
