@@ -396,10 +396,13 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
   //
   // read in rules, if not already done, from 1 or more files
   //
-  
+
+  const bool has_prefix = param.has( "prefix" );
+  const std::string prefix = has_prefix ? Helper::expand( param.value( "prefix" ) ) : "" ;
+
   if ( rules.size() == 0 )
     {
-
+      
       if ( ! param.has( "file" ) )
 	Helper::halt( "CANONICAL requires a 'file' argument" );
       
@@ -408,7 +411,14 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
       for (int i=0; i<filenames.size(); i++)
 	{
 	  std::string filename = Helper::expand( filenames[i] );
+
+	  // add a prefix to any relative paths, if one was specified
+	  if ( filename.size() > 1 && filename[0] != globals::folder_delimiter )
+	    filename = prefix + filename;
+
+	  // read rules
 	  int nrules = read( filename );
+	  
 	  logger << "  read " << nrules << " rules from " << filename << "\n";
 	}
 
@@ -1748,8 +1758,14 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
 	  // scale 
 	  if ( req_scale.find( key ) != req_scale.end() )
             {
-	      const double edf_phys_min = header.physical_min[ putative(0) ];
-	      const double edf_phys_max = header.physical_max[ putative(0) ];
+
+	      const double edf_phys_min_orig = header.physical_min[ putative(0) ];
+	      const double edf_phys_max_orig = header.physical_max[ putative(0) ];
+	      const bool flipped = edf_phys_max_orig < edf_phys_min_orig;
+	      
+	      const double edf_phys_min = flipped ? edf_phys_max_orig : edf_phys_min_orig ;
+	      const double edf_phys_max = flipped ? edf_phys_min_orig : edf_phys_max_orig ;
+	      
 	      // -1 all neg
 	      // +1 only pos
 	      // 0  requires both NEG and POS
