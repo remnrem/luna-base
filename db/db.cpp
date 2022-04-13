@@ -1462,6 +1462,7 @@ void writer_t::set_types()
   numeric_factor( globals::epoch_strat );
   numeric_factor( globals::sample_strat );
   numeric_factor( globals::freq_strat );
+  numeric_factor( globals::sec_strat );
   numeric_factor( globals::cycle_strat );
   string_factor( globals::band_strat );
   string_factor( globals::annot_strat );
@@ -1474,7 +1475,6 @@ void writer_t::set_types()
   numeric_factor( globals::value_strat );
 
   numeric_factor( "IC" );
-  numeric_factor( "SEC" );
   numeric_factor( "TAP" );
   numeric_factor( "TH" );
   numeric_factor( "SPINDLE" );

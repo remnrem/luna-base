@@ -999,6 +999,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "INTERPOLATE" ) )  proc_chep_based_interpolation( edf, param(c) );
       else if ( is( c, "SL" ) )           proc_surface_laplacian( edf , param(c) );
       else if ( is( c, "EMD" ) )          proc_emd( edf , param(c) );
+
+      else if ( is( c, "DFA" ) )          proc_dfa( edf , param(c) );
       
       else if ( is( c, "MI" ) )           proc_mi( edf, param(c) );
       else if ( is( c, "HR" ) )           proc_bpm( edf , param(c) );
@@ -2762,6 +2764,12 @@ void proc_attach_clocs( edf_t & edf , param_t & param )
 void proc_emd( edf_t & edf , param_t & param )
 {
   dsptools::emd_wrapper( edf , param );
+}
+
+// DFA : detrended fluctuation analysis
+void proc_dfa( edf_t & edf , param_t & param )
+{
+  dsptools::dfa_wrapper( edf , param );
 }
 
 // ICA : fastICA on sample by channel matrix (whole trace)

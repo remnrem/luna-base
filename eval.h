@@ -356,6 +356,8 @@ void proc_fiplot( edf_t & , param_t & );
 void proc_mi( edf_t & , param_t & );
 void proc_ica( edf_t & , param_t & );
 void proc_emd( edf_t & , param_t & );
+void proc_dfa( edf_t & , param_t & );
+
 void proc_attach_clocs( edf_t & , param_t & );
 void proc_surface_laplacian( edf_t & , param_t & );
 void proc_leave_one_out( edf_t & , param_t & );

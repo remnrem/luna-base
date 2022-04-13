@@ -20,53 +20,45 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __DSP_H__
-#define __DSP_H__
 
-#include "gc.h"
-#include "irasa.h"
-#include "tsync.h"
-#include "sync.h"
-#include "standardize.h"
-#include "mtm/mtm.h"
-#include "siggen.h"
-#include "simul.h"
-#include "psi.h"
-#include "microstates.h"
-#include "tlock.h"
-#include "tclst.h"
-#include "peaks.h"
-#include "psc.h"
-#include "spectral_norm.h"
-#include "tv.h"
-#include "rems.h"
-#include "cfc.h"
-#include "acf.h"
-#include "resample.h"
-#include "coherence.h"
-#include "correl.h"
-#include "conncoupl.h"
-#include "conv.h"
-#include "ecgsuppression.h"
-#include "pac.h"
+#ifndef __DFA_H__
+#define __DFA_H__
+
 #include "hilbert.h"
-#include "fiplot.h"
-#include "slow-waves.h"
-#include "mse.h"
-#include "ed.h"
-#include "interpolate.h"
-#include "polarity.h"
-#include "cwt-design.h"
-#include "fir.h"
-#include "emd.h"
-#include "dfa.h"
-#include "mi.h"
-#include "reduce.h"
-#include "wrappers.h"
-#include "ica-wrapper.h"
-#include "sl.h"
-#include "shift.h"
-#include "linedenoiser.h"
-#include "detrend.h"
+#include <vector>
+#include <set>
+#include <stats/Eigen/Dense>
+
+namespace dsptools { 
+  void dfa_wrapper( edf_t & edf , param_t & param ) ;
+}
+
+struct dfa_t {
+
+  dfa_t();
+
+  // default, 0.1s to 10s 
+  void set_windows( double sr, double l = 0.1 , int m = 2 , int c = 100 ) ;
+
+  void filter_hilbert( const double flwr1 , const double fupr1 ,
+		       const double ripple1 , const double tw1 )    
+  {
+    flwr = flwr1;
+    fupr = fupr1;
+    ripple = ripple1;
+    tw = tw1;
+  }
+
+  void proc( const std::vector<double> * d );
+
+  double sr, flwr, fupr, ripple, tw;
+  
+  std::vector<double> w;
+  std::vector<double> t;
+  std::vector<double> fluctuations;
+  std::vector<double> slopes;
+  
+};
+
 
 #endif

@@ -2622,7 +2622,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   std::vector<double> x;
   
 
-  if ( p == "fir" || p == "fft" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
+  if ( p == "fir" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
        || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" ) 
     {
@@ -3019,6 +3019,23 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(1);
     }
 
+  if ( p == "dfa" )
+    {
+      std::vector<double> w(0);
+      dfa_t dfa;
+      int nw = 100;
+      dfa.set_windows( 200 );
+      
+      dfa.proc( &x );
+      
+      for (int i=0; i<nw; i++)
+	std::cout << dfa.w[i] << "\t"
+		  << dfa.fluctuations[i] << "\t"
+		  << dfa.slopes[i] << "\n";
+      
+      std::exit(1);
+    }
+    
   
   if ( p == "fft" )
     {

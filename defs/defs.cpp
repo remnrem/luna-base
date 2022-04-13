@@ -151,6 +151,7 @@ bool globals::devel;
 std::string globals::epoch_strat;
 std::string globals::time_strat;
 std::string globals::freq_strat;
+std::string globals::sec_strat;
 std::string globals::signal_strat;
 std::string globals::signal1_strat;
 std::string globals::signal2_strat;
@@ -454,7 +455,8 @@ void globals::init_defs()
   var_strat     = "VAR";
   value_strat   = "VAL";
   feature_strat     = "FTR";
-
+  sec_strat = "SEC";
+  
   //
   // Misc.
   //

@@ -416,6 +416,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   //  std::cout << "TWT , slp_lat , FWT " << TWT << " " << slp_lat << " " << FWT << "\n";
 
   // WASO (ignores leading and also trailing wake)
+  //  TWT = SLP_LAT + WASO + FWT
   //  WASO = TWT - slp_lat - FWT;
   // BUT, the above might count UNDEF/OTHER in the leading/trailing wake, and so remove too much
   // easier to just figure it out by iteration
@@ -423,7 +424,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   for (int e=first_sleep_epoch;e<=last_sleep_epoch;e++)
     if ( stages[e] == WAKE ) ++w;
   WASO = w * epoch_mins;
-
+    
   // sleep efficiency (includes sleep latency as W) include OTHER in denom
   slp_eff_pct = ( TST / TRT ) * 100;
     
@@ -1494,6 +1495,7 @@ void hypnogram_t::output( const bool verbose ,
       if ( any_sleep )
 	{
 	  writer.value( "WASO" , WASO );
+	  writer.value( "FWT" , FWT );
 	  writer.value( "SLP_LAT" , slp_lat );
 	  writer.value( "PER_SLP_LAT" , per_slp_lat );      
 	  writer.value( "SLP_EFF" , slp_eff_pct );
