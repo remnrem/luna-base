@@ -274,7 +274,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 
 canon_edf_signal_t::canon_edf_signal_t( edf_header_t & hdr , const int slot )
 {
-  if ( slot < 0 || slot > hdr.ns )
+  if ( slot < 0 || slot >= hdr.ns )
     Helper::halt( "bad EDF header slot" );
   
   label = Helper::trim( Helper::sanitize( Helper::toupper( hdr.label[ slot ] ) ) );
@@ -293,6 +293,20 @@ canon_edf_signal_t::canon_edf_signal_t( edf_header_t & hdr , const int slot )
   else if ( phys_min >= -zero_constant ) scale = 1; // all positive  
   if ( phys_min < zero_constant && phys_max > zero_constant ) scale = 2;
 };
+
+
+// alternatively, in 'dry_run' mode, allow 'new' canonical signals (that are not in
+// EDF) to be entered here - i.e. if they feature as for subsequent CS
+
+canon_edf_signal_t::canon_edf_signal_t( const std::string & label , 
+					const int sr ,
+					const std::string & unit , 
+					const std::string & trandsucer ,
+					const int scale )
+  : label(label) , sr(sr) , unit( unit ) , transducer( transducer ) , scale( scale ) 
+{
+
+}
 
 
 int canonical_t::read( const std::string & filename )
@@ -984,6 +998,29 @@ void canonical_t::proc( )
       
       completed.insert( rule.canonical_label );
       
+
+      //
+      // and update the EDF signal list...
+      //
+      
+      if ( ! already_present ) 
+	{
+
+	  if ( dry_run ) 
+	    {
+	      // TODO: need to pass SR, scale, unit, transducer info about
+	      //  dry-run 'dummy' new CS (for subsequent CS rule matching as a sig)
+	      canon_edf_signal_t new_sig( rule.canonical_label );					  
+	      signals.insert( new_sig );	      
+	    }
+	  else
+	    {
+	      canon_edf_signal_t new_sig( edf.header , canonical_slot );	  
+	      signals.insert( new_sig );
+	    }
+	}
+
+
       //
       // Verbose output
       //

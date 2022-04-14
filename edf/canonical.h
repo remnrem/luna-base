@@ -74,7 +74,13 @@ struct canon_rule_t {
 struct canon_edf_signal_t {
   
   canon_edf_signal_t( edf_header_t & hdr , const int slot );
-
+  
+  canon_edf_signal_t( const std::string & label ,
+		      const int sr ,
+		      const std::string & unit ,
+		      const std::string & trandsucer ,
+		      const int scale);
+  
   canon_edf_signal_t( const std::string & label )
     : label(label)
   { }

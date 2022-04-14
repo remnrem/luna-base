@@ -595,6 +595,12 @@ void cmddefs_t::init()
   add_param( "CANONICAL" , "group" , "GRP1" , "Group (from csfile.txt)" );
   add_param( "CANONICAL" , "cs" , "EEG,LOC,ROC" , "Optional: only calculate these CS" );
 
+  add_table( "CANONICAL" , "" , "Canonical signal summaries" );
+  add_var( "CANONICAL" , "" , "CS_SET" , "Number of canonical signals set" );
+  add_var( "CANONICAL" , "" , "CS_NOT" , "Number of canonical signals not set" );
+  add_var( "CANONICAL" , "" , "USED_CH" , "Number of used EDF channels" );
+  add_var( "CANONICAL" , "" , "UNUSED_CH" , "Number of ununsed EDF channels" );
+
   add_table( "CANONICAL" , "CS" , "Canonical signal information" );
   add_var( "CANONICAL" , "CS" , "DEFINED" , "Is canonical signal present/defined?" );
   add_var( "CANONICAL" , "CS" , "SIG" , "Primary signal" );
