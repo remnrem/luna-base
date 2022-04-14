@@ -2614,7 +2614,6 @@ void characterize_spindles( edf_t & edf ,
    for (int i=0;i<n;i++)
      {
 
-
        spindle_t * spindle = &(*spindles)[ i ];
        
        // std::cout << " spindle-> " << spindle->tp.start << " " << spindle->tp.stop << " --- " 
@@ -2632,8 +2631,14 @@ void characterize_spindles( edf_t & edf ,
        //
        
        slice_t slice( edf , s , spindle->tp );
+
+       // nb. we are going to mean-centre these data too
+       // for this particular spindle... avoids some weird cases
+       // where we have huge offsets in original signal amplitudes around
+       // this spindle, meaning that even after BP filter, we can
+       // have spindle intervals with no zero-crossings
        
-       std::vector<double> d = *slice.pdata();
+       std::vector<double> d = MiscMath::centre( *slice.pdata() );
 
        std::vector<uint64_t> tp = *slice.ptimepoints();
        
@@ -2646,9 +2651,6 @@ void characterize_spindles( edf_t & edf ,
        const int npoints = d.size();
 
 
-       // swappy
-       //for (int p=0; p<npoints; p++) d[p] *= -1;
-      
        //
        // ISA (scale by SR)
        //
@@ -2862,6 +2864,7 @@ void characterize_spindles( edf_t & edf ,
 
       for (int p=0;p<npoints-1;p++)
         {
+
 	  const bool pos2neg = d[p] >= 0 && d[p+1] < 0 ;
 	  const bool neg2pos = d[p] <= 0 && d[p+1] > 0 ;	  
 	  if ( ! ( pos2neg || neg2pos ) ) continue;
@@ -2878,7 +2881,24 @@ void characterize_spindles( edf_t & edf ,
 	  zcp.push_back( pos2neg );
 	  zcs.push_back( p );
 	}
-      
+
+
+      // no zero-crossings?
+      if ( zc.size() == 0 )
+        {
+          logger << " *** warning: spindle w/out any zero-crossings... bailing on this spindle\n";
+
+
+	  // slice_t slice( edf , s0 , spindle->tp );
+	  // std::vector<double> d2 = *slice.pdata();
+	  // if ( d2.size() != npoints ) Helper::halt( "hmm" );
+	  // for (int jj=0; jj<npoints; jj++)
+	  //   std::cout << " " << d[jj] << "\t" << d2[jj] << "\n";
+	  // std::cout << "\n\n";
+
+	  continue;
+        }
+
 
       if ( ht_verb )
 	{
@@ -2972,7 +2992,7 @@ void characterize_spindles( edf_t & edf ,
 	    }
 	}
       
-
+      
       //
       // Get intervals from peak-trough, vice-versa
       //
@@ -3121,7 +3141,8 @@ void characterize_spindles( edf_t & edf ,
 	  spindle->negisa /= (double)spindle->negsp;
 
 	}
-      
+
+		  
       //      std::cout << " spindle->posisa = " << spindle->posisa << " " << spindle->negisa << "\n";
 
       //
@@ -3147,11 +3168,15 @@ void characterize_spindles( edf_t & edf ,
       for (int z=0; z<zc.size()-1; z++)
 	{
 
+	  //	  std::cout << "zcs = " << zcs.size() << " " << zcp.size() << " " << " and " << z << "\n";
+	  
 	  // neg HW (i.e. initiated by post->neg ZC)
 	  const bool neg_halfwave = zcp[z];
 
 	  // is the spanned peak sufficient?
 	  bool okay = false;
+
+	  
 	  
 	  for (int p=zcs[z]; p <= zcs[z+1]; p++)
 	    {	      
@@ -3165,7 +3190,6 @@ void characterize_spindles( edf_t & edf ,
 		}
 	    }
 	  
-	  //std::cout << " OK = " << okay << "\n";
 	  
 	  // skip?
 	  if ( ! okay ) 
@@ -3195,6 +3219,7 @@ void characterize_spindles( edf_t & edf ,
 	  wall.push_back( w );
 	  tall.push_back( t );
 	}
+
 
       //
       // F min/max
@@ -3242,7 +3267,8 @@ void characterize_spindles( edf_t & edf ,
 	    }
 
 	}
-      
+
+
       //
       // Slope of frequency (both HWs and slopes) stratified by pos/neg polarity
       //
@@ -3419,8 +3445,9 @@ void characterize_spindles( edf_t & edf ,
       spindle->amp = max_p2p;
 
 
-
       
+
+ 
       //
       // FFT for modal spindle frequency of spindle
       // (performed on bandpass filtered data)
@@ -3568,16 +3595,16 @@ void characterize_spindles( edf_t & edf ,
 		  
 		  // weight by CWT for spindle...
 		  
-		  if ( 0 ) 
-		    std::cout << "TL\t" 
-			      << edf.id << "\t"  
-			      << target_f << "\t"
-			      << orig_sp << "\t"
-			      << i << "\t"
-			      << l << "\t" 
-			      << (*averaged)[orig_sp] << "\t"
-			      << (*d0)[l] << "\t"
-			      << (*averaged)[orig_sp] * (*d0)[l] << "\n";
+		  // if ( 0 ) 
+		  //   std::cout << "TL\t" 
+		  // 	      << edf.id << "\t"  
+		  // 	      << target_f << "\t"
+		  // 	      << orig_sp << "\t"
+		  // 	      << i << "\t"
+		  // 	      << l << "\t" 
+		  // 	      << (*averaged)[orig_sp] << "\t"
+		  // 	      << (*d0)[l] << "\t"
+		  // 	      << (*averaged)[orig_sp] * (*d0)[l] << "\n";
 		  
 		  ++orig_sp;
 		  
@@ -3612,7 +3639,8 @@ void characterize_spindles( edf_t & edf ,
 	 if ( copy_spindles[i].include ) spindles->push_back( copy_spindles[i] );
        logger << "  QC'ed spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
      }
-      
+
+
    
    //
    // Denominator for mean of spindle-locked average signal
@@ -3628,7 +3656,7 @@ void characterize_spindles( edf_t & edf ,
 	 }
      }
 
-
+   
    //
    // Remove tmp channel we created
    //
@@ -3639,6 +3667,8 @@ void characterize_spindles( edf_t & edf ,
        edf.drop_signal( s );	  
      }
 
+
+   
 }
 
 
