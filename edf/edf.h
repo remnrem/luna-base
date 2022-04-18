@@ -345,6 +345,14 @@ public:
   
   int                        record_size;   // bytes per record (for ns_all signals)
   int                        header_size;   // bytes for entire header
+
+  //
+  // EDF+ Annotations store (populate on reading, but only used
+  // for WRITE edfz , i.e. to store these in the index)
+  //
+
+  std::map<int,std::string> edf_annots;
+  bool has_edf_annots;
   
   //
   // Primary timeline for masking, annotations, etc
@@ -361,6 +369,15 @@ public:
 
   clocs_t clocs;
 
+
+  //
+  // EDFZ
+  //
+  
+  edfz_t * edfz_ptr() const
+  {
+    return edfz;
+  }
 
   //
   // Annotations
@@ -569,7 +586,7 @@ public:
     header.init();
     records.clear();    
     inp_signals_n.clear();
-    
+    has_edf_annots = false;
   }
   
   

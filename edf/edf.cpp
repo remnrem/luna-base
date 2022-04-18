@@ -470,7 +470,6 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   } else {
     rdsz = edfz->read( q , hdrSz );
   }
-    
   
   std::set<int> channels;
   
@@ -832,6 +831,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   // clean up buffer
   delete [] p0 ;
 
+
   // return mapping of imported channel numbers
   return channels;
   
@@ -863,7 +863,7 @@ bool edf_record_t::read( int r )
       
       // find the appropriate record
       fseek( edf->file , offset , SEEK_SET );
-  
+      
       // and read it
       size_t rdsz = fread( p , 1, edf->record_size , edf->file );
     }
@@ -1351,7 +1351,8 @@ bool edf_t::attach( const std::string & f ,
 
   edfz = NULL;
 
-  bool edfz_mode = Helper::file_extension( filename , "edfz" ); 
+  bool edfz_mode = Helper::file_extension( filename , "edfz" )
+    || Helper::file_extension( filename , "edf.gz" ); 
   
   
   //
@@ -1381,6 +1382,7 @@ bool edf_t::attach( const std::string & f ,
 	  globals::problem = true;
 	  return false;
 	}
+
     }
 
   
@@ -1406,7 +1408,7 @@ bool edf_t::attach( const std::string & f ,
   else
     {
       // TODO... need to check EDFZ file. e.g. try reading the last record?
-      
+      //
     }
 
   //
@@ -1522,8 +1524,6 @@ bool edf_t::attach( const std::string & f ,
 	  
 	}
     }
-
-  
   
   //
   // Create timeline (relates time-points to records and vice-versa)
@@ -1933,11 +1933,13 @@ bool  edf_t::is_actually_standard_edf()
   if ( ! header.edfplus ) return true;
   
   // EDF Annotations (other than time track)?
-  for (int s=0;s<header.ns;s++)
-    {
-      if ( ! header.is_data_channel(s) )
-	if ( s != header.t_track ) return false;
-    }
+  if ( has_edf_annots ) return false;
+
+  // for (int s=0;s<header.ns;s++)
+  //   {
+  //     if ( ! header.is_data_channel(s) )
+  // 	if ( s != header.t_track ) return false;
+  //   }
 
   // discontinuous?
   if ( is_actually_discontinuous() ) return false;
@@ -2026,6 +2028,11 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
 
   if ( actually_EDF && actually_EDFD )
     Helper::halt( "internal error in write() when determining EDF type" );
+
+  if ( actually_EDFD )
+    logger << "  data are truly discontinuous\n";
+  else
+    logger << "  data are not truly discontinuous\n";
   
   //
   // Reset start-time to NULL (i.e. to writing as standard EDF but is actually discontinuous, then)
@@ -2039,8 +2046,10 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   //
 
   if ( write_as_edf || actually_EDF )
-    set_edf();
-
+    {
+      logger << "  writing as a standard EDF\n";
+      set_edf();
+    }
   
   //
   // Deal with start time?  If writing as a truly discontinuous EDF+D, then
@@ -2138,11 +2147,23 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
 	      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
 	    }
 	  
-	
-	  // set index	  
-	  int64_t offset = edfz.tell();	  
-	  edfz.add_index( r , offset );
 	  
+	  // set index :
+	  // record -> offset into EDFZ and time-point	  
+	  //        -> string representation of EDF Annots
+
+	  // offset into file
+	  int64_t offset = edfz.tell();	  
+
+	  // time-point offset
+	  uint64_t tp = timeline.timepoint( r );
+	
+	  // any annots
+	  const std::string edf_annot_str = edf_annots[ r ] == "" ? "." : edf_annots[ r ] ;
+	  
+	  // write to the index
+	  edfz.add_index( r , offset , timeline.timepoint( r ) , edf_annot_str  );
+		  
 	  // now write to the .edfz
 	  records.find(r)->second.write( &edfz );
 	  
@@ -3947,6 +3968,8 @@ void edf_t::drop_annots()
     if ( header.is_annotation_channel(s) )
       drop_signal( s );
 
+  has_edf_annots = false;
+  
 }
 
 void edf_t::drop_time_track()
@@ -4088,35 +4111,38 @@ int edf_t::add_continuous_time_track()
 }
 
 
-
-
 uint64_t edf_t::timepoint_from_EDF( int r )
 {
+
+  //
+  // for EDFZ, this will be stored in the .idx
+  //
+
+  if ( file == NULL )
+    return edfz->get_tindex( r );
   
   //
   // Read this is called when constructing a time-series for 
   // an existing EDF+D, only
   //
-
+  
   if ( ! header.edfplus ) Helper::halt( "should not call timepoint_from_EDF for basic EDF");
   if (   header.continuous ) Helper::halt( "should not call timepoint_from_EDF for EDF+C");
   if (   header.time_track() == -1 ) Helper::halt( "internal error: no EDF+D time-track" );
   
+  // allocate buffer space
+  int ttsize = 2 * globals::edf_timetrack_size;  
+  byte_t * p = new byte_t[ ttsize ];
+  byte_t * p0 = p;
+  
   // determine offset into EDF
-  uint64_t offset = header_size + (uint64_t)(record_size) * r;
-
+  uint64_t offset = header_size + (uint64_t)(record_size) * r;      
   offset += header.time_track_offset(); 
-
+  
   // time-track is record : edf->header.time_track 
   // find the appropriate record
   fseek( file , offset , SEEK_SET );
-  
-  int ttsize = 2 * globals::edf_timetrack_size;
-  
-  // allocate space in the buffer for a single record, and read from file
-  byte_t * p = new byte_t[ ttsize ];
-  byte_t * p0 = p;
-
+      
   // and read only time-track (all of it)
   size_t rdsz = fread( p , 1, ttsize , file );
   
@@ -4129,18 +4155,18 @@ uint64_t edf_t::timepoint_from_EDF( int r )
       ++p;
       ++e;
     }
-
+  
   double tt_sec = 0;
-
+  
   if ( ! Helper::str2dbl( tt.substr(0,e) , &tt_sec ) ) 
     Helper::halt( "problem converting time-track in EDF+" );
-
+  
   delete [] p0;
   
   uint64_t tp = globals::tp_1sec * tt_sec;
 
   return tp; 
-
+  
 }
   
 void edf_t::flip( const int s )

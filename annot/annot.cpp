@@ -3936,11 +3936,13 @@ void annotation_set_t::set( edf_t * edf )
 // Convert from EDF Annotations track(s) to Luna-format annotations
 //
 
-annot_t * annotation_set_t::from_EDF( edf_t & edf )
+annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 {
-
+  
   if ( ! globals::skip_edf_annots ) 
-    logger << "  extracting 'EDF Annotations' track\n";  
+    logger << "  extracting 'EDF Annotations' track "
+	   << ( edfz == NULL ? "from EDF+" : "from EDFZ .idx" )
+	   << "\n";  
   else
     logger << "  extracting only EDF+D time-track 'EDF Annotations' track\n";  
   
@@ -3962,7 +3964,126 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
     ( edf.timeline.epoch_len_tp_uint64_t() == 0 ?
       globals::default_epoch_len :
       edf.timeline.epoch_len_tp_uint64_t() );
-    
+
+
+  //
+  // when reading a typical EDF+ we need to read from disk
+  // but when reading a compressed EDF+, the annotations will
+  // already be duplicated in the .idx, and so we can pull
+  // directly from that, which is much quicker
+  //
+
+  if ( edfz != NULL )
+    {
+      int r = edf.timeline.first_record();
+      while ( r != -1 )
+	{
+	  std::string s = edfz->get_annots( r );
+
+	  if ( s == "." )
+	    {
+	      // skip to next record
+	      r = edf.timeline.next_record( r );
+	      continue;
+	    }
+
+	  // quoted, comma-delimited
+	  // "onset|dur|text","onset|dur|text"
+	  std::vector<std::string> tok = Helper::quoted_parse( s , "," );
+	  
+	  for (int j=0; j<tok.size(); j++)
+	    {
+	      // track that this has actual EDF Annotations 
+	      edf.has_edf_annots = true;
+	      
+	      std::vector<std::string> tok2 = Helper::parse( Helper::unquote( tok[j] ) , "|" );
+	      if ( tok2.size() < 3 ) Helper::halt( "bad format for EDF .idx annots (vec-len):\n" + tok[j] );
+	      
+	      double onset = 0, dur = 0;
+	      if ( ! Helper::str2dbl( tok2[0] , &onset ) )
+		Helper::halt( "bad format for EDF .idx annots (onset):\n" + tok[j]  );
+
+	      if ( ! Helper::str2dbl( tok2[1] , &dur ) )
+		Helper::halt( "bad format for EDF .idx annots (dur):\n" + tok[j]  );
+	      
+	      std::string txt = tok2[2];
+	      
+	      // add this annotation (clunky, but keep this code in sync w/
+	      // what we do below when reading from the EDF+ directly)
+	      
+	      uint64_t start_tp = Helper::sec2tp( onset );
+	      
+	      uint64_t dur_tp = Helper::sec2tp( dur );
+		      
+	      // stop is one past the end 
+	      // NOTE: zero-lengh annot is [a,a),
+	      uint64_t stop_tp  = start_tp + dur_tp ;
+	      
+	      // get the annotation label
+	      std::string aname = Helper::trim( txt );
+	      
+	      // sanitize?
+	      if ( globals::sanitize_everything )
+		aname = Helper::sanitize( aname );
+	      
+	      // do any remapping
+	      aname = nsrr_t::remap( aname );
+	      
+	      // fix stage duration (if 0-dur point)?  (unless
+	      // adding ellipsis, i.e. here change points
+	      // might not map to even epochs... 30, 90, 30,
+	      // 180, etc... )
+	      
+	      if ( globals::sleep_stage_assume_epoch_duration
+		   && globals::is_stage_annotation( aname )
+		   && ( ! globals::set_0dur_as_ellipsis )
+		   && start_tp == stop_tp )
+		stop_tp += epoch_len;
+	      
+	      // make interval
+	      interval_t interval( start_tp , stop_tp );
+	      
+	      // is this a class?
+	      bool edf_class =  nsrr_t::as_edf_class( aname );
+	      // if not, do we ignore? : nsrr_t::only_add_named_EDF_annots 
+	      
+	      if ( aname != "" )
+		{			  
+		  // add as standard edf_annot_t ?
+		  if ( ! edf_class )
+		    {
+		      if ( ! nsrr_t::whitelist )
+			{
+			  instance_t * instance = a->add( aname , interval , "." );
+			  // track how many annotations we add
+			  edf.aoccur[ globals::edf_annot_label ]++;
+			}
+		    }
+		  else // ... else add as a class
+		    {
+		      // add as a new class
+		      // (no meta-info)
+		      annot_t * a = edf.timeline.annotations.add( aname );
+		      instance_t * instance = a->add( "." , interval , "." );
+		      edf.aoccur[ aname ]++;
+		    }
+		}
+	    }
+
+	  
+	  // next record
+	  r = edf.timeline.next_record( r );		
+	}
+
+      // all done
+      return a;
+    }
+  
+  
+  //
+  // read from main file
+  //
+  
   int r = edf.timeline.first_record();
   
   while ( r != -1 )
@@ -3976,8 +4097,13 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 	      
 	      tal_t t = edf.tal( s , r );
 	      
+	      // store (for use if WRITE edfz is later called,
+	      //  i.e. to populate the .idx)
+	      
+	      edf.edf_annots[ r ] = t.export_annots();
+	      
 	      //std::cout << " edf-annot s,r = " << s << " " << r << "\n" << t << "\n";
-
+	      
 	      const int na = t.size();
 	      
 	      for (int i=0; i<na; i++)
@@ -3988,8 +4114,11 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		  if ( te.name != globals::edf_timetrack_label )
 		    {
 		      
+		      // track that this has actual EDF Annotations 
+		      edf.has_edf_annots = true;
+		      
 		      uint64_t start_tp = Helper::sec2tp( te.onset );
-
+		      
 		      uint64_t dur_tp = Helper::sec2tp( te.duration );
 		      
 		      // stop is one past the end 
@@ -4006,8 +4135,11 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		      // do any remapping
 		      aname = nsrr_t::remap( aname );
 			
-		      // fix stage duration (if 0-dur point)?
-		      // (unless adding ellipsis, i.e. here change points might not map to even epochs... 30, 90, 30, 180, etc... ) 
+		      // fix stage duration (if 0-dur point)?  (unless
+		      // adding ellipsis, i.e. here change points
+		      // might not map to even epochs... 30, 90, 30,
+		      // 180, etc... )
+		      
 		      if ( globals::sleep_stage_assume_epoch_duration
 			   && globals::is_stage_annotation( aname )
 			   && ( ! globals::set_0dur_as_ellipsis )
@@ -4020,28 +4152,21 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf )
 		      // is this a class?
 		      bool edf_class =  nsrr_t::as_edf_class( aname );
 		      // if not, do we ignore? : nsrr_t::only_add_named_EDF_annots 
-		      		      
+		      
 		      if ( aname != "" )
-			{
-
+			{			  
 			  // add as standard edf_annot_t ?
 			  if ( ! edf_class )
 			    {
-			      
 			      if ( ! nsrr_t::whitelist )
 				{
 				  instance_t * instance = a->add( aname , interval , "." );
-				  
-				  //std::cerr << " adding [" << te.name << "] -- "
-				  //          << te.onset << "\t" << interval.duration() << "\n";
-				  
 				  // track how many annotations we add
 				  edf.aoccur[ globals::edf_annot_label ]++;
 				}
 			    }
 			  else // ... else add as a class
 			    {
-
 			      // add as a new class
 			      // (no meta-info)
 			      annot_t * a = edf.timeline.annotations.add( aname );

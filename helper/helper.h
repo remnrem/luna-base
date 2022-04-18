@@ -212,7 +212,8 @@ namespace Helper
   
   bool str2dbl(const std::string & , double * ); 
   bool str2int(const std::string & , int * ); 
-  bool str2int64(const std::string & , uint64_t * ); 
+  bool str2int64(const std::string & , uint64_t * );
+  bool str2signed_int64(const std::string & , int64_t * ); 
 
   template <class T>
     bool from_string(T& t,

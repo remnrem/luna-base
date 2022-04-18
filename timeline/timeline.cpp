@@ -85,7 +85,6 @@ void timeline_t::init_timeline( bool okay_to_reinit )
   
   clear_epoch_mapping();
   
-
   //
   // Continuous timeline?
   //
@@ -119,13 +118,13 @@ void timeline_t::init_timeline( bool okay_to_reinit )
       
       total_duration_tp = 
 	(uint64_t)edf->header.nr * edf->header.record_duration_tp;
-      
+
       // okay to use header.nr here, as this will only be called
       // once, on first loading the EDF (i.e. so nr==nr_all as
       // no records have yet been removed)
       
       for (int r = 0;r < edf->header.nr;r++)
-	{
+	{	  
 	  uint64_t tp = edf->timepoint_from_EDF(r);
 	  tp2rec[tp] = r;
 	  rec2tp[r] = tp;
@@ -135,6 +134,7 @@ void timeline_t::init_timeline( bool okay_to_reinit )
 	  // and end up being thelast (i.e. record nr-1).
 	}
     }
+
 }
 
 
@@ -962,7 +962,7 @@ void timeline_t::clear_epoch_mask( bool b )
   mask_set = b;  // i.e. if b==T, equivalent to masking all entries
   mask.resize( epochs.size() , b );
   if ( epoched() )
-    logger << " reset all " << epochs.size() << " epochs to be " << ( b ? "masked" : "included" ) << "\n";
+    logger << "  reset all " << epochs.size() << " epochs to be " << ( b ? "masked" : "included" ) << "\n";
 }
 
 int timeline_t::set_epoch_mask( const int e , const bool b ) 
@@ -1001,7 +1001,7 @@ int timeline_t::set_epoch_mask( const int e , const bool b )
 void timeline_t::clear_epoch_annotations()
 {
   if ( eannots.size() > 0 ) 
-    logger << " clearing all epoch-annotations\n";
+    logger << "  clearing all epoch-annotations\n";
   eannots.clear();
 }
 
@@ -1171,13 +1171,13 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
       
     }
   
-  logger << " based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values , "|" ) + "]" : "" )  
+  logger << "  based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values , "|" ) + "]" : "" )  
 	 << " " << cnt_basic_match << " epochs match; ";
 
   logger << cnt_mask_set << " newly masked, " 
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
@@ -1284,13 +1284,13 @@ void timeline_t::trim_epochs( std::string & label , int n )
     
     }
   
-  logger << " based on leading/trailing " << label << " (w/ up to " << n << " epochs) " 
+  logger << "  based on leading/trailing " << label << " (w/ up to " << n << " epochs) " 
 	 << cnt_basic_match << " epochs match; ";
   
   logger << cnt_mask_set << " newly masked, " 
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
@@ -2041,8 +2041,8 @@ void timeline_t::flip_epoch_mask()
 
     }
   
-  logger << " flipped all epoch masks\n";
-  logger << " total of " << cnt_mask_unset << " of " << epochs.size() << " retained\n";
+  logger << "  flipped all epoch masks\n";
+  logger << "  total of " << cnt_mask_unset << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -2134,12 +2134,12 @@ void timeline_t::regional_mask( int x , int y )
   for (int e=0;e<ne;e++)
     if ( ! mask[e] ) ++cnt_now_unmasked; 
 
-  logger << " based on regional smoothing ("<<x << "/" << y << " good), ";
+  logger << "  based on regional smoothing ("<<x << "/" << y << " good), ";
 
   logger << cnt_mask_set << " newly masked " 
 	 << cnt_mask_unset << " unmasked and " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
   
 }
 
@@ -2201,12 +2201,12 @@ void timeline_t::select_epoch_randomly( int n )
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
 
-  logger << " randomly selected up to " << n << " epochs; ";
+  logger << "  randomly selected up to " << n << " epochs; ";
 
   logger << cnt_mask_set << " newly masked " 
 	 << cnt_mask_unset << " unmasked and " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -2227,9 +2227,9 @@ void timeline_t::select_epoch_range( int a , int b , bool include )
   for (int i=a; i<=b; i++) e.insert( i );
 
   if ( include )
-    logger << " selecting epochs from " << a << " to " << b << "; ";
+    logger << "  selecting epochs from " << a << " to " << b << "; ";
   else
-    logger << " masking epochs from " << a << " to " << b << "; ";
+    logger << "  masking epochs from " << a << " to " << b << "; ";
 
   return select_epoch_range( e , include );
 
@@ -2270,9 +2270,9 @@ void timeline_t::select_epoch_range( const std::set<int> & specified_epochs , bo
     }
 
   if ( include )
-    logger << " selecting";
+    logger << "  selecting";
   else
-    logger << " masking";
+    logger << "  masking";
 
   logger << " from set of " << specified_epochs.size() << " epochs; ";
   
@@ -2280,7 +2280,7 @@ void timeline_t::select_epoch_range( const std::set<int> & specified_epochs , bo
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
 
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -2316,11 +2316,11 @@ void timeline_t::select_epoch_first( int n )
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
 
-  logger << " selecting up to " << n << " epochs for start; ";
+  logger << "  selecting up to " << n << " epochs for start; ";
   logger << cnt_mask_set << " newly masked, "  
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 }
 
 
@@ -2402,11 +2402,11 @@ void timeline_t::select_epoch_within_run( const std::string & label , int b )
       
     }
   
-  logger << " based on " << label << " with " << b << " flanking epochs; ";
+  logger << "  based on " << label << " with " << b << " flanking epochs; ";
   logger << cnt_mask_set << " newly masked, " 
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -2439,12 +2439,12 @@ void timeline_t::select_epoch_until_isnot( const std::string & str )
 
     }
 
-  logger << " based on " << str << " leading epochs; ";
+  logger << "  based on " << str << " leading epochs; ";
 
   logger << cnt_mask_set << " newly masked, " 
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
 }
 
@@ -2794,9 +2794,9 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
   
   if ( ! Helper::fileExists( f ) ) Helper::halt( "could not find " + f );
   
-  logger << " reading intervals to " << ( exclude ? " exclude" : "retain" ) << " from " << f << "\n";
+  logger << "  reading intervals to " << ( exclude ? " exclude" : "retain" ) << " from " << f << "\n";
   
-  logger << " currently, mask mode set to: ";
+  logger << "  currently, mask mode set to: ";
   int mm = epoch_mask_mode();
   if      ( mm == 0 ) logger << " mask (default)\n";
   else if ( mm == 1 ) logger << " unmask\n";
@@ -2832,7 +2832,7 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
   
   FIN.close();
 
-  logger << " processed " << cnt << " " << intervals.size() << " intervals\n";
+  logger << "  processed " << cnt << " " << intervals.size() << " intervals\n";
 
 
   //
@@ -2913,12 +2913,12 @@ void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels ,
       
     }
   
-  logger << " based on " << onelabel << " " << cnt_basic_match << " epochs match; ";
+  logger << "  based on " << onelabel << " " << cnt_basic_match << " epochs match; ";
 
   logger << cnt_mask_set << " newly masked, "   
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
-  logger << " total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
@@ -3434,7 +3434,7 @@ void timeline_t::signal2annot( const param_t & param )
 	    }
 	}
       
-      logger << " added " << cnt << " intervals for " << label << " based on " << ex << " <= " << signals.label(s) << " <= " << ey << "\n";
+      logger << "  added " << cnt << " intervals for " << label << " based on " << ex << " <= " << signals.label(s) << " <= " << ey << "\n";
       
       // next label
       ++ee;
@@ -3699,7 +3699,7 @@ void timeline_t::list_all_annotations( const param_t & param )
   if ( param.has( "all" ) ) keep_mode = 1;
   if ( param.has( "start" ) ) keep_mode = 2;  
   
-  logger << " keeping annotations based on ";
+  logger << "  keeping annotations based on ";
   if ( keep_mode == 0 )      logger << "any overlap with";
   else if ( keep_mode == 1 ) logger << "complete (all) overlap with";
   else if ( keep_mode == 2 ) logger << "starting in";
@@ -3882,7 +3882,7 @@ void timeline_t::list_all_annotations( const param_t & param )
   bool hms = true;  
   if ( ! starttime.valid )
     {
-      logger << " ** could not find valid start-time in EDF header **\n";
+      logger << "  *** could not find valid start-time in EDF header ***\n";
       hms = false;
     }
 
@@ -4058,7 +4058,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
   if ( mask_mode > -1 ) 
     {
       set_epoch_mask_mode( mask_mode );  
-      logger << " set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
+      logger << "  set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
     }
 
 
@@ -4214,7 +4214,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
     } 
   
   
-  logger << " based on eval expression [" << expression << "]\n"
+  logger << "  based on eval expression [" << expression << "]\n"
 	 << "  " << acc_retval << " true, " << acc_valid - acc_retval << " false and " 
 	 << acc_total - acc_valid << " invalid return values\n"
 	 << "  " << cnt_basic_match << " epochs match; " 

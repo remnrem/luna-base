@@ -73,6 +73,8 @@ struct tal_t
   
   std::vector<tal_element_t> d;
   
+  std::string export_annots() const;
+  
   friend std::ostream & operator<<( std::ostream & out , const tal_t & t );
 };
 

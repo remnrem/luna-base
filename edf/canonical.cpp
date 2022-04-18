@@ -301,7 +301,7 @@ canon_edf_signal_t::canon_edf_signal_t( edf_header_t & hdr , const int slot )
 canon_edf_signal_t::canon_edf_signal_t( const std::string & label , 
 					const int sr ,
 					const std::string & unit , 
-					const std::string & trandsucer ,
+					const std::string & transducer ,
 					const int scale )
   : label(label) , sr(sr) , unit( unit ) , transducer( transducer ) , scale( scale ) 
 {

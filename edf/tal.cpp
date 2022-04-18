@@ -27,10 +27,11 @@
 #include "defs/defs.h"
 #include "intervals/intervals.h"
 #include <iostream>
+#include <sstream>
 
 tal_t edf_t::tal( const int signal , const int rec )
 {
-  
+
   // extract data from EDF record into TAL format
   tal_t t( this , signal , rec );
   
@@ -56,7 +57,7 @@ tal_t edf_t::tal( const int signal , const int rec )
   // std::cout << "records " << ( records.find( rec ) != records.end() ) << "\n";
   // std::cout << "s = " << records[rec].data.size() << "\n";
   // std::cout << "signal = " <<signal << "\n";
-
+  
   const std::vector<int16_t> & raw = records.find(rec)->second.data[signal];
 
   const int np_used = raw.size();
@@ -102,6 +103,33 @@ std::ostream & operator<<( std::ostream & out , const tal_t & t )
   return out;
 }
 
+std::string tal_t::export_annots() const
+{
+  std::stringstream ss;
+  bool printed = false;
+  //  std::cout << "ds = " << d.size() << "\n";
+  for (int i=0; i<d.size(); i++)
+    {
+      const tal_element_t & el = d[i];
+      
+      // no need to print time-track
+      if ( el.name == globals::edf_timetrack_label ) continue;
+      
+      if ( printed ) ss << ",";
+      
+      ss << "\"" << el.onset << "|"
+	 << el.duration << "|"
+	 << ( el.name == "" ? "." : el.name )
+	 << "\"";
+      
+      printed = true;
+    }
+
+  //  std::cout << " string = [" << ss.str() << "]\n";
+  return ss.str();
+}
+
+
 
 tal_t::tal_t( edf_t * edf , int signal , int r )
 {
@@ -134,7 +162,8 @@ void tal_t::decode( const std::string & str )
   // Onset [\x14] {text} [\x14]  
   // [\x00]
 
-	    
+  //  std::cout << "\n";
+  
   // ASCII 20 --> \x14
   // ASCII 21 --> \x15
   
@@ -158,7 +187,7 @@ void tal_t::decode( const std::string & str )
       
       std::vector<std::string> subs = Helper::char_split( toks[t] , '\x14' , NO_EMPTIES );
       
-      // std::cout << "subs size = " << subs.size() << "\n";
+      //      std::cout << "subs size = " << subs.size() << "\n";
 
       // this should contain at least one field (time)
       if ( subs.size() < 1 ) continue;
@@ -166,7 +195,7 @@ void tal_t::decode( const std::string & str )
       // time can optionally have a duration
       std::vector<std::string> ts = Helper::char_split( subs[0] , '\x21' , NO_EMPTIES );
       
-      //std::cout << "ts size = " << ts.size() << "\n";
+      //      std::cout << "ts size = " << ts.size() << "\n";
 
       double onset = 0;
       double duration = 0;

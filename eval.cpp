@@ -2081,6 +2081,10 @@ void proc_write( edf_t & edf , param_t & param )
        Helper::file_extension( filename, "EDFZ" ) ) 
     filename = filename.substr(0 , filename.size() - 5 );
 
+  if ( Helper::file_extension( filename, "edf.gz" ) || 
+       Helper::file_extension( filename, "EDF.GZ" ) ) 
+    filename = filename.substr(0 , filename.size() - 7 );
+  
   // make edf-tag optional
   if ( param.has( "edf-tag" ) ) 
     filename += "-" + param.requires( "edf-tag" ) + ".edf";
@@ -2092,8 +2096,9 @@ void proc_write( edf_t & edf , param_t & param )
       
       filename += ".edf";
     }
-  
-  if ( edfz ) filename += "z";
+
+  // set .edf.gz as main EDFZ file extension
+  if ( edfz ) filename += ".gz";
   
   //
   // optionally, allow directory change
@@ -2295,11 +2300,19 @@ void proc_epoch( edf_t & edf , param_t & param )
       // for EDF+D, this vector is passed to timeline
       align_str = param.value( "align" );
       align_annots = param.strvector( "align" );
+
+      // swap in a default?
+      if ( align_str == "T" ) // i.e. no arg to align
+	{
+	  align_str = "N1,N2,N3,R,W,?,L,U,M";
+	  align_annots = Helper::parse( align_str , "," );
+	}
+      
       
       // find the first of these annotations
       offset = edf.timeline.annotations.first( align_annots );
     }
-
+  
 
   // if already EPOCH'ed for a different record size, or increment,
   // then we should first remove all epochs; this will remove the

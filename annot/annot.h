@@ -67,6 +67,7 @@ struct instance_idx_t;
 struct instance_t;
 struct avar_t;
 struct edf_t;
+struct edfz_t;
 struct annotation_set_t;
 
 typedef std::map<instance_idx_t,instance_t*> annot_map_t;
@@ -787,7 +788,7 @@ struct annotation_set_t
     return aa != annots.end() ? aa->second : NULL ;   
   }
   
-  annot_t * from_EDF( edf_t & edf );
+  annot_t * from_EDF( edf_t & edf , edfz_t * edfz = NULL );
   
   void clear() ;
   

@@ -413,6 +413,10 @@ bool Helper::str2int64(const std::string & s , uint64_t * i)
   return from_string<uint64_t>(*i,s,std::dec);
 }
 
+bool Helper::str2signed_int64(const std::string & s , int64_t * i)
+{
+  return from_string<int64_t>(*i,s,std::dec);
+}
 
 // std::string Helper::stringize( const std::set<std::string> & d , const std::string & delim )
 // {
