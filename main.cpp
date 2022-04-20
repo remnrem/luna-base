@@ -763,7 +763,7 @@ int main(int argc , char ** argv )
 
       
       // load from STDIN
-      std::map<std::string,std::string> data;
+      std::map<std::string,std::string> data0;
       std::vector<std::string> ids;
       if ( ! Helper::fileExists( infile ) ) Helper::halt( "could not open " + infile );
       std::ifstream IN1( infile.c_str() , std::ios::in );
@@ -778,16 +778,43 @@ int main(int argc , char ** argv )
 	  if ( ! okay ) { ++rejected; continue;  } 
 
 	  // add, either whole sequence, or subset (1..s)
-	  data[ id ] = req_len ? s.substr( 0 , req_len ) : s;
+	  data0[ id ] = req_len ? s.substr( 0 , req_len ) : s;
 	  ids.push_back( id );
 	}
       IN1.close();
 
       if ( req_len ) 
-	logger << "  " << data.size() << " of " 
-	       << data.size() + rejected 
+	logger << "  " << data0.size() << " of " 
+	       << data0.size() + rejected 
 	       << " individuals included (analysis of first " << req_len << " states only)\n";
 
+      //
+      // Splice out '?' and ensure no similar sequences
+      //
+      
+      std::map<std::string,std::string> data;
+      std::map<std::string,std::string>::const_iterator ss = data0.begin();
+      while ( ss != data0.end() )
+	{
+	  const std::string & s0 = ss->second;
+	  std::vector<char> c;
+	  const int n = s0.size();
+	  char last = '?';
+	  for (int i=0; i<n; i++)
+	    {
+	      if ( s0[i] == '?' ) continue;
+	      if ( s0[i] == last ) continue;
+	      c.push_back( s0[i] );
+	      last = s0[i];
+	    }
+	  data[ ss->first ] = std::string( c.begin() , c.end() );
+
+	  // std::cout << "orig = " << s0 << "\n"
+	  // 	    << "new = " << data[ ss->first ] << "\n\n";
+	  // next indiv.
+	  ++ss;
+	}
+      
       //
       // report indiv-level enrichment? (versus group?)
       //

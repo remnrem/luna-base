@@ -965,7 +965,18 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "" , "TIB" , "Time in bed" );
   add_var( "HYPNO" , "" , "TWT" , "Total wake time" );
   add_var( "HYPNO" , "" , "WASO" , "Wake after sleep onset" );
+  add_var( "HYPNO" , "" , "FWT" , "Final wake time" );
+  add_var( "HYPNO" , "" , "LOT" , "Lights On time" );
+  add_var( "HYPNO" , "" , "SIS" , "Study Starts In Sleep" );
+  add_var( "HYPNO" , "" , "EIS" , "Study Ends In Sleep" );
 
+  add_var( "HYPNO" , "" , "MINS_ASC_N2" , "Duration of ascending N2 (mins)" );
+  add_var( "HYPNO" , "" , "MINS_DSC_N2" , "Duration of descending N2 (mins)" );
+  add_var( "HYPNO" , "" , "MINS_FLT_N2" , "Duration of flat N2 (mins)" );
+  add_var( "HYPNO" , "" , "PCT_ASC_N2" , "Proportion of N2 that is ascending" );
+  add_var( "HYPNO" , "" , "PCT_DSC_N2" , "Proportion of N2 that is descending" );
+  add_var( "HYPNO" , "" , "PCT_FLT_N2" , "Proportion of N2 that is flat" );
+  
   add_var( "HYPNO" , "" , "T1_LIGHTS_OFF" , "Lights off, hrs since midnight [0,24)" );
   add_var( "HYPNO" , "" , "T2_SLEEP_ONSET" , "Sleep onset, hrs since midnight [0,24)" );
   add_var( "HYPNO" , "" , "T3_SLEEP_MIDPOINT" , "Sleep midpoint, hrs since midnight [0,24)" );
@@ -977,19 +988,17 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "" , "SLP_LAT" , "Sleep latency (minutes from lights off)" );
   add_var( "HYPNO" , "" , "PER_SLP_LAT" , "Persistent sleep latency (mins from lights off)" );
   add_var( "HYPNO" , "" , "REM_LAT" , "REM latency (minutes from onset of sleep)" );
-  add_var( "HYPNO" , "" , "MINS_N1" , "Total duration of N1 sleep (mins)" );
-  add_var( "HYPNO" , "" , "MINS_N2" , "Total duration of N2 sleep (mins)" );
-  add_var( "HYPNO" , "" , "MINS_N3" , "Total duration of N3 sleep (mins)" );
-  add_var( "HYPNO" , "" , "MINS_N4" , "Total duration of N4 (NREM4) sleep (mins)" );
-  add_var( "HYPNO" , "" , "MINS_REM" , "Total duration of REM sleep (mins)" );
-  add_var( "HYPNO" , "" , "PCT_N1" , "Proportion N1 of total sleep time" );
-  add_var( "HYPNO" , "" , "PCT_N2" , "Proportion N2 of total sleep time" );
-  add_var( "HYPNO" , "" , "PCT_N3" , "Proportion N3 of total sleep time" );
-  add_var( "HYPNO" , "" , "PCT_N4" , "Proportion N4 of total sleep time" );
-  add_var( "HYPNO" , "" , "PCT_REM" , "Proportion REM of total sleep time" );
   add_var( "HYPNO" , "" , "NREMC" , "Number of sleep cycles" );
   add_var( "HYPNO" , "" , "NREMC_MINS" , "Mean duration of each sleep cycle" );
 
+  add_table( "HYPNO" , "SS" , "Stage-stratified output" );
+  add_var( "HYPNO" , "SS" , "MINS" , "Stage duration (mins)" );
+  add_var( "HYPNO" , "SS" , "PCT" , "Stage duration (% of TST)" );
+  add_var( "HYPNO" , "SS" , "BOUT_N" , "Number of bouts" );
+  add_var( "HYPNO" , "SS" , "BOUT_MN" , "Mean bout duration" );
+  add_var( "HYPNO" , "SS" , "BOUT_MD" , "Median bout duration" );
+  add_var( "HYPNO" , "SS" , "BOUT_5" , "Stage duration (only bouts 5+ mins)" );
+  add_var( "HYPNO" , "SS" , "BOUT_10" , "Stage duration (only bouts 10+ mins)" );
 
   add_table( "HYPNO" , "C" , "NREM cycle-level output" );
   add_var( "HYPNO" , "C" , "NREMC_START" , "First epoch number of this NREM cycle" );

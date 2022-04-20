@@ -107,10 +107,16 @@ struct hypnogram_t
   double TpST;  // total persistent sleep time
   
   double FWT;  // final wake time  ( from final wake to end of test )
-  double SPT;  // sleep period time [ Amount of time available for sleep after Sleep Onset , SPT = TRT - Sleep Latency ]
 
-  double WASO; // wake after sleep onset  [ WASO = Wake epochs/2 - (Sleep Latency {+ Final Wake Time}) ]  (mins)  
+  // note - in the Luna output, we exclude FWT from these SPT measures
+  double SPT;  // sleep period time [ Amount of time available for sleep after Sleep Onset , SPT = TRT - Sleep Latency ]
   
+  double WASO; // wake after sleep onset  [ WASO = Wake epochs/2 - (Sleep Latency {+ Final Wake Time}) ]  (mins)  
+
+  //double LOT; // LightsOn Time --> mins["L"]
+
+  bool   starts_in_sleep; // study starts/ends in sleep
+  bool   ends_in_sleep;
   
   double slp_eff_pct;   // sleep efficiency [ TST/TIB X 100 ]  (%)
   double slp_main_pct;  // sleep maintaince [ TST/SPT X 100 ] (%)
@@ -120,24 +126,31 @@ struct hypnogram_t
   double per_slp_lat;  // latency to 10 mins sleep
   double rem_lat_mins;      // REM latency (minutes)
 
+
+  std::map<std::string,double> mins;
+  std::map<std::string,double> pct;
+  std::map<std::string,int> bout_n;
+  std::map<std::string,double> bout_mean, bout_med, bout_5, bout_10;
   
-  double mins_wake;  // minutes awake
-  double mins_n1;  // minutes N1
-  double mins_n2;  // etc
-  double mins_n3;  // 
-  double mins_n4;  // 
-  double mins_rem;  // 
-  double mins_other;
+  // double mins_wake;  // minutes awake
+  // double mins_n1;  // minutes N1
+  // double mins_n2;  // etc
+  // double mins_n3;  // 
+  // double mins_n4;  // 
+  // double mins_rem;  // 
+  // double mins_other;
 
-  double pct_n1;   // % of sleep that is N1
-  double pct_n2;   // etc
-  double pct_n3;   // 
-  double pct_n4;   // 
-  double pct_rem;  // 
-  double pct_other;
+  // double pct_n1;   // % of sleep that is N1
+  // double pct_n2;   // etc
+  // double pct_n3;   // 
+  // double pct_n4;   // 
+  // double pct_rem;  // 
+  // double pct_other;
 
+  //
   // stage distribution stats (devel=T)
-
+  //
+  
   // mean time (i.e. central point, in mins from start) = mt
   // normalized mean time (0..1)                        = zmt
   

@@ -266,26 +266,27 @@ void hypnogram_t::calc_stats( const bool verbose )
   //
   // Basic summary statistics per-individual/night
   //
-
-  mins_wake = mins_n1 = mins_n2 = mins_n3 = mins_n4 = mins_rem = mins_other = 0;
+  
+  mins[ "W" ] = mins[ "N1" ] = mins[ "N2" ] = mins[ "N3" ] = mins[ "N4" ] = mins[ "R" ] = mins[ "?" ] = mins["L"] = 0;
   
   // implicitly, this will only count in the TRT (i.e. ignore pre
   // lights-out, and post lights-on)
 
   for (int e = 0 ; e < ne ; e++ )
     {
-      if      ( stages[e] == WAKE  ) mins_wake += epoch_mins;
-      else if ( stages[e] == NREM1 ) mins_n1 += epoch_mins;
-      else if ( stages[e] == NREM2 ) mins_n2 += epoch_mins;
-      else if ( stages[e] == NREM3 ) mins_n3 += epoch_mins;
-      else if ( stages[e] == NREM4 ) mins_n4 += epoch_mins;
-      else if ( stages[e] == REM   ) mins_rem += epoch_mins;
-      else if ( stages[e] != LIGHTS_ON ) mins_other += epoch_mins; // movement, artifact, unscored, but only 
+      if      ( stages[e] == WAKE  ) mins[ "W" ] += epoch_mins;
+      else if ( stages[e] == NREM1 ) mins[ "N1" ] += epoch_mins;
+      else if ( stages[e] == NREM2 ) mins[ "N2" ] += epoch_mins;
+      else if ( stages[e] == NREM3 ) mins[ "N3" ] += epoch_mins;
+      else if ( stages[e] == NREM4 ) mins[ "N4" ] += epoch_mins;
+      else if ( stages[e] == REM   ) mins[ "R" ] += epoch_mins;
+      else if ( stages[e] == LIGHTS_ON ) mins[ "L" ] += epoch_mins;
+      else mins[ "?" ] += epoch_mins; // movement, artifact, unscored 
     }
 
   // did we observe /any/ sleep?
 
-  any_sleep = ( mins_n1 + mins_n2 + mins_n3 + mins_n4 + mins_rem ) > 0 ;
+  any_sleep = ( mins[ "N1" ] + mins["N2"] + mins["N3"] + mins["N4"] + mins["R"] ) > 0 ;
 
   // lights out/on check
   // i.e. L can only be at start and end of recording
@@ -390,7 +391,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   TRT =  TRT_total_epochs * epoch_mins;
   
   // total wake time (ignores pre lights out, post lights off)
-  TWT = mins_wake;
+  TWT = mins["W"];
   
   // final wake time 
   FWT = ( lights_on_epoch - final_wake_epoch ) * epoch_mins; 
@@ -399,8 +400,12 @@ void hypnogram_t::calc_stats( const bool verbose )
   rem_lat_mins = ( first_rem_epoch - first_sleep_epoch ) * epoch_mins;
   
   // Total sleep time (excludes 'other')
-  TST = TRT - TWT - mins_other ; 
+  TST = TRT - TWT - mins[ "?" ];
 
+  // study starts/ends in sleep?
+  starts_in_sleep = is_sleep( stages[0] );
+  ends_in_sleep = is_sleep( stages[ne-1] );
+  
   // std::cout << "TST TRT " << TST << " " << TRT << "\n";
   // std::cout << "dets" << lights_out_epoch << " " << first_sleep_epoch << " " << last_sleep_epoch << " " << lights_on_epoch << "\n";
   
@@ -410,9 +415,10 @@ void hypnogram_t::calc_stats( const bool verbose )
   // latency to persistent sleep
   per_slp_lat = ( first_persistent_sleep_epoch - lights_out_epoch ) * epoch_mins;
 
-  // Sleep period time
+  // Sleep period time : note, diff. from Luna output
+  // here SPT = sleep onset to lights On (i.e. includes final wake)
   SPT = TRT - slp_lat;
-
+  
   //  std::cout << "TWT , slp_lat , FWT " << TWT << " " << slp_lat << " " << FWT << "\n";
 
   // WASO (ignores leading and also trailing wake)
@@ -437,19 +443,19 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   if ( TST > 0 ) 
     {
-      pct_n1  = mins_n1  / TST;
-      pct_n2  = mins_n2  / TST;
-      pct_n3  = mins_n3  / TST;
-      pct_n4  = mins_n4  / TST;
-      pct_rem = mins_rem / TST;
+      pct["N1"]  = mins[ "N1" ] / TST;
+      pct["N2"]  = mins[ "N2" ] / TST;
+      pct["N3"]  = mins[ "N3" ] / TST;
+      pct["N4"]  = mins[ "N4" ] / TST;
+      pct["R"]   = mins[ "R" ] / TST;
     }
   else
     {
-      pct_n1  = 0;
-      pct_n2  = 0;
-      pct_n3  = 0;
-      pct_n4  = 0;
-      pct_rem = 0;
+      pct[ "N1" ] = 0;
+      pct[ "N2" ] = 0;
+      pct[ "N3" ] = 0;
+      pct[ "N4" ] = 0;
+      pct[ "R" ] = 0;
       
     }
 
@@ -501,6 +507,103 @@ void hypnogram_t::calc_stats( const bool verbose )
 
 
   //
+  // Bout count and duration (ignore N4 here.)
+  //
+
+  const std::vector<std::string> these_stages = { "N1", "N2", "N3", "N4", "NR", "R", "W" , "?" , "L" } ;
+  
+  std::vector<std::string>::const_iterator qq = these_stages.begin();
+  while ( qq != these_stages.end() )
+    {
+      sleep_stage_t stage = WAKE;
+      if ( *qq == "N1" ) stage = NREM1;
+      if ( *qq == "N2" ) stage = NREM2;
+      if ( *qq == "N3" ) stage = NREM3; 
+      if ( *qq == "N4" ) stage = NREM4; 
+      if ( *qq == "R" ) stage = REM;
+      if ( *qq == "?" ) stage = UNKNOWN;
+      if ( *qq == "L" ) stage = LIGHTS_ON;
+
+      // special case:
+      bool all_nrem = *qq == "NR";
+
+      std::vector<double> b;
+      for (int e=0; e<ne; e++)
+	{
+	  // start of a bout?
+	  bool bout_start = false;
+	  if ( all_nrem )
+	      bout_start = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 ;	      	  
+	  else
+	    bout_start = stages[e] == stage;
+
+	  // skip to next epoch, not a match
+	  if ( ! bout_start ) continue;
+	  
+	  // assess this bout -- look ahead as many matching epochs as possible (or to end)
+	  double l = epoch_mins;
+	  while ( 1 )
+	    {
+	      ++e;
+
+	      // end of recording?... add this final bout
+	      if ( e == ne )
+		{
+		  b.push_back( l );
+		  break;
+		}
+
+	      // end of bout?
+	      if ( all_nrem )
+		{
+		  if ( stages[e] != NREM1 && stages[e] != NREM2 && stages[e] != NREM3 && stages[e] != NREM4 )
+		    {
+		      b.push_back( l );
+                      break;
+		    }
+		}
+	      else
+		{
+		  if ( stages[e] != stage )
+		    {
+		      b.push_back( l );
+		      break;
+		    }
+		}
+
+	      // else increase bout length
+	      l += epoch_mins;
+	    }
+	  
+	  // now continue to next epoch
+	}	    
+
+      //
+      // record stats
+      //
+
+      for (int bb=0; bb<b.size(); bb++)
+	{
+	  if ( b[bb] >= 5 ) bout_5[ *qq ] += b[bb];
+	  if ( b[bb] >= 10 ) bout_10[ *qq ] += b[bb];	  
+	}
+      
+      bout_n[ *qq ] = b.size();
+      if ( b.size() != 0 )
+	{
+	  bout_med[ *qq ] = MiscMath::median( b , true ); // T -> handle ties properly
+	  bout_mean[ *qq ] = MiscMath::mean( b );
+	}
+      
+      //
+      // next stage
+      //
+      
+      ++qq;
+    }
+  
+  
+  //
   // Sleep cycles : based on modified Floyd & Feinberg rules
   //
   
@@ -540,8 +643,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   // 1)  Find periods of 'persistent sleep' (default 10mins prior sleep)
   //
   
-  TpST = 0;
-
   std::vector<std::string> persistent_sleep( ne , "" );
   for (int e=0;e<ne;e++)
     {
@@ -563,11 +664,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  if ( ++ec == e ) break;
 	}
 
-      if ( okay ) 
-	{
-	  persistent_sleep[e] = "S"; 
-	  TpST += epoch_mins;
-	}
+      if ( okay ) persistent_sleep[e] = "S"; 
       else persistent_sleep[e] = "W";
     }
   
@@ -875,18 +972,6 @@ void hypnogram_t::calc_stats( const bool verbose )
     }
 
 
-  // for (int e=0;e<ne;e++)
-  //   {
-  //     std::cout << "C\t" 
-  // 		<< e+1 << "\t"
-  // 		<< stages[e] << "\t"
-  // 		<< sleep_period[e] << "\t"
-  // 		<< sleep_code[e] <<"\t"
-  // 		<< wata[e] << "\t"
-  // 		<< cycle_ending_waso[e] << "\t"
-  // 		<< sleep_cycle_number[e] << "\n";
-		
-  //   }
   
   //
   // Get cycle/period statistics
@@ -961,7 +1046,36 @@ void hypnogram_t::calc_stats( const bool verbose )
   for (int e=0; e<ne; e++)
     if ( persistent_sleep[e] == "S" ) in_persistent_sleep[e] = true;
 
+  // do not alter original persistent sleep definition, as that was used in NREM cycle
+  // construct;  but here we need to add in the fact that we've skipped the e.g. 10 mins
+  // of sleep prior to start of persistent sleep... this is includede in PER_SLP_LAT but
+  // original not in TPST.  so add in here...
+  
+  for (int e=1; e<ne; e++)
+    {
 
+      // std::cout << " e = " << e << "\t"
+      // 		<< stages[e] << "\t"
+      // 		<< in_persistent_sleep[e] << "\n";
+
+      // start of a persistent sleep bout?
+      if ( in_persistent_sleep[e] && ! in_persistent_sleep[e-1] )
+	{
+	  int ec = e;
+	  for (int i=0; i<def_persistent_sleep_epochs; i++)
+	    {
+	      --ec;
+	      if ( ec < 0 || in_persistent_sleep[ec] )
+		Helper::halt( "error defining persistent sleep bouts... check stage/epoch alignment (EPOCH align)" );
+	      in_persistent_sleep[ec] = true;
+	    }
+	}
+    }
+  
+  TpST = 0;
+  for (int e=0; e<ne; e++)
+    if ( in_persistent_sleep[e] ) TpST += epoch_mins;
+	
   
   //
   // Sleep cycle definitions
@@ -1071,6 +1185,9 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  // next right epoch
 	  ++k;
 	}
+
+      // std::cout << " left_wgt " << left_wgt << " " << left_n << "\n";
+      // std::cout << " right_wgt " << right_wgt << " " << right_n << "\n\n";
       
       if ( left_n  > 0 ) left_wgt /= (double)left_n;
       if ( right_n > 0 ) right_wgt /= (double)right_n;
@@ -1078,10 +1195,27 @@ void hypnogram_t::calc_stats( const bool verbose )
       // simple average of left/right averages
       // if no data, wgt will be 0, which is fine
       n2_ascdesc[e] = ( left_wgt + right_wgt ) / 2.0;
-
+      //std::cout << " n2 AD = " << e << "  " << stages[e] << " " << n2_ascdesc[e] << "\n";
     }
   
 
+  //
+  // Track duration of N2 class
+  //
+
+  mins[ "N2_ASC" ] = 0 ;
+  mins[ "N2_DSC" ] = 0 ;
+  mins[ "N2_FLT" ] = 0 ;
+  
+  for (int e=0;e<ne;e++)
+    {
+      if ( stages[e] != NREM2 ) continue;
+      if      ( n2_ascdesc[e] >= 0.25 ) mins[ "N2_ASC" ] += epoch_mins;
+      else if ( n2_ascdesc[e] <= -0.25 ) mins[ "N2_DSC" ] += epoch_mins;
+      else mins[ "N2_FLT" ] += epoch_mins;      
+    }
+  
+  
   
   //
   // Flanking epochs 
@@ -1467,16 +1601,37 @@ void hypnogram_t::output( const bool verbose ,
   if ( verbose )
     {
        
-      // values
-      writer.value(  "T1_LIGHTS_OFF" , clock_lights_out.as_numeric_string() );
-
-      if ( any_sleep ) 
+      // values - ensure all are hours past the prior midnight (before T1)
+      
+      if ( clock_lights_out.valid )
 	{
-	  writer.value(  "T2_SLEEP_ONSET" , clock_sleep_onset.as_numeric_string() );
-	  writer.value(  "T3_SLEEP_MIDPOINT" , clock_sleep_midpoint.as_numeric_string() );
-	  writer.value(  "T4_FINAL_WAKE" , clock_wake_time.as_numeric_string() );
+
+	  // ensure all are yoked to the same midnight as T1	  
+	  double t1 = clock_lights_out.hours();
+	  double t5 = clock_lights_on.hours();
+	  if ( t5 < t1 ) t5 += 24.0;
+
+	  writer.value(  "T1_LIGHTS_OFF" , t1 );
+	  
+	  if ( any_sleep ) 
+	    {
+	      double t2 = clock_sleep_onset.hours();
+	      double t3 = clock_sleep_midpoint.hours();
+	      double t4 = clock_wake_time.hours();
+	      if ( t2 < t1 ) t2 += 24.0;
+	      if ( t3 < t1 ) t3 += 24.0;
+	      if ( t4 < t1 ) t4 += 24.0;
+	      
+	      writer.value(  "T2_SLEEP_ONSET" , t2 );
+	      writer.value(  "T3_SLEEP_MIDPOINT" , t3 );
+	      writer.value(  "T4_FINAL_WAKE" , t4 );
+	    }
+
+	  writer.value(  "T5_LIGHTS_ON" , t5 );
+
 	}
-      writer.value(  "T5_LIGHTS_ON" , clock_lights_on.as_numeric_string() );
+      
+      // NREM cycles
       
       if ( any_sleep )
 	{
@@ -1489,12 +1644,35 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "TST" , TST );
       writer.value( "TPST" , TpST );
       writer.value( "TWT" , TWT );
-      writer.value( "OTHR" , mins_other );
+      writer.value( "LOT" , mins[ "L" ] );
+      writer.value( "OTHR" , mins[ "?" ] );
       writer.value( "CONF" , n_conflicts );
+      writer.value( "SIS" , (int)starts_in_sleep );
+      writer.value( "EIS" , (int)ends_in_sleep );
 
       if ( any_sleep )
 	{
+	  writer.value( "MINS_ASC_N2" , mins[ "N2_ASC" ] );
+	  writer.value( "MINS_DSC_N2" , mins[ "N2_DSC" ] );
+	  writer.value( "MINS_FLT_N2" , mins[ "N2_FLT" ] );
+	  
+	  // of N2
+	  if ( mins[ "N2" ] > 0 )
+	    {
+	      writer.value( "PCT_ASC_N2" , mins[ "N2_ASC" ] / mins[ "N2" ] );
+	      writer.value( "PCT_DSC_N2" , mins[ "N2_DSC" ] / mins[ "N2" ] );
+	      writer.value( "PCT_FLT_N2" , mins[ "N2_FLT" ] / mins[ "N2" ] );
+	    }
+	}
+      
+      if ( any_sleep )
+	{
 	  writer.value( "WASO" , WASO );
+	  // nb. different definition used internally
+	  writer.value( "SPT" , SPT - FWT );
+
+	  // adjust for increased time for onset of persistent sleep veresus first sleep
+	  writer.value( "PSPT" , SPT - FWT - ( per_slp_lat - slp_lat ) );
 	  writer.value( "FWT" , FWT );
 	  writer.value( "SLP_LAT" , slp_lat );
 	  writer.value( "PER_SLP_LAT" , per_slp_lat );      
@@ -1503,26 +1681,12 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "SLP_EFF2" , slp_eff2_pct );
 	}
 
-      if ( mins_rem > 0 )
+      
+      
+      if ( mins[ "R" ] > 0 )
 	writer.value( "REM_LAT" , rem_lat_mins );
 
-      if ( any_sleep )
-	{
-	  writer.value( "PCT_N1" , pct_n1 );
-	  writer.value( "PCT_N2" , pct_n2 );
-	  writer.value( "PCT_N3" , pct_n3 );
-	  if ( ! collapse_nrem34 ) 
-	    writer.value( "PCT_N4" , pct_n4 );
-	  writer.value( "PCT_REM" , pct_rem);
-	}
-      
-      writer.value( "MINS_N1" , mins_n1 );
-      writer.value( "MINS_N2" , mins_n2 );
-      writer.value( "MINS_N3" , mins_n3 );
-      if ( ! collapse_nrem34 ) 
-	writer.value( "MINS_N4" , mins_n4 );
-      writer.value( "MINS_REM" , mins_rem);
-      
+           
 
       // ignore for now... 
       /// metrics need normalization by sequence length
@@ -1533,9 +1697,58 @@ void hypnogram_t::output( const bool verbose ,
 	}
 
     }
+
+  //
+  // NREM cycle summary stats
+  //
+  
+  if ( verbose && any_sleep )
+    {
+      writer.var( "NREMC_START" , "NREM cycle start epoch" );
+      writer.var( "NREMC_NREM_MINS" , "NREM cycle NREM duration (mins)" );
+      writer.var( "NREMC_REM_MINS" , "NREM cycle REM duration (mins)" );
+      writer.var( "NREMC_OTHER_MINS" , "NREM cycle other duration (mins)" );
+      writer.var( "NREMC_MINS" , "NREM cycle total duration (mins)" );
+      writer.var( "NREMC_N" , "NREM cycle total duration (epochs)" );
+    }
+    
+  //
+  // Stage-stratified outputs
+  //
+
+  if ( any_sleep )
+    {
+      const std::vector<std::string> these_stages_without_n4 = { "N1", "N2", "N3", "NR", "R", "W" , "?" , "L" } ;
+      const std::vector<std::string> these_stages_with_n4 =    { "N1", "N2", "N3", "N4" , "NR", "R", "W" , "?" , "L" } ;
+      const std::vector<std::string> & these_stages = collapse_nrem34 ? these_stages_without_n4 : these_stages_with_n4 ; 
+      
+      // get total NR stats
+      mins[ "NR" ] = mins[ "N1" ] + mins[ "N2" ] + mins[ "N3" ] + mins[ "N4" ];
+      pct[ "NR" ] = pct[ "N1" ] + pct[ "N2" ] + pct[ "N3" ] + pct[ "N4" ];
+
+      std::vector<std::string>::const_iterator ss = these_stages.begin();
+      while ( ss != these_stages.end() )
+	{
+	  writer.level( *ss , globals::stage_strat );
+	  writer.value( "MINS" , mins[ *ss] );
+
+	  // sleep stage as % of TST
+	  if ( *ss == "N1" || *ss == "N2" || *ss == "N3" || *ss == "N4" || *ss == "NR" || *ss == "R" )
+	    writer.value( "PCT" , pct[ *ss] );
+	  
+	  writer.value( "BOUT_N" , bout_n[ *ss] );
+	  writer.value( "BOUT_MN" , bout_mean[ *ss] );
+	  writer.value( "BOUT_MD" , bout_med[ *ss] );
+	  writer.value( "BOUT_5" , bout_5[ *ss] );
+	  writer.value( "BOUT_10" , bout_10[ *ss] );
+	  ++ss;
+	}
+      writer.unlevel( globals::stage_strat );
+    }
+  
   
   //
-  // Cycle-specific output (verbose mode only), and transitions
+  // Cycle-stratified outputs (verbose mode only), and transitions
   //
 
   if ( verbose ) 
@@ -1544,13 +1757,6 @@ void hypnogram_t::output( const bool verbose ,
       if ( any_sleep ) 
 	{
 
-	  writer.var( "NREMC_START" , "NREM cycle start epoch" );
-	  writer.var( "NREMC_NREM_MINS" , "NREM cycle NREM duration (mins)" );
-	  writer.var( "NREMC_REM_MINS" , "NREM cycle REM duration (mins)" );
-	  writer.var( "NREMC_OTHER_MINS" , "NREM cycle other duration (mins)" );
-	  writer.var( "NREMC_MINS" , "NREM cycle total duration (mins)" );
-	  writer.var( "NREMC_N" , "NREM cycle total duration (epochs)" );
-	  
 	  std::map<int,double>::iterator cc = nremc_duration.begin();
 	  while ( cc != nremc_duration.end() )
 	    {
@@ -1567,7 +1773,7 @@ void hypnogram_t::output( const bool verbose ,
 	    }
 	  
 	  writer.unlevel( globals::cycle_strat );
-
+	  
 	  //
 	  // Transitions
 	  //
@@ -1816,10 +2022,10 @@ void hypnogram_t::output( const bool verbose ,
       // and as percentages
       writer.value( "PCT_E_SLEEP" , TST>0 ? elapsed_sleep / TST : 0 );
 
-      writer.value( "PCT_E_N1" , mins_n1 > 0 ? elapsed_n1 / mins_n1 : 0 );
-      writer.value( "PCT_E_N2" , mins_n2 > 0 ? elapsed_n2 / mins_n2 : 0 );
-      writer.value( "PCT_E_N3" , (mins_n3+mins_n4) > 0 ? elapsed_n34 / (mins_n3+mins_n4) : 0 );
-      writer.value( "PCT_E_REM" , mins_rem > 0 ? elapsed_rem / mins_rem : 0 );
+      writer.value( "PCT_E_N1" , mins[ "N1" ] > 0 ? elapsed_n1 / mins[ "N1" ] : 0 );
+      writer.value( "PCT_E_N2" , mins[ "N2" ] > 0 ? elapsed_n2 / mins[ "N2" ] : 0 );
+      writer.value( "PCT_E_N3" , (mins["N3"] + mins["N4"]) > 0 ? elapsed_n34 / (mins["N3"]+mins["N4"]) : 0 );
+      writer.value( "PCT_E_REM" , mins["R"] > 0 ? elapsed_rem / mins["R"] : 0 );
 
       // track elapsed time
       if ( stages[e] == WAKE ) 
@@ -1869,10 +2075,10 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "TOT_W2R" , wake2rem_total[e] );
 
       // N2 ascending/descending status
-
+      
       if ( stages[e] == NREM2 ) 
 	writer.value( "N2_WGT" , n2_ascdesc[e] );
-      
+    
            
     } // next epoch
 
@@ -1900,7 +2106,7 @@ void dummy_hypno()
       else if ( s == "N1" ) h.stages.push_back( NREM1 );
       else if ( s == "N2" ) h.stages.push_back( NREM2 );
       else if ( s == "N3" ) h.stages.push_back( NREM3 );
-      //else if ( s == "N4" ) h.stages.push_back( NREM4 );
+      else if ( s == "N4" ) h.stages.push_back( NREM4 );
       else if ( s == "R"  ) h.stages.push_back( REM );
       else if ( s == "L"  ) h.stages.push_back( LIGHTS_ON );
       else if ( s == "?"  ) h.stages.push_back( UNKNOWN );
