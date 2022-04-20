@@ -121,6 +121,13 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   values.clear(); values.insert( "R" );
   timeline->annotate_epochs(  globals::stage( REM ) , "SleepStage" , values );
   
+  //
+  // Preliminary step to edit out any 'trailing' weird sleep epochs...
+  //  i.e. if two hours of WAKE, then a single N1 epoch, then all wake...
+  //  this appears to happen in, e.g. some MrOS studies
+  //
+  
+  
 
   //
   // If we've masked the data, epoch count may not start at 0...
@@ -222,7 +229,105 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
     }
 
   writer.unepoch();
-    
+  
+
+  //
+  // Clean up edge cases - if we have a long W period and then only a few sleep epochs
+  // set those to missing
+  //
+
+  const double end_wake = param.has( "end-wake" ) ? param.requires_dbl( "end-wake" ) : 60 ; 
+  const double end_sleep =  param.has( "end-sleep" ) ? param.requires_dbl( "end-sleep" ) : 5 ; 
+  
+  n_fixed = 0;
+
+  if ( end_wake > 0 )
+    {
+      const int ne = stages.size();
+      const double epoch_mins = timeline->epoch_length() / 60.0 ;
+      
+      // count sleep backwards
+      double s = 0;
+      std::vector<double> rev_sleep( ne );
+      for (int e=ne-1; e>= 0; e-- )
+	{
+	  if ( is_sleep( stages[e] ) ) s += epoch_mins;
+	  rev_sleep[e] = s;	  
+	}
+      
+      // go forwards counting wake
+      n_fixed = 0;
+      double cumul_wake = 0; // or missing
+      for (int e=0; e<ne; e++)
+	{
+	  sleep_stage_t E1 = stages[e];
+
+	  if ( is_sleep( stages[e] ) ) 
+	    {
+	      if ( cumul_wake > end_wake && rev_sleep[e] < end_sleep )
+		{
+		  stages[e] = UNKNOWN;
+		  ++n_fixed;
+		}
+	      else
+		cumul_wake = 0; // reset the counter
+	    }
+	  else
+	    cumul_wake += epoch_mins; 
+	  
+	  // std::cout << " e = " << e << " " << cumul_wake << " " << rev_sleep[e] << "\t" 
+	  // 	    << E1 << "\t" << stages[e] << "\t" << fixed << "\n";
+	}
+      
+
+      // now do the reverse (i.e. to get rid of spurious leading S epochs)
+      //  (with a long wait until 'real' sleep onset)
+      
+      // count sleep forwards
+      s = 0;
+      std::vector<double> fwd_sleep( ne );
+      for (int e=0; e < ne; e++ )
+	{
+	  if ( is_sleep( stages[e] ) ) s += epoch_mins;
+	  fwd_sleep[e] = s;	  
+	}
+      
+      // go backwards counting wake
+      
+      // reset wake/missing flags
+      cumul_wake = 0; 
+      for (int e=ne-1; e>=0; e--)
+	{
+	  sleep_stage_t E1 = stages[e];
+
+	  if ( is_sleep( stages[e] ) ) 
+	    {
+	      if ( cumul_wake > end_wake && fwd_sleep[e] < end_sleep )
+		{
+		  stages[e] = UNKNOWN;
+		  ++n_fixed;
+		}
+	      else
+		cumul_wake = 0; // reset the counter
+	    }
+	  else
+	    cumul_wake += epoch_mins; 
+	}
+      
+      logger << "  set " << n_fixed << " leading/trailing sleep epochs to '?' (given end-wake=" << end_wake 
+	     << " and end-sleep=" << end_sleep << ")\n";
+    }
+
+  // 
+  // repeat for leading sleep
+  //
+  
+  
+  
+  //
+  // Report any conflicts
+  //
+
   if ( n_conflicts )
     logger << "  *** found " << n_conflicts << " epoch(s) of " << ne << " with conflicting spanning annotations\n"
 	   << "  *** check that epochs and annotations align as intended\n"
@@ -1647,6 +1752,7 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "LOT" , mins[ "L" ] );
       writer.value( "OTHR" , mins[ "?" ] );
       writer.value( "CONF" , n_conflicts );
+      writer.value( "FIXED" , n_fixed );
       writer.value( "SIS" , (int)starts_in_sleep );
       writer.value( "EIS" , (int)ends_in_sleep );
 

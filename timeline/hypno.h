@@ -80,6 +80,9 @@ struct hypnogram_t
   // number of conflicting epochs (set to missing)
   int n_conflicts;
 
+  // number of 'fixed' trailing epochs
+  int n_fixed;
+
   // times 
   clocktime_t clock_lights_out;
   clocktime_t clock_lights_on;
