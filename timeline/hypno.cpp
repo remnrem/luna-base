@@ -33,6 +33,8 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "helper/token-eval.h"
+#include "dsp/lzw.h"
+#include "dsp/mse.h"
 
 extern writer_t writer;
 
@@ -1755,21 +1757,6 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "FIXED" , n_fixed );
       writer.value( "SIS" , (int)starts_in_sleep );
       writer.value( "EIS" , (int)ends_in_sleep );
-
-      if ( any_sleep )
-	{
-	  writer.value( "MINS_ASC_N2" , mins[ "N2_ASC" ] );
-	  writer.value( "MINS_DSC_N2" , mins[ "N2_DSC" ] );
-	  writer.value( "MINS_FLT_N2" , mins[ "N2_FLT" ] );
-	  
-	  // of N2
-	  if ( mins[ "N2" ] > 0 )
-	    {
-	      writer.value( "PCT_ASC_N2" , mins[ "N2_ASC" ] / mins[ "N2" ] );
-	      writer.value( "PCT_DSC_N2" , mins[ "N2_DSC" ] / mins[ "N2" ] );
-	      writer.value( "PCT_FLT_N2" , mins[ "N2_FLT" ] / mins[ "N2" ] );
-	    }
-	}
       
       if ( any_sleep )
 	{
@@ -1785,14 +1772,44 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "SLP_EFF" , slp_eff_pct );
 	  writer.value( "SLP_MAIN_EFF" , slp_main_pct );
 	  writer.value( "SLP_EFF2" , slp_eff2_pct );
+	  
+	  //
+	  // Sleep Fragmentation Index /  Stage Transition Index
+	  //
+	  
+	  // SFI = # of transitions into W / TST
+	  // STI = # of sleep-sleep transitions / TST
+	  
+	  int trans_to_w = transitions[ NREM1 ][ WAKE ]
+	    + transitions[ NREM2 ][ WAKE ]
+	    + transitions[ NREM3 ][ WAKE ]
+	    + transitions[ REM ][ WAKE ];
+	  writer.value( "SFI" , trans_to_w / (double)TST );
+	  
+	  int trans_within_sleep =
+	    transitions[ NREM1 ][ NREM2 ]
+	    + transitions[ NREM1 ][ NREM3 ]
+	    + transitions[ NREM1 ][ REM ]
+	    + transitions[ NREM2 ][ NREM1 ]
+	    + transitions[ NREM2 ][ NREM3 ]
+	    + transitions[ NREM2 ][ REM ]
+	    + transitions[ NREM3 ][ NREM1 ]
+	    + transitions[ NREM3 ][ NREM2 ]
+	    + transitions[ NREM3 ][ REM ]
+	    + transitions[ REM ][ NREM1 ]
+	    + transitions[ REM ][ NREM2 ]
+	    + transitions[ REM ][ NREM3 ];
+	  writer.value( "STI" , trans_within_sleep / (double)TST );
+
+	  //
+	  // REM latency
+	  //
+
+	  if ( mins[ "R" ] > 0 )
+	    writer.value( "REM_LAT" , rem_lat_mins );
+	  	  
 	}
-
-      
-      
-      if ( mins[ "R" ] > 0 )
-	writer.value( "REM_LAT" , rem_lat_mins );
-
-           
+                 
 
       // ignore for now... 
       /// metrics need normalization by sequence length
@@ -1804,6 +1821,33 @@ void hypnogram_t::output( const bool verbose ,
 
     }
 
+
+  //
+  // LZW compression index, and sample entropy
+  //
+
+  std::vector<char> sc(stages.size(),'?');
+  for (int e=0; e<stages.size(); e++)
+    {
+      if      ( stages[e] == NREM1 ) sc[e] = 'A';
+      else if ( stages[e] == NREM2 ) sc[e] = 'B';
+      else if ( stages[e] == NREM3 || stages[e] == NREM4 ) sc[e] = 'C';
+      else if ( stages[e] == REM ) sc[e] = 'D';
+      else if ( stages[e] == WAKE ) sc[e] = 'E';      
+    }
+
+  std::string seq( sc.begin() , sc.end() );
+  double LZW = 0;
+  lzw_t lzw( seq , &LZW );
+  writer.value( "LZW" , LZW );
+  
+  // mse_t se;
+  // for (int m=1; m<=7; m++)                                                                                      
+  //   {
+  //     double mse = se.sampen( seq , m );
+  //     std::cout << " Mse = " << m << "\t" << mse << "\n";
+  //   }	
+  
   //
   // NREM cycle summary stats
   //
@@ -1849,7 +1893,22 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "BOUT_10" , bout_10[ *ss] );
 	  ++ss;
 	}
-      writer.unlevel( globals::stage_strat );
+
+      // split by ASC/DESC N2
+      writer.level( "N2_ASC" , globals::stage_strat );
+      writer.value( "MINS" , mins[ "N2_ASC" ] );
+      writer.value( "PCT" , mins[ "N2_ASC" ] / mins[ "N2" ] );
+
+      writer.level( "N2_DSC" , globals::stage_strat );
+      writer.value( "MINS" , mins[ "N2_DSC" ] );
+      writer.value( "PCT" , mins[ "N2_DSC" ] / mins[ "N2" ] );
+      
+      writer.level( "N2_FLT" , globals::stage_strat );
+      writer.value( "MINS" , mins[ "N2_FLT" ] );
+      writer.value( "PCT" , mins[ "N2_FLT" ] / mins[ "N2" ] );
+      
+      writer.unlevel( globals::stage_strat );      
+
     }
   
   
