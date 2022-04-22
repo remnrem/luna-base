@@ -80,9 +80,12 @@ struct hypnogram_t
   // number of conflicting epochs (set to missing)
   int n_conflicts;
 
-  // number of 'fixed' trailing epochs
+  // number of 'fixed' due to leading/trailing sleep
   int n_fixed;
 
+  // number of 'fixed' epochs due to lights on/off
+  int n_lights_fixed;
+  
   // times 
   clocktime_t clock_lights_out;
   clocktime_t clock_lights_on;
@@ -233,6 +236,7 @@ struct hypnogram_t
   std::vector<int> wake2rem_total; 
 
   std::map<sleep_stage_t,std::map<sleep_stage_t,int> > transitions;
+  std::map<sleep_stage_t,std::map<sleep_stage_t,int> > transitions5;
   
   std::vector<bool> is_waso;      // distinguish WAKE during SLEEP from pre/post
     

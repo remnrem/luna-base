@@ -242,68 +242,191 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   
   double lights_off = -1;
   double lights_on = -1;
+
+  clocktime_t st( timeline->edf->header.starttime );
   
   if ( param.has( "lights-off" ) )
     {
-  //     clocktime_t et( param.value( "lights-off" ) );
-  //     if ( et.valid ) 
-  // 	{
-  // 	  lights_off = et;
-  // 	  logger << "  setting lights_off time to " << lights_off.as_string() << "\n";
-  // 	}
-  //     else
-  // 	logger << "  invalid time for lights-off=" << param.value( "lights-off" ) << "  -- will ignore this\n";
-  //   }
-  
-  // if ( param.has( "lights-on" ) )
-  //   {
-  //     clocktime_t et( param.value( "lights-on" ) );
-  //     if ( et.valid )
-  //       {
-  //         lights_on = et;
-  //         logger << "  setting lights_on time to " << lights_off.as_string() << "\n";
-  //       }
-  //     else
-  //       logger << "  invalid time for lights-on=" << param.value( "lights-on" ) << "  -- will ignore this\n";
+      if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-off=hh:mm:ss" );
+      clocktime_t et( param.value( "lights-off" ) );
+      if ( et.valid ) 
+	{
+	  
+	  int earlier = clocktime_t::earlier( st , et );
+	  
+	  if ( earlier == 2 )
+	    lights_off = 0;  // set to start of EDF
+	  else
+	    lights_off = clocktime_t::difference_seconds( st , et );
+	  
+	  logger << "  setting lights_off time to " << et.as_string() << " (" << lights_off << " seconds from EDF start)\n";
+   	}
+      else
+   	logger << "  invalid time for lights-off=" << param.value( "lights-off" ) << "  -- will ignore this\n";
     }
   
-  
+
+  if ( param.has( "lights-on" ) )
+    {
+      if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-on=hh:mm:ss" );
+      clocktime_t et( param.value( "lights-on" ) );
+      if ( et.valid ) 
+	{
+	  // assume that lights-on is always *after* EDF start
+	  lights_on = clocktime_t::difference_seconds( st , et );
+	  logger << "  setting lights_on time to " << et.as_string() << " (" << lights_on << " seconds from EDF start)\n";
+   	}
+      else
+   	logger << "  invalid time for lights-on=" << param.value( "lights-on" ) << "  -- will ignore this\n";
+    }
+
   //
-  // If not already set, see if there are (exactly one) lights_on and/or lights_off annotations present
+  // If not already set, see if there are lights_on and/or lights_off annotations present
   //
   
   annot_t * lights_on_annot = timeline->annotations( "lights_on" );
   annot_t * lights_off_annot = timeline->annotations( "lights_off" );
 
-  //clocktime_t st( timeline->edf->header.starttime );
+  //
+  // valid combinations:                  | Off                    | On
+  // ------------------------------------------------------------------------------------------
+  //  a)  lights_off interval only          : start of lights_off    | end of lights_off
+  //  b)  two lights_on intervals           : end of first lights_on | start of second light on
+  //  c)  one lights_off + 1 or 2 lights_on : start of lights off    | start of last lights_on
   
-  if ( lights_on_annot && lights_on < 0 ) 
+  //  nb.  the final case works if two 'change-point' (i.e. 0-duration
+  //  intervals) are specified as lights_off and lights_on as well
+    
+  // lights_off
+  //  --> all epochs that end (using exact (not +1) time) before this time will be set to L
+  
+  // lights_on change-point:
+  //  --> all epochs that start on or after this time will be set to L
+  
+  int n_annot_lights_on = 0;
+  int n_annot_lights_off = 0;
+  
+  if ( lights_off_annot && lights_off < 0 ) // i.e. if not already set above
     {
-      
-      // for now assume 
-      // a) this is a single time point
-      // and b) that we only have a single lights_on event per study 
-      
+      annot_map_t & loff = lights_off_annot->interval_events;
+      n_annot_lights_off = loff.size();
+    }
+  
+  if ( lights_on_annot && lights_on < 0 ) // i.e. if not already set above
+    {
       annot_map_t & lon = lights_on_annot->interval_events;
-      const int na = lon.size();
-      if ( na == 1 ) 
-	{
-	  
-	}
-      else
-	logger <<  "  *** warning - found a 'lights_on' annotation, but multiple values existed... ignoring\n";
-
-      // annot_map_t::const_iterator ee = lon.begin();
-      // while ( ee != lon.end() )
-      // 	{
-      // 	  // stages[ ee->first.interval ] = WAKE;
-      // 	  // ++ee;
-      // 	}
-      
-      //annot_t * annot = timeline->annotations( sslabel );
-
+      n_annot_lights_on = lon.size();
     }
 
+  // extract change-points depending on the available annotations
+
+  // condition c
+  if ( n_annot_lights_off == 1 && n_annot_lights_on > 0 )
+    {
+      annot_map_t & lon = lights_on_annot->interval_events;
+      annot_map_t & loff = lights_off_annot->interval_events;
+
+      annot_map_t::const_iterator aa = loff.begin();
+      annot_map_t::const_iterator bb = lon.begin();
+      
+      // i.e. if leading and trailing LightsOn intervals given, take last
+      // otherwise, the assumption is that lights_on is a change-point, so take start of first
+      if ( lon.size() == 2 ) 
+	++bb;
+
+      lights_off = aa->first.interval.start_sec();
+      lights_on = bb->first.interval.start_sec();
+    }
+  
+  // condition a
+  if ( n_annot_lights_off == 1 && n_annot_lights_on == 0 )
+    {
+      annot_map_t & loff = lights_off_annot->interval_events;
+      annot_map_t::const_iterator aa = loff.begin();
+      lights_off = aa->first.interval.start_sec();
+      lights_on = aa->first.interval.stop_sec(); 
+    }
+  
+  // condition b
+  if ( n_annot_lights_off == 0 && n_annot_lights_on == 2 )
+    {
+      annot_map_t & lon = lights_on_annot->interval_events;
+      annot_map_t::const_iterator aa = lon.begin();
+      lights_off = aa->first.interval.stop_sec();
+      ++aa;
+      lights_on = aa->first.interval.start_sec();
+    }
+
+  // check that we did not have any bad combos
+  if ( n_annot_lights_off > 1 || n_annot_lights_on > 2 )
+    logger <<  "  *** warning - multiple 'lights_off' and 'lights_on' annotations... ignoring\n";
+
+  // check that, if both specified, then lights off happens before lights on
+
+  if ( lights_off > 0 && lights_on > 0 )
+    {
+      if ( lights_on <= lights_off )
+	{
+	  logger << "  using lights-off = " << lights_off << " seconds\n"
+		 << "        lights-on  = " << lights_on << " seconds\n";
+	  Helper::halt( "lights_on must occur after lights_off" );
+	}
+    }
+  
+  //
+  // Set any epochs to L if they occur before lights off or after lights on
+  //
+
+  const double epoch_mins = timeline->epoch_length() / 60.0 ;
+
+  n_lights_fixed = 0;
+  int loff_n = 0 , lon_n = 0;
+  if ( lights_off > 0 || lights_on > 0 )
+    {
+      
+      for (int e=0; e<stages.size(); e++)
+	{
+	  // this epoch ends before lights off?
+	  // i.e. will /include/ the epoch when lights_out == epoch start
+	  //  this also means we include partial epochs, if lights_out is midway, but so be it
+	  
+	  if ( lights_off > 0 )
+	    {
+	      // n.b. fudge to avoid precision issues
+	      const double s = 60 * (e+1) * epoch_mins - 0.0001;
+	      if ( s < lights_off )
+		{
+		  stages[e] = LIGHTS_ON;
+		  ++n_lights_fixed;
+		  ++loff_n;
+		}
+	    }
+	  
+	  // or, is this epoch starting at or after lights on?
+	  if ( lights_on > 0 )
+            {
+	      // n.b. fudge to avoid precision issues
+              const double s = 60 * e * epoch_mins + 0.0001;	      
+	      if ( s >= lights_on )
+                {
+                  stages[e] = LIGHTS_ON;
+                  ++n_lights_fixed;
+		  ++lon_n;
+                }
+            }
+	}
+
+      
+      if ( lights_off > 0 )
+	logger << "  set " << loff_n << " leading epochs to L based on a lights_off time of " << lights_off << " seconds from EDF start\n";
+
+      if ( lights_on > 0 )
+	logger << "  set " << lon_n << " final epochs to L based on a lights_on time of " << lights_on << " seconds from EDF start\n";
+
+    }
+  
+  
+  
   //
   // Clean up edge cases - if we have a long W period and then only a few sleep epochs
   // set those to missing
@@ -315,10 +438,9 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   n_fixed = 0;
 
   if ( end_wake > 0 )
-    {
+    {      
       const int ne = stages.size();
-      const double epoch_mins = timeline->epoch_length() / 60.0 ;
-      
+
       // count sleep backwards
       double s = 0;
       std::vector<double> rev_sleep( ne );
@@ -1523,6 +1645,10 @@ void hypnogram_t::calc_stats( const bool verbose )
 	    }
 	  else	    
 	    ++transitions[ stages[ e - 1 ] ][ stages[e] ];
+
+	  // return 5-class transitions in either case (for STI etc)
+	  ++transitions5[ stages[ e - 1 ] ][ stages[e] ];
+	  
 	}
 
 
@@ -1835,9 +1961,10 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "LOT" , mins[ "L" ] );
       writer.value( "OTHR" , mins[ "?" ] );
       writer.value( "CONF" , n_conflicts );
-      writer.value( "FIXED" , n_fixed );
-      writer.value( "SIS" , (int)starts_in_sleep );
-      writer.value( "EIS" , (int)ends_in_sleep );
+      writer.value( "FIXED_WAKE" , n_fixed );
+      writer.value( "FIXED_LIGHTS" , n_fixed );      
+      writer.value( "SINS" , (int)starts_in_sleep );
+      writer.value( "EINS" , (int)ends_in_sleep );
       
       if ( any_sleep )
 	{
@@ -1847,10 +1974,15 @@ void hypnogram_t::output( const bool verbose ,
 	  
 	  writer.value( "FWT" , FWT );
 	  writer.value( "SLP_LAT" , slp_lat );
-	  
-	  writer.value( "SLP_EFF" , slp_eff_pct );	  
-	  writer.value( "SLP_EFF2" , slp_eff2_pct );
-	  writer.value( "SLP_MAIN_EFF" , slp_main_pct );
+
+	  // was SLP_EFF
+	  writer.value( "SE_TIB" , slp_eff_pct );	  
+
+	  // was SLP_EFF2 --> this is the new default SE (i.e. denom SPT) 
+	  writer.value( "SE" , slp_eff2_pct );
+
+	  // ignore
+	  //writer.value( "SLP_MAIN_EFF" , slp_main_pct );
 
 	  // only defined if there is at least some persistent sleep
 	  if ( TpST > 0 ) 
@@ -1867,31 +1999,60 @@ void hypnogram_t::output( const bool verbose ,
 	  // SFI = # of transitions into W / TST
 	  // STI = # of sleep-sleep transitions / TST
 	  
-	  int trans_to_w = transitions[ NREM1 ][ WAKE ]
-	    + transitions[ NREM2 ][ WAKE ]
-	    + transitions[ NREM3 ][ WAKE ]
-	    + transitions[ REM ][ WAKE ];
+	  int trans_to_w = transitions5[ NREM1 ][ WAKE ]
+	    + transitions5[ NREM2 ][ WAKE ]
+	    + transitions5[ NREM3 ][ WAKE ]
+	    + transitions5[ REM ][ WAKE ];
 	  writer.value( "SFI" , trans_to_w / (double)TST );
 	  
 	  int trans_within_sleep =
-	    transitions[ NREM1 ][ NREM2 ]
-	    + transitions[ NREM1 ][ NREM3 ]
-	    + transitions[ NREM1 ][ REM ]
-	    + transitions[ NREM2 ][ NREM1 ]
-	    + transitions[ NREM2 ][ NREM3 ]
-	    + transitions[ NREM2 ][ REM ]
-	    + transitions[ NREM3 ][ NREM1 ]
-	    + transitions[ NREM3 ][ NREM2 ]
-	    + transitions[ NREM3 ][ REM ]
-	    + transitions[ REM ][ NREM1 ]
-	    + transitions[ REM ][ NREM2 ]
-	    + transitions[ REM ][ NREM3 ];
-	  writer.value( "STI" , trans_within_sleep / (double)TST );
+	    transitions5[ NREM1 ][ NREM2 ]
+	    + transitions5[ NREM1 ][ NREM3 ]
+	    + transitions5[ NREM1 ][ REM ]
+	    + transitions5[ NREM2 ][ NREM1 ]
+	    + transitions5[ NREM2 ][ NREM3 ]
+	    + transitions5[ NREM2 ][ REM ]
+	    + transitions5[ NREM3 ][ NREM1 ]
+	    + transitions5[ NREM3 ][ NREM2 ]
+	    + transitions5[ NREM3 ][ REM ]
+	    + transitions5[ REM ][ NREM1 ]
+	    + transitions5[ REM ][ NREM2 ]
+	    + transitions5[ REM ][ NREM3 ];
+	  writer.value( "TI_S" , trans_within_sleep / (double)TST );
+	  
+	  // REM - NREM transition only
+	  int rem_nrem_trans = 
+	    + transitions5[ NREM1 ][ REM ]
+	    + transitions5[ NREM2 ][ REM ]
+	    + transitions5[ NREM3 ][ REM ]
+            + transitions5[ REM ][ NREM1 ]
+            + transitions5[ REM ][ NREM2 ]
+            + transitions5[ REM ][ NREM3 ];
+          writer.value( "TI_RNR" , rem_nrem_trans / (double)TST );
 
+	  // 3-class (NREM / REM / WAKE) - denom = SPT 
+	  int s3_trans =
+            + transitions5[ NREM1 ][ REM ] // NREM - REM
+            + transitions5[ NREM2 ][ REM ]
+            + transitions5[ NREM3 ][ REM ]
+            + transitions5[ REM ][ NREM1 ] 
+            + transitions5[ REM ][ NREM2 ]
+            + transitions5[ REM ][ NREM3 ]	    
+	    + transitions5[ REM ][ WAKE ]  // REM - WAKE
+	    + transitions5[ WAKE ][ REM ] 
+            + transitions5[ NREM1 ][ WAKE ] // NREM - REM
+            + transitions5[ NREM2 ][ WAKE ]
+            + transitions5[ NREM3 ][ WAKE ]
+            + transitions5[ WAKE ][ NREM1 ] 
+            + transitions5[ WAKE ][ NREM2 ]
+            + transitions5[ WAKE ][ NREM3 ];	    
+          writer.value( "TI_S3" , s3_trans / (double)(SPT - FWT) );
+	  
+	  
 	  //
 	  // REM latency
 	  //
-
+	  
 	  if ( mins[ "R" ] > 0 )
 	    writer.value( "REM_LAT" , rem_lat_mins );
 	  	  
@@ -1905,9 +2066,9 @@ void hypnogram_t::output( const bool verbose ,
 	  if ( runs_pv5 >= 0 ) writer.value( "RUNS" , runs_pv5 );
 	  if ( runs_pv3 >= 0 ) writer.value( "RUNS3" , runs_pv3 );	  
 	}
-
+      
     }
-
+  
 
   //
   // LZW compression index, and sample entropy
