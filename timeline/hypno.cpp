@@ -233,6 +233,77 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   writer.unepoch();
   
 
+
+  //
+  // do we have any lights_on or lights_off annotations?   Or have these been passed 
+  // via the command line (e.g. as a variable, which may be individual-specific, lights-off=${LOFF} 
+  // where LOFF is defined in a vars=data.txt file )
+  //
+  
+  double lights_off = -1;
+  double lights_on = -1;
+  
+  if ( param.has( "lights-off" ) )
+    {
+  //     clocktime_t et( param.value( "lights-off" ) );
+  //     if ( et.valid ) 
+  // 	{
+  // 	  lights_off = et;
+  // 	  logger << "  setting lights_off time to " << lights_off.as_string() << "\n";
+  // 	}
+  //     else
+  // 	logger << "  invalid time for lights-off=" << param.value( "lights-off" ) << "  -- will ignore this\n";
+  //   }
+  
+  // if ( param.has( "lights-on" ) )
+  //   {
+  //     clocktime_t et( param.value( "lights-on" ) );
+  //     if ( et.valid )
+  //       {
+  //         lights_on = et;
+  //         logger << "  setting lights_on time to " << lights_off.as_string() << "\n";
+  //       }
+  //     else
+  //       logger << "  invalid time for lights-on=" << param.value( "lights-on" ) << "  -- will ignore this\n";
+    }
+  
+  
+  //
+  // If not already set, see if there are (exactly one) lights_on and/or lights_off annotations present
+  //
+  
+  annot_t * lights_on_annot = timeline->annotations( "lights_on" );
+  annot_t * lights_off_annot = timeline->annotations( "lights_off" );
+
+  //clocktime_t st( timeline->edf->header.starttime );
+  
+  if ( lights_on_annot && lights_on < 0 ) 
+    {
+      
+      // for now assume 
+      // a) this is a single time point
+      // and b) that we only have a single lights_on event per study 
+      
+      annot_map_t & lon = lights_on_annot->interval_events;
+      const int na = lon.size();
+      if ( na == 1 ) 
+	{
+	  
+	}
+      else
+	logger <<  "  *** warning - found a 'lights_on' annotation, but multiple values existed... ignoring\n";
+
+      // annot_map_t::const_iterator ee = lon.begin();
+      // while ( ee != lon.end() )
+      // 	{
+      // 	  // stages[ ee->first.interval ] = WAKE;
+      // 	  // ++ee;
+      // 	}
+      
+      //annot_t * annot = timeline->annotations( sslabel );
+
+    }
+
   //
   // Clean up edge cases - if we have a long W period and then only a few sleep epochs
   // set those to missing
@@ -319,10 +390,6 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       logger << "  set " << n_fixed << " leading/trailing sleep epochs to '?' (given end-wake=" << end_wake 
 	     << " and end-sleep=" << end_sleep << ")\n";
     }
-
-  // 
-  // repeat for leading sleep
-  //
   
   
   
@@ -537,7 +604,8 @@ void hypnogram_t::calc_stats( const bool verbose )
   for (int e=first_sleep_epoch;e<=last_sleep_epoch;e++)
     if ( stages[e] == WAKE ) ++w;
   WASO = w * epoch_mins;
-    
+  mins[ "WASO" ] = WASO;
+  
   // sleep efficiency (includes sleep latency as W) include OTHER in denom
   slp_eff_pct = ( TST / TRT ) * 100;
     
@@ -617,7 +685,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   // Bout count and duration (ignore N4 here.)
   //
 
-  const std::vector<std::string> these_stages = { "N1", "N2", "N3", "N4", "NR", "R", "W" , "?" , "L" } ;
+  const std::vector<std::string> these_stages = { "N1", "N2", "N3", "N4", "NR", "R", "W" , "?" , "L" , "WASO" } ;
   
   std::vector<std::string>::const_iterator qq = these_stages.begin();
   while ( qq != these_stages.end() )
@@ -630,9 +698,11 @@ void hypnogram_t::calc_stats( const bool verbose )
       if ( *qq == "R" ) stage = REM;
       if ( *qq == "?" ) stage = UNKNOWN;
       if ( *qq == "L" ) stage = LIGHTS_ON;
-
-      // special case:
+      
+      // special cases
       bool all_nrem = *qq == "NR";
+      
+      bool waso = *qq == "WASO";
 
       std::vector<double> b;
       for (int e=0; e<ne; e++)
@@ -640,7 +710,9 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  // start of a bout?
 	  bool bout_start = false;
 	  if ( all_nrem )
-	      bout_start = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 ;	      	  
+	    bout_start = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 ;	      	  
+	  else if ( waso )
+	    bout_start = stages[e] == WAKE && e >= first_sleep_epoch && e <= last_sleep_epoch ;
 	  else
 	    bout_start = stages[e] == stage;
 
@@ -668,6 +740,14 @@ void hypnogram_t::calc_stats( const bool verbose )
 		      b.push_back( l );
                       break;
 		    }
+		}
+	      else if ( waso ) 
+		{
+		  if ( stages[e] != WAKE || e > last_sleep_epoch )
+		    {
+		      b.push_back( l );
+                      break;
+		    }		  
 		}
 	      else
 		{
@@ -700,6 +780,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 	{
 	  bout_med[ *qq ] = MiscMath::median( b , true ); // T -> handle ties properly
 	  bout_mean[ *qq ] = MiscMath::mean( b );
+	  bout_max[ *qq ] = MiscMath::max( b );
 	}
       
       //
@@ -1749,7 +1830,7 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "TIB" , TIB );
       writer.value( "TRT" , TRT );
       writer.value( "TST" , TST );
-      writer.value( "TPST" , TpST );
+      writer.value( "TST_PER" , TpST );
       writer.value( "TWT" , TWT );
       writer.value( "LOT" , mins[ "L" ] );
       writer.value( "OTHR" , mins[ "?" ] );
@@ -1763,16 +1844,22 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "WASO" , WASO );
 	  // nb. different definition used internally
 	  writer.value( "SPT" , SPT - FWT );
-
-	  // adjust for increased time for onset of persistent sleep veresus first sleep
-	  writer.value( "PSPT" , SPT - FWT - ( per_slp_lat - slp_lat ) );
+	  
 	  writer.value( "FWT" , FWT );
 	  writer.value( "SLP_LAT" , slp_lat );
-	  writer.value( "PER_SLP_LAT" , per_slp_lat );      
-	  writer.value( "SLP_EFF" , slp_eff_pct );
-	  writer.value( "SLP_MAIN_EFF" , slp_main_pct );
-	  writer.value( "SLP_EFF2" , slp_eff2_pct );
 	  
+	  writer.value( "SLP_EFF" , slp_eff_pct );	  
+	  writer.value( "SLP_EFF2" , slp_eff2_pct );
+	  writer.value( "SLP_MAIN_EFF" , slp_main_pct );
+
+	  // only defined if there is at least some persistent sleep
+	  if ( TpST > 0 ) 
+	    {
+	      writer.value( "SLP_LAT_PER" , per_slp_lat );      
+	      // adjust for increased time for onset of persistent sleep veresus first sleep
+	      writer.value( "SPT_PER" , SPT - FWT - ( per_slp_lat - slp_lat ) );
+	    }
+	  	  
 	  //
 	  // Sleep Fragmentation Index /  Stage Transition Index
 	  //
@@ -1868,14 +1955,14 @@ void hypnogram_t::output( const bool verbose ,
 
   if ( any_sleep )
     {
-      const std::vector<std::string> these_stages_without_n4 = { "N1", "N2", "N3", "NR", "R", "W" , "?" , "L" } ;
-      const std::vector<std::string> these_stages_with_n4 =    { "N1", "N2", "N3", "N4" , "NR", "R", "W" , "?" , "L" } ;
+      const std::vector<std::string> these_stages_without_n4 = { "N1", "N2", "N3", "NR", "R", "W" , "?" , "L" , "WASO" } ;
+      const std::vector<std::string> these_stages_with_n4 =    { "N1", "N2", "N3", "N4" , "NR", "R", "W" , "?" , "L" , "WASO" } ;
       const std::vector<std::string> & these_stages = collapse_nrem34 ? these_stages_without_n4 : these_stages_with_n4 ; 
       
       // get total NR stats
       mins[ "NR" ] = mins[ "N1" ] + mins[ "N2" ] + mins[ "N3" ] + mins[ "N4" ];
       pct[ "NR" ] = pct[ "N1" ] + pct[ "N2" ] + pct[ "N3" ] + pct[ "N4" ];
-
+      
       std::vector<std::string>::const_iterator ss = these_stages.begin();
       while ( ss != these_stages.end() )
 	{
@@ -1887,6 +1974,7 @@ void hypnogram_t::output( const bool verbose ,
 	    writer.value( "PCT" , pct[ *ss] );
 	  
 	  writer.value( "BOUT_N" , bout_n[ *ss] );
+	  writer.value( "BOUT_MX" , bout_max[ *ss] );
 	  writer.value( "BOUT_MN" , bout_mean[ *ss] );
 	  writer.value( "BOUT_MD" , bout_med[ *ss] );
 	  writer.value( "BOUT_5" , bout_5[ *ss] );
@@ -2257,8 +2345,7 @@ void dummy_hypno()
   edf_t edf;
   
   // dummy values
-  
-  
+    
   hypnogram_t h;
   h.timeline = &edf.timeline;
   

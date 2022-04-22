@@ -1099,6 +1099,20 @@ void MiscMath::normalize( std::vector<double> * x , const std::vector<bool> & in
 }
 
 
+double MiscMath::max(const std::vector<double> & x )
+{
+  double mn, mx;
+  minmax( x , &mn , &mx );
+  return mx;
+}
+
+double MiscMath::min(const std::vector<double> & x )
+{
+  double mn, mx;
+  minmax( x , &mn , &mx );
+  return mn;
+}
+
 
 void MiscMath::minmax( const std::vector<double> & x , double * mn , double * mx)
 {

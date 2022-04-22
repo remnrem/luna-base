@@ -123,6 +123,9 @@ namespace MiscMath
  double sum( const std::vector<int> & x );
  double sqr( const double a );
 
+ double max(const std::vector<double> & x );
+ double min(const std::vector<double> & x );
+
  void minmax( const std::vector<double> & x , double * mn , double * mx);
  void normalize( std::vector<double> * x , double * mn , double * mx);
  void normalize( std::vector<double> * x , const std::vector<bool> & include_mask );

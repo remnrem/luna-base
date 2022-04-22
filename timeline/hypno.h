@@ -133,7 +133,7 @@ struct hypnogram_t
   std::map<std::string,double> mins;
   std::map<std::string,double> pct;
   std::map<std::string,int> bout_n;
-  std::map<std::string,double> bout_mean, bout_med, bout_5, bout_10;
+  std::map<std::string,double> bout_mean, bout_med, bout_5, bout_10, bout_max;
   
   // double mins_wake;  // minutes awake
   // double mins_n1;  // minutes N1
