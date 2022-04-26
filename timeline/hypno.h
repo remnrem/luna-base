@@ -85,14 +85,16 @@ struct hypnogram_t
 
   // number of 'fixed' epochs due to lights on/off
   int n_lights_fixed;
-  
+  int n_lights_fixed_was_sleep;
+
   // times 
+  clocktime_t clock_start;
   clocktime_t clock_lights_out;
   clocktime_t clock_lights_on;
-
   clocktime_t clock_sleep_onset;
   clocktime_t clock_sleep_midpoint;
   clocktime_t clock_wake_time;
+  clocktime_t clock_stop;
 
   // Epoch markers
   

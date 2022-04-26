@@ -248,36 +248,41 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   if ( param.has( "lights-off" ) )
     {
       if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-off=hh:mm:ss" );
-      clocktime_t et( param.value( "lights-off" ) );
-      if ( et.valid ) 
-	{
-	  
-	  int earlier = clocktime_t::earlier( st , et );
-	  
-	  if ( earlier == 2 )
-	    lights_off = 0;  // set to start of EDF
+      if ( param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" ) 
+	{ 
+	  clocktime_t et( param.value( "lights-off" ) );
+	  if ( et.valid ) 
+	    {
+	      
+	      int earlier = clocktime_t::earlier( st , et );
+	      
+	      if ( earlier == 2 )
+		lights_off = 0;  // set to start of EDF
+	      else
+		lights_off = clocktime_t::difference_seconds( st , et );
+	      
+	      logger << "  setting lights_off = " << et.as_string() << " (" << lights_off << " secs, " << lights_off/60.0 << " mins from start)\n";
+	    }
 	  else
-	    lights_off = clocktime_t::difference_seconds( st , et );
-	  
-	  logger << "  setting lights_off time to " << et.as_string() << " (" << lights_off << " seconds from EDF start)\n";
-   	}
-      else
-   	logger << "  invalid time for lights-off=" << param.value( "lights-off" ) << "  -- will ignore this\n";
+	    logger << "  invalid time for lights-off=" << param.value( "lights-off" ) << "  -- will ignore this\n";
+	}
     }
-  
 
   if ( param.has( "lights-on" ) )
     {
       if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-on=hh:mm:ss" );
-      clocktime_t et( param.value( "lights-on" ) );
-      if ( et.valid ) 
+      if ( param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
 	{
-	  // assume that lights-on is always *after* EDF start
-	  lights_on = clocktime_t::difference_seconds( st , et );
-	  logger << "  setting lights_on time to " << et.as_string() << " (" << lights_on << " seconds from EDF start)\n";
-   	}
-      else
-   	logger << "  invalid time for lights-on=" << param.value( "lights-on" ) << "  -- will ignore this\n";
+	  clocktime_t et( param.value( "lights-on" ) );
+	  if ( et.valid ) 
+	    {
+	      // assume that lights-on is always *after* EDF start
+	      lights_on = clocktime_t::difference_seconds( st , et );
+	      logger << "  setting lights_on = " << et.as_string() << " (" << lights_on << " secs, " << lights_on/60.0 << " mins from start)\n";
+	    }
+	  else
+	    logger << "  invalid time for lights-on=" << param.value( "lights-on" ) << "  -- will ignore this\n";
+	}
     }
 
   //
@@ -379,7 +384,10 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 
   const double epoch_mins = timeline->epoch_length() / 60.0 ;
 
+  
   n_lights_fixed = 0;
+  n_lights_fixed_was_sleep = 0;
+
   int loff_n = 0 , lon_n = 0;
   if ( lights_off > 0 || lights_on > 0 )
     {
@@ -396,6 +404,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 	      const double s = 60 * (e+1) * epoch_mins - 0.0001;
 	      if ( s < lights_off )
 		{
+		  if ( is_sleep( stages[e] ) ) ++n_lights_fixed_was_sleep;
 		  stages[e] = LIGHTS_ON;
 		  ++n_lights_fixed;
 		  ++loff_n;
@@ -409,7 +418,8 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
               const double s = 60 * e * epoch_mins + 0.0001;	      
 	      if ( s >= lights_on )
                 {
-                  stages[e] = LIGHTS_ON;
+                  if ( is_sleep( stages[e] ) ) ++n_lights_fixed_was_sleep;
+		  stages[e] = LIGHTS_ON;
                   ++n_lights_fixed;
 		  ++lon_n;
                 }
@@ -1798,9 +1808,31 @@ void hypnogram_t::calc_stats( const bool verbose )
       wake2rem_total[e] = e_wake2rem;
     }
 
+  
+  int first_lights_out_epoch = 0;
+  for (int e=0; e<ne; e++)
+    {
+      if ( stages[e] != LIGHTS_ON ) 
+	{
+	  first_lights_out_epoch = e;
+	  break;
+	}
+    }
+
+  // +1 is okay even if lights on is at end	
+  // as this will never be used other than to give a
+  // time below (i.e. start of epoch 'ne' = last point of recording) +1LLU
+  int first_lights_on_epoch = ne;
+  for (int e=ne-1; e!=0; e--)
+    {
+      if ( stages[e] != LIGHTS_ON )
+	{
+	  first_lights_on_epoch = e+1;
+	  break;
+	}
+    }
 
 
-    
   //
   // Clocktime-based measures
   //
@@ -1808,25 +1840,38 @@ void hypnogram_t::calc_stats( const bool verbose )
   clocktime_t starttime( timeline->edf->header.starttime );
   if ( ! starttime.valid ) 
     {
-      clock_lights_out.valid = clock_sleep_onset.valid 
+      clock_start.valid = clock_lights_out.valid = clock_sleep_onset.valid 
 	= clock_sleep_midpoint.valid = clock_wake_time.valid 
-	= clock_lights_on.valid = false;
+	= clock_lights_on.valid = clock_stop.valid = false;
     }
   else
     {
-      clock_lights_out     = starttime;
-        
-      double epoch_hrs = epoch_mins / 60.0;
+      // T0
+      clock_start = starttime;
+      
+      double epoch_hrs = epoch_mins / 60.0;      
 
-      clock_sleep_onset    = starttime;
+      // T1
+      clock_lights_out = starttime;
+      clock_lights_out.advance_hrs( epoch_hrs * first_lights_out_epoch );
+
+      // T2
+      clock_sleep_onset = starttime;
       clock_sleep_onset.advance_hrs( epoch_hrs * first_sleep_epoch );
       
-      clock_wake_time      = starttime;
+      // T4
+      clock_wake_time = starttime;
       clock_wake_time.advance_hrs( epoch_hrs * final_wake_epoch );
       
-      clock_lights_on      = starttime;
-      clock_lights_on.advance_hrs( epoch_hrs * ne );
+      // T5 
+      clock_lights_on = starttime;
+      clock_lights_on.advance_hrs( epoch_hrs * first_lights_on_epoch );
     
+      // T6 end
+      clock_stop = starttime;
+      clock_stop.advance_hrs( epoch_hrs * ne );
+
+      // T3 (midpoint)
       clock_sleep_midpoint.midpoint( clock_sleep_onset , clock_wake_time );      
       
     }
@@ -1920,10 +1965,18 @@ void hypnogram_t::output( const bool verbose ,
       if ( clock_lights_out.valid )
 	{
 
+	  double t0 = clock_start.hours();
+
 	  // ensure all are yoked to the same midnight as T1	  
 	  double t1 = clock_lights_out.hours();
+	  if ( t1 < t0 ) t1 += 24.0;
 	  double t5 = clock_lights_on.hours();
-	  if ( t5 < t1 ) t5 += 24.0;
+	  if ( t5 < t0 ) t5 += 24.0;
+
+	  double t6 = clock_stop.hours();
+	  if ( t6 < t0 ) t6 += 24.0;
+	  
+	  writer.value(  "T0_START" , t0 );
 
 	  writer.value(  "T1_LIGHTS_OFF" , t1 );
 	  
@@ -1932,9 +1985,9 @@ void hypnogram_t::output( const bool verbose ,
 	      double t2 = clock_sleep_onset.hours();
 	      double t3 = clock_sleep_midpoint.hours();
 	      double t4 = clock_wake_time.hours();
-	      if ( t2 < t1 ) t2 += 24.0;
-	      if ( t3 < t1 ) t3 += 24.0;
-	      if ( t4 < t1 ) t4 += 24.0;
+	      if ( t2 < t0 ) t2 += 24.0;
+	      if ( t3 < t0 ) t3 += 24.0;
+	      if ( t4 < t0 ) t4 += 24.0;
 	      
 	      writer.value(  "T2_SLEEP_ONSET" , t2 );
 	      writer.value(  "T3_SLEEP_MIDPOINT" , t3 );
@@ -1942,6 +1995,18 @@ void hypnogram_t::output( const bool verbose ,
 	    }
 
 	  writer.value(  "T5_LIGHTS_ON" , t5 );
+
+	  writer.value(  "T6_STOP" , t6 );
+
+	  
+	  // same in HMS
+	  writer.value(  "HMS0_START" , clock_start.as_string(':') );
+	  writer.value(  "HMS1_LIGHTS_OFF" , clock_lights_out.as_string(':') );
+	  writer.value(  "HMS2_SLEEP_ONSET" , clock_sleep_onset.as_string(':') );
+	  writer.value(  "HMS3_SLEEP_MIDPOINT" , clock_sleep_midpoint.as_string(':') );
+	  writer.value(  "HMS4_FINAL_WAKE" , clock_wake_time.as_string(':') );
+	  writer.value(  "HMS5_LIGHTS_ON" , clock_lights_on.as_string(':') );
+	  writer.value(  "HMS6_STOP" , clock_stop.as_string(':') );
 
 	}
       
@@ -1953,8 +2018,14 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value(  "NREMC_MINS" , nremc_mean_duration );
 	}
 
-      writer.value( "TIB" , TIB );
-      writer.value( "TRT" , TRT );
+      const double epoch_mins = timeline->epoch_length() / 60.0 ;
+
+      // note: here we swap definitions of "TIB" and "TRT"
+      // i.e. in the code, they are reversed.... 
+      // should go back and make consistent some point soon!
+      writer.value( "TRT" , TIB ); 
+      writer.value( "TIB" , TRT );
+      
       writer.value( "TST" , TST );
       writer.value( "TST_PER" , TpST );
       writer.value( "TWT" , TWT );
@@ -1962,7 +2033,8 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "OTHR" , mins[ "?" ] );
       writer.value( "CONF" , n_conflicts );
       writer.value( "FIXED_WAKE" , n_fixed );
-      writer.value( "FIXED_LIGHTS" , n_fixed );      
+      writer.value( "FIXED_LIGHTS" , n_lights_fixed );
+      writer.value( "LOST" , n_lights_fixed_was_sleep * epoch_mins ); 
       writer.value( "SINS" , (int)starts_in_sleep );
       writer.value( "EINS" , (int)ends_in_sleep );
       
@@ -2275,7 +2347,7 @@ void hypnogram_t::output( const bool verbose ,
 
   const int ne = timeline->num_epochs();
   
-  clocktime_t starttime( clock_lights_out );
+  clocktime_t starttime( clock_start );
 
 
   //
