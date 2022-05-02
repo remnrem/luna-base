@@ -3233,7 +3233,7 @@ void characterize_spindles( edf_t & edf ,
 	  else if ( wall[z] > fmax ) fmax = wall[z];
 	}
       
-      spindle->frq_range += fmax - fmin;
+      spindle->frq_range = fmax - fmin;
 
       //
       // Durations/freqs of slopes -- no need to check things here
