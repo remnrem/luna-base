@@ -66,15 +66,19 @@ void dsptools::tclst( edf_t & edf , param_t & param )
   
   bool use_amp = param.has( "amp" );
   bool use_phase = param.has( "phase" );
+  bool use_freq = param.has( "freq" );
   
   if ( use_amp && use_complex_dist )
     Helper::halt( "can only specify complex OR amp" );
-
+  
   if ( use_phase && use_complex_dist )
     Helper::halt( "can only specify complex OR phase" );
 
+  if ( use_freq && use_complex_dist )
+    Helper::halt( "can only specify complex OR freq" );
+
   // default:
-  if ( ! ( use_complex_dist || use_amp || use_phase ) )
+  if ( ! ( use_complex_dist || use_amp || use_phase || use_freq ) )
     { use_amp = use_phase = true; }
 
   // --------------------------------------------------------------------------------
@@ -357,6 +361,11 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	      // get phase angles	  
 	      const std::vector<double> * phase = ht.phase();
 	      
+	      // get inst. freq (optionally)
+	      std::vector<double> freq = ht.instantaneous_frequency();
+	      if ( use_freq )
+		freq = ht.instantaneous_frequency();
+	      
 	      // populate each interval
 	      for (int i=0; i<ni; i++)
 		{	      	      
@@ -366,6 +375,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 		      //std::cout << "det " << p << " " << (*signal)[s1] << " " << (*phase)[s1] << "\n";
 		      P[i](p,s) = (*phase)[s1];
 		      X[i](p,s) = (*signal)[s1];
+		      F[i](p,s) = frq[s1];
 		      ++s1;
 		    }	      
 		}
@@ -538,7 +548,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       // initiate distance calculation and clustering for this set of intervals
       //
 
-      std::cout << " anout to cluster \n";
+      std::cout << " about to cluster \n";
       tclst_t tc( use_complex_dist || use_amp ? &X : NULL ,
 		  use_complex_dist || use_phase ? &P : NULL ,
 		  chs , t , k1 , k2 ,

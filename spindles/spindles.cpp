@@ -3894,7 +3894,7 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , isa = 0 , qual = 0 ;
 
   double symm = 0 , symm2 = 0, chirp = 0 ;
-  double frq1 = 0 , frq2 = 0 , frq_range;
+  double frq1 = 0 , frq2 = 0 , frq_range = 0;
 
   // HWs
   double negf = 0 , posf = 0 , allf = 0;

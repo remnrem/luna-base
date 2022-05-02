@@ -58,6 +58,8 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 
   
   std::string current_rule = "";
+
+  bool rules_set = false;
   
   for (int i=0; i<l; i++)
     {
@@ -67,10 +69,63 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
       if ( line[0] == '%' ) continue;
       
       // no indentation: new canonical label
+      //  -- which might also use the canon <- alias1 alias2 ... syntax
       // will only have one of these
       if ( line[0] != ' ' )
 	{
-	  canonical_label = line;
+	  
+	  // special case 1: (handled below)
+	  //  canon 
+
+	  // equals
+
+	  //  canon
+	  //   req:
+	  //    sig = canon
+
+	  // special case 2: (handled here)
+	  //  canon <- alias1 alias2 
+
+	  // equals
+	  
+	  //  canon
+	  //   req:
+	  //    sig = canon,alias1,alias2
+	  
+
+	  std::vector<std::string> t1 = Helper::quoted_parse( line , ", \t" );
+
+
+	  if ( t1.size() > 2 && t1[1] == "<-" )
+	    {
+
+	      canonical_label = t1[0];
+
+	      std::vector<std::string> tfin;
+	      for (int j=2; j<t1.size(); j++) // skips canon <-
+		{
+		  std::vector<std::string> t2 =
+		    Helper::quoted_parse( canonical_t::swap_in_alias( t1[j] ) , ", \t" );
+		  for (int k=0; k < t2.size(); k++)
+		      tfin.push_back( t2[k] );
+		}
+
+	      // add as req_sigs...
+	      for (int j=0; j<tfin.size(); j++)
+		{
+		  req_sig.push_back( Helper::unquote( Helper::toupper( tfin[j] ) ) );
+		  std::cout << " addding [" << tfin[j] << "]\n";
+		}
+
+	      // also add canonical label itself
+	      req_sig.push_back( Helper::unquote( Helper::toupper( canonical_label ) ) );
+	      
+	    }
+	  else // not a special case.. this is the start of a rule
+	    {	      
+	      canonical_label = line;
+	    }
+	  
 	  // add self name to unless list
 	  // (i.e. only do each rule once)
 	  unless.insert( canonical_label );
@@ -78,11 +133,14 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	}
       else
 	{
+
 	  if ( canonical_label == "" )
 	    Helper::halt( "canonical signal not identified yet:\n" + line );
 
 	  if ( line.size() <= 2 )
 	    Helper::halt( "invalid line:\n" + line );
+
+	  rules_set = true;
 	  
 	  const bool rtype = line[1] != ' ';
 	  
@@ -264,10 +322,21 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		}	      
 	    } 
 	}
-      
+    
     } // next line
 
+  //
+  // check for special case, where only a canonical label is specified...
+  //  i.e. add canonical label as its own signal requirement:
+  //
+
+  // also add canonical label itself 
+  if ( ! rules_set ) 
+    req_sig.push_back( Helper::unquote( Helper::toupper( canonical_label ) ) );
+
+  //
   // all done
+  //
 }
   
     

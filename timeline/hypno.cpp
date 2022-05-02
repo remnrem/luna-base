@@ -1368,7 +1368,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   // do not alter original persistent sleep definition, as that was used in NREM cycle
   // construct;  but here we need to add in the fact that we've skipped the e.g. 10 mins
-  // of sleep prior to start of persistent sleep... this is includede in PER_SLP_LAT but
+  // of sleep prior to start of persistent sleep... this is included in PER_SLP_LAT but
   // original not in TPST.  so add in here...
   
   for (int e=1; e<ne; e++)
@@ -1386,7 +1386,16 @@ void hypnogram_t::calc_stats( const bool verbose )
 	    {
 	      --ec;
 	      if ( ec < 0 || in_persistent_sleep[ec] )
-		Helper::halt( "error defining persistent sleep bouts... check stage/epoch alignment (EPOCH align)" );
+		{
+		  logger << "  first epoch of persistent sleep e = " << e << "\n";
+		  logger << "  tracking back " << def_persistent_sleep_epochs << " epochs of sleep, to also mark as persistent\n";
+		  if ( ec < 0 ) 
+		    logger << "  however, epoch count is less than 0 (ec = " << ec << ")\n";
+		  else
+		    logger << "  however, encountering epochs already marked as persistent.. this should not happen\n";
+		  
+		  Helper::halt( "error defining persistent sleep bouts... check stage/epoch alignment (EPOCH align)" );
+		}
 	      in_persistent_sleep[ec] = true;
 	    }
 	}
@@ -1977,8 +1986,10 @@ void hypnogram_t::output( const bool verbose ,
 	  if ( t6 < t0 ) t6 += 24.0;
 	  
 	  writer.value(  "T0_START" , t0 );
+	  writer.value(  "E0_START" , 0 );
 
 	  writer.value(  "T1_LIGHTS_OFF" , t1 );
+	  writer.value(  "E1_LIGHTS_OFF" , t1 - t0 );
 	  
 	  if ( any_sleep ) 
 	    {
@@ -1989,15 +2000,21 @@ void hypnogram_t::output( const bool verbose ,
 	      if ( t3 < t0 ) t3 += 24.0;
 	      if ( t4 < t0 ) t4 += 24.0;
 	      
-	      writer.value(  "T2_SLEEP_ONSET" , t2 );
-	      writer.value(  "T3_SLEEP_MIDPOINT" , t3 );
+	      writer.value(  "T2_SLEEP_ONSET" , t2 - t0 );
+	      writer.value(  "E2_SLEEP_ONSET" , t2 - t0 );
+
+	      writer.value(  "T3_SLEEP_MIDPOINT" , t3 - t0 );
+	      writer.value(  "E3_SLEEP_MIDPOINT" , t3 - t0 );
+
 	      writer.value(  "T4_FINAL_WAKE" , t4 );
+	      writer.value(  "E4_FINAL_WAKE" , t4 - t0 );
 	    }
 
 	  writer.value(  "T5_LIGHTS_ON" , t5 );
+	  writer.value(  "E5_LIGHTS_ON" , t5 - t0 );
 
 	  writer.value(  "T6_STOP" , t6 );
-
+	  writer.value(  "E6_STOP" , t6 - t0 );
 	  
 	  // same in HMS
 	  writer.value(  "HMS0_START" , clock_start.as_string(':') );
