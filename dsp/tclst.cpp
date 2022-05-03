@@ -362,9 +362,9 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	      const std::vector<double> * phase = ht.phase();
 	      
 	      // get inst. freq (optionally)
-	      std::vector<double> freq = ht.instantaneous_frequency();
-	      if ( use_freq )
-		freq = ht.instantaneous_frequency();
+	      // std::vector<double> freq = ht.instantaneous_frequency();
+	      // if ( use_freq )
+	      // 	freq = ht.instantaneous_frequency();
 	      
 	      // populate each interval
 	      for (int i=0; i<ni; i++)
@@ -375,7 +375,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 		      //std::cout << "det " << p << " " << (*signal)[s1] << " " << (*phase)[s1] << "\n";
 		      P[i](p,s) = (*phase)[s1];
 		      X[i](p,s) = (*signal)[s1];
-		      F[i](p,s) = frq[s1];
+		      //F[i](p,s) = frq[s1];
 		      ++s1;
 		    }	      
 		}
