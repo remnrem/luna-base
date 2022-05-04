@@ -2890,6 +2890,8 @@ void edf_t::reference( const signal_list_t & signals0 ,
 	  rec = timeline.next_record(rec); 
 	  
 	}
+
+      std::cout << "d->size = " << d->size() << "\m";
       
       // update signal
       update_signal( signals(s) , &d );

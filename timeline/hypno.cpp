@@ -709,6 +709,11 @@ void hypnogram_t::calc_stats( const bool verbose )
   // REM latency
   rem_lat_mins = ( first_rem_epoch - first_sleep_epoch ) * epoch_mins;
   
+  // REM latency, excluding W
+  rem_lat_nowake_mins = 0;
+  for (int e = first_sleep_epoch ; e <= first_rem_epoch; e++)
+    if ( is_nrem( stages[e] ) ) rem_lat_nowake_mins += epoch_mins;
+  
   // Total sleep time (excludes 'other')
   TST = TRT - TWT - mins[ "?" ];
 
@@ -2160,8 +2165,10 @@ void hypnogram_t::output( const bool verbose ,
 	  //
 	  
 	  if ( mins[ "R" ] > 0 )
-	    writer.value( "REM_LAT" , rem_lat_mins );
-	  	  
+	    {
+	      writer.value( "REM_LAT" , rem_lat_mins );
+	      writer.value( "REM_LAT2" , rem_lat_nowake_mins );
+	    }
 	}
                  
 

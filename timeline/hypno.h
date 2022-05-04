@@ -134,7 +134,7 @@ struct hypnogram_t
   double slp_lat;   // sleep latency [ Sleep Latency = Lights Out - Sleep Onset ]  (mins)
   double per_slp_lat;  // latency to 10 mins sleep
   double rem_lat_mins;      // REM latency (minutes)
-
+  double rem_lat_nowake_mins;  // REM latency (minutes), excluding W
 
   std::map<std::string,double> mins;
   std::map<std::string,double> pct;
