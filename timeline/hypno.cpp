@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -550,8 +549,13 @@ void hypnogram_t::calc_stats( const bool verbose )
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
   
   const int ne = stages.size();
-  
 
+  //
+  // make a copy of stages
+  //
+  
+  original_stages = stages;
+  
   //
   // Recode any leading/trailing "?" as "L"
   //
@@ -817,7 +821,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   // Bout count and duration (ignore N4 here.)
   //
 
-  const std::vector<std::string> these_stages = { "N1", "N2", "N3", "N4", "NR", "R", "W" , "?" , "L" , "WASO" } ;
+  const std::vector<std::string> these_stages = { "N1", "N2", "N3", "N4", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
   
   std::vector<std::string>::const_iterator qq = these_stages.begin();
   while ( qq != these_stages.end() )
@@ -834,6 +838,8 @@ void hypnogram_t::calc_stats( const bool verbose )
       // special cases
       bool all_nrem = *qq == "NR";
       
+      bool all_sleep = *qq == "S";
+
       bool waso = *qq == "WASO";
 
       std::vector<double> b;
@@ -843,6 +849,8 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  bool bout_start = false;
 	  if ( all_nrem )
 	    bout_start = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 ;	      	  
+	  else if ( all_sleep ) 
+	    bout_start = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 || stages[e] == REM ;
 	  else if ( waso )
 	    bout_start = stages[e] == WAKE && e >= first_sleep_epoch && e <= last_sleep_epoch ;
 	  else
@@ -872,6 +880,14 @@ void hypnogram_t::calc_stats( const bool verbose )
 		      b.push_back( l );
                       break;
 		    }
+		}
+	      else if ( all_sleep ) 
+		{
+		  if ( stages[e] != NREM1 && stages[e] != NREM2 && stages[e] != NREM3 && stages[e] != NREM4 && stages[e] != REM )
+                    {
+                      b.push_back( l );
+                      break;
+                    }
 		}
 	      else if ( waso ) 
 		{
@@ -973,6 +989,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  continue;
 	}
       
+      // 'not sleep' = WAKE, L or ?
       // otherwise, assume all other annotations are consistent with sleep
       bool okay = true;
       int ec = e - def_persistent_sleep_epochs;
@@ -980,7 +997,7 @@ void hypnogram_t::calc_stats( const bool verbose )
       while ( okay )
 	{
 	  if ( ec < 0 ) { okay = false; break; }	  
-	  if ( stages[ ec ] == WAKE || stages[ ec ] == LIGHTS_ON ) { okay = false; break; }  	  
+	  if ( stages[ ec ] == WAKE || stages[ ec ] == LIGHTS_ON || stages[ec ] == UNKNOWN ) { okay = false; break; }  	  
 	  if ( ++ec == e ) break;
 	}
 
@@ -1373,11 +1390,11 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   for (int e=1; e<ne; e++)
     {
-
+      
       // std::cout << " e = " << e << "\t"
-      // 		<< stages[e] << "\t"
+      // 		<< globals::stage( stages[e] ) << "\t"
       // 		<< in_persistent_sleep[e] << "\n";
-
+      
       // start of a persistent sleep bout?
       if ( in_persistent_sleep[e] && ! in_persistent_sleep[e-1] )
 	{
@@ -2205,14 +2222,17 @@ void hypnogram_t::output( const bool verbose ,
 
   if ( any_sleep )
     {
-      const std::vector<std::string> these_stages_without_n4 = { "N1", "N2", "N3", "NR", "R", "W" , "?" , "L" , "WASO" } ;
-      const std::vector<std::string> these_stages_with_n4 =    { "N1", "N2", "N3", "N4" , "NR", "R", "W" , "?" , "L" , "WASO" } ;
+      const std::vector<std::string> these_stages_without_n4 = { "N1", "N2", "N3", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+      const std::vector<std::string> these_stages_with_n4 =    { "N1", "N2", "N3", "N4" , "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
       const std::vector<std::string> & these_stages = collapse_nrem34 ? these_stages_without_n4 : these_stages_with_n4 ; 
       
       // get total NR stats
       mins[ "NR" ] = mins[ "N1" ] + mins[ "N2" ] + mins[ "N3" ] + mins[ "N4" ];
       pct[ "NR" ] = pct[ "N1" ] + pct[ "N2" ] + pct[ "N3" ] + pct[ "N4" ];
       
+      mins[ "S" ] = mins[ "N1" ] + mins[ "N2" ] + mins[ "N3" ] + mins[ "N4" ] + mins[ "R" ] ;
+      pct[ "S" ] = pct[ "N1" ] + pct[ "N2" ] + pct[ "N3" ] + pct[ "N4" ] + pct[ "R" ];  // should be 1.0
+
       std::vector<std::string>::const_iterator ss = these_stages.begin();
       while ( ss != these_stages.end() )
 	{
@@ -2220,14 +2240,14 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "MINS" , mins[ *ss] );
 
 	  // sleep stage as % of TST
-	  if ( *ss == "N1" || *ss == "N2" || *ss == "N3" || *ss == "N4" || *ss == "NR" || *ss == "R" )
+	  if ( *ss == "N1" || *ss == "N2" || *ss == "N3" || *ss == "N4" || *ss == "NR" || *ss == "R" || *ss == "S" )
 	    writer.value( "PCT" , pct[ *ss] );
 	  
 	  writer.value( "BOUT_N" , bout_n[ *ss] );
 	  writer.value( "BOUT_MX" , bout_max[ *ss] );
 	  writer.value( "BOUT_MN" , bout_mean[ *ss] );
 	  writer.value( "BOUT_MD" , bout_med[ *ss] );
-	  writer.value( "BOUT_5" , bout_5[ *ss] );
+	  writer.value( "BOUT_05" , bout_5[ *ss] );
 	  writer.value( "BOUT_10" , bout_10[ *ss] );
 	  ++ss;
 	}
@@ -2426,6 +2446,9 @@ void hypnogram_t::output( const bool verbose ,
 	  // stages
 	  
 	  writer.value( "STAGE" , globals::stage( stages[e] ) );
+
+	  // i.e. prior to anything being set to L or ?
+	  writer.value( "OSTAGE" , globals::stage( original_stages[e] ) );
 	  
 	  writer.value( "STAGE_N" , stagen[ stages[e] ] );
 	  
@@ -2507,9 +2530,10 @@ void hypnogram_t::output( const bool verbose ,
 
       // time in minutes
       writer.value( "MINS" ,  e * epoch_mins );
-      
+    
       // stages      
       writer.value( "STAGE" , globals::stage( stages[e] ) );    
+      writer.value( "OSTAGE" , globals::stage( original_stages[e] ) );    
       writer.value( "STAGE_N" , stagen[ stages[e] ] );
 
 

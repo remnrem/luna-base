@@ -2681,7 +2681,7 @@ void proc_record_table( edf_t & edf , param_t & param )
 
 // STAGE : set and display sleep stage labels (verbose = F)
 // STAGE : + eannot=<file> option --> write as .eannot
-// HYPNO : verbose report on sleep STAGES     (verbose = F)
+// HYPNO : verbose report on sleep STAGES     (verbose = T)
 
 void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 {

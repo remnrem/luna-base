@@ -366,6 +366,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	      const std::vector<double> * phase = ht.phase();
 	      
 	      // get inst. freq (optionally)
+
 	      std::vector<double> freq;
 	      if ( use_freq )
 		freq = ht.instantaneous_frequency(  Fs[s] );

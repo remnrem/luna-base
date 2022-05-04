@@ -75,6 +75,7 @@ struct hypnogram_t
   
   // sleep stage information
   std::vector<sleep_stage_t> stages;
+  std::vector<sleep_stage_t> original_stages;
   std::vector<int> epoch_n;
   
   // number of conflicting epochs (set to missing)
