@@ -207,10 +207,6 @@ interval_t timeline_t::record2interval( int r ) const
 }
 
 
-
-
-
-
 bool timeline_t::interval2records( const interval_t & interval , 
 				   uint64_t n_samples_per_record , 
 				   int * start_rec , 
@@ -220,6 +216,11 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 {
 
+  // std::cout << " search: " << interval.as_string() << "\n";
+  // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
+  // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
+  // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
+  
   if ( interval.stop < interval.start ) 
     Helper::halt( "badly defined interval requested, with stop before start" );
 
@@ -362,6 +363,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       if ( lwr != tp2rec.begin() ) 
 	{
+	  //std::cout << "lwr != begin\n";
 	  // go back one record
 	  --lwr;
 	  uint64_t previous_rec_start = lwr->first;
@@ -378,6 +380,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       else if ( lwr == tp2rec.begin() )
        	{
+	  //std::cout << "lwr = begin\n";
 	  // If the search point occurs before /all/ records, need to
 	  // indicate that we are in a gap also	  
 	  
@@ -403,8 +406,15 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	*start_smp = 0; // i.e. use start of this record, as it is after the 'true' start site
       else
 	{	
-	  uint64_t start_offset = interval.start % edf->header.record_duration_tp;
+	  // OLD code: broken for EDF+D w/ gaps that are not multiples of the record size
+	  //uint64_t start_offset = interval.start % edf->header.record_duration_tp;
 
+
+	  // NEW version for EDF+D
+	  uint64_t start_offset = interval.start - lwr->first;
+	  
+	  //std::cout << "tp start = " << lwr->first << " " << interval.start << "\n";
+	  
 	  // nb: old code prior to v0.25
 	  // uint64_t start_sample = 
 	  //   ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
@@ -424,13 +434,17 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // 
       
       std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( stop_tp ); 
-      
+
+      //if ( upr == tp2rec.end() ) std::cout << " AT END\n";
+	
       //
       // this should have returned one past the one we are looking for 
       // i.e. that starts *after* the search point
       //
       
       bool ends_before = upr == tp2rec.begin() ;
+
+      //std::cout << " ends before: " << ends_before << "\n";
       
       if ( ! ends_before ) 
 	{
@@ -439,21 +453,50 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       else
 	{
-	  *stop_rec  = -1; // i.e. flag as bad, so ensure that stop is before the start (which will also be rec 0)
+	  *stop_rec  = -1; // i.e. flag as bad, to ensure that stop is before the start (which will also be rec 0)
 	}
 
+      //std::cout << "stop_rec = " << upr->second << "\n";
+
+      //
       // get samples within (as above)      
+      //
+
       uint64_t previous_rec_start = upr->first;
       uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1;
+
+
+      //
+      // Does this end point fall in a gap?
+      //
+
       in_gap = ! ( stop_tp >= previous_rec_start && stop_tp <= previous_rec_end );
+
+      // std::cout << " previous_rec_start: " << previous_rec_start << "\n";
+      // std::cout << " previous_rec_end: " << previous_rec_end << "\n";
+
+      // if so, set to the last point
       
       if ( in_gap )
-	*stop_smp = n_samples_per_record - 1; // set to last point
+	*stop_smp = n_samples_per_record - 1; 
       else
-	{	  
-	  uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
+	{
+
+	  // else, determine the offset into this record
+
+	  // std::cout << "stop tp: " << stop_tp << "\n";
+	  // std::cout << "edf->header.record_duration_tp: " << edf->header.record_duration_tp << "\n";
+
+	  // OLD code::: broken when EDF+D has gaps that are not multiples of record size...
+	  //uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
+
+	  // how far into this record (TP)?
+	  uint64_t stop_offset = stop_tp - upr->first ; 
+
+	  // convert to sample points
 	  uint64_t stop_sample = 
 	    floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+	  
 	  //if ( stop_sample >= n_samples_per_record ) stop_sample = n_samples_per_record - 1LLU;
 	  *stop_smp = (int)stop_sample;
 	}
@@ -951,6 +994,7 @@ int timeline_t::calc_epochs()
 
 interval_t timeline_t::wholetrace() const
 {  
+  //std::cout << "LTP = " << last_time_point_tp + 1LLU << "\n";
   // end is defined as 1 past the last time point
   return interval_t( 0 , last_time_point_tp + 1LLU );
 }

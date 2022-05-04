@@ -37,6 +37,7 @@ extern logger_t logger;
 void dsptools::tclst( edf_t & edf , param_t & param )
 {
 
+  // debug mode
   const bool dmode = false;
   
   // --------------------------------------------------------------------------------
@@ -288,7 +289,8 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       //                                     -------------------------------------------
       std::vector<Eigen::MatrixXd> X(ni); //    real | signal amplitudes (filtered)
       std::vector<Eigen::MatrixXd> P(ni); //    imag | phases
-
+      std::vector<Eigen::MatrixXd> F(ni); //    freq | freq
+      
       // store phases for output, if in complex mode
       std::vector<Eigen::MatrixXd> P2(ni); 
       std::vector<Eigen::MatrixXd> ZP2(ni); // normalized against the seed
@@ -302,10 +304,12 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	      P2[i] = Eigen::MatrixXd::Zero( points , ns );
 	      ZP2[i] = Eigen::MatrixXd::Zero( points , ns );
 	    }
+	  if ( use_freq )
+	    F[i] = Eigen::MatrixXd::Zero( points , ns );
 	}
       
       //
-      // Get each signal, filter, and populate X and P
+      // Get each signal, filter, and populate X, P & F
       //
 
       std::vector<std::string> chs;
@@ -362,9 +366,10 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	      const std::vector<double> * phase = ht.phase();
 	      
 	      // get inst. freq (optionally)
-	      // std::vector<double> freq = ht.instantaneous_frequency();
-	      // if ( use_freq )
-	      // 	freq = ht.instantaneous_frequency();
+
+	      std::vector<double> freq;
+	      if ( use_freq )
+		freq = ht.instantaneous_frequency(  Fs[s] );
 	      
 	      // populate each interval
 	      for (int i=0; i<ni; i++)
@@ -375,7 +380,8 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 		      //std::cout << "det " << p << " " << (*signal)[s1] << " " << (*phase)[s1] << "\n";
 		      P[i](p,s) = (*phase)[s1];
 		      X[i](p,s) = (*signal)[s1];
-		      //F[i](p,s) = frq[s1];
+		      if ( use_freq )
+			F[i](p,s) = freq[s1];
 		      ++s1;
 		    }	      
 		}
@@ -395,14 +401,16 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       if ( verbose_interval >= ni )
 	Helper::halt( "bad report=interval specified" );
       
-      Eigen::MatrixXd P0, X0;
+      Eigen::MatrixXd P0, X0, F0;
       if ( verbose_interval >= 0 )
 	{
 	  P0 = P[verbose_interval];
-	  X0 = X[verbose_interval];	  
+	  X0 = X[verbose_interval];
+	  if ( use_freq )
+	    F0 = F[verbose_interval];
 	}
-
-
+      
+      
       // --------------------------------------------------------------------------------
       //
       // Normalize phases by the seed channel (i.e. relative phase,
@@ -533,29 +541,39 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	{
 	  const Eigen::MatrixXd & XX = X[ verbose_interval ];
 	  const Eigen::MatrixXd & PP = P[ verbose_interval ];
+	  const Eigen::MatrixXd & FF = F[ verbose_interval ];
 	  	  
 	  for (int s=0; s<ns; s++)
 	    for (int p=0; p<points; p++)
-	      std::cout << chs[s] << "\t"
-			<< p - half_points1 << "\t"
-			<< X0(p,s) << "\t"
-			<< XX(p,s) << "\t"
-			<< P0(p,s) << "\t"
-			<< PP(p,s) << "\n";
+	      {
+		std::cout << chs[s] << "\t"
+			  << p - half_points1 << "\t"
+			  << X0(p,s) << "\t"
+			  << XX(p,s) << "\t"
+			  << P0(p,s) << "\t"
+			  << PP(p,s) ;
+		if ( use_freq )
+		  std::cout << F0(p,s) << "\t"
+			    << FF(p,s) ;
+		std::cout << "\n";
+	      }
+
+	  
 	}
       
       //
       // initiate distance calculation and clustering for this set of intervals
       //
 
-      std::cout << " about to cluster \n";
+
       tclst_t tc( use_complex_dist || use_amp ? &X : NULL ,
 		  use_complex_dist || use_phase ? &P : NULL ,
+		  use_freq ? &F : NULL ,
 		  chs , t , k1 , k2 ,
 		  hcK,
 		  use_complex_dist );
      
-      std::cout << " anout to cluster DONE \n";
+      
       //
       // output overall feature means
       //
@@ -781,6 +799,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 
 tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 		  const std::vector<Eigen::MatrixXd> * P ,
+		  const std::vector<Eigen::MatrixXd> * F ,
 		  const std::vector<std::string> & chs ,
 		  const std::vector<double> & t ,
 		  const int k1, const int k2,
@@ -790,10 +809,12 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 
   const bool hasX = X != NULL;
   const bool hasP = P != NULL;
-  if ( ! ( hasX || hasP ) )
+  const bool hasF = F != NULL;
+  
+  if ( ! ( hasX || hasP || hasF ) )
     Helper::halt( "bad call of tclst_t" );
 
-  if ( use_complex_dist && ! ( hasX  ||  hasP ) )
+  if ( use_complex_dist && ! ( hasX  ||  hasP || hasF) )
     Helper::halt( "bad call of tclst_t" );
   
   // number of intervals
@@ -802,10 +823,10 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
     Helper::halt( "internal problem in tclst_t() " );
 
   // number of signals
-  const int ns = hasX ? (*X)[0].cols() : (*P)[0].cols();
+  const int ns = hasX ? (*X)[0].cols() : ( hasP ? (*P)[0].cols() : (*F)[0].cols() ) ;
   
   // number of sample points in each interval
-  const int np = hasX ? (*X)[0].rows() : (*P)[0].rows();
+  const int np = hasX ? (*X)[0].rows() : ( hasP ? (*P)[0].rows() : (*F)[0].rows() ) ;
   
   logger << "  time-locked clustering for " << n << " " << np << "-point intervals, based on " << ns << " channels\n";
   
@@ -813,7 +834,7 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
   D.resize( n , n );
   
   // for k-means clustering
-  Data::Matrix<double> XPa( n , ( (int)hasX+(int)hasP ) * ns * np );
+  Data::Matrix<double> XPa( n , ( (int)hasX+(int)hasP+(int)hasF ) * ns * np );
 
   for (int i=0; i<n; i++)
     {
@@ -823,10 +844,11 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 	  {
 	    if ( hasX ) XPa(i,c++) = (*X)[i](p,s);
 	    if ( hasP ) XPa(i,c++) = (*P)[i](p,s);
+	    if ( hasF ) XPa(i,c++) = (*F)[i](p,s);
 	  }
     }
   
-
+  
   //
   // hierarchical clustering on D
   //
@@ -855,16 +877,18 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 	    
 	    const Eigen::MatrixXd * xi = hasX ? &(*X)[i] : NULL ;
 	    const Eigen::MatrixXd * pi = hasP ? &(*P)[i] : NULL ;
+	    const Eigen::MatrixXd * fi = hasF ? &(*F)[i] : NULL ;
 	    
 	    const Eigen::MatrixXd * xj = hasX ? &(*X)[j] : NULL ;
 	    const Eigen::MatrixXd * pj = hasP ? &(*P)[j] : NULL ;
+	    const Eigen::MatrixXd * fj = hasF ? &(*F)[j] : NULL ;
 	    
 	    if ( use_complex_dist )
 	      {
 		double d = 0;
 		for (int s=0; s<ns; s++)
 		  for (int p=0; p<np; p++)
-		    d += pow( ( (*xi)(p,s) - (*xj)(p,s) ) , 2 ) + pow( ( (*pi)(p,s) - (*pj)(p,s) ) , 2 );
+		    d += pow( ( (*xi)(p,s) - (*xj)(p,s) ) , 2 ) + pow( ( (*pi)(p,s) - (*pj)(p,s) ) , 2 ) ;
 		d = sqrt( d );
 		D(i,j) = d;
 	      }
@@ -877,6 +901,9 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 		// phases
 		double px = 0; 
 		
+		// freqs
+		double fx = 0; 
+		
 		for (int s=0; s<ns; s++)
 		  for (int p=0; p<np; p++)
 		    {
@@ -884,15 +911,19 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 			dx += pow( ( (*xi)(p,s) - (*xj)(p,s) ) , 2 );
 		      if ( hasP )
 			px += pow( ( (*pi)(p,s) - (*pj)(p,s) ) , 2 );
+		      if ( hasF )
+			px += pow( ( (*fi)(p,s) - (*fj)(p,s) ) , 2 );		      
 		    }
 		
 		if ( hasX )
 		  dx = sqrt( dx );
 		if ( hasP )
 		  px = sqrt( px );
+		if ( hasF )
+		  fx = sqrt( fx );
 		
 		// take (weighted?) sum of these two measures?
-		D(i,j) = dx + px;
+		D(i,j) = dx + px + fx;
 	      }
 	    
 	  }

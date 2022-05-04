@@ -45,6 +45,7 @@ struct tclst_t {
   //  
   tclst_t( const std::vector<Eigen::MatrixXd> * X ,
 	   const std::vector<Eigen::MatrixXd> * P ,
+	   const std::vector<Eigen::MatrixXd> * F ,
 	   const std::vector<std::string> & chs ,
 	   const std::vector<double> & t , 
 	   const int k1 , const int k2, 
