@@ -927,8 +927,15 @@ void canonical_t::proc( )
 	  if ( verbose ) logger << "   re-referencing "
 				<< rule.canonical_label
 				<< " against " << matched_ref << "\n";
+	  
+	  edf.reference( siglst , // original channel
+			 reflst , // reference(s)
+			 false ,  // do not create a new channel
+			 "" , // new channel name (ignored)
+			 0 , // new channel SR (ignored)
+			 false , // do not de-ref
+			 false ); // not in verbose mode
 
-	  edf.reference( siglst , reflst , false , "" , 0 );
 	}
       
       //

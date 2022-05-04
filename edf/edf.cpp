@@ -1622,8 +1622,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   
   const uint64_t n_samples_per_record = header.n_samples[signal];
   
-   //   std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
-   // std::cerr << "SR " << n_samples_per_record << "\n";
+  // std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
+  // std::cerr << "SR " << n_samples_per_record << "\n";
  
   int start_record, stop_record;
   int start_sample, stop_sample;
@@ -1636,8 +1636,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					 &stop_record, &stop_sample );
   
   
-   // std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
-   // std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
+  // std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
+  // std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
   
   //
   // If the interval is too small (or is applied to a signal with a low sampling rate)
@@ -2705,9 +2705,9 @@ void edf_t::reference( const signal_list_t & signals0 ,
 
   if ( make_new )
     {
+      
       // make copy
       copy_signal( header.label[ signals(0) ] , new_channel );
-
       
       // switch to re-reference this copy now
       signals = header.signal_list( new_channel );
@@ -2720,6 +2720,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
       // this slot is the 'new' one, so original signal untouched
       if ( new_sr != 0 && sig_sr != new_sr )
 	dsptools::resample_channel( *this , signals(0) , new_sr );
+
       
       // if the reference needs resampling, we need to copy a new
       // channel and do the re-sampling (i.e. to leave the original
@@ -2890,6 +2891,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
 	  rec = timeline.next_record(rec); 
 	  
 	}
+
       
       // update signal
       update_signal( signals(s) , &d );
@@ -3592,12 +3594,12 @@ void edf_t::copy_signal( const std::string & from_label , const std::string & to
   //
   // get data
   //
-
+  
   interval_t interval = timeline.wholetrace();  
   slice_t slice( *this , s1 , interval );
   const std::vector<double> * d = slice.pdata();
-
-
+  
+  
   //
   // add signal (w/ same pmin/pmax and dmin/dmax)
   //
@@ -3606,6 +3608,7 @@ void edf_t::copy_signal( const std::string & from_label , const std::string & to
 	      header.physical_min[s1] , header.physical_max[s1] ,
 	      header.digital_min[s1] , header.digital_max[s1] 
 	      );
+
   
   //
   // and copy the header values that would not have been properly set by add_signal()
