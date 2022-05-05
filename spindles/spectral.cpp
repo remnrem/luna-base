@@ -732,29 +732,37 @@ annot_t * spectral_power( edf_t & edf ,
 
 	      // slope
 	      std::vector<double> s2 = MiscMath::outliers( &slopes , slope_th2 );
-	      double s_mean = MiscMath::mean( s2 );
-	      double s_med  = MiscMath::median( s2 );
-	      double s_sd   = MiscMath::sdev( s2 , s_mean );
-	      writer.value( "SPEC_SLOPE_MN" , s_mean );
-	      writer.value( "SPEC_SLOPE_MD" , s_med );
-	      writer.value( "SPEC_SLOPE_SD" , s_sd );
+	      if ( s2.size() != 0 ) 
+		{
+		  double s_mean = MiscMath::mean( s2 );
+		  double s_med  = MiscMath::median( s2 );
+		  double s_sd   = MiscMath::sdev( s2 , s_mean );
+		  writer.value( "SPEC_SLOPE_MN" , s_mean );
+		  writer.value( "SPEC_SLOPE_MD" , s_med );
+		  writer.value( "SPEC_SLOPE_SD" , s_sd );
+		}
 
 	      // intercept
 	      std::vector<double> i2 = MiscMath::outliers( &slopes_intercept , slope_th2 );
-	      double i_mean = MiscMath::mean( i2 );
-	      double i_med  = MiscMath::median( i2 );
-	      double i_sd   = MiscMath::sdev( i2 , i_mean );
-	      writer.value( "SPEC_INTERCEPT_MN" , i_mean );
-	      writer.value( "SPEC_INTERCEPT_MD" , i_med );
-	      writer.value( "SPEC_INTERCEPT_SD" , i_sd );
+	      if ( i2.size() != 0 ) 
+		{
+		  double i_mean = MiscMath::mean( i2 );
+		  double i_med  = MiscMath::median( i2 );
+		  double i_sd   = MiscMath::sdev( i2 , i_mean );
+		  writer.value( "SPEC_INTERCEPT_MN" , i_mean );
+		  writer.value( "SPEC_INTERCEPT_MD" , i_med );
+		  writer.value( "SPEC_INTERCEPT_SD" , i_sd );
+		}
 
-	      	      // intercept
+	      // R-sq
 	      std::vector<double> rsq2 = MiscMath::outliers( &slopes_rsq , slope_th2 );
-	      double rsq_mean = MiscMath::mean( rsq2 );
-	      double rsq_med  = MiscMath::median( rsq2 );	      
-	      writer.value( "SPEC_RSQ_MN" , rsq_mean );
-	      writer.value( "SPEC_RSQ_MD" , rsq_med );
-	      
+	      if ( rsq2.size() != 0 )
+		{
+		  double rsq_mean = MiscMath::mean( rsq2 );
+		  double rsq_med  = MiscMath::median( rsq2 );	      
+		  writer.value( "SPEC_RSQ_MN" , rsq_mean );
+		  writer.value( "SPEC_RSQ_MD" , rsq_med );
+		}
 
 	    }
 	}

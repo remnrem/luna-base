@@ -73,6 +73,8 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 		  + Helper::int2str( timeline->num_total_epochs() ) );    
   stages.resize( s.size() );
   for (int e=0;e<s.size();e++) stages[e] = globals::stage( s[e] );
+  original_stages = stages;
+  edit( t , param );
   calc_stats( verbose );
   return true;
 } 
@@ -232,7 +234,41 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   writer.unepoch();
   
 
+  //
+  // make a copy of the stages
+  //
+  
+  original_stages = stages;
+  
+  //
+  // edit hypnogram as needed (e.g. for lights-off, excessive WASO, etc)
+  //
+  
+  edit( timeline , param ); 
+  
+  //
+  // Report any conflicts
+  //
 
+  if ( n_conflicts )
+    logger << "  *** found " << n_conflicts << " epoch(s) of " << ne << " with conflicting spanning annotations\n"
+	   << "  *** check that epochs and annotations align as intended\n"
+	   << "  *** see EPOCH 'align' or 'offset' options\n"; 
+
+
+  //
+  // finally, calculate hypno stats
+  //
+  
+   calc_stats( verbose );
+   
+   return true;
+}   
+
+
+void hypnogram_t::edit( timeline_t * timeline , param_t & param )
+{
+  
   //
   // do we have any lights_on or lights_off annotations?   Or have these been passed 
   // via the command line (e.g. as a variable, which may be individual-specific, lights-off=${LOFF} 
@@ -522,22 +558,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 	     << " and end-sleep=" << end_sleep << ")\n";
     }
   
-  
-  
-  //
-  // Report any conflicts
-  //
-
-  if ( n_conflicts )
-    logger << "  *** found " << n_conflicts << " epoch(s) of " << ne << " with conflicting spanning annotations\n"
-	   << "  *** check that epochs and annotations align as intended\n"
-	   << "  *** see EPOCH 'align' or 'offset' options\n"; 
-  
-   calc_stats( verbose );
-
-   return true;
-}   
-
+  }
 
 void hypnogram_t::calc_stats( const bool verbose )
 {
@@ -550,11 +571,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   const int ne = stages.size();
 
-  //
-  // make a copy of stages
-  //
-  
-  original_stages = stages;
   
   //
   // Recode any leading/trailing "?" as "L"
@@ -2624,7 +2640,8 @@ void hypnogram_t::output( const bool verbose ,
 void dummy_hypno()
 {
   edf_t edf;
-  
+  param_t param;
+
   // dummy values
     
   hypnogram_t h;
@@ -2654,6 +2671,9 @@ void dummy_hypno()
   edf.id = "_DUMMY_";
   h.fudge( 30 , h.stages.size() );
 
+  // make a copy of stages 
+  h.original_stages = h.stages;
+  h.edit( h.timeline , param );
   h.calc_stats( true );
   h.output( true , true ); // verbose mode == T 
 

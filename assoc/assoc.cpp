@@ -894,7 +894,7 @@ void assoc_t::attach_covariates( param_t & param )
     for (int j=0; j<ncov; j++)
       varlist.push_back( tok[j] );
   
-  logger << "  attached " << ncov << " covariate()s: ";
+  logger << "  attached " << ncov << " covariate(s): ";
   for (int j=0; j<ncov; j++)
     logger << " " << tok[j] ;
   logger << "\n";
