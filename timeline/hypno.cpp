@@ -592,7 +592,8 @@ void hypnogram_t::calc_stats( const bool verbose )
   //
   // Basic summary statistics per-individual/night
   //
-  
+
+  // clear, in case this is run twice
   mins[ "W" ] = mins[ "N1" ] = mins[ "N2" ] = mins[ "N3" ] = mins[ "N4" ] = mins[ "R" ] = mins[ "?" ] = mins["L"] = 0;
   
   // implicitly, this will only count in the TRT (i.e. ignore pre
@@ -843,6 +844,11 @@ void hypnogram_t::calc_stats( const bool verbose )
   //
 
   const std::vector<std::string> these_stages = { "N1", "N2", "N3", "N4", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+
+  // initialize these two maps, which are +='ed below
+  // i.e. (if HYPNO is run twice)
+  bout_5.clear();
+  bout_10.clear();
   
   std::vector<std::string>::const_iterator qq = these_stages.begin();
   while ( qq != these_stages.end() )
@@ -932,12 +938,12 @@ void hypnogram_t::calc_stats( const bool verbose )
 	    }
 	  
 	  // now continue to next epoch
-	}	    
+	}
 
       //
       // record stats
       //
-
+      
       for (int bb=0; bb<b.size(); bb++)
 	{
 	  if ( b[bb] >= 5 ) bout_5[ *qq ] += b[bb];
@@ -1402,19 +1408,19 @@ void hypnogram_t::calc_stats( const bool verbose )
   // after the fact, track epoch-level stats
   in_persistent_sleep.resize( ne , false );
   for (int e=0; e<ne; e++)
-    if ( persistent_sleep[e] == "S" ) in_persistent_sleep[e] = true;
-
+    in_persistent_sleep[e] = persistent_sleep[e] == "S" ;
+  
   // do not alter original persistent sleep definition, as that was used in NREM cycle
   // construct;  but here we need to add in the fact that we've skipped the e.g. 10 mins
   // of sleep prior to start of persistent sleep... this is included in PER_SLP_LAT but
   // original not in TPST.  so add in here...
-  
+
   for (int e=1; e<ne; e++)
     {
       
       // std::cout << " e = " << e << "\t"
-      // 		<< globals::stage( stages[e] ) << "\t"
-      // 		<< in_persistent_sleep[e] << "\n";
+      //  		<< globals::stage( stages[e] ) << "\t"
+      //  		<< in_persistent_sleep[e] << "\n";
       
       // start of a persistent sleep bout?
       if ( in_persistent_sleep[e] && ! in_persistent_sleep[e-1] )
@@ -1596,6 +1602,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 	   && e < final_wake_epoch ) is_waso[e] = true;
     }
 
+  
   flanking.resize( ne , 0 );
   flanking_tot.resize( ne , 0 );
   nearest_wake.resize( ne , 0 );
@@ -1618,6 +1625,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   wake2rem.resize( ne , 0 ); wake2rem_total.resize( ne , 0 );
 
   transitions.clear();
+  transitions5.clear();
 
   for (int e = 0 ; e < ne ; e++)
     {
@@ -1690,7 +1698,7 @@ void hypnogram_t::calc_stats( const bool verbose )
       //
       // Generic transition matrix counts
       //
-      
+            
       if ( e != 0 )	
 	{
 	  if ( flanking_3class )
