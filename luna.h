@@ -106,6 +106,7 @@
 #include "pops/pops.h"
 
 #include "assoc/assoc.h"
+#include "assoc/massoc.h"
 
 #include "clocs/topo.h"
 

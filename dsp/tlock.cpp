@@ -27,6 +27,7 @@
 #include "helper/logger.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
+#include "assoc/massoc.h"
 
 extern writer_t writer;
 extern logger_t logger;
@@ -68,6 +69,26 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   // to ensure same number of points per window; i.e. this is also why
   // all signals must have the same SR
   //
+
+
+  //
+  // only self-channels
+  //
+
+  // by default, gives sync'ed values for all channels in sig
+  // even if the cache has a CH strata that is different (i.e. seeded on sCH = "C3" )
+  //  to only give output for same channels, add 'same-channel=T'
+
+  const bool same_channel = param.yesno( "same-channel" );
+
+  // also allow to match e.g. 'same-channel'  if seed = C3
+  //   same-channel=T  channel-postfix=_SIGMA
+  //  will match sig = C3 /and/ C3_SIGMA for this seed
+
+  const std::string channel_postfix = param.has( "channel-postfix" ) ? param.value( "channel-postfix" ) : ""; 
+
+  if ( channel_postfix != "" && ! same_channel )
+    Helper::halt( "cannot specify channel-postfix without same-channel=T" );
   
   //
   // output
@@ -75,6 +96,8 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   
   bool verbose = param.has( "verbose" );
 
+  bool to_massoc = param.has( "export" );
+  
   //
   // get window
   //
@@ -136,6 +159,16 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       std::vector<int> cx = cache->fetch( *cc );
 
       //
+      // do we have a channel specification, and must this match?
+      //
+
+      std::string seed_channel = "";
+      if ( same_channel && cc->stratum.find( globals::signal_strat ) != cc->stratum.end() )
+	{
+	  seed_channel = cc->stratum.find(  globals::signal_strat )->second;
+	}
+      
+      //
       // add output stratifiers based on this key
       //
 
@@ -152,10 +185,26 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 
       for (int s=0; s<ns; s++)
 	{
-	  
-	  int cnt_valid_intervals = 0;
 
+	  //
+	  // track which intervals are kept (i.e. to crossing discontinuities)
+	  // (this is only used in MASSOC mode)
+	  //
+	  
+	  std::vector<int> eidx_base1;
+
+	  int cnt_valid_intervals = 0;
+	  
 	  writer.level( signals.label(s) , globals::signal_strat );
+
+	  // skip this channel?
+
+	  if ( same_channel && seed_channel != "" )
+	    {
+	      if ( seed_channel != signals.label(s) &&
+		   seed_channel + channel_postfix != signals.label(s) )
+		continue;
+	    }
 	  
 	  // get data and TP information 
 	  
@@ -166,9 +215,11 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	  const std::vector<uint64_t> * tp = slice.ptimepoints();
 	  
 	  // build up TLOCK matrix
+	  // nb. we still need X constructed in MASSOC mode, even
+	  // if we do not write to outptu ('export' versus 'verbose')
 	  
 	  tlock_t tlock(t, norm_points );
-	  tlock.verbose = verbose;
+	  tlock.verbose = verbose || to_massoc ; 
 
 	  // loop time-points to sync/lock on
 	  
@@ -194,7 +245,10 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	      tlock.add( d , lower , upper , take_log , angle_bins );
 	      
 	      ++cnt_valid_intervals;
-	      
+
+	      if ( to_massoc )
+		eidx_base1.push_back( i + 1 ); 
+				     
 	      // next interval
 	    }
 	  
@@ -253,7 +307,69 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 
 	      writer.unlevel( "SEC" );
 	    }
+
+	  //
+	  // Dump for MASSOC?
+	  //
+
+	  if ( to_massoc )
+	    {
+#ifdef HAS_LGBM
+	      
+	      // filename = indiv-id + strata
+	      // ID =
+	      // variables = T
+
+	      const int nrow = tlock.X.dim2(); // note - obs in cols here
+	      const int ncol = tlock.X.dim1();
+	      
+	      // row-IDs : strata + N
+	      //  EDFID_C3_11_1
+	      //  EDFID_C3_11_2 ...
+	      //  etc
+	      
+	      std::vector<std::string> rowids( nrow );
+	      std::vector<std::string> eids( nrow );
+	      
+	      std::string rowbase = signals.label(s);
+	      std::map<std::string,std::string>::const_iterator ss = cc->stratum.begin();
+	      while ( ss != cc->stratum.end() )
+		{
+		  // nb. here 'CH' means seed channel;  SIG means the readout
+		  rowbase += "_" + ss->second ;
+		  ++ss;
+		}
+
+	      if ( eidx_base1.size() != nrow )
+		Helper::halt( "internal error in TLOCK w/ eidx_base1 size" );
+	      
+	      for (int i=0; i<nrow; i++)
+		{
+		  rowids[i] = rowbase ;
+		  eids[i] = Helper::int2str( eidx_base1[i] );
+		}
+	      
+	      // col IDs: simply 1, 2, 3, etc
+	      std::vector<std::string> colids( ncol );
+	      for (int i=0; i<ncol; i++)
+		colids[i] = Helper::int2str( i+1 );
+	      
+	      // i.e. expecting something like export=path/
+	      //      or export=path/root
+	      //        filename will append root_ID_ROWBASE
+	      const std::string filename = param.requires( "export" ) + "_" + edf.id + "_" + rowbase;
+
+	      //std::cout << " rowids.size() = " << rowids.size() <<"  " << colids.size() << " " << tlock.X.dim2() <<  "x" << tlock.X.dim1() << "\n";
+
+	      // save
+	      massoc_t massoc( edf.id , rowids , eids, colids , tlock.X , filename );
+#else
+	      Helper::halt( "LGBM support not compiled in" );
+#endif
+	      
+	    }
 	  
+	 	  
 	  //
 	  // Verbose output? Show whole matrix...
 	  //

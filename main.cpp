@@ -308,6 +308,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_cperm_test   = false;
   bool cmdline_proc_lgbm         = false;
   bool cmdline_proc_assoc        = false;
+  bool cmdline_proc_massoc       = false;
   bool cmdline_proc_pops         = false;
     
   //
@@ -357,6 +358,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_lgbm = true;
 	  else if ( strcmp( argv[1] , "--assoc" ) == 0 )
 	    cmdline_proc_assoc = true;	  
+	  else if ( strcmp( argv[1] , "--massoc" ) == 0 )
+	    cmdline_proc_massoc = true;	  
 	  else if ( strcmp( argv[1] , "--pops" ) == 0 )
 	    cmdline_proc_pops = true;
 	}
@@ -715,6 +718,30 @@ int main(int argc , char ** argv )
 #endif
       std::exit(0);
     }
+
+
+  //
+  // LGBM-based MASSOC (i.e. TLOCK-based)
+  //
+  
+  if ( cmdline_proc_massoc )
+    {
+#ifdef HAS_LGBM
+      param_t param;
+      build_param_from_cmdline( &param );      
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "MASSOC" , 1 , "" );
+      writer.level( "MASSOC", "_MASSOC" );
+      massoc_t massoc( param );
+      writer.unlevel( "_MASSOC" );
+      writer.commit();
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+      std::exit(0);
+    }
+
 
   //
   // Cluster permitation test (CPT)
