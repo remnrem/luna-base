@@ -1474,6 +1474,7 @@ void writer_t::set_types()
   numeric_factor( globals::time_strat );
   numeric_factor( globals::value_strat );
 
+  numeric_factor( "EID" );
   numeric_factor( "IC" );
   numeric_factor( "TAP" );
   numeric_factor( "TH" );

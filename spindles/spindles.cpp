@@ -466,7 +466,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  std::vector<double> ph_peak;
 	  
 	  // are spindles in slow-waves?
-	  std::vector<bool> sw_peak;
+	  //	  std::vector<bool> sw_peak;
 	  
 	  // find slow-waves	      
 	  p_sw = new slow_waves_t( *d , *tp , Fs[s] , sw_par );
@@ -1503,7 +1503,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
 		  sw_peak = itpc.event_included;
-		  
 		  ph_peak = itpc.phase;
 		  
 		  //
@@ -1602,6 +1601,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      spindles[i].so_nearest = nearest_sw[i] ;
 		      spindles[i].so_nearest_num = nearest_sw_number[i] ;		      
 		    }
+		  
+		  //		  std::cout << "sw_peak = " << sw_peak[i] << "\n";
 		  
 		  if ( sw_peak[ i ] )
 		    spindles[i].so_phase_peak =  MiscMath::as_angle_0_pos2neg( ph_peak[ i ] ) ;		  		  		      

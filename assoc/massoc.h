@@ -59,12 +59,25 @@ struct massoc_t {
   
 private:
 
+
+  int mode;
+
   //
   // inputs
   //
 
   // load train/valid/test status
   void attach_ids( param_t & param );
+  
+  // prune missing training/validation obs
+  void prune();
+  void prune1( const int n,
+	       const std::vector<bool> & missing ,
+	       std::vector<std::string> * iids,
+	       std::vector<std::string> * ids,
+	       std::vector<std::string> * eids,
+	       Eigen::MatrixXd * X,
+	       std::vector<double> * Y );
   
   // load all features
   void load( const std::string & , const int force_destin = 0 );
@@ -124,22 +137,23 @@ private:
   
   static lgbm_t lgbm;
 
-  // indiv-IDs (i.e. for splits, outputs)
-  std::vector<std::string> iids;
+  /* // indiv-IDs (i.e. for splits, outputs) */
+  /* std::vector<std::string> iids; */
 
   // col/row IDs (i.e. tracking indiv + event-level info)
   std::vector<std::string> vars;
   std::vector<std::string> ids;
 
-  int nv;
-  int ni_train;
-  int ni_valid;
-  int ni_test;
+  /* int nv; */
+  /* int ni_train; */
+  /* int ni_valid; */
+  /* int ni_test; */
 
   // pool of potential IIDs
   std::set<std::string> training_pool;
   std::set<std::string> validation_pool;
   std::set<std::string> test_pool;
+
 
   // IIDs in data
   std::vector<std::string> training_iids;
@@ -155,8 +169,7 @@ private:
   std::vector<std::string> training_eids;
   std::vector<std::string> validation_eids;
   std::vector<std::string> test_eids;
-  
-  
+    
   // indiv by var matrix
   Eigen::MatrixXd Xtrain;
   Eigen::MatrixXd Xvalid;

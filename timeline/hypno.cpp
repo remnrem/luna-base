@@ -275,20 +275,42 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // where LOFF is defined in a vars=data.txt file )
   //
   
+  // lights-off=hh::mm::ss
+  //  OR 
+  // if numeric, assume this is seconds past EDF start
+
   double lights_off = -1;
   double lights_on = -1;
 
   clocktime_t st( timeline->edf->header.starttime );
   
-  if ( param.has( "lights-off" ) )
+  if ( param.has( "lights-off" ) && param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" )
     {
-      if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-off=hh:mm:ss" );
-      if ( param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" ) 
-	{ 
+      // argument in seconds:
+      double x;
+      if ( Helper::str2dbl( param.value( "lights-off" ) , &x ) ) 
+	{
+	  if ( x < 0 ) 
+	    {
+	      logger << "  lights-off time less than 0 -- setting to 0 (EDF start)\n";
+	      x = 0;
+	    }
+
+	  lights_off = x;
+	  
+	  logger << "  setting lights_off = " 
+		 << lights_off << " secs, "
+		 << lights_off/60.0 << " mins from start\n";
+	}
+      else
+	{
+      
+	  // else assume is hh:mm:ss
+
+	  if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-off=hh:mm:ss" );
 	  clocktime_t et( param.value( "lights-off" ) );
 	  if ( et.valid ) 
-	    {
-	      
+	    {	  
 	      int earlier = clocktime_t::earlier( st , et );
 	      
 	      if ( earlier == 2 )
@@ -296,29 +318,59 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	      else
 		lights_off = clocktime_t::difference_seconds( st , et );
 	      
-	      logger << "  setting lights_off = " << et.as_string() << " (" << lights_off << " secs, " << lights_off/60.0 << " mins from start)\n";
+	      logger << "  setting lights_off = " << et.as_string() 
+		     << " (" << lights_off << " secs, " 
+		     << lights_off/60.0 << " mins from start)\n";
 	    }
 	  else
-	    logger << "  invalid time for lights-off=" << param.value( "lights-off" ) << "  -- will ignore this\n";
+	    logger << "  invalid time for lights-off=" 
+		   << param.value( "lights-off" ) << "  -- will ignore this\n";	  
 	}
     }
+  
+  //
+  // Lights-On time 
+  //
 
-  if ( param.has( "lights-on" ) )
+  if ( param.has( "lights-on" ) && param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
     {
-      if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-on=hh:mm:ss" );
-      if ( param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
+      
+      // argument in seconds:
+      double x;
+      if ( Helper::str2dbl( param.value( "lights-on" ) , &x ) ) 
 	{
+	  if ( x < 0 ) 
+	    {
+	      logger << "  lights-on time less than 0 -- setting to 0 (EDF start)\n";
+	      x = 0;
+	    }
+
+	  lights_on = x;
+	  
+	  logger << "  setting lights_on = " 
+		 << lights_on << " secs, "
+		 << lights_on/60.0 << " mins from start\n";
+	}
+      else
+	{
+      
+	  // else assume is hh:mm:ss
+	  
+	  if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-on=hh:mm:ss" );
 	  clocktime_t et( param.value( "lights-on" ) );
 	  if ( et.valid ) 
 	    {
 	      // assume that lights-on is always *after* EDF start
 	      lights_on = clocktime_t::difference_seconds( st , et );
-	      logger << "  setting lights_on = " << et.as_string() << " (" << lights_on << " secs, " << lights_on/60.0 << " mins from start)\n";
+	      logger << "  setting lights_on = " << et.as_string() 
+		     << " (" << lights_on << " secs, " << lights_on/60.0 << " mins from start)\n";
 	    }
 	  else
 	    logger << "  invalid time for lights-on=" << param.value( "lights-on" ) << "  -- will ignore this\n";
+	  
 	}
     }
+
 
   //
   // If not already set, see if there are lights_on and/or lights_off annotations present
