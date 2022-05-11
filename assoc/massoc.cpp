@@ -59,6 +59,10 @@ massoc_t::massoc_t( param_t & param )
   // the default:
   const bool test_mode = param.has( "test" ) || ! ( split_mode || train_mode || merge_mode || dump_mode || rows_mode );
   
+  if ( train_mode ) mode = 1;
+  else if ( test_mode ) mode = 2;
+  else mode = 0;
+
   if ( test_mode + train_mode + split_mode + merge_mode + dump_mode + rows_mode > 1 )
     Helper::halt( "can only specify one of split, merge, dump, train or test" );
   
@@ -69,7 +73,7 @@ massoc_t::massoc_t( param_t & param )
   // dump mode - take a single file and output row IDs
   //
 
-  if ( dump_mode )
+  if ( rows_mode )
     {
       const std::string infile = Helper::expand( param.requires( "load" ) );
 
@@ -161,6 +165,12 @@ massoc_t::massoc_t( param_t & param )
   attach_phenotypes( param );
 
   //
+  // prune training/validation datasets, if needed
+  //
+
+  prune();
+
+  //
   // train
   //
 
@@ -242,10 +252,14 @@ massoc_t::massoc_t( param_t & param )
 void massoc_t::load( const std::string & filename , const int force_destin )
 {
 
+  // special case: in test mode, if no pool of test IDs specified, assume it is everybody
+  const bool all_test = mode == 2 && test_pool.size() == 0 ;
+
   if ( ! force_destin )
     {
-      if ( training_pool.size() == 0 && validation_pool.size() == 0 && test_pool.size() == 0 )
-	Helper::halt( "no training/validation/test obs specified... quitting" );
+      if ( ! all_test ) 
+	if ( training_pool.size() == 0 && validation_pool.size() == 0 && test_pool.size() == 0 )
+	  Helper::halt( "no training/validation/test obs specified... quitting" );
     }
   else
     {
@@ -336,7 +350,7 @@ void massoc_t::load( const std::string & filename , const int force_destin )
 	      cnt_valid.insert( iid );
 	      ++obs_valid;
 	    }
-	  else if ( test_pool.find( iid ) != test_pool.end() )
+	  else if ( all_test || test_pool.find( iid ) != test_pool.end() )
 	    {
 	      home.push_back( 3 );
 	      test_ids.push_back( id );
@@ -564,8 +578,8 @@ void massoc_t::split( const std::string & id_file1, const std::string & id_file2
     {
       std::string l;
       IN1 >> l;
-      if ( l == "" ) continue;
       if ( IN1.eof() || IN1.bad() ) break;
+      if ( l == "" ) continue;      
       ids1.insert( l );
     }
   IN1.close();
@@ -575,8 +589,8 @@ void massoc_t::split( const std::string & id_file1, const std::string & id_file2
     {
       std::string l;
       IN2 >> l;
-      if ( l == "" ) continue;
       if ( IN2.eof() || IN2.bad() ) break;
+      if ( l == "" ) continue;      
       ids2.insert( l );
     }
   IN2.close();
@@ -790,69 +804,146 @@ massoc_t::massoc_t( const std::string & iid,
 // load phenotypes/labels
 void massoc_t::attach_phenotypes( param_t & param )
 {
-
+  
   Ytrain.resize( Xtrain.rows() , NaN_value );
   Yvalid.resize( Xvalid.rows() , NaN_value );
   Ytest.resize( Xtest.rows() , NaN_value );
-
-  // no missing data allowed for train/valid
+  
+  // by default match on full IID+ID+EID (i.e. this is expected in the vars file)
+  // however, if iid-vars=T, then match on IID only (from ID in vars).  
+  //   i.e. here we apply individual (not event) level labels
+  
+  const bool iid_match = param.yesno( "iid-vars" );
   
   // known phenotypes optional for test dataset                                                                                                 
   if ( ! param.has( "phe" ) ) return;
   
   phenotype_label = param.value( "phe" );
 
-  //
-  // training data: requires_phenotypes
-  //
-  
+  double y;
+
+  int obs_train = 0 , obs_valid = 0 , obs_test = 0;
+  // training data
   for (int i=0; i<training_ids.size(); i++)
     {
-      const std::string id = training_iids[i] + "_" + training_ids[i] + "_" + training_eids[i];	
-      double y;
-      if ( cmd_t::pull_ivar( id , phenotype_label , &y ) )
-	Ytrain[i] = y;
-      else
-	Helper::halt( "no phenotype label for " + id ) ;
+      const std::string id = iid_match ? training_iids[i] : training_iids[i] + "_" + training_ids[i] + "_" + training_eids[i];	
+      if ( cmd_t::pull_ivar( id , phenotype_label , &y ) ) { Ytrain[i] = y; ++obs_train; }
+      
     }
   
-  //
-  // validation data: requires phenotypes
-  //
-
+  // validation data
   for (int i=0; i<validation_ids.size(); i++)
     {
-      const std::string id = validation_iids[i] + "_" + validation_ids[i] + "_" + validation_eids[i];
-      double y;
-      if ( cmd_t::pull_ivar( id , phenotype_label , &y ) )
-	Yvalid[i] = y;
-      else
-	Helper::halt( "no phenotype label for " + id );
+      const std::string id = iid_match ? validation_iids[i] : validation_iids[i] + "_" + validation_ids[i] + "_" + validation_eids[i];
+      if ( cmd_t::pull_ivar( id , phenotype_label , &y ) ) { Yvalid[i] = y; ++obs_valid; }      
     }
 
   
-  //
-  // test data (allowed to be missing)
-  //
-
-  int nmiss = 0;
+  // test data
   for (int i=0; i<test_ids.size(); i++)
     {
-      const std::string id = test_iids[i] + "_" + test_ids[i] + "_" + test_eids[i];
-      double y;
-      if ( cmd_t::pull_ivar( id , phenotype_label , &y ) )
-	Ytest[i] = y;
-      else
-	++nmiss;
-    }
-  
+      const std::string id = iid_match ? test_iids[i] : test_iids[i] + "_" + test_ids[i] + "_" + test_eids[i];
+      if ( cmd_t::pull_ivar( id , phenotype_label , &y ) ) { Ytest[i] = y; ++obs_test; }       
+    }  
   
   logger << "  attached " << phenotype_label << " for " 
-	 << training_ids.size() << " training, "
-	 << validation_ids.size() << " validation, and "
-	 << test_ids.size() - nmiss << " (of " << test_ids.size() << ") test observation\n";
+	 << obs_train << " (of " << training_ids.size()  << ") training, "
+	 << obs_valid << " (of " << validation_ids.size() << ") validation, and "
+	 << obs_test  << " (of " << test_ids.size() << ") test observation\n";
   
 }
+
+// prune trainers/validation data w/ a missing label
+void massoc_t::prune()
+{
+ 
+  // trainers
+  
+  const int ni_train = Ytrain.size() ;
+  std::vector<bool> miss_train( ni_train );
+  int obs_train = 0;
+  for (int i=0; i<ni_train; i++)
+    {
+      miss_train[i] = std::isnan( Ytrain[i] ) ;
+      if ( ! miss_train[i] ) ++obs_train;
+    }
+  
+  if ( obs_train < ni_train )
+    {
+      logger << "  pruning train dataset from " << ni_train << " to " << obs_train << " based on missing/NA labels\n";
+      prune1( obs_train , miss_train , &training_iids, &training_ids, &training_eids, &Xtrain, &Ytrain );
+    }
+
+  
+  // validation
+  
+  const int ni_valid = Yvalid.size() ;
+  std::vector<bool> miss_valid( ni_valid );
+  int obs_valid = 0;
+  for (int i=0; i<ni_valid; i++)
+    {
+      miss_valid[i] = std::isnan( Yvalid[i] ) ;
+      if ( ! miss_valid[i] ) ++obs_valid;
+    }
+  
+  if ( obs_valid < ni_valid )
+    {
+      logger << "  pruning validation dataset from " << ni_valid << " to " << obs_valid << " based on missing/NA labels\n";
+      prune1( obs_valid , miss_valid , &validation_iids, &validation_ids, &validation_eids, &Xvalid, &Yvalid );
+    }
+
+
+}
+
+
+void massoc_t::prune1( const int n, const std::vector<bool> & missing , 
+		       std::vector<std::string> * iids, 
+		       std::vector<std::string> * ids, 
+		       std::vector<std::string> * eids, 
+		       Eigen::MatrixXd * X, 
+		       std::vector<double> * Y )
+{
+
+  const int n0 = iids->size();
+
+  if ( ids->size() != n0 || 
+       eids->size() != n0  ||
+       X->rows() != n0 ||
+       Y->size() != n0 ||
+       missing.size() != n0 )
+    Helper::halt( "internal error in prune()" );
+  
+  // allocate copy storage
+  std::vector<std::string> iids2( n );
+  std::vector<std::string> ids2( n );
+  std::vector<std::string> eids2( n );
+  Eigen::MatrixXd X2 = Eigen::MatrixXd::Zero( n , X->cols() );
+  std::vector<double> Y2( n );
+  
+  int c = 0;
+  for (int i=0; i<n0; i++)
+    {
+      if ( ! missing[i] ) 
+	{
+	  iids2[c] = (*iids)[i];
+	  ids2[c] = (*ids)[i];
+	  eids2[c] = (*eids)[i];
+	  X2.row(c) = X->row(i);
+	  Y2[c] = (*Y)[i];
+	  ++c;
+	}
+    }
+
+  // copy back
+  *iids = iids2;
+  *ids = ids2;
+  *eids = eids2;
+  *X = X2;
+  *Y = Y2;
+}
+
+
+
 
 // load train/valid/test status
 void massoc_t::attach_ids( param_t & param )
@@ -949,8 +1040,8 @@ void massoc_t::train( param_t & param )
   // configuration required  
   lgbm.load_config( param.requires( "config" ) );
 
-  std::cout << " Y train -  \n";
-  for (int i=0; i<Ytrain.size(); i++) std::cout << Ytrain[i] << "\n";
+  // std::cout << " Y train -  \n";
+  // for (int i=0; i<Ytrain.size(); i++) std::cout << Ytrain[i] << "\n";
   
   // attach data
   lgbm.attach_training_matrix( Xtrain );
@@ -1021,10 +1112,16 @@ void massoc_t::predict( param_t & param )
     {
       writer.id( test_iids[i] + "_" + test_ids[i] + "_" + test_eids[i] , "." );
 
+	   
       writer.value( "IID" , test_iids[i] ); // indiv
       writer.value( "TID" , test_ids[i] );  // type
-      writer.value( "EID" , test_eids[i] ); // event
-      
+
+      int eid = 0;
+      if ( Helper::str2int( test_eids[i] , &eid ) )
+	writer.value( "EID" , eid ); // should always work
+      else
+	writer.value( "EID" , test_eids[i] ); // but in case not...
+
       if ( Ytest.size() != 0 && Helper::realnum( Ytest[i] ) )
 	writer.value( "OBS" , Ytest[i] );
       else
@@ -1087,20 +1184,22 @@ void massoc_t::SHAP( param_t & param )
 
   // indiv level output
   
-  for (int i=0;i<n;i++)
+  if ( param.has( "verbose" ) ) 
     {
-      writer.id( test_iids[i] + "_" + test_ids[i] + "_" + test_eids[i] , "." );
-      
-      for (int j=0; j<nv; j++)
+      for (int i=0;i<n;i++)
 	{
-	  writer.level( vars[j] , "VAR" );
-	  writer.value( "SHAP" , S(i,j) );
+	  writer.id( test_iids[i] + "_" + test_ids[i] + "_" + test_eids[i] , "." );
+	  
+	  for (int j=0; j<nv; j++)
+	    {
+	      writer.level( vars[j] , "VAR" );
+	      writer.value( "SHAP" , S(i,j) );
+	    }
+	  writer.unlevel( "VAR" );
 	}
-      writer.unlevel( "VAR" );
+      writer.id( "." , "." );
     }
-  
-  writer.id( "." , "." );
-
+ 
 
 }
 
