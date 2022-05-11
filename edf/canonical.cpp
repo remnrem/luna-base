@@ -444,7 +444,8 @@ int canonical_t::read( const std::string & filename )
 	    lines.push_back( line );
 	  else
 	    {
-	      rules.push_back( canon_rule_t( lines ) );
+	      if ( read_this( line[0] ) )
+		rules.push_back( canon_rule_t( lines ) );
 	      lines.clear();
 	      lines.push_back( line );		      
 	    }
@@ -455,13 +456,25 @@ int canonical_t::read( const std::string & filename )
   
   // flush buffer and add last rule
   if ( lines.size() != 0 )
-    rules.push_back( canon_rule_t( lines ) );
+    if ( read_this( lines[0] ) )
+      rules.push_back( canon_rule_t( lines ) );
   
   IN1.close();
   
   return rules.size();
 }
 
+
+bool canonical_t::read_this( const std::string & rule )
+{
+  // if inclusions specified, it needs to be in here
+  const bool inc_rule = canins.size() == 0 || canins.find( rule ) != canins.end();
+
+  // if exclusions specified, it needs to not be in here
+  const bool exc_rule = canins.size() == 0 || canouts.find( rule ) == canins.end();
+
+  return inc_rule && exc_rule;
+}
 
 canonical_t::canonical_t( edf_t & edf , param_t & param )
   : edf(edf)
@@ -475,6 +488,14 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
   scale_codes[ 1 ] = "POS";
   scale_codes[ -1 ] = "NEG";
   scale_codes[ 2 ] = "AC";
+
+  //
+  // spcify a subset of canonical rules to apply? 
+  //
+
+  if ( param.has( "inc" ) ) canins = param.strset( "inc" );
+  if ( param.has( "exc" ) ) canouts = param.strset( "exc" );
+  
   
   //
   // read in rules, if not already done, from 1 or more files

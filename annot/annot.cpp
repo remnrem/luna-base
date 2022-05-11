@@ -3471,7 +3471,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	    }
 	  
 	  // write an ... instead of the second time-poimt (for 0-duration intervals)
-	  const bool add_ellipsis = globals::set_0dur_as_ellipsis && interval.start == interval.start ;
+	  const bool add_ellipsis = globals::set_0dur_as_ellipsis && interval.start == interval.stop ;
 
 	  //std::cout << " xx " << interval.start <<  " " << interval.stop << " " << interval.stop - interval.start << "   .... " << add_ellipsis << "\n";
 

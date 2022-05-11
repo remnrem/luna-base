@@ -2108,13 +2108,13 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "SPT" , SPT - FWT );
 	  
 	  writer.value( "FWT" , FWT );
-	  writer.value( "SLP_LAT" , slp_lat );
+	  writer.value( "SOL" , slp_lat );
 
 	  // was SLP_EFF
-	  writer.value( "SE_TIB" , slp_eff_pct );	  
+	  writer.value( "SE" , slp_eff_pct );	  
 
 	  // was SLP_EFF2 --> this is the new default SE (i.e. denom SPT) 
-	  writer.value( "SE" , slp_eff2_pct );
+	  writer.value( "SME" , slp_eff2_pct );
 
 	  // ignore
 	  //writer.value( "SLP_MAIN_EFF" , slp_main_pct );
@@ -2122,7 +2122,7 @@ void hypnogram_t::output( const bool verbose ,
 	  // only defined if there is at least some persistent sleep
 	  if ( TpST > 0 ) 
 	    {
-	      writer.value( "SLP_LAT_PER" , per_slp_lat );      
+	      writer.value( "SOL_PER" , per_slp_lat );      
 	      // adjust for increased time for onset of persistent sleep veresus first sleep
 	      writer.value( "SPT_PER" , SPT - FWT - ( per_slp_lat - slp_lat ) );
 	    }

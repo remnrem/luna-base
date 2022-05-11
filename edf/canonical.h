@@ -108,7 +108,9 @@ struct canonical_t
   canonical_t( edf_t & edf , param_t & param );
 
   int read( const std::string & filename );
-    
+
+  bool read_this( const std::string & );
+  
   void add_alias( const std::string & , const std::string & ); 
   
   void proc( );
@@ -141,6 +143,12 @@ struct canonical_t
   bool retain_prefiltering;
   // output class used in mapper-cgi-util mode
   cansigs_t retval;
+
+  // only inc these canonica rules
+  std::set<std::string> canins;
+  
+  // ignore these canonical rules
+  std::set<std::string> canouts;
   
   // can be assigned to multiple groups
   std::set<std::string> group;
