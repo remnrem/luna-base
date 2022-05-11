@@ -109,7 +109,7 @@ struct canonical_t
 
   int read( const std::string & filename );
 
-  bool read_this( const std::string & );
+  bool apply_this( const std::string & );
   
   void add_alias( const std::string & , const std::string & ); 
   

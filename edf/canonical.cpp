@@ -113,10 +113,9 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	      // add as req_sigs...
 	      for (int j=0; j<tfin.size(); j++)
 		{
-		  req_sig.push_back( Helper::unquote( Helper::toupper( tfin[j] ) ) );
-		  std::cout << " addding [" << tfin[j] << "]\n";
+		  req_sig.push_back( Helper::unquote( Helper::toupper( tfin[j] ) ) );		  
 		}
-
+	      
 	      // also add canonical label itself
 	      req_sig.push_back( Helper::unquote( Helper::toupper( canonical_label ) ) );
 	      
@@ -443,9 +442,8 @@ int canonical_t::read( const std::string & filename )
 	  if ( lines.size() == 0 )
 	    lines.push_back( line );
 	  else
-	    {
-	      if ( read_this( line[0] ) )
-		rules.push_back( canon_rule_t( lines ) );
+	    {	      
+	      rules.push_back( canon_rule_t( lines ) );
 	      lines.clear();
 	      lines.push_back( line );		      
 	    }
@@ -456,8 +454,7 @@ int canonical_t::read( const std::string & filename )
   
   // flush buffer and add last rule
   if ( lines.size() != 0 )
-    if ( read_this( lines[0] ) )
-      rules.push_back( canon_rule_t( lines ) );
+    rules.push_back( canon_rule_t( lines ) );
   
   IN1.close();
   
@@ -465,13 +462,13 @@ int canonical_t::read( const std::string & filename )
 }
 
 
-bool canonical_t::read_this( const std::string & rule )
+bool canonical_t::apply_this( const std::string & rule )
 {
   // if inclusions specified, it needs to be in here
   const bool inc_rule = canins.size() == 0 || canins.find( rule ) != canins.end();
 
   // if exclusions specified, it needs to not be in here
-  const bool exc_rule = canins.size() == 0 || canouts.find( rule ) == canins.end();
+  const bool exc_rule = canouts.size() == 0 || canouts.find( rule ) == canouts.end();
 
   return inc_rule && exc_rule;
 }
@@ -524,13 +521,30 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
 	  int nrules = read( filename );
 	  
 	  logger << "  read " << nrules << " rules from " << filename << "\n";
+	  
+	}
+      
+
+      
+      logger << "  in total, read " << rules.size()
+	     << " rules and " << aliases.size() << " variables\n";
+      
+      // number that will actually be applied
+      if ( canins.size() != 0 || canouts.size() != 0 )
+	{
+	  int napp = 0;
+	  for (int r=0; r<rules.size(); r++)
+	    {
+	      const canon_rule_t rule = rules[r];
+	      if ( apply_this( rule.canonical_label ) ) ++napp;
+	    }
+	  logger << "  of these, " << napp << " rules will be applied to the dataset, based on inc/exc options\n";
 	}
 
-      logger << "  in total, read " << rules.size()
-	     << " rules and " << aliases.size() << " variables\n\n";
+      logger << "\n";
     }
   
-
+  
   //
   // Other options
   //
@@ -626,6 +640,17 @@ void canonical_t::proc( )
 
       const canon_rule_t rule = rules[r];
 
+      //
+      // are we skipping this?
+      //
+
+      if ( ! apply_this( rule.canonical_label ) )
+	continue;
+      
+      //
+      // start attempting to do this rule
+      //
+      
       if ( verbose ) logger << "\n  - attempting rule " << r+1 << " of " << rules.size() << " : target = " << rule.canonical_label << "\n";
       
       attempted.insert( rule.canonical_label );
@@ -1008,7 +1033,7 @@ void canonical_t::proc( )
 	      {
 		if ( verbose )
 		  logger << "   setting voltage scale to " << rule.set_unit << "\n";
-		edf.rescale(  canonical_signal(0) , rule.set_unit );
+		edf.rescale(  canonical_signal(0) , rule.set_unit , true ); // T -> quietly
 	      }
 	}
 

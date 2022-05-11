@@ -516,7 +516,7 @@ public:
   // Units
   //
 
-  void rescale( const int s , const std::string & sc );
+  void rescale( const int s , const std::string & sc , const bool quietly = false );
 
 private:
   
