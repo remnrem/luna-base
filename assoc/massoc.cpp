@@ -167,8 +167,9 @@ massoc_t::massoc_t( param_t & param )
   //
   // prune training/validation datasets, if needed
   //
-
-  prune();
+  
+  if ( ! param.has( "unpruned" ) )
+    prune();
 
   //
   // train
