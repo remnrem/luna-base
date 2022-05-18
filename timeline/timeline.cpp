@@ -2614,6 +2614,32 @@ uint64_t timeline_t::timepoint( int r , int s , int nsamples ) const
 // }
 
 
+void timeline_t::add_mask_annot( const std::string & tag )
+{
+
+  if ( ! epoched() ) return;
+  
+  first_epoch();
+
+  logger << "  adding annotation " << tag << " to mark unmasked (included) epochs\n";
+
+  annot_t * a = annotations.add( tag );
+
+  a->description = "Included (unmasked) epoch";
+
+  while ( 1 )
+    {
+      
+      int e = next_epoch();
+
+      if ( e == -1 ) break;
+      
+      instance_t * instance = a->add( "." , epoch(e) , "." );
+      
+    }
+  
+}
+
 void timeline_t::mask2annot( const std::string & path , const std::string & tag , bool with_id ) 
 {
 

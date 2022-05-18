@@ -109,6 +109,18 @@ int CRandom::rand (int n)
   return r;
 }
 
+//
+// Return a random uint64_t between 0 and fac-1
+//
+
+
+uint64_t CRandom::rand (uint64_t n)
+{
+  uint64_t r = uint64_t(rand() * n);
+  if (r == n) r--;
+  return r;
+}
+
 
 //
 // Yates-Fisher shuffle

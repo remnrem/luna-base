@@ -904,6 +904,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
       else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
+      else if ( is( c, "OVERLAP") )       proc_annotate( edf, param(c) );
       else if ( is( c, "EXTEND" ) )       proc_extend_annots( edf, param(c) );
       else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
       else if ( is( c, "S2A" ) )          proc_signal2annot( edf, param(c) );
@@ -946,6 +947,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
+      else if ( is( c, "ANNOT-MASK" ) )   proc_annot_mask( edf, param(c) );
       else if ( is( c, "CHEP" ) )         timeline_t::proc_chep( edf, param(c) );
       else if ( is( c, "CHEP-MASK" ) )    proc_chep_mask( edf, param(c) );
       
@@ -2555,6 +2557,15 @@ void proc_file_annot( edf_t & edf , param_t & param )
 }
 
 
+// ANNOT-MASK : add (internally) a MASK corresponding to included (or excluded epochs)
+
+void proc_annot_mask( edf_t & edf , param_t & param )
+{
+  // default annot name = "E"
+  const std::string tag = param.has( "inc" ) ? param.value( "inc" ) : "E" ;
+  edf.timeline.add_mask_annot( tag );
+}
+
 // DUMP-MASK : output the current mask as an .annot file
 
 void proc_dump_mask( edf_t & edf , param_t & param )
@@ -2597,6 +2608,15 @@ void proc_write_annots( edf_t & edf , param_t & param )
 void proc_extend_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.annotations.extend( param );
+}
+
+
+// ANNOTATE : annotate one annot based on other annotation(s)
+//  (for this one EDF) - also see command-line variant to read
+//  in annots from multiple individuals for a joint test
+void proc_annotate( edf_t & edf , param_t & param )
+{
+  annotate_t annotate( edf , param );
 }
 
 

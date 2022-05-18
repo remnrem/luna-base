@@ -167,7 +167,7 @@ struct timeline_t
   void list_spanning_annotations( const param_t & param );
 
   void annot2signal( const param_t & param );
-
+  
   void signal2annot( const param_t & param );
 
   void signal_means_by_annot( const param_t & param );
@@ -448,6 +448,8 @@ struct timeline_t
 
   void mask2annot( const std::string & path , const std::string & tag , const bool with_id = true );
 
+  void add_mask_annot( const std::string & tag );
+  
   void dumpmask();
 
   //
@@ -562,6 +564,12 @@ struct timeline_t
   uint64_t valid_tps(  const interval_t & );
 
 
+  //
+  // ANNOTATE command implementation (annots.cpp)
+  //
+
+  void annotate( param_t & );
+  
   //
   // EPOCH annotations
   //

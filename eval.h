@@ -274,6 +274,7 @@ void proc_canonical( edf_t & edf , param_t & param );
 
 void proc_dump( edf_t & , param_t & );
 void proc_dump_mask( edf_t & , param_t & );
+void proc_annot_mask( edf_t & , param_t & );
 //void proc_chep( edf_t & , param_t & ); // now in timeline_t
 void proc_chep_mask( edf_t & , param_t & );
 void proc_file_mask( edf_t & , param_t & );
@@ -293,6 +294,7 @@ void proc_combine_suds_cmdline();
 
 void proc_hypoxic_burden( edf_t & , param_t & );
 
+void proc_annotate( edf_t & , param_t & );
 void proc_annot2signal( edf_t & , param_t & );
 void proc_signal2annot( edf_t & , param_t & );
 void proc_sig_annot_mean( edf_t & , param_t & );

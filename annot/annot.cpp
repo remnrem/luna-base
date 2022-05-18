@@ -944,10 +944,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    iname = Helper::sanitize( iname );
 	  
 	  //
-	  // Combine class & instance ID?
+	  // Combine class & instance ID? (unless missing, or same as class)
 	  //
 	  
-	  if ( globals::combine_annot_class_inst && iname != "." )
+	  if ( globals::combine_annot_class_inst && iname != "." && iname != aname )
 	    aname += globals::annot_class_inst_combiner + iname ;
 	  
 	  //

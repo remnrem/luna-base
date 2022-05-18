@@ -64,6 +64,7 @@
 #include "stats/qda.h"
 
 #include "annot/annot.h"
+#include "annot/annotate.h"
 
 #include "edf/edf.h"
 
