@@ -24,6 +24,7 @@
 #define __CRANDOM_H__
 
 #include <vector>
+#include <cstdint>
 
 class CRandom 
 {
