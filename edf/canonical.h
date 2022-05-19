@@ -68,6 +68,10 @@ struct canon_rule_t {
   // sets
   int set_sr;
   std::string set_unit;
+
+  // "<<-" relabelling rule
+  bool relabel_canonical;
+  std::vector<std::string> original_canonical_label;
   
 };
 

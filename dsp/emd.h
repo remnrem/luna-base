@@ -83,7 +83,9 @@ struct emd_t
   bool verbose;
   
   std::vector<double> sift( const std::vector<double> & ); 
-  std::vector<double> envelope_mean( const std::vector<double> & ); 
+  static std::vector<double> envelope_mean( const std::vector<double> & , const bool ,
+					    std::vector<double> * mine = NULL ,
+					    std::vector<double> * maxe = NULL );
   
   std::vector<std::vector<double> > imf;
   std::vector<double> residual;

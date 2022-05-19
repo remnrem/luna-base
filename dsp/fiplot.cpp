@@ -25,6 +25,7 @@
 #include "miscmath/miscmath.h"
 #include "cwt/cwt.h"
 #include "fftw/fftwrap.h"
+#include "dsp/emd.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -74,11 +75,26 @@ void fiplot_wrapper( edf_t & edf , const param_t & param , const std::vector<dou
 
   bool logspace = param.has("f-log"); // now interpret f-inc as the number of steps to have
 
-  const double f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 1  ;
-  const double f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 20 ;
-  const double f_inc = param.has( "f-log" ) ? param.requires_dbl( "f-log" ) : 
+  double f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 1  ;
+  double f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 20 ;
+  double f_inc = param.has( "f-log" ) ? param.requires_dbl( "f-log" ) : 
     ( param.has( "f-inc" ) ? param.requires_dbl( "f-inc" ) : 1 )  ;
-  const int num_cyc = param.has( "cycles" ) ? param.requires_int( "cycles" ) : 7 ;
+  int num_cyc = param.has( "cycles" ) ? param.requires_int( "cycles" ) : 7 ;
+
+  //
+  // Or, we are just looking at a raw signal (i.e. already we have peaks) 
+  //
+
+  if ( param.yesno( "envelope" ) )
+    {
+      // i.e. instead of doing CWT for various bands, just take the
+      // signal as is and intervaliz / make a single "interval plot"
+      // IP .. i.e. no "F" component now; just take the envelope usin HT
+
+      // set f to negative
+      f_lwr = f_upr = f_inc = -1;
+      num_cyc = 0;
+    }
 
   
   //
@@ -205,6 +221,16 @@ void fiplot_t::set_f( double lwr , double upr , double inc , bool logspace , int
   f_inc = inc; // # of inc if logspace == T
   num_cycles = num_cyc;
 
+  // special case: do not do CWT
+  
+  if ( num_cycles == 0 )
+    {      
+      frqs.push_back( -1 ); // min ENV
+      frqs.push_back( -2 ); // max ENV
+      frqs.push_back( -3 ); // original
+      return;
+    }
+  
   if ( ! logspace )
     {
       for (double f = f_lwr ; f <= f_upr ; f += f_inc ) frqs.push_back( f );
@@ -226,22 +252,65 @@ void fiplot_t::proc( const std::vector<double> & x , const std::vector<uint64_t>
   // frq points (Hz)
   nf = frqs.size();
 
+  // if not CWT, but getting envelope of a single signal, do here once
+  std::vector<double> mine, maxe;
+  if ( num_cycles == 0 )
+    {
+      std::vector<double> ignore_mean_env = emd_t::envelope_mean( x , false , &mine, &maxe );
+    }
+  
   for ( int fi = 0 ; fi < nf ; fi++ )
     {
       
       double f = frqs[fi];
 
-      logger << "  assessing " << f << " Hz ...";
+      std::vector<double> c;
 
-      writer.level( f , globals::freq_strat );
-      
-      // get CWT 
+      // CWT
 
-      std::vector<double> c = cwt( x , fs , f , num_cycles );
+      if ( f > 0 )
+	{
+	  logger << "  assessing " << f << " Hz ...";
+	  
+	  writer.level( f , globals::freq_strat );
+	  
+	  c = cwt( x , fs , f , num_cycles );
+	  
+	  if ( verbose ) 
+	    for (int i=0;i<c.size();i++)
+	      std::cout << "CWT\t" << c[i] << "\t" << x[i] << "\n";
+	}
+      else
+	{
+	  // get envelope -- fudge, should make
+	  // things clearer...
+	  if ( fi == 0 ) // min
+	    c = mine;
+	  else if ( fi == 1 ) // max
+	    c = maxe;
+	  else // orig-raw
+	    {
+	      // get 0 .. 1 scale
+	      double min, max;
+	      MiscMath::minmax( x , &min, &max );
+	      min *= 1.01; max *= 1.01;
+	      double rng = max - min;
+	      c = x;
+	      for (int i=0; i<c.size(); i++) c[i] = ( c[i] - min ) / rng ;
+	    }
+	  
+	  // std::cout << "fi = " << fi << "\n";
+	  // for (int i=20000; i<20400; i++)
+	  //   std::cout << x[i] << "\t" << c[i] << "\n";
 
-      if ( verbose ) 
-	for (int i=0;i<c.size();i++)
-	  std::cout << "CWT\t" << c[i] << "\t" << x[i] << "\n";
+	  // indicate w/ F == -1 and +1 for min/max env, and 0 for orig
+	  if ( fi == 0 )
+	    writer.level( -1 , globals::freq_strat );
+	  else if ( fi == 1 ) 
+	    writer.level( +1 , globals::freq_strat );
+	  else
+	    writer.level( 0 , globals::freq_strat );
+	}
       
       // get intervals
 

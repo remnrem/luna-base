@@ -410,7 +410,7 @@ std::vector<double> emd_t::sift( const std::vector<double> & x )
       // mean of envelope
       //
 
-      std::vector<double> m = envelope_mean( h );
+      std::vector<double> m = envelope_mean( h , verbose );
       
 
       //
@@ -640,7 +640,9 @@ void emd_t::hht( double Fs )
 }
 
 
-std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
+std::vector<double> emd_t::envelope_mean( const std::vector<double> & x , const bool vmode ,
+					  std::vector<double> * mine , 
+					  std::vector<double> * maxe )
 {
 
   //
@@ -658,7 +660,7 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
   std::vector<int> minindex = extrema.minindex();
   std::vector<int> maxindex = extrema.maxindex();
 
-  if ( verbose ) 
+  if ( vmode ) 
     std::cerr << "n min/max = " << extrema.nextrema << " " << minindex.size() << " " << maxindex.size() << "\n";
   
   //
@@ -679,7 +681,7 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
   double wavefreq1 = 0;
   bool add_first_min = false , add_first_max = false , add_last_min = false , add_last_max = false;
 
-  if ( verbose ) 
+  if ( vmode ) 
     std::cerr << " first_min, first_max = " << first_min << " " << first_max << "  " << first_pt << "\n";
 
   if ( first_pt <= first_min && first_pt <= first_max ) 
@@ -743,7 +745,7 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
       else wavefreq2 = d1 + round(1.5 * d2 );
     }
 
-  if ( verbose ) 
+  if ( vmode ) 
     std::cerr << "wavefreqs " << wavefreq1 <<" " << wavefreq2 << "\n";
 
  
@@ -882,6 +884,26 @@ std::vector<double> emd_t::envelope_mean( const std::vector<double> & x )
   std::vector<double> env( n );
   for (int i=0; i<n; i++)
     env[i] = ( sa( i ) + sb( i ) ) / 2.0 ; 
+
+  //
+  // Optionally, set min/max envelopes too? (not used in EMD per se,
+  // if called by FIP or other functions)
+  //
+
+  if ( mine != NULL )
+    {
+      mine->resize( n );
+      for (int i=0; i<n; i++)
+	(*mine)[i] = sb( i );
+    }
+
+  if ( maxe != NULL )
+    {
+      maxe->resize( n );
+      for (int i=0; i<n; i++)
+	(*maxe)[i] = sa( i );      
+    }
+  
   
   return env;
 

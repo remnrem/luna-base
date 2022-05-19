@@ -43,7 +43,7 @@ std::map<int,std::string> canonical_t::scale_codes;
 canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 {
   const int l = lines.size();
-
+  
   // logger << "rule:\n";
   // for (int i=0; i<l; i++) logger << i << "\t[" << lines[i] << "]\n";
   
@@ -56,7 +56,9 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
   set_sr = 0; // do not change
   set_unit = ".";
 
-  
+  // <<- rules
+  relabel_canonical = false;
+    
   std::string current_rule = "";
 
   bool rules_set = false;
@@ -91,23 +93,29 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	  //  canon
 	  //   req:
 	  //    sig = canon,alias1,alias2
-	  
 
+
+	  // special case 3: (handled here)
+	  //  canon <<- canon1 canon2 canon3 
+
+	  // this relabels 'canon1', 'canon2' etc all to 'canon'
+	  //  i.e. to handle case where same EDF has > 1 version
+	  //  of a canonical signal;   hopefully, if handled properly,
+	  //  the transducer field, or other, will disambiguate downstream
+	  //  When loading back into Luna, they will automatically be uniquified
+	  
 	  std::vector<std::string> t1 = Helper::quoted_parse( line , ", \t" );
 
-
 	  if ( t1.size() > 2 && t1[1] == "<-" )
-	    {
-
+	    {	      
 	      canonical_label = t1[0];
-
 	      std::vector<std::string> tfin;
 	      for (int j=2; j<t1.size(); j++) // skips canon <-
 		{
 		  std::vector<std::string> t2 =
 		    Helper::quoted_parse( canonical_t::swap_in_alias( t1[j] ) , ", \t" );
 		  for (int k=0; k < t2.size(); k++)
-		      tfin.push_back( t2[k] );
+		    tfin.push_back( t2[k] );
 		}
 
 	      // add as req_sigs...
@@ -120,7 +128,19 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	      req_sig.push_back( Helper::unquote( Helper::toupper( canonical_label ) ) );
 	      
 	    }
-	  else // not a special case.. this is the start of a rule
+
+	  // otherwise, handled "<<-" special rule
+	  else if ( t1.size() > 2 && t1[1] == "<<-" )
+            {	      
+	      canonical_label = t1[0];
+	      relabel_canonical = true;
+	      original_canonical_label.clear();
+	      for (int j=2; j<t1.size(); j++)
+		original_canonical_label.push_back( t1[j] );
+	    }	  
+
+	  // otherwise, not a special case.. this is the start of a rule
+	  else 
 	    {	      
 	      canonical_label = line;
 	    }
@@ -666,8 +686,32 @@ void canonical_t::proc( )
 	  if ( verbose ) logger << "   already processed " << rule.canonical_label << "\n";
 	  continue;
 	}
-            
 
+      //
+      // handle special case: <<- canonical relabelling
+      //
+
+      if ( rule.relabel_canonical )
+	{
+	  int v = 0;
+	  for (int j = 0; j < rule.original_canonical_label.size(); j++)
+	    {
+	      const std::string & olab = rule.original_canonical_label[j];
+	      
+	      if ( edf.header.has_signal( olab ) )
+		{
+		  std::string nlab = rule.canonical_label + ( j ? "." + Helper::int2str(j) : "" ) ; 
+		  
+		  if ( ! dry_run )
+		    logger << "   renaming canonical " << olab									       << " as " << nlab << "\n";
+		  edf.header.rename_channel( olab , nlab );		  
+		}
+	    }
+
+	  // now advance to the next rule
+	  continue;
+	}
+      
       //
       // group specifier?
       //
