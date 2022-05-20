@@ -42,6 +42,9 @@ lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> 
   // Some observatons can be 'missing' and will be skipped 
   // in generating the model
   //
+
+  // std::cout << " X " << X.rows() << " " << X.cols() << "\n";
+  // std::cout << " Y " << y.size() << "\n";
   
   int nm = 0;
   std::vector<bool> mi( X.rows() , false );
@@ -52,9 +55,11 @@ lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> 
   const int n = X.rows() - nm;
   const int p = X.cols();
   
+  //  std::cout << " X.r, c, nm = " << X.rows() << " " << nm << " " << n << " " << p << "\n";
+  
   if ( n < 3 ) Helper::halt( "not enough nonmissing obs in lda_t()" );
-
-  //  std::cout << " X " << X.rows() << " " << X.cols() << "\n";
+  
+  
 
   if ( nm )
     {      

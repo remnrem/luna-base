@@ -49,7 +49,8 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 
   const int wn = param.has( "n" ) ? param.requires_int( "n" ) : 100;
   const double wmin = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
-  const double wmax = param.has( "max" ) ? param.requires_dbl( "max" ) : 10;
+  const int    scale = param.has( "m" ) ? param.requires_int( "m" ) : 2;
+  //  const double wmax = param.has( "max" ) ? param.requires_dbl( "max" ) : 10;
 
   const double fmin = param.requires_dbl( "f-lwr" );
   const double fmax = param.requires_dbl( "f-upr" );
@@ -81,7 +82,7 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 
       const double Fs = edf.header.sampling_freq( signals(s) );       
       dfa_t dfa;
-      dfa.set_windows( Fs , wmin );
+      dfa.set_windows( Fs , wmin , scale, wn );
       dfa.filter_hilbert( fmin, fmax, ripple, tw );
 
       //

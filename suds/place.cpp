@@ -80,6 +80,12 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       if ( line[0] == '%' ) continue;
       std::vector<std::string> tok = Helper::parse( line );
       if ( tok.size() != 1 ) Helper::halt( "expecting one stage per line" );
+
+      // enforce N1, N2, N3, R, W, ?, L
+      if ( line == "L" ) line = "?";
+      if ( line != "?" && line != "N1" && line != "N2" && line != "N3" && line != "R" && line != "W" )
+	Helper::halt( "stages=<file> lines can only be one of: N1, N2, N3, R, W, L or ?" );
+      
       allstages.push_back( line );
     }
   IN1.close();
@@ -138,8 +144,17 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   
   // true = 'is a trainer' 
   int n_unique_stages = proc( edf , param , true );
-  
-  
+
+  //
+  // the above may have dropped back epochs... we need to ensure that we
+  // skip those when aligning the proposal epochs.. i.e if
+  //   full EDF = 1000 epochs
+  //   valid signals  = 950
+  //   proposal = 600
+  //  then we need to align the 600 against the full 1000 epochs ;;; but any 'drop' because of bad signal
+  //   we will set the phenotype to ?, i.e. so that it is effectively dropped
+  //
+   
   // //
   // // Shift... start from leftmost and go all way to rightmost
   // //   stages might be longer than EDF, or shorter
@@ -184,6 +199,14 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   double max_kappa = -1 ;
   int best_offset = -1;
   bool matched = false;
+
+  //
+  // track valid epochs
+  //
+
+  std::map<int,int> e2e;
+  for (int i=0; i< epochs.size(); i++)
+    e2e[ epochs[i] ] = i ;
   
   //
   // Iterate over alignments
@@ -200,7 +223,17 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       // construct trail staging 
       //
 
-      std::vector<std::string> trial( nedf , "?" );
+      //  1 2 3 4 5 6 7 8 9 10
+      //  1 2   4     7 8 9
+      
+      
+      // nedf = all EDF epochs
+      // epochs.size() = all valid epochs
+      // only pull valid epochs here
+      
+      // build full proposal:
+      
+      std::vector<std::string> ftrial( nedf , "?" );
       
       int cnt = 0;
       int mine = 9999999;
@@ -214,7 +247,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
 	      ++cnt;	      
 	      if ( p < mine ) mine = p;
 	      if ( p > maxe ) maxe = p;	      
-	      trial[p] = allstages[i];       	      
+	      ftrial[p] = allstages[i];       	      
        	    }
        	  ++p;
        	}
@@ -222,8 +255,16 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       const int overlap = maxe  - mine + 1;
       
       // std::cout << " FROM : " << p1 << "  ----  "
-      // 		<< " ACT " << mine << " " << maxe << " OL = " << overlap << " " << overlap/(double)nedf << "\n";
+      //  		<< " ACT " << mine << " " << maxe << " OL = " << overlap << " " << overlap/(double)nedf << "\n";
 
+      //
+      // Extract only epochs that are valid 
+      //
+
+      const int ne_valid = epochs.size();
+      std::vector<std::string> trial( ne_valid , "?" );
+      for (int i=0; i<ne_valid; i++) trial[i] = ftrial[ epochs[i] ];
+      
       //
       // Evaluate this set of stages in trial
       //
@@ -254,6 +295,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
 	    {
 	      ++s;
 	      t += yy->second;
+	      //std::cout << " adding " << yy->first << "\n";
 	    }
 	  ++yy;
 	}
@@ -274,7 +316,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       // for p predictors, require at least p+2 observations
       if ( ! ( t > nc+1 ) )
 	okay = false;
-  
+      
       if ( ! okay )
 	{	  
 	  vec_fit.push_back( 0 );
@@ -290,9 +332,9 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       //
 
       Eigen::MatrixXd pp;
-  
-      int dummy = self_classify( NULL , &pp );
 
+      int dummy = self_classify( NULL , &pp );
+      
       if ( dummy == 0 )
 	{
 
@@ -309,7 +351,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       //
       
       double overlap_fraction = overlap/(double)nedf;
-
+    
       
 
       //

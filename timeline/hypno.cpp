@@ -2263,21 +2263,26 @@ void hypnogram_t::output( const bool verbose ,
   // LZW compression index, and sample entropy
   //
 
-  std::vector<char> sc(stages.size(),'?');
-  for (int e=0; e<stages.size(); e++)
+  if ( verbose && any_sleep )
     {
-      if      ( stages[e] == NREM1 ) sc[e] = 'A';
-      else if ( stages[e] == NREM2 ) sc[e] = 'B';
-      else if ( stages[e] == NREM3 || stages[e] == NREM4 ) sc[e] = 'C';
-      else if ( stages[e] == REM ) sc[e] = 'D';
-      else if ( stages[e] == WAKE ) sc[e] = 'E';      
+      
+      std::vector<char> sc(stages.size(),'?');
+      for (int e=0; e<stages.size(); e++)
+	{
+	  if      ( stages[e] == NREM1 ) sc[e] = 'A';
+	  else if ( stages[e] == NREM2 ) sc[e] = 'B';
+	  else if ( stages[e] == NREM3 || stages[e] == NREM4 ) sc[e] = 'C';
+	  else if ( stages[e] == REM ) sc[e] = 'D';
+	  else if ( stages[e] == WAKE ) sc[e] = 'E';      
+	}
+      
+      std::string seq( sc.begin() , sc.end() );
+      double LZW = 0;
+      lzw_t lzw( seq , &LZW );
+      writer.value( "LZW" , LZW );
     }
-
-  std::string seq( sc.begin() , sc.end() );
-  double LZW = 0;
-  lzw_t lzw( seq , &LZW );
-  writer.value( "LZW" , LZW );
   
+
   // mse_t se;
   // for (int m=1; m<=7; m++)                                                                                      
   //   {
@@ -2285,7 +2290,7 @@ void hypnogram_t::output( const bool verbose ,
   //     std::cout << " Mse = " << m << "\t" << mse << "\n";
   //   }	
   
-  //
+    //
   // NREM cycle summary stats
   //
   
@@ -2303,7 +2308,7 @@ void hypnogram_t::output( const bool verbose ,
   // Stage-stratified outputs
   //
 
-  if ( any_sleep )
+  if ( verbose && any_sleep )
     {
       const std::vector<std::string> these_stages_without_n4 = { "N1", "N2", "N3", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
       const std::vector<std::string> these_stages_with_n4 =    { "N1", "N2", "N3", "N4" , "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
@@ -2457,7 +2462,7 @@ void hypnogram_t::output( const bool verbose ,
   stagen[ UNSCORED ] = 2; // these others should not happen, but in case...
   stagen[ MOVEMENT ] = 2;
   stagen[ ARTIFACT ] = 2;
-  stagen[ LIGHTS_ON ] = 2;
+  stagen[ LIGHTS_ON ] = 3;
 
 
   // epoch size (in minutes)

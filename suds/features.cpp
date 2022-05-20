@@ -1615,7 +1615,7 @@ int suds_indiv_t::proc_class_labels( suds_helper_t * helper )
 	       ++c;
 	     }
 	 }
-       
+
        counts.clear();
        for (int i=0;i<y.size();i++) counts[y[i]]++;
 
@@ -1638,13 +1638,15 @@ int suds_indiv_t::proc_class_labels( suds_helper_t * helper )
 
 
 
+
+
 int suds_indiv_t::proc_prune_rows( suds_helper_t * helper ) 
 {
 
   // this only applies for trainers
 
   if ( ! trainer ) return 1;
-
+  
   // retained == size ne,  nge +pos elements
   // valid    == size nge, nve +pos elements
   // okay     == size nve, nve2 +pos elements
