@@ -20,7 +20,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: zip mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
+          install: zip mingw-w64-x86_64-cmake git gcc mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
       - run: |
           git clone --recursive https://github.com/microsoft/LightGBM
           cd LightGBM
