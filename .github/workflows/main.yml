@@ -26,14 +26,13 @@ jobs:
           cd LightGBM
           mkdir build
           cd build
-          ls /
           /mingw64/bin/cmake.exe -G "MinGW Makefiles"  ..
           mingw32-make.exe -j4
-          cp ../lightgbm.exe ../lib_lightgbm.dll ../lib_lightgbm.dll.a ${HOME}/
+          cp -r ../../LightGBM {HOME}/
       - uses: actions/checkout@v2
       - run: |
-          mingw32-make.exe ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/
-          zip -j win-luna.zip *.exe /mingw64/bin/libfftw3-3.dll ${HOME}/lib_lightgbm.dll* ${HOME}/lightgbm.exe
+          mingw32-make.exe ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          zip -j win-luna.zip *.exe /mingw64/bin/libfftw3-3.dll ${HOME}/LightGBM/lib_lightgbm.dll* ${HOME}/LightGBM/lightgbm.exe
       - uses: actions/upload-artifact@v2
         with:
           name: win-luna.zip
@@ -91,7 +90,7 @@ jobs:
           ./configure --enable-shared --prefix=${HOME}/fftw-3.3.8/
           make
           make install
-      - name: Install LightGB
+      - name: Install LightGBM
         run: |
           cd ${HOME}
           git clone --recursive https://github.com/microsoft/LightGBM
@@ -103,7 +102,7 @@ jobs:
           cd ${GITHUB_WORKSPACE}
       - name: make
         run: |
-          make FFTW=${HOME}/fftw-3.3.8 LGBM=1 LGBM_PATH=/build/LightGBM
+          make FFTW=${HOME}/fftw-3.3.8 LGBM=1 LGBM_PATH={HOME}/LightGBM
   release:
     runs-on: ubuntu-latest
     needs: [linux-build,macos-build,windows-build]
