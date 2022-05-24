@@ -32,7 +32,7 @@ jobs:
           cp ../lightgbm.exe ../lib_lightgbm.dll ../lib_lightgbm.dll.a ${HOME}/
       - uses: actions/checkout@v2
       - run: |
-          mingw32-make.exe ARCH=WINDOWS 
+          mingw32-make.exe ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/
           zip -j win-luna.zip *.exe /mingw64/bin/libfftw3-3.dll ${HOME}/lib_lightgbm.dll* ${HOME}/lightgbm.exe
       - uses: actions/upload-artifact@v2
         with:
