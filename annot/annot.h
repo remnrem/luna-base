@@ -854,6 +854,7 @@ struct annotation_set_t
 			 const std::string & a_n3 = "", 
 			 const std::string & a_n4 = "", 
 			 const std::string & a_rem = "",
+			 const std::string & a_light = "",
 			 const std::string & a_other = "");
 
 };
