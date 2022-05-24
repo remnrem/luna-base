@@ -30,7 +30,7 @@ endif
 
 ifdef LGBM_PATH
 DEP_INCLUDES +=-I$(LGBM_PATH)/include
-DEP_LIB =-L$(LGBM_PATH)
+DEP_LIB +=-L$(LGBM_PATH)
 endif
 
 
