@@ -109,13 +109,19 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   logger << "  based on EDF, there are " << nedf << " " << edf.timeline.epoch_length() << "-s epochs\n";
 
   //
-  // Required extent of overlap (by default, 10%)
+  // Required extent of overlap (by default, 10% of the EDF, at least 50% of the stages supplied)
   //
   
-  double req_overlap = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0.1 ; 
-  logger << "  requiring " << req_overlap << " proportion overlap\n\n";
-
-
+  double req_edf_overlap = param.has( "edf-overlap" ) ? param.requires_dbl( "edf-overlap" ) : 0.1 ; 
+  double req_stg_overlap = param.has( "stg-overlap" ) ? param.requires_dbl( "stg-overlap" ) : 0.5 ; 
+  
+  // ensure req_edf_overlap is not larger than nstages / nedf (i.e. would never be able to fit)
+  if ( req_edf_overlap > nstages / (double)nedf )
+    Helper::halt( "specified edf-overlap is larger than maximum possible given nstages=" + Helper::int2str( nstages )
+		  + " and nedf=" + Helper::int2str( nedf ) );
+  
+  logger << "  requiring " << req_edf_overlap << " proportion of EDF, and " << req_stg_overlap << " of supplied stages overlap\n\n";
+  
   // force alignment even for equal epochs sizes?
   const bool force_align = param.has( "force" );
   
@@ -136,13 +142,16 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   // this impacts whether epochs w/ missing values are dropped or not  
   // 0 SUDS
   // 1 SOAP
-  // 2 RESOAP/PLACE .. i.e. allow missing
-  suds_t::soap_mode = 1;
+  // 2 RESOAP/PLACE .. i.e. allow missing staging
+  suds_t::soap_mode = 2;
   
   // // ensure we do not call self_classify() from proc
   suds_t::self_classification = false;
   
-  // true = 'is a trainer' 
+  // ignore any existing priors in PLACE mode
+  suds_t::ignore_target_priors = true;
+  
+  // true -> 'is a trainer'
   int n_unique_stages = proc( edf , param , true );
 
   //
@@ -211,10 +220,10 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   //
   // Iterate over alignments
   //
-  
+  //  std::cout << " estart << " << estart << " " << estop <<"\n";
   for (int s1=estart; s1<= estop; s1++)
     {
-
+      //  std::cout << " s1 = " << s1 << "\n";
       // putative offset
 
       int p = s1;
@@ -255,7 +264,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       const int overlap = maxe  - mine + 1;
       
       // std::cout << " FROM : " << p1 << "  ----  "
-      //  		<< " ACT " << mine << " " << maxe << " OL = " << overlap << " " << overlap/(double)nedf << "\n";
+      // 		<< " ACT " << mine << " " << maxe << " OL = " << overlap << " " << overlap/(double)nedf << "\n";
 
       //
       // Extract only epochs that are valid 
@@ -276,11 +285,11 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       for (int i=0; i<n; i++) ++ycounts[ y[i] ];
         
       //
-      // requires at least two stages w/ at least 3 observations, and has to 
+      // requires at least two stages w/ at least 10 observations, and has to 
       // be greater than the number of PSCs
       //
       
-      const int required_n = 3;
+      const int required_n = 10;
   
       int s = 0;
       int t = 0;
@@ -350,16 +359,15 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       // track as a solution?
       //
       
-      double overlap_fraction = overlap/(double)nedf;
-    
+      const double edf_overlap_fraction = overlap/(double)nedf;
+      const double stg_overlap_fraction = overlap/(double)nstages;
+      
+      const bool overlap_okay = edf_overlap_fraction >= req_edf_overlap
+	&& stg_overlap_fraction >= req_stg_overlap;       
+      
+      vec_fit.push_back( overlap_okay ? 1 : 0 ) ;
       
 
-      //
-      // Model okay?
-      //
-      
-      vec_fit.push_back( overlap_fraction >= req_overlap  ? 1 : 0  );
-      
       //
       // Get alignment kappa
       //
@@ -368,7 +376,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       
       double kappa = -1 , kappa3 = -1;
       
-      if ( overlap_fraction >= req_overlap )
+      if ( overlap_okay )
 	{
 	  
 	  kappa = MiscMath::kappa( prd ,
@@ -425,7 +433,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       
       writer.value( "OLAP_N" , vec_overlap[i] );
       writer.value( "OLAP_EDF" , vec_overlap[i]/(double)nedf );
-      writer.value( "OLAP_INP" , vec_overlap[i]/(double)nstages );
+      writer.value( "OLAP_STG" , vec_overlap[i]/(double)nstages );
 
       if ( vec_k[i] >= 0 )
 	{
@@ -453,9 +461,20 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       return;
     }
 
-  logger << "\n  optimal epoch offset = " << ( best_offset >= 0 ? "+" : "-" ) << best_offset << " epochs (kappa = " << max_kappa << ")\n"
+  logger << "\n  optimal epoch offset = " << ( best_offset >= 0 ? "+" : "" ) << best_offset << " epochs (kappa = " << max_kappa << ")\n"
 	 << "  which spans " << vec_overlap[ best_idx ] << " epochs (of " << nedf << " in the EDF, and of " << nstages << " in the input stages)\n";
-  
+
+  //
+  // main outputs
+  //
+
+  writer.value( "OFFSET" , best_offset );
+  writer.value( "K" , max_kappa );
+  writer.value( "OLAP_N" , vec_overlap[ best_idx ] );
+  writer.value( "OLAP_EDF" , vec_overlap[ best_idx ] / (double)nedf );
+  writer.value( "OLAP_STG" , vec_overlap[ best_idx ] / (double)nstages );
+ 
+		
   //
   // write datafiles out
   //

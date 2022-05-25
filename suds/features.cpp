@@ -63,7 +63,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   suds_helper_t helper (edf , param );
 
-  
+
   //
   // Is this individual a trainer (i.e. with known stages) or no?
   //
@@ -87,23 +87,21 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
 
   rc = proc_check_channels( &helper );
   if ( rc == 0 ) return 0;
-
   
   //
   // For trainers, get the observed stages
   //
-  
+
   rc = proc_extract_observed_stages( &helper ) ;
   if ( rc == 0 ) return 0;
 
-  
   //
   // Build feature matrix given a model
   //
   
   rc = proc_build_feature_matrix( &helper );
   if ( rc == 0 ) return 0;  
-
+  
   //
   // epoch-level QC (also performs an initial SVD) ( nge --> nve ) 
   //
@@ -906,8 +904,8 @@ int suds_indiv_t::proc_build_feature_matrix( suds_helper_t * helper )
       epochs.push_back( epoch );
       
     } // next epoch
-
-
+  
+  
    // --------------------------------------------------------------------------------
    //
    // Finished adding in signal-based features, epoch-by-epoch
