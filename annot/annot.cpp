@@ -2632,6 +2632,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 					 const std::string & a_n3 , 
 					 const std::string & a_n4 , 
 					 const std::string & a_rem ,
+					 const std::string & a_light , 
 					 const std::string & a_other )
 {
 
@@ -2652,7 +2653,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   // Use default annotation labels, if not otherwise specified
   // 
 
-  std::string dwake, dn1, dn2, dn3, dn4, drem, dother, dunknown;
+  std::string dwake, dn1, dn2, dn3, dn4, drem, dlight, dother, dunknown;
 
   std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
   while ( ii != annots.end() )
@@ -2668,6 +2669,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
       else if ( ss == NREM3 )    dn3 = s;
       else if ( ss == NREM4 )    dn4 = s;
       else if ( ss == REM )      drem = s;
+      else if ( ss == LIGHTS_ON ) dlight = s;
       else if ( ss == UNSCORED ) dother = s;
       else if ( ss == MOVEMENT ) dother = s;
       else if ( ss == ARTIFACT ) dother = s;
@@ -2680,6 +2682,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   std::vector<std::string> v_n3    = Helper::parse( a_n3 , "," );
   std::vector<std::string> v_n4    = Helper::parse( a_n4 , "," );
   std::vector<std::string> v_rem   = Helper::parse( a_rem , "," );
+  std::vector<std::string> v_light = Helper::parse( a_light , "," );
   std::vector<std::string> v_other = Helper::parse( a_other , "," );
 
   // add defaults
@@ -2689,6 +2692,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   if ( v_n3.size() == 0 ) v_n3.push_back( dn3 );
   if ( v_n4.size() == 0 ) v_n4.push_back( dn4 );
   if ( v_rem.size() == 0 ) v_rem.push_back( drem );
+  if ( v_light.size() == 0 ) v_light.push_back( dlight );
   if ( v_other.size() == 0 ) v_other.push_back( dother );
   
 
@@ -2696,7 +2700,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   // find annotations, allowing a comma-delimited list
   //
 
-  std::vector<annot_t *> wakes, n1s, n2s, n3s, n4s, rems, others;
+  std::vector<annot_t *> wakes, n1s, n2s, n3s, n4s, rems, lights, others;
   
   for (int a=0;a<v_wake.size();a++)
     wakes.push_back( find( v_wake[a] ) );
@@ -2716,6 +2720,9 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   for (int a=0;a<v_rem.size();a++)
     rems.push_back( find( v_rem[a] ) );
   
+  for (int a=0;a<v_light.size();a++)
+    lights.push_back( find( v_light[a] ) );
+
   for (int a=0;a<v_other.size();a++)
     others.push_back( find( v_other[a] ) );
 
@@ -2731,8 +2738,9 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   for (int a=0;a<n3s.size();a++) if ( n3s[a] != NULL ) ++assigned;
   for (int a=0;a<rems.size();a++) if ( rems[a] != NULL ) ++assigned;
   for (int a=0;a<wakes.size();a++) if ( wakes[a] != NULL ) ++assigned;
+  for (int a=0;a<lights.size();a++) if ( lights[a] != NULL ) ++assigned;
   if ( assigned == 0 ) return false;
-
+  
   //
   // Align all putative stages, and if we see point markers, extend to the next (end) annot
   //
@@ -2830,6 +2838,21 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
         }
     }
   
+  for ( int i=0; i<lights.size(); i++ )
+    {
+      annot_t * stg = lights[i];
+      if ( stg )
+	{
+          annot_map_t & events = stg->interval_events;
+          annot_map_t::const_iterator ee = events.begin();
+          while ( ee != events.end() )
+            {
+              stages[ ee->first.interval ] = LIGHTS_ON;
+              ++ee;
+            }
+        }
+    }
+
   for ( int i=0; i<others.size(); i++ )
     {
       annot_t * stg = others[i];

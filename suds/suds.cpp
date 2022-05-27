@@ -69,7 +69,7 @@ int suds_t::ns;
 // Run modes
 //
 
-// 0, 1, 2 = SUDS, SOAP, RESOAP
+// 0, 1, 2, 3  = SUDS, SOAP, RESOAP, PLACE
 int suds_t::soap_mode = 0; 
 bool suds_t::cache_target = false;
 suds_indiv_t suds_t::cached;

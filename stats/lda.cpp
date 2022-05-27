@@ -1,5 +1,6 @@
 
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -259,10 +260,13 @@ lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> 
     return model;
   }
 
-  if ( rank < p ) 
-    logger << " warning... rank < p\n"; 
-
-
+  if ( rank < p )
+    {
+      logger << "  ** warning... rank = " << rank << " < p = " << p << " - potentially issues with data\n"; 
+      //std::cout << " W = \n" << W << "\n";
+      //std::cout << "X = \n" << X << "\n";
+    }
+  
   //
   // get new scaling matrix p x rank , possibly of rank < p
   // scaling <- scaling %*% X.s$v[, 1L:rank] %*% diag(1/X.s$d[1L:rank],,rank)

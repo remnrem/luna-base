@@ -124,6 +124,9 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   values.clear(); values.insert( "R" );
   timeline->annotate_epochs(  globals::stage( REM ) , "SleepStage" , values );
   
+  values.clear(); values.insert( "L" );
+  timeline->annotate_epochs(  globals::stage( LIGHTS_ON ) , "SleepStage" , values );
+
   //
   // Preliminary step to edit out any 'trailing' weird sleep epochs...
   //  i.e. if two hours of WAKE, then a single N1 epoch, then all wake...
@@ -190,10 +193,11 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       bool n2   = timeline->epoch_annotation( "N2" , e );
       bool n3   = timeline->epoch_annotation( "N3" , e );
       bool n4   = timeline->epoch_annotation( "NREM4" , e );
-      bool rem  = timeline->epoch_annotation( "R"   , e );      
+      bool rem  = timeline->epoch_annotation( "R"   , e );
+      bool lights  = timeline->epoch_annotation( "L"   , e );      
       
-      bool other = ! ( wake || n1 || n2 || n3 || n4 || rem );
-      bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem ) > 1;
+      bool other = ! ( wake || n1 || n2 || n3 || n4 || rem || lights );
+      bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem + (int)lights ) > 1;
       
       //
       // track any conflicts (i.e. if epochs not aligned to staging annotations)
@@ -212,6 +216,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 	  if ( n4 ) { ss << ( delim ? "," : "" ) << ( collapse_nrem34 ? "N3" : "N4" ); delim = true; }
 	  if ( rem ) { ss << ( delim ? "," : "" ) << "R"; delim = true; }
 	  if ( wake ) { ss << ( delim ? "," : "" ) << "W"; delim = true; }	  
+	  if ( lights ) { ss << ( delim ? "," : "" ) << "L"; delim = true; }	  
 	  writer.value( "CONFLICT" , ss.str() );
 	}
       
@@ -224,6 +229,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       else if ( n3 ) stages.push_back( NREM3 );
       else if ( n4 ) stages.push_back( collapse_nrem34 ? NREM3 : NREM4 );
       else if ( rem ) stages.push_back( REM );
+      else if ( lights ) stages.push_back( LIGHTS_ON );
       else stages.push_back( UNKNOWN );
       
       // store original EDF 0-based encoding, to be passed to calc_stats()
@@ -529,7 +535,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // set those to missing
   //
 
-  const double end_wake = param.has( "end-wake" ) ? param.requires_dbl( "end-wake" ) : 60 ; 
+  const double end_wake = param.has( "end-wake" ) ? param.requires_dbl( "end-wake" ) : 120 ; 
   const double end_sleep =  param.has( "end-sleep" ) ? param.requires_dbl( "end-sleep" ) : 5 ; 
   
   n_fixed = 0;
@@ -553,7 +559,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       for (int e=0; e<ne; e++)
 	{
 	  sleep_stage_t E1 = stages[e];
-
+	  
 	  if ( is_sleep( stages[e] ) ) 
 	    {
 	      if ( cumul_wake > end_wake && rev_sleep[e] < end_sleep )
@@ -564,11 +570,11 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	      else
 		cumul_wake = 0; // reset the counter
 	    }
-	  else
+	  else if ( is_wake( stages[e] ) )
 	    cumul_wake += epoch_mins; 
 	  
 	  // std::cout << " e = " << e << " " << cumul_wake << " " << rev_sleep[e] << "\t" 
-	  // 	    << E1 << "\t" << stages[e] << "\t" << fixed << "\n";
+	  //  	    << E1 << "\t" << stages[e] << "\t" << n_fixed << "\n";
 	}
       
 
@@ -581,7 +587,8 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       for (int e=0; e < ne; e++ )
 	{
 	  if ( is_sleep( stages[e] ) ) s += epoch_mins;
-	  fwd_sleep[e] = s;	  
+	  fwd_sleep[e] = s;
+	  //std::cout << "fwd_sleep[e] = " << e << " " << fwd_sleep[e] << "\n";
 	}
       
       // go backwards counting wake
@@ -596,13 +603,15 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	    {
 	      if ( cumul_wake > end_wake && fwd_sleep[e] < end_sleep )
 		{
+		  // std::cout << " fixing " << cumul_wake << " " << end_wake << " / "
+		  // 	    <<  fwd_sleep[e] << " " << end_sleep << "\n";
 		  stages[e] = UNKNOWN;
 		  ++n_fixed;
 		}
 	      else
 		cumul_wake = 0; // reset the counter
 	    }
-	  else
+	  else if ( is_wake( stages[e] ) )
 	    cumul_wake += epoch_mins; 
 	}
       
@@ -610,7 +619,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	     << " and end-sleep=" << end_sleep << ")\n";
     }
   
-  }
+}
 
 void hypnogram_t::calc_stats( const bool verbose )
 {
@@ -2066,14 +2075,16 @@ void hypnogram_t::output( const bool verbose ,
 
   if ( verbose )
     {
-       
-      // values - ensure all are hours past the prior midnight (before T1)
+      
+      // HMS ;; hh:mm:ss clocktime
+      // E   :: elapsed time, minutes
+      // T   :: clocktime, hours past previous midnight
       
       if ( clock_lights_out.valid )
 	{
 
 	  double t0 = clock_start.hours();
-
+	  
 	  // ensure all are yoked to the same midnight as T1	  
 	  double t1 = clock_lights_out.hours();
 	  if ( t1 < t0 ) t1 += 24.0;
@@ -2087,7 +2098,7 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value(  "E0_START" , 0 );
 
 	  writer.value(  "T1_LIGHTS_OFF" , t1 );
-	  writer.value(  "E1_LIGHTS_OFF" , t1 - t0 );
+	  writer.value(  "E1_LIGHTS_OFF" , ( t1 - t0 ) * 60.0 );
 	  
 	  if ( any_sleep ) 
 	    {
@@ -2098,31 +2109,36 @@ void hypnogram_t::output( const bool verbose ,
 	      if ( t3 < t0 ) t3 += 24.0;
 	      if ( t4 < t0 ) t4 += 24.0;
 	      
-	      writer.value(  "T2_SLEEP_ONSET" , t2 - t0 );
-	      writer.value(  "E2_SLEEP_ONSET" , t2 - t0 );
-
-	      writer.value(  "T3_SLEEP_MIDPOINT" , t3 - t0 );
-	      writer.value(  "E3_SLEEP_MIDPOINT" , t3 - t0 );
-
+	      writer.value(  "T2_SLEEP_ONSET" , t2 );
+	      writer.value(  "E2_SLEEP_ONSET" , Helper::dbl2str( ( t2 - t0 ) * 60.0 , 3 ) );
+	      
+	      writer.value(  "T3_SLEEP_MIDPOINT" , t3  );
+	      writer.value(  "E3_SLEEP_MIDPOINT" , Helper::dbl2str( ( t3 - t0 ) * 60.0, 3 ) );
+	      
 	      writer.value(  "T4_FINAL_WAKE" , t4 );
-	      writer.value(  "E4_FINAL_WAKE" , t4 - t0 );
+	      writer.value(  "E4_FINAL_WAKE" , Helper::dbl2str( ( t4 - t0 ) * 60.0 , 3 ) );
 	    }
 
 	  writer.value(  "T5_LIGHTS_ON" , t5 );
-	  writer.value(  "E5_LIGHTS_ON" , t5 - t0 );
+	  writer.value(  "E5_LIGHTS_ON" , Helper::dbl2str( ( t5 - t0 ) * 60.0 , 3 ) );
 
 	  writer.value(  "T6_STOP" , t6 );
-	  writer.value(  "E6_STOP" , t6 - t0 );
+	  writer.value(  "E6_STOP" , Helper::dbl2str( ( t6 - t0 ) * 60.0 , 3 ) );
 	  
 	  // same in HMS
 	  writer.value(  "HMS0_START" , clock_start.as_string(':') );
 	  writer.value(  "HMS1_LIGHTS_OFF" , clock_lights_out.as_string(':') );
-	  writer.value(  "HMS2_SLEEP_ONSET" , clock_sleep_onset.as_string(':') );
-	  writer.value(  "HMS3_SLEEP_MIDPOINT" , clock_sleep_midpoint.as_string(':') );
-	  writer.value(  "HMS4_FINAL_WAKE" , clock_wake_time.as_string(':') );
+	  
+	  if ( any_sleep )
+	    {
+	      writer.value(  "HMS2_SLEEP_ONSET" , clock_sleep_onset.as_string(':') );
+	      writer.value(  "HMS3_SLEEP_MIDPOINT" , clock_sleep_midpoint.as_string(':') );
+	      writer.value(  "HMS4_FINAL_WAKE" , clock_wake_time.as_string(':') );
+	    }
+	  
 	  writer.value(  "HMS5_LIGHTS_ON" , clock_lights_on.as_string(':') );
 	  writer.value(  "HMS6_STOP" , clock_stop.as_string(':') );
-
+	  
 	}
       
       // NREM cycles
