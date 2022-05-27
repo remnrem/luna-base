@@ -85,6 +85,7 @@ LDFLAGS += -L/mingw64/bin/  -l:lib_lightgbm.dll
 else
 LDFLAGS += -Wl,-rpath ${LGBM_PATH} -l_lightgbm
 endif
+endif
 
 
 
