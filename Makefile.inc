@@ -79,7 +79,7 @@ endif
 
 ifeq ($(LGBM),1)
 ifeq ($(ARCH),LINUX)
-LDFLAGS += -Wl,-rpath=${LGBM_PATH}
+LDFLAGS += -Wl,-rpath=${LGBM_PATH} -l_lightgbm
 else ifeq ($(ARCH),WINDOWS)
 LDFLAGS += -L/mingw64/bin/  -l:lib_lightgbm.dll
 else
