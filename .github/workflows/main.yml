@@ -35,7 +35,6 @@ jobs:
           mingw32-make.exe ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM
           ref='refs/tags/v'
           if [[ ${{ github.ref }} == *${ref}* ]]; then
-            echo "yes"
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
             mkdir luna${v}
             cp *.exe /mingw64/bin/libfftw3-3.dll /mingw64/bin/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna${v}/
@@ -77,7 +76,6 @@ jobs:
              make ARCH=MAC FFTW=${HOME}/fftw-3.3.8 LGBM=1 LGBM_PATH=${HOME}/LightGBM
              ref='refs/tags/v'
              if [[ ${{ github.ref }} == *${ref}* ]]; then
-               echo "yes"
                v=$(echo ${{ github.ref }} | cut -d'/' -f3)
                mkdir luna${v}
                cp luna destrat behead lib_lightgbm.so luna${v}/
