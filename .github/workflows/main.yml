@@ -36,9 +36,9 @@ jobs:
           ref='refs/tags/v'
           if [[ ${{ github.ref }} == *${ref}* ]]; then
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
-            mkdir luna${v}
-            cp *.exe /mingw64/bin/libfftw3-3.dll /mingw64/bin/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna${v}/
-            zip -r win-luna.zip luna${v}
+            mkdir luna-${v}
+            cp *.exe /mingw64/bin/libfftw3-3.dll /mingw64/bin/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
+            zip -r win-luna.zip luna-${v}
           fi
       - uses: actions/upload-artifact@v2
         if: startsWith(github.ref, 'refs/tags/v')
@@ -77,15 +77,15 @@ jobs:
              ref='refs/tags/v'
              if [[ ${{ github.ref }} == *${ref}* ]]; then
                v=$(echo ${{ github.ref }} | cut -d'/' -f3)
-               mkdir luna${v}
-               cp luna destrat behead lib_lightgbm.so luna${v}/
-               cd luna${v}/
+               mkdir luna-${v}
+               cp luna destrat behead lib_lightgbm.so luna-${v}/
+               cd luna-${v}/
                install_name_tool -add_rpath  @executable_path/. ./luna
                install_name_tool -add_rpath  @executable_path/. ./destrat
                install_name_tool -add_rpath  @executable_path/. ./behead
                otool -l ./luna
                cd ..
-               tar cvzf mac-luna.tar.gz luna${v}/
+               tar cvzf mac-luna.tar.gz luna-${v}/
              fi
       - uses: actions/upload-artifact@v2
         if: startsWith(github.ref, 'refs/tags/v')
