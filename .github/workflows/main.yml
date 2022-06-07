@@ -38,7 +38,7 @@ jobs:
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
             mkdir luna${v}
             cp *.exe /mingw64/bin/libfftw3-3.dll /mingw64/bin/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna${v}/
-            zip -j -r win-luna.zip luna${v}
+            zip -r win-luna.zip luna${v}
           fi
       - uses: actions/upload-artifact@v2
         if: startsWith(github.ref, 'refs/tags/v')
