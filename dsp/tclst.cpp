@@ -744,8 +744,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	    }
 	  writer.unlevel( globals::cluster_strat );	  
 	}
-      
-      
+
       //
       // Output distance matrix of intervals, if computed
       //
@@ -991,6 +990,5 @@ tclst_t::tclst_t( const std::vector<Eigen::MatrixXd> * X ,
       
     }
        
-  std::cout << " done..\n";
 }
 

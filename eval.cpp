@@ -1018,6 +1018,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
       else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
+      else if ( is( c, "RIPPLE" ) )       proc_ripples( edf , param(c) );
       
       else if ( is( c, "POL" ) )          proc_polarity( edf, param(c) );	  
       else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
@@ -1983,6 +1984,14 @@ void proc_coupling( edf_t & edf , param_t & param )
   // requires cached SPINDLES and SO results
   spindle_so_coupling( edf , param );
 }
+
+
+// RIPPLES : ripple detection
+
+void proc_ripples( edf_t & edf , param_t & param )
+{
+  dsptools::ripple_wrapper( edf , param );
+} 
 
 
 // POL : polarity check for EEG N2/N3 

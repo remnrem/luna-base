@@ -27,6 +27,8 @@
 #include "edf/slice.h"
 #include "db/db.h"
 
+#include "stats/nmf.h"
+
 std::vector<std::string> psc_t::vname;
 Eigen::Array<double, 1, Eigen::Dynamic> psc_t::means;
 Eigen::Array<double, 1, Eigen::Dynamic> psc_t::sds;
@@ -36,7 +38,7 @@ Eigen::MatrixXd psc_t::V;
 extern writer_t writer;
 
 
-void psc_t::construct( param_t & param )
+void psc_t::construct( param_t & param , const bool nmf_mode )
 {
 
   //
@@ -708,6 +710,22 @@ void psc_t::construct( param_t & param )
 
   Eigen::MatrixXd O = U;
 
+  //
+  // branch to NMF mode?
+  //
+  
+  if ( nmf_mode )
+    {
+      logger << "  running NMF with " << nc << " components\n";
+      
+      nmf_t nmf( O );
+      
+      nmf.factorize( nc );
+
+      std::cout << "W\n" << nmf.W << "\n\nH" << nmf.H << "\n";
+      
+      return;
+    }
 
   
   //

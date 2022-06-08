@@ -52,7 +52,11 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr 
   input = dsptools::apply_fir( d , sr , fir_t::BAND_PASS ,
 			       1 , // Kaiser window
 			       ripple , tw ,
-			       lwr , upr );
+			       lwr , upr ,
+			       0 ,  // order/ignored
+			       fir_t::HAMMING , // ignored for KW
+			       true // use FFT
+			       );
   
   store_real_imag = store;
   

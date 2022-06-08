@@ -34,8 +34,8 @@ struct param_t;
 
 struct psc_t {
 
-  void construct( param_t & );
-
+  void construct( param_t & , const bool nmf_mode );
+  
   void attach( param_t & );
   
   void project( edf_t & edf , param_t & );
@@ -46,21 +46,23 @@ struct psc_t {
     means.resize(0);
     sds.resize(0);
     W.resize(0);
-    V.resize(0,0);
+    V.resize(0,0);    
   }
 
   // members
-
   static std::vector<std::string> vname;  
   static Eigen::Array<double, 1, Eigen::Dynamic> means;
   static Eigen::Array<double, 1, Eigen::Dynamic> sds;
 
-  // number of PSC
-  int nc;  
-
+  int nc;
+  
+  // PSC mode
   static Eigen::VectorXd W;
   static Eigen::MatrixXd V;   
   const double EPS = 1e-6;
+  
+  // NMF mode
+  const int maxiter = 500;  
   
 };
 

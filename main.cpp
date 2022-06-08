@@ -301,6 +301,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_cwt_design   = false;
   bool cmdline_proc_pdlib        = false;
   bool cmdline_proc_psc          = false;
+  bool cmdline_proc_nmf          = false;
   bool cmdline_proc_ms_kmer      = false;
   bool cmdline_proc_ms_cmp_maps  = false;
   bool cmdline_proc_copy_suds    = false;
@@ -344,6 +345,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_cwt_design = true;
 	  else if ( strcmp( argv[1] , "--psc" ) == 0 )
 	    cmdline_proc_psc = true;
+	  else if ( strcmp( argv[1] , "--nmf" ) == 0 )
+	    cmdline_proc_nmf = true;
 	  else if ( strcmp( argv[1] , "--cpt" ) == 0 )
 	    cmdline_proc_cperm_test = true;
 	  else if ( strcmp( argv[1] , "--kmer" ) == 0 )
@@ -625,25 +628,30 @@ int main(int argc , char ** argv )
 
 
   //
-  // PSC 
+  // PSC, or NMF
   //
 
-  if ( cmdline_proc_psc )
+  if ( cmdline_proc_psc || cmdline_proc_nmf )
     {
-      param_t param;
-      build_param_from_cmdline( &param );
+      if ( cmdline_proc_psc && cmdline_proc_nmf )
+	Helper::halt( "cannot specify both --psc and --nmf" );
       
+      param_t param;
+      build_param_from_cmdline( &param );      
       writer.begin();
       
-      //      writer.id( "." , "." );
+      // writer.id( "." , "." );
 
-      writer.cmd( "PSC" , 1 , "" );
-      writer.level( "PSC", "_PSC" );
+      const std::string clab = cmdline_proc_psc ? "PSC" : "NMF" ; 
       
-      psc_t psc;
-      psc.construct( param );
+      writer.cmd( clab , 1 , "" );
+      writer.level( clab, "_" + clab );
 
-      writer.unlevel( "_PSC" );
+      // PSC , or NMF mode:
+      psc_t psc;
+      psc.construct( param , cmdline_proc_nmf );
+    
+      writer.unlevel( "_" + clab );
 
       writer.commit();
       std::exit(0);
