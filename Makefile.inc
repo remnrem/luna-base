@@ -30,7 +30,7 @@ endif
 
 ifdef LGBM_PATH
 DEP_INCLUDES +=-I$(LGBM_PATH)/include
-DEP_LIB =-L$(LGBM_PATH)
+DEP_LIB +=-L$(LGBM_PATH)
 endif
 
 
@@ -79,9 +79,12 @@ endif
 
 ifeq ($(LGBM),1)
 ifeq ($(ARCH),LINUX)
-LDFLAGS += -Wl,-rpath=${LGBM_PATH}
+LDFLAGS += -Wl,-rpath=${LGBM_PATH} -l_lightgbm
+else ifeq ($(ARCH),WINDOWS)
+LDFLAGS += -L/mingw64/bin/  -l:lib_lightgbm.dll
+else
+LDFLAGS += -Wl,-rpath ${LGBM_PATH} -l_lightgbm
 endif
-LDFLAGS += -l_lightgbm
 endif
 
 
