@@ -22,12 +22,46 @@
 
 #include "stats/nmf.h"
 
+#include "helper/logger.h"
+
+extern logger_t logger;
+
 // naive NMF implementation...
 
-nmf_t::nmf_t( const Eigen::MatrixXd & V , const int maxiter , const double EPS )
-  : V(V) , maxiter(maxiter ) , EPS(EPS)
+nmf_t::nmf_t( const Eigen::MatrixXd & V_ , const int maxiter , const double EPS )
+  : V(V_) , maxiter(maxiter ) , EPS(EPS)
 {
+  // scale to positivity?
+  const double m = V.minCoeff();
+
+  if ( m < 0 )
+    {
+      V.array() -= m;
+    }
+      
+    
+  // remove null rows
+  rows.clear();
+  const int nr = V.rows();
+  included.resize( nr , true );
   
+  for (int r=0;r<nr;r++)
+    {
+      if ( V.row(r).sum() >= EPS )
+	rows.push_back( r );
+      else
+	included[r] = false;	
+    }
+
+  // need to splice out? 
+  if ( rows.size() < nr )
+    {
+      Eigen::MatrixXd V2 = V;
+      V.resize( rows.size() , Eigen::NoChange );
+      for (int r=0; r<rows.size(); r++)
+	V.row(r) = V2.row(rows[r]);      
+      logger << " spliced out " << V.rows() << " from " << V_.rows() << "\n";
+    }
 }
 
 void nmf_t::factorize( const int num_sources )

@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -2674,10 +2673,33 @@ void edf_t::reference_and_scale( const int s , const int r , const double rescal
 }
 
 
+void edf_t::pairwise_reference( const signal_list_t & signals ,
+				const signal_list_t & refs ,
+				const bool make_new ,
+				const std::vector<std::string> & new_channels ,
+				const int new_sr ,
+				bool dereference ,
+				const bool verbose )
+{
+  const int ns = signals.size();
+  const int nr = refs.size();
+  const int nw = new_channels.size();
+  
+  if ( ns != nr ) Helper::halt( "sig and ref must be same size with 'pairwise' " );
+  if ( make_new && nw != ns ) Helper::halt( "sig and new must be same size with 'pairwise' " );
+  for (int s=0; s<ns; s++)
+    {
+      signal_list_t s1 = header.signal_list( signals.label( s ) ) ;
+      signal_list_t s2 = header.signal_list( refs.label( s ) ) ;
+      
+      reference( s1, s2, make_new, new_channels[s], new_sr, dereference, verbose );      
+    }
+}
+
 
 void edf_t::reference( const signal_list_t & signals0 ,
 		       const signal_list_t & refs ,
-		       bool make_new ,
+		       const bool make_new ,
 		       const std::string & new_channel , 
 		       const int new_sr ,
 		       bool dereference ,
@@ -2694,8 +2716,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
 
   if ( ns == 0 ) 
     Helper::halt( "must specify sig={ ... }" );
-
-  
+    
   //
   // Create a new channel?
   //
@@ -2703,8 +2724,12 @@ void edf_t::reference( const signal_list_t & signals0 ,
   if ( make_new && ns > 1 )
     Helper::halt( "can only re-reference a single channel if 'new' is specified" );
 
+  std::string ch_label = "" ;
+    
   if ( make_new )
     {
+      // retain original label for output below
+      ch_label = signals.label(0);
       
       // make copy
       copy_signal( header.label[ signals(0) ] , new_channel );
@@ -2751,13 +2776,14 @@ void edf_t::reference( const signal_list_t & signals0 ,
   if ( verbose && nr > 0 )
     {
       logger << ( dereference ? "  dereferencing" : "  referencing" );
-      for (int s=0;s<ns;s++) logger << " " << header.label[ signals(s) ];
+      for (int s=0;s<ns;s++) logger << " " << ( make_new ? ch_label : header.label[ signals(s) ] ) ;
       logger << " with respect to";
-      if ( nr > 1 ) logger << " the average of";
-      for (int r=0;r<nr;r++) logger << " " << header.label[ refs(r) ];
+      if ( nr > 1 ) logger << " the average of";      
+      for (int r=0;r<nr;r++) logger << " " << header.label[ refs(r) ];      
+      if ( make_new ) logger << " --> " << header.label[ signals(0) ] << "\n";
       logger << "\n";
     }
-  
+
 
 
   //
@@ -2830,7 +2856,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
 
 
   //
-  // We to resample reference?
+  // Need to resample reference?
   //
 
   if ( make_new && new_sr != 0 )
@@ -2839,9 +2865,9 @@ void edf_t::reference( const signal_list_t & signals0 ,
       if ( ref_sr != new_sr )
 	{
 	  const int refsize = reference.size();
-
+	  
 	  reference = dsptools::resample( &reference , ref_sr , new_sr );
-
+	  
 	  // ensure exact length... pad if needed
 	  if ( reference.size() != refsize )
 	    reference.resize( refsize );
@@ -3082,7 +3108,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
   signal_list_t r;
   
   // wildcard means all signals '*'
-
+  
   if ( s == "*" )
     {
       for (int s=0;s<label.size();s++)

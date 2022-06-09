@@ -465,14 +465,24 @@ public:
 
   // redundant
   void reference_and_scale( const int s , const int r , double rescale = 1 ); // perform single channel referencing
-  
-  void reference( const signal_list_t & signals , const signal_list_t & refs ,
-		  bool make_new ,
+
+  void pairwise_reference( const signal_list_t & signals ,
+			   const signal_list_t & refs ,
+			   const bool make_new ,
+			   const std::vector<std::string> & new_channels ,
+			   const int new_channel_sr , // ignored if not make_new
+			   const bool dereference = false ,
+			   const bool verbose = true );
+
+  void reference( const signal_list_t & signals ,
+		  const signal_list_t & refs ,
+		  const bool make_new ,
 		  const std::string & new_channel ,
 		  const int new_channel_sr , // ignored if not make_new
 		  const bool dereference = false ,
 		  const bool verbose = true );
 
+  
   void guess_canonicals( param_t & , bool make_signals );
 
   cansigs_t make_canonicals( const std::vector<std::string> & files,

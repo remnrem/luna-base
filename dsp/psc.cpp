@@ -722,8 +722,64 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       
       nmf.factorize( nc );
 
-      std::cout << "W\n" << nmf.W << "\n\nH" << nmf.H << "\n";
+      if ( param.has( "dump-V" ) )
+	std::cout << V << "\n";
+
+      // outputs
+
+      writer.id( "." , "." );
+
+      //
+      // W ( x ID )
+      //
+
+      int ii = 0;
+
+      for (int i=0;i<ni;i++)
+	{
+	  writer.id( id[i] , "." );
+	  
+	  // included in NMF?
+	  if ( nmf.included[i] )
+	    {
+	      const double sm = nmf.W.row(ii).sum();
+	      for (int j=0;j<nc;j++)
+		{
+		  writer.level( j+1 , "NMF" );
+		  // either as factor or variable?  col2ch col2f col2var
+		  writer.value( "W" , nmf.W(ii,j) );
+		  writer.value( "W1" , nmf.W(ii,j) / (double) sm  );
+		}
+	      writer.unlevel( "NMF" );
+	      
+	      ++ii;
+	    }
+	  
+	}
       
+
+      //
+      // H ( x VARS )
+      //
+
+      writer.id( "." , "." );
+      
+      for (int j=0;j<nc;j++)
+	{
+	  writer.level( j+1 , "NMF" );
+	  
+	  for (int i=0;i<nv;i++)
+	    {
+	      writer.level( vname[i] , "VAR" );
+	      writer.value( "CH" , col2ch[ vname[i] ] );
+	      writer.value( "F" , col2f[ vname[i] ] );
+	      writer.value( "BASE" , col2var[ vname[i] ] );	      
+	      writer.value( "H" , nmf.H(j,i) );
+	    }
+	  writer.unlevel( "VAR" );
+	}
+      writer.unlevel( "NMF" );	  
+          
       return;
     }
 

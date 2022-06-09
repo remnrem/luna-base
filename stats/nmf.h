@@ -41,6 +41,8 @@ struct nmf_t {
   Eigen::MatrixXd V;
   Eigen::MatrixXd W;
   Eigen::MatrixXd H;
+  std::vector<int> rows;
+  std::vector<bool> included;
   int maxiter;  
   double EPS;
   int iter;

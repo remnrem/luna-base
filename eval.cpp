@@ -827,13 +827,19 @@ bool cmd_t::eval( edf_t & edf )
       
       //
       // If this particular command did not explicitly specify
-      // signals, then add all
+      // signals, then add a wildcard
       //
       
-      if ( ! param(c).has( "sig" ) )
-	param(c).add_hidden( "sig" , signal_string() );
+      // Old version - this did not include newly added signals
+      // when 'sig' is specified on the initial command line,
       
+      //if ( ! param(c).has( "sig" ) )
+      //param(c).add_hidden( "sig" , signal_string() );
 
+      // Change to add wildcard '*' which will always take all in-memory channels
+      if ( ! param(c).has( "sig" ) )
+	param(c).add_hidden( "sig" , "*" );
+      
       //
       // Print command
       //
@@ -3400,11 +3406,25 @@ void proc_reference( edf_t & edf , param_t & param )
   //   this leaves C3 as is, and make a new channel called 'C3_A2'
 
   bool make_new = param.has( "new" );
-  std::string new_channel = "";
-  if ( make_new ) new_channel = param.value( "new" );
+
+  std::vector<std::string> new_channels;
+  
+  const bool pairwise = param.has( "pairwise" ) ;
+  if ( make_new )
+    {
+      new_channels = param.strvector( "new" );
+      if ( ! pairwise )
+        if ( new_channels.size() != 1 )
+          Helper::halt( "expecting a single label for new" );
+    }
+  
   int new_sr = 0;
   if ( make_new && param.has( "sr" ) ) new_sr = param.requires_int( "sr" );
-  edf.reference( signals , references , make_new , new_channel , new_sr , false );
+  
+  if ( pairwise )
+    edf.pairwise_reference( signals , references , make_new , new_channels , new_sr , false );
+  else
+    edf.reference( signals , references , make_new , new_channels[0] , new_sr , false );
   
 }
 
@@ -3420,12 +3440,25 @@ void proc_dereference( edf_t & edf , param_t & param )
   if ( refstr != "." ) references = edf.header.signal_list( refstr );
 
   bool make_new = param.has( "new" );
-  std::string new_channel = "";
-  if ( make_new ) new_channel = param.value( "new" );
-  int new_sr = 0;
-  if ( make_new && param.has( "sr" ) ) new_sr = param.requires_int( "sr" );
+  std::vector<std::string> new_channels;
   
-  edf.reference( signals , references , make_new , new_channel , new_sr , true );
+  const bool pairwise = param.has( "pairwise" ) ;
+  if ( make_new )
+    {
+      new_channels = param.strvector( "new" );
+      if ( ! pairwise )
+	if ( new_channels.size() != 1 )
+	  Helper::halt( "expecting a single label for new" );
+    }
+  
+  int new_sr = 0;
+  if ( make_new && param.has( "sr" ) )
+    new_sr = param.requires_int( "sr" );
+
+  if ( pairwise ) 
+    edf.pairwise_reference( signals , references , make_new , new_channels , new_sr , true );
+  else
+    edf.reference( signals , references , make_new , new_channels[0] , new_sr , true );
   
 }
 
@@ -3435,15 +3468,15 @@ void proc_dereference( edf_t & edf , param_t & param )
 void proc_rerecord( edf_t & edf , param_t & param )
 {
   double rs = param.requires_dbl( "dur" ); 
-
-    logger << " altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
   
-    edf.reset_record_size( rs );
-
-    logger << " now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF\n";
-
-    proc_write( edf , param );
-    globals::problem = true;
+  logger << " altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
+  
+  edf.reset_record_size( rs );
+  
+  logger << " now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF\n";
+  
+  proc_write( edf , param );
+  globals::problem = true;
 }
 
 // uV or mV : set units for tracks
