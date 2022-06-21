@@ -3391,7 +3391,7 @@ bool edf_t::restructure()
 
   if ( ! header.edfplus ) 
     {
-      logger << "  restructuring as an EDF+: ";
+      logger << "  restructuring as an EDF+:";
       set_edfplus();
     }
       
@@ -3475,7 +3475,7 @@ bool edf_t::restructure()
   if ( records.size() == 0 ) globals::problem = true;
     
 
-  logger << "  keeping " 
+  logger << " keeping " 
 	 << records.size() << " records of " 
 	 << copy.size() << ", resetting mask\n";
   

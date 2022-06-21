@@ -51,11 +51,13 @@ struct edf_t;
 struct annot_t;
 struct param_t;
 struct annotate_stats_t {
-
+  
   annotate_stats_t()
   {
     nss.clear();
     nsa.clear();
+    psa.clear();
+    ns.clear();
     adist.clear();
     sdist.clear();
     ndist.clear();    
@@ -67,6 +69,10 @@ struct annotate_stats_t {
   // seed-annot counts
   std::map<std::string,std::map<std::string,double> > nsa;
 
+  // seed-annot proportion (of seeds overlapped by 1+ annot)
+  std::map<std::string,std::set<interval_t> > psa;
+  std::map<std::string,double> ns; // denom (# flat seeds)
+   
   // seed-annot abs(dist)
   std::map<std::string,std::map<std::string,double> > adist;
 
@@ -119,7 +125,10 @@ struct annotate_t {
   bool ordered_groups;
   
   int nreps;
-  
+
+  std::set<std::string> fixed;
+
+  std::map<std::string,double> flt_lwr, flt_upr;
   
   //
   // data
@@ -132,6 +141,8 @@ struct annotate_t {
   uint64_t maxtp;
   
   std::set<std::string> sseeds, sannots, sbgs;
+
+  double edge_sec;
   
   std::set<annot_t*> seeds, annots, bgs;
 
@@ -186,7 +197,14 @@ struct annotate_t {
   std::map<std::string,std::map<std::string,double> > p_expsq;
   std::map<std::string,std::map<std::string,double> > p_pv;
   std::map<std::string,std::map<std::string,double> > p_z;
-  
+
+  // seed-annot proportion seeds spanned by 1+ annot
+  std::map<std::string,double> prop_obs;
+  std::map<std::string,double> prop_exp;
+  std::map<std::string,double> prop_expsq;
+  std::map<std::string,double> prop_pv;
+  std::map<std::string,double> prop_z;
+
   // abs distance to nearest
   std::map<std::string,std::map<std::string,double> > absd_obs;
   std::map<std::string,std::map<std::string,double> > absd_exp;

@@ -1160,7 +1160,7 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
   
   grand_mean /= (double)n;
 
-  //  std::cout << "grand mean = " << grand_mean << "\n";
+  std::cout << "grand mean = " << grand_mean << "\n";
   
   double cum_sum = 0;
   double cum_f = 0;
@@ -1174,8 +1174,8 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
   // previous 't' (i.e. lowest possible value)
   double last_t = l.begin()->first;
   
-  // std::cout << "starting t = " << t << "\n"
-  // 	    << "last (previous) t = " << last_t << "\n";
+  std::cout << "starting t = " << t << "\n"
+   	    << "last (previous) t = " << last_t << "\n";
 
 
   // iterate over all observed values
@@ -1186,21 +1186,21 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
       
       const double this_t = ii->first;
       
-      //      std::cerr << "observed value " << this_t << "\n";
+      //std::cerr << "observed value " << this_t << "\n";
       
       // check we don't skip a category
       if ( this_t > t + inc )
 	{
-	  //std::cerr << "updating t... from " << t << "\n";
+	  std::cerr << "updating t... from " << t << "\n";
 	  while ( 1 ) 
 	    {
 	      t += inc;
 	      if ( this_t <= t ) break;
 	      
 	    }
-	  //std::cerr << "t is now " << t << "\n";
+	  std::cerr << "t is now " << t << "\n";
 	}
-
+      
       
       //std::cout << "test threshold t = " << t << "\n";
       
@@ -1208,20 +1208,20 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
       cum_sum += this_t * ii->second;
 
       //std::cout << "updating cumulative sum = " << cum_sum << "\n";	    
-           
+      
       // a test-point?
       // i.e. if we've gone one past (or equal to) the current threshold
       
       if ( this_t >= t && last_t < t )
 	{
-
-	  //std::cout << "  -- triggering evaluation\n";
+	  
+	  std::cout << "  -- triggering evaluation\n";
 	  
 	  const double f = cum_f / (double)n;
 	  const double m = cum_sum / cum_f;
 	  
- 	  //std::cerr << "w = " << f << "\n";
- 	  // std::cerr << "m = " << m << "\n";
+ 	  std::cerr << "w = " << f << "\n";
+	  std::cerr << "m = " << m << "\n";
 	  
 	  if ( f >= 0 || f <= 1 ) 
 	    {
@@ -1238,15 +1238,15 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
 	      
 	      if ( tvals != NULL ) (*tvals)[ t ] = sigma_b;
 	      
-	      //std::cout << " sigma_B\t" << sigma_b << "\n";
+	      std::cout << " sigma_B\t" << sigma_b << "\n";
 	      
- 	      // std::cout << "details " << t << "\t"
-	      // 		<< f << "\t"
-	      // 		<< ii->first << "\t"
- 	      // 		<< sigma_b << "\t"
- 	      // 		<< max_sigma_b << "\t"
- 	      // 		<< max_t << "\t" 
- 	      // 		<< max_t2 << "\n";
+	      std::cout << "details " << t << "\t"
+	       		<< f << "\t"
+	       		<< ii->first << "\t"
+ 	       		<< sigma_b << "\t"
+ 	       		<< max_sigma_b << "\t"
+ 	       		<< max_t << "\t" 
+ 	       		<< max_t2 << "\n";
 	      
 	    }
 	  
@@ -1272,10 +1272,139 @@ double MiscMath::threshold( const std::vector<double> & x , double lwr, double u
   // i.e. threshold is x > t 
   //      rather than x >= t
 
-  //std::cerr << "maximum threshold is " << max_t << " " << max_t2 << "\n";
+  std::cerr << "maximum threshold is " << max_t << " " << max_t2 << "\n";
   if ( w != NULL ) *w = 1 - best_f;
   return max_t2;
    
+}
+
+
+
+double MiscMath::threshold2( const std::vector<double> & x ,
+			     double * empf , 
+			     const int k , 
+			     std::map<double,double> * fvals , 
+			     std::map<double,double> * tvals )
+{
+  
+  // Otsu (1979) A Threshold Selection Method from Gray-Level
+  // Histograms
+
+  if ( empf == NULL )
+    Helper::halt( "internal error calling threshold2() " );
+  
+  if ( fvals != NULL ) fvals->clear();
+  if ( tvals != NULL ) tvals->clear();  
+    
+  if ( k > 0 && ( fvals == NULL || tvals == NULL ) )
+    Helper::halt( "internal error calling threshold2() " );
+  
+  const int n = x.size();
+  
+  double sum = 0;
+
+  std::map<double,int> l;
+  for (int i=0;i<n;i++) 
+    {
+      l[ x[i] ]++;
+      sum += x[i];
+    }
+  
+  double sumB = 0;
+  double wB = 0;
+  double wF = 0;
+  
+  double varMax = 0;
+  double threshold = 0;
+  
+  double cnt = 0;
+  
+  std::map<double,int>::const_iterator ii = l.begin();
+  while ( ii != l.end() )
+    {
+
+      // track above-threshold proportion
+      if ( fvals != NULL )
+	{
+	  cnt += ii->second ;
+	  (*fvals)[ ii->first ] = cnt / (double)n ; 
+	}
+      
+      wB += ii->second;
+      if ( wB == 0 ) { ++ii; continue; }
+
+      wF = n - wB;
+      if ( wF == 0 ) break;
+
+      sumB += ii->first * ii->second;
+      
+      double mB = sumB / wB ;
+      double mF = ( sum - sumB ) / wF ;
+      
+      double varBetween = wB * wF * ( mB - mF ) * ( mB - mF );
+      
+      if ( tvals != NULL )
+	(*tvals)[ ii->first ] = varBetween ; 
+      
+      if ( varBetween > varMax )
+	{
+	  varMax = varBetween;
+	  threshold = ii->first ;
+	  *empf = cnt / (double)n ;
+	}
+
+      // next possible value 
+      ++ii;
+      
+    }
+  
+  //
+  // splice out a subset 
+  //
+  
+  if ( k > 0 )
+    {
+
+      std::map<double,double> f2 = *fvals;
+      std::map<double,double> t2 = *tvals;
+      
+      fvals->clear();
+      tvals->clear();
+
+      
+      int k2 = t2.size() / k ; 
+      
+      int p = 0;
+      std::map<double,double>::const_iterator ii = t2.begin();
+      while ( ii != t2.end() )
+	{
+	  if ( p % k2 == 0 )
+	    {
+	      (*tvals)[ ii->first ] = ii->second;
+	      (*fvals)[ ii->first ] = f2[ ii->first ];
+	    }
+	  ++p;
+	  ++ii;
+	}
+      
+    }
+
+  //
+  // normalize t-vals
+  //
+
+  if ( tvals != NULL )
+    {
+      std::map<double,double>::iterator ii = tvals->begin();
+      while ( ii != tvals->end() )
+	{
+	  (*tvals)[ ii->first ] = ii->second / varMax;
+	  ++ii;
+	}
+    }
+  
+  return threshold;
+
 }
 
 

@@ -71,6 +71,39 @@ void annotate_t::set_options( param_t & param )
   
   nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000 ; 
 
+  fixed.clear();
+  if ( param.has( "fixed" ) ) fixed = param.strset( "fixed" );
+
+  // meta-data filters
+  // flt=wgt,10,. 
+  
+  if ( param.has( "flt" ) )
+    {
+      std::vector<std::string> w = param.strvector( "flt" );
+
+      // must be divisible by 3
+      if ( w.size() % 3 != 0 ) Helper::halt( "expecting flt=label,lwr,upr{,label2,lwr2,upr2}" );
+      
+      const int nw = w.size() / 3 ;
+      int p = 0;
+      for (int i=0; i<nw; i++)
+	{
+	  std::string label = w[p];
+	  // lwr?
+	  if ( w[p+1] != "." )
+	    if ( ! Helper::str2dbl( w[p+1] , &flt_lwr[ label ] ) )
+	      Helper::halt( "bad numeric format for " + label + w[p+1] );
+	  // upr?
+	  if ( w[p+2] != "." )
+	    if ( ! Helper::str2dbl( w[p+2] , &flt_upr[ label ] ) )
+	      Helper::halt( "bad numeric format for " + label + w[p+2] );
+
+	  p += 3;
+	}
+
+      logger << "  set " << flt_lwr.size() << " lower-limits, and " << flt_upr.size() << " upper-limits w/ 'flt'\n";
+    }
+  
   // checks
   if ( flanking_sec < 0 || window_sec < 0 ) Helper::halt( "invalid negative values for 'f' and/or 'w'" );
 
@@ -98,6 +131,11 @@ void annotate_t::set_options( param_t & param )
   if ( param.has( "bg" ) ) 
     sbgs = param.strset( "bg" );
     
+  // edge for background -- i.e. if elements could not be placed within X seconds of background segment edge,
+  // then denote here
+  if ( param.has( "edges" ) )
+    edge_sec = param.requires_dbl( "edges" );
+  
   // outputs - i.e. seed annotations that are w/ or w/out a 'matched' annot
   make_anew = false;
   if ( param.has( "matched" ) )
@@ -135,7 +173,6 @@ void annotate_t::prep()
 
   // for now, assume a single indiv only
       
-  //const std::string iid = edf->id;
   iid = edf->id;
 
 
@@ -149,11 +186,13 @@ void annotate_t::prep()
 
   bgs.clear();
 
+  uint64_t edge_tp = edge_sec * globals::tp_1sec;
+
   std::set<std::string>::const_iterator aa = sbgs.begin();
   while ( aa != sbgs.end() )
     {
       annot_t * a = edf->timeline.annotations.find( *aa );
-      if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
+      if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";      
       bgs.insert( a );
       ++aa;
     }
@@ -207,7 +246,7 @@ void annotate_t::prep()
       annot_map_t::const_iterator ii = annot->interval_events.begin();
       while ( ii != annot->interval_events.end() )
         {
-          const instance_idx_t & instance_idx = ii->first;
+	  instance_idx_t instance_idx = ii->first;	  	  	  
 	  abg.insert( instance_idx.interval );
 	  ++ii;
 	}      
@@ -216,19 +255,58 @@ void annotate_t::prep()
 
   std::set<interval_t> mbg; // merged backgrounds (merge contiguous regions)
 
-  // any background specified?
+  //
+  // combine and flatten all backgrounds
+  // 
+
   if ( abg.size() != 0 )
     {
-      mbg = flatten( abg );
-      tottp = total_duration( mbg );
+      mbg = flatten( abg );      
     }
+
+  //
+  // reduce edges?
+  //
+
+  if ( edge_sec )
+    {
+      std::set<interval_t> b = mbg;
+      mbg.clear();
+      std::set<interval_t>::const_iterator bb = b.begin();
+      while ( bb != b.end() )
+	{
+	  interval_t b2 = *bb;
+	  b2.start += edge_tp;
+	  if ( b2.stop - edge_tp < b2.start )
+	    b2.stop = b2.start; // null interval
+	  else
+	    b2.stop -= edge_tp;
+	  
+	  mbg.insert( b2 );
+	  ++bb;
+	}
+    }
+
+  
+  //
+  // final summary
+  //
+
   
   if ( mbg.size() != 0 )    
-    logger << "  background intervals reduced to " << mbg.size()
-	   << " contiguous segments, spanning " << tottp * globals::tp_duration << " seconds\n";
+    {
+
+      tottp = total_duration( mbg );
+      
+      logger << "  background intervals reduced to " << mbg.size()
+	     << " contiguous segments, spanning " << tottp * globals::tp_duration << " seconds\n";
+
+      if ( edge_tp != 0 )
+	logger << "  background intervals reduced by " << edge_sec << " seconds at edges\n";
+    }
   else
     logger << "  no background intervals ('bg'), will assume a single region from 0 to last annotation end-point\n";
-
+  
 
   
   
@@ -305,7 +383,14 @@ void annotate_t::prep()
 	  ++ff;
 	}
     }
-      
+
+
+  //
+  // any filters to apply?
+  //
+
+  const bool filters = flt_lwr.size() || flt_upr.size();
+  int filtered_out = 0;
   
   //
   // Pull all intervals and construct the primary datastore
@@ -313,7 +398,7 @@ void annotate_t::prep()
 
   // indiv -> annot -> set of intervals
   events.clear();
-
+  
   int cnt = 0;
   
   pp = all_annots.begin();
@@ -327,8 +412,9 @@ void annotate_t::prep()
       annot_map_t::const_iterator ii = annot->interval_events.begin();
       while ( ii != annot->interval_events.end() )
         {
-          const instance_idx_t & instance_idx = ii->first;
 
+	  const instance_idx_t & instance_idx = ii->first;
+	  
 	  // annot class ID
 	  //  plus/minus the channel
 	  
@@ -372,7 +458,44 @@ void annotate_t::prep()
 
 	  // did not map
 	  if ( ! okay ) { ++ii; continue; } 
-	    
+
+	  // weights to inc/exc?
+	  if ( filters ) 
+	    {
+	      const instance_t * instance = ii->second;
+
+	      bool include = true;
+	      
+	      std::map<std::string,double>::const_iterator ll = flt_lwr.begin();
+	      while ( ll != flt_lwr.end() )
+		{
+		  avar_t * mw = instance->find( ll->first ) ;
+		  if ( mw != NULL ) 
+		    {
+		      double w = mw->double_value();
+		      if ( w < ll->second ) { include = false ; break; }
+		    }
+		  ++ll;
+		}
+
+	      std::map<std::string,double>::const_iterator uu =	flt_upr.begin();
+	      if ( include ) 
+		while ( uu != flt_upr.end() )
+		  {
+		    avar_t * mw = instance->find( uu->first );
+		    if ( mw != NULL )
+		      {
+			double w = mw->double_value();
+			if ( w > uu->second ) { include = false ; break; }
+		      }   
+		    ++uu;
+		  }
+
+	      // skip this annotation?
+	      if ( ! include ) { ++ii; ++filtered_out; continue; }
+	      
+	    }
+	  
 	  // adjust interval by offset
 	  // i.e. all times relative to the bounding segment	  
 
@@ -401,7 +524,7 @@ void annotate_t::prep()
 	      uint64_t dur = seg[ iid ][ offset ];
 	      interval.stop = interval.stop + f > dur ? dur : interval.stop + f ;
 	    }
-
+	  
 	  // add this segment to the primary list
 	  events[ iid ][ offset ][ aid ].insert( interval );
 	  
@@ -410,6 +533,7 @@ void annotate_t::prep()
 	  // next instance
           ++ii;
         }
+    
       // next annotation
       ++pp;
     }
@@ -418,8 +542,11 @@ void annotate_t::prep()
   logger << "  registered " << cnt
 	 << " intervals across " << achs.size()
 	 << " annotation classes, including " << sachs.size() << " seed(s)\n";
-  
 
+  if ( filters )
+    logger << "  excluded " << filtered_out << " of " << filtered_out + cnt << " annotations based on filters, leaving " << cnt << "\n";
+
+  
   // review
 
   if ( 0 )
@@ -508,7 +635,7 @@ void annotate_t::shuffle()
 
   while ( ee != events.end() )
     {
-
+      
       // consider each contiguous region
       const std::map<uint64_t,std::map<std::string,std::set<interval_t> > > & region = ee->second;
 
@@ -516,14 +643,22 @@ void annotate_t::shuffle()
       while ( rr != region.end() )
 	{
 	  
-	  // shuffle (w/ wrapping) each seed annotation independently	      
+	  // shuffle (w/ wrapping) each seed annotation independently
 	  const uint64_t maxshuffle = seg[ iid ][ rr->first ];
-	  //std::cout << " mxshuf = " << iid << "\t" << rr->first << "\t" << seg[iid].size() << "\t" << maxshuffle << "\n";
+	  //std::cout << " seg .. mxshuf = " << iid << "\t" << rr->first << "\t" << seg[iid].size() << "\t" << maxshuffle << "\n";
 	  
 	  // each seed for this region
 	  std::set<std::string>::const_iterator ss = sachs.begin();
 	  while ( ss != sachs.end() )
 	    {
+	      //std::cout << " seed = " << *ss << "\n";
+	      
+	      // skipping this annotation? (fixed), then nothing to do here
+	      if ( fixed.find( *ss ) != fixed.end() )
+		{
+		  ++ss;
+		  continue;
+		}
 	      
 	      // get a random offset
 	      //  - which results in no annots that span the end of this segment
@@ -538,7 +673,7 @@ void annotate_t::shuffle()
 		  // not appropriate for this
 		  
 		  ++iter;
-		  if ( iter > 10000 )
+		  if ( iter > 1000 )
 		    Helper::halt( "cannot find shuffle sets for " + *ss );
 		  
 		  // putative shuffle 
@@ -553,7 +688,7 @@ void annotate_t::shuffle()
 		      interval_t i = *ii;
 		      i.start += pp;
 		      i.stop += pp;
-		      // check
+		      // check - spans segment break?
 		      if ( i.start < maxshuffle && i.stop >= maxshuffle )
 			{
 			  okay = false;
@@ -591,13 +726,15 @@ void annotate_t::shuffle()
 		      i.stop -= maxshuffle;
 		    }
 		  
+		  //std::cout << " chng " << ii->as_string() << " --> " << i.as_string() << "\n";
 		  // add this new one to the list
 		  shuffled.insert( i );
 		  	      
 		  ++ii;
 		}
 	    
-	      
+	      //std::cout << " resizing " << events[ ee->first ][ rr->first ][ *ss ].size() << " to " << shuffled.size() << "\n";
+
 	      // update
 	      events[ ee->first ][ rr->first ][ *ss ] = shuffled;
 	      
@@ -657,6 +794,10 @@ annotate_stats_t annotate_t::eval()
 		  ++qq;
 		}
 	      
+	      // track # of (flattened) annots
+	      std::set<interval_t> flata = flatten( a );	      
+	      r.ns[ *aa ] += flata.size();
+ 	      
 	      // consider all other annots
 	      std::set<std::string>::const_iterator bb = achs.begin();
 	      while ( bb != achs.end() )
@@ -671,7 +812,7 @@ annotate_stats_t annotate_t::eval()
 		  const std::set<interval_t> & b = rr->second.find( *bb )->second;
 		  		  
 		  // calc and record stats on flattened lists 
-		  seed_annot_stats( flatten( a ) , *aa , flatten( b ) , *bb , &r );
+		  seed_annot_stats( flata , *aa , flatten( b ) , *bb , &r );
 		  		  
 		  // next annot
 		  ++bb;
@@ -720,11 +861,14 @@ annotate_stats_t annotate_t::eval()
 void annotate_t::output()
 {
 
+  //
   // seed-seed group overlap
+  //
+
   std::map<std::string,double>::const_iterator ss = obs.begin();
   while ( ss != obs.end() )
     {
-      writer.level( ss->first , "SEED" );
+      writer.level( ss->first , "SEEDS" );
       writer.value( "OBS" , obs[ ss->first ] );
       if ( nreps )
 	{
@@ -732,11 +876,32 @@ void annotate_t::output()
 	  double var = expsq[ ss->first ] / (double)nreps - mean * mean;	  
 	  writer.value( "EXP" , mean );
 	  writer.value( "P" , ( pv[ ss->first ] + 1 ) / (double)( nreps + 1 ) );
-	  writer.value( "Z" , ( obs[ ss->first ] - mean ) / var );
+	  writer.value( "Z" , ( obs[ ss->first ] - mean ) / sqrt( var ) );
 	}
       ++ss;
     }
-  writer.unlevel( globals::annot_strat );
+  writer.unlevel( "SEEDS" );
+  
+  //
+  // seed-* prop overlap
+  //
+
+  std::map<std::string,double>::const_iterator pp = prop_obs.begin();
+  while ( pp != prop_obs.end() )
+    {
+      writer.level( pp->first , "SEED" );
+      writer.value( "PROP" , prop_obs[ pp->first ] );
+      if ( nreps )
+        {
+          double mean = prop_exp[ pp->first ] / (double)nreps;
+          double var = prop_expsq[ pp->first ] / (double)nreps - mean * mean;	  
+          writer.value( "PROP_EXP" , mean );
+          writer.value( "PROP_P" , ( prop_pv[ pp->first ] + 1 ) / (double)( nreps + 1 ) );
+          writer.value( "PROP_Z" , ( prop_obs[ pp->first ] - mean ) / sqrt( var ) ); 
+        }
+      ++pp;
+    }
+  writer.unlevel( "SEED" );
 
   //
   // seed-annot overlap & distances; seed on distance measures, as that will be a
@@ -754,8 +919,9 @@ void annotate_t::output()
 	  writer.level( pp->first , globals::annot_strat );
 
 	  //
-	  // seed-annot overlap 
+	  // seed-annot overlap: count
 	  //
+	  
 	  if ( p_obs[ sa->first ][ pp->first ] != 0 )
 	    {
 	      writer.value( "N_OBS" , p_obs[ sa->first ][ pp->first ]  );
@@ -765,7 +931,7 @@ void annotate_t::output()
 		  writer.value( "N_P" , ( p_pv[ sa->first ][ pp->first ]  + 1 ) / (double)( nreps + 1 ) );
 		}
 	    }
-	  
+	  	  
 	  // seed-annot distances
 	  
 	  writer.value( "D1_OBS" , absd_obs[ sa->first ][ pp->first ]  );
@@ -779,7 +945,7 @@ void annotate_t::output()
 	  if ( nreps )
 	    {
 	      writer.value( "D2_EXP" , sgnd_exp[ sa->first ][ pp->first ]  / (double)nreps );
-	      writer.value( "D2_P" , ( sgnd_pv[ sa->first ][ pp->first ] ) / (double)( nreps + 1 ) );
+	      writer.value( "D2_P" , ( sgnd_pv[ sa->first ][ pp->first ] + 1 ) / (double)( nreps + 1 ) );
 	    }	  
 	  
 	  ++pp;
@@ -932,8 +1098,11 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 
   // if no b annots in this segment, then nothing to do
   // stats remain as they are
-
+  
   if ( b.size() == 0 ) return;
+
+  // is 'b' also a seed?
+  const bool bseed = sachs.find( bstr ) != sachs.end();
   
   // tmp debug verbose output 
   
@@ -954,19 +1123,19 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  ++ibb;
 	}
     }
-  
+
   
   // consider each seed
   std::set<interval_t>::const_iterator aa = a.begin();
   while ( aa != a.end() )    
     {
-
+      
       double dist = 0;
       bool overlap = false;
       
       // find the first annot not before (at or after) the seed
       std::set<interval_t>::const_iterator bb = b.lower_bound( *aa );
-
+      
       // edge cases:
       // no annot at or past seed? : bb == b.end() 
       // no annot before seed?     : bb == b.begin()
@@ -1036,6 +1205,17 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // track: overlap = dist == 0,
       // but use bool overlap to avoid floating-point equality test
       if ( overlap ) r->nsa[ astr ][ bstr ] += 1 ;
+
+      // to track proprtion of seeds w/ at least one (non-seed) annot overlap
+      if ( overlap && ! bseed )
+	{
+	  r->psa[ astr ].insert ( *aa );
+	  //std::cout << "  ok " << aa->as_string() << "\n";
+	}
+      else
+	{
+	  //std::cout << " not " << aa->as_string() << "\n";
+	}
       
       // for mean distance -- do we meet the window criterion?
       const double adist = fabs( dist );
@@ -1068,7 +1248,9 @@ std::set<interval_t> annotate_t::flatten( const std::set<interval_t> & x )
 {
 
   std::set<interval_t> m;
-
+  
+  if ( x.size() == 0 ) return m;
+  
   interval_t curr = *x.begin();
   
   std::set<interval_t>::const_iterator xx = x.begin();
@@ -1119,7 +1301,16 @@ void annotate_t::observed( const annotate_stats_t & s )
   
   // seed-annot pairwise overlap (std::map<std::string,std::map<std::string,double> > )
   p_obs = s.nsa;
-
+  
+  // seed-annot proportion spanned
+  std::map<std::string,std::set<interval_t> >::const_iterator pp = s.psa.begin();
+  while ( pp != s.psa.end() )
+    {
+      prop_obs[ pp->first ] = pp->second.size() / s.ns.find(  pp->first )->second;
+      //std::cout <<"  prop_obs = " << prop_obs[ pp->first ] << "\n";
+      ++pp;
+    }
+  
   // absolute distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   absd_obs = s.adist;
 
@@ -1170,7 +1361,6 @@ void annotate_t::build_null( const annotate_stats_t & s )
   std::map<std::string,std::map<std::string,double> >::const_iterator sa = p_obs.begin();
   while ( sa != p_obs.end() )
     {
-
       // should always be okay, but check just in case some weirdness
       const bool is_seen = s.nsa.find( sa->first ) != s.nsa.end();
       if ( ! is_seen ) { ++sa; continue; }
@@ -1194,6 +1384,29 @@ void annotate_t::build_null( const annotate_stats_t & s )
       ++sa;
     }
 
+  //
+  // prop-seed overlap
+  //
+
+  std::map<std::string,double>::const_iterator pp = prop_obs.begin();
+  while ( pp != prop_obs.end() )
+    {
+      const bool is_seen = s.psa.find( pp->first ) != s.psa.end();
+      if ( is_seen )
+        {
+          double val = s.psa.find( pp->first )->second.size() / s.ns.find( pp->first )->second;
+	  // std::cout << " prop_exp " << pp->first << " = "
+	  // 	    << val << " = " << s.psa.find( pp->first )->second.size() << " / " << s.ns.find( pp->first )->second <<  "\n";
+	  //	  std::cout << " val = " << val << "\n";
+
+	  prop_exp[ pp->first ] += val;
+          prop_expsq[ pp->first ] += val * val;
+          if ( val >= prop_obs[ pp->first ] ) ++prop_pv[ pp->first ];
+        }
+      ++pp;
+    }
+
+  
   //
   // seed-annot distances : sgnd_obs and absd_obs will always have the same keys, so do just once
   //
@@ -1229,7 +1442,6 @@ void annotate_t::build_null( const annotate_stats_t & s )
 	      absd_expsq[ sa->first ][ pp->first ] += a * a;
 	      sgnd_expsq[ sa->first ][ pp->first ] += s * s;
 
-	      
 	      // pvals : testing whether *closer* so stat is LE rather than GE
 	      if ( a <= absd_obs[ sa->first ][ pp->first ] ) ++absd_pv[ sa->first ][ pp->first ];
 	      

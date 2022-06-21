@@ -1024,7 +1024,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
       else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
-      else if ( is( c, "RIPPLE" ) )       proc_ripples( edf , param(c) );
+      else if ( is( c, "RIPPLES" ) )       proc_ripples( edf , param(c) );
       
       else if ( is( c, "POL" ) )          proc_polarity( edf, param(c) );	  
       else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
@@ -3914,10 +3914,10 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   // additional annot files to add from the command line
   // i.e. so we don't have to edit the sample-list
-  else if ( Helper::iequals( tok0 , "annots-file" ) ||
-	    Helper::iequals( tok0 , "annots-files" ) ||
-	    Helper::iequals( tok0 , "annot-file" ) ||
-	    Helper::iequals( tok0 , "annot-files" ) )
+  else if ( Helper::iequals( tok0 , "annot-file" ) ||
+	    Helper::iequals( tok0 , "annot-files" ) ||
+	    Helper::iequals( tok0 , "annots-file" ) ||
+	    Helper::iequals( tok0 , "annots-files" ) )
     {
       globals::annot_files = Helper::parse( tok1 , "," );
       return;
@@ -3942,7 +3942,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
 
   // delimiter char for annot key=value pairs (default '=')
-  if ( Helper::iequals( tok0 , "annot-keyval" ) )
+  if ( Helper::iequals( tok0 , "annot-keyval" ) || Helper::iequals( tok0 , "annots-keyval" ) )
     {
       globals::annot_keyval_delim = tok1[0];
       return;
@@ -3954,7 +3954,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::annot_alignment = Helper::vec2set( Helper::parse( tok1 , "," ) ) ;
       return;
     }
-
+  
   
   // signal alias?
   if ( Helper::iequals( tok0 , "alias" ) )

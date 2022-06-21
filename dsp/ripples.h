@@ -26,6 +26,7 @@
 struct edf_t;
 struct param_t;
 struct signal_list_t;
+struct annot_t;
 
 #include <vector>
 
@@ -42,13 +43,16 @@ struct ripple_t {
 
   ripple_t( const uint64_t start , const uint64_t stop ,
 	    const int start_sp , const int stop_sp )
-    : pos( start , stop ) , start_sp( start_sp ) , stop_sp( stop_sp ) , wgt(1.0) , frq(0.0) 
+    : pos( start , stop ) , start_sp( start_sp ) , stop_sp( stop_sp ) , wgt(1.0) , x(0) , frq(0.0) , frqp2p(0) , n(0)
   { } 
   
   interval_t pos;
   int start_sp, stop_sp;
   double wgt;
+  double x;
   double frq;
+  double frqp2p;
+  int n;
   
 };
 
@@ -58,18 +62,34 @@ struct ripples_t {
   // detector
   ripples_t( const std::vector<double> & x ,
 	     const std::vector<uint64_t> & tp ,
-	     const int sr ,
+	     const int sr_ ,
 	     const double flwr ,
 	     const double fupr ,
 	     const double kwin_ripple ,
 	     const double kwin_tw , 
+	     const bool verbose_ , 
 	     const int hfbands , 
 	     const double th ,
 	     const double req_msec , 
 	     const int req_peaks_flt ,
-	     const int req_peaks_raw );
+	     const int req_peaks_raw ,
+	     const double combine_msec , 
+	     const double edge_secs ,
+	     const int otsu_k );
   
   std::vector<ripple_t> ripples;
+
+  void output( const bool );
+
+  void annotate( annot_t * , const std::string & ch );
+  
+  bool verbose;
+  int sr;  
+  int n_segments;
+  double totdur_mins;
+  double incdur_mins; // exclude edges
+
+  static std::vector<double> percentile( const std::vector<double> & x );
   
 };
 

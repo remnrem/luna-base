@@ -2873,21 +2873,19 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "otsu" )
     {
-      double w = 0;
-      std::map<double,double> tvals;
-
-      double th = MiscMath::threshold( x , -1 , 6 , 0.5 , &w , &tvals );
-
-      std::cout << "w = " << w << "\n";
-      std::cout << "th = " << th << "\n";
+      std::map<double,double> tvals, fvals;      
+      double f;
+      double th = MiscMath::threshold2( x , &f, 0 , &fvals , &tvals );
+      
+      std::cout << "best th = " << th << "\n";
 
       std::map<double,double>::const_iterator ii = tvals.begin();
       while ( ii != tvals.end() )
-	{
-	  std::cout << ii->first << "\t" << ii->second << "\n";
-	  ++ii;
-	}
-
+       	{
+       	  std::cout << "th = " << ii->first << "\t varB = " << ii->second << "\t F = " << fvals[ ii->first ] << "\n";
+       	  ++ii;
+       	}
+      
       std::exit(0);
     }
 

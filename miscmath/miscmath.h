@@ -235,7 +235,11 @@ namespace MiscMath
   // thresholding
   double threshold( const std::vector<double> & , double,double,double, double *, std::map<double,double> * t = NULL );
 
-
+  double threshold2( const std::vector<double> & x , double * empf ,
+		     const int k = 0 ,		     
+		     std::map<double,double> * fvals = NULL , std::map<double,double> * tvals = NULL );
+  
+  
   // angles/phases
 
   double rad2deg(double radians);

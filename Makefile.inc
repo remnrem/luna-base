@@ -77,16 +77,21 @@ else
 LDFLAGS += -L/usr/local/lib -lfftw3 -lz
 endif
 
-ifeq ($(LGBM),1)
-ifeq ($(ARCH),LINUX)
-LDFLAGS += -Wl,-rpath=${LGBM_PATH} -l_lightgbm
-else ifeq ($(ARCH),WINDOWS)
-LDFLAGS += -L/mingw64/bin/  -l:lib_lightgbm.dll
+ifdef LGBM_PATH
+ifeq ($(ARCH),WINDOWS)
+LDFLAGS += -L/mingw64/bin/
 else
-LDFLAGS += -Wl,-rpath ${LGBM_PATH} -l_lightgbm
+LDFLAGS += -Wl,-rpath,${LGBM_PATH}
 endif
 endif
 
+ifeq ($(LGBM),1)
+ifeq ($(ARCH),WINDOWS)
+LDFLAGS += -l:lib_lightgbm.dll
+else
+LDFLAGS += -l_lightgbm
+endif
+endif
 
 
 ##
