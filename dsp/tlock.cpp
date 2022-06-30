@@ -28,6 +28,7 @@
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "assoc/massoc.h"
+#include "dsp/mt_spectrogram.h"
 
 extern writer_t writer;
 extern logger_t logger;
@@ -64,6 +65,8 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 
   if ( take_log && angle_bins ) Helper::halt( "cannot specify both tolog and phase" );
 
+
+  
   //
   // get time-points: expecting a cache in sample-point units (i.e. 
   // to ensure same number of points per window; i.e. this is also why
@@ -104,8 +107,12 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   
   double half_window = param.requires_dbl( "w" );
   if ( half_window <= 0 ) Helper::halt( "w must be a positive number" );
-
+  
   int half_points = half_window * Fs[0] ;
+ 
+  // ensure an nice multiple of sample rate
+  half_window = half_points / Fs[0];
+  half_points = half_window * Fs[0] ;  
   int points = 1 + 2 * half_points;
   
   std::vector<double> t;
@@ -125,6 +132,22 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   
   if ( norm_points < 0 || norm_points > points / 2 ) 
     Helper::halt( "expecting np between 0 and 0.5" );
+
+  //
+  // Spectrogram
+  //
+
+  const bool spectrogram = param.has( "spectrogram" );
+  
+  const double mtm_nw = param.has( "nw" ) ? param.requires_dbl( "nw" ) : 3 ;
+  const int    mtm_t  = param.has( "t" ) ? param.requires_int( "t" ) : 5 ;
+  const double mtm_seg = param.has( "segment-sec" ) ? param.requires_dbl( "segment-sec" ) : half_window ;
+  const double mtm_step = param.has( "segment-inc" ) ? param.requires_dbl( "segment-inc" ) : mtm_seg / 4.0;
+  const double mtm_fmin = param.has( "f-lwr" ) ? param.requires_int( "f-lwr" ) : 1 ;
+  const double mtm_fmax = param.has( "f-upr" ) ? param.requires_int( "f-upr" ) : 30 ;
+  const bool mtm_dB = param.has( "dB" ) ? true : param.yesno( "dB" );
+  const bool mtm_center = param.has( "center" ) ? true : param.yesno( "center" );
+
   
   //
   // Get seed sample-points from cache
@@ -148,7 +171,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   std::set<ckey_t>::const_iterator cc = ckeys.begin();
 
   // can use CACHE command explicitly...
-  //  logger << cache->print();
+  //logger << cache->print();
 
 
   while ( cc != ckeys.end() )
@@ -172,10 +195,12 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       // add output stratifiers based on this key
       //
 
+      std::stringstream sstr;
       std::map<std::string,std::string>::const_iterator ss = cc->stratum.begin();
       while ( ss != cc->stratum.end() )
 	{
 	  writer.level( ss->second , "s" + ss->first );
+	  sstr << ss->first << "=" << ss->second << ";" ;
 	  ++ss;
 	}
 
@@ -219,27 +244,37 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	  // if we do not write to outptu ('export' versus 'verbose')
 	  
 	  tlock_t tlock(t, norm_points );
-	  tlock.verbose = verbose || to_massoc ; 
+	  tlock.verbose = verbose || to_massoc || spectrogram ; 
 
 	  // loop time-points to sync/lock on
 	  
 	  for ( int i=0; i<cx.size(); i++)
 	    {
-	  
+	      
+	      //std::cout << "CX " << cx[i] << "\n";
+	      
 	      int lower = cx[i] - half_points;
 	      int upper = cx[i] + half_points;
 	      
+	      //std::cout << " C1\n";
+	      // ??TODO: check for discontunuities (EDF+)	  
+	      //std::cout << " tp-> " << tp->size() << " " << Fs[0] << " " << lower << " " << upper << "\t";
+	      
 	      // interval out-of-range
 	      if ( lower < 0 || upper > d->size() ) 
-		continue;
-	      
-	      // TODO: check for discontunuities (EDF+)	  
-	      
-	      if ( edf.timeline.discontinuity( *tp , Fs[0] , lower , upper ) )
 		{
+		  //std::cout << "XXX2\n";			       
 		  continue;
 		}
-
+	      
+		  
+	      if ( edf.timeline.discontinuity( *tp , Fs[0] , lower , upper ) )
+		{
+		  //std::cout << "XXX\n";
+		  continue;
+		}
+	      //std::cout << "YES\n";
+	      
 	      // otherwise, add this interval to the tlock 
 	      
 	      tlock.add( d , lower , upper , take_log , angle_bins );
@@ -256,7 +291,10 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	  writer.value( "N" , cnt_valid_intervals );
 	  writer.value( "N_ALL" , (int)cx.size() );
 	  	  
-	  logger << "  included " << cnt_valid_intervals << " of " << (int)cx.size() << " intervals for strata " << ++scnt << "\n";
+	  logger << "  included " << cnt_valid_intervals
+		 << " of " << (int)cx.size()
+		 << " intervals for strata " << ++scnt << " "
+		 << sstr.str() << " for channel " << signals.label(s) << "\n";
 	
 	  //
 	  // Report either as phase angles (assuming radians), otherwise take the mean
@@ -282,10 +320,74 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	      writer.unlevel( "SEC" );
 	      
 	    }
-	  
+
+	  else if ( spectrogram )
+	    {
+
+	      logger << "  calculating mean MT spectrogram...\n";
+
+	      Data::Vector<double> means = tlock.average( );
+	      
+	      mt_spectrogram_t mtm( tlock.X ,
+				    Fs[0] ,
+				    mtm_nw , mtm_t,
+				    mtm_seg , mtm_step,
+				    mtm_fmin, mtm_fmax,
+				    mtm_dB,
+				    mtm_center );
+
+	      const int nf = mtm.frq.size();
+	      const int nt = mtm.t.size();
+
+	      // mean-centered, normalized versions (by row/freq and by col/time)
+	      
+	      // double min = 999;
+	      // for (int i=0; i<nf; i++)
+	      // 	for (int j=0; j<nt; j++)
+	      // 	  if ( mtm.Z(i,j) < min ) min = mtm.Z(i,j);
+
+	      //Data::Matrix<double> Z0 = mtm.Z;
+	      
+	      // for (int i=0; i<nf; i++)
+	      // 	for (int j=0; j<nt; j++)
+	      // 	  Z0(i,j) += min;
+
+	      std::vector<double> row_min( nf );
+	      std::vector<double> row_max( nf );
+	      
+	      for (int i=0; i<nf; i++)
+		{
+		  row_min[i] = mtm.Z(i,0);
+		  row_max[i] = mtm.Z(i,0);
+		  
+		  for (int j=1; j<nt; j++)
+		    {
+		      if ( mtm.Z(i,j) < row_min[i] ) row_min[i] = mtm.Z(i,j);
+		      if ( mtm.Z(i,j) > row_max[i] ) row_max[i] = mtm.Z(i,j);		      
+		    }
+		}
+	      
+	      // output
+	      for (int i=0; i<nf; i++)
+		{
+		  writer.level( mtm.frq[i] , globals::freq_strat );
+		  for (int j=0; j<nt; j++)
+		    {
+		      writer.level( mtm.t[j] , "SEC" );
+		      writer.value( "PSD" , mtm.Z(i,j) );
+		      // normalized by F (row) min/max
+		      writer.value( "PSD_F" , ( mtm.Z(i,j) - row_min[i] ) / ( row_max[i] - row_min[i] ) );
+		      
+		      // variance in PSD
+		      writer.value( "VAR" , mtm.ZZ(i,j) );
+		    }
+		  writer.unlevel( "SEC" );
+		}
+	      writer.unlevel( globals::freq_strat );
+	    }
 	 
 	  //
-	  // report summaries: for regulat values, get the average
+	  // report summaries: for regular values, get the average
 	  // and normalize (by edges)
 	  //
 	  
@@ -298,7 +400,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 		  logger << "  means.size() = " << means.size() << " " << t.size() << "\n";
 		  Helper::halt( "internal error in tlock_t()" );
 		}	      
-
+	      
 	      for (int i=0; i<means.size(); i++) 
 		{
 		  writer.level( t[i] , "SEC" );

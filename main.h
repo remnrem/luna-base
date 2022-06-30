@@ -42,6 +42,7 @@ void process_edfs(cmd_t&);
 void list_cmds();
 
 void build_param_from_cmdline( param_t * );
+void build_param_from_args( param_t * , int argc , char** argv );
 std::string luna_base_version();
 
 #endif

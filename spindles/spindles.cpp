@@ -205,6 +205,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   // generate a feature file of spindles
   const bool     save_annots                = param.has( "annot" );
+  //const bool     full_annot_inst_ids        = param.yesno( "annot-ids" );
+  
   
   // show verbose ENRICH output
   const bool     enrich_output            = param.has( "enrich" );
@@ -1590,7 +1592,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      //
 	      // Individual PEAKS, to be output later, in characterize() 
 	      //
-	      
+	    
 	      for (int i=0;i<nspindles;i++)
 		{
 		  // peak_sec
@@ -2245,9 +2247,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	      // annot label
 	      const std::string analysis_label = Helper::dbl2str(frq[fi]) ;
-
+	      
 	      const std::string aname = sp_label;// + "-" + analysis_label;
-		
+	      
 	      annot_t * a = edf.timeline.annotations.add( aname );
 	      a->description = "Spindle intervals";
 	      
@@ -2255,9 +2257,28 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		     << ", instance: " << analysis_label 
 		     << ", channel: " << signals.label(s) << "\n";
 
+	      logger << "  ** note: sp:xxx meta-data are sample-points specific to this EDF mask\n";
+	      
 	      // use F_C as instance label
 	      for (int i=0;i<spindles.size();i++)
-		instance_t * instance = a->add( analysis_label , spindles[i].tp , signals.label(s) );
+		{
+		  
+		  const spindle_t & spindle = spindles[i];
+
+		  // ID + N + CH + F 
+		  // const std::string inst_id = full_annot_inst_ids
+		  //   ? edf.id + "|" + Helper::int2str( i+1 ) + "|" + signals.label(s) + "|" + analysis_label 
+		  //   : analysis_label ; 
+		  
+		  instance_t * instance = a->add( analysis_label , spindle.tp , signals.label(s) );
+		  
+		  int mid_sp = spindle.start_sp + spindle.peak_sp;
+		  //int mid_sp = spindle.start_sp + spindles[i].symm * ( spindle.stop_sp - spindle.start_sp ) ;
+		  
+		  // as string (sp:XXXXXXXX)
+		  instance->set( "mid", "sp:" + Helper::int2str( mid_sp ) );
+		  
+		}
 	      
 	    }
 	  
@@ -3695,11 +3716,13 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        writer.level( i+1 , "SPINDLE" );  // 1-based spindle count
        
        writer.value( "START"  , spindle->tp.start * globals::tp_duration );
+       writer.value( "PEAK"  ,  ( spindle->start_sp + spindle->peak_sp ) * globals::tp_duration );
        writer.value( "STOP"   , spindle->tp.stop * globals::tp_duration );
        
        writer.value( "START_SP"  , spindle->start_sp );
+       writer.value( "PEAK_SP"  ,  spindle->start_sp + spindle->peak_sp );
        writer.value( "STOP_SP"   , spindle->stop_sp  );
-       
+
        if ( starttime != NULL )
 	 {
 
@@ -4222,12 +4245,18 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
       //
       // Save in the annotation class
       //
-
+      
       std::vector<spindle_t>::const_iterator ii = spindles.begin();
       while ( ii != spindles.end() )
 	{	  
 	  const interval_t & spindle = ii->tp;
-	  a->add(  signals.label(s)  , spindle , signals.label(s) );      	  	  
+
+	  instance_t * instance = a->add(  signals.label(s)  , spindle , signals.label(s) );
+	  
+	  uint64_t mid_tp = spindle.start + ii->symm * ( spindle.stop - spindle.start ) ;
+	  
+	  instance->set( "mid", (double)(mid_tp * globals::tp_duration ) );
+	  
 	  ++ii;
 	}
 
@@ -4255,7 +4284,7 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
 	      writer.value( "SINGLE_SP_START" , spindle.tp.start * globals::tp_duration );
 	      writer.value( "SINGLE_SP_STOP" , spindle.tp.stop * globals::tp_duration );
 	      writer.value( "SINGLE_SP_DUR" , (spindle.tp.stop-spindle.tp.start+1)/(double)globals::tp_1sec );
-
+	      
 	      ++ii;
 	    }
 	  writer.unlevel( "SPINDLE" );

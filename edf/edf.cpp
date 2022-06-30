@@ -386,6 +386,15 @@ void edf_t::terse_summary( param_t & param )
   writer.value( "START_TIME" , Helper::trim( header.starttime ) );
   writer.value( "START_DATE" , Helper::trim( header.startdate ) );
 
+  // stop time
+  clocktime_t et( header.starttime );
+  if ( et.valid )
+    {
+      double time_sec = ( timeline.last_time_point_tp * globals::tp_duration ) ;
+      et.advance_seconds( time_sec );
+      writer.value( "STOP_TIME" , et.as_string() );
+    }
+  
   if ( write_signals ) 
     {
       std::vector<std::string> chs;

@@ -48,7 +48,7 @@ void proc_mask( edf_t & edf , param_t & param )
   if ( ! edf.timeline.epoched() ) 
     {
       int ne = edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-      logger << " set epochs, to default length " << globals::default_epoch_len << ", " << ne << " epochs\n";
+      logger << "  set epochs, to default length " << globals::default_epoch_len << ", " << ne << " epochs\n";
     }
 
   
@@ -120,7 +120,7 @@ void proc_mask( edf_t & edf , param_t & param )
   if ( mask_mode > -1 ) 
     {
       edf.timeline.set_epoch_mask_mode( mask_mode );  
-      logger << " set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
+      logger << "  set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
     }
   
 

@@ -43,16 +43,31 @@ struct ripple_t {
 
   ripple_t( const uint64_t start , const uint64_t stop ,
 	    const int start_sp , const int stop_sp )
-    : pos( start , stop ) , start_sp( start_sp ) , stop_sp( stop_sp ) , wgt(1.0) , x(0) , frq(0.0) , frqp2p(0) , n(0)
+    : pos( start , stop ) , start_sp( start_sp ) , stop_sp( stop_sp ) 
   { } 
   
   interval_t pos;
+  
   int start_sp, stop_sp;
-  double wgt;
+  
+  // raw magnitude 
   double x;
+
+  // percentile
+  double wgt;
+
+  // frequency, based on mean duration of half-wave zero-crossings in globally filtered signal
   double frq;
-  double frqp2p;
+  
+  // number of samples
   int n;
+  
+  // number of half-waves (based on zero-crossings)
+  int nhw;
+  
+  // defined by wave-form = negative peak of middle wave
+  // (from EDF start time)
+  uint64_t midp; 
   
 };
 

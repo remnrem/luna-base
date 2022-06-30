@@ -58,10 +58,13 @@ void annotate_t::set_options( param_t & param )
 {
   
   midpoint = param.has( "midpoint" );
-  
+
+  // for *seeds* only, add flanking values
   flanking_sec = param.has( "f" ) ? param.requires_dbl( "f" ) : 0 ;
   
   window_sec = param.has( "w" ) ? param.requires_dbl( "w" ) : 10 ; 
+  
+  include_overlap_in_dist = param.has( "dist-includes-overlapping" );
   
   overlap_th = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0 ;
 
@@ -74,6 +77,18 @@ void annotate_t::set_options( param_t & param )
   fixed.clear();
   if ( param.has( "fixed" ) ) fixed = param.strset( "fixed" );
 
+  chs_inc.clear();
+  if ( param.has( "chs-inc" ) )
+    proc_chlist( param.value( "chs-inc" ) , true );
+
+  chs_exc.clear();
+  if ( param.has( "chs-exc" ) )
+    proc_chlist( param.value( "chs-exc" ) , false );
+
+  if ( param.has( "chs-inc" ) && param.has( "chs-exc" ) )
+    Helper::halt( "cannot specify by chs-inc and chs-exc lists" );
+  
+  
   // meta-data filters
   // flt=wgt,10,. 
   
@@ -112,7 +127,9 @@ void annotate_t::set_options( param_t & param )
   if ( midpoint ) logger << "  reducing all annotations to midpoints\n";
   if ( flanking_sec ) logger << "  adding f=" << flanking_sec << " seconds to each annotation\n";
   if ( window_sec ) logger << "  using window w=" << window_sec << " seconds to search for local intervals\n";
-
+  logger << "  " << ( include_overlap_in_dist ? "" : "not" )
+	 << " including overlapping events in nearest-neighbor distances\n";
+  
   if ( ordered_groups ) logger << "  ordered=T, so preserving order of seed-seed overlap groups (A,B != B,A)\n";
   else logger << "  ordered=F, so pooling seed-seed permutations, i.e. A,B == B,A (default)\n"; 
   
@@ -124,6 +141,7 @@ void annotate_t::set_options( param_t & param )
   sseeds = param.strset( "seed" );
   
   // from each seed, look at all enrichment w/ all other annots
+  //  non-seed annotations are not permuted
   if ( param.has( "annot" ) )
     sannots = param.strset( "annot" );
 
@@ -150,12 +168,16 @@ void annotate_t::set_options( param_t & param )
     {
       make_anew = true;
       out_include = false;
-      out_tag = param.value( "matched" );
+      out_tag = param.value( "unmatched" );
     }
 
   // 1+ matching... or need more?
   mcount = param.has( "m-count" ) ? param.requires_int( "m-count" ) : 1 ;
-    
+
+  // seed-annot(non-seed) matching only (versus seed-seed)
+  seed_nonseed = ! param.has( "seed-seed" ) ;
+
+  
   // unless explicitly specified, do not do perms if
   // getting these outputs
   if ( make_anew && ! param.has( "nreps" ) ) nreps = 0;
@@ -372,7 +394,7 @@ void annotate_t::prep()
 	}
     }
   
-
+  
   if ( 0 )
     {
       std::cout << "breaks\n";
@@ -406,7 +428,7 @@ void annotate_t::prep()
     {
       
       annot_t * annot = *pp;
-
+      
       const bool is_seed = seeds.find( *pp ) != seeds.end();
       
       annot_map_t::const_iterator ii = annot->interval_events.begin();
@@ -422,6 +444,24 @@ void annotate_t::prep()
 	    instance_idx.parent->name :
 	    instance_idx.parent->name + "_" + instance_idx.ch_str ;
 
+	  // skip if not in chs-inc list
+	  // or skip if in chs-exc list
+	  if ( ! process_channel( instance_idx.parent->name , instance_idx.ch_str ) )
+	    {
+	      ++ii;
+	      continue;
+	    }
+	  
+	  
+	  // need to add channel-specific version to seed fix-list?
+	  if ( ! pool_channels && fixed.find( instance_idx.parent->name ) != fixed.end() )
+	    {
+	      // logger << "  adding "
+	      // 	     << instance_idx.parent->name + "_" + instance_idx.ch_str
+	      // 	     << " to fixed list\n";
+	      fixed.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
+	    }
+	  
 	  // track actual AIDs for analysis
 	  
 	  if ( is_seed ) sachs.insert( aid );
@@ -506,10 +546,10 @@ void annotate_t::prep()
 	  interval.start -= offset;
 	  interval.stop -= offset;
 	  
-	  // add flanking regions to start/stop
+	  // add flanking regions to start/stop to seeds only
 	  //  - but do not overstep bounding edges
-
-	  if ( flanking_sec > 0 )
+	  
+	  if ( is_seed && flanking_sec > 0 )
 	    {
 	      uint64_t f = globals::tp_1sec * flanking_sec ;
 
@@ -630,7 +670,10 @@ void annotate_t::loop()
 void annotate_t::shuffle()
 {
 
+  //
   // shuffle each indiv/seed independently
+  //
+  
   std::map<std::string,std::map<uint64_t,std::map<std::string,std::set<interval_t> > > >::const_iterator ee = events.begin();
 
   while ( ee != events.end() )
@@ -657,13 +700,14 @@ void annotate_t::shuffle()
 	      if ( fixed.find( *ss ) != fixed.end() )
 		{
 		  ++ss;
+		  //std::cout << "   skipping perm...\n";
 		  continue;
 		}
 	      
 	      // get a random offset
 	      //  - which results in no annots that span the end of this segment
 	      //  - keep going unitl we get one... ouch 
-
+	      
 	      uint64_t pp = 0;
 	      int iter = 0;
 	      
@@ -927,26 +971,39 @@ void annotate_t::output()
 	      writer.value( "N_OBS" , p_obs[ sa->first ][ pp->first ]  );
 	      if ( nreps )
 		{
-		  writer.value( "N_EXP" , p_exp[ sa->first ][ pp->first ] / (double)nreps );
+		  double mean = p_exp[ sa->first ][ pp->first ] / (double)nreps;
+		  double var = p_expsq[ sa->first ][ pp->first ] / (double)nreps - mean * mean;	  
+		  writer.value( "N_EXP" , mean );
 		  writer.value( "N_P" , ( p_pv[ sa->first ][ pp->first ]  + 1 ) / (double)( nreps + 1 ) );
+		  writer.value( "N_Z" , ( p_obs[ sa->first ][ pp->first ] - mean ) / sqrt( var ) );
 		}
 	    }
 	  	  
 	  // seed-annot distances
 	  
 	  writer.value( "D1_OBS" , absd_obs[ sa->first ][ pp->first ]  );
+	  writer.value( "D_N" , dn_obs[  sa->first ][ pp->first ]  );
 	  if ( nreps )
 	    {
-	      writer.value( "D1_EXP" , absd_exp[ sa->first ][ pp->first ] / (double)nreps  );
+	      double mean = absd_exp[ sa->first ][ pp->first ] / (double)nreps;
+	      double var = absd_expsq[ sa->first ][ pp->first ] / (double)nreps - mean * mean;
+	      writer.value( "D1_EXP" , mean );
 	      writer.value( "D1_P" , ( absd_pv[ sa->first ][ pp->first ] + 1 ) / (double)( nreps + 1 ) );
+	      writer.value( "D1_Z" , ( absd_obs[ sa->first ][ pp->first ] - mean ) / sqrt( var ) );
+
+	      writer.value( "D_N_EXP" , dn_exp[  sa->first ][ pp->first ] / (double)nreps  );	      
+	      
 	    }
 
 	  writer.value( "D2_OBS" , sgnd_obs[ sa->first ][ pp->first ]  );
 	  if ( nreps )
 	    {
-	      writer.value( "D2_EXP" , sgnd_exp[ sa->first ][ pp->first ]  / (double)nreps );
+	      double mean = sgnd_exp[ sa->first ][ pp->first ] / (double)nreps;
+	      double var = sgnd_expsq[ sa->first ][ pp->first ] / (double)nreps - mean * mean;
+	      writer.value( "D2_EXP" , mean );
 	      writer.value( "D2_P" , ( sgnd_pv[ sa->first ][ pp->first ] + 1 ) / (double)( nreps + 1 ) );
-	    }	  
+	      writer.value( "D2_Z" , ( sgnd_obs[ sa->first ][ pp->first ] - mean ) / sqrt( var ) );
+	    }
 	  
 	  ++pp;
 	}	  
@@ -1205,25 +1262,22 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // track: overlap = dist == 0,
       // but use bool overlap to avoid floating-point equality test
       if ( overlap ) r->nsa[ astr ][ bstr ] += 1 ;
-
+      
       // to track proprtion of seeds w/ at least one (non-seed) annot overlap
       if ( overlap && ! bseed )
-	{
-	  r->psa[ astr ].insert ( *aa );
-	  //std::cout << "  ok " << aa->as_string() << "\n";
-	}
-      else
-	{
-	  //std::cout << " not " << aa->as_string() << "\n";
-	}
+	r->psa[ astr ].insert ( *aa );
       
       // for mean distance -- do we meet the window criterion?
       const double adist = fabs( dist );
       if ( adist <= window_sec )
 	{
-	  r->adist[ astr ][ bstr ] += fabs( dist );
-	  r->sdist[ astr ][ bstr ] += dist;
-	  r->ndist[ astr ][ bstr ] += 1; // denom for both the above
+	  // do we include complete overlap as "nearest"?
+	  if ( include_overlap_in_dist || ! overlap )
+	    {
+	      r->adist[ astr ][ bstr ] += fabs( dist );
+	      r->sdist[ astr ][ bstr ] += dist;
+	      r->ndist[ astr ][ bstr ] += 1; // denom for both the above
+	    }
 	}
       
       // are we tracking hits
@@ -1231,8 +1285,14 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	{
 	  if ( overlap || adist <= window_sec )
 	    {
-	      named_interval_t named( *aa , astr );
-	      hits[ named ]++;
+	      // only tracjing seed-nonseed matches? or all?
+	      const bool okay = seed_nonseed ? ! bseed : true ; 
+	      //	      std::cout << " okay = " << astr << " " << bstr << " = " << okay << " " << overlap << " " << window_sec << " " << adist << "\n";
+	      if ( okay )
+		{
+		  named_interval_t named( *aa , astr );
+		  hits[ named ]++;
+		}
 	    }
 	}
       
@@ -1313,10 +1373,10 @@ void annotate_t::observed( const annotate_stats_t & s )
   
   // absolute distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   absd_obs = s.adist;
-
+  
   // signed distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   sgnd_obs = s.sdist;
-
+  
   // get average distances (these may be < S-A count, because of window_sec threshold)
   std::map<std::string,std::map<std::string,double> >::const_iterator dd = s.ndist.begin();
   while ( dd != s.ndist.end() )
@@ -1327,6 +1387,7 @@ void annotate_t::observed( const annotate_stats_t & s )
 	{
 	  absd_obs[ dd->first ][ ee->first ] /= (double)ee->second;
 	  sgnd_obs[ dd->first ][ ee->first ] /= (double)ee->second;
+	  dn_obs[ dd->first ][ ee->first ] = (double)ee->second;
 	  ++ee;
 	}
       ++dd;
@@ -1442,13 +1503,16 @@ void annotate_t::build_null( const annotate_stats_t & s )
 	      absd_expsq[ sa->first ][ pp->first ] += a * a;
 	      sgnd_expsq[ sa->first ][ pp->first ] += s * s;
 
+	      // track counts
+	      dn_exp[ sa->first ][ pp->first ] += n;
+	      
 	      // pvals : testing whether *closer* so stat is LE rather than GE
 	      if ( a <= absd_obs[ sa->first ][ pp->first ] ) ++absd_pv[ sa->first ][ pp->first ];
 	      
 	      // nb. although we've calculated mean signed-dist, here the test is 2-sided, so take abs(x)
 	      // nb. test if closer (smaller dist) is more significant, thus reversed sign 
 	      if ( fabs(s) <= fabs( sgnd_obs[ sa->first ][ pp->first ] ) ) ++sgnd_pv[ sa->first ][ pp->first ];
-            }
+	    }
           ++pp;
         }
       ++sa;
@@ -1507,11 +1571,12 @@ void annotate_t::new_seeds()
 	      while ( ii != intervals.end() )
 		{
 		  named_interval_t named( *ii , *ss );
-		  
+
+		  // requisite # of hits
 		  const bool write_this = out_include ?
 		    hits[ named ] >= mcount : // include
 		    hits[ named ] <  mcount ; // exclude
-
+		  
 		  // nb - we drop any instance ID information
 		  // for now... can fix this up later?
 		  //  but... given we've a) flattened, and b) perhaps
@@ -1544,3 +1609,44 @@ void annotate_t::new_seeds()
 }
 
   
+void annotate_t::proc_chlist( const std::string & s , const bool inc )
+{
+  if ( inc ) chs_inc.clear();
+  else chs_exc.clear();
+
+  //  annot:ch,annot:ch
+  // format chs-inc=SP11:C3,SP11:C4,RIP:LHH1
+
+  std::vector<std::string> tok = Helper::parse( s , "," );
+  for (int i=0; i<tok.size(); i++)
+    {
+      // expect annot:ch
+      std::vector<std::string> tok2 = Helper::parse( tok[i] , ":" );
+      if ( tok2.size() != 2 ) Helper::halt( "expecting annot:ch format for chs-inc and chs-exc" );
+
+      if ( inc ) chs_inc[ tok2[0] ].insert( tok2[1] );
+      else chs_exc[ tok2[0] ].insert( tok2[1] );      
+    }
+  
+}
+
+bool annotate_t::process_channel( const std::string & a , const std::string & ch )
+{
+
+  std::map<std::string,std::set<std::string> >::const_iterator aa = chs_inc.find( a );  
+  if ( aa != chs_inc.end() )
+    {
+      const std::set<std::string> & chs = aa->second;
+      if ( chs.find( ch ) == chs.end() ) return false;      
+    }
+
+  aa = chs_exc.find( a );
+  if ( aa != chs_exc.end() )
+    {
+      const std::set<std::string> & chs	= aa->second;
+      if ( chs.find( ch ) != chs.end() ) return	false;
+    }
+  
+  return true;
+
+}

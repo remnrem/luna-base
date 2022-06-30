@@ -311,6 +311,8 @@ int main(int argc , char ** argv )
   bool cmdline_proc_assoc        = false;
   bool cmdline_proc_massoc       = false;
   bool cmdline_proc_pops         = false;
+  bool cmdline_proc_otsu         = false;
+  bool cmdline_proc_fft          = false;
     
   //
   // parse command line
@@ -365,6 +367,11 @@ int main(int argc , char ** argv )
 	    cmdline_proc_massoc = true;	  
 	  else if ( strcmp( argv[1] , "--pops" ) == 0 )
 	    cmdline_proc_pops = true;
+	  else if ( strcmp( argv[1] , "--otsu" ) == 0 )
+	    cmdline_proc_otsu = true;
+	  else if ( strcmp( argv[1] , "--fft" ) == 0 )
+	    cmdline_proc_fft = true;
+
 	}
       
       // otherwise, first element will be treated as a file list
@@ -750,6 +757,42 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+  //
+  // Basic FFT on stdin signal
+  //
+
+  if ( cmdline_proc_fft )
+    {
+      param_t param;
+      build_param_from_args( &param , argc, argv );      
+      writer.begin();      
+      writer.id( "." , "." );
+      writer.cmd( "FFT" , 1 , "" );
+      writer.level( "FFT", "_FFT" );      
+      dsptools::cmdline_fft( param );
+      writer.unlevel( "_FFT" );
+      writer.commit();
+      std::exit(0);      
+    }
+
+  
+  //
+  // Otsu thresholding
+  //
+
+  if ( cmdline_proc_otsu )
+    {
+      param_t param;
+      build_param_from_args( &param , argc, argv );
+      writer.begin();      
+      writer.id( "." , "." );
+      writer.cmd( "OTSU" , 1 , "" );
+      writer.level( "OTSU", "_OTSU" );      
+      dsptools::cmdline_otsu( param );
+      writer.unlevel( "_OTSU" );
+      writer.commit();
+      std::exit(0);      
+    }
 
   //
   // Cluster permitation test (CPT)
@@ -3722,10 +3765,28 @@ void build_param_from_cmdline( param_t * param )
       param->parse( x ); 
     }
 
-  // swap in wildcasds: here, means @{includes} 
+  // swap in wildcards: here, means @{includes} 
   param->update( "." , globals::indiv_wildcard  );
 
 }
+
+void build_param_from_args( param_t * param , int argc , char** argv )
+{
+  // this only triggered w/ command-line commands, e.g. --fft, etc
+  // 1 is seed command, e.g. --fft
+  // parse args 2 onwards
+  for (int i=2; i<argc; i++)
+    {
+      std::string x = argv[i];
+      if ( x == "" ) continue;
+      param->parse( x ); 
+    }
+  
+  // swap in wildcards: here, means @{includes} 
+  param->update( "." , globals::indiv_wildcard  );
+
+}
+
 
 
 std::string luna_base_version() 

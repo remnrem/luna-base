@@ -914,6 +914,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EXTEND" ) )       proc_extend_annots( edf, param(c) );
       else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
       else if ( is( c, "S2A" ) )          proc_signal2annot( edf, param(c) );
+      else if ( is( c, "A2C" ) )          proc_annot2cache( edf , param(c) );
+      
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
       else if ( is( c, "MEANS" ) )        proc_sig_annot_mean( edf, param(c) );
@@ -971,6 +973,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "TSYNC" ) )        proc_tsync( edf , param(c) );
       
       else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
+      else if ( is( c, "OTSU" ) )         proc_otsu( edf, param(c) );
       
       else if ( is( c, "COVAR" ) )        proc_covar( edf, param(c) );
       else if ( is( c, "PSD" ) )          proc_psd( edf, param(c) );	  
@@ -1032,7 +1035,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
 
       else if ( is( c, "CACHE" ) )        proc_dump_cache( edf , param(c) );
-      
+
       else if ( is( c, "SIGGEN" ) )       proc_siggen( edf , param(c) );
       else if ( is( c, "SIMUL" ) )        proc_simul( edf , param(c) );
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
@@ -1495,6 +1498,12 @@ void proc_filter_design_cmdline()
 void proc_tv_denoise( edf_t & edf , param_t & param )
 {
   dsptools::tv( edf , param );
+}
+
+// OTSU   automatic binary thresholding
+void proc_otsu( edf_t & edf , param_t & param )
+{
+  dsptools::otsu( edf , param );
 }
 
 // CWT 
@@ -2648,6 +2657,15 @@ void proc_signal2annot( edf_t & edf , param_t & param )
 {
   edf.timeline.signal2annot( param );
 }
+
+
+// A2C : make a cache from an annotation
+
+void proc_annot2cache( edf_t & edf , param_t & param )
+{
+  edf.timeline.annot2cache( param );
+}
+
 
 // MEANS : signal means conditional on annotations
 

@@ -37,8 +37,10 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
 {
   
   // Signals
-  
-  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+
+  const bool no_annotations = true;
+
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , no_annotations );
   
   if ( signals.size() == 0 ) return;
 
@@ -93,13 +95,15 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
 
   const double min_nyquist = fupr / 2.0;
   std::vector<double> Fs = edf.header.sampling_freq( signals );  
+
   int sr = Fs[0];
   for (int s=0;s<ns;s++)
     {
-      if ( Fs[s] < min_nyquist )
+      if ( Fs[ s ] < min_nyquist )
 	Helper::halt( "sample rate not sufficient for f-upr" );
-      if ( Fs[s] != sr )
-	Helper::halt( "all sampling rates must be similar for PSI" );
+      
+      if ( Fs[ s ] != sr )
+	Helper::halt( "all sampling rates must be similar for RIPPLES" );
     }
 
   std::vector<uint64_t> * tp = NULL ;
@@ -122,6 +126,9 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       
       // detect ripples
+
+      logger << "\n  processing " << signals.label(s) << "...\n";
+      
       ripples_t ripples( *d , *tp , sr , flwr, fupr, kwin_ripple, kwin_tw, verbose ,
 			 hfbands, th, req_msec, req_peaks_flt, req_peaks_raw , combine_msec,			 
 			 edge_secs , otsu_k );
@@ -167,7 +174,14 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   verbose = verbose_; 
   const bool otsu = otsu_k != -1;
   const uint64_t combine_tp = ( combine_msec / 1000.0 ) *  globals::tp_1sec ;
-      
+  
+  logger << "  excluding edges of segments, for " << edge_secs << " seconds\n"
+	 << "  requiring ripples to be at least " << req_msec << " msec\n"
+	 << "  combining ripples nearer than " << combine_msec << " msec\n"
+	 << "  requiring at least " << req_peaks_flt << " peaks in the filtered signal, " << req_peaks_raw << " in the raw signal\n"
+	 << "  splitting range into " << hfbands << " equal bands\n";
+  logger << "  FIR tw = " << kwin_tw << ", ripple = " << kwin_ripple << "\n";
+  
   //
   // set up 
   //
@@ -496,16 +510,20 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   
   logger << "  found " << all_ripples.size() << " ripples, merged to " << ripples.size() << "\n";
   
-
+  
   //
-  // add magnitudes
+  // add ripple meta-data: magnitude, frequency, mid-point
   //
 
   for (int i=0; i< ripples.size(); i++)
     {
 
       ripple_t & rip = ripples[i];
-      
+
+      //
+      // number of sample points
+      //
+
       rip.n = rip.stop_sp - rip.start_sp;
       
       //
@@ -520,74 +538,128 @@ ripples_t::ripples_t( const std::vector<double> & x ,
       rip.x /= (double)(rip.stop_sp - rip.start_sp);
             
       //
-      // frequency (from filtered signal, xf) half-wave sample points
+      // frequency (from full-range filtered signal, xf) half-wave sample points
       //
-      
-      std::vector<int> hwsp;
 
-      // based on ZC:
+      std::vector<double> xx;
+      for (int j = rip.start_sp ; j < rip.stop_sp; j++)
+	xx.push_back( xf[j] );
 
-      int last = -1;
+      // ensure locally mean-centered
+      MiscMath::centre( &xx );
+
+      // count zero-crossings
+      // (w/ linear interpolation) 
+      std::vector<double> hwsp;
+
+      double last = -9;
+      double dt = 1.0 / (double) sr;
+      const int nxx = xx.size();
+
+      // track which are pos2neg or not
+      std::vector<bool> pos2neg;
+      std::vector<int> zc_idx;
       
-      for (int j = rip.start_sp == 0 ? 1 : rip.start_sp ; j < rip.stop_sp; j++)
+      for (int j=1; j<nxx; j++)
 	{
-	  const bool zc = ( xf[j-1] <= 0 && xf[j] > 0 ) || ( xf[j-1] > 0 && xf[j] <= 0 );
 	  
-	  if ( zc )
+	  const bool neg2pos_zc = xx[j-1] <= 0 && xx[j] > 0 ;
+	  const bool pos2neg_zc = xx[j-1] > 0  && xx[j] <= 0 ;
+	  
+	  if ( neg2pos_zc || pos2neg_zc ) 
 	    {
+	      // track for determination of ripple peak/middle
+	      pos2neg.push_back( pos2neg_zc );
+	      zc_idx.push_back( j );
 
-	      //std::cout << " ZC = " << j << "\n";
-
-	      if ( last != -1 )
-		hwsp.push_back( j - last + 1 );	      
-	      last = j;
+	      // get fractional ZC point
+	      double wj = fabs( xx[j] ) / ( fabs( xx[j-1] ) + fabs( xx[j] ) ) ; 
+	      double jj = dt * ( j * wj + (j-1)*(1-wj) );
+	      
+	      if ( last > -1 )
+		hwsp.push_back( jj - last );
+	      
+	      last = jj;
 	    }
 	}
-     
       
-      rip.frq = sr / (double)( 2.0 * MiscMath::mean( hwsp ) ) ;
-
-      //      std::cout	<< "frq\t" << rip.frq << " (p=" << hwsp.size() << ") ";
+      
+      rip.frq = 1.0 / ( 2.0 * MiscMath::mean( hwsp ) ) ; 
 
       //
-      // based on Peaks
+      // verbose of (complete) half-waves ... i.e. may be less than # of peaks
       //
       
-      hwsp.clear();
-      last = -1;
-      for (int j = rip.start_sp + 1 ; j < rip.stop_sp - 1 ; j++)
+      rip.nhw = hwsp.size() ;
+
+      
+      //
+      // get most central negative peak      
+      //
+
+      int didx = 0;
+      int dbest = -1;
+      
+      int mid = nxx / 2;
+
+      for (int i=1; i<zc_idx.size(); i++)
 	{
+	  // only consider negative halfwaves
+	  if ( pos2neg[i] ) continue;
+
+	  // mid-point of this negative halfwave (in sp)
+	  int j = ( zc_idx[i] + zc_idx[i-1] ) / 2 ;
 	  
-	  const bool pos_peak = xf[j] >= xf[j-1] && xf[j] > xf[j+1] ;
-	  const bool neg_peak = xf[j] <= xf[j-1] && xf[j] < xf[j+1] ;	  
+	  // distance (in sp) from middle of ripple
+	  int d = abs( j - mid );
 	  
-          if ( pos_peak || neg_peak )
-            {
-	      //std::cout << " PEAK = " << j << "\n";
-	      if ( last != -1 )
-		hwsp.push_back( j - last + 1 );
-              last = j;
-            }
-        }
+	  if ( dbest == -1 )
+	    {
+	      dbest = d;
+	      didx = 1;	// of second (neg-to-pos) ZC
+	    }
+	  else
+	    {
+	      if ( d < dbest )
+		{
+		  dbest = d;
+		  didx = i; // of second (neg-to-pos) ZC
+		}	      
+	    }
+	}
 
+      // mid-point = peak of negative halfwave (in sp) closet to ripple middle
+      int mid_sp = ( zc_idx[didx] + zc_idx[didx-1] ) / 2 ;
+      double lowest = 999;
 
-      rip.frqp2p = sr / (double)( 2.0 * MiscMath::mean( hwsp ) ) ;
-
+      for (int j = zc_idx[didx-1]; j <= zc_idx[didx]; j++)
+	if ( xx[ j ] < lowest )
+	  {
+	    mid_sp = j;
+	    lowest = xx[j] ;
+	  }
       
-      // std::vector<double> xx;
-      // for (int j = rip.start_sp ; j < rip.stop_sp  ; j++)
-      // 	xx.push_back( xf[j] );
+      // convert to time-points from EDF start
       
-      // std::cout << rip.frqp2p << " (p=" <<  hwsp.size() << ")  ; mean = " << MiscMath::mean(xx) << "\n";
+      double mid_fraction = mid_sp / (double) nxx ;
       
-      // for (int j = rip.start_sp ; j < rip.stop_sp  ; j++)
-      // 	{
-      // 	  std::cout << "  " << j << "\t" << ( j - rip.start_sp ) / (double)sr << "\t" << xf[j] << "\n";
-      // 	}
+      // in time-points (from EDF start)
+      rip.midp = rip.pos.start + ( rip.pos.stop - rip.pos.start ) * mid_fraction ;
+      
+      // std::cout << " mid_sp = " << rip.mid_sp << "\n"
+      // 		<< didx << " " << zc_idx[didx] << " " << zc_idx[didx-1] << "\n";
+      
+      // for (int z=0; z<zc_idx.size(); z++)
+      // 	std::cout << "z = " << z << " " << zc_idx[z] << " " << pos2neg[z] << "\n";
+      // std::cout << "\n";
+      
+       // for (int j = 0 ; j < nxx  ; j++)
+       // 	std::cout << "  " << j << "\t" << j / (double)sr << "\t" << rip.start_sp + j << "\t" << ( rip.start_sp + j == rip.mid_sp ) << "\t" << xx[j] << "\n";
+    
       
       
     }
-
+  
   //
   // score 
   //
@@ -691,15 +763,17 @@ void ripples_t::output( const bool verbose )
 	  writer.level( i+1 , globals::count_strat );
 	  writer.value( "START" , globals::tp_duration * ripple.pos.start );
 	  writer.value( "STOP" , globals::tp_duration * ripple.pos.stop );
-
+	  writer.value( "MID" , globals::tp_duration * ripple.midp );
+	  
 	  writer.value( "START_SP" , ripple.start_sp );
 	  writer.value( "STOP_SP" , ripple.stop_sp );
-
+	  
+	  
 	  writer.value( "PCT" , ripple.wgt );
-	  writer.value( "FRQ" , ripple.frq );
-	  writer.value( "FRQ2" , ripple.frqp2p );
+	  writer.value( "FRQ" , ripple.frq );	  
 	  writer.value( "MAG" , ripple.x );
 	  writer.value( "SP" , ripple.n );
+	  writer.value( "NHW" , ripple.nhw );
 	  writer.value( "DUR" , ripple.n / (double)sr );
 	  
 	}
@@ -723,9 +797,12 @@ void ripples_t::annotate( annot_t * a , const std::string & ch )
       instance_t * instance = a->add( "." , ripple.pos , ch );
       instance->set( "pct" , ripple.wgt );
       instance->set( "frq" , ripple.frq );
-      instance->set( "frq2" , ripple.frqp2p );
-      instance->set( "n" , ripple.n );
-      instance->set( "mag" , ripple.x );      
+      instance->set( "n"   , ripple.n );
+      instance->set( "nhw" , ripple.nhw );
+      instance->set( "mag" , ripple.x );
+      
+      std::string mid_tp = "tp:" + Helper::int2str( ripple.midp );
+      instance->set( "mid" , mid_tp );
     }
 }
 

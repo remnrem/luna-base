@@ -49,7 +49,8 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   // get signals
   //
 
-  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  const bool no_annotations = true;
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , no_annotations );
 
   if ( signals.size() < 2 ) return;
 
@@ -61,7 +62,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 
-  int sr = Fs[0];
+  int sr = Fs[ 0 ];
   for (int s=1;s<ns;s++)
     if ( Fs[s] != sr )
       Helper::halt( "all sampling rates must be similar for PSI" );

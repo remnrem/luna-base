@@ -141,6 +141,7 @@ void cmddefs_t::init()
   add_var( "HEADERS" , "" , "NS" , "Number of signals/channels" );
   add_var( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
   add_var( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" );
+  add_var( "HEADERS" , "" , "STOP_TIME" , "Stop time" );
   add_var( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
   add_var( "HEADERS" , "" , "REC_DUR" , "Duration of each record (seconds)" );
   add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Total duration of EDF (seconds)" );
@@ -960,15 +961,26 @@ void cmddefs_t::init()
 
 
   add_table( "HYPNO" , "" , "Individual-level output" );
+  add_var( "HYPNO" , "" , "TRT" , "Total sleep time" );
   add_var( "HYPNO" , "" , "TST" , "Total sleep time" );
-  add_var( "HYPNO" , "" , "TPST" , "Total persistent sleep time" );
+  add_var( "HYPNO" , "" , "TST_PER" , "Total persistent sleep time" );
   add_var( "HYPNO" , "" , "TIB" , "Time in bed" );
+  add_var( "HYPNO" , "" , "SPT" , "Sleep period time" );
+  add_var( "HYPNO" , "" , "SPT_PER" , "Persistent sleep period time" );
   add_var( "HYPNO" , "" , "TWT" , "Total wake time" );
   add_var( "HYPNO" , "" , "WASO" , "Wake after sleep onset" );
   add_var( "HYPNO" , "" , "FWT" , "Final wake time" );
   add_var( "HYPNO" , "" , "LOT" , "Lights On time" );
-  add_var( "HYPNO" , "" , "SIS" , "Study Starts In Sleep" );
-  add_var( "HYPNO" , "" , "EIS" , "Study Ends In Sleep" );
+  add_var( "HYPNO" , "" , "LOST" , "Lights On sleep time" );
+  add_var( "HYPNO" , "" , "SINS" , "Study Starts In Sleep" );
+  add_var( "HYPNO" , "" , "EINS" , "Study Ends In Sleep" );
+
+  add_var( "HYPNO" , "" , "OTHR" , "Unknown stage duration" );
+  add_var( "HYPNO" , "" , "CONF" , "Number of epochs with conflicting stage assignments" );
+    
+
+  add_var( "HYPNO" , "" , "FIXED_WAKE" , "Epochs fixed due to excessive WASO" );
+  add_var( "HYPNO" , "" , "FIXED_LIGHTS" , "Epochs fixed due to Lights On" );
 
   add_var( "HYPNO" , "" , "MINS_ASC_N2" , "Duration of ascending N2 (mins)" );
   add_var( "HYPNO" , "" , "MINS_DSC_N2" , "Duration of descending N2 (mins)" );
@@ -976,21 +988,47 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "" , "PCT_ASC_N2" , "Proportion of N2 that is ascending" );
   add_var( "HYPNO" , "" , "PCT_DSC_N2" , "Proportion of N2 that is descending" );
   add_var( "HYPNO" , "" , "PCT_FLT_N2" , "Proportion of N2 that is flat" );
+
+  add_var( "HYPNO" , "" , "T0_START" , "Recording start, hrs since prior midnight " );
+  add_var( "HYPNO" , "" , "T1_LIGHTS_OFF" , "Lights off, hrs since prior midnight" );
+  add_var( "HYPNO" , "" , "T2_SLEEP_ONSET" , "Sleep onset, hrs since prior midnight" );
+  add_var( "HYPNO" , "" , "T3_SLEEP_MIDPOINT" , "Sleep midpoint, hrs since prior midnight" );
+  add_var( "HYPNO" , "" , "T4_FINAL_WAKE" , "Final wake, hrs since prior midnight" );
+  add_var( "HYPNO" , "" , "T5_LIGHTS_ON" , "Lights on, hrs since prior midnight" );
+  add_var( "HYPNO" , "" , "T6_STOP" , "Study stop, hrs since prior midnight" );
+
+  add_var( "HYPNO" , "" , "E0_START" , "Recording start, elapsed time" );
+  add_var( "HYPNO" , "" , "E1_LIGHTS_OFF" , "Lights off, elapsed time" );
+  add_var( "HYPNO" , "" , "E2_SLEEP_ONSET" , "Sleep onset, elapsed time" );
+  add_var( "HYPNO" , "" , "E3_SLEEP_MIDPOINT" , "Sleep midpoint, elapsed time" );
+  add_var( "HYPNO" , "" , "E4_FINAL_WAKE" , "Final wake, elapsed time" );
+  add_var( "HYPNO" , "" , "E5_LIGHTS_ON" , "Lights on, elapsed time" );
+  add_var( "HYPNO" , "" , "E6_STOP" , "Study stop, elapsed time" );
+
+
+  add_var( "HYPNO" , "" , "HMS0_START" , "Recording start, clock time" );
+  add_var( "HYPNO" , "" , "HMS1_LIGHTS_OFF" , "Lights off, clock time" );
+  add_var( "HYPNO" , "" , "HMS2_SLEEP_ONSET" , "Sleep onset, clock time" );
+  add_var( "HYPNO" , "" , "HMS3_SLEEP_MIDPOINT" , "Sleep midpoint, clock time" );
+  add_var( "HYPNO" , "" , "HMS4_FINAL_WAKE" , "Final wake, clock time" );
+  add_var( "HYPNO" , "" , "HMS5_LIGHTS_ON" , "Lights on, clock time" );
+  add_var( "HYPNO" , "" , "HMS6_STOP" , "Study stop, clock time" );
   
-  add_var( "HYPNO" , "" , "T1_LIGHTS_OFF" , "Lights off, hrs since midnight [0,24)" );
-  add_var( "HYPNO" , "" , "T2_SLEEP_ONSET" , "Sleep onset, hrs since midnight [0,24)" );
-  add_var( "HYPNO" , "" , "T3_SLEEP_MIDPOINT" , "Sleep midpoint, hrs since midnight [0,24)" );
-  add_var( "HYPNO" , "" , "T4_FINAL_WAKE" , "Final wake, hrs since midnight [0,24)" );
-  add_var( "HYPNO" , "" , "T5_LIGHTS_ON" , "Lights on, hrs since midnight [0,24)" );
-  add_var( "HYPNO" , "" , "SLP_EFF" , "Sleep efficiency" );
-  add_var( "HYPNO" , "" , "SLP_EFF2" , "Sleep efficiency (alternate defn.)" );
-  add_var( "HYPNO" , "" , "SLP_MAIN_EFF" , "Sleep maintenance efficiency" );
-  add_var( "HYPNO" , "" , "SLP_LAT" , "Sleep latency (minutes from lights off)" );
-  add_var( "HYPNO" , "" , "PER_SLP_LAT" , "Persistent sleep latency (mins from lights off)" );
+  
+  add_var( "HYPNO" , "" , "SE" , "Sleep efficiency" );
+  add_var( "HYPNO" , "" , "SME" , "Sleep efficiency (alternate defn.)" );
+  add_var( "HYPNO" , "" , "SOL" , "Sleep latency (minutes from lights off)" );
+  add_var( "HYPNO" , "" , "SOL_PER" , "Persistent sleep latency (mins from lights off)" );
   add_var( "HYPNO" , "" , "REM_LAT" , "REM latency (minutes from onset of sleep)" );
+  add_var( "HYPNO" , "" , "REM_LAT2" , "REM latency (excluding wake)" );
   add_var( "HYPNO" , "" , "NREMC" , "Number of sleep cycles" );
   add_var( "HYPNO" , "" , "NREMC_MINS" , "Mean duration of each sleep cycle" );
 
+  add_var( "HYPNO" , "" , "SFI" , "Sleep Fragmentation Index" );
+  add_var( "HYPNO" , "" , "TI_S" , "Sleep Transition Index" );
+  add_var( "HYPNO" , "" , "TI_S3" , "Sleep Transition Index, 3-stage classification" );
+  add_var( "HYPNO" , "" , "TI_RNR" , "Sleep Transition Index: REM-NREM only" );
+  
   add_table( "HYPNO" , "SS" , "Stage-stratified output" );
   add_var( "HYPNO" , "SS" , "MINS" , "Stage duration (mins)" );
   add_var( "HYPNO" , "SS" , "PCT" , "Stage duration (% of TST)" );
@@ -1007,6 +1045,14 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "C" , "NREMC_REM_MINS" , "Duration of REM in this cycle (mins)" );
   add_var( "HYPNO" , "C" , "NREMC_OTHER_MINS" , "Minutes of wake and unscored epochs" );
 
+
+  add_table( "HYPNO", "N" , "Bouts" ); 
+  add_var( "HYPNO" , "N" , "FIRST_EPOCH" , "First epoch" );
+  add_var( "HYPNO" , "N" , "LAST_EPOCH" , "Last epoch" );
+  add_var( "HYPNO" , "N" , "START" , "Start (clocktime)" );
+  add_var( "HYPNO" , "N" , "STOP" , "Stop (clocktime) [ end of last epoch ]" );
+  add_var( "HYPNO" , "N" , "MINS" , "Bout duration (minutes)" );
+  
 
   add_table( "HYPNO" , "E" , "Epoch-level output" );
   add_var( "HYPNO" , "E" , "CLOCK_HOURS" , "Start time of epoch (hours since midnight)" );
@@ -1710,8 +1756,10 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "Q" , "Quality metric" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "PASS" , "Flag (0/1) for whether this spindle passes the quality metric criterion" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "START" , "Start position of the spindle (seconds elapsed since start of EDF)" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK" , "Peak/mid position of the spindle (seconds elapsed since start of EDF)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP" , "Stop position of the spindle (seconds elapsed since start of EDF)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "START_SP" , "Start position of the spindle (in sample-units relative to current in-memory EDF)" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK_SP" , "Peak/mid position of the spindle (in sample-units relative to the current in-memory EDF)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP_SP" , "Stop position of the spindle (in sample-units relative to the current in-memory EDF)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM" , "Symmetry index (relative position of peak)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM2" , "Folded symmetry index (0=symmetrical, 1=asymmetrical)" );

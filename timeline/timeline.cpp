@@ -44,9 +44,23 @@ bool timeline_t::discontinuity( const std::vector<uint64_t> & t , int sr , int s
 {
   if ( sp2 < sp1 ) return true;
   if ( sp1 < 0 || sp2 >= t.size() ) return true;
-  uint64_t x = ( globals::tp_1sec / sr ) * ( sp2-sp1 );
-  uint64_t y = t[sp2] - t[sp1];  
-  return x != y ; 
+
+  // observed difference between sample points (in tp-units)
+  const uint64_t observed = t[sp2] - t[sp1];
+  
+  // expected difference between sample points, given sample rate and nominal number
+  // of sample points between t1 and t2
+  
+  const uint64_t one_sample_tp = globals::tp_1sec / sr;
+  
+  const uint64_t expected = one_sample_tp * ( sp2-sp1 );
+  
+  // are these ~equal?
+  const uint64_t diff = observed > expected ? observed - expected : expected - observed ;
+
+  // test to within resolution of half 1/SR 
+  return diff > one_sample_tp / 2 ;
+
 }
 
 int timeline_t::first_record() const
@@ -279,8 +293,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
   if ( edf->header.continuous )
     {
-      //      std::cout << "EDF-C\n";
-
+      //std::cout << "EDF-C\n";
+      
       // old version:  get initial records/samples, nb. use ceil() to get nearest sample *after* start of interval
       
       // now (v0.25+) for fractionally split things (i.e. if interval boundary does not align w/ a sample point exactly)
@@ -343,6 +357,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // For a discontinuous EDF+ we need to search 
       // explicitly across record timepoints
       //
+
+      //std::cout << " -- EDF-D \n";
       
       //
       // Get first record that is not less than start search point (i.e. equal to or greater than)
@@ -486,7 +502,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 	  // std::cout << "stop tp: " << stop_tp << "\n";
 	  // std::cout << "edf->header.record_duration_tp: " << edf->header.record_duration_tp << "\n";
-
+	  
 	  // OLD code::: broken when EDF+D has gaps that are not multiples of record size...
 	  //uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
 
@@ -3197,6 +3213,176 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 }
     
 
+void timeline_t::annot2cache( const param_t & param )
+{
+  
+  // create a set of cache<int> sample "points" based on an annotation meta-data,
+
+  // where we expect the time of each point in time-points elapsed from EDF start
+  // format mid=tp:172727374886
+  
+  // expected by TLOCK, etc.   need to make these globals more explicit
+  const std::string cache_points_label = "points"; 
+  
+  // get annotations
+  if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
+  std::vector<std::string> anames = param.strvector( "annot" );
+
+  // add channel stratifier
+  const bool ignore_channel = param.yesno( "ignore-channel" );
+  
+  // which meta-data field contains the seconds time stamp?
+  std::string meta = param.requires( "meta" ); 
+  
+  // if not otherwise specified, use annot names as new channel labels, otherwise map to a single label  
+  const bool single_cache = param.has( "cache" );
+  const std::string single_cache_name = single_cache ? param.value( "cache" ) : "" ; 
+  std::vector<std::string> cnames = anames;
+
+  // requires a sample rate to be specified
+  const int sr = param.requires_int( "sr" );
+  if ( sr <= 0 ) Helper::halt( "requires positive sr argument" );
+  
+  // store int peaks (derived from second-level times)
+  // channel-specific map
+  std::map<std::string,std::vector<int> > d;
+  
+  // for each annotation
+  for (int a=0; a<anames.size(); a++)
+    {
+      
+      // does annot exist?
+      annot_t * annot = annotations( anames[a] );
+      if ( annot == NULL ) continue;
+
+      int cnt = 0 ;
+      
+      // get all events
+      const annot_map_t & events = annot->interval_events;
+      
+      // look at each annotation event
+      annot_map_t::const_iterator aa = events.begin();
+      while ( aa != events.end() )
+	{
+
+	  // get instance
+	  const instance_t * instance = aa->second;
+	  
+	  // does it have the requisite field?
+	  avar_t * m = instance->find( meta );
+
+	  if ( m != NULL )
+	    {
+	      // get as a string-format tp:XXXXXXX sample-points
+	      std::string t = m->text_value() ;
+	      
+	      if ( t.size() < 4 ) Helper::halt( "bad format for meta field: " + t );
+	      if ( t.substr(0,3) != "sp:" ) Helper::halt( "bad format for meta field: " + t );
+	      int sp = 0;
+	      if ( ! Helper::str2int( t.substr(3) , &sp ) )
+		Helper::halt( "bad format for meta field: " + t );
+	      
+	      
+	      const std::string ch = ignore_channel ? "." : aa->first.ch_str ;
+	      
+	      d[ ch ].push_back( sp );
+	      
+	      ++cnt;
+	    }
+	  
+	  // OLD
+	  // want to make sure this includes at least one sample point... so make interval span
+	  // 1/sr with the point in the middle
+	  //uint64_t width_tp = globals::tp_1sec / (double)( 2.0 * sr );
+	  
+	  //std::cout << " TP = " << tp << "\n";
+	      
+	      //interval_t interval( tp - width_tp , tp + width_tp );
+	      
+	      //int start_rec , start_smp , stop_rec , stop_smp ;
+	      
+	      // bool okay = interval2records( interval , sr , 
+	      // 				    & start_rec , & start_smp ,
+	      // 				    & stop_rec , & stop_smp ) ;
+	      
+	    //   if ( okay )
+	    // 	{
+
+	    // 	  // std::cout << "start , rec-dur , sr , smp = " << start_rec << " " << edf->header.record_duration << " "
+	    // 	  // 	    << sr << " " << start_smp << "\n";
+		  
+	    // 	  int sp = start_rec * edf->header.record_duration * sr + start_smp ;
+	    // 	  uint64_t sp2 = start_rec * edf->header.record_duration * sr + start_smp ; 
+
+	    // 	  //std::cout << " sp = " << sp << " " << sp2 << "\n";
+		  
+		  
+	    // 	  const std::string ch = ignore_channel ? "." : aa->first.ch_str ;
+		    
+	    // 	  d[ ch ].push_back( sp );
+
+	    // 	  ++cnt;
+
+	    // 	  // std::cout << " added " << interval.as_string() << "\t"
+	    // 	  //  	    << start_rec << " " << start_smp << " = " << sp << "\n";
+		  
+	    // 	}
+	    //   else
+	    // 	{
+	    //    	  //std::cout << "hmmmm\n";
+	    //    	  // int sp = start_rec * edf->header.record_duration * sr	+ start_smp ;
+		  
+	    //    	  // std::cout << " *** FAILED tried to added " << interval.as_string() << "\t"
+	    // 	  // 	    << start_rec << " " << start_smp << " = " << sp << "\n";
+		  
+	    // 	}
+	    // }
+	  
+	  // next instance
+	  ++aa;
+	  
+	}
+      
+      logger << "  added " << cnt << " cache points from " << anames[a] << "\n";
+      
+      // add to this cache, or save to add to a combined cache?
+
+      if ( ! single_cache )
+	{
+	  cache_t<int> * c = cache.find_int( cnames[a] );
+
+	  std::map<std::string,std::vector<int> >::const_iterator dd = d.begin();
+	  while ( dd != d.end() )
+	    {
+	      writer.level( dd->first , globals::signal_strat );
+	      c->add( ckey_t( "points" , writer.faclvl() ) , dd->second );
+	      ++dd;
+	    }
+	  writer.unlevel( globals::signal_strat );
+	  d.clear();
+	}
+      
+      // next annotation class
+    }
+    
+  // add all points to a single cache
+  if ( single_cache )
+    {
+      cache_t<int> * c = cache.find_int( single_cache_name );
+      
+      std::map<std::string,std::vector<int> >::const_iterator dd = d.begin();
+      while ( dd != d.end() )
+	{
+	  writer.level( dd->first , globals::signal_strat );
+	  c->add( ckey_t( "points" , writer.faclvl() ) , dd->second );
+	  ++dd;
+	}   
+      writer.unlevel( globals::signal_strat );
+      
+    }
+}
+
+
 void timeline_t::annot2signal( const param_t & param )
 {
   // create a new signal based on one or more annotations
@@ -3256,7 +3442,7 @@ void timeline_t::annot2signal( const param_t & param )
 		value = 0;
 	      else
 		{
-		  // set value to to numeric
+		  // set value to numeric
 		  if ( ! Helper::str2dbl( aa->first.id , &value ) )
 		    Helper::halt( "requires numeric instance IDs" ); 
 		}

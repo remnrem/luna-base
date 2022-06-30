@@ -91,7 +91,22 @@ namespace dsptools
 
   void fft( edf_t & , param_t & );
 
-
+  void cmdline_fft( param_t & );
+  
+  void run_fft( const std::vector<double> & x , const int Fs , const bool verbose );
+  
+  // Otsu 
+  
+  void otsu( edf_t & , param_t & );
+  
+  void cmdline_otsu( param_t & );
+  
+  void run_otsu( const std::vector<double> & x , const int k );
+  
+  // Helper
+  
+  std::vector<double> readcin();
+  
 }
 
 #endif
