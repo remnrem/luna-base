@@ -68,8 +68,14 @@ void annotate_t::set_options( param_t & param )
   
   overlap_th = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0 ;
 
+  // flattened all channels to a single event
   pool_channels = param.has( "pool-channels" );
+  if ( pool_channels )
+    pool_channel_sets = param.strset( "pool-channels" );
 
+  // keep channels separate, but permute similarly
+  aligned_permutes = param.strset( "align" );
+  
   ordered_groups = param.has( "ordered" );
   
   nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000 ; 
@@ -440,7 +446,11 @@ void annotate_t::prep()
 	  // annot class ID
 	  //  plus/minus the channel
 	  
-	  const std::string aid = pool_channels ?
+	  bool pool = pool_channels &&
+	    ( pool_channel_sets.size() == 0 || pool_channel_sets.find( instance_idx.parent->name ) != pool_channel_sets.end() ) ; 
+	  
+	  
+	  const std::string aid = pool ?
 	    instance_idx.parent->name :
 	    instance_idx.parent->name + "_" + instance_idx.ch_str ;
 
@@ -454,11 +464,11 @@ void annotate_t::prep()
 	  
 	  
 	  // need to add channel-specific version to seed fix-list?
-	  if ( ! pool_channels && fixed.find( instance_idx.parent->name ) != fixed.end() )
+	  if ( ( ! pool ) && fixed.find( instance_idx.parent->name ) != fixed.end() )
 	    {
-	      // logger << "  adding "
-	      // 	     << instance_idx.parent->name + "_" + instance_idx.ch_str
-	      // 	     << " to fixed list\n";
+	      logger << "  adding "
+	       	     << instance_idx.parent->name + "_" + instance_idx.ch_str
+	       	     << " to fixed list\n";
 	      fixed.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
 	    }
 	  
@@ -472,7 +482,7 @@ void annotate_t::prep()
 	  // the new output
 	  achs_name_ch[ aid ] =
 	    std::make_pair( instance_idx.parent->name ,
-			    pool_channels ? "." : instance_idx.ch_str );
+			    pool ? "." : instance_idx.ch_str );
 	  
 	  
 	  // actual interval
@@ -676,75 +686,101 @@ void annotate_t::shuffle()
   
   std::map<std::string,std::map<uint64_t,std::map<std::string,std::set<interval_t> > > >::const_iterator ee = events.begin();
 
+  // individuals
   while ( ee != events.end() )
     {
       
-      // consider each contiguous region
+      // contiguous regions
       const std::map<uint64_t,std::map<std::string,std::set<interval_t> > > & region = ee->second;
-
+      
       std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = region.begin();
       while ( rr != region.end() )
 	{
 	  
 	  // shuffle (w/ wrapping) each seed annotation independently
 	  const uint64_t maxshuffle = seg[ iid ][ rr->first ];
-	  //std::cout << " seg .. mxshuf = " << iid << "\t" << rr->first << "\t" << seg[iid].size() << "\t" << maxshuffle << "\n";
 	  
 	  // each seed for this region
 	  std::set<std::string>::const_iterator ss = sachs.begin();
 	  while ( ss != sachs.end() )
 	    {
-	      //std::cout << " seed = " << *ss << "\n";
 	      
 	      // skipping this annotation? (fixed), then nothing to do here
 	      if ( fixed.find( *ss ) != fixed.end() )
 		{
-		  ++ss;
-		  //std::cout << "   skipping perm...\n";
+		  ++ss;		  
 		  continue;
 		}
+
+
+	      // get the factor by which to shuffle these annot in this region
+
+	      uint64_t pp = 0;
+	      
+	      
+	      // if using aligned permutations, have we already
+	      // generated a shuffle for an aligned annot? if so use
+	      // that
+
+
+	      if ( 0 ) // aligned already 
+		{
+		  // if ( aligned )
+		  // 	{
+		  /// TODO...
+		}
+	      
 	      
 	      // get a random offset
 	      //  - which results in no annots that span the end of this segment
 	      //  - keep going unitl we get one... ouch 
 	      
-	      uint64_t pp = 0;
-	      int iter = 0;
-	      
-	      while ( 1 )
+	      else 
 		{
-		  // we having to try too hard?   tells us the data are
-		  // not appropriate for this
-		  
-		  ++iter;
-		  if ( iter > 1000 )
-		    Helper::halt( "cannot find shuffle sets for " + *ss );
-		  
-		  // putative shuffle 
-		  pp = CRandom::rand( maxshuffle );
 
-		  // check all events
-		  bool okay = true;
-		  const std::set<interval_t> & original = events[ ee->first ][ rr->first ][ *ss ];
-		  std::set<interval_t>::const_iterator ii = original.begin();
-		  while ( ii != original.end() )
+		  int iter = 0;
+		  
+		  while ( 1 )
 		    {
-		      interval_t i = *ii;
-		      i.start += pp;
-		      i.stop += pp;
-		      // check - spans segment break?
-		      if ( i.start < maxshuffle && i.stop >= maxshuffle )
+		      // we having to try too hard?   tells us the data are
+		      // not appropriate for this
+		      
+		      ++iter;
+		      if ( iter > 1000 )
+			Helper::halt( "cannot find shuffle sets for " + *ss );
+		      
+		      // putative shuffle 
+		      pp = CRandom::rand( maxshuffle );
+		      
+		      // check all events
+		      bool okay = true;
+		      const std::set<interval_t> & original = events[ ee->first ][ rr->first ][ *ss ];
+		      std::set<interval_t>::const_iterator ii = original.begin();
+		      while ( ii != original.end() )
 			{
-			  okay = false;
-			  break;
+			  interval_t i = *ii;
+			  i.start += pp;
+			  i.stop += pp;
+			  // check - spans segment break?
+			  if ( i.start < maxshuffle && i.stop >= maxshuffle )
+			    {
+			      okay = false;
+			      break;
+			    }
+			  ++ii;
 			}
-		      ++ii;
+		      
+		      // need to try again?
+		      if ( okay ) break;
 		    }
+		  
 
-		  // need to try again?
-		  if ( okay ) break;
+		  // save this aligned shuffle?
+		  
+		  
 		}
 
+	      
 	      //
 	      // now we have a valid shuffle value... do the shuffle 
 	      //
@@ -1590,7 +1626,7 @@ void annotate_t::new_seeds()
 		      ++acnt;
 		    }
 		  ++tcnt;
-
+		  
 		  // next interval
 		  ++ii;
 		}
@@ -1598,11 +1634,11 @@ void annotate_t::new_seeds()
 	    }
 	  ++ee;
 	}
-
+      
       logger << "   - wrote " << acnt << " (of " << tcnt << ") seed events, based on ";
       if ( ! out_include ) logger << "not ";
       logger << "matching " << mcount << " or more other annots\n";
-
+      
       // all done, next seed
       ++ss;
     }

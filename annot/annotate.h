@@ -124,6 +124,10 @@ struct annotate_t {
   
   bool pool_channels;
 
+  std::set<std::string> pool_channel_sets;
+
+  std::set<std::string> aligned_permutes;
+  
   bool ordered_groups;
   
   int nreps;

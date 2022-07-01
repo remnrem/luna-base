@@ -925,6 +925,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
       else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
+      else if ( is( c, "RENAME" ) )       proc_rename( edf, param(c) );
       else if ( is( c, "ENFORCE-SR" ) )   proc_enforce_signals( edf , param(c) );
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
       else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
@@ -3172,6 +3173,41 @@ void proc_enforce_signals( edf_t & edf , param_t & param )
   if ( drops.size() > 0 ) logger << "\n";
  
 }
+
+
+// RENAME : rename signals
+
+void proc_rename( edf_t & edf , param_t & param )
+{
+
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  std::vector<std::string> new_signals = param.strvector( "new" );
+  
+  if ( signals.size() != new_signals.size() )
+    Helper::halt( "number of channels for 'sig' and 'new' must match" );
+
+  const int ns = signals.size();
+  
+  // check that all new labels are in fact new
+  std::set<std::string> newset;
+  for (int s=0; s<ns; s++)
+    {
+      if ( edf.header.has_signal( new_signals[s] ) )
+	Helper::halt( "'new' signal labels cannot already exist in the EDF" );
+      newset.insert( new_signals[s] );
+    }
+
+  if ( newset.size() != new_signals.size() )
+    Helper::halt( "cannot have duplicate labels in new" );
+      
+  for (int s=0; s<ns; s++)
+    {
+      logger << "  renaming [" << signals.label(s) << "] as [" << new_signals[s]  << "]\n";
+      edf.header.rename_channel(  signals.label(s) , new_signals[s] );
+    }
+
+}
+
 
 // SIGNALS : drop one or more signal
 
