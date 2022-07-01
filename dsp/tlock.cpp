@@ -159,6 +159,16 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       std::vector<int> cx = cache->fetch( *cc );
 
       //
+      // any intervals? if not, skip
+      // 
+      
+      if ( cx.size() == 0 ) 
+	{
+	  ++cc;
+	  continue;
+	}
+      
+      //
       // do we have a channel specification, and must this match?
       //
 

@@ -284,6 +284,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // lights-off=hh::mm::ss
   //  OR 
   // if numeric, assume this is seconds past EDF start
+  //  explicitly check for ":" to denote hh:mm:ss
 
   double lights_off = -1;
   double lights_on = -1;
@@ -292,9 +293,12 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   
   if ( param.has( "lights-off" ) && param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" )
     {
+      const std::string loffstr = param.value( "lights-off" );
+      const bool hms_mode = loffstr.find( ":" ) != std::string::npos;
+      
       // argument in seconds:
       double x;
-      if ( Helper::str2dbl( param.value( "lights-off" ) , &x ) ) 
+      if ( (!hms_mode) && Helper::str2dbl( loffstr , &x ) ) 
 	{
 	  if ( x < 0 ) 
 	    {
@@ -308,13 +312,13 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 		 << lights_off << " secs, "
 		 << lights_off/60.0 << " mins from start\n";
 	}
-      else
+      else if ( hms_mode )
 	{
-      
+	  
 	  // else assume is hh:mm:ss
 
 	  if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-off=hh:mm:ss" );
-	  clocktime_t et( param.value( "lights-off" ) );
+	  clocktime_t et( loffstr );
 	  if ( et.valid ) 
 	    {	  
 	      int earlier = clocktime_t::earlier( st , et );
@@ -330,8 +334,12 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	    }
 	  else
 	    logger << "  invalid time for lights-off=" 
-		   << param.value( "lights-off" ) << "  -- will ignore this\n";	  
+		   << loffstr << "  -- will ignore this\n";	  
 	}
+      else
+	logger << "  invalid time for lights-off="
+	       << loffstr << "  -- will ignore this\n";
+
     }
   
   //
@@ -341,9 +349,12 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   if ( param.has( "lights-on" ) && param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
     {
       
+      const std::string lonstr = param.value( "lights-on" );
+      const bool hms_mode = lonstr.find( ":" ) != std::string::npos;
+      
       // argument in seconds:
       double x;
-      if ( Helper::str2dbl( param.value( "lights-on" ) , &x ) ) 
+      if ( (!hms_mode) && Helper::str2dbl( lonstr , &x ) ) 
 	{
 	  if ( x < 0 ) 
 	    {
@@ -357,13 +368,15 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 		 << lights_on << " secs, "
 		 << lights_on/60.0 << " mins from start\n";
 	}
-      else
+      else if ( hms_mode )
 	{
-      
+	  
 	  // else assume is hh:mm:ss
 	  
-	  if ( ! st.valid ) Helper::halt( "EDF does not have a valid start time - cannot use lights-on=hh:mm:ss" );
-	  clocktime_t et( param.value( "lights-on" ) );
+	  if ( ! st.valid ) 
+	    Helper::halt( "EDF does not have a valid start time - cannot use lights-on=hh:mm:ss" );
+	  
+	  clocktime_t et( lonstr );
 	  if ( et.valid ) 
 	    {
 	      // assume that lights-on is always *after* EDF start
@@ -372,11 +385,12 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 		     << " (" << lights_on << " secs, " << lights_on/60.0 << " mins from start)\n";
 	    }
 	  else
-	    logger << "  invalid time for lights-on=" << param.value( "lights-on" ) << "  -- will ignore this\n";
-	  
+	    logger << "  invalid time for lights-on=" << lonstr << "  -- will ignore this\n";	  
 	}
+      else
+	logger << "  invalid time for lights-on=" << lonstr << "  -- will ignore this\n";	  
     }
-
+  
 
   //
   // If not already set, see if there are lights_on and/or lights_off annotations present
