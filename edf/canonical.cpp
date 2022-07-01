@@ -142,7 +142,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	  // otherwise, not a special case.. this is the start of a rule
 	  else 
 	    {	      
-	      canonical_label = line;
+	      canonical_label = Helper::sanitize( Helper::trim( line ) );
 	    }
 	  
 	  // add self name to unless list
@@ -235,21 +235,24 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		  if ( key == "SIG" )
 		    {
 		      for (int j=0; j<tok2.size(); j++)
-			req_sig.push_back( Helper::unquote( Helper::toupper( tok2[j] ) ) );
+			req_sig.push_back( Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) ) );
 		    }
 		  else if ( key == "REF" )
 		    {
 		      for (int j=0; j<tok2.size(); j++)
-                        req_ref.push_back( Helper::unquote( Helper::toupper( tok2[j] ) ) );
+                        req_ref.push_back( Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) ));
 		    }
 		  else if ( key == "TRANS" )
 		    {
 		      // n.b. first version cannot be an alias
 		      // n.b. . means missing (empty)
 		      // check that a field hasn't already been specified i.e. cannot have one-to-many mapping
+
+		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) );
+		      
 		      for (int j=0; j<tok2.size(); j++)
                         {
-			  std::string str = Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) );
+			  std::string str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) );
 			  if ( canonical_t::empty_field( str ) )
 			    {
 			      if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label ); 
@@ -257,7 +260,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 			    }
 			  if ( req_transducer.find( str ) != req_transducer.end() )
 			    Helper::halt( "cannot specify a transducer type multiple times: " + str + " for " + canonical_label );
-			  req_transducer[ str ] = Helper::unquote( tok2[0] );
+			  req_transducer[ str ] = pref_str;
 			}
 		    }
 		  else if ( key == "UNIT" )
@@ -265,9 +268,12 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		      // n.b. first version cannot be an alias
 		      // n.b. '.' means missing field 
 		      // as above, cannot specify a value multiple times
+
+		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) );
+
 		      for (int j=0; j<tok2.size(); j++)
 			{
-			  std::string str = Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) );
+			  std::string str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) );
 			  if ( canonical_t::empty_field( str ) )
                             {
                               if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label );
@@ -275,7 +281,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
                             }						    
 			  if ( req_unit.find( str ) != req_unit.end() )
 			    Helper::halt( "cannot specify a unit type multiple times: " + str + " for " + canonical_label );
-			  req_unit[ str ] = Helper::unquote( tok2[0] );
+			  req_unit[ str ] = pref_str;
 			}
 		    }
 		  else if ( key == "SR-MIN" || key == "MIN-SR" )
@@ -365,11 +371,14 @@ canon_edf_signal_t::canon_edf_signal_t( edf_header_t & hdr , const int slot )
   if ( slot < 0 || slot >= hdr.ns )
     Helper::halt( "bad EDF header slot" );
   
-  label = Helper::trim( Helper::sanitize( Helper::toupper( hdr.label[ slot ] ) ) );
+  label = Helper::sanitize( Helper::trim( Helper::toupper( hdr.label[ slot ] ) ) );
   sr = hdr.sampling_freq( slot );
-  unit = Helper::trim( Helper::sanitize( Helper::toupper( hdr.phys_dimension[ slot ] ) ) );
-  transducer = Helper::trim( Helper::sanitize( Helper::toupper( hdr.transducer_type[ slot ] ) ) );
+  unit = Helper::sanitize( Helper::trim( Helper::toupper( hdr.phys_dimension[ slot ] ) ) );
+  transducer = Helper::sanitize( Helper::trim( Helper::toupper( hdr.transducer_type[ slot ] ) ) );
 
+  if ( canonical_t::empty_field( unit ) ) unit = ".";
+  if ( canonical_t::empty_field( transducer ) ) transducer = ".";
+  
   scale = 0; // -1, 0, +1
   double phys_min = hdr.physical_min[slot] < hdr.physical_max[slot] ? hdr.physical_min[slot] : hdr.physical_max[slot];
   double phys_max = hdr.physical_min[slot] < hdr.physical_max[slot] ? hdr.physical_max[slot] : hdr.physical_min[slot];
@@ -663,7 +672,7 @@ void canonical_t::proc( )
       //
       // are we skipping this?
       //
-
+      
       if ( ! apply_this( rule.canonical_label ) )
 	continue;
       
@@ -703,7 +712,8 @@ void canonical_t::proc( )
 		  std::string nlab = rule.canonical_label + ( j ? "." + Helper::int2str(j) : "" ) ; 
 		  
 		  if ( ! dry_run )
-		    logger << "   renaming canonical " << olab									       << " as " << nlab << "\n";
+		    logger << "   renaming canonical " << olab
+			   << " as " << nlab << "\n";
 		  edf.header.rename_channel( olab , nlab );		  
 		}
 	    }
@@ -1059,16 +1069,16 @@ void canonical_t::proc( )
 	  else if ( rule.req_unit.find( sig->unit ) != rule.req_unit.end() )
 	    ustr = rule.req_unit.find( sig->unit )->second;
 	  else // copy and clean original, if not requirement
-	    ustr = Helper::trim( Helper::sanitize( edf.header.phys_dimension[ canonical_slot ] ) );
+	    ustr = Helper::sanitize( Helper::trim( edf.header.phys_dimension[ canonical_slot ] ) );
 	  
 	  if ( empty_field( ustr ) )
 	    ustr = ".";
 	  
 	  // update EDF header
 	  if ( verbose && edf.header.phys_dimension[ canonical_slot ] != ustr )
-	    logger << "   changing physical unit from "
+	    logger << "   changing physical unit from ["
 		   << edf.header.phys_dimension[ canonical_slot ]
-		   << " to " << ustr << "\n";
+		   << "] to " << ustr << "\n";
 	  edf.header.phys_dimension[ canonical_slot ] = ustr;
 	      
 	  // secondarily, for voltages, convert to either volts, millivolts, microvolts (set-unit)
@@ -1096,15 +1106,15 @@ void canonical_t::proc( )
 	  else if ( rule.req_transducer.find( sig->transducer ) != rule.req_transducer.end() )
 	    transducer = rule.req_transducer.find( sig->transducer )->second; 
 	  else // copy and clean original, if not requirement
-	    transducer = Helper::trim( Helper::sanitize( edf.header.transducer_type[ canonical_slot ] ) );
+	    transducer = Helper::sanitize( Helper::trim( edf.header.transducer_type[ canonical_slot ] ) );
 	  
 	  if ( empty_field( transducer ) )
 	    transducer = ".";
 	  
 	  if ( verbose && edf.header.transducer_type[ canonical_slot ]  != transducer )
-	    logger << "   changing transducer field from "
+	    logger << "   changing transducer field from ["
 		   << edf.header.transducer_type[ canonical_slot ]
-		   << " to " << transducer << "\n";
+		   << "] to " << transducer << "\n";
 	  
 	  edf.header.transducer_type[ canonical_slot ] = transducer;	  
 	}
@@ -1162,7 +1172,7 @@ void canonical_t::proc( )
       //
       // track that we have completed this rule
       //
-      
+
       completed.insert( rule.canonical_label );
       
 
@@ -1240,7 +1250,7 @@ void canonical_t::proc( )
       while ( ii != attempted.end() )
 	{
 	  if ( completed.find( *ii ) == completed.end() )
-	    {
+	    {	      
 	      any_incomplete = true;
 	      writer.level( *ii , "CS" );
 	      writer.value( "DEFINED" , 0 );
