@@ -47,12 +47,14 @@ void gc_wrapper( edf_t & edf , param_t & param )
   // Get signals
   //
 
-  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  const bool no_annotations = true;
 
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , no_annotations );
+  
   if ( signals.size() < 2 ) return;
-
+  
   const int ns = signals.size();
-
+  
 
   //
   // Check sample rates

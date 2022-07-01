@@ -117,6 +117,8 @@ struct annotate_t {
   double flanking_sec;
 
   double window_sec;
+
+  bool include_overlap_in_dist;
   
   double overlap_th;
   
@@ -129,7 +131,13 @@ struct annotate_t {
   std::set<std::string> fixed;
 
   std::map<std::string,double> flt_lwr, flt_upr;
+
+  // annot class specific channel inc/exc [ annot -> chs ] 
+  std::map<std::string,std::set<std::string> > chs_inc, chs_exc;
   
+  void proc_chlist( const std::string & s , const bool );
+  bool process_channel( const std::string & a , const std::string & ch );
+
   //
   // data
   //
@@ -153,6 +161,7 @@ struct annotate_t {
   std::string out_tag;
   bool out_include;
   int mcount; // must match at least this many 
+  bool seed_nonseed; // show only seed-nonseed hits
   // track how many 'overlaps' a seed annot has
   std::map<named_interval_t,int> hits;
   void new_seeds();
@@ -211,14 +220,17 @@ struct annotate_t {
   std::map<std::string,std::map<std::string,double> > absd_expsq;
   std::map<std::string,std::map<std::string,double> > absd_pv;
   std::map<std::string,std::map<std::string,double> > absd_z;
-  
+    
   // signed distance to nearest
   std::map<std::string,std::map<std::string,double> > sgnd_obs;
   std::map<std::string,std::map<std::string,double> > sgnd_exp;
   std::map<std::string,std::map<std::string,double> > sgnd_expsq;
   std::map<std::string,std::map<std::string,double> > sgnd_pv;
   std::map<std::string,std::map<std::string,double> > sgnd_z;
-  
+
+  // number of events included in the nearest-neighbour calcs
+  std::map<std::string,std::map<std::string,double> > dn_obs;
+  std::map<std::string,std::map<std::string,double> > dn_exp;
 
   //
   // helpers

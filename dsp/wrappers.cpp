@@ -417,6 +417,9 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
 }
 
 
+//
+// FFT
+//
 
 void dsptools::fft( edf_t & edf , param_t & param )
 {
@@ -425,13 +428,9 @@ void dsptools::fft( edf_t & edf , param_t & param )
   // whole signal FFT
   //
 
-  //
-  // show real/imaginary frequency-domain values
-  //
-
+  // show real/imaginary frequency-domain values?
   const bool verbose = param.has( "verbose" );
   
-
   //
   // iterate over signals
   //
@@ -457,47 +456,169 @@ void dsptools::fft( edf_t & edf , param_t & param )
       interval_t interval = edf.timeline.wholetrace();
       
       slice_t slice( edf , signals(s) , interval );
-
+      
       const std::vector<double> * d = slice.pdata();
+      
+      run_fft( *d , Fs , verbose );
+      
+      writer.unlevel( globals::signal_strat );
+    }
+  logger << "\n";
+}
 
-      int index_length = d->size();
 
-      FFT fftseg( index_length , index_length , Fs , FFT_FORWARD , WINDOW_NONE );
-      
-      fftseg.apply( &((*d)[0]) , index_length );
-      
-      // Extract the raw transform
-      std::vector<std::complex<double> > t = fftseg.transform();
-      
-      // Extract the raw transform scaled by 1/n
-      std::vector<std::complex<double> > t2 = fftseg.scaled_transform();
-      
-      int my_N = fftseg.cutoff;      
+std::vector<double> dsptools::readcin()
+{
+  std::vector<double> x;
 
-      for (int f=0;f<my_N;f++)
+  int cnt = 0;
+  while ( ! std::cin.eof() )
+    {
+      double xx;
+      std::cin >> xx;
+      if ( std::cin.bad() ) Helper::halt( "bad input" );
+      if ( std::cin.eof() ) break;	  
+      x.push_back( xx );	  
+      if ( ++cnt % 100000  == 0 )
+	logger << " line " << cnt << "\n";
+    }
+  logger << x.size() << " values read\n";
+  return x;
+}
+
+
+void dsptools::cmdline_fft( param_t & param )
+{
+  
+  std::vector<double> x = dsptools::readcin();
+
+  const int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 100 ; 
+
+  logger << "  setting sr = " << sr << "\n";
+  
+  const bool verbose = param.has( "verbose" );
+  
+  dsptools::run_fft( x , sr , verbose );
+  
+}
+
+void dsptools::run_fft( const std::vector<double> & x , const int Fs , const bool verbose )
+{
+  
+  int index_length = x.size();
+  
+  FFT fftseg( index_length , index_length , Fs , FFT_FORWARD , WINDOW_NONE );
+  
+  fftseg.apply( &(x[0]) , index_length );
+      
+  // Extract the raw transform
+  std::vector<std::complex<double> > t = fftseg.transform();
+  
+  // Extract the raw transform scaled by 1/n
+  std::vector<std::complex<double> > t2 = fftseg.scaled_transform();
+  
+  int my_N = fftseg.cutoff;      
+  
+  for (int f=0;f<my_N;f++)
+    {
+      writer.level( fftseg.frq[f] , globals::freq_strat );
+      
+      if ( verbose )
 	{
-	  writer.level( fftseg.frq[f] , globals::freq_strat );
-
-	  if ( verbose )
-	    {
-	      writer.value( "RE" , std::real( t[f] ) );
-	      writer.value( "IM" , std::imag( t[f] ) );
-	      writer.value( "UNNORM_AMP" , fftseg.mag[f] );
-	      writer.value( "NORM_AMP" , ( f == 0 ? 1 : 2 ) * fftseg.mag[f] / (double)index_length );
-	    }
-	  
-	  writer.value( "PSD" , fftseg.X[f] );
-	  
-	  if ( fftseg.X[f] > 0 ) 
-	    writer.value( "DB" , log10( fftseg.X[f] )  );
+	  writer.value( "RE" , std::real( t[f] ) );
+	  writer.value( "IM" , std::imag( t[f] ) );
+	  writer.value( "UNNORM_AMP" , fftseg.mag[f] );
+	  writer.value( "NORM_AMP" , ( f == 0 ? 1 : 2 ) * fftseg.mag[f] / (double)index_length );
 	}
-      writer.unlevel( globals::freq_strat );
-            
-    } // next signal
+      
+      writer.value( "PSD" , fftseg.X[f] );
+      
+      if ( fftseg.X[f] > 0 ) 
+	writer.value( "DB" , log10( fftseg.X[f] )  );
+    }
+  writer.unlevel( globals::freq_strat );
+    
+}
 
-  writer.unlevel( globals::signal_strat );
 
+
+//
+// Otsu
+//
+  
+void dsptools::otsu( edf_t & edf , param_t & param )
+{
+  
+  const int k = param.has( "k" ) ? param.requires_int( "k" ) : 100 ; 
+
+  const bool verbose = param.has( "verbose" ) ; 
+  
+  // iterate over signals
+  
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  
+  const int ns = signals.size();
+
+  logger << "  evaluating Otsu thresholds:";
+  
+  for (int s=0; s<ns; s++)
+    {
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) ) 
+	continue;
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      
+      logger << " " << signals.label(s) ;
+      
+      interval_t interval = edf.timeline.wholetrace();
+      
+      slice_t slice( edf , signals(s) , interval );
+      
+      const std::vector<double> * d = slice.pdata();
+      
+      run_otsu( *d , k );
+      
+      writer.unlevel( globals::signal_strat );
+    }
+  
   logger << "\n";
   
 }
+
+void dsptools::cmdline_otsu( param_t & param )
+{
+
+  std::vector<double> x = dsptools::readcin();
+  
+  const int k = param.has( "k" ) ? param.requires_int( "k" ) : 100 ; 
+
+  dsptools::run_otsu( x , k );
+  
+}
+  
+void dsptools::run_otsu( const std::vector<double> & x , const int k )
+{  
+  std::map<double,double> tvals, fvals;      
+
+  double f;  
+  double th = MiscMath::threshold2( x , &f, k , &fvals , &tvals );
+  
+  logger << "  Otsu threshold = " << th << " percentile = " << f << "\n";
+
+  writer.value( "EMPTH" , th );
+  writer.value( "EMPF" , f );
+  
+  std::map<double,double>::const_iterator tt =  tvals.begin();
+  while ( tt != tvals.end() )
+    {
+      writer.level( tt->first , "TH" );
+      writer.value("SIGMAB" , tt->second );
+      writer.value("F" , fvals[ tt->first ] );
+      ++tt;
+    }
+  writer.unlevel( "TH" );
+    
+}
+  
 

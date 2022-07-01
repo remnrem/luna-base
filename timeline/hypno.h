@@ -51,6 +51,32 @@ extern logger_t logger;
 
 void dummy_hypno();
 
+struct bout_t
+{
+  bout_t( const int e1, const int e2, const sleep_stage_t & stg )
+    : start(e1), stop(e2), ss(stg) 
+  {
+    // just track W, S, NR and ?
+    // NR --> N2 by default
+    if ( ss == NREM1 || ss == NREM3 || ss == NREM4 || ss == NREM2 )
+      ss = NREM2;
+    else if ( ! ( ss == WAKE || ss == REM ) )
+      ss = UNKNOWN;           
+  }
+
+  int start, stop;
+  sleep_stage_t ss;
+
+  bool operator<( const bout_t & rhs ) const
+  {
+    if ( start < rhs.start ) return true;
+    if ( rhs.start < start ) return false;
+    if ( stop < rhs.stop ) return true;
+    if ( rhs.stop < stop ) return false;
+    return ss < rhs.ss;    
+  }
+};
+
 struct hypnogram_t
 {
   
@@ -142,7 +168,9 @@ struct hypnogram_t
   std::map<std::string,double> pct;
   std::map<std::string,int> bout_n;
   std::map<std::string,double> bout_mean, bout_med, bout_5, bout_10, bout_max;
-  
+
+  std::set<bout_t> bouts;
+
   // double mins_wake;  // minutes awake
   // double mins_n1;  // minutes N1
   // double mins_n2;  // etc

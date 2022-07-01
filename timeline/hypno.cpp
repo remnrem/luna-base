@@ -916,14 +916,22 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   //
   // Bout count and duration (ignore N4 here.)
+  // Also, make an output of each bout
   //
 
-  const std::vector<std::string> these_stages = { "N1", "N2", "N3", "N4", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+  const std::vector<std::string> these_stages
+    = { "N1", "N2", "N3", "N4", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
 
   // initialize these two maps, which are +='ed below
   // i.e. (if HYPNO is run twice)
   bout_5.clear();
   bout_10.clear();
+
+
+  //
+  // Get bout stats
+  //
+
   
   std::vector<std::string>::const_iterator qq = these_stages.begin();
   while ( qq != these_stages.end() )
@@ -1039,8 +1047,39 @@ void hypnogram_t::calc_stats( const bool verbose )
       
       ++qq;
     }
+
+
+
+  //
+  // Bouts
+  //
   
+  bouts.clear();
+
+  // use bout_t to get NREM downcasting
+  bout_t curr( 0 , 0 , stages[0] );
+  int bstart = 0;
   
+  for (int e=1; e<=ne; e++)
+    {
+      
+      if ( e == ne )
+	{
+	  bouts.insert( bout_t( bstart , ne-1 , curr.ss ) );
+	  break;
+	}
+
+      bout_t next( 0 , 0 , stages[e] );
+
+      if ( next.ss != curr.ss )
+	{
+	  bouts.insert( bout_t( bstart , e-1 , curr.ss ) );
+	  curr.ss = next.ss;
+	  bstart = e;
+	}
+    }
+
+   
   //
   // Sleep cycles : based on modified Floyd & Feinberg rules
   //
@@ -2385,6 +2424,44 @@ void hypnogram_t::output( const bool verbose ,
       
       writer.unlevel( globals::stage_strat );      
 
+
+      //
+      // Bouts
+      //
+      int bn = 0;
+      std::set<bout_t>::const_iterator bb = bouts.begin();
+      while ( bb != bouts.end() )
+	{
+	  writer.level( ++bn ,"N" );
+
+	  const int e1 = epoch_n[ bb->start ] ;
+	  const int e2 = epoch_n[ bb->stop ] ;
+	
+	  clocktime_t ct1 = timeline->edf->header.starttime;
+	  ct1.advance_seconds( timeline->epoch_length() * e1 );
+
+	  // nb. +1 to get to /end/ of the last epoch
+	  clocktime_t ct2 = timeline->edf->header.starttime;
+	  ct2.advance_seconds( timeline->epoch_length() * ( e2 + 1 ) ) ;
+	  
+	  if ( bb->ss == NREM2 ) 
+	    writer.value( "STAGE" , "NR" );	  
+	  else
+	    writer.value( "STAGE" , globals::stage( bb->ss ) );	    
+	  
+	  writer.value( "FIRST_EPOCH" , e1 + 1 );
+	  writer.value( "LAST_EPOCH" , e2 + 1 );
+	  
+	  writer.value( "START" , ct1.as_string() );
+	  writer.value( "STOP"  , ct2.as_string() );
+
+	  writer.value( "MINS" , ( ( e2 - e1 + 1 ) * timeline->epoch_length() ) / 60.0 );
+	  
+	  ++bb;
+	}
+      writer.unlevel( "N" );
+  
+      
     }
   
   

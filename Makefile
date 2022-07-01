@@ -2,7 +2,7 @@ include Makefile.inc
 ifeq ($(ARCH),WINDOWS)
   TARGETS = luna destrat behead tocol
 else
-  TARGETS = luna libluna destrat behead dmerge tocol fixrows cgi-mapper simassoc
+  TARGETS = luna libluna destrat regional behead dmerge tocol fixrows cgi-mapper simassoc
 endif
 
 SRCS = globals.cpp eval.cpp cmddefs.cpp \
@@ -78,6 +78,9 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 
 destrat: utils/reader.o libluna.a
 	$(CXX) -o $@ $^ -L. -lz  $(LDFLAGS)
+
+regional: utils/region-annotate.o 
+	$(CXX) -o $@ $^ 
 
 tocol: utils/tocol.o 
 	$(CXX) -o $@ $^ $(LDFLAGS)

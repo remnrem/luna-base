@@ -298,6 +298,7 @@ void proc_annotate( edf_t & , param_t & );
 void proc_annot2signal( edf_t & , param_t & );
 void proc_signal2annot( edf_t & , param_t & );
 void proc_sig_annot_mean( edf_t & , param_t & );
+void proc_annot2cache( edf_t & , param_t & );
 
 void proc_record_dump( edf_t & , param_t & );
 void proc_record_table( edf_t & , param_t & );
@@ -343,6 +344,7 @@ void proc_mtm( edf_t & , param_t & );
 void proc_irasa( edf_t & , param_t & );
 void proc_1overf_norm( edf_t & , param_t & );
 void proc_tv_denoise( edf_t & , param_t & );
+void proc_otsu( edf_t & , param_t & );
 void proc_cwt( edf_t & , param_t & );
 void proc_hilbert( edf_t & , param_t & );
 void proc_sync(edf_t & , param_t & );
