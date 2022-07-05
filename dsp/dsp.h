@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "dupes.h"
 #include "gc.h"
 #include "ripples.h"
 #include "irasa.h"

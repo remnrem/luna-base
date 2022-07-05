@@ -3808,6 +3808,14 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 	  if      ( (*d)[i] < pmin ) pmin = (*d)[i];
 	  else if ( (*d)[i] > pmax ) pmax = (*d)[i];
 	}
+
+      // exapand range as needed
+      if ( fabs( pmin - pmax ) < 1e-6 )
+	{
+	  pmin--;
+	  pmax++;
+	}
+      
     }
 
   if ( debug )
@@ -5048,3 +5056,4 @@ void edf_t::set_headers( param_t & param )
     }
   
 }
+

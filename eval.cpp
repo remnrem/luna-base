@@ -871,7 +871,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "TYPES" ) )        proc_show_channel_map();
       else if ( is( c, "VARS" ) )         proc_dump_vars( edf , param(c) );
       else if ( is( c, "STATS" ) )        proc_stats( edf , param(c) );
-      
+      else if ( is( c, "DUPES" ) )        proc_dupes( edf, param(c) ); 
+		           
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
       else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
 
@@ -1172,6 +1173,11 @@ void proc_dump_vars( edf_t & edf , param_t & param )
         
 }
 
+// DUPES : find signals that are ~duplicates
+void proc_dupes( edf_t & edf , param_t & param )
+{
+  dsptools::dupes( edf, param );
+}
 
 // STATS : get basic stats for an EDF
 
