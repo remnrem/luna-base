@@ -49,9 +49,218 @@ annotate_t::annotate_t( edf_t & edf1 , param_t & param )
   
 annotate_t::annotate_t( param_t & param )
 {
+
   // command-line, multi-sample invocation
-  // TODO
+  
+  // create a 'super' individual, where we simply concatenate segments
+  // across individuals; we pull the same annotations from all sets 
+  
+  // this means we cannot write out annotations as matched/unmatched 
   single_indiv_mode = false;
+
+
+  // nb. we only allow this is 'bg' mode is specified -- this will
+  // implicitly ensure that annotations are only shuffled within
+  // individuals
+
+  if ( ! param.has( "bg" ) )
+    Helper::halt( "bg specification is required in multi-sample mode" );
+  
+  // expect a file: indiv -- annot
+  
+  std::string alist = param.requires( "a-list" );
+
+  std::map<std::string,std::set<std::string> > annots;
+
+  if ( ! Helper::fileExists( alist ) )
+    Helper::halt( "could not open " + alist );
+
+  // read each 
+  std::ifstream IN1( alist.c_str() , std::ios::in );
+  int acnt = 0;
+  while ( 1 )
+    {
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.eof() || IN1.bad() ) break;
+      if ( line == "" ) continue;
+      std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
+      if ( tok.size() != 2 )
+	Helper::halt( "expecting two tab/space delimited fields: ID  annot-file" );
+      annots[ tok[0] ].insert( tok[1] );
+      ++acnt;
+    }
+  IN1.close();
+  
+  logger << "  expecting " << acnt << " annotation files from " << annots.size() << " individuals\n";
+
+  //
+  // read in these annotations and make a super-individual annotation file
+  //
+
+  // build up a new annotation file, and re-read
+  const std::string aggregated = param.requires( "merged" ) + ".annot";
+
+  std::ofstream OUT1( aggregated.c_str() , std::ios::out );
+  
+  // get size of each 
+  std::map<std::string,double> ind2dur;
+  
+  double offset = 0 ; 
+  
+  std::map<std::string,std::set<std::string> >::const_iterator aa = annots.begin();
+  while ( aa != annots.end() )
+    {
+
+      const std::string & indiv = aa->first ;
+
+      logger << "\n  processing " << indiv;
+      
+      const std::set<std::string> & afiles = aa->second;
+      std::set<std::string>::const_iterator bb = afiles.begin();
+      while ( bb != afiles.end() )
+	{
+	  
+	  if ( ! Helper::fileExists( *bb ) )
+	    Helper::halt( "could not open " + *bb );
+	  
+	  // notes:
+	  //  expects a 'duration_sec' filed in the .annot
+	  //  ignores any meta-data
+	  //  drops headers
+
+	  logger << " " << * bb ;
+	  
+	  const bool seen_indiv = ind2dur.find( indiv ) != ind2dur.end();
+	  
+	  std::ifstream IN1( bb->c_str() , std::ios::in );
+	  bool seen_dur = false;
+	  while ( 1 )
+	    {
+	      std::string line;
+	      Helper::safe_getline( IN1 , line );
+	      if ( IN1.eof() || IN1.bad() ) break;
+	      if ( line == "" ) continue;
+	      if ( line[0] == '#' ) continue;
+	      std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
+	      if ( tok.size() != 6 ) Helper::halt( "expecting standard 6-field annotations:" + line );
+
+	      if ( tok[0] == "duration_sec" )
+		{
+		  seen_dur = true;
+		  
+		  double sec;
+
+		  if ( ! Helper::str2dbl( tok[1] , &sec ) )
+		    Helper::halt( "problem reading duration_sec field: " + tok[1] );
+		  
+		  if ( seen_indiv )
+		    {
+		      if ( fabs( ind2dur[ indiv ] - sec ) > 0.1 )
+			Helper::halt( "different duration_sec observed for individual: " + indiv );
+		    }
+		  else
+		    {
+		      ind2dur[ indiv ] = sec ; 		      
+		    }		  
+		}
+	      
+	      
+	      // otherwise skip headers, etc
+	      if ( tok[0] == "class" || tok[3] == "." || tok[4] == "." ) continue;
+
+	      // requires we have duration before reading annots
+	      if ( ! seen_dur ) continue;
+
+	      // otherwise, we can expect to parse this line
+	      //  - assumption, these will be elapsed seconds (i.e. standard WRITE-ANNOTS output form)
+	      double start, stop;
+
+	      if ( ! Helper::str2dbl( tok[3] , &start ) )
+		Helper::halt( "invalid start field (secs): " + tok[3] );
+
+	      if ( ! Helper::str2dbl( tok[4] , &stop ) )
+		Helper::halt( "invalid start field (secs): " + tok[4] );
+
+	      // move forward
+	      start += offset;
+	      stop += offset;
+
+	      // write out to mega-file
+
+	      OUT1 << tok[0] << "\t"
+		   << tok[1] << "\t"
+		   << tok[2] << "\t"
+		   << start << "\t"
+		   << stop << "\t"
+		   << tok[5] << "\n";
+	      
+	    }
+	  IN1.close();
+
+	  // next annotation file
+	  ++bb;
+	}
+
+      logger << "\n"
+	     << "  annotations aligned from " << offset << " to " << offset + ind2dur[ indiv ] + 10.0 << " seconds\n";
+	
+      // shift offset along, with a spacer (arbitrary, 10 seconds)
+      // to avoid any flattening of contiguous regions (stop of ind A -- start of ind B)
+      offset += ind2dur[ indiv ] + 10.0; 
+      
+      // next individual
+      ++aa;
+    }
+  
+  // done writing
+  
+  OUT1.close();
+  
+  //
+  // done reading all inputs
+  //  -- now create the dummy EDF and attach the mega-file
+  //
+
+  //
+  // make an empty dummy EDF
+  //
+
+  // record size does not matter - set to 100 seconds
+  // and allow an extra record at end to make sure all fits
+
+  int nr = (int)( offset / 100 ) + 1 ;
+  int rs = 100;
+  std::string startdate = "01.01.85";
+  std::string starttime = "00.00.00";
+
+  logger << "\n";
+
+  edf_t edfm;
+  
+  bool okay = edfm.init_empty( "_aggregate_" , nr , rs , startdate , starttime );
+  
+  if ( ! okay ) Helper::halt( "problem creating the new aggrgete EDF" );
+  
+  //  
+  // load the aggregated file
+  //
+
+  edfm.timeline.annotations.set( &edfm );
+  
+  edfm.load_annotations( aggregated );
+  
+  //
+  // now run as for single-individual mode
+  //
+
+  edf = &edfm;
+
+  set_options( param );
+  prep();
+  loop();
+  output();
+  
 }
 
 void annotate_t::set_options( param_t & param )
@@ -69,10 +278,13 @@ void annotate_t::set_options( param_t & param )
   overlap_th = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0 ;
 
   // flattened all channels to a single event
-  pool_channels = param.has( "pool-channels" );
-  if ( pool_channels )
-    pool_channel_sets = param.strset( "pool-channels" );
-
+  pool_channels = param.has( "pool-channels" ) || param.has( "pool-specific-channels" ) ;
+  if ( param.has( "pool-specific-channels" ) )
+    pool_channel_sets = param.strset( "pool-specific-channels" );
+  
+  if ( pool_channels ) logger << "  pooling annotations across channels\n";
+  else logger << "  retaining channel-level information\n";
+  
   // keep channels separate, but permute similarly
   aligned_permutes = param.strset( "align" );
   
@@ -202,7 +414,7 @@ void annotate_t::prep()
   // for now, assume a single indiv only
       
   iid = edf->id;
-
+  
 
   //
   // Get annotations from attached timeline
@@ -220,7 +432,7 @@ void annotate_t::prep()
   while ( aa != sbgs.end() )
     {
       annot_t * a = edf->timeline.annotations.find( *aa );
-      if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";      
+      if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
       bgs.insert( a );
       ++aa;
     }
@@ -260,7 +472,7 @@ void annotate_t::prep()
   if ( seeds.size() == 0 )
     Helper::halt( "no matching seed annotations found" );
 
-
+  
   //
   // contruct the background set
   //
@@ -292,6 +504,7 @@ void annotate_t::prep()
       mbg = flatten( abg );      
     }
 
+  
   //
   // reduce edges?
   //
@@ -319,7 +532,6 @@ void annotate_t::prep()
   //
   // final summary
   //
-
   
   if ( mbg.size() != 0 )    
     {
@@ -448,6 +660,7 @@ void annotate_t::prep()
 	  
 	  bool pool = pool_channels &&
 	    ( pool_channel_sets.size() == 0 || pool_channel_sets.find( instance_idx.parent->name ) != pool_channel_sets.end() ) ; 
+
 	  
 	  
 	  const std::string aid = pool ?
@@ -594,8 +807,10 @@ void annotate_t::prep()
 	 << " annotation classes, including " << sachs.size() << " seed(s)\n";
 
   if ( filters )
-    logger << "  excluded " << filtered_out << " of " << filtered_out + cnt << " annotations based on filters, leaving " << cnt << "\n";
-
+    logger << "  excluded " << filtered_out << " of "
+	   << filtered_out + cnt
+	   << " annotations based on filters, leaving " << cnt << "\n";
+  
   
   // review
 
@@ -1560,7 +1775,7 @@ void annotate_t::build_null( const annotate_stats_t & s )
 void annotate_t::new_seeds()
 {
 
-  if ( !single_indiv_mode )
+  if ( ! single_indiv_mode )
     {
       logger << "  *** cannot add a new seed annotation when running in multi-individual mode ***\n";      
       return;
@@ -1577,7 +1792,7 @@ void annotate_t::new_seeds()
       const std::string aname = achs_name_ch[ *ss ].first;
       const std::string chname = achs_name_ch[ *ss ].second;
       
-      logger << "  creating new annotation " << aname << out_tag << "\n";
+      logger << "  creating new annotation " << aname << out_tag << " ( channel = " << chname << " )\n";
       
       annot_t * a = edf->timeline.annotations.add( aname + out_tag );
       int acnt = 0 , tcnt =0 ;

@@ -41,8 +41,8 @@ void proc_eval_tester( const bool );
 void process_edfs(cmd_t&);
 void list_cmds();
 
-void build_param_from_cmdline( param_t * );
-void build_param_from_args( param_t * , int argc , char** argv );
+void build_param( param_t * , int argc , char** argv , int );
+void build_param_from_stdin( param_t * );
 std::string luna_base_version();
 
 #endif

@@ -56,7 +56,16 @@ struct massoc_t {
 	    const std::vector<std::string> & colids ,
 	    const Data::Matrix<double> & X ,
 	    const std::string & filename );
-  
+
+  // also from TLOCK, but allowing unique indiv IDs
+  //  i.e. to faciliate picking trainers, etc
+  massoc_t( const std::vector<std::string> & ids ,
+	    const std::vector<std::string> & rowids ,
+	    const std::vector<std::string> & eids ,
+	    const std::vector<std::string> & colids ,
+	    const Data::Matrix<double> & X ,
+	    const std::string & filename );
+
 private:
 
 

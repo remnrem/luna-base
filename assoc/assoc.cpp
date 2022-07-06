@@ -960,7 +960,7 @@ void assoc_t::import_testdata( param_t & param )
 	Helper::halt( "requires at least two tab-delimited columns in " + files[f] );
       
       if ( hdr[0] != "ID" )
-	Helper::halt( "expecting first column hedaer to be ID in " + files[f] );
+	Helper::halt( "expecting first column header to be ID in " + files[f] );
       
       // process each line
       

@@ -88,7 +88,6 @@ int main(int argc , char ** argv )
       std::exit( globals::retcode ); 
     } 
   
-
   
   //
   // help mode
@@ -147,6 +146,7 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+  
   //
   // EVAL from the command line 
   //
@@ -171,15 +171,15 @@ int main(int argc , char ** argv )
     }
 
 
-
   //
   // PDC helper
   //
   
   else if ( argc == 2 && strcmp( argv[1] , "--pdc" ) == 0 )
     {
-      param_t param;
-      build_param_from_cmdline( &param );
+      param_t param;      
+      build_param_from_stdin( &param );
+      //build_param_from_args( &param , argc , argv );
       writer.nodb();
       writer.begin();      
       writer.id( "." , "." );
@@ -201,9 +201,7 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
-  
-
-  
+    
   //
   // build a project list
   //
@@ -217,6 +215,7 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+  
   //
   // change paths
   //
@@ -246,57 +245,41 @@ int main(int argc , char ** argv )
 
   
   //
-   // map channels/ annots
-   //
+  // map channels/ annots
+  //
 
-   if ( argc >=2 && strcmp( argv[1] , "--mapper" ) == 0 )
-     {
-       global.api();
-
-       // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
-       std::vector<std::string> tok;
-       for (int i=2;i<argc;i++) tok.push_back( argv[i] );
-       Helper::channel_annot_mapper( tok , false ) ;
-       std::exit(0);
-     }
-
-   //
-   // map channels/ annots, HTML style output
-   //
-
-   if ( argc >=2 && strcmp( argv[1] , "--mapper-html" ) == 0 )
-     {
-       global.api();
-       
-       // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
-       std::vector<std::string> tok;
-       for (int i=2;i<argc;i++) tok.push_back( argv[i] );
-       Helper::channel_annot_mapper( tok , true ) ;
-       std::exit(0);
-     }
-
-  
+  if ( argc >=2 && strcmp( argv[1] , "--mapper" ) == 0 )
+    {
+      global.api();
       
-  //
-  // compile text-table output across individuals
-  //
-
-//   else if ( argc >=2 && strcmp( argv[1] , "--compile" ) == 0 )
-//     {
-//       global.api();
-//       std::vector<std::string> tok;
-//       for (int i=2;i<argc;i++) tok.push_back( argv[i] );
-//       Helper::compile_txttabs( tok );
-//       std::exit(0);
-//     }
-
+      // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::channel_annot_mapper( tok , false ) ;
+      std::exit(0);
+    }
   
-
+  //
+  // map channels/ annots, HTML style output
+  //
+  
+  if ( argc >=2 && strcmp( argv[1] , "--mapper-html" ) == 0 )
+    {
+      global.api();
+      
+      // expecting form: cmap=xxx amap=xxx c=xxx a=yyy 
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::channel_annot_mapper( tok , true ) ;
+       std::exit(0);
+    }
+  
+  
   //
   // special command-line driven functions that do not involve
   // iterating through a sample list
   //
-
+  
   bool cmdline_proc_fir_design   = false;
   bool cmdline_proc_cwt_design   = false;
   bool cmdline_proc_pdlib        = false;
@@ -313,7 +296,36 @@ int main(int argc , char ** argv )
   bool cmdline_proc_pops         = false;
   bool cmdline_proc_otsu         = false;
   bool cmdline_proc_fft          = false;
-    
+  bool cmdline_proc_overlap      = false;
+
+  //
+  // use standard input versus command line for
+  // command-line options (e.g. --massoc, --psc, etc)
+  //
+  
+  // e.g. default : get options from stdin: (param_from_command_line == 0)
+  //
+  //   echo "load=file.dat rows" | luna --massoc -o out.db @param.txt vars=phe.txt
+  //
+  // else, if --options appears as a command line option, then take everything after that as options for --command
+  //   i.e. to build the param_t object 
+  //
+  //   luna --massoc -o out.db @param.txt --options vars=phe.txt load=file.data rows
+  //
+  
+  int param_from_command_line = 0 ; 
+  
+  for (int i=0; i<argc; i++)
+    {
+      if ( strcmp( argv[i] , "--options" ) == 0 ||
+	   strcmp( argv[i] , "--opt" ) == 0 )
+	{
+	  param_from_command_line = i+1;
+	  break;
+	}
+    }	
+  
+  
   //
   // parse command line
   //
@@ -321,7 +333,7 @@ int main(int argc , char ** argv )
   if ( argc == 2 && strcmp( argv[1] , "--pdlib" ) == 0 ) 
     {
       param_t param;
-      build_param_from_cmdline( &param );
+      build_param( &param, argc, argv, param_from_command_line );      
       writer.nodb();
       writer.begin();      
       writer.id( "." , "." );
@@ -371,7 +383,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_otsu = true;
 	  else if ( strcmp( argv[1] , "--fft" ) == 0 )
 	    cmdline_proc_fft = true;
-
+	  else if ( strcmp( argv[1] , "--overlap" ) == 0 )
+	    cmdline_proc_overlap = true;
 	}
       
       // otherwise, first element will be treated as a file list
@@ -582,6 +595,7 @@ int main(int argc , char ** argv )
     Helper::halt( "no input, quitting" );
 
 
+  
   //
   // -------- done parsing command args --------
   //
@@ -644,7 +658,8 @@ int main(int argc , char ** argv )
 	Helper::halt( "cannot specify both --psc and --nmf" );
       
       param_t param;
-      build_param_from_cmdline( &param );      
+      build_param( &param, argc, argv, param_from_command_line );
+            
       writer.begin();
       
       // writer.id( "." , "." );
@@ -673,7 +688,8 @@ int main(int argc , char ** argv )
     {
 #ifdef HAS_LGBM
       param_t param;
-      build_param_from_cmdline( &param );      
+      build_param( &param, argc, argv, param_from_command_line );
+
       writer.begin();
       writer.id( "." , "." );
       writer.cmd( "POPS" , 1 , "" );
@@ -697,7 +713,8 @@ int main(int argc , char ** argv )
     {
 #ifdef HAS_LGBM
       param_t param;
-      build_param_from_cmdline( &param );      
+      build_param( &param, argc, argv, param_from_command_line );
+
       writer.begin();
       writer.id( "." , "." );
       writer.cmd( "LGBM" , 1 , "" );
@@ -720,7 +737,8 @@ int main(int argc , char ** argv )
     {
 #ifdef HAS_LGBM
       param_t param;
-      build_param_from_cmdline( &param );      
+      build_param( &param, argc, argv, param_from_command_line );
+            
       writer.begin();
       writer.id( "." , "." );
       writer.cmd( "ASSOC" , 1 , "" );
@@ -743,7 +761,8 @@ int main(int argc , char ** argv )
     {
 #ifdef HAS_LGBM
       param_t param;
-      build_param_from_cmdline( &param );      
+      build_param( &param, argc, argv, param_from_command_line );
+
       writer.begin();
       writer.id( "." , "." );
       writer.cmd( "MASSOC" , 1 , "" );
@@ -764,7 +783,8 @@ int main(int argc , char ** argv )
   if ( cmdline_proc_fft )
     {
       param_t param;
-      build_param_from_args( &param , argc, argv );      
+      build_param( &param, argc, argv, param_from_command_line );
+
       writer.begin();      
       writer.id( "." , "." );
       writer.cmd( "FFT" , 1 , "" );
@@ -775,7 +795,26 @@ int main(int argc , char ** argv )
       std::exit(0);      
     }
 
-  
+
+  //
+  // OVERLAP enrichment (multi-sample case)
+  //
+
+  if ( cmdline_proc_overlap )
+    {
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+      
+      writer.begin();      
+      writer.id( "." , "." );
+      writer.cmd( "OVERLAP" , 1 , "" );
+      writer.level( "OVERLAP", "_OVERLAP" );      
+      annotate_t annotate( param );
+      writer.unlevel( "_OVERLAP" );
+      writer.commit();
+      std::exit(0);      
+    }
+
   //
   // Otsu thresholding
   //
@@ -783,7 +822,8 @@ int main(int argc , char ** argv )
   if ( cmdline_proc_otsu )
     {
       param_t param;
-      build_param_from_args( &param , argc, argv );
+      build_param( &param, argc, argv, param_from_command_line );
+      
       writer.begin();      
       writer.id( "." , "." );
       writer.cmd( "OTSU" , 1 , "" );
@@ -801,7 +841,8 @@ int main(int argc , char ** argv )
   if ( cmdline_proc_cperm_test )
     {      
       param_t param;
-      build_param_from_cmdline( &param );      
+      build_param( &param, argc, argv, param_from_command_line );
+
       writer.begin();      
       writer.id( "." , "." );
       writer.cmd( "CPT" , 1 , "" );
@@ -821,7 +862,8 @@ int main(int argc , char ** argv )
   if ( cmdline_proc_ms_kmer )
     {
       param_t param;
-      build_param_from_cmdline( &param );
+      build_param( &param, argc, argv, param_from_command_line );
+            
       writer.begin();
       
       writer.id( "." , "." );      
@@ -1182,7 +1224,8 @@ int main(int argc , char ** argv )
   if ( cmdline_proc_ms_cmp_maps )
     {
       param_t param;
-      build_param_from_cmdline( &param );
+      build_param( &param, argc, argv, param_from_command_line );
+      
       writer.begin();
       
       writer.id( "." , "." );      
@@ -3753,7 +3796,7 @@ void list_cmds()
   
 }
 
-void build_param_from_cmdline( param_t * param )
+void build_param_from_stdin( param_t * param )
 {
   
   while ( ! std::cin.eof() )
@@ -3770,12 +3813,25 @@ void build_param_from_cmdline( param_t * param )
 
 }
 
-void build_param_from_args( param_t * param , int argc , char** argv )
+void build_param( param_t * param , int argc , char** argv , int start )
 {
+
+  //
+  // get arguments from stdin (rather than the command line options?
+  //
+  
+  if ( start == 0 )
+    {
+      build_param_from_stdin( param );
+      return;
+    }
+
+  //
   // this only triggered w/ command-line commands, e.g. --fft, etc
-  // 1 is seed command, e.g. --fft
-  // parse args 2 onwards
-  for (int i=2; i<argc; i++)
+  // where we have an --options argument;  start equals the arg after that
+  //
+  
+  for (int i=start; i<argc; i++)
     {
       std::string x = argv[i];
       if ( x == "" ) continue;

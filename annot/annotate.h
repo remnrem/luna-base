@@ -175,7 +175,7 @@ struct annotate_t {
   std::set<std::string> achs; // All Annotation/CHannels
   std::map<std::string,std::pair<std::string,std::string> > achs_name_ch; // track originals
   
-  // for now, just fix to one iid
+  // track indiv ID
   std::string iid;
   
   // main interval map

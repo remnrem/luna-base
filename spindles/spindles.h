@@ -46,6 +46,9 @@ struct spindle_t
   int start_sp, stop_sp;
   interval_t tp;
   
+  // track mid in 'tp' units (from EDF start)
+  uint64_t tp_mid;
+  
   // spindle properties
   double amp, dur, fwhm, nosc, frq, fft, symm, symm2, isa;
   double chirp, frq_h1, frq_h2, frq_range; 

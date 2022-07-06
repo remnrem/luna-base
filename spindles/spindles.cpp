@@ -2257,26 +2257,16 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		     << ", instance: " << analysis_label 
 		     << ", channel: " << signals.label(s) << "\n";
 
-	      logger << "  ** note: sp:xxx meta-data are sample-points specific to this EDF mask\n";
-	      
 	      // use F_C as instance label
 	      for (int i=0;i<spindles.size();i++)
 		{
 		  
 		  const spindle_t & spindle = spindles[i];
-
-		  // ID + N + CH + F 
-		  // const std::string inst_id = full_annot_inst_ids
-		  //   ? edf.id + "|" + Helper::int2str( i+1 ) + "|" + signals.label(s) + "|" + analysis_label 
-		  //   : analysis_label ; 
 		  
 		  instance_t * instance = a->add( analysis_label , spindle.tp , signals.label(s) );
-		  
-		  int mid_sp = spindle.start_sp + spindle.peak_sp;
-		  //int mid_sp = spindle.start_sp + spindles[i].symm * ( spindle.stop_sp - spindle.start_sp ) ;
-		  
-		  // as string (sp:XXXXXXXX)
-		  instance->set( "mid", "sp:" + Helper::int2str( mid_sp ) );
+
+		  // index tp
+		  instance->set( "mid", "tp:" + Helper::int2str( spindle.tp_mid ) );
 		  
 		}
 	      
@@ -3466,9 +3456,11 @@ void characterize_spindles( edf_t & edf ,
       // spindle amp
       spindle->amp = max_p2p;
 
-
+      // track tp of spindle peak also
+      double fractional_mid = spindle->peak_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
+      spindle->tp_mid = spindle->tp.start + fractional_mid * ( spindle->tp.stop - spindle->tp.start ) ;  
+      //std::cout << " mids = " << spindle->tp.start << "\t" << spindle->tp_mid << "\t" << spindle->tp.stop << "\n";
       
-
  
       //
       // FFT for modal spindle frequency of spindle
@@ -3716,8 +3708,8 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        writer.level( i+1 , "SPINDLE" );  // 1-based spindle count
        
        writer.value( "START"  , spindle->tp.start * globals::tp_duration );
-       writer.value( "PEAK"  ,  ( spindle->start_sp + spindle->peak_sp ) * globals::tp_duration );
        writer.value( "STOP"   , spindle->tp.stop * globals::tp_duration );
+       writer.value( "PEAK"  ,  spindle->tp_mid * globals::tp_duration );
        
        writer.value( "START_SP"  , spindle->start_sp );
        writer.value( "PEAK_SP"  ,  spindle->start_sp + spindle->peak_sp );
@@ -3916,7 +3908,7 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 {
 
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , isa = 0 , qual = 0 ;
-
+  
   double symm = 0 , symm2 = 0, chirp = 0 ;
   double frq1 = 0 , frq2 = 0 , frq_range = 0;
 
@@ -4253,9 +4245,7 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
 
 	  instance_t * instance = a->add(  signals.label(s)  , spindle , signals.label(s) );
 	  
-	  uint64_t mid_tp = spindle.start + ii->symm * ( spindle.stop - spindle.start ) ;
-	  
-	  instance->set( "mid", (double)(mid_tp * globals::tp_duration ) );
+	  //instance->set( "mid", (double)(tp_mid * globals::tp_duration ) );
 	  
 	  ++ii;
 	}

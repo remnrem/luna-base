@@ -3218,8 +3218,8 @@ void timeline_t::annot2cache( const param_t & param )
   
   // create a set of cache<int> sample "points" based on an annotation meta-data,
 
-  // where we expect the time of each point in time-points elapsed from EDF start
-  // format mid=tp:172727374886
+  // where we expect the time of each point in seconds elapsed from EDF start
+  // format e.g. p=7737.4886
   
   // expected by TLOCK, etc.   need to make these globals more explicit
   const std::string cache_points_label = "points"; 
@@ -3227,25 +3227,62 @@ void timeline_t::annot2cache( const param_t & param )
   // get annotations
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
   std::vector<std::string> anames = param.strvector( "annot" );
-
+  
   // add channel stratifier
   const bool ignore_channel = param.yesno( "ignore-channel" );
+
+  if ( ignore_channel ) logger << "  ignoring channel from annotations\n";
+  else logger << "  tracking channel from annotations (add 'ignore-channel' to ignore)\n";
   
   // which meta-data field contains the seconds time stamp?
   std::string meta = param.requires( "meta" ); 
-  
+  logger << "  looking for tp:XXX data in annotation meta-field " << meta << "\n";
+    
   // if not otherwise specified, use annot names as new channel labels, otherwise map to a single label  
   const bool single_cache = param.has( "cache" );
   const std::string single_cache_name = single_cache ? param.value( "cache" ) : "" ; 
   std::vector<std::string> cnames = anames;
-
+  if ( single_cache ) logger << "  mapping to a single cache " << single_cache_name << "\n";
+  else logger << "  mapping to caches based on annotation names\n";    
+  
   // requires a sample rate to be specified
-  const int sr = param.requires_int( "sr" );
-  if ( sr <= 0 ) Helper::halt( "requires positive sr argument" );
+  //  - this done by 'attaching' a channel (sig)
+  const std::string attached_sig = param.requires( "sig" );
+  signal_list_t signals = edf->header.signal_list( attached_sig );
+  
+  if ( signals.size() != 1 ) Helper::halt( "expecting a single channel (present in EDF) for 'sig' " );
+  
+  const int sr = edf->header.sampling_freq( signals )[0];
+  logger << "  using " << attached_sig << " (Fs = " << sr
+	 << ") to anchor annotations to sample-points\n";
+
+  // must map to within 1 sample (i.e. if at edge?)
+  const double max_diff = param.has( "diff" ) ? param.requires_dbl( "diff" ) : 1/(double)sr;
+  logger << "  mapping to closest sample-point within " << max_diff << " seconds\n";
   
   // store int peaks (derived from second-level times)
-  // channel-specific map
+  // in a channel-specific map
   std::map<std::string,std::vector<int> > d;
+  
+  // get current time-point channel (for all)
+  slice_t slice( *edf , signals(0) , edf->timeline.wholetrace() );
+
+  const std::vector<uint64_t> * tp = slice.ptimepoints();
+
+  struct chpt_t {
+    chpt_t( const std::string & ch , uint64_t tp )
+      : ch(ch) , tp(tp) { }
+    
+    std::string ch;
+    uint64_t tp;
+    
+    bool operator< (const chpt_t & rhs ) const
+    {
+      if ( tp < rhs.tp ) return true;
+      if ( tp > rhs.tp ) return false;
+      return ch < rhs.ch;
+    }
+  };
   
   // for each annotation
   for (int a=0; a<anames.size(); a++)
@@ -3254,99 +3291,115 @@ void timeline_t::annot2cache( const param_t & param )
       // does annot exist?
       annot_t * annot = annotations( anames[a] );
       if ( annot == NULL ) continue;
-
+      
       int cnt = 0 ;
       
-      // get all events
+      // get all events (which are sorted)
       const annot_map_t & events = annot->interval_events;
+
+      // tp index
+      std::set<chpt_t> tps;
       
       // look at each annotation event
       annot_map_t::const_iterator aa = events.begin();
       while ( aa != events.end() )
 	{
-
+	  
 	  // get instance
 	  const instance_t * instance = aa->second;
 	  
 	  // does it have the requisite field?
 	  avar_t * m = instance->find( meta );
-
+	  
 	  if ( m != NULL )
 	    {
-	      // get as a string-format tp:XXXXXXX sample-points
+	      // get as 'tp:XXXXXXX' string
 	      std::string t = m->text_value() ;
-	      
-	      if ( t.size() < 4 ) Helper::halt( "bad format for meta field: " + t );
-	      if ( t.substr(0,3) != "sp:" ) Helper::halt( "bad format for meta field: " + t );
-	      int sp = 0;
-	      if ( ! Helper::str2int( t.substr(3) , &sp ) )
-		Helper::halt( "bad format for meta field: " + t );
-	      
-	      
-	      const std::string ch = ignore_channel ? "." : aa->first.ch_str ;
-	      
-	      d[ ch ].push_back( sp );
-	      
-	      ++cnt;
+
+	      if ( t.size() >= 4 && t.substr(0,3) == "tp:" )
+		{
+		  
+		  std::string t2 = t.substr(3);
+		  uint64_t tpval;
+		  if ( ! Helper::str2int64( t2 , &tpval ) )
+		    Helper::halt( "invalid tp: format in annotation file:" + t );
+		  
+		  // add as channel-specific mapping or no?
+		  tps.insert( chpt_t( ignore_channel ? "." : aa->first.ch_str , tpval ) );
+				      
+		}
 	    }
-	  
-	  // OLD
-	  // want to make sure this includes at least one sample point... so make interval span
-	  // 1/sr with the point in the middle
-	  //uint64_t width_tp = globals::tp_1sec / (double)( 2.0 * sr );
-	  
-	  //std::cout << " TP = " << tp << "\n";
-	      
-	      //interval_t interval( tp - width_tp , tp + width_tp );
-	      
-	      //int start_rec , start_smp , stop_rec , stop_smp ;
-	      
-	      // bool okay = interval2records( interval , sr , 
-	      // 				    & start_rec , & start_smp ,
-	      // 				    & stop_rec , & stop_smp ) ;
-	      
-	    //   if ( okay )
-	    // 	{
-
-	    // 	  // std::cout << "start , rec-dur , sr , smp = " << start_rec << " " << edf->header.record_duration << " "
-	    // 	  // 	    << sr << " " << start_smp << "\n";
-		  
-	    // 	  int sp = start_rec * edf->header.record_duration * sr + start_smp ;
-	    // 	  uint64_t sp2 = start_rec * edf->header.record_duration * sr + start_smp ; 
-
-	    // 	  //std::cout << " sp = " << sp << " " << sp2 << "\n";
-		  
-		  
-	    // 	  const std::string ch = ignore_channel ? "." : aa->first.ch_str ;
-		    
-	    // 	  d[ ch ].push_back( sp );
-
-	    // 	  ++cnt;
-
-	    // 	  // std::cout << " added " << interval.as_string() << "\t"
-	    // 	  //  	    << start_rec << " " << start_smp << " = " << sp << "\n";
-		  
-	    // 	}
-	    //   else
-	    // 	{
-	    //    	  //std::cout << "hmmmm\n";
-	    //    	  // int sp = start_rec * edf->header.record_duration * sr	+ start_smp ;
-		  
-	    //    	  // std::cout << " *** FAILED tried to added " << interval.as_string() << "\t"
-	    // 	  // 	    << start_rec << " " << start_smp << " = " << sp << "\n";
-		  
-	    // 	}
-	    // }
 	  
 	  // next instance
 	  ++aa;
 	  
 	}
       
-      logger << "  added " << cnt << " cache points from " << anames[a] << "\n";
+      //
+      // now we have a sorted set of time-points
+      //
       
-      // add to this cache, or save to add to a combined cache?
+      int idx = 1;
+      const int np = tp->size();
 
+      // std::cout << " np = " << np << "\n";
+      // std::cout << " num annots = " << tps.size() << "\n";
+      
+      std::set<chpt_t>::const_iterator tt = tps.begin();
+      while ( tt != tps.end() )
+	{
+	  
+	  const uint64_t & curr = tt->tp;
+	  const uint64_t & prior = (*tp)[idx-1];
+	  const uint64_t & next = (*tp)[idx];
+  
+	  // shift sample-point window up
+	  if ( next < curr )
+	    {
+	      ++idx;
+	      if ( idx == np ) break;
+	      continue;
+	    }
+	  
+	  // is in-between these two points?
+	  if ( curr >= prior && curr < next )
+	    {
+	      const uint64_t d1 = curr - prior;
+	      const uint64_t d2 = next - curr ;
+	      
+	      const bool first = d1 < d2 ; 
+
+	      double df = ( first ? d1 : d2 ) * globals::tp_duration ; 
+
+	      // close enough?
+	      if ( df <= max_diff )
+		{
+		  int sp = first ? idx-1 : idx ;
+		  
+		  // store
+		  d[ tt->ch ].push_back( sp );
+		  
+		  //std::cout << " adding " << anames[a] <<" " << sp << " " << ( first ? prior : next ) << "\n";
+		  
+		  ++cnt;
+		}
+	    }
+	  
+	  // advance to next point 
+	  ++tt;
+	}
+      
+           
+      //
+      // done mapping
+      //
+      
+      logger << "  added " << cnt << " (of " << tps.size() << ") cache points from " << anames[a] << "\n";
+
+      //
+      // add to this cache, or save to add to a combined cache?
+      //
+      
       if ( ! single_cache )
 	{
 	  cache_t<int> * c = cache.find_int( cnames[a] );

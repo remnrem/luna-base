@@ -98,8 +98,10 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   // 
   
   bool verbose = param.has( "verbose" );
-
+  
   bool to_massoc = param.has( "export" );
+
+  bool massoc_iids = param.yesno( "unique-ids" );
   
   //
   // get window
@@ -439,7 +441,13 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	      //  EDFID_C3_11_1
 	      //  EDFID_C3_11_2 ...
 	      //  etc
+
+	      // optionally, make indiv-IDs unique, i.e. so we can select individual
+	      // events as trainers.  This effectively breaks the "indiv" hierarchy.
+	      // (that is, we will not be able to manipulate all events belonging to
+	      // one person)
 	      
+	      std::vector<std::string> iids( massoc_iids ? nrow : 0 );
 	      std::vector<std::string> rowids( nrow );
 	      std::vector<std::string> eids( nrow );
 	      
@@ -457,8 +465,12 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	      
 	      for (int i=0; i<nrow; i++)
 		{
+		  
 		  rowids[i] = rowbase ;
 		  eids[i] = Helper::int2str( eidx_base1[i] );
+		  
+		  // make unique IDs?
+		  if ( massoc_iids ) iids[i] = "_ind_" + edf.id + "_row_" + rowids[i] + "_obs_" + eids[i];
 		}
 	      
 	      // col IDs: simply 1, 2, 3, etc
@@ -474,7 +486,17 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	      //std::cout << " rowids.size() = " << rowids.size() <<"  " << colids.size() << " " << tlock.X.dim2() <<  "x" << tlock.X.dim1() << "\n";
 
 	      // save
-	      massoc_t massoc( edf.id , rowids , eids, colids , tlock.X , filename );
+
+	      if ( massoc_iids )
+		{
+		  logger << "  writing with unique indiv-level IDs\n";
+		  massoc_t massoc( iids , rowids , eids, colids , tlock.X , filename );
+		}
+	      else
+		{
+		  logger << "  preserving indiv-level IDs\n";
+		  massoc_t massoc( edf.id , rowids , eids, colids , tlock.X , filename );
+		}
 #else
 	      Helper::halt( "LGBM support not compiled in" );
 #endif

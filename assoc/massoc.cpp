@@ -81,10 +81,13 @@ massoc_t::massoc_t( param_t & param )
 
       const int nrow = training_iids.size();
 
-      std::cout << "ID\n";
+      std::cout << "ID1\tIID\tID\tEID\n";
       for (int i=0; i<nrow; i++)
-	std::cout << training_iids[i] << "_" << training_ids[i] << "_" << training_eids[i] << "\n";
-
+	std::cout << training_iids[i] << "_" << training_ids[i] << "_" << training_eids[i] << "\t"
+		  << training_iids[i] << "\t"
+		  << training_ids[i] << "\t"
+		  << training_eids[i] << "\n";
+      
       return;
       
     }
@@ -749,7 +752,7 @@ void massoc_t::save( const std::vector<std::string> & iids,
 
   std::ofstream OUT1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::out );
   
-  logger << " writing binary data matrix, " << ncol << " features, " << nrow << " observations\n";
+  logger << "  writing binary data matrix, " << ncol << " features, " << nrow << " observations\n";
   
   // rows 
   Helper::bwrite( OUT1, nrow ) ;
@@ -801,6 +804,29 @@ massoc_t::massoc_t( const std::string & iid,
   
 }
 
+massoc_t::massoc_t( const std::vector<std::string> & iids,
+		    const std::vector<std::string> & rowids ,
+		    const std::vector<std::string> & eids ,
+		    const std::vector<std::string> & colids ,
+		    const Data::Matrix<double> & XX ,
+		    const std::string & filename )
+{
+
+  // yes, dumb copy, I know
+  // also note::: whilst coming from TLOCK, XX needs to be transposed --> X
+
+  const int nrow = XX.dim2();
+  const int ncol = XX.dim1();
+  
+  Eigen::MatrixXd X = Eigen::MatrixXd::Zero( nrow, ncol );
+  for (int i=0; i<nrow; i++)
+    for (int j=0; j<ncol; j++)
+      X(i,j) = XX(j,i); // nb. transpose
+  
+  save( iids, rowids, eids, colids, X , filename );
+  
+}
+
   
 // load phenotypes/labels
 void massoc_t::attach_phenotypes( param_t & param )
@@ -829,7 +855,6 @@ void massoc_t::attach_phenotypes( param_t & param )
     {
       const std::string id = iid_match ? training_iids[i] : training_iids[i] + "_" + training_ids[i] + "_" + training_eids[i];	
       if ( cmd_t::pull_ivar( id , phenotype_label , &y ) ) { Ytrain[i] = y; ++obs_train; }
-      
     }
   
   // validation data
