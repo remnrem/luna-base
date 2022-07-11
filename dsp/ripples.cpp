@@ -68,6 +68,8 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
 
   const int req_peaks_raw = param.has( "peaks-raw" ) ? param.requires_int( "peaks-raw" ) : req_peaks_flt ; 
 
+  const double req_raw_p2p_prop = param.has( "peaks-raw-prop" ) ? param.requires_dbl( "peaks-raw-prop" ) : 0.01 ; 
+  
   const int hfbands = param.has( "bands" ) ? param.requires_int( "bands" ) : 1 ;
 
   const double edge_secs = param.has( "edges" ) ? param.requires_dbl( "edges" ) : 1.0 ; 
@@ -130,8 +132,9 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
       logger << "\n  processing " << signals.label(s) << "...\n";
       
       ripples_t ripples( *d , *tp , sr , flwr, fupr, kwin_ripple, kwin_tw, verbose ,
-			 hfbands, th, req_msec, req_peaks_flt, req_peaks_raw , combine_msec,			 
-			 edge_secs , otsu_k );
+			 hfbands, th, req_msec, req_peaks_flt, req_peaks_raw , req_raw_p2p_prop,
+			 combine_msec, edge_secs , otsu_k );
+			 
 
       // stats & annots
       if ( ! otsu )
@@ -165,6 +168,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      const double req_msec ,
 		      const int req_peaks_flt ,
 		      const int req_peaks_raw ,
+		      const double req_raw_p2p_prop , 
 		      const double combine_msec , 
 		      const double edge_secs ,
 		      const int otsu_k )
@@ -439,22 +443,72 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		{
 		  int flt_peakn = 0;
 		  for (int s=start+1; s<stop-1; s++)
-		    if ( fabs( xf[s] ) > fabs( xf[s-1] )  && fabs( xf[s] ) > fabs( xf[s+1] ) )
-		      ++flt_peakn;
+		    {
+		      if ( xf[s] > xf[s-1] && xf[s] > xf[s+1] ) 
+			++flt_peakn;
+		      else if ( xf[s] < xf[s-1] && xf[s] < xf[s+1] )
+			++flt_peakn;
+		    }
 		  if ( flt_peakn < req_peaks_flt )
 		    okay = false;
 		}
 	      
-	      // same, in raw data
+	      // same, in raw data -- and track sizes
 	      if ( okay && req_peaks_raw )
 		{
-		  int raw_peakn = 0;
-		  for (int s=start+1; s<stop-1; s++)
-		    if ( fabs(x[s]) > fabs(x[s-1]) && fabs(x[s]) > fabs(x[s+1]) )
-		      ++raw_peakn;
-		  if ( raw_peakn < req_peaks_raw )
-		    okay = false;
+		  
+		  std::vector<int> pk;
+		  for (int s=start+1; s<stop-1; s++)		    
+		    {
+		      if ( x[s] >= x[s-1] && x[s] > x[s+1] )	
+			pk.push_back( s );
+                      else if (	x[s] <= x[s-1] && x[s] < x[s+1] )
+			pk.push_back( s );		      
+		    }
+		  
+		  std::vector<double> p2p;
+		  std::vector<bool> pdir;
+		  double max_p2p = 0;
+		  for (int p=1;p<pk.size();p++)
+		    {
+		      double t = fabs( x[pk[p-1]] ) - fabs( x[pk[p]] ) ;
+		      if ( t > max_p2p ) max_p2p = t;
+		      p2p.push_back( t );
+		      pdir.push_back( x[pk[p-1]] >  x[pk[p]] );
+		    }
+		  
+		  
+		  // require these to be at least e.g. 20% of the max p2p to be counted
+		  // and require at least req_peaks_raw / 2 of each
+
+		  int raw_peakn_pos = 0;
+		  int raw_peakn_neg = 0;
+		  for (int p=0; p<p2p.size(); p++)
+		    {
+		      //std::cout << " p2p = " << p2p[p] <<" " <<  max_p2p << " " << req_raw_p2p_prop << " " << 
+		      if ( fabs( p2p[p] ) >= max_p2p * req_raw_p2p_prop )
+			{
+			  if ( pdir[p] ) 
+			    ++raw_peakn_pos;
+			  else
+			    ++raw_peakn_neg;
+			}
+		    }
+		  
+		  //std::cout << " raw_peakn = " << p2p.size() << "\t" << raw_peakn_pos << " " << raw_peakn_neg  << "\t" << req_peaks_raw << "\n";
+		  // for (int s=start; s<stop; s++)
+		  //   std::cout << "  " << x[s] << "\t" << xf[ s ] << "\n"; 
+ 		  
+		  if ( raw_peakn_pos < req_peaks_raw/2.0 || raw_peakn_neg < req_peaks_raw/2.0 )
+		    {
+		      okay = false;
+		      //std::cout << " IS BAD\n";
+		    }
+		  // else
+		  //   std::cout << " IS GOOD\n";
+		  
 		}
+		  
 	      
 	      // add?
 	      if ( okay )
@@ -591,6 +645,60 @@ ripples_t::ripples_t( const std::vector<double> & x ,
       //
       
       rip.nhw = hwsp.size() ;
+
+
+      //
+      // max peak-to-peak amplitude (based on neg-to-pos)
+      //
+      
+      rip.p2pamp = 0;
+
+      double max_neg = 0 , max_pos = 0;
+      bool seen_pos = false; bool seen_neg = false;
+      
+      for (int i=1; i<zc_idx.size(); i++)
+	{
+	  
+	  // from ZC previous to this one
+	  const bool pos_hw = pos2neg[i]; // this is end of this HW
+
+	  if ( pos_hw )
+	    {
+	      seen_pos = true;
+	      for (int j=zc_idx[i] ; j>=zc_idx[i-1]; j-- )
+		if ( xx[j] > max_pos ) max_pos = xx[j];
+	    }
+	  else
+	    {
+	      seen_neg = true;
+	      for (int j=zc_idx[i] ; j>=zc_idx[i-1]; j-- )
+                if ( xx[j] < max_neg ) max_neg = xx[j];
+	    }
+	  
+	  // eval only neg-peak --> pos-peak
+	  
+	  if ( seen_neg && seen_pos )
+	    {
+	      double p2p = max_pos - max_neg;	      
+	      if ( p2p > rip.p2pamp )
+		rip.p2pamp = p2p;
+
+	      // keep most recent HW peak; clear one before so we can compare
+	      // (i-1) vs i,  and now i vs (i+1)
+	      if ( pos_hw )
+		{
+		  seen_neg = false;
+		  max_neg = 0;
+		}
+	      else
+		{
+		  seen_pos = false;
+		  max_pos = 0;
+		}
+	      
+	    }
+	  
+	}
 
       
       //
@@ -774,6 +882,7 @@ void ripples_t::output( const bool verbose )
 	  writer.value( "MAG" , ripple.x );
 	  writer.value( "SP" , ripple.n );
 	  writer.value( "NHW" , ripple.nhw );
+	  writer.value( "AMP" , ripple.p2pamp );
 	  writer.value( "DUR" , ripple.n / (double)sr );
 	  
 	}
@@ -799,6 +908,7 @@ void ripples_t::annotate( annot_t * a , const std::string & ch )
       instance->set( "frq" , ripple.frq );
       instance->set( "n"   , ripple.n );
       instance->set( "nhw" , ripple.nhw );
+      instance->set( "amp" , ripple.p2pamp );
       instance->set( "mag" , ripple.x );
       
       std::string mid_tp = "tp:" + Helper::int2str( ripple.midp );

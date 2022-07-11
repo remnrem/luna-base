@@ -46,7 +46,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
   //
   // --------------------------------------------------------------------------------
 
-  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , true );
   if ( signals.size() < 1 ) return;
   
   const int ns = signals.size();
@@ -68,20 +68,21 @@ void dsptools::tclst( edf_t & edf , param_t & param )
   bool use_amp = param.has( "amp" );
   bool use_phase = param.has( "phase" );
   bool use_freq = param.has( "freq" );
+  bool use_raw = param.has( "raw" );
   
   if ( use_amp && use_complex_dist )
     Helper::halt( "can only specify complex OR amp" );
   
   if ( use_phase && use_complex_dist )
     Helper::halt( "can only specify complex OR phase" );
-
+  
   if ( use_freq && use_complex_dist )
     Helper::halt( "can only specify complex OR freq" );
 
   // default:
-  if ( ! ( use_complex_dist || use_amp || use_phase || use_freq ) )
-    { use_amp = use_phase = true; }
-
+  if ( ! ( use_raw || use_complex_dist || use_amp || use_phase || use_freq ) )
+    { use_raw = true; }
+  
   // --------------------------------------------------------------------------------
   //
   // Output verbosity
@@ -115,6 +116,8 @@ void dsptools::tclst( edf_t & edf , param_t & param )
   // hierarchical complete-linkage clustering
   // (if -1, use silhouette, and replace hcK w/ selected value)
 
+  const bool hclustering = param.has( "hc" );
+  
   int hcK = param.has( "hc" ) ? param.requires_int( "hc" ) : 0 ;
   
 
@@ -298,7 +301,10 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       for (int i=0; i<ni; i++)
 	{
 	  X[i] = Eigen::MatrixXd::Zero( points , ns );
-	  P[i] = Eigen::MatrixXd::Zero( points , ns );
+
+	  if ( ! use_raw )
+	    P[i] = Eigen::MatrixXd::Zero( points , ns );
+	  
 	  if ( use_complex_dist )
 	    {
 	      P2[i] = Eigen::MatrixXd::Zero( points , ns );
@@ -661,7 +667,8 @@ void dsptools::tclst( edf_t & edf , param_t & param )
       // hierarchical clustering group means
       //
 
-      hcK = tc.sol.k;
+      if ( hclustering ) 
+	hcK = tc.sol.k;
 
       std::map<int,std::vector<double> > pclmeans, zpclmeans;
       if ( use_complex_dist )
@@ -703,7 +710,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	  for (int k=k1; k<=k2; k++)
 	    {
 	      writer.level( k , "KN" );
-
+	      
 	      std::map<int,int> c;
 	      for (int i=0;i<ni;i++)
 		{
@@ -712,7 +719,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 		  c[ tc.ksol[k][i] ]++;
 		}
 	      writer.unlevel( globals::count_strat );
-	      	      
+	      
 	      for (int kk=0; kk<k; kk++)
 		{
 		  writer.level( kk+1 , globals::cluster_strat );
@@ -723,10 +730,13 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	      
 	    }
 	  writer.unlevel( "KN" );
+
 	}
 
+      
       if ( hcK )
 	{
+
 	  std::map<int,int> c;
 	  for (int i=0;i<ni;i++)
 	    {
@@ -785,7 +795,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	    }
 	}
       
-      
+
       //
       // Next cache seed
       //

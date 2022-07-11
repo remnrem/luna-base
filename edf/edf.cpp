@@ -2789,7 +2789,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
       logger << " with respect to";
       if ( nr > 1 ) logger << " the average of";      
       for (int r=0;r<nr;r++) logger << " " << header.label[ refs(r) ];      
-      if ( make_new ) logger << " --> " << header.label[ signals(0) ] << "\n";
+      if ( make_new ) logger << " --> " << header.label[ signals(0) ];
       logger << "\n";
     }
 
@@ -4978,6 +4978,9 @@ void edf_t::set_headers( param_t & param )
   if ( param.has( "id" ) )
     {
       header.patient_id = param.value( "id" ) ;
+      // also update edf.id
+      id = header.patient_id;
+      // this will not change any DB output though
       logger << "  set 'id' to " << header.patient_id << "\n";
       if ( header.patient_id.size() > 80 )
 	logger << "  *** warning - 'id' will be truncated to 80 characters if saved as EDF\n";

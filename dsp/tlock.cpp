@@ -37,8 +37,8 @@ extern logger_t logger;
 void dsptools::tlock( edf_t & edf , param_t & param )
 {
   
-  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
-
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , true );
+  
   if ( signals.size() < 1 ) return;
 
   const int ns = signals.size();
@@ -366,17 +366,21 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 
 	      std::vector<double> row_min( nf );
 	      std::vector<double> row_max( nf );
-	      
+	      std::vector<double> row_mean( nf , 0 );
+
 	      for (int i=0; i<nf; i++)
 		{
 		  row_min[i] = mtm.Z(i,0);
 		  row_max[i] = mtm.Z(i,0);
+		  row_mean[i] = mtm.Z(i,0);
 		  
 		  for (int j=1; j<nt; j++)
 		    {
 		      if ( mtm.Z(i,j) < row_min[i] ) row_min[i] = mtm.Z(i,j);
 		      if ( mtm.Z(i,j) > row_max[i] ) row_max[i] = mtm.Z(i,j);		      
+		      row_mean[i] += mtm.Z(i,j);
 		    }
+		  row_mean[i] /= (double)nt;
 		}
 	      
 	      // output
@@ -386,9 +390,17 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 		  for (int j=0; j<nt; j++)
 		    {
 		      writer.level( mtm.t[j] , "SEC" );
+		      // mean
 		      writer.value( "PSD" , mtm.Z(i,j) );
+
+		      // median
+		      writer.value( "PSD_MD" , mtm.Z_median(i,j) );		      
+		      
 		      // normalized by F (row) min/max
 		      writer.value( "PSD_F" , ( mtm.Z(i,j) - row_min[i] ) / ( row_max[i] - row_min[i] ) );
+
+		      // normalized by row mean
+		      writer.value( "PSD_M" , mtm.Z(i,j) - row_mean[i] ) ;
 		      
 		      // variance in PSD
 		      writer.value( "VAR" , mtm.ZZ(i,j) );

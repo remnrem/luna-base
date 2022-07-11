@@ -31,8 +31,7 @@
 #include "intervals/intervals.h"
 
 
-typedef std::map<std::string,std::map<uint64_t,std::map<std::string,std::set<interval_t> > > > interval_map_t;
-
+typedef std::map<uint64_t,std::map<std::string,std::set<interval_t> > > interval_map_t;
 
 struct named_interval_t {
   interval_t i;
@@ -126,7 +125,7 @@ struct annotate_t {
 
   std::set<std::string> pool_channel_sets;
 
-  std::set<std::string> aligned_permutes;
+  std::map<std::string,std::set<std::string> > aligned_permutes;
   
   bool ordered_groups;
   
@@ -175,15 +174,12 @@ struct annotate_t {
   std::set<std::string> achs; // All Annotation/CHannels
   std::map<std::string,std::pair<std::string,std::string> > achs_name_ch; // track originals
   
-  // track indiv ID
-  std::string iid;
-  
   // main interval map
-  //  indiv -> segment(start-point) -> annot -> events
+  //  segment(start-point) -> annot -> events
   interval_map_t events;
   
   // for each segment, the offset --> size (i.e. map elements to 0... size on reading)
-  std::map<std::string,std::map<uint64_t,uint64_t> > seg; // offset --> size 
+  std::map<uint64_t,uint64_t> seg; // offset --> size 
   
   //
   // mask/breakpoints
@@ -249,7 +245,7 @@ struct annotate_t {
 
   // which segment does this annotation /completely/ fall in? (or -1 if not )
   
-  bool segment( const std::string & id , const interval_t & i , uint64_t * segoff ) const;
+  bool segment( const interval_t & i , uint64_t * segoff ) const;
 
   // seed-seed enrichment group 
   std::map<std::string,double> pileup( const std::set<named_interval_t> & intervals ) const;

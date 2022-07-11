@@ -51,9 +51,11 @@ mt_spectrogram_t::mt_spectrogram_t( const Data::Matrix<double> & X ,
   // nw / npi
   // t  / nwin
   
-  Z.clear(); ZZ.clear();
+  Z.clear(); Z_median.clear(); ZZ.clear();
   int out_f = 0 , out_t = 0;
 
+  std::vector<std::vector<std::vector<double> > > Z_trk; // for medians
+  
   for (int i=0; i<nobs; i++)
     {
 
@@ -89,7 +91,13 @@ mt_spectrogram_t::mt_spectrogram_t( const Data::Matrix<double> & X ,
 	  out_t = mtm.espec.size();
 	  
 	  Z.resize( out_f , out_t );
+	  Z_median.resize( out_f , out_t );
 	  ZZ.resize( out_f , out_t );
+
+	  Z_trk.resize( out_f );
+	  for (int f=0; f<out_f; f++)
+	    Z_trk[f].resize( out_t );
+	  
 	}
       
       const int nsegs = mtm.espec.size();
@@ -107,6 +115,7 @@ mt_spectrogram_t::mt_spectrogram_t( const Data::Matrix<double> & X ,
 	    if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f )
 	      {
 		Z[fidx][j] += mtm.espec[j][fidx] ;
+		Z_trk[fidx][j].push_back( mtm.espec[j][fidx] );
 		ZZ[fidx][j] += mtm.espec[j][fidx] * mtm.espec[j][fidx] ; 
 		++fidx;
 	      }
@@ -126,6 +135,7 @@ mt_spectrogram_t::mt_spectrogram_t( const Data::Matrix<double> & X ,
 	double mean = Z[i][j] / (double)nobs;
 	double var = ZZ[i][j] / (double)nobs - mean * mean ;
 	Z[i][j] = mean; // mean
+	Z_median[i][j] = MiscMath::median( Z_trk[i][j] ); // median
 	ZZ[i][j] = sqrt( var ); // SD	
       }
 

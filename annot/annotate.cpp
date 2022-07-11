@@ -286,8 +286,25 @@ void annotate_t::set_options( param_t & param )
   else logger << "  retaining channel-level information\n";
   
   // keep channels separate, but permute similarly
-  aligned_permutes = param.strset( "align" );
-  
+  // align=A1,A2|R1|Z1,Z2
+  //  here | delimits different sets (R1 may imply all channels within R1)
+  if ( param.has( "align" ) )
+    {
+      std::string ap = param.value( "align" );
+      std::vector<std::string> ap_tok = Helper::parse( ap , "|" );
+      
+      for (int aidx=0; aidx<ap_tok.size(); aidx++)
+	{
+	  // nb. insert self --> self so that channel-expansion works
+	  std::vector<std::string> tok = Helper::parse( ap_tok[ aidx ] , "," );
+	  const int na = tok.size();
+	  for (int i=0; i<na; i++)
+	    for (int j=0; j<na; j++)
+	      aligned_permutes[ tok[i] ].insert( tok[j] );
+	}
+      logger << "  using " << ap_tok.size() << " alignment groups\n";
+    }
+            
   ordered_groups = param.has( "ordered" );
   
   nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000 ; 
@@ -406,15 +423,6 @@ void annotate_t::set_options( param_t & param )
 
 void annotate_t::prep()
 {
-  
-  //
-  // Indiv ID
-  //
-
-  // for now, assume a single indiv only
-      
-  iid = edf->id;
-  
 
   //
   // Get annotations from attached timeline
@@ -595,7 +603,7 @@ void annotate_t::prep()
       // 0 1 2 3 4 5 6 7 8 9 10
       // sz = 10,  i.e. random from 0 to 9	  
 
-      seg[ iid ][ 0LLU ] = tottp;
+      seg[ 0LLU ] = tottp;
       
       brk.insert( 0LLU );
       brk.insert( tottp );
@@ -607,7 +615,7 @@ void annotate_t::prep()
 	{
 	  brk.insert( bb->start );
 	  brk.insert( bb->stop );	  
-	  seg[ iid ][ bb->start ] = bb->duration();
+	  seg[ bb->start ] = bb->duration();
 	  ++bb;	  
 	}
     }
@@ -660,7 +668,6 @@ void annotate_t::prep()
 	  
 	  bool pool = pool_channels &&
 	    ( pool_channel_sets.size() == 0 || pool_channel_sets.find( instance_idx.parent->name ) != pool_channel_sets.end() ) ; 
-
 	  
 	  
 	  const std::string aid = pool ?
@@ -684,6 +691,34 @@ void annotate_t::prep()
 	       	     << " to fixed list\n";
 	      fixed.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
 	    }
+
+	  // need to add channel-specific version to alignment groups?
+	  if ( ( ! pool ) && aligned_permutes.find( instance_idx.parent->name ) != aligned_permutes.end() )
+            {
+
+	      const std::string ch_name = instance_idx.parent->name + "_" + instance_idx.ch_str;
+
+	      if ( aligned_permutes.find( ch_name ) == aligned_permutes.end() )
+		{
+		  // logger << "  adding "
+		  // 	 << instance_idx.parent->name + "_" + instance_idx.ch_str
+		  // 	 << " to alignment group\n";
+		  
+		  const std::string root_name = instance_idx.parent->name;		  
+		  
+		  // update key:
+		  aligned_permutes[ ch_name ] = aligned_permutes[ root_name ];
+		  // and all other members
+		  std::map<std::string,std::set<std::string> >::iterator pp = aligned_permutes.begin();
+		  while ( pp != aligned_permutes.end() )
+		    {
+		      if ( pp->second.find( root_name ) != pp->second.end() )
+			pp->second.insert( ch_name );
+		      ++pp;
+		    }
+		}
+            }
+
 	  
 	  // track actual AIDs for analysis
 	  
@@ -717,7 +752,7 @@ void annotate_t::prep()
 	  
 	  uint64_t offset;	  
 
-	  bool okay = segment( iid , interval , &offset );
+	  bool okay = segment( interval , &offset );
 
 	  // did not map
 	  if ( ! okay ) { ++ii; continue; } 
@@ -783,13 +818,13 @@ void annotate_t::prep()
 	      // if segment() return T, as above, we are guaranteed to
 	      // have duration of bounding segment in seg[ offset ]
 
-	      if ( seg[iid].find( offset ) == seg[iid].end() ) Helper::halt( "logic error 3" );
-	      uint64_t dur = seg[ iid ][ offset ];
+	      if ( seg.find( offset ) == seg.end() ) Helper::halt( "logic error 3" );
+	      uint64_t dur = seg[ offset ];
 	      interval.stop = interval.stop + f > dur ? dur : interval.stop + f ;
 	    }
 	  
 	  // add this segment to the primary list
-	  events[ iid ][ offset ][ aid ].insert( interval );
+	  events[ offset ][ aid ].insert( interval );
 	  
 	  ++cnt;
 	  
@@ -810,45 +845,56 @@ void annotate_t::prep()
     logger << "  excluded " << filtered_out << " of "
 	   << filtered_out + cnt
 	   << " annotations based on filters, leaving " << cnt << "\n";
+
+
+
+  if ( aligned_permutes.size() )
+    {
+      std::map<std::string,std::set<std::string> >::const_iterator aa = aligned_permutes.begin();
+      while ( aa != aligned_permutes.end() )
+	{
+	  logger << " aligned permute : " << aa->first ;
+	  std::set<std::string>::const_iterator bb = aa->second.begin();
+	  while ( bb != aa->second.end() )
+	    {
+	      logger << " " << *bb ; 
+	      ++bb;
+	    }
+	  logger << "\n";
+	  ++aa;
+	}
+    }
   
   
   // review
 
   if ( 0 )
     {
-      std::map<std::string,std::map<uint64_t,std::map<std::string,std::set<interval_t> > > >::const_iterator ee = events.begin();
-      
-      while ( ee != events.end() )
+
+      std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = events.begin();
+      while ( rr != events.end() )
 	{
-
-	  const std::map<uint64_t,std::map<std::string,std::set<interval_t> > > & region = ee->second;
-	  std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = region.begin();
-	  while ( rr != region.end() )
+	  const std::map<std::string,std::set<interval_t> > & annots = rr->second;
+	  std::map<std::string,std::set<interval_t> >::const_iterator qq = annots.begin();
+	  while ( qq != annots.end() )
 	    {
-	      const std::map<std::string,std::set<interval_t> > & annots = rr->second;
-	      std::map<std::string,std::set<interval_t> >::const_iterator qq = annots.begin();
-	      while ( qq != annots.end() )
+	      const std::set<interval_t> & ints = qq->second;
+	      std::set<interval_t>::const_iterator ii = ints.begin();
+	      while ( ii != ints.end() )
 		{
-		  const std::set<interval_t> & ints = qq->second;
-		  std::set<interval_t>::const_iterator ii = ints.begin();
-		  while ( ii != ints.end() )
-		    {
-		      std::cout << " ee-> " << ee->first << "\t" 
-				<< rr->first << "\t"
-				<< qq->first << "\t"
-				<< ii->as_string() << "\n";
-
-		      ++ii;
-		    }
-		    
-		  ++qq;
+		  std::cout << " rr-> " << rr->first << "\t"
+			    << qq->first << "\t"
+			    << ii->as_string() << "\n";
+		  
+		  ++ii;
 		}
-	      ++rr;
+	      
+	      ++qq;
 	    }
-	  ++ee;	  
+	  ++rr;
 	}
     }
-
+  
   
 }
 
@@ -896,80 +942,107 @@ void annotate_t::shuffle()
 {
 
   //
-  // shuffle each indiv/seed independently
+  // shuffle each seed/region independently
   //
   
-  std::map<std::string,std::map<uint64_t,std::map<std::string,std::set<interval_t> > > >::const_iterator ee = events.begin();
-
-  // individuals
-  while ( ee != events.end() )
+  // contiguous regions
+  std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = events.begin();
+  while ( rr != events.end() )
     {
       
-      // contiguous regions
-      const std::map<uint64_t,std::map<std::string,std::set<interval_t> > > & region = ee->second;
+      // shuffle (w/ wrapping) each seed annotation independently
+      const uint64_t maxshuffle = seg[ rr->first ];
+
+      //      std::cout << " max shuffle = " << maxshuffle << " ---> " << ( maxshuffle * globals::tp_duration ) / 60.0 << "\n";
+      // if permuting blocks of seed together
+      std::map<std::string,uint64_t> aligned_shuffle;
+
+      //      std::cerr << "\n\n\nNEW REGION.............................\n";
       
-      std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = region.begin();
-      while ( rr != region.end() )
+      // each seed for this region
+      std::set<std::string>::const_iterator ss = sachs.begin();
+      while ( ss != sachs.end() )
 	{
 	  
-	  // shuffle (w/ wrapping) each seed annotation independently
-	  const uint64_t maxshuffle = seg[ iid ][ rr->first ];
+	  // skipping this annotation? (fixed), then nothing to do here
+	  if ( fixed.find( *ss ) != fixed.end() )
+	    {
+	      ++ss;		  
+	      continue;
+	    }
 	  
-	  // each seed for this region
-	  std::set<std::string>::const_iterator ss = sachs.begin();
-	  while ( ss != sachs.end() )
+	  
+	  // get the factor by which to shuffle these annot in this region
+	  
+	  uint64_t pp = 0;
+	  
+	  
+	  // if using aligned permutations, have we already
+	  // generated a shuffle for an aligned annot? if so use
+	  // that
+	  
+	  if ( aligned_shuffle.find( *ss ) != aligned_shuffle.end() ) // aligned already 
+	    {
+	      pp = aligned_shuffle[ *ss ];	      
+	    }
+	  
+	  // *otherwise*, get a new random offset
+	  //  - which results in no annots that span the end of this segment
+	  //  - keep going unitl we get one... ouch 
+	  
+	  else 
 	    {
 	      
-	      // skipping this annotation? (fixed), then nothing to do here
-	      if ( fixed.find( *ss ) != fixed.end() )
+	      int iter = 0;
+	      
+	      while ( 1 )
 		{
-		  ++ss;		  
-		  continue;
-		}
-
-
-	      // get the factor by which to shuffle these annot in this region
-
-	      uint64_t pp = 0;
-	      
-	      
-	      // if using aligned permutations, have we already
-	      // generated a shuffle for an aligned annot? if so use
-	      // that
-
-
-	      if ( 0 ) // aligned already 
-		{
-		  // if ( aligned )
-		  // 	{
-		  /// TODO...
-		}
-	      
-	      
-	      // get a random offset
-	      //  - which results in no annots that span the end of this segment
-	      //  - keep going unitl we get one... ouch 
-	      
-	      else 
-		{
-
-		  int iter = 0;
+		  // we having to try too hard?   tells us the data are
+		  // not appropriate for this
 		  
-		  while ( 1 )
+		  ++iter;
+		  if ( iter > 1000 )
+		    Helper::halt( "cannot find shuffle sets for " + *ss );
+		  
+		  // putative shuffle 
+		  pp = CRandom::rand( maxshuffle );
+		  
+		  // check all events
+		  bool okay = true;
+		  const std::set<interval_t> & original = events[ rr->first ][ *ss ];
+		  std::set<interval_t>::const_iterator ii = original.begin();
+		  while ( ii != original.end() )
 		    {
-		      // we having to try too hard?   tells us the data are
-		      // not appropriate for this
+		      interval_t i = *ii;
+		      i.start += pp;
+		      i.stop += pp;
+		      // check - spans segment break?
+		      if ( i.start < maxshuffle && i.stop >= maxshuffle )
+			{
+			  okay = false;
+			  break;
+			}
+		      ++ii;
+		    }
+		  
+		  // need to try again for this one?
+		  if ( ! okay ) continue;
+
+		  // will this be an aligned-group shuffle? if so, we need to check that
+		  // all the members are good too before accepting.
+		  
+		  if ( aligned_permutes.find( *ss ) == aligned_permutes.end() ) break;
+
+		  const std::set<std::string> & apset = aligned_permutes.find( *ss )->second;
+		  std::set<std::string>::const_iterator kk = apset.begin();
+		  while ( kk != apset.end() )		    
+		    {
+		      if ( *kk == *ss ) { ++kk; continue; }
+
+		      // test this seed for break-point overlap
 		      
-		      ++iter;
-		      if ( iter > 1000 )
-			Helper::halt( "cannot find shuffle sets for " + *ss );
-		      
-		      // putative shuffle 
-		      pp = CRandom::rand( maxshuffle );
-		      
-		      // check all events
-		      bool okay = true;
-		      const std::set<interval_t> & original = events[ ee->first ][ rr->first ][ *ss ];
+		      bool okay1 = true;
+		      const std::set<interval_t> & original = events[ rr->first ][ *kk ];
 		      std::set<interval_t>::const_iterator ii = original.begin();
 		      while ( ii != original.end() )
 			{
@@ -979,70 +1052,88 @@ void annotate_t::shuffle()
 			  // check - spans segment break?
 			  if ( i.start < maxshuffle && i.stop >= maxshuffle )
 			    {
-			      okay = false;
+			      okay1 = false;
 			      break;
 			    }
 			  ++ii;
 			}
-		      
-		      // need to try again?
-		      if ( okay ) break;
+
+		      // failed on an aligned annot?
+		      if ( ! okay1 )
+			{
+			  okay = false;
+			  break;
+			}
+		      ++kk;
 		    }
-		  
 
-		  // save this aligned shuffle?
+		  // we good overall?
+		  if ( okay ) break;
 		  
-		  
-		}
-
+		  // otherwise, loop back and try again...		  
+		  //std::cerr << " iter = " << iter << "\n";
+		}	      
 	      
-	      //
-	      // now we have a valid shuffle value... do the shuffle 
-	      //
+	      // save this aligned shuffle?
 	      
-	      // copy over events
-	      std::set<interval_t> original = events[ ee->first ][ rr->first ][ *ss ];
-	      
-	      std::set<interval_t> shuffled;
-	      
-	      std::set<interval_t>::const_iterator ii = original.begin();
-	      while ( ii != original.end() )
+	      if ( aligned_permutes.find( *ss ) != aligned_permutes.end() )
 		{
+		  const std::set<std::string> & apset = aligned_permutes.find( *ss )->second;
 		  
-		  interval_t i = *ii;
-		  
-		  i.start += pp;
-		  i.stop += pp;
-		  
-		  // need to wrap?
-		  if ( i.start >= maxshuffle )
+		  std::set<std::string>::const_iterator kk = apset.begin();
+		  while ( kk != apset.end() )
 		    {
-		      i.start -= maxshuffle;
-		      i.stop -= maxshuffle;
+		      aligned_shuffle[ *kk ] = pp;
+		      ++kk;
 		    }
-		  
-		  //std::cout << " chng " << ii->as_string() << " --> " << i.as_string() << "\n";
-		  // add this new one to the list
-		  shuffled.insert( i );
-		  	      
-		  ++ii;
 		}
-	    
-	      //std::cout << " resizing " << events[ ee->first ][ rr->first ][ *ss ].size() << " to " << shuffled.size() << "\n";
-
-	      // update
-	      events[ ee->first ][ rr->first ][ *ss ] = shuffled;
 	      
-	      // next seed
-	      ++ss;
 	    }
-
-	  // next region
-	  ++rr;
+	  
+	      
+	  //
+	  // now we have a valid shuffle value... do the shuffle 
+	  //
+	
+	  // copy over events
+	  std::set<interval_t> original = events[ rr->first ][ *ss ];
+	  
+	  std::set<interval_t> shuffled;
+	  
+	  std::set<interval_t>::const_iterator ii = original.begin();
+	  while ( ii != original.end() )
+	    {
+	      
+	      interval_t i = *ii;
+	      
+	      i.start += pp;
+	      i.stop += pp;
+	      
+	      // need to wrap?
+	      if ( i.start >= maxshuffle )
+		{
+		  i.start -= maxshuffle;
+		  i.stop -= maxshuffle;
+		}
+	      
+	      //std::cout << " chng " << ii->as_string() << " --> " << i.as_string() << "\n";
+	      // add this new one to the list
+	      shuffled.insert( i );
+	      
+	      ++ii;
+	    }
+	  
+	  //std::cout << " resizing " << events[ ee->first ][ rr->first ][ *ss ].size() << " to " << shuffled.size() << "\n";
+	  
+	  // update
+	  events[ rr->first ][ *ss ] = shuffled;
+	  
+	  // next seed
+	  ++ss;
 	}
-
-      // next person
-      ++ee;
+      
+      // next region
+      ++rr;
     }
   
 }
@@ -1055,99 +1146,78 @@ annotate_stats_t annotate_t::eval()
 
   // secondary: optionally (only w/ true data) output new
   // seed annotations (if 'make_anew' set)
-  
-  
-  std::map<std::string,std::map<uint64_t,std::map<std::string,std::set<interval_t> > > >::const_iterator ii = events.begin();
-  
-  while ( ii != events.end() )
+    
+  // each region
+  std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = events.begin();
+  while ( rr != events.end() )
     {
       
-      // each region
-      const std::map<uint64_t,std::map<std::string,std::set<interval_t> > > & region = ii->second;
-      std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = region.begin();
-      while ( rr != region.end() )
+      // for seed-pileup
+      std::set<named_interval_t> puints;
+      
+      // each seed for this region
+      std::set<std::string>::const_iterator aa = sachs.begin();
+      while ( aa != sachs.end() )
 	{
+	  // does this interval have any seeds?
+	  if ( rr->second.find( *aa ) == rr->second.end() ) { ++aa; continue; }
 	  
-	  // for seed-pileup
-	  std::set<named_interval_t> puints;
+	  // get all seed events
+	  const std::set<interval_t> & a = rr->second.find( *aa )->second;
 	  
-	  // each seed for this region
-	  std::set<std::string>::const_iterator aa = sachs.begin();
-	  while ( aa != sachs.end() )
+	  // track for pile-up
+	  std::set<interval_t>::const_iterator qq = a.begin();
+	  while ( qq != a.end() )
 	    {
+	      puints.insert( named_interval_t( *qq , *aa ) );
+	      ++qq;
+	    }
+	  
+	  // track # of (flattened) annots
+	  std::set<interval_t> flata = flatten( a );	      
+	  r.ns[ *aa ] += flata.size();
+ 	  
+	  // consider all other annots
+	  std::set<std::string>::const_iterator bb = achs.begin();
+	  while ( bb != achs.end() )
+	    {		  
+	      // skip self comparison
+	      if ( *aa == *bb ) { ++bb; continue; }
+	      
 	      // does this interval have any seeds?
-	      if ( rr->second.find( *aa ) == rr->second.end() ) { ++aa; continue; }
+	      if ( rr->second.find( *bb ) == rr->second.end() ) { ++bb; continue; }
 	      
-	      // get all seed events
-	      const std::set<interval_t> & a = rr->second.find( *aa )->second;
+	      // get all other annots
+	      const std::set<interval_t> & b = rr->second.find( *bb )->second;
 	      
-	      // track for pile-up
-	      std::set<interval_t>::const_iterator qq = a.begin();
-	      while ( qq != a.end() )
-		{
-		  puints.insert( named_interval_t( *qq , *aa ) );
-		  ++qq;
-		}
+	      // calc and record stats on flattened lists 
+	      seed_annot_stats( flata , *aa , flatten( b ) , *bb , &r );
 	      
-	      // track # of (flattened) annots
-	      std::set<interval_t> flata = flatten( a );	      
-	      r.ns[ *aa ] += flata.size();
- 	      
-	      // consider all other annots
-	      std::set<std::string>::const_iterator bb = achs.begin();
-	      while ( bb != achs.end() )
-		{		  
-		  // skip self comparison
-		  if ( *aa == *bb ) { ++bb; continue; }
-		  
-		  // does this interval have any seeds?
-		  if ( rr->second.find( *bb ) == rr->second.end() ) { ++bb; continue; }
-		  
-		  // get all other annots
-		  const std::set<interval_t> & b = rr->second.find( *bb )->second;
-		  		  
-		  // calc and record stats on flattened lists 
-		  seed_annot_stats( flata , *aa , flatten( b ) , *bb , &r );
-		  		  
-		  // next annot
-		  ++bb;
-		}
-	      
-	      // next seed
-	      ++aa;
+	      // next annot
+	      ++bb;
 	    }
 	  
-	  // seed-seed pileup 	  
-	  std::map<std::string,double> pu = pileup( puints );
-	  std::map<std::string,double>::const_iterator pp = pu.begin();
-	  while ( pp != pu.end() )
-	    {
-	      if ( 1 || pp->first != "_O1" )
-		{
-		  r.nss[ pp->first ] += pp->second;
-		}
-	      ++pp;
-	    }
-	  
-	  // region
-	  ++rr;
+	  // next seed
+	  ++aa;
 	}
-      // person
-      ++ii;
+      
+      // seed-seed pileup 	  
+      std::map<std::string,double> pu = pileup( puints );
+      std::map<std::string,double>::const_iterator pp = pu.begin();
+      while ( pp != pu.end() )
+	{
+	  if ( 1 || pp->first != "_O1" )
+	    {
+	      r.nss[ pp->first ] += pp->second;
+	    }
+	  ++pp;
+	}
+      
+      // region
+      ++rr;
     }
-
-
-  // final
-  // std::map<std::string,double>::const_iterator pp = r.nss.begin();
-  // while ( pp != r.nss.end() )
-  //   {
-  //     std::cout << pp->first << " = " << pp->second << "\n";
-  //     ++pp;
-  //   }
-  // std::cout << "\n\n.......\n\n";
-
-  
-  // all done
+ 
+   // all done
   return r;
   
 }
@@ -1287,8 +1357,7 @@ bool annotate_t::place_interval( const interval_t & i ,  uint64_t * offset ) con
   --u1;
 
   // is in gap between two breaks? (i.e. offset for start not tracked) 
-  const std::map<uint64_t,uint64_t> & seg2 = seg.find( iid )->second;
-  if ( seg2.find( *u1 ) == seg2.end() ) return false;
+  if ( seg.find( *u1 ) == seg.end() ) return false;
   
   // seems okay, return offset for bounding segment
   *offset = *u1;
@@ -1297,13 +1366,13 @@ bool annotate_t::place_interval( const interval_t & i ,  uint64_t * offset ) con
 }
 
 
-bool annotate_t::segment( const std::string & id , const interval_t & i , uint64_t * segoff ) const
+bool annotate_t::segment( const interval_t & i , uint64_t * segoff ) const
 {
   uint64_t offset = 0;
   
   // if spans a break point, or falls in a gap, no good
   if ( ! place_interval( i , &offset ) ) return false;
-
+  
   // return start to of this containing segment
   *segoff = offset;
   
@@ -1387,7 +1456,7 @@ std::string annotate_t::stringize( const std::set<named_interval_t> & t ) const
 
   // otherwise, default is to pool all perms
   
-  // first reduce to nams, i.e. so B,A --> A,B 
+  // first reduce to names, i.e. so B,A --> A,B 
   std::set<std::string> names;
   std::set<named_interval_t>::const_iterator tt = t.begin();
   while ( tt != t.end() )
@@ -1798,56 +1867,50 @@ void annotate_t::new_seeds()
       int acnt = 0 , tcnt =0 ;
       
       // iterate over all iids/regions/etc
-     interval_map_t::const_iterator ee = events.begin();
-      while ( ee != events.end() )
+
+      std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = events.begin();
+      while ( rr != events.end() )
 	{
-	  // get regions
-	  const std::map<uint64_t,std::map<std::string,std::set<interval_t> > > & regions = ee->second;
-	  std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = regions.begin();
-	  while ( rr != regions.end() )
+	  // track offset (i.e. need to add back in for the output)
+	  uint64_t offset = rr->first;
+	  
+	  // pick this seed only
+	  std::map<std::string,std::set<interval_t> >::const_iterator this_seed = rr->second.find( *ss );
+	  
+	  // may not be any seeds in this region - skip to next region
+	  if ( this_seed == rr->second.end() ) { ++rr; continue; }
+	  
+	  // get intervals
+	  const std::set<interval_t> & intervals = this_seed->second;
+	  
+	  std::set<interval_t>::const_iterator ii = intervals.begin();
+	  while ( ii != intervals.end() )
 	    {
-	      // track offset (i.e. need to add back in for the output)
-	      uint64_t offset = rr->first;
+	      named_interval_t named( *ii , *ss );
 	      
-	      // pick this seed only
-	      std::map<std::string,std::set<interval_t> >::const_iterator this_seed = rr->second.find( *ss );
+	      // requisite # of hits
+	      const bool write_this = out_include ?
+		hits[ named ] >= mcount : // include
+		hits[ named ] <  mcount ; // exclude
 	      
-	      // may not be any seeds in this region - skip to next region
-	      if ( this_seed == rr->second.end() ) { ++rr; continue; }
-
-	      // get intervals
-	      const std::set<interval_t> & intervals = this_seed->second;
+	      // nb - we drop any instance ID information
+	      // for now... can fix this up later?
+	      //  but... given we've a) flattened, and b) perhaps
+	      //  pooled channels, this is probably the 'right'
+	      //  thing to do...
 	      
-	      std::set<interval_t>::const_iterator ii = intervals.begin();
-	      while ( ii != intervals.end() )
+	      if ( write_this )
 		{
-		  named_interval_t named( *ii , *ss );
-
-		  // requisite # of hits
-		  const bool write_this = out_include ?
-		    hits[ named ] >= mcount : // include
-		    hits[ named ] <  mcount ; // exclude
-		  
-		  // nb - we drop any instance ID information
-		  // for now... can fix this up later?
-		  //  but... given we've a) flattened, and b) perhaps
-		  //  pooled channels, this is probably the 'right'
-		  //  thing to do...
-		  
-		  if ( write_this )
-		    {
-		      interval_t mapped( ii->start + offset , ii->stop + offset );
-		      a->add( "." , mapped , chname );
-		      ++acnt;
-		    }
-		  ++tcnt;
-		  
-		  // next interval
-		  ++ii;
+		  interval_t mapped( ii->start + offset , ii->stop + offset );
+		  a->add( "." , mapped , chname );
+		  ++acnt;
 		}
-	      ++rr;
+	      ++tcnt;
+	      
+	      // next interval
+	      ++ii;
 	    }
-	  ++ee;
+	  ++rr;
 	}
       
       logger << "   - wrote " << acnt << " (of " << tcnt << ") seed events, based on ";

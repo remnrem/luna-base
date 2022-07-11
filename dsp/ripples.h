@@ -64,6 +64,9 @@ struct ripple_t {
   
   // number of half-waves (based on zero-crossings)
   int nhw;
+
+  // max peak-to-peak amplitude
+  double p2pamp;
   
   // defined by wave-form = negative peak of middle wave
   // (from EDF start time)
@@ -88,6 +91,7 @@ struct ripples_t {
 	     const double req_msec , 
 	     const int req_peaks_flt ,
 	     const int req_peaks_raw ,
+	     const double req_raw_p2p_prop , 
 	     const double combine_msec , 
 	     const double edge_secs ,
 	     const int otsu_k );

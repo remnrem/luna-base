@@ -47,7 +47,7 @@ struct mt_spectrogram_t
   // output Z = rows = frequencies
   //            cols = samples (time w/ within segment, defined by seg_inc)
   
-  Data::Matrix<double> Z, ZZ;
+  Data::Matrix<double> Z, Z_median, ZZ;
   std::vector<double> frq; // rows (freq)
   std::vector<double> t;   // cols (time)
     

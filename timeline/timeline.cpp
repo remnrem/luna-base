@@ -3246,16 +3246,49 @@ void timeline_t::annot2cache( const param_t & param )
   else logger << "  mapping to caches based on annotation names\n";    
   
   // requires a sample rate to be specified
-  //  - this done by 'attaching' a channel (sig)
-  const std::string attached_sig = param.requires( "sig" );
-  signal_list_t signals = edf->header.signal_list( attached_sig );
-  
-  if ( signals.size() != 1 ) Helper::halt( "expecting a single channel (present in EDF) for 'sig' " );
-  
-  const int sr = edf->header.sampling_freq( signals )[0];
-  logger << "  using " << attached_sig << " (Fs = " << sr
-	 << ") to anchor annotations to sample-points\n";
+  //  - this done by 'attaching' a channel (sig) OR by specifying a SR
+  //  - but we then need to find a channel with that SR (got get TP from slice)
 
+  int slot = -1;
+  int sr = -1;
+
+  if ( param.has( "sr" ) )
+    {
+      sr = param.requires_int( "sr" );
+
+      // pick first channel w/ this SR (allow for floating point wobble)
+      signal_list_t signals = edf->header.signal_list( "*" );
+      std::vector<double> srs = edf->header.sampling_freq( signals );
+      for (int s=0;s<signals.size();s++)
+	{
+	  if ( fabs( srs[s] - sr ) < 0.0001 )
+	    {
+	      slot = s;
+	      break;
+	    }
+	}
+    }
+  else
+    {
+      const std::string attached_sig = param.requires( "sig" );
+      signal_list_t signals = edf->header.signal_list( attached_sig );
+      if ( signals.size() != 1 ) Helper::halt( "expecting a single channel (present in EDF) for 'sig' " );
+      
+      sr = edf->header.sampling_freq( signals )[0];
+      logger << "  using " << attached_sig << " (Fs = " << sr
+	     << ") to anchor annotations to sample-points\n";
+
+      slot = signals(0);
+    }
+
+  if ( sr == -1 || slot == -1 )
+    Helper::halt( "need to specify sig or sr to get a sample rate (and EDF needs channel w/ that sr)");
+  
+  // get current time-point channel (for all)
+  slice_t slice( *edf , slot , edf->timeline.wholetrace() );
+  
+  const std::vector<uint64_t> * tp = slice.ptimepoints();
+  
   // must map to within 1 sample (i.e. if at edge?)
   const double max_diff = param.has( "diff" ) ? param.requires_dbl( "diff" ) : 1/(double)sr;
   logger << "  mapping to closest sample-point within " << max_diff << " seconds\n";
@@ -3264,11 +3297,7 @@ void timeline_t::annot2cache( const param_t & param )
   // in a channel-specific map
   std::map<std::string,std::vector<int> > d;
   
-  // get current time-point channel (for all)
-  slice_t slice( *edf , signals(0) , edf->timeline.wholetrace() );
-
-  const std::vector<uint64_t> * tp = slice.ptimepoints();
-
+  
   struct chpt_t {
     chpt_t( const std::string & ch , uint64_t tp )
       : ch(ch) , tp(tp) { }
