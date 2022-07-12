@@ -68,6 +68,10 @@ struct ripple_t {
   // max peak-to-peak amplitude
   double p2pamp;
   
+  // skewness & kurtosis
+  double skew;
+  double kurt;
+
   // defined by wave-form = negative peak of middle wave
   // (from EDF start time)
   uint64_t midp; 

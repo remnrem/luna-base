@@ -598,7 +598,10 @@ ripples_t::ripples_t( const std::vector<double> & x ,
       std::vector<double> xx;
       for (int j = rip.start_sp ; j < rip.stop_sp; j++)
 	xx.push_back( xf[j] );
-
+      
+      // copy 
+      std::vector<double> rawx = xx;
+      
       // ensure locally mean-centered
       MiscMath::centre( &xx );
 
@@ -645,8 +648,16 @@ ripples_t::ripples_t( const std::vector<double> & x ,
       //
       
       rip.nhw = hwsp.size() ;
+      
+      //
+      // skew & kurtosis based on raw signals
+      //
 
-
+      double mean   = MiscMath::mean( rawx );
+      double sd     = MiscMath::sdev( rawx , mean );
+      rip.skew   = MiscMath::skewness( rawx , mean , sd );
+      rip.kurt   = MiscMath::kurtosis( rawx , mean );
+      
       //
       // max peak-to-peak amplitude (based on neg-to-pos)
       //
@@ -884,7 +895,8 @@ void ripples_t::output( const bool verbose )
 	  writer.value( "NHW" , ripple.nhw );
 	  writer.value( "AMP" , ripple.p2pamp );
 	  writer.value( "DUR" , ripple.n / (double)sr );
-	  
+	  writer.value( "SKEW" , ripple.skew );
+	  writer.value( "KURT" , ripple.kurt );
 	}
 
       writer.unlevel( globals::count_strat );
@@ -910,6 +922,8 @@ void ripples_t::annotate( annot_t * a , const std::string & ch )
       instance->set( "nhw" , ripple.nhw );
       instance->set( "amp" , ripple.p2pamp );
       instance->set( "mag" , ripple.x );
+      instance->set( "skew" , ripple.skew );
+      instance->set( "kurt" , ripple.kurt );
       
       std::string mid_tp = "tp:" + Helper::int2str( ripple.midp );
       instance->set( "mid" , mid_tp );
