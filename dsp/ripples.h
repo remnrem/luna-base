@@ -95,7 +95,9 @@ struct ripples_t {
 	     const double req_msec , 
 	     const int req_peaks_flt ,
 	     const int req_peaks_raw ,
-	     const double req_raw_p2p_prop , 
+	     const double req_raw_p2p_prop ,
+	     const double max_amp_thresh_abs ,
+	     const double max_amp_thresh_pct , 
 	     const double combine_msec , 
 	     const double edge_secs ,
 	     const int otsu_k );

@@ -69,11 +69,15 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
   const int req_peaks_raw = param.has( "peaks-raw" ) ? param.requires_int( "peaks-raw" ) : req_peaks_flt ; 
 
   const double req_raw_p2p_prop = param.has( "peaks-raw-prop" ) ? param.requires_dbl( "peaks-raw-prop" ) : 0.01 ; 
+
+  const double max_amp_thresh_abs = param.has( "max-abs" ) ? param.requires_dbl( "max-abs" ) : -1 ;
+
+  const double max_amp_thresh_pct = param.has( "max-pct" ) ? param.requires_dbl( "max-pct" ) : -1 ; 
   
   const int hfbands = param.has( "bands" ) ? param.requires_int( "bands" ) : 1 ;
 
   const double edge_secs = param.has( "edges" ) ? param.requires_dbl( "edges" ) : 1.0 ; 
-
+  
   const double combine_msec = param.has( "combine" ) ? param.requires_dbl( "combine" ) : 10.0;
   
   
@@ -133,6 +137,7 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
       
       ripples_t ripples( *d , *tp , sr , flwr, fupr, kwin_ripple, kwin_tw, verbose ,
 			 hfbands, th, req_msec, req_peaks_flt, req_peaks_raw , req_raw_p2p_prop,
+			 max_amp_thresh_abs , max_amp_thresh_pct , 
 			 combine_msec, edge_secs , otsu_k );
 			 
 
@@ -169,6 +174,8 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      const int req_peaks_flt ,
 		      const int req_peaks_raw ,
 		      const double req_raw_p2p_prop , 
+		      const double max_amp_thresh_abs ,
+		      const double max_amp_thresh_pct ,
 		      const double combine_msec , 
 		      const double edge_secs ,
 		      const int otsu_k )
@@ -279,6 +286,35 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   const double thx = MiscMath::percentile( mag , th / 100.0 );
   
   logger << "  thresholding at percentile = " << th << " (" << thx << ")\n";
+
+
+  //
+  // absolute amplitude threshold exclusion
+  //
+
+  double th_amp = max_amp_thresh_abs > 0 ? max_amp_thresh_abs : -1 ;
+  
+  if ( max_amp_thresh_pct > 0 ) 
+    {
+
+      std::vector<double> ax( x.size() );
+
+      for (int i=0; i<x.size(); i++) ax[i] = fabs( x[i] );
+
+      const double tpct = MiscMath::percentile( ax , max_amp_thresh_pct / 100.0 );
+
+      if ( max_amp_thresh_abs > 0 )
+	{
+	  if ( tpct < th_amp ) th_amp = tpct ; 
+	}
+      else
+	{
+	  th_amp = tpct;
+	}
+    }
+
+  if ( max_amp_thresh_pct > 0 || max_amp_thresh_abs > 0 )
+    logger << "  using amplitude threshold of " << th_amp << "\n";
   
   //
   // empirical threshold determination 
@@ -403,14 +439,16 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   writer.value( "SECS_TOT" , totdur_mins );
   writer.value( "SECS" , incdur_mins );
   writer.value( "NSEG" , n_segments );
-     
+  
   //
   // iterate over signal
   //
+
+  int fail_dur = 0, fail_amp = 0 , fail_flt_hw = 0 , fail_raw_hw = 0; 
+  
   
   for (int i=0; i<n; i++)
     {
-      //std::cout << i << "\t" <<  (*mag)[i] << "\t" << thx << "\t" << in_ripple << "\n";
       
       if ( ! in_ripple ) // start a new ripple ?
 	{
@@ -436,7 +474,22 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 	      // meets duration criterion?
 	      const int len_sp = stop - start ; 
 	      const double len_msec = ( len_sp / (double)sr ) * 1000.0 ; 
+	      
 	      bool okay = len_msec >= req_msec ;
+
+	      if ( ! okay ) ++fail_dur;
+	      
+	      // amplitude threshold?
+	      if ( okay && th_amp > 0 )
+		{
+		  for (int s=start; s<stop; s++)
+		    if ( fabs( x[s] ) > th_amp )
+		      {
+			okay = false;
+			++fail_amp;
+			break;
+		      }
+		}
 	      
 	      // peak count okay?
 	      if ( okay && req_peaks_flt )
@@ -450,7 +503,10 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 			++flt_peakn;
 		    }
 		  if ( flt_peakn < req_peaks_flt )
-		    okay = false;
+		    {
+		      ++fail_flt_hw;
+		      okay = false;
+		    }
 		}
 	      
 	      // same, in raw data -- and track sizes
@@ -477,15 +533,13 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      pdir.push_back( x[pk[p-1]] >  x[pk[p]] );
 		    }
 		  
-		  
 		  // require these to be at least e.g. 20% of the max p2p to be counted
 		  // and require at least req_peaks_raw / 2 of each
 
 		  int raw_peakn_pos = 0;
 		  int raw_peakn_neg = 0;
 		  for (int p=0; p<p2p.size(); p++)
-		    {
-		      //std::cout << " p2p = " << p2p[p] <<" " <<  max_p2p << " " << req_raw_p2p_prop << " " << 
+		    {		      
 		      if ( fabs( p2p[p] ) >= max_p2p * req_raw_p2p_prop )
 			{
 			  if ( pdir[p] ) 
@@ -495,20 +549,13 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 			}
 		    }
 		  
-		  //std::cout << " raw_peakn = " << p2p.size() << "\t" << raw_peakn_pos << " " << raw_peakn_neg  << "\t" << req_peaks_raw << "\n";
-		  // for (int s=start; s<stop; s++)
-		  //   std::cout << "  " << x[s] << "\t" << xf[ s ] << "\n"; 
- 		  
 		  if ( raw_peakn_pos < req_peaks_raw/2.0 || raw_peakn_neg < req_peaks_raw/2.0 )
 		    {
-		      okay = false;
-		      //std::cout << " IS BAD\n";
+		      ++fail_raw_hw;
+		      okay = false;		   
 		    }
-		  // else
-		  //   std::cout << " IS GOOD\n";
-		  
 		}
-		  
+	      
 	      
 	      // add?
 	      if ( okay )
@@ -527,7 +574,12 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 	  
     }
 
-
+  logger << "  " << all_ripples.size() << " ripples retained, "
+	 << " failed N: dur = " << fail_dur
+	 << ", amp = " << fail_amp	 
+	 << ", halt-waves (filtered) " << fail_flt_hw
+	 << ", half-waves (raw) = " << fail_raw_hw << "\n";
+   
   //
   // merge nearby
   //
