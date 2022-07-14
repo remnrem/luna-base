@@ -303,6 +303,8 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 
       const double tpct = MiscMath::percentile( ax , max_amp_thresh_pct / 100.0 );
 
+      logger << "  " << max_amp_thresh_pct << " percentile = " << tpct << "\n";
+
       if ( max_amp_thresh_abs > 0 )
 	{
 	  if ( tpct < th_amp ) th_amp = tpct ; 
@@ -494,6 +496,11 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 	      // peak count okay?
 	      if ( okay && req_peaks_flt )
 		{
+
+		  // for (int s=start; s<stop; s++)
+		  //   std::cout << " " << xf[s] << "\n";
+		  // std::cout << "\n";
+		  
 		  int flt_peakn = 0;
 		  for (int s=start+1; s<stop-1; s++)
 		    {
@@ -502,6 +509,9 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      else if ( xf[s] < xf[s-1] && xf[s] < xf[s+1] )
 			++flt_peakn;
 		    }
+
+		  //		  std::cout << " flt_peakn = " << flt_peakn << ", dur = " << len_sp << " " << len_msec << "\n";
+
 		  if ( flt_peakn < req_peaks_flt )
 		    {
 		      ++fail_flt_hw;
@@ -577,7 +587,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   logger << "  " << all_ripples.size() << " ripples retained, "
 	 << " failed N: dur = " << fail_dur
 	 << ", amp = " << fail_amp	 
-	 << ", halt-waves (filtered) " << fail_flt_hw
+	 << ", half-waves (filtered) " << fail_flt_hw
 	 << ", half-waves (raw) = " << fail_raw_hw << "\n";
    
   //

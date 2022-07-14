@@ -479,7 +479,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // and display (& potentially cache)
 	  p_sw->display_slow_waves( param.has( "verbose" ) , &edf , cache_metrics );
 	  
-
 	  if ( verbose_time_phase_locking ) 
 	    {
 	      
@@ -2265,6 +2264,16 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  
 		  instance_t * instance = a->add( analysis_label , spindle.tp , signals.label(s) );
 
+		  // any meta-data?
+		  
+		  instance->set( "amp" , spindle.amp );
+		  instance->set( "isa" , spindle.isa );
+		  instance->set( "frq" , spindle.frq );
+		  instance->set( "dur" , spindle.dur );
+
+		  if ( param.has( "so" ) )
+		    instance->set( "soc" , (int)( fabs( spindle.so_nearest < 1e-8 ) ) );
+		  
 		  // index tp
 		  instance->set( "mid", "tp:" + Helper::int2str( spindle.tp_mid ) );
 		  
@@ -2275,8 +2284,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  //
 	  // Clean-up at the spindle/F level
-	  //
-	  
+	  //	  
 
 	  if ( ht_chirp ) 
 	    {

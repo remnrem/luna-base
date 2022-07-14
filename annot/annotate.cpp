@@ -284,6 +284,16 @@ void annotate_t::set_options( param_t & param )
   
   if ( pool_channels ) logger << "  pooling annotations across channels\n";
   else logger << "  retaining channel-level information\n";
+
+
+  // only compare within similar channels?
+  //  (for unpooled comparisons only)
+  
+  only_within_channel = param.has( "within-channel" );
+
+  if ( only_within_channel && pool_channels )
+    Helper::halt( "cannot specify within-channel and pool-channel together" );
+  
   
   // keep channels separate, but permute similarly
   // align=A1,A2|R1|Z1,Z2
@@ -673,7 +683,7 @@ void annotate_t::prep()
 	  const std::string aid = pool ?
 	    instance_idx.parent->name :
 	    instance_idx.parent->name + "_" + instance_idx.ch_str ;
-
+	  
 	  // skip if not in chs-inc list
 	  // or skip if in chs-exc list
 	  if ( ! process_channel( instance_idx.parent->name , instance_idx.ch_str ) )
@@ -719,6 +729,12 @@ void annotate_t::prep()
 		}
             }
 
+	  // track with channel this annotaton belongs to 
+	       
+	  if ( only_within_channel )
+	    {
+	      label2channel[ aid ] = instance_idx.ch_str ; 
+	    }
 	  
 	  // track actual AIDs for analysis
 	  
@@ -1174,7 +1190,7 @@ annotate_stats_t annotate_t::eval()
 	    }
 	  
 	  // track # of (flattened) annots
-	  std::set<interval_t> flata = flatten( a );	      
+	  std::set<interval_t> flata = flatten( a );
 	  r.ns[ *aa ] += flata.size();
  	  
 	  // consider all other annots
@@ -1183,6 +1199,9 @@ annotate_stats_t annotate_t::eval()
 	    {		  
 	      // skip self comparison
 	      if ( *aa == *bb ) { ++bb; continue; }
+	      
+	      // requiring only intra-channel comparisons?
+	      if ( only_within_channel && ! same_channel( *aa , *bb ) ) { ++bb; continue; }
 	      
 	      // does this interval have any seeds?
 	      if ( rr->second.find( *bb ) == rr->second.end() ) { ++bb; continue; }

@@ -144,6 +144,14 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       logger << " estimating SO for " << signals.label(s) << "\n";
       
       writer.level( signals.label(s) , globals::signal_strat );
+
+      par.ch = signals.label(s);
+
+      
+      //
+      // Get data, detect SO
+      //
+      
       
       double sr = edf.header.sampling_freq( signals )[s];
       
@@ -286,7 +294,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 	  writer.value( "SO_TRANS_FREQ" , avg_trans_freq );
 
 	  writer.value( "SO_NEG_AMP" , avg_x );
-	  writer.value( "SO_POS_AMP" , avg_x );
+	  writer.value( "SO_POS_AMP" , avg_y );
 	  writer.value( "SO_P2P" , avg_yminusx );
 	  
 	  // may not be calculated, i.e.  if looking at half-waves  
@@ -335,9 +343,41 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
       cache->add( ckey_t( "SO_SLOPE_NEG2" , writer.faclvl() ) , report_median_stats ? median_slope_n2 : avg_slope_n2 ) ;      
     }
   
+
+  //
+  // Save as annotation?
+  //
+
+  if ( astr != "" && astr != "." )
+    {
+      
+      logger << "  writing SO annotations to " << astr << "\n";
+      
+      annot_t * a = edf->timeline.annotations.add( astr );
+
+      for (int i=0;i<sw.size();i++)
+	{
+	  const slow_wave_t & w = sw[i];
+	  
+	  instance_t * instance = a->add( "." , w.interval_tp , ch );
+	  
+	  instance->set( "frq" , 1.0 / (double) w.interval_tp.duration_sec() );
+	  instance->set( "dur" , w.interval_tp.duration_sec() );
+	  instance->set( "slope"   , w.slope_n2() );
+	  instance->set( "p2p" , w.amplitude() );
+	  instance->set( "amp" ,  w.down_amplitude );
+	  instance->set( "trans" ,  w.trans()  );
+	  instance->set( "transf" ,  w.trans_freq() );
+	  instance->set( "transf" ,  w.trans_freq() );
+	  instance->set( "mid" ,  "tp:" + Helper::int2str( w.zero_crossing_tp ) );
+	}
+
+    }
+  
   //
   // Verbose per-SO and per-epoch information next
   //
+
 
   if ( ! verbose ) return;
 
@@ -575,12 +615,16 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   
   const bool using_pct_pos = par.pct_pos > 0;
   const bool using_pct_neg = par.pct_neg > 0;
-  const bool using_pct = using_pct_pos || using_pct_neg;
+  const bool using_pct = using_pct_pos || using_pct_neg || par.pct > 0 ;
   
   const bool using_p2p_mintime = par.t_p2p_min > 0 ;
   const bool using_p2p_maxtime = par.t_p2p_max > 0 ;
   const bool using_delta = par.SO_delta_mode == 2;
   const bool using_SO = par.SO_delta_mode == 1;
+
+  // annotations
+  astr = par.astr;
+  ch = par.ch;
   
   // cache peaks?
   bool cache_neg = cache_name_neg != NULL ;
@@ -820,11 +864,13 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       if ( par.use_mean ) 
 	{
 	  avg_x = MiscMath::mean( tmp_x );
+	  avg_y = MiscMath::mean( tmp_y );
 	  avg_yminusx = MiscMath::mean( tmp_yminusx );
 	}
       else
 	{
 	  avg_x = MiscMath::median( tmp_x );
+	  avg_y = MiscMath::median( tmp_y );
 	  avg_yminusx = MiscMath::median( tmp_yminusx );
 	}
     }
@@ -848,25 +894,43 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
   if ( using_pct )
     {
-      // e.g. from Kim et al, (the top 15 percentile of the peaks)
-      // (the bottom 40 percentile of the troughs) 
-      // nb. -ve scaling for neg vs pos peaks, that 1 - par.pct_pos only
-      // as these are defined as the "top percentiles" 
-      th_pct_x = using_pct_neg ? MiscMath::percentile( tmp_x , par.pct_neg ) : 0 ;
-      th_pct_y = using_pct_pos ? MiscMath::percentile( tmp_y , 1.0 - par.pct_pos ) : 0 ; 
 
-      if ( using_pct_neg ) 
-	logger << "  thresholding negative half-waves at bottom "
+      // overall percentile?  specified as the "TOP" p percentile i.e. 25 --> 1 - 0.25
+      // however, for negative peak, keep as is (i.e. negative values, and so we want the *bottom*
+      if ( ! ( using_pct_neg || using_pct_pos ) )
+	{
+	  th_pct_x = MiscMath::percentile( tmp_x , par.pct ) ;
+	  th_pct_yminusx = MiscMath::percentile( tmp_yminusx , 1.0 - par.pct ) ;	  
+	  logger << "  thresholding negative and peak-to-peak amplitudes at the "
+		 << 100* par.pct << " percentile ( " << th_pct_x << " and " << th_pct_yminusx << " )\n";
+	  
+	}
+      else
+	{
+	  
+	  // e.g. from Kim et al, (the top 15 percentile of the peaks)
+	  // (the bottom 40 percentile of the troughs) 
+	  // nb. -ve scaling for neg vs pos peaks, that 1 - par.pct_pos only
+	  // as these are defined as the "top percentiles" 
+	    
+	  th_pct_x = using_pct_neg ? MiscMath::percentile( tmp_x , par.pct_neg ) : 0 ;
+	  th_pct_y = using_pct_pos ? MiscMath::percentile( tmp_y , 1.0 - par.pct_pos ) : 0 ; 
+	  
+	  if ( using_pct_neg ) 
+	    logger << "  thresholding negative half-waves at bottom "
 	       << 100* par.pct_neg << " percentile ( < " << th_pct_x << ")\n";
-      if ( using_pct_pos ) 
-	logger << "  thresholding positive half-waves at top "
-	       << 100* par.pct_pos << " percentile ( > " << th_pct_y << ")\n";
+	  if ( using_pct_pos ) 
+	    logger << "  thresholding positive half-waves at top "
+		   << 100* par.pct_pos << " percentile ( > " << th_pct_y << ")\n";
+	}
+      
+      
       
     }
   
   // accumulators for final averages/medians
   
-  std::vector<double> acc_yminusx, acc_x, 
+  std::vector<double> acc_yminusx, acc_x, acc_y,  
     acc_duration_sec, acc_negative_duration_sec, acc_positive_duration_sec, 
     acc_slope_n1 , acc_slope_n2 , acc_slope_p1 , acc_slope_p2 , 
     acc_trans , acc_trans_freq ;
@@ -900,50 +964,60 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
       if ( using_pct )
 	{
-	  // both SO and delta require large UP state 
-	  // percentile-based postive peak threshold
-	  if ( using_pct_pos && w.up_amplitude < th_pct_y ) accepted = false;
-            	  
-	  // percentile-based negative peak threshold (nb. negative scaling) 
-	  // a SO is a large enough DOWN state also 
-	  if ( using_pct_neg && w.down_amplitude < th_pct_x ) w.SO_delta = 1;
 
-	  // but DOWN state must be within time-range for SO 
-	  // SO -- negative peak must be within time range of postive peak
-	  if ( accepted && w.SO_delta == 1 )
+	  if ( ! ( using_pct_pos || using_pct_neg ) ) // combined percentiles
 	    {
-	      const double p2p_t = w.trans();
-	      if ( using_p2p_mintime && p2p_t < par.t_p2p_min ) accepted = false;
-	      if ( using_p2p_maxtime && p2p_t > par.t_p2p_max ) accepted = false;	      
+	      if ( w.down_amplitude > th_pct_x ) accepted = false;
+	      if ( w.up_amplitude - w.down_amplitude < th_pct_yminusx ) accepted = false;
 	    }
-
-	  // Delta -- must check that max value of all points in prior 0.5 seconds were below
-	  // threshold
-	  if ( w.SO_delta != 1 )
+	  else
 	    {
-	      double mxneg = w.up_amplitude ; // start at positive peak, and go back 0,5 secs to find lowest
-	      int pnts = sr * par.t_p2p_max ;
-	      int idx = w.up_peak_sp;
-	      while ( pnts >= 0 )
+	      
+	      // both SO and delta require large UP state 
+	      // percentile-based postive peak threshold
+		if ( using_pct_pos && w.up_amplitude < th_pct_y ) accepted = false;
+	      
+	      // percentile-based negative peak threshold (nb. negative scaling) 
+		   // a SO is a large enough DOWN state also 
+			if ( using_pct_neg && w.down_amplitude < th_pct_x ) w.SO_delta = 1;
+	      
+	      // but DOWN state must be within time-range for SO 
+		   // SO -- negative peak must be within time range of postive peak
+		   if ( accepted && w.SO_delta == 1 )
+		     {
+		       const double p2p_t = w.trans();
+		       if ( using_p2p_mintime && p2p_t < par.t_p2p_min ) accepted = false;
+		       if ( using_p2p_maxtime && p2p_t > par.t_p2p_max ) accepted = false;	      
+		     }
+
+	      // Delta -- must check that max value of all points in prior 0.5 seconds were below
+	      // threshold
+	      if ( w.SO_delta != 1 )
 		{
-		  if ( idx == 0 ) break;
-		  --idx;
-		  --pnts;
-		  if ( filtered[ idx ] < mxneg ) mxneg = filtered[ idx ]; 
+		  double mxneg = w.up_amplitude ; // start at positive peak, and go back 0,5 secs to find lowest
+		  int pnts = sr * par.t_p2p_max ;
+		  int idx = w.up_peak_sp;
+		  while ( pnts >= 0 )
+		    {
+		      if ( idx == 0 ) break;
+		      --idx;
+		      --pnts;
+		      if ( filtered[ idx ] < mxneg ) mxneg = filtered[ idx ]; 
+		    }
+		  // if the most -ve value 
+			      if ( mxneg < th_pct_x ) accepted = false;
+		  
+		  // otherwise, set as a delta wave
+		  w.SO_delta = 2;
 		}
-	      // if the most -ve value 
-	      if ( mxneg < th_pct_x ) accepted = false;
-
-	      // otherwise, set as a delta wave
-	      w.SO_delta = 2;
+	      
+	      // restrict to one class?
+	      if ( using_SO && w.SO_delta != 1 ) accepted = false;
+	      if ( using_delta && w.SO_delta != 2 ) accepted = false;
+	      if ( w.SO_delta == 0 ) accepted = false;
 	    }
-
-	  // restrict to one class?
-	  if ( using_SO && w.SO_delta != 1 ) accepted = false;
-	  if ( using_delta && w.SO_delta != 2 ) accepted = false;
-	  if ( w.SO_delta == 0 ) accepted = false;
+	  
 	}
-            
       
       // save this wave?
       if ( accepted ) 
@@ -953,6 +1027,9 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 	  // amplitude of negative peak
 	  acc_x.push_back( w.down_amplitude );
 
+	  // amplitude of negative peak
+	  acc_y.push_back( w.up_amplitude );
+	  
 	  // peak-to-peak amplitude
 	  acc_yminusx.push_back( w.up_amplitude - w.down_amplitude );
 
@@ -980,7 +1057,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     }
   
   // means 
-  avg_x = acc_x.size() > 0 ? MiscMath::mean( acc_x ) : 0 ; 
+  avg_x = acc_x.size() > 0 ? MiscMath::mean( acc_x ) : 0 ;
+  avg_y = acc_y.size() > 0 ? MiscMath::mean( acc_y ) : 0 ;
   avg_yminusx = acc_yminusx.size() > 0 ? MiscMath::mean( acc_yminusx ) : 0 ; 
   avg_duration_sec = acc_duration_sec.size() > 0 ? MiscMath::mean( acc_duration_sec ) : 0 ;
   avg_negative_duration_sec = acc_negative_duration_sec.size() > 0 ? MiscMath::mean( acc_negative_duration_sec ) : 0 ;

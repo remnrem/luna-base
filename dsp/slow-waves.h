@@ -26,6 +26,7 @@
 
 #include "intervals/intervals.h"
 #include "timeline/cache.h"
+#include "annot/annot.h"
 
 #include <vector>
 #include <iostream>
@@ -61,7 +62,7 @@ struct slow_wave_param_t {
 
     // relative: magnitude threshold, e.g. 2 = twice the mean for a) p2p amp. AND , b) negative peak amp
     thr = param.has( "mag" ) ? param.requires_dbl( "mag" )       : 0 ;
-
+    
     // or, base this on median of all events rather than mean
     use_mean = param.has( "th-mean" ) ;
 
@@ -87,6 +88,9 @@ struct slow_wave_param_t {
     if ( pct_neg > 1 ) Helper::halt( "pct-neg should be between 0 and 100" );
     if ( pct_pos > 1 ) Helper::halt( "pct-pos should be between 0 and 100" );
 
+    // percentile for neg & P2P (as per mag)
+    pct = param.has( "pct" ) ? param.requires_dbl( "pct" ) / 100.0 : -1;
+    
     // Kim et al. peak-to-peak time interval : 0.15  0.5 
     t_p2p_min = param.has( "t-p2p-min" ) ? param.requires_dbl( "t-p2p-min" ) : 0 ;
     t_p2p_max = param.has( "t-p2p-max" ) ? param.requires_dbl( "t-p2p-max" ) : 0 ;
@@ -113,14 +117,21 @@ struct slow_wave_param_t {
     else if ( param.has( "negative-half-wave" ) ) type = SO_NEGATIVE_HALF;
     else if ( param.has( "positive-half-wave" ) ) type = SO_POSITIVE_HALF;
 
+    // annotations -- first check so-annot then annot (i.e. if called from SPINDLES)
+    astr = ".";
+
+    if ( param.has( "so-annot" ) )
+      astr = param.value( "so-annot" );
+    else if ( param.has( "annot" ) )
+      astr = param.value( "annot" );
+    
   }
   
   // relative threshold based on mean of 
   // all SOs (based on negative peak & P2P )
   // this might not be used (i.e. set to 0) 
   // if only using absolute criteria
-  
-  double thr ; // 0.75 
+  double thr; // 0.75 
   
   // if using thr, then only base on P2P
   // i.e. if signal polarity is uncertain
@@ -157,6 +168,7 @@ struct slow_wave_param_t {
   // based on SO/delta distinction
   double pct_neg ; // = 0 ,  // DOWN percentile
   double pct_pos; //  = 0 ,  // UP percentile
+  double pct; // DOWN and P2P percentile
   double t_p2p_min; //  = 0  ,  // DOWN peak - UP peak min time
   double t_p2p_max; //  = 0  ,  // DOWN peak - UP peak max time 
   int    SO_delta_mode; // = 0 , // 0 ignore, 1=SO, 2=Delta
@@ -173,6 +185,12 @@ struct slow_wave_param_t {
   // SW type (ignored)
   slow_wave_type type; // = SO_FULL ,
 
+  // annotations
+  std::string astr;
+
+  // current channel
+  std::string ch;
+  
 };
   
 
@@ -230,6 +248,10 @@ struct slow_wave_t
     return ( interval_tp.stop - interval_tp.start ) * globals::tp_duration ;
   }
   
+  double mid() const {
+    return zero_crossing_tp * globals::tp_duration ;    
+  }
+
   // start --> mid
   double dur1() const {
     return ( zero_crossing_tp - interval_tp.start ) * globals::tp_duration ;    
@@ -367,10 +389,17 @@ private:
   double th_x;        // negative peak (-ve)
   double th_y;        // positive peak (+ve)
   double th_yminusx;  // p2p
-
+  
   // percentiles
   double th_pct_x;       // neg peak (-ve value)
   double th_pct_y;       // pos peak (+ve value)
+  double th_pct_yminusx; // p2p
+
+  // annotations
+  std::string astr;
+
+  // current channel label
+  std::string ch;
   
   // total signal time in seconds (i.e. denonimnator for SW rate)
   double signal_duration_sec;

@@ -125,6 +125,22 @@ struct annotate_t {
 
   std::set<std::string> pool_channel_sets;
 
+  bool only_within_channel;
+
+  std::map<std::string,std::string> label2channel;
+
+  bool same_channel( const std::string & l1 , const std::string & l2 ) const
+  {
+    std::map<std::string,std::string>::const_iterator ll1 = label2channel.find( l1 );
+    std::map<std::string,std::string>::const_iterator ll2 = label2channel.find( l2 );
+
+    // should never happen, but just in case
+    if ( ll1 == label2channel.end() || ll2 == label2channel.end() ) return false;
+    
+    // same channel?
+    return ll1->second == ll2->second ; 
+  }
+  
   std::map<std::string,std::set<std::string> > aligned_permutes;
   
   bool ordered_groups;
