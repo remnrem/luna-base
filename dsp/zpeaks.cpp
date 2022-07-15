@@ -22,7 +22,62 @@
 
 #include "dsp/zpeaks.h"
 
+#include "edf/edf.h"
+#include "edf/slice.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
+
+extern logger_t logger;
+
 void dsptools::zpeaks( edf_t & edf , param_t & param )
 {
 
+  //
+  // parameters
+  //
+
+  const std::string annot = param.has( "annot" ) ? param.value( "annot" ) : "";
+
+  
+  
+  //
+  // signals to process
+  //
+  
+  std::string signal_label = param.requires( "sig" );
+  const bool no_annotations = true;
+  signal_list_t signals = edf.header.signal_list( signal_label , no_annotations );
+  const int ns = signals.size();
+  
+
+  
+  //
+  // process data 
+  //
+
+  for (int s=0; s<ns; s++)
+    {
+      
+      slice_t slice( edf , signals(s) , edf.timeline.wholetrace() );
+      
+      std::vector<double> * d = slice.nonconst_pdata();
+      
+      const int n = d->size();
+
+      //
+      // find peaks
+      //
+
+
+      //
+      // report
+      //
+      
+      logger << " " << signals.label(s)  << "\n";
+      
+      
+    }
+  
+  
 }
