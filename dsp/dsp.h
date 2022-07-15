@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "rectify.h"
 #include "dupes.h"
 #include "gc.h"
 #include "ripples.h"
@@ -38,6 +39,7 @@
 #include "tlock.h"
 #include "tclst.h"
 #include "peaks.h"
+#include "zpeaks.h"
 #include "psc.h"
 #include "spectral_norm.h"
 #include "tv.h"

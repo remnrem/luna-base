@@ -876,8 +876,9 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
       else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
 
-
+      
       else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
+      else if ( is( c, "RECTIFY" ) )      proc_rectify( edf , param(c) );
       else if ( is( c, "REVERSE" ) )      proc_reverse( edf , param(c) );
       else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
@@ -991,6 +992,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
       else if ( is( c, "TCLST" ) )        proc_tclst( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
+      else if ( is( c, "Z-PEAKS" ) )      proc_zpeaks( edf , param(c) );
 
       else if ( is( c, "SEDF" ) )         proc_sedf( edf , param(c) );
 
@@ -1677,6 +1679,12 @@ void proc_tclst( edf_t & edf  , param_t & param )
 void proc_peaks( edf_t & edf , param_t & param )
 {
   dsptools::peaks( edf , param );
+}
+
+// Z-PEAKS
+void proc_zpeaks( edf_t & edf , param_t & param )
+{
+  dsptools::zpeaks( edf , param );
 }
 
 // SEDF : make a summarize EDF 
@@ -3566,6 +3574,12 @@ void proc_standardize( edf_t & edf , param_t & param )
   dsptools::standardize( edf , param );
 }
 
+// RECTIFY 
+
+void proc_rectify( edf_t & edf , param_t & param  )
+{
+  dsptools::rectify( edf , param );
+}
 
 // FLIP : change polarity of signal
 

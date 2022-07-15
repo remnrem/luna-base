@@ -20,53 +20,16 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __PEAKS_H__
-#define __PEAKS_H__
+#ifndef __RECTIFY_H__
+#define __RECTIFY_H__
 
 struct edf_t;
 struct param_t;
-struct signal_list_t;
-
-#include <vector>
 
 namespace dsptools
 {
-  void peaks( edf_t & edf , param_t & param );
+  void rectify( edf_t & edf , param_t & param );
 }
 
-  
-struct peaks_t {
-  
- peaks_t()
-  {
-    // option defaults
-    max = true;
-    min = false;    
-    ignore_clipped = true;
-    th_clipped = 3; // 3 or more equal sample points == 'clipped'
-    percentile = 0; // default --> all; expecting from 1..100  (100 implies all too)
-  }
-
-  // find peaks, and save them to the pre-specified cache  
-  void detect( const std::vector<double> * x , const std::vector<int> * sp = 0 );
-  
-  // find max and/or min
-  bool max;
-  bool min;
-  
-  double percentile;
-
-  // record clipped points
-  bool ignore_clipped;
-  // number of contiguous samples to call something clipped
-  int th_clipped;  
-  // to testing clipping
-  const double EPS = 1e-6;
-
-  // peak locations/values
-  std::vector<int> pk;
-  std::vector<double> values;
-  std::vector<bool> ismin;
-};
-
 #endif
+
