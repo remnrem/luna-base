@@ -30,6 +30,31 @@
 
 extern logger_t logger;
 
+//
+// Implmentation and minor extension of peak finding heuristic :
+//
+// Brakel, J.P.G. van (2014). "Robust peak detection algorithm using
+// z-scores". Stack Overflow. Available at:
+// https://stackoverflow.com/questions/22583391/peak-signal-detection-in-realtime-timeseries-data/22640362#22640362
+// (version: 2020-11-08).
+//
+
+//  -- primary code in MiscMath::smoothedZ()
+
+
+// lag: higher = more smoothing / more adaptive to long term average
+//      for stationary series, use a higher lag
+//      to capture time-varying trends, use a lower lag
+
+// influence: extent to which peaks influence baseline
+//  0 = no influence; 1 = complete
+//  for stationary series, use low/0 influence
+//  higher numbers = better abl to capture quick changes related to spiking
+
+// threshold: number of SD units above moving mean; set based on expected rate
+//   i.e. 3.5 --> p = 0.00047 --> 1/p = 1 in 2128
+
+
 void dsptools::zpeaks( edf_t & edf , param_t & param )
 {
 
@@ -37,9 +62,36 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
   // parameters
   //
 
+  // use local peak-finding threshold method ( still uses th/min0 and th2/min, and max                                                  
+  const double window_sec = param.requires_dbl( "w" );
+  
+  const double influence = param.has( "influence" ) ? param.requires_dbl( "influence" ) : 0.01;
+  
+  if ( influence < 0 || influence > 1 ) Helper::halt( "influence should be between 0 and 1" );
+
+  // core region
+  
+  const double threshold = param.requires_dbl( "th" );
+  
+  const double min_dur_sec = param.has( "sec" ) ? param.requires_dbl( "sec" ) : 0 ;
+
+  const double max_threshold = param.has( "max" ) ? param.requires_dbl( "max" ) : 0 ;
+    
+  // flanking region:
+
+  const double threshold2 = param.has( "th2" ) ? param.requires_dbl( "th2" ) :	0 ;
+
+  const double min_dur2_sec = param.has( "sec2" ) ? param.requires_dbl( "sec2" ) : 0 ;
+  
+  const bool ignore_negatives = ! param.has( "negatives" ) ;
+
+  //
+  // save annotations
+  //
+  
   const std::string annot = param.has( "annot" ) ? param.value( "annot" ) : "";
 
-  
+   
   
   //
   // signals to process
@@ -55,27 +107,68 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
   //
   // process data 
   //
-
+  
   for (int s=0; s<ns; s++)
     {
       
       slice_t slice( edf , signals(s) , edf.timeline.wholetrace() );
       
       std::vector<double> * d = slice.nonconst_pdata();
+
+      const std::vector<uint64_t> * tp = slice.ptimepoints();
       
       const int n = d->size();
 
+      const int Fs = edf.header.sampling_freq( signals(s) ) ;
+      
       //
       // find peaks
       //
 
+      std::vector<interval_t> peaks;
+      
+      
+      // derive parameters given SR
+      const int lag_sp = Fs * window_sec ;
+      const int min_dur_sp = min_dur_sec * Fs;
+      const int min_dur2_sp = min_dur2_sec * Fs;
 
+      const bool verbose = false;
+      
+      std::vector<int> pks = MiscMath::smoothedZ( *d, lag_sp,
+						  threshold, influence, 
+						  min_dur_sp,
+						  max_threshold,
+						  threshold2,
+						  min_dur2_sp,
+						  ignore_negatives, 
+						  &peaks,
+						  verbose );
       //
       // report
       //
       
-      logger << " " << signals.label(s)  << "\n";
+      logger << "  detected " << peaks.size() << " peaks for "
+	     << signals.label(s) << "\n";
+	     
       
+      //
+      // save annots
+      //
+
+      const int na = peaks.size();
+
+      annot_t * a = edf.timeline.annotations.add( annot );
+
+      const std::string ch = signals.label( s );
+
+      for (int i=0; i<na; i++)
+	{
+	  // std::cout << " peaks == " << peaks[i].start << "   " << peaks[i].stop << "\t"
+	  // 	    << (*tp)[peaks[i].start] << "   " << (*tp)[peaks[i].stop] << "\n";
+	  
+	  a->add( "." , interval_t( (*tp)[peaks[i].start] , (*tp)[peaks[i].stop] ) , ch );
+	}
       
     }
   
