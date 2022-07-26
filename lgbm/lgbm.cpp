@@ -568,6 +568,8 @@ bool lgbm_t::save_model( const std::string & filename )
 Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_iter )
 {
 
+  std::cout << "X dim = " << X.rows() << " " << X.cols() << "\n";
+  
 
   if ( ! has_booster )
     Helper::halt( "no model defined" );
@@ -575,8 +577,12 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
   const void * p = static_cast<const void*>(X.data());
   
   // results
+  std::cout << " qt_mode = " << qt_mode << "\n";
+  std::cout << " bbb " << lgbm_t::classes( booster ) << "\n";
   int num_classes = qt_mode ? 1 : lgbm_t::classes( booster );
   int num_obs = X.rows();
+
+  std::cout << " num , obs = " << num_classes <<" " << num_obs<< "\n";
   
   int64_t out_len = num_classes * num_obs;
 
@@ -585,7 +591,8 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
   Eigen::MatrixXd R( num_classes , num_obs );
   
   double * out_result = R.data();
-  
+
+  std::cout << "here we go...\n";
   int flag = LGBM_BoosterPredictForMat( booster ,
 					p ,
 					C_API_DTYPE_FLOAT64 , // or C_API_DTYPE_FLOAT32 
@@ -599,6 +606,7 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
 					&out_len ,
 					out_result );
 
+  std::cout << " done\n";
   if ( flag )
     Helper::halt( "issue w/ prediction" );
 
@@ -722,6 +730,7 @@ int lgbm_t::classes( BoosterHandle b )
   int out = 0;
   int res = LGBM_BoosterGetNumClasses( b , &out );
   if ( res ) Helper::halt( "internal error in lgbm_t::classes()" );
+  std::cout << " booster num_classes = " << out << "\n";
   return out;
 }
 

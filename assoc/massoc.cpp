@@ -261,13 +261,20 @@ void massoc_t::load( const std::string & filename , const int force_destin )
 
   if ( ! force_destin )
     {
-      if ( ! all_test ) 
-	if ( training_pool.size() == 0 && validation_pool.size() == 0 && test_pool.size() == 0 )
-	  Helper::halt( "no training/validation/test obs specified... quitting" );
+      if ( ! all_test )
+	{
+	  bool any_data = training_pool.size() !=0 || training_pool_iids.size() !=0;
+	  if ( validation_pool.size() != 0 || validation_pool_iids.size() != 0 ) any_data = true;
+	  if ( test_pool.size() != 0 || test_pool_iids.size() ) any_data = true;
+	  
+	  if ( ! any_data )
+	    Helper::halt( "no training/validation/test obs specified... quitting" );
+	}
     }
   else
     {
-      if ( training_pool.size() != 0 || validation_pool.size() != 0 || test_pool.size() != 0 )
+      if ( training_pool.size() != 0 || validation_pool.size() != 0 || test_pool.size() != 0
+	   || training_pool_iids.size() != 0 || validation_pool_iids.size() != 0 || test_pool_iids.size() != 0 )
         Helper::halt( "training/validation/test obs should not be specified in split/merge mode... quitting" );
     }
   
@@ -336,7 +343,12 @@ void massoc_t::load( const std::string & filename , const int force_destin )
 	  // event-level ID (e.g. spindle count, within type)
 	  const std::string eid = Helper::bread_str( IN1 );
 
-	  if ( force_destin == 1 || training_pool.find( iid ) != training_pool.end() )
+	  // fully-qualified ID1
+	  const std::string id1 = iid + "_" + id + "_" + eid;
+
+	  if ( force_destin == 1
+	       || training_pool_iids.find( iid ) != training_pool_iids.end()
+	       || training_pool.find( id1 ) != training_pool.end() )
 	    {
 	      home.push_back( 1 );
 	      training_ids.push_back( id );
@@ -345,7 +357,9 @@ void massoc_t::load( const std::string & filename , const int force_destin )
 	      cnt_train.insert( iid );
 	      ++obs_train;
 	    }
-	  else if ( force_destin == 2 || validation_pool.find( iid ) != validation_pool.end() )
+	  else if ( force_destin == 2
+		    || validation_pool_iids.find( iid ) != validation_pool_iids.end()
+		    || validation_pool.find( id1 ) != validation_pool.end() )		    
 	    {
 	      home.push_back( 2 );
 	      validation_ids.push_back( id );
@@ -354,7 +368,10 @@ void massoc_t::load( const std::string & filename , const int force_destin )
 	      cnt_valid.insert( iid );
 	      ++obs_valid;
 	    }
-	  else if ( all_test || test_pool.find( iid ) != test_pool.end() )
+	  else if ( all_test
+		    || test_pool_iids.find( iid ) != test_pool_iids.end()
+		    || test_pool.find( id1 ) != test_pool.end()
+		    )
 	    {
 	      home.push_back( 3 );
 	      test_ids.push_back( id );
@@ -979,6 +996,11 @@ void massoc_t::attach_ids( param_t & param )
   validation_pool.clear();
   test_pool.clear();
 
+  training_pool_iids.clear();
+  validation_pool_iids.clear();
+  test_pool_iids.clear();
+  
+  
   //
   // Training IDs
   //
@@ -1003,6 +1025,30 @@ void massoc_t::attach_ids( param_t & param )
     }
   
 
+    //
+  // Training IDs
+  //
+
+  if ( param.has( "train-iids" ) )
+    {
+      const std::string filename = Helper::expand( param.value( "train-iids" ) ) ;
+      
+      if ( ! Helper::fileExists( filename ) )
+	Helper::halt( "could not open " + filename );
+      
+      std::ifstream IN1( filename.c_str(), std::ios::in );
+      while ( 1 )
+	{
+	  std::string l;
+	  IN1 >> l;
+	  if ( IN1.eof() || IN1.bad() ) break;
+	  if ( l == "" ) continue;
+	  training_pool_iids.insert( l );
+	}
+      IN1.close();
+    }
+
+  
   //
   // Validation IDs
   //
@@ -1028,6 +1074,30 @@ void massoc_t::attach_ids( param_t & param )
 
 
   //
+  // Validation IIDs
+  //
+
+  if ( param.has( "valid-iids" ) )
+    {
+      const std::string filename = Helper::expand( param.value( "valid-iids" ) ) ;
+      
+      if ( ! Helper::fileExists( filename ) )
+	Helper::halt( "could not open " + filename );
+      
+      std::ifstream IN1( filename.c_str(), std::ios::in );
+      while ( 1 )
+	{
+	  std::string l;
+	  IN1 >> l;	  
+	  if ( IN1.eof() || IN1.bad() ) break;
+	  if ( l == "" ) continue;
+	  validation_pool_iids.insert( l );
+	}
+      IN1.close();
+    }
+
+  
+  //
   // Test IDs
   //
   
@@ -1050,10 +1120,38 @@ void massoc_t::attach_ids( param_t & param )
       IN1.close();
     }
 
+
+  //
+  // Test IDs
+  //
+  
+  if ( param.has( "test-iids" ) )
+    {
+      const std::string filename = Helper::expand( param.value( "test-iids" ) ) ;
+      
+      if ( ! Helper::fileExists( filename ) )
+        Helper::halt( "could not open " + filename );
+      
+      std::ifstream IN1( filename.c_str(), std::ios::in );
+      while ( 1 )
+        {
+          std::string l;
+          IN1 >> l;
+          if ( IN1.eof() || IN1.bad() ) break;
+	  if ( l == "" ) continue;          
+          test_pool_iids.insert( l );
+        }
+      IN1.close();
+    }
+
   logger << "  read " << training_pool.size() << " training IDs, "
 	 << validation_pool.size() << " validation IDs, and "
 	 << test_pool.size() << " test IDs\n";
-  
+
+  logger << "  read " << training_pool_iids.size() << " training IIDs, "
+	 << validation_pool_iids.size() << " validation IIDs, and "
+	 << test_pool_iids.size() << " test IIDs\n";
+
 }
 
 

@@ -100,6 +100,8 @@ struct ripples_t {
 	     const double max_amp_thresh_pct , 
 	     const double combine_msec , 
 	     const double edge_secs ,
+	     edf_t * edf , 
+	     const std::set<std::string> & excludes , 
 	     const int otsu_k );
   
   std::vector<ripple_t> ripples;

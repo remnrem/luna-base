@@ -91,7 +91,12 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
   
   const std::string annot = param.has( "annot" ) ? param.value( "annot" ) : "";
 
-   
+  const double add_flank_sec = param.has( "add-flanking" ) ? param.requires_dbl( "add-flanking" ) : 0 ;  
+
+  if ( annot != "" ) 
+    logger << "  writing peaks to annotation " << annot
+	   << " with " << add_flank_sec
+	   << " seconds added each side\n" ;
   
   //
   // signals to process
@@ -147,30 +152,78 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
       //
       // report
       //
+
+      const int na = peaks.size();
+
+      // ignore if a peak spans a discontinuity
+
+      std::vector<bool> okay( na , true );
       
-      logger << "  detected " << peaks.size() << " peaks for "
-	     << signals.label(s) << "\n";
-	     
+      uint64_t add_flank_tp = add_flank_sec * globals::tp_1sec;
+
+      double coverage = 0; 
+
+      int valid = 0;
+
+      double total_dur_min = ( edf.header.nr * edf.header.record_duration ) / 60.0;
+       
+      
+      for (int i=0; i<na; i++)
+	{	      
+
+	  
+	  if ( !edf.timeline.discontinuity( *tp , Fs , peaks[i].start , peaks[i].stop ) )
+	    {
+	      uint64_t start_tp = (*tp)[peaks[i].start] > add_flank_tp ? (*tp)[peaks[i].start] - add_flank_tp : 0 ;
+	      uint64_t stop_tp  = (*tp)[peaks[i].stop] + add_flank_tp ;
+	      
+	      //	      std::cout << " det " << start_tp << " " << stop_tp << " \t" << peaks[i].start << " " << peaks[i].stop << "\n";
+	      
+	      coverage += globals::tp_duration * (double)( stop_tp - start_tp );
+	      ++valid;	      
+	    }
+	  else
+	    okay[i] = false;
+	}
+      
+      logger << "  detected " << valid << " peaks for "
+	     << signals.label(s) 
+	     << "( " << valid / total_dur_min << " per minute)"
+	     << ", spanning "
+	     << coverage << " seconds\n";
+      if ( na > valid )
+	logger << "   rejected " << na - valid << " peaks that spanned discontinuities\n";
+      
+      
       
       //
       // save annots
       //
 
-      const int na = peaks.size();
-
-      annot_t * a = edf.timeline.annotations.add( annot );
-
-      const std::string ch = signals.label( s );
-
-      for (int i=0; i<na; i++)
+      if ( annot != "" )
 	{
-	  // std::cout << " peaks == " << peaks[i].start << "   " << peaks[i].stop << "\t"
-	  // 	    << (*tp)[peaks[i].start] << "   " << (*tp)[peaks[i].stop] << "\n";
+
+	  annot_t * a = edf.timeline.annotations.add( annot );
 	  
-	  a->add( "." , interval_t( (*tp)[peaks[i].start] , (*tp)[peaks[i].stop] ) , ch );
+	  const std::string ch = signals.label( s );
+	  	  
+	  for (int i=0; i<na; i++)
+	    {
+	      // std::cout << " peaks == " << peaks[i].start << "   " << peaks[i].stop << "\t"
+	      // 	    << (*tp)[peaks[i].start] << "   " << (*tp)[peaks[i].stop] << "\n";
+
+	      if ( okay[i] )
+		{
+		  uint64_t start_tp = (*tp)[peaks[i].start] > add_flank_tp ? (*tp)[peaks[i].start] - add_flank_tp : 0 ;
+		  uint64_t stop_tp  = (*tp)[peaks[i].stop] + add_flank_tp ; 	  
+		  
+		  a->add( "." , interval_t( start_tp , stop_tp ) , ch );
+		}
+	    }
+	  
 	}
       
+      // next signal
     }
-  
   
 }

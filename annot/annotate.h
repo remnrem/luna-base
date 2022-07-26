@@ -34,12 +34,15 @@
 typedef std::map<uint64_t,std::map<std::string,std::set<interval_t> > > interval_map_t;
 
 struct named_interval_t {
-  interval_t i;
+  uint64_t offset;
+  interval_t i;  
   std::string n;
-  named_interval_t( const interval_t & i , const std::string & n )
-    : i(i), n(n) { }
+  named_interval_t( uint64_t offset, const interval_t & i , const std::string & n )
+    : offset(offset), i(i), n(n) { }
   bool operator<( const named_interval_t & rhs ) const
   {
+    if ( offset < rhs.offset ) return true;
+    if ( rhs.offset < offset ) return false;
     if ( i < rhs.i ) return true;
     if ( rhs.i < i ) return false;
     return n < rhs.n;
@@ -59,7 +62,8 @@ struct annotate_stats_t {
     ns.clear();
     adist.clear();
     sdist.clear();
-    ndist.clear();    
+    ndist.clear();
+    s2a_mappings.clear();
   }
   
   // seed-seed group counts
@@ -81,6 +85,11 @@ struct annotate_stats_t {
   // denominator for distance means
   std::map<std::string,std::map<std::string,double> > ndist;
 
+  // seed-annots pile-up (1-to-many seed-to-annot mapping)
+  //  e.g. for each SP, how many of each flavor for SO+/SO- or RIP+/RIP-
+  std::map<named_interval_t,std::set<std::string> > s2a_mappings;
+    
+  
 };
 
 
@@ -112,9 +121,11 @@ struct annotate_t {
   //
 
   bool midpoint;
+  std::set<std::string> midpoint_annot;
   
   double flanking_sec;
-
+  std::map<std::string,double> flanking_sec_annot;
+  
   double window_sec;
 
   bool include_overlap_in_dist;
@@ -127,6 +138,14 @@ struct annotate_t {
 
   bool only_within_channel;
 
+  bool shuffle_annots;
+
+  double max_shuffle_sec;
+  
+  bool constrained_shuffle_dur;
+
+  bool do_pileup;
+  
   std::map<std::string,std::string> label2channel;
 
   bool same_channel( const std::string & l1 , const std::string & l2 ) const
@@ -183,6 +202,10 @@ struct annotate_t {
   bool seed_nonseed; // show only seed-nonseed hits
   // track how many 'overlaps' a seed annot has
   std::map<named_interval_t,int> hits;
+
+  // track original (i.e. prior to midpoint/flanking manipulations
+  std::map<named_interval_t,interval_t> unmanipulated;
+  
   void new_seeds();
   
   // includes ANNOT_CH formats (maps to events) 
@@ -193,6 +216,10 @@ struct annotate_t {
   // main interval map
   //  segment(start-point) -> annot -> events
   interval_map_t events;
+
+  // track originals (if using a constrained shuffle only, i.e. otherwise
+  // we do not need to track these separately)
+  interval_map_t observed_events;  
   
   // for each segment, the offset --> size (i.e. map elements to 0... size on reading)
   std::map<uint64_t,uint64_t> seg; // offset --> size 
@@ -248,12 +275,23 @@ struct annotate_t {
   std::map<std::string,std::map<std::string,double> > dn_obs;
   std::map<std::string,std::map<std::string,double> > dn_exp;
 
+  // one-to-many s2a mappings
+  // std::map<named_interval_t,std::set<std::string> > s2a_mappings;
+  std::map<std::string,std::map<std::string,int> > s2a_obs;
+  std::map<std::string,std::map<std::string,int> > s2a_exp;
+  std::map<std::string,std::map<std::string,int> > s2a_expsq;
+  std::map<std::string,std::map<std::string,double> > s2a_pv;
+  std::map<std::string,std::map<std::string,double> > s2a_z;
+  // helper function to do the mapping
+  std::map<std::string,std::map<std::string,int> > s2a_proc( const std::map<named_interval_t,std::set<std::string> > & );
+  
   //
   // helpers
   //
 
   // merge overlapping annots
-  std::set<interval_t> flatten( const std::set<interval_t> & x );
+  // if join_neighbours, then contiguous intervals also merged
+  std::set<interval_t> flatten( const std::set<interval_t> & x , const bool join_neighbours = true );
 
   uint64_t total_duration( const std::set<interval_t> & x );
   
@@ -270,12 +308,17 @@ struct annotate_t {
   // seed-annot stats calc
   void seed_annot_stats( const std::set<interval_t> & a , const std::string & astr ,
 			 const std::set<interval_t> & b , const std::string & bstr ,
+			 uint64_t , 
 			 annotate_stats_t * r );
   
   // handle stats from orig/perms
   void observed( const annotate_stats_t & s ) ;
   void build_null( const annotate_stats_t & s ) ;
 
+  // debug mode
+  bool debug_mode;
+  void view();
+  
   
 };
 

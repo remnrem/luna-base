@@ -2297,7 +2297,7 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
 
   if ( regions != NULL ) 
     {
-      std::cout << " in here...\n";
+
       regions->clear();
       
       bool in = s[0] != 0;

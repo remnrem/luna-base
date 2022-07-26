@@ -174,6 +174,11 @@ struct timeline_t
   
   void signal_means_by_annot( const param_t & param );
 
+  int annot2sp( edf_t & edf , const std::string & astr , bool ,
+		std::vector<interval_t> * , 
+		std::vector<interval_t> * , 
+		int * orig_n , 
+		std::string ch , int sr = 0 );
   
   //
   // Hypnogram

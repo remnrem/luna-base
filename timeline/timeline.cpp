@@ -3363,6 +3363,7 @@ void timeline_t::annot2cache( const param_t & param )
 	  ++aa;
 	  
 	}
+
       
       //
       // now we have a sorted set of time-points
@@ -3370,7 +3371,7 @@ void timeline_t::annot2cache( const param_t & param )
       
       int idx = 1;
       const int np = tp->size();
-
+      
       // std::cout << " np = " << np << "\n";
       // std::cout << " num annots = " << tps.size() << "\n";
       
@@ -3387,11 +3388,11 @@ void timeline_t::annot2cache( const param_t & param )
 	    {
 	      ++idx;
 	      if ( idx == np ) break;
-	      continue;
+	      continue; // i.e. bounce back but do not update ++tt
 	    }
 	  
 	  // is in-between these two points?
-	  if ( curr >= prior && curr < next )
+	  if ( curr >= prior && curr <= next )
 	    {
 	      const uint64_t d1 = curr - prior;
 	      const uint64_t d2 = next - curr ;
@@ -4625,3 +4626,213 @@ bool timeline_t::align_epochs( uint64_t * tp , int * rec , const std::set<uint64
   
 }
 
+
+
+int timeline_t::annot2sp( edf_t & edf , const std::string & astr ,
+			  bool only_this_channel ,
+			  std::vector<interval_t> * sample_points , 
+			  std::vector<interval_t> * time_points , 
+			  int * orig_n , 
+			  std::string ch , int sr )
+{
+  
+  sample_points->clear();
+  time_points->clear();
+  
+  // use "CH" to get SR (unless it is otherwise specified)
+  //  but read all annots (irrespective of channel) unless only_this_channel == 1
+  //  (in which case, we require a specified CH ratehr than a SR (where we simply
+  //   find the first match) 
+
+  if ( only_this_channel && ( ch == "" || ch == "." ) )
+    Helper::halt( "require a specified channel for annot2sp() " );
+  
+  // either, find the SR of the given channel:
+  if ( sr == 0 )
+    {
+      signal_list_t signals = edf.header.signal_list( ch );
+      if ( signals.size() == 0 ) return 0;
+      if ( signals.size() != 1 ) Helper::halt( "problem matching a single channel" );
+      std::vector<double> Fs = edf.header.sampling_freq( signals );      
+      sr = Fs[0];
+    }
+  else
+    {      
+      signal_list_t signals = edf.header.signal_list( "*" );
+      std::vector<double> Fs = edf.header.sampling_freq( signals );
+      for (int s=0; s<Fs.size(); s++)
+	{
+	  if ( (int)(Fs[s]) == sr )
+	    {
+	      ch = signals.label( s );
+	      break;
+	    }
+	}
+    }
+
+  
+  if ( sr == 0 || ch == "" || ch == "." )
+    Helper::halt( "problem finding a channel w/ SR matching" );
+
+
+  signal_list_t signals = edf.header.signal_list( ch );
+  if ( signals.size() != 1 ) Helper::halt( "problem matching a single channel" );
+    
+  logger << "  using " << ch << " (SR = " << sr << ") to align annotations to sample-points\n";
+
+  
+  // must map to within 1 sample (n.b. if at edge, ignored)
+  const double max_diff = 1/(double)sr;
+  logger << "  mapping to closest sample-point within " << max_diff << " seconds\n";
+  
+  
+  //
+  // get the annotation
+  //
+  
+  annot_t * annot = annotations( astr );
+  
+  if ( annot == NULL )
+    Helper::halt( "could not find annotation class " + astr );
+
+  
+  
+  //
+  // get time-points for this SR (via pull of a dummy channel) 
+  //
+
+  slice_t slice( edf , signals(0) , edf.timeline.wholetrace() );
+  
+  const std::vector<uint64_t> * tp = slice.ptimepoints();
+
+  const int np = tp->size();
+  
+  //
+  // Iterate over elements, and build a single ordered table of all times
+  //
+  
+  std::map<uint64_t,int> times;
+
+  *orig_n = 0;
+  
+  const annot_map_t & events = annot->interval_events;  
+  annot_map_t::const_iterator aa = events.begin();
+  while ( aa != events.end() )
+    {
+      // get this annot interval
+      const instance_idx_t instance = aa->first;
+      
+      bool add = ( ! only_this_channel ) || instance.ch_str == ch ; 
+      if ( add )
+	{
+	  // track count
+	  (*orig_n)++;
+
+	  times[ instance.interval.start ] = -1;
+	  times[ instance.interval.stop ] = -1;
+	}
+      ++aa;      
+    }
+  
+  //
+  // now map all *unique & sorted* times 
+  //
+  
+  // index of tp-map (starts at 1)
+  int idx = 1;
+
+  std::map<uint64_t,int>::iterator tt = times.begin();
+  while ( tt != times.end() )
+    {
+      
+      const uint64_t & curr = tt->first;
+      const uint64_t & prior = (*tp)[idx-1];
+      const uint64_t & next = (*tp)[idx];
+      
+      // shift sample-point window up
+      if ( next < curr )
+	{	  
+	  ++idx;
+	  if ( idx == np ) break;
+	  continue; // i.e. bounce back but do not update ++tt
+	}
+
+      //      std::cout << "\n considering = " << curr << "\n";      
+      //std::cout << " idx now = " << idx << " ; curr , prior next = " << curr << " " << prior << " " << next << "\n";
+      
+      // is in-between these two points?
+      if ( curr >= prior && curr <= next )
+	{
+	  const uint64_t d1 = curr - prior;
+	  const uint64_t d2 = next - curr ;
+	  
+	  const bool first = d1 < d2 ; 
+	  
+	  //	  std::cout << " closest first = " << first  << "\n";
+	  
+	  double df = ( first ? d1 : d2 ) * globals::tp_duration ; 
+	  
+	  //std::cout << "  in nbetween = " << df << "\n";
+	  
+	  // close enough?
+	  if ( df <= max_diff )
+	    {
+	      int sp = first ? idx-1 : idx ;
+
+	      //std::cout << " storing " << sp << "\n";
+
+	      // store
+	      tt->second = sp ;	      
+	    }
+
+	}
+	  
+
+      // advance to next point 
+      
+      ++tt;
+    }
+  
+  
+  //
+  // map back to starts and stops
+  //
+      
+  aa = events.begin();
+  while ( aa != events.end() )
+    {
+      
+      int start = -1 , stop = -1;
+
+      const instance_idx_t & instance = aa->first;
+      
+      bool add = ( ! only_this_channel ) || instance.ch_str == ch ; 
+      
+      if ( add )
+	{
+	  if ( times.find( instance.interval.start ) != times.end() )
+	    start = times[ instance.interval.start ];
+	  
+	  if ( times.find( instance.interval.stop ) != times.end() )
+	    stop = times[ instance.interval.stop ];
+	  
+	  // std::cout << " start , stop = " << start << "\t" << stop << " <---- "
+	  // 	    << instance.interval.start << "  " << instance.interval.stop << "\n";
+	  
+	  // add this event (both SP and TP to ensure these are aligned
+	  // in the returned value (i.e. to go to makeing a spindle_t ) 
+	  if ( start != -1 && stop != -1 )
+	    {
+	      sample_points->push_back( interval_t( (uint64_t)start , (uint64_t)stop ) );
+	      time_points->push_back( instance.interval );
+	    }
+	}
+      
+      ++aa;
+
+    }
+
+  
+  return sample_points->size();
+  
+}

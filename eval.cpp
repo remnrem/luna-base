@@ -59,7 +59,7 @@ void param_t::parse( const std::string & s )
 {
   std::vector<std::string> tok = Helper::quoted_parse( s , "=" );
   if ( tok.size() == 2 )     add( tok[0] , tok[1] );
-  else if ( tok.size() == 1 ) add( tok[0] , "T" );
+  else if ( tok.size() == 1 ) add( tok[0] , "__null__" );
   else // ignore subsequent '=' signs in 'value'  (i.e. key=value=2  is 'okay', means "value=2" is set to 'key')
     {
       std::string v = tok[1];
@@ -123,6 +123,12 @@ bool param_t::has(const std::string & s ) const
 {
   return opt.find(s) != opt.end(); 
 } 
+
+bool param_t::empty(const std::string & s ) const
+{
+  if ( ! has( s ) ) return true; // no key
+  return opt.find( s )->second == "__null__";
+}
 
 bool param_t::yesno(const std::string & s ) const
 {
@@ -192,10 +198,15 @@ std::string param_t::dump( const std::string & indent , const std::string & deli
   std::stringstream ss;
   while ( ii != opt.end() ) 
     {
-      if ( cnt == sz )
+
+      if ( ii->second != "__null__" )
 	ss << indent << ii->first << "=" << ii->second; 
       else
-	ss << indent << ii->first << "=" << ii->second << delim; 
+	ss << indent << ii->first ;
+
+      if ( cnt != sz )
+	ss << delim; 
+      
       ++cnt;
       ++ii;
     }
@@ -2338,17 +2349,19 @@ void proc_epoch( edf_t & edf , param_t & param )
       if ( param.has( "offset" ) ) 
 	Helper::halt( "cannot specify both offset and align" );
       
-      // for EDF+D, this vector is passed to timeline
-      align_str = param.value( "align" );
-      align_annots = param.strvector( "align" );
-
       // swap in a default?
-      if ( align_str == "T" ) // i.e. no arg to align
+      if ( param.empty( "align" ) ) // i.e. no arg to align
 	{
 	  align_str = "N1,N2,N3,R,W,?,L,U,M";
 	  align_annots = Helper::parse( align_str , "," );
 	}
-      
+      else
+	{
+	  align_str = param.value( "align" );
+	  align_annots = param.strvector( "align" );
+	}
+
+      // for EDF+D, this vector is passed to timeline
       
       // find the first of these annotations
       offset = edf.timeline.annotations.first( align_annots );
@@ -2791,7 +2804,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   std::string cycle_annot = "";
   if ( param.has( "annot-cycles" ) )
     {
-      if ( param.value( "annot-cycles" ) == "T" )
+      if ( param.empty( "annot-cycles" ) )
 	cycle_annot = "NREMC";
       else
 	cycle_annot = param.value( "annot-cycles" );

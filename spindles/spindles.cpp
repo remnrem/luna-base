@@ -57,6 +57,30 @@ extern logger_t logger;
 annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 {
 
+  
+  //
+  // Signals
+  // 
+  
+  std::string signal_label = param.requires( "sig" );   
+  
+  // list of signals (data only)
+
+  const bool no_annotations = true;
+
+  signal_list_t signals = edf.header.signal_list( signal_label , no_annotations );  
+  
+  // number of signals
+  const int ns = signals.size();
+  
+  // nothing to do...
+  if ( ns == 0 ) return NULL;
+  
+  // sampling rate
+  std::vector<double> Fs = edf.header.sampling_freq( signals );
+  
+  
+
   //
   // Optionally collate all spindles called here, either across all channels:
   //
@@ -66,8 +90,69 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // ... or within channels only
 
   std::map<std::string,mspindles_t> ch2mspindles; 
-  
 
+  //
+  // Optionally, read in pre-computed spindles from an annotation (i.e. rather than use
+  // the CWT);  we still want F set, as this is used in the characterisation stage;  we also
+  // want to stratify by channel;
+  //
+
+  const bool using_precomputed = param.has( "precomputed" ) ;
+
+  // channel -> precomputed spindle list
+
+  std::map<std::string,std::vector<spindle_t> > precomputed;
+
+  if ( using_precomputed )
+    {
+      
+      // check that all channels have the same SR if using 'precomputed'       
+      
+      const std::string from_annot = param.value( "precomputed" );
+      
+      // get sample-points for each channel
+
+      for (int s=0; s<ns; s++)
+	{
+	  const bool only_extract_this_channel = true;
+
+	  std::vector<interval_t> sample_points , time_points ; 
+
+	  int orig_n;
+	  
+	  // get sample points, and times
+	  int n = edf.timeline.annot2sp(edf, from_annot, only_extract_this_channel,
+					&sample_points ,
+					&time_points ,
+					&orig_n , 
+					signals.label(s) );
+
+	  //
+	  // build the spindle list
+	  //
+	  
+	  std::vector<spindle_t> sp;
+
+	  // nb. have to remove 1 SP from end 
+	  for (int i=0; i<n; i++)
+	    sp.push_back( spindle_t( time_points[i].start , time_points[i].stop ,
+				     sample_points[i].start , sample_points[i].stop - 1 ) );
+	  
+	  //
+	  // add to the list
+	  //
+	  
+	  precomputed[ signals.label(s) ] = sp; 
+	  
+	  logger << "  mapped " << sp.size() << " of " 
+		 << orig_n << " spindles for "
+		 << signals.label(s) << "\n";
+	  
+	}
+
+    }
+  
+  
   //
   // Wavelet parameters
   //
@@ -286,26 +371,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
     }
   
 
-
-
-  //
-  // Signals
-  // 
-  
-  std::string signal_label = param.requires( "sig" );   
-  
-  // list of signals
-  signal_list_t signals = edf.header.signal_list( signal_label );  
-  
-  // number of signals
-  const int ns = signals.size();
-
-  // nothing to do...
-  if ( ns == 0 ) return NULL;
-
-  // sampling rate
-  std::vector<double> Fs = edf.header.sampling_freq( signals );
-  
  
   //
   // Set up annotation
@@ -408,7 +473,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       double dt_minutes = (double)dt / ( 60 * globals::tp_1sec ) ;
       
       double t_minutes = d->size() * dt_minutes; // total trace time in minutes
-
+      
       //
       // Run CWT 
       //
@@ -752,14 +817,28 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  
  		  	  
 	  //
-	  // Find above threshold regions
+	  // Find above threshold regions (detect given CWT,or use a precomputed list)
 	  //
 	  
 	  std::vector<interval_t> spindles1;
 	  std::vector<int> spindles1_start; // sample-points
 	  std::vector<int> spindles1_stop; // sample-points
 
-	  if ( use_zpks )
+	  if ( using_precomputed )
+	    {
+	      std::vector<spindle_t> prespins = precomputed[ signals.label(s) ];
+	      const int n = prespins.size();
+
+	      for (int i=0;i<n; i++)
+		{
+		  spindles1.push_back( prespins[i].tp );
+		  spindles1_start.push_back( prespins[i].start_sp );
+		  spindles1_stop.push_back( prespins[i].stop_sp );
+		}
+	      logger << "  attached " << n <<  " precomputed spindles...\n";
+	      
+	    }	  
+	  else if ( use_zpks )
 	    {
 	      
 	      logger << "  robust detection of local peaks\n"; 
@@ -939,24 +1018,27 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      for (int i=1;i<spindles1.size();i++)
 		{
 		  
+		  
 		  uint64_t this_start = spindles1[i].start;
 		  uint64_t this_stop  = spindles1[i].stop;
 		  
 		  int this_start_sp   = spindles1_start[i];
 		  int this_stop_sp   = spindles1_stop[i];
 		  
-		  // merge? if both ends are within one second (or 
-		  // if the first spindle ends 
+		  // merge? if both ends are within X seconds (default = 0.5 ) 
+		  // std::cout << " previous_ / this " << previous_start << " " << previous_stop << "\t"
+		  // 	    << this_start << " " << this_stop << "\n";
 		  
 		  // overlap?
 		  if ( this_start < previous_stop ) { extending = true; }
-
+		  
 		  // too near?
 		  else if ( this_start - previous_stop < spindle_merge_tp ) { extending = true; }
 		  
 		  // this next spindle is sufficiently far away, so add the previous one
 		  else 
 		    {				  
+		      
 		      // does it still meet max duration criterion (i.e. if extended)?
 		      if ( previous_stop - previous_start + 1 < max_dur_tp )
 			{
@@ -965,6 +1047,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 							 previous_start_sp , previous_stop_sp ) );
 			  
 			}
+		      
 		      extending = false;
 		    }
 		  
@@ -975,7 +1058,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      previous_start = this_start;
 		      previous_start_sp = this_start_sp;
 		    }
-
+		  
 		  previous_stop  = this_stop;
 		  previous_stop_sp  = this_stop_sp;
 		  
@@ -993,21 +1076,27 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  spindles.push_back( spindle_t( previous_start , previous_stop , 
 						previous_start_sp , previous_stop_sp ) );
 		  
-// 		  spindles.push_back( interval_t( previous_start , previous_stop ) );
-// 		  spindles_start.push_back( previous_start_sp );
-// 		  spindles_stop.push_back( previous_stop_sp );
 		}
 
 	    } 
 
 
 	  int nspindles_postmerge = spindles.size();
-
+	  
 	  logger << "  merged nearby intervals: from " 
 		 << spindles1.size() << " to " 
 		 << spindles.size() << " unique events\n";
 	  
+	  
+	  
+	  
 
+	  // ------------------------------------------------------------
+	  // 
+	  // Spindle detection over -- now do spindle analysis 
+	  //  - only requires 'spindles[]  and averaged[] 
+	  //
+	  // ------------------------------------------------------------
 	  
 	  //
 	  // Track whether each SP is in a spindle or not

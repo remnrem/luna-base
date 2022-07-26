@@ -78,8 +78,23 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
 
   const double edge_secs = param.has( "edges" ) ? param.requires_dbl( "edges" ) : 1.0 ; 
   
-  const double combine_msec = param.has( "combine" ) ? param.requires_dbl( "combine" ) : 10.0;
+  const std::set<std::string> excludes = param.strset( "exclude" ); // annots to exclude, e.g. IEDs
   
+  const double combine_msec = param.has( "combine" ) ? param.requires_dbl( "combine" ) : 10.0;
+
+
+  //
+  // Check excludes
+  //
+
+  std::set<std::string>::const_iterator ee = excludes.begin();
+  while ( ee != excludes.end() )
+    {
+      annot_t * annot = edf.timeline.annotations( *ee );
+      if ( annot == NULL )
+	Helper::halt( "could not find annotation " + *ee );
+      ++ee;
+    }
   
   //
   // Outputs
@@ -138,8 +153,10 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
       ripples_t ripples( *d , *tp , sr , flwr, fupr, kwin_ripple, kwin_tw, verbose ,
 			 hfbands, th, req_msec, req_peaks_flt, req_peaks_raw , req_raw_p2p_prop,
 			 max_amp_thresh_abs , max_amp_thresh_pct , 
-			 combine_msec, edge_secs , otsu_k );
-			 
+			 combine_msec, edge_secs ,
+			 excludes.size() == 0 ? NULL : &edf , excludes,
+			 otsu_k );
+      
 
       // stats & annots
       if ( ! otsu )
@@ -178,6 +195,8 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      const double max_amp_thresh_pct ,
 		      const double combine_msec , 
 		      const double edge_secs ,
+		      edf_t * edf , 
+		      const std::set<std::string> & excludes , 
 		      const int otsu_k )
 {
 
@@ -192,7 +211,9 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 	 << "  requiring at least " << req_peaks_flt << " peaks in the filtered signal, " << req_peaks_raw << " in the raw signal\n"
 	 << "  splitting range into " << hfbands << " equal bands\n";
   logger << "  FIR tw = " << kwin_tw << ", ripple = " << kwin_ripple << "\n";
-  
+
+
+
   //
   // set up 
   //
@@ -446,7 +467,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   // iterate over signal
   //
 
-  int fail_dur = 0, fail_amp = 0 , fail_flt_hw = 0 , fail_raw_hw = 0; 
+  int fail_dur = 0, fail_amp = 0 , fail_flt_hw = 0 , fail_raw_hw = 0, fail_exc_annot = 0; 
   
   
   for (int i=0; i<n; i++)
@@ -565,7 +586,36 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      okay = false;		   
 		    }
 		}
-	      
+
+	      // any annotation exclusions?
+	      if ( okay && edf != NULL && excludes.size() != 0 )
+		{
+		  std::set<std::string>::const_iterator ee = excludes.begin();
+		  while ( ee != excludes.end() )
+		    {
+		      // tp[stop] is +1 end already
+		      
+		      interval_t interval( tp[start] , tp[stop] );
+
+		      // nb. as extract() is a terrible function and currently
+		      // only extracts things that are completely within the interval
+		      // here we will make a kludge and expand this region to +/- 0.5 secs
+		      
+		      interval.expand( 0.5 * globals::tp_1sec );
+		      
+                      annot_t * annot = edf->timeline.annotations( *ee );
+		      if ( annot == NULL ) Helper::halt( "could not find annotation " + *ee );
+                      annot_map_t events = annot->extract( interval );
+                      const bool has_annot = events.size() ;
+                      if ( has_annot )
+			{
+			  okay = false;
+			  ++fail_exc_annot;
+			  break;
+			}
+		      ++ee;
+		    }
+		}
 	      
 	      // add?
 	      if ( okay )
@@ -588,20 +638,25 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 	 << " failed N: dur = " << fail_dur
 	 << ", amp = " << fail_amp	 
 	 << ", half-waves (filtered) " << fail_flt_hw
-	 << ", half-waves (raw) = " << fail_raw_hw << "\n";
-   
+	 << ", half-waves (raw) = " << fail_raw_hw
+	 << ", annotated exclusions = " << fail_exc_annot 
+	 << "\n";
+
+  if ( all_ripples.size() == 0 ) return;
+  
   //
   // merge nearby
   //
   
   ripples.clear();
-
+  
   const int n0 = all_ripples.size();
 
   int prev = 0;
   
   for (int i=1; i<n0; i++)
     {
+            
       // gap between the previous and this one?
       const bool gap = ( all_ripples[ i ].pos.start - all_ripples[ i - 1 ].pos.stop + 1 ) >= combine_tp ;
 
@@ -618,11 +673,11 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 	}
       
     }
-
+  
   // add last set
   ripples.push_back( ripple_t( all_ripples[ prev ].pos.start , all_ripples[ n0 - 1 ].pos.stop ,
 			       all_ripples[ prev ].start_sp , all_ripples[ n0 - 1 ].stop_sp  ) );
-
+    
   
   logger << "  found " << all_ripples.size() << " ripples, merged to " << ripples.size() << "\n";
   

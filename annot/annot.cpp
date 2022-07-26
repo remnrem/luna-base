@@ -758,7 +758,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( globals::specified_annots.size() > 0 && 
 	       globals::specified_annots.find( name ) == globals::specified_annots.end() ) 
 	    continue;
-	    
+
+	  //std::cout << " loading " << name << "\n";
 	  
 	  //
 	  // otherwise, create the annotation if it doesn't exist
@@ -921,6 +922,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( aname == "" ) continue;
 	  
+	  //std::cout << " anme [" << aname << "]\n";
 
 	  //
 	  // save original class name (prior to any combining)

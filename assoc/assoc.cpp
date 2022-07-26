@@ -54,8 +54,6 @@ extern writer_t writer;
 
 assoc_t::assoc_t( param_t & param )
 {
-
-  lgbm.qt_mode = true;
   
   //
   // training or test mode?
@@ -68,6 +66,8 @@ assoc_t::assoc_t( param_t & param )
   // misc. options
   //
 
+  lgbm.qt_mode = true; //param.yesno( "qt" ) ;
+  
   allow_missing_values = param.has( "missing" ) ? param.yesno( "missing" ) : true ; 
   
   //
@@ -203,7 +203,9 @@ void assoc_t::import_training( param_t & param )
   std::set<std::string> excids = param.strset( "exc-ids" );
   const bool check_incids = incids.size() != 0 ;
   const bool check_excids = excids.size() != 0 ;
+  int skipped = 0;
   
+	
   //
   // pass through all files to get the total variable list
   //
@@ -273,8 +275,8 @@ void assoc_t::import_training( param_t & param )
 	  const std::string & id = tok[0];
 
 	  // skip this person?
-	  if ( check_incids && incids.find( id ) == incids.end() ) continue;
-	  if ( check_excids && excids.find( id ) != excids.end() ) continue;
+	  if ( check_incids && incids.find( id ) == incids.end() ) { ++skipped; continue; }
+	  if ( check_excids && excids.find( id ) != excids.end() ) { ++skipped; continue; }
 
 	  // otherwise, add to the list
 	  if ( ind2row.find( id ) == ind2row.end() )
@@ -355,6 +357,8 @@ void assoc_t::import_training( param_t & param )
     }
 
   logger << "  expecting " << nc << " features on " << ni_train << " training and " << ni_valid << " validation observations\n";
+  if ( skipped != 0 ) logger << "  skipped " << skipped << " observations due to inc-ids/exc-ids\n";
+
   //  req_vars.clear();
   varlist.resize( nc );
   
@@ -418,7 +422,7 @@ void assoc_t::import_training( param_t & param )
 	  // trainer (versus validiation dataset)
 	  const bool is_trainer = valid_set.find( id ) == valid_set.end();
 	  const int row = is_trainer ? train2row[ id ] : valid2row[ id ];
-	  
+		  
 	  // get stratifiers for these variables
 	  std::string var_strats;
 	  for (int ss=0; ss<sslot.size(); ss++)
@@ -459,8 +463,8 @@ void assoc_t::import_training( param_t & param )
     }
 
   
-  // std::cout << " Xtrain\n" << Xtrain << "\n\n";
-  // std::cout << " Xvalid\n" << Xvalid << "\n\n";
+   std::cout << " Xtrain\n" << Xtrain << "\n\n";
+   std::cout << " Xvalid\n" << Xvalid << "\n\n";
     
   
 }
@@ -916,6 +920,7 @@ void assoc_t::import_testdata( param_t & param )
   std::set<std::string> excids = param.strset( "exc-ids" );
   const bool check_incids = incids.size() != 0 ;
   const bool check_excids = excids.size() != 0 ;
+  int skipped = 0;
   
   // we have the set of variables read in already
   // first pass to get the # of people
@@ -980,8 +985,8 @@ void assoc_t::import_testdata( param_t & param )
 	  const std::string & id = tok[0];
 
 	  // skip this person?
-          if ( check_incids && incids.find( id ) == incids.end() ) continue;
-          if ( check_excids && excids.find( id ) != excids.end() ) continue;
+          if ( check_incids && incids.find( id ) == incids.end() ) { ++skipped; continue; }
+          if ( check_excids && excids.find( id ) != excids.end() ) { ++skipped; continue; }
 
 	  // otherwise, add as a test subject
 	  if ( ind2row.find( id ) == ind2row.end() )
@@ -1016,7 +1021,9 @@ void assoc_t::import_testdata( param_t & param )
     }
   
   logger << "  expecting " << nv << " features on " << ni << " test observations\n";
-
+  if ( skipped != 0 ) 
+    logger << "  skipped " << skipped << " observations due to inc-ids/exc-ids\n";
+  
   X = Eigen::MatrixXd::Constant( ni, nv,  NaN_value );
 
   //
@@ -1119,9 +1126,10 @@ void assoc_t::predict( param_t & param )
 
   // only go up to iteration 'iter'?  ( 0 implies all )
   const int iter = param.has( "iter" ) ? param.requires_int( "iter" ) : 0 ;
-  
+  std::cout << " 11..\n";
   Eigen::MatrixXd Y = lgbm.predict( X , iter );
-
+  std::cout << " 22..\n";
+  
   const int n = Y.rows();
 
   if ( test_ids.size() != n )
@@ -1160,7 +1168,7 @@ void assoc_t::SHAP( param_t & param )
   if ( test_ids.size() != n )
     Helper::halt( "internal error in predict()" );
 
-  //  std::cout << " nv = " << nv << " " << varlist.size() << "\n";
+  std::cout << " nv = " << nv << " " << varlist.size() << "\n";
     
   if ( nv != varlist.size() )
     Helper::halt( "internal error in predict(), varlist size" );

@@ -53,7 +53,9 @@ struct param_t
   void clear();
   
   bool has(const std::string & s ) const;
-
+  
+  bool empty(const std::string & s ) const;
+  
   // if ! has(X) return F
   // else return yesno(value(X))
   bool yesno(const std::string & s ) const;

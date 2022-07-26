@@ -158,11 +158,15 @@ private:
   /* int ni_valid; */
   /* int ni_test; */
 
-  // pool of potential IIDs
+  // pool of potential IIDs (train-iids= ... ) 
+  std::set<std::string> training_pool_iids;
+  std::set<std::string> validation_pool_iids;
+  std::set<std::string> test_pool_iids;
+
+  // pool of fully-qualified IDs (train-ids= ... )
   std::set<std::string> training_pool;
   std::set<std::string> validation_pool;
   std::set<std::string> test_pool;
-
 
   // IIDs in data
   std::vector<std::string> training_iids;
