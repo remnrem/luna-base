@@ -76,7 +76,7 @@ struct pops_t {
 
   // derive level 2 stats (from pops_t::specs)
   // this is also co-opted by prediction mode 
-  void level2( const bool training = true );
+  void level2( const bool training = true , const bool quiet = false );
 
   // dump feature matrix
   void dump_matrix( const std::string & f );

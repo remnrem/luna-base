@@ -62,16 +62,20 @@ double pops_opt_t::slope_epoch_th = 5;
 
 std::map<std::string,std::set<std::string> > pops_opt_t::aliases;
 
+std::vector<std::string> pops_opt_t::equivs;
+std::string pops_opt_t::equiv_root;
+std::string pops_opt_t::equiv_swapin;
+
 void pops_opt_t::set_options( param_t & param )
 {
   
   // i.e. prepend this to any non-absolute paths;
-  pops_path = param.has( "path" ) ? param.value( "path" ) : "" ;
+  pops_path = param.has( "path" ) ? Helper::expand( param.value( "path" ) ) : "" ;
   
   // assume <path/root>.ftr
   // assume <path/root>.mod
   // assume <path/root>.conf
-  pops_root = param.has( "root" ) ? param.value( "root" ) : "" ;  
+  pops_root = param.has( "root" ) ? Helper::expand( param.value( "root" ) ) : "" ;  
   if ( pops_root != "" && pops_path != "" ) 
     Helper::halt( "can only specify 'root' or 'path'" );
   
@@ -113,7 +117,33 @@ void pops_opt_t::set_options( param_t & param )
 	    aliases[ tok2[0] ].insert( tok2[j] );
 	}
     }
-  
+
+  // channel equivalents
+  //  i.e. actually different channels; map to the preferred term in the model file
+  //  currently, only allow for a single channel to be rotated (i.e. swap in multiple
+  //  equivalent versions, and test for best predictions / consensus)
+  //   e.g. train on C4
+  //     -->    alias  C4 <- C4_M1 C4_A1 etc
+  //     -->    equiv  C4,C3,C1,C3,P4,F3,F4
+  //      i.e. if we have those, then try doing everything with that
+
+  // default:no equivalence channel
+  equiv_root = equiv_swapin = "";
+  equivs.clear();
+
+  if ( param.has( "equiv" ) )
+    {
+      std::vector<std::string> chs = param.strvector( "equiv" );
+      if ( chs.size() < 2 )
+	Helper::halt( "equiv requires two or more channels" );
+
+      equiv_root = chs[0];
+
+      // note:: includes self-equiv, i==0
+      for (int i=0; i<chs.size(); i++)
+	equivs.push_back( chs[i] );
+      
+    }
 
 }
 

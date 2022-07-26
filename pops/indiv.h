@@ -31,6 +31,16 @@ struct param_t;
 
 #include "pops/pops.h"
 
+
+struct pops_sol_t {
+  // epoch numbers
+  std::vector<int> E;  
+  // predicted stages
+  std::vector<int> S;  
+  // predictions
+  Eigen::MatrixXd P;  
+};
+
 struct pops_indiv_t {
   
   pops_indiv_t( edf_t & , param_t & );
@@ -41,7 +51,7 @@ struct pops_indiv_t {
   
   void level1( edf_t & );
 
-  void level2();
+  void level2( const bool quiet_mode = false );
   
   void predict( );
   
@@ -49,9 +59,12 @@ struct pops_indiv_t {
 
   void apply_espriors( const std::string & f );
   
-  void summarize( );
-
-
+  void summarize( pops_sol_t * sol = NULL );
+  
+  void combine( std::vector<pops_sol_t> & sols ,
+		int method ,
+		double min_conf );
+  
   // trainer/target?
   bool trainer;
 

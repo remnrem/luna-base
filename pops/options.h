@@ -39,6 +39,12 @@ struct pops_opt_t {
   
   static std::map<std::string,std::set<std::string> > aliases;
 
+  // for a single channel only, can run POPS prediction swapping
+  // in multiple channels instead of one 
+  static std::vector<std::string> equivs;
+  static std::string equiv_root;
+  static std::string equiv_swapin;
+  
   static std::string pops_path;
   static std::string pops_root;
 

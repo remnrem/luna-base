@@ -71,18 +71,15 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   //  - derive level-2 stats for that one individual
   //  - load model
   //  - make prediction
-  
-  // get any staging
-  staging( edf , param );
-
-
-  
+    
   //
   // training mode: derive level-1 stats and then quit
   //
   
   if ( training_mode )
     {
+      // get any staging
+      staging( edf , param );
       level1( edf );
       save1( edf.id , param.requires( "data" ) );      
     }
@@ -90,54 +87,193 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   
   //
   // Predict: level 1 & 2 states, then fit 
-  //
+  //   optionally, allow for all this to be nested in running different
+  //   equivalance sets
 
   if ( ! training_mode )
     {
-
-      level1( edf );
-
-      level2();
       
-      logger << "  final feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
+      // looping over equivalence channels? 0 if no equivs
+      const int equivn = pops_opt_t::equivs.size();
+
+      // check all equivs exist [ to mapping, i.e. skip eq == 0 , as that
+      // is tested below (but allows for aliases) ] 
       
-      if ( dump_features ) 
+      for (int eq = 1; eq < equivn; eq++)
 	{
-	  std::string dfile = Helper::expand( param.value( "dump" ) );
-	  logger << "  dumping feature matrix to " << dfile << "\n";
-	  std::ofstream O1( dfile.c_str() , std::ios::out );
-	  O1 << "SS";
-	  std::vector<std::string> labels = pops_t::specs.select_labels();
-	  for (int i=0; i<labels.size(); i++) O1 << "\t" << labels[i];
-	  O1 << "\n";
-	  for (int i=0; i<X1.rows(); i++)
+	  int s = edf.header.signal( pops_opt_t::equivs[eq] );
+	  if ( s == -1 ) Helper::halt( "could not find " + pops_opt_t::equivs[eq] );
+	}
+
+      std::vector<pops_sol_t> sols;
+      int eq1 = 0;
+      // default combione CONF = 0.5
+      double comb_conf = param.has( "conf" ) ? param.requires_dbl( "conf" ) : 0 ;
+      // default = arithmetic mean of all sols CONF > 0.5
+      int comb_method = param.has( "mean" ) ? 3 : param.has( "geo" ) ? 2 : 1 ; // best (default)
+
+      if ( equivn )
+	{
+	  logger << "  combining final solution across " << equivn << " equivalence channels; method = ";
+	  if ( comb_method == 1 ) logger << " most confident";
+	  else if ( comb_method == 2 ) logger << " geometric mean";
+	  else logger << " mean";
+
+	  if ( comb_method != 1 ) 
+	    logger << ", minimum conf score = " << comb_conf;
+	  logger << "\n";
+	  
+	}
+
+      if ( pops_opt_t::equiv_root != "" )
+	{
+	  
+	  if ( pops_t::specs.chs.find( pops_opt_t::equiv_root ) == pops_t::specs.chs.end() )
 	    {
-	      O1 << pops_t::label( (pops_stage_t)S[i] );
-	      for (int j=0; j<X1.cols(); j++)
-		O1 << "\t" << X1(i,j);
-	      O1 << "\n";
+	      logger << "  ** equiv channel should be in from this list of 1 or more channels: ";
+	      std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin();
+	      while( ss != pops_t::specs.chs.end() )
+		{
+		  logger << " " << ss->first ;
+		  ++ss;
+		}
+	      logger << "\n";
+	      Helper::halt( "could not find root equivalence channel: " + pops_opt_t::equiv_root + " (see note above)" );	      
 	    }
-	  O1.close();
+
 	}
-
-
-      if ( ! pops_t::lgbm_model_loaded )
+      
+      // will only loop once if no equivalence channel list      
+      while ( 1 )
 	{
-	  pops_t::lgbm.load_model( param.requires( "model" ) );
-	  if ( param.has( "config" ) ) 
-	    pops_t::lgbm.load_config( param.value( "config" ) );	  
-	  pops_t::lgbm_model_loaded = true;
+
+	  // swapping in a different channel?
+	  if ( equivn )
+	    {
+	      // all done?
+	      if ( eq1 == equivn ) break;
+
+	      // otherwise, get the next channel
+	      pops_opt_t::equiv_swapin = pops_opt_t::equivs[ eq1 ];
+	      ++eq1;
+
+	      // track which channel equivalent we are using
+	      writer.level( pops_opt_t::equiv_swapin , "CHEQ" );
+
+	      logger << "  now processing equivalent channel "
+		     << pops_opt_t::equiv_swapin
+		     << " (for " << pops_opt_t::equiv_root << ")\n";
+	      
+	    }
+
+	  //
+	  // get any staging (this should reset internals too, if repeating)
+	  //
+
+	  staging( edf , param );
+	  
+	  //
+	  // build level 1 & 2 features
+	  //
+
+	  level1( edf );
+	  
+	  level2( eq1 > 1 ? true : false ); // set to quiet mode, if repeating
+	  
+	  logger << "  feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
+
+	  //
+	  // Optionally, dump all
+	  //
+
+	  if ( dump_features ) 
+	    {
+	      if ( equivn ) Helper::halt( "cannot specify dump and equiv together" );
+	      
+	      std::string dfile = Helper::expand( param.value( "dump" ) );
+	      logger << "  dumping feature matrix to " << dfile << "\n";
+	      std::ofstream O1( dfile.c_str() , std::ios::out );
+	      O1 << "SS";
+	      std::vector<std::string> labels = pops_t::specs.select_labels();
+	      for (int i=0; i<labels.size(); i++) O1 << "\t" << labels[i];
+	      O1 << "\n";
+	      for (int i=0; i<X1.rows(); i++)
+		{
+		  O1 << pops_t::label( (pops_stage_t)S[i] );
+		  for (int j=0; j<X1.cols(); j++)
+		    O1 << "\t" << X1(i,j);
+		  O1 << "\n";
+		}
+	      O1.close();
+	    }
+
+
+	  //
+	  // Load LGBM model if needed
+	  //
+	  
+	  if ( ! pops_t::lgbm_model_loaded )
+	    {
+	      pops_t::lgbm.load_model( param.requires( "model" ) );
+	      if ( param.has( "config" ) ) 
+		pops_t::lgbm.load_config( param.value( "config" ) );	  
+	      pops_t::lgbm_model_loaded = true;
+	    }
+
+	  //
+	  // Make the actual predictions
+	  //
+
+	  predict();
+	  
+	  SHAP();
+	  
+	  if ( elapsed_sleep_priors )
+	    apply_espriors( param.value( "es-priors" ) );
+
+	  //
+	  // Summarize for this equiv channel
+	  //
+
+	  pops_sol_t sol;
+	  
+	  if ( equivn ) 
+	    logger << "  Solution mapping " << pops_opt_t::equiv_swapin << " --> " <<  pops_opt_t::equiv_root << "\n";
+	  
+	  summarize( equivn ? &sol : NULL );
+	  
+	  //
+	  // track if >1 equiv channel
+	  //
+	  
+	  if ( equivn )
+	    {
+	      sols.push_back( sol );
+	    }
+	  
+	  //
+	  // end of loop
+	  //
+
+	  if ( equivn == 0 ) break;
+
+	}
+
+      if ( equivn )
+	writer.unlevel( "CHEQ" );
+      
+      //
+      // Final summaries
+      //
+      
+      if ( equivn )
+	{
+	  logger << "  Combined solution: " << equivn << " equivalence channels:\n";
+	  combine( sols , comb_method, comb_conf );	  
+	  summarize();
 	}
       
-      predict();
-      
-      SHAP();
-
-      if ( elapsed_sleep_priors )
-	apply_espriors( param.value( "es-priors" ) );
-      
-      summarize();
-    }
+    } // end of PREDICTION mode
   
 }
 
@@ -170,7 +306,7 @@ void pops_indiv_t::staging( edf_t & edf , param_t & param )
 
   S.resize( ne , has_staging ? POPS_UNKNOWN : POPS_WAKE );
   E.resize( ne );
-  
+
   // for targets w/ no existing staging, all done
   if ( ! has_staging ) 
     {
@@ -300,6 +436,12 @@ void pops_indiv_t::level1( edf_t & edf )
 {
 
   //
+  // ensure we reset epoch count 'ne'
+  //
+
+  ne = edf.timeline.first_epoch();
+
+  //
   // score level-1 factors --> X1
   //
 
@@ -339,7 +481,7 @@ void pops_indiv_t::level1( edf_t & edf )
   const bool silent_signal_search = true;
 
   signal_list_t signals;
-  
+    
   std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin(); 
   while ( ss != pops_t::specs.chs.end() )
     {
@@ -398,8 +540,9 @@ void pops_indiv_t::level1( edf_t & edf )
   //
   
   int en = 0 ;
-  
-  edf.timeline.first_epoch();
+
+  // was called above, and reset 'ne'
+  //edf.timeline.first_epoch();
   
   while ( 1 ) 
     {
@@ -444,14 +587,47 @@ void pops_indiv_t::level1( edf_t & edf )
 	  if ( bad_epoch ) continue;
 
 	  //
+	  // Swap to a channel equivalent?
+	  //
+
+	  // always use nominal signal label here, as this relates to the
+	  // POPS feature specification;  rather, if swapping in an equivalent
+	  // signal, just do once at this edf.slice() stage; then everything else
+	  // proceeds as is
+	  
+	  const std::string siglab = signals.label(s) ; 
+
+	  //	  std::cout << "siglab = " << siglab << " " << pops_opt_t::equiv_root << " == " << ( pops_opt_t::equiv_root == siglab ) << "\n";
+
+	  int slot1;
+
+	  // swapping in an equivalent value?
+	  if ( pops_opt_t::equiv_root == siglab )
+	    {
+	      // if swap == self, then use original slot (i.e. this is based
+	      // on FTR file aliases. rather than EDF header aliases... awkward
+	      // but keep for now
+	      
+	      if ( pops_opt_t::equiv_swapin == siglab )
+		slot1 = signals(s);
+	      else // do the swap
+		slot1 = edf.header.signal( pops_opt_t::equiv_swapin );
+	    }
+	  else // no swapping needed
+	     slot1 = signals(s);
+	  
+	  //	  std::cout << "pops_opt_t::equiv_swapin = " << pops_opt_t::equiv_swapin << " " << slot1 << "\n";
+
+	  if ( slot1 == -1 )
+	    Helper::halt( "could not find equiv channel " + pops_opt_t::equiv_swapin );
+	  
+	  //
 	  // Get data
 	  //
 
-	  const std::string siglab = signals.label(s) ;
+	  slice_t slice( edf , slot1 , interval );
 	  
-	  slice_t slice( edf , signals(s) , interval );
-	  
-	  const int sr = edf.header.sampling_freq( signals(s) ); 
+	  const int sr = edf.header.sampling_freq( slot1 );
 	  
 	  //
 	  // get data & mean-center
@@ -605,6 +781,7 @@ void pops_indiv_t::level1( edf_t & edf )
 		      if ( bin.bfa[i] > zupr ) break;		       
 		      if ( bin.bfa[i] >= zlwr ) norm += bin.bspec[i] ;
 		    }
+
 		  // sanity check
 		  if ( norm == 0 )
 		    {
@@ -932,7 +1109,7 @@ void pops_indiv_t::level1( edf_t & edf )
 }
 
 
-void pops_indiv_t::level2()
+void pops_indiv_t::level2( const bool quiet_mode )
 {
 
   // co-opt pops_t::level2() to do this (i.e. same
@@ -950,7 +1127,7 @@ void pops_indiv_t::level2()
 
   pops_t pops;
   pops.from_single_target( *this );
-  pops.level2( false ); // false --> not training sample
+  pops.level2( false , quiet_mode ); // false --> not training sample
   pops.copy_back( this );
 
 
@@ -1040,7 +1217,7 @@ void pops_indiv_t::SHAP()
   
 }
 
-void pops_indiv_t::summarize()
+void pops_indiv_t::summarize( pops_sol_t * sol )
 {
   
   std::map<int,double> dur_obs, dur_obs_orig, dur_predf, dur_pred1;
@@ -1048,6 +1225,12 @@ void pops_indiv_t::summarize()
   
   int slp_lat_obs = -1 , slp_lat_prd = -1;
   int rem_lat_obs = -1 , rem_lat_prd = -1;
+
+  //
+  // Update 'ne' (as may be on combined set); it should track w/ E, S and P
+  //
+
+  ne = E.size();
   
   //
   // epoch-level output (posteriors & predictions)
@@ -1112,8 +1295,7 @@ void pops_indiv_t::summarize()
 	  writer.value( "FLAG" , flag );
 	 
 	}
-
-          
+      
       // slp/rem latency
       if ( has_staging ) 
 	{
@@ -1142,6 +1324,17 @@ void pops_indiv_t::summarize()
   writer.unepoch();
 
 
+  //
+  // Track solutions across equivalence channels?
+  //
+
+  if ( sol != NULL )
+    {
+      sol->E = E;
+      sol->P = P;
+      sol->S = preds;
+    }
+  
   //
   // Summaries
   //  
@@ -1192,13 +1385,12 @@ void pops_indiv_t::summarize()
   // this person
   //
 
-    
   // 5-class stats
   pops_stats_t stats( S, preds , 5 );
 
   // 3-class stats
   pops_stats_t stats3( pops_t::NRW( S ) , pops_t::NRW( preds ) , 3 );
-  
+
   //
   // outputs
   //
@@ -1414,9 +1606,10 @@ void pops_indiv_t::summarize()
   // Confusion matrix, to console
   //
 
-  logger << "  \n  Final kappa = " << stats.kappa << "; 3-class kappa = " << stats3.kappa << "\n";
+  logger << "  kappa = " << stats.kappa << "; 3-class kappa = " << stats3.kappa
+	 << " ( n = " << ne << " epochs)\n";
   logger << "  Confusion matrix: \n";
-  std::map<int,std::map<int,int> > table = pops_t::tabulate( S , preds , true );
+  std::map<int,std::map<int,int> > table = pops_t::tabulate( S, preds, true );
   logger << "\n";
 
 }
@@ -1592,5 +1785,153 @@ void pops_indiv_t::apply_espriors( const std::string & f )
   
 }
 
+void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
+			    int method ,
+			    double min_conf )
+{
+  // create a final solution from multiple equivalence channels
+  // update pops_indiv_t::  E and P only,
+  //  also, if 'has_staging', then S as well (from the original/obs staging)
+
+  int nsol = sols.size();
+  
+  // get consensus # of good epochs
+  // epoch --> solution # --> row in that sol
+  
+  std::map<int,std::map<int,int> > EE;
+  for (int i=0; i<nsol; i++)
+    {
+      const std::vector<int> & E1 = sols[i].E;
+      const int n = E1.size();
+      for (int e=0; e<n; e++) EE[ E1[e] ][ i ] = e ;
+    }
+  
+  //
+  // remake consensus E list
+  //
+  
+  const int ne_comb = EE.size();
+
+  E.clear();
+  std::map<int,std::map<int,int> >::const_iterator ee = EE.begin();
+  while ( ee != EE.end() )
+    {
+      E.push_back( ee->first );
+      ++ee;
+    }
+
+  
+  //
+  // Remake original staging? ( from Sorig[],. which is still defined (all W)
+  // even if there is no staging per se)
+  //
+  
+  S.resize( ne_comb );
+  for (int e=0; e<ne_comb; e++)
+    S[e] = Sorig[ E[e] ];
+  
+
+  //
+  // Create a final P (initially ,simple means
+  //
+  
+  // option 1: take most confident
+  // option 2: (geometric) means, but only for solutions with an above-threshold confidence
+  //        3: arithmetic mean
+  
+  P.resize( ne_comb , Eigen::NoChange );
+  
+  for (int e=0; e<ne_comb; e++)
+    {
+      std::map<int,int> & esols = EE[ E[e] ];
+      
+      // # of sols for this epoch
+      const int nse = esols.size();
+      
+      // this should be at least one
+      //    std::cout << " epoch " << E[e] << " has " << nse << " sols\n";
+
+      if ( nse == 1 ) // straight copy of one and only
+	{
+	  std::map<int,int>::const_iterator ss = esols.begin();
+	  P.row( e ) = sols[ ss->first ].P.row( ss->second );
+	}
+      else
+	{
+	  // need to resolve multiple solutions
+
+	  // take max CONF
+	  if ( method == 1 )
+	    {
+	      int mxi = -1;
+	      double mx = 0; 
+	  
+	      std::map<int,int>::const_iterator ss = esols.begin();
+	      while ( ss != esols.end() )
+		{
+		  // max from this sol for this consensus epoch
+		  double pmx = sols[ ss->first ].P.row( ss->second ).maxCoeff();
+		  if ( pmx > mx )
+		    {
+		      mx = pmx;
+		      mxi = ss->first ;
+		    }
+		  ++ss;
+		}
+	      
+	      // max is sols[ mxi ]
+	      // swap in the best row:
+	      P.row( e ) = sols[ mxi ].P.row( esols[ mxi ] );
+	      
+	    }
+	  else if ( method == 2 ) // geo mean
+	    {
+	      // ( geometric ) mean of all values above threshold 	  
+	      Eigen::VectorXd M = Eigen::VectorXd::Constant( P.cols() , 1.0 ) ;
+	      
+	      int cnt = 0;
+	      std::map<int,int>::const_iterator ss = esols.begin();
+	      while ( ss != esols.end() )
+		{
+		  double conf = sols[ ss->first ].P.row( ss->second ).maxCoeff();
+		  if ( conf >= min_conf ) 
+		    {
+		      M.array() *= sols[ ss->first ].P.row( ss->second ).array() ;
+		      ++cnt;
+		    }
+		  ++ss;
+		}
+	      
+	      P.row( e ) = M.array().pow( 1.0 / (double) cnt );
+	    }
+	  else // arith mean
+	    {
+	      
+	      // mean of all values above threshold 	  
+	      Eigen::VectorXd M = Eigen::VectorXd::Zero( P.cols() )  ;
+	      
+	      std::map<int,int>::const_iterator ss = esols.begin();
+	      while ( ss != esols.end() )
+		{
+		  double conf = sols[ ss->first ].P.row( ss->second ).maxCoeff();
+		  if ( conf >= min_conf )
+		    M.array() += sols[ ss->first ].P.row( ss->second ).array() ;
+		  ++ss;
+		}
+	      P.row( e ) = M;
+	    }
+	  
+	  // scale to 1.0
+	  P.row( e ) /= P.row(e).sum();
+	}
+      
+    } // move to next consensus epoch to resolve
+  
+
+  //  std::cout << "summary " << E.size() <<"\t" << S.size() <<" " << P.rows() << "\n";
+
+}
 
 #endif
+
+

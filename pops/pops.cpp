@@ -256,7 +256,7 @@ void pops_t::make_level2_library( param_t & param )
 // derive level 2 stats (from pops_t::specs)
 //
 
-void pops_t::level2( const bool training )
+void pops_t::level2( const bool training , const bool quiet )
 {
   
   // go through all level2 blocks in order
@@ -277,15 +277,18 @@ void pops_t::level2( const bool training )
       const bool inplace = from_block == to_block;      
       std::vector<int> from_cols = pops_t::specs.block_cols( from_block , pops_t::specs.na );
       std::vector<int> to_cols = pops_t::specs.block_cols( to_block , pops_t::specs.na );
-      
-      logger << "   - adding level-2 feature " << l2ftr << ": "; 
 
-      if ( from_cols.size() > 0 )  // time track does not have "from" cols
-	logger << from_block << " (n=" << from_cols.size() << ") ";
-      
-      logger << "--> " 
-	     << to_block << " (n=" << to_cols.size() << ", cols:" 
-	     << to_cols[0] << "-" << to_cols[to_cols.size()-1] << ") \n";
+      if ( ! quiet ) 
+	{
+	  logger << "   - adding level-2 feature " << l2ftr << ": "; 
+	  
+	  if ( from_cols.size() > 0 )  // time track does not have "from" cols
+	    logger << from_block << " (n=" << from_cols.size() << ") ";
+	  
+	  logger << "--> " 
+		 << to_block << " (n=" << to_cols.size() << ", cols:" 
+		 << to_cols[0] << "-" << to_cols[to_cols.size()-1] << ") \n";
+	}
       
       // for (int j=0;j<from_cols.size();j++) logger << " " << from_cols[j] ;
       // logger << "\n";
@@ -491,8 +494,9 @@ void pops_t::level2( const bool training )
 	      
 	      // save W and V to a file (i.e. for use later in prediction models, to project
 	      // test cases into this space)
-	      
-	      logger << "   - writing SVD W and V to " << wvfile << "\n";
+
+	      if ( ! quiet ) 
+		logger << "   - writing SVD W and V to " << wvfile << "\n";
 
 	      std::ofstream OUT1( Helper::expand( wvfile ).c_str() , std::ios::out );
 	      OUT1 << V1.rows() << " " << nc << "\n";
@@ -514,7 +518,10 @@ void pops_t::level2( const bool training )
 		{
 		  // allow for 'path' option to modify where this file is
 		  std::string filename = pops_t::update_filepath( wvfile );
-		  logger << "   - reading SVD W and V from " << filename << "\n";
+
+		  if ( ! quiet )
+		    logger << "   - reading SVD W and V from " << filename << "\n";
+
 		  if ( ! Helper::fileExists( filename ) ) 
 		    Helper::halt( "cannot find " + filename + "\n (hint: add a 'path' arg to point to the .svd file" );
 		  std::ifstream IN1( filename.c_str() , std::ios::in );
@@ -833,6 +840,9 @@ std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a ,
 						   const std::vector<int> & b , 
 						   const bool print  )
 {
+
+  // assume : a = obs = rows
+  //        : b = prd = cols
   
   std::map<int,std::map<int,int> > res;
   
@@ -883,7 +893,7 @@ std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a ,
   if ( print )
     {
 
-      logger << "\t   Obs:";
+      logger << "\t Pred:";
       std::set<int>::const_iterator uu = uniq.begin();
       while ( uu != uniq.end() )
 	{
@@ -892,7 +902,7 @@ std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a ,
 	}
       logger << "\tTot\n";	
       
-      logger << "  Pred:";
+      logger << "  Obs:";
       uu = uniq.begin();
       while ( uu != uniq.end() )
 	{
@@ -922,25 +932,27 @@ std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a ,
 	}
       logger << "\t1.00\n\n";
 
+      //
+      // conditional probabilties  / res[][] / row[]
+      //   --->  P ( predicted | observed ) 
       
-      // conditional probabilties  / res[][] / cols[] 
       uu = uniq.begin();
       while ( uu != uniq.end() )
         {
-	  writer.level( pops_t::label( (pops_stage_t)(*uu) ) , "PRED" );
+	  writer.level( pops_t::label( (pops_stage_t)(*uu) ) , "OBS" );
 	  std::set<int>::const_iterator jj = uniq.begin();
           while ( jj != uniq.end() )
 	    {
-	      writer.level( pops_t::label( (pops_stage_t)(*jj) ) , "OBS" );
+	      writer.level( pops_t::label( (pops_stage_t)(*jj) ) , "PRED" );
 	      writer.value( "N" , res[ *uu ][ *jj ] );
-	      if ( cols[ *uu ] > 0 ) 
-		writer.value( "P" , res[ *uu ][ *jj ] / cols[ *jj ] );
+	      if ( rows[ *uu ] > 0 ) 
+		writer.value( "P" , res[ *uu ][ *jj ] / rows[ *uu ] );
 	      ++jj;
 	    }
-	  writer.unlevel( "OBS" );
+	  writer.unlevel( "PRED" );
 	  ++uu;
 	}
-      writer.unlevel( "PRED" );
+      writer.unlevel( "OBS" );
     }
   
   return res;
