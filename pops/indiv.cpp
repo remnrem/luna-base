@@ -92,12 +92,15 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
   if ( ! training_mode )
     {
+
+      //
+      // 1) set up any channel equivalance set
+      //
       
-      // looping over equivalence channels? 0 if no equivs
       const int equivn = pops_opt_t::equivs.size();
 
-      // check all equivs exist [ to mapping, i.e. skip eq == 0 , as that
-      // is tested below (but allows for aliases) ] 
+      // check all equivs exist [ to mapping, i.e. skip eq == 0
+      // as that is tested below (but allows for aliases) ] 
       
       for (int eq = 1; eq < equivn; eq++)
 	{
@@ -107,24 +110,23 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
       std::vector<pops_sol_t> sols;
       int eq1 = 0;
-      // default combione CONF = 0.5
+      // default combione CONF = 0.0
       double comb_conf = param.has( "conf" ) ? param.requires_dbl( "conf" ) : 0 ;
-      // default = arithmetic mean of all sols CONF > 0.5
+      // default = best/most confident call
       int comb_method = param.has( "mean" ) ? 3 : param.has( "geo" ) ? 2 : 1 ; // best (default)
-
+      
       if ( equivn )
 	{
 	  logger << "  combining final solution across " << equivn << " equivalence channels; method = ";
 	  if ( comb_method == 1 ) logger << " most confident";
 	  else if ( comb_method == 2 ) logger << " geometric mean";
 	  else logger << " mean";
-
+	  
 	  if ( comb_method != 1 ) 
 	    logger << ", minimum conf score = " << comb_conf;
-	  logger << "\n";
-	  
+	  logger << "\n";	  
 	}
-
+      
       if ( pops_opt_t::equiv_root != "" )
 	{
 	  
@@ -142,17 +144,30 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	    }
 
 	}
+
+      //
+      // Read any ranges?
+      //
+      
+      const bool has_ranges = param.has( "ranges" );
+      if ( has_ranges ) pops_t::read_ranges( param.value( "ranges" ) );
+
+      const double range_th   = param.has( "ranges-th" ) ? param.requires_dbl( "ranges-th" ) : 5 ;
+      const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.2 ; 
+      if ( range_th < 0 ) Helper::halt( "ranges-th should be positive" );
+      if ( range_prop < 0 || range_prop > 1 ) Helper::halt( "ranges-prop should be 0 - 1" );
       
       //
       // will only loop once if no equivalence channel list      
       //
-
+      
       while ( 1 )
 	{
-
+	  
 	  // swapping in a different channel?
 	  if ( equivn )
 	    {
+
 	      // all done?
 	      if ( eq1 == equivn ) break;
 
@@ -171,7 +186,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 		      continue;
 		    }
 		}
-
+	      
 	      // track which channel equivalent we are using
 	      writer.level( pops_opt_t::equiv_swapin , "CHEQ" );
 	      
@@ -197,6 +212,13 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  
 	  logger << "  feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
 
+	  //
+	  // Optinally, apply feature ranges (set X1 points to missing)
+	  //
+	  
+	  if ( param.has( "ranges" ) )
+	    apply_ranges( range_th, range_prop );
+	  
 	  //
 	  // Optionally, dump all
 	  //
@@ -1947,6 +1969,63 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
 
 }
 
+
+void pops_indiv_t::apply_ranges( double th, double prop )
+{
+  
+  // final feature labels
+  std::vector<std::string> labels = pops_t::specs.select_labels();
+  
+  const int ne = X1.rows();
+  const int nv = X1.cols();
+
+  std::cout <<" ne, nv, labels ranges "
+	    << ne << " " << nv << " "
+	    << labels.size() << " "
+	    << pops_t::range_mean.size() << "\n";
+
+  const double NaN_value = std::numeric_limits<double>::quiet_NaN();
+
+  int total = 0;
+  
+  // process each variable at a time
+  for (int j=0; j<nv; j++)
+    {
+      if ( pops_t::range_mean.find( labels[j] ) == pops_t::range_mean.end() )
+	Helper::halt( "could not find " + labels[j] + " in ranges file" );
+
+      writer.level( labels[j] , "FTR" );
+      
+      double mean = pops_t::range_mean[ labels[j] ];
+      double sd = pops_t::range_sd[ labels[j] ];
+
+      const double lwr = mean - th * sd ;
+      const double upr = mean + th * sd ; 
+      
+      // track number of outlier epochs
+      int outlier = 0;
+      
+      for (int e=0; e<ne; e++)
+	if ( X1(e,j) < lwr || X1(e,j) > upr )
+	  {
+	    X1(e,j) = NaN_value;
+	    ++outlier;
+	  }
+
+      total += outlier;
+      writer.value( "BAD" , outlier );
+      writer.value( "PROP" , outlier / (double)ne );
+      
+    }
+  writer.unlevel( "FTR" );
+
+  double bad = total / (double)( ne * nv );
+  logger << "  set " << total << " ( prop = " << bad << ") data points to missing\n"; 
+  
+}
+
+
 #endif
+
 
 

@@ -52,6 +52,8 @@ struct pops_indiv_t {
   void level1( edf_t & );
 
   void level2( const bool quiet_mode = false );
+
+  void apply_ranges(double,double);
   
   void predict( );
   

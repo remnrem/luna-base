@@ -166,6 +166,26 @@ std::string param_t::single_value() const
   return ""; // should not happen
 }
 
+std::string param_t::single_pair( std::string * value ) const 
+{ 
+  if ( ! single() ) Helper::halt( "no single value/pair" ); 
+  
+  std::map<std::string,std::string>::const_iterator ii = opt.begin();
+  
+  while ( ii != opt.end() ) 
+    {
+      if ( hidden.find( ii->first ) == hidden.end() )
+	{
+	  *value = Helper::remove_all_quotes( ii->second );
+	  return Helper::remove_all_quotes( ii->first );
+	}
+      ++ii;
+    }
+  // should not happen
+  *value = "";
+  return ""; 
+}
+
 std::string param_t::requires( const std::string & s , const bool uppercase ) const
 {
   if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
@@ -826,12 +846,20 @@ bool cmd_t::eval( edf_t & edf )
 {
 
   //
+  // Conditional evaluation
+  //
+  
+  int if_count = 0;
+
+  std::string if_condition = "";
+  
+  //
   // Loop over each command
   //
   
   for ( int c = 0 ; c < num_cmds() ; c++ )
     {	        
-
+      
       // was a problem flag raised when loading the EDF?
       
       if ( globals::problem ) return false;
@@ -858,16 +886,71 @@ bool cmd_t::eval( edf_t & edf )
       logger << " ..................................................................\n"
 	     << " CMD #" << c+1 << ": " << cmd(c) << "\n";
       logger << "   options: " << param(c).dump( "" , " " ) << "\n";
+
+      //
+      // Deal with conditionals first: if if_count>1, implies to ignore -- unless we come across an ENDIF/FI 
+      //
       
+      if ( if_count )
+	{
+	  
+	  if ( is( c, "ENDIF" ) || is( c, "FI" ) )
+	    {
+	      if_condition = "";
+	      --if_count;
+	    }
+	  else
+	    logger << "  skipping this command due to prior IF: " << if_condition << "\n";
+	  
+	  continue;
+	}
+      else if ( is( c, "IF" ) || is( c, "IFNOT" ) )
+	{
+	  
+	  param_t par = param(c);
+	  bool ifnot = is( c, "IFNOT" ) ;
+	  
+	  std::string var = par.single_value();
+	  bool val = cmd_t::pull_ivar_bool( edf.id , var );	      
+
+	  if ( ifnot ) // requiress F
+	    {
+	      if ( val )
+		{
+		  if_count++;
+                  if_condition = var + " == " + (val?"T":"F") + " (required T)";
+		}
+	    }
+	  else // requires T
+	    {
+	      if ( ! val )
+		{
+		  if_count++;
+		  if_condition = var + " == " + (val?"T":"F") + " (required F)";
+		}
+	    }
+	  
+	  continue;
+	}
+      
+      //
+      // ignore END/FI for executed blocks
+      //
+      
+      if ( is( c, "ENDIF" ) || is( c, "FI" ) )
+	continue;
+      
+      //
+      // Process command
+      //
       
       writer.cmd( cmd(c) , c+1 , param(c).dump( "" , " " ) );
-
+      
       // use strata to keep track of tables by commands, with leading underscore to denote
       // special status of this factor
-
+      
       writer.level( cmd(c) , "_" + cmd(c) );
-      
-      
+            
       //
       // Now process the command
       //
@@ -878,6 +961,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
       else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
       else if ( is( c, "SET-HEADERS" ) )  proc_set_headers( edf , param(c) );
+      else if ( is( c, "SET-VAR" ) )      proc_set_ivar( edf, param(c) );
       else if ( is( c, "DESC" ) )         proc_desc( edf , param(c) );
       else if ( is( c, "TYPES" ) )        proc_show_channel_map();
       else if ( is( c, "VARS" ) )         proc_dump_vars( edf , param(c) );
@@ -943,7 +1027,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
       else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
       else if ( is( c, "CONTAINS" ) )     proc_has_signals( edf , param(c) );
-
+      
       else if ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) proc_rms( edf, param(c) );
       else if ( is( c, "MSE" ) )          proc_mse( edf, param(c) );
       else if ( is( c, "LZW" ) )          proc_lzw( edf, param(c) );
@@ -1114,6 +1198,16 @@ void proc_headers( edf_t & edf , param_t & param )
 {
   // optionally add a SIGNALS col that has a comma-delimited list of all signals
   edf.terse_summary( param );
+}
+
+// SET-VAR : set an IVAR
+
+void proc_set_ivar( edf_t & edf , param_t & param )
+{
+  std::string val;
+  std::string var = param.single_pair( & val );
+  logger << "  setting individual-level variable " << var << " to " << val << "\n";
+  cmd_t::ivars[ edf.id ][ var ] = val;
 }
 
 // SET-HEADERS : set EDF header fields
@@ -4668,6 +4762,23 @@ bool cmd_t::pull_ivar( const std::string & id , const std::string & phe , double
 
 }
 
+bool cmd_t::pull_ivar_bool( const std::string & id , const std::string & phe )
+{
+  
+  // ivars:  ID -> PHE -> VAL
+
+  // ID
+  if ( ivars.find( id ) == ivars.end() ) return false;
+  
+  // var
+  const std::map<std::string,std::string> & data = ivars.find( id )->second;
+  if ( data.find( phe ) == data.end() ) return false;
+  
+  // return value
+  return Helper::yesno( data.find( phe )->second );
+
+}
+
 
 void proc_has_signals( edf_t & edf , param_t & param )
 {
@@ -4893,13 +5004,27 @@ void proc_has_signals( edf_t & edf , param_t & param )
       globals::problem = true;
       return;
     }
-  
+
   //
-  // otherwise adjust return code
+  // setting a variable?, or adjust return code
   //
 
-  if ( count == 0 ) globals::retcode = 2;
-  else if ( count < ns && globals::retcode == 0 ) globals::retcode = 1;
-
+  if ( param.has( "var" ) )
+    {
+      // T = all
+      // F = ! all
+      std::string var = param.value( "var" );      
+      cmd_t::ivars[ edf.id ][ var ] = count == ns ? "T" : "F" ;
+      logger << "  setting " << var << " = " << ( count == ns ? "T" : "F" ) << "\n";
+    }
+  else
+    {
+      //
+      // otherwise adjust return code
+      //
+      
+      if ( count == 0 ) globals::retcode = 2;
+      else if ( count < ns && globals::retcode == 0 ) globals::retcode = 1;
+    } 
 }
 

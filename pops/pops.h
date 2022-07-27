@@ -81,6 +81,10 @@ struct pops_t {
   // dump feature matrix
   void dump_matrix( const std::string & f );
 
+  // dump/read a range file (mean/SD for training features)
+  void dump_ranges( const std::string & f );
+  static void read_ranges( const std::string & f );
+    
   // fit and save a LGBM model (--> pops_t::lgbm)
   void fit_model( const std::string & f , const lgbm_label_t & w );
 
@@ -119,6 +123,13 @@ struct pops_t {
   int ni_validation; // holdouts actually present
   int nrows_training, nrows_validation;
 
+  //
+  // feature ranges
+  //
+  
+  static std::map<std::string,double> range_mean;
+  static std::map<std::string,double> range_sd;
+  
   //
   // helpers
   //

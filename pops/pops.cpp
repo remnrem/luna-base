@@ -75,9 +75,13 @@ pops_specs_t pops_t::specs;
 Eigen::MatrixXd pops_t::ES_probs;
 std::vector<double> pops_t::ES_mins;
 
+std::map<std::string,double> pops_t::range_mean;
+std::map<std::string,double> pops_t::range_sd;
+
 std::vector<std::string> pops_t::labels5 = { "W" , "R" , "N1" , "N2" , "N3" };
 std::vector<std::string> pops_t::labels3 = { "W" , "R" , "NR" };
-  
+
+
 //
 // create a level 2 feature library and save
 // i.e. for trainer and/or validation library
@@ -201,7 +205,13 @@ void pops_t::make_level2_library( param_t & param )
       return;
     }
 
+  //
+  // Write ranges (means/SDs) to a .range file
+  //
 
+  if ( param.has( "ranges" ) )
+    dump_ranges( param.value( "ranges" ) );
+  
   //
   // LGBM config (user-specified, or default for POPS)
   //
@@ -1035,6 +1045,62 @@ void pops_t::dump_matrix( const std::string & f )
   Z1.close();
 }
 
+
+void pops_t::read_ranges( const std::string & f )
+{
+  std::string rfile = Helper::expand( f );
+  if ( ! Helper::fileExists( rfile ) ) Helper::halt( "could not open " + rfile );
+
+  // expecting an exact line up w/ feature file and ranges
+  // but we do not test this explicitly - - i.e. as we might read
+  // this prior to building the feature set
+  
+  std::ifstream IN1( rfile.c_str() , std::ios::in );
+  // header
+  std::string str1, str2, str3;
+  IN1 >> str1 >> str2 >> str3;
+  if ( str1 != "VAR" || str2 != "MEAN" || str3 != "SD" )
+    Helper::halt( "bad format for " + rfile + "\n -- expecting columns ID, MEAN and SD" );
+  
+  while ( 1 )
+    {
+      std::string varname;
+      double mean, sd;
+      IN1 >> varname >> mean >> sd;
+      range_mean[ varname ] = mean ;
+      range_sd[ varname ] = sd ;
+    }
+  logger << "  read " << range_mean.size() << " feature mean/SD pairs\n";
+  IN1.close();
+}
+
+
+void pops_t::dump_ranges( const std::string & f )
+{
+  std::string rfile = Helper::expand( f );
+
+  logger << "  dumping ranges to " << rfile << "\n";
+  
+  std::ofstream O1( rfile.c_str() , std::ios_base::out );
+  
+  O1 << "VAR\tMEAN\tSD\n";
+
+  const int nrow = X1.rows();
+  const int ncol = X1.cols();
+
+  std::vector<std::string> labels = pops_t::specs.select_labels();
+
+  for (int i=0; i<ncol; i++)
+    {
+      double mean = X1.col(i).mean();
+      double sd = sqrt((X1.col(i).array() - mean ).square().sum()/(nrow-1));
+      O1 << labels[i] << "\t"
+	 << mean << "\t"
+	 << sd << "\n";
+    }
+  O1.close();
+
+}
 
 
 void pops_t::write_elapsed_sleep_priors( const std::string & f , double tbin, double tmax, double c )
