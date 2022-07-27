@@ -65,6 +65,8 @@ struct param_t
   bool single() const;  
 
   std::string single_value() const ;
+
+  std::string single_pair(std::string * ) const ;
   
   std::string requires( const std::string & s , const bool uppercase = false ) const;
   
@@ -175,6 +177,8 @@ class cmd_t
 					      const std::string & phe );
 
   static bool pull_ivar( const std::string & id , const std::string & phe , double * x );
+
+  static bool pull_ivar_bool( const std::string & id , const std::string & phe );
   
   // id-mapper
   static std::map<std::string,std::string>  idmapper;
@@ -240,6 +244,7 @@ void proc_summaries( edf_t & , param_t & );
 void proc_aliases( edf_t & , param_t & );
 void proc_headers( edf_t & , param_t & );
 void proc_set_headers( edf_t & , param_t & );
+void proc_set_ivar( edf_t & , param_t & );
 void proc_validate( edf_t & , param_t & );
 void proc_desc( edf_t & , param_t & );
 void proc_dump_vars( edf_t & , param_t & );
