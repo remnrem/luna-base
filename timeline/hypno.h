@@ -116,6 +116,9 @@ struct hypnogram_t
   int n_lights_fixed;
   int n_lights_fixed_was_sleep;
 
+  // number of W epochs set to ? if they lead/trail sleep
+  int n_ignore_wake;
+
   // times 
   clocktime_t clock_start;
   clocktime_t clock_lights_out;

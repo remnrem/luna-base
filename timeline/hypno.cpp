@@ -633,6 +633,49 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	     << " and end-sleep=" << end_sleep << ")\n";
     }
   
+
+
+  //
+  // Set all leading and/or trailing wake to ?
+  //
+  
+  const bool trim_lead_wake = param.has( "trim-wake" ) || param.has( "trim-leading-wake" );
+  const bool trim_trail_wake = param.has( "trim-wake" ) || param.has( "trim-trailing-wake" );
+  
+  if ( trim_lead_wake || trim_trail_wake ) 
+    {
+      const int ne = stages.size();
+      
+      n_ignore_wake = 0;
+      
+      if ( trim_lead_wake ) 
+	for (int e=0; e<ne; e++)
+	  {	    
+	    if ( is_sleep( stages[e] ) ) break;
+	    stages[e] = UNKNOWN;
+	    ++n_ignore_wake;
+	  }
+      
+      if ( trim_trail_wake )
+        for (int e=ne-1; e!=0; e--)
+          {
+	    if ( is_sleep( stages[e] ) ) break;
+            stages[e] = UNKNOWN;
+            ++n_ignore_wake;
+	  }
+      
+      //
+      // track & report
+      //
+      
+      logger << "  set " << n_ignore_wake << " ";
+      if ( trim_lead_wake && trim_trail_wake ) logger << "leading/trailing";
+      else if ( trim_lead_wake ) logger << "leading";
+      else logger << "trailing";
+      logger << " to ?\n";
+
+    }
+
 }
 
 void hypnogram_t::calc_stats( const bool verbose )
@@ -2216,8 +2259,9 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "LOT" , mins[ "L" ] );
       writer.value( "OTHR" , mins[ "?" ] );
       writer.value( "CONF" , n_conflicts );
-      writer.value( "FIXED_WAKE" , n_fixed );
-      writer.value( "FIXED_LIGHTS" , n_lights_fixed );
+      writer.value( "FIXED_SLEEP" , n_fixed ); // --> ?
+      writer.value( "FIXED_WAKE" , n_ignore_wake ); // --> ?
+      writer.value( "FIXED_LIGHTS" , n_lights_fixed ); // --> ?
       writer.value( "LOST" , n_lights_fixed_was_sleep * epoch_mins ); 
       writer.value( "SINS" , (int)starts_in_sleep );
       writer.value( "EINS" , (int)ends_in_sleep );

@@ -143,7 +143,10 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	}
       
+      //
       // will only loop once if no equivalence channel list      
+      //
+
       while ( 1 )
 	{
 
@@ -156,10 +159,22 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      // otherwise, get the next channel
 	      pops_opt_t::equiv_swapin = pops_opt_t::equivs[ eq1 ];
 	      ++eq1;
+	      
+	      // do we have this equiv channel?  if not, just skip
+	      
+	      if ( pops_opt_t::equiv_swapin != pops_opt_t::equiv_root )
+		{
+		  bool test = edf.header.has_signal( pops_opt_t::equiv_swapin );
+		  if ( ! test ) 
+		    {
+		      logger << "  ** could not find " << pops_opt_t::equiv_swapin << " ... skipping\n";
+		      continue;
+		    }
+		}
 
 	      // track which channel equivalent we are using
 	      writer.level( pops_opt_t::equiv_swapin , "CHEQ" );
-
+	      
 	      logger << "  now processing equivalent channel "
 		     << pops_opt_t::equiv_swapin
 		     << " (for " << pops_opt_t::equiv_root << ")\n";
