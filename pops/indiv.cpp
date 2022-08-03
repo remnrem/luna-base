@@ -1982,7 +1982,7 @@ void pops_indiv_t::apply_ranges( double th, double prop )
     {
       if ( pops_t::range_mean.find( labels[j] ) == pops_t::range_mean.end() )
 	Helper::halt( "could not find " + labels[j] + " in ranges file" );
-
+      
       writer.level( labels[j] , "FTR" );
       
       double mean = pops_t::range_mean[ labels[j] ];

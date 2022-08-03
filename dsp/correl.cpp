@@ -37,6 +37,8 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 
+#include "clocs/clocs.h"
+
 #include <string>
 
 
@@ -64,8 +66,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   
   
   signal_list_t signals1 = edf.header.signal_list( signal_label1 );  
-
-  signal_list_t signals2 = edf.header.signal_list( signal_label2 );  
+  signal_list_t signals2 = edf.header.signal_list( signal_label2 );
   
   const int ns1 = signals1.size();
   const int ns2 = signals2.size();
@@ -75,7 +76,18 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   
   writer.var( "R" , "Channel correlation (-1..1)" );
 
+  //
+  // Incorporate distance matrix
+  //
 
+  const bool has_clocs = edf.clocs.attached();
+  Data::Matrix<double> S;
+  // get all signals (for S matrix call)
+  const std::string signals_label =   param.has( "sig1" ) ? signal_label1 + "," + signal_label2 : signal_label1 ; 
+  signal_list_t signals  = edf.header.signal_list( signals_label );  
+  
+  
+  
   //
   // compile signals
   //
@@ -113,6 +125,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   
   const int ns = sigs.size();
 
+
   
   //
   // adjust all SRs now if needed
@@ -144,14 +157,31 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
       if ( srs.size() > 1 ) Helper::halt( "all sampling rates must be similar, use 'sr'" );
     }
 
+
+
+  //
+  // Get distances?
+  //
+  
+  if ( has_clocs )
+    {
+      edf.clocs.convert_to_unit_sphere();
+      // inter-electrode cosine similarity matrix
+      S = edf.clocs.interelectrode_distance_matrix( signals );      
+      if ( S.dim1() != ns )
+	Helper::halt( "internal problem mapping clocs to CORREL channels" ); 
+    }
   
   //
   // Epochs or whole signal?
   //
+
+  // do calculations epoch-level (and take mean/median)?
+  const bool epoched = param.has( "epoch" ) || param.has( "ch-epoch" );
+
+  // actually show epoch-level correlations too?
+  const bool show_epoched = param.has( "epoch" );
   
-  bool epoched = param.has( "epoch" ) ;
-
-
   //
   // Number of pairwise comparisons
   //
@@ -160,16 +190,59 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   
 
   //
-  // For channel-level summaries (not in per-epoch mode)
+  // For channel-level summaries 
   //
+  
+  const bool ch_summaries = param.has( "ch-high" ) || param.has( "ch-low" ) || param.has( "ch-spatial-weight" ) || param.has( "ch-spatial-threshold" ) ;
+  const double ch_over = param.has( "ch-high" ) ? param.requires_dbl( "ch-high" ) : 1;
+  const double ch_under = param.has( "ch-low" ) ? param.requires_dbl( "ch-low" ) : -1;
 
-  bool ch_summaries = param.has( "ch-high" ) || param.has( "ch-low" );
-  double ch_over = param.has( "ch-high" ) ? param.requires_dbl( "ch-high" ) : 1;
-  double ch_under = param.has( "ch-low" ) ? param.requires_dbl( "ch-low" ) : -1;
+  // single ch summaries based on epoch level results?
+  const bool ch_use_median = param.has( "ch-median" ); // for epoch-level mode   
+
+  // S = -1 to +1  +1  -1  2  0 
+  // weight by spatial distance W = (-S+1)/2
+  // weight by W^Y where Y = 2 by default, higher # means less weight on nearby channels
+  const bool ch_weight = param.has( "ch-spatial-weight" );
+  const double ch_weight_value = ! param.empty( "ch-spatial-weight" ) ? param.requires_dbl( "ch-spatial-weight" ) : 2 ; 
+  if ( ch_weight_value <= 0 ) Helper::halt( "ch-spatial-weight should be positive" );
+  
+  // threshold based on distance (only include pairs below the threshold) 
+  // i.e. exclude channels that are very similiar
+  const bool ch_threshold =  param.has( "ch-spatial-threshold" ); 
+  const double ch_threshold_value = param.has( "ch-spatial-threshold" ) ? param.requires_dbl( "ch-spatial-threshold" ) : 1 ;
+  if ( ch_threshold_value < -1 || ch_threshold_value > 1 ) Helper::halt( "ch-spatial-threshold should be between -1 and +1" );
+  
   std::map<int,double> summr_mean, summr_min, summr_max;
   std::map<int,int> summr_under, summr_over, summr_n;
+  std::set<std::string> summr_over_channels;
+  std::map<std::string,std::set<std::string> > summr_over_groups;
+  
   for (int s=0;s<ns;s++) { summr_min[ sigs[s] ] = 1; summr_max[ sigs[s] ] = -1; }
-  if ( ch_summaries && ! all_by_all ) Helper::halt( "can only do ch-high/ch-low summaries with all-by-all CORREL (i.e. sig=X, not sig1=X sig2=Y)" );
+  if ( ch_summaries && ! all_by_all )
+    Helper::halt( "can only do ch-high/ch-low summaries with all-by-all CORREL (i.e. sig=X, not sig1=X sig2=Y)" );
+  
+  if ( ch_summaries )
+    {
+      if ( ch_weight ) 
+	logger << "  weighting channel-level mean correlations by spatial similarity, exp = " << ch_weight_value << "\n";
+      if ( ch_threshold )
+	logger << "  thresholding channel-level summaries to pairs with S < " << ch_threshold_value << "\n";
+    }
+
+  std::vector<int> universe;
+  std::map<std::string,int> s2i;
+  std::map<int,std::string> i2s;
+  for (int s=0; s<ns; s++)
+    {
+      s2i[ signals.label(s) ] = s;
+      i2s[ s ] = signals.label(s) ;
+      universe.push_back( s );
+    }
+  
+  MiscMath::disjoint_set_t ds;
+  ds.make_set( universe );
+  
   
   //
   // Start iterating over pairs
@@ -262,35 +335,79 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	      
 	      if ( epoched ) 
 		{
-		  writer.epoch( edf.timeline.display_epoch( epoch ) );
+
+		  if ( show_epoched ) 
+		    writer.epoch( edf.timeline.display_epoch( epoch ) );
 		  
 		  if ( r > -5 ) 
 		    epoch_r[i][j].push_back( r );
 		}
-	      
-	      if ( r > -5 ) 
-		writer.value( "R" , r );
+
+	      // display correlation?  Y is whole signal (not epoched)
+	      // otherwise, this is an epoch level corr, which we only
+	      // show in verbose mode
+	      if ( show_epoched || ! epoched )
+		if ( r > -5 ) 
+		  {
+		    writer.value( "R" , r );
+
+		    if ( has_clocs ) // actually similarities...
+		      writer.value( "S" , S(i,j) );
+
+		  }
 	      
 	      
 	      //	      
-	      // store channel-level summaries (only whole-signal analysis right now)
+	      // store channel-level summaries (if in whole-signal analysis mode)
 	      //
 	      
 	      if ( (!epoched) && ch_summaries )
 		{
-		  summr_mean[ signals1(i) ] += r;
-		  summr_mean[ signals2(j) ] += r;
-		  ++summr_n[ signals1(i) ];
-		  ++summr_n[ signals2(j) ];
+
+		  bool include = true;
 		  
-		  if ( r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = r;
-		  if ( r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = r;
-				  
-		  if ( r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = r;
-		  if ( r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = r;
+		  // exclude based on spatial distance?
+		  if ( has_clocs && ch_threshold && S(i,j) >= ch_threshold_value ) include = false;
 		  
-		  if ( r > ch_over ) { ++summr_over[ signals1(i) ]; ++summr_over[ signals2(j) ]; }
-		  if ( r < ch_under ) { ++summr_under[ signals1(i) ]; ++summr_under[ signals2(j) ]; }
+		  if ( include )
+		    {
+		      
+		      double ra = fabs( r );
+
+		      // weight by spatial distance?
+		      if ( has_clocs && ch_weight ) 
+			ra *= pow( ( 1 - S(i,j) ) / 2.0 , ch_weight_value );
+		      
+		      summr_mean[ signals1(i) ] += ra;
+		      summr_mean[ signals2(j) ] += ra;
+		      ++summr_n[ signals1(i) ];
+		      ++summr_n[ signals2(j) ];
+		      
+		      // these still based on signed, unweighted correl.
+		      if ( r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = r;
+		      if ( r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = r;
+		      
+		      if ( r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = r;
+		      if ( r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = r;
+		      
+		      if ( r > ch_over )
+			{
+			  ++summr_over[ signals1(i) ];
+			  ++summr_over[ signals2(j) ];
+			  summr_over_channels.insert( signals1.label(i) );
+			  summr_over_channels.insert( signals2.label(j) );
+			  // add to sets: nb. mapping to get original signals() numbering
+			  ds.make_union( s2i[ signals1.label(i) ] , s2i[ signals2.label(j) ] );
+			  // std::cout << " pairing " << signals1.label(i) << " " << signals2.label(j) << " --> " << s2i[ signals1.label(i) ] << " " << s2i[ signals2.label(j) ]  << "\n";
+			  // MiscMath::print_sets( universe , ds );
+			}
+
+		      if ( r < ch_under )
+			{
+			  ++summr_under[ signals1(i) ];
+			  ++summr_under[ signals2(j) ];
+			}
+		    }
 		  
 		}	      
 
@@ -317,8 +434,9 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
       // otherwise, next epoch 
       //
     } 
-  
-  writer.unepoch();
+
+  if ( show_epoched )
+    writer.unepoch();
 
 
   //
@@ -341,47 +459,158 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
               writer.level( signals2.label(j) , "CH2" );
 	      
 	      double mean_r = MiscMath::mean( epoch_r[i][j] );	      
-	      double median_r = MiscMath::median( epoch_r[i][j] );
+	      double median_r = MiscMath::median( epoch_r[i][j] );	      
 	      
 	      writer.value( "R_MEAN" , mean_r );   
-	      writer.value( "R_MEDIAN" , median_r ); 
+	      writer.value( "R_MEDIAN" , median_r );
+
+	      //
+	      // Spatial similarity?
+	      //
+
+	      if ( has_clocs  )
+		writer.value( "S" , S(i,j) );
+
+	      //
+	      // Accumulate channel-level summaries from epoch-level means/medians
+	      //
+
+	      if ( ch_summaries )
+		{
+
+                  // exclude based on spatial distance?
+		  bool include = true;
+
+                  if ( has_clocs && ch_threshold && S(i,j) >= ch_threshold_value ) include = false;
+		  
+                  if ( include )
+		    {
+		      double r = ch_use_median ? median_r : mean_r ;
+		      
+		      // get |r|
+		      double ra = fabs( r );
+		      
+		      // weight |r| by spatial distance?
+		      if ( has_clocs && ch_weight )
+			ra *= pow( ( 1 - S(i,j) ) / 2.0 , ch_weight_value );
+		      
+		      // mean |r| (weighted)
+		      summr_mean[ signals1(i) ] += ra;
+		      summr_mean[ signals2(j) ] += ra;
+		      ++summr_n[ signals1(i) ];
+		      ++summr_n[ signals2(j) ];
+		      
+		      // these still based on signed, unweighted correl.
+		      if ( r > summr_max[ signals1(i) ] ) summr_max[ signals1(i) ] = r;
+		      if ( r > summr_max[ signals2(j) ] ) summr_max[ signals2(j) ] = r;
+		      
+		      if ( r < summr_min[ signals1(i) ] ) summr_min[ signals1(i) ] = r;
+		      if ( r < summr_min[ signals2(j) ] ) summr_min[ signals2(j) ] = r;
+		      
+		      if ( r > ch_over )
+			{
+			  ++summr_over[ signals1(i) ];
+			  ++summr_over[ signals2(j) ];
+			  summr_over_channels.insert( signals1.label(i) );
+			  summr_over_channels.insert( signals2.label(j) );
+			  // add to sets
+			  ds.make_union( s2i[ signals1.label(i) ] , s2i[ signals2.label(j) ] );
+			  // std::cout << " pairing " << signals1.label(i) << " " << signals2.label(j) << " --> " << s2i[ signals1.label(i) ] << " " << s2i[ signals2.label(j) ]  << "\n";
+			  // MiscMath::print_sets( universe , ds );
+			}
+
+		      if ( r < ch_under )
+			{
+			  ++summr_under[ signals1(i) ];
+			  ++summr_under[ signals2(j) ];
+			}
+		      
+		    }
+		}
+	      
 	    }
 	}
-
+      
       writer.unlevel( "CH2" );
       writer.unlevel( "CH1" );
 
     }
   
   
-  
   //
   // Write channel-level summaries (min/max/mean/median/# channels over t1/# channels under t2)
-  // Presently, only implemented for un-epoched analysis, can relax that
   //
 
-  if ( ( ! epoched ) && ch_summaries )
+  if ( ch_summaries )
     {
-
-      logger << "  writing channel-level summaries: mean min max";
+      
+      logger << "  writing channel-level summaries: mean min max";       
       if ( ch_over < 1 ) logger << " #>" << ch_over ;
       if ( ch_under > -1 ) logger << " #<" << ch_under ;
       logger << "\n";
+
+      if ( epoched ) logger << "  channel-level summaries based on " << ( ch_use_median ? "median" : "mean" ) << " of epoch-level correlations\n";
+      else logger << "  channel-level summaries based on correlations aross the entire recording period\n";
+
+      //
+      // summary of summaries
+      //
+      
+      writer.value( "SUMM_HIGH_N" , (int)summr_over_channels.size() );
+      writer.value( "SUMM_HIGH_CHS" , Helper::stringize( summr_over_channels ) ); 
+
+      // get disjoint sets
+      std::map<int,std::set<int> > dsets = MiscMath::get_sets( universe, ds );
+      
+      bool anydone = false;
+      int set_idx = 0;
+      std::map<int,std::set<int> >::const_iterator dd = dsets.begin();
+      while ( dd != dsets.end() )
+	{
+	  const std::set<int> & ss = dd->second;
+	  if ( ss.size() > 1 )
+	    {
+	      anydone = true;
+	      writer.level( ++set_idx , "CHS" );
+	      std::string str = "";
+	      std::set<int>::const_iterator kk = ss.begin();
+	      while ( kk != ss.end() )
+		{
+		  if ( kk != ss.begin() ) str += ",";
+		  str += i2s[ *kk ];
+		  ++kk;
+		}
+	      writer.value( "SET" , str );
+	      writer.value( "N" , (int)ss.size() );
+	    }
+	  ++dd;
+	}
+
+      if ( anydone )
+	writer.unlevel( "CHS" );
+      
+      //
+      // channel-level summaries
+      //
       
       for (int s=0;s<ns;s++)
 	{
           if ( edf.header.is_annotation_channel( sigs[s]) ) continue;
 	  writer.level( sigset[ sigs[s] ] , globals::signal_strat );
-	  writer.value( "SUMM_MEAN" , summr_mean[ sigs[s] ] / (double)summr_n[ sigs[s] ] );
-	  writer.value( "SUMM_MIN" , summr_min[ sigs[s] ] );
-	  writer.value( "SUMM_MAX" , summr_max[ sigs[s] ] );
-	  writer.value( "SUMM_HIGH" , summr_over[ sigs[s] ] );
-	  writer.value( "SUMM_LOW" , summr_under[ sigs[s] ] );
+	  
+	  if ( summr_n[ sigs[s] ] > 0 )
+	    {
+	      writer.value( "SUMM_MEAN" , summr_mean[ sigs[s] ] / (double)summr_n[ sigs[s] ] );
+	      writer.value( "SUMM_N"    , summr_n[ sigs[s] ] );	    
+	      writer.value( "SUMM_MIN"  , summr_min[ sigs[s] ] );
+	      writer.value( "SUMM_MAX"  , summr_max[ sigs[s] ] );
+	      writer.value( "SUMM_HIGH" , summr_over[ sigs[s] ] );
+	      writer.value( "SUMM_LOW"  , summr_under[ sigs[s] ] );
+	    }
 	}
       writer.unlevel( globals::signal_strat );
       
     }
-  
   
 }
 
