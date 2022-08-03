@@ -193,9 +193,14 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   // For channel-level summaries 
   //
   
-  const bool ch_summaries = param.has( "ch-high" ) || param.has( "ch-low" ) || param.has( "ch-spatial-weight" ) || param.has( "ch-spatial-threshold" ) ;
+  const bool ch_summaries = param.has( "ch-high" ) || param.has( "ch-low" ) 
+    || param.has( "ch-spatial-weight" ) || param.has( "ch-spatial-threshold" ) || param.has( "ch-summ" ) 
+    || param.has( "ch-epoch" ) ; 
+
   const double ch_over = param.has( "ch-high" ) ? param.requires_dbl( "ch-high" ) : 1;
   const double ch_under = param.has( "ch-low" ) ? param.requires_dbl( "ch-low" ) : -1;
+  const bool has_ch_over = param.has( "ch-high" );
+  const bool has_ch_under = param.has( "ch-low" );
 
   // single ch summaries based on epoch level results?
   const bool ch_use_median = param.has( "ch-median" ); // for epoch-level mode   
@@ -556,39 +561,43 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
       // summary of summaries
       //
       
-      writer.value( "SUMM_HIGH_N" , (int)summr_over_channels.size() );
-      writer.value( "SUMM_HIGH_CHS" , Helper::stringize( summr_over_channels ) ); 
-
-      // get disjoint sets
-      std::map<int,std::set<int> > dsets = MiscMath::get_sets( universe, ds );
-      
-      bool anydone = false;
-      int set_idx = 0;
-      std::map<int,std::set<int> >::const_iterator dd = dsets.begin();
-      while ( dd != dsets.end() )
+      if ( has_ch_over ) 
 	{
-	  const std::set<int> & ss = dd->second;
-	  if ( ss.size() > 1 )
+	  writer.value( "SUMM_HIGH_N" , (int)summr_over_channels.size() );
+	  writer.value( "SUMM_HIGH_CHS" , Helper::stringize( summr_over_channels ) ); 
+       
+	  // get disjoint sets
+	  std::map<int,std::set<int> > dsets = MiscMath::get_sets( universe, ds );
+	  
+	  bool anydone = false;
+	  int set_idx = 0;
+	  std::map<int,std::set<int> >::const_iterator dd = dsets.begin();
+	  while ( dd != dsets.end() )
 	    {
-	      anydone = true;
-	      writer.level( ++set_idx , "CHS" );
-	      std::string str = "";
-	      std::set<int>::const_iterator kk = ss.begin();
-	      while ( kk != ss.end() )
+	      const std::set<int> & ss = dd->second;
+	      if ( ss.size() > 1 )
 		{
-		  if ( kk != ss.begin() ) str += ",";
-		  str += i2s[ *kk ];
-		  ++kk;
+		  anydone = true;
+		  writer.level( ++set_idx , "CHS" );
+		  std::string str = "";
+		  std::set<int>::const_iterator kk = ss.begin();
+		  while ( kk != ss.end() )
+		    {
+		      if ( kk != ss.begin() ) str += ",";
+		      str += i2s[ *kk ];
+		      ++kk;
+		    }
+		  writer.value( "SET" , str );
+		  writer.value( "N" , (int)ss.size() );
 		}
-	      writer.value( "SET" , str );
-	      writer.value( "N" , (int)ss.size() );
+	      ++dd;
 	    }
-	  ++dd;
+	  
+	  if ( anydone )
+	    writer.unlevel( "CHS" );
 	}
 
-      if ( anydone )
-	writer.unlevel( "CHS" );
-      
+
       //
       // channel-level summaries
       //
@@ -601,11 +610,15 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	  if ( summr_n[ sigs[s] ] > 0 )
 	    {
 	      writer.value( "SUMM_MEAN" , summr_mean[ sigs[s] ] / (double)summr_n[ sigs[s] ] );
-	      writer.value( "SUMM_N"    , summr_n[ sigs[s] ] );	    
+	      writer.value( "SUMM_N"    , summr_n[ sigs[s] ] );
 	      writer.value( "SUMM_MIN"  , summr_min[ sigs[s] ] );
 	      writer.value( "SUMM_MAX"  , summr_max[ sigs[s] ] );
-	      writer.value( "SUMM_HIGH" , summr_over[ sigs[s] ] );
-	      writer.value( "SUMM_LOW"  , summr_under[ sigs[s] ] );
+	      
+	      if ( has_ch_over )
+		writer.value( "SUMM_HIGH" , summr_over[ sigs[s] ] );
+
+	      if ( has_ch_under )
+		writer.value( "SUMM_LOW"  , summr_under[ sigs[s] ] );
 	    }
 	}
       writer.unlevel( globals::signal_strat );
