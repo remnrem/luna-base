@@ -31,6 +31,7 @@
 
 #include <stdint.h>
 #include <map>
+#include <unordered_map>
 
 namespace MiscMath
 {
@@ -316,6 +317,35 @@ namespace MiscMath
 #define median_preserve(a,n) MiscMath::kth_smallest_preserve(a,n,(((n)&1)?((n)/2):(((n)/2)-1)))
 #define percentile_preserve(a,n,k) MiscMath::kth_smallest_preserve(a,n,k);
 
+
+  //
+  // Disjoint sets
+  //
+  
+  class disjoint_set_t 
+  {
+    
+    std::unordered_map<int, int> parent;
+    
+    // stores the depth of trees
+    std::unordered_map<int, int> rank;
+    
+  public:
+    
+    void make_set(std::vector<int> const & universe);
+    
+    // find the root of the set in which element `k` belongs
+    int find(int k);
+    
+    // perform union of two subsets
+    void make_union(int a, int b);
+    
+  };
+  
+  void print_sets(std::vector<int> const &universe, disjoint_set_t &ds);
+  
+  std::map<int,std::set<int> > get_sets( std::vector<int> const &universe, disjoint_set_t &ds );
+   
   
 }
 

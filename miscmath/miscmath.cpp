@@ -2337,3 +2337,92 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
   return s;
   
 }
+
+
+
+//
+// disjoint sets
+//
+
+
+void MiscMath::disjoint_set_t::make_set(std::vector<int> const & universe)
+{
+  // create n disjoint sets (one for each item)
+  for (int i: universe)
+    {
+      parent[i] = i;
+      rank[i] = 0;
+    }
+}
+
+// find the root of the set in which element `k` belongs
+int MiscMath::disjoint_set_t::find(int k)
+{
+  // if `k` is not the root
+  if (parent[k] != k)
+    {
+      // path compression
+      parent[k] = find(parent[k]);
+    }
+  
+  return parent[k];
+}
+
+// perform union of two subsets
+void MiscMath::disjoint_set_t::make_union(int a, int b)
+{
+  // find the root of the sets in which elements x and y belongs
+  int x = find(a);
+  int y = find(b);
+  
+  // if x and y are present in the same set
+  if (x == y) {
+    return;
+  }
+  
+  // always attach a smaller depth tree under the root of the deeper tree.
+  if ( rank[x] > rank[y] ) {
+    parent[y] = x;
+  }
+  else if (rank[x] < rank[y]) {
+    parent[x] = y;
+  }
+  else {
+    parent[x] = y;
+    rank[y]++;
+  }
+}
+
+
+void MiscMath::print_sets(std::vector<int> const &universe, disjoint_set_t &ds)
+{
+  for (int i: universe) {
+    std::cout << ds.find(i) << ' ';
+  }
+  std::cout << "\n";
+}
+
+std::map<int,std::set<int> > MiscMath::get_sets( std::vector<int> const &universe, disjoint_set_t &ds )
+{
+  std::map<int,std::set<int> > r;
+  for (int i: universe) 
+    r[ ds.find(i) ].insert( i );
+  return r;
+}
+
+    // usage: disjoint–Set data structure (Union–Find algorithm)
+
+    // universe of items
+    // vector<int> universe = { 1, 2, 3, 4, 5 };
+    
+    // initialize `DisjointSet` class
+    // disjoint_set_t ds;
+    
+    // create a singleton set for each element of the universe
+    // ds.make_set(universe);
+    // print_sets(universe, ds);
+ 
+    // ds.make_union(4, 3);        // 4 and 3 are in the same set
+    // print_sets(universe, ds);
+ 
+
