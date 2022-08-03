@@ -639,8 +639,36 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // Set all leading and/or trailing wake to ?
   //
   
+  // takes optional param in mins
   const bool trim_lead_wake = param.has( "trim-wake" ) || param.has( "trim-leading-wake" );
   const bool trim_trail_wake = param.has( "trim-wake" ) || param.has( "trim-trailing-wake" );
+  
+  double mins_lead_wake = 0 , mins_trail_wake = 0; 
+  
+  if ( param.has( "trim-wake" ) )
+    {
+      if ( param.empty( "trim-wake" ) ) 
+	mins_lead_wake = mins_trail_wake = 0;
+      else
+	mins_lead_wake = mins_trail_wake = param.requires_dbl( "trim-wake" );      
+    }
+  else
+    {
+      if ( param.empty("trim-leading-wake" ) )
+        mins_lead_wake = 0;
+      else
+	mins_lead_wake = param.requires_dbl( "trim-leading-wake" );
+
+      if ( param.empty("trim-trailing-wake" ) )
+        mins_trail_wake = 0;
+      else
+	mins_trail_wake = param.requires_dbl( "trim-trailing-wake" );
+
+    }
+  
+  // allow this much 
+  int epoch_lead_wake = mins_lead_wake / epoch_mins ; 
+  int epoch_trail_wake = mins_trail_wake / epoch_mins ;
   
   if ( trim_lead_wake || trim_trail_wake ) 
     {
@@ -649,20 +677,36 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       n_ignore_wake = 0;
       
       if ( trim_lead_wake ) 
-	for (int e=0; e<ne; e++)
-	  {	    
-	    if ( is_sleep( stages[e] ) ) break;
-	    stages[e] = UNKNOWN;
-	    ++n_ignore_wake;
-	  }
+	{
+	  int first_sleep = 0;
+	  for (int e=0; e<ne; e++)
+	    if ( is_sleep( stages[e] ) ) 
+	      {  first_sleep = e; break; }
+	  
+	  first_sleep -= epoch_lead_wake;
+	  for (int e=0; e<first_sleep; e++)
+	    {
+	      stages[e] = UNKNOWN;
+	      ++n_ignore_wake;
+	    }
+	}
       
+
       if ( trim_trail_wake )
-        for (int e=ne-1; e!=0; e--)
-          {
-	    if ( is_sleep( stages[e] ) ) break;
-            stages[e] = UNKNOWN;
-            ++n_ignore_wake;
-	  }
+        {
+	  int last_sleep = ne-1;
+	  for (int e=ne-1; e!=0; e--)
+	    if ( is_sleep( stages[e] ) ) 
+	      { last_sleep = e; break; } 
+	  
+	  last_sleep += epoch_trail_wake;
+	  
+	  for (int e=last_sleep+1; e<ne; e++)
+            {
+	      stages[e] = UNKNOWN;
+              ++n_ignore_wake;
+            }
+	}
       
       //
       // track & report
@@ -672,8 +716,8 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       if ( trim_lead_wake && trim_trail_wake ) logger << "leading/trailing";
       else if ( trim_lead_wake ) logger << "leading";
       else logger << "trailing";
-      logger << " to ?\n";
-
+      logger << " wake epochs to ?\n";
+      
     }
 
 }

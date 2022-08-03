@@ -2647,7 +2647,9 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       lgbm_label_t labels( "luna.wgt" );
       std::cout << " from luna.wgt " << labels.n << "\n";
 
-      lgbm.apply_label_weights( lgbm.training , labels );
+      lgbm.add_label_weights( lgbm.training , &lgbm.training_weights, labels );
+
+      lgbm.apply_weights( lgbm.training , &lgbm.training_weights );
       
       //lgbm.load_weights( lgbm.training , "RENAMED_binary.train.weight" );
 

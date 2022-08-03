@@ -99,14 +99,16 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       
       const int equivn = pops_opt_t::equivs.size();
 
+      // IGNORE: we allow missing equiv channels -- they are just 
+      // skipped below
+
       // check all equivs exist [ to mapping, i.e. skip eq == 0
       // as that is tested below (but allows for aliases) ] 
-      
-      for (int eq = 1; eq < equivn; eq++)
-	{
-	  int s = edf.header.signal( pops_opt_t::equivs[eq] );
-	  if ( s == -1 ) Helper::halt( "could not find " + pops_opt_t::equivs[eq] );
-	}
+      // for (int eq = 1; eq < equivn; eq++)
+      // 	{
+      // 	  int s = edf.header.signal( pops_opt_t::equivs[eq] );
+      // 	  //if ( s == -1 ) Helper::halt( "could not find " + pops_opt_t::equivs[eq] );
+      // 	}
 
       std::vector<pops_sol_t> sols;
       int eq1 = 0;
@@ -152,8 +154,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       const bool has_ranges = param.has( "ranges" );
       if ( has_ranges ) pops_t::read_ranges( param.value( "ranges" ) );
 
-      const double range_th   = param.has( "ranges-th" ) ? param.requires_dbl( "ranges-th" ) : 5 ;
-      const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.2 ; 
+      const double range_th   = param.has( "ranges-th" ) ? param.requires_dbl( "ranges-th" ) : 4 ;
+      const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.33 ; 
       if ( range_th < 0 ) Helper::halt( "ranges-th should be positive" );
       if ( range_prop < 0 || range_prop > 1 ) Helper::halt( "ranges-prop should be 0 - 1" );
       
@@ -170,7 +172,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	      // all done?
 	      if ( eq1 == equivn ) break;
-
+	      
 	      // otherwise, get the next channel
 	      pops_opt_t::equiv_swapin = pops_opt_t::equivs[ eq1 ];
 	      ++eq1;
@@ -261,9 +263,16 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  // Make the actual predictions
 	  //
 
-	  predict();
+	  const int num_iter = param.has( "iterations" ) ? param.requires_int( "iterations" ) : 0 ; 
+
+	  predict( num_iter );
 	  
-	  SHAP();
+	  //
+	  // Optionally, SHAP values too 
+	  //
+
+	  if ( param.has( "SHAP" ) )
+	    SHAP();
 	  
 	  if ( elapsed_sleep_priors )
 	    apply_espriors( param.value( "es-priors" ) );
@@ -1159,7 +1168,8 @@ void pops_indiv_t::level2( const bool quiet_mode )
   // a duplicated copy of core level 2 features (i.e. if
   // we add stuff
 
-  // expand X1 to include space for level-2 features                                                                                                                                          
+  // expand X1 to include space for level-2 features          
+
   X1.conservativeResize( Eigen::NoChange , pops_t::specs.na );
 
   pops_t pops;
@@ -1171,9 +1181,9 @@ void pops_indiv_t::level2( const bool quiet_mode )
 }
 
 
-void pops_indiv_t::predict()
+void pops_indiv_t::predict( const int iter )
 {
-  P = pops_t::lgbm.predict( X1 );
+  P = pops_t::lgbm.predict( X1 , iter );
 }
 
 void pops_indiv_t::SHAP()
@@ -1979,10 +1989,10 @@ void pops_indiv_t::apply_ranges( double th, double prop )
   const int ne = X1.rows();
   const int nv = X1.cols();
 
-  std::cout <<" ne, nv, labels ranges "
-	    << ne << " " << nv << " "
-	    << labels.size() << " "
-	    << pops_t::range_mean.size() << "\n";
+  // std::cout <<" ne, nv, labels ranges "
+  // 	    << ne << " " << nv << " "
+  // 	    << labels.size() << " "
+  // 	    << pops_t::range_mean.size() << "\n";
 
   const double NaN_value = std::numeric_limits<double>::quiet_NaN();
 
@@ -2011,10 +2021,21 @@ void pops_indiv_t::apply_ranges( double th, double prop )
 	    X1(e,j) = NaN_value;
 	    ++outlier;
 	  }
-
+      
+      double bad_prop = outlier / (double)ne;
+      
+      if ( bad_prop > prop ) 
+	{
+	  logger << "  setting variable " << labels[j] << " to missing, as more than " << prop << " epochs are outliers\n";
+	  for (int e=0; e<ne; e++)
+	    X1(e,j) = NaN_value;
+	  outlier = ne;
+	}
+      
       total += outlier;
+
       writer.value( "BAD" , outlier );
-      writer.value( "PROP" , outlier / (double)ne );
+      writer.value( "PROP" , bad_prop );
       
     }
   writer.unlevel( "FTR" );

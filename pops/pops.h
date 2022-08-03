@@ -119,6 +119,7 @@ struct pops_t {
   std::vector<int> S;
   std::vector<int> E;
   std::vector<int> Istart, Iend;
+  std::vector<std::string> I; // trainer/validation IDs, yoked to Istart[]
   std::set<std::string> holdouts; // validation IDs
   int ni_validation; // holdouts actually present
   int nrows_training, nrows_validation;

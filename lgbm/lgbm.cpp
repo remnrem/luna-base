@@ -104,7 +104,7 @@ void lgbm_cli_wrapper( param_t & param )
   if ( has_training )
     {
       lgbm.load_training_data( param.value( "train" ) );
-
+    
       logger << "  attached training data ("
        	     << lgbm_t::rows( lgbm.training ) << " x "
        	     << lgbm_t::cols( lgbm.training ) << " ) from "
@@ -118,6 +118,7 @@ void lgbm_cli_wrapper( param_t & param )
   if ( has_validation )
     {
       lgbm.load_validation_data( param.value( "valid" ) );
+
       logger << "  attached validation data ("
 	     << lgbm_t::rows( lgbm.validation ) << " x "
 	     << lgbm_t::cols( lgbm.validation ) << " ) from "
@@ -139,27 +140,41 @@ void lgbm_cli_wrapper( param_t & param )
       logger << "  applying label-weights from " << param.value( "weights" ) << "\n";
       
       if ( has_training ) 
-	lgbm.apply_label_weights( lgbm.training , labels );
+	lgbm.add_label_weights( lgbm.training , &lgbm.training_weights, labels );
       
       if ( has_validation ) 
-	lgbm.apply_label_weights( lgbm.validation , labels );
+	lgbm.add_label_weights( lgbm.validation , &lgbm.validation_weights, labels );
     }
   
   // per-observation weight file: training
   if ( has_training_weights )
     {
       logger << "  attached training weights from " << param.has( "train-weights" ) << "\n";
-      lgbm.load_weights( lgbm.training , param.value( "train-weights" ) );      
+      lgbm.load_weights( lgbm.training , &lgbm.training_weights, param.value( "train-weights" ) );      
     }
 
   // per-observation weight file: validation
   if ( has_validation_weights )
     {
       logger << "  attached validation weights from " << param.has( "valid-weights" ) << "\n";
-      lgbm.load_weights( lgbm.validation , param.value( "valid-weights" ) );      
+      lgbm.load_weights( lgbm.validation , &lgbm.validation_weights, param.value( "valid-weights" ) );      
     }
 
+
+  //
+  // Apply weights
+  //
   
+  if ( has_label_weights || has_validation_weights ) 
+    {
+      if ( has_training ) 
+	lgbm.apply_weights( lgbm.training , &lgbm.training_weights );
+
+      if ( has_validation ) 
+	lgbm.apply_weights( lgbm.validation , &lgbm.validation_weights );
+      
+    }
+
   //
   // Train and save model
   //
@@ -167,9 +182,9 @@ void lgbm_cli_wrapper( param_t & param )
   if ( has_training ) 
     {
       lgbm.create_booster();
-
+      
       lgbm.save_model( model_file );
-
+      
       // all done
       return;
     }
@@ -353,7 +368,32 @@ bool lgbm_t::attach_training_matrix( const Eigen::MatrixXd & X )
 
   if ( res ) Helper::halt( "problem attaching training data" );
 
+  // set all weights to 1.0
+  reset_weights( training , &training_weights );
+
   has_training = true;
+  return true;
+
+}
+
+bool lgbm_t::attach_validation_matrix( const Eigen::MatrixXd & X )
+{
+  
+  int res = LGBM_DatasetCreateFromMat( X.data() , 
+				       C_API_DTYPE_FLOAT64 ,
+				       X.rows() ,
+				       X.cols() ,
+				       0 , // col-major
+				       params.c_str() ,
+				       training ,
+				       &validation );
+
+  if ( res ) Helper::halt( "problem attaching validation data" );
+
+  // set all weights to 1.0
+  reset_weights( validation , &validation_weights );
+
+  has_validation = true;
   return true;
 
 }
@@ -376,38 +416,10 @@ bool lgbm_t::load_training_data( const std::string & f )
 
   if ( res ) Helper::halt( "problem loading training data" );
 
+  // set all weights to 1.0
+  reset_weights( training , &training_weights );
+
   has_training = true;  
-  return true;
-}
-
-// set a weight column to a dataset (from file)
-bool lgbm_t::load_weights( DatasetHandle d , const std::string & f )
-{
-  std::string filename = Helper::expand( f );
-  if ( ! Helper::fileExists( filename ) )
-    Helper::halt( "could not attach weight file " + filename );
-
-  std::vector<float> w;
-  std::ifstream IN1( filename.c_str() , std::ios::in );
-  while ( 1 )
-    {
-      float x;
-      IN1 >> x;
-      if ( IN1.bad() || IN1.eof() ) break;
-      w.push_back(x);      
-    }
-  IN1.close();
-
-  logger << "  reading " << w.size() << " weights from " << filename << "\n";
-  
-  int res = LGBM_DatasetSetField( d ,
-				  "weight" , 
-				  w.data() ,
-				  w.size() , 
-				  C_API_DTYPE_FLOAT32 );
-  
-  if ( res )
-    Helper::halt( "problem attaching weights from " + filename );
   return true;
 }
 
@@ -425,9 +437,14 @@ bool lgbm_t::load_validation_data( const std::string & f )
 					training , 
 					&validation );  
   if ( res ) Helper::halt( "problem loading validation data" );
+
+  // set all weights to 1.0
+  reset_weights( validation , &validation_weights );
+
   has_validation = true; 
   return true;
 }
+
 
 bool lgbm_t::attach_training_labels( const std::vector<int> & labels )
 {
@@ -466,6 +483,7 @@ bool lgbm_t::attach_training_qts( const std::vector<double> & qts )
   return true;
 }
 
+
 bool lgbm_t::attach_validation_labels( const std::vector<int> & labels )
 {
   const int n = labels.size();
@@ -502,23 +520,36 @@ bool lgbm_t::attach_validation_qts( const std::vector<double> & qts )
   return true;
 }
 
-bool lgbm_t::attach_validation_matrix( const Eigen::MatrixXd & X )
+bool lgbm_t::reset_weights( DatasetHandle d , std::vector<float> * w )
 {
-  
-  int res = LGBM_DatasetCreateFromMat( X.data() , 
-				       C_API_DTYPE_FLOAT64 ,
-				       X.rows() ,
-				       X.cols() ,
-				       0 , // col-major
-				       params.c_str() ,
-				       training ,
-				       &validation );
-
-  if ( res ) Helper::halt( "problem attaching validation data" );
-
-  has_validation = true;
+  const int n = rows(d);
+  w->resize(n);
+  for (int i=0; i<n; i++) (*w)[i] = 1.0;
   return true;
+}
 
+// set a weight column to a dataset (from file)
+bool lgbm_t::load_weights( DatasetHandle d , std::vector<float> * w , const std::string & f )
+{
+  std::string filename = Helper::expand( f );
+  
+  if ( ! Helper::fileExists( filename ) )
+    Helper::halt( "could not attach weight file " + filename );
+  
+  w->clear();
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+  while ( 1 )
+    {
+      float x;
+      IN1 >> x;
+      if ( IN1.bad() || IN1.eof() ) break;
+      w->push_back(x);      
+    }
+  IN1.close();
+  
+  logger << "  reading " << w->size() << " weights from " << filename << "\n";
+  
+  return true;
 }
 
 
@@ -885,30 +916,38 @@ std::vector<std::string> lgbm_t::features( DatasetHandle d )
 }
 
 
-bool lgbm_t::apply_label_weights( DatasetHandle d , const lgbm_label_t & l )
+bool lgbm_t::apply_weights( DatasetHandle d , std::vector<float> * w )
 {
+  
+  // apply weights
+  int res = LGBM_DatasetSetField( d ,
+				  "weight" , 
+				  w->data() ,
+				  w->size() , 
+				  C_API_DTYPE_FLOAT32 );
+  
+  if ( res )
+    Helper::halt( "problem attaching weights" );
+  
+  return true;
+  
+}
+
+bool lgbm_t::add_label_weights( DatasetHandle d , std::vector<float> * w , const lgbm_label_t & l )
+{
+  
   // get labels;
   std::vector<int> lab = lgbm_t::labels( d );
   const int n = lgbm_t::rows( d );
-
-  std::vector<float> w( n , 1.0 );
   
   for (int i=0; i<n; i++)
     {
       if ( lab[i] < 0 || lab[i] >= l.n )
 	Helper::halt( "internal error in lgbm_t::apply_label_weights() " );
-      w[i] = l.weight[ lab[i] ];
+      
+      // multiplicative weight update
+      (*w)[i] *= l.weight[ lab[i] ];
     }
-
-  // apply weights
-  int res = LGBM_DatasetSetField( d ,
-				  "weight" , 
-				  w.data() ,
-				  w.size() , 
-				  C_API_DTYPE_FLOAT32 );
-  
-  if ( res )
-    Helper::halt( "problem attaching weights" );
   
   return true;
 }

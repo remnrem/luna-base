@@ -55,7 +55,7 @@ struct pops_indiv_t {
 
   void apply_ranges(double,double);
   
-  void predict( );
+  void predict( const int iter = 0 );
   
   void SHAP();
 

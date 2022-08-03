@@ -45,6 +45,8 @@ struct lgbm_t {
     : has_booster(false) , has_training(false ) , has_validation(false), n_iterations(n_iterations)
   {
     qt_mode = false;
+    training_weights.clear();
+    validation_weights.clear();
     params = "";
   }
   
@@ -52,6 +54,8 @@ struct lgbm_t {
     : has_booster(false) , has_training(false ) , has_validation(false) , n_iterations(n_iterations)
   {
     qt_mode = false;
+    training_weights.clear();
+    validation_weights.clear();
     load_config( config_file );
   }
   
@@ -92,9 +96,15 @@ struct lgbm_t {
   // Weights
   //
 
-  bool load_weights( DatasetHandle d , const std::string & f );
-
-  bool apply_label_weights( DatasetHandle d , const lgbm_label_t & l );
+  bool reset_weights( DatasetHandle d , std::vector<float> * );
+  
+  bool load_weights( DatasetHandle d , std::vector<float> * , const std::string & f );
+  
+  bool add_label_weights( DatasetHandle d , std::vector<float> * , const lgbm_label_t & l );
+  
+  bool add_block_weights( DatasetHandle d , const std::vector<uint64_t> & , const std::map<uint64_t,float > & wtable );
+  
+  bool apply_weights( DatasetHandle d , std::vector<float> * );
   
   //
   // Set up a booster 
@@ -180,18 +190,20 @@ struct lgbm_t {
   // training data
   bool has_training;
   DatasetHandle training;
+  std::vector<float> training_weights;
 
   // validation data
   bool has_validation;
   DatasetHandle validation;
-
+  std::vector<float> validation_weights;
+  
   // classification (labels) versus regression (qts) mode
   bool qt_mode;
   
   // not used yet
   FastConfigHandle fastconfig;
   // then needs LGBM_FastConfigFree
-
+  
   int n_iterations;
   
 };

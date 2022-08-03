@@ -107,15 +107,17 @@ void pops_t::load1( const std::string & f )
   S.resize( ne_training ); // will push_back() below
   E.resize( ne_training ); // ...
   
-  // track when indivs start/stop
+  // track when indivs start/stop, and who they are
   Istart.clear();
   Iend.clear();
+  I.clear();
 
   // validation people (will be added to end of X1, S and E, etc
   Eigen::MatrixXd X2 = Eigen::MatrixXd::Zero( ne_validation , pops_t::specs.n1 );
   std::vector<int> S2( ne_validation );
   std::vector<int> E2( ne_validation );
   std::vector<int> Istart2, Iend2;
+  std::vector<std::string> I2;
 
   // re-read
   std::ifstream IN2( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
@@ -130,12 +132,13 @@ void pops_t::load1( const std::string & f )
       if ( IN2.eof() || IN2.bad() ) break;
       
       const bool is_training = holdouts.find( id ) == holdouts.end();
-
+      
       int ne1 = pops_indiv_t::bread_int( IN2 );      
       int nf1 = pops_indiv_t::bread_int( IN2 );
       
       if ( is_training )
 	{
+	  I.push_back( id );
 	  Istart.push_back( ne_training );
 	  for (int i=0; i<ne1; i++)
 	    {
@@ -152,6 +155,7 @@ void pops_t::load1( const std::string & f )
 	}
       else  // validation individul
 	{
+	  I2.push_back( id );
 	  Istart2.push_back( offset + ne_validation );
 	  for (int i=0; i<ne1; i++)
 	    {
@@ -179,8 +183,9 @@ void pops_t::load1( const std::string & f )
     {
       Istart.push_back( Istart2[i] );
       Iend.push_back( Iend2[i] );      
+      I.push_back( I2[i] );
     }
-
+  
   for (int i=0; i<ne_validation; i++)
     {
       S.push_back( S2[i] );

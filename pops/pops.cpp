@@ -115,6 +115,8 @@ void pops_t::make_level2_library( param_t & param )
   bool is_trainer = true;
   std::string dump_file = "";
 
+  const bool dump_range_file = param.has( "ranges-only" );
+
   if ( dump_feature_matrix ) 
     {      
       if ( param.has( "model" ) || param.has( "config" ) )
@@ -124,6 +126,11 @@ void pops_t::make_level2_library( param_t & param )
       else if ( param.value("dump" ) != "training" )
 	Helper::halt( "'dump' must be set to 'training' or 'test'" );
       dump_file = param.requires( "file" );
+    }
+  else if ( dump_range_file ) // ranges-only
+    {
+      if ( param.has( "model" ) || param.has( "config" ) )
+	Helper::halt( "cannot specify both ranges-only and model/config" );
     }
   else 
     {
@@ -210,8 +217,11 @@ void pops_t::make_level2_library( param_t & param )
   //
 
   if ( param.has( "ranges" ) )
-    dump_ranges( param.value( "ranges" ) );
-  
+    {
+      dump_ranges( param.value( "ranges" ) );
+      if ( param.has( "ranges-only" ) ) return;
+    }
+
   //
   // LGBM config (user-specified, or default for POPS)
   //
@@ -481,8 +491,10 @@ void pops_t::level2( const bool training , const bool quiet )
 	{
 
 	  const int nc = spec.narg( "nc" );
-	  const std::string wvfile = spec.arg[ "file" ];
-	  
+
+	  // allow for 'path' option to modify where this file is                                                        
+	  const std::string wvfile = pops_t::update_filepath( spec.arg[ "file" ] );
+
 	  // copy to a temporary
 	  Eigen::MatrixXd D = Eigen::MatrixXd::Zero( ne , nfrom );	  
 	  for (int j=0; j<nfrom; j++) D.col(j) = X1.col( from_cols[j] ) ;
@@ -652,9 +664,13 @@ void pops_t::fit_model( const std::string & modelfile , const lgbm_label_t & wei
   lgbm.attach_training_labels( S1 );
 
   // training weights
-  lgbm.apply_label_weights( lgbm.training , weights );
+  lgbm.add_label_weights( lgbm.training , &lgbm.training_weights, weights );
   
- 
+  // update weights?
+  
+  // apply final weights
+  lgbm.apply_weights( lgbm.training , &lgbm.training_weights );
+
   // validation data?
   if ( nrows_validation ) 
     {
@@ -663,9 +679,14 @@ void pops_t::fit_model( const std::string & modelfile , const lgbm_label_t & wei
       // labels
       lgbm.attach_validation_labels( S2 );
       
-      // training weights
-      lgbm.apply_label_weights( lgbm.validation , weights );
+      // valdation  weights
+      lgbm.add_label_weights( lgbm.validation , &lgbm.validation_weights, weights );
       
+      // update weights?
+  
+      // apply final weights
+      lgbm.apply_weights( lgbm.validation , &lgbm.validation_weights );
+
     }
 
   // fit model
@@ -944,7 +965,8 @@ std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a ,
 
       //
       // conditional probabilties  / res[][] / row[]
-      //   --->  P ( predicted | observed ) 
+      //   --->  Pr ( predicted | observed )  P_COND_OBS
+      //         Pr ( observed | predicted )  P_COND_PRED
       
       uu = uniq.begin();
       while ( uu != uniq.end() )
@@ -956,7 +978,9 @@ std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a ,
 	      writer.level( pops_t::label( (pops_stage_t)(*jj) ) , "PRED" );
 	      writer.value( "N" , res[ *uu ][ *jj ] );
 	      if ( rows[ *uu ] > 0 ) 
-		writer.value( "P" , res[ *uu ][ *jj ] / rows[ *uu ] );
+		writer.value( "P_COND_OBS" , res[ *uu ][ *jj ] / rows[ *uu ] );
+	      if ( cols[ *jj ] > 0 ) 
+		writer.value( "P_COND_PRED" , res[ *uu ][ *jj ] / cols[ *jj ] );
 	      ++jj;
 	    }
 	  writer.unlevel( "PRED" );
@@ -1057,16 +1081,21 @@ void pops_t::read_ranges( const std::string & f )
   
   std::ifstream IN1( rfile.c_str() , std::ios::in );
   // header
-  std::string str1, str2, str3;
-  IN1 >> str1 >> str2 >> str3;
-  if ( str1 != "VAR" || str2 != "MEAN" || str3 != "SD" )
+  std::string str0, str1, str2, str3;
+  IN1 >> str0 >> str1 >> str2 >> str3;
+  if ( str0 != "ID" || str1 != "VAR" || str2 != "MEAN" || str3 != "SD" )
     Helper::halt( "bad format for " + rfile + "\n -- expecting columns ID, MEAN and SD" );
   
   while ( 1 )
     {
+      std::string id;
       std::string varname;
       double mean, sd;
-      IN1 >> varname >> mean >> sd;
+      IN1 >> id >> varname >> mean >> sd;
+      if ( IN1.eof() || IN1.bad() ) break;
+      // only read initial overall values
+      if ( id != "." ) break;
+      if ( varname == "" ) continue;
       range_mean[ varname ] = mean ;
       range_sd[ varname ] = sd ;
     }
@@ -1077,13 +1106,19 @@ void pops_t::read_ranges( const std::string & f )
 
 void pops_t::dump_ranges( const std::string & f )
 {
-  std::string rfile = Helper::expand( f );
 
+  // dump ranges a) overall (ID == ".")
+  // and then person by person (trainer)
+  // this will be called after a level2 library
+  // construction
+
+  std::string rfile = Helper::expand( f );
+  
   logger << "  dumping ranges to " << rfile << "\n";
   
   std::ofstream O1( rfile.c_str() , std::ios_base::out );
   
-  O1 << "VAR\tMEAN\tSD\n";
+  O1 << "ID\tVAR\tMEAN\tSD\n";
 
   const int nrow = X1.rows();
   const int ncol = X1.cols();
@@ -1094,10 +1129,44 @@ void pops_t::dump_ranges( const std::string & f )
     {
       double mean = X1.col(i).mean();
       double sd = sqrt((X1.col(i).array() - mean ).square().sum()/(nrow-1));
-      O1 << labels[i] << "\t"
+      O1 << ".\t"
+	 << labels[i] << "\t"
 	 << mean << "\t"
 	 << sd << "\n";
     }
+
+  //
+  // now indiv-by-indiv
+  //
+  
+  const int nt = Istart.size();
+
+  //  std::cout << " stts " << nrow <<" " << ncol << " " << nt << "\n";
+  
+  for (int i=0; i<nt; i++)
+    {
+      
+      // pull out data for this trainer only
+      int fromi = Istart[i];
+      int sz    = Iend[i] - Istart[i] + 1;
+      Eigen::MatrixXd XI = X1.block( fromi , 0 , sz, ncol ); 
+      
+      // repeat as above (by col)
+      for (int j=0; j<ncol; j++)
+	{	  
+	  //std::cout << "i , j = " << i << "\t" << j << "\n";
+	  double mean = XI.col(j).mean();
+	  double sd = sqrt((XI.col(j).array() - mean ).square().sum()/(sz-1));
+	  
+	  O1 << I[i] << "\t"
+	     << labels[j] << "\t"
+	     << mean << "\t"
+	     << sd << "\n";
+	}
+      
+      // next trainer
+    }
+
   O1.close();
 
 }
