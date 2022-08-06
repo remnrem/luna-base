@@ -45,7 +45,8 @@ enum pops_feature_t
     POPS_HJORTH ,
     POPS_FD ,
     POPS_PE ,
-    POPS_MEAN ,    
+    POPS_MEAN ,   
+    POPS_COVAR ,     // from ivars
     
     // level 2 features
     POPS_TIME ,          // level 2 features

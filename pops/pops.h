@@ -130,7 +130,14 @@ struct pops_t {
   
   static std::map<std::string,double> range_mean;
   static std::map<std::string,double> range_sd;
+
+  //
+  // Get indiv-weights (from ivars)
+  //
   
+  bool attach_indiv_weights( const std::string & w , bool );
+  bool dump_weights();
+
   //
   // helpers
   //

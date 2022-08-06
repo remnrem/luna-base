@@ -66,6 +66,10 @@ std::vector<std::string> pops_opt_t::equivs;
 std::string pops_opt_t::equiv_root;
 std::string pops_opt_t::equiv_swapin;
 
+std::vector<std::string> pops_opt_t::iweights;
+bool pops_opt_t::dump_model_weights;
+std::string pops_opt_t::model_weights_file;
+
 void pops_opt_t::set_options( param_t & param )
 {
   
@@ -103,6 +107,14 @@ void pops_opt_t::set_options( param_t & param )
   epoch_len = globals::default_epoch_len;
   epoch_inc = globals::default_epoch_len;
   
+  // training weights (for indiv-level vars)
+  if ( param.has( "iid-weights" ) )
+    iweights = param.strvector( "iid-weights" );
+
+  // dump model weights to file? (after LGBM fitting)
+  dump_model_weights = param.has( "dump-weights" );
+  model_weights_file = dump_model_weights ? param.value( "dump-weights" ) : "" ; 
+
   // channel aliases
   //  (added when reading spec.) 
   if ( param.has( "alias" ) ) 

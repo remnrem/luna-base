@@ -236,7 +236,7 @@ void pops_t::make_level2_library( param_t & param )
     lgbm.n_iterations = param.requires_int( "iterations" );
 
   //  
-  // stage weights?    
+  // stage (label) weights?    
   //
 
   std::vector<double> wgts(  pops_opt_t::n_stages , 1.0 );
@@ -644,11 +644,13 @@ void pops_t::level2( const bool training , const bool quiet )
 // fit and save a LGBM model
 //
 
-void pops_t::fit_model( const std::string & modelfile , const lgbm_label_t & weights )
+void pops_t::fit_model( const std::string & modelfile , 
+			const lgbm_label_t & weights )
 {
+
   // training   X1.topRows( nrows_training )   -->   S1
   // validaiton X1.bottomRows( nrows_validation )   --> S2
-
+  
   // split stages 
   std::vector<int> S1 = S;
   S1.resize( nrows_training );
@@ -662,19 +664,21 @@ void pops_t::fit_model( const std::string & modelfile , const lgbm_label_t & wei
 
   // labels
   lgbm.attach_training_labels( S1 );
-
+  
   // training weights
   lgbm.add_label_weights( lgbm.training , &lgbm.training_weights, weights );
   
-  // update weights?
-  
+  // update w/ indiv-level weights?  calls lgbm.add_block_weights() 
+  for (int i=0; i < pops_opt_t::iweights.size(); i++)
+    attach_indiv_weights( pops_opt_t::iweights[i] , true ); // T --> training
+
   // apply final weights
   lgbm.apply_weights( lgbm.training , &lgbm.training_weights );
-
+  
   // validation data?
   if ( nrows_validation ) 
     {
-      lgbm.attach_validation_matrix( X1.bottomRows( nrows_validation) );
+      lgbm.attach_validation_matrix( X1.bottomRows( nrows_validation ) );
 
       // labels
       lgbm.attach_validation_labels( S2 );
@@ -682,12 +686,18 @@ void pops_t::fit_model( const std::string & modelfile , const lgbm_label_t & wei
       // valdation  weights
       lgbm.add_label_weights( lgbm.validation , &lgbm.validation_weights, weights );
       
-      // update weights?
-  
+      // update w/ indiv-level weights?  calls lgbm.add_block_weights() 
+      for (int i=0; i<pops_opt_t::iweights.size(); i++)
+	attach_indiv_weights( pops_opt_t::iweights[i] , false ); // F --> validation
+            
       // apply final weights
       lgbm.apply_weights( lgbm.validation , &lgbm.validation_weights );
 
     }
+
+  // save weights?
+  if ( pops_opt_t::dump_model_weights )
+    dump_weights();
 
   // fit model
   lgbm.create_booster();
@@ -1056,12 +1066,15 @@ void pops_t::dump_matrix( const std::string & f )
   Z1 << "SS";
   std::vector<std::string> labels = pops_t::specs.select_labels();
   for (int i=0; i< labels.size(); i++) 
-    Z1 << "\t" << labels[i];
+    Z1 << "\t" << labels[i];       
   Z1 << "\n";
-
+  
   for (int i=0; i<X1.rows(); i++)
     {
+      // epoch label (i.e. stage)
       Z1 << pops_t::label( (pops_stage_t)S[i] );
+      
+      // epoch features
       for (int j=0; j< X1.cols(); j++)
 	Z1 << "\t" << X1(i,j);
       Z1 << "\n";
@@ -1276,7 +1289,123 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f , double tbin, do
 
 }
 
+
+bool pops_t::attach_indiv_weights( const std::string & wlabel , bool training_dataset )
+{
+  
+  // this is called at level 2 , prior to training only
+  // we look for @vars ivars attached store, to find indiv-level weights
+  // from the column named 'w' 
+  
+  // number of people w/ weights
+
+  int cnt = 0;
+  
+  //
+  // index people by the row at which they start in the data matrix
+  // (to be passed to lgbm_t )
+  //
+
+  std::vector<uint64_t> starts;
+  std::map<uint64_t,float> wtable;
+
+  for (int i=0; i<Istart.size(); i++)
+    {
+      const bool in_training = holdouts.find( I[i] ) == holdouts.end () ;
+      
+      if ( ( training_dataset && in_training )
+	   || ( (!training_dataset) && (!in_training) ) )	
+	{
+	  // get block start (potentially adjusting for offset into validation
+	  uint64_t start = in_training ? Istart[i] : Istart[i] - nrows_training ;
+	  starts.push_back( start );
+
+	  // get weight
+	  double w = 1;	  
+	  if ( cmd_t::pull_ivar( I[i] , wlabel , &w ) ) ++cnt;
+	  else w = 1; // not needed, to be make explicit: if missing keep w=1
+	  wtable[ start ] = w;
+	}
+    }
+
+  logger << "  updating weights for " << cnt << " of " << starts.size() 
+	 << " individuals, from " << wlabel << " for the " 
+	 << ( training_dataset ? "training" : "validation" ) << " dataset\n";
+
+  //
+  // make call to update LGBM weights
+  //
+  
+  if ( training_dataset )
+    lgbm.add_block_weights( lgbm.training , &lgbm.training_weights, starts, wtable );
+  else
+    lgbm.add_block_weights( lgbm.validation , &lgbm.validation_weights, starts, wtable );
+	 
+ 
+  return true;
+}
+
+bool pops_t::dump_weights() 
+{
+  std::string f = Helper::expand( pops_opt_t::model_weights_file );
+
+  std::ofstream O1( f.c_str() , std::ios::out );
+
+  logger << "  dumping weights to " << f << "\n";
+  
+  O1 << "ID\tTV\tSS\tW\n";
+  
+  std::vector<double> w1 = lgbm_t::weights( lgbm.training );
+  std::vector<double> w2;
+  if ( nrows_validation != 0 ) w2 = lgbm_t::weights( lgbm.validation );
+  
+  // std::cout << "w1, w2 size = " << w1.size() << " " << w2.size() << "\n";
+  // std::cout << "X1 rows = " << X1.rows() << "\n";
+  // std::cout << "nrow t, v = " << nrows_training << " " << nrows_validation << "\n";
+  
+  const int ni = I.size();
+  int iid_idx = 0;
+
+  //  std::cout << "I Iend = " << I.size() <<" " << Iend.size() << "\n";
+
+  for (int i=0; i<X1.rows(); i++)
+    {
+      // training or validation?
+      bool is_training = i < nrows_training ;
+      
+      // IID
+      O1 << I[ iid_idx ] << "\t";
+      
+      O1 << ( is_training ? "T" : "V" ) << "\t";
+      
+      // epoch label (i.e. stage)
+      O1 << pops_t::label( (pops_stage_t)S[i] ) << "\t";
+
+      O1 << ( is_training ? i : i-nrows_training ) << "\t";
+
+      O1 << ( is_training ? w1.size() : w2.size() ) << "\t";
+
+      // weights
+      O1 << ( is_training ? w1[i] : w2[i-nrows_training] ) << "\n";
+
+      // advance IID if at last epoch of current indiv?
+      if ( i == Iend[ iid_idx ] )
+	{
+	  if ( iid_idx < ni - 1 ) 
+	    ++iid_idx;
+	}
+      
+    }
+  
+  // all done
+  O1.close();
+  
+  return true;
+}
+
 #endif
+
+
 
 
 

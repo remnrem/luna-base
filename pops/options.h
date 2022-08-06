@@ -64,7 +64,11 @@ struct pops_opt_t {
   static std::vector<double> slope_range;
   static double slope_th;
   static double slope_epoch_th;
-  
+
+  static std::vector<std::string> iweights;
+  static bool dump_model_weights;
+  static std::string model_weights_file;
+
   // outputs
   static bool epoch_level_SHAP;
 };

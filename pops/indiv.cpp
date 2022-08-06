@@ -582,6 +582,36 @@ void pops_indiv_t::level1( edf_t & edf )
 
 
   //
+  // Get any indivi-level covariates (will be entered identically for every epoch)
+  //
+
+  const bool do_covar = pops_t::specs.has( pops_feature_t::POPS_COVAR , "." ) ;
+  std::vector<std::string> covar_name;
+  std::vector<double> covar_value;
+  std::vector<int> covar_cols;
+
+  if ( do_covar )
+    {
+      covar_cols = pops_t::specs.cols( pops_feature_t::POPS_COVAR , "." );
+      pops_spec_t spec = pops_t::specs.fcmap[ pops_feature_t::POPS_COVAR ][ "." ];
+      if ( covar_cols.size() != spec.arg.size() ) 
+	Helper::halt( "internal error with COVAR column assignment" );
+
+      std::map<std::string,std::string>::const_iterator cc = spec.arg.begin();
+      int idx = 0;
+      while ( cc != spec.arg.end() )
+	{
+	  std::string var = cc->first;	  
+	  double val = std::numeric_limits<double>::quiet_NaN();	  
+	  cmd_t::pull_ivar( edf.id , var , &val ); 
+	  covar_name.push_back( var );
+	  covar_value.push_back( val );
+	  //std::cout << " ID " << edf.id << "\t" << var << "\t" << val << "\n";	  
+	  ++cc;
+	}      
+    }
+
+  //
   // iterate over epochs
   //
   
@@ -1055,6 +1085,16 @@ void pops_indiv_t::level1( edf_t & edf )
 	}
 
 
+      //
+      // Covariates at end?
+      //
+      
+      if ( do_covar )
+	{
+	  for (int j=0; j< covar_cols.size(); j++)
+	    X1( en , covar_cols[j] ) = covar_value[j] ; 
+	}
+      
       //
       // track that this was a bad epoch (for at least one signal/metric)
       //

@@ -952,6 +952,44 @@ bool lgbm_t::add_label_weights( DatasetHandle d , std::vector<float> * w , const
   return true;
 }
 
+bool lgbm_t::add_block_weights( DatasetHandle d , 
+				std::vector<float> * w, 
+				const std::vector<uint64_t> & Istart , 
+				const std::map<uint64_t,float > & wtable )
+{
+
+  const int nind = Istart.size();  
+  if ( nind == 0 ) return false;
+  
+  const int ndat = rows(d);
+  const int nrow = w->size();
+  if ( ndat != nrow ) 
+    Helper::halt( "internal problem in lgbm_t::add_block_weights()");
+  
+  // go up to the N-1 person
+  for (int i=0; i<nind-1; i++)
+    {
+      //std::cout <<" looking for " << Istart[ i ] << "\n";
+      std::map<uint64_t,float>::const_iterator ff = wtable.find( Istart[ i ] ) ;
+      if ( ff != wtable.end() )
+	{
+	  int s1 = Istart[i];
+	  int s2 = Istart[i+1];
+	  //std::cout << " setting " << Istart[i] <<" " << s1 << " to " << s2 <<" " << ff->second << "\n";
+	  for (int j=s1; j<s2; j++)
+	    (*w)[j] *= ff->second;
+	}
+    }
+  
+  // go from last person to the end (nb. if case of only one person, this will
+  // also be the first person
+  std::map<uint64_t,float>::const_iterator ff = wtable.find( Istart[ nind -1  ] ) ;
+  if ( ff != wtable.end() )
+    for (int j= Istart[ nind-1 ] ; j<nrow; j++)
+      (*w)[j] *= ff->second;
+  
+  return true;
+}
 
 void lgbm_t::load_pops_default_config()
 {

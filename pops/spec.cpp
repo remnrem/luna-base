@@ -172,8 +172,13 @@ void pops_specs_t::read( const std::string & f )
 	  std::vector<std::string> tok2 = Helper::parse( tok[i] , '=' );
 	  if ( tok2.size() > 2 ) Helper::halt( "bad format: " + tok[i] );
 	  
+	  // special case: COVAR lists variable names
+	  if ( ftr == "COVAR" )
+	    {
+	      targs[ tok2[0] ] = ""; // only requires the keys (var names)
+	    }
 	  // add as channel
-	  if ( tok2.size() == 1 )
+	  else if ( tok2.size() == 1 )
 	    {
 	      // has the channel already been specified via CH?
 	      if ( tok2[0] != "." && chs.find( tok2[0] ) == chs.end() )
@@ -192,7 +197,7 @@ void pops_specs_t::read( const std::string & f )
 	    }
 	}
 
-      // if no channels, e.g. could be a time-track; denote that it is empty
+      // if no channels, e.g. could be a time-track or a covariate; denote that it is empty
       if ( tchs.size() == 0 )
 	tchs.push_back( "." );
       
@@ -208,7 +213,7 @@ void pops_specs_t::read( const std::string & f )
       // check block names
       if ( level1 || ftr == "TIME" )
 	{
-	  // special case: lvl1 outliers command -- set 'channel' as the new block
+	  // special cases: lvl1 outliers command w/out channels -- set 'channel' as the new block
 	  if ( ftr == "OUTLIERS" )
 	    {	      	      
 	      // requires that we've seen this block already
@@ -217,38 +222,43 @@ void pops_specs_t::read( const std::string & f )
 	      tchs.clear();
 	      tchs.push_back( block );
 	    }
-	  
+	  else if ( ftr == "COVAR" )
+	    {
+	      tchs.clear();
+              tchs.push_back( "." ); // just put empty channel
+	    }
+
 	  // mark that we've seen this block
 	  bmap.insert( block );
 	}
-	else
-	  {
-
-	    // requires 'block' arg
-	    if ( targs.find( "block" ) == targs.end() )
-	      Helper::halt( "no block argument for " + ftr );
-	    
-	    // cannot specify an existing block as a target, unless it is the block= arg
-	    // (i.e. replace originals)
-	    const std::string from_block = Helper::toupper( targs[ "block" ] );
-	    
-	    // set 'channel' as the prior block
-	    tchs.clear();
-	    tchs.push_back( from_block );
-	    
-	    // does this point to an existing block?
-	    if ( bmap.find( from_block ) == bmap.end() )
-	      Helper::halt( "specified block " + targs[ "block" ] + " not found" );
-	    
-	    // not self-replacement
-	    if ( from_block != block ) 
-	      {
-		if ( bmap.find( block ) != bmap.end() )
-		  Helper::halt( "cannot specify an existing non-self block for a level-2 feature:\n" + line  );
-		// but now insert to track other lvl2 features
-		bmap.insert( block );
-	      }	  
-	  }
+      else
+	{
+	  
+	  // requires 'block' arg
+	  if ( targs.find( "block" ) == targs.end() )
+	    Helper::halt( "no block argument for " + ftr );
+	  
+	  // cannot specify an existing block as a target, unless it is the block= arg
+	  // (i.e. replace originals)
+	  const std::string from_block = Helper::toupper( targs[ "block" ] );
+	  
+	  // set 'channel' as the prior block
+	  tchs.clear();
+	  tchs.push_back( from_block );
+	  
+	  // does this point to an existing block?
+	  if ( bmap.find( from_block ) == bmap.end() )
+	    Helper::halt( "specified block " + targs[ "block" ] + " not found" );
+	  
+	  // not self-replacement
+	  if ( from_block != block ) 
+	    {
+	      if ( bmap.find( block ) != bmap.end() )
+		Helper::halt( "cannot specify an existing non-self block for a level-2 feature:\n" + line  );
+	      // but now insert to track other lvl2 features
+	      bmap.insert( block );
+	    }	  
+	}
       
       
       // add each channel separately (w/ the same args)      
@@ -306,6 +316,7 @@ void pops_specs_t::init()
   lab2ftr[ "PE" ] = POPS_PE;
   lab2ftr[ "MEAN" ] = POPS_MEAN;
   lab2ftr[ "OUTLIERS" ] = POPS_EPOCH_OUTLIER;
+  lab2ftr[ "COVAR" ] = POPS_COVAR;
 
   lab2ftr[ "TIME" ] = POPS_TIME;
   lab2ftr[ "SMOOTH" ] = POPS_SMOOTH;
@@ -331,7 +342,8 @@ void pops_specs_t::init()
   ftr2lab[ POPS_PE ] = "PE";  
   ftr2lab[ POPS_MEAN ] = "MEAN";
   ftr2lab[ POPS_EPOCH_OUTLIER ] = "OUTLIERS";
-  
+  ftr2lab[ POPS_COVAR ] = "COVAR";
+
   ftr2lab[ POPS_TIME ] = "TIME";  
   ftr2lab[ POPS_SMOOTH ] = "SMOOTH";
   ftr2lab[ POPS_DENOISE ] = "DENOISE";
@@ -415,12 +427,18 @@ void pops_specs_t::check_args()
 	    Helper::halt( "from=x and to=y must be between 3 and 7" );	  
         }
 
+      // COVAR (individual-level)
+      if ( spec.ftr == pops_feature_t::POPS_COVAR )
+	{
+	  if ( spec.arg.size() == 0 ) 
+	    Helper::halt( "COVAR requires 1+ variable names listed after" );
+	}
       
       // time-tracks
       if ( spec.ftr == pops_feature_t::POPS_TIME )
 	{
 	  if ( spec.arg.find( "order" ) == spec.arg.end() )
-	    spec.arg[ "order" ] = 1;
+	    spec.arg[ "order" ] = "1";
 	  // Helper::halt( ftr2lab[ pops_feature_t::POPS_TIME ] + " requires 'order' arg" );
 	}
 
@@ -687,6 +705,14 @@ int pops_spec_t::cols( int * t )
       size = n2 - n1 + 1 ;
       *t += size ;
       return size ;
+    }
+
+  // COVAR
+  if ( ftr == POPS_COVAR )
+    {
+      size = arg.size();
+      *t += size;
+      return size;
     }
   
   // time-track

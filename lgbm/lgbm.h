@@ -102,10 +102,11 @@ struct lgbm_t {
   
   bool add_label_weights( DatasetHandle d , std::vector<float> * , const lgbm_label_t & l );
   
-  bool add_block_weights( DatasetHandle d , const std::vector<uint64_t> & , const std::map<uint64_t,float > & wtable );
+  bool add_block_weights( DatasetHandle d , std::vector<float> * , const std::vector<uint64_t> & , const std::map<uint64_t,float > & wtable );
   
   bool apply_weights( DatasetHandle d , std::vector<float> * );
   
+
   //
   // Set up a booster 
   //
