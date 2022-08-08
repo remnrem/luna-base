@@ -52,21 +52,15 @@ int main(int argc , char ** argv )
   
   bool show_version = argc >= 2 
     && ( strcmp( argv[1] ,"-v" ) == 0 || strcmp( argv[1] ,"--version" ) == 0 );
-
-  //
-  // usgae
-  //
-
-  std::string usage_msg = "usage: luna [sample-list|EDF] [n1] [n2] [@parameter-file] [sig=s1,s2] [v1=val1] < command-file";
   
   //
   // initiate global defintions
   //
-
+  
   std::set_new_handler(NoMem);
 
   global.init_defs();
-
+  
   if ( show_version )  
     {
       global.api();
@@ -74,6 +68,16 @@ int main(int argc , char ** argv )
       std::exit( globals::retcode );
     }
 
+  
+  //
+  // usage
+  //
+  
+  std::string usage_msg = luna_base_version() +
+    "url: http://zzz.bwh.harvard.edu/luna/\n"
+    "primary usage: luna [sample-list|EDF] [n1] [n2] [id=ID] [@param-file] \n"
+    "                    [sig=s1,s2] [var1=val1] [-o out.db] [-s COMMANDS] [< command-file]\n";
+  
   
   //
   // Some initial options (called prior to the main banner, etc)

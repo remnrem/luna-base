@@ -31,6 +31,8 @@ extern logger_t logger;
 void pops_indiv_t::save1( const std::string & id , const std::string & f )
 {
 
+  logger << "  writing binary data file to " << f << "\n";
+  
   // ID, ne, nf { features , row-major }   
   std::ofstream OUT1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::out );
   bwrite( OUT1, id ) ;

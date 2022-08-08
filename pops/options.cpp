@@ -85,7 +85,7 @@ void pops_opt_t::set_options( param_t & param )
   
   verbose = param.has( "verbose" );
   
-  epoch_level_SHAP = param.has( "epoch-SHAP" );
+  epoch_level_SHAP = param.has( "epoch-SHAP" ) || param.has( "SHAP-epoch" ) ;
   
   n_stages = param.has( "3-class" ) ? 3 : 5;
 

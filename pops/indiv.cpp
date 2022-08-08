@@ -265,6 +265,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	  const int num_iter = param.has( "iterations" ) ? param.requires_int( "iterations" ) : 0 ; 
 
+	  logger << "  predicting based on " << num_iter << " iterations of " << param.value( "model" ) << "\n";
+	  
 	  predict( num_iter );
 	  
 	  //
@@ -1694,7 +1696,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
 
   logger << "  kappa = " << stats.kappa << "; 3-class kappa = " << stats3.kappa
-	 << " ( n = " << ne << " epochs)\n";
+	 << " (n = " << ne << " epochs)\n";
   logger << "  Confusion matrix: \n";
   std::map<int,std::map<int,int> > table = pops_t::tabulate( S, preds, true );
   logger << "\n";
