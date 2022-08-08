@@ -719,6 +719,100 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       logger << " wake epochs to ?\n";
       
     }
+  
+  
+  //
+  // Recode any leading/trailing "?" as "L"
+  //
+  
+  const int ne = stages.size();
+
+  for (int e =0; e < ne ; e++)
+    {
+      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
+      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+    }
+  
+  for (int e = ne - 1 ; e != 0 ; e--)
+    {
+      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
+      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+    }
+    
+  
+  //
+  // constrain to only analyse the first N minutes after X ?
+  //
+  
+  n_only_first_mins = param.has( "first" ) ? param.requires_dbl( "first" ) : -1 ; 
+
+  // T0 : ED start, 
+  // T1 : lights out
+  // T2 : sleep onset (default)
+  //  make everything after N minutes missing '?'
+  
+  first_anchor = "";
+  if ( n_only_first_mins > 0 ) 
+    first_anchor = param.has( "first-anchor" ) ? param.value( "first-anchor" ) : "T2" ;
+  
+  if ( n_only_first_mins > 0 ) 
+    {
+      if ( first_anchor != "T0" && first_anchor != "T1" && first_anchor != "T2" ) 
+	Helper::halt( "first-anchor should be T2 (sleep onset, default), T0 (EDF start) or T1 (lights out)" );
+      logger << "  restricting statistics to the first " << n_only_first_mins << " minutes past " ;
+      if ( first_anchor == "T2" ) logger << "sleep onset";
+      else if ( first_anchor == "T0" ) logger << "EDF start";
+      else logger << "lights out";
+      logger << "\n";
+      
+      const int first_epochs = n_only_first_mins / (double)epoch_mins ; 
+      
+      int start = 0; // T0
+      
+      // T1 ( lights out ) 
+      if ( first_anchor == "T1" )
+	{
+	  for (int e=0; e<ne; e++)
+	    if ( stages[e] != LIGHTS_ON )
+	      {
+		start = e;
+		break;
+	      }
+	} // T2 (sleep onset)
+      else if ( first_anchor == "T2" )
+	{
+	  for (int e=0; e<ne; e++)
+            if ( is_sleep( stages[e] ) )
+              {
+		start = e;
+		break;
+              }
+	}
+      
+      // e.g. 1 min = 2 epoch = 0 1 
+      // last defined as one past 
+      int last = start + first_epochs ;
+      
+      if ( last > ne ) 
+	{	  
+	  last = ne;
+	  // track actual time allowed
+	  n_only_first_mins = ( last - start ) * epoch_mins;
+	  logger << "  *** reducing first period, which is longer than available staging: " 
+		 << n_only_first_mins << " minutes\n";
+	}
+      
+      
+      logger << "  retaining only epochs " << start+1 << " to " << last << ";"
+	     << " setting epochs " << last+1 << " to end (" << ne << ") to L\n";
+      
+      for (int e=last; e<ne; e++)
+	stages[e] = LIGHTS_ON;
+      
+    }
+ 
+
+
 
 }
 
@@ -732,24 +826,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
   
   const int ne = stages.size();
-
-  
-  //
-  // Recode any leading/trailing "?" as "L"
-  //
-  
-  for (int e =0; e < ne ; e++)
-    {
-      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
-    }
-  
-  for (int e = ne - 1 ; e != 0 ; e--)
-    {
-      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
-    }
-
+ 
   
   //
   // Basic summary statistics per-individual/night

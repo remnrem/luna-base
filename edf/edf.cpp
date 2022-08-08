@@ -1556,7 +1556,7 @@ bool edf_t::attach( const std::string & f ,
 	{
 	  double time_sec = ( timeline.last_time_point_tp * globals::tp_duration ) ;
 	  et.advance_seconds( time_sec );
-	  logger << " ( clocktime " << header.starttime << " - " << et.as_string() << " )";
+	  logger << " | clocktime " << header.starttime << " - " << et.as_string() ;
 	}
       logger << "\n";
       
@@ -1568,11 +1568,11 @@ bool edf_t::attach( const std::string & f ,
       logger << "\n signals: " << header.ns << " (of " << header.ns_all << ") selected ";
       
       if ( header.edfplus & header.continuous ) 
-	logger << "in an EDF+C file:" ;
+	logger << "in an EDF+C file" ;
       else if ( header.edfplus & ! header.continuous ) 
-	logger << "in an EDF+D file:" ;
+	logger << "in an EDF+D file" ;
       else
-	logger << "in a standard EDF file:" ;
+	logger << "in a standard EDF file" ;
 
       for (int s=0;s<header.ns;s++) 
 	logger << ( s % 8 == 0 ? "\n  " : " | " ) << header.label[s]; 
