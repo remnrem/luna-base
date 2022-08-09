@@ -1084,6 +1084,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "MS" ) )           proc_microstates( edf , param(c) );
 
+      else if ( is( c, "ASYMM" ) )        proc_asymm( edf , param(c) );
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
       else if ( is( c, "TCLST" ) )        proc_tclst( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
@@ -1765,6 +1766,11 @@ void proc_microstates( edf_t & edf , param_t & param )
   dsptools::microstates( edf , param );
 }
 
+// ASYMM
+void proc_asymm( edf_t & edf  , param_t & param )
+{
+  lat_t lat( edf , param );
+}
 
 // TLOCK
 void proc_tlock( edf_t & edf  , param_t & param )

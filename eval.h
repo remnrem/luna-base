@@ -361,6 +361,8 @@ void proc_sync(edf_t & , param_t & );
 void proc_tsync(edf_t & , param_t & );
 void proc_psc( edf_t & , param_t & );
 void proc_microstates( edf_t & , param_t & );
+
+void proc_asymm( edf_t & , param_t & );
 void proc_tlock( edf_t & , param_t & );
 void proc_peaks( edf_t & , param_t & );
 void proc_zpeaks( edf_t & , param_t & );

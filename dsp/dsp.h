@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "lat.h"
 #include "rectify.h"
 #include "dupes.h"
 #include "gc.h"

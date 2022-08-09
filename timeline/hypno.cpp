@@ -2273,6 +2273,18 @@ void hypnogram_t::output( const bool verbose ,
       
     }
 
+  //
+  // Epoch-level annotation of NREM cycles also (both STAGE and HYPNO)
+  //
+
+  for (int e=0;e<timeline->num_epochs() ;e++)
+    if ( sleep_cycle_number[e] ) 
+      {	
+	const std::string cycle = "_NREMC_" + Helper::int2str( sleep_cycle_number[e] );	
+	timeline->annotate_epoch( cycle , e );	
+      }
+
+  
   
   //
   // currently, this routine is hard-coded to assume 30-second epochs,
@@ -2842,7 +2854,7 @@ void hypnogram_t::output( const bool verbose ,
   //
   // Add cycle epoch-annotation
   //
-  
+  if ( 0 )  // now done above
   for (int e=0;e<ne;e++)
     if ( sleep_cycle_number[e] ) 
       {	
