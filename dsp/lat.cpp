@@ -141,7 +141,12 @@ lat_t::lat_t( edf_t & edf , param_t & param )
   
   // band -> epoch -> channel -> power
   b2e2ch2psd.clear();
-    
+
+  //
+  // cache'd epochs are 1-based (from strata outputs), but
+  // here set to 0-based on first read
+  //
+  
   // iterate over keys: only consider cache_var w/ CH, E, and (B or F)
   
   std::set<ckey_t>::const_iterator cc = ckeys.begin();    
@@ -182,12 +187,12 @@ lat_t::lat_t( edf_t & edf , param_t & param )
       
       const double psd = cx[0];
 
-      int epoch = -1;
+      int epoch1 = -1;
       double freq = -1;
       std::string band = "";
       std::string ch = cc->stratum.find( globals::signal_strat )->second;
       
-      if ( ! Helper::str2int( cc->stratum.find( globals::epoch_strat )->second , &epoch ) )
+      if ( ! Helper::str2int( cc->stratum.find( globals::epoch_strat )->second , &epoch1 ) )
 	Helper::halt( "internal error with epoch encoding" );
 
       if ( is_freq )
@@ -199,6 +204,12 @@ lat_t::lat_t( edf_t & edf , param_t & param )
 	{
 	  band = cc->stratum.find( globals::band_strat )->second;
 	}
+
+      // 
+      // recode as 0-based epoch count
+      //
+      
+      const int epoch = epoch1 - 1;
       
       if ( is_band )
 	b2e2ch2psd[ band ][ epoch ][ ch ] = psd ; 
@@ -370,17 +381,15 @@ lat_t::lat_t( edf_t & edf , param_t & param )
   auto ee = all_epochs.begin();
   while ( ee != all_epochs.end() )
     {
-      // 1-based epochs in cache
-      const int e = *ee - 1 ;
-      
-      if ( e >= ne )
+      // we're now working w/ 0-based epochs
+      if ( *ee >= ne )
 	{
 	  logger << " expected (max) = " << ne << "\n";
-	  logger << " observed (0-based index) " << e << "\n";	    
+	  logger << " observed (0-based index) " << *ee << "\n";	    
 	  Helper::halt( "unexpected epoch number found, greater than implied ne" );
 	}
-      S.push_back( S2[e] );
-      E.push_back( e );
+      S.push_back( S2[*ee] );
+      E.push_back( *ee );
       ++ee;
     }
 
@@ -388,7 +397,7 @@ lat_t::lat_t( edf_t & edf , param_t & param )
     logger << "  retained " << S.size() <<" of " << S2.size() << " stages\n";
 
   // do the actual work
-  proc( edf , param); 
+  proc( edf , param ); 
   
 }
   
@@ -435,6 +444,7 @@ void lat_t::proc( edf_t & edf , param_t & param )
       // get current epoch encoding
       
       const int ne2 = edf.timeline.first_epoch();
+
       if ( ne != ne2 )
 	{
 	  logger << "  expected number of epochs (based on staging) = " << ne << "\n";
@@ -596,7 +606,7 @@ void lat_t::proc( edf_t & edf , param_t & param )
     {
       for (int e=0; e<ne; e++)
 	{
-	  logger << E[e] << "\t"
+	  logger << E[e]+1 << "\t"
 		 << S[e] << "\t"
 		 << C[e] << "\t"
 		 << T_NR2R[e] << "\t"
