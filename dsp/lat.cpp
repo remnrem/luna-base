@@ -596,7 +596,7 @@ void lat_t::proc( edf_t & edf , param_t & param )
   // Check
   //
 
-  if ( 1  )
+  if ( 0  )
     {
       for (int e=0; e<ne; e++)
 	{
@@ -906,7 +906,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	    }
 	}
       
-      logger << "  cycle " << c << ", found " << nrems.size() << " and " << rems.size() << "NR/R epochs\n";
+      //logger << "  cycle " << c << ", found " << nrems.size() << " and " << rems.size() << "NR/R epochs\n";
 
       //
       // skip if not enough NREM or REM epochs

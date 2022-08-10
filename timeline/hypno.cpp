@@ -400,11 +400,13 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   annot_t * lights_off_annot = timeline->annotations( "lights_off" );
 
   //
-  // valid combinations:                  | Off                    | On
+  // valid combinations:                        | Off                    | On
   // ------------------------------------------------------------------------------------------
-  //  a)  lights_off interval only          : start of lights_off    | end of lights_off
-  //  b)  two lights_on intervals           : end of first lights_on | start of second light on
-  //  c)  one lights_off + 1 or 2 lights_on : start of lights off    | start of last lights_on
+  //  a)  lights_off interval only (>epoch dur) : start of lights_off    | end of lights_off
+  //  b)  lights_off interval only (<epoch dur) : start of lights_off    | end of recoding (i.e. no explicit lights_on)
+  //  c)  two lights_on intervals               : end of first lights_on | start of second light on
+  //  d)  one lights_off + 1 or 2 lights_on     : start of lights off    | start of last lights_on
+
   
   //  nb.  the final case works if two 'change-point' (i.e. 0-duration
   //  intervals) are specified as lights_off and lights_on as well
@@ -430,9 +432,11 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       n_annot_lights_on = lon.size();
     }
 
+  //
   // extract change-points depending on the available annotations
+  //
 
-  // condition c
+  // condition d)
   if ( n_annot_lights_off == 1 && n_annot_lights_on > 0 )
     {
       annot_map_t & lon = lights_on_annot->interval_events;
@@ -450,16 +454,26 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       lights_on = bb->first.interval.start_sec();
     }
   
-  // condition a
+  // condition a) and b)
   if ( n_annot_lights_off == 1 && n_annot_lights_on == 0 )
     {
       annot_map_t & loff = lights_off_annot->interval_events;
       annot_map_t::const_iterator aa = loff.begin();
+
+      // a) this defines an interval of Lights Off
       lights_off = aa->first.interval.start_sec();
       lights_on = aa->first.interval.stop_sec(); 
+      
+      // b) if lights_off was of very short duration (i.e. 0-point, or < epoch)
+      //    then we assume that it is a change-point marker (at start) but that 
+      //    lights_on dees not occur until the end of the recording
+      if ( lights_on - lights_off < timeline->epoch_length() )
+	lights_on = timeline->last_time_point_tp * globals::tp_duration ; 
+      
     }
   
-  // condition b
+  
+  // condition c)
   if ( n_annot_lights_off == 0 && n_annot_lights_on == 2 )
     {
       annot_map_t & lon = lights_on_annot->interval_events;
