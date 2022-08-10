@@ -437,7 +437,7 @@ annot_t * spectral_power( edf_t & edf ,
 		 + this_sigma  
 		 + this_beta
 		 + this_gamma;
-
+	       
 	       if ( this_total > 0 )
 		 {
 		   writer.level( globals::band( SLOW ) , globals::band_strat );
@@ -503,6 +503,37 @@ annot_t * spectral_power( edf_t & edf ,
 		   }
 		   if ( cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_total ) : this_total );
+		   
+		   writer.unlevel( globals::band_strat );
+		   
+		 }
+	       else if ( cache_epochs && cache_bands && ! dB )
+		 {
+		   // need to enter 0 in this case for cache
+		   //  nb. only doing this in non-dB mode (i.e. for ASYMM(
+		   writer.level( globals::band( SLOW ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+		   
+		   writer.level( globals::band( DELTA ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+		   
+		   writer.level( globals::band( THETA ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+		   
+		   writer.level( globals::band( ALPHA ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+		   
+		   writer.level( globals::band( SIGMA ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+
+		   writer.level( globals::band( BETA ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+
+		   writer.level( globals::band( GAMMA ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+		   
+		   writer.level( globals::band( TOTAL ) , globals::band_strat );
+		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
 		   
 		   writer.unlevel( globals::band_strat );
 		   

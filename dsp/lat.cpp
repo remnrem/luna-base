@@ -269,7 +269,7 @@ lat_t::lat_t( edf_t & edf , param_t & param )
 
       if ( fset.size() * cset.size() * eset.size() != data_points )
 	{
-	  logger << "  expecting " << data_points << " data points (given "
+	  logger << "  expecting " << fset.size() * cset.size() * eset.size() << " data points (given "
 		 << fset.size() << " freq bins x " << cset.size() << " chs x " << eset.size() << " epochs)\n"
 		 << "  but observed only " << data_points << "\n";	    
 	  Helper::halt( "ASYMM requires squared data" );
@@ -338,7 +338,7 @@ lat_t::lat_t( edf_t & edf , param_t & param )
 
       if ( bset.size() * cset.size() * eset.size() != data_points )
 	{
-	  logger << "  expecting " << data_points << " data points (given "
+	  logger << "  expecting " << bset.size() * cset.size() * eset.size() << " data points (given "
 		 << bset.size() << " bands x " << cset.size() << " chs x " << eset.size() << " epochs)\n"
 		 << "  but observed only " << data_points << "\n";	    
 	  Helper::halt( "ASYMM requires squared data" );
@@ -484,8 +484,8 @@ void lat_t::proc( edf_t & edf , param_t & param )
   T_R2NR.resize( ne, 0 );
   T_NR2R.resize( ne, 0 );
 
-  // default, 3 mins (6 epochs) each side of a transition 
-  const int e_window = param.has( "trans" ) ? param.requires_int( "trans" ) : 6;
+  // default, 5 mins (10 epochs) each side of a transition 
+  const int e_window = param.has( "trans" ) ? param.requires_int( "trans" ) : 10;
   tr_start = -e_window; 
 
   //
@@ -818,14 +818,14 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   // min. # of NREM epochs per cycle
   const int req_nrem_epochs = 10;
 
-  // leading/trailing NREM search interval
-  const int flanking_epochs_search = 100; 
+  // leading/trailing NREM search interval [each side]
+  const int flanking_epochs_search = 50; 
 
-  // max # of flanking NREM epochs to take (of /100)
-  const int flanking_epochs_max = 40;
+  // max # of flanking NREM epochs to take (of /flanking_epochs_search) [each side]
+  const int flanking_epochs_max = 30;
 
-  // min # of flanking NREM epochs 
-  const int flanking_epochs_min = 25;
+  // min # of flanking NREM epochs [both sides]
+  const int flanking_epochs_min = 30;
 
   // min # of NREM on either side of the REM period
   const int req_1sided_nrem = 10;
@@ -834,7 +834,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   const double outlier_ratio = 2.0;						
 
   // outlier th
-  const double psd_th = 3;
+  const double psd_th = 6;
 
   //
   // As we can see major changes in L/R ratios across the night, this analysis is focussed to
@@ -851,7 +851,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   // get log2(L/R)
   //
 
-  const double ASYMM_EPS = 1e-6 ;
+  const double ASYMM_EPS = 1e-8 ;
   
   std::vector<double> log2lr( ne , 0 );
   for (int e=0; e<ne; e++)
@@ -871,8 +871,18 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   // Cycle based analysis 
   //
 
+  // track which epochs featured in which cycle-based analysis
   std::map<int,int> used_rem_cycle, used_nrem_cycle;
-
+  
+  // track for average stats over cycles
+  // but only for cycles w/out NREM-NREM deviations (p<0.05)
+  const double p_nrem_nrem_threshold = 0.05;
+  int n_cycles_analyzed = 0;
+  double z_rem = 0;
+  double z_abs_rem = 0;
+  double abs_logp_asymm = 0;
+  double signed_logp_asymm = 0;
+  
   for (int c=1; c<=num_cycles; c++)
     {
   
@@ -891,7 +901,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	}
       
       //logger << "  cycle " << c << ", found " << nrems.size() << " and " << rems.size() << "NR/R epochs\n";
-
+      
       //
       // skip if not enough NREM or REM epochs
       //
@@ -1103,22 +1113,40 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       writer.value( "LR_REM" , rem_mean );
       writer.value( "LR_NREM" , nrem_mean );
       writer.value( "Z_REM" , zrem_mean );
-      writer.value( "Z_NREM" , znrem_mean );
       writer.value( "N_REM" , (int)zrem_lr.size() );
       writer.value( "N_NREM" , (int)znrem_lr.size() ); 
       writer.value( "P" , pvalue );
-      writer.value( "Z" , zrem_mean * -log10( pvalue ) );
+      writer.value( "LOGP" , ( zrem_mean > 0 ? 1 : -1 ) * -log10( pvalue ) );
+
+      // track
+      if ( NREM_pvalue >= p_nrem_nrem_threshold )
+	{
+	  ++n_cycles_analyzed;
+	  z_rem += zrem_mean;
+	  z_abs_rem += fabs( zrem_mean );
+	  signed_logp_asymm += ( zrem_mean > 0 ? 1 : -1 ) * -log10( pvalue );
+	  abs_logp_asymm += -log10( pvalue );
+	}
+
+      // NREM-NREM                                                                                                                         
+      writer.value( "LR_LEADING_NREM" , leading_nrem_mean );
+      writer.value( "LR_TRAILING_NREM" , trailing_nrem_mean );
+      writer.value( "P_NREM" , NREM_pvalue );
+      writer.value( "LOGP_NREM" , -log10( NREM_pvalue ) );
+
 
       // NREM-NREM
       writer.value( "LR_LEADING_NREM" , leading_nrem_mean );
       writer.value( "LR_TRAILING_NREM" , trailing_nrem_mean );
       writer.value( "P_NREM" , NREM_pvalue );
+      writer.value( "LOGP_NREM" , -log10( NREM_pvalue ) );
       
       //
       // next cycle
       //
     }
   writer.unlevel( globals::cycle_strat );
+
 
 
   
@@ -1178,9 +1206,9 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	      for (int j=0; j < -tr_start ; j++)
 		{
 		  tr_NR2R_NR_mean[ j ] += tr1[ j ] - mean1; 
-		  tr_NR2R_R_mean[ j ] += tr2[ j ] - mean1; 
-		  tr_NR2R_cnt++;
+		  tr_NR2R_R_mean[ j ] += tr2[ j ] - mean1; 		  
 		}
+	      tr_NR2R_cnt++;
 	    }
 	}
 
@@ -1224,15 +1252,13 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	      for (int j=0; j < -tr_start ; j++)
 		{
 		  tr_R2NR_R_mean[ j ] += tr1[ j ] - mean1; 
-		  tr_R2NR_NR_mean[ j ] += tr2[ j ] - mean1; 
-		  tr_R2NR_cnt++;
+		  tr_R2NR_NR_mean[ j ] += tr2[ j ] - mean1; 		  
 		}
+	      tr_R2NR_cnt++;
 	    }
 	}
     }
     
-  writer.value( "TR_R2NR_N" , tr_R2NR_cnt );
-  writer.value( "TR_NR2R_N" , tr_NR2R_cnt );
 
   if ( tr_R2NR_cnt || tr_NR2R_cnt ) 
     {
@@ -1264,7 +1290,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   //
   // Raw, epoch-level output 
   //
-
+  
   if ( epoch_level_output )
     {
       for (int e=0; e<ne; e++)
@@ -1289,8 +1315,53 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	}
       writer.unepoch();
     }
-  
 
+  //
+  // Naive, raw L/R summaries
+  //
+  
+  int valid_n = 0;
+  double left_log = 0 , right_log = 0 , lr_raw = 0;
+  
+  // ignore W
+  for (int e=0; e<ne; e++)
+    {
+      if ( ( S[e] == ASYMM_SS_NREM || S[e] == ASYMM_SS_REM ) && ! outlier[e] ) 
+	{
+	  ++valid_n;
+	  left_log += log( L[e] );
+	  right_log += log( R[e] );
+	  lr_raw += log2lr[e] ;
+	}
+    }
+
+  if ( valid_n ) 
+    {
+      left_log /= (double) valid_n;
+      right_log /= (double) valid_n;
+      lr_raw /= (double) valid_n;
+      
+      writer.value( "L_SLEEP" , left_log );
+      writer.value( "R_SLEEP" , right_log );
+      writer.value( "LR_SLEEP" , lr_raw );
+    }
+
+
+  //
+  // Summary of cycle-based tests
+  //
+
+  if ( n_cycles_analyzed ) 
+    {
+      writer.value( "NC" , n_cycles_analyzed );
+      writer.value( "Z_REM" , z_rem / (double)n_cycles_analyzed );
+      writer.value( "ABS_Z_REM" , z_abs_rem / (double)n_cycles_analyzed );
+      writer.value( "ABS_LOGP" , abs_logp_asymm / (double)n_cycles_analyzed );
+      writer.value( "LOGP" , signed_logp_asymm / (double)n_cycles_analyzed );
+    }
+
+  writer.value( "TR_R2NR_N" , tr_R2NR_cnt );
+  writer.value( "TR_NR2R_N" , tr_NR2R_cnt );
 
   return res;
 }
