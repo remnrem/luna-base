@@ -63,7 +63,7 @@ lat_t::lat_t( edf_t & edf , param_t & param )
   bool has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
   
   if ( (!has_staging)  || ne != edf.timeline.hypnogram.stages.size() )
-    Helper::halt( "problem extracting stage information for trainer" );
+    Helper::halt( "problem extracting stage information for full EDF" );
 
   S.resize( ne , ASYMM_SS_IGNORE );
   
@@ -344,10 +344,12 @@ lat_t::lat_t( edf_t & edf , param_t & param )
 	    Helper::halt( "could not find requested channel " + *cc + " in the cache" );
 	  ++cc;
 	}
-
+      
       if ( any_freqs && all_epochs.size() != eset.size() )
 	Helper::halt( "internal error in ASYMM: mismatch of epoch sizes between bands and freqs" );
-      
+      else
+	all_epochs = eset;
+
       //
       // All good
       //
@@ -383,7 +385,7 @@ lat_t::lat_t( edf_t & edf , param_t & param )
     }
 
   if ( S.size() < S2.size() )
-    logger << "  spliced out " << S.size() <<" of " << S2.size() << " stages\n";
+    logger << "  retained " << S.size() <<" of " << S2.size() << " stages\n";
 
   // do the actual work
   proc( edf , param); 
@@ -403,8 +405,9 @@ void lat_t::proc( edf_t & edf , param_t & param )
   // epoch level output 
   const bool verbose = false;
 
-  bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
-  if ( ! okay ) Helper::halt( "problem constructing the hypnogram" );
+  // already done, above
+  //  bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
+  //if ( ! okay ) Helper::halt( "problem constructing the hypnogram" );
 
   const bool epoch_lvl_output = false;
   const std::string eannot = "";  
@@ -433,7 +436,11 @@ void lat_t::proc( edf_t & edf , param_t & param )
       
       const int ne2 = edf.timeline.first_epoch();
       if ( ne != ne2 )
-	Helper::halt( "EDF has been restructed prior to ASYMM... epochs encoding off" ); 
+	{
+	  logger << "  expected number of epochs (based on staging) = " << ne << "\n";
+	  logger << "  observed number of epochs (based on EDF) = " << ne2 << "\n";
+	  Helper::halt( "EDF has been restructed prior to ASYMM... epochs encoding off" ); 
+	}
 
       std::vector<int> epochs;
       while ( 1 )
@@ -469,6 +476,7 @@ void lat_t::proc( edf_t & edf , param_t & param )
 
   // default, 3 mins (6 epochs) each side of a transition 
   const int e_window = param.has( "trans" ) ? param.requires_int( "trans" ) : 6;
+  tr_start = -e_window; 
 
   //
   // NREM -> REM 
@@ -806,15 +814,12 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   // max # of flanking NREM epochs to take (of /100)
   const int flanking_epochs_max = 40;
 
-  // min # of flanking NREM epochs
+  // min # of flanking NREM epochs 
   const int flanking_epochs_min = 25;
 
-  // min # of good NREM following outlier removal (within region)
-  const int req_good_nrem = 10;
-  
-  // min # of good REM following outlier removal (within region)
-  const int req_good_rem = 10;
-  
+  // min # of NREM on either side of the REM period
+  const int req_1sided_nrem = 10;
+    
   // outlier limit range
   const double outlier_ratio = 2.0;						
 
@@ -851,38 +856,19 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	}
     }
 
-  //
-  // Raw, epoch-level output 
-  //
-
-  if ( epoch_level_output )
-    {
-      for (int e=0; e<ne; e++)
-	{
-	  writer.epoch( E[e] + 1 );
-	  writer.value( "L" , L[e] );
-	  writer.value( "R" , R[e] );
-	  writer.value( "LR" , log2lr[e] );
-	  writer.value( "OUT" , (int)outlier[e] );
-	  writer.value( "C" , C[e] );
-
-	  std::string ss = "?";
-	  if ( S[e] == ASYMM_SS_WAKE ) ss = "W";
-	  else if ( S[e] == ASYMM_SS_REM ) ss = "R";
-	  else if ( S[e] == ASYMM_SS_NREM ) ss = "NR";
-	  writer.value( "SS" , ss );
-	}
-      writer.unepoch();
-    }
-  
   
   //
   // Cycle based analysis 
   //
 
+  std::map<int,int> used_rem_cycle, used_nrem_cycle;
+
   for (int c=1; c<=num_cycles; c++)
     {
+  
       std::vector<int> rems, nrems;
+      std::vector<int> nrems_leading, nrems_trailing;
+      
       for (int e=0; e<ne; e++)
 	{
 	  if ( C[e] > c ) break;
@@ -915,7 +901,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 
       // get flanking NREM in here:
       nrems.clear();
-
+      
       // leading NREM
       int cnt = 0;      
       for (int e=rem_start-1; e >= lwr_epoch ; e--)
@@ -926,6 +912,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	      ++cnt;
 	      if ( cnt > flanking_epochs_max ) break;
 	      nrems.push_back( e );
+	      nrems_leading.push_back( e );
 	    }
 	}
       
@@ -939,6 +926,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	      ++cnt;
 	      if ( cnt > flanking_epochs_max ) break;
 	      nrems.push_back( e );
+	      nrems_trailing.push_back( e );
 	    }
 	}
 
@@ -946,6 +934,11 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       if ( nrems.size() < flanking_epochs_min )
 	continue;
       
+      // enough leading and trailing NREM?
+      if ( nrems_leading.size() < req_1sided_nrem 
+	   || nrems_trailing.size() < req_1sided_nrem  ) 
+	continue;
+
       //
       // Flag outliers (in original channels, log-scaled)
       //
@@ -1004,11 +997,23 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       for (int i=0; i<rems.size(); i++)
 	if ( ! outlier[rems[i]] )
 	  rem_lr.push_back( log2lr[ rems[i] ] );
-
+      
       for (int i=0; i<nrems.size(); i++)
 	if ( ! outlier[nrems[i]] )
 	  nrem_lr.push_back( log2lr[ nrems[i] ] );
+
+      // and split out leading vs trailing NREM too
+      std::vector<double> leading_nrem_lr;
+      std::vector<double> trailing_nrem_lr;
       
+      for (int i=0; i<nrems.size(); i++)
+	if ( ! outlier[nrems[i]] )
+	  {
+	    if ( nrems[i] < rem_start )
+	      leading_nrem_lr.push_back( log2lr[ nrems[i] ] );
+	    else
+	      trailing_nrem_lr.push_back( log2lr[ nrems[i] ] );
+	  }
            
       //
       // Normalize by NREM mean/SD
@@ -1048,6 +1053,40 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 				      &pvalue );
 
       if ( !okay ) continue;
+
+      //
+      // compare leading vs trailing NREM 
+      //
+
+      double leading_nrem_mean = MiscMath::mean( leading_nrem_lr );
+      double leading_nrem_sd = MiscMath::sdev( leading_nrem_lr , leading_nrem_mean );
+
+      double trailing_nrem_mean = MiscMath::mean( trailing_nrem_lr );
+      double trailing_nrem_sd = MiscMath::sdev( trailing_nrem_lr , trailing_nrem_mean );
+      
+      double NREM_pvalue = 1;
+
+      bool okay_nrem_nrem = Statistics::t_test( leading_nrem_mean, leading_nrem_sd * leading_nrem_sd , leading_nrem_lr.size() , 
+						trailing_nrem_mean, trailing_nrem_sd * trailing_nrem_sd , trailing_nrem_lr.size() , 
+						&NREM_pvalue );
+
+      
+      //
+      // track epochs used;
+      //
+      
+      for (int i=0; i<rems.size(); i++)
+        if ( ! outlier[rems[i]] )
+          used_rem_cycle[ rems[i] ] = c;
+
+      for (int i=0; i<nrems.size(); i++)
+        if ( ! outlier[nrems[i]] )
+          used_nrem_cycle[ nrems[i] ] = c;
+
+
+      //
+      // Report
+      //
       
       writer.level( c, globals::cycle_strat );
       
@@ -1059,6 +1098,11 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       writer.value( "N_NREM" , (int)znrem_lr.size() ); 
       writer.value( "P" , pvalue );
       writer.value( "Z" , zrem_mean * -log10( pvalue ) );
+
+      // NREM-NREM
+      writer.value( "LR_LEADING_NREM" , leading_nrem_mean );
+      writer.value( "LR_TRAILING_NREM" , trailing_nrem_mean );
+      writer.value( "P_NREM" , NREM_pvalue );
       
       //
       // next cycle
@@ -1068,8 +1112,176 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 
 
   
+  //
+  // Transition based
+  //
+
+  // only consider full transitions (w/ no outliers) 
+  std::vector<double> tr_R2NR_R_mean( -tr_start );
+  std::vector<double> tr_R2NR_NR_mean( -tr_start );
+  int tr_R2NR_cnt = 0;
+  
+  std::vector<double> tr_NR2R_NR_mean( -tr_start );
+  std::vector<double> tr_NR2R_R_mean( -tr_start );
+  int tr_NR2R_cnt = 0;
+
+  
+  for (int e=0; e<ne; e++)
+    {
+
+      //
+      // start of NR -> R transition
+      //
+
+      if ( T_NR2R[e] == tr_start ) 
+	{
+	  
+	  // n.b. tr_start is -ve e.g. -3  for -3 -2 -1 +1 +2 +3
+	  // we can also expect a full valid range (i.e. or else
+	  // this would not have been marked as a transition)
+	  
+	  std::vector<double> tr1( -tr_start );
+	  std::vector<double> tr2( -tr_start );
+
+	  int p = e;
+	  bool okay = true;
+	  
+	  for (int j=0 ; j < -tr_start ; j++)
+	    {
+	      if ( outlier[p] ) { okay = false; break; }
+	      tr1[j] = log2lr[p] ; 
+	      ++p;
+	    }
+	  
+	  for (int j=0 ; j < -tr_start ; j++)
+	    {
+	      if ( outlier[p] ) { okay = false; break; }
+	      tr2[j] = log2lr[p] ; 
+	      ++p;
+	    }
+	  
+	  // only count full transitions
+	  if ( okay ) 
+	    {
+	      double mean1 = MiscMath::mean( tr1 );
+
+	      for (int j=0; j < -tr_start ; j++)
+		{
+		  tr_NR2R_NR_mean[ j ] += tr1[ j ] - mean1; 
+		  tr_NR2R_R_mean[ j ] += tr2[ j ] - mean1; 
+		  tr_NR2R_cnt++;
+		}
+	    }
+	}
 
     
+      //
+      // hitting a R -> NR interval?
+      //
+      
+      if ( T_R2NR[e] == tr_start ) 
+	{
+	  
+	  // n.b. tr_start is -ve e.g. -3  for -3 -2 -1 +1 +2 +3
+	  // we can also expect a full valid range (i.e. or else
+	  // this would not have been marked as a transition)
+	  
+	  std::vector<double> tr1( -tr_start );
+	  std::vector<double> tr2( -tr_start );
+
+	  int p = e;
+	  bool okay = true;
+	  
+	  for (int j=0; j < -tr_start ; j++)
+	    {
+	      if ( outlier[p] ) { okay = false; break; }
+	      tr1[j] = log2lr[p] ; 
+	      ++p;
+	    }
+	  
+	  for (int j=0; j < -tr_start ; j++)
+	    {
+	      if ( outlier[p] ) { okay = false; break; }
+	      tr2[j] = log2lr[p] ; 
+	      ++p;
+	    }
+	  
+	  // only count full transitions
+	  if ( okay ) 
+	    {
+	      double mean1 = MiscMath::mean( tr1 );
+	      
+	      for (int j=0; j < -tr_start ; j++)
+		{
+		  tr_R2NR_R_mean[ j ] += tr1[ j ] - mean1; 
+		  tr_R2NR_NR_mean[ j ] += tr2[ j ] - mean1; 
+		  tr_R2NR_cnt++;
+		}
+	    }
+	}
+    }
+    
+  writer.value( "TR_R2NR_N" , tr_R2NR_cnt );
+  writer.value( "TR_NR2R_N" , tr_NR2R_cnt );
+
+  if ( tr_R2NR_cnt || tr_NR2R_cnt ) 
+    {
+      
+      // pre-trans
+      int p = 0;
+      for (int i = tr_start ; i != 0 ; i++ )
+	{
+	  writer.level( i , "TR" );
+	  if ( tr_R2NR_cnt ) writer.value( "R2NR" , tr_R2NR_R_mean[p] / (double)tr_R2NR_cnt );
+	  if ( tr_NR2R_cnt ) writer.value( "NR2R" , tr_NR2R_NR_mean[p] / (double)tr_NR2R_cnt );
+	  ++p;
+	}
+
+      // post-trans
+      p = 0;
+      for (int i=1; i <= -tr_start; i++ )
+	{
+	  writer.level( i , "TR" );
+	  if ( tr_R2NR_cnt ) writer.value( "R2NR" , tr_R2NR_NR_mean[p] / (double)tr_R2NR_cnt );
+	  if ( tr_NR2R_cnt ) writer.value( "NR2R" , tr_NR2R_R_mean[p] / (double)tr_NR2R_cnt );
+	  ++p;
+	}
+
+      writer.unlevel( "TR" );
+    }
+
+
+  //
+  // Raw, epoch-level output 
+  //
+
+  if ( epoch_level_output )
+    {
+      for (int e=0; e<ne; e++)
+	{
+	  writer.epoch( E[e] + 1 );
+	  writer.value( "L" , L[e] );
+	  writer.value( "R" , R[e] );
+	  writer.value( "LR" , log2lr[e] );
+	  writer.value( "OUT" , (int)outlier[e] );
+	  writer.value( "C" , C[e] );
+	  
+	  std::string used = ".";
+	  if ( used_rem_cycle[e] != 0 ) used = "REM_C" + Helper::int2str( used_rem_cycle[e] );	      
+	  else if ( used_nrem_cycle[e] != 0 ) used = "NREM_C" + Helper::int2str( used_nrem_cycle[e] );
+	  writer.value( "INC" , used );
+
+	  std::string ss = "?";
+	  if ( S[e] == ASYMM_SS_WAKE ) ss = "W";
+	  else if ( S[e] == ASYMM_SS_REM ) ss = "R";
+	  else if ( S[e] == ASYMM_SS_NREM ) ss = "NR";
+	  writer.value( "SS" , ss );
+	}
+      writer.unepoch();
+    }
+  
+
+
   return res;
 }
 

@@ -53,7 +53,8 @@ struct lat_t
 
   // options
   bool epoch_level_output;
-  
+  int tr_start;
+
   // main data stores:
   
   // freq -> epoch -> channel -> power
