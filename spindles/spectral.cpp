@@ -427,7 +427,7 @@ annot_t * spectral_power( edf_t & edf ,
 	   // Epoch-level output
 	   //
 
-	   if ( show_epoch )
+	   if ( show_epoch || ( cache_epochs && cache_bands ) )
 	     {
 	       
 	       double this_total =  this_slowwave
@@ -441,7 +441,7 @@ annot_t * spectral_power( edf_t & edf ,
 	       if ( this_total > 0 )
 		 {
 		   writer.level( globals::band( SLOW ) , globals::band_strat );
-		   if ( ! suppress_output ) {
+		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
 		     writer.value( "RELPSD" , this_slowwave / this_total );
 		   }
@@ -450,7 +450,7 @@ annot_t * spectral_power( edf_t & edf ,
 		   
 		   
 		   writer.level( globals::band( DELTA ) , globals::band_strat );
-		   if ( ! suppress_output ) {
+		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_delta ) : this_delta );
 		     writer.value( "RELPSD" , this_delta / this_total );
 		   }
@@ -458,7 +458,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_delta ) : this_delta );
 		   
 		   writer.level( globals::band( THETA ) , globals::band_strat );
-		   if ( ! suppress_output ) {
+		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_theta ) : this_theta  );
 		     writer.value( "RELPSD" , this_theta / this_total );
 		   }
@@ -466,7 +466,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_theta ) : this_theta );
 		   
 		   writer.level( globals::band( ALPHA ) , globals::band_strat );
-		   if ( ! suppress_output ) {
+		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_alpha ) : this_alpha );
 		     writer.value( "RELPSD" , this_alpha / this_total );
 		   }
@@ -474,7 +474,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_alpha ) : this_alpha );
 		   
 		   writer.level( globals::band( SIGMA ) , globals::band_strat );
-		   if ( ! suppress_output ) {
+		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_sigma ) : this_sigma );
 		     writer.value( "RELPSD" , this_sigma / this_total );
 		   }
@@ -482,7 +482,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_sigma ) : this_sigma );
 
 		   writer.level( globals::band( BETA ) , globals::band_strat );
-		   if ( ! suppress_output ) {
+		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_beta ) : this_beta  );
 		     writer.value( "RELPSD" , this_beta / this_total );
 		   }
@@ -490,7 +490,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_beta ) : this_beta );
 
 		   writer.level( globals::band( GAMMA ) , globals::band_strat );
-		   if ( ! suppress_output ) {		     
+		   if ( show_epoch && ! suppress_output ) {		     
 		     writer.value( "PSD" , dB ? 10*log10( this_gamma ) : this_gamma );
 		     writer.value( "RELPSD" , this_gamma / this_total );
 		   }
@@ -498,7 +498,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_gamma ) : this_gamma );
 		   
 		   writer.level( globals::band( TOTAL ) , globals::band_strat );
-		   if ( ! suppress_output ) {
+		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_total ) : this_total );				   
 		   }
 		   if ( cache_epochs && cache_bands )
@@ -575,9 +575,9 @@ annot_t * spectral_power( edf_t & edf ,
 	       // epoch-level output?
 	       //
 	       
-	       if ( show_epoch_spectrum )
+	       if ( show_epoch_spectrum || ( cache_epochs && cache_spectrum ) )
 		 {		 
-
+		   
 		   // using bin_t 	      
 		   bin_t bin( min_power , max_power , bin_fac );
 		   bin.bin( freqs , pwelch.psd );
@@ -594,20 +594,20 @@ annot_t * spectral_power( edf_t & edf ,
 		       writer.level( f0[ f0.size()-1 ] , globals::freq_strat );
 
 		       //writer.level( bin.bfa[i] , globals::freq_strat );
-		       if ( ! suppress_output ) 
+		       if ( show_epoch_spectrum && ! suppress_output ) 
 			 if ( bin.bspec[i] > 0 || ! dB ) 
 			   writer.value( "PSD" , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
-
+		       
 		       // cache epoch-level PSD?
 		       if ( cache_epochs && cache_spectrum )
 			 cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB? 10*log10( bin.bspec[i] ) : bin.bspec[i] );
-
-		       if ( ! suppress_output ) 
+		       
+		       if ( show_epoch_spectrum &&  ! suppress_output ) 
 			 if ( bin.nominal[i] != "" )
 			   writer.value( "INT" , bin.nominal[i] );
 
 		       // CV?
-		       if ( ! suppress_output )
+		       if ( show_epoch_spectrum && ! suppress_output )
 			 if ( calc_seg_sd )
 			   writer.value( "CV" , binsd.bspec[i] );
 		       		       

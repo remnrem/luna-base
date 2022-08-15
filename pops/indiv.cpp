@@ -115,6 +115,9 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       // default combione CONF = 0.0
       double comb_conf = param.has( "conf" ) ? param.requires_dbl( "conf" ) : 0 ;
       // default = best/most confident call
+      //  1 : take most confident
+      //  2 : geometric mean
+      //  3 : confidenence-weighted mean
       int comb_method = param.has( "mean" ) ? 3 : param.has( "geo" ) ? 2 : 1 ; // best (default)
       
       if ( equivn )
@@ -122,7 +125,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  logger << "  combining final solution across " << equivn << " equivalence channels; method = ";
 	  if ( comb_method == 1 ) logger << " most confident";
 	  else if ( comb_method == 2 ) logger << " geometric mean";
-	  else logger << " mean";
+	  else logger << " confidence-weighted mean";
 	  
 	  if ( comb_method != 1 ) 
 	    logger << ", minimum conf score = " << comb_conf;
@@ -1993,30 +1996,40 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
 	      
 	      P.row( e ) = M.array().pow( 1.0 / (double) cnt );
 	    }
-	  else // arith mean
+	  else // confidence-weighted arith mean
 	    {
 	      
-	      // mean of all values above threshold 	  
+	      // orig: mean of all values above threshold 	  
+
+	      // new: confidence-weighted mean
+
 	      Eigen::VectorXd M = Eigen::VectorXd::Zero( P.cols() )  ;
 	      
 	      std::map<int,int>::const_iterator ss = esols.begin();
 	      while ( ss != esols.end() )
 		{
 		  double conf = sols[ ss->first ].P.row( ss->second ).maxCoeff();
-		  if ( conf >= min_conf )
-		    M.array() += sols[ ss->first ].P.row( ss->second ).array() ;
+
+		  // if ( conf >= min_conf )
+		  //   M.array() += sols[ ss->first ].P.row( ss->second ).array() ;
+		  
+		  M.array() += conf * sols[ ss->first ].P.row( ss->second ).array() ;
+		  
 		  ++ss;
 		}
 	      P.row( e ) = M;
 	    }
 	  
 	  // scale to 1.0
-	  P.row( e ) /= P.row(e).sum();
+	  if ( P.row(e).sum() <= 1e-10 ) 
+	    P.row( e ).array() = 1 / (double)P.cols();
+	  else
+	    P.row( e ) /= P.row(e).sum();
 	}
       
     } // move to next consensus epoch to resolve
   
-
+  
   //  std::cout << "summary " << E.size() <<"\t" << S.size() <<" " << P.rows() << "\n";
 
 }

@@ -28,6 +28,8 @@
 struct edf_t;
 struct param_t;
 
+#include "timeline/cache.h"
+
 void irasa_wrapper( edf_t & edf , param_t & param );
 
 struct irasa_t { 
@@ -51,7 +53,10 @@ struct irasa_t {
  	   const double slope_outlier ,
 	   const int window , 
 	   const bool segment_median ,
-	   const bool epoch_median 	   
+	   const bool epoch_median , 
+	   cache_t<double> * cache , 
+	   const bool cache_epochs ,
+	   const bool silent
 	   );
 
   

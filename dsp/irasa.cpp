@@ -53,6 +53,8 @@ void irasa_wrapper( edf_t & edf , param_t & param )
   // Analysis parameters
   //
 
+  const bool silent = param.has( "silent" );
+
   const double h_min = param.has( "h-min" ) ? param.requires_dbl( "h-min" ) : 1.05;
   const double h_max = param.has( "h-max" ) ? param.requires_dbl( "h-max" ) : 1.95;
   const int    h_cnt = param.has( "h-steps" ) ? param.requires_dbl( "h-steps" ) : 19;
@@ -108,6 +110,22 @@ void irasa_wrapper( edf_t & edf , param_t & param )
   if ( problem )
     logger << "  *** warning *** evaluated frequency range exceeds Nyquist for one or more signals\n";
   
+
+  //
+  // Caching
+  //
+
+  const bool cache_data = param.has( "cache" );
+
+  const std::string cache_name = cache_data ? param.requires( "cache" ) : "" ;
+
+  const bool cache_epochs = param.has( "cache-epochs" );
+
+  cache_t<double> * cache = NULL ;
+
+  if ( cache_data )
+    cache = edf.timeline.cache.find_num( cache_name );
+
   //
   // Iterate over signals
   //
@@ -139,7 +157,7 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 
       irasa_t irasa( edf , *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
 		     segment_sec , overlap_sec , converter , epoch_lvl_output , logout , slope_range , slope_outlier ,
-		     window_function , segment_median , epoch_median );
+		     window_function , segment_median , epoch_median , cache , cache_epochs , silent );
       
 
       //
@@ -150,12 +168,21 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 	{
 	  writer.level( irasa.frq[f] , globals::freq_strat );
 
-	  if ( logout )	    
-	    writer.value( "LOGF" , log( irasa.frq[f] ) );
+	  if ( ! silent ) 
+	    {
+	      if ( logout )	    
+		writer.value( "LOGF" , log( irasa.frq[f] ) );
+	      
+	      writer.value( "APER" , irasa.aperiodic[f] );
+	      writer.value( "PER" , irasa.periodic[f] );	      
+	    }
 	  
-	  writer.value( "APER" , irasa.aperiodic[f] );
-	  writer.value( "PER" , irasa.periodic[f] );	      
-
+	  if ( cache_data )
+	    {
+	      cache->add( ckey_t( "APER" , writer.faclvl() ) , irasa.aperiodic[f] );
+	      cache->add( ckey_t( "PER" , writer.faclvl() ) , irasa.periodic[f] );
+	    }
+	  
 	}
       writer.unlevel( globals::freq_strat );
 
@@ -196,7 +223,10 @@ irasa_t::irasa_t( edf_t & edf ,
 		  const double slope_outlier ,
 		  const int window_function ,
 		  const bool segment_median ,
-		  const bool epoch_median )
+		  const bool epoch_median , 
+		  cache_t<double> * cache , 
+		  const bool cache_epochs , 
+		  const bool silent  )
 {
   
   const double h_inc = ( h_max - h_min ) / (double)(h_cnt-1);
@@ -373,7 +403,7 @@ irasa_t::irasa_t( edf_t & edf ,
       int cnt = 0;
 
       // verbose, epoch level output?
-      if ( epoch_lvl_output )
+      if ( epoch_lvl_output || cache_epochs )
 	writer.epoch( edf.timeline.display_epoch( epoch ) );
 
       // get main statistics for this epoch
@@ -401,29 +431,48 @@ irasa_t::irasa_t( edf_t & edf ,
 		}
 	      
 	      // verbose, epoch level output?
-	      if ( epoch_lvl_output )
+	      if ( epoch_lvl_output || cache_epochs )
 		{		            
-
-		  // for epoch-level slope (below) [ always raw PSD ]
-		  aper_frq.push_back( pwelch.freq[ i ] );
-		  aper_spectrum.push_back( aper );
 		  
 		  writer.level( pwelch.freq[ i ] , globals::freq_strat );
 		  
-		  if ( logout )
+		  if ( epoch_lvl_output) 
 		    {
-		      if ( okay )
+		      
+		      // for epoch-level slope (below) [ always raw PSD ]
+		      aper_frq.push_back( pwelch.freq[ i ] );
+		      aper_spectrum.push_back( aper );
+		  
+		      if ( ! silent ) 
 			{
-			  writer.value( "PER" , log_per );
-			  writer.value( "APER" , log_aper );			    
+			  if ( logout )
+			    {
+			      if ( okay )
+				{
+				  writer.value( "PER" , log_per );
+				  writer.value( "APER" , log_aper );			    
+				}
+			    }
+			  else
+			    {
+			      writer.value( "PER" , per );
+			      writer.value( "APER" , aper );
+			    }
 			}
 		    }
-		  else
+
+		  
+		  //
+		  // add epoch level data to cache 
+		  //
+		  if ( cache_epochs ) 
 		    {
-		      writer.value( "PER" , per );
-		      writer.value( "APER" , aper );
+		      cache->add( ckey_t( "APER" , writer.faclvl() ) , aper );
+		      cache->add( ckey_t( "PER" , writer.faclvl() ) , per );
 		    }
+
 		}
+	    	      
 
 	      //
 	      // track for average over all 
@@ -450,7 +499,7 @@ irasa_t::irasa_t( edf_t & edf ,
 	}
       
       
-      if ( epoch_lvl_output )
+      if ( epoch_lvl_output || cache_epochs )
 	writer.unlevel( globals::freq_strat );
       
 

@@ -25,6 +25,7 @@
 #include "edf/edf.h"
 #include "db/db.h"
 #include "stats/statistics.h"
+#include "miscmath/crandom.h"
 
 extern logger_t logger;
 extern writer_t writer;
@@ -125,6 +126,12 @@ lat_t::lat_t( edf_t & edf , param_t & param )
 
   epoch_level_output = param.has( "epoch" );
   
+  nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 0 ; 
+
+  if ( nreps ) 
+    logger << "  applying " << nreps << " shuffles to derive empirical expecations for TR_NR2R and TR_R2NR\n";
+
+
   //
   // Extract and map power 
   //
@@ -1153,112 +1160,116 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   //
   // Transition based
   //
-
-  // only consider full transitions (w/ no outliers) 
-  std::vector<double> tr_R2NR_R_mean( -tr_start );
-  std::vector<double> tr_R2NR_NR_mean( -tr_start );
+  
+  // originals
+  std::vector<double> tr_R2NR_R_mean( -tr_start , 0 );
+  std::vector<double> tr_R2NR_NR_mean( -tr_start , 0 );
   int tr_R2NR_cnt = 0;
   
-  std::vector<double> tr_NR2R_NR_mean( -tr_start );
-  std::vector<double> tr_NR2R_R_mean( -tr_start );
+  std::vector<double> tr_NR2R_NR_mean( -tr_start , 0);
+  std::vector<double> tr_NR2R_R_mean( -tr_start , 0 );
   int tr_NR2R_cnt = 0;
 
+  bool okay1 = eval_transitions( log2lr , false , outlier , tr_start , 
+				 &tr_R2NR_R_mean, 
+				 &tr_R2NR_NR_mean,
+				 &tr_NR2R_NR_mean,
+				 &tr_NR2R_R_mean,
+				 &tr_R2NR_cnt,
+				 &tr_NR2R_cnt );
+
+  // if zero count, set |mean| --> 0
   
-  for (int e=0; e<ne; e++)
+  if ( tr_R2NR_cnt > 0 ) 
+    for (int j=0; j<-tr_start; j++)
+      {
+	tr_R2NR_R_mean[j] = tr_R2NR_R_mean[j] / (double)tr_R2NR_cnt ;
+	tr_R2NR_NR_mean[j] = tr_R2NR_NR_mean[j] / (double)tr_R2NR_cnt ;
+      }
+  
+  if ( tr_NR2R_cnt > 0 ) 
+    for (int j=0; j<-tr_start; j++)
+      {
+	tr_NR2R_NR_mean[j] = tr_NR2R_NR_mean[j] / (double)tr_NR2R_cnt ;
+	tr_NR2R_R_mean[j] = tr_NR2R_R_mean[j] / (double)tr_NR2R_cnt ;
+      }
+
+
+  //
+  // Permutation?
+  //
+
+  // get mean distribution, instead of empirical mean
+  std::vector<double> tr_NR2R_NR_emp( -tr_start , 0 );
+  std::vector<double> tr_NR2R_R_emp( -tr_start , 0 );
+  std::vector<double> tr_R2NR_R_emp( -tr_start , 0 );
+  std::vector<double> tr_R2NR_NR_emp( -tr_start , 0);
+  
+  if ( nreps ) 
     {
-
-      //
-      // start of NR -> R transition
-      //
-
-      if ( T_NR2R[e] == tr_start ) 
-	{
-	  
-	  // n.b. tr_start is -ve e.g. -3  for -3 -2 -1 +1 +2 +3
-	  // we can also expect a full valid range (i.e. or else
-	  // this would not have been marked as a transition)
-	  
-	  std::vector<double> tr1( -tr_start );
-	  std::vector<double> tr2( -tr_start );
-
-	  int p = e;
-	  bool okay = true;
-	  
-	  for (int j=0 ; j < -tr_start ; j++)
-	    {
-	      if ( outlier[p] ) { okay = false; break; }
-	      tr1[j] = log2lr[p] ; 
-	      ++p;
-	    }
-	  
-	  for (int j=0 ; j < -tr_start ; j++)
-	    {
-	      if ( outlier[p] ) { okay = false; break; }
-	      tr2[j] = log2lr[p] ; 
-	      ++p;
-	    }
-	  
-	  // only count full transitions
-	  if ( okay ) 
-	    {
-	      double mean1 = MiscMath::mean( tr1 );
-
-	      for (int j=0; j < -tr_start ; j++)
-		{
-		  tr_NR2R_NR_mean[ j ] += tr1[ j ] - mean1; 
-		  tr_NR2R_R_mean[ j ] += tr2[ j ] - mean1; 		  
-		}
-	      tr_NR2R_cnt++;
-	    }
-	}
-
-    
-      //
-      // hitting a R -> NR interval?
-      //
+      std::vector<double> ptr_R2NR_R_mean( -tr_start ,0);
+      std::vector<double> ptr_R2NR_NR_mean( -tr_start ,0);
+      int ptr_R2NR_cnt = 0;
       
-      if ( T_R2NR[e] == tr_start ) 
+      std::vector<double> ptr_NR2R_NR_mean( -tr_start ,0);
+      std::vector<double> ptr_NR2R_R_mean( -tr_start ,0);
+      int ptr_NR2R_cnt = 0;
+      
+      for (int r=0; r<nreps; r++)
 	{
 	  
-	  // n.b. tr_start is -ve e.g. -3  for -3 -2 -1 +1 +2 +3
-	  // we can also expect a full valid range (i.e. or else
-	  // this would not have been marked as a transition)
+	  bool okay2 = eval_transitions( log2lr , true , outlier , tr_start ,
+					 &ptr_R2NR_R_mean,
+					 &ptr_R2NR_NR_mean,
+					 &ptr_NR2R_NR_mean,
+					 &ptr_NR2R_R_mean,
+					 &ptr_R2NR_cnt,
+					 &ptr_NR2R_cnt );
 	  
-	  std::vector<double> tr1( -tr_start );
-	  std::vector<double> tr2( -tr_start );
+	  // get means / set to zero
+	  if ( ptr_R2NR_cnt > 0 ) 
+	    for (int j=0; j<-tr_start; j++)
+	      {
+		ptr_R2NR_R_mean[j] = ptr_R2NR_R_mean[j] / (double)ptr_R2NR_cnt ;
+		ptr_R2NR_NR_mean[j] = ptr_R2NR_NR_mean[j] / (double)ptr_R2NR_cnt ;
+	      }
+	  
+	  if ( ptr_NR2R_cnt > 0 ) 
+	    for (int j=0; j<-tr_start; j++)
+	      {
+		ptr_NR2R_NR_mean[j] = ptr_NR2R_NR_mean[j] / (double)ptr_NR2R_cnt ;
+		ptr_NR2R_R_mean[j] = ptr_NR2R_R_mean[j] / (double)ptr_NR2R_cnt ;
+	      }
+	  
+	  // eval means
+	  
+	  for (int j=0; j < -tr_start; j++)
+	    {
+	      tr_R2NR_R_emp[j] += ptr_R2NR_R_mean[j];
+	      tr_R2NR_NR_emp[j] += ptr_R2NR_NR_mean[j];
 
-	  int p = e;
-	  bool okay = true;
-	  
-	  for (int j=0; j < -tr_start ; j++)
-	    {
-	      if ( outlier[p] ) { okay = false; break; }
-	      tr1[j] = log2lr[p] ; 
-	      ++p;
-	    }
-	  
-	  for (int j=0; j < -tr_start ; j++)
-	    {
-	      if ( outlier[p] ) { okay = false; break; }
-	      tr2[j] = log2lr[p] ; 
-	      ++p;
-	    }
-	  
-	  // only count full transitions
-	  if ( okay ) 
-	    {
-	      double mean1 = MiscMath::mean( tr1 );
+	      tr_NR2R_NR_emp[j] += ptr_NR2R_NR_mean[j];
+	      tr_NR2R_R_emp[j] += ptr_NR2R_R_mean[j];
 	      
-	      for (int j=0; j < -tr_start ; j++)
-		{
-		  tr_R2NR_R_mean[ j ] += tr1[ j ] - mean1; 
-		  tr_R2NR_NR_mean[ j ] += tr2[ j ] - mean1; 		  
-		}
-	      tr_R2NR_cnt++;
+
+	      // if ( ptr_R2NR_R_mean[j]  >= tr_R2NR_R_mean[j] )  tr_R2NR_R_emp[j]++;
+	      // if ( ptr_R2NR_NR_mean[j] >= tr_R2NR_NR_mean[j] ) tr_R2NR_NR_emp[j]++;
+
+	      // if ( ptr_NR2R_NR_mean[j] >= tr_NR2R_NR_mean[j] ) tr_NR2R_NR_emp[j]++;
+	      //if ( ptr_NR2R_R_mean[j]  >= tr_NR2R_R_mean[j] )  tr_NR2R_R_emp[j]++;
+	      
 	    }
+
+
 	}
+      
     }
-    
+  
+
+  // 
+  // Report transition statistics
+  //
+
 
   if ( tr_R2NR_cnt || tr_NR2R_cnt ) 
     {
@@ -1268,8 +1279,21 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       for (int i = tr_start ; i != 0 ; i++ )
 	{
 	  writer.level( i , "TR" );
-	  if ( tr_R2NR_cnt ) writer.value( "R2NR" , tr_R2NR_R_mean[p] / (double)tr_R2NR_cnt );
-	  if ( tr_NR2R_cnt ) writer.value( "NR2R" , tr_NR2R_NR_mean[p] / (double)tr_NR2R_cnt );
+	  if ( tr_R2NR_cnt ) 
+	    {
+	      writer.value( "R2NR" , tr_R2NR_R_mean[p] );
+	      if ( nreps ) 
+		writer.value( "R2NR_EMP" , ( tr_R2NR_R_emp[p]  ) / (double)( nreps  ) );
+	    }
+	  
+	  if ( tr_NR2R_cnt ) 
+	    {
+	      writer.value( "NR2R" , tr_NR2R_NR_mean[p] );
+	      if ( nreps ) 
+		writer.value( "NR2R_EMP" , ( tr_NR2R_NR_emp[p]  ) / (double)( nreps  ) );
+	      
+	    }
+	  
 	  ++p;
 	}
 
@@ -1278,11 +1302,22 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       for (int i=1; i <= -tr_start; i++ )
 	{
 	  writer.level( i , "TR" );
-	  if ( tr_R2NR_cnt ) writer.value( "R2NR" , tr_R2NR_NR_mean[p] / (double)tr_R2NR_cnt );
-	  if ( tr_NR2R_cnt ) writer.value( "NR2R" , tr_NR2R_R_mean[p] / (double)tr_NR2R_cnt );
+	  if ( tr_R2NR_cnt ) 
+	    {
+	      writer.value( "R2NR" , tr_R2NR_NR_mean[p] );
+	      if ( nreps ) 
+		writer.value( "R2NR_EMP" , ( tr_R2NR_NR_emp[p]  ) / (double)( nreps  ) );
+	    }
+
+	  if ( tr_NR2R_cnt ) 
+	    {
+	      writer.value( "NR2R" , tr_NR2R_R_mean[p] );
+	      if ( nreps ) 
+		writer.value( "NR2R_EMP" , ( tr_NR2R_R_emp[p] ) / (double)( nreps  ) );
+	    }
 	  ++p;
 	}
-
+      
       writer.unlevel( "TR" );
     }
 
@@ -1322,7 +1357,10 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   
   int valid_n = 0;
   double left_log = 0 , right_log = 0 , lr_raw = 0;
-  
+
+  double lr_raw_wake = 0 , lr_raw_nrem = 0 , lr_raw_rem = 0;
+  int n_wake = 0 , n_nrem = 0 , n_rem = 0;
+
   // ignore W
   for (int e=0; e<ne; e++)
     {
@@ -1332,6 +1370,25 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	  left_log += log( L[e] );
 	  right_log += log( R[e] );
 	  lr_raw += log2lr[e] ;
+	}
+
+      if ( ! outlier[e] )
+	{
+	  if ( S[e] == ASYMM_SS_NREM )
+	    {
+	      ++n_nrem;
+	      lr_raw_nrem += log2lr[e];	  
+	    }
+	  else if ( S[e] == ASYMM_SS_REM )
+	    {
+	      ++n_rem;
+	      lr_raw_rem += log2lr[e];	  
+	    }
+	  else if ( S[e] == ASYMM_SS_WAKE )
+	    {
+	      ++n_wake;
+              lr_raw_wake += log2lr[e];
+	    }
 	}
     }
 
@@ -1346,7 +1403,14 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       writer.value( "LR_SLEEP" , lr_raw );
     }
 
+  if ( n_rem ) 
+    writer.value( "LR_REM" , lr_raw_rem / (double)n_rem );
+  if ( n_nrem )
+    writer.value( "LR_NREM" , lr_raw_nrem / (double)n_nrem );
+  if ( n_wake )
+    writer.value( "LR_WAKE" , lr_raw_wake / (double)n_wake );
 
+  
   //
   // Summary of cycle-based tests
   //
@@ -1366,3 +1430,189 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   return res;
 }
 
+
+
+bool lat_t::eval_transitions( const std::vector<double> & log2lr , 
+			      const bool permute , 
+			      const std::vector<bool> & outlier , 
+			      const int tr_start , // e.g. -3 for -3,-2,-1,+1,+2,+3
+			      std::vector<double> * res_tr_R2NR_R_mean , // return vals
+			      std::vector<double> * res_tr_R2NR_NR_mean , 
+			      std::vector<double> * res_tr_NR2R_NR_mean , 
+			      std::vector<double> * res_tr_NR2R_R_mean , 
+			      int * res_tr_R2NR_cnt , 
+			      int * res_tr_NR2R_cnt )
+{
+
+  const int ne = log2lr.size();
+
+  const int half_size = -tr_start;
+    
+  res_tr_R2NR_R_mean->resize( half_size );
+  res_tr_R2NR_NR_mean->resize( half_size );
+  *res_tr_R2NR_cnt = 0;
+  
+  res_tr_NR2R_NR_mean->resize( half_size );
+  res_tr_NR2R_R_mean->resize( half_size );
+  *res_tr_NR2R_cnt = 0;
+  
+  // ensure space if zero'ed
+  for (int j=0; j<half_size; j++)
+    {
+      (*res_tr_R2NR_R_mean)[j] = 0;
+      (*res_tr_R2NR_NR_mean)[j] = 0;
+      (*res_tr_NR2R_NR_mean)[j] = 0;
+      (*res_tr_NR2R_R_mean)[j] = 0;
+    }
+
+  // n.b. tr_start is -ve e.g. -3  for -3 -2 -1 +1 +2 +3
+  // we can also expect a full valid range (i.e. or else
+  // this would not have been marked as a transition)
+  
+  std::vector<double> tr1( half_size );
+  std::vector<double> tr2( half_size );
+  
+  
+  //
+  // only consider full transitions (w/ no outliers)   
+  // (for both original and permuted) 
+  //
+
+  for (int e=0; e<ne; e++)
+    {
+      
+      //
+      // start of NR -> R or R -> NR transition?
+      //
+      
+      if ( T_NR2R[e] == tr_start || T_R2NR[e] == tr_start )
+	{
+	  
+	  //
+	  // which transition type?
+	  //
+	  
+	  const bool nr2r = T_NR2R[e] == tr_start ; 
+	  
+	  //
+	  // get index (shuffling & wrapping if perm'ed)
+	  //  - but if perm'ed we require that it is in sleep
+	  
+	  int p = permute ? CRandom::rand( ne ) : e ;
+	  
+	  if ( p >= ne ) p -= ne; // should not happen, but keep anyway...
+	  
+	  while ( permute )
+	    {
+	      bool is_sleep = true;
+	      int k = p;
+	      
+	      for (int j=0; j<2*half_size; j++)
+		{
+		  if ( ! ( S[k] == ASYMM_SS_NREM || S[k] == ASYMM_SS_REM ) )
+		    {
+		      is_sleep = false; 
+		      break; 
+		    }
+
+		  ++k;
+		  if ( k == ne ) k = 0;
+		}
+	      
+	      // good if this falls in sleep (NR and/or R)
+	      if ( is_sleep ) break;
+	      
+	      // otherwise, look for a new position
+	      p = CRandom::rand( ne ) ;
+	      if ( p >= ne ) p -= ne;
+	      
+	    }
+
+	  //
+	  // Now evaluate whether the 2*half_size interval starting at epoch 'p' 
+	  // is valid ( no outliers) ;   if we permuted above, we ensure it falls
+	  // within sleep, but we do not ensure it does not contain outliers (just like
+	  // the original).   This means that the statistic may be undefined sometimes 
+	  // but we will know as count == 0;   just ignore those cases.  This means
+	  // the test if a a) transition changes but also b) influence by prob 
+	  // of hitting an outlier.. but should be good enough for now
+	  //
+	  
+	  //
+	  // not okay to span any outliers (in either original, or permuted)
+	  //
+
+	  bool okay = true;
+	  
+	  //
+	  // assess left & right ( twice half_sizd )
+	  //
+	  
+	  for (int j=p ; j < p + 2 * half_size ; j++)
+	    if ( outlier[j] ) { okay = false; break; }
+	  
+	  //
+	  // only consider this transition (permed or original) 
+	  // if it does not span an outlier;  we take abs() of
+	  // every point
+	  //
+	  
+	  if ( okay ) 
+	    {
+	      // populate tr1 & tr2
+	      for (int j=0 ; j < half_size ; j++)
+		{
+		  tr1[j] = fabs( log2lr[p++] ) ;
+		  if ( p == ne ) p = 0; // wrap
+		}
+	      
+	      for (int j=0 ; j < half_size ; j++)
+		{
+		  tr2[j] = fabs( log2lr[p++] ) ;
+		  if ( p == ne ) p = 0; // wrap
+		}				  
+	      
+	      //
+	      // normalize by left ; statistic = absolute diff
+	      //
+	      
+	      double mean1 = MiscMath::mean( tr1 );
+	      
+	      if ( nr2r ) // NREM -> REM transition
+		{
+		  for (int j=0; j < half_size ; j++)
+		    {
+		      (*res_tr_NR2R_NR_mean)[ j ] += tr1[ j ] - mean1 ; 
+		      (*res_tr_NR2R_R_mean)[ j ] += tr2[ j ] - mean1 ; 		  
+		    }
+		  (*res_tr_NR2R_cnt)++;
+		}
+	      else // REM -> NREM transition
+		{
+		  for (int j=0; j < half_size ; j++)
+		    {
+		      (*res_tr_R2NR_R_mean)[ j ] += tr1[ j ] - mean1 ;
+		      (*res_tr_R2NR_NR_mean)[ j ] += tr2[ j ] - mean1 ;
+		    }
+		  (*res_tr_R2NR_cnt)++;
+		}
+	    }
+	  
+	  //
+	  // end of this transition
+	  //
+	}
+
+      // 
+      // move to next epoch 
+      //
+
+    }
+  
+  // 
+  // all done
+  //
+
+  return true;
+  
+}

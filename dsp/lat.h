@@ -51,9 +51,22 @@ struct lat_t
   // do analysis
   void proc( edf_t & , param_t & );
 
+  // helper
+  bool eval_transitions( const std::vector<double> & log2lr , 
+			 const bool permute , 
+			 const std::vector<bool> & outlier , 
+			 const int tr_start , 
+			 std::vector<double> * res_tr_R2NR_R_mean , 
+			 std::vector<double> * res_tr_R2NR_NR_mean , 
+			 std::vector<double> * res_tr_NR2R_NR_mean , 
+			 std::vector<double> * res_tr_NR2R_R_mean , 
+			 int * res_tr_R2NR_cnt , 
+			 int * tr_NR2R_cnt );
+
   // options
   bool epoch_level_output;
   int tr_start;
+  int nreps;
 
   // main data stores:
   
