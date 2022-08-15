@@ -98,46 +98,97 @@ std::vector<std::string> pops_t::labels3 = { "W" , "R" , "NR" };
 void pops_t::make_level2_library( param_t & param )
 {
 
-  // always requires data input
+  //
+  // Inputs
+  //
+
+  // always require an explicit, single data file
   const std::string data_file   = param.requires( "data" );
+  
+  // features: add path as needed
 
-  // needs a feature file, but will use default/internal ('.') if one is not specified
-  const std::string feature_file  = param.has( "features" ) ? param.value( "features" ) : "." ;
+  std::string feature_file  = ".";
+  if ( param.has( "features" ) )
+    feature_file = param.value( "features" );
+  else if ( pops_opt_t::pops_root != "" )
+    feature_file = pops_opt_t::pops_root + ".ftr";
+  if ( feature_file != "." )
+    feature_file = pops_t::update_filepath( feature_file );
+  if ( feature_file == "." ) 
+    Helper::halt( "POPS requires a feature file, via lib or features args" );
+  
+  std::string model_file  = ".";
+  if ( param.has( "model" ) )
+    model_file = param.value( "model" );
+  else if ( pops_opt_t::pops_root != "" )
+    model_file = pops_opt_t::pops_root + ".mod";
+  if ( model_file != "." )
+    model_file = pops_t::update_filepath( model_file );
+  
+  std::string conf_file  = ".";
+  if ( param.has( "conf" ) )
+    conf_file = param.value( "conf" );
+  else if ( pops_opt_t::pops_root != "" )
+    conf_file = pops_opt_t::pops_root + ".conf";
+  if ( conf_file != "." )
+    conf_file = pops_t::update_filepath( conf_file );
+
+  std::string ranges_file  = ".";
+  if ( param.has( "ranges" ) )
+    ranges_file = param.value( "ranges" );
+  else if ( pops_opt_t::pops_root != "" && pops_opt_t::if_root_apply_ranges )
+    ranges_file = pops_opt_t::pops_root + ".ranges";
+  if ( ranges_file != "." )
+    ranges_file = pops_t::update_filepath( ranges_file );
+  
+  std::string espriors_file  = ".";
+  if ( param.has( "es-priors" ) )
+    espriors_file = param.value( "es-priors" );
+  else if ( pops_opt_t::pops_root != "" && pops_opt_t::if_root_apply_espriors )
+    espriors_file = pops_opt_t::pops_root + ".espriors";
+  if ( espriors_file != "." )
+    espriors_file = pops_t::update_filepath( espriors_file );
+  
 
   //
-  // *either*, dump features after constructing feature matrix, or run LGBM
+  // Misc set up
   //
 
-  std::string lgbm_model = "";
-  std::string lgbm_config = "";
-    
-  const bool dump_feature_matrix = param.has( "dump" );
   bool is_trainer = true;
+  
+  //
+  // Either dump feature matrix, or run LGBM
+  //
+
+  // mode 1: load, make lvl-2 matrix, (dump ranges), train model, save
+  // mode 2: load, make lvl-2 matrix, dump to a file
+  // mode 3: load, make lvl-2 matrix, dump ranges
+  
+  const bool run_mode2 = param.has( "dump" );
+  
   std::string dump_file = "";
+  
+  const bool run_mode3 = param.has( "ranges-only" );
 
-  const bool dump_range_file = param.has( "ranges-only" );
+  // main use:
+  const bool run_mode1 = ! ( run_mode2 || run_mode3 );
 
-  if ( dump_feature_matrix ) 
-    {      
-      if ( param.has( "model" ) || param.has( "config" ) )
-	Helper::halt( "cannot specify both dump and model/config" );
+  // in normal use, we require a model file
+  if ( run_mode1 )
+    {
+      if ( model_file == "." )
+	Helper::halt( "POPS requires a model file to be specified, via lib or model" );      
+    }
+
+  // if dumping, is this for trainers or test cases?
+  if ( run_mode2 )
+    {            
       if ( param.value( "dump" ) == "test" )
-	is_trainer = false;
-      else if ( param.value("dump" ) != "training" )
-	Helper::halt( "'dump' must be set to 'training' or 'test'" );
+	is_trainer = false;      
+      else if ( param.value( "dump" ) != "training" )
+       	Helper::halt( "'dump' must be set to either 'training' or 'test'" );
+      
       dump_file = param.requires( "file" );
-    }
-  else if ( dump_range_file ) // ranges-only
-    {
-      if ( param.has( "model" ) || param.has( "config" ) )
-	Helper::halt( "cannot specify both ranges-only and model/config" );
-    }
-  else 
-    {
-      // else we need LGBM configs - always needs a model
-      lgbm_model = param.requires( "model" );
-      // can have a default config file
-      lgbm_config = param.has( "config" ) ? param.value( "config" ) : ".";
     }
   
 
@@ -154,7 +205,10 @@ void pops_t::make_level2_library( param_t & param )
    
   if ( param.has( "hold-outs" ) )
     load_validation_ids( param.value( "hold-outs" ) );
-
+  else if ( param.has( "validation" ) )
+    load_validation_ids( param.value( "validation" ) );
+  
+	   
   //  
   // get previous data: assume single file, concatenated
   // this will populate: X1, S, E and Istart/Iend
@@ -206,39 +260,52 @@ void pops_t::make_level2_library( param_t & param )
   // output the the feature matrix 
   //
 
-  if ( dump_feature_matrix ) 
+  if ( run_mode2 )
     {
       dump_matrix( dump_file );
       return;
     }
 
+  
   //
   // Write ranges (means/SDs) to a .range file
   //
 
-  if ( param.has( "ranges" ) )
+  if ( ranges_file != "." )
     {
-      dump_ranges( param.value( "ranges" ) );
-      if ( param.has( "ranges-only" ) ) return;
-    }
 
+      // this does a) whole sample, b) per indiv
+      dump_ranges( ranges_file );
+      
+      // all done?
+      if ( run_mode3 ) // ranges-only
+	return;
+    }
+  
+  
   //
   // LGBM config (user-specified, or default for POPS)
   //
-
-  if ( lgbm_config == "." )
+  
+  if ( conf_file == "." )
     lgbm.load_pops_default_config();
   else    
-    lgbm.load_config( lgbm_config );
+    lgbm.load_config( conf_file );
 
-  // set number of iterations?
+  //
+  // Set number of iterations?
+  //
+  
   if ( param.has( "iterations" ) ) 
     lgbm.n_iterations = param.requires_int( "iterations" );
-
+  else if ( param.has( "iter" ) ) 
+    lgbm.n_iterations = param.requires_int( "iter" );
+  
+  
   //  
-  // stage (label) weights?    
+  // Stage (label) weights?    
   //
-
+  
   std::vector<double> wgts(  pops_opt_t::n_stages , 1.0 );
   
   if ( param.has( "weights" ) ) // order must be W, R, NR...
@@ -250,22 +317,24 @@ void pops_t::make_level2_library( param_t & param )
   
   lgbm_label_t weights( pops_opt_t::n_stages == 5 ? pops_t::labels5 : pops_t::labels3 , wgts );
 
+  
   //
-  // do training
+  // Train model
   //
  
-  fit_model( lgbm_model , weights );
- 
-  //
-  // write elapsed-sleep priors?
-  //
+  fit_model( model_file , weights );
+  
 
-  if ( param.has( "es-priors" ) )
+  //
+  // Write elapsed-sleep priors?
+  //
+  
+  if ( espriors_file != "." )
     {
       double tbin = param.has( "es-min" ) ? param.requires_dbl( "es-min" ) : 20 ;
       double tmax = param.has( "es-max" ) ? param.requires_dbl( "es-max" ) : 380 ;
       double c    = param.has( "es-c" )   ? param.requires_dbl( "es-c" ) : 0.01 ;
-      write_elapsed_sleep_priors( param.value( "es-priors" ) , tbin ,tmax , c );
+      write_elapsed_sleep_priors( espriors_file , tbin ,tmax , c );
       
     }
   
@@ -494,7 +563,7 @@ void pops_t::level2( const bool training , const bool quiet )
 
 	  // allow for 'path' option to modify where this file is                                                        
 	  const std::string wvfile = pops_t::update_filepath( spec.arg[ "file" ] );
-
+	  
 	  // copy to a temporary
 	  Eigen::MatrixXd D = Eigen::MatrixXd::Zero( ne , nfrom );	  
 	  for (int j=0; j<nfrom; j++) D.col(j) = X1.col( from_cols[j] ) ;
@@ -519,8 +588,8 @@ void pops_t::level2( const bool training , const bool quiet )
 
 	      if ( ! quiet ) 
 		logger << "   - writing SVD W and V to " << wvfile << "\n";
-
-	      std::ofstream OUT1( Helper::expand( wvfile ).c_str() , std::ios::out );
+	      
+	      std::ofstream OUT1( wvfile.c_str() , std::ios::out );
 	      OUT1 << V1.rows() << " " << nc << "\n";
 	      for (int i=0;i<V1.rows(); i++)
 		for (int j=0;j<nc; j++)
@@ -538,15 +607,13 @@ void pops_t::level2( const bool training , const bool quiet )
 	      
 	      if ( V.find( wvfile ) == V.end() ) // do once
 		{
-		  // allow for 'path' option to modify where this file is
-		  std::string filename = pops_t::update_filepath( wvfile );
 
 		  if ( ! quiet )
-		    logger << "   - reading SVD W and V from " << filename << "\n";
-
-		  if ( ! Helper::fileExists( filename ) ) 
-		    Helper::halt( "cannot find " + filename + "\n (hint: add a 'path' arg to point to the .svd file" );
-		  std::ifstream IN1( filename.c_str() , std::ios::in );
+		    logger << "   - reading SVD W and V from " << wvfile << "\n";
+		  
+		  if ( ! Helper::fileExists( wvfile ) )
+		    Helper::halt( "cannot find " + wvfile + "\n (hint: add a 'path' arg to point to the .svd file" );
+		  std::ifstream IN1( wvfile.c_str() , std::ios::in );
 		  int nrow, ncol;
 		  IN1 >> nrow >> ncol;
 		  
@@ -567,12 +634,18 @@ void pops_t::level2( const bool training , const bool quiet )
 		  V[ wvfile ] = V0;
 		  W[ wvfile ] = W0;
 		}	    
-	      
 
+	      //
+	      // line-up
+	      //
+
+	      if ( D.cols() != V[wvfile].rows() )
+		Helper::halt( "projection file does not align with number of features - please check this has not been swapped/modified\n" + wvfile );
+	      
 	      //
 	      // project 
 	      //
-	      	      
+	      
 	      Eigen::MatrixXd U_proj = D * V[ wvfile ] * W[ wvfile ];
 	      
 	      // copy back
@@ -713,15 +786,15 @@ void pops_t::fit_model( const std::string & modelfile ,
 // attach a final LGBM model
 //
 
-void pops_t::load_model( param_t & param )
-{
-  if ( ! lgbm_model_loaded )
-    {
-      lgbm.load_config( param.requires( "config" ) );
-      lgbm.load_model( param.requires( "model" ) );
-      lgbm_model_loaded = true;  
-    }
-}
+// void pops_t::load_model( param_t & param )
+// {
+//   if ( ! lgbm_model_loaded )
+//     {
+//       lgbm.load_config( param.requires( "config" ) );
+//       lgbm.load_model( param.requires( "model" ) );
+//       lgbm_model_loaded = true;  
+//     }
+// }
 
 void pops_t::outliers( const Eigen::VectorXd & x ,
 		       const double th ,
@@ -1043,15 +1116,16 @@ void pops_t::load_validation_ids( const std::string & f )
 
 std::string pops_t::update_filepath( const std::string & f )
 {
+  
   if ( f == "" ) Helper::halt( "empty file name" );
   std::string f2 = Helper::expand( f );
 
   if ( pops_opt_t::pops_path == "" ) return f2;
   
   // add a path before hand (unless we're already given an absolute path)
-  if ( f2[0] != globals::folder_delimiter && pops_opt_t::pops_path != "" )
-    f2 = globals::folder_delimiter + pops_opt_t::pops_path + f2;
-  
+  if ( f2[0] != globals::folder_delimiter )
+    f2 = Helper::expand( pops_opt_t::pops_path + globals::folder_delimiter + f2 );
+
   return f2;
 }
 
@@ -1085,19 +1159,20 @@ void pops_t::dump_matrix( const std::string & f )
 
 void pops_t::read_ranges( const std::string & f )
 {
-  std::string rfile = Helper::expand( f );
-  if ( ! Helper::fileExists( rfile ) ) Helper::halt( "could not open " + rfile );
+
+  if ( ! Helper::fileExists( f ) )
+    Helper::halt( "could not open " + f );
 
   // expecting an exact line up w/ feature file and ranges
   // but we do not test this explicitly - - i.e. as we might read
   // this prior to building the feature set
   
-  std::ifstream IN1( rfile.c_str() , std::ios::in );
+  std::ifstream IN1( f.c_str() , std::ios::in );
   // header
   std::string str0, str1, str2, str3;
   IN1 >> str0 >> str1 >> str2 >> str3;
   if ( str0 != "ID" || str1 != "VAR" || str2 != "MEAN" || str3 != "SD" )
-    Helper::halt( "bad format for " + rfile + "\n -- expecting columns ID, MEAN and SD" );
+    Helper::halt( "bad format for " + f + "\n -- expecting columns ID, MEAN and SD" );
   
   while ( 1 )
     {

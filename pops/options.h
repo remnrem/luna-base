@@ -36,18 +36,29 @@ struct param_t;
 struct pops_opt_t {
     
   static void set_options( param_t & );
-  
-  static std::map<std::string,std::set<std::string> > aliases;
 
+  // channels
+  static std::map<std::string,std::set<std::string> > aliases;
+  static std::map<std::string,std::string> replacements;
+  static std::map<std::string,std::string> replacements_rmap;
+  
   // for a single channel only, can run POPS prediction swapping
   // in multiple channels instead of one 
   static std::vector<std::string> equivs;
   static std::string equiv_root;
   static std::string equiv_swapin;
-  
+
+  // files
   static std::string pops_path;
   static std::string pops_root;
 
+  static bool if_root_apply_ranges;
+  static bool if_root_apply_espriors;
+
+  // variables
+  static std::set<std::string> inc_vars, exc_vars;
+
+  // misc
   static bool verbose;
   static int n_stages;
   static int trim_wake_epochs;
