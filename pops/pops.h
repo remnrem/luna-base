@@ -62,7 +62,7 @@ struct pops_t {
   // two main entry points
   
   // 1) when predicting, we need to load the LGBM model
-  void load_model( param_t & );
+  //  void load_model( param_t & );
   
   // 2) main wrapper:: create a level 2 feature library and save
   // i.e. for trainer and/or validation library

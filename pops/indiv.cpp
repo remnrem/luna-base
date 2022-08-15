@@ -50,13 +50,50 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    param_t & param )
 {
 
+  //
+  // Inputs
+  //
+    
+  std::string model_file  = ".";
+  if ( param.has( "model" ) )
+    model_file = param.value( "model" );
+  else if ( pops_opt_t::pops_root != "" )
+    model_file = pops_opt_t::pops_root + ".mod";
+  if ( model_file != "." )
+    model_file = pops_t::update_filepath( model_file );
+
+  // under lib mode, only read if it actually exists
+  std::string ranges_file  = ".";
+  if ( param.has( "ranges" ) )
+    ranges_file = param.value( "ranges" );
+  else if ( pops_opt_t::pops_root != "" && pops_opt_t::if_root_apply_ranges )
+    {      
+      ranges_file = pops_t::update_filepath( pops_opt_t::pops_root + ".ranges" );
+      if ( ! Helper::fileExists( ranges_file ) ) ranges_file = ".";
+    }
+
+  // under lib mode, only read if it actually exists
+  std::string espriors_file  = ".";
+  if ( param.has( "es-priors" ) )
+    espriors_file = param.value( "es-priors" );
+  else if ( pops_opt_t::pops_root != "" && pops_opt_t::if_root_apply_espriors )
+    {
+      espriors_file = pops_t::update_filepath( pops_opt_t::pops_root + ".espriors" );
+      if ( ! Helper::fileExists( espriors_file ) ) espriors_file = ".";
+    }
+
+
+  //
+  // Run modes
+  //
+  
   const bool training_mode = param.has( "train" );
+    
+  trainer = training_mode;
+
   
   const bool dump_features = param.has( "dump" );
 
-  const bool elapsed_sleep_priors = param.has( "es-priors" ) && param.value( "es-priors" ) != "." ; 
-  
-  trainer = training_mode;
   
   // training (1) : make level-1 stats, stages, save (binary features, BFTR)
   
@@ -147,13 +184,14 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	}
 
+
       //
       // Read any ranges?
       //
       
-      const bool has_ranges = param.has( "ranges" );
-      if ( has_ranges ) pops_t::read_ranges( param.value( "ranges" ) );
-
+      if ( ranges_file != "." )
+	pops_t::read_ranges( param.value( "ranges" ) );
+      
       const double range_th   = param.has( "ranges-th" ) ? param.requires_dbl( "ranges-th" ) : 4 ;
       const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.33 ; 
       if ( range_th < 0 ) Helper::halt( "ranges-th should be positive" );
@@ -169,7 +207,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  // swapping in a different channel?
 	  if ( equivn )
 	    {
-
+	      
 	      // all done?
 	      if ( eq1 == equivn ) break;
 	      
@@ -253,31 +291,43 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  
 	  if ( ! pops_t::lgbm_model_loaded )
 	    {
-	      pops_t::lgbm.load_model( param.requires( "model" ) );
-	      if ( param.has( "config" ) ) 
-		pops_t::lgbm.load_config( param.value( "config" ) );	  
+	      pops_t::lgbm.load_model( model_file );
+	      
+	      // if ( param.has( "config" ) ) 
+	      // 	pops_t::lgbm.load_config( param.value( "config" ) );	  
+	      
 	      pops_t::lgbm_model_loaded = true;
 	    }
 
+	  
 	  //
 	  // Make the actual predictions
 	  //
 
-	  const int num_iter = param.has( "iterations" ) ? param.requires_int( "iterations" ) : 0 ; 
-
+	  int num_iter = 0;
+	  if ( param.has( "iterations" ) ) num_iter = param.requires_int( "iterations" ) ;
+	  else if ( param.has( "iter" ) ) num_iter = param.requires_int( "iter" ) ;
+	  
 	  logger << "  predicting based on " << num_iter << " iterations of " << param.value( "model" ) << "\n";
 	  
 	  predict( num_iter );
 	  
+	  
 	  //
 	  // Optionally, SHAP values too 
 	  //
-
+	  
 	  if ( param.has( "SHAP" ) )
 	    SHAP();
+
+
+	  //
+	  // Apply elapsed-sleep priors?
+	  //
+
+	  if ( espriors_file != "." )
+	    apply_espriors( espriors_file );
 	  
-	  if ( elapsed_sleep_priors )
-	    apply_espriors( param.value( "es-priors" ) );
 
 	  //
 	  // Summarize for this equiv channel
@@ -286,10 +336,12 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  pops_sol_t sol;
 	  
 	  if ( equivn ) 
-	    logger << "  Solution mapping " << pops_opt_t::equiv_swapin << " --> " <<  pops_opt_t::equiv_root << "\n";
+	    logger << "  Solution mapping " << pops_opt_t::equiv_swapin
+		   << " --> " <<  pops_opt_t::equiv_root << "\n";
 	  
 	  summarize( equivn ? &sol : NULL );
 	  
+
 	  //
 	  // track if >1 equiv channel
 	  //
@@ -299,10 +351,11 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      sols.push_back( sol );
 	    }
 	  
+
 	  //
 	  // end of loop
 	  //
-
+	  
 	  if ( equivn == 0 ) break;
 
 	}

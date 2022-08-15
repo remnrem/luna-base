@@ -445,16 +445,15 @@ annot_t * spectral_power( edf_t & edf ,
 		     writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
 		     writer.value( "RELPSD" , this_slowwave / this_total );
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_slowwave ) : this_slowwave );
-		   
 		   
 		   writer.level( globals::band( DELTA ) , globals::band_strat );
 		   if ( ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_delta ) : this_delta );
 		     writer.value( "RELPSD" , this_delta / this_total );
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_delta ) : this_delta );
 		   
 		   writer.level( globals::band( THETA ) , globals::band_strat );
@@ -462,7 +461,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     writer.value( "PSD" , dB ? 10*log10( this_theta ) : this_theta  );
 		     writer.value( "RELPSD" , this_theta / this_total );
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_theta ) : this_theta );
 		   
 		   writer.level( globals::band( ALPHA ) , globals::band_strat );
@@ -470,7 +469,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     writer.value( "PSD" , dB ? 10*log10( this_alpha ) : this_alpha );
 		     writer.value( "RELPSD" , this_alpha / this_total );
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_alpha ) : this_alpha );
 		   
 		   writer.level( globals::band( SIGMA ) , globals::band_strat );
@@ -478,7 +477,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     writer.value( "PSD" , dB ? 10*log10( this_sigma ) : this_sigma );
 		     writer.value( "RELPSD" , this_sigma / this_total );
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_sigma ) : this_sigma );
 
 		   writer.level( globals::band( BETA ) , globals::band_strat );
@@ -486,7 +485,7 @@ annot_t * spectral_power( edf_t & edf ,
 		     writer.value( "PSD" , dB ? 10*log10( this_beta ) : this_beta  );
 		     writer.value( "RELPSD" , this_beta / this_total );
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_beta ) : this_beta );
 
 		   writer.level( globals::band( GAMMA ) , globals::band_strat );
@@ -494,20 +493,20 @@ annot_t * spectral_power( edf_t & edf ,
 		     writer.value( "PSD" , dB ? 10*log10( this_gamma ) : this_gamma );
 		     writer.value( "RELPSD" , this_gamma / this_total );
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_gamma ) : this_gamma );
 		   
 		   writer.level( globals::band( TOTAL ) , globals::band_strat );
 		   if ( ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_total ) : this_total );				   
 		   }
-		   if ( cache_epochs && cache_bands )
+		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_total ) : this_total );
 		   
 		   writer.unlevel( globals::band_strat );
 		   
 		 }
-	       else if ( cache_epochs && cache_bands && ! dB )
+	       else if ( cache_data && cache_epochs && cache_bands && ! dB )
 		 {
 		   // need to enter 0 in this case for cache
 		   //  nb. only doing this in non-dB mode (i.e. for ASYMM(
@@ -771,7 +770,7 @@ annot_t * spectral_power( edf_t & edf ,
 	      // Cache summary spectra?
 	      //
 
-	      if ( cache_spectrum )
+	      if ( cache_data && cache_spectrum )
 		cache->add( ckey_t( "PSD" , writer.faclvl() ) , x );
 	      
 	    }
@@ -886,7 +885,7 @@ annot_t * spectral_power( edf_t & edf ,
 	      }
 	      
 	      // Cache summary bands?
-	      if ( cache_bands )
+	      if ( cache_data && cache_bands )
 		cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10(p) : p );
 	      
 	    }

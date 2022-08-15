@@ -1476,9 +1476,17 @@ void proc_pops( edf_t & edf , param_t & param )
   // set up features ('.' = use internal defaults)
   //
   
-  const std::string ftr_file = param.has( "features" ) ? param.value( "features" ) : "." ; 
-
-  pops_t::specs.read( ftr_file );
+  std::string feature_file  = ".";
+  if ( param.has( "features" ) )
+    feature_file = param.value( "features" );
+  else if ( pops_opt_t::pops_root != "" )
+    feature_file = pops_opt_t::pops_root + ".ftr";
+  if ( feature_file != "." )
+    feature_file = pops_t::update_filepath( feature_file );
+  if ( feature_file == "." ) 
+    Helper::halt( "POPS requires a feature file, via lib or features args" );
+  
+  pops_t::specs.read( feature_file );
  
   //
   // process individual (either trainer, or target)
@@ -4793,16 +4801,24 @@ void proc_has_signals( edf_t & edf , param_t & param )
   //    - alters return code (default)
   //    - skips to next EDF (if skip option is given) 
 
-  bool skip = param.has( "skip" );
+  const bool skip = param.has( "skip" ) || param.has( "skip-if-none" ) ;
+  
+  const bool skip_if_none = param.has( "skip-if-none" );
+  
   
   // check this EDF has the signals OR annots OR stage information
   
-  bool check_stages = param.has( "stages" );
+  const bool check_stages = param.has( "stages" );
 
-  bool check_annots = param.has( "annots" ) || param.has( "annot" );
+  const bool check_annots = param.has( "annots" ) || param.has( "annot" );
 
+  // only signals has skip vs skip-if-none distinction
+  if ( ( check_stages || check_annots ) && skip_if_none )
+    Helper::halt( "cannot specify stages/annots and skip-if-none - use 'skip' instead" );
+    
+  
   // will always have a default signal value: if not specified, means everything
-  bool check_signals = param.value( "sig" ) != "*" ;
+  const bool check_signals = param.value( "sig" ) != "*" ;
 
   if ( ( check_stages && check_annots ) ||
        ( check_stages && check_signals ) ||
@@ -5001,14 +5017,32 @@ void proc_has_signals( edf_t & edf , param_t & param )
   writer.value( "NS_OBS" , count );
   writer.value( "NS_TOT" , edf.header.ns );
 
+
   //
-  // in skip mode, bail if none present
+  // in skip mode
   //
   
   if ( skip && count == 0 )
     {
-      globals::problem = true;
-      return;
+
+      int code = 0;                    // all
+      if      ( count == 0 ) code = 2; // none
+      else if ( count < ns ) code = 1; // some, but not all
+
+      // under skip-if-none, do we have /none/?
+      if ( skip_if_none && code == 2 )
+	{
+	  globals::problem = true;
+	  return;
+	}
+
+      // else, more stringent: skip unless we have all
+      if ( ( ! skip_if_none ) && code != 0 )
+	{
+	  globals::problem = true;
+          return;
+	}
+      
     }
 
   //
@@ -5025,6 +5059,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
     }
   else
     {
+      
       //
       // otherwise adjust return code
       //

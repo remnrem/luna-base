@@ -39,6 +39,9 @@ extern writer_t writer;
 std::string pops_opt_t::pops_path;
 std::string pops_opt_t::pops_root;
 
+bool pops_opt_t::if_root_apply_ranges;
+bool pops_opt_t::if_root_apply_espriors;
+
 bool pops_opt_t::verbose;
 
 int pops_opt_t::trim_wake_epochs;
@@ -61,6 +64,7 @@ double pops_opt_t::slope_th  = 3;
 double pops_opt_t::slope_epoch_th = 5;
 
 std::map<std::string,std::set<std::string> > pops_opt_t::aliases;
+std::map<std::string,std::string> pops_opt_t::replacements;
 
 std::vector<std::string> pops_opt_t::equivs;
 std::string pops_opt_t::equiv_root;
@@ -74,14 +78,21 @@ void pops_opt_t::set_options( param_t & param )
 {
   
   // i.e. prepend this to any non-absolute paths;
-  pops_path = param.has( "path" ) ? Helper::expand( param.value( "path" ) ) : "" ;
   
-  // assume <path/root>.ftr
-  // assume <path/root>.mod
-  // assume <path/root>.conf
-  pops_root = param.has( "root" ) ? Helper::expand( param.value( "root" ) ) : "" ;  
-  if ( pops_root != "" && pops_path != "" ) 
-    Helper::halt( "can only specify 'root' or 'path'" );
+  pops_path = param.has( "path" ) ? Helper::expand( param.value( "path" ) ) : "" ;
+  pops_root = param.has( "lib" ) ? Helper::expand( param.value( "lib" ) ) : "" ;
+  
+  // assume path/lib.ftr
+  //        path/lib.mod
+  //        path/lib.conf
+  // optional:
+  //        path/lib.ranges
+  //        path/lib.espriors
+  //        path/(SVD files)
+
+  // under root-specification, able to use/not use ranges, es-priors
+  if_root_apply_ranges = param.has( "ranges" ) ;
+  if_root_apply_espriors = param.has( "espriors" ) ;
   
   verbose = param.has( "verbose" );
   
@@ -130,6 +141,20 @@ void pops_opt_t::set_options( param_t & param )
 	}
     }
 
+  // channel replacements : i.e. if feature has C4_M1, but we want to use C3_M2 and *not* C4_M1 (i.e. not as an 'equivalent' channel)
+  if ( param.has( "replace" ) )
+    {
+      if ( param.empty( "replace" ) )
+	Helper::halt( "no replace old,new(,old,new,...)" );
+      std::vector<std::string> tok = param.strvector( "replace" );
+      
+      if ( tok.size() % 2 != 0 )
+	Helper::halt( "expecting replace=old,new(,old,new) - i.e. an even number of args" );
+      
+      for (int i=0; i<tok.size(); i+=2 )
+	replacements[ tok[i] ] = tok[i+1];
+    }
+  
   // channel equivalents
   //  i.e. actually different channels; map to the preferred term in the model file
   //  currently, only allow for a single channel to be rotated (i.e. swap in multiple

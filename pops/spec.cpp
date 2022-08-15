@@ -47,6 +47,9 @@ void pops_specs_t::read( const std::string & f )
   init_default();
   
   const bool use_default = f == "." ; 
+
+  // do not allow a default feature file 
+  if ( use_default ) Helper::halt( "no feature file specified" );
   
   if ( ( ! use_default ) && ( ! Helper::fileExists( Helper::expand( f ) ) ) ) 
     Helper::halt( "could not open " + f );
@@ -68,6 +71,8 @@ void pops_specs_t::read( const std::string & f )
       logger << "  reading feature specification from " << f << "\n";
       IN1.open( Helper::expand( f ).c_str() , std::ios::in );
     }
+  else
+    logger << "  using the default feature file\n";
   
   int cnt = 0;
   
@@ -82,7 +87,7 @@ void pops_specs_t::read( const std::string & f )
 	line = defaults[ cnt++ ];
       else
 	Helper::safe_getline( IN1 , line );
-
+      
       if ( ( ! use_default ) && ( IN1.bad() || IN1.eof() ) ) break;
       
       if ( line == "" ) continue;
@@ -112,13 +117,34 @@ void pops_specs_t::read( const std::string & f )
 	  
 	  std::string unit = tok[ tok.size()-1 ];
 
-	  // store any aliases (first fetching from the commad line)
-	  std::set<std::string> aliases = pops_opt_t::aliases[ tok[1] ];
-	  for (int i=2;i<tok.size()-2;i++)
-	    aliases.insert( tok[i] );
-	  
-	  chs[ tok[1] ] = pops_channel_t( tok[1] , aliases , sr , unit ) ;
+	  std::string primary_label = tok[1] ;
 
+	  std::set<std::string> aliases;
+
+	  //
+	  // replace this label:: note, this ignores any aliases
+	  //
+
+	  if ( pops_opt_t::replacements.find( primary_label ) != pops_opt_t::replacements.end() )
+	    {
+	      primary_label = pops_opt_t::replacements[ primary_label ];
+	      // nb. we'll need to replace from the spec file as well when reading
+	    }
+	  else // ... otherwise, also read in the aliases
+	    {
+	      // store any aliases (first fetching from the command line)
+	      // nb. if the channel has been replaced, then aliases all go to this new channel
+
+	      // from command line
+	      aliases = pops_opt_t::aliases[ primary_label ];
+
+	      // from spec file
+	      for (int i=2;i<tok.size()-2;i++)
+		aliases.insert( tok[i] );
+	    }
+	  
+	  chs[ primary_label ] = pops_channel_t( primary_label , aliases , sr , unit ) ;
+	  
           // next line
 	  continue;
         }
@@ -180,16 +206,25 @@ void pops_specs_t::read( const std::string & f )
 	  // add as channel
 	  else if ( tok2.size() == 1 )
 	    {
+
+	      std::string channel_label = tok2[0];
+
+	      // is this being replaced? 
+	      if ( pops_opt_t::replacements.find( channel_label ) != pops_opt_t::replacements.end() )
+		channel_label = pops_opt_t::replacements[ channel_label ];
+	      
 	      // has the channel already been specified via CH?
-	      if ( tok2[0] != "." && chs.find( tok2[0] ) == chs.end() )
-		Helper::halt( tok2[0] + " not specified via 'CH' yet: " + line );	      
-	      tchs.push_back( tok2[0] );
+	      if ( channel_label != "." && chs.find( channel_label) == chs.end() )
+		Helper::halt( channel_label + " not specified via 'CH' yet: " + line );	      
+	      
+	      tchs.push_back( channel_label );
 
 	      // track
-	      if ( checker.find( ftr + "::" + tok2[0] ) != checker.end() )
+	      if ( checker.find( ftr + "::" + channel_label ) != checker.end() )
 		Helper::halt( "can only specify a feature/channel pair once" );
-	      checker.insert( ftr + "::" + tok2[0] );
 
+	      checker.insert( ftr + "::" + channel_label );
+	      
 	    }
 	  else // else, as key=val arg
 	    {
@@ -261,16 +296,16 @@ void pops_specs_t::read( const std::string & f )
 	}
       
       
-      // add each channel separately (w/ the same args)      
+      // add each channel separately (w/ the same args) 
       for (int c=0; c<tchs.size(); c++)
 	{
-	  pops_spec_t spec;	  
+	  pops_spec_t spec;
 	  spec.block = block;
 	  spec.ftr = lab2ftr[ Helper::toupper( ftr ) ];
 	  spec.ch = tchs[c];
-	  spec.arg = targs;	  
+	  spec.arg = targs;
 	  fcmap[ spec.ftr ][ spec.ch ] = spec;
-	  specs.push_back( spec );	  	  
+	  specs.push_back( spec );
 	}
     }
 
@@ -792,17 +827,17 @@ void pops_specs_t::init_default()
 {
   defaults.clear();
   // single EEG
-  defaults.push_back( "CH C3 128" );
+  defaults.push_back( "CH C4_M1 C4 C4-M1 C4_A1 C4-A1  128 uV" );
 
   // level 1
-  defaults.push_back( "spec1: SPEC C3 lwr=0.5 upr=35" );
-  defaults.push_back( "spec2: RSPEC C3 lwr=2 upr=15 z-lwr=30 z-upr=45" );
-  defaults.push_back( "misc: SLOPE C3" );
-  defaults.push_back( "misc: SKEW C3" );
-  defaults.push_back( "misc: KURTOSIS C3" );
-  defaults.push_back( "misc: FD C3" );
-  defaults.push_back( "misc: PE C3" );
-  defaults.push_back( "hjorth: HJORTH C3" );
+  defaults.push_back( "spec1: SPEC C4_M1 lwr=0.5 upr=35" );
+  defaults.push_back( "spec2: RSPEC C4_M1 lwr=2 upr=15 z-lwr=30 z-upr=45" );
+  defaults.push_back( "misc: SLOPE C4_M1" );
+  defaults.push_back( "misc: SKEW C4_M1" );
+  defaults.push_back( "misc: KURTOSIS C4_M1" );
+  defaults.push_back( "misc: FD C4_M1" );
+  defaults.push_back( "misc: PE C4_M1" );
+  defaults.push_back( "hjorth: HJORTH C4_M1" );
   
   // lvl1 outlier removal
   defaults.push_back( "hjorth: OUTLIERS th=8" );
