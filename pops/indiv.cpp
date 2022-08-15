@@ -35,6 +35,7 @@
 
 #include "fftw/fftwrap.h"
 #include "pdc/pdc.h"
+#include <cmath>
 
 extern logger_t logger;
 extern writer_t writer;
@@ -184,16 +185,15 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	}
 
-
       //
       // Read any ranges?
       //
       
       if ( ranges_file != "." )
-	pops_t::read_ranges( param.value( "ranges" ) );
+	pops_t::read_ranges( ranges_file );
       
       const double range_th   = param.has( "ranges-th" ) ? param.requires_dbl( "ranges-th" ) : 4 ;
-      const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.33 ; 
+      const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.1 ; 
       if ( range_th < 0 ) Helper::halt( "ranges-th should be positive" );
       if ( range_prop < 0 || range_prop > 1 ) Helper::halt( "ranges-prop should be 0 - 1" );
       
@@ -253,11 +253,27 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  logger << "  feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
 
 	  //
+	  // Optionally, drop columns (--> NA ) 
+	  //
+
+	  if ( pops_opt_t::inc_vars.size() || pops_opt_t::exc_vars.size() )
+	    apply_incexcvars();
+
+	    
+	  //
 	  // Optinally, apply feature ranges (set X1 points to missing)
 	  //
 	  
-	  if ( param.has( "ranges" ) )
+	  if ( ranges_file != "." ) 
 	    apply_ranges( range_th, range_prop );
+
+
+	  //
+	  // Summary stats --> output to db, after doing apply_incexcvars() and apply_ranges()
+	  // which may drop stuff
+	  //
+	  
+	  ftr_summaries();
 	  
 	  //
 	  // Optionally, dump all
@@ -307,8 +323,9 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  int num_iter = 0;
 	  if ( param.has( "iterations" ) ) num_iter = param.requires_int( "iterations" ) ;
 	  else if ( param.has( "iter" ) ) num_iter = param.requires_int( "iter" ) ;
-	  
-	  logger << "  predicting based on " << num_iter << " iterations of " << param.value( "model" ) << "\n";
+
+	  if ( num_iter != 0 ) 
+	    logger << "  predicting based on " << num_iter << " iterations of " << model_file << "\n";
 	  
 	  predict( num_iter );
 	  
@@ -327,7 +344,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	  if ( espriors_file != "." )
 	    apply_espriors( espriors_file );
-	  
+
 
 	  //
 	  // Summarize for this equiv channel
@@ -1868,8 +1885,8 @@ void pops_indiv_t::apply_espriors( const std::string & f )
   // inputs: P  =  posteriors P( stage | signals ) 
   //         S  =  assigned stage
 
-
-  //
+  logger << "  applying ES prior model...\n";
+  
   
   // revise the current posterior probailities, given elapsed sleep priors
 
@@ -2078,29 +2095,33 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
 void pops_indiv_t::apply_ranges( double th, double prop )
 {
   
-  // final feature labels
-  std::vector<std::string> labels = pops_t::specs.select_labels();
+  // final feature labels -- but using the original channel names (if any replace=X,Y
+  // operation was performed).   This way, we still connect w/ the original ranges
+  
+  std::vector<std::string> labels = pops_t::specs.select_original_labels();
   
   const int ne = X1.rows();
   const int nv = X1.cols();
 
-  // std::cout <<" ne, nv, labels ranges "
-  // 	    << ne << " " << nv << " "
-  // 	    << labels.size() << " "
-  // 	    << pops_t::range_mean.size() << "\n";
-
   const double NaN_value = std::numeric_limits<double>::quiet_NaN();
 
   int total = 0;
-  
+
+  //
   // process each variable at a time
+  //
+  
   for (int j=0; j<nv; j++)
     {
       if ( pops_t::range_mean.find( labels[j] ) == pops_t::range_mean.end() )
 	Helper::halt( "could not find " + labels[j] + " in ranges file" );
+
+      // these should always be 'selected' if we're looking at them
+      if ( pops_t::specs.final2orig.find( j ) == pops_t::specs.final2orig.end() )
+	Helper::halt( "internal logic error in apply_ranges()" );
       
-      writer.level( labels[j] , "FTR" );
-      
+      const int ftr_slot = pops_t::specs.final2orig[ j ] + 1 ;
+            
       double mean = pops_t::range_mean[ labels[j] ];
       double sd = pops_t::range_sd[ labels[j] ];
 
@@ -2128,16 +2149,100 @@ void pops_indiv_t::apply_ranges( double th, double prop )
 	}
       
       total += outlier;
+     
+    }
+ 
+  double bad = total / (double)( ne * nv );
+  logger << "  set " << total << " ( prop = " << bad << ") data points to missing\n"; 
+  
+}
 
-      writer.value( "BAD" , outlier );
-      writer.value( "PROP" , bad_prop );
+
+
+void pops_indiv_t::apply_incexcvars()
+{
+  if ( pops_opt_t::inc_vars.size() != 0 && pops_opt_t::exc_vars.size() != 0 )
+    Helper::halt( "can only specify variable includes OR excludes" );
+
+  const bool inc_mode = pops_opt_t::inc_vars.size() ; 
+  
+  // get only feature block names to match on
+  std::vector<std::string> labels = pops_t::specs.select_blocks();
+  
+  const int ne = X1.rows();
+  const int nv = X1.cols();
+
+  const double NaN_value = std::numeric_limits<double>::quiet_NaN();
+  
+  int removed = 0 ; 
+  
+  //
+  // process each variable at a time
+  //
+  
+  for (int j=0; j<nv; j++)
+    {
+      
+      const bool match = inc_mode ?
+	pops_opt_t::inc_vars.find( labels[j]  ) != pops_opt_t::inc_vars.end() :
+	pops_opt_t::exc_vars.find( labels[j]  ) != pops_opt_t::exc_vars.end() ;
+
+      if ( ( inc_mode && ! match ) || ( ( !inc_mode ) && match ) )
+	{
+	  // NA-out this column
+	  for (int e=0; e<ne; e++)
+	    X1(e,j) = NaN_value;
+
+	  // track 
+	  ++removed;
+	}
+
+    }
+
+  if ( inc_mode ) 
+    logger << "  retained " << nv - removed << " of " << nv << " features based on inc-vars\n";
+  else
+    logger << "  retained " << nv - removed << " of " << nv << " features based on exc-vars\n";
+  
+}
+
+void pops_indiv_t::ftr_summaries()
+{
+
+  std::vector<std::string> labels = pops_t::specs.select_original_labels();
+  
+  const int ne = X1.rows();
+  const int nv = X1.cols();
+
+  const double NaN_value = std::numeric_limits<double>::quiet_NaN();
+
+  for (int j=0; j<nv; j++)
+    {      
+      
+      if ( pops_t::specs.final2orig.find( j ) == pops_t::specs.final2orig.end() )
+	Helper::halt( "internal logic error in apply_ranges()" );
+      
+      const int ftr_slot = pops_t::specs.final2orig[ j ] + 1 ;
+      
+      writer.level( ftr_slot , "FTR" );
+      
+      // track number of outlier epochs
+      int missing = 0;
+      
+      for (int e=0; e<ne; e++)
+	if ( std::isnan( X1(e,j) ) )
+	  ++missing;
+
+      const bool dropped = missing == ne ;
+      const double missing_prop = missing / (double)ne;
+      
+      writer.value( "BAD" , missing );
+      writer.value( "PROP" , missing_prop );
+      writer.value( "DROPPED" , (int)dropped );
       
     }
   writer.unlevel( "FTR" );
 
-  double bad = total / (double)( ne * nv );
-  logger << "  set " << total << " ( prop = " << bad << ") data points to missing\n"; 
-  
 }
 
 

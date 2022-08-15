@@ -558,6 +558,8 @@ void pops_specs_t::build_colmap()
 
   col_block.clear();
   col_label.clear();
+  col_original_label.clear(); // if replace=X,Y track originals
+  col_root.clear();
   col_select.clear();
   col_level.clear();
   
@@ -585,6 +587,14 @@ void pops_specs_t::build_colmap()
 	{
 	  ftr2ch2col[ ftr ][ ch ].push_back( j );
 	  col_label.push_back( ftrlab + "." + ch + ".V" + Helper::int2str( j - start + 1 ) );
+	  
+	  if ( pops_opt_t::replacements_rmap.find( ch ) != pops_opt_t::replacements_rmap.end() )
+	    col_original_label.push_back( ftrlab + "." + pops_opt_t::replacements_rmap[ ch ] + ".V" + Helper::int2str( j - start + 1 ) );
+	  else
+	    col_original_label.push_back( ftrlab + "." + ch + ".V" + Helper::int2str( j - start + 1 ) );
+
+	  col_root.push_back( ftrlab + "." + ch ); // i.e. channel/block specific
+	  
 	  col_block.push_back( block );
 	  col_select.push_back( selected.find( block ) != selected.end() );
 	  col_level.push_back( level1 ? 1 : 2 );
@@ -639,6 +649,9 @@ void pops_specs_t::build_colmap()
 	}      
       writer.value( "LEVEL" , col_level[f] );
       writer.value( "LABEL" , col_label[f] );
+      writer.value( "LABEL_ORIG" , col_original_label[f] );
+      writer.value( "ROOT" ,  col_root[f] );
+      
       writer.unlevel( globals::feature_strat );
 
     }
@@ -680,8 +693,46 @@ std::vector<std::string> pops_specs_t::select_labels()
       ++ii;
     }
   return s;
-
 }
+
+std::vector<std::string> pops_specs_t::select_original_labels()
+{
+  std::vector<std::string> s;
+  std::map<int,int>::const_iterator ii = final2orig.begin();
+  while ( ii != final2orig.end() )
+    {
+      s.push_back( col_original_label[ ii->second ] );
+      ++ii;
+    }
+  return s;
+}
+
+std::vector<std::string> pops_specs_t::select_roots()
+{
+  std::vector<std::string> s;
+  std::map<int,int>::const_iterator ii = final2orig.begin();
+  while ( ii != final2orig.end() )
+    {
+      s.push_back( col_root[ ii->second ] );
+      ++ii;
+    }
+  return s;
+}
+
+
+std::vector<std::string> pops_specs_t::select_blocks()
+{
+  std::vector<std::string> s;
+  std::map<int,int>::const_iterator ii = final2orig.begin();
+  while ( ii != final2orig.end() )
+    {
+      s.push_back( col_block[ ii->second ] );
+      ++ii;
+    }
+  return s;
+  
+}
+
 
 
 // return implied number of columns

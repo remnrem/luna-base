@@ -184,6 +184,8 @@ struct pops_specs_t {
   // expanded feature lists
   std::vector<std::string> col_block;
   std::vector<std::string> col_label;
+  std::vector<std::string> col_original_label;
+  std::vector<std::string> col_root;
   std::vector<bool>        col_select;
   std::vector<int>         col_level;  
   std::map<int,int>        orig2final;
@@ -202,7 +204,18 @@ struct pops_specs_t {
   // get feature labels
   //  std::vector<std::string> total_labels();
   std::vector<std::string> select_labels();
-    
+
+  // prior to any replace=X,Y -- so that any .ranges files
+  // will still map to this channel
+  std::vector<std::string> select_original_labels();
+
+  // var roots only (for inc-vars and exc-vars) [ OLD ] 
+  std::vector<std::string> select_roots();
+
+  // blocks only (for inc-vars and exc-vars)
+  std::vector<std::string> select_blocks();
+  
+  
 };
 
 #endif

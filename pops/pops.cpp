@@ -1159,19 +1159,20 @@ void pops_t::dump_matrix( const std::string & f )
 
 void pops_t::read_ranges( const std::string & f )
 {
-  std::string rfile = Helper::expand( f );
-  if ( ! Helper::fileExists( rfile ) ) Helper::halt( "could not open " + rfile );
+
+  if ( ! Helper::fileExists( f ) )
+    Helper::halt( "could not open " + f );
 
   // expecting an exact line up w/ feature file and ranges
   // but we do not test this explicitly - - i.e. as we might read
   // this prior to building the feature set
   
-  std::ifstream IN1( rfile.c_str() , std::ios::in );
+  std::ifstream IN1( f.c_str() , std::ios::in );
   // header
   std::string str0, str1, str2, str3;
   IN1 >> str0 >> str1 >> str2 >> str3;
   if ( str0 != "ID" || str1 != "VAR" || str2 != "MEAN" || str3 != "SD" )
-    Helper::halt( "bad format for " + rfile + "\n -- expecting columns ID, MEAN and SD" );
+    Helper::halt( "bad format for " + f + "\n -- expecting columns ID, MEAN and SD" );
   
   while ( 1 )
     {

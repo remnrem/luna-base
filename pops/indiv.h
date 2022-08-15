@@ -54,6 +54,10 @@ struct pops_indiv_t {
   void level2( const bool quiet_mode = false );
 
   void apply_ranges(double,double);
+
+  void apply_incexcvars();
+  
+  void ftr_summaries();
   
   void predict( const int iter = 0 );
   

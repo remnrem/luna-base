@@ -42,6 +42,9 @@ std::string pops_opt_t::pops_root;
 bool pops_opt_t::if_root_apply_ranges;
 bool pops_opt_t::if_root_apply_espriors;
 
+std::set<std::string> pops_opt_t::inc_vars;
+std::set<std::string> pops_opt_t::exc_vars;
+
 bool pops_opt_t::verbose;
 
 int pops_opt_t::trim_wake_epochs;
@@ -65,6 +68,7 @@ double pops_opt_t::slope_epoch_th = 5;
 
 std::map<std::string,std::set<std::string> > pops_opt_t::aliases;
 std::map<std::string,std::string> pops_opt_t::replacements;
+std::map<std::string,std::string> pops_opt_t::replacements_rmap; // track reverse mapping
 
 std::vector<std::string> pops_opt_t::equivs;
 std::string pops_opt_t::equiv_root;
@@ -91,8 +95,17 @@ void pops_opt_t::set_options( param_t & param )
   //        path/(SVD files)
 
   // under root-specification, able to use/not use ranges, es-priors
-  if_root_apply_ranges = param.has( "ranges" ) ;
-  if_root_apply_espriors = param.has( "espriors" ) ;
+  if_root_apply_ranges = param.has( "apply-ranges" ) ? param.yesno( "apply-ranges" ) : true ;
+  if_root_apply_espriors = param.has( "apply-es-priors" ) ? param.yesno( "apply-es-priors" ) : true;
+
+  // vars
+
+  if ( param.has( "inc-vars" ) ) inc_vars = param.strset( "inc-vars" );
+  if ( param.has( "exc-vars" ) ) exc_vars = param.strset( "exc-vars" );
+  
+
+  // misc
+
   
   verbose = param.has( "verbose" );
   
@@ -101,7 +114,7 @@ void pops_opt_t::set_options( param_t & param )
   n_stages = param.has( "3-class" ) ? 3 : 5;
 
   trim_wake_epochs = param.has( "trim" ) ? param.requires_int( "trim" ) : -1;
-    
+  
   welch_median = param.yesno( "fft-median" );
   
   lwr = param.has( "lwr" ) ? param.requires_dbl( "lwr" ) : 0.5;
@@ -152,7 +165,12 @@ void pops_opt_t::set_options( param_t & param )
 	Helper::halt( "expecting replace=old,new(,old,new) - i.e. an even number of args" );
       
       for (int i=0; i<tok.size(); i+=2 )
-	replacements[ tok[i] ] = tok[i+1];
+	{
+	  if (  tok[i] == tok[i+1] )
+	    Helper::halt( "invalid replacement (same label)" );
+	  replacements[ tok[i] ] = tok[i+1];
+	  replacements_rmap[ tok[i+1] ] = tok[i];	  
+	}
     }
   
   // channel equivalents
