@@ -372,7 +372,7 @@ void suds_t::set_options( param_t & param )
   wgt_mean_normalize = param.has( "wgt-mean" );    
 
   // threshold on the means (only take above average scorers, default = 1) 
-  wgt_mean_th = ( param.has( "wgt-mean" ) && param.value( "wgt-mean" ) != "T" ) ? param.requires_dbl( "wgt-mean" ) : 1 ;
+  wgt_mean_th = ( param.has( "wgt-mean" ) && ! param.empty( "wgt-mean" ) ) ? param.requires_dbl( "wgt-mean" ) : 1 ;
 
   if ( wgt_mean_normalize && ( wgt_percentile > 0 || equal_wgt_in_selected  ) ) 
     Helper::halt( "cannot specify wgt-pct and/or wgt-equal and wgt-mean together" );

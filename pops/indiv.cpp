@@ -117,8 +117,13 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   if ( training_mode )
     {
       // get any staging
-      staging( edf , param );
+      bool has_valid_staging = staging( edf , param );
+      
+      // nothing to do if no staging data for this trainer
+      if ( ! has_valid_staging ) return; 
+      
       level1( edf );
+      
       save1( edf.id , param.requires( "data" ) );      
     }
 
@@ -196,7 +201,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	pops_t::read_ranges( ranges_file );
       
       const double range_th   = param.has( "ranges-th" ) ? param.requires_dbl( "ranges-th" ) : 4 ;
-      const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.1 ; 
+      const double range_prop = param.has( "ranges-prop" ) ? param.requires_dbl( "ranges-prop" ) : 0.33 ; 
       if ( range_th < 0 ) Helper::halt( "ranges-th should be positive" );
       if ( range_prop < 0 || range_prop > 1 ) Helper::halt( "ranges-prop should be 0 - 1" );
       
@@ -242,7 +247,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  //
 	  // get any staging (this should reset internals too, if repeating)
 	  //
-
+	  
 	  staging( edf , param );
 	  
 	  //
@@ -358,7 +363,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  if ( equivn ) 
 	    logger << "  Solution mapping " << pops_opt_t::equiv_swapin
 		   << " --> " <<  pops_opt_t::equiv_root << "\n";
-	  
+	  	  
 	  summarize( equivn ? &sol : NULL );
 	  
 
@@ -399,7 +404,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 }
 
 
-void pops_indiv_t::staging( edf_t & edf , param_t & param )
+bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 {
 
   // calculate ne and staging, if present  
@@ -412,12 +417,17 @@ void pops_indiv_t::staging( edf_t & edf , param_t & param )
   
   // trainer
   if ( trainer && ! has_staging )
-    Helper::halt( "no valid staging for trainer " + edf.id );
-  
+    {
+      logger << "  *** no valid staging for trainer " <<  edf.id << "  ( -- skipping -- )\n";
+      return false;
+    }
   // check epochs line up, if staging present
   if ( has_staging && ne != edf.timeline.hypnogram.stages.size() )    
-    Helper::halt( "problem extracting stage information for trainer" );
-  
+    {
+      logger << "  *** problem extracting stage information for trainer" <<  edf.id << "  ( -- skipping -- )\n";
+      return false;      
+    }  
+
   // store staging information here
   // n.b. if we don't have any staging (for a test subject)
   // we are tracking this in 'has_staging' and so we will not
@@ -434,13 +444,13 @@ void pops_indiv_t::staging( edf_t & edf , param_t & param )
       Sorig = S;
       for (int ss=0; ss < ne; ss++ )
 	E[ss] = ss;
-      return;
+      return true; // target always returns T
     }
 
   //
   // convert 
   //
-
+  
   for (int ss=0; ss < ne; ss++ )
     {
 
@@ -549,7 +559,7 @@ void pops_indiv_t::staging( edf_t & edf , param_t & param )
 	  
     } // end of wake trimming option
 
-  
+  return true;
 }
 
 
@@ -1151,7 +1161,7 @@ void pops_indiv_t::level1( edf_t & edf )
 	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_HJORTH , siglab ) ;
 	       X1( en , cols[0] ) = activity > 0 ? log( activity ) : log( 0.0001 ) ;
 	       X1( en , cols[1] ) = mobility;
-	       X1( en , cols[2] ) = complexity;	     
+	       X1( en , cols[2] ) = complexity;
 	     }
 
 	   //
@@ -2126,13 +2136,18 @@ void pops_indiv_t::apply_ranges( double th, double prop )
   
   for (int j=0; j<nv; j++)
     {
-      if ( pops_t::range_mean.find( labels[j] ) == pops_t::range_mean.end() )
-	Helper::halt( "could not find " + labels[j] + " in ranges file" );
 
+      // allow skipping of a variable, if not present in the range file
+      // i.e. not all variables need a range specified;   this can be 
+      // useful if this is not meaningful for some measures (e.g. binary indiv-level covariates)
+      
+      if ( pops_t::range_mean.find( labels[j] ) == pops_t::range_mean.end() )
+	continue;
+      
       // these should always be 'selected' if we're looking at them
       if ( pops_t::specs.final2orig.find( j ) == pops_t::specs.final2orig.end() )
 	Helper::halt( "internal logic error in apply_ranges()" );
-      
+
       const int ftr_slot = pops_t::specs.final2orig[ j ] + 1 ;
             
       double mean = pops_t::range_mean[ labels[j] ];
@@ -2141,6 +2156,9 @@ void pops_indiv_t::apply_ranges( double th, double prop )
       const double lwr = mean - th * sd ;
       const double upr = mean + th * sd ; 
       
+      //      std::cout <<" testign " <<   labels[j] <<" " << mean << " " << sd << " --> " << lwr << " - " << upr << "\n";
+      
+
       // track number of outlier epochs
       int outlier = 0;
       

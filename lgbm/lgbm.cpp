@@ -599,8 +599,11 @@ bool lgbm_t::save_model( const std::string & filename )
 Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_iter )
 {
 
-  //  std::cout << "X dim = " << X.rows() << " " << X.cols() << "\n";
+  // std::cout << "X dim = " << X.rows() << " " << X.cols() << "\n";
   
+  // std::cout << X << "\n\n";
+
+
 
   if ( ! has_booster )
     Helper::halt( "no model defined" );
@@ -616,6 +619,8 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
   //  std::cout << " num , obs = " << num_classes <<" " << num_obs<< "\n";
   
   int64_t out_len = num_classes * num_obs;
+
+  //  std::cout << " out result(1) " << out_len << "\n";
 
   // note: returns row-major storage, so read into transposed matrix
   //  and transpose on return (below)
@@ -635,8 +640,10 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
 					params.c_str() ,
 					&out_len ,
 					out_result );
+  
+  // std::cout << " done\n";
+  // std::cout << " out result(2) " << out_len << "\n";
 
-  //  std::cout << " done\n";
   if ( flag )
     Helper::halt( "issue w/ prediction" );
 
@@ -648,6 +655,10 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
       for (int i=0; i<R.cols(); i++)
 	R(1,i) = 1 - R(0,i);
     }
+
+  // std::cout << "R = " << R.rows() <<" " << R.cols() <<"\n";
+  
+  // std::cout << " R(t) \n" << R.transpose() << "\n";
   
   return R.transpose();
   

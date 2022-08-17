@@ -162,9 +162,9 @@ void timeline_t::proc_chep( edf_t & edf , param_t & param )
       // defaults
       std::vector<double> p = { 0.0 , 0.0 } ;
       
-      if ( param.value( "epochs" ) != "T" ) // i.e. if a specific value given
+      if ( ! param.empty( "epochs" ) ) // i.e. if a specific value given
 	p = param.dblvector( "epochs" );
-
+      
       if ( p.size() == 1 ) 
 	edf.timeline.collapse_chep2epoch( signals , p[0] , 0 ); 
       else if ( p.size() == 2 ) 
@@ -190,9 +190,9 @@ void timeline_t::proc_chep( edf_t & edf , param_t & param )
       // defaults
       std::vector<double> p = { 0.0 , 0.0 } ;
       
-      if ( drop && param.value( "drop-channels" ) != "T" ) // i.e. if a specific value given
+      if ( drop && ! param.empty( "drop-channels" ) ) // i.e. if a specific value given
 	p = param.dblvector( "drop-channels" );      
-      else if ( (!drop) && param.value( "channels" ) != "T" ) // i.e. if a specific value given
+      else if ( (!drop) && ! param.empty( "channels" ) ) // i.e. if a specific value given
 	p = param.dblvector( "channels" );
       
       if ( p.size() == 1 ) p.push_back(0);

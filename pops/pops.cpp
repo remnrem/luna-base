@@ -128,6 +128,8 @@ void pops_t::make_level2_library( param_t & param )
   std::string conf_file  = ".";
   if ( param.has( "conf" ) )
     conf_file = param.value( "conf" );
+  else if ( param.has( "config" ) )
+    conf_file = param.value( "config" );
   else if ( pops_opt_t::pops_root != "" )
     conf_file = pops_opt_t::pops_root + ".conf";
   if ( conf_file != "." )
@@ -1178,16 +1180,31 @@ void pops_t::read_ranges( const std::string & f )
     {
       std::string id;
       std::string varname;
+      std::string str_mean , str_sd;
+
       double mean, sd;
-      IN1 >> id >> varname >> mean >> sd;
+      IN1 >> id >> varname >> str_mean >> str_sd;
       if ( IN1.eof() || IN1.bad() ) break;
       // only read initial overall values
       if ( id != "." ) break;
       if ( varname == "" ) continue;
+      
+      // skip if invalid ranges/means
+      if ( str_mean == "." || Helper::iequals( str_mean, "nan" ) || Helper::iequals( str_mean, "-nan" ) )
+	continue;
+      
+      if ( str_sd == "." || Helper::iequals( str_sd, "nan" ) || Helper::iequals( str_sd, "-nan" ) || str_sd == "0" )
+	continue;
+
+      if ( ! Helper::str2dbl( str_mean , &mean ) ) continue;
+      if ( ! Helper::str2dbl( str_sd , &sd ) ) continue;
+      
+      if ( sd < 1e-6 ) continue; 
+      
       range_mean[ varname ] = mean ;
       range_sd[ varname ] = sd ;
     }
-  logger << "  read " << range_mean.size() << " feature mean/SD pairs\n";
+  logger << "  read " << range_mean.size() << " valid feature mean/SD pairs\n";
   IN1.close();
 }
 
@@ -1221,6 +1238,14 @@ void pops_t::dump_ranges( const std::string & f )
 	 << labels[i] << "\t"
 	 << mean << "\t"
 	 << sd << "\n";
+
+      // if ( labels[i] == "HJORTH.EMG.V1" ) 
+      // 	{
+      // 	  std::cout <<"  MEAN = " << mean << " " << sd << "\n";
+      // 	  std::cout <<" Ne = " << X1.rows() << "\n";
+      // 	  std::cout << X1.col(i) << "\n\n";
+      // 	}
+
     }
 
   //

@@ -5022,13 +5022,13 @@ void proc_has_signals( edf_t & edf , param_t & param )
   // in skip mode
   //
   
-  if ( skip && count == 0 )
+  if ( skip )
     {
-
+      
       int code = 0;                    // all
       if      ( count == 0 ) code = 2; // none
       else if ( count < ns ) code = 1; // some, but not all
-
+      
       // under skip-if-none, do we have /none/?
       if ( skip_if_none && code == 2 )
 	{

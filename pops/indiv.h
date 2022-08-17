@@ -45,7 +45,7 @@ struct pops_indiv_t {
   
   pops_indiv_t( edf_t & , param_t & );
 
-  void staging( edf_t & , param_t & );
+  bool staging( edf_t & , param_t & );
   
   void save1( const std::string & , const std::string & );
   

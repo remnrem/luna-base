@@ -364,7 +364,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   double flat_eps = 1e-6;
   if ( calc_flat )
     {
-      if ( param.value( "flat" ) != "T" ) flat_eps = param.requires_dbl( "flat" );
+      if ( ! param.empty( "flat" ) ) flat_eps = param.requires_dbl( "flat" );
       logger << "  epsilon for flat signals: |X[i]-X[i-1]| < " << flat_eps << "\n";
     }
   
