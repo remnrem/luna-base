@@ -283,24 +283,25 @@ int main(int argc , char ** argv )
   // special command-line driven functions that do not involve
   // iterating through a sample list
   //
-  
-  bool cmdline_proc_fir_design   = false;
-  bool cmdline_proc_cwt_design   = false;
-  bool cmdline_proc_pdlib        = false;
-  bool cmdline_proc_psc          = false;
-  bool cmdline_proc_nmf          = false;
-  bool cmdline_proc_ms_kmer      = false;
-  bool cmdline_proc_ms_cmp_maps  = false;
-  bool cmdline_proc_copy_suds    = false;
-  bool cmdline_proc_combine_suds = false;
-  bool cmdline_proc_cperm_test   = false;
-  bool cmdline_proc_lgbm         = false;
-  bool cmdline_proc_assoc        = false;
-  bool cmdline_proc_massoc       = false;
-  bool cmdline_proc_pops         = false;
-  bool cmdline_proc_otsu         = false;
-  bool cmdline_proc_fft          = false;
-  bool cmdline_proc_overlap      = false;
+   
+  bool cmdline_proc_fir_design    = false;
+  bool cmdline_proc_cwt_design    = false;
+  bool cmdline_proc_pdlib         = false;
+  bool cmdline_proc_psc           = false;
+  bool cmdline_proc_nmf           = false;
+  bool cmdline_proc_ms_kmer       = false;
+  bool cmdline_proc_ms_cmp_maps   = false;
+  bool cmdline_proc_copy_suds     = false;
+  bool cmdline_proc_combine_suds  = false;
+  bool cmdline_proc_cperm_test    = false;
+  bool cmdline_proc_lgbm          = false;
+  bool cmdline_proc_assoc         = false;
+  bool cmdline_proc_massoc        = false;
+  bool cmdline_proc_pops          = false;
+  bool cmdline_proc_pops_espriors = false;
+  bool cmdline_proc_otsu          = false;
+  bool cmdline_proc_fft           = false;
+  bool cmdline_proc_overlap       = false;
 
   //
   // use standard input versus command line for
@@ -383,6 +384,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_massoc = true;	  
 	  else if ( strcmp( argv[1] , "--pops" ) == 0 )
 	    cmdline_proc_pops = true;
+	  else if ( strcmp( argv[1] , "--es-priors" ) == 0 )
+	    cmdline_proc_pops_espriors = true;
 	  else if ( strcmp( argv[1] , "--otsu" ) == 0 )
 	    cmdline_proc_otsu = true;
 	  else if ( strcmp( argv[1] , "--fft" ) == 0 )
@@ -700,6 +703,31 @@ int main(int argc , char ** argv )
       writer.level( "POPS", "_POPS" );
       pops_t pops( param );
       pops.make_level2_library( param );      
+      writer.unlevel( "_POPS" );
+      writer.commit();
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+      std::exit(0);
+    }
+
+
+  //
+  // Make es-priors (as a standalone function)
+  //
+  
+  if ( cmdline_proc_pops_espriors )
+    {
+#ifdef HAS_LGBM
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "POPS" , 1 , "" );
+      writer.level( "POPS", "_POPS" );
+      pops_t pops( param );
+      pops.make_espriors( param );      
       writer.unlevel( "_POPS" );
       writer.commit();
 #else

@@ -55,7 +55,7 @@ void pops_indiv_t::save1( const std::string & id , const std::string & f )
 void pops_t::load1( const std::string & f )
 {
   
-    
+  
   std::ifstream IN1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
 
   int total_epochs = 0;
@@ -106,8 +106,8 @@ void pops_t::load1( const std::string & f )
   
   // store : note, here set to total (training + validation size) for X1 (only)
   X1.resize( total_epochs , pops_t::specs.n1 );
-  S.resize( ne_training ); // will push_back() below
   E.resize( ne_training ); // ...
+  S.resize( ne_training ); // will push_back() below
   
   // track when indivs start/stop, and who they are
   Istart.clear();
@@ -150,7 +150,7 @@ void pops_t::load1( const std::string & f )
 	      S[ ne_training ] = pops_indiv_t::bread_int( IN2 );
 	      // features
 	      for (int j=0; j<pops_t::specs.n1; j++)
-		X1( ne_training , j ) = pops_indiv_t::bread_dbl( IN2 );	  
+		X1( ne_training , j ) = pops_indiv_t::bread_dbl( IN2 );
 	      ++ne_training;
 	    }
 	  Iend.push_back( ne_training - 1 );
@@ -194,6 +194,75 @@ void pops_t::load1( const std::string & f )
       E.push_back( E2[i] );
     }
 
+}
+
+
+
+void pops_t::load1_stages_only( const std::string & f )
+{
+
+  // only populate S, E and I -- based on ALL individuals in the file
+  // alignment does not need to worry about trainers versus validation, etc
+  
+  std::ifstream IN1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
+  
+  int total_epochs = 0;
+  int n_indiv = 0;
+  int ne_training = 0;
+
+  // track when indivs start/stop, and who they are
+  E.clear();
+  S.clear();
+  Istart.clear();
+  Iend.clear();
+  I.clear();
+  
+  // step through file
+  while ( 1 )
+    {
+      std::string id = pops_indiv_t::bread_str( IN1 );
+      if ( IN1.eof() || IN1.bad() ) break;
+      ++n_indiv;
+
+      // number of epochs (to read)
+      int ne1 = pops_indiv_t::bread_int( IN1 );
+      total_epochs += ne1;
+
+      // number of features (to skip) 
+      int nf1 = pops_indiv_t::bread_int( IN1 );
+      
+      // read epochs and stages
+      // pops_indiv_t::bskip_int( IN1 , ne1 * 2 );
+      
+      I.push_back( id );
+      Istart.push_back( ne_training );
+
+      for (int i=0; i<ne1; i++)
+	{
+	  // epoch
+	  E.push_back( pops_indiv_t::bread_int( IN1 ) );
+
+	  // stage
+	  S.push_back(pops_indiv_t::bread_int( IN1 ) );
+
+	  // skip features
+	  pops_indiv_t::bskip_dbl( IN1 , nf1 );
+
+	  // track epoch numbering 
+	  ++ne_training;
+	}
+      Iend.push_back( ne_training - 1 );
+
+      // next individual
+    }
+
+  IN1.close();
+  
+  logger << "  read " << total_epochs << " stages from " << n_indiv << " individuals\n";
+  
+  // now S, E, I* populated, but not X1
+  // i.e this function only called by standalone es-priors call
+  
 }
 
 

@@ -73,7 +73,10 @@ struct pops_t {
 
   // load level 1 data
   void load1( const std::string & f );
-
+  
+  // load stages/epochs only from level 1 data (for --es-priors standalone only)
+  void load1_stages_only( const std::string & f );
+  
   // derive level 2 stats (from pops_t::specs)
   // this is also co-opted by prediction mode 
   void level2( const bool training = true , const bool quiet = false );
@@ -89,8 +92,11 @@ struct pops_t {
   void fit_model( const std::string & f , const lgbm_label_t & w );
 
   // write elapsed-sleep priors
-  void write_elapsed_sleep_priors( const std::string & f , double , double, double );
+  void write_elapsed_sleep_priors( const std::string & f , double , double, double, double, double );
 
+  // as a standalone function
+  void make_espriors( param_t & );
+  
   // for using level2() in the context of prediction
   void from_single_target( const pops_indiv_t & );
   void copy_back( pops_indiv_t * );  
@@ -103,10 +109,19 @@ struct pops_t {
   
   static pops_specs_t specs;
 
+  //
   // elapsed-sleep priors
+  //
+  
+  static Eigen::MatrixXd ES_probs;           // P( ES, %NR, %REM | stage ) 
+  static std::vector<double> ES_mins;        // total mins elapsed sleep
+  static std::vector<double> ES_prior_nrem;  // prior/recent NREM duration
+  static std::map<int,std::map<int,int> > ES_rowmap; // ES-bin, prior_nrem_bin --> row of ES table
+  
+  static bool ES_fractional_count;           // for target, either count only most likely stage, versus use weights
+  static bool ES_rolling;                    // as we update an epoch, use the newly-updated counts when looking at the next epochs
+  static double non_NREM_mins;               // duration of non-NREM we allow to truncate the "prior NREM"
 
-  static Eigen::MatrixXd ES_probs;
-  static std::vector<double> ES_mins;
   
   //
   // cohort-level data 

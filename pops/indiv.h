@@ -63,8 +63,10 @@ struct pops_indiv_t {
   
   void SHAP();
 
-  void apply_espriors( const std::string & f );
+  void apply_soap();
   
+  void apply_espriors( const std::string & f );
+
   void summarize( pops_sol_t * sol = NULL );
   
   void combine( std::vector<pops_sol_t> & sols ,
@@ -82,7 +84,11 @@ struct pops_indiv_t {
   
   // level 1 features
   Eigen::MatrixXd X1;
-  
+
+  // full level 1 features (i.e. copy before setting NaNs)
+  //  - this is used in SOAP
+  Eigen::MatrixXd X1f;
+    
   // staging
   std::vector<int> S;
   std::vector<int> Sorig;

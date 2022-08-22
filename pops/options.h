@@ -80,6 +80,11 @@ struct pops_opt_t {
   static bool dump_model_weights;
   static std::string model_weights_file;
 
+  // post-SOAP
+
+  static bool soap_results;
+  static double soap_threshold;
+  
   // outputs
   static bool epoch_level_SHAP;
 };

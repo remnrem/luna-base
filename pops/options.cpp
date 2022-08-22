@@ -23,6 +23,7 @@
 #ifdef HAS_LGBM
 
 #include "pops/options.h"
+#include "pops/pops.h"
 
 #include "lgbm/lgbm.h"
 #include "helper/helper.h"
@@ -78,6 +79,9 @@ std::vector<std::string> pops_opt_t::iweights;
 bool pops_opt_t::dump_model_weights;
 std::string pops_opt_t::model_weights_file;
 
+bool pops_opt_t::soap_results;
+double pops_opt_t::soap_threshold;
+
 void pops_opt_t::set_options( param_t & param )
 {
   
@@ -98,14 +102,22 @@ void pops_opt_t::set_options( param_t & param )
   if_root_apply_ranges = param.has( "apply-ranges" ) ? param.yesno( "apply-ranges" ) : true ;
   if_root_apply_espriors = param.has( "apply-es-priors" ) ? param.yesno( "apply-es-priors" ) : true;
 
+  pops_t::ES_rolling = param.yesno( "es-rolling" );
+  pops_t::ES_fractional_count = param.yesno( "es-weighted" );
+  
   // vars
 
   if ( param.has( "inc-vars" ) ) inc_vars = param.strset( "inc-vars" );
   if ( param.has( "exc-vars" ) ) exc_vars = param.strset( "exc-vars" );
-  
+
+  // SOAP
+
+  soap_results = param.has( "soap" );
+
+  soap_threshold = param.empty( "soap" ) ? 0.5 : param.requires_dbl( "soap" ); 
+    
 
   // misc
-
   
   verbose = param.has( "verbose" );
   
