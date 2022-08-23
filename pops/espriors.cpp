@@ -167,6 +167,7 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	  // track definition
 	  pops_t::ES_mins.push_back( c1 );
 	  pops_t::ES_prior_nrem.push_back( c2 );
+	  std::cout << " c1, c2 = " << c1 <<" " << c2 << " --> " << row << "\n";
 	  pops_t::ES_rowmap[ (int)c1 ][ (int)c2 ] = row;
 	  ++row;
 	  
@@ -279,13 +280,19 @@ void pops_indiv_t::apply_espriors( const std::string & f )
       
       int es_bin = floor( elapsed_sleep > 360 ? 360 : elapsed_sleep / 20.0 );
       int nrem_bin = floor( recent_nrem > 60 ? 60 : recent_nrem / 10.0 );
+      
+      int es_min = es_bin * 20;
+      int nrem_min = nrem_bin * 10;
 
-      if ( pops_t::ES_rowmap.find( es_bin ) == pops_t::ES_rowmap.end() )
+      if ( pops_t::ES_rowmap.find( es_min ) == pops_t::ES_rowmap.end() )
 	Helper::halt( "internal error in finding ES bin(1)" );
-      if ( pops_t::ES_rowmap[ es_bin ].find( nrem_bin ) == pops_t::ES_rowmap[ es_bin ].end() )
+      
+      std::cout << " E = " << i << "\t" << S[i] << " -->  nrem_bin = " << es_min << " " << nrem_min << " || " << recent_nrem << "\n";
+
+      if ( pops_t::ES_rowmap[ es_min ].find( nrem_min ) == pops_t::ES_rowmap[ es_min ].end() )
 	Helper::halt( "internal error in finding NR bin(2)" );
       
-      curr_bin = pops_t::ES_rowmap[ es_bin ][ nrem_bin ];
+      curr_bin = pops_t::ES_rowmap[ es_min ][ nrem_min ];
 
       // update probs
       revised(i,0) *= revised(i,0) * pops_t::ES_probs(curr_bin,0);
