@@ -291,6 +291,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_nmf           = false;
   bool cmdline_proc_ms_kmer       = false;
   bool cmdline_proc_ms_cmp_maps   = false;
+  bool cmdline_proc_ms_label_maps = false;
   bool cmdline_proc_copy_suds     = false;
   bool cmdline_proc_combine_suds  = false;
   bool cmdline_proc_cperm_test    = false;
@@ -372,6 +373,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_ms_kmer = true;
 	  else if ( strcmp( argv[1] , "--cmp-maps" ) == 0 )
 	    cmdline_proc_ms_cmp_maps = true;
+	  else if ( strcmp( argv[1] , "--label-maps" ) == 0 )
+	    cmdline_proc_ms_label_maps = true;
 	  else if ( strcmp( argv[1] , "--copy-suds" ) == 0 ) 
 	    cmdline_proc_copy_suds = true;
 	  else if ( strcmp( argv[1] , "--combine-suds" ) == 0 ) 
@@ -1246,6 +1249,89 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
   
+
+  //
+  // MS map label
+  //
+  
+  if ( cmdline_proc_ms_label_maps )
+    {
+
+      param_t param;
+      
+      build_param( &param, argc, argv, param_from_command_line );
+      
+      writer.begin();
+      
+      writer.id( "." , "." );      
+      writer.cmd( "LABEL-MAPS" , 1 , "" );
+      writer.level( "LABEL-MAPS", "_LABEL-MAPS" );
+
+      logger << " running LABEL-MAPS\n";
+      
+
+      //
+      // Threshold of min spatial correl? 
+      //
+
+      const double th = param.has( "th" ) ? param.requires_dbl( "th" ) : 0 ; 
+
+      if ( th < 0 || th > 1 ) Helper::halt( "invalid 'th' value - expecting 0 -- 1" );
+
+      if ( th > 0 )
+	logger << "  only assigning maps with spatial r >= " << th << " to matched template\n";
+      else
+	logger << "  no spatial correlation threshold ('th') set\n";
+      
+      //
+      // Get template (with labels) and copy the (static) labels
+      //
+      
+      ms_prototypes_t map_template;
+      
+      std::string template_map = Helper::expand( param.requires( "template" ) );	  
+      
+      map_template.read( template_map );
+      
+      std::vector<char> template_labels = map_template.ms_labels;
+
+      //
+      // Get to-be-labelled maps (updates ms_labels?)
+      //
+      
+      ms_prototypes_t sol1;
+      
+      std::string sol1_file = Helper::expand( param.requires( "sol" ) );	  
+      
+      sol1.read( sol1_file );
+      
+      std::vector<char> sol1_labels = sol1.ms_labels;
+
+      
+      //
+      // do mapping (based on maximal spatial correlation), updating static map labels [ to match sol1 ] 
+      //  this will also edit 'sol1' to match polarity to closest to the template (for viz)
+      //
+      
+      ms_prototypes_t::ms_labels = ms_cmp_maps_t::label_maps( map_template , template_labels , &sol1 , sol1_labels , th ); 
+      
+      
+      //
+      // Re-write 'sol' (and updated labels will be includede)
+      //
+
+      std::string sol1_newfile = Helper::expand( param.requires( "new" ) );
+      
+      sol1.write( sol1_newfile );
+      
+      //
+      // all done
+      //
+      
+      writer.unlevel( "_LABEL-MAPS" );
+      writer.commit();
+      std::exit(0);
+    }
 
 
   //

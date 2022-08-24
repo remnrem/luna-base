@@ -67,7 +67,7 @@ struct ms_prototypes_t {
 
   void map_to_canonicals( const std::string & filename );
   
-  static double spatial_correlation( const Eigen::VectorXd & M1 , const Eigen::VectorXd & M2 );
+  static double spatial_correlation( const Eigen::VectorXd & M1 , const Eigen::VectorXd & M2 , bool * flip = NULL );
 
   int K;
   int C;
@@ -439,9 +439,18 @@ struct microstates_t {
 };
 
 
-
+  
+		  
 struct ms_cmp_maps_t {
 
+
+  static std::vector<char> label_maps( const ms_prototypes_t & T , 
+				       const std::vector<char> & Tl ,
+				       ms_prototypes_t * A , 
+				       const std::vector<char> & Al ,
+				       double );
+  
+  
   ms_cmp_maps_t( const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & d ,
 		 const Eigen::MatrixXd * fixed ,
 		 const std::vector<std::string> * fixed_chs , 

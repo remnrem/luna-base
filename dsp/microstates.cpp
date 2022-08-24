@@ -3128,11 +3128,12 @@ void ms_prototypes_t::map_to_canonicals( const std::string & filename )
 }
 
 
-double ms_prototypes_t::spatial_correlation( const Eigen::VectorXd & M1, const Eigen::VectorXd & M2 )
+double ms_prototypes_t::spatial_correlation( const Eigen::VectorXd & M1, const Eigen::VectorXd & M2 , bool * flip )
 {
-
+  
   // calculate spatial correlation between two maps 
-
+  // optionally, return 'flip==T' if we need to flip a map (for viz)
+  
   const int nc = M1.size();
   
   if ( M2.size() != nc ) 
@@ -3153,6 +3154,8 @@ double ms_prototypes_t::spatial_correlation( const Eigen::VectorXd & M1, const E
   // pick smallest distance to ensure polarity invariance
   double gmd = t < t2 ? t : t2 ;
 
+  if ( flip != NULL ) *flip = t2 < t ; 
+  
   // return spatial correlation
   return 1 - ( gmd * gmd ) / 2.0; 
   
@@ -3811,3 +3814,99 @@ double ms_cmp_maps_t::cmp_maps_template( const Eigen::MatrixXd & A , const Eigen
   return max_res / (double)nk;
   
 }
+
+
+std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T , 
+					     const std::vector<char> & Tl ,
+					     ms_prototypes_t * A , 
+					     const std::vector<char> & Al ,
+					     double minr )
+
+{
+
+  //
+  // same logic as cmp_maps_template() above
+  // but also flip polarity of A to match best-fit T
+  //
+  
+  // get number of maps from a) template T , b) candidate map set A
+  const int nt = T.K;
+  const int nk = A->K;
+
+  if ( nk > nt )
+    Helper::halt( "template must have same or larger number of maps than the target" );
+  
+  std::vector<char> r(nk);
+  std::vector<int> best(nt);
+  std::vector<double> spatialr(nk);
+  std::vector<bool> flip(nk);
+  
+  // nk x nt correlation matrix:
+  Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nt );
+  for (int i=0; i<nk; i++)
+    for (int j=0; j<nt; j++)
+      R(i,j) = ms_prototypes_t::spatial_correlation( A->A.col(i) , T.A.col(j) );
+  
+  // find best match, brute-force over all combinations
+  //  for K pairs , find all possible matches
+  
+  // keep person 'A' fixed (1, 2, 3, ..., K)
+  // then make all possible permutations of 'B' vector
+  //  by permuting all 'nt' labels, but only selecting the first 'nk'
+  // involves redundant work, but should not be an issue really
+  
+  std::vector<int> kt( nt );
+  for (int i=0; i<nt; i++) kt[i] = i;
+  
+  double max_res = 0;
+  
+  do {
+    double res = 0;    
+    
+    // nb, here only looking at the first nk of nt
+    for (int k=0; k<nk; k++) 
+      res += R(k,kt[k]);
+    
+    if ( res > max_res )
+      {
+	max_res = res;
+
+	best = kt;
+	
+	for (int k=0; k<nk; k++)
+	  {
+	    // recalc to get polarity 
+	    //spatialr[k] = R(k,kt[k]);
+	    bool f;
+	    spatialr[k] = ms_prototypes_t::spatial_correlation( A->A.col(k) , T.A.col(kt[k]) , &f );
+	    flip[k] = f;
+	  }
+      }
+    
+  } while ( std::next_permutation( kt.begin() , kt.end() ) );
+  
+  // copy first 'nk' elements from T to A
+  for (int k=0; k<nk; k++)
+    {
+      bool okay = spatialr[k] >= minr;
+
+      char newlab = okay ? Tl[ best[k] ] : '?';
+      
+      logger << "   mapping [" << Al[k] << "] --> template [" << Tl[ best[k] ] << "] with R = " << spatialr[k];      
+      if ( flip[k] ) logger << " [flip]";
+      else logger << "       ";
+      if ( ! okay ) logger << " *** below threshold corr. -- assigning '?'";
+      logger << "\n";
+      
+      // do flip?
+      if ( flip[k] )
+	A->A.col(k) = -1 * A->A.col(k).array();
+      
+      // copy label
+      r[k] = newlab;
+    }
+  
+  return r;
+  
+}
+
