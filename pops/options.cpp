@@ -48,6 +48,18 @@ std::set<std::string> pops_opt_t::exc_vars;
 
 bool pops_opt_t::verbose;
 
+double pops_opt_t::ES_es_tbin;
+double pops_opt_t::ES_nr_tbin;
+
+double pops_opt_t::ES_es_tmax;
+double pops_opt_t::ES_nr_tmax;
+
+double pops_opt_t::ES_non_NREM_mins;
+double pops_opt_t::ES_c;
+
+bool pops_opt_t::ES_rolling;
+bool pops_opt_t::ES_fractional_count;
+
 int pops_opt_t::trim_wake_epochs;
 int pops_opt_t::n_stages;
 
@@ -81,6 +93,7 @@ std::string pops_opt_t::model_weights_file;
 
 bool pops_opt_t::soap_results;
 double pops_opt_t::soap_threshold;
+int pops_opt_t::soap_nc;
 
 void pops_opt_t::set_options( param_t & param )
 {
@@ -102,8 +115,30 @@ void pops_opt_t::set_options( param_t & param )
   if_root_apply_ranges = param.has( "apply-ranges" ) ? param.yesno( "apply-ranges" ) : true ;
   if_root_apply_espriors = param.has( "apply-es-priors" ) ? param.yesno( "apply-es-priors" ) : true;
 
-  pops_t::ES_rolling = param.yesno( "es-rolling" );
-  pops_t::ES_fractional_count = param.yesno( "es-weighted" );
+   
+  // intercept (i.e. to avoid 0-weight probs for any cell)
+  ES_c = param.has( "es-c" )  ? param.requires_dbl( "es-c" ) : 0.001 ;
+  
+  ES_rolling = param.yesno( "es-rolling" );
+
+  ES_fractional_count = param.yesno( "es-weighted" );
+
+  // elapsed sleep priors
+
+  // bin size (mins) &  max time (mins)
+  ES_es_tbin = param.has( "es-min" ) ? param.requires_dbl( "es-min" ) : 20 ;
+  ES_es_tmax = param.has( "es-max" ) ? param.requires_dbl( "es-max" ) : 380 ;
+
+  ES_nr_tbin = param.has( "nr-min" ) ? param.requires_dbl( "nr-min" ) : 10 ;
+  ES_nr_tmax = param.has( "nr-max" ) ? param.requires_dbl( "nr-max" ) : 60 ;
+  ES_non_NREM_mins = param.has( "nr-allow" ) ? param.requires_dbl( "nr-allow" ) : 5 ; 
+  
+  // NOT USED NOW: intercept (i.e. to avoid 0-weight probs for any cell)
+  ES_c = param.has( "es-c" )  ? param.requires_dbl( "es-c" ) : 0.001 ;  
+
+  // misc
+  ES_rolling = param.yesno( "es-rolling" );
+  ES_fractional_count = param.yesno( "es-weighted" );
   
   // vars
 
@@ -115,7 +150,9 @@ void pops_opt_t::set_options( param_t & param )
   soap_results = param.has( "soap" );
 
   soap_threshold = param.empty( "soap" ) ? 0.5 : param.requires_dbl( "soap" ); 
-    
+
+  soap_nc = param.has( "soap-nc" ) ? param.requires_int( "soap-nc" ) : 10 ;
+  
 
   // misc
   

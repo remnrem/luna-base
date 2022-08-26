@@ -341,9 +341,13 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	  if ( num_iter != 0 ) 
 	    logger << "  predicting based on " << num_iter << " iterations of " << model_file << "\n";
-	  
+
+	  //
+	  // Constructs P and PS 
+	  //
+
 	  predict( num_iter );
-	  
+
 	  
 	  //
 	  // Optionally, SHAP values too 
@@ -354,42 +358,25 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 
 	  //
-	  // Apply SOAP?
+	  // If swapping in equivalance channels, summarize for
+	  // particular channel (and save to sol via summarize() )
 	  //
 	  
-	  if ( pops_opt_t::soap_results )
-	    apply_soap();
-	  
-	  
-	  //
-	  // Apply elapsed-sleep priors?
-	  //
-
-	  if ( espriors_file != "." )
-	    apply_espriors( espriors_file );
-
-
-	  //
-	  // Summarize for this equiv channel
-	  //
-
 	  pops_sol_t sol;
 	  
 	  if ( equivn ) 
 	    logger << "  Solution mapping " << pops_opt_t::equiv_swapin
 		   << " --> " <<  pops_opt_t::equiv_root << "\n";
-	  	  
+	  
 	  summarize( equivn ? &sol : NULL );
 	  
-
+	  
 	  //
 	  // track if >1 equiv channel
 	  //
 	  
 	  if ( equivn )
-	    {
-	      sols.push_back( sol );
-	    }
+	    sols.push_back( sol );
 	  
 
 	  //
@@ -403,16 +390,39 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       if ( equivn )
 	writer.unlevel( "CHEQ" );
       
+
       //
-      // Final summaries
+      // Combine equiv solutions
       //
       
       if ( equivn )
 	{
 	  logger << "  Combined solution: " << equivn << " equivalence channels:\n";
-	  combine( sols , comb_method, comb_conf );	  
-	  summarize();
+	  combine( sols , comb_method, comb_conf );	  	  
 	}
+
+      
+      //
+      // Apply SOAP to the final solution?
+      //
+      
+      if ( pops_opt_t::soap_results )
+	apply_soap();
+      
+      
+      //
+      // Apply elapsed-sleep priors to the final solution?
+      //
+      
+      if ( espriors_file != "." )
+	apply_espriors( espriors_file );
+      
+
+      //
+      // All done, summarize 
+      //
+
+      summarize();
       
     } // end of PREDICTION mode
   
@@ -1323,7 +1333,18 @@ void pops_indiv_t::level2( const bool quiet_mode )
 
 void pops_indiv_t::predict( const int iter )
 {
+  // get posteriors
   P = pops_t::lgbm.predict( X1 , iter );
+
+  // construct current most likely/predictedstaging PS
+  PS.clear();
+  for (int e=0; e<P.rows(); e++)
+    {
+      int predx;
+      double pmax = P.row(e).maxCoeff(&predx);
+      PS.push_back( predx );
+    }  
+
 }
 
 void pops_indiv_t::SHAP()
@@ -1408,7 +1429,6 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 {
   
   std::map<int,double> dur_obs, dur_obs_orig, dur_predf, dur_pred1;
-  std::vector<int> preds;
   
   int slp_lat_obs = -1 , slp_lat_prd = -1;
   int rem_lat_obs = -1 , rem_lat_prd = -1;
@@ -1435,20 +1455,20 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       writer.value( "PP_R" , P(e,1) );   // 1 R
       writer.value( "PP_N1" , P(e,2) );  // 2 NR
       writer.value( "PP_N2" , P(e,3) );
-      writer.value( "PP_N3" , P(e,4) );
-      
-
-      // original - note, uses other index back to the orignal epoch-count
-      //writer.value( "ORIG" , pops_t::label( (pops_stage_t)Sorig[ E[e] ] ) );
+      writer.value( "PP_N3" , P(e,4) );      
       
       // predicted (original)
-      int predx;
+      int predx = -1;
       double pmax = P.row(e).maxCoeff(&predx);
+
+      // this should have already been made and match
+      if ( predx != PS[e] ) Helper::halt( "internal error in assigned PS" );
+
       writer.value( "CONF" , pmax );
       avg_pmax += pmax;
-      preds.push_back( predx );
+      PS.push_back( predx );
       writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
-
+           
       // priors
       if ( has_staging )
 	{
@@ -1519,7 +1539,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
     {
       sol->E = E;
       sol->P = P;
-      sol->S = preds;
+      sol->S = PS;
     }
   
   //
@@ -1573,11 +1593,11 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
 
   // 5-class stats
-  pops_stats_t stats( S, preds , 5 );
+  pops_stats_t stats( S, PS , 5 );
 
   // 3-class stats
-  pops_stats_t stats3( pops_t::NRW( S ) , pops_t::NRW( preds ) , 3 );
-
+  pops_stats_t stats3( pops_t::NRW( S ) , pops_t::NRW( PS ) , 3 );
+  
   //
   // outputs
   //
@@ -1626,11 +1646,11 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   // 5-class stats, but on 'restricted' epoch sets
   // here, do all obs stage types
 
-  pops_stats_t stats_AAA( S, preds , 5 , 1 );
-  pops_stats_t stats_AAX( S, preds , 5 , 2 );
-  pops_stats_t stats_XAA( S, preds , 5 , 3 );
-  pops_stats_t stats_XAX( S, preds , 5 , 4 );
-  pops_stats_t stats_TRN( S, preds , 5 , 5 );
+  pops_stats_t stats_AAA( S, PS , 5 , 1 );
+  pops_stats_t stats_AAX( S, PS , 5 , 2 );
+  pops_stats_t stats_XAA( S, PS , 5 , 3 );
+  pops_stats_t stats_XAX( S, PS , 5 , 4 );
+  pops_stats_t stats_TRN( S, PS , 5 , 5 );
 
   bool set_etype = false;
 
@@ -1690,12 +1710,12 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       else
         writer.level( pops_t::labels3[ ss ] , globals::stage_strat );      
       
-      pops_stats_t stats_OAO( S, preds , 5 , 0 , ss );
-      pops_stats_t stats_AAA( S, preds , 5 , 1 , ss );
-      pops_stats_t stats_AAX( S, preds , 5 , 2 , ss );
-      pops_stats_t stats_XAA( S, preds , 5 , 3 , ss );
-      pops_stats_t stats_XAX( S, preds , 5 , 4 , ss );
-      pops_stats_t stats_TRN( S, preds , 5 , 5 , ss );
+      pops_stats_t stats_OAO( S, PS , 5 , 0 , ss );
+      pops_stats_t stats_AAA( S, PS , 5 , 1 , ss );
+      pops_stats_t stats_AAX( S, PS , 5 , 2 , ss );
+      pops_stats_t stats_XAA( S, PS , 5 , 3 , ss );
+      pops_stats_t stats_XAX( S, PS , 5 , 4 , ss );
+      pops_stats_t stats_TRN( S, PS , 5 , 5 , ss );
 
       bool set_etype = false;
       
@@ -1796,7 +1816,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   logger << "  kappa = " << stats.kappa << "; 3-class kappa = " << stats3.kappa
 	 << " (n = " << ne << " epochs)\n";
   logger << "  Confusion matrix: \n";
-  std::map<int,std::map<int,int> > table = pops_t::tabulate( S, preds, true );
+  std::map<int,std::map<int,int> > table = pops_t::tabulate( S, PS, true );
   logger << "\n";
 
 }
@@ -1807,10 +1827,11 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
 			    int method ,
 			    double min_conf )
 {
-  // create a final solution from multiple equivalence channels
-  // update pops_indiv_t::  E and P only,
-  //  also, if 'has_staging', then S as well (from the original/obs staging)
 
+  // create a final solution from multiple equivalence channels
+  // update pops_indiv_t::  E and P, and PS only,
+  //  also, if 'has_staging', then S as well (from the original/obs staging)
+  
   int nsol = sols.size();
   
   // get consensus # of good epochs
@@ -1837,7 +1858,7 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
       E.push_back( ee->first );
       ++ee;
     }
-
+  
   
   //
   // Remake original staging? ( from Sorig[],. which is still defined (all W)
@@ -1955,8 +1976,19 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
       
     } // move to next consensus epoch to resolve
   
+
+  //
+  // Populate final PS
+  //
+
+  PS.clear();
+  for (int e=0; e<P.rows(); e++)
+    {
+      int predx;
+      double pmax = P.row(e).maxCoeff(&predx);
+      PS.push_back( predx );
+    }  
   
-  //  std::cout << "summary " << E.size() <<"\t" << S.size() <<" " << P.rows() << "\n";
 
 }
 

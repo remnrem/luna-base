@@ -43,27 +43,10 @@
 //    prior NREM    = minutes of prior NREM, allowing for up to X epochs of non-NREM (10-mins bins)
 
 Eigen::MatrixXd pops_t::ES_probs;            // P( ES, prior-NREM | stage )
+Eigen::VectorXd pops_t::ES_global_priors;
 std::vector<double> pops_t::ES_mins;         // total mins elapsed sleep
 std::vector<double> pops_t::ES_prior_nrem; 
 std::map<int,std::map<int,int> > pops_t::ES_rowmap;
-
-// for target, either count only most likely stage, versus use weights
-bool pops_t::ES_fractional_count = false;    
-
-// as we update an epoch, use the newly-updated counts when looking at the next epochs
-bool pops_t::ES_rolling = false;             
-
-// amount of non-NREM allowed when counting prior NREM 
-double pops_t::non_NREM_mins = 5;
-
-//   N W W W N N N R N N ? ....
-//                       X
-//   6       5 4 3   2 1 
-//     4 3 2       1
-//             
-//  if allowing 2 mins of non-NREM, then prior NREM = 5 epochs worth
-//  if allowing 5 mins, then prior NREM = 6, etc
-//  if allowing 0, prior NREM = 2
 
 
 // original ES priors:
@@ -123,13 +106,15 @@ void pops_indiv_t::apply_espriors( const std::string & f )
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not open " + filename );
       
-      // expecting format: ES PP(N1) PP(N2) PP(N3) PP(R) PP(W)
+      // expecting format: ES NREM PrP(W) PrP(R) PrP(N1) PrP(N2) PrP(N3) 
       // where ES is the prior number of elapsed sleep epochs before this one (minutes)
+      // and   NREM is the durtaion of 'recent' NREM
       // and the probabilities are based on the average in this range (i.e. up to the next ES)
       
       std::vector<double> pp_n1, pp_n2, pp_n3, pp_r, pp_w;
       
       pops_t::ES_mins.clear();
+      pops_t::ES_global_priors = Eigen::VectorXd::Zero( 5 );
       
       std::ifstream IN1( filename.c_str() , std::ios::in );
 
@@ -143,8 +128,33 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	  if ( line == "" ) continue;
 	  if ( line[0] == '#' || line[0] == '%' ) continue;
 	  std::vector<std::string> tok = Helper::parse( line , "\t " );
-	  if ( tok.size() != 7 ) Helper::halt( "bad format for " + filename );
+	  if ( tok.size() != 8 ) Helper::halt( "bad format for " + filename );
 	  if ( tok[0] == "ES" ) continue;
+	  
+	  // global priors
+	  if ( tok[0] == "." )
+	    {
+	      
+	      // format non-NREM-mins W R N1 N2 N3
+	      double c2,c3,c4,c5,c6,c7;
+	      if ( ! Helper::str2dbl( tok[1] , &c2 ) ) Helper::halt( "bad value in " + filename );
+	      if ( ! Helper::str2dbl( tok[2] , &c3 ) ) Helper::halt( "bad value in " + filename );
+	      if ( ! Helper::str2dbl( tok[3] , &c4 ) ) Helper::halt( "bad value in " + filename );
+	      if ( ! Helper::str2dbl( tok[4] , &c5 ) ) Helper::halt( "bad value in " + filename );
+	      if ( ! Helper::str2dbl( tok[5] , &c6 ) ) Helper::halt( "bad value in " + filename );
+	      if ( ! Helper::str2dbl( tok[6] , &c7 ) ) Helper::halt( "bad value in " + filename );
+
+	      logger << "  setting nr-allow value to " << c2 <<"\n";
+	      pops_opt_t::ES_non_NREM_mins = c2;
+
+	      // global / "original" prior probs
+	      pops_t::ES_global_priors[0] = c3;
+	      pops_t::ES_global_priors[1] = c4;
+	      pops_t::ES_global_priors[2] = c5;
+	      pops_t::ES_global_priors[3] = c6;
+	      pops_t::ES_global_priors[4] = c7;	      
+	      continue;
+	    }
 	  
 	  double c1,c2,c3,c4,c5,c6,c7;
 	  if ( ! Helper::str2dbl( tok[0] , &c1 ) ) Helper::halt( "bad value in " + filename );
@@ -162,21 +172,24 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	  if ( c5 < 0 || c5 > 1 ) Helper::halt( "bad value in " + filename );
 	  if ( c6 < 0 || c6 > 1 ) Helper::halt( "bad value in " + filename );
 	  if ( c7 < 0 || c7 > 1 ) Helper::halt( "bad value in " + filename );
-
-
+	  
+	  
 	  // track definition
 	  pops_t::ES_mins.push_back( c1 );
-	  pops_t::ES_prior_nrem.push_back( c2 );
-	  std::cout << " c1, c2 = " << c1 <<" " << c2 << " --> " << row << "\n";
+	  pops_t::ES_prior_nrem.push_back( c2 );	  
 	  pops_t::ES_rowmap[ (int)c1 ][ (int)c2 ] = row;
 	  ++row;
 	  
+	  // rows will sum to 1.0
+	  double tot = c3+c4+c5+c6+c7;
+	  
 	  // read in probs
-	  pp_n1.push_back( c3 );
-	  pp_n2.push_back( c4 );
-	  pp_n3.push_back( c5 );
-	  pp_r.push_back( c6 );
-	  pp_w.push_back( c7 );
+	  pp_w.push_back( c3 / tot );
+	  pp_r.push_back( c4 / tot );
+	  pp_n1.push_back( c5 / tot );
+	  pp_n2.push_back( c6 / tot );
+	  pp_n3.push_back( c7 / tot );
+	  
 	}
       
       if ( pops_t::ES_mins.size() < 1 )
@@ -186,33 +199,34 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 
 
       //
-      // we can assume that P(ES,prior NREM|stage) should sum to 1.0 but just in case...
+      // we can assume that P(stage|ES,prior NREM) should sum to 1.0 but just in case...
       //
       
       const int nbins = pp_n1.size();
       
-      double s1 = 0 ,s2 = 0 ,s3 = 0 ,sr = 0 ,sw = 0;
-      for (int i=0; i<nbins; i++)
-	{
-	  s1 += pp_n1[i];
-	  s2 += pp_n2[i];
-	  s3 += pp_n3[i];
-	  sr += pp_r[i];
-	  sw += pp_w[i];
-	}
+      // double s1 = 0 ,s2 = 0 ,s3 = 0 ,sr = 0 ,sw = 0;
+      // for (int i=0; i<nbins; i++)
+      // 	{
+      // 	  sw += pp_w[i];
+      // 	  sr += pp_r[i];	  
+      // 	  s1 += pp_n1[i];
+      // 	  s2 += pp_n2[i];
+      // 	  s3 += pp_n3[i];
+      // 	}
 
-      if ( s1 <= 0 || s2 <= 0 || s3 <= 0 || sr <= 0 || sw <= 0 )
-	Helper::halt( "bad format in " + f );
+      // if ( s1 <= 0 || s2 <= 0 || s3 <= 0 || sr <= 0 || sw <= 0 )
+      // 	Helper::halt( "bad format in " + f );
       
-      for (int i=0; i<nbins; i++)
-	{
-	  pp_n1[i] /= s1;
-	  pp_n2[i] /= s2;
-	  pp_n3[i] /= s3;
-	  pp_r[i] /= sr;
-	  pp_w[i] /= sw;
-	}
+      // for (int i=0; i<nbins; i++)
+      // 	{
+      // 	  pp_w[i] /= sw;
+      // 	  pp_r[i] /= sr;	  
+      // 	  pp_n1[i] /= s1;
+      // 	  pp_n2[i] /= s2;
+      // 	  pp_n3[i] /= s3;
+      // 	}
 
+      
       //
       // Construct prior prob map
       //
@@ -234,15 +248,26 @@ void pops_indiv_t::apply_espriors( const std::string & f )
       
     }
   
+
+
+
   
   //
   // apply ES priors model
   //
 
-  // inputs: P  =  posteriors P( stage , prior NREM | signals ) 
-  //         S  =  assigned stage
-
+  // inputs: P   =  posteriors P( stage , prior NREM | signals ) 
+  //         PS  =  predicted stage
+  
   logger << "  applying ES prior model...\n";
+
+  // options::
+  //  - for target, either count only most likely stage, versus use weights
+  //    bool pops_opt_t::ES_fractional_count 
+  
+  //  - as we update an epoch, use the newly-updated counts when looking at the next epochs
+  //     bool pops_opt_t::ES_rolling 
+
   
 
   //
@@ -252,16 +277,13 @@ void pops_indiv_t::apply_espriors( const std::string & f )
   Eigen::MatrixXd revised = P ;
   
   
-  // use the current best-guess stage (S) to calculate elapsed sleep
-  
-  // nb. if there are very large gaps in the valid record (i.e. big chunks of bad data)  
-  // then the elapsed sleep estimates will be off (obviously), so probably should
-  // give a note that es-model=X might not be wanted in that scenario
+  // use the current best-guess stage (PS) to calculate elapsed sleep
+  // nb. this assumes a ~contiguous study
   
   const int nr = revised.rows();
   
   const int nbins = pops_t::ES_mins.size();
-
+  
   // initialize these -- both 0 at the start
   double elapsed_sleep = 0 ;
   double recent_nrem = 0;
@@ -272,54 +294,82 @@ void pops_indiv_t::apply_espriors( const std::string & f )
   
   // nb: this **assumes** that elapsed sleep bins should start at 0 
   int curr_bin = 0;
-  
+    
   for (int i=0; i<nr; i++)
     {
       
-      // get bin numbers :: nb. using hard-coding here
+      // get bin numbers (truncated at max)
       
-      int es_bin = floor( elapsed_sleep > 360 ? 360 : elapsed_sleep / 20.0 );
-      int nrem_bin = floor( recent_nrem > 60 ? 60 : recent_nrem / 10.0 );
+      int es_bin = floor( ( elapsed_sleep > pops_opt_t::ES_es_tmax ? pops_opt_t::ES_es_tmax : elapsed_sleep ) / pops_opt_t::ES_es_tbin );
+      int nrem_bin = floor( ( recent_nrem > pops_opt_t::ES_nr_tmax ? pops_opt_t::ES_nr_tmax : recent_nrem ) / pops_opt_t::ES_nr_tbin );
       
-      int es_min = es_bin * 20;
-      int nrem_min = nrem_bin * 10;
-
+      int es_min = es_bin * pops_opt_t::ES_es_tbin;
+      int nrem_min = nrem_bin * pops_opt_t::ES_nr_tbin;
+      
       if ( pops_t::ES_rowmap.find( es_min ) == pops_t::ES_rowmap.end() )
 	Helper::halt( "internal error in finding ES bin(1)" );
-      
-      std::cout << " E = " << i << "\t" << S[i] << " -->  nrem_bin = " << es_min << " " << nrem_min << " || " << recent_nrem << "\n";
 
+      std::cout << " elapsed E = " << i+1 << "\t" << elapsed_sleep << "\t" << recent_nrem << "\n";
+      
+      std::cout << " E = " << i << "\t obs=" << S[i] << " pred=" << PS[i] << " -->  nrem_bin = " << es_min << " " << nrem_min << " || " << recent_nrem << "\n";
+      
       if ( pops_t::ES_rowmap[ es_min ].find( nrem_min ) == pops_t::ES_rowmap[ es_min ].end() )
 	Helper::halt( "internal error in finding NR bin(2)" );
       
       curr_bin = pops_t::ES_rowmap[ es_min ][ nrem_min ];
 
-      // update probs
-      revised(i,0) *= revised(i,0) * pops_t::ES_probs(curr_bin,0);
-      revised(i,1) *= revised(i,1) * pops_t::ES_probs(curr_bin,1);
-      revised(i,2) *= revised(i,2) * pops_t::ES_probs(curr_bin,2);
-      revised(i,3) *= revised(i,3) * pops_t::ES_probs(curr_bin,3);
-      revised(i,4) *= revised(i,4) * pops_t::ES_probs(curr_bin,4);
 
-      // scale to sum to 1.0
-      const double row_sum = revised(i,0) + revised(i,1) + revised(i,2) + revised(i,3) + revised(i,4);
+      if ( 0 )
+	{
       
-      revised(i,0) /= row_sum;
-      revised(i,1) /= row_sum;
-      revised(i,2) /= row_sum;
-      revised(i,3) /= row_sum;
-      revised(i,4) /= row_sum;
+	  // update probs
+	  revised(i,0) *= revised(i,0) * pops_t::ES_probs(curr_bin,0);
+	  revised(i,1) *= revised(i,1) * pops_t::ES_probs(curr_bin,1);
+	  revised(i,2) *= revised(i,2) * pops_t::ES_probs(curr_bin,2);
+	  revised(i,3) *= revised(i,3) * pops_t::ES_probs(curr_bin,3);
+	  revised(i,4) *= revised(i,4) * pops_t::ES_probs(curr_bin,4);
+	  
+	  // scale to sum to 1.0
+	  const double row_sum = revised(i,0) + revised(i,1) + revised(i,2) + revised(i,3) + revised(i,4);
+	  
+	  revised(i,0) /= row_sum;
+	  revised(i,1) /= row_sum;
+	  revised(i,2) /= row_sum;
+	  revised(i,3) /= row_sum;
+	  revised(i,4) /= row_sum;
 
+	}
+
+
+      //
+      // Update posteriors given these revised (temporally specific) priors
+      //
+
+      Eigen::VectorXd r1 = update_posteriors( revised.row(i), pops_t::ES_global_priors, pops_t::ES_probs.row(curr_bin) );
+      
+      std::cout << " old = " << revised.row(i) << "\n";
+      std::cout << " pr1 = " << pops_t::ES_global_priors.transpose() << "\n";
+      std::cout << " pr2 = " << pops_t::ES_probs.row(curr_bin) << "\n";
+      std::cout << " new = " << r1.transpose() << "\n";
+      
+	
+      //
       // get next ES value for next epoch
-      if ( S[i] != pops_stage_t::POPS_WAKE )
-	elapsed_sleep += epoch_duration_mins;
+      //  based on the *predicted* stage
+      //
       
+      if ( PS[i] != pops_stage_t::POPS_WAKE )
+	elapsed_sleep += epoch_duration_mins;
+
+      //
       // get next NR value for next epoch
+      //
+      
       int j = i ; 
       bool first_NREM = false;      
       int recent_nrem_epochs = 0;      
       const double epoch_mins = 0.5 ; // nb. hard-coded
-      int allowance = pops_t::non_NREM_mins / epoch_mins ;
+      int allowance = pops_opt_t::ES_non_NREM_mins / epoch_mins ;
       int nonNREM = 0;
       while ( 1 )
 	{
@@ -329,7 +379,7 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	  --j;
 	  
 	  // is NREM?
-	  const bool is_nrem = S[j] == POPS_N1 || S[j] == POPS_N2 || S[j] == POPS_N3 ;
+	  const bool is_nrem = PS[j] == POPS_N1 || PS[j] == POPS_N2 || PS[j] == POPS_N3 ;
 
 	  // track whether we've yet hit any NREM
 	  if ( is_nrem ) first_NREM = true;
@@ -345,7 +395,6 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	}
       
       recent_nrem = recent_nrem_epochs * epoch_mins;
-
       
     }
 
@@ -356,7 +405,7 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 
 
 //
-// stand-alone function to make es-priors file from training data
+// stand-alone function to make es-priors file from training data (*observed stages, S*)
 //
 
 void pops_t::make_espriors( param_t & param )
@@ -383,13 +432,13 @@ void pops_t::make_espriors( param_t & param )
 
   if ( data_file != "" )
     {
-      // scan data file, but only extract SS (not feature matrix)
+      // scan data file, but only extract observed SS (not feature matrix)
       load1_stages_only( data_file );
       
       if ( text_file != "" )
 	{
 	  logger << "  writing epoch/stage info to " << text_file << "\n";
-
+	  
 	  std::ofstream O1( text_file.c_str(), std::ios::out );
 	  
 	  for (int e=0; e<S.size(); e++)
@@ -439,37 +488,25 @@ void pops_t::make_espriors( param_t & param )
   const std::string espriors_file = param.value( "es-priors" );
   
   //
-  // parameters 
-  //
-
-  // bin size (mins)
-  const double tbin = param.has( "es-min" ) ? param.requires_dbl( "es-min" ) : 20 ;
-  const double nr_tbin = param.has( "nr-min" ) ? param.requires_dbl( "nr-min" ) : 10 ;
-  
-  // max time (mins)
-  const double tmax = param.has( "es-max" ) ? param.requires_dbl( "es-max" ) : 380 ;
-  const double nr_tmax = param.has( "nr-max" ) ? param.requires_dbl( "nr-max" ) : 60 ;
-  
-  // intercept (i.e. to avoid 0-weight probs for any cell)
-  const double c    = param.has( "es-c" )   ? param.requires_dbl( "es-c" ) : 0.01 ;
-
-  //
   // calculate and report : just needs S and E
   //
   
-  write_elapsed_sleep_priors( espriors_file , tbin, tmax , nr_tbin, nr_tmax, c );
+  write_elapsed_sleep_priors( espriors_file );
   
   // all done
   
 }
 
 
-void pops_t::write_elapsed_sleep_priors( const std::string & f ,
-					 double es_tbin, double es_tmax,
-					 double nrem_tbin , double nrem_tmax, 
-					 double c )
+void pops_t::write_elapsed_sleep_priors( const std::string & f )
 {
   
+  double es_tbin = pops_opt_t::ES_es_tbin;
+  double es_tmax = pops_opt_t::ES_es_tmax;
+  double nrem_tbin = pops_opt_t::ES_nr_tbin;
+  double nrem_tmax = pops_opt_t::ES_nr_tmax;
+  double c = pops_opt_t::ES_c;
+
   // Given OBSERVED S and E, calculate overall elapsed sleep prior distribution 
   // and then P(ES|stage) from training data;  save to a file that 
   // POPS es-priors=X can use during testing 
@@ -477,8 +514,6 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f ,
   // c    : constant, i.e. to ensure some weight all values
   // tbin : bin size (e.g. 20 mins default) 
   // tmax : maximum limit (default = 400 mins, 6.6 hrs)
-
-  //
   
   const int ne = S.size();
 
@@ -496,10 +531,16 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f ,
   const int es_nbins = floor( es_tmax / es_tbin ) + 1;
 
   const int nrem_nbins = floor( nrem_tmax / nrem_tbin ) + 1;
+
+  // global priors
+  Eigen::VectorXd global_priors = Eigen::VectorXd::Zero( 5 );
+
   
   for (int i=0; i<ne; i++)
     {
-      
+      // global priors
+      ++global_priors[ S[i] ];
+	
       // new indiv? reset all counters
       if ( E[i] < prior_epoch )
 	elpased_sleep_mins = 0;
@@ -511,21 +552,25 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f ,
       int recent_nrem_epochs = 0;
 
       // number of epochs of non-NREM to allow
-      int allowance = pops_t::non_NREM_mins / epoch_mins ; 
+      int allowance = pops_opt_t::ES_non_NREM_mins / epoch_mins ; 
       int nonNREM = 0;
-
-      int j = i ; 
-
+      
+      int j = i;
+      
       bool first_NREM = false;
       
       while ( 1 )
 	{
+	  // no data left previously
 	  if ( j == 0 ) break;
+	  
+	  // bumping into the previous person?
+	  if ( E[j-1] > E[j] ) break;
 	  
 	  // move back in time
 	  --j;
-	  
-	  // is NREM?
+
+	  // is NREM? -- based on *observed* stages S
 	  const bool is_nrem = S[j] == POPS_N1 || S[j] == POPS_N2 || S[j] == POPS_N3 ;
 
 	  // track whether we've yet hit any NREM
@@ -543,6 +588,10 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f ,
 	}
       
       double recent_nrem_mins = recent_nrem_epochs * epoch_mins;
+
+
+      // std::cout << "E[i] " << i << "\t" <<S[i] << "\t" << elpased_sleep_mins << "\t" << recent_nrem_mins << "\t"
+      // 		<< ( recent_nrem_mins > elpased_sleep_mins ) << "\n";
       
       // W, R, N1, N2, N3
       if ( S[i] >= 0 && S[i] <= 5 ) 
@@ -573,50 +622,45 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f ,
   // total number of bins  
   //
 
-  // not all bins are possible: count the possible ones
-  int tot_bins =0; 
-  for (int es_bin = 0 ; es_bin < es_nbins ; es_bin++ )
-    for (int nrem_bin = 0 ; nrem_bin < nrem_nbins ; nrem_bin++ )
-      {
-        const double es_minutes = es_bin * es_tbin;
-        const double nrem_minutes = nrem_bin * nrem_tbin;
-        if ( nrem_minutes <= es_minutes ) ++tot_bins;
-      }
-  
+  // max size, although not all bins are valid (e.g. 0 ES but 60 NREM)
+  // these will not be output below
+
+  int tot_bins = es_nbins * nrem_nbins ; 
+
   
   Eigen::MatrixXd P = Eigen::MatrixXd::Zero( tot_bins , pops_opt_t::n_stages );
-
-  int row = 0;
+  Eigen::VectorXd N = Eigen::VectorXd::Zero( tot_bins );
   
+  int row = 0;  
   for (int es_bin = 0 ; es_bin < es_nbins ; es_bin++ )
     for (int nrem_bin = 0 ; nrem_bin < nrem_nbins ; nrem_bin++ )
       {
-
-	// skip 'impossible' options
-	const double es_minutes = es_bin * es_tbin;
-	const double nrem_minutes = nrem_bin * nrem_tbin;
-	if ( nrem_minutes > es_minutes ) continue;
-	
-	// else, add as a row
 	for (int ss = 0; ss<5; ss++)
-	  P( row , ss ) = ES[ ss ][ es_bin ][ nrem_bin ];
-	
-	// next tot-bin
-	++row;
-	//std::cout << " count row = " << row << " of "<< tot_bins << "\n";
+	  {
+	    P( row , ss ) = ES[ ss ][ es_bin ][ nrem_bin ];
+	    N[row] += ES[ ss ][ es_bin ][ nrem_bin ];
+	  }
+ 	++row;
       }
   
+  // normalize within row
+  for (int r = 0; r < P.rows(); r++)
+    if ( P.row( r ).sum() > 0 )
+      P.row( r ) /= P.row( r ).sum();
+
   
-  // normalize within stage
-  for (int ss = 0; ss<5; ss++)
-    P.col( ss ) /= P.col( ss ).sum();
+  // // normalize within stage
+  // for (int ss = 0; ss<5; ss++)
+  //   if ( P.col( ss ).sum() > 0 )
+  //     P.col( ss ) /= P.col( ss ).sum();
   
-  // add offset, re-normalize
-  for (int ss = 0; ss<5; ss++)
-    {      
-      P.col( ss ).array() += c;
-      P.col( ss ) /= P.col( ss ).sum();
-    }
+  // // add offset, re-normalize
+  // if ( c > 0 ) 
+  //   for (int ss = 0; ss<5; ss++)
+  //     {      
+  // 	P.col( ss ).array() += c;
+  // 	P.col( ss ) /= P.col( ss ).sum();
+  //     }
   
   
   //
@@ -624,57 +668,109 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f ,
   //
   
   std::string filename = Helper::expand( f );
-
+  
   std::ofstream OUT1( filename.c_str() , std::ios::out );
   
   logger << "  writing P( elapsed sleep | stg ) to " << filename << "\n";
   
   OUT1 << "ES\t"
        << "RECENT_NR\t"
+       << "PP(W)\t"
+       << "PP(R)\t"
        << "PP(N1)\t"
        << "PP(N2)\t"
        << "PP(N3)\t"
-       << "PP(R)\t"
-       << "PP(W)\n";
+       << "NE\n";
   
-  // to get output format: N1 N2 N3 R W
-  std::vector<int> sidx = { 2 , 3 , 4 , 1 , 0 };
   std::map<int,std::vector<double> > nn;
   
+  // first row is always overall priors (i.e. 'original' priors)
+  // in second slot, write nr-allow (mins) value (i.e. to ensure that
+  // same value used when applying)
+  OUT1 << ".\t" << pops_opt_t::ES_non_NREM_mins;
+
+  for (int i=0; i<5; i++)
+    OUT1 << "\t" << global_priors[i] / (double)ne;
+
+  OUT1 << "\t" << ne ;
+  OUT1 << "\n";
+  
+  // now priors conditional on elapsed sleep history
   row = 0;
   for (int es_bin = 0 ; es_bin < es_nbins ; es_bin++ )
     for (int nrem_bin = 0 ; nrem_bin < nrem_nbins ; nrem_bin++ )
       {	
-	// skip 'impossible' rows
-	if ( nrem_bin * nrem_tbin > es_bin * es_tbin ) continue;
 
+	// skip 'impossible' rows in output (i.e. more than the 'next'
+	// ES bin e.g can be can't be larger than the "next" ES bin
+	// e.g. okay to have ES = 0 and NREM=10 if ES=0 actually means
+	// 0 to 20
+
+	if ( P.row(row).sum() <= 1e-8 )
+	  {
+	    ++row;
+	    continue;
+	  }
+	
 	OUT1 << es_bin * es_tbin << "\t"
 	     << nrem_bin * nrem_tbin ;
 	
 	for (int s=0; s<5; s++)
-	  OUT1 << "\t" << P(row,sidx[s]);
-
+	  OUT1 << "\t" << P(row,s);
+	
+	OUT1 << "\t" << N[row]
+	     << "\n";
+	
 	nn[ nrem_bin ].resize( 5 , 0 );
 	for (int s=0; s<5; s++)
-	  nn[ nrem_bin ][s] += P(row,sidx[s]);
-
-	OUT1 << "\n";
+	  nn[ nrem_bin ][s] += P(row,s);
 	
 	++row;
       }
   
   OUT1.close();
-
-
-  for (int nrem_bin = 0 ; nrem_bin < nrem_nbins ; nrem_bin++ )
-    {
-      std::cout << nrem_bin * nrem_tbin ;
-      for (int s=0; s<5; s++)
-	std::cout <<"\t" << nn[ nrem_bin ][s];
-      
-      std::cout << "\n";
-    }
+  
 }
 
+
+Eigen::VectorXd pops_indiv_t::update_posteriors( const Eigen::VectorXd & posteriors ,
+						 const Eigen::VectorXd & original_priors,
+						 const Eigen::VectorXd & new_priors )
+{
+  // implements https://arxiv.org/pdf/2007.01386.pdf
+  
+  const int nk = posteriors.size();
+  if ( nk != original_priors.size() ) Helper::halt( "mismatch in pops_indiv_t::update_posteriors()" );
+  if ( nk != new_priors.size() ) Helper::halt( "mismatch in pops_indiv_t::update_posteriors()" );
+  Eigen::MatrixXd A = Eigen::MatrixXd::Zero( nk, nk );
+  
+  // build A
+  for (int i=0; i<nk; i++)
+    for (int j=0; j<nk; j++)
+      {
+	if ( i == j ) A(i,i) = ( posteriors[i] - 1.0 ) * original_priors[i] + 1 ;
+	else A(i,j) = posteriors[i] * original_priors[j];
+      }
+  
+  // get eigenvector corresponding to largest eigen value
+  
+  Eigen::EigenSolver<Eigen::MatrixXd> es(A);
+  Eigen::VectorXd eval = es.eigenvalues().real();
+  int idx = 0;
+  double evmax = eval.maxCoeff(&idx);
+  
+  std::cout << "The eigenvalues of A are:" << "\n" << es.eigenvalues() << "\n";
+  std::cout << "The matrix of eigenvectors, V, is:" << "\n" << es.eigenvectors() << "\n\n";
+  
+  // get (scaled) likelihoods
+  Eigen::VectorXd u = es.eigenvectors().col(idx).real();
+
+  // update posteriors w/ new prior
+  double denom = 0;
+  for (int j=0; j<nk; j++) denom += u[j] * new_priors[j];
+  for (int j=0; j<nk; j++) u[j] = ( u[j] * new_priors[j] ) / denom ;  
+  
+  return u;
+}
 
 #endif

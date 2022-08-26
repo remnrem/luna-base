@@ -62,11 +62,15 @@ struct pops_indiv_t {
   void predict( const int iter = 0 );
   
   void SHAP();
-
+  
   void apply_soap();
   
   void apply_espriors( const std::string & f );
 
+  static Eigen::VectorXd update_posteriors( const Eigen::VectorXd & posteriors ,
+					    const Eigen::VectorXd & original_priors ,
+					    const Eigen::VectorXd & new_priors );
+  
   void summarize( pops_sol_t * sol = NULL );
   
   void combine( std::vector<pops_sol_t> & sols ,
@@ -98,6 +102,7 @@ struct pops_indiv_t {
 
   // predictions
   Eigen::MatrixXd P;
+  std::vector<int> PS; // (final) predicted stages
   
   
   //

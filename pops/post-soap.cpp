@@ -60,7 +60,7 @@ void pops_indiv_t::apply_soap()
   // number of PCs (for X1)
   //
   
-  const int nc = 10;
+  const int nc = pops_opt_t::soap_nc ; 
 
 
   //
@@ -116,9 +116,10 @@ void pops_indiv_t::apply_soap()
     
   
   //
-  // construct confidence and most-likely calls
+  // construct confidence and most-likely calls (w/ string labels)
+  //  - already done, but just check here
   //
-
+  
   std::vector<std::string> pops_predictions_str( ne_full );
   std::vector<int> pops_predictions( ne_full );
   std::vector<double> confidence( ne_full );
@@ -127,12 +128,14 @@ void pops_indiv_t::apply_soap()
     {
       int predx;
       double pmax = P.row(e).maxCoeff(&predx);
+      // check prior work
+      if ( predx != PS[e] ) Helper::halt( "book keeping error in POPS(1)" );
       confidence[e] = pmax;
       pops_predictions_str[e] = pops_t::labels5[ predx ] ;
       pops_predictions[e] = predx ;
     }
   
- 
+  
   
   //
   // Flag low-confidence assignments
@@ -329,28 +332,28 @@ void pops_indiv_t::apply_soap()
 	}
     }
   
-
+  
   //
   // Modify originals
   //
-
+  
   int nchanged = 0;
-
+  
   for (int e=0; e < ne_full; e++)
     {
-
+      
       const bool low_conf = ! row_included[ e ] ; 
       
-      const bool retain = leave_rare_asis && low_conf_stages.find( S[e] ) != low_conf_stages.end() ;
+      const bool retain = leave_rare_asis && low_conf_stages.find( PS[e] ) != low_conf_stages.end() ;
       
       if ( low_conf && ! retain )
 	{
 
-	  // original:: S[e]
-	  // original:: P(e,j);
-	  //            confidence[e]
+	  // original prediction:: PS[e]
+	  // original posteriors:: P(e,j);
+	  //                       confidence[e]
 	  
-	  // revised:: prediction.cl[ e ]  [ str ]
+	  // revised prediction:: prediction.cl[ e ]  [ str ]
 	  
 	  int revised = 0; // W
 	  if      ( prediction.cl[ e ] == "R" ) revised = 1;
@@ -365,7 +368,7 @@ void pops_indiv_t::apply_soap()
 	  
 	  if ( revised_conf > confidence[e] )
 	    {
-
+	      
 	      for (int j=0; j<5; j++)
                 {
                   if ( old2new[j] == -1 )
@@ -373,10 +376,10 @@ void pops_indiv_t::apply_soap()
                   else
                     P(e,j) = prediction.pp( e , old2new[ j ] );
 		}
-
-	      // update most likely stage
-	      S[e] = revised;
-	      if ( S[e] != revised ) ++nchanged;
+	      
+	      // update most likely predicted stage
+	      PS[e] = revised;
+	      if ( PS[e] != revised ) ++nchanged;
 	    }
 	}
     }

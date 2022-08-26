@@ -329,15 +329,8 @@ void pops_t::make_level2_library( param_t & param )
   //
   
   if ( espriors_file != "." )
-    {
-      double tbin = param.has( "es-min" ) ? param.requires_dbl( "es-min" ) : 20 ;
-      double tmax = param.has( "es-max" ) ? param.requires_dbl( "es-max" ) : 380 ;
-      double nr_tbin = param.has( "nr-min" ) ? param.requires_dbl( "nr-min" ) : 10 ;
-      double nr_tmax = param.has( "nr-max" ) ? param.requires_dbl( "nr-max" ) : 60 ;
-      double c    = param.has( "es-c" )   ? param.requires_dbl( "es-c" ) : 0.01 ;
-      write_elapsed_sleep_priors( espriors_file , tbin ,tmax , nr_tbin, nr_tmax, c );
-      
-    }
+    write_elapsed_sleep_priors( espriors_file );      
+
   
 }
 

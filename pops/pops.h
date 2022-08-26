@@ -92,7 +92,7 @@ struct pops_t {
   void fit_model( const std::string & f , const lgbm_label_t & w );
 
   // write elapsed-sleep priors
-  void write_elapsed_sleep_priors( const std::string & f , double , double, double, double, double );
+  void write_elapsed_sleep_priors( const std::string & f );
 
   // as a standalone function
   void make_espriors( param_t & );
@@ -114,14 +114,11 @@ struct pops_t {
   //
   
   static Eigen::MatrixXd ES_probs;           // P( ES, %NR, %REM | stage ) 
+  static Eigen::VectorXd ES_global_priors;
   static std::vector<double> ES_mins;        // total mins elapsed sleep
   static std::vector<double> ES_prior_nrem;  // prior/recent NREM duration
   static std::map<int,std::map<int,int> > ES_rowmap; // ES-bin, prior_nrem_bin --> row of ES table
   
-  static bool ES_fractional_count;           // for target, either count only most likely stage, versus use weights
-  static bool ES_rolling;                    // as we update an epoch, use the newly-updated counts when looking at the next epochs
-  static double non_NREM_mins;               // duration of non-NREM we allow to truncate the "prior NREM"
-
   
   //
   // cohort-level data 

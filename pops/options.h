@@ -55,6 +55,20 @@ struct pops_opt_t {
   static bool if_root_apply_ranges;
   static bool if_root_apply_espriors;
 
+  // elapsed sleep priors
+  static double ES_es_tbin;
+  static double ES_nr_tbin;
+
+  static double ES_es_tmax;
+  static double ES_nr_tmax;
+  
+  static double ES_non_NREM_mins;
+  static double ES_c;
+  
+  static bool ES_rolling;
+  static bool ES_fractional_count;
+  
+  
   // variables
   static std::set<std::string> inc_vars, exc_vars;
 
@@ -84,6 +98,7 @@ struct pops_opt_t {
 
   static bool soap_results;
   static double soap_threshold;
+  static int soap_nc;
   
   // outputs
   static bool epoch_level_SHAP;
