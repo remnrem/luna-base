@@ -27,12 +27,99 @@
 #include "helper/helper.h"
 #include "stats/eigen_ops.h"
 #include "stats/lda.h"
+#include "miscmath/miscmath.h"
 
 #include "db/db.h"
 #include "helper/logger.h"
 
 extern logger_t logger;
 extern writer_t writer;
+
+
+Eigen::MatrixXd pops_indiv_t::soap_X( bool * okay )
+{
+
+  //
+  // Project full feature matrix (X1f) into 'nc' independent components for LDA (->U)
+  //   i..e X1f == X1, but before any NaNs are set
+  //
+  
+  const int nc = pops_opt_t::soap_nc ; 
+  
+  const int ne_full = P.rows();
+    
+  // find any columns w/ NaNs (e.g. un-specified covariates) and remove them
+  std::set<int> included_Xcols;
+  for (int c=0; c<X1f.cols(); c++)
+    {
+      bool okay = true;
+      for (int r=0; r<X1f.rows(); r++)
+	{
+	  if ( std::isnan( X1f(r,c) ) )
+	    {
+	      okay = false;
+	      break;
+	    }	  
+	}
+      if ( okay ) included_Xcols.insert(c);
+    }
+
+  if ( included_Xcols.size() < 2 )
+    {
+      logger << "  ** could not find any X1 columns with non-missing values.. bailing on soap\n";
+      *okay = false;
+      Eigen::MatrixXd U;
+      return U;
+    }
+  
+  Eigen::MatrixXd X1ff = Eigen::MatrixXd::Zero( X1f.rows() , included_Xcols.size() );
+  auto xx = included_Xcols.begin();
+  int c = 0;
+  while ( xx != included_Xcols.end() )
+    {
+      X1ff.col(c++) = X1f.col(*xx);
+      ++xx;
+    }
+  
+  Eigen::BDCSVD<Eigen::MatrixXd> svd( X1ff , Eigen::ComputeThinU | Eigen::ComputeThinV );
+  Eigen::MatrixXd U = svd.matrixU().leftCols( nc );
+  *okay = true;  
+  return U;
+
+}
+
+
+double pops_indiv_t::simple_soap( const Eigen::MatrixXd & U ,
+				  const std::vector<int> & ST )
+{
+
+  const int ne = ST.size();
+  if ( U.rows() != ne ) Helper::halt( "internal error in pops_indiv_t::simple_soap()" );
+  
+  std::vector<std::string> sstr( ne );
+  
+  for (int e=0; e<ne; e++)
+    sstr[e] = pops_t::labels5[ ST[e] ] ;
+
+  lda_t lda( sstr  , U );
+  
+  lda_model_t lda_model = lda.fit();
+    
+  if ( ! lda_model.valid )
+    {
+      logger << "  *** could not fit SOAP model\n";
+      return -1;
+    }
+  
+  lda_posteriors_t prediction = lda_t::predict( lda_model , U ) ; 
+
+  // get kappa
+  double kappa = MiscMath::kappa( prediction.cl , sstr );
+
+  return kappa;
+  
+}
+
 
 void pops_indiv_t::apply_soap()
 {
@@ -157,7 +244,7 @@ void pops_indiv_t::apply_soap()
   //
   // Flag stages/classes that do not have enough unambiguous epochs
   //
-  
+
   const int nstages_all = stg_count.size();
   
   std::set<int> low_conf_stages;
@@ -392,6 +479,150 @@ void pops_indiv_t::apply_soap()
     
   
 }
+
+
+
+void pops_indiv_t::grid_soap()
+{
+
+  //
+  // iteratively circle through stages, doing grid search to optimize R
+  //
+
+  
+  // likelihood rescaling factors:: initially all at 1.0, i.e. no changes
+  
+  Eigen::VectorXd r = Eigen::VectorXd::Constant( 5 , 1 );
+  
+  // make SOAP feature matrix
+
+  bool okay = true;
+  Eigen::MatrixXd U = soap_X( &okay );
+  if ( ! okay ) return;
+  
+  // baseline SOAP 
+
+  double k = simple_soap( U , PS );
+
+  // update PS given P, count # of stages
+  std::vector<int> cnts0(5,0);  
+  int nstages_orig = update_predicted(&cnts0);  
+  
+  //
+  // grid search around rescaled likelhoods, and use SOAP kappa to determine the optimal values
+  //
+  
+  // track max kappa 
+  double max_kappa = 0;
+ 
+  // if global priors have not been specified (i.e. if not running es-priors) then
+  // set to uniform - i.e. should not matter as we are not changing them
+
+  if ( pops_t::ES_global_priors.size() == 0 )
+    pops_t::ES_global_priors = Eigen::VectorXd::Constant( 5, 0.2 );
+  
+  // copy posteriors
+
+  Eigen::MatrixXd P0 = P;
+
+  std::vector<double> ll = MiscMath::linspace( pops_opt_t::lk_lwr , pops_opt_t::lk_upr , pops_opt_t::lk_steps );
+
+  // only do REM?
+  std::vector<int> stgs = { 1 }; 
+  
+  for (int ss=0; ss<stgs.size(); ss++)
+    {
+      int s2 = stgs[ss] ; 
+
+      logger << "  rescaling " << pops_t::labels5[ s2 ] << " likelihoods\n";
+
+      double max_fac = 1;
+  
+      for (double sidx = 0; sidx < ll.size(); sidx++)
+	{
+	  
+	  //
+	  // likelihood rescaling factors
+	  //
+	  
+	  double fac = ll[sidx];
+	  
+	  //Eigen::VectorXd r2 = Eigen::VectorXd::Constant( 5 , 1 );
+	  //r2[ss] = fac;
+
+	  // alter this stage
+	  r[ s2 ] = fac;
+	  
+	  // set to the originals
+	  P = P0;
+
+	  // rescale posteriors
+	  const int ne = P.rows();
+	  
+	  for (int e=0; e<ne; e++)
+	    P.row(e) = update_posteriors( P.row(e) ,
+					  pops_t::ES_global_priors ,
+					  NULL , // no change in priors
+					  &r );
+	  
+	  // update PS given P
+	  std::vector<int> cnts1(5,0);
+	  int nstages = update_predicted(&cnts1);
+	  
+	  // redo SOAP (w/ same U)	  
+	  double k1 = nstages >= nstages_orig ? simple_soap( U , PS ) : 0 ; 
+
+	  if ( 0 )
+	    {
+	      std::cout << s2 << "\t" << fac << "\t"
+			<< nstages << "/" << nstages_orig << "\t"
+			<< max_kappa << "\t" << k1
+			<< " r= " << r.transpose() << " :";
+	      
+	      for (int i=0; i<5; i++) std::cout << " " << cnts0[i];
+	      std::cout <<" || ";
+	      
+	      for (int i=0; i<5; i++) std::cout << " " << cnts1[i];
+	      std::cout <<"\n";
+	    }
+	  
+	  
+	  if ( k1 > max_kappa )
+	    {
+	      //std::cout << " UPDATING k = " << k1 << "\n";
+	      max_kappa = k1;
+	      max_fac = fac;
+	    }
+	  
+	}
+      
+
+      //
+      // Final rescaling for this stage
+      //
+      
+      P = P0;
+      
+      r[ s2 ] = max_fac;
+      
+      for (int e=0; e<P.rows(); e++)
+	P.row(e) = update_posteriors( P.row(e) ,
+				      pops_t::ES_global_priors ,
+				      NULL , 
+				      &r );
+      update_predicted();
+      
+      logger << "  reacaled likelihood R = " << r.transpose() << "\n";
+
+      writer.value( "RESCALE_REM_FAC" , max_fac );
+      writer.value( "RESCALE_REM_K0" , k );
+      writer.value( "RESCALE_REM_K1" , max_kappa );
+      
+      // next stage (curr. REM only)
+    }
+  
+}
+
 
 
 

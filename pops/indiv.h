@@ -64,12 +64,18 @@ struct pops_indiv_t {
   void SHAP();
   
   void apply_soap();
+  Eigen::MatrixXd soap_X( bool * okay );
+  double simple_soap( const Eigen::MatrixXd & X , const std::vector<int> & );
+  void grid_soap();
   
   void apply_espriors( const std::string & f );
 
   static Eigen::VectorXd update_posteriors( const Eigen::VectorXd & posteriors ,
 					    const Eigen::VectorXd & original_priors ,
-					    const Eigen::VectorXd & new_priors );
+					    const Eigen::VectorXd * new_priors ,
+					    const Eigen::VectorXd * rescale = NULL );
+
+  int update_predicted( std::vector<int> * cnts = NULL );  
   
   void summarize( pops_sol_t * sol = NULL );
   

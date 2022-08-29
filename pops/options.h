@@ -99,6 +99,10 @@ struct pops_opt_t {
   static bool soap_results;
   static double soap_threshold;
   static int soap_nc;
+  static bool soap_grid;
+  static double lk_lwr;
+  static double lk_upr;
+  static double lk_steps;
   
   // outputs
   static bool epoch_level_SHAP;

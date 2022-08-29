@@ -94,6 +94,10 @@ std::string pops_opt_t::model_weights_file;
 bool pops_opt_t::soap_results;
 double pops_opt_t::soap_threshold;
 int pops_opt_t::soap_nc;
+bool pops_opt_t::soap_grid;
+double pops_opt_t::lk_lwr;
+double pops_opt_t::lk_upr;
+double pops_opt_t::lk_steps;
 
 void pops_opt_t::set_options( param_t & param )
 {
@@ -152,7 +156,11 @@ void pops_opt_t::set_options( param_t & param )
   soap_threshold = param.empty( "soap" ) ? 0.5 : param.requires_dbl( "soap" ); 
 
   soap_nc = param.has( "soap-nc" ) ? param.requires_int( "soap-nc" ) : 10 ;
-  
+
+  lk_lwr = param.has( "soap-lwr" ) ? param.requires_dbl( "soap-lwr" ) : 1;
+  lk_upr = param.has( "soap-upr" ) ? param.requires_dbl( "soap-upr" ) : 100;
+  lk_steps = param.has( "soap-steps" ) ? param.requires_int( "soap-steps" ) : 100;
+  soap_grid = param.has( "soap-grid" );
 
   // misc
   

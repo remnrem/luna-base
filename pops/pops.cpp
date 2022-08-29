@@ -851,7 +851,7 @@ pops_stats_t::pops_stats_t( const std::vector<int> & obs_ ,
 			    const int type , 
 			    const int ostage )
 {
-  
+
   // save either 3-class or 5-class stats
   // i.e. inputs obs and pred may be 5 or 3-class
   n = nstages;

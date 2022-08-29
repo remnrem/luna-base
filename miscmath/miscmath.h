@@ -39,6 +39,7 @@ namespace MiscMath
   // next pow2
   long int nextpow2( const int a );
   std::vector<double> logspace(double a, double b, int n);
+  std::vector<double> log2space(double a, double b, int n);
   std::vector<double> linspace(double a, double b, int n);
   
   double rms( const std::vector<double> & );

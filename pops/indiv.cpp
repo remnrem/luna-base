@@ -264,7 +264,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  // Make a copy of the full X1 , if going to be using SOAP 
 	  //
 	  
-	  if ( pops_opt_t::soap_results )
+	  if ( pops_opt_t::soap_results || pops_opt_t::soap_grid )
 	    X1f = X1;
 	  
 	  //
@@ -414,15 +414,23 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       // Apply elapsed-sleep priors to the final solution?
       //
       
-      if ( espriors_file != "." )
+      if ( espriors_file != "." && pops_opt_t::if_root_apply_espriors )
 	apply_espriors( espriors_file );
-      
 
+      //
+      // Grid-search likelihood rescaling
+      //
+
+      if ( pops_opt_t::soap_grid )
+	grid_soap();
+
+      
       //
       // All done, summarize 
       //
-
+      
       summarize();
+      
       
     } // end of PREDICTION mode
   
@@ -1336,14 +1344,8 @@ void pops_indiv_t::predict( const int iter )
   // get posteriors
   P = pops_t::lgbm.predict( X1 , iter );
 
-  // construct current most likely/predictedstaging PS
-  PS.clear();
-  for (int e=0; e<P.rows(); e++)
-    {
-      int predx;
-      double pmax = P.row(e).maxCoeff(&predx);
-      PS.push_back( predx );
-    }  
+  // construct current most likely/predicted staging PS
+  update_predicted();
 
 }
 
@@ -1460,15 +1462,14 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       // predicted (original)
       int predx = -1;
       double pmax = P.row(e).maxCoeff(&predx);
-
+      
       // this should have already been made and match
       if ( predx != PS[e] ) Helper::halt( "internal error in assigned PS" );
-
+      
       writer.value( "CONF" , pmax );
       avg_pmax += pmax;
-      PS.push_back( predx );
       writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
-           
+      
       // priors
       if ( has_staging )
 	{
@@ -1981,15 +1982,8 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
   // Populate final PS
   //
 
-  PS.clear();
-  for (int e=0; e<P.rows(); e++)
-    {
-      int predx;
-      double pmax = P.row(e).maxCoeff(&predx);
-      PS.push_back( predx );
-    }  
+  update_predicted();
   
-
 }
 
 
@@ -2154,6 +2148,24 @@ void pops_indiv_t::ftr_summaries()
 
 }
 
+
+int pops_indiv_t::update_predicted( std::vector<int> * cnts )
+{
+  // given P, update PS
+  std::set<int> ns;
+  
+  PS.clear();
+  for (int e=0; e<P.rows(); e++)
+    {
+      int predx;
+      double pmax = P.row(e).maxCoeff(&predx);
+      PS.push_back( predx );
+      ns.insert( predx );
+      if ( cnts != NULL ) (*cnts)[predx]++;
+    }  
+
+  return ns.size();
+}
 
 #endif
 

@@ -317,7 +317,7 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	Helper::halt( "internal error in finding NR bin(2)" );
       
       curr_bin = pops_t::ES_rowmap[ es_min ][ nrem_min ];
-
+      
 
       if ( 0 )
 	{
@@ -339,20 +339,31 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	  revised(i,4) /= row_sum;
 
 	}
-
+      std::cout << " hh\n";
 
       //
       // Update posteriors given these revised (temporally specific) priors
       //
 
-      Eigen::VectorXd r1 = update_posteriors( revised.row(i), pops_t::ES_global_priors, pops_t::ES_probs.row(curr_bin) );
+      Eigen::VectorXd revised_priors = pops_t::ES_probs.row(curr_bin);
       
-      std::cout << " old = " << revised.row(i) << "\n";
-      std::cout << " pr1 = " << pops_t::ES_global_priors.transpose() << "\n";
-      std::cout << " pr2 = " << pops_t::ES_probs.row(curr_bin) << "\n";
-      std::cout << " new = " << r1.transpose() << "\n";
+      revised.row(i) = update_posteriors( revised.row(i),
+					  pops_t::ES_global_priors,
+					  &revised_priors );
       
-	
+       // std::cout << " old = " << revised.row(i) << "\n";
+       // std::cout << " pr1 = " << pops_t::ES_global_priors.transpose() << "\n";
+       // std::cout << " pr2 = " << pops_t::ES_probs.row(curr_bin) << "\n";
+       //       std::cout << " new = " << r1.transpose() << "\n";
+
+      //
+      // Update most likely stage
+      //
+      
+      int predx;
+      double pmax = revised.row(i).maxCoeff(&predx);
+      PS[i] = predx;
+      
       //
       // get next ES value for next epoch
       //  based on the *predicted* stage
@@ -398,7 +409,7 @@ void pops_indiv_t::apply_espriors( const std::string & f )
       
     }
 
-  // all done  
+  // update, all done  
   P = revised;
   
 }
@@ -735,13 +746,21 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f )
 
 Eigen::VectorXd pops_indiv_t::update_posteriors( const Eigen::VectorXd & posteriors ,
 						 const Eigen::VectorXd & original_priors,
-						 const Eigen::VectorXd & new_priors )
+						 const Eigen::VectorXd * new_priors ,
+						 const Eigen::VectorXd * rescale )
 {
   // implements https://arxiv.org/pdf/2007.01386.pdf
   
   const int nk = posteriors.size();
-  if ( nk != original_priors.size() ) Helper::halt( "mismatch in pops_indiv_t::update_posteriors()" );
-  if ( nk != new_priors.size() ) Helper::halt( "mismatch in pops_indiv_t::update_posteriors()" );
+  if ( nk != original_priors.size() )
+    {
+      logger << " posteriors.size() = " << posteriors.size() << "\n"
+	     << " original_priors.size() = " << original_priors.size() << "\n";
+      
+      Helper::halt( "mismatch in pops_indiv_t::update_posteriors() #1" );
+    }
+  if ( new_priors != NULL && nk != new_priors->size() ) Helper::halt( "mismatch in pops_indiv_t::update_posteriors() #2" );
+  if ( rescale != NULL && nk != rescale->size() ) Helper::halt( "mismatch in pops_indiv_t::update_posteriors() #3" );
   Eigen::MatrixXd A = Eigen::MatrixXd::Zero( nk, nk );
   
   // build A
@@ -759,16 +778,25 @@ Eigen::VectorXd pops_indiv_t::update_posteriors( const Eigen::VectorXd & posteri
   int idx = 0;
   double evmax = eval.maxCoeff(&idx);
   
-  std::cout << "The eigenvalues of A are:" << "\n" << es.eigenvalues() << "\n";
-  std::cout << "The matrix of eigenvectors, V, is:" << "\n" << es.eigenvectors() << "\n\n";
-  
   // get (scaled) likelihoods
   Eigen::VectorXd u = es.eigenvectors().col(idx).real();
+  
+  // rescale likelihoods?
+  if ( rescale != NULL )
+    u = u.array() * rescale->array();
 
-  // update posteriors w/ new prior
+  // update posteriors w/ new priors?
   double denom = 0;
-  for (int j=0; j<nk; j++) denom += u[j] * new_priors[j];
-  for (int j=0; j<nk; j++) u[j] = ( u[j] * new_priors[j] ) / denom ;  
+  if ( new_priors != NULL )
+    {  
+      for (int j=0; j<nk; j++) denom += u[j] * (*new_priors)[j];
+      for (int j=0; j<nk; j++) u[j] = ( u[j] * (*new_priors)[j] ) / denom ;  
+    }
+  else
+    {
+      for (int j=0; j<nk; j++) denom += u[j] * original_priors[j];
+      for (int j=0; j<nk; j++) u[j] = ( u[j] * original_priors[j] ) / denom ;
+    }
   
   return u;
 }

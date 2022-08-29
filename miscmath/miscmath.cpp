@@ -65,6 +65,19 @@ std::vector<double> MiscMath::logspace(double a, double b, int n)
   return r;
 }
 
+std::vector<double> MiscMath::log2space(double a, double b, int n)
+{
+  if ( n < 2 ) Helper::halt( "log2space requires at least two values" );
+  // for a->b, generate a series of logarithmically (log2) equally spaced intervals
+  a = log2(a);
+  b = log2(b);
+  const double st = (b-a)/(double)(n-1);
+  std::vector<double> r(n);
+  r[0] = pow(2,a);
+  r[n-1] = pow(2,b);
+  for (int i=1;i<n-1;i++) r[i] = pow( 2, a + i*st );
+  return r;
+}
 
 //
 // linspace function
