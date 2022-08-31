@@ -141,10 +141,10 @@ void pops_t::make_level2_library( param_t & param )
     ranges_file = pops_t::update_filepath( ranges_file );
   
   std::string espriors_file  = ".";
-  if ( param.has( "es-priors" ) )
-    espriors_file = param.value( "es-priors" );
+  if ( param.has( "priors" ) )
+    espriors_file = param.value( "priors" );
   else if ( pops_opt_t::pops_root != "" && pops_opt_t::if_root_apply_espriors )
-    espriors_file = pops_opt_t::pops_root + ".espriors";
+    espriors_file = pops_opt_t::pops_root + ".priors";
   if ( espriors_file != "." )
     espriors_file = pops_t::update_filepath( espriors_file );
   
@@ -1196,7 +1196,7 @@ void pops_t::read_ranges( const std::string & f )
       range_mean[ varname ] = mean ;
       range_sd[ varname ] = sd ;
     }
-  logger << "  read " << range_mean.size() << " valid feature mean/SD pairs\n";
+  logger << "  read " << range_mean.size() << " valid feature mean/SD ranges from " << f << "\n";
   IN1.close();
 }
 

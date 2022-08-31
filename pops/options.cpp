@@ -98,6 +98,10 @@ bool pops_opt_t::soap_grid;
 double pops_opt_t::lk_lwr;
 double pops_opt_t::lk_upr;
 double pops_opt_t::lk_steps;
+double pops_opt_t::soap_grid_mean_conf;
+
+bool pops_opt_t::eval_mode = false;
+
 
 void pops_opt_t::set_options( param_t & param )
 {
@@ -112,37 +116,34 @@ void pops_opt_t::set_options( param_t & param )
   //        path/lib.conf
   // optional:
   //        path/lib.ranges
-  //        path/lib.espriors
+  //        path/lib.priors
   //        path/(SVD files)
 
   // under root-specification, able to use/not use ranges, es-priors
   if_root_apply_ranges = param.has( "apply-ranges" ) ? param.yesno( "apply-ranges" ) : true ;
-  if_root_apply_espriors = param.has( "apply-es-priors" ) ? param.yesno( "apply-es-priors" ) : true;
+  if_root_apply_espriors = param.has( "apply-priors" ) ? param.yesno( "apply-priors" ) : true;
 
    
   // intercept (i.e. to avoid 0-weight probs for any cell)
-  ES_c = param.has( "es-c" )  ? param.requires_dbl( "es-c" ) : 0.001 ;
+  ES_c = param.has( "priors-c" )  ? param.requires_dbl( "priors-c" ) : 0.001 ;
   
-  ES_rolling = param.yesno( "es-rolling" );
+  ES_rolling = param.yesno( "priors-rolling" );
 
-  ES_fractional_count = param.yesno( "es-weighted" );
+  ES_fractional_count = param.yesno( "priors-weighted" );
 
   // elapsed sleep priors
 
   // bin size (mins) &  max time (mins)
-  ES_es_tbin = param.has( "es-min" ) ? param.requires_dbl( "es-min" ) : 20 ;
-  ES_es_tmax = param.has( "es-max" ) ? param.requires_dbl( "es-max" ) : 380 ;
+  ES_es_tbin = param.has( "priors-es-min" ) ? param.requires_dbl( "priors-es-min" ) : 20 ;
+  ES_es_tmax = param.has( "priors-es-max" ) ? param.requires_dbl( "priors-es-max" ) : 380 ;
 
-  ES_nr_tbin = param.has( "nr-min" ) ? param.requires_dbl( "nr-min" ) : 10 ;
-  ES_nr_tmax = param.has( "nr-max" ) ? param.requires_dbl( "nr-max" ) : 60 ;
-  ES_non_NREM_mins = param.has( "nr-allow" ) ? param.requires_dbl( "nr-allow" ) : 5 ; 
+  ES_nr_tbin = param.has( "priors-nr-min" ) ? param.requires_dbl( "priors-nr-min" ) : 10 ;
+  ES_nr_tmax = param.has( "priors-nr-max" ) ? param.requires_dbl( "priors-nr-max" ) : 60 ;
+  ES_non_NREM_mins = param.has( "priors-nr-allow" ) ? param.requires_dbl( "priors-nr-allow" ) : 5 ; 
   
   // NOT USED NOW: intercept (i.e. to avoid 0-weight probs for any cell)
-  ES_c = param.has( "es-c" )  ? param.requires_dbl( "es-c" ) : 0.001 ;  
+  ES_c = param.has( "priors-c" )  ? param.requires_dbl( "priors-c" ) : 0.001 ;  
 
-  // misc
-  ES_rolling = param.yesno( "es-rolling" );
-  ES_fractional_count = param.yesno( "es-weighted" );
   
   // vars
 
@@ -161,6 +162,8 @@ void pops_opt_t::set_options( param_t & param )
   lk_upr = param.has( "soap-upr" ) ? param.requires_dbl( "soap-upr" ) : 100;
   lk_steps = param.has( "soap-steps" ) ? param.requires_int( "soap-steps" ) : 100;
   soap_grid = param.has( "soap-grid" );
+  soap_grid_mean_conf = param.has( "soap-grid" ) && ! param.empty( "soap-grid" ) ? param.requires_dbl( "soap-grid" ) : 0.8; 
+
 
   // misc
   

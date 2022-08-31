@@ -527,15 +527,44 @@ void pops_indiv_t::grid_soap()
 
   std::vector<double> ll = MiscMath::linspace( pops_opt_t::lk_lwr , pops_opt_t::lk_upr , pops_opt_t::lk_steps );
 
-  // only do REM?
-  std::vector<int> stgs = { 1 }; 
+
+  //
+  // BY default, only rescale likelihoods for stages that are ~never otherwise confidently 
+  // assigned.  By this on % of epochs that have a confidence above X 
+  //
+  
+  std::vector<int> stgs;
+  const double conf_th1 = pops_opt_t::soap_grid_mean_conf; // 0.8 by default
+  const double conf_th2 = 0.05;
+  // i.e. if more than 5% of epochs have P(stage|data) > 0.8, then do not try to 
+  // rescale this stage, as it already has sufficient confident assignments
+  
+  for (int ss=0; ss<5; ss++)
+    {
+      double prop = 0 ; 
+      const int ne = P.rows();
+      for (int e=0; e<ne; e++)
+	if ( P(e,ss) > conf_th1 ) ++prop; 
+      prop /= (double)ne;
+      if ( prop < conf_th2 )
+	{
+	  stgs.push_back( ss );
+	  logger << "  SOAP-scaling likelihoods for " 
+		 << pops_t::labels5[ ss ] << " ( " << prop << " epochs > " << conf_th1 << " conf )\n";
+	}
+    }
+  
+  //
+  // rescale stages identified above
+  //
   
   for (int ss=0; ss<stgs.size(); ss++)
     {
       int s2 = stgs[ss] ; 
-
-      logger << "  rescaling " << pops_t::labels5[ s2 ] << " likelihoods\n";
-
+      
+      //logger << "  rescaling " << pops_t::labels5[ s2 ] << " likelihoods\n";
+      writer.level( pops_t::labels5[ stgs[ss] ] , globals::stage_strat ); 
+            
       double max_fac = 1;
   
       for (double sidx = 0; sidx < ll.size(); sidx++)
@@ -571,6 +600,10 @@ void pops_indiv_t::grid_soap()
 	  
 	  // redo SOAP (w/ same U)	  
 	  double k1 = nstages >= nstages_orig ? simple_soap( U , PS ) : 0 ; 
+	  
+	  writer.level( fac , "FAC" );
+	  writer.value( "K" , k1 );
+	  writer.value( "NS" , nstages );
 
 	  if ( 0 )
 	    {
@@ -595,8 +628,10 @@ void pops_indiv_t::grid_soap()
 	    }
 	  
 	}
-      
 
+      writer.unlevel( "FAC" );
+
+      
       //
       // Final rescaling for this stage
       //
@@ -612,7 +647,7 @@ void pops_indiv_t::grid_soap()
 				      &r );
       update_predicted();
       
-      logger << "  reacaled likelihood R = " << r.transpose() << "\n";
+      //logger << "  reacaled likelihood R = " << r.transpose() << "\n";
 
       writer.value( "RESCALE_REM_FAC" , max_fac );
       writer.value( "RESCALE_REM_K0" , k );
@@ -620,7 +655,8 @@ void pops_indiv_t::grid_soap()
       
       // next stage (curr. REM only)
     }
-  
+
+  writer.unlevel( globals::stage_strat );
 }
 
 

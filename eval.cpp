@@ -1041,6 +1041,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
 
       else if ( is( c, "POPS" ) )        proc_pops( edf , param(c) );
+      else if ( is( c, "EVAL-STAGES" ) ) proc_eval_stages( edf , param(c) );
 
       else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
       else if ( is( c, "RESOAP" ) )      proc_resoap( edf , param(c) );
@@ -1458,6 +1459,16 @@ void proc_make_suds( edf_t & edf , param_t & param  )
   suds_indiv_t trainer;
   trainer.add_trainer( edf , param );  
 }
+
+
+// EVAL-STAGES : given an external file (.eannot), calculate kappa and all other POPS stats
+
+void proc_eval_stages( edf_t & edf , param_t & param )
+{
+  // one external file, vesus internal staging
+  pops_indiv_t indiv( edf , param , param.requires( "file" ) );
+}
+
 
 
 // POPS : population-level staging

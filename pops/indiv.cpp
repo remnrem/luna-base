@@ -46,10 +46,13 @@ extern writer_t writer;
 //  - brain,
 //  - heart
 //  - lung
+
+
   
 pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    param_t & param )
 {
+
 
   //
   // Inputs
@@ -75,11 +78,11 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
   // under lib mode, only read if it actually exists
   std::string espriors_file  = ".";
-  if ( param.has( "es-priors" ) )
-    espriors_file = param.value( "es-priors" );
+  if ( param.has( "priors" ) )
+    espriors_file = param.value( "priors" );
   else if ( pops_opt_t::pops_root != "" && pops_opt_t::if_root_apply_espriors )
     {
-      espriors_file = pops_t::update_filepath( pops_opt_t::pops_root + ".espriors" );
+      espriors_file = pops_t::update_filepath( pops_opt_t::pops_root + ".priors" );
       if ( ! Helper::fileExists( espriors_file ) ) espriors_file = ".";
     }
 
@@ -365,18 +368,14 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  pops_sol_t sol;
 	  
 	  if ( equivn ) 
-	    logger << "  Solution mapping " << pops_opt_t::equiv_swapin
-		   << " --> " <<  pops_opt_t::equiv_root << "\n";
-	  
-	  summarize( equivn ? &sol : NULL );
-	  
-	  
-	  //
-	  // track if >1 equiv channel
-	  //
-	  
-	  if ( equivn )
-	    sols.push_back( sol );
+	    {
+	      logger << "  Solution mapping " << pops_opt_t::equiv_swapin
+		     << " --> " <<  pops_opt_t::equiv_root << "\n";
+	      
+	      summarize( &sol );
+	    
+	      sols.push_back( sol );
+	    }	 	    
 	  
 
 	  //
@@ -401,7 +400,18 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  combine( sols , comb_method, comb_conf );	  	  
 	}
 
-      
+      //
+      // Prior to any post-prediction updates, print confusion matrix
+      // (just to console, not other output tracked)
+      //
+
+      if ( pops_opt_t::soap_results || 
+	   ( espriors_file != "." && pops_opt_t::if_root_apply_espriors ) ||
+	   pops_opt_t::soap_grid )
+	{
+	  print_confusion_matrix();
+	}
+	   
       //
       // Apply SOAP to the final solution?
       //
@@ -411,7 +421,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       
       
       //
-      // Apply elapsed-sleep priors to the final solution?
+      // Apply elapsed-sleep/recent-NREM priors to the final solution?
       //
       
       if ( espriors_file != "." && pops_opt_t::if_root_apply_espriors )
@@ -422,11 +432,13 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       //
 
       if ( pops_opt_t::soap_grid )
-	grid_soap();
-
+	{
+	  // prior to SOAP-grid, print 
+	  grid_soap();
+	}
       
       //
-      // All done, summarize 
+      // All done, now summarize (& also print final confusion matrix)
       //
       
       summarize();
@@ -1452,24 +1464,36 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       
       writer.epoch( E[e] + 1 );
       
-      // format always: W R N1 N2 N3
-      writer.value( "PP_W" , P(e,0) );   // 0 W 
-      writer.value( "PP_R" , P(e,1) );   // 1 R
-      writer.value( "PP_N1" , P(e,2) );  // 2 NR
-      writer.value( "PP_N2" , P(e,3) );
-      writer.value( "PP_N3" , P(e,4) );      
-      
-      // predicted (original)
+      // predicted stage
       int predx = -1;
-      double pmax = P.row(e).maxCoeff(&predx);
       
-      // this should have already been made and match
-      if ( predx != PS[e] ) Helper::halt( "internal error in assigned PS" );
-      
-      writer.value( "CONF" , pmax );
-      avg_pmax += pmax;
-      writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
-      
+      // format always: W R N1 N2 N3
+      if ( ! pops_opt_t::eval_mode )
+	{
+	  writer.value( "PP_W" , P(e,0) );   // 0 W 
+	  writer.value( "PP_R" , P(e,1) );   // 1 R
+	  writer.value( "PP_N1" , P(e,2) );  // 2 NR
+	  writer.value( "PP_N2" , P(e,3) );
+	  writer.value( "PP_N3" , P(e,4) );      
+	  
+	  // predicted (original) --> predx
+	  double pmax = P.row(e).maxCoeff(&predx);
+	  
+	  // this should have already been made and match
+	  if ( predx != PS[e] ) Helper::halt( "internal error in assigned PS" );
+	  
+	  writer.value( "CONF" , pmax );
+	  avg_pmax += pmax;
+	  writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
+	}
+
+      // 'predictions' from an external fike?
+      if ( pops_opt_t::eval_mode )
+	{
+	  predx = PS[e];
+	  writer.value( "PRED" , pops_t::labels5[ PS[e] ] );
+	}
+
       // priors
       if ( has_staging )
 	{
@@ -1525,8 +1549,10 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 
       dur_pred1[ predx ]++;
       
-      for (int ss=0; ss< pops_opt_t::n_stages; ss++)
-	dur_predf[ ss ] += P(e,ss);
+
+      if ( ! pops_opt_t::eval_mode )
+	for (int ss=0; ss< pops_opt_t::n_stages; ss++)
+	  dur_predf[ ss ] += P(e,ss);
     }
 
   writer.unepoch();
@@ -1543,6 +1569,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       sol->S = PS;
     }
   
+
   //
   // Summaries
   //  
@@ -1573,13 +1600,17 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
 	{
 	  writer.level( pops_t::label( (pops_stage_t)ss ) , "SS" ); 
-	  writer.value( "PRF" ,  fac * dur_predf[ss] );
+	  
+	  if ( ! pops_opt_t::eval_mode )
+	    writer.value( "PRF" ,  fac * dur_predf[ss] );
+	  
 	  writer.value( "PR1" ,  fac * dur_pred1[ss] );
 	}
       
       int masked = Sorig.size() - S.size();
       writer.level( pops_t::label( POPS_UNKNOWN ) , "SS" );
-      writer.value( "PRF" ,  fac * masked );
+      if ( ! pops_opt_t::eval_mode )
+	writer.value( "PRF" ,  fac * masked );
       writer.value( "PR1" ,  fac * masked );
       writer.unlevel( "SS" );
       
@@ -1796,7 +1827,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       // stag durations
       writer.value( "OBS" ,  fac * dur_obs[ss] );
       writer.value( "ORIG" , fac * dur_obs_orig[ss] );
-      writer.value( "PRF" ,  fac * dur_predf[ss] );
+      if ( ! pops_opt_t::eval_mode )
+	writer.value( "PRF" ,  fac * dur_predf[ss] );
       writer.value( "PR1" ,  fac * dur_pred1[ss] );
     }
  
@@ -1804,7 +1836,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.level( pops_t::label( POPS_UNKNOWN ) ,  globals::stage_strat  );
   writer.value( "OBS" ,  fac * masked );
   writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
-  writer.value( "PRF" ,  fac * masked );
+  if ( ! pops_opt_t::eval_mode )
+    writer.value( "PRF" ,  fac * masked );
   writer.value( "PR1" ,  fac * masked );
 
   writer.unlevel(  globals::stage_strat  );
@@ -1822,6 +1855,22 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 
 }
 
+void pops_indiv_t::print_confusion_matrix()
+{
+  
+  // 5-class stats
+  pops_stats_t stats( S, PS , 5 );
+  
+  // 3-class stats
+  pops_stats_t stats3( pops_t::NRW( S ) , pops_t::NRW( PS ) , 3 );
+  
+  logger << "  kappa = " << stats.kappa << "; 3-class kappa = " << stats3.kappa
+         << " (n = " << ne << " epochs)\n";
+  logger << "  Confusion matrix: \n";
+  std::map<int,std::map<int,int> > table = pops_t::tabulate( S, PS, true );
+  logger << "\n";
+
+}
 
 
 void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,

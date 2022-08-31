@@ -101,6 +101,7 @@ struct pops_t {
   void from_single_target( const pops_indiv_t & );
   void copy_back( pops_indiv_t * );  
   
+
   //  static pops_opt_t opt;
   
   static lgbm_t lgbm;
@@ -231,7 +232,7 @@ struct pops_stats_t {
   double macro_precision, macro_recall, macro_f1 ;
   double avg_weighted_precision, avg_weighted_recall, avg_weighted_f1;  
   std::vector<double> precision, recall, f1;
-
+  
 };
 
 #endif

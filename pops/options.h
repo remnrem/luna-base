@@ -100,12 +100,18 @@ struct pops_opt_t {
   static double soap_threshold;
   static int soap_nc;
   static bool soap_grid;
+  static double soap_grid_mean_conf;
   static double lk_lwr;
   static double lk_upr;
   static double lk_steps;
   
   // outputs
   static bool epoch_level_SHAP;
+
+
+  // no P (i.e. if in eval mode)
+  static bool eval_mode;
+
 };
 
 #endif

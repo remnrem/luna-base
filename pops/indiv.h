@@ -43,7 +43,13 @@ struct pops_sol_t {
 
 struct pops_indiv_t {
   
+  // normal train/test route
   pops_indiv_t( edf_t & , param_t & );
+
+  // special case #1: to eval against existing, external staging
+  pops_indiv_t( edf_t & , param_t & , const std::string & f1 );
+  // special case #2: to eval two external files:: no attached EDFs
+  pops_indiv_t( param_t & , const std::string & f1 , const std::string & f2 );
 
   bool staging( edf_t & , param_t & );
   
@@ -79,6 +85,8 @@ struct pops_indiv_t {
   
   void summarize( pops_sol_t * sol = NULL );
   
+  void print_confusion_matrix();
+  
   void combine( std::vector<pops_sol_t> & sols ,
 		int method ,
 		double min_conf );
@@ -110,6 +118,13 @@ struct pops_indiv_t {
   Eigen::MatrixXd P;
   std::vector<int> PS; // (final) predicted stages
   
+
+
+  //
+  // Helper function -- compare this individual to an external set of calls
+  //
+  
+  void eval_stages();
   
   //
   // binary I/O functions

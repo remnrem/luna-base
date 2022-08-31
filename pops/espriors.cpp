@@ -309,9 +309,9 @@ void pops_indiv_t::apply_espriors( const std::string & f )
       if ( pops_t::ES_rowmap.find( es_min ) == pops_t::ES_rowmap.end() )
 	Helper::halt( "internal error in finding ES bin(1)" );
 
-      std::cout << " elapsed E = " << i+1 << "\t" << elapsed_sleep << "\t" << recent_nrem << "\n";
+      // std::cout << " elapsed E = " << i+1 << "\t" << elapsed_sleep << "\t" << recent_nrem << "\n";
       
-      std::cout << " E = " << i << "\t obs=" << S[i] << " pred=" << PS[i] << " -->  nrem_bin = " << es_min << " " << nrem_min << " || " << recent_nrem << "\n";
+      // std::cout << " E = " << i << "\t obs=" << S[i] << " pred=" << PS[i] << " -->  nrem_bin = " << es_min << " " << nrem_min << " || " << recent_nrem << "\n";
       
       if ( pops_t::ES_rowmap[ es_min ].find( nrem_min ) == pops_t::ES_rowmap[ es_min ].end() )
 	Helper::halt( "internal error in finding NR bin(2)" );
@@ -339,7 +339,6 @@ void pops_indiv_t::apply_espriors( const std::string & f )
 	  revised(i,4) /= row_sum;
 
 	}
-      std::cout << " hh\n";
 
       //
       // Update posteriors given these revised (temporally specific) priors

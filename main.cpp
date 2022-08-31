@@ -291,6 +291,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_nmf           = false;
   bool cmdline_proc_ms_kmer       = false;
   bool cmdline_proc_ms_cmp_maps   = false;
+  bool cmdline_proc_ms_corr_maps  = false;
   bool cmdline_proc_ms_label_maps = false;
   bool cmdline_proc_copy_suds     = false;
   bool cmdline_proc_combine_suds  = false;
@@ -300,6 +301,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_massoc        = false;
   bool cmdline_proc_pops          = false;
   bool cmdline_proc_pops_espriors = false;
+  bool cmdline_proc_eval_stages   = false;
   bool cmdline_proc_otsu          = false;
   bool cmdline_proc_fft           = false;
   bool cmdline_proc_overlap       = false;
@@ -373,6 +375,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_ms_kmer = true;
 	  else if ( strcmp( argv[1] , "--cmp-maps" ) == 0 )
 	    cmdline_proc_ms_cmp_maps = true;
+	  else if ( strcmp( argv[1] , "--correl-maps" ) == 0 )
+	    cmdline_proc_ms_corr_maps = true;
 	  else if ( strcmp( argv[1] , "--label-maps" ) == 0 )
 	    cmdline_proc_ms_label_maps = true;
 	  else if ( strcmp( argv[1] , "--copy-suds" ) == 0 ) 
@@ -387,6 +391,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_massoc = true;	  
 	  else if ( strcmp( argv[1] , "--pops" ) == 0 )
 	    cmdline_proc_pops = true;
+	  else if ( strcmp( argv[1] , "--eval-stages" ) == 0 )
+	    cmdline_proc_eval_stages = true;
 	  else if ( strcmp( argv[1] , "--es-priors" ) == 0 )
 	    cmdline_proc_pops_espriors = true;
 	  else if ( strcmp( argv[1] , "--otsu" ) == 0 )
@@ -711,6 +717,27 @@ int main(int argc , char ** argv )
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
+      std::exit(0);
+    }
+
+  //
+  // POPS EVAL STAGES
+  //
+
+  if ( cmdline_proc_eval_stages ) 
+    {
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "EVAL-STAGES" , 1 , "" );
+      writer.level( "EVAL-STAGES", "_EVAL-STAGES" );
+
+      pops_indiv_t indiv( param , param.requires( "file" ) , param.value( "file2" ) );
+      
+      writer.unlevel( "_EVAL-STAGES" );
+      writer.commit();
       std::exit(0);
     }
 
@@ -1334,10 +1361,73 @@ int main(int argc , char ** argv )
     }
 
 
+
+  //
+  // MS correl maps
+  //
+
+  if ( cmdline_proc_ms_corr_maps )
+    {
+
+      param_t param;
+      
+      build_param( &param, argc, argv, param_from_command_line );
+      
+      writer.begin();
+      
+      writer.id( "." , "." );      
+      writer.cmd( "CORREL-MAPS" , 1 , "" );
+      writer.level( "CORREL-MAPS", "_CORREL-MAPS" );
+
+      logger << " running CORREL-MAPS\n";
+      
+      
+      //
+      // Get to-be-labelled maps (updates ms_labels?)
+      //
+      
+      ms_prototypes_t A;
+      
+      std::string sol_file = Helper::expand( param.requires( "sol" ) );	  
+      
+      A.read( sol_file );
+      
+      //
+      // Spatial correlations
+      //
+      
+      const int nk = A.K;
+      
+      Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nk );
+      for (int i=0; i<nk; i++)
+	for (int j=0; j<nk; j++)
+	  R(i,j) = ms_prototypes_t::spatial_correlation( A.A.col(i) , A.A.col(j) );
+      
+      for (int i=0; i<nk; i++)
+	std::cout << "\t" << A.ms_labels[i];
+      std::cout << "\n";
+      
+      for (int i=0; i<nk; i++)
+	{
+	  std::cout << A.ms_labels[i];
+	  for (int j=0; j<nk; j++) 
+	    std::cout << "\t" << R(i,j);
+	  std::cout << "\n";	  
+	}
+      
+      //
+      // all done
+      //
+      
+      writer.unlevel( "_CORREL-MAPS" );
+      writer.commit();
+      std::exit(0);
+    }
+
+
   //
   // MS compare maps
   //
-
 
   if ( cmdline_proc_ms_cmp_maps )
     {
