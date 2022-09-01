@@ -65,8 +65,8 @@ assoc_t::assoc_t( param_t & param )
   //
   // misc. options
   //
-
-  lgbm.qt_mode = true; //param.yesno( "qt" ) ;
+  
+  lgbm.qt_mode = param.yesno( "qt" ) ;
   
   allow_missing_values = param.has( "missing" ) ? param.yesno( "missing" ) : true ; 
   
@@ -1126,29 +1126,29 @@ void assoc_t::predict( param_t & param )
 
   // only go up to iteration 'iter'?  ( 0 implies all )
   const int iter = param.has( "iter" ) ? param.requires_int( "iter" ) : 0 ;
-  std::cout << " 11..\n";
-  Eigen::MatrixXd Y = lgbm.predict( X , iter );
-  std::cout << " 22..\n";
   
+  Eigen::MatrixXd Y = lgbm.predict( X , iter );
+    
   const int n = Y.rows();
-
+  
   if ( test_ids.size() != n )
     Helper::halt( "internal error in predict()" );
 
-  writer.id( "." , "." );
-  
-  for (int i=0;i<n;i++)
-    {
-      writer.id( test_ids[i] , "." );
-      
-      if ( test_phe.size() != 0 && test_phe[i] > -998 )
-	writer.value( "OBS" , test_phe[i] );
+  //writer.id( "." , "." );
 
-      writer.value( "PRD" , Y(i,0) );
-    }
+   for (int i=0;i<n;i++)
+     {
+       
+       writer.id( test_ids[i] , "." );
+           
+       if ( test_phe.size() != 0 && test_phe[i] > -998 )
+   	writer.value( "OBS" , test_phe[i] );
+       
+       writer.value( "PRD" , Y(i,0) );
+       
+     }
   
   writer.id( "." , "." );
-
 
 }
 
@@ -1165,6 +1165,7 @@ void assoc_t::SHAP( param_t & param )
   const int n = S.rows();
   const int nv = S.cols() - 1; // nb last col is expected value
 
+
   if ( test_ids.size() != n )
     Helper::halt( "internal error in predict()" );
 
@@ -1177,6 +1178,8 @@ void assoc_t::SHAP( param_t & param )
   
   Eigen::VectorXd M = S.cwiseAbs().colwise().mean();
 
+  std::cout << " S = " << S.rows() << " " << S.cols() << " " << M.size() << " " << nv << "\n";
+  
   if ( M.size() != nv + 1 )
     Helper::halt( "internal error in SHAP" );
 

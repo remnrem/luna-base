@@ -89,7 +89,7 @@ void lgbm_cli_wrapper( param_t & param )
   //
 
   lgbm.qt_mode = qt_mode;
-  
+
   //
   // attach configuration file
   //
@@ -598,11 +598,10 @@ bool lgbm_t::save_model( const std::string & filename )
 
 Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_iter )
 {
-
-  // std::cout << "X dim = " << X.rows() << " " << X.cols() << "\n";
   
-  // std::cout << X << "\n\n";
-
+  std::cout << "X dim = " << X.rows() << " " << X.cols() << "\n";
+  
+  std::cout << X << "\n\n";
 
 
   if ( ! has_booster )
@@ -611,16 +610,17 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
   const void * p = static_cast<const void*>(X.data());
   
   // results
-  // std::cout << " qt_mode = " << qt_mode << "\n";
-  // std::cout << " bbb " << lgbm_t::classes( booster ) << "\n";
+  std::cout << " qt_mode = " << qt_mode << "\n";
+  std::cout << " bbb " << lgbm_t::classes( booster ) << "\n";
+
   int num_classes = qt_mode ? 1 : lgbm_t::classes( booster );
   int num_obs = X.rows();
 
-  //  std::cout << " num , obs = " << num_classes <<" " << num_obs<< "\n";
+  std::cout << " num , obs = " << num_classes <<" " << num_obs<< "\n";
   
   int64_t out_len = num_classes * num_obs;
 
-  //  std::cout << " out result(1) " << out_len << "\n";
+  std::cout << " out result(1) " << out_len << "\n";
 
   // note: returns row-major storage, so read into transposed matrix
   //  and transpose on return (below)
@@ -641,12 +641,15 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
 					&out_len ,
 					out_result );
   
-  // std::cout << " done\n";
-  // std::cout << " out result(2) " << out_len << "\n";
+  std::cout << " done\n";
+  std::cout << " out result(2) " << out_len << "\n";
 
   if ( flag )
     Helper::halt( "issue w/ prediction" );
 
+  std::cout << " num_classes = " << num_classes << "\n"
+	    << " qt_mode = " << qt_mode << "\n";
+  
   // for binary classificaiton, make a two-col matrix
   // (i.e. same as for multiclass)
   if ( num_classes == 1 && ! qt_mode )
@@ -656,9 +659,9 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
 	R(1,i) = 1 - R(0,i);
     }
 
-  // std::cout << "R = " << R.rows() <<" " << R.cols() <<"\n";
+  std::cout << "R = " << R.rows() <<" " << R.cols() <<"\n";
   
-  // std::cout << " R(t) \n" << R.transpose() << "\n";
+  std::cout << " R(t) \n" << R.transpose() << "\n";
   
   return R.transpose();
   

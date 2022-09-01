@@ -2319,39 +2319,57 @@ void hypnogram_t::output( const bool verbose ,
   if ( verbose )
     {
       
-      // HMS ;; hh:mm:ss clocktime
+      // HMS :: hh:mm:ss clocktime
       // E   :: elapsed time, minutes
       // T   :: clocktime, hours past previous midnight
       
       if ( clock_lights_out.valid )
 	{
-
+	  
 	  double t0 = clock_start.hours();
 	  
-	  // ensure all are yoked to the same midnight as T1	  
+	  // ensure all are yoked to the same midnight as T0	  
 	  double t1 = clock_lights_out.hours();
 	  if ( t1 < t0 ) t1 += 24.0;
+
+	  double t2 = any_sleep ? clock_sleep_onset.hours() : 0 ;
+	  if ( t2 < t0 ) t2 += 24.0;
+	  
+	  double t3 = any_sleep ? clock_sleep_midpoint.hours() : 0;
+	  if ( t3 < t0 ) t3 += 24.0;
+
+	  double t4 = any_sleep ? clock_wake_time.hours() : 0;
+	  if ( t4 < t0 ) t4 += 24.0;
+
 	  double t5 = clock_lights_on.hours();
 	  if ( t5 < t0 ) t5 += 24.0;
 
 	  double t6 = clock_stop.hours();
 	  if ( t6 < t0 ) t6 += 24.0;
+	  		  
+	  // finally, if t0 is at mignight, or just after, we need to
+	  // make it align to the *previous* midnight. 
+	  // i.e. if t0 < 12pm, then shift everything by 24 hours
+
+	  if ( t0 < 12 )
+	    {
+	      t0 += 24.0;
+	      t1 += 24.0;
+	      t2 += 24.0; // t2/t3/t4 may not be 
+	      t3 += 24.0; // defined if no sleep,	      
+	      t4 += 24.0; // but no probs, they will not be output
+	      t5 += 24.0;
+	      t6 += 24.0;	      
+	    }
 	  
 	  writer.value(  "T0_START" , t0 );
 	  writer.value(  "E0_START" , 0 );
-
+	  
 	  writer.value(  "T1_LIGHTS_OFF" , t1 );
 	  writer.value(  "E1_LIGHTS_OFF" , ( t1 - t0 ) * 60.0 );
 	  
 	  if ( any_sleep ) 
 	    {
-	      double t2 = clock_sleep_onset.hours();
-	      double t3 = clock_sleep_midpoint.hours();
-	      double t4 = clock_wake_time.hours();
-	      if ( t2 < t0 ) t2 += 24.0;
-	      if ( t3 < t0 ) t3 += 24.0;
-	      if ( t4 < t0 ) t4 += 24.0;
-	      
 	      writer.value(  "T2_SLEEP_ONSET" , t2 );
 	      writer.value(  "E2_SLEEP_ONSET" , Helper::dbl2str( ( t2 - t0 ) * 60.0 , 3 ) );
 	      

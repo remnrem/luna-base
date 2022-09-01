@@ -533,12 +533,13 @@ void pops_indiv_t::grid_soap()
   // assigned.  By this on % of epochs that have a confidence above X 
   //
   
-  std::vector<int> stgs;
+  std::vector<int> stgs = { 1 } ; // REM only
   const double conf_th1 = pops_opt_t::soap_grid_mean_conf; // 0.8 by default
   const double conf_th2 = 0.05;
   // i.e. if more than 5% of epochs have P(stage|data) > 0.8, then do not try to 
   // rescale this stage, as it already has sufficient confident assignments
-  
+
+  if ( 0) 
   for (int ss=0; ss<5; ss++)
     {
       double prop = 0 ; 
@@ -562,7 +563,7 @@ void pops_indiv_t::grid_soap()
     {
       int s2 = stgs[ss] ; 
       
-      //logger << "  rescaling " << pops_t::labels5[ s2 ] << " likelihoods\n";
+      logger << "  rescaling " << pops_t::labels5[ s2 ] << " likelihoods\n";
       writer.level( pops_t::labels5[ stgs[ss] ] , globals::stage_strat ); 
             
       double max_fac = 1;
