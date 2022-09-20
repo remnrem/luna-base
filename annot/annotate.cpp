@@ -187,12 +187,12 @@ annotate_t::annotate_t( param_t & param )
 	      stop += offset;
 
 	      // write out to mega-file
-
+	      
 	      OUT1 << tok[0] << "\t"
 		   << tok[1] << "\t"
 		   << tok[2] << "\t"
-		   << start << "\t"
-		   << stop << "\t"
+		   << Helper::dbl2str( start , globals::time_format_dp ) << "\t"
+		   << Helper::dbl2str( stop , globals::time_format_dp ) << "\t"
 		   << tok[5] << "\n";
 	      
 	    }
@@ -203,7 +203,7 @@ annotate_t::annotate_t( param_t & param )
 	}
 
       logger << "\n"
-	     << "  annotations aligned from " << offset << " to " << offset + ind2dur[ indiv ] + 10.0 << " seconds\n";
+	     << "   annotations aligned from " << offset << " to " << offset + ind2dur[ indiv ] + 10.0 << " seconds\n";
 	
       // shift offset along, with a spacer (arbitrary, 10 seconds)
       // to avoid any flattening of contiguous regions (stop of ind A -- start of ind B)
@@ -482,8 +482,8 @@ void annotate_t::set_options( param_t & param )
   
   // from each seed, look at all enrichment w/ all other annots
   //  non-seed annotations are not permuted
-  if ( param.has( "annot" ) )
-    sannots = param.strset( "annot" );
+  if ( param.has( "other" ) )
+    sannots = param.strset( "other" );
 
   // background (i.e. defines the space; only select/permute within contiguous blocks of these regions)
   if ( param.has( "bg" ) ) 
@@ -1033,7 +1033,7 @@ void annotate_t::prep()
   while ( qq != annot_n.end() )
     {
       logger << "  " << qq->first;
-      if ( sachs.find( qq->first ) != sachs.end() ) logger << " [seed]"; else logger << " [annot]";
+      if ( sachs.find( qq->first ) != sachs.end() ) logger << " [seed]"; else logger << " [other]";
       logger << " : n = " << qq->second
 	     << " , mins = " << annot_s[ qq->first ] / 60.0
 	     << " , avg. dur (s) = " << annot_s[ qq->first ] / (double)qq->second;
@@ -1575,32 +1575,33 @@ void annotate_t::output()
   // one-to-many seed/annot overlap
   //
   
-  std::map<std::string,std::map<std::string,int> >::const_iterator saa = s2a_obs.begin();
+  std::map<std::string,std::map<std::string,uint64_t> >::const_iterator saa = s2a_obs.begin();
   while ( saa != s2a_obs.end() )
     {
       writer.level( saa->first , "SEED" );
 
-      const std::map<std::string,int> & p = saa->second;
-      std::map<std::string,int>::const_iterator pp = p.begin();
+      const std::map<std::string,uint64_t> & p = saa->second;
+      std::map<std::string,uint64_t>::const_iterator pp = p.begin();
       while ( pp != p.end() )
         {
-          writer.level( pp->first , "ANNOTS" );
+          writer.level( pp->first , "OTHERS" );
 	  
 	  //writer.value( "N_OBS" , s2a_obs[ saa->first ][ pp->first ]  );
-	  writer.value( "N_OBS" , pp->second );
-
+	  writer.value( "N_OBS" , (int)pp->second );
+	  
 	  if ( nreps )
 	    {
 	      double mean = s2a_exp[ saa->first ][ pp->first ] / (double)nreps;
 	      double var = s2a_expsq[ saa->first ][ pp->first ] / (double)nreps - mean * mean;
 	      writer.value( "N_EXP" , mean );
+	      //std::cout << " var = " << var << " " << s2a_expsq[ saa->first ][ pp->first ]  << "\n";
 	      if ( var > 0 )
 		writer.value( "N_Z" , ( (double)s2a_obs[ saa->first ][ pp->first ] - mean ) / sqrt( var ) );
 	    }
 	  
 	  ++pp;
 	}
-      writer.unlevel( "ANNOTS" );
+      writer.unlevel( "OTHERS" );
       
       ++saa;
     }
@@ -1620,7 +1621,7 @@ void annotate_t::output()
       std::map<std::string,double>::const_iterator pp = p.begin();
       while ( pp != p.end() )
 	{
-	  writer.level( pp->first , globals::annot_strat );
+	  writer.level( pp->first , "OTHER" );
 
 	  //
 	  // seed-annot overlap: count
@@ -1671,7 +1672,7 @@ void annotate_t::output()
 	  
 	  ++pp;
 	}	  
-      writer.unlevel( globals::annot_strat );
+      writer.unlevel( "OTHER" );
       ++sa;
     }
   writer.unlevel( "SEED" );
@@ -1962,8 +1963,8 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       
       // to track proprtion of seeds w/ at least one (non-seed) annot overlap
       if ( overlap && ! bseed )
-	r->psa[ astr ].insert ( *aa );
-
+	r->psa[ astr ].insert ( named_interval_t( offset, *aa , astr ) );
+  
       // save original distance
       const double adist_orig = fabs( dist );
 
@@ -2098,9 +2099,10 @@ void annotate_t::observed( const annotate_stats_t & s )
   p_obs = s.nsa;
   
   // seed-annot proportion spanned
-  std::map<std::string,std::set<interval_t> >::const_iterator pp = s.psa.begin();
+  std::map<std::string,std::set<named_interval_t> >::const_iterator pp = s.psa.begin();
   while ( pp != s.psa.end() )
     {
+      //std::cout << " prop obs " << pp->first << " " << pp->second.size() << " " << s.ns.find(  pp->first )->second << "\n";
       prop_obs[ pp->first ] = pp->second.size() / s.ns.find(  pp->first )->second;
       ++pp;
     }
@@ -2255,17 +2257,17 @@ void annotate_t::build_null( const annotate_stats_t & s )
   //
 
   // summarize permuted values
-  std::map<std::string,std::map<std::string,int> > s2a = s2a_proc( s.s2a_mappings );
+  std::map<std::string,std::map<std::string,uint64_t> > s2a = s2a_proc( s.s2a_mappings );
   
-  std::map<std::string,std::map<std::string,int> >::const_iterator qq = s2a_obs.begin();
+  std::map<std::string,std::map<std::string,uint64_t> >::const_iterator qq = s2a_obs.begin();
   while ( qq != s2a_obs.end() )
     {
-      const std::map<std::string,int> & k = qq->second;
-      std::map<std::string,int>::const_iterator kk = k.begin();
+      const std::map<std::string,uint64_t> & k = qq->second;
+      std::map<std::string,uint64_t>::const_iterator kk = k.begin();
       while ( kk != k.end() )
 	{
 	  // aggregate
-	  int perm = s2a[ qq->first ][ kk->first ];
+	  uint64_t perm = s2a[ qq->first ][ kk->first ];
 	  s2a_exp[  qq->first ][ kk->first ] += perm;
 	  s2a_expsq[  qq->first ][ kk->first ] += perm * perm;
 	  ++kk;
@@ -2408,13 +2410,13 @@ bool annotate_t::process_channel( const std::string & a , const std::string & ch
 }
 
 
-std::map<std::string,std::map<std::string,int> > annotate_t::s2a_proc( const std::map<named_interval_t,std::set<std::string> > & s )
+std::map<std::string,std::map<std::string,uint64_t> > annotate_t::s2a_proc( const std::map<named_interval_t,std::set<std::string> > & s )
 {
 
-  std::map<std::string,std::map<std::string,int> > r;
+  std::map<std::string,std::map<std::string,uint64_t> > r;
   
   //  std::cout << " s2a_proc S.size() " << s.size() << "\n";
-
+  
   int cnt = 0;
   
   std::map<named_interval_t,std::set<std::string> >::const_iterator ss = s.begin();
@@ -2451,8 +2453,7 @@ std::map<std::string,std::map<std::string,int> > annotate_t::s2a_proc( const std
       ++ss;
     }
 
-  
-  
+    
   return r;
     
 }

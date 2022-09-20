@@ -393,7 +393,7 @@ int main(int argc , char ** argv )
 	    cmdline_proc_pops = true;
 	  else if ( strcmp( argv[1] , "--eval-stages" ) == 0 )
 	    cmdline_proc_eval_stages = true;
-	  else if ( strcmp( argv[1] , "--es-priors" ) == 0 )
+	  else if ( strcmp( argv[1] , "--priors" ) == 0 )
 	    cmdline_proc_pops_espriors = true;
 	  else if ( strcmp( argv[1] , "--otsu" ) == 0 )
 	    cmdline_proc_otsu = true;
@@ -427,6 +427,16 @@ int main(int argc , char ** argv )
       
       for (int i=2;i<argc;i++)
 	{
+
+	  // if we've had an --options command (which sets 'param_from_command_line')
+	  // then ignore any options at or past this value, i.e. as they are specific
+	  // for the command line tool
+
+	  if ( param_from_command_line != 0 && i >= param_from_command_line ) 
+	    continue;
+
+	  // parse for a key=value form: if we do not have this, we assume
+	  // it is a special variable (e.g. @include) or a numeric SL row-range
 	  
 	  std::vector<std::string> tok = 
 	    Helper::quoted_parse( argv[i] , "=" );

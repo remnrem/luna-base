@@ -73,7 +73,7 @@ struct annotate_stats_t {
   std::map<std::string,std::map<std::string,double> > nsa;
 
   // seed-annot proportion (of seeds overlapped by 1+ annot)
-  std::map<std::string,std::set<interval_t> > psa;
+  std::map<std::string,std::set<named_interval_t> > psa;
   std::map<std::string,double> ns; // denom (# flat seeds)
    
   // seed-annot abs(dist)
@@ -277,13 +277,14 @@ struct annotate_t {
 
   // one-to-many s2a mappings
   // std::map<named_interval_t,std::set<std::string> > s2a_mappings;
-  std::map<std::string,std::map<std::string,int> > s2a_obs;
-  std::map<std::string,std::map<std::string,int> > s2a_exp;
-  std::map<std::string,std::map<std::string,int> > s2a_expsq;
+  // allow for very large sq. values
+  std::map<std::string,std::map<std::string,uint64_t> > s2a_obs;
+  std::map<std::string,std::map<std::string,uint64_t> > s2a_exp;
+  std::map<std::string,std::map<std::string,uint64_t> > s2a_expsq;
   std::map<std::string,std::map<std::string,double> > s2a_pv;
   std::map<std::string,std::map<std::string,double> > s2a_z;
   // helper function to do the mapping
-  std::map<std::string,std::map<std::string,int> > s2a_proc( const std::map<named_interval_t,std::set<std::string> > & );
+  std::map<std::string,std::map<std::string,uint64_t> > s2a_proc( const std::map<named_interval_t,std::set<std::string> > & );
   
   //
   // helpers

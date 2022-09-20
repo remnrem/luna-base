@@ -478,6 +478,7 @@ bool annot_t::process_special( const std::string & , const std::string & )
 bool annot_t::load( const std::string & f , edf_t & parent_edf )
 {
 
+  
   //
   // static annot_t function, which will create multiple annot_t for each new 'name'
   // encountered
@@ -912,7 +913,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    ? Helper::sanitize( Helper::unquote( tok[0] ) , globals::class_inst_delimiter )
 	    : Helper::unquote( tok[0] );
 	  
-	  
+
 	  //
 	  // Remap term?
 	  //
@@ -922,7 +923,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( aname == "" ) continue;
 	  
-	  //std::cout << " anme [" << aname << "]\n";
 
 	  //
 	  // save original class name (prior to any combining)
@@ -1041,7 +1041,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( cls_root  != tok[0] )
 	    parent_edf.timeline.annotations.aliasing[ cls_root ] = tok[0];
 	  
-	  
+
 	  //
 	  // Check size
 	  //
