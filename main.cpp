@@ -736,6 +736,7 @@ int main(int argc , char ** argv )
 
   if ( cmdline_proc_eval_stages ) 
     {
+#ifdef HAS_LGBM
       param_t param;
       build_param( &param, argc, argv, param_from_command_line );
 
@@ -748,6 +749,10 @@ int main(int argc , char ** argv )
       
       writer.unlevel( "_EVAL-STAGES" );
       writer.commit();
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+
       std::exit(0);
     }
 

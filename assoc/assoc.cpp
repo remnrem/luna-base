@@ -23,7 +23,7 @@
 #ifdef HAS_LGBM
 
 // analog of POPS but for (stage-stratified) between-person classification
-// DV can be binary or quantitative trait
+// DV can be binary, multiclass or quantitative trait
 
 // similar to POPS, *except*
 //   -- calculate all epoch level metrics, but summarizes by annotation (i.e. duplicate columns)
@@ -463,8 +463,8 @@ void assoc_t::import_training( param_t & param )
     }
 
   
-   std::cout << " Xtrain\n" << Xtrain << "\n\n";
-   std::cout << " Xvalid\n" << Xvalid << "\n\n";
+   // std::cout << " Xtrain\n" << Xtrain << "\n\n";
+   // std::cout << " Xvalid\n" << Xvalid << "\n\n";
     
   
 }
@@ -1130,23 +1130,38 @@ void assoc_t::predict( param_t & param )
   Eigen::MatrixXd Y = lgbm.predict( X , iter );
     
   const int n = Y.rows();
+
+  //  std::cout << "Y.cols = " << Y.cols() << "\n";
+  
+  const int nc = Y.cols();
   
   if ( test_ids.size() != n )
     Helper::halt( "internal error in predict()" );
-
+  
   //writer.id( "." , "." );
 
-   for (int i=0;i<n;i++)
-     {
-       
-       writer.id( test_ids[i] , "." );
-           
-       if ( test_phe.size() != 0 && test_phe[i] > -998 )
-   	writer.value( "OBS" , test_phe[i] );
-       
-       writer.value( "PRD" , Y(i,0) );
-       
-     }
+  for (int i=0;i<n;i++)
+    {
+      
+      writer.id( test_ids[i] , "." );
+      
+      if ( test_phe.size() != 0 && test_phe[i] > -998 )
+	writer.value( "OBS" , test_phe[i] );
+      
+      if ( nc == 1 ) // for binary & QTs
+	writer.value( "PRD" , Y(i,0) );
+      else // for multi-class outputs
+	{
+	  for (int j=0; j<nc; j++)
+	    {
+	      writer.level( j, "K" );
+	      writer.value( "PRD" , Y(i,j) );
+	    }
+	  writer.unlevel( "K" );
+	}
+
+      // next obs
+    }
   
   writer.id( "." , "." );
 
@@ -1169,7 +1184,7 @@ void assoc_t::SHAP( param_t & param )
   if ( test_ids.size() != n )
     Helper::halt( "internal error in predict()" );
 
-  std::cout << " nv = " << nv << " " << varlist.size() << "\n";
+  //  std::cout << " nv = " << nv << " " << varlist.size() << "\n";
     
   if ( nv != varlist.size() )
     Helper::halt( "internal error in predict(), varlist size" );
@@ -1178,7 +1193,7 @@ void assoc_t::SHAP( param_t & param )
   
   Eigen::VectorXd M = S.cwiseAbs().colwise().mean();
 
-  std::cout << " S = " << S.rows() << " " << S.cols() << " " << M.size() << " " << nv << "\n";
+  //  std::cout << " S = " << S.rows() << " " << S.cols() << " " << M.size() << " " << nv << "\n";
   
   if ( M.size() != nv + 1 )
     Helper::halt( "internal error in SHAP" );
