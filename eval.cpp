@@ -1465,8 +1465,13 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 
 void proc_eval_stages( edf_t & edf , param_t & param )
 {
+#ifdef HAS_LGBM
   // one external file, vesus internal staging
   pops_indiv_t indiv( edf , param , param.requires( "file" ) );
+#else
+  Helper::halt( "no LGBM support compiled in" );
+#endif
+
 }
 
 
