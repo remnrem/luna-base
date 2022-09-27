@@ -1044,7 +1044,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EVAL-STAGES" ) ) proc_eval_stages( edf , param(c) );
 
       else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
-      else if ( is( c, "RESOAP" ) )      proc_resoap( edf , param(c) );
+      else if ( is( c, "COMPLETE" ) )    proc_resoap( edf , param(c) );
       else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
       else if ( is( c, "PLACE" ) )       proc_place_soap( edf , param(c) ); // e.g. find where should go
       

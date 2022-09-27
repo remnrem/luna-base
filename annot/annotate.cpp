@@ -328,10 +328,10 @@ void annotate_t::set_options( param_t & param )
   // flatten all channels to a single annotation class
   //
   
-  pool_channels = param.has( "pool-channels" ) || param.has( "pool-specific-channels" ) ;
+  pool_channels = param.has( "pool-channels" );
   
-  if ( param.has( "pool-specific-channels" ) )
-    pool_channel_sets = param.strset( "pool-specific-channels" );
+  if ( ! param.empty( "pool-channels" ) )
+    pool_channel_sets = param.strset( "pool-channels" );
   
   if ( pool_channels ) logger << "  pooling annotations across channels\n";
   else logger << "  retaining channel-level information\n";
@@ -391,7 +391,7 @@ void annotate_t::set_options( param_t & param )
   // also permute annots (as well as seeds)
   //
   
-  shuffle_annots = param.has( "shuffle-annots" ) || param.has( "shuffle-annot" );
+  shuffle_annots = param.has( "shuffle-others" ) || param.has( "shuffle-others" );
   
   //
   // do not permute a particular seed/annotation
@@ -783,9 +783,11 @@ void annotate_t::prep()
 	  // annot class ID
 	  //  plus/minus the channel
 	  
-	  bool pool = pool_channels &&
+	  bool pool = pool_channels && 
 	    ( pool_channel_sets.size() == 0 || pool_channel_sets.find( instance_idx.parent->name ) != pool_channel_sets.end() ) ; 
 	  
+	  // if no channel specified, then always 'ppol' (i.e. in simple case, do not add "_." to end
+	  if ( instance_idx.ch_str == "." ) pool = true;
 	  
 	  const std::string aid = pool ?
 	    instance_idx.parent->name :
@@ -798,7 +800,7 @@ void annotate_t::prep()
 	      ++ii;
 	      continue;
 	    }
-
+	  
 	  // need to add channel-specific version for 'midpoint'?
 	  if ( ( ! pool ) && midpoint_annot.find( instance_idx.parent->name ) != midpoint_annot.end() )
 	    {
@@ -1828,15 +1830,15 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 				   uint64_t offset , 
 				   annotate_stats_t * r )
 {
-
+  //  debug_mode = true;
   // if ( debug_mode ) std::cout << "\nseed_annot_stats( "
-  // 			      << astr << " n = " << a.size() << " -- "
-  // 			      << bstr << " n = " << b.size() << " )\n";
+  //  			      << astr << " n = " << a.size() << " -- "
+  //  			      << bstr << " n = " << b.size() << " )\n";
   
   // if no b annots in this segment, then nothing to do
   // stats remain as they are  
   if ( b.size() == 0 ) return;
-
+  
   // is 'b' also a seed?
   const bool bseed = sachs.find( bstr ) != sachs.end();
   
@@ -1963,8 +1965,12 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       
       // to track proprtion of seeds w/ at least one (non-seed) annot overlap
       if ( overlap && ! bseed )
-	r->psa[ astr ].insert ( named_interval_t( offset, *aa , astr ) );
-  
+	{
+	  //	  std::cout << " found overlap : " << astr << " " << bstr << " = " << aa->as_string() << " by " << bb->as_string() << "\n";
+ 	  r->psa[ astr ].insert ( named_interval_t( offset, *aa , astr ) );
+	  //	  std::cout << "   size = " << r->psa[ astr ].size() << "\n";
+	}
+      
       // save original distance
       const double adist_orig = fabs( dist );
 
@@ -2026,6 +2032,8 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		}
 	    }
 	}
+
+
       // next seed annot
       ++aa;
     }
@@ -2102,7 +2110,8 @@ void annotate_t::observed( const annotate_stats_t & s )
   std::map<std::string,std::set<named_interval_t> >::const_iterator pp = s.psa.begin();
   while ( pp != s.psa.end() )
     {
-      //std::cout << " prop obs " << pp->first << " " << pp->second.size() << " " << s.ns.find(  pp->first )->second << "\n";
+      // std::cout << " prop obs " << pp->first << " " << pp->second.size() << " " << s.ns.find(  pp->first )->second << " = "
+      // 		<< pp->second.size() / s.ns.find(  pp->first )->second << "\n";
       prop_obs[ pp->first ] = pp->second.size() / s.ns.find(  pp->first )->second;
       ++pp;
     }
@@ -2192,9 +2201,11 @@ void annotate_t::build_null( const annotate_stats_t & s )
   while ( pp != prop_obs.end() )
     {
       const bool is_seen = s.psa.find( pp->first ) != s.psa.end();
+      //      std::cout << " TESTING " << pp->first << " " << is_seen << "\n";
       if ( is_seen )
         {
           double val = s.psa.find( pp->first )->second.size() / s.ns.find( pp->first )->second;
+	  //  std::cout << " val (exp) = " << val << " " << s.psa.find( pp->first )->second.size() << " " << s.ns.find( pp->first )->second << "\n";
 	  prop_exp[ pp->first ] += val;
           prop_expsq[ pp->first ] += val * val;
           if ( val >= prop_obs[ pp->first ] ) ++prop_pv[ pp->first ];	  

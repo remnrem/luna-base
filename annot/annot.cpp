@@ -1138,7 +1138,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  
 	  if ( interval.start == 1 && interval.stop == 0 ) 
-	    {
+	    {	      
 	      continue;
 	    }
 	  
@@ -1214,8 +1214,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  
 	  parent_edf.aoccur[ a->name ]++;
+
 	  
-	  	         
 	  //
 	  // Also add any other columns (as separate events under this same annotation)
 	  //
