@@ -47,6 +47,7 @@ struct cansigs_t {
 struct canon_rule_t {
   
   canon_rule_t( const std::vector<std::string> & lines );
+  canon_rule_t( const std::string & l );
   
   std::string canonical_label;
 
@@ -72,6 +73,9 @@ struct canon_rule_t {
   // "<<-" relabelling rule
   bool relabel_canonical;
   std::vector<std::string> original_canonical_label;
+
+  // special: closed
+  bool closed;
   
 };
 
@@ -197,6 +201,8 @@ struct canonical_t
     if ( s == "" || s == "." ) return true;
     const std::string s2 = Helper::trim( s );
     if ( s2 == "" || s2 == "." ) return true;
+    const std::string s3 = Helper::trim( s , '_' , '_' );
+    if ( s3 == "" || s3 == "." ) return true;    
     return false;
   }
   
