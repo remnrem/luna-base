@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Install LightGBM
         run: |
-           brew install lightgbm
+          brew install lightgbm
 #          cd ${HOME}
 #          brew install cmake
 #          brew install libomp
