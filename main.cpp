@@ -1311,8 +1311,17 @@ int main(int argc , char ** argv )
       writer.level( "LABEL-MAPS", "_LABEL-MAPS" );
 
       logger << " running LABEL-MAPS\n";
-      
 
+      //
+      // options
+      //
+
+      bool verbose = param.has( "verbose" );
+
+      // minimize sum(1-r)^p
+      double p = param.has( "p" ) ? param.requires_dbl( "p" ) : 2 ;
+      logger << "  minimizing sum_k (1-r)^" << p << "\n";
+      
       //
       // Threshold of min spatial correl? 
       //
@@ -1356,7 +1365,9 @@ int main(int argc , char ** argv )
       //  this will also edit 'sol1' to match polarity to closest to the template (for viz)
       //
       
-      ms_prototypes_t::ms_labels = ms_cmp_maps_t::label_maps( map_template , template_labels , &sol1 , sol1_labels , th ); 
+      ms_prototypes_t::ms_labels = ms_cmp_maps_t::label_maps( map_template , template_labels , &sol1 , sol1_labels ,
+							      th , p , verbose ); 
+							      
       
       
       //

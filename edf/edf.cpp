@@ -2080,6 +2080,9 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   // Write to file
   //
 
+  if ( f == filename )
+    Helper::halt( "cannot overwrite an existing file: " + filename );
+
   filename = f;
 
   if ( ! as_edfz ) 

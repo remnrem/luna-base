@@ -2463,8 +2463,52 @@ void proc_epoch( edf_t & edf , param_t & param )
   // Epochs start at 0, or something else?
   //
   
-  double offset = param.has( "offset" ) ? param.requires_dbl( "offset" ) : 0 ;
+  double offset = 0;
 
+  if ( param.has( "offset" ) )
+    {
+      std::string ostr = param.value( "offset" );
+      std::vector<std::string> tok = Helper::parse( ostr  , ":" );
+      
+      // hh:mm, hh:mm:ss or dd:hh:mm:ss
+      // (can be hh:mm:ss.ssss)                                         
+      bool is_hms = tok.size() == 2 || tok.size() == 3 || tok.size() == 4;
+
+      if ( is_hms )
+	{
+
+	  clocktime_t starttime( edf.header.starttime );
+	  
+	  if ( ! starttime.valid )
+	    Helper::halt( "specifying offset=hh:mm:ss clocktime start, but no valid EDF header starttime" );
+	  
+	  clocktime_t otime( ostr );
+	  
+	  // 1: EDF start comes before OFFSET start (required)
+	  // 2: OFFSET comes before EDF start --> flag error
+	  
+	  
+	  int earlier = clocktime_t::earlier( starttime , otime );
+	  
+	  if ( earlier == 2 )
+	    Helper::halt( "cannot specify an EPOCH offset earlier than EDF start" );
+	  else
+	    offset = clocktime_t::difference_seconds( starttime , otime ) ;
+	  
+	}
+      else
+	{
+	  // arg value is in seconds
+	  offset = param.requires_dbl( "offset" ) ;	  
+	}
+      
+    }
+
+
+  //
+  // Align w/ first instance of some annotation?
+  //
+  
   std::vector<std::string> align_annots;
   std::string align_str = "";
 
