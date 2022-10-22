@@ -3826,7 +3826,9 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
 					     const std::vector<char> & Tl ,
 					     ms_prototypes_t * A , 
 					     const std::vector<char> & Al ,
-					     double minr )
+					     double minr ,
+					     double p,
+					     bool verbose )
 
 {
 
@@ -3860,29 +3862,53 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
   // then make all possible permutations of 'B' vector
   //  by permuting all 'nt' labels, but only selecting the first 'nk'
   // involves redundant work, but should not be an issue really
+
+  if ( verbose )
+    {
+      std::cout << "R\n" << R << "\n\n";
+    }
   
   std::vector<int> kt( nt );
   for (int i=0; i<nt; i++) kt[i] = i;
-  
-  double max_res = 0;
+    
+  double min_res = 999;
   
   do {
-    double res = 0;    
+
+    double res = 0;
     
-    // nb, here only looking at the first nk of nt
+    // nb, here only looking at the first nk of nt    
     for (int k=0; k<nk; k++) 
-      res += R(k,kt[k]);
-    
-    if ( res > max_res )
+      res += pow( 1 - R(k,kt[k]) , p );
+            
+    // verbose?
+    if ( verbose )
       {
-	max_res = res;
+	double mr = 1;
+	for (int k=0; k<nk; k++)
+	  {
+	    if ( mr > R(k,kt[k]) ) mr = R(k,kt[k]) ;
+	    std::cout << "  "
+		      << Al[k] << ">" << Tl[ kt[k] ] 
+		      << " " << R(k,kt[k])
+		      << ""; 
+	  }
+	std::cout << " S = " << res << "\n";
+      }
+
+    // best?
+    if ( res < min_res )
+      {
+
+	min_res = res;
 
 	best = kt;
 	
 	for (int k=0; k<nk; k++)
 	  {
-	    // rescalceto get polarity 
-	    // spatialr[k] = R(k,kt[k]);
+	    // recalc to get polarity 
+	    //  spatialr[k] = R(k,kt[k]);
+
 	    bool f;
 	    spatialr[k] = ms_prototypes_t::spatial_correlation( A->A.col(k) , T.A.col(kt[k]) , &f );
 	    flip[k] = f;
@@ -3890,6 +3916,10 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
       }
     
   } while ( std::next_permutation( kt.begin() , kt.end() ) );
+
+
+  bool all_optimal = true;
+  bool all_mapped = true;
   
   // copy first 'nk' elements from T to A
   for (int k=0; k<nk; k++)
@@ -3903,6 +3933,29 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
       else logger << "       ";
       if ( ! okay ) logger << " *** below threshold corr. -- assigning '?'";
       logger << "\n";
+
+      if ( ! okay ) all_mapped = false;
+      
+      // is this an 'optimal' match (i.e. no other template with a higher SPC?
+      bool optimal = true;
+      for (int j=0; j<nt; j++)
+	{
+	  if ( j == k ) continue;
+	  if ( R(k,kt[j]) > spatialr[k] )
+	    {
+	      optimal = false;
+	      break;
+	    }
+	}
+
+      writer.level( std::string( 1, Tl[ best[k] ] ) , "KT" );
+      writer.value( "K1" , std::string( 1, Al[k] ) );
+      writer.value( "SPC" , spatialr[k] );
+      writer.value( "FLIP" , flip[k] );
+      writer.value( "MAPPED" , okay );
+      writer.value( "OPTIMAL" , optimal );
+
+      if ( ! optimal ) all_optimal = false;
       
       // do flip?
       if ( flip[k] )
@@ -3917,7 +3970,12 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
       writer.value( "CANON" , std::string(1,Tl[ best[k] ] ) ); 
       writer.value( "FLIP" , flip[k] );
     }
-  writer.unlevel( "K" );
+
+  writer.unlevel( "KT" );
+
+  writer.value( "S" , min_res );
+  writer.value( "OPTIMAL" , all_optimal );
+  writer.value( "MAPPED" , all_mapped );
 
   return r;
   

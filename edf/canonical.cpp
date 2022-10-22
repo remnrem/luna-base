@@ -40,6 +40,13 @@ std::vector<canon_rule_t> canonical_t::rules;
 std::map<std::string,std::string> canonical_t::aliases;
 std::map<int,std::string> canonical_t::scale_codes;
 
+// special case: single label means 'close out'
+canon_rule_t::canon_rule_t( const std::string & label  )
+{
+  canonical_label = label;
+  closed = true;
+}
+
 canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 {
   const int l = lines.size();
@@ -58,6 +65,9 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 
   // <<- rules
   relabel_canonical = false;
+
+  // special closed rule [ignore_generics]
+  closed = false;
     
   std::string current_rule = "";
 
@@ -247,12 +257,14 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		      // n.b. first version cannot be an alias
 		      // n.b. . means missing (empty)
 		      // check that a field hasn't already been specified i.e. cannot have one-to-many mapping
-
-		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) );
+		      
+		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) , '*' );
 		      
 		      for (int j=0; j<tok2.size(); j++)
                         {
-			  std::string str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) );
+			  // allow transducer fields to retain wildcard '*' in sanitization
+			  std::string str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) , '*' );
+			  //if ( str == "*" && j == 0 ) Helper::halt( "first field cannot be '*' for " + canonical_label );
 			  if ( canonical_t::empty_field( str ) )
 			    {
 			      if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label ); 
@@ -268,19 +280,22 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		      // n.b. first version cannot be an alias
 		      // n.b. '.' means missing field 
 		      // as above, cannot specify a value multiple times
+		      // allow '*' as a pref str too 
 
-		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) );
-
+		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) , '*' );
+		      
 		      for (int j=0; j<tok2.size(); j++)
 			{
-			  std::string str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) );
+			  // allow transducer fields to retain wildcard '*' in sanitization
+			  std::string str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) , '*' );
+			  //if ( str == "*" && j == 0 ) Helper::halt( "first field cannot be '*' for " + canonical_label );
 			  if ( canonical_t::empty_field( str ) )
                             {
                               if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label );
                               str = ".";
                             }						    
 			  if ( req_unit.find( str ) != req_unit.end() )
-			    Helper::halt( "cannot specify a unit type multiple times: " + str + " for " + canonical_label );
+			    Helper::halt( "cannot specify a unit type multiple times: " + str + " for " + canonical_label );			  
 			  req_unit[ str ] = pref_str;
 			}
 		    }
@@ -429,7 +444,11 @@ int canonical_t::read( const std::string & filename )
       // process any aliases separately
       std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
 
-      // let XX=A,B,C,D
+      //
+      // Variable assignment:
+      //   let XX=A,B,C,D
+      //
+      
       if ( line.size() >= 4
 	   && tok.size() >= 2
 	   && Helper::toupper( line.substr(0,4) ) == "LET " 
@@ -460,6 +479,28 @@ int canonical_t::read( const std::string & filename )
 	  continue;
 	}
 
+
+      //
+      // one-line close rule (i.e. for group-specific rules, to stop generics from being run)
+      //
+
+      // 'closed: '
+      if ( line.size() >= 8
+	   && tok.size() >= 2
+	   && Helper::toupper( line.substr(0,8) ) == "CLOSED: " ) 
+	{
+	  // comma or space delimited for the second set
+	  std::vector<std::string> str = Helper::quoted_parse( line.substr(8) , " ," );
+	  
+	  // add special 'close-out' rule (i.e. single string constructer)
+	  for (int i=0; i<str.size(); i++)
+	    rules.push_back( canon_rule_t( str[i] ) );
+	  
+	  // nothing else to do here
+	  continue;
+	}
+
+      
       //
       // process line as part of a rule
       //
@@ -644,9 +685,10 @@ void canonical_t::proc( )
   std::set<std::string> do_not_drop;
 
   //
-  // track that, if a group has been specified, but did not match, then
-  // we do not allow any subsequent generic rules to match for that
-  // target canonical signal
+  // track that, if a group has been specified, but did not match, and
+  // we encountered a closed command, then we do not allow any
+  // subsequent generic rules to match for that target canonical
+  // signal
   //
 
   std::set<std::string> ignore_generics;  
@@ -669,6 +711,19 @@ void canonical_t::proc( )
 
       const canon_rule_t rule = rules[r];
 
+
+      //
+      // is this a special close-out rule?
+      //
+
+      if ( rule.closed )
+	{
+	  if ( verbose ) logger << "\n  - attempting rule " << r+1 << " of " << rules.size() << " : target = " << rule.canonical_label << "\n";
+ 	  if ( verbose ) logger << "   closing out all generic rules for " << rule.canonical_label << "\n";
+ 	  ignore_generics.insert( rule.canonical_label );
+	  continue;
+	}
+      
       //
       // are we skipping this?
       //
@@ -745,8 +800,9 @@ void canonical_t::proc( )
           // track that we have encountered a group-specific rule for
 	  // a specified group: this means that any generic rules will
 	  // be ignored for this canonical signal
-	  
-	  ignore_generics.insert( rule.canonical_label );
+
+	  //  NO ... this is now done explicitly via closed: special rule
+	  // ignore_generics.insert( rule.canonical_label );
 
 	}
       else
@@ -756,7 +812,7 @@ void canonical_t::proc( )
 	  
 	  if ( ignore_generics.find( rule.canonical_label ) != ignore_generics.end() )
 	    {
-	      if ( verbose ) logger << "   bailing: did not previously satisfy a group-specific rule\n";
+	      if ( verbose ) logger << "   bailing: this rule has been previously closed out\n";
 	      continue;
 	    }
 	}
@@ -817,18 +873,33 @@ void canonical_t::proc( )
       //
 
       bool wild_trans = false;
+      bool wild_trans_pref = false;
       
       if ( rule.req_transducer.size() != 0 )
 	{
 	  if ( rule.req_transducer.find( sig->transducer ) == rule.req_transducer.end() )
 	    {
 	      
-	      // wildcard?
-	      if ( rule.req_transducer.find( "*" ) != rule.req_transducer.end() )
+	      // wildcard?  (note: sanitization spared * -> _ conversion in trans special case)
+	      if ( rule.req_transducer.find( "*" ) != rule.req_transducer.end() && sig->transducer != "." )
 		{
+		  
+		  wild_trans_pref = rule.req_transducer.find( "*" )->second == "*";
+		  
+		  if ( verbose )
+                    {
+                      if ( wild_trans_pref )
+                        logger << "   allowing wildcard '*' match for " << sig->transducer << ", will keep as is\n";
+                      else
+                        logger << "   allowing wildcard '*' match for " << sig->transducer << ", will set to "
+                               << rule.req_transducer.find( "*" )->second << "\n";
+                    }
+
+
 		  if ( verbose )
 		    logger << "   allowing wildcard '*' match for " << sig->transducer << ", will set to "
 			   << rule.req_transducer.find( "*" )->second << "\n";
+
 		  wild_trans = true;		  
 		}
 	      else
@@ -847,19 +918,30 @@ void canonical_t::proc( )
       //
       // unit rules?
       //
-
-      bool wild_unit = false;
+      
+      bool wild_unit = false; // match
+      bool wild_unit_pref = false; // pref is wild (i.e. keep as is) 
       
       if ( rule.req_unit.size() != 0 )
 	{
           if ( rule.req_unit.find( sig->unit ) == rule.req_unit.end() )
 	    {
-	      // wildcard?
-	      if ( rule.req_unit.find( "*" ) != rule.req_unit.end() )
+	      // wildcard? (note: sanitization spared * -> _ conversion in unit special case)
+	      // only match non-missing values
+	      if ( rule.req_unit.find( "*" ) != rule.req_unit.end() && sig->unit != "." )
                 {
+		  wild_unit_pref = rule.req_unit.find( "*" )->second == "*";
+
                   if ( verbose )
-                    logger << "   allowing wildcard '*' match for " << sig->unit << ", will set to "
-                           << rule.req_unit.find( "*" )->second << "\n";
+                    {
+		      if ( wild_unit_pref )
+			logger << "   allowing wildcard '*' match for " << sig->unit << ", will keep as "
+			       << sig->unit << "\n";
+		      else
+			logger << "   allowing wildcard '*' match for " << sig->unit << ", will set to "
+			       << rule.req_unit.find( "*" )->second << "\n";
+		    }
+		  
                   wild_unit = true;
                 }
               else
@@ -1063,9 +1145,13 @@ void canonical_t::proc( )
 	  std::string ustr = ".";
 	  
 	  // if unit was a requirement, get the preferred label
-
 	  if ( wild_unit )
-            ustr = rule.req_unit.find( "*" )->second;
+	    {
+	      if ( wild_unit_pref )
+		ustr = Helper::sanitize( Helper::trim( edf.header.phys_dimension[ canonical_slot ] ) );
+	      else
+		ustr = rule.req_unit.find( "*" )->second;
+	    }	    
 	  else if ( rule.req_unit.find( sig->unit ) != rule.req_unit.end() )
 	    ustr = rule.req_unit.find( sig->unit )->second;
 	  else // copy and clean original, if not requirement
@@ -1102,7 +1188,12 @@ void canonical_t::proc( )
 	  std::string transducer = ".";
 	  // if transducer was a requirement, get the preferred label
 	  if ( wild_trans )
-	    transducer = rule.req_transducer.find( "*" )->second;
+	    {
+	      if ( wild_trans_pref )
+		transducer = Helper::sanitize( Helper::trim( edf.header.transducer_type[ canonical_slot ] ) );
+	      else
+		transducer = rule.req_transducer.find( "*" )->second;
+	    }
 	  else if ( rule.req_transducer.find( sig->transducer ) != rule.req_transducer.end() )
 	    transducer = rule.req_transducer.find( sig->transducer )->second; 
 	  else // copy and clean original, if not requirement
@@ -1301,8 +1392,9 @@ void canonical_t::proc( )
 	      
 	      // report output
 	      writer.level( label , globals::signal_strat );	      
- 	      writer.value( "DROPPED" , 1 );	      	      
- 	      writer.value( "USED" , was_used );
+	      if ( drop_originals ) 
+		writer.value( "DROPPED" , 1 );	      	      
+	      writer.value( "USED" , was_used );
 	      
 	      if ( was_used ) ++sigs_used;
 	      else ++sigs_unused;	      

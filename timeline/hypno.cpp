@@ -2832,17 +2832,24 @@ void hypnogram_t::output( const bool verbose ,
 	  
 	  if ( starttime.valid ) 
 	    {
-	      clocktime_t current_clock_time = starttime;
+
+	      // old - assume epoch 1 starts at 0 / EDF start
+	      //clocktime_t current_clock_time = starttime;	      
+	      //current_clock_time.advance_seconds( epoch_sec * epoch_n[e] );
 	      
-	      current_clock_time.advance_seconds( epoch_sec * epoch_n[e] );
-	      
-	      writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
+	      // new - use actual epoch encoding (it's what it's there for!)
+	      interval_t interval = timeline->epoch( epoch_n[e] );	      
+	      const double sec0 = interval.start * globals::tp_duration;
+              clocktime_t present = starttime;
+              present.advance_seconds( sec0 );
+                            	      
+	      writer.value( "CLOCK_TIME" , present.as_string( ':' ) );
 	      
 	      if ( verbose ) 
-		writer.value( "CLOCK_HOURS" ,  current_clock_time.as_numeric_string() );
+		writer.value( "CLOCK_HOURS" ,  present.as_numeric_string() );
 	      
 	    }
-	  
+		  
 	  // time in minutes
 	  
 	  writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
@@ -2918,21 +2925,27 @@ void hypnogram_t::output( const bool verbose ,
       writer.epoch( timeline->display_epoch( e ) );
       
 
-      // clock time based on EDF header
       if ( starttime.valid ) 
 	{
-	  clocktime_t current_clock_time = starttime;
-	  
-	  current_clock_time.advance_seconds( epoch_sec * e );
-	  
-	  writer.value( "CLOCK_TIME" , current_clock_time.as_string() );      
-	  
-	  if ( verbose ) 
-	    writer.value( "CLOCK_HOURS" ,  current_clock_time.as_numeric_string() );
 
+	  // old -- clock time based on EDF header
+	  //clocktime_t current_clock_time = starttime;
+	  //current_clock_time.advance_seconds( epoch_sec * e );
+
+	  // new - use actual epoch encoding (it's what it's there for!)                                              
+	  interval_t interval = timeline->epoch( e );
+	  const double sec0 = interval.start * globals::tp_duration;
+	  clocktime_t present = starttime;
+	  present.advance_seconds( sec0 );
+	  
+	  writer.value( "CLOCK_TIME" , present.as_string( ':' ) );
+	  
+	  if ( verbose )
+	    writer.value( "CLOCK_HOURS" ,  present.as_numeric_string() );
+	  
 	}
 
-      // time in minutes
+      // time in minutes (from EPOCH 1, not EDF start, i.e. if EPOCH align)
       writer.value( "MINS" ,  e * epoch_mins );
     
       // stages      

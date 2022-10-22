@@ -1044,7 +1044,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EVAL-STAGES" ) ) proc_eval_stages( edf , param(c) );
 
       else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
-      else if ( is( c, "RESOAP" ) )      proc_resoap( edf , param(c) );
+      else if ( is( c, "COMPLETE" ) )    proc_resoap( edf , param(c) );
       else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
       else if ( is( c, "PLACE" ) )       proc_place_soap( edf , param(c) ); // e.g. find where should go
       
@@ -1465,8 +1465,13 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 
 void proc_eval_stages( edf_t & edf , param_t & param )
 {
+#ifdef HAS_LGBM
   // one external file, vesus internal staging
   pops_indiv_t indiv( edf , param , param.requires( "file" ) );
+#else
+  Helper::halt( "no LGBM support compiled in" );
+#endif
+
 }
 
 
@@ -2458,8 +2463,52 @@ void proc_epoch( edf_t & edf , param_t & param )
   // Epochs start at 0, or something else?
   //
   
-  double offset = param.has( "offset" ) ? param.requires_dbl( "offset" ) : 0 ;
+  double offset = 0;
 
+  if ( param.has( "offset" ) )
+    {
+      std::string ostr = param.value( "offset" );
+      std::vector<std::string> tok = Helper::parse( ostr  , ":" );
+      
+      // hh:mm, hh:mm:ss or dd:hh:mm:ss
+      // (can be hh:mm:ss.ssss)                                         
+      bool is_hms = tok.size() == 2 || tok.size() == 3 || tok.size() == 4;
+
+      if ( is_hms )
+	{
+
+	  clocktime_t starttime( edf.header.starttime );
+	  
+	  if ( ! starttime.valid )
+	    Helper::halt( "specifying offset=hh:mm:ss clocktime start, but no valid EDF header starttime" );
+	  
+	  clocktime_t otime( ostr );
+	  
+	  // 1: EDF start comes before OFFSET start (required)
+	  // 2: OFFSET comes before EDF start --> flag error
+	  
+	  
+	  int earlier = clocktime_t::earlier( starttime , otime );
+	  
+	  if ( earlier == 2 )
+	    Helper::halt( "cannot specify an EPOCH offset earlier than EDF start" );
+	  else
+	    offset = clocktime_t::difference_seconds( starttime , otime ) ;
+	  
+	}
+      else
+	{
+	  // arg value is in seconds
+	  offset = param.requires_dbl( "offset" ) ;	  
+	}
+      
+    }
+
+
+  //
+  // Align w/ first instance of some annotation?
+  //
+  
   std::vector<std::string> align_annots;
   std::string align_str = "";
 

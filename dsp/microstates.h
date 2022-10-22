@@ -448,7 +448,9 @@ struct ms_cmp_maps_t {
 				       const std::vector<char> & Tl ,
 				       ms_prototypes_t * A , 
 				       const std::vector<char> & Al ,
-				       double );
+				       double th ,
+				       double p , 
+				       bool verbose = false );
   
   
   ms_cmp_maps_t( const std::map<std::string,std::map<std::string,std::map<std::string,double> > > & d ,

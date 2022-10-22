@@ -194,7 +194,7 @@ void globals::init_defs()
   
   version = "v0.27.0";
   
-  date    = "08-Aug-2022";
+  date    = "27-Sep-2022";
 
   //
   // Return code
@@ -386,6 +386,24 @@ void globals::init_defs()
   sleep_stage_labels[ "SDO:NonRapidEyeMovementSleep-N4" ] = NREM4;
   sleep_stage_labels[ "SDO:RapidEyeMovementSleep" ]       = REM;
 
+  // other
+  sleep_stage_labels[ "Stage1" ] = NREM1;
+  sleep_stage_labels[ "Stage2" ] = NREM2;
+  sleep_stage_labels[ "Stage3" ] = NREM3;
+  sleep_stage_labels[ "Stage4" ] = NREM4;
+  sleep_stage_labels[ "S1" ] = NREM1;
+  sleep_stage_labels[ "S2" ] = NREM2;
+  sleep_stage_labels[ "S3" ] = NREM3;
+  sleep_stage_labels[ "S4" ] = NREM4;
+
+  sleep_stage_labels[ "lights" ] = LIGHTS_ON;
+  sleep_stage_labels[ "lights_on" ] = LIGHTS_ON;
+  sleep_stage_labels[ "unknown" ] = UNKNOWN;
+  sleep_stage_labels[ "missing" ] = UNKNOWN;
+  sleep_stage_labels[ "A" ] = UNKNOWN;
+  sleep_stage_labels[ "artifact" ] = UNKNOWN;
+
+  
   // other NSRR
   sleep_stage_labels[ "Wake|0" ]          = WAKE;
   sleep_stage_labels[ "Stage 1 sleep|1" ] = NREM1;
