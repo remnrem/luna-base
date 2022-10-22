@@ -75,14 +75,22 @@ instance_t * annot_t::add( const std::string & id , const interval_t & interval 
       t.advance_seconds( start_secs );
       id2 = t.as_string( ':' , true ); // T = include any fractional seconds
     }
-      
-  instance_t * instance = new instance_t ;
+  
+  // get index
+  instance_idx_t idx( this , interval , id2 , ch );
+
+  // does this already exist?
+  if ( interval_events.find( idx ) != interval_events.end() )
+    return interval_events[ idx ];
+
+  // else create a new instance
+  instance_t * instance = new instance_t ;  
+
+  interval_events[ instance_idx_t( this , interval , id2 , ch ) ] = instance;
   
   // track (for clean-up)
   all_instances.insert( instance );
     
-  interval_events[ instance_idx_t( this , interval , id2 , ch ) ] = instance; 
-  
   return instance; 
   
 }

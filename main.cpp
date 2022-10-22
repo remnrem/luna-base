@@ -2094,11 +2094,12 @@ void process_edfs( cmd_t & cmd )
 			       Helper::file_extension( fname2 , "txt" ) ||
 			       Helper::file_extension( fname2 , "tsv" ) ||
 			       Helper::file_extension( fname2 , "xml" ) ||
+			       Helper::file_extension( fname2 , "ameta" ) ||
 			       Helper::file_extension( fname2 , "stages" ) ||
 			       Helper::file_extension( fname2 , "eannot" ) )   
 			    {
 			      edf.load_annotations( fname + fname2 );	 			   
-			    }
+			    }			 
 			}
 		      closedir (dir);
 		    }
@@ -2115,6 +2116,7 @@ void process_edfs( cmd_t & cmd )
 		       Helper::file_extension( fname , "txt" ) ||
 		       Helper::file_extension( fname , "tsv" ) ||
 		       Helper::file_extension( fname , "xml" ) ||
+		       Helper::file_extension( fname , "ameta" ) ||
 		       Helper::file_extension( fname , "stages" ) ||
 		       Helper::file_extension( fname , "eannot" ) )
 		    {
