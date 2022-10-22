@@ -3428,10 +3428,13 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
       logger << "  control-template similarity                      : " << within[1] << " p = " << p_con   << "\n";
       logger << "  | case-template - control-template | similarity  : " << het_between << " p = " << p_het   << "\n";
       
-      // writer.value( "P_TEMPLATE_HET" , p_het );
-      // writer.value( "P_TEMPLATE_CAS" , p_cas );
-      // writer.value( "P_TEMPLATE_CON" , p_con );  
-  
+      writer.id( "." , "." );
+      writer.level( "ALL" , "SUMM" );
+      writer.value( "P_TEMPLATE_HET" , p_het );
+      writer.value( "P_TEMPLATE_CAS" , p_cas );
+      writer.value( "P_TEMPLATE_CON" , p_con );  
+      writer.unlevel( "SUMM" );
+
       for (int i=0;i<ni; i++)
 	{
 	  writer.id( ids[i] , "." );
@@ -3516,11 +3519,14 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
   logger << "  | within-case - within-control | similarity  : " << het_between << " p = " << p_het   << "\n";
   logger << "  concordant / discordant pair similarity      : " << pobs  << " p = " << p_pairs << "\n";
   
-  // writer.value( "P_PAIRS" , p_pairs );
-  // writer.value( "P_HET" , p_het );
-  // writer.value( "P_CAS" , p_cas );
-  // writer.value( "P_CON" , p_con );  
-  
+  writer.id( "." , "." );
+  writer.level( "ALL" , "SUMM" );
+  writer.value( "P_PAIRS" , p_pairs );
+  writer.value( "P_HET" , p_het );
+  writer.value( "P_CAS" , p_cas );
+  writer.value( "P_CON" , p_con );  
+  writer.unlevel( "SUMM" );
+
   for (int i=0;i<ni; i++)
     {
       writer.id( ids[i] , "." );
@@ -3875,8 +3881,8 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
 	
 	for (int k=0; k<nk; k++)
 	  {
-	    // recalc to get polarity 
-	    //spatialr[k] = R(k,kt[k]);
+	    // rescalceto get polarity 
+	    // spatialr[k] = R(k,kt[k]);
 	    bool f;
 	    spatialr[k] = ms_prototypes_t::spatial_correlation( A->A.col(k) , T.A.col(kt[k]) , &f );
 	    flip[k] = f;
@@ -3904,8 +3910,15 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
       
       // copy label
       r[k] = newlab;
+
+      // outputs
+      writer.level( std::string(1,Al[k]) , "K" );
+      writer.value( "SPC" , spatialr[k] ); 
+      writer.value( "CANON" , std::string(1,Tl[ best[k] ] ) ); 
+      writer.value( "FLIP" , flip[k] );
     }
-  
+  writer.unlevel( "K" );
+
   return r;
   
 }
