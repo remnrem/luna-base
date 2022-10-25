@@ -1362,33 +1362,45 @@ void proc_place_soap( edf_t & edf , param_t & param  )
 // REBASE : change epoch duration 
 void proc_rebase_soap( edf_t & edf , param_t & param  )
 {
-  // desired epoch (must be a multiple of current epoch length)
-  //  e.g. if wanting 20 -> 30 (or vice versa) set epoch length to 10
-  //  EPOCH dur=10 & RESOAP dur=30 
-
+  
+  // uses existing EPOCH settings (which can include overlapping epochs)
+  // and then predict into a new space ;  
+  
   if ( ! edf.timeline.epoched() ) 
     Helper::halt( "REBASE requires that EPOCH was explicitly set beforehand" );
   
-  uint64_t e1_tp = edf.timeline.epoch_len_tp_uint64_t();
+  // original epoch size (i.e. from a previous EPOCH command )
+  //uint64_t e1_tp = edf.timeline.epoch_len_tp_uint64_t();
   
-  double e2 = param.requires_dbl( "dur" );
-  uint64_t e2_tp = e2 * globals::tp_1sec ; 
+  // final desired epoch size (can be anything)
+  double newlen = param.requires_dbl( "dur" );
 
-  // assumption is that the set epoch length is the GCD (greatest common divisor) of the 
-  // original and target epoch duration
+  //uint64_t e2_tp = e2 * globals::tp_1sec ; 
   
-  if ( e2_tp % e1_tp != 0 ) 
-    Helper::halt( "dur must be an exact multiple of current epoch length" );
+  // analysis window: size must be an integer multiple of original epoch length
+  // i.e. to ensure integer number of sample points (although prob not really necessary...)
+  
+  // double win2 = param.has( "window" ) ? param.requires_dbl( "window" ) : 0;
+  // uint64_t win2_tp = win2 * globals::tp_1sec ;
+  
+  // double overlap2 = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0;
+  //uint64_t overlap2_tp = overlap2 * globals::tp_1sec ;
+  
+  // assumption is that the set epoch length is the GCD (greatest common divisor) of the 
+  // original and analysis window length
+  
+  // if ( win2_tp % e1_tp != 0 ) 
+  //   Helper::halt( "window must be an exact multiple of current epoch length" );
   
   suds_t::set_options( param );
-
+  
   // load model, if not already done
   if ( ! suds_t::model.loaded() )
     suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" );
 
   suds_indiv_t self;
-  self.rebase( edf , param , e2 );
-      
+  self.rebase( edf , param , newlen );
+  
 }
 
 
