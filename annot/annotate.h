@@ -186,11 +186,11 @@ struct annotate_t {
   
   uint64_t maxtp;
   
-  std::set<std::string> sseeds, sannots, sbgs;
+  std::set<std::string> sseeds, sannots, sbgs, sxbgs;
 
   double edge_sec;
   
-  std::set<annot_t*> seeds, annots, bgs;
+  std::set<annot_t*> seeds, annots, bgs, xbgs;
 
   // add new annotations (seed<_TAG>) depending on whether existing
   // seeds match or do not match one+ annots
@@ -294,6 +294,9 @@ struct annotate_t {
   // if join_neighbours, then contiguous intervals also merged
   std::set<interval_t> flatten( const std::set<interval_t> & x , const bool join_neighbours = true );
 
+  // excise: return 'y' after excising 'x'
+  std::set<interval_t> excise( const std::set<interval_t> & y , const std::set<interval_t> & x );
+  
   uint64_t total_duration( const std::set<interval_t> & x );
   
   bool place_interval( const interval_t & , uint64_t * ) const ;

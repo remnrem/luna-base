@@ -493,6 +493,11 @@ void annotate_t::set_options( param_t & param )
   // then denote here
   if ( param.has( "edges" ) )
     edge_sec = param.requires_dbl( "edges" );
+
+  // exclusionary background (xbg) -- i.e. xbg is the converse of bg, and thus
+  // specifies gaps rather than allowed intervals
+  if ( param.has( "xbg" ) )
+    sxbgs = param.strset( "xbg" );
   
   // outputs - i.e. seed annotations that are w/ or w/out a 'matched' annot
   make_anew = false;
@@ -551,6 +556,22 @@ void annotate_t::prep()
     }
 
   //
+  // exclusionary backgrounds
+  //
+  
+  xbgs.clear();
+  
+  aa = sxbgs.begin();
+  while ( aa != sxbgs.end() )
+    {
+      annot_t * a = edf->timeline.annotations.find( *aa );
+      if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
+      else xbgs.insert( a );
+      ++aa;
+    }
+
+  
+  //
   // seeds
   //
   
@@ -589,7 +610,7 @@ void annotate_t::prep()
   // contruct the background set
   //
 
-  std::set<interval_t> abg; // all backgrouns
+  std::set<interval_t> abg; // all backgrounds
   
   std::set<annot_t*>::const_iterator bb = bgs.begin();
   while ( bb != bgs.end() )
@@ -611,12 +632,13 @@ void annotate_t::prep()
   //
   // combine and flatten all backgrounds
   //  ( true --> join adjacent/contiguous intervals for the BG)
-
+  //
+  
   if ( abg.size() != 0 )
     {
       mbg = flatten( abg , true );
     }
-
+  
   
   //
   // reduce edges?
@@ -635,7 +657,7 @@ void annotate_t::prep()
 	  if ( b2.stop - edge_tp < b2.start )
 	    {
 	      b2.stop = b2.start; // null interval
-	      std::cout << " making a NULL interval...\n";
+	      //std::cout << " making a NULL interval...\n";
 	    }
 	  else
 	    b2.stop -= edge_tp;
@@ -647,7 +669,51 @@ void annotate_t::prep()
 	}
     }
 
+  //
+  // remove exclusionary backgrounds (i.e. make holes)
+  //
 
+  if ( xbgs.size() )
+    {
+      
+      std::set<interval_t> xs; // all excisions
+  
+      std::set<annot_t*>::const_iterator bb = xbgs.begin();
+      while ( bb != xbgs.end() )
+	{
+	  annot_t * annot = *bb;
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  while ( ii != annot->interval_events.end() )
+	    {
+	      instance_idx_t instance_idx = ii->first;	  	  	  
+	      xs.insert( instance_idx.interval );
+	      ++ii;
+	    }      
+	  ++bb;
+	}
+
+      // flatten 
+      //  ( true --> join adjacent/contiguous intervals for the BG)      
+      xs = flatten( xs , true );
+
+      logger << "  excising " << xs.size() << " unique xbg intervals\n";
+      
+      // and now remove these from the primary background
+      mbg = excise( mbg , xs );
+      
+      if ( mbg.size() == 0 )
+	Helper::halt( "no valid background intervals left after exclusions" );
+      
+    }
+
+  // std::set<interval_t>::const_iterator mm = mbg.begin();
+  // while ( mm != mbg.end() )
+  //   {
+  //     std::cout << "  BB = " << mm->start << " .. " << mm->stop << "\n";
+  //     ++mm;
+  //   }
+    
+  
   //
   // final summary
   //
@@ -667,12 +733,6 @@ void annotate_t::prep()
     logger << "  no background intervals ('bg'), will assume a single region from 0 to last annotation end-point\n";
   
 
-  //
-  // and annotation stats
-  //
-
-  
-  
   
   //
   // make a combined set
@@ -786,7 +846,7 @@ void annotate_t::prep()
 	  bool pool = pool_channels && 
 	    ( pool_channel_sets.size() == 0 || pool_channel_sets.find( instance_idx.parent->name ) != pool_channel_sets.end() ) ; 
 	  
-	  // if no channel specified, then always 'ppol' (i.e. in simple case, do not add "_." to end
+	  // if no channel specified, then always 'pool' (i.e. in simple case, do not add "_." to end
 	  if ( instance_idx.ch_str == "." ) pool = true;
 	  
 	  const std::string aid = pool ?
@@ -2042,6 +2102,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 }
 
 
+
 std::set<interval_t> annotate_t::flatten( const std::set<interval_t> & x , const bool join_neighbours )
 {
 
@@ -2083,6 +2144,79 @@ std::set<interval_t> annotate_t::flatten( const std::set<interval_t> & x , const
   return m;
 }
 
+
+std::set<interval_t> annotate_t::excise( const std::set<interval_t> & y , const std::set<interval_t> & x )
+{
+
+  if ( x.size() == 0 || y.size() == 0 ) return y;
+  
+  // ensure that exclusions are flattened
+  std::set<interval_t> fx = flatten( x , true );
+  
+  std::set<interval_t> z;
+
+  std::set<interval_t>::const_iterator yy = y.begin();
+  while ( yy != y.end() )
+    {
+      const interval_t & interval = *yy;
+      
+      // find the first annot not before (at or after) this 
+      std::set<interval_t>::const_iterator xx = fx.lower_bound( interval );
+
+      // as flattened, slide back one, i.e. to see whether
+      // x starts before y but overlaps
+      if ( xx != fx.begin() )
+	{
+	  // slide back one
+	  --xx; 
+	  
+	  // too early? revert to first 
+	  if ( xx->stop <= interval.start ) ++xx;
+	}
+      
+      // no overlap?
+      if ( xx == fx.end() ) { z.insert( interval ); ++yy; continue; }
+      
+      // this is after target?
+      if ( xx->start >= interval.stop ) { z.insert( interval ); ++yy; continue; }
+
+      
+      // if here, means we have at least one region to exclude 
+      
+      uint64_t curr = interval.start;
+      
+      while ( 1 )
+	{
+	  // putative new interval, up until the start of the exclusion
+	  // (as we know that bb starts within this spanning interval)
+	  if ( curr < xx->start )
+	    z.insert( interval_t( curr , xx->start ) );
+	  
+	  // update curr to after this hole (i.e. +1 = start of new)
+	  curr = xx->stop;
+	  
+	  // but check this is not past end; if so, all done
+	  if ( curr >= interval.stop ) { break; }
+
+	  // search for another hole?
+	  ++xx;
+	  
+	  // nothing found? then jump out 
+	  if ( xx == fx.end() ) { break;}
+	  if ( xx->start >= interval.stop ) { break; }
+	  
+	}
+
+      // do we have any remaining span we want to add?
+      if ( curr < interval.stop )
+	z.insert( interval_t( curr , interval.stop ) );
+      
+      // all done, find next interval to prune
+      ++yy;
+    }
+  
+  return z;
+}
 
 uint64_t annotate_t::total_duration( const std::set<interval_t> & x )
 {
