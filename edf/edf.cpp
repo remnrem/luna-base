@@ -4486,16 +4486,16 @@ bool edf_t::basic_stats( param_t & param )
 		  if ( (*d)[i] < min ) min = (*d)[i];
 		  if ( (*d)[i] > max ) max = (*d)[i];
 		}
-	      
+	    	      
 	      std::map<int,double> pct;
-	      pct[ -1 ]  = MiscMath::percentile( *d , 0.001 );
+	      //pct[ -1 ]  = MiscMath::percentile( *d , 0.001 );
 	      pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
 	      pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
 	      pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
 	      pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
 	      pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
 	      pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
-	      pct[ 999 ]  = MiscMath::percentile( *d , 0.999 );
+	      //pct[ 999 ]  = MiscMath::percentile( *d , 0.999 );
 	      for (int pp=0;pp<9;pp++)
 		pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
 	      

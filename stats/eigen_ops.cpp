@@ -693,10 +693,31 @@ Eigen::MatrixXd eigen_ops::load_mat( const std::string & f ,
 }
 
 
-bool eigen_ops::p95_logmod( Eigen::Ref<Eigen::MatrixXd> m )
+
+Eigen::VectorXd eigen_ops::percentile_scale( const Eigen::VectorXd & x , const double pct , const int nsegs )
 {
+  
+  const int nt = x.size();
+  const int ns = nt / nsegs;
+
+  // mean center
+  Eigen::VectorXd r = x.array() - x.mean();
+  
+  std::vector<double> pcts;  
+  for (int i=0; i<nsegs; i++)
+    {
+      std::vector<double> v = copy_vector( r.segment( i*ns , ns ) );
+      pcts.push_back( MiscMath::percentile( v , pct ) );      
+    }
+  
+  double pct_th = MiscMath::median( pcts );
+  if ( pct_th == 0 ) return r;
+  
   // x = sign(x) . log( abs(x) / p_95(x) + 1 )  
-  return true;
+  for (int p=0; p<nt; p++)
+    r[p] = sgn( r[p] ) * log( fabs( r[p] ) / pct_th + 1.0 );
+  
+  return r;
 }
 
 

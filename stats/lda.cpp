@@ -83,8 +83,9 @@ lda_model_t lda_t::fit( const bool flat_priors , const std::vector<std::string> 
 	}
     }
 
-  //std::cout << " X (post removals) = " << X.rows() << " " << X.cols() << "\n";
   
+  logger << "  LDA: removed " << nm << " missing values, " << X.rows() << " remaining, with " << X.cols() << " features\n";
+    
   //
   // At this point, any missing values will have been removed, and we can 
   // fit the LDA model w/out worrying about missing values

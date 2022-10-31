@@ -223,7 +223,7 @@ struct suds_indiv_t {
 	
   // 'REBASE' i.e. call SOAP but change epoch duration after building the model
   void rebase( edf_t & edf , param_t & param , double );
-
+  
   // 'PLACE' i.e. figure out where existing stages should go
   void place( edf_t & edf , param_t & param , const std::string & stagefile );
   

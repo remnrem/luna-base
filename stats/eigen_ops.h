@@ -27,15 +27,19 @@
 #include <vector>
 #include <map>
 
-namespace eigen_ops { 
+template <typename T> int sgn(T val) {
+  return (T(0) < val) - (val < T(0));
+}
 
+namespace eigen_ops { 
+    
   void random_normal( Eigen::MatrixXd & m );  
   
   bool scale( Eigen::Ref<Eigen::MatrixXd> m , const bool,  const bool , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );  
 
   bool robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool , bool , double , bool second_rescale = true , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );    
-  
-  bool p95_logmod( Eigen::Ref<Eigen::MatrixXd> m );
+
+  Eigen::VectorXd percentile_scale( const Eigen::VectorXd & x , const double pct , const int nsegs );
   
   void accumulate( Eigen::Ref<Eigen::VectorXd> m , const int ctype );
 
