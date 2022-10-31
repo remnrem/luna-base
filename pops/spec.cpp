@@ -474,7 +474,6 @@ void pops_specs_t::check_args()
 	{
 	  if ( spec.arg.find( "order" ) == spec.arg.end() )
 	    spec.arg[ "order" ] = "1";
-	  // Helper::halt( ftr2lab[ pops_feature_t::POPS_TIME ] + " requires 'order' arg" );
 	}
 
       // smoothing/denoising

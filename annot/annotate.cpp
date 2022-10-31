@@ -498,6 +498,9 @@ void annotate_t::set_options( param_t & param )
   // specifies gaps rather than allowed intervals
   if ( param.has( "xbg" ) )
     sxbgs = param.strset( "xbg" );
+
+  if ( param.has( "xbg" ) && ! param.has( "bg" ) )
+    Helper::halt( "xbg requires bg to be explicitly specified" );
   
   // outputs - i.e. seed annotations that are w/ or w/out a 'matched' annot
   make_anew = false;
@@ -667,6 +670,10 @@ void annotate_t::prep()
 	  
 	  ++bb;
 	}
+
+      if ( edge_tp != 0 )
+	logger << "  background intervals reduced by " << edge_sec << " seconds at edges\n";
+      
     }
 
   //
@@ -726,8 +733,6 @@ void annotate_t::prep()
       logger << "  background intervals reduced to " << mbg.size()
 	     << " contiguous segments, spanning " << tottp * globals::tp_duration << " seconds\n";
 
-      if ( edge_tp != 0 )
-	logger << "  background intervals reduced by " << edge_sec << " seconds at edges\n";
     }
   else
     logger << "  no background intervals ('bg'), will assume a single region from 0 to last annotation end-point\n";

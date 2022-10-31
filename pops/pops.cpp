@@ -545,7 +545,42 @@ void pops_t::level2( const bool training , const bool quiet )
 
         }
       
-      
+
+      //
+      // RESCALE (within person)
+      //
+            
+      if ( spec.ftr == POPS_RESCALE )
+	{
+
+	  // by default, use 95% percentile
+	  const double pct = spec.has( "pct" ) ? spec.narg( "pct" ) : 0.95;   
+
+	  if ( pct <= 0 || pct >= 1 ) 
+	    Helper::halt( "pct should be between 0 and 1" );
+	  
+	  // segments for estimating pct (no overlap) 	  
+	  const int nsegs = spec.has( "n" ) ? spec.narg( "n" ) : 50 ;
+	  
+          // these should always match
+	  if ( nfrom != nto )
+            Helper::halt( "internal error (2) in level2()" );
+	  
+          // need to go person-by-person
+          for (int j=0; j<nfrom; j++)
+            {
+              Eigen::VectorXd D = X1.col( from_cols[j] ) ;
+              for (int i=0; i<ni; i++)
+                {
+                  int fromi = Istart[i];
+                  int sz    = Iend[i] - Istart[i] + 1;
+		  eigen_ops::percentile_scale( D.segment( fromi , sz ) , pct , nsegs );
+                }
+              X1.col( to_cols[j] ) = D;
+            }
+	  
+        }
+
       //
       // SVD  - done differently for trainers versus targets
       //
@@ -658,12 +693,13 @@ void pops_t::level2( const bool training , const bool quiet )
 	{
 	  
           const int order = spec.narg( "order" );
-	  
+
           // need to go person-by-person                                                                                                                                                    
 	  for (int i=0; i<ni; i++)
 	    {
 	      int fromi = Istart[i];
 	      int sz    = Iend[i] - Istart[i] + 1;
+	      
 	      X1.block( fromi , to_cols[0] , sz , nto ) = pops_t::add_time_track( sz , order );
 	    }
 	  

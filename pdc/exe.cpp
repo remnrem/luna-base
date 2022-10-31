@@ -97,8 +97,8 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
   
   std::string outfile = "";
   if ( write_matrix ) 
-    outfile = param.requires( "mat" ) + "-" + edf.id + ".mat" ;
-
+    outfile = param.requires( "mat" ) ;
+  
   
   
   //

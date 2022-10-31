@@ -945,7 +945,7 @@ void pops_indiv_t::level1( edf_t & edf )
 		  // these have been checked and will be present/valid 
 		  const double lwr = spec.narg( "lwr" );
 		  const double upr = spec.narg( "upr" );
-
+		  
 		  int b = 0;
 		  
 		  for ( int i = 0 ; i < bin.bfa.size() ; i++ )
@@ -1000,7 +1000,7 @@ void pops_indiv_t::level1( edf_t & edf )
 		    {
 		      if (  bin.bfa[i] >= lwr && bin.bfa[i] <= upr )
 			{
-			  if ( b == ncols ) Helper::halt( "internal error... bad sizes for VSPEC" );
+			  if ( b == ncols ) Helper::halt( "internal error... bad sizes for RSPEC" );
 			  X1( en , cols[b] ) = log( bin.bspec[i] / norm ) ; 
 			  ++b;			   
 			}
