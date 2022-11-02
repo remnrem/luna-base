@@ -175,7 +175,7 @@ void pops_opt_t::set_options( param_t & param )
 
   trim_wake_epochs = param.has( "trim" ) ? param.requires_int( "trim" ) : -1;
   
-  welch_median = param.yesno( "fft-median" );
+  welch_median = param.has( "fft-median" ) ? param.yesno( "fft-median" ) : true;
   
   lwr = param.has( "lwr" ) ? param.requires_dbl( "lwr" ) : 0.5;
   

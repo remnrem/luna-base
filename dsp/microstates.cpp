@@ -3235,7 +3235,7 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
 			      const std::vector<std::string> * fixed_chs , 
 			      const std::map<std::string,int> & phe ,
 			      const int nreps ,
-			      const bool brute_force ) 
+			      const double p )
 {
 
   // if fixed is non-NULL, then do a C/C comparison against this fixed map
@@ -3357,7 +3357,12 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
       
       const int nt = fixed->cols();
       if ( nt < nk ) Helper::halt( "template contains fewer prototypes than data" );
-      if ( fixed->rows() != nc ) Helper::halt( "fixed map has bad # of channels" );
+      if ( fixed->rows() != nc ) 
+	{
+	  logger << "  template = " << fixed->rows() << " channels\n"
+		 << "  data     = " << nc << " channels\n";
+	  Helper::halt( "fixed map has bad # of channels" );
+	}
       FX = Eigen::MatrixXd::Zero( nc , nt );
       std::map<std::string,int> ch2row;
       for (int r=0; r<nc; r++) ch2row[ (*fixed_chs)[r] ] = r;
@@ -3389,15 +3394,15 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
       // always brute-force ; special comparison as we
       // allow FX to have more classes than 'm'
       for (int i=0;i<ni; i++)
-	R[i] = cmp_maps_template( m[i] , FX , &(best[i]) ) ;
+	R[i] = cmp_maps_template( m[i] , FX , p, &(best[i]) ) ;
+
 
       //
-      // Statistics on R
+      // Statistics on R (distance matrix)
       //
       
-
       // Original data
-
+      
       std::vector<int> perm( ni );
       for (int i=0;i<ni;i++) perm[i] = i;
       
@@ -3409,6 +3414,7 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
       int r_het = 0 , r_w_cas = 0 , r_w_con = 0;
       for (int p = 0; p < nreps ; p++ )
 	{
+
 	  // shuffle
 	  CRandom::random_draw( perm );
 	  
@@ -3416,17 +3422,19 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
 	  double pwithin[2];
 	  double phet = het_template_statistic( g , perm , R , pwithin );
 	  if ( phet >= het_between ) ++r_het;      
-	  if ( pwithin[0] >= within[0] ) ++r_w_cas;
-	  if ( pwithin[1] >= within[1] ) ++r_w_con;
+	  
+	  // n.b sign of comparisons:: testing if /less distant/
+	  if ( pwithin[0] <= within[0] ) ++r_w_cas;
+	  if ( pwithin[1] <= within[1] ) ++r_w_con;
 	}
       
       double p_het = ( r_het + 1 ) / (double)( nreps + 1 );
       double p_cas = ( r_w_cas + 1 ) / (double)( nreps + 1 );
       double p_con = ( r_w_con + 1 ) / (double)( nreps + 1 );  
       
-      logger << "  case-template similarity                         : " << within[0] << " p = " << p_cas   << "\n";
-      logger << "  control-template similarity                      : " << within[1] << " p = " << p_con   << "\n";
-      logger << "  | case-template - control-template | similarity  : " << het_between << " p = " << p_het   << "\n";
+      logger << "  case-template (more similar?)                  : " << within[0] << " p = " << p_cas   << "\n";
+      logger << "  control-template (more similar?)               : " << within[1] << " p = " << p_con   << "\n";
+      logger << "  | case-template - control-template | distance  : " << het_between << " p = " << p_het   << "\n";
       
       writer.id( "." , "." );
       writer.level( "ALL" , "SUMM" );
@@ -3459,13 +3467,13 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
   // Otherwise, report pairwise comparisons
   //
   
-  logger << "  creating individual-by-individual global similarity matrix\n";
+  logger << "  creating individual-by-individual global distance matrix\n";
     
   Eigen::MatrixXd R = Eigen::MatrixXd::Zero( ni, ni );
 
   for (int i=0;i<ni; i++)
     for (int j=i+1;j<ni;j++)
-      R(i,j) = R(j,i) = brute_force ? cmp_maps_bf( m[i] , m[j] ) : cmp_maps( m[i] , m[j] );
+      R(i,j) = R(j,i) = cmp_maps_bf( m[i] , m[j] , p ) ;
   
   //
   // Original data
@@ -3505,8 +3513,11 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
       double pwithin[2];
       double phet = het_statistic( g , perm , R , pwithin );
       if ( phet >= het_between ) ++r_het;      
-      if ( pwithin[0] >= within[0] ) ++r_w_cas;
-      if ( pwithin[1] >= within[1] ) ++r_w_con;
+
+      // n.b signs here - testing whether phenotypic group is /less distant/
+      // than expected by chance (to eachother)
+      if ( pwithin[0] <= within[0] ) ++r_w_cas;
+      if ( pwithin[1] <= within[1] ) ++r_w_con;
     }
   
   double p_pairs = ( r + 1 ) / (double)( nreps + 1 );
@@ -3514,10 +3525,10 @@ ms_cmp_maps_t::ms_cmp_maps_t( const std::map<std::string,std::map<std::string,st
   double p_cas = ( r_w_cas + 1 ) / (double)( nreps + 1 );
   double p_con = ( r_w_con + 1 ) / (double)( nreps + 1 );  
   
-  logger << "  within-case similarity                       : " << within[0] << " p = " << p_cas   << "\n";
-  logger << "  within-control similarity                    : " << within[1] << " p = " << p_con   << "\n";
-  logger << "  | within-case - within-control | similarity  : " << het_between << " p = " << p_het   << "\n";
-  logger << "  concordant / discordant pair similarity      : " << pobs  << " p = " << p_pairs << "\n";
+  logger << "  within-case (more similar?)                : " << within[0] << " p = " << p_cas   << "\n";
+  logger << "  within-control (more similar?)             : " << within[1] << " p = " << p_con   << "\n";
+  logger << "  | within-case - within-control | distance  : " << het_between << " p = " << p_het   << "\n";
+  logger << "  concordant / discordant pair distance      : " << pobs  << " p = " << p_pairs << "\n";
   
   writer.id( "." , "." );
   writer.level( "ALL" , "SUMM" );
@@ -3588,8 +3599,8 @@ double ms_cmp_maps_t::statistic( const std::vector<int> & phe ,
 	}
     }
   
-  // concordant pairs / discordant pairs similarity 
-  return ( st_within/(double)n_conc) / (st/(double)n_disc )  ; 
+  // discordant pairs / concordant pairs distance
+  return (st/(double)n_disc )  / ( st_within/(double)n_conc) ;
   
 }
 
@@ -3629,10 +3640,10 @@ double ms_cmp_maps_t::het_statistic( const std::vector<int> & phe ,
 	  }
       }
 
-  // mean within-case simularity
+  // mean within-case distance
   within[0] = st_cas / (double)n_cas_pairs;
 
-  // mean within-control similarity
+  // mean within-control distance
   within[1] = st_con / (double)n_con_pairs;
   
   // | case-case - control-control |
@@ -3674,10 +3685,10 @@ double ms_cmp_maps_t::het_template_statistic( const std::vector<int> & phe ,
 	}
     }
   
-  // mean case-template similarity
+  // mean case-template distance
   within[0] = st_cas / (double)n_cas;
   
-  // mean control-template similarity
+  // mean control-template distance
   within[1] = st_con / (double)n_con;
   
   // | case-case - control-control |
@@ -3695,37 +3706,37 @@ double ms_cmp_maps_t::het_template_statistic( const std::vector<int> & phe ,
 // Get spatial correlation given two maps, and find the best join: greedy
 //
 
-double ms_cmp_maps_t::cmp_maps( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B )
-{
+// double ms_cmp_maps_t::cmp_maps( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B )
+// {
 
-  // here, we can assume that A and B are of the same dimension
-  // we can also assume that maps are normalized
+//   // here, we can assume that A and B are of the same dimension
+//   // we can also assume that maps are normalized
   
-  const int nk = A.cols();
+//   const int nk = A.cols();
 
-  // get matrix of spatial correlations
+//   // get matrix of spatial correlations
   
-  Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nk );
-  for (int i=0; i<nk; i++)
-    for (int j=0; j<nk; j++)
-      R(i,j) = ms_prototypes_t::spatial_correlation( A.col(i) , B.col(j) );
+//   Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nk );
+//   for (int i=0; i<nk; i++)
+//     for (int j=0; j<nk; j++)
+//       R(i,j) = ms_prototypes_t::spatial_correlation( A.col(i) , B.col(j) );
   
 
-  // find best match, greedily
+//   // find best match, greedily
   
-  double res = 0;
-  for (int k=0; k<nk; k++)
-    {
-      Eigen::Index r0, c0;      
-      R.maxCoeff(&r0,&c0);
-      res += R(r0,c0);
-      R.row(r0) = Eigen::VectorXd::Zero( nk );
-      R.col(c0) = Eigen::VectorXd::Zero( nk );      
-    }
+//   double res = 0;
+//   for (int k=0; k<nk; k++)
+//     {
+//       Eigen::Index r0, c0;      
+//       R.maxCoeff(&r0,&c0);
+//       res += R(r0,c0);
+//       R.row(r0) = Eigen::VectorXd::Zero( nk );
+//       R.col(c0) = Eigen::VectorXd::Zero( nk );      
+//     }
 
-  return res / (double)nk;
+//   return res / (double)nk;
   
-}
+// }
 
 
 
@@ -3733,7 +3744,7 @@ double ms_cmp_maps_t::cmp_maps( const Eigen::MatrixXd & A , const Eigen::MatrixX
 // Get spatial correlation given two maps, and find the best join: brute-force
 //
 
-double ms_cmp_maps_t::cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B )
+double ms_cmp_maps_t::cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B , double p )
 {
 
   const int nk = A.cols();
@@ -3748,21 +3759,23 @@ double ms_cmp_maps_t::cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::Matr
   // keep person 'A' fixed (1, 2, 3, ..., K)
   // then make all possible permutations of 'B' vector
 
+  // metric = minimum of sum (1-R)^p / K 
+  
   std::vector<int> kb( nk );
   for (int i=0; i<nk; i++) kb[i] = i;
 
-  double max_res = 0;
+  double min_res = 999;
   
   do {
     double res = 0;
     for (int k=0; k<nk; k++)
-      res += R(k,kb[k]);
-    if ( res > max_res )
-      max_res = res;
+      res += pow( 1.0 - R(k,kb[k]) , p );
+    if ( res < min_res )
+      min_res = res;
     
   } while ( std::next_permutation( kb.begin() , kb.end() ) );
     
-  return max_res / (double)nk;
+  return min_res / (double)nk;
   
 }
 
@@ -3773,7 +3786,7 @@ double ms_cmp_maps_t::cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::Matr
 // to have more columns than than map "A" and we select the best
 //
 
-double ms_cmp_maps_t::cmp_maps_template( const Eigen::MatrixXd & A , const Eigen::MatrixXd & T , std::vector<int> * best )
+double ms_cmp_maps_t::cmp_maps_template( const Eigen::MatrixXd & A , const Eigen::MatrixXd & T , double p , std::vector<int> * best )
 {
 
   const int nk = A.cols();
@@ -3792,32 +3805,34 @@ double ms_cmp_maps_t::cmp_maps_template( const Eigen::MatrixXd & A , const Eigen
   // then make all possible permutations of 'B' vector
   //  by permuting all 'nt' labels, but only selecting the first 'nk'
   // involves redundant work, but should not be an issue really
+
+  // metric as above
   
   std::vector<int> kt( nt );
   for (int i=0; i<nt; i++) kt[i] = i;
   
-  double max_res = 0;
-
+  double min_res = 999;
+  
   do {
     double res = 0;    
 
     // nb, here only looking at the first nk of nt
     for (int k=0; k<nk; k++) 
-      res += R(k,kt[k]);
+      res += pow( 1.0 - R(k,kt[k]) , p );
     
-    if ( res > max_res )
+    if ( res < min_res )
       {
-	max_res = res;
+	min_res = res;
 	if ( best != NULL ) *best = kt; 
       }
-
+    
   } while ( std::next_permutation( kt.begin() , kt.end() ) );
-
+  
   // reduce 'best' down to the first nk elements from nt
   if ( best != NULL )
     best->resize( nk );
   
-  return max_res / (double)nk;
+  return min_res / (double)nk;
   
 }
 
@@ -3964,11 +3979,6 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
       // copy label
       r[k] = newlab;
 
-      // outputs
-      writer.level( std::string(1,Al[k]) , "K" );
-      writer.value( "SPC" , spatialr[k] ); 
-      writer.value( "CANON" , std::string(1,Tl[ best[k] ] ) ); 
-      writer.value( "FLIP" , flip[k] );
     }
 
   writer.unlevel( "KT" );

@@ -882,8 +882,8 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   std::map<int,int> used_rem_cycle, used_nrem_cycle;
   
   // track for average stats over cycles
-  // but only for cycles w/out NREM-NREM deviations (p<0.05)
-  const double p_nrem_nrem_threshold = 0.05;
+  // but only for cycles w/out NREM-NREM deviations (p<0.001)
+  const double p_nrem_nrem_threshold = 0.001;
   int n_cycles_analyzed = 0;
   double z_rem = 0;
   double z_abs_rem = 0;
@@ -1126,7 +1126,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       writer.value( "LOGP" , ( zrem_mean > 0 ? 1 : -1 ) * -log10( pvalue ) );
 
       // track
-      if ( NREM_pvalue >= p_nrem_nrem_threshold )
+      if ( NREM_pvalue >= p_nrem_nrem_threshold && pvalue < NREM_pvalue  )
 	{
 	  ++n_cycles_analyzed;
 	  z_rem += zrem_mean;

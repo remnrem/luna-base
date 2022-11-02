@@ -458,14 +458,14 @@ struct ms_cmp_maps_t {
 		 const std::vector<std::string> * fixed_chs , 
 		 const std::map<std::string,int> & phe ,
 		 const int nreps ,
-		 const bool brute_force = false );
-
-  double cmp_maps( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B );
-
-  double cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B );
-
-  double cmp_maps_template( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B , std::vector<int> * best = NULL );
-
+		 const double p );
+  
+  //  double cmp_maps( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B  );
+  
+  double cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B , double  );
+  
+  double cmp_maps_template( const Eigen::MatrixXd & A , const Eigen::MatrixXd & B , double, std::vector<int> * best = NULL );
+  
   double statistic( const std::vector<int> & phe ,
 		    const std::vector<int> & perm ,
 		    const Eigen::MatrixXd & R ,

@@ -1319,7 +1319,9 @@ int main(int argc , char ** argv )
       bool verbose = param.has( "verbose" );
 
       // minimize sum(1-r)^p
+
       double p = param.has( "p" ) ? param.requires_dbl( "p" ) : 2 ;
+
       logger << "  minimizing sum_k (1-r)^" << p << "\n";
       
       //
@@ -1458,7 +1460,9 @@ int main(int argc , char ** argv )
 
   if ( cmdline_proc_ms_cmp_maps )
     {
+
       param_t param;
+
       build_param( &param, argc, argv, param_from_command_line );
       
       writer.begin();
@@ -1473,23 +1477,25 @@ int main(int argc , char ** argv )
       // number of permutations to perform 
       //
 
-      int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000;
+      const int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000;
 
       //
       // to define global similarity: greedy or brute-force (default) enumeration of all possibilities?
       //
       
-      const bool brute_force = ! param.has( "greedy" );
+      // minimize sum(1-r)^p                                                                                                                                                                               
+      const double p = param.has( "p" ) ? param.requires_dbl( "p" ) : 2 ;
+      logger << "  matching based on minimizing sum_k (1-r)^" << p << "\n";
       
       //
       // Either all-case compared to all-controls : stat = d( concordant pairs ) / d( discordant pairs )
       // OR given a fixed map=M: stat =  ( d( case - X ) - d( control - X )^2 
       // 
 
-      bool use_fixed = param.has( "template" );
-
+      const bool use_fixed = param.has( "template" );
+      
       ms_prototypes_t fixed;
-
+      
       if ( use_fixed )
 	{
 	  // read a standard prototype map file (sol format, i.e. no ID)
@@ -1578,7 +1584,7 @@ int main(int argc , char ** argv )
 			      use_fixed ? &(fixed.chs) : NULL ,
 			      phe ,
 			      nreps ,
-			      brute_force );
+			      p );
       
       //
       // all done

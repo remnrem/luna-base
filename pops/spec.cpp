@@ -150,13 +150,14 @@ void pops_specs_t::read( const std::string & f )
         }
 
       //
-      // Final SELECT block command (only once)
+      // Final SELECT block command
       //
-      
+    
       if ( Helper::toupper( tok[0] ) == "SELECT" )
 	{
-	  if ( selected.size() > 0 )
-	    Helper::halt( "can only use SELECT once" );
+	  // if ( selected.size() > 0 )
+	  //   Helper::halt( "can only use SELECT once" );
+
 	  for (int s=1; s<tok.size(); s++)
 	    {
 	      std::string selected_block = Helper::toupper( tok[s] ) ;
