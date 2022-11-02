@@ -1393,6 +1393,115 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
 
+
+  //
+  // ASYMM
+  //
+
+  add_cmd( "power" , "ASYMM" , "EEG asymmetry" );
+  add_url( "ASYMM" , "power-spectra/#asymm" );
+
+  add_param( "ASYMM" , "left" , "C3" , "Left channel(s)" );
+  add_param( "ASYMM" , "right" , "C4" , "Right channel(s)" );
+  add_param( "ASYMM" , "nreps" , "500" , "Replicates for transition randomisation test" );
+  add_param( "ASYMM" , "cache-var" , "PER" , "Cached variable (if not PSD)" );
+  add_param( "ASYMM" , "epoch" , "" , "Epoch level output" );
+  add_param( "ASYMM" , "trans" , "" , "Transition-centric output" );
+  
+  add_table( "ASYMM" , "B,CHS" , "Band-based primary asymmetry stats" );
+  add_var( "ASYMM", "B,CHS" , "L_SLEEP" , "Left power during sleep" );
+  add_var( "ASYMM", "B,CHS" , "R_SLEEP" , "Right power during sleep" );
+  add_var( "ASYMM", "B,CHS" , "LR_SLEEP" , "log2(L/R) during sleep" );
+  add_var( "ASYMM", "B,CHS" , "LR_WAKE" , "log2(L/R) during wake" );
+  add_var( "ASYMM", "B,CHS" , "LR_NREM" , "log2(L/R) during NREM" );
+  add_var( "ASYMM", "B,CHS" , "LR_REM" , "log2(L/R) during REM" );
+  add_var( "ASYMM", "B,CHS" , "Z_REM" , "NREM-normalized REM log2(L/R)");
+  add_var( "ASYMM", "B,CHS" , "LOGP" , "NREM-normalized REM log2(L/R) -log10(p)");
+  add_var( "ASYMM", "B,CHS" , "ABS_Z_REM" , "Absolute NREM-normalized REM log2(L/R)");
+  add_var( "ASYMM", "B,CHS" , "ABS_LOGP" , "Absolute NREM-normalized REM log2(L/R) -log10(p)");
+  add_var( "ASYMM", "B,CHS" , "NC" , "Number of included NREM cycles" );
+  add_var( "ASYMM", "B,CHS" , "TR_NR2R_N" , "Number of NR-to-R transitions" );
+  add_var( "ASYMM", "B,CHS" , "TR_R2NR_N" , "Number of R-to-NR transitions" );
+
+  add_table( "ASYMM" , "F,CHS" , "Frequency-bin-based primary asymmetry stats" );
+  add_var( "ASYMM", "F,CHS" , "L_SLEEP" , "Left power during sleep" );
+  add_var( "ASYMM", "F,CHS" , "R_SLEEP" , "Right power during sleep" );
+  add_var( "ASYMM", "F,CHS" , "LR_SLEEP" , "log2(L/R) during sleep" );
+  add_var( "ASYMM", "F,CHS" , "LR_WAKE" , "log2(L/R) during wake" );
+  add_var( "ASYMM", "F,CHS" , "LR_NREM" , "log2(L/R) during NREM" );
+  add_var( "ASYMM", "F,CHS" , "LR_REM" , "log2(L/R) during REM" );
+  add_var( "ASYMM", "F,CHS" , "Z_REM" , "NREM-normalized REM log2(L/R)");
+  add_var( "ASYMM", "F,CHS" , "LOGP" , "NREM-normalized REM log2(L/R) -log10(p)");
+  add_var( "ASYMM", "F,CHS" , "ABS_Z_REM" , "Absolute NREM-normalized REM log2(L/R)");
+  add_var( "ASYMM", "F,CHS" , "ABS_LOGP" , "Absolute NREM-normalized REM log2(L/R) -log10(p)");
+  add_var( "ASYMM", "F,CHS" , "NC" , "Number of included NREM cycles" );
+  add_var( "ASYMM", "F,CHS" , "TR_NR2R_N" , "Number of NR-to-R transitions" );
+  add_var( "ASYMM", "F,CHS" , "TR_R2NR_N" , "Number of R-to-NR transitions" );
+
+  add_table( "ASYMM" , "E,B,CHS" , "Epoch-level frequency-band output" );
+  add_var( "ASYMM", "E,B,CHS" , "C" , "NREM cycle number" );
+  add_var( "ASYMM", "E,B,CHS" , "INC" , "Included in analysis, 1=Y");
+  add_var( "ASYMM", "E,B,CHS" , "L" , "Left power" );
+  add_var( "ASYMM", "E,B,CHS" , "R" , "Right power" );
+  add_var( "ASYMM", "E,B,CHS" , "LR" , "log2(L/R)" );
+  add_var( "ASYMM", "E,B,CHS" , "OUT" , "Flagged as outlier, 1=Y" );
+  add_var( "ASYMM", "E,B,CHS" , "SS" , "Sleep stage (W/R/NR)" );
+
+  add_table( "ASYMM" , "E,F,CHS" , "Epoch-level frequency-bin output" );
+  add_var( "ASYMM", "E,F,CHS" , "C" , "NREM cycle number" );
+  add_var( "ASYMM", "E,F,CHS" , "INC" , "Included in analysis, 1=Y");
+  add_var( "ASYMM", "E,F,CHS" , "L" , "Left power" );
+  add_var( "ASYMM", "E,F,CHS" , "R" , "Right power" );
+  add_var( "ASYMM", "E,F,CHS" , "LR" , "log2(L/R)" );
+  add_var( "ASYMM", "E,F,CHS" , "OUT" , "Flagged as outlier, 1=Y" );
+  add_var( "ASYMM", "E,F,CHS" , "SS" , "Sleep stage (W/R/NR)" );
+
+  add_table( "ASYMM" , "C,B,CHS" , "Cycle-level frequency-band output" );
+  add_var( "ASYMM", "C,B,CHS" , "LR_REM" , "log2(L/R) in REM" );
+  add_var( "ASYMM", "C,B,CHS" , "LR_NREM" , "log2(L/R) in NREM" );
+  add_var( "ASYMM", "C,B,CHS" , "LR_LEADING_NREM" , "log2(L/R) in leading NREM" );
+  add_var( "ASYMM", "C,B,CHS" , "LR_TRAILING_NREM" , "log2(L/R) in trailing NREM" );
+  add_var( "ASYMM", "C,B,CHS" , "Z_REM" , "Normalized REM log2(L/R)" );
+  add_var( "ASYMM", "C,B,CHS" , "P" , "REM-vs-NREM p-value" );
+  add_var( "ASYMM", "C,B,CHS" , "P_NREM" , "Leading-vs-trailing NREM p-value" );
+  add_var( "ASYMM", "C,B,CHS" , "LOGP" , "REM-vs-NREM p-value, log-scaled" );
+  add_var( "ASYMM", "C,B,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" );
+  add_var( "ASYMM", "C,B,CHS" , "N_NREM" , "Number of NREM epochs" );
+  add_var( "ASYMM", "C,B,CHS" , "N_REM" , "Number of REM epochs" );
+  
+  add_table( "ASYMM" , "C,F,CHS" , "Cycle-level frequency-bin output" );
+  add_var( "ASYMM", "C,F,CHS" , "LR_REM" , "log2(L/R) in REM" );
+  add_var( "ASYMM", "C,F,CHS" , "LR_NREM" , "log2(L/R) in NREM" );
+  add_var( "ASYMM", "C,F,CHS" , "LR_LEADING_NREM" , "log2(L/R) in leading NREM" );
+  add_var( "ASYMM", "C,F,CHS" , "LR_TRAILING_NREM" , "log2(L/R) in trailing NREM" );
+  add_var( "ASYMM", "C,F,CHS" , "Z_REM" , "Normalized REM log2(L/R)" );
+  add_var( "ASYMM", "C,F,CHS" , "P" , "REM-vs-NREM p-value" );
+  add_var( "ASYMM", "C,F,CHS" , "P_NREM" , "Leading-vs-trailing NREM p-value" );
+  add_var( "ASYMM", "C,F,CHS" , "LOGP" , "REM-vs-NREM p-value, log-scaled" );
+  add_var( "ASYMM", "C,F,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" );
+  add_var( "ASYMM", "C,F,CHS" , "N_NREM" , "Number of NREM epochs" );
+  add_var( "ASYMM", "C,F,CHS" , "N_REM" , "Number of REM epochs" );
+
+  add_table( "ASYMM" , "B,CHS,TR" , "Transition-based frequency-bin output" );
+  add_var( "ASYMM", "B,CHS,TR" , "NR2R" , "NREM-to-REM transition means" );
+  add_var( "ASYMM", "B,CHS,TR" , "R2NR" , "REM-to-NREM transition means" );
+  add_var( "ASYMM", "B,CHS,TR" , "NR2R_EMP" , "NREM-to-REM transition means, null empirical expectation" );
+  add_var( "ASYMM", "B,CHS,TR" , "R2NR_EMP" , "REM-to-NREM transition means, null empirical expectation" );
+
+  add_table( "ASYMM" , "F,CHS,TR" , "Transition-based frequency-bin output" );
+  add_var( "ASYMM", "F,CHS,TR" , "NR2R" , "NREM-to-REM transition means" );
+  add_var( "ASYMM", "F,CHS,TR" , "R2NR" , "REM-to-NREM transition means" );
+  add_var( "ASYMM", "F,CHS,TR" , "NR2R_EMP" , "NREM-to-REM transition means, null empirical expectation" );
+  add_var( "ASYMM", "F,CHS,TR" , "R2NR_EMP" , "REM-to-NREM transition means, null empirical expectation" );
+
+  add_table( "ASYMM" , "E" , "Epoch-level hypnogram statistic" );
+  add_var( "ASYMM", "E" , "STAGE" , "Sleep stage" );
+  add_var( "ASYMM", "E" , "STAGE" , "Sleep stage (numeric encoding)" );
+  add_var( "ASYMM", "E" , "STAGE" , "Original sleep stage" );
+  add_var( "ASYMM", "E" , "STAGE" , "Elapsed minutes" );
+  add_var( "ASYMM", "E" , "CLOCK_TIME" , "Clock time hh:mm:ss" );
+
+  
   //
   // FIP 
   //
