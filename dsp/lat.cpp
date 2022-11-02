@@ -124,13 +124,18 @@ lat_t::lat_t( edf_t & edf , param_t & param )
   // Misc args
   //
 
-  epoch_level_output = param.has( "epoch" );
+  epoch_level_output = param.yesno( "epoch" );
+
+  trans_level_output = param.yesno( "trans" );
   
-  nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 0 ; 
-
+  nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : ( trans_level_output ? 500 : 0 ) ; 
+  
   if ( nreps ) 
-    logger << "  applying " << nreps << " shuffles to derive empirical expecations for TR_NR2R and TR_R2NR\n";
-
+    {
+      trans_level_output = true;
+      logger << "  applying " << nreps << " shuffles to derive empirical expecations for TR_NR2R and TR_R2NR\n";
+    }
+  
 
   //
   // Extract and map power 
@@ -492,9 +497,12 @@ void lat_t::proc( edf_t & edf , param_t & param )
   T_NR2R.resize( ne, 0 );
 
   // default, 5 mins (10 epochs) each side of a transition 
-  const int e_window = param.has( "trans" ) ? param.requires_int( "trans" ) : 10;
+  const int e_window = param.has( "trans" ) ? ( param.empty( "trans" ) ? 10 : param.requires_int( "trans" ) ) : 10;
   tr_start = -e_window; 
 
+  if ( trans_level_output )
+    logger << "  using +/-" << e_window << " epoch window around transitions\n";
+  
   //
   // NREM -> REM 
   //
@@ -1169,15 +1177,15 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   std::vector<double> tr_NR2R_NR_mean( -tr_start , 0);
   std::vector<double> tr_NR2R_R_mean( -tr_start , 0 );
   int tr_NR2R_cnt = 0;
-
-  bool okay1 = eval_transitions( log2lr , false , outlier , tr_start , 
-				 &tr_R2NR_R_mean, 
-				 &tr_R2NR_NR_mean,
-				 &tr_NR2R_NR_mean,
-				 &tr_NR2R_R_mean,
-				 &tr_R2NR_cnt,
-				 &tr_NR2R_cnt );
-
+  
+  bool okay1 = trans_level_output && eval_transitions( log2lr , false , outlier , tr_start , 
+						       &tr_R2NR_R_mean, 
+						       &tr_R2NR_NR_mean,
+						       &tr_NR2R_NR_mean,
+						       &tr_NR2R_R_mean,
+						       &tr_R2NR_cnt,
+						       &tr_NR2R_cnt );
+  
   // if zero count, set |mean| --> 0
   
   if ( tr_R2NR_cnt > 0 ) 
@@ -1271,7 +1279,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   //
 
 
-  if ( tr_R2NR_cnt || tr_NR2R_cnt ) 
+  if ( trans_level_output && ( tr_R2NR_cnt || tr_NR2R_cnt ) ) 
     {
       
       // pre-trans
