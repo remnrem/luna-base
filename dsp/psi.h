@@ -86,7 +86,7 @@ struct psi_t {
 
   void calc();
 
-  void report( const signal_list_t & , cache_t<double> * cache = NULL );
+  void report( const signal_list_t & , cache_t<double> * cache = NULL , bool by_epoch = false );
   
   std::vector<Data::Matrix<std::complex<double> > > data2cs_event( const Data::Matrix<double> * , int maxfreqbin );
 

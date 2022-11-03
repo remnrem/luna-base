@@ -164,7 +164,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       psi.calc();
       
-      psi.report( signals , cache );
+      psi.report( signals , cache , by_epoch );
 
       return; 
     }
@@ -200,7 +200,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       writer.epoch( edf.timeline.display_epoch( epoch ) );
       
-      psi.report( signals , cache );
+      psi.report( signals , cache , by_epoch );
 
     }
 
@@ -210,7 +210,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
 
 
-void psi_t::report( const signal_list_t & signals , cache_t<double> * cache )
+void psi_t::report( const signal_list_t & signals , cache_t<double> * cache , bool by_epoch )
 {
   const double EPS = 1e-8;
 
@@ -223,11 +223,15 @@ void psi_t::report( const signal_list_t & signals , cache_t<double> * cache )
       // use mean frequency as factor for all PSI output
       double mean_f = ( frqs[ freqbins[m][0] ] + frqs[ freqbins[m][ freqbins[m].size()-1 ] ] ) / 2.0;
       writer.level( mean_f , globals::freq_strat );
-      //writer.value( "M" , m + 1 );
-      writer.value( "F1" , frqs[ freqbins[m][0] ] );
-      writer.value( "F2" , frqs[ freqbins[m][ freqbins[m].size()-1 ] ] );
-      writer.value( "NF" ,  (int)freqbins[m].size() );
 
+      if ( ! by_epoch )
+	{
+	  //writer.value( "M" , m + 1 );
+	  writer.value( "F1" , frqs[ freqbins[m][0] ] );
+	  writer.value( "F2" , frqs[ freqbins[m][ freqbins[m].size()-1 ] ] );
+	  writer.value( "NF" ,  (int)freqbins[m].size() );
+	}
+      
       // channel sums
       for (int i=0;i<nchan;i++)
 	{
