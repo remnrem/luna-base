@@ -1202,16 +1202,16 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	tr_NR2R_R_mean[j] = tr_NR2R_R_mean[j] / (double)tr_NR2R_cnt ;
       }
 
-
+  
   //
   // Permutation?
   //
 
-  // get mean distribution, instead of empirical mean
-  std::vector<double> tr_NR2R_NR_emp( -tr_start , 0 );
-  std::vector<double> tr_NR2R_R_emp( -tr_start , 0 );
-  std::vector<double> tr_R2NR_R_emp( -tr_start , 0 );
-  std::vector<double> tr_R2NR_NR_emp( -tr_start , 0);
+  // get mean/SD distribution, instead of empirical mean
+  std::vector<std::vector<double> > tr_NR2R_NR_emp( -tr_start );
+  std::vector<std::vector<double> > tr_NR2R_R_emp( -tr_start );
+  std::vector<std::vector<double> > tr_R2NR_R_emp( -tr_start );
+  std::vector<std::vector<double> > tr_R2NR_NR_emp( -tr_start );
   
   if ( nreps ) 
     {
@@ -1249,25 +1249,17 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 		ptr_NR2R_R_mean[j] = ptr_NR2R_R_mean[j] / (double)ptr_NR2R_cnt ;
 	      }
 	  
-	  // eval means
+	  // track perms
 	  
 	  for (int j=0; j < -tr_start; j++)
 	    {
-	      tr_R2NR_R_emp[j] += ptr_R2NR_R_mean[j];
-	      tr_R2NR_NR_emp[j] += ptr_R2NR_NR_mean[j];
+	      tr_R2NR_R_emp[j].push_back( ptr_R2NR_R_mean[j] );
+	      tr_R2NR_NR_emp[j].push_back( ptr_R2NR_NR_mean[j] );
 
-	      tr_NR2R_NR_emp[j] += ptr_NR2R_NR_mean[j];
-	      tr_NR2R_R_emp[j] += ptr_NR2R_R_mean[j];
-	      
-
-	      // if ( ptr_R2NR_R_mean[j]  >= tr_R2NR_R_mean[j] )  tr_R2NR_R_emp[j]++;
-	      // if ( ptr_R2NR_NR_mean[j] >= tr_R2NR_NR_mean[j] ) tr_R2NR_NR_emp[j]++;
-
-	      // if ( ptr_NR2R_NR_mean[j] >= tr_NR2R_NR_mean[j] ) tr_NR2R_NR_emp[j]++;
-	      //if ( ptr_NR2R_R_mean[j]  >= tr_NR2R_R_mean[j] )  tr_NR2R_R_emp[j]++;
+	      tr_NR2R_NR_emp[j].push_back( ptr_NR2R_NR_mean[j] );
+	      tr_NR2R_R_emp[j].push_back( ptr_NR2R_R_mean[j] );
 	      
 	    }
-
 
 	}
       
@@ -1277,7 +1269,6 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   // 
   // Report transition statistics
   //
-
 
   if ( trans_level_output && ( tr_R2NR_cnt || tr_NR2R_cnt ) ) 
     {
@@ -1289,17 +1280,26 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	  writer.level( i , "TR" );
 	  if ( tr_R2NR_cnt ) 
 	    {
+	      // R of R->NR
 	      writer.value( "R2NR" , tr_R2NR_R_mean[p] );
-	      if ( nreps ) 
-		writer.value( "R2NR_EMP" , ( tr_R2NR_R_emp[p]  ) / (double)( nreps  ) );
+	      if ( nreps )
+		{
+		  double emean = MiscMath::mean( tr_R2NR_R_emp[p] );
+		  double esd = MiscMath::sdev( tr_R2NR_R_emp[p] , emean );
+		  writer.value( "R2NR_Z" , ( tr_R2NR_R_mean[p] - emean ) / esd );
+		}
 	    }
 	  
 	  if ( tr_NR2R_cnt ) 
 	    {
+	      // NR of NR->R
 	      writer.value( "NR2R" , tr_NR2R_NR_mean[p] );
-	      if ( nreps ) 
-		writer.value( "NR2R_EMP" , ( tr_NR2R_NR_emp[p]  ) / (double)( nreps  ) );
-	      
+	      if ( nreps )
+		{
+		  double emean = MiscMath::mean( tr_NR2R_NR_emp[p] );
+                  double esd = MiscMath::sdev( tr_NR2R_NR_emp[p] , emean );
+                  writer.value( "NR2R_Z" , ( tr_NR2R_NR_mean[p] - emean ) / esd );
+		}
 	    }
 	  
 	  ++p;
@@ -1313,15 +1313,23 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	  if ( tr_R2NR_cnt ) 
 	    {
 	      writer.value( "R2NR" , tr_R2NR_NR_mean[p] );
-	      if ( nreps ) 
-		writer.value( "R2NR_EMP" , ( tr_R2NR_NR_emp[p]  ) / (double)( nreps  ) );
+	      if ( nreps )
+		{
+		  double emean = MiscMath::mean( tr_R2NR_NR_emp[p] );
+                  double esd = MiscMath::sdev( tr_R2NR_NR_emp[p] , emean );
+                  writer.value( "R2NR_Z" , ( tr_R2NR_NR_mean[p] - emean ) / esd );
+		}	      
 	    }
 
 	  if ( tr_NR2R_cnt ) 
 	    {
 	      writer.value( "NR2R" , tr_NR2R_R_mean[p] );
-	      if ( nreps ) 
-		writer.value( "NR2R_EMP" , ( tr_NR2R_R_emp[p] ) / (double)( nreps  ) );
+	      if ( nreps )
+		{
+		  double emean = MiscMath::mean( tr_NR2R_R_emp[p] );
+                  double esd = MiscMath::sdev( tr_NR2R_R_emp[p] , emean );
+                  writer.value( "NR2R_Z" , ( tr_NR2R_R_mean[p] - emean ) / esd );
+		}	      
 	    }
 	  ++p;
 	}
