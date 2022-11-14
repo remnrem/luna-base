@@ -72,6 +72,9 @@ struct pops_opt_t {
   // variables
   static std::set<std::string> inc_vars, exc_vars;
 
+  // feature/stage associations
+  static bool run_stage_associations;
+  
   // misc
   static bool verbose;
   static int n_stages;

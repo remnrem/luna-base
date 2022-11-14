@@ -708,14 +708,23 @@ Eigen::VectorXd eigen_ops::percentile_scale( const Eigen::VectorXd & x , const d
     {
       std::vector<double> v = copy_vector( r.segment( i*ns , ns ) );
       pcts.push_back( MiscMath::percentile( v , pct ) );      
+      std::cout << " pct = " << pcts[ pcts.size() - 1 ] << "\n";
     }
   
   double pct_th = MiscMath::median( pcts );
   if ( pct_th == 0 ) return r;
-  
+
+  std::cout << " p95 = " << pct_th << "\n";
+
   // x = sign(x) . log( abs(x) / p_95(x) + 1 )  
   for (int p=0; p<nt; p++)
-    r[p] = sgn( r[p] ) * log( fabs( r[p] ) / pct_th + 1.0 );
+    {
+      double oo = r[p];
+      r[p] = sgn( r[p] ) * log( fabs( r[p] ) / pct_th + 1.0 );
+      if ( ! Helper::realnum( r[p] ) )
+	std::cout << " oo = " << oo << " " << r[p] <<" " << pct_th << "\n";
+    }
+
   
   return r;
 }

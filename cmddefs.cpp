@@ -1441,6 +1441,7 @@ void cmddefs_t::init()
   add_table( "ASYMM" , "E,B,CHS" , "Epoch-level frequency-band output" );
   add_var( "ASYMM", "E,B,CHS" , "C" , "NREM cycle number" );
   add_var( "ASYMM", "E,B,CHS" , "INC" , "Included in analysis, 1=Y");
+  add_var( "ASYMM", "E,B,CHS" , "CONSIDER" , "Considered this epoch" );
   add_var( "ASYMM", "E,B,CHS" , "L" , "Left power" );
   add_var( "ASYMM", "E,B,CHS" , "R" , "Right power" );
   add_var( "ASYMM", "E,B,CHS" , "LR" , "log2(L/R)" );
@@ -1450,6 +1451,7 @@ void cmddefs_t::init()
   add_table( "ASYMM" , "E,F,CHS" , "Epoch-level frequency-bin output" );
   add_var( "ASYMM", "E,F,CHS" , "C" , "NREM cycle number" );
   add_var( "ASYMM", "E,F,CHS" , "INC" , "Included in analysis, 1=Y");
+  add_var( "ASYMM", "E,F,CHS" , "CONSIDER" , "Considered this epoch" );
   add_var( "ASYMM", "E,F,CHS" , "L" , "Left power" );
   add_var( "ASYMM", "E,F,CHS" , "R" , "Right power" );
   add_var( "ASYMM", "E,F,CHS" , "LR" , "log2(L/R)" );
@@ -1468,6 +1470,7 @@ void cmddefs_t::init()
   add_var( "ASYMM", "C,B,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" );
   add_var( "ASYMM", "C,B,CHS" , "N_NREM" , "Number of NREM epochs" );
   add_var( "ASYMM", "C,B,CHS" , "N_REM" , "Number of REM epochs" );
+  add_var( "ASYMM", "C,B,CHS" , "INC" , "Includede this cycle" );
   
   add_table( "ASYMM" , "C,F,CHS" , "Cycle-level frequency-bin output" );
   add_var( "ASYMM", "C,F,CHS" , "LR_REM" , "log2(L/R) in REM" );
@@ -1481,13 +1484,14 @@ void cmddefs_t::init()
   add_var( "ASYMM", "C,F,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" );
   add_var( "ASYMM", "C,F,CHS" , "N_NREM" , "Number of NREM epochs" );
   add_var( "ASYMM", "C,F,CHS" , "N_REM" , "Number of REM epochs" );
+  add_var( "ASYMM", "C,F,CHS" , "INC" , "Includede this cycle" );
 
   add_table( "ASYMM" , "B,CHS,TR" , "Transition-based frequency-bin output" );
   add_var( "ASYMM", "B,CHS,TR" , "NR2R" , "NREM-to-REM transition means" );
   add_var( "ASYMM", "B,CHS,TR" , "R2NR" , "REM-to-NREM transition means" );
-  add_var( "ASYMM", "B,CHS,TR" , "NR2R_EMP" , "NREM-to-REM transition means, null empirical expectation" );
-  add_var( "ASYMM", "B,CHS,TR" , "R2NR_EMP" , "REM-to-NREM transition means, null empirical expectation" );
-
+  add_var( "ASYMM", "B,CHS,TR" , "NR2R_Z" , "NREM-to-REM transition means, Z-score" );
+  add_var( "ASYMM", "B,CHS,TR" , "R2NR_Z" , "REM-to-NREM transition means, Z-score" );
+  
   add_table( "ASYMM" , "F,CHS,TR" , "Transition-based frequency-bin output" );
   add_var( "ASYMM", "F,CHS,TR" , "NR2R" , "NREM-to-REM transition means" );
   add_var( "ASYMM", "F,CHS,TR" , "R2NR" , "REM-to-NREM transition means" );
@@ -2195,6 +2199,50 @@ void cmddefs_t::init()
   set_compressed( "COH" , tfac_t( "CH1,CH2,B,E" ) );
   set_compressed( "COH" , tfac_t( "CH1,CH2,F,E" ) );
       
+  //
+  // PSI 
+  //
+
+  add_cmd( "topo" , "PSI" , "Phase slope index" );
+  add_url( "PSI" , "cross-signal-analysis/#psi" );
+
+  add_param( "PSI" , "sig" , "C3,C4" , "Restrict analysis to these channels (all-by-all pairs)" );
+  add_param( "PSI" , "epoch" , "" , "Epoch level analysis" );
+
+  add_param( "PSI" , "f" , "3" , "Frequency center(s)" );
+  add_param( "PSI" , "f-lwr" , "3" , "Lower frequency range" );
+  add_param( "PSI" , "f-upr" , "25" , "Upper frequency range" );
+  add_param( "PSI" , "w" , "5" , "Window width (Hz)" );
+  add_param( "PSI" , "r" , "1" , "Window increment (Hz)" );
+
+  add_table( "PSI" , "F" , "Phase-slope index parameters" );
+  add_var( "PSI" , "F" , "F1" , "Lower frequency bound" );
+  add_var( "PSI" , "F" , "F2" , "Upper frequency bound" );
+  add_var( "PSI" , "F" , "NF" , "NUmber of frequency bins" );
+
+  add_table( "PSI" , "F,CH" , "Net (single-channel) Phase-slope index parameters" );
+  add_var( "PSI" , "F,CH" , "PSI" , "Net Phase-slope index, normalized" );
+  add_var( "PSI" , "F,CH" , "PSI_RAW" , "Net Phase-slope index, raw" );
+  add_var( "PSI" , "F,CH" , "STD" , "Net Phase-slope index, SD" );
+
+  add_table( "PSI" , "F,CH1,CH2" , "Pairwise Phase-slope index parameters" );
+  add_var( "PSI" , "F,CH1,CH2" , "PSI" , "Phase-slope index, normalized" );
+  add_var( "PSI" , "F,CH1,CH2" , "PSI_RAW" , "Phase-slope index, raw" );
+  add_var( "PSI" , "F,CH1,CH2" , "STD" , "Phase-slope index, SD" );
+
+  add_table( "PSI" , "E,F,CH" , "Epoch-level net (single-channel) Phase-slope index parameters" );
+  add_var( "PSI" , "E,F,CH" , "PSI" , "Net Phase-slope index, normalized" );
+  add_var( "PSI" , "E,F,CH" , "PSI_RAW" , "Net Phase-slope index, raw" );
+  add_var( "PSI" , "E,F,CH" , "STD" , "Net Phase-slope index, SD" );
+
+  add_table( "PSI" , "E,F,CH1,CH2" , "Epoch-level pairwise Phase-slope index parameters" );
+  add_var( "PSI" , "E,F,CH1,CH2" , "PSI" , "Phase-slope index, normalized" );
+  add_var( "PSI" , "E,F,CH1,CH2" , "PSI_RAW" , "Phase-slope index, raw" );
+  add_var( "PSI" , "E,F,CH1,CH2" , "STD" , "Phase-slope index, SD" );
+
+  set_compressed( "PSI" , tfac_t( "E,F,CH" ) );
+  set_compressed( "PSI" , tfac_t( "E,F,CH1,CH2" ) );
+
   //
   // SYNC
   //

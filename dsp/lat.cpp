@@ -887,11 +887,12 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
   //
 
   // track which epochs featured in which cycle-based analysis
-  std::map<int,int> used_rem_cycle, used_nrem_cycle;
+  std::map<int,int> used_rem_cycle, used_nrem_cycle; // actually used (i.e. passed NREM test)
+  std::map<int,int> in_rem_cycle, in_nrem_cycle;     // considered    (i.e. otherwise okay)
   
   // track for average stats over cycles
-  // but only for cycles w/out NREM-NREM deviations (p<0.001)
-  const double p_nrem_nrem_threshold = 0.001;
+  // but only for cycles w/out NREM-NREM deviations (p<0.01)
+  const double p_nrem_nrem_threshold = 0.01;
   int n_cycles_analyzed = 0;
   double z_rem = 0;
   double z_abs_rem = 0;
@@ -1105,19 +1106,36 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 						trailing_nrem_mean, trailing_nrem_sd * trailing_nrem_sd , trailing_nrem_lr.size() , 
 						&NREM_pvalue );
 
+      //
+      // Include in summary 
+      //
+      
+      const bool include_this_cycle =  NREM_pvalue >= p_nrem_nrem_threshold ;
       
       //
       // track epochs used;
       //
       
+      if ( include_this_cycle ) 
+	{
+	  for (int i=0; i<rems.size(); i++)
+	    if ( ! outlier[rems[i]] )
+	      used_rem_cycle[ rems[i] ] = c;
+	  
+	  for (int i=0; i<nrems.size(); i++)
+	    if ( ! outlier[nrems[i]] )
+	      used_nrem_cycle[ nrems[i] ] = c;
+	}
+
+      // but track for plotting purposes if considered
       for (int i=0; i<rems.size(); i++)
         if ( ! outlier[rems[i]] )
-          used_rem_cycle[ rems[i] ] = c;
+          in_rem_cycle[ rems[i] ] = c;
 
       for (int i=0; i<nrems.size(); i++)
         if ( ! outlier[nrems[i]] )
-          used_nrem_cycle[ nrems[i] ] = c;
-
+          in_nrem_cycle[ nrems[i] ] = c;
+      
 
       //
       // Report
@@ -1132,16 +1150,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       writer.value( "N_NREM" , (int)znrem_lr.size() ); 
       writer.value( "P" , pvalue );
       writer.value( "LOGP" , ( zrem_mean > 0 ? 1 : -1 ) * -log10( pvalue ) );
-
-      // track
-      if ( NREM_pvalue >= p_nrem_nrem_threshold && pvalue < NREM_pvalue  )
-	{
-	  ++n_cycles_analyzed;
-	  z_rem += zrem_mean;
-	  z_abs_rem += fabs( zrem_mean );
-	  signed_logp_asymm += ( zrem_mean > 0 ? 1 : -1 ) * -log10( pvalue );
-	  abs_logp_asymm += -log10( pvalue );
-	}
+      writer.value( "INC" , (int)include_this_cycle );
 
       // NREM-NREM                                                                                                                         
       writer.value( "LR_LEADING_NREM" , leading_nrem_mean );
@@ -1156,6 +1165,16 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       writer.value( "P_NREM" , NREM_pvalue );
       writer.value( "LOGP_NREM" , -log10( NREM_pvalue ) );
       
+      // track
+      if ( include_this_cycle );
+	{
+	  ++n_cycles_analyzed;
+	  z_rem += zrem_mean;
+	  z_abs_rem += fabs( zrem_mean );
+	  signed_logp_asymm += ( zrem_mean > 0 ? 1 : -1 ) * -log10( pvalue );
+	  abs_logp_asymm += -log10( pvalue );
+	}
+	
       //
       // next cycle
       //
@@ -1357,7 +1376,12 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	  if ( used_rem_cycle[e] != 0 ) used = "REM_C" + Helper::int2str( used_rem_cycle[e] );	      
 	  else if ( used_nrem_cycle[e] != 0 ) used = "NREM_C" + Helper::int2str( used_nrem_cycle[e] );
 	  writer.value( "INC" , used );
-
+	  
+	  std::string considered = ".";
+	  if ( in_rem_cycle[e] != 0 ) considered = "REM_C" + Helper::int2str( in_rem_cycle[e] );	      
+	  else if ( in_nrem_cycle[e] != 0 ) considered = "NREM_C" + Helper::int2str( in_nrem_cycle[e] );
+	  writer.value( "CONSIDER" , considered );
+	  
 	  std::string ss = "?";
 	  if ( S[e] == ASYMM_SS_WAKE ) ss = "W";
 	  else if ( S[e] == ASYMM_SS_REM ) ss = "R";

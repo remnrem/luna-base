@@ -78,11 +78,11 @@ struct spindle_t
   bool include;
 
   // SO coupling metrics
-  double peak_sec;
+  double anchor_sec;
+  double so_phase_anchor;
   double so_nearest;
   int so_nearest_num;
-  double so_phase_peak;
-
+  
   double if_spindle;
 
   bool operator<( const spindle_t & rhs ) const { return tp < rhs.tp; } 

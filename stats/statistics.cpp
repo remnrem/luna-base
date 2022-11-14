@@ -2670,11 +2670,12 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
 
   for (int i=0;i<n;i++)
     {
+      //std::cout << " i " << i << "\t[" << y[i] << "]\t" << x[i] << "\n";
       group_means[ y[i] ] += x[i];
       group_n[ y[i] ]++;
       mean += x[i];      
     }
-
+  
   const int k = group_n.size();
   if ( k < 2 ) return 1.0;
 
@@ -2684,6 +2685,7 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
   while ( ii != group_means.end() )
     {
       group_means[ ii->first ] /= (double)group_n[ ii->first ];
+      //std::cout << "group mean " << group_means[ ii->first ] << "\n";
       ++ii;
     }
 
@@ -2715,11 +2717,15 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
   ii = group_means.begin();
   while	( ii != group_means.end() )
     {
+      //std::cout << " group N " << group_n[ ii->first ] << "\n";
+      
       SSB += group_n[ ii->first ] * ( ii->second - mean ) * ( ii->second - mean );
       SSW += SSw[ ii->first ];
       ++ii;
     }
   
+  //  std::cout << " SST,B,W = " << SST << " " << SSB << " " << SSW << "\n";
+
   double dfT = n - 1;
   double MST = SST / dfT;
 
@@ -2735,13 +2741,13 @@ double Statistics::anova( const std::vector<std::string> & y , const Data::Vecto
   // std::cout << "B: " << SSB << " " << MSB << "\n";
   // std::cout << "W: " << SSW << " " << MSW << "\n";
   // std::cout << "F , p = " << F << " "  << "\n";
-
+  
   if ( retf ) *retf = F ;
   if ( retb ) *retb = MSB;
   if ( retw ) *retw = MSW;
   
   double p = MiscMath::pF( F , dfB , dfW );
-
+  //std::cout << " done\n";
 
   return p;
 }

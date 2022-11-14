@@ -267,9 +267,23 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // verbose display of all CWT coefficients
   const bool     show_cwt_coeff           = param.has( "show-coef" );
 
-  // detect slow waves and estimate ITPC etc for spindle start/peak/stop and slow waves
+  // detect slow waves and estimate ITPC etc for spindle start/anchor/stop and slow waves
   const bool     sw_coupling              = param.has( "so" );
+  
+  // by default, SW phase coupling anchor is with "peak" (point of max CWT amplitude)
+  
+  // alternatively, consider position metrics (-1 start , 0 middle , +1 stop)
+  // 0 spindle peak, -1 start, +1 end :: choice of coupling metric
 
+  // alternatively, add second offset 
+
+  const bool     sw_coupling_positional   = param.has( "couple" );
+  const double   sw_coupling_anchor       = param.has( "couple" ) ? (1+param.requires_dbl( "couple" ))/2.0 : 0.5;
+  if ( sw_coupling_anchor < 0 || sw_coupling_anchor > 1 ) 
+    Helper::halt( "expecting couple=x where x is between -1 and 1" );
+  // on top of the above, allow second offset e.g. couple=0 couple-offset=-0.5 means 0.5 seconds before spindle start
+  const double sw_coupling_offset_sec     = param.has( "couple-offset" ) ? param.requires_dbl( "couple-offset" ) : 0;
+  
   // show SPINDLES in sample-pints
   const bool     show_sample_points       = param.has( "sp" );
 
@@ -530,8 +544,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // filter-Hilbert raw signal for SWs
 	  p_hilbert = new hilbert_t( *d , Fs[s] , sw_par.f_lwr , sw_par.f_upr , sw_par.fir_ripple , sw_par.fir_tw );
 	  
-	  std::vector<double> ph_peak;
-	  
+	  //std::vector<double> ph_peak;
 	  // are spindles in slow-waves?
 	  //	  std::vector<bool> sw_peak;
 	  
@@ -1390,7 +1403,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  
 	  //
-	  // Optional slow-wave coupling?
+	  // Align SO events/phase w/ these spindles
 	  //
 	  
 	  if ( sw_coupling )
@@ -1398,15 +1411,19 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      // slow waves have already been detected for this channel (in 'so')
 
-	      std::vector<double> ph_peak;
-	      
-	      // are spindles in slow-waves?
+	      // estimate SO phase at spindle 'anchor' point
+	      // and a boolean for whether it falls within a SO
+	      	      
+	      // typically, anchor is "peak" or point of max wavelet
+	      // alternatively, if 'couple' arg is set, it can be 
+	      // positional (start/middle/stop)
 
- 	      std::vector<bool> sw_peak;
+	      std::vector<double> ph_anchor;
+ 	      std::vector<bool> sw_anchor;
 
 	      if ( verbose_time_phase_locking )
 		{
-
+		  
 		  //
 		  // Phase-locked average of spindle power w.r.t. SO phase
 		  //	      
@@ -1467,61 +1484,86 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      const int nspindles = spindles.size();
 	      
-	      std::vector<int> sw_spindles_start; std::map<int,int> swmap_start;
-	      std::vector<int> sw_spindles_stop; std::map<int,int> swmap_stop;
-	      std::vector<int> sw_spindles_peak; std::map<int,int> swmap_peak;
-	      std::vector<int> all_spindles_peak;
+	      // std::vector<int> sw_spindles_start; std::map<int,int> swmap_start;
+	      // std::vector<int> sw_spindles_stop; std::map<int,int> swmap_stop;
+	      
+	      std::vector<int> sw_spindles_anchor; //std::map<int,int> swmap_peak;
+	      std::vector<int> all_spindles_anchor;
+	      
 	      std::vector<double> nearest_sw;
 	      std::vector<int> nearest_sw_number;
-	      std::vector<uint64_t> spindle_peak;
+	      std::vector<uint64_t> spindle_anchor;
 
-
-	      int sw_spin_count = 0;
 	      for (int i=0;i<nspindles;i++)
 		{
+		  // spindle start/stop in sample points
 		  int b0 = spindles[i].start_sp;
 		  int b1 = spindles[i].stop_sp;
-		  double mx = averaged[b0];
-		  int mxi = b0;
-		  for (int j = b0+1 ; j <= b1 ; j++ )
-		    if ( averaged[j] > mx ) { mx = averaged[j] ; mxi = j; } 
 		  
-		  bool any = false;
-		  // is this feature in a slow-wave?
-		  if ( p_sw->in_slow_wave(b0) ) 
+		  // define spindle anchor 'ba' in one of a few ways, below		  
+		  int ba = b0;
+		  
+		  // positional: anchor defined as range 0..1 from start/stop
+		  if ( sw_coupling_positional )
+		    {		      
+		      // n.b. b1 is *inclusive* 
+		      int blen = b1 - b0 ; 
+		      ba = b0 + sw_coupling_anchor * blen;
+		    }
+		  else // maximal CWT amplitude
+		    {
+		      double mx = averaged[b0];
+		      int mxi = b0;
+		      for (int j = b0+1 ; j <= b1 ; j++ )
+			if ( averaged[j] > mx ) { mx = averaged[j] ; ba = j; } 
+		      
+		    }
+		  
+		  //
+		  // any offset to the anchor?
+		  //
+		  
+		  ba += sw_coupling_offset_sec * Fs[s]; 
+
+		  		  
+		  //
+		  // Overlap w/ SO?
+		  //
+		  
+		  // // spindle start in SO?
+		  // if ( p_sw->in_slow_wave(b0) ) 
+		  //   { 
+		  //     any=true; 
+		  //     sw_spindles_start.push_back( b0 ); 
+		  //     swmap_start[i]=sw_spindles_start.size()-1; 
+		  //   }
+		  
+		  // // spindle stop in SO?
+		  // if ( p_sw->in_slow_wave(b1) ) 
+		  //   { 
+		  //     any=true; 
+		  //     sw_spindles_stop.push_back( b1 ); 
+		  //     swmap_stop[i]=sw_spindles_stop.size()-1; 
+		  //   }
+		  
+		  // spindle anchor in SO ? 
+		  if ( p_sw->in_slow_wave(ba) ) 
 		    { 
-		      any=true; 
-		      sw_spindles_start.push_back( b0 ); 
-		      swmap_start[i]=sw_spindles_start.size()-1; 
+		      sw_spindles_anchor.push_back( ba ); 
+		      //swmap_peak[i]=sw_spindles_peak.size()-1; 
 		    }
 		  
-		  if ( p_sw->in_slow_wave(b1) ) 
-		    { 
-		      any=true; 
-		      sw_spindles_stop.push_back( b1 ); 
-		      swmap_stop[i]=sw_spindles_stop.size()-1; 
-		    }
+		  // record all anchors 
+		  all_spindles_anchor.push_back( ba ); 
 		  
-		  // is spindle peak in SO ? 
-		  if ( p_sw->in_slow_wave(mxi) ) 
-		    { any=true;
-		      sw_spindles_peak.push_back( mxi ); 
-		      swmap_peak[i]=sw_spindles_peak.size()-1; 
-		    }
-		  
-		  if ( any ) ++sw_spin_count;
-		  
-		  // record all peaks 
-		  all_spindles_peak.push_back( mxi ); 
-		  
-		  // second distance to nearest SW (secs)
+		  // second distance to nearest SW (secs) from anchor
 		  int sw_num = 0;
-		  nearest_sw.push_back( p_sw->nearest(mxi , &sw_num ) ); 
+		  nearest_sw.push_back( p_sw->nearest(ba , &sw_num ) ); 
 		  nearest_sw_number.push_back( sw_num + 1 ); // make 1-based for visual output
-		  spindle_peak.push_back( (*tp)[ mxi ] );
+		  spindle_anchor.push_back( (*tp)[ ba ] );
 		}
 
-
+	      
 	      //
 	      // Proportion of spindles in a SO
 	      //
@@ -1533,7 +1575,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // SW-phase for each spindle in a SO
 	      //
 	      
-	      if ( all_spindles_peak.size() > 0 ) 
+	      if ( all_spindles_anchor.size() > 0 ) 
 		{
 		  
 		  //
@@ -1584,7 +1626,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // Perform spindle/SO coupling analysis
 		  //
 
-		  itpc_t itpc  = p_hilbert->phase_events( all_spindles_peak , 
+		  itpc_t itpc  = p_hilbert->phase_events( all_spindles_anchor , 
 							  use_mask ? &so_mask : NULL , nreps ,  // optional, mask events/spindles
 							  sr , 
 							  epoch_sec ,  // optionally, within-epoch shuffle
@@ -1592,8 +1634,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 							  );
 
 
-		  sw_peak = itpc.event_included;
-		  ph_peak = itpc.phase;
+		  sw_anchor = itpc.event_included;
+		  ph_anchor = itpc.phase;
 		  
 		  //
 		  // Gather output (but don't send to writer until later, i.e. need to 
@@ -1680,11 +1722,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      //
 	      // Individual PEAKS, to be output later, in characterize() 
 	      //
-	    
+	      
 	      for (int i=0;i<nspindles;i++)
 		{
 		  // peak_sec
-		  spindles[i].peak_sec = spindle_peak[i] * globals::tp_duration ;
+		  spindles[i].anchor_sec = spindle_anchor[i] * globals::tp_duration ;
 		  
 		  if ( nearest_sw_number[i] != 0 ) // is now 1-basewd 
 		    {
@@ -1694,10 +1736,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  
 		  //		  std::cout << "sw_peak = " << sw_peak[i] << "\n";
 		  
-		  if ( sw_peak[ i ] )
-		    spindles[i].so_phase_peak =  MiscMath::as_angle_0_pos2neg( ph_peak[ i ] ) ;		  		  		      
+		  if ( sw_anchor[ i ] )
+		    spindles[i].so_phase_anchor =  MiscMath::as_angle_0_pos2neg( ph_anchor[ i ] ) ;		  		  		      
 		  else 
-		    spindles[i].so_phase_peak =  -9;
+		    spindles[i].so_phase_anchor =  -9;
 		  
 		}
 	      
@@ -3553,7 +3595,7 @@ void characterize_spindles( edf_t & edf ,
       // spindle amp
       spindle->amp = max_p2p;
 
-      // track tp of spindle peak also
+      // track tp of spindle max neg-trough 
       double fractional_mid = spindle->peak_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
       spindle->tp_mid = spindle->tp.start + fractional_mid * ( spindle->tp.stop - spindle->tp.start ) ;  
       //std::cout << " mids = " << spindle->tp.start << "\t" << spindle->tp_mid << "\t" << spindle->tp.stop << "\n";
@@ -3603,18 +3645,18 @@ void characterize_spindles( edf_t & edf ,
 
 	  // 10..13.5  <slow spindles> 
 	  // 13.5..16  <fast spindles>
-
+	  
 	  // 20..30
 	  
 	  do_fft( slice0.nonconst_pdata() , Fs , &spindle_fft );
 	  
 	  // calculate enrichment (log10-scale), so set min to v. low...
 	  double q_spindle = -999 , q_baseline = -999;
-
+	  
 	  std::map<freq_range_t,double>::const_iterator ff = spindle_fft.begin();
 	  while ( ff != spindle_fft.end() )
 	    {
-
+	      
 	      const double & baseline_band_power = (*baseline)[ ff->first ] ;
 	      const double & spindle_band_power = ff->second;
 	      const freq_range_t & band = ff->first;
@@ -3811,10 +3853,10 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        writer.value( "START_SP"  , spindle->start_sp );
        writer.value( "PEAK_SP"  ,  spindle->start_sp + spindle->peak_sp );
        writer.value( "STOP_SP"   , spindle->stop_sp  );
-
+       
        if ( starttime != NULL )
 	 {
-
+	   
 	   double tp1_sec =  spindle->tp.start / (double)globals::tp_1sec;
 	   clocktime_t present1 = *starttime;
 	   present1.advance_seconds( tp1_sec );
@@ -3888,7 +3930,7 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        
        if ( param.has( "so" ) )
 	 {
-	   writer.value( "PEAK" , spindle->peak_sec );
+	   writer.value( "ANCHOR" , spindle->anchor_sec );
 
 	   if ( spindle->so_nearest_num != 0 ) 
 	     {
@@ -3896,8 +3938,8 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	       writer.value( "SO_NEAREST_NUM" , spindle->so_nearest_num );
 	     }
 	   
-	   if ( spindle->so_phase_peak >= 0 ) 
-	     writer.value( "SO_PHASE_PEAK" , spindle->so_phase_peak );
+	   if ( spindle->so_phase_anchor >= 0 ) 
+	     writer.value( "SO_PHASE_ANCHOR" , spindle->so_phase_anchor );
 	 }
 
        if ( param.has( "if" ) )

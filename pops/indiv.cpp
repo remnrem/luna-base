@@ -611,6 +611,8 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 void pops_indiv_t::level1( edf_t & edf )
 {
 
+  const double NaN_value = std::numeric_limits<double>::quiet_NaN();
+
   //
   // ensure we reset epoch count 'ne'
   //
@@ -620,13 +622,13 @@ void pops_indiv_t::level1( edf_t & edf )
   //
   // score level-1 factors --> X1
   //
-
-  X1.resize( ne , pops_t::specs.n1 );
-
+  
+  X1 = Eigen::MatrixXd::Zero( ne , pops_t::specs.n1 );
+  
   logger << "  expecting " << pops_t::specs.n1
 	 << " level-1 features (for " << ne
 	 << " epochs) and " << pops_t::specs.ns << " signals\n";
-    
+  
   //
   // PSD (Welch) parameters 
   //
@@ -651,7 +653,7 @@ void pops_indiv_t::level1( edf_t & edf )
   //
   // check signals present in EDF
   //
-
+  
   std::vector<std::string> slabs;
   std::vector<int> slots;
   const bool silent_signal_search = true;
@@ -700,7 +702,7 @@ void pops_indiv_t::level1( edf_t & edf )
 	      logger << "  rescaling " << ss->first 
 		     << " from " << edf.header.phys_dimension[ slot ] 
 		     << " to " << ss->second.unit << "\n";
-	      edf.rescale( slot , ss->second.unit );
+	      edf.rescale( slot , ss->second.unit ,true );
 	    }
 	}
       
@@ -741,15 +743,108 @@ void pops_indiv_t::level1( edf_t & edf )
 	}      
     }
 
+
+  //
+  // Figure out any coherence channel pairs
+  //
+  
+  int coh_Fs = 0;
+  std::set<int> cohchs;
+  std::map<std::pair<int,int>, std::string > cohpairs;
+  
+  const int ns = pops_t::specs.ns;
+  
+  for (int s1 = 0 ; s1 < ns; s1++ )
+    for (int s2 = 0 ; s2< ns; s2++ )
+      if ( s1 != s2 ) 
+	{
+	  
+	  const std::string sigpair = signals.label(s1) + "," + signals.label(s2);
+	  
+	  if ( pops_t::specs.has( pops_feature_t::POPS_COH , sigpair ) ) 
+	    { 
+	      
+	      // swap in an equivalence channels for one?
+	      
+	      const std::string siglab1 = signals.label(s1) ;       
+	      const std::string siglab2 = signals.label(s2) ;       
+	      
+	      int slot1 = -1;
+	      int slot2 = -1;
+	      
+	      if ( pops_opt_t::equiv_root == siglab1 )
+		{		      
+		  if ( pops_opt_t::equiv_swapin == siglab1 )
+		    slot1 = signals(s1);
+		  else 
+		    slot1 = edf.header.signal( pops_opt_t::equiv_swapin );
+		}
+	      else // no swapping needed
+		slot1 = signals(s1);
+	      
+	      
+	      // or the second channel has the equivalence?
+	      
+	      if ( pops_opt_t::equiv_root == siglab2 )
+		{
+		  if ( pops_opt_t::equiv_swapin == siglab2 )
+		    slot2 = signals(s2);
+		  else 
+		    slot2 = edf.header.signal( pops_opt_t::equiv_swapin );
+		}
+	      else // no swapping needed
+		slot2 = signals(s2);		  
+	      
+	      if ( slot1 == -1 || slot2 == -1 )
+		Helper::halt( "could not find equiv channel " + pops_opt_t::equiv_swapin );
+	      
+	      // track
+	      cohchs.insert( slot1 );
+	      cohchs.insert( slot2 );
+	      cohpairs[ std::make_pair( slot1, slot2 ) ] = sigpair ; // original label
+	      
+	      // track Fs
+	      if ( coh_Fs == 0 ) 
+		coh_Fs = edf.header.sampling_freq( slot1 );
+	      
+	      if ( edf.header.sampling_freq( slot1 ) != coh_Fs ||
+		   edf.header.sampling_freq( slot2 ) != coh_Fs )
+		Helper::halt( "unequal sample rates for COH channels" );	      
+	    }
+	}
+  
+  
+  const bool do_coherence = cohpairs.size() != 0 ; 
+  
+  // get first epoch to set up COH, whether used or not below?
+
+  // dummy values here - could be any values if do_coherence is false
+  int total_sample_points = 30 * 128;
+  coh_Fs = do_coherence ? coh_Fs : 128;
+  
+  if ( do_coherence )
+    {
+      edf.timeline.first_epoch();
+      int epoch = edf.timeline.next_epoch();
+      if ( epoch == -1 ) Helper::halt( "no epochs to analyse" );
+      slice_t slice1( edf , *(cohchs.begin()) , edf.timeline.epoch( epoch ) );
+      const std::vector<double> * d1 = slice1.pdata();
+      total_sample_points = d1->size();
+      // wind back to the start
+      edf.timeline.first_epoch();
+    }
+  
+  coherence_t coherence( total_sample_points, coh_Fs, 
+			 fft_segment_size , fft_segment_overlap , 
+			 WINDOW_TUKEY50 , false , false );
+  
+
   //
   // iterate over epochs
   //
   
   int en = 0 ;
-
-  // was called above, and reset 'ne'
-  //edf.timeline.first_epoch();
-  
+    
   while ( 1 ) 
     {
       
@@ -776,12 +871,11 @@ void pops_indiv_t::level1( edf_t & edf )
       interval_t interval = edf.timeline.epoch( epoch );
       
       bool bad_epoch = false;
-
+      
       //
       // Iterate over signals
       //
-
-      const int ns = pops_t::specs.ns;
+            
       
       for (int s = 0 ; s < ns; s++ )
 	{
@@ -803,8 +897,7 @@ void pops_indiv_t::level1( edf_t & edf )
 	  
 	  const std::string siglab = signals.label(s) ; 
 
-	  //	  std::cout << "siglab = " << siglab << " " << pops_opt_t::equiv_root << " == " << ( pops_opt_t::equiv_root == siglab ) << "\n";
-
+	  
 	  int slot1;
 
 	  // swapping in an equivalent value?
@@ -853,12 +946,13 @@ void pops_indiv_t::level1( edf_t & edf )
 	  const bool do_spectral =
 	    pops_t::specs.has( pops_feature_t::POPS_LOGPSD , siglab ) ||
 	    pops_t::specs.has( pops_feature_t::POPS_RELPSD , siglab ) ||	    
-	    pops_t::specs.has( pops_feature_t::POPS_CVPSD , siglab ) || 
-	    pops_t::specs.has( pops_feature_t::POPS_BANDS , siglab ) ||
+	    pops_t::specs.has( pops_feature_t::POPS_CVPSD  , siglab ) || 
+	    pops_t::specs.has( pops_feature_t::POPS_BANDS  , siglab ) ||	    
 	    pops_t::specs.has( pops_feature_t::POPS_RBANDS , siglab ) ||	    
 	    pops_t::specs.has( pops_feature_t::POPS_VBANDS , siglab ) || 	  
-	    pops_t::specs.has( pops_feature_t::POPS_SLOPE , siglab );
-
+	    pops_t::specs.has( pops_feature_t::POPS_SLOPE  , siglab );
+	  
+	 	  
 	  const bool do_skew = pops_t::specs.has( pops_feature_t::POPS_SKEW , siglab );
 	  
 	  const bool do_kurt = pops_t::specs.has( pops_feature_t::POPS_KURTOSIS , siglab );
@@ -868,8 +962,8 @@ void pops_indiv_t::level1( edf_t & edf )
 	  const bool do_pe = pops_t::specs.has( pops_feature_t::POPS_PE , siglab );
 	  
 	  const bool do_pfd = pops_t::specs.has( pops_feature_t::POPS_FD , siglab );
-	  	  	  
-
+	
+	  
 	  //
 	  // PSD (Welch)
 	  //
@@ -921,7 +1015,7 @@ void pops_indiv_t::level1( edf_t & edf )
 		    }
 		}
 
-	      
+
 	      //
 	      // track that this is bad / to be removed below?
 	      //
@@ -987,12 +1081,15 @@ void pops_indiv_t::level1( edf_t & edf )
 		      if ( bin.bfa[i] > zupr ) break;		       
 		      if ( bin.bfa[i] >= zlwr ) norm += bin.bspec[i] ;
 		    }
+		  
+		  //		  std::cout << " norm = " << norm << "\n";
 
 		  // sanity check
-		  if ( norm == 0 )
+		  if ( norm <= 1e-8 )
 		    {
 		      bad_epoch = true;
-		      norm = 1e-4;
+		      norm = 1e-8;
+		      //std::cout << " resetting norm 1e-8\n";
 		    }
 		  
 		  int b = 0;				   
@@ -1001,12 +1098,14 @@ void pops_indiv_t::level1( edf_t & edf )
 		      if (  bin.bfa[i] >= lwr && bin.bfa[i] <= upr )
 			{
 			  if ( b == ncols ) Helper::halt( "internal error... bad sizes for RSPEC" );
+			  // std::cout << " setting " << bin.bfa[i] << "\t" << bin.bspec[i] << "\t"
+			  // 	    << norm << "\t" << bin.bspec[i] / norm  << "\t"
+			  // 	    << log( bin.bspec[i] / norm ) << "\n";
 			  X1( en , cols[b] ) = log( bin.bspec[i] / norm ) ; 
 			  ++b;			   
 			}
 		    }
 		}
-	      
 	      
 	      //
 	      // cv-PSD?
@@ -1157,13 +1256,15 @@ void pops_indiv_t::level1( edf_t & edf )
 	   if ( do_skew && ! bad_epoch )
 	     {
 	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_SKEW , siglab ) ;
-	       X1( en , cols[0] ) = MiscMath::skewness( *d , 0 , MiscMath::sdev( *d , 0 ) );
+	       const double skewness = MiscMath::skewness( *d , 0 , MiscMath::sdev( *d , 0 ) );
+	       X1( en , cols[0] ) = Helper::realnum( skewness ) ? skewness : 0 ;
 	     }
 
 	   if ( do_kurt && ! bad_epoch )
 	     {
 	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_KURTOSIS , siglab ) ;
-	       X1( en , cols[0] ) = MiscMath::kurtosis0( *d ); // assumes mean-centered
+	       const double kurt = MiscMath::kurtosis0( *d ); // assumes mean-centered
+               X1( en , cols[0] ) = Helper::realnum( kurt ) ? kurt : 0 ;
 	     }
 	   
 	   // fractal dimension
@@ -1201,7 +1302,9 @@ void pops_indiv_t::level1( edf_t & edf )
 	     {
 	       double activity = 0 , mobility = 0 , complexity = 0;
 	       MiscMath::hjorth( d , &activity , &mobility , &complexity );
-
+	       // std::cout << "hj " << d->size() << "\t" 
+	       // 		 << activity << " " << mobility << " " << complexity << "\n";
+	       
 	       // use all 3 parameters (log-scaling H1)
 	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_HJORTH , siglab ) ;
 	       X1( en , cols[0] ) = activity > 0 ? log( activity ) : log( 0.0001 ) ;
@@ -1213,8 +1316,57 @@ void pops_indiv_t::level1( edf_t & edf )
 	   // Next signal
 	   //
 	}
+      
+      
+      //
+      // Pairwise COH signals
+      //
+      
+      if ( cohpairs.size() != 0 ) 
+	{
+	  	  
+	  coherence.clear();
+	  
+	  // PSD first
+	  std::set<int>::const_iterator ss = cohchs.begin();
+	  while ( ss != cohchs.end() )
+	    {	      
+	      dsptools::coherence_prepare( edf , *ss , interval , &coherence );	      
+	      ++ss;
+	    }
+	  
+	  // pairwise comparisons
+	  std::map<std::pair<int,int>, std::string >::const_iterator pp = cohpairs.begin();
+	  while ( pp != cohpairs.end() )
+	    {
+	      const std::pair<int,int> & p = pp->first;	      
+	      const std::string sigpair = pp->second;
 
+	      scoh_t scoh = dsptools::coherence_do( &coherence , p.first , p.second );	      
+	      
+	      // make bcoh[] etc
+	      scoh.proc_and_output( coherence , false );
+	      
+	      // add outputs :: make 0 if undefined
+	      std::vector<double> bcohs( 6 );
+	      bcohs[0] = scoh.bn[ SLOW ]  ? scoh.bcoh[ SLOW ]  : 0;
+	      bcohs[1] = scoh.bn[ DELTA ] ? scoh.bcoh[ DELTA ] : 0;
+	      bcohs[2] = scoh.bn[ THETA ] ? scoh.bcoh[ THETA ] : 0;
+	      bcohs[3] = scoh.bn[ ALPHA ] ? scoh.bcoh[ ALPHA ] : 0;
+	      bcohs[4] = scoh.bn[ SIGMA ] ? scoh.bcoh[ SIGMA ] : 0;
+	      bcohs[5] = scoh.bn[ BETA  ] ? scoh.bcoh[ BETA  ] : 0;
+	      
+	      std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_COH , sigpair ) ;
+	      if ( cols.size() != 6 ) Helper::halt( "internal error in COH cols" );
+	      
+	      for (int j=0; j< cols.size(); j++)
+		X1( en , cols[j] ) = bcohs[j];
+	      
+	      ++pp;
+	    }	  
+	}
 
+      
       //
       // Covariates at end?
       //
@@ -1240,6 +1392,7 @@ void pops_indiv_t::level1( edf_t & edf )
     } // next epoch
 
 
+  
   //
   // Epoch-level outlier removal (at lvl1 stage) 
   //
@@ -1257,27 +1410,22 @@ void pops_indiv_t::level1( edf_t & edf )
       
       // get lvl1 columns only (
       std::vector<int> c = pops_t::specs.block_cols( blk , pops_t::specs.n1 );
-      // std::cout << " --> " << blk << " " 
-      // 		<< c.size() << "\n";
-
+      
       double th = spec.narg( "th" );
-
+      
       // copy staging
       std::vector<int> S2 = S;
       
       // this amends S2
       for (int j=0;j<c.size();j++)
-	{
-	  pops_t::outliers( X1.col(c[j]) , th , S , &S2 );
-	}
-
+	pops_t::outliers( X1.col(c[j]) , th , S , &S2 );	  
+      
       // after doing one round for this block, update S
       S = S2;
       
       // do proc
       ++ii;
     }
-
 
   //
   // Prune out bad rows
@@ -1303,6 +1451,7 @@ void pops_indiv_t::level1( edf_t & edf )
   
   for (int i=0; i<good; i++)
     {
+      
       if ( reslot[i] != i )
 	{
 	  S[i] = S[ reslot[i] ];
@@ -1310,7 +1459,7 @@ void pops_indiv_t::level1( edf_t & edf )
 	  X1.row(i) = X1.row( reslot[i] );
 	}
     }
-
+  
   logger << "  pruning rows from " << ne << " to " << good << " epochs\n";
 
   // final update

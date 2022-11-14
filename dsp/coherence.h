@@ -25,6 +25,8 @@
 
 #include <vector>
 #include <complex>
+#include <map>
+#include "defs/defs.h"
 
 struct edf_t;
 struct param_t;
@@ -52,14 +54,19 @@ struct scoh_t
     sxy.resize( n );    
   }
   
-  void output( const coherence_t & , const double upper_freq = -1 ) const;
-
+  void proc_and_output( const coherence_t & , const bool output , const double upper_freq = -1 );
+  
   // cross and auto spectra (vector over frequencies)
   std::vector<bool>   bad;
   std::vector<double> sxx;
   std::vector<double> syy;
   std::vector<std::complex<double> > sxy;
-
+  
+  // band power
+  std::map<frequency_band_t,double> bcoh, bicoh, blcoh;
+  // band bin count
+  std::map<frequency_band_t,int> bn;
+   
 
 };
 
@@ -72,7 +79,7 @@ struct coh_t
   void add( const scoh_t & c ) { epochs.push_back( c ); } 
   
   // calculate and output final (averaged) connectivity stats, 
-  void calc_stats( const coherence_t & , const double upper_freq = -1 ) const;
+  void calc_stats( const coherence_t & , const double upper_freq = -1 ) ;
     
   // data 
   std::vector<scoh_t> epochs;

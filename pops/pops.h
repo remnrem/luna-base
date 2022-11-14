@@ -81,6 +81,10 @@ struct pops_t {
   // this is also co-opted by prediction mode 
   void level2( const bool training = true , const bool quiet = false );
 
+  // test mean differences by stage (overall, and within person)
+  void stage_association();
+  void stage_association1( Eigen::VectorXd & ftr , const std::vector<std::string> & ss );
+			   
   // dump feature matrix
   void dump_matrix( const std::string & f );
 
@@ -213,7 +217,12 @@ struct pops_t {
 };
 
 
-
+struct pops_nan_report_t {
+  pops_nan_report_t( const Eigen::MatrixXd & m );
+  bool any() const;
+  std::map<int,int> rows; 
+  std::map<int,int> cols;
+};
 
 struct pops_stats_t { 
 

@@ -59,6 +59,7 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "stats/eigen_ops.h"
+#include "stats/statistics.h"
 #include "db/db.h"
 #include "dsp/tv.h"
 
@@ -216,6 +217,38 @@ void pops_t::make_level2_library( param_t & param )
   
   load1( data_file );
   
+
+  //
+  // Check for NaNs
+  //
+  
+  pops_nan_report_t missing_vars( X1 );
+  if ( missing_vars.any() )
+    {
+                                    
+      std::vector<std::string> pp = pops_t::specs.col_label;
+      std::map<int,int>::const_iterator cc = missing_vars.cols.begin();
+      while ( cc != missing_vars.cols.end() )
+	{
+	  logger  << "  ** warning: " << pp[cc->first ] << " has " << cc->second << " missing values\n";
+	  ++cc;
+	}
+      
+      const int nt = Istart.size();
+      for (int i=0; i<nt; i++)
+	{
+	  for (int e = Istart[i] ; e <= Iend[i] ; e++) 
+	    {
+	      if ( missing_vars.rows.find( e ) != missing_vars.rows.end() )
+		{
+		  logger << "  ** warning: " << I[ i ]  
+			 << " has an epoch with " << missing_vars.rows[e] << " missing value(s)\n";		  
+		}
+	    }
+	}
+    }
+
+
   //
   // expand X1 to include space for level-2 features
   //
@@ -245,6 +278,8 @@ void pops_t::make_level2_library( param_t & param )
       ++ii;
     }
 
+
+
   //  
   // derive level-2 stats (jointly in *all* indiv. training + valid ) 
   //  -- typically trainer, but allow for test individuals here if we
@@ -255,6 +290,13 @@ void pops_t::make_level2_library( param_t & param )
   level2( is_trainer );
   
   
+  //
+  // states
+  //
+  
+  if ( pops_opt_t::run_stage_associations )
+    stage_association();
+
   //
   // output the the feature matrix 
   //
@@ -393,6 +435,9 @@ void pops_t::level2( const bool training , const bool quiet )
 	  const int hwin = spec.narg( "half-window" );
 	  const int fwin = 1 + 2 * hwin;
 
+	  // not used
+	  //const double atten = spec.has( "a" ) ? spec.narg( "a" ) : 0.25;
+	  
 	  // these should always match
 	  if ( nfrom != nto )
 	    Helper::halt( "internal error (2) in level2()" );
@@ -574,7 +619,7 @@ void pops_t::level2( const bool training , const bool quiet )
                 {
                   int fromi = Istart[i];
                   int sz    = Iend[i] - Istart[i] + 1;
-		  eigen_ops::percentile_scale( D.segment( fromi , sz ) , pct , nsegs );
+		  D.segment( fromi , sz ) = eigen_ops::percentile_scale( D.segment( fromi , sz ) , pct , nsegs );
                 }
               X1.col( to_cols[j] ) = D;
             }
@@ -831,10 +876,13 @@ void pops_t::outliers( const Eigen::VectorXd & x ,
 		       const std::vector<int> & staging , 
 		       std::vector<int> * staging2 )
 {
-  double sum = 0 , sumsq = 0;
+
+
+  double sum = 0;
+  double sumsq = 0;
   int n = 0;
   const int n1 = x.size();
-
+  
   // based mean/SD on staging[] good calls
   for (int i=0; i<n1; i++)
     {
@@ -845,24 +893,24 @@ void pops_t::outliers( const Eigen::VectorXd & x ,
 	  n++;
 	}
     }
-
+  
   if ( n < 3 ) return;
-  const double mean = sum/n;
+  const double mean = sum/(double)n;
   const double meansq = mean * mean ; 
-  const double sd = sqrt( sumsq / (n-1) - ( n/(n-1) ) * meansq );
+  const double sd = sqrt( sumsq / (double)(n-1) - ( n/(double)(n-1) ) * meansq );
   const double upr = mean + th * sd ;
   const double lwr = mean - th * sd ;
 
   // update staging2
   for (int i=0; i<n1; i++)
-    {
+    {    
       if ( (*staging2)[i] != POPS_UNKNOWN )
         {
 	  if ( x[i] < lwr || x[i] > upr )
-	    (*staging2)[i] = POPS_UNKNOWN;
+	    (*staging2)[i] = POPS_UNKNOWN;	  
 	}
     }
-    
+  
 }
 
 
@@ -1428,6 +1476,164 @@ bool pops_t::dump_weights()
   return true;
 }
 
+
+// helper to determine the presence of NaN in a matrix
+// and construct a small report if so
+
+pops_nan_report_t::pops_nan_report_t( const Eigen::MatrixXd & m )
+{
+  rows.clear(); 
+  cols.clear();
+
+  const bool anynans = m.array().isNaN().count() > 0 ;
+  if ( ! anynans ) return;
+  
+  for (int c=0; c<m.cols(); c++) 
+    {
+      int cnt = m.col(c).array().isNaN().count();
+      if ( cnt ) cols[c] = cnt;
+    }
+
+  for (int r=0; r<m.rows(); r++) 
+    {
+      int cnt = m.row(r).array().isNaN().count();
+      if ( cnt ) rows[r] = cnt;
+    }
+  
+}
+
+bool pops_nan_report_t::any() const
+{
+  return rows.size() != 0 || cols.size() != 0;
+}
+
+void pops_t::stage_association1( Eigen::VectorXd & ftr , 
+				 const std::vector<std::string> & ss )
+{
+  const int nobs = ftr.size();
+  if ( nobs < 2 ) return;
+
+  const int num_nan = ftr.array().isNaN().count();      
+  writer.value( "N" , nobs - num_nan );
+  writer.value( "N0" , num_nan );
+
+  // no missing data 
+  if ( num_nan == 0 ) 
+    {         
+      double pv = Statistics::anova( ss  , eigen_ops::copy_vector( ftr ) );
+      if ( pv > -0.01 ) 
+	{
+	  if ( pv < 1e-200 ) pv = 1e-200;
+	  writer.value( "ANOVA", -log10(pv) );
+	}
+      
+      // nb. we have to standardize ftr first
+      eigen_ops::scale( ftr , true , true );
+      double wb = eigen_ops::between_within_group_variance( ss , ftr );
+      writer.value( "WMAX", wb );
+    }
+  else
+    {
+      // need to splice out non-missing values
+      const int nobs2 = nobs - num_nan ;
+      if ( nobs2 < 2 ) return;
+      Eigen::VectorXd ftr2 = Eigen::VectorXd::Zero( nobs2 );
+      std::vector<std::string> ss2( nobs2 );
+      int p = 0;
+      for (int j=0; j<nobs; j++) 
+	{
+	  if ( Helper::realnum( ftr[j] ) )
+	    {
+	      ftr2[p] = ftr[j];
+	      ss2[p] = ss[j];
+	      ++p;
+	    } 
+	}
+      
+      double pv = Statistics::anova( ss2  , eigen_ops::copy_vector( ftr2 ) );
+      if ( pv > -0.01 ) 
+	{
+	  if ( pv < 1e-200 ) pv = 1e-200;
+	  writer.value( "ANOVA", -log10(pv) );
+	}
+      
+      // nb. we have to standardize ftr first
+      eigen_ops::scale( ftr2 , true , true );
+      double wb = eigen_ops::between_within_group_variance( ss2 , ftr2 );
+      writer.value( "WMAX", wb );
+
+    }
+  
+}
+
+void pops_t::stage_association() 
+{
+  // generate 1) a person x feature table
+  //          2) an overall feature-level table
+
+  logger << "  running feature/stage trainer associations\n";
+
+  const int nobs = X1.rows();
+  const int ncol = X1.cols();
+  
+  // feature labels
+  std::vector<std::string> ftrs = pops_t::specs.select_labels();
+  if ( ftrs.size() != ncol ) 
+    Helper::halt( "interal error in stage_association()" );
+  
+  // stages
+  std::vector<std::string> ss( nobs );
+  for (int i=0; i<nobs; i++) 
+    ss[i] = pops_t::label( (pops_stage_t)S[i] );
+  
+  //
+  // consider each feature
+  //
+  
+  for (int f=0; f<ftrs.size(); f++)
+    {      
+      writer.level( pops_t::specs.final2orig[ f ] + 1  , globals::feature_strat );
+      Eigen::VectorXd ftr = X1.col(f);
+      //std::cout << " OVERALL ftr " <<  f << "/" << ftrs.size() << "\n";
+      stage_association1( ftr , ss );
+    }
+  writer.unlevel( globals::feature_strat );
+  
+  
+  //
+  // Now repeat for each individual
+  //
+    
+  const int nt = Istart.size();
+
+  for (int i=0; i<nt; i++)
+    {
+      
+      writer.level( I[i] , "TRAINER" );
+		    
+      // pull out data for this trainer only
+      int fromi = Istart[i];
+      int sz    = Iend[i] - Istart[i] + 1;
+      Eigen::MatrixXd XI = X1.block( fromi , 0 , sz, ncol );
+      
+      // splice stages
+      const int n1 = XI.rows();
+      std::vector<std::string> ss1( n1 );
+      for (int j=0; j<n1; j++) ss1[j] = ss[ fromi + j ];
+      
+      // consider each feature
+      for (int f=0; f<ftrs.size(); f++)
+	{	  
+	  writer.level( pops_t::specs.final2orig[ f ] + 1 , globals::feature_strat );
+	  Eigen::VectorXd ftr = XI.col(f);
+	  //std::cout << " INDIV " << i << " ftr " <<  f << "/" << ftrs.size() << "\n";
+	  stage_association1( ftr , ss1 );	  
+	}
+      writer.unlevel( globals::feature_strat );
+    }
+  writer.unlevel( "TRAINER" );  
+  
+}
 
 
 #endif

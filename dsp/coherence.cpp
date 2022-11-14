@@ -324,7 +324,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 		{
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );
 		  
-		  scoh.output( coherence , show_epoch_spectrum ? upper_freq : -1 );
+		  scoh.proc_and_output( coherence , true, show_epoch_spectrum ? upper_freq : -1 );
 		  
 		}
 	      
@@ -347,7 +347,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   if ( epoched )
     writer.unepoch();
   
-	  
+
   //
   // Output whole-signal coherence (this may optionally contain an average over all coh_t
   // if we previously analyzed epochs)
@@ -355,20 +355,20 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   
   logger << "  calculating overall coherence statistics\n";
 
-  std::map<int,std::map<int,coh_t> >::const_iterator ii = coh.begin();
+  std::map<int,std::map<int,coh_t> >::iterator ii = coh.begin();
   while ( ii != coh.end() )
     {
       
       writer.level( signals1.label(ii->first) , "CH1" );
       
-      std::map<int,coh_t>::const_iterator jj = ii->second.begin();
+      std::map<int,coh_t>::iterator jj = ii->second.begin();
       while ( jj != ii->second.end() )
 	{
 	  writer.level( signals2.label(jj->first) , "CH2" );
-
-	  // output (and calc stats averaged over epochs)
+	  
+	  // output (and calc stats averaged over epochs)	
 	  jj->second.calc_stats( coherence , show_spectrum ? upper_freq : -1 );
-
+	  
 	  ++jj;
 	}
 
@@ -410,7 +410,7 @@ scoh_t dsptools::coherence_do( coherence_t * coherence , const int signal1 , con
 
 
 
-void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq ) const
+void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq ) 
 {
   
   
@@ -423,7 +423,7 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
   // if only a single epoch, then just use scoh_t to output
   if ( ne == 1 )
     {
-      epochs[0].output( coherence , upper_freq );
+      epochs[0].proc_and_output( coherence , true , upper_freq );
       return;
    }
 
@@ -521,7 +521,7 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
   // Output
   //
   
-  scoh.output( coherence , upper_freq );
+  scoh.proc_and_output( coherence , true, upper_freq );
   
   
 }
@@ -531,17 +531,20 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
 
 
 
-void scoh_t::output( const coherence_t & coherence , const double upper_freq ) const
+void scoh_t::proc_and_output( const coherence_t & coherence , 
+			      const bool output , 
+			      const double upper_freq )
 {
-
+  
   //
   // Band-level summaries
   //
-    
-  std::map<frequency_band_t,double> bcoh, bicoh, blcoh;
 
-  std::map<frequency_band_t,int> bn;
-    
+  bcoh.clear();
+  bicoh.clear();
+  blcoh.clear();
+  bn.clear();
+
   std::vector<frequency_band_t> bands;
   bands.push_back( SLOW );
   bands.push_back( DELTA );
@@ -560,7 +563,7 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 
   const std::vector<double> & frq = coherence.frq();
 
-  for (int k=0; k< frq.size() ; k++)
+  for ( int k=0; k< frq.size() ; k++)
     {
       
       if ( bad[k] ) continue;
@@ -568,12 +571,10 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
       //
       // main stats
       //
-
+      
       const double & Sxx = sxx[k];
       const double & Syy = syy[k];
       const std::complex<double> & Sxy = sxy[k];
-
-
       
       double Re = std::real( Sxy );
       double Im = std::imag( Sxy );
@@ -618,22 +619,23 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
       // frequency-bin output
       //
 
-      if ( upper_freq > 0 && frq[k] <= upper_freq ) 
-	{
-	  
-	  any = true;
-	  
-	  writer.level( frq[k] , globals::freq_strat );
-
-	  if ( Helper::realnum( coh ) )
-	    writer.value( "COH" , coh );
-	  if ( Helper::realnum( icoh ) )
-	    writer.value( "ICOH" , icoh );
-	  if ( Helper::realnum( lcoh ) )
-	    writer.value( "LCOH" , lcoh );
-	  if ( Helper::realnum( cross_spectra_dB ) )
-	    writer.value( "CSPEC" , cross_spectra_dB );
-	}      
+      if ( output ) 
+	if ( upper_freq > 0 && frq[k] <= upper_freq ) 
+	  {
+	    
+	    any = true;
+	    
+	    writer.level( frq[k] , globals::freq_strat );
+	    
+	    if ( Helper::realnum( coh ) )
+	      writer.value( "COH" , coh );
+	    if ( Helper::realnum( icoh ) )
+	      writer.value( "ICOH" , icoh );
+	    if ( Helper::realnum( lcoh ) )
+	      writer.value( "LCOH" , lcoh );
+	    if ( Helper::realnum( cross_spectra_dB ) )
+	      writer.value( "CSPEC" , cross_spectra_dB );
+	  }      
       
     } // next frequency 'k'
 
@@ -642,7 +644,7 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
   // clear any frequency-strata, if set
   //
   
-  if ( any )
+  if ( output && any )
     writer.unlevel( globals::freq_strat );
   
   
@@ -665,26 +667,28 @@ void scoh_t::output( const coherence_t & coherence , const double upper_freq ) c
 	  bicoh[ *bb ] /= (double)bn[ *bb ];
 	  blcoh[ *bb ] /= (double)bn[ *bb ];
 
-	  any = true;
-	  writer.level( globals::band( *bb ) , globals::band_strat );	  
-
-	  if ( Helper::realnum( bcoh[ *bb ] ) )
-	    writer.value( "COH" , bcoh[ *bb ] );
-
-	  if ( Helper::realnum( bicoh[ *bb ] ) )
-	    writer.value( "ICOH" , bicoh[ *bb ] );
-	  
-	  if ( Helper::realnum( blcoh[ *bb ] ) )
-	    writer.value( "LCOH" , blcoh[ *bb ] );	  
-	}      
+	  if ( output ) 
+	    {
+	      any = true;
+	      writer.level( globals::band( *bb ) , globals::band_strat );	  
+	      
+	      if ( Helper::realnum( bcoh[ *bb ] ) )
+		writer.value( "COH" , bcoh[ *bb ] );
+	      
+	      if ( Helper::realnum( bicoh[ *bb ] ) )
+		writer.value( "ICOH" , bicoh[ *bb ] );
+	      
+	      if ( Helper::realnum( blcoh[ *bb ] ) )
+		writer.value( "LCOH" , blcoh[ *bb ] );	  
+	    }      
+	}
 
       ++bb;
     }
-
-  if ( any )
+  
+  if ( output && any )
     writer.unlevel( globals::band_strat );
-		  
-
+  
 }
 
 

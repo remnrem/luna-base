@@ -48,6 +48,8 @@ std::set<std::string> pops_opt_t::exc_vars;
 
 bool pops_opt_t::verbose;
 
+bool pops_opt_t::run_stage_associations;
+
 double pops_opt_t::ES_es_tbin;
 double pops_opt_t::ES_nr_tbin;
 
@@ -168,6 +170,8 @@ void pops_opt_t::set_options( param_t & param )
   // misc
   
   verbose = param.has( "verbose" );
+
+  run_stage_associations = param.has( "stage-assoc" ) ? param.yesno( "stage-assoc" ) : true;
   
   epoch_level_SHAP = param.has( "epoch-SHAP" ) || param.has( "SHAP-epoch" ) ;
   

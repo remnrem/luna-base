@@ -53,8 +53,9 @@ void pops_specs_t::read( const std::string & f )
   
   if ( ( ! use_default ) && ( ! Helper::fileExists( Helper::expand( f ) ) ) ) 
     Helper::halt( "could not open " + f );
-
-  // clear any current specifications                                                                                           
+  
+  // clear any current specifications
+  
   specs.clear();
 
   // track features/channels (each can only be added once)
@@ -204,6 +205,47 @@ void pops_specs_t::read( const std::string & f )
 	    {
 	      targs[ tok2[0] ] = ""; // only requires the keys (var names)
 	    }
+	  // special case: COH has /pairs/ of channels
+	  else if ( ftr == "COH" & tok2.size() == 1 )
+	    {
+	      // assuming CH1,CH2
+	      std::vector<std::string> tok3 = Helper::parse( tok2[0] , "," );
+	      if ( tok3.size() != 2 ) Helper::halt( "expecting comma-delimited pair of signals 'COH sig1,sig2'" );
+	      
+	      // check each
+	      std::string channel1_label = tok3[0];
+	      std::string channel2_label = tok3[1];
+
+	      // is either being replaced? 
+	      if ( pops_opt_t::replacements.find( channel1_label ) != pops_opt_t::replacements.end() )
+		channel1_label = pops_opt_t::replacements[ channel1_label ];
+	      if ( pops_opt_t::replacements.find( channel2_label ) != pops_opt_t::replacements.end() )
+		channel2_label = pops_opt_t::replacements[ channel2_label ];
+	      
+	      // have both channels already been specified via CH?
+	      if ( chs.find( channel1_label) == chs.end() )
+		Helper::halt( channel1_label + " not specified via 'CH' yet: " + line );	      
+	      if ( chs.find( channel2_label) == chs.end() )
+		Helper::halt( channel2_label + " not specified via 'CH' yet: " + line );	      
+	      
+	      if ( channel1_label == channel2_label ) 
+		Helper::halt( "cannot set COH channels to be the same: " 
+			      + channel1_label + " " + channel2_label );
+	      	      
+	      // track paired label for mapping	      
+
+	      const std::string paired_label = channel1_label + "," + channel2_label;
+	      
+	      tchs.push_back( paired_label );
+	      
+	      
+	      // track
+	      if ( checker.find( ftr + "::" + paired_label ) != checker.end() )
+		Helper::halt( "can only specify a feature/channel pair once" );
+	      
+	      checker.insert( ftr + "::" + paired_label );
+	      	      
+	    }
 	  // add as channel
 	  else if ( tok2.size() == 1 )
 	    {
@@ -339,10 +381,12 @@ void pops_specs_t::init()
   lab2ftr[ "SPEC" ] = POPS_LOGPSD;
   lab2ftr[ "RSPEC" ] = POPS_RELPSD;
   lab2ftr[ "VSPEC" ] = POPS_CVPSD;
-
+  
   lab2ftr[ "BAND" ] = POPS_BANDS;
   lab2ftr[ "RBAND" ] = POPS_RBANDS;
   lab2ftr[ "VBAND" ] = POPS_VBANDS;
+  
+  lab2ftr[ "COH" ] = POPS_COH;
   
   lab2ftr[ "SLOPE" ] = POPS_SLOPE;
   lab2ftr[ "SKEW" ] = POPS_SKEW;
@@ -366,9 +410,12 @@ void pops_specs_t::init()
   ftr2lab[ POPS_LOGPSD ] = "SPEC";
   ftr2lab[ POPS_RELPSD ] = "RSPEC";
   ftr2lab[ POPS_CVPSD ] = "VSPEC";
+  
   ftr2lab[ POPS_BANDS ] = "BAND";
   ftr2lab[ POPS_RBANDS ] = "RBAND";
   ftr2lab[ POPS_VBANDS ] = "VBAND";
+
+  ftr2lab[ POPS_COH ] = "COH";
 
   ftr2lab[ POPS_SLOPE ] = "SLOPE";   
   ftr2lab[ POPS_SKEW ] = "SKEW";
@@ -488,8 +535,14 @@ void pops_specs_t::check_args()
 	{
 	  if ( spec.arg.find( "half-window" ) == spec.arg.end() )
             Helper::halt( ftr2lab[ pops_feature_t::POPS_SMOOTH ] + " requires 'half-window' (epochs) arg" );
+	  // can also have 'a' argument -- 0 to 1
+	  if ( spec.arg.find( "a" ) == spec.arg.end() )
+	    {
+	      double a = spec.narg( "a" );
+	      if ( a < 0 || a > 1 ) Helper::halt( "expecting 'a' arg to be between 0 and 1" );
+	    }
 	}
-
+      
       // CUMUL
       if ( spec.ftr == pops_feature_t::POPS_CUMUL )
 	{	  
@@ -753,16 +806,18 @@ int pops_spec_t::cols( int * t )
       return n;
     }
   
-  // 6 fixed bands
+  // 6 fixed bands (per channel, or between /pair/ of channels for COH)
   if ( ftr == POPS_BANDS 
        || ftr == POPS_RBANDS 
-       || ftr == POPS_VBANDS )
+       || ftr == POPS_VBANDS 
+       || ftr == POPS_COH )
     {
       *t += 6;
       size = 6;
       return size;
     }
-    
+  
+
   // 1 column per channel
   if ( ftr == POPS_SLOPE
        || ftr == POPS_SKEW

@@ -39,13 +39,14 @@ enum pops_feature_t
     POPS_BANDS ,    // fixed power bands
     POPS_RBANDS ,   // relative bands
     POPS_VBANDS ,   // variance 
+    POPS_COH ,      // two-channel coherence
     POPS_SLOPE ,    // Fixed 30-45 Hz ; fixed other param
     POPS_SKEW , 
     POPS_KURTOSIS ,
     POPS_HJORTH ,
     POPS_FD ,
     POPS_PE ,
-    POPS_MEAN ,   
+    POPS_MEAN ,
     POPS_COVAR ,     // from ivars
     
     // level 2 features
@@ -60,7 +61,7 @@ enum pops_feature_t
     
     // not a feature, but a rule to remove epochs
     POPS_EPOCH_OUTLIER 
-
+    
   };
 
 
