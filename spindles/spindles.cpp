@@ -1411,15 +1411,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      // slow waves have already been detected for this channel (in 'so')
 
-	      // estimate SO phase at spindle 'anchor' point
-	      // and a boolean for whether it falls within a SO
-	      	      
-	      // typically, anchor is "peak" or point of max wavelet
-	      // alternatively, if 'couple' arg is set, it can be 
-	      // positional (start/middle/stop)
-
-	      std::vector<double> ph_anchor;
- 	      std::vector<bool> sw_anchor;
 
 	      if ( verbose_time_phase_locking )
 		{
@@ -1477,23 +1468,42 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    }
 		  
 		}
+
 	      
 	      //
 	      //  Seed on spindles, consider SO phase
 	      //
 	      
+	      	      // estimate SO phase at spindle 'anchor' point
+	      // and a boolean for whether it falls within a SO
+	      	      
+	      // typically, anchor is "peak" or point of max wavelet
+	      // alternatively, if 'couple' arg is set, it can be 
+	      // positional (start/middle/stop)
+	      
+	      // not all spindles will have a valid anchor (i.e. if it can be outside
+	      // the spindle body - due to discontinuities), and so we have to track
+	      // which subset of spindles are included here [ in anchor_idx ] 
+	      
+	      std::map<int,int> anchor_idx;
+	      
+	      // SO phase for this spindle 
+	      std::vector<double> ph_anchor;
+ 	      
+	      // was this spindle anchor in a SO?
+	      std::vector<bool> sw_anchor;
+	      
+
+	      // all spindles
 	      const int nspindles = spindles.size();
 	      
-	      // std::vector<int> sw_spindles_start; std::map<int,int> swmap_start;
-	      // std::vector<int> sw_spindles_stop; std::map<int,int> swmap_stop;
-	      
-	      std::vector<int> sw_spindles_anchor; //std::map<int,int> swmap_peak;
-	      std::vector<int> all_spindles_anchor;
+	      std::vector<int> sw_spindles_anchor; 
+	      std::vector<int> valid_spindles_anchor;
 	      
 	      std::vector<double> nearest_sw;
 	      std::vector<int> nearest_sw_number;
 	      std::vector<uint64_t> spindle_anchor;
-
+	      
 	      for (int i=0;i<nspindles;i++)
 		{
 		  // spindle start/stop in sample points
@@ -1507,7 +1517,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  if ( sw_coupling_positional )
 		    {		      
 		      // n.b. b1 is *inclusive* 
-		      int blen = b1 - b0 ; 
+		      int blen = b1 - b0 + 1 ; 
 		      ba = b0 + sw_coupling_anchor * blen;
 		    }
 		  else // maximal CWT amplitude
@@ -1515,67 +1525,67 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      double mx = averaged[b0];
 		      int mxi = b0;
 		      for (int j = b0+1 ; j <= b1 ; j++ )
-			if ( averaged[j] > mx ) { mx = averaged[j] ; ba = j; } 
-		      
-		    }
+			if ( averaged[j] > mx ) { mx = averaged[j] ; ba = j; } 		      
+		    }		  
 		  
 		  //
 		  // any offset to the anchor?
 		  //
 		  
-		  ba += sw_coupling_offset_sec * Fs[s]; 
+		  const int offset_sp = sw_coupling_offset_sec * Fs[s]; 
+		  
+		  //
+		  // test for offset inducing a discontinuity (this includes if
+		  // we go off the start/end of the map 
+		  //  we know that 'ba' will start being somewhere within the spindle
+		  // body, and that every spindle will be continuous
+		  // so just test ba vs ba+offset
+		  
+		  bool valid_anchor = true;
+		  if ( offset_sp < 0 ) 
+		    valid_anchor = ! timeline_t::discontinuity( *tp , Fs[s] , ba + offset_sp , ba );
+		  else if ( offset_sp > 0 ) 
+		    valid_anchor = ! timeline_t::discontinuity( *tp , Fs[s] , ba , ba + offset_sp );
+		  
+		  //
+		  // If this is a valid anchor, include in the SO-phase/overlap analysis
+		  //
+		  
+		  if ( valid_anchor ) 
+		    {
+		      
+		      const int valid_idx = anchor_idx.size();
 
-		  		  
-		  //
-		  // Overlap w/ SO?
-		  //
-		  
-		  // // spindle start in SO?
-		  // if ( p_sw->in_slow_wave(b0) ) 
-		  //   { 
-		  //     any=true; 
-		  //     sw_spindles_start.push_back( b0 ); 
-		  //     swmap_start[i]=sw_spindles_start.size()-1; 
-		  //   }
-		  
-		  // // spindle stop in SO?
-		  // if ( p_sw->in_slow_wave(b1) ) 
-		  //   { 
-		  //     any=true; 
-		  //     sw_spindles_stop.push_back( b1 ); 
-		  //     swmap_stop[i]=sw_spindles_stop.size()-1; 
-		  //   }
-		  
-		  // spindle anchor in SO ? 
-		  if ( p_sw->in_slow_wave(ba) ) 
-		    { 
-		      sw_spindles_anchor.push_back( ba ); 
-		      //swmap_peak[i]=sw_spindles_peak.size()-1; 
+		      // track that this spindle is in the SO phase/overlap analysis
+		      anchor_idx[ i ] = valid_idx;
+		      
+		      // calculate anchor (sp)
+		      ba += offset_sp ;
+		      
+		      // spindle anchor in SO ? 
+		      if ( p_sw->in_slow_wave(ba) ) 
+			sw_spindles_anchor.push_back( ba ); 
+		      
+		      // record all (valid) anchors 
+		      valid_spindles_anchor.push_back( ba ); 
+		      
+		      // time (seconds) to nearest SO from this anchor
+		      int sw_num = 0;
+		      nearest_sw.push_back( p_sw->nearest(ba , &sw_num ) ); 
+		      nearest_sw_number.push_back( sw_num + 1 ); // make 1-based for visual output
+		      spindle_anchor.push_back( (*tp)[ ba ] );
 		    }
 		  
-		  // record all anchors 
-		  all_spindles_anchor.push_back( ba ); 
-		  
-		  // second distance to nearest SW (secs) from anchor
-		  int sw_num = 0;
-		  nearest_sw.push_back( p_sw->nearest(ba , &sw_num ) ); 
-		  nearest_sw_number.push_back( sw_num + 1 ); // make 1-based for visual output
-		  spindle_anchor.push_back( (*tp)[ ba ] );
+		  //
+		  // next spindle
+		  //
 		}
-
 	      
 	      //
-	      // Proportion of spindles in a SO
+	      // SO-phase for each spindle in a SO
 	      //
 	      
-	      std::string analysis_label = "wavelet-" + Helper::dbl2str(frq[fi]) ;
-	      
-	     
-	      //
-	      // SW-phase for each spindle in a SO
-	      //
-	      
-	      if ( all_spindles_anchor.size() > 0 ) 
+	      if ( valid_spindles_anchor.size() > 0 ) 
 		{
 		  
 		  //
@@ -1583,70 +1593,76 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // spindles that occur within a SO? Or use all
 		  // spindles?
 		  //
-
+		  
 		  std::vector<bool> so_mask;		  
-
+		  
 		  // default is to use mask
 		  bool use_mask = ! param.has( "all-spindles" );
 		  
 		  if ( use_mask ) 
 		    so_mask = p_sw->sp_in_sw_vec();
-
+		  
 		  //
 		  // report coupling overlap by SO phase
 		  //
 		  
 		  bool stratify_by_so_phase_bin = param.has ( "stratify-by-phase" );
 		  
+		  
 		  //
 		  // Within-epoch permutation (default)
 		  //
-
+		  
 		  bool eperm = ! param.has( "perm-whole-trace" );
 		  
 		  double epoch_sec = 0 ;
+		  
 		  int sr = Fs[s];
-		
+		  
 		  if ( eperm ) 
 		    {
 		      if ( ! edf.timeline.epoched() ) edf.timeline.ensure_epoched();
 		      epoch_sec = edf.timeline.epoch_length();
 		    }
-
-		  // use permutation for ITPC values?
-
+		  
+		  //
+		  // Permutation for ITPC values?
+		  //
+		  
 		  int nreps = 0;
-
+		  
 		  if ( param.has( "nreps" ) ) nreps = param.requires_int( "nreps" );
-
+		  
 		  if ( nreps != 0 && nreps < 10 ) Helper::halt( "nreps must be 10+" );
 		  
-
+		      
 		  //
 		  // Perform spindle/SO coupling analysis
 		  //
-
-		  itpc_t itpc  = p_hilbert->phase_events( all_spindles_anchor , 
-							  use_mask ? &so_mask : NULL , nreps ,  // optional, mask events/spindles
-							  sr , 
-							  epoch_sec ,  // optionally, within-epoch shuffle
-							  stratify_by_so_phase_bin // optional, overlap by SO-phase bin
-							  );
-
-
+		  
+		  itpc_t itpc = p_hilbert->phase_events( valid_spindles_anchor , 
+							 use_mask ? &so_mask : NULL , nreps , 
+							 sr , 
+							 epoch_sec , // opt: within-epoch shuffle
+							 stratify_by_so_phase_bin // opt: overlap by SO-phase bin
+							 );
+		  
+		  // n.b. these only include all valid spindles
+		  // i.e. not necessarily all spindles
+		  //  anchor_idx[] maps this set to the originals
+		  
 		  sw_anchor = itpc.event_included;
 		  ph_anchor = itpc.phase;
-		  
+		      
 		  //
 		  // Gather output (but don't send to writer until later, i.e. need to 
 		  // group all CH/F strata output together for -t mode
 		  //
-
+		  
 		  // ITPC magnitude of coupling
 		  
 		  means[ "COUPL_MAG" ] =  itpc.itpc.obs ;
-		  //writer.value( "COUPL_MAG"      , itpc.itpc.obs );
-
+		  
 		  if ( use_mask )
 		    means[ "COUPL_OVERLAP" ] = itpc.ninc.obs ;
 		  
@@ -1662,9 +1678,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      
 		      if ( use_mask ) 
 			{
-			  			  
+			  
 			  means[ "COUPL_OVERLAP_EMP" ] = itpc.ninc.p ;
-
+			  
 			  means[ "COUPL_OVERLAP_NULL" ] = itpc.ninc.mean ;
 			  
 			  if ( itpc.ninc.sd > 0 )  		    			
@@ -1672,7 +1688,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			}
 		      
 		    }
-
+		  
 		  //
 		  // mean angle; no empirical test results; -9 means no events observed, so set to missing
 		  //
@@ -1685,12 +1701,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // the null, give mean rate of 'significant'
 		  // (P<0.05) coupling
 		  //
-		  
+		      
 		  means[ "COUPL_PV" ] = itpc.pv.obs ;
-		  
+		      
 		  if ( nreps ) 
 		    means[ "COUPL_SIGPV_NULL" ] = itpc.sig.mean ; 
-
+		      
 		  
 		  //
 		  // phase-bin stratified overlap/counts
@@ -1706,7 +1722,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			  writer.level( b * 20 + 10 , "PHASE" );
 			  writer.value( "COUPL_OVERLAP"      , itpc.phasebin[b].obs );
 			  writer.value( "COUPL_OVERLAP_EMP"    , itpc.phasebin[b].p );
-			  //writer.value( "COUPL_OVERLAP_NULL" , itpc.phasebin[b].mean );
+			  
 			  if ( itpc.phasebin[b].sd > 0 ) 
 			    {
 			      double Z = ( itpc.phasebin[b].obs - itpc.phasebin[b].mean ) / itpc.phasebin[b].sd ; 
@@ -1715,35 +1731,52 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			}
 		      writer.unlevel( "PHASE" );
 		    }
-
+		  
 		}
-	        
-	  
-	      //
-	      // Individual PEAKS, to be output later, in characterize() 
-	      //
 	      
+	      
+	      //
+	      // Individual spindle anchors (to be output later) in characterize() 
+	      // n.b. have to map from valid set to originals [ anchor_idx ]
+	      //
+
 	      for (int i=0;i<nspindles;i++)
 		{
-		  // peak_sec
-		  spindles[i].anchor_sec = spindle_anchor[i] * globals::tp_duration ;
 		  
-		  if ( nearest_sw_number[i] != 0 ) // is now 1-basewd 
+		  const bool valid = anchor_idx.find( i ) != anchor_idx.end();
+		  
+		  if ( valid ) 
 		    {
-		      spindles[i].so_nearest = nearest_sw[i] ;
-		      spindles[i].so_nearest_num = nearest_sw_number[i] ;		      
+		      
+		      const int aidx = anchor_idx[ i ];
+		      
+		      // track spindle anchor position (for output only)
+		      spindles[i].anchor_sec = spindle_anchor[aidx] * globals::tp_duration ;
+		      
+		      if ( nearest_sw_number[ aidx ] != 0 ) // is now 1-basewd 
+			{
+			  spindles[i].so_nearest = nearest_sw[ aidx ] ;
+			  spindles[i].so_nearest_num = nearest_sw_number[ aidx ] ;		      
+			}
+		      else
+			spindles[i].so_nearest_num = 0;
+		      
+		      if ( sw_anchor[ aidx ] )
+			spindles[i].so_phase_anchor = MiscMath::as_angle_0_pos2neg( ph_anchor[ aidx ] ) ;
+		      else 
+			spindles[i].so_phase_anchor = -9;
+		      
 		    }
-		  
-		  //		  std::cout << "sw_peak = " << sw_peak[i] << "\n";
-		  
-		  if ( sw_anchor[ i ] )
-		    spindles[i].so_phase_anchor =  MiscMath::as_angle_0_pos2neg( ph_anchor[ i ] ) ;		  		  		      
-		  else 
-		    spindles[i].so_phase_anchor =  -9;
-		  
+		  else // for spindles w/ no valid anchors...
+		    {
+		      // set anchor to NA
+		      spindles[i].anchor_sec = -9;
+		      spindles[i].so_phase_anchor = -9;
+		      spindles[i].so_nearest_num = 0; // as is 1-based for lookup 
+		    }
 		}
+
 	      
-	    	     	      	      
 	      //
 	      // Optional, consideration of spindle chirp as a function of SO phase
 	      //
@@ -1751,11 +1784,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      if ( ht_chirp ) 
 		{
 		  
-
-
 		  // look at IF in spindle range, i.e. but not specifically detecting individual spindles
 		  // i.e. parallel to phase and time locked SW analyses above
-
+		  
 		  int nbins = 36/2;
 	      
 		  
@@ -1806,7 +1837,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      double r_cl = Statistics::circular_linear_correlation( so_angle , pl_chirp );
 		      writer.value( "R_PHASE_IF" , r_cl );
 		    }
-
+		  
 
 		  //
 		  // Repeat SO/IF analysis, but stratify by positive/negative HWs / slopes
@@ -3930,8 +3961,10 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        
        if ( param.has( "so" ) )
 	 {
-	   writer.value( "ANCHOR" , spindle->anchor_sec );
-
+	   // if no valid anchor, make NA in output
+	   if ( spindle->anchor_sec >= 0 )
+	     writer.value( "ANCHOR" , spindle->anchor_sec );
+	   
 	   if ( spindle->so_nearest_num != 0 ) 
 	     {
 	       writer.value( "SO_NEAREST" , spindle->so_nearest );
