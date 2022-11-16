@@ -163,6 +163,7 @@ std::string globals::annot_instance_strat;
 std::string globals::annot_meta_strat;
 std::string globals::count_strat;
 std::string globals::sample_strat;
+std::string globals::anchor_strat;
 std::string globals::cluster_strat;
 std::string globals::var_strat;
 std::string globals::value_strat;
@@ -469,6 +470,7 @@ void globals::init_defs()
   epoch_strat  = "E";
   time_strat   = "T";
   sample_strat = "SP"; // sample-point
+  anchor_strat = "ANCHOR";
   cluster_strat = "K";
   var_strat     = "VAR";
   value_strat   = "VAL";

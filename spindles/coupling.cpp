@@ -23,6 +23,7 @@
 #include "spindles/spindles.h"
 
 #include "helper/logger.h"
+
 #include "db/db.h"
 
 extern logger_t logger;

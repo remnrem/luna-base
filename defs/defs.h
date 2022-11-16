@@ -276,6 +276,7 @@ struct globals
   static std::string annot_meta_strat;     // annot instance meta variable label
   static std::string count_strat;
   static std::string sample_strat;
+  static std::string anchor_strat;
   static std::string cluster_strat;
   static std::string var_strat;
   static std::string value_strat; // numeric value
