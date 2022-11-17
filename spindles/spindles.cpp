@@ -1423,7 +1423,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      std::vector<int> peaks;
 	      for (int i=0; i<spindles.size(); i++)
 		{
-		  int p = spindles[i].start_sp + spindles[i].peak_sp;
+		  int p = spindles[i].start_sp + spindles[i].max_trough_sp;
 		  //		  std::cout << "p = " << spindles[i].start_sp  << " " << spindles[i].peak_sp << "\n";
 		  peaks.push_back(p);
 		}
@@ -2961,18 +2961,19 @@ void characterize_spindles( edf_t & edf ,
       
 
       //
-      // Get max/avarage of the statistic
+      // Get max/avarage of the statistic (and track sp-offset of the max)
       //
-      
+       
       spindle->max_stat = 0;
       spindle->mean_stat = 0;
+      spindle->peak_amp_sp = 0;
       
       if ( averaged != NULL )
 	{
 	  
 	  int start = spindle->start_sp;
 	  int stop  = spindle->stop_sp;
-
+	  
 	  // get max (CWT are all positive) 
 	  
 	  double sum = 0;
@@ -2980,13 +2981,16 @@ void characterize_spindles( edf_t & edf ,
 	  for (int s=start;s<=stop;s++)
 	    {
 	      double x = (*averaged)[s] ; 
-	      if ( x > spindle->max_stat ) spindle->max_stat = x ;
+	      if ( x > spindle->max_stat ) 
+		{
+		  spindle->max_stat = x ;
+		  spindle->peak_amp_sp = s - start ; // 0-based sp offset
+		}
 	      sum += x ;	      
 	    }
 	  spindle->mean_stat = sum / (double)(stop - start + 1);
 	}
-      
-      
+            
 
       //
       // Find largest peak-to-peak amplitude
@@ -3662,24 +3666,24 @@ void characterize_spindles( edf_t & edf ,
 
 	}
       
-      // spindle 'peak' defined as lowest trough
-      spindle->peak_sp = lowest_idx; 
+      // spindle 'peak' defined as lowest trough 
+      // 0-based sp offset, similar to spindle->peak_amp_sp
+      spindle->max_trough_sp = lowest_idx; 
       
+      // track tp of spindle max neg-trough 
+      double fractional_mid = spindle->max_trough_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
+      spindle->tp_mid = spindle->tp.start + fractional_mid * ( spindle->tp.stop - spindle->tp.start ) ;  
+
       // spindle symmetry (based on mid-point of largest peak-to-trough)
       spindle->symm = max_p2p_idx;
       
       // folded symmetry index (i.e. 0 = mid-way; 1 = 0 )
       spindle->symm2 = 2.0 * fabs( spindle->symm - 0.5 ) ;
 
-      // spindle amp
+      // spindle amp (max peak-to-peak)
       spindle->amp = max_p2p;
-
-      // track tp of spindle max neg-trough 
-      double fractional_mid = spindle->peak_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
-      spindle->tp_mid = spindle->tp.start + fractional_mid * ( spindle->tp.stop - spindle->tp.start ) ;  
-      //std::cout << " mids = " << spindle->tp.start << "\t" << spindle->tp_mid << "\t" << spindle->tp.stop << "\n";
       
- 
+      
       //
       // FFT for modal spindle frequency of spindle
       // (performed on bandpass filtered data)
@@ -3924,14 +3928,19 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        spindle_t * spindle = &(*spindles)[i];
        
        writer.level( i+1 , "SPINDLE" );  // 1-based spindle count
+ 
+      
+       writer.value( "START"   , spindle->tp.start * globals::tp_duration );
+       double peak_amp_sec = spindle->peak_amp_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
+       peak_amp_sec = spindle->tp.start + peak_amp_sec * ( spindle->tp.stop - spindle->tp.start ) ;  
+       writer.value( "PEAK"    ,  peak_amp_sec * globals::tp_duration );
+       writer.value( "TROUGH"  ,  spindle->tp_mid * globals::tp_duration );
+       writer.value( "STOP"    , spindle->tp.stop * globals::tp_duration );
        
-       writer.value( "START"  , spindle->tp.start * globals::tp_duration );
-       writer.value( "STOP"   , spindle->tp.stop * globals::tp_duration );
-       writer.value( "PEAK"  ,  spindle->tp_mid * globals::tp_duration );
-       
-       writer.value( "START_SP"  , spindle->start_sp );
-       writer.value( "PEAK_SP"  ,  spindle->start_sp + spindle->peak_sp );
-       writer.value( "STOP_SP"   , spindle->stop_sp  );
+       writer.value( "START_SP"   , spindle->start_sp );
+       writer.value( "PEAK_SP"    ,  spindle->start_sp + spindle->peak_amp_sp );
+       writer.value( "TROUGH_SP"  ,  spindle->start_sp + spindle->max_trough_sp );
+       writer.value( "STOP_SP"    , spindle->stop_sp  );
        
        if ( starttime != NULL )
 	 {

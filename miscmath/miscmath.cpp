@@ -2439,3 +2439,24 @@ std::map<int,std::set<int> > MiscMath::get_sets( std::vector<int> const &univers
     // print_sets(universe, ds);
  
 
+void MiscMath::winsorize( std::vector<double> * x , double p )
+{
+  // assume 'p' between 0 and 0.5
+  if ( p < 0 || p > 0.5 ) 
+    Helper::halt( "MiscMath::winsorize() with invalid p" );
+
+  if ( p == 0 ) return;
+  
+  double lwr = MiscMath::percentile( *x , p );
+  double upr = MiscMath::percentile( *x , 1-p );
+  
+  if ( lwr >= upr )
+    Helper::halt( "should not happen...pls fix me" );
+  
+  for (int i=0; i<x->size(); i++)
+    {
+      if      ( (*x)[i] < lwr ) (*x)[i] = lwr;
+      else if ( (*x)[i] > upr ) (*x)[i] = upr;
+    }
+
+}

@@ -71,6 +71,8 @@ namespace MiscMath
   double median( const std::vector<double> & x , const bool upper = false );
   double iqr( const std::vector<double> & x );
   double percentile( const std::vector<double> & x , double p );
+
+  void winsorize( std::vector<double> * x , double w );
   
   template<typename T> static inline double Lerp(T v0, T v1, T t)
    {

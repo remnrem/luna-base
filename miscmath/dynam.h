@@ -62,7 +62,7 @@ struct dynam_t {
   bool linear_trend( double * beta , double * rsq , double * intercept = NULL );
   
   void hjorth( double * h1 , double *h2 , double *h3 );
-
+    
   // data
   
   std::vector<double> y;
@@ -113,5 +113,19 @@ struct gdynam_t {
   dynam_t between;
   
 };
+
+struct dissipation_t 
+{
+  
+  dissipation_t( const std::vector<double> & x , 
+		 const int mx = 0 ,  
+		 const double winsor = 0.05 );
+  
+  std::vector<double> plife( const std::vector<double> & ps );
+  
+  std::vector<double> s;
+
+};
+
 
 #endif

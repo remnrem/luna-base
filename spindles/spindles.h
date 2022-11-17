@@ -71,13 +71,16 @@ struct spindle_t
   // detection
   double max_stat, mean_stat;
   
-  // spindle peak (point of lowest trough)
-  int peak_sp;
-  
   // flag not to be included in analyis
   bool include;
 
-  // SO coupling metrics
+  // max trough (for spindle temporal alignment)
+  int max_trough_sp;
+  
+  // max amplitude (based on CWT)
+  int peak_amp_sp;
+
+  // SO coupling metrics: anchor may be based on max amp, or a temporal anchor
   double anchor_sec;
   double so_phase_anchor;
   double so_nearest;

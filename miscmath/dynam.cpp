@@ -28,6 +28,8 @@
 
 #include "dsp/tv.h"
 
+#include "dsp/spline.h"
+
 #include "db/db.h"
 
 #include <cstddef>
@@ -430,3 +432,67 @@ int gdynam_t::stratify()
 }
 
   
+
+
+dissipation_t::dissipation_t( const std::vector<double> & x , 
+			      const int mx ,  
+			      const double winsor  )
+{
+  // assumptions::: positive values
+  // treated as contiguous, e.g. all spliced NREM epochs
+  
+  std::vector<double> y = x;
+
+  if ( mx ) y.resize( mx , 0 );
+      
+  const int np = y.size();
+  
+  if ( winsor > 0 ) 
+    MiscMath::winsorize( &y, winsor );
+  
+  // make cumulative sum
+  s.resize( np, 0 );
+  double sum = 0;
+  for (int p=0; p<np; p++)
+    {
+      if ( y[p] < 0 ) Helper::halt( "dissipation_t() expects only positive inputs" );
+      sum += y[p];
+      s[p] = sum ;
+    }
+  
+  // as a proportion
+  for (int p=0; p<np; p++)
+    s[p] /= sum;
+  
+  
+}
+
+  
+std::vector<double> dissipation_t::plife( const std::vector<double> & ps )
+{
+
+  // make spline
+  // note t is the DV
+  // i.e. to predict t (number of epochs) given a percentile value
+
+  const int np = s.size();
+  
+  std::vector<double> t0( np );
+  for (int p=0; p<np; p++) t0[p] = p;
+  
+  tk::spline spline;
+  spline.set_points( s, t0 );
+  const int n = ps.size();
+  
+  std::vector<double> res( n );
+
+  for (int i=0; i<n; i++)
+    {      
+      if ( ps[i] < 0 || ps[i] > 1  ) 
+	Helper::halt( "invalid spline call" );
+      res[i] = spline( ps[i] );
+    }
+  
+  return res;
+}
+

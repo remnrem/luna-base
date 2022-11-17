@@ -1166,7 +1166,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
       writer.value( "LOGP_NREM" , -log10( NREM_pvalue ) );
       
       // track
-      if ( include_this_cycle );
+      if ( include_this_cycle )
 	{
 	  ++n_cycles_analyzed;
 	  z_rem += zrem_mean;
@@ -1174,7 +1174,7 @@ lat_results_t lat_t::analyse( const std::vector<double> & L ,
 	  signed_logp_asymm += ( zrem_mean > 0 ? 1 : -1 ) * -log10( pvalue );
 	  abs_logp_asymm += -log10( pvalue );
 	}
-	
+      
       //
       // next cycle
       //
