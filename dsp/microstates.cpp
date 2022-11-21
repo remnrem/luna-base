@@ -43,6 +43,9 @@ extern logger_t logger;
 
 std::vector<char> ms_prototypes_t::ms_labels;
 
+bool ms_prototypes_t::ul_groups;
+
+std::map<int,int> ms_prototypes_t::ul_mapping;
 
 //
 // TODO:  to add annot from states;
@@ -57,7 +60,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   //
   // This function can be called in one of several modes
   //
-  // Single-EDF mode: find peaks, segmentat, backfit, smooth then calculate stats
+  // Single-EDF mode: find peaks, segment, backfit, smooth then calculate stats
   //
   // Multi-sample mode:  1) find peaks, aggregating into a single EDF (e.g. peaks.edf)  [ 'peaks' ]
   //                     2) read peaks.edf, segment and save prototype file [ assume a single EDF given, not sample-list ]  
@@ -102,7 +105,20 @@ void dsptools::microstates( edf_t & edf , param_t & param )
   
   if ( ( add_annot || add_sig || add_corrs ) && epoch ) 
     Helper::halt( "cannot use add-annot or add-sig in epoch mode" );
+
+  //
+  // Group-specific (two groups only: upper/lower)
+  // microstates (i.e. pairs 'A' and 'a')
+  //
+
+  ms_prototypes_t::ul_groups = param.yesno( "grouped" ) ;
   
+  // internally, code using (e.g.)
+  // '1' for 'A/a', '2' for 'B/b' etc
+  // nb. assumes letter encoding for states
+  // std::map<char,int> state2group; 
+  // std::map<int,char> grp2state;
+
   //
   // Channels
   //
@@ -137,6 +153,10 @@ void dsptools::microstates( edf_t & edf , param_t & param )
     {
       const std::string filename = param.value( "backfit" ); 
       prior_prototypes.read( filename );
+      
+      // make UL mapping?
+      if ( ms_prototypes_t::ul_groups )
+	prior_prototypes.make_ul_map();
       
       // check channels line up      
       if ( signals.size() != prior_prototypes.C )
@@ -255,7 +275,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       //
       
       if ( multi_backfit )
-       {
+	{
 	 if ( epoch )
 	   {
 	     // already read... no need to re-read
@@ -267,6 +287,10 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	     const std::string filename = param.value( "backfit" );
 	     prototypes.read( filename );
 
+	     // make UL mapping?
+	     if ( ms_prototypes_t::ul_groups )
+	       prototypes.make_ul_map();
+	     
 	     // check channels line up 
 	     if ( signals.size() != prototypes.C )
 	       Helper::halt( "number of channels in " + filename + " does not match current signal selection" );
@@ -350,7 +374,9 @@ void dsptools::microstates( edf_t & edf , param_t & param )
       
       ms_stats_t stats = mstates.stats( Statistics::transpose( X ) , 
 					microstates_t::eig2mat( prototypes.A ) , 
-					smoothed.best() );
+					smoothed.best() ,
+					smoothed.best_unreduced() 
+					);
       
 
       //
@@ -1224,9 +1250,6 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
   
   // Assumes average reference already set  
   // Normalise EEG and maps (average reference and gfp = 1 for EEG)
-
-  //X = X ./ repmat(std(X,1), C, 1); % already have average reference  
-  //A = (A - repmat(mean(A,1), C, 1)) ./ repmat(std(A,1), C, 1);
   
   //
   // Global field power 
@@ -1266,11 +1289,6 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
   
   
   // Global map dissilarity
-
-  // GMD = nan(K,N*T);
-  // for k = 1:K
-  //   GMD(k,:) = sqrt(mean( (X - repmat(A(:,k),1,N*T)).^2 ));
-  // end
 
   Data::Matrix<double> GMD( K , N );
 
@@ -1315,20 +1333,36 @@ ms_backfit_t microstates_t::backfit( const Data::Matrix<double> & X_ ,
   //
   // Get matching labels, i.e. assign states (min. GMD)
   //
-
+  
   ms_backfit_t bf(N);
-
+  
   for (int j=0;j<N;j++)
     {
       // add all labels/GMDs which will be sorted by add()
       for (int k=0;k<K;k++)
-	bf.labels[j].add( k , GMD(k,j) );
+	{
 
+	  // default: add label 'as is' 
+	  if ( ! ms_prototypes_t::ul_groups )
+	    {
+	      bf.labels[j].add( k , GMD(k,j) );
+	    }
+	  else
+	    {
+	      // special case: in u/l grouping, merge 'A' and 'a' to both 'A'
+	      // the labels[] ms_assignments_t struct can handle having >1
+	      // version of the same label (i.e. will pick the
+	      
+	      bf.labels[j].add( ms_prototypes_t::ul_reduction(k) , k, GMD(k,j) );
+	      
+	    }
+	}
+      
       // pick the best for each time point
       bf.labels[j].set_picks();
-
+      
     }
-
+  
   //
   // Optionally, store GMD for smoothing
   //
@@ -1354,7 +1388,7 @@ ms_backfit_t microstates_t::smooth_reject( const ms_backfit_t & sol ,
     Helper::halt( "solution not populated in smooth_reject()" );
 
   // make a working copy, which will be editted;
-  // no need to populate GMD (esp. of labels may change in any case)
+  // no need to populate GMD (esp. as labels may change in any case)
   
   ms_backfit_t bf(N);
   bf.labels = sol.labels;
@@ -1440,35 +1474,14 @@ ms_backfit_t microstates_t::smooth_windowed( const ms_backfit_t & labels ,
 					     double threshold )
 {
 
-  Helper::halt( "not yet implemented" );
-
-  // TEMP..
+  Helper::halt( "microstates_t::smooth_windowed() not yet implemented" );
+  
   Data::Matrix<double> X = eig2mat( X_ );  // C x N  EEG 
   Data::Matrix<double> A = eig2mat( A_ );  // C x K  prototypes
-
   const int C = X.dim1();
   const int N = X.dim2();
   const int K = A.dim2();
-  
   ms_backfit_t bf(N);
-
-  // % [L,sig2,R2,MSE,ind] = window_smoothing(X,A,opts)
-  // %  Implementation of the Segmentation Smoothing Algorithm, as described in
-  // %  Table II of [1]. Smoothes using the interval t-b to t+b excluding t.
-  // %  Note, that temporary allocation of labels (denoted with Lambda in [1])
-  // %  is not necessary in this implementation, and steps 3 and 6 are therefore
-  // %  left out.
-
-  // const = sum(sum(X.^2));
-  // const double const1 = Statistics::sum( Statistics::sum_squares( X ) );
-
-
-  // double sig2_old = 0;
-  // double sig2 = std::numeric_limits<double>::max();
-  // xxx
-  
-  
-
   return bf;
   
 }
@@ -1504,17 +1517,42 @@ ms_rle_t microstates_t::rle( const std::vector<int> & x )
 
 ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 				 const Data::Matrix<double> & A_ ,
-				 const std::vector<int> & L )
+				 const std::vector<int> & L , 
+				 const std::vector<int> & L2 )
 {
-  ms_stats_t stats;
 
+  // assignments are in 'L'
+  // under default run, L2 == L
+  // under U/l mapping, then L2 reflects the 'original' (i.e. A or a)
+  // whereas L reflects the reduced assignment (e.g 'A' irrespective or whether
+  // 'A' or 'a' was best fit)
+
+  // when calculating the mean spatial correlation, etc, for a reduced state, we
+  // need to look up the original/actual mapping (i.e. best) - i.e. anything
+  // that involves the lookup into the GMD() table
+
+  // but when doing the RLE, or looking at coverage stats, we should use
+  // the standard/reduced L
+  
+  // note that K will still be the full set (e.g. 8) if using a reduced map
+  //   A B C D a b c d 
+  // but only the first ones will be populated w/ >0 coverage
+
+  // note: is okay if one group does not have a given state:
+  //    A B C D a b c e
+  // i.e. this will imply the following reduced groups (K=5 effectively) 
+  //    A B C D E
+  
+  
+  ms_stats_t stats;
+  
   Data::Matrix<double> X = X_;
   Data::Matrix<double> A = A_;
   
   const int C = X.dim1();
   const int N = X.dim2();
   const int K = A.dim2();
-
+  
   //
   // Normalize X and A (by mean / set GFP = 1 )
   // (same code as backfit()
@@ -1576,11 +1614,13 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
 	}
     }
 
+  // Spatial correlations
+  
   Data::Matrix<double> SpatCorr( K , N );
   for (int i=0;i<K;i++)
     for (int j=0;j<N;j++)
       SpatCorr(i,j) = 1 - ( GMD(i,j) * GMD(i,j) ) / 2.0;
-
+  
   // Total GEV (nb. based on un-normalized X_)..
   
   Data::Vector<double> var = Statistics::sdev( X_ ,Statistics::mean(  X_ ) );
@@ -1591,23 +1631,19 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
       denom += var[j];
     }
 
+  // nb. uses L2 for original assigment 
+  //   (only has effect with U/l mapping)
   stats.GEV_tot = 0;
   for (int j=0;j<N;j++)
-    if ( L[j] != -1 ) // for unambiguous assignments...
-      stats.GEV_tot += SpatCorr( L[j] , j ) * var[j] ;
+    if ( L2[j] != -1 ) // for unambiguous assignments...
+      stats.GEV_tot += SpatCorr( L2[j] , j ) * var[j] ;
   stats.GEV_tot /= denom;
   
-  //   .Gfp        - Global field power
-  //   .Occurence  - Occurence of a microstate per s
-  //   .Duration   - Average duration of a microstate
-  //   .Coverage   - % of time occupied by a microstate
-  //   .GEV        - Global Explained Variance of microstate
-  //   .MspatCorr  - Spatial Correlation between template maps and microstates
-  //   .TP         - transition probabilities
-
-  // transition probabilities
-
+  // transition probabilities: 
+  //   (U/l mapping note: here use L not L2)
+  
   ms_rle_t runs = rle( L );
+  
 
   // copy GFP (per point -- needed?)
   
@@ -1617,7 +1653,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   
   stats.SpatCorr = SpatCorr;
   
-  // means
+  // means: note: these are for "ALL" maps
   stats.m_gfp.resize(K);
   stats.m_dur.resize(K);
   stats.m_occ.resize(K);
@@ -1629,18 +1665,26 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   stats.m_spc.resize(K);
 
   // track ambiguous points
+  //  U/l mapping note: does not matter if we use L or L2 here
 
   int ambig = 0;
   for (int j=0;j<N;j++)
     if ( L[j] == -1 ) ++ambig;
   
   writer.value( "AMBIG" , ambig / (double)N );
-  
+
+
+  //
   // stats for each class
+  //
+
+  
   for (int k=0; k<K; k++)
     {
-      // Mean GFP (nb. uses /n-1 version here only to match ML Toolbox
-      // but we will swap to /n
+      
+      // Mean GFP
+      // U/l note:  here use L[] 
+      // nb. uses /n-1 denom. here only to match ML Toolbox 
       
       std::vector<double> gfp_k;
       for (int j=0;j<N;j++)
@@ -1649,53 +1693,57 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
       stats.m_gfp[k] = MiscMath::mean( gfp_k );
       
       // occur/duration
+      // U/l note: uses L[] implicitly (rle_t above)
       std::vector<double> times;
       for (int i=0; i<runs.d.size(); i++)
 	if ( runs.d[i] == k ) times.push_back( runs.c[i] * ( 1000.0 / sr ) );
-
+      
       stats.m_occ[k] = times.size() / (double) N * sr;
       stats.m_dur[k] = MiscMath::mean( times );
       stats.m_cov[k] = ( stats.m_occ[k] * stats.m_dur[k] ) / 1000.0;
-
+      
       // versions w/ denominator as only unambiguously assigned points
       stats.m_occ_unambig[k] = stats.m_occ[k] / ( 1.0 - ambig / (double)N );
       stats.m_cov_unambig[k] = stats.m_cov[k] / ( 1.0 - ambig / (double)N );
       
       // weighted coverage (mean spatial correlation across /all/ points)
+      // U/l note: implicitly, this is being calculated for all K=4+4=8 maps
+      //  i.e. is map specific, can be easily averaged / summed in the output
       stats.m_wcov[k] = MiscMath::mean( *SpatCorr.row(k).data_pointer() );
 
-      // mean spatial correl
+      
+      // mean spatial correl (of assigned points) 
+      // U/l note: this uses L2[] mapping to get the value
+      //  but pools the output for the reduced state 
       std::vector<double> spc_k;
       for (int j=0;j<N;j++)
-        if ( L[j] == k )
-          spc_k.push_back( SpatCorr( L[j], j ) );
+        if ( L[j] == k ) // matches on reduced form L[] 
+          spc_k.push_back( SpatCorr( L2[j], j ) ); // but uses actual/original L2[]
       stats.m_spc[k] = MiscMath::mean( spc_k );
       
       // GEV
-
-      //GEV(trial,k) = sum( (GFP(trial,L(trial,:)==k) .* MspatCorrTMP(k,L(trial,:)==k)).^2) ./ sum(GFP(trial,:).^2);
-
+      // U/l mapping note: as above
       double numer = 0;
       double denom = 0;
       for (int j=0;j<N;j++)
 	{
-	  if ( L[j] == k )
-	    numer += ( SpatCorr( L[j], j ) * GFP[j] ) * ( SpatCorr( L[j], j ) * GFP[j] ) ;
+	  if ( L[j] == k ) // nb.  uses L[] for putput, but L2[] for lookup
+	    numer += ( SpatCorr( L2[j], j ) * GFP[j] ) * ( SpatCorr( L2[j], j ) * GFP[j] ) ;
 	  denom += GFP[j] * GFP[j];
 	}
       
       stats.m_gev[k] = numer / denom;
-
       
       // next K
     }
   
-  //
-  // transition probs
-  //
 
+  //
+  // transition probs: these all based on reduced L mapping
+  //
+  
   // runs.d contains sequence of states
-
+  
   const int seqlen = runs.d.size();
   
   // count ambig (-1) as the class 'K+1' here 
@@ -1719,15 +1767,13 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
   //
   // LZW complexity & SE
   //
-
+  
   lzw_t lzw( runs.d , &stats.lwz_states );
 
   // mse_t se;
-
   // for (int m=1; m<=8; m++)
   //   stats.samplen[m] = se.sampen( runs.d , m );
   
-
   //
   // dump sequences to file?
   //
@@ -1740,6 +1786,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
       // only write unambiguous state sequences
       // as we are splicing out ambiguous segments, we need to manually check 
       // that we do not have a duplicate sequence here...
+      // U/l mapping: this is implicitly based on L[], not L2[]
       std::ofstream OUT1( Helper::expand( statesfile ).c_str() , std::ios::out );
       OUT1 << subj_id << "\t";
 
@@ -2485,14 +2532,16 @@ void ms_prototypes_t::write( const std::string & filename )
   O1.close();
 }
 
+
+
 void ms_prototypes_t::read( const std::string & f )
 {
-
+  
   const std::string & filename = Helper::expand( f );
 
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not find " + filename );
-
+  
   A.resize(0,0);
   chs.clear();
   C = 0;
@@ -2500,7 +2549,7 @@ void ms_prototypes_t::read( const std::string & f )
   std::vector<double> t;
   
   std::ifstream IN1( filename.c_str() , std::ios::in );
-
+  
   // get header row
   std::string line;
   Helper::safe_getline( IN1 , line );
@@ -2576,9 +2625,59 @@ void ms_prototypes_t::read( const std::string & f )
       A(c,k) = t[tc++];
   
   logger << "  read " << K << "-class prototypes for " << C << " channels from " << filename << "\n";
+
 }
 
 
+//
+// two-group (U/l) reductions?
+//
+
+void ms_prototypes_t::make_ul_map()
+{
+  // to populate case-invariant mapping:
+  // static std::vectormap<int,int> ul_mapping;
+  
+  // pool UPPER and lower variants
+  // to the first instance of either A or a
+  //  (in output the string will be always
+  //   changed to uppercase anyway)
+  //  but need to handle case of
+  //   A B C D   a b c e
+  //  i.e. output is (case/group invariant)
+  //    A B C D E  
+
+  // construct targets (first instance of
+  //  the class), to make sure this points
+  //  to the correct ms_labels[] (ignoring case)
+  
+  std::map<char,int> lab2num;
+  
+  for (int k=0; k<K; k++)
+    {      
+      char U = toupper( ms_labels[ k ] );      
+      if ( lab2num.find( U ) == lab2num.end() )
+	lab2num[ U ] = k;
+    }
+
+  // assign homes
+  ul_mapping.clear();
+  
+  for (int k=0; k<K; k++)
+    {
+      ul_mapping[ k ] = lab2num[ toupper( ms_labels[ k ] ) ]; 
+      //      std::cout << " assigning " << k << " --> " << ul_mapping[ k ]  << "  --- " << ms_labels[ k ] << "\n";
+    }
+  
+}
+
+int ms_prototypes_t::ul_reduction(const int l)
+{
+  // should always be present
+  if ( ul_mapping.find( l ) == ul_mapping.end() )
+    Helper::halt( "internal error in ul-mapping lookups" );
+  return ul_mapping[ l ];
+}
 
 
 void microstates_t::aggregate2edf( const Data::Matrix<double> & X ,
@@ -3783,10 +3882,13 @@ double ms_cmp_maps_t::cmp_maps_bf( const Eigen::MatrixXd & A , const Eigen::Matr
 //
 // Get spatial correlation given a map and a 'template' set;
 // Using brute-force enumeration of all possibilities, here we allow the template (T)
-// to have more columns than than map "A" and we select the best
+// to have more columns than map "A" and we select the best
 //
 
-double ms_cmp_maps_t::cmp_maps_template( const Eigen::MatrixXd & A , const Eigen::MatrixXd & T , double p , std::vector<int> * best )
+double ms_cmp_maps_t::cmp_maps_template( const Eigen::MatrixXd & A ,
+					 const Eigen::MatrixXd & T ,
+					 double p ,
+					 std::vector<int> * best )
 {
 
   const int nk = A.cols();
@@ -3990,4 +4092,6 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
   return r;
   
 }
+
+
 

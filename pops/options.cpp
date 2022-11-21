@@ -123,7 +123,7 @@ void pops_opt_t::set_options( param_t & param )
 
   // under root-specification, able to use/not use ranges, es-priors
   if_root_apply_ranges = param.has( "apply-ranges" ) ? param.yesno( "apply-ranges" ) : true ;
-  if_root_apply_espriors = param.has( "apply-priors" ) ? param.yesno( "apply-priors" ) : true;
+  if_root_apply_espriors = param.has( "apply-priors" ) ? param.yesno( "apply-priors" ) : false ;
 
    
   // intercept (i.e. to avoid 0-weight probs for any cell)

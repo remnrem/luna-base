@@ -206,7 +206,7 @@ void pops_specs_t::read( const std::string & f )
 	      targs[ tok2[0] ] = ""; // only requires the keys (var names)
 	    }
 	  // special case: COH has /pairs/ of channels
-	  else if ( ftr == "COH" & tok2.size() == 1 )
+	  else if ( ftr == "COH" && tok2.size() == 1 )
 	    {
 	      // assuming CH1,CH2
 	      std::vector<std::string> tok3 = Helper::parse( tok2[0] , "," );

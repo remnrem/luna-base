@@ -60,11 +60,38 @@ struct ms_prototypes_t {
   
   void write( const std::string & filename );
   void read( const std::string & filename );
+
+  //
+  // U/l reductions
+  //
+
+  // return column that matches to ms_labels[] upper case version
+  // A B C D a b c d
+  // 0 1 2 3 4 5 6 7  original
+  // 0 1 2 3 0 1 2 3  ul_mapping
+  
+  // A B C D a b c e
+  // 0 1 2 3 4 5 6 7
+  // 0 1 2 3 0 1 2 4  ul_mapping
+  // A B C D A B C E
+  
+  void make_ul_map();
+
+  static bool ul_groups;
+  
+  static std::map<int,int> ul_mapping;
+  
+  static int ul_reduction(const int);
+
+  
+  //
+  // Char label store
+  //
   
   // i.e. store explicitly, as might not be A, B, C, D (i.e. if skips A, C, E, F ) 
   // enfore that these are single chars, i.e. to make the sequence analysis work
   static std::vector<char> ms_labels;
-
+  
   void map_to_canonicals( const std::string & filename );
   
   static double spatial_correlation( const Eigen::VectorXd & M1 , const Eigen::VectorXd & M2 , bool * flip = NULL );
@@ -79,42 +106,57 @@ struct ms_prototypes_t {
 
 struct ms_assignment_t {
 
-  ms_assignment_t( int l , double g ) : label(l) , gmd(g) { } 
+  ms_assignment_t( int l , int ol, double g ) : label(l) , original(ol), gmd(g) { } 
+  
+  ms_assignment_t( int l , double g ) : label(l) , original(l) , gmd(g) { }   
 
   int label;
-
+  
+  int original; // used for reduced mappings only
+  
   double gmd;
 
   bool operator<( const ms_assignment_t & rhs ) const {
     if ( gmd < rhs.gmd ) return true;
-    if ( gmd > rhs.gmd ) return false;
-    return label < rhs.label;			  
+    if ( gmd > rhs.gmd ) return false;    
+    return original < rhs.original;
   }
 
 };
 
 struct ms_assignments_t {
 
-  //ms_assignment_t( const int K ) { label.resize( K ); } 
-
   // original, ordered values
   std::set<ms_assignment_t> assignments;
-
+  
+  // note: in upper/lower mapping, we may add the same "label"
+  // twice... this is fine as the GMD will differentiate (i.e.
+  // pick the version of that map to use)
+  
   void add( int l , double g )
   {
     assignments.insert( ms_assignment_t( l , g ) );
   }
 
+  // if tracking original labels in reduced mappings
+  void add( int l , int ol, double g )
+  {
+    assignments.insert( ms_assignment_t( l , ol, g ) );
+  }
+
   // populate ordered 
   std::vector<int> picks;
-
+  std::vector<int> picks_originals;
+  
   void set_picks()
   {
     picks.clear();
+    picks_originals.clear();
     std::set<ms_assignment_t>::const_iterator aa = assignments.begin();
     while ( aa != assignments.end() )
       {
 	picks.push_back( aa->label );
+	picks_originals.push_back( aa->original );
 	++aa;
       }
     // now done w/ assignments
@@ -126,17 +168,28 @@ struct ms_assignments_t {
   {
     const int n = picks.size();
     std::vector<int> old = picks;
+    std::vector<int> old_originals = picks_originals;
     // shift current best to last
-    picks[ n-1 ] = picks[0]; 
+    picks[ n-1 ] = picks[0];
+    picks_originals[ n-1 ] = picks_originals[0]; 
     // fill in the rest
-    for (int i=0; i<n-1; i++) picks[i] = old[i+1];
+    for (int i=0; i<n-1; i++)
+      {
+	picks[i] = old[i+1];
+	picks_originals[i] = old_originals[i+1];
+      }
   }
-
+  
   int best() const
   {
     return picks[0];
   }
-    
+  
+  int best_unreduced() const
+  {
+    return picks_originals[0];
+  }
+  
 };
 
 struct ms_backfit_t {
@@ -157,6 +210,20 @@ struct ms_backfit_t {
       }
     return L;
   }
+
+  // return -1 for an ambiguous assignment
+  std::vector<int> best_unreduced() const {
+    const int n = labels.size();
+    std::vector<int> L2( n );
+    for (int i=0;i<n;i++)
+      {
+        if ( ambiguous[i] ) L2[i] = -1;
+        else L2[i] = labels[i].best_unreduced();
+      }
+    return L2;
+  }
+
+
   
   // confidence threshold 
   void determine_ambiguity( double conf , double th2 );
@@ -360,7 +427,8 @@ struct microstates_t {
 
   ms_stats_t stats( const Data::Matrix<double> & X , 
 		    const Data::Matrix<double> & A , 
-		    const std::vector<int> & L );
+		    const std::vector<int> & L , 
+		    const std::vector<int> & L2 );
   
   static std::map<int,std::pair<int,double> > counts( const std::vector<int> & l )
   {
