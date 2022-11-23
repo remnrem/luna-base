@@ -76,10 +76,12 @@ struct spindle_t
 
   // max trough (for spindle temporal alignment)
   int max_trough_sp;
+  double max_trough_rel; //(0..1)
   
   // max amplitude (based on CWT)
   int peak_amp_sp;
-
+  double peak_amp_rel; // (0..1)
+  
   // SO coupling metrics: anchor may be based on max amp, or a temporal anchor
   double anchor_sec;
   double so_phase_anchor;

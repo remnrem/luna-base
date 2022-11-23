@@ -2320,9 +2320,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "DUR" , means["DUR"] );
 	      writer.value( "FWHM" , means["FWHM"] );
 	      writer.value( "NOSC" , means["NOSC"] );
+
 	      writer.value( "SYMM" , means["SYMM"] );
 	      writer.value( "SYMM2" , means["SYMM2"] );
-
+	      writer.value( "SYMM_AMP" , means["SYMM_AMP"] );
+	      writer.value( "SYMM_TROUGH" , means["SYMM_TROUGH"] );
+	      writer.value( "SEC_P2P" , means["SEC_P2P"] );
+	      writer.value( "SEC_AMP" , means["SEC_AMP"] );
+	      writer.value( "SEC_TROUGH" , means["SEC_TROUGH"] );
+	      
 	      // spindle frequency
 	      writer.value( "FRQ" , means["FRQ"] );
 	      writer.value( "FFT" , means["FFT"] );	      
@@ -2967,7 +2973,8 @@ void characterize_spindles( edf_t & edf ,
       spindle->max_stat = 0;
       spindle->mean_stat = 0;
       spindle->peak_amp_sp = 0;
-      
+      spindle->peak_amp_rel = -1;
+            
       if ( averaged != NULL )
 	{
 	  
@@ -2988,6 +2995,8 @@ void characterize_spindles( edf_t & edf ,
 		}
 	      sum += x ;	      
 	    }
+
+	  spindle->peak_amp_rel = spindle->peak_amp_sp / (double)( stop - start );
 	  spindle->mean_stat = sum / (double)(stop - start + 1);
 	}
             
@@ -3671,9 +3680,9 @@ void characterize_spindles( edf_t & edf ,
       spindle->max_trough_sp = lowest_idx; 
       
       // track tp of spindle max neg-trough 
-      double fractional_mid = spindle->max_trough_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
-      spindle->tp_mid = spindle->tp.start + fractional_mid * ( spindle->tp.stop - spindle->tp.start ) ;  
-
+      spindle->max_trough_rel = spindle->max_trough_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;      
+      spindle->tp_mid = spindle->tp.start + spindle->max_trough_rel * ( spindle->tp.stop - spindle->tp.start ) ;  
+      
       // spindle symmetry (based on mid-point of largest peak-to-trough)
       spindle->symm = max_p2p_idx;
       
@@ -4136,10 +4145,16 @@ void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_
 void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & results ) 
 {
 
-  double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , frq = 0 , fft = 0 , isa = 0 , qual = 0 ;
+  double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , isa = 0 , qual = 0 ;
+
+  // relative measures of spindle "peaks" (0..1)
+  double symm = 0 , symm2 = 0, symm_amp = 0 , symm_max_trough = 0;
   
-  double symm = 0 , symm2 = 0, chirp = 0 ;
-  double frq1 = 0 , frq2 = 0 , frq_range = 0;
+  // in seconds from start
+  double symm_sec = 0 , symm_amp_sec = 0 , symm_max_trough_sec = 0;
+
+  // freq/chirp 
+  double frq = 0 , fft = 0 , chirp = 0, frq1 = 0 , frq2 = 0 , frq_range = 0;
 
   // HWs
   double negf = 0 , posf = 0 , allf = 0;
@@ -4168,13 +4183,22 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       amp += ii->amp;
       fwhm += ii->fwhm;
       nosc += ii->nosc;
+
+      // relative symmetry measures
+      symm += ii->symm;   // based on max peak-to-peak
+      symm2 += ii->symm2; // as above
+      symm_amp += ii->peak_amp_rel; 
+      symm_max_trough += ii->max_trough_rel;
+      
+      // in seconds
+      symm_sec += ii->symm * ii->dur ;
+      symm_amp_sec += ii->peak_amp_rel * ii->dur;
+      symm_max_trough_sec += ii->max_trough_rel * ii->dur;
+      
+      // freq
       frq += ii->frq;
       fft += ii->fft;
-      symm += ii->symm;
-      symm2 += ii->symm2;
-
-      chirp += ii->chirp;
-      
+      chirp += ii->chirp;      
       frq1 += ii->frq_h1;
       frq2 += ii->frq_h2;
       frq_range += ii->frq_range;
@@ -4226,8 +4250,15 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   results[ "NOSC" ]     = nosc / (double)denom;
   results[ "FRQ" ]      = frq / (double)denom;
   results[ "FFT" ]      = fft / (double)denom;
+
   results[ "SYMM" ]     = symm / (double)denom;
   results[ "SYMM2" ]    = symm2 / (double)denom;
+  results[ "SYMM_AMP" ] = symm_amp / (double)denom;
+  results[ "SYMM_TROUGH" ]    = symm_max_trough / (double)denom;
+
+  results[ "SEC_P2P" ]    = symm_sec / (double)denom;
+  results[ "SEC_AMP" ]    = symm_amp_sec / (double)denom;
+  results[ "SEC_TROUGH" ] = symm_max_trough_sec / (double)denom;
 
   results[ "CHIRP" ]   = chirp / (double)denom;
   results[ "FRQ1" ]    = frq1 / (double)denom;
