@@ -360,7 +360,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // Spindle propagation
   //
 
-  const bool do_prop = param.has( "prop" );
+  const bool verbose_prop = param.has( "prop-verbose" ) || param.has( "verbose-prop" ) ;
+
+  const bool do_prop = verbose_prop || param.has( "prop" );
   
   sp_props_t props;
   
@@ -2583,7 +2585,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
 	      
 	      // do analysis
-	      avgs.push_back( props.analyse( f , c , signals.label(s) , w ) );
+	      avgs.push_back( props.analyse( f , c , signals.label(s) , w , verbose_prop ) );
 	      
 	      // report average
 	    }

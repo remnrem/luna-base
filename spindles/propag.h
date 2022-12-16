@@ -74,7 +74,8 @@ struct sp_props_t {
   double analyse( const std::set<double> & f , 
 		  const std::set<std::string> & c , 
 		  const std::string & seed , 
-		  const double w = 1.0 
+		  const double w = 1.0 ,
+		  const bool verbose = false 
 		  );
   
   // members

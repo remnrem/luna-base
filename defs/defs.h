@@ -82,8 +82,9 @@ enum sleep_stage_t
     UNSCORED ,
     MOVEMENT ,
     ARTIFACT ,
-    LIGHTS_ON ,
-    UNKNOWN //  i.e. null marker / not a sleep stage
+    LIGHTS_ON ,    
+    UNKNOWN , //  i.e. null marker / not a sleep stage
+    GAP       // i.e. for EDF+D gaps
   };
 
 

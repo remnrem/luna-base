@@ -144,6 +144,8 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   
 
   // in VERBOSE (HYPNO) mode, we require the FULL epoch set
+  //  -- although, note that we are adding support for HYPNO in EDF+D conttexts
+  //     and so this is no different... 
   
   if ( verbose ) 
     {
@@ -169,23 +171,56 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   stages.clear();
   epoch_n.clear();
 
+  // explicitly track length and start of each epoch
+  //  (to allow for gaps)
+  epoch_dur.clear();
+  epoch_start.clear();
+  epoch_gap.clear();
+  
   //
   // We should be able to use current 0..ne epoch naming as epoch-annotations
   // still work after a restructure
   //
-
+  
   n_conflicts = 0;
 
+  uint64_t end_prior = 0;
+  
   while ( 1 ) 
     {
-
+      
       int e = timeline->next_epoch();
-    
-      writer.epoch( timeline->display_epoch( e ) );
       
       if ( e == -1 ) break;
+      
+      writer.epoch( timeline->display_epoch( e ) );
 
-      // for output of STAGES or HYPNO, use original EDF annotations though
+      //
+      // was there a gap prior to this epoch?
+      //  - if contiguous, end of last == start of current
+      //
+      
+      interval_t interval = timeline->epoch( e );
+      
+      if ( end_prior != 0 && end_prior != interval.start )
+	{
+	  //std::cout << " found gap before epoch " << e << " " << e2 << "\n";
+	  uint64_t gap_dur = interval.start - end_prior;
+	  
+	  // add a fake 'gap' epoch
+	  // before this real one
+
+	  epoch_gap.push_back( true );
+	  epoch_dur.push_back( gap_dur * globals::tp_duration );
+	  epoch_n.push_back( -1 ); // not used
+	  epoch_start.push_back( -1 ); // not used
+	  
+	}
+      
+      //
+      // for output of STAGES or HYPNO, use original EDF annotations
+      //
+
       int e2 = timeline->original_epoch(e) ;
       
       bool wake = timeline->epoch_annotation( "W"  , e );
@@ -234,7 +269,12 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       
       // store original EDF 0-based encoding, to be passed to calc_stats()
       epoch_n.push_back( e2 );
+
+//      epoch_gap.push_back( false );
+//      epoch_dur.push_back( xxx );
+//      epoch_start.push_back( xxx );
       
+      // track times for basic epochs
     }
 
   writer.unepoch();
@@ -504,7 +544,6 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   //
 
   const double epoch_mins = timeline->epoch_length() / 60.0 ;
-
   
   n_lights_fixed = 0;
   n_lights_fixed_was_sleep = 0;

@@ -341,6 +341,7 @@ void globals::init_defs()
   sleep_stage[ MOVEMENT ]  = "M";
   sleep_stage[ UNSCORED ]  = "U"; // ambiguous - 'unscorable'
   sleep_stage[ UNKNOWN ]   = "?"; // missing
+  sleep_stage[ GAP ]       = "GAP"; // GAP
 
   // minimal: default
   sleep_stage_labels[ "W" ]     = WAKE;  
@@ -353,9 +354,23 @@ void globals::init_defs()
   sleep_stage_labels[ "?" ]     = UNKNOWN;
   sleep_stage_labels[ "M" ]     = MOVEMENT;  
   sleep_stage_labels[ "L" ]     = LIGHTS_ON;
+  sleep_stage_labels[ "G" ]     = GAP ; 
 
+  
   //
-  // SUDS predictions
+  // POPS predictions
+  //
+  
+  sleep_stage_labels[ "pW" ]  = WAKE;
+  sleep_stage_labels[ "pN1" ] = NREM1;
+  sleep_stage_labels[ "pN2" ] = NREM2;
+  sleep_stage_labels[ "pN3" ] = NREM3;
+  sleep_stage_labels[ "pR" ]  = REM;
+  sleep_stage_labels[ "p?" ]  = UNKNOWN;
+
+  
+  //
+  // SOAP predictions
   //
   
   sleep_stage_labels[ "sW" ]  = WAKE;
@@ -364,8 +379,8 @@ void globals::init_defs()
   sleep_stage_labels[ "sN3" ] = NREM3;
   sleep_stage_labels[ "sR" ]  = REM;
   sleep_stage_labels[ "s?" ]  = UNKNOWN;
-  
 
+  
   //
   // Common/NSRR labels
   //
@@ -403,6 +418,9 @@ void globals::init_defs()
   sleep_stage_labels[ "missing" ] = UNKNOWN;
   sleep_stage_labels[ "A" ] = UNKNOWN;
   sleep_stage_labels[ "artifact" ] = UNKNOWN;
+
+  sleep_stage_labels[ "G" ] = GAP;
+  sleep_stage_labels[ "-" ] = GAP;
 
   
   // other NSRR
