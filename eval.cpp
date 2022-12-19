@@ -1332,8 +1332,8 @@ void proc_self_suds( edf_t & edf , param_t & param  )
     {
       suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
-			  param.has( "write-weights" ) ? param.value( "write-weights" ) : ""  
-			  );
+			  param.has( "write-weights" ) ? param.value( "write-weights" ) : "" ,  
+			  param.has( "sig" ) && param.value( "sig" ) != "*" ? param.value( "sig") : "C4_M1" ) ;
     }
   
   suds_indiv_t self;
@@ -1352,7 +1352,10 @@ void proc_place_soap( edf_t & edf , param_t & param  )
   // load model, if not already done (or default) (_1 or _2)
 
   if ( ! suds_t::model.loaded() )
-    suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" );
+    suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
+			"" , "" ,
+			param.has( "sig" ) && param.value( "sig" ) != "*" ? param.value( "sig") : "C4_M1"
+			);
   
   suds_indiv_t self;
   self.place( edf , param , stagefile );
@@ -1396,7 +1399,10 @@ void proc_rebase_soap( edf_t & edf , param_t & param  )
   
   // load model, if not already done
   if ( ! suds_t::model.loaded() )
-    suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" );
+    suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" ,
+                        "" , "" ,
+			param.has( "sig" ) && param.value( "sig" ) != "*" ? param.value( "sig") : "C4_M1"
+                        );
 
   suds_indiv_t self;
   self.rebase( edf , param , newlen );
