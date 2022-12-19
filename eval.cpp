@@ -1327,8 +1327,9 @@ void proc_self_suds( edf_t & edf , param_t & param  )
   suds_t::set_options( param );  
 
   // load model, if not already done
-
-  if ( ! suds_t::model.loaded() )
+  //  or, in R mode, force load each time...
+  
+  if ( param.has( "force-reload" ) || ! suds_t::model.loaded() )
     {
       suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
