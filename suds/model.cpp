@@ -83,7 +83,8 @@ void suds_model_t::init()
  
 bool suds_model_t::read( const std::string & modelfile ,
 			 const std::string & winfile ,
-			 const std::string & woutfile )
+			 const std::string & woutfile ,
+			 const std::string & default_channel )
 {
 
 
@@ -127,21 +128,21 @@ bool suds_model_t::read( const std::string & modelfile ,
     {
       // populate 'default' SOAP model
 
-      lines.push_back( "CH C4_M1 128" );	
+      lines.push_back( "CH " + default_channel + " 128" );	
 
       if ( modelfile == "_1" )
 	{
-	  lines.push_back( "SPEC C4_M1 lwr=0.5 upr=25" );
+	  lines.push_back( "SPEC " + default_channel + " lwr=0.5 upr=25" );
 	}
       else if ( modelfile == "_2" )
 	{
-	  lines.push_back( "SPEC C4_M1 lwr=0.5 upr=25" );
-	  lines.push_back( "RSPEC C4_M1 lwr=5 upr=20 z-lwr=30 z-upr=45" );
-	  lines.push_back( "SLOPE C4_M1" );
-	  lines.push_back( "SKEW C4_M1" );
-	  lines.push_back( "KURTOSIS C4_M1" );
-	  lines.push_back( "FD C4_M1" );
-	  lines.push_back( "PE C4_M1" );
+	  lines.push_back( "SPEC " + default_channel + " lwr=0.5 upr=25" );
+	  lines.push_back( "RSPEC " + default_channel + " lwr=5 upr=20 z-lwr=30 z-upr=45" );
+	  lines.push_back( "SLOPE " + default_channel );
+	  lines.push_back( "SKEW " + default_channel + "" );
+	  lines.push_back( "KURTOSIS " + default_channel );
+	  lines.push_back( "FD " + default_channel );
+	  lines.push_back( "PE " + default_channel );
 	  lines.push_back( "DENOISE2 lambda=0.5" );
 	  //%SMOOTH2 half-window=15
 	  lines.push_back( "TIME order=4" );	  

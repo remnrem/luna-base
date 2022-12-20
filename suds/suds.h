@@ -165,7 +165,8 @@ struct suds_model_t {
   // populate specs[]
   bool read( const std::string & ,
 	     const std::string & winfile = "" , 
-	     const std::string & woutfile = "" );
+	     const std::string & woutfile = "" ,
+	     const std::string & default_channel = "C4_M1" );
 
   // use default
   void default_model();

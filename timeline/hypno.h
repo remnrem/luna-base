@@ -109,6 +109,17 @@ struct hypnogram_t
   std::vector<double> epoch_start; // elapsed seconds
   std::vector<bool> epoch_gap; // this 'epoch' is actually a gap
 
+  // total epoch count
+  int ne;  // total number of observed epochs (i.e. standard, from timeline)
+  int ne_gaps; // epochs (ne) plus any extra gaps;
+               // epoch_n[], stages[], etc correspond to ne_gaps, not ne;
+
+
+  // standard epoch sizes (for observed epochs)
+  double epoch_sec;
+  double epoch_mins;
+  double epoch_hrs;
+  
   // number of conflicting epochs (set to missing)
   int n_conflicts;
 
@@ -145,8 +156,8 @@ struct hypnogram_t
   int final_wake_epoch;     // (epoch)
 
   // how to handle gaps (by default, missing, but could be 'wake')
-  sleep_stage_t gap_treatment;
-  
+  static sleep_stage_t gap_treatment;
+
   // statistics
   
   bool any_sleep;
