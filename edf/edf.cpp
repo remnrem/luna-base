@@ -1728,113 +1728,121 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 //
 
 
-bool edf_header_t::write( FILE * file )
+bool edf_header_t::write( FILE * file , const std::vector<int> & ch2slot )
 {
+
+  // new number of channels (might be less than original)
+
+  const int ns2 = ch2slot.size();
   
   // regarding the nbytes_header variable, although we don't really
   // use it, still ensure that it is properly set (i.e. we may have
-  // added/removed signals, so we need to update before making the EDF
+  // added/removed signals, so we need to update before making the EDF)
   
-  nbytes_header = 256 + ns * 256;
+  const int nbytes_header2 = 256 + ns2 * 256;
   
   writestring( version , 8 , file );
   writestring( patient_id , 80 , file );
   writestring( recording_info , 80 , file );
   writestring( startdate , 8 , file );
   writestring( starttime , 8 , file );
-  writestring( nbytes_header , 8 , file );
+  writestring( nbytes_header2 , 8 , file );
   fwrite( reserved.data() , 1 , 44 , file );
   writestring( nr , 8 , file );
   writestring( record_duration , 8 , file );
-  writestring( ns , 4 , file );
+  writestring( ns2 , 4 , file );
 
-  // for each of 'ns' signals
+  // for each of 'ns2' signals
   
-  for (int s=0;s<ns;s++)
-    writestring( label[s], 16, file );
+  for (int s=0;s<ns2;s++)
+    writestring( label[ ch2slot[s] ], 16, file );
   
-  for (int s=0;s<ns;s++)
-    writestring( transducer_type[s], 80, file );
+  for (int s=0;s<ns2;s++)
+    writestring( transducer_type[ch2slot[s]], 80, file );
 
-  for (int s=0;s<ns;s++)
-    writestring( phys_dimension[s], 8, file );
+  for (int s=0;s<ns2;s++)
+    writestring( phys_dimension[ch2slot[s]], 8, file );
 
-  for (int s=0;s<ns;s++)
-    writestring( physical_min[s], 8, file );
+  for (int s=0;s<ns2;s++)
+    writestring( physical_min[ch2slot[s]], 8, file );
 
-  for (int s=0;s<ns;s++)
-    writestring( physical_max[s], 8, file );
+  for (int s=0;s<ns2;s++)
+    writestring( physical_max[ch2slot[s]], 8, file );
 
-  for (int s=0;s<ns;s++)
-    writestring( digital_min[s], 8, file );
+  for (int s=0;s<ns2;s++)
+    writestring( digital_min[ch2slot[s]], 8, file );
 
-  for (int s=0;s<ns;s++)
-    writestring( digital_max[s], 8, file );
+  for (int s=0;s<ns2;s++)
+    writestring( digital_max[ch2slot[s]], 8, file );
 
-  for (int s=0;s<ns;s++)
-    writestring( prefiltering[s], 80, file );
+  for (int s=0;s<ns2;s++)
+    writestring( prefiltering[ch2slot[s]], 80, file );
 
-  for (int s=0;s<ns;s++)
-    writestring( n_samples[s], 8, file );
+  for (int s=0;s<ns2;s++)
+    writestring( n_samples[ch2slot[s]], 8, file );
   
-  for (int s=0;s<ns;s++)
-    writestring( signal_reserved[s], 32, file );
+  for (int s=0;s<ns2;s++)
+    writestring( signal_reserved[ch2slot[s]], 32, file );
   
   return true;
 }
 
 
 
-bool edf_header_t::write( edfz_t * edfz )
+bool edf_header_t::write( edfz_t * edfz , const std::vector<int> & ch2slot )
 {
+
+  // new number of channels (might be less than original)
+
+  const int ns2 = ch2slot.size();
   
   // regarding the nbytes_header variable, although we don't really
   // use it, still ensure that it is properly set (i.e. we may have
   // added/removed signals, so we need to update before making the EDF
-  nbytes_header = 256 + ns * 256;
+  const int nbytes_header2 = 256 + ns2 * 256;
   
   edfz->writestring( version , 8 );
   edfz->writestring( patient_id , 80 );
   edfz->writestring( recording_info , 80 );
   edfz->writestring( startdate , 8 );
   edfz->writestring( starttime , 8 );
-  edfz->writestring( nbytes_header , 8 );
+  edfz->writestring( nbytes_header2 , 8 );
   edfz->write( (byte_t*)reserved.data() , 44 );
   edfz->writestring( nr , 8 );
   edfz->writestring( record_duration , 8 );
-  edfz->writestring( ns , 4 );
+  edfz->writestring( ns2 , 4 ); // ns2
 
-  // for each of 'ns' signals
+  // for each of 'ns2' signals
   
-  for (int s=0;s<ns;s++)
-    edfz->writestring( label[s], 16 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( label[ch2slot[s]], 16 );
   
-  for (int s=0;s<ns;s++)
-    edfz->writestring( transducer_type[s], 80 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( transducer_type[ch2slot[s]], 80 );
 
-  for (int s=0;s<ns;s++)
-    edfz->writestring( phys_dimension[s], 8 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( phys_dimension[ch2slot[s]], 8 );
 
-  for (int s=0;s<ns;s++)
-    edfz->writestring( physical_min[s], 8 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( physical_min[ch2slot[s]], 8 );
 
-  for (int s=0;s<ns;s++)
-    edfz->writestring( physical_max[s], 8 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( physical_max[ch2slot[s]], 8 );
 
-  for (int s=0;s<ns;s++)
-    edfz->writestring( digital_min[s], 8  );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( digital_min[ch2slot[s]], 8  );
 
-  for (int s=0;s<ns;s++)
-    edfz->writestring( digital_max[s], 8 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( digital_max[ch2slot[s]], 8 );
 
-  for (int s=0;s<ns;s++)
-    edfz->writestring( prefiltering[s], 80 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( prefiltering[ch2slot[s]], 80 );
 
-  for (int s=0;s<ns;s++)
-    edfz->writestring( n_samples[s], 8 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( n_samples[ch2slot[s]], 8 );
   
-  for (int s=0;s<ns;s++)
-    edfz->writestring( signal_reserved[s], 32 );
+  for (int s=0;s<ns2;s++)
+    edfz->writestring( signal_reserved[ch2slot[s]], 32 );
   
   return true;
 }
@@ -1843,12 +1851,16 @@ bool edf_header_t::write( edfz_t * edfz )
 
 
 
-bool edf_record_t::write( FILE * file )
+bool edf_record_t::write( FILE * file , const std::vector<int> & ch2slot )
 {
 
+  const int ns2 = ch2slot.size();
   
-  for (int s=0;s<edf->header.ns;s++)
+  for (int s2=0; s2 < ns2; s2++)
     {
+
+      // get actual from-slot 
+      const int s = ch2slot[s2];
       
       const int nsamples = edf->header.n_samples[s];
 
@@ -1886,14 +1898,16 @@ bool edf_record_t::write( FILE * file )
 }
 
 
-bool edf_record_t::write( edfz_t * edfz )
+bool edf_record_t::write( edfz_t * edfz , const std::vector<int> & ch2slot )
 {
-
-  // check if this has been read?
   
-  for (int s=0;s<edf->header.ns;s++)
+  const int ns2 = ch2slot.size();
+  
+  for (int s2=0; s2 < ns2; s2++)
     {
       
+      const int s = ch2slot[s2];
+
       const int nsamples = edf->header.n_samples[s];
 
       //
@@ -2017,9 +2031,36 @@ bool edf_t::is_actually_discontinuous()
 }
 
 
-bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bool always_edfd )
+bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bool always_edfd , const std::vector<int> * p_ch2slot )
 {
+
+  //
+  // By default, ch2slot will be 0,1,2,...,ns-1   i.e. a straight mapping/ordering of all channels
+  //   when writing header and records, we iterate over ch2slot rather than 0..ns-1 however, 
+  //   i.e. to allow scenario where we want a reduced set, or a different ordering
+  //   this is passed in via the `channels` option of WRITE
+  //    where proc_write() will first have checked that all channels actually existed
+  //    and will have mapped to the slot numbers.  Therefore, at this point we can
+  //    always assume that this will be valid
+  //
   
+  std::vector<int> ch2slot;
+
+  // a pre-specified channel list?
+  if ( p_ch2slot != NULL ) 
+    ch2slot = *p_ch2slot;
+  else
+    {
+      // if channels not explicitly specified
+      // just take all, in the order they are already in
+      ch2slot.resize( header.ns );
+      for (int s=0; s<header.ns; s++)
+	ch2slot[s] = s;      
+    }
+  
+  const int ns2 = ch2slot.size();
+
+
   //
   // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is set after any RESTRUCTURE
   // We'll keep this as is here, but for the purpose of WRITE-ing an EDF+ (only), we'll first check 
@@ -2100,7 +2141,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
       if ( make_EDFC ) set_continuous();
 
       // write header
-      header.write( outfile );
+      header.write( outfile , ch2slot );
       
       // change back if needed, as subsequent commands after will be happier
       if ( make_EDFC ) set_discontinuous();
@@ -2117,7 +2158,8 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
 	      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
 	    }
 	  
-	  records.find(r)->second.write( outfile );
+	  records.find(r)->second.write( outfile , ch2slot );
+
 	  r = timeline.next_record(r);
 	}
       
@@ -2141,8 +2183,10 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
 
       
       if ( make_EDFC ) set_continuous();
+
       // write header (as EDFZ)
-      header.write( &edfz );
+      header.write( &edfz , ch2slot );
+
       if ( make_EDFC ) set_discontinuous();
 
       
@@ -2174,9 +2218,9 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
 	  
 	  // write to the index
 	  edfz.add_index( r , offset , timeline.timepoint( r ) , edf_annot_str  );
-		  
+	  
 	  // now write to the .edfz
-	  records.find(r)->second.write( &edfz );
+	  records.find(r)->second.write( &edfz , ch2slot );
 	  
 	  // next record
 	  r = timeline.next_record(r);
@@ -2188,14 +2232,24 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
       //
       
       logger << "  writing EDFZ index to " << filename << ".idx\n";
-
+      
       // update record_size (e.g. if channels dropped)
       // at this point, we will have read all information in from
       // the existing 
+
       int new_record_size = 0;
 
-      for (int s=0;s<header.ns;s++)
-	new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
+      // old
+      // for (int s=0;s<header.ns;s++)
+      // 	new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
+      
+      // now allowing for dropped channels
+      for (int s2=0; s2<ns2; s2++)
+	{
+	  const int s = ch2slot[s2];
+	  new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
+	}
+      
       edfz.write_index( new_record_size );
 
       
@@ -3610,8 +3664,8 @@ void edf_t::shift( int s , int shift_sp , bool wrap )
 
 void edf_t::set_order( param_t & param )
 {
-
-  // do here
+  
+  
 
 }
 
@@ -4806,35 +4860,57 @@ bool edf_t::append( const std::string & filename ,
   //  base.header.nr      # of records (will be increased)
   //  base.header.recdur  # irrelevant
 
-  //  base.header.label[i]       hannel label, should match EXACTLY data[r].first
+  //  base.header.label[i]       channel label, should match EXACTLY data[r].first
   //  base.header.n_samples[i]   # samples per reccord for signal i, should match data[r][s].size() 
-
+  
   const int n_new_records = data.size();
 
   //
-  // Check all channels exist, and have correct n_samples[]
-  //
+  // Check all original channels exist, and have correct n_samples[]
+  //  - allow for different order
+  //  - ignore channels in new data but not present in the original
+  
+  std::map<std::string,int> ch2slot;
+  for (int s=0; s<channels.size(); s++)
+    ch2slot[ channels[s] ] = s;
 
-  if ( base.header.ns != channels.size() )
-    Helper::halt( "must have exactly same set of channels to append to an EDF" );
+  // consider each original channel - all must be present in the new 
+  // data -- but now the order and # does not otherwise have to align
+  // we will use ch2ch[] below to select the correct channel from the new 
+  // data 
   
+  std::vector<int> ch2ch( base.header.ns );
   for (int s=0; s<base.header.ns; s++)
-    if ( channels[s] != base.header.label[s] )
-      Helper::halt( "must have exactly the same order of channels to append to an EDF" );
+    {
+      if ( ch2slot.find( base.header.label[s] ) == ch2slot.end() )
+	Helper::halt( "could not find " + base.header.label[s] + " in the to-be-appended data" );
+      ch2ch[s] = ch2slot[ base.header.label[s] ];
+    }
   
+  // if ( base.header.ns != channels.size() )
+  //   Helper::halt( "must have exactly same set of channels to append to an EDF" );
+  
+  // for (int s=0; s<base.header.ns; s++)
+  //   if ( channels[s] != base.header.label[s] )
+  //     Helper::halt( "must have exactly the same order of channels to append to an EDF" );
+  
+
+
   //
   // Just check first record, but **assume** all records have the same length (will be checked when writing)
   //
-
-  if ( data[0].size() != base.header.ns )
-    Helper::halt( "data[] must exactly match EDF # of channels" );
-
+  
+  // not required any more: allowing more channels in new data (which will be ignored)
+  // if ( data[0].size() != base.header.ns )
+  //   Helper::halt( "data[] must exactly match EDF # of channels" );
+  
+  // nb ch2ch[] mapping from original to new slots
   for (int s=0; s < base.header.ns; s++)
-    if ( data[0][s].size() != base.header.n_samples[s] )
+    if ( data[0][ ch2ch[s] ].size() != base.header.n_samples[s] )
       Helper::halt( "data[] must have exactly the same # of samples per record to append" );
-
+  
   //
-  // Store key values
+  // Store key values : these necessarily match the original/base
   //
 
   const int orig_nr = base.header.nr;
@@ -4890,7 +4966,7 @@ bool edf_t::append( const std::string & filename ,
       bv[s] = ( orig_physical_max[s] - orig_physical_min[s] ) / (double)( orig_digital_max[s] - orig_digital_min[s] );
       os[s] = ( orig_physical_max[s] / bv[s] ) - orig_digital_max[s];
     }
-
+  
   //
   // Iterate over records
   //
@@ -4904,10 +4980,14 @@ bool edf_t::append( const std::string & filename ,
 
 	  const int nsamples = orig_nsamples[s];
 
-	  const std::vector<double> & d = data[r][s];
+	  // nb. select the correct slot from the new data using ch2ch[]
+	  // otherwise, below use s rather than ch2ch[s] as we are 
+	  // placing into slot s
+	  const std::vector<double> & d = data[r][ ch2ch[s] ];
 	  
-	  if ( d.size() != nsamples ) Helper::halt( "hmm... internal error in append()" );
-
+	  if ( d.size() != nsamples ) 
+	    Helper::halt( "hmm... internal error in append()" );
+	  
 	  const double pmin = orig_physical_min[s] ;
 	  const double pmax = orig_physical_max[s] ;
 	  

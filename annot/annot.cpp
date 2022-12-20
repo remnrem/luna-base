@@ -3092,6 +3092,15 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   const bool collapse_disc = param.has( "collapse" );
   
   //
+  // Min duration (e.g. to ensure we have 30 sec epochs)
+  //
+
+  const bool has_min_dur = param.has( "min-dur" ) && param.requires_dbl( "min-dur" ) > 0 ;
+  
+  const double min_dur = has_min_dur ?  param.requires_dbl("min-dur" )  : 0 ;
+    
+    
+  //
   // for complete XML compatibility
   //
 
@@ -3251,17 +3260,28 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  const annot_t * annot = instance_idx.parent;
 
 	  annot_map_t::const_iterator ii = annot->interval_events.find( instance_idx );
-          if ( ii == annot->interval_events.end() )  continue;
+          if ( ii == annot->interval_events.end() ) {++ee; continue; }
 	  instance_t * inst = ii->second;
 	  
+	  // skip if too short?
+	  
+	  interval_t interval = instance_idx.interval;
+
+	  if ( has_min_dur )
+	    {	      
+	      const bool too_short = interval.duration_sec() < min_dur ; 	      
+	      if ( too_short ) { ++ee; continue;}
+	    }
+
+	  // output
 	  
 	  O1 << "<Instance class=\"" << annot->name << "\">\n";
 	  
 	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
 	    O1 << " <Name>" << instance_idx.id << "</Name>\n";
-
+	  
 	  // adjuts by offset, if needed (ALIGN)
-	  interval_t interval = instance_idx.interval;
+	  
 	  if ( annot_offset )
 	    {
 	      if ( interval.start < annot_offset ) interval.start = 0;
@@ -3472,13 +3492,30 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  if ( annot->name == "duration_hms" ) { ++ee; continue; } 
 	  if ( annot->name == "duration_sec" ) { ++ee; continue; } 
 	  if ( annot->name == "epoch_sec" ) { ++ee; continue; } 
+	  
+
+
+	  //
+	  // Get interval
+	  //
+
+	  interval_t interval = instance_idx.interval;
+	  
+	  // any duration reqs?
+
+	  if ( has_min_dur )
+	    {	      
+	      const bool too_short = interval.duration_sec() < min_dur ; 	      
+	      if ( too_short ) { ++ee; continue; } 
+	    }
+	  
 
 	  //
 	  // start/stop in seconds, with 4 d.p.
 	  //
 	  
 	  // any re-ALIGNment ? 
-	  interval_t interval = instance_idx.interval;
+
 
           if ( annot_offset )
             {

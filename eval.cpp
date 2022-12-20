@@ -1016,7 +1016,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
       else if ( is( c, "MEANS" ) )        proc_sig_annot_mean( edf, param(c) );
-		    
+      else if ( is( c, "TABULATE" ) )     proc_sig_tabulate( edf, param(c) );
+
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
       else if ( is( c, "HEAD" ) )         proc_head_matrix( edf , param(c) );
 
@@ -2368,12 +2369,40 @@ void proc_write( edf_t & edf , param_t & param )
 
   bool always_EDFD = param.has( "EDF+D" );
 
+  //
+  // Specify order and number of channels in the new EDF?
+  //
+  
+  std::vector<int> channels;
+  
+  const bool set_chorder = param.has( "channels" );
+  
+  if ( set_chorder )
+    {
+      std::vector<std::string> str = param.strvector( "channels" );
+      std::set<int> cuniq;
+      // check each exists
+      for (int s=0; s<str.size(); s++)
+	{
+	  if ( ! edf.header.has_signal( str[s] ) ) 
+	    Helper::halt( "could not find requested channel " + str[s] );
+	  const int slot = edf.header.signal( str[s] );
+	  channels.push_back( slot );
+	  cuniq.insert( slot );
+	}
+
+      if ( cuniq.size() < channels.size() )
+	logger << "  exporting " << cuniq.size() << " unique signals ("<< channels.size() << " total) from " << edf.header.ns << " originals\n";
+      else
+	logger << "  exporting " << channels.size() << " signals from " << edf.header.ns << " originals\n";
+    }
+
 
   //
   // Save data (write_as_edf flag forces starttime to 00.00.00 if really EDF+D)
   //
   
-  bool saved = edf.write( filename , edfz , write_as_edf , always_EDFD );
+  bool saved = edf.write( filename , edfz , write_as_edf , always_EDFD , set_chorder ? &channels : NULL );
   
   if ( ! saved ) 
     Helper::halt( "problem trying to save " + filename );
@@ -2882,6 +2911,12 @@ void proc_sig_annot_mean( edf_t & edf , param_t & param )
   edf.timeline.signal_means_by_annot( param );
 }
 
+// TABULATE : assume discrete values for a signal, and get counts
+
+void proc_sig_tabulate( edf_t & edf , param_t & param )
+{
+  edf.tabulate( param );
+}
 
 // ANNOTS : list all annotations
 
@@ -3386,6 +3421,66 @@ void proc_enforce_signals( edf_t & edf , param_t & param )
 
 void proc_rename( edf_t & edf , param_t & param )
 {
+
+  // either from a file, or the command line
+  if ( param.has( "file" ) )
+    {
+      if ( param.has( "new" ) ) 
+	Helper::halt( "cannot specify both file and sig/new" );
+      
+      std::vector<std::string> old_signals, new_signals;
+      std::set<std::string> newset;
+
+      const std::string fname = Helper::expand( param.value( "file" ) );
+      if ( ! Helper::fileExists( fname ) )
+	Helper::halt( "could not open " + fname );
+      
+      std::ifstream I1( fname.c_str() , std::ios::in );
+      while ( ! I1.eof() )
+	{
+	  std::string line;
+	  Helper::safe_getline( I1 , line);
+	  if ( I1.eof() || line == "" ) continue;	  
+	  std::vector<std::string> tok2 = Helper::parse( line , "\t" );
+	  if ( tok2.size() != 2 ) 
+	    Helper::halt( "expecting two tab-delimited values: " + line );
+
+	  const std::string s1 = tok2[0];
+	  const std::string s2 = tok2[1];
+	  	  
+	  const bool old_exists = edf.header.has_signal( s1 );
+	  const bool new_exists = edf.header.has_signal( s2 );
+	  
+	  // new mappings must be unique
+	  if ( new_exists )
+	    Helper::halt( "'new' signal labels cannot already exist in the EDF" );
+	  
+	  // just ignore if original channel does not exist
+	  if ( old_exists )
+	    {
+	      old_signals.push_back( s1 );
+	      new_signals.push_back( s2 );
+	      newset.insert( s2 );
+	    }
+	  
+	  // next pair
+	}
+
+      if ( newset.size() != new_signals.size() )
+	Helper::halt( "cannot have duplicate labels in new" );
+      
+      for (int s=0; s<old_signals.size(); s++)
+	{
+	  logger << "  renaming [" << old_signals[s] << "] as [" << new_signals[s]  << "]\n";
+	  edf.header.rename_channel( old_signals[s] , new_signals[s] );
+	}
+      
+      return;
+    }
+  
+  //
+  // Otherwise, take input from command line
+  //
 
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
   std::vector<std::string> new_signals = param.strvector( "new" );

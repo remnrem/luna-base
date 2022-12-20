@@ -1501,3 +1501,89 @@ void edf_t::seg_dumper( param_t & param )
   writer.unlevel( "GAP" );
   
 }
+
+
+void edf_t::tabulate( param_t & param )
+{
+  
+  //
+  // Attach signals
+  //
+  
+  const bool no_annotations = true;
+
+  signal_list_t signals = header.signal_list(  param.requires( "sig" ) , no_annotations );
+
+  const int ns = signals.size();
+
+  if ( ns == 0 ) return;
+  
+  //
+  // Numeric precision
+  //
+  
+  const bool use_prec = param.has( "prec" ) ;
+  const int prec = use_prec ? param.requires_int( "prec" ) : 0 ; 
+  if ( prec < 0 ) Helper::halt( "prec must be a positive integer" );
+
+  
+  //
+  // Iterate over each signal
+  //
+
+  timeline.ensure_epoched();
+  
+  for (int s=0; s<ns; s++)
+    {
+      
+      timeline.first_epoch();
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      
+      std::map<double,int> cnts;
+
+      while ( 1 ) 
+	{
+	  
+	  int epoch = timeline.next_epoch();      
+	  
+	  if ( epoch == -1 ) break;
+	  
+	  interval_t interval = timeline.epoch( epoch );
+	  
+	  slice_t slice( *this , signals(s) , interval );
+	  
+	  const std::vector<double> * d = slice.pdata();
+	  
+	  std::map<double,int> ecnts;	  
+	  
+	  const int np = d->size();
+	  
+	  for (int i=0; i<np; i++)
+	    {
+	      ecnts[ (*d)[i] ]++;
+	      cnts[ (*d)[i] ]++;
+	    }
+
+	  
+	} // next epoch
+      
+      //
+      // output
+      //
+      
+      std::map<double,int>::const_iterator ii = cnts.begin();
+      while ( ii != cnts.end() )
+	{
+	  writer.level( ii->first , "VALUE" );
+	  writer.value( "N" , ii->second );
+	  ++ii;
+	}
+      writer.unlevel( "VALUE" );
+      
+      // next signal
+      writer.unlevel( globals::signal_strat );
+    }
+
+}
+
