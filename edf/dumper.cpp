@@ -1505,6 +1505,13 @@ void edf_t::seg_dumper( param_t & param )
 
 void edf_t::tabulate( param_t & param )
 {
+
+  //
+  // Count # of distinct values w/ at least this many obs
+  //
+
+  std::vector<int> cnts_req;
+  if ( param.has( "req" ) ) cnts_req = param.intvector( "req" );
   
   //
   // Attach signals
@@ -1568,8 +1575,40 @@ void edf_t::tabulate( param_t & param )
 	  
 	} // next epoch
       
+
       //
       // output
+      //
+
+      
+      // number of distinct values for this channel
+
+      writer.value( "NV" , (int)cnts.size() );
+
+      // if req=X,Y,Z given, then # of distinct values w/ at least
+      // this many obs
+      
+      if ( cnts_req.size() )
+	{
+	  for (int i=0; i < cnts_req.size(); i++)
+	    {
+	      writer.level( cnts_req[i] , "REQ" );
+	      
+	      int cnt = 0;
+	      std::map<double,int>::const_iterator ii = cnts.begin();
+	      while ( ii != cnts.end() )
+		{
+		  if (  ii->second >= cnts_req[i] ) ++cnt;
+		  ++ii;
+		}
+	      writer.value( "NV" , cnt );
+	    }
+	  writer.unlevel( "REQ" );
+	}
+
+
+      //
+      // Basic table
       //
       
       std::map<double,int>::const_iterator ii = cnts.begin();
