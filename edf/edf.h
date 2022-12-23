@@ -179,9 +179,9 @@ struct edf_header_t
 
   std::set<int> read( FILE * file, edfz_t * edfz , const std::set<std::string> * inp_signals );
 
-  bool write( FILE * file );
+  bool write( FILE * file , const std::vector<int> & ch2slot );
   
-  bool write( edfz_t * edfz );
+  bool write( edfz_t * edfz , const std::vector<int> & ch2slot );
 
   int  signal( const std::string & s , bool silent = false );
 
@@ -263,9 +263,9 @@ struct edf_record_t
   bool read( int r ); 
 
   // for writing, split out into two separate functions (no particular reason for the differences...)
-  bool write( FILE * file );
+  bool write( FILE * file , const std::vector<int> & ch2slot );
 
-  bool write( edfz_t * );
+  bool write( edfz_t * , const std::vector<int> & ch2slot );
 
   
   void add_data( const std::vector<int16_t> & );
@@ -451,6 +451,8 @@ public:
 
   void data_dumper( const std::string & , const param_t & );
   
+  void tabulate( param_t & param );
+
   void seg_dumper( param_t & param );
   
   void record_dumper( param_t & param );
@@ -675,7 +677,11 @@ public:
   // Write EDF(Z) back to file
   //
   
-  bool write( const std::string & f , bool edfz = false , bool null_starttime = false , bool always_edfd = false );
+  bool write( const std::string & f , 
+	      bool edfz = false , 
+	      bool null_starttime = false , 
+	      bool always_edfd = false , 
+	      const std::vector<int> * p_ch2slot = NULL );
   
     
   // given a mask, change the representation in memory, 

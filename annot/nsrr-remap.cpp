@@ -313,6 +313,9 @@ add( "R" , "Sleep stage R" );
 add( "W" , "Wake" ); 
 add( "W" , "Wake|0" ); 
 add( "W" , "Sleep stage W" ); 
+add( "NR" , "Sleep stage N" ); 
+add( "NR" , "Sleep stage NREM" ); 
+add( "NR" , "NREM" ); 
 add( "U" , "Unscored" ); 
 add( "U" , "Unscored|9" ); 
 add( "?" , "Unknown" ); 
@@ -373,7 +376,7 @@ add( "notes" , "Technician Notes" );
  //   - by default, take sleep stages (remapped) and arousals as class-level vars
  //   - can be over-ridden with edf-annot-class=X,Y,Z
 
- edf_annot_class( "N1,N2,N3,R,W,?,arousal,LM" );
+ edf_annot_class( "N1,N2,N3,R,W,?,arousal,LM,NR" );
 
 }
 

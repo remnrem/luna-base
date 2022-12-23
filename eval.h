@@ -310,6 +310,7 @@ void proc_annot2signal( edf_t & , param_t & );
 void proc_signal2annot( edf_t & , param_t & );
 void proc_sig_annot_mean( edf_t & , param_t & );
 void proc_annot2cache( edf_t & , param_t & );
+void proc_sig_tabulate( edf_t & edf , param_t & param );
 
 void proc_record_dump( edf_t & , param_t & );
 void proc_record_table( edf_t & , param_t & );
