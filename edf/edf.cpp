@@ -357,7 +357,10 @@ void edf_t::report_aliases() const
 void edf_t::terse_summary( param_t & param )
 {
 
-  signal_list_t signals = header.signal_list( param.value( "sig" ) );
+  // only non-annot signals here
+  const bool NO_ANNOTS = true; 
+
+  signal_list_t signals = header.signal_list( param.value( "sig" ) , NO_ANNOTS );
   
   const int ns1 = signals.size();
 
