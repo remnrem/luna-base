@@ -1327,12 +1327,15 @@ void proc_self_suds( edf_t & edf , param_t & param  )
   // set options
   suds_t::set_options( param );  
 
+  // force a reload (used in moonlight/R mode)
+  if ( param.has( "force-reload" ) )
+    suds_t::model.init();
+
   // load model, if not already done
   //  or, in R mode, force load each time...
-  
-  if ( param.has( "force-reload" ) || ! suds_t::model.loaded() )
+
+  if ( suds_t::model.loaded() )
     {
-      std::cout << " reloading modell....\n";
       suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
 			  param.has( "write-weights" ) ? param.value( "write-weights" ) : "" ,  

@@ -46,6 +46,7 @@ extern writer_t writer;
 
 void suds_model_t::init()
 {
+
   lab2ftr[ "SPEC" ] = SUDS_LOGPSD;
   lab2ftr[ "RSPEC" ] = SUDS_RELPSD;
   lab2ftr[ "VSPEC" ] = SUDS_CVPSD;
@@ -78,6 +79,12 @@ void suds_model_t::init()
   ftr2lab[ SUDS_SMOOTH2] = "SMOOTH2";
   ftr2lab[ SUDS_DENOISE2] = "DENOISE2";  
 
+  // other clears/resets
+  nc = 0;  
+  chs.clear();
+  specs.clear();
+  fcmap.clear();
+  
 }
 
  

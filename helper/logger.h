@@ -111,24 +111,32 @@ class logger_t
   void warning( const std::string & msg )
   {
     if ( is_off ) return ;
-    if ( globals::Rmode && globals::Rdisp )
+
+    if ( globals::logger_function )
+      (*globals::logger_function)( " ** warning: " + msg + " **" );
+    else if ( globals::Rmode && globals::Rdisp )
       ss << " ** warning: " << msg << " ** " << std::endl;
     else
       _out_stream << " ** warning: " << msg << " ** " << std::endl;
   }
   
-
+  
   template<typename T>           
     logger_t& operator<< (const T& data) 
     {
       if ( is_off ) return *this;      
-
-      if ( ! globals::silent ) 
-	_out_stream << data;
-      else if ( globals::Rmode && globals::Rdisp )
+      
+      if ( globals::logger_function )
 	{
-	  ss << data;
+	  std::stringstream ss1;
+	  ss1 << data;
+	  (*globals::logger_function)( ss1.str() );
 	}
+      else if ( globals::Rmode && globals::Rdisp )
+	ss << data;
+      else if ( ! globals::silent ) 
+	_out_stream << data;
+      
       return *this;
 
     }

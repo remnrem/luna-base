@@ -142,6 +142,8 @@ param_t globals::param;
 
 void (*globals::bail_function) ( const std::string & );
 
+void (*globals::logger_function) ( const std::string & );
+
 bool globals::silent;
 bool globals::verbose; 
 bool globals::Rmode;
@@ -215,6 +217,12 @@ void globals::init_defs()
   
   bail_function = NULL;
 
+  //
+  // Optional redirect of logger?
+  //
+
+  logger_function = NULL; 
+  
   //
   // Output
   //
