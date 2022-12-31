@@ -694,7 +694,6 @@ void pops_indiv_t::level1( edf_t & edf )
   std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin(); 
   while ( ss != pops_t::specs.chs.end() )
     {
-      
       // primary?
       int slot = edf.header.signal( ss->first , silent_signal_search );
 

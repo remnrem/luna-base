@@ -39,6 +39,7 @@ extern writer_t writer;
 
 void pops_specs_t::read( const std::string & f )
 {
+
   // if already done, skipe
   if ( specs.size() ) return;
   

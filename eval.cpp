@@ -1519,7 +1519,7 @@ void proc_pops( edf_t & edf , param_t & param )
   if ( param.has( "force-reload" ) )
     {
       pops_t::specs.init();
-      pops_t::specs.init_default();
+      pops_t::specs.init_default();     
     }
 
   //
