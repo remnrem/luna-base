@@ -98,6 +98,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   
   const bool dump_features = param.has( "dump" );
 
+  const bool output_features = param.has( "output-features" );
+
   
   // training (1) : make level-1 stats, stages, save (binary features, BFTR)
   
@@ -318,7 +320,36 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      O1.close();
 	    }
 
+	  //
+	  // Write epoch x feature matrix to standard output stream
+	  //
 
+	  if ( output_features )
+	    {
+	      if ( equivn ) Helper::halt( "cannot specify output-features and equiv together" );
+
+	      std::vector<std::string> labels = pops_t::specs.select_labels();
+	      // std::cout << "l " << labels.size() << "\n"
+	      // 		<< X1.rows() << " " << X1.cols() << "\n"
+	      // 		<< E.size() << "\n";
+	     
+	      // E x FTR
+	      for (int i=0; i<X1.rows(); i++)
+		{
+
+		  writer.epoch( E[i] + 1 );
+		  
+		  for (int j=0; j<X1.cols(); j++)
+                    {
+		      writer.level( labels[j] , "FTR" );
+		      writer.value( "X" , X1(i,j) );
+		    }
+		  writer.unlevel( "FTR" );
+		}
+	      writer.unepoch();
+	    }
+	  
+	  
 	  //
 	  // Load LGBM model if needed
 	  //

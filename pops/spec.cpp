@@ -378,6 +378,29 @@ void pops_specs_t::read( const std::string & f )
 void pops_specs_t::init()
 {
 
+  // clear/reset
+  lvl2.clear();
+  lab2ftr.clear();
+  ftr2lab.clear();
+  defaults.clear();  
+  ftr2ch2col.clear();     
+  fcmap.clear();
+  chs.clear();
+  specs.clear();
+  blocksize.clear();
+  selected.clear();
+  col_block.clear();
+  col_label.clear();
+  col_original_label.clear();
+  col_root.clear();
+  col_select.clear();
+  col_level.clear();
+  orig2final.clear();
+  final2orig.clear();
+  n1 = na = nf = ns = 0; 
+
+  // set
+  
   lab2ftr[ "SPEC" ] = POPS_LOGPSD;
   lab2ftr[ "RSPEC" ] = POPS_RELPSD;
   lab2ftr[ "VSPEC" ] = POPS_CVPSD;

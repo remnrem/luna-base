@@ -212,7 +212,7 @@ void pops_opt_t::set_options( param_t & param )
       for (int i=0; i<tok.size(); i++)
 	{
 	  std::vector<std::string> tok2 = Helper::parse( tok[i] , "|=" );
-	  if ( tok2.size() < 2 ) Helper::halt( "bad format for alias=main|second,main2=second2" );
+	  if ( tok2.size() < 2 ) Helper::halt( "bad format for alias=main|second,main2|second2" );
 	  for (int j=1; j<tok2.size(); j++)
 	    aliases[ tok2[0] ].insert( tok2[j] );
 	}

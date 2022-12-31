@@ -1511,7 +1511,17 @@ void proc_pops( edf_t & edf , param_t & param )
   //
 
   pops_t pops( param );   
-  
+
+  //
+  // force new specs? (for use w/ R/moonlight)
+  //
+
+  if ( param.has( "force-reload" ) )
+    {
+      pops_t::specs.init();
+      pops_t::specs.init_default();
+    }
+
   //
   // set up features ('.' = use internal defaults)
   //
