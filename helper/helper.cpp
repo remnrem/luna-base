@@ -255,6 +255,9 @@ void Helper::halt( const std::string & msg )
   // some other code handles the exit, e.g. if running under luna-web?
   if ( globals::bail_function != NULL ) 
     globals::bail_function( msg );
+
+  // do not kill the process? i.e. in R mode... likely dangerous...
+  if ( ! globals::bail_on_fail ) return;
   
   // switch logger off , i.e. as we don't want close-out msg
   logger.off();
