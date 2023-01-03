@@ -4126,13 +4126,26 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       nsrr_t::unmapped = Helper::yesno( tok1 );
       return;
     }
-
   
       
   // sleep stage prefix
   if (  Helper::iequals( tok0 , "ss-prefix" ) )
     {
       globals::sleep_stage_prefix = tok1; 
+      return;
+    }
+
+  // POPS stages: pN1, pN2, ... 
+  if ( Helper::iequals( tok0 , "ss-pops" ) )
+    {
+      globals::sleep_stage_prefix = "p";
+      return;
+    }
+
+  // SOAP stages: sN1, sN2, ... 
+  if ( Helper::iequals( tok0 , "ss-soap" ) )
+    {
+      globals::sleep_stage_prefix = "s";
       return;
     }
   

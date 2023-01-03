@@ -473,7 +473,12 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       //
       
       summarize();
-      
+
+      //
+      // Add annotations
+      //
+    
+      add_annots( edf );      
       
     } // end of PREDICTION mode
   
@@ -2393,6 +2398,45 @@ int pops_indiv_t::update_predicted( std::vector<int> * cnts )
     }  
 
   return ns.size();
+}
+
+
+void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
+{
+  
+  // ensure cleared if already present
+  edf.timeline.annotations.clear( "pN1" );
+  edf.timeline.annotations.clear( "pN2" );
+  edf.timeline.annotations.clear( "pN3" );
+  edf.timeline.annotations.clear( "pR" );
+  edf.timeline.annotations.clear( "pW" );
+  
+  annot_t * aN1 = edf.timeline.annotations.add( "pN1" );
+  annot_t * aN2 = edf.timeline.annotations.add( "pN2" );
+  annot_t * aN3 = edf.timeline.annotations.add( "pN3" );
+  annot_t * aR = edf.timeline.annotations.add( "pR" );
+  annot_t * aW = edf.timeline.annotations.add( "pW" );
+  
+  aN1->description = "N1, POPS prediction";
+  aN2->description = "N2, POPS prediction";
+  aN3->description = "N3, POPS prediction";
+  aR->description = "R, POPS prediction";
+  aW->description = "W, POPS prediction";
+  
+  logger << "  adding POPS annotations\n";
+  
+  int ne = E.size();
+  
+  for (int e=0; e<ne; e++)
+    {      
+      interval_t interval = edf.timeline.epoch( e );      
+      if      ( PS[e] == POPS_WAKE ) aW->add( "." , interval , "." );
+      else if ( PS[e] == POPS_REM )  aR->add( "." , interval , "." );
+      else if ( PS[e] == POPS_N1 )   aN1->add( "." , interval , "." );
+      else if ( PS[e] == POPS_N2 )   aN2->add( "." , interval , "." );
+      else if ( PS[e] == POPS_N3 )   aN3->add( "." , interval , "." );
+    }
+      		  
 }
 
 #endif

@@ -2653,12 +2653,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   if ( find( "SleepStage" ) != NULL ) return false; 
 
   
-  //
-  // Is a prefix specified? 
-  //
-
-  bool has_prefix = globals::sleep_stage_prefix != "" ;
-
+  
   //
   // Use default annotation labels, if not otherwise specified
   // 
@@ -2668,8 +2663,11 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
   while ( ii != annots.end() )
     {
-
-      const std::string & s = has_prefix ? globals::sleep_stage_prefix + "_" + ii->first : ii->first;
+      
+      const std::string & s = ii->first;
+      
+      // this function takes care of any prefix specified via ss-prefix
+      // i.e.   if prefix is 'p' than 'pN1' will match to 'N1' etc
       
       sleep_stage_t ss = globals::stage( s );
       
@@ -2704,7 +2702,6 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   if ( v_rem.size() == 0 ) v_rem.push_back( drem );
   if ( v_light.size() == 0 ) v_light.push_back( dlight );
   if ( v_other.size() == 0 ) v_other.push_back( dother );
-  
 
   //
   // find annotations, allowing a comma-delimited list
@@ -2720,7 +2717,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   
   for (int a=0;a<v_n2.size();a++)
     n2s.push_back( find( v_n2[a] ) );
-
+  
   for (int a=0;a<v_n3.size();a++)
     n3s.push_back( find( v_n3[a] ) );
 

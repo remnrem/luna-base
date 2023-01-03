@@ -333,7 +333,10 @@ void globals::init_defs()
   // Primary sleep stage encoding 
   //
 
-  // i.e. to track different schemes, SUDS_N1,  sleep_stage_prefix == "SUDS" 
+  // i.e. to track different schemes, SUDS_N1,  sleep_stage_prefix == "SUDS"
+  // SOAP 's'
+  // POPS 'p' (predicted)
+  
   sleep_stage_prefix       = ""; // by default not  
 
   // if we find 0-duration annots, assume epoch length
@@ -369,24 +372,24 @@ void globals::init_defs()
   // POPS predictions
   //
   
-  sleep_stage_labels[ "pW" ]  = WAKE;
-  sleep_stage_labels[ "pN1" ] = NREM1;
-  sleep_stage_labels[ "pN2" ] = NREM2;
-  sleep_stage_labels[ "pN3" ] = NREM3;
-  sleep_stage_labels[ "pR" ]  = REM;
-  sleep_stage_labels[ "p?" ]  = UNKNOWN;
+  // sleep_stage_labels[ "pW" ]  = WAKE;
+  // sleep_stage_labels[ "pN1" ] = NREM1;
+  // sleep_stage_labels[ "pN2" ] = NREM2;
+  // sleep_stage_labels[ "pN3" ] = NREM3;
+  // sleep_stage_labels[ "pR" ]  = REM;
+  // sleep_stage_labels[ "p?" ]  = UNKNOWN;
 
   
-  //
-  // SOAP predictions
-  //
+  // //
+  // // SOAP predictions
+  // //
   
-  sleep_stage_labels[ "sW" ]  = WAKE;
-  sleep_stage_labels[ "sN1" ] = NREM1;
-  sleep_stage_labels[ "sN2" ] = NREM2;
-  sleep_stage_labels[ "sN3" ] = NREM3;
-  sleep_stage_labels[ "sR" ]  = REM;
-  sleep_stage_labels[ "s?" ]  = UNKNOWN;
+  // sleep_stage_labels[ "sW" ]  = WAKE;
+  // sleep_stage_labels[ "sN1" ] = NREM1;
+  // sleep_stage_labels[ "sN2" ] = NREM2;
+  // sleep_stage_labels[ "sN3" ] = NREM3;
+  // sleep_stage_labels[ "sR" ]  = REM;
+  // sleep_stage_labels[ "s?" ]  = UNKNOWN;
 
   
   //

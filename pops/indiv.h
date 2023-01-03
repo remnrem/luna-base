@@ -90,6 +90,8 @@ struct pops_indiv_t {
   void combine( std::vector<pops_sol_t> & sols ,
 		int method ,
 		double min_conf );
+
+  void add_annots( edf_t & , const std::string & prefix = "p" );
   
   // trainer/target?
   bool trainer;

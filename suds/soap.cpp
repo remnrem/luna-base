@@ -203,12 +203,8 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
   //
   // Output annotations (of discordant epochs)
   //
-
-  if ( param.has( "annot" ) )
-    {
-      const std::string annot_folder = param.has("annot-dir") ? param.value( "annot-dir" ) : "./";      
-      write_annots( annot_folder , param.value( "annot" ) , pp , labels , ne_all , edf );
-    }
+  
+  add_annots( pp , labels , ne_all , edf );
   
 }
 

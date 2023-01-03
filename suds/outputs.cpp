@@ -649,46 +649,69 @@ void suds_indiv_t::summarize_kappa( const std::vector<std::string> & prd , const
 }
 
 
-void suds_indiv_t::write_annots( const std::string & annot_folder , const std::string & aname , 
-				 const Eigen::MatrixXd & pp , const std::vector<std::string> & labels , 
-				 int ne_all , edf_t & edf )
+void suds_indiv_t::add_annots( const Eigen::MatrixXd & pp , const std::vector<std::string> & labels , 			       
+			       int ne_all , edf_t & edf )
 {
 
+  // could be called by SOAP or SUDS 
+  // in practice, w/ SUDS deprecated, this will only be called by SOAP
+  // but we can keep this interface in place.
+  
   bool prior_staging = obs_stage.size() != 0 ;
   if ( ! prior_staging ) return;
 
-  const std::string delim = annot_folder[ annot_folder.size() - 1 ] != '/' ? "/" : "";
-  
-  if ( annot_folder != "" && annot_folder != "./" ) 
-    {
-      std::string syscmd = globals::mkdir_command + " " + annot_folder ;
-      int retval = system( syscmd.c_str() );
-    }
+  // ensure cleared, i.e. so only one copy if run >1 (as from moonlight)
+  edf.timeline.annotations.clear( "sW" );
+  edf.timeline.annotations.clear( "sR" );
+  edf.timeline.annotations.clear( "sN1" );
+  edf.timeline.annotations.clear( "sN2" );
+  edf.timeline.annotations.clear( "sN3" );
+  edf.timeline.annotations.clear( "sNR" );
+  edf.timeline.annotations.clear( "s?" );
+  edf.timeline.annotations.clear( "sDISC3" );
+  edf.timeline.annotations.clear( "sDISC5" );
   
   // annot label
-  annot_t * a_disc3 = edf.timeline.annotations.add( aname + "_disc3" );
-  a_disc3->description = "SOAP NR/R/W discordance";
+  annot_t * aW = edf.timeline.annotations.add( "sW" );
+  annot_t * aR = edf.timeline.annotations.add( "sR" );
 
-  annot_t * a_disc5 = NULL;
+  aW->description = "W, SOAP-prediction";
+  aR->description = "R, SOAP-prediction";
+  
+  // Discordance annots
+  
+  annot_t * aDISC5 = suds_t::n_stages == 5 ? edf.timeline.annotations.add( "sDISC5" ) : NULL ;
+  annot_t * aDISC3 = edf.timeline.annotations.add( "sDISC3" );
+  aDISC3->description = "3-class SOAP discordance";
+
+  // NR
+  annot_t * aN1 = NULL;
+  annot_t * aN2 = NULL;
+  annot_t * aN3 = NULL;
+  annot_t * aNR = NULL;
+
   if ( suds_t::n_stages == 5 )
     {
-      a_disc5 = edf.timeline.annotations.add( aname + "_disc5" );
-      a_disc5->description = "SOAP N1/N2/N3/R/W discordance";
+      aN1 = edf.timeline.annotations.add( "sN1" );
+      aN2 = edf.timeline.annotations.add( "sN2" );
+      aN3 = edf.timeline.annotations.add( "sN3" );
+      aN1->description = "N1, SOAP-prediction";
+      aN2->description = "N2, SOAP-prediction";
+      aN3->description = "N3, SOAP-prediction";
+      aDISC5->description = "5-class SOAP discordance";
     }
+  else if ( suds_t::n_stages == 3 )
+    {
+      aNR = edf.timeline.annotations.add( "sNR" );
+      aNR->description = "NR, SOAP-prediction";
+    }
+  
+  annot_t * aU = edf.timeline.annotations.add( "s?" );
+  aU->description = "Unscored SOAP-prediction";
 
-  annot_t * a_unscr = edf.timeline.annotations.add( aname + "_unscr" );
-  a_unscr->description = "SOAP unscored epoch";
-
-  const std::string a_filename3 = annot_folder + delim + aname + "_disc3.annot";
-  const std::string a_filename5 = annot_folder + delim + aname + "_disc5.annot";
-  const std::string a_filenameU = annot_folder + delim + aname + "_unscr.annot";
-
-  logger << "  writing NR/R/W discordant epochs to " << a_filename3 << "\n";
-  if ( suds_t::n_stages == 5 )
-    logger << "  writing N1/N2/N3/R/W discordant epochs to " << a_filename5 << "\n";  
-  logger << "  writing unscored epochs to " << a_filenameU << "\n";
-   
+  
   // epochs[] contains the codes of epochs actually present in the model/valid
+
   std::map<int,int> e2e;
   for (int i=0; i < epochs.size(); i++) 
     e2e[ epochs[i] ] = i ;  
@@ -706,34 +729,34 @@ void suds_indiv_t::write_annots( const std::string & annot_folder , const std::s
 	{
 	  std::string predss = suds_t::max_inrow( pp.row(e) , labels );
 
+	  if      ( predss == "N1" ) aN1->add( "." , interval , "." );
+	  else if ( predss == "N2" ) aN2->add( "." , interval , "." );
+	  else if ( predss == "N2" ) aN3->add( "." , interval , "." );
+	  else if ( predss == "NR" ) aNR->add( "." , interval , "." );
+	  else if ( predss == "R" ) aR->add( "." , interval , "." );
+	  else if ( predss == "W" ) aW->add( "." , interval , "." );
+	  
 	  if ( suds_t::n_stages == 5 )
 	    {
 	      if ( predss !=  suds_t::str( obs_stage[i] ) )
-		a_disc5->add( suds_t::str( obs_stage[i] ) + "->" + predss , interval , "." );
+		aDISC5->add( suds_t::str( obs_stage[i] ) + "->" + predss , interval , "." );
 	      
 	      if ( suds_t::NRW( predss ) != suds_t::NRW( suds_t::str( obs_stage[i] ) ) )
-		a_disc3->add( suds_t::NRW( suds_t::str( obs_stage[i] ) ) + "->" + suds_t::NRW( predss ) , interval , "." );
+		aDISC3->add( suds_t::NRW( suds_t::str( obs_stage[i] ) ) + "->" + suds_t::NRW( predss ) , interval , "." );
 	    }
 	  else
 	    {
 	      if ( predss !=  suds_t::str( obs_stage[i] ) )
-		a_disc3->add( suds_t::str( obs_stage[i] ) + "->" + predss , interval , "." );
+		aDISC3->add( suds_t::str( obs_stage[i] ) + "->" + predss , interval , "." );
 	    }
 	}
       else
        	{
-	  a_unscr->add( "." , interval , "." );
+	  aU->add( "." , interval , "." );
 	}
       
     }
-
-  a_disc3->save( a_filename3 );
-
-  if ( a_disc5 ) 
-    a_disc5->save( a_filename5 );
-
-  a_unscr->save( a_filenameU );
-
+      
 }
 
 
