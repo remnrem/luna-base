@@ -53,7 +53,12 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    param_t & param )
 {
 
+  //
+  // Track this EDF
+  //
 
+  pedf = &edf;
+  
   //
   // Inputs
   //
@@ -469,16 +474,19 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	}
       
       //
+      // Add annotations
+      //
+
+      logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW)\n";
+
+      add_annots( edf );      
+
+      //
       // All done, now summarize (& also print final confusion matrix)
       //
       
       summarize();
 
-      //
-      // Add annotations
-      //
-    
-      add_annots( edf );      
       
     } // end of PREDICTION mode
   
@@ -489,7 +497,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 {
 
   // calculate ne and staging, if present  
-  ne = edf.timeline.first_epoch();
+  ne = ne_total = edf.timeline.first_epoch();
   
   // get staging
   edf.timeline.annotations.make_sleep_stage( edf.timeline );
@@ -653,7 +661,7 @@ void pops_indiv_t::level1( edf_t & edf )
   // ensure we reset epoch count 'ne'
   //
 
-  ne = edf.timeline.first_epoch();
+  ne = ne_total = edf.timeline.first_epoch();
 
   //
   // score level-1 factors --> X1
@@ -1636,17 +1644,72 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
 
   ne = E.size();
+
+
+  //
+  // track if epoch skipped
+  //
+
+  std::map<int,int> e2e;
+  
+  for (int e=0; e<ne; e++)
+    e2e[ E[e] ] = e ;
+  
   
   //
   // epoch-level output (posteriors & predictions)
   //  
+
+  //logger << "Ne, neT = " << ne << " " << ne_total << " " << e2e.size() << "\n";
+
+  clocktime_t starttime( pedf->header.starttime );
+  bool hms = true;
+  if ( ! starttime.valid )
+    {
+      logger << " ** could not find valid start-time in EDF header **\n";
+      hms = false;
+    }
   
   double avg_pmax = 0;
-
-  for (int e=0; e<ne; e++)
+  
+  for (int epoch=0; epoch<ne_total; epoch++)
     {
       
-      writer.epoch( E[e] + 1 );
+      const bool skipped = e2e.find( epoch ) == e2e.end();
+      
+      //std::cout << " epoch " << epoch << " " << skipped << "\n";
+      
+      writer.epoch( epoch + 1 );
+
+      if ( hms )
+	{
+	  interval_t interval = pedf->timeline.epoch( epoch );
+	  
+	  double tp1_sec =  interval.start / (double)globals::tp_1sec;
+	  clocktime_t present1 = starttime;
+	  present1.advance_seconds( tp1_sec );
+	  // add down to 1/100th of a second                                                                                                                                                            
+           double tp1_extra = tp1_sec - (long)tp1_sec;
+
+           double tp2_sec =  interval.stop / (double)globals::tp_1sec;
+           clocktime_t present2 = starttime;
+           present2.advance_seconds( tp2_sec );
+           double tp2_extra = tp2_sec - (long)tp2_sec;
+
+           writer.value( "START"  , present1.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
+           writer.value( "STOP"   , present2.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
+	}
+
+      
+      if ( skipped )
+	{
+	  writer.value( "FLAG" , -1 );		    
+	  continue;
+	}
+
+      // this is in range of only 'valid' epochs 
+      // i.e. 'e' will align w/ P(), etc
+      const int e = e2e[ epoch ] ;
       
       // predicted stage
       int predx = -1;
@@ -1704,6 +1767,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 	      		  
 	    }	  
 
+	  // skipped --> -1
 	  // conc  --> 0
 	  // disc5 --> 1
 	  // disc3 --> 2
@@ -2422,14 +2486,12 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
   aN3->description = "N3, POPS prediction";
   aR->description = "R, POPS prediction";
   aW->description = "W, POPS prediction";
-  
-  logger << "  adding POPS annotations\n";
-  
+    
   int ne = E.size();
   
   for (int e=0; e<ne; e++)
     {      
-      interval_t interval = edf.timeline.epoch( e );      
+      interval_t interval = edf.timeline.epoch( E[e] );      
       if      ( PS[e] == POPS_WAKE ) aW->add( "." , interval , "." );
       else if ( PS[e] == POPS_REM )  aR->add( "." , interval , "." );
       else if ( PS[e] == POPS_N1 )   aN1->add( "." , interval , "." );

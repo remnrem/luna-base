@@ -1593,8 +1593,8 @@ bool Helper::hhmmss( const clocktime_t & ct ,
   present2.advance_seconds( tp2_sec );
   double tp2_extra = tp2_sec - (long)tp2_sec;
   
-  *t1 = present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , dp  ).substr(1) ;
-  *t2 = present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , dp  ).substr(1) ;
+  *t1 = present1.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , dp  ).substr(1) ;
+  *t2 = present2.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , dp  ).substr(1) ;
   
   return true;
 }
