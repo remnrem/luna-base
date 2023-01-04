@@ -353,8 +353,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 		}
 	      writer.unepoch();
 	    }
-	  
-	  
+	  	  
 	  //
 	  // Load LGBM model if needed
 	  //
