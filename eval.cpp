@@ -2677,6 +2677,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	  writer.value( "START"    , interval.start_sec() );
 	  writer.value( "MID"      , interval.mid_sec() );
 	  writer.value( "STOP"     , interval.stop_sec() );
+	  writer.value( "TP" , interval.as_tp_string() );
 	  
 	  // original time-points
 	  

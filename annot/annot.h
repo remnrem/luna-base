@@ -838,7 +838,7 @@ struct annotation_set_t
   uint64_t first_in_interval( const std::vector<std::string> & requested ,
 			      const interval_t & range ) const;
   
-  std::set<uint64_t> starts( const std::vector<std::string> & requested ) const;
+  std::set<uint64_t> starts( const std::vector<std::string> & requested , uint64_t dur ) const;
 
   void write( const std::string & filename , param_t & param , edf_t & edf );
 

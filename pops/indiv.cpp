@@ -476,9 +476,12 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       // Add annotations
       //
 
-      logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW)\n";
-
-      add_annots( edf );      
+      if ( has_staging ) 
+	logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW)\n";
+      else
+	logger << "  adding POPS annotations (N1, N2, N3, R, W)\n";
+      
+      add_annots( edf , has_staging ? "p" : "" );      
 
       //
       // All done, now summarize (& also print final confusion matrix)
@@ -2468,17 +2471,17 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
 {
   
   // ensure cleared if already present
-  edf.timeline.annotations.clear( "pN1" );
-  edf.timeline.annotations.clear( "pN2" );
-  edf.timeline.annotations.clear( "pN3" );
-  edf.timeline.annotations.clear( "pR" );
-  edf.timeline.annotations.clear( "pW" );
+  edf.timeline.annotations.clear( prefix + "N1" );
+  edf.timeline.annotations.clear( prefix + "N2" );
+  edf.timeline.annotations.clear( prefix + "N3" );
+  edf.timeline.annotations.clear( prefix + "R" );
+  edf.timeline.annotations.clear( prefix + "W" );
   
-  annot_t * aN1 = edf.timeline.annotations.add( "pN1" );
-  annot_t * aN2 = edf.timeline.annotations.add( "pN2" );
-  annot_t * aN3 = edf.timeline.annotations.add( "pN3" );
-  annot_t * aR = edf.timeline.annotations.add( "pR" );
-  annot_t * aW = edf.timeline.annotations.add( "pW" );
+  annot_t * aN1 = edf.timeline.annotations.add( prefix + "N1" );
+  annot_t * aN2 = edf.timeline.annotations.add( prefix + "N2" );
+  annot_t * aN3 = edf.timeline.annotations.add( prefix + "N3" );
+  annot_t * aR = edf.timeline.annotations.add( prefix + "R" );
+  annot_t * aW = edf.timeline.annotations.add( prefix + "W" );
   
   aN1->description = "N1, POPS prediction";
   aN2->description = "N2, POPS prediction";

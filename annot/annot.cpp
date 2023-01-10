@@ -4321,9 +4321,14 @@ uint64_t annotation_set_t::first_in_interval( const std::vector<std::string> & r
 }
 
 
-std::set<uint64_t> annotation_set_t::starts( const std::vector<std::string> & requested ) const
+std::set<uint64_t> annotation_set_t::starts( const std::vector<std::string> & requested , uint64_t dur ) const
 {
 
+  // get start points from these requested epochs;
+  // but add in extra start points for each 'dur' period within that annotation
+  // i.e. for epoch-alignment, this handles the case of annotations that are >1 multiples
+  // of the epoch size (e.g. 90s REM)  and adds in possible starts at 0, 30, 60 s
+  
   std::set<uint64_t> sts;
   
   for (int a=0; a < requested.size(); a++)
@@ -4335,10 +4340,27 @@ std::set<uint64_t> annotation_set_t::starts( const std::vector<std::string> & re
       annot_map_t::const_iterator ii = annot->interval_events.begin();
       while ( ii != annot->interval_events.end() )
 	{
-	  sts.insert( ii->first.interval.start );
+
+	  if ( dur == 0 )
+	    sts.insert( ii->first.interval.start );
+	  else
+	    {
+	      	  
+	      uint64_t pos = ii->first.interval.start ;
+	      uint64_t end = ii->first.interval.stop ;
+	      while ( 1 )
+		{
+		  if ( pos + dur <= end )
+		    {
+		      sts.insert( pos );
+		      pos += dur;
+		    }
+		  else break;
+		}
+	    }
 	  ++ii;
 	}
-    }  
+    }
   return sts;
 }
 

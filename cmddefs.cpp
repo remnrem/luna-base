@@ -420,7 +420,7 @@ void cmddefs_t::init()
   add_var( "EPOCH" , "E" , "MID" , "Midpoint of epoch (seconds elapsed from EDF start)" );
   add_var( "EPOCH" , "E" , "START" , "Start of epoch (seconds elapsed from EDF start)" );
   add_var( "EPOCH" , "E" , "STOP" , "Stop of epoch (seconds elapsed from EDF start)" );
-
+  add_var( "EPOCH" , "E" , "TP" , "Interval in time-points" );
 
   // EPOCH-ANNOT
 
