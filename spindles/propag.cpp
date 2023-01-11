@@ -331,7 +331,7 @@ double sp_props_t::analyse( const std::set<double> & f ,
       
       writer.value( "N" , cmap_n[ cc->first ] );
       writer.value( "P" , cmap_n[ cc->first ] / (double)np ); 
-
+      
       if ( cmap_n[ cc->first ] > 0 ) 
 	  {
 	    
@@ -357,10 +357,15 @@ double sp_props_t::analyse( const std::set<double> & f ,
       //
 
       writer.value( "N_PRESEED" , pre_cmap_n[ cc->first ] );
-      writer.value( "P_PRESEED" , pre_cmap_n[ cc->first ] / (double)np );
-
+      writer.value( "P_PRESEED" , pre_cmap_n[ cc->first ] / (double)np );      
+      
       writer.value( "N_POSTSEED" , post_cmap_n[ cc->first ] );
       writer.value( "P_POSTSEED" , post_cmap_n[ cc->first ] / (double)np );
+
+      // scaled ( -1 to +1 ) pre/post metric: proportion of times CH is before versus after SEED
+      const double pp = post_cmap_n[ cc->first ] / ( post_cmap_n[ cc->first ] + pre_cmap_n[ cc->first ] );
+
+      writer.value( "PP" , 2 * ( pp - 0.5 ) ) ;
 
       if ( pre_cmap_n[ cc->first ] > 0 )
           {	    
