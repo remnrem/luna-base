@@ -1326,11 +1326,15 @@ void proc_self_suds( edf_t & edf , param_t & param  )
 
   // set options
   suds_t::set_options( param );  
-
+  
+  // force a reload (used in moonlight/R mode)
+  if ( param.has( "force-reload" ) )
+    suds_t::model.init();
+  
   // load model, if not already done
   //  or, in R mode, force load each time...
   
-  if ( param.has( "force-reload" ) || ! suds_t::model.loaded() )
+  if ( ! suds_t::model.loaded() )
     {
       suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
@@ -1507,7 +1511,17 @@ void proc_pops( edf_t & edf , param_t & param )
   //
 
   pops_t pops( param );   
-  
+
+  //
+  // force new specs? (for use w/ R/moonlight)
+  //
+
+  if ( param.has( "force-reload" ) )
+    {
+      pops_t::specs.init();
+      pops_t::specs.init_default();     
+    }
+
   //
   // set up features ('.' = use internal defaults)
   //
@@ -2663,6 +2677,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	  writer.value( "START"    , interval.start_sec() );
 	  writer.value( "MID"      , interval.mid_sec() );
 	  writer.value( "STOP"     , interval.stop_sec() );
+	  writer.value( "TP" , interval.as_tp_string() );
 	  
 	  // original time-points
 	  
@@ -4112,13 +4127,26 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       nsrr_t::unmapped = Helper::yesno( tok1 );
       return;
     }
-
   
       
   // sleep stage prefix
   if (  Helper::iequals( tok0 , "ss-prefix" ) )
     {
       globals::sleep_stage_prefix = tok1; 
+      return;
+    }
+
+  // POPS stages: pN1, pN2, ... 
+  if ( Helper::iequals( tok0 , "ss-pops" ) )
+    {
+      globals::sleep_stage_prefix = "p";
+      return;
+    }
+
+  // SOAP stages: sN1, sN2, ... 
+  if ( Helper::iequals( tok0 , "ss-soap" ) )
+    {
+      globals::sleep_stage_prefix = "s";
       return;
     }
   

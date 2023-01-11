@@ -2704,17 +2704,20 @@ void hypnogram_t::output( const bool verbose ,
 	}
 
       // split by ASC/DESC N2
-      writer.level( "N2_ASC" , globals::stage_strat );
-      writer.value( "MINS" , mins[ "N2_ASC" ] );
-      writer.value( "PCT" , mins[ "N2_ASC" ] / mins[ "N2" ] );
-
-      writer.level( "N2_DSC" , globals::stage_strat );
-      writer.value( "MINS" , mins[ "N2_DSC" ] );
-      writer.value( "PCT" , mins[ "N2_DSC" ] / mins[ "N2" ] );
-      
-      writer.level( "N2_FLT" , globals::stage_strat );
-      writer.value( "MINS" , mins[ "N2_FLT" ] );
-      writer.value( "PCT" , mins[ "N2_FLT" ] / mins[ "N2" ] );
+      if ( 0 )
+	{
+	  writer.level( "N2_ASC" , globals::stage_strat );
+	  writer.value( "MINS" , mins[ "N2_ASC" ] );
+	  writer.value( "PCT" , mins[ "N2_ASC" ] / mins[ "N2" ] );
+	  
+	  writer.level( "N2_DSC" , globals::stage_strat );
+	  writer.value( "MINS" , mins[ "N2_DSC" ] );
+	  writer.value( "PCT" , mins[ "N2_DSC" ] / mins[ "N2" ] );
+	  
+	  writer.level( "N2_FLT" , globals::stage_strat );
+	  writer.value( "MINS" , mins[ "N2_FLT" ] );
+	  writer.value( "PCT" , mins[ "N2_FLT" ] / mins[ "N2" ] );
+	}
       
       writer.unlevel( globals::stage_strat );      
 
@@ -2908,8 +2911,11 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.epoch( epoch_n[e] + 1 );
 	  
 	  
-	  // clock time based on EDF header
-	  
+	  // new - use actual epoch encoding (it's what it's there for!)
+	  interval_t interval = timeline->epoch( epoch_n[e] );	      
+	  const double sec0 = interval.start * globals::tp_duration;
+
+	  // clock time based on EDF header	  
 	  if ( starttime.valid ) 
 	    {
 
@@ -2917,9 +2923,6 @@ void hypnogram_t::output( const bool verbose ,
 	      //clocktime_t current_clock_time = starttime;	      
 	      //current_clock_time.advance_seconds( epoch_sec * epoch_n[e] );
 	      
-	      // new - use actual epoch encoding (it's what it's there for!)
-	      interval_t interval = timeline->epoch( epoch_n[e] );	      
-	      const double sec0 = interval.start * globals::tp_duration;
               clocktime_t present = starttime;
               present.advance_seconds( sec0 );
                             	      
@@ -2930,12 +2933,13 @@ void hypnogram_t::output( const bool verbose ,
 	      
 	    }
 		  
-	  // time in minutes
-	  
+	  // time in minutes (from start of stage-aligned epochs)	  
 	  writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
 	  
-	  // stages
+	  // time from EDF start (seconds)
+	  writer.value( "START" , sec0 ); 
 	  
+	  // stages	  
 	  writer.value( "STAGE" , globals::stage( stages[e] ) );
 
 	  // i.e. prior to anything being set to L or ?
@@ -3004,7 +3008,10 @@ void hypnogram_t::output( const bool verbose ,
 
       writer.epoch( timeline->display_epoch( e ) );
       
-
+      // new - use actual epoch encoding (it's what it's there for!)                                              
+      interval_t interval = timeline->epoch( e );
+      const double sec0 = interval.start * globals::tp_duration;
+      
       if ( starttime.valid ) 
 	{
 
@@ -3012,9 +3019,6 @@ void hypnogram_t::output( const bool verbose ,
 	  //clocktime_t current_clock_time = starttime;
 	  //current_clock_time.advance_seconds( epoch_sec * e );
 
-	  // new - use actual epoch encoding (it's what it's there for!)                                              
-	  interval_t interval = timeline->epoch( e );
-	  const double sec0 = interval.start * globals::tp_duration;
 	  clocktime_t present = starttime;
 	  present.advance_seconds( sec0 );
 	  
@@ -3027,7 +3031,11 @@ void hypnogram_t::output( const bool verbose ,
 
       // time in minutes (from EPOCH 1, not EDF start, i.e. if EPOCH align)
       writer.value( "MINS" ,  e * epoch_mins );
-    
+
+      
+      // time from EDF start (seconds)
+      writer.value( "START" , sec0 );
+
       // stages      
       writer.value( "STAGE" , globals::stage( stages[e] ) );    
       writer.value( "OSTAGE" , globals::stage( original_stages[e] ) );    

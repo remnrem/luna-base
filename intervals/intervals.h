@@ -184,6 +184,13 @@ struct interval_t
     return ss.str();
   }
   
+  std::string as_tp_string() const 
+  {
+    std::stringstream ss;
+    ss << start << "->" << stop;
+    return ss.str();
+  }
+
   static int intersect( const std::set<interval_t> & a, 
 			const std::set<interval_t> & b, 
 			std::set<interval_t> * botha,

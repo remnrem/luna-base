@@ -421,8 +421,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // Set up annotation
   //
   
-  std::string sp_label = "spindles";
-
+  std::string sp_label = "SP";
+  
   if ( save_annots ) 
     {
       if ( param.value( "annot" ) != "" )

@@ -255,6 +255,9 @@ void Helper::halt( const std::string & msg )
   // some other code handles the exit, e.g. if running under luna-web?
   if ( globals::bail_function != NULL ) 
     globals::bail_function( msg );
+
+  // do not kill the process? i.e. in R mode... likely dangerous...
+  if ( ! globals::bail_on_fail ) return;
   
   // switch logger off , i.e. as we don't want close-out msg
   logger.off();
@@ -1590,8 +1593,8 @@ bool Helper::hhmmss( const clocktime_t & ct ,
   present2.advance_seconds( tp2_sec );
   double tp2_extra = tp2_sec - (long)tp2_sec;
   
-  *t1 = present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , dp  ).substr(1) ;
-  *t2 = present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , dp  ).substr(1) ;
+  *t1 = present1.as_string(':') +  Helper::dbl2str_fixed( tp1_extra , dp  ).substr(1) ;
+  *t2 = present2.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , dp  ).substr(1) ;
   
   return true;
 }

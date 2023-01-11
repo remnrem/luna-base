@@ -205,6 +205,7 @@ void pops_opt_t::set_options( param_t & param )
 
   // channel aliases
   //  (added when reading spec.) 
+  aliases.clear();
   if ( param.has( "alias" ) ) 
     {
       std::vector<std::string> tok = param.strvector( "alias" );
@@ -212,13 +213,15 @@ void pops_opt_t::set_options( param_t & param )
       for (int i=0; i<tok.size(); i++)
 	{
 	  std::vector<std::string> tok2 = Helper::parse( tok[i] , "|=" );
-	  if ( tok2.size() < 2 ) Helper::halt( "bad format for alias=main|second,main2=second2" );
+	  if ( tok2.size() < 2 ) Helper::halt( "bad format for alias=main|second,main2|second2" );
 	  for (int j=1; j<tok2.size(); j++)
 	    aliases[ tok2[0] ].insert( tok2[j] );
 	}
     }
 
   // channel replacements : i.e. if feature has C4_M1, but we want to use C3_M2 and *not* C4_M1 (i.e. not as an 'equivalent' channel)
+  replacements.clear();
+  replacements_rmap.clear();
   if ( param.has( "replace" ) )
     {
       if ( param.empty( "replace" ) )

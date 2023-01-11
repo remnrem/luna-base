@@ -2653,12 +2653,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   if ( find( "SleepStage" ) != NULL ) return false; 
 
   
-  //
-  // Is a prefix specified? 
-  //
-
-  bool has_prefix = globals::sleep_stage_prefix != "" ;
-
+  
   //
   // Use default annotation labels, if not otherwise specified
   // 
@@ -2668,8 +2663,11 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   std::map<std::string,annot_t*>::const_iterator ii = annots.begin();
   while ( ii != annots.end() )
     {
-
-      const std::string & s = has_prefix ? globals::sleep_stage_prefix + "_" + ii->first : ii->first;
+      
+      const std::string & s = ii->first;
+      
+      // this function takes care of any prefix specified via ss-prefix
+      // i.e.   if prefix is 'p' than 'pN1' will match to 'N1' etc
       
       sleep_stage_t ss = globals::stage( s );
       
@@ -2704,7 +2702,6 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   if ( v_rem.size() == 0 ) v_rem.push_back( drem );
   if ( v_light.size() == 0 ) v_light.push_back( dlight );
   if ( v_other.size() == 0 ) v_other.push_back( dother );
-  
 
   //
   // find annotations, allowing a comma-delimited list
@@ -2720,7 +2717,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   
   for (int a=0;a<v_n2.size();a++)
     n2s.push_back( find( v_n2[a] ) );
-
+  
   for (int a=0;a<v_n3.size();a++)
     n3s.push_back( find( v_n3[a] ) );
 
@@ -4324,9 +4321,14 @@ uint64_t annotation_set_t::first_in_interval( const std::vector<std::string> & r
 }
 
 
-std::set<uint64_t> annotation_set_t::starts( const std::vector<std::string> & requested ) const
+std::set<uint64_t> annotation_set_t::starts( const std::vector<std::string> & requested , uint64_t dur ) const
 {
 
+  // get start points from these requested epochs;
+  // but add in extra start points for each 'dur' period within that annotation
+  // i.e. for epoch-alignment, this handles the case of annotations that are >1 multiples
+  // of the epoch size (e.g. 90s REM)  and adds in possible starts at 0, 30, 60 s
+  
   std::set<uint64_t> sts;
   
   for (int a=0; a < requested.size(); a++)
@@ -4338,10 +4340,27 @@ std::set<uint64_t> annotation_set_t::starts( const std::vector<std::string> & re
       annot_map_t::const_iterator ii = annot->interval_events.begin();
       while ( ii != annot->interval_events.end() )
 	{
-	  sts.insert( ii->first.interval.start );
+
+	  if ( dur == 0 )
+	    sts.insert( ii->first.interval.start );
+	  else
+	    {
+	      	  
+	      uint64_t pos = ii->first.interval.start ;
+	      uint64_t end = ii->first.interval.stop ;
+	      while ( 1 )
+		{
+		  if ( pos + dur <= end )
+		    {
+		      sts.insert( pos );
+		      pos += dur;
+		    }
+		  else break;
+		}
+	    }
 	  ++ii;
 	}
-    }  
+    }
   return sts;
 }
 

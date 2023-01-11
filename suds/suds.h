@@ -372,11 +372,11 @@ struct suds_indiv_t {
 
   
   //
-  // write to an .annot
+  // add (internally) as an annotation
   //
-
-  void write_annots( const std::string & folder , const std::string & aname ,
-		     const Eigen::MatrixXd & , const std::vector<std::string> & , int , edf_t & );
+  
+  void add_annots( const Eigen::MatrixXd & , const std::vector<std::string> & , int , edf_t & );
+		   
   
   //
   // output obs vs prd kappas (5 and 3 level)

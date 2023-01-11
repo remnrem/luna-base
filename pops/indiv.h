@@ -1,4 +1,4 @@
-
+\
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -90,6 +90,11 @@ struct pops_indiv_t {
   void combine( std::vector<pops_sol_t> & sols ,
 		int method ,
 		double min_conf );
+
+  void add_annots( edf_t & , const std::string & prefix = "p" );
+
+  // track
+  edf_t * pedf;
   
   // trainer/target?
   bool trainer;
@@ -99,6 +104,9 @@ struct pops_indiv_t {
   
   // number of epochs
   int ne;
+
+  // total number of epochs
+  int ne_total;
   
   // level 1 features
   Eigen::MatrixXd X1;

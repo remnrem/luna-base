@@ -359,7 +359,8 @@ struct timeline_t
   }
 
   interval_t epoch( const int e ) const
-  { 
+  {
+    if ( e < 0 || e >= epochs.size() ) return interval_t(0LLU,0LLU);
     return epochs[e]; 
   }
  

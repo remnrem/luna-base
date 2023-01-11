@@ -290,6 +290,9 @@ struct globals
     
   // function to bail to if needed
   static void (*bail_function) ( const std::string & msg );
+
+  // rediret logger?
+  static void (*logger_function) ( const std::string & msg ); 
   
   // in CGI mode, set this to T
   static bool silent;
