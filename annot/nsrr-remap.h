@@ -34,6 +34,9 @@ struct nsrr_t {
   // set up
   static void init();
 
+  // turn default NSRR annot remap on/off
+  static bool do_nsrr_remap;
+  
   // do mapping
   static std::string remap( const std::string & ); 
   

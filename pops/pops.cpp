@@ -70,7 +70,7 @@ extern writer_t writer;
 
 //pops_opt_t pops_t::opt;
 lgbm_t pops_t::lgbm;
-bool pops_t::lgbm_model_loaded = false;
+std::string pops_t::lgbm_model_loaded = "";
 pops_specs_t pops_t::specs;
 
 std::map<std::string,double> pops_t::range_mean;
@@ -864,11 +864,11 @@ void pops_t::fit_model( const std::string & modelfile ,
 
 // void pops_t::load_model( param_t & param )
 // {
-//   if ( ! lgbm_model_loaded )
+//   if ( ! lgbm_model_loaded != param.requires( "model" ) )
 //     {
 //       lgbm.load_config( param.requires( "config" ) );
 //       lgbm.load_model( param.requires( "model" ) );
-//       lgbm_model_loaded = true;  
+//       lgbm_model_loaded = param.requires( "model" );
 //     }
 // }
 

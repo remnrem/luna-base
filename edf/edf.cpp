@@ -606,7 +606,6 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   
   for (int s=0;s<ns_all;s++)
     {
-      
       // signal label, trim leading/trailing spaces
       std::string l = Helper::trim( edf_t::get_string( &p , 16 ) );
 
@@ -616,9 +615,16 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	l = Helper::search_replace( l , ' ' , globals::space_replacement );
 
       // global sanitization of channel labels?
+      // but, if allowing spaces, then make these exempt
+      // if either 'sanitize_everything' then retrim w/ underscore
       if ( globals::sanitize_everything && ! annotation )
-	l = Helper::sanitize( l );
-	
+	{
+	  if ( globals::replace_channel_spaces )
+	    l = Helper::trim( Helper::sanitize( l ) , '_' ) ;
+	  else // allow spaces in a sanitized version still
+	    l = Helper::trim( Helper::sanitize( l , ' ' ) , '_' ) ;
+	}
+
       // make all data-channels upper case?
       if ( globals::uppercase_channels && ! annotation )
 	l = Helper::toupper( l );

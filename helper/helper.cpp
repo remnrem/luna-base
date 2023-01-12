@@ -452,8 +452,8 @@ std::string Helper::trim( const std::string & s , const char c , const char d )
 {
   int first_nonspace = 0;
   int last_nonspace = s.size()-1;
-  for (int i=0;i<s.size();i++) if ( s[i] == c || s[i] == d ) ++first_nonspace; else break;
-  for (int i=s.size()-1;i!=0;i--) if ( s[i] == c || s[i] == d ) --last_nonspace; else break;  
+  for (int i=0;i<s.size();i++) { if ( s[i] == c || s[i] == d ) ++first_nonspace; else break; }
+  for (int i=s.size()-1;i!=0;i--) { if ( s[i] == c || s[i] == d ) --last_nonspace; else break; }
   if ( first_nonspace > last_nonspace ) return "";
   return s.substr( first_nonspace , last_nonspace - first_nonspace  + 1 );
 }

@@ -4231,12 +4231,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  // NSRR remapping
+  // NSRR remapping (off by default)
   if ( Helper::iequals( tok0 , "nsrr-remap" ) )
     {
-      // clear pre-populated NSRR remapping
-      if ( ! Helper::yesno( tok1 ) )
-	nsrr_t::clear();
+      nsrr_t::do_nsrr_remap = Helper::yesno( tok1 ) ;
+      //clear pre-populated NSRR remapping
+      //if ( ! Helper::yesno( tok1 ) )
+      //nsrr_t::clear();
       return;
     }
   

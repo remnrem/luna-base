@@ -733,7 +733,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  std::string orig_name = Helper::unquote( Helper::trim( tok[0] ) ) ;
 	  
-	  // want to keep '/' symbol here though...
+	  // want to keep ':' symbol here though...
 	  if ( globals::sanitize_everything )
 	    orig_name = Helper::sanitize( orig_name , globals::class_inst_delimiter );
 	  
