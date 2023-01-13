@@ -790,6 +790,8 @@ struct annotation_set_t
   
   annot_t * from_EDF( edf_t & edf , edfz_t * edfz = NULL );
   
+  int remap( const std::vector<std::string> & files , bool );
+  
   void clear() ;
   
   void clear( const std::string & name )

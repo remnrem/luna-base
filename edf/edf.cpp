@@ -660,6 +660,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       label_all[ uc_l ] = s ;
       
     }
+
   
   // for each signal, does it match?
   // (and if so, change this to "standard" form)
@@ -693,7 +694,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	  if ( globals::skip_edf_annots && continuous )
 	    include = false;
 	}
-
+      
       //
       // add this channel in 
       //
@@ -742,11 +743,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   for (int s=0;s<ns_all;s++)
     {
       if ( channels.find(s) != channels.end() ) 
-	{
-
-	  phys_dimension.push_back( Helper::trim( edf_t::get_string( &p , 8 ) ) );
-
-	}
+	phys_dimension.push_back( Helper::trim( edf_t::get_string( &p , 8 ) ) );
       else
 	edf_t::skip( &p , 8 );
     }
@@ -801,6 +798,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   for (int s=0;s<ns_all;s++)
     {
       int x = edf_t::get_int( &p , 8 );
+
+      if ( x == 0 )
+	logger << "  *** warning, " << s << " has SR of 0 and should be dropped\n";
+      
       if ( channels.find(s) != channels.end() )
 	n_samples.push_back( x );      
       n_samples_all.push_back( x );
@@ -844,7 +845,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       offset.push_back( ( physical_max[s] / bv ) - digital_max[s] ) ;
     }  
   
-
+  
   // clean up buffer
   delete [] p0 ;
 

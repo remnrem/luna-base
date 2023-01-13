@@ -31,57 +31,56 @@ std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
 std::map<std::string,std::string> nsrr_t::pmap;
 
 // by default, no remapping (nsrr-remap=T turns on)
-bool nsrr_t::do_nsrr_remap = false;
+bool nsrr_t::do_nsrr_remap = true;
 
 // annot list acts as an annot white list
 bool nsrr_t::whitelist = false;
 bool nsrr_t::unmapped = false;
 
 std::set<std::string> nsrr_t::edf_class;
+bool nsrr_t::all_edf_class = false;
 
-std::string nsrr_t::remap( const std::string & a )
+std::string nsrr_t::remap( const std::string & s1 )
 {
-
+  
+  // always trim obvious whitespace
+  std::string a0 = Helper::trim( s1 );
+  
+  // swap internal spaces for a different character?
+  std::string a1 = globals::replace_annot_spaces
+    ? Helper::search_replace( a0 , ' ' , globals::space_replacement ) 
+    : a0 ;
+   
+  // santization (but perhaps allowing for spaces?)
+  // and then retrim on sanitized characters
+  if ( globals::sanitize_everything )
+    {
+      if ( globals::replace_annot_spaces )
+	a1 = Helper::trim( Helper::sanitize( a1 ) , '_' ) ;
+      else // allow spaces in a sanitized version still
+	a1 = Helper::trim( Helper::sanitize( a1 , ' ' ) , '_' ) ;
+    }
+  
+  
   //
   // do nothing
   //
-  
+      
   if ( ! do_nsrr_remap )
-    {            
-
-      // always trim obvious whitespace
-      std::string a0 = Helper::trim( a );
-      
-      // swap internal spaces for a different character?
-      std::string a1 = globals::replace_annot_spaces
-	? Helper::search_replace( a0 , ' ' , globals::space_replacement ) 
-	: a0 ;
-      
-      // santization (but perhaps allowing for spaces?)
-      // and then retrim on sanitized characters
-      if ( globals::sanitize_everything )
-        {
-          if ( globals::replace_annot_spaces )
-            a1 = Helper::trim( Helper::sanitize( a1 ) , '_' ) ;
-          else // allow spaces in a sanitized version still
-	    a1 = Helper::trim( Helper::sanitize( a1 , ' ' ) , '_' ) ;
-        }
-
-      // all done
+    {
       return a1;
     }
-
+  
   
   //
   // do remapping
   //
 
-  std::string a_uc;
-  if ( globals::sanitize_everything )
-    a_uc = Helper::sanitize(  Helper::toupper( Helper::unquote( a ) ) );
-  else
-    a_uc = Helper::toupper( Helper::unquote( a ) );
-    
+  
+  std::string a = a1;
+
+  std::string a_uc = Helper::toupper( a );
+
   //
   // found as a primary? ( return preferred case in pmap )
   //
@@ -104,9 +103,13 @@ std::string nsrr_t::remap( const std::string & a )
   
   if ( ! found )
     {
+
       std::string ca = a;
       
       // we may still want to swap spaces
+      // note - this is prob redundant now, as we
+      // will always replace spaces above..
+      
       if ( globals::replace_annot_spaces )
 	ca = Helper::search_replace( ca , ' ' , globals::space_replacement );
       
@@ -274,7 +277,7 @@ void nsrr_t::init()
   // grep ^remap resources/harm.annots | cut -f2 | cut -d"|" -f2- | tr -d '"' > tmp.2  
   // paste tmp.1 tmp.2 | awk -F"\t" ' { printf "add( \"" $1 "\" , \""  $2  "\" ); \n" } '
       
-  add( "arousal" , "Arousal ()" ); 
+add( "arousal" , "Arousal ()" ); 
 add( "arousal" , "Arousal|Arousal ()" ); 
 add( "arousal" , "Arousal|Arousal (Standard)" ); 
 add( "arousal" , "Arousal_(STANDARD)" ); 
@@ -420,6 +423,13 @@ add( "notes" , "Technician Notes" );
 
 void nsrr_t::edf_annot_class( const std::string & s )
 {
+
+  if ( s == "*" )
+    {
+      all_edf_class = true;
+      return;
+    }
+  
   edf_class.clear();
   std::vector<std::string> tok = Helper::parse( s , "," );
   for (int i=0; i<tok.size(); i++)
@@ -428,7 +438,7 @@ void nsrr_t::edf_annot_class( const std::string & s )
 
 bool nsrr_t::as_edf_class(  const std::string & s )
 {
-  return edf_class.find( s ) != edf_class.end() ;
+  return all_edf_class || edf_class.find( s ) != edf_class.end() ;
 }
 
 

@@ -603,9 +603,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  x = Helper::unquote( x );
 	  
-	  // sanitize?
-	  if ( globals::sanitize_everything )
-	    x = Helper::sanitize( x );
+	  // sanitize? [ done in remap now ] 
+	  //	  if ( globals::sanitize_everything )
+	  //  x = Helper::sanitize( x );
 	  
 	  // remap? (and if so, track)
 	  std::string y = nsrr_t::remap( x ) ;
@@ -733,9 +733,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  std::string orig_name = Helper::unquote( Helper::trim( tok[0] ) ) ;
 	  
-	  // want to keep ':' symbol here though...
-	  if ( globals::sanitize_everything )
-	    orig_name = Helper::sanitize( orig_name , globals::class_inst_delimiter );
+	  // by default, '.' is the class.inst delimiter and this is
+	  // not sanitized;  so we can skip this here, as remap() handles
+	  // sanitization (but respects keeping spaces, if requested)
+	  // so, comment out this step below
+	  // want to keep '.' symbol here though... 
+	  // if ( globals::sanitize_everything )
+	  //   orig_name = Helper::sanitize( orig_name , globals::class_inst_delimiter );
 	  
 	  std::string name = nsrr_t::remap( orig_name );
 	  
@@ -917,19 +921,24 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Sanitize class name, but keep '/' and '.' symbol 
 	  //
 	  
-	  std::string aname = globals::sanitize_everything
-	    ? Helper::sanitize( Helper::unquote( tok[0] ) , globals::class_inst_delimiter )
-	    : Helper::unquote( tok[0] );
-	  
+	  // std::string aname = globals::sanitize_everything
+	  //   ? Helper::sanitize( Helper::unquote( tok[0] ) , globals::class_inst_delimiter )
+	  //   : Helper::unquote( tok[0] );
 
+	  std::string aname = Helper::unquote( tok[0] );
+	  
 	  //
-	  // Remap term?
+	  // Remap (and sanitize) term?
 	  //
+	  
+	  std::string tname = nsrr_t::remap( aname );
+	  
+	  if ( tname == "" ) continue;
+	  
+	  if ( tname != aname )
+	    parent_edf.timeline.annotations.aliasing[ tname ] = aname;
 
-	  
-	  aname = nsrr_t::remap( aname );
-	  
-	  if ( aname == "" ) continue;
+	  aname = tname;
 	  
 
 	  //
@@ -4017,15 +4026,21 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
   // by default, this is edf_annot_t and the entries here are added as the instance ID
 
   // however, we can specify that certain EDF annotations are entered as a class
-  //  these will be remapped etc as above
+  //  these will be remapped etc as above;  if edf-annot-class-all=T, then /all/
+  //  EDF+ annotations are added at the class level
   
-  annot_t * a =  edf.timeline.annotations.add( globals::edf_annot_label );
-  
-  a->name = globals::edf_annot_label;
-  a->description = "EDF Annotations";
-  a->file = edf.filename;
-  a->type = globals::A_FLAG_T; 
+  annot_t * a =  NULL;
 
+  // only need edf_annot_t if edf-annot-class-all=F
+  if ( ! nsrr_t::all_edf_class )
+    {
+      edf.timeline.annotations.add( globals::edf_annot_label );
+      a->name = globals::edf_annot_label;
+      a->description = "EDF Annotations";
+      a->file = edf.filename;
+      a->type = globals::A_FLAG_T; 
+    }
+  
   // if we need to expand 0-duration stages
   uint64_t epoch_len = globals::tp_1sec *
     ( edf.timeline.epoch_len_tp_uint64_t() == 0 ?
@@ -4038,6 +4053,10 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
   // but when reading a compressed EDF+, the annotations will
   // already be duplicated in the .idx, and so we can pull
   // directly from that, which is much quicker
+  //
+
+  //
+  // Parse EDFZ (from index)
   //
 
   if ( edfz != NULL )
@@ -4089,12 +4108,19 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	      // get the annotation label
 	      std::string aname = Helper::trim( txt );
 	      
-	      // sanitize?
-	      if ( globals::sanitize_everything )
-		aname = Helper::sanitize( aname );
+	      // // sanitize?
+	      // if ( globals::sanitize_everything )
+	      // 	aname = Helper::sanitize( aname );
 	      
 	      // do any remapping
-	      aname = nsrr_t::remap( aname );
+	      const std::string tname = nsrr_t::remap( aname );
+
+	      // track aliasing?
+	      if ( tname != aname )
+		edf.timeline.annotations.aliasing[ tname ] = aname;	      
+
+	      aname = tname;
+	      
 	      
 	      // fix stage duration (if 0-dur point)?  (unless
 	      // adding ellipsis, i.e. here change points
@@ -4112,7 +4138,6 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	      
 	      // is this a class?
 	      bool edf_class =  nsrr_t::as_edf_class( aname );
-	      // if not, do we ignore? : nsrr_t::only_add_named_EDF_annots 
 	      
 	      if ( aname != "" )
 		{			  
@@ -4195,13 +4220,20 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 		      // get the annotation label
 		      std::string aname = Helper::trim( te.name );
 
-		      // sanitize?
- 		      if ( globals::sanitize_everything )
-			aname = Helper::sanitize( aname );
+		      // sanitize? (done in remap() )
+		      //	      if ( globals::sanitize_everything )
+		      //   aname = Helper::sanitize( aname );
 		      
-		      // do any remapping
-		      aname = nsrr_t::remap( aname );
-			
+		      // do any remapping                                                                                                                         
+		      const std::string tname = nsrr_t::remap( aname );
+		      
+		      // track aliasing?                                                                                                                          
+		      if ( tname != aname )
+			edf.timeline.annotations.aliasing[ tname ] = aname;
+		      
+		      aname = tname;
+		      
+		     	      
 		      // fix stage duration (if 0-dur point)?  (unless
 		      // adding ellipsis, i.e. here change points
 		      // might not map to even epochs... 30, 90, 30,
@@ -4376,3 +4408,166 @@ void annotation_set_t::extend( param_t & param )
 
   
 }
+
+
+int annotation_set_t::remap( const std::vector<std::string> & files , bool remap_field )
+{
+
+  int mapped = 0;
+
+  // assume tab-delimited file:
+  //  remap     primary|second|third        [ remap_field == T ]
+  //  OR
+  //  primary  second|third                 [ remap_field == F ]
+
+  std::map<std::string,std::string> old2new;
+  
+  for (int fi=0; fi<files.size(); fi++)
+    {
+      const std::string fname = Helper::expand( files[fi] );
+      
+      if ( ! Helper::fileExists( fname ) )
+	Helper::halt( "could not find " + fname );
+
+      std::ifstream IN1( fname.c_str() , std::ios::in );
+      while ( ! IN1.eof() )
+	{
+	  std::string x;
+	  Helper::safe_getline( IN1 , x );
+          if ( IN1.eof() ) break;
+	  if ( x == "" ) continue;
+	  if ( x[0] == '%' ) continue;
+	  
+	  std::vector<std::string> tok = Helper::parse( x , "\t" );
+
+	  if ( remap_field && ! Helper::iequals( tok[0] , "remap" ) )
+	    continue;
+	  
+	  if ( tok.size() > 2 ) Helper::halt( "bad format: " + x );
+	  if ( remap_field && tok.size() != 2 ) Helper::halt( "bad format: " + x );
+	  
+	  // allow
+	  //   remap    pri|sec|third    [ remap_field == T ] 
+	  //   pri      sec|third
+	  //   pri|sec|third
+	  
+	  std::string tok1 = remap_field ? tok[1] : ( tok.size() == 1 ? tok[0] : tok[0] + "|" + tok[1] ) ; 
+
+	  // swap out spaces?
+	  if ( globals::replace_annot_spaces )
+	    tok1 = Helper::search_replace( tok1 , ' ' , globals::space_replacement );
+
+	  // sanitize?
+	  if ( globals::sanitize_everything )
+	    {
+	      if ( globals::replace_annot_spaces )
+		tok1 = Helper::sanitize( tok1 );
+	      else // allow spaces in a sanitized version still, and keeps | and "
+		tok1 = Helper::sanitize( tok1 , ' ' );
+	    }
+	  
+	  std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "|" );
+	  
+	  if ( tok2.size() < 2 ) Helper::halt( "problem with line: " + x );
+
+	  // trims spaces and underscores
+	  std::string snew = Helper::trim( Helper::unquote( tok2[0] ) , '_' );
+	  for (int j=1; j<tok2.size(); j++)
+	    {
+	      std::string sorig = Helper::trim( Helper::unquote( tok2[j] ) , '_' );	      
+	      old2new[ sorig ] = snew ;
+	    }
+	  
+	}
+    }
+
+  // requires a one-to-one mapping, i.e. cannot merge;  check this quickly here
+
+  std::map<std::string,std::string> target2orig;
+  
+  std::map<std::string,std::string>::const_iterator aa = old2new.begin();
+  while ( aa != old2new.end() )
+    {
+      if ( aa->first == "start_hms" || aa->second == "start_hms" )
+	Helper::halt( "cannot remap to a special annotation term: start_hms" );
+
+      if ( aa->first == "duration_hms" || aa->second == "duration_hms" )
+	Helper::halt( "cannot remap to a special annotation term: duration_hms" );
+
+      if ( aa->first == "duration_sec" || aa->second == "duration_sec" )
+	Helper::halt( "cannot remap to a special annotation term: duration_sec" );
+      
+      if ( aa->first == "epoch_sec" || aa->second == "epoch_sec" )
+	Helper::halt( "cannot remap to a special annotation term: epoch_sec" );
+
+      if ( aa->first == "annot_offset" || aa->second == "annot_offset" )
+	Helper::halt( "cannot remap to a special annotation term: annot_offset" );
+
+      // does the original term actually exist?
+      if ( annots.find( aa->first ) != annots.end() )
+	{
+	  // check that the new term does *not* already exist
+	  if ( annots.find( aa->second ) != annots.end() )
+	    Helper::halt( "cannot map to an existing term: " + aa->first + " " + aa->second );
+
+	  // check that another original has not already pointed to the same new term, ( and exists in the data)
+	  if ( target2orig.find( aa->second ) != target2orig.end() )
+	    Helper::halt( "cannot map multiple existing terms to the same target: "
+			  + aa->first + " and " + target2orig[ aa->second ] + " --> " + aa->second );
+	  
+	  // otherwise, this will be okay to map
+	  target2orig[ aa->second ] = aa->first ; 
+	  
+	}	
+      
+      ++aa;
+    }
+
+
+  // std::map<std::string,annot_t*>::const_iterator aaa = annots.begin();
+  // while ( aaa != annots.end() )
+  //   {
+  //     std::cout << " ACTUAL NAMES [" << aaa->first << "]\n";
+  //     ++aaa;
+  //   }
+
+
+  //
+  // Now do the actual remapping
+  //
+
+  // MAIN:: 
+  //  std::map<std::string,annot_t*> annots;
+  // update :  track alias swaps for this person
+  //    std::map<std::string,std::string> aliasing;
+
+  std::map<std::string,std::string>::const_iterator tt = target2orig.begin();
+  while ( tt != target2orig.end() )
+    {
+      // original : tt->second
+      // new      : tt->first
+
+      logger << "  remapping " << tt->second << " to " << tt->first << "\n";
+      
+      // 1) copy index in pointer map
+      annots[ tt->first ] = annots[  tt->second ];
+
+      // 2) erase old version
+      annots.erase( annots.find(  tt->second ) );
+
+      // 3) update annot_t name
+      annot_t * a = annots[ tt->first ];
+      a->name = tt->first;
+
+      // 4) track in aliasing map [ new -> old ] 
+      //    i.e. so results will show in an ALIASES command
+      aliasing[ tt->first ] = tt->second ;
+      
+      ++mapped;
+      
+      ++tt;
+    }
+  
+  return mapped;
+}
+

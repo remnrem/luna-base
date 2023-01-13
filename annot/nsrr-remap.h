@@ -67,6 +67,7 @@ struct nsrr_t {
   // for EDF+ annotations only: make as class instead of edt_annot_t --> inst.
   static void edf_annot_class( const std::string & s );
   static std::set<std::string> edf_class;
+  static bool all_edf_class;  // make /all/ EDF annotations class level (i.e. no edf_annot )
   static bool as_edf_class( const std::string & s );
   
 };
