@@ -2645,6 +2645,7 @@ bool globals::is_stage_annotation( const std::string & s )
 
 
 bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
+					 const bool force_remake , 
 					 const std::string & a_wake , 
 					 const std::string & a_n1 , 
 					 const std::string & a_n2 , 
@@ -2655,14 +2656,22 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 					 const std::string & a_other )
 {
 
+
+  //
+  // force a remake?
+  //
+  
+  if ( force_remake )
+    clear( "SleepStage" );
+      
   //
   // already made?
   //
   
-  if ( find( "SleepStage" ) != NULL ) return false; 
-
+  if ( find( "SleepStage" ) != NULL )
+    return false; 
   
-  
+   
   //
   // Use default annotation labels, if not otherwise specified
   // 
@@ -2949,9 +2958,13 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   //
   // Create the 'SleepStage' unified annotation (used by HYPNO, STAGE, and POPS)
   //
+
+  // ensure cleared if already exists; if it doesn't this command won't
+  // do anything, so okay
+  clear( "SleepStage" );
   
   annot_t * ss = add( "SleepStage" );
-
+  
   ss->description = "SleepStage";
   
   for ( int i=0; i<vec_stages.size(); i++ )
@@ -4034,7 +4047,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
   // only need edf_annot_t if edf-annot-class-all=F
   if ( ! nsrr_t::all_edf_class )
     {
-      edf.timeline.annotations.add( globals::edf_annot_label );
+      a = edf.timeline.annotations.add( globals::edf_annot_label );
       a->name = globals::edf_annot_label;
       a->description = "EDF Annotations";
       a->file = edf.filename;

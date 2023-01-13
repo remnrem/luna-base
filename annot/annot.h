@@ -850,6 +850,7 @@ struct annotation_set_t
   // other annotations
   
   bool make_sleep_stage( const timeline_t & tl ,
+			 const bool force_remake = false , 
 			 const std::string & a_wake = "" , 
 			 const std::string & a_n1 = "", 
 			 const std::string & a_n2 = "", 

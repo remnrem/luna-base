@@ -3013,7 +3013,8 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   std::string rem    = param.has( "R" )  ? param.value("R")  : "" ;
   std::string lights = param.has( "L" )  ? param.value("L")  : "" ; 
   std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
-
+  bool force_remake  = param.has( "force" );
+  
   std::string eannot = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
   if ( eannot != "" && verbose ) Helper::halt( "cannot use eannot with HYPNO" );
 
@@ -3029,7 +3030,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
     }
   else
     {      
-      edf.timeline.annotations.make_sleep_stage( edf.timeline, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
+      edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
       bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
       if ( ! okay ) return; // i.e. if no valid annotations found
     }
