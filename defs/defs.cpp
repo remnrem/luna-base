@@ -47,7 +47,7 @@ std::vector<std::string> globals::annot_files;
 bool globals::allow_space_delim = false;
 char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
-char globals::class_inst_delimiter = '/';
+char globals::class_inst_delimiter = ':';
 char globals::annot_keyval_delim = '=' ; 
 
 bool globals::sanitize_everything = true;

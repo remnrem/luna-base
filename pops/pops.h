@@ -110,7 +110,7 @@ struct pops_t {
   
   static lgbm_t lgbm;
 
-  static bool lgbm_model_loaded;
+  static std::string lgbm_model_loaded;
   
   static pops_specs_t specs;
 

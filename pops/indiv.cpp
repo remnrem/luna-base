@@ -358,14 +358,14 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  // Load LGBM model if needed
 	  //
 	  
-	  if ( ! pops_t::lgbm_model_loaded )
+	  if ( pops_t::lgbm_model_loaded != model_file )
 	    {
 	      pops_t::lgbm.load_model( model_file );
 	      
 	      // if ( param.has( "config" ) ) 
 	      // 	pops_t::lgbm.load_config( param.value( "config" ) );	  
 	      
-	      pops_t::lgbm_model_loaded = true;
+	      pops_t::lgbm_model_loaded = model_file ;
 	    }
 
 	  

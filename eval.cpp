@@ -976,6 +976,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RECTIFY" ) )      proc_rectify( edf , param(c) );
       else if ( is( c, "REVERSE" ) )      proc_reverse( edf , param(c) );
       else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
+      else if ( is( c, "REMAP" ) )        proc_remap_annots( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
       else if ( is( c, "MINMAX" ) )       proc_minmax( edf , param(c) );
@@ -3012,7 +3013,8 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   std::string rem    = param.has( "R" )  ? param.value("R")  : "" ;
   std::string lights = param.has( "L" )  ? param.value("L")  : "" ; 
   std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
-
+  bool force_remake  = param.has( "force" );
+  
   std::string eannot = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
   if ( eannot != "" && verbose ) Helper::halt( "cannot use eannot with HYPNO" );
 
@@ -3028,7 +3030,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
     }
   else
     {      
-      edf.timeline.annotations.make_sleep_stage( edf.timeline, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
+      edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
       bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
       if ( ! okay ) return; // i.e. if no valid annotations found
     }
@@ -3712,6 +3714,32 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
 }
 
 
+// REMAP
+
+void proc_remap_annots( edf_t & edf , param_t & param )
+{
+  // as if having originally 'remap' command, but apply these
+  // after the fact, i.e. to already loaded/created annots
+
+  if ( ! param.has( "file" ) ) Helper::halt( "requires file argument" );
+  
+  const std::vector<std::string> files = param.strvector( "file" );
+  
+  int remap_field = 0;
+  if ( param.has( "remap-col" ) ) remap_field = 1;
+  else if ( param.has( "optional-remap-col" ) ) remap_field = 2;
+
+  // be default, allow spaces (i.e. for moonlight)
+  const bool remap_spaces = param.has( "allow-spaces" ) ? param.yesno( "allow-spaces" ) : false;
+  const bool remap_verbose = param.has( "verbose" );
+  
+  int mapped = edf.timeline.annotations.remap( files , remap_field , remap_spaces , remap_verbose );
+
+  logger << "  remapped " << mapped << " annotations\n";
+  
+}
+
+
 // CANONICAL
 
 void proc_canonical( edf_t & edf , param_t & param )
@@ -4231,12 +4259,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  // NSRR remapping
+  // NSRR remapping (off by default)
   if ( Helper::iequals( tok0 , "nsrr-remap" ) )
     {
-      // clear pre-populated NSRR remapping
-      if ( ! Helper::yesno( tok1 ) )
+      nsrr_t::do_nsrr_remap = Helper::yesno( tok1 ) ;
+
+      // also clear pre-populated NSRR remapping
+      // to not confuse further attempts to remap
+      if ( ! nsrr_t::do_nsrr_remap )
 	nsrr_t::clear();
+      
       return;
     }
   
@@ -4256,6 +4288,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  else if (  Helper::iequals( tok0 , "edf-annot-class-all" ) )
+    {
+      // equals 'edf-annot-class=*'
+      if ( Helper::yesno( tok1 ) )
+	nsrr_t::edf_annot_class( "*" ); // set all to be read as a class, e.g. for Moonlight
+      return;
+    }
+
+  
   
   // fix delimiter to tab only for .annot
   // default T --> tab-only=F is option to allow spaces  
