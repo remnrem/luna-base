@@ -4423,16 +4423,40 @@ void annotation_set_t::extend( param_t & param )
 }
 
 
-int annotation_set_t::remap( const std::vector<std::string> & files , bool remap_field )
+int annotation_set_t::remap( const std::vector<std::string> & files , int remap_field , bool remap_spaces , bool verbose )
 {
 
+  if ( verbose )
+    {
+      logger << "  REMAP annotations:\n";
+      if ( remap_spaces )  logger << "   - allowing space-delimited & tab-delimited fields\n";
+      else logger << "   - only allowing tab-delimited fields\n";
+      
+      if      ( remap_field == 0 ) logger << "   - assuming no 'remap' column 1 fields\n";
+      else if ( remap_field == 1 ) logger << "   - assuming 'remap' column 1 fields present\n";
+      else if ( remap_field == 2 ) logger << "   - optionally allowing but not requiring 'remap' columns\n";
+    }	
+  
+  // clear all prior 'aliasing' info
+  aliasing.clear();
+  
   int mapped = 0;
 
-  // assume tab-delimited file:
-  //  remap     primary|second|third        [ remap_field == T ]
-  //  OR
+  // remap_field
+  //   0  
   //  primary  second|third                 [ remap_field == F ]
 
+  //   1 
+  //  remap     primary|second|third        [ remap_field == T ]
+
+  //   2 -- moonlight mode
+  //  could be either -- scan first field to determine
+  //  ignore 'remap' and also 'nsrr-remap'
+  
+
+  // if remap_spaces == T , then allow space-delimiters (i.e. assumes that
+  // annots w/ spaces are quoted)
+  
   std::map<std::string,std::string> old2new;
   
   for (int fi=0; fi<files.size(); fi++)
@@ -4451,20 +4475,28 @@ int annotation_set_t::remap( const std::vector<std::string> & files , bool remap
 	  if ( x == "" ) continue;
 	  if ( x[0] == '%' ) continue;
 	  
-	  std::vector<std::string> tok = Helper::parse( x , "\t" );
+	  std::vector<std::string> tok = remap_spaces ? Helper::quoted_parse( x, " \t" ) : Helper::parse( x , "\t" );
 
-	  if ( remap_field && ! Helper::iequals( tok[0] , "remap" ) )
+	  // requires 'remap' field?
+	  if ( remap_field == 1 && ! Helper::iequals( tok[0] , "remap" ) )
 	    continue;
-	  
-	  if ( tok.size() > 2 ) Helper::halt( "bad format: " + x );
-	  if ( remap_field && tok.size() != 2 ) Helper::halt( "bad format: " + x );
+
+	  // skip special term in NSRR annot files
+	  if ( Helper::iequals( tok[0] , "nsrr-remap" ) )
+	    continue;
 	  
 	  // allow
 	  //   remap    pri|sec|third    [ remap_field == T ] 
 	  //   pri      sec|third
 	  //   pri|sec|third
+
+	  bool has_remap = remap_field == 1 || ( remap_field == 2 && Helper::iequals( tok[0] , "remap" )  ) ;
 	  
-	  std::string tok1 = remap_field ? tok[1] : ( tok.size() == 1 ? tok[0] : tok[0] + "|" + tok[1] ) ; 
+	  if ( tok.size() > 2 ) Helper::halt( "bad format: " + x );
+	  
+	  if ( has_remap && tok.size() != 2 ) Helper::halt( "bad format: " + x );
+	  
+	  std::string tok1 = has_remap ? tok[1] : ( tok.size() == 1 ? tok[0] : tok[0] + "|" + tok[1] ) ; 
 
 	  // swap out spaces?
 	  if ( globals::replace_annot_spaces )
@@ -4489,13 +4521,17 @@ int annotation_set_t::remap( const std::vector<std::string> & files , bool remap
 	    {
 	      std::string sorig = Helper::trim( Helper::unquote( tok2[j] ) , '_' );	      
 	      old2new[ sorig ] = snew ;
+	      if ( verbose )
+		logger << "  adding mapping [" << sorig << "] --> [" << snew << "]\n";
 	    }
 	  
 	}
     }
 
+  //
   // requires a one-to-one mapping, i.e. cannot merge;  check this quickly here
-
+  //
+  
   std::map<std::string,std::string> target2orig;
   
   std::map<std::string,std::string>::const_iterator aa = old2new.begin();
@@ -4537,14 +4573,6 @@ int annotation_set_t::remap( const std::vector<std::string> & files , bool remap
     }
 
 
-  // std::map<std::string,annot_t*>::const_iterator aaa = annots.begin();
-  // while ( aaa != annots.end() )
-  //   {
-  //     std::cout << " ACTUAL NAMES [" << aaa->first << "]\n";
-  //     ++aaa;
-  //   }
-
-
   //
   // Now do the actual remapping
   //
@@ -4559,7 +4587,7 @@ int annotation_set_t::remap( const std::vector<std::string> & files , bool remap
     {
       // original : tt->second
       // new      : tt->first
-
+      
       logger << "  remapping " << tt->second << " to " << tt->first << "\n";
       
       // 1) copy index in pointer map

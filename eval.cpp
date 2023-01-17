@@ -3722,12 +3722,18 @@ void proc_remap_annots( edf_t & edf , param_t & param )
   // after the fact, i.e. to already loaded/created annots
 
   if ( ! param.has( "file" ) ) Helper::halt( "requires file argument" );
-
+  
   const std::vector<std::string> files = param.strvector( "file" );
   
-  const bool remap_field = param.has( "remap-col" ) ? param.yesno( "remap-col" ) : true ; 
+  int remap_field = 0;
+  if ( param.has( "remap-col" ) ) remap_field = 1;
+  else if ( param.has( "optional-remap-col" ) ) remap_field = 2;
+
+  // be default, allow spaces (i.e. for moonlight)
+  const bool remap_spaces = param.has( "allow-spaces" ) ? param.yesno( "allow-spaces" ) : false;
+  const bool remap_verbose = param.has( "verbose" );
   
-  int mapped = edf.timeline.annotations.remap( files , remap_field );
+  int mapped = edf.timeline.annotations.remap( files , remap_field , remap_spaces , remap_verbose );
 
   logger << "  remapped " << mapped << " annotations\n";
   
