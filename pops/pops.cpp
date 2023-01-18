@@ -435,14 +435,12 @@ void pops_t::level2( const bool training , const bool quiet )
 	{
 	  const int hwin = spec.narg( "half-window" );
 	  const int fwin = 1 + 2 * hwin;
+	  const double mwin = 0.05;  // taper down to this weight (from 1 at center)
 
-	  // not used
-	  //const double atten = spec.has( "a" ) ? spec.narg( "a" ) : 0.25;
-	  
 	  // these should always match
 	  if ( nfrom != nto )
 	    Helper::halt( "internal error (2) in level2()" );
-
+	  
 	  // need to go person-by-person
 	  for (int j=0; j<nfrom; j++)
 	    {
@@ -451,7 +449,7 @@ void pops_t::level2( const bool training , const bool quiet )
 		{
 		  int fromi = Istart[i];
 		  int sz    = Iend[i] - Istart[i] + 1;
-		  D.segment( fromi , sz ) = eigen_ops::moving_average( D.segment( fromi , sz ) , fwin );
+		  D.segment( fromi , sz ) = eigen_ops::tri_moving_average( D.segment( fromi , sz ) , fwin , mwin );
 		}
 	      X1.col( to_cols[j] ) = D;
 	    }

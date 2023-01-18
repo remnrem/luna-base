@@ -181,6 +181,9 @@ struct pops_specs_t {
   
   // SELECT <blocks>
   std::set<std::string> selected;
+
+  // DROP <vars>
+  std::set<std::string> dropped;
   
   // expanded feature lists
   std::vector<std::string> col_block;

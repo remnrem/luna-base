@@ -3017,7 +3017,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "fir" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
-       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" ) 
+       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" || p == "tri" ) 
     {
 
       int cnt= 0;
@@ -3427,6 +3427,24 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(1);
     }
     
+
+  if ( p == "tri" )
+    {
+      int n = x.size();
+      int h = 7 ;
+      double w = 0.05;
+
+      Eigen::VectorXd Y = eigen_ops::copy_array( x );
+
+      Eigen::VectorXd Y2 = eigen_ops::tri_moving_average( Y , h , w );
+      Eigen::VectorXd Y3 = eigen_ops::moving_average( Y , h );
+
+      for (int i=0; i<n; i++)
+	std::cout << Y[i] << "\t" << Y2[i] << "\t" << Y3[i] << "\n";
+      
+    }
+  
+
   
   if ( p == "fft" )
     {

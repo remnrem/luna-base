@@ -54,6 +54,8 @@ namespace eigen_ops {
 
   Eigen::VectorXd median_filter( const Eigen::VectorXd & x , const int );
 
+  Eigen::VectorXd tri_moving_average( const Eigen::VectorXd & x , int s , double w );
+  
   Eigen::VectorXd moving_average( const Eigen::VectorXd & x , int s );
   
   Eigen::VectorXd unit_scale( const Eigen::VectorXd & x , double xmin , double xmax );
