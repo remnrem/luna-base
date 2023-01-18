@@ -1635,6 +1635,12 @@ void pops_indiv_t::SHAP()
 
 void pops_indiv_t::summarize( pops_sol_t * sol )
 {
+
+  //
+  // note - this may be called in '--eval-stages' context, in which case there is no
+  // atatched EDF.  This only matters for clocktime (hms) outputs below.  But, this
+  // is why we need to test for pedf being NULL or not. 
+  //
   
   std::map<int,double> dur_obs, dur_obs_orig, dur_predf, dur_pred1;
   
@@ -1661,12 +1667,12 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
   // epoch-level output (posteriors & predictions)
   //  
-
-  //logger << "Ne, neT = " << ne << " " << ne_total << " " << e2e.size() << "\n";
-
-  clocktime_t starttime( pedf->header.starttime );
-  bool hms = true;
-  if ( ! starttime.valid )
+  
+  //  logger << "Ne, neT = " << ne << " " << ne_total << " " << e2e.size() << "\n";
+    
+  clocktime_t starttime( pedf ? pedf->header.starttime : "." );
+  bool hms = pedf ? true : false; // if no EDF attached...
+  if ( pedf && ! starttime.valid )
     {
       logger << " ** could not find valid start-time in EDF header **\n";
       hms = false;

@@ -101,6 +101,7 @@ void pops_specs_t::read( const std::string & f )
       // block: <feature> <channel-label> <key=val>
       
       std::vector<std::string> tok = Helper::parse( line , " \t" );
+      if ( tok.size() == 0 ) continue;
       if ( tok.size() < 2 ) Helper::halt( "bad format for line: " + line );
       
       //

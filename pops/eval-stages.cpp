@@ -141,6 +141,9 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   
 {
 
+  // track the EDF
+  pedf = &edf;
+
   pops_opt_t::set_options( param );
 
   logger << "  evaluating external staging in " << file1 << "\n";
@@ -201,6 +204,9 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 void pops_indiv_t::eval_stages() 
 {
   
+  // track that we have no EDF
+  pedf = NULL;
+
   // so that summarize() doesn't look for P[] to be populated
 
   pops_opt_t::eval_mode = true;
