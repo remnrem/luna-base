@@ -252,6 +252,61 @@ Eigen::VectorXd eigen_ops::unit_scale( const Eigen::VectorXd & x )
   return r;
 }
 
+Eigen::VectorXd eigen_ops::tri_moving_average( const Eigen::VectorXd & x , int s , double mw )
+{
+  if ( s == 1 ) return x;
+  const int n = x.size();
+  if ( n == 0 ) return x;
+  if ( s >= n )
+    {
+      std::cerr << "warning: in moving_average(), vector size is less than window size\n";
+      s = n-1;
+      if ( s % 2 == 0 ) --s; // check that it remains odd
+      if ( s < 2 ) return x; // bail out
+    }
+  if ( s % 2 == 0 ) Helper::halt( "require an odd-number for moving average" );
+
+  
+  // move this many forward/backward
+  const int hwin = (s-1)/2;  
+
+  // weights    5 4 3 2 1  0 1 2 3 4 5
+  std::vector<double> w( hwin + 1 );
+  for (int i=0; i<=hwin; i++)
+    w[i] = mw + ( hwin-i )/(double)hwin * ( 1.0 - mw ); 
+
+  
+  // new value
+  Eigen::VectorXd a = Eigen::VectorXd::Zero( n ) ;
+    
+  for (int i=0; i<n; i++)
+    {
+
+      double wgt = w[0];
+      a[ i ] += w[0] * x[ i ];
+
+      // flanking
+      for (int j=1; j<=hwin; j++)
+	{
+	  if ( i - j >= 0 )
+	    {
+	      wgt += w[ j ];
+	      a[ i ] += w[ j ] * x[ i - j ];
+	    }
+	  if ( i + j < n )
+	    {
+	      wgt += w[ j ];
+              a[ i ] += w[ j ] * x[ i + j ];
+	    }
+	}
+
+      // denom
+      a[i] /= wgt;
+    }
+
+  return a;
+
+}
 
 Eigen::VectorXd eigen_ops::moving_average( const Eigen::VectorXd & x , int s )
 {
