@@ -351,9 +351,10 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	  if ( output_features )
 	    {
-	      if ( equivn ) Helper::halt( "cannot specify output-features and equiv together" );
-
+	      //if ( equivn ) Helper::halt( "cannot specify output-features and equiv together" );
+	      
 	      std::vector<std::string> labels = pops_t::specs.select_labels();
+	      
 	      // std::cout << "l " << labels.size() << "\n"
 	      // 		<< X1.rows() << " " << X1.cols() << "\n"
 	      // 		<< E.size() << "\n";
@@ -366,7 +367,10 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 		  
 		  for (int j=0; j<X1.cols(); j++)
                     {
-		      writer.level( labels[j] , "FTR" );
+		      if ( equivn )
+			writer.level( pops_opt_t::equiv_label + ":" + labels[j] , "FTR" );
+		      else
+			writer.level( labels[j] , "FTR" );
 		      writer.value( "X" , X1(i,j) );
 		    }
 		  writer.unlevel( "FTR" );
