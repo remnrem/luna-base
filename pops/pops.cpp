@@ -355,6 +355,11 @@ void pops_t::make_level2_library( param_t & param )
       wgts = param.dblvector( "weights" );
       if ( wgts.size() != pops_opt_t::n_stages )
 	Helper::halt( "expecting " + Helper::int2str( pops_opt_t::n_stages ) + " stage weights" );
+      logger << "  read " << wgts.size() << " weights:";
+      if      ( pops_opt_t::n_stages == 5 ) logger << " W, R, N1, N2, N3 =";
+      else if ( pops_opt_t::n_stages == 3 ) logger << " W, R, NR =";
+      for (int i=0; i<wgts.size(); i++) logger << " " << wgts[i] ;
+      logger << "\n";
     }
   
   lgbm_label_t weights( pops_opt_t::n_stages == 5 ? pops_t::labels5 : pops_t::labels3 , wgts );

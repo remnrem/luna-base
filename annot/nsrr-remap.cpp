@@ -46,6 +46,11 @@ std::string nsrr_t::remap( const std::string & s1 )
 	a1 = Helper::trim( Helper::sanitize( a1 , ' ' ) , '_' ) ;
     }
   
+  //
+  // reduce multiple (internal) spaces or underscores to one
+  //
+  
+  a1 = Helper::squash( Helper::squash( a1 , ' ' ) , '_' );
   
   //
   // do nothing
@@ -55,8 +60,7 @@ std::string nsrr_t::remap( const std::string & s1 )
     {
       return a1;
     }
-  
-  
+    
   //
   // do remapping
   //

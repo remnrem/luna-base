@@ -152,17 +152,9 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       
       const int equivn = pops_opt_t::equivs.size();
 
-      // IGNORE: we allow missing equiv channels -- they are just 
+      // Note: we allow missing equiv channels -- they are just 
       // skipped below
-
-      // check all equivs exist [ to mapping, i.e. skip eq == 0
-      // as that is tested below (but allows for aliases) ] 
-      // for (int eq = 1; eq < equivn; eq++)
-      // 	{
-      // 	  int s = edf.header.signal( pops_opt_t::equivs[eq] );
-      // 	  //if ( s == -1 ) Helper::halt( "could not find " + pops_opt_t::equivs[eq] );
-      // 	}
-
+      
       std::vector<pops_sol_t> sols;
       int eq1 = 0;
       // default combione CONF = 0.0
@@ -185,22 +177,28 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  logger << "\n";	  
 	}
       
-      if ( pops_opt_t::equiv_root != "" )
-	{
-	  
-	  if ( pops_t::specs.chs.find( pops_opt_t::equiv_root ) == pops_t::specs.chs.end() )
-	    {
-	      logger << "  ** equiv channel should be in from this list of 1 or more channels: ";
-	      std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin();
-	      while( ss != pops_t::specs.chs.end() )
+      // all 'originals' in an equiv set must exist in the feature specification (exactly)
+      if ( equivn )
+	{	  
+	  const std::map<std::string,std::string> & em = pops_opt_t::equivs[0];
+	  std::map<std::string,std::string>::const_iterator ee = em.begin();
+	  while ( ee != em.end() )
+	    {	      
+	      const std::string & eroot = ee->first;
+	      if ( pops_t::specs.chs.find( eroot ) == pops_t::specs.chs.end() )
 		{
-		  logger << " " << ss->first ;
-		  ++ss;
+		  logger << "  ** all equiv channel originals should be specified in the feature defs: ";
+		  std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin();
+		  while( ss != pops_t::specs.chs.end() )
+		    {
+		      logger << " " << ss->first ;
+		      ++ss;
+		    }
+		  logger << "\n";
+		  Helper::halt( "could not find root equivalence channel: " + eroot + " (see note above)" );	      
 		}
-	      logger << "\n";
-	      Helper::halt( "could not find root equivalence channel: " + pops_opt_t::equiv_root + " (see note above)" );	      
-	    }
-
+	      ++ee;
+	    } 
 	}
 
       //
@@ -229,31 +227,53 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      // all done?
 	      if ( eq1 == equivn ) break;
 	      
-	      // otherwise, get the next channel
-	      pops_opt_t::equiv_swapin = pops_opt_t::equivs[ eq1 ];
+	      // otherwise, get the next set of channel mappings
+	      // (which includes self mapping at first )
+	      pops_opt_t::equiv_swapins = pops_opt_t::equivs[ eq1 ];
 	      ++eq1;
 	      
-	      // do we have this equiv channel?  if not, just skip
-	      
-	      if ( pops_opt_t::equiv_swapin != pops_opt_t::equiv_root )
+	      // do we have all equiv channels?  if not, just skip
+	      if ( eq1 != 1 ) 
 		{
-		  bool test = edf.header.has_signal( pops_opt_t::equiv_swapin );
-		  if ( ! test ) 
+		  std::map<std::string,std::string>::const_iterator ee = pops_opt_t::equiv_swapins.begin();
+		  bool all_present = true;
+		  while ( ee != pops_opt_t::equiv_swapins.end() )
 		    {
-		      logger << "  ** could not find " << pops_opt_t::equiv_swapin << " ... skipping\n";
+		      bool test = edf.header.has_signal( ee->second );
+		      if ( ! test ) 
+			{
+			  logger << "  ** could not find equivalence channel " 
+				 << ee->second << " (for " << ee->first << ")\n";   
+			  all_present = false;
+			  break;
+			}
+		      ++ee;
+		    }
+		  
+		  if ( ! all_present ) 
+		    {
+		      logger << "  ** could not find all equivalence sets...  skipping\n";
 		      continue;
 		    }
 		}
-	      
-	      // track which channel equivalent we are using
-	      writer.level( pops_opt_t::equiv_swapin , "CHEQ" );
-	      
-	      logger << "  now processing equivalent channel "
-		     << pops_opt_t::equiv_swapin
-		     << " (for " << pops_opt_t::equiv_root << ")\n";
-	      
-	    }
 
+	      // track which channel equivalent set we are using
+	      pops_opt_t::equiv_label = "";
+	      std::map<std::string,std::string>::const_iterator ee = pops_opt_t::equiv_swapins.begin();
+	      while ( ee != pops_opt_t::equiv_swapins.end() )
+		{
+		  if ( ee != pops_opt_t::equiv_swapins.begin() ) 
+		    pops_opt_t::equiv_label  += ";";
+		  pops_opt_t::equiv_label += ee->first + "->" + ee->second;
+		  ++ee;
+		}
+	      
+	      writer.level( pops_opt_t::equiv_label , "CHEQ" );
+	      
+	      logger << "  processing equivalent channel set " << pops_opt_t::equiv_label << "\n";
+		     	      
+	    }
+	
 	  //
 	  // get any staging (this should reset internals too, if repeating)
 	  //
@@ -401,14 +421,13 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  //
 	  
 	  pops_sol_t sol;
-	  
+	
 	  if ( equivn ) 
 	    {
-	      logger << "  Solution mapping " << pops_opt_t::equiv_swapin
-		     << " --> " <<  pops_opt_t::equiv_root << "\n";
+	      logger << "  Solution mapping " << pops_opt_t::equiv_label << "\n";
 	      
 	      summarize( &sol );
-	    
+	      
 	      sols.push_back( sol );
 	    }	 	    
 	  
@@ -709,18 +728,20 @@ void pops_indiv_t::level1( edf_t & edf )
   std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin(); 
   while ( ss != pops_t::specs.chs.end() )
     {
+      
       // primary?
       int slot = edf.header.signal( ss->first , silent_signal_search );
-
+      
       // match on an alias?
       if ( slot == -1 ) 
 	{
-
+	  
 	  const std::set<std::string> & aliases = ss->second.aliases;
-
+	  
 	  std::set<std::string>::const_iterator aa = aliases.begin();
 	  while ( aa != aliases.end() )
 	    {
+	  	      
 	      slot = edf.header.signal( *aa , silent_signal_search );
 	      if ( slot != -1 ) break;
 	      ++aa;
@@ -817,31 +838,34 @@ void pops_indiv_t::level1( edf_t & edf )
 	      int slot1 = -1;
 	      int slot2 = -1;
 	      
-	      if ( pops_opt_t::equiv_root == siglab1 )
+	      std::map<std::string,std::string>::const_iterator equiv = pops_opt_t::equiv_swapins.find( siglab1 );
+	      if ( equiv != pops_opt_t::equiv_swapins.end() )
 		{		      
-		  if ( pops_opt_t::equiv_swapin == siglab1 )
+		  if ( equiv->second == siglab1 ) // self
 		    slot1 = signals(s1);
 		  else 
-		    slot1 = edf.header.signal( pops_opt_t::equiv_swapin );
+		    slot1 = edf.header.signal( equiv->second ); // will be present
 		}
 	      else // no swapping needed
 		slot1 = signals(s1);
 	      
-	      
+	      if ( slot1 == -1 )
+		Helper::halt( "could not find equiv channel " + equiv->second );
+	      	      
 	      // or the second channel has the equivalence?
-	      
-	      if ( pops_opt_t::equiv_root == siglab2 )
+	      equiv =pops_opt_t::equiv_swapins.find( siglab2 );
+	      if (  equiv != pops_opt_t::equiv_swapins.end() )
 		{
-		  if ( pops_opt_t::equiv_swapin == siglab2 )
+		  if ( equiv->second == siglab2 )
 		    slot2 = signals(s2);
 		  else 
-		    slot2 = edf.header.signal( pops_opt_t::equiv_swapin );
+		    slot2 = edf.header.signal( equiv->second );
 		}
 	      else // no swapping needed
 		slot2 = signals(s2);		  
 	      
-	      if ( slot1 == -1 || slot2 == -1 )
-		Helper::halt( "could not find equiv channel " + pops_opt_t::equiv_swapin );
+	      if ( slot2 == -1 )
+		Helper::halt( "could not find equiv channel " + equiv->second );
 	      
 	      // track
 	      cohchs.insert( slot1 );
@@ -946,24 +970,25 @@ void pops_indiv_t::level1( edf_t & edf )
 	  int slot1;
 
 	  // swapping in an equivalent value?
-	  if ( pops_opt_t::equiv_root == siglab )
+	  std::map<std::string,std::string>::const_iterator equiv = pops_opt_t::equiv_swapins.find( siglab );
+	  if ( equiv != pops_opt_t::equiv_swapins.end() )
 	    {
 	      // if swap == self, then use original slot (i.e. this is based
 	      // on FTR file aliases. rather than EDF header aliases... awkward
 	      // but keep for now
 	      
-	      if ( pops_opt_t::equiv_swapin == siglab )
+	      if ( equiv->second == siglab ) // self swap 
 		slot1 = signals(s);
-	      else // do the swap
-		slot1 = edf.header.signal( pops_opt_t::equiv_swapin );
+	      else // else do the swap
+		slot1 = edf.header.signal( equiv->second );
 	    }
 	  else // no swapping needed
-	     slot1 = signals(s);
+	    slot1 = signals(s);
 	  
 	  //	  std::cout << "pops_opt_t::equiv_swapin = " << pops_opt_t::equiv_swapin << " " << slot1 << "\n";
 
 	  if ( slot1 == -1 )
-	    Helper::halt( "could not find equiv channel " + pops_opt_t::equiv_swapin );
+	    Helper::halt( "could not find equiv channel " + equiv->second );
 	  
 	  //
 	  // Get data
@@ -1345,16 +1370,29 @@ void pops_indiv_t::level1( edf_t & edf )
 	   
 	   if ( do_hjorth && ! bad_epoch )
 	     {
-	       double activity = 0 , mobility = 0 , complexity = 0;
-	       MiscMath::hjorth( d , &activity , &mobility , &complexity );
-	       // std::cout << "hj " << d->size() << "\t" 
-	       // 		 << activity << " " << mobility << " " << complexity << "\n";
+
+	       pops_spec_t spec = pops_t::specs.fcmap[ pops_feature_t::POPS_HJORTH ][ siglab ];
+
+	       const bool include_h1 = spec.narg( "h1" ) > 0.5 ;
 	       
-	       // use all 3 parameters (log-scaling H1)
+	       double activity = 0 , mobility = 0 , complexity = 0;
+
+	       MiscMath::hjorth( d , &activity , &mobility , &complexity );
+	       
+	       // use either 2 or 3 parameters (log-scaling H1)
 	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_HJORTH , siglab ) ;
-	       X1( en , cols[0] ) = activity > 0 ? log( activity ) : log( 0.0001 ) ;
-	       X1( en , cols[1] ) = mobility;
-	       X1( en , cols[2] ) = complexity;
+	       
+	       if ( include_h1 ) 
+		 {
+		   X1( en , cols[0] ) = activity > 0 ? log( activity ) : log( 0.0001 ) ;
+		   X1( en , cols[1] ) = mobility;
+		   X1( en , cols[2] ) = complexity;
+		 }
+	       else
+		 {
+		   X1( en , cols[0] ) = mobility;
+                   X1( en , cols[1] ) = complexity;
+		 }	       
 	     }
 
 	   //

@@ -886,10 +886,12 @@ int pops_spec_t::cols( int * t )
       return size;
     }
   
-  // 3 values per channel
+  // 2 or 3 values per channel
+  // (only include H1 is 'h1=1' option set
   if ( ftr == POPS_HJORTH )
     {
-      size = 3;
+      int n = narg( "h1" );
+      size = n > 0.5 ? 3 : 2 ;
       *t += size ;
       return size ;
     }

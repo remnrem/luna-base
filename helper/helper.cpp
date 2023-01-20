@@ -448,6 +448,21 @@ void Helper::ascii7( std::vector<char> * s , char repl )
     if ( (*s)[i] < 32 || (*s)[i] > 126 ) (*s)[i] = repl;  
 }
 
+std::string Helper::squash( const std::string & s , const char c )
+{
+  std::vector<char> t;
+  const int n = s.size();
+  for (int i=0; i<n; i++)
+    {
+      if ( i == 0 ) t.push_back( s[i] );
+      else if ( s[i] != c ) t.push_back( s[i] );
+      else if ( s[i-1] != c ) t.push_back( s[i] );
+    }
+  
+  std::string ret(t.begin(), t.end());
+  return ret;
+}
+
 std::string Helper::trim( const std::string & s , const char c , const char d )
 {
   int first_nonspace = 0;
@@ -1765,5 +1780,6 @@ void Helper::bskip_int( std::ifstream & I , const int n )
   std::vector<double> dummy( n ) ;
   I.read( (char*)( &dummy[0] ), n * sizeof(int) );
 }
+
 
 

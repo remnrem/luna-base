@@ -85,9 +85,9 @@ std::map<std::string,std::set<std::string> > pops_opt_t::aliases;
 std::map<std::string,std::string> pops_opt_t::replacements;
 std::map<std::string,std::string> pops_opt_t::replacements_rmap; // track reverse mapping
 
-std::vector<std::string> pops_opt_t::equivs;
-std::string pops_opt_t::equiv_root;
-std::string pops_opt_t::equiv_swapin;
+std::vector<std::map<std::string,std::string> > pops_opt_t::equivs;
+std::map<std::string,std::string> pops_opt_t::equiv_swapins;
+std::string pops_opt_t::equiv_label;
 
 std::vector<std::string> pops_opt_t::iweights;
 bool pops_opt_t::dump_model_weights;
@@ -208,18 +208,36 @@ void pops_opt_t::set_options( param_t & param )
   aliases.clear();
   if ( param.has( "alias" ) ) 
     {
-      std::vector<std::string> tok = param.strvector( "alias" );
-      // primary|second,primary|secondary
-      for (int i=0; i<tok.size(); i++)
+      
+      // expecting single |, two cols
+      std::vector<std::string> tok = Helper::parse( param.value( "alias" ) , "|" );
+      
+      if ( tok.size() != 2 ) 
+	Helper::halt( "bad format for alias=main,main2,...|second,second2,..." );
+      
+      // primary1,primary2,...|secondary1,secondary2,...
+      // i.e. both sides should have same number of elements
+      std::vector<std::string> pri = Helper::parse( tok[0] , "," );
+      std::vector<std::string> sec = Helper::parse( tok[1] , "," );
+      if ( pri.size() != sec.size() )
+	Helper::halt( "bad format for alias=main,main2,...|second,second2,..." );
+      
+      
+      // but to map multiple aliases, can do =
+      // pri1,pri2|sec1=sec1b=sec1c,sec2
+      // i.e. maps sec1, sec1b and sec1c --> pri
+      //      maps sec2 --> pri2
+      
+      for (int i=0; i<pri.size(); i++)
 	{
-	  std::vector<std::string> tok2 = Helper::parse( tok[i] , "|=" );
-	  if ( tok2.size() < 2 ) Helper::halt( "bad format for alias=main|second,main2|second2" );
-	  for (int j=1; j<tok2.size(); j++)
-	    aliases[ tok2[0] ].insert( tok2[j] );
+	  std::vector<std::string> sec2 = Helper::parse( sec[i] , "=" );
+	  for (int j=0; j<sec2.size(); j++)
+	    aliases[ pri[i] ].insert( sec2[j] );
 	}
     }
-
-  // channel replacements : i.e. if feature has C4_M1, but we want to use C3_M2 and *not* C4_M1 (i.e. not as an 'equivalent' channel)
+  
+  // channel replacements : 
+  // i.e. if feature has C4_M1, but we want to use C3_M2 and *not* C4_M1 (i.e. not as an 'equivalent' channel)
   replacements.clear();
   replacements_rmap.clear();
   if ( param.has( "replace" ) )
@@ -242,29 +260,60 @@ void pops_opt_t::set_options( param_t & param )
   
   // channel equivalents
   //  i.e. actually different channels; map to the preferred term in the model file
-  //  currently, only allow for a single channel to be rotated (i.e. swap in multiple
-  //  equivalent versions, and test for best predictions / consensus)
-  //   e.g. train on C4
-  //     -->    alias  C4 <- C4_M1 C4_A1 etc
-  //     -->    equiv  C4,C3,C1,C3,P4,F3,F4
+  //  we allow for multiple channels to be rotated, but all originals
+  //  must have the same number of alternatives
+  //   e.g.
+  //      equiv=C4,F4|C3,F3|C1,F1|C2,F2
+  
+  //   means default channels (in the .ftr file) are 'C4' and 'F4'
+  //    but three other models will be run (with 'C3' and 'F3', then with
+  //    'C2' and 'F2' etc)
+  //   and the final predictions will be based on the set of four predictions
+
+  //     -->    equiv  C4|C3|C1|C3|P4|F3|F4
   //      i.e. if we have those, then try doing everything with that
 
+  //   if an equivalence channel does not exist, just skip that step (for all)   
+  
   // default:no equivalence channel
-  equiv_root = equiv_swapin = "";
+  equiv_swapins.clear();
   equivs.clear();
-
+  
   if ( param.has( "equiv" ) )
     {
-      std::vector<std::string> chs = param.strvector( "equiv" );
-      if ( chs.size() < 2 )
-	Helper::halt( "equiv requires two or more channels" );
-
-      equiv_root = chs[0];
-
-      // note:: includes self-equiv, i==0
-      for (int i=0; i<chs.size(); i++)
-	equivs.push_back( chs[i] );
+      // expect | delimited equivalence sets
+      std::vector<std::string> eqs = Helper::parse( param.value( "equiv" ) , "|" );
+      if ( eqs.size() < 2 )
+	Helper::halt( "equiv requires two or more sets of channels" );
       
+      // within each |, we expect the same number of channels (comma-delimited)
+      std::vector<std::string> originals = Helper::parse( eqs[0] , "," );
+      const int neq = originals.size();
+      
+      // add 'self' 
+      std::map<std::string,std::string> eq1;
+      for (int k=0; k<neq; k++)
+	eq1[ originals[k] ] = originals[k];
+      equivs.push_back( eq1 );
+      
+      // track the originals (but as a set)
+      //equiv_root = chs[0];
+      
+      // add each equivalence set
+      for (int j=1; j<eqs.size(); j++)
+	{
+	  std::vector<std::string> eq = Helper::parse( eqs[j] , "," );
+	  if ( eq.size() != neq ) 
+	    Helper::halt( "same number of equiv channels must be specified each set:\n" 
+			  + eqs[0] + "\n" + eqs[j] );	  
+
+	  std::map<std::string,std::string> eq1;
+	  for (int k=0; k<neq; k++)
+	    eq1[ originals[k] ] = eq[k];
+	  equivs.push_back( eq1 );
+	  
+	}      
+
     }
 
 }
