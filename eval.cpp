@@ -1067,6 +1067,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );      
       else if ( is( c, "FILTER-DESIGN" )) proc_filter_design( edf, param(c) );
+      else if ( is( c, "MOVING-AVERAGE" )) proc_moving_average( edf, param(c) );
       else if ( is( c, "CWT-DESIGN" ) )   proc_cwt_design( edf , param(c) );
       else if ( is( c, "CWT" ) )          proc_cwt( edf , param(c) );
       else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
@@ -1638,6 +1639,12 @@ void proc_artifacts( edf_t & edf , param_t & param )
 //   //band_pass_filter( edf , param );
 // }
 
+// MOVING-AVERAGE
+
+void proc_moving_average( edf_t & edf , param_t & param )
+{
+  dsptools::movavg( edf , param );  
+}
 
 // FILTER : general FIR
 

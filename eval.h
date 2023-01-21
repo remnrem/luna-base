@@ -345,6 +345,7 @@ void proc_correct( edf_t & , param_t & );
 
 void proc_resample( edf_t & , param_t & );
 void proc_zoh( edf_t & , param_t & );
+void proc_moving_average( edf_t & , param_t & );
 void proc_filter( edf_t & , param_t & );
 void proc_filter_legacy( edf_t & , param_t & );
 void proc_filter_design( edf_t & , param_t & );
