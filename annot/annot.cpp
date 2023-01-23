@@ -4519,7 +4519,8 @@ int annotation_set_t::remap( const std::vector<std::string> & files , int remap_
 	  std::string snew = Helper::trim( Helper::unquote( tok2[0] ) , '_' );
 	  for (int j=1; j<tok2.size(); j++)
 	    {
-	      std::string sorig = Helper::trim( Helper::unquote( tok2[j] ) , '_' );	      
+	      std::string sorig = Helper::trim( Helper::unquote( tok2[j] ) , '_' );
+	      sorig = Helper::squash( Helper::squash( sorig , ' ' ) , '_' );
 	      old2new[ sorig ] = snew ;
 	      if ( verbose )
 		logger << "  adding mapping [" << sorig << "] --> [" << snew << "]\n";
