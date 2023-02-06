@@ -1270,7 +1270,6 @@ void cmddefs_t::init()
   add_var( "POPS", "" , "RECALL" , "Recall" );
   add_var( "POPS", "" , "RECALL3" , "Recall, 3-class" );
   add_var( "POPS", "" , "RECALL_WGT" , "Recall,weighted" );
-
   add_var( "POPS", "" , "SLP_LAT_OBS" , "Observed sleep latency" );
   add_var( "POPS", "" , "SLP_LAT_PRD" , "Predicted sleep latency" );
   add_var( "POPS", "" , "REM_LAT_OBS" , "Observed REM latency" );
@@ -1288,6 +1287,8 @@ void cmddefs_t::init()
   add_var( "POPS" , "E" , "PP_W" , "Posterior probability of wake" );
   add_var( "POPS" , "E" , "PRED", "Predicted stage" );
   add_var( "POPS" , "E" , "PRIOR" , "Observed stage (if known)" );
+  add_var( "POPS" , "E" , "START" , "Start time (hh:mm:ss)" );
+  add_var( "POPS" , "E" , "STOP" , "Stop time (hh:mm:ss)");
   
   add_table( "POPS" , "SS" , "Sleep-stage summaries" );
   add_var( "POPS" , "SS" , "OBS" , "Observed stage duration (for included epochs)");
@@ -1303,7 +1304,9 @@ void cmddefs_t::init()
   add_var( "POPS" , "FTR" , "FINAL" , "Column, if included" );
   add_var( "POPS" , "FTR" , "INC" , "Included?" );
   add_var( "POPS" , "FTR" , "LABEL" , "Feature label" );
+  add_var( "POPS" , "FTR" , "LABEL_ORIG" , "Feature label" );
   add_var( "POPS" , "FTR" , "LEVEL" , "Level (1/2)" );
+  add_var( "POPS" , "FTR" , "ROOT" , "Root label" );
 
   add_table( "POPS" , "ETYPE" , "Error type" );
   add_var( "POPS" , "ETYPE" , "ACC" , "Accuracy" );
@@ -1324,6 +1327,68 @@ void cmddefs_t::init()
   add_var( "POPS" , "PRED,OBS" , "N" , "Count" );
   add_var( "POPS" , "PRED,OBS" , "P" , "Proportion" );
 
+
+  add_table( "POPS" , "CHEQ" , "Channel-equivalent stats" );
+  add_var( "POPS", "CHEQ" , "ACC" , "Accuracy" );
+  add_var( "POPS", "CHEQ" , "ACC3" , "Accuracy for 3-class model" );
+  add_var( "POPS", "CHEQ" , "K" , "Kappa statistic" );
+  add_var( "POPS", "CHEQ" , "K3" , "Kappa for 3-class model" );
+  add_var( "POPS", "CHEQ" , "F1" , "F1 statistic" );
+  add_var( "POPS", "CHEQ" , "F13" , "F1 for 3-class model" );
+  add_var( "POPS", "CHEQ" , "F1_WGT" , "F1 weighted" );
+  add_var( "POPS", "CHEQ" , "CONF" , "Mean confidence (max. posterior)" );
+  add_var( "POPS", "CHEQ" , "MCC" , "Matthews correlation coefficient" );
+  add_var( "POPS", "CHEQ" , "MCC3" , "Matthews correlation coefficient, 3-class" );
+  add_var( "POPS", "CHEQ" , "PREC" , "Precision" );
+  add_var( "POPS", "CHEQ" , "PREC_WGT" , "Precision, weighted" );
+  add_var( "POPS", "CHEQ" , "PREC3" , "Precision, 3-class" );
+  add_var( "POPS", "CHEQ" , "RECALL" , "Recall" );
+  add_var( "POPS", "CHEQ" , "RECALL3" , "Recall, 3-class" );
+  add_var( "POPS", "CHEQ" , "RECALL_WGT" , "Recall,weighted" );
+  add_var( "POPS", "CHEQ" , "REM_LAT_OBS" , "Observed REM latency" );
+  add_var( "POPS", "CHEQ" , "REM_LAT_PRD" , "Predicted REM latency" );
+  add_var( "POPS", "CHEQ" , "SLP_LAT_OBS" , "Observed sleep latency" );
+  add_var( "POPS", "CHEQ" , "SLP_LAT_PRD" , "Predicted sleep latency" );
+  
+  add_table( "POPS" , "E,CHEQ" , "POPS predictions" );
+  add_var( "POPS" , "E,CHEQ" , "FLAG" , "-1/0/1/2 excluded/match/disc5/disc3" );
+  add_var( "POPS" , "E,CHEQ" , "CONF" , "Confidence score" );
+  add_var( "POPS" , "E,CHEQ" , "PP_N1" , "Posterior probability of N1" );
+  add_var( "POPS" , "E,CHEQ" , "PP_N2" , "Posterior probability of N2" );
+  add_var( "POPS" , "E,CHEQ" , "PP_N3" , "Posterior probability of N3" );
+  add_var( "POPS" , "E,CHEQ" , "PP_R" , "Posterior probability of REM" );
+  add_var( "POPS" , "E,CHEQ" , "PP_W" , "Posterior probability of wake" );
+  add_var( "POPS" , "E,CHEQ" , "PRED", "Predicted stage" );
+  add_var( "POPS" , "E,CHEQ" , "PRIOR" , "Observed stage (if known)" );
+  add_var( "POPS" , "E,CHEQ" , "START" , "Start time (hh:mm:ss)" );
+  add_var( "POPS" , "E,CHEQ" , "STOP" , "Stop time (hh:mm:ss)");
+  
+  add_table( "POPS" , "SS,CHEQ" , "Sleep-stage summaries" );
+  add_var( "POPS" , "SS,CHEQ" , "OBS" , "Observed stage duration (for included epochs)");
+  add_var( "POPS" , "SS,CHEQ" , "ORIG" , "Observed stage duration (all epochs)");
+  add_var( "POPS" , "SS,CHEQ" , "PRF" , "Predicted stage duration, weighted" );
+  add_var( "POPS" , "SS,CHEQ" , "PR1" , "Predicted stage duration, based on most likely" );
+  add_var( "POPS" , "SS,CHEQ" , "F1" , "F1 statistic" );
+  add_var( "POPS" , "SS,CHEQ" , "RECALL" , "Recall" );
+  add_var( "POPS" , "SS,CHEQ" , "PREC" , "Precision" );
+
+  add_table( "POPS" , "FTR,CHEQ" , "Feature stats" );
+  add_var( "POPS" , "FTR,CHEQ" , "BAD" , "Number of bad epochs" );
+  add_var( "POPS" , "FTR,CHEQ" , "DROPPED" , "Feature completely dropped" );
+  add_var( "POPS" , "FTR,CHEQ" , "PROP" , "Proportion of bad epochs" );
+
+
+  add_table( "POPS" , "ETYPE,CHEQ" , "Error type" );
+  add_var( "POPS" , "ETYPE,CHEQ" , "ACC" , "Accuracy" );
+  add_var( "POPS" , "ETYPE,CHEQ" , "N" , "Count" );
+
+  add_table( "POPS" , "ETYPE,CHEQ,SS" , "Error type" );
+  add_var( "POPS" , "ETYPE,CHEQ,SS" , "ACC" , "Accuracy" );
+  add_var( "POPS" , "ETYPE,CHEQ,SS" , "N" , "Count" );
+
+  add_table( "POPS" , "PRED,OBS,CHEQ" , "Confusion matrix" );
+  add_var( "POPS" , "PRED,OBS,CHEQ" , "N" , "Count" );
+  add_var( "POPS" , "PRED,OBS,CHEQ" , "P" , "Proportion" );
 
   
   /////////////////////////////////////////////////////////////////////////////////

@@ -288,14 +288,14 @@ void globals::init_defs()
 
   
   //
-  // Automatically remap NSRR annotations; 
-  // if nsrr-remap=0 is subsequently, set, 
-  // we will call nsrr_t::clear() which wipes
-  // all this
+  // Automatically remap stage annotations; 
+  // nb. if annot-remap=F then this is subsequently wiped
+  //     if nssr-remap=T then we also later call nsrr_t::init_nsrr_mappings()
   //
-
+  
   nsrr_t::init();
 
+  
   //
   // --build
   //

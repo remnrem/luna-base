@@ -1865,13 +1865,12 @@ bool edf_record_t::write( FILE * file , const std::vector<int> & ch2slot )
 {
 
   const int ns2 = ch2slot.size();
-  
+
   for (int s2=0; s2 < ns2; s2++)
     {
-
       // get actual from-slot 
       const int s = ch2slot[s2];
-      
+
       const int nsamples = edf->header.n_samples[s];
 
       //
@@ -1879,7 +1878,7 @@ bool edf_record_t::write( FILE * file , const std::vector<int> & ch2slot )
       //
 
       if ( edf->header.is_data_channel(s) )
-	{      
+	{
 	  for (int j=0;j<nsamples;j++)
 	    {	  
 	      char a , b;
@@ -1894,7 +1893,7 @@ bool edf_record_t::write( FILE * file , const std::vector<int> & ch2slot )
       //
       
       if ( edf->header.is_annotation_channel(s) )
-	{      	  	  
+	{
 	  for (int j=0;j< 2*nsamples;j++)
 	    {	  	      
 	      char a = j >= data[s].size() ? '\x00' : data[s][j];	      
@@ -2044,33 +2043,7 @@ bool edf_t::is_actually_discontinuous()
 bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bool always_edfd , const std::vector<int> * p_ch2slot )
 {
 
-  //
-  // By default, ch2slot will be 0,1,2,...,ns-1   i.e. a straight mapping/ordering of all channels
-  //   when writing header and records, we iterate over ch2slot rather than 0..ns-1 however, 
-  //   i.e. to allow scenario where we want a reduced set, or a different ordering
-  //   this is passed in via the `channels` option of WRITE
-  //    where proc_write() will first have checked that all channels actually existed
-  //    and will have mapped to the slot numbers.  Therefore, at this point we can
-  //    always assume that this will be valid
-  //
   
-  std::vector<int> ch2slot;
-
-  // a pre-specified channel list?
-  if ( p_ch2slot != NULL ) 
-    ch2slot = *p_ch2slot;
-  else
-    {
-      // if channels not explicitly specified
-      // just take all, in the order they are already in
-      ch2slot.resize( header.ns );
-      for (int s=0; s<header.ns; s++)
-	ch2slot[s] = s;      
-    }
-  
-  const int ns2 = ch2slot.size();
-
-
   //
   // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is set after any RESTRUCTURE
   // We'll keep this as is here, but for the purpose of WRITE-ing an EDF+ (only), we'll first check 
@@ -2104,7 +2077,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   // Force as standard EDF? 
   //
 
-  if ( write_as_edf || actually_EDF )
+  if ( ( write_as_edf || actually_EDF ) && ! always_edfd ) 
     {
       logger << "  writing as a standard EDF\n";
       set_edf();
@@ -2125,6 +2098,41 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
     {      
       reset_start_time();
     }
+
+
+  
+  //
+  // By default, ch2slot will be 0,1,2,...,ns-1   i.e. a straight mapping/ordering of all channels
+  //   when writing header and records, we iterate over ch2slot rather than 0..ns-1 however, 
+  //   i.e. to allow scenario where we want a reduced set, or a different ordering
+  //   this is passed in via the `channels` option of WRITE
+  //    where proc_write() will first have checked that all channels actually existed
+  //    and will have mapped to the slot numbers.  Therefore, at this point we can
+  //    always assume that this will be valid
+  //
+  
+  std::vector<int> ch2slot;
+
+  // a pre-specified channel list?
+  if ( p_ch2slot != NULL ) 
+    ch2slot = *p_ch2slot;
+  else
+    {
+      // if channels not explicitly specified
+      // just take all, in the order they are already in
+      for (int s=0; s<header.ns; s++)
+	ch2slot.push_back(s);
+    }
+  
+  const int ns2 = ch2slot.size();
+
+  if ( ns2 == 0 )
+    {
+      logger << "  *** no channels to write to a new EDF... bailing\n";
+      return false;
+    }
+  else
+    logger << "  writing " << ns2 << " channels\n";
   
   
   //
@@ -2152,14 +2160,13 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
 
       // write header
       header.write( outfile , ch2slot );
-      
+
       // change back if needed, as subsequent commands after will be happier
       if ( make_EDFC ) set_discontinuous();
 
       int r = timeline.first_record();
       while ( r != -1 ) 
 	{
-	  
 	  // we may need to load this record, before we can write it
 	  if ( ! loaded( r ) )
 	    {
@@ -2169,7 +2176,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
 	    }
 	  
 	  records.find(r)->second.write( outfile , ch2slot );
-
+	  
 	  r = timeline.next_record(r);
 	}
       

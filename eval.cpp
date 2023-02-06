@@ -4266,21 +4266,35 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  // NSRR remapping (off by default)
-  if ( Helper::iequals( tok0 , "nsrr-remap" ) )
-    {
-      nsrr_t::do_nsrr_remap = Helper::yesno( tok1 ) ;
 
-      // also clear pre-populated NSRR remapping
-      // to not confuse further attempts to remap
-      if ( ! nsrr_t::do_nsrr_remap )
+  //          default
+  // stages   Y
+  // others   N
+  // i.e. order of annot-remap=F and nsrr-remap=T will matter
+  
+  // annot-remap: if F, then wipe all (stages + any added NSRR terms)
+  if ( Helper::iequals( tok0 , "annot-remap" ) )
+    {
+      
+      //nsrr_t::do_remap = Helper::yesno( tok1 ) ;
+
+      // clear ALL (stages + others) pre-populated NSRR remapping      
+      if ( !  Helper::yesno( tok1 ) )  
 	nsrr_t::clear();
       
       return;
     }
+
+  // nsrr-remap: if T, add in extra terms (off by default)  
+  if ( Helper::iequals( tok0 , "nsrr-remap" ) )
+    {
+      if ( Helper::yesno( tok1 ) )
+	nsrr_t::init_nsrr_mappings();
+      return;
+    }
   
   // generic annotation re-labelling, same format as 'alias'
-  else if ( Helper::iequals( tok0 , "remap" ) )
+  if ( Helper::iequals( tok0 , "remap" ) )
     {
       nsrr_t::annot_remapping( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
       return;
@@ -4289,50 +4303,40 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // for EDF-annots only, set these to be a class rather than an annotation
   // (and apply any remappings)
   // if annot-whitelist=T then we *only* add EDF Annots if they are named here 
-  else if ( Helper::iequals( tok0 , "edf-annot-class" ) )
+  if ( Helper::iequals( tok0 , "edf-annot-class" ) )
     {
       nsrr_t::edf_annot_class( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
       return;
     }
-
-  else if (  Helper::iequals( tok0 , "edf-annot-class-all" ) )
+  
+  if (  Helper::iequals( tok0 , "edf-annot-class-all" ) )
     {
       // equals 'edf-annot-class=*'
       if ( Helper::yesno( tok1 ) )
 	nsrr_t::edf_annot_class( "*" ); // set all to be read as a class, e.g. for Moonlight
       return;
     }
-
+  
   
   
   // fix delimiter to tab only for .annot
   // default T --> tab-only=F is option to allow spaces  
-  else if ( Helper::iequals( tok0 , "tab-only" ) )
+  if ( Helper::iequals( tok0 , "tab-only" ) )
     {
       globals::allow_space_delim = ! Helper::yesno( tok1 );
       return;
     }
 
-  // default annot folder
-  // else if ( Helper::iequals( tok0 , "annot-folder" ) ||
-  // 	    Helper::iequals( tok0 , "annots-folder" ) ) 
-  //   {
-  //     if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
-  // 	globals::annot_folder = tok1 + globals::folder_delimiter ;
-  //     else
-  // 	globals::annot_folder = tok1;		      
-  //     return;
-  //   }
 
   // if annot INST ID black, add hh:mm:ss
-  else if ( Helper::iequals( tok0 , "inst-hms" ) )
+  if ( Helper::iequals( tok0 , "inst-hms" ) )
     {
       globals::set_annot_inst2hms = Helper::yesno( tok1 );
       return;
     }
 
   // set INST ID to hh:mm:ss, whether it is blank or not
-  else if ( Helper::iequals( tok0 , "force-inst-hms" ) )
+  if ( Helper::iequals( tok0 , "force-inst-hms" ) )
     {
       globals::set_annot_inst2hms_force = Helper::yesno( tok1 );
       return;
@@ -4340,7 +4344,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   // not enforce epoch check for .eannot
   // default = 5 ... (arbitrary, but allow the occassional off-by-one issue)
-  else if ( Helper::iequals( tok0 , "epoch-check" ) )
+  if ( Helper::iequals( tok0 , "epoch-check" ) )
     {
       if ( ! Helper::str2int( tok1 , &globals::enforce_epoch_check ) )
         Helper::halt( "epoch-check requires integer value, e.g. epoch-check=10" );
@@ -4349,7 +4353,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // set default epoch length
-  else if ( Helper::iequals( tok0 , "epoch-len" ) )
+  if ( Helper::iequals( tok0 , "epoch-len" ) )
     {
       if ( ! Helper::str2int( tok1 , &globals::default_epoch_len ) )
 	Helper::halt( "epoch-len requires integer value, e.g. epoch-len=10" );
@@ -4359,15 +4363,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   // additional annot files to add from the command line
   // i.e. so we don't have to edit the sample-list
-  else if ( Helper::iequals( tok0 , "annot-file" ) ||
-	    Helper::iequals( tok0 , "annot-files" ) ||
-	    Helper::iequals( tok0 , "annots-file" ) ||
-	    Helper::iequals( tok0 , "annots-files" ) )
+  if ( Helper::iequals( tok0 , "annot-file" ) ||
+       Helper::iequals( tok0 , "annot-files" ) ||
+       Helper::iequals( tok0 , "annots-file" ) ||
+       Helper::iequals( tok0 , "annots-files" ) )
     {
       globals::annot_files = Helper::parse( tok1 , "," );
       return;
     }
-
+  
   // do not load sample-list annotations
   if ( Helper::iequals( tok0 , "skip-sl-annots" ) )
     {
@@ -4377,7 +4381,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   
 
   // specified annots (only load these)
-  else if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
+  if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
     {
       param_t dummy;     
       dummy.add( "dummy" , globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
@@ -4457,6 +4461,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::txt_table_prepend = tok1;
       return;
     }
+
   if ( Helper::iequals( tok0 , "tt-append" ) ||  Helper::iequals( tok0 , "tt-suffix" ) )
     {
       globals::txt_table_append = tok1;

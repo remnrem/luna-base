@@ -55,21 +55,20 @@ std::string nsrr_t::remap( const std::string & s1 )
   //
   // do nothing
   //
-      
-  if ( ! do_nsrr_remap )
-    {
-      return a1;
-    }
+  // if ( ! do_remap )
+  //   {
+  //     return a1;
+  //   }
     
+
   //
   // do remapping
   //
-
   
   std::string a = a1;
-
+  
   std::string a_uc = Helper::toupper( a );
-
+  
   //
   // found as a primary? ( return preferred case in pmap )
   //
@@ -231,16 +230,106 @@ void nsrr_t::add( const std::string & p , const std::string & a )
   pmap[ Helper::toupper( p2 ) ] = p2;
 }
 
-// clear all existing 
+
+// clear existing NSRR annotations
 void nsrr_t::clear()
 {
   amap.clear();
   bmap.clear();
-  pmap.clear();
+  pmap.clear();  
 }
 
 
 void nsrr_t::init() 
+{
+
+  // just one for now (given remapping of ANNOTS as below) 
+  // ${sleep}
+  
+  cmd_t::vars[ "sleep" ] = "N1,N2,N3,R";
+  
+  add( "N1" , "NREM1" );
+  add( "N1" , "NREM1 sleep" );
+  add( "N1" , "N1 sleep" ); 
+  add( "N1" , "Stage 1 sleep|1" ); 
+  add( "N1" , "Sleep stage N1" ); 
+  add( "N1" , "Stage N1" );
+  add( "N1" , "Stage NREM1" ); 
+  
+  add( "N2" , "NREM2" );
+  add( "N2" , "NREM2 sleep" );
+  add( "N2" , "N2 sleep" );
+  add( "N2" , "Stage 2 sleep|2" ); 
+  add( "N2" , "Sleep stage N2" );
+  add( "N2" , "Stage N2" );
+  add( "N2" , "Stage NREM2" ); 
+  
+  add( "N3" , "NREM3" );
+  add( "N3" , "NREM3 sleep" );
+  add( "N3" , "N3 sleep" ); 
+  add( "N3" , "Stage 3 sleep|3" ); 
+  add( "N3" , "Sleep stage N3" ); 
+  add( "N3" , "Stage N3" );
+  add( "N3" , "Stage NREM3" ); 
+
+  // NNREM4 --> N3
+  add( "N3" , "N4" ); 
+  add( "N3" , "NREM4" );
+  add( "N3" , "NREM4 sleep" );
+  add( "N3" , "N4 sleep" ); 
+  add( "N3" , "Stage 4 sleep|4" ); 
+  add( "N3" , "Sleep stage N4" ); 
+  add( "N3" , "Stage N4" );
+  add( "N3" , "Stage NREM4" ); 
+
+  add( "R" , "REM" );
+  add( "R" , "REM sleep" ); 
+  add( "R" , "REM sleep|5" ); 
+  add( "R" , "Sleep stage R" ); 
+  add( "R" , "Stage R" );
+  add( "R" , "Stage REM" );
+  
+  add( "W" , "Wake" ); 
+  add( "W" , "Wake|0" ); 
+  add( "W" , "Sleep stage W" );
+  add( "W" , "Stage W" );
+  add( "W" , "Stage Wake" );
+  add( "W" , "Wake stage" ); 
+
+  add( "NR" , "Sleep stage N" ); 
+  add( "NR" , "Sleep stage NREM" ); 
+  add( "NR" , "NREM" );
+  add( "NR" , "NREM sleep" );
+  add( "NR" , "NR sleep" ); 
+
+  add( "U" , "Unscored" ); 
+  add( "U" , "Unscored|9" ); 
+
+  add( "?" , "Unknown" ); 
+  add( "?" , "Sleep stage ?" ); 
+  add( "?" , "Stage ?" );
+  
+  add( "M" , "Movement|6" ); 
+
+  add( "L" , "Lights" ); 
+
+  add( "lights_on" , "Lights On" ); 
+  add( "lights_on" , "LightsOn" ); 
+
+  add( "lights_off" , "Lights Off" );
+  add( "lights_off" , "LightsOff" ); 
+    
+  //
+  // EDF+ annotations
+  //   - by default, take sleep stages (remapped) and arousals as class-level vars
+  //   - can be over-ridden with edf-annot-class=X,Y,Z
+  
+  edf_annot_class( "N1,N2,N3,R,W,?,arousal,LM,NR" );
+  
+}
+
+
+void nsrr_t::init_nsrr_mappings() 
 {
   
   //
@@ -248,26 +337,22 @@ void nsrr_t::init()
   // later turned off.  not a problem, as the variables will be overwritten by anything specified on
   // the command line, this will not yet have been parsed
   //
-
-  // just one for now (given remapping of ANNOTS as below) 
-  // ${sleep}
-
-  cmd_t::vars[ "sleep" ] = "N1,N2,N3,R";
-  
-  
+    
   //
   // actual remapping terms
   //
 
   // this should be kept fairly update-to-date w/ the NSRR NAP file harm.annots
   // assuming harm.annots only has one line per row, the following will generate the text below:
+  // but do not include sleep stage terms (i.e. they are added above, separaetly)
   
   // grep ^remap resources/harm.annots | cut -f2 | cut -d"|" -f1  > tmp.1
   // grep ^remap resources/harm.annots | cut -f2 | cut -d"|" -f2- | tr -d '"' > tmp.2  
   // paste tmp.1 tmp.2 | awk -F"\t" ' { printf "add( \"" $1 "\" , \""  $2  "\" ); \n" } '
       
 add( "arousal" , "Arousal ()" ); 
-add( "arousal" , "Arousal|Arousal ()" ); 
+add( "arousal" , "Arousal|Arousal ()" );
+add( "arousal" , "Arousal|Arousal" ); 
 add( "arousal" , "Arousal|Arousal (Standard)" ); 
 add( "arousal" , "Arousal_(STANDARD)" ); 
 add( "arousal" , "Arousal|Arousal_(Arousal)" ); 
@@ -323,38 +408,6 @@ add( "desat" , "SpO2 desaturation" );
 add( "desat" , "SpO2 desaturation|SpO2 desaturation" ); 
 add( "desat" , "SpO2 desaturation|DESAT" ); 
 add( "unsure" , "Unsure|Unsure|Unsure" ); 
-add( "N1" , "NREM1" ); 
-add( "N1" , "Stage 1 sleep|1" ); 
-add( "N1" , "Sleep stage N1" ); 
-add( "N2" , "NREM2" ); 
-add( "N2" , "Stage 2 sleep|2" ); 
-add( "N2" , "Sleep stage N2" ); 
-add( "N3" , "NREM3" ); 
-add( "N3" , "Stage 3 sleep|3" ); 
-add( "N3" , "Sleep stage N3" ); 
-add( "N3" , "N4" ); 
-add( "N3" , "NREM4" ); 
-add( "N3" , "Stage 4 sleep|4" ); 
-add( "N3" , "Sleep stage N4" ); 
-add( "R" , "REM" ); 
-add( "R" , "REM sleep|5" ); 
-add( "R" , "Sleep stage R" ); 
-add( "W" , "Wake" ); 
-add( "W" , "Wake|0" ); 
-add( "W" , "Sleep stage W" ); 
-add( "NR" , "Sleep stage N" ); 
-add( "NR" , "Sleep stage NREM" ); 
-add( "NR" , "NREM" ); 
-add( "U" , "Unscored" ); 
-add( "U" , "Unscored|9" ); 
-add( "?" , "Unknown" ); 
-add( "?" , "Sleep stage ?" ); 
-add( "M" , "Movement|6" ); 
-add( "L" , "Lights" ); 
-add( "lights_on" , "Lights On" ); 
-add( "lights_on" , "LightsOn" ); 
-add( "lights_off" , "LightsOff" ); 
-add( "lights_off" , "Lights Off" ); 
 add( "movement" , "Movement" ); 
 add( "PLM" , "Periodic leg movement" ); 
 add( "PLM" , "Periodic leg movement|PLM" ); 
@@ -399,13 +452,6 @@ add( "notes" , "Technician Notes" );
   
   // END of auto-generated code (from NSRR/NAP harm.annots)
 
-
- //
- // EDF+ annotations
- //   - by default, take sleep stages (remapped) and arousals as class-level vars
- //   - can be over-ridden with edf-annot-class=X,Y,Z
-
- edf_annot_class( "N1,N2,N3,R,W,?,arousal,LM,NR" );
 
 }
 

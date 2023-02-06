@@ -58,8 +58,8 @@ std::map<std::string,std::string> nsrr_t::amap;
 std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
 std::map<std::string,std::string> nsrr_t::pmap;
 
-// by default, no remapping (nsrr-remap=T turns on)
-bool nsrr_t::do_nsrr_remap = true;
+// turn off any remapping
+//bool nsrr_t::do_remap = true;
 
 // annot list acts as an annot white list
 bool nsrr_t::whitelist = false;

@@ -31,12 +31,15 @@
 
 struct nsrr_t { 
 
-  // set up
+  // set up stage mappings 
   static void init();
-
-  // turn default NSRR annot remap on/off
-  static bool do_nsrr_remap;
   
+  // set up all NSRR annot mappings
+  static void init_nsrr_mappings();
+  
+  // indicates that no remapping is to be done)
+  //static bool do_remap;
+    
   // do mapping
   static std::string remap( const std::string & ); 
   
