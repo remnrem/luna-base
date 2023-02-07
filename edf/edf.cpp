@@ -5151,3 +5151,32 @@ void edf_t::set_headers( param_t & param )
   
 }
 
+// int edf_t::read_all()
+// {
+  
+//   for (int r = 0 ; r < header.nr_all; r++)
+//     {	
+//       bool found     = records.find(r) != records.end();
+//       bool retained  = timeline.retained(r);
+//       bool unmasked  = !timeline.masked_record(r);
+      
+//       if ( retained )
+// 	if ( unmasked ) 
+// 	  if ( ! found )
+// 	    {
+// 	      read_records( r, r );
+// 		++rex;
+// 	    }
+//     }
+//   return rex;
+// }
+
+
+void edf_t::update_edf_pointers( edf_t * p )
+{
+  for (int r = 0 ; r < header.nr_all; r++)
+    {
+      bool found = records.find(r) != records.end();
+      records.find(r)->second.edf = p; 
+    }
+}

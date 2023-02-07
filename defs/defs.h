@@ -62,7 +62,8 @@ enum frequency_band_t
     HIGH_SIGMA,
     BETA, 
     GAMMA,
-    TOTAL 
+    TOTAL, 
+    DENOM
   };
 
 enum fft_t 

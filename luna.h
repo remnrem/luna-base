@@ -41,9 +41,7 @@
 #include "helper/mapper.h"
 
 #include "tinyxml/tinyxml.h"
-
 //#include "lwprep/lwprep.h"
-
 #include "tinyxml/xmlreader.h"
 
 #include "stats/Eigen/Dense"
@@ -54,11 +52,9 @@
 #include "stats/nmf.h"
 
 #include "miscmath/miscmath.h"
-
 #include "miscmath/dynam.h"
 
 #include "stats/glm.h"
-
 #include "stats/lda.h"
 #include "stats/qda.h"
 
@@ -66,19 +62,16 @@
 #include "annot/annotate.h"
 
 #include "edf/edf.h"
-
 #include "edf/canonical.h"
-
 #include "edf/slice.h"
-
 #include "edf/sedf.h"
+#include "edf/freezer.h"
 
 #include "timeline/timeline.h"
 
 #include "annot/nsrr-remap.h"
 
 #include "dsp/dsp.h"
-
 #include "dsp/libsamplerate/samplerate.h"
 
 #include "fftw/fftwrap.h"
@@ -86,11 +79,9 @@
 #include "ica/ica.h"
 
 #include "spindles/spindles.h"
-
 #include "spindles/spectral.h"
 
 #include "artifacts/artifacts.h"
-
 #include "artifacts/correct.h"
 
 #include "cwt/cwt.h"

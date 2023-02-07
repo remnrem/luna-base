@@ -27,7 +27,7 @@
 
 extern logger_t logger;
 extern writer_t writer;
-
+extern freezer_t freezer;
 
 //
 // param_t 
@@ -1053,6 +1053,9 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
 
+      else if ( is( c, "FREEZE" ) )       proc_freeze( edf , param(c) );
+      else if ( is( c, "THAW" ) )         proc_thaw( edf , param(c) );
+      
       else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
       else if ( is( c, "ANNOT-MASK" ) )   proc_annot_mask( edf, param(c) );
@@ -2763,6 +2766,19 @@ void proc_epoch_mask( edf_t & edf , param_t & param )
  
   edf.timeline.apply_simple_epoch_mask( vars , onelabel , param.has("if") );  
 
+}
+
+// FREEZE : make a copy of the current (internal) EDF 
+
+void proc_freeze( edf_t & edf , param_t & param )
+{
+  freezer.freeze( param.requires( "tag" ) , edf );  
+}
+
+// THAW : bring back and replace current EDF
+void proc_thaw( edf_t & edf , param_t & param )
+{
+  freezer.thaw( param.requires( "tag" ) , &edf , param.has( "remove" ) );  
 }
 
 // EPOCH-ANNOT : directly apply epoch-level annotations from the command line

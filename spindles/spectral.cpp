@@ -200,6 +200,26 @@ annot_t * spectral_power( edf_t & edf ,
   //
 
   const bool use_nextpow2 = param.has( "pow2" );
+
+
+  //
+  // User defined 'TOTAL' ? (allow change o the fly)
+  //
+
+  if ( param.has( "total" ) )
+    {
+      std::vector<std::string> f = Helper::parse( param.value( "total" ) , ",-" );
+      if ( f.size() != 2 ) Helper::halt( "expecting band=lower,upper" );
+      double f0, f1;
+      if ( ! Helper::str2dbl( f[0] , &f0 ) ) Helper::halt( "expecting numeric for total power range" );
+      if ( ! Helper::str2dbl( f[1] , &f1 ) ) Helper::halt( "expecting numeric for total power range" );
+      if ( f0 >= f1 ) Helper::halt( "expecting band=lower,upper" );
+      if ( f0 < 0 || f1 < 0 ) Helper::halt( "negative frequencies specified" );
+
+      // update
+      logger << "  setting total power (denominator for RELPSD) to " << f0 << " to " << f1 << " Hz\n"; 
+      globals::freq_band[ DENOM ] = freq_range_t( f0 , f1 ) ;
+    }
   
   //
   // Define standard band summaries
@@ -218,7 +238,7 @@ annot_t * spectral_power( edf_t & edf ,
     }
   bands.push_back( BETA );
   bands.push_back( GAMMA );
-  bands.push_back( TOTAL );
+  bands.push_back( DENOM );
 
   //
   // Attach signals
@@ -396,7 +416,7 @@ annot_t * spectral_power( edf_t & edf ,
 	   double this_high_sigma = pwelch.psdsum( HIGH_SIGMA ) ; /// globals::band_width( HIGH_SIGMA );
 	   double this_beta       = pwelch.psdsum( BETA )  ;      /// globals::band_width( BETA );
 	   double this_gamma      = pwelch.psdsum( GAMMA ) ;      /// globals::band_width( GAMMA );]
-	   double this_total      = pwelch.psdsum( TOTAL ) ;      /// globals::band_width( TOTAL );
+	   double this_total      = pwelch.psdsum( DENOM ) ;      /// globals::band_width( DENOM );
 	   
 	   //
 	   // track epoch-level band-power statistics
@@ -409,7 +429,7 @@ annot_t * spectral_power( edf_t & edf ,
 	   track_band[ SIGMA ].push_back( this_sigma );
 	   track_band[ BETA  ].push_back( this_beta );
 	   track_band[ GAMMA ].push_back( this_gamma );
-	   track_band[ TOTAL ].push_back( this_total );
+	   track_band[ DENOM ].push_back( this_total );
 
 	   if ( 0 )
 	     {
@@ -496,7 +516,7 @@ annot_t * spectral_power( edf_t & edf ,
 		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_gamma ) : this_gamma );
 		   
-		   writer.level( globals::band( TOTAL ) , globals::band_strat );
+		   writer.level( globals::band( DENOM ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( this_total ) : this_total );				   
 		   }
@@ -531,7 +551,7 @@ annot_t * spectral_power( edf_t & edf ,
 		   writer.level( globals::band( GAMMA ) , globals::band_strat );
 		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
 		   
-		   writer.level( globals::band( TOTAL ) , globals::band_strat );
+		   writer.level( globals::band( DENOM ) , globals::band_strat );
 		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
 		   
 		   writer.unlevel( globals::band_strat );
@@ -862,7 +882,7 @@ annot_t * spectral_power( edf_t & edf ,
       // mean total power
       //
 
-      double mean_total_power = MiscMath::mean( track_band[ TOTAL ] );
+      double mean_total_power = MiscMath::mean( track_band[ DENOM ] );
       
 
       //

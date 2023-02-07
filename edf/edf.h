@@ -690,6 +690,19 @@ public:
   
   bool restructure();
 
+
+  //
+  // for COPY of edf_ts: read up all records, i.e. make entirely in-memory
+  //  
+  //  int edf_t::read_all();
+
+  //
+  // after copying shallow copy of an edf_t, need to fix things:
+  //
+
+  void update_edf_pointers( edf_t * );
+
+
   
   //
   // extract and realign samples based on a set of annotations

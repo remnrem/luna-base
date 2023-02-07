@@ -27,6 +27,8 @@ globals global;
 
 writer_t writer;
 
+freezer_t freezer;
+
 logger_t logger( "+++ luna" );
 
 std::set<std::string>              cmd_t::commands;
