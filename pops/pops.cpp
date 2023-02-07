@@ -70,7 +70,7 @@ extern writer_t writer;
 
 //pops_opt_t pops_t::opt;
 lgbm_t pops_t::lgbm;
-bool pops_t::lgbm_model_loaded = false;
+std::string pops_t::lgbm_model_loaded = "";
 pops_specs_t pops_t::specs;
 
 std::map<std::string,double> pops_t::range_mean;
@@ -355,6 +355,11 @@ void pops_t::make_level2_library( param_t & param )
       wgts = param.dblvector( "weights" );
       if ( wgts.size() != pops_opt_t::n_stages )
 	Helper::halt( "expecting " + Helper::int2str( pops_opt_t::n_stages ) + " stage weights" );
+      logger << "  read " << wgts.size() << " weights:";
+      if      ( pops_opt_t::n_stages == 5 ) logger << " W, R, N1, N2, N3 =";
+      else if ( pops_opt_t::n_stages == 3 ) logger << " W, R, NR =";
+      for (int i=0; i<wgts.size(); i++) logger << " " << wgts[i] ;
+      logger << "\n";
     }
   
   lgbm_label_t weights( pops_opt_t::n_stages == 5 ? pops_t::labels5 : pops_t::labels3 , wgts );
@@ -435,14 +440,12 @@ void pops_t::level2( const bool training , const bool quiet )
 	{
 	  const int hwin = spec.narg( "half-window" );
 	  const int fwin = 1 + 2 * hwin;
+	  const double mwin = 0.05;  // taper down to this weight (from 1 at center)
 
-	  // not used
-	  //const double atten = spec.has( "a" ) ? spec.narg( "a" ) : 0.25;
-	  
 	  // these should always match
 	  if ( nfrom != nto )
 	    Helper::halt( "internal error (2) in level2()" );
-
+	  
 	  // need to go person-by-person
 	  for (int j=0; j<nfrom; j++)
 	    {
@@ -451,7 +454,7 @@ void pops_t::level2( const bool training , const bool quiet )
 		{
 		  int fromi = Istart[i];
 		  int sz    = Iend[i] - Istart[i] + 1;
-		  D.segment( fromi , sz ) = eigen_ops::moving_average( D.segment( fromi , sz ) , fwin );
+		  D.segment( fromi , sz ) = eigen_ops::tri_moving_average( D.segment( fromi , sz ) , fwin , mwin );
 		}
 	      X1.col( to_cols[j] ) = D;
 	    }
@@ -864,11 +867,11 @@ void pops_t::fit_model( const std::string & modelfile ,
 
 // void pops_t::load_model( param_t & param )
 // {
-//   if ( ! lgbm_model_loaded )
+//   if ( ! lgbm_model_loaded != param.requires( "model" ) )
 //     {
 //       lgbm.load_config( param.requires( "config" ) );
 //       lgbm.load_model( param.requires( "model" ) );
-//       lgbm_model_loaded = true;  
+//       lgbm_model_loaded = param.requires( "model" );
 //     }
 // }
 

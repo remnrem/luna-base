@@ -144,7 +144,7 @@ std::string Helper::sanitize( const std::string & s ,
 {
 
   // nb. does not sanitize comma or pipe or quotes or period
-
+  
   // i.e. and so can be used on expressions that include
   // these operators around labels sig="EEG C3-M2","EEG C4-M1"
   //  --> sig="EEG_C3_M2","EEG_C4_M1"
@@ -448,12 +448,27 @@ void Helper::ascii7( std::vector<char> * s , char repl )
     if ( (*s)[i] < 32 || (*s)[i] > 126 ) (*s)[i] = repl;  
 }
 
+std::string Helper::squash( const std::string & s , const char c )
+{
+  std::vector<char> t;
+  const int n = s.size();
+  for (int i=0; i<n; i++)
+    {
+      if ( i == 0 ) t.push_back( s[i] );
+      else if ( s[i] != c ) t.push_back( s[i] );
+      else if ( s[i-1] != c ) t.push_back( s[i] );
+    }
+  
+  std::string ret(t.begin(), t.end());
+  return ret;
+}
+
 std::string Helper::trim( const std::string & s , const char c , const char d )
 {
   int first_nonspace = 0;
   int last_nonspace = s.size()-1;
-  for (int i=0;i<s.size();i++) if ( s[i] == c || s[i] == d ) ++first_nonspace; else break;
-  for (int i=s.size()-1;i!=0;i--) if ( s[i] == c || s[i] == d ) --last_nonspace; else break;  
+  for (int i=0;i<s.size();i++) { if ( s[i] == c || s[i] == d ) ++first_nonspace; else break; }
+  for (int i=s.size()-1;i!=0;i--) { if ( s[i] == c || s[i] == d ) --last_nonspace; else break; }
   if ( first_nonspace > last_nonspace ) return "";
   return s.substr( first_nonspace , last_nonspace - first_nonspace  + 1 );
 }
@@ -897,7 +912,7 @@ bool Helper::imatch(const std::string& a, const std::string& b , unsigned int mi
 bool Helper::yesno( const std::string & s )
 {
   // 0 no NO n N F f false FALSE 
-  // versus all else 
+  // versus all else  (including empty, i.e. 'var'  --> 'var=T' 
   if ( s.size() == 0 ) return false; // empty == NO
   if ( s[0] == '0' || s[0] == 'n' || s[0] == 'N' || s[0] == 'f' || s[0] == 'F' ) return false;
   return true;
@@ -1765,5 +1780,6 @@ void Helper::bskip_int( std::ifstream & I , const int n )
   std::vector<double> dummy( n ) ;
   I.read( (char*)( &dummy[0] ), n * sizeof(int) );
 }
+
 
 

@@ -976,6 +976,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RECTIFY" ) )      proc_rectify( edf , param(c) );
       else if ( is( c, "REVERSE" ) )      proc_reverse( edf , param(c) );
       else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
+      else if ( is( c, "REMAP" ) )        proc_remap_annots( edf , param(c) );
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
       else if ( is( c, "MINMAX" ) )       proc_minmax( edf , param(c) );
@@ -1069,6 +1070,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );      
       else if ( is( c, "FILTER-DESIGN" )) proc_filter_design( edf, param(c) );
+      else if ( is( c, "MOVING-AVERAGE" )) proc_moving_average( edf, param(c) );
       else if ( is( c, "CWT-DESIGN" ) )   proc_cwt_design( edf , param(c) );
       else if ( is( c, "CWT" ) )          proc_cwt( edf , param(c) );
       else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
@@ -1640,6 +1642,12 @@ void proc_artifacts( edf_t & edf , param_t & param )
 //   //band_pass_filter( edf , param );
 // }
 
+// MOVING-AVERAGE
+
+void proc_moving_average( edf_t & edf , param_t & param )
+{
+  dsptools::movavg( edf , param );  
+}
 
 // FILTER : general FIR
 
@@ -2680,6 +2688,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	  writer.value( "START"    , interval.start_sec() );
 	  writer.value( "MID"      , interval.mid_sec() );
 	  writer.value( "STOP"     , interval.stop_sec() );
+	  writer.value( "TP" , interval.as_tp_string() );
 	  
 	  // original time-points
 	  
@@ -3027,7 +3036,8 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   std::string rem    = param.has( "R" )  ? param.value("R")  : "" ;
   std::string lights = param.has( "L" )  ? param.value("L")  : "" ; 
   std::string misc   = param.has( "?" )  ? param.value("?")  : "" ; 
-
+  bool force_remake  = param.has( "force" );
+  
   std::string eannot = param.has( "eannot" ) ? param.value( "eannot" ) : "" ;
   if ( eannot != "" && verbose ) Helper::halt( "cannot use eannot with HYPNO" );
 
@@ -3043,7 +3053,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
     }
   else
     {      
-      edf.timeline.annotations.make_sleep_stage( edf.timeline, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
+      edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
       bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
       if ( ! okay ) return; // i.e. if no valid annotations found
     }
@@ -3727,6 +3737,32 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
 }
 
 
+// REMAP
+
+void proc_remap_annots( edf_t & edf , param_t & param )
+{
+  // as if having originally 'remap' command, but apply these
+  // after the fact, i.e. to already loaded/created annots
+
+  if ( ! param.has( "file" ) ) Helper::halt( "requires file argument" );
+  
+  const std::vector<std::string> files = param.strvector( "file" );
+  
+  int remap_field = 0;
+  if ( param.has( "remap-col" ) ) remap_field = 1;
+  else if ( param.has( "optional-remap-col" ) ) remap_field = 2;
+
+  // be default, allow spaces (i.e. for moonlight)
+  const bool remap_spaces = param.has( "allow-spaces" ) ? param.yesno( "allow-spaces" ) : false;
+  const bool remap_verbose = param.has( "verbose" );
+  
+  int mapped = edf.timeline.annotations.remap( files , remap_field , remap_spaces , remap_verbose );
+
+  logger << "  remapped " << mapped << " annotations\n";
+  
+}
+
+
 // CANONICAL
 
 void proc_canonical( edf_t & edf , param_t & param )
@@ -4246,17 +4282,35 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  // NSRR remapping
+
+  //          default
+  // stages   Y
+  // others   N
+  // i.e. order of annot-remap=F and nsrr-remap=T will matter
+  
+  // annot-remap: if F, then wipe all (stages + any added NSRR terms)
+  if ( Helper::iequals( tok0 , "annot-remap" ) )
+    {
+      
+      //nsrr_t::do_remap = Helper::yesno( tok1 ) ;
+
+      // clear ALL (stages + others) pre-populated NSRR remapping      
+      if ( !  Helper::yesno( tok1 ) )  
+	nsrr_t::clear();
+      
+      return;
+    }
+
+  // nsrr-remap: if T, add in extra terms (off by default)  
   if ( Helper::iequals( tok0 , "nsrr-remap" ) )
     {
-      // clear pre-populated NSRR remapping
-      if ( ! Helper::yesno( tok1 ) )
-	nsrr_t::clear();
+      if ( Helper::yesno( tok1 ) )
+	nsrr_t::init_nsrr_mappings();
       return;
     }
   
   // generic annotation re-labelling, same format as 'alias'
-  else if ( Helper::iequals( tok0 , "remap" ) )
+  if ( Helper::iequals( tok0 , "remap" ) )
     {
       nsrr_t::annot_remapping( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
       return;
@@ -4265,41 +4319,40 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // for EDF-annots only, set these to be a class rather than an annotation
   // (and apply any remappings)
   // if annot-whitelist=T then we *only* add EDF Annots if they are named here 
-  else if ( Helper::iequals( tok0 , "edf-annot-class" ) )
+  if ( Helper::iequals( tok0 , "edf-annot-class" ) )
     {
       nsrr_t::edf_annot_class( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
       return;
     }
-
+  
+  if (  Helper::iequals( tok0 , "edf-annot-class-all" ) )
+    {
+      // equals 'edf-annot-class=*'
+      if ( Helper::yesno( tok1 ) )
+	nsrr_t::edf_annot_class( "*" ); // set all to be read as a class, e.g. for Moonlight
+      return;
+    }
+  
+  
   
   // fix delimiter to tab only for .annot
   // default T --> tab-only=F is option to allow spaces  
-  else if ( Helper::iequals( tok0 , "tab-only" ) )
+  if ( Helper::iequals( tok0 , "tab-only" ) )
     {
       globals::allow_space_delim = ! Helper::yesno( tok1 );
       return;
     }
 
-  // default annot folder
-  // else if ( Helper::iequals( tok0 , "annot-folder" ) ||
-  // 	    Helper::iequals( tok0 , "annots-folder" ) ) 
-  //   {
-  //     if ( tok1[ tok1.size() - 1 ] != globals::folder_delimiter )
-  // 	globals::annot_folder = tok1 + globals::folder_delimiter ;
-  //     else
-  // 	globals::annot_folder = tok1;		      
-  //     return;
-  //   }
 
   // if annot INST ID black, add hh:mm:ss
-  else if ( Helper::iequals( tok0 , "inst-hms" ) )
+  if ( Helper::iequals( tok0 , "inst-hms" ) )
     {
       globals::set_annot_inst2hms = Helper::yesno( tok1 );
       return;
     }
 
   // set INST ID to hh:mm:ss, whether it is blank or not
-  else if ( Helper::iequals( tok0 , "force-inst-hms" ) )
+  if ( Helper::iequals( tok0 , "force-inst-hms" ) )
     {
       globals::set_annot_inst2hms_force = Helper::yesno( tok1 );
       return;
@@ -4307,7 +4360,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   // not enforce epoch check for .eannot
   // default = 5 ... (arbitrary, but allow the occassional off-by-one issue)
-  else if ( Helper::iequals( tok0 , "epoch-check" ) )
+  if ( Helper::iequals( tok0 , "epoch-check" ) )
     {
       if ( ! Helper::str2int( tok1 , &globals::enforce_epoch_check ) )
         Helper::halt( "epoch-check requires integer value, e.g. epoch-check=10" );
@@ -4316,7 +4369,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // set default epoch length
-  else if ( Helper::iequals( tok0 , "epoch-len" ) )
+  if ( Helper::iequals( tok0 , "epoch-len" ) )
     {
       if ( ! Helper::str2int( tok1 , &globals::default_epoch_len ) )
 	Helper::halt( "epoch-len requires integer value, e.g. epoch-len=10" );
@@ -4326,15 +4379,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   // additional annot files to add from the command line
   // i.e. so we don't have to edit the sample-list
-  else if ( Helper::iequals( tok0 , "annot-file" ) ||
-	    Helper::iequals( tok0 , "annot-files" ) ||
-	    Helper::iequals( tok0 , "annots-file" ) ||
-	    Helper::iequals( tok0 , "annots-files" ) )
+  if ( Helper::iequals( tok0 , "annot-file" ) ||
+       Helper::iequals( tok0 , "annot-files" ) ||
+       Helper::iequals( tok0 , "annots-file" ) ||
+       Helper::iequals( tok0 , "annots-files" ) )
     {
       globals::annot_files = Helper::parse( tok1 , "," );
       return;
     }
-
+  
   // do not load sample-list annotations
   if ( Helper::iequals( tok0 , "skip-sl-annots" ) )
     {
@@ -4344,7 +4397,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   
 
   // specified annots (only load these)
-  else if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
+  if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
     {
       param_t dummy;     
       dummy.add( "dummy" , globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
@@ -4424,6 +4477,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::txt_table_prepend = tok1;
       return;
     }
+
   if ( Helper::iequals( tok0 , "tt-append" ) ||  Helper::iequals( tok0 , "tt-suffix" ) )
     {
       globals::txt_table_append = tok1;

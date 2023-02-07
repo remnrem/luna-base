@@ -47,7 +47,7 @@ std::vector<std::string> globals::annot_files;
 bool globals::allow_space_delim = false;
 char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
-char globals::class_inst_delimiter = '/';
+char globals::class_inst_delimiter = ':';
 char globals::annot_keyval_delim = '=' ; 
 
 bool globals::sanitize_everything = true;
@@ -288,14 +288,14 @@ void globals::init_defs()
 
   
   //
-  // Automatically remap NSRR annotations; 
-  // if nsrr-remap=0 is subsequently, set, 
-  // we will call nsrr_t::clear() which wipes
-  // all this
+  // Automatically remap stage annotations; 
+  // nb. if annot-remap=F then this is subsequently wiped
+  //     if nssr-remap=T then we also later call nsrr_t::init_nsrr_mappings()
   //
-
+  
   nsrr_t::init();
 
+  
   //
   // --build
   //

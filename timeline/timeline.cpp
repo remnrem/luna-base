@@ -698,6 +698,8 @@ int timeline_t::calc_epochs()
       // epochs have to be continuous in clocktime
       // putative start (i.e. start of record)
       uint64_t estart = rec2tp[r];
+
+      //std::cout << " r tp = " << r << "\t" << estart << "\n";
       
       // but, if we are allowing annot offset alignment, we may need to skip ahead a bit? (i.e. will go the 
       // the start of the next valid annot
@@ -705,23 +707,35 @@ int timeline_t::calc_epochs()
       //  align_annots( &estart , &record, start points... set<uint64_t> ) 
       
       std::set<uint64_t> astarts;
-
+      
       if ( annot_alignment )
 	{
-	  astarts = annotations.starts( epoch_align_annots );
-	  logger << "  within each segment, aligning epochs to " << astarts.size() << " annotations (" << epoch_align_str << ")\n";
 	  
-	  // this will advance the estart (tp) and spanning record (r) as needed	  
-	  const bool retcode = align_epochs( &estart , &r , astarts );
+	  astarts = annotations.starts( epoch_align_annots , epoch_length_tp );
+	  
+	  // this function allows for case where annotations are longer than the epoch size... cut into epoch duration
+	  // starts
+	  //     e.g.   0 -  30 
+	  //     60 -- 180
+	  
+	  // if epoch size = 30, implies possible starts of: 0 , 60 , 90 , 120 and 150 
 
+  	  logger << "  within each segment, aligning epochs to " << astarts.size() << " possible starting points from (" << epoch_align_str << ")\n";
+	  
+	  // this will advance the estart (tp) and spanning record (r) as needed
+	  const bool retcode = align_epochs( &estart , &r , astarts );
+	  
+	  // std::cout << " DONE align_epochs() :::  retcode = " << retcode << "\t";
+	  // std::cout << " estart = " << estart << "\n";
+	  
 	  // could not find any of the specified annotations to start alignment
 	  if ( ! retcode ) return 0;
 	  
 	}
-
+      
       // we've now found a start point:: see where it would end (i.e. will it fit in contiguous 
       // time, and figure out which records are spanned)
-
+      
       // for purpose of searching, skip last point
       // i.e. normally intervals are defined as END if 1 past the last point
       uint64_t estop  = estart + epoch_length_tp - 1LLU;
@@ -754,16 +768,17 @@ int timeline_t::calc_epochs()
 
 	  uint64_t rec_start = rec2tp[r];
 	  uint64_t rec_end   = rec2tp_end[r];
-	  
-// 	  std::cout << "dets " << rec_start << " " << rec_end << "\t"
-// 		    << estart << " " << erestart << " " << estop << "\n";
+
+	  // std::cout << "dets " << rec_start << " " << rec_end << "\t"
+ 	  // 	    << estart << " " << erestart << " " << estop << "\n";
 
 	  //
 	  // Will the next epoch potentially come from this record?
 	  //
-	  
+	  //std::cout << " erestart " << erestart << "\n";
 	  if ( erestart >= rec_start && erestart <= rec_end )
 	    {
+	      //std::cout << "  track this is the restarting record\n";
 	      // track this is the restarting record
 	      restart_rec = r;
 	    }
@@ -774,12 +789,14 @@ int timeline_t::calc_epochs()
 	  
 	  if ( estop <= rec_end )
 	    {
+
+	      //std::cout << " ** EPOCH WILL END IN THIS REC\n";
 	      
 	      // add to list of epochs (note: adding +1 when saving interval)
 	      interval_t saved_interval( estart , estop + 1LLU );
 	      epochs.push_back( saved_interval );
 	      
-	      // std::cout << "E " << epochs.size() << " adding " << estart << " -- " << estop + 1LLU << "\n";
+	      //std::cout << "E " << epochs.size() << " adding " << estart << " -- " << estop + 1LLU << "\n";
 	      
 	      // add this last record to the epoch in any case
 	      putative_r2e[ r ].insert( e );
@@ -813,7 +830,7 @@ int timeline_t::calc_epochs()
 	      // clear temporary markers
 	      putative_e2r.clear();
 	      putative_r2e.clear();
-    
+     
 	      // move on to the next epoch
 	      ++e;
 	    
@@ -834,6 +851,7 @@ int timeline_t::calc_epochs()
 
 	      if ( restart_rec == -1 ) 
 		{		  
+		  //std::cout << " setting to -1, assume next E starsts in next R\n";
 		  // we need to jump to the next record
 		  // and no need to check for discontinuity
 		  // as we are starting a new epoch in any case
@@ -865,9 +883,11 @@ int timeline_t::calc_epochs()
 	      //
 	      // Any annot-alignment?
 	      //
-
+	      
 	      if ( annot_alignment )
 		{
+		  // std::cout << " epoch alignment for this next epochs...."
+		  // 	    << " estart r " << estart << "\t" << r << "\n";
 		  // skip ahead?
 		  const bool retcode = align_epochs( &estart , &r , astarts );
 		  if ( ! retcode ) break;		  
@@ -960,7 +980,7 @@ int timeline_t::calc_epochs()
 
   if ( 0 ) 
     {
-      std::cout << "REC 2 E\n";
+      //      std::cout << "REC 2 E\n";
       
       std::map<int,std::set<int> >::const_iterator ii = rec2epoch.begin();
       while ( ii != rec2epoch.end() )
@@ -4599,11 +4619,19 @@ int timeline_t::whole_recording_epoch_dur() {
 
 bool timeline_t::align_epochs( uint64_t * tp , int * rec , const std::set<uint64_t> & annots )
 {
+
+  // std::cout << " tp = " << *tp << "\t"
+  // 	    << " rec = " << *rec << "\t"
+  // 	    << " annots.s() = " << annots.size() << "\n";
   
   std::set<uint64_t>::const_iterator ii = annots.begin();
   while ( ii != annots.end() )
     {
+      //      std::cout << "considering annot = " << *ii << "\n";
+
+      // if this annot starts before the record
       if ( *ii < *tp ) { ++ii; continue; }
+      //std::cout << " setting tp = " << *tp << "\n";
       *tp = *ii;
       break;
     }
@@ -4615,12 +4643,15 @@ bool timeline_t::align_epochs( uint64_t * tp , int * rec , const std::set<uint64
     {
       interval_t reci = record2interval( *rec );
       // unable to find this record
-      if ( reci.start == 0 && reci.stop == 0 ) return false;      
+      if ( reci.start == 0 && reci.stop == 0 )  return false; 
       if ( *tp >= reci.start && *tp <= reci.stop ) return true;
       // advance to the next record and check
+      //std::cout << " advancing rec = " << *rec << "\n";
       (*rec)++;
     }
 
+  //  std::cout << " DONE\n";
+  
   // all done
   return true;
   

@@ -281,6 +281,7 @@ void proc_dereference( edf_t & , param_t & );
 void proc_adjust( edf_t & , param_t & );
 void proc_rerecord( edf_t & edf , param_t & param );
 void proc_canonical( edf_t & edf , param_t & param );
+void proc_remap_annots( edf_t & edf , param_t & param );
 
 void proc_dump( edf_t & , param_t & );
 void proc_dump_mask( edf_t & , param_t & );
@@ -347,6 +348,7 @@ void proc_correct( edf_t & , param_t & );
 
 void proc_resample( edf_t & , param_t & );
 void proc_zoh( edf_t & , param_t & );
+void proc_moving_average( edf_t & , param_t & );
 void proc_filter( edf_t & , param_t & );
 void proc_filter_legacy( edf_t & , param_t & );
 void proc_filter_design( edf_t & , param_t & );

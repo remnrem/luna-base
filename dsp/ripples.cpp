@@ -95,6 +95,7 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
 	Helper::halt( "could not find annotation " + *ee );
       ++ee;
     }
+
   
   //
   // Outputs
@@ -109,6 +110,7 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
   const bool otsu = param.has( "otsu" );
 
   const int otsu_k = otsu ? 100 : -1;
+
   
   //
   // Check samples rates 
@@ -225,6 +227,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 
   ripples.clear();
 
+  
   //
   // Duration (calculate channel specific, but will be common to all)
   //
@@ -254,6 +257,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
       
       const double f1 = flwr + b * fwin ;
       const double f2 = flwr + (b+1) * fwin ;
+
       logger << "  filtering " << f1 << " Hz -- " << f2 << " Hz\n";
       
       std::vector<double> txf =

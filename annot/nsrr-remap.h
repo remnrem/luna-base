@@ -31,9 +31,15 @@
 
 struct nsrr_t { 
 
-  // set up
+  // set up stage mappings 
   static void init();
-
+  
+  // set up all NSRR annot mappings
+  static void init_nsrr_mappings();
+  
+  // indicates that no remapping is to be done)
+  //static bool do_remap;
+    
   // do mapping
   static std::string remap( const std::string & ); 
   
@@ -64,6 +70,7 @@ struct nsrr_t {
   // for EDF+ annotations only: make as class instead of edt_annot_t --> inst.
   static void edf_annot_class( const std::string & s );
   static std::set<std::string> edf_class;
+  static bool all_edf_class;  // make /all/ EDF annotations class level (i.e. no edf_annot )
   static bool as_edf_class( const std::string & s );
   
 };

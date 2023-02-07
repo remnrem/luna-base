@@ -162,18 +162,25 @@ struct lgbm_t {
   //
   // clean-up
   //
-  
-  ~lgbm_t()
+
+  void reset()
   {
     if ( has_booster && LGBM_BoosterFree( booster ) )
       Helper::halt( "problem freeing LGBM booster" );
     
     if ( has_training && LGBM_DatasetFree( training ) )
       Helper::halt( "problem freeing LGBM training data" );
-
+    
     if ( has_validation && LGBM_DatasetFree( validation ) )
       Helper::halt( "problem freeing LGBM validation data" );
 
+    has_booster = has_training = has_validation = false;
+    
+  }
+  
+  ~lgbm_t()
+  {
+    reset();
   }
   
 

@@ -209,6 +209,8 @@ namespace Helper
   std::string trim( const std::string & s , const char c = ' ' , const char d = ' ' );
   std::string format( const std::string & , int indent = 10 , int width = 60, bool no_initial_indent = true );
 
+  std::string squash( const std::string & s , const char c );
+
   
   bool str2dbl(const std::string & , double * ); 
   bool str2int(const std::string & , int * ); 

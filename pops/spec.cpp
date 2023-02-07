@@ -98,9 +98,11 @@ void pops_specs_t::read( const std::string & f )
       // format
       // CH <label1> <label2> ... <sample-rate>
       // SELECT <blocks>
+      // DROP
       // block: <feature> <channel-label> <key=val>
       
       std::vector<std::string> tok = Helper::parse( line , " \t" );
+      if ( tok.size() == 0 ) continue;
       if ( tok.size() < 2 ) Helper::halt( "bad format for line: " + line );
       
       //
@@ -152,14 +154,14 @@ void pops_specs_t::read( const std::string & f )
         }
 
       //
-      // Final SELECT block command
+      // Final SELECT block command(s)
       //
-    
+      
       if ( Helper::toupper( tok[0] ) == "SELECT" )
 	{
 	  // if ( selected.size() > 0 )
 	  //   Helper::halt( "can only use SELECT once" );
-
+	  
 	  for (int s=1; s<tok.size(); s++)
 	    {
 	      std::string selected_block = Helper::toupper( tok[s] ) ;
@@ -170,6 +172,19 @@ void pops_specs_t::read( const std::string & f )
 	  continue;
 	}
             
+
+      //
+      // Optional DROP command(s)
+      //
+      
+      if ( Helper::toupper( tok[0] ) == "DROP" )
+	{	  
+	  // this expects 1+ final  variable names
+	  for (int s=1; s<tok.size(); s++)
+	    dropped.insert(  Helper::toupper( tok[s] ) );
+	  continue;
+	}
+
       
       //
       // Feature specifer: block name
@@ -390,6 +405,7 @@ void pops_specs_t::init()
   specs.clear();
   blocksize.clear();
   selected.clear();
+  dropped.clear();
   col_block.clear();
   col_label.clear();
   col_original_label.clear();
@@ -618,7 +634,8 @@ void pops_specs_t::build_colmap()
   //   level 1 (things actually extracted from the EDF, and saved to the data files)
   //   level 2 (derived metrics calculated on loading (all) trainers, e.g. smoothing, etc)
   //   selected : final set of selected metrics : may be a subset of the above 
-
+  //   dropped  : drop any indiv variables
+  
   //  e.g. eeg: SPEC C3
   //       eog: SPEC LOC
   //       slope: SLOPE C3
@@ -662,19 +679,32 @@ void pops_specs_t::build_colmap()
       
       for (int j=start; j<end; j++)
 	{
+	  // track that this feature mapped to this channel to this X1 col
 	  ftr2ch2col[ ftr ][ ch ].push_back( j );
-	  col_label.push_back( ftrlab + "." + ch + ".V" + Helper::int2str( j - start + 1 ) );
+
+	  // final label
+	  const std::string vlabel = ftrlab + "." + ch + ".V" + Helper::int2str( j - start + 1 );
+
+	  col_label.push_back( vlabel );
 	  
 	  if ( pops_opt_t::replacements_rmap.find( ch ) != pops_opt_t::replacements_rmap.end() )
 	    col_original_label.push_back( ftrlab + "." + pops_opt_t::replacements_rmap[ ch ] + ".V" + Helper::int2str( j - start + 1 ) );
 	  else
 	    col_original_label.push_back( ftrlab + "." + ch + ".V" + Helper::int2str( j - start + 1 ) );
-
+	  
 	  col_root.push_back( ftrlab + "." + ch ); // i.e. channel/block specific
 	  
-	  col_block.push_back( block );
-	  col_select.push_back( selected.find( block ) != selected.end() );
+	  col_block.push_back( block );	  
+
 	  col_level.push_back( level1 ? 1 : 2 );
+
+	  // black selected?
+	  bool is_selected = selected.find( block ) != selected.end() ;
+
+	  // but this variable dropped?
+	  if ( dropped.find( vlabel ) != dropped.end() ) is_selected = false;
+	  
+	  col_select.push_back( is_selected );
 	}
       
     }
@@ -684,10 +714,12 @@ void pops_specs_t::build_colmap()
   //
 
   n = col_block.size();
-  
+
+  // not sure this is needed...
   col_level.resize( n );
   col_select.resize( n );
 
+  
   n1 = 0; // level 1 features
   na = 0; // level 1 + level 2 features (all)
   nf = 0; // final number of selected features
@@ -854,10 +886,12 @@ int pops_spec_t::cols( int * t )
       return size;
     }
   
-  // 3 values per channel
+  // 2 or 3 values per channel
+  // (only include H1 is 'h1=1' option set
   if ( ftr == POPS_HJORTH )
     {
-      size = 3;
+      int n = narg( "h1" );
+      size = n > 0.5 ? 3 : 2 ;
       *t += size ;
       return size ;
     }

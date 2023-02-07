@@ -52,3 +52,21 @@ std::set<std::string>              cmd_t::signallist;
 std::map<std::string,std::string>  cmd_t::label_aliases;
 std::map<std::string,std::vector<std::string> >  cmd_t::primary_alias;
 std::map<std::string,std::string>  cmd_t::primary_upper2orig;
+
+// annotation remapping
+
+// annotation map
+std::map<std::string,std::string> nsrr_t::amap;
+std::map<std::string,std::vector<std::string> > nsrr_t::bmap;
+std::map<std::string,std::string> nsrr_t::pmap;
+
+// turn off any remapping
+//bool nsrr_t::do_remap = true;
+
+// annot list acts as an annot white list
+bool nsrr_t::whitelist = false;
+bool nsrr_t::unmapped = false;
+
+std::set<std::string> nsrr_t::edf_class;
+bool nsrr_t::all_edf_class = false;
+
