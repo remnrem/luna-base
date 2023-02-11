@@ -75,106 +75,59 @@ class cmddefs_t
  public:
   
   cmddefs_t();
-  
+
+#ifdef __clang__
+  void __attribute__((optnone)) init();
+#else
+#ifdef __GNUC__    
+  void __attribute__((optimize(0))) init();
+#else
   void init();
-
+#endif
+#endif
+  
   // domain description
-  void add_domain( const std::string & domain , const std::string & label ,  const std::string & desc )
-  {
-    domain_label[ domain ] = label;
-    domain_desc[ domain ] = desc;
-  }
+  void add_domain( const std::string & domain , const std::string & label ,  const std::string & desc );
 
-  bool is_domain( const std::string & d ) 
-  {
-    return domain_label.find( d ) != domain_label.end();
-  }
+  bool is_domain( const std::string & d ) ;
 
   // command description 
-  void add_cmd( const std::string & domain , const std::string & cmd , const std::string & desc , const bool hide = false )
-  {
-    dcmds[ domain ].insert( cmd );
-    cmds[ cmd ] = desc ; 
-    cdomain[ cmd ] = domain;
-    chide[ cmd ] = hide ;
-  }
+  void add_cmd( const std::string & domain , const std::string & cmd , const std::string & desc , const bool hide = false );
+
 
   // hidden command description 
-  void hide_cmd( const std::string & domain , const std::string & cmd , const std::string & desc )
-  {
-    add_cmd( domain, cmd , desc , true );    
-  }
+  void hide_cmd( const std::string & domain , const std::string & cmd , const std::string & desc );
   
-  bool is_cmd( const std::string & c ) 
-  {
-    return cmds.find( c ) != cmds.end();
-  }
-  
+  bool is_cmd( const std::string & c ) ;
   
   // command URLs , e.g.  zzz.bwh.harvard.edu/luna/ref/
-  void add_url( const std::string & cmd , const std::string & url ) 
-  {
-    if ( cmds.find( cmd ) == cmds.end() ) Helper::halt( cmd + " not registered" );
-    curl[ cmd ] = url;
-  }
+  void add_url( const std::string & cmd , const std::string & url ) ;
 
-  void add_note( const std::string & cmd , const std::string & note ) 
-  {
-    if ( cmds.find( cmd ) == cmds.end() ) Helper::halt( cmd + " not registered" );
-    cnotes[ cmd ] = note;
-  }
+  void add_note( const std::string & cmd , const std::string & note ) ;
 
   // parameters for this command
   void add_param( const std::string & cmd , const std::string & param , 
 		  const std::string & ex ,  // "" if none
   		  const std::string & desc , 
 		  const std::string & requirements = "" ,
-		  const bool hide = false )
-  {
-    pdesc[ cmd ][ param ] = desc;
-    preq[ cmd ][ param ] = requirements;
-    px[ cmd ][ param ] = ex;
-    phide[ cmd ][ param ] = hide;
-  }
-
+		  const bool hide = false );
 
   // hide parameter for this command
   void hide_param( const std::string & cmd , const std::string & param , 
 		   const std::string & ex ,  // "" if none
 		   const std::string & desc , 
-		   const std::string & requirements = "" )
-  {
-    add_param( cmd , param , ex , desc , requirements , true );
-  }
-  
+		   const std::string & requirements = "" );
   
   // output from this command , "CMD" , "F,B,CH,E" , "desc" , is compressed Y/N
-  void add_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false , bool hide = false )
-  {
-    tfac_t tfac( factors );
-    otables[ cmd ][ tfac ] = desc ; 
-    ofacs[ cmd ][ tfac ] = isz ; 
-    ohide[ cmd ][ tfac ] = hide;
-  }
+  void add_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false , bool hide = false );
 
-  void hide_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false )
-  {
-    add_table( cmd , factors , desc , isz , true );
-  }
+  void hide_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false );
 
   // add variable
-  void add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide = false )
-  {
-    tfac_t tfac( factors );
-    ovars[ cmd ][ tfac ][ var ] = desc;
-    vhide[ cmd ][ tfac ][ var ] = hide;
-  }
+  void add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide = false );
 
   // add hidden variable
-  void hide_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc )
-  {
-    add_var( cmd , factors , var , desc , true );
-  }
+  void hide_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc );
   
   
   //
@@ -206,11 +159,11 @@ class cmddefs_t
   // indicate whether table should be compressed or no
   //
 
-  void all_compressed( bool b ) { allz = b; } 
-  bool all_compressed() const { return allz; }
+  void all_compressed( bool b ) ;
+  bool all_compressed() const ;
 
-  void none_compressed( bool b ) { nonez = b; } 
-  bool none_compressed() const { return nonez; }
+  void none_compressed( bool b );
+  bool none_compressed() const ;
 
 
   // allow change after table has been registered  
@@ -232,9 +185,9 @@ class cmddefs_t
   // list factors
   //
   
-  void add_tag( const std::string & tag ) { tags.insert( tag ); } 
-  void clear_tags() { tags.clear(); }
-  bool is_tag( const std::string & tag ) const { return tags.find( tag ) != tags.end(); } 
+  void add_tag( const std::string & tag );
+  void clear_tags();
+  bool is_tag( const std::string & tag ) const ;
   std::set<std::string> variables( const std::string & cmd , const param_t * param , const tfac_t & tfac  );
 
  private:
@@ -293,42 +246,13 @@ class cmddefs_t
   std::map<std::string,std::map<tfac_t,bool> > ohide;  // tables
   std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > > vhide;  // variables
       
-  bool hidden_cmd( const std::string & c ) const
-  {
-    std::map<std::string,bool>::const_iterator cc = chide.find( c );
-    if ( cc == chide.end() ) return false;
-    return cc->second;
-  }
+  bool hidden_cmd( const std::string & c ) const;
   
-  bool hidden_param( const std::string & c , const std::string & p ) const
-  {
-    std::map<std::string,std::map<std::string,bool> >::const_iterator cc = phide.find( c );
-    if ( cc == phide.end() ) return false;
-    std::map<std::string,bool>::const_iterator pp = cc->second.find( p );
-    if ( pp == cc->second.end() ) return false;
-    return pp->second;
-  }
+  bool hidden_param( const std::string & c , const std::string & p ) const;
 
-  bool hidden_table( const std::string & c , const tfac_t & tfac ) const
-  {
-    std::map<std::string,std::map<tfac_t,bool> >::const_iterator cc = ohide.find( c );
-    if ( cc == ohide.end() ) return false;
-    std::map<tfac_t,bool>::const_iterator tt = cc->second.find( tfac );
-    if ( tt == cc->second.end() ) return false;
-    return tt->second;
-  }
+  bool hidden_table( const std::string & c , const tfac_t & tfac ) const;
   
-  bool hidden_var( const std::string & c , const tfac_t & tfac , const std::string & v ) const
-  {
-    std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > >::const_iterator cc = vhide.find( c );
-    if ( cc == vhide.end() ) return false;
-    std::map<tfac_t,std::map<std::string,bool> >::const_iterator tt = cc->second.find( tfac );
-    if ( tt == cc->second.end() ) return false;
-    std::map<std::string,bool>::const_iterator vv = tt->second.find( v );
-    if ( vv == tt->second.end() ) return false;
-    return vv->second;
-  }
-
+  bool hidden_var( const std::string & c , const tfac_t & tfac , const std::string & v ) const;
   
   // all, or no, output should be compressed
   bool allz;
