@@ -178,7 +178,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       const int segment_size = Fs[s] * segment_size_sec;
       const int segment_step = Fs[s] * segment_step_sec;
       const uint64_t delta_tp = globals::tp_1sec / Fs[s] ;
-      
+
       //
       // Get time points (and flags for segments that span discontinuities)
       //  - also, indicate whether all should be computed (at segment/eppch level)
@@ -193,6 +193,11 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       int p = 0;
       int nn = 0;
       int actual = 0;
+
+      // actual segment size (may differ from requested due to sample rates)
+      // here, check against this)
+      const double segment_sec2 = segment_size / (double)Fs[s];
+
       while ( 1 ) {
 	if ( p + segment_size > np ) break;
 	
@@ -202,7 +207,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	
 	start.push_back( start_sec );
 	stop.push_back( stop_sec );
-	disc.push_back( fabs( implied_sec - segment_size_sec ) > 0.0001 );
+	disc.push_back( fabs( implied_sec - segment_sec2 ) > 0.0001 );
 
 	bool okay = true;
 	if ( restrict_start && start_sec < restrict_start_sec ) okay = false;
@@ -210,8 +215,10 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	restrict.push_back( ! okay );
 	if ( okay ) ++actual;
 	++nn;
-	// std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t" << ( fabs( implied_sec - segment_size_sec ) > 0.001 )
-	//  	  << "\trestrict=" << ! okay << "\n";
+	// std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t"
+	// 	  << " sz " << implied_sec << " " << segment_sec2 << " " 
+	// 	  << ( fabs( implied_sec - segment_sec2 ) > 0.001 )
+	//   	  << "\trestrict=" << ! okay << "\n";
 	
 	// next segment
 	p += segment_step;
