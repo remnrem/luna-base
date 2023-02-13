@@ -183,7 +183,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       int p = 0;
       int nn = 0;
       while ( 1 ) {
-	if ( p + segment_size >= np ) break;
+	if ( p + segment_size > np ) break;
 	
 	double start_sec = (*tp)[p] * globals::tp_duration;
 	double stop_sec = ( (*tp)[ p + segment_size - 1 ] + delta_tp ) * globals::tp_duration; // '1past'
@@ -193,7 +193,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	stop.push_back( stop_sec );
 	disc.push_back( fabs( implied_sec - segment_size_sec ) > 0.0001 );
 	++nn;
-	// std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t" << ( fabs( implied_sec - segment_size_sec ) > 0.001 ) << "\n";
+	//std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t" << ( fabs( implied_sec - segment_size_sec ) > 0.001 ) << "\n";
 	
 	// next segment
 	p += segment_step;
@@ -296,7 +296,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  const int nsegs = mtm.espec.size();
 
 	  if ( nsegs != start.size() )
-	    Helper::halt( "internal error in MTM timing" );
+	    Helper::halt( "internal error in MTM timing:" + Helper::int2str( nsegs ) + " vs " + Helper::int2str( (int)start.size() ) );
 	  
 	  if ( epoch_level_output ) 
 	    {
