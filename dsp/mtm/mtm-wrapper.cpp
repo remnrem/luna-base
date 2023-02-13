@@ -159,14 +159,46 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       
       slice_t slice( edf , signals(s) , interval );
       
-      const std::vector<double> * d = slice.pdata();	   
+      const std::vector<double> * d = slice.pdata();
 
+      
       //
       // Step size in sample-points
       //
       
       const int segment_size = Fs[s] * segment_size_sec;
       const int segment_step = Fs[s] * segment_step_sec;
+      const uint64_t delta_tp = globals::tp_1sec / Fs[s] ;
+      
+      //
+      // Get time points (and flags for segments that span discontinuities)
+      //
+
+      const std::vector<uint64_t> * tp = slice.ptimepoints();	   
+      const int np = tp->size();
+      
+      std::vector<double> start, stop;
+      std::vector<bool> disc;
+
+      int p = 0;
+      int nn = 0;
+      while ( 1 ) {
+	if ( p + segment_size >= np ) break;
+	
+	double start_sec = (*tp)[p] * globals::tp_duration;
+	double stop_sec = ( (*tp)[ p + segment_size - 1 ] + delta_tp ) * globals::tp_duration; // '1past'
+	double implied_sec = stop_sec - start_sec;
+	
+	start.push_back( start_sec );
+	stop.push_back( stop_sec );
+	disc.push_back( fabs( implied_sec - segment_size_sec ) > 0.0001 );
+	++nn;
+	// std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t" << ( fabs( implied_sec - segment_size_sec ) > 0.001 ) << "\n";
+	
+	// next segment
+	p += segment_step;
+	
+      }
       
       //
       // call MTM
@@ -262,12 +294,18 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       if ( epoch_level_output || spectral_slope )
 	{
 	  const int nsegs = mtm.espec.size();
+
+	  if ( nsegs != start.size() )
+	    Helper::halt( "internal error in MTM timing" );
 	  
 	  if ( epoch_level_output ) 
 	    {
 	      for ( int j = 0 ; j < nsegs ; j++)
 		{
 		  writer.level( j+1 , "SEG" );	  
+		  writer.value( "START" , start[j] );
+		  writer.value( "STOP" , stop[j] );
+		  writer.value( "DISC" , (int)disc[j] );
 		  
 		  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
 		    {

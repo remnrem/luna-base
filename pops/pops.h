@@ -155,6 +155,14 @@ struct pops_t {
   bool attach_indiv_weights( const std::string & w , bool );
   bool dump_weights();
 
+  void report_counts();
+  
+  //
+  // Sample fixed number of obs per stage
+  //
+
+  void sample_fixed_n();
+  
   //
   // helpers
   //

@@ -97,6 +97,9 @@ struct pops_opt_t {
   static bool dump_model_weights;
   static std::string model_weights_file;
 
+  static bool sample_fixed_n;
+  static std::vector<int> fixed_n;
+  
   // post-SOAP
 
   static bool soap_results;

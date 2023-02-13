@@ -93,6 +93,9 @@ std::vector<std::string> pops_opt_t::iweights;
 bool pops_opt_t::dump_model_weights;
 std::string pops_opt_t::model_weights_file;
 
+bool pops_opt_t::sample_fixed_n;
+std::vector<int> pops_opt_t::fixed_n;
+
 bool pops_opt_t::soap_results;
 double pops_opt_t::soap_threshold;
 int pops_opt_t::soap_nc;
@@ -171,7 +174,7 @@ void pops_opt_t::set_options( param_t & param )
   
   verbose = param.has( "verbose" );
 
-  run_stage_associations = param.has( "stage-assoc" ) ? param.yesno( "stage-assoc" ) : true;
+  run_stage_associations = param.has( "stage-assoc" ) ? param.yesno( "stage-assoc" ) : false ;
   
   epoch_level_SHAP = param.has( "epoch-SHAP" ) || param.has( "SHAP-epoch" ) ;
   
@@ -203,6 +206,14 @@ void pops_opt_t::set_options( param_t & param )
   dump_model_weights = param.has( "dump-weights" );
   model_weights_file = dump_model_weights ? param.value( "dump-weights" ) : "" ; 
 
+  // randomly select exactly N of each class? fix=W,R,N1,N2,N3
+  if ( param.has( "fix" ) )
+    {
+      fixed_n = param.intvector( "fix" );
+      if ( fixed_n.size() != 5 ) Helper::halt( "expecting 5 values for fix=W,R,NR..." );
+      sample_fixed_n = true;
+    }
+  
   // channel aliases
   //  (added when reading spec.) 
   aliases.clear();

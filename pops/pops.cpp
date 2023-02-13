@@ -56,6 +56,7 @@
 
 #include "lgbm/lgbm.h"
 #include "miscmath/miscmath.h"
+#include "miscmath/crandom.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "stats/eigen_ops.h"
@@ -261,24 +262,7 @@ void pops_t::make_level2_library( param_t & param )
   // summarize training and validation dataset counts  
   //
 
-  std::map<int,int> ss_training, ss_valid;
-  for (int i=0; i<nrows_training; i++) 
-    ss_training[S[i]]++;
-  for (int i=nrows_training; i<nrows_validation+nrows_training; i++) 
-    ss_valid[S[i]]++;
-  
-  logger << "  nT=" << Istart.size() - ni_validation << " training individuals, "
-	 << "nV=" << ni_validation << " (of " << holdouts.size() << " listed) validation individuals\n";
-  logger << "  stage epoch counts:\n";
-  std::map<int,int>::const_iterator ii = ss_training.begin();
-  while ( ii != ss_training.end() )
-    {
-      logger << "  " << pops_t::label( (pops_stage_t)ii->first ) << "\t" 
-	     << " train = " << ii->second << "\t"
-	     << " validation = " << ss_valid[ ii->first ] << "\n";
-      ++ii;
-    }
-
+  report_counts();
 
 
   //  
@@ -289,7 +273,20 @@ void pops_t::make_level2_library( param_t & param )
   //
   
   level2( is_trainer );
-  
+
+
+  //
+  // prune trainer rows (atfer level2(), i.e. keeping SVD and smoothing in place
+  // but drop these before adding other weights, etc and fitting the model
+  // only prune trainer rows, not validation rows
+  //
+
+  if ( pops_opt_t::sample_fixed_n )
+    {
+      sample_fixed_n();
+      logger << "  after pruning training epochs:\n";
+      report_counts();
+    }
   
   //
   // states
@@ -493,7 +490,7 @@ void pops_t::level2( const bool training , const bool quiet )
       //
       // DERIV
       //
-
+      
       if ( spec.ftr == POPS_DERIV )
         {
 	  const int hw = spec.narg( "half-window" ) ;
@@ -801,7 +798,7 @@ void pops_t::fit_model( const std::string & modelfile ,
 {
 
   // training   X1.topRows( nrows_training )   -->   S1
-  // validaiton X1.bottomRows( nrows_validation )   --> S2
+  // validation X1.bottomRows( nrows_validation )   --> S2
   
   // split stages 
   std::vector<int> S1 = S;
@@ -826,7 +823,7 @@ void pops_t::fit_model( const std::string & modelfile ,
 
   // apply final weights
   lgbm.apply_weights( lgbm.training , &lgbm.training_weights );
-  
+         
   // validation data?
   if ( nrows_validation ) 
     {
@@ -1229,7 +1226,7 @@ void pops_t::dump_matrix( const std::string & f )
     {
       // epoch label (i.e. stage)
       Z1 << pops_t::label( (pops_stage_t)S[i] );
-      
+
       // epoch features
       for (int j=0; j< X1.cols(); j++)
 	Z1 << "\t" << X1(i,j);
@@ -1364,7 +1361,210 @@ void pops_t::dump_ranges( const std::string & f )
 
 }
 
+void pops_t::report_counts()
+{
+  std::map<int,int> ss_training, ss_valid;
+  for (int i=0; i<nrows_training; i++) 
+    ss_training[S[i]]++;
+  for (int i=nrows_training; i<nrows_validation+nrows_training; i++) 
+    ss_valid[S[i]]++;
+  
+  logger << "  nT=" << Istart.size() - ni_validation << " training individuals, "
+	 << "nV=" << ni_validation << " (of " << holdouts.size() << " listed) validation individuals\n";
+  logger << "  stage epoch counts:\n";
+  std::map<int,int>::const_iterator ii = ss_training.begin();
+  while ( ii != ss_training.end() )
+    {
+      logger << "  " << pops_t::label( (pops_stage_t)ii->first ) << "\t" 
+	     << " train = " << ii->second << "\t"
+	     << " validation = " << ss_valid[ ii->first ] << "\n";
+      ++ii;
+    }
 
+}
+
+void pops_t::sample_fixed_n()
+{  
+
+  // select epochs from trainers to keep
+  std::map<int,std::vector<int> > all;
+  for (int i=0; i<nrows_training; i++)
+    all[ S[i] ].push_back( i );
+  
+  // ensure we have enough of each as requested
+  for (int i=0; i<pops_opt_t::fixed_n.size(); i++)
+    if ( all[i].size() < pops_opt_t::fixed_n[i] )
+      {
+	logger << "  *** requested " << pops_opt_t::fixed_n[i] << " "
+	       << pops_t::label( (pops_stage_t)i ) << " epochs, but only observed " << all[i].size() << "\n" ;
+	Helper::halt( "stopping - change fix=W,R,N1,N2,N3 options and re-run" );
+      }
+
+  // pick the requested subset 
+  std::set<int> inc;
+  int new_trainer_rows = 0;
+  for (int i=0; i<pops_opt_t::fixed_n.size(); i++)
+    {
+      const int nobs = all[i].size();
+      const int nreq = pops_opt_t::fixed_n[i];
+      std::set<int> selected;
+      while ( 1 )
+	{
+	  if ( selected.size() == nreq ) break;
+	  const int idx = CRandom::rand( nobs ) ;
+	  const int r = all[i][idx];
+	  selected.insert( r );
+	  inc.insert( r );
+	}
+      //      logger << "  got " << selected.size() << " stage " << i << "\n";
+      new_trainer_rows += selected.size();
+    }
+  
+  // make new versions of S, X1, E
+  // also I/Iend
+  // keep nrows_validation as neeeded
+  // total n epoch = nrows_training + nrows_validation (stacked top/bottom)
+
+  // std::vector<int> S  stages   
+  // X1                  features   
+  // E                   epoch number
+  // nrows_training	   
+       
+       // I Iend              startstop of each indivi
+       // keep I/Iend abd I as is - i.e. all trainer indivs
+       // retained, even if some contribute 0 epochs Iend[i] = 
+				   // weights not yet constructed so nothing to do there  
+							 //       // advance IID if at last epoch of current indiv?
+
+
+  // copy over
+
+  std::vector<int> Sx = S;
+  std::vector<int> Ex = E;
+  Eigen::MatrixXd X1x = X1;
+  std::vector<std::string> Ix = I;
+  std::vector<int> Istartx = Istart;
+  std::vector<int> Iendx = Iend;
+  
+  // wipe all 
+  X1 = Eigen::MatrixXd::Zero( new_trainer_rows + nrows_validation , X1x.cols() );
+  S.clear();
+  S.resize( new_trainer_rows + nrows_validation );
+  E.clear();
+  E.resize( new_trainer_rows + nrows_validation );
+
+  // copy features/stages/epochs
+  int idx = 0;
+  std::set<int>::const_iterator ii = inc.begin();
+  while ( ii != inc.end() )
+    {
+      X1.row(idx) = X1x.row( *ii );
+      S[idx] = Sx[ *ii ];
+      E[idx] = Ex[ *ii ];
+      ++idx;
+      ++ii;
+    }
+
+  // copy indiv-IDs
+  I.clear();
+  Istart.clear();
+  Iend.clear();
+
+  // old number of indivs
+  const int nix = Ix.size();
+
+  int iid_idx = 0;
+  int iid_start = -1;
+  int iid_end = 0;
+
+  int new_idx = 0;
+  
+  for (int i=0; i<nrows_training; i++)
+    {
+      
+      // this row included?      
+	if ( inc.find( i ) != inc.end() )
+	  {
+	    // only first row for this new person
+	    if ( iid_start == -1 ) iid_start = new_idx;
+	    iid_end = new_idx;
+	    ++new_idx;
+	  }      
+      
+      // advance to IID if at last epoch of current indiv?
+      if ( i == Iendx[ iid_idx ] )
+	{
+
+	  // anything to add?
+	  if ( iid_start != -1 )
+	    {
+	      Istart.push_back( iid_start );
+	      Iend.push_back( iid_end );
+	      I.push_back( Ix[iid_idx] );
+	      // reset
+	      iid_start = -1;
+	    }
+
+	  // advance to next person 
+	  if ( iid_idx < nix - 1 ) 
+	    ++iid_idx;
+	}
+    }
+
+  // add validation data back in
+  X1.block( new_trainer_rows , 0 , nrows_validation , X1.cols() ) = X1x.block( nrows_training , 0 , nrows_validation , X1.cols() );
+
+  for (int i=0; i<nrows_validation; i++)
+    {
+      S[ new_trainer_rows + i ] = Sx[ nrows_training + i ];
+      E[ new_trainer_rows + i ] = Ex[ nrows_training + i ];
+    }
+
+  // complete indiv-IDs using above logic
+  // i.e. we have not reset iid_idx, etc
+  
+  iid_start = -1;
+  
+  for (int i=nrows_training; i<nrows_training+nrows_validation; i++)
+    {
+
+      // only first row for this new person
+      if ( iid_start == -1 ) iid_start = new_idx;	    
+      iid_end = new_idx;
+      ++new_idx;
+    
+      // advance to IID if at last epoch of current indiv?
+      if ( i == Iendx[ iid_idx ] )
+	{
+	  // anything to add?
+	  if ( iid_start != -1 )
+	    {
+	      Istart.push_back( iid_start );
+	      Iend.push_back( iid_end );
+	      I.push_back( Ix[iid_idx] );
+	      // reset
+	      iid_start = -1;
+	    }
+	  
+	  // advance to next person 
+	  if ( iid_idx < nix - 1 ) 
+            ++iid_idx;
+	}
+    }
+
+  
+  // finally, update row count
+  nrows_training = new_trainer_rows;
+
+  // std::cout << "I szs = " << I.size() << " " << Istart.size() << " "<< Iend.size() << "\n";
+  // std::cout << "X1 sxz " << X1.rows() << " " << E.size() <<" " << S.size() << "\n";
+  
+  // for (int i=0; i<I.size(); i++)
+  //   std::cout << I[i] << "\t" << Istart[i] << "\t" << Iend[i] << "\n";
+  
+  // all done!
+  
+}
 
 
 bool pops_t::attach_indiv_weights( const std::string & wlabel , bool training_dataset )
@@ -1422,6 +1622,8 @@ bool pops_t::attach_indiv_weights( const std::string & wlabel , bool training_da
   return true;
 }
 
+
+
 bool pops_t::dump_weights() 
 {
   std::string f = Helper::expand( pops_opt_t::model_weights_file );
@@ -1444,7 +1646,7 @@ bool pops_t::dump_weights()
   int iid_idx = 0;
 
   //  std::cout << "I Iend = " << I.size() <<" " << Iend.size() << "\n";
-
+  
   for (int i=0; i<X1.rows(); i++)
     {
       // training or validation?
@@ -1579,7 +1781,7 @@ void pops_t::stage_association()
 
   const int nobs = X1.rows();
   const int ncol = X1.cols();
-  
+    
   // feature labels
   std::vector<std::string> ftrs = pops_t::specs.select_labels();
   if ( ftrs.size() != ncol ) 
@@ -1612,12 +1814,16 @@ void pops_t::stage_association()
 
   for (int i=0; i<nt; i++)
     {
+      std::cout << "i= " << i << " / " << nt << "\n";
       
       writer.level( I[i] , "TRAINER" );
 		    
       // pull out data for this trainer only
       int fromi = Istart[i];
       int sz    = Iend[i] - Istart[i] + 1;
+
+      std::cout << " fromi sz = " << fromi << "\t" << sz << "\n";
+
       Eigen::MatrixXd XI = X1.block( fromi , 0 , sz, ncol );
       
       // splice stages

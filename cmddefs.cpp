@@ -1687,6 +1687,11 @@ void cmddefs_t::init()
   add_var( "MTM" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
   add_var( "MTM" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
 
+  add_table( "MTM", "CH,SEG", "Segment timing details" );
+  add_var( "MTM" , "CH,SEG" , "START" , "Start time (seconds)" );
+  add_var( "MTM" , "CH,SEG" , "STOP" , "Stop time (seconds)");
+  add_var( "MTM" , "CH,SEG" , "DISC" , "Spans a discontinuity (0/1=N/Y)");
+  
   add_table( "MTM" , "CH,F" , "Whole-night, per-channel power" );
   add_var( "MTM" , "CH,F" , "MTM" , "Power" );
 
