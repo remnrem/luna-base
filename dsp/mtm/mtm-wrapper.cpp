@@ -85,9 +85,18 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   int min_sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ; 
 
   //
-  // Reporting full spectrum? (default 0.5 to 25 Hz)
+  // Start/stop times?
   //
 
+  const bool   restrict_start = param.has( "start" );
+  const bool   restrict_stop = param.has( "stop" );
+  const double restrict_start_sec = param.has( "start" ) ? param.requires_dbl( "start" ) : 0 ;
+  const double restrict_stop_sec = param.has( "stop" ) ? param.requires_dbl( "stop" ) : 0 ;
+  
+  //
+  // Reporting full spectrum? (default 0.5 to 25 Hz)
+  //
+  
   double min_f = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5; 
   double max_f = param.has( "max" ) ? param.requires_dbl( "max" ) : 25;  
 
@@ -172,14 +181,15 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       
       //
       // Get time points (and flags for segments that span discontinuities)
-      //
-
+      //  - also, indicate whether all should be computed (at segment/eppch level)
+      //  - this is for monnlight MTM interactive viewer mainly
+      
       const std::vector<uint64_t> * tp = slice.ptimepoints();	   
       const int np = tp->size();
       
       std::vector<double> start, stop;
-      std::vector<bool> disc;
-
+      std::vector<bool> disc, compseg;
+      
       int p = 0;
       int nn = 0;
       while ( 1 ) {
@@ -192,6 +202,12 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	start.push_back( start_sec );
 	stop.push_back( stop_sec );
 	disc.push_back( fabs( implied_sec - segment_size_sec ) > 0.0001 );
+
+	bool okay = true;
+	if ( restrict_start && start_sec < restract_start_sec ) okay = false;
+	if ( restrict_stop && stop_sec > restract_start_sec ) okay = false;
+	compseg.push_back( ! okay );
+	
 	++nn;
 	//std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t" << ( fabs( implied_sec - segment_size_sec ) > 0.001 ) << "\n";
 	
@@ -209,7 +225,10 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       mtm.dB = dB;
       mtm.opt_remove_mean = mean_center;
       mtm.opt_remove_trend = remove_linear_trend;
-      
+
+      if ( restrict_start || restrict_stop )
+	mtm.restrict = compseg;
+	  
       // s==0 means only give verbose output on first channel
       mtm.apply( d , Fs[s] , segment_size , segment_step , s == 0 );
       
@@ -302,20 +321,24 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	    {
 	      for ( int j = 0 ; j < nsegs ; j++)
 		{
-		  writer.level( j+1 , "SEG" );	  
-		  writer.value( "START" , start[j] );
-		  writer.value( "STOP" , stop[j] );
-		  writer.value( "DISC" , (int)disc[j] );
-		  
-		  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+
+		  if ( compseg[j] ) 
 		    {
-		      if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+		      writer.level( j+1 , "SEG" );	  
+		      writer.value( "START" , start[j] );
+		      writer.value( "STOP" , stop[j] );
+		      writer.value( "DISC" , (int)disc[j] );
+		      
+		      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
 			{
-			  writer.level( mtm.f[i] , globals::freq_strat  );
-			  writer.value( "MTM" , mtm.espec[j][i] );
+			  if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+			    {
+			      writer.level( mtm.f[i] , globals::freq_strat  );
+			      writer.value( "MTM" , mtm.espec[j][i] );
+			    }
 			}
+		      writer.unlevel( globals::freq_strat );	      
 		    }
-		  writer.unlevel( globals::freq_strat );	      
 		}
 	    }
 	  
@@ -326,19 +349,22 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      
 	      for ( int j = 0 ; j < nsegs ; j++)
 		{
-		  double es1 = 0 ;
-		  
-		  bool okay = spectral_slope_helper( mtm.raw_espec[j] , 
-						     mtm.f ,						     
-						     slope_range ,
-						     slope_outlier ,
-						     spectral_slope_show_epoch ,
-						     &es1 );
-		  
-		  if ( okay ) slopes.push_back( es1 );
+
+		  if ( compseg[j] )
+		    {
+		      double es1 = 0 ;
+		      
+		      bool okay = spectral_slope_helper( mtm.raw_espec[j] , 
+							 mtm.f ,						     
+							 slope_range ,
+							 slope_outlier ,
+							 spectral_slope_show_epoch ,
+							 &es1 );
+		      
+		      if ( okay ) slopes.push_back( es1 );
+		    }
 		}
 	    }
-	  
 	  
 	}
       

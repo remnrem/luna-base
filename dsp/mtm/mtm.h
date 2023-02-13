@@ -92,6 +92,10 @@ struct mtm_t
   bool opt_remove_mean;
   bool opt_remove_trend;
 
+
+  // restrict to only some segments?
+  std::vector<bool> restrict;
+  
   //
   // Core functions
   //

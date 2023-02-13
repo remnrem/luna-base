@@ -75,6 +75,8 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 		   const int seg_size , const int seg_step , bool verbose , mtm_t * precomputed )
 {
 
+  const bool allsegs = restrict.size() == 0 ;
+  
   const double dt = 1.0/(double)fs;
 
   const int total_npoints = d->size();
@@ -103,7 +105,22 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
       if ( p + seg_size > total_npoints ) break;      
       ++n_segs;
     }
+
+  if ( !allsegs )
+    if ( restrict.size() != n_segs )
+      Helper::halt("internal error in mtm w/ comp-segs implied" );
+
+  int n_segs_actual = 0;
+  if ( !allsegs )
+    {
+      for (int p=0; p<n_segs; p++)
+	if ( ! restrict[p] )
+	  ++n_segs_actual;
+    }
+  else
+    n_segs_actual = n_segs;
   
+				   
   const double spectral_resolution = ( 2 * npi ) / ( seg_size / (double)fs );
 
   if ( verbose ) 
@@ -114,9 +131,13 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	   << "    segment duration         = " << seg_size / (double)fs << "s\n"
 	   << "    segment step             = " << seg_step / (double)fs << "s\n"
 	   << "    FFT size                 = " << klen << "\n"
-	   << "    number of segments       = " << n_segs << "\n"
-	   << "    adjustment               = "
-	   << ( opt_remove_trend ? "detrend" : ( opt_remove_mean ? "constant" : "none" ) ) << "\n";
+	   << "    number of segments       = " << n_segs << "\n";
+
+  if ( ! allsegs )
+    logger << "    computed segments        = " << n_segs_actual << "\n"; 
+  
+  logger << "    adjustment               = "
+	 << ( opt_remove_trend ? "detrend" : ( opt_remove_mean ? "constant" : "none" ) ) << "\n";
   
   //
   // Generate and store tapers
@@ -146,7 +167,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
     }
   
   //
-  // Spectrogram output
+  // Spectrogram output (for all n_segs whether all computed or not)
   //
   
   espec.resize( n_segs );
@@ -165,12 +186,15 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   //
 
   int sn = 0; // count of segment 
-
+		   
   for ( int p = 0; p < total_npoints ; p += seg_step )
     {
       // all done?
       if ( p + seg_size > total_npoints ) break;
-            
+
+      // skip this segment?
+      if ( ( ! allsegs ) && restrict[p] ) continue;
+      
       // need to copy segment (i.e. if detrending)
       std::vector<double> segment( npoints );  // == seg_size
       
