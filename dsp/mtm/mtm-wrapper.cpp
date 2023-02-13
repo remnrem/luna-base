@@ -188,10 +188,11 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       const int np = tp->size();
       
       std::vector<double> start, stop;
-      std::vector<bool> disc, compseg;
+      std::vector<bool> disc, restrict;
       
       int p = 0;
       int nn = 0;
+      int actual = 0;
       while ( 1 ) {
 	if ( p + segment_size > np ) break;
 	
@@ -204,18 +205,26 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	disc.push_back( fabs( implied_sec - segment_size_sec ) > 0.0001 );
 
 	bool okay = true;
-	if ( restrict_start && start_sec < restract_start_sec ) okay = false;
-	if ( restrict_stop && stop_sec > restract_start_sec ) okay = false;
-	compseg.push_back( ! okay );
-	
+	if ( restrict_start && start_sec < restrict_start_sec ) okay = false;
+	if ( restrict_stop && stop_sec > restrict_stop_sec ) okay = false;
+	restrict.push_back( ! okay );
+	if ( okay ) ++actual;
 	++nn;
-	//std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t" << ( fabs( implied_sec - segment_size_sec ) > 0.001 ) << "\n";
+	// std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t" << ( fabs( implied_sec - segment_size_sec ) > 0.001 )
+	//  	  << "\trestrict=" << ! okay << "\n";
 	
 	// next segment
 	p += segment_step;
 	
       }
-      
+
+
+      if ( actual == 0 )
+	{
+	  logger << "  *** no segments to process, leaving MTM...\n";
+	  return;
+	}
+
       //
       // call MTM
       //
@@ -227,7 +236,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       mtm.opt_remove_trend = remove_linear_trend;
 
       if ( restrict_start || restrict_stop )
-	mtm.restrict = compseg;
+	mtm.restrict = restrict;
 	  
       // s==0 means only give verbose output on first channel
       mtm.apply( d , Fs[s] , segment_size , segment_step , s == 0 );
@@ -322,7 +331,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      for ( int j = 0 ; j < nsegs ; j++)
 		{
 
-		  if ( compseg[j] ) 
+		  if ( ! restrict[j] ) 
 		    {
 		      writer.level( j+1 , "SEG" );	  
 		      writer.value( "START" , start[j] );
@@ -350,7 +359,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      for ( int j = 0 ; j < nsegs ; j++)
 		{
 
-		  if ( compseg[j] )
+		  if ( ! restrict[j] )
 		    {
 		      double es1 = 0 ;
 		      

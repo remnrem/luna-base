@@ -185,15 +185,17 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   // Iterate over segments
   //
 
-  int sn = 0; // count of segment 
-		   
+  int sn = 0; // count of segment  (whether processed or no)
+  bool done_first = false;
+  
   for ( int p = 0; p < total_npoints ; p += seg_step )
     {
+
       // all done?
       if ( p + seg_size > total_npoints ) break;
 
       // skip this segment?
-      if ( ( ! allsegs ) && restrict[p] ) continue;
+      if ( ( ! allsegs ) && restrict[sn] ) { ++sn; continue; }
       
       // need to copy segment (i.e. if detrending)
       std::vector<double> segment( npoints );  // == seg_size
@@ -238,13 +240,13 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
       raw_espec[sn].resize( nfreqs );
       espec[sn].resize( nfreqs );
       
-      if ( sn == 0 ) 
+      if ( ! done_first )
 	f.resize( nfreqs , 0 );
       
       for (int i = 0; i < nfreqs; i++)
 	{
 
-	  if ( sn == 0 ) 
+	  if ( ! done_first )
 	    f[i] = df*i;
 	  
 	  // report dB?
@@ -254,17 +256,19 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	    espec[sn][i] = raw_espec[sn][i] ;	  
 	}  
       
-
+      
       //
       // Next segment
       //
 
+      done_first = true;
+      
       ++sn;
 
     }
 
   //
-  // Compute average spectrum
+  // Compute average spectrum (using only actually computed segments)
   //
 
   spec.resize( nfreqs , 0 );
@@ -274,11 +278,14 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
     {
       for (int i=0; i<n_segs; i++)
 	{
-	  spec[f] += espec[i][f];
-	  raw_spec[f] += raw_espec[i][f];
+	  if ( allsegs || ! restrict[i] )
+	    {
+	      spec[f] += espec[i][f];
+	      raw_spec[f] += raw_espec[i][f];
+	    }
 	}
-      spec[f] /= (double)n_segs;      
-      raw_spec[f] /= (double)n_segs;
+      spec[f] /= (double)n_segs_actual;      
+      raw_spec[f] /= (double)n_segs_actual;
     }
  
 }
