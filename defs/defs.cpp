@@ -652,6 +652,7 @@ std::string globals::band( frequency_band_t b )
     case HIGH_SIGMA : return "FAST_SIGMA";
     case LOW_SIGMA  : return "SLOW_SIGMA";    
     case TOTAL : return "TOTAL";
+    case DENOM : return "TOTAL";      
     default : return "UNKNOWN";
     } 
 }
