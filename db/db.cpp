@@ -134,7 +134,7 @@ tfac_t strata_t::tfac() const
 	{ ++aa; continue; } 
       
       // skip tags
-      if ( globals::cmddefs.is_tag( aa->first.factor_name ) )
+      if ( globals::cmddefs().is_tag( aa->first.factor_name ) )
 	{ ++aa; continue; }
       
       // otherwise, add (to ID which zfile_t to write to)
@@ -1370,7 +1370,7 @@ void writer_t::update_plaintext_curr_strata()
 
   // figure out which table (command/strata)  
   curr_zfile = zfiles->file( curr_command.cmd_name , NULL , curr_strata.print_zfile_tag() ) ;  
- 
+
   // might not be a valid table (i.e. this could be the case if setting 
   // levels, e.g. A+B,  then when only level(A) is set, it will not be valid
   // this is fine, so we won't give an error yet;  but if somebody tries writing 
@@ -1380,7 +1380,7 @@ void writer_t::update_plaintext_curr_strata()
   
   // set (all) levels 
   curr_zfile->set_stratum( faclvl() );
-  
+
 }
 
 

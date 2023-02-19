@@ -112,7 +112,7 @@ int main(int argc , char ** argv )
 	  std::cerr << "List of domains\n"
 		    << "---------------\n\n";
 	  
-	  std::cerr << globals::cmddefs.help_domains()
+	  std::cerr << globals::cmddefs().help_domains()
 		    << "\n";
 
 	  std::cerr << "for commands within a domain, add the domain label after -h, e.g.\n"
@@ -129,19 +129,19 @@ int main(int argc , char ** argv )
 	  // 'all'  list all commands for all domains
 	  if ( p == "all" ) 
 	    {
-	      std::cerr << globals::cmddefs.help_commands() << "\n";
+	      std::cerr << globals::cmddefs().help_commands() << "\n";
 
 	    }
 	  // -h {domain}  list all commands (non-verbose)
-	  else if ( globals::cmddefs.is_domain(p) ) 
+	  else if ( globals::cmddefs().is_domain(p) ) 
 	    {
-	      std::cerr << "\n" << globals::cmddefs.help_commands( p ) << "\n";
+	      std::cerr << "\n" << globals::cmddefs().help_commands( p ) << "\n";
 	    }
 	  
 	  // -h {cmd}  list all options/tables (verbose)
-	  else if ( globals::cmddefs.is_cmd(p) ) 
+	  else if ( globals::cmddefs().is_cmd(p) ) 
 	    {
-	      std::cerr << globals::cmddefs.help( p , true , true ) << "\n";
+	      std::cerr << globals::cmddefs().help( p , true , true ) << "\n";
 	    }
 	  
 	  // otherwise, complain
@@ -1971,11 +1971,12 @@ void process_edfs( cmd_t & cmd )
           
       
       //
-      // Unset 'problem' flag (i.e. for bailing for this individual)
+      // Unset 'problem' and 'empty' flags (i.e. for bailing for this individual)
       //
       
       globals::problem = false;
 
+      globals::empty = false; 
 
       //
       // Limited to specific signals to load in?
@@ -2759,23 +2760,23 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   if ( p == "cmddefs" ) 
     {
       
-      globals::cmddefs.add_domain( "misc" , "misc" ,  "Misc" );
+      globals::cmddefs().add_domain( "misc" , "misc" ,  "Misc" );
       
-      globals::cmddefs.add_cmd( "misc" , "comm1" , "this is a dummy command" );
-      globals::cmddefs.add_table( "comm1" , "XX" , "A simple table" , false );
-      globals::cmddefs.add_var( "comm1" , "XX" , "X", "Var X" );
-      globals::cmddefs.add_var( "comm1" , "XX" , "Y" , "Var Y" );
+      globals::cmddefs().add_cmd( "misc" , "comm1" , "this is a dummy command" );
+      globals::cmddefs().add_table( "comm1" , "XX" , "A simple table" , false );
+      globals::cmddefs().add_var( "comm1" , "XX" , "X", "Var X" );
+      globals::cmddefs().add_var( "comm1" , "XX" , "Y" , "Var Y" );
       
-      globals::cmddefs.add_cmd( "misc" , "comm2" , "this is a dummy command" );
-      globals::cmddefs.add_table( "comm2" , "CH,B" , "A nice table" , true );
-      globals::cmddefs.add_var( "comm2" , "CH,B" , "V1" , "Variable 1" );
-      globals::cmddefs.add_var( "comm2" , "CH,B" , "V2" , "Variable 2" );
+      globals::cmddefs().add_cmd( "misc" , "comm2" , "this is a dummy command" );
+      globals::cmddefs().add_table( "comm2" , "CH,B" , "A nice table" , true );
+      globals::cmddefs().add_var( "comm2" , "CH,B" , "V1" , "Variable 1" );
+      globals::cmddefs().add_var( "comm2" , "CH,B" , "V2" , "Variable 2" );
       
-      //   std::cout << globals::cmddefs.help( "comm1" , true )  << "\n\n\n";
-      std::cout << globals::cmddefs.help( "comm2" , true )  << "\n";
+      //   std::cout << globals::cmddefs().help( "comm1" , true )  << "\n\n\n";
+      std::cout << globals::cmddefs().help( "comm2" , true )  << "\n";
       
       // add a dummy tag
-      globals::cmddefs.add_tag( "Z" );
+      globals::cmddefs().add_tag( "Z" );
       
       zfiles_t files( "folder1" , "indiv1" ); 
       
@@ -2821,36 +2822,36 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   if ( p == "cmddefs" )
     {
       
-      globals::cmddefs.add_cmd( "misc"   , "NEWONE" , "A test command" );
-      globals::cmddefs.add_table( "NEWONE" , "" , "Table 0, baseline" );
-      globals::cmddefs.add_table( "NEWONE" , "CH" , "Table 1, by channel" );
-      globals::cmddefs.add_table( "NEWONE" , "CH,X" , "Table 2, by channel and X" );
-      globals::cmddefs.add_table( "NEWONE" , "CH,X,Y" , "Table 2a, by channel and X/Y" , true );
-      globals::cmddefs.add_table( "NEWONE" , "CH,X,Z" , "Table 2b, by channel and X/Z"  );
+      globals::cmddefs().add_cmd( "misc"   , "NEWONE" , "A test command" );
+      globals::cmddefs().add_table( "NEWONE" , "" , "Table 0, baseline" );
+      globals::cmddefs().add_table( "NEWONE" , "CH" , "Table 1, by channel" );
+      globals::cmddefs().add_table( "NEWONE" , "CH,X" , "Table 2, by channel and X" );
+      globals::cmddefs().add_table( "NEWONE" , "CH,X,Y" , "Table 2a, by channel and X/Y" , true );
+      globals::cmddefs().add_table( "NEWONE" , "CH,X,Z" , "Table 2b, by channel and X/Z"  );
 
-      globals::cmddefs.add_var( "NEWONE" , "" , "V1" , "some var1" );
-      globals::cmddefs.add_var( "NEWONE" , "" , "V2" , "some var2" );
+      globals::cmddefs().add_var( "NEWONE" , "" , "V1" , "some var1" );
+      globals::cmddefs().add_var( "NEWONE" , "" , "V2" , "some var2" );
 
-      globals::cmddefs.add_var( "NEWONE" , "CH" , "V1" , "some var1" );
-      globals::cmddefs.add_var( "NEWONE" , "CH" , "V2" , "some var2" );
-      globals::cmddefs.add_var( "NEWONE" , "CH" , "V3" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH" , "V1" , "some var1" );
+      globals::cmddefs().add_var( "NEWONE" , "CH" , "V2" , "some var2" );
+      globals::cmddefs().add_var( "NEWONE" , "CH" , "V3" , "some var3" );
 
-      globals::cmddefs.add_var( "NEWONE" , "CH,X" , "V2a" , "some var2" );
-      globals::cmddefs.add_var( "NEWONE" , "CH,X" , "V3a" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X" , "V2a" , "some var2" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X" , "V3a" , "some var3" );
 
-      globals::cmddefs.add_var( "NEWONE" , "CH,X,Y" , "V2a" , "some var2" );
-      globals::cmddefs.add_var( "NEWONE" , "CH,X,Y" , "V3a" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Y" , "V2a" , "some var2" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Y" , "V3a" , "some var3" );
 
-      globals::cmddefs.add_var( "NEWONE" , "CH,X,Z" , "V2a" , "some var2" );
-      globals::cmddefs.add_var( "NEWONE" , "CH,X,Z" , "V3a" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Z" , "V2a" , "some var2" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Z" , "V3a" , "some var3" );
 
-      //  std::cout << globals::cmddefs.help_domains() << "\n";
-      //std::cout << globals::cmddefs.help_commands() << "\n";
+      //  std::cout << globals::cmddefs().help_domains() << "\n";
+      //std::cout << globals::cmddefs().help_commands() << "\n";
       
-      globals::cmddefs.set_compressed( "NEWONE" , tfac_t( "CH,X,Z" ) );
-      globals::cmddefs.set_compressed( "NEWONE" , tfac_t( "CH,X,Y" ) , false );
+      globals::cmddefs().set_compressed( "NEWONE" , tfac_t( "CH,X,Z" ) );
+      globals::cmddefs().set_compressed( "NEWONE" , tfac_t( "CH,X,Y" ) , false );
       
-      std::cout << globals::cmddefs.help( "NEWONE" , true ) << "\n";
+      std::cout << globals::cmddefs().help( "NEWONE" , true ) << "\n";
       
       
       std::exit(0);
@@ -2859,7 +2860,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       param.add( "epoch" );
       param.add( "ep" );
       std::set<std::string> unk;
-      std::cout << "st = " << globals::cmddefs.check( "ANNOTS" , param.keys() , &unk ) << "\n";
+      std::cout << "st = " << globals::cmddefs().check( "ANNOTS" , param.keys() , &unk ) << "\n";
       
       std::set<std::string>::const_iterator uu = unk.begin();
       while ( uu != unk.end() ) { std::cout << " bad param " << *uu << "\n"; ++uu; } 

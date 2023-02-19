@@ -939,6 +939,29 @@ bool cmd_t::eval( edf_t & edf )
       
       if ( is( c, "ENDIF" ) || is( c, "FI" ) )
 	continue;
+
+
+      //
+      // Is the current mask empty? if so, skip unless this is a THAW
+      //
+
+      if ( globals::empty )
+	{
+	  bool skip = true;
+	  if      ( is( c, "THAW" ) ) skip = false;
+	  else if ( is( c, "HEADERS" ) ) skip = false;
+	  else if ( is( c, "SET-VAR" ) ) skip = false;
+	  else if ( is( c, "SET-HEADERS" ) ) skip = false;
+	  else if ( is( c, "DESC" ) ) skip = false;
+	  else if ( is( c, "ALIASES" ) ) skip = false;
+	  else if ( is( c, "TYPES" ) ) skip = false;
+	  if ( skip )
+	    {
+	      logger << "  ** skipping " << cmd(c) << " as there are no unmasked records\n"; 
+	      continue;
+	    }
+	}
+      
       
       //
       // Process command
@@ -2781,13 +2804,36 @@ void proc_epoch_mask( edf_t & edf , param_t & param )
 
 void proc_freeze( edf_t & edf , param_t & param )
 {
-  freezer.freeze( param.requires( "tag" ) , edf );  
+  
+  if ( ! param.single() )
+    Helper::halt( "FREEZE requires a single argument" );
+
+  // take either FREEZE tag=name or  FREEZE name
+  const std::string freeze_name = param.has( "tag" ) ? param.value( "tag" ) : param.single_value() ;
+
+  if ( freeze_name == "remove" ) Helper::halt( "cannot use 'remove' as a freeze name" );  
+  
+  freezer.freeze( freeze_name , edf );
+
 }
 
 // THAW : bring back and replace current EDF
 void proc_thaw( edf_t & edf , param_t & param )
 {
-  freezer.thaw( param.requires( "tag" ) , &edf , param.has( "remove" ) );  
+
+  const bool remove = param.has( "remove" ) ? param.yesno( "remove" ) : false ;
+
+  if ( remove )
+    {
+      freezer.thaw( param.requires( "tag" ) , &edf , remove );  
+    }
+  else
+    {
+      // can allow single arg context here (if not also using 'remove')
+      const std::string freeze_name = param.has( "tag" ) ? param.value( "tag" ) : param.single_value() ;
+      freezer.thaw( freeze_name , &edf , false );
+    }
+  
 }
 
 // EPOCH-ANNOT : directly apply epoch-level annotations from the command line
@@ -4277,8 +4323,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "compressed" ) )
     {
       bool yesno = Helper::yesno( tok1 );      
-      globals::cmddefs.all_compressed( yesno );
-      globals::cmddefs.none_compressed( !yesno );
+      globals::cmddefs().all_compressed( yesno );
+      globals::cmddefs().none_compressed( !yesno );
       return;
     }
 

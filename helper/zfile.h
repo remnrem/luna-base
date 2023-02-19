@@ -60,7 +60,7 @@ struct zfile_t {
      // TAG-defined factors... i.e. get straight to core variables
      // as represented in the cmddefs_t
      
-     vars = global.cmddefs.variables( cmd , param , tfac_t( table , "_" ) );
+     vars = globals::cmddefs().variables( cmd , param , tfac_t( table , "_" ) );
      
      // however, in generating the output, we'll need to respect the TAG-defined
      // factors... so track these separately
@@ -200,11 +200,18 @@ struct zfiles_t {
   // access file by command-name/table ID
   zfile_t * file( const std::string & cmd , const param_t * param , const std::string & table  ) 
   {
+    
     std::map<std::string,std::map<std::string,zfile_t*> >::const_iterator cc = files.find( cmd );
-    if ( cc == files.end() ) return new_file( cmd , param , table );
+    
+    if ( cc == files.end() )
+	return new_file( cmd , param , table );
+
     const std::map<std::string,zfile_t*> & t = cc->second;
+
     std::map<std::string,zfile_t*>::const_iterator tt = t.find( table );
+
     if ( tt == t.end() ) return new_file( cmd , param , table );
+
     return tt->second;
   }
 
@@ -255,16 +262,16 @@ private:
   {
     
     // figure out whether this table should be compressed, according to cmddefs
-    
+
     tfac_t tfac( table , "_" );
     
     // is this a valid table?  
-
-    if ( ! globals::cmddefs.exists( cmd , tfac ) )
+	 
+    if ( ! globals::cmddefs().exists( cmd , tfac ) )
       return NULL;
-      
+      	 
     // should this be compressed by default?
-    bool compressed = globals::cmddefs.out_compressed( cmd , tfac );
+	 bool compressed = globals::cmddefs().out_compressed( cmd , tfac );
 
     // create a new file, store a pointer to it, and return that pointer
     //  prepend-COMMAND-F1_F2_F3{_append}.txt{.gz}

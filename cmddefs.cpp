@@ -33,7 +33,7 @@ extern globals global;
 
 cmddefs_t::cmddefs_t()
 {
-  init();
+  //init();
 }
 
 
@@ -2567,7 +2567,7 @@ tfac_t::tfac_t( const std::string & s , const std::string & delim ) {
   std::vector<std::string> tok = Helper::parse( s , delim );
   for (int i=0;i<tok.size();i++) 
     {
-      if ( tok[i][0] != '_' && ! globals::cmddefs.is_tag( tok[i] ) )
+      if ( tok[i][0] != '_' && ! globals::cmddefs().is_tag( tok[i] ) )
 	fac.insert( tok[i] );
     } 
 }
@@ -2873,10 +2873,10 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 bool cmddefs_t::exists( const std::string & cmd ,
 			const tfac_t & tfac ) const
 {
-    
+  
   if ( cmds.find( cmd ) == cmds.end() )
-    return false;
-    
+      return false;
+
   if ( ofacs.find( cmd ) == ofacs.end() ) return false; 
 
   bool rv = ofacs.find( cmd )->second.find( tfac ) != ofacs.find( cmd )->second.end() ;

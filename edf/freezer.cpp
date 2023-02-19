@@ -119,6 +119,12 @@ bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean )
   
   // and delete also?
   if ( also_clean ) clean( s );
+
+  // it is not possible to freeze an empty dataset,
+  // therefore set globals::empty to false (i.e. is okay
+  // if it was previously set), to allow processing to restart
+
+  globals::empty = false;
   
   return true;
 }

@@ -40,7 +40,11 @@ std::string globals::date;
 
 int globals::retcode;
 
-cmddefs_t globals::cmddefs;
+cmddefs_t & globals::cmddefs()
+{
+  static cmddefs_t * ans = new cmddefs_t();
+  return *ans;
+}
 
 //std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
@@ -133,6 +137,7 @@ uint64_t globals::tp_1000thsec;
 double globals::tp_duration;
 
 bool globals::problem;
+bool globals::empty;
 
 bool globals::bail_on_fail;
 
@@ -204,6 +209,14 @@ void globals::init_defs()
   //
 
   retcode = 0;
+
+  //
+  // initialize cmddefs_t (note, using pattern to avoid static initialization issues)
+  //
+  
+  static cmddefs_t & x = cmddefs();
+  x.init();
+  
   
   //
   // Set up RNG
@@ -562,6 +575,7 @@ void globals::init_defs()
   //  18:00 -> 18:00 (as is)
 
   problem = false;
+  empty = false;
   
   bail_on_fail = true;
   

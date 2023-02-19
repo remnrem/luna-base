@@ -3555,7 +3555,7 @@ bool edf_t::restructure()
       
   // set warning flags, if not enough data left
   
-  if ( records.size() == 0 ) globals::problem = true;
+  if ( records.size() == 0 ) globals::empty = true;
     
 
   logger << " keeping " 
@@ -4469,6 +4469,8 @@ bool edf_t::basic_stats( param_t & param )
   bool calc_median = true;
   
   int required_sr = param.has( "sr-under" ) ? param.requires_int( "sr-under" ) : 0 ; 
+
+  const bool minimal = param.has( "min" ) || param.has( "minimal" );
   
   for (int s=0; s<ns; s++)
     {
@@ -4476,7 +4478,7 @@ bool edf_t::basic_stats( param_t & param )
       //
       // skip annotation channels
       //
-
+      
       if ( header.is_annotation_channel( signals(s) ) ) continue;
 
       //
@@ -4544,32 +4546,36 @@ bool edf_t::basic_stats( param_t & param )
 	      
 	      double mean   = MiscMath::mean( *d );
 	      double median = calc_median ? MiscMath::median( *d ) : 0;
-	      double sd     = MiscMath::sdev( *d , mean );
-	      double rms    = MiscMath::rms( *d );
-	      double skew   = MiscMath::skewness( *d , mean , sd );
-	      double kurt   = MiscMath::kurtosis( *d , mean );
+
+	      
+	      double sd     = minimal ? 0 : MiscMath::sdev( *d , mean );
+	      double rms    = minimal ? 0 : MiscMath::rms( *d );
+	      double skew   = minimal ? 0 : MiscMath::skewness( *d , mean , sd );
+	      double kurt   = minimal ? 0 : MiscMath::kurtosis( *d , mean );
 	      
 	      double min = (*d)[0];
 	      double max = (*d)[0];
+	      if ( ! minimal ) 
+		for (int i = 0 ; i < n ; i++ )
+		  {
+		    if ( (*d)[i] < min ) min = (*d)[i];
+		    if ( (*d)[i] > max ) max = (*d)[i];
+		  }
 	      
-	      for (int i = 0 ; i < n ; i++ )
-		{
-		  if ( (*d)[i] < min ) min = (*d)[i];
-		  if ( (*d)[i] > max ) max = (*d)[i];
-		}
-	    	      
 	      std::map<int,double> pct;
-	      //pct[ -1 ]  = MiscMath::percentile( *d , 0.001 );
-	      pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
-	      pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
-	      pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
-	      pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
-	      pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
-	      pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
-	      //pct[ 999 ]  = MiscMath::percentile( *d , 0.999 );
-	      for (int pp=0;pp<9;pp++)
-		pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
-	      
+	      if ( ! minimal )
+		{
+		  //pct[ -1 ]  = MiscMath::percentile( *d , 0.001 );
+		  pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
+		  pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
+		  pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
+		  pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
+		  pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
+		  pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
+		  //pct[ 999 ]  = MiscMath::percentile( *d , 0.999 );
+		  for (int pp=0;pp<9;pp++)
+		    pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
+		}
 	      
 	      //
 	      // Output
@@ -4577,53 +4583,61 @@ bool edf_t::basic_stats( param_t & param )
 	      
 	      writer.epoch( timeline.display_epoch( epoch ) );
 	      
-	      writer.value( "MAX"  , max  );
-	      writer.value( "MIN"  , min  );	      
 	      writer.value( "MEAN" , mean );
-
-	      if ( Helper::realnum( skew ) )
-		writer.value( "SKEW" , skew );
-
-	      if ( Helper::realnum( kurt ) )
-		writer.value( "KURT" , kurt );
 
 	      if ( calc_median ) 
 		writer.value( "MEDIAN" , median );	      
 
-	      writer.value( "RMS"  , rms  );
-
-	      std::map<int,double>::const_iterator pp = pct.begin() ;
-	      while ( pp != pct.end() )
+	      if ( ! minimal )
 		{
-		  if ( pp->first == -1 )
-		    writer.value( ( "P001" ) + Helper::int2str( pp->first ) , pp->second ) ;
-		  else		    
-		    writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
-		  ++pp;
+		  writer.value( "MAX"  , max  );
+		  writer.value( "MIN"  , min  );	      
+		  
+		  if ( Helper::realnum( skew ) )
+		    writer.value( "SKEW" , skew );
+		  
+		  if ( Helper::realnum( kurt ) )
+		    writer.value( "KURT" , kurt );
+		  
+		  writer.value( "RMS"  , rms  );
+		  
+		  std::map<int,double>::const_iterator pp = pct.begin() ;
+		  while ( pp != pct.end() )
+		    {
+		      if ( pp->first == -1 )
+			writer.value( ( "P001" ) + Helper::int2str( pp->first ) , pp->second ) ;
+		      else		    
+			writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
+		      ++pp;
+		    }
 		}
-
 
 	      
 	      //
 	      // Record
 	      //
 	      
-	      if ( t_min == 0 && t_max == 0 ) 
-		{ 
-		  t_min = min; 
-		  t_max = max; 
-		} 
-	      
-	      if ( min < t_min ) t_min = min;
-	      if ( max > t_max ) t_max = max;
-	      
 	      e_mean.push_back( mean );
+
 	      if ( calc_median ) 
 		e_median.push_back( median );
-	      e_sd.push_back( sd );
-	      e_rms.push_back( rms );	  
-	      e_skew.push_back( skew );
-	      e_kurt.push_back( kurt );
+
+	      if ( ! minimal )
+		{
+		  if ( t_min == 0 && t_max == 0 ) 
+		    { 
+		      t_min = min; 
+		      t_max = max; 
+		    } 
+		  
+		  if ( min < t_min ) t_min = min;
+		  if ( max > t_max ) t_max = max;
+		  
+		  e_sd.push_back( sd );
+		  e_rms.push_back( rms );	  
+		  e_skew.push_back( skew );
+		  e_kurt.push_back( kurt );
+		}
 	    }
 	  
 	  writer.unepoch();
@@ -4648,51 +4662,55 @@ bool edf_t::basic_stats( param_t & param )
  
       double mean = MiscMath::mean( *d );
       //double median = calc_median ? MiscMath::median( *d ) : 0 ;
-      double rms  = MiscMath::rms( *d );
-      double sd = MiscMath::sdev( *d );
-      double skew = MiscMath::skewness( *d , mean , sd );
-      double kurt = MiscMath::kurtosis( *d , mean );
-      double min = (*d)[0];
-      double max = (*d)[0];
 
-      
-      for (int i = 0 ; i < n ; i++ )
-	{
-	  if ( (*d)[i] < min ) min = (*d)[i];
-	  if ( (*d)[i] > max ) max = (*d)[i];
-	}
-      
-      std::map<int,double> pct;
-      pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
-      pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
-      pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
-      pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
-      pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
-      pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
-      for (int pp=0;pp<9;pp++)
-	pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
-
-      //
-      // Output
-      //
-	  
-
-      writer.value( "MAX"  , max  );
-      writer.value( "MIN"  , min  );      
       writer.value( "MEAN" , mean );
-      writer.value( "SKEW" , skew );
-      writer.value( "KURT" , kurt );
       
-      //if ( calc_median ) writer.value( "MEDIAN" , median );
-
-      writer.value( "RMS"  , rms  );
-      writer.value( "SD"  , sd  );
-
-      std::map<int,double>::const_iterator pp = pct.begin() ;
-      while ( pp != pct.end() ) 
+      if ( ! minimal )
 	{
-	  writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
-	  ++pp;
+	  double rms  = MiscMath::rms( *d );
+	  double sd = MiscMath::sdev( *d );
+	  double skew = MiscMath::skewness( *d , mean , sd );
+	  double kurt = MiscMath::kurtosis( *d , mean );
+	  double min = (*d)[0];
+	  double max = (*d)[0];
+
+      
+	  for (int i = 0 ; i < n ; i++ )
+	    {
+	      if ( (*d)[i] < min ) min = (*d)[i];
+	      if ( (*d)[i] > max ) max = (*d)[i];
+	    }
+	  
+	  std::map<int,double> pct;
+	  pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
+	  pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
+	  pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
+	  pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
+	  pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
+	  pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
+	  for (int pp=0;pp<9;pp++)
+	    pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
+	  
+	  //
+	  // Output
+	  //
+	  	  
+	  writer.value( "MAX"  , max  );
+	  writer.value( "MIN"  , min  );      	  
+	  writer.value( "SKEW" , skew );
+	  writer.value( "KURT" , kurt );
+	  
+	  //if ( calc_median ) writer.value( "MEDIAN" , median );
+	  
+	  writer.value( "RMS"  , rms  );
+	  writer.value( "SD"  , sd  );
+	  
+	  std::map<int,double>::const_iterator pp = pct.begin() ;
+	  while ( pp != pct.end() ) 
+	    {
+	      writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
+	      ++pp;
+	    }
 	}
       
       //
@@ -4704,29 +4722,33 @@ bool edf_t::basic_stats( param_t & param )
 	  const int ne = e_mean.size(); 
 	  double med_mean  = median_destroy( &e_mean[0] , ne );
 	  double med_median  = calc_median ? median_destroy( &e_median[0] , ne ) : 0 ;  
-	  double med_rms  = median_destroy( &e_rms[0] , ne );
-	  double med_skew = median_destroy( &e_skew[0] , ne );
-	  double med_kurt = median_destroy( &e_kurt[0] , ne );
-	  
-	  writer.value( "NE" , timeline.num_total_epochs() );	  
-	  writer.value( "NE1" , ne );
-
 	  writer.value( "MEDIAN.MEAN" , med_mean );
 	  if ( calc_median )
 	    writer.value( "MEDIAN.MEDIAN" , med_median );
-	  writer.value( "MEDIAN.RMS"  , med_rms );
-	  writer.value( "MEDIAN.SKEW" , med_skew );
-	  writer.value( "MEDIAN.KURT" , med_kurt );
+
+	  writer.value( "NE" , timeline.num_total_epochs() );	  
+	  writer.value( "NE1" , ne );
+	  
+	  if ( ! minimal )
+	    {
+	  
+	      double med_rms  = median_destroy( &e_rms[0] , ne );
+	      double med_skew = median_destroy( &e_skew[0] , ne );
+	      double med_kurt = median_destroy( &e_kurt[0] , ne );
+	      
+	      writer.value( "MEDIAN.RMS"  , med_rms );
+	      writer.value( "MEDIAN.SKEW" , med_skew );
+	      writer.value( "MEDIAN.KURT" , med_kurt );
+	    }
 	}
 
-
-
+      
       //
       // Optional, encoding 
       //
       
       // verbose output: every unique value / count 
-      if ( hist )
+	   if ( hist )
 	{
 	  
 	  std::map<double,int> counts;

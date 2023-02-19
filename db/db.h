@@ -759,7 +759,7 @@ class writer_t
     // right table to output to)
 
     if ( fac_name != "." ) 
-      globals::cmddefs.add_tag( fac_name );
+      globals::cmddefs().add_tag( fac_name );
     
     if      ( fac_name == "." ) unlevel();
     else if ( lvl_name == "." ) unlevel( fac_name );

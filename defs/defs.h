@@ -128,9 +128,9 @@ struct globals
   static std::string date;
 
   // command definitions
-
-  static cmddefs_t cmddefs;
-
+  
+  static cmddefs_t & cmddefs();
+  
   // return code (e.g. for CONTAINS)
   static int retcode;
   
@@ -310,6 +310,8 @@ struct globals
 
   static bool problem;
 
+  static bool empty;
+  
   static bool bail_on_fail;
 
   // devel
