@@ -206,6 +206,8 @@ annot_t * spectral_power( edf_t & edf ,
   // User defined 'TOTAL' ? (allow change o the fly)
   //
 
+  globals::freq_band[ DENOM ] = globals::freq_band[ TOTAL ];
+
   if ( param.has( "total" ) )
     {
       std::vector<std::string> f = Helper::parse( param.value( "total" ) , ",-" );
