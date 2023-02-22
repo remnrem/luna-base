@@ -299,8 +299,14 @@ annot_t * spectral_power( edf_t & edf ,
       
       if ( edf.header.is_annotation_channel( signals(s) ) ) 
 	continue;
-      
 
+      //
+      // bad SR ( require at least 50 Hz)
+      //
+
+      if ( Fs[s] < 50 ) continue;
+
+      
       //
       // Stratify output by channel
       //

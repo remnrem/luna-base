@@ -4487,6 +4487,7 @@ bool edf_t::basic_stats( param_t & param )
 
       if ( required_sr != 0 && header.sampling_freq( signals(s) ) > required_sr ) continue;
 
+      if ( header.sampling_freq( signals(s) ) == 0 ) continue;
 	   
       //
       // Output signal
