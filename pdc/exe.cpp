@@ -66,7 +66,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
    
   //d
   // For multiple signals, create a single matrix based on all channels 
-  // *unliess* uni is specified, in which case write clusters separately
+  // *unless* uni is specified, in which case write clusters separately
   // for each channel (i.e. output stratified by channel) 
   // -- do not allow mat and uni to be specified together/
   //
@@ -98,8 +98,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
   std::string outfile = "";
   if ( write_matrix ) 
     outfile = param.requires( "mat" ) ;
-  
-  
+
   
   //
   // Signals and sample-rate
@@ -135,7 +134,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 
   
   //
-  // Requires data to be epoched, ubnless 'cat' mode and no epochs,se whole signal
+  // Requires data to be epoched, unless 'cat' mode and no epochs,se whole signal
   //
 
   bool use_whole_trace = false;
@@ -160,7 +159,8 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 
   if ( param.has( "entropy" ) ) 
     {
-      if ( univariate ) Helper::halt( "cannot specify uni and entropy options together" );
+      if ( univariate )
+	Helper::halt( "cannot specify uni and entropy options together" );
 
       // automatically set m and t
       entropy_heuristic_wrapper( param );
@@ -427,6 +427,215 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	  
 	}
       
+    }
+
+  //
+  // Find representative epochs
+  //
+  
+  const int find_representatives = param.has( "representative" ) ?
+    ( param.empty("representative" ) ? 1 : param.requires_int( "representative" ) ) : 0 ; 
+
+  // by defauly, use median similarity 
+  const bool use_median = ! param.has( "sum" );
+
+  if ( find_representatives )
+    {
+
+      // 1) get epoch most similar to all other epochs
+      // 2) get epoch most dissimilar to this epoch
+      // 3) for next j cases, find epoch min( all_i D_i + 
+      
+      int mini1 = 0;
+
+      double mind = 0;
+
+      for (int i=0;i<nobs;i++)
+	{
+	  double d1 = 0;
+	  if ( use_median )
+	    {
+	      const std::vector<double> * dd = D.col(i).data_pointer();
+	      //const Vector<T> * col_pointer( const int c ) const { return &data[c]; }
+	      d1 = MiscMath::median( *dd );
+	    }
+	  else // sum
+	    for (int j=0;j<nobs;j++)
+	      if ( j != i ) d1 += D[i][j];
+	  
+	  if ( i == 0 || d1 < mind ) 
+	    {
+	      mind = d1;
+	      mini1 = i;
+	    }
+	}
+      
+      std::vector<int> es;
+      std::set<int> ess;
+      es.push_back( mini1 );
+      ess.insert( mini1 );
+      
+      // 2) find least similar to this
+      int miniN = 0;
+      mind = 0;
+      for (int i=0;i<nobs;i++)
+	{
+	  if ( D[i][mini1] > mind )
+	    {
+	      mind = D[i][mini1] ;
+	      miniN = i;
+	    }
+	}
+      
+      //      std::cout	<< " eDIS = " << obs[miniN].id << "\n";
+      es.push_back( miniN );
+      ess.insert( miniN );
+      
+      // now find next epoch most similar to all others, but not similar
+      // to existing picks
+
+      for (int k=0; k<find_representatives; k++)
+	{
+	  int minik = 0;
+	  
+	  double mind = 0;
+	  int nn = 0;
+	  
+	  for (int i=0;i<nobs;i++)
+	    {
+	      if ( ess.find( i ) != ess.end() )
+		continue;
+	      
+	      // mean distance to all other points
+	      double d1 = 0;
+	      for (int j=0;j<nobs;j++)
+		if ( j != i )
+		  d1 += D[i][j];
+	      d1 /= (double)( nobs-1 );
+	      
+	      // adjust for distance to closest existing
+	      // points (i.e. subtract these values)
+	      // so less likely to select if close to
+	      // another existing point
+	      double d2 = 0;
+	      for ( int q=0; q<es.size(); q++)
+		//if ( q != 1 )  // skip 'worst case' pick here initially
+		  if ( q == 0 || d2 < D[i][es[q]] )
+		    d2 = D[i][es[q]];
+	      							 
+	      d1 /= d2;
+	      
+	      if ( i == 0 || d1 < mind )
+		{
+		  mind = d1;
+		  minik = i;
+		}
+	      
+	    }
+
+	  //		std::cout << " found next point rep " << minik << " at " << mind << "\n";
+	      es.push_back( minik );
+	      ess.insert( minik );
+	    }
+
+      //
+      // now, for the k+2 epochs, assign every other epoch to closest
+      //
+
+      int q = es.size();
+      std::vector<int> asgn( nobs , 0 );
+      std::vector<std::vector<int> > q2a( q );
+      
+      // 0 = most likely
+      // 1 = least likely
+      // 2 ... others
+
+      for (int i=0; i<nobs; i++)
+	for (int j=1; j<q; j++)
+	  {
+	    if ( D[i][es[j]] < D[i][ es[ asgn[i] ] ] )
+	      {
+		//std::cout << " setting " << i << " -> " << j << "\n";
+		asgn[i] = j;		
+	      }
+	  }
+     
+      std::map<int,int> ec;
+      for (int i=0; i<nobs; i++)
+	{
+	  ec[ asgn[i] ]++;
+	  q2a[ asgn[i] ].push_back( i );
+	}
+
+      //
+      // Now go back and find best representative for this whole set 
+      // (and edit es[] ) 
+      //
+	   
+      for (int j=0; j<q; j++)
+	{
+	  const int nq = ec[ j ];
+	  const std::vector<int> & e = q2a[ j ];
+	  if ( e.size() != nq ) Helper::halt( "internal error" );
+	  double d1 = 0;
+	  int didx = 0;
+	  for (int p=0; p<nq; p++)
+	    {
+	      std::vector<double> dst;
+	      for (int q=0; q<nq; q++)
+		if ( p!=q )
+		  {
+		    //std::cout << " adding p,q " << e[p] << " " << e[q] << " " << D[e[p]][e[q]] << "\n";
+		    dst.push_back( D[e[p]][e[q]] );
+		  }
+	      
+	      double dd = MiscMath::median( dst );
+	      //std::cout << "  DD = " << e[p] << " " << dd << "\n";
+	      if ( p == 0 || dd < d1 )
+		{
+		  d1 = dd;
+		  didx = e[p];
+		}
+	    }
+
+	  // std::cout << " final min median= " << d1 << "\n";
+	  
+	  // std::cout << " grp j = " << j << "\n"
+	  // 	    << " updating " << es[ j ] << " tp " << didx << "\n";
+	    
+	  // update es[]
+	  es[ j ] = didx;
+	  
+	}
+      
+      //
+      // outputs
+      //
+
+      for (int j=0; j<q; j++)
+	{
+	  writer.level( j+1 , "K" );
+	  writer.value( "E" , obs[ es[j] ].id );
+	  writer.value( "N" , ec[ j ] );
+	}
+      writer.unlevel( "K" );
+
+      for (int i=0; i<nobs; i++)
+	{
+	  int e = 0;
+	  if ( ! Helper::str2int( obs[ i ].id , &e ) )
+	    Helper::halt( "internal error in exe-rep" );
+	  
+	  writer.epoch( e );
+	  writer.value( "K" , 1+ asgn[i] );
+	  writer.value( "KE" , obs[ es[ asgn[i] ] ].id );
+	}
+      writer.unepoch();
+      
+      // for (int i=0;i<nobs;i++)
+      //   {
+      //     for (int j=0;j<nobs;j++) OUT1 << ( j ? "\t" : "" ) << D[i][j];
+
     }
 
   
