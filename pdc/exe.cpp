@@ -456,6 +456,7 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	  if ( use_median )
 	    {
 	      const std::vector<double> * dd = D.col(i).data_pointer();
+	      
 	      //const Vector<T> * col_pointer( const int c ) const { return &data[c]; }
 	      d1 = MiscMath::median( *dd );
 	    }
@@ -577,35 +578,40 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	  const int nq = ec[ j ];
 	  const std::vector<int> & e = q2a[ j ];
 	  if ( e.size() != nq ) Helper::halt( "internal error" );
-	  double d1 = 0;
-	  int didx = 0;
-	  for (int p=0; p<nq; p++)
-	    {
-	      std::vector<double> dst;
-	      for (int q=0; q<nq; q++)
-		if ( p!=q )
-		  {
-		    //std::cout << " adding p,q " << e[p] << " " << e[q] << " " << D[e[p]][e[q]] << "\n";
-		    dst.push_back( D[e[p]][e[q]] );
-		  }
-	      
-	      double dd = MiscMath::median( dst );
-	      //std::cout << "  DD = " << e[p] << " " << dd << "\n";
-	      if ( p == 0 || dd < d1 )
-		{
-		  d1 = dd;
-		  didx = e[p];
-		}
-	    }
 
-	  // std::cout << " final min median= " << d1 << "\n";
-	  
-	  // std::cout << " grp j = " << j << "\n"
-	  // 	    << " updating " << es[ j ] << " tp " << didx << "\n";
-	    
-	  // update es[]
-	  es[ j ] = didx;
-	  
+	  // requires this cluster to have at least 3 elements
+	  // otherwise, keep prototype as is
+	  if ( nq >= 3 )
+	    {
+	      double d1 = 0;
+	      int didx = 0;
+	      for (int p=0; p<nq; p++)
+		{
+		  std::vector<double> dst;
+		  for (int q=0; q<nq; q++)
+		    if ( p!=q )
+		      {
+			//std::cout << " adding p,q " << e[p] << " " << e[q] << " " << D[e[p]][e[q]] << "\n";
+			dst.push_back( D[e[p]][e[q]] );
+		      }
+		  
+		  double dd = MiscMath::median( dst );
+		  //std::cout << "  DD = " << e[p] << " " << dd << "\n";
+		  if ( p == 0 || dd < d1 )
+		    {
+		      d1 = dd;
+		      didx = e[p];
+		    }
+		}
+	      
+	      // std::cout << " final min median= " << d1 << "\n";
+	      
+	      // std::cout << " grp j = " << j << "\n"
+	      // 	    << " updating " << es[ j ] << " tp " << didx << "\n";
+	      
+	      // update es[]
+	      es[ j ] = didx;
+	    }
 	}
       
       //
