@@ -470,7 +470,9 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	      mini1 = i;
 	    }
 	}
-      
+
+
+      std::cout<< "first = " << mini1 << "\n";
       std::vector<int> es;
       std::set<int> ess;
       es.push_back( mini1 );
@@ -488,7 +490,7 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	    }
 	}
       
-      //      std::cout	<< " eDIS = " << obs[miniN].id << "\n";
+      std::cout	<< " dissim = " << miniN << "\n";
       es.push_back( miniN );
       ess.insert( miniN );
       
@@ -497,22 +499,30 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 
       for (int k=0; k<find_representatives; k++)
 	{
-	  int minik = 0;
+	  int minik = -1;
 	  
 	  double mind = 0;
 	  int nn = 0;
+
+	  std::cout << " k ------------------ " << k << "\n";
 	  
 	  for (int i=0;i<nobs;i++)
 	    {
-	      if ( ess.find( i ) != ess.end() )
-		continue;
 	      
-	      // mean distance to all other points
+	      if ( ess.find( i ) != ess.end() )
+		{
+		  std::cout << " skipping " << i << "\n";
+		  continue;
+		}
+	      
+	      // mean distance to /all/ other points
 	      double d1 = 0;
 	      for (int j=0;j<nobs;j++)
 		if ( j != i )
 		  d1 += D[i][j];
 	      d1 /= (double)( nobs-1 );
+
+	      std::cout << "   mean dst to all other points = " << d1 << "\n";
 	      
 	      // adjust for distance to closest existing
 	      // points (i.e. subtract these values)
@@ -520,24 +530,33 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	      // another existing point
 	      double d2 = 0;
 	      for ( int q=0; q<es.size(); q++)
-		//if ( q != 1 )  // skip 'worst case' pick here initially
-		  if ( q == 0 || d2 < D[i][es[q]] )
-		    d2 = D[i][es[q]];
-	      							 
-	      d1 /= d2;
+		if ( q == 0 || d2 < D[i][es[q]] )
+		  d2 = D[i][es[q]];
 	      
-	      if ( i == 0 || d1 < mind )
+	      std::cout << "   dist to close existing point (largest d) = " << d2 << "\n";
+	      
+	      d1 *= d2;
+	      std::cout <<"    ratio = " << d1 << "\n";
+	      
+	      if ( minik == -1 || d1 < mind )
 		{
+		  std::cout << " setting to NEW\n";
 		  mind = d1;
 		  minik = i;
 		}
 	      
 	    }
-
-	  //		std::cout << " found next point rep " << minik << " at " << mind << "\n";
+	  
+	  std::cout << " found next point rep " << minik << " at " << mind << "\n";
 	      es.push_back( minik );
 	      ess.insert( minik );
 	    }
+
+
+      // report
+      for (int j=0; j<es.size(); j++)
+	std::cout <<" before update j = " << j << " " << obs[ es[j] ].id  << "\n";
+
 
       //
       // now, for the k+2 epochs, assign every other epoch to closest
@@ -556,7 +575,7 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	  {
 	    if ( D[i][es[j]] < D[i][ es[ asgn[i] ] ] )
 	      {
-		//std::cout << " setting " << i << " -> " << j << "\n";
+		std::cout << " setting " << i << " -> " << j << "\n";
 		asgn[i] = j;		
 	      }
 	  }
@@ -568,6 +587,12 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	  q2a[ asgn[i] ].push_back( i );
 	}
 
+ 
+      // report
+      for (int j=0; j<q; j++)
+	std::cout <<" after update j = " << j << " " << obs[ es[j] ].id  << "\n";
+     
+      
       //
       // Now go back and find best representative for this whole set 
       // (and edit es[] ) 
@@ -606,8 +631,8 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
 	      
 	      // std::cout << " final min median= " << d1 << "\n";
 	      
-	      // std::cout << " grp j = " << j << "\n"
-	      // 	    << " updating " << es[ j ] << " tp " << didx << "\n";
+	      std::cout << " grp j = " << j << "\n"
+			<< " updating " << es[ j ] << " tp " << didx << "\n";
 	      
 	      // update es[]
 	      es[ j ] = didx;

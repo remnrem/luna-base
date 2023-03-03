@@ -75,6 +75,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
   
   for (int i=0; i<l; i++)
     {
+      
       const std::string & line = lines[i];
       
       if ( Helper::trim(line) == "" ) continue;
@@ -256,7 +257,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		    {
 		      // n.b. first version cannot be an alias
 		      // n.b. . means missing (empty)
-		      // check that a field hasn't already been specified i.e. cannot have one-to-many mapping
+		      // check that a field hasn't already been specified as something else i.e. cannot have one-to-many mapping
 		      
 		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) , '*' );
 		      
@@ -270,7 +271,8 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 			      if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label ); 
 			      str = ".";
 			    }
-			  if ( req_transducer.find( str ) != req_transducer.end() )
+
+			  if ( req_transducer.find( str ) != req_transducer.end() && req_transducer[ str ] != pref_str )
 			    Helper::halt( "cannot specify a transducer type multiple times: " + str + " for " + canonical_label );
 			  req_transducer[ str ] = pref_str;
 			}
@@ -286,16 +288,18 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		      
 		      for (int j=0; j<tok2.size(); j++)
 			{
-			  // allow transducer fields to retain wildcard '*' in sanitization
+			  // allow unit fields to retain wildcard '*' in sanitization
 			  std::string str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[j] ) ) ) , '*' );
+			  
 			  //if ( str == "*" && j == 0 ) Helper::halt( "first field cannot be '*' for " + canonical_label );
 			  if ( canonical_t::empty_field( str ) )
                             {
                               if ( j == 0 ) Helper::halt( "first field cannot be '.' for " + canonical_label );
                               str = ".";
-                            }						    
-			  if ( req_unit.find( str ) != req_unit.end() )
-			    Helper::halt( "cannot specify a unit type multiple times: " + str + " for " + canonical_label );			  
+                            }
+
+			  if ( req_unit.find( str ) != req_unit.end() && req_unit[ str ]  != pref_str )
+			    Helper::halt( "cannot specify different unit types : " + str + " and " + req_unit[ str ] + " for " + canonical_label );
 			  req_unit[ str ] = pref_str;
 			}
 		    }
