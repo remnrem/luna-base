@@ -1981,6 +1981,7 @@ bool  edf_t::is_actually_standard_edf()
 
 bool edf_t::is_actually_discontinuous() 
 {
+
   // definitely continuous
   if ( header.continuous ) return false;
   
@@ -2011,19 +2012,18 @@ bool edf_t::is_actually_discontinuous()
       if ( r == -1 )
 	{
 	  // make this the 'previous'
-	   tp0 = tp;
-	   segend = true;
+	  tp0 = tp;
+	  segend = true;
 	}
       else
 	{
 	  tp = timeline.rec2tp[r] ;
-
 	  // discontinuity / end of segment?
 	  segend = tp - tp0 != header.record_duration_tp ;
 	}
-
+      
       // record this segment 
-
+	   
       if ( segend )
 	{
 	  ++num_segments ;	  
