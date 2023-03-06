@@ -1363,6 +1363,7 @@ double MiscMath::threshold2( const std::vector<double> & x ,
 	{
 	  varMax = varBetween;
 	  threshold = ii->first ;
+	  //std::cout << " setting " << cnt << " " << n << " " << cnt/(double)n << "\n";
 	  *empf = cnt / (double)n ;
 	}
 

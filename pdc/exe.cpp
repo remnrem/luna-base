@@ -435,238 +435,346 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
   
   const int find_representatives = param.has( "representative" ) ?
     ( param.empty("representative" ) ? 1 : param.requires_int( "representative" ) ) : 0 ; 
-
-  // by defauly, use median similarity 
-  const bool use_median = ! param.has( "sum" );
-
+       
+  
   if ( find_representatives )
     {
-
-      // 1) get epoch most similar to all other epochs
-      // 2) get epoch most dissimilar to this epoch
-      // 3) for next j cases, find epoch min( all_i D_i + 
       
-      int mini1 = 0;
+      // nobs = number of epochs
+      // 
 
-      double mind = 0;
-
+      // track splits 0 (all), 1, 2, etc
+      std::map<int,std::set<int> > splits;
+      std::vector<int> split( nobs , 0 );
+      
+      // initialize: all in one
       for (int i=0;i<nobs;i++)
+	splits[0].insert( i );
+      // std::cout << " splits.size() " << splits.size() << "\n";
+      // std::cout << " ss " << splits[0].size() << "\n";
+
+      // code for next splits
+      int scnt = 0;
+      
+      // start loop
+      while ( 1 )
 	{
-	  double d1 = 0;
-	  if ( use_median )
+	  
+
+	  //
+	  // Within each split, get an Otsu threshold
+	  //  - if we return 0 freqs for all, then we're done 
+
+	  bool zero = true;
+
+	  std::map<int,double > th;
+	  //std::cout <<"---------------------------------------------------------\n";
+	  std::map<int,std::set<int> >::const_iterator ss = splits.begin();
+          while ( ss != splits.end() )
 	    {
-	      const std::vector<double> * dd = D.col(i).data_pointer();
+	      std::set<int>::const_iterator pp = ss->second.begin();
+	      std::vector<double> x;
+              while ( pp != ss->second.end() )
+                {
+                  std::set<int>::const_iterator qq = pp;
+		  qq++;
+		  while ( qq != ss->second.end() )
+		    {
+		      x.push_back( D[*pp][*qq] );
+		      //std::cout << " intootsu  " << D[*pp][*qq] << "\n";
+		      ++qq;
+		    }
+		  ++pp;
+		}
+
+	      double empf = 0;
+	      std::map<double,double> fvals;
+	      th[ ss->first ] = MiscMath::threshold2( x , &empf , 0 , &fvals );
+	      if ( empf > 1e-8 ) zero = false; 
 	      
-	      //const Vector<T> * col_pointer( const int c ) const { return &data[c]; }
-	      d1 = MiscMath::median( *dd );
+	      //std::cout << "\n\notsu " << th[ ss->first ] << " " << empf << "\n";
+	      ++ss;
 	    }
-	  else // sum
-	    for (int j=0;j<nobs;j++)
-	      if ( j != i ) d1 += D[i][j];
+
+	  //
+	  // No splits?
+	  //
+
+	  if ( zero ) break;
 	  
-	  if ( i == 0 || d1 < mind ) 
-	    {
-	      mind = d1;
-	      mini1 = i;
-	    }
-	}
 
-
-      std::cout<< "first = " << mini1 << "\n";
-      std::vector<int> es;
-      std::set<int> ess;
-      es.push_back( mini1 );
-      ess.insert( mini1 );
-      
-      // 2) find least similar to this
-      int miniN = 0;
-      mind = 0;
-      for (int i=0;i<nobs;i++)
-	{
-	  if ( D[i][mini1] > mind )
-	    {
-	      mind = D[i][mini1] ;
-	      miniN = i;
-	    }
-	}
-      
-      std::cout	<< " dissim = " << miniN << "\n";
-      es.push_back( miniN );
-      ess.insert( miniN );
-      
-      // now find next epoch most similar to all others, but not similar
-      // to existing picks
-
-      for (int k=0; k<find_representatives; k++)
-	{
-	  int minik = -1;
-	  
-	  double mind = 0;
-	  int nn = 0;
-
-	  std::cout << " k ------------------ " << k << "\n";
+	  //
+	  // Based on the Otsu split, derive estimate of neighbors, based on below th
+	  // distances only - i.e. we want lots 
+	  //
+	       
+	  std::vector<double> w( nobs , 0 );
 	  
 	  for (int i=0;i<nobs;i++)
 	    {
-	      
-	      if ( ess.find( i ) != ess.end() )
-		{
-		  std::cout << " skipping " << i << "\n";
-		  continue;
-		}
-	      
-	      // mean distance to /all/ other points
-	      double d1 = 0;
-	      for (int j=0;j<nobs;j++)
-		if ( j != i )
-		  d1 += D[i][j];
-	      d1 /= (double)( nobs-1 );
+	      const double & st = th[ split[i] ] ;
 
-	      std::cout << "   mean dst to all other points = " << d1 << "\n";
-	      
-	      // adjust for distance to closest existing
-	      // points (i.e. subtract these values)
-	      // so less likely to select if close to
-	      // another existing point
-	      double d2 = 0;
-	      for ( int q=0; q<es.size(); q++)
-		if ( q == 0 || d2 < D[i][es[q]] )
-		  d2 = D[i][es[q]];
-	      
-	      std::cout << "   dist to close existing point (largest d) = " << d2 << "\n";
-	      
-	      d1 *= d2;
-	      std::cout <<"    ratio = " << d1 << "\n";
-	      
-	      if ( minik == -1 || d1 < mind )
+	      const std::set<int> & s = splits.find( split[i] )->second;
+	      std::set<int>::const_iterator ss = s.begin();
+	      while ( ss != s.end() )
 		{
-		  std::cout << " setting to NEW\n";
-		  mind = d1;
-		  minik = i;
+		  
+		  const double & dst = D[i][*ss] ;
+		  //std::cout << " st dst " << st << " " << dst << " " << w[i] << "\n";
+		  if ( dst <= st ) 
+		    w[i]++;
+		  ++ss;		  
 		}
+	    }
+
+	   // std::cout << "\n";
+	   // for (int i=0; i<nobs; i++)
+	   //   std::cout << " pre " << i << "\t" << split[i] << "\t" << w[i] << "\n";
+	   // std::cout << "\n";
+
+
+	  
+	  // 2) Within each split, find the largest distance
+	  
+	  
+	  std::map<int,std::pair<int,int> > didx;
+	  std::map<int,double > d1;
+	  
+	  ss = splits.begin();
+	  while ( ss != splits.end() )
+	    {
+	      //std::cout << " ss->first looking " << ss->second.size() << "\n";
 	      
+	      std::set<int>::const_iterator pp = ss->second.begin();
+	      
+	      double d0 = 0;
+	      int ix = 0, jx = 0;
+	      while ( pp != ss->second.end() )
+		{
+		  std::set<int>::const_iterator qq = pp;
+		  ++qq; // skip self
+		  
+		  while ( qq != ss->second.end() )
+		    {
+
+		      // raw distance for this pair
+		      double dst = D[*pp][*qq];
+
+		      // weighting: smallest 'w' of the pair
+		      double w1 = w[ *pp ] < w[*qq ] ? w[*pp] : w[*qq ] ; 
+
+		      // statistic
+		      
+		      double st = dst * w1 ;
+
+		      //std::cout << " dst w1 st " << dst <<  " " << w1 << " " << st << "\n";
+		      
+		      if ( st > d0 )
+			{
+			  d0 = st;
+			  ix = *pp; jx = *qq;			 
+			}
+		      ++qq;
+		    }
+		  ++pp;
+		}
+
+	      //std::cout << "  putative split " << ss->first << " = " << ix << " " << jx << " " << d0 << "\n";
+	      // save largest distance for this split
+	      didx[ss->first] = std::make_pair( ix, jx );
+	      d1[ss->first] = d0;
+
+	      ++ss;
+	    }
+
+
+	  //
+	  // Determine which split to make
+	  //
+	  
+	  //std::cout << "\n\ncurrently " << splits.size() << " splits\n";
+
+	  double mind = 0;
+	  int mins = 0;
+
+	  //	  std::cout << " d1 sz = " << d1.size() << "\n";
+	  
+	  std::map<int,double>::const_iterator uu = d1.begin();
+	  while ( uu != d1.end() )
+	    {
+	      //std::cout << " uu-> split " << uu->first << " " << uu->second << " d = " << mind << "\n";
+	      if ( uu->second > mind )
+		{
+		  mind = uu->second;
+		  mins = uu->first; 
+		}
+	      ++uu;
 	    }
 	  
-	  std::cout << " found next point rep " << minik << " at " << mind << "\n";
-	      es.push_back( minik );
-	      ess.insert( minik );
+	  //std::cout << " will split split " << mins << "\n";
+	  int ix = didx[mins].first;
+	  int jx = didx[mins].second;
+
+	  // the two new labels to add
+	  // 0, 1+2, 3+4,
+          int lab1 = ++scnt;
+	  int lab2 = ++scnt;
+	  //std::cout << " splitting " << mins << " --> " << lab1 << " + " << lab2 << "\n";
+	  
+	  //std::cout << " D(ix,jx) = [ " << ix << " , " << jx << " ]  " << D[ix][jx] << " " << w[ix] << " " << w[jx] << "\n";
+	  // make the split
+	  const std::set<int> & s1 = splits[ mins ];
+	  std::set<int>::const_iterator pp = s1.begin();
+	  while ( pp != s1.end() )
+	    {
+	  //std::cout << " ix jx " << ix << " " << jx << "\n";
+	      // does 'p' go w/ i or j in this split?
+	      if ( D[*pp][ix] < D[*pp][jx] )
+		{
+	          split[ *pp ] = lab1;
+		  splits[ lab1 ].insert( *pp );
+		  //	  std::cout << " adding " << lab1 << "\n";
+		}
+	      else
+		{
+		  split[ *pp ] = lab2;
+                  splits[ lab2 ].insert( *pp );
+		  // std::cout << " adding " << lab2 << "\n";
+	         }       
+	      
+	      ++pp;
 	    }
 
+	  // finally, remove the partent split					
+	  splits.erase( splits.find( mins ) );
+	       
+	  // all done, count splits
+	  std::map<int,int> cnts;
+	  for (int i=0; i<nobs; i++)
+	    cnts[split[i]]++;
 
-      // report
-      for (int j=0; j<es.size(); j++)
-	std::cout <<" before update j = " << j << " " << obs[ es[j] ].id  << "\n";
+	  // print:
 
+	  // std::cout << "\n\n";
+	  // if ( 0 )
+	  //   {
+	  //     for (int i=0; i<nobs; i++)
+	  // 	std::cout <<"  end " << i << "\t" << split[i] << "\t" << w[i] << "\n";
+	  //     std::cout << "\n\n";
+	  //   }
+	  
+	  // std::map<int,int>::const_iterator cc = cnts.begin();
+	  // while ( cc != cnts.end() )
+	  //   {
+	  //     std::cout << " splitN " << cc->first << " = " << cc->second << "\n";
+	  //     ++cc;
+	  //   }
 
-      //
-      // now, for the k+2 epochs, assign every other epoch to closest
-      //
-
-      int q = es.size();
-      std::vector<int> asgn( nobs , 0 );
-      std::vector<std::vector<int> > q2a( q );
-      
-      // 0 = most likely
-      // 1 = least likely
-      // 2 ... others
-
-      for (int i=0; i<nobs; i++)
-	for (int j=1; j<q; j++)
-	  {
-	    if ( D[i][es[j]] < D[i][ es[ asgn[i] ] ] )
-	      {
-		std::cout << " setting " << i << " -> " << j << "\n";
-		asgn[i] = j;		
-	      }
-	  }
-     
-      std::map<int,int> ec;
-      for (int i=0; i<nobs; i++)
-	{
-	  ec[ asgn[i] ]++;
-	  q2a[ asgn[i] ].push_back( i );
+	  //std::cout <<" FIN " << cnts.size() << " " << find_representatives << "\n";
+	  if ( cnts.size() >= find_representatives ) break;
 	}
+    
+      //
+      // given splits, now find the most representative epoch of each 
+      //
 
- 
-      // report
-      for (int j=0; j<q; j++)
-	std::cout <<" after update j = " << j << " " << obs[ es[j] ].id  << "\n";
-     
       
+      std::map<int,int> repe;
+           
       //
       // Now go back and find best representative for this whole set 
-      // (and edit es[] ) 
       //
-	   
-      for (int j=0; j<q; j++)
-	{
-	  const int nq = ec[ j ];
-	  const std::vector<int> & e = q2a[ j ];
-	  if ( e.size() != nq ) Helper::halt( "internal error" );
 
-	  // requires this cluster to have at least 3 elements
-	  // otherwise, keep prototype as is
-	  if ( nq >= 3 )
-	    {
-	      double d1 = 0;
-	      int didx = 0;
-	      for (int p=0; p<nq; p++)
-		{
-		  std::vector<double> dst;
-		  for (int q=0; q<nq; q++)
-		    if ( p!=q )
-		      {
-			//std::cout << " adding p,q " << e[p] << " " << e[q] << " " << D[e[p]][e[q]] << "\n";
-			dst.push_back( D[e[p]][e[q]] );
-		      }
-		  
-		  double dd = MiscMath::median( dst );
-		  //std::cout << "  DD = " << e[p] << " " << dd << "\n";
-		  if ( p == 0 || dd < d1 )
-		    {
-		      d1 = dd;
-		      didx = e[p];
-		    }
-		}
-	      
-	      // std::cout << " final min median= " << d1 << "\n";
-	      
-	      std::cout << " grp j = " << j << "\n"
-			<< " updating " << es[ j ] << " tp " << didx << "\n";
-	      
-	      // update es[]
-	      es[ j ] = didx;
-	    }
-	}
-      
+      std::map<int,std::set<int> >::const_iterator ss = splits.begin();
+      while ( ss != splits.end() )
+       {
+	 const int s = ss->first;
+	 
+	 const std::set<int> & epochs = ss->second;
+
+	 // set representative as the first
+	 repe[ s ] = *(epochs.begin());
+
+	 // but otherwise get median 
+	 if ( epochs.size() > 1 )
+	   {
+	     
+	     double d1 = 0;                                                                                                                  
+	     int didx = 0;                                                                                                                   
+	     
+	     std::set<int>::const_iterator pp = epochs.begin();
+	     while ( pp != epochs.end() )
+	       {
+
+		 // candidate rep for this split
+		 const int c = *pp;
+
+		 // get median dst to all others in this split
+		 std::vector<double> ds;
+		 std::set<int>::const_iterator qq = epochs.begin();
+		 while ( qq != epochs.end() )
+		   {
+		     if ( pp != qq )
+		       ds.push_back( D[*pp][*qq] );
+		     ++qq;
+		   }
+		 double medd = MiscMath::median ( ds );
+
+		 // got a new representative?
+		 if ( pp == epochs.begin() || medd < d1 )
+		   {
+		     d1 = medd;
+		     didx = *pp;
+		   }
+		 
+		 ++pp;
+	       }
+
+	     // update repe
+	     repe[ s ] = didx;
+	   }
+	 
+	 // next split
+	 ++ss;
+       }
+
+    
       //
       // outputs
       //
 
-      for (int j=0; j<q; j++)
+      const int q = splits.size();
+      int k = 0;
+      std::map<int,int> track;
+      std::map<int,int>::const_iterator kk = repe.begin();
+      while ( kk != repe.end() )
 	{
-	  writer.level( j+1 , "K" );
-	  writer.value( "E" , obs[ es[j] ].id );
-	  writer.value( "N" , ec[ j ] );
+	  writer.level( ++k , "K" );
+	  track[ kk->first ] = k; // for output below
+	  writer.value( "E" , obs[ kk->second ].id );                                                                                              
+	  writer.value( "N" , (int)splits[ kk->first ].size() );
+	  ++kk;
 	}
       writer.unlevel( "K" );
-
-      for (int i=0; i<nobs; i++)
-	{
-	  int e = 0;
-	  if ( ! Helper::str2int( obs[ i ].id , &e ) )
-	    Helper::halt( "internal error in exe-rep" );
-	  
-	  writer.epoch( e );
-	  writer.value( "K" , 1+ asgn[i] );
-	  writer.value( "KE" , obs[ es[ asgn[i] ] ].id );
-	}
-      writer.unepoch();
       
-      // for (int i=0;i<nobs;i++)
-      //   {
-      //     for (int j=0;j<nobs;j++) OUT1 << ( j ? "\t" : "" ) << D[i][j];
+      
+      for (int i=0; i<nobs; i++)
+       	{
+	  // actual epoch label
+	  int e = 0;
+       	  if ( ! Helper::str2int( obs[ i ].id , &e ) )
+       	    Helper::halt( "internal error in exe-rep" );
 
+	  // class in split[i]
+	  // representative in repe[ split[i] ] 
+	  const std::string rep = obs[ repe[ split[i] ] ].id ;      
+
+	  writer.epoch( e );	  
+	  writer.value( "K" , track[ split[i] ] );
+	  writer.value( "KE" , rep );
+	}
+      writer.unepoch();      
+      
     }
 
   
