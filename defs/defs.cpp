@@ -437,7 +437,6 @@ void globals::init_defs()
   sleep_stage_labels[ "S4" ] = NREM4;
 
   sleep_stage_labels[ "lights" ] = LIGHTS_ON;
-  sleep_stage_labels[ "lights_on" ] = LIGHTS_ON;
   sleep_stage_labels[ "unknown" ] = UNKNOWN;
   sleep_stage_labels[ "missing" ] = UNKNOWN;
   sleep_stage_labels[ "A" ] = UNKNOWN;

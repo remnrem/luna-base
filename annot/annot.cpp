@@ -3125,6 +3125,9 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
   const bool add_specials = ! param.has( "no-specials" );
   
+  // in .annot mode only, skip # headers
+  const bool add_headers = ! param.has( "no-headers" );
+  
   clocktime_t starttime( edf.header.starttime );
 
   if ( hms && ! starttime.valid ) 
@@ -3394,29 +3397,35 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  if ( annot->interval_events.size() == 0 ) continue;
 	  
 	  bool has_vars = annot->types.size() > 0 ;
-
-	  // nb. ensure class name is quoted if contains `|` delimiter here 
-	  O1 << "# " << Helper::quote_if( annot->name, '|' ) ; 
 	  
-	  if ( annot->description != "" )
-	    O1 << " | " << annot->description;
-	  else if ( has_vars ) // need a dummy description here 
-	    O1 << " | " << annot->description ;
 	  
-	  if ( has_vars ) 
-	    O1 << " |";
-	  
-	  std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
-	  while ( aa != annot->types.end() )
+	  if ( add_headers )
 	    {
-	      O1 << " " << aa->first 
-		 << "[" 
-		 << globals::type_name[ aa->second ] 
-		 << "]";	      
-	      ++aa;
-	    }
 	  
-	  O1 << "\n";
+	      // nb. ensure class name is quoted if contains `|` delimiter here 
+	      O1 << "# " << Helper::quote_if( annot->name, '|' ) ; 
+	      
+	      if ( annot->description != "" )
+		O1 << " | " << annot->description;
+	      else if ( has_vars ) // need a dummy description here 
+		O1 << " | " << annot->description ;
+	      
+	      if ( has_vars ) 
+		O1 << " |";
+	      
+	      std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
+	      while ( aa != annot->types.end() )
+		{
+		  O1 << " " << aa->first 
+		     << "[" 
+		     << globals::type_name[ aa->second ] 
+		     << "]";	      
+		  ++aa;
+		}
+	      
+	      O1 << "\n";
+	      
+	    }
 
 
 	  //
@@ -3441,7 +3450,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
       // dummy markers first 
       //
 
-      if ( add_specials )
+      if ( add_specials && add_headers )
 	{
 	  if ( start_hms != "." ) 
 	    O1 << "# start_hms | EDF start time\n";
