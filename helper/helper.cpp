@@ -209,15 +209,30 @@ std::string Helper::search_replace( std::string s , const std::string & a , cons
 
 std::string Helper::expand( const std::string & f )
 {
+
 #ifdef WINDOWS
   return f;
 #else
-  wordexp_t exp_result;
-  wordexp( f.c_str(), &exp_result, 0);
-  std::string r = exp_result.we_wordv[0];
-  wordfree(&exp_result);
-  return r;
+  // only expand ~ if first character for home-folder subst
+  if ( f.size() == 0 ) return f;
+  if ( f[0] != '~' ) return f;
+  std::string home = getenv("HOME");
+  return home + f.substr(1);
 #endif
+
+//   wordexp_t exp_result;
+//   // place filepath in quotes to handle spaces, other special chars etc
+//   //const int illegal = wordexp( ("\""+f+"\"").c_str(), &exp_result, 0);
+//   const int illegal = wordexp( f.c_str(), &exp_result, 0);  
+//   if ( illegal )
+//     Helper::halt( "code " + Helper::int2str(illegal) + "\nproblem parsing filepath: " + f );  
+//   std::string r = exp_result.we_wordv[0];
+//   //  for (uint32_t i = 1; i < exp_result.we_wordc; ++i)
+//   //    r += " " + std::string(exp_result.we_wordv[i]);
+//   wordfree(&exp_result);
+//   std::cout << "r [" << r << "]\n";
+//   return r;
+// #endif
 }
 
 

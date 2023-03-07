@@ -82,22 +82,7 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
 
   if ( ne_by_ne && univariate )
     Helper::halt( "cannot specify both uni and cat" );
-
     
-  //
-  // write cluster solution to normal output stream
-  // write to a separate txt file, not an output-db
-  //
-
-  
-  bool write_matrix = param.has( "mat" );
-  
-  if ( univariate && write_matrix ) 
-    Helper::halt( "cannot specify uni and mat together" );
-  
-  std::string outfile = "";
-  if ( write_matrix ) 
-    outfile = param.requires( "mat" ) ;
 
   
   //
@@ -112,6 +97,24 @@ void pdc_t::similarity_matrix( edf_t & edf , param_t & param )
   
   const int ns = signals.size();
 
+
+  //
+  // write cluster solution to normal output stream
+  // write to a separate txt file, not an output-db
+  //
+
+  
+  bool write_matrix = param.has( "mat" );
+  
+  if ( univariate && write_matrix && ns != 1 ) 
+    Helper::halt( "cannot specify uni and mat together if >1 signal" );
+  
+  std::string outfile = "";
+  if ( write_matrix ) 
+    outfile = param.requires( "mat" ) ;
+
+
+  
   // desired
   int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : -1;
 
