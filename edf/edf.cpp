@@ -1354,7 +1354,6 @@ bool edf_t::attach( const std::string & f ,
   //
   // Store filename and ID
   //
-  std::cout << " f[" << f << "]\n";
   
   // expand() expands out any ~/ notation to full path
   filename = Helper::expand( f ) ;
@@ -1372,24 +1371,19 @@ bool edf_t::attach( const std::string & f ,
   bool edfz_mode = Helper::file_extension( filename , "edfz" )
     || Helper::file_extension( filename , "edf.gz" ); 
 
-  std::cout << " file [" << filename << "\n"; 
-  
   //
   // Attach the file
   //
   
   if ( ! edfz_mode ) 
     {
-      std::cout << "S1\n";
       if ( ( file = fopen( filename.c_str() , "rb" ) ) == NULL )
 	{      
-	  std::cout << "S2\n";
 	  file = NULL;
 	  logger << " PROBLEM: could not open specified EDF: " << filename << "\n";
 	  globals::problem = true;
 	  return false;
 	}
-      	  std::cout << "S3\n";
     }
   else
     {
