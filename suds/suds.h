@@ -104,7 +104,8 @@ enum suds_stage_t
    SUDS_NR = 4 , // generic NR (for 3-stage model)
    SUDS_REM = 5 ,
    SUDS_ARTIFACT = 6 , 
-   SUDS_UNKNOWN = 7 
+   SUDS_UNKNOWN = 7 ,
+   SUDS_LIGHTS 
   };
 
 enum suds_feature_t
@@ -919,7 +920,8 @@ public:
     if ( s == SUDS_NR ) return "NR";
     if ( s == SUDS_REM ) return "R";
     if ( s == SUDS_ARTIFACT ) return "BAD";
-    if ( s == SUDS_UNKNOWN ) return "?";       
+    if ( s == SUDS_UNKNOWN ) return "?";
+    if ( s == SUDS_UNKNOWN ) return "L";       
     return "?";
   }
   
@@ -933,6 +935,7 @@ public:
     if ( s == "R" ) return SUDS_REM;
     if ( s == "BAD" ) return SUDS_ARTIFACT;
     if ( s == "?" ) return SUDS_UNKNOWN;
+    if ( s == "L" ) return SUDS_LIGHTS;
     return SUDS_UNKNOWN;
   }
 

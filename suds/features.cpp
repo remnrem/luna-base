@@ -293,10 +293,12 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
       for (int ss=0; ss < helper->ne ; ss++ )
 	{
 	  if ( helper->edf.timeline.hypnogram.stages[ ss ] == UNSCORED
-	       || helper->edf.timeline.hypnogram.stages[ ss ] == LIGHTS_ON
 	       || helper->edf.timeline.hypnogram.stages[ ss ] == MOVEMENT
 	       || helper->edf.timeline.hypnogram.stages[ ss ] == UNKNOWN )
 	    obs_stage[ss] = SUDS_UNKNOWN;
+	  
+	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == LIGHTS_ON )
+	    obs_stage[ss] = SUDS_LIGHTS;
 	  
 	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == WAKE )
 	    obs_stage[ss] = SUDS_WAKE;
@@ -322,19 +324,23 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
 	  // note: however, if in 'self-classification' mode
 	  // (i.e. running SOAP), then we allow these, i.e. to enable
 	  // 'auto-completion' staging (i.e. if some small proportion
-	  // is staged, and we want to complete the rest)
-	  
+	  // is staged, and we want to complete the rest); we do not do this for L
+	  // epochs however, they should be completely ignored
+	       
 	  // lda_t will ignore '?' in fitting the model; i.e. so we can process
 	  // just the 'full' dataset (as will be used in the prediction part) 
 	  // and that way we are sure that we are doing the SOAP part right
 
 	  if ( suds_t::soap_mode )
 	    {
-	      ++helper->nge;
+	      if ( obs_stage[ss] == SUDS_LIGHTS )
+                helper->retained[ss] = false;
+	      else
+		++helper->nge;
 	    }
 	  else
 	    {	      
-	      if ( obs_stage[ss] == SUDS_UNKNOWN ) 
+	      if ( obs_stage[ss] == SUDS_UNKNOWN ||  obs_stage[ss] == SUDS_LIGHTS ) 
 		helper->retained[ss] = false; 
 	      else ++helper->nge;
 	    }

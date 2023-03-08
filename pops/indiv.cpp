@@ -538,7 +538,8 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   // check epochs line up, if staging present
   if ( has_staging && ne != edf.timeline.hypnogram.stages.size() )    
     {
-      logger << "  *** problem extracting stage information for trainer" <<  edf.id << "  ( -- skipping -- )\n";
+      logger << "  *** problem extracting stage information for trainer: " <<  edf.id << "  ( -- skipping -- )\n";
+      logger << "      (expecting " << ne << " epochs, observed " << edf.timeline.hypnogram.stages.size() << ")\n";
       return false;      
     }  
 
@@ -781,7 +782,7 @@ void pops_indiv_t::level1( edf_t & edf )
       
       ++ss;
     }
-
+  
 
   //
   // Get any indivi-level covariates (will be entered identically for every epoch)
@@ -911,7 +912,7 @@ void pops_indiv_t::level1( edf_t & edf )
 			 fft_segment_size , fft_segment_overlap , 
 			 WINDOW_TUKEY50 , false , false );
   
-
+  
   //
   // iterate over epochs
   //
@@ -922,7 +923,7 @@ void pops_indiv_t::level1( edf_t & edf )
     {
       
       int epoch = edf.timeline.next_epoch();      	  
-      
+      std::cout << " epoch " << epoch << "\n";
       if ( epoch == -1 ) break;
       
       if ( en == ne ) Helper::halt( "internal error: over-counted epochs" );
