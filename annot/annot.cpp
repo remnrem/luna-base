@@ -4481,6 +4481,8 @@ int annotation_set_t::remap( const std::vector<std::string> & files , int remap_
 	  std::string x;
 	  Helper::safe_getline( IN1 , x );
           if ( IN1.eof() ) break;
+	  x = Helper::trim( x , ' ' , '\t' );
+	  
 	  if ( x == "" ) continue;
 	  if ( x[0] == '%' ) continue;
 	  
