@@ -38,13 +38,24 @@ endif
 ## Compiler flags
 ##
 
-CXX = g++
-CC = gcc
+ifeq ($(WASM),1)
+ CXX = em++
+ CC = emcc
+else
+ CXX = g++
+ CC = gcc
+endif
+
 
 CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. 
 #CXXFLAGS=-O0 -std=gnu++11 -MMD -MP -I. -I.. -pg
 
 CXXFLAGS +=$(DEP_INCLUDES)
+
+ifeq ($(WASM),1)
+ CXXFLAGS+=-DWASM -s USE_ZLIB=1
+endif
+
 
 ifeq ($(ARCH),MAC)
 CXXFLAGS+=-I/usr/local/include
@@ -65,16 +76,25 @@ CFLAGS=-O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 ## Linker flags
 ##
 
-LD = g++ 
+ifeq ($(WASM),1)
+ LD = em++
+else
+ LD = g++
+endif
+
 
 LDFLAGS = $(DEP_LIB) -L. -L..
 
 # assuming mingw64 for windows build:
 
 ifeq ($(ARCH),WINDOWS)
-LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3 -lz -static -static-libgcc -static-libstdc++
+ LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3 -lz -static -static-libgcc -static-libstdc++
 else
-LDFLAGS += -L/usr/local/lib -lfftw3 -lz
+ ifeq ($(WASM),1)
+  LDFLAGS += -L${WASM_DEPS} -lfftw3 -s USE_ZLIB=1
+ else
+  LDFLAGS += -L/usr/local/lib -lfftw3 -lz
+ endif
 endif
 
 ifdef LGBM_PATH
@@ -95,25 +115,37 @@ endif
 
 
 ##
+## WASM flags
+##
+
+ifdef WASM
+#LDFLAGS += -s LINKABLE=1 -s EXPORT_ALL=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -sALLOW_MEMORY_GROWTH -sFORCE_FILESYSTEM  --preload-file tutorial/
+ LDFLAGS += -s LINKABLE=1 -s EXPORT_ALL=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -sALLOW_MEMORY_GROWTH -sFORCE_FILESYSTEM
+endif
+
+
+##
 ## Static binary: 'make static STATIC=1', otherwise set PIC code
 ##
 
 ifdef STATIC
-LDFLAGS += -static
-ifdef LINUX
-LDFLAGS += -static-libgcc -static-libstdc++
+ LDFLAGS += -static
+ ifdef LINUX
+  LDFLAGS += -static-libgcc -static-libstdc++
+ endif
 endif
-endif
+
 
 ##
 ## Build with dynamic linking, and libluna.so (default)
 ##
 
 ifndef STATIC
-CXXFLAGS+=-fPIC
-CFLAGS+=-fPIC
-LDFLAGS+=-fPIC
+ CXXFLAGS+=-fPIC
+ CFLAGS+=-fPIC
+ LDFLAGS+=-fPIC
 endif
+
 
 ##
 ## Shared library name
@@ -131,9 +163,17 @@ export CFLAGS
 export LD
 export LDFLAGS
 
-AR = ar
-ARFLAGS = rv
-RANLIB= ranlib
+
+ifdef WASM
+ AR = emar
+ ARFLAGS = rv
+ RANLIB= emranlib
+else
+ AR = ar
+ ARFLAGS = rv
+ RANLIB= ranlib
+endif
+
 RM = rm -f
 ECHO = echo
 SHELL = /bin/sh
