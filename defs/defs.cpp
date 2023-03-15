@@ -200,9 +200,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v0.27.0";
+  version = "v0.28.0";
   
-  date    = "27-Sep-2022";
+  date    = "14-Mar-2022";
 
   //
   // Return code

@@ -4469,6 +4469,8 @@ bool edf_t::basic_stats( param_t & param )
   int required_sr = param.has( "sr-under" ) ? param.requires_int( "sr-under" ) : 0 ; 
 
   const bool minimal = param.has( "min" ) || param.has( "minimal" );
+
+  const bool run_pcts = param.has( "pct" ) ? param.yesno("pct") : true ;
   
   for (int s=0; s<ns; s++)
     {
@@ -4545,7 +4547,6 @@ bool edf_t::basic_stats( param_t & param )
 	      
 	      double mean   = MiscMath::mean( *d );
 	      double median = calc_median ? MiscMath::median( *d ) : 0;
-
 	      
 	      double sd     = minimal ? 0 : MiscMath::sdev( *d , mean );
 	      double rms    = minimal ? 0 : MiscMath::rms( *d );
@@ -4562,7 +4563,7 @@ bool edf_t::basic_stats( param_t & param )
 		  }
 	      
 	      std::map<int,double> pct;
-	      if ( ! minimal )
+	      if ( run_pcts )
 		{
 		  //pct[ -1 ]  = MiscMath::percentile( *d , 0.001 );
 		  pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
@@ -4599,18 +4600,21 @@ bool edf_t::basic_stats( param_t & param )
 		    writer.value( "KURT" , kurt );
 		  
 		  writer.value( "RMS"  , rms  );
-		  
-		  std::map<int,double>::const_iterator pp = pct.begin() ;
-		  while ( pp != pct.end() )
+
+		  if ( run_pcts )
 		    {
-		      if ( pp->first == -1 )
-			writer.value( ( "P001" ) + Helper::int2str( pp->first ) , pp->second ) ;
-		      else		    
-			writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
-		      ++pp;
+		      std::map<int,double>::const_iterator pp = pct.begin() ;
+		      while ( pp != pct.end() )
+			{
+			  if ( pp->first == -1 )
+			    writer.value( ( "P001" ) + Helper::int2str( pp->first ) , pp->second ) ;
+			  else		    
+			    writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
+			  ++pp;
+			}
 		    }
 		}
-
+	      
 	      
 	      //
 	      // Record
@@ -4679,16 +4683,20 @@ bool edf_t::basic_stats( param_t & param )
 	      if ( (*d)[i] < min ) min = (*d)[i];
 	      if ( (*d)[i] > max ) max = (*d)[i];
 	    }
-	  
+
+
 	  std::map<int,double> pct;
-	  pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
-	  pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
-	  pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
-	  pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
-	  pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
-	  pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
-	  for (int pp=0;pp<9;pp++)
-	    pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
+	  if ( run_pcts )
+	    {	      
+	      pct[ 1 ]  = MiscMath::percentile( *d , 0.01 );
+	      pct[ 2 ]  = MiscMath::percentile( *d , 0.02 );
+	      pct[ 5 ]  = MiscMath::percentile( *d , 0.05 );
+	      pct[ 95 ] = MiscMath::percentile( *d , 0.95 );
+	      pct[ 98 ] = MiscMath::percentile( *d , 0.98 );
+	      pct[ 99 ] = MiscMath::percentile( *d , 0.99 );
+	      for (int pp=0;pp<9;pp++)
+		pct[ 10 + pp * 10 ] = MiscMath::percentile( *d , 0.1 + pp*0.1 );
+	    }
 	  
 	  //
 	  // Output
@@ -4703,12 +4711,15 @@ bool edf_t::basic_stats( param_t & param )
 	  
 	  writer.value( "RMS"  , rms  );
 	  writer.value( "SD"  , sd  );
-	  
-	  std::map<int,double>::const_iterator pp = pct.begin() ;
-	  while ( pp != pct.end() ) 
+
+	  if ( run_pcts )
 	    {
-	      writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
-	      ++pp;
+	      std::map<int,double>::const_iterator pp = pct.begin() ;
+	      while ( pp != pct.end() ) 
+		{
+		  writer.value( ( pp->first < 10 ? "P0" : "P" ) + Helper::int2str( pp->first ) , pp->second ) ;
+		  ++pp;
+		}
 	    }
 	}
       
@@ -4747,7 +4758,7 @@ bool edf_t::basic_stats( param_t & param )
       //
       
       // verbose output: every unique value / count 
-	   if ( hist )
+      if ( hist )
 	{
 	  
 	  std::map<double,int> counts;
