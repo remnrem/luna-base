@@ -23,6 +23,138 @@
 #include "edf/edf.h"
 #include "edf/slice.h"
 
+
+bool edf_t::edf_minus()
+{
+
+  // takes an EDF+D and makes a new standard EDF with gaps added (zeros)
+  // it will also create an annot_offset_table[] for use w/ a subsequen WRITE-ANNOTS
+  
+  if ( ! header.edfplus )
+    {
+      logger << "  not already a standard EDF -- nothing for EDF-MINUS to do\n";
+      return false;
+    }
+
+  // this function can work with original EDF+D but also in-memory 'EDF+D'
+  //  i.e. after restructuring
+
+  // special case where EDF (in-memory) is already continuous -- in this case, nothing to do,
+  // so just force EDF in the standard manner
+  
+  if ( header.continuous )
+    {
+      logger << "  no discontinuities found -- peforming simple 'EDF' operation instead to force EDF\n";
+      set_edf();
+      //reset_start_time();
+      return false;
+    }
+
+  //
+  // otherwise, we have some form of a discontinuous EDF 
+  //
+
+  // get number of signals
+  int nsigs = 0;
+  for (int s=0; s<header.ns; s++)
+    if ( header.is_data_channel(s) ) ++nsigs;
+  
+  logger << "  making a standard EDF with " << nsigs << " data channels\n";
+
+
+  // record size          = header.record_duration   (sec)
+  // implied new EDF size =  
+
+  // actual signal in seconds
+  double observed_sec = header.nr * header.record_duration ;
+
+  // implied standaard EDF durtion
+  double implied_sec = timeline.last_time_point_tp * globals::tp_duration ;
+
+  double spliced_sec = implied_sec - observed_sec;
+
+
+  //
+  // keeping EDF record size constant, 
+  // i.e. as per SEGMENTS command
+  //
+  
+  std::set<interval_t> segs, gaps;
+
+  int r = timeline.first_record();  
+  uint64_t tp0 = timeline.rec2tp[r];
+  uint64_t tp_start = tp0;
+  
+  uint64_t gap_start = 0; // i.e. always start at EDF starttime
+  
+  while ( r != -1 )
+    {      
+      // next record
+      r = timeline.next_record( r );
+
+      // start of this next record
+      uint64_t tp;
+      bool segend = false;
+      
+      // end?
+      if ( r == -1 )
+	{
+	  // make this the 'previous'
+	  tp0 = tp;
+	  segend = true;
+	}
+      else
+	{
+	  tp = timeline.rec2tp[r] ;	  
+	  // discontinuity / end of segment?
+	  segend = tp - tp0 != header.record_duration_tp ;
+	}
+      
+      // record this segment 
+      if ( segend )
+	{	  
+
+	  uint64_t tp_stop = tp0 + header.record_duration_tp;
+
+	  segs.insert( interval_t( tp_start , tp_stop ) );
+	  
+	  // did we observe a gap prior to this?
+	  if ( tp_start > gap_start )
+	    {
+	      gaps.insert( interval_t( gap_start , tp_start ) );	      
+	    }
+	  
+	  // reset start of next gap to end to this segment	      
+	  gap_start = tp0 + header.record_duration_tp;
+	  
+	  // current point becomes start of the next segment
+	  tp_start = tp;
+	  
+	}
+      
+      // current point becomes the last one, for next lookup
+      tp0 = tp;
+
+    }
+
+  int num_segments = segs.size();
+  int num_gaps = gaps.size();
+
+  // the total segment duration should be an exact multiple of EDF record size
+  // the gap durations need not be, however;
+  // in the new standard EDF, each gap may need to be expanded to be an even
+  // EDF record size
+
+  // if we extend gaps, then we need to track the time added and appropriately
+  // build an annot offset table for subsequent WRITE-ANNOTS
+
+  //  std::map<
+  
+  
+
+  return true;
+}
+
 bool edf_t::align( const std::vector<std::string> & annots )
 {
 

@@ -2937,7 +2937,72 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     }
 
 
+  //
+  // test date/time functions
+  //
 
+  if ( p == "datetime" )
+    {
+      
+      if ( 0 )
+	{
+	  for (int c=0; c<10000; c++)
+	    {
+	      std::string ds = date_t::datestring( c );
+	      date_t dt( ds );
+	      int c2 = date_t::count( dt );
+	      std::cout << ( c != c2 ? "*****" : "" ) 
+			<< c << "\t"
+			<< c2 << "\t"
+			<< ds << "\n";
+	    }
+	}
+
+      if ( 1 )
+	{
+	  std::string inp1, inp2;
+	  std::cin >> inp1 >> inp2;
+	  clocktime_t t1( inp1 );
+	  clocktime_t t2( inp2 );
+
+	  std::cout << "t1: "
+		    << t1.valid << "\t"
+		    << t1.as_string( ) << "\t"
+		    << t1.as_datetime_string( ) << "\n";
+	  //<< t1.d << " - " << t1.h << ":" << t1.m << ":" << t1.s << "\n";
+	  
+	  std::cout << "t2: "
+		    << t2.valid << "\t"
+		    << t2.as_string( ) << "\t"
+		    << t2.as_datetime_string( ) << "\n";
+	  //<< t2.d << " - " << t2.h << ":" << t2.m << ":" << t2.s << "\n";
+
+	  const int earlier = clocktime_t::earlier( t1 , t2 ) ; 
+	  
+	  const double difh = earlier == 0 ? 0 : ( earlier == 1 ? clocktime_t::difference_hours( t1 , t2 ) : clocktime_t::difference_hours( t2 , t1 )   );
+	  const double difs = earlier == 0 ? 0 : ( earlier == 1 ? clocktime_t::difference_seconds( t1 , t2 ) : clocktime_t::difference_seconds( t2 , t1 ) );
+
+	  clocktime_t midpoint;
+	  midpoint.midpoint( t1 , t2 );
+	  
+ 	  std::cout << " earlier = " << earlier << "\n";
+	  std::cout << " t1 - t2 (hours) = " << difh << "\n";
+	  std::cout << " t1 - t2 (secs) = " << difs << "\t" << difs / 3600.0 << "\n";
+	  std::cout << " midpoint = " << midpoint.as_datetime_string() << "\n";
+	  std::cout << "\n";
+	  clocktime_t nt = t1;
+	  for (int i=0;i<48;i++)
+	    {
+	      //nt.advance_hrs( 1.222 );
+	      nt.advance( clocktime_t( "+1:30" ) );
+	      std::cout << "  --> " << nt.as_string() << "\t" << nt.as_datetime_string() << "\n";
+	    }
+	}
+      
+      
+      
+      std::exit(0);
+    }
   
 
   //

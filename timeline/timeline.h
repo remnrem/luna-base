@@ -83,6 +83,8 @@ struct timeline_t
 
   void re_init_timeline() { init_timeline( true ); }
 
+  void create_discontinuous_timeline( const std::vector<uint64_t> & tps );
+
   void restructure( const std::set<int> & keep );
 
   

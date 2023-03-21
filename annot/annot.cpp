@@ -675,8 +675,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   const bool align_annots = globals::annot_alignment.size() > 0 ;
     
   // check EDF starttime, which might be needed
+  //  -- but add EDF start date here too, to allow dhms printing
   
-  clocktime_t starttime( parent_edf.header.starttime );
+  clocktime_t starttime( parent_edf.header.startdate, parent_edf.header.starttime );
     
   // read header then data
   
@@ -1155,8 +1156,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  
 	  if ( interval.start == 1 && interval.stop == 0 ) 
-	    {	      
+	    {
+	      //logger << "  *** warning, skipping annot\n";
 	      continue;
+	      
 	    }
 	  
 	  	  
@@ -1618,14 +1621,23 @@ interval_t annot_t::get_interval( const std::string & line ,
 	    }
 	  else
 	    {
+	      
+	      // h:m:s specification does not work for >12 hours recordings
+	      
 	      // 1: EDF start comes before ANNOT start
-	      // 2: annot start comes before EDF start --> need to ignore by 
+	      
+	      // 2: annot start comes before EDF start
+	      // --> need to ignore by 
 	      //    setting special flag interval_t(1,0) 
 	      
 	      int earlier = clocktime_t::earlier( starttime , atime );
 	      
-	      if ( earlier == 2 ) 
-		before_edf_start = true;
+	      if ( earlier == 2 )  // allow for this to be the latter time
+		{
+		  before_edf_start = true;
+		  // i.e. take the next occasion
+		  // dbl_start =  24*60*60 - clocktime_t::difference_seconds( starttime , atime ) ;
+		}
 	      else 
 		dbl_start = clocktime_t::difference_seconds( starttime , atime ) ;
 	      
@@ -1640,16 +1652,18 @@ interval_t annot_t::get_interval( const std::string & line ,
 	    Helper::halt( "invalid interval (start) : " + line );
 
 	}
-
+    
       // stop time:
       if ( is_hms2 )
 	{
+	  
 	  clocktime_t btime( stop_str );
-
+	  
 	  if ( is_elapsed_hhmmss_stop )
 	    dbl_stop = btime.seconds(); // was ealpsed [hh:mm:ss] 
 	  else
 	    dbl_stop = clocktime_t::difference_seconds( starttime , btime ) ;  // was clocktime
+	  
 	}
       else if ( col2dur ) // expecting ""
 	{
@@ -1694,8 +1708,9 @@ interval_t annot_t::get_interval( const std::string & line ,
 
       if ( ! *readon )
 	interval.stop  = Helper::sec2tp( dbl_stop );
-      
+
     }
+
   
   
   if ( ! *readon )
@@ -3101,7 +3116,8 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   // use hh:mm:ss, if possible, instead of elapsed seconds (for .annot only)
   //
 
-  bool hms = param.has( "hms" );
+  bool hms = param.has( "hms" ) || param.has( "dhms" );
+  const bool dhms = param.has( "dhms" );
 
   //
   // If from internal EDF+D, write w/ time-stamps for standard EDF
@@ -3123,12 +3139,16 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   // for complete XML compatibility
   //
 
-  const bool add_specials = ! param.has( "no-specials" );
+  // no outputs other than data rows (no class line)  
+  const bool minimal = param.has( "minimal" ) || param.has( "min" ) ;
+  
+  const bool add_specials = ! ( minimal || param.has( "no-specials" ) );
   
   // in .annot mode only, skip # headers
-  const bool add_headers = ! param.has( "no-headers" );
+  const bool add_headers = ! ( minimal || param.has( "no-headers" ) );
   
-  clocktime_t starttime( edf.header.starttime );
+  // ensure date is here too (to allow 'dhms' mode printing)
+  clocktime_t starttime( edf.header.startdate , edf.header.starttime );
 
   if ( hms && ! starttime.valid ) 
     {
@@ -3136,14 +3156,30 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
       hms = false;
     }
 
+  
+  
+
+  
   //
   // Any offsets specified to annotations for output? (i.e. via ALIGN)
   //
 
+  // nb. this could have been set by the ALIGN command -- although, we
+  //    are taking that as redundant / too complicated now... so
+  //    here also allow direct specificaiton (in secs) for WRITE-ANNOT
+  //    but in that case it is interpeted here as +ve (i.e. to add, not subjtract)
+  
+  if ( param.has( "offset" ) )
+    {
+      double s1 = param.requires_dbl( "offset" );      
+      annot_offset = s1 * globals::tp_1sec;
+      annot_offset_dir = +1;
+    }
+  
   if ( annot_offset )
-    logger << "  applying a offset of -"
+    logger << "  applying a offset of " << ( annot_offset_dir == 1 ? "+" : "-" ) 
 	   << annot_offset * globals::tp_duration
-	   << " to all annotations when writing out\n";
+	   << " seconds to all annotations when writing out\n";
 
   //
   // either for all annots, or just a subset
@@ -3306,10 +3342,18 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  
 	  if ( annot_offset )
 	    {
-	      if ( interval.start < annot_offset ) interval.start = 0;
-	      else interval.start -= annot_offset;
-	      if ( interval.stop < annot_offset ) interval.stop = 0;
-	      else interval.stop -= annot_offset;
+	      if ( annot_offset_dir == +1 )
+		{
+                  interval.start += annot_offset;
+                  interval.stop += annot_offset;
+		}
+	      else // from ALIGN
+		{
+		  if ( interval.start < annot_offset ) interval.start = 0;
+		  else interval.start -= annot_offset;
+		  if ( interval.stop < annot_offset ) interval.stop = 0;
+		  else interval.stop -= annot_offset;
+		}
 	    }
 	  
 	  O1 << " <Start>" << interval.start_sec() << "</Start>\n"
@@ -3466,13 +3510,14 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
       // (optional, but nice to have) header row for data 
       //
 
-      O1 << "class" << "\t"
-	 << "instance" << "\t"
-	 << "channel" << "\t"
-	 << "start" << "\t"
-	 << "stop" << "\t"
-	 << "meta" << "\n";
-
+      if ( ! minimal )
+	O1 << "class" << "\t"
+	   << "instance" << "\t"
+	   << "channel" << "\t"
+	   << "start" << "\t"
+	   << "stop" << "\t"
+	   << "meta" << "\n";
+      
       //
       // Now, the data rows
       //
@@ -3547,12 +3592,20 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
           if ( annot_offset )
             {
-	      if ( interval.start < annot_offset ) interval.start = 0;
-              else interval.start -= annot_offset;
-              if ( interval.stop < annot_offset ) interval.stop	= 0;
-              else interval.stop -= annot_offset;	      
-            }
-
+	      if ( annot_offset_dir == 1 )
+		{
+		  interval.start += annot_offset;
+		  interval.stop += annot_offset;
+		}
+	      else // from ALIGN
+		{
+		  if ( interval.start < annot_offset ) interval.start = 0;
+		  else interval.start -= annot_offset;
+		  if ( interval.stop < annot_offset ) interval.stop	= 0;
+		  else interval.stop -= annot_offset;	      
+		}
+	    }
+	  
 	  // collapse from EDF+D to elapsed time in standard EDF ?
 
 	  if ( collapse_disc && ! edf.header.continuous ) 
@@ -3604,13 +3657,17 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	      present2.advance_seconds( tp2_sec );
 	      double tp2_extra = tp2_sec - (long)tp2_sec;
 
+	      // add dd-mm-yy-hh:mm:ss
+	      
 	      // hh:mm:ss.ssss
 	      if ( globals::time_format_dp ) 
-		O1 << present1.as_string(':') << Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp  ).substr(1) << "\t"
-		   << ( add_ellipsis ? "..." : present2.as_string(':') + Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp  ).substr(1) ) ;
+		O1 << ( dhms ? present1.as_datetime_string(':') : present1.as_string(':') )
+		   << Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp  ).substr(1)
+		   << "\t"
+		   << ( add_ellipsis ? "..." : ( dhms ? present2.as_datetime_string(':') : present2.as_string(':') ) + Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp  ).substr(1) ) ;
 	      else // or truncate to hh:mm:ss
-		O1 << present1.as_string(':') << "\t"
-		   << ( add_ellipsis ? "..." : present2.as_string(':') ) ;
+		O1 << ( dhms ? present1.as_datetime_string(':') : present1.as_string(':') ) << "\t"
+		   << ( add_ellipsis ? "..." : ( dhms ? present2.as_datetime_string(':') : present2.as_string(':') ) ) ;
 	      
 	    }
 	  else // write as elapsed seconds
@@ -3987,6 +4044,8 @@ void annotation_set_t::clear()
   epoch_sec = 0 ; 
 
   annot_offset = 0LLU;
+
+  annot_offset_dir = -1;
 }
 
 

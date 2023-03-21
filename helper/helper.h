@@ -276,10 +276,123 @@ namespace Helper
 }
 
 
+
+struct date_t {
+
+  date_t( const std::string & dt )
+  {
+    // assumes European dd/mm/yy encoding [ or dd.mm.yy or dd-mm-yy ]
+    // also, yy can be yyyy
+    // mm can be jan/feb etc or 1/2 etc
+    std::vector<std::string> tok = Helper::parse( dt , "./-" );
+    if ( tok.size() != 3 ) Helper::halt( "invalid date string: " + dt );
+
+    d=m=y=0;
+    
+    if ( ! Helper::str2int( tok[0] , &d ) )
+      Helper::halt( "invalid day value: " + dt );
+    if ( ! Helper::str2int( tok[1] , &m ) )
+      {
+	std::string mm = Helper::toupper( tok[1] );
+	if ( mm.size() == 3 )
+	  {
+	    if      ( mm == "JAN" ) m = 1;
+	    else if ( mm == "FEB" ) m = 2;
+	    else if ( mm == "MAR" ) m = 3;
+	    else if ( mm == "APR" ) m = 4;
+	    else if ( mm == "MAY" ) m = 5;
+	    else if ( mm == "JUN" ) m = 6;
+	    else if ( mm == "JUL" ) m = 7;
+	    else if ( mm == "AUG" ) m = 8;
+	    else if ( mm == "SEP" ) m = 9;
+	    else if ( mm == "OCT" ) m = 10;
+	    else if ( mm == "NOV" ) m = 11;
+	    else if ( mm == "DEC" ) m = 12;
+	  }
+      }
+
+    if ( m == 0 )
+      Helper::halt( "invalid month value: " + dt );
+    if ( ! Helper::str2int( tok[2] , &y ) )
+      Helper::halt( "invalid year value: " + dt );
+    
+    init();
+  }
+
+  int diff( const date_t & rhs ) const;
+
+  // days past 1/1/85
+  static int count( const date_t & );
+  
+  static bool leap_year( const int year )
+  {
+    return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 ; 
+  }
+
+  static int days_in_month( int mn, int yr )
+  {
+    static int mlength[] =      { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    static int leap_mlength[] = { 0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };    
+    return leap_year( yr ) ? leap_mlength[mn] : mlength[mn];    
+  }
+
+  // given day count (past 1/1/85) return a printable datestring
+  static std::string datestring( int c ); 
+
+
+  std::string as_string() const
+  {
+    return Helper::int2str( d ) + "-" + Helper::int2str( m ) + "-" + Helper::int2str( y );
+  }
+  
+  date_t( const int d = 1 , const int m = 1 , const int y = 1985 )
+    : d(d) , m(m) , y(y) 
+  {
+    init();
+  }
+    
+  void init()
+  {
+
+    // YY --> YYYY conversion 1985 -- 2084
+    //         >=85 --> 19++
+    //         < 85 --> 20++
+    if      ( y >= 0  && y < 85 ) y += 2000;
+    else if ( y >= 85 && y < 100 ) y += 1900;
+    
+    if ( y < 1985 || y > 3000 )
+      Helper::halt( "invalid year (range 1985 - 3000): " + Helper::int2str(y) );
+    
+    if ( m < 1 || m > 12 )
+      Helper::halt( "invalid month (range 1 - 12): " + Helper::int2str(m) );
+
+    if ( d < 1 || d > days_in_month( m , y ) )
+      Helper::halt( "invalid day (range 1 - [28-31]): " + Helper::int2str(d) );
+  }
+   
+  int y;
+  int m;
+  int d;
+  
+  bool operator<( const date_t & rhs ) const
+  {
+    if ( y < rhs.y ) return true;
+    if ( y > rhs.y ) return false;
+    if ( m < rhs.m ) return true;
+    if ( m > rhs.m ) return false;
+    return d < rhs.d;
+  }
+  
+};
+
+
+
 struct clocktime_t
 {
   
   // default (midnight)
+  // day = days past epoch 1/1/85
+  //  missing = 0 (i.e.  == 1/1/85)
   clocktime_t() 
   {
     valid = true;
@@ -287,8 +400,24 @@ struct clocktime_t
     s=0.0;
   }
 
+  bool operator==( const clocktime_t & rhs ) const
+  {
+    if ( ! valid ) return false;
+    if ( ! rhs.valid ) return false;
+    if ( d != rhs.d ) return false;
+    if ( h != rhs.h ) return false;
+    if ( m != rhs.m ) return false;
+    if ( fabs( s - rhs.s ) > 1e-12 ) return false;
+    return true;
+  }
+  
   // convert time-string to internal 
   clocktime_t( const std::string & t );
+
+  // convert date-string and time-string to internal
+  clocktime_t( const std::string & dt , const std::string & tm );
+
+  void parse_string( const std::string & t ); 
   
   // assume from hours, fractional
   //  clocktime_t( double ); 
@@ -311,6 +440,7 @@ struct clocktime_t
 
   clocktime_t( const clocktime_t & t1 ) { copy(t1); } 
 
+  
   clocktime_t & operator= (const clocktime_t & t1 ) { copy(t1); return *this; }
     
   void copy( const clocktime_t & t1 )
@@ -340,6 +470,13 @@ struct clocktime_t
     return Helper::timestring( h,m,s, tchar , fractional );
   }
 
+  // dd-mm-yyyy-hh:mm:ss
+  std::string as_datetime_string( const char tchar = '.' , bool fractional = false ) 
+  {
+    if ( ! valid ) return "NA";
+    return date_t::datestring(d) + "-" + Helper::timestring( h,m,s, tchar , fractional );
+  }
+
   std::string as_numeric_string() 
   {
     if ( ! valid ) return "NA";
@@ -348,225 +485,29 @@ struct clocktime_t
 
   // calculate mid-point between two times
   bool midpoint( const clocktime_t & t1 , const clocktime_t & t2 );
+
+  // time as numeric (either in units past epoch (if dr == 0 )
+  // or relative to some other reference day ('dr') 
+  double minutes( const int dr = 0 ) const;
+  double hours( const int dr = 0 ) const;
+  double seconds( const int dr = 0 ) const;
   
-  double minutes() const 
-  {
-    return h*60 + m + s/(double)60; 
-  }
+  int rounded_seconds( const int dr = 0 ) const;
   
-  double hours() const
-  {
-    return h + m/(double)60 + s/(double)(60*60);
-  }
+  //  void advance_1second();  
+  bool convert( double hrs );
+  bool convert_seconds( double sec );
   
-  double seconds() const
-  {
-    return h*60*60 + m*60 + s ;
-  }
-
-  int rounded_seconds() const
-  {
-    int si = floor(s);
-    if ( s - si > 0.5 ) ++si;
-    return h*60*60 + m*60 + si ;
-  }
-  
-  void advance_1second()
-  {
-    ++s;
-    // check we don't wrap mins or hours
-    if ( s >= 60 ) 
-      {
-	++m;
-	s -= 60.0;
-	if ( m == 60 ) 
-	  {
-	    ++h;
-	    m = 0;
-	    if ( h == 24 ) h = 0;
-	  }	
-      }
-    
-  }
-
-  bool convert( double hrs ) 
-  {
-    valid = true;
-    if ( hrs < 0 ) valid = false;
-    if ( hrs > 24 ) valid = false;
-    if ( ! valid ) return false;
-    
-    double t_hours = hrs;
-    double t_mins  = hrs * 60.0;
-    double t_secs  = hrs * 3600.0;
-
-    t_mins -= floor(t_hours) * 60 ;
-    t_secs -= floor(t_hours) * 3600 + floor(t_mins) * 60;
-    
-    h = floor(t_hours);
-    m = floor(t_mins);
-    s = t_secs;
-    
-    return true;
-
-  }
-  
-
-  bool convert_seconds( double sec ) 
-  {
-    valid = true;
-    if ( sec < 0 ) valid = false;
-    if ( sec > 86400 ) valid = false;
-    if ( ! valid ) return false;
-    
-    double t_hours = floor( sec / 3600.0 );
-    sec -= t_hours * 3600.0;
-    
-    double t_mins  = floor( sec / 60.0 );
-    sec -= t_mins * 60.0;
-    
-    h = t_hours;
-    m = t_mins;
-    s = sec;
-     
-    return true;
-
-  }
-
   void advance_tp( uint64_t tp );
-
-  void advance_hrs( double hrs ) 
-  { 
-    double t_hrs = hours(); 
-    
-    t_hrs += hrs; 
-    
-    // need to wrap?  
-    while ( 1 ) 
-      { 
-   	if ( t_hrs >= 0 && t_hrs < 24 ) break; 
-   	if ( t_hrs < 0 ) t_hrs += 24.0; 
-   	else if ( t_hrs >= 24 ) t_hrs -= 24.0; 
-      }     
-    
-    // update this time back to usual format 
-    convert( t_hrs ); 
-  } 
+  void advance_hrs( double hrs );
+  void advance_seconds( double secs );
+  void advance( const clocktime_t & t );
   
-  void advance_seconds( double secs )
-  {
-
-    double t_sec = seconds();
-
-    t_sec += secs;
+  static int earlier( const clocktime_t & t1 , const clocktime_t & t2 );
     
-    // need to wrap? (86400 seconds in a day)
-    while ( 1 )
-      {
-	if ( t_sec >= 0 && t_sec < 86400 ) break;
-	if ( t_sec < 0 ) t_sec += 86400.0;
-	else if ( t_sec >= 86400.0 ) t_sec -= 86400.0;
-      }    
-    
-    // update this time back to usual format
-    convert_seconds( t_sec );
-  }
+  static double difference_hours( const clocktime_t & t1 , const clocktime_t & t2 );
 
-  //
-  void advance( const clocktime_t & t ) 
-  {
-
-    if ( ! t.valid ) { valid = false; return; }
-
-    double secs = seconds();
-    double secs2 = t.seconds();
-
-    //advance
-    secs += secs2;
-
-    // need to wrap? 
-    // seconds in the day = 0 .. 86400
-
-    while ( 1 )
-      {
-	if ( secs >= 86400 ) secs -= 86400;
-	else break;
-      }
-
-    // convert back to h/m/s
-
-    double t_secs   = secs;
-    double t_mins   = secs / 60.0;
-    double t_hours  = secs / 3600.0;
-    
-    t_mins -= floor(t_hours) * 60 ;
-    t_secs -= floor(t_hours) * 3600 + floor(t_mins) * 60;
- 
-    h = floor(t_hours);
-    m = floor(t_mins);
-    s = t_secs;
-        
-  }
-
-  // this *tests* whether t1 comes before t2 (return 1 or 2 for which comes first)
-  //  based on smallest difference going from t1 --> t2   or t1 --> 2
-  //    i.e. all these would have t1 first 
-  //       09:00 09:10
-  //       22:00 02:00    ( as 4 < 20 ) 
-  static int earlier( const clocktime_t & t1 , const clocktime_t & t2 )
-  {
-    double d1 = difference_seconds( t1 , t2 );
-    double d2 = difference_seconds( t2 , t1 );
-    if ( d1 < d2 ) return 1;
-    if ( d2 < d1 ) return 2;
-    return 0;
-  }
-    
-  // this *assumes* that t1 comes before t2
-  static double difference_hours( const clocktime_t & t1 , const clocktime_t & t2 )
-  {
-    // we assume t1 happens before t2
-    // thus  22 8   means from 22 to 8
-    // (not 8 to 22)
-    // and assume time wrap is always within 1 day
-
-    double t1h = t1.hours();
-    double t2h = t2.hours();
-    
-    if ( t2h < t1h ) // e.g. 22 to 8 , means it wraps
-      {
-	return 24.0 - t1h + t2h;
-      }
-    else // no overnight wrap, 
-      {
-	return t2h - t1h;
-      }
-    
-    return 0;
-  }
-
-
-  static double difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 )
-  {
-    // we assume t1 happens before t2
-    // thus  22 8   means from 22 to 8
-    // (not 8 to 22)
-    // and assume time wrap is always within 1 day
-
-    double t1s = t1.seconds();
-    double t2s = t2.seconds();
-    
-    if ( t2s < t1s ) 
-      {
-	return 86400.0 - t1s + t2s;
-      }
-    else // no overnight wrap, 
-      {
-	return t2s - t1s;
-      }
-    
-    return 0;
-  }
+  static double difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 );
 
 };
 

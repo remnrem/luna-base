@@ -660,7 +660,7 @@ public:
 
   bool is_actually_standard_edf(); // i.e. effectively continuous AND no EDF Annots (other than time-track)
   
-  int add_continuous_time_track();
+  int add_time_track( const std::vector<uint64_t> * tps = NULL ); // add EDF+C (or EDF+D) track to the EDF (as Annot channel)
   
   void drop_time_track();
 
@@ -710,6 +710,14 @@ public:
   
   bool align( const std::vector<std::string> & annots ); 
 
+
+  //
+  // edf-minus
+  //
+
+  bool edf_minus();
+
+  
   // empirical recalculate the physical min/max from data (i.e. 
   // instead of relying on the EDF header;  replace the header values
   
