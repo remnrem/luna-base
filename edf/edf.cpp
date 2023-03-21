@@ -670,7 +670,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       
       // retrieve temp label
       std::string l = tlabels[s];
-
+      
       // this match function will change 'l' to match any primary aliase
       // it does a case-insensitive match, but returns the correct (preferred-case) version
       
@@ -694,11 +694,12 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	  if ( globals::skip_edf_annots && continuous )
 	    include = false;
 	}
-      
+    
       //
       // add this channel in 
       //
 
+      
       if ( include ) 
 	{
 
@@ -715,9 +716,8 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	  
 	  // first annotation channel is time-track
 	  if ( annotation && t_track == -1 ) 
-	    {
-	      t_track = label.size(); 
-	    }
+	    t_track = label.size();
+
 
 	  // label mapping only to non-annotation channels
 	  if ( ! annotation ) 
@@ -799,8 +799,14 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
     {
       int x = edf_t::get_int( &p , 8 );
 
+      // SR == 0 Hz ? 
       if ( x == 0 )
 	logger << "  *** warning, " << s << " has SR of 0 and should be dropped\n";
+      
+      // non-integer SR ? 
+      double sr = x / record_duration;
+      if ( fabs( trunc(sr) - sr ) > 1e-8 )
+	logger << "  *** warning, signal " << s << " has a non-integer SR - advise to RESAMPLE\n";
       
       if ( channels.find(s) != channels.end() )
 	n_samples.push_back( x );      
@@ -1446,7 +1452,7 @@ bool edf_t::attach( const std::string & f ,
   //
   // EDF+ requires a time-track
   //
-  
+
   if ( header.edfplus && header.time_track() == -1 ) 
     {
       if ( !header.continuous ) 
@@ -1454,7 +1460,7 @@ bool edf_t::attach( const std::string & f ,
 
       logger << " EDF+ [" << filename << "] did not contain any time-track: adding...\n";
 
-      add_continuous_time_track();
+      add_time_track();
 
     }
 
@@ -1892,11 +1898,14 @@ bool edf_record_t::write( FILE * file , const std::vector<int> & ch2slot )
       
       if ( edf->header.is_annotation_channel(s) )
 	{
+	  //std::cout << " ANNOT WRT ";
 	  for (int j=0;j< 2*nsamples;j++)
 	    {	  	      
 	      char a = j >= data[s].size() ? '\x00' : data[s][j];	      
-	      fputc( a , file );	      
+	      //std::cout << a ;
+	      fputc( a , file );
 	    }
+	  //std::cout << "\n";
 	}
     
     }
@@ -2120,6 +2129,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
       // just take all, in the order they are already in
       for (int s=0; s<header.ns; s++)
 	ch2slot.push_back(s);
+
     }
   
   const int ns2 = ch2slot.size();
@@ -2370,6 +2380,7 @@ void edf_t::add_signal( const std::string & label ,
   const int ndata = data.size();
 
   // normally, n_samples is Fs * record length.
+
   // *however*, as we are currently otherwise enforcing that sample rate must be an integer 
   //   we've also added a backdoor for sedf_t creation here, to allow for
   //   has sample rate < 1 Hz and very long records (e.g. 30 seconds): namely,
@@ -2519,13 +2530,12 @@ void edf_record_t::add_annot( const std::string & str , const int signal )
   
   if ( signal < 0 || signal >= data.size() ) 
     Helper::halt( "internal error in add_annot()" );
-  
+
   // convert text to int16_t encoding
   data[ signal ].resize( str.size() );
   for (int s=0;s<str.size();s++) 
-    {
-      data[signal][s] = (char)str[s];
-    } 
+    data[signal][s] = (char)str[s];
+
 }
 
 // now redundant
@@ -4057,7 +4067,7 @@ void edf_t::set_edfplus()
   header.edfplus = true;
   header.continuous = true;    
   set_continuous(); // this sets reversed field EDF+C
-  add_continuous_time_track();
+  add_time_track();
 }
 
 void edf_t::set_edf()
@@ -4101,84 +4111,116 @@ void edf_t::drop_time_track()
 }
 
 
-int edf_t::add_continuous_time_track()
+int edf_t::add_time_track( const std::vector<uint64_t> * tps )
 {
   
-  // this can only add a time-track to a continuous record
-  // i.e. if discontinuous, it must already (by definition) 
-  // have a time track
+  // if tps == NULL, this implies a continuous record
+  //   - this will be the typical case -- i.e. if it is
+  //     an EDF+D/discontinuous, then (by definition) we will
+  //     have read in a time-track
 
-  if ( ! header.continuous ) 
-    return header.time_track();
+  // however, one exception to this is when merging standard EDFs
+  // to make a new EDF (--merge) and if there are gaps between files.
+  // here we need to set the EDF+D time-track explicitly- which is
+  // done by calling this function by having tps != NULL but a vector
+  // of time-points for each record
 
-  if ( ! header.edfplus ) set_edfplus();
-
-  // time-track already set?
-  if ( header.time_track() != -1 ) return header.time_track();
-
-  // update header
-  ++header.ns;
-
-  // set t_track channel
-  header.t_track  = header.ns - 1;
-  header.t_track_edf_offset = record_size; // i.e. at end of record
-
-  const int16_t dmax = 32767;
-  const int16_t dmin = -32768;
+  const bool contin = tps == NULL;
   
-  // need to set a record size -- this should be enough?
-  const int n_samples = globals::edf_timetrack_size;
+  if ( contin && ! header.continuous ) 
+    return header.time_track();
+  
+  if ( ! header.edfplus )
+    set_edfplus();
 
-  // how many existing 'EDF Annotations' tracks?
-  int annot_tracks = 0 ; 
+  
+  // time-track already set?
+  if ( contin && header.time_track() != -1 )
+    return header.time_track();  
+  
+  // check EDF+D time-track size, if specified
+  if ( ! contin )
+    if ( tps->size() != header.nr )
+      Helper::halt( "internal error: expecting " + Helper::int2str( header.nr )
+		    + " records but given time-track for " + Helper::int2str( (int)tps->size() ) );
 
-  std::map<std::string,int>::const_iterator jj = header.label_all.begin();
-  while ( jj != header.label_all.end() )
+
+  // add a new time-track?
+  
+  if ( header.time_track() == -1 ) 
     {
-      if ( Helper::imatch( jj->first  , "EDF Annotation" , 14 ) ) 
-	annot_tracks++;                     
-      ++jj;
+      
+      // update header
+      ++header.ns;
+      
+      // set t_track channel
+      header.t_track  = header.ns - 1;
+      header.t_track_edf_offset = record_size; // i.e. at end of record
+      
+      const int16_t dmax = 32767;
+      const int16_t dmin = -32768;
+      
+      // need to set a record size -- this should be enough?
+      // default (defs/defs.cpp) is currently 15 (i.e. 30 chars)
+      const int n_samples = globals::edf_timetrack_size;
+      
+      // how many existing 'EDF Annotations' tracks?
+      int annot_tracks = 0 ; 
+      
+      std::map<std::string,int>::const_iterator jj = header.label_all.begin();
+      while ( jj != header.label_all.end() )
+	{
+	  if ( Helper::imatch( jj->first  , "EDF Annotation" , 14 ) ) 
+	    annot_tracks++;                     
+	  ++jj;
+	}
+      
+      header.label.push_back( "EDF Annotations" + ( annot_tracks > 0 ? Helper::int2str( annot_tracks ) : "" ) );
+      header.annotation_channel.push_back( true );
+
+      // note: annot, so not added to header/record signal map label2header
+
+      header.transducer_type.push_back( "" );
+      header.phys_dimension.push_back( "" );
+      
+      header.physical_min.push_back( 0 ); // ignored
+      header.physical_max.push_back( 1 ); // ignored
+      header.digital_min.push_back( dmin );
+      header.digital_max.push_back( dmax );
+      
+      header.orig_physical_min.push_back( 0 ); // ignored
+      header.orig_physical_max.push_back( 1 ); // ignored
+      header.orig_digital_min.push_back( dmin );
+      header.orig_digital_max.push_back( dmax );
+      
+      header.prefiltering.push_back( "" );
+      header.n_samples.push_back( n_samples );
+      header.signal_reserved.push_back( "" );  
+      header.bitvalue.push_back( 1 ); // ignored
+      header.offset.push_back( 0 );   // ignored
     }
-
-  header.label.push_back( "EDF Annotations" + ( annot_tracks > 0 ? Helper::int2str( annot_tracks ) : "" ) );
-  header.annotation_channel.push_back( true );
-
-  // note: annot, so not added to header/record signal map label2header
-
-  header.transducer_type.push_back( "" );
-  header.phys_dimension.push_back( "" );
-
-  header.physical_min.push_back( 0 ); // ignored
-  header.physical_max.push_back( 1 ); // ignored
-  header.digital_min.push_back( dmin );
-  header.digital_max.push_back( dmax );
-
-  header.orig_physical_min.push_back( 0 ); // ignored
-  header.orig_physical_max.push_back( 1 ); // ignored
-  header.orig_digital_min.push_back( dmin );
-  header.orig_digital_max.push_back( dmax );
-
-  header.prefiltering.push_back( "" );
-  header.n_samples.push_back( n_samples );
-  header.signal_reserved.push_back( "" );  
-  header.bitvalue.push_back( 1 ); // ignored
-  header.offset.push_back( 0 );   // ignored
   
   // create each 'TAL' timestamp, and add to record
   double dur_sec = header.record_duration;
-  double onset = 0; // start at T=0
+  double onset = 0; // start at T=0 [ for EDF+C ], else uses tps[] below
 
-  uint64_t onset_tp = 0;
-  uint64_t dur_tp = header.record_duration_tp;
+  // uint64_t onset_tp = 0;
+  // uint64_t dur_tp = header.record_duration_tp;
 
   // for each record
   int r = timeline.first_record();
-  
+
+  // counter (EDF+D only, to index tps[]) 
+  int rc = 0;
+
   while ( r != -1 ) 
     {
 
-      std::string ts = "+" + Helper::dbl2str( onset ) + "\x14\x14\x00";
+      // either EDF+C or EDF+D times
+      double tsec = contin ? onset : ( (*tps)[rc] / (double)globals::tp_1sec ) ;
       
+      std::string ts = "+" + Helper::dbl2str( tsec ) + "\x14\x14\x00";
+
       // need to make sure that the record (i.e. other signals) 
       // are first loaded into memory...
       
@@ -4186,7 +4228,7 @@ int edf_t::add_continuous_time_track()
       
       if ( ! record_in_memory )
 	{
-
+	  
 	  // this will be created with ns+1 slots (i.e. 
 	  // already with space for the new timetrack, 
 	  // so we can add directly)
@@ -4203,19 +4245,35 @@ int edf_t::add_continuous_time_track()
       //
       // Add the time-stamp as the new track (i.e. if we write as EDF+)
       //
+
+      if ( contin )
+	{
       
-      if ( ! record_in_memory ) // record already 'updated'
-	records.find(r)->second.add_annot( ts , header.t_track );
-      else // push_back on end of record
-	records.find(r)->second.add_annot( ts );
+	  if ( ! record_in_memory ) // record structure already 'updated' from above
+	    records.find(r)->second.add_annot( ts , header.t_track );
+	  else // push_back on end of record
+	    records.find(r)->second.add_annot( ts );
+	}
+      else
+	{
+	  // different logic for the EDF+D / --merge case
+
+	  // here, we are adding a EDF+D time-track (from --merge)
+	  // there will already be a time-track
+	  records.find(r)->second.add_annot( ts , header.t_track );
+	  
+	}
       
       //
       // And mark the actual record directy (i.e. if this is used in memory)
-      //
+      // for EDF+C  (if EDF+D, this does not matter)
       
       onset += dur_sec;
-      onset_tp += dur_tp;
-     
+      //onset_tp += dur_tp;
+      
+      // next record [ used for EDF+D ]
+      ++rc;
+      
       r = timeline.next_record(r);
     }
 
@@ -4228,6 +4286,7 @@ int edf_t::add_continuous_time_track()
 }
 
 
+
 uint64_t edf_t::timepoint_from_EDF( int r )
 {
 
@@ -4237,7 +4296,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
 
   if ( file == NULL )
     return edfz->get_tindex( r );
-  
+
   //
   // Read this is called when constructing a time-series for 
   // an existing EDF+D, only
@@ -4264,6 +4323,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
   size_t rdsz = fread( p , 1, ttsize , file );
   
   std::string tt( ttsize , '\x00' );
+
   int e = 0;
   for (int j=0; j < ttsize; j++)
     {      
@@ -4274,7 +4334,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
     }
   
   double tt_sec = 0;
-  
+
   if ( ! Helper::str2dbl( tt.substr(0,e) , &tt_sec ) ) 
     Helper::halt( "problem converting time-track in EDF+" );
   

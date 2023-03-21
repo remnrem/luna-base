@@ -980,6 +980,8 @@ bool cmd_t::eval( edf_t & edf )
       
       if      ( is( c, "WRITE" ) )        proc_write( edf, param(c) );
       else if ( is( c, "EDF" ) )          proc_force_edf( edf , param(c) );
+      else if ( is( c, "EDF-" ) )         proc_edf_minus( edf , param(c) );
+      else if ( is( c, "EDF-MINUS" ) )    proc_edf_minus( edf , param(c) );
       else if ( is( c, "SUMMARY" ) )      proc_summaries( edf , param(c) );
       else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
       else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
@@ -2251,6 +2253,17 @@ void proc_slowwaves( edf_t & edf , param_t & param )
   
 }
 
+
+// EDF-MINUS : convert from EDF+D to EDF
+//   adding padding (zeros for annots)
+//   ajusting annotations
+//   and adding in a new "gap" annot
+
+void proc_edf_minus( edf_t & edf , param_t & param )
+{
+
+}
+
 // EDF : convert from EDF+D to EDF or EDF+C
 //               or EDF+C to EDF
 
@@ -3031,7 +3044,7 @@ void proc_list_spanning_annots( edf_t & edf , param_t & param )
 
 void proc_timetrack( edf_t & edf , param_t & param )
 {
-  edf.add_continuous_time_track();
+  edf.add_time_track();
 }
 
 // RESTRUCTURE : flush masked records
@@ -3047,7 +3060,7 @@ void proc_restructure( edf_t & edf , param_t & param )
 
 void proc_record_dump( edf_t & edf , param_t & param )
 {
-  edf.add_continuous_time_track();  
+  edf.add_time_track();  
   edf.record_dumper( param );
 }
 

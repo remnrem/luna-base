@@ -212,6 +212,42 @@ void timeline_t::restructure( const std::set<int> & keep )
 }
 
 
+void timeline_t::create_discontinuous_timeline( const std::vector<uint64_t> & tps )
+{
+  
+  // this is only used when making a new merged EDF+D from multiple standard EDFs
+  // that contain gaps
+  
+  // we can assume that header.nr and header.record_duration_tp will have been set 
+  
+  total_duration_tp = 
+    (uint64_t)edf->header.nr * edf->header.record_duration_tp;      
+  last_time_point_tp = 0;
+
+  // check
+  if ( edf->header.nr != tps.size() )
+    Helper::halt( "internal error in timeline_t::create_discontinuous_timeline()" );
+  
+  // okay to use header.nr here, as this will only be called
+  // once, on first creating the new in-memory EDF+D
+        
+  for (int r = 0;r < edf->header.nr; r++)
+	{	  
+	  uint64_t tp = tps[r] ;
+	  tp2rec[ tp ] = r;
+	  rec2tp[ r ] = tp;
+	  rec2orig_rec[ r ] = r; // 1-to-1 mapping before any RE
+	  rec2tp_end[r] = last_time_point_tp = tp + edf->header.record_duration_tp - 1LLU;
+	  // last_time_point_tp will be updated, 
+	  // and end up being thelast (i.e. record nr-1).
+	}
+  
+  logger << "  set EDF+D timeline for " << edf->header.nr << " records\n";
+}
+
+
+
+
 interval_t timeline_t::record2interval( int r ) const
 { 
   std::map<int,uint64_t>::const_iterator ll = rec2tp.find(r);
@@ -2950,7 +2986,7 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
   // Make sure that we have a time-track set
   //
   
-  edf->add_continuous_time_track();
+  edf->add_time_track();
   
     
   return;

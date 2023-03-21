@@ -727,6 +727,10 @@ struct annotation_set_t
     epoch_sec = 0 ; 
 
     annot_offset = 0LLU;
+
+    annot_offset_dir = -1;
+
+    annot_offset_table.clear();
     
   }
   
@@ -756,6 +760,26 @@ struct annotation_set_t
   // this ONLY impacts the WRITE-ANNOTS set of commands
   uint64_t annot_offset; 
 
+  int annot_offset_dir; // -1 or +1 depending on to add or subtract
+  //  ALIGN --> "-ve" encoding
+  //  WRITE-ANNOTS offset=X --> +ve encoding 
+
+  // for use w/ EDF-MINS only -- a table of offsets (i.e. to adjust
+  // for multiple gaops:  if above 'first' then add offset 'second'
+  std::map<double,uint64_t> annot_offset_table;
+
+  // multiple offsets
+  void clear_annot_offsets()
+  {
+    annot_offset_table.clear();
+  }
+  
+  void set_annot_offset( double s, uint64_t a )
+  {
+    annot_offset_table[ s ] = a; 
+  }
+
+  // single offset
   void set_annot_offset( uint64_t a )
   {
     annot_offset = a;
