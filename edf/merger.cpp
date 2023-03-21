@@ -49,7 +49,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   
   std::vector<edf_t*> edfs;
   
-  std::string id = "id";
+  std::string id = "merged1";
   std::string filename = "merged.edf";
   std::string slist = "";
   bool use_fixed_order = false; // "fixed"  
@@ -277,7 +277,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   //
 
   medf.header.version = edfs[ first_edf ]->header.version;
-  medf.header.patient_id = edfs[ first_edf ]->header.patient_id;
+  medf.header.patient_id = id;
   medf.header.recording_info = edfs[ first_edf ]->header.recording_info;
   medf.header.startdate = edfs[ first_edf ]->header.startdate;
   medf.header.starttime = edfs[ first_edf ]->header.starttime;
