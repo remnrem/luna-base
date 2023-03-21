@@ -170,6 +170,10 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   
   logger << " setting SR to " << sr << "\n";
   
+
+  // default is to leave EEG in ECG-bad epochs 'as is'
+  const bool mask_bad_epochs = param.has( "mask-bad-epochs" );
+
   //
   // ECG channel
   //
@@ -257,9 +261,19 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
 	epoch_bpm.push_back( bpm );
       else 
 	{
-	  edf.timeline.set_epoch_mask( epoch );
+	  
+	  // mask that epoch?
+	  if ( mask_bad_epochs ) 
+	    edf.timeline.set_epoch_mask( epoch );
+	  else
+	    {
+	      // else, just remove all R peaks from that epoch, i.e. so no correction is made
+	      
+	    }
 	  ++removed_epochs;
 	}
+      
+      
             
     }
 
@@ -798,3 +812,13 @@ void dsptools::bpm( edf_t & edf , param_t & param )
   
 }
 
+int rpeaks_t::strip( const std::vector<interval_t> & bad_epochs )
+{
+  // return # of peaks removed
+
+  int removed = 0;
+  
+  
+
+  return removed;
+}

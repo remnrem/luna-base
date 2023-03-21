@@ -34,6 +34,8 @@
 extern writer_t writer;
 extern logger_t logger; 
 
+#include "stats/Eigen/Dense"
+#include "stats/eigen_ops.h"
 
 void mtm::wrapper( edf_t & edf , param_t & param )
 {
@@ -67,6 +69,16 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   bool remove_linear_trend = param.has( "detrend" );
   if ( mean_center && remove_linear_trend )
     Helper::halt( "cannot specify both mean-center and detrend" );
+  
+  //
+  // create new signals?
+  // prefix_CH_N ... where N = 1,2,3, that correspond to Fs in range
+  //
+  
+  const bool new_sigs = param.has( "add" ) ;
+  
+  std::string new_sig_prefix = new_sigs ? param.value( "add" ) : "" ; 
+
   
   //
   // MTM parameters (tw or nw)
@@ -182,12 +194,21 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       //
       // Get time points (and flags for segments that span discontinuities)
       //  - also, indicate whether all should be computed (at segment/eppch level)
-      //  - this is for monnlight MTM interactive viewer mainly
+      //  - this is for moonlight MTM interactive viewer mainly
       
       const std::vector<uint64_t> * tp = slice.ptimepoints();	   
       const int np = tp->size();
       
       std::vector<double> start, stop;
+      std::vector<int> start_sp, stop_sp; // original signal encoding
+      
+      // when 'add' option, count number of segments spanning this sample point
+      std::vector<int> addn( np , 0 ); 
+
+      // get 
+      int nf = -1;
+      Eigen::MatrixXd addX;
+
       std::vector<bool> disc, restrict;
       
       int p = 0;
@@ -205,6 +226,8 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	double stop_sec = ( (*tp)[ p + segment_size - 1 ] + delta_tp ) * globals::tp_duration; // '1past'
 	double implied_sec = stop_sec - start_sec;
 	
+	start_sp.push_back( p );
+	stop_sp.push_back( p + segment_size - 1 ) ; // 'last point in seg'
 	start.push_back( start_sec );
 	stop.push_back( stop_sec );
 	disc.push_back( fabs( implied_sec - segment_sec2 ) > 0.0001 );
@@ -250,6 +273,20 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       
       if ( s == 0 ) logger << "  processed channel(s):";
       logger << " " << signals.label(s) ;
+      
+
+      //
+      // count freq bins if not already done? could add only areduced set perhaps?
+      //
+
+      if ( new_sigs && nf == -1 ) 
+	{	  
+	  nf = 0;
+	  for ( int i = 0 ; i < mtm.f.size() ; i++ )
+	    if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f )
+	      ++nf;
+	  addX = Eigen::MatrixXd::Zero( np , nf );	  
+	}
       
       //
       // Output: tapers?
@@ -323,37 +360,70 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       // i.e. not using epoch encoding etc
       //
 
-      // store spectral slope per epoch for this channel?                                                                                                               
+      // store spectral slope per epoch for this channel?
+                   
       std::vector<double> slopes;
       
-      if ( epoch_level_output || spectral_slope )
+      if ( epoch_level_output || spectral_slope || new_sigs )
 	{
 	  const int nsegs = mtm.espec.size();
 
 	  if ( nsegs != start.size() )
 	    Helper::halt( "internal error in MTM timing:" + Helper::int2str( nsegs ) + " vs " + Helper::int2str( (int)start.size() ) );
 	  
-	  if ( epoch_level_output ) 
+	  if ( epoch_level_output || new_sigs ) 
 	    {
 	      for ( int j = 0 ; j < nsegs ; j++)
 		{
-
+		  
 		  if ( ! restrict[j] ) 
 		    {
-		      writer.level( j+1 , "SEG" );	  
-		      writer.value( "START" , start[j] );
-		      writer.value( "STOP" , stop[j] );
-		      writer.value( "DISC" , (int)disc[j] );
 		      
-		      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+		      //
+		      // add main output
+		      //
+		      
+		      if ( epoch_level_output ) 
 			{
-			  if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+			  writer.level( j+1 , "SEG" );	  
+			  writer.value( "START" , start[j] );
+			  writer.value( "STOP" , stop[j] );
+			  writer.value( "DISC" , (int)disc[j] );
+			  
+			  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
 			    {
-			      writer.level( mtm.f[i] , globals::freq_strat  );
-			      writer.value( "MTM" , mtm.espec[j][i] );
+			      if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+				{
+				  writer.level( mtm.f[i] , globals::freq_strat  );
+				  writer.value( "MTM" , mtm.espec[j][i] );
+				}
 			    }
+			  writer.unlevel( globals::freq_strat );	      
 			}
-		      writer.unlevel( globals::freq_strat );	      
+		      
+		      //
+		      // make new signals?		      
+		      //
+		      
+		      if ( new_sigs ) 
+			{
+			  int s1 = start_sp[j];
+			  int s2 = stop_sp[j];
+			  //std::cout << " s1 s2 = " << s1 << " .. " << s2 << "\n";
+			  for (int p=s1; p<=s2; p++)
+			    {
+			      addn[p]++;
+			      
+			      int fidx = 0;
+			      for ( int i = 0 ; i < mtm.f.size() ; i++ )
+				if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f )
+				  {
+				    addX(p,fidx++) += mtm.espec[j][i];
+				    //std::cout << " adding seg << " << j << " sample " << p << " freq " << fidx-1 <<"=" << mtm.f[i] << " = " << mtm.espec[j][i] << "\n";
+				  }
+			    }
+			  
+			}
 		    }
 		}
 	    }
@@ -387,7 +457,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       if ( epoch_level_output ) 
 	writer.unlevel( "SEG" );
       
-      
+    
 
       //
       // spectral slope based on distribution of epoch-level slopes?
@@ -407,6 +477,36 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	    }
 	}
 
+      
+      //
+      // add new signals?
+      //
+
+      if ( new_sigs )
+	{
+
+	  int fidx = 0;
+	  for ( int i = 0 ; i < mtm.f.size() ; i++ )
+	    if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f )
+	      {
+		
+		const std::string new_sig_label = new_sig_prefix + "_" + signals.label(s) + "_" + Helper::int2str( fidx + 1 );
+		
+		std::vector<double> dat = eigen_ops::copy_array( addX.col( fidx ) );
+		
+		// normalize
+		for (int p=0; p<np; p++) dat[p] /= (double)addn[p];
+		
+		if ( dat.size() != np ) Helper::halt( "internal error in MTM 'add'" );
+		
+		logger << "  adding new signal " << new_sig_label << " ( MTM @ " << mtm.f[i] << " Hz )\n";
+		
+		edf.add_signal( new_sig_label , Fs[s] , dat );
+		
+		++fidx;
+	      }
+	}
+      
       
     } // next signal
 

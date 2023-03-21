@@ -2510,12 +2510,22 @@ void cmddefs_t::init()
 
   add_param( "EXE" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
   add_param( "EXE" , "uni" , "" , "For N signals, run N univariate analyses, rather than a single multi-signal one" );
+  add_param( "EXE" , "representative" , "4" , "Extract N representative epochs" );
     
   add_param( "EXE" , "m" , "5" , "PDC embedding dimension" );
   add_param( "EXE" , "t" , "1" , "PDC span" );
 
   add_param( "EXE" , "k" , "10" , "Number of clusters" );
     
+  add_table( "EXE" , "E,CH" , "Epoch cluster assignment" );
+  add_var( "EXE" , "E,CH" , "CL" , "Cluster code [cluster]" );
+  add_var( "EXE" , "E,CH" , "K" , "Representative split [representative]");
+  add_var( "EXE" , "E,CH" , "KE" , "Representative epoch [representative]");
+
+  add_table( "EXE" , "CH,K" , "Representative split info [representative]" );
+  add_var( "EXE" , "CH,K" , "E" , "Representative epoch for split K" );
+  add_var( "EXE" , "CH,K" , "N" , "Number of epochs in split K" );
+
   add_table( "EXE" , "E,CH" , "Epoch cluster assignment" );
   add_var( "EXE" , "E,CH" , "CL" , "Cluster code" );
 

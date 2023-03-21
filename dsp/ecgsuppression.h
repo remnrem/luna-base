@@ -53,6 +53,9 @@ struct rpeaks_t
   
   std::vector<uint64_t> beats( interval_t & ) const;
   
+  int strip( const std::vector<interval_t> & bad_epochs );
+
+
 };
 
 

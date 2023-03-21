@@ -241,7 +241,7 @@ int main(int argc , char ** argv )
 
   if ( argc >=2 && strcmp( argv[1] , "--merge" ) == 0 )
     {
-      global.api();
+      //global.api();
       std::vector<std::string> tok;
       for (int i=2;i<argc;i++) tok.push_back( argv[i] );
       Helper::merge_EDFs( tok );
