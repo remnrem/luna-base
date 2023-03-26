@@ -509,6 +509,11 @@ struct clocktime_t
 
   static double difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 );
 
+  static double ordered_difference_hours( const clocktime_t & t1 , const clocktime_t & t2 );
+
+  static double ordered_difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 );
+
+  
 };
 
 

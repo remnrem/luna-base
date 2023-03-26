@@ -2061,17 +2061,23 @@ interval_t timeline_t::collapse( const interval_t & interval ) const
   
   bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
 
+  //  std::cout << " start rec smp = " << start_rec << " " << start_smp << "\n";
+  //std::cout << " stop rec smp = " << stop_rec << " " << stop_smp << "\n";
+  //  ++stop_smp;
+  
   // interval has to fall completely in a valid area
   if ( ! any ) return interval_t( 1LLU , 0LLU );
 
   if ( rec2orig_rec.find( start_rec ) == rec2orig_rec.end() ) return interval_t( 1LLU , 0LLU );
   if ( rec2orig_rec.find( stop_rec ) == rec2orig_rec.end() ) return interval_t( 1LLU , 0LLU );
 
-  start_rec = rec2orig_rec.find(  start_rec )->second;
+  start_rec = rec2orig_rec.find( start_rec )->second;
   stop_rec = rec2orig_rec.find( stop_rec )->second;
   
   uint64_t start = start_rec * edf->header.record_duration_tp + ( start_smp / (double)srate ) * globals::tp_1sec ;
-  uint64_t stop = stop_rec * edf->header.record_duration_tp + ( stop_smp / (double)srate ) * globals::tp_1sec ;
+
+  // nb + add one extra STOP smp here, +1 end
+  uint64_t stop = stop_rec * edf->header.record_duration_tp + ( (stop_smp+1) / (double)srate ) * globals::tp_1sec ;
 
   return interval_t( start , stop );
     

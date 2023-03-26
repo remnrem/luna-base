@@ -64,7 +64,7 @@ void edf_t::record_table( param_t & param )
 	        << r+1 << "\t" 
 		<< header.nr << "/" << header.nr_all ;
       
-      std::cout << "\t" << interval.as_string() ;
+      std::cout << "\t" << interval.as_string( 4 ) ;
 
       // epoch information?
       
@@ -1336,6 +1336,17 @@ void edf_t::seg_dumper( param_t & param )
 
   bool valid_hms = starttime.valid;
 
+  const bool add_annots = param.has( "annot" );
+  
+  annot_t * a_segs = NULL;
+  annot_t * a_gaps = NULL;
+  
+  if ( add_annots )
+    {
+      a_segs = timeline.annotations.add( globals::annot_disc_segment );
+      a_gaps = timeline.annotations.add( globals::annot_disc_gap );
+    }
+  
   // we only need to consider this for discontinuous EDF+ 
   
   if ( header.continuous || ! header.edfplus )
@@ -1440,11 +1451,30 @@ void edf_t::seg_dumper( param_t & param )
 	  writer.value( "DUR_SEC" , secs2 - secs1 );
 	  writer.value( "DUR_MIN" , ( secs2 - secs1 ) / 60.0);
 	  writer.value( "DUR_HR"  , ( secs2 - secs1 ) / ( 3600.0 ) );
+
+	  // save an annotation?
+	  if ( a_segs != NULL )
+	    {
+	      uint64_t tp_stop = tp0 + header.record_duration_tp;
+	      interval_t interval( tp_start , tp_stop );
+	      // annot instance ID is 1-based count of segments
+	      // i.e. as ++num_segments above
+	      a_segs->add( Helper::int2str( num_segments ) , interval , "." );
+	    }
 	  
 	  // did we observe a gap prior to this?
 	  if ( tp_start > gap_start )
 	    {
-	      gaps.insert( interval_t( gap_start , tp_start ) );	      
+	      gaps.insert( interval_t( gap_start , tp_start ) );
+
+	      if ( a_gaps )
+		{
+		  // set a 1-time-point marker at first time-point of the new segment
+		  // set 1TP past end, i.e. so it will be picked up after a collapse
+		  std::string gn = Helper::int2str( (int)gaps.size() );
+		  a_gaps->add( gn , interval_t( gap_start, tp_start+1LLU ) , "." );
+		}
+	      
 	    }
 
 	  // reset start of next gap to end to this segment	      

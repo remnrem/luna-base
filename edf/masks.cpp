@@ -335,10 +335,10 @@ void proc_mask( edf_t & edf , param_t & param )
       clocktime_t t1( tok[0] );
       clocktime_t t2( tok[1] );
       
-      double s1 = clocktime_t::difference_seconds( starttime , t1 ) ;
-      double s2 = clocktime_t::difference_seconds( starttime , t2 ) ;
+      double s1 = clocktime_t::ordered_difference_seconds( starttime , t1 ) ; 
+      double s2 = clocktime_t::ordered_difference_seconds( starttime , t2 ) ; 
       s2 -= globals::tp_duration;
-
+      
       // for the continuous case:
       if ( edf.header.continuous )
 	{

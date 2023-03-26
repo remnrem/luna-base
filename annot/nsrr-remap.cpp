@@ -59,7 +59,6 @@ std::string nsrr_t::remap( const std::string & s1 )
   //   {
   //     return a1;
   //   }
-    
 
   //
   // do remapping
@@ -68,7 +67,8 @@ std::string nsrr_t::remap( const std::string & s1 )
   std::string a = a1;
   
   std::string a_uc = Helper::toupper( a );
-  
+
+
   //
   // found as a primary? ( return preferred case in pmap )
   //
@@ -105,7 +105,7 @@ std::string nsrr_t::remap( const std::string & s1 )
       
       // recheck that space-swapped version does not have an alias
       found = amap.find( ca_uc ) != amap.end() ;
-      
+
       if ( ! found )
 	{
 	  // if in white-list mode, we return nothing (i.e. an invalid/skipped annot)
@@ -221,10 +221,24 @@ void nsrr_t::annot_remapping( const std::string & s )
 // add a new annotation remap
 void nsrr_t::add( const std::string & p , const std::string & a )
 {
-  // swap spaces for another char?
-  const std::string p2 = globals::replace_annot_spaces ? Helper::search_replace( p , ' ' , globals::space_replacement ) : p;
-  const std::string a2 = globals::replace_annot_spaces ? Helper::search_replace( a , ' ' , globals::space_replacement ) : a;
 
+  const std::string p2 = globals::sanitize_everything
+    ? Helper::sanitize(  Helper::unquote( p ) )
+    : ( globals::replace_annot_spaces
+	? Helper::search_replace( Helper::unquote( p )  , ' ' , globals::space_replacement )
+	: Helper::unquote( p ) );
+	
+  const std::string a2 = globals::sanitize_everything
+    ? Helper::sanitize(  Helper::unquote( a ) )
+    : ( globals::replace_annot_spaces
+	? Helper::search_replace( Helper::unquote( a )  , ' ' , globals::space_replacement )
+	: Helper::unquote( a ) );
+
+  // swap spaces for another char?
+  // const std::string p2 = globals::replace_annot_spaces ? Helper::search_replace( p , ' ' , globals::space_replacement ) : p;
+  // const std::string a2 = globals::replace_annot_spaces ? Helper::search_replace( a , ' ' , globals::space_replacement ) : a;
+
+  //std::cout << " mapping " << a2 << " " << p2 << "\n";
   amap[ Helper::toupper( a2 ) ] = p2;
   bmap[ Helper::toupper( p2 ) ].push_back( Helper::toupper( a2 ) );
   pmap[ Helper::toupper( p2 ) ] = p2;

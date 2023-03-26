@@ -397,7 +397,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	      if ( earlier == 2 )
 		lights_off = 0;  // set to start of EDF
 	      else
-		lights_off = clocktime_t::difference_seconds( st , et );
+		lights_off = clocktime_t::ordered_difference_seconds( st , et );
 	      
 	      logger << "  setting lights_off = " << et.as_string() 
 		     << " (" << lights_off << " secs, " 
@@ -451,7 +451,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	  if ( et.valid ) 
 	    {
 	      // assume that lights-on is always *after* EDF start
-	      lights_on = clocktime_t::difference_seconds( st , et );
+	      lights_on = clocktime_t::ordered_difference_seconds( st , et );
 	      logger << "  setting lights_on = " << et.as_string() 
 		     << " (" << lights_on << " secs, " << lights_on/60.0 << " mins from start)\n";
 	    }

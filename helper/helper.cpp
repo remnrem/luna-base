@@ -1347,6 +1347,53 @@ double clocktime_t::difference_hours( const clocktime_t & t1 , const clocktime_t
 }
 
 
+double clocktime_t::ordered_difference_hours( const clocktime_t & t1 , const clocktime_t & t2 )
+{
+  // here we *assume* t1 happens before t2
+  
+  // thus  22 8   means from 22 to 8 (not 8 to 22)
+  // and assume time wrap is always within 1 day
+
+  double t1h = t1.hours();
+  double t2h = t2.hours();
+  
+  if ( t2h < t1h ) // e.g. 22 to 8 , means it wraps
+    {
+      return 24.0 - t1h + t2h;
+    }
+  else // no overnight wrap, 
+    {
+      return t2h - t1h;
+    }
+  
+  return 0;
+  
+}
+
+double clocktime_t::ordered_difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 )
+{
+  // here we *assume* t1 happens before t2
+  // thus  22 8   means from 22 to 8 (not 8 to 22)
+  // and assume time wrap is always within 1 day
+  // i.e. no use of date info for now
+  
+  double t1s = t1.seconds();
+  double t2s = t2.seconds();
+  
+  if ( t2s < t1s ) 
+    {
+      return 86400.0 - t1s + t2s;
+    }
+  else // no overnight wrap, 
+    {
+      return t2s - t1s;
+    }
+  
+  return 0;
+  
+}
+
+
 double clocktime_t::difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 )
 {
 

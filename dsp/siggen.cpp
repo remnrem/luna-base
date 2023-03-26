@@ -32,23 +32,23 @@ void dsptools::siggen( edf_t & edf , param_t & param )
 {
 
   //
-  // Get signals, check sampling rates
+  // Add or update a signal
   //
   
-  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  const std::string siglab = param.requires( "sig" );
+  if ( siglab == "*" ) Helper::halt( "must specify a single signal 'sig'" );
+  if ( siglab.find( "," ) != std::string::npos ) Helper::halt( "must specify a single signal 'sig'" );
 
-  if ( signals.size() == 0 ) return;
-  
-  const int ns = signals.size();
-  
-  std::vector<double> Fs = edf.header.sampling_freq( signals );
-  
-  int sr = Fs[0];
-  for (int s=1;s<ns;s++)
-    if ( Fs[s] != sr )
-      Helper::halt( "all sampling rates must be similar for SIGGEN" );
+  // channel already exists?
+  const bool update_existing_channel = edf.header.has_signal( siglab );
+  const bool add_to_existing = param.has( "add" );
 
+  // SR of a new channel?
+  const int fs = update_existing_channel ? -1 : param.requires_int( "sr" );  
+  if ( (!update_existing_channel) && fs < 1 )
+    Helper::halt( "requires postive sample rate specified with 'sr'" );
 
+  
   //
   // Options
   //
@@ -56,6 +56,7 @@ void dsptools::siggen( edf_t & edf , param_t & param )
   // sine, square, saw, triangular
 
   bool sine_wave = param.has( "sine" );
+
   std::vector<double> sine_param;
 
   if ( sine_wave )
@@ -64,56 +65,119 @@ void dsptools::siggen( edf_t & edf , param_t & param )
       if ( sine_param.size() == 2 ) sine_param.resize(3,0);
       else if ( sine_param.size() != 3 ) Helper::halt( "expecting sine=frq,amp{,phase}" );
       if ( sine_param[0] <= 0 ) Helper::halt( "frq must be positive" );
-      if ( sine_param[0] >= sr / 2.0 ) Helper::halt( "frq not under Nyquist frequency, given sample rate" );
+      if ( sine_param[0] >= fs / 2.0 ) Helper::halt( "frq not under Nyquist frequency, given sample rate" );
       if ( sine_param[1] <= 0 ) Helper::halt( "amp should be positive, non-zero" );
     }
 
-  bool first_clear = param.has( "clear" );
-  
-  
+
   //
-  // pull signals
+  // simple impulses
   //
 
-  for (int s=0; s<ns; s++)
+  // impulse=T,A,D,T,A,D,...
+  bool impulses = param.has( "impulse" ) ;
+  std::vector<double> impulse_t, impulse_a;
+  std::vector<int> impulse_d; // in samples
+  std::vector<double> impulse_all;
+  if ( impulses ) impulse_all = param.dblvector( "impulse" );
+  if ( impulse_all.size() % 3 != 0 ) Helper::halt( "need impulse=T,A,D,T,A,D,..." );
+
+  if ( impulses )
     {
+      int n = impulse_all.size() ;
+      for (int i=0; i<n; i+=3)
+	{
+	  impulse_t.push_back( impulse_all[i] );
+	  impulse_a.push_back( impulse_all[i+1] );
+	  impulse_d.push_back( impulse_all[i+2] );
+	}
+    }
+  
+  
+  //
+  // make synthetic signal
+  //
 
-      
-      interval_t interval = edf.timeline.wholetrace();
+  const int np = edf.header.record_duration * edf.header.nr * fs ;
+    
+  std::vector<double> d( np , 0 );
+  
 
-      slice_t slice( edf , signals(s) , interval );
-      
-      std::vector<double> d = * slice.pdata();
+  //
+  // sine waves
+  //
 
-      const std::vector<uint64_t> * tp = slice.ptimepoints();
-
-      const int np = tp->size();
-      
+  if ( sine_wave )
+    {
       for ( int p=0 ; p<np; p++ )
 	{
 	  // time in seconds
-	  double t = (*tp)[p] * globals::tp_duration;
-
-	  // add to original value, or start from scratch?
-	  double x = first_clear ? 0 : d[p];
-
+	  double t = p /(double)fs;
+	  
 	  // add a sine wave?
 	  if ( sine_wave )
-	    x += sine_param[1] * sin( 2 * M_PI * sine_param[0] * t + sine_param[2] );
+	    d[p] += sine_param[1] * sin( 2 * M_PI * sine_param[0] * t + sine_param[2] );
+	  // others to go here..
 
-	  // replace back
-	  d[p] = x;
-	}      
+	}  
+    }
 
-      //
-      // copy whole signal back
-      //
-      
-      edf.update_signal( signals(s) , &d );
+  
+  //
+  // add impulse?
+  //
+  
+  if ( impulses )
+    {
+      for (int i=0; i<impulse_t.size(); i++)
+	{
+	  int start = impulse_t[i] * np;
+	  int end = start + impulse_d[i];
+	  end = end >= np ? np-1 : end ;
 
+	  for (int j=start; j<end; j++)
+	    d[j] += impulse_a[i];
+	}
     }
   
+  //
+  // Create/update signal
+  //
+  
+  if ( update_existing_channel )
+    {
+      
+      const int slot = edf.header.signal( siglab );
+      
+      if ( edf.header.is_annotation_channel( slot ) )
+	Helper::halt( "cannot modify an EDF Annotation channel" );
+      
+      slice_t slice( edf , slot , edf.timeline.wholetrace() );
+      
+      const std::vector<double> * d1 = slice.pdata();
+      
+      if ( d1->size() != d.size() )
+	Helper::halt( "internal error in siggen()" );
+      
+      if ( add_to_existing )
+	{
+	  // add existing to simulated signal
+	  for (int i=0; i<d1->size(); i++)
+	    d[i] += (*d1)[i];
+	}
+            
+      // now update the channel       
+      logger << "  updating " << siglab << "...\n";
+      edf.update_signal( edf.header.signal( siglab ) , &d );
 
+    }
+  else
+    {
+      
+      logger << "  creating new channel " << siglab << "...\n";
+      edf.add_signal( siglab , fs , d );
+    }
+  
   //
   // all done
   //

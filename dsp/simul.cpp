@@ -59,10 +59,9 @@ void dsptools::simul( edf_t & edf , param_t & param )
   //
   // baseline signal from a specified PSD, either:
   //
-  //  file  : from a file
-  //  alpha : 1/f^a
-  //  freq  : freq=10,20,30  amp=1,1,1
-  //
+  //  file    : from a file
+  //  alpha   : 1/f^a
+  //  freq    : freq=10,20,30  amp=1,1,1
 
   //
   // Also allow transients (pulses)
@@ -91,6 +90,13 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
   if ( from_file && ( functional || simple ) )
     Helper::halt( "cannot specify alpha/frq as well as file" );
+
+
+  //
+  // impulses (i.e. for impulse and step functions)
+  //
+
+  const bool impulses = param.has( "impulse" );
   
   //
   // sample rate & frequency resolution

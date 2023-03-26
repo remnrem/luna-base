@@ -24,6 +24,62 @@
 #include "edf/slice.h"
 
 
+void edf_t::set_timestamps( param_t & param )
+{
+
+  if ( header.nr == 0 ) return;
+  
+  const std::string filename = Helper::expand( param.requires( "file" ) );
+
+  if ( ! Helper::fileExists( filename ) )
+    Helper::halt( "could not find " + filename );
+
+  std::vector<uint64_t> tps;
+  std::ifstream IN( filename.c_str(), std::ios::in );
+  while ( ! IN.eof() )
+    {
+      std::string x;
+      Helper::safe_getline( IN , x );
+      if ( IN.eof() ) break;
+      if ( x == "" ) continue;
+
+      double secs;
+      if ( ! Helper::str2dbl( x , &secs ) )
+	Helper::halt( "bad numeric value: " + x );
+
+      tps.push_back( (uint64_t)( secs * globals::tp_1sec ) );
+          
+    }
+  IN.close();
+
+  logger << "  read " << tps.size() << " timestamps\n";
+
+  // check this lines up
+  if ( header.nr != tps.size() )
+    Helper::halt( "expecting " + Helper::int2str( header.nr ) + " timestamps (i.e. to match number of EDF records" );
+
+  // check all ascending
+  for (int i=1; i<header.nr; i++)    
+    if ( tps[i] <= tps[i-1] )
+      Helper::halt( "found non-increasing consecutive time-points" );
+
+  // make EDF+ (adds a time-track and at)  
+  set_edfplus(); 
+
+  // set as EDF+D explicitly
+  set_discontinuous();
+  
+  // now update in-memory time-track
+  timeline.create_discontinuous_timeline( tps );
+  
+  // now add EDF annotations w/ explcitly calculated tps
+  add_time_track( &tps );
+
+  logger << "  updated EDF+D time-track\n";
+  
+}
+
+
 bool edf_t::edf_minus()
 {
 
