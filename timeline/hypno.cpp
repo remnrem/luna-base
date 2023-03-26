@@ -206,11 +206,11 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
     {
       
       int e = timeline->next_epoch();
-      
+
       if ( e == -1 ) break;
       
       writer.epoch( timeline->display_epoch( e ) );
-
+      
       //
       // was there a gap prior to this epoch?
       //  - if contiguous, end of last == start of current
@@ -220,7 +220,8 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       
       if ( end_prior != 0 && end_prior != interval.start )
 	{
-	  //std::cout << " found gap before epoch " << e << " " << e2 << "\n";
+
+	  //std::cout << " found gap before epoch " << e << "\n";
 	  uint64_t gap_dur = interval.start - end_prior;
 	  
 	  // add a fake 'gap' epoch
@@ -2872,8 +2873,14 @@ void hypnogram_t::output( const bool verbose ,
   const int ne = timeline->num_epochs();
   
   clocktime_t starttime( clock_start );
-
-
+  
+  // std::cout << " NE / NE_GAPS " << ne << " " << ne_gaps << "\n";
+  // std::cout << " stages[] " << stages.size() << "\n";
+  // std::cout << " stages[] " << epoch_n.size() << "\n";
+  // std::cout << " gap[] " << epoch_gap.size() << "\n";
+  // std::cout << " dur[] " << epoch_dur.size() << "\n";
+  // std::cout << " start[] " << epoch_start.size() << "\n";
+  
   //
   // output in non-verbsoe mode (STAGES command)
   //
@@ -2884,35 +2891,50 @@ void hypnogram_t::output( const bool verbose ,
       if ( eannot == "." )
 	{
 	  logger << "  writing epoch-level sleep stages to standard out\n";
-	  for (int e=0;e<ne;e++)
-	    std::cout << globals::stage( stages[e] ) << "\n";
+	  for (int e=0;e<ne_gaps;e++)
+	    if ( ! epoch_gap[e] )
+	      std::cout << globals::stage( stages[ e ] ) << "\n";	
 	  return;
 	}      
       else if ( eannot != "" )
 	{
 	  logger << "  writing epoch-level sleep stages to " << eannot << "\n";
 	  std::ofstream EOUT( Helper::expand( eannot ).c_str() , std::ios::out );
-	  for (int e=0;e<ne;e++)
-	    EOUT << globals::stage( stages[e] ) << "\n";
+	  for (int e=0;e<ne_gaps;e++)
+	    if ( ! epoch_gap[e] )		      
+	      EOUT << globals::stage( stages[ e ] ) << "\n";
 	  EOUT.close();
 	  return;
 	}
       
       // Typical STAGE command
+
+      // actual existing epoch count
+      int ecnt = 0;
       
-      for (int e=0;e<ne;e++)
+      for (int e=0;e<ne_gaps;e++)
 	{
+
+	  // skip gaps in the output
+	  const bool is_gap = epoch_gap[e];
+	  if ( is_gap ) continue;
+	  
+	  // get actual epoch number
+	  const int eidx = epoch_n[e];
 	  
 	  // epoch-level stratification
 	  // epoch_n is the original 0-based epoch encoding
 	  // so, for diplay +1 , but for other calculations
 	  // we want to keep this original encoding
 	  
-	  writer.epoch( epoch_n[e] + 1 );
+	  //std::cout << " e " << e << " / " << ne << " --> " << epoch_n.size() << " " << epoch_n[e] << "\n";
 	  
+	  writer.epoch( eidx + 1 );
 	  
 	  // new - use actual epoch encoding (it's what it's there for!)
-	  interval_t interval = timeline->epoch( epoch_n[e] );	      
+	  interval_t interval = timeline->epoch( ecnt );
+	  ++ecnt;
+	  
 	  const double sec0 = interval.start * globals::tp_duration;
 
 	  // clock time based on EDF header	  
@@ -2925,23 +2947,25 @@ void hypnogram_t::output( const bool verbose ,
 	      
               clocktime_t present = starttime;
               present.advance_seconds( sec0 );
-                            	      
+	      
+	      //std::cout << sec0 << " is sec0 " << present.as_string( ':' ) << "\n";
+	      
 	      writer.value( "CLOCK_TIME" , present.as_string( ':' ) );
 	      
 	      if ( verbose ) 
 		writer.value( "CLOCK_HOURS" ,  present.as_numeric_string() );
 	      
 	    }
-		  
+	  
 	  // time in minutes (from start of stage-aligned epochs)	  
-	  writer.value( "MINS" ,  epoch_n[e] * epoch_mins );
+	  writer.value( "MINS" ,  eidx * epoch_mins );
 	  
 	  // time from EDF start (seconds)
 	  writer.value( "START" , sec0 ); 
 	  
 	  // stages	  
 	  writer.value( "STAGE" , globals::stage( stages[e] ) );
-
+	  
 	  // i.e. prior to anything being set to L or ?
 	  writer.value( "OSTAGE" , globals::stage( original_stages[e] ) );
 	  
