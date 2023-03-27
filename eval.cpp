@@ -447,7 +447,7 @@ void cmd_t::signal_alias( const std::string & s )
   // but with case-insensitive matches
   
   // x|Y|Y
-    
+
   // format canonical|alias1|alias2 , etc.
   std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
   if ( tok.size() < 2 ) Helper::halt( "bad format for signal alias:  canonical|alias 1|alias 2\n" + s );
@@ -982,6 +982,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EDF" ) )          proc_force_edf( edf , param(c) );
       else if ( is( c, "EDF-" ) )         proc_edf_minus( edf , param(c) );
       else if ( is( c, "EDF-MINUS" ) )    proc_edf_minus( edf , param(c) );
+      else if ( is( c, "SET-TIMESTAMPS" ) ) proc_set_timestamps( edf , param(c) );
       else if ( is( c, "SUMMARY" ) )      proc_summaries( edf , param(c) );
       else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
       else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
@@ -2261,7 +2262,13 @@ void proc_slowwaves( edf_t & edf , param_t & param )
 
 void proc_edf_minus( edf_t & edf , param_t & param )
 {
+  edf.edf_minus();
+}
 
+// SET-TIMESTAMPS
+void proc_set_timestamps( edf_t & edf , param_t & param )
+{
+  edf.set_timestamps( param );
 }
 
 // EDF : convert from EDF+D to EDF or EDF+C
@@ -2341,9 +2348,11 @@ void proc_write( edf_t & edf , param_t & param )
   if ( Helper::file_extension( filename, "edf.gz" ) || 
        Helper::file_extension( filename, "EDF.GZ" ) ) 
     filename = filename.substr(0 , filename.size() - 7 );
-  
+
   // make edf-tag optional
-  if ( param.has( "edf-tag" ) ) 
+  if ( param.has( "edf" ) )
+    filename = param.requires( "edf" ) + ".edf" ;
+  else if ( param.has( "edf-tag" ) ) 
     filename += "-" + param.requires( "edf-tag" ) + ".edf";
   else
     {
@@ -2423,12 +2432,19 @@ void proc_write( edf_t & edf , param_t & param )
   // if a mask has been set, this will restructure the mask
   edf.restructure(); 
   
+
   //
   // Force as EDF (i.e. even if restructured), and set starttime = 0;
   //
 
-  bool write_as_edf = param.has( "force-edf" );
-  
+  int write_as_edf = param.has( "force-edf" ) ? 1 : 0 ;
+
+  if ( param.has( "null-starttime" ) )
+    {
+      if ( ! write_as_edf )
+	Helper::halt( "null-starttime option can only be specified with force-edf" );
+      write_as_edf = 2;
+    }  
   
   //
   // Do not write 'quasi-discontinuous' (i.e. single-segment EDF+D) as EDF+D
@@ -2465,7 +2481,7 @@ void proc_write( edf_t & edf , param_t & param )
 	logger << "  exporting " << channels.size() << " signals from " << edf.header.ns << " originals\n";
     }
 
-
+  
   //
   // Save data (write_as_edf flag forces starttime to 00.00.00 if really EDF+D)
   //
@@ -3066,6 +3082,7 @@ void proc_record_dump( edf_t & edf , param_t & param )
 
 
 // SEGMENTS : show all contiguous segments
+// (and optionally, add annotations to this effect)
 
 void proc_dump_segs( edf_t & edf , param_t & param )
 {
@@ -4207,7 +4224,26 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::set_0dur_as_ellipsis =  Helper::yesno( tok1 );;
       return;
     }
-  
+
+  // treatment of gaps going from EDF+D to EDF in annots
+  if ( Helper::iequals( tok0 , "annot-segment" ) )
+    {
+      globals::annot_disc_segment = tok1[0];
+      return;
+    }
+
+  if ( Helper::iequals( tok0 , "annot-gap" ) )
+    {
+      globals::annot_disc_gap = tok1[0];
+      return;
+    }
+
+  if ( Helper::iequals( tok0 , "annot-span-gaps" ) )
+    {
+      globals::annot_disc_drop_spanning = ! Helper::yesno( tok1 );
+      return;
+    }
+
   // split class/annot remappings (ABC/DEF|XYZ)
   if ( Helper::iequals( tok0 , "class-instance-delimiter" ) )
     {
@@ -4483,7 +4519,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // signal alias?
   if ( Helper::iequals( tok0 , "alias" ) )
     {
-      cmd_t::signal_alias( globals::sanitize_everything? Helper::sanitize( tok1 ) : tok1 );
+
+      const std::string str = globals::sanitize_everything ?
+	(  globals::replace_channel_spaces
+	   ? Helper::trim( Helper::sanitize( tok1 ) , '_' ) 
+	   : Helper::trim( Helper::sanitize( tok1 , ' ' ) , '_' ) 
+	   )
+	: tok1 ; 
+      
+      cmd_t::signal_alias( str );
       return;
     }
   

@@ -278,10 +278,11 @@ void edf_t::description( const param_t & param )
 	++n_annot_channels_sel;
     }
 
-  clocktime_t et( header.starttime );
+  clocktime_t et( header.startdate, header.starttime );
   if ( et.valid )
     {
-      double time_sec = ( timeline.last_time_point_tp * globals::tp_duration ) ; 
+      // go to next time point /after/ end
+      double time_sec = ( timeline.last_time_point_tp+1LLU ) * globals::tp_duration ; 
       et.advance_seconds( time_sec );
     }
   
@@ -300,6 +301,16 @@ void edf_t::description( const param_t & param )
 	    << header.nr * header.record_duration << " sec" 
 	    << "\n"; // not fractional 
 
+  if ( header.edfplus && ! header.continuous )
+    {
+      clocktime_t st( header.startdate , header.starttime ); // include dates
+      double diff_secs = clocktime_t::ordered_difference_seconds( st , et );
+      clocktime_t ot( "00.00.00" );
+      ot.advance_seconds( diff_secs );
+      std::cout << "Duration (w/ gaps): "
+		<< ot.as_string() << "  " << diff_secs << " sec\n";
+    }
+  
   if ( n_data_channels_sel < n_data_channels )
     std::cout << "# signals         : " << n_data_channels_sel << " selected (of " << n_data_channels << ")\n";
   else
@@ -393,7 +404,7 @@ void edf_t::terse_summary( param_t & param )
   clocktime_t et( header.starttime );
   if ( et.valid )
     {
-      double time_sec = ( timeline.last_time_point_tp * globals::tp_duration ) ;
+      double time_sec = ( timeline.last_time_point_tp+1LLU) * globals::tp_duration ;
       et.advance_seconds( time_sec );
       writer.value( "STOP_TIME" , et.as_string() );
     }
@@ -1568,7 +1579,8 @@ bool edf_t::attach( const std::string & f ,
       clocktime_t et( header.starttime );
       if ( et.valid )
 	{
-	  double time_sec = ( timeline.last_time_point_tp * globals::tp_duration ) ;
+	  // nb. going to one past end:
+	  double time_sec = ( (timeline.last_time_point_tp+1LLU) * globals::tp_duration ) ;
 	  et.advance_seconds( time_sec );
 	  logger << " | clocktime " << header.starttime << " - " << et.as_string() ;
 	}
@@ -2047,9 +2059,12 @@ bool edf_t::is_actually_discontinuous()
 }
 
 
-bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bool always_edfd , const std::vector<int> * p_ch2slot )
+bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , bool always_edfd , const std::vector<int> * p_ch2slot )
 {
 
+  // write_as_edf 0   -- no, do not force as EDF
+  //              1   -- yes, force as EDF but reset start time
+  //              2   -- yes, force as EDF and set starttime to NULL (00.00.00) w/ message
   
   //
   // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is set after any RESTRUCTURE
@@ -2077,8 +2092,8 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   // Reset start-time to NULL (i.e. to writing as standard EDF but is actually discontinuous, then)
   // clocktimes will not make sense
   //
-
-  bool null_starttime = write_as_edf && actually_EDFD; 
+  
+  bool null_starttime = write_as_edf == 2 && actually_EDFD; 
   
   //
   // Force as standard EDF? 
@@ -2093,7 +2108,8 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
   //
   // Deal with start time?  If writing as a truly discontinuous EDF+D, then
   // keep start-time as is (i.e. first epoch might not be 0 seconds).  But if
-  // writing as a EDF+C, then make start time == 
+  // writing as a EDF+C, then make start time == first record (or even if EDF
+  // unless we are told otherwise) 
   //
     
   if ( null_starttime ) 
@@ -2101,12 +2117,11 @@ bool edf_t::write( const std::string & f , bool as_edfz , bool write_as_edf , bo
       logger << "  setting EDF starttime to null (00.00.00)\n";
       header.starttime = "00.00.00";
     }
-  else if ( make_EDFC )  // no changes for EDF+D
+  else if ( write_as_edf == 1 || make_EDFC )  // no changes for EDF+D
     {      
       reset_start_time();
     }
-
-
+  
   
   //
   // By default, ch2slot will be 0,1,2,...,ns-1   i.e. a straight mapping/ordering of all channels

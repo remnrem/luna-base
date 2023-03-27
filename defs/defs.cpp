@@ -53,6 +53,9 @@ char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = ':';
 char globals::annot_keyval_delim = '=' ; 
+std::string globals::annot_disc_segment = "segment";
+std::string globals::annot_disc_gap = "gap";
+bool globals::annot_disc_drop_spanning = true;
 
 bool globals::sanitize_everything = true;
 
@@ -581,7 +584,19 @@ void globals::init_defs()
   edf_timetrack_label = "_TT";
   edf_timetrack_size = 15; // i.e. up to 30 chars
   edf_annot_label = "edf_annot";
-  
+
+
+  // if running 'collapse' EDF+D --> EDF
+  // add annot to show gaps 
+  annot_disc_segment = "segment";
+  annot_disc_gap = "gap";
+  annot_disc_drop_spanning = true;
+  // S1 S1 S1 G1 G1 S2 S2 G2 S3 S3
+
+  // S1 S1 S1 S2 S2 S3 S3
+  // -------- ----- -----
+  // segment1   2     3 
+  // gap     1     2   (2-tp duration marker, so hits both epochs)
   
   // whether to assume 30-sec and enfore epoch check when first attaching 
   // an .eannot file;   default is allow up to 5 epochs difference

@@ -1636,10 +1636,10 @@ interval_t annot_t::get_interval( const std::string & line ,
 		{
 		  before_edf_start = true;
 		  // i.e. take the next occasion
-		  // dbl_start =  24*60*60 - clocktime_t::difference_seconds( starttime , atime ) ;
+		  // ??? OLD dbl_start =  24*60*60 - clocktime_t::difference_seconds( starttime , atime ) ;
 		}
 	      else 
-		dbl_start = clocktime_t::difference_seconds( starttime , atime ) ;
+		dbl_start = clocktime_t::ordered_difference_seconds( starttime , atime ) ;
 	      
 	    }
 
@@ -1662,7 +1662,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  if ( is_elapsed_hhmmss_stop )
 	    dbl_stop = btime.seconds(); // was ealpsed [hh:mm:ss] 
 	  else
-	    dbl_stop = clocktime_t::difference_seconds( starttime , btime ) ;  // was clocktime
+	    dbl_stop = clocktime_t::ordered_difference_seconds( starttime , btime ) ;  // was clocktime
 	  
 	}
       else if ( col2dur ) // expecting ""
@@ -3142,14 +3142,14 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   // no outputs other than data rows (no class line)  
   const bool minimal = param.has( "minimal" ) || param.has( "min" ) ;
   
-  const bool add_specials = ! ( minimal || param.has( "no-specials" ) );
+  const bool add_specials = param.has( "specials" );
   
   // in .annot mode only, skip # headers
-  const bool add_headers = ! ( minimal || param.has( "no-headers" ) );
+  const bool add_headers = param.has( "headers" );
   
   // ensure date is here too (to allow 'dhms' mode printing)
   clocktime_t starttime( edf.header.startdate , edf.header.starttime );
-
+  
   if ( hms && ! starttime.valid ) 
     {
       logger << " ** could not find valid start-time in EDF header **\n";
@@ -3450,9 +3450,9 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	      O1 << "# " << Helper::quote_if( annot->name, '|' ) ; 
 	      
 	      if ( annot->description != "" )
-		O1 << " | " << annot->description;
+		O1 << " | " << Helper::quote_if( annot->description, '|' );
 	      else if ( has_vars ) // need a dummy description here 
-		O1 << " | " << annot->description ;
+		O1 << " | " << Helper::quote_if( annot->description, '|' );
 	      
 	      if ( has_vars ) 
 		O1 << " |";
@@ -3610,7 +3610,10 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
 	  if ( collapse_disc && ! edf.header.continuous ) 
 	    {
+	      //	      std::cout << " pre  " << interval.start << " -- " << interval.stop << "\n";
 	      interval = edf.timeline.collapse( interval );
+	      //std::cout << " post " << interval.start << " -- " << interval.stop << "\n";
+	      
 	      // if the annotation doesn't completely fit in a region, skip it
 	      if ( interval.start == 1LLU && interval.stop == 0LLU )
 		{ ++ee; continue; }
@@ -3647,16 +3650,36 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	    {
 
 	      double tp1_sec =  interval.start / (double)globals::tp_1sec;
+	      // add down to 1/1000th of a second
+	      double tp1_extra = tp1_sec - (long)tp1_sec;
+	      // but if we be round up to 1.000 then we need to add +1 to tp1_sec
+	      if ( tp1_extra >= 0.9995 )
+		{
+		  ++tp1_sec;
+		  tp1_extra = 0;
+		}
+
+	      // and get clock time
 	      clocktime_t present1 = starttime;
 	      present1.advance_seconds( tp1_sec );
-	      // add down to 1/100th of a second
-	      double tp1_extra = tp1_sec - (long)tp1_sec;
-	   
+
+	      // stop time
 	      double tp2_sec =  interval.stop / (double)globals::tp_1sec;
+	      double tp2_extra = tp2_sec - (long)tp2_sec;
+	      if ( tp2_extra >= 0.9995 )
+		{
+		  ++tp2_sec;
+                  tp2_extra = 0;
+		}
 	      clocktime_t present2 = starttime;
 	      present2.advance_seconds( tp2_sec );
-	      double tp2_extra = tp2_sec - (long)tp2_sec;
+		  
+	      // std::cout << " tp = " << interval.as_string() << "\n";
+	      // std::cout << " times = " << interval.start_sec() << " " << interval.stop_sec() << "\t"
+	      // 		<< present1.as_string(':')  << " -- " << present2.as_string(':') << "\n";
 
+	      // std::cout << " fl = " << tp1_sec << " " << tp1_extra << " ---- " << tp2_sec << " " << tp2_extra << "\n";
+	      
 	      // add dd-mm-yy-hh:mm:ss
 	      
 	      // hh:mm:ss.ssss

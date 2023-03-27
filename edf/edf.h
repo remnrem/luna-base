@@ -679,7 +679,7 @@ public:
   
   bool write( const std::string & f , 
 	      bool edfz = false , 
-	      bool null_starttime = false , 
+	      int null_starttime = 0 , 
 	      bool always_edfd = false , 
 	      const std::vector<int> * p_ch2slot = NULL );
   
@@ -712,11 +712,12 @@ public:
 
 
   //
-  // edf-minus
+  // edf-minus & set-timestamps
   //
 
   bool edf_minus();
 
+  void set_timestamps( param_t & );
   
   // empirical recalculate the physical min/max from data (i.e. 
   // instead of relying on the EDF header;  replace the header values

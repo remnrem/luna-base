@@ -182,6 +182,10 @@ struct globals
 
   static bool set_0dur_as_ellipsis;
 
+  static std::string annot_disc_segment;
+  static std::string annot_disc_gap;
+  static bool annot_disc_drop_spanning;
+  
   //
   // Annotation types stored here statically;  these can be properties of both 
   // annot_t, in which case they provide a guide for all instance_t.data fields
