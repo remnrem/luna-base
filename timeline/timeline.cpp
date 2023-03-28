@@ -1068,6 +1068,16 @@ interval_t timeline_t::wholetrace() const
 {  
   //std::cout << "LTP = " << last_time_point_tp + 1LLU << "\n";
   // end is defined as 1 past the last time point
+
+  // check that we don't have a mask set::: if we do, give a warning to the console
+
+  if ( mask_set )
+    logger << "\n"
+	   << "  *** warning - running a command that pulls the whole trace\n"
+	   << "  ***           but currently an epoch mask set has been set;\n"
+	   << "  ***           for this operation to skip masked epochs,\n"
+	   << "  ***           you need to run RE (RESTRUCTURE) beforehand\n";
+  
   return interval_t( 0 , last_time_point_tp + 1LLU );
 }
 
@@ -2718,52 +2728,68 @@ void timeline_t::add_mask_annot( const std::string & tag )
   
 }
 
-void timeline_t::mask2annot( const std::string & path , const std::string & tag , bool with_id ) 
+// void timeline_t::mask2annot( const std::string & path , const std::string & tag , bool with_id ) 
+// {
+
+//   if ( ! mask_set ) return;
+  
+//   std::string path2 = path[ path.size() - 1 ] != globals::folder_delimiter 
+//     ? path + globals::folder_delimiter 
+//     : path ; 
+  
+//   std::string filename = with_id ? ( path2 + tag + "-" + edf->id + ".annot" ) : ( path2 + tag + ".annot" ) ;
+  
+//   annot_t * a = annotations.add( tag );
+//   a->description = "Mask based on " + tag ;
+//   //a->types[ "M" ] = globals::A_BOOL_T;
+  
+//   const int ne = mask.size();
+  
+//   for (int e=0;e<ne;e++)
+//     {
+//       if ( mask[e] )
+// 	{
+// 	  instance_t * instance = a->add( tag , epoch(e) , "." );
+// 	  //instance->set( "M" , true );
+// 	}
+//     }
+
+//   a->save( filename );
+
+//   // this will also retain the annotatiton 'tag', so it can be used
+//   // downstream by explicitly requesting the 'tag' annotation even if
+//   // the mask changes (i.e. rather than delete the annotation here)
+  
+// }
+
+
+
+void timeline_t::dumpmask( const param_t & param )
 {
 
-  if ( ! mask_set ) return;
-  
-  std::string path2 = path[ path.size() - 1 ] != globals::folder_delimiter 
-    ? path + globals::folder_delimiter 
-    : path ; 
-  
-  std::string filename = with_id ? ( path2 + tag + "-" + edf->id + ".annot" ) : ( path2 + tag + ".annot" ) ;
-  
-  annot_t * a = annotations.add( tag );
-  a->description = "Mask based on " + tag ;
-  //a->types[ "M" ] = globals::A_BOOL_T;
-  
-  const int ne = mask.size();
-  
-  for (int e=0;e<ne;e++)
-    {
-      if ( mask[e] )
-	{
-	  instance_t * instance = a->add( tag , epoch(e) , "." );
-	  //instance->set( "M" , true );
-	}
-    }
+  // also dump an 
+  const bool dump_annot = param.has( "annot" );
+  const std::string annot_str = dump_annot ? param.value( "annot" ) : "" ; 
 
-  a->save( filename );
-
-  // this will also retain the annotatiton 'tag', so it can be used
-  // downstream by explicitly requesting the 'tag' annotation even if
-  // the mask changes (i.e. rather than delete the annotation here)
+  // default is to make annot when an epoch is /masked/ (versus opposite)
+  const bool annot_unmasked = param.yesno( "annot-unmasked" );
+				   
+  annot_t * ann = dump_annot ? annotations.find( annot_str ) : NULL ; 
   
-}
-
-
-
-void timeline_t::dumpmask()
-{
-
+  // no output?
+  const bool output = param.has( "output" ) && param.yesno( "output" ) == false ; 
+  
   // no mask set: means all clear so display that
-  //if ( ! mask_set ) return;
+  // if ( ! mask_set ) return;
 
   first_epoch();
-  
-  logger << "  dumping MASK\n";
 
+  if ( output ) 
+    logger << "  dumping MASK\n";
+  if ( dump_annot )
+    logger << "  creating annotation " << annot_str << " based on mask == " << ( annot_unmasked ? "FALSE" : "TRUE" ) << "\n";
+  
+  
   while ( 1 ) 
     {
       
@@ -2772,7 +2798,7 @@ void timeline_t::dumpmask()
       if ( e == -1 ) break;
       
       interval_t interval = epoch( e );
-
+      
       // EPOCH_INTERVAL will already have been output by the EPOCH command
       writer.epoch( display_epoch( e ) );
       //      writer.var(   "INTERVAL" , "Epoch time start/stop" );
@@ -2780,6 +2806,14 @@ void timeline_t::dumpmask()
       //      writer.value( "INTERVAL" , interval.as_string() );
       writer.value( "EMASK" , mask_set ? mask[e] : false );
 
+      
+      if ( ann )
+	{
+	  if ( annot_unmasked && ! mask_set ) 
+	    ann->add( "." , interval , "." );
+	  else if ( mask_set && ! annot_unmasked )
+	    ann->add( "." , interval , "." );
+	}
     }
 
   writer.unepoch();

@@ -923,7 +923,7 @@ void pops_indiv_t::level1( edf_t & edf )
     {
       
       int epoch = edf.timeline.next_epoch();      	  
-      std::cout << " epoch " << epoch << "\n";
+      //      std::cout << " epoch " << epoch << "\n";
       if ( epoch == -1 ) break;
       
       if ( en == ne ) Helper::halt( "internal error: over-counted epochs" );
