@@ -677,7 +677,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // check EDF starttime, which might be needed
   //  -- but add EDF start date here too, to allow dhms printing
   
-  clocktime_t starttime( parent_edf.header.startdate, parent_edf.header.starttime );
+  //  clocktime_t starttime( parent_edf.header.startdate, parent_edf.header.starttime );
+  // IGNORE THAT FOR NOW...
+  clocktime_t starttime( parent_edf.header.starttime );
     
   // read header then data
   
@@ -1416,6 +1418,8 @@ interval_t annot_t::get_interval( const std::string & line ,
 				  )
 {
 
+  //  std::cout << "[" << line << "]\n";
+  
   // 0 class
   // 1 instance
   // 2 channel
@@ -1617,7 +1621,8 @@ interval_t annot_t::get_interval( const std::string & line ,
 
 	  if ( is_elapsed_hhmmss_start )
 	    {
-	      dbl_start = atime.seconds(); 
+	      dbl_start = atime.seconds();
+	      //std::cout << " aatime.seconds = " << dbl_start << "\n";
 	    }
 	  else
 	    {
@@ -1631,6 +1636,8 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      //    setting special flag interval_t(1,0) 
 	      
 	      int earlier = clocktime_t::earlier( starttime , atime );
+
+	      //std::cout << " earlier ?? " << earlier << "\n";
 	      
 	      if ( earlier == 2 )  // allow for this to be the latter time
 		{
@@ -1639,7 +1646,21 @@ interval_t annot_t::get_interval( const std::string & line ,
 		  // ??? OLD dbl_start =  24*60*60 - clocktime_t::difference_seconds( starttime , atime ) ;
 		}
 	      else 
-		dbl_start = clocktime_t::ordered_difference_seconds( starttime , atime ) ;
+		{
+		  
+
+		  // std::cout << "sT1 " << starttime.as_string() << "\t"
+		  // 	    << atime.as_string() << "\n";
+		  
+		  // std::cout << "T1 " << starttime.as_datetime_string() << "\t"
+		  // 	    << atime.as_datetime_string() << "\n";
+		  
+		  
+		  dbl_start = clocktime_t::ordered_difference_seconds( starttime , atime ) ;
+		  
+		  //std::cout << " dbl_start (X)  = " << dbl_start << "\n";
+		}
+	      //std::cout <<" now = " <<dbl_start << "\n";
 	      
 	    }
 
@@ -1680,11 +1701,17 @@ interval_t annot_t::get_interval( const std::string & line ,
 	}
       
       if ( dbl_start < 0 )
-	Helper::halt( f + " contains row(s) with negative time points" ) ;
-      
-      if ( ( !*readon ) && dbl_stop < 0 )
-	Helper::halt( f + " contains row(s) with negative time points" ) ;
+	{
+	  //std::cout << " S1 " << dbl_start << "\n";
+	  Helper::halt( f + " contains row(s) with negative time points" ) ;
+	}
 
+      if ( ( !*readon ) && dbl_stop < 0 )
+	{
+	  //std::cout << " S2 " << dbl_start << "\n";
+	  Helper::halt( f + " contains row(s) with negative time points" ) ;
+	}
+      
       // annot(epoch)/record alignment (to the leftmost second)
       // i.e. to handle staging annots that start at a fractional second onset
 
@@ -3927,9 +3954,17 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       
       dbl_stop = dbl_start + dbl_dur; 
 	      
-      if ( dbl_start < 0 ) Helper::halt( filename + " contains row(s) with negative time points" ) ;
-
-      if ( dbl_dur < 0 ) Helper::halt( filename + " contains row(s) with negative durations" );
+      if ( dbl_start < 0 )
+	{
+	  //std::cout << " S3 " << dbl_start << "\n";
+	  Helper::halt( filename + " contains row(s) with negative time points" ) ;
+	}
+      
+      if ( dbl_dur < 0 )
+	{
+	  //std::cout << " S4 " << dbl_dur << "\n";
+	  Helper::halt( filename + " contains row(s) with negative durations" );
+	}
       
       // convert to uint64_t time-point units
       

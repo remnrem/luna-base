@@ -464,20 +464,20 @@ struct clocktime_t
   int m;
   double s;
 
-  std::string as_string( const char tchar = '.' , bool fractional = false ) 
+  std::string as_string( const char tchar = '.' , bool fractional = false ) const
   {
     if ( ! valid ) return "NA";
     return Helper::timestring( h,m,s, tchar , fractional );
   }
 
   // dd-mm-yyyy-hh:mm:ss
-  std::string as_datetime_string( const char tchar = '.' , bool fractional = false ) 
+  std::string as_datetime_string( const char tchar = '.' , bool fractional = false ) const
   {
     if ( ! valid ) return "NA";
     return date_t::datestring(d) + "-" + Helper::timestring( h,m,s, tchar , fractional );
   }
 
-  std::string as_numeric_string() 
+  std::string as_numeric_string() const
   {
     if ( ! valid ) return "NA";
     return Helper::dbl2str( hours() );
