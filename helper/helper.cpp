@@ -1349,6 +1349,10 @@ double clocktime_t::difference_hours( const clocktime_t & t1 , const clocktime_t
 
 double clocktime_t::ordered_difference_hours( const clocktime_t & t1 , const clocktime_t & t2 )
 {
+
+  // exact match?
+  if ( t1 == t2 ) return 0;
+
   // here we *assume* t1 happens before t2
   
   // thus  22 8   means from 22 to 8 (not 8 to 22)
@@ -1372,6 +1376,13 @@ double clocktime_t::ordered_difference_hours( const clocktime_t & t1 , const clo
 
 double clocktime_t::ordered_difference_seconds( const clocktime_t & t1 , const clocktime_t & t2 )
 {
+
+  if ( t1 == t2 )
+    {
+      //std::cout << " IS EQ\n";
+      return 0;
+    }
+  
   // here we *assume* t1 happens before t2
   // thus  22 8   means from 22 to 8 (not 8 to 22)
   // and assume time wrap is always within 1 day
@@ -1379,6 +1390,8 @@ double clocktime_t::ordered_difference_seconds( const clocktime_t & t1 , const c
   
   double t1s = t1.seconds();
   double t2s = t2.seconds();
+
+  //  std::cout << " t1, t2 = " << t1s << " " << t2s << "\n";
   
   if ( t2s < t1s ) 
     {

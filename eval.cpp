@@ -2952,17 +2952,15 @@ void proc_annot_mask( edf_t & edf , param_t & param )
 
 void proc_dump_mask( edf_t & edf , param_t & param )
 {
-  if ( ! param.has("tag") )
-    {
-      edf.timeline.dumpmask();
-      return;
-    }
-
-  // otherwise, create an ANNOT file from the MASK, i.e. for viewing
-  std::string tag = param.requires( "tag" );
-  std::string path = param.has( "path" ) ? param.value("path") : ".";
-  bool no_id = ! param.has( "no-id" );
-  edf.timeline.mask2annot( path, tag , no_id ); 
+  
+  edf.timeline.dumpmask( param );
+  
+  // nb. dumpmask() now allows adding annots +/- output
+  // // otherwise, create an ANNOT file from the MASK, i.e. for viewing
+  // std::string tag = param.requires( "tag" );
+  // std::string path = param.has( "path" ) ? param.value("path") : ".";
+  // bool no_id = ! param.has( "no-id" );
+  // edf.timeline.mask2annot( path, tag , no_id ); 
 }
 
 // CHEP : dump, or convert from CHEP->MASK
