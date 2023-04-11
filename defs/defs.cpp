@@ -128,6 +128,10 @@ int globals::sample_list_min;
 int globals::sample_list_max;
 std::string globals::sample_list_id;
 
+bool globals::anon; 
+std::string globals::force_starttime;
+std::string globals::force_startdate;
+
 bool globals::write_naughty_list;
 std::string globals::naughty_list;
 
@@ -205,7 +209,7 @@ void globals::init_defs()
   
   version = "v0.28.0";
   
-  date    = "14-Mar-2022";
+  date    = "10-Apr-2023";
 
   //
   // Return code
@@ -558,6 +562,11 @@ void globals::init_defs()
   sample_list_max = -1;
   sample_list_id = "";
 
+  anon = false; 
+
+  force_starttime = "";
+  force_startdate = "";
+  
   write_naughty_list = false;
   naughty_list = "";
   

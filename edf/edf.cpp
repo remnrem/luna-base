@@ -574,6 +574,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
     }
 
+    
   // Number and direction of records/signals
   
   nr                   = edf_t::get_int( &q , 8 );
@@ -1453,7 +1454,35 @@ bool edf_t::attach( const std::string & f ,
   
   inp_signals_n = header.read( file , edfz , inp_signals );
   
+
+  //
+  // anon header info?
+  //
+
+  if ( globals::anon )
+    {
+      // ID, recording info and startdate --> NULL 
+      header.patient_id = header.edfplus ? "X X X X" : ".";
+      header.recording_info = header.edfplus ? "Startdate X X X X" : ".";
+      header.startdate = "01.01.85";
+    }
+
+  //
+  // force EDF start times/dates
+  //
+
+  if ( globals::force_starttime != "" )
+    {
+      header.starttime = globals::force_starttime;
+      logger << "  forced start-time to " << header.starttime << "\n";
+    }
   
+  if ( globals::force_startdate != "" )
+    {
+      header.startdate = globals::force_startdate;
+      logger << "  forced start-date to " << header.startdate << "\n";
+    }
+
   //
   // Swap out any signal label aliases at this point
   //
@@ -1573,17 +1602,21 @@ bool edf_t::attach( const std::string & f ,
 
   if ( ! silent ) 
     {
-      logger << " duration: " << Helper::timestring( timeline.total_duration_tp , '.' , false )  // not fractional
-	     << " | " << timeline.total_duration_tp * globals::tp_duration << " secs";
+      
+      logger << " duration " << Helper::timestring( timeline.total_duration_tp , '.' , false )  // not fractional
+	     << ", " << timeline.total_duration_tp * globals::tp_duration << "s";
       
       clocktime_t et( header.starttime );
+      
       if ( et.valid )
 	{
 	  // nb. going to one past end:
 	  double time_sec = ( (timeline.last_time_point_tp+1LLU) * globals::tp_duration ) ;
 	  et.advance_seconds( time_sec );
-	  logger << " | clocktime " << header.starttime << " - " << et.as_string() ;
+	  logger << " | time " << header.starttime << " - " << et.as_string() ;
 	}
+
+      logger << " | date " << header.startdate;
       logger << "\n";
       
       //	 << " hms, last time-point " << Helper::timestring( ++timeline.last_time_point_tp ) << " hms after start\n";

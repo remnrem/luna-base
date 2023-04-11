@@ -257,6 +257,10 @@ struct globals
   static int sample_list_min;
   static int sample_list_max;
   static std::string sample_list_id;
+
+  static bool anon;
+  static std::string force_starttime;
+  static std::string force_startdate;
   
   static bool write_naughty_list;
   static std::string naughty_list;

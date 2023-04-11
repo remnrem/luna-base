@@ -2048,8 +2048,6 @@ void proc_anon( edf_t & edf , param_t & param )
       logger << " setting ID to " << edf.id << " and start date to '01.01.85' for " 
 	     << edf.filename << "\n";
       
-      edf.header.patient_id = edf.id;
-      
       edf.header.patient_id = edf.header.edfplus ? edf.id + " X X X" : edf.id;
       
     }
@@ -4134,6 +4132,30 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  // do not read IDs in
+  if ( Helper::iequals( tok0 , "anon" ) )
+    {
+      globals::anon = Helper::yesno( tok1 );
+      return;
+    }
+
+  // force start time/dates
+  if ( Helper::iequals( tok0 , "starttime" ) )
+    {
+      globals::force_starttime = tok1;
+      if ( globals::force_starttime.size() > 8 )
+	Helper::halt( "starttime cannot be over 8 characters" );
+      return;
+    }
+  
+  if ( Helper::iequals( tok0 , "startdate" ) )
+    {
+      globals::force_startdate = tok1;
+      if ( globals::force_startdate.size() > 8 )
+	Helper::halt( "startdate cannot be over 8 characters" );      
+      return;
+    }
+  
   // specify indiv-wildcard (other than ^)
   // which is needed if file ID actually contains ^
   if ( Helper::iequals( tok0 , "wildcard" ) )
@@ -4481,13 +4503,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  // do not load sample-list annotations
-  if ( Helper::iequals( tok0 , "skip-sl-annots" ) )
-    {
-      globals::skip_sl_annots = Helper::yesno( tok1 );
-      return;
-    }
-  
 
   // specified annots (only load these)
   if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
@@ -4551,17 +4566,19 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  // do not read ANNOT annotations
-  if ( Helper::iequals( tok0 , "skip-annots" ) )
+  // do not load sample-list annotations
+  if ( Helper::iequals( tok0 , "skip-sl-annots" ) )
     {
-      globals::skip_nonedf_annots = Helper::yesno( tok1 );
+      globals::skip_sl_annots = Helper::yesno( tok1 );
       return;
     }
-
-  // do not read EDF or ANNOT annotations
-  if ( Helper::iequals( tok0 , "skip-all-annots" ) )
+  
+  // do not read ANY annotations
+  if ( Helper::iequals( tok0 , "skip-annots" ) ||
+       Helper::iequals( tok0 , "skip-all-annots" ) )
     {
-      globals::skip_edf_annots = globals::skip_nonedf_annots = Helper::yesno( tok1 );
+      // nb - internally skip_edf_annots and skip_sl_annots are redundant I believe, but can keep as is 
+      globals::skip_edf_annots = globals::skip_sl_annots = globals::skip_nonedf_annots = Helper::yesno( tok1 );
       return;
     }
   	

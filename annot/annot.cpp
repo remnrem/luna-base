@@ -677,8 +677,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // check EDF starttime, which might be needed
   //  -- but add EDF start date here too, to allow dhms printing
   
-  //  clocktime_t starttime( parent_edf.header.startdate, parent_edf.header.starttime );
-  // IGNORE THAT FOR NOW...
+  clocktime_t startdatetime( parent_edf.header.startdate, parent_edf.header.starttime );
   clocktime_t starttime( parent_edf.header.starttime );
     
   // read header then data
@@ -1080,7 +1079,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  tok[5] = ".";
 		  tok[4] = tok[3];
 		  tok[3] = tok[2];
-		  tok[2] = ".";
+		  tok[2] = ".";		  
 		}
 	      else if (  tok.size() == 3 )
 		{
@@ -1143,11 +1142,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  bool readon = false;
 	  
 	  std::string ch; 
-	  
+
 	  interval_t interval = get_interval( line , tok ,
 					      &ch , 
 					      &readon , 
-					      parent_edf , a , starttime , f ,
+					      parent_edf , a ,
+					      starttime , startdatetime, 
+					      f ,
 					      align_annots );
 	  
 	  //
@@ -1188,10 +1189,38 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      else
 		{
 		  std::vector<std::string> ntok = Helper::parse( buffer , globals::allow_space_delim ? " \t" : "\t" );
-		  
+
 		  if ( ntok.size() == 0 ) 
 		    Helper::halt( "invalid line following '...' end timepoint" );
 
+		  // allow diff formats
+		  if ( ntok.size() != 6 ) 
+		    {
+		      if ( ntok.size() == 4 ) 
+			{
+			  ntok.resize( 6 );
+			  ntok[5] = ".";
+			  ntok[4] = ntok[3];
+			  ntok[3] = ntok[2];
+			  ntok[2] = ".";			  			  
+			}
+		      else if (  ntok.size() == 3 )
+			{
+			  ntok.resize( 6 );
+			  ntok[5] = ".";
+			  ntok[4] = ntok[2];
+			  ntok[3] = ntok[1];
+			  ntok[2] = ".";
+			  ntok[1] = ".";
+			}
+		      else
+			Helper::halt ( "expecting 6/4/3 columns, but found " 
+				       + Helper::int2str( (int) ntok.size() ) 
+				       + "\n  (hint: use the 'tab-only' option to ignore space delimiters)\n"
+				       + "line [ " + buffer + "]" );
+		      
+		    }
+		  
 		  std::string nch;
 		  bool dummy;
 		  
@@ -1199,7 +1228,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  interval_t ninterval = get_interval( line , ntok ,
 						       &nch, 
 						       &dummy, 
-						       parent_edf , NULL , starttime , f ,
+						       parent_edf , NULL ,
+						       starttime , startdatetime, 
+						       f ,
 						       align_annots );
 		  
 		  
@@ -1412,13 +1443,14 @@ interval_t annot_t::get_interval( const std::string & line ,
 				  bool * readon , 
 				  const edf_t & parent_edf , 
 				  annot_t * a ,
-				  const clocktime_t & starttime , 
+				  const clocktime_t & starttime ,
+				  const clocktime_t & startdatetime , 
 				  const std::string & f ,
 				  const bool align_annots 
 				  )
 {
 
-  //  std::cout << "[" << line << "]\n";
+  // std::cout << "[" << line << "]\n";
   
   // 0 class
   // 1 instance
@@ -1567,8 +1599,9 @@ interval_t annot_t::get_interval( const std::string & line ,
 
       // assume this is either: 
       //    single numeric value (in seconds) which is an offset past the EDF start
-      // OR in clock-time, in hh:mm:ss (24-hour) format
-
+      // OR in clock-time, in hh:mm:ss (24-hour) format or dd-mm-yy-hh:mm:ss
+      // OR in elapsed clock-time in format 0+hh:mm:ss
+      
       // with either format, the second column can be a read-on  ('...')
       // with either format, the second column can be a duration (in secs) if second col starts +
       
@@ -1614,66 +1647,73 @@ interval_t annot_t::get_interval( const std::string & line ,
       
       double dbl_start = 0 , dbl_stop = 0;
       
-      // start time:
+      // start time
+      
       if ( is_hms1 )
 	{
+
 	  clocktime_t atime( start_str );
 
+	  // 0+hh:mm:ss format
 	  if ( is_elapsed_hhmmss_start )
 	    {
+
+	      if ( atime.d != 0 )
+		Helper::halt( "elapsed clock-times cannot contain dates: format = 0+hh:mm:ss" );
+
+	      // i.e. seconds past 'midnight == start of EDF' 
 	      dbl_start = atime.seconds();
-	      //std::cout << " aatime.seconds = " << dbl_start << "\n";
+	      
 	    }
 	  else
 	    {
-	      
-	      // h:m:s specification does not work for >12 hours recordings
-	      
-	      // 1: EDF start comes before ANNOT start
-	      
-	      // 2: annot start comes before EDF start
-	      // --> need to ignore by 
-	      //    setting special flag interval_t(1,0) 
-	      
-	      int earlier = clocktime_t::earlier( starttime , atime );
 
-	      //std::cout << " earlier ?? " << earlier << "\n";
+	      // if dates are specified, check that annot does not start before the EDF start
+	      // otherwose, *assume* that it starts afterwards
+	      //  i.e. if start = 10pm,  then 9pm --> 23 hours later, assumed the next day
 	      
-	      if ( earlier == 2 )  // allow for this to be the latter time
-		{
-		  before_edf_start = true;
-		  // i.e. take the next occasion
-		  // ??? OLD dbl_start =  24*60*60 - clocktime_t::difference_seconds( starttime , atime ) ;
+	      // if start is before EDF start, flag that ( special flag interval interval_t(1,0)   
+
+	      // day information specified?
+	      
+	      if ( startdatetime.d != 0 && atime.d != 0 ) 
+		{		  
+		  int earlier = clocktime_t::earlier( startdatetime , atime );		  
+		  if ( earlier == 2 )
+		    before_edf_start = true;
+		  else
+		    dbl_start = clocktime_t::ordered_difference_seconds( startdatetime , atime ) ;
 		}
-	      else 
+	      else if ( startdatetime.d == 0 && atime.d != 0 )
+		{
+		  // do not allow date info in annot if EDF start is null
+		  Helper::halt( "cannot specify annotations with date-times if the EDF start date is null (1.1.85)" );
+		}
+	      else
 		{
 		  
-
-		  // std::cout << "sT1 " << starttime.as_string() << "\t"
-		  // 	    << atime.as_string() << "\n";
-		  
-		  // std::cout << "T1 " << starttime.as_datetime_string() << "\t"
-		  // 	    << atime.as_datetime_string() << "\n";
-		  
+		  // otherwise, no date information for the annotation, so
+		  //  a) ignore date of EDF start and
+		  //  b) assume that the time is the next to occur		   
 		  
 		  dbl_start = clocktime_t::ordered_difference_seconds( starttime , atime ) ;
 		  
-		  //std::cout << " dbl_start (X)  = " << dbl_start << "\n";
 		}
-	      //std::cout <<" now = " <<dbl_start << "\n";
-	      
+	      	      
 	    }
 
 	}
       else 
 	{
-	  // if here, we are assuming this is not a hh:mm:ss format time, 
+	  // if here, we are assuming this is not a (dd-mm-yy-)hh:mm:ss format time, 
 	  // so assume this is seconds 
+
 	  if ( ! Helper::str2dbl( start_str , &dbl_start ) )
 	    Helper::halt( "invalid interval (start) : " + line );
-
+	  
 	}
-    
+
+      
       // stop time:
       if ( is_hms2 )
 	{
@@ -1681,9 +1721,43 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  clocktime_t btime( stop_str );
 	  
 	  if ( is_elapsed_hhmmss_stop )
-	    dbl_stop = btime.seconds(); // was ealpsed [hh:mm:ss] 
+	    {
+	      // was elapsed 0+hh:mm:ss
+	      
+	      if ( btime.d != 0 )
+                Helper::halt( "elapsed clock-times cannot contain dates: format = 0+hh:mm:ss" );
+	      
+	      dbl_stop = btime.seconds(); 
+	    }
 	  else
-	    dbl_stop = clocktime_t::ordered_difference_seconds( starttime , btime ) ;  // was clocktime
+	    {
+	      // date-time available for stop and EDF start?
+
+              if ( startdatetime.d != 0 && btime.d != 0 )
+                {
+		  
+                  int earlier = clocktime_t::earlier( startdatetime , btime );
+		  
+		  if ( earlier == 2 )
+	            before_edf_start = true;
+                  else
+                    dbl_stop = clocktime_t::ordered_difference_seconds( startdatetime , btime ) ;		  
+		}
+	      else if ( startdatetime.d == 0 && btime.d != 0 )
+		{
+		  Helper::halt( "cannot specify annotations with date-times if the EDF start date is null (1.1.85)" );
+		}
+	      else
+		{
+		  // otherwise, no date information for the annotation, so
+		  //  a) ignore date of EDF start and
+		  //  b) assume that the time is the next to occur		   
+		  
+		  dbl_stop = clocktime_t::ordered_difference_seconds( starttime , btime ) ;
+		  
+		}
+	      
+	    }
 	  
 	}
       else if ( col2dur ) // expecting ""

@@ -146,7 +146,8 @@ struct annot_t
 				  bool * , 
 				  const edf_t & ,
 				  annot_t * ,
-				  const clocktime_t & , 
+				  const clocktime_t & , // time only
+				  const clocktime_t & , // date time 
 				  const std::string & ,
 				  const bool align_annots 
 				  );
