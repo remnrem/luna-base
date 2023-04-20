@@ -348,10 +348,13 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 {
   
   //
-  // do we have any lights_on or lights_off annotations?   Or have these been passed 
+  // 1) Do we have any lights_on or lights_off annotations?
+
+  // 2) Or have these been passed 
   // via the command line (e.g. as a variable, which may be individual-specific, lights-off=${LOFF} 
   // where LOFF is defined in a vars=data.txt file )
   //
+  // 3) Or, have we been given a cache, which implies LON and LOFF (from trim)
   
   // lights-off=hh::mm::ss
   //  OR 
@@ -362,8 +365,59 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   double lights_on = -1;
 
   clocktime_t st( timeline->edf->header.starttime );
+
+  if ( param.has( "cache" ) )
+    {
+      std::string cname = param.value( "cache" );
+      
+      if ( ! timeline->cache.has_num( cname ) )
+	logger << "  skipping... cache " << cname << " not found for this individual...\n";
+      else
+	{
+	  
+	  cache_t<double> * cache = timeline->cache.find_num( cname );
+
+	  // expecting a single stratum... if not, complain (e.g. could reflect TAGs)
+	  
+	  std::set<ckey_t> ckeys_off = cache->keys( "LOFF" );
+	  std::set<ckey_t> ckeys_on = cache->keys( "LON" );
+
+	  if ( ckeys_off.size() > 1 ) Helper::halt( "expecting single stratum for cache" );
+	  if ( ckeys_on.size() > 1 ) Helper::halt( "expecting single stratum for cache" );
+
+	  // set lights off
+	  if ( ckeys_off.size() )
+	    {
+	      std::vector<double> cx = cache->fetch( *ckeys_off.begin() );
+	      if ( cx.size() != 1 ) Helper::halt( "internal error - expecting single cache entry for LOFF" );
+	      
+	      lights_off = cx[0];
+
+	      logger << "  from TRIM cache, setting lights_off = "
+		     << lights_off << " secs, "
+		     << lights_off/60.0 << " mins from start\n";
+	      
+	    }
+
+	  // set lights on
+	  if ( ckeys_on.size() )
+	    {
+	      std::vector<double> cx = cache->fetch( *ckeys_on.begin() );
+	      if ( cx.size() != 1 ) Helper::halt( "internal error - expecting single cache entry for LON" );
+	      
+	      lights_on = cx[0];
+	      
+	      logger << "  from TRIM cache, setting lights_on = "
+		     << lights_on << " secs, "
+		     << lights_on/60.0 << " mins from start\n";
+	      	      
+	    }	  
+	}
+    }
   
-  if ( param.has( "lights-off" ) && param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" )
+
+  // else, if not already set, see about command line args
+  if ( lights_off < 0 && param.has( "lights-off" ) && param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" )
     {
       const std::string loffstr = param.value( "lights-off" );
       const bool hms_mode = loffstr.find( ":" ) != std::string::npos;
@@ -418,7 +472,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // Lights-On time 
   //
 
-  if ( param.has( "lights-on" ) && param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
+  if ( lights_on < 0 && param.has( "lights-on" ) && param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
     {
       
       const std::string lonstr = param.value( "lights-on" );

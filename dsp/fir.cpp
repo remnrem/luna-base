@@ -31,6 +31,7 @@
 
 #include "edf/slice.h"
 #include "edf/edf.h"
+#include "dsp/ngaus.h"
 
 extern logger_t logger;
 
@@ -505,31 +506,47 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   //
   // reading filter coefficients from an external file?
   //
-  bool from_file = param.has( "file" );
+
+  const bool from_file = param.has( "file" );
 
   std::string fir_file = "";
 
   //
+  // Narrow-band filter via frequency-domain Gaussian
+  // 
+  
+  const bool ngaus = param.has( "ngaus" );
+  std::vector<double> npar;
+  if ( ngaus )
+    {    
+      npar = param.dblvector( "ngaus" );
+      if ( npar.size() !=2 ) Helper::halt( "expecting ngaus=<freq>,<fwhm>" );      
+    }
+  const double ngaus_f = ngaus ? npar[0] : 0 ;
+  const double ngaus_fwhm = ngaus ? npar[1] : 0 ;
+  
+  
+  //
   // FIR design method
   //
 
-  bool use_kaiser = param.has( "tw" ) || param.has( "ripple" );
+  const bool use_kaiser = param.has( "tw" ) || param.has( "ripple" );
 
-  bool fixed_order = ! ( use_kaiser || from_file ) ;
+  const bool fixed_order = ! ( use_kaiser || from_file || ngaus ) ;
 
   //
   // Kaiser-window specification
   //
   
-  double ripple = use_kaiser ? param.requires_dbl( "ripple" ) : 0 ;
+  const double ripple = use_kaiser ? param.requires_dbl( "ripple" ) : 0 ;
 
-  double tw = use_kaiser ?  param.requires_dbl( "tw" ) : 0 ;
+  const double tw = use_kaiser ?  param.requires_dbl( "tw" ) : 0 ;
 
   //
   // fixed-order
   //
   
-  int order = fixed_order ? param.requires_int( "order" ) : 0 ;
+  const int order = fixed_order ? param.requires_int( "order" ) : 0 ;
 
   //
   // Windowing if not Kaiser window
@@ -560,7 +577,7 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   // standard convolution vs FFT implementation
   //
 
-  bool use_fft = param.has( "fft" );
+  const bool use_fft = param.has( "fft" );
 
   if ( param.has( "bandpass" ) )
     {
@@ -593,8 +610,8 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       ftype = fir_t::EXTERNAL;
       fir_file = param.value( "file" );
     }	    
-  else 
-    Helper::halt( "need to specify FIR type as bandpass, bandstop, lowpass, highpass, or file" );
+  else if ( ! ngaus ) 
+    Helper::halt( "need to specify FIR type as bandpass, bandstop, lowpass, highpass (or file or ngaus)" );
 
 
   
@@ -628,14 +645,35 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
 
       logger << " " << signals.label(s);
 
-      apply_fir( edf , signals(s) , ftype , use_kaiser ? 1 : 2 ,
-		 ripple, tw ,
-		 f1 , f2 ,
-		 order , window , 
-		 use_fft , fir_file );
+      if ( ngaus )
+	apply_ngaus( edf, signals(s) , ngaus_f, ngaus_fwhm );
+      else	
+	apply_fir( edf , signals(s) , ftype , use_kaiser ? 1 : 2 ,
+		   ripple, tw ,
+		   f1 , f2 ,
+		   order , window , 
+		   use_fft , fir_file );
       
     }
   logger << "\n";
+}
+
+
+void dsptools::apply_ngaus( edf_t & edf , int s , const double ngaus_f , const double ngaus_fwhm )
+{
+  
+  interval_t interval = edf.timeline.wholetrace();
+  
+  slice_t slice( edf , s , interval );
+  
+  const std::vector<double> * d = slice.pdata();
+  
+  int fs = edf.header.sampling_freq( s );
+  
+  std::vector<double> filtered = narrow_gaussian_t::filter( *d , fs, ngaus_f , ngaus_fwhm ) ;
+  
+  edf.update_signal( s , &filtered );
+  
 }
 
 

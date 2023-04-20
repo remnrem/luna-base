@@ -23,6 +23,9 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "trim.h"
+#include "ngaus.h"
+#include "ged.h"
 #include "movavg.h"
 #include "lat.h"
 #include "rectify.h"

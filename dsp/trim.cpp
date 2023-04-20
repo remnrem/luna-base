@@ -1,0 +1,381 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
+#include "dsp/trim.h"
+
+#include "helper/helper.h"
+#include "helper/logger.h"
+#include "db/db.h"
+#include "edf/edf.h"
+#include "edf/slice.h"
+#include "timeline/cache.h"
+
+#include "stats/Eigen/Dense"
+#include "stats/eigen_ops.h"
+
+extern logger_t logger;
+extern writer_t writer;
+
+void dsptools::trim_lights( edf_t & edf , param_t & param )
+{
+  
+  // Given a recording, and 1 or more signals, determine where lights off/on occurred
+  // based on the assumption of high amplitude noise during the lights on epochs
+  
+  // by default, trim both start and stop
+  
+  const bool trim_start = ! param.has( "only-end" ) ;
+  const bool trim_stop = ! param.has( "only-start" ) ;
+
+  // by default, use +/- 2 SD units as outlier
+  const double th = param.has( "th" ) ? param.requires_dbl( "th" ) : 2 ; 
+
+  // by default, do not allow more than 20 epochs of (10 mins) 'good' data at either end
+  const int good_th = param.has( "allow" ) ? param.requires_int( "allow" ) : 20;  
+
+  // by default, require equivalent of 20 epochs of bad data to be flagged - i.e. or else maxima may
+  // point to a single trivial outliers
+  const int req_epoch = param.has( "req" ) ? param.requires_int( "req" ) : 20 ;
+  
+  //  by default, smoothing window (total window, in epochs) - otherwise, 5 mins triangular win  
+  const int smooth_win = param.has( "w" ) ? param.requires_int( "w" ) : 11 ; 
+
+  // outputs
+  const bool verbose = param.has( "epoch" ) || param.has( "verbose" );
+
+  const bool set_vars = param.has( "var" );
+
+  if ( set_vars && param.empty( "var" ) )
+    Helper::halt( "var option must specify a variable name, e.g. var=lights --> lights_off and lights_on" );
+  
+  // which signals?
+  const bool NO_ANNOTS = true;
+
+  signal_list_t signals = edf.header.signal_list(  param.requires( "sig" ) , NO_ANNOTS );
+  
+  const int ns = signals.size();
+
+  if ( ns == 0 ) return;
+  
+  std::vector<double> Fs = edf.header.sampling_freq( signals );
+
+  // epoch-wise storage
+
+  int ne = edf.timeline.first_epoch();
+
+  Eigen::MatrixXd H1 = Eigen::MatrixXd::Zero( ne , ns );
+  Eigen::MatrixXd H2 = Eigen::MatrixXd::Zero( ne , ns );
+  Eigen::MatrixXd H3 = Eigen::MatrixXd::Zero( ne , ns );
+  std::vector<int> ep;
+
+  // iterate over epochs
+
+  int ecnt = 0;
+  
+  while ( 1 )
+    {
+      
+      int epoch = edf.timeline.next_epoch();	  
+      
+      if ( epoch == -1 ) break;
+      
+      interval_t interval = edf.timeline.epoch( epoch );
+      
+      // get all signals
+      eigen_matslice_t mslice( edf , signals , interval );
+
+      Eigen::MatrixXd & X = mslice.nonconst_data_ref();
+
+      // process each signal
+      for (int s=0; s<ns; s++)
+	{
+	  
+	  std::vector<double> v = eigen_ops::copy_vector( X.col(s) );
+	  
+	  double activity = 0 , mobility = 0 , complexity = 0;
+
+	  MiscMath::centre( &v );
+	  
+          MiscMath::hjorth( &v , &activity , &mobility , &complexity );
+	  
+	  activity = activity > 0 ? log( activity ) : log( activity + 1e-12 );
+	  
+	  H1( ecnt , s ) = activity ;
+	  H2( ecnt , s ) = mobility ;
+	  H3( ecnt , s ) = complexity ;
+	}
+      
+      // track epochs
+      ep.push_back( epoch );
+      ++ecnt;
+
+    }
+  
+  //
+  // we now have all epoch level data H1, H2, H3
+  //
+  
+  
+  // track overall estimates of lights off/on
+  
+  int lights_off = -1, lights_on = -1;
+  
+  // proceed channel-wise
+  
+  for (int s=0; s<ns; s++)
+    {
+
+      // get IQRs
+      std::vector<double> v1 = eigen_ops::copy_vector( H1.col(s) );
+      std::vector<double> v2 = eigen_ops::copy_vector( H2.col(s) );
+      std::vector<double> v3 = eigen_ops::copy_vector( H3.col(s) );
+
+      // get medians
+      double m1 = MiscMath::median( v1 );
+      double m2 = MiscMath::median( v2 );
+      double m3 = MiscMath::median( v3 );
+
+      double iqr1 = MiscMath::iqr( v1 ) ;
+      double iqr2 = MiscMath::iqr( v2 ) ;
+      double iqr3 = MiscMath::iqr( v3 ) ;
+
+      double lwr1 = m1 - th * iqr1;
+      double upr1 = m1 + th * iqr1;
+      
+      double lwr2 = m2 - th * iqr2;
+      double upr2 = m2 + th * iqr2;
+      
+      double lwr3 = m3 - th * iqr3;
+      double upr3 = m3 + th * iqr3;
+      
+      // outliers
+      std::vector<bool> okay( ne , true );
+      Eigen::VectorXd out = Eigen::VectorXd::Zero( ne );
+      for (int e=0; e<ne; e++)
+	{	  
+	  if ( v1[e] < lwr1 || v1[e] > upr1
+	       || v2[e] < lwr2 || v2[e] > upr2
+	       || v3[e] < lwr3 || v3[e] > upr3 )
+	    {
+	      out[e] = 1;
+	      okay[e] = false;
+	    }
+	}
+      
+      // smooth (taper to 0.05 by default) 
+      out = eigen_ops::tri_moving_average( out , smooth_win , 0.05 );
+
+
+      // estiamte for each possible 'e'   sum(X)^2 / n
+      //   where n is # of epochs (from start, or unitl end)
+      //   i.e. this equals sum(X) * mean(X)
+      //   i.e. weights both the total amount of X and the density... ~equal balance
+
+      // but also impose rule that if we've had more than T epochs of 'good' data, then
+      // we stop tracking
+      
+      // lights off
+      int lights_off1 = -1;
+      double max_off = 0;
+      double cum = 0;
+      int good = 0;
+      
+      std::vector<double> trk_off( ne);
+      std::vector<double> trk_on( ne);
+      
+      for (int e=0; e<ne; e++)
+	{
+
+	  // do not allow more than (e.g.) 20 epochs of 'good' (non-outlier) epochs in this region)
+	  if ( okay[e] ) ++good;
+	  if ( good > good_th ) break;
+	  
+	  cum += out[e] ;
+	  double stat = pow( cum, 2) / (double)(e+1);
+	  if ( stat > max_off )
+	    {
+	      max_off = stat;
+	      lights_off1 = e;
+	    }
+	  trk_off[e] = stat;
+	}
+      
+           
+      // lights on
+      int lights_on1 = -1;
+      double max_on = 0;
+      cum = 0;
+      good = 0;
+      for (int e1=0; e1<ne; e1++)
+        {
+	  int e = ne - 1 - e1;
+	  
+	  if ( okay[e] ) ++good;
+          if ( good > good_th )	break;
+
+	  cum += out[e] ;
+	  double stat = pow( cum, 2 )  / (double)(e1+1); // nb e1 denom, i.e. # until end
+	  if ( stat > max_on )
+            {
+              max_on = stat;
+              lights_on1 = e;
+	    }
+	  trk_on[e] = stat;
+        }
+
+
+      //
+      // magnitude check: stats ~equals number of epochs (weighted) 
+      //  requires this to be at least e.g. 20 (10 mins) or else what's the point of changing
+
+      if ( max_off < req_epoch )
+	lights_off1 = -1;
+	
+      if ( max_on < req_epoch )
+	lights_on1 = -1;
+
+      
+      //
+      // channel-wise output
+      //
+
+      writer.level( signals.label(s) , globals::signal_strat );
+
+      if ( trim_start && lights_off1 >= 0 ) 
+	writer.value( "EOFF" , lights_off1 );
+      if ( trim_stop && lights_on1 >= 0 ) 
+	writer.value( "EON" , lights_on1 );
+      
+      if ( verbose )
+	{	  
+	  for (int e=0; e<ne; e++)
+	    {
+	      writer.epoch( edf.timeline.display_epoch( ep[e] ) );
+	      if ( trim_start ) writer.value( "XOFF" , trk_off[e] );
+	      if ( trim_stop ) writer.value( "XON" , trk_on[e] );
+
+	      writer.value( "STAT" , out[e] );
+	      writer.value( "FLAG" , okay[e] ? 0 : 1 ) ;
+	      writer.value( "H1" , H1(e,s) );
+	      writer.value( "H2" , H2(e,s) );
+	      writer.value( "H3" , H3(e,s) );
+	      
+	    }
+	  writer.unepoch();
+	  
+	}
+
+
+      //
+      // trake earliest lights off and latest lights on
+      //
+
+      if ( lights_off1 > 0 )
+	{
+	  if ( lights_off < 0 ) lights_off = lights_off1;
+	  else if ( lights_off1 < lights_off ) lights_off = lights_off1;
+	}
+
+      if ( lights_on1 > 0 )
+	{
+	  if ( lights_on < 0 )	lights_on = lights_on1;
+	  else if ( lights_on1 > lights_on ) lights_on = lights_on1;
+	}
+      
+      // next signal
+    }
+
+  writer.unlevel( globals::signal_strat );
+
+
+  //
+  // final determination
+  //
+
+  const bool set_off = trim_start && lights_off >= 0 ;
+  const bool set_on  = trim_stop && lights_on >= 0 ;
+
+  // if ( set_off && set_on && lights_off > lights_on )
+  //   Helper::halt( "problem - empirical lights on set before lights off" );
+  
+  clocktime_t starttime( edf.header.starttime );
+  double epoch_hrs = 30.0 / 3600.0;
+  clocktime_t clock_lights_out = starttime;
+  clocktime_t clock_lights_on = starttime;
+  
+  if ( set_off ) 
+    {      
+      writer.value( "EOFF" , lights_off );
+      clock_lights_out.advance_hrs( epoch_hrs * lights_off ) ;
+      writer.value( "LOFF" , clock_lights_out.as_string() );
+
+    }
+
+  if ( set_on )
+    {
+      writer.value( "EON" , lights_on );
+      clock_lights_on.advance_hrs( epoch_hrs * lights_on ) ;
+      writer.value( "LON" , clock_lights_on.as_string() );
+    }
+  
+
+  //
+  // use cache to remember LON and LOFF values? [ will enable hypno to understand these ]
+  //
+
+  if ( set_off || set_on )
+    {
+
+      cache_t<double> * cache = param.has( "cache" ) ? edf.timeline.cache.find_num( param.value( "cache" ) ) : NULL ;
+
+      if ( cache )
+	logger << "  setting cache " << param.value( "cache" ) << " to store times\n";
+      
+      clocktime_t starttime( edf.header.starttime );
+      double epoch_hrs = 30.0 / 3600.0; 
+      
+      clocktime_t clock_lights_out = starttime;
+      if ( set_off ) 
+	clock_lights_out.advance_hrs( epoch_hrs * lights_off ) ;
+      
+      clocktime_t clock_lights_on = starttime;
+      if ( set_on ) 
+	clock_lights_on.advance_hrs( epoch_hrs * lights_on ) ;
+      
+      if ( set_off )
+	{
+	  logger << " lights-off=" << clock_lights_out.as_string() << " (skipping " << lights_off << " epochs from start)\n";	  
+	  if ( cache ) cache->add( ckey_t( "LOFF" , writer.faclvl() ) , edf.timeline.epoch_length() * lights_off );
+	}
+      
+      if ( set_on )
+	{
+	  logger << " lights-on=" << clock_lights_on.as_string() << " (skipping " << ne - lights_on - 1 << " epochs from end)\n";
+	  if ( cache ) cache->add( ckey_t( "LON" , writer.faclvl() ) , edf.timeline.epoch_length() * lights_on );
+	}
+      
+    }
+
+  
+}
+
+

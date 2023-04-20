@@ -266,9 +266,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // verbose display of all CWT coefficients
   const bool     show_cwt_coeff           = param.has( "show-coef" );
 
+  
   // detect slow waves and estimate ITPC etc for spindle start/anchor/stop and slow waves
   const bool     sw_coupling              = param.has( "so" );
   
+  // by default, SW coupling is for same channel as the original; but we can allow this to vary
+  //  (if null "", below use same channel)
+  const std::string sw_channel = ( ! param.empty( "so" ) ) ? param.value( "so" ) : "" ; 
+
+  const bool  external_sw_channel = sw_channel != "";
   
   // by default, SW phase coupling anchor is with "peak" (point of max CWT amplitude)
   //  always calculate this, and use this in the primary spindle level output 
@@ -471,7 +477,33 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   std::set<feature_t> all_spindles;
   
+
+  //
+  // Get SO channel if explicitly specified?  Only need to do once.
+  //
+
+  std::vector<double> * dslow = NULL;
+  std::vector<uint64_t> * tpslow = NULL;
+  int srslow = 0;
+
+  if ( sw_channel != "" )
+    {
+      const int slow_slot = edf.header.signal( sw_channel );
+      if ( slow_slot == -1 ) Helper::halt( "could not find " + sw_channel );
+      
+      if ( edf.header.is_annotation_channel( slow_slot ) )
+	Helper::halt( sw_channel + " is an annotation channel" );
+
+      srslow = edf.header.sampling_freq( slow_slot );
+
+      // get data
+      slice_t slice( edf , slow_slot , edf.timeline.wholetrace() );
+      dslow = slice.nonconst_pdata();
+      tpslow = slice.nonconst_ptimepoints();
+      	
+    }
   
+   
   //
   // For each signal, over the whole signal
   //
@@ -493,6 +525,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  continue;
 	}
 
+      if ( srslow != 0 && srslow != Fs[s] )
+	{
+	  Helper::halt( "sample rate for sig and so channels must be the same" );
+	}
       
       //
       // Output
@@ -518,6 +554,17 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       double dt_minutes = (double)dt / ( 60 * globals::tp_1sec ) ;
       
       double t_minutes = d->size() * dt_minutes; // total trace time in minutes
+
+
+      //
+      // If no explicit so channel, self-asgign
+      //
+
+      if ( srslow == 0 )
+	{
+	  dslow = (std::vector<double> *)d;
+	  tpslow = (std::vector<uint64_t> *)tp;
+	}
       
       //
       // Run CWT 
@@ -546,7 +593,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       //
       
       std::map<freq_range_t,double> baseline_fft;
-
+      
       do_fft( d , Fs[s] , &baseline_fft );
 
 
@@ -560,11 +607,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       //
       // Set up for optional slow-wave coupling
       //
-
+      
       hilbert_t * p_hilbert = NULL ;
       
       slow_waves_t * p_sw = NULL ;
-    
+     
       
       if ( sw_coupling )
 	{
@@ -573,14 +620,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  slow_wave_param_t sw_par( param );
 	  
 	  // filter-Hilbert raw signal for SWs
-	  p_hilbert = new hilbert_t( *d , Fs[s] , sw_par.f_lwr , sw_par.f_upr , sw_par.fir_ripple , sw_par.fir_tw );
-	  
+	  p_hilbert = new hilbert_t( *dslow , srslow , sw_par.f_lwr , sw_par.f_upr , sw_par.fir_ripple , sw_par.fir_tw );
+	  	  
 	  //std::vector<double> ph_peak;
 	  // are spindles in slow-waves?
 	  //	  std::vector<bool> sw_peak;
 	  
 	  // find slow-waves	      
-	  p_sw = new slow_waves_t( *d , *tp , Fs[s] , sw_par );
+	  p_sw = new slow_waves_t( *dslow , *tpslow , srslow , sw_par );
 	  
 	  // and phase
 	  p_sw->phase_slow_waves();

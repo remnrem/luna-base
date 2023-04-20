@@ -148,6 +148,9 @@ namespace dsptools
   
   void apply_fir( edf_t & edf , param_t & param );
 
+  // narrow band via freq domain gaussian - handle separately
+  void apply_ngaus( edf_t & edf , int s, const double, const double );
+  
   // filter given EDF and signal slot 's' (pull data, call apply_fir() 
   void apply_fir( edf_t & edf , int s , fir_t::filterType ,
 		  int mode ,

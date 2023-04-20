@@ -3081,7 +3081,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "fir" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
-       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" || p == "tri" ) 
+       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" || p == "tri" || p == "ngaus" ) 
     {
 
       int cnt= 0;
@@ -3098,6 +3098,22 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
     }
 
+  if ( p == "ngaus" )
+    {
+      double f = x[0];
+      double fwhm = x[1];
+      int sr = x[2];
+
+      std::vector<double> y( x.size() - 3 );
+      for (int i=0; i<y.size(); i++) y[i] = x[i+3];
+
+      std::vector<double> z = narrow_gaussian_t::filter( y , sr, f , fwhm ) ;
+      
+      for (int i=0; i<y.size(); i++) std::cout << y[i] << "\t" << z[i] << "\n";
+      std::exit(0);
+      
+    }
+  
   if ( p == "desats" )
     {
       hb_find_desats_t r = hb_t::find_desats( eigen_ops::copy_array( x ) , 32 , 1.5 );
@@ -3344,6 +3360,23 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(0);
     }
 
+
+  if ( p == "ged" )
+    {
+      Eigen::MatrixXd X = Eigen::MatrixXd::Random(5,5);
+      Eigen::MatrixXd A = X + X.transpose();
+      std::cout << "Here is a random symmetric matrix, A:" << "\n" << A << "\n";
+      X = Eigen::MatrixXd::Random(5,5);
+      Eigen::MatrixXd B = X * X.transpose();
+      std::cout << "and a random positive-definite matrix, B:" << "\n" << B << "\n\n";
+
+      ged_t ged;
+      ged.covar( A, B );
+      ged.calc();
+      
+      std::exit(0);
+    }
+  
 
   if ( p == "fir" ) 
     {

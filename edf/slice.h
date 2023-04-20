@@ -74,6 +74,11 @@ class slice_t
     return &time_points; 
   }
   
+  std::vector<uint64_t> * nonconst_ptimepoints() 
+  { 
+    return &time_points; 
+  }
+
   const std::vector<int> * precords() const 
   { 
     return &records;

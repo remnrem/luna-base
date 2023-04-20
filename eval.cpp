@@ -1166,6 +1166,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
       
       else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
+      else if ( is( c, "TRIM" ) )         proc_trim( edf, param(c) ) ;
 
       else if ( is( c, "CACHE" ) )        proc_dump_cache( edf , param(c) );
 
@@ -1651,6 +1652,11 @@ void proc_correct( edf_t & edf , param_t & param )
   dsptools::artifact_correction( edf , param );
 }
 
+// TRIM : empircal heuristic to set lights off/on times based on signals
+void proc_trim( edf_t & edf , param_t & param )
+{
+  dsptools::trim_lights( edf, param );
+}
 
 // ARTIFACTS : artifact rejection using Buckelmueller et al. 
 
