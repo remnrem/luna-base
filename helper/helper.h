@@ -147,17 +147,6 @@ namespace Helper
 
   // case-insensitive any match
   bool contains( const std::string& a, const std::string& b );
-  
-  // print vector
-  template <class T> std::string print( const std::vector<T> & x , const std::string & label , const int l )
-    {
-      std::stringstream ss;
-      if ( label != "" )     
-	ss << "--- " << label << " ---\n";
-      int n = l > x.size() ? x.size() : l ;
-      for (int i=0;i<n;i++) ss << i << " [ " << x[i] << " ]\n";
-      return ss.str();
-    }
 
   bool fileExists(const std::string &);
   std::string expand( const std::string & f );
@@ -173,6 +162,32 @@ namespace Helper
   void debug( const std::string & msg );
   bool realnum(double d);
   bool similar( double a, double b , double EPS = 1e-6 );
+
+
+  
+  // subset a vector
+  template <class T> std::vector<T> subset( const std::vector<T> & x , const std::vector<bool> & mask )
+  {
+    const int n = x.size();
+    if ( n != mask.size() ) halt( "internal error in Helper::subset()" );
+    std::vector<T> r;
+    for (int i=0; i<n; i++)
+      if ( mask[i] ) r.push_back( x[i] );
+    return r;
+    
+  }
+      
+  // print vector
+  template <class T> std::string print( const std::vector<T> & x , const std::string & label , const int l )
+    {
+      std::stringstream ss;
+      if ( label != "" )     
+	ss << "--- " << label << " ---\n";
+      int n = l > x.size() ? x.size() : l ;
+      for (int i=0;i<n;i++) ss << i << " [ " << x[i] << " ]\n";
+      return ss.str();
+    }
+
   
   std::string int2str(int n);  
   std::string int2str(long n);

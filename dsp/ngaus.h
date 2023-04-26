@@ -24,9 +24,11 @@
 #define __NARROWBAND_GAUSSIAN_FILTER_H__
 
 #include <vector>
+#include "stats/Eigen/Dense"
 
 struct narrow_gaussian_t
 {
+  static Eigen::VectorXd filter( const Eigen::VectorXd & d , int sr, double f , double fwhm );
   static std::vector<double> filter( const std::vector<double> & , int sr, double f , double fwhm );
 };
 

@@ -26,6 +26,7 @@
 #include <vector>
 #include "miscmath/crandom.h"
 #include <fstream>
+#include "annot/annot.h"
 
 // nb. using Eigen:::Ref<>
 // for a writable reference:    Eigen::Ref<Eigen::VectorXd> 
@@ -893,3 +894,78 @@ void eigen_ops::accumulate( Eigen::Ref<Eigen::VectorXd> m , const int ctype )
   // all done
 }
 
+Eigen::MatrixXd eigen_ops::covariance( const Eigen::MatrixXd & X , const int minus1 )
+{
+  Eigen::MatrixXd centered = X.rowwise() - X.colwise().mean();
+  Eigen::MatrixXd cov = (centered.adjoint() * centered) / double(X.rows() - minus1 );
+  return cov;
+}
+
+
+Eigen::MatrixXd eigen_ops::subset_rows( Eigen::MatrixXd & m , const std::vector<uint64_t> * tp , annot_t * annot , const double w, const bool exclude )
+{
+  // if 'exclude==T' then remove rows in annot; otherwise, remove if not in annot
+
+  const uint64_t w_tp = w > 0 ? w * globals::tp_1sec : 0;
+  
+  const int n = m.rows();
+  if ( tp->size() != n ) Helper::halt( "internal error in eigen_ops::subset_rows()" );
+
+  // if no annotation defined, return all (or none)
+  if ( annot == NULL )
+    {
+      if ( exclude )
+	return m;
+      else
+	return Eigen::MatrixXd::Zero( 0 , m.cols() );
+    }
+
+  // get events
+  std::vector<bool> f( n , ! exclude );
+  int p = 0;
+  annot_map_t::const_iterator ii = annot->interval_events.begin();
+  while ( ii != annot->interval_events.end() )
+    {
+      const instance_idx_t & instance_idx = ii->first;
+      uint64_t astart = instance_idx.interval.start;
+      uint64_t astop = instance_idx.interval.stop;
+
+      // add flanking window
+      if ( w_tp != 0 )
+	{
+	  if ( astart > w_tp ) astart -= w_tp;
+	  astop += w_tp;
+	}
+
+      // catch up?
+      while ( (*tp)[p] < astart )
+	{
+	  if ( p == n - 1 ) break;
+	  ++p;	  
+	}
+      
+      // wind back until the start (or just before)
+      while ( (*tp)[p] > astart )
+	{
+	  if ( p == 0 ) break;
+	  --p;
+	}
+      
+      // now step over each time-point until the end of this annot
+      while ( (*tp)[p] < astop )
+	{
+	  f[p] = exclude;
+	  ++p;
+	}
+      
+      // next annotation
+      ++ii;
+    }
+  
+  std::vector<int> rows;
+  for (int i=0; i<n; i++)
+    if ( f[i] ) rows.push_back(i);
+  
+  return m( rows , Eigen::all ) ;
+
+}

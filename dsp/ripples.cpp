@@ -1,4 +1,4 @@
-
+A
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -82,6 +82,7 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
   
   const double combine_msec = param.has( "combine" ) ? param.requires_dbl( "combine" ) : 10.0;
 
+  const bool tolog = param.has( "tolog" ) ; 
 
   //
   // Check excludes
@@ -154,7 +155,7 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
       
       ripples_t ripples( *d , *tp , sr , flwr, fupr, kwin_ripple, kwin_tw, verbose ,
 			 hfbands, th, req_msec, req_peaks_flt, req_peaks_raw , req_raw_p2p_prop,
-			 max_amp_thresh_abs , max_amp_thresh_pct , 
+			 max_amp_thresh_abs , max_amp_thresh_pct , tolog , 
 			 combine_msec, edge_secs ,
 			 excludes.size() == 0 ? NULL : &edf , excludes,
 			 otsu_k );
@@ -195,6 +196,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      const double req_raw_p2p_prop , 
 		      const double max_amp_thresh_abs ,
 		      const double max_amp_thresh_pct ,
+		      const bool tolog , 
 		      const double combine_msec , 
 		      const double edge_secs ,
 		      edf_t * edf , 
@@ -277,6 +279,21 @@ ripples_t::ripples_t( const std::vector<double> & x ,
       hilbert_t hilbert( txf );
       
       std::vector<double> tmag = *hilbert.magnitude();
+
+      // log
+      if ( tolog )
+	{
+	  double mmin0, mmax0;
+	  MiscMath::minmax( tmag , &mmin0, &mmax0 );
+	  logger << "  original scale, min/max = " << mmin0 << " " << mmax0 << "\n";
+	  if ( mmin0 > 0 ) 
+	    for (int i=0; i<n; i++) tmag[i] = log( tmag[i]  );
+	  else
+	    {
+	      const double C = mmin0 + 1e-8;
+	      for (int i=0; i<n; i++) tmag[i] = log( tmag[i] + C );
+	    }
+	}
       
       // normalize
       tmag = MiscMath::Z( tmag );
@@ -290,18 +307,21 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   // aggregate & unit scale
   //
 
-  for (int i=0; i<n; i++) mag[i] /= (double)hfbands;
+  if ( hfbands > 1 ) 
+    for (int i=0; i<n; i++) mag[i] /= (double)hfbands;
   
   // unit scale
   
   double mmin, mmax;
   MiscMath::minmax( mag , &mmin, &mmax );
+  logger << "  range " << mmin << " to " << mmax << "\n";
   double mrng = mmax - mmin == 0 ? 1 : mmax - mmin ;  
   for (int i=0;i<n;i++)
     {
       if ( mag[i] <= mmin ) mag[i] = 0;
       else if ( mag[i] >= mmax ) mag[i] = 1;
       else mag[i] = ( mag[i] - mmin ) / mrng;
+      //      std::cout << mag[i] << "\n";
     }
   
   //

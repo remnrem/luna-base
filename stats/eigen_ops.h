@@ -27,12 +27,16 @@
 #include <vector>
 #include <map>
 
+struct annot_t;
+
 template <typename T> int sgn(T val) {
   return (T(0) < val) - (val < T(0));
 }
 
 namespace eigen_ops { 
-    
+
+  Eigen::MatrixXd subset_rows( Eigen::MatrixXd & m , const std::vector<uint64_t> * tp , annot_t * annot , const double w = 0 , const bool exclude = true );
+  
   void random_normal( Eigen::MatrixXd & m );  
   
   bool scale( Eigen::Ref<Eigen::MatrixXd> m , const bool,  const bool , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );  
@@ -72,6 +76,8 @@ namespace eigen_ops {
 
   Eigen::VectorXd canonical_correlation( const Eigen::MatrixXd & X , const Eigen::MatrixXd & Y );
 
+  Eigen::MatrixXd covariance( const Eigen::MatrixXd & X , const int minus1 = 1 );
+  
   Eigen::MatrixXd load_mat( const std::string & file ,
 			    std::vector<std::string> * header = NULL ,
 			    std::vector<std::string> * ids = NULL ,

@@ -313,6 +313,7 @@ void proc_annot2signal( edf_t & , param_t & );
 void proc_signal2annot( edf_t & , param_t & );
 void proc_sig_annot_mean( edf_t & , param_t & );
 void proc_annot2cache( edf_t & , param_t & );
+void proc_cache2annot( edf_t & , param_t & );
 void proc_sig_tabulate( edf_t & edf , param_t & param );
 
 void proc_record_dump( edf_t & , param_t & );
@@ -398,6 +399,7 @@ void proc_psi( edf_t & , param_t & );
 void proc_conncoupl( edf_t & , param_t & );
 void proc_pac( edf_t & , param_t & );
 void proc_cfc( edf_t & , param_t & );
+void proc_ged( edf_t & , param_t & );
 
 void proc_ecgsuppression( edf_t & , param_t & );
 void proc_bpm( edf_t & , param_t & );

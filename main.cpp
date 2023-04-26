@@ -64,6 +64,8 @@ int main(int argc , char ** argv )
     {
       global.api();
       std::cerr << luna_base_version() ;
+      std::cerr << "Eigen library v" << EIGEN_WORLD_VERSION << "." << EIGEN_MAJOR_VERSION << "." << EIGEN_MINOR_VERSION << "\n";
+      std::cerr << "sqlite v" << sqlite3_libversion() << "\n";
       std::exit( globals::retcode );
     }
 
@@ -3106,10 +3108,14 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       std::vector<double> y( x.size() - 3 );
       for (int i=0; i<y.size(); i++) y[i] = x[i+3];
-
-      std::vector<double> z = narrow_gaussian_t::filter( y , sr, f , fwhm ) ;
       
-      for (int i=0; i<y.size(); i++) std::cout << y[i] << "\t" << z[i] << "\n";
+      std::vector<double> z = narrow_gaussian_t::filter( y , sr, f , fwhm ) ;
+
+      Eigen::VectorXd yy = Eigen::VectorXd::Zero( y.size() );
+      for (int i=0; i<y.size(); i++) yy[i] = y[i];
+      Eigen::VectorXd zz = narrow_gaussian_t::filter( yy , sr, f , fwhm ) ;
+      
+      for (int i=0; i<y.size(); i++) std::cout << y[i] << "\t" << z[i] << "\t" << zz[i] << "\n";
       std::exit(0);
       
     }

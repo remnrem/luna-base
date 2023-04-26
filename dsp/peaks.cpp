@@ -33,12 +33,24 @@ extern logger_t logger;
 
 void dsptools::peaks( edf_t & edf , param_t & param )
 {
+  // write peaks to a cache (e.g. for TLOCK)
+  const bool to_cache = param.has( "cache" );
+  const std::string cache_name = to_cache ? param.requires( "cache" ) : "";
+  cache_t<int> * cache = to_cache ? edf.timeline.cache.find_int( cache_name ) : NULL ;
+  if ( to_cache ) logger << "  writing peaks to cache " << cache_name << "\n" ;
   
-  const std::string cache_name = param.requires( "cache" );
-
-  cache_t<int> * cache = edf.timeline.cache.find_int( cache_name );                                                                                                    
-  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  // write peaks to an annot (e.g. for GED)
+  const bool to_annot = param.has( "annot" );  
+  const std::string annot_name = to_annot ? param.requires( "annot" ) : "";
+  annot_t * annot = to_annot ? edf.timeline.annotations.add( annot_name ) : NULL ; 
+  uint64_t w_tp = 0; // window around each point
+  if ( param.has( "w" ) )
+    w_tp = globals::tp_1sec * param.requires_dbl( "w" );
+  if ( to_annot ) logger << "  writing peaks to annotation " << annot_name << ", +/- " << param.value( "w" ) << "sec\n";
   
+       
+  // signals
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );  
   const int ns = signals.size();
   
   // options
@@ -96,6 +108,8 @@ void dsptools::peaks( edf_t & edf , param_t & param )
 	  slice_t slice( edf , signals(s) , interval );
 
 	  const std::vector<double> * d = slice.pdata();
+
+	  const std::vector<uint64_t> * tp = slice.ptimepoints();
 	  
 	  // need sample points w.r.t. current EDF structure (i.e. not time-points per se)
 	  // but based on the current epoch
@@ -123,8 +137,22 @@ void dsptools::peaks( edf_t & edf , param_t & param )
 	  peaks.detect( d , by_epoch ? &sp : NULL );	  
 	  
 	  // cache: nb. 'points' is the variable name that TLOCK looks for
-	  cache->add( ckey_t( "points" , faclvl1 ) , peaks.pk );	  
-	  
+	  if ( to_cache )
+	    cache->add( ckey_t( "points" , faclvl1 ) , peaks.pk );	  
+
+	  // annots
+	  if ( to_annot )
+	    {
+	      const int np = peaks.pk.size();
+	      for (int p=0; p<np; p++)
+		{
+		  interval_t interval( (*tp)[ peaks.pk[p] ] , (*tp)[ peaks.pk[p] ] );
+		  interval.expand( w_tp );
+		  annot->add( peaks.ismin[p] ? "-ve" : "+ve" , interval , signals.label(s) );
+		}
+	    }
+
+	    
 	  // all done for this channel if we are in whole-signal mode
 	  if ( ! by_epoch ) break;
 	  

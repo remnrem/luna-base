@@ -98,6 +98,7 @@ struct ripples_t {
 	     const double req_raw_p2p_prop ,
 	     const double max_amp_thresh_abs ,
 	     const double max_amp_thresh_pct , 
+	     const bool tolog, 
 	     const double combine_msec , 
 	     const double edge_secs ,
 	     edf_t * edf , 

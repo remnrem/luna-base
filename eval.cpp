@@ -1039,6 +1039,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
       else if ( is( c, "S2A" ) )          proc_signal2annot( edf, param(c) );
       else if ( is( c, "A2C" ) )          proc_annot2cache( edf , param(c) );
+      else if ( is( c, "C2A" ) )          proc_cache2annot( edf , param(c) );
       
       else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
@@ -1151,6 +1152,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SUPPRESS-ECG" ) ) proc_ecgsuppression( edf , param(c) );
       else if ( is( c, "PAC" ) )          proc_pac( edf , param(c) );
       else if ( is( c, "CFC" ) )          proc_cfc( edf , param(c) );
+      else if ( is( c, "GED" ) )          proc_ged( edf , param(c) );
+      
       else if ( is( c, "TAG" ) )          proc_tag( param(c) );
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
       else if ( is( c, "ZOH" ) )          proc_zoh( edf, param(c) );
@@ -1166,7 +1169,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
       
       else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
-      else if ( is( c, "TRIM" ) )         proc_trim( edf, param(c) ) ;
+      else if ( is( c, "EDGER" ) )        proc_trim( edf, param(c) ) ;
 
       else if ( is( c, "CACHE" ) )        proc_dump_cache( edf , param(c) );
 
@@ -3026,6 +3029,12 @@ void proc_annot2cache( edf_t & edf , param_t & param )
   edf.timeline.annot2cache( param );
 }
 
+// C2A : make an annotation from a cache
+
+void proc_cache2annot( edf_t & edf , param_t & param )
+{
+  edf.timeline.cache2annot( param );
+}
 
 // MEANS : signal means conditional on annotations
 
@@ -3404,6 +3413,14 @@ void proc_spike( edf_t & edf , param_t & param )
 void proc_pac( edf_t & edf , param_t & param )
 {
   dsptools::pac( edf , param );
+}
+
+
+// GED : generalized eigendecomposition
+
+void proc_ged( edf_t & edf , param_t & param )
+{
+  ged_wrapper( edf, param );
 }
 
 // CFC : generic cross-frequency coupling methods (other than PAC as above)

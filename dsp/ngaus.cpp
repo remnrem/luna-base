@@ -28,6 +28,16 @@
 // implements a narrow-band filter via frequency-domain Gaussian
 // based on a Matlab implementation by MX Cohen
 
+Eigen::VectorXd narrow_gaussian_t::filter( const Eigen::VectorXd & d , int sr, double f , double fwhm )
+{
+  const int n = d.size();  
+  std::vector<double> v2(n);  
+  Eigen::VectorXd::Map( &v2[0], d.size()) = d;
+  v2 = narrow_gaussian_t::filter( v2 , sr, f, fwhm );
+  Eigen::Map<Eigen::VectorXd> r( &(v2[0]) , n );
+  return r;
+}
+
 std::vector<double> narrow_gaussian_t::filter( const std::vector<double> & d , int sr, double f , double fwhm )
 {
 

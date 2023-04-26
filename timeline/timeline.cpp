@@ -3309,6 +3309,50 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 }
     
 
+void timeline_t::cache2annot( const param_t & param )
+{
+
+  Helper::halt( "C2A not implemented yet" );
+  
+  // create a set of annotations based on a cache value
+  // expecting cache value to be seconds --> double
+  // or sample points -- int
+
+  // // add a window 'w'
+  // const std::string aname = param.requires( "annot" );
+
+  // // select the cache
+
+  //   std::string cache_name = param.requires( "cache" );
+
+  // if ( ! edf.timeline.cache.has_int( cache_name ) )
+  //   Helper::halt( "cache not found for this individual: " + cache_name );
+
+  // cache_t<int> * cache = edf.timeline.cache.find_int( cache_name );
+
+  // std::set<ckey_t> ckeys = cache->keys( "points" );
+
+  // std::set<ckey_t>::const_iterator cc = ckeys.begin();
+  // while ( cc != ckeys.end() )
+  //   {
+
+  //     int scnt = 0;
+
+  //     std::vector<int> cx = cache->fetch( *cc );
+
+
+  //           std::stringstream sstr;
+  //     std::map<std::string,std::string>::const_iterator ss = cc->stratum.begin();
+  //     while ( ss != cc->stratum.end() )
+  //       {
+  //         writer.level( ss->second , "s" + ss->first );
+  //         sstr << ss->first << "=" << ss->second << ";" ;
+  //         ++ss;
+  //       }
+
+  
+}
+
 void timeline_t::annot2cache( const param_t & param )
 {
   
