@@ -27,7 +27,7 @@ struct edf_t;
 struct param_t;
 
 #include "stats/Eigen/Dense"
-
+#include <vector>
 
 void ged_wrapper( edf_t & , param_t & param );
 

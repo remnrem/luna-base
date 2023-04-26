@@ -143,9 +143,15 @@ int fn_luna_slbuilder( const std::string & filename )
       tok = Helper::parse( filename , dl );
     }
   
-  if ( Helper::file_extension( filename , "edf" ) )
+  const bool has_edf_ext = Helper::file_extension( filename , "edf" ) ; // 4 chars
+  const bool has_edfz_ext = Helper::file_extension( filename , "edfz" ) ; // 5 
+  const bool has_edfgz_ext = Helper::file_extension( filename , "edf.gz" ) ; // 7  
+  
+  if ( has_edf_ext || has_edfz_ext || has_edfgz_ext ) 
     {
       
+      const int xchar = has_edf_ext ? 4 : ( has_edfz_ext ? 5 : 7 ) ;
+
       std::string id;
       
       // get ID from EDF? 
@@ -157,12 +163,12 @@ int fn_luna_slbuilder( const std::string & filename )
 	  if ( id == "" ) 
 	    {
 	      std::cerr << " *** empty Patient ID header for " << filename << ", so going to set ID to filename\n";
-	      id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 );
+	      id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - xchar );
 	    }
 	}
       else
 	{	      
-	  id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 );
+	  id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - xchar );
 	}
       
       //
@@ -177,8 +183,8 @@ int fn_luna_slbuilder( const std::string & filename )
       //        but it will also clash if different EDFs have same names but are in different folders
       
       std::string key = globals::sl_link_across_folders ? 
-	tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - 4 ) : 
-	filename.substr( 0 , filename.size() - 4 );
+	tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - xchar ) : 
+	filename.substr( 0 , filename.size() - xchar );
       
       globals::sl_data[ key ].id = id;
       globals::sl_data[ key ].edf = filename;
