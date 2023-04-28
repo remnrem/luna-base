@@ -176,6 +176,9 @@ void dsptools::resample_channel( edf_t & edf , param_t & param )
   // new sampling rate for all channels
   int sr = param.requires_int( "sr" );
 
+  // only downsample?
+  const bool downsample_only = param.has( "downsample" );
+
   const int ns = signals.size();
 
   int converter = SRC_SINC_FASTEST;
@@ -197,8 +200,11 @@ void dsptools::resample_channel( edf_t & edf , param_t & param )
     }
   
   for (int s=0;s<ns;s++)
-    resample_channel( edf , signals(s) , sr , converter );
-  
+    {
+      if ( Fs[s] > sr || ! downsample_only )
+	resample_channel( edf , signals(s) , sr , converter );
+    }
+
 }
 
 

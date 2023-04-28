@@ -1739,9 +1739,29 @@ void process_edfs( cmd_t & cmd )
 
   std::string f = cmd.data();
 
-  // use .edf (or .EDF extension) to indicate 'single EDF' mode, '.rec'
+  // use .edf (or .EDF extension, or .rec or .edfz or .edf.gz ) to indicate 'single EDF' mode, '.rec'
   f = f.substr( (int)f.size() - 4 >= 0 ? (int)f.size() - 4 : 0 );
   bool single_edf = Helper::iequals( f , ".edf" ) || Helper::iequals( f , ".rec" ) ;
+
+  if ( ! single_edf ) 
+    {
+      // also test .edfz or .edf.gz
+      f = cmd.data();
+      f = f.substr( (int)f.size() - 5 >= 0 ? (int)f.size() - 5 : 0 );
+      if ( Helper::iequals( f , ".edfz" ) ) 
+	{
+	  single_edf = true;
+	}
+      else 
+	{
+	  f = cmd.data();
+	  f = f.substr( (int)f.size() - 7 >= 0 ? (int)f.size() - 7 : 0 );
+	  if ( Helper::iequals( f , ".edf.gz" ) ) 
+	    {
+	      single_edf = true;	      
+	    }
+	}      
+    }
   
   // also allow .sedf for Luna summary EDF
   if ( ! single_edf )
@@ -1754,7 +1774,7 @@ void process_edfs( cmd_t & cmd )
   // use presence of --fs command-line option to indicate 'single ASCII file' mode
   bool single_txt = globals::param.has( "-fs" );
   if ( single_txt ) single_edf = true;
-
+  
   // use presence of '.' name to indicate an empty EDF
   bool empty_edf = f == "." ;
   if ( empty_edf ) single_edf = true;
@@ -1890,11 +1910,17 @@ void process_edfs( cmd_t & cmd )
 	{
 	  edffile = cmd.data();
 	  rootname = edffile;
+	  
+	  std::cout << " edffile [" << edffile << "]\n";
 
 	  // remove .edf from ID, making file name ==> ID 
 	  if ( Helper::file_extension( rootname , "edf" ) )
 	    rootname = rootname.substr( 0 , rootname.size() - 4 );
-
+	  else if ( Helper::file_extension( rootname , "edfz" ) )
+	    rootname = rootname.substr( 0 , rootname.size() - 5 );
+	  else if (  Helper::file_extension( rootname , "edf.gz" ) )
+	    rootname = rootname.substr( 0 , rootname.size() - 7 );
+	  
 	  tok.resize(2);
 	  tok[0] = rootname;
 	  tok[1] = edffile;
