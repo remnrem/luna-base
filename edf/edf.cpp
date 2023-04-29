@@ -389,12 +389,19 @@ void edf_t::terse_summary( param_t & param )
   writer.value( "NR" , header.nr );
   writer.value( "REC_DUR" , header.record_duration );
 
-  // total duration in TP units
+  // duration in TP units
   uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
   std::string total_duration_hms = Helper::timestring( duration_tp , ':' , false );
-  writer.value( "TOT_DUR_SEC" , header.nr * header.record_duration );
-  writer.value( "TOT_DUR_HMS" , total_duration_hms );
+  writer.value( "REC_DUR_SEC" , header.nr * header.record_duration );
+  writer.value( "REC_DUR_HMS" , total_duration_hms );
 
+  // if EDF+ w/ gaps, the 'total'
+  double full_span_sec = ( timeline.last_time_point_tp+1LLU ) * globals::tp_duration ;
+  writer.value( "TOT_DUR_SEC" , full_span_sec );
+  clocktime_t ot( "00.00.00" );
+  ot.advance_seconds( full_span_sec );
+  writer.value( "TOT_DUR_HMS" , ot.as_string() );
+  
   const std::string pat_id = Helper::trim( header.patient_id ) ;
   writer.value( "EDF_ID" , pat_id == "" ? "." : pat_id );
   writer.value( "START_TIME" , Helper::trim( header.starttime ) );
