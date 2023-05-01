@@ -3126,7 +3126,7 @@ void hypnogram_t::output( const bool verbose ,
 
       
       // time from EDF start (seconds)
-      writer.value( "START" , sec0 );
+      writer.value( "START_SEC" , sec0 );
 
       // stages      
       writer.value( "STAGE" , globals::stage( stages[e] ) );    
