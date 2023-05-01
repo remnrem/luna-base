@@ -2813,6 +2813,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
       else if ( ss == REM )      drem = s;
       else if ( ss == LIGHTS_ON ) dlight = s;
       else if ( ss == UNSCORED ) dother = s;
+      else if ( ss == UNKNOWN )  dother = s;
       else if ( ss == MOVEMENT ) dother = s;
       else if ( ss == ARTIFACT ) dother = s;
       ++ii;
@@ -2870,17 +2871,20 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 
 
   //
+  // EDIT: skip this step, as below we'll set everything to '?' if nothing
+  // specified
+  //
   // Check we had sensible annotations
   //
 
-  int assigned = 0;
-  for (int a=0;a<n1s.size();a++) if ( n1s[a] != NULL ) ++assigned;
-  for (int a=0;a<n2s.size();a++) if ( n2s[a] != NULL ) ++assigned;
-  for (int a=0;a<n3s.size();a++) if ( n3s[a] != NULL ) ++assigned;
-  for (int a=0;a<rems.size();a++) if ( rems[a] != NULL ) ++assigned;
-  for (int a=0;a<wakes.size();a++) if ( wakes[a] != NULL ) ++assigned;
-  for (int a=0;a<lights.size();a++) if ( lights[a] != NULL ) ++assigned;
-  if ( assigned == 0 ) return false;
+  // int assigned = 0;
+  // for (int a=0;a<n1s.size();a++) if ( n1s[a] != NULL ) ++assigned;
+  // for (int a=0;a<n2s.size();a++) if ( n2s[a] != NULL ) ++assigned;
+  // for (int a=0;a<n3s.size();a++) if ( n3s[a] != NULL ) ++assigned;
+  // for (int a=0;a<rems.size();a++) if ( rems[a] != NULL ) ++assigned;
+  // for (int a=0;a<wakes.size();a++) if ( wakes[a] != NULL ) ++assigned;
+  // for (int a=0;a<lights.size();a++) if ( lights[a] != NULL ) ++assigned;
+  // if ( assigned == 0 ) return false;
   
   //
   // Align all putative stages, and if we see point markers, extend to the next (end) annot
@@ -3010,6 +3014,17 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
     }
 
 
+  //
+  // If nothing has been observed, set a single spanning interval to unknown / ?
+  //
+
+  if ( stages.size() == 0 )
+    {
+      interval_t whole_record = interval_t( 0 , tl.last_time_point_tp + 1LLU );
+      stages[ whole_record ] = UNKNOWN; 
+    }
+  
+  
   //
   // Now, look through stages[] and extend any zero-point stages; also, flag conflicts 
   //
