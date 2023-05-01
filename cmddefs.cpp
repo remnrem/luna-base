@@ -1067,7 +1067,7 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "E" , "CLOCK_HOURS" , "Start time of epoch (hours since midnight)" );
   add_var( "HYPNO" , "E" , "CLOCK_TIME" , "Start time of epoch (hh:mm:ss)" );
   add_var( "HYPNO" , "E" , "MINS" , "Elapsed minutes" );
-  add_var( "HYPNO" , "E" , "START" , "Start time (seconds since start of EDF)" );
+  add_var( "HYPNO" , "E" , "START_SEC" , "Start time (seconds since start of EDF)" );
   add_var( "HYPNO" , "E" , "STAGE" , "Text description of sleep stage" );
   add_var( "HYPNO" , "E" , "OSTAGE" , "Original stage label (pre any modifications)" );
   add_var( "HYPNO" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" );
