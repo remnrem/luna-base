@@ -2813,7 +2813,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
       else if ( ss == REM )      drem = s;
       else if ( ss == LIGHTS_ON ) dlight = s;
       else if ( ss == UNSCORED ) dother = s;
-      else if ( ss == UNKNOWN )  dother = s;
+      //else if ( ss == UNKNOWN )  dother = s;
       else if ( ss == MOVEMENT ) dother = s;
       else if ( ss == ARTIFACT ) dother = s;
       ++ii;
@@ -3020,6 +3020,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 
   if ( stages.size() == 0 )
     {
+      std::cout << " in here..\n";
       interval_t whole_record = interval_t( 0 , tl.last_time_point_tp + 1LLU );
       stages[ whole_record ] = UNKNOWN; 
     }
