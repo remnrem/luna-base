@@ -42,7 +42,7 @@ struct slow_wave_param_t {
 
   slow_wave_param_t( const param_t & param )
   {
-
+    
     // freq.
     f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.5  ; 
     f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.0  ; 
@@ -62,6 +62,7 @@ struct slow_wave_param_t {
 
     // relative: magnitude threshold, e.g. 2 = twice the mean for a) p2p amp. AND , b) negative peak amp
     thr = param.has( "mag" ) ? param.requires_dbl( "mag" )       : 0 ;
+    using_rel = thr > 0 ;
     
     // or, base this on median of all events rather than mean
     use_mean = param.has( "th-mean" ) ;
@@ -125,6 +126,8 @@ struct slow_wave_param_t {
     else if ( param.has( "annot" ) )
       astr = param.value( "annot" );
     
+    // do not skip SO detection
+    skip = false;
   }
   
   // relative threshold based on mean of 
@@ -132,7 +135,8 @@ struct slow_wave_param_t {
   // this might not be used (i.e. set to 0) 
   // if only using absolute criteria
   double thr; // 0.75 
-  
+  bool using_rel; // if thr > 0 
+
   // if using thr, then only base on P2P
   // i.e. if signal polarity is uncertain
   
@@ -190,6 +194,9 @@ struct slow_wave_param_t {
 
   // current channel
   std::string ch;
+
+  // skip SO detection per se
+  bool skip;
   
 };
   

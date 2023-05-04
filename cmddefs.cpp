@@ -275,8 +275,23 @@ void cmddefs_t::init()
 
   add_param( "TLOCK" , "w" , "2" , "Window size around peaks (seconds) (req.)");
   add_param( "TLOCK" , "phase" , "20" , "Expect phase values (radians) and summarize in, e.g. 20 bins" );
+
+  // issue: hard to specify, as factors can appear on-the-fly (based on cache)
+  //        so just hard code a couple of common scenarios here:   CH    and CH x F
+
+  // generic by channel
+  add_table( "TLOCK" , "CH,sCH" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "CH,sCH" , "N" , "Number of included peaks" );
+  add_var( "TLOCK" , "CH,sCH" , "N_ALL" , "Total number of included peaks" );
+
+  add_table( "TLOCK" , "CH,SEC,sCH" , "Spindle peak time-locked summaries" );
+  add_var( "TLOCK" , "CH,SEC,sCH" , "M" , "Signal mean" );
+
+  add_table( "TLOCK" , "N,SEC,CH,sCH" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "N,SEC,CH,sCH" , "V" , "Signal value" );
+  set_compressed( "TLOCK" , tfac_t( "N,SEC,CH,sCH" ) );
   
-  // spindle peaks
+  // spindle peaks ( by channel & freq) 
   add_table( "TLOCK" , "CH,sCH,sF" , "Spindle peak time-locked counts" );
   add_var( "TLOCK" , "CH,sCH,sF" , "N" , "Number of included peaks" );
   add_var( "TLOCK" , "CH,sCH,sF" , "N_ALL" , "Total number of included peaks" );

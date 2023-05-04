@@ -57,7 +57,7 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr 
 			       fir_t::HAMMING , // ignored for KW
 			       true // use FFT
 			       );
-  
+
   store_real_imag = store;
   
   proc();
@@ -97,9 +97,9 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr 
 
 void hilbert_t::proc()
 {
-
-  int n = input.size();
   
+  int n = input.size();
+
   // 1) take FFT
   real_FFT fft( n , n , 1 );
   fft.apply( input );
@@ -513,8 +513,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	      ++overlap;  
 
 	      // SO-phase stratified overlap counts when no mask/SO given
-	      if ( by_phase )
-		bin( ph[ pei ] , binsize , &pbacc );
+	      //	      if ( by_phase )
+	      //		bin( ph[ pei ] , binsize , &pbacc );
 	    }
 
 

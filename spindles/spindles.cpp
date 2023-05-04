@@ -266,7 +266,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // verbose display of all CWT coefficients
   const bool     show_cwt_coeff           = param.has( "show-coef" );
 
-  
+
+
+  //
+  // Coupling
+  //
+
   // detect slow waves and estimate ITPC etc for spindle start/anchor/stop and slow waves
   const bool     sw_coupling              = param.has( "so" );
   
@@ -319,6 +324,32 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   if ( ! ( sw_coupling_has_anchors || sw_coupling_has_offsets ) )
     sw_coupling_offset.push_back( 0 );
   
+  
+  //
+  // Non-SO coupling: we may have a channel we want to consider phase
+  // and look at spindle coupling, but not detect canonical SO -
+  // e.g. a non-EEG channel.  here, we specify by the phase=<channel>
+  // option instead
+  //
+
+  const bool phase_coupling = param.has( "phase" ) ;
+  if ( phase_coupling && sw_coupling )
+    Helper::halt( "cannot specify both 'so' and 'phase' options together" );
+  if ( phase_coupling && param.empty( "phase" ) ) Helper::halt( "expecting phase=channel" );
+  const std::string phase_channel = phase_coupling ? param.value( "phase" ) : "";
+  double phase_lwr = 1, phase_upr = 4;
+  if ( phase_coupling ) 
+    {
+      std::vector<double> pp = param.dblvector( "phase-band" );
+      if ( pp.size() != 2 ) Helper::halt( "expecting phase-band=lwr,upr" );
+      phase_lwr = pp[0];
+      phase_upr = pp[1];
+      if ( phase_lwr >= phase_upr ) Helper::halt( "expecting phase-band=lwr,upr" );      
+    }
+  const double fir_tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 1 ; 
+  const double fir_ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.02 ; 
+
+
   // show SPINDLES in sample-pints
   const bool     show_sample_points       = param.has( "sp" );
 
@@ -479,29 +510,31 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
 
   //
-  // Get SO channel if explicitly specified?  Only need to do once.
+  // Get SO/Phase channel if explicitly specified?  Only need to do once
   //
-
-  std::vector<double> * dslow = NULL;
-  std::vector<uint64_t> * tpslow = NULL;
+  
+  std::vector<double> dxslow;
+  std::vector<uint64_t> tpxslow;
   int srslow = 0;
 
-  if ( sw_channel != "" )
+  if ( sw_channel != "" || phase_channel != "" )
     {
-      const int slow_slot = edf.header.signal( sw_channel );
-      if ( slow_slot == -1 ) Helper::halt( "could not find " + sw_channel );
+      std::string ext_ch =  phase_channel == "" ? sw_channel : phase_channel ;
+      const int slow_slot = edf.header.signal( ext_ch ) ;
+      if ( slow_slot == -1 ) Helper::halt( "could not find " + ext_ch );
       
       if ( edf.header.is_annotation_channel( slow_slot ) )
-	Helper::halt( sw_channel + " is an annotation channel" );
+	Helper::halt( ext_ch + " is an annotation channel" );
 
       srslow = edf.header.sampling_freq( slow_slot );
-
+      
       // get data
       slice_t slice( edf , slow_slot , edf.timeline.wholetrace() );
-      dslow = slice.nonconst_pdata();
-      tpslow = slice.nonconst_ptimepoints();
-      	
+      dxslow = *slice.nonconst_pdata();
+      tpxslow = *slice.nonconst_ptimepoints();      
+      logger << "  attached SO/phase channel " << ext_ch << " SR=" << srslow << "Hz\n";
     }
+  
   
    
   //
@@ -524,10 +557,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  logger << "  skipping channel " <<  signals.label(s) << " with sample rate of " << Fs[s] << " < 50 Hz\n";
 	  continue;
 	}
+      
+      //
+      // If specified, SO/phase channel should have the same sample rate (?necessary?)
+      //
 
       if ( srslow != 0 && srslow != Fs[s] )
 	{
-	  Helper::halt( "sample rate for sig and so channels must be the same" );
+	  Helper::halt( "sample rate for sig and so/phase channels must be the same; use RESAMPLE" );
 	}
       
       //
@@ -557,14 +594,13 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
       //
-      // If no explicit so channel, self-asgign
+      // Set 
       //
 
-      if ( srslow == 0 )
-	{
-	  dslow = (std::vector<double> *)d;
-	  tpslow = (std::vector<uint64_t> *)tp;
-	}
+      std::vector<double> * dslow = srslow == 0 ? (std::vector<double> *)d : &dxslow ; 
+
+      std::vector<uint64_t> * tpslow = srslow == 0 ? (std::vector<uint64_t> *)tp : &tpxslow ;
+
       
       //
       // Run CWT 
@@ -605,7 +641,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
       //
-      // Set up for optional slow-wave coupling
+      // Set up for optional (slow-wave) coupling
       //
       
       hilbert_t * p_hilbert = NULL ;
@@ -613,29 +649,37 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       slow_waves_t * p_sw = NULL ;
      
       
-      if ( sw_coupling )
+      if ( sw_coupling || phase_coupling )
 	{
 	  
 	  // get SW param from the options
 	  slow_wave_param_t sw_par( param );
 	  
+	  // do not explicitly detect SOs if in phase mode
+	  if ( phase_coupling ) sw_par.skip = true;
+
 	  // filter-Hilbert raw signal for SWs
-	  p_hilbert = new hilbert_t( *dslow , srslow , sw_par.f_lwr , sw_par.f_upr , sw_par.fir_ripple , sw_par.fir_tw );
-	  	  
-	  //std::vector<double> ph_peak;
-	  // are spindles in slow-waves?
-	  //	  std::vector<bool> sw_peak;
+	  p_hilbert = sw_coupling ? 
+	    new hilbert_t( *dslow , Fs[s] , sw_par.f_lwr , sw_par.f_upr , sw_par.fir_ripple , sw_par.fir_tw ) :
+	    new hilbert_t( *dslow , Fs[s] , phase_lwr , phase_upr , fir_ripple , fir_tw );
 	  
 	  // find slow-waves	      
-	  p_sw = new slow_waves_t( *dslow , *tpslow , srslow , sw_par );
+	  p_sw = new slow_waves_t( *dslow , *tpslow , Fs[s] , sw_par ) ;
 	  
 	  // and phase
 	  p_sw->phase_slow_waves();
 	  
+
 	  // and display (& potentially cache)
-	  p_sw->display_slow_waves( param.has( "verbose" ) , &edf , cache_metrics );
+	  if ( sw_coupling ) 
+	    p_sw->display_slow_waves( param.has( "verbose" ) , &edf , cache_metrics );
 	  
-	  if ( verbose_time_phase_locking ) 
+	  
+	  //
+	  // display SO characteristics 
+	  //
+
+	  if ( sw_coupling && verbose_time_phase_locking ) 
 	    {
 	      
 	      //
@@ -1481,10 +1525,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	  
 	  //
-	  // Align SO events/phase w/ these spindles
+	  // Align SO events/phase w/ these spindles (sw_coupling)
+	  // Alternatively, align the phase bins of a specified channel w/ spindles (phase_coupling)
+	  //  i.e. in the latter case, we do not try to detect SO discretely
 	  //
 	  
-	  if ( sw_coupling )
+	  if ( sw_coupling || phase_coupling )
 	    {
 	      
 	      //
@@ -1557,7 +1603,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      //
 	      // Primary spindle/SO coupling & overlap analysis
 	      //
-	      
+
+
 	      // always iterate over offset vector
 	      // either:
 	      //   anchor = PEAK AMPLITUDE, run for each 
@@ -1573,10 +1620,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  else if ( sw_coupling_offset[a] > 0.0000001 ) 
 		    anchor_label += "plus" + Helper::dbl2str( sw_coupling_offset[a] ) + "s";
 
+		  // only use more complex output form is > 1 anchor
 		  
-		  logger << "  running coupling analysis for anchor tag " << anchor_label << "\n";
+		  if ( sw_coupling_has_anchors ) 
+		    {
+		      logger << "  running coupling analysis for anchor tag " << anchor_label << "\n";
+		      
+		      writer.level( anchor_label , globals::anchor_strat );		      
+		    }
 
-		  writer.level( anchor_label , globals::anchor_strat );
 		  
 		  // estimate SO phase at spindle 'anchor' point
 		  // and a boolean for whether it falls within a SO
@@ -1699,17 +1751,20 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      
 		      std::vector<bool> so_mask;		  
 		      
-		      // default is to use mask
-		      bool use_mask = ! param.has( "all-spindles" );
+		      // default is to use mask in SO mode; in phase mode, do not
+		      bool use_mask = phase_coupling ? false : ! param.has( "all-spindles" );
 		      
+		      // if non-SO coupling, this is not needed
+		      if ( phase_coupling ) use_mask = false;
+
 		      if ( use_mask ) 
 			so_mask = p_sw->sp_in_sw_vec();
 		      
 		      //
-		      // report coupling overlap by SO phase
+		      // report coupling overlap by SO/external channel phase
 		      //
 		      
-		      bool stratify_by_so_phase_bin = param.has ( "stratify-by-phase" );
+		      bool stratify_by_so_phase_bin = param.has ( "stratify-by-phase" ) || phase_coupling ; 
 		      
 		      
 		      //
@@ -1758,14 +1813,16 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      ph_anchor = itpc.phase;
 		      
 		      //
-		      // We can output now, as this is stratified by ANCHOR + F + CH
+		      // if >1 We can output now, as this is stratified by ANCHOR + F + CH
 		      //  i.e. so does not need to be interleaved with the F + CH outputs
 		      //  in the case of -t mode
 		      //
 		      
 		      // ITPC magnitude of coupling
 		      
-		      writer.value( "COUPL_ANCHOR_N" , (int)anchor_idx.size() );
+		      // i.e. by default overlap with mid-point
+		      writer.value( "COUPL_ANCHOR" , (int)anchor_idx.size() );
+		      
 		      writer.value( "COUPL_MAG" , itpc.itpc.obs );
 		      if ( use_mask )
 			writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
@@ -1820,6 +1877,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			     {
 			       writer.level( b * 20 + 10 , "PHASE" );
 			       writer.value( "COUPL_OVERLAP"      , itpc.phasebin[b].obs );
+			       writer.value( "COUPL_OVERLAP_EXP"   , itpc.phasebin[b].mean );
 			       writer.value( "COUPL_OVERLAP_EMP"    , itpc.phasebin[b].p );
 
 			       if ( itpc.phasebin[b].sd > 0 ) 
@@ -1881,7 +1939,13 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    }
 		}
 	      
-	      writer.unlevel( globals::anchor_strat );
+
+	      //
+	      // only using complex anchor-statifier if >1 anchor specified
+	      //
+
+	      if ( sw_coupling_has_anchors ) 
+		writer.unlevel( globals::anchor_strat );
 	      
 	      //
 	      // End of COUPL analyses

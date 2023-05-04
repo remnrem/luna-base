@@ -3732,27 +3732,61 @@ void timeline_t::signal2annot( const param_t & param )
   //
   // S2A encoding
   //
-
+  
   // encoding=LABEL,lwr,upr
   // encoding=label,val,+win
+  // bins=min,max,n
 
   //  VALUE :  X    // --> X+EPS
   //           X-Y
   //           X+Y  // eps
 
-  if ( ! ( param.has( "encoding" ) || param.has( "encoding2" ) ) )
-    Helper::halt( "no encoding=label,value,... or encoding2=label,value1,value2,..." );
+  if ( ! ( param.has( "encoding" ) || param.has( "encoding2" ) || param.has( "bins" ) ) )
+    Helper::halt( "no encoding=label,value,... or encoding2=label,value1,value2,... or bins=min,max,n" );
 
   bool e2 = param.has( "encoding" );
   bool e3 = param.has( "encoding2" );
-  if ( e2 == e3 ) Helper::halt( "must either specify encoding or encoding2");
-  
-  std::vector<std::string> enc = e2 ? param.strvector( "encoding" ) : param.strvector( "encoding2" );
+  bool eb = param.has( "bins" );
+  if ( e2 + e3 + eb > 1 ) Helper::halt( "must either specify encoding or encoding2 or bins");
+  const std::string bin_label = param.has( "bin-label" ) ? param.value( "bin-label" ) : "B" ; 
 
-  const int nxy = e2 ? 2 : 3;
-    
+  std::vector<std::string> enc; 
+  int nxy = -1;
+
+  if ( e2 ) 
+    {
+      enc = param.strvector( "encoding" );
+      nxy = 2;
+    }
+  else if ( e3 ) 
+    {
+      enc = param.strvector( "encoding2" );
+      nxy = 3;
+    }
+  else
+    {
+      // make 'encoding2' style string
+      std::vector<double> b = param.dblvector("bins");
+      if ( b.size() != 3 ) Helper::halt( "expecting bins=min,max,n" );
+      const int n = b[2];
+      const double bmin = b[0];
+      const double bmax = b[1];
+      if ( bmin >= bmax || n == 0 ) Helper::halt( "expecting bins=min,max,m" );
+      const double binc = (b[1] - b[0] ) / (double)n;
+      
+      nxy = 3;
+      enc.clear();
+      for (int i=0; i<n; i++)
+	{
+	  enc.push_back( bin_label + Helper::int2str( i+1 ) ); // annotate label
+	  enc.push_back( Helper::dbl2str( bmin + i * binc ) );
+	  enc.push_back( Helper::dbl2str( bmin + (i+1) * binc ) );
+	}
+    }
+
   if ( enc.size() % nxy != 0 )
     Helper::halt( "requires " + Helper::int2str( nxy) + " args per encoding value" );
+
 
   //
   // Either make one annot class (and labels are instances)

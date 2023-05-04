@@ -63,7 +63,7 @@ void ged_wrapper( edf_t & edf , param_t & param )
   //     
 
   
-  int run_mode = 2;
+  int run_mode = 1;
   
   if ( run_mode == 1 ) 
     {
@@ -171,6 +171,12 @@ void ged_runmode1( edf_t & edf , param_t & param, Eigen::MatrixXd & Rd , int sr 
 
   const double fwhm1 = param.requires_dbl( "fwhm1" );
 
+  const double filteR = param.has( "f2" );
+  
+  const double f2 = filteR ? param.requires_dbl( "f2" ) : 0 ;
+
+  const double fwhm2  = filteR ? param.requires_dbl( "fwhm2" ) : 0 ;
+
   const std::string new_ts = param.has( "ts" ) ? param.value( "ts" ) : "" ;
 
   // compute
@@ -187,9 +193,16 @@ void ged_runmode1( edf_t & edf , param_t & param, Eigen::MatrixXd & Rd , int sr 
   // narrow-band covariance
   Eigen::MatrixXd S = eigen_ops::covariance( Sd );
   
-  // broad-band covariance
-  Eigen::MatrixXd R = eigen_ops::covariance( Rd );
+  // reference (broad-band or a different narrow-band) covariance
+  if ( filteR ) 
+    {
+      logger << "  creating narrowband R, " << f2 << " Hz (" << fwhm2 << " FWHM Gaussian)\n";
+      for (int s=0; s<ns; s++)
+	Rd.col(s) = narrow_gaussian_t::filter( Rd.col(s) , sr, f2, fwhm2 );
+    }
 
+  Eigen::MatrixXd R = eigen_ops::covariance( Rd );
+  
   // GED
   ged_t ged;
   ged.covar( S, R );
