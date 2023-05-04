@@ -740,9 +740,6 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	  //  	    << E1 << "\t" << stages[e] << "\t" << n_fixed << "\n";
 	}
       
-  // TODO..... continue edits from this point onwards....   TODO....
-  
-
       
       // now do the reverse (i.e. to get rid of spurious leading S epochs)
       //  (with a long wait until 'real' sleep onset)
@@ -876,23 +873,40 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   
   
   //
-  // Recode any leading/trailing "?" as "L"
+  // Recode any leading/trailing "?" as "L"; an exception to this is if 
+  // there are not any wake/sleep epochs found (i.e. all is '?' or 'GAP')
+  // which is consistent w/ not having *any* annotations supplied (i.e. just
+  // leave as all null in that case, versus change to L (up to GAP or end)
   //
   
   const int ne = stages.size();
-
+  
+  bool has_nonnull = false;
+  
   for (int e =0; e < ne ; e++)
     {
-      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+      if ( stages[e] == WAKE || stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 || stages[e] == REM )
+	{
+	  has_nonnull = true;
+	  break;
+	}
     }
   
-  for (int e = ne - 1 ; e != 0 ; e--)
+  if ( has_nonnull )
     {
-      if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
-      if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+      for (int e =0; e < ne ; e++)
+	{
+	  if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
+	  if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+	}
+      
+      for (int e = ne - 1 ; e != 0 ; e--)
+	{
+	  if ( stages[e] == UNKNOWN ) stages[e] = LIGHTS_ON;
+	  if ( stages[e] != UNKNOWN && stages[e] != LIGHTS_ON ) break;
+	}
     }
-    
+  
   
   //
   // constrain to only analyse the first N minutes after X ?
@@ -3015,7 +3029,7 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "MINS" ,  eidx * epoch_mins );
 	  
 	  // time from EDF start (seconds)
-	  writer.value( "START" , sec0 ); 
+	  writer.value( "START_SEC" , sec0 ); 
 	  
 	  // stages	  
 	  writer.value( "STAGE" , globals::stage( stages[e] ) );
@@ -3112,7 +3126,7 @@ void hypnogram_t::output( const bool verbose ,
 
       
       // time from EDF start (seconds)
-      writer.value( "START" , sec0 );
+      writer.value( "START_SEC" , sec0 );
 
       // stages      
       writer.value( "STAGE" , globals::stage( stages[e] ) );    

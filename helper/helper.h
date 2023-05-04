@@ -385,9 +385,9 @@ struct date_t {
       Helper::halt( "invalid day (range 1 - [28-31]): " + Helper::int2str(d) );
   }
    
-  int y;
+  int d;  
   int m;
-  int d;
+  int y;
   
   bool operator<( const date_t & rhs ) const
   {

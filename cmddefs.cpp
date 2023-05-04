@@ -1081,8 +1081,10 @@ void cmddefs_t::init()
   add_table( "HYPNO" , "E" , "Epoch-level output" );
   add_var( "HYPNO" , "E" , "CLOCK_HOURS" , "Start time of epoch (hours since midnight)" );
   add_var( "HYPNO" , "E" , "CLOCK_TIME" , "Start time of epoch (hh:mm:ss)" );
-  add_var( "HYPNO" , "E" , "MINS" , "Start time of epoch (minutes since start of EDF)" );
+  add_var( "HYPNO" , "E" , "MINS" , "Elapsed minutes" );
+  add_var( "HYPNO" , "E" , "START_SEC" , "Start time (seconds since start of EDF)" );
   add_var( "HYPNO" , "E" , "STAGE" , "Text description of sleep stage" );
+  add_var( "HYPNO" , "E" , "OSTAGE" , "Original stage label (pre any modifications)" );
   add_var( "HYPNO" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" );
   add_var( "HYPNO" , "E" , "PERSISTENT_SLEEP" , "Flag to indicate persistent sleep" );
   add_var( "HYPNO" , "E" , "WASO" , "Flag to indicate wake after sleep onset" );
@@ -1098,19 +1100,32 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "E" , "PCT_E_N3" , "Cumulative elapsed N3 as proportion of total N3 sleep" );
   add_var( "HYPNO" , "E" , "PCT_E_REM" , "Cumulative elapsed REM as proportion of total REM sleep" );
   add_var( "HYPNO" , "E" , "PCT_E_SLEEP" , "Cumulative elapsed sleep as proportion of total sleep" );
-  add_var( "HYPNO" , "E" , "FLANKING_SIM" , "Number of similarly-staged epochs,either forwards or backwards" );
+  add_var( "HYPNO" , "E" , "FLANKING_MIN" , "Number of similarly-staged epochs,either forwards or backwards" );
+  add_var( "HYPNO" , "E" , "FLANKING_ALL" , "The total number of similar epochs in this stretch of similar epochs" );
 
   add_var( "HYPNO" , "E" , "N2_WGT" , "Score to indicate ascending versus descending N2 sleep" );
   add_var( "HYPNO" , "E" , "NEAREST_WAKE" , "Number of epochs (forward or backwards) since nearest wake epoch" );
-  add_var( "HYPNO" , "E" , "NREM2REM" , "Number of epochs from this N2 epoch to the N2/REM transition" );
-  add_var( "HYPNO" , "E" , "NREM2REM_TOTAL" , "Total number of contiguous N2 epochs until a REM transition" );
-  add_var( "HYPNO" , "E" , "NREM2WAKE" , "Number of epochs from this N2 epoch to the N2/Wake transition" );
-  add_var( "HYPNO" , "E" , "NREM2WAKE_TOTAL" , "Total number of contiguous N2 epochs until a Wake transition" );
+
+
   add_var( "HYPNO" , "E" , "CYCLE" , "Cycle number, if this epoch is in a sleep cycle" );
   add_var( "HYPNO" , "E" , "CYCLE_POS_ABS" , "Absolute position of this epoch in the current NREM cycle (mins)" );
   add_var( "HYPNO" , "E" , "CYCLE_POS_REL" , "Relative position of this epoch in the current NREM cycle (0-1)" );
   add_var( "HYPNO" , "E" , "PERIOD" , "Cycle period: NREMP or REMP, or missing if not in a cycle" );
 
+  add_var( "HYPNO" , "E" , "TR_NR2R" , "Number of epochs from this NREM epoch to a REM transition" );
+  add_var( "HYPNO" , "E" , "TOT_NR2R" , "Total number of contiguous NREM epochs followed by REM" );
+  add_var( "HYPNO" , "E" , "TR_NR2W" , "Number of epochs from this NREM epoch to a wake transition" );
+  add_var( "HYPNO" , "E" , "TOT_NR2W" , "Total number of contiguous NREM epochs followed by wake" );
+  add_var( "HYPNO" , "E" , "TR_R2W" , "Number of epochs from this REM epoch to a wake transition" );
+  add_var( "HYPNO" , "E" , "TOT_R2W" , "Total number of contiguous REM epochs followed by wake" );
+  add_var( "HYPNO" , "E" , "TR_R2NR" , "Number of epochs from this REM epoch to a NREM transition" );
+  add_var( "HYPNO" , "E" , "TOT_R2NR" , "Total number of contiguous REM epochs followed by NREM" );
+  add_var( "HYPNO" , "E" , "TR_W2R" , "Number of epochs from this wake epoch to a REM transition" );
+  add_var( "HYPNO" , "E" , "TOT_W2R" , "Total number of contiguous wake epochs followed by REM" );
+  add_var( "HYPNO" , "E" , "TR_W2NR" , "Number of epochs from this wake epoch to a NREM transition" );
+  add_var( "HYPNO" , "E" , "TOT_W2NR" , "Total number of contiguous wake epochs followed by NREM" );
+
+  
   add_table( "HYPNO" , "C" , "NREM cycle-level output" );
 
   add_table( "HYPNO" , "PRE,POST" , "Stage transitions" );
