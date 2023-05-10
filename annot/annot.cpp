@@ -3020,7 +3020,6 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 
   if ( stages.size() == 0 )
     {
-      std::cout << " in here..\n";
       interval_t whole_record = interval_t( 0 , tl.last_time_point_tp + 1LLU );
       stages[ whole_record ] = UNKNOWN; 
     }

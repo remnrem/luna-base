@@ -361,9 +361,9 @@ bool hypnogram_t::empty() const
       const sleep_stage_t & stg = stages[i];
       if ( stg == WAKE || stg == NREM1 || stg == NREM2
 	   || stg == NREM3 || stg == NREM4 || stg == REM )
-	return true;
+	return false;
     }
-  return false;
+  return true;
   
 }
 
