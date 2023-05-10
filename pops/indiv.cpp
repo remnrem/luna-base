@@ -526,8 +526,13 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   
   // get staging
   edf.timeline.annotations.make_sleep_stage( edf.timeline );
-  
+
+  // valid?
   has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
+
+  // valid, but empty?
+  if ( has_staging && edf.timeline.hypnogram.empty() )
+    has_staging = false;
   
   // trainer
   if ( trainer && ! has_staging )

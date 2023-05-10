@@ -3147,8 +3147,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 
   // epoch level output for HYPNO?
   bool epoch_lvl_output =param.has( "epoch" );
-  
-  
+    
   // optionally, add cycle annotation
   std::string cycle_annot = "";
   if ( param.has( "annot-cycles" ) )

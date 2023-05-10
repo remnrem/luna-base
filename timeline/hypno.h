@@ -90,7 +90,8 @@ struct hypnogram_t
   bool construct( timeline_t * t , param_t & param , const bool verbose , const std::vector<std::string> & s );
   bool construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel = "SleepStage" );
   void edit(  timeline_t * t , param_t & param  );
-
+  bool empty() const;
+  
   void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
   void output( const bool verbose , const bool epoch_lvl_output ,
 	       const std::string & eannot = "" ,

@@ -339,10 +339,33 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   //
   
   calc_stats( verbose );
+
+
+  //
+  // If all missing, return false
+  //
   
   return true;
 }   
 
+bool hypnogram_t::empty() const
+{
+
+  // do we have any of the five main stages (include NREM4 here too, so six)
+  // i.e. if a hypnogram is all UNKNOWN, or LIGHTS, or GAP, etc, then doesn't count
+  // as a valid hypnogram
+  
+  const int n = stages.size();
+  for (int i=0; i<n; i++)
+    {
+      const sleep_stage_t & stg = stages[i];
+      if ( stg == WAKE || stg == NREM1 || stg == NREM2
+	   || stg == NREM3 || stg == NREM4 || stg == REM )
+	return true;
+    }
+  return false;
+  
+}
 
 void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 {

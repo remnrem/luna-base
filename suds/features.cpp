@@ -242,8 +242,15 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
   else if ( trainer )
     {
       helper->edf.timeline.annotations.make_sleep_stage( helper->edf.timeline );
+
+      // valid?
+      bool has_staging = helper->edf.timeline.hypnogram.construct( &(helper->edf.timeline) , helper->param , false );
+
+      // valid, but empty?
+      if ( has_staging && helper->edf.timeline.hypnogram.empty() )
+	has_staging = false;
       
-      if ( ! helper->edf.timeline.hypnogram.construct( &(helper->edf.timeline) , helper->param , false ) )
+      if ( ! has_staging  )
 	{
 	  if ( suds_t::soap_mode ) return 0; // okay to skip for SOAP
 	  // but flag as major prob if a trainer
