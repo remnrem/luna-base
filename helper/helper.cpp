@@ -905,6 +905,51 @@ bool Helper::iequals(const std::string& a, const std::string& b)
   return true;
 }
 
+// prefix expansion: if ends in *, then give all matches
+std::vector<std::string> Helper::expansion( const std::vector<std::string> & inputs ,
+					    const std::vector<std::string> & matches ,
+					    const char wildcard )
+{
+
+  std::vector<std::string>  ret;
+
+  for (int i=0; i<inputs.size(); i++)
+    {
+      const std::string & inp = inputs[i];
+
+      if ( inp.find( wildcard ) == std::string::npos )
+	ret.push_back( inp );
+      else
+	{
+	  const int n = inp.size();
+
+	  // wildcard only --> all annots
+	  if ( n == 1 )
+	    {
+	      for (int j=0; j<matches.size(); j++)
+		ret.push_back( matches[j] );
+	    }
+	  else
+	    {	      
+
+	      if ( inp[n-1] != wildcard )
+		Helper::halt( "only the final character can be a wildcard, " + std::string( 1, wildcard ) );
+
+	      const std::string inp1 = inp.substr(0,n-1);
+	      
+	      if ( inp1.find( wildcard ) != std::string::npos )
+		Helper::halt( "only the final character can be a wildcard, " + std::string( 1 , wildcard ) );
+	      
+	      for (int j=0; j<matches.size(); j++)
+		if ( Helper::imatch( inp1 , matches[j] ) )
+		  ret.push_back( matches[j] );	      
+	    }
+	}
+    }
+  return ret;
+  
+}
+
 
 bool Helper::imatch(const std::string& a, const std::string& b , unsigned int min )
 {

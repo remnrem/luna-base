@@ -526,8 +526,23 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   
   // get staging
   edf.timeline.annotations.make_sleep_stage( edf.timeline );
-  
+
+  // valid?
   has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
+
+  bool emp = edf.timeline.hypnogram.empty();
+  // valid, but empty?
+  if ( has_staging && edf.timeline.hypnogram.empty() )
+    has_staging = false;
+
+  // prediction
+  if ( (!trainer) )
+    {
+      if ( has_staging )
+	logger << "  existing staging found: will calculate predicted/observed agreement metrics\n";
+      else
+	logger << "  no valid pre-existing staging annotations observed: will not be reporting predicted/observed agreement metrics\n";
+    }
   
   // trainer
   if ( trainer && ! has_staging )

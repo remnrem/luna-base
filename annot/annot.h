@@ -869,6 +869,8 @@ struct annotation_set_t
 
   void write( const std::string & filename , param_t & param , edf_t & edf );
 
+  void make( param_t & param , edf_t & edf );
+  
   void extend( param_t & param );
   
   // Attempt to create a single SLEEP STAGE annotation from multiple

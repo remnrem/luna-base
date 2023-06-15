@@ -125,6 +125,17 @@ struct interval_t
     return start > rhs.start;
   }
 
+  interval_t union_with_overlapping_interval( const interval_t & b ) const
+  {
+    // this should only be called for overlapping intervals
+    return interval_t( start < b.start ? start : b.start , stop > b.stop ? stop : b.stop );
+  }
+
+  interval_t intersection_with_overlapping_interval( const interval_t & b ) const
+  {
+    // this should only be called for overlapping intervals
+    return interval_t( start > b.start ? start : b.start , stop < b.stop ? stop : b.stop );
+  }
 
   bool overlaps( const interval_t & b ) const 
   {

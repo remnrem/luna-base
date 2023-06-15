@@ -657,7 +657,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  
 	  // do not explicitly detect SOs if in phase mode
 	  if ( phase_coupling ) sw_par.skip = true;
-
+	  
+	  // set channel label
+	  sw_par.ch = external_sw_channel ? sw_channel : signals.label(s);
+	  
 	  // filter-Hilbert raw signal for SWs
 	  p_hilbert = sw_coupling ? 
 	    new hilbert_t( *dslow , Fs[s] , sw_par.f_lwr , sw_par.f_upr , sw_par.fir_ripple , sw_par.fir_tw ) :
