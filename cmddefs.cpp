@@ -1481,7 +1481,9 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH,F" , "PSD" , "Power (mean over epochs)" );
   add_var( "PSD" , "CH,F" , "PSD_MD" , "Power (median over epochs)" );
   add_var( "PSD" , "CH,F" , "PSD_SD" , "Power (SD over epochs)" );
-
+  add_var( "PSD" , "CH,F" , "SEGCV_MN" , "Segment CV (mean)" );
+  add_var( "PSD" , "CH,F" , "SEGCV_MD" , "Segment CV (median)" );
+  add_var( "PSD" , "CH,F" , "SEGCV_SD" , "Segment CV (SD)" );
 
   add_table( "PSD" , "CH,B,E" , "Whole-night, per-channel per-epoch band power" );
   add_var( "PSD" , "CH,B,E" , "PSD" , "Power" );
@@ -1489,6 +1491,7 @@ void cmddefs_t::init()
 
   add_table( "PSD" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
   add_var( "PSD" , "CH,F,E" , "PSD" , "Power" );
+  add_var( "PSD" , "CH,F,E" , "CV" , "CV" );
   set_compressed( "PSD" , tfac_t( "CH,F,E" ) );
 
   add_table( "PSD" , "CH,E", "Epoch/channel level stats" );

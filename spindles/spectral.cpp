@@ -329,8 +329,9 @@ annot_t * spectral_power( edf_t & edf ,
       std::map<frequency_band_t,std::vector<double> > track_band;
       std::map<int,std::vector<double> > track_freq;
       std::map<int,std::vector<double> > track_freq_logged;
-
       
+      std::map<int,std::vector<double> > track_segcv;
+    
       // store spectral slope per epoch for this channel?
       std::vector<double> slopes;
       std::vector<double> slopes_intercept;
@@ -355,9 +356,7 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  if ( epoch == -1 ) break;
 	  
-
 	  ++total_epochs;
-
 	  
 	  interval_t interval = edf.timeline.epoch( epoch );
 	  
@@ -576,9 +575,8 @@ annot_t * spectral_power( edf_t & edf ,
 	     {
 	       freqs = pwelch.freq;
 	     }
-	     
-
-	       
+	   
+	   
 	   // std::cout << "freqs.size() = " << freqs[s].size() << "\n";
 	   // std::cout << "pwelch.size() = " << pwelch.psd.size() << "\n";
 	   
@@ -597,13 +595,29 @@ annot_t * spectral_power( edf_t & edf ,
 		     if ( pwelch.psd[f] > 0 ) 
 		       track_freq_logged[ f ].push_back( 10*log10( pwelch.psd[f] ) );
 		   }
+	       
+
+	       //
+	       // Segment-level stats?
+	       //
+
+	       if ( calc_seg_sd ) 
+		 for (int f=0;f<pwelch.psd.size();f++)
+		   {		   
+		     if ( pwelch.psd[f] > 0 ) 
+		       track_segcv[ f ].push_back( pwelch.psdsd[f] );
+		   }
+	       
 
 	       //
 	       // epoch-level output?
 	       //
 	       
+	       
 	       if ( show_epoch_spectrum || ( cache_epochs && cache_spectrum ) )
 		 {		 
+		   
+		   std::vector<double> f0;
 		   
 		   // using bin_t 	      
 		   bin_t bin( min_power , max_power , bin_fac );
@@ -613,13 +627,12 @@ annot_t * spectral_power( edf_t & edf ,
 		   if ( calc_seg_sd )
 		     binsd.bin( freqs, pwelch.psdsd );
 		   
-		   std::vector<double> f0;
 		   
 		   for ( int i = 0 ; i < bin.bfa.size() ; i++ )
 		     {		     
 		       f0.push_back( ( bin.bfa[i] + bin.bfb[i] ) / 2.0 );		       
 		       writer.level( f0[ f0.size()-1 ] , globals::freq_strat );
-
+		       
 		       //writer.level( bin.bfa[i] , globals::freq_strat );
 		       if ( show_epoch_spectrum && ! suppress_output ) 
 			 if ( bin.bspec[i] > 0 || ! dB ) 
@@ -637,11 +650,11 @@ annot_t * spectral_power( edf_t & edf ,
 		       if ( show_epoch_spectrum && ! suppress_output )
 			 if ( calc_seg_sd )
 			   writer.value( "CV" , binsd.bspec[i] );
-		       		       
+
 		     }
 		   writer.unlevel( globals::freq_strat );
 		 }
-	     	      
+
 	       
 	       //
 	       // epoch-level peakedness
@@ -679,7 +692,6 @@ annot_t * spectral_power( edf_t & edf ,
 	     }
 	   else
 	     logger << " *** warning:: skipped a segment: different NFFT/internal problem ... \n";
-	   
 	   
       
 	   //
@@ -727,11 +739,16 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  std::vector<double> means, medians, sds;
 	  
+	  std::vector<double> cv_means, cv_medians, cv_sds; 
+
 	  int ne_valid = dB ? track_freq_logged[0].size() : track_freq[0].size();
 	  int ne_min = ne_valid;
-
+	
 	  for (int f=0;f<n;f++) 
 	    {
+	      
+	      //	      std::cout << " F = " << f << "\n";
+
 	      // wanting to get stats of dB or raw?
 	      const std::vector<double> & yy = dB ? track_freq_logged[f] : track_freq[f] ;
 	      
@@ -750,10 +767,34 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      if ( aggregate_psd_med && xx.size() > 2 )
 		medians.push_back(  MiscMath::median( xx ) );
+
+	      // segment CV tracking?
+	      
+	      if ( calc_seg_sd )
+		{
+		  const std::vector<double> & yy = track_segcv[f];
+		  
+		  // any outlier removal of epochs?  	      
+		  std::vector<double> xx = aggregate_psd_th > 0 && ne_valid > 2 ? 
+		    MiscMath::outliers( &yy , aggregate_psd_th ) : yy ; 
+
+		  //		  std::cout << " xx s = " << xx.size() << "\n";
+
+		  cv_means.push_back( MiscMath::mean( xx ) );
+		  
+		  if ( xx.size() > 2 )
+		    cv_sds.push_back( MiscMath::sdev( xx ) );
+		  
+		  if ( xx.size() > 2 )
+		    cv_medians.push_back(  MiscMath::median( xx ) );	      
+
+		} 
+
 	    }
-	  
+	
 	  bin_t bin( min_power , max_power , bin_fac );	  
 	  bin.bin( freqs , means );
+	  //	  std::cout << " frq means " << freqs.size() << " " << means.size() <<"\n";
 
 	  bin_t bin_med( min_power , max_power , bin_fac );	  
 	  if ( aggregate_psd_med && ne_min > 2 )
@@ -762,6 +803,28 @@ annot_t * spectral_power( edf_t & edf ,
 	  bin_t bin_sds( min_power , max_power , bin_fac );	  
 	  if ( aggregate_psd_sd && ne_min > 2 ) 
 	    bin_sds.bin( freqs , sds );
+	  
+	  
+	  // segment CV
+	  bin_t cv_bin( min_power , max_power , bin_fac );
+          bin_t cv_bin_med( min_power , max_power , bin_fac );
+          bin_t cv_bin_sds( min_power , max_power , bin_fac );
+	  
+	  if ( calc_seg_sd )
+	    {
+
+	      std::cout <<"freqs " << freqs.size() << " " << " " << cv_means.size() << " " << cv_medians.size() 
+	       		<< " " << cv_sds.size() << "\n";
+	      
+	      cv_bin.bin( freqs , cv_means );
+	      
+	      if ( ne_min > 2 )
+		cv_bin_med.bin( freqs , cv_medians );
+	      
+	      if ( ne_min > 2 )
+		cv_bin_sds.bin( freqs , cv_sds );
+
+	    }
 
 	  
 	  std::vector<double> f0;
@@ -789,6 +852,13 @@ annot_t * spectral_power( edf_t & edf ,
 		      if ( aggregate_psd_sd && ne_min > 2 )
 			writer.value( "PSD_SD" , bin_sds.bspec[i]  );
 		      
+		      if ( calc_seg_sd )
+			{
+			  writer.value( "SEGCV_MN" , cv_bin.bspec[i]  );		      
+			  writer.value( "SEGCV_MD" , cv_bin_med.bspec[i]  );
+			  writer.value( "SEGCV_SD" , cv_bin_sds.bspec[i]  );		      
+			}
+
 		      if ( bin.nominal[i] != "" )
 			writer.value( "INT" , bin.nominal[i] );
 		    }

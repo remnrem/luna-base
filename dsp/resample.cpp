@@ -178,7 +178,10 @@ void dsptools::resample_channel( edf_t & edf , param_t & param )
 
   // only downsample?
   const bool downsample_only = param.has( "downsample" );
-
+  
+  // upsample only if above this threshold? (default 0 , i.e. do all) 
+  const int upsample_if = param.has( "upsample-if" ) ? param.requires_int( "upsample-if" ) : 0 ; 
+  
   const int ns = signals.size();
 
   int converter = SRC_SINC_FASTEST;
@@ -201,7 +204,24 @@ void dsptools::resample_channel( edf_t & edf , param_t & param )
   
   for (int s=0;s<ns;s++)
     {
-      if ( Fs[s] > sr || ! downsample_only )
+      
+      // RESAMPLE sr=128 downsample upsample-if=100 
+      
+      bool do_resample = true;
+
+      // default: always resample (from SR0 -> SR1) 
+      //  unless 'downsample' in which case only reduce sample rates (i.e. lower rates stay as is)
+      //   unless 'upsample-if=X' in which case, if SR0 >= X then resample (which might entail upsampling, i.e. 100 -> 128 Hz) 
+      
+      // do not upsample: (downsample) 
+      if ( downsample_only && sr >= Fs[s] ) do_resample = false;
+      
+      // unless in special range (upsample-if)
+      if ( upsample_if && ! do_resample )
+	if ( Fs[s] >= upsample_if )
+	  do_resample= true;
+      
+      if ( do_resample ) 
 	resample_channel( edf , signals(s) , sr , converter );
     }
 
