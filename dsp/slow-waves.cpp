@@ -355,16 +355,21 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
   if ( astr != "" && astr != "." )
     {
       
-      logger << "  writing SO annotations to " << astr << "\n";
+      logger << "  writing SO annotations to " << astr << " (also half-waves: " << astr << "_pos and " << astr << "_neg)\n";
+      logger << "  for channel " << ch << "\n";
       
       annot_t * a = edf->timeline.annotations.add( astr );
-
+      annot_t * apos = edf->timeline.annotations.add( astr + "_pos" );
+      annot_t * aneg = edf->timeline.annotations.add( astr + "_neg" );
+      
       for (int i=0;i<sw.size();i++)
 	{
 	  const slow_wave_t & w = sw[i];
-	  
+
+	  // full wave
 	  instance_t * instance = a->add( "." , w.interval_tp , ch );
-	  
+
+	  // meta-data
 	  instance->set( "frq" , 1.0 / (double) w.interval_tp.duration_sec() );
 	  instance->set( "dur" , w.interval_tp.duration_sec() );
 	  instance->set( "slope"   , w.slope_n2() );
@@ -374,6 +379,11 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
 	  instance->set( "transf" ,  w.trans_freq() );
 	  instance->set( "transf" ,  w.trans_freq() );
 	  instance->set( "mid" ,  "tp:" + Helper::int2str( w.zero_crossing_tp ) );
+
+	  // half-waves
+	  aneg->add( "." , interval_t( w.interval_tp.start, w.zero_crossing_tp ) , ch );
+	  apos->add( "." , interval_t( w.zero_crossing_tp , w.interval_tp.stop ) , ch );
+	  
 	}
 
     }

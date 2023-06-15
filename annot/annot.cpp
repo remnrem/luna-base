@@ -30,6 +30,7 @@
 #include "db/db.h"
 #include "nsrr-remap.h"
 #include "helper/token-eval.h"
+#include "annot/annotate.h"
 
 #include <string>
 #include <fstream>
@@ -2760,6 +2761,191 @@ bool globals::is_stage_annotation( const std::string & s )
 }
 
 
+
+void annotation_set_t::make( param_t & param , edf_t & edf )
+{
+  
+  const std::string newannot = param.requires( "annot" );
+  
+  const std::string expr     = param.requires( "expr" );
+  
+  // expressions always in form:
+  //  A + B
+  //   note -- could be A + A - i.e. flatten
+
+  // A|B   A or B  i.e. union
+  // A*B   A and B i.e. intersection
+
+  // A+B   A but only if A overlaps B (u.e. keep A as is)
+  // A-B   A but only if B doesn't overlap B
+  
+  const bool do_union = expr.find( "|" ) != std::string::npos ;
+  const bool do_intersection = expr.find( "*" ) != std::string::npos ;
+
+  const bool do_keepif = expr.find( "+" ) != std::string::npos ;
+  const bool do_dropif = expr.find( "-" ) != std::string::npos ;
+
+  if ( ! ( do_union || do_intersection || do_keepif || do_dropif ) )
+    Helper::halt( "expr requires A|B, A*B, A+B or A-B form" );
+  
+  char delim = '|';
+  if ( do_intersection ) delim = '*';
+  else if ( do_keepif ) delim = '+';
+  else if ( do_dropif ) delim = '-';
+
+  std::vector<std::string> tok = Helper::parse( expr , delim );
+  if ( tok.size() != 2 ) 
+    Helper::halt( "expr requires A|B, A*B, A+B or A-B form" );
+
+  annot_t * a1 = find( tok[0] );
+  annot_t * a2 = find( tok[1] );
+  annot_t * an = add( newannot );
+
+  if ( a1 == NULL )
+    logger << "  *** warning, could not find any annotation " << tok[0] << "\n";
+  if ( a2 == NULL )
+    logger << "  *** warning, could not find any annotation " << tok[1] << "\n";
+
+  // don't allow self except union/intersection
+  if ( tok[0] == tok[1] )
+    {
+      // i.e. pileup / flatten
+      if ( do_keepif || do_dropif )
+	Helper::halt( "expr in form A+A or A-A not allowed" );      
+    }
+  
+  // use annotate_t::flatten( x )
+  // and annotate_t::overlaps_flattened_set(a,b)
+
+  
+  const annot_map_t & events1 = a1->interval_events;
+  const annot_map_t & events2 = a2->interval_events;
+
+  std::cout << " h1\n";
+  
+  std::set<interval_t> nevs;
+  
+  // here, we alwats select from events1
+  // but need to make a quick set of events2
+  if ( do_keepif || do_dropif )
+    {
+      
+      std::set<interval_t> b;
+
+      annot_map_t::const_iterator jj = events2.begin();
+      while ( jj != events2.end() )
+	{
+	  const instance_idx_t & instance_idx = jj->first;
+	  b.insert( instance_idx.interval );
+	  ++jj;
+	}
+
+      // flatten b;
+      b = annotate_t::flatten( b );
+      
+      // now look at 'a', one at a time
+      
+      annot_map_t::const_iterator ii = events1.begin();
+      while ( ii != events1.end() )
+        {
+          const instance_idx_t & instance_idx = ii->first;
+	  const interval_t & a = instance_idx.interval; 
+	  const bool overlaps = annotate_t::overlaps_flattened_set( a , b );
+
+	  // a keeper?
+	  const bool to_add = do_keepif ? overlaps : ! overlaps ; 
+	  if ( to_add )
+	    nevs.insert( a );	  
+	  ++ii;
+        }
+      
+    }
+  
+  std::cout << " gg\n";
+  
+  if ( do_union || do_intersection )
+    {
+      // here, we want to flatten both a1 and a2
+
+      std::set<interval_t> a, b;
+      
+      annot_map_t::const_iterator ii = events1.begin();
+      while ( ii != events1.end() )
+        {
+          const instance_idx_t & instance_idx = ii->first;
+          a.insert( instance_idx.interval );
+          ++ii;
+        }
+
+      annot_map_t::const_iterator jj = events2.begin();
+      while ( jj != events2.end() )
+        {
+          const instance_idx_t & instance_idx = jj->first;
+          b.insert( instance_idx.interval );
+          ++jj;
+        }
+
+      // flatten
+      a = annotate_t::flatten( a );
+      b = annotate_t::flatten( b );
+      
+      // make new interval set, by going over both (flattened) lists
+      
+      std::set<interval_t>::const_iterator aa = a.begin();
+      std::set<interval_t>::const_iterator bb = b.begin();
+      
+      while ( 1 )
+	{
+
+	  // empty sets
+	  if ( aa == a.end() || bb == b.end() ) break;
+	  
+	  // overlap?	  
+	  const bool overlaps = aa->overlaps( *bb );
+	  
+	  if ( overlaps )
+	    nevs.insert( do_union ?
+			 aa->union_with_overlapping_interval( *bb ) :
+			 aa->intersection_with_overlapping_interval( *bb ) ); 
+	  
+	  // advance whichever ends first
+	  //   AAAA     AAAAA       AAA
+	  //   BB B             BBBB           <- would be missed
+	  //              BB
+	  //        BB
+	  
+	  if ( aa->stop < bb->stop )
+	    {
+	      ++aa;
+	      if ( aa == a.end() ) break;		
+	    }
+	  else
+	    {
+	      ++bb;
+	      if ( bb == b.end() ) break;	      
+	    }
+	  
+	}
+      
+    }
+
+  
+  //
+  // add new events
+  //
+  std::cout << " add " << nevs.size() << "\n";
+  std::set<interval_t>::const_iterator nn = nevs.begin();
+  while ( nn != nevs.end() )
+    {
+      an->add( "." , *nn , "." );
+      ++nn;
+    }
+  
+  logger << "  created " << nevs.size() << " instances of " << newannot << "\n";
+}
+
+
+
 bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 					 const bool force_remake , 
 					 const std::string & a_wake , 
@@ -3249,8 +3435,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   const bool has_min_dur = param.has( "min-dur" ) && param.requires_dbl( "min-dur" ) > 0 ;
   
   const double min_dur = has_min_dur ?  param.requires_dbl("min-dur" )  : 0 ;
-    
-    
+  
   //
   // for complete XML compatibility
   //
@@ -3271,9 +3456,6 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
       logger << " ** could not find valid start-time in EDF header **\n";
       hms = false;
     }
-
-  
-  
 
   
   //
@@ -3302,6 +3484,31 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   //
 
   std::set<std::string> annots2write = param.strset( "annot" );
+
+  //
+  // potentially allow for prefix matching here too
+  //
+
+  if ( param.has( "prefix" ) )
+    {
+      if ( param.empty( "prefix" ) )
+	Helper::halt( "prefix cannot be empty" );
+      
+      std::vector<std::string> prefixes = param.strvector( "prefix" );
+      
+      std::vector<std::string> anames = names();
+
+      for (int j=0; j<prefixes.size(); j++)
+	{
+	  logger << "  matching any annotations starting with " << prefixes[j] << "\n";
+	  for (int i=0; i<anames.size(); i++)
+	    {
+	      if ( Helper::imatch( prefixes[j] , anames[i] ) )
+		annots2write.insert( anames[i] );
+	    }
+	}
+    }
+  
   if ( annots2write.size() > 0 )
     logger << "  writing a subset of all annotations, based on " << annots2write.size() << " specified\n";
   

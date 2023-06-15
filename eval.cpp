@@ -1033,6 +1033,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
+      else if ( is( c, "MAKE-ANNOTS" ) )  proc_make_annots( edf , param(c) );
       else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
       else if ( is( c, "OVERLAP") )       proc_annotate( edf, param(c) );
       else if ( is( c, "EXTEND" ) )       proc_extend_annots( edf, param(c) );
@@ -2983,6 +2984,13 @@ void proc_list_annots( edf_t & edf , param_t & param )
 
 
 
+// MAKE-ANNOTS : make new annotations based on pairwse intersection,union, overlap, etc
+
+void proc_make_annots( edf_t & edf , param_t & param )
+{
+  edf.timeline.annotations.make( param , edf );
+}
+
 // WRITE-ANNOTS : write all annots to disk
 
 void proc_write_annots( edf_t & edf , param_t & param )
@@ -3148,20 +3156,30 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   // epoch level output for HYPNO?
   bool epoch_lvl_output =param.has( "epoch" );
     
-  // optionally, add cycle annotation
-  std::string cycle_annot = "";
-  if ( param.has( "annot-cycles" ) )
+  // optionally, add annotations
+  // allow old annot-cycles form
+  
+  std::string annot_prefix = "";
+
+  if ( param.has( "annot" ) )
+    {
+      if ( param.empty( "annot" ) )
+	annot_prefix = "h";
+      else
+	annot_prefix = param.value( "annot" );
+    }
+  else if ( param.has( "annot-cycles" ) )
     {
       if ( param.empty( "annot-cycles" ) )
-	cycle_annot = "NREMC";
+	annot_prefix = "h";
       else
-	cycle_annot = param.value( "annot-cycles" );
+	annot_prefix = param.value( "annot-cycles" );
     }
   
   
   // and output...
 
-  edf.timeline.hypnogram.output( verbose , epoch_lvl_output , eannot , cycle_annot );
+  edf.timeline.hypnogram.output( verbose , epoch_lvl_output , eannot , annot_prefix );
 
 }
 

@@ -148,6 +148,11 @@ namespace Helper
   // case-insensitive any match
   bool contains( const std::string& a, const std::string& b );
 
+  // prefix expansion: if ends in *, then give all matches
+  std::vector<std::string> expansion( const std::vector<std::string> & inputs ,
+				      const std::vector<std::string> & matches ,
+				      const char wildcard = '*' );
+  
   bool fileExists(const std::string &);
   std::string expand( const std::string & f );
   bool deleteFile( const std::string & );

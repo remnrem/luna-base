@@ -34,6 +34,9 @@
 extern logger_t logger;
 extern writer_t writer;
 
+std::map<std::string,int> annotate_t::global_alignment_group;
+std::map<int,std::set<std::string> > annotate_t::group_global_alignment;
+
 
 // initiate from a single attached EDF/timeline ( 'OVERLAP' command )
 annotate_t::annotate_t( edf_t & edf1 , param_t & param )
@@ -42,6 +45,7 @@ annotate_t::annotate_t( edf_t & edf1 , param_t & param )
   single_indiv_mode = true;
   set_options( param );
   prep();
+  if ( event_perm ) init_event_permutation();
   loop();
   output();
 }
@@ -58,17 +62,30 @@ annotate_t::annotate_t( param_t & param )
   // this means we cannot write out annotations as matched/unmatched 
   single_indiv_mode = false;
 
+  // in event perm mode, need to build some structures to ensure only within-person
+  // event permutations
 
-  // nb. we only allow this is 'bg' mode is specified -- this will
+  event_perm = param.has( "event-perm" );
+
+  if ( event_perm )
+    {
+      if ( ! param.empty( "event-perm") )
+	event_neighbourhood_sec = param.requires_dbl( "event-perm" );
+      else
+	event_neighbourhood_sec = 5; 
+    }
+  
+  // nb. we only allow this if 'bg' mode is specified, or if using block permutation -- this will
   // implicitly ensure that annotations are only shuffled within
   // individuals
 
-  if ( ! param.has( "bg" ) )
-    Helper::halt( "bg specification is required in multi-sample mode" );
+  if ( ! ( param.has( "bg" ) || event_perm ) )
+    Helper::halt( "bg specification, or event permutation, is required in multi-sample mode" );
+
   
   // expect a file: indiv -- annot
   
-  std::string alist = param.requires( "a-list" );
+  std::string alist = Helper::expand( param.requires( "a-list" ) );
 
   std::map<std::string,std::set<std::string> > annots;
 
@@ -87,7 +104,7 @@ annotate_t::annotate_t( param_t & param )
       std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
       if ( tok.size() != 2 )
 	Helper::halt( "expecting two tab/space delimited fields: ID  annot-file" );
-      annots[ tok[0] ].insert( tok[1] );
+      annots[ tok[0] ].insert( Helper::expand( tok[1] ) );
       ++acnt;
     }
   IN1.close();
@@ -143,7 +160,8 @@ annotate_t::annotate_t( param_t & param )
 	      if ( line == "" ) continue;
 	      if ( line[0] == '#' ) continue;
 	      std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
-	      if ( tok.size() != 6 ) Helper::halt( "expecting standard 6-field annotations:" + line );
+	      if ( tok.size() != 6 ) Helper::halt( "expecting standard 6-field annotations:" + line +
+						   "\nuse WRITE-ANNOTS to generate" );
 
 	      if ( tok[0] == "duration_sec" )
 		{
@@ -202,6 +220,18 @@ annotate_t::annotate_t( param_t & param )
 	  ++bb;
 	}
 
+      
+      // for block-based permutation, special code for individuals
+      // to allow for intra-indiv perms only
+
+      if ( event_perm )
+	OUT1 << "indiv_int_mrkr" << "\t"
+	     << indiv << "\t"
+	     << "." << "\t"
+	     << offset << "\t"
+	     << offset + ind2dur[ indiv ] << "\t"
+	     << "." << "\n";
+            
       logger << "\n"
 	     << "   annotations aligned from " << offset << " to " << offset + ind2dur[ indiv ] + 10.0 << " seconds\n";
 	
@@ -264,6 +294,7 @@ annotate_t::annotate_t( param_t & param )
   
   set_options( param );
   prep();
+  if ( event_perm ) init_event_permutation();
   loop();
   output();
   
@@ -305,24 +336,47 @@ void annotate_t::set_options( param_t & param )
 	flanking_sec = fval;
       else
 	{
-	  // assume annot:f,annot:f format	  
+	  // assume annot~f,annot~f format, or | delim
 	  for (int t=0; t<tok.size(); t++)
 	    {
-	      std::vector<std::string> tok2 = Helper::parse( tok[t] , ":" );
-	      if ( tok2.size() != 2 ) Helper::halt( "expecting annot:second format for 'f'" );
-	      if ( ! Helper::str2dbl( tok2[1] , &fval ) ) Helper::halt( "expecting annot:second format for 'f'" );
+	      std::vector<std::string> tok2 = Helper::parse( tok[t] , "~|" );
+	      if ( tok2.size() != 2 ) Helper::halt( "expecting annot|second format for 'f'" );
+	      if ( ! Helper::str2dbl( tok2[1] , &fval ) ) Helper::halt( "expecting annot|second format for 'f'" );
 	      flanking_sec_annot[ tok2[0] ] = fval ; 
 	    }
 	}
     }
   
+
   // distance to neighbour stats
-  window_sec = param.has( "w" ) ? param.requires_dbl( "w" ) : 10 ; 
+  window_sec = param.has( "w" ) ? param.requires_dbl( "w" ) : 10 ;
+  
+  // distance to marker stats: default 12 hours = 12*60^2 effectively means no limit
+  marker_window_sec = param.has( "mw" ) ? param.requires_dbl( "mw" ) : 12 * 60 * 60;  ;
+
+  // is D2 based on 'before' / 'after' ratio only, or the actual distance ( by default, have the counts +1/-1)
+  d2_signed = param.has( "d2-quant" ) ? ( ! param.yesno( "d2-quant" ) ) : true ; 
   
   include_overlap_in_dist = ! param.has( "dist-excludes-overlapping" );
   
   overlap_th = param.has( "overlap" ) ? param.requires_dbl( "overlap" ) : 0 ;
   
+  // contrasts 
+
+  contrasts.clear();
+  if ( param.has( "contrasts" ) )
+    {
+      // contrasts=seed1|annot1-seed2|annot2,
+      std::vector<std::string> tok = param.strvector( "contrasts" );
+      for (int i=0; i<tok.size(); i++)
+	{
+	  // parse by | and -
+	  std::vector<std::string> tok2 = Helper::parse( tok[i] , "|-" );
+	  if ( tok2.size() != 4 ) Helper::halt( "expecting contrasts=seed|annot-seed|annot" );
+	  // a1 b1 a2 b2 
+	  contrasts.push_back( annot_contrast_t( tok2[0], tok2[1], tok2[2], tok2[3] ) );  
+	}
+    }
   
   //
   // flatten all channels to a single annotation class
@@ -400,6 +454,22 @@ void annotate_t::set_options( param_t & param )
   fixed.clear();
   if ( param.has( "fixed" ) ) fixed = param.strset( "fixed" );
 
+
+  //
+  // non-segment markers?
+  //
+
+  mannots.clear();
+  has_markers = false;
+  if ( param.has( "marker" ) )
+    {
+      if ( ! param.has( "event-perm" ) )
+	Helper::halt( "marker requires event-perm" );
+      has_markers = true;
+      // root_match() allows expanding, ie.  hyp_clock_*
+      mannots = annotate_t::root_match( param.strset( "marker" ) , edf->timeline.annotations.names() );
+    }
+  
   //
   // do seed-seed pileup?
   //
@@ -419,7 +489,21 @@ void annotate_t::set_options( param_t & param )
   else
     max_shuffle_sec = 0;
 
+  //
+  // block permutation across intervals (instead of circular shuffle w/ in intervals)
+  //
 
+  event_perm = param.has( "event-perm" );
+
+  if ( event_perm )
+    {
+      if ( ! param.empty( "event-perm" ) )
+	event_neighbourhood_sec = param.requires_dbl( "event-perm" );
+      else
+	event_neighbourhood_sec = 5; 
+    }
+
+    
   //
   // Misc
   //
@@ -467,6 +551,8 @@ void annotate_t::set_options( param_t & param )
   if ( midpoint ) logger << "  reducing all annotations to midpoints\n";
   if ( flanking_sec ) logger << "  adding f=" << flanking_sec << " seconds to each annotation\n";
   if ( window_sec ) logger << "  truncating distance at w=" << window_sec << " seconds for nearest neighbours\n";
+  if ( marker_window_sec ) logger << "  truncating seed-marker distance at mw=" << marker_window_sec << " seconds\n";
+
   logger << "  " << ( include_overlap_in_dist ? "" : "not " )
 	 << "including overlapping events in nearest-neighbor distances\n";
   
@@ -478,17 +564,27 @@ void annotate_t::set_options( param_t & param )
     Helper::halt( "require seed argument" );
   
   // requires 1+ seed: look at enrichment of ALL combinations of seeds
-  sseeds = param.strset( "seed" );
+  // allow wildcards:
+  //sseeds = param.strset( "seed" );
+  sseeds = annotate_t::root_match( param.strset( "seed" ) , edf->timeline.annotations.names() );
+
   
   // from each seed, look at all enrichment w/ all other annots
   //  non-seed annotations are not permuted
   if ( param.has( "other" ) )
-    sannots = param.strset( "other" );
+    {
+      //sannots = param.strset( "other" );
+      sannots = annotate_t::root_match( param.strset( "other" ) , edf->timeline.annotations.names() );
 
+    }
+  
   // background (i.e. defines the space; only select/permute within contiguous blocks of these regions)
   if ( param.has( "bg" ) ) 
-    sbgs = param.strset( "bg" );
-    
+    {
+      ///sbgs = param.strset( "bg" );
+      sbgs = annotate_t::root_match( param.strset( "bg" ) , edf->timeline.annotations.names() );      
+    }
+  
   // edge for background -- i.e. if elements could not be placed within X seconds of background segment edge,
   // then denote here
   if ( param.has( "edges" ) )
@@ -497,11 +593,15 @@ void annotate_t::set_options( param_t & param )
   // exclusionary background (xbg) -- i.e. xbg is the converse of bg, and thus
   // specifies gaps rather than allowed intervals
   if ( param.has( "xbg" ) )
-    sxbgs = param.strset( "xbg" );
-
+    {
+      //sxbgs = param.strset( "xbg" );
+      sxbgs = annotate_t::root_match( param.strset( "xbg" ) , edf->timeline.annotations.names() );
+    }
+  
   if ( param.has( "xbg" ) && ! param.has( "bg" ) )
     Helper::halt( "xbg requires bg to be explicitly specified" );
-  
+
+  // Note -- these are redundant now... can use MAKE-ANNOTS
   // outputs - i.e. seed annotations that are w/ or w/out a 'matched' annot
   make_anew = false;
   if ( param.has( "matched" ) )
@@ -610,6 +710,38 @@ void annotate_t::prep()
 
 
   //
+  // other markers; initially put all these in a single bin
+  // starting (0); in the multi_indiv case, these will be
+  // split out into different bins based on indiv (in init_event_perm())
+  //
+  
+  markers.clear();
+  
+  aa = mannots.begin();
+  while ( aa != mannots.end() )
+    {
+      annot_t * a = edf->timeline.annotations.find( *aa );
+      if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
+      else
+	{
+	  annot_map_t::const_iterator ii = a->interval_events.begin();
+	  while ( ii != a->interval_events.end() )
+	    {
+	      instance_idx_t instance_idx = ii->first;
+	      markers[ 0 ][ *aa ].insert( instance_idx.interval );
+	      ++ii;
+	    }
+
+	  // flatten, joining adjacent regions
+	  if ( markers[0][ *aa ].size() != 0 ) 
+	    markers[0][ *aa ] = flatten( markers[0][ *aa ] , true );
+	}
+      
+      ++aa;
+    }
+
+  
+  //
   // contruct the background set
   //
 
@@ -713,14 +845,7 @@ void annotate_t::prep()
       
     }
 
-  // std::set<interval_t>::const_iterator mm = mbg.begin();
-  // while ( mm != mbg.end() )
-  //   {
-  //     std::cout << "  BB = " << mm->start << " .. " << mm->stop << "\n";
-  //     ++mm;
-  //   }
-    
-  
+      
   //
   // final summary
   //
@@ -732,11 +857,13 @@ void annotate_t::prep()
       
       logger << "  background intervals reduced to " << mbg.size()
 	     << " contiguous segments, spanning " << tottp * globals::tp_duration << " seconds\n";
-
+      
     }
   else
     logger << "  no background intervals ('bg'), will assume a single region from 0 to last annotation end-point\n";
-  
+
+  if ( markers[0].size() != 0 )
+    logger << "  " << markers[ 0 ].size() << " marker annotations also included\n";
 
   
   //
@@ -1013,7 +1140,7 @@ void annotate_t::prep()
 
 	  if ( offset > interval.start ) Helper::halt( "logic error (1)" );
 	  if ( offset > interval.stop ) Helper::halt( "logic error (2)" );
-	  
+
 	  // re-register interval relative to bounding segment
 	  interval.start -= offset;
 	  interval.stop -= offset;
@@ -1040,8 +1167,20 @@ void annotate_t::prep()
 	      uint64_t dur = seg[ offset ];
 	      interval.stop = interval.stop + f > dur ? dur : interval.stop + f ;
 	    }
+
+	  // for event-based perm (unlike circular perm), retain the original (absolute)
+	  // tp-encoding i.e. rather than reduced to 0..N for each segment
+	  // we do it this way (lazy) just so we don't have to change the right/left edge expansion code
+	  // above
+	  
+	  if ( event_perm )
+	    {
+	      interval.start += offset;
+	      interval.stop += offset;
+	    }
 	  
 	  // track the original (used only if outputting matched annots)
+
 	  if ( make_anew ) 
 	    unmanipulated[ named_interval_t( offset , interval , aid ) ] = original;
 	  
@@ -1122,9 +1261,38 @@ void annotate_t::prep()
       
       ++qq;
     }
+
+  if ( mannots.size() )
+    {
+      std::set<std::string>::const_iterator mm = mannots.begin();
+      while ( mm != mannots.end() )
+	{
+	  if ( markers[ 0 ].find( *mm ) != markers[ 0 ].end() )
+	    {
+	      const std::set<interval_t> & mrk = markers[ 0 ][ *mm ];
+
+	      double secs = 0;
+	      std::set<interval_t>::const_iterator qq = mrk.begin();
+	      while ( qq != mrk.end() )
+		{
+		  secs += qq->duration_sec();
+		  ++qq;
+		}
+	      
+	      logger << "  " << *mm
+		     << " [marker]";
+	      logger << " : n = " << mrk.size() 
+		     << " , mins = " << secs / 60.0 
+		     << " , avg. dur (s) = " << secs / (double)mrk.size() << "\n";	      
+	      
+	    }
+	  ++mm;
+	}
+    }
   
  
   // info about aligned permutes
+  // and make 'global_alignment_group' object (used in pinstance_t/event-perm) 
   
   if ( aligned_permutes.size() )
     {
@@ -1141,10 +1309,76 @@ void annotate_t::prep()
 	  logger << "\n";
 	  ++aa;
 	}
+
     }
   
+  // construct global_alignment_group & group_alignment_alignment
 
-  if ( constrained_shuffle_dur )
+  //  seed-name --> map 
+  const std::set<std::string> & permset = shuffle_annots ? achs : sachs;
+  global_alignment_group.clear();
+  
+  std::set<std::string>::const_iterator ppp = permset.begin();
+  while ( ppp != permset.end() )
+    {
+      // already done?
+      if ( global_alignment_group.find( *ppp ) != global_alignment_group.end() )
+	{
+	  ++ppp;
+	  continue;
+	}
+      
+      // is this in an alignment set? add as is (unique group)? 
+      std::map<std::string,std::set<std::string> >::const_iterator aa = aligned_permutes.find( *ppp );
+      
+      // if not, add as is (unique group)
+      if ( aa == aligned_permutes.end() )
+	{
+	  int gnum = global_alignment_group.size();
+	  global_alignment_group[ *ppp ] = gnum;
+	}
+      else
+	{
+	  // get all alignments;
+	  const std::set<std::string> & g = aa->second;
+	  std::set<std::string>::const_iterator gg = g.begin();
+	  while ( gg != g.end() )
+	    {
+	      // has this been assigned to a group already?
+	      if ( global_alignment_group.find( *gg ) != global_alignment_group.end() )
+		{
+		  global_alignment_group[ *ppp ] = global_alignment_group[ *gg ];
+		  break;
+		}
+	      ++gg;
+	    }
+	  
+	  // if still not added, add as new group
+	  if ( global_alignment_group.find( *ppp ) == global_alignment_group.end() )
+	    {
+	      int gnum = global_alignment_group.size();
+	      global_alignment_group[ *ppp ] = gnum;
+	    }	      
+	}
+      ++ppp;
+    }
+
+  
+  // make reverse lookup
+  group_global_alignment.clear();
+  std::map<std::string,int>::const_iterator mm = global_alignment_group.begin();
+  while ( mm != global_alignment_group.end() )
+    {
+      group_global_alignment[ mm->second ].insert( mm->first );      
+      //std::cout << " alignment group " << mm->first << "\t" << mm->second << "\n";
+      ++mm;
+    }
+
+  
+
+  if ( event_perm )
+    logger << "  event-based permutation with " << event_neighbourhood_sec << "s spans\n";
+  else if ( constrained_shuffle_dur )
     logger << "  shuffling constrained to +/- " << max_shuffle_sec << "s within each contiguous background interval\n";  
   else
     logger << "  unconstrained shuffling within each contiguous background interval\n";
@@ -1165,9 +1399,12 @@ void annotate_t::loop()
   // evaluate the original dataset
   annotate_stats_t s = eval();
 
+  // any contrasts
+  add_contrasts( &s );
+  
   // record
   observed( s );
-
+  
   // do we need to track the original, observed events?
   if ( constrained_shuffle_dur )
     observed_events = events;
@@ -1194,7 +1431,10 @@ void annotate_t::loop()
 	events = observed_events;
       
       // permute
-      shuffle();
+      if ( event_perm )
+	event_permutation();
+      else
+	shuffle();
 
       // verbose output?
       if ( debug_mode )
@@ -1205,6 +1445,9 @@ void annotate_t::loop()
       
       // calc statistics for null data
       annotate_stats_t s = eval();
+
+      // any contrasts
+      add_contrasts( &s );
 
       // track null distribution
       build_null( s );
@@ -1292,6 +1535,7 @@ void annotate_t::shuffle()
 		  // not appropriate for this
 		  
 		  ++iter;
+		  
 		  if ( iter > 500 )
 		    Helper::halt( "cannot find any valid shuffle sets for " + *ss
 				  + "\n please sanity-check the number/size of background/event intervals" );
@@ -1444,11 +1688,845 @@ void annotate_t::shuffle()
 }
 
 
+void annotate_t::init_event_permutation()
+{
+
+  //  view();
+  
+  //
+  // first handle the scenario where we have >1 individual
+  // i.e. indiv_int_mrkr annotation will be present in merged.annot
+  //
+  
+  annot_t * aindivs = edf->timeline.annotations.find( "indiv_int_mrkr" );
+
+  multi_indiv = aindivs != NULL; 
+
+  if ( multi_indiv )
+    {
+      indiv_segs.clear();
+      
+      annot_map_t::const_iterator aa = aindivs->interval_events.begin();
+      while ( aa != aindivs->interval_events.end() )
+        {
+          const instance_idx_t & instance_idx = aa->first;
+          indiv_segs.push_back( instance_idx.interval );
+	  //std::cout << " pushing indiv_segs " << instance_idx.interval.as_string() << "\n";
+          ++aa;
+        }
+    }
+
+  
+  // neighbourhood size around each seed
+  uint64_t neighbourhood_tp = event_neighbourhood_sec * globals::tp_1sec;
+  
+  // if we need to track which indivs these segments come from (multi_indiv==T)
+  std::vector<interval_t>::const_iterator ii = indiv_segs.begin();
+  const int nindiv = multi_indiv ? indiv_segs.size() : 1 ;   
+  int indiv = 0;
+  
+  if ( multi_indiv )
+    logger << "  running in multi-individual mode, for N=" << nindiv << "\n";
+  else
+    logger << "  running in single-individual mode\n";
+
+  // input:
+  //  std::map<uint64_t,uint64_t> seg      : all segments for all indivs (start/length)
+  //  std::vector<interval_t> indiv_segs   : for each indiv, their total span     
+  //  
+  
+  // outputs:
+  //  
+  // indiv-> start of each segment for that indiv  
+  // std::map<int,std::set<uint64_t> > indiv2segs
+  //  
+  // by indiv, under aligned permutations, identify local friends (will be permuted together)
+  // std::map<int,std::map<pinstance_t,std::set<pinstance_t> > > event2friends;
+
+  // by indiv, for each event, the implied neighbourhood span (for permuting)
+  // std:map<int, std::map<pinstance_t,interval_t> > event2neighbourhood;;
+
+  //
+  // pool all events that will be permuted (seeds, not fixed, etc)
+  //
+
+  std::set<pinstance_t> pevents;
+  
+  
+  //
+  // consider all segments (starst/offset -> segment size)
+  //
+  
+  std::map<uint64_t,uint64_t>::const_iterator ss = seg.begin();
+  
+  while ( ss != seg.end() )
+    {
+      
+      uint64_t segstart = ss->first;
+      uint64_t seglen = ss->second;
+
+      //      std::cout <<" looking at segstart " << segstart << "\t" << seglen << "\n";
+      
+      // which 'indiv'? (else fixed to '0')
+      //      std::cout << "is multi indiv " << multi_indiv << "\n";
+      
+      if ( multi_indiv )
+	{
+	  while (1)
+	    {
+	      // current indiv okay
+	      if ( segstart >= ii->start && segstart < ii->stop )
+		break;
+	      // advance to next
+	      ++ii; ++indiv;
+	      if ( indiv > nindiv )
+		Helper::halt( "mismatch between indivs and blocks in annotate_t::init_block_permutation()" );
+	    }
+	}
+      
+      //      std::cout << " indiv = " << indiv << "\n";
+      
+      // track segments by indiv
+      indiv2segs[ indiv ].insert( segstart );
+      seg2indiv[ segstart ] = indiv;
+      
+      // get actual events, to populate pevents[]
+      // std::cout << " events.size() " << events.size() << "\t" << segstart << "\n";
+      
+      // std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator jj1 = events.begin();
+      // while ( jj1 != events.end() ) { std::cout << "  events key " << jj1->first << "\n"; ++jj1; } 
+
+      // might not be any events in this segment? -> skip to the next segment
+      std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator jj = events.find( segstart );      
+      if ( jj == events.end() )
+	{	  
+	  ++ss;
+	  continue;
+	}
+        
+      const std::map<std::string,std::set<interval_t> > & annot2event = jj->second;
+
+      // now consider all events that will be permuetd only
+      const std::set<std::string> & permset = shuffle_annots ? achs : sachs;
+      
+      std::set<std::string>::const_iterator pp = permset.begin();
+      while ( pp != permset.end() )
+	{
+	  //	  std::cout << " considering permset " << *pp << "\n";
+	  
+	  // skip?
+          if ( fixed.find( *pp ) != fixed.end() )
+            {
+              ++pp;
+              continue;
+            }
+	  
+	  // pull the events
+	  
+	  std::map<std::string,std::set<interval_t> >::const_iterator aa = annot2event.find( *pp );
+
+	  if ( aa == annot2event.end() )
+	    {
+	      ++pp;
+	      continue;
+	    }
+
+	  // iterate over events
+	  const std::set<interval_t> & evts = aa->second;
+	  std::set<interval_t>::const_iterator ee = evts.begin();
+	  while ( ee != evts.end() )
+	    {
+	      pevents.insert( pinstance_t( aa->first ,
+					   *ee ,					  
+					   segstart ) ); 	      
+	      ++ee;
+	    }
+	  
+	  // next annotation
+	  ++pp;
+	}
+
+
+      //
+      // Populate fixed_events structure too
+      //
+
+      std::map<std::string,std::set<interval_t> >::const_iterator ff = annot2event.begin();
+      while ( ff != annot2event.end() )
+	{
+
+	  // skip if not fixed / not permuting
+
+	  bool is_fixed = permset.find( ff->first ) == permset.end();
+	  if ( ( ! is_fixed ) && fixed.find( ff->first ) != fixed.end() ) is_fixed = true;
+
+	  if ( ! is_fixed )
+	    {
+	      ++ff;
+              continue;
+            }
+
+	  // iterate over events                                                                                                                       
+          const std::set<interval_t> & evts = ff->second;
+          std::set<interval_t>::const_iterator ee = evts.begin();
+          while ( ee != evts.end() )
+            {	      
+	      fixed_events[ segstart ][ ff->first ].insert( *ee );
+	      ++ee;
+	    }
+	  
+	  ++ff;
+	}
+      
+      //      std::cout << "\n\nskipping to next segment....\n";
+      
+      // next segment
+      ++ss;
+    }
+
+  //  std::cout << " finished step 1\n";
+
+  //
+  // Align any markers to create segments == indivs
+  //
+
+  // initially, all markers are in a single bin, starting 0
+  // which will always be the start of the first/only indiv
+  // in the non-multi_indiv case
+
+  // otherwise, we should create some segments that map to the indiv
+  // i.e. to make sure that seeds are not compared to other people's
+  // markers
+  
+  if ( multi_indiv )
+    {
+      
+      interval_map_t pooled_markers = markers;
+      markers.clear();
+      
+      std::set<std::string>::const_iterator mm = mannots.begin();
+      while ( mm != mannots.end() )
+	{
+	  
+	  // no markers exist?
+	  if ( pooled_markers[ 0 ].find( *mm ) == pooled_markers[ 0 ].end() ) { ++mm; continue; }
+	  
+	  // get single marker pool
+	  const std::set<interval_t> & mrk = pooled_markers[ 0 ][ *mm ];
+	  
+	  // deal out into indiv pools (if here, will always have at least two people)
+	  int indiv = 0;
+	  uint64_t indiv_curr = indiv_segs[0].start;
+	  uint64_t indiv_next = indiv_segs[1].start;
+	  
+	  std::set<interval_t>::const_iterator qq = mrk.begin();
+	  while ( qq != mrk.end() )
+	    {
+	      
+	      while ( 1 )
+		{
+		  // is before the next person (or this is the last person)
+		  // and so always assign to the last person in that case
+		  if ( qq->start < indiv_next || indiv == nindiv - 1 ) break;
+		  
+		  // next indiv?
+		  if ( indiv < nindiv - 1 ) 
+		    {
+		      ++indiv;
+		      
+		      indiv_curr = indiv_segs[ indiv ].start;
+		      
+		      // only need the next marker if there is a person afterwards
+		      if ( indiv < nindiv - 1 )
+			indiv_next = indiv_segs[ indiv + 1 ].start;
+		    }
+		}
+	      
+	      // now 'indiv_curr' should point to segment start for this person
+	      // add to the new list
+	      markers[ indiv_curr ][ *mm ].insert( *qq );
+
+	      // next marker event
+	      ++qq;
+	    }
+	  
+	  // next marker class
+	  ++mm;
+	}
+
+      logger << "  split markers up into " << markers.size() << " regions/individuals\n";
+    }
+  
+  
+  //  std::cout << "\n\n-------------- step2\n\n";
+  
+  //
+  // Now we've populated pevents with all permutable events, define neighbourhoods
+  // (w.r.t. other permutable events only)
+  //
+  
+  // under aligned permutations, identify local friends (will be permuted together)
+  // std::map<instance_t,std::set<instance_t> > event2friends;
+  event2friends.clear();
+  
+  // for each event, the implied neighbourhood span (for permuting)
+  // std::map<instance_t,interval_t> event2neighbourhood;;
+  event2neighbourhood.clear();
+  
+  std::set<pinstance_t>::const_iterator ee = pevents.begin();
+  while ( ee != pevents.end() )
+    {
+      
+      // 'index' is ee
+
+      // search for neighbours, using ff
+      std::set<pinstance_t>::const_iterator ff = ee;
+
+      //      std::cout << " searching " << ee->name << " " << ee->interval << "\n";
+	
+      // make friends
+      std::set<pinstance_t> friends;
+      
+      // back
+      while ( 1 ) 
+	{
+	  
+	  if ( ff == pevents.begin() ) break;	  
+	  
+	  // move back
+	  --ff;
+
+	  // different segment/indiv?
+	  if ( ff->seg != ee->seg ) break;
+	  
+	  // too far away?
+	  if ( ee->interval.start - ff->interval.stop > neighbourhood_tp ) break;
+	  
+	  // else add, if aligned
+	  if ( aligned( ee->name , ff->name ) )
+	    friends.insert( *ff );
+	}
+      
+      // now reset ff and move forwards
+      ff = ee;
+      while ( 1 )
+        {
+
+	  // move forward
+	  ++ff;
+
+	  if ( ff == pevents.end() ) break;
+
+          // different segment/indiv?
+	  if ( ff->seg != ee->seg ) break;
+	  
+          // too far away?
+	  if ( ff->interval.start - ee->interval.stop > neighbourhood_tp ) break;
+	  
+          // else add, if aligned
+	  if ( aligned( ee->name , ff->name ) )
+	    friends.insert( *ff );
+        }
+      
+      // now define interval, starting w/ self
+      interval_t n = ee->interval ;
+      
+      std::set<pinstance_t>::const_iterator gg = friends.begin();
+      while ( gg != friends.end() )
+	{
+	  if ( gg->interval.start < n.start )
+	    n.start = gg->interval.start;
+
+	  if ( gg->interval.stop > n.stop )
+	    n.stop = gg->interval.stop;
+
+	  ++gg;
+	}
+
+      // get indiv
+      int indiv = seg2indiv[ ee->seg ];
+
+      // std::cout << " adding span "
+      // 		<< indiv << " " << ee->name << " " << ee->interval.as_string() << " " << friends.size() <<  "  span " << n << "\n";
+      
+      // track friends
+      event2friends[indiv][ *ee ] = friends;
+
+      //      std::cout << " event2neighbourhood (span) = " << n << "\n";
+
+      // track total neighbourhood span
+      event2neighbourhood[indiv][ *ee ] = n;
+
+      // next permutable event
+      ++ee;
+    }
+
+
+  if ( debug_mode )
+    {
+      std::cout << "\n\n----- Verbose display\n\n";
+      
+      // verbose display
+      std::map<int,std::map<pinstance_t,std::set<pinstance_t> > >::const_iterator kk = event2friends.begin();
+      while ( kk != event2friends.end() )
+	{
+	  
+	  int indiv = kk->first;
+	  std::cout << "\n\n----- indiv " << indiv << "\n";
+	  
+	  std::map<pinstance_t,std::set<pinstance_t> >::const_iterator gg = kk->second.begin();
+	  
+	  while ( gg != kk->second.end() )
+	    {
+	      
+	      std::cout << " pseed "
+			<< " " << gg->first.interval.as_string() << " "
+			<< " " << gg->first.interval << " " 
+			<< " " << gg->first.name << " "
+			<< " " << gg->first.seg << "\n";
+	      std::cout << "   " << gg->second.size() << " friends, spanning " << event2neighbourhood[ indiv ][ gg->first ] << "\n";
+	      std::set<pinstance_t>::const_iterator ff = gg->second.begin();
+	      while ( ff != gg->second.end() )
+		{
+		  std::cout << "   " << ff->interval.as_string() << " " << ff->name << " " << ff->seg << "\n";
+		  ++ff;
+		}
+	      ++gg;
+	    }
+	  
+	  std::cout << " nexxt indiv...\n";
+	  ++kk;
+	}
+      std::cout << "leaving init_event_perm()\n";
+    }
+  
+
+}
+
+
+
+
+void annotate_t::event_permutation()
+{
+
+  // initiate event boundaries with fixed events only
+  events = fixed_events;
+
+  // std::cout << "\n\n\n---------------------------------------\nevent_permutation()  -- showing fixed events only\n";
+  // view();
+  // std::cout << "\n";
+  
+  // indiv-wise, permutation of seed, eventwise (rather than circular shuffle) 
+  std::map<int,std::map<pinstance_t,std::set<pinstance_t> > >::const_iterator kk = event2friends.begin();
+  while ( kk != event2friends.end() )
+    {
+      
+    // which individual?
+    const int indiv = kk->first;
+
+    // segment starts : indiv2segs[ indiv ] -> set of segments (start tps)
+    // segment info: seg[ start_tp ]        -> duration of that segment (tps)
+
+    // algorithm: for each to-be-placed interval (of fixed duration), create a unique map
+    //   of possible placements, taking into account the currently dropped events as well
+    //   as the core boundaries
+
+
+    // 0) initialize blackout map w/ gaps between segments for this individual
+    // [ in loop [
+    // 1) pick event to permute; find friends; determine total span = t
+    // 2) create a list of possible placements and track overall span, given current blackout map and 't'
+    //   0                ... blackout[0].start  = put1
+    //   blackout[0].stop ... blackout[1].start  = put2
+    //   blackout[1].stop ... blackout[2].start  = put3 ...
+    //   etc.
+    // 3) for each putative region (put1, put2, ...) only consider is length of put is >= 't' (or perhaps t+2 to ensure gap each side)
+    // 4)  record  put1.start -> put1.length - t 
+    //             put2.start -> put2.length - t
+    //             ...
+    //     and aggregate lengths of each = R
+    // 5) pick random seed r = 0 ... R
+    // 6) map to which put1 region, and place
+    // 7) add this placed interval to the blackout map, i.e. as if a new gap is added
+    
+    // breaks for this indiv
+    const std::set<uint64_t> & isegs = indiv2segs.find( indiv )->second;
+
+    // make original segment intervals (convenience used below)
+    std::set<interval_t> iints;
+    std::set<uint64_t>::const_iterator aa = isegs.begin();
+    while ( aa != isegs.end() )
+      {
+	interval_t i( *aa , *aa + seg[ *aa ] );
+	iints.insert( i );
+	++aa;
+      }
+    
+    // initial offset for this indiv
+    uint64_t offset = multi_indiv ? indiv_segs[ indiv ].start : 0LLU ; 
+    
+    // calc total duration from 0 to last segment end below
+    uint64_t last_offset = 0;
+
+    
+    // create initial blackout map (0-based)
+    // only defined if >1 segment
+    // for N segments, we should now have N-1 blackout regions
+    //  these will a) be added to by any new placed events,
+    //             b) used to construct a list of valid placements give span of 't'
+    
+    std::set<interval_t> blackouts0;
+    
+    if ( isegs.size() > 1 )
+      {
+	std::set<uint64_t>::const_iterator ii = isegs.begin();
+	// S111   S2222  S3333 
+	//    |   |
+	//  prior p
+	
+	// start of first seg + length of first seg = start of first black out
+	uint64_t prior = *ii + seg[ *ii ] ;
+	
+	// go to start of next segment
+	++ii;
+	
+	while ( ii != isegs.end() )
+	  {
+	    // 0-based start of next segment / end of this blackout
+	    uint64_t p = *ii ; 
+	    
+	    // add to the list
+	    //std::cout << " initializing blackouts with " << prior << " " << p << "\n";
+	    blackouts0.insert( interval_t( prior , p ) ) ;
+
+	    // update for next time - end of this segment = start of next blackout
+	    prior = *ii + seg[ *ii ];
+
+	    // update last time point 
+	    last_offset = prior;
+	    
+	    ++ii;
+	  }
+      }
+    else
+      last_offset = *isegs.begin() + seg[ *isegs.begin() ];
+
+    //    std::cout << " last_offset -> " << last_offset << "\n";
+    
+
+    // iterate over events in order of alignment groups;
+    //  contruct blackouts for each group;  when encountering a new group, wipe
+    //  blackout map to original (based only on indiv/background = blackouts0 )
+    // this way, only evens w/in the same alignment group cannot be placed on
+    // top of each other
+
+    std::map<int,std::set<std::string> >::const_iterator g2sets = group_global_alignment.begin();
+    while ( g2sets != group_global_alignment.end() )
+      {
+	
+	
+	// events for this indiv
+	const std::map<pinstance_t,std::set<pinstance_t> > & ievents_all = kk->second;
+
+	// construct subset of these ievents[] which only includes events from the current group
+	std::map<pinstance_t,std::set<pinstance_t> > ievents;
+	std::map<pinstance_t,std::set<pinstance_t> >::const_iterator vv = ievents_all.begin();
+	while ( vv != ievents_all.end() )
+	  {
+	    if ( g2sets->second.find( vv->first.name ) != g2sets->second.end() )
+	      ievents[ vv->first ] = vv->second;
+	    ++vv;
+	  }
+
+	// reset the blackouts to default, i.e. fresh for this alignment group
+	std::set<interval_t> blackouts = blackouts0;
+	
+	// randomize order in which we pick events to permute
+	const int nev = ievents.size();
+
+	// list events for easy access
+	std::vector<pinstance_t> pidx;
+	std::map<pinstance_t,std::set<pinstance_t> >::const_iterator ff = ievents.begin();
+	while ( ff != ievents.end() ) { pidx.push_back( ff->first ); ++ff; } 
+    
+	// also idx as an int
+	std::vector<int> idx( nev );
+
+	// randomize event picks
+	CRandom::random_draw( idx );
+	
+	// track which events have already been moved
+	std::set<pinstance_t> moved;    
+	
+	// randomly place each event (+friends) in the above (random) order
+	for (int e=0; e<nev; e++)
+	  {
+	    
+	    // locate the event to permute
+	    pinstance_t & fidx = pidx[ idx[e] ];
+	    
+	    // all ready done?	
+	    if ( moved.find( fidx ) != moved.end() )
+	      continue;
+	    
+	    // make friends - some original friends may have already been
+	    // moved (by another index, as this is not a fully transitive
+	    // process)
+	    
+	    const std::set<pinstance_t> & oldfriends = ievents.at( fidx );
+	    
+	    std::set<pinstance_t> friends;
+	    std::set<pinstance_t>::const_iterator ff = oldfriends.begin();
+	    while ( ff != oldfriends.end() )
+	      {
+		if ( moved.find( *ff ) == moved.end() )
+		  friends.insert( *ff );
+		++ff;
+	      }
+	    
+	    
+	    // total interval spanned by index and all true friends
+	    
+	    interval_t span = event2neighbourhood.at( indiv ).at( fidx );
+	    uint64_t span_tp = span.duration();
+	    
+	    // given the current blackout map and span_tp, create a list of possible
+	    // potential placements = places --> place-segement start
+	    // but also need to track 'original' segment start (i.e. place-segments will be
+	    // created by adding new events -> new gaps -> new place-segments
+	    
+	    //  SEGMENT1---------------   SEGMENT2-----------------
+	    //            |placed|
+	    
+	    //  a)
+	    //  P1--------       P2----   P3-----------------------
+	    
+	    //  b) becomes:
+	    //  P1-------- P2----P3-----------------------
+	    
+	    //  P1,P2,P3 --> point back to start positions in a)
+	    //  but also we want the original SEGMENT the event belongs to
+	    //   i.e P1 == P2 --> S1
+	    //       P3       --> S2
+	    //  but we'll calculate this when needed below, rather than try to track here
+	    
+	    std::map<interval_t,uint64_t> places; 
+	    
+	    // start at first segment
+	    uint64_t place0 = *isegs.begin();
+	    
+	    // get aggregate length
+	    uint64_t totr = 0LLU;
+	    
+	    uint64_t max_dur = 0LLU;
+	    
+	    std::set<interval_t>::const_iterator bb = blackouts.begin();
+	    while ( bb != blackouts.end() )
+	      {
+		
+		uint64_t place1 = bb->start;
+		
+		if ( place0 >= place1 ) Helper::halt( "internal error in creating the blackout list" );
+		
+		uint64_t dur = place1 - place0 ;
+		
+		// duration sufficient?
+		// this will also ensure that if the indiv interval starts in
+		// a blackout, then this segment will not be added
+		// nb. contiguous regions should not be merged during eval(), i.e.
+		// so should be okay to allow the (unlikely) event that two indpendent
+		// regions are permuted to be completely contiguous - they will still
+		// count as two separate events
+		
+		//if ( ( dur - span_tp ) > max_dur ) max_dur = dur - span_tp ;
+		
+		if ( dur >= span_tp )
+		  {
+		    // add interval, adter reducing by span_tp, and track the start point
+		    places[ interval_t( totr , totr + dur - span_tp ) ] = place0; 
+		    // update latest
+		    totr += dur - span_tp ;				
+		  }
+		
+		// update for the next potential
+		place0 = bb->stop;
+		
+		++bb;
+	      }
+	    
+	    // need to add final segment?	
+	    uint64_t place1 = last_offset;
+	    //if ( place0 > place1 ) std::cout <<	"HAH2 MAJOR BLUNDER!\n";
+	    
+	    uint64_t dur = place1 - place0;
+	    //if ( ( dur - span_tp ) > max_dur ) max_dur = dur - span_tp ;
+	    if ( dur >= span_tp )
+	      {
+		places[ interval_t( totr , totr + dur - span_tp ) ] = place0;
+		totr += dur - span_tp;	    
+	      }
+	    
+	    //	std::cout << " MAX dur = " << max_dur * globals::tp_duration << "\n";
+	    
+	    if ( debug_mode )
+	      {
+		std::cout << " verbose----- event " << e << "\n";
+		std::cout << "isegs\n";
+		
+		std::set<uint64_t>::const_iterator ii = isegs.begin();
+		while ( ii != isegs.end() )
+		  {
+		    std::cout << " " << *ii << " (dur " << seg[ *ii ] << ")\n";
+		    ++ii;
+		  }
+		
+		std::cout << " blackouts\n";
+		std::set<interval_t>::const_iterator bb = blackouts.begin();
+		while ( bb != blackouts.end() )
+		  {
+		    std::cout << "  " << bb->as_string() << "\n";
+		    ++bb;
+		  }
+		
+		std::cout << "span " << span.as_string() << " " << span.duration_sec() << "\n";
+		
+		std::cout << "places\n";
+		std::map<interval_t,uint64_t>::const_iterator pp = places.begin();
+		while ( pp != places.end() )
+		  {
+		    std::cout << " " << pp->first.as_string() << " --> " << pp->second << "\n";
+		    ++pp;
+		  }
+		std::cout << "\n";
+	      }
+	    
+
+	    
+	    //
+	    // now find a placement 0 .. totr
+	    //
+	    
+	    // get rr which is 0 .. totr in places[] space	
+	    uint64_t rr = CRandom::rand( totr ) ;
+	    if ( rr == totr ) --rr;
+	    //std::cout << " picked rr = " << rr << " , with totr = " << totr << "\n";
+	    
+	    // get actual time offset (in tp from 'offset', i.e. t==0 for this person)
+	    uint64_t pp = 0LLU;
+	    
+	    // place-segment start
+	    uint64_t place_segstart = 0LLU;
+	    
+	    // nb. could speed this up...
+	    std::map<interval_t,uint64_t>::const_iterator qq = places.begin();
+	    //std::cout << "  considering " << places.size() << " places\n";
+	    while ( qq != places.end() )
+	      {
+		//std::cout << " qq->first.start / stop = " << qq->first.start << " " << qq->first.stop << "\n";
+		
+		if ( rr >= qq->first.start  && rr < qq->first.stop )
+		  {
+		    // 0 1 2 3 4 5 6 7 8 9 [10]		 
+		    uint64_t df = rr - qq->first.start ;
+		    
+		    // std::cout << "located places- place interval " << qq->first.as_string() << " points to "
+		    // 	  << qq->second << " as true segment start, with offset df = " << df << "\n";
+		    
+		    // set the point: this should /always/  work...
+		    pp = qq->second + df; 
+		    
+		    //		std::cout << " setting pp = " << pp << "\n";
+		    
+		    // get place-segment start 
+		    place_segstart = qq->second;
+		    
+		    break;
+		  }
+		++qq;
+	      }
+	    
+	    // get the original segment start that this place-segment starts in
+	    //  i.e. this gets us back to the original events[] keying
+	    
+	    uint64_t segstart;
+	    
+	    if ( ! annotate_t::get_segment_start( iints , place_segstart , &segstart ) )
+	      Helper::halt( "internal error from annotate_t::get_segment_start()" );
+	    
+	    // std::cout << "  placing event at pp = " << fidx.interval << " " << pp << "; "
+	    // 	  << " segstart = " << segstart << "  from " << place_segstart << "\n";
+	    
+	    //
+	    // track this these events have been moved
+	    //
+	    
+	    // track index
+	    // and build up the map
+	    moved.insert( fidx );
+	    
+	    // new position : pp is start of new span
+	    // thus also add the offset from span start to the event of interest
+	    //   start = pp + ( fidx.interval.start - span.start )
+	    //   end   = start + fidx.interval.duration
+	    
+	    uint64_t new_start = pp + ( fidx.interval.start - span.start );
+	    uint64_t new_stop  = new_start + fidx.interval.duration();
+	    interval_t new_interval = interval_t( new_start , new_stop );
+	    events[ segstart ][ fidx.name ].insert( new_interval );
+	    
+	    //	std::cout << " ADDING A INDEX... " << fidx.interval.as_string() << " --> " << new_interval.as_string() << "\n";
+	
+	    // & any friends that come along for the ride
+	    std::set<pinstance_t>::const_iterator gg = friends.begin();
+	    while ( gg != friends.end() )
+	      {
+		moved.insert( *gg );
+
+		// as above, need to consider local offset relative to start of span
+		// (which pp now places)
+		//std::cout << "  ++++ A FRIEND " << gg->interval.as_string() << "\n";
+		uint64_t new_start = pp + ( gg->interval.start - span.start );
+		uint64_t new_stop  = new_start + gg->interval.duration();
+		events[ segstart ][ gg->name ].insert( interval_t( new_start , new_stop ) );
+		
+		++gg;
+	      }
+	    
+
+	    //
+	    // Update the blackouts list to include placed event as a new gap
+	    //
+	    
+	    // new span
+	    uint64_t new_span_start = pp ;
+	    uint64_t new_span_stop  = pp + span.duration();
+	    blackouts.insert( interval_t( new_span_start , new_span_stop ) );
+	    
+	    // next index event
+	  }
+	
+	// next alignent-group of annots
+	++g2sets;
+      }
+    
+    // next indiv
+    ++kk;
+    }
+  
+
+  // std::cout << "\n\n---------- FINAL VIEW ---------------\n\n";
+  // view();
+       
+}
+
+  
 annotate_stats_t annotate_t::eval()
 {
-  // main task: aggregate overlap stats in 'r'
-  annotate_stats_t r;
 
+  // main task: aggregate overlap stats in 'r'
+
+  annotate_stats_t r;
+  
   // secondary: optionally (only w/ true data) output new
   // seed annotations (if 'make_anew' set)
 
@@ -1498,7 +2576,9 @@ annotate_stats_t annotate_t::eval()
 	  // i.e. keep contiguous annots 'as is' ;  this should not really matter,
 	  // but it will avoid a possible edge case where annots start and end at
 	  // the edge of the region -- when wrapped, these two would be merged
-	  // and so this would change the overall number of annots.
+	  // and so this would change the overall number of annots.  Also, will work
+	  // better with event-permutation, where in theory two events could be placed
+	  // right next to each other
 	  
 	  const bool flatten_mode = false;
 	  
@@ -1550,6 +2630,39 @@ annotate_stats_t annotate_t::eval()
 	      // next annot
 	      ++bb;
 	    }
+
+	  //
+	  // consider any non-segment markers
+	  //
+
+	  std::set<std::string>::const_iterator mm = mannots.begin();
+	  while ( mm != mannots.end() )
+	    {
+	      
+	      // should not happen, but skip any self comparison
+	      if ( *aa == *mm ) { ++mm; continue; }
+
+	      // markers do not have channel information, (perhaps can change in future)
+	      // but for now no need to check the 'same_channel()' test
+
+	      // the offset for this seed segment can be used to figure out the
+	      // indiv/bin for
+	      
+	      int indiv = multi_indiv ? indiv_segs[ seg2indiv[ offset ] ].start : 0 ; 
+
+	      // get the markers
+	      const std::set<interval_t> & mrk = markers[ indiv ][ *mm ];
+	      
+	      // calculate stats - can use the same seed_annot_stats()
+	      // but swap out window_sec first (then replace)
+	      double orig_window_sec = window_sec;
+	      window_sec = marker_window_sec;
+	      seed_annot_stats( a , *aa ,  mrk , *mm , offset , &r );
+	      window_sec = orig_window_sec;
+	      
+	      ++mm;
+	    }
+	    	  
 	  
 	  // next seed
 	  ++aa;
@@ -1585,6 +2698,84 @@ annotate_stats_t annotate_t::eval()
   return r;
   
 }
+
+
+void annotate_t::add_contrasts( annotate_stats_t * r )
+{
+
+  // contrast=SP11-SO|SP15,SO
+  // initially, only modify nsa[ a ][ b ]
+  
+  //          seed,annot|new-seed,annot
+  //          seed,annot|seed,new-annot
+  //          seed,seed2|seed,new-seed2
+
+  //  logger << "  attempting to add " << contrasts.size() << " contrasts\n";
+  for (int i=0; i<contrasts.size(); i++)
+    {
+
+      annot_contrast_t c = contrasts[i];
+
+      // search on adist[][]
+      // then make contrasts for adist, sdist and nsa
+      
+      //std::cout << " c " << c.a1 << " " << c.b1 << " ----> " << c.a2 << " " << c.b2 << "\n";
+      //std::cout << " sz " << r->nsa.size() << "\n";
+      // std::map<std::string,std::map<std::string,double> >::const_iterator qq = r->nsa.begin();
+      // while ( qq != r->nsa.end() ) { std::cout << " ---> " << qq->first << "\n"; ++qq ; } 
+	    
+      // do we find a1 and b1?
+      std::map<std::string,std::map<std::string,double> >::const_iterator nn = r->adist.find( c.a1 );
+      
+      if ( nn == r->adist.end() )
+	continue;
+
+      // std::map<std::string,double>::const_iterator qq2 = nn->second.begin();
+      // while ( qq2 != nn->second.end() ) { std::cout << " ---> " << qq2->first << "\n"; ++qq2 ; }
+      
+      if ( nn->second.find( c.b1 ) == nn->second.end() )
+	continue;
+
+      std::map<std::string,std::map<std::string,double> >::const_iterator mm = r->adist.find( c.a2 );
+
+      if ( mm == r->adist.end() )
+	continue;
+      
+      // qq2 = nn->second.begin();
+      // while ( qq2 != nn->second.end() ) { std::cout << " ---> " << qq2->first << "\n"; ++qq2 ; }
+
+      if ( mm->second.find( c.b2 ) == mm->second.end() )
+	continue;
+
+      // make new scores - need denom added here to get diff in average scores
+
+      double sc_adist = r->adist[ c.a1 ][ c.b1 ] / ( r->ndist[ c.a1 ][ c.b1 ] == 0 ? 1 : r->ndist[ c.a1 ][ c.b1 ] )
+	- r->adist[ c.a2 ][ c.b2 ] / ( r->ndist[ c.a2 ][ c.b2 ] == 0 ? 1 : r->ndist[ c.a2 ][ c.b2 ] ) ;
+
+      double sc_sdist = r->sdist[ c.a1 ][ c.b1 ] / ( r->ndist[ c.a1 ][ c.b1 ] == 0 ? 1 : r->ndist[ c.a1 ][ c.b1 ] )
+	- r->sdist[ c.a2 ][ c.b2 ] / ( r->ndist[ c.a2 ][ c.b2 ] == 0 ? 1 : r->ndist[ c.a2 ][ c.b2 ] ) ;
+      
+      //double sc_sdist = r->sdist[ c.a1 ][ c.b1 ] - r->sdist[ c.a2 ][ c.b2 ];
+
+      double sc_nsa   = r->nsa[ c.a1 ][ c.b1 ]   - r->nsa[ c.a2 ][ c.b2 ];
+           
+      const std::string l1 = c.a1 == c.a2 ? c.a1 : c.a1 + "-" + c.a2;
+      const std::string l2 = c.b1 == c.b2 ? c.b1 : c.b1 + "-" + c.b2;
+
+      //      std::cout << " CONTRASTS = " << l1 << " " << l2 << " -- " << sc_adist << " " << sc_sdist << " " << sc_nsa << "\n";
+      
+      // make a new label and store
+      r->adist[ l1 ][ l2 ] = sc_adist;
+      r->sdist[ l1 ][ l2 ] = sc_sdist;
+      r->nsa[ l1 ][ l2 ] = sc_nsa;
+
+      // need to set ndist to 1.0 - i.e. has no meaning/effect, but means that distance measures are seen:
+      r->ndist[ l1 ][ l2 ] = 1.0;
+      
+    }
+
+}
+
 
 
 void annotate_t::output()
@@ -1683,6 +2874,9 @@ void annotate_t::output()
   std::map<std::string,std::map<std::string,double> >::const_iterator sa = absd_obs.begin();
   while ( sa != absd_obs.end() )
     {
+
+      //      std::cout << " sa obs2 " << sa->first << "\n";
+      
       writer.level( sa->first , "SEED" );
       const std::map<std::string,double> & p = sa->second;
       std::map<std::string,double>::const_iterator pp = p.begin();
@@ -1709,6 +2903,10 @@ void annotate_t::output()
 	    }
 	  	  
 	  // seed-annot distances
+	  // if ( absd_obs.find( sa->first  ) == absd_obs.end() )
+	  //   std::cout << " COULD NOT FIND " << sa->first << " in absd_obs " << "\n";
+	  // if ( absd_exp.find( sa->first ) == absd_exp.end() )
+	  //   std::cout << " COULD NOT FIND " << sa->first << " in absd_exp " << "\n";
 	  
 	  writer.value( "D1_OBS" , absd_obs[ sa->first ][ pp->first ]  );
 	  writer.value( "D_N" , dn_obs[  sa->first ][ pp->first ]  );
@@ -2053,10 +3251,16 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  
 	  // track only -1 or +1 for 'before' or 'after'
 	  // overlap == 0 here, so add that qualifier
-	  if ( ! overlap ) 
-	    r->sdist[ astr ][ bstr ] += dist > 0 ? +1 : -1 ;
-	  
-	  r->ndist[ astr ][ bstr ] += 1; // denom for both the above
+	  if ( ! overlap )
+	    {
+
+	      if ( d2_signed )  // reduce to -1/+1
+		r->sdist[ astr ][ bstr ] += dist > 0 ? +1 : -1 ;
+	      else
+		r->sdist[ astr ][ bstr ] += dist ;
+	      
+	    }
+	  r->ndist[ astr ][ bstr ] += 1; // denom for both the above (D1+D2)
 	}
       
       // are we tracking hits
@@ -2102,10 +3306,60 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // next seed annot
       ++aa;
     }
-  
-  
+
 }
 
+bool annotate_t::overlaps_flattened_set(  const interval_t & a , const std::set<interval_t> & b )
+{
+
+  // std::cout << " qry = " << a << "\n";
+  // std::set<interval_t>::const_iterator bb1 = b.begin();
+  // while ( bb1 != b.end() )
+  //   {
+  //     std::cout << " --> " << *bb1 << "\n";
+  //     ++bb1;
+  //   }
+
+	    
+  
+  // this assumes that 'b' is flattened already
+
+  // nothing to overlap?
+  if ( b.size() == 0 ) return false;
+  
+  // find the first annot not before (at or after) the seed
+  std::set<interval_t>::const_iterator bb = b.lower_bound( a );
+
+
+  // does first take overlap seed?
+      
+  if ( bb != b.end() && bb->overlaps( a ) )
+    {
+      // we're done, found complete overlap
+      return true;      
+    }
+  else // it must come afterwards
+    {
+      
+      // step back, if we can - is there a closer annot /before/ the seed?
+      if ( bb != b.begin() )
+	{
+	  
+	  --bb;
+	  
+	  // nb - this may overlap seed
+	  // i.e. starts before, but ends after seed-start, and so
+	  //  was not captured by the lower_bound(); as b is flattened,
+	  // only need to step back once
+	  
+	  if ( bb->stop > a.start )
+	    return true;
+	  else
+	    return false;
+	}
+    } 
+  return false;
+}
 
 
 std::set<interval_t> annotate_t::flatten( const std::set<interval_t> & x , const bool join_neighbours )
@@ -2250,7 +3504,7 @@ void annotate_t::observed( const annotate_stats_t & s )
   while ( pp != s.psa.end() )
     {
       // std::cout << " prop obs " << pp->first << " " << pp->second.size() << " " << s.ns.find(  pp->first )->second << " = "
-      // 		<< pp->second.size() / s.ns.find(  pp->first )->second << "\n";
+      //  		<< pp->second.size() / s.ns.find(  pp->first )->second << "\n";
       prop_obs[ pp->first ] = pp->second.size() / s.ns.find(  pp->first )->second;
       ++pp;
     }
@@ -2258,6 +3512,13 @@ void annotate_t::observed( const annotate_stats_t & s )
   // absolute distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   absd_obs = s.adist;
   
+  // auto sa1 = absd_obs.begin();
+  // while ( sa1 != absd_obs.end() )
+  //   {
+  //     std::cout << " SA1 obs " << sa1->first << "\n";
+  //     ++sa1;
+  //    }
+
   // signed distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   sgnd_obs = s.sdist;
   
@@ -2265,6 +3526,7 @@ void annotate_t::observed( const annotate_stats_t & s )
   std::map<std::string,std::map<std::string,double> >::const_iterator dd = s.ndist.begin();
   while ( dd != s.ndist.end() )
     {
+      //      std::cout << " obs annot = " << dd->first << "\n";
       const std::map<std::string,double> & e = dd->second;
       std::map<std::string,double>::const_iterator ee = e.begin();
       while ( ee != e.end() )
@@ -2285,9 +3547,11 @@ void annotate_t::observed( const annotate_stats_t & s )
 
 void annotate_t::build_null( const annotate_stats_t & s )
 {
+
   // consider only the observed configurations
-  
+
   // seed-seed group overlap
+  //std::map<std::string,double>::const_iterator ss = s.psa.begin();
   std::map<std::string,double>::const_iterator ss = obs.begin();
   while ( ss != obs.end() )
     {
@@ -2312,7 +3576,7 @@ void annotate_t::build_null( const annotate_stats_t & s )
       // should always be okay, but check just in case some weirdness
       const bool is_seen = s.nsa.find( sa->first ) != s.nsa.end();
       if ( ! is_seen ) { ++sa; continue; }
-      
+
       const std::map<std::string,double> & p = sa->second;
       const std::map<std::string,double> & pe = s.nsa.find( sa->first )->second;
       
@@ -2363,7 +3627,7 @@ void annotate_t::build_null( const annotate_stats_t & s )
 
       const bool is_seen = s.ndist.find( sa->first ) != s.ndist.end();
       if ( ! is_seen ) { ++sa; continue; }
-      
+
       const std::map<std::string,double> & p = sa->second;
       const std::map<std::string,double> & pe_abs = s.adist.find( sa->first )->second;
       const std::map<std::string,double> & pe_sgn = s.sdist.find( sa->first )->second;
@@ -2528,9 +3792,9 @@ void annotate_t::proc_chlist( const std::string & s , const bool inc )
   std::vector<std::string> tok = Helper::parse( s , "," );
   for (int i=0; i<tok.size(); i++)
     {
-      // expect annot:ch
-      std::vector<std::string> tok2 = Helper::parse( tok[i] , ":" );
-      if ( tok2.size() != 2 ) Helper::halt( "expecting annot:ch format for chs-inc and chs-exc" );
+      // expect annot~ch or annot|ch
+      std::vector<std::string> tok2 = Helper::parse( tok[i] , "~|" );
+      if ( tok2.size() != 2 ) Helper::halt( "expecting annot|ch or annot~ch format for chs-inc and chs-exc" );
 
       if ( inc ) chs_inc[ tok2[0] ].insert( tok2[1] );
       else chs_exc[ tok2[0] ].insert( tok2[1] );      
@@ -2624,12 +3888,118 @@ void annotate_t::view()
             {
 	      std::cout << "region = " << rr->first << "\t"
 			<< "annot = " << qq->first << "\t"
-			<< "event = " << ii->as_string() << "\n";
+			<< "interval = " << ii->as_string() << "\t"
+			<< "dur = " << ii->duration_sec() << "\n";
               ++ii;
             }
           ++qq;
         }
       ++rr;
     }
+
+  
+  rr = markers.begin();
+  while ( rr != markers.end() )
+    {
+      const std::map<std::string,std::set<interval_t> > & annots = rr->second;
+      std::map<std::string,std::set<interval_t> >::const_iterator qq = annots.begin();
+      while ( qq != annots.end() )
+        {
+          const std::set<interval_t> & ints = qq->second;
+          std::set<interval_t>::const_iterator ii = ints.begin();
+          while ( ii != ints.end() )
+            {
+	      std::cout << "region = " << rr->first << "\t"
+			<< "marker = " << qq->first << "\t"
+			<< "interval = " << ii->as_string() << "\t"
+			<< "dur = " << ii->duration_sec() << "\n";
+              ++ii;
+            }
+          ++qq;
+        }
+      ++rr;
+    }
+
   std::cout << "\n";
+  
+}
+
+
+
+std::set<std::string> annotate_t::root_match( const std::string & s , const std::vector<std::string> & names )
+{
+  std::set<std::string> ss;
+  ss.insert( s );
+  return root_match( ss , names );
+}
+
+std::set<std::string> annotate_t::root_match( const std::set<std::string> & s , const std::vector<std::string> & names )
+{
+  std::set<std::string> r;
+
+  std::set<std::string>::const_iterator ss = s.begin();
+  while ( ss != s.end() )
+    {
+      if ( ss->size() == 0 ) { ++ss; continue; }
+
+      // vanilla?
+      if ( (*ss)[ ss->size() - 1 ] != '*' )
+	{
+	  r.insert( *ss );
+	}
+      else
+	{
+	  // ignore if only a *
+	  if ( ss->size() == 1 ) { ++ss; continue; }
+
+	  const std::string root = ss->substr( 0 , ss->size() - 1 );
+	  const int rootsize = root.size();
+	  
+	  for (int i=0; i<names.size(); i++)
+	    {
+	      if ( names[i].size() < rootsize ) continue;
+	      if ( names[i].substr( 0 , rootsize ) == root )
+		r.insert( names[i] );
+	    }	  
+	}
+      
+      ++ss;
+    }
+  return r;
+}
+
+
+bool annotate_t::get_segment_start( const std::set<interval_t> & y , uint64_t x , uint64_t * start )
+{
+  if ( y.size() == 0 ) return false;
+  
+  // assumption: y is non-overlapping segments;
+  // return start of segment in which x falls
+  interval_t xx( x , x );
+
+  //An iterator to the the first element in the container which is considered to go after val, or set::end if no elements are considered to go after val.
+  std::set<interval_t>::const_iterator ll = y.upper_bound( xx );
+  
+  if ( ll != y.end() )
+    {
+      if ( x >= ll->start && x < ll->stop )
+	{
+	  *start = ll->start;
+	  return true;
+	}
+    }
+
+  if ( ll == y.begin() ) return false;
+  
+  // else wind back
+  --ll;
+
+  if ( x >= ll->start && x < ll->stop )
+    {
+      *start = ll->start;
+      return true;
+    }
+
+  return false;
+    
 }

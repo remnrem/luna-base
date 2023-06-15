@@ -33,6 +33,15 @@
 
 typedef std::map<uint64_t,std::map<std::string,std::set<interval_t> > > interval_map_t;
 
+
+struct annot_contrast_t {
+  annot_contrast_t( const std::string & a1, const std::string & b1,
+		    const std::string & a2, const std::string & b2 ) 
+    : a1(a1), b1(b1), a2(a2), b2(b2) { } 
+  std::string a1, b1;
+  std::string a2, b2;
+};
+
 struct named_interval_t {
   uint64_t offset;
   interval_t i;  
@@ -93,8 +102,32 @@ struct annotate_stats_t {
 };
 
 
-struct annotate_t {
+// for event-permutation, use this alternate representation of events
+// (which takes their segment (and therefore individual) and label as
+// well as interval
+
+struct pinstance_t {
+
+  pinstance_t( const std::string & name ,
+	       const interval_t & interval ,
+	       const uint64_t seg )
+    : name(name), interval(interval), seg(seg)
+  { }
   
+  std::string name;
+  interval_t interval;
+  uint64_t seg;
+  
+  bool operator<( const pinstance_t & rhs ) const
+  {
+    if ( interval < rhs.interval ) return true;
+    if ( rhs.interval < interval ) return false;
+    return name < rhs.name;
+  }
+};
+
+struct annotate_t {
+
   // initiate from a single attached EDF/timeline 
   annotate_t( edf_t & edf , param_t & param );
   
@@ -112,6 +145,10 @@ struct annotate_t {
   annotate_stats_t eval();
 
   void shuffle();
+
+  void init_event_permutation();
+
+  void event_permutation();
   
   void output();
   
@@ -128,9 +165,13 @@ struct annotate_t {
   
   double window_sec;
 
+  double marker_window_sec; // allowed to be different for seed-marker relations
+  
   bool include_overlap_in_dist;
   
   double overlap_th;
+
+  bool d2_signed;
   
   bool pool_channels;
 
@@ -141,9 +182,35 @@ struct annotate_t {
   bool shuffle_annots;
 
   double max_shuffle_sec;
-  
+
   bool constrained_shuffle_dur;
 
+
+  // event-level permutation
+  //  (including handling multi-indiv case, i.e. block permute only within person)
+  //   does provide support for aligned annots
+  
+  bool event_perm;
+  double event_neighbourhood_sec;
+
+  bool multi_indiv;
+
+  // populated in the multi-indiv case
+  std::vector<interval_t> indiv_segs; // for multi-indiv case
+
+  // indiv-> start of each segment for that indiv.
+  std::map<int,std::set<uint64_t> > indiv2segs;
+  std::map<uint64_t,int> seg2indiv;
+
+  // indiv -> under aligned permutations, identify local friends (will be permuted together)
+  std::map<int,std::map<pinstance_t,std::set<pinstance_t> > > event2friends;
+  std::map<int,std::map<pinstance_t,interval_t> > event2neighbourhood;;
+  
+    
+  // misc options
+
+  std::vector<annot_contrast_t> contrasts;
+  
   bool do_pileup;
   
   std::map<std::string,std::string> label2channel;
@@ -161,7 +228,19 @@ struct annotate_t {
   }
   
   std::map<std::string,std::set<std::string> > aligned_permutes;
+
+  // populated to help pinstance_t to help event-perm order perms by alignment group
+  static std::map<std::string,int> global_alignment_group;
+  static std::map<int,std::set<std::string> > group_global_alignment;
   
+  bool aligned( const std::string & a , const std::string & b ) const
+  {
+    std::map<std::string,std::set<std::string> >::const_iterator ii = aligned_permutes.find( a );
+    if ( ii == aligned_permutes.end() ) return false;
+    if ( ii->second.find( b ) == ii->second.end() ) return false;
+    return true;
+  }
+    
   bool ordered_groups;
   
   int nreps;
@@ -212,17 +291,38 @@ struct annotate_t {
   std::set<std::string> sachs; // Seed Annotation/CHannels
   std::set<std::string> achs; // All Annotation/CHannels
   std::map<std::string,std::pair<std::string,std::string> > achs_name_ch; // track originals
-  
+
+  //
   // main interval map
+  //
+
   //  segment(start-point) -> annot -> events
   interval_map_t events;
 
   // track originals (if using a constrained shuffle only, i.e. otherwise
   // we do not need to track these separately)
   interval_map_t observed_events;  
+
+  // for event permutation, keep original non-permutable event table too
+  interval_map_t fixed_events;
   
   // for each segment, the offset --> size (i.e. map elements to 0... size on reading)
   std::map<uint64_t,uint64_t> seg; // offset --> size 
+
+
+  //
+  // non-segment annots
+  //  - must be non-seeds, i.e. not permuted
+  //  - these might not even fall in a segment
+  //  - i.e. in which case, there could be no overlap
+  //  - but appropriate for time-until metrics
+  //  - e.g. sleep onset (0-duration time-point marker)
+
+  std::set<std::string> mannots;
+
+  interval_map_t markers;
+
+  bool has_markers;
   
   //
   // mask/breakpoints
@@ -285,6 +385,8 @@ struct annotate_t {
   std::map<std::string,std::map<std::string,double> > s2a_z;
   // helper function to do the mapping
   std::map<std::string,std::map<std::string,uint64_t> > s2a_proc( const std::map<named_interval_t,std::set<std::string> > & );
+
+  
   
   //
   // helpers
@@ -292,8 +394,16 @@ struct annotate_t {
 
   // merge overlapping annots
   // if join_neighbours, then contiguous intervals also merged
-  std::set<interval_t> flatten( const std::set<interval_t> & x , const bool join_neighbours = true );
+  static std::set<interval_t> flatten( const std::set<interval_t> & x , const bool join_neighbours = true );
 
+  static bool overlaps_flattened_set(  const interval_t & a , const std::set<interval_t> & b );
+
+  static std::set<std::string> root_match( const std::string & , const std::vector<std::string> & );
+
+  static std::set<std::string> root_match( const std::set<std::string> & , const std::vector<std::string> & );
+
+  static bool get_segment_start( const std::set<interval_t> & , uint64_t , uint64_t * );
+  
   // excise: return 'y' after excising 'x'
   std::set<interval_t> excise( const std::set<interval_t> & y , const std::set<interval_t> & x );
   
@@ -314,6 +424,9 @@ struct annotate_t {
 			 const std::set<interval_t> & b , const std::string & bstr ,
 			 uint64_t , 
 			 annotate_stats_t * r );
+
+  // add in contrasts effects
+  void add_contrasts( annotate_stats_t * r );
   
   // handle stats from orig/perms
   void observed( const annotate_stats_t & s ) ;

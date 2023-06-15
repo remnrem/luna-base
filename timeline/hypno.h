@@ -95,12 +95,17 @@ struct hypnogram_t
   void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
   void output( const bool verbose , const bool epoch_lvl_output ,
 	       const std::string & eannot = "" ,
-	       const std::string & annot_cycle = "" );
-
+	       const std::string & annot_prefix = "" ,
+	       const std::string & annot_suffix = "_" );
+  
+  void annotate( const std::string & annot_prefix , const std::string & suffix );
+	
+  
   // special case, if analysing a hypnogram with no EDF
   void fudge( double es, int ne );
 
   timeline_t * timeline;
+
   
   // sleep stage information
   std::vector<sleep_stage_t> stages;
@@ -110,6 +115,11 @@ struct hypnogram_t
   std::vector<double> epoch_start; // elapsed seconds
   std::vector<bool> epoch_gap; // this 'epoch' is actually a gap
 
+
+  // track elapsed stage values (for annots only)
+  std::map<std::string,std::vector<double> > elapsed_stg_sec;
+  std::map<std::string,std::vector<double> > elapsed_stg_rel;
+  
   // total epoch count
   int ne;  // total number of observed epochs (i.e. standard, from timeline)
   int ne_gaps; // epochs (ne) plus any extra gaps;
@@ -150,6 +160,15 @@ struct hypnogram_t
   clocktime_t clock_wake_time;
   clocktime_t clock_stop;
 
+  // also saved as tp (for annot output_
+  uint64_t tp_0_start;
+  uint64_t tp_1_lights_out;
+  uint64_t tp_2_sleep_onset;
+  uint64_t tp_3_sleep_midpoint;
+  uint64_t tp_4_final_wake;
+  uint64_t tp_5_lights_on;
+  uint64_t tp_6_stop;
+  
   // Epoch markers
   
   int first_sleep_epoch;    // (epoch)  

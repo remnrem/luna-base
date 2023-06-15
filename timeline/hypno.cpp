@@ -2404,10 +2404,504 @@ void hypnogram_t::calc_stats( const bool verbose )
 
 }
 
+
+void hypnogram_t::annotate( const std::string & annot_prefix , const std::string & suffix )
+{
+  
+  logger << "  creating hypnogram-derived annotations, with prefix " << annot_prefix << "\n";
+
+  // either nothing, or insert underscore if prefix specified
+  const std::string prefix = annot_prefix != "" ? annot_prefix + "_" : "" ;
+
+  // use annots in class:value format, so that one can split into class/instance IDs downstream as needed
+  // if make suffix == ':' then annotations will be split into class : instance IDs when loaded downstream
+  // by default, suffix is '_'
+ 
+  // all annotations start <prefix>_
+  
+  // NREMC cycle
+  //    number: hyp_cycle_1 hyp_cycle_2 ... 
+  //    mins (abs)   : hyp_cycle_m0_10 hyp_cycle_m10_20 ...
+  //    pct position (quinites) : hyp_cycle_q1 hyp_cycle_q2 ... hyp_cycle_q5
+  
+  // Bouts
+  //    if in a 5-min / 10-min bout
+  //    for stages N1, N2, N3, R, W, NR, S, WASO
+  //    annotaton labels:   hyp_bout5_N1   hyp_bout10_S  etc
+
+  // 0-duration mark-points
+  
+  // Transitions 
+  //    hyp_tr_W_NR   hyp_tr_W_NR  etc
+
+  // Time-points 
+  //   hyp_t0_start, hyp_t1_lights_off, hyp_t2_sleep_onset,
+  //   hyp_t3_sleep_midpoint, hyp_t4_final_wake, hyp_t5_lights_on, hyp_t6_stop
+
+  // Epoch-level annotations
+  //  WASO   waso
+  //   
+  
+  // Cumulative elapsed durations
+  //   Clock-time (by 24-hour) 
+  //     hyp_clock:20 hyp_clock:23 hyp_clock:00 etc
+  //   Elapsed time (hours) from sleep onset (1-baed counting)
+  //     hyp_elapsed:1hr hyp_elapsed:2hr ...
+  //   Elapsed stage : hours or quintiles
+  //     hyp_n1:1hr hyp_n1:2hr ...
+  //     hyp_n1:q1  hyp_n1:q2 .... 
+  //     for : E_N1 E_N2 E_N3 E_REM E_SLEEP E_WAKE E_WASO
+
+  // Misc
+
+  // Ascending/descending N2 ( Y / N /not sure)
+  //   hyp_N2_asc hyp_N2_dsc
+
+  //
+  // NREM cycles
+  //
+
+  std::map<int,double>::iterator cc = nremc_duration.begin();
+  while ( cc != nremc_duration.end() )
+    {      
+
+      // cc->first  : 1-based cycle #
+      // nremc_start_epoch[ cc->first ] : 1-based epoch start
+      // nremc_epoch_duration[ cc->first ] : cycle length ( in epochs )
+      
+      // NREMC number
+      std::string cn = Helper::int2str( cc->first );
+
+      // annot class
+      annot_t * a = timeline->annotations.add( prefix + "cycle" + suffix + "n" + cn );
+      
+      // epoch number start (adjust for 1-base encoding)
+      int start_epoch = nremc_start_epoch[ cc->first ] - 1;
+      
+      // length of cycle (in epochs) , minus 1 as we'll add this to stop of first
+      int length = nremc_epoch_duration[ cc->first ] - 1;
+      
+      // get interval
+      interval_t interval = timeline->epoch( start_epoch );
+      
+      // adjust end-point -> convert to time-points
+      interval.stop += (uint64_t)(timeline->epoch_length_tp * length ) ;
+      
+      // add annotation
+      instance_t * instance = a->add( "." , interval , "." );
+
+      // quintiles of position
+      uint64_t len = interval.duration(); 
+      uint64_t q5  = len / 5LLU ;
+      for (int q=0; q<5; q++)
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "cycle" + suffix + "q" + Helper::int2str( q+1 ) );
+	  interval_t qinterval( interval.start + q5 * q , interval.start + q5 * (q+1) );
+	  instance_t * instance = a->add( "." , qinterval , "." );
+	}
+
+      // mins (10-min blocks) 
+      uint64_t min10 = 10 * 60 * globals::tp_1sec ; 
+      int mc = 0;
+      for (uint64_t m=0; m < len; m += min10 )
+	{
+	  if ( m + min10 <= len )
+	    {	      
+	      annot_t * a = timeline->annotations.add( prefix + "cycle" + suffix + "m" + Helper::int2str( mc ) + "_" + Helper::int2str( mc+10)  );
+	      interval_t minterval( interval.start + m , interval.start + m + min10 );
+	      instance_t * instance = a->add( "." , minterval , "." );
+	      mc += 10;
+	    }
+	}
+            
+      ++cc;
+    }
+
+  //
+  // Bouts
+  //
+  //    annotaton labels:   hyp_bout5:N1   hyp_bout10:S  etc
+
+  std::set<bout_t>::const_iterator bb = bouts.begin();
+  while ( bb != bouts.end() )
+    {
+      const int e1 = epoch_n[ bb->start ] ;
+      const int e2 = epoch_n[ bb->stop ] ;
+
+      interval_t interval1 = timeline->epoch( e1 );
+      interval_t interval2 = timeline->epoch( e2 );
+      interval_t interval( interval1.start , interval2.stop );
+
+      // nb. NREM downcasting
+      std::string stg;
+      if ( bb->ss == NREM2 ) 
+	stg = "NR";
+      else
+	stg = globals::stage( bb->ss );
+
+      
+      double len = ( ( e2 - e1 + 1 ) * timeline->epoch_length() ) / 60.0 ;
+
+      if ( len >= 10 )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "bout10" + suffix + stg ) ;	  
+	  a->add( "." , interval , "." );
+	}
+      else if ( len >= 5 )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "bout05" + suffix + stg ) ;	  
+	  a->add( "." , interval , "." );	  
+	}
+      
+      ++bb;
+    }
+
+
+  //
+  // Clock-time & elapsed/cumulative stage times
+  //
+  
+  // 24-hr clocktime: 
+  //   hyp_clock:20 hyp_clock:23 hyp_clock:00 etc                                                                                                                
+  
+  // get initial 
+  int hr = clock_start.h;
+
+  // seconds until next hour (will always be integer s)
+  double secs2next = 60 * ( 60 - clock_start.m ) - clock_start.s;
+  uint64_t tp = secs2next * globals::tp_1sec ;  
+
+  // fixed 1 hour
+  const uint64_t hour_tp = 3600 * globals::tp_1sec ;
+      
+  // first interval (start to hour), may be fractional, as always starts at zero 
+  std::string hrstr = ( hr < 10 ? "0"	: "" ) + Helper::int2str( hr );
+  annot_t * ah1 = timeline->annotations.add( prefix + "clock" + suffix + hrstr );
+  ah1->add( "." , interval_t( 0 , tp ) , "." );
+
+  // move to next hour
+  ++hr;
+  
+  // continue w/ full hours
+  while ( tp < timeline->last_time_point_tp )
+    {      
+      std::string hrstr = ( hr < 10 ? "0" : "" ) + Helper::int2str( hr );      
+      annot_t * ah1 = timeline->annotations.add( prefix + "clock" + suffix + hrstr );
+      ah1->add( "." , interval_t( tp , tp + hour_tp ) , "." );
+      
+      // move to the next hour
+      ++hr;
+      if ( hr == 24 ) hr = 0;
+      tp += hour_tp;
+    }
+  
+  
+  //   Elapsed time (hours) from sleep onset (1-based counting)
+  //     hyp_elapsed_h1 hyp_elapsed_h2 ...                                                                                                                       
+  // reset hr to first (1-based counting)
+
+  hr = 1;
+  tp = 0; // start of record
+  
+  while ( tp < timeline->last_time_point_tp )
+    {
+      std::string hrstr = "h" + Helper::int2str( hr ) ;
+      annot_t * ah1 = timeline->annotations.add( prefix + "elapsed" + suffix + "T_" + hrstr );
+      ah1->add( "." , interval_t( tp , tp + hour_tp ) , "." );
+      // move to the next hour                                                                                                                                    
+      ++hr;
+      tp += hour_tp;
+    }
+
+
+  //   Elapsed stage : hours or quintiles
+  //     hyp_n1_h1  hyp_n1_h2 ...
+  //     hyp_n1_q1  hyp_n1_q2 ... hyp_n1_q5
+  //     for : N1 N2 N3 NR R S W WASO
+
+  // add annotation at epoch levels:
+  for (int e=0; e<ne; e++)
+    {
+      
+      // or epoch_n[] ?      
+      interval_t interval = timeline->epoch( e );
+      
+      bool is_wake = stages[e] == WAKE ;
+      bool is_waso = stages[e] == WAKE && e > first_sleep_epoch && e < final_wake_epoch ;
+      bool is_n1   = stages[e] == NREM1;
+      bool is_n2   = stages[e] == NREM2;
+      bool is_n3   = stages[e] == NREM3 || stages[e] == NREM4;
+      bool is_nr   = is_n1 || is_n2 || is_n3 ;
+      bool is_rem  = stages[e] == REM ;
+      bool is_sleep = is_nr || is_rem ;
+      
+      if ( is_wake )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "W" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "W_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "W" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "W_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+
+      if ( is_waso )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "WASO" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "WASO_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "WASO" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "WASO_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+
+      if ( is_sleep )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "S" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "S_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "S" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "S_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+
+      if ( is_n1 )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "N1" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "N1_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "N1" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "N1_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+
+      if ( is_n2 )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "N2" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "N2_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "N2" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "N2_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+
+      if ( is_n3 )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "N3" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "N3_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "N3" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "N3_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+      
+      if ( is_nr )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "NR" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "NR_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "NR" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "NR_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+
+      if ( is_rem )
+	{
+	  // abs
+	  double a = elapsed_stg_sec[ "R" ][ e ];
+	  int h = 1 + floor( a / 60.0 ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "R_h" + Helper::int2str( h ) ;
+	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  ah1->add( "." , interval , "." );
+
+	  // rel
+	  double r = elapsed_stg_rel[ "R" ][ e ];
+	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
+          alabel = prefix + "elapsed" + suffix + "R_q" + Helper::int2str( q ) ;
+          annot_t * ah2 = timeline->annotations.add( alabel );
+          ah2->add( "." , interval , "." );	 	  
+	}
+      
+      // next epoch
+    }
+  
+
+  
+  //
+  // Time points (0-dur events)
+  //
+  //   hyp_t0_start, hyp_t1_lights_off, hyp_t2_sleep_onset,
+  //   hyp_t3_sleep_midpoint, hyp_t4_final_wake, hyp_t5_lights_on, hyp_t6_stop
+
+  annot_t * a0 = timeline->annotations.add( prefix + "t0_start" );
+  a0->add( "." , interval_t( tp_0_start , tp_0_start ) , "." );
+
+  // std::cout << " tp_0_start = " << tp_0_start << "\n"
+  // 	    << " t1_lights_out = " << tp_1_lights_out << "\n"
+  // 	    << " t2_sleep_onset = " << tp_2_sleep_onset << "\n"
+  // 	    << " t3_sleep_midpoint = " << tp_3_sleep_midpoint << "\n"
+  // 	    << " t4_final_wake = " << tp_4_final_wake << "\n"
+  // 	    << " t5_lights_on = " << tp_5_lights_on << "\n"
+  // 	    << " t6_stop = " << tp_6_stop << "\n";
+  
+  annot_t * a1 = timeline->annotations.add( prefix + "t1_lights_out" );
+  a1->add( "." , interval_t( tp_1_lights_out , tp_1_lights_out ) , "." );
+  
+  
+  //   hyp_t3_sleep_midpoint, hyp_t4_final_wake, hyp_t5_lights_on, hyp_t6_stop                                                                 
+  
+  if ( tp_2_sleep_onset != tp_4_final_wake ) 
+    {
+
+      annot_t * a2 = timeline->annotations.add( prefix + "t2_sleep_onset" );
+      a2->add( "." , interval_t( tp_2_sleep_onset , tp_2_sleep_onset ) , "." );
+
+      annot_t * a3 = timeline->annotations.add( prefix + "t3_sleep_midpoint" );
+      a3->add( "." , interval_t( tp_3_sleep_midpoint , tp_3_sleep_midpoint ) , "." );
+
+      annot_t * a4 = timeline->annotations.add( prefix + "t4_final_wake" );
+      a4->add( "." , interval_t( tp_4_final_wake , tp_4_final_wake ) , "." );
+    }
+  
+  annot_t * a5 = timeline->annotations.add( prefix + "t5_lights_on" );
+  a5->add( "." , interval_t( tp_5_lights_on , tp_5_lights_on ) , "." );
+
+  annot_t * a6 = timeline->annotations.add( prefix + "t6_stop" );
+  a6->add( "." , interval_t( tp_6_stop , tp_6_stop ) , "." );
+  
+  
+  //
+  // Epoch level annotations:
+  //
+  
+  //
+  // Transitions: hyp_tr:W_NR   hyp_tr:W_NR  etc
+  // Ascending/descending N2: hyp_N2:asc hyp_N2:dsc
+  // WASO :waso
+  //
+
+  for (int e=0; e<ne; e++)
+    {
+
+      interval_t interval = timeline->epoch( e );
+      
+      // transition var of '1' means at *end* of that
+      // epoch there is a transition
+
+      const bool is_nr2r = nrem2rem[e] == 1;
+      const bool is_nr2w = nrem2wake[e] == 1;
+      const bool is_r2nr = rem2nrem[e] == 1;
+      const bool is_r2w  = rem2wake[e] == 1;
+      const bool is_w2nr = wake2nrem[e] == 1;
+      const bool is_w2r  = wake2rem[e] == 1;
+      
+      if ( is_nr2r || is_nr2w || is_r2nr || is_r2w || is_w2nr || is_w2r )
+	{
+	  std::string tr = "NR";
+	  if ( is_r2nr || is_r2w )
+	    tr = "R";
+	  else if ( is_w2nr || is_w2r )
+	    tr = "W";
+	  
+	  if ( is_r2nr || is_w2nr )
+	    tr += "_NR";
+	  else if ( is_nr2r || is_w2r )
+	    tr += "_R";
+	  else
+	    tr += "_W";
+	  
+	  annot_t * a = timeline->annotations.add( prefix + "tr" + suffix + tr );
+	  interval_t tinterval( interval.stop , interval.stop );
+	  instance_t * instance = a->add( "." , tinterval , "." );
+	  
+	}
+
+      // WASO?
+      if ( is_waso[e] )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "waso" );
+          instance_t * instance = a->add( "." , interval , "." );
+	}
+
+      // Ascending/descending N2
+      if ( n2_ascdesc[e] >= 0.25 )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "N2" + suffix + "asc" );
+	  instance_t * instance = a->add( "." , interval , "." );
+	}
+      
+      if ( n2_ascdesc[e] <= -0.25 )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "N2" + suffix + "dsc" );
+	  instance_t * instance = a->add( "." , interval , "." );
+	}
+
+      // persistent sleep
+      if ( in_persistent_sleep[e] )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "persistent_sleep" );
+          instance_t * instance = a->add( "." , interval , "." );
+	}
+      
+    }
+
+}
+
+
 void hypnogram_t::output( const bool verbose ,
 			  const bool epoch_lvl_output ,
 			  const std::string & eannot ,
-			  const std::string & cycle_prefix )
+			  const std::string & annot_prefix ,
+			  const std::string & annot_suffix )
 {
   
   
@@ -2418,55 +2912,11 @@ void hypnogram_t::output( const bool verbose ,
   const bool minimal = eannot == ".";
 
 
-  //
-  // Add annotation to denote NREM cycle?  Do here, before output,
-  // so that annot-cycles works w/ both STAGE and HYPNO
-  //
-
-  const bool annotate_cycles = cycle_prefix != "";
-
-
-  if ( annotate_cycles )
-    {
-      logger << "  creating NREM cycle annotation " << cycle_prefix << "\n";
-    
-      annot_t * a = timeline->annotations.add( cycle_prefix );
-      a->description = "NREMC";
-      
-      std::map<int,double>::iterator cc = nremc_duration.begin();
-      while ( cc != nremc_duration.end() )
-	{
-	  
-	  // cc->first  : 1-based cycle #
-	  // nremc_start_epoch[ cc->first ] : 1-based epoch start
-	  // nremc_epoch_duration[ cc->first ] : cycle length ( in epochs )
-
-	  // NREMC number
-	  std::string cn = Helper::int2str( cc->first );
-	  
-	  // epoch number start (adjust for 1-base encoding)
-	  int start_epoch = nremc_start_epoch[ cc->first ] - 1;
-
-	  // length of cycle (in epochs) , minus 1 as we'll add this to stop of first
-	  int length = nremc_epoch_duration[ cc->first ] - 1;
-	  
-	  // get interval
-	  interval_t interval = timeline->epoch( start_epoch );
-	  
-	  // adjust end-point -> convert to time-points
-	  interval.stop += (uint64_t)(timeline->epoch_length_tp * length ) ;
-
-	  // add annotation
-	  instance_t * instance = a->add( cn , interval , "." );
-	  
-	  ++cc;
-	}
-      
-    }
 
   //
   // Epoch-level annotation of NREM cycles also (both STAGE and HYPNO)
-  //
+  //   (really, special legacy case, used by PSD dynamics...
+  //    can likely retire over time)
 
   for (int e=0;e<timeline->num_epochs() ;e++)
     if ( sleep_cycle_number[e] ) 
@@ -2488,11 +2938,20 @@ void hypnogram_t::output( const bool verbose ,
 	Helper::halt( "requires 30-second epochs to be set currently" );
     }
 
+  // also saved as tp (for annot output)
+  tp_0_start = 0LLU;
+  tp_1_lights_out = 0LLU;
+  tp_2_sleep_onset = 0LLU;
+  tp_3_sleep_midpoint = 0LLU;
+  tp_4_final_wake = 0LLU;
+  tp_5_lights_on = 0LLU;
+  tp_6_stop = 0LLU;
+
   
   //
   // Per individual level output (VERBOSE MODE ONLY)
   //
-
+  
   if ( verbose )
     {
       
@@ -2539,6 +2998,21 @@ void hypnogram_t::output( const bool verbose ,
 	      t6 += 24.0;	      
 	    }
 	  
+
+	  // for annots
+	  tp_0_start = 0LLU;
+	  tp_1_lights_out = ( t1 - t0 ) * 60.0 * 60.0 * (double)globals::tp_1sec ; 
+
+	  if ( any_sleep )
+	    {
+	      tp_2_sleep_onset = ( t2 - t0 ) * 60.0 * 60.0 * (double)globals::tp_1sec ;
+	      tp_3_sleep_midpoint = ( t3 - t0 ) * 60.0 * 60.0 * (double)globals::tp_1sec ;
+	      tp_4_final_wake = ( t4 - t0 ) * 60.0 * 60.0 * (double)globals::tp_1sec ;
+	    }
+	  tp_5_lights_on = ( t5 - t0 ) * 60.0 * 60.0 * (double)globals::tp_1sec ;
+	  tp_6_stop = ( t6 - t0 ) * 60.0 * 60.0 * (double)globals::tp_1sec ;
+	  
+	  // outputs
 	  writer.value(  "T0_START" , t0 );
 	  writer.value(  "E0_START" , 0 );
 	  
@@ -2965,12 +3439,6 @@ void hypnogram_t::output( const bool verbose ,
   
   clocktime_t starttime( clock_start );
   
-  // std::cout << " NE / NE_GAPS " << ne << " " << ne_gaps << "\n";
-  // std::cout << " stages[] " << stages.size() << "\n";
-  // std::cout << " stages[] " << epoch_n.size() << "\n";
-  // std::cout << " gap[] " << epoch_gap.size() << "\n";
-  // std::cout << " dur[] " << epoch_dur.size() << "\n";
-  // std::cout << " start[] " << epoch_start.size() << "\n";
   
   //
   // output in non-verbsoe mode (STAGES command)
@@ -3072,11 +3540,10 @@ void hypnogram_t::output( const bool verbose ,
     }
 
   
+
   //
   // ... otherwise, the rest of this function is verbose mode only
   //
-
-
 
   
   // Outputs
@@ -3087,25 +3554,17 @@ void hypnogram_t::output( const bool verbose ,
   //   d) period number
   //   e) N2 measure of direction
 
-
-
-  //
-  // Add cycle epoch-annotation
-  //
-  if ( 0 )  // now done above
-  for (int e=0;e<ne;e++)
-    if ( sleep_cycle_number[e] ) 
-      {	
-	const std::string cycle = "_NREMC_" + Helper::int2str( sleep_cycle_number[e] );	
-	timeline->annotate_epoch( cycle , e );	
-      }
-
-
+  
   //
   // output epoch level data ?
+  //   if not, quit - unless we also need to make annotations afterwards
   //
 
-  if ( ! epoch_lvl_output ) return;
+  const bool annotate_features = annot_prefix != "";
+  
+  if ( ! epoch_lvl_output )
+    if ( ! annotate_features ) 
+      return;
 
   
   double elapsed_n1 = 0 , elapsed_n2 = 0 , elapsed_n34 = 0 , elapsed_rem = 0;
@@ -3174,6 +3633,30 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "PCT_E_N3" , (mins["N3"] + mins["N4"]) > 0 ? elapsed_n34 / (mins["N3"]+mins["N4"]) : 0 );
       writer.value( "PCT_E_REM" , mins["R"] > 0 ? elapsed_rem / mins["R"] : 0 );
 
+      // track if making annots?
+      if ( annotate_features )
+	{
+	  elapsed_stg_sec[ "N1" ].push_back( elapsed_n1 );
+	  elapsed_stg_sec[ "N2" ].push_back( elapsed_n2 );
+	  elapsed_stg_sec[ "N3" ].push_back( elapsed_n34 );
+	  elapsed_stg_sec[ "NR" ].push_back( elapsed_n1 + elapsed_n2 + elapsed_n34 );
+	  elapsed_stg_sec[ "R" ].push_back( elapsed_rem );
+	  elapsed_stg_sec[ "S" ].push_back( elapsed_sleep );
+	  elapsed_stg_sec[ "W" ].push_back( elapsed_wake );
+	  elapsed_stg_sec[ "WASO" ].push_back( elapsed_waso );
+	  
+	  elapsed_stg_rel[ "N1" ].push_back( mins[ "N1" ] > 0 ? elapsed_n1 / mins[ "N1" ] : 0 );
+          elapsed_stg_rel[ "N2" ].push_back( mins[ "N2" ] > 0 ? elapsed_n2 / mins[ "N2" ] : 0 );
+          elapsed_stg_rel[ "N3" ].push_back( (mins["N3"] + mins["N4"]) > 0 ? elapsed_n34 / (mins["N3"]+mins["N4"]) : 0 ) ;
+	  elapsed_stg_rel[ "NR" ].push_back( (mins["N1"] + mins["N2"] + mins["N3"] + mins["N4"]) > 0 ? (elapsed_n1+elapsed_n2+elapsed_n34) / (mins["N1"] + mins["N2"]+mins["N3"]+mins["N4"]) : 0 ) ;
+	  elapsed_stg_rel[ "R" ].push_back( mins["R"] > 0 ? elapsed_rem / mins["R"] : 0 );
+          elapsed_stg_rel[ "S" ].push_back( mins[ "S" ] > 0 ? elapsed_sleep / mins[ "S" ] : 0  );
+          elapsed_stg_rel[ "W" ].push_back( mins[ "W" ] > 0 ? elapsed_wake / mins[ "W" ] : 0  );
+          elapsed_stg_rel[ "WASO" ].push_back( mins[ "WASO" ] > 0 ? elapsed_waso / mins[ "WASO" ] : 0  );
+	}
+      
+	  
+      
       // track elapsed time
       if ( stages[e] == WAKE ) 
 	{
@@ -3231,6 +3714,21 @@ void hypnogram_t::output( const bool verbose ,
 
   writer.unepoch();
 
+
+
+  //
+  // Add annotation to denote multiple hypnogram features, e.g. including NREM cycle?
+  // Note - this is done *after* output (meaning that annot will only work w/ HYPNO, not stages)
+  //
+  
+      
+  
+  if ( annotate_features )
+    {
+      annotate( annot_prefix , annot_suffix );      
+    }
+
+   
 
 }
 
