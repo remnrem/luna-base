@@ -1066,7 +1066,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "EPOCH" ) )        proc_epoch( edf, param(c) );
       else if ( is( c, "ALIGN" ) )        proc_align( edf , param(c) );
       else if ( is( c, "SLICE" ) )        proc_slice( edf , param(c) , 1 );
-
+      else if ( is( c, "ALIGN-EPOCHS" ) ) proc_align_epochs( edf , param(c) );
+      
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
 
@@ -2101,6 +2102,12 @@ void proc_dump( edf_t & edf , param_t & param )
   edf.data_dumper( signal , param );	  
 }
       
+// ALIGN-EPOCHS
+
+void proc_align_epochs( edf_t & edf , param_t & param )
+{
+  align_epochs_t align( edf , param );  
+}
 
 // ALIGN
 
