@@ -991,8 +991,11 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	  n_only_first_mins = ( last - start ) * epoch_mins;
 	  logger << "  *** reducing first period, which is longer than available staging: " 
 		 << n_only_first_mins << " minutes\n";
+	  first_too_short = 1;
 	}
-      
+      else 
+	first_too_short = 0;
+    
       
       logger << "  retaining only epochs " << start+1 << " to " << last << ";"
 	     << " setting epochs " << last+1 << " to end (" << ne << ") to L\n";
@@ -1001,9 +1004,9 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	stages[e] = LIGHTS_ON;
       
     }
+  else
+    first_too_short = -1;
  
-
-
 
 }
 
@@ -3074,6 +3077,8 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "TWT" , TWT );
       writer.value( "LOT" , mins[ "L" ] );
       writer.value( "OTHR" , mins[ "?" ] );
+      if ( first_too_short != -1 ) 
+	writer.value( "SHORT" , first_too_short );
       writer.value( "CONF" , n_conflicts );
       writer.value( "FIXED_SLEEP" , n_fixed ); // --> ?
       writer.value( "FIXED_WAKE" , n_ignore_wake ); // --> ?

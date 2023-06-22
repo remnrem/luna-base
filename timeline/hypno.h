@@ -144,6 +144,9 @@ struct hypnogram_t
   // number of W epochs set to ? if they lead/trail sleep
   int n_ignore_wake;
   
+  // first option is longer than available (SOL to END)
+  int first_too_short; // 0 N 1 Y -1 N/A
+
   // only calculate stats for first N epochs after X (make rest missing)
   // X is either start of recording, or sleep onset 
   // this is run *after* fixing above 'early sleep' issues

@@ -2764,6 +2764,110 @@ bool globals::is_stage_annotation( const std::string & s )
 
 void annotation_set_t::make( param_t & param , edf_t & edf )
 {
+
+  // special case: just add epoch annotations
+  // (and flatten, so that we get all as a 'background')
+  
+  if ( param.has( "epoch" ) )
+    {
+      
+      const std::string newannot = param.value( "epoch" );
+      
+      // optional, 'windows' on edges (e.g. w=1,5,10)
+      std::vector<double> windows;
+      if ( param.has( "w" ) ) windows = param.dblvector( "w" );
+      const bool add_edges = windows.size() > 0 ;
+      const bool collapse_startstop = param.has( "collapse-edges" );
+      const std::string winname = param.has( "edge" ) ? param.value( "edge" ) : "edge" ;
+      
+      annot_t * edgeLR = NULL, * edgeL = NULL, * edgeR = NULL;
+
+      if ( add_edges )  
+	{
+	  if ( collapse_startstop ) 
+	    edgeLR = add( winname );
+	  else
+	    {
+	      edgeL = add( winname + "_left" );
+	      edgeR = add( winname + "_right" );	      
+	    }
+	}
+      
+      std::set<interval_t> epochs;
+      
+      edf.timeline.ensure_epoched();
+      
+      int ne = edf.timeline.first_epoch();
+      
+      if ( ne == 0 ) 
+	{
+	  logger << "  ** no epochs to add, leaving MAKE-ANNOTS\n";
+	  return;
+	}
+      
+      while ( 1 )
+	{
+	  int epoch = edf.timeline.next_epoch();
+	  if ( epoch == -1 ) break;
+	  epochs.insert( edf.timeline.epoch( epoch ) );
+	}  
+      
+      // flatten
+
+      epochs = annotate_t::flatten( epochs );
+      
+      // add as annotations
+      annot_t * an = add( newannot );
+      std::set<interval_t>::const_iterator nn = epochs.begin();
+      while ( nn != epochs.end() )
+	{
+	  an->add( "." , *nn , "." );
+
+	  // optionally, any windows?
+	  for (int i=0; i<windows.size(); i++)
+	    {
+	      if ( windows[i] <= 0 ) continue;
+	      
+	      interval_t interval( *nn );
+	      
+	      uint64_t tp = windows[i] * globals::tp_1sec;
+
+	      if ( interval.duration() >= tp )
+		{
+		  interval_t edge1( interval.start , interval.start + tp );
+		  interval_t edge2( interval.stop - tp , interval.stop );
+		  
+		  if ( edgeLR ) 
+		    {
+		      edgeLR->add( "left_"+Helper::dbl2str( windows[i] )  , edge1 , "." );
+		      edgeLR->add( "right_"+Helper::dbl2str( windows[i] ) , edge2 , "." );
+		    }
+		  
+		  if ( edgeL ) 
+		    edgeL->add( Helper::dbl2str( windows[i] ) , edge1 , "." );
+		  
+		  if ( edgeR )
+		    edgeR->add( Helper::dbl2str( windows[i] ) , edge2 , "." );
+		  
+		} 
+	    }
+
+	  ++nn;
+	}
+      
+      logger << "  created " << epochs.size() << " instances of " << newannot << "\n";
+
+      if ( add_edges ) 
+	logger << "  also added edge annotations, " << ( edgeLR ? ( winname+"_left & " + winname + "_right" ) : winname ) << "\n";
+
+      // all done
+      return;
+    }
+  
+
+  //
+  // process rest
+  //
   
   const std::string newannot = param.requires( "annot" );
   
@@ -2859,12 +2963,10 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       
     }
   
-  std::cout << " gg\n";
-  
   if ( do_union || do_intersection )
     {
       // here, we want to flatten both a1 and a2
-
+      
       std::set<interval_t> a, b;
       
       annot_map_t::const_iterator ii = events1.begin();
@@ -2888,7 +2990,8 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       b = annotate_t::flatten( b );
       
       // make new interval set, by going over both (flattened) lists
-      
+      // and looking for overlap 
+
       std::set<interval_t>::const_iterator aa = a.begin();
       std::set<interval_t>::const_iterator bb = b.begin();
       
@@ -2906,7 +3009,8 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 			 aa->union_with_overlapping_interval( *bb ) :
 			 aa->intersection_with_overlapping_interval( *bb ) ); 
 	  
-	  // advance whichever ends first
+	  // advance whichever ends first (remember: these are flattened already)
+
 	  //   AAAA     AAAAA       AAA
 	  //   BB B             BBBB           <- would be missed
 	  //              BB
@@ -2924,14 +3028,33 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 	    }
 	  
 	}
+     
+      // for union mode only, also add any member of 'a' that does not overlap any member of (flattened) 'b'
+      // and vice versa
       
+      aa = a.begin();
+      while ( aa != a.end() )
+	{
+	  if ( ! annotate_t::overlaps_flattened_set( *aa , b ) )
+	    nevs.insert( *aa );
+	  ++aa;
+	}
+
+      bb = b.begin();
+      while ( bb != b.end() )
+	{
+	  if ( ! annotate_t::overlaps_flattened_set( *bb , a ) )
+	    nevs.insert( *bb );
+	  ++bb;
+	}
+ 
     }
 
   
   //
   // add new events
   //
-  std::cout << " add " << nevs.size() << "\n";
+  
   std::set<interval_t>::const_iterator nn = nevs.begin();
   while ( nn != nevs.end() )
     {

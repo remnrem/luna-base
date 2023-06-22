@@ -4943,8 +4943,12 @@ void cmd_t::attach_ivars( const std::string & file )
 	  if ( ! header )
 	    {
 	      if ( ncols != tok.size() )
-		Helper::halt( "inconsistent number of columns in " + filename );
-	      
+		{
+		  std::cerr << " expecting " << ncols << " columns from header\n";
+		  std::cerr << " observed " << tok.size() << "\n"
+			    << s << "\n";
+		  Helper::halt( "inconsistent number of columns in " + filename );
+		}
 	      for (int c=0;c<ncols;c++)
 		{
 		  if ( c == idcol ) continue;		  
