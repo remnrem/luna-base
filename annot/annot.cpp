@@ -2821,8 +2821,6 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   const annot_map_t & events1 = a1->interval_events;
   const annot_map_t & events2 = a2->interval_events;
 
-  std::cout << " h1\n";
-  
   std::set<interval_t> nevs;
   
   // here, we alwats select from events1

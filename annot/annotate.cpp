@@ -3121,8 +3121,8 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       std::string mtype = ".";
       
       // verbose output
-      // if ( debug_mode )
-      //   std::cout << "a = " << aa->as_string() << "\n";
+      //if ( debug_mode )
+      std::cout << "a = " << aa->as_string() << "\n";
 
       // edge cases:
       // no annot at or past seed? : bb == b.end() 
@@ -3141,14 +3141,14 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 
       // if ( debug_mode )
       // 	{
-      // 	  std::cout << " initial b = ";
-      // 	  if ( bb == b.end() ) std::cout << " -END-";
-      // 	  else
-      // 	    {
-      // 	      std::cout << bb->as_string() ;
-      // 	      if ( bb == b.begin() ) std::cout << " (begin)";
-      // 	    }	  
-      // 	  std::cout << "\n";
+       	  std::cout << " initial b = ";
+       	  if ( bb == b.end() ) std::cout << " -END-";
+       	  else
+       	    {
+       	      std::cout << bb->as_string() ;
+       	      if ( bb == b.begin() ) std::cout << " (begin)";
+       	    }	  
+       	  std::cout << "\n";
       // 	}
 
       
@@ -3161,7 +3161,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  overlap = true;
 
 	  // if ( debug_mode )
-	  //   std::cout << "  found overlap, dist = 0 \n";
+	  std::cout << "  found overlap, dist = 0 \n";
 	  
 	}
       else // it must come afterwards
@@ -3176,7 +3176,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	    -1; 
 	  
 	  // if ( debug_mode )
-	  //   std::cout << " prov dist = " << dist << "\n";
+	  std::cout << " prov dist = " << dist << "\n";
 	  
 	  // step back, if we can - is there a closer annot /before/ the seed?
 	  if ( bb != b.begin() )
@@ -3184,7 +3184,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      --bb;
 
 	      // if ( debug_mode )
-	      // 	std::cout << " stepping back, b -> " << bb->as_string() << "\n";
+	      std::cout << " stepping back, b -> " << bb->as_string() << "\n";
 	      
 	      // nb - this may overlap seed
 	      // i.e. starts before, but ends after seed-start, and so
@@ -3196,7 +3196,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		  overlap = true;
 
 		  // if ( debug_mode )
-		  //   std::cout << "  back b overlaps a, done\n"; 
+		  std::cout << "  back b overlaps a, done\n"; 
 		}
 	      else
 		{
@@ -3215,8 +3215,8 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 
 		  // if ( debug_mode )
 		  //   {
-		  //     std::cout << " back b is before, so dist = " << left_dist << "\n";
-		  //     std::cout << " final dist = " << dist << "\n";
+		  std::cout << " back b is before, so dist = " << left_dist << "\n";
+		  std::cout << " final dist = " << dist << "\n";
 		  //   }
 		}
 	    }
@@ -3229,9 +3229,9 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // to track proprtion of seeds w/ at least one (non-seed) annot overlap
       if ( overlap && ! bseed )
 	{
-	  //	  std::cout << " found overlap : " << astr << " " << bstr << " = " << aa->as_string() << " by " << bb->as_string() << "\n";
+	  std::cout << " found overlap : " << astr << " " << bstr << " = " << aa->as_string() << " by " << bb->as_string() << "\n";
  	  r->psa[ astr ].insert ( named_interval_t( offset, *aa , astr ) );
-	  //	  std::cout << "   size = " << r->psa[ astr ].size() << "\n";
+	  std::cout << "   size = " << r->psa[ astr ].size() << "\n";
 	}
       
       // save original distance
@@ -3240,6 +3240,8 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // truncate at window length
       if ( dist > window_sec ) dist = window_sec;
       else if ( dist < -window_sec ) dist = -window_sec;
+
+      std::cout <<" final distance = " << dist << "\n";
       
       // for mean distance -- do we meet the window criterion?
       const double adist = fabs( dist );
