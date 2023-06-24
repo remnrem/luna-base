@@ -46,8 +46,8 @@ annotate_t::annotate_t( edf_t & edf1 , param_t & param )
   set_options( param );
   prep();
   if ( event_perm ) init_event_permutation();
-  loop();
-  output();
+  annotate_stats_t s = loop();
+  output(s);
 }
 
   
@@ -295,8 +295,8 @@ annotate_t::annotate_t( param_t & param )
   set_options( param );
   prep();
   if ( event_perm ) init_event_permutation();
-  loop();
-  output();
+  annotate_stats_t s = loop();
+  output(s);
   
 }
 
@@ -369,7 +369,8 @@ void annotate_t::set_options( param_t & param )
 	{
 	  uint64_t start = ss * globals::tp_1sec; 
 	  flanking_overlap_intervals.push_back( interval_t( start , start + dur ) );
-	  flanking_overlap_desc.push_back( Helper::dbl2str( ss + s[0]/2.0 ) + "_" + Helper::dbl2str( s[0] ) );
+	  flanking_overlap_mid.push_back( ss + s[0]/2.0 );
+	  flanking_overlap_desc.push_back( Helper::dbl2str( ss + s[0]/2.0 ) + "+/-" + Helper::dbl2str( s[0]/2.0 ) ) ;
 	  flanking_overlap_mx = start + dur; // sets to max: specifies search range around each seed
 	}
       
@@ -1443,7 +1444,7 @@ void annotate_t::prep()
 
 
 
-void annotate_t::loop()
+annotate_stats_t annotate_t::loop()
 {
 
   if ( debug_mode )
@@ -1500,15 +1501,17 @@ void annotate_t::loop()
 	}
       
       // calc statistics for null data
-      annotate_stats_t s = eval();
+      annotate_stats_t p = eval();
 
       // any contrasts
-      add_contrasts( &s );
+      add_contrasts( &p );
 
       // track null distribution
-      build_null( s );
+      build_null( p );
     }
-  
+
+  // return observed stats for output keys
+  return s;
 }
 
 
@@ -2603,10 +2606,10 @@ annotate_stats_t annotate_t::eval()
       std::set<std::string>::const_iterator aa = sachs.begin();
       while ( aa != sachs.end() )
 	{
-	  
+	  	  
 	  // does this interval have any seeds?
 	  if ( rr->second.find( *aa ) == rr->second.end() ) { ++aa; continue; }
-
+	  
 	  // get all seed events
 	  const std::set<interval_t> & a = rr->second.find( *aa )->second;
 	  
@@ -2660,6 +2663,7 @@ annotate_stats_t annotate_t::eval()
 	      ++ff;
 	    }
 
+
 	  //
 	  // consider all other annots
 	  //
@@ -2700,15 +2704,15 @@ annotate_stats_t annotate_t::eval()
 	      
 	      // should not happen, but skip any self comparison
 	      if ( *aa == *mm ) { ++mm; continue; }
-
+	      
 	      // markers do not have channel information, (perhaps can change in future)
 	      // but for now no need to check the 'same_channel()' test
-
+	      
 	      // the offset for this seed segment can be used to figure out the
 	      // indiv/bin for
 	      
 	      int indiv = multi_indiv ? indiv_segs[ seg2indiv[ offset ] ].start : 0 ; 
-
+	      
 	      // get the markers
 	      const std::set<interval_t> & mrk = markers[ indiv ][ *mm ];
 	      
@@ -2837,7 +2841,7 @@ void annotate_t::add_contrasts( annotate_stats_t * r )
 
 
 
-void annotate_t::output()
+void annotate_t::output( const annotate_stats_t & s )
 {
 
   //
@@ -3003,6 +3007,23 @@ void annotate_t::output()
 
   if ( n_flanking_offsets )
     {
+
+      std::vector<int> fidx;
+      std::vector<double> fmid;
+      std::vector<std::string> fstr;
+      for (int fi=n_flanking_offsets; fi!=0; fi--)
+	{
+	  fidx.push_back( -fi );
+	  fmid.push_back( -1 * flanking_overlap_mid[ fi-1 ] );
+	  fstr.push_back( "-" + flanking_overlap_desc[ fi-1 ] );
+	}
+      for (int fi=1; fi<=n_flanking_offsets; fi++)
+	{
+	  fidx.push_back( fi );
+	  fmid.push_back( flanking_overlap_mid[ fi-1 ] );
+	  fstr.push_back( flanking_overlap_desc[ fi-1 ] );
+	}
+      
       std::map<std::string,std::map<std::string,std::map<int,double> > >::const_iterator sf = pf_obs.begin();
       while ( sf != pf_obs.end() )
 	{
@@ -3029,40 +3050,26 @@ void annotate_t::output()
 	      writer.level( pp->first , "OTHER" );
 
 	      // always do all rather than just observed
-	      for (int fi=0; fi<n_flanking_offsets; fi++)
+	      
+
+	      for (int fi=0; fi<fidx.size(); fi++)
 		{
-
-		  int fpos = fi+1;
-		  int fneg = -(fi+1);
-		  std::string desc = flanking_overlap_desc[ fi ];
-
+		  
+		  int pos = fidx[fi];		  
+		  
 		  // pos
-		  writer.level( fpos , "OFFSET" );
-		  writer.value( "INT" , desc );
-		  writer.value( "N_OBS" , pf_obs[ sf->first ][ pp->first ][ fpos ]  );
+		  writer.level( fmid[fi] , "OFFSET" );
+		  writer.value( "INT" , fstr[fi] );
+		  writer.value( "N_OBS" , pf_obs[ sf->first ][ pp->first ][ pos ]  );
 		  if ( nreps )
 		    {
-		      double mean = pf_exp[ sf->first ][ pp->first ][ fpos ] / (double)nreps;
-		      double var = pf_expsq[ sf->first ][ pp->first ][ fpos ] / (double)nreps - mean * mean;	  
+		      double mean = pf_exp[ sf->first ][ pp->first ][ pos ] / (double)nreps;
+		      double var = pf_expsq[ sf->first ][ pp->first ][ pos ] / (double)nreps - mean * mean;	  
 		      writer.value( "N_EXP" , mean );
-		      writer.value( "N_P" , ( pf_pv[ sf->first ][ pp->first ][ fpos ]  + 1 ) / (double)( nreps + 1 ) );
+		      writer.value( "N_P" , ( pf_pv[ sf->first ][ pp->first ][ pos ]  + 1 ) / (double)( nreps + 1 ) );
 		      if ( var > 0 ) 
-			writer.value( "N_Z" , ( pf_obs[ sf->first ][ pp->first ][ fpos ] - mean ) / sqrt( var ) );
+			writer.value( "N_Z" , ( pf_obs[ sf->first ][ pp->first ][ pos ] - mean ) / sqrt( var ) );
 		    }
-
-		  // neg
-		  writer.level( fneg , "OFFSET" );
-                  writer.value( "INT" , "-" + desc );
-                  writer.value( "N_OBS" , pf_obs[ sf->first ][ pp->first ][ fneg ]  );
-                  if ( nreps )
-                    {
-                      double mean = pf_exp[ sf->first ][ pp->first ][ fneg ] / (double)nreps;
-                      double var = pf_expsq[ sf->first ][ pp->first ][ fneg ] / (double)nreps - mean * mean;
-                      writer.value( "N_EXP" , mean );
-                      writer.value( "N_P" , ( pf_pv[ sf->first ][ pp->first ][ fneg ]  + 1 ) / (double)( nreps + 1 ) );
-                      if ( var > 0 )
-                        writer.value( "N_Z" , ( pf_obs[ sf->first ][ pp->first ][ fneg ] - mean ) / sqrt( var ) );
-                    }
 
 		}
 	      writer.unlevel( "OFFSET" );
@@ -3230,6 +3237,13 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 				   annotate_stats_t * r )
 {
 
+  
+  // read from r->nsa[][] to ensure that nsa will
+  // always contain all necessary keys (whether or not combos are seen
+  // in the observed data)
+  
+  int dummy = r->nsa[ astr ][ bstr ] ; 
+  
   //  debug_mode = true;
   // if ( debug_mode ) std::cout << "\nseed_annot_stats( "
   //  			      << astr << " n = " << a.size() << " -- "
@@ -3433,21 +3447,23 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  // -mx                                      +mx
 
 	  std::set<interval_t>::const_iterator cc = closestb;
-
+	  
+	  // std::cout << "\n\n CHECKING " << astr << " " << bstr << "\n";
 	  // std::cout << " aa " << aa->as_string() << "\n";
 	  // std::cout << " cc " << cc->as_string() << "\n";
-
+	  
 	  // forwards:: events must span after
 	  while ( 1 )
 	    {
 	      // nothing left?
 	      if ( cc == b.end() ) break;	      
 	      
-	      //std::cout << "  checking -> cc " << cc->as_string() << "\n";
+	      //	      std::cout << "  checking -> cc " << cc->as_string() << "\n";
 	      
 	      // comes before, i.e. this cc does not extend after, then advance 
 	      if ( cc->stop <= aa->stop )
 		{
+		  //		  std::cout << " advancing...\n";
 		  ++cc;
 		  continue;
 		}
@@ -3468,7 +3484,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      // end of overlap: we know cc ends after 
 	      uint64_t s2 = cc->stop - aa->stop;
 
-	      //std::cout << " s12 " << s1 << " " << s2 << "\n";
+	      //  std::cout << " s12 " << s1 << " " << s2 << "\n";
 	      
 	      for (int fi=0; fi<n_flanking_offsets; fi++)
 		{
@@ -3476,11 +3492,11 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		  
 		  // gone past (s2 is end+1 still)
 		  if ( win.start >= s2 ) break;
-
+		  
 		  //     |aaaaaa|  [s1]------[s2]
 		  //            |   |   |   |   |   |   |   win[] interval_t
 		  // overlaps?
-		  //std::cout << " win " << fi << " of " << n_flanking_offsets << " = " << win.as_string() << "\n";
+		  //		  std::cout << " win " << fi << " of " << n_flanking_offsets << " = " << win.as_string() << "\n";
 		  
 		  if ( s1 < win.stop && s2 > win.start ) 
 		    {
@@ -3493,7 +3509,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      ++cc;				
 	    }
 
-	  //std::cout << "now going back\n";
+	  //std::cout << " now going back\n";
 	  
 	  // now consider going backwards: reset to closest
 	  cc = closestb;
@@ -3542,7 +3558,12 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		  //std::cout << " win " << win.as_string() << "\n";
 		  
 		  // gone past , based on end of win: no point in looking here.
-		  if ( win.stop >= s2 ) break;
+		  if ( win.start >= s2 ) 
+		    {
+		      // std::cout << " huh, " << win.stop << "  " << s2 << "\n";
+		      // std::cout << "gone past?\n";
+		      break;		      
+		    }
 
 		  //     |aaaaaa|  [s1]------[s2]
 		  //            |   |   |   |   |   |   |   win[] interval_t
@@ -3562,7 +3583,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 
 	    }
 
-	  	  
+	  //std::cout << " done1\n";
 	}
       
       // are we tracking hits
@@ -3795,12 +3816,16 @@ uint64_t annotate_t::total_duration( const std::set<interval_t> & x )
 void annotate_t::observed( const annotate_stats_t & s )
 {
   
+  // for pairwise combinations (nsa and nosa, ndist, etc), only nsa is guaranteed to 
+  // contain all keys;  therefore, here we should ensure that zero's are entered for nosa
+  // and ndist[]
+
   // seed-seed group overlap ( std::map<std::string,double> )
   obs = s.nss;
   
   // seed-annot pairwise overlap (std::map<std::string,std::map<std::string,double> > )
   p_obs = s.nsa;
-
+  
   // flanking offset seed-annot pairwise overlaps
   pf_obs = s.nosa;
   
@@ -3817,28 +3842,55 @@ void annotate_t::observed( const annotate_stats_t & s )
   // absolute distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   absd_obs = s.adist;
   
-  // auto sa1 = absd_obs.begin();
-  // while ( sa1 != absd_obs.end() )
-  //   {
-  //     std::cout << " SA1 obs " << sa1->first << "\n";
-  //     ++sa1;
-  //    }
-
   // signed distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   sgnd_obs = s.sdist;
   
   // get average distances (these may be < S-A count, because of window_sec threshold)
-  std::map<std::string,std::map<std::string,double> >::const_iterator dd = s.ndist.begin();
-  while ( dd != s.ndist.end() )
+  // isa nsa[] keys, but check that ndist is >0 
+
+  std::map<std::string,std::map<std::string,double> >::const_iterator dd = s.nsa.begin();
+  while ( dd != s.nsa.end() )
     {
-      //      std::cout << " obs annot = " << dd->first << "\n";
+      
       const std::map<std::string,double> & e = dd->second;
       std::map<std::string,double>::const_iterator ee = e.begin();
       while ( ee != e.end() )
 	{
-	  absd_obs[ dd->first ][ ee->first ] /= (double)ee->second;
-	  sgnd_obs[ dd->first ][ ee->first ] /= (double)ee->second;
-	  dn_obs[ dd->first ][ ee->first ] = (double)ee->second;
+	  
+	  // handle nosa here, to ensure all keys are populated (based on nsa)
+          // i.e. ensure that pf_obs[] can be used as fully populated
+	  for (int fi=0; fi<n_flanking_offsets; fi++)
+	    {
+	      int dummy1 = pf_obs[ dd->first ][ ee->first ][ fi + 1 ]; 
+	      int dummy2 = pf_obs[ dd->first ][ ee->first ][ - ( fi + 1 )  ]; 
+	    }
+	  
+	  // handle absd_obs, sgnd_obs and dn_obs to ensure all keys are populated
+	  
+	  double nd = -1;
+	  
+	  std::map<std::string,std::map<std::string,double> >::const_iterator nn = s.ndist.find( dd->first );
+          if ( nn != s.ndist.end() )
+	    {
+	      const std::map<std::string,double> & n2 = nn->second;
+	      std::map<std::string,double>::const_iterator nnn = n2.find( ee->first );
+	      
+	      if ( nnn != n2.end() )  
+		nd = nnn->second; // set a (non-zero) value
+	    }
+	  
+	  if ( nd > 0 ) 
+	    {
+	      absd_obs[ dd->first ][ ee->first ] /= nd;
+	      sgnd_obs[ dd->first ][ ee->first ] /= nd;
+	      dn_obs[ dd->first ][ ee->first ] = nd;
+	    }
+	  else
+	    {
+	      absd_obs[ dd->first ][ ee->first ] = window_sec; // set to max (for an annot: Q markers?)
+	      sgnd_obs[ dd->first ][ ee->first ] = 0; // null value 'not-defined'
+	      dn_obs[ dd->first ][ ee->first ] = 0;
+	    }
 	  ++ee;
 	}
       ++dd;
@@ -3850,15 +3902,15 @@ void annotate_t::observed( const annotate_stats_t & s )
 }
 
 
-void annotate_t::build_null( const annotate_stats_t & s )
+void annotate_t::build_null( annotate_stats_t & s )
 {
-  
+
   //
   // seed-seed group overlap
   //
-
-  // consider only observed values
-  // std::map<std::string,double>::const_iterator ss = s.psa.begin();
+  
+  // consider only observed values (observed combos for 1+ seed pileup)
+  
   std::map<std::string,double>::const_iterator ss = obs.begin();
   while ( ss != obs.end() )
     {
@@ -3877,90 +3929,75 @@ void annotate_t::build_null( const annotate_stats_t & s )
   //
   // seed-annot overlap 
   //
+
   
   std::map<std::string,std::map<std::string,double> >::const_iterator sa = p_obs.begin();
+
   while ( sa != p_obs.end() )
     {
-      // should always be okay, but check just in case some weirdness
-      const bool is_seen = s.nsa.find( sa->first ) != s.nsa.end();
-      if ( ! is_seen ) { ++sa; continue; }
-      
-      const std::map<std::string,double> & p = sa->second;
-      const std::map<std::string,double> & pe = s.nsa.find( sa->first )->second;
-      
+      const std::map<std::string,double> & p = sa->second;      
       std::map<std::string,double>::const_iterator pp = p.begin();
       while ( pp != p.end() )
 	{	  
-	  const bool is_seen = pe.find( pp->first ) != pe.end();
-	  if ( is_seen )
-	    {
-	      double val = pe.find( pp->first )->second;
-	      p_exp[ sa->first ][ pp->first ] += val;
-	      p_expsq[ sa->first ][ pp->first ] += val * val;
-	      if ( val >= p_obs[ sa->first ][ pp->first ] ) ++p_pv[ sa->first ][ pp->first ];
-	    }
+	  // nsa[] should always exist, but even if not, would get '0' here, so okay
+	  double val = s.nsa[ sa->first ][ pp->first ];
+	  
+	  p_exp[ sa->first ][ pp->first ] += val;
+	  p_expsq[ sa->first ][ pp->first ] += val * val;
+	  if ( val >= p_obs[ sa->first ][ pp->first ] ) ++p_pv[ sa->first ][ pp->first ];
+	  
 	  ++pp;
 	}
       ++sa;
     }
 
+
   //
-  // seed-annot flanking window overlap: Q? to consider all perms?
+  // seed-annot flanking window overlap
   //
   
   std::map<std::string,std::map<std::string,std::map<int,double> > >::const_iterator sf = pf_obs.begin();
   while ( sf != pf_obs.end() )
     {
-      //      std::cout << " checking pf " << sf->first << "\n";
-      
-      // should always be okay, but check just in case some weirdness
-      const bool is_seen = s.nosa.find( sf->first ) != s.nosa.end();
-      if ( ! is_seen ) { ++sf; continue; }
       
       const std::map<std::string,std::map<int,double> > & p = sf->second;
-      const std::map<std::string,std::map<int,double> > & pe = s.nosa.find( sf->first )->second;
-      
       std::map<std::string,std::map<int,double> >::const_iterator pp = p.begin();
       while ( pp != p.end() )
 	{	  
-	  const bool is_seen = pe.find( pp->first ) != pe.end();
-	  if ( is_seen )
+	  // for each flanking val: all these will exist in the obs
+	  std::map<int,double>::const_iterator ff = pp->second.begin();
+	  while ( ff != pp->second.end() )
 	    {
-	      //std::cout <<" here sz = " << pp->second.size() << "\n";
-	      // for each flanking val: these should always all exists
-	      std::map<int,double>::const_iterator ff = pp->second.begin();
-	      while ( ff != pp->second.end() )
-		{
-		  double val = pe.find( pp->first )->second.find( ff->first )->second;
-		  //std::cout << " building pf_exp... val = " << ff->first << " = " << val << "\n";
-		  pf_exp[ sf->first ][ pp->first ][ ff->first ] += val;
-		  pf_expsq[ sf->first ][ pp->first ][ ff->first ] += val * val;
-		  if ( val >= pf_obs[ sf->first ][ pp->first ][ ff->first ] ) ++pf_pv[ sf->first ][ pp->first ][ ff->first ];
-		  ++ff;
-		}
+	      // get the permuted value; it might not exist, but then this gets set to 0 so okay		  
+	      double val = s.nosa[ sf->first ][ pp->first ][ ff->first ] ; 
+	      pf_exp[ sf->first ][ pp->first ][ ff->first ] += val;
+	      pf_expsq[ sf->first ][ pp->first ][ ff->first ] += val * val;
+	      if ( val >= pf_obs[ sf->first ][ pp->first ][ ff->first ] ) ++pf_pv[ sf->first ][ pp->first ][ ff->first ];
+	      ++ff;	    
 	    }
 	  ++pp;
 	}
       ++sf;
     }
 
+  //  std::cout << "in BN(2)\n";
+
   //
   // prop-seed overlap
   //
-
+  
   std::map<std::string,double>::const_iterator pp = prop_obs.begin();
   while ( pp != prop_obs.end() )
     {
+
       const bool is_seen = s.psa.find( pp->first ) != s.psa.end();
-      //      std::cout << " TESTING " << pp->first << " " << is_seen << "\n";
-      if ( is_seen )
-        {
-          double val = s.psa.find( pp->first )->second.size() / s.ns.find( pp->first )->second;
-	  //  std::cout << " val (exp) = " << val << " " << s.psa.find( pp->first )->second.size() << " " << s.ns.find( pp->first )->second << "\n";
-	  prop_exp[ pp->first ] += val;
-          prop_expsq[ pp->first ] += val * val;
-          if ( val >= prop_obs[ pp->first ] ) ++prop_pv[ pp->first ];	  
-        }
+
+      // set to 0.0 if not any observed in the permuted
+      double val = is_seen ? s.psa.find( pp->first )->second.size() / s.ns.find( pp->first )->second : 0 ;       
+      prop_exp[ pp->first ] += val;
+      prop_expsq[ pp->first ] += val * val;
+      if ( val >= prop_obs[ pp->first ] ) ++prop_pv[ pp->first ];	  
+    
       ++pp;
     }
 
@@ -3968,52 +4005,76 @@ void annotate_t::build_null( const annotate_stats_t & s )
   //
   // seed-annot distances : sgnd_obs and absd_obs will always have the same keys, so do just once
   //
-
+  
   sa = absd_obs.begin();
   while ( sa != absd_obs.end() )
     {
 
-      const bool is_seen = s.ndist.find( sa->first ) != s.ndist.end();
-      if ( ! is_seen ) { ++sa; continue; }
-
+      // const bool is_seen = s.ndist.find( sa->first ) != s.ndist.end();
+      // if ( ! is_seen ) { ++sa; continue; }
+      
+      //      std::cout << "s1\n";
       const std::map<std::string,double> & p = sa->second;
-      const std::map<std::string,double> & pe_abs = s.adist.find( sa->first )->second;
-      const std::map<std::string,double> & pe_sgn = s.sdist.find( sa->first )->second;
-      const std::map<std::string,double> & pe_n   = s.ndist.find( sa->first )->second;
+      //std::cout << "s2\n";
+      // const std::map<std::string,double> & pe_abs = s.adist.find( sa->first )->second;
+
+      // //      std::cout << "s3\n";
+      // const std::map<std::string,double> & pe_sgn = s.sdist.find( sa->first )->second;
+      // //      std::cout << "s4\n";
+      // const std::map<std::string,double> & pe_n   = s.ndist.find( sa->first )->second;
+      //    std::cout << "s5\n";
       
       std::map<std::string,double>::const_iterator pp = p.begin();
       while ( pp != p.end() )
         {
-          const bool is_seen = pe_n.find( pp->first ) != pe_n.end();
-          if ( is_seen )
-            {
-	      const double n = pe_n.find( pp->first )->second;
-	      // normalize here:
-	      const double a = pe_abs.find( pp->first )->second / n;
-	      const double s = pe_sgn.find( pp->first )->second / n;
+          
+	  // keys: sa->first  pp->first 
+	  //  access s.ndist[][]   s.sdist[][]   s.adist[][] 
 
-	      // expecteds: sums
-              absd_exp[ sa->first ][ pp->first ] += a;
-	      sgnd_exp[ sa->first ][ pp->first ] += s;
-	      
-	      // sum of sqs
-	      absd_expsq[ sa->first ][ pp->first ] += a * a;
-	      sgnd_expsq[ sa->first ][ pp->first ] += s * s;
-
-	      // track counts
-	      dn_exp[ sa->first ][ pp->first ] += n;
-	      
-	      // pvals : testing whether *closer* so stat is LE rather than GE
-	      if ( a <= absd_obs[ sa->first ][ pp->first ] ) ++absd_pv[ sa->first ][ pp->first ];
-	      
-	      // nb. we've calculated mean pre/prior, but here the test is 2-sided, so take abs(x)
-	      if ( fabs(s) > fabs( sgnd_obs[ sa->first ][ pp->first ] ) ) ++sgnd_pv[ sa->first ][ pp->first ];
+	  // if not defined, ndist and sdist should be zero
+	  // otherwise, adist should be max window size (i.e. 'undefined')
+	  // Q/TODO: annot vs marker max value issue
+	  	  
+	  //	  std::cout << "s5\n";
+	  const double n = s.ndist[ sa->first ][ pp->first ];
+	  
+	  double a1 = window_sec;
+	  double s1 = 0; 
+	  
+	  // normalize here if defined
+	  if ( n > 0 ) 
+	    {		  
+	      a1 = s.adist[ sa->first ][ pp->first ] / n ; 
+	      s1 = s.sdist[ sa->first ][ pp->first ] / n ; 		  
 	    }
+	  
+	  //	  std::cout << "s6\n";
+	  
+	  // expecteds: sums
+	  absd_exp[ sa->first ][ pp->first ] += a1;
+	  sgnd_exp[ sa->first ][ pp->first ] += s1;
+	  
+	  // sum of sqs
+	  absd_expsq[ sa->first ][ pp->first ] += a1 * a1;
+	  sgnd_expsq[ sa->first ][ pp->first ] += s1 * s1;
+	      
+	  // track counts
+	  dn_exp[ sa->first ][ pp->first ] += n;
+	  
+	  // pvals : testing whether *closer* so stat is LE rather than GE
+	  if ( a1 <= absd_obs[ sa->first ][ pp->first ] ) ++absd_pv[ sa->first ][ pp->first ];
+	  
+	  // nb. we've calculated mean pre/prior, but here the test is 2-sided, so take abs(x)
+	  if ( fabs(s1) > fabs( sgnd_obs[ sa->first ][ pp->first ] ) ) ++sgnd_pv[ sa->first ][ pp->first ];
+	  
           ++pp;
         }
       ++sa;
+      //      std::cout << "s7\n";
     }
-  
+  //  std::cout << "s-done\n";
+
+
   //
   // 1-to-many seed-to-annots mappings
   //
@@ -4036,7 +4097,8 @@ void annotate_t::build_null( const annotate_stats_t & s )
 	}
       ++qq;
     }
-  
+
+  //  std::cout << "done BN\n";  
 }
 
 

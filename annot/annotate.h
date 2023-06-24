@@ -93,13 +93,12 @@ struct annotate_stats_t {
   
   // seed-seed group counts
   std::map<std::string,double> nss;
-
+  
   // seed-annot counts
   std::map<std::string,std::map<std::string,double> > nsa;
   
   // offset seed-annot counts
   std::map<std::string,std::map<std::string,std::map<int,double> > > nosa;
-
   
   // seed-annot proportion (of seeds overlapped by 1+ annot)
   std::map<std::string,std::set<named_interval_t> > psa;
@@ -160,7 +159,7 @@ struct annotate_t {
   
   void prep();
   
-  void loop();
+  annotate_stats_t loop();
 
   annotate_stats_t eval();
 
@@ -170,7 +169,7 @@ struct annotate_t {
 
   void event_permutation();
   
-  void output();
+  void output(const annotate_stats_t & );
   
 
   //
@@ -185,6 +184,7 @@ struct annotate_t {
 
   // i.e. offsets=<sec>,<inc>,<max>  all in seconds
   std::vector<interval_t> flanking_overlap_intervals;
+  std::vector<double> flanking_overlap_mid;
   std::vector<std::string> flanking_overlap_desc;
   uint64_t flanking_overlap_mx;
   int n_flanking_offsets;
@@ -386,6 +386,7 @@ struct annotate_t {
   std::map<std::string,std::map<std::string,std::map<int,double> > > pf_pv;
   std::map<std::string,std::map<std::string,std::map<int,double> > > pf_z;
 
+
   // seed-annot proportion seeds spanned by 1+ annot
   std::map<std::string,double> prop_obs;
   std::map<std::string,double> prop_exp;
@@ -466,7 +467,7 @@ struct annotate_t {
   
   // handle stats from orig/perms
   void observed( const annotate_stats_t & s ) ;
-  void build_null( const annotate_stats_t & s ) ;
+  void build_null( annotate_stats_t & s ) ;
 
   // debug mode
   bool debug_mode;
