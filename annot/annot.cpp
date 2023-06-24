@@ -2770,16 +2770,20 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   
   if ( param.has( "epoch" ) )
     {
-      
+
+      if ( param.empty( "epoch" ) ) Helper::halt("value needed for epoch option (annotation class label)" );
       const std::string newannot = param.value( "epoch" );
       
       // optional, 'windows' on edges (e.g. w=1,5,10)
+      // either, they can always extend from edge to X, or
+      // you can have a series of them
+      
       std::vector<double> windows;
       if ( param.has( "w" ) ) windows = param.dblvector( "w" );
       const bool add_edges = windows.size() > 0 ;
       const bool collapse_startstop = param.has( "collapse-edges" );
       const std::string winname = param.has( "edge" ) ? param.value( "edge" ) : "edge" ;
-      
+      const int seq = param.has( "s" ) ? param.requires_int( "s" ) : 1 ;
       annot_t * edgeLR = NULL, * edgeL = NULL, * edgeR = NULL;
 
       if ( add_edges )  

@@ -61,12 +61,28 @@ struct named_interval_t {
 struct edf_t;
 struct annot_t;
 struct param_t;
+
+
+// // for offset-based overlap counts: defines 'nosa' in annotate_stats_t
+// struct offset_t {
+//   int64_t t;  // -ve or +ve offset   
+//   uint64_t w; // width 
+  
+//   bool operator() const {
+//     if ( t < rhs.t ) return true;
+//     if ( rhs.t < t ) return false;
+//     return w < rhs.w;
+//   }
+  
+// };
+
 struct annotate_stats_t {
   
   annotate_stats_t()
   {
     nss.clear();
     nsa.clear();
+    nosa.clear();
     psa.clear();
     ns.clear();
     adist.clear();
@@ -80,7 +96,11 @@ struct annotate_stats_t {
 
   // seed-annot counts
   std::map<std::string,std::map<std::string,double> > nsa;
+  
+  // offset seed-annot counts
+  std::map<std::string,std::map<std::string,std::map<int,double> > > nosa;
 
+  
   // seed-annot proportion (of seeds overlapped by 1+ annot)
   std::map<std::string,std::set<named_interval_t> > psa;
   std::map<std::string,double> ns; // denom (# flat seeds)
@@ -162,6 +182,14 @@ struct annotate_t {
   
   double flanking_sec;
   std::map<std::string,double> flanking_sec_annot;
+
+  // i.e. offsets=<sec>,<inc>,<max>  all in seconds
+  std::vector<interval_t> flanking_overlap_intervals;
+  std::vector<std::string> flanking_overlap_desc;
+  uint64_t flanking_overlap_mx;
+  int n_flanking_offsets;
+  std::set<std::string> flanking_overlap_seeds;
+  std::set<std::string> flanking_overlap_others;
   
   double window_sec;
 
@@ -212,6 +240,7 @@ struct annotate_t {
   std::vector<annot_contrast_t> contrasts;
   
   bool do_pileup;
+  bool do_seed_seed;
   
   std::map<std::string,std::string> label2channel;
 
@@ -349,6 +378,13 @@ struct annotate_t {
   std::map<std::string,std::map<std::string,double> > p_expsq;
   std::map<std::string,std::map<std::string,double> > p_pv;
   std::map<std::string,std::map<std::string,double> > p_z;
+
+  // seed-annot pairwise overlap counts for flanking offset windows
+  std::map<std::string,std::map<std::string,std::map<int,double> > > pf_obs;
+  std::map<std::string,std::map<std::string,std::map<int,double> > > pf_exp;
+  std::map<std::string,std::map<std::string,std::map<int,double> > > pf_expsq;
+  std::map<std::string,std::map<std::string,std::map<int,double> > > pf_pv;
+  std::map<std::string,std::map<std::string,std::map<int,double> > > pf_z;
 
   // seed-annot proportion seeds spanned by 1+ annot
   std::map<std::string,double> prop_obs;

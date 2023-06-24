@@ -348,6 +348,38 @@ void annotate_t::set_options( param_t & param )
     }
   
 
+  // specify flanking offset windows for 'nosa' overlap?
+  flanking_overlap_intervals.clear();
+  flanking_overlap_mx = 0LLU;
+  n_flanking_offsets = 0;
+  
+  // nb. we only extend around seeds
+  if ( param.has( "offset-seed" ) ) flanking_overlap_seeds = param.strset( "offset-seed" );
+  if ( param.has( "offset-other" ) ) flanking_overlap_others = param.strset( "offset-other" );
+  
+  if ( param.has( "offset" ) )
+    {
+      std::vector<double> s = param.dblvector("offset");
+      if ( s.size() != 3 ) Helper::halt( "expecting offset=size,inc,max in seconds" );
+      if ( s[0] < 0 || s[1] <= 0 || s[2] <= 0 ) Helper::halt( "offset values must be positive" );
+          
+      flanking_overlap_intervals.clear();
+      uint64_t dur = s[0] * globals::tp_1sec;
+      for (double ss = 0 ; ss <= s[2] ; ss += s[1] )
+	{
+	  uint64_t start = ss * globals::tp_1sec; 
+	  flanking_overlap_intervals.push_back( interval_t( start , start + dur ) );
+	  flanking_overlap_desc.push_back( Helper::dbl2str( ss + s[0]/2.0 ) + "_" + Helper::dbl2str( s[0] ) );
+	  flanking_overlap_mx = start + dur; // sets to max: specifies search range around each seed
+	}
+      
+      n_flanking_offsets = flanking_overlap_intervals.size(); 
+    }
+
+  if ( n_flanking_offsets )
+    logger << "  evaluating " << n_flanking_offsets << " flanking intervals for overlap (offset arg)\n";
+  
+  
   // distance to neighbour stats
   window_sec = param.has( "w" ) ? param.requires_dbl( "w" ) : 10 ;
   
@@ -474,7 +506,13 @@ void annotate_t::set_options( param_t & param )
   // do seed-seed pileup?
   //
   
-  do_pileup = param.has( "pileup" ) ? param.yesno( "pileup" ) : true ; 
+  do_pileup = param.has( "pileup" ) ? param.yesno( "pileup" ) : false ; 
+
+  //
+  // include seed-seed pairwise comparisons in SEED-ANNOT pairs? default = no
+  //
+
+  do_seed_seed = param.has( "seed-seed" ) ? param.yesno( "seed-seed" ) : false; 
   
   //
   // constrained shuffle duration (i.e. only up to X seconds in either direction)?
@@ -589,7 +627,9 @@ void annotate_t::set_options( param_t & param )
   // then denote here
   if ( param.has( "edges" ) )
     edge_sec = param.requires_dbl( "edges" );
-
+  else
+    edge_sec = 0;
+  
   // exclusionary background (xbg) -- i.e. xbg is the converse of bg, and thus
   // specifies gaps rather than allowed intervals
   if ( param.has( "xbg" ) )
@@ -908,8 +948,9 @@ void annotate_t::prep()
 	  ++pp;
 	}
 
+      // 
       // 0 1 2 3 4 5 6 7 8 9 10
-      // sz = 10,  i.e. random from 0 to 9	  
+      // sz = 10,  i.e. random from 0 to 9
 
       seg[ 0LLU ] = tottp;
       
@@ -927,8 +968,8 @@ void annotate_t::prep()
 	  ++bb;	  
 	}
     }
-  
-  
+
+   
   if ( debug_mode )
     {
       
@@ -936,11 +977,16 @@ void annotate_t::prep()
       std::set<uint64_t>::const_iterator ff = brk.begin();
       while ( ff != brk.end() )
 	{
-	  std::cout << " background discontinuity tp = " << *ff << "\tsec = " << *ff * globals::tp_duration << "\n";
+	  std::cout << " background discontinuity tp = " << *ff << "\t@sec = " << *ff * globals::tp_duration << "\n";
 	  ++ff;
 	}
     }
 
+  //
+  // track orig/final counts
+  //
+
+  std::map<std::string,int> orig_counts;
   
   //
   // any filters to apply?
@@ -957,6 +1003,7 @@ void annotate_t::prep()
   events.clear();
   
   int cnt = 0;
+  int off_target = 0;
   
   pp = all_annots.begin();
   while ( pp != all_annots.end() )
@@ -1061,6 +1108,10 @@ void annotate_t::prep()
 	    std::make_pair( instance_idx.parent->name ,
 			    pool ? "." : instance_idx.ch_str );
 	  
+
+	  // count as an original
+
+	  orig_counts[ aid ]++;
 	  
 	  // actual interval
 
@@ -1090,10 +1141,12 @@ void annotate_t::prep()
 	  //
 	  
 	  uint64_t offset;	  
-
+	  
 	  bool okay = segment( interval , &offset );
-
-	  if ( ! okay ) { ++ii; continue; } 
+	  
+	  //std::cout << " ii->f " << aid << " " << okay << "\n";
+	  
+	  if ( ! okay ) { ++ii; off_target++; continue; } 
 
 	  //
 	  // weights to inc/exc?
@@ -1202,6 +1255,8 @@ void annotate_t::prep()
 	 << " intervals across " << achs.size()
 	 << " annotation classes, including " << sachs.size() << " seed(s)\n";
 
+  logger << "  " << off_target << " events fell outside of the background and were rejected\n";
+  
   if ( filters )
     logger << "  excluded " << filtered_out << " of "
 	   << filtered_out + cnt
@@ -1241,6 +1296,7 @@ void annotate_t::prep()
       logger << "  " << qq->first;
       if ( sachs.find( qq->first ) != sachs.end() ) logger << " [seed]"; else logger << " [other]";
       logger << " : n = " << qq->second
+	     << " of " << orig_counts[ qq->first ] 
 	     << " , mins = " << annot_s[ qq->first ] / 60.0
 	     << " , avg. dur (s) = " << annot_s[ qq->first ] / (double)qq->second;
       
@@ -2613,7 +2669,10 @@ annotate_stats_t annotate_t::eval()
 	    {		  
 	      // skip self comparison
 	      if ( *aa == *bb ) { ++bb; continue; }
-	      
+
+	      // skip seed-seed comparison?
+	      if ( (!do_seed_seed ) && sachs.find( *bb ) != sachs.end() ) { ++bb; continue; }
+		   
 	      // requiring only intra-channel comparisons?
 	      if ( only_within_channel && ! same_channel( *aa , *bb ) ) { ++bb; continue; }
 	      
@@ -2827,8 +2886,7 @@ void annotate_t::output()
       ++pp;
     }
   writer.unlevel( "SEED" );
-
-
+  
   //
   // one-to-many seed/annot overlap
   //
@@ -2903,10 +2961,6 @@ void annotate_t::output()
 	    }
 	  	  
 	  // seed-annot distances
-	  // if ( absd_obs.find( sa->first  ) == absd_obs.end() )
-	  //   std::cout << " COULD NOT FIND " << sa->first << " in absd_obs " << "\n";
-	  // if ( absd_exp.find( sa->first ) == absd_exp.end() )
-	  //   std::cout << " COULD NOT FIND " << sa->first << " in absd_exp " << "\n";
 	  
 	  writer.value( "D1_OBS" , absd_obs[ sa->first ][ pp->first ]  );
 	  writer.value( "D_N" , dn_obs[  sa->first ][ pp->first ]  );
@@ -2941,33 +2995,115 @@ void annotate_t::output()
       ++sa;
     }
   writer.unlevel( "SEED" );
-  
+
+
+  //
+  // seed-annot flanking overlap window
+  //
+
+  if ( n_flanking_offsets )
+    {
+      std::map<std::string,std::map<std::string,std::map<int,double> > >::const_iterator sf = pf_obs.begin();
+      while ( sf != pf_obs.end() )
+	{
+	  
+	  if ( ! ( flanking_overlap_seeds.size() == 0
+		   || flanking_overlap_seeds.find( sf->first ) != flanking_overlap_seeds.end() ) )
+	    {
+	      ++sf; continue;
+	    }    
+	    
+	  writer.level( sf->first , "SEED" );
+
+	  const std::map<std::string,std::map<int,double> > & p = sf->second;
+	  std::map<std::string,std::map<int, double> >::const_iterator pp = p.begin();
+	  while ( pp != p.end() )
+	    {
+
+	      if ( ! ( flanking_overlap_others.size() == 0
+		       || flanking_overlap_others.find( pp->first ) != flanking_overlap_others.end() ) )
+		{
+		  ++pp; continue;
+		}
+	      
+	      writer.level( pp->first , "OTHER" );
+
+	      // always do all rather than just observed
+	      for (int fi=0; fi<n_flanking_offsets; fi++)
+		{
+
+		  int fpos = fi+1;
+		  int fneg = -(fi+1);
+		  std::string desc = flanking_overlap_desc[ fi ];
+
+		  // pos
+		  writer.level( fpos , "OFFSET" );
+		  writer.value( "INT" , desc );
+		  writer.value( "N_OBS" , pf_obs[ sf->first ][ pp->first ][ fpos ]  );
+		  if ( nreps )
+		    {
+		      double mean = pf_exp[ sf->first ][ pp->first ][ fpos ] / (double)nreps;
+		      double var = pf_expsq[ sf->first ][ pp->first ][ fpos ] / (double)nreps - mean * mean;	  
+		      writer.value( "N_EXP" , mean );
+		      writer.value( "N_P" , ( pf_pv[ sf->first ][ pp->first ][ fpos ]  + 1 ) / (double)( nreps + 1 ) );
+		      if ( var > 0 ) 
+			writer.value( "N_Z" , ( pf_obs[ sf->first ][ pp->first ][ fpos ] - mean ) / sqrt( var ) );
+		    }
+
+		  // neg
+		  writer.level( fneg , "OFFSET" );
+                  writer.value( "INT" , "-" + desc );
+                  writer.value( "N_OBS" , pf_obs[ sf->first ][ pp->first ][ fneg ]  );
+                  if ( nreps )
+                    {
+                      double mean = pf_exp[ sf->first ][ pp->first ][ fneg ] / (double)nreps;
+                      double var = pf_expsq[ sf->first ][ pp->first ][ fneg ] / (double)nreps - mean * mean;
+                      writer.value( "N_EXP" , mean );
+                      writer.value( "N_P" , ( pf_pv[ sf->first ][ pp->first ][ fneg ]  + 1 ) / (double)( nreps + 1 ) );
+                      if ( var > 0 )
+                        writer.value( "N_Z" , ( pf_obs[ sf->first ][ pp->first ][ fneg ] - mean ) / sqrt( var ) );
+                    }
+
+		}
+	      writer.unlevel( "OFFSET" );
+
+	      // next annot
+	      ++pp;
+	    }	  
+	  writer.unlevel( "OTHER" );
+
+	  // next seed
+	  ++sf;
+	}
+      writer.unlevel( "SEED" );
+    }
+
 }
 
  
 
 bool annotate_t::place_interval( const interval_t & i ,  uint64_t * offset ) const 
 {
+
   // to test if interval i spans any point in 'brk' (where 'brk' contains 0 and end also)
   // test whether the start and stop have the same iterator from upper_bound search
-  
   std::set<uint64_t>::const_iterator u1 = brk.upper_bound( i.start );
-
+  
   // for end, check on END - 1, i.e. if end of annot is last of all, we need the end of the GREATER than the last event
   std::set<uint64_t>::const_iterator u2 = brk.upper_bound( i.stop == 0 ? 0 : i.stop - 1LLU ); 
-
+  
   // if we span a break-point, we know this segment is no good
   if ( u1 != u2 ) return false;
 
   // but what if we are in a gap? (including starting before or after all segments)
   if ( u1 == brk.begin() || u1 == brk.end() ) return false;
-
+ 
   // track back, and check whether value is a key in seg[]
   --u1;
 
   // is in gap between two breaks? (i.e. offset for start not tracked) 
   if ( seg.find( *u1 ) == seg.end() ) return false;
-  
+
   // seems okay, return offset for bounding segment
   *offset = *u1;
   
@@ -3093,6 +3229,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 				   uint64_t offset , 
 				   annotate_stats_t * r )
 {
+
   //  debug_mode = true;
   // if ( debug_mode ) std::cout << "\nseed_annot_stats( "
   //  			      << astr << " n = " << a.size() << " -- "
@@ -3115,14 +3252,18 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       
       // find the first annot not before (at or after) the seed
       std::set<interval_t>::const_iterator bb = b.lower_bound( *aa );
-
+      
       // track matched B (verbose output only)
       interval_t bmatch = *bb;
       std::string mtype = ".";
+
+      // track closet match (used in offsets[] calcs below)
+      // as we tweak *bb
+      std::set<interval_t>::const_iterator closestb = bb;
       
       // verbose output
       //if ( debug_mode )
-      std::cout << "a = " << aa->as_string() << "\n";
+      //      std::cout << "a = " << aa->as_string() << "\n";
 
       // edge cases:
       // no annot at or past seed? : bb == b.end() 
@@ -3141,14 +3282,14 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 
       // if ( debug_mode )
       // 	{
-       	  std::cout << " initial b = ";
-       	  if ( bb == b.end() ) std::cout << " -END-";
-       	  else
-       	    {
-       	      std::cout << bb->as_string() ;
-       	      if ( bb == b.begin() ) std::cout << " (begin)";
-       	    }	  
-       	  std::cout << "\n";
+      // std::cout << " initial b = ";
+      // if ( bb == b.end() ) std::cout << " -END-";
+      // else
+      //   {
+      //     std::cout << bb->as_string() ;
+      //     if ( bb == b.begin() ) std::cout << " (begin)";
+      //   }	  
+      // std::cout << "\n";
       // 	}
 
       
@@ -3161,7 +3302,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  overlap = true;
 
 	  // if ( debug_mode )
-	  std::cout << "  found overlap, dist = 0 \n";
+	  //   std::cout << "  found overlap, dist = 0 \n";
 	  
 	}
       else // it must come afterwards
@@ -3176,7 +3317,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	    -1; 
 	  
 	  // if ( debug_mode )
-	  std::cout << " prov dist = " << dist << "\n";
+	  //  std::cout << " prov dist = " << dist << "\n";
 	  
 	  // step back, if we can - is there a closer annot /before/ the seed?
 	  if ( bb != b.begin() )
@@ -3184,7 +3325,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      --bb;
 
 	      // if ( debug_mode )
-	      std::cout << " stepping back, b -> " << bb->as_string() << "\n";
+	      // std::cout << " stepping back, b -> " << bb->as_string() << "\n";
 	      
 	      // nb - this may overlap seed
 	      // i.e. starts before, but ends after seed-start, and so
@@ -3195,8 +3336,11 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		  dist = 0;
 		  overlap = true;
 
+		  // track
+		  closestb = bb;
+		  
 		  // if ( debug_mode )
-		  std::cout << "  back b overlaps a, done\n"; 
+		  // std::cout << "  back b overlaps a, done\n"; 
 		}
 	      else
 		{
@@ -3211,12 +3355,14 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		  // lower_bound (i.e. the final annot occurs before this seed)
 		  // in which case, this left annot will be the closest 
 		  if ( dist < 0 || left_dist <= dist )
-		    dist = - left_dist;
-
+		    {
+		      dist = - left_dist;
+		      closestb = bb;
+		    }
 		  // if ( debug_mode )
 		  //   {
-		  std::cout << " back b is before, so dist = " << left_dist << "\n";
-		  std::cout << " final dist = " << dist << "\n";
+		  // std::cout << " back b is before, so dist = " << left_dist << "\n";
+		  // std::cout << " final dist = " << dist << "\n";
 		  //   }
 		}
 	    }
@@ -3229,9 +3375,9 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // to track proprtion of seeds w/ at least one (non-seed) annot overlap
       if ( overlap && ! bseed )
 	{
-	  std::cout << " found overlap : " << astr << " " << bstr << " = " << aa->as_string() << " by " << bb->as_string() << "\n";
+	  //	  std::cout << " found overlap : " << astr << " " << bstr << " = " << aa->as_string() << " by " << bb->as_string() << "\n";
  	  r->psa[ astr ].insert ( named_interval_t( offset, *aa , astr ) );
-	  std::cout << "   size = " << r->psa[ astr ].size() << "\n";
+	  //std::cout << "   size = " << r->psa[ astr ].size() << "\n";
 	}
       
       // save original distance
@@ -3241,7 +3387,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       if ( dist > window_sec ) dist = window_sec;
       else if ( dist < -window_sec ) dist = -window_sec;
 
-      std::cout <<" final distance = " << dist << "\n";
+      //      std::cout <<" final distance = " << dist << "\n";
       
       // for mean distance -- do we meet the window criterion?
       const double adist = fabs( dist );
@@ -3263,6 +3409,160 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      
 	    }
 	  r->ndist[ astr ][ bstr ] += 1; // denom for both the above (D1+D2)
+	}
+
+
+      //
+      // evaluate any offsets windows? 
+      //
+
+      if ( n_flanking_offsets 
+	   && ( flanking_overlap_seeds.size() == 0 || flanking_overlap_seeds.find( astr ) != flanking_overlap_seeds.end() )
+	   && ( flanking_overlap_others.size() == 0 || flanking_overlap_others.find( bstr ) != flanking_overlap_others.end() ) 
+	   )
+	{
+
+	  // seed          is   *aa
+	  // closest match is   *closestb
+	  // max_range     is   flanking_overlap_mx
+	  // windows       are  flanking_overlap_intervals[]
+
+	  //                  |---aa---|
+	  //  |   |   |   |   |        |   |   |   |   |
+	  //    -4  -3  -2  -1           +1  +2  +3  +4
+	  // -mx                                      +mx
+
+	  std::set<interval_t>::const_iterator cc = closestb;
+
+	  // std::cout << " aa " << aa->as_string() << "\n";
+	  // std::cout << " cc " << cc->as_string() << "\n";
+
+	  // forwards:: events must span after
+	  while ( 1 )
+	    {
+	      // nothing left?
+	      if ( cc == b.end() ) break;	      
+	      
+	      //std::cout << "  checking -> cc " << cc->as_string() << "\n";
+	      
+	      // comes before, i.e. this cc does not extend after, then advance 
+	      if ( cc->stop <= aa->stop )
+		{
+		  ++cc;
+		  continue;
+		}
+
+	      // if here, cc must extend from aa forwards; check we have
+	      // not gone too far : from end of seed to start of cc; but
+	      // need to check that cc does actually start after end of aa
+	      
+	      if ( cc->start >= aa->stop && cc->start - aa->stop > flanking_overlap_mx )
+		break;
+	      
+	      // otherwise, we have at least some of the range between end of *aa and
+	      // final search region spanned by this *cc.   Count which bins have overlap
+	      
+	      // zero-bounded start of overlap
+	      uint64_t s1 = cc->start < aa->stop ? 0LLU : cc->start - aa->stop ;
+	      
+	      // end of overlap: we know cc ends after 
+	      uint64_t s2 = cc->stop - aa->stop;
+
+	      //std::cout << " s12 " << s1 << " " << s2 << "\n";
+	      
+	      for (int fi=0; fi<n_flanking_offsets; fi++)
+		{
+		  const interval_t & win = flanking_overlap_intervals[fi];
+		  
+		  // gone past (s2 is end+1 still)
+		  if ( win.start >= s2 ) break;
+
+		  //     |aaaaaa|  [s1]------[s2]
+		  //            |   |   |   |   |   |   |   win[] interval_t
+		  // overlaps?
+		  //std::cout << " win " << fi << " of " << n_flanking_offsets << " = " << win.as_string() << "\n";
+		  
+		  if ( s1 < win.stop && s2 > win.start ) 
+		    {
+		      //std::cout << "overlaps!\n";
+		      r->nosa[ astr ][ bstr ][ fi + 1 ] += 1 ; // +1 based offset counts:
+		    }
+		}
+	      
+	      // loop back to consider next putative *cc in forwards direction
+	      ++cc;				
+	    }
+
+	  //std::cout << "now going back\n";
+	  
+	  // now consider going backwards: reset to closest
+	  cc = closestb;
+
+	  while ( 1 )
+	    {
+
+	      //std::cout << " chking neg " << cc->as_string() << "\n";
+
+	      // starts after start?, i.e. this cc does not extend before?
+	      // then roll back (unless we are already at the start of the list) 
+	      if ( cc->start >= aa->start )
+		{
+		  //std::cout << "  cc starts after aa, roll back...\n";
+		  if ( cc == b.begin() ) break; 
+		  --cc;
+		  continue;
+		}
+	      
+	      // if here, cc must start before aa start; check we have
+	      // not gone too far : from start of seed to end of cc;
+	      //  but need to check that end of seed to start of cc; but
+	      // need to check that cc does actually start after end of aa
+	      
+	      if ( aa->start >= cc->stop && aa->start - cc->stop > flanking_overlap_mx )
+		{
+		  //std::cout << " gone too far::: " << cc->stop << " " << aa->start << " " << aa->start - cc->stop << " " << flanking_overlap_mx << "\n";
+		  break;
+		}
+
+	      // otherwise, we have at least some of the range between start of *aa and
+	      // prior final search region spanned by this *cc.   Count which bins have overlap
+	      
+	      // start of offset (we know cc starts before aa starts if here)
+	      uint64_t s2 = aa->start - cc->start;
+
+	      // zero-bounded end of overlap (going back in time)
+	      uint64_t s1 = cc->stop < aa->start ? aa->start - cc->stop : 0LLU ;
+	      
+	      //std::cout << " s1 s2 " << s1 << " " << s2 << "\n";
+	      
+	      for (int fi=0; fi<n_flanking_offsets; fi++)
+		{
+		  const interval_t & win = flanking_overlap_intervals[fi];
+		  
+		  //std::cout << " win " << win.as_string() << "\n";
+		  
+		  // gone past , based on end of win: no point in looking here.
+		  if ( win.stop >= s2 ) break;
+
+		  //     |aaaaaa|  [s1]------[s2]
+		  //            |   |   |   |   |   |   |   win[] interval_t
+		  // overlaps?
+		  //std::cout << " checking neg pos  " << -( fi + 1 ) << "\n";
+		  if ( s1 < win.stop && s2 > win.start ) 
+		    {
+		      r->nosa[ astr ][ bstr ][ -( fi + 1 ) ] += 1 ; // -ve +1 based offset counts:
+		      //std::cout << " FOUND ONE OH MY!\n";
+		    }
+		  
+		}
+	      
+	      // loop back to consider next putative *cc in forwards direction
+	      if ( cc == b.begin() ) break;
+	      --cc;
+
+	    }
+
+	  	  
 	}
       
       // are we tracking hits
@@ -3500,6 +3800,9 @@ void annotate_t::observed( const annotate_stats_t & s )
   
   // seed-annot pairwise overlap (std::map<std::string,std::map<std::string,double> > )
   p_obs = s.nsa;
+
+  // flanking offset seed-annot pairwise overlaps
+  pf_obs = s.nosa;
   
   // seed-annot proportion spanned
   std::map<std::string,std::set<named_interval_t> >::const_iterator pp = s.psa.begin();
@@ -3549,11 +3852,13 @@ void annotate_t::observed( const annotate_stats_t & s )
 
 void annotate_t::build_null( const annotate_stats_t & s )
 {
-
-  // consider only the observed configurations
-
+  
+  //
   // seed-seed group overlap
-  //std::map<std::string,double>::const_iterator ss = s.psa.begin();
+  //
+
+  // consider only observed values
+  // std::map<std::string,double>::const_iterator ss = s.psa.begin();
   std::map<std::string,double>::const_iterator ss = obs.begin();
   while ( ss != obs.end() )
     {
@@ -3567,9 +3872,10 @@ void annotate_t::build_null( const annotate_stats_t & s )
 	}      
       ++ss;
     }
+  
 
   //
-  // seed-annot overlap
+  // seed-annot overlap 
   //
   
   std::map<std::string,std::map<std::string,double> >::const_iterator sa = p_obs.begin();
@@ -3578,7 +3884,7 @@ void annotate_t::build_null( const annotate_stats_t & s )
       // should always be okay, but check just in case some weirdness
       const bool is_seen = s.nsa.find( sa->first ) != s.nsa.end();
       if ( ! is_seen ) { ++sa; continue; }
-
+      
       const std::map<std::string,double> & p = sa->second;
       const std::map<std::string,double> & pe = s.nsa.find( sa->first )->second;
       
@@ -3596,6 +3902,46 @@ void annotate_t::build_null( const annotate_stats_t & s )
 	  ++pp;
 	}
       ++sa;
+    }
+
+  //
+  // seed-annot flanking window overlap: Q? to consider all perms?
+  //
+  
+  std::map<std::string,std::map<std::string,std::map<int,double> > >::const_iterator sf = pf_obs.begin();
+  while ( sf != pf_obs.end() )
+    {
+      //      std::cout << " checking pf " << sf->first << "\n";
+      
+      // should always be okay, but check just in case some weirdness
+      const bool is_seen = s.nosa.find( sf->first ) != s.nosa.end();
+      if ( ! is_seen ) { ++sf; continue; }
+      
+      const std::map<std::string,std::map<int,double> > & p = sf->second;
+      const std::map<std::string,std::map<int,double> > & pe = s.nosa.find( sf->first )->second;
+      
+      std::map<std::string,std::map<int,double> >::const_iterator pp = p.begin();
+      while ( pp != p.end() )
+	{	  
+	  const bool is_seen = pe.find( pp->first ) != pe.end();
+	  if ( is_seen )
+	    {
+	      //std::cout <<" here sz = " << pp->second.size() << "\n";
+	      // for each flanking val: these should always all exists
+	      std::map<int,double>::const_iterator ff = pp->second.begin();
+	      while ( ff != pp->second.end() )
+		{
+		  double val = pe.find( pp->first )->second.find( ff->first )->second;
+		  //std::cout << " building pf_exp... val = " << ff->first << " = " << val << "\n";
+		  pf_exp[ sf->first ][ pp->first ][ ff->first ] += val;
+		  pf_expsq[ sf->first ][ pp->first ][ ff->first ] += val * val;
+		  if ( val >= pf_obs[ sf->first ][ pp->first ][ ff->first ] ) ++pf_pv[ sf->first ][ pp->first ][ ff->first ];
+		  ++ff;
+		}
+	    }
+	  ++pp;
+	}
+      ++sf;
     }
 
   //

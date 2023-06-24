@@ -24,6 +24,7 @@
 
 #include "eval.h"
 #include "luna.h"
+#include "miscmath/crandom.h"
 
 extern logger_t logger;
 extern writer_t writer;
@@ -4166,6 +4167,18 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  if ( Helper::iequals( tok0 , "srand" ) )
+    {
+      
+      uint64_t rng_seed = 0;
+      //long unsigned 
+      if ( ! Helper::str2int64( tok1  , &rng_seed ) )
+	Helper::halt( "cannot set srand to " + tok1 );
+      logger << "  setting RNG seed to " << rng_seed << "\n";
+      CRandom::srand( rng_seed );
+      return;
+    }
+  
   if ( Helper::iequals( tok0 , "devel" ) )
     {
       globals::devel = Helper::yesno( tok1 );
