@@ -2765,6 +2765,41 @@ bool globals::is_stage_annotation( const std::string & s )
 void annotation_set_t::make( param_t & param , edf_t & edf )
 {
 
+  // special case: just add each epoch as a distinct annotation
+  // (no flattening, etc, unlike below)
+  if ( param.has( "epoch-num" ) )
+    {
+      if ( param.empty( "epoch-num" ) ) Helper::halt("value needed for epoch-num  (annotation class label)" );
+      const std::string newannot = param.value( "epoch-num" );
+
+      // use 5-digit formatting
+      //std::cout << std::setfill('0') << std::setw(5) << 25;
+
+            
+      edf.timeline.ensure_epoched();
+      
+      int ne = edf.timeline.first_epoch();
+      
+      if ( ne == 0 ) 
+	{
+	  logger << "  ** no epochs to add, leaving MAKE-ANNOTS\n";
+	  return;
+	}
+      
+      while ( 1 )
+	{
+	  int epoch = edf.timeline.next_epoch();
+	  if ( epoch == -1 ) break;
+	  int e1 = edf.timeline.display_epoch( epoch );
+	  // yes, I know...
+	  std::string zeros = ( e1 < 10 ? "000" : ( e1 < 100 ? "00" : ( e1 < 1000 ? "0" : "" ) ) );
+	  annot_t * an = add( newannot + "_" + zeros + Helper::int2str( e1 ) );
+	  an->add( "." , edf.timeline.epoch( epoch ) , "." );
+	}
+      // all done
+      return;
+    }
+  
   // special case: just add epoch annotations
   // (and flatten, so that we get all as a 'background')
   

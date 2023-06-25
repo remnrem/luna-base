@@ -87,7 +87,8 @@ struct annotate_stats_t {
     ns.clear();
     adist.clear();
     sdist.clear();
-    ndist.clear();
+    nadist.clear();
+    nsdist.clear();
     s2a_mappings.clear();
   }
   
@@ -110,8 +111,10 @@ struct annotate_stats_t {
   // seed-annot signed(dist)
   std::map<std::string,std::map<std::string,double> > sdist;
 
-  // denominator for distance means
-  std::map<std::string,std::map<std::string,double> > ndist;
+  // denominator for distance means (sep. for abs and signed)
+  // for abs, we truncate at max win; for signed, we ignore (set to zero + do not include in denom) 
+  std::map<std::string,std::map<std::string,double> > nadist;
+  std::map<std::string,std::map<std::string,double> > nsdist;
 
   // seed-annots pile-up (1-to-many seed-to-annot mapping)
   //  e.g. for each SP, how many of each flavor for SO+/SO- or RIP+/RIP-

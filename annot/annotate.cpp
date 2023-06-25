@@ -2812,11 +2812,11 @@ void annotate_t::add_contrasts( annotate_stats_t * r )
 
       // make new scores - need denom added here to get diff in average scores
 
-      double sc_adist = r->adist[ c.a1 ][ c.b1 ] / ( r->ndist[ c.a1 ][ c.b1 ] == 0 ? 1 : r->ndist[ c.a1 ][ c.b1 ] )
-	- r->adist[ c.a2 ][ c.b2 ] / ( r->ndist[ c.a2 ][ c.b2 ] == 0 ? 1 : r->ndist[ c.a2 ][ c.b2 ] ) ;
-
-      double sc_sdist = r->sdist[ c.a1 ][ c.b1 ] / ( r->ndist[ c.a1 ][ c.b1 ] == 0 ? 1 : r->ndist[ c.a1 ][ c.b1 ] )
-	- r->sdist[ c.a2 ][ c.b2 ] / ( r->ndist[ c.a2 ][ c.b2 ] == 0 ? 1 : r->ndist[ c.a2 ][ c.b2 ] ) ;
+      double sc_adist = r->adist[ c.a1 ][ c.b1 ] / ( r->nadist[ c.a1 ][ c.b1 ] == 0 ? 1 : r->nadist[ c.a1 ][ c.b1 ] )
+	- r->adist[ c.a2 ][ c.b2 ] / ( r->nadist[ c.a2 ][ c.b2 ] == 0 ? 1 : r->nadist[ c.a2 ][ c.b2 ] ) ;
+      
+      double sc_sdist = r->sdist[ c.a1 ][ c.b1 ] / ( r->nsdist[ c.a1 ][ c.b1 ] == 0 ? 1 : r->nsdist[ c.a1 ][ c.b1 ] )
+	- r->sdist[ c.a2 ][ c.b2 ] / ( r->nsdist[ c.a2 ][ c.b2 ] == 0 ? 1 : r->nsdist[ c.a2 ][ c.b2 ] ) ;
       
       //double sc_sdist = r->sdist[ c.a1 ][ c.b1 ] - r->sdist[ c.a2 ][ c.b2 ];
 
@@ -2831,9 +2831,10 @@ void annotate_t::add_contrasts( annotate_stats_t * r )
       r->adist[ l1 ][ l2 ] = sc_adist;
       r->sdist[ l1 ][ l2 ] = sc_sdist;
       r->nsa[ l1 ][ l2 ] = sc_nsa;
-
+      
       // need to set ndist to 1.0 - i.e. has no meaning/effect, but means that distance measures are seen:
-      r->ndist[ l1 ][ l2 ] = 1.0;
+      r->nadist[ l1 ][ l2 ] = 1.0;
+      r->nsdist[ l1 ][ l2 ] = 1.0;
       
     }
 
@@ -3382,6 +3383,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	    }
 	}
       
+      
       // track: overlap = dist == 0,
       // but use bool overlap to avoid floating-point equality test
       if ( overlap ) r->nsa[ astr ][ bstr ] += 1 ;
@@ -3394,35 +3396,39 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  //std::cout << "   size = " << r->psa[ astr ].size() << "\n";
 	}
       
-      // save original distance
-      const double adist_orig = fabs( dist );
+      // truncate at window length?
+      const bool truncate = dist > window_sec || dist < -window_sec ;
 
-      // truncate at window length
-      if ( dist > window_sec ) dist = window_sec;
-      else if ( dist < -window_sec ) dist = -window_sec;
-
-      //      std::cout <<" final distance = " << dist << "\n";
+      // sets abs-dist to max;
+      // ignores in calc of signed-dist
+      double adist = truncate ? window_sec : fabs( dist ) ;
       
-      // for mean distance -- do we meet the window criterion?
-      const double adist = fabs( dist );
-      
+      //      std::cout << "a, closest = " << aa->as_string() << "\t" << closestb->as_string() << "\t" << overlap << "\t" << dist << "\n";
+            
       // do we include complete overlap as "nearest"?
       if ( include_overlap_in_dist || ! overlap )
 	{
+
 	  r->adist[ astr ][ bstr ] += adist ; 
+	  r->nadist[ astr ][ bstr ] += 1; 
 	  
 	  // track only -1 or +1 for 'before' or 'after'
 	  // overlap == 0 here, so add that qualifier
 	  if ( ! overlap )
 	    {
+	      if ( ! truncate )
+		{
+		  if ( d2_signed )  // reduce to -1/+1
+		    r->sdist[ astr ][ bstr ] += dist > 0 ? +1 : -1 ;
+		  else
+		    r->sdist[ astr ][ bstr ] += dist ;
 
-	      if ( d2_signed )  // reduce to -1/+1
-		r->sdist[ astr ][ bstr ] += dist > 0 ? +1 : -1 ;
-	      else
-		r->sdist[ astr ][ bstr ] += dist ;
-	      
+		  // denom
+		  r->nsdist[ astr ][ bstr ] += 1;
+
+		}
 	    }
-	  r->ndist[ astr ][ bstr ] += 1; // denom for both the above (D1+D2)
+	  
 	}
 
 
@@ -3590,9 +3596,6 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       if ( make_anew )
 	{
 	  
-	  // use adist_orig as we truncated the other adist
-	  
-	  //if ( overlap || adist_orig <= window_sec )
 	  if ( overlap ) // only report based on absolute overlap
 	    {
 	      // only tracking seed-nonseed matches? or all?
@@ -3816,9 +3819,9 @@ uint64_t annotate_t::total_duration( const std::set<interval_t> & x )
 void annotate_t::observed( const annotate_stats_t & s )
 {
   
-  // for pairwise combinations (nsa and nosa, ndist, etc), only nsa is guaranteed to 
+  // for pairwise combinations (nsa and nosa, nadist, nsdist, etc), only nsa is guaranteed to 
   // contain all keys;  therefore, here we should ensure that zero's are entered for nosa
-  // and ndist[]
+  // and nxdist[]
 
   // seed-seed group overlap ( std::map<std::string,double> )
   obs = s.nss;
@@ -3846,7 +3849,7 @@ void annotate_t::observed( const annotate_stats_t & s )
   sgnd_obs = s.sdist;
   
   // get average distances (these may be < S-A count, because of window_sec threshold)
-  // isa nsa[] keys, but check that ndist is >0 
+  // isa nsa[] keys, but check that nxdist is >0 
 
   std::map<std::string,std::map<std::string,double> >::const_iterator dd = s.nsa.begin();
   while ( dd != s.nsa.end() )
@@ -3867,30 +3870,44 @@ void annotate_t::observed( const annotate_stats_t & s )
 	  
 	  // handle absd_obs, sgnd_obs and dn_obs to ensure all keys are populated
 	  
-	  double nd = -1;
+	  double nad = -1, nsd = -1;
 	  
-	  std::map<std::string,std::map<std::string,double> >::const_iterator nn = s.ndist.find( dd->first );
-          if ( nn != s.ndist.end() )
+	  std::map<std::string,std::map<std::string,double> >::const_iterator nn = s.nadist.find( dd->first );
+          if ( nn != s.nadist.end() )
 	    {
 	      const std::map<std::string,double> & n2 = nn->second;
 	      std::map<std::string,double>::const_iterator nnn = n2.find( ee->first );
 	      
 	      if ( nnn != n2.end() )  
-		nd = nnn->second; // set a (non-zero) value
+		nad = nnn->second; // set a (non-zero) value
+	    }
+
+	  nn = s.nsdist.find( dd->first );
+	  if ( nn != s.nsdist.end() )
+	    {
+	      const std::map<std::string,double> & n2 = nn->second;
+	      std::map<std::string,double>::const_iterator nnn = n2.find( ee->first );
+	      
+	      if ( nnn != n2.end() )  
+		nsd = nnn->second; // set a (non-zero) value
 	    }
 	  
-	  if ( nd > 0 ) 
+	  if ( nad > 0 ) 
 	    {
-	      absd_obs[ dd->first ][ ee->first ] /= nd;
-	      sgnd_obs[ dd->first ][ ee->first ] /= nd;
-	      dn_obs[ dd->first ][ ee->first ] = nd;
+	      absd_obs[ dd->first ][ ee->first ] /= nad;
+	      dn_obs[ dd->first ][ ee->first ] = nad; // hmm? use abs (nad not nsd) - we prob don't need this...
 	    }
 	  else
 	    {
-	      absd_obs[ dd->first ][ ee->first ] = window_sec; // set to max (for an annot: Q markers?)
-	      sgnd_obs[ dd->first ][ ee->first ] = 0; // null value 'not-defined'
+	      absd_obs[ dd->first ][ ee->first ] = window_sec; // set to max (for an annot: Q markers?)	      
 	      dn_obs[ dd->first ][ ee->first ] = 0;
 	    }
+
+	  if ( nsd > 0 )	    
+	    sgnd_obs[ dd->first ][ ee->first ] /= nsd;
+	  else
+	    sgnd_obs[ dd->first ][ ee->first ] = 0; // null value 'not-defined'
+	  
 	  ++ee;
 	}
       ++dd;
@@ -4003,26 +4020,15 @@ void annotate_t::build_null( annotate_stats_t & s )
 
   
   //
-  // seed-annot distances : sgnd_obs and absd_obs will always have the same keys, so do just once
+  // seed-annot distances : sgnd_obs and absd_obs may now have different keys/denoms
+  //    but absd should always be the superset, and sgnd = 0 if not, so just use absd
   //
   
   sa = absd_obs.begin();
   while ( sa != absd_obs.end() )
     {
-
-      // const bool is_seen = s.ndist.find( sa->first ) != s.ndist.end();
-      // if ( ! is_seen ) { ++sa; continue; }
-      
-      //      std::cout << "s1\n";
+     
       const std::map<std::string,double> & p = sa->second;
-      //std::cout << "s2\n";
-      // const std::map<std::string,double> & pe_abs = s.adist.find( sa->first )->second;
-
-      // //      std::cout << "s3\n";
-      // const std::map<std::string,double> & pe_sgn = s.sdist.find( sa->first )->second;
-      // //      std::cout << "s4\n";
-      // const std::map<std::string,double> & pe_n   = s.ndist.find( sa->first )->second;
-      //    std::cout << "s5\n";
       
       std::map<std::string,double>::const_iterator pp = p.begin();
       while ( pp != p.end() )
@@ -4030,25 +4036,26 @@ void annotate_t::build_null( annotate_stats_t & s )
           
 	  // keys: sa->first  pp->first 
 	  //  access s.ndist[][]   s.sdist[][]   s.adist[][] 
-
+	  
 	  // if not defined, ndist and sdist should be zero
 	  // otherwise, adist should be max window size (i.e. 'undefined')
 	  // Q/TODO: annot vs marker max value issue
 	  	  
-	  //	  std::cout << "s5\n";
-	  const double n = s.ndist[ sa->first ][ pp->first ];
+	  const double na = s.nadist[ sa->first ][ pp->first ];
+	  const double ns = s.nsdist[ sa->first ][ pp->first ];
 	  
 	  double a1 = window_sec;
 	  double s1 = 0; 
 	  
 	  // normalize here if defined
-	  if ( n > 0 ) 
-	    {		  
-	      a1 = s.adist[ sa->first ][ pp->first ] / n ; 
-	      s1 = s.sdist[ sa->first ][ pp->first ] / n ; 		  
-	    }
+
+	  if ( na > 0 ) 
+	    a1 = s.adist[ sa->first ][ pp->first ] / na ; 
 	  
-	  //	  std::cout << "s6\n";
+	  if ( ns > 0 )
+	    s1 = s.sdist[ sa->first ][ pp->first ] / ns ; 		  
+	  
+	  //	  std::cout << "sgnd\t" << s1 << "\t" << a1 << "\t" << na << "\t" << ns  << "\t" << s.nsa[ sa->first ][ pp->first ]  << "\n";
 	  
 	  // expecteds: sums
 	  absd_exp[ sa->first ][ pp->first ] += a1;
@@ -4058,8 +4065,9 @@ void annotate_t::build_null( annotate_stats_t & s )
 	  absd_expsq[ sa->first ][ pp->first ] += a1 * a1;
 	  sgnd_expsq[ sa->first ][ pp->first ] += s1 * s1;
 	      
-	  // track counts
-	  dn_exp[ sa->first ][ pp->first ] += n;
+	  // track counts (prob. don't need??)
+	  // just use abs() value here
+	  dn_exp[ sa->first ][ pp->first ] += na;
 	  
 	  // pvals : testing whether *closer* so stat is LE rather than GE
 	  if ( a1 <= absd_obs[ sa->first ][ pp->first ] ) ++absd_pv[ sa->first ][ pp->first ];
@@ -4299,7 +4307,8 @@ void annotate_t::view()
 	      std::cout << "region = " << rr->first << "\t"
 			<< "annot = " << qq->first << "\t"
 			<< "interval = " << ii->as_string() << "\t"
-			<< "dur = " << ii->duration_sec() << "\n";
+			<< "dur = " << ii->duration_sec() << "\t"
+			<< ii->start << "\n";
               ++ii;
             }
           ++qq;
