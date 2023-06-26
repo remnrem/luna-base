@@ -3414,14 +3414,24 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  
 	  // track only -1 or +1 for 'before' or 'after'
 	  // overlap == 0 here, so add that qualifier
+
+	  // nb. above:
+	  //   +1 implies ANNOT is AFTER SEED
+	  //   -1         ANNOT is BEFORE SEED
+	  //  we want the output to be SEED-CENTRIC,
+	  //   i..e. -1 means SEED comes BEFORE
+	  //       and so change sign of sdist below
+
+	  const double seed_centric_dist = - dist ; 
+	  
 	  if ( ! overlap )
 	    {
 	      if ( ! truncate )
 		{
 		  if ( d2_signed )  // reduce to -1/+1
-		    r->sdist[ astr ][ bstr ] += dist > 0 ? +1 : -1 ;
+		    r->sdist[ astr ][ bstr ] += seed_centric_dist > 0 ? +1 : -1 ;
 		  else
-		    r->sdist[ astr ][ bstr ] += dist ;
+		    r->sdist[ astr ][ bstr ] += seed_centric_dist ;
 
 		  // denom
 		  r->nsdist[ astr ][ bstr ] += 1;
@@ -4069,11 +4079,11 @@ void annotate_t::build_null( annotate_stats_t & s )
 	  // just use abs() value here
 	  dn_exp[ sa->first ][ pp->first ] += na;
 	  
-	  // pvals : testing whether *closer* so stat is LE rather than GE
+	  // pvals : one-sided p-values
 	  if ( a1 <= absd_obs[ sa->first ][ pp->first ] ) ++absd_pv[ sa->first ][ pp->first ];
 	  
 	  // nb. we've calculated mean pre/prior, but here the test is 2-sided, so take abs(x)
-	  if ( fabs(s1) > fabs( sgnd_obs[ sa->first ][ pp->first ] ) ) ++sgnd_pv[ sa->first ][ pp->first ];
+	  if ( fabs(s1) >= fabs( sgnd_obs[ sa->first ][ pp->first ] ) ) ++sgnd_pv[ sa->first ][ pp->first ];
 	  
           ++pp;
         }
