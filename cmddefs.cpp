@@ -2025,6 +2025,11 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "F,CH,SEED" , "PP" , "CH-SEED pre/post metric" );
 
   
+  add_table( "SPINDLES" , "SPINDLE,F,CH,SEED" , "Spindle propagation seed-channel stats" );
+  add_var( "SPINDLES" , "SPINDLE,F,CH,SEED" , "REL" , "Relative position" );
+  add_var( "SPINDLES" , "SPINDLE,F,CH,SEED" , "T" , "Time" );
+
+
   add_table( "SPINDLES" , "MSPINDLE" , "Merged-spindle output [collate]" );
   add_var( "SPINDLES" , "MSPINDLE" , "MSP_DUR","Duration of this m-spindle" );
   add_var( "SPINDLES" , "MSPINDLE" , "MSP_F","Estimated frequency of this m-spindle" );
