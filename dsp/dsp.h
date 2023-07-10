@@ -67,6 +67,7 @@
 #include "polarity.h"
 #include "cwt-design.h"
 #include "fir.h"
+#include "iir.h"
 #include "emd.h"
 #include "dfa.h"
 #include "mi.h"

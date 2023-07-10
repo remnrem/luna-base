@@ -574,11 +574,11 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   
   
   //
-  // standard convolution vs FFT implementation
+  // standard convolution vs FFT implementation (default)
   //
-
-  const bool use_fft = param.has( "fft" );
-
+  
+  const bool use_fft = param.has( "fft" ) ? param.yesno( "fft" ) : true;
+  
   if ( param.has( "bandpass" ) )
     {
       ftype = fir_t::BAND_PASS;

@@ -181,6 +181,9 @@ struct annotate_t {
 
   bool midpoint;
   std::set<std::string> midpoint_annot;
+
+  bool use_rps;
+  std::map<std::string,std::string> rp_annot;
   
   double flanking_sec;
   std::map<std::string,double> flanking_sec_annot;

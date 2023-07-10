@@ -753,7 +753,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	{
 	  
 	  logger << "\n  detecting spindles around F_C " << frq[fi] << "Hz for " << signals.label(s) << "\n";
-
+	  
 	  if ( alt_spec ) 
 	    logger << "  wavelet with FWHM(T) " << fwhm[fi] << "\n";       
 	  else
@@ -2607,7 +2607,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		    instance->set( "soc" , (int)( fabs( spindle.so_nearest < 1e-8 ) ) );
 		  
 		  // index tp
-		  instance->set( "mid", "tp:" + Helper::int2str( spindle.tp_mid ) );
+		  //instance->set( "mid", "tp:" + Helper::int2str( spindle.tp_mid ) );
+		  instance->set( "rp_mid", (double)( spindle.tp_mid - spindle.tp.start )
+				 / double( spindle.tp.stop - spindle.tp.start ) );
 		  
 		}
 	      
@@ -2933,11 +2935,19 @@ void characterize_spindles( edf_t & edf ,
    // Spindle-level QC filters (set default at 0, i.e spindle-activity must be more likely)
    //
 
-   bool qc_q = true;
+   bool qc_q = param.has( "noq" ) ? false : true;
    double qc_qmin = 0 , qc_qmax = -1;
-   if ( param.has( "q" ) ) { qc_q = true; qc_qmin = param.requires_dbl( "q" ); } 
-   if ( param.has( "q-max" ) ) { qc_q = true; qc_qmax = param.requires_dbl( "q-max" ); }
+   if ( qc_q )
+     {
+       if ( param.has( "q" ) ) { qc_q = true; qc_qmin = param.requires_dbl( "q" ); } 
+       if ( param.has( "q-max" ) ) { qc_q = true; qc_qmax = param.requires_dbl( "q-max" ); }
+       if ( qc_qmin < 0 ) qc_q = false;
+     }
 
+   if ( qc_q && ( target_f < 10 || target_f > 16 ) )
+     {
+       Helper::halt( "spindle fc is outside of 10-16 Hz range, but 'q' is set\n   add q=-9 to remove freq-based QC filter" );
+     }
    
    // if ( 1 ) 
    //   {

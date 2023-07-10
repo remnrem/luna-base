@@ -42,6 +42,7 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
 
 CSRCS = $(wildcard db/*.c) \
         $(wildcard stats/*.c) \
+        $(wildcard dsp/*.c) \
         $(wildcard dsp/libsamplerate/*.c)
 
 OBJS = $(SRCS:.cpp=.o) $(CSRCS:.c=.o) 

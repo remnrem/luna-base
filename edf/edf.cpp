@@ -515,6 +515,15 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
   Helper::ascii7( &reserved , ' ' );
 
+  
+  // enfore rule that reserved fields should be null (allowing EDF+C and EDF+D codes)
+  for (int i=5;i<44;i++) reserved[i] = ' ';
+  if ( reserved[0] != 'E' ) reserved[0] = ' ';
+  if ( reserved[1] != 'D' ) reserved[1] = ' ';
+  if ( reserved[2] != 'F' ) reserved[2] = ' ';
+  if ( reserved[3] != '+' ) reserved[3] = ' ';
+  if ( reserved[4] != 'C' && reserved[4] != 'D' ) reserved[4] = ' ';
+  
   //
   // ensure starttime is in the PM, i.e. 07:00 --> 19:00
   // unless we've otherwise been instructed to respect

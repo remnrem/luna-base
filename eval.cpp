@@ -1691,7 +1691,11 @@ void proc_moving_average( edf_t & edf , param_t & param )
 
 void proc_filter( edf_t & edf , param_t & param )	  
 {
-  dsptools::apply_fir( edf , param );
+
+  if ( param.has( "butterworth" ) || param.has( "chebyshev" ) )
+    dsptools::apply_iir( edf , param );
+  else
+    dsptools::apply_fir( edf , param );
 }
 
 

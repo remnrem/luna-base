@@ -320,7 +320,25 @@ void annotate_t::set_options( param_t & param )
       else
 	midpoint_annot = param.strset( "midpoint" ); // do some
     }
-    
+
+  // reduce annotations to a relative position (rp_) specified meta
+  // field (this will be 0..1 as a relative position w/in the interval)
+  // e.g. SO peaks, SP midpoints, etc
+  use_rps = false;
+  if ( param.has( "rp" ) )
+    {
+      // expecting rp=<annot>|<tag>,<annot>|<tag>
+      //   to get rp_<tag> for <annot>
+      std::vector<std::string> tok = param.strvector( "rp" );
+      for (int i=0; i<tok.size(); i++)
+	{
+	  std::vector<std::string> tok2 = Helper::parse( tok[i] , "|" );
+	  if ( tok2.size() != 2 ) Helper::halt( "expecting rp=<annot>|<rp-tag>" );
+	  rp_annot[ tok2[0] ] = tok2[1] ;
+	}
+      use_rps = rp_annot.size() != 0;
+    }
+  
   // for *seeds* only, add flanking values
   flanking_sec = 0;
   if ( param.has( "f" ) )
@@ -588,6 +606,7 @@ void annotate_t::set_options( param_t & param )
   if ( overlap_th < 0 || overlap_th > 1 ) Helper::halt( "invalid value for 'overlap' (0 - 1)" );
 
   if ( midpoint ) logger << "  reducing all annotations to midpoints\n";
+  if ( use_rps ) logger <<"  reducing some annotations to rp-tags\n";
   if ( flanking_sec ) logger << "  adding f=" << flanking_sec << " seconds to each annotation\n";
   if ( window_sec ) logger << "  truncating distance at w=" << window_sec << " seconds for nearest neighbours\n";
   if ( marker_window_sec ) logger << "  truncating seed-marker distance at mw=" << marker_window_sec << " seconds\n";
@@ -1046,6 +1065,13 @@ void annotate_t::prep()
 	    {
 	      midpoint_annot.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
 	    }
+
+	  // need to add channel-specific version for 'rp'?
+	  if ( ( ! pool ) && rp_annot.find( instance_idx.parent->name ) != rp_annot.end() )
+	    {
+	      rp_annot[ instance_idx.parent->name + "_" + instance_idx.ch_str ]
+		= rp_annot[ instance_idx.parent->name ];
+	    }
 	  
 	  // need to add channel-specific version for 'f'?
 	  if ( ( ! pool ) && flanking_sec_annot.find( instance_idx.parent->name ) != flanking_sec_annot.end() )
@@ -1057,9 +1083,6 @@ void annotate_t::prep()
 	  // need to add channel-specific version to seed fix-list?
 	  if ( ( ! pool ) && fixed.find( instance_idx.parent->name ) != fixed.end() )
 	    {
-	      // logger << "  adding "
-	      //  	     << instance_idx.parent->name + "_" + instance_idx.ch_str
-	      //  	     << " to fixed list\n";
 	      fixed.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
 	    }
 
@@ -1137,6 +1160,57 @@ void annotate_t::prep()
 	      interval.start = interval.stop = m;
 	    }
 
+	  //
+	  // set to rp-tag time-point?
+	  //
+
+	  if ( use_rps && rp_annot.find( aid ) != rp_annot.end() )
+	    {
+
+	      // if this is already a 0-dur tp, then skip (but print warning message)
+	      uint64_t dur = interval.stop - interval.start;
+	      
+	      if ( dur == 0LLU )
+		{
+		  logger << "  warning - requested a rp-tag recoding of a 0-duration time-stamp, skipping...\n";
+		}
+	      else
+		{
+		  const instance_t * instance = ii->second;
+		  
+		  // expecting special encoding: rp_<tag>
+		  const std::string & rp_tag = "rp_" + rp_annot[ aid ];
+		  
+		  avar_t * rp = instance->find( rp_tag );
+		  
+		  if ( rp == NULL )
+		    Helper::halt( "annotation " + aid + " found that does not have required rp-tag " + rp_tag );
+		  
+		  double rpval = rp->double_value();
+		  
+		  // can be negative, i.e. implies before
+		  
+		  // rp      -1      0   0.5   1       2
+		  //          .      |---------|       .  
+		  
+		  if ( rpval >= 0 )
+		    {
+		      uint64_t p = interval.start + dur * rpval;
+		      interval.start = interval.stop = p;
+		    }
+		  else
+		    {
+		      uint64_t x = dur * -rpval;
+		      if ( interval.start > x )
+			interval.start -= x;
+		      else
+			interval.start = 0LLU;
+		      interval.stop = interval.start ; 
+		    }		
+		  
+		}
+	    }
+	  
 	  //
 	  // add to the map?
 	  //
@@ -1307,7 +1381,9 @@ void annotate_t::prep()
       if ( fixed.find( qq->first ) != fixed.end() || ( ! shuffle_annots && sachs.find( qq->first ) == sachs.end() ) )
 	logger << " [fixed]";
 
-      if ( midpoint_annot.find( qq->first ) != midpoint_annot.end() ) logger << " [midpoint]";
+      if ( use_rps && rp_annot.find( qq->first ) != rp_annot.end() ) logger << " [rp=" << rp_annot[qq->first ] << "]";
+      
+      if ( midpoint || midpoint_annot.find( qq->first ) != midpoint_annot.end() ) logger << " [midpoint]";
 
       if ( flanking_sec > 0 && sachs.find( qq->first ) != sachs.end() )
 	logger << " [f=" << flanking_sec << "]";
