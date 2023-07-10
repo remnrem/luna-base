@@ -3220,7 +3220,13 @@ void proc_surface_laplacian( edf_t & edf , param_t & param )
 
 void proc_attach_clocs( edf_t & edf , param_t & param )
 {
-  
+
+  if ( ! param.has( "file" ) ) 
+    {
+      edf.clocs.set_default();
+      return;
+    }
+
   std::string filename = Helper::expand( param.requires( "file" ) );
   if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not find " + filename );
 

@@ -34,8 +34,8 @@ void dsptools::surface_laplacian_wrapper( edf_t & edf , param_t & param )
   //
   
   if ( ! edf.clocs.attached() ) 
-    Helper::halt( "no clocs attached" );
-
+    edf.clocs.set_default();
+  
   //
   // parameters
   //

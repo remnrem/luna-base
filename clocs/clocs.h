@@ -139,6 +139,8 @@ struct clocs_t {
   
   int load_cart( const std::string & filename , bool verbose = false );
   
+  void set_default();
+
   bool attached() const { return cloc.size() != 0 ; } 
 
   int size() const { return cloc.size() ; } 

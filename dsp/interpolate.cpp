@@ -44,8 +44,9 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 {
 
   // requires some clocs
-  if ( ! edf.clocs.attached() ) Helper::halt( "no clocs attached" );
-  
+  if ( ! edf.clocs.attached() ) 
+    edf.clocs.set_default();
+
   // check that data are epoched 
   if ( ! edf.timeline.epoched() ) 
     Helper::halt( "requires epoch'ed data" ) ;
@@ -224,7 +225,8 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
 {
   
   // requires ome clocs to be attached
-  if ( ! edf.clocs.attached() ) Helper::halt( "no clocs attached" );
+  if ( ! edf.clocs.attached() ) 
+    edf.clocs.set_default();
   
   // signal list
   std::string signal_label = param.requires( "sig" );
