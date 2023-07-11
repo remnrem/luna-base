@@ -182,7 +182,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   epoch_start.clear();
   epoch_gap.clear();
 
-  // how ot handle gaps -- treat as "WAKE" or just as unknown?
+  // how ot handle gaps -- treat as "WAKE" or just as unknown? - default== MISSING
   gap_treatment = param.has( "gaps" ) && param.value( "gaps" ) == "W" ? WAKE : UNKNOWN; 
   
   //
@@ -220,9 +220,10 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       
       if ( end_prior != 0 && end_prior != interval.start )
 	{
-
-	  //std::cout << " found gap before epoch " << e << "\n";
+	  
+	  //std::cout << " found gap before epoch " << e << "( gap ends " << interval.start_sec() << "\n";
 	  uint64_t gap_dur = interval.start - end_prior;
+	  //std::cout << "   gap dur was " << gap_dur << " tp\n";
 	  
 	  // add a fake 'gap' epoch
 	  // before this real one
@@ -301,7 +302,9 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
     }
 
   writer.unepoch();
-  
+
+  // std::cout << " lengths\n"
+  // 	    << stages.size() << " " << epoch_n.size() << " " << epoch_gap.size() << " " << epoch_start.size() << " " << epoch_dur.size() << "\n";
 
   //
   // make a copy of the stages
@@ -309,12 +312,12 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   
   original_stages = stages;
 
+  
   //
   // track total number of epochs + gaps
   //
 
   ne_gaps = stages.size();
-
   
   
   //
@@ -1018,9 +1021,11 @@ void hypnogram_t::calc_stats( const bool verbose )
   //
 
   const double epoch_mins = timeline->epoch_length() / 60.0 ; 
-  
+
+  // this includes gaps
   const int ne = stages.size();
- 
+
+  //  std::cout << "ne (gaps?) = " << ne << "\n";
   
   //
   // Basic summary statistics per-individual/night
@@ -1032,16 +1037,20 @@ void hypnogram_t::calc_stats( const bool verbose )
   // implicitly, this will only count in the TRT (i.e. ignore pre
   // lights-out, and post lights-on)
 
+  // nb. this includes gaps, so count below
   for (int e = 0 ; e < ne ; e++ )
     {
-      if      ( stages[e] == WAKE  ) mins[ "W" ] += epoch_mins;
+      if ( epoch_gap[e] ) mins["GAP"] += epoch_dur[e]; // actual GAP size
+      else if ( stages[e] == WAKE  ) mins[ "W" ] += epoch_mins;
       else if ( stages[e] == NREM1 ) mins[ "N1" ] += epoch_mins;
       else if ( stages[e] == NREM2 ) mins[ "N2" ] += epoch_mins;
       else if ( stages[e] == NREM3 ) mins[ "N3" ] += epoch_mins;
       else if ( stages[e] == NREM4 ) mins[ "N4" ] += epoch_mins;
       else if ( stages[e] == REM   ) mins[ "R" ] += epoch_mins;
       else if ( stages[e] == LIGHTS_ON ) mins[ "L" ] += epoch_mins;
-      else mins[ "?" ] += epoch_mins; // movement, artifact, unscored 
+      
+      
+      else mins[ "?" ] += epoch_mins; // movement, artifact, unscored or GAP 
     }
 
   // did we observe /any/ sleep?
@@ -1167,6 +1176,9 @@ void hypnogram_t::calc_stats( const bool verbose )
   // Total sleep time (excludes 'other')
   TST = TRT - TWT - mins[ "?" ];
 
+  // Total GAP time
+  TGT = mins["GAP"];
+  
   // study starts/ends in sleep?
   starts_in_sleep = is_sleep( stages[0] );
   ends_in_sleep = is_sleep( stages[ne-1] );
@@ -1179,7 +1191,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   // latency to persistent sleep
   per_slp_lat = ( first_persistent_sleep_epoch - lights_out_epoch ) * epoch_mins;
-
+  
   // Sleep period time : note, diff. from Luna output
   // here SPT = sleep onset to lights On (i.e. includes final wake)
   SPT = TRT - slp_lat;
@@ -1820,20 +1832,33 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   std::map<int,int> cmin;
   std::map<int,int> cmax;
-  std::map<int,int> counts_rem;
-  std::map<int,int> counts_nrem;
-  std::map<int,int> counts_other;
-
+  std::map<int,double> secs_tot;
+  std::map<int,double> secs_rem;
+  std::map<int,double> secs_nrem;
+  std::map<int,double> secs_other;
+  
   for (int e=0;e<ne;e++)
     {
       const int & sn = sleep_cycle_number[e];
       if ( sn == 0 ) continue;
-      if ( sn > num_nremc ) num_nremc = sn;
-      if ( cmin.find( sn ) == cmin.end() ) cmin[ sn ] = cmax[sn] = e;
-      cmax[sn] = e; // track max
-      if ( is_rem( stages[e] ) ) counts_rem[sn]++;
-      else if ( is_nrem( stages[e] ) ) counts_nrem[sn]++;
-      else counts_other[sn]++;
+      
+      // non-gapped epoch count
+      const int eidx = epoch_n[e];
+      const bool is_gap = epoch_gap[e];
+
+      if ( ! is_gap )
+	{
+	  if ( sn > num_nremc ) num_nremc = sn;	  
+	  // track epochs based on non-happed version	  
+	  if ( cmin.find( sn ) == cmin.end() ) cmin[ sn ] = cmax[sn] = eidx;
+	  cmax[sn] = eidx; // track max
+	}
+      
+      // accumulate times (including any gaps)
+      secs_tot[sn] += epoch_dur[e];
+      if      ( is_rem( stages[e] ) ) secs_rem[sn] += epoch_dur[e];
+      else if ( is_nrem( stages[e] ) ) secs_nrem[sn] += epoch_dur[e];
+      else secs_other[sn] += epoch_dur[e]; // includes gaps
     }
 
 
@@ -1844,36 +1869,50 @@ void hypnogram_t::calc_stats( const bool verbose )
       const int & sn = ii->first ;
       
       // total cycle duration
-      double dur = cmax[ sn ] - ii->second + 1;
-      double dur_mins = dur * epoch_mins ; 
+      double dur = secs_tot[sn];
+      double dur_mins = dur / 60.0;
       
       nremc_mean_duration += dur_mins;
- 
-      nremc_duration[ sn ] = ( counts_rem[sn] + counts_nrem[sn] + counts_other[sn] ) * epoch_mins ; 
-      nremc_nrem_duration[ sn ] = counts_nrem[sn] * epoch_mins ; 
-      nremc_rem_duration[ sn ] = counts_rem[sn]  * epoch_mins ; 
+      
+      nremc_duration[ sn ] = ( secs_rem[sn] + secs_nrem[sn] + secs_other[sn] ) / 60.0;
+      nremc_nrem_duration[ sn ] = secs_nrem[sn] / 60.0;
+      nremc_rem_duration[ sn ] = secs_rem[sn] / 60.0;
       
       nremc_start_epoch[ sn ] = ii->second + 1 ;  // output 1-based coding
-
-      nremc_epoch_duration[ sn ] = counts_rem[sn] + counts_nrem[sn] + counts_other[sn] ;
+      
+      nremc_epoch_duration[ sn ] = cmax[sn] - ii->second + 1; 
             
       ++ii;
     }
 
   if ( num_nremc > 0 ) nremc_mean_duration /= (double)num_nremc;
 
-  // cycle positions
+
+  // cycle positions for each epoch
   cycle_pos_relative.resize( ne , -1 );
   cycle_pos_absolute.resize( ne , -1 );
+  
+  std::map<int,double> elapsed_in_cycle;
+
   for (int e=0; e<ne; e++)
     {
       const int & sn = sleep_cycle_number[e];
+
       if ( sn == 0 ) continue;      
+      
       int cycle_start = cmin[sn];
       
-      // position within each cycle.
-      cycle_pos_absolute[e] = ( e - cycle_start ) * epoch_mins ; 
+      // position within each cycle.xxxxxx
+      //cycle_pos_absolute[e] = ( e - cycle_start ) * epoch_mins ;
+      // cycle_pos_absolute[e] = ( e - cycle_start ) * epoch_dur[e] mins ; 
+      // cycle_pos_relative[e] = cycle_pos_absolute[e] / (double)nremc_duration[sn];
+
+      cycle_pos_absolute[e] = elapsed_in_cycle[sn] / 60.0 ; 
       cycle_pos_relative[e] = cycle_pos_absolute[e] / (double)nremc_duration[sn];
+
+      // increment
+      elapsed_in_cycle[sn] += epoch_dur[e];
+      
     }
 
 
@@ -2104,7 +2143,7 @@ void hypnogram_t::calc_stats( const bool verbose )
       
       //
       // calculate the number of similar epochs 
-      // (FLANKING_MIN and FLANKING_ALL)
+      // (FLANKING and FLANKING_ALL)
       //
       
       int sim = 0;  
@@ -3071,7 +3110,8 @@ void hypnogram_t::output( const bool verbose ,
       // should go back and make consistent some point soon!
       writer.value( "TRT" , TIB ); 
       writer.value( "TIB" , TRT );
-      
+
+      writer.value( "TGT" , TGT );
       writer.value( "TST" , TST );
       writer.value( "TST_PER" , TpST );
       writer.value( "TWT" , TWT );
@@ -3476,12 +3516,19 @@ void hypnogram_t::output( const bool verbose ,
       // actual existing epoch count
       int ecnt = 0;
       
+      // elapsed time from start of first stage epoch
+      double mins = 0;
+      
       for (int e=0;e<ne_gaps;e++)
 	{
-
+	  
 	  // skip gaps in the output
 	  const bool is_gap = epoch_gap[e];
-	  if ( is_gap ) continue;
+	  if ( is_gap )
+	    {
+	      mins += epoch_dur[e];
+	      continue;	      
+	    }
 	  
 	  // get actual epoch number
 	  const int eidx = epoch_n[e];
@@ -3522,7 +3569,7 @@ void hypnogram_t::output( const bool verbose ,
 	    }
 	  
 	  // time in minutes (from start of stage-aligned epochs)	  
-	  writer.value( "MINS" ,  eidx * epoch_mins );
+	  writer.value( "MINS" ,  mins / 60.0 ); // eidx * epoch_mins );
 	  
 	  // time from EDF start (seconds)
 	  writer.value( "START_SEC" , sec0 ); 
@@ -3534,6 +3581,9 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "OSTAGE" , globals::stage( original_stages[e] ) );
 	  
 	  writer.value( "STAGE_N" , stagen[ stages[e] ] );
+
+	  // track mins
+	  mins += epoch_dur[e];
 	  
 	}
       
@@ -3575,29 +3625,42 @@ void hypnogram_t::output( const bool verbose ,
   double elapsed_n1 = 0 , elapsed_n2 = 0 , elapsed_n34 = 0 , elapsed_rem = 0;
     
   double elapsed_sleep = 0 , elapsed_wake = 0 , elapsed_waso = 0 ;
+
+  //  std::cout << " ne ne_gaps " << ne << " " << ne_gaps << "\n";
   
-  for (int e=0;e<ne;e++)
+  double elapsed_mins_from_epoch1 = 0;
+  
+  for (int e=0;e<ne_gaps;e++)
     {
       
+      // skip gaps in the output
+      const bool is_gap = epoch_gap[e];
+      
+      if ( is_gap )
+	{
+	  // for MINS output
+	  elapsed_mins_from_epoch1 += epoch_dur[e];
+
+	  // here, implies GAP counts of ? unknown
+	  // i.e. do not increment any elapsed_* counters
+	  continue;
+	}
+      
+      // get actual epoch number
+      const int eidx = epoch_n[e];
+      
       // epoch-level stratification
-
-      // nb. we can use display_epoch() here, not epoch_n[], as 
-      // HYPNO (verbose=T) should never be called on a masked/noncontiguous 
-      // set of epochs...
-
-      writer.epoch( timeline->display_epoch( e ) );
+      
+      writer.epoch( timeline->display_epoch( eidx ) );
       
       // new - use actual epoch encoding (it's what it's there for!)                                              
-      interval_t interval = timeline->epoch( e );
+      interval_t interval = timeline->epoch( eidx );
+
       const double sec0 = interval.start * globals::tp_duration;
       
       if ( starttime.valid ) 
 	{
-
-	  // old -- clock time based on EDF header
-	  //clocktime_t current_clock_time = starttime;
-	  //current_clock_time.advance_seconds( epoch_sec * e );
-
+	  
 	  clocktime_t present = starttime;
 	  present.advance_seconds( sec0 );
 	  
@@ -3609,8 +3672,11 @@ void hypnogram_t::output( const bool verbose ,
 	}
 
       // time in minutes (from EPOCH 1, not EDF start, i.e. if EPOCH align)
-      writer.value( "MINS" ,  e * epoch_mins );
+      writer.value( "MINS" ,  elapsed_mins_from_epoch1 / 60.0 ); // e * epoch_mins );
+      elapsed_mins_from_epoch1 += epoch_dur[e];
 
+      // flag if comes after a GAP
+      writer.value( "AFTER_GAP" , e != 0 && epoch_gap[e-1] ? 1 : 0 );
       
       // time from EDF start (seconds)
       writer.value( "START_SEC" , sec0 );
@@ -3619,7 +3685,7 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "STAGE" , globals::stage( stages[e] ) );    
       writer.value( "OSTAGE" , globals::stage( original_stages[e] ) );    
       writer.value( "STAGE_N" , stagen[ stages[e] ] );
-
+      
 
       // stage stats
       writer.value( "E_WAKE" , elapsed_wake );
@@ -3629,7 +3695,7 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "E_N2" , elapsed_n2 );
       writer.value( "E_N3" , elapsed_n34 );
       writer.value( "E_REM" , elapsed_rem );		  
-
+      
       // and as percentages
       writer.value( "PCT_E_SLEEP" , TST>0 ? elapsed_sleep / TST : 0 );
 
@@ -3689,7 +3755,7 @@ void hypnogram_t::output( const bool verbose ,
       
       // flanking epochs
 
-      writer.value( "FLANKING_MIN" , flanking[e] );
+      writer.value( "FLANKING" , flanking[e] );
       writer.value( "FLANKING_ALL" , flanking_tot[e] );
       writer.value( "NEAREST_WAKE" , nearest_wake[e] );
       writer.value( "WASO" , is_waso[e] );
@@ -3725,9 +3791,7 @@ void hypnogram_t::output( const bool verbose ,
   // Add annotation to denote multiple hypnogram features, e.g. including NREM cycle?
   // Note - this is done *after* output (meaning that annot will only work w/ HYPNO, not stages)
   //
-  
-      
-  
+          
   if ( annotate_features )
     {
       annotate( annot_prefix , annot_suffix );      

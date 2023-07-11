@@ -78,6 +78,11 @@ struct sp_props_t {
 		  const bool verbose = false 
 		  );
   
+  void regional( const int reqch = 2 , 
+		 const double w = 0.5 ,
+		 const bool verbose = false );
+  
+  
   // members
   std::vector<uint64_t> tps;
   std::map<sp_idx_t,sp_dat_t> data;

@@ -437,10 +437,10 @@ tsync_t::tsync_t( const Eigen::MatrixXd & X ,
 	    xcorr[ s1 ][ s2 ][ idx ] = xr / (double)np;
 	    
 	  }
-	
+
 	// estimated delay in samples
 	delay[ s1 ][ s2 ] = xr_max_idx;
-
+	//std::cout << " S1, S2 = " << s1 << " " << s2 << "\n";
 	
       }
   

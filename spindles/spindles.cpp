@@ -2673,6 +2673,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   if ( do_prop ) 
     {
+
+      props.regional( 1 );
       
       const double w = 1.0; // 1 sec window
 

@@ -191,6 +191,8 @@ struct hypnogram_t
   double TWT;  // total wake time
   double TST;  // total sleep time
   double TpST;  // total persistent sleep time
+
+  double TGT; // total GAP time
   
   double FWT;  // final wake time  ( from final wake to end of test )
 

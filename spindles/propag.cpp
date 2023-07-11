@@ -24,6 +24,8 @@
 
 #include "db/db.h"
 #include "helper/logger.h"
+#include "stats/Eigen/Dense"
+#include "dsp/tsync.h"
 
 extern logger_t logger;
 extern writer_t writer;
@@ -36,6 +38,8 @@ void sp_props_t::add_tp ( const std::vector<uint64_t> & tp )
     Helper::halt( "internal error in prop(): must be similar intervals/sampling rates across signals" );
 }
 
+
+// adds a channel for a given frequency: all spindles, all CWT 
 void sp_props_t::add( double f , const std::string & ch , const std::vector<spindle_t> & sp, const std::vector<double> & cwt )
 {
   // store frequency as integer
@@ -44,9 +48,180 @@ void sp_props_t::add( double f , const std::string & ch , const std::vector<spin
   data[ idx ] = dat;
 }
 
+
+
+void sp_props_t::regional( const int reqch , 
+			   const double w , 
+			   const bool verbose )
+{
+
+  // data[ sp_idx_t ] = sp_dat_t ; 
+
+  std::vector<int> count( tps.size() , 0 );
+  const int np = count.size();
+  if ( np < 1 ) return;
+  
+  std::map<sp_idx_t,sp_dat_t>::const_iterator dd = data.begin();
+  while ( dd != data.end() )
+    {
+      const sp_dat_t & dat = dd->second;
+      const int n = dat.sp.size();
+      for (int i=0; i<n; i++)
+	{
+	  const int start = dat.sp[i].start_sp;
+	  const int stop = dat.sp[i].stop_sp;
+	  for (int j=start; j<=stop; j++) ++count[j];
+	}
+      ++dd;
+    }
+  
+  // for (int i=0; i<count.size(); i++)
+  //   std::cout << count[i] << "\n";
+  
+  //
+  // get regions where multiple detected spindles
+  //
+  
+  std::set<interval_t> regions;
+  int curr = count[0];
+  bool in_region = false;
+  int start = -1 ;
+
+  // single time-point
+  uint64_t w_tp = tps[1] - tps[0];
+  double Fs = 1.0 / double( globals::tp_duration * w_tp  );
+  std::cout << Fs << " is Fs \n";
+  
+  for (int i=0; i<np; i++)
+    {
+      
+      bool in1 = count[i] >= reqch;
+            
+      // end of existing region?
+      if ( in_region )
+	{	  
+	  // discontin? [ will always be i>0 if here, so okay to check i-1th ] 
+	  const bool discon = tps[i] - tps[i-1] > w_tp ;
+
+	  // end?
+	  if ( discon || ! in1 )
+	    {
+	      // last, inclusive
+	      int stop = i-1;
+	      regions.insert( interval_t( start , i-1 ) );
+	      in_region = false;
+	    }
+	  
+	}
+      else
+	{
+	  // start of a new region?
+	  if ( in1 )
+	    {
+	      start = i;
+	      in_region = true;
+	    }
+	}
+
+    }
+
+  
+  logger << "  made " << regions.size() << " total regions\n";
+
+  //
+  // iterate over regions
+  //
+
+  
+  const int nc = data.size(); // channels x freqs
+
+  Eigen::MatrixXd XC = Eigen::MatrixXd::Zero( nc , nc );
+
+  std::set<interval_t>::const_iterator rr = regions.begin();
+  int cnt = 0;
+  while ( rr != regions.end() )
+    {
+
+      // double sec1 = tps[ rr->start ] * globals::tp_duration;
+      // double sec2 = tps[ rr->stop ] * globals::tp_duration;
+      // std::cout << ++cnt << "\t" << sec1 << "\t" << sec2 << "\n";
+      
+      const int sp1 = rr->start;
+      const int sp2 = rr->stop;
+      const int np = sp2 - sp1 + 1 ;
+      // zero-pad up to 1 second each side
+      const int offset = Fs;
+      const int np_padded = np + 2 * offset ; 
+      
+      // zero-pad 1-second either way
+      
+      Eigen::MatrixXd X = Eigen::MatrixXd::Zero( np_padded , nc );
+      //std::cout << " X " << X.rows() << " " << X.cols() << "\n";
+      int col = 0;
+      std::map<sp_idx_t,sp_dat_t>::const_iterator dd = data.begin();
+      while ( dd != data.end() )
+	{
+	  const sp_dat_t & dat = dd->second;
+	  
+	  Eigen::VectorXd C = Eigen::VectorXd::Zero( np );
+	  
+	  int rw = 0;
+	  for (int j=sp1; j<= sp2; j++)
+	    C[ rw++ ] = dat.coeff[ j ];
+	  //	  std::cout << " adding col " << col << " " << C.size() << "\n";
+	  X.col( col ).segment( offset , np ) = C;	 
+	  ++col;	    
+	  ++dd;
+	}
+
+      //std::cout << X << "\n";
+      // get xcorrs
+      
+      //std::cout << " about to XCORR\n";
+      tsync_t tsync( X , Fs , (int)Fs*0.25 );
+      
+      //std::cout << " DONE\n";
+      int d1 = 0;
+      dd = data.begin();
+      while ( dd != data.end() )
+	{
+	  int e1 = 0;
+	  std::map<sp_idx_t,sp_dat_t>::const_iterator ee = data.begin();
+	  while ( ee != data.end() )
+	    {
+	      if ( dd == ee ) { ++ee; ++e1; continue; }
+
+	      const double delay =  1.0/(double)Fs * ( d1 < e1 ? tsync.delay[ d1 ][ e1 ] : - tsync.delay[ e1 ][ d1 ] );
+
+	      XC(d1,e1) += delay;
+	      
+	      std::cout << d1 << " " << e1 << " " << dd->first.fe9 << "\t" << dd->first.ch << "\t" << delay << "\n";
+	      
+	      ++e1;
+	      ++ee;
+	    }
+	  
+	  ++d1;
+	  ++dd;
+	}
+      
+      //std::cout << "\n....\n";
+      // next region
+      ++rr;
+    }
+
+
+  XC /= (double)regions.size();
+
+  std::cout << " XC\n" << XC << "\n";
+  
+  
+}
+
+
 double sp_props_t::analyse( const std::set<double> & f , 
 			    const std::set<std::string> & c , 
-			    const std::string & seed , 			  
+			    const std::string & seed , 
 			    const double w ,
 			    const bool verbose )
 {
@@ -126,10 +301,11 @@ double sp_props_t::analyse( const std::set<double> & f ,
   const sp_dat_t & dat = data[ idx ];
   
   const int np = dat.sp.size();
-
+  
   if ( dat.coeff.size() != tps.size() )
     Helper::halt( "internal error in prop(): wrong TP/CWT size alignment" );
-      
+
+  
   for (int p=0; p<np; p++)
     {
 
@@ -152,7 +328,7 @@ double sp_props_t::analyse( const std::set<double> & f ,
 	}
       
       // midx is the peak
-
+      
       std::map<std::string,double>::iterator cc = cmap.begin();
       while ( cc != cmap.end() ) 
 	{
@@ -162,7 +338,7 @@ double sp_props_t::analyse( const std::set<double> & f ,
 	  
 	  // channel
 	  const std::string ch = cc->first;
-
+	  
 	  // skip self-seed
 	  if ( seed == ch ) 
 	    {
@@ -226,7 +402,7 @@ double sp_props_t::analyse( const std::set<double> & f ,
 		  nidx = i;
 		}	     
 	    }
-
+	  
 	  // express channel amplitude as a proportion of the seed peak amp.
 	  //  and require that it is at least 50% of the detected spindle to include
 
@@ -281,6 +457,20 @@ double sp_props_t::analyse( const std::set<double> & f ,
 	      
 	    }
 
+	  //
+	  // xcorr
+	  //
+	  
+	  for (int i = sp.start_sp; i <= sp.stop_sp; i++)
+            {
+              if ( coeff[i] > nx )
+                {
+                  nx = coeff[i];
+                  nidx = i;
+                }
+            }
+
+	  
 	  // next CH
 	  ++cc;
 	}
@@ -288,8 +478,7 @@ double sp_props_t::analyse( const std::set<double> & f ,
       if ( verbose ) 
 	writer.unlevel( globals::signal_strat ); 
             
-      // next spindle for the seed channel
-      
+      // next spindle for the seed channel      
     }
 
   if ( verbose )

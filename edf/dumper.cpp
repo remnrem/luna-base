@@ -122,12 +122,13 @@ void edf_t::record_dumper( param_t & param )
   while ( r != -1 )
     {
       
-      std::cout << "Record " << r+1 << " of " << header.nr_all << " total (" << header.nr << " retained)\n";
-
+      std::cout << "Record " << r+1 << " of " << header.nr_all << " total (" << header.nr
+		<< " retained), each of " << header.record_duration << " seconds duration\n";
+      
       //
       // Interval for this record
       //
-
+      
       interval_t interval = timeline.record2interval(r); 
       
       //
@@ -136,6 +137,7 @@ void edf_t::record_dumper( param_t & param )
       
       if ( show_annots ) 
 	{
+
 	  std::cout << "Generic Annotatons-----------------------\n";
 	  
 	  for (int a=0;a<annots.size();a++)
