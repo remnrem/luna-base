@@ -138,8 +138,8 @@ void edf_t::record_dumper( param_t & param )
       if ( show_annots ) 
 	{
 
-	  std::cout << "Generic Annotatons-----------------------\n";
-	  
+	  std::cout << "Generic Annotations----------------------\n";
+
 	  for (int a=0;a<annots.size();a++)
 	    {
 	      
