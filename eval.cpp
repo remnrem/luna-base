@@ -4583,6 +4583,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  // specified annots (only load these - but do not apply sanitization)
+  if ( Helper::iequals( tok0 , "raw-annots" ) || Helper::iequals( tok0 , "raw-annot" ) ) 
+    {
+      param_t dummy;     
+      dummy.add( "dummy" , tok1 );
+      globals::specified_annots = dummy.strset( "dummy" , "," );      
+      return;
+    }
 
   // delimiter char for annot key=value pairs (default '=')
   if ( Helper::iequals( tok0 , "annot-keyval" ) || Helper::iequals( tok0 , "annots-keyval" ) )

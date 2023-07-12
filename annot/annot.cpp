@@ -4703,6 +4703,14 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	      // get the annotation label
 	      std::string aname = Helper::trim( txt );
 	      
+	      //
+	      // skip this annotation (based on the raw, original annot name in EDF+)
+	      //
+	      
+	      if ( globals::specified_annots.size() > 0 &&
+		   globals::specified_annots.find( aname ) == globals::specified_annots.end() )
+		continue;
+	    
 	      // // sanitize?
 	      // if ( globals::sanitize_everything )
 	      // 	aname = Helper::sanitize( aname );
@@ -4815,13 +4823,32 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 		      // get the annotation label
 		      std::string aname = Helper::trim( te.name );
 
+		      
+		      //
+		      // skip this annotation (based on the raw, original annot name in EDF+)
+		      //
+		      
+		      //		      std::cout << " check  [" << aname << "] \n";
+		      
+		      
+		      if ( globals::specified_annots.size() > 0 &&
+			   globals::specified_annots.find( aname ) == globals::specified_annots.end() )
+			{
+			  // std::cout << " first [" << *globals::specified_annots.begin() << "] of " << globals::specified_annots.size() << "\n";
+			  // std::cout << "skipping\n";
+			  continue;
+			}
+		      
 		      // sanitize? (done in remap() )
 		      //	      if ( globals::sanitize_everything )
 		      //   aname = Helper::sanitize( aname );
 		      
-		      // do any remapping                                                                                                                         
+		      // do any remapping                                                                                                  
+		      
 		      const std::string tname = nsrr_t::remap( aname );
 		      
+ 
+
 		      // track aliasing?                                                                                                                          
 		      if ( tname != aname )
 			edf.timeline.annotations.aliasing[ tname ] = aname;
