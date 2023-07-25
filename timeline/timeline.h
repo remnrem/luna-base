@@ -254,17 +254,19 @@ struct timeline_t
 
   int whole_recording_epoch_dur(); 
 
-  int set_epoch(const double s, const double o , const double offset = 0 , 
+  int set_epoch(const double s, const double o , const uint64_t offset = 0LLU , 
 		const std::string align_str = "" , 
 		const std::vector<std::string> * align_annots = NULL ) 
   { 
-    if ( s <= 0 || o < 0 || offset < 0 ) 
-      Helper::halt( "cannot specify negative epoch durations/increments/offsets");
+    if ( s <= 0 || o < 0 )
+      Helper::halt( "cannot specify negative epoch durations/increments");
     
     clear_epoch_annotations();
     epoch_length_tp = s * globals::tp_1sec;
     epoch_inc_tp = o * globals::tp_1sec;
-    epoch_offset_tp = offset * globals::tp_1sec;
+
+    // pass offset as uint64_t
+    epoch_offset_tp = offset ; // * globals::tp_1sec;
     
     epoch_align_str = align_str;
     if ( align_annots != NULL ) 

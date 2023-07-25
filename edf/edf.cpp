@@ -3678,7 +3678,7 @@ void edf_t::update_physical_minmax( const int s )
   slice_t slice( *this , s , interval );
   const std::vector<double> * d = slice.pdata();
   const int n = d->size();
-
+  
   double pmin = (*d)[0];
   double pmax = (*d)[0];
   
@@ -3886,7 +3886,7 @@ void edf_t::update_signal_retain_range( int s , const std::vector<double> * d )
   update_signal( s , d , &dmin, &dmax, &pmin, &pmax );
 }
 
-void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmin_ , int16_t * dmax_ , double * pmin_ , double * pmax_ )
+void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmin_ , int16_t * dmax_ , const double * pmin_ , const double * pmax_ )
 {
 
   const bool debug = false;
@@ -3907,22 +3907,18 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 
   if ( debug ) std::cout << " n = " << n << "\n";
   
-  bool set_minmax = dmin_ != NULL ; 
+  bool set_dminmax = dmin_ != NULL ; 
+  bool set_pminmax = pmin_ != NULL ; 
   
   // use full digital min/max scale if not otherwise specified
   int16_t dmin = -32768;
   int16_t dmax = 32767;  
 
-  double pmin = (*d)[0];
-  double pmax = (*d)[0];
-
-  if ( set_minmax )
+  if ( set_dminmax )
     {
-      pmin = *pmin_;
-      pmax = *pmax_;
       dmin = *dmin_;
       dmax = *dmax_;
-
+      
       if ( dmin == dmax )
 	{
 	  dmin = -32768;
@@ -3933,7 +3929,16 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 	  dmin = *dmax_;
 	  dmax = *dmin_;
 	}
-
+    }
+    
+  double pmin = (*d)[0];
+  double pmax = (*d)[0];
+  
+  if ( set_pminmax )
+    {
+      pmin = *pmin_;
+      pmax = *pmax_;
+      
       if ( pmin == pmax )
         {
           pmin--;
@@ -3943,8 +3948,7 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
         {
           pmin = *pmax_;
           pmax = *pmin_;
-        }
-
+        }      
     }
   else
     {
@@ -3954,7 +3958,7 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 	  if      ( (*d)[i] < pmin ) pmin = (*d)[i];
 	  else if ( (*d)[i] > pmax ) pmax = (*d)[i];
 	}
-
+      
       // exapand range as needed
       if ( fabs( pmin - pmax ) < 1e-6 )
 	{
@@ -3963,13 +3967,13 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 	}
       
     }
-
+  
   if ( debug )
     {
       std::cout << " pmin, pmax = " << pmin << " " << pmax << "\n";
       std::cout << " dmin, dmax = " << dmin << " " << dmax << "\n";
     }
-
+  
   
   //
   // update header min/max (but leave orig_physical_min/max unchanged)
@@ -4513,56 +4517,119 @@ void edf_t::rescale( const int s , const std::string & sc , const bool quietly )
 
 
 
-void edf_t::minmax( signal_list_t & signals )
+void edf_t::minmax( signal_list_t & signals , const double * ppmin , const double * ppmax , const bool force )
 {
 
-  int16_t dmax = 0;
-  int16_t dmin = 0;
-  double pmin = 0 , pmax = 0;
-  
-  bool any_set = false;
-
   const int ns = signals.size();
-
-  for (int s=0; s < ns; s++)
-    {
-
-      if ( ! header.is_data_channel( signals(s) ) ) continue;
-
-      if ( ! any_set )
-	{
-	  pmin = header.physical_min[ signals(s) ] ;
-	  pmax = header.physical_max[ signals(s) ] ;	  
-	  dmin = header.digital_min[ signals(s) ] ;
-	  dmax = header.digital_max[ signals(s) ] ;
-	  any_set = true;
-	}
-      else
-	{
-	  if ( header.physical_min[ signals(s) ] < pmin ) pmin = header.physical_min[ signals(s) ];
-	  if ( header.physical_max[ signals(s) ] > pmax ) pmax = header.physical_max[ signals(s) ];
-	  if ( header.digital_min[ signals(s) ] < dmin ) dmin = header.digital_min[ signals(s) ];
-	  if ( header.digital_max[ signals(s) ] > dmax ) dmax = header.digital_max[ signals(s) ];
-	}
-    }
-
-  //
-  // now rescale each channel to these identical EDF scales
-  //
-
-  interval_t interval = timeline.wholetrace();
- 
-  for (int s=0; s < ns; s++)
-    {
-      if ( ! header.is_data_channel( signals(s) ) ) continue;
-      
-      slice_t slice( *this , signals(s) , interval );
-
-      const std::vector<double> * d = slice.pdata();
-      
-      update_signal( signals(s) , d , &dmin, &dmax , &pmin , &pmax );
-    }
   
+  if ( ns == 0 ) return;
+  
+  const bool clip = ppmin != NULL || ppmax != NULL ; 
+  
+  // *either*
+  //   set PMIN/PMAX to be equal across all channels in signals (set to equal the first) 
+  // *or*
+  //   if pmin or pmax is non-null, then set signal min/max to these values, do not change DMIN/DMAX
+
+  if ( ! clip ) 
+    {
+
+      int16_t dmax = 0;
+      int16_t dmin = 0;
+      double pmin = 0 , pmax = 0;
+      
+      bool any_set = false;
+      
+      for (int s=0; s < ns; s++)
+	{
+	  
+	  if ( ! header.is_data_channel( signals(s) ) ) continue;
+	  
+	  if ( ! any_set )
+	    {
+	      pmin = header.physical_min[ signals(s) ] ;
+	      pmax = header.physical_max[ signals(s) ] ;	  
+	      dmin = header.digital_min[ signals(s) ] ;
+	      dmax = header.digital_max[ signals(s) ] ;
+	      any_set = true;
+	    }
+	  else
+	    {
+	      if ( header.physical_min[ signals(s) ] < pmin ) pmin = header.physical_min[ signals(s) ];
+	      if ( header.physical_max[ signals(s) ] > pmax ) pmax = header.physical_max[ signals(s) ];
+	      if ( header.digital_min[ signals(s) ] < dmin ) dmin = header.digital_min[ signals(s) ];
+	      if ( header.digital_max[ signals(s) ] > dmax ) dmax = header.digital_max[ signals(s) ];
+	    }
+	}
+      
+      //
+      // now rescale each channel to these identical EDF scales
+      //
+      
+      interval_t interval = timeline.wholetrace();
+      
+      for (int s=0; s < ns; s++)
+	{
+	  if ( ! header.is_data_channel( signals(s) ) ) continue;
+	  
+	  slice_t slice( *this , signals(s) , interval );
+	  
+	  const std::vector<double> * d = slice.pdata();
+	  
+	  update_signal( signals(s) , d , &dmin , &dmax , &pmin , &pmax );
+	}
+    
+      return;
+    }
+
+  //
+  // fix PMIN/PMAX
+  //
+
+  if ( clip ) 
+    {
+
+      interval_t interval = timeline.wholetrace();
+      
+      for (int s=0; s < ns; s++)
+        {
+          if ( ! header.is_data_channel( signals(s) ) ) continue;
+	  
+          slice_t slice( *this , signals(s) , interval );
+
+          const std::vector<double> * d = slice.pdata();
+	  
+	  // clip, or as is
+	  // if 'force ==T ', then only reduce range (i.e. to clip, never expand)
+	  
+	  const double pmin_value = ppmin != NULL ? 
+	    ( force ? *ppmin 
+	      : ( *ppmin > header.physical_min[ signals(s) ] ? *ppmin : header.physical_min[ signals(s) ] ) ) 
+	    : header.physical_min[ signals(s) ] ; 
+
+	  const double pmax_value = ppmax != NULL ?
+	    ( force ? *ppmax
+	      : ( *ppmax < header.physical_max[ signals(s) ] ? *ppmax : header.physical_max[ signals(s) ] ) )
+	    : header.physical_max[ signals(s) ] ;
+	 
+	  // check we need to do any update - otherwise skip 
+	  // i.e. MINMAX min=-2000 max=2000  
+	  //   but if pmin/pmax is -100/+100 then nothing to do...
+
+	  if ( force  
+	       || *ppmin > header.physical_min[ signals(s) ] 
+	       || *ppmax < header.physical_max[ signals(s) ] )
+	    {
+	      
+	      logger << "  updating " << signals.label(s) << " to physical min / max = " << pmin_value << " / " << pmax_value << "\n";
+	      
+	      // null mean set dmin/dmax to full range
+	      update_signal( signals(s) , d , NULL, NULL , &pmin_value , &pmax_value );
+	    }
+	}
+      
+     return;
+    }
   
 }
 

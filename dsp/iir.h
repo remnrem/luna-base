@@ -30,6 +30,7 @@
 #include <complex>
 
 #include "dsp/filter.h"
+#include "stats/Eigen/Dense"
 
 struct edf_t;
 struct param_t;
@@ -37,6 +38,9 @@ struct param_t;
 namespace dsptools { 
   
   void apply_iir( edf_t & edf , param_t & param );
+  
+  Eigen::MatrixXd butterworth( const Eigen::MatrixXd & X , int order , int fs, double f1, double f2 );
+
 }
 
 
@@ -60,7 +64,10 @@ struct iir_t {
   ~iir_t();
   
   std::vector<double> apply( const std::vector<double> & x );
-
+  
+  // special internal case; quick BP-filter for ALIGN-EPOCHS
+  Eigen::VectorXd apply( const Eigen::VectorXd & x );
+    
 private:
 
   BWLowPass  * bwlp;

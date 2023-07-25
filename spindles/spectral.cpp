@@ -813,8 +813,8 @@ annot_t * spectral_power( edf_t & edf ,
 	  if ( calc_seg_sd )
 	    {
 
-	      std::cout <<"freqs " << freqs.size() << " " << " " << cv_means.size() << " " << cv_medians.size() 
-	       		<< " " << cv_sds.size() << "\n";
+	      // std::cout <<"freqs " << freqs.size() << " " << " " << cv_means.size() << " " << cv_medians.size() 
+	      //  		<< " " << cv_sds.size() << "\n";
 	      
 	      cv_bin.bin( freqs , cv_means );
 	      

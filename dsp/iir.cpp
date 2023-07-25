@@ -38,6 +38,24 @@ extern logger_t logger;
 extern writer_t writer;
 
 
+Eigen::MatrixXd dsptools::butterworth( const Eigen::MatrixXd & X , int order , int fs, double f1, double f2 )
+{
+
+  const int r = X.rows();
+  const int c = X.cols();
+  Eigen::MatrixXd F = Eigen::MatrixXd::Zero( r , c );  
+  
+  for (int j=0; j<c; j++)
+    {
+      iir_t iir;
+      iir.init( BUTTERWORTH_BANDPASS , order, fs , f1, f2 );
+      F.col(j) = iir.apply( X.col(j) );
+    }
+
+  return F;
+  
+}
+
 void dsptools::apply_iir( edf_t & edf , param_t & param )
 {
 
@@ -293,6 +311,26 @@ std::vector<double> iir_t::apply( const std::vector<double> & x )
       return y;
     }
   
+  return y;
+  
+}
+
+
+
+Eigen::VectorXd iir_t::apply( const Eigen::VectorXd & x )
+{
+  const int n = x.size();
+
+  Eigen::VectorXd y = Eigen::VectorXd::Zero( n );
+  
+  if ( bwbp != NULL )
+    {
+      for (int i=0; i<n; i++) y[i] = bw_band_pass( bwbp , x[i] );
+      return y;
+    }
+  else
+    Helper::halt( "internal Eigen BWBP error" );
+    
   return y;
   
 }

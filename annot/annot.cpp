@@ -4916,9 +4916,9 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 // of a list of annotations, find the first start time 
 // i.e. for aligning staging with a start that is not 0-seconds
 
-double annotation_set_t::first(const std::vector<std::string> & requested ) const
+uint64_t annotation_set_t::first(const std::vector<std::string> & requested ) const
 {
-  std::set<double> starts;
+  std::set<uint64_t> starts;
   
   for (int a=0; a < requested.size(); a++)
     {
@@ -4928,12 +4928,12 @@ double annotation_set_t::first(const std::vector<std::string> & requested ) cons
       // sorted first by time
       annot_map_t::const_iterator ii = annot->interval_events.begin();
       if (  ii == annot->interval_events.end() ) continue;
-      starts.insert( ii->first.interval.start_sec() );
+      starts.insert( ii->first.interval.start );    
     }
   
   // none found: return 0
-  if ( starts.size() == 0 ) return 0;
-  
+  if ( starts.size() == 0 ) return 0LLU;
+
   // return smallest
   return *starts.begin();
   

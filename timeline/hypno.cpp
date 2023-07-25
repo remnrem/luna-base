@@ -257,6 +257,11 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       
       bool other = ! ( wake || n1 || n2 || n3 || n4 || rem || lights );
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem + (int)lights ) > 1;
+
+      if ( conflict ) 
+	{
+	  std::cout << " conflict interval " << interval.start << " " << interval.stop << "\n";
+	}
       
       //
       // track any conflicts (i.e. if epochs not aligned to staging annotations)

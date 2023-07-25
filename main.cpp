@@ -1911,7 +1911,7 @@ void process_edfs( cmd_t & cmd )
 	  edffile = cmd.data();
 	  rootname = edffile;
 	  
-	  std::cout << " edffile [" << edffile << "]\n";
+	  //	  std::cout << " edffile [" << edffile << "]\n";
 
 	  // remove .edf from ID, making file name ==> ID 
 	  if ( Helper::file_extension( rootname , "edf" ) )
