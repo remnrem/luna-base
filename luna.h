@@ -67,6 +67,7 @@
 #include "edf/sedf.h"
 #include "edf/freezer.h"
 #include "edf/align-epochs.h"
+#include "edf/insert.h"
 
 #include "timeline/timeline.h"
 

@@ -324,6 +324,7 @@ void proc_dump_segs( edf_t & , param_t & );
 void proc_intervals( param_t & , const std::string & );
 void proc_align( edf_t & edf , param_t & param );
 void proc_align_epochs( edf_t & edf , param_t & param );
+void proc_insert( edf_t & edf , param_t & param );
 void proc_epoch_dump( edf_t & , param_t & );
 void proc_epoch_matrix( edf_t & , param_t & );
 void proc_head_matrix( edf_t & , param_t & );
@@ -372,6 +373,7 @@ void proc_cwt( edf_t & , param_t & );
 void proc_hilbert( edf_t & , param_t & );
 void proc_sync(edf_t & , param_t & );
 void proc_tsync(edf_t & , param_t & );
+void proc_xcorr(edf_t & , param_t & );
 void proc_psc( edf_t & , param_t & );
 void proc_microstates( edf_t & , param_t & );
 

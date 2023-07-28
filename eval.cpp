@@ -1068,6 +1068,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ALIGN" ) )        proc_align( edf , param(c) );
       else if ( is( c, "SLICE" ) )        proc_slice( edf , param(c) , 1 );
       else if ( is( c, "ALIGN-EPOCHS" ) ) proc_align_epochs( edf , param(c) );
+      else if ( is( c, "INSERT" ) )       proc_insert( edf , param(c) );
       
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
@@ -1106,6 +1107,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
       else if ( is( c, "SYNC" ) )         proc_sync( edf , param(c) ); 
       else if ( is( c, "TSYNC" ) )        proc_tsync( edf , param(c) );
+      else if ( is( c, "XCORR" ) )        proc_xcorr( edf, param(c) );
       
       else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
       else if ( is( c, "OTSU" ) )         proc_otsu( edf, param(c) );
@@ -1756,6 +1758,12 @@ void proc_tsync( edf_t & edf , param_t & param )
   dsptools::tsync( edf , param );
 }
 
+// XCORR - better TSYNC for basic XCORR
+void proc_xcorr( edf_t & edf , param_t & param )
+{
+  dsptools::xcorr( edf , param );
+}
+
 // -cwt  from the command line
 void proc_cwt_design_cmdline()
 {
@@ -2106,7 +2114,15 @@ void proc_dump( edf_t & edf , param_t & param )
   std::string signal = param.requires( "sig" );  
   edf.data_dumper( signal , param );	  
 }
-      
+
+
+// INSERT
+
+void proc_insert( edf_t & edf , param_t & param )
+{
+  edf_inserter_t inserter( edf , param );
+}
+
 // ALIGN-EPOCHS
 
 void proc_align_epochs( edf_t & edf , param_t & param )
@@ -2296,7 +2312,8 @@ void proc_set_timestamps( edf_t & edf , param_t & param )
 
 void proc_force_edf( edf_t & edf , param_t & param )
 {
-
+  Helper::halt( "EDF command is on pause" );
+  
   bool force = param.has( "force" );
 
   if ( ! edf.header.edfplus ) 
@@ -2309,17 +2326,22 @@ void proc_force_edf( edf_t & edf , param_t & param )
     {
       logger << "  converting from EDF+C to standard EDF\n";
       edf.set_edf();      
-      edf.reset_start_time();
+      edf.reset_start_time();      
+      edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+      edf.timeline.re_init_timeline();
+      edf.restructure( true );
       return;
     }
   
   // if here, it is nominally EDF+D
-  
+  // working point here.
   if ( ! edf.is_actually_discontinuous() )
     {
       logger << "  converting from EDF+D that is actually continuous, to standard EDF\n";
       edf.set_edf();
-      edf.reset_start_time();
+      edf.reset_start_time();      
+      edf.timeline.re_init_timeline();
+      edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
       return;
     }
   
@@ -2327,11 +2349,14 @@ void proc_force_edf( edf_t & edf , param_t & param )
     {
       logger << "  forcing EDF+D to standard EDF: will lose discontinuity/time information\n";
       edf.set_edf();
-
+      
       // set start time to NULL
       logger << "  setting EDF starttime to null (00.00.00)\n";
       edf.header.starttime = "00.00.00";
 
+      edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+      edf.timeline.re_init_timeline();
+      edf.restructure( true );
       return;
     }
   

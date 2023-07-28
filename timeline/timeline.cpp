@@ -204,7 +204,7 @@ void timeline_t::restructure( const std::set<int> & keep )
   
   // reset epochs (but retain epoch-level annotations)
   reset_epochs();
-
+  
   // clear any cache
   cache.clear();
   

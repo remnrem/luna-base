@@ -2755,8 +2755,10 @@ void edf_t::reset_record_size( const double new_record_duration )
 
   record_size = new_record_size ; 
 
-  // make a new timeline 
+  // make a new timeline & re-epoch
   timeline.re_init_timeline();
+  //re-epoch? or not needed here (as WRITE then end)
+  //timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
 
   // all done
 
@@ -3486,7 +3488,7 @@ void edf_header_t::check_channels()
 }
 
 
-bool edf_t::restructure()
+bool edf_t::restructure( const bool force )
 {
   
   //
@@ -3499,15 +3501,18 @@ bool edf_t::restructure()
   
   if ( ! timeline.is_epoch_mask_set() ) 
     {
-      logger << "  no epoch mask set, no restructuring needed\n";
-      
-      writer.value( "NR1" , header.nr );
-      writer.value( "NR2" , header.nr );
-      
-      writer.value( "DUR1" , header.nr * header.record_duration );
-      writer.value( "DUR2" , header.nr * header.record_duration );
-
-      return false;
+      if ( ! force )
+	{
+	  logger << "  no epoch mask set, no restructuring needed\n";
+	  
+	  writer.value( "NR1" , header.nr );
+	  writer.value( "NR2" , header.nr );
+	  
+	  writer.value( "DUR1" , header.nr * header.record_duration );
+	  writer.value( "DUR2" , header.nr * header.record_duration );
+	  
+	  return false;
+	}
     }
   
 
@@ -3528,15 +3533,16 @@ bool edf_t::restructure()
   // nothing to do...
   if ( ! any_records_dropped ) 
     {
-
-      writer.value( "NR1" , cnt );
-      writer.value( "NR2" , cnt );
-
-      writer.value( "DUR1" , cnt * header.record_duration );
-      writer.value( "DUR2" , cnt * header.record_duration );
-
-      return false;
-
+      if ( ! force )
+	{
+	  writer.value( "NR1" , cnt );
+	  writer.value( "NR2" , cnt );
+	  
+	  writer.value( "DUR1" , cnt * header.record_duration );
+	  writer.value( "DUR2" , cnt * header.record_duration );
+	  
+	  return false;
+	}
     }
 
 
