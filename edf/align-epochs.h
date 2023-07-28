@@ -44,6 +44,9 @@ private:
 
   std::map<int,Eigen::MatrixXd> X1, X2;
   std::vector<int> E1, E2;
+  
+  // track signal slots from EDF(loaded) -> EDF2(subset)
+  std::vector<int> slot2;
 
   // final mapping: E2 --> E1 
   std::map<int,int> mapping;
@@ -64,6 +67,7 @@ private:
   bool resolve_order;
   
   int verbose;
+  int verbose2;
   
 };
 

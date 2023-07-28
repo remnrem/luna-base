@@ -860,7 +860,7 @@ struct annotation_set_t
     return n;
   }
 
-  double first( const std::vector<std::string> & names ) const;
+  uint64_t first( const std::vector<std::string> & names ) const;
 
   uint64_t first_in_interval( const std::vector<std::string> & requested ,
 			      const interval_t & range ) const;

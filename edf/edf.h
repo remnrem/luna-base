@@ -443,7 +443,8 @@ public:
   
   void update_signal_retain_range( int s , const std::vector<double> * );
 
-  void update_signal( int s , const std::vector<double> * , int16_t * dmin = NULL , int16_t * dmax = NULL , double * pmin = NULL , double * pmax = NULL );
+  void update_signal( int s , const std::vector<double> * , int16_t * dmin = NULL , int16_t * dmax = NULL , 
+		      const double * pmin = NULL , const double * pmax = NULL );
 
   void shift( int s , int tp , bool wrap = true ); 
 
@@ -498,9 +499,9 @@ public:
   void flip( const int s );
 
   void reverse( const int s ); 
-
-  void minmax( signal_list_t & );
-
+  
+  void minmax( signal_list_t & , const double * force_min = NULL , const double * force_max = NULL , const bool force = false );
+  
   void reset_record_size( const double );
 
   void set_id( const std::string & s ) { id=s; } 

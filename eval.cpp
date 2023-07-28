@@ -2633,8 +2633,8 @@ void proc_epoch( edf_t & edf , param_t & param )
   // Epochs start at 0, or something else?
   //
   
-  double offset = 0;
-
+  uint64_t offset = 0LLU;
+  
   if ( param.has( "offset" ) )
     {
       std::string ostr = param.value( "offset" );
@@ -2655,21 +2655,22 @@ void proc_epoch( edf_t & edf , param_t & param )
 	  clocktime_t otime( ostr );
 	  
 	  // 1: EDF start comes before OFFSET start (required)
-	  // 2: OFFSET comes before EDF start --> flag error
-	  
+	  // 2: OFFSET comes before EDF start --> flag error	  
 	  
 	  int earlier = clocktime_t::earlier( starttime , otime );
 	  
 	  if ( earlier == 2 )
 	    Helper::halt( "cannot specify an EPOCH offset earlier than EDF start" );
 	  else
-	    offset = clocktime_t::difference_seconds( starttime , otime ) ;
+	    offset = globals::tp_1sec * clocktime_t::difference_seconds( starttime , otime ) ;
 	  
 	}
       else
 	{
 	  // arg value is in seconds
-	  offset = param.requires_dbl( "offset" ) ;	  
+	  double o_sec = param.requires_dbl( "offset" ) ;
+	  if ( o_sec < 0 ) Helper::halt( "offset must be non-negative" );
+	  offset = globals::tp_1sec * o_sec;
 	}
       
     }
@@ -2713,7 +2714,7 @@ void proc_epoch( edf_t & edf , param_t & param )
   if ( edf.timeline.epoched() 
        && ( ( ! Helper::similar( edf.timeline.epoch_length() , dur ) )
 	    || ( ! Helper::similar( edf.timeline.epoch_inc() , inc ) )
-	    || ( ! Helper::similar( edf.timeline.epoch_offset() , offset ) )
+	    || ( ! Helper::similar( edf.timeline.epoch_offset() , globals::tp_duration * offset ) )
 	    || ( edf.timeline.align_string() != align_str ) ) )
     {
       logger << " epoch definitions have changed: original epoch mappings will be lost\n";
@@ -2742,7 +2743,7 @@ void proc_epoch( edf_t & edf , param_t & param )
   
   logger << "  set epochs, length " << dur 
 	 << " (step " << inc 
-	 << ", offset " << offset 
+	 << ", offset " << offset * globals::tp_duration  
 	 <<  "), " << ne << " epochs\n";
   
   writer.value( "NE" , ne );
@@ -4080,7 +4081,26 @@ void proc_minmax( edf_t & edf , param_t & param )
 {
   std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
-  edf.minmax( signals );
+
+  // clip at these values? (and set PMIN/PMAX for these signals)
+
+  const bool clip_min = param.has( "min" ) ;
+  const bool clip_max = param.has( "max" );
+
+  // by default, if |value| smaller than specified, leave as is
+  // (i.e. only clip, do not expand range) ; if ! 
+  
+  const bool force = param.has( "force" );
+
+  // if not 'clip' then MINMAX sets all PMIN/PMAX to be the same
+  if ( ! ( clip_min || clip_max ) ) 
+    edf.minmax( signals );
+  else 
+    {
+      const double pmin = clip_min ? param.requires_dbl( "min" ) : 0 ;
+      const double pmax = clip_max ? param.requires_dbl( "max" ) : 0 ;      
+      edf.minmax( signals , clip_min ? &pmin : NULL , clip_max ? &pmax : NULL , force );      
+    }
 }
 
 // STANDARDIZE : robust winsorization and norming for each signal (done per whole signal or epoch) 

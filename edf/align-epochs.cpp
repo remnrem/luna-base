@@ -28,6 +28,7 @@
 #include "helper/logger.h"
 #include "helper/helper.h"
 #include "stats/eigen_ops.h"
+#include "dsp/iir.h"
 
 extern writer_t writer;
 extern logger_t logger;
@@ -53,6 +54,8 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
   const bool no_annotations = true;
   
   signal_list_t signals = edf.header.signal_list( signal_label , no_annotations);
+
+  signal_list_t signals2 = edf2.header.signal_list( signal_label , no_annotations);
   
   ns = signals.size();
   
@@ -60,21 +63,35 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
   
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 
+
+  //
+  // Get channel names: all channels specified here must exist in EDF2 
+  //
+  
+  slot2.resize( ns , -1 );
+  
   //
   // Check all exist, with similar SR, in the second EDF
   //
 
+  int fs = 0;
+
   for (int s=0; s<ns; s++)
     {
       const std::string slab = signals.label(s);
+
       if ( ! edf2.header.has_signal( slab ) )
 	Helper::halt( "could not find " + slab + " in " + edffile2 );
+      
+      // ordering of signals may be different in EDF2, so map explicitly for use below
+      slot2[ s ] = edf2.header.signal( slab );
 
-      const double sr2 = edf2.header.sampling_freq( signals(s) );
-
+      const double sr2 = edf2.header.sampling_freq( slot2[s] );
+      
       if ( fabs( sr2 - Fs[s] ) > 0.01 )
 	Helper::halt( "different sample rate for " + slab + " between EDFs" );
       
+      fs = sr2;
     }
   
   //
@@ -93,7 +110,7 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
   // Assume same order of epochs 
   //
 
-  assume_order = param.has( "ordered" ) ? param.yesno( "ordered" ) : true;
+  assume_order = param.has( "ordered" ) ? param.yesno( "ordered" ) : false ;
 
   //
   // Attempt to fix, i.e. if abother epoch matches better, take second best
@@ -106,7 +123,8 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
   // verbose output for a single E2 epoch
   //
 
-  verbose = param.has( "verbose" ) ? param.requires_int( "verbose" ) : -1 ; 
+  verbose = param.has( "verbose" ) ? param.requires_int( "verbose" ) - 1 : -1 ; 
+  verbose2 = param.has( "verbose2" ) ? param.requires_int( "verbose2" ) - 1 : -1 ; 
 
   //
   // Looks all good to align
@@ -120,7 +138,7 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
 
   logger << "  aligning " << ne2 << " epochs from " << edffile2 << " to the in-memory EDF containing " << ne << " epochs\n";
 
-  if ( ne2 >= ne ) Helper::halt( "expecting " + edffile2 + " to have fewer epochs than the primary attached EDF" );
+  //  if ( ne2 >= ne ) Helper::halt( "expecting " + edffile2 + " to have fewer epochs than the primary attached EDF" );
 
   // to track discontinuities
   std::vector<interval_t> intervals;
@@ -143,11 +161,11 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
       
       eigen_matslice_t mslice( edf , signals , interval );
       
-      Eigen::MatrixXd X = mslice.data_ref();
+      Eigen::MatrixXd X = dsptools::butterworth( mslice.data_ref() , 4 , fs , 1 , 20 ) ;
+            
+      // T = center , T = norm , 0 = W(winsor) , F = second_rescale , T = ignore invariants (set to 0/VAR1)
+      eigen_ops::robust_scale( X , true , true , 0.02 , true , true );
       
-      // T = center , F = winsor , 0 = W(winsor) , F = second_rescale , T = ignore invariants (set to 0/VAR1)
-      eigen_ops::robust_scale( X , true , false , 0 , false , true );
-
       X1[ epoch ] = X;
       
     }
@@ -166,12 +184,13 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
 
       interval_t interval = edf2.timeline.epoch( epoch );
       
-      eigen_matslice_t mslice( edf2 , signals , interval );
-
-      Eigen::MatrixXd X = mslice.data_ref();
-
-      // T = center , F = winsor , 0 = W(winsor) , F = second_rescale , T = ignore invariants (set to 0/VAR1)
-      eigen_ops::robust_scale( X , true , false , 0 , false , true );
+      eigen_matslice_t mslice( edf2 , signals2 , interval );
+      
+      //Eigen::MatrixXd dsptools::buttworth( const Eigen::MatrixXd & X , int order , int fs, double f1, double f2 )
+      Eigen::MatrixXd X = dsptools::butterworth( mslice.data_ref() , 4 , fs , 1 , 20 ) ;
+      
+      // T = center , T = scale  , 0 = W(winsor) , F = second_rescale , T = ignore invariants (set to 0/VAR1)
+      eigen_ops::robust_scale( X , true , true , 0.02 , true , true );
       
       X2[ epoch ] = X;
 
@@ -197,18 +216,60 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
 
   for (int e2idx = 0; e2idx < ne2 ; e2idx++ )
     {
+      //      std::cout << "REP1\n";
+
+      // console reportedffis                                                                                                                                                
+      if ( e2idx == 0 ) logger << "  ";
+      logger << ".";
+      if ( e2idx % 50 == 49 ) logger << " " << e2idx+1 << " of " << ne2 << " epochs aligned\n  ";
+      else if ( e2idx % 10 == 9 ) logger << " ";
+      
       int e2 = E2[e2idx];
       double sc, nxt;
       int nxte;
-
+      
+      //      std::cout << " about to...\n";
       int e1 = best_match( e2 , &sc, &nxt , &nxte );
+      
+      if ( verbose == e2 )
+	{
+	  if ( verbose2 == -1 ) 
+	    {
+	      
+	      logger << "  matched " << edf.timeline.display_epoch( e2 ) << " to " << edf.timeline.display_epoch( e1 ) << "\n";
+	      logger << "  verbose output to stdout: \n";
+	      
+	      const Eigen::MatrixXd & X = X1.find(e1)->second;
+	      const Eigen::MatrixXd & Y = X2.find(e2)->second;
+	      
+	      Eigen::MatrixXd C(X.rows(), X.cols()+Y.cols());
+	      C << X, Y;
+	      std::cout << C << "\n";
+	    }
+	  else
+	    {
+	      logger << "  forcing alignment: " << edf.timeline.display_epoch( e2 ) << " to " << edf.timeline.display_epoch( verbose2 ) << "\n";
+	      logger << "  verbose output to stdout: \n";
+	      
+	      const Eigen::MatrixXd & X = X1.find(verbose2)->second;
+	      const Eigen::MatrixXd & Y = X2.find(e2)->second;
+	      
+	      Eigen::MatrixXd C(X.rows(), X.cols()+Y.cols());
+	      C << X, Y;
+	      std::cout << C << "\n";
+	      
+	      
+	    }
+	}
+
+
       mapping[ e2 ] = e1;
       mapping2[ e2 ] = nxte;
       scs[ e2 ] = sc;
       nxts[ e2 ] = nxt;
       
       // reverse mapping for check below (resolve)
-      if ( e1 != -1 )
+      if ( e1 >= 0 )
 	{
 	  rmapping[ e1 ].insert( e2 );
 	  if ( rmapping[ e1 ].size() > 1 )
@@ -285,19 +346,24 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
   bool order_okay = true;
   int last_epoch = -2;
   int last_e2 = -1;
-  
+  std::set<int> outoforder;
+
   std::map<int,int>::const_iterator ii = mapping.begin();
   while ( ii != mapping.end() )
     {
+
       // only check if mapping
-      if ( ii->second != -1 )
+      if ( ii->second >= 0 )
 	{
 	  if ( ii->second <= last_epoch )
 	    {
-	      order_okay = false;
+	      order_okay = false;	      
+	      
 	      int ee2 = edf2.timeline.display_epoch( ii->first ) ;
+	      
+	      // take abs, i.e. whether best or not
 	      int ee1 = edf.timeline.display_epoch( ii->second ) ;
-
+	      	     
 	      int eprior2 = edf2.timeline.display_epoch( last_e2 );
 	      int eprior = edf.timeline.display_epoch( last_epoch );
 
@@ -317,16 +383,74 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
 	      
 	      if ( assume_order ) 
 		Helper::halt( "alignment violated ordering assumption (use ordered=F for ignore)");
-	    }
+	    }	  
 	  last_epoch = ii->second;
 	  last_e2 = ii->first ; 
 	}
       ++ii;
     }
   
+  writer.value( "ORDERED" , (int)order_okay );
+    
   if ( order_okay ) 
     logger << "  all epochs aligned in correct, increasing order\n";
-     
+  
+  
+  //
+  // figure out exact order, and do some fill-ins
+  //
+
+  std::vector<int> new_oe, old_oe;
+
+  std::map<int,int>::const_iterator ee = mapping.begin();
+  while ( ee != mapping.end() )
+    {
+      const int e2 = ee->first; // yes, confusing...
+      const int e1 = ee->second;
+
+      new_oe.push_back( e2 );
+      old_oe.push_back( e1 );
+      ++ee;
+    }
+  
+  for (int i=0; i<new_oe.size(); i++)
+    {
+      // fill in?
+      if ( old_oe[i] == -1 ) 
+	{
+	  if ( i != 0 && i != new_oe.size() - 1 ) 
+	    {
+	      if ( old_oe[i-1] + 2 == old_oe[i+1] 
+		   && new_oe[i-1] + 2 == new_oe[i+1] )
+		old_oe[ i ] = old_oe[i-1] + 1 ;
+	    }
+	}
+      else // check ordering for non-missing 
+	{
+	  // COMPARE TO TWO BACK AND FORWARD
+	  //  5 6 15 8 9 10
+	  //         X
+	 
+	  bool back = true;
+	  if ( i > 1 )
+	    if ( old_oe[i-1] != -1 && old_oe[i-1] >= old_oe[i] )
+	      if ( old_oe[i-2] != -1 && old_oe[i-2] >= old_oe[i] )
+		back = false;
+
+	  bool forward = true;
+	  if ( i < new_oe.size() - 2 )
+	    if ( old_oe[i+1] != -1 && old_oe[i+1] <= old_oe[i] )
+	      if ( old_oe[i+2] != -1 && old_oe[i+2] <= old_oe[i] )
+		forward = false;
+	  
+	  const bool ooo = ! ( back || forward );
+	  if ( ooo ) outoforder.insert( old_oe[i] );
+	}
+    }
+
+
+  
+   
   //
   // output
   //
@@ -334,7 +458,7 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
   int count = 0 ;
   int count1 = 0 , count2 = 0;
   
-  std::map<int,int>::const_iterator ee = mapping.begin();
+  ee = mapping.begin();
   while ( ee != mapping.end() )
     {
       writer.level( edf2.timeline.display_epoch( ee->first ) , "E2" );
@@ -348,15 +472,29 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
 	  if ( scs[ ee->first ] > -th ) ++count1;
 	  if ( nxts[ ee->first ] < th2 ) ++count2;
 	}
+      
+      if ( outoforder.find( ee->first ) != outoforder.end() )
+	writer.value( "ORDERED" , 0 );
+      else
+	writer.value( "ORDERED" , 1 );
+      
 
       if ( mapping2[ ee->first ] != -1 )
 	writer.value( "NEXT_E1" , edf.timeline.display_epoch( mapping2[ ee->first ] )  );
       
+      
+
       writer.value( "D" , scs[ ee->first ] );
       writer.value( "NEXT" , nxts[ ee->first ] ) ;
       ++ee;
     }
   writer.unlevel( "E2" );
+
+
+  writer.value( "N_ALIGNED" , count );
+  writer.value( "N_FAILED" , ne2 - count );
+  writer.value( "N_FAILED_TH1" , count1 );
+  writer.value( "N_FAILED_TH2" , count2 );
 
   logger << "  aligned " << count << " of " << ne2 << " epochs confidently\n";
   logger << "    " << count1 << " epochs (" << ceil((count1/(double)ne2)*100) << "%) failed based on th = " << th << "\n"
@@ -373,15 +511,17 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
 
 int align_epochs_t::best_match( const int e2 , double * sc , double * nxt , int * nxte ) const
 {
-
+  
   Eigen::VectorXd D = Eigen::VectorXd::Zero( ne );
-
+  
   for (int e1idx=0; e1idx<ne; e1idx++)
     {
       const int e1 = E1[e1idx];
-      D[ e1idx ] = dist( e1 , e2 );      
+      D[ e1idx ] = dist( e1 , e2 );     
+      //std::cout << " dist = " << e1 << " " << e2 << " = " << D[e1idx] << "\n";
     }
-  
+  //  std::exit(1);
+
   int idx = 0;
   const double dmin = D.minCoeff(&idx);
 
@@ -411,9 +551,9 @@ int align_epochs_t::best_match( const int e2 , double * sc , double * nxt , int 
   // matched?
   const bool matched = dmin <= dt && *nxt >= th2;  
   
-  *nxte = matched ? second_best_epoch : -1;
+  *nxte = matched ? second_best_epoch : idx;
   return matched ? idx : -1;
-
+  
 }
 
 double align_epochs_t::dist( const int e1, const int e2 ) const
@@ -425,9 +565,18 @@ double align_epochs_t::dist( const int e1, const int e2 ) const
     
   const Eigen::MatrixXd & X = X1.find(e1)->second;
   const Eigen::MatrixXd & Y = X2.find(e2)->second;
-
+  
+  // std::cout << " testing... " << e1 << " " << e2 << " " << ( e1 == 59 ? "YAY" : "" ) << "\n";
+  // Eigen::MatrixXd C(X.rows(), X.cols()+Y.cols());
+  // C << X, Y;
+  // std::cout << " X, Y = " <<C << "\n"; 
+  
+  // same channels should always be put in same cols, even if
+  // in diff order in the EDFs, i.e. by virtue of slice() and signal_list_t 
   for (int s=0; s<ns; s++)
     d += (X.col(s) - Y.col(s)).squaredNorm();
+  
+  //  std::cout << " d = " << d << "\n";
 
   if ( d == 0 ) d = DEPS;
   
