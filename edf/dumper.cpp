@@ -1339,15 +1339,23 @@ void edf_t::seg_dumper( param_t & param )
   bool valid_hms = starttime.valid;
 
   const bool add_annots = param.has( "annot" );
-  
+
   annot_t * a_segs = NULL;
   annot_t * a_gaps = NULL;
   
   if ( add_annots )
     {
       a_segs = timeline.annotations.add( globals::annot_disc_segment );
-      a_gaps = timeline.annotations.add( globals::annot_disc_gap );
+      a_gaps = timeline.annotations.add( globals::annot_disc_gap );      
     }
+
+  const bool flag_largest_segment = param.has( "largest" ) && ! param.empty( "largest" );
+  
+  annot_t * a_largest = NULL;
+  std::map<uint64_t,interval_t> seg_sizes;
+    
+  if ( flag_largest_segment )
+    a_largest = timeline.annotations.add( param.value( "largest" ) );
   
   // we only need to consider this for discontinuous EDF+ 
   
@@ -1463,6 +1471,12 @@ void edf_t::seg_dumper( param_t & param )
 	      // i.e. as ++num_segments above
 	      a_segs->add( Helper::int2str( num_segments ) , interval , "." );
 	    }
+
+	  // save to figure out the largest
+
+	  uint64_t tp1_ = tp_start ;
+          uint64_t tp2_ = tp0 + header.record_duration * globals::tp_1sec ; 
+	  seg_sizes[ tp2_ - tp1_ ] = interval_t( tp1_ , tp2_ );
 	  
 	  // did we observe a gap prior to this?
 	  if ( tp_start > gap_start )
@@ -1496,6 +1510,17 @@ void edf_t::seg_dumper( param_t & param )
 
   writer.value( "NSEGS" , num_segments );
   writer.value( "NGAPS" , (int)gaps.size() );
+
+  // largest
+  if ( num_segments > 1 )
+    {
+      std::map<uint64_t,interval_t>::const_iterator ss = seg_sizes.end();
+      --ss;
+      const double largest_sec = ss->first * globals::tp_duration;
+      writer.value( "LARGEST" , largest_sec );
+      if ( flag_largest_segment )
+	a_largest->add( Helper::dbl2str( largest_sec ) , ss->second , "." );
+    }
   
   // output any gaps
   std::set<interval_t>::const_iterator gg = gaps.begin();

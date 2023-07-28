@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "xcorr.h"
 #include "trim.h"
 #include "ngaus.h"
 #include "ged.h"
@@ -34,6 +35,7 @@
 #include "ripples.h"
 #include "irasa.h"
 #include "tsync.h"
+#include "xcorr.h"
 #include "sync.h"
 #include "standardize.h"
 #include "mtm/mtm.h"
@@ -69,6 +71,7 @@
 #include "fir.h"
 #include "iir.h"
 #include "emd.h"
+#include "ssa.h"
 #include "dfa.h"
 #include "mi.h"
 #include "reduce.h"

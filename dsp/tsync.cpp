@@ -392,6 +392,13 @@ tsync_t::tsync_t( const Eigen::MatrixXd & X ,
 		  int w )
 
 {
+  doxcorr( X, sr, w );
+}
+
+void tsync_t::doxcorr( const Eigen::MatrixXd & X ,
+		     double sr ,
+		     int w )
+{
   xcorr.clear();
   delay.clear();
 
@@ -433,8 +440,11 @@ tsync_t::tsync_t( const Eigen::MatrixXd & X ,
 		xr_max_idx = idx;
 	      }
 
+	    std::cout << " xc " << s1 << " " << s2 << " " << idx << " " << xr << "  " << xcorr[ s1 ][ s2 ][ idx ] << "\n";
+	    
 	    // scale by N
 	    xcorr[ s1 ][ s2 ][ idx ] = xr / (double)np;
+
 	    
 	  }
 
@@ -446,3 +456,21 @@ tsync_t::tsync_t( const Eigen::MatrixXd & X ,
   
 }
 
+tsync_t::tsync_t( const std::vector<double> * a ,
+		  const std::vector<double> * b , 
+		  double sr ,
+		  int w
+		  )
+{
+
+  const int n = a->size();
+  if ( b->size() != n ) Helper::halt( "internal error tsync_t()" );
+  Eigen::MatrixXd C = Eigen::MatrixXd::Zero( n , 2 );
+  for (int i=0; i<n; i++)
+    {
+      C(i,0) = (*a)[i];
+      C(i,1) = (*b)[i];      
+    }   
+  doxcorr(C,sr,w);
+  
+}

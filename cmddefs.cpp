@@ -2391,6 +2391,34 @@ void cmddefs_t::init()
   add_var( "SYNC" , "E,F" , "KOP" , "Magnitude-squared coherence" );
   set_compressed( "SYNC" , tfac_t( "E,F" ) );
 
+
+  //
+  // XCORR
+  //
+
+  add_cmd( "topo" , "XCORR" , "Cross-correlation" );
+  add_url( "XCORR" , "cross-signal-analysis/#xcorr" );
+
+  add_param( "XCORR" , "sig" , "C3,C4" , "Restrict analysis to these channel" );
+  add_param( "XCORR" , "w" , "10" , "Restrict to window of +/- 10 seconds" );
+  add_param( "XCORR" , "verbose" , "10" , "Restrict to window of +/- 10 seconds" );
+  add_param( "XCORR" , "epoch" , "10" , "Epoch-level outputs" );
+
+  add_table( "XCORR" , "CH1,CH2" , "Pairwise outputs" );
+  add_var( "XCORR" , "CH1,CH2" , "D" , "Delay in seconds (+ve: CH1 lags CH2" );
+  add_var( "XCORR" , "CH1,CH2" , "S" , "Delay in samples" );
+  add_var( "XCORR" , "CH1,CH2" , "D_MN" , "Delay in seconds, mean over epochs" );
+  add_var( "XCORR" , "CH1,CH2" , "S_MN" , "Delay in samples, mean over epochs" );
+  add_var( "XCORR" , "CH1,CH2" , "D_MD" , "Delay in seconds, median over epochs" );
+  add_var( "XCORR" , "CH1,CH2" , "S_MD" , "Delay in samples, median over epochs" );
+  
+  add_table( "XCORR" , "CH1,CH2,D" , "Lag-wise x-corrs" );
+  add_var( "XCORR" , "CH1,CH2,D" , "T" , "Lag time (seconds)" );
+  add_var( "XCORR" , "CH1,CH2,D" , "XCORR" , "Cross correlation" );
+
+  add_table( "XCORR" , "CH1,CH2,E" , "Epoch-wise outputs" );
+  add_var( "XCORR" , "CH1,CH2,E" , "D" , "Delay in seconds" );
+
   
   //
   // CORREL
@@ -2465,7 +2493,8 @@ void cmddefs_t::init()
   // INTERPOLATE
   //
   
-  
+
+
   
   /////////////////////////////////////////////////////////////////////////////////
   //

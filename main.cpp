@@ -38,7 +38,7 @@ void log_commands( int argc , char ** argv );
 
 int main(int argc , char ** argv )
 {
-  
+
   //
   // initial check for display of all commands
   //
@@ -1911,8 +1911,6 @@ void process_edfs( cmd_t & cmd )
 	  edffile = cmd.data();
 	  rootname = edffile;
 	  
-	  std::cout << " edffile [" << edffile << "]\n";
-
 	  // remove .edf from ID, making file name ==> ID 
 	  if ( Helper::file_extension( rootname , "edf" ) )
 	    rootname = rootname.substr( 0 , rootname.size() - 4 );
@@ -3109,7 +3107,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "fir" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
-       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" || p == "tri" || p == "ngaus" ) 
+       || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" || p == "tri" || p == "ngaus" || p == "ssa" || p == "xcorr" ) 
     {
 
       int cnt= 0;
@@ -3732,6 +3730,75 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     }
 
 
+  //
+  // XCORR / TSYNC 
+  //
+
+  if ( p == "xcorr" )
+    {
+      // sensor data:
+      //  2621    2621   28864 s1.txt
+      // 2271    2271   25530 s2.txt
+
+      if ( 1 )
+	{
+	  if ( x.size() != 2621 + 2271 ) Helper::halt( "expecting matlab sensor data example: 2621 + 2271 elements" );
+	  std::vector<double> a(2621) , b(2271);
+	  for (int i=0;i<2621;i++) a[i] = x[i];
+	  for (int i=0;i<2271;i++) b[i] = x[i+2621];
+	  std::cout << " a.size()  " << a.size() <<   " " << b.size() << "\n";
+	  
+	  xcorr_t xcorr( b , a );
+
+	  std::cout << "main " << xcorr.mx << " " << xcorr.lags[xcorr.mx] << "\t" << xcorr.C[xcorr.mx] << "\n";
+
+	  int n = xcorr.lags.size();
+          for (int i=0; i<n; i++)
+            std::cout << xcorr.lags[i] << "\t" << xcorr.C[i] << "\n";
+
+	}
+      else
+	{
+	  if ( x.size() != 32 ) Helper::halt( "expecting 2*16-element example" );
+
+	  std::vector<double> a(16) , b(16);
+          for (int i=0;i<16;i++) a[i] = x[i];
+          for (int i=0;i<16;i++) b[i] = x[i+16];
+
+	  xcorr_t xcorr( a , b );
+	  
+	  int n = xcorr.lags.size();
+	  for (int i=0; i<n; i++)
+	    std::cout << xcorr.lags[i] << "\t" << xcorr.C[i] << "\n";
+	  
+	}
+      
+      // tsync_t xcorr( &a , &b , 100 , 3 );
+      // std::cout << "xc " << xcorr.delay[0][1] << "\n";
+
+      // const std::map<int,double> & c =  xcorr.xcorr[0][1];
+      // std::map<int,double>::const_iterator cc = c.begin();
+      // while ( cc != c.end() )
+      // 	{
+      // 	  std::cout << cc->first << " = " << cc->second << "\n";
+      // 	  ++cc;
+      // 	}
+      
+    }
+
+  //
+  // SSA
+  //
+
+  if ( p == "ssa" )
+    {
+      const int n = x.size();
+      ssa_t ssa( &x , 8 ) ;
+      std::exit(1);
+      
+    }
+    
+  
   //
   // ICA
   //

@@ -42,6 +42,17 @@ struct tsync_t {
 	   int w
 	   );
 
+  void doxcorr( const Eigen::MatrixXd & X ,
+		 double sr ,
+		int w
+		);
+  
+  tsync_t( const std::vector<double> * a ,
+	   const std::vector<double> * b , 
+	   double sr ,
+	   int w
+	   );
+
   std::map<int,std::map<int,std::map<int,double> > > xcorr;
   std::map<int,std::map<int,int> > delay;
 
