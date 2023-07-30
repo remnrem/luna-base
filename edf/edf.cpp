@@ -242,7 +242,6 @@ std::string edf_header_t::summary() const
 
 void edf_t::description( const param_t & param ) 
 {
-
   signal_list_t signals = header.signal_list( param.requires( "sig" ) );
   
   bool channel_list = param.has( "channels" );
@@ -1508,7 +1507,7 @@ bool edf_t::attach( const std::string & f ,
   //
   // EDF+ requires a time-track
   //
-
+  
   if ( header.edfplus && header.time_track() == -1 ) 
     {
       if ( !header.continuous ) 
@@ -1809,7 +1808,7 @@ bool edf_header_t::write( FILE * file , const std::vector<int> & ch2slot )
   // new number of channels (might be less than original)
 
   const int ns2 = ch2slot.size();
-  
+
   // regarding the nbytes_header variable, although we don't really
   // use it, still ensure that it is properly set (i.e. we may have
   // added/removed signals, so we need to update before making the EDF)
@@ -2143,7 +2142,8 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
   //
   
   bool null_starttime = write_as_edf == 2 && actually_EDFD; 
-  
+
+
   //
   // Force as standard EDF? 
   //
@@ -2153,7 +2153,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
       logger << "  writing as a standard EDF\n";
       set_edf();
     }
-  
+
   //
   // Deal with start time?  If writing as a truly discontinuous EDF+D, then
   // keep start-time as is (i.e. first epoch might not be 0 seconds).  But if
@@ -2181,6 +2181,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
   //    and will have mapped to the slot numbers.  Therefore, at this point we can
   //    always assume that this will be valid
   //
+
   
   std::vector<int> ch2slot;
 
@@ -2197,7 +2198,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
     }
   
   const int ns2 = ch2slot.size();
-
+  
   if ( ns2 == 0 )
     {
       logger << "  *** no channels to write to a new EDF... bailing\n";
@@ -2367,6 +2368,11 @@ void edf_t::drop_signal( const int s )
   if ( s < 0 || s >= header.ns ) return;  
   --header.ns;
 
+  
+  // std::cout << "\n\n b4 dropping... " << header.t_track << "\n";
+  // for (int i=0; i<header.annotation_channel.size() ;i++)
+  //   std::cout << "header.annotation_channel[ " << i << " ] = " << header.annotation_channel[i] << "\t" << header.label[i] << "\n";
+
   // need to track whether this signal was in the list of signals to be read from the original file
   //  -- it needn't be, i.e. if a new channel has been created
   //  -- but if it is, we need to know this when we subsequently read in
@@ -2422,7 +2428,24 @@ void edf_t::drop_signal( const int s )
 	records.find(r)->second.drop(s);
       r = timeline.next_record(r);
     }
+
+  // reset/clear time-track?
+  // do not touch t_track_edf_offset, as that should be fixed
+  // w.r.t actual file
+  if ( header.t_track != -1 ) 
+    {
+      header.t_track = -1;
+      for (int i=0; i<header.annotation_channel.size() ;i++)
+	if ( header.annotation_channel[i] )
+	  {
+	    header.t_track = i;
+	    break;
+	  }
+    }
   
+  // std::cout << " after dropping... " ;
+  // for (int i=0; i<header.annotation_channel.size() ;i++)
+  //   std::cout << "header.annotation_channel[ " << i << " ] = " << header.annotation_channel[i] << "\t" << header.label[i] << "\n";
   
 }
 
@@ -4154,7 +4177,6 @@ void edf_t::set_edf()
   header.reserved[2] = ' ';
   header.reserved[3] = ' ';
   header.reserved[4] = ' ';
-
   set_continuous(); 
   drop_time_track();
   drop_annots();
