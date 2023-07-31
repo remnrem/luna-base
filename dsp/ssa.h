@@ -25,6 +25,7 @@
 #define __SSA_H__
 
 #include <stats/Eigen/Dense>
+#include <vector>
 
 struct edf_t;
 struct param_t;

@@ -1680,6 +1680,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      if ( startdatetime.d != 0 && atime.d != 0 ) 
 		{		  
 		  int earlier = clocktime_t::earlier( startdatetime , atime );		  
+		  //std::cout << " earlier = " << earlier << "  " << startdatetime << " " << atime << "\n";
 		  if ( earlier == 2 )
 		    before_edf_start = true;
 		  else
@@ -1829,10 +1830,16 @@ interval_t annot_t::get_interval( const std::string & line ,
       // Check for valid ordering
       
       if ( interval.start > interval.stop )
-	Helper::halt( "invalid interval: stop is before start\n" + line );
+	{
+	  //std::cout << " dets " << interval.start << " " << interval.stop << "\n";
+	  // ignore otherwise...
+	  interval.start = 1LL;
+	  interval.stop  = 0LL;
 
+	  //Helper::halt( "invalid interval: stop is before start\n" + line );
+	}
     }
-
+  
   // special code for interval that starts before EDF start (have to ignore)
   if ( before_edf_start ) 
     {

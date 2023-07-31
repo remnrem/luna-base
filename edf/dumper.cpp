@@ -1364,11 +1364,16 @@ void edf_t::seg_dumper( param_t & param )
       
       writer.value( "NSEGS" , 1 );
       writer.value( "NGAPS" , 0 );
-      
+
       writer.level( 1 , "SEG" );
       double secs = header.nr * header.record_duration;
       writer.value( "START" , 0 );
       writer.value( "STOP" ,  secs );
+
+      // largest (only) seg
+      writer.value( "LARGEST" , secs );
+      if ( flag_largest_segment )
+	a_largest->add( Helper::dbl2str( secs ) , interval_t( 0LLU , (uint64_t)(secs * globals::tp_1sec) ) , "." );
       
       writer.value( "DUR_SEC" , secs );
       writer.value( "DUR_MIN" , secs / 60.0);

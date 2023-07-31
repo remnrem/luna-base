@@ -26,6 +26,7 @@
 
 #include "stats/Eigen/Dense"
 #include <map>
+#include <vector>
 
 struct edf_t;
 struct param_t;
