@@ -23,6 +23,8 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+
+#include "peri.h"
 #include "xcorr.h"
 #include "trim.h"
 #include "ngaus.h"

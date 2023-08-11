@@ -55,10 +55,17 @@ extern logger_t logger;
 //
 
 // A 'timeline' coordinates several things for an EDF:
-//  1) the primary 'epoch'
+//  1) the primary 'epoch' 
 //  2) an epoch-based mask
-//  3) any annotations
-//  4) (?todo: non-epoch based masks)
+//  3) channel-epoch (CHEP) masks
+//  4) contains general annotations
+//  5) contains caches
+
+// standard epochs: all of same size and fixed increment
+// generic epochs (e.g. typically defined by annotations, etc) can be any size/location
+// certain functions (e.g. hypnogram) will require standard (and non-overlapping) epochs
+// to make sense
+
 
 
 struct timeline_t 
@@ -68,10 +75,11 @@ struct timeline_t
 
  public:
   
+
   timeline_t( edf_t * p ) 
     {      
       edf = p;            
-      unepoch();      
+      unepoch();
     } 
   
 
@@ -88,27 +96,28 @@ struct timeline_t
   void restructure( const std::set<int> & keep );
 
   
+
   //
   // Basic duration information for EDF
   //
-
+  
 
   // Total file duration (microsecond units)
 
   uint64_t  total_duration_tp;
   
   // Final accessible timepoint (0-base) 
-  // for EDF+ w/ gaps, then
-  // total_duration_tp <= last_time_point_tp + 1 
+  // for EDF+ w/ gaps, total_duration_tp <= last_time_point_tp + 1 
   
   uint64_t  last_time_point_tp;
   
+
   //
   // Iteration over records in the 'retained' timeline
   //
 
   int first_record() const; // -1 if empty
-
+  
   int next_record(const int r) const; // -1 if at end
 
   bool retained(const int r ) const;
@@ -123,8 +132,9 @@ struct timeline_t
   std::map<int,uint64_t>  rec2tp;
   std::map<int,uint64_t>  rec2tp_end;
 
-  // for internal EDF+D, map 'file' rec --> implied rec (if iterating
-  // through only retained records)
+  // for internal EDF+D, map 'file' rec --> implied rec
+  // (if iterating through only retained records)
+
   std::map<int,int>  rec2orig_rec;
   
   bool interval2records( const interval_t & interval , 
@@ -141,14 +151,14 @@ struct timeline_t
   
   // collapse edf+d time --> edf standard time-point (from EDF start)
   interval_t collapse( const interval_t & interval ) const;
-		     
-  
+		       
   // for a given record/sample pair, give the time-point (in tp)
-
   uint64_t timepoint( int r , int s = 0 , int nsamples = 0 ) const;
 
+  // for an internal EDF+D, give current tp (tp1 = in elapsed tp)
+  // given an original, external tp
+  bool remap_timepoint( const uint64_t & tp , uint64_t * tp1 );
 
-  //  uint64_t endpoint( int r ) const;
 
 
   //
@@ -183,208 +193,111 @@ struct timeline_t
 		std::vector<interval_t> * , 
 		int * orig_n , 
 		std::string ch , int sr = 0 );
-  
+
+  // ------------------------------------------------------------
   //
   // Hypnogram
   //
-
+  // ------------------------------------------------------------
+  
   hypnogram_t hypnogram;
  
- 
+
+  
+  // ------------------------------------------------------------
   //
-  // 2) The primary 'epoch'
+  // Epochs
   //
+  // ------------------------------------------------------------
   
-  int ensure_epoched() 
-  {
-
-    if ( epoched() ) return num_epochs();
-
-    // otherwise, set to defaults
-
-    int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-
-    logger << "  set epochs to default " 
-	   << globals::default_epoch_len 
-	   << " seconds, " << ne << " epochs\n";
-
-    return ne;
-  }
+  int ensure_epoched();
   
-  bool epoched() const { return epoch_length_tp != 0; } 
-  
-  void unepoch() 
-  {
-    current_epoch = -1;
-    
-    // No EPOCHs
-    epoch_length_tp = 0L;
-    epoch_inc_tp = 0L;
-    epoch_offset_tp = 0L;
-    epoch_align_annots.clear();
-    epoch_align_str = "";
-    epochs.clear();
-    
-    // Masks
-    clear_epoch_mask();
-    mask_mode = 0; // default (0=mask; 1=unmask; 2=force)
+  bool epoched() const;
 
-    // Annotations
-    clear_epoch_annotations();    
-    
-    // old/new epoch mapping
-    clear_epoch_mapping();
+  void unepoch(); 
 
-    // record/epoch mappings
-    rec2epoch.clear();
-    epoch2rec.clear();
-  }
- 
-  int reset_epochs()
-  {
-    // called automatically after RESTRUCTURE only
-    // this doesn't wipe any epoch-level annotations, 
-    // as they are fixed to the original file-EDF epochs
-    // (for this particularly epoch size) in any case
-
-    first_epoch();
-    return calc_epochs();
-  }
-
+  // reset_epochs()
+  //  called automatically after RESTRUCTURE only
+  //  this doesn't wipe any epoch-level annotations, 
+  //  as they are fixed to the original file-EDF epochs
+  //  (for this particularly epoch size) in any case
 
   int whole_recording_epoch_dur(); 
 
   int set_epoch(const double s, const double o , const uint64_t offset = 0LLU , 
 		const std::string align_str = "" , 
-		const std::vector<std::string> * align_annots = NULL ) 
-  { 
-    if ( s <= 0 || o < 0 )
-      Helper::halt( "cannot specify negative epoch durations/increments");
+		const std::vector<std::string> * align_annots = NULL );
+
+  bool generic_epochs() const;
+  
+  double epoch_length() const;
+  
+  double epoch_inc() const;
+
+  double epoch_offset() const;
+
+  std::string align_string() const;
+  
+  bool exactly_contiguous_epochs() const;
+  
+  double epoch_len_tp() const;
+  
+  double epoch_increment_tp() const;
+
+  uint64_t epoch_len_tp_uint64_t() const;
+
+  // initial setting: standard epochs
+  int calc_epochs(); 
+
+  // initial setting: generic (annot/cache-based epochs)
+  int calc_epochs_generic_from_annots( param_t & param ); 
+
+  // called after RE to remap epochs
+  int reset_epochs(); 
+  
+  void debug_dump_epochs();
+
+  void output_epoch_info( const bool show_masked = false );
     
-    clear_epoch_annotations();
-    epoch_length_tp = s * globals::tp_1sec;
-    epoch_inc_tp = o * globals::tp_1sec;
-
-    // pass offset as uint64_t
-    epoch_offset_tp = offset ; // * globals::tp_1sec;
-    
-    epoch_align_str = align_str;
-    if ( align_annots != NULL ) 
-      epoch_align_annots = *align_annots;
-    
-    if ( epoch_length_tp == 0 || epoch_inc_tp == 0 ) 
-      Helper::halt( "invalid epoch parameters" );
-    first_epoch();
-    return calc_epochs();
-  }
-  
-  double epoch_length() const 
-  { return (double)epoch_length_tp / globals::tp_1sec; }
-  
-  double epoch_inc() const 
-  { return (double)epoch_inc_tp / globals::tp_1sec; }
-
-  double epoch_offset() const 
-  { return (double)epoch_offset_tp / globals::tp_1sec; }
-
-  std::string align_string() const 
-  { return epoch_align_str; }
-  
-  bool exactly_contiguous_epochs() const
-  { return epoch_length_tp == epoch_inc_tp; } 
-  
-  double epoch_len_tp() const 
-  { return epoch_length_tp ; }
-  
-  double epoch_increment_tp() const 
-  { return epoch_inc_tp ; } 
-
-  uint64_t epoch_len_tp_uint64_t() const
-  { return epoch_length_tp ; }
-
-
-  int calc_epochs();
-
   bool align_epochs( uint64_t * tp , int * rec , const std::set<uint64_t> & annots );
   
-  int first_epoch()  
-  { 
+  int first_epoch();
 
-    // point to first epoch, and return number of non-masked epochs also
-
-    if ( ! epoched() ) 
-      {
-
-	int ne = set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-
-	logger << "  set epochs to default " 
-	       << globals::default_epoch_len 
-	       << " seconds, " << ne << " epochs\n";
-      }
-
-    current_epoch = -1; 
-
-    return num_epochs();
-  } 
+  int next_epoch(); 
   
-
-  int next_epoch()  
-  { 
-    // return the next unmasked epoch
-    while (1)
-      {
-	++current_epoch;
-	if ( current_epoch == epochs.size() ) return -1;
-	if ( ! mask_set ) break;
-	if ( ! mask[ current_epoch ] ) break; 	
-      }
-    return current_epoch;
-  }
-  
-  int next_epoch_ignoring_mask()  
-  { 
-    ++current_epoch;
-    if ( current_epoch == epochs.size() ) return -1;
-    return current_epoch;
-  }
+  int next_epoch_ignoring_mask();
 
   // all unmasked epochs
-  int num_epochs() const 
-  { 
-    if ( ! mask_set ) return epochs.size();
-    int r = 0;
-    for (int i=0;i<mask.size();i++)
-      if ( ! mask[i] ) ++r;
-    return r;
-  }
+  int num_epochs() const; 
 
   // all epochs
-  int num_total_epochs() const 
-  { 
-    return epochs.size(); 
-  }
+  int num_total_epochs() const;
 
-  interval_t epoch( const int e ) const
-  {
-    if ( e < 0 || e >= epochs.size() ) return interval_t(0LLU,0LLU);
-    return epochs[e]; 
-  }
+  interval_t epoch( const int e ) const;
  
-  bool epoch_records( const int e , int * a , int * b ) const 
-  {
-    *a = *b = 0;
-    std::map<int,std::set<int> >::const_iterator rr = epoch2rec.find( e );
-    if ( rr == epoch2rec.end() ) return false;
-    const std::set<int> & recs = rr->second;
-    *a = *recs.begin();
-    *b = *recs.rbegin();
-    return true;
-  }
+  bool epoch_records( const int e , int * a , int * b ) const;
 
+  //
+  // Epoch mappings
+  //
+
+  void clear_epoch_mapping();
+
+  bool has_epoch_mapping() const;
+
+  void set_epoch_mapping();
   
-  //
+  int original_epoch(int e);
+
+  // 1-based epoch mapping
+  int display_epoch(int e) const;
+
+  int display2curr_epoch(int e) const;
+  
+  std::map<int,bool> spanning_epoch_masks( const int r );
+
+
   // Epoch Masks
-  //
 
   // mask as simply 0/1 in a file, which must match # of epochs
   void load_mask( const std::string & , bool exclude = true );
@@ -397,15 +310,9 @@ struct timeline_t
   
   // convert from full annotation to epoch-level masks
     
-  void apply_epoch_include_mask( annot_t * a , std::set<std::string> * values = NULL )
-  {
-    apply_epoch_mask( a , values , true );
-  }
+  void apply_epoch_include_mask( annot_t * a , std::set<std::string> * values = NULL );
 
-  void apply_epoch_exclude_mask( annot_t * a , std::set<std::string> * values = NULL )
-  {
-    apply_epoch_mask( a , values , false );
-  }
+  void apply_epoch_exclude_mask( annot_t * a , std::set<std::string> * values = NULL );
   
   // behavior if annotation missing, i.e. an 'empty' mask
   void apply_empty_epoch_mask( const std::string & , bool include );
@@ -444,93 +351,49 @@ struct timeline_t
   
   void clear_epoch_mask( bool b = false );
   
-  bool is_epoch_mask_set() const { return mask_set; }
+  bool is_epoch_mask_set() const;
 
   int  set_epoch_mask( const int e , const bool b = true );
 
-  void set_epoch_mask_mode( const int m ) 
-  {
-    mask_mode = m;
-  }
+  void set_epoch_mask_mode( const int m );
 
-  int epoch_mask_mode() const { return mask_mode; } 
+  int epoch_mask_mode() const;
 
-  bool masked( const int e ) const
-  { 
-    return mask[e]; 
-  }
-
-  //  void mask2annot( const std::string & path , const std::string & tag , const bool with_id = true );
+  bool masked( const int e ) const;
 
   void add_mask_annot( const std::string & tag );
   
   void dumpmask( const param_t & );
 
+  bool elapsed_seconds_to_spanning_epochs( const double t1, const double t2, int * e1 , int * e2 );
+
+  // ------------------------------------------------------------
   //
   // Channel-specific epoch masks (ch/ep mask)
   //
+  // ------------------------------------------------------------
   
   static void proc_chep( edf_t & edf , param_t & param );
 
-  bool is_chep_mask_set() const { return chep.size() != 0; } 
+  bool is_chep_mask_set() const;
   
-  void clear_chep_mask() { chep.clear(); } 
+  void clear_chep_mask();
 
-  std::map<int,std::set<std::string> > make_chep_copy() const { return chep; }
+  std::map<int,std::set<std::string> > make_chep_copy() const;
 
-  void set_chep_mask( const int e , const std::string & s ) { chep[ display_epoch( e ) ].insert(s); } 
+  void set_chep_mask( const int e , const std::string & s );
 
-  void merge_chep_mask( const std::map<int,std::set<std::string> > & m ) 
-  {
-    if ( chep.size() == 0 ) { chep = m ; return; } 
-    std::map<int,std::set<std::string> >::const_iterator ii = m.begin();
-    while ( ii != m.end() )
-      {
-	std::set<std::string>::const_iterator jj = ii->second.begin();
-	while ( jj != ii->second.end() )
-	  {
-	    chep[ ii->first ].insert( *jj );
-	    ++jj;
-	  }
-	++ii;
-      }
-  }
-  
+  void merge_chep_mask( const std::map<int,std::set<std::string> > & m ) ;
 
-  bool unset_chep_mask( const int e , const std::string & s ) 
-  { 
-    // return T if anything removed
-    int e1 = display_epoch( e );    
-    std::map<int,std::set<std::string> >::iterator ii = chep.find( e1 ) ;
-    if ( ii == chep.end() ) return false;
-    std::set<std::string>::iterator jj = ii->second.find( s );
-    if ( jj == ii->second.end() ) return false;
-    ii->second.erase( jj );
-    return true; 
-  } 
+  bool unset_chep_mask( const int e , const std::string & s ) ;
 
   void dump_chep_mask( signal_list_t , bool );
   
-  bool masked( const int e , const std::string & s ) const 
-  {
-    std::map<int,std::set<std::string> >::const_iterator ee = chep.find( display_epoch( e ) );
-    if ( ee == chep.end() ) return false;
-    return ee->second.find( s ) != ee->second.end() ;
-  }
+  bool masked( const int e , const std::string & s ) const;
 
-  // save/load cheps
   void read_chep_file( const std::string & f , bool reset = true );
 
   void write_chep_file( const std::string & f ) const;
-
-  // query
-  std::vector<std::string> masked_channels( const int e , const signal_list_t & ) const;
-  
-  std::vector<std::string> unmasked_channels( const int e , const signal_list_t & ) const;
-
-  signal_list_t masked_channels_sl( const int e , const signal_list_t & ) const;
-  
-  signal_list_t unmasked_channels_sl( const int e , const signal_list_t & ) const;
 
   // sets main epoch mask
   void collapse_chep2epoch( signal_list_t signals , const double pct , const int k );
@@ -544,9 +407,21 @@ struct timeline_t
 				  const bool bad_set_all_bad = true , 
 				  const bool good_set_all_good = true );
   
+  // query
+  std::vector<std::string> masked_channels( const int e , const signal_list_t & ) const;
+  
+  std::vector<std::string> unmasked_channels( const int e , const signal_list_t & ) const;
+
+  signal_list_t masked_channels_sl( const int e , const signal_list_t & ) const;
+  
+  signal_list_t unmasked_channels_sl( const int e , const signal_list_t & ) const;
+
+
+  // ------------------------------------------------------------
   //
   // Generic masks
   //
+  // ------------------------------------------------------------
   
   bool masked_timepoint( uint64_t ) const;
 
@@ -578,15 +453,23 @@ struct timeline_t
   uint64_t valid_tps(  const interval_t & );
 
 
+  // ------------------------------------------------------------
   //
-  // ANNOTATE command implementation (annots.cpp)
+  // OVERLAP command implementation (annots.cpp)
   //
+  // ------------------------------------------------------------
 
-  void annotate( param_t & );
+  // FIXME... REDUNDANT??? or not?
+  //  void annotate( param_t & );
   
+
+  // ------------------------------------------------------------  
   //
   // EPOCH annotations
   //
+  // ------------------------------------------------------------
+
+  // ?? redundant?
   
   // i.e. a lightweight annot, separate from annot_t, that is only
   // used internally for store SleepStage information
@@ -603,158 +486,36 @@ struct timeline_t
   // should be used with current 0..(ne-1) mapping, will
   // be converted to original epoch mapping if needed
 
-  void annotate_epoch( const std::string & label , int e )
-  {
-    
-    // do we need to remap the epoch?
-    
-    if ( has_epoch_mapping() )
-      {
-        // off-the-grid  
-        if ( epoch_curr2orig.find( e ) == epoch_curr2orig.end() ) 
-	  return;
-	
-        // convert query to the original mapping
-        e = epoch_curr2orig.find( e )->second;
-      }
+  void annotate_epoch( const std::string & label , int e );
 
-    eannots[ label ][ e ] = true;
-  }
-
-
-/*   void annotate_epochs( const std::string & label , bool b ) */
-/*   { */
-/*     const int ne = num_epochs(); */
-/*     eannots[ label ].clear(); */
-/*     for (int e = 0 ; e < ne ; e++) eannots[ label ][ e ] = b ; */
-/*   } */
-  
-/*   void annotate_epochs( const std::vector<std::string> & s ) */
-/*   { */
-/*     if ( s.size() != num_total_epochs() )  */
-/*       Helper::halt( "internal error: incorrect number of epochs in annotate_epochs()" ); */
-/*     for (int i=0;i<s.size();i++) eannots[ s[i] ][ i ] = true;  */
-/*   } */
-  
   void clear_epoch_annotations();
-
 
   // Return all epoch annotations
   
-  std::set<std::string> epoch_annotations() const
-  {
-    std::set<std::string> r;
-    std::map<std::string,std::map<int,bool> >::const_iterator ii = eannots.begin();
-    while ( ii != eannots.end() )
-      {
-	r.insert( ii->first );
-	++ii;
-      }
-    return r;
-  }
+  std::set<std::string> epoch_annotations() const;
   
   // does annotation 'k' exist at all? 
   
-  bool epoch_annotation(const std::string & k ) const
-  {
-    return eannots.find( k ) != eannots.end() ;
-  }
+  bool epoch_annotation(const std::string & k ) const;
   
   // does EPOCH 'e' contain annotation 'k'?
   // where 'e' is in the current 0..ne epoch form, 
   // and will be remapped if necessary
   
-  bool epoch_annotation(const std::string & k, int e) const
-  {
-
-    // look up this annotation 'k'
-    std::map<std::string,std::map<int,bool> >::const_iterator ii = eannots.find( k );
-
-    // annotation k does not exist anywhere
-    if ( ii == eannots.end() ) return false;
-    
-    // do we need to remap the epoch? 
-    if ( has_epoch_mapping() ) 
-      {
-	// off-the-grid
-	if ( epoch_curr2orig.find( e ) == epoch_curr2orig.end() ) return false;
-	// convert query to the original mapping
-	e = epoch_curr2orig.find( e )->second;
-      }
-    
-    // now we have the correct original-EDF epoch number, do
-    // we have an flag? if not, means FALSE
-    if ( ii->second.find( e ) == ii->second.end() ) return false;
-
-    // return the boolean value (i.e. could still be set FALSE explicitly)
-    return ii->second.find( e )->second; 
-  }
-  
+  bool epoch_annotation(const std::string & k, int e) const;
 
   //
-  // Misc
+  // Misc helpers
   //
+
+  bool check( const std::string & cmd ) const;
 
   interval_t wholetrace() const; 
-
-  
-  //
-  // Epoch mappings
-  //
-
-  void clear_epoch_mapping()
-  {
-    epoch_orig2curr.clear();
-    epoch_curr2orig.clear();
-  }
-
-  bool has_epoch_mapping() const
-  {
-    return epoch_orig2curr.size() != 0 ;
-  }
-
-  void set_epoch_mapping();
-  
-  int original_epoch(int e)
-  {
-    if ( ! has_epoch_mapping() ) return e;
-    if ( epoch_curr2orig.find(e) == epoch_curr2orig.end() ) return -1;
-    return epoch_curr2orig.find(e)->second;
-  }
-
-  // 1-based epoch mapping
-  int display_epoch(int e) const
-    {      
-      if ( ! has_epoch_mapping() ) return e+1;
-      if ( epoch_curr2orig.find(e) == epoch_curr2orig.end() ) return -1;
-      return epoch_curr2orig.find(e)->second + 1 ;
-    }
-
-
-  int display2curr_epoch(int e) const 
-  {
-    if ( ! has_epoch_mapping() ) return e-1;    
-    if ( epoch_orig2curr.find(e-1) == epoch_orig2curr.end() ) return -1;
-    return epoch_orig2curr.find(e-1)->second ;
-  }
   
   static bool discontinuity( const std::vector<uint64_t> & t , int sr, int sp1, int sp2 );
 
-  std::map<int,bool> spanning_epoch_masks( const int r ) 
-  {
-    std::map<int,bool> rec;
-    std::map<int,std::set<int> >::const_iterator ii = rec2epoch.find( r );
-    if ( ii == rec2epoch.end() ) return rec;
-    std::set<int>::const_iterator jj = ii->second.begin();
-    while ( jj != ii->second.end() )
-      {
-	rec[ *jj ] = masked_epoch( *jj );
-	++jj;
-      }
-    return rec;
-  }
-  
 
+  
  private:
 
   
@@ -771,12 +532,25 @@ struct timeline_t
   uint64_t     epoch_inc_tp;    
 
   uint64_t     epoch_offset_tp;
+
+  // generic epochs
+
+  std::set<std::string> epoch_generic_param_annots;
+  double                epoch_generic_param_w;
+  bool                  epoch_generic_param_set_midpoint;
+  double                epoch_generic_param_min_epoch_size;
   
+  // epoch alignment
   
   std::string epoch_align_str; // un-tokenized version of below, for quick check by EVAL when calling proc_epoch()
   std::vector<std::string> epoch_align_annots; // for EDF+D w/ 'align' (i.e. cannot have a single offset number)
 
   std::vector<interval_t> epochs;
+
+  // for generic-epoch (vs standard epoch) case:
+  std::vector<std::string> epoch_labels;
+
+  bool standard_epochs;
 
   int current_epoch;
 

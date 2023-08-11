@@ -32,7 +32,7 @@ struct param_t;
 struct signal_list_t;
 
 void gc_wrapper( edf_t & edf , param_t & param );
-
+  
 struct gc_t { 
   
   gc_t( const Eigen::MatrixXd & X ,
@@ -41,7 +41,8 @@ struct gc_t {
 	double timewin_ms , 	
 	double order_ms ,
 	const std::vector<double> * frqs = NULL , 
-	int compute_bic = 0 
+	int compute_bic = 0 ,
+	const bool outputs = true
 	);
   
   // time-domain

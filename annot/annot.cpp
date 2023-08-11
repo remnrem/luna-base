@@ -2909,8 +2909,62 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       // all done
       return;
     }
-  
 
+  //
+  // flatten
+  //
+
+  if ( param.has( "flatten" ) )
+    {
+      const std::string newannot = param.requires( "annot" );
+      const std::string oldannot = param.requires( "flatten" );
+
+      annot_t * a1 = find( oldannot );
+      if ( a1 == NULL )
+	{
+	  logger << "  *** warning, could not find any annotation " << oldannot << "\n";
+          return;
+	}
+
+      annot_t * an = add( newannot );
+
+      // get events
+      const annot_map_t & events1 = a1->interval_events;
+      
+      std::set<interval_t> nevs;
+  
+      annot_map_t::const_iterator jj = events1.begin();
+      while ( jj != events1.end() )
+	{
+	  const instance_idx_t & instance_idx = jj->first;
+	  nevs.insert( instance_idx.interval );
+	  ++jj;
+	}
+
+      //
+      // flatten
+      //
+
+      nevs = annotate_t::flatten( nevs );
+
+      //
+      // add new events
+      //
+      
+      std::set<interval_t>::const_iterator nn = nevs.begin();
+      while ( nn != nevs.end() )
+	{
+	  an->add( "." , *nn , "." );
+	  ++nn;
+	}
+      
+      logger << "  created " << nevs.size() << " flattened instances of " << newannot << " from " << oldannot << "\n";
+     
+      // all done
+      return;
+    }
+
+  
   //
   // process rest
   //

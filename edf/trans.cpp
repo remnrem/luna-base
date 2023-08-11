@@ -99,10 +99,6 @@ void proc_trans( edf_t & edf , param_t & param )
   
   const bool verbose = param.has( "verbose" );
 
-
-  //
-  // set epoch flags based on this?
-  //
   
   logger << "  evaluating expression  : " << expression << "\n";
 

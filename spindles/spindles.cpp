@@ -389,6 +389,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   const bool cache_peaks                  = param.has( "cache-peaks" );
   const std::string cache_peaks_name = cache_peaks ? param.value( "cache-peaks" ) : "";
+  const bool cache_amp_peak  = param.has( "amp-peaks" ) ;
+  
+  const bool cache_peaks_sec             = param.has( "cache-peaks-sec" );
+  const std::string cache_peaks_sec_name = cache_peaks_sec ? param.value( "cache-peaks-sec" ) : "";
 
   cache_t<double> * cache_metrics = param.has( "cache-metrics" ) ? edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
 
@@ -1509,7 +1513,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
 	  //
-	  // Cache spindle peaks
+	  // Cache spindle peaks: in sample points
 	  //
 	  
 	  if ( cache_peaks )
@@ -1520,13 +1524,39 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      for (int i=0; i<spindles.size(); i++)
 		{
 		  int p = spindles[i].start_sp + spindles[i].max_trough_sp;
-		  //		  std::cout << "p = " << spindles[i].start_sp  << " " << spindles[i].peak_sp << "\n";
 		  peaks.push_back(p);
 		}
               cache->add( ckey_t( "points" , writer.faclvl() ) , peaks );
 	    }
-
 	  
+	  //
+	  // Cache spindle peaks: in seconds
+	  //
+	  
+	  if ( cache_peaks_sec )
+            {
+	      logger << "  caching peaks (seconds) in " << cache_peaks_sec_name << "\n";
+              cache_t<double> * cache = edf.timeline.cache.find_num( cache_peaks_sec_name );
+	      
+	      std::vector<double> peaks;
+	      for (int i=0; i<spindles.size(); i++)
+		{
+		  spindle_t & spindle = spindles[i];
+		  if ( cache_amp_peak )
+		    {
+		      double peak_amp_sec = spindle.peak_amp_sp / (double)( spindle.stop_sp - spindle.start_sp ) ;
+		      peak_amp_sec = spindle.tp.start + peak_amp_sec * ( spindle.tp.stop - spindle.tp.start ) ;
+		      peaks.push_back( peak_amp_sec * globals::tp_duration );
+		    }
+		  else
+		    {
+		      peaks.push_back( spindle.tp_mid * globals::tp_duration );
+		    }
+		      
+		}
+              cache->add( ckey_t( "seconds" , writer.faclvl() ) , peaks );
+	    }
+
 	  //
 	  // Align SO events/phase w/ these spindles (sw_coupling)
 	  // Alternatively, align the phase bins of a specified channel w/ spindles (phase_coupling)
@@ -1782,8 +1812,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      
 		      if ( eperm ) 
 			{
+			  if ( edf.timeline.generic_epochs() )
+			    Helper::halt( "cannot run within-epoch permutation with generic (differently-sized) epochs: add 'perm-whole-trace' " );
+			  
 			  if ( ! edf.timeline.epoched() ) edf.timeline.ensure_epoched();
 			  epoch_sec = edf.timeline.epoch_length();
+			  
 			}
 		      
 		      //

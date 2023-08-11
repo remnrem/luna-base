@@ -214,7 +214,11 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   slice_t slice1( edf , sigs[0] , interval );      
   const std::vector<double> * d1 = slice1.pdata();
   const int total_sample_points = d1->size();  
-      
+
+  //
+  // nb. this assumes epochs have similar sizes
+  //
+
   coherence_t coherence( total_sample_points, Fs, segment_sec, overlap_sec, window , average_adj , detrend );
 
 
@@ -266,7 +270,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
       coherence.clear();
 
       //
-      // (Re)popilate cache with single-channel spectra
+      // (Re)populate cache with single-channel spectra
       //
 
       for (int i=0;i<ns;i++)

@@ -314,12 +314,15 @@ void proc_mask( edf_t & edf , param_t & param )
       double t1, t2;      
       if ( tok.size() != 2 || (!Helper::str2dbl( tok[0] , &t1 )) || (!Helper::str2dbl( tok[1] , &t2 ) ) ) 
 	Helper::halt( "expecting sec=<time1>-<time2> where <time> is in seconds" );
+
       // reduce t2 by 1 tp, i.e. so we get time up to but not including t2
       // thus 0..30  means just 0 <= x < 30 , i.e. the first epoch
-      t2 -= globals::tp_duration;
-      int epoch1 = 1 + floor( t1 / edf.timeline.epoch_length() );
-      int epoch2 = 1 + floor( t2 / edf.timeline.epoch_length() );
-      edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
+
+      int epoch1, epoch2;
+      if ( edf.timeline.elapsed_seconds_to_spanning_epochs( t1, t2, &epoch1, &epoch2 ) )
+	edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
+      else
+	logger << "  bad time ranges given from MASK sec\n";
     }
 
 
@@ -336,71 +339,20 @@ void proc_mask( edf_t & edf , param_t & param )
       clocktime_t t2( tok[1] );
       
       double s1 = clocktime_t::ordered_difference_seconds( starttime , t1 ) ; 
-      double s2 = clocktime_t::ordered_difference_seconds( starttime , t2 ) ; 
-      s2 -= globals::tp_duration;
-      
-      // for the continuous case:
-      if ( edf.header.continuous )
-	{
-	  int epoch1 = 1 + floor( s1 / edf.timeline.epoch_length() );
-	  int epoch2 = 1 + floor( s2 / edf.timeline.epoch_length() );	  
-	  if ( epoch1 > epoch2 ) Helper::halt( "misspecified hms times: implies start after end" );	  
-	  edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
-	}
+      double s2 = clocktime_t::ordered_difference_seconds( starttime , t2 ) ;
 
-      // for the discontinuous case, select all epochs that are spanned by this interval
-      if ( ! edf.header.continuous )
-	{
-	  int epoch1 = -1 , epoch2 = -1;
-
-	  // look at each epoch
-	  edf.timeline.first_epoch();	  
-	  while ( 1 ) 
-	    {
-	      int epoch = edf.timeline.next_epoch();      
-	      if ( epoch == -1 ) break;
-	      interval_t interval = edf.timeline.epoch( epoch );
-
-	      // std::cout << "epoch "
-	      // 		<< interval.start << "\t"
-	      // 		<< interval.stop << "\t"
-	      // 		<< interval.start_sec() << "\t"
-	      // 		<< interval.stop_sec_exact() << "\t"
-	      // 		<< s1 << "\t"
-	      // 		<< s2 << "\t"
-	      // 		<< epoch1 << "\t"
-	      // 		<< epoch2 << "\n";
-
-	      // is this epoch spanned by this hms range? track first / last spanned
-	      if ( interval.start_sec() <= s2 && interval.stop_sec_exact() >= s1 ) 
-		{
-		  std::cout << "  ADDING.....\n";
-		  if ( epoch1 != -1 )
-		    epoch2 = epoch;
-		  else
-		    epoch1 = epoch;
-		}
-	    }
-
-	  // if only a single epoch flagged
-	  if ( epoch2 == -1 ) epoch2 = epoch1;
-	  
-	  // nb. 1-based selection here
-	  if ( epoch1 != -1 )
-	    edf.timeline.select_epoch_range( 1+epoch1 , 1+epoch2 , true );
-
-	}
+      int epoch1, epoch2;
+      if ( edf.timeline.elapsed_seconds_to_spanning_epochs( s1, s2, &epoch1, &epoch2 ) )
+        edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
+      else
+        logger << "  bad time ranges given from MASK hms\n";
       
     }
   
-
-
-
-
   //
   // Include/exclude/annotate masks
   //
-  
+
   // nb. these now mutually exclusive
   bool has_imask = match_mode == 1 ;
   bool has_xmask = match_mode == 0 ;

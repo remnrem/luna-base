@@ -962,7 +962,14 @@ bool cmd_t::eval( edf_t & edf )
 	      continue;
 	    }
 	}
+
+
+      //
+      // Check that epoch type is consistent w/ the command
+      //
       
+      if ( ! edf.timeline.check( cmd(c) ) )
+	Helper::halt( "cannot apply " + cmd(c) + " with non-standard epoch definitions" );
       
       //
       // Process command
@@ -1126,6 +1133,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ASYMM" ) )        proc_asymm( edf , param(c) );
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
       else if ( is( c, "TCLST" ) )        proc_tclst( edf , param(c) );
+      else if ( is( c, "PERI" ) )         proc_peri( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
       else if ( is( c, "Z-PEAKS" ) )      proc_zpeaks( edf , param(c) );
 
@@ -1891,6 +1899,13 @@ void proc_asymm( edf_t & edf  , param_t & param )
   lat_t lat( edf , param );
 }
 
+// PERI
+void proc_peri( edf_t & edf  , param_t & param )
+{
+  // generic peri-event epoch-based analyses
+  dsptools::peri( edf , param );
+}
+
 // TLOCK
 void proc_tlock( edf_t & edf  , param_t & param )
 {
@@ -2543,7 +2558,52 @@ void proc_write( edf_t & edf , param_t & param )
 
 void proc_epoch( edf_t & edf , param_t & param )
 {
+
+  //
+  // just dump, do not alter
+  //
   
+  if ( param.has( "dump" ) || param.has( "table" ) )
+    {
+      
+      const bool show_masked = param.has( "masked" ) ;
+      
+      if ( edf.timeline.epoched() )
+	{
+	  if ( show_masked ) 
+	    logger << "  outputting epoch table for " << edf.timeline.num_total_epochs() << " masked & unmasked epochs\n";
+	  else
+	    logger << "  outputting epoch table for " << edf.timeline.num_epochs() << " unmasked epochs\n";
+	  
+	  edf.timeline.output_epoch_info( show_masked );
+	}
+      else
+	logger << "  no epochs set, not dumping any information\n";
+      return;
+    }
+
+  //
+  // annotation-based (generic) epochs?
+  //
+  
+  if ( param.has( "annot" ) )
+    {
+      int ne = edf.timeline.calc_epochs_generic_from_annots( param );
+      
+      logger << "  set " << ne << " generic epochs, based on annotations [ " << param.value( "annot" ) << " ]";
+      if ( param.has( "else" ) ) logger << " and [ " << param.value( "else" ) << " ]";
+      logger << "\n";
+      
+      if ( param.has( "verbose" ) )
+	edf.timeline.output_epoch_info();
+      
+      return;
+    }
+
+  //
+  // otherwise, define standard epochs 
+  //  
+
   const bool opt_clear = param.has( "clear" );
   const bool opt_req   = param.has( "require" );
   const bool opt_len   = param.has( "len" ) || param.has( "dur" ) || param.has( "epoch" ) || param.has( "inc" );
@@ -2745,69 +2805,17 @@ void proc_epoch( edf_t & edf , param_t & param )
 	 << " (step " << inc 
 	 << ", offset " << offset * globals::tp_duration  
 	 <<  "), " << ne << " epochs\n";
-  
-  writer.value( "NE" , ne );
-  writer.value( "DUR" , dur );
-  writer.value( "INC" , inc );
-  
+    
   
   //
   // write more verbose information to db
   //
+
   
   if ( param.has( "verbose" ) )
-    {
+    edf.timeline.output_epoch_info();
 
-      // track clock time
-
-      clocktime_t starttime( edf.header.starttime );
-      
-      bool hms = starttime.valid;
-      
-      
-      edf.timeline.first_epoch();
-      
-      while ( 1 ) 
-	{
-	  
-	  int epoch = edf.timeline.next_epoch();      
-	  
-	  if ( epoch == -1 ) break;
-	  
-	  interval_t interval = edf.timeline.epoch( epoch );
-	  
-	  // original encoding (i.e. to allows epochs to be connected after the fact
-	  writer.epoch( edf.timeline.display_epoch( epoch ) );
-	  
-	  // if present, original encoding
-	  writer.value( "E1" , epoch+1 );
-	  
-	  writer.value( "INTERVAL" , interval.as_string() );      
-	  writer.value( "START"    , interval.start_sec() );
-	  writer.value( "MID"      , interval.mid_sec() );
-	  writer.value( "STOP"     , interval.stop_sec() );
-	  writer.value( "TP" , interval.as_tp_string() );
-	  
-	  // original time-points
-	  
-	  if ( hms )
-	    {
-	      const double sec0 = interval.start * globals::tp_duration;
-	      clocktime_t present = starttime;
-	      present.advance_seconds( sec0 );
-	      std::string clocktime = present.as_string( ':' );
-	      writer.value( "HMS" , clocktime );
-	    }
-	
-	  
-	}		  
-      
-  
-      writer.unepoch();
-      
-    }
-
-
+ 
   //
   // any constraints on the min. number of epochs required? 
   //

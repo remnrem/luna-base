@@ -3517,10 +3517,12 @@ bool edf_t::restructure( const bool force )
   //
   // Map back onto original epochs
   //
-  
+
   timeline.set_epoch_mapping();
 
+  //
   // Check that we have anything to do
+  //
   
   if ( ! timeline.is_epoch_mask_set() ) 
     {
@@ -3598,9 +3600,13 @@ bool edf_t::restructure( const bool force )
 
   for (int r = 0 ; r < header.nr_all; r++)
     {
-      
+      // do we need to load this record in from disk?
       bool found     = records.find(r) != records.end();
+
+      // was this record dropped from a prior RE?
       bool retained  = timeline.retained(r);
+      
+      // is this masked in the current retained set?
       bool unmasked  = !timeline.masked_record(r);
       
       if ( retained )
@@ -3630,38 +3636,15 @@ bool edf_t::restructure( const bool force )
       ++ii;
     }
 
-
-  if ( 0 ) 
-    {
-      for (int r = 0 ; r < header.nr_all; r++)
-	{
-	  
-	  bool found     = copy.find(r) != copy.end();
-	  bool retained  = timeline.retained(r);
-	  bool unmasked  = !timeline.masked_record(r);
-	  
-	  if ( retained )
-	    {
-	      if ( unmasked ) 
-		{	      
-		  if ( ! found ) Helper::halt( "internal error in restructure()");
-		  records.insert( std::map<int,edf_record_t>::value_type( r , copy.find(r)->second ) );
-		  include.insert( r );
-		}
-	    }
-	}
-    }
-
-  
-      
+       
   // set warning flags, if not enough data left
   
   if ( records.size() == 0 ) globals::empty = true;
     
 
   logger << " keeping " 
-	 << records.size() << " records of " 
-	 << copy.size() << ", resetting mask\n";
+	 << records.size() << " of " 
+	 << copy.size() << " records, resetting mask\n";
   
   writer.value( "NR1" , (int)copy.size() );
   writer.value( "NR2" , (int)records.size() );
@@ -4819,6 +4802,7 @@ bool edf_t::basic_stats( param_t & param )
 		    writer.value( "KURT" , kurt );
 		  
 		  writer.value( "RMS"  , rms  );
+		  writer.value( "SD"  , sd  );
 
 		  if ( run_pcts )
 		    {
@@ -5415,26 +5399,6 @@ void edf_t::set_headers( param_t & param )
     }
   
 }
-
-// int edf_t::read_all()
-// {
-  
-//   for (int r = 0 ; r < header.nr_all; r++)
-//     {	
-//       bool found     = records.find(r) != records.end();
-//       bool retained  = timeline.retained(r);
-//       bool unmasked  = !timeline.masked_record(r);
-      
-//       if ( retained )
-// 	if ( unmasked ) 
-// 	  if ( ! found )
-// 	    {
-// 	      read_records( r, r );
-// 		++rex;
-// 	    }
-//     }
-//   return rex;
-// }
 
 
 void edf_t::update_edf_pointers( edf_t * p )

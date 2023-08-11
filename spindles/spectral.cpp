@@ -265,15 +265,17 @@ annot_t * spectral_power( edf_t & edf ,
     
 
   //
-  // Check segment lengths
+  // Check segment lengths (i.e. epoch sizes are fixed)
   //
-
-  if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
-    {
-      fft_segment_overlap = 0;
-      fft_segment_size = edf.timeline.epoch_length();
-    }
   
+  if ( ! edf.timeline.generic_epochs() )
+    {
+      if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
+	{
+	  fft_segment_overlap = 0;
+	  fft_segment_size = edf.timeline.epoch_length();
+	}
+    }
 
   
   //
@@ -356,19 +358,43 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  if ( epoch == -1 ) break;
 	  
-	  ++total_epochs;
-	  
 	  interval_t interval = edf.timeline.epoch( epoch );
 	  
+         
+	  //
+	  // Need to check segment length?
+	  //
+
+	  if ( edf.timeline.generic_epochs() )
+	    {
+	      // here, all epochs need to have the same segment length, so will skip here
+	      // if the epoch is too short
+	      if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
+		{
+		  logger << "  *** skipping epoch " << interval.as_string() << ", too short given segment-sec\n";
+		  continue;
+		}
+	    }
+	  
+
+	  //
+	  // okay to process
+	  //
+
+	  ++total_epochs;
+	  
+	  //
 	  // stratify output by epoch?
+	  //
+
 	  if ( epoch_level_output )
 	    writer.epoch( edf.timeline.display_epoch( epoch ) );
+	  
+	  //
+	  // Get data
+	  //
 
-	   //
-	   // Get data
-	   //
-
-	   slice_t slice( edf , signals(s) , interval );
+	  slice_t slice( edf , signals(s) , interval );
 	   
 	   std::vector<double> * d = slice.nonconst_pdata();
 

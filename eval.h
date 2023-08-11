@@ -380,6 +380,8 @@ void proc_microstates( edf_t & , param_t & );
 void proc_asymm( edf_t & , param_t & );
 void proc_tlock( edf_t & , param_t & );
 void proc_peaks( edf_t & , param_t & );
+void proc_peri( edf_t & , param_t & );
+
 void proc_zpeaks( edf_t & , param_t & );
 void proc_sedf( edf_t & , param_t & );
 void proc_tclst( edf_t & , param_t & );

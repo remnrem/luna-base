@@ -448,7 +448,7 @@ struct annotate_t {
   static bool get_segment_start( const std::set<interval_t> & , uint64_t , uint64_t * );
   
   // excise: return 'y' after excising 'x'
-  std::set<interval_t> excise( const std::set<interval_t> & y , const std::set<interval_t> & x );
+  static std::set<interval_t> excise( const std::set<interval_t> & y , const std::set<interval_t> & x );
   
   uint64_t total_duration( const std::set<interval_t> & x );
   

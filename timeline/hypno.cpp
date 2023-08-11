@@ -2487,7 +2487,8 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 
   // Epoch-level annotations
   //  WASO   waso
-  //   
+  //  Pre-sleep wake     pre_sleep_wake
+  //  Post-sleep wake    post_sleep_wake
   
   // Cumulative elapsed durations
   //   Clock-time (by 24-hour) 
@@ -2667,6 +2668,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   //     for : N1 N2 N3 NR R S W WASO
 
   // add annotation at epoch levels:
+  
   for (int e=0; e<ne; e++)
     {
       
@@ -2873,13 +2875,23 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   //
   // Transitions: hyp_tr:W_NR   hyp_tr:W_NR  etc
   // Ascending/descending N2: hyp_N2:asc hyp_N2:dsc
-  // WASO :waso
+  // WASO : waso, pre_sleep_wake, post_sleep_wake
   //
 
+  // get final wake
+  int final_sleep_epoch = ne-1;
+  for (int e=0; e<ne; e++)
+    
+  
   for (int e=0; e<ne; e++)
     {
 
       interval_t interval = timeline->epoch( e );
+      
+      bool is_wake = stages[e] == WAKE ;
+      bool is_pre_sleep_wake = stages[e] == WAKE && e <= first_sleep_epoch ;
+      bool is_post_sleep_wake = stages[e] == WAKE && e >= final_wake_epoch ;
+      
       
       // transition var of '1' means at *end* of that
       // epoch there is a transition
@@ -2916,6 +2928,20 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       if ( is_waso[e] )
 	{
 	  annot_t * a = timeline->annotations.add( prefix + "waso" );
+          instance_t * instance = a->add( "." , interval , "." );
+	}
+
+      // pre-sleep wake?
+      if ( is_pre_sleep_wake )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "pre_sleep_wake" );
+          instance_t * instance = a->add( "." , interval , "." );
+	}
+      
+      // post-sleep wake?
+      if ( is_post_sleep_wake )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "post_sleep_wake" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
 
@@ -2983,6 +3009,8 @@ void hypnogram_t::output( const bool verbose ,
     {
       if ( ! Helper::similar( timeline->epoch_length() , 30 , 0.001 ) ) 
 	Helper::halt( "requires 30-second epochs to be set currently" );
+      if ( ! Helper::similar( timeline->epoch_inc() , 30 , 0.001 ) ) 
+	Helper::halt( "requires non-overlapping 30-second epochs to be set currently" );
     }
 
   // also saved as tp (for annot output)

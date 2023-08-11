@@ -2584,19 +2584,6 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     }
      
 
-  if ( p == "cwt" )
-    {
-      CWT cwt;
-      cwt.set_sampling_rate( 400 );
-      cwt.add_wavelets( 0.5 , 5 , 30 , 0.25 , 35 , 20 ) ;
-
-
-      std::vector<dcomp> w1 = cwt.alt_wavelet( 0 );
-      for (int i=0;i<w1.size();i++)
-	std::cout << i << "\t" << w1[i] << "\n";
-      
-      std::exit(1);
-    }
 
   if ( p == "cancor" )
     {
@@ -3105,7 +3092,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   std::vector<double> x;
   
 
-  if ( p == "fir" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" 
+  if ( p == "fir" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" || p == "cwt" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
        || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" || p == "tri" || p == "ngaus" || p == "ssa" || p == "xcorr" ) 
     {
@@ -3170,6 +3157,40 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 	    std::cout << "\t" << emd.imf[j][i] ;
 	  std::cout << "\t" << emd.residual[i] << "\n";
 	}
+      
+      std::exit(1);
+    }
+
+
+  if ( p == "cwt" )
+    {
+      std::cout << "input lengh = " << x.size() << "\n";
+      // 100 times fastter
+
+      int Fs = 100;
+      if ( p2 != "" )
+        if ( ! Helper::str2int( p2 , &Fs ) )
+	  Helper::halt( "expecting sample rate as second parameter" );
+
+      std::vector<double> fc, fwhm;
+      fc.push_back( 1 ); fwhm.push_back( CWT::pick_fwhm( 1 ) );
+      double timelength = 20 ;
+      const bool wrapped = true;
+      std::vector<double> mag, phase;
+      dsptools::alt_run_cwt( x , Fs , fc[0] , fwhm[0] , timelength , wrapped , &mag , &phase );
+
+      for ( int i=0; i< mag.size(); i++)
+	std::cout << mag[i] << "\n";
+      std::exit(1);
+
+      CWT cwt;
+      cwt.set_sampling_rate( 400 );
+      cwt.add_wavelets( 0.5 , 5 , 30 , 0.25 , 35 , 20 ) ;
+
+
+      std::vector<dcomp> w1 = cwt.alt_wavelet( 0 );
+      for (int i=0;i<w1.size();i++)
+	std::cout << i << "\t" << w1[i] << "\n";
       
       std::exit(1);
     }

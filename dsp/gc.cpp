@@ -171,7 +171,8 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 	    double timewin_ms , 
 	    double order_ms ,
 	    const std::vector<double> * frqs ,
-	    int compute_bic
+	    int compute_bic ,
+	    const bool outputs
 	    ) 
 {
   
@@ -245,15 +246,17 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
   
   for (int s1=0; s1<ns; s1++)
     {
-      
-      writer.level( signals.label(s1) , globals::signal1_strat );
+
+      if ( outputs ) 
+	writer.level( signals.label(s1) , globals::signal1_strat );
 
       ZZ.col(0) = Z.col(s1);
       
       for (int s2=s1+1; s2<ns; s2++)
 	{
 
-	  writer.level( signals.label(s2) , globals::signal2_strat );
+	  if ( outputs ) 
+	    writer.level( signals.label(s2) , globals::signal2_strat );
 	  
 	  ZZ.col(1) = Z.col(s2);
 	  
@@ -295,8 +298,9 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 		      bic = this_bic;
 		    }
 		}
-	      
-	      writer.value( "BIC" , bic );
+
+	      if ( outputs )     
+		writer.value( "BIC" , bic );
 	    }
 	  
 	  
@@ -348,8 +352,11 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 	  
 	  // time-domain
 
-	  writer.value( "Y2X" , y2x );  
-	  writer.value( "X2Y" , x2y );
+	  if ( outputs )
+	    {
+	      writer.value( "Y2X" , y2x );  
+	      writer.value( "X2Y" , x2y );
+	    }
 	  
 	  y2x_sum[ s1 ][ s2 ] += y2x;  
 	  x2y_sum[ s1 ][ s2 ] += x2y;  
@@ -361,9 +368,11 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
   
 	      std::map<double,double>::const_iterator ff = tf_y2x.begin();
 	      while ( ff != tf_y2x.end() )
-		{      
-		  writer.level( ff->first , globals::freq_strat );
-		  writer.value( "Y2X" , ff->second );
+		{
+		  if ( outputs ) {
+		    writer.level( ff->first , globals::freq_strat );
+		    writer.value( "Y2X" , ff->second );
+		  }
 		  tf_y2x_sum[ s1 ][ s2 ][ ff->first ] += ff->second;
 		  ++ff;
 		}
@@ -371,19 +380,24 @@ gc_t::gc_t( const Eigen::MatrixXd & X ,
 	      ff = tf_x2y.begin();
 	      while ( ff != tf_x2y.end() )
 		{      
-		  writer.level( ff->first , globals::freq_strat );
-		  writer.value( "X2Y" , ff->second );
+		  if ( outputs ) {
+		    writer.level( ff->first , globals::freq_strat );
+		    writer.value( "X2Y" , ff->second );
+		  }
 		  tf_x2y_sum[ s1 ][ s2 ][ ff->first ] += ff->second;
 		  ++ff;
 		}
-	      writer.unlevel( globals::freq_strat );
+	      if ( outputs ) 
+		writer.unlevel( globals::freq_strat );
 
 	    }	  
 
 	} // next s2
-      writer.unlevel( globals::signal2_strat );  	      
+      if ( outputs ) 
+	writer.unlevel( globals::signal2_strat );  	      
     } // next s1 
-  writer.unlevel( globals::signal1_strat );  	      
+  if ( outputs ) 
+    writer.unlevel( globals::signal1_strat );  	      
 }
 
 

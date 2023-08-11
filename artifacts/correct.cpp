@@ -82,7 +82,7 @@ void dsptools::artifact_correction( edf_t & edf , param_t & param )
     ? segment_size_sec / 2.0
     : segment_size_sec ;  
   
-  const int ne = edf.timeline.first_epoch();
+  //  const int ne = edf.timeline.first_epoch();
 
   //
   // requires similar SRs

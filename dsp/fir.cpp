@@ -665,7 +665,7 @@ void dsptools::apply_ngaus( edf_t & edf , int s , const double ngaus_f , const d
   
   interval_t interval = edf.timeline.wholetrace();
 
-  std::cout <<" int " << interval.start << " " << interval.stop << "\n";
+  //  std::cout <<" int " << interval.start << " " << interval.stop << "\n";
     
   slice_t slice( edf , s , interval );
 
@@ -675,11 +675,11 @@ void dsptools::apply_ngaus( edf_t & edf , int s , const double ngaus_f , const d
   
   int fs = edf.header.sampling_freq( s );
 
-  std::cout << " F1\n";
+  //  std::cout << " F1\n";
   std::vector<double> filtered = narrow_gaussian_t::filter( *d , fs, ngaus_f , ngaus_fwhm ) ;
-  std::cout << " F2\n";  
+  //  std::cout << " F2\n";  
   edf.update_signal( s , &filtered );
-  std::cout << " F3\n";    
+  //  std::cout << " F3\n";    
 }
 
 
