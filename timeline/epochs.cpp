@@ -521,6 +521,7 @@ int timeline_t::calc_epochs()
 
   // reset counter
   current_epoch = -1;
+  mask.clear();
   mask.resize( epochs.size() , false );
   mask_set = false;
   mask_mode = 0; 
@@ -631,7 +632,8 @@ int timeline_t::reset_epochs()
 	  
 	  if ( okay1 && okay2 )
 	    {
-	      new_epochs.push_back( e2 );
+	      // push old epoch back
+	      new_epochs.push_back( e1 );
 	      new_epoch_labels.push_back( epoch_labels[e] );
 	    }
 	  else
@@ -677,6 +679,7 @@ int timeline_t::reset_epochs()
   
   // reset counter & mask
   current_epoch = -1;
+  mask.clear();
   mask.resize( epochs.size() , false );
   mask_set = false;
   mask_mode = 0; 
@@ -1209,6 +1212,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 
   // reset counter
   current_epoch = -1;
+  mask.clear();
   mask.resize( epochs.size() , false );
   mask_set = false;
   mask_mode = 0; 

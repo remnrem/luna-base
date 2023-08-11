@@ -4733,11 +4733,12 @@ bool edf_t::basic_stats( param_t & param )
 	      //
 	      // Get data 
 	      //
-	      
+
+	      std::cout << "P1\n";
 	      slice_t slice( *this , signals(s) , interval );
-	      
+	      std::cout << "P2\n";
 	      const std::vector<double> * d = slice.pdata();
-	      
+	      std::cout <<" d sz = " << d->size() << "\n";
 	      const int n = d->size();
 	      
 	      if ( n == 0 ) { continue; } 

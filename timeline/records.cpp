@@ -189,10 +189,10 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 {
 
-   // std::cout << " search: " << interval.as_string() << "\n";
-   // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
-   // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
-   // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
+  // std::cout << " search: " << interval.as_string() << "\n";
+  // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
+  // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
+  // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
   
   if ( interval.stop < interval.start ) 
     Helper::halt( "badly defined interval requested, with stop before start" );
@@ -316,7 +316,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // For a discontinuous EDF+ we need to search 
       // explicitly across record timepoints
       //
-
+      
       //      std::cout << " -- EDF-D \n";
       
       //
@@ -355,7 +355,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       else if ( lwr == tp2rec.begin() )
        	{
-	  //	  std::cout << "lwr = begin\n";
+	  //std::cout << "lwr = begin\n";
 	  // If the search point occurs before /all/ records, need to
 	  // indicate that we are in a gap also	  
 	  
@@ -525,8 +525,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // Otherwise, we're all good
   //
   
-  // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
-  // std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
+   // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
+   // std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
     
   return true;
   
@@ -542,10 +542,9 @@ interval_t timeline_t::collapse( const interval_t & interval ) const
   
   bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
 
-  std::cout << " start rec smp = " << start_rec << " " << start_smp << "\n";
-  std::cout << " stop rec smp = " << stop_rec << " " << stop_smp << "\n";
-  std::cout << " any = " << any << "\n";
-  //  ++stop_smp;
+  // std::cout << " start rec smp = " << start_rec << " " << start_smp << "\n";
+  // std::cout << " stop rec smp = " << stop_rec << " " << stop_smp << "\n";
+  // std::cout << " any = " << any << "\n";
   
   // interval has to fall completely in a valid area
   if ( ! any ) return interval_t( 1LLU , 0LLU );
