@@ -2037,7 +2037,7 @@ void set_tag( const std::string & t )
   globals::current_tag = t ; 
 
   if ( t != "." ) 
-    logger << " setting analysis tag to [" << globals::current_tag << "]\n";
+    logger << "  setting analysis tag to [" << globals::current_tag << "]\n";
 
   if ( t == "." ) writer.tag( "." , "." );
   else

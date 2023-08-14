@@ -3642,15 +3642,23 @@ bool edf_t::restructure( const bool force )
   if ( records.size() == 0 ) globals::empty = true;
     
 
-  logger << " keeping " 
-	 << records.size() << " of " 
-	 << copy.size() << " records, resetting mask\n";
+  const int n_before = copy.size();
+  const int n_after  = records.size();
   
-  writer.value( "NR1" , (int)copy.size() );
-  writer.value( "NR2" , (int)records.size() );
+  const double s_before = header.record_duration * n_before  ;
+  const double s_after = header.record_duration * n_after ;
+
+  const double m_before = s_before / 60.0;
+  const double m_after = s_after / 60.0;
+
+  logger << "  retaining " << n_after << " of " << n_before << " records\n"; 
+  logger << "  of " << m_before << " minutes, dropping " << m_before - m_after << ", retaining " << m_after << "\n";
+  logger << "  resetting mask\n";
+  writer.value( "NR1" , n_before );
+  writer.value( "NR2" , n_after );
   
-  writer.value( "DUR1" , copy.size() * header.record_duration );
-  writer.value( "DUR2" , records.size() * header.record_duration );
+  writer.value( "DUR1" , s_before );
+  writer.value( "DUR2" , s_after );
 
   int n_data_channels = 0 , n_annot_channels = 0;
 
@@ -4734,11 +4742,10 @@ bool edf_t::basic_stats( param_t & param )
 	      // Get data 
 	      //
 
-	      std::cout << "P1\n";
 	      slice_t slice( *this , signals(s) , interval );
-	      std::cout << "P2\n";
+
 	      const std::vector<double> * d = slice.pdata();
-	      std::cout <<" d sz = " << d->size() << "\n";
+
 	      const int n = d->size();
 	      
 	      if ( n == 0 ) { continue; } 

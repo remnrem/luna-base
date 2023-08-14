@@ -60,8 +60,12 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
   const int smooth_win = param.has( "w" ) ? param.requires_int( "w" ) : 9 ; 
   const double smooth_taper = 0.5;
   
-  // anchor on sleep stages (to get median and SD), if present, unless this is set
-  bool anchor_on_sleep = ! param.has( "all" );
+  // anchor on sleep stages (to get median and SD), if present, unless this is set ('all') 
+  bool anchor_on_sleep = ! ( param.has( "all" ) || param.has( "wake" ) );
+  // or 'wake'
+  bool anchor_on_wake = param.has( "wake" );
+  if ( param.has( "wake" ) && param.has( "all" ) ) 
+    Helper::halt( "cannot specify both 'wake' and 'all' options" );
 
   // use H2 also?
   const bool use_h2 = param.has("h2") ;
@@ -93,7 +97,7 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 
   std::vector<bool> use( ne , true );
 
-  if ( anchor_on_sleep )
+  if ( anchor_on_sleep || anchor_on_wake )
     {
       // get staging
       edf.timeline.annotations.make_sleep_stage( edf.timeline );      
@@ -103,19 +107,31 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	{
 	  if ( ne != edf.timeline.hypnogram.stages.size() )
 	    Helper::halt( "internal error extracting staging" );
-
+	  
 	  for (int ss=0; ss<ne; ss++)
 	    {
-	      if ( ! ( edf.timeline.hypnogram.stages[ ss ] == NREM1
-		       || edf.timeline.hypnogram.stages[ ss ] == NREM2
-		       || edf.timeline.hypnogram.stages[ ss ] == NREM3
-		       || edf.timeline.hypnogram.stages[ ss ] == REM ) )
+	      bool is_sleep = edf.timeline.hypnogram.stages[ ss ] == NREM1 
+		|| edf.timeline.hypnogram.stages[ ss ] == NREM2
+		|| edf.timeline.hypnogram.stages[ ss ] == NREM3
+		|| edf.timeline.hypnogram.stages[ ss ] == REM ;
+	      
+	      bool is_wake = edf.timeline.hypnogram.stages[ ss ] == WAKE;
+
+	      if ( ( anchor_on_sleep && ! is_sleep ) || ( anchor_on_wake && ! is_wake ) ) 
 		{
 		  use[ss] = false;
 		  ++cnt;
 		}
 	    }
-	  logger << "  anchoring on sleep epochs only for normative ranges, using " << ne - cnt << " of " << ne << " epochs\n";
+	  logger << "  anchoring on " << ( anchor_on_sleep ? "sleep" : "wake" ) 
+		 << " epochs only for normative ranges, using " << ne - cnt << " of " << ne << " epochs\n";
+
+	  // requires at least 10 epochs) 
+	  if ( ne - cnt < 10 ) 
+	    {
+	      logger << "  could not find 10+ valid epochs, so not anchoring on sleep/wake epochs only\n";
+	      anchor_on_sleep = anchor_on_sleep = false;
+	    }
 	}
       else
 	{
@@ -186,16 +202,18 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
   
   for (int s=0; s<ns; s++)
     {
-      //      std::cout << " S = " << s << "\n";
+      // std::cout << " S = " << s << "\n";
       
+      // std::cout << "H1 " << H1.rows() << " " << H1.cols() << "\n";
+      // std::cout << "H2 " << H2.rows() << " " << H2.cols() << "\n";
+      // std::cout << "H3 " << H3.rows() << " " << H3.cols() << "\n";      
       
       // get IQRs
       std::vector<double> v1 = eigen_ops::copy_vector( H1.col(s) );
-      std::vector<double> v2 = eigen_ops::copy_vector( H2.col(s) );
+      std::vector<double> v2;
+      if ( use_h2 ) v2 = eigen_ops::copy_vector( H2.col(s) );
       std::vector<double> v3 = eigen_ops::copy_vector( H3.col(s) );
-
-      //    std::cout << "oo\n";
-	    
+      
       // reduce subset for stats?
       std::vector<double> r1, r2, r3;
       if ( anchor_on_sleep )
@@ -205,13 +223,12 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	  r3 = Helper::subset( v3 , use ) ;
 	}
 
-      //      std::cout << "xx\n";
       // get medians
       double m1 = MiscMath::median( anchor_on_sleep ? r1 : v1 );
       double m2 = use_h2 ? MiscMath::median( anchor_on_sleep ? r2 : v2 ) : 0 ;
       double m3 = MiscMath::median( anchor_on_sleep ? r3 : v3 );
       
-      //      std::cout << "yy\n";
+      //            std::cout << "yy\n";
 		  
       // factor of 0.7413 to get robust estimate of SD from IQR
       // double sd1 = 0.7413 * MiscMath::iqr( v1 ) ;
@@ -359,11 +376,19 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	      writer.epoch( edf.timeline.display_epoch( ep[e] ) );
 	      if ( trim_start ) writer.value( "XOFF" , trk_off[e] );
 	      if ( trim_stop ) writer.value( "XON" , trk_on[e] );
+	      
+	      if ( lights_off1 >= 0 && e < lights_off1 ) 
+		writer.value( "TRIM" , 1 );
+	      else if ( lights_on1 >= 0 && e > lights_on1 ) 
+		writer.value( "TRIM" , 1 );
+	      else
+		writer.value( "TRIM" , 0 );
 
 	      writer.value( "STAT" , out[e] );
 	      writer.value( "FLAG" , okay[e] ? 0 : 1 ) ;
 	      writer.value( "H1" , H1(e,s) );
-	      writer.value( "H2" , H2(e,s) );
+	      if ( use_h2 ) 
+		writer.value( "H2" , H2(e,s) );
 	      writer.value( "H3" , H3(e,s) );
 	      
 	    }

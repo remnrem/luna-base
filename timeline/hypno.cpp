@@ -2706,14 +2706,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  // abs
 	  double a = elapsed_stg_sec[ "WASO" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
-	  std::string alabel = prefix + "elapsed" + suffix + "WASO_h" + Helper::int2str( h ) ;
+	  std::string alabel = prefix + "elapsed" + suffix + "waso_h" + Helper::int2str( h ) ;
 	  annot_t * ah1 = timeline->annotations.add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "WASO" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
-          alabel = prefix + "elapsed" + suffix + "WASO_q" + Helper::int2str( q ) ;
+          alabel = prefix + "elapsed" + suffix + "waso_q" + Helper::int2str( q ) ;
           annot_t * ah2 = timeline->annotations.add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
