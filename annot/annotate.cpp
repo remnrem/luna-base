@@ -4433,8 +4433,10 @@ void annotate_t::view()
 
 std::set<std::string> annotate_t::root_match( const std::string & s , const std::vector<std::string> & names )
 {
+  std::vector<std::string> tok = Helper::parse( s , "," );
   std::set<std::string> ss;
-  ss.insert( s );
+  for (int i=0; i<tok.size(); i++)
+    ss.insert( tok[i] );
   return root_match( ss , names );
 }
 

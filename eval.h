@@ -324,6 +324,7 @@ void proc_dump_segs( edf_t & , param_t & );
 void proc_intervals( param_t & , const std::string & );
 void proc_align( edf_t & edf , param_t & param );
 void proc_align_epochs( edf_t & edf , param_t & param );
+void proc_align_annots( edf_t & edf , param_t & param );
 void proc_insert( edf_t & edf , param_t & param );
 void proc_epoch_dump( edf_t & , param_t & );
 void proc_epoch_matrix( edf_t & , param_t & );
