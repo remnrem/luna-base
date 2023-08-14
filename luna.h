@@ -60,6 +60,7 @@
 
 #include "annot/annot.h"
 #include "annot/annotate.h"
+#include "annot/align-annots.h"
 
 #include "edf/edf.h"
 #include "edf/canonical.h"

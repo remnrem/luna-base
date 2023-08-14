@@ -1075,6 +1075,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ALIGN" ) )        proc_align( edf , param(c) );
       else if ( is( c, "SLICE" ) )        proc_slice( edf , param(c) , 1 );
       else if ( is( c, "ALIGN-EPOCHS" ) ) proc_align_epochs( edf , param(c) );
+      else if ( is( c, "ALIGN-ANNOTS" ) ) proc_align_annots( edf , param(c) );
       else if ( is( c, "INSERT" ) )       proc_insert( edf , param(c) );
       
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
@@ -2143,6 +2144,13 @@ void proc_insert( edf_t & edf , param_t & param )
 void proc_align_epochs( edf_t & edf , param_t & param )
 {
   align_epochs_t align( edf , param );  
+}
+
+// ALIGN-ANNOTS: given an ALIGN-EPOCHS solution, change annotation timings
+
+void proc_align_annots( edf_t & edf , param_t & param )
+{
+  align_annots_t align( edf , param );  
 }
 
 // ALIGN
