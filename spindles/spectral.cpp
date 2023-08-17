@@ -190,7 +190,7 @@ annot_t * spectral_power( edf_t & edf ,
   const bool use_seg_median = param.has( "segment-median" );
 
   //
-  // Return SD of segments (actually CV)
+  // Return intra-segment CVs and associated stats
   //
 
   const bool calc_seg_sd = param.has( "segment-sd" );
@@ -786,10 +786,13 @@ annot_t * spectral_power( edf_t & edf ,
 	      if ( xx.size() < ne_min ) 
 		ne_min = xx.size();
 	      
-	      means.push_back( MiscMath::mean( xx ) );
+	      const double epoch_mean = MiscMath::mean( xx ) ;
+	      const double epoch_sd   = MiscMath::sdev( xx ) ; 
+	      	      
+	      means.push_back( epoch_mean );
 	      
 	      if ( aggregate_psd_sd && xx.size() > 2 )
-		sds.push_back( MiscMath::sdev( xx ) );
+		sds.push_back( epoch_sd ) ;
 	      
 	      if ( aggregate_psd_med && xx.size() > 2 )
 		medians.push_back(  MiscMath::median( xx ) );
@@ -829,8 +832,7 @@ annot_t * spectral_power( edf_t & edf ,
 	  bin_t bin_sds( min_power , max_power , bin_fac );	  
 	  if ( aggregate_psd_sd && ne_min > 2 ) 
 	    bin_sds.bin( freqs , sds );
-	  
-	  
+
 	  // segment CV
 	  bin_t cv_bin( min_power , max_power , bin_fac );
           bin_t cv_bin_med( min_power , max_power , bin_fac );
@@ -878,6 +880,16 @@ annot_t * spectral_power( edf_t & edf ,
 		      if ( aggregate_psd_sd && ne_min > 2 )
 			writer.value( "PSD_SD" , bin_sds.bspec[i]  );
 		      
+		      // also give CV assuming log-normal distribution
+		      if ( dB ) 
+			{
+			  // need SD on natural log scale
+			  // bin_sds.bspec[i] is on 10 * log10( X ) scale
+			  const double lnsd = log( 10.0 ) * bin_sds.bspec[i] / 10.0 ;
+			  const double cv = sqrt( exp( lnsd ) - 1.0 ) ; 
+			  writer.value( "PSD_CV" , cv );
+			}
+
 		      if ( calc_seg_sd )
 			{
 			  writer.value( "SEGCV_MN" , cv_bin.bspec[i]  );		      

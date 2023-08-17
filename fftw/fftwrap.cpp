@@ -792,6 +792,8 @@ void PWELCH::process()
   //
   
   std::vector<std::vector<double> > tracker;
+  std::vector<std::vector<double> > lntracker;
+
   if ( calc_seg_sd || use_median )
     {
       int segments = 0;
@@ -799,38 +801,46 @@ void PWELCH::process()
 	++segments;
       
       // freq x segment
-      tracker.resize(N);
-      for (int i=0; i<N; i++)
-	tracker[i].resize( segments );
+      if ( use_median ) 
+	{
+	  tracker.resize(N);
+	  for (int i=0; i<N; i++)
+	    tracker[i].resize( segments );
+	}
       
+      // for CV, tracker natural log of segment power
       if ( calc_seg_sd )
-	psdsd.resize( N );
-      
+	{
+	  lntracker.resize(N);
+          for (int i=0; i<N; i++)
+            lntracker[i].resize( segments );
+	  psdsd.resize( N );
+	}
     }
 
   
-      //
+  //
   // Iterate over segments, performing individual FFT in each
   //
-
+  
   int segments = 0;
   
-//    std::cout << "total_points = " << total_points << "\n"
-//    	    << "segment_size_points (NFFT) = " << segment_size_points << "\n"
-//    	    << "segment_increment_points = " << segment_increment_points << "\n"
-//     	    << "total_points - segment_size_points = " << total_points - segment_size_points << "\n";
+  //    std::cout << "total_points = " << total_points << "\n"
+  //    	    << "segment_size_points (NFFT) = " << segment_size_points << "\n"
+  //    	    << "segment_increment_points = " << segment_increment_points << "\n"
+  //     	    << "total_points - segment_size_points = " << total_points - segment_size_points << "\n";
   
   for (int p = 0; p <= total_points - segment_size_points ; p += segment_increment_points )
     {
       
       ++segments;
       
-//       std::cout << "seg " << segments << "\t" 
-//        		<< p << " -- " << p + segment_size_points - 1 << "\n";
+      //       std::cout << "seg " << segments << "\t" 
+      //        		<< p << " -- " << p + segment_size_points - 1 << "\n";
       
       // note -- this assumes no zero-padding will be applied, 
       // and all segments passed must be of exactly size segment_size_points
-     
+      
       
       //      FFT fft( nfft , Fs , FFT_FORWARD , window );
       
@@ -868,11 +878,18 @@ void PWELCH::process()
       for (int i=0;i<fft0.cutoff;i++)
 	psd[i] += fft0.X[i];
 
-      if ( use_median || calc_seg_sd )
+      if ( use_median ) 
 	{
 	  for (int i=0;i<fft0.cutoff;i++)
 	    tracker[i][segments-1] = fft0.X[i];
 	}
+
+      if ( calc_seg_sd )
+	{
+	  for (int i=0;i<fft0.cutoff;i++)
+            lntracker[i][segments-1] = log( fft0.X[i] ); // natural log
+	}
+
       
     } // next segment
   
@@ -887,9 +904,12 @@ void PWELCH::process()
       
       if ( calc_seg_sd )
 	{	  
-	  const double sd = MiscMath::sdev( tracker[i] , mn );
-	  // CV
-	  psdsd[i] = mn > 0 ? sd / mn : 0 ;
+	  // sd of natural log scaled
+	  const double sd = MiscMath::sdev( lntracker[i] );
+	  
+	  // CV, using formula for log-normal data	  
+	  psdsd[i] = sqrt( exp( sd * sd ) -1 );
+	  // psdsd[i] = mn > 0 ? sd / mn : 0 ;
 	}
 
       

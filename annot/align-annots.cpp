@@ -145,7 +145,10 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
   uint64_t elen = globals::tp_1sec * globals::default_epoch_len ; 
 
   std::map<std::string,int> skipped;
-  
+  std::map<std::string,int> proc;
+  int n_skipped = 0;
+  int n_proc = 0;
+
   for (int a=0;a<names.size();a++)
     {
       
@@ -159,7 +162,10 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
 
 	  instance_idx_t instance_idx = aa->first;
 	  interval_t interval1 = instance_idx.interval ;
-	  
+	
+	  ++n_proc;
+	  ++proc[ names[a] ];
+
 	  // figure out which epochs start/end occurred in 
 	  // do -1 for stop
 	  
@@ -172,6 +178,7 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
 	  if ( ! ( f1 && f2 ) )
 	    {
 	      ++skipped[ names[a] ];
+	      ++n_skipped;
 	      ++aa;
 	      continue;
 	    }
@@ -183,6 +190,7 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
 	  if ( n2 - n1 != e2 - e1 )
 	    {
               ++skipped[ names[a] ];
+	      ++n_skipped;
               ++aa;
               continue;
             }
@@ -204,9 +212,32 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
     } // next annot class
 
        
-  logger << "  copied " << names.size() << " new annotation classes\n";
+  logger << "  copied " << names.size() << " new annotation classes, in total " << n_proc << " instances\n";
 
+  if ( n_skipped != 0  ) 
+    logger << "  of these, skipped " << n_skipped << " annotations that did not align in the new data\n";
+  else
+    logger << "  all annotations aligned smoothly\n";
+
+  //
+  // Some outputs
+  //
   
+
+  writer.value( "SKIPPED" , n_skipped );
+  writer.value( "ALIGNED" , n_proc - n_skipped );
+ 
+  std::map<std::string,int>::const_iterator ss =  proc.begin();
+  while ( ss != proc.end() ) 
+    {
+      const int s = skipped[ ss->first ];
+      writer.level( ss->first , globals::annot_strat );
+      writer.value( "ALIGNED" , ss->second - s );
+      writer.value( "SKIPPED" , s );
+      ++ss;
+    }
+  writer.unlevel( globals::annot_strat );
+
   //
   // Save new annotations
   //

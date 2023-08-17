@@ -2910,6 +2910,78 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       return;
     }
 
+
+  //
+  // split - i.e. the opposite of flatten, but assuming at an epoch level
+  //
+
+  if ( param.has( "split" ) )
+    {
+      const std::string newannot = param.requires( "annot" );
+      const std::string oldannot = param.requires( "split" );
+      
+      annot_t * a1 = find( oldannot );
+      if ( a1 == NULL )
+	{
+	  logger << "  *** warning, could not find any annotation " << oldannot << "\n";
+          return;
+	}
+
+      annot_t * an = add( newannot );
+
+      // build up new, epoch-based annotation map
+      std::set<interval_t> nevs;
+
+      // iterate over unmasked epochs
+      int ne = edf.timeline.first_epoch();
+      
+      while ( 1 ) 
+	{
+	  
+	  int epoch = edf.timeline.next_epoch();
+	  
+	  if ( epoch == -1 ) break;
+	  
+	  const interval_t interval = edf.timeline.epoch( epoch );
+
+	  // get overlapping annotations for this epoch
+	  annot_map_t events = a1->extract( interval );
+	  
+	  // list events in this epoch (any span)
+	  annot_map_t::const_iterator ii = events.begin();
+	  while ( ii != events.end() )
+	    {	  	      
+	      const instance_idx_t & instance_idx = ii->first;	      
+	      const instance_t * instance = ii->second;
+	      const interval_t & an_interval = instance_idx.interval;
+	      
+	      // keep intersection w/ this spanning epoch	      
+	      nevs.insert( an_interval.intersection_with_overlapping_interval( interval ) ) ;
+	      ++ii;
+	    }
+	 
+
+	} // next epoch
+		  
+      //
+      // add new events
+      //
+      
+      std::set<interval_t>::const_iterator nn = nevs.begin();
+      while ( nn != nevs.end() )
+	{
+	  an->add( "." , *nn , "." );
+	  ++nn;
+	}
+      
+      logger << "  created " << nevs.size() << " epochized instances of " << newannot << " from " << oldannot << "\n";
+     
+      // all done
+      return;
+      
+    }
+
+
   //
   // flatten
   //

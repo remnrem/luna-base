@@ -1481,6 +1481,7 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH,F" , "PSD" , "Power (mean over epochs)" );
   add_var( "PSD" , "CH,F" , "PSD_MD" , "Power (median over epochs)" );
   add_var( "PSD" , "CH,F" , "PSD_SD" , "Power (SD over epochs)" );
+  add_var( "PSD" , "CH,F" , "PSD_CV" , "Power (CV over epochs)" );
   add_var( "PSD" , "CH,F" , "SEGCV_MN" , "Segment CV (mean)" );
   add_var( "PSD" , "CH,F" , "SEGCV_MD" , "Segment CV (median)" );
   add_var( "PSD" , "CH,F" , "SEGCV_SD" , "Segment CV (SD)" );
