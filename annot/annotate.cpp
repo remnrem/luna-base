@@ -4447,9 +4447,10 @@ std::set<std::string> annotate_t::root_match( const std::set<std::string> & s , 
   std::set<std::string>::const_iterator ss = s.begin();
   while ( ss != s.end() )
     {
+      // empty
       if ( ss->size() == 0 ) { ++ss; continue; }
 
-      // vanilla?
+      // vanilla? add as is (whether in the annot list or not) 
       if ( (*ss)[ ss->size() - 1 ] != '*' )
 	{
 	  r.insert( *ss );
@@ -4459,6 +4460,7 @@ std::set<std::string> annotate_t::root_match( const std::set<std::string> & s , 
 	  // ignore if only a *
 	  if ( ss->size() == 1 ) { ++ss; continue; }
 
+	  // expand if ends in wildcar: 'annot*'
 	  const std::string root = ss->substr( 0 , ss->size() - 1 );
 	  const int rootsize = root.size();
 	  

@@ -25,6 +25,7 @@
 #include "helper/logger.h"
 #include "edf.h"
 #include "eval.h"
+#include "annot/annotate.h"
 
 extern logger_t logger;
 
@@ -38,12 +39,12 @@ void proc_mask( edf_t & edf , param_t & param )
   //
   // How keep things safe, we only allow a single parmeter for a MASK command
   //
-
+  
   // single() takes into account 'hidden' params (i.e. signal)
-
+  
   if ( ! param.single() ) 
     Helper::halt( "MASK commands can only take a single parameter" );
-
+  
   
   if ( ! edf.timeline.epoched() ) 
     {
@@ -51,7 +52,12 @@ void proc_mask( edf_t & edf , param_t & param )
       logger << "  set epochs, to default length " << globals::default_epoch_len << ", " << ne << " epochs\n";
     }
 
+
   
+  //
+  // Priamry annotation-based include/exclude masks
+  //
+
   //
   // Mode:   mask[default]     // Existing      Evaluated      mask    unmask    both
   //                              N             N              N       N         N
@@ -71,59 +77,201 @@ void proc_mask( edf_t & edf , param_t & param )
   //  if               include   force 
   
   //  mask-ifnot       exclude   mask     // if doesn't have X, then mask
-  //  unmask-ifnot                        // if doesn't have X, then unmask
+  //  unmask-ifnot     exclude   unmask   // if doesn't have X, then unmask
   //  ifnot                      force 
-   
+
+  //  mask-if-all       include   mask
+  //  unmask-if-all     include   unmask
+  //  if-all            include   force 
+  
+  //  mask-ifnot       exclude   mask     // if doesn't have X, then mask
+  //  unmask-ifnot     exclude   unmask   // if doesn't have X, then unmask
+  //  ifnot                      force 
+
+  
   int mask_mode = -1;
   int match_mode = -1; 
+  bool match_logic_or = true; // defaults to OR logic for multiple annotations
   
   std::string condition;
   
-  if ( param.has( "mask-if" ) )
-    {
-      condition = param.value( "mask-if" );
-      mask_mode = 0;
-      match_mode = 1;
-    }
-  else if ( param.has( "unmask-if" ) )
-    {
-      condition = param.value( "unmask-if" );
-      mask_mode = 1;
-      match_mode = 1;
-    }
-  else if ( param.has( "if" ) )
-    {
-      condition = param.value( "if" );
-      mask_mode = 2;
-      match_mode = 1;
-    }
-  else if ( param.has( "mask-ifnot" ) )
-    {
-      condition = param.value( "mask-ifnot" );
-      mask_mode = 0;
-      match_mode = 0;
-    }
-  else if ( param.has( "unmask-ifnot" ) )
-    {
-      condition = param.value( "unmask-ifnot" );
-      mask_mode = 1;
-      match_mode = 0;
-    }
-  else if ( param.has( "ifnot" ) )
-    {
-      condition = param.value( "ifnot" );
-      mask_mode = 2;
-      match_mode = 0;
-    }
+  if      ( param.has( "mask-if" ) )     condition = param.value( "mask-if" );
+  else if ( param.has( "mask-if-any" ) ) condition = param.value( "mask-if-any" );  // mask-if == mask-if-any
+  else if ( param.has( "mask-if-all" ) ) condition = param.value( "mask-if-all" );
 
+  else if ( param.has( "unmask-if" ) )     condition = param.value( "unmask-if" );
+  else if ( param.has( "unmask-if-any" ) ) condition = param.value( "unmask-if-any" );
+  else if ( param.has( "unmask-if-all" ) ) condition = param.value( "unmask-if-all" );
+
+  else if ( param.has( "if" ) )     condition = param.value( "if" );
+  else if ( param.has( "if-any" ) ) condition = param.value( "if-any" );
+  else if ( param.has( "if-all" ) ) condition = param.value( "if-all" );
   
+  else if ( param.has( "mask-ifnot" ) )     condition = param.value( "mask-ifnot" );
+  else if ( param.has( "mask-ifnot-any" ) ) condition = param.value( "mask-ifnot-any" );
+  else if ( param.has( "mask-ifnot-all" ) ) condition = param.value( "mask-ifnot-all" );
+
+  else if ( param.has( "unmask-ifnot" ) )     condition = param.value( "unmask-ifnot" );
+  else if ( param.has( "unmask-ifnot-any" ) ) condition = param.value( "unmask-ifnot-any" );
+  else if ( param.has( "unmask-ifnot-all" ) ) condition = param.value( "unmask-ifnot-all" );
+
+  else if ( param.has( "ifnot" ) )     condition = param.value( "ifnot" );
+  else if ( param.has( "ifnot-any" ) ) condition = param.value( "ifnot-any" );
+  else if ( param.has( "ifnot-all" ) ) condition = param.value( "ifnot-all" );
+  
+  // 1) if vs ifnot match mode?
+
+  match_mode = 0;  // all 'ifnot'
+  if      ( param.has( "if" )     || param.has( "mask-if" )     || param.has( "unmask-if" ) )     match_mode = 1 ;
+  else if ( param.has( "if-any" ) || param.has( "mask-if-any" ) || param.has( "unmask-if-any" ) ) match_mode = 1 ;
+  else if ( param.has( "if-all" ) || param.has( "mask-if-all" ) || param.has( "unmask-if-all" ) ) match_mode = 1 ;
+
+
+  // 2) mask mode: force / unmask / mask ?
+  mask_mode = 0; // 'mask' by default
+  // unmask?
+  if ( param.has( "unmask-if" )    || param.has( "unmask-if-any" )    || param.has( "unmask-if-all" ) ) mask_mode = 1;
+  if ( param.has( "unmask-ifnot" ) || param.has( "unmask-ifnot-any" ) || param.has( "unmask-ifnot-all" ) ) mask_mode = 1;    
+  // force?
+  if ( param.has( "if" )    || param.has( "if-any" )    || param.has( "if-all" ) )   mask_mode = 2;
+  if ( param.has( "ifnot" ) || param.has( "ifnot-any" ) || param.has( "ifnot-all" ) ) mask_mode = 2;
+
   if ( mask_mode > -1 ) 
     {
       edf.timeline.set_epoch_mask_mode( mask_mode );  
       logger << "  set masking mode to " << ( mask_mode == 2 ? "'force'" : mask_mode == 1 ? "'unmask'" : "'mask' (default)" ) << "\n";
     }
-  
 
+  // 3) multiple annot logic mode
+  match_logic_or = true;
+  // and? (i.e. 'all' )
+  if ( param.has( "if-all" )    || param.has( "mask-if-all" )    || param.has( "unmask-if-all" ) ) match_logic_or = false;
+  if ( param.has( "ifnot-all" ) || param.has( "mask-ifnot-all" ) || param.has( "unmask-ifnot-all" ) ) match_logic_or = false;
+
+
+  // apply an annotation-based mask? 
+  if ( condition != "" )
+    {      
+      
+      // expand any wildcards in annotation list
+      //   note: this will not work for instance-ID options: class IDs only
+      
+      // if condition is comma-delimited, expand out any root* matches;
+      //  otherwise all 
+      std::set<std::string> conditions = annotate_t::root_match( condition , edf.timeline.annotations.names() );
+
+      // build primary input for epoch mask:
+      std::map<annot_t*,std::set<std::string> > amask;
+
+      // for console output
+      std::map<std::string,std::set<std::string> > amask_labels;
+
+      // require full span for this annot?
+      std::set<std::string> fullspan;
+
+      // iterate over annot classes
+      std::set<std::string>::const_iterator aa = conditions.begin();
+      while ( aa != conditions.end() )
+	{
+	  // are instance values specified?   annot[V1|V2]
+	  // is a value specified?
+
+	  const std::vector<std::string> tok = Helper::parse( *aa , "[]" );
+
+	  if ( tok.size() == 0 )
+	    {
+	      ++aa;
+	      continue;
+	    }
+	  
+	  std::string annot_label = Helper::unquote( tok[0] );
+
+	  const std::string annot_label_orig = annot_label ; 
+	  
+	  // special syntax to require complete overlap
+	  //  (nb. this means will not be able to combine +annot* )	  
+	  
+	  if ( annot_label[0] == '+' )
+	    {
+	      // drop special leading char
+	      annot_label = annot_label.substr( 1 );
+	      // send to timeline when doing matching
+	      fullspan.insert( annot_label );	      
+	    }
+	       	  
+          annot_t * annot = edf.timeline.annotations( annot_label );
+	  
+	  std::set<std::string> values;
+	  
+	  // not found?  need to add as an 'empty' annotation (but we can
+	  // ignore any values) - the match function will always return a
+	  // non-match
+
+	  if ( annot == NULL )
+	    {
+	      amask[ NULL ] = values ;  // an empty record
+	      amask_labels[ annot_label_orig ] = values; // for console output below
+	      ++aa;
+	      continue;
+	    }
+
+	  // parse for any explicitly specified instance ID matches?
+          const bool has_values = tok.size() != 1 ;
+	  
+	  if ( has_values )
+	    {
+	      if ( tok.size() != 2 )
+		Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
+	      if ( (*aa)[ aa->size() - 1 ] != ']' )
+		Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
+	      
+	      // multiple pipe-delimited instance IDs?  annot[v1|v2]
+	      const std::vector<std::string> tok2 = Helper::parse( tok[1] , "|" );              
+              for (int v=0;v<tok2.size();v++)
+		if ( tok2[v] != "" )
+		  values.insert( tok2[v] );
+	      
+	    }
+
+	  // add to map
+	  amask[ annot ] = values;
+	  amask_labels[ annot_label_orig ] = values; // for console output below                                                                       
+	  // next annotation
+	  ++aa;
+	}
+
+      //
+      // some console blurb 
+      //
+
+      logger  << "  annots:";
+      std::string alabel;
+      std::map<std::string,std::set<std::string> >::const_iterator ll = amask_labels.begin();
+      while ( ll != amask_labels.end() )
+	{
+	  if ( alabel != "" ) alabel += ",";
+	  logger << " " << ll->first;
+	  alabel += ll->first;
+	  if ( ll->second.size() != 0 )
+	    {
+	      const std::string s1 = Helper::stringize( ll->second , "|" );
+	      logger << "[" << s1 << "]";
+	      alabel += "[" + s1 + "]";
+	    }
+	  ++ll;
+	}
+      
+      //
+      // apply the actual mask
+      //
+      
+      edf.timeline.apply_epoch_mask2( amask , fullspan , alabel , match_logic_or , match_mode );
+      
+      // all done
+      return;
+    }
+
+	
   
   //
   // Wipe entire mask, i.e. include all 
@@ -307,6 +455,7 @@ void proc_mask( edf_t & edf , param_t & param )
       edf.timeline.select_epoch_within_run( val[0] , n );
     }
 
+
   if ( param.has( "sec" ) ) 
     {
       // convert to nearest epochs 
@@ -349,121 +498,5 @@ void proc_mask( edf_t & edf , param_t & param )
       
     }
   
-  //
-  // Include/exclude/annotate masks
-  //
-
-  // nb. these now mutually exclusive
-  bool has_imask = match_mode == 1 ;
-  bool has_xmask = match_mode == 0 ;
- 
-  std::string imask_str = has_imask ? condition : "";
-  std::string xmask_str = has_xmask ? condition : "" ;
-
-  // add epoch-level 'annotations' instead of masking
-  bool has_amask = param.has( "flag" );
-  bool has_alabels = param.has( "label" );
-  if ( has_amask != has_alabels ) 
-    Helper::halt( "need to specify both flag and labels together" );
-  std::string amask_str = has_amask ? param.value( "flag" ) : "" ;
-  std::string alabel_str = has_alabels ? param.value( "label" ) : "" ;
-  
-  
-  //
-  // MASK include [ if ]
-  //
-  
-  if ( has_imask )
-    {
-      std::vector<std::string> im0 = Helper::parse( imask_str , "," );      
-
-      // if MASK if=A,B does not work, i.e. in force mode, this is the 
-      // same as saying MASK if=B
- 
-      if ( im0.size() > 1 && mask_mode == 2 ) 
-	Helper::halt( "cannot specify multiple annotations with an 'if' mask" );
-      
-      for (int i=0;i<im0.size();i++)
-	{
-	  // is a value specified?
-	  bool has_values = false;
-	  
-	  std::vector<std::string> im = Helper::parse( im0[i] , "[]" );
-	  if      ( im.size() == 1 ) has_values = false;
-	  else if ( im.size() != 2 ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
-	  else if ( im0[i][im0[i].size()-1] != ']' ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
-	  else    has_values = true;
-	  
-	  const std::string annot_label = Helper::unquote( im[0] );
-	  
-	  annot_t * annot = edf.timeline.annotations( annot_label );
-	  
-	  if ( annot == NULL ) 
-	    { 
-	      // does not have mask -- 
-	      edf.timeline.apply_empty_epoch_mask( annot_label , true );
-	      continue; // do nothing
-	    }	  
-	  
-	  // do we have values? 
-	  if ( has_values )
-	    {
-	      std::vector<std::string> imask_val = Helper::parse( im[1] , "|" );
-	      std::set<std::string> ss;
-	      for (int v=0;v<imask_val.size();v++) ss.insert( imask_val[v] );      
-	      edf.timeline.apply_epoch_include_mask( annot , &ss );
-	    }
-	  else
-	    {	      
-	      edf.timeline.apply_epoch_include_mask( annot );
-	    }
-	  
-	}
-    }
-  
-  
-
-  //
-  // MASK exclude [ ifnot ]
-  //
-  
-  if ( has_xmask )
-    {
-      std::vector<std::string> xm0 = Helper::parse( xmask_str , "," );      
-      if ( xm0.size() > 1 ) Helper::halt( "cannot specify multiple annotations with an 'ifnot' mask" );
-      for (int i=0;i<xm0.size();i++)
-	{
-	  bool has_values = false;
-	  std::vector<std::string> xm = Helper::parse( xm0[i] , "[]" );
-	  if      ( xm.size() == 1 ) has_values = false;
-	  else if ( xm.size() != 2 ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
-	  else if ( xm0[i][xm0[i].size()-1] != ']' ) Helper::halt( "incorrectly specified annot[value(s)] -- expecting ann1, ann1[val1] or ann1[val1|val2]" );
-	  else    has_values = true;
-	  
-	  const std::string annot_label = Helper::unquote( xm[0] );
-	  
-	  annot_t * annot = edf.timeline.annotations( annot_label );
-
-	  if ( annot == NULL ) 
-	    {
-	      edf.timeline.apply_empty_epoch_mask( annot_label , false );
-	      continue; 
-	    }
-
-	  // do we have values? 
-	  if ( has_values )
-	    {
-	      std::vector<std::string> xmask_val = Helper::parse( xm[1] , "|" );
-	      std::set<std::string> ss;
-	      for (int v=0;v<xmask_val.size();v++) ss.insert( xmask_val[v] );      
-	      edf.timeline.apply_epoch_exclude_mask( annot , &ss );
-	    }
-	  else
-	    {	      
-	      edf.timeline.apply_epoch_exclude_mask( annot );
-	    }
-
-	}
-    }
   
 }

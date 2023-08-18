@@ -37,7 +37,7 @@ struct edf_inserter_t
   edf_inserter_t( edf_t & edf , param_t & param );
   
   void insert( edf_t & edf , edf_t & edf2 , const std::string & siglabel , const double offset , const std::string annot_label ); 
-     
+  
 };
 
 #endif

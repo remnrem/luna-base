@@ -2865,29 +2865,31 @@ void proc_file_mask( edf_t & edf , param_t & param )
 
 void proc_epoch_mask( edf_t & edf , param_t & param )
 {
-  
+
+  Helper::halt( "EPOCH-MASK command is redundant" );
+
   // COMMAND NOT SUPPORTED
 
-  std::set<std::string> vars;
-  std::string onelabel;
+  // std::set<std::string> vars;
+  // std::string onelabel;
   
-  if ( param.has( "if" ) ) 
-    {    
-      if ( param.has( "ifnot" ) ) Helper::halt( "both if & ifnot specified" );
-      vars = param.strset( "if" );
-      onelabel = param.value("if");
-      logger << " masking epochs that match " << onelabel << "\n";
-    }
-  else if ( param.has( "ifnot" ) ) 
-    {
-      vars = param.strset( "ifnot" );
-      onelabel = param.value("ifnot");
-      logger << " masking epochs that do not match " << onelabel << "\n";
-    }
-  else
-    Helper::halt( "no if/ifnot specified" );
+  // if ( param.has( "if" ) ) 
+  //   {    
+  //     if ( param.has( "ifnot" ) ) Helper::halt( "both if & ifnot specified" );
+  //     vars = param.strset( "if" );
+  //     onelabel = param.value("if");
+  //     logger << " masking epochs that match " << onelabel << "\n";
+  //   }
+  // else if ( param.has( "ifnot" ) ) 
+  //   {
+  //     vars = param.strset( "ifnot" );
+  //     onelabel = param.value("ifnot");
+  //     logger << " masking epochs that do not match " << onelabel << "\n";
+  //   }
+  // else
+  //   Helper::halt( "no if/ifnot specified" );
  
-  edf.timeline.apply_simple_epoch_mask( vars , onelabel , param.has("if") );  
+  // edf.timeline.apply_simple_epoch_mask( vars , onelabel , param.has("if") );  
 
 }
 
@@ -3141,7 +3143,9 @@ void proc_timetrack( edf_t & edf , param_t & param )
 void proc_restructure( edf_t & edf , param_t & param )
 {
   // just drop MASK'ed records, then reset mask
-  edf.restructure( );
+  const bool FORCE_RESTRUCTURE = false;
+  const bool VERBOSE_OUTPUT = param.has( "verbose" );
+  edf.restructure( FORCE_RESTRUCTURE , VERBOSE_OUTPUT );
 }
 
 

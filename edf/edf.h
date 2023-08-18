@@ -689,7 +689,7 @@ public:
   // [downstream, we can add new things, like changing the record structure, etc]
   // needs to update header as well (and timeline)
   
-  bool restructure( const bool force = false );
+  bool restructure( const bool force = false , const bool verbose = false );
 
 
   //

@@ -80,147 +80,333 @@ void timeline_t::flip_epoch_mask()
 
 // behavior if annotation missing, i.e. an 'empty' mask
 
-void timeline_t::apply_empty_epoch_mask( const std::string & label , bool include )
+// void timeline_t::apply_empty_epoch_mask( const std::string & label , bool include )
+// {
+  
+//   // this is requested if the annotation is missing
+//   // i.e. returns match == F for every epoch; treat as specified by include and mask_mode
+
+//   // include T/F   means whether a 'match' means having (T) versus not-having (F) the annotation
+//   // mask_mode will already have been set
+  
+//   mask_set = true;
+  
+//   const int ne = epochs.size();
+  
+//   int cnt_mask_set = 0;
+//   int cnt_mask_unset = 0;
+//   int cnt_unchanged = 0;
+//   int cnt_now_unmasked = 0;
+//   int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
+  
+//   for (int e=0;e<ne;e++)
+//     {
+      
+//       bool matches = false;
+      
+//       // set new potential mask, depending on match_mode
+      
+//       bool new_mask = mask[e];
+
+//       if ( include ) 
+// 	{
+// 	  if      ( mask_mode == 0 ) new_mask = matches;   // mask-if
+// 	  else if ( mask_mode == 1 ) new_mask = !matches;  // unmask-if
+// 	  else if ( mask_mode == 2 ) new_mask = matches ;  // if
+// 	}
+//       else
+// 	{
+// 	  if      ( mask_mode == 0 ) new_mask = !matches;  // mask-ifnot
+// 	  else if ( mask_mode == 1 ) new_mask = matches;   // unmask-ifnot
+// 	  else if ( mask_mode == 2 ) new_mask = ! matches; // ifnot
+// 	}
+
+//       int mc = set_epoch_mask( e , new_mask );
+
+//       if      ( mc == +1 ) ++cnt_mask_set;
+//       else if ( mc == -1 ) ++cnt_mask_unset;
+//       else                 ++cnt_unchanged;
+      
+//       if ( !mask[e] ) ++cnt_now_unmasked;
+      
+//     }
+
+//   logger << "  based on " << label << " " << cnt_basic_match << " epochs match; ";
+//   logger << cnt_mask_set << " newly masked, "   
+// 	 << cnt_mask_unset << " unmasked, " 
+// 	 << cnt_unchanged << " unchanged\n";
+//   logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  
+//   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
+  
+//   writer.level( label  , "EMASK" );
+
+//   writer.var( "N_MATCHES"    , "Number of matching epochs" );
+//   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
+//   writer.var( "N_MASK_UNSET" , "Number of epochs newly unmasked" );
+//   writer.var( "N_UNCHANGED"  , "Number of epochs unchanged by this mask" );
+//   writer.var( "N_RETAINED"   , "Number of epochs retained for analysis" );
+//   writer.var( "N_TOTAL"      , "Total number of epochs" );
+
+//   writer.value( "N_MATCHES"    , cnt_basic_match  );
+//   writer.value( "N_MASK_SET"   , cnt_mask_set     );
+//   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
+//   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
+//   writer.value( "N_RETAINED"   , cnt_now_unmasked );
+//   writer.value( "N_TOTAL"      , (int)epochs.size()    );
+
+//   writer.unlevel( "EMASK" );
+
+// }
+
+
+// void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values , bool include )
+// {
+  
+//   // include T/F   means whether a 'match' means having (T) versus not-having (F) the annotation
+  
+//   // mask_mode will already have been set
+  
+//   // if 'values' is NULL, then we just use presence of an annotation,
+//   // rather than looking at the instance ID
+  
+//   bool value_mask = values != NULL;
+  
+//   mask_set = true;
+
+//   const int ne = epochs.size();
+  
+//   //
+//   // We do not clear the mask here, as we want to allow multiple
+//   // filters to be added on top of oneanther
+//   //
+
+//   int cnt_mask_set = 0;
+//   int cnt_mask_unset = 0;
+//   int cnt_unchanged = 0;
+//   int cnt_now_unmasked = 0;
+//   int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
+  
+//   for (int e=0;e<ne;e++)
+//     {
+
+//       interval_t interval = epoch( e );
+      
+//       annot_map_t events = a->extract( interval );
+      
+//       bool matches = false;
+      
+//       if ( value_mask ) 
+// 	{
+// 	  // do any of the instance IDs match any of the values?
+// 	  annot_map_t::const_iterator ii = events.begin();
+// 	  while ( ii != events.end() )
+// 	    {		  
+// 	      const instance_idx_t & instance_idx = ii->first;	      
+// 	      if ( values->find( instance_idx.id ) != values->end() )
+// 		{
+// 		  matches = true;
+// 		  break;
+// 		}
+// 	      ++ii;
+// 	    }
+// 	}
+//       else 
+// 	{	  
+// 	  matches = events.size() > 0 ;
+// 	}
+
+//       // count basic matches
+
+//       if ( matches ) ++cnt_basic_match;
+      
+//       // set new potential mask, depending on match_mode
+      
+//       bool new_mask = mask[e];
+
+//       if ( include ) 
+// 	{
+// 	  if      ( mask_mode == 0 ) new_mask = matches;   // mask-if
+// 	  else if ( mask_mode == 1 ) new_mask = !matches;  // unmask-if
+// 	  else if ( mask_mode == 2 ) new_mask = matches ;  // if
+// 	}
+//       else
+// 	{
+// 	  if      ( mask_mode == 0 ) new_mask = !matches;  // mask-ifnot
+// 	  else if ( mask_mode == 1 ) new_mask = matches;   // unmask-ifnot
+// 	  else if ( mask_mode == 2 ) new_mask = ! matches; // ifnot
+// 	}
+
+//       int mc = set_epoch_mask( e , new_mask );
+
+//       if      ( mc == +1 ) ++cnt_mask_set;
+//       else if ( mc == -1 ) ++cnt_mask_unset;
+//       else                 ++cnt_unchanged;
+      
+//       if ( !mask[e] ) ++cnt_now_unmasked;
+      
+//     }
+  
+//   logger << "  based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values , "|" ) + "]" : "" )  
+// 	 << " " << cnt_basic_match << " epochs match; ";
+
+//   logger << cnt_mask_set << " newly masked, " 
+// 	 << cnt_mask_unset << " unmasked, " 
+// 	 << cnt_unchanged << " unchanged\n";
+//   logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+
+  
+//   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
+  
+//   writer.level( a->name , "EMASK" );
+
+//   writer.var( "N_MATCHES"    , "Number of matching epochs" );
+//   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
+//   writer.var( "N_MASK_UNSET" , "Number of epochs newly unmasked" );
+//   writer.var( "N_UNCHANGED"  , "Number of epochs unchanged by this mask" );
+//   writer.var( "N_RETAINED"   , "Number of epochs retained for analysis" );
+//   writer.var( "N_TOTAL"      , "Total number of epochs" );
+
+//   writer.value( "N_MATCHES"    , cnt_basic_match  );
+//   writer.value( "N_MASK_SET"   , cnt_mask_set     );
+//   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
+//   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
+//   writer.value( "N_RETAINED"   , cnt_now_unmasked );
+//   writer.value( "N_TOTAL"      , (int)epochs.size()    );
+
+//   writer.unlevel( "EMASK" );
+// }
+
+
+
+
+
+void timeline_t::apply_epoch_mask2( const std::map<annot_t *,std::set<std::string> > & annots ,
+				    const std::set<std::string> & fullspan , 
+				    const std::string & alabel ,
+				    bool or_match , bool include )
+				    
 {
-  
-  // this is requested if the annotation is missing
-  // i.e. returns match == F for every epoch; treat as specified by include and mask_mode
 
-  // include T/F   means whether a 'match' means having (T) versus not-having (F) the annotation
-  // mask_mode will already have been set
-  
-  mask_set = true;
-  
-  const int ne = epochs.size();
-  
-  int cnt_mask_set = 0;
-  int cnt_mask_unset = 0;
-  int cnt_unchanged = 0;
-  int cnt_now_unmasked = 0;
-  int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
-  
-  for (int e=0;e<ne;e++)
-    {
-      
-      bool matches = false;
-      
-      // set new potential mask, depending on match_mode
-      
-      bool new_mask = mask[e];
+  // annots[] contains annot pointers
+  //  if the value is non-null, implies to match on instance IDs
+  //  otherwise, match on the class ID
 
-      if ( include ) 
-	{
-	  if      ( mask_mode == 0 ) new_mask = matches;   // mask-if
-	  else if ( mask_mode == 1 ) new_mask = !matches;  // unmask-if
-	  else if ( mask_mode == 2 ) new_mask = matches ;  // if
-	}
-      else
-	{
-	  if      ( mask_mode == 0 ) new_mask = !matches;  // mask-ifnot
-	  else if ( mask_mode == 1 ) new_mask = matches;   // unmask-ifnot
-	  else if ( mask_mode == 2 ) new_mask = ! matches; // ifnot
-	}
+  //  if annot is null, implies an 'empty' mask - i.e. no instances of that requested annotation found
+  //    (previously we handled this as a special case in apply_empty_epoch_mask()
+  //    simply eval as "F", i.e. no match, and then treat as usual
 
-      int mc = set_epoch_mask( e , new_mask );
+  //  if multiple annotations specified, a match is defined as AT LEAST ONE - i.e. OR
+  //   AND logic can be specified 
 
-      if      ( mc == +1 ) ++cnt_mask_set;
-      else if ( mc == -1 ) ++cnt_mask_unset;
-      else                 ++cnt_unchanged;
-      
-      if ( !mask[e] ) ++cnt_now_unmasked;
-      
-    }
+  //   or_match   T    epoch matches if AT LEAST ONE annotation matches (i.e. OR mode)
+  //              F    epoch matches if ALL annotations match (i.e. AND mode)
 
-  logger << "  based on " << label << " " << cnt_basic_match << " epochs match; ";
-  logger << cnt_mask_set << " newly masked, "   
-	 << cnt_mask_unset << " unmasked, " 
-	 << cnt_unchanged << " unchanged\n";
-  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  //   include    T    a match means having that annotation requirement
+  //              F    a match means not having that annotation requirement
   
-  // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
-  
-  writer.level( label  , "EMASK" );
-
-  writer.var( "N_MATCHES"    , "Number of matching epochs" );
-  writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
-  writer.var( "N_MASK_UNSET" , "Number of epochs newly unmasked" );
-  writer.var( "N_UNCHANGED"  , "Number of epochs unchanged by this mask" );
-  writer.var( "N_RETAINED"   , "Number of epochs retained for analysis" );
-  writer.var( "N_TOTAL"      , "Total number of epochs" );
-
-  writer.value( "N_MATCHES"    , cnt_basic_match  );
-  writer.value( "N_MASK_SET"   , cnt_mask_set     );
-  writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
-  writer.value( "N_UNCHANGED"  , cnt_unchanged    );
-  writer.value( "N_RETAINED"   , cnt_now_unmasked );
-  writer.value( "N_TOTAL"      , (int)epochs.size()    );
-
-  writer.unlevel( "EMASK" );
-
-}
-
-
-void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values , bool include )
-{
-  
-  // include T/F   means whether a 'match' means having (T) versus not-having (F) the annotation
-  
-  // mask_mode will already have been set
-  
-  // if 'values' is NULL, then we just use presence of an annotation,
-  // rather than looking at the instance ID
-  
-  bool value_mask = values != NULL;
-  
-  mask_set = true;
-
-  const int ne = epochs.size();
-  
-  //
-  // We do not clear the mask here, as we want to allow multiple
+  // Note: we do not clear the mask here, as we want to allow multiple
   // filters to be added on top of oneanther
+
   //
+  // Initialise
+  //
+
+  mask_set = true;
+  
+  const int ne = epochs.size();
 
   int cnt_mask_set = 0;
   int cnt_mask_unset = 0;
   int cnt_unchanged = 0;
   int cnt_now_unmasked = 0;
   int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
-  
+
+  //
+  // Iterate over epochs
+  //
+
   for (int e=0;e<ne;e++)
     {
+      
+      // for and/or logic
+      //   i.e. AND matches = n_matches == n_annots
+      //        OR  matches = n_matches > 0 ;    
+      
+      // note that AND logic is at the class level: annotations are always
+      // considered as OR matches 
+      
+      int n_annots = annots.size();
+      int n_matches = 0;
 
+      // get the epoch 
       interval_t interval = epoch( e );
       
-      annot_map_t events = a->extract( interval );
-      
-      bool matches = false;
-      
-      if ( value_mask ) 
+      // consider all annots
+      std::map<annot_t *,std::set<std::string> >::const_iterator aa = annots.begin();
+      while ( aa != annots.end() )
 	{
-	  // do any of the instance IDs match any of the values?
-	  annot_map_t::const_iterator ii = events.begin();
-	  while ( ii != events.end() )
-	    {		  
-	      const instance_idx_t & instance_idx = ii->first;	      
-	      if ( values->find( instance_idx.id ) != values->end() )
-		{
-		  matches = true;
-		  break;
-		}
-	      ++ii;
+
+	  // get the annotation
+	  annot_t * a = aa->first;
+	  
+	  // empty? i.e. no instances, implies this epoch will not match either
+	  if ( a == NULL )
+	    {
+	      ++aa;
+	      continue;
 	    }
-	}
-      else 
-	{	  
-	  matches = events.size() > 0 ;
-	}
+	  
+	  // require this epoch fully-spanned (by a each annotation of this class) to be a match?
+	  const bool full = fullspan.find( aa->first->name ) != fullspan.end();
+	  
+	  // otherwise, get overlapping annots
+	  annot_map_t events = full ? a->extract_complete_overlap( interval ) : a->extract( interval );
 
+	  const bool check_instance_value = aa->second.size() != 0; 
+
+	  if ( check_instance_value ) 
+	    {
+	      // do any of the instance IDs match any of the values?
+	      // check each of potentially multiple events, but otherwise stop
+	      // at the first match
+	      annot_map_t::const_iterator ii = events.begin();
+	      while ( ii != events.end() )
+		{		  
+		  const instance_idx_t & instance_idx = ii->first;	      
+		  if ( aa->second.find( instance_idx.id ) != aa->second.end() )
+		    {
+		      // at least one value matches: we can count this as a class-level
+		      // match and move on to the next annot class
+		      ++n_matches;
+		      break;
+		    }
+		  ++ii;
+		}
+	    }
+	  else 
+	    {
+	      // otherwise, simply note if we see one or 1 in this area: 
+	      if ( events.size() != 0 ) ++n_matches;
+	    }
+	  
+	  // early stopping if on OR mode?
+	  if ( or_match && n_matches > 0 ) break;
+	  
+	  // next annotation
+	  ++aa;
+	}
+      
+      // do we get a match?
+      //  can apply either OR or AND logic across multiple annot clases here
+      
+      const bool matches = or_match ? n_matches != 0 : n_matches == n_annots ; 
+      
       // count basic matches
-
+      
       if ( matches ) ++cnt_basic_match;
       
-      // set new potential mask, depending on match_mode
+      // set new potential mask, depending on mask mode and include/exclde mode
       
       bool new_mask = mask[e];
 
@@ -236,9 +422,9 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
 	  else if ( mask_mode == 1 ) new_mask = matches;   // unmask-ifnot
 	  else if ( mask_mode == 2 ) new_mask = ! matches; // ifnot
 	}
-
+      
       int mc = set_epoch_mask( e , new_mask );
-
+      
       if      ( mc == +1 ) ++cnt_mask_set;
       else if ( mc == -1 ) ++cnt_mask_unset;
       else                 ++cnt_unchanged;
@@ -246,10 +432,13 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
       if ( !mask[e] ) ++cnt_now_unmasked;
       
     }
-  
-  logger << "  based on " << a->name << ( value_mask ? "[" + Helper::stringize( *values , "|" ) + "]" : "" )  
-	 << " " << cnt_basic_match << " epochs match; ";
 
+  logger << "  applied annotation mask for " << annots.size() << " annotations";
+  if ( annots.size() > 1 ) logger << " (using " << ( or_match ? "or" : "and") << "-matching across multiple annotations)";
+  logger << "\n";
+
+  logger << "  " << cnt_basic_match << " epochs match; ";
+  
   logger << cnt_mask_set << " newly masked, " 
 	 << cnt_mask_unset << " unmasked, " 
 	 << cnt_unchanged << " unchanged\n";
@@ -258,48 +447,45 @@ void timeline_t::apply_epoch_mask( annot_t * a , std::set<std::string> * values 
   
   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
-  writer.level( a->name , "EMASK" );
-
+  writer.level( alabel , "EMASK" );
+  
   writer.var( "N_MATCHES"    , "Number of matching epochs" );
   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
   writer.var( "N_MASK_UNSET" , "Number of epochs newly unmasked" );
   writer.var( "N_UNCHANGED"  , "Number of epochs unchanged by this mask" );
   writer.var( "N_RETAINED"   , "Number of epochs retained for analysis" );
   writer.var( "N_TOTAL"      , "Total number of epochs" );
-
+  
   writer.value( "N_MATCHES"    , cnt_basic_match  );
   writer.value( "N_MASK_SET"   , cnt_mask_set     );
   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
   writer.value( "N_RETAINED"   , cnt_now_unmasked );
   writer.value( "N_TOTAL"      , (int)epochs.size()    );
-
+  writer.value( "MATCH_LOGIC"  , or_match ? "OR" : "AND" );
+  writer.value( "MATCH_TYPE"   , include ? "if" : "ifnot" );
+  writer.value( "MASK_MODE"    , mask_mode == 2 ? "force" : ( mask_mode == 0 ? "mask" : "unmask" ) ) ; 
+ 		
   writer.unlevel( "EMASK" );
-}
 
-
-
-
-
-
-
-
-// directly specify epoch-level masks
-void apply_simple_epoch_mask( const std::set<std::string> & , const std::string & , bool );
   
-  // convert from full annotation to epoch-level masks
+}
+
+
+
+
+  
+// convert from full annotation to epoch-level masks
     
-void timeline_t::apply_epoch_include_mask( annot_t * a , std::set<std::string> * values )
-{
-  apply_epoch_mask( a , values , true );
-}
+// void timeline_t::apply_epoch_include_mask( annot_t * a , std::set<std::string> * values )
+// {
+//   apply_epoch_mask( a , values , true );
+// }
 
-void timeline_t::apply_epoch_exclude_mask( annot_t * a , std::set<std::string> * values )
-{
-  apply_epoch_mask( a , values , false );
-}
-
-
+// void timeline_t::apply_epoch_exclude_mask( annot_t * a , std::set<std::string> * values )
+// {
+//   apply_epoch_mask( a , values , false );
+// }
 
 
 
@@ -1406,95 +1592,96 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
 }
 
 
-void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels , const std::string & onelabel , bool include )
-{
+// directly specify epoch-level masks
+// void timeline_t::apply_simple_epoch_mask( const std::set<std::string> & labels , const std::string & onelabel , bool include )
+// {
   
-  // if 'ifnot', can only specify a single 
-  if ( labels.size() > 1 && ! include ) Helper::halt( "can only specify a single mask for 'ifnot'");
+//   // if 'ifnot', can only specify a single 
+//   if ( labels.size() > 1 && ! include ) Helper::halt( "can only specify a single mask for 'ifnot'");
 
-  mask_set = true;
+//   mask_set = true;
   
-  const int ne = epochs.size();
+//   const int ne = epochs.size();
  
-  // Note: we do not clear the mask here, as we want to allow multiple
-  // filters to be added on top of oneanther
+//   // Note: we do not clear the mask here, as we want to allow multiple
+//   // filters to be added on top of oneanther
   
-  int cnt_mask_set = 0;
-  int cnt_mask_unset = 0;
-  int cnt_unchanged = 0;
-  int cnt_now_unmasked = 0;
-  int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
+//   int cnt_mask_set = 0;
+//   int cnt_mask_unset = 0;
+//   int cnt_unchanged = 0;
+//   int cnt_now_unmasked = 0;
+//   int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not
   
 
-  for (int e=0;e<ne;e++)
-    {
+//   for (int e=0;e<ne;e++)
+//     {
 
-      bool matches = false;
+//       bool matches = false;
       
-      std::set<std::string>::const_iterator ii = labels.begin();
-      while ( ii != labels.end() )
-	{
-	  if ( epoch_annotation( *ii , e ) ) { matches = true; break; }
-	  ++ii;
-	}
+//       std::set<std::string>::const_iterator ii = labels.begin();
+//       while ( ii != labels.end() )
+// 	{
+// 	  if ( epoch_annotation( *ii , e ) ) { matches = true; break; }
+// 	  ++ii;
+// 	}
       
-      // count basic matches
-      if ( matches ) ++cnt_basic_match;
+//       // count basic matches
+//       if ( matches ) ++cnt_basic_match;
       
-      // set new potential mask, depending on match_mode      
-      bool new_mask = mask[e];
+//       // set new potential mask, depending on match_mode      
+//       bool new_mask = mask[e];
       
-      if ( include ) 
-	{
-	  if      ( mask_mode == 0 ) new_mask = matches;   // mask-if
-	  else if ( mask_mode == 1 ) new_mask = !matches;  // unmask-if
-	  else if ( mask_mode == 2 ) new_mask = matches ;  // if
-	}
-      else
-	{
-	  if      ( mask_mode == 0 ) new_mask = !matches;  // mask-ifnot
-	  else if ( mask_mode == 1 ) new_mask = matches;   // unmask-ifnot
-	  else if ( mask_mode == 2 ) new_mask = ! matches; // ifnot
-	}
+//       if ( include ) 
+// 	{
+// 	  if      ( mask_mode == 0 ) new_mask = matches;   // mask-if
+// 	  else if ( mask_mode == 1 ) new_mask = !matches;  // unmask-if
+// 	  else if ( mask_mode == 2 ) new_mask = matches ;  // if
+// 	}
+//       else
+// 	{
+// 	  if      ( mask_mode == 0 ) new_mask = !matches;  // mask-ifnot
+// 	  else if ( mask_mode == 1 ) new_mask = matches;   // unmask-ifnot
+// 	  else if ( mask_mode == 2 ) new_mask = ! matches; // ifnot
+// 	}
 
-      int mc = set_epoch_mask( e , new_mask );
+//       int mc = set_epoch_mask( e , new_mask );
 
-      if      ( mc == +1 ) ++cnt_mask_set;
-      else if ( mc == -1 ) ++cnt_mask_unset;
-      else                 ++cnt_unchanged;
+//       if      ( mc == +1 ) ++cnt_mask_set;
+//       else if ( mc == -1 ) ++cnt_mask_unset;
+//       else                 ++cnt_unchanged;
       
-      if ( !mask[e] ) ++cnt_now_unmasked;
+//       if ( !mask[e] ) ++cnt_now_unmasked;
       
-    }
+//     }
   
-  logger << "  based on " << onelabel << " " << cnt_basic_match << " epochs match; ";
+//   logger << "  based on " << onelabel << " " << cnt_basic_match << " epochs match; ";
 
-  logger << cnt_mask_set << " newly masked, "   
-	 << cnt_mask_unset << " unmasked, " 
-	 << cnt_unchanged << " unchanged\n";
-  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+//   logger << cnt_mask_set << " newly masked, "   
+// 	 << cnt_mask_unset << " unmasked, " 
+// 	 << cnt_unchanged << " unchanged\n";
+//   logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
 
-  // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
+//   // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
   
-  writer.level( onelabel , "EMASK" );
+//   writer.level( onelabel , "EMASK" );
 
-  writer.var( "N_MATCHES"    , "Number of matching epochs" );
-  writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
-  writer.var( "N_MASK_UNSET" , "Number of epochs newly unmasked" );
-  writer.var( "N_UNCHANGED"  , "Number of epochs unchanged by this mask" );
-  writer.var( "N_RETAINED"   , "Number of epochs retained for analysis" );
-  writer.var( "N_TOTAL"      , "Total number of epochs" );
+//   writer.var( "N_MATCHES"    , "Number of matching epochs" );
+//   writer.var( "N_MASK_SET"   , "Number of epochs newly masked" ); 
+//   writer.var( "N_MASK_UNSET" , "Number of epochs newly unmasked" );
+//   writer.var( "N_UNCHANGED"  , "Number of epochs unchanged by this mask" );
+//   writer.var( "N_RETAINED"   , "Number of epochs retained for analysis" );
+//   writer.var( "N_TOTAL"      , "Total number of epochs" );
 
-  writer.value( "N_MATCHES"    , cnt_basic_match  );
-  writer.value( "N_MASK_SET"   , cnt_mask_set     );
-  writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
-  writer.value( "N_UNCHANGED"  , cnt_unchanged    );
-  writer.value( "N_RETAINED"   , cnt_now_unmasked );
-  writer.value( "N_TOTAL"      , (int)epochs.size()    );
+//   writer.value( "N_MATCHES"    , cnt_basic_match  );
+//   writer.value( "N_MASK_SET"   , cnt_mask_set     );
+//   writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
+//   writer.value( "N_UNCHANGED"  , cnt_unchanged    );
+//   writer.value( "N_RETAINED"   , cnt_now_unmasked );
+//   writer.value( "N_TOTAL"      , (int)epochs.size()    );
 
-  writer.unlevel( "EMASK" );
+//   writer.unlevel( "EMASK" );
 
-}
+// }
 
 
 

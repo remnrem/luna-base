@@ -878,23 +878,26 @@ annot_t * spectral_power( edf_t & edf ,
 			writer.value( "PSD_MD" , bin_med.bspec[i]  );
 		      
 		      if ( aggregate_psd_sd && ne_min > 2 )
-			writer.value( "PSD_SD" , bin_sds.bspec[i]  );
-		      
-		      // also give CV assuming log-normal distribution
-		      if ( dB ) 
 			{
-			  // need SD on natural log scale
-			  // bin_sds.bspec[i] is on 10 * log10( X ) scale
-			  const double lnsd = log( 10.0 ) * bin_sds.bspec[i] / 10.0 ;
-			  const double cv = sqrt( exp( lnsd ) - 1.0 ) ; 
-			  writer.value( "PSD_CV" , cv );
+			  writer.value( "PSD_SD" , bin_sds.bspec[i]  );
+			  
+			  // also give CV assuming log-normal distribution
+			  if ( dB ) 
+			    {
+			      // need SD on natural log scale
+			      // bin_sds.bspec[i] is on 10 * log10( X ) scale
+			      const double lnsd = log( 10.0 ) * bin_sds.bspec[i] / 10.0 ;
+			      const double cv = sqrt( exp( lnsd ) - 1.0 ) ; 
+			      writer.value( "PSD_CV" , cv );
+			    }
 			}
+		      
 
 		      if ( calc_seg_sd )
 			{
-			  writer.value( "SEGCV_MN" , cv_bin.bspec[i]  );		      
+			  writer.value( "SEGCV_MN" , cv_bin.bspec[i]  );
 			  writer.value( "SEGCV_MD" , cv_bin_med.bspec[i]  );
-			  writer.value( "SEGCV_SD" , cv_bin_sds.bspec[i]  );		      
+			  writer.value( "SEGCV_SD" , cv_bin_sds.bspec[i]  );
 			}
 
 		      if ( bin.nominal[i] != "" )

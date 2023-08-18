@@ -43,7 +43,7 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
   // both EDFs must be continuous (or effectively contiuous, i.e. no gaps)
   
   // two modes
-  //   1) given pairs of signals, find the lag for each based on xcorr()
+  //   1) given pairs of signals, find the lag for each based on xcorr() or euclidean distance
   //        edf= pairs= w= verbose
 
   //   2) given a lag value (in seconds, or tp-units) insert the second channel, but with an offset 
@@ -70,21 +70,26 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       // all done
       return;
     }
-  
+
+
+  // method
+  const bool euclidean = ! param.has( "xcorr" );
   
   // verbose outputs
   const bool verbose = param.has( "verbose" );
 
-  // range to search (seconds)
+
+  // XCORR: range to search (seconds)
   const double tmax = param.has( "w" ) ? param.requires_dbl( "w" ) : -1 ;
   const double tcent = param.has( "c" ) ? param.requires_dbl( "c" ) : 0 ; 
+
   
   // get signal pairs from edf1
   std::vector<std::string> pairs = param.strvector( "pairs" );
-
+  
   if ( pairs.size() == 0 || pairs.size() % 2 )
     Helper::halt( "expecting an even number of channels pairs=sig1,sig2,sig1,sig2,... (or run in insert mode with offset arg)" );
-
+  
   const int np = pairs.size() / 2 ;
 
   // slots
@@ -120,96 +125,282 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       srs.push_back( sr1 );
       
     }
-  
+
   //
-  // Get data 
+  // Enfore similar SR required for all signals... easier...
   //
 
+  int sr = srs[0];
   for (int p=0; p<np; p++)
+    if ( srs[p] != sr )
+      Helper::halt( "sample must match for all signals" );
+  
+  
+  // ------------------------------------------------------------
+  // 
+  // XCORR method      
+  //
+  // ------------------------------------------------------------
+  
+
+  if ( ! euclidean )
     {
-      
-      slice_t slice1( edf  , slot1[p] , edf.timeline.wholetrace() );
-      slice_t slice2( edf2 , slot2[p] , edf2.timeline.wholetrace() );
-      
-      const std::vector<double> * dx = slice1.pdata();
-      const std::vector<double> * dy = slice2.pdata();
 
-      const int tmax_sp = tmax * srs[p];
-      const int tcent_sp = tcent * srs[p];
+      //
+      // Get data 
+      //
       
-      xcorr_t xcorr( *dx , *dy , tmax_sp , tcent_sp );
-
-      double lag_sec = xcorr.lags[xcorr.mx] / (double)srs[p];
-
-      // redundant now
-      // adjust search to within a window? [ reset.mx ] 
-      // if ( tmax > 0 )
-      // 	{
-      // 	  // only need to do if max is outside this window
-      // 	  if ( fabs( lag_sec ) > tmax )
-      // 	    {
-
-      // 	      double mc = 0;
-      // 	      int midx = 0;
-      // 	      for (int i=0; i< xcorr.lags.size(); i++)
-      // 		{
-      // 		  const double t = xcorr.lags[i] / (double)srs[p];
-      // 		  if ( fabs( t ) <= tmax )
-      // 		    {
-		    
-      // 		      if ( fabs( xcorr.C[i] ) > mc )
-      // 			{
-		
-      // 			  mc = fabs( xcorr.C[i] );
-      // 			  midx = i;
-      // 			}
-      // 		    }
-      // 		}
-
-      // 	      // update
-      // 	      xcorr.mx = midx;
-      // 	      lag_sec = xcorr.lags[xcorr.mx] / (double)srs[p];
-      // 	    }	      
-      // 	}
-      
-      
-      logger << "  cross-correlation for " << slab1[p] << " x " << slab2[p] << " estimated lag " << lag_sec << "\n";
-
-      writer.level( slab1[p] + ".." + slab2[p] , "CHS" );
-      
-      writer.value( "SR" , srs[p] );
-      writer.value( "L1" , (int)dx->size() );
-      writer.value( "L2" , (int)dy->size() );
-      writer.value( "LAG_SP" , xcorr.lags[xcorr.mx] );
-      writer.value( "LAG_SEC" , lag_sec );
-      writer.value( "MX" , xcorr.C[xcorr.mx] );
-      
-      if ( verbose && tmax > 0 )
+      for (int p=0; p<np; p++)
 	{
-	  bool output = false;
-
-	  for (int i=0; i< xcorr.lags.size(); i++)
+	  
+	  slice_t slice1( edf  , slot1[p] , edf.timeline.wholetrace() );
+	  slice_t slice2( edf2 , slot2[p] , edf2.timeline.wholetrace() );
+	  
+	  const std::vector<double> * dx = slice1.pdata();
+	  const std::vector<double> * dy = slice2.pdata();
+	  
+	  const int tmax_sp = tmax * srs[p];
+	  const int tcent_sp = tcent * srs[p];
+	  
+	  xcorr_t xcorr( *dx , *dy , tmax_sp , tcent_sp );
+	  
+	  double lag_sec = xcorr.lags[xcorr.mx] / (double)srs[p];
+	  
+	  logger << "  cross-correlation for " << slab1[p] << " x " << slab2[p] << " estimated lag " << lag_sec << "\n";
+	  
+	  writer.level( slab1[p] + ".." + slab2[p] , "CHS" );
+	  
+	  writer.value( "SR" , srs[p] );
+	  writer.value( "L1" , (int)dx->size() );
+	  writer.value( "L2" , (int)dy->size() );
+	  writer.value( "LAG_SP" , xcorr.lags[xcorr.mx] );
+	  writer.value( "LAG_SEC" , lag_sec );
+	  writer.value( "MX" , xcorr.C[xcorr.mx] );
+	  
+	  if ( verbose && tmax > 0 )
 	    {
-	      const double t = xcorr.lags[i] / (double)srs[p];
-	      if ( t >= tcent-tmax && t <= tcent+tmax )
+	      bool output = false;
+	      
+	      for (int i=0; i< xcorr.lags.size(); i++)
 		{
-		  output = true;
-		  writer.level( xcorr.lags[i] , "SP" );
-		  writer.value( "T" , t );
-		  writer.value( "XC" , xcorr.C[i] );
+		  const double t = xcorr.lags[i] / (double)srs[p];
+		  if ( t >= tcent-tmax && t <= tcent+tmax )
+		    {
+		      output = true;
+		      writer.level( xcorr.lags[i] , "SP" );
+		      writer.value( "T" , t );
+		      writer.value( "XC" , xcorr.C[i] );
+		    }
 		}
+	      
+	      if ( output ) 
+		writer.unlevel( "SP" );	  
 	    }
 	  
-	  if ( output ) 
-	    writer.unlevel( "SP" );	  
+	  // next pair of channels
 	}
-
-      // next pair of channels
+      writer.unlevel( "CHS" );
     }
-  writer.unlevel( "CHS" );
+
+  
+  // ------------------------------------------------------------
+  //
+  // Distance-based slide
+  //
+  // ------------------------------------------------------------
+
+  if ( euclidean )
+    {
+
+      
+      const double ystart_sec = param.requires_dbl( "start" );
+      const double ylen_sec   = param.requires_dbl( "len" );
+
+      const double yinc_sec   = param.has( "inc" ) ? param.requires_dbl( "inc" ) : 600; // 10 min jumps
+      const int    ysteps     = param.has( "steps" ) ? param.requires_int( "steps" ) : 1;
+
+      const bool constrained_offset = param.has( "offset-range" );
+
+      std::vector<double> offsets; 
+      if ( constrained_offset )
+	{
+	  offsets = param.dblvector( "offset-range" );
+	  if ( offsets.size() != 2 || offsets[1] <= offsets[0] ) Helper::halt( "expecting offset-range=min,max" );
+	}
+      
+      // nb. only really makses sense when steps == 1 
+      if ( verbose && ysteps != 1 )
+	Helper::halt( "do not advise 'verbose' with multiple steps" );
+      
+      int ystart = ystart_sec * sr;
+      const int ylen   = ylen_sec * sr;
+      const int yinc   = yinc_sec * sr;
+      
+      // store all data
+      std::vector<Eigen::VectorXd> dX(np), dY(np);
+      
+      for (int p=0; p<np; p++)
+	{
+	  
+          slice_t slice1( edf  , slot1[p] , edf.timeline.wholetrace() );
+          slice_t slice2( edf2 , slot2[p] , edf2.timeline.wholetrace() );
+	  
+	  const std::vector<double> * dx = slice1.pdata();
+          const std::vector<double> * dy = slice2.pdata();
+	  
+	  const int nx = dx->size();
+	  const int ny = dy->size();
+	  
+	  Eigen::VectorXd xx = Eigen::VectorXd::Zero( nx );
+	  Eigen::VectorXd yy = Eigen::VectorXd::Zero( ny );
+	  
+	  for (int i=0; i<nx; i++) xx[i] = (*dx)[i];
+	  for (int i=0; i<ny; i++) yy[i] = (*dy)[i];
+	    
+	  dX[p] = xx;
+	  dY[p] = yy;
+
+	}
+      
+      
+      // now we have all data in dX and dY
+           
+      // total number of samples in each dataset
+      const int nx = dX[0].size();
+      const int ny = dY[0].size();
+      
+      logger << "  based on " << ysteps << " " << ylen_sec << "s segment(s), starting "
+	     << ystart_sec << "s past 2ndary EDF start, advancing " << yinc_sec << "s each step\n";
+      
+      // consider each possible starting point
+
+      int steps = 0;
+
+      while ( 1 )
+	{
+	  std::cout << " \nBEGIN\n";
+	  std::cout << "  ystart = " << ystart << "\n";
+	  
+	  if ( ystart + ylen >= ny )
+	    {
+	      std::cout << " done, breaking because end of Y segs\n";
+	      break;
+	    }
+	  // enough steps?
+	  ++steps;
+	  if ( steps > ysteps ) break;
+
+	  writer.level( ystart / (double)sr , "SEGMENT" );
+	  
+	  // Get segment for yy
+	  std::vector<Eigen::VectorXd> sY(np);
+	  for (int p=0;p<np;p++)
+	    sY[p] = dY[p].segment( ystart , ylen );
+	  
+	  // 0 1 2 3 4 5 6 7 8 9
+	  // 1 2 3
+	  //               1 2 3
+	  
+	  // e.g. 8 possible alignments, going from 0 to 7 
+	  const int na = nx - ylen + 1 ;
+	  
+	  // by default
+	  // align 'y' segment from 0 up to nx - ylen 
+	  // given constrains, only consider alignments compatible with those
+
+	  int mina = 0;
+	  int maxa = na;
+
+	  if ( constrained_offset )
+	    {
+	      // in sample points
+	      int minoff = offsets[0] * sr;
+	      int maxoff = offsets[1] * sr;
+	      
+	      // offset = ystart - a 
+	      // offset if what we substract from Y
+	      // i.e. -ve offset means  Y - offset --> starts at +ve point in X
+	      
+	      // a = ystart - offset
+	      mina = ystart - minoff;
+	      maxa = ystart - maxoff;
+
+	      if ( mina > maxa )
+		{
+		  int aa = mina;
+		  mina = maxa;
+		  maxa = aa;
+		}
+
+	      if ( mina < 0 ) mina = 0;
+	      if ( maxa < 0 ) maxa = 0;
+	      if ( mina >= na ) mina = na;
+	      if ( maxa >= na ) maxa = na;
+
+	      std::cout << " considering offsets "
+			<< ( ystart - mina ) / (double)sr << " to " << ( ystart - maxa ) / (double)sr << "\n";
+	      std::cout << " based on a range " << mina << " - " << maxa << " ..... " << mina/(double)sr << " - "
+			<< maxa / (double)sr << "\n";
+	      
+	    }
+	  
+	  // score each alignment
+	  std::vector<double> st( na , 0 );
+	  
+	  for (int p=0; p<np; p++)
+	    for (int a=mina; a <maxa  ; a++)
+	      st[a] += ( dX[p].segment(a,ylen) - sY[p] ).norm() ;
+	  
+	  // get min.
+	  int minidx = 0;
+	  double minst = 0;
+	  
+	  for (int a=mina; a < maxa ; a++)
+	    {
+	      if ( a == mina || st[a] < minst )
+		{
+		  minst = st[a];
+		  minidx = a;
+		}
+	    }
+
+	  // console outputs
+	  logger << "  for segment starting " << ystart / (double)sr << "s, optimal offset = " << ystart - minidx
+		 << " (" << ( ystart - minidx ) / (double)sr << "s )\n";
+
+	  // output offset	  
+	  if ( verbose ) 
+	    for (int a=0; a < na ; a++)
+	      std::cout << st[a] << "\n";
+	  
+	  writer.value( "SP" , ystart - minidx );
+	  writer.value( "SEC" , ( ystart - minidx ) / (double)sr );
+	  
+	  // advance to the next block
+	  ystart += yinc;
+	  
+	}
+      writer.unlevel( "SEGMENT" );
+      
+
+      
+    }
+  
+	  // writer.level( slab1[p] + ".." + slab2[p] , "CHS" );
+	  
+	  // writer.value( "SR" , srs[p] );
+          // writer.value( "L1" , (int)dx->size() );
+	  
+	  
+	  // next pair of channels
+	  
+    //     }
+    //   writer.unlevel( "CHS" );
+    // }  
+  
 }
 
- 
+
 
 void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & siglabel , const double offset , const std::string annot_label )
 {
