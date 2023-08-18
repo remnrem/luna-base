@@ -305,22 +305,48 @@ struct timeline_t
   // interval list corresponding to original EDF times
   void load_interval_list_mask( const std::string & , bool exclude = true );
 
-  // directly specify epoch-level masks
-  void apply_simple_epoch_mask( const std::set<std::string> & , const std::string & , bool );
-  
-  // convert from full annotation to epoch-level masks
-    
-  void apply_epoch_include_mask( annot_t * a , std::set<std::string> * values = NULL );
+  // directly specify epoch-level masks - no longer done
+  //  void apply_simple_epoch_mask( const std::set<std::string> & , const std::string & , bool );
 
-  void apply_epoch_exclude_mask( annot_t * a , std::set<std::string> * values = NULL );
-  
-  // behavior if annotation missing, i.e. an 'empty' mask
-  void apply_empty_epoch_mask( const std::string & , bool include );
+  // 
+  // ----- legacy annotation-based epoch masks -----
+  //
 
+  // primary mask function
+  // void apply_epoch_mask( annot_t * a , std::set<std::string> * values , bool include );
+
+  // // wrappers to call apply_epoch_mask()
+  // // convert from full annotation to epoch-level masks
+  // void apply_epoch_include_mask( annot_t * a , std::set<std::string> * values = NULL );
+
+  // void apply_epoch_exclude_mask( annot_t * a , std::set<std::string> * values = NULL );
+  
+  // // behavior if annotation missing, i.e. an 'empty' mask
+  // void apply_empty_epoch_mask( const std::string & , bool include );
+
+  // 
+  // ----- revised annotation-based epoch masks -----
+  //
+
+  // new generic epoch mask to handle all the above cases
+  void apply_epoch_mask2( const std::map<annot_t *,std::set<std::string> > & annots ,
+			  const std::set<std::string> & fullspan , 
+			  const std::string & alabel , 
+			  bool or_mode, bool include );
+			  
+
+  //
+  // ----- eval-expression epoch masks -----
+  //
+  
   // eval-based mask
   void apply_eval_mask( const std::string & , int mask_mode , const bool verbose = false );
+
+  //
+  // ----- other masks ----- 
+  //
   
-  // other masks : randomly select up to 'n' epochs from the current set 
+  // randomly select up to 'n' epochs from the current set 
   void select_epoch_randomly( int n );
 
   // trim leading and trailing epochs (allow only n)
@@ -346,10 +372,13 @@ struct timeline_t
 
   // select EPOCHs within a run of 'n' (either side) other similarly annotated epochs
   void select_epoch_within_run( const std::string & str , int n );
-  
-  void apply_epoch_mask( annot_t * a , std::set<std::string> * values , bool include );
-  
+
+  // clear all epoch masks
   void clear_epoch_mask( bool b = false );
+
+  //
+  // ---- epoch-mask helper function -----
+  //
   
   bool is_epoch_mask_set() const;
 
@@ -361,11 +390,19 @@ struct timeline_t
 
   bool masked( const int e ) const;
 
-  void add_mask_annot( const std::string & tag );
-  
   void dumpmask( const param_t & );
 
   bool elapsed_seconds_to_spanning_epochs( const double t1, const double t2, int * e1 , int * e2 );
+
+  //
+  // ---- legacy -----
+  //
+
+  //  MASK2ANNOT function (ANNOT-MASK - currently note used)
+  //    see if otherwise implemented?
+  
+  void add_mask_annot( const std::string & tag );
+  
 
   // ------------------------------------------------------------
   //
@@ -565,8 +602,12 @@ struct timeline_t
   
   // epoch to record mapping
   std::map<int,std::set<int> > epoch2rec;
+  // kludge...
+public:
   std::map<int,std::set<int> > rec2epoch;
-  
+private:
+
+
   // original <--> current epoch mappings
   // i.e. track if masks have been applied
   

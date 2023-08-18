@@ -3511,7 +3511,7 @@ void edf_header_t::check_channels()
 }
 
 
-bool edf_t::restructure( const bool force )
+bool edf_t::restructure( const bool force , const bool verbose )
 {
   
   //
@@ -3608,6 +3608,39 @@ bool edf_t::restructure( const bool force )
       
       // is this masked in the current retained set?
       bool unmasked  = !timeline.masked_record(r);
+
+      if ( verbose )
+	{
+	  const uint64_t tp = timeline.rec2tp[ r ] ;
+	  const double sec = tp * globals::tp_duration;
+	  writer.level( r+1 , "REC" );
+	  writer.value( "RETAINED" , retained );
+	  writer.value( "MASK" , ! unmasked );
+	  writer.value( "START" , sec );
+	  writer.value( "STOP" , sec + header.record_duration );
+
+	  // get epochs
+	  if  ( timeline.epoched() )
+	    {
+
+	      std::map<int,std::set<int> >::const_iterator ii = timeline.rec2epoch.find( r );
+	      
+	      if ( ii != timeline.rec2epoch.end() )
+		{	     
+		  std::set<int>::const_iterator jj = ii->second.begin();
+		  // output 1-based epochs
+		  std::stringstream ss;
+		  while ( jj != ii->second.end() )
+		    {
+		      if ( jj !=  ii->second.begin() )
+			ss << ",";
+		      ss << 1 + *jj ; 
+		      ++jj;
+		    }
+		  writer.value( "EPOCH" , ss.str() );
+		}	      
+	    }
+	}
       
       if ( retained )
 	if ( unmasked ) 
@@ -3617,6 +3650,9 @@ bool edf_t::restructure( const bool force )
 	  }    
     }
 
+  if ( verbose )
+    writer.unlevel( "REC" );
+  
   
   //
   // Remove records based on epoch-mask

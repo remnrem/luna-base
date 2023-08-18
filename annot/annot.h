@@ -198,8 +198,10 @@ struct annot_t
   //
   
   annot_map_t extract( const interval_t & window );
-  
-  
+
+  // as above, but only events that completely span window
+  annot_map_t extract_complete_overlap( const interval_t & window );
+    
   std::set<std::string> instance_ids() const;
 
  private:

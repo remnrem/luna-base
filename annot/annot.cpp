@@ -2682,78 +2682,37 @@ annot_map_t annot_t::extract( const interval_t & window )
     }
   
   return r;
-
-  
-  // // find first interval just /before/ then step over deciding which
-  // // should fit in
-
-  // interval_evt_map_t::const_iterator ii 
-  //   = interval_events.lower_bound( window );
-
-  // interval_evt_map_t::const_iterator jj = ii; 
-  
-  // // if returns iterator to end(), could still overlap the 
-  // // one or more events at the end, so need to check for this
-  // // special case of looking backwards either way; 
-  
-  // // back
-  // while ( 1 ) 
-  //   {
-
-  //     if ( jj == interval_events.begin() ) break;
-  //     --jj;
-  //     const interval_t & a = jj->first;
-      
-  //     //      std::cout << "extract: considering " << a.start << " - " << a.stop << "\n";
-      
-  //     if ( a.overlaps( window ) ) 
-  // 	{
-  // 	  r[ a ] = jj->second;
-  // 	  //std::cout << " found overlap\n";
-  // 	}
-  //     else if ( a.is_before( window ) )
-  // 	{
-  // 	  // also need to consider intervals that start before 'a' but still span window
-  // 	  // i.e. go back until test interval doesn't overlap 'a'
-  // 	  interval_evt_map_t::const_iterator kk = jj; 
-  // 	  interval_t prev = a;
-  // 	  while ( 1 ) 
-  // 	    {
-  // 	      if ( kk == interval_events.begin() ) break;
-  // 	      --kk;
-  // 	      interval_t b = kk->first;
-  // 	      if ( ! prev.overlaps( b ) ) break; // really all done now
-  // 	      if ( b.overlaps( window ) ) 
-  // 		{ 
-  // 		  r[ b ] = kk->second; 
-  // 		  std::cout << " XXX added an extra!\n"; 		  
-  // 		}
-  // 	      prev = b;
-  // 	    }
-  // 	  break;      
-  // 	}
-  //   }
-
-  // std::cout << "now forward...\n";
-  // // forward
-  // while ( 1 ) 
-  //   {      
-  //     if ( ii == interval_events.end() ) break;
-  //     const interval_t & a = ii->first;
-  //     std::cout << "extract: considering " << a.start << " - " << a.stop << "\n";
-  //     if ( a.overlaps( window ) ) 
-  // 	{
-  // 	  r[ a ] = ii->second;
-  // 	  std::cout << " found overlap\n";
-  // 	}
-      
-  //     else if ( a.is_after( window ) ) break;      
-  //     ++ii;
-  //   }
-  // std::cout << "  done...\n";
-  // return r;
   
 }
+
+
+annot_map_t annot_t::extract_complete_overlap( const interval_t & window ) 
+{
+  
+  //
+  // Fetch all annotations that /completely/ overlap this window
+  // where overlap is defined as region A to B-1 for interval_t(A,B)
+  //
+
+  annot_map_t r; 
+  
+  // urghhh... need to implement a much better search... 
+  // but for now just use brute force... :-(
+  
+  annot_map_t::const_iterator ii = interval_events.begin();
+  while ( ii != interval_events.end() )
+    {
+      const interval_t & a = ii->first.interval;
+      // note, different ordering vs. overlaps() above in extract()
+      if ( window.is_completely_spanned_by(a) ) r[ ii->first ] = ii->second;
+      else if ( a.is_after( window ) ) break;
+      ++ii;
+    }
+  
+  return r;
+  
+}
+
 
 
 bool globals::is_stage_annotation( const std::string & s )
@@ -2772,6 +2731,13 @@ bool globals::is_stage_annotation( const std::string & s )
 void annotation_set_t::make( param_t & param , edf_t & edf )
 {
 
+  // expr:       pairwise operations on two annotations = A|B A*B A+B A-B
+  // epoch-num:  
+  // epoch:             collapse-edges
+  // flatten:
+  // split:
+
+  
   // special case: just add each epoch as a distinct annotation
   // (no flattening, etc, unlike below)
   if ( param.has( "epoch-num" ) )
@@ -3099,7 +3065,7 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 
   std::set<interval_t> nevs;
   
-  // here, we alwats select from events1
+  // here, we always select from events1
   // but need to make a quick set of events2
   if ( do_keepif || do_dropif )
     {
@@ -3203,21 +3169,24 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
      
       // for union mode only, also add any member of 'a' that does not overlap any member of (flattened) 'b'
       // and vice versa
-      
-      aa = a.begin();
-      while ( aa != a.end() )
-	{
-	  if ( ! annotate_t::overlaps_flattened_set( *aa , b ) )
-	    nevs.insert( *aa );
-	  ++aa;
-	}
 
-      bb = b.begin();
-      while ( bb != b.end() )
+      if ( do_union )
 	{
-	  if ( ! annotate_t::overlaps_flattened_set( *bb , a ) )
-	    nevs.insert( *bb );
-	  ++bb;
+	  aa = a.begin();
+	  while ( aa != a.end() )
+	    {
+	      if ( ! annotate_t::overlaps_flattened_set( *aa , b ) )
+		nevs.insert( *aa );
+	      ++aa;
+	    }
+	  
+	  bb = b.begin();
+	  while ( bb != b.end() )
+	    {
+	      if ( ! annotate_t::overlaps_flattened_set( *bb , a ) )
+		nevs.insert( *bb );
+	      ++bb;
+	    }
 	}
  
     }
