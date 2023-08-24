@@ -1204,7 +1204,7 @@ void cmddefs_t::init()
   // SUDS
   //
 
-  add_cmd( "staging"   , "SUDS" , "Staging Using the Dynamics of Sleep" );
+  add_cmd( "staging"   , "SUDS" , "Staging Using the Dynamics of Sleep (depreceated)" );
   add_url( "SUDS" , "suds/#suds" );
 
   add_param( "SUDS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );

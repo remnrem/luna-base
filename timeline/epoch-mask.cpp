@@ -1401,7 +1401,7 @@ void timeline_t::dumpmask( const param_t & param )
   // default is to make annot when an epoch is /masked/ (versus opposite)
   const bool annot_unmasked = param.yesno( "annot-unmasked" );
 				   
-  annot_t * ann = dump_annot ? annotations.find( annot_str ) : NULL ; 
+  annot_t * ann = dump_annot ? annotations.add( annot_str ) : NULL ; 
   
   // no output?
   const bool output = param.has( "output" ) && param.yesno( "output" ) == false ; 
@@ -1433,12 +1433,13 @@ void timeline_t::dumpmask( const param_t & param )
       //      writer.value( "INTERVAL" , interval.as_string() );
       writer.value( "EMASK" , mask_set ? mask[e] : false );
 
-      
+      const bool m =  mask_set ? mask[e] : false ; 
+
       if ( ann )
 	{
-	  if ( annot_unmasked && ! mask_set ) 
+	  if ( annot_unmasked && ! m ) 
 	    ann->add( "." , interval , "." );
-	  else if ( mask_set && ! annot_unmasked )
+	  else if ( m && ! annot_unmasked )
 	    ann->add( "." , interval , "." );
 	}
     }

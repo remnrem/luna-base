@@ -173,7 +173,7 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
 
   // default is to leave EEG in ECG-bad epochs 'as is'
   const bool mask_bad_epochs = param.has( "mask-bad-epochs" );
-
+  
   //
   // ECG channel
   //
@@ -221,19 +221,25 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   const std::vector<double> * ecg = slice1.pdata();
   const std::vector<uint64_t> * tp = slice1.ptimepoints();  
 
+  //  logger << "  pulled " << tp->size() << " samples\n";
+
   //
   // find ECG peaks
   //
-
-  rpeaks_t peaks = mpeakdetect( edf , ecg , tp , sr );
   
+  rpeaks_t peaks = mpeakdetect( edf , ecg , tp , sr );
+
+  logger << "  detected R peaks\n";
 
   //
   // clean beats
   //
   
   int removed = peaks.clean( 0.3 , 2 );  
-    
+
+  //  logger << "  removed " << removed << " bad beats\n";
+  
+  
   //
   // find bad ECG epochs (i.e. calculate implied HR)
   //
@@ -480,37 +486,45 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
   std::vector<double> x = MiscMath::centre( *d );
   
   // band-pass filter: 0.05-40Hz 
-    
+
+  logger << "  filtering ECG...\n";
+
   std::vector<double> bpf = dsptools::apply_fir( x , Fs , fir_t::BAND_PASS ,
 						 1, // Kaiser window
 						 0.02 , 0.5 , // ripple, TW
 						 0.5 , 40 ) ;  // f1, f2
-
+  
   // differentiate and sqr data
   std::vector<double> sq( n - 1 );
   for (int i=0;i<n-1;i++) 
     sq[i] = ( bpf[i+1] - bpf[i] ) * ( bpf[i+1] - bpf[i] );
 
-  // integrate over 7 points (i.e. sum)  
+  // integrate over 7 points (i.e. sum) - but expanded for higher SRs  
   // d=[1 1 1 1 1 1 1]; % window size - intialise
   // x = filter(d,1,sqr);
+
+  const int ds = Fs > 256 ? 7 * Fs / (double)256  : 7 ; 
   
   std::vector<double> ss( n - 1 , 0 );
   for (int i=0; i < n-1; i++)
-    for (int j = 0 ; j < 7 ; j++ )
+    for (int j = 0 ; j < ds ; j++ )
       if ( i-j >= 0 ) ss[i] += sq[i-j];
-
+  
   // median filter, window size of 10
   std::vector<double> mf = MiscMath::median_filter( ss , 10 );
 
   // remove filter delay
-  int delay = ceil( 7 / 2.0 );
+  int delay = ceil( ds / 2.0 );
   
   // i.e. skip first 'delay-1' elements, by starting at element 'delay-1', 
   // put back into 'sq'
   
   std::vector<double> mdfint;
-  for (int i=delay-1;i<ss.size();i++) mdfint.push_back( ss[i] );
+  for (int i=delay-1;i<ss.size();i++)
+    {
+      //      std::cout << "ss[" << i << "] = " << ss[i] << "\n";
+      mdfint.push_back( ss[i] );
+    }
 
   //
   // segment search area (on 'sq')
@@ -524,21 +538,25 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
   
   // avoid issues, calculate max within each EPOCH, take median max value 
   int e30 = Fs * 30;
+
+  // note, as we dropped some samples, need to ensure we count all
+  // thus e <= ne below
   int ne = len / e30;
   
   std::vector<double> maxvals;
-  for (int e = 0; e < ne ; e++)
+  for (int e = 0; e <= ne ; e++)
     {
       int s1 = e * e30;
-      int s2 = s1 + e30 - 1 ;  
+      int s2 = s1 + e30 - 1 ;
       double max_h = 0;
-      for (int i = s1; i <= s2 ; i++ ) 
-	if ( mdfint[i] > max_h ) max_h = mdfint[i];
+      for (int i = s1; i <= s2 ; i++ ) { 
+	if ( i < len ) 
+	  if ( mdfint[i] > max_h ) max_h = mdfint[i];
+      }
       maxvals.push_back( max_h );
-  }
-  
+    }
+
   double max_h = median_destroy( &maxvals[0] , maxvals.size() );
-  
   double thresh = 0.2;  
   double th = max_h * thresh;
   
@@ -558,7 +576,7 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
 
   std::vector<int> maxloc, minloc;
   std::vector<double> maxval, minval;
-  
+
   // get max point within each segment
   for (int i=0;i<left.size();i++)
     {
@@ -595,7 +613,7 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
       minloc.push_back( mni );
       minval.push_back( mn );
     }
-  
+
   // check for lead inversion
   //  do minima precede maxima?
     
@@ -632,6 +650,7 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
       //std::cout << "xx " << ( inverted ? minloc[i] : maxloc[i] ) << "\n"; 
     }
   
+
   // take the one with the smallest HRV  (threshold at 2)
   const int nb = R_i.size();
   
