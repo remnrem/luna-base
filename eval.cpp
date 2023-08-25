@@ -2583,7 +2583,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	  else
 	    logger << "  outputting epoch table for " << edf.timeline.num_epochs() << " unmasked epochs\n";
 	  
-	  edf.timeline.output_epoch_info( show_masked );
+	  edf.timeline.output_epoch_info( true , show_masked );
 	}
       else
 	logger << "  no epochs set, not dumping any information\n";
@@ -2602,8 +2602,7 @@ void proc_epoch( edf_t & edf , param_t & param )
       if ( param.has( "else" ) ) logger << " and [ " << param.value( "else" ) << " ]";
       logger << "\n";
       
-      if ( param.has( "verbose" ) )
-	edf.timeline.output_epoch_info();
+      edf.timeline.output_epoch_info( param.has( "verbose" ) );
       
       return;
     }
@@ -2818,10 +2817,8 @@ void proc_epoch( edf_t & edf , param_t & param )
   //
   // write more verbose information to db
   //
-
   
-  if ( param.has( "verbose" ) )
-    edf.timeline.output_epoch_info();
+  edf.timeline.output_epoch_info( param.has( "verbose" ) );
 
  
   //

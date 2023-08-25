@@ -257,7 +257,7 @@ struct timeline_t
   
   void debug_dump_epochs();
 
-  void output_epoch_info( const bool show_masked = false );
+  void output_epoch_info( const bool verbose , const bool show_masked = false );
     
   bool align_epochs( uint64_t * tp , int * rec , const std::set<uint64_t> & annots );
   

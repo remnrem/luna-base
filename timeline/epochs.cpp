@@ -1225,9 +1225,9 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 
 
 
-void timeline_t::output_epoch_info( const bool show_masked )
+void timeline_t::output_epoch_info( const bool verbose , const bool show_masked )
 {
-
+  
   int n_masked = 0, n_unmasked = 0; 
   
   // track clock time
@@ -1250,46 +1250,52 @@ void timeline_t::output_epoch_info( const bool show_masked )
       // std::cout << " E int " << interval.as_string() << "\n";
       
       // original encoding (i.e. to allows epochs to be connected after the fact)
-      writer.epoch( display_epoch( epoch0 ) );
+      if ( verbose ) 
+	writer.epoch( display_epoch( epoch0 ) );
       
       // if present, original encoding
-      writer.value( "E1" , epoch0+1 );
+      if ( verbose )
+	writer.value( "E1" , epoch0+1 );
 
       // is this epoch masked?
       const bool is_masked = mask_set && mask[epoch0] ; 
-      
-      if ( show_masked )
-	writer.value( "EMASK" , is_masked );
 
+      if ( verbose ) 
+	if ( show_masked )
+	  writer.value( "EMASK" , is_masked );
+      
       if ( is_masked )
 	++n_masked;
       else
 	++n_unmasked;
-      
-      writer.value( "LABEL" , epoch_labels[ epoch0 ] );
-      writer.value( "INTERVAL" , interval.as_string() );      
-      writer.value( "START"    , interval.start_sec() );
-      writer.value( "MID"      , interval.mid_sec() );
-      writer.value( "STOP"     , interval.stop_sec() );
-      writer.value( "TP" , interval.as_tp_string() );
-      writer.value( "DUR"      , interval.duration_sec() );
 
-      // original time-points
-      
-      if ( hms )
+      if ( verbose )
 	{
-	  const double sec0 = interval.start * globals::tp_duration;
-	  clocktime_t present = starttime;
-	  present.advance_seconds( sec0 );
-	  std::string clocktime = present.as_string( ':' );
-	  writer.value( "HMS" , clocktime );
+	  writer.value( "LABEL" , epoch_labels[ epoch0 ] );
+	  writer.value( "INTERVAL" , interval.as_string() );      
+	  writer.value( "START"    , interval.start_sec() );
+	  writer.value( "MID"      , interval.mid_sec() );
+	  writer.value( "STOP"     , interval.stop_sec() );
+	  writer.value( "TP" , interval.as_tp_string() );
+	  writer.value( "DUR"      , interval.duration_sec() );
+	
+	  // original time-points
+	  
+	  if ( hms )
+	    {
+	      const double sec0 = interval.start * globals::tp_duration;
+	      clocktime_t present = starttime;
+	      present.advance_seconds( sec0 );
+	      std::string clocktime = present.as_string( ':' );
+	      writer.value( "HMS" , clocktime );
+	    }
 	}
 
       // next epoch
     }		  
-  
-  writer.unepoch();
 
+  if ( verbose ) 
+    writer.unepoch();
     
   writer.value( "NE" , n_unmasked );
 
@@ -1302,8 +1308,6 @@ void timeline_t::output_epoch_info( const bool show_masked )
     writer.value( "OFFSET" , epoch_offset() );
   }
   writer.value( "GENERIC" , (int)(!standard_epochs) );
-
-  
   
 }
 
