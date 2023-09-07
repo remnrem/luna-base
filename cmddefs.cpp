@@ -1061,6 +1061,10 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "SS" , "BOUT_MD" , "Median bout duration" );
   add_var( "HYPNO" , "SS" , "BOUT_5" , "Stage duration (only bouts 5+ mins)" );
   add_var( "HYPNO" , "SS" , "BOUT_10" , "Stage duration (only bouts 10+ mins)" );
+  
+  add_table( "HYPNO" , "SS,DUR" , "Duration/timing stage-stratified output" );
+  add_var( "HYPNO" , "SS,DUR" , "T" , "Time from sleep onset to reach DUR mins (mins)" );
+  add_var( "HYPNO" , "SS,DUR" , "SHORT" , "Binary flag if insufficient duration" );
 
   add_table( "HYPNO" , "C" , "NREM cycle-level output" );
   add_var( "HYPNO" , "C" , "NREMC_START" , "First epoch number of this NREM cycle" );

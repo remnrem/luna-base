@@ -30,6 +30,7 @@
 #include "stats/eigen_ops.h"
 #include "dsp/tsync.h"
 #include "dsp/xcorr.h"
+#include "dsp/spline.h"
 
 extern writer_t writer;
 extern logger_t logger;
@@ -66,7 +67,23 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       const std::string signal_label = param.value( "sig" );
       const double offset = param.requires_dbl( "offset" );
       const std::string annot_label = param.has( "annot" ) ? param.value( "annot" ) : "" ;
-      insert( edf , edf2 , signal_label , offset , annot_label );
+
+      // optionally, timestretch secondary signal?
+      const double stretch_denom = param.has( "secs" ) ? param.requires_dbl( "secs" ) : -1 ;
+      const double stretch_shift = param.has( "shift" ) ? param.requires_dbl( "shift" ) : 0 ;
+
+      if ( param.has( "secs" ) != param.has( "shift" ) )
+	Helper::halt( "requires both secs and shift options (or neither)" );
+
+      // e.g. if offset shifts (constant) by -10 seconds in 8 hours
+      //  secs=28800 shift=-10
+      // where 28800 = 8 * 60 * 60 
+
+      const bool timestretch = stretch_denom > 0 ;
+      const double fac = timestretch ? stretch_shift / stretch_denom : 0 ; 
+	
+      param.has( "stretch" ) ? param.requires_dbl( "stretch1" ) : 0 ;   
+      insert( edf , edf2 , signal_label , offset , timestretch ? &fac : NULL , annot_label );
       // all done
       return;
     }
@@ -402,7 +419,9 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 
 
 
-void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & siglabel , const double offset , const std::string annot_label )
+void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & siglabel ,
+			     const double offset , const double * fac, 
+			     const std::string annot_label )
 {
   
   // insert as much of the signals from edf2 into edf
@@ -411,6 +430,11 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
   // if an offset is specified, then we insert
   // optionally, we can add annotations to indicate where the signal is missing from edf2 
 
+  // if stretch is non-null, then apply this timestretch factor to the inserted channel
+  // i.e. this is to adjust for linear difference in clock rates.
+
+  const bool timestretch = fac != NULL; 
+  
   const bool no_annotations = true;
 
   signal_list_t signals = edf2.header.signal_list( siglabel , no_annotations );
@@ -420,13 +444,15 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
   logger << "  inserting " << ns << " signals from " << edf2.filename << ", ";
   logger << "using an offset of " << offset << " seconds\n";
 
+  if ( timestretch )
+    logger << "  rescaling signals by a factor of " << fac << "\n";
   
   // EDF        |-----------------------|
 
   // EDF2       |-----------------------|      offset = 0
   // EDF2       |-----------------|000000      offset = 0 , pad with zeros and add annotation to indicate missing signal
-  // EDF2       000|--------------------|XXX|  offset = -ve (i.e. EDF comes before EDF2): pad w/ zeros; truncate at end X); add annot.  
-  // EDF2   |XXX|--------------------|000      offset = +ve (i.e. EDF comes after EDF2) 
+  // EDF2       000|--------------------|XXX|  offset = +ve (i.e. EDF2 start comes after EDF start): pad w/ zeros; truncate at end X); add annot.  
+  // EDF2   |XXX|--------------------|000      offset = +ve (i.e. EDF2 comes before after EDF start) 
 
 
   for (int s=0; s<ns; s++)
@@ -455,59 +481,93 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
 	      ++j;
 	    }
 	}
-
-      // make a new vector
+      
+      // make a new vector, set to zero-pad
       std::vector<double> d1( np , 0 );
-
+      
       // pull the EDF2 signal
       slice_t slice( edf2 , signals(s) , edf2.timeline.wholetrace() );      
-      const std::vector<double> * d2 = slice.pdata();
-                
+      std::vector<double> d2 = *slice.pdata();
+      
       // calculate best offset in sample points
       const int offset_sp = offset * Fs;
+      
+      // time-stretch?
+      if ( timestretch )
+	{
+	  
+	  // if original SR is S, then resample at tS
+	  // where t = param from stretch
+	  
+	  // e.g. nominal SIG = 200 Hz
+
+	  //  but we think the true clock is 250 Hz
+	  //  then stretch =  200 / 250
+	  //   i.e. need fewer points per second
+
+	  const int n_orig = d2.size();
+	  const int n_scaled = n_orig * (*fac);
+	  
+	  std::vector<double> t( n_orig );
+	  for (int i=0; i<n_orig; i++) t[i] = i;
+	  
+	  tk::spline spline;
+	  spline.set_points( t, d2 );
+	  
+	  d2.clear();
+	  d2.resize( n_scaled , 0 );
+	  
+	  for (int i=0; i<n_scaled; i++)
+	    d2[i] = spline( n_orig * ( i / (double)n_scaled ) );	  
+	  
+	}
+      
       
       // console messages
       logger << "  adding " << sig << " ( SR = " << Fs << " Hz, offset = " << offset_sp << " samples ) to primary EDF\n";
 
-      // +ve offset : pad w/ new N zeros , skip first N 
+      // +ve offset : pad w/ new N zeros , skip last N 
+      //  ||||||||     d1
+      //    ||||||||   d2
+      //  00IIIIII
+      
+      // -ve offset : pad w/ new N zeros , skip first N 
       //    ||||||||
       //  ||||||||
-
-      // -ve offset : pad w/ new N zeros , skip last N 
-      //  ||||||||
-      //    ||||||||
+      //    IIIIII00
 
       // pointers (sample points to both files)
-      int p1 = 0; 
-      int p2 = offset_sp; 
+      int p1 = offset_sp > 0 ?  offset_sp : 0 ;
+      int p2 = offset_sp < 0 ? -offset_sp : 0 ;
       
       // signal lengths
       const int n1 = np;
-      const int n2 = d2->size();
+      const int n2 = d2.size();
 
       // advance sp in 2ndary signal 
       while ( 1 )
 	{
 
-	  if ( p2 < 0 || p2 >= n2 )
+	  // all done
+	  if ( p1 >= n1 ) break;
+
+	  // zero-pad if out of input
+	  if ( p2 >= n2 ) 
 	    d1[ p1 ] = 0 ;
-	  else
-	    d1[ p1 ] = (*d2)[ p2 ];
-	  
+	  else // else insert
+	    d1[ p1 ] = d2[ p2 ];
+
 	  // advance
 	  ++p1;
-	  ++p2;
-	  
-	  // all done?
-	  if ( p1 == n1 ) break;
-	  
+	  ++p2;	  	  
 	}
 
       // add the new signal
       edf.add_signal( sig , Fs , d1 );
       
       // add any annotations 
-
+      // -- todo --
+      
     }
   
 }

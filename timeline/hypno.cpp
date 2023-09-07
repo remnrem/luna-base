@@ -940,36 +940,65 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   
   
   //
-  // constrain to only analyse the first N minutes after X ?
+  // constrain to only analyse the first (or last) N minutes after (or before) X ?
   //
   
-  n_only_first_mins = param.has( "first" ) ? param.requires_dbl( "first" ) : -1 ; 
+  constrain_too_short = -1; // N/A
 
+  const bool constrain_first = param.has( "first" );
+  const bool constrain_last  = param.has( "last" );
+  const bool constrain_clock = param.has( "clock" );
+
+  // some checks
+  if ( constrain_first && constrain_last )
+    Helper::halt( "cannot specify both first and last" );
+  if ( constrain_last && constrain_clock )
+    Helper::halt( "cannot specifiy both clock and last" );
+  if ( param.has( "anchor" ) && constrain_clock )
+    Helper::halt( "cannot specifiy both clock and anchor" );  
+  if ( constrain_clock && ! constrain_first )
+    Helper::halt( "must specify first=<mins> if using clock=<hh:mm:ss> as anchor" );
+  
+  constrain_mins = -1 ; 
+  if ( constrain_first )
+    constrain_mins = param.requires_dbl( "first" );
+  else if ( constrain_last )
+    constrain_mins = param.requires_dbl( "last" );
+  
+  
   // T0 : ED start, 
   // T1 : lights out
   // T2 : sleep onset (default)
   //  make everything after N minutes missing '?'
+
+  // or... for T4,T5 T6 do the same, but in reverse
   
-  first_anchor = "";
-  if ( n_only_first_mins > 0 ) 
-    first_anchor = param.has( "first-anchor" ) ? param.value( "first-anchor" ) : "T2" ;
+  // default to T2 (sleep onset) or final wake (T4)
+  constrain_anchor = constrain_last ? "T4" : "T2";
   
-  if ( n_only_first_mins > 0 ) 
+  if ( param.has( "anchor" ) )
+    constrain_anchor = param.value( "anchor" );
+
+  //
+  // Constrain to first N mins 
+  //
+  
+  if ( constrain_first && ! constrain_clock )
     {
-      if ( first_anchor != "T0" && first_anchor != "T1" && first_anchor != "T2" ) 
-	Helper::halt( "first-anchor should be T2 (sleep onset, default), T0 (EDF start) or T1 (lights out)" );
-      logger << "  restricting statistics to the first " << n_only_first_mins << " minutes past " ;
-      if ( first_anchor == "T2" ) logger << "sleep onset";
-      else if ( first_anchor == "T0" ) logger << "EDF start";
+      if ( constrain_anchor != "T0" && constrain_anchor != "T1" && constrain_anchor != "T2" ) 
+	Helper::halt( "anchor should be T2 (sleep onset, default), T0 (EDF start) or T1 (lights out)" );
+      logger << "  restricting statistics to the first " << constrain_mins << " minutes past " ;
+      if ( constrain_anchor == "T2" ) logger << "sleep onset";
+      else if ( constrain_anchor == "T0" ) logger << "EDF start";
       else logger << "lights out";
       logger << "\n";
       
-      const int first_epochs = n_only_first_mins / (double)epoch_mins ; 
+      const int first_epochs = constrain_mins / (double)epoch_mins ; 
       
       int start = 0; // T0
       
       // T1 ( lights out ) 
-      if ( first_anchor == "T1" )
+      if ( constrain_anchor == "T1" )
 	{
 	  for (int e=0; e<ne; e++)
 	    if ( stages[e] != LIGHTS_ON )
@@ -978,7 +1007,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 		break;
 	      }
 	} // T2 (sleep onset)
-      else if ( first_anchor == "T2" )
+      else if ( constrain_anchor == "T2" )
 	{
 	  for (int e=0; e<ne; e++)
             if ( is_sleep( stages[e] ) )
@@ -996,26 +1025,242 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	{	  
 	  last = ne;
 	  // track actual time allowed
-	  n_only_first_mins = ( last - start ) * epoch_mins;
+	  constrain_mins = ( last - start ) * epoch_mins;
 	  logger << "  *** reducing first period, which is longer than available staging: " 
-		 << n_only_first_mins << " minutes\n";
-	  first_too_short = 1;
+		 << constrain_mins << " minutes\n";
+	  constrain_too_short = 1;
 	}
       else 
-	first_too_short = 0;
-    
-      
+	constrain_too_short = 0;
+          
       logger << "  retaining only epochs " << start+1 << " to " << last << ";"
-	     << " setting epochs " << last+1 << " to end (" << ne << ") to L\n";
-      
+	     << " setting other epochs to L\n";
+
+      for (int e=0; e<start; e++)
+        stages[e] = LIGHTS_ON;
+
       for (int e=last; e<ne; e++)
 	stages[e] = LIGHTS_ON;
       
     }
-  else
-    first_too_short = -1;
- 
 
+
+  //
+  // Constrain to first N mins 
+  //
+  
+  if ( constrain_last )
+    {
+      if ( constrain_anchor != "T4" && constrain_anchor != "T5" && constrain_anchor != "T6" ) 
+	Helper::halt( "anchor should be T4 (final wake, default), T5 (lights on) or T6 (EDF stop)" );
+      logger << "  restricting statistics to the last " << constrain_mins << " minutes prior to " ;
+      if ( constrain_anchor == "T4" ) logger << "final wake";
+      else if ( constrain_anchor == "T6" ) logger << "EDF stop";
+      else logger << "lights on";
+      logger << "\n";
+      
+      const int last_epochs = constrain_mins / (double)epoch_mins ; 
+      
+      int last = ne; // T6, 1-past encoding
+      
+      // T5 ( lights on ) 
+      if ( constrain_anchor == "T5" )
+	{
+	  for (int e=ne-1; e>=0; e--)
+	    if ( stages[e] != LIGHTS_ON )
+	      {
+		last = e+1;
+		break;
+	      }
+	} // T2 (sleep onset)
+      else if ( constrain_anchor == "T4" )
+	{
+	  for (int e=ne-1; e>=0; e--)
+            if ( is_sleep( stages[e] ) )
+              {
+		last = e+1;
+		break;
+              }
+	}
+      
+      // last defined as one past
+      int start = last - last_epochs ; 
+      
+      if ( start < 0 )
+	{	  
+	  start = 0;
+	  // track actual time allowed
+	  constrain_mins = ( last - start ) * epoch_mins;
+	  logger << "  *** reducing last period, which is longer than available staging: " 
+		 << constrain_mins << " minutes\n";
+	  constrain_too_short = 1;
+	}
+      else 
+	constrain_too_short = 0;
+      
+      logger << "  retaining only epochs " << start+1 << " to " << last << ";"
+	     << " setting other epochs to L\n";
+            
+      for (int e=0; e<start; e++)
+	stages[e] = LIGHTS_ON;
+      
+      for (int e=last; e<ne; e++)
+        stages[e] = LIGHTS_ON;
+      
+      
+    }
+
+  
+  //
+  // Constrain to clock start time 
+  //
+
+  if ( constrain_clock )
+    {
+
+      constrain_too_short = 0;
+      
+      if ( param.empty( "clock" ) )
+	Helper::halt( "clock requires a hh:mm:ss value" );
+      
+      std::string ctime = param.value( "clock" );
+          
+      clocktime_t starttime( timeline->edf->header.starttime );
+      bool invalid_hms = ! starttime.valid;
+      if ( invalid_hms )
+	Helper::halt( "EDF does not have valid start-time in header" );
+
+      // note::: ctime might come before or after EDF start time
+      clocktime_t t1( ctime );
+      
+      // 1: starttime is first, 2: ctime is first; 0: both same
+      // if days not specified, then assume shortest distance (12 hr) rule
+      // to determine which comes 'first'
+      
+      const int e = clocktime_t::earlier( starttime , t1 );
+
+      const bool before_start = e == 2 ; 
+      
+      // if EDF starts *after* this time, flag that we'll have a short duration
+      if ( before_start ) constrain_too_short = 1;
+      
+      // get time diff either way::
+      const double secs = clocktime_t::ordered_difference_seconds( starttime , t1 ) ; 
+      
+      // note, start/stop_sec may be -ve if they come before the EDF start
+      // we don't need to do anything there, as it is like having L anyway
+
+      const double start_sec = before_start ?
+	-1 * clocktime_t::ordered_difference_seconds( t1 , starttime ) : 
+	+1 * clocktime_t::ordered_difference_seconds( starttime , t1 ) ;
+      
+      // get start epoch
+      int start_epoch = 0;
+      
+      double esecs = 0; 
+      
+      for (int e=0;e<ne;e++)
+	{
+	  const double diff = fabs( esecs - start_sec );
+	  
+	  if ( esecs > start_sec || diff < 1e-4 )
+	    {
+	      start_epoch = e;
+	      break;
+	    }
+	  
+	  // advance to start of next epoch
+	  esecs += epoch_dur[e];
+	}
+
+      // we now have the start epoch
+      //   if the clock time was before the EDF start (0)
+      //   then we need to adjust for that - i.e. will have a smaller
+      //   window
+      
+      const double adjusted_mins = start_sec >= 0 ? constrain_mins : constrain_mins + ( start_sec / 60.0 ) ;  
+      
+      // get number of (whole) epochs to include
+      // i.e. always try to include same # of epochs
+      // even if epoch starts are not aligned w/ clock time
+      // specified 
+      
+      const int included_epochs = adjusted_mins / (double) epoch_mins ; 
+      
+      const int last_epoch = start_epoch + included_epochs ; // 1-past encoding
+
+      // std::cout << start_sec << " start_sec \n";
+      // std::cout << constrain_mins << " constrain_mins \n";
+      // std::cout << adjusted_mins << " adjusted_mins \n";
+      // std::cout << included_epochs << " included_epochs (win size) \n";
+      // std::cout << last_epoch << " last epoch (1 past)\n";
+	    
+      // special case: wipe all, if clock period starts after last
+      // epoch, or if clock period ends before first epoch
+      
+      if ( included_epochs <= 0 || start_epoch >= ne )
+	{
+	  constrain_too_short = 1;
+	  logger << "  clock period is outside observed epoch range: setting all epochs to L\n";
+	  for (int e=0; e<ne; e++)
+	    stages[e] = LIGHTS_ON;	  
+	}
+      
+      // wipe all epochs before the start epoch 
+      if ( start_epoch > 0 )
+	{
+          logger << "  setting " << start_epoch << " epochs before " << t1.as_string() << " to L\n";
+          for (int e=0; e<start_epoch; e++)
+            stages[e] = LIGHTS_ON;
+	}
+
+      // wipe all epochs after the end
+      if ( included_epochs > 0 )
+	{
+	  int actual_stop_epoch = last_epoch;
+	  
+	  if ( last_epoch > ne )
+	    {
+	      actual_stop_epoch = ne;
+	      constrain_too_short = 1;
+	    }
+
+	  if ( ne - actual_stop_epoch > 0 )
+	    {
+	      logger << "  setting " << ne - actual_stop_epoch << " end epochs to L\n";
+	      for (int e=actual_stop_epoch; e<ne; e++)
+		stages[e] = LIGHTS_ON;
+	    }
+	}
+    }  
+
+
+  //
+  // capture params
+  //  - this does not edit the hypnogram per se, but is a convenient place to pick up s
+  //    some extra param values for the calculated stats  (as param_t not passed in to that)
+  //
+
+  if ( param.has( "stg-durs" ) )
+    {
+      stg_durs = param.intvector( "stg-durs" );
+    }
+  else
+    {
+      stg_durs = { 10 , 30 , 60 , 90 , 120 } ; 
+    }
+  
+  // check ascending
+  for (int i=1; i<stg_durs.size(); i++)
+    if ( stg_durs[i] <= stg_durs[i-1] )
+      Helper::halt( "stg-durs=X,Y,Z must be ascending integers (minutes)" );
+
+  // convert to secs
+  for (int i=0; i<stg_durs.size(); i++)
+    stg_durs[i] *= 60;
+  
+  stg_dur_times.clear();
+  
 }
 
 void hypnogram_t::calc_stats( const bool verbose )
@@ -1454,6 +1699,126 @@ void hypnogram_t::calc_stats( const bool verbose )
 	}
     }
 
+
+  
+  //
+  // Elapsed stage duration/time values
+  //  i.e. how long after anchor did we see 100 mins of NR, etc
+  // Only calculate these if we have some sleep, as these are all
+  // anchored on first sleep 
+  //
+
+  if ( found_first_sleep )
+    {
+
+      // first_sleep_epoch = e;
+
+      // use a reduced set of stages types here, i.e no need for L or ? etc
+      const std::vector<std::string> these_stages
+	= { "N1", "N2", "N3", "NR", "R", "S", "WASO" } ;
+      
+      std::vector<std::string>::const_iterator qq = these_stages.begin();
+      while ( qq != these_stages.end() )
+	{
+	  sleep_stage_t stage = WAKE;
+	  if ( *qq == "N1" ) stage = NREM1;
+	  if ( *qq == "N2" ) stage = NREM2;
+	  if ( *qq == "N3" ) stage = NREM3; 
+	  if ( *qq == "N4" ) stage = NREM4; 
+	  if ( *qq == "R" ) stage = REM;
+	  if ( *qq == "?" ) stage = UNKNOWN;
+	  if ( *qq == "L" ) stage = LIGHTS_ON;
+	  
+	  // special cases
+	  bool all_nrem = *qq == "NR";      
+	  bool all_sleep = *qq == "S";
+	  bool waso = *qq == "WASO";
+	  
+	  // populate stg_dur_times[ STG ][ DUR ] -> T
+	  //  where DUR values are stored in stg_durs[] (set, so in ascending order)
+	  
+	  // track offsets for each , define as -1 if not achieved;
+	  // offsets from sleep onset, by default, when
+	  // presented, but here calculated from EDF start (t=0)
+	  // for convenience and adjust later
+	  	  
+	  const int ndurs = stg_durs.size();
+	  
+	  std::vector<double> tall( ndurs , -1 );
+	  
+	  // start here, i.e. if == ndurs then all done
+	  int didx = 0; 
+	  
+	  // track time from EDF start
+	  double t = 0;
+	  
+	  // elapsed seconds of this stage
+	  double elapsed = 0;
+	  
+	  // iterate over epochs, *** starting at first sleep epoch
+	  for (int e=first_sleep_epoch; e<ne; e++)
+	    {
+	      
+	      // track from EDF start - note
+	      // add this first, as makes sense that we achieve this at the 'end'
+	      // of the given epoch that adds it in. i.e. if 1 min, then at end of 2nd epoch
+	      // would say 'yes, we've now had 1 min of that stage, not at start
+	      
+	      t += epoch_dur[e];
+	      
+	      //	      std::cout << " e,t = " << e << " " << t << "\n";
+	      
+	      bool matches = false;
+	      
+	      if ( all_nrem )
+		matches = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 ;
+	      else if ( all_sleep ) 
+		matches = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 || stages[e] == REM ;
+	      else if ( waso )
+		matches = stages[e] == WAKE && e >= first_sleep_epoch && e <= last_sleep_epoch ;
+	      else
+		matches = stages[e] == stage;
+	      
+	      if ( matches )
+		{
+		  // add in
+		  elapsed += epoch_dur[e];
+		  
+		  //		  std::cout << "   match = " << *qq << " " << e << " " << t << " " << elapsed << "\n";
+		  
+		  int best = didx-1;
+		  
+		  // now test
+		  for (int i=didx; i<ndurs; i++)
+		    {
+		      //		      std::cout << " i stgdur = " << i << " " << stg_durs[i] << "\n";
+		      if ( elapsed >= stg_durs[i] )
+			{
+			  //  std::cout << " setting\n";
+			  tall[i] = t;
+			  best = i;
+			}
+		    }
+		  
+		  // track progress
+		  didx = best+1;
+		  
+		  // all done?
+		  if ( didx >= ndurs ) break;
+		  
+		}
+	      
+	    } // next epoch
+	  
+	  // store results
+	  for (int i=0; i<ndurs; i++)
+	    stg_dur_times[ *qq ][ stg_durs[i] ] = tall[ i ];
+	  
+	  // next stage/class
+	  ++qq;
+	}
+    }
+  
    
   //
   // Sleep cycles : based on modified Floyd & Feinberg rules
@@ -3150,8 +3515,8 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "TWT" , TWT );
       writer.value( "LOT" , mins[ "L" ] );
       writer.value( "OTHR" , mins[ "?" ] );
-      if ( first_too_short != -1 ) 
-	writer.value( "SHORT" , first_too_short );
+      if ( constrain_too_short != -1 ) 
+	writer.value( "SHORT" , constrain_too_short );
       writer.value( "CONF" , n_conflicts );
       writer.value( "FIXED_SLEEP" , n_fixed ); // --> ?
       writer.value( "FIXED_WAKE" , n_ignore_wake ); // --> ?
@@ -3344,9 +3709,37 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value( "BOUT_MD" , bout_med[ *ss] );
 	  writer.value( "BOUT_05" , bout_5[ *ss] );
 	  writer.value( "BOUT_10" , bout_10[ *ss] );
+
+	  //
+	  // dur/time trackers (if this stage class was included)
+	  //
+	  
+	  if ( stg_dur_times.find( *ss ) != stg_dur_times.end() )
+	    {
+	      for (int di=0; di<stg_durs.size(); di++)
+		{
+		  writer.level( stg_durs[di] / 60 , "DUR" );
+		  
+		  // any?
+		  const bool any = stg_dur_times[ *ss ][ stg_durs[di] ] > 0 ;
+		  
+		  if ( any )
+		    {	      
+		      writer.value( "SHORT" , 0 );
+		      writer.value( "T" , stg_dur_times[ *ss ][ stg_durs[di] ] / (double)60.0 );
+		    }
+		  else
+		    writer.value( "SHORT" , 1 );
+		  
+		}
+	      writer.unlevel( "DUR" );
+	    }
+	  
+	  // next stage/class type
 	  ++ss;
 	}
 
+      
       // split by ASC/DESC N2
       if ( 0 )
 	{

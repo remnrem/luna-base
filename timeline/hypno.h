@@ -144,15 +144,18 @@ struct hypnogram_t
   // number of W epochs set to ? if they lead/trail sleep
   int n_ignore_wake;
   
-  // first option is longer than available (SOL to END)
-  int first_too_short; // 0 N 1 Y -1 N/A
-
+  // first/last option is longer than available (SOL to END)
+  int constrain_too_short; // 0 N 1 Y -1 N/A
+  
   // only calculate stats for first N epochs after X (make rest missing)
-  // X is either start of recording, or sleep onset 
-  // this is run *after* fixing above 'early sleep' issues
-  int n_only_first_mins;
-  std::string first_anchor; // SO or EDF
+  // or last, or by clock time, etc
 
+  // X is either start of recording, or sleep onset 
+  // nb. this is run *after* fixing above 'early sleep' issues
+  int constrain_mins;
+  clocktime_t constrain_clock;
+  std::string constrain_anchor; // T2, etc
+  
 
   // times 
   clocktime_t clock_start;
@@ -163,7 +166,7 @@ struct hypnogram_t
   clocktime_t clock_wake_time;
   clocktime_t clock_stop;
 
-  // also saved as tp (for annot output_
+  // also saved as tp (for annot output)
   uint64_t tp_0_start;
   uint64_t tp_1_lights_out;
   uint64_t tp_2_sleep_onset;
@@ -222,6 +225,13 @@ struct hypnogram_t
 
   std::set<bout_t> bouts;
 
+  //
+  // stage timing vars; if -1 means not defined
+  //    stage -> requested elapsed mins (integer) -> seconds past anchor (T0,T1,T2(default))
+
+  std::map<std::string,std::map<int,double> > stg_dur_times;
+  std::vector<int> stg_durs; // populated by dur-times
+  
   //
   // stage distribution stats (devel=T)
   //
