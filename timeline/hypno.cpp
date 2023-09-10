@@ -3750,7 +3750,7 @@ void hypnogram_t::output( const bool verbose ,
 	  std::stringstream wstr;
 	  wstr << "W" << p_width * epoch_mins << "_" << p_inc * epoch_mins << "_T" << p_anchor;
 
-	  if ( nslide > 1 ) 
+	  //if ( nslide > 1 ) 
 	    writer.level( wstr.str() , "W" );
 
 	  // for each stage
@@ -3776,7 +3776,7 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.unlevel( globals::stage_strat );
 	  ++ww;
 	}
-      if ( nslide > 1 ) 
+      //      if ( nslide > 1 ) 
 	writer.unlevel( "W" );
     }
 
@@ -4503,7 +4503,7 @@ void hypnogram_t::do_slide()
               int b = a - wid; // left
               if ( b >= end )   // exact check
                 {
-		  std::cout << " adding " << b << " to " << a << "\n";
+		  //std::cout << " adding " << b << " to " << a << "\n";
                   e1.push_back( b ); // order flipped
                   e2.push_back( a ); 
                   wt.push_back( epoch_mins * ( ( a + b )/2.0 - a0 ) );
@@ -4514,7 +4514,7 @@ void hypnogram_t::do_slide()
       // midpoint based, delimited by SPT
       if ( anc == 3 ) 
 	{
-	  std::cout << " epochs = " << first_sleep_epoch << " " << sleep_midpoint_epoch << " " << final_wake_epoch << "\n";
+	  //std::cout << " epochs = " << first_sleep_epoch << " " << sleep_midpoint_epoch << " " << final_wake_epoch << "\n";
 	  
 	  // shift by half window, to cover (as here, right is aligned to MID)
 	  int a0 = sleep_midpoint_epoch + wid/2 ;
