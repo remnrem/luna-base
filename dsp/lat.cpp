@@ -431,12 +431,13 @@ void lat_t::proc( edf_t & edf , param_t & param )
   //if ( ! okay ) Helper::halt( "problem constructing the hypnogram" );
 
   const bool epoch_lvl_output = false;
+  const bool cycle_lvl_output = true;
   const std::string eannot = "";  
   // cycle annotation --> epoch annots
   const std::string cycle_annot = "NREMC";
   
   // add annotations (this also generates some output, output...
-  edf.timeline.hypnogram.output( verbose, epoch_lvl_output , eannot , cycle_annot );
+  edf.timeline.hypnogram.output( verbose, epoch_lvl_output , cycle_lvl_output, eannot , cycle_annot );
 
   // look up to six cycles
   const bool has_cycles = edf.timeline.epoch_annotation( "_NREMC_1" ) 

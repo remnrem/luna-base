@@ -3210,6 +3210,9 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 
   // epoch level output for HYPNO?
   bool epoch_lvl_output =param.has( "epoch" );
+
+  // cycles and transitions?
+  bool cycle_lvl_output = param.has( "verbose" ) ? param.yesno( "verbose" ) : true ;
     
   // optionally, add annotations
   // allow old annot-cycles form
@@ -3234,7 +3237,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   
   // and output...
 
-  edf.timeline.hypnogram.output( verbose , epoch_lvl_output , eannot , annot_prefix );
+  edf.timeline.hypnogram.output( verbose , epoch_lvl_output , cycle_lvl_output, eannot , annot_prefix );
 
 }
 

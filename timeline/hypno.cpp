@@ -948,6 +948,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   const bool constrain_first = param.has( "first" );
   const bool constrain_last  = param.has( "last" );
   const bool constrain_clock = param.has( "clock" );
+  
 
   // some checks
   if ( constrain_first && constrain_last )
@@ -958,7 +959,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
     Helper::halt( "cannot specifiy both clock and anchor" );  
   if ( constrain_clock && ! constrain_first )
     Helper::halt( "must specify first=<mins> if using clock=<hh:mm:ss> as anchor" );
-  
+
   constrain_mins = -1 ; 
   if ( constrain_first )
     constrain_mins = param.requires_dbl( "first" );
@@ -1072,7 +1073,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 		last = e+1;
 		break;
 	      }
-	} // T2 (sleep onset)
+	} // T4 
       else if ( constrain_anchor == "T4" )
 	{
 	  for (int e=ne-1; e>=0; e--)
@@ -1113,6 +1114,8 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   
   //
   // Constrain to clock start time 
+  //   NOTE - this allows for windows that do not overlap the EDF... they will effectively be L so window
+  //          may be smaller... this will impact MINS estimates... i.e. careful to interpret W (are L effectively = W) 
   //
 
   if ( constrain_clock )
@@ -1233,33 +1236,50 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	    }
 	}
     }  
-
+  
 
   //
-  // capture params
-  //  - this does not edit the hypnogram per se, but is a convenient place to pick up s
-  //    some extra param values for the calculated stats  (as param_t not passed in to that)
+  // Specify sliding window on epoch-level data?
   //
 
-  if ( param.has( "stg-durs" ) )
+  if ( param.has( "slide" ) )
     {
-      stg_durs = param.intvector( "stg-durs" );
-    }
-  else
-    {
-      stg_durs = { 10 , 30 , 60 , 90 , 120 } ; 
-    }
-  
-  // check ascending
-  for (int i=1; i<stg_durs.size(); i++)
-    if ( stg_durs[i] <= stg_durs[i-1] )
-      Helper::halt( "stg-durs=X,Y,Z must be ascending integers (minutes)" );
+    
+      sliding_window = true;
+      
+      std::vector<double> s = param.dblvector( "slide" ); // mins
+      
+      const int nslide = s.size() / 2 ;
+      if ( s.size() != nslide * 2 ) 
+	Helper::halt( "slide=<width1>,<inc1>,<width2>,<inc2>,... must have even number of args (width,inc pairs in mins)" );
+      
+      window_width_epochs.clear();
+      window_increment_epochs.clear();
+      
+      for (int i=0; i<nslide; i+=2)
+	{
+	  window_width_epochs.push_back( s[i] / epoch_mins );
+	  window_increment_epochs.push_back( s[i+1] / epoch_mins );
+	}
 
-  // convert to secs
-  for (int i=0; i<stg_durs.size(); i++)
-    stg_durs[i] *= 60;
-  
-  stg_dur_times.clear();
+
+      // by default, anchor T2 unless told otherwise
+      std::vector<int> slide_anchor( nslide , 2 );
+      
+      if ( param.has( "slide-anchor" ) )
+	{
+	  slide_anchor = param.intvector( "slide-anchor" );
+	  if ( slide_anchor.size() != nslide ) 
+	    Helper::halt( "slide-anchor arg len does not match given slide" );
+	  for (int i=0; i<nslide; i++)
+	    if ( slide_anchor[i] < 0 || slide_anchor[i] > 6 ) 
+	      Helper::halt( "slide-anchor args should be between 0 and 6" );	  
+	}
+      
+      window_anchor = slide_anchor;
+
+    }
+
   
 }
 
@@ -1325,16 +1345,25 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   
   // lights out/on
-  int lights_out_epoch = 0;
-  for (int e=0;e<ne-1;e++) 
-    {
-      if ( stages[e] != LIGHTS_ON ) { lights_out_epoch = e; break; } 
-    }
+  lights_out_epoch = 0;
+  for (int e=0;e<ne;e++) 
+    if ( stages[e] != LIGHTS_ON ) { lights_out_epoch = e; break; } 
 
-  int lights_on_epoch = ne; // by default, one past the end  
-  for (int e=ne-1;e>0;e--) 
+  lights_on_epoch = ne; // by default, one past the end  
+  for (int e=ne-1;e>=0;e--) 
     if ( stages[e] != LIGHTS_ON ) { lights_on_epoch = e+1 ;  break; }
 
+  //  std::cout << "LON/OFF " << lights_out_epoch << " " << lights_on_epoch << "\n";
+  
+  any_dark = false; // i.e. otherwise implies all L all night
+  for (int e=0;e<ne;e++)
+    {
+      if ( stages[e] != LIGHTS_ON ) 
+	{
+	  any_dark = true;
+	  break;
+	}
+    }
   
   //
   // For cycle calculations below, etc,  use TRT which is [ lights_out_epoch ,  lights_on_epoch )  
@@ -1401,12 +1430,15 @@ void hypnogram_t::calc_stats( const bool verbose )
   for (int e = ne - 1; e != 0 ; e-- )
     if ( is_sleep( stages[e] ) ) { last_sleep_epoch = e; break; } 
   
+  // Store midpoint as an epoch code  
+  sleep_midpoint_epoch = first_sleep_epoch + ( final_wake_epoch - first_sleep_epoch ) / 2;
+
   // total time in bed
   TIB = ne * epoch_mins;
   
   // total recording time (i.e. only from lights out, lights on)
   // note; lights_out_epoch is defined as 1 past end, so no +1
-  int TRT_total_epochs = lights_on_epoch - lights_out_epoch ;
+  int TRT_total_epochs = any_dark ? lights_on_epoch - lights_out_epoch : 0 ; 
   TRT =  TRT_total_epochs * epoch_mins;
   
   // total wake time (ignores pre lights out, post lights off)
@@ -1414,7 +1446,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   // final wake time 
   FWT = ( lights_on_epoch - final_wake_epoch ) * epoch_mins; 
-
+  
   // REM latency
   rem_lat_mins = ( first_rem_epoch - first_sleep_epoch ) * epoch_mins;
   
@@ -1424,10 +1456,10 @@ void hypnogram_t::calc_stats( const bool verbose )
     if ( is_nrem( stages[e] ) ) rem_lat_nowake_mins += epoch_mins;
   
   // Total sleep time (excludes 'other')
-  TST = TRT - TWT - mins[ "?" ];
-
+  TST = TRT - TWT - mins[ "?" ] ;
+  
   // Total GAP time
-  TGT = mins["GAP"];
+  TGT = mins[ "GAP" ];
   
   // study starts/ends in sleep?
   starts_in_sleep = is_sleep( stages[0] );
@@ -1459,15 +1491,19 @@ void hypnogram_t::calc_stats( const bool verbose )
   WASO = w * epoch_mins;
   mins[ "WASO" ] = WASO;
   
-  // sleep efficiency (includes sleep latency as W) include OTHER in denom
+  // SE - sleep efficiency (includes sleep latency as W) include OTHER in denom
   slp_eff_pct = ( TST / TRT ) * 100;
     
-  // sleep maintainence (ignores initial sleep latency as W) includes OTHER in denom
+  // IGNORED *** now; sleep maintainence (ignores initial sleep latency as W) includes OTHER in denom
   slp_main_pct = ( TST / SPT ) * 100;
 
-  // alternate: sleep maintainence/efficiency 2 (denom is from initial sleep to final sleep)
-  // i.e. ignores both leading and trailing W; includes OTHER in denom
-  slp_eff2_pct = ( TST / ( epoch_mins * ( last_sleep_epoch - first_sleep_epoch + 1 ) ) ) * 100 ; 
+  // note - actual (reported) SPT is actually SPT - FWT (i.e. given to user);
+  // this should equal SPT_actual as calculated here... used below just in the PCT2 calcs
+  const double SPT_actual = epoch_mins * ( last_sleep_epoch - first_sleep_epoch + 1 ) ;    
+
+  // SME -- alternate: sleep maintainence/efficiency 2 (denom is from initial sleep to final sleep)
+  // i.e. ignores *both* leading and trailing W; includes OTHER in denom
+  slp_eff2_pct = ( TST / SPT_actual ) * 100;
 
   if ( TST > 0 ) 
     {
@@ -1483,9 +1519,26 @@ void hypnogram_t::calc_stats( const bool verbose )
       pct[ "N2" ] = 0;
       pct[ "N3" ] = 0;
       pct[ "N4" ] = 0;
-      pct[ "R" ] = 0;
-      
+      pct[ "R" ] = 0;      
     }
+
+  if ( SPT_actual > 0 ) 
+    {
+      pct2["N1"]  = mins[ "N1" ] / SPT_actual;
+      pct2["N2"]  = mins[ "N2" ] / SPT_actual;
+      pct2["N3"]  = mins[ "N3" ] / SPT_actual;
+      pct2["N4"]  = mins[ "N4" ] / SPT_actual;
+      pct2["R"]   = mins[ "R" ] / SPT_actual;
+    } 
+  else
+    {
+      pct2[ "N1" ] = 0;
+      pct2[ "N2" ] = 0;
+      pct2[ "N3" ] = 0;
+      pct2[ "N4" ] = 0;
+      pct2[ "R" ] = 0;
+    }
+
 
 
   //
@@ -1533,6 +1586,11 @@ void hypnogram_t::calc_stats( const bool verbose )
       runs_pv3 = Statistics::runs_test( runs_stage3 );
     }
 
+  //
+  // Sliding window for stage density?
+  //
+  
+  if ( sliding_window ) do_slide();
 
   //
   // Bout count and duration (ignore N4 here.)
@@ -1703,17 +1761,19 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   //
   // Elapsed stage duration/time values
-  //  i.e. how long after anchor did we see 100 mins of NR, etc
-  // Only calculate these if we have some sleep, as these are all
-  // anchored on first sleep 
+  //   for a given stage/class: 
+  //     **anchored on first sleep**, get all epochs (or all sleep epochs) and normalize to 0..1 
+  //     calculate median 
   //
 
   if ( found_first_sleep )
     {
-
+      
       // first_sleep_epoch = e;
 
       // use a reduced set of stages types here, i.e no need for L or ? etc
+      // i.e. only things within the sleep period (so no W either)
+
       const std::vector<std::string> these_stages
 	= { "N1", "N2", "N3", "NR", "R", "S", "WASO" } ;
       
@@ -1733,41 +1793,57 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  bool all_nrem = *qq == "NR";      
 	  bool all_sleep = *qq == "S";
 	  bool waso = *qq == "WASO";
-	  
-	  // populate stg_dur_times[ STG ][ DUR ] -> T
-	  //  where DUR values are stored in stg_durs[] (set, so in ascending order)
-	  
-	  // track offsets for each , define as -1 if not achieved;
-	  // offsets from sleep onset, by default, when
-	  // presented, but here calculated from EDF start (t=0)
-	  // for convenience and adjust later
 	  	  
-	  const int ndurs = stg_durs.size();
-	  
-	  std::vector<double> tall( ndurs , -1 );
-	  
-	  // start here, i.e. if == ndurs then all done
-	  int didx = 0; 
-	  
 	  // track time from EDF start
-	  double t = 0;
+	  double t_all = 0;
+	  double t_sleep = 0;
 	  
 	  // elapsed seconds of this stage
-	  double elapsed = 0;
+	  std::vector<double> elapsed_all, elapsed_sleep;
+	  std::vector<int> chk;
+	  
+
+	  //
+	  // scale to 0..1 ;; 0 = sleep onset, and t_all, t_sleep track max
+	  //   -- always used sleep onset as 0 (min);
+	  //      but first point will have min as dur of first sleep epoch dur, 
+	  //      so that is the min possible value, if we want scaling to 0..1, not 0 per se.
+	  
+	  const double min_all = epoch_dur[ first_sleep_epoch ];
+	  const double min_sleep = epoch_dur[ first_sleep_epoch ];
+	  
+	  double max_all = 0;
+	  double max_sleep = 0;
 	  
 	  // iterate over epochs, *** starting at first sleep epoch
 	  for (int e=first_sleep_epoch; e<ne; e++)
 	    {
-	      
+
+	      // only consider within the sleep period
+	      if ( e == final_wake_epoch ) break;
+
 	      // track from EDF start - note
 	      // add this first, as makes sense that we achieve this at the 'end'
 	      // of the given epoch that adds it in. i.e. if 1 min, then at end of 2nd epoch
 	      // would say 'yes, we've now had 1 min of that stage, not at start
 	      
-	      t += epoch_dur[e];
+	      t_all += epoch_dur[e];
 	      
-	      //	      std::cout << " e,t = " << e << " " << t << "\n";
+	      if ( stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 || stages[e] == REM )
+		t_sleep += epoch_dur[e];
 	      
+	      // is this the last sleep epoch?
+	      
+	      if ( e + 1 == final_wake_epoch ) 
+		{
+		  max_all = t_all;
+		  max_sleep = t_sleep;
+		}
+	      
+	      //
+	      // is this a match
+	      //
+
 	      bool matches = false;
 	      
 	      if ( all_nrem )
@@ -1779,40 +1855,51 @@ void hypnogram_t::calc_stats( const bool verbose )
 	      else
 		matches = stages[e] == stage;
 	      
+	      
 	      if ( matches )
 		{
 		  // add in
-		  elapsed += epoch_dur[e];
-		  
-		  //		  std::cout << "   match = " << *qq << " " << e << " " << t << " " << elapsed << "\n";
-		  
-		  int best = didx-1;
-		  
-		  // now test
-		  for (int i=didx; i<ndurs; i++)
-		    {
-		      //		      std::cout << " i stgdur = " << i << " " << stg_durs[i] << "\n";
-		      if ( elapsed >= stg_durs[i] )
-			{
-			  //  std::cout << " setting\n";
-			  tall[i] = t;
-			  best = i;
-			}
-		    }
-		  
-		  // track progress
-		  didx = best+1;
-		  
-		  // all done?
-		  if ( didx >= ndurs ) break;
-		  
+		  elapsed_all.push_back( t_all );
+		  elapsed_sleep.push_back( t_sleep );
+		  chk.push_back( e+1 );
 		}
-	      
+
 	    } // next epoch
 	  
-	  // store results
-	  for (int i=0; i<ndurs; i++)
-	    stg_dur_times[ *qq ][ stg_durs[i] ] = tall[ i ];
+	  const int n1 = elapsed_all.size();
+	  
+	  // requires at least 5 epochs 
+	  if ( n1 >= 5 ) 
+	    {
+
+	      
+	      for (int i=0; i<n1; i++)
+		{
+		  
+		  //  std::cout << "det " << *qq << " " << chk[i] << " " << elapsed_all[i] << " " << elapsed_sleep[i] ;
+		  
+		  elapsed_all[i] = ( elapsed_all[i] - min_all ) / ( max_all - min_all );
+		  elapsed_sleep[i] = ( elapsed_sleep[i] - min_sleep ) / ( max_sleep - min_sleep );		  
+		  
+		  //		  std::cout << " " << elapsed_all[i] << " " << elapsed_sleep[i] << "\n";
+		  		  
+		}
+
+	      // get medians
+	      
+	      const double med_all = MiscMath::median( elapsed_all );
+	      const double med_sleep = MiscMath::median( elapsed_sleep );
+	      
+	      //std::cout << " stats med = " << med_all << " " << med_sleep << "\n";
+
+	      
+	      // store results
+	      stg_timing_all[ *qq ] = med_all;
+	      
+	      if ( stage == NREM1 || stage == NREM2 || stage == NREM3 || stage == NREM4 || stage == REM )
+		stg_timing_sleep[ *qq ] = med_sleep;
+	      
+	    }
 	  
 	  // next stage/class
 	  ++qq;
@@ -1825,7 +1912,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   //
   
 
-  // Thresolds
+  // Thresholds
 
   // Minimum duration for a NREM period
   const double def_min_nrem_duration_mins = 15;
@@ -2759,7 +2846,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   // as this will never be used other than to give a
   // time below (i.e. start of epoch 'ne' = last point of recording) +1LLU
   int first_lights_on_epoch = ne;
-  for (int e=ne-1; e!=0; e--)
+  for (int e=ne-1; e>=0; e--)
     {
       if ( stages[e] != LIGHTS_ON )
 	{
@@ -3337,6 +3424,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 
 void hypnogram_t::output( const bool verbose ,
 			  const bool epoch_lvl_output ,
+			  const bool extra_output ,
 			  const std::string & eannot ,
 			  const std::string & annot_prefix ,
 			  const std::string & annot_suffix )
@@ -3456,9 +3544,12 @@ void hypnogram_t::output( const bool verbose ,
 	  writer.value(  "T0_START" , t0 );
 	  writer.value(  "E0_START" , 0 );
 	  
-	  writer.value(  "T1_LIGHTS_OFF" , t1 );
-	  writer.value(  "E1_LIGHTS_OFF" , ( t1 - t0 ) * 60.0 );
-	  
+	  if ( any_dark ) 
+	    {
+	      writer.value(  "T1_LIGHTS_OFF" , t1 );
+	      writer.value(  "E1_LIGHTS_OFF" , ( t1 - t0 ) * 60.0 );
+	    }
+
 	  if ( any_sleep ) 
 	    {
 	      writer.value(  "T2_SLEEP_ONSET" , t2 );
@@ -3471,15 +3562,20 @@ void hypnogram_t::output( const bool verbose ,
 	      writer.value(  "E4_FINAL_WAKE" , Helper::dbl2str( ( t4 - t0 ) * 60.0 , 3 ) );
 	    }
 
-	  writer.value(  "T5_LIGHTS_ON" , t5 );
-	  writer.value(  "E5_LIGHTS_ON" , Helper::dbl2str( ( t5 - t0 ) * 60.0 , 3 ) );
+	  if ( any_dark )
+	    {
+	      writer.value(  "T5_LIGHTS_ON" , t5 );
+	      writer.value(  "E5_LIGHTS_ON" , Helper::dbl2str( ( t5 - t0 ) * 60.0 , 3 ) );
+	    }
 
 	  writer.value(  "T6_STOP" , t6 );
 	  writer.value(  "E6_STOP" , Helper::dbl2str( ( t6 - t0 ) * 60.0 , 3 ) );
 	  
 	  // same in HMS
 	  writer.value(  "HMS0_START" , clock_start.as_string(':') );
-	  writer.value(  "HMS1_LIGHTS_OFF" , clock_lights_out.as_string(':') );
+	  
+	  if ( any_dark )
+	    writer.value(  "HMS1_LIGHTS_OFF" , clock_lights_out.as_string(':') );
 	  
 	  if ( any_sleep )
 	    {
@@ -3488,7 +3584,9 @@ void hypnogram_t::output( const bool verbose ,
 	      writer.value(  "HMS4_FINAL_WAKE" , clock_wake_time.as_string(':') );
 	    }
 	  
-	  writer.value(  "HMS5_LIGHTS_ON" , clock_lights_on.as_string(':') );
+	  if ( any_dark )
+	    writer.value(  "HMS5_LIGHTS_ON" , clock_lights_on.as_string(':') );
+	  
 	  writer.value(  "HMS6_STOP" , clock_stop.as_string(':') );
 	  
 	}
@@ -3629,8 +3727,60 @@ void hypnogram_t::output( const bool verbose ,
 	}
       
     }
-  
 
+  //
+  // Stage density sliding window
+  //
+
+  if ( sliding_window )
+    {
+      
+      // only add W, INC & ANCHOR strata if needed
+      // otherwise just STAGE x MINS 
+      const int nslide = window_width_epochs.size();
+      
+      std::map<int,std::map<std::string,std::vector<double> > >::const_iterator ww = window_stats.begin();
+      while ( ww != window_stats.end() )
+	{
+	  
+	  const int p_width = window_width_epochs[ ww->first ]; 
+	  const int p_inc = window_increment_epochs[ ww->first ]; 
+	  const int p_anchor = window_anchor[ ww->first ]; 
+
+	  std::stringstream wstr;
+	  wstr << "W" << p_width * epoch_mins << "_" << p_inc * epoch_mins << "_T" << p_anchor;
+
+	  if ( nslide > 1 ) 
+	    writer.level( wstr.str() , "W" );
+
+	  // for each stage
+	  std::map<std::string,std::vector<double> >::const_iterator zz =ww->second.begin();
+	  while ( zz != ww->second.end() )
+	    {
+	      const std::string & stg = zz->first;
+	      writer.level( stg , globals::stage_strat );
+	      
+	      // for each time-point
+	      int tidx = 0;
+	      std::vector<double>::const_iterator tt = zz->second.begin();
+	      while ( tt != zz->second.end() )
+		{
+		  writer.level( window_timer[ ww->first ][ tidx ] , "MINS" );
+		  writer.value( "DENS" , *tt );
+		  ++tidx;
+		  ++tt;
+		}
+	      writer.unlevel( "MINS" );
+	      ++zz;
+	    }
+	  writer.unlevel( globals::stage_strat );
+	  ++ww;
+	}
+      if ( nslide > 1 ) 
+	writer.unlevel( "W" );
+    }
+
+  
   //
   // LZW compression index, and sample entropy
   //
@@ -3662,11 +3812,11 @@ void hypnogram_t::output( const bool verbose ,
   //     std::cout << " Mse = " << m << "\t" << mse << "\n";
   //   }	
   
-    //
+  //
   // NREM cycle summary stats
   //
   
-  if ( verbose && any_sleep )
+  if ( verbose && any_sleep && extra_output )
     {
       writer.var( "NREMC_START" , "NREM cycle start epoch" );
       writer.var( "NREMC_NREM_MINS" , "NREM cycle NREM duration (mins)" );
@@ -3689,10 +3839,12 @@ void hypnogram_t::output( const bool verbose ,
       // get total NR stats
       mins[ "NR" ] = mins[ "N1" ] + mins[ "N2" ] + mins[ "N3" ] + mins[ "N4" ];
       pct[ "NR" ] = pct[ "N1" ] + pct[ "N2" ] + pct[ "N3" ] + pct[ "N4" ];
+      pct2[ "NR" ] = pct2[ "N1" ] + pct2[ "N2" ] + pct2[ "N3" ] + pct2[ "N4" ];
       
       mins[ "S" ] = mins[ "N1" ] + mins[ "N2" ] + mins[ "N3" ] + mins[ "N4" ] + mins[ "R" ] ;
       pct[ "S" ] = pct[ "N1" ] + pct[ "N2" ] + pct[ "N3" ] + pct[ "N4" ] + pct[ "R" ];  // should be 1.0
-
+      pct2[ "S" ] = pct2[ "N1" ] + pct2[ "N2" ] + pct2[ "N3" ] + pct2[ "N4" ] + pct2[ "R" ];  // should be 1.0 - SME 
+ 
       std::vector<std::string>::const_iterator ss = these_stages.begin();
       while ( ss != these_stages.end() )
 	{
@@ -3701,7 +3853,10 @@ void hypnogram_t::output( const bool verbose ,
 
 	  // sleep stage as % of TST
 	  if ( *ss == "N1" || *ss == "N2" || *ss == "N3" || *ss == "N4" || *ss == "NR" || *ss == "R" || *ss == "S" )
-	    writer.value( "PCT" , pct[ *ss] );
+	    {
+	      writer.value( "PCT" , pct[ *ss] );
+	      writer.value( "DENS" , pct2[ *ss] );
+	    }
 	  
 	  writer.value( "BOUT_N" , bout_n[ *ss] );
 	  writer.value( "BOUT_MX" , bout_max[ *ss] );
@@ -3714,26 +3869,10 @@ void hypnogram_t::output( const bool verbose ,
 	  // dur/time trackers (if this stage class was included)
 	  //
 	  
-	  if ( stg_dur_times.find( *ss ) != stg_dur_times.end() )
-	    {
-	      for (int di=0; di<stg_durs.size(); di++)
-		{
-		  writer.level( stg_durs[di] / 60 , "DUR" );
-		  
-		  // any?
-		  const bool any = stg_dur_times[ *ss ][ stg_durs[di] ] > 0 ;
-		  
-		  if ( any )
-		    {	      
-		      writer.value( "SHORT" , 0 );
-		      writer.value( "T" , stg_dur_times[ *ss ][ stg_durs[di] ] / (double)60.0 );
-		    }
-		  else
-		    writer.value( "SHORT" , 1 );
-		  
-		}
-	      writer.unlevel( "DUR" );
-	    }
+	  if ( stg_timing_all.find( *ss ) != stg_timing_all.end() )	    
+	    writer.value( "TA" , stg_timing_all[ *ss ] );
+	  if ( stg_timing_sleep.find( *ss ) != stg_timing_sleep.end() )	    
+	    writer.value( "TS" , stg_timing_sleep[ *ss ] );
 	  
 	  // next stage/class type
 	  ++ss;
@@ -3762,39 +3901,42 @@ void hypnogram_t::output( const bool verbose ,
       //
       // Bouts
       //
-      int bn = 0;
-      std::set<bout_t>::const_iterator bb = bouts.begin();
-      while ( bb != bouts.end() )
+      
+      if ( extra_output )
 	{
-	  writer.level( ++bn ,"N" );
-
-	  const int e1 = epoch_n[ bb->start ] ;
-	  const int e2 = epoch_n[ bb->stop ] ;
-	
-	  clocktime_t ct1 = timeline->edf->header.starttime;
-	  ct1.advance_seconds( timeline->epoch_length() * e1 );
-
-	  // nb. +1 to get to /end/ of the last epoch
-	  clocktime_t ct2 = timeline->edf->header.starttime;
-	  ct2.advance_seconds( timeline->epoch_length() * ( e2 + 1 ) ) ;
-	  
-	  if ( bb->ss == NREM2 ) 
-	    writer.value( "STAGE" , "NR" );	  
-	  else
-	    writer.value( "STAGE" , globals::stage( bb->ss ) );	    
-	  
-	  writer.value( "FIRST_EPOCH" , e1 + 1 );
-	  writer.value( "LAST_EPOCH" , e2 + 1 );
-	  
-	  writer.value( "START" , ct1.as_string() );
-	  writer.value( "STOP"  , ct2.as_string() );
-
-	  writer.value( "MINS" , ( ( e2 - e1 + 1 ) * timeline->epoch_length() ) / 60.0 );
-	  
-	  ++bb;
+	  int bn = 0;
+	  std::set<bout_t>::const_iterator bb = bouts.begin();
+	  while ( bb != bouts.end() )
+	    {
+	      writer.level( ++bn ,"N" );
+	      
+	      const int e1 = epoch_n[ bb->start ] ;
+	      const int e2 = epoch_n[ bb->stop ] ;
+	      
+	      clocktime_t ct1 = timeline->edf->header.starttime;
+	      ct1.advance_seconds( timeline->epoch_length() * e1 );
+	      
+	      // nb. +1 to get to /end/ of the last epoch
+	      clocktime_t ct2 = timeline->edf->header.starttime;
+	      ct2.advance_seconds( timeline->epoch_length() * ( e2 + 1 ) ) ;
+	      
+	      if ( bb->ss == NREM2 ) 
+		writer.value( "STAGE" , "NR" );	  
+	      else
+		writer.value( "STAGE" , globals::stage( bb->ss ) );	    
+	      
+	      writer.value( "FIRST_EPOCH" , e1 + 1 );
+	      writer.value( "LAST_EPOCH" , e2 + 1 );
+	      
+	      writer.value( "START" , ct1.as_string() );
+	      writer.value( "STOP"  , ct2.as_string() );
+	      
+	      writer.value( "MINS" , ( ( e2 - e1 + 1 ) * timeline->epoch_length() ) / 60.0 );
+	      
+	      ++bb;
+	    }
+	  writer.unlevel( "N" );
 	}
-      writer.unlevel( "N" );
-  
       
     }
   
@@ -3803,12 +3945,12 @@ void hypnogram_t::output( const bool verbose ,
   // Cycle-stratified outputs (verbose mode only), and transitions
   //
 
-  if ( verbose ) 
+  if ( verbose && extra_output ) 
     {
-
+      
       if ( any_sleep ) 
 	{
-
+	  
 	  std::map<int,double>::iterator cc = nremc_duration.begin();
 	  while ( cc != nremc_duration.end() )
 	    {
@@ -4265,7 +4407,7 @@ void dummy_hypno()
   h.original_stages = h.stages;
   h.edit( h.timeline , param );
   h.calc_stats( true );
-  h.output( true , true ); // verbose mode == T 
+  h.output( true , true , true ); // verbose mode == T 
 
 }
 
@@ -4277,4 +4419,208 @@ void hypnogram_t::fudge( double es, int ne )
 
 
 
+void hypnogram_t::do_slide()
+{
+
+  window_stats.clear();
+  window_timer.clear();
+
+  // requires at least some sleep:
+  
+  bool sleep = false;
+  for (int e=0; e<ne; e++)
+    if ( is_sleep( stages[e] ) )
+      {
+	sleep = true;
+	break;
+      }
+  if ( ! sleep ) return;
+  
+  // consider each window specification
+
+  const int nslide = window_width_epochs.size();
+
+  for (int i=0; i<nslide; i++)
+    {
+      const int wid = window_width_epochs[i];
+      const int inc = window_increment_epochs[i];
+      const int anc = window_anchor[i];
+           
+      // std::map<int,std::map<std::string,std::vector<double> > > > > window_stats;
+      // std::map<int,std::vector<double> > > > window_timer;
+
+      // build window_timer, and start/stop epoch codes
+      std::vector<double> wt;
+      std::vector<int> e1, e2;
+
+      int align = +1; // forwards
+      if ( anc == 3 ) align = 0; // outwards both ways
+      if ( anc > 3 ) align = -1; // backwards
+      
+      if ( wid == 0 || inc == 0 ) 
+	Helper::halt( "sliding window width and increment must be >0" );
+            
+      // nb, below b is +1 past end 
+      if ( anc < 3 ) 
+	{	  
+	  int a0 = 0; // EDF start
+	  if ( anc == 1 ) a0 = lights_out_epoch;
+	  else if ( anc == 2 ) a0 = first_sleep_epoch;
+	  
+	  // end point
+	  int end = ne;
+	  if ( anc == 1 ) end = lights_on_epoch;
+	  if ( anc == 2 ) end = final_wake_epoch;
+	  
+	  for (int a=a0; a < ne; a += inc)
+	    {
+	      int b = a + wid;
+	      if ( b <= end )
+		{
+		  e1.push_back( a );
+		  e2.push_back( b );
+		  wt.push_back( epoch_mins * ( ( a + b )/2.0 - a0 ) ); 
+		}
+	    }	  
+	}
+
+      // reverse
+      if ( anc > 3 )
+        {
+          // "start" is always +1 past 
+	  int a0 = ne; // EDF end (+1)
+          if ( anc == 5 ) a0 = lights_on_epoch;
+          else if ( anc == 4 ) a0 = final_wake_epoch;
+
+          // end point (left most), 0-based
+	  int end = 0;
+          if ( anc == 5) end = lights_out_epoch;
+          if ( anc == 4) end = first_sleep_epoch;
+
+	  // b - a 
+          for (int a=a0; a >= 0; a -= inc)
+            {
+              int b = a - wid; // left
+              if ( b >= end )   // exact check
+                {
+		  std::cout << " adding " << b << " to " << a << "\n";
+                  e1.push_back( b ); // order flipped
+                  e2.push_back( a ); 
+                  wt.push_back( epoch_mins * ( ( a + b )/2.0 - a0 ) );
+                }
+            }
+        }
+
+      // midpoint based, delimited by SPT
+      if ( anc == 3 ) 
+	{
+	  std::cout << " epochs = " << first_sleep_epoch << " " << sleep_midpoint_epoch << " " << final_wake_epoch << "\n";
+	  
+	  // shift by half window, to cover (as here, right is aligned to MID)
+	  int a0 = sleep_midpoint_epoch + wid/2 ;
+	  int end = first_sleep_epoch;
+	  
+	  // nb. MINS is based on center, so wt calc is changed...  starts at 0 not w/2
+
+	  // first back
+	  for (int a=a0; a >= 0; a -= inc)
+            {
+              int b = a - wid; // left
+
+	      if ( b >= end )   // exact check
+		{                     		  
+		  e1.push_back( b ); 
+                  e2.push_back( a );
+                  wt.push_back( epoch_mins * ( ( a + b )/2.0 - sleep_midpoint_epoch ) );		  
+                }
+            }
+	  
+	  // flip to get right order
+	  std::vector<int> r1 = e1;
+	  std::vector<int> r2 = e2;
+	  std::vector<double> rt = wt;
+	  const int nn = e1.size();
+	  for (int i=0;i<nn;i++)
+	    {
+	      e1[nn-1-i] = r1[i];
+	      e2[nn-1-i] = r2[i];
+	      wt[nn-1-i] = rt[i];
+	    }
+
+	  // then forward, note, the same shift - 
+	  a0 = sleep_midpoint_epoch - wid/2;
+	  // but we don't need to repeat the zero-aligned one, so shift now
+	  a0 += inc;
+
+	  end = final_wake_epoch;
+	  for (int a=a0; a < ne; a += inc)
+            {
+              int b = a + wid;
+              if ( b <= end )
+                {
+		  e1.push_back( a );
+                  e2.push_back( b );
+                  wt.push_back( epoch_mins * ( ( a + b )/2.0 - sleep_midpoint_epoch ) );		  
+                }
+            }
+	}
+
+
+      // store times
+      window_timer[i] = wt;
+
+      // get densities      
+      const std::vector<std::string> these_stages
+	= { "N1", "N2", "N3", "NR", "R", "S", "WASO","W" } ;
+      
+      const int nw = wt.size();
+
+      std::vector<std::string>::const_iterator qq = these_stages.begin();
+      while ( qq != these_stages.end() )
+	{
+	  
+	  sleep_stage_t stage = WAKE;
+	  if ( *qq == "N1" ) stage = NREM1;
+	  if ( *qq == "N2" ) stage = NREM2;
+	  if ( *qq == "N3" ) stage = NREM3;
+	  if ( *qq == "N4" ) stage = NREM4;
+	  if ( *qq == "R" ) stage = REM;
+	  // special cases
+	  bool all_nrem = *qq == "NR";
+	  bool all_sleep = *qq == "S";
+	  bool waso = *qq == "WASO";
+
+	  std::vector<double> dens( nw );
+	  
+	  for (int j=0; j<nw; j++)
+	    {
+	      double d = 0;
+	      for (int e=e1[j];e<e2[j];e++)
+		{
+		  bool match = false;
+		  if ( all_nrem ) 
+		    match = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 ;
+		  else if ( all_sleep ) 
+		    match = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 || stages[e] == REM ;
+		  else if ( waso ) 
+		    match = stages[e] == WAKE && e >= first_sleep_epoch && e < final_wake_epoch;
+		  else 
+		    match = stages[e] == stage;
+		  
+		  if ( match ) d++;
+		}
+	      
+	      // normalize to 0..1 rate
+	      d /= (double)( e2[j] - e1[j] );
+	      
+	      dens[ j ] = d ; 
+	      
+	    }
+	  
+	  // store
+	  window_stats[ i ][ *qq ] = dens;
+	  ++qq;
+	}
+    }
+}
 

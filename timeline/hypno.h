@@ -93,13 +93,15 @@ struct hypnogram_t
   bool empty() const;
   
   void calc_stats( const bool verbose ); // verbose == STAGES vs HYPNO
-  void output( const bool verbose , const bool epoch_lvl_output ,
+  void output( const bool verbose , 
+	       const bool epoch_lvl_output ,
+	       const bool extra_output , 
 	       const std::string & eannot = "" ,
 	       const std::string & annot_prefix = "" ,
 	       const std::string & annot_suffix = "_" );
   
   void annotate( const std::string & annot_prefix , const std::string & suffix );
-	
+  
   
   // special case, if analysing a hypnogram with no EDF
   void fudge( double es, int ne );
@@ -114,7 +116,6 @@ struct hypnogram_t
   std::vector<double> epoch_dur; // to track gap length
   std::vector<double> epoch_start; // elapsed seconds
   std::vector<bool> epoch_gap; // this 'epoch' is actually a gap
-
 
   // track elapsed stage values (for annots only)
   std::map<std::string,std::vector<double> > elapsed_stg_sec;
@@ -180,6 +181,9 @@ struct hypnogram_t
   int first_sleep_epoch;    // (epoch)  
   int first_persistent_sleep_epoch;  // first persistent sleep epoch
   int final_wake_epoch;     // (epoch)
+  int lights_out_epoch;
+  int lights_on_epoch;
+  int sleep_midpoint_epoch;
 
   // how to handle gaps (by default, missing, but could be 'wake')
   static sleep_stage_t gap_treatment;
@@ -187,6 +191,7 @@ struct hypnogram_t
   // statistics
   
   bool any_sleep;
+  bool any_dark;  // i.e. flag if all L
 
   double TIB;  // time in bed : length of entire record, ignoring all staging
   double TRT;  // total recording time : from lights out to lights on
@@ -220,17 +225,32 @@ struct hypnogram_t
 
   std::map<std::string,double> mins;
   std::map<std::string,double> pct;
+  std::map<std::string,double> pct2; // denom includes WASO & ?
   std::map<std::string,int> bout_n;
   std::map<std::string,double> bout_mean, bout_med, bout_5, bout_10, bout_max;
 
   std::set<bout_t> bouts;
 
-  //
-  // stage timing vars; if -1 means not defined
-  //    stage -> requested elapsed mins (integer) -> seconds past anchor (T0,T1,T2(default))
+  
+  // stage timing stats
+  std::map<std::string,double> stg_timing_all;   // all epochs
+  std::map<std::string,double> stg_timing_sleep; // denom is only sleep epochs
 
-  std::map<std::string,std::map<int,double> > stg_dur_times;
-  std::vector<int> stg_durs; // populated by dur-times
+
+  //
+  // sliding windows (computed on epochs post-hoc),  
+  //   all multiple to be specified in a single run
+  //
+
+  bool sliding_window;
+  std::vector<int> window_width_epochs;
+  std::vector<int> window_increment_epochs;
+  std::vector<int> window_anchor;
+  // [width][inc][anchor][stage][ value vector ]
+  std::map<int,std::map<std::string,std::vector<double> > > window_stats;
+  std::map<int,std::vector<double> > window_timer;
+
+  void do_slide();
   
   //
   // stage distribution stats (devel=T)
