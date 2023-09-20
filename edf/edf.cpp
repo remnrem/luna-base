@@ -831,10 +831,19 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	logger << "  *** warning, " << s << " has SR of 0 and should be dropped\n";
       
       // non-integer SR ? 
-      double sr = x / record_duration;
-      if ( fabs( trunc(sr) - sr ) > 1e-8 )
-	logger << "  *** warning, signal " << s << " has a non-integer SR - advise to RESAMPLE\n";
-      
+      const bool annotation = Helper::imatch( tlabels[s] , "EDF Annotation" , 14 ) ;
+      if ( ! annotation )
+	{
+	  double sr = x / record_duration;
+	  if ( fabs( trunc(sr) - sr ) > 1e-8 )
+	    {
+	      logger << "  *** warning, signal " << s << " ( " << tlabels[s]
+		     << " ) has a non-integer SR - advise to RESAMPLE\n"
+		     << "    - record size        = " << record_duration << " seconds\n"
+		     << "    - samples per record = " << x << "\n"
+		     << "    - implied SR         = " << x << " / " << record_duration << " = " << sr << "\n";
+	    }
+	}
       if ( channels.find(s) != channels.end() )
 	n_samples.push_back( x );      
       n_samples_all.push_back( x );
@@ -2086,7 +2095,12 @@ bool edf_t::is_actually_discontinuous()
 	{
 	  tp = timeline.rec2tp[r] ;
 	  // discontinuity / end of segment?
-	  segend = tp - tp0 != header.record_duration_tp ;
+	  // allow for minor round, must be within
+	  // 1/10,000th of a second
+	  // 0.0001 * 1e9 =  1e+05 tps
+	  uint64_t len = tp - tp0;
+	  uint64_t dif = len > header.record_duration_tp ? len - header.record_duration_tp : header.record_duration_tp - len ; 
+	  segend = dif > 10000LLU;
 	}
       
       // record this segment 
@@ -4465,6 +4479,20 @@ uint64_t edf_t::timepoint_from_EDF( int r )
   
   uint64_t tp = globals::tp_1sec * tt_sec;
 
+  // to handle floating point issues -- enforce that the last few digits of an EDF+ specified time-point should be zeros
+  uint64_t div10 = tp % 10LLU ; 
+
+  if ( div10 != 0 )
+    {
+      //      std::cout << " fixin " << tp << "\t" << div100 << "\t";
+      // round down, or up
+      if ( div10 < 5 ) tp -= div10 ;
+      else tp += 10LLU - div10;
+      //      std::cout << tp << "\n";
+    }
+
+  //  std::cout << " READ [ " << tt.substr(0,e) << " ]\t" << tt_sec << "\t" << tp << "\n";
+  
   return tp; 
   
 }

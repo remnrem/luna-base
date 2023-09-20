@@ -64,7 +64,8 @@ void edf_t::record_table( param_t & param )
 	        << r+1 << "\t" 
 		<< header.nr << "/" << header.nr_all ;
       
-      std::cout << "\t" << interval.as_string( 4 ) ;
+      std::cout << "\t" << interval.as_string( 4 )
+		<< "\t" << interval.start << "\t" << interval.stop ;
 
       // epoch information?
       
@@ -1434,7 +1435,16 @@ void edf_t::seg_dumper( param_t & param )
 	  tp = timeline.rec2tp[r] ;
 
 	  // discontinuity / end of segment?
-	  segend = tp - tp0 != header.record_duration_tp ;
+          // allow for minor round, must be within                                                                                                                                                                                             
+          // 1/10,000th of a second                                                                                                                                                                                                            
+          // 0.0001 * 1e9 =  1e+05 tps
+	  
+          uint64_t len = tp - tp0;
+	  uint64_t dif = len > header.record_duration_tp ? len - header.record_duration_tp : header.record_duration_tp - len ;
+          segend = dif > 10000LLU;
+	  
+	  //	  segend = tp - tp0 != header.record_duration_tp ;
+	  //std::cout << " segend = " << segend << "\t" << tp << "\t" << tp0 << "\t" << tp - tp0 << "\t" << header.record_duration_tp << "\n";
 	}
 
       // record this segment 

@@ -1505,7 +1505,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	    {
 	      cache_t<double> * cache_num = edf.timeline.cache.find_num( cache_name );
 	      cache_num->add( ckey_t( "spindle-wavelet-power" , writer.faclvl() ) , averaged_corr );
-	      
+
 	      // cache_t<uint64_t> * cache_tp = edf.timeline.cache_tp( cache_name );
 	      // cache_tp->add( ckey_t( "spindle-peaks" , writer.faclvl() ) , averaged_corr );	      
 
@@ -1861,8 +1861,18 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      writer.value( "COUPL_ANCHOR" , (int)anchor_idx.size() );
 		      
 		      writer.value( "COUPL_MAG" , itpc.itpc.obs );
+
 		      if ( use_mask )
-			writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
+			{
+			  writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
+
+			  // special one-off for age prediction model:
+			  if ( cache_metrics )
+			    {
+			      std::map<std::string,std::string> faclvl = writer.faclvl() ;
+			      cache_metrics->add( ckey_t( "COUPL_OVERLAP" ,  faclvl ) , itpc.ninc.obs );
+			    }
+			}		      
 		      
 		      if ( nreps ) 
 			{

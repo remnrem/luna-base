@@ -163,7 +163,16 @@ bool edf_t::edf_minus()
 	{
 	  tp = timeline.rec2tp[r] ;	  
 	  // discontinuity / end of segment?
-	  segend = tp - tp0 != header.record_duration_tp ;
+
+	  // discontinuity / end of segment?
+	  // allow for minor round, must be within
+	  // 1/10,000th of a second
+	  // 0.0001 * 1e9 =  1e+05 tps
+	  uint64_t len = tp - tp0;
+	  uint64_t dif = len > header.record_duration_tp ? len - header.record_duration_tp : header.record_duration_tp - len ; 
+	  segend = dif > 10000LLU;
+	  
+	  //segend = tp - tp0 != header.record_duration_tp ;
 	}
       
       // record this segment 

@@ -68,21 +68,19 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       const double offset = param.requires_dbl( "offset" );
       const std::string annot_label = param.has( "annot" ) ? param.value( "annot" ) : "" ;
 
-      // optionally, timestretch secondary signal?
-      const double stretch_denom = param.has( "secs" ) ? param.requires_dbl( "secs" ) : -1 ;
-      const double stretch_shift = param.has( "shift" ) ? param.requires_dbl( "shift" ) : 0 ;
-
-      if ( param.has( "secs" ) != param.has( "shift" ) )
-	Helper::halt( "requires both secs and shift options (or neither)" );
-
+      // optionally, timestretch secondary signal?   drift sec per 'secs' secs
+      const double stretch_denom = param.has( "secs" ) ? param.requires_dbl( "secs" ) : 1 ;
+      const double stretch_shift = param.has( "drift" ) ? param.requires_dbl( "drift" ) : 0 ;
+      
       // e.g. if offset shifts (constant) by -10 seconds in 8 hours
-      //  secs=28800 shift=-10
+      //  secs=28800 drift=-10
       // where 28800 = 8 * 60 * 60 
-
-      const bool timestretch = stretch_denom > 0 ;
+      
+      // if just do shift  implies per 1 second... but to avoid floating point issues, probably
+      // better to give a reasonable denominator (with secs) 
+      const bool timestretch = param.has( "drift" ) && stretch_denom > 0 ;
       const double fac = timestretch ? stretch_shift / stretch_denom : 0 ; 
-	
-      param.has( "stretch" ) ? param.requires_dbl( "stretch1" ) : 0 ;   
+      
       insert( edf , edf2 , signal_label , offset , timestretch ? &fac : NULL , annot_label );
       // all done
       return;
@@ -295,19 +293,20 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 
       while ( 1 )
 	{
-	  std::cout << " \nBEGIN\n";
-	  std::cout << "  ystart = " << ystart << "\n";
+	  // std::cout << " \nBEGIN\n";
+	  // std::cout << "  ystart = " << ystart << "\n";
 	  
 	  if ( ystart + ylen >= ny )
 	    {
-	      std::cout << " done, breaking because end of Y segs\n";
+	      logger << " done, reached end of secondary signal\n";
 	      break;
 	    }
+
 	  // enough steps?
 	  ++steps;
 	  if ( steps > ysteps ) break;
 
-	  writer.level( ystart / (double)sr , "SEGMENT" );
+	  writer.level( ystart / (double)sr , "WIN" );
 	  
 	  // Get segment for yy
 	  std::vector<Eigen::VectorXd> sY(np);
@@ -397,23 +396,9 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	  ystart += yinc;
 	  
 	}
-      writer.unlevel( "SEGMENT" );
-      
-
-      
+      writer.unlevel( "WIN" );
+        
     }
-  
-	  // writer.level( slab1[p] + ".." + slab2[p] , "CHS" );
-	  
-	  // writer.value( "SR" , srs[p] );
-          // writer.value( "L1" , (int)dx->size() );
-	  
-	  
-	  // next pair of channels
-	  
-    //     }
-    //   writer.unlevel( "CHS" );
-    // }  
   
 }
 
@@ -427,10 +412,24 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
   // insert as much of the signals from edf2 into edf
   // assume both are (effectively) continuous
   // by default, align at 0, i.e. start of edf2 signal equals start of edf, and add as much as we can  
-  // if an offset is specified, then we insert
+
+  // if an offset is specified, then we insert after adding an offset
+  //   -ve offset implies EDF2 start is AFTER EDF start (i.e. it needs to be shifted backwards) so that starts align
+  //   +ve offset implies the reverse:  EDF2 start is BEFORE EDF start, needs to go forward 
+
+  //            S
+  // EDF        |-----------------------|
+
+  // EDF2       |-----------------------|      offset = 0
+  // EDF2       |-----------------|000000      offset = 0 , pad with zeros and add annotation to indicate missing signal
+
+  // EDF2       000|--------------------|XXX|  offset = -ve (i.e. EDF2 start is after EDF start): pad w/ zeros; truncate at end X as needed
+  // EDF2   |XXX|--------------------|000      offset = +ve (i.e. EDF2 start is before EDF start), need to shift forwards 
+
+  
   // optionally, we can add annotations to indicate where the signal is missing from edf2 
 
-  // if stretch is non-null, then apply this timestretch factor to the inserted channel
+  // if fac (secs/shift) is non-null, then apply this timestretch factor to the inserted channel
   // i.e. this is to adjust for linear difference in clock rates.
 
   const bool timestretch = fac != NULL; 
@@ -445,14 +444,13 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
   logger << "using an offset of " << offset << " seconds\n";
 
   if ( timestretch )
-    logger << "  rescaling signals by a factor of " << fac << "\n";
+    {
+      if ( *fac > 0 ) 
+	logger << "  shrinking secondary signals by a rate of " <<  (*fac) << " sec per second\n";
+      else
+	logger << "  stretching secondary signals by a rate of " << -1 * (*fac) << " sec per second\n";
+    }
   
-  // EDF        |-----------------------|
-
-  // EDF2       |-----------------------|      offset = 0
-  // EDF2       |-----------------|000000      offset = 0 , pad with zeros and add annotation to indicate missing signal
-  // EDF2       000|--------------------|XXX|  offset = +ve (i.e. EDF2 start comes after EDF start): pad w/ zeros; truncate at end X); add annot.  
-  // EDF2   |XXX|--------------------|000      offset = +ve (i.e. EDF2 comes before after EDF start) 
 
 
   for (int s=0; s<ns; s++)
@@ -481,7 +479,7 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
 	      ++j;
 	    }
 	}
-      
+
       // make a new vector, set to zero-pad
       std::vector<double> d1( np , 0 );
       
@@ -491,23 +489,22 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
       
       // calculate best offset in sample points
       const int offset_sp = offset * Fs;
-      
+
       // time-stretch?
       if ( timestretch )
 	{
-	  
-	  // if original SR is S, then resample at tS
-	  // where t = param from stretch
-	  
-	  // e.g. nominal SIG = 200 Hz
 
-	  //  but we think the true clock is 250 Hz
-	  //  then stretch =  200 / 250
-	  //   i.e. need fewer points per second
-
+	  // if a time-stretch factor is defined, then
+	  // use spline interpolation to stretch or shrink
+	  // the secondary signal as needed (based on
+	  // the ratio of secs and shift as specified on
+	  // the INSERT command line
+	  
 	  const int n_orig = d2.size();
-	  const int n_scaled = n_orig * (*fac);
+	  const int n_scaled = n_orig - n_orig * (*fac);
 	  
+	  if ( n_scaled <= 0 ) Helper::halt( "rescaled signal not defined" );
+
 	  std::vector<double> t( n_orig );
 	  for (int i=0; i<n_orig; i++) t[i] = i;
 	  
@@ -521,24 +518,22 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
 	    d2[i] = spline( n_orig * ( i / (double)n_scaled ) );	  
 	  
 	}
-      
-      
+            
       // console messages
-      logger << "  adding " << sig << " ( SR = " << Fs << " Hz, offset = " << offset_sp << " samples ) to primary EDF\n";
+      logger << "  inserting " << sig << " ( SR = " << Fs << " Hz, offset = " << offset_sp << " samples ) into primary EDF\n";
 
-      // +ve offset : pad w/ new N zeros , skip last N 
-      //  ||||||||     d1
-      //    ||||||||   d2
-      //  00IIIIII
+      // -ve offset : pad w/ new N zeros , skip last N 
+      //   ||||||||     d1
+      //     ||||||||   d2   <---- need to shift back, aka start early 
+      //   00IIIIII
       
-      // -ve offset : pad w/ new N zeros , skip first N 
-      //    ||||||||
-      //  ||||||||
+      // +ve offset : pad w/ new N zeros , skip first N 
+      //   ||||||||
+      // ||||||||          -----> need to shift forward, but means start late in 2ndary
       //    IIIIII00
-
+      
       // pointers (sample points to both files)
-      int p1 = offset_sp > 0 ?  offset_sp : 0 ;
-      int p2 = offset_sp < 0 ? -offset_sp : 0 ;
+      int p1 = 0 , p2 = offset_sp ;
       
       // signal lengths
       const int n1 = np;
@@ -548,15 +543,15 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
       while ( 1 )
 	{
 
-	  // all done
-	  if ( p1 >= n1 ) break;
-
+	  // all done?
+	  if ( p1 == n1 ) break;
+	  
 	  // zero-pad if out of input
 	  if ( p2 >= n2 ) 
 	    d1[ p1 ] = 0 ;
-	  else // else insert
+	  else if ( p2 >= 0 ) // else add or 0-pad (i.e. not yet at start of EDF1)
 	    d1[ p1 ] = d2[ p2 ];
-
+	  
 	  // advance
 	  ++p1;
 	  ++p2;	  	  
@@ -569,6 +564,8 @@ void edf_inserter_t::insert( edf_t & edf , edf_t & edf2 , const std::string & si
       // -- todo --
       
     }
+  
+  
   
 }
 
