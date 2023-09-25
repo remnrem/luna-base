@@ -131,6 +131,27 @@ bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const
   return true;
 }
 
+bool eigen_ops::IQR_norm( Eigen::Ref<Eigen::MatrixXd> m  )
+{
+  
+  const int rows = m.rows();
+  const int cols = m.cols();
+  bool okay = true;
+  for (int c=0;c<cols;c++)
+    {
+      std::vector<double> v = copy_vector( m.col(c) );
+      double median = MiscMath::median( v ) ;
+      double iqr = MiscMath::iqr( v ) ;
+      if ( iqr > 0 )
+	{
+	  for (int i=0; i<rows; i++)
+	    m(i,c) = ( m(i,c) - median ) / iqr ;
+	}
+      else
+	okay = false;
+    }
+  return okay;
+}
 
 bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center , bool normalize , double w , bool second_rescale ,
 			      const bool ignore_invariants , std::vector<int> * zeros )

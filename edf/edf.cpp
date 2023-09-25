@@ -3525,7 +3525,7 @@ void edf_header_t::check_channels()
 }
 
 
-bool edf_t::restructure( const bool force , const bool verbose )
+bool edf_t::restructure( const bool force , const bool verbose , const bool preserve_cache )
 {
   
   //
@@ -3733,7 +3733,7 @@ bool edf_t::restructure( const bool force , const bool verbose )
 
   // adjust timeline (now will be a discontinuous track)
   
-  timeline.restructure( include );
+  timeline.restructure( include , preserve_cache );
 
   return true;
 
@@ -4723,7 +4723,7 @@ bool edf_t::basic_stats( param_t & param )
   // Run through each record
   // Get min/max
   // Calculate RMS for each signal
-  // Get mean/median/SD and skewness/kurtosis
+  // Get mean/median/SD and skewness/kurtosis (excess 'kurt' or standard 'kurt3' )
   // optinoally, display a histogram of observed values (and figure out range)
   
   std::string signal_label = param.requires( "sig" );  
@@ -4745,6 +4745,9 @@ bool edf_t::basic_stats( param_t & param )
   const bool minimal = param.has( "min" ) || param.has( "minimal" );
 
   const bool run_pcts = param.has( "pct" ) ? param.yesno("pct") : true ;
+
+  // kurtosis() returns 'excess kurtosis - normal has 0, so +3 back, if require original)
+  const double kurt_adj = param.has( "kurt3" ) ? 3 : 0 ; 
   
   for (int s=0; s<ns; s++)
     {
@@ -4825,7 +4828,7 @@ bool edf_t::basic_stats( param_t & param )
 	      double sd     = minimal ? 0 : MiscMath::sdev( *d , mean );
 	      double rms    = minimal ? 0 : MiscMath::rms( *d );
 	      double skew   = minimal ? 0 : MiscMath::skewness( *d , mean , sd );
-	      double kurt   = minimal ? 0 : MiscMath::kurtosis( *d , mean );
+	      double kurt   = minimal ? 0 : MiscMath::kurtosis( *d , mean ) + kurt_adj ;
 	      
 	      double min = (*d)[0];
 	      double max = (*d)[0];
@@ -4948,7 +4951,7 @@ bool edf_t::basic_stats( param_t & param )
 	  double rms  = MiscMath::rms( *d );
 	  double sd = MiscMath::sdev( *d );
 	  double skew = MiscMath::skewness( *d , mean , sd );
-	  double kurt = MiscMath::kurtosis( *d , mean );
+	  double kurt = MiscMath::kurtosis( *d , mean ) + kurt_adj ;
 	  double min = (*d)[0];
 	  double max = (*d)[0];
 

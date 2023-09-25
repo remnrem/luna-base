@@ -209,7 +209,10 @@ namespace Helper
   void ascii7( std::string * s , char repl );
   void ascii7( std::vector<char> * s , char repl );
   
+  std::map<std::string,std::string> mapize( const std::string & s , const char delim = ',' , const char eq = '=' );
 
+  std::string ezipam( const std::map<std::string,std::string> & , const char delim = ',' , const char eq = '=' , const std::string & empty = "." );
+  
   template<typename T> 
     std::string stringize( const T & t , const std::string & delim = "," )
     {
@@ -235,6 +238,7 @@ namespace Helper
   bool str2dbl(const std::string & , double * ); 
   bool str2int(const std::string & , int * ); 
   bool str2int64(const std::string & , uint64_t * );
+  bool str2signed_int64(const std::string & , int64_t * );
   bool str2signed_int64(const std::string & , int64_t * ); 
 
   template <class T>

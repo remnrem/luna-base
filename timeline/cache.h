@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -47,9 +46,10 @@
 
 
 
-
+struct edf_t;
 
 void ctest();
+void ctest2( edf_t & );
 
 struct ckey_t {
   
@@ -166,6 +166,31 @@ struct cache_t {
     return ii->second;
   }
 
+  std::vector<T> fetch( const std::string & cmd , const std::string & var , const std::map<std::string,std::string> & faclvl ) const {
+    
+    // get all keys matching cmd:var
+    ckey_t key( cmd + ":" + var , faclvl );
+
+    typename std::map<ckey_t,std::vector<T> >::const_iterator ii = store.find( key );
+    if ( ii == store.end() )
+      {
+        std::vector<T> dummy; return dummy;
+      }
+    return ii->second;
+  }
+
+  bool fetch1( const std::string & cmd , const std::string & var , const std::map<std::string,std::string> & faclvl , T * val ) const {
+    
+    // get all keys matching cmd:var
+    ckey_t key( cmd + ":" + var , faclvl );
+    
+    typename std::map<ckey_t,std::vector<T> >::const_iterator ii = store.find( key );
+    if ( ii == store.end() ) return false;
+    if ( ii->second.size() != 1 ) return false;
+    *val = ii->second[0];    
+    return true;
+  }
+  
   
   std::string print() const {
     std::stringstream oo;

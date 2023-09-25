@@ -694,6 +694,22 @@ std::string globals::band( frequency_band_t b )
     } 
 }
 
+frequency_band_t globals::band( const std::string & b )
+{ 
+  if ( b == "SLOW" ) return SLOW;
+  if ( b == "ALPHA" ) return ALPHA;
+  if ( b == "BETA" ) return BETA;
+  if ( b == "GAMMA" ) return GAMMA;
+  if ( b == "THETA" ) return THETA;
+  if ( b == "DELTA" ) return DELTA;
+  if ( b == "SIGMA" ) return SIGMA;
+  if ( b == "HIGH_SIGMA" || b == "FAST_SIGMA" ) return HIGH_SIGMA;
+  if ( b == "LOW_SIGMA" || b == "SLOW_SIGMA" ) return LOW_SIGMA;
+  if ( b == "TOTAL" || b == "DENOM" ) return TOTAL;
+  return UNKNOWN_BAND;
+}
+
+
 
 std::string globals::stage( sleep_stage_t s )
 {

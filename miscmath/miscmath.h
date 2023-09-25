@@ -51,6 +51,10 @@ namespace MiscMath
   // nearest index [within lwr/upr range]
   int nearest_idx( const std::vector<double> & x , double value , int lwr = -1 , int upr = -1 );
 
+  // log-scale
+  std::vector<double> dB( const std::vector<double> & x );
+  void dB( std::vector<double> * x );
+  
   // mean/variance  
   double mean( const std::vector<double> & x );
   double mean( const std::vector<int> & x );
@@ -61,7 +65,7 @@ namespace MiscMath
   
   double skewness( const std::vector<double> & x );
   double skewness( const std::vector<double> & x , double m , double sd );
-
+  
   double kurtosis0( const std::vector<double> & x );
   double kurtosis( const std::vector<double> & x );
   double kurtosis( const std::vector<double> & x , double m );

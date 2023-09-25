@@ -437,6 +437,34 @@ bool Helper::str2signed_int64(const std::string & s , int64_t * i)
   return from_string<int64_t>(*i,s,std::dec);
 }
 
+std::string Helper::ezipam( const std::map<std::string,std::string> & m , const char delim  , const char eq , const std::string & empty )
+{
+  if ( m.size() == 0 ) return empty;
+  std::stringstream ss;
+  std::map<std::string,std::string>::const_iterator mm = m.begin();
+  while ( mm != m.end() )
+    {
+      if ( mm != m.begin() ) ss << delim;
+      ss << mm->first << eq << mm->second;
+      ++mm;
+    }
+  return ss.str();
+}
+
+std::map<std::string,std::string> Helper::mapize( const std::string & s , const char delim, const char eq )
+{
+  std::cout <<" s [" << s << "]\n";
+  std::map<std::string,std::string> r;
+  std::vector<std::string> tok = Helper::parse( s , delim );
+  for (int i=0; i<tok.size(); i++)
+    {
+      std::vector<std::string> tok2 = Helper::parse( tok[i] , eq );
+      if ( tok2.size() != 2 ) Helper::halt( "invalid string for mapize()" );
+      r[ tok2[0] ] = tok2[1] ;
+    }
+  return r;
+}
+
 // std::string Helper::stringize( const std::set<std::string> & d , const std::string & delim )
 // {
 //   std::stringstream ss;

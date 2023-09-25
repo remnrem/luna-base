@@ -1466,6 +1466,9 @@ void cmddefs_t::init()
   add_param( "PSD" , "average-adj" , "" , "Average adjacent frequency bins" );
   
   add_param( "PSD" , "dynamics" , "" , "Power dynamics (experimental/undocumented)" );
+
+  add_param( "PSD" , "kurtosis" , "" , "Output kurtosis for band-power (dB-scaled)" );
+    
   
   add_table( "PSD" , "CH" , "Channel-level output" );
   add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
@@ -1480,7 +1483,11 @@ void cmddefs_t::init()
   add_table( "PSD" , "CH,B" , "Whole-night, per-channel band power" );
   add_var( "PSD" , "CH,B" , "PSD" , "Power" );
   add_var( "PSD" , "CH,B" , "RELPSD" , "Relative power" );
+  add_var( "PSD" , "CH,B" , "KURT" , "Kurtosis" );
 
+  add_table( "PSD" , "CH,B1,B2" , "Whole-night, per-channel band power ratios" );
+  add_var( "PSD" , "CH,B1,B2" , "RATIO" , "Band power ratios" );
+  
   add_table( "PSD" , "CH,F" , "Whole-night, per-channel power" );
   add_var( "PSD" , "CH,F" , "PSD" , "Power (mean over epochs)" );
   add_var( "PSD" , "CH,F" , "PSD_MD" , "Power (median over epochs)" );

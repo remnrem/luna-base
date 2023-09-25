@@ -3020,6 +3020,10 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 
   // A+B   A but only if A overlaps B (u.e. keep A as is)
   // A-B   A but only if B doesn't overlap B
+
+  // ??by default, keep "A" channel in + and - operations; but
+  // otherwise drop (i.e. unless we in future check whether
+  // union etc are for the same channel)
   
   const bool do_union = expr.find( "|" ) != std::string::npos ;
   const bool do_intersection = expr.find( "*" ) != std::string::npos ;
@@ -3063,6 +3067,8 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   const annot_map_t & events1 = a1->interval_events;
   const annot_map_t & events2 = a2->interval_events;
 
+  logger << "  found " << events1.size() << " events for " << tok[0] << " and " << events2.size() << " events for " << tok[1] << "\n";
+  
   std::set<interval_t> nevs;
   
   // here, we always select from events1

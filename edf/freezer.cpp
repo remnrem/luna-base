@@ -28,11 +28,24 @@
 extern logger_t logger;
 
 
-void freezer_t::edf2edf( const edf_t & from , edf_t & to )
+void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
 {
 
+  caches_t cache;
+
+  // do not overwrite cache? 
+  if ( preserve_cache )
+    cache = to.timeline.cache;
+  
   // primary shallow copy
   to = from;
+  
+  // swap original cache back in
+  if ( preserve_cache )
+    to.timeline.cache = cache; 
+  
+  // ??unnecessary now we've ensured all records are pulled into memory...
+  //   (probably okay to leave commented out, but need to check this...)
   
   // update edf_t pointers in all records
   //to.update_edf_pointers( & to );
@@ -76,7 +89,7 @@ void freezer_t::freeze( const std::string & s , edf_t & edf )
   // Do the copy (includes deep-copying of some items)
   //
 
-  edf2edf( edf , *edf2 );
+  edf2edf( edf , *edf2 , false );
 
   //
   // store pointer to this edf_t
@@ -95,7 +108,7 @@ void freezer_t::freeze( const std::string & s , edf_t & edf )
   
 }
   
-bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean )
+bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean , bool preserve_cache )
 {
 
   if ( store.find( s ) == store.end() )
@@ -115,7 +128,7 @@ bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean )
 	 << new_edf->timeline.annotations.names().size() << " annotations\n";
   
   // do the copy back
-  edf2edf( *(store[s]) , *edf );
+  edf2edf( *(store[s]) , *edf , preserve_cache );
   
   // and delete also?
   if ( also_clean ) clean( s );

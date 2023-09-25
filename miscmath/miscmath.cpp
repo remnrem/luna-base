@@ -2461,3 +2461,18 @@ void MiscMath::winsorize( std::vector<double> * x , double p )
     }
 
 }
+
+std::vector<double> MiscMath::dB( const std::vector<double> & x )
+{
+  std::vector<double> r( x.size() );
+  for (int i=0; i<x.size(); i++)
+    r[i] = 10 * log10( x[i] );
+  return r;
+}
+
+void MiscMath::dB( std::vector<double> * x )
+{
+  for (int i=0; i<x->size(); i++)
+    (*x)[i] = 10 * log10( (*x)[i] );
+}
+

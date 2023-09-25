@@ -66,6 +66,19 @@ annot_t * spectral_power( edf_t & edf ,
   const double aggregate_psd_th     = param.has( "th" ) ? param.requires_dbl( "th" ) : 0 ; 
   const bool aggregate_psd_med      = param.has( "median" );
 
+  // get kurtosis of band power (raw - kurt3, or excess kurtosis - kurt )  
+  const bool calc_kurt  = param.has( "kurt" ) || param.has( "kurtosis" )
+    || param.has( "kurt3" ) || param.has( "kurtosis3" ) ;
+
+  const double kurt_adj = param.has( "kurt3" ) || param.has( "kurtosis3" ) ? +3 : 0 ; 
+
+  // output ratios of band power values
+  const bool calc_ratio = param.has( "ratio" );
+  if ( calc_ratio && param.empty( "ratio" ) )
+    Helper::halt( "cannot have empty ratio arg" );
+  // ratio=ALPHA/BETA,THETA/DELTA,...
+  const std::string ratios = calc_ratio ? param.value( "ratio" ) : "" ;
+  
   // Characterize dynamics: of all epoch-level stats created, get the H1, H2, H3, linear and exponential trend
   // Hjorth stats just consider all points concatenated
   // trend lines are based on observed E numbers 
@@ -909,8 +922,8 @@ annot_t * spectral_power( edf_t & edf ,
 	      // Cache summary spectra?
 	      //
 
-	      if ( cache_data && cache_spectrum )
-		cache->add( ckey_t( "PSD" , writer.faclvl() ) , x );
+	      // if ( cache_data && cache_spectrum )
+	      // 	cache->add( ckey_t( "PSD" , writer.faclvl() ) , x );
 	      
 	    }
 	  
@@ -1024,8 +1037,8 @@ annot_t * spectral_power( edf_t & edf ,
 	      }
 	      
 	      // Cache summary bands?
-	      if ( cache_data && cache_bands )
-		cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10(p) : p );
+	      // if ( cache_data && cache_bands )
+	      // 	cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10(p) : p );
 	      
 	    }
 	  
@@ -1180,6 +1193,77 @@ annot_t * spectral_power( edf_t & edf ,
 	  writer.unlevel( globals::band_strat );
 	}
      
+      //
+      // Band-power ratios 
+      //
+
+      if ( calc_ratio )
+	{
+	  // ratio=ALPHA/BETA,THETA/DELTA,...
+
+	  std::vector<std::string> r = Helper::parse( Helper::toupper( ratios ) , ',' );
+	  
+	  bool done_any = false; 
+	  
+	  std::vector<std::string>::const_iterator rr = r.begin();
+	  while ( rr != r.end() )
+	    {
+	      // A/B
+	      std::vector<std::string> tok = Helper::parse( *rr , '/' );
+	      if ( tok.size() != 2 ) Helper::halt( "bad format for PSD ratio: " + *rr );
+	      	      
+	      frequency_band_t b1 = globals::band( tok[0] );
+	      frequency_band_t b2 = globals::band( tok[1] );
+	      
+	      if ( b1 != UNKNOWN_BAND && b2 != UNKNOWN_BAND )
+		{
+		  const std::vector<double> & p1 = track_band[ b1 ];
+		  const std::vector<double> & p2 = track_band[ b2 ];
+		  if ( p1.size() != p2.size() ) Helper::halt( "internal error" );
+		  std::vector<double> rat;
+		  for (int i=0;i<p1.size(); i++)
+		    if ( p2[i] > 0 ) rat.push_back( p1[i] / p2[i] );
+		  if ( rat.size() > 0 )
+		    {
+		      const double rmean = MiscMath::mean( rat );
+		      const double rmedian = MiscMath::median( rat );
+		      writer.level( tok[0] , "B1" );
+		      writer.level( tok[1] , "B2" );
+		      writer.value( "RATIO" , rmean );
+		      writer.value( "RATIO_MD" , rmedian );		  
+		      done_any = true;
+		    }
+		}
+	      ++rr;
+	    }
+	  
+	  if ( done_any )
+	    {
+	      writer.unlevel( "B2" );
+	      writer.unlevel( "B1" );
+	    }
+	  
+	}
+
+      
+      //
+      // Band-power kurtosis 
+      //
+
+      if ( calc_kurt )
+	{	  
+	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();	  
+	  while ( ii != track_band.end() )
+	    {	      
+	      writer.level( globals::band( ii->first ) , globals::band_strat );	      
+	      // get kurtosis of dB-scaled values
+	      //  track_band is always raw values
+	      double k = MiscMath::kurtosis( MiscMath::dB( ii->second ) ) + kurt_adj ;
+	      writer.value( "KURT" , k );
+	      ++ii;
+	    }
+	  writer.unlevel( globals::band_strat );
+	}
 
 
       

@@ -1167,6 +1167,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "PAC" ) )          proc_pac( edf , param(c) );
       else if ( is( c, "CFC" ) )          proc_cfc( edf , param(c) );
       else if ( is( c, "GED" ) )          proc_ged( edf , param(c) );
+
+      else if ( is( c, "PREDICT" ) )      proc_predict( edf , param(c) );
       
       else if ( is( c, "TAG" ) )          proc_tag( param(c) );
       else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
@@ -1940,6 +1942,14 @@ void proc_sedf( edf_t & edf , param_t & param )
 }
 
 
+// PREDICT : given cached values, make a model-based prediction
+
+void proc_predict( edf_t & edf , param_t & param )
+{
+  
+  prediction_t m( edf , param );
+  
+}
 
 // PSC : either build PSC (from multiple results) or fit to an EDF
 void proc_psc( edf_t & edf , param_t & param )
@@ -2911,17 +2921,21 @@ void proc_freeze( edf_t & edf , param_t & param )
 void proc_thaw( edf_t & edf , param_t & param )
 {
 
-  const bool remove = param.has( "remove" ) ? param.yesno( "remove" ) : false ;
+  // by default, cache is preserved
 
+  const bool preserve_cache = param.has( "preserve-cache" ) ;
+  
+  const bool remove = param.has( "remove" ) ? param.yesno( "remove" ) : false ;
+  
   if ( remove )
     {
-      freezer.thaw( param.requires( "tag" ) , &edf , remove );  
+      freezer.thaw( param.requires( "tag" ) , &edf , remove , preserve_cache );  
     }
   else
     {
-      // can allow single arg context here (if not also using 'remove')
+      // can allow single arg context here (if not also using 'remove' or 'replace-cache' )
       const std::string freeze_name = param.has( "tag" ) ? param.value( "tag" ) : param.single_value() ;
-      freezer.thaw( freeze_name , &edf , false );
+      freezer.thaw( freeze_name , &edf , false , preserve_cache );
     }
   
 }
@@ -3142,7 +3156,8 @@ void proc_restructure( edf_t & edf , param_t & param )
   // just drop MASK'ed records, then reset mask
   const bool FORCE_RESTRUCTURE = false;
   const bool VERBOSE_OUTPUT = param.has( "verbose" );
-  edf.restructure( FORCE_RESTRUCTURE , VERBOSE_OUTPUT );
+  const bool PRESERVE_CACHE = param.has( "preserve-cache" ) ? param.yesno( "preserve-cache" ) : false ; 
+  edf.restructure( FORCE_RESTRUCTURE , VERBOSE_OUTPUT , PRESERVE_CACHE );
 }
 
 
@@ -3351,6 +3366,57 @@ void proc_shift( edf_t & edf , param_t & param )
 
 void proc_dump_cache( edf_t & edf , param_t & param )
 {
+
+  if ( param.has( "test" ) )
+    {
+      ctest2( edf );
+      return;
+    }
+  // set up to record from output stream
+  
+  if ( param.has( "record" ) )
+    {
+      // record=command,variable,{strata}
+      std::vector<std::string> tok = param.strvector( "record" );
+      if ( tok.size() < 2 ) Helper::halt( "record=command,variable,{strata}" );
+
+      std::set<std::string> fac;
+      for (int i=2; i<tok.size(); i++) fac.insert( tok[i] );
+
+      // assume numeric
+      bool is_text = param.has( "text" ) || param.has( "str" );
+      //      bool is_int  = param.has( "int" ) || param.has( "integer" );
+
+      const std::string cname = param.requires( "cache" );
+      const std::string cmd_name = Helper::toupper( tok[0] );
+      const std::string var_name = Helper::toupper( tok[1] );
+      const std::string fac_name = Helper::toupper( Helper::stringize( fac ) );
+
+      if ( is_text )
+	{
+	  // makes if does not exist
+	  cache_t<std::string> * cache = edf.timeline.cache.find_str( cname );
+	  writer.cache( cache );
+	  writer.cache_string( cmd_name , var_name, fac );
+	}
+      // else if ( is_int )
+      // 	{
+      // 	  cache_t<int> * cache = edf.timeline.cache.find_int( cname );
+      // 	  writer.cache( cache );
+      // 	  writer.cache_integer( cmd_name , var_name , fac );
+      // 	}
+      else
+	{
+	  cache_t<double> * cache = edf.timeline.cache.find_num( cname );
+	  writer.cache( cache );
+	  writer.cache_numeric( cmd_name , var_name , fac );
+	}
+      
+      logger << "  caching output from " << cmd_name << ", variable = " << var_name ;
+      if ( fac.size() != 0 ) logger << " (strata = " << fac_name << ")";
+      logger << " to cache " << cname << "\n";
+								       
+    }
   
   // clear / load / dump 
 
@@ -5605,3 +5671,20 @@ void proc_has_signals( edf_t & edf , param_t & param )
     } 
 }
 
+std::map<std::string,std::string>  cmd_t::indiv_var_map( const std::string & id )
+{
+
+  std::map<std::string,std::string> allvars = vars;
+
+  if ( ivars.find( id ) != ivars.end() )
+    {
+      const std::map<std::string,std::string> & newvars = ivars.find( id )->second;
+      std::map<std::string,std::string>::const_iterator vv = newvars.begin();
+      while ( vv != newvars.end() )
+	{
+	  allvars[ vv->first ] = vv->second;
+	  ++vv;
+	}
+    }
+  return allvars;
+}

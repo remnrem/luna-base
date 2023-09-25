@@ -41,6 +41,8 @@ namespace eigen_ops {
   
   bool scale( Eigen::Ref<Eigen::MatrixXd> m , const bool,  const bool , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );  
 
+  bool IQR_norm( Eigen::Ref<Eigen::MatrixXd> m  );
+  
   bool robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool , bool , double , bool second_rescale = true , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );    
 
   Eigen::VectorXd percentile_scale( const Eigen::VectorXd & x , const double pct , const int nsegs );

@@ -29,8 +29,10 @@
 #include "intervals/intervals.h"
 #include "cmddefs.h"
 #include "helper/zfile.h"
+#include "timeline/cache.h"
 
 class writer_t;
+
 extern writer_t writer;
 
 struct value_t;
@@ -170,6 +172,7 @@ struct level_t;
     }
     
     std::string factor_string() const;
+    std::set<std::string> factor_strings() const;
     std::string level_string() const;    
     std::string factor_level_string() const;
     int matches( const std::set<int> & cvars , const std::set<int> & rvars );
@@ -380,7 +383,6 @@ class StratOutDBase {
   
   StratOutDBase()
     {
-      
     }
   
   ~StratOutDBase()
@@ -403,6 +405,7 @@ class StratOutDBase {
 
   std::string name() const { return filename; } 
 
+   
   //
   // Writers
   //
@@ -555,7 +558,18 @@ class writer_t
   // database
   //
   
-  writer_t() { dbless = true; plaintext = false; zfiles = NULL ; curr_zfile = NULL ; retval = NULL; } 
+  writer_t()
+  {
+    dbless = true;
+    plaintext = false;
+    zfiles = NULL ;
+    curr_zfile = NULL ;
+    retval = NULL;
+    caching = false;
+    cache_num = NULL;
+    cache_int = NULL;
+    cache_str = NULL;    
+  } 
   
   bool attach( const std::string & filename , bool readonly = false )
   {
@@ -683,6 +697,70 @@ class writer_t
     return true;
   }
   
+
+  //
+  // Cache recorders
+  //
+
+  
+  bool caching;
+
+  // yes, I know this isn't how to use templates... another day, urgh
+  cache_t<double> * cache_num;
+  cache_t<int> * cache_int;
+  cache_t<std::string> * cache_str;
+  
+  void cache( cache_t<double> * c )
+  {
+    caching = true; 
+    cache_num = c;
+  }
+
+  void cache( cache_t<int> * c )
+  {
+    caching = true; 
+    cache_int = c;
+  }
+  
+  void cache( cache_t<std::string> * c )
+  {
+    caching = true; 
+    cache_str = c;
+  }
+
+  void no_cache( )
+  {
+    caching = false;
+  }
+  
+  // command -> variable -> factor strings 
+  std::map<std::string,std::map<std::string,std::set<std::string> > > track_num;
+  std::map<std::string,std::map<std::string,std::set<std::string> > > track_int;
+  std::map<std::string,std::map<std::string,std::set<std::string> > > track_str;
+
+  void cache_numeric( const std::string & c , const std::string & v , const std::set<std::string> & f )
+  {
+    if ( cache_num == NULL ) Helper::halt( "no numeric cache set" );
+    track_num[ c ][ v ] = f; 
+  }
+
+  void cache_integer( const std::string & c , const std::string & v , const std::set<std::string> & f )
+  {
+    if ( cache_int == NULL ) Helper::halt( "no numeric cache set" );
+    track_int[ c ][ v ] = f; 
+  }
+  
+  void cache_string( const std::string & c , const std::string & v , const std::set<std::string> & f )
+  {
+    if ( cache_str == NULL ) Helper::halt( "no numeric cache set" );
+    track_str[ c ][ v ] = f; 
+  }
+
+  bool check_cache_factors( const std::string var_name , std::map<std::string,std::map<std::string,std::set<std::string> > > &);  
+  void check_cache_write( const std::string var_name , double d );
+  void check_cache_write( const std::string var_name , int i );
+  void check_cache_write( const std::string var_name , const std::string & s );
+
 
   //
   // writers
@@ -930,6 +1008,7 @@ class writer_t
 
   bool value( const std::string & var_name , double d , const std::string & desc = "" )
   {    
+    if ( caching ) check_cache_write( var_name , d );
     //    std::cout << "add-v :" << var_name << " " << d << "\n";
     if ( retval != NULL ) return to_retval( var_name , d );
     else if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( d ) ) : to_stdout( var_name , value_t( d ) ) ;
@@ -938,7 +1017,10 @@ class writer_t
   }
 
   bool value( const std::string & var_name , int i , const std::string & desc = "" ) 
-  { 
+  {
+    // always use numeric cache (i.e. ignore int cache for now, will make life simpler to use
+    // them downstream)
+    if ( caching ) check_cache_write( var_name , (double)i );
     if ( retval != NULL ) return to_retval( var_name , i ); 
     else if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( i ) ) : to_stdout( var_name , value_t( i ) ) ; 
     if ( desc != "" ) var( var_name , desc ); 
@@ -947,6 +1029,7 @@ class writer_t
   
   bool value( const std::string & var_name , const std::string & s , const std::string & desc = "" )
   {
+    if ( caching ) check_cache_write( var_name , s );
     if ( retval != NULL ) return to_retval( var_name , s );
     if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( s ) ) : to_stdout( var_name , value_t( s ) ); 
     if ( desc != "" ) var( var_name , desc );

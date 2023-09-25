@@ -134,7 +134,7 @@ void timeline_t::init_timeline( bool okay_to_reinit )
 
 
 
-void timeline_t::restructure( const std::set<int> & keep )
+void timeline_t::restructure( const std::set<int> & keep , const bool preserve_cache )
 {
 
   // the restructured EDF header should be in place at this point
@@ -187,7 +187,11 @@ void timeline_t::restructure( const std::set<int> & keep )
   reset_epochs();
   
   // clear any cache
-  cache.clear();
+  if ( ! preserve_cache ) 
+    {
+      logger << "  clearing any cached values\n";
+      cache.clear();
+    }
   
   logger << "  retaining " << num_epochs() << " epochs\n";
 }

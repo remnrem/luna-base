@@ -173,6 +173,9 @@ class cmd_t
   // individual-specific vars
   static std::map<std::string,std::map<std::string,std::string> >  ivars;
 
+  // make combined map var map (for use externally, e.g. PREDICT model reader) 
+  static std::map<std::string,std::string>  indiv_var_map( const std::string & id );
+  
   static std::map<std::string,int> pull_ivar( const std::vector<std::string> & ids , 
 					      const std::string & phe );
 
@@ -375,6 +378,8 @@ void proc_hilbert( edf_t & , param_t & );
 void proc_sync(edf_t & , param_t & );
 void proc_tsync(edf_t & , param_t & );
 void proc_xcorr(edf_t & , param_t & );
+
+void proc_predict( edf_t & , param_t & );
 void proc_psc( edf_t & , param_t & );
 void proc_microstates( edf_t & , param_t & );
 

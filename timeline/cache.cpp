@@ -57,6 +57,30 @@ void ctest()
   
 }
 
+void ctest2( edf_t & edf )
+{
+  std::string cmd = "PSD";
+  std::string var = "RELPSD";
+
+  std::map<std::string,std::string> fac;
+  fac[ "CH" ] = "C3";
+  fac[ "B" ] = "SIGMA";
+
+  cache_t<double> * c = edf.timeline.cache.find_num( "c1" );
+
+  std::vector<double> d = c->fetch( cmd , var , fac );
+
+  std::cout << " d size = " << d.size() << "\n";
+  for (int i=0; i<d.size(); i++)
+    std::cout << " d = " << d[i] << "\n";
+
+  std::cout<< "fetch1()...\n";
+  double d1 = 0;
+  if ( c->fetch1( cmd , var , fac , &d1 ) )
+    std::cout << " d1 = " << d1 << "\n";
+    
+}
+
 
 void caches_t::load( const std::string & filename )
 {

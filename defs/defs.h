@@ -63,7 +63,8 @@ enum frequency_band_t
     BETA, 
     GAMMA,
     TOTAL, 
-    DENOM
+    DENOM,
+    UNKNOWN_BAND
   };
 
 enum fft_t 
@@ -358,7 +359,8 @@ struct globals
   
   // helper functions to pull out global values
   static std::string band( frequency_band_t b );
-
+  static frequency_band_t band( const std::string & b );
+  
   static std::string stage( sleep_stage_t );
 
   static std::string stage( int );

@@ -30,6 +30,9 @@ void dsptools::standardize( edf_t & edf , param_t & param )
 {
 
   const bool by_epoch = param.has( "epoch" );
+
+  // ( X - median ) / ( IQR ) 
+  const bool iqr_norm = param.has( "IQR" );
   
   // center (based on median in first round)
   const bool center = param.has( "center" ) ? param.yesno( "center" ) : true ; 
@@ -57,10 +60,17 @@ void dsptools::standardize( edf_t & edf , param_t & param )
   if ( by_epoch ) logger << "  iterating over epochs\n";
   else logger << "  correcting for entire signal\n";
 
-  logger << "  robust standardization of " << ns << " signals";
-  if ( winsor > 0 ) logger << ", winsorizing at " << wt;
-  logger << "\n";
-
+  if ( iqr_norm )
+    {
+      logger << "  IQR-based standardization of " << ns << " signals\n";	    
+    }
+  else
+    {
+      logger << "  robust standardization of " << ns << " signals";
+      if ( winsor > 0 ) logger << ", winsorizing at " << wt;
+      logger << "\n";
+    }
+  
   //
   // get data (whole signal) 
   //
@@ -94,12 +104,15 @@ void dsptools::standardize( edf_t & edf , param_t & param )
       // epoch or whole trace?
       interval_t interval = by_epoch ? edf.timeline.epoch( epoch ) : edf.timeline.wholetrace();
       
-      // get data (yes, dupes)
+      // get data (yes, dupes effort...)
       eigen_matslice_t mslice( edf , signals , interval );
       Eigen::MatrixXd & T = mslice.nonconst_data_ref();      
 
       // process
-      eigen_ops::robust_scale( T , center , scale , wt , second_norm );
+      if ( iqr_norm )
+	eigen_ops::IQR_norm( T );
+      else
+	eigen_ops::robust_scale( T , center , scale , wt , second_norm );
       
       // update X
       const int trows = T.rows();      

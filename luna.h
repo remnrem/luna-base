@@ -114,6 +114,8 @@
 
 #include "resp/hb.h"
 
+#include "models/predict.h"
+
 #include <iostream>
 #include <unistd.h>
 #include <dirent.h>

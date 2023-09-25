@@ -93,7 +93,7 @@ struct timeline_t
 
   void create_discontinuous_timeline( const std::vector<uint64_t> & tps );
 
-  void restructure( const std::set<int> & keep );
+  void restructure( const std::set<int> & keep , const bool preserve_cache );
 
   
 
