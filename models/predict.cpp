@@ -28,10 +28,14 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "timeline/cache.h"
+#include "models/knn.h"
 
 extern writer_t writer;
 extern logger_t logger;
 
+// init. static members
+Eigen::MatrixXd model_knn_t::X = Eigen::MatrixXd::Zero( 0 , 0 );
+  
 prediction_t::prediction_t( edf_t & edf , param_t & param )
 {
 
@@ -66,8 +70,19 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
     Helper::halt( "cache not found: " + cache_name );
   
   cache_t<double> * cache = edf.timeline.cache.find_num( cache_name );
-  
 
+  //
+  // KNN missing imputation
+  //
+
+  model_knn_t knn;
+  
+  if ( param.has( "impute" ) )
+    {
+      logger << " *** want to load...\n";
+      knn.load( param.value( "impute" ) ) ;
+    }
+  
   //
   // allocate space
   //
