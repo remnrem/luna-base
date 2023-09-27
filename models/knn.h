@@ -29,18 +29,27 @@
 
 struct model_knn_t {
   
-  static void load( const std::string & f , int * rows = NULL , int * cols = NULL );
+  static void load( const std::string & f ,
+		    const std::vector<std::string> & header , 
+		    int * rows = NULL , int * cols = NULL );
   
   // use k-nearest observations to fill in missing data
   
   static Eigen::VectorXd impute( const Eigen::VectorXd & f ,
-				 const std::vector<bool> & missing ,
-				 int k = 10 );
+				 const std::vector<bool> & missing );
+
+  static Eigen::VectorXd distance( const Eigen::VectorXd & f );
 
   static void clear();
   
+  static bool populated() { return X.rows() != 0 ; } 
+
+  static void set_k( int k1 ) { k = k1; }
+  
 private:
 
+  static int k;
+  
   static Eigen::MatrixXd X;  
   
 };

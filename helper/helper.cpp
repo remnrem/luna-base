@@ -453,7 +453,6 @@ std::string Helper::ezipam( const std::map<std::string,std::string> & m , const 
 
 std::map<std::string,std::string> Helper::mapize( const std::string & s , const char delim, const char eq )
 {
-  std::cout <<" s [" << s << "]\n";
   std::map<std::string,std::string> r;
   std::vector<std::string> tok = Helper::parse( s , delim );
   for (int i=0; i<tok.size(); i++)

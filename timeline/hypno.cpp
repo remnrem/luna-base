@@ -1444,8 +1444,11 @@ void hypnogram_t::calc_stats( const bool verbose )
   // total wake time (ignores pre lights out, post lights off)
   TWT = mins["W"];
   
-  // final wake time 
+  // final wake time (until lights on)
   FWT = ( lights_on_epoch - final_wake_epoch ) * epoch_mins; 
+
+  // post-sleep time (until recording end) 
+  t_postsleep = ( ne - 1 - final_wake_epoch ) * epoch_mins;
   
   // REM latency
   rem_lat_mins = ( first_rem_epoch - first_sleep_epoch ) * epoch_mins;
@@ -1470,6 +1473,9 @@ void hypnogram_t::calc_stats( const bool verbose )
   
   // sleep latency
   slp_lat = ( first_sleep_epoch - lights_out_epoch ) * epoch_mins;
+
+  // pre-sleep time (includes lights off )
+  t_presleep = first_sleep_epoch * epoch_mins ; 
   
   // latency to persistent sleep
   per_slp_lat = ( first_persistent_sleep_epoch - lights_out_epoch ) * epoch_mins;
@@ -3622,16 +3628,21 @@ void hypnogram_t::output( const bool verbose ,
       writer.value( "LOST" , n_lights_fixed_was_sleep * epoch_mins ); 
       writer.value( "SINS" , (int)starts_in_sleep );
       writer.value( "EINS" , (int)ends_in_sleep );
-      
+
       if ( any_sleep )
 	{
 	  writer.value( "WASO" , WASO );
+
 	  // nb. different definition used internally
 	  writer.value( "SPT" , SPT - FWT );
 	  
 	  writer.value( "FWT" , FWT );
 	  writer.value( "SOL" , slp_lat );
 
+	  // SOL/FWT versions that include LightsOff
+	  writer.value( "PRE" , t_presleep );
+	  writer.value( "POST" , t_postsleep );
+	  	  
 	  // was SLP_EFF
 	  writer.value( "SE" , slp_eff_pct );	  
 
@@ -4310,6 +4321,12 @@ void hypnogram_t::output( const bool verbose ,
       // persistent sleep
       
       writer.value( "PERSISTENT_SLEEP" , in_persistent_sleep[e] );
+
+      // in/out of sleep period
+      
+      writer.value( "SPT" , (int)(e >= first_sleep_epoch && e < final_wake_epoch) );
+      writer.value( "POST" , (int)(e >= final_wake_epoch) );
+      writer.value( "PRE" , (int)(e < first_sleep_epoch ) );
       
       // cycles
       

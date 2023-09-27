@@ -20,7 +20,7 @@
 //
 //    --------------------------------------------------------------------
 
-#include "models/predict.h"
+#include "models/model.h"
 #include <fstream>
 #include <iostream>
 #include <cstdlib>
@@ -30,6 +30,17 @@
 
 extern logger_t logger;
 
+
+// special terms required/expected in a model
+
+// title     <- "Title of the model"
+// reference <- "PMID, URL, or other citation"
+
+// outcome   <- "label for the predicted measure"
+// type      <- "linear or logistic"
+// training  <- "brief description of training population (N=XXXX)" 
+
+// data      <- "filepath for training data"
 
 void prediction_model_t::read( const std::string & f , const std::string & id )
 {
@@ -41,19 +52,19 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
   terms.clear();
   specials.clear();
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
-
-  // first line is always the title
-  Helper::safe_getline( IN1 , title );
-
   // process any variable substitutions?
   std::map<std::string,std::string>  allvars = cmd_t::indiv_var_map( id );
-   
+    
   // build current term
+
   model_term_t term;
 
   bool in_term = false;
-  
+
+  // load
+
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+    
   while ( ! IN1.eof() ) 
     {
       std::string line;
@@ -82,7 +93,7 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
       Helper::swap_in_variables( &line , &allvars );
 
       // parse on whitespace
-      std::vector<std::string> tok = Helper::parse( line , "\t " );
+      std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
 
       // same as blank (end term) 
       if ( tok.size() == 0 )
@@ -112,10 +123,14 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
 	    }
 	  else // numeric
 	    {
-	      double x;
-	      if ( ! Helper::str2dbl( tok[2] , &x ) )
-		Helper::halt( "could not convert to a numeric value: " + line );
-	      specials[ tok[0] ] = x;
+	      // allows missing value via '.' 
+	      if ( tok[2] != "." )
+		{
+		  double x;
+		  if ( ! Helper::str2dbl( tok[2] , &x ) )
+		    Helper::halt( "could not convert to a numeric value (use period for missing value) : " + line );
+		  specials[ tok[0] ] = x;
+		}
 	    }
 	  
 	  // next line
@@ -165,11 +180,16 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
 		  const std::string value = tok2[1];
 
 		  //std::cout << "key/value=[" << key << "][" << value << "]\n";
-
+		  
 		  if      ( key == "CMD" )
 		    term.cmd = value;
 		  else if ( key == "VAR" )
 		    term.var = value;
+		  else if ( key == "VALUE" )
+		    {
+		      term.value = value; // may be missing at this point
+		      term.has_value = true;
+		    }
 		  else if ( key == "CH" )
 		    term.chs = Helper::parse( value , ',' );		  
 		  else if ( key == "STRATA" && value != "." ) // allow baseline strata = empty
@@ -192,6 +212,10 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
                       if ( ! Helper::str2dbl( value , &x ) ) Helper::halt( "bad numeric value: " + line );
 		      term.sd = x;
 		    }
+		  else if ( key == "REQ" )
+		    {
+		      term.required = Helper::yesno( value );
+		    }
 		  else
 		    Helper::halt( "unrecognized key term: " + key );
 		}
@@ -211,6 +235,20 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
   logger << "  read " << terms.size()
 	 << " terms and " << specials.size()
 	 << " special variables from " << filename << "\n";
+  
+  // complain if additional variables have not been specified
+  
+  if ( specials_str.find( "title" ) == specials_str.end() )
+    logger << "  *** no 'title' specified ***\n";
+  if ( specials_str.find( "outcome" ) == specials_str.end() )
+    logger << "  *** no 'outcome' specified ***\n";
+  if ( specials_str.find( "reference" ) == specials_str.end() )
+    logger << "  *** no 'reference' specified ***\n";
+  if ( specials_str.find( "training" ) == specials_str.end() )
+    logger << "  *** no 'training' information specified ***\n";
+  if ( specials_str.find( "type" ) == specials_str.end() )
+    logger << "  *** no 'type' information (linear/logistic) specified ***\n";  
+  
 }
       
 void prediction_model_t::populate()
@@ -245,39 +283,69 @@ std::set<std::string> prediction_model_t::channels() const
   return chs;
 }
 
+
 void prediction_model_t::dump() const
 {
 
-  std::cout << "title: " << title << "\n\n";
+  std::cout << "% dumping current parsed model\n\n";
   
-  std::set<model_term_t>::const_iterator tt = terms.begin();
-  while ( tt != terms.end() )
-    {
-      std::cout << tt->label << "\n"
-		<< "  b=" << tt->coef << " "
-		<< "m=" << tt->mean << " "
-		<< "sd=" << tt->sd << "\n"
-		<< "  cmd=" << tt->cmd << " "
-		<< "var=" << tt->var << " " 
-		<< "strata=" << Helper::ezipam( tt->strata , ',', '/' ) << "\n\n";
-      ++tt;
-    }
-  
-  if ( specials.size() + specials_str.size() > 0 )
-    {
-      std::cout << "\nspecials:\n";
-      std::map<std::string,double>::const_iterator ss = specials.begin();
-      while ( ss != specials.end() )
-	{
-	  std::cout << "  " << ss->first << " <- " << ss->second << "\n";
-	  ++ss;
-	}
+  if ( specials_str.size() > 0 )
+    {      
       std::map<std::string,std::string>::const_iterator qq = specials_str.begin();
       while ( qq != specials_str.end() )
 	{
 	  std::cout << "  " << qq->first << " <- \"" << qq->second << "\"\n";
 	  ++qq;
 	}
+      std::cout << "\n";
     }
   
+
+  if ( specials.size() > 0 )
+    {
+      std::map<std::string,double>::const_iterator ss = specials.begin();
+      while ( ss != specials.end() )
+	{
+	  std::cout << "  " << ss->first << " <- " << ss->second << "\n";
+	  ++ss;
+	}
+      std::cout << "\n";
+    }
+  
+  std::set<model_term_t>::const_iterator tt = terms.begin();
+  while ( tt != terms.end() )
+    {
+      if ( tt->has_value )
+	std::cout << tt->label << "\n"
+		  << "  value=" << tt->value << " "
+		  << "req=" << tt->required << "\n"
+		  << "  b=" << tt->coef << " "
+		  << "m=" << tt->mean << " "
+		  << "sd=" << tt->sd << "\n\n";
+      else
+	std::cout << tt->label << "\n"
+		  << "  cmd=" << tt->cmd << " "
+		  << "var=" << tt->var << " "
+		  << "req=" << tt->required << " "
+		  << "ch=" << Helper::stringize( tt->chs ) << " " 
+		  << "strata=" << Helper::ezipam( tt->strata , ',', '/' ) << "\n"
+		  << "  b=" << tt->coef << " "
+		  << "m=" << tt->mean << " "
+		  << "sd=" << tt->sd << "\n\n";
+      ++tt;
+    }
+  
+  
+}
+
+std::vector<std::string> prediction_model_t::header() const
+{
+  std::vector<std::string> h;
+  std::set<model_term_t>::const_iterator tt = terms.begin();
+  while ( tt != terms.end() )
+    {
+      h.push_back( tt->label );
+      ++tt;
+    }
+  return h;
 }

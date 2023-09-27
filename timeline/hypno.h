@@ -222,7 +222,10 @@ struct hypnogram_t
   double per_slp_lat;  // latency to 10 mins sleep
   double rem_lat_mins;      // REM latency (minutes)
   double rem_lat_nowake_mins;  // REM latency (minutes), excluding W
-
+  
+  double t_presleep; // time from recording start to sleep onset (SOL + lights off)
+  double t_postsleep; // time from sleep offset to end of recording (FWT + lights off) 
+  
   std::map<std::string,double> mins;
   std::map<std::string,double> pct;
   std::map<std::string,double> pct2; // denom includes WASO & ?

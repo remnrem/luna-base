@@ -28,14 +28,15 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "timeline/cache.h"
-#include "models/knn.h"
+
 
 extern writer_t writer;
 extern logger_t logger;
 
 // init. static members
 Eigen::MatrixXd model_knn_t::X = Eigen::MatrixXd::Zero( 0 , 0 );
-  
+int model_knn_t::k = 10;
+
 prediction_t::prediction_t( edf_t & edf , param_t & param )
 {
 
@@ -72,16 +73,37 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   cache_t<double> * cache = edf.timeline.cache.find_num( cache_name );
 
   //
-  // KNN missing imputation
+  // kNN missing imputation
+  //
+  
+  // allow command line to over-ride model value: 
+  const std::string knn_data = param.has( "data" ) ? param.value( "data" ) : model.specials_str[ "data" ];
+  
+  // 0 if not defined
+  int knn_n = param.has( "knn" ) ? param.requires_int( "knn" ) : model.specials[ "knn" ]; 
+  
+  const bool has_training_data = knn_data != "" && knn_n != 0;
+  
+  if ( has_training_data )
+    {
+      knn.load( knn_data , model.header() );
+      knn.set_k( knn_n );
+    }
+
+  //
+  // Z (abs) threshold to set to missing (and re-impute) 
+  //
+  
+  const double imp_th = param.has( "th" ) ? param.requires_dbl( "th" ) : model.specials[ "th" ] ;
+  const bool do_reimputation = imp_th > 0.01; 
+    
+  //
+  // allow dropping of terms
   //
 
-  model_knn_t knn;
-  
-  if ( param.has( "impute" ) )
-    {
-      logger << " *** want to load...\n";
-      knn.load( param.value( "impute" ) ) ;
-    }
+  std::set<std::string> dropped;
+  if ( param.has( "drop" ) )
+    dropped = param.strset( "drop" );
   
   //
   // allocate space
@@ -100,21 +122,90 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   int i = 0 ;
 
   bool okay = true;
+
+  // track any missing data (i.e. not present in the cache)
+  
+  missing.resize( nt , false );  
+  int n_obs = 0;
   
   std::set<model_term_t>::const_iterator tt = model.terms.begin();
   while ( tt != model.terms.end() )
     {
 
+      // dropped?
+      if ( dropped.find( tt->label ) != dropped.end() )
+	{
+	  logger << "  dropping " << tt->label << "\n";
+	  // this can over-ride any requirement
+	  missing[i] = true;
+	  ++i;
+	  ++tt;
+	  continue;
+	}
+      
+      // if this a value (non-cache) term?
+      if ( tt->has_value )
+	{
+	  double x;
+	  bool valid = Helper::str2dbl( tt->value , &x ) ;
+	  
+	  if ( tt->value == "." || tt->value == "" || ! valid )
+	    {
+	      
+	      logger << "  *** non-numeric/missing value specified for " << tt->label << "\n";
+	      
+	      if ( tt->required )
+		{
+		  okay = false;
+		  break;
+		}
+	      else 
+		missing[i] = true;
+	    }
+	  else
+	    {
+	      X[i] = x;
+	      ++n_obs;
+	    }
+	  
+	  // go to next term
+	  ++i;
+	  ++tt;
+	  continue;
+	}
+
+      //
+      // pull from the cache:
+      //
+      
       // no channels specified
       if ( tt->chs.size() == 0 )
 	{
 	  double x1;
 	  if ( ! cache->fetch1( tt->cmd , tt->var , tt->strata , &x1 ) )
 	    {
-	      okay = false;
-	      break;
-	    }	  
+	      logger << "  *** could not find "
+		     << tt->label << " : " << tt->cmd << " "
+		     << tt->var << " "
+		     << Helper::ezipam( tt->strata ) << "\n";
+	      
+	      // was this feature required to be non-missing?	      
+	      if ( tt->required )
+		{
+		  // if so, a fatal error
+		  okay = false;
+		  break;
+		}
+	      else // just track and we can impute
+		{
+		  missing[i] = true;
+		}	    
+	    }
+
+	  // add this feature 
 	  X[i] = x1;
+	  ++n_obs;
+	  
 	}
       else // 1+ channel specified
 	{
@@ -127,24 +218,48 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 	      std::map<std::string,std::string> ss1 = tt->strata;
 	      ss1[ "CH" ] = *cc ;
 	      double x1;
+
+	      // only add for this channel if present
 	      if ( ! cache->fetch1( tt->cmd , tt->var , ss1 , &x1 ) )
 		{
-		  logger << "  *** could not find " << tt->cmd << " "
+		  logger << "  *** could not find "
+			 << tt->label << " : " << tt->cmd << " "
 			 << tt->var << " "
 			 << Helper::ezipam( ss1 ) << "\n";
 		  
-		  okay = false;
-		  break;
 		}
-	      xx.push_back( x1 );
-
+	      else // rack up this channel for this feature
+		xx.push_back( x1 );
+	      
 	      // next channel
 	      ++cc;
 	    } 
+
+	  // check we have at least one channel
 	  
-	  // take mean
-	  X[i] = MiscMath::mean( xx );
-	  
+	  if ( xx.size() == 0 )
+	    {
+	      logger << "  *** could not find (for any channels) "
+		     << tt->label << " : " << tt->cmd << " "
+		     << tt->var << " "
+		     << Helper::ezipam( tt->strata ) << "\n";
+
+	      // fatal error?
+	      if ( tt->required )
+		{
+		  okay = false;
+		  break;
+		}
+	      else // just track it is missing
+		{
+		  missing[i] = true;
+		}	      
+	    }
+	  else // we can add the mean across channels
+	    {
+	      X[i] = MiscMath::mean( xx );
+	      ++n_obs;
+	    }
 	}
 
       // next term
@@ -154,16 +269,46 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   
 
   //
-  // requires complete data for now
+  // check non-missing data requirements
+  //
+  
+  if ( n_obs < model.specials[ "minf" ] || n_obs == 0 )
+    {
+      logger << "  *** found " << n_obs << " non-missing features";
+      if ( model.specials[ "minf" ] > 0 ) logger << " but require " << model.specials[ "minf" ] << "\n";
+      okay = false;	
+    }
+
+  writer.value( "NF" , nt );
+  writer.value( "NF_OBS" , n_obs );
+
+  if ( okay )
+    {
+      if ( n_obs < nt )
+	{
+	  if ( ! knn.populated() )
+	    {
+	      okay = false;
+	      logger << "  *** missing values, but no attached dataset for kNN imputation\n";
+	    }
+	}
+    }
+
+
+  //
+  // fatality?
   //
   
   if ( ! okay )
     {
-      logger << "  could not find all variables... bailing\n";
+      logger << "  *** could not satisfy non-missing feature requirements... bailing\n";
+      writer.value( "OKAY" , 0 );
+      
       return;
     }
-
-
+  writer.value( "OKAY" , 1 );
+  
+  
   //
   // Some checks
   //
@@ -178,52 +323,151 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
     Helper::halt( "problem, only have " + Helper::int2str( model.coef.size() ) + " coefs" );
   
 
-  // std::cout << "X = " << X << "\n";
-  // std::cout << "mean = " << model.mean << "\n";
-  // std::cout << "sd = " << model.sd << "\n";
-  // std::cout << "coef = " << model.coef << "\n";
-    
+  //
+  // log-transformation of features
+  //
+  
+  if ( model.specials[ "log1p" ] > 0 )
+    {
+      logger << "  log1p() transforming all features\n";
+      for (int i=0; i<nt; i++)
+	if ( fabs( X[i] ) > 1e-8 ) 
+	  X[i] = ( X[i] > 0 ? 1 : -1 ) * log1p( fabs( X[i] ) ) ;
+    }
+
+  // ?? hmmm... but then feature means/SDs are on wrong scale...
+  
   //
   // Normalization of metrics
   //
 
   Z = X - model.mean ;
-
-  Z = X.array() / model.sd.array() ; 
-
-  //
-  // Output
-  //
-
-  output();
-
-  //
-  // Prediction
-  //
-
-  // raw
-  y = y1 = (Z.transpose() * model.coef) + model.specials[ "model_intercept" ]; 
-  logger << "  predicted value = " << y << "\n";
-  writer.value( "Y" , y );
   
-  // bias corrected
+  Z = X.array() / model.sd.array() ; 
+  
 
-  if ( model.specials.find( "bias_correction_term" ) != model.specials.end() )
+
+  
+  //
+  // Missing data imputation (on Z scale)
+  //
+  
+  if ( n_obs < nt )
     {
+      logger << "  imputing missing values for " << nt - n_obs << " of " << nt << " features\n";      
+      Z = knn.impute( Z , missing );
+    }
+  
+  
+  //
+  // Check means, if reference data are present - assumes they are standardized
+  //
+  
+  if ( knn.populated() )
+    {      
+      // original distances
+      D = knn.distance( Z );
+      
+      // re-impute missing/weird values?
+      if ( do_reimputation )
+	{
+	  missing2.resize( nt , false );
+	  int bad = 0;
+	  for (int i=0; i<nt; i++)
+	    if ( fabs( D[i] ) > imp_th )
+	      {
+		++bad; 
+		missing2[i] = true;
+	      }
+
+	  if ( bad > 0 ) 
+	    {
+	      logger << "  attempting re-imputation for " << bad << " features\n";
+	      if ( nt - bad <  model.specials[ "minf" ] )
+		{
+		  logger << "  *** would imply fewer than " << model.specials[ "minf" ] << " original features remaining, bailing\n";		  
+		  writer.value( "OKAY" , 0 );
+		  return;
+		}
+
+	      // impute
+	      Z = knn.impute( Z , missing2 );
+	      
+	    }
+	}
+            
+    }
+  
+  //
+  // Primary prediction
+  //
+  
+  y = y1 = (Z.transpose() * model.coef) + model.specials[ "model_intercept" ]; 
+
+
+
+
+  
+  //
+  // bias corrected
+  //
+
+  const bool apply_bias_correction = model.specials.find( "bias_correction_term" ) != model.specials.end() ;
+
+  if ( apply_bias_correction ) 
+    {
+      if (  model.specials.find( "bias_correction_slope" ) == model.specials.end() )
+	Helper::halt( "need to specify bias_correction_slope special variable\n" );
+      
+      if (  model.specials.find( "bias_correction_intercept" ) == model.specials.end() )
+	Helper::halt( "need to specify bias_correction_intercept special variable\n" );
+      
       double b = model.specials["bias_correction_slope"];
       double c = model.specials["bias_correction_intercept"];
       double x = model.specials["bias_correction_term"];
       
       y1 = y - ( b * x + c );
-      logger << "  bias-corrected predicted value = " << y1 << "\n";
-      writer.value( "Y1" , y );
-      writer.value( "X" , x );
     }
 
+  //
+  // softplus
+  //
+
+  const bool apply_softplus = model.specials[ "softplus" ] > 0 ;
+  if ( apply_softplus )
+    {
+      logger << "  applying softplus scaling to predicted values\n";
+      
+      y = log1p( exp(-fabs(y) ) ) + ( y > 0 ? y : 0 ) ; 
+
+      if  ( apply_bias_correction ) 
+	y1 = log1p( exp(-fabs(y1) ) ) + ( y1 > 0 ? y1 : 0 ) ; 
+      
+    }
   
+  
+  //
+  // Feature level output
+  //
+
+  logger << "\n  predicted value (Y) = " << y << "\n";
+  writer.value( "Y" , y );
+
+  if ( apply_bias_correction )
+    {
+      logger << "  bias-corrected predicted value (Y1) = " << y1 << "\n";
+      writer.value( "Y1" , y );
+      writer.value( "YOBS" , model.specials["bias_correction_term"] );
+    }
+  
+  output();
+
+
+  //
+  // all done
+  //
   
 }
-
 
 void prediction_t::output() const
 {
@@ -235,11 +479,31 @@ void prediction_t::output() const
   while ( tt != model.terms.end() )
     {
       writer.level( tt->label , "TERM" );
-      writer.value( "X" , X[i] );
+
+      // only output if non-missing raw value
+      if ( ! missing[i] ) 
+	writer.value( "X" , X[i] );
+
+      // if here, Z would have been imputed, so okay to
+      // output either way
       writer.value( "Z" , Z[i] );
+      
+      // was a KNN run? were any features imputed
+      if ( knn.populated() )
+       	{
+       	  // D only makes sense if non-missing
+       	  if ( ! missing[i] ) 
+       	    writer.value( "D" , D[i] );      
+	  
+       	  writer.value( "IMP" , (int)missing[i] );
+	  writer.value( "REIMP" , (int)missing2[i] );
+       	}
+
+      // population/model parameters, but included for refernece
       writer.value( "M" , model.mean[i] );
       writer.value( "SD" , model.sd[i] );
       writer.value( "B" , model.coef[i] );      
+
       ++i;
       ++tt;
     }
