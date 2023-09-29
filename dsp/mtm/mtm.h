@@ -32,6 +32,7 @@ struct param_t;
 
 #include "stats/Eigen/Dense"
 #include "fftw/fftwrap.h"
+#include "fftw/bandaid.h"
 
 
 namespace mtm
@@ -79,7 +80,7 @@ struct mtm_t
 
   // dB output?
   bool dB;
-
+  
   // hold results here
   std::vector<double> f;
   std::vector<double> spec; // average over segments
@@ -92,7 +93,14 @@ struct mtm_t
   bool opt_remove_mean;
   bool opt_remove_trend;
 
-
+  // track band-level info
+  bandaid_t * bandaid;
+  
+  // kurtosis 
+  void calc_kurtosis( bool kurt3 );
+  bool kurt3;
+  std::map<frequency_band_t,double> kurtosis;
+  
   // restrict to only some segments?
   std::vector<bool> restrict;
   

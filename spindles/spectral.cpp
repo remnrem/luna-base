@@ -31,11 +31,10 @@
 #include "fftw/fftwrap.h"
 #include "dsp/mse.h"
 #include "miscmath/dynam.h"
-
+#include "fftw/bandaid.h"
 
 extern writer_t writer;
 extern logger_t logger;
-
 
 
 annot_t * spectral_power( edf_t & edf , 
@@ -78,6 +77,7 @@ annot_t * spectral_power( edf_t & edf ,
     Helper::halt( "cannot have empty ratio arg" );
   // ratio=ALPHA/BETA,THETA/DELTA,...
   const std::string ratios = calc_ratio ? param.value( "ratio" ) : "" ;
+  const int ratio_plus1 = param.has( "ratio1" );
   
   // Characterize dynamics: of all epoch-level stats created, get the H1, H2, H3, linear and exponential trend
   // Hjorth stats just consider all points concatenated
@@ -214,47 +214,15 @@ annot_t * spectral_power( edf_t & edf ,
 
   const bool use_nextpow2 = param.has( "pow2" );
 
-
   //
-  // User defined 'TOTAL' ? (allow change o the fly)
+  // change power band definitions on-the-fly
   //
 
-  globals::freq_band[ DENOM ] = globals::freq_band[ TOTAL ];
+  bandaid_t bandaid;
 
-  if ( param.has( "total" ) )
-    {
-      std::vector<std::string> f = Helper::parse( param.value( "total" ) , ",-" );
-      if ( f.size() != 2 ) Helper::halt( "expecting band=lower,upper" );
-      double f0, f1;
-      if ( ! Helper::str2dbl( f[0] , &f0 ) ) Helper::halt( "expecting numeric for total power range" );
-      if ( ! Helper::str2dbl( f[1] , &f1 ) ) Helper::halt( "expecting numeric for total power range" );
-      if ( f0 >= f1 ) Helper::halt( "expecting band=lower,upper" );
-      if ( f0 < 0 || f1 < 0 ) Helper::halt( "negative frequencies specified" );
-
-      // update
-      logger << "  setting total power (denominator for RELPSD) to " << f0 << " to " << f1 << " Hz\n"; 
-      globals::freq_band[ DENOM ] = freq_range_t( f0 , f1 ) ;
-    }
+  bandaid.define_bands( param );
   
-  //
-  // Define standard band summaries
-  //
   
-  std::vector<frequency_band_t> bands;
-  bands.push_back( SLOW );
-  bands.push_back( DELTA );
-  bands.push_back( THETA );
-  bands.push_back( ALPHA );
-  bands.push_back( SIGMA );
-  if ( 0 )
-    {
-      bands.push_back( LOW_SIGMA );
-      bands.push_back( HIGH_SIGMA );
-    }
-  bands.push_back( BETA );
-  bands.push_back( GAMMA );
-  bands.push_back( DENOM );
-
   //
   // Attach signals
   //
@@ -340,8 +308,7 @@ annot_t * spectral_power( edf_t & edf ,
 
       std::vector<double> epochs;
 
-      // band and F results
-      std::map<frequency_band_t,std::vector<double> > track_band;
+      // track F results      
       std::map<int,std::vector<double> > track_freq;
       std::map<int,std::vector<double> > track_freq_logged;
       
@@ -452,36 +419,29 @@ annot_t * spectral_power( edf_t & edf ,
 			  average_adj ,
 			  use_nextpow2 );
 	   
-
-	   double this_slowwave   = pwelch.psdsum( SLOW )  ;      /// globals::band_width( SLOW );
-	   double this_delta      = pwelch.psdsum( DELTA ) ;      /// globals::band_width( DELTA );
-	   double this_theta      = pwelch.psdsum( THETA ) ;      /// globals::band_width( THETA );
-	   double this_alpha      = pwelch.psdsum( ALPHA ) ;      /// globals::band_width( ALPHA );
-	   double this_sigma      = pwelch.psdsum( SIGMA ) ;      /// globals::band_width( SIGMA );
-	   double this_low_sigma  = pwelch.psdsum( LOW_SIGMA ) ;  /// globals::band_width( LOW_SIGMA );
-	   double this_high_sigma = pwelch.psdsum( HIGH_SIGMA ) ; /// globals::band_width( HIGH_SIGMA );
-	   double this_beta       = pwelch.psdsum( BETA )  ;      /// globals::band_width( BETA );
-	   double this_gamma      = pwelch.psdsum( GAMMA ) ;      /// globals::band_width( GAMMA );]
-	   double this_total      = pwelch.psdsum( DENOM ) ;      /// globals::band_width( DENOM );
+	   bandaid.track_bands_per_epoch( pwelch.psdsum( SLOW ),
+					  pwelch.psdsum( DELTA ),
+					  pwelch.psdsum( THETA ),
+					  pwelch.psdsum( ALPHA ),
+					  pwelch.psdsum( SIGMA ),
+					  pwelch.psdsum( LOW_SIGMA ),
+					  pwelch.psdsum( HIGH_SIGMA ),
+					  pwelch.psdsum( BETA ),
+					  pwelch.psdsum( GAMMA ),
+					  pwelch.psdsum( DENOM ) );
 	   
-	   //
-	   // track epoch-level band-power statistics
-	   //
-	   
-	   track_band[ SLOW  ].push_back( this_slowwave );
-	   track_band[ DELTA ].push_back( this_delta );
-	   track_band[ THETA ].push_back( this_theta );
-	   track_band[ ALPHA ].push_back( this_alpha );
-	   track_band[ SIGMA ].push_back( this_sigma );
-	   track_band[ BETA  ].push_back( this_beta );
-	   track_band[ GAMMA ].push_back( this_gamma );
-	   track_band[ DENOM ].push_back( this_total );
+	   // double this_slowwave   = pwelch.psdsum( SLOW )  ;      /// globals::band_width( SLOW );
+	   // double this_delta      = pwelch.psdsum( DELTA ) ;      /// globals::band_width( DELTA );
+	   //  double this_theta      = pwelch.psdsum( THETA ) ;      /// globals::band_width( THETA );
+	   //  double this_alpha      = pwelch.psdsum( ALPHA ) ;      /// globals::band_width( ALPHA );
+	   //  double this_sigma      = pwelch.psdsum( SIGMA ) ;      /// globals::band_width( SIGMA );
+	   //  double this_low_sigma  = pwelch.psdsum( LOW_SIGMA ) ;  /// globals::band_width( LOW_SIGMA );
+	   //  double this_high_sigma = pwelch.psdsum( HIGH_SIGMA ) ; /// globals::band_width( HIGH_SIGMA );
+	   //  double this_beta       = pwelch.psdsum( BETA )  ;      /// globals::band_width( BETA );
+	   //  double this_gamma      = pwelch.psdsum( GAMMA ) ;      /// globals::band_width( GAMMA );]
+	   //  double this_total      = pwelch.psdsum( DENOM ) ;      /// globals::band_width( DENOM );
 
-	   if ( 0 )
-	     {
-	       track_band[ LOW_SIGMA ].push_back( this_low_sigma );
-	       track_band[ HIGH_SIGMA ].push_back( this_high_sigma );
-	     }
+	   
 	   
 	   //
 	   // track epoch numbers (for dynam_t)
@@ -496,78 +456,70 @@ annot_t * spectral_power( edf_t & edf ,
 	   if ( show_epoch || ( cache_epochs && cache_bands ) )
 	     {
 	       
-	       double this_total =  this_slowwave
-		 + this_delta
-		 + this_theta
-		 + this_alpha
-		 + this_sigma  
-		 + this_beta
-		 + this_gamma;
-	       
-	       if ( this_total > 0 )
+	       if ( bandaid.total > 0 )
 		 {
 		   writer.level( globals::band( SLOW ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
-		     writer.value( "PSD" , dB ? 10*log10( this_slowwave ) : this_slowwave  );
-		     writer.value( "RELPSD" , this_slowwave / this_total );
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.slow ) : bandaid.slow  );
+		     writer.value( "RELPSD" , bandaid.slow / bandaid.total );
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_slowwave ) : this_slowwave );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.slow ) : bandaid.slow );
 		   
 		   writer.level( globals::band( DELTA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
-		     writer.value( "PSD" , dB ? 10*log10( this_delta ) : this_delta );
-		     writer.value( "RELPSD" , this_delta / this_total );
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.delta ) : bandaid.delta );
+		     writer.value( "RELPSD" , bandaid.delta / bandaid.total );
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_delta ) : this_delta );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.delta ) : bandaid.delta );
 		   
 		   writer.level( globals::band( THETA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
-		     writer.value( "PSD" , dB ? 10*log10( this_theta ) : this_theta  );
-		     writer.value( "RELPSD" , this_theta / this_total );
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.theta ) : bandaid.theta  );
+		     writer.value( "RELPSD" , bandaid.theta / bandaid.total );
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_theta ) : this_theta );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.theta ) : bandaid.theta );
 		   
 		   writer.level( globals::band( ALPHA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
-		     writer.value( "PSD" , dB ? 10*log10( this_alpha ) : this_alpha );
-		     writer.value( "RELPSD" , this_alpha / this_total );
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.alpha ) : bandaid.alpha );
+		     writer.value( "RELPSD" , bandaid.alpha / bandaid.total );
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_alpha ) : this_alpha );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.alpha ) : bandaid.alpha );
 		   
 		   writer.level( globals::band( SIGMA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
-		     writer.value( "PSD" , dB ? 10*log10( this_sigma ) : this_sigma );
-		     writer.value( "RELPSD" , this_sigma / this_total );
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.sigma ) : bandaid.sigma );
+		     writer.value( "RELPSD" , bandaid.sigma / bandaid.total );
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_sigma ) : this_sigma );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.sigma ) : bandaid.sigma );
 
 		   writer.level( globals::band( BETA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
-		     writer.value( "PSD" , dB ? 10*log10( this_beta ) : this_beta  );
-		     writer.value( "RELPSD" , this_beta / this_total );
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.beta ) : bandaid.beta  );
+		     writer.value( "RELPSD" , bandaid.beta / bandaid.total );
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_beta ) : this_beta );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.beta ) : bandaid.beta );
 
 		   writer.level( globals::band( GAMMA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {		     
-		     writer.value( "PSD" , dB ? 10*log10( this_gamma ) : this_gamma );
-		     writer.value( "RELPSD" , this_gamma / this_total );
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.gamma ) : bandaid.gamma );
+		     writer.value( "RELPSD" , bandaid.gamma / bandaid.total );
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_gamma ) : this_gamma );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.gamma ) : bandaid.gamma );
 		   
 		   writer.level( globals::band( DENOM ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
-		     writer.value( "PSD" , dB ? 10*log10( this_total ) : this_total );				   
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.total ) : bandaid.total );				   
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
-		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( this_total ) : this_total );
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.total ) : bandaid.total );
 		   
 		   writer.unlevel( globals::band_strat );
 		   
@@ -575,7 +527,7 @@ annot_t * spectral_power( edf_t & edf ,
 	       else if ( cache_data && cache_epochs && cache_bands && ! dB )
 		 {
 		   // need to enter 0 in this case for cache
-		   //  nb. only doing this in non-dB mode (i.e. for ASYMM(
+		   //  nb. only doing this in non-dB mode (i.e. for ASYMM)
 		   writer.level( globals::band( SLOW ) , globals::band_strat );
 		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
 		   
@@ -615,9 +567,6 @@ annot_t * spectral_power( edf_t & edf ,
 	       freqs = pwelch.freq;
 	     }
 	   
-	   
-	   // std::cout << "freqs.size() = " << freqs[s].size() << "\n";
-	   // std::cout << "pwelch.size() = " << pwelch.psd.size() << "\n";
 	   
 	   if ( freqs.size() == pwelch.psd.size() )
 	     {
@@ -1014,31 +963,26 @@ annot_t * spectral_power( edf_t & edf ,
       // mean total power
       //
 
-      double mean_total_power = MiscMath::mean( track_band[ DENOM ] );
+      double mean_total_power = MiscMath::mean( bandaid.track_band[ DENOM ] );
       
 
       //
       // by band 
       //      
       
-      std::vector<frequency_band_t>::const_iterator bi = bands.begin();
-      while ( bi != bands.end() )
+      std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
+      while ( bi != bandaid.bands.end() )
 	{	   
-
+	  
 	  if ( okay ) 
 	    {
-	      double p = MiscMath::mean( track_band[ *bi ] );
-
+	      double p = MiscMath::mean( bandaid.track_band[ *bi ] );
 	      writer.level( globals::band( *bi ) , globals::band_strat );
-
+	      
 	      if ( ! suppress_output ) {		
 		writer.value( "PSD" , dB ? 10*log10(p) : p  );
 		writer.value( "RELPSD" , p / mean_total_power );
 	      }
-	      
-	      // Cache summary bands?
-	      // if ( cache_data && cache_bands )
-	      // 	cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10(p) : p );
 	      
 	    }
 	  
@@ -1103,9 +1047,9 @@ annot_t * spectral_power( edf_t & edf ,
 	  // band power 
 	  //
 
-	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();
+	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
 	  
-	  while ( ii != track_band.end() )
+	  while ( ii != bandaid.track_band.end() )
 	    {	      
 	      writer.level( globals::band( ii->first ) , globals::band_strat );
 	      
@@ -1118,7 +1062,7 @@ annot_t * spectral_power( edf_t & edf ,
 	    }
 	  
 	  writer.unlevel( globals::band_strat ); 
-
+	  
 
 	  //
 	  // full spectra?
@@ -1171,9 +1115,9 @@ annot_t * spectral_power( edf_t & edf ,
 		     mse_m , mse_r );
 
 	  
-	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();
+	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
 
-	  while ( ii != track_band.end() )
+	  while ( ii != bandaid.track_band.end() )
 	    {
 	      
 	      writer.level( globals::band( ii->first ) , globals::band_strat );
@@ -1214,15 +1158,27 @@ annot_t * spectral_power( edf_t & edf ,
 	      	      
 	      frequency_band_t b1 = globals::band( tok[0] );
 	      frequency_band_t b2 = globals::band( tok[1] );
-	      
+
+	      // calculate both mean of epoch-ratios,
+	      // as well as ratio of means of epoch-power
+	      // optionally (ratio1) add +1 to denom, so it is always defined
+
 	      if ( b1 != UNKNOWN_BAND && b2 != UNKNOWN_BAND )
 		{
-		  const std::vector<double> & p1 = track_band[ b1 ];
-		  const std::vector<double> & p2 = track_band[ b2 ];
+		  const std::vector<double> & p1 = bandaid.track_band[ b1 ];
+		  const std::vector<double> & p2 = bandaid.track_band[ b2 ];
+
 		  if ( p1.size() != p2.size() ) Helper::halt( "internal error" );
+
 		  std::vector<double> rat;
+		  double pw1 = 0 , pw2 = 0;
 		  for (int i=0;i<p1.size(); i++)
-		    if ( p2[i] > 0 ) rat.push_back( p1[i] / p2[i] );
+		    {
+		      rat.push_back( p1[i] / ( ratio_plus1 + p2[i] ) );
+		      pw1 += p1[i];
+		      pw2 += p2[i];
+		    }
+
 		  if ( rat.size() > 0 )
 		    {
 		      const double rmean = MiscMath::mean( rat );
@@ -1230,6 +1186,7 @@ annot_t * spectral_power( edf_t & edf ,
 		      writer.level( tok[0] , "B1" );
 		      writer.level( tok[1] , "B2" );
 		      writer.value( "RATIO" , rmean );
+		      writer.value( "RATIO_MN" , pw1 / ( ratio_plus1 + pw2 ) );
 		      writer.value( "RATIO_MD" , rmedian );		  
 		      done_any = true;
 		    }
@@ -1247,13 +1204,13 @@ annot_t * spectral_power( edf_t & edf ,
 
       
       //
-      // Band-power kurtosis 
+      // Band-power kurtosis  (redundant now...) 
       //
 
       if ( calc_kurt )
 	{	  
-	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = track_band.begin();	  
-	  while ( ii != track_band.end() )
+	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();	  
+	  while ( ii != bandaid.track_band.end() )
 	    {	      
 	      writer.level( globals::band( ii->first ) , globals::band_strat );	      
 	      // get kurtosis of dB-scaled values

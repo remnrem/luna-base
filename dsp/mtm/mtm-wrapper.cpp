@@ -26,6 +26,7 @@
 #include "edf/slice.h"
 #include "eval.h"
 #include "fftw/fftwrap.h"
+#include "fftw/bandaid.h"
 
 #include "db/db.h"
 #include "helper/helper.h"
@@ -58,6 +59,37 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   const double segment_step_sec = param.has( "segment-inc" ) ? param.requires_dbl( "segment-inc" ) : segment_size_sec ;
 
   //
+  // set up band values
+  //
+
+  bandaid_t bandaid;
+
+  bandaid.define_bands( param );
+
+  //
+  // spectral kurtosis values
+  //
+
+  // 'excess' kurtosis, i.e. = 0 for N(0,1)
+  const bool spec_kurt  = param.has( "speckurt" ) || param.has( "speckurt3" ) ;
+
+  // standardard k, i.e. = 3 for N(0,1)
+  const bool spec_kurt3 = param.has( "speckurt3" );
+
+  //
+  // ratios of band-powers
+  //
+
+  // output ratios of band power values
+  const bool calc_ratio = param.has( "ratio" );
+  if ( calc_ratio && param.empty( "ratio" ) )
+    Helper::halt( "cannot have empty ratio arg" );
+  // ratio=ALPHA/BETA,THETA/DELTA,...
+  const std::string ratios = calc_ratio ? param.value( "ratio" ) : "" ;
+  const int ratio_plus1 = param.has( "ratio1" );
+
+  
+  //  
   // report epoch-level ?
   //
   
@@ -238,6 +270,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	restrict.push_back( ! okay );
 	if ( okay ) ++actual;
 	++nn;
+
 	// std::cout << "seg " << nn << "\t" << p << "\t" << start_sec << "\t" << stop_sec << "\t"
 	// 	  << " sz " << implied_sec << " " << segment_sec2 << " " 
 	// 	  << ( fabs( implied_sec - segment_sec2 ) > 0.001 )
@@ -264,10 +297,16 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       mtm.dB = dB;
       mtm.opt_remove_mean = mean_center;
       mtm.opt_remove_trend = remove_linear_trend;
-
+      mtm.bandaid = &bandaid;
+	
+      // calculate kurtosis values?
+      if ( spec_kurt )
+	mtm.calc_kurtosis( spec_kurt3 );	  
+      
+      // possibly restrict to a subset of segments?
       if ( restrict_start || restrict_stop )
 	mtm.restrict = restrict;
-	  
+      
       // s==0 means only give verbose output on first channel
       mtm.apply( d , Fs[s] , segment_size , segment_step , s == 0 );
       
@@ -331,6 +370,115 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       writer.unlevel( globals::freq_strat );
 
 
+      //
+      // bands
+      //
+      
+      bandaid.calc_bandpower( mtm.f , mtm.spec );
+
+      const double mean_total_power = bandaid.fetch( DENOM );
+      
+      std::vector<frequency_band_t>::const_iterator bb = bandaid.bands.begin();
+      while ( bb != bandaid.bands.end() )
+	{
+	  writer.level( globals::band( *bb ) , globals::band_strat );
+	  double p = bandaid.fetch( *bb );
+	  writer.value( "MTM" , dB ? 10*log10(p) : p  );
+	  writer.value( "RELMTM" , p / mean_total_power );
+
+	  ++bb;
+	}
+      writer.unlevel( globals::band_strat );
+
+      
+      //
+      // Band-power ratios 
+      //
+      
+      if ( calc_ratio )
+	{
+	  // ratio=ALPHA/BETA,THETA/DELTA,...
+	  std::cout << " calc rating..\n";
+	  std::vector<std::string> r = Helper::parse( Helper::toupper( ratios ) , ',' );
+	  
+	  bool done_any = false; 
+	  
+	  std::vector<std::string>::const_iterator rr = r.begin();
+	  while ( rr != r.end() )
+	    {
+	      // A/B
+	      std::vector<std::string> tok = Helper::parse( *rr , '/' );
+	      if ( tok.size() != 2 ) Helper::halt( "bad format for PSD ratio: " + *rr );
+	      
+	      frequency_band_t b1 = globals::band( tok[0] );
+	      frequency_band_t b2 = globals::band( tok[1] );
+
+	      // calculate both mean of epoch-ratios,
+	      // as well as ratio of means of epoch-power
+	      // optionally (ratio1) add +1 to denom, so it is always defined
+
+	      if ( b1 != UNKNOWN_BAND && b2 != UNKNOWN_BAND )
+		{
+		  const std::vector<double> & p1 = bandaid.track_band[ b1 ];
+		  const std::vector<double> & p2 = bandaid.track_band[ b2 ];
+
+		  std::cout << " p1 = " << p1.size() << " " << p2.size() << "\n";
+		  
+		  if ( p1.size() != p2.size() ) Helper::halt( "internal error" );
+
+		  std::vector<double> rat;
+		  double pw1 = 0 , pw2 = 0;
+		  for (int i=0;i<p1.size(); i++)
+		    {
+		      rat.push_back( p1[i] / ( ratio_plus1 + p2[i] ) );
+		      pw1 += p1[i];
+		      pw2 += p2[i];
+		    }
+
+		  std::cout << "rat size = " << rat.size() << "\n";
+		  
+		  if ( rat.size() > 0 )
+		    {
+		      const double rmean = MiscMath::mean( rat );
+		      const double rmedian = MiscMath::median( rat );
+		      writer.level( tok[0] , "B1" );
+		      writer.level( tok[1] , "B2" );
+		      writer.value( "RATIO" , rmean );
+		      writer.value( "RATIO_MN" , pw1 / ( ratio_plus1 + pw2 ) );
+		      writer.value( "RATIO_MD" , rmedian );		  
+		      done_any = true;
+		    }
+		}
+	      ++rr;
+	    }
+	  
+	  if ( done_any )
+	    {
+	      writer.unlevel( "B2" );
+	      writer.unlevel( "B1" );
+	    }
+	  
+	}
+
+      
+
+      //
+      // 'spectral kurtosis'
+      //
+
+      if ( spec_kurt ) 
+	{	  
+	  std::map<frequency_band_t,double>::const_iterator bb = mtm.kurtosis.begin();
+	  while ( bb != mtm.kurtosis.end() )
+	    {
+	      writer.level( globals::band( bb->first ) , globals::band_strat );
+	      writer.value( "SPECKURT" , bb->second );	      
+	      ++bb;
+	    }
+	  writer.unlevel( globals::band_strat );
+	}
+
+      
       //
       // display spectral slope?
       //

@@ -255,7 +255,18 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	  else
 	    espec[sn][i] = raw_espec[sn][i] ;	  
 	}  
-      
+
+      //
+      // track band-power per segment?
+      //
+
+      if ( bandaid != NULL )
+	{
+	  // fill 'current' slots
+	  bandaid->calc_bandpower( f , raw_espec[sn] );
+	  // but also track current --> into track_band[]
+	  bandaid->track();
+	}
       
       //
       // Next segment
@@ -287,9 +298,66 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
       spec[f] /= (double)n_segs_actual;      
       raw_spec[f] /= (double)n_segs_actual;
     }
- 
+   
+
+
+  // -------------------------------------------------------------------------------//
+  //
+  // Spectral kurtosis 
+  //
+  // -------------------------------------------------------------------------------
+  
+  if ( kurtosis.size() )    
+    {
+
+      std::map<frequency_band_t,double>::const_iterator bb = kurtosis.begin();
+      
+      while ( bb != kurtosis.end() )
+	{
+	  
+	  freq_range_t band = globals::freq_band[ bb->first ];
+
+	  std::vector<double> xx;
+	  
+	  for (int fi=0; fi<nfreqs; fi++)
+	    {
+	      if ( f[fi] >= band.first && f[fi] < band.second )
+		{		  
+		  for (int i=0; i<n_segs; i++)
+		    {
+		      // only use computed segs
+		      if ( allsegs || ! restrict[i] )
+			xx.push_back( raw_espec[i][fi] );
+		    }
+		}
+	    }
+	  
+	  double k = MiscMath::kurtosis( xx );	
+	  if ( kurt3 ) k += 3;
+	  
+	  // store
+	  kurtosis[ bb->first ] = k ;
+	  
+	  // next band?
+	  ++bb; 
+	}
+    }
+  
 }
 
+
+void mtm_t::calc_kurtosis( bool kurt3_ )
+{
+  kurt3 = kurt3_;  
+  kurtosis[ SLOW ] = 0;
+  kurtosis[ DELTA ] = 0;
+  kurtosis[ THETA ] = 0;
+  kurtosis[ ALPHA ] = 0;
+  kurtosis[ SIGMA ] = 0;
+  kurtosis[ BETA ] = 0;
+  kurtosis[ GAMMA ] = 0;
+  kurtosis[ TOTAL ] = 0;   
+}
 
 
 

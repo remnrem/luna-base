@@ -335,7 +335,8 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 	  X[i] = ( X[i] > 0 ? 1 : -1 ) * log1p( fabs( X[i] ) ) ;
     }
 
-  // ?? hmmm... but then feature means/SDs are on wrong scale...
+
+
   
   //
   // Normalization of metrics
@@ -344,8 +345,6 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   Z = X - model.mean ;
   
   Z = X.array() / model.sd.array() ; 
-  
-
 
   
   //
@@ -456,7 +455,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   if ( apply_bias_correction )
     {
       logger << "  bias-corrected predicted value (Y1) = " << y1 << "\n";
-      writer.value( "Y1" , y );
+      writer.value( "Y1" , y1 );
       writer.value( "YOBS" , model.specials["bias_correction_term"] );
     }
   
@@ -496,7 +495,8 @@ void prediction_t::output() const
        	    writer.value( "D" , D[i] );      
 	  
        	  writer.value( "IMP" , (int)missing[i] );
-	  writer.value( "REIMP" , (int)missing2[i] );
+	  if ( missing2.size() == nt )
+	    writer.value( "REIMP" , (int)missing2[i] );
        	}
 
       // population/model parameters, but included for refernece
