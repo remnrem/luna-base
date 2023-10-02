@@ -314,13 +314,13 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   //
 
   if ( model.mean.size() != nt )
-    Helper::halt( "problem, only have " + Helper::int2str( model.mean.size() ) + " means" );
+    Helper::halt( "problem, only have " + Helper::int2str( (int)model.mean.size() ) + " means" );
 
   if ( model.sd.size() != nt )
-    Helper::halt( "problem, only have " + Helper::int2str( model.sd.size() ) + " sds" );
+    Helper::halt( "problem, only have " + Helper::int2str( (int)model.sd.size() ) + " sds" );
   
   if ( model.coef.size() != nt )
-    Helper::halt( "problem, only have " + Helper::int2str( model.coef.size() ) + " coefs" );
+    Helper::halt( "problem, only have " + Helper::int2str( (int)model.coef.size() ) + " coefs" );
   
 
   //
