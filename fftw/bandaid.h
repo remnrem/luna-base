@@ -41,26 +41,25 @@ struct param_t;
 struct bandaid_t {
 
   bandaid_t();
+
+  void init();
   
   void define_bands( param_t & );
 
   // used w/ PSD
   void track_bands_per_epoch( double , double, double, double, double, double, double, double, double, double ); 
   double psdsum( const std::vector<double> & f , const std::vector<double> & x , const freq_range_t & b );
-
   
   // these next two used w/ MTM 
   void calc_bandpower( const std::vector<double> & f , const std::vector<double> & x );
 
   void track();
   
-
   double fetch( frequency_band_t b ) const;
   
   void freq_band_settings( const std::string & b , double * r0 , double * r1 );
 
   std::map<frequency_band_t,std::vector<double> > track_band;
-
   
   std::vector<frequency_band_t> bands;
   

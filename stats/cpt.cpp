@@ -133,12 +133,16 @@ void cpt_wrapper( param_t & param )
   
   
   //
-  // which variables to pull from these?
+  // which variables to pull from these? (or all?)
   //
 
-  if ( ! param.has( "dv" ) ) Helper::halt( "no dv=var1,var2 specified" );
-  std::set<std::string> dvars = param.strset( "dv" );
+  std::set<std::string> dvars;
+  bool all_dvars = param.value( "dv" ) == "*" ;
+  if ( param.has( "all-dvs" ) ) all_dvars = true;
+  if ( ! all_dvars ) 
+    dvars = param.strset( "dv" );
 
+     
   //
   // which channels to include (if not all)
   //
@@ -280,10 +284,40 @@ void cpt_wrapper( param_t & param )
       if ( dline[0] == '%' || dline[0] == '#' ) continue; 
 
       ++row_cnt;
-
+      
       std::vector<std::string> tok = Helper::parse( dline , "\t" );
       if ( tok.size() != iv_coln ) Helper::halt( "bad number of columns in " + iv_file + "\n" + dline );
 
+      // scan for missing data
+      bool missing_data = false; 
+      
+      // add IV
+      double iv_num;
+      if ( ! Helper::str2dbl( tok[ iv_col ] , &iv_num ) )
+	missing_data = true;
+      //Helper::halt( "problem with numeric value" + tok[ iv_col ] );
+
+      // add covariates
+      std::vector<double> cc( covar_col.size() );
+      for (int c=0; c<covar_col.size(); c++)
+	{
+	  double cov_num;
+	  if ( ! Helper::str2dbl( tok[ covar_col[c] ] , &cov_num ) )
+	    missing_data = true;
+	  cc[c] = cov_num;	  
+	}
+      
+      // skip if any missing data
+      if ( missing_data )
+	continue;
+      
+      // no missing IV data -- can add here
+      ivdata[ iv ].push_back( iv_num );
+      
+      // add covariates
+      for (int c=0; c<covar_col.size(); c++)
+	ivdata[ covar_label[c] ].push_back( cc[c] );
+            
       // add ID
       const std::string this_id = tok[ id_col ] ;
       if ( id_excludes.size() != 0 && id_excludes.find( this_id ) != id_excludes.end() ) continue;
@@ -293,20 +327,6 @@ void cpt_wrapper( param_t & param )
       ids.push_back( tok[ id_col ] );
       ids_map[ tok[ id_col ] ] = this_idn;
 
-      // add IV
-      double iv_num;
-      if ( ! Helper::str2dbl( tok[ iv_col ] , &iv_num ) )
-	Helper::halt( "problem with numeric value" + tok[ iv_col ] );
-      ivdata[ iv ].push_back( iv_num );
-
-      // add covariates
-      for (int c=0; c<covar_col.size(); c++)
-	{
-	  double cov_num;
-	  if ( ! Helper::str2dbl( tok[ covar_col[c] ] , &cov_num ) )
-	    Helper::halt( "problem with numeric value" + tok[ covar_col[c] ] );
-	  ivdata[ covar_label[c] ].push_back( cov_num );
-	}
 
       // next row
       
@@ -394,12 +414,12 @@ void cpt_wrapper( param_t & param )
       for (int i=0;i<tok.size();i++)
 	{
 	  if ( tok[i] == "ID" ) id_slot = i;
-	  if ( tok[i] == "F" ) f_slot = i;
-	  if ( tok[i] == "CH" ) ch_slot = i;
-	  if ( tok[i] == "CH1" ) ch1_slot = i;
-	  if ( tok[i] == "CH2" ) ch2_slot = i;	  
-	  if ( tok[i] == "T" || tok[i] == "TBIN" ) t_slot = i;
-	  if ( dvars.find( tok[i] ) != dvars.end() ) slot2var[i] = tok[i];
+	  else if ( tok[i] == "F" ) f_slot = i;
+	  else if ( tok[i] == "CH" ) ch_slot = i;
+	  else if ( tok[i] == "CH1" ) ch1_slot = i;
+	  else if ( tok[i] == "CH2" ) ch2_slot = i;	  
+	  else if ( tok[i] == "T" || tok[i] == "TBIN" ) t_slot = i;
+	  else if ( all_dvars || dvars.find( tok[i] ) != dvars.end() ) slot2var[i] = tok[i];
 	}
       
       if ( slot2var.size() == 0 ) 
@@ -495,8 +515,7 @@ void cpt_wrapper( param_t & param )
 		  ++ii;
 		  continue;
 		}
-		   
-	      
+		   	      
 	      double x;
 	      if ( ! Helper::str2dbl( tok[ ii->first ] , &x ) ) 
 		Helper::halt( "bad value in " + infile + "\n" 
@@ -558,8 +577,8 @@ void cpt_wrapper( param_t & param )
 		    {
 		      
 		      // ch ~ frq ~ time ~ var 
-		      std::string col_name = ii2->first + "~" + ii3->first + "~" + ii4->first + "~" + ii4->first ;
-
+		      std::string col_name = ii2->first + "~" + ii3->first + "~" + ii4->first + "~" + ii5->first ;
+		      
 		      // cols
 		      col2ch[ col_name ] = ii2->first;
 		      std::vector<std::string> ctok = Helper::parse( ii2->first , "." );
@@ -580,7 +599,7 @@ void cpt_wrapper( param_t & param )
 		      col2var[ col_name ] = ii5->first;
 		      
 		      if ( cols.find( col_name ) == cols.end() )
-			{
+			{			  
 			  cols.insert( col_name );
 			  vname.push_back( col_name );
 			  slot[ ii2->first ][ ii3->first ][ ii4->first ][ ii5->first ] = cols.size() - 1 ;
@@ -930,6 +949,16 @@ void cpt_wrapper( param_t & param )
   if ( clocs_file != "" )
     clocs.load_cart( clocs_file );
 
+  // attach default clocs (unless told otherwise?)
+  if ( ! clocs.attached() ) 
+    if ( ! param.has( "no-clocs" ) )
+      if ( spatial_threshold > 0 ) 	
+	clocs.set_default();
+
+  if ( param.has( "no-clocs" )  || spatial_threshold < 1e-8 )
+    logger << "  no clocs attached, not defining spatial clusters\n";
+
+  
   //
   // Verbose output for adjacencies
   //
@@ -946,7 +975,7 @@ void cpt_wrapper( param_t & param )
       
       cpt.calc_adjacencies( vname , col2var , col2f , col2t, col2ch1 , col2ch2 ,
 			    freq_threshold , time_threshold , 
-			    clocs_file == "" ? NULL : &clocs ,
+			    clocs.attached() ? &clocs : NULL ,
 			    spatial_threshold , 
 			    verbose ) ;
     }
@@ -1165,8 +1194,9 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 	      std::set<std::string>::const_iterator cc2 = chs.begin();
 	      while ( cc2 != chs.end() )
 		{
-		  if ( *cc2 != "." ) 
-		    dist_matrix[ *cc1 ][ *cc2 ] = clocs->distance( *cc1 , *cc2 , 2 );
+		  if ( *cc2 != "." )
+		    dist_matrix[ *cc1 ][ *cc2 ] = clocs->distance( *cc1 , *cc2 , 2 );		      
+
 		  ++cc2;
 		}
 	    }

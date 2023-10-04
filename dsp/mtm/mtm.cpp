@@ -124,20 +124,23 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   const double spectral_resolution = ( 2 * npi ) / ( seg_size / (double)fs );
 
   if ( verbose ) 
-    logger << "  assuming all channels have the same sample rate of " << fs << "Hz:\n"
-	   << "    time half-bandwidth (nw) = " << npi << "\n"
-	   << "    number of tapers         = " << nwin << "\n"
-	   << "    spectral resolution      = " << spectral_resolution << "Hz\n"      
-	   << "    segment duration         = " << seg_size / (double)fs << "s\n"
-	   << "    segment step             = " << seg_step / (double)fs << "s\n"
-	   << "    FFT size                 = " << klen << "\n"
-	   << "    number of segments       = " << n_segs << "\n";
-
-  if ( ! allsegs )
-    logger << "    computed segments        = " << n_segs_actual << "\n"; 
-  
-  logger << "    adjustment               = "
-	 << ( opt_remove_trend ? "detrend" : ( opt_remove_mean ? "constant" : "none" ) ) << "\n";
+    {
+      logger << "  assuming all channels have the same sample rate of " << fs << "Hz:\n"
+	     << "    time half-bandwidth (nw) = " << npi << "\n"
+	     << "    number of tapers         = " << nwin << "\n"
+	     << "    spectral resolution      = " << spectral_resolution << "Hz\n"      
+	     << "    segment duration         = " << seg_size / (double)fs << "s\n"
+	     << "    segment step             = " << seg_step / (double)fs << "s\n"
+	     << "    FFT size                 = " << klen << "\n"
+	     << "    number of segments       = " << n_segs << "\n";
+      
+      if ( ! allsegs )
+	logger << "    computed segments        = " << n_segs_actual << "\n"; 
+      
+      logger << "    adjustment               = "
+	     << ( opt_remove_trend ? "detrend" : ( opt_remove_mean ? "constant" : "none" ) ) << "\n";
+      
+    }
   
   //
   // Generate and store tapers

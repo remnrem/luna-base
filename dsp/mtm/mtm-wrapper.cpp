@@ -93,8 +93,10 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   // report epoch-level ?
   //
   
-  bool epoch_level_output = param.has( "epoch" );
-
+  bool epoch_level_output = param.has( "epoch" ) || param.has( "epoch-bands" );
+  
+  bool epoch_level_output_bands_only = param.has( "epoch-bands" );
+  
   bool display_tapers = param.has( "dump-tapers" );
 
   bool mean_center = param.has( "mean-center" );
@@ -198,6 +200,12 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
       if ( min_sr && Fs[s] < min_sr )
 	continue;
+      
+      //
+      // Clear up
+      //
+
+      bandaid.init();
       
       //
       // Stratify output by channel
@@ -515,7 +523,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       if ( epoch_level_output || spectral_slope || new_sigs )
 	{
 	  const int nsegs = mtm.espec.size();
-
+	  
 	  if ( nsegs != start.size() )
 	    Helper::halt( "internal error in MTM timing:" + Helper::int2str( nsegs ) + " vs " + Helper::int2str( (int)start.size() ) );
 	  
@@ -531,22 +539,47 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		      // add main output
 		      //
 		      
-		      if ( epoch_level_output ) 
+		      if ( epoch_level_output )
 			{
 			  writer.level( j+1 , "SEG" );	  
 			  writer.value( "START" , start[j] );
 			  writer.value( "STOP" , stop[j] );
 			  writer.value( "DISC" , (int)disc[j] );
 			  
-			  for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
+			  // spectrogram-level output?
+			  if ( ! epoch_level_output_bands_only ) 
 			    {
-			      if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+			      for ( int i = 0 ; i < mtm.f.size() ; i++ ) 
 				{
-				  writer.level( mtm.f[i] , globals::freq_strat  );
-				  writer.value( "MTM" , mtm.espec[j][i] );
+				  if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f ) 
+				    {
+				      writer.level( mtm.f[i] , globals::freq_strat  );
+				      writer.value( "MTM" , mtm.espec[j][i] );
+				    }
 				}
+			      writer.unlevel( globals::freq_strat );
 			    }
-			  writer.unlevel( globals::freq_strat );	      
+			  
+			  //
+			  // epoch-level band-level output?
+			  //
+			  
+			  bandaid.calc_bandpower( mtm.f , mtm.espec[j] );
+			  
+			  const double mean_total_power = bandaid.fetch( DENOM );
+			  
+			  std::vector<frequency_band_t>::const_iterator bb = bandaid.bands.begin();
+			  while ( bb != bandaid.bands.end() )
+			    {
+			      writer.level( globals::band( *bb ) , globals::band_strat );
+			      double p = bandaid.fetch( *bb );
+			      writer.value( "MTM" , dB ? 10*log10(p) : p  );
+			      if ( ! ( *bb == TOTAL || *bb == DENOM ) )
+				writer.value( "RELMTM" , p / mean_total_power );			  
+			      ++bb;
+			    }
+			  writer.unlevel( globals::band_strat );
+			  
 			}
 		      
 		      //
@@ -573,10 +606,14 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 			  
 			}
 		    }
+		  
 		}
 	    }
-	  
-	  // epoch level spectral slope? (based on the raw power )
+	
+
+	  //
+	  // epoch level spectral slope? (based on raw power)
+	  //
 	  
 	  if ( spectral_slope )
 	    {		  

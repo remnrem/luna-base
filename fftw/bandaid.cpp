@@ -25,16 +25,29 @@
 
 bandaid_t::bandaid_t()
 {
+  init();
+  
+}
+
+void bandaid_t::init()
+{
+
+  // nb. this function clears the current tracker, but any changed freq band defs remain
+
+  track_band.clear();
+  
+  slow = delta = theta = alpha = sigma = beta = gamma = 0;
+  low_sigma = high_sigma = 0;
+  denom = total = 0;
+  
+  bands.clear();
   bands.push_back( SLOW );
   bands.push_back( DELTA );
   bands.push_back( THETA );
   bands.push_back( ALPHA );
   bands.push_back( SIGMA );
-  if ( 0 )
-    {
-      bands.push_back( LOW_SIGMA );
-      bands.push_back( HIGH_SIGMA );
-    }
+  //     bands.push_back( LOW_SIGMA );
+  //     bands.push_back( HIGH_SIGMA );
   bands.push_back( BETA );
   bands.push_back( GAMMA );
   bands.push_back( DENOM );
@@ -145,13 +158,10 @@ void bandaid_t::track()
   track_band[ BETA  ].push_back( beta );
   track_band[ GAMMA ].push_back( gamma );
   track_band[ DENOM ].push_back( denom );
-
-  if ( 0 )
-    {
-      track_band[ LOW_SIGMA ].push_back( low_sigma );
-      track_band[ HIGH_SIGMA ].push_back( high_sigma );
-    }
   
+  // track_band[ LOW_SIGMA ].push_back( low_sigma );
+  // track_band[ HIGH_SIGMA ].push_back( high_sigma );
+    
 }
 
 void bandaid_t::track_bands_per_epoch( double slow_ , double delta_, double theta_, double alpha_,
@@ -235,5 +245,4 @@ double bandaid_t::fetch( frequency_band_t b ) const
   }
   
 }
-
 

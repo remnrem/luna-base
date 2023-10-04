@@ -289,6 +289,11 @@ annot_t * spectral_power( edf_t & edf ,
 
       if ( Fs[s] < 50 ) continue;
 
+      //
+      // reset bandaid
+      //
+
+      bandaid.init();
       
       //
       // Stratify output by channel
