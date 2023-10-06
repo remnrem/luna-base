@@ -44,7 +44,7 @@ void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
       c_num = writer.cache_num_name();
       c_int = writer.cache_int_name();
       c_str = writer.cache_str_name();
-      std::cout << " " << c_num << "] [" << c_int << "] [" << c_str << "\n";
+      //std::cout << " " << c_num << "] [" << c_int << "] [" << c_str << "\n";
     }
   else
     {
@@ -66,14 +66,12 @@ void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
 
       // restore any writer/db recordings
       if ( c_num != "" )
-	{
-	  std::cout << " adding " << c_num << "\n";
-	  cache_t<double> * cache = to.timeline.cache.find_num( c_num );
-	  std::cout << " found? " << ( cache != NULL ) <<  "\n";
+	{	  
+	  cache_t<double> * cache = to.timeline.cache.find_num( c_num );	  
           writer.cache( cache );
 	}
 
-      if ( c_num != "" )
+      if ( c_int != "" )
 	{
 	  cache_t<int> * cache = to.timeline.cache.find_int( c_int );
           writer.cache( cache );
