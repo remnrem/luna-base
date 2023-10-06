@@ -240,10 +240,13 @@ ripples_t::ripples_t( const std::vector<double> & x ,
   //
   // filter-Hilbert
   //
-  
+
+  std::vector<double> ripple( 1, kwin_ripple ); // 40dB attenuation
+  std::vector<double> tw( 1, kwin_tw );
+
   std::vector<double> xf = dsptools::apply_fir( x , sr , fir_t::BAND_PASS ,
 						1 , // Kaiser window
-						kwin_ripple , kwin_tw ,
+						ripple , tw ,
 						flwr ,  fupr ,
 						0 ,  // order/ignored
 						fir_t::HAMMING , // ignored for KW      
@@ -266,7 +269,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 	hfbands == 1 ? xf :	
 	dsptools::apply_fir( x , sr , fir_t::BAND_PASS ,
 			     1 , // Kaiser window
-			     kwin_ripple , kwin_tw ,
+			     ripple , tw ,
 			     f1, f2 , 
 			     0 ,  // order/ignored
 			     fir_t::HAMMING , // ignored for KW

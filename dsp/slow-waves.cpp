@@ -722,10 +722,13 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // Band-pass filter for slow waves
   //
 
-  
+
+  std::vector<double> ripple( 1, par.fir_ripple );
+  std::vector<double> tw( 1, par.fir_tw );
+
   filtered = dsptools::apply_fir( unfiltered , sr , fir_t::BAND_PASS ,
 				  1 , // use Kaiser window
-				  par.fir_ripple , par.fir_tw ,
+				  ripple , tw ,
 				  par.f_lwr , par.f_upr );
 
   // std::cout << " par.fir_ripple " << par.fir_ripple << " " << par.fir_tw << " " << par.f_lwr << " " << par.f_upr << "\n";

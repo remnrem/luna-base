@@ -489,9 +489,12 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
 
   logger << "  filtering ECG...\n";
 
+  std::vector<double> ripple( 1, 0.01 ); // 40dB
+  std::vector<double> tw( 1, 0.5 ); // transition width...can flex
+  
   std::vector<double> bpf = dsptools::apply_fir( x , Fs , fir_t::BAND_PASS ,
 						 1, // Kaiser window
-						 0.02 , 0.5 , // ripple, TW
+						 ripple , tw , // ripple, TW
 						 0.5 , 40 ) ;  // f1, f2
   
   // differentiate and sqr data

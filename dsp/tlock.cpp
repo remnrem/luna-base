@@ -28,7 +28,7 @@
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "assoc/massoc.h"
-#include "dsp/mt_spectrogram.h"
+#include "spectral/mt_spectrogram.h"
 
 extern writer_t writer;
 extern logger_t logger;

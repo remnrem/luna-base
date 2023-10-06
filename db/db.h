@@ -728,9 +728,27 @@ class writer_t
     cache_str = c;
   }
 
+  std::string cache_num_name()
+  {
+    return cache_num != NULL ? cache_num->name : "" ; 
+  }
+
+  std::string cache_int_name()
+  {
+    return cache_int != NULL ? cache_int->name : "" ; 
+  }
+
+  std::string cache_str_name()
+  {
+    return cache_str != NULL ? cache_str->name : "" ; 
+  }
+
   void no_cache( )
   {
     caching = false;
+    cache_num = NULL;
+    cache_int = NULL;
+    cache_str = NULL;
   }
   
   // command -> variable -> factor strings 

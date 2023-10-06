@@ -45,7 +45,7 @@ void proc_mask( edf_t & edf , param_t & param )
   if ( ! param.single() ) 
     Helper::halt( "MASK commands can only take a single parameter" );
   
-  
+    
   if ( ! edf.timeline.epoched() ) 
     {
       int ne = edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
@@ -53,7 +53,6 @@ void proc_mask( edf_t & edf , param_t & param )
     }
 
 
-  
   //
   // Priamry annotation-based include/exclude masks
   //
@@ -136,6 +135,8 @@ void proc_mask( edf_t & edf , param_t & param )
   if ( param.has( "if" )    || param.has( "if-any" )    || param.has( "if-all" ) )   mask_mode = 2;
   if ( param.has( "ifnot" ) || param.has( "ifnot-any" ) || param.has( "ifnot-all" ) ) mask_mode = 2;
 
+
+      
   if ( mask_mode > -1 ) 
     {
       edf.timeline.set_epoch_mask_mode( mask_mode );  
@@ -266,12 +267,11 @@ void proc_mask( edf_t & edf , param_t & param )
       //
       
       edf.timeline.apply_epoch_mask2( amask , fullspan , alabel , match_logic_or , match_mode );
+
       
       // all done
       return;
     }
-
-	
   
   //
   // Wipe entire mask, i.e. include all 

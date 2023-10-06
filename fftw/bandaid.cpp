@@ -54,6 +54,11 @@ void bandaid_t::init()
 
 }
 
+int bandaid_t::size() const
+{
+  return bands.size();
+}
+
 void bandaid_t::define_bands( param_t & param )
 {
   

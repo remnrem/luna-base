@@ -43,6 +43,8 @@ struct bandaid_t {
   bandaid_t();
 
   void init();
+
+  int size() const;
   
   void define_bands( param_t & );
 

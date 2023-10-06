@@ -21,7 +21,7 @@
 //    --------------------------------------------------------------------
 
 
-#include "dsp/irasa.h"
+#include "spectral/irasa.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "dsp/resample.h"

@@ -55,7 +55,6 @@ mtm_t::mtm_t( const double npi , const int nwin ) : npi(npi) , nwin(nwin)
 
 void mtm_t::store_tapers( const int seg_size ) 
 {
-  
   // Vector of eigenvalues
   lam    = Eigen::VectorXd::Zero( nwin );
   
@@ -65,9 +64,9 @@ void mtm_t::store_tapers( const int seg_size )
   // samples x tapers
   tapers = Eigen::MatrixXd::Zero( seg_size , nwin );
   
-  // calculate Slepian tapers                                                                                                                                                 
+  // calculate Slepian tapers                                                                                                          
   generate_tapers( seg_size, nwin, npi );
-  
+
 }
 
 
@@ -127,12 +126,12 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
     {
       logger << "  assuming all channels have the same sample rate of " << fs << "Hz:\n"
 	     << "    time half-bandwidth (nw) = " << npi << "\n"
-	     << "    number of tapers         = " << nwin << "\n"
+	     << "    number of tapers (t)     = " << nwin << "\n"
 	     << "    spectral resolution      = " << spectral_resolution << "Hz\n"      
 	     << "    segment duration         = " << seg_size / (double)fs << "s\n"
 	     << "    segment step             = " << seg_step / (double)fs << "s\n"
 	     << "    FFT size                 = " << klen << "\n"
-	     << "    number of segments       = " << n_segs << "\n";
+	     << "    # segments per interval  = " << n_segs << "\n";
       
       if ( ! allsegs )
 	logger << "    computed segments        = " << n_segs_actual << "\n"; 
@@ -159,15 +158,16 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   //
   // calculate (or attached pre-computed) Slepian tapers
   //
-
+  
   if ( precomputed == NULL ) 
     generate_tapers( npoints, nwin, npi );
   else
-    {
+    {      
       lam = precomputed->lam;
       tapsum = precomputed->tapsum;
       tapers = precomputed->tapers;
     }
+
   
   //
   // Spectrogram output (for all n_segs whether all computed or not)
@@ -183,7 +183,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
   // use next pow2 FFT by default:
   real_FFT fftseg( seg_size , klen , fs , WINDOW_NONE );
   //  real_FFT fftseg( seg_size , seg_size , fs , WINDOW_NONE );
-  
+
   //
   // Iterate over segments
   //
@@ -235,7 +235,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 		    npoints ,
 		    kind, nwin, npi, inorm, dt,
 		    &(raw_espec)[sn][0],  klen );      
-      
+
       //
       // shrink to positive spectrum (already scled x2)?
       // 
@@ -280,7 +280,8 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
       ++sn;
 
     }
-
+  
+  
   //
   // Compute average spectrum (using only actually computed segments)
   //
@@ -301,66 +302,9 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
       spec[f] /= (double)n_segs_actual;      
       raw_spec[f] /= (double)n_segs_actual;
     }
-   
-
-
-  // -------------------------------------------------------------------------------//
-  //
-  // Spectral kurtosis 
-  //
-  // -------------------------------------------------------------------------------
-  
-  if ( kurtosis.size() )    
-    {
-
-      std::map<frequency_band_t,double>::const_iterator bb = kurtosis.begin();
-      
-      while ( bb != kurtosis.end() )
-	{
-	  
-	  freq_range_t band = globals::freq_band[ bb->first ];
-
-	  std::vector<double> xx;
-	  
-	  for (int fi=0; fi<nfreqs; fi++)
-	    {
-	      if ( f[fi] >= band.first && f[fi] < band.second )
-		{		  
-		  for (int i=0; i<n_segs; i++)
-		    {
-		      // only use computed segs
-		      if ( allsegs || ! restrict[i] )
-			xx.push_back( raw_espec[i][fi] );
-		    }
-		}
-	    }
-	  
-	  double k = MiscMath::kurtosis( xx );	
-	  if ( kurt3 ) k += 3;
-	  
-	  // store
-	  kurtosis[ bb->first ] = k ;
-	  
-	  // next band?
-	  ++bb; 
-	}
-    }
-  
+     
 }
 
-
-void mtm_t::calc_kurtosis( bool kurt3_ )
-{
-  kurt3 = kurt3_;  
-  kurtosis[ SLOW ] = 0;
-  kurtosis[ DELTA ] = 0;
-  kurtosis[ THETA ] = 0;
-  kurtosis[ ALPHA ] = 0;
-  kurtosis[ SIGMA ] = 0;
-  kurtosis[ BETA ] = 0;
-  kurtosis[ GAMMA ] = 0;
-  kurtosis[ TOTAL ] = 0;   
-}
 
 
 

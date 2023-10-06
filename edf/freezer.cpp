@@ -24,26 +24,70 @@
 #include "edf/edf.h"
 #include "helper/logger.h"
 #include "eval.h"
+#include "db/db.h"
 
 extern logger_t logger;
 
+extern writer_t writer;
 
 void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
 {
 
   caches_t cache;
-
+  std::string c_num, c_int, c_str;
+  
   // do not overwrite cache? 
   if ( preserve_cache )
-    cache = to.timeline.cache;
+    {
+      logger << "  restoring the cache and any recording options\n";
+      cache = to.timeline.cache;
+      c_num = writer.cache_num_name();
+      c_int = writer.cache_int_name();
+      c_str = writer.cache_str_name();
+      std::cout << " " << c_num << "] [" << c_int << "] [" << c_str << "\n";
+    }
+  else
+    {
+      // should revisit this - cannot simply set, as otherwise FREEZE wipes the cache
+      //   think it implies that CACHE record should be set prior to any freeze/thaw...
+      // TODO... at some point, revisit and fix it up..
+      // logger << "  wiping any cache variables\n";
+      // writer.no_cache();
+    }
   
   // primary shallow copy
   to = from;
   
   // swap original cache back in
   if ( preserve_cache )
-    to.timeline.cache = cache; 
-  
+    {
+      // restore actual cache
+      to.timeline.cache = cache;
+
+      // restore any writer/db recordings
+      if ( c_num != "" )
+	{
+	  std::cout << " adding " << c_num << "\n";
+	  cache_t<double> * cache = to.timeline.cache.find_num( c_num );
+	  std::cout << " found? " << ( cache != NULL ) <<  "\n";
+          writer.cache( cache );
+	}
+
+      if ( c_num != "" )
+	{
+	  cache_t<int> * cache = to.timeline.cache.find_int( c_int );
+          writer.cache( cache );
+	}
+
+      if ( c_str != "" )
+	{
+	  cache_t<std::string> * cache = to.timeline.cache.find_str( c_str );
+          writer.cache( cache );
+	}
+
+    }
+
+	
   // ??unnecessary now we've ensured all records are pulled into memory...
   //   (probably okay to leave commented out, but need to check this...)
   

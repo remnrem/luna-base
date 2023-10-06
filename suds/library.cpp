@@ -44,7 +44,7 @@
 
 #include "dsp/resample.h"
 #include "fftw/fftwrap.h"
-#include "dsp/mtm/mtm.h"
+#include "spectral/mtm/mtm.h"
 #include "dsp/tv.h"
 
 extern logger_t logger;

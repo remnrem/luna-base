@@ -2883,7 +2883,10 @@ void characterize_spindles( edf_t & edf ,
   const double window_ripple = param.has( "char-ripple" ) ? param.requires_dbl( "char-ripple" ) : 0.02 ;
   const double window_tw = param.has( "char-tw" ) ? param.requires_dbl( "char-tw" ) : 4 ;
   const int hann = param.has( "hann" ) ? param.requires_int( "hann" ) : 0 ; 
-    
+
+  std::vector<double> window_ripple_vec( 1 , window_ripple );
+  std::vector<double> window_tw_vec( 1 , window_tw );
+  
   //
   // Copy key output modes
   //
@@ -2933,7 +2936,7 @@ void characterize_spindles( edf_t & edf ,
 	      
 	      dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
 				   1 , // 1 = Kaiser window
-				   window_ripple , window_tw , 
+				   window_ripple_vec , window_tw_vec , 
 				   target_f - window_f * 0.5 ,
 				   target_f + window_f * 0.5 ,
 				   0, // order (if not Kaiser win)
@@ -2952,10 +2955,12 @@ void characterize_spindles( edf_t & edf ,
 	      logger << "  filtering at "
 		     << target_f - window_f * 0.5  << " to "
 		     << target_f + window_f * 0.5 << ", Hann window, order = " << hann << "\n";
+
+	      std::vector<double> zero;
 	      
 	      dsptools::apply_fir( edf , s , fir_t::BAND_PASS ,
 				   2 , // fixed order
-				   0 , 0 , 
+				   zero , zero , // Kaiser stuff 
 				   target_f - window_f * 0.5 ,
 				   target_f + window_f * 0.5 ,
 				   hann, // --> even order: odd / symmetric FIR
@@ -4547,11 +4552,14 @@ annot_t * spindle_bandpass( edf_t & edf , param_t & param )
       //
       // Filter entire signal
       //
+
+      std::vector<double> fripple( 1, 0.01 );
+      std::vector<double> ftw( 1, 0.5 );
       
       // ripple = 0.005 , transition width (Hz) = 0.5 Hz 
       dsptools::apply_fir( edf , signals(s) , fir_t::BAND_PASS ,
 			   1 , // Kaiser window
-			   0.02 , 0.5 , // ripple , TW
+			   fripple, ftw, // ripple , TW
 			   10 , 16			   
 			   );
 

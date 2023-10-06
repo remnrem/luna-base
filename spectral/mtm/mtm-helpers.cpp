@@ -20,7 +20,7 @@
 //
 //    --------------------------------------------------------------------
 
-#include "dsp/mtm/mtm.h"
+#include "spectral/mtm/mtm.h"
 
 int mtm_t::get_pow_2(int inum)
 {

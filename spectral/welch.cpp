@@ -20,7 +20,7 @@
 //
 //    --------------------------------------------------------------------
 
-#include "spectral.h"
+#include "spectral/welch.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "eval.h"

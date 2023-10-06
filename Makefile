@@ -20,6 +20,8 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard dsp/*.cpp) \
         $(wildcard miscmath/*.cpp) \
         $(wildcard artifacts/*.cpp) \
+        $(wildcard spectral/*.cpp) \
+        $(wildcard spectral/mtm/*.cpp) \
         $(wildcard spindles/*.cpp) \
         $(wildcard intervals/*.cpp) \
         $(wildcard resp/*.cpp) \
@@ -33,13 +35,12 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard clocs/*.cpp) \
         $(wildcard pdc/*.cpp) \
         $(wildcard sstore/*.cpp) \
-        $(wildcard dsp/mtm/*.cpp) \
         $(wildcard dsp/libsamplerate/*.cpp) \
         $(wildcard pops/*.cpp) \
         $(wildcard assoc/*.cpp) \
         $(wildcard lgbm/*.cpp) \
         $(wildcard web/*.cpp) \
-        $(wildcard models/*.cpp) \
+        $(wildcard models/*.cpp) 
 
 CSRCS = $(wildcard db/*.c) \
         $(wildcard stats/*.c) \

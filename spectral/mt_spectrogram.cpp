@@ -20,9 +20,9 @@
 //
 //    --------------------------------------------------------------------
 
-#include "dsp/mt_spectrogram.h"
+#include "spectral/mt_spectrogram.h"
 
-#include "dsp/mtm/mtm.h"
+#include "spectral/mtm/mtm.h"
 
 mt_spectrogram_t::mt_spectrogram_t( const Data::Matrix<double> & X ,
 				    const int sr ,

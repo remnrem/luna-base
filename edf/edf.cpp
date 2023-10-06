@@ -5007,26 +5007,30 @@ bool edf_t::basic_stats( param_t & param )
       
       if ( by_epoch && e_mean.size() > 0 )
 	{
+
 	  const int ne = e_mean.size(); 
+
+	  // means
 	  double med_mean  = median_destroy( &e_mean[0] , ne );
 	  double med_median  = calc_median ? median_destroy( &e_median[0] , ne ) : 0 ;  
-	  writer.value( "MEDIAN.MEAN" , med_mean );
+	  writer.value( "MEAN_MD" , med_mean );
 	  if ( calc_median )
-	    writer.value( "MEDIAN.MEDIAN" , med_median );
+	    writer.value( "MEDIAN_MD" , med_median );
 
 	  writer.value( "NE" , timeline.num_total_epochs() );	  
 	  writer.value( "NE1" , ne );
 	  
 	  if ( ! minimal )
 	    {
-	  
-	      double med_rms  = median_destroy( &e_rms[0] , ne );
-	      double med_skew = median_destroy( &e_skew[0] , ne );
-	      double med_kurt = median_destroy( &e_kurt[0] , ne );
 	      
-	      writer.value( "MEDIAN.RMS"  , med_rms );
-	      writer.value( "MEDIAN.SKEW" , med_skew );
-	      writer.value( "MEDIAN.KURT" , med_kurt );
+	      writer.value( "RMS_MN"  , MiscMath::mean( e_rms  ) );
+	      writer.value( "SKEW_MN" , MiscMath::mean( e_skew ) );
+	      writer.value( "KURT_MN" , MiscMath::mean( e_kurt ) );
+
+	      writer.value( "RMS_MD"  , MiscMath::median( e_rms  ) );
+	      writer.value( "SKEW_MD" , MiscMath::median( e_skew ) );
+              writer.value( "KURT_MD" , MiscMath::median( e_kurt ) );
+
 	    }
 	}
 

@@ -95,12 +95,7 @@ struct mtm_t
 
   // track band-level info
   bandaid_t * bandaid;
-  
-  // kurtosis 
-  void calc_kurtosis( bool kurt3 );
-  bool kurt3;
-  std::map<frequency_band_t,double> kurtosis;
-  
+    
   // restrict to only some segments?
   std::vector<bool> restrict;
   
@@ -160,7 +155,33 @@ struct mtm_t
   void rm_lintrend(double *x,  double *y, int length, double a, double b);
   void get_abfit(double *x, double *y, int length, double *slope, double *intercept);
   void rm_lin_sig_trend(double *y, int n, double dt);
+  
+};
 
+
+// 'spectral kurtosis'
+
+struct spectral_kurtosis_t {
+  
+  spectral_kurtosis_t( bool k3 = false ); 
+  
+  void setf( const std::vector<double> & );
+  
+  void add( int ch , const std::vector<std::vector<double> > & );
+  
+  void average_channels();
+  
+  double kurtosis( frequency_band_t );
+  
+  bool kurt3;
+
+  std::vector<double> f;
+  
+  std::map<int,std::vector<std::vector<double> > > ch2segxf;
+
+  std::vector<std::vector<double> > segxf;
+
+  std::set<frequency_band_t> bands;
   
 };
 

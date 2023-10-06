@@ -127,12 +127,18 @@ namespace dsptools
   //
   
   void design_fir( param_t & param );
+
   
   std::vector<double> design_bandpass_fir( double ripple , double tw , double fs , double f1 , double f2 , bool eval = false );
   std::vector<double> design_bandstop_fir( double ripple , double tw , double fs , double f1 , double f2 , bool eval = false );
   std::vector<double> design_lowpass_fir( double ripple  , double tw , double fs , double f , bool eval = false );
   std::vector<double> design_highpass_fir( double ripple , double tw , double fs , double f , bool eval = false );
 
+  // make bandpass by convolving two separate filters
+  std::vector<double> design_bandpass_fir( double ripple1 , double ripple2,
+					   double tw1 , double tw2,
+					   double fs , double f1 , double f2 , bool eval = false );
+  
   //
   // Other window
   //
@@ -154,7 +160,8 @@ namespace dsptools
   // filter given EDF and signal slot 's' (pull data, call apply_fir() 
   void apply_fir( edf_t & edf , int s , fir_t::filterType ,
 		  int mode ,
-		  double ripple , double tw ,
+		  const std::vector<double> & ripple ,
+		  const std::vector<double> & tw ,
 		  double f1, double f2 ,
 		  int order = 0 , fir_t::windowType = fir_t::HAMMING ,
 		  const bool use_fft = false ,
@@ -163,7 +170,8 @@ namespace dsptools
   // do the actual filtering, given data
   std::vector<double> apply_fir( const std::vector<double> & , int fs , fir_t::filterType ftype ,
 				 int mode ,
-				 double ripple , double tw ,
+				 const std::vector<double> & ripple ,
+				 const std::vector<double> & tw ,
 				 double f1, double f2 ,
 				 int order = 0 , fir_t::windowType = fir_t::HAMMING ,
 				 const bool use_fft = false ,

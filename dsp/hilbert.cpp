@@ -48,10 +48,14 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const bool store ) : input
 hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , double ripple , double tw , const bool store )
 {
 
-  // include band-pass filter
+  std::vector<double> tw1(1), ripple1(1);
+  tw1[0] = tw;
+  ripple1[0] = ripple;
+
+    // include band-pass filter
   input = dsptools::apply_fir( d , sr , fir_t::BAND_PASS ,
 			       1 , // Kaiser window
-			       ripple , tw ,
+			       ripple1 , tw1 ,
 			       lwr , upr ,
 			       0 ,  // order/ignored
 			       fir_t::HAMMING , // ignored for KW
@@ -66,10 +70,11 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr 
 
 hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , const std::string & fir_file , const bool store )
 {
+  std::vector<double> dummy;
   // include band-pass filter
   input = dsptools::apply_fir( d , sr , fir_t::EXTERNAL , 
 			       0 , // from file
-			       0 , 0 , // ripple , tw ,
+			       dummy , dummy , // ripple , tw ,
 			       0 , 0 , // lwr , upr ,
 			       0 , fir_t::RECTANGULAR , // 
 			       false , fir_file  // all ignored except fir_file 
@@ -82,11 +87,11 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , const std::
 
 hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr , double upr , int order , fir_t::windowType window , const bool store )
 {
-
+  std::vector<double> dummy;
   // include band-pass filter
   input = dsptools::apply_fir( d , sr , fir_t::BAND_PASS ,
 			       2 ,   // fixed order
-			       0 , 0 , // ripple , tw , ignored
+			       dummy, dummy , // ripple , tw , ignored
 			       lwr , upr ,
 			       order , window );
   

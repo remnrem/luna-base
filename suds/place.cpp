@@ -42,10 +42,6 @@
 #include "edf/edf.h"
 #include "edf/slice.h"
 
-#include "dsp/resample.h"
-#include "fftw/fftwrap.h"
-#include "dsp/mtm/mtm.h"
-#include "dsp/tv.h"
 
 extern logger_t logger;
 

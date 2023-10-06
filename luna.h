@@ -77,12 +77,15 @@
 #include "dsp/dsp.h"
 #include "dsp/libsamplerate/samplerate.h"
 
+#include "spectral/welch.h"
+#include "spectral/irasa.h"
+#include "spectral/mtm/mtm.h"
+
 #include "fftw/fftwrap.h"
 
 #include "ica/ica.h"
 
 #include "spindles/spindles.h"
-#include "spindles/spectral.h"
 
 #include "artifacts/artifacts.h"
 #include "artifacts/correct.h"

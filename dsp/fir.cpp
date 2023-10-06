@@ -32,6 +32,7 @@
 #include "edf/slice.h"
 #include "edf/edf.h"
 #include "dsp/ngaus.h"
+#include "dsp/conv.h"
 
 extern logger_t logger;
 
@@ -104,10 +105,17 @@ void dsptools::design_fir( param_t & param )
   
   if ( use_kaiser == fixed_order )
     Helper::halt( "must specify either Kaiser window format or fixed FIR order" );
-  
-  double ripple = use_kaiser ? param.requires_dbl( "ripple" ) : 0;
 
-  double tw = use_kaiser ? param.requires_dbl( "tw" ) : 0;
+  // allow separate high+low pass filters
+  std::vector<double> ripple, tw;
+  if ( use_kaiser )
+    {
+      ripple = param.dblvector( "ripple" ) ;
+      tw = param.dblvector( "tw" );
+    }
+  bool kaiser_high_and_low = ripple.size() == 2 && tw.size() == 2;
+
+  
   
   int order = fixed_order ? param.requires_int( "order" ) : 0 ;  
   
@@ -129,8 +137,18 @@ void dsptools::design_fir( param_t & param )
 
       if ( use_kaiser )
 	{
-	  logger << " designing bandpass filter, " << f1 << "-" << f2 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
-	  design_bandpass_fir( ripple , tw , fs , f1, f2 , true );
+
+	  if ( kaiser_high_and_low )
+	    {
+	      logger << " designing bandpass filter, convolving highpass (" << f1 << "Hz, ripple="<< ripple[0]<<", tw="<< tw[0]<<")"
+		     << " with lowpass ("<< f2 << "Hz, ripple="<< ripple[1]<<", tw="<< tw[1]<<")\n";
+	      design_bandpass_fir( ripple[0], ripple[1] , tw[0], tw[1] , fs , f1, f2 , true );
+	    }
+	  else
+	    {
+	      logger << " designing bandpass filter, " << f1 << "-" << f2 << "Hz, ripple=" << ripple[0] << ", tw=" << tw[0] << ", fs=" << fs << "\n"; 
+	      design_bandpass_fir( ripple[0] , tw[0] , fs , f1, f2 , true );
+	    }
 	}
       else
 	{
@@ -153,8 +171,8 @@ void dsptools::design_fir( param_t & param )
 
       if ( use_kaiser )
 	{
-	  logger << " designing bandstop filter, " << f1 << "-" << f2 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
-	  design_bandstop_fir( ripple , tw , fs , f1, f2 , true );
+	  logger << " designing bandstop filter, " << f1 << "-" << f2 << "Hz, ripple=" << ripple[0] << ", tw=" << tw[0] << ", fs=" << fs << "\n"; 
+	  design_bandstop_fir( ripple[0] , tw[0] , fs , f1, f2 , true );
 	}
       else
 	{
@@ -171,8 +189,8 @@ void dsptools::design_fir( param_t & param )
       f1 = param.requires_dbl( "lowpass" );
       if ( use_kaiser )
 	{
-	  logger << " designing lowpass filter, " << f1 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
-	  design_lowpass_fir( ripple , tw , fs , f1 , true );
+	  logger << " designing lowpass filter, " << f1 << "Hz, ripple=" << ripple[0] << ", tw=" << tw[0] << ", fs=" << fs << "\n"; 
+	  design_lowpass_fir( ripple[0] , tw[0] , fs , f1 , true );
 	}
       else
 	{
@@ -189,8 +207,8 @@ void dsptools::design_fir( param_t & param )
       f1 = param.requires_dbl( "highpass" );
       if ( use_kaiser )
 	{
-	  logger << " designing highpass filter, " << f1 << "Hz, ripple=" << ripple << ", tw=" << tw << ", fs=" << fs << "\n"; 
-	  design_highpass_fir( ripple , tw , fs , f1 , true );
+	  logger << " designing highpass filter, " << f1 << "Hz, ripple=" << ripple[0] << ", tw=" << tw[0] << ", fs=" << fs << "\n"; 
+	  design_highpass_fir( ripple[0] , tw[0] , fs , f1 , true );
 	}
       else
 	{
@@ -235,6 +253,45 @@ std::vector<double> dsptools::design_bandpass_fir( double ripple , double tw , d
 
   return fc;
 }
+
+
+// make bandpass by convolving two separate filters
+std::vector<double> dsptools::design_bandpass_fir( double ripple1 , double ripple2,
+						   double tw1 , double tw2,
+						   double fs , double f1 , double f2 , bool eval )
+{
+  
+  std::vector<double> fc1 = design_highpass_fir( ripple1 , tw1, fs, f1 , false ); // F = no eval
+  std::vector<double> fc2 = design_lowpass_fir( ripple2 , tw2, fs, f2 , false ); // F = no eval
+
+  // convolve
+  std::vector<double> fc = convolve( fc1 , fc2 );
+
+  fir_t fir;
+
+  if ( eval )
+    {
+      std::string label = "BANDPASS_HP_"
+	+ Helper::dbl2str( f1 ) + "_" + Helper::dbl2str( ripple1 ) + "_" + Helper::dbl2str( tw1 )
+	+ "_LP_" 
+	+ Helper::dbl2str( f2 ) + "_" + Helper::dbl2str( ripple2 ) + "_" + Helper::dbl2str( tw2 );
+
+      fir.outputFFT( label , fc , fs );
+    }
+
+  // for (int i=0;i<fc1.size();i++)
+  //   std::cout << "f1\t" << fc1[i] << "\n"; 
+
+  // for (int i=0;i<fc2.size();i++)
+  //   std::cout << "f2\t" << fc2[i] << "\n"; 
+  
+  // for (int i=0;i<fc.size();i++)
+  //   std::cout << "fc\t" << fc[i] << "\n"; 
+
+  return fc;
+    
+}
+
 
 
 std::vector<double> dsptools::design_bandstop_fir( double ripple , double tw , double fs , double f1 , double f2 , bool eval )
@@ -426,7 +483,7 @@ std::vector<double> dsptools::apply_fir( const std::vector<double> & x ,
 					 int fs,
 					 fir_t::filterType ftype ,
 					 int mode ,  // Kaiser window (1) or fixed order (2)
-					 double ripple , double tw ,        // if using Kaiser window approach
+					 const std::vector<double> & ripple , const std::vector<double> & tw , // if using Kaiser window approach
 					 double f1, double f2 ,             
 					 int order , fir_t::windowType window ,  // if using fixed # of taps
 					 const bool use_fft , const std::string & fir_file )
@@ -464,17 +521,23 @@ std::vector<double> dsptools::apply_fir( const std::vector<double> & x ,
   
   bool kaiser = mode == 1 && ftype != fir_t::EXTERNAL; 
   bool fixed_order = mode != 1 && ftype != fir_t::EXTERNAL;
+  bool kaiser_high_and_low = ripple.size() == 2 && tw.size() == 2; 
   
   if ( kaiser )
     {
       if ( ftype == fir_t::BAND_PASS ) 
-	fc = design_bandpass_fir( ripple , tw , fs , f1, f2 );    
+	{
+	  if ( kaiser_high_and_low ) 
+	    fc = design_bandpass_fir( ripple[0] , ripple[1] , tw[0] , tw[1], fs , f1, f2 );
+	  else
+	    fc = design_bandpass_fir( ripple[0] , tw[0] , fs , f1, f2 );
+	}
       else if ( ftype == fir_t::BAND_STOP )
-	fc = design_bandstop_fir( ripple , tw , fs , f1, f2 );
+	fc = design_bandstop_fir( ripple[0] , tw[0] , fs , f1, f2 );
       else if ( ftype == fir_t::LOW_PASS )
-	fc = design_lowpass_fir( ripple , tw , fs , f1 );
+	fc = design_lowpass_fir( ripple[0] , tw[0] , fs , f1 );
       else if ( ftype == fir_t::HIGH_PASS )
-	fc = design_highpass_fir( ripple , tw , fs , f1 );
+	fc = design_highpass_fir( ripple[0] , tw[0] , fs , f1 );
     }
   else if ( fixed_order ) // fixed FIR order
     {
@@ -535,12 +598,15 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   const bool fixed_order = ! ( use_kaiser || from_file || ngaus ) ;
 
   //
-  // Kaiser-window specification
+  // Kaiser-window specification: can be 1 or 2 values
   //
   
-  const double ripple = use_kaiser ? param.requires_dbl( "ripple" ) : 0 ;
-
-  const double tw = use_kaiser ?  param.requires_dbl( "tw" ) : 0 ;
+  std::vector<double> ripple, tw;
+  if ( use_kaiser )
+    {
+      ripple = param.dblvector( "ripple" ) ;
+      tw = param.dblvector( "tw" );
+    }
 
   //
   // fixed-order
@@ -685,7 +751,7 @@ void dsptools::apply_ngaus( edf_t & edf , int s , const double ngaus_f , const d
 
 void dsptools::apply_fir( edf_t & edf , int s , fir_t::filterType ftype ,
 			  int mode ,
-			  double ripple , double tw ,
+			  const std::vector<double> & ripple , const std::vector<double> & tw ,
 			  double f1, double f2 ,
 			  int order , fir_t::windowType window , 
 			  const bool use_fft , const std::string & fir_file )

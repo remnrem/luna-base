@@ -189,9 +189,12 @@ void timeline_t::restructure( const std::set<int> & keep , const bool preserve_c
   // clear any cache
   if ( ! preserve_cache ) 
     {
-      logger << "  clearing any cached values\n";
+      logger << "  clearing any cached values and recording options\n";
       cache.clear();
+      writer.no_cache();
     }
+  else
+    logger << "  preserving any cached values and recording options\n";
   
   logger << "  retaining " << num_epochs() << " epochs\n";
 }

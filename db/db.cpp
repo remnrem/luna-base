@@ -1511,24 +1511,24 @@ bool writer_t::check_cache_factors( const std::string var_name ,
 				    std::map<std::string,std::map<std::string,std::set<std::string> > > & m )
 {
   // std::cout << " var name " << var_name << "\n"
-  // 	    << " cmd name " << curr_command.cmd_name << "\n";
+  //  	    << " cmd name " << curr_command.cmd_name << "\n";
   
   std::map<std::string,std::map<std::string,std::set<std::string> > >::const_iterator cc
     = m.find( curr_command.cmd_name );
   if ( cc == m.end() ) return false;
-  //std::cout << "s2\n";
+  //  std::cout << "s2\n";
   std::map<std::string,std::set<std::string> >::const_iterator dd = cc->second.find( var_name );
   if ( dd == cc->second.end() ) return false;
-  //std::cout << "s3\n";
+  // std::cout << "s3\n";
   std::set<std::string> f = dd->second;
   if ( curr_strata.empty() && f.size() != 0 ) return false;
   //  std::cout << "s4\n";
   std::set<std::string> f1 = curr_strata.factor_strings();
 
-   // std::cout << " f1.size() = " << f1.size() << "\n";
-   // std::cout << " f.size() = " << f.size() << "\n";
-   // std::cout << " f1 [" << Helper::stringize( f1 ) << "]\n";
-   // std::cout << " f [" << Helper::stringize( f ) << "]\n";
+  // std::cout << " f1.size() = " << f1.size() << "\n";
+  // std::cout << " f.size() = " << f.size() << "\n";
+  // std::cout << " f1 [" << Helper::stringize( f1 ) << "]\n";
+  // std::cout << " f [" << Helper::stringize( f ) << "]\n";
   
   if ( f1.size() != f.size() ) return false;
 
@@ -1538,7 +1538,7 @@ bool writer_t::check_cache_factors( const std::string var_name ,
       if ( f1.find( *ff ) == f1.end() ) return false;
       ++ff;
     }
-  //  std::cout << " matched\n";
+  //    std::cout << " matched\n";
   // if here, we match exactly... save
   return true;
   
@@ -1549,6 +1549,8 @@ void writer_t::check_cache_write( const std::string var_name , double d )
 
   if ( ! check_cache_factors( var_name , track_num ) ) return;
 
+  if ( cache_num == NULL ) Helper::halt( "no caches set - add preserve-cache to RE or THAW" );
+  
   cache_num->add( ckey_t( curr_command.cmd_name + ":" + var_name ,  // CMD:VAR
 			  writer.faclvl() ) , 
 		  d ) ;      
@@ -1556,7 +1558,11 @@ void writer_t::check_cache_write( const std::string var_name , double d )
 
 void writer_t::check_cache_write( const std::string var_name , int i )
 {
+  
   if ( ! check_cache_factors( var_name , track_int ) ) return;
+
+  if ( cache_int == NULL ) Helper::halt( "no caches set - add preserve-cache to RE or THAW" );
+  
   cache_int->add( ckey_t( curr_command.cmd_name + ":" + var_name ,  // CMD:VAR
 			  writer.faclvl() ) , 
 		  i ) ;      
@@ -1565,7 +1571,10 @@ void writer_t::check_cache_write( const std::string var_name , int i )
 
 void writer_t::check_cache_write( const std::string var_name , const std::string & s )
 {
+  
   if ( ! check_cache_factors( var_name , track_str ) ) return;
+
+  if ( cache_str == NULL ) Helper::halt( "no caches set - add preserve-cache to RE or THAW" );
   
   cache_str->add( ckey_t( curr_command.cmd_name + ":" + var_name ,  // CMD:VAR
 			  writer.faclvl() ) , 

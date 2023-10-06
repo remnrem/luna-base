@@ -344,9 +344,8 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 
   Z = X - model.mean ;
   
-  Z = X.array() / model.sd.array() ; 
-
-  
+  Z = Z.array() / model.sd.array() ; 
+    
   //
   // Missing data imputation (on Z scale)
   //
@@ -357,6 +356,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
       Z = knn.impute( Z , missing );
     }
   
+
   
   //
   // Check means, if reference data are present - assumes they are standardized
@@ -396,16 +396,15 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 	}
             
     }
+
+  
   
   //
   // Primary prediction
   //
   
   y = y1 = (Z.transpose() * model.coef) + model.specials[ "model_intercept" ]; 
-
-
-
-
+       
   
   //
   // bias corrected
