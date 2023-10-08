@@ -34,6 +34,8 @@ extern writer_t writer;
 
 extern logger_t logger;
 
+extern freezer_t freezer;
+
 void log_commands( int argc , char ** argv );
 
 int main(int argc , char ** argv )
@@ -1818,7 +1820,7 @@ void process_edfs( cmd_t & cmd )
 
   while ( single_edf || ! EDFLIST.eof() )
     {
-            
+
       // each line should contain (tab-delimited)  
       //  1  ID
       //  2  EDF file
@@ -2002,6 +2004,8 @@ void process_edfs( cmd_t & cmd )
 
       globals::empty = false; 
 
+
+      
       //
       // Limited to specific signals to load in?
       //
@@ -2016,6 +2020,7 @@ void process_edfs( cmd_t & cmd )
 
       edf_t edf;
       
+
       bool okay = true; 
       
       if ( single_txt )
@@ -2069,6 +2074,12 @@ void process_edfs( cmd_t & cmd )
 	  continue;
 	}
       
+
+      //
+      // ensure we've cleaned the freezer (except this new self)
+      //
+      
+      freezer.clean( &edf );
       
       //
       // Check labels are still unique given aliases
@@ -2357,14 +2368,22 @@ void process_edfs( cmd_t & cmd )
       if ( cmd_t::has_indiv_wildcard || cmd_t::plaintext_mode ) 
 	writer.close();
 
+
+      //
+      // clean the freezer
+      //
+
+      freezer.clean( &edf );
+      
       //
       // all done / next EDF
       //
 
       if ( single_edf ) break;
-      
-    }
 
+
+    }
+  
 
   //
   // Close sample-list if open

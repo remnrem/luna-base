@@ -87,11 +87,9 @@ void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
 
 	
   // ??unnecessary now we've ensured all records are pulled into memory...
-  //   (probably okay to leave commented out, but need to check this...)
-  
   // update edf_t pointers in all records
-  //to.update_edf_pointers( & to );
-  
+  to.update_edf_pointers( & to );
+
   logger << "  copied " << from.header.nr << " records\n";
   
   // we'll keep annotations constant, as those are not changed.
@@ -107,7 +105,7 @@ void freezer_t::freeze( const std::string & s , edf_t & edf )
 {
   
   logger << "  freezing state, with tag " << s << "\n";
-
+  
   //
   // first, ensure that all records have been pulled from the file;
   // i.e. so we will not need to touch the disk again;  this way,
@@ -118,9 +116,15 @@ void freezer_t::freeze( const std::string & s , edf_t & edf )
   // will 
   //  a) skip records that are no longer retained,
   //  b) not re-read already loaded records
-  
+
   edf.read_records( 0 , edf.header.nr_all - 1 );
 
+  //
+  // we should now be able to shut off the file inpts safely, if any exist
+  //
+  
+  edf.closeout_inputs();
+  
   //
   // Allocate freeze target
   //
@@ -128,17 +132,20 @@ void freezer_t::freeze( const std::string & s , edf_t & edf )
   edf_t * edf2 = new edf_t;
   
   //
-  // Do the copy (includes deep-copying of some items)
+  // Make a copy of edf into edf2
   //
 
   edf2edf( edf , *edf2 , false );
 
+
+
+  
   //
   // store pointer to this edf_t
   //
   
   store[ s ] = edf2;
-
+    
   //
   // some output
   //
@@ -152,7 +159,7 @@ void freezer_t::freeze( const std::string & s , edf_t & edf )
   
 bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean , bool preserve_cache )
 {
-
+  
   if ( store.find( s ) == store.end() )
     Helper::halt( "could not find frozen EDF " + s );
   
@@ -173,8 +180,8 @@ bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean , bo
   edf2edf( *(store[s]) , *edf , preserve_cache );
   
   // and delete also?
-  if ( also_clean ) clean( s );
-
+  if ( also_clean ) clean( s , true );
+  
   // it is not possible to freeze an empty dataset,
   // therefore set globals::empty to false (i.e. is okay
   // if it was previously set), to allow processing to restart
@@ -184,14 +191,49 @@ bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean , bo
   return true;
 }
 
-void freezer_t::clean( const std::string & s )
+void freezer_t::clean( edf_t * self )
+{
+  if ( store.size() == 0 )
+    {
+      //      std::cout <<" noting to clean\n";
+      return;
+    }
+  //  std::cout << " in clean()\n";
+  
+  std::map<std::string,edf_t*>::const_iterator ss = store.begin();
+  while ( ss != store.end() )
+    {
+      //      std::cout << " here1\n";
+      // make sure not to clean self
+      if ( ss->second != self )
+	clean( ss->first , false ); // keep store key intact while we iterate
+//       else
+// /	std::cout << " skipping this one\n";
+      ++ss;
+      
+    }
+  store.clear();
+  //  std::cout << "  cleaned the freezer\n";
+}
+  
+  
+void freezer_t::clean( const std::string & s , bool clear_store )
 {
   if ( store.find( s ) != store.end() )
     {
-      logger << "  cleaning up freeze " << s << "\n";
+      //      logger << "  cleaning up freeze " << s << "\n";
       edf_t * p = store[ s ];
-      delete p; 
+      if ( p == NULL ) logger << " is null\n";
+      //      std::cout << " calling delete\n";
+      delete p;
+      //std::cout << "  -- done\n";
+    }
+  if ( clear_store )
+    {
+      store.erase( s );
+      //std::cout << " cleaned..\n";
     }
 }
+
 
 

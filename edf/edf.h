@@ -283,14 +283,15 @@ struct edf_record_t
 
   void drop( const int s );
   
- private:
+private:
 
-
+  
   //
   // Primary data store ( signal x samples per record )
   //
   
   edf_t * edf;
+
   
   std::vector<std::vector<int16_t> >    data;
   
@@ -536,7 +537,7 @@ private:
   //
   // File buffer for standard EDF
   //
-  
+
   FILE * file;
 
 
@@ -546,6 +547,7 @@ private:
 
   edfz_t * edfz;
   
+
   
   //
   // Endianness
@@ -580,9 +582,28 @@ public:
 
   ~edf_t() 
   {
+    // std::cout <<" in ~edf_t::edft_()...\n";
+    // std::cout << " self addr " << this << "\n";
     init();
+    //    std::cout << " )done(\n";
   }
 
+  void closeout_inputs()
+  {
+    //    std::cerr << " closing out\n";
+    if ( file != NULL )
+      fclose(file);
+    file = NULL;
+    
+    if ( edfz != NULL )
+      {
+        edfz->close();
+        delete edfz;
+      }
+    edfz = NULL;    
+  }
+  
+  
   void init()
   {
     if ( file != NULL ) 

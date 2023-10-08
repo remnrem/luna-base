@@ -1068,7 +1068,7 @@ bool edf_t::read_records( int r1 , int r2 )
   
   if ( r2 < r1 ) r2 = r1;
   if ( r2 > header.nr_all ) r2 = header.nr_all - 1;
-
+  
   //  std::cerr << "edf_t::read_records :: scanning ... r1, r2 " << r1 << "\t" << r2 << "\n";
   
   for (int r=r1;r<=r2;r++)

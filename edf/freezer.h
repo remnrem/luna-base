@@ -33,19 +33,20 @@ struct freezer_t
 {
   
   freezer_t() { }
-  
+
   void freeze( const std::string & s , edf_t & );
   
   bool thaw( const std::string & s , edf_t * , bool clean = false , bool preserve_cache = false );
   
-  void clean( const std::string & s );
+  void clean( const std::string & s , bool );
+
+  void clean( edf_t * self );
   
 private:
   
   std::map<std::string,edf_t*> store;
-
-  void edf2edf( const edf_t & from , edf_t & to , bool replace_cache );
-
+  
+  void edf2edf( const edf_t & from , edf_t & to , bool replace_cache );  
   
 };
 
