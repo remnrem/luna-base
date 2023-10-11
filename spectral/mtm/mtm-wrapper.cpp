@@ -325,6 +325,11 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   // band->epoch->value (already averaged over channels)
   //  todo... add a non-channel-averaged version too for consistency...
   std::vector<std::vector<double> > etrack_avg_speckurt;
+  std::vector<std::vector<double> > etrack_avg_speckurt2;
+  std::vector<std::vector<double> > etrack_avg_specskew;
+  std::vector<std::vector<double> > etrack_avg_specskew2;
+  std::vector<std::vector<double> > etrack_avg_speccv;
+  std::vector<std::vector<double> > etrack_avg_speccv2;
   
 
   if ( epochwise )
@@ -1025,6 +1030,18 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		{
 		  writer.level( globals::band( *bb ) , globals::band_strat );
 		  writer.value( "SPECKURT" , skurt.kurtosis( *bb ) );
+		  
+		  // tmp
+		  double sd1, sd2, sk1, sk2;
+		  double k2 = skurt.kurtosis2( *bb , &sd2, &sk2 );
+		  writer.value( "SPECKURT2" , skurt.kurtosis2( *bb ) );
+		  writer.value( "SPECSD2"   , sd2 );
+		  writer.value( "SPECSKEW2" , sk2 );
+
+		  double k1 = skurt.kurtosis( *bb , &sd1, &sk1 );
+		  writer.value( "SPECSD"   , sd1 );
+		  writer.value( "SPECSKEW" , sk1 );
+ 
 		  ++bb;
 		}
 	      writer.unlevel( globals::band_strat );
@@ -1036,13 +1053,36 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  
 	  // first, size up
 	  if ( etrack_avg_speckurt.size() == 0 )
-	    etrack_avg_speckurt.resize( skurt.bands.size() );
-	  
+	    {
+	      etrack_avg_speckurt.resize( skurt.bands.size() );
+	      etrack_avg_speckurt2.resize( skurt.bands.size() );
+
+	      etrack_avg_specskew.resize( skurt.bands.size() );
+	      etrack_avg_specskew2.resize( skurt.bands.size() );
+
+	      etrack_avg_speccv.resize( skurt.bands.size() );
+	      etrack_avg_speccv2.resize( skurt.bands.size() );
+
+	    }
 	  int bn=0;
 	  std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
 	  while ( bb != skurt.bands.end() )
 	    {
-	      etrack_avg_speckurt[bn].push_back( skurt.kurtosis( *bb ) );
+	      
+	      double sd1, sd2, sk1, sk2;
+	      double k1 = skurt.kurtosis( *bb , &sd1, &sk1 );
+	      double k2 = skurt.kurtosis2( *bb , &sd2, &sk2 );
+	      
+	      etrack_avg_speckurt[bn].push_back( k1 );
+	      etrack_avg_speckurt2[bn].push_back( k2 );
+
+	      etrack_avg_specskew[bn].push_back( sk1 );
+	      etrack_avg_specskew2[bn].push_back( sk2 );
+
+	      etrack_avg_speccv[bn].push_back( sd1 );
+	      etrack_avg_speccv2[bn].push_back( sd2 );
+
+
 	      ++bb;
 	      ++bn;
 	    }
@@ -1206,6 +1246,16 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      writer.value( "SPECKURT_MD" , kmed );
 	      writer.value( "SPECKURT_SD" , ksd );
 	      
+	      
+	      // tmp
+	      writer.value( "SPECKURT2" , MiscMath::mean( etrack_avg_speckurt2[bn] ) ); 
+
+	      writer.value( "SPECSKEW" , MiscMath::mean( etrack_avg_specskew[bn] ) ); 
+	      writer.value( "SPECSKEW2" , MiscMath::mean( etrack_avg_specskew2[bn] ) ); 
+
+	      writer.value( "SPECCV" , MiscMath::mean( etrack_avg_speccv[bn] ) ); 
+	      writer.value( "SPECCV2" , MiscMath::mean( etrack_avg_speccv2[bn] ) ); 
+
 	      ++bb;
 	      ++bn;
 	    }

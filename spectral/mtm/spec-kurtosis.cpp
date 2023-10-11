@@ -93,7 +93,7 @@ void spectral_kurtosis_t::average_channels()
 }
 
 
-double spectral_kurtosis_t::kurtosis( frequency_band_t b )
+double spectral_kurtosis_t::kurtosis( frequency_band_t b , double * sd , double * skew )
 {
   freq_range_t band = globals::freq_band[ b ];
   std::vector<double> xx;
@@ -113,6 +113,73 @@ double spectral_kurtosis_t::kurtosis( frequency_band_t b )
     return -999;
 
   double k = MiscMath::kurtosis( xx ) + ( kurt3 ? 3 : 0 ) ;
+
+  if ( sd != NULL )
+    {
+      std::vector<double> lntracker( xx.size() );
+      for (int i=0; i<xx.size(); i++)
+	lntracker[i] = log( xx[i] );
+      
+      // sd of natural log scaled                                                          
+      const double xsd = MiscMath::sdev( lntracker );
+      
+      // CV, using formula for log-normal data                                             
+      *sd = sqrt( exp( xsd * xsd ) -1 );
+
+    }
+
+  if ( skew != NULL )
+    *skew = MiscMath::skewness( xx );
+
+  //  std::cout << " len1 = " << xx.size() << "\n";
+
+  return k;
+  
+}
+
+
+double spectral_kurtosis_t::kurtosis2( frequency_band_t b , double * sd, double * skew )
+{
+  // alternate version where we sum in the freq domain first
+  // and then kurtosis just for the e.g. 29 values
+  
+  freq_range_t band = globals::freq_band[ b ];
+  
+  int nf=f.size();
+  int n_segs=segxf.size();
+  
+  std::vector<double> xx;
+  for (int i=0; i<n_segs; i++)
+    {
+      double b = 0;
+      for (int fi=0;fi<nf;fi++)
+	if ( f[fi] >= band.first && f[fi] < band.second )
+	  b += segxf[i][fi];
+      xx.push_back( b );
+    }
+  
+  if ( xx.size() < 2 )
+    return -999;
+  
+  double k = MiscMath::kurtosis( xx ) + ( kurt3 ? 3 : 0 ) ;
+  
+  if ( sd != NULL )
+    {
+      std::vector<double> lntracker( xx.size() );
+      for (int i=0; i<xx.size(); i++)
+	lntracker[i] = log( xx[i] );
+      
+      // sd of natural log scaled                                                          
+      const double xsd = MiscMath::sdev( lntracker );
+      
+      // CV, using formula for log-normal data                                             
+      *sd = sqrt( exp( xsd * xsd ) -1 );
+    }
+
+  //  std::cout << " len2 = " << xx.size() << "\n";
+
+  if ( skew != NULL ) 
+    *skew = MiscMath::skewness( xx );
 
   return k;
   

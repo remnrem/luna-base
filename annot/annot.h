@@ -133,7 +133,7 @@ struct annot_t
      wipe();
    }
 
-
+  
   //
   // Primary loaders/savers
   //
@@ -738,11 +738,12 @@ struct annotation_set_t
   }
   
   void set( edf_t * edf );
-    
+  
   ~annotation_set_t()
   {
     clear();
   }
+  
 
   // data
 
@@ -826,8 +827,13 @@ struct annotation_set_t
     std::map<std::string,annot_t*>::iterator ii = annots.find( name );
     if ( ii != annots.end() )
       {
-	delete ii->second;
-	annots.erase( ii ); 
+	// only delete if this was the parent (i.e. so a copy of annot_t will not destroy the 
+	// original
+	if ( ii->second->parent == this ) 
+	  {
+	    delete ii->second;
+	    annots.erase( ii ); 
+	  }
       }
   }
 

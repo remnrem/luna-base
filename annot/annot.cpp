@@ -56,7 +56,6 @@ void annot_t::wipe()
   all_instances.clear();
 }
 
-
 instance_t * annot_t::add( const std::string & id , const interval_t & interval , const std::string & ch )
 {
 
@@ -4649,9 +4648,12 @@ void annotation_set_t::clear()
   std::map<std::string,annot_t*>::iterator ii = annots.begin();
   while ( ii != annots.end() ) 
     {
-      delete ii->second;
+      // i.e. leave original annots untouched if the annot was not initiated by this set
+      if ( ii->second->parent == this ) 
+	delete ii->second;
       ++ii;
     }
+  
   
   annots.clear(); 
   

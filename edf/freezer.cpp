@@ -194,45 +194,34 @@ bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean , bo
 void freezer_t::clean( edf_t * self )
 {
   if ( store.size() == 0 )
-    {
-      //      std::cout <<" noting to clean\n";
-      return;
-    }
-  //  std::cout << " in clean()\n";
+    return;
   
   std::map<std::string,edf_t*>::const_iterator ss = store.begin();
   while ( ss != store.end() )
     {
-      //      std::cout << " here1\n";
       // make sure not to clean self
       if ( ss->second != self )
 	clean( ss->first , false ); // keep store key intact while we iterate
-//       else
-// /	std::cout << " skipping this one\n";
       ++ss;
       
     }
   store.clear();
-  //  std::cout << "  cleaned the freezer\n";
+
 }
   
   
 void freezer_t::clean( const std::string & s , bool clear_store )
 {
+
   if ( store.find( s ) != store.end() )
     {
-      //      logger << "  cleaning up freeze " << s << "\n";
+      logger << "  cleaning up freeze " << s << "\n";
       edf_t * p = store[ s ];
-      if ( p == NULL ) logger << " is null\n";
-      //      std::cout << " calling delete\n";
       delete p;
-      //std::cout << "  -- done\n";
     }
+  
   if ( clear_store )
-    {
-      store.erase( s );
-      //std::cout << " cleaned..\n";
-    }
+    store.erase( s );
 }
 
 

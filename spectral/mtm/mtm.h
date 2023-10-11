@@ -171,7 +171,9 @@ struct spectral_kurtosis_t {
   
   void average_channels();
   
-  double kurtosis( frequency_band_t );
+  double kurtosis( frequency_band_t , double * sd = NULL , double * skew = NULL );
+
+  double kurtosis2( frequency_band_t , double * sd = NULL , double * skew = NULL );
   
   bool kurt3;
 
