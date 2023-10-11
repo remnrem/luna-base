@@ -2963,6 +2963,8 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   // Ascending/descending N2 ( Y / N /not sure)
   //   hyp_N2_asc hyp_N2_dsc
 
+  // basic 'lights on' (i.e. will reflect any truncation too)
+  
   //
   // NREM cycles
   //
@@ -3141,6 +3143,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       bool is_nr   = is_n1 || is_n2 || is_n3 ;
       bool is_rem  = stages[e] == REM ;
       bool is_sleep = is_nr || is_rem ;
+      bool is_lights = stages[e] == LIGHTS_ON ;
+
+      if ( is_lights )
+	{
+	  std::string alabel = prefix + "lights";
+          annot_t * ah1 = timeline->annotations.add( alabel );
+          ah1->add( "." , interval , "." );
+	}
       
       if ( is_wake )
 	{
@@ -3277,6 +3287,9 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
           annot_t * ah2 = timeline->annotations.add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
+
+
+      
       
       // next epoch
     }
