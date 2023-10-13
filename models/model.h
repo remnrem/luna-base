@@ -52,6 +52,7 @@ struct model_term_t {
     required = false;
     has_value = false;
     value = ".";
+    log_transform = false;
   }
   
   std::string label;
@@ -64,7 +65,8 @@ struct model_term_t {
   double mean;
   double sd;
   bool required;
-  
+  bool log_transform;
+
   // if the model file sets a VALUE (i.e. instead of specify a cache location
   // store it here (on reading model file - which can contain indiv-specific
   // variable substitutions) before passing to the feature vector; in this case,

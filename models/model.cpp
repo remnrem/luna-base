@@ -30,16 +30,12 @@
 
 extern logger_t logger;
 
-
 // special terms required/expected in a model
-
 // title     <- "Title of the model"
 // reference <- "PMID, URL, or other citation"
-
 // outcome   <- "label for the predicted measure"
 // type      <- "linear or logistic"
 // training  <- "brief description of training population (N=XXXX)" 
-
 // data      <- "filepath for training data"
 
 void prediction_model_t::read( const std::string & f , const std::string & id )
@@ -216,6 +212,10 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
 		    {
 		      term.required = Helper::yesno( value );
 		    }
+		  else if ( key == "LOG" )
+		    {
+		      term.log_transform = Helper::yesno( value );
+		    }		  
 		  else
 		    Helper::halt( "unrecognized key term: " + key );
 		}
@@ -318,7 +318,8 @@ void prediction_model_t::dump() const
       if ( tt->has_value )
 	std::cout << tt->label << "\n"
 		  << "  value=" << tt->value << " "
-		  << "req=" << tt->required << "\n"
+		  << "req=" << tt->required << " "
+		  << "log=" << tt->log_transform << "\n"
 		  << "  b=" << tt->coef << " "
 		  << "m=" << tt->mean << " "
 		  << "sd=" << tt->sd << "\n\n";
@@ -327,6 +328,7 @@ void prediction_model_t::dump() const
 		  << "  cmd=" << tt->cmd << " "
 		  << "var=" << tt->var << " "
 		  << "req=" << tt->required << " "
+		  << "log=" << tt->log_transform << " "
 		  << "ch=" << Helper::stringize( tt->chs ) << " " 
 		  << "strata=" << Helper::ezipam( tt->strata , ',', '/' ) << "\n"
 		  << "  b=" << tt->coef << " "
