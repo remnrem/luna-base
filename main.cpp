@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -575,6 +576,7 @@ int main(int argc , char ** argv )
 		{
 		  // assume this is an ID (i.e. must be a string)
 		  globals::sample_list_id = argv[i];		  
+		  //logger << "  restricting analysis to ID [" << globals::sample_list_id << "]\n";
 		  specified = 2;// i.e. done selecting
 		}
 	      else if ( specified == 0 )
@@ -596,6 +598,7 @@ int main(int argc , char ** argv )
 	  if ( specified == 1 ) 
 	    {
 	      globals::sample_list_max = globals::sample_list_min;
+	      //logger << "  restricting analysis to sample # " << globals::sample_list_max << "\n";
 	    }
 	  else if ( globals::sample_list_max < globals::sample_list_min )
 	    {
@@ -606,7 +609,10 @@ int main(int argc , char ** argv )
 	  
 	  if ( globals::sample_list_min < 0 ) globals::sample_list_min = -1;
 	  if ( globals::sample_list_max < 0 ) globals::sample_list_max = -1;
-	    
+
+	  // if ( globals::sample_list_max > globals::sample_list_min )
+	  //   logger << "  restricting analysis to samples # " << globals::sample_list_min << " to " << globals::sample_list_max << "\n";
+	  
 	}
             
     }

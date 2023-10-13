@@ -323,17 +323,6 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
     Helper::halt( "problem, only have " + Helper::int2str( (int)model.coef.size() ) + " coefs" );
   
 
-  //
-  // log-transformation of features
-  //
-  
-  if ( model.specials[ "log1p" ] > 0 )
-    {
-      logger << "  log1p() transforming all features\n";
-      for (int i=0; i<nt; i++)
-	if ( fabs( X[i] ) > 1e-8 ) 
-	  X[i] = ( X[i] > 0 ? 1 : -1 ) * log1p( fabs( X[i] ) ) ;
-    }
 
 
 
@@ -345,7 +334,36 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   Z = X - model.mean ;
   
   Z = Z.array() / model.sd.array() ; 
-    
+
+
+  
+  //
+  // log-transformation of normalized features
+  //
+
+  bool all_logged = model.specials[ "log1p" ] ;
+  
+  int idx = 0,  n_tr = 0;
+
+  tt = model.terms.begin();
+  while ( tt != model.terms.end() )
+    {
+      if ( ! missing[idx] )
+	{
+	  if ( all_logged || tt->log_transform )
+	    {
+	      Z[idx] = ( Z[idx] > 0 ? 1 : -1 ) * log1p( fabs( Z[idx] ) );
+	      ++n_tr;
+	    }
+	}      
+      ++idx;
+      ++tt;
+    }
+
+  if ( n_tr > 0 ) 
+    logger << "  log1p() transformed " << n_tr << " normalized features\n";
+
+
   //
   // Missing data imputation (on Z scale)
   //
@@ -460,7 +478,6 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   
   output();
 
-
   //
   // all done
   //
@@ -509,4 +526,3 @@ void prediction_t::output() const
   writer.unlevel( "TERM" );
   
 }
-
