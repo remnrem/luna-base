@@ -1865,7 +1865,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      if ( use_mask )
 			{
 			  writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
-
+			  writer.value( "CDENS" , itpc.ninc.obs / t_minutes ) ;
+			  writer.value( "UDENS" , ( spindles.size() - itpc.ninc.obs ) / t_minutes ) ;
+			  
 			  // special one-off for age prediction model:
 			  if ( cache_metrics )
 			    {
