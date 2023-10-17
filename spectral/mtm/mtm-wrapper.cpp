@@ -86,8 +86,11 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   //
 
   // 'excess' kurtosis, i.e. = 0 for N(0,1)
-  const bool spec_kurt  = param.has( "speckurt" ) || param.has( "speckurt3" ) ;
+  const bool spec_kurt  = param.has( "speckurt" ) || param.has( "speckurt3" ) || param.has( "alternate-speckurt" );
   
+  // 'alternative' definition of spectral kurtosis (i.e. kurt of both time and freq bins, within band)
+  const bool kurt_altdef = param.has( "alternate-speckurt" );
+
   // standardard k, i.e. = 3 for N(0,1)
   const bool spec_kurt3 = param.has( "speckurt3" );
 
@@ -323,14 +326,17 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   // etrack_slope.resize( ns_used );
 
   // band->epoch->value (already averaged over channels)
-  //  todo... add a non-channel-averaged version too for consistency...
-  std::vector<std::vector<double> > etrack_avg_speckurt;
-  std::vector<std::vector<double> > etrack_avg_speckurt2;
-  std::vector<std::vector<double> > etrack_avg_specskew;
-  std::vector<std::vector<double> > etrack_avg_specskew2;
-  std::vector<std::vector<double> > etrack_avg_speccv;
-  std::vector<std::vector<double> > etrack_avg_speccv2;
-  
+  //   avg over channels
+  std::vector<std::vector<double> > etrack_chavg_speckurt;  
+  std::vector<std::vector<double> > etrack_chavg_specskew;
+  std::vector<std::vector<double> > etrack_chavg_speccv;
+  // channel->band->epoch->value
+  std::vector<std::vector<std::vector<double> > > etrack_speckurt;  
+  std::vector<std::vector<std::vector<double> > > etrack_specskew;
+  std::vector<std::vector<std::vector<double> > > etrack_speccv;
+  etrack_speckurt.resize( ns_used );
+  etrack_specskew.resize( ns_used );
+  etrack_speccv.resize( ns_used );
 
   if ( epochwise )
     logger << "  epochwise analysis, iterating over " << edf.timeline.num_epochs() << " epochs\n";
@@ -965,6 +971,70 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		}
 	    }
 	  
+	  
+	  //
+	  // (per-channel) Spectral kurtosis (calc'ed per epoch/interval but also here averaging channels
+	  //   -- only for 'primary' definiton (not alternate-speckurt) 
+	  //
+	  
+	  if ( spec_kurt && ! kurt_altdef )
+	    {
+	      
+	      //
+	      // output now?
+	      //
+	      
+	      if ( ( ! epochwise ) || epoch_level_output )
+		{
+		  std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
+		  while ( bb != skurt.bands.end() )
+		    {
+		      writer.level( globals::band( *bb ) , globals::band_strat );
+		      
+		      // current (i.e. latest added) channel = ns1
+		      // kurtosis2() is the 'primary' def
+		      double spsk , spcv ; 
+		      double spku = skurt.kurtosis2( ns1 , *bb , &spcv, &spsk ) ;
+		      
+		      writer.value( "SPECCV" , spcv );
+		      writer.value( "SPECSKEW" , spsk );
+		      writer.value( "SPECKURT" , spku );
+		      
+		      ++bb;
+		    }
+		  writer.unlevel( globals::band_strat );
+		}
+
+	      //
+	      // track?
+	      //
+
+              if ( epochwise && etrack_speckurt[ns1].size() == 0 )
+		{
+		  etrack_speckurt[ns1].resize( skurt.bands.size() );
+		  etrack_specskew[ns1].resize( skurt.bands.size() );
+		  etrack_speccv[ns1].resize( skurt.bands.size() );
+		}
+	      
+	      int bn=0;
+	      std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
+	      while ( bb != skurt.bands.end() )
+		{
+		  
+		  double spsk ,spcv ;
+		  double spku = kurt_altdef ? skurt.kurtosis( *bb , &spcv, &spsk ) : skurt.kurtosis2( ns1, *bb , &spcv, &spsk ) ;
+		  
+		  etrack_speckurt[ns1][bn].push_back( spku );
+		  etrack_speccv[ns1][bn].push_back( spcv );
+		  etrack_specskew[ns1][bn].push_back( spsk );
+		  
+		  ++bb;
+		  ++bn;
+		}
+	  	  
+	    }
+
+
 	  //
 	  // add new signals?
 	  //
@@ -1008,9 +1078,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
 
       //
-      // Spectral kurtosis (calc per epoch/interval averaging channels)
-      //   ... jez, annoying to have to make a special case like this... 
-      //       this metric better be worth it...
+      // Spectral kurtosis (calc'ed per epoch/interval but also here averaging channels
       //
       
       if ( spec_kurt )
@@ -1029,19 +1097,14 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      while ( bb != skurt.bands.end() )
 		{
 		  writer.level( globals::band( *bb ) , globals::band_strat );
-		  writer.value( "SPECKURT" , skurt.kurtosis( *bb ) );
 		  
-		  // tmp
-		  double sd1, sd2, sk1, sk2;
-		  double k2 = skurt.kurtosis2( *bb , &sd2, &sk2 );
-		  writer.value( "SPECKURT2" , skurt.kurtosis2( *bb ) );
-		  writer.value( "SPECSD2"   , sd2 );
-		  writer.value( "SPECSKEW2" , sk2 );
-
-		  double k1 = skurt.kurtosis( *bb , &sd1, &sk1 );
-		  writer.value( "SPECSD"   , sd1 );
-		  writer.value( "SPECSKEW" , sk1 );
- 
+		  double spsk , spcv ; 
+		  double spku = kurt_altdef ? skurt.kurtosis( *bb , &spcv, &spsk ) : skurt.kurtosis2( *bb , &spcv, &spsk ) ;
+		  
+		  writer.value( "SPECCV" , spcv );
+		  writer.value( "SPECSKEW" , spsk );
+		  writer.value( "SPECKURT" , spku );
+		  
 		  ++bb;
 		}
 	      writer.unlevel( globals::band_strat );
@@ -1052,36 +1115,24 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  //
 	  
 	  // first, size up
-	  if ( etrack_avg_speckurt.size() == 0 )
+	  if ( etrack_chavg_speckurt.size() == 0 )
 	    {
-	      etrack_avg_speckurt.resize( skurt.bands.size() );
-	      etrack_avg_speckurt2.resize( skurt.bands.size() );
-
-	      etrack_avg_specskew.resize( skurt.bands.size() );
-	      etrack_avg_specskew2.resize( skurt.bands.size() );
-
-	      etrack_avg_speccv.resize( skurt.bands.size() );
-	      etrack_avg_speccv2.resize( skurt.bands.size() );
-
+	      etrack_chavg_speckurt.resize( skurt.bands.size() );
+	      etrack_chavg_specskew.resize( skurt.bands.size() );
+	      etrack_chavg_speccv.resize( skurt.bands.size() );	      
 	    }
+
 	  int bn=0;
 	  std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
 	  while ( bb != skurt.bands.end() )
 	    {
 	      
-	      double sd1, sd2, sk1, sk2;
-	      double k1 = skurt.kurtosis( *bb , &sd1, &sk1 );
-	      double k2 = skurt.kurtosis2( *bb , &sd2, &sk2 );
-	      
-	      etrack_avg_speckurt[bn].push_back( k1 );
-	      etrack_avg_speckurt2[bn].push_back( k2 );
-
-	      etrack_avg_specskew[bn].push_back( sk1 );
-	      etrack_avg_specskew2[bn].push_back( sk2 );
-
-	      etrack_avg_speccv[bn].push_back( sd1 );
-	      etrack_avg_speccv2[bn].push_back( sd2 );
-
+	      double spsk ,spcv ;
+	      double spku = kurt_altdef ? skurt.kurtosis( *bb , &spcv, &spsk ) : skurt.kurtosis2( *bb , &spcv, &spsk ) ;
+      
+	      etrack_chavg_speckurt[bn].push_back( spku );
+	      etrack_chavg_speccv[bn].push_back( spcv );
+	      etrack_chavg_specskew[bn].push_back( spsk );
 
 	      ++bb;
 	      ++bn;
@@ -1170,8 +1221,39 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      
 	    }
 	  writer.unlevel( globals::band_strat );
-
-	 	  
+	  
+	  //
+	  // spectral kurtsosis (avg over channels)
+	  //
+	  
+	  if ( spec_kurt )
+	    {
+	      
+	      // initial dummy, to get bands (defined in constructor)
+	      spectral_kurtosis_t skurt;
+	      
+	      int bn=0;
+	      std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
+	      while ( bb != skurt.bands.end() )
+		{
+		  writer.level( globals::band( *bb ) , globals::band_strat  );
+		  
+		  writer.value( "SPECKURT" , MiscMath::mean( etrack_speckurt[ns1][bn] ) );
+		  writer.value( "SPECKURT_MD" , MiscMath::median( etrack_speckurt[ns1][bn] ) );
+		  
+		  writer.value( "SPECSKEW" ,  MiscMath::mean( etrack_specskew[ns1][bn] ) );
+		  writer.value( "SPECSKEW_MD" , MiscMath::median( etrack_specskew[ns1][bn] ) );
+		  
+		  writer.value( "SPECCV" ,    MiscMath::mean( etrack_speccv[ns1][bn] ) );
+		  writer.value( "SPECCV_MD" , MiscMath::median( etrack_speccv[ns1][bn] ) );
+		  
+		  ++bb;
+		  ++bn;
+		}
+	      writer.unlevel( globals::band_strat );
+	    }
+	  
+	  
 	  //
 	  // band ratios
 	  //
@@ -1237,25 +1319,16 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  while ( bb != skurt.bands.end() )
 	    {
 	      writer.level( globals::band( *bb ) , globals::band_strat  );
-	      
-	      double kmean = MiscMath::mean( etrack_avg_speckurt[bn] );
-	      double kmed  = MiscMath::median( etrack_avg_speckurt[bn] );
-	      double ksd   = MiscMath::sdev( etrack_avg_speckurt[bn] );
-	      
-	      writer.value( "SPECKURT" , kmean );
-	      writer.value( "SPECKURT_MD" , kmed );
-	      writer.value( "SPECKURT_SD" , ksd );
-	      
-	      
-	      // tmp
-	      writer.value( "SPECKURT2" , MiscMath::mean( etrack_avg_speckurt2[bn] ) ); 
+	      	      	      
+	      writer.value( "SPECKURT" , MiscMath::mean( etrack_chavg_speckurt[bn] ) );
+	      writer.value( "SPECKURT_MD" , MiscMath::median( etrack_chavg_speckurt[bn] ) );
 
-	      writer.value( "SPECSKEW" , MiscMath::mean( etrack_avg_specskew[bn] ) ); 
-	      writer.value( "SPECSKEW2" , MiscMath::mean( etrack_avg_specskew2[bn] ) ); 
+	      writer.value( "SPECSKEW" ,  MiscMath::mean( etrack_chavg_specskew[bn] ) );
+	      writer.value( "SPECSKEW_MD" , MiscMath::median( etrack_chavg_specskew[bn] ) );
 
-	      writer.value( "SPECCV" , MiscMath::mean( etrack_avg_speccv[bn] ) ); 
-	      writer.value( "SPECCV2" , MiscMath::mean( etrack_avg_speccv2[bn] ) ); 
-
+	      writer.value( "SPECCV" ,    MiscMath::mean( etrack_chavg_speccv[bn] ) );
+	      writer.value( "SPECCV_MD" , MiscMath::median( etrack_chavg_speccv[bn] ) );
+	      	      
 	      ++bb;
 	      ++bn;
 	    }

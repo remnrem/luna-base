@@ -171,10 +171,15 @@ struct spectral_kurtosis_t {
   
   void average_channels();
   
-  double kurtosis( frequency_band_t , double * sd = NULL , double * skew = NULL );
-
+  // main
   double kurtosis2( frequency_band_t , double * sd = NULL , double * skew = NULL );
   
+  // per channel
+  double kurtosis2( const int, frequency_band_t , double * sd = NULL , double * skew = NULL );
+  
+  // alternate def
+  double kurtosis( frequency_band_t , double * sd = NULL , double * skew = NULL );
+
   bool kurt3;
 
   std::vector<double> f;

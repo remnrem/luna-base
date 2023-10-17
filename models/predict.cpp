@@ -473,8 +473,12 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
     {
       logger << "  bias-corrected predicted value (Y1) = " << y1 << "\n";
       writer.value( "Y1" , y1 );
-      writer.value( "YOBS" , model.specials["bias_correction_term"] );
     }
+  
+  if ( model.specials.find( "observed" ) != model.specials.end() )
+    writer.value( "YOBS" , model.specials["observed"] );
+  else if ( model.specials.find( "bias_correction_term" ) != model.specials.end() )
+    writer.value( "YOBS" , model.specials["bias_correction_term"] );                                                                                                          
   
   output();
 
