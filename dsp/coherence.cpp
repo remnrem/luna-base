@@ -53,6 +53,8 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   std::string signal_label1 , signal_label2 ; 
 
   bool all_by_all = false;
+  
+  const bool mirror_outputs = param.has( "mirror" );
 
   if ( param.has( "sig1" ) )
     {

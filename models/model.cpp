@@ -188,6 +188,8 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
 		    }
 		  else if ( key == "CH" )
 		    term.chs = Helper::parse( value , ',' );		  
+		  else if ( key == "CHS" ) // expecting C1+C2,A1+A2,<etc>
+		    term.pairs = Helper::parse( value , ',' ); 
 		  else if ( key == "STRATA" && value != "." ) // allow baseline strata = empty
 		    term.strata = Helper::mapize( value  , ',' , '/' );
 		  else if ( key == "B" )
@@ -215,7 +217,11 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
 		  else if ( key == "LOG" )
 		    {
 		      term.log_transform = Helper::yesno( value );
-		    }		  
+		    }		 
+		  else if ( key == "DIR" )
+		    {
+		      term.directed = Helper::yesno( value );
+		    } 
 		  else
 		    Helper::halt( "unrecognized key term: " + key );
 		}
@@ -269,19 +275,19 @@ void prediction_model_t::populate()
     }
 }
 
-std::set<std::string> prediction_model_t::channels() const
-{
-  std::set<std::string> chs;
-  std::set<model_term_t>::const_iterator tt = terms.begin();
-  while ( tt != terms.end() )
-    {
-      // any 'channel' labels?
-      std::map<std::string,std::string>::const_iterator cc = tt->strata.find( "CH" );
-      ++tt;
-    }
+// std::set<std::string> prediction_model_t::channels() const
+// {
+//   std::set<std::string> chs;
+//   std::set<model_term_t>::const_iterator tt = terms.begin();
+//   while ( tt != terms.end() )
+//     {
+//       // any 'channel' labels?
+//       std::map<std::string,std::string>::const_iterator cc = tt->strata.find( "CH" );
+//       ++tt;
+//     }
 
-  return chs;
-}
+//   return chs;
+// }
 
 
 void prediction_model_t::dump() const
@@ -324,16 +330,22 @@ void prediction_model_t::dump() const
 		  << "m=" << tt->mean << " "
 		  << "sd=" << tt->sd << "\n\n";
       else
-	std::cout << tt->label << "\n"
-		  << "  cmd=" << tt->cmd << " "
-		  << "var=" << tt->var << " "
-		  << "req=" << tt->required << " "
-		  << "log=" << tt->log_transform << " "
-		  << "ch=" << Helper::stringize( tt->chs ) << " " 
-		  << "strata=" << Helper::ezipam( tt->strata , ',', '/' ) << "\n"
-		  << "  b=" << tt->coef << " "
-		  << "m=" << tt->mean << " "
-		  << "sd=" << tt->sd << "\n\n";
+	{
+	  std::cout << tt->label << "\n"
+		    << "  cmd=" << tt->cmd << " "
+		    << "var=" << tt->var << " "
+		    << "req=" << tt->required << " "
+		    << "log=" << tt->log_transform << " ";
+	  if ( tt->chs.size() ) 
+	    std::cout << "ch=" << Helper::stringize( tt->chs ) << " ";
+	  if ( tt->pairs.size() )
+	    std::cout << "chs=" << Helper::stringize( tt->pairs ) << " ";
+
+	  std::cout << "strata=" << Helper::ezipam( tt->strata , ',', '/' ) << "\n"
+		    << "  b=" << tt->coef << " "
+		    << "m=" << tt->mean << " "
+		    << "sd=" << tt->sd << "\n\n";
+	}
       ++tt;
     }
   

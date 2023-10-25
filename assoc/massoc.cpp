@@ -70,23 +70,40 @@ massoc_t::massoc_t( param_t & param )
     Helper::halt( "'phe' required for 'train' mode" );
   
   //
-  // dump mode - take a single file and output row IDs
+  // rows mode - take a single file and output row IDs
   //
 
   if ( rows_mode )
     {
-      const std::string infile = Helper::expand( param.requires( "load" ) );
+      
+      const bool all_ftr = param.has( "features" );
 
+      const std::string infile = Helper::expand( param.requires( "load" ) );
+      
       load( infile , 1 );
 
       const int nrow = training_iids.size();
 
-      std::cout << "ID1\tIID\tID\tEID\n";
+      std::cout << "ID1\tIID\tID\tEID";
+      if ( all_ftr ) 
+	for (int i=0; i<vars.size(); i++) 
+	  std::cout << "\t" << vars[i];
+      std::cout << "\n";
       for (int i=0; i<nrow; i++)
-	std::cout << training_iids[i] << "_" << training_ids[i] << "_" << training_eids[i] << "\t"
-		  << training_iids[i] << "\t"
-		  << training_ids[i] << "\t"
-		  << training_eids[i] << "\n";
+	{
+	  std::cout << training_iids[i] << "_" << training_ids[i] << "_" << training_eids[i] << "\t"
+		    << training_iids[i] << "\t"
+		    << training_ids[i] << "\t"
+		    << training_eids[i] ;
+	  
+	  if ( all_ftr ) 
+	    {
+	      for (int j=0; j<vars.size(); j++)
+		std::cout << "\t" << Xtrain(i,j);
+	    }
+	  
+	  std::cout << "\n";
+	}
       
       return;
       

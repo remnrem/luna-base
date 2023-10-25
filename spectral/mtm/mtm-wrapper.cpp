@@ -1191,8 +1191,11 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      const double psd   = MiscMath::sdev( etrack_power[ns1][fi] );
 	      
 	      writer.value( "MTM" , pmean );
-	      writer.value( "MTM_MD" , pmed );
-	      writer.value( "MTM_SD" , psd );
+	      if ( etrack_power[ns1][fi].size() > 2 ) 
+		{
+		  writer.value( "MTM_MD" , pmed );
+		  writer.value( "MTM_SD" , psd );
+		}
 	    }
 	  writer.unlevel( globals::freq_strat );
 
@@ -1204,21 +1207,27 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	    {
 	      writer.level( globals::band( bandaid.bands[bi] ) , globals::band_strat  );
 	      const double pmean = MiscMath::mean( etrack_bandpower[ns1][bi] );
-	      const double pmed  = MiscMath::median( etrack_bandpower[ns1][bi] );
-	      const double psd   = MiscMath::sdev( etrack_bandpower[ns1][bi] );
 
 	      const double rpmean = MiscMath::mean( etrack_relbandpower[ns1][bi] );
-	      const double rpmed  = MiscMath::median( etrack_relbandpower[ns1][bi] );
-	      const double rpsd   = MiscMath::sdev( etrack_relbandpower[ns1][bi] );
 	      
 	      writer.value( "MTM" , pmean );
-	      writer.value( "MTM_MD" , pmed );
-	      writer.value( "MTM_SD" , psd );
-
 	      writer.value( "REL" , rpmean );
-	      writer.value( "REL_MD" , rpmed );
-	      writer.value( "REL_SD" , rpsd );
 	      
+	      if ( etrack_bandpower[ns1][bi].size() > 2 ) 
+		{
+		  const double pmed  = MiscMath::median( etrack_bandpower[ns1][bi] );
+		  const double psd   = MiscMath::sdev( etrack_bandpower[ns1][bi] );
+		  writer.value( "MTM_MD" , pmed );
+		  writer.value( "MTM_SD" , psd );
+		}
+
+	      if ( etrack_relbandpower[ns1][bi].size() > 2 )
+		{
+		  const double rpmed  = MiscMath::median( etrack_relbandpower[ns1][bi] );
+		  const double rpsd   = MiscMath::sdev( etrack_relbandpower[ns1][bi] );
+		  writer.value( "REL_MD" , rpmed );
+		  writer.value( "REL_SD" , rpsd );
+		}
 	    }
 	  writer.unlevel( globals::band_strat );
 	  
@@ -1275,14 +1284,20 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		  frequency_band_t b2 = globals::band( tok[1] );
 
 		  const double rmean = MiscMath::mean( etrack_bandratios[ns1][rn] );
-		  const double rmed  = MiscMath::median( etrack_bandratios[ns1][rn] );
-		  const double rsd   = MiscMath::sdev( etrack_bandratios[ns1][rn] );
 		  
 		  writer.level( tok[0] , "B1" );
 		  writer.level( tok[1] , "B2" );
 		  writer.value( "RATIO" , rmean );
-		  writer.value( "RATIO_MD" , rmed );
-		  writer.value( "RATIO_SD" , rsd );
+		  
+
+		  if ( etrack_bandratios[ns1][rn].size() > 2 ) 
+		    {
+		      const double rmed  = MiscMath::median( etrack_bandratios[ns1][rn] );
+		      const double rsd   = MiscMath::sdev( etrack_bandratios[ns1][rn] );
+		      writer.value( "RATIO_MD" , rmed );
+		      writer.value( "RATIO_SD" , rsd );
+		    }
+		  
 		  done_any = true;
 		  
 		  ++rn;

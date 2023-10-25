@@ -46,6 +46,7 @@ struct model_term_t {
     label = cmd = var = ".";
     // if cmd == var == ".", implies a value was set (not from cache) 
     chs.clear();   // separate out channels from other strata
+    pairs.clear(); // CHS=C3+O1,C4+O2
     strata.clear();
     coef = mean = 0;
     sd = 1;
@@ -53,6 +54,7 @@ struct model_term_t {
     has_value = false;
     value = ".";
     log_transform = false;
+    directed = false;
   }
   
   std::string label;
@@ -60,12 +62,14 @@ struct model_term_t {
   std::string var;
   std::map<std::string,std::string> strata;
   std::vector<std::string> chs;
+  std::vector<std::string> pairs;
   
   double coef;
   double mean;
   double sd;
   bool required;
   bool log_transform;
+  bool directed; // if CH1/CH2, then swap sign if find CH2/CH1
 
   // if the model file sets a VALUE (i.e. instead of specify a cache location
   // store it here (on reading model file - which can contain indiv-specific
@@ -98,7 +102,7 @@ struct prediction_model_t {
 
   void dump() const;
 
-  std::set<std::string> channels() const;
+  //  std::set<std::string> channels() const;
   
   std::set<model_term_t> terms;
 

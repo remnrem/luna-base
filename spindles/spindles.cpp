@@ -379,7 +379,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   //
   // Caches:
-  //   - spindle peaks (cache-peaks)
+  //   - spindle peaks (cache-peaks); spindle mid-points (cache-mids)
   //   - wavelet power (cache)
   //   - metrics (DENS, etc)
   //
@@ -390,6 +390,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool cache_peaks                  = param.has( "cache-peaks" );
   const std::string cache_peaks_name = cache_peaks ? param.value( "cache-peaks" ) : "";
   const bool cache_amp_peak  = param.has( "amp-peaks" ) ;
+
+  const bool cache_mids                  = param.has( "cache-mids" );
+  const std::string cache_mids_name = cache_mids ? param.value( "cache-mids" ) : "";
   
   const bool cache_peaks_sec             = param.has( "cache-peaks-sec" );
   const std::string cache_peaks_sec_name = cache_peaks_sec ? param.value( "cache-peaks-sec" ) : "";
@@ -1513,7 +1516,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 
 	  //
-	  // Cache spindle peaks: in sample points
+	  // Cache spindle peaks: in sample points 
+	  //  'peaks' or literal mid-points
 	  //
 	  
 	  if ( cache_peaks )
@@ -1529,6 +1533,20 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
               cache->add( ckey_t( "points" , writer.faclvl() ) , peaks );
 	    }
 	  
+	  if ( cache_mids )
+	    {
+              cache_t<int> * cache = edf.timeline.cache.find_int( cache_mids_name );
+
+	      std::vector<int> peaks;
+	      for (int i=0; i<spindles.size(); i++)
+		{
+		  int p = spindles[i].start_sp + ( spindles[i].stop_sp - spindles[i].start_sp ) / 2;
+		  peaks.push_back(p);
+		}
+              cache->add( ckey_t( "points" , writer.faclvl() ) , peaks );
+	    }
+
+
 	  //
 	  // Cache spindle peaks: in seconds
 	  //

@@ -913,7 +913,7 @@ bool cmd_t::eval( edf_t & edf )
 	  
 	  std::string var = par.single_value();
 	  bool val = cmd_t::pull_ivar_bool( edf.id , var );	      
-
+	  std::cout << " var, cal = " << var << " " << val << "\n";
 	  if ( ifnot ) // requiress F
 	    {
 	      if ( val )
@@ -948,6 +948,8 @@ bool cmd_t::eval( edf_t & edf )
 
       if ( globals::empty )
 	{
+	  // not systematic, but some commands that do not access the EDF are okay 
+	  // to reun - most importantly THAW...
 	  bool skip = true;
 	  if      ( is( c, "THAW" ) ) skip = false;
 	  else if ( is( c, "HEADERS" ) ) skip = false;
@@ -956,6 +958,7 @@ bool cmd_t::eval( edf_t & edf )
 	  else if ( is( c, "DESC" ) ) skip = false;
 	  else if ( is( c, "ALIASES" ) ) skip = false;
 	  else if ( is( c, "TYPES" ) ) skip = false;
+	  else if ( is( c, "PREDICT" ) ) skip = false;
 	  if ( skip )
 	    {
 	      logger << "  ** skipping " << cmd(c) << " as there are no unmasked records\n"; 
@@ -2844,7 +2847,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 		 << edf.id << " when setting EPOCH: "
 		 << "required=" << r << "\t"
 		 << "but observed=" << ne << "\n";
-	  globals::problem = true;
+	  globals::empty = true;
 	}
     }
 }
@@ -3158,6 +3161,25 @@ void proc_restructure( edf_t & edf , param_t & param )
   const bool VERBOSE_OUTPUT = param.has( "verbose" );
   const bool PRESERVE_CACHE = param.has( "preserve-cache" ) ? param.yesno( "preserve-cache" ) : false ; 
   edf.restructure( FORCE_RESTRUCTURE , VERBOSE_OUTPUT , PRESERVE_CACHE );
+
+  // optionally, require a certain number of epochs to be left?
+  if ( param.has( "require" ) )
+    {
+      const int r = param.requires_int( "require" );
+      if ( r > 0 ) 
+	{
+	  edf.timeline.ensure_epoched();
+	  
+	  if ( edf.timeline.num_epochs() < r ) 
+	    {         
+	      logger << " ** warning: after RESTRUCTURE: "
+		     << "required " << r << " epochs "
+		     << "but observed only " << edf.timeline.num_epochs()  << " (setting empty flag)\n";
+	      globals::empty = true;
+	    }
+	  return;
+	}
+    }
 }
 
 

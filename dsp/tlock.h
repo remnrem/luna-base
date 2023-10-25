@@ -44,6 +44,8 @@ struct tlock_t {
 	    const int , const int , 
 	    const bool take_log = false , 
 	    const int angle_bin = 0 );
+
+  void norm_within_intervals( const int );
   
   Data::Vector<double> average() const ;
 

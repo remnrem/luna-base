@@ -132,8 +132,14 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   
   int norm_points = points * ( param.has( "np" ) ? param.requires_dbl( "np" ) : 0 );
   
+  // norm each row (i.e. for MASSOC output)
+  int norm1_points = points * ( param.has( "np1" ) ? param.requires_dbl( "np1" ) : 0 );
+  
   if ( norm_points < 0 || norm_points > points / 2 ) 
     Helper::halt( "expecting np between 0 and 0.5" );
+
+  if ( norm1_points < 0 || norm1_points > points / 2 ) 
+    Helper::halt( "expecting np1 between 0 and 0.5" );
 
   //
   // Spectrogram
@@ -256,6 +262,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	  // if we do not write to outptu ('export' versus 'verbose')
 	  
 	  tlock_t tlock(t, norm_points );
+	  
 	  tlock.verbose = verbose || to_massoc || spectrogram ; 
 
 	  // loop time-points to sync/lock on
@@ -299,6 +306,10 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	      // next interval
 	    }
 	  
+	  
+	  // optionally, norm each obs (col)
+	  if ( norm1_points ) tlock.norm_within_intervals( norm1_points );
+
 	  // report number of interval considered/accepted
 	  writer.value( "N" , cnt_valid_intervals );
 	  writer.value( "N_ALL" , (int)cx.size() );
@@ -667,6 +678,46 @@ void tlock_t::add( const std::vector<double> * x ,
 
     } // end of regular value accumulator
   
+}
+
+
+void tlock_t::norm_within_intervals( const int np1 )
+{
+  if ( np1 <= 0 ) return;
+
+  // note - actually wants to norm cols, as these are 
+
+  const int nrow = X.dim1();
+  const int ncol = X.dim2();
+  
+  // rescale each row to get min = 0
+  // and edges mean == 1 
+  
+  for (int j=0; j<ncol; j++)
+    {
+      
+      // 1) rescale to minimumm of 0.0
+      
+      double minval = X(0,j);
+      for (int i=0; i<nrow; i++) 
+	if ( X(i,j) < minval ) 
+	  minval = X(i,j);
+      for (int i=0; i<nrow; i++)
+	X(i,j) -= minval;
+      
+      // 2) normalize to get value of 1.0 for baseline, based on edges
+      
+      double norm = 0;
+      for (int i=0; i<np1; i++)
+	{
+	  norm += X(i,j);
+	  norm += X(nrow-(i+1),j);
+	}
+      norm /= 2.0 * np1;
+      for (int i=0; i<nrow; i++) 
+	X(i,j) /= norm;
+    }
+
 }
 
 

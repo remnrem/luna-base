@@ -3009,6 +3009,10 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   const std::string newannot = param.requires( "annot" );
   
   const std::string expr     = param.requires( "expr" );
+
+  // optional - a channel label for the new annot (nb. *ignores* input channel labels, 
+  // so this is a temp kludge...) 
+  const std::string ch_label = param.has( "ch" ) ? param.value( "ch" ) : "." ;
   
   // expressions always in form:
   //  A + B
@@ -3204,7 +3208,7 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   std::set<interval_t>::const_iterator nn = nevs.begin();
   while ( nn != nevs.end() )
     {
-      an->add( "." , *nn , "." );
+      an->add( "." , *nn , ch_label );
       ++nn;
     }
   

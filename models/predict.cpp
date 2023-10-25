@@ -56,6 +56,12 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   
   model.populate();
   
+  // requires an intercept and at least one term
+
+  if ( model.specials.find( "intercept" ) == models.specials.end() ) 
+    Helper::halt( "no intercept specified in model" );
+  
+
   // verbose output
   
   if ( param.has( "dump-model" ) )
@@ -179,7 +185,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
       //
       
       // no channels specified
-      if ( tt->chs.size() == 0 )
+      if ( tt->chs.size() == 0 && tt->pairs.size() == 0 )
 	{
 	  double x1;
 	  if ( ! cache->fetch1( tt->cmd , tt->var , tt->strata , &x1 ) )
@@ -207,35 +213,120 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 	  ++n_obs;
 	  
 	}
-      else // 1+ channel specified
+      else 
 	{
-	  // take the mean
+	  
+	  //
+	  // combine features across channels (or channel pairs)
+	  //
+	  
 	  std::vector<double> xx;
-	  std::vector<std::string>::const_iterator cc = tt->chs.begin();
-	  while ( cc != tt->chs.end() )
+
+	  if ( tt->chs.size() != 0 ) // 1+ single channel specified
 	    {
-	      // add CH into the strata
-	      std::map<std::string,std::string> ss1 = tt->strata;
-	      ss1[ "CH" ] = *cc ;
-	      double x1;
-
-	      // only add for this channel if present
-	      if ( ! cache->fetch1( tt->cmd , tt->var , ss1 , &x1 ) )
-		{
-		  logger << "  *** could not find "
-			 << tt->label << " : " << tt->cmd << " "
-			 << tt->var << " "
-			 << Helper::ezipam( ss1 ) << "\n";
-		  
-		}
-	      else // rack up this channel for this feature
-		xx.push_back( x1 );
 	      
-	      // next channel
-	      ++cc;
-	    } 
+	      // *either* look
+	      // take the mean
+	      
+	      std::vector<std::string>::const_iterator cc = tt->chs.begin();
+	      while ( cc != tt->chs.end() )
+		{
+		  
+		  // if single channel feature, add if we have 	      
+		  // single channel analysis: add CH into the strata
+		  
+		  std::map<std::string,std::string> ss1 = tt->strata;
+		  ss1[ "CH" ] = *cc ;
+		  double x1;
+		  
+		  // only add for this channel if present
+		  if ( ! cache->fetch1( tt->cmd , tt->var , ss1 , &x1 ) )
+		    {
+		      logger << "  *** could not find "
+			     << tt->label << " : " << tt->cmd << " "
+			     << tt->var << " "
+			     << Helper::ezipam( ss1 ) << "\n";
+		      
+		    }
+		  else // rack up this channel for this feature
+		    xx.push_back( x1 );
+		  
+		  // next channel
+		  ++cc;
+		}
+	      
+	    }
+	  else 
+	    {
+	      
+	      // CH1, CH2 scenario, specified via chs=A+B,C+D, etc
+	      //   i.e. here average A+B statistic w/  C+D  statistic, etc
+	      
+	      // *either* look
+	      // take the mean
+	      
+	      std::vector<std::string>::const_iterator cc = tt->pairs.begin();
+	      while ( cc != tt->pairs.end() )
+		{
+		  
+		  // add CH1 and CH2 into the strata
+		  
+		  std::vector<std::string> c1c2 = Helper::parse( *cc , "+" );
+		  if ( c1c2.size() != 2 ) 
+		    {
+		      std::cout << " term " << tt->label << "\n"
+				<< " term = [" << *cc << "]\n";
+		      Helper::halt( "bad format for CHS=A+B,C+D,E+F" );
+		    }
+		  
+		  std::map<std::string,std::string> ss1 = tt->strata;
+		  
+		  ss1[ "CH1" ] = c1c2[0];
+		  ss1[ "CH2" ] = c1c2[1];
+		  
+		  bool retrieved = false;
+		  
+		  // slot
+		  double x1;
+		  
+		  retrieved = cache->fetch1( tt->cmd , tt->var , ss1 , &x1 );
+		  
+		  // try swapping?
+		  if ( ! retrieved ) 
+		    {
+		      std::map<std::string,std::string> ss2 = tt->strata;
+		      ss2[ "CH2" ] = c1c2[0];
+		      ss2[ "CH1" ] = c1c2[1];
+		      retrieved = cache->fetch1( tt->cmd , tt->var , ss2 , &x1 );
 
-	  // check we have at least one channel
+		      // for a directed metric, need to swap sign
+		      if ( tt-> directed ) x1 = - x1;
+		    }
+		  
+		  // only add for this channel if present
+		  if ( ! retrieved )
+		    {
+		      logger << "  *** could not find "
+			     << tt->label << " : " << tt->cmd << " "
+			     << tt->var << " "
+			     << Helper::ezipam( ss1 ) << "\n";		      
+		    }		  
+		  else // rack up this channel for this feature
+		    {
+		      std::cout << " adding " << x1 << " for " << *cc << "\n";
+		      xx.push_back( x1 );
+		    }
+
+		  // next channel pair
+		  ++cc;
+		}
+
+	    }
+	  
+
+	  //
+	  // check we have at least one channel (or channel pair)
+	  //
 	  
 	  if ( xx.size() == 0 )
 	    {
@@ -255,7 +346,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 		  missing[i] = true;
 		}	      
 	    }
-	  else // we can add the mean across channels
+	  else // we can add the mean across channels/pairs
 	    {
 	      X[i] = MiscMath::mean( xx );
 	      ++n_obs;
@@ -421,7 +512,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   // Primary prediction
   //
   
-  y = y1 = (Z.transpose() * model.coef) + model.specials[ "model_intercept" ]; 
+  y = y1 = (Z.transpose() * model.coef) + model.specials[ "intercept" ]; 
        
   
   //
@@ -463,22 +554,34 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   
   
   //
-  // Feature level output
+  // Primary outputs
   //
 
+  // prediction
   logger << "\n  predicted value (Y) = " << y << "\n";
   writer.value( "Y" , y );
 
+  // bias-corrected prediction, of model supplied
   if ( apply_bias_correction )
     {
       logger << "  bias-corrected predicted value (Y1) = " << y1 << "\n";
       writer.value( "Y1" , y1 );
     }
   
+  // observed, if supplied
   if ( model.specials.find( "observed" ) != model.specials.end() )
-    writer.value( "YOBS" , model.specials["observed"] );
+    {
+      writer.value( "YOBS" , model.specials["observed"] );
+      logger << "  observed value (YOBS) = " << model.specials["observed"] << "\n";
+    }
   else if ( model.specials.find( "bias_correction_term" ) != model.specials.end() )
-    writer.value( "YOBS" , model.specials["bias_correction_term"] );                                                                                                          
+    {
+      logger << "  observed value (YOBS) = " << model.specials["bias_correction_term"] << "\n";
+      writer.value( "YOBS" , model.specials["bias_correction_term"] );                                                                             
+    }
+  
+    
+  // feature level output (by FTR)
   
   output();
 
@@ -497,7 +600,7 @@ void prediction_t::output() const
   std::set<model_term_t>::const_iterator tt = model.terms.begin();
   while ( tt != model.terms.end() )
     {
-      writer.level( tt->label , "TERM" );
+      writer.level( tt->label , "FTR" );
 
       // only output if non-missing raw value
       if ( ! missing[i] ) 
@@ -527,6 +630,6 @@ void prediction_t::output() const
       ++i;
       ++tt;
     }
-  writer.unlevel( "TERM" );
+  writer.unlevel( "FTR" );
   
 }

@@ -1521,8 +1521,8 @@ bool edf_t::attach( const std::string & f ,
     {
       if ( !header.continuous ) 
 	Helper::halt( "EDF+D with no time track" );
-
-      logger << " EDF+ [" << filename << "] did not contain any time-track: adding...\n";
+      
+      logger << " EDF+C [" << filename << "] did not contain any time-track: adding...\n";
 
       add_time_track();
 

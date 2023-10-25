@@ -1927,6 +1927,7 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  // recursively swap in any existing variables in the defiinition
 		  // ${a=${b}} 
 		  Helper::swap_in_variables( &tok[1] , vars );
+		  logger << "  setting variable ${" << tok[0] << "} = " << tok[1] << "\n";
 		  (*vars)[ tok[0] ] = tok[1]; 
 		  break;
 		}
