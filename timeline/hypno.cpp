@@ -3811,21 +3811,47 @@ void hypnogram_t::output( const bool verbose ,
 
   if ( verbose && any_sleep )
     {
+
+      // nb - this will include lights on/out, but those should not add much to complexity values
       
       std::vector<char> sc(stages.size(),'?');
+      std::vector<char> sc3(stages.size(),'?'); // 3-class NR/R/W
+      
       for (int e=0; e<stages.size(); e++)
 	{
-	  if      ( stages[e] == NREM1 ) sc[e] = 'A';
-	  else if ( stages[e] == NREM2 ) sc[e] = 'B';
-	  else if ( stages[e] == NREM3 || stages[e] == NREM4 ) sc[e] = 'C';
-	  else if ( stages[e] == REM ) sc[e] = 'D';
-	  else if ( stages[e] == WAKE ) sc[e] = 'E';      
+	  if      ( stages[e] == NREM1 ) { sc[e] = 'A'; sc3[e] = 'A'; } 
+	  else if ( stages[e] == NREM2 ) { sc[e] = 'B'; sc3[e] = 'A'; } 
+	  else if ( stages[e] == NREM3 || stages[e] == NREM4 ) { sc[e] = 'C'; sc3[e] = 'A'; } 
+	  else if ( stages[e] == REM ) { sc[e] = 'D'; sc3[e] = 'B'; }
+	  else if ( stages[e] == WAKE ) { sc[e] = 'E'; sc3[e] = 'C'; }       
 	}
+           
       
+      // 5-class
       std::string seq( sc.begin() , sc.end() );
-      double LZW = 0;
-      lzw_t lzw( seq , &LZW );
-      writer.value( "LZW" , LZW );
+      double r5 = 0;
+      lzw_t lzw( seq , &r5 );
+      
+      // 3-class
+      std::string seq3( sc3.begin() , sc3.end() );      
+      double r3 = 0;
+      lzw_t lzw3( seq3 , &r3 );
+      
+      // also get smallest possible value for fixed length 
+      const int n1 = seq.size();
+      double r0 = 0;
+      std::string seq0( n1 , 'A' );
+      lzw_t lzw0( seq0 , &r0 );
+      
+      //  r0    = min possile ratio
+      //  r3/r5 = obs
+      //  1.0   = max 
+
+      double scaled5 = ( r5 - r0 ) / ( 1.0 - r0 );
+      double scaled3 = ( r3 - r0 ) / ( 1.0 - r0 );
+      writer.value( "LZW" , scaled5 );
+      writer.value( "LZW3" , scaled3 );
+      
     }
   
 
