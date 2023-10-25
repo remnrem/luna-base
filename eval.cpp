@@ -913,13 +913,13 @@ bool cmd_t::eval( edf_t & edf )
 	  
 	  std::string var = par.single_value();
 	  bool val = cmd_t::pull_ivar_bool( edf.id , var );	      
-	  std::cout << " var, cal = " << var << " " << val << "\n";
-	  if ( ifnot ) // requiress F
+
+	  if ( ifnot ) // requires F
 	    {
 	      if ( val )
 		{
 		  if_count++;
-                  if_condition = var + " == " + (val?"T":"F") + " (required T)";
+                  if_condition = var + " == " + (val?"T":"F") + " (required F)";
 		}
 	    }
 	  else // requires T
