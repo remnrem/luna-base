@@ -30,7 +30,7 @@ endif
 
 ifdef LGBM_PATH
 DEP_INCLUDES +=-I$(LGBM_PATH)/include
-DEP_LIB +=-L$(LGBM_PATH)
+DEP_LIB +=-L$(LGBM_PATH)/lib
 endif
 
 
@@ -101,7 +101,7 @@ ifdef LGBM_PATH
 ifeq ($(ARCH),WINDOWS)
 LDFLAGS += -L/mingw64/bin/
 else
-LDFLAGS += -Wl,-rpath,${LGBM_PATH}
+LDFLAGS += -Wl,-rpath,${LGBM_PATH}/lib/
 endif
 endif
 
