@@ -1236,7 +1236,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	    }
 	}
     }  
-  
+
 
   //
   // Specify sliding window on epoch-level data?
@@ -1279,8 +1279,14 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       window_anchor = slide_anchor;
 
     }
-
   
+  //
+  // Output ascending/descending N2? 
+  //
+
+  output_n2_asc_desc = param.has( "n2-asc-desc" ) ? param.yesno( "n2-asc-desc" ) : false ;
+  n2_asc_desc_th = param.has( "n2-asc-desc-th" ) ? param.requires_dbl( "n2-asc-desc-th" ) : 0.25;
+    
 }
 
 void hypnogram_t::calc_stats( const bool verbose )
@@ -1303,6 +1309,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   // clear, in case this is run twice
   mins[ "W" ] = mins[ "N1" ] = mins[ "N2" ] = mins[ "N3" ] = mins[ "N4" ] = mins[ "R" ] = mins[ "?" ] = mins["L"] = 0;
+  mins[ "N2A" ] = mins[ "N2D" ] = mins[ "N2F" ] = 0;
   
   // implicitly, this will only count in the TRT (i.e. ignore pre
   // lights-out, and post lights-on)
@@ -1511,6 +1518,149 @@ void hypnogram_t::calc_stats( const bool verbose )
   // i.e. ignores *both* leading and trailing W; includes OTHER in denom
   slp_eff2_pct = ( TST / SPT_actual ) * 100;
 
+
+
+  //
+  // Ascending/descending N2 
+  //
+  
+  // Assign each N2 epoch a value to describe its relative position in
+  // the hypnogram: consider 'k' epochs before and after, calculating 
+  // the average of non-N2 epochs,  either W/R/N1 or N3/N4  
+
+  // Calculate a single score: 
+  // Defined only for N2 epochs
+  //   Left epochs    +1  N3              Right epochs    -1  N3
+  //                  -1  N1/W/R                          +1  N1/W/R
+  
+  const int n2_ascdesc_k = 10;  // 5 minutes
+  
+  // Can select extreme epochs as 'ascending' and 'descending' based on this score 
+  // (e.g. >+0.5 and < -0.5)
+  
+  n2_ascdesc.resize( ne , 0 );
+  
+  for (int e=0;e<ne;e++)
+    {
+      
+      if ( stages[e] != NREM2 ) continue;
+      
+      double left_wgt = 0;
+      int left_n = 0; 
+      int k = e-1;
+
+      while ( k >= 0 )
+	{
+
+	  if ( stages[k] == NREM3 || stages[k] == NREM4 )
+	    {
+	      left_wgt += 1;
+	      ++left_n;
+	    }
+	  
+	  if ( stages[k] == NREM1 || stages[k] == REM || stages[k] == WAKE )
+	    {
+	      left_wgt += -1;
+	      ++left_n;
+	    }
+
+	  // counted enough?
+	  if ( left_n > n2_ascdesc_k ) break;
+	  
+	  // next left epoch
+	  --k;
+	}
+
+      //
+      // Right-most
+      //
+
+      double right_wgt = 0;
+      int right_n = 0; 
+      k = e+1;
+
+      while ( k < ne )
+	{
+
+	  if ( stages[k] == NREM3 || stages[k] == NREM4 )
+	    {
+	      right_wgt += -1;
+	      ++right_n;
+	    }
+	  
+	  if ( stages[k] == NREM1 || stages[k] == REM || stages[k] == WAKE )
+	    {
+	      right_wgt += +1;
+	      ++right_n;
+	    }
+	  
+	  // counted enough?
+	  if ( right_n > n2_ascdesc_k ) break;
+	  
+	  // next right epoch
+	  ++k;
+	}
+
+      // std::cout << " left_wgt " << left_wgt << " " << left_n << "\n";
+      // std::cout << " right_wgt " << right_wgt << " " << right_n << "\n\n";
+      
+      if ( left_n  > 0 ) left_wgt /= (double)left_n;
+      if ( right_n > 0 ) right_wgt /= (double)right_n;
+
+      // simple average of left/right averages
+      // if no data, wgt will be 0, which is fine
+      n2_ascdesc[e] = ( left_wgt + right_wgt ) / 2.0;
+      //std::cout << " n2 AD = " << e << "  " << stages[e] << " " << n2_ascdesc[e] << "\n";
+    }
+  
+
+  //
+  // Track duration of N2 class
+  //
+
+  mins[ "N2A" ] = 0 ;
+  mins[ "N2D" ] = 0 ;
+  mins[ "N2F" ] = 0 ;
+
+  std::vector<bool> n2asc( ne , false );
+  std::vector<bool> n2dsc( ne , false );
+  std::vector<bool> n2flt( ne , false );
+
+  if ( output_n2_asc_desc )
+    {
+      for (int e=0;e<ne;e++)
+	{
+	  if ( stages[e] != NREM2 ) continue;
+	  
+	  // if      ( n2_ascdesc[e] >= 0.25 ) mins[ "N2_ASC" ] += epoch_mins;
+	  // else if ( n2_ascdesc[e] <= -0.25 ) mins[ "N2_DSC" ] += epoch_mins;
+	  // else mins[ "N2_FLT" ] += epoch_mins;      
+	  
+	  // default = 0.25
+	  if      ( n2_ascdesc[e] >= n2_asc_desc_th ) 
+	    {
+	      mins[ "N2A" ] += epoch_mins;
+	      n2asc[e] = true;
+	    }
+	  else if ( n2_ascdesc[e] <= -n2_asc_desc_th ) 
+	    {
+	      mins[ "N2D" ] += epoch_mins;
+	      n2dsc[e] = true;
+	    }
+	  else 
+	    {
+	      mins[ "N2F" ] += epoch_mins;      
+	      n2flt[e] = true;
+	    }
+	}
+    }
+
+
+
+  //
+  // relative (PCT and DENS) calcs
+  //
+
   if ( TST > 0 ) 
     {
       pct["N1"]  = mins[ "N1" ] / TST;
@@ -1518,6 +1668,11 @@ void hypnogram_t::calc_stats( const bool verbose )
       pct["N3"]  = mins[ "N3" ] / TST;
       pct["N4"]  = mins[ "N4" ] / TST;
       pct["R"]   = mins[ "R" ] / TST;
+      
+      // special cases
+      pct["N2A"]  = mins[ "N2" ] > 0 ? mins["N2A" ] /  mins[ "N2" ]  : -1 ;
+      pct["N2D"]  = mins[ "N2" ] > 0 ? mins["N2D" ] /  mins[ "N2" ]  : -1 ;
+      pct["N2F"]  = mins[ "N2" ] > 0 ? mins["N2F" ] /  mins[ "N2" ]  : -1 ;
     }
   else
     {
@@ -1526,6 +1681,11 @@ void hypnogram_t::calc_stats( const bool verbose )
       pct[ "N3" ] = 0;
       pct[ "N4" ] = 0;
       pct[ "R" ] = 0;      
+
+      pct[ "N2A" ] = 0;
+      pct[ "N2D" ] = 0;
+      pct[ "N2F" ] = 0;
+
     }
 
   if ( SPT_actual > 0 ) 
@@ -1535,6 +1695,11 @@ void hypnogram_t::calc_stats( const bool verbose )
       pct2["N3"]  = mins[ "N3" ] / SPT_actual;
       pct2["N4"]  = mins[ "N4" ] / SPT_actual;
       pct2["R"]   = mins[ "R" ] / SPT_actual;
+
+      pct2["N2A"]  = mins[ "N2A" ] / SPT_actual;
+      pct2["N2D"]  = mins[ "N2D" ] / SPT_actual;
+      pct2["N2F"]  = mins[ "N2F" ] / SPT_actual;
+      
     } 
   else
     {
@@ -1543,6 +1708,11 @@ void hypnogram_t::calc_stats( const bool verbose )
       pct2[ "N3" ] = 0;
       pct2[ "N4" ] = 0;
       pct2[ "R" ] = 0;
+
+      pct2[ "N2A" ] = 0;
+      pct2[ "N2D" ] = 0;
+      pct2[ "N2F" ] = 0;
+
     }
 
 
@@ -1603,8 +1773,10 @@ void hypnogram_t::calc_stats( const bool verbose )
   // Also, make an output of each bout
   //
 
-  const std::vector<std::string> these_stages
-    = { "N1", "N2", "N3", "N4", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+  const std::vector<std::string> ar1 = { "N1", "N2", "N2A","N2D","N2F", "N3", "N4", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+  const std::vector<std::string> ar2 = { "N1", "N2",                    "N3", "N4", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+  
+  const std::vector<std::string> these_stages = output_n2_asc_desc ? ar1 : ar2 ; 
 
   // initialize these two maps, which are +='ed below
   // i.e. (if HYPNO is run twice)
@@ -1630,11 +1802,13 @@ void hypnogram_t::calc_stats( const bool verbose )
       if ( *qq == "L" ) stage = LIGHTS_ON;
       
       // special cases
-      bool all_nrem = *qq == "NR";
-      
+      bool all_nrem = *qq == "NR";      
       bool all_sleep = *qq == "S";
-
       bool waso = *qq == "WASO";
+      bool n2a = *qq == "N2A";
+      bool n2d = *qq == "N2D";
+      bool n2f = *qq == "N2F";
+
 
       std::vector<double> b;
       for (int e=0; e<ne; e++)
@@ -1647,6 +1821,12 @@ void hypnogram_t::calc_stats( const bool verbose )
 	    bout_start = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 || stages[e] == REM ;
 	  else if ( waso )
 	    bout_start = stages[e] == WAKE && e >= first_sleep_epoch && e <= last_sleep_epoch ;
+	  else if ( n2a ) 
+	    bout_start = n2asc[e];
+	  else if ( n2d ) 
+	    bout_start = n2dsc[e];
+	  else if ( n2f ) 
+	    bout_start = n2flt[e];
 	  else
 	    bout_start = stages[e] == stage;
 
@@ -1690,6 +1870,30 @@ void hypnogram_t::calc_stats( const bool verbose )
 		      b.push_back( l );
                       break;
 		    }		  
+		}
+	      else if ( n2a ) 
+		{
+		  if ( ! n2asc[e] )
+                    {
+                      b.push_back( l );
+                      break;
+                    }
+		}
+	      else if ( n2d ) 
+		{
+		  if ( ! n2dsc[e] )
+                    {
+                      b.push_back( l );
+                      break;
+                    }
+		}
+	      else if ( n2f ) 
+		{
+		  if ( ! n2flt[e] )
+                    {
+                      b.push_back( l );
+                      break;
+                    }
 		}
 	      else
 		{
@@ -1780,8 +1984,10 @@ void hypnogram_t::calc_stats( const bool verbose )
       // use a reduced set of stages types here, i.e no need for L or ? etc
       // i.e. only things within the sleep period (so no W either)
 
-      const std::vector<std::string> these_stages
-	= { "N1", "N2", "N3", "NR", "R", "S", "WASO" } ;
+      const std::vector<std::string> ar1 =  { "N1", "N2", "N2A", "N2D", "N2F", "N3", "NR", "R", "S", "WASO" };
+      const std::vector<std::string> ar2 =  { "N1", "N2",                      "N3", "NR", "R", "S", "WASO" };
+      
+      const std::vector<std::string> these_stages = output_n2_asc_desc ? ar1 : ar2 ; 
       
       std::vector<std::string>::const_iterator qq = these_stages.begin();
       while ( qq != these_stages.end() )
@@ -1799,7 +2005,10 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  bool all_nrem = *qq == "NR";      
 	  bool all_sleep = *qq == "S";
 	  bool waso = *qq == "WASO";
-	  	  
+	  bool n2a = *qq == "N2A";
+	  bool n2d = *qq == "N2D";
+	  bool n2f = *qq == "N2F";
+
 	  // track time from EDF start
 	  double t_all = 0;
 	  double t_sleep = 0;
@@ -1858,10 +2067,15 @@ void hypnogram_t::calc_stats( const bool verbose )
 		matches = stages[e] == NREM1 || stages[e] == NREM2 || stages[e] == NREM3 || stages[e] == NREM4 || stages[e] == REM ;
 	      else if ( waso )
 		matches = stages[e] == WAKE && e >= first_sleep_epoch && e <= last_sleep_epoch ;
+	      else if ( n2a ) 
+		matches = n2asc[e] ; 
+	      else if ( n2d ) 
+		matches = n2dsc[e] ; 
+	      else if ( n2f )
+		matches = n2flt[e]; 
 	      else
 		matches = stages[e] == stage;
-	      
-	      
+	      	      
 	      if ( matches )
 		{
 		  // add in
@@ -1877,18 +2091,11 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  // requires at least 5 epochs 
 	  if ( n1 >= 5 ) 
 	    {
-
 	      
 	      for (int i=0; i<n1; i++)
 		{
-		  
-		  //  std::cout << "det " << *qq << " " << chk[i] << " " << elapsed_all[i] << " " << elapsed_sleep[i] ;
-		  
 		  elapsed_all[i] = ( elapsed_all[i] - min_all ) / ( max_all - min_all );
-		  elapsed_sleep[i] = ( elapsed_sleep[i] - min_sleep ) / ( max_sleep - min_sleep );		  
-		  
-		  //		  std::cout << " " << elapsed_all[i] << " " << elapsed_sleep[i] << "\n";
-		  		  
+		  elapsed_sleep[i] = ( elapsed_sleep[i] - min_sleep ) / ( max_sleep - min_sleep );		  		  		  
 		}
 
 	      // get medians
@@ -1902,7 +2109,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 	      // store results
 	      stg_timing_all[ *qq ] = med_all;
 	      
-	      if ( stage == NREM1 || stage == NREM2 || stage == NREM3 || stage == NREM4 || stage == REM )
+	      if ( stage == NREM1 || stage == NREM2 || stage == NREM3 || stage == NREM4 || stage == REM || n2a || n2d || n2f )
 		stg_timing_sleep[ *qq ] = med_sleep;
 	      
 	    }
@@ -2451,117 +2658,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   // define whether stage N1 can define the onset of a new NREM phase.
  
    
-
-  //
-  // Ascending/descending N2 
-  //
-  
-  // Assign each N2 epoch a value to describe its relative position in
-  // the hypnogram: consider 'k' epochs before and after, calculating 
-  // the average of non-N2 epochs,  either W/R/N1 or N3/N4  
-
-  // Calculate a single score: 
-  // Defined only for N2 epochs
-  //   Left epochs    +1  N3              Right epochs    -1  N3
-  //                  -1  N1/W/R                          +1  N1/W/R
-  
-  const int n2_ascdesc_k = 10;  // 5 minutes
-  
-  // Can select extreme epochs as 'ascending' and 'descending' based on this score 
-  // (e.g. >+0.5 and < -0.5)
-  
-  n2_ascdesc.resize( ne , 0 );
-  
-  for (int e=0;e<ne;e++)
-    {
-      
-      if ( stages[e] != NREM2 ) continue;
-      
-      double left_wgt = 0;
-      int left_n = 0; 
-      int k = e-1;
-
-      while ( k >= 0 )
-	{
-
-	  if ( stages[k] == NREM3 || stages[k] == NREM4 )
-	    {
-	      left_wgt += 1;
-	      ++left_n;
-	    }
-	  
-	  if ( stages[k] == NREM1 || stages[k] == REM || stages[k] == WAKE )
-	    {
-	      left_wgt += -1;
-	      ++left_n;
-	    }
-
-	  // counted enough?
-	  if ( left_n > n2_ascdesc_k ) break;
-	  
-	  // next left epoch
-	  --k;
-	}
-
-      //
-      // Right-most
-      //
-
-      double right_wgt = 0;
-      int right_n = 0; 
-      k = e+1;
-
-      while ( k < ne )
-	{
-
-	  if ( stages[k] == NREM3 || stages[k] == NREM4 )
-	    {
-	      right_wgt += -1;
-	      ++right_n;
-	    }
-	  
-	  if ( stages[k] == NREM1 || stages[k] == REM || stages[k] == WAKE )
-	    {
-	      right_wgt += +1;
-	      ++right_n;
-	    }
-	  
-	  // counted enough?
-	  if ( right_n > n2_ascdesc_k ) break;
-	  
-	  // next right epoch
-	  ++k;
-	}
-
-      // std::cout << " left_wgt " << left_wgt << " " << left_n << "\n";
-      // std::cout << " right_wgt " << right_wgt << " " << right_n << "\n\n";
-      
-      if ( left_n  > 0 ) left_wgt /= (double)left_n;
-      if ( right_n > 0 ) right_wgt /= (double)right_n;
-
-      // simple average of left/right averages
-      // if no data, wgt will be 0, which is fine
-      n2_ascdesc[e] = ( left_wgt + right_wgt ) / 2.0;
-      //std::cout << " n2 AD = " << e << "  " << stages[e] << " " << n2_ascdesc[e] << "\n";
-    }
-  
-
-  //
-  // Track duration of N2 class
-  //
-
-  mins[ "N2_ASC" ] = 0 ;
-  mins[ "N2_DSC" ] = 0 ;
-  mins[ "N2_FLT" ] = 0 ;
-  
-  for (int e=0;e<ne;e++)
-    {
-      if ( stages[e] != NREM2 ) continue;
-      if      ( n2_ascdesc[e] >= 0.25 ) mins[ "N2_ASC" ] += epoch_mins;
-      else if ( n2_ascdesc[e] <= -0.25 ) mins[ "N2_DSC" ] += epoch_mins;
-      else mins[ "N2_FLT" ] += epoch_mins;      
-    }
-  
   
   
   //
@@ -3876,15 +3972,23 @@ void hypnogram_t::output( const bool verbose ,
       writer.var( "NREMC_N" , "NREM cycle total duration (epochs)" );
     }
     
+
   //
   // Stage-stratified outputs
   //
 
   if ( verbose && any_sleep )
     {
+
       const std::vector<std::string> these_stages_without_n4 = { "N1", "N2", "N3", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
       const std::vector<std::string> these_stages_with_n4 =    { "N1", "N2", "N3", "N4" , "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
-      const std::vector<std::string> & these_stages = collapse_nrem34 ? these_stages_without_n4 : these_stages_with_n4 ; 
+      // with N2_ASC/DSC/FLT
+      const std::vector<std::string> these_stages_without_n4_n2ad = { "N1", "N2", "N2A", "N2D", "N2F", "N3", "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+      const std::vector<std::string> these_stages_with_n4_n2ad =    { "N1", "N2", "N2A", "N2D", "N2F", "N3", "N4" , "NR", "R", "S", "W" , "?" , "L" , "WASO" } ;
+      
+      const std::vector<std::string> & these_stages = collapse_nrem34 ? 
+	( output_n2_asc_desc ? these_stages_without_n4_n2ad : these_stages_with_n4_n2ad ) :
+	( output_n2_asc_desc ? these_stages_with_n4_n2ad : these_stages_with_n4 );
       
       // get total NR stats
       mins[ "NR" ] = mins[ "N1" ] + mins[ "N2" ] + mins[ "N3" ] + mins[ "N4" ];
@@ -3898,11 +4002,24 @@ void hypnogram_t::output( const bool verbose ,
       std::vector<std::string>::const_iterator ss = these_stages.begin();
       while ( ss != these_stages.end() )
 	{
+	  
+	  // skip?
+	  if ( ! output_n2_asc_desc ) 
+	    {
+	      if ( *ss == "N2A" || *ss == "N2D" || *ss == "N2F"  ) 
+		{
+		  ++ss;
+		  continue;
+		}
+	    }
+
+	  
 	  writer.level( *ss , globals::stage_strat );
 	  writer.value( "MINS" , mins[ *ss] );
-
+	  
 	  // sleep stage as % of TST
-	  if ( *ss == "N1" || *ss == "N2" || *ss == "N3" || *ss == "N4" || *ss == "NR" || *ss == "R" || *ss == "S" )
+	  if ( *ss == "N1" || *ss == "N2" || *ss == "N3" || *ss == "N4" || *ss == "NR" || *ss == "R" 
+	       || *ss == "S" || *ss == "N2A" || *ss == "N2D" || *ss == "N2F" )
 	    {
 	      writer.value( "PCT" , pct[ *ss] );
 	      writer.value( "DENS" , pct2[ *ss] );
@@ -3927,24 +4044,7 @@ void hypnogram_t::output( const bool verbose ,
 	  // next stage/class type
 	  ++ss;
 	}
-
-      
-      // split by ASC/DESC N2
-      if ( 0 )
-	{
-	  writer.level( "N2_ASC" , globals::stage_strat );
-	  writer.value( "MINS" , mins[ "N2_ASC" ] );
-	  writer.value( "PCT" , mins[ "N2_ASC" ] / mins[ "N2" ] );
-	  
-	  writer.level( "N2_DSC" , globals::stage_strat );
-	  writer.value( "MINS" , mins[ "N2_DSC" ] );
-	  writer.value( "PCT" , mins[ "N2_DSC" ] / mins[ "N2" ] );
-	  
-	  writer.level( "N2_FLT" , globals::stage_strat );
-	  writer.value( "MINS" , mins[ "N2_FLT" ] );
-	  writer.value( "PCT" , mins[ "N2_FLT" ] / mins[ "N2" ] );
-	}
-      
+           
       writer.unlevel( globals::stage_strat );      
 
 

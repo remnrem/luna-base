@@ -256,6 +256,13 @@ struct hypnogram_t
   void do_slide();
   
   //
+  // Ascending/descending distinction?
+  //
+  
+  bool output_n2_asc_desc;
+  double n2_asc_desc_th;
+
+  //
   // stage distribution stats (devel=T)
   //
   

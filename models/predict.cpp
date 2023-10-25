@@ -58,7 +58,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   
   // requires an intercept and at least one term
 
-  if ( model.specials.find( "intercept" ) == models.specials.end() ) 
+  if ( model.specials.find( "intercept" ) == model.specials.end() ) 
     Helper::halt( "no intercept specified in model" );
   
 
