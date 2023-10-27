@@ -433,7 +433,7 @@ void timeline_t::apply_epoch_mask2( const std::map<annot_t *,std::set<std::strin
       
     }
 
-  logger << "  applied annotation mask for " << annots.size() << " annotations";
+  logger << "  applied annotation mask for " << annots.size() << " annotation(s)";
   if ( annots.size() > 1 ) logger << " (using " << ( or_match ? "or" : "and") << "-matching across multiple annotations)";
   logger << "\n";
 

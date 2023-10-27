@@ -2451,6 +2451,53 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  if ( p == "tps" )
+    {
+
+      edf_t edf;
+      const int rs = 1;
+      bool okay = edf.init_empty( "id1" , 10000 , 1 , "01.01.85" , "00:00:00" );
+      int fs;
+      double s1, s2;
+      std::cin >> fs >> s1 >> s2;
+
+      uint64_t start = s1 * globals::tp_1sec;
+      uint64_t stop = s2 * globals::tp_1sec;
+
+      int start_record, start_sample;
+      int stop_record, stop_sample;
+      int n_samples_in_record = fs * rs;
+      
+      okay = edf.timeline.interval2records( interval_t( start , stop ) ,
+					    n_samples_in_record , 
+					    &start_record, &start_sample ,
+					    &stop_record, &stop_sample );
+      
+      
+      int d = 0;
+      int sr = start_record;
+      int ss = start_sample;
+      while ( 1 )
+	{
+	  ++d;
+	  if ( sr == stop_record && ss == stop_sample )
+	    break;
+
+	  ++ss;
+	  if ( ss == n_samples_in_record )
+	    {
+	      ss = 0;
+	      ++sr;
+	    }
+	  
+	}
+
+      std::cout << " okay=" << okay << "  out = " << start_record << " " << start_sample << " ... " << stop_record << " " << stop_sample << "\t" << d << "\n";
+
+      std::exit(1);
+	      
+    }
+  
   if ( p == "randomize-kmer" )
     {
 

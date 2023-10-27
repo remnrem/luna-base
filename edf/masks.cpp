@@ -261,6 +261,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	    }
 	  ++ll;
 	}
+      logger << "\n";
       
       //
       // apply the actual mask

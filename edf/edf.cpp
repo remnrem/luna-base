@@ -1727,8 +1727,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					 &stop_record, &stop_sample );
   
   
-  // std::cerr << "records start = " << start_record << " .. " << start_sample << "\n";
-  // std::cerr << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
+  // std::cout << "records start = " << start_record << " .. " << start_sample << "\n";
+  // std::cout << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
   
   //
   // If the interval is too small (or is applied to a signal with a low sampling rate)
@@ -4814,7 +4814,7 @@ bool edf_t::basic_stats( param_t & param )
 	      const std::vector<double> * d = slice.pdata();
 
 	      const int n = d->size();
-	      
+
 	      if ( n == 0 ) { continue; } 
 	      
 	      

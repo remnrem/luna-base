@@ -27,31 +27,56 @@ struct edf_t;
 struct param_t;
 struct signal_list_t;
 
+
 #include <vector>
 #include "stats/matrix.h"
+#include "timeline/timeline.h"
 
 namespace dsptools
 {
   void tlock( edf_t & edf , param_t & param );
 }
 
-  
+
+// this is called per signal
+
 struct tlock_t {
   
-  tlock_t( const std::vector<double> & t , const int  );
+  tlock_t( edf_t & edf , int );
   
-  void add( const std::vector<double> * x , 
-	    const int , const int , 
-	    const bool take_log = false , 
-	    const int angle_bin = 0 );
+  // build via epochs
+  void epoch_builder( const int slot );
+  
+  // build via cache sample-points
+  void cache_builder( cache_t<int> * cache ,
+		      const double hw_sec ,
+		      const int slot , 
+		      const std::string siglabel , 
+		      const bool same_channel = false , 
+		      const std::string channel_postfix = "" );
+  
+  
+  // normalizations
+  
+  // normalization only interval edges? o(e.g. 0.1 is 10%+10% of edges
+  void edge_normalization( Data::Vector<double> * x , const int  p ) const;
+  
 
-  void norm_within_intervals( const int );
-  
-  Data::Vector<double> average() const ;
+  // outputs  
+  bool spectrogram( ) const;
 
-  Data::Matrix<double> angles() const ;
+  void clearX();
   
-  // for regular means::: track the whole matrix (just in case we want to ) 
+  int set_window(int hw);
+  void set_window_epoch(int sp ); // know sr
+
+  edf_t & edf;
+  
+  // time axis
+  std::vector<double> t;  
+  int sr;
+
+  // for regular means: track the whole matrix (just in case we want to ) 
   //   but only when 'verbose' option is true;
   //   each row is a sample-point in the interval window
   //   each column is a new epoch
@@ -61,21 +86,43 @@ struct tlock_t {
   //   each column is an angle bin: do not track individual epochs
   //   but rather do the summatation in-place
 
+  int ni;
+  int np;
   Data::Matrix<double> X;
+  
+  
+  //
+  // main input/builder
+  //
+  
+  void add( const std::vector<double> * x , 
+	    const int , const int );
 
-  // just track the means, & # of points in bon-verbose mode
+  //
+  // main outputs
+  //
+
+  void outputs();
+  
+  Data::Vector<double> average() const ;
+  
+  Data::Matrix<double> angles() const ;
+  
+
+  // normalisation points
+  double norm_pct;
+  bool take_log;
+  int angle_bins;
+  double emid;
+  
+  // means only? i.e. no need to build the matrix [ todo ] 
+  bool means_only;
   Data::Vector<double> means;
   int count;
 
-  // time axis
-  std::vector<double> t;
-
-  // normalisation points
-  int norm_points;
-
   // verbose mode
   bool verbose;
-
+    
 };
 
 

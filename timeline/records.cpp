@@ -189,15 +189,60 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 {
 
+  // if interval starts inbetween gaps, effectively shift it back to the one just before
+  //  i.e. and similarly shift the end point
+  //  for continunous cases, this means that all segments with same interval size will return
+  //  the same number of samples;  otherwise, prior span rules could lead to +1 additional sample
+  //  e.g. if SR=100Hz, pulling interval 0.015 seconds:
+
+  //   S   0       1       2        ...
+  //       0.000   0.010   0.020 
+
+  //  as intervals are defined [a,b), this means that under old encoding: 
+
+  //  T                  S
+  //  0.0000 0.0150  ->  [ 0 , 1 )    L=1
+  //  0.0025 0.0175  ->  [ 0 , 1 )    L=1
+  //  0.0050 0.0200  ->  [ 0 , 2 )    L=2
+  //  0.0075 0.0225  ->  [ 0 , 2 )    L=2
+  //  0.0100 0.0250  ->  [ 1 , 2 )    L=1
+
+
+  // now: 
+  //  T                                     S
+  //  0.0000 0.0150                     ->  [ 0 , 1 )    L=1
+  //  0.0025 0.0175  ->  0.0000 0.0150  ->  [ 0 , 1 )    L=1
+  //  0.0050 0.0200  ->  0.0000 0.0150  ->  [ 0 , 1 )    L=1
+  //  0.0075 0.0225  ->  0.0000 0.0150  ->  [ 0 , 1 )    L=1
+  //  0.0100 0.0250                     ->  [ 1 , 2 )    L=1
+
+  // for EDF+D cases (i.e. w/ gaps which might be of any length) it is not guaranteed that a similarly-sized
+  // pair of intervals will return the same number of samples, if the intervals span gaps, and so we don't
+  // case.    But at least for epochs, every epoch is defined to be a contiguous set of samples, and so even
+  // for EDF+D this ensures that we won't get slices returned w/ +1 extra sample point ever in epoch-based
+  // analyses
+
+  // for most cases (i.e. where intervals are aligned with records/samples, as is typical case, this was never
+  // and issue;  but this provides a nicer handling of fractional epochs, etc.   The primary impact was for TLOCK
+  // where we'd get one additional sample at the end depending on alignment as above; although not really a substantive
+  // problem, this led to data-handling issues.
+  
   // std::cout << " search: " << interval.as_string() << "\n";
   // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
   // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
   // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
+
+  //
+  // badly-defined interval?
+  //
   
   if ( interval.stop < interval.start ) 
-    Helper::halt( "badly defined interval requested, with stop before start" );
+    Helper::halt( "internal error: badly defined interval requested, with stop before start" );
 
-  // empty record set?
+  //
+  // 0-duration interval: i.e. an empty record set
+  //
+  
   if ( interval.stop == interval.start )
     {
       *start_rec = 0;
@@ -206,45 +251,25 @@ bool timeline_t::interval2records( const interval_t & interval ,
       *stop_smp = 0;
       return false;
     }
-
+  
   //
-  // Note: here we want to find records/samples that are inclusive w.r.t. the interval
-  // so change coding of stop being 1 unit past the end below
+  // Otherwise, requires that stop is >0; should be the case given the
+  // above checks, but whatever...
   //
-
+  
   if ( interval.stop == 0 ) 
     Helper::halt( "internal error in timeline()" );
-
-  //
-  // Interval defines one-past-the end;   we therefore subtract 1-tp unit from it;
-  //  Hpwever, if matching fractional intervals (i.e. interval.start and .stop do not
-  //  fall exactly on a sample point, then we will get 1 extra sample point;  we therefore
-  //  track both stop+1 and stop, and if they give the same implied sample point, we subtract one
-  //
-  //  e.g.  if 100 Hz sample
-  //   okay     0.02    0.92
-  //                    = 9200000000 is one past  (of whatever, 1e9 tp = 1sec)
-  //                    = 9199999999 is exact end
-  //                    = means we get samples #3 (0.02) to #92 (0.91)
-
-  //  not okay: 0.025   0.925
-  //                   = 9255000000
-  //                   = 9254999999
-  //                   = implies #3 to #93 (0.92) .. and so one extra; therefore, here subtract 1
-  //   
-
-  uint64_t stop_plus1_tp = interval.stop;
+    
+  // sample rate, in tp units
+  uint64_t sample_tp = edf->header.record_duration_tp / n_samples_per_record ; 
   
-  uint64_t stop_tp = interval.stop - 1LLU;
+  // pull out stop as well may need to adjust this below
+  uint64_t stop_tp = interval.stop;
   
-  
-  // allow 0-duration annotations, but note that these often
-  // need fixes if end if 1 TP before the start (as can happen if the
-  // annotation start/stop fall between sample-points); this is handled at
-  // the end
-  
-  if ( interval.start > stop_tp ) return false;
-
+  // ensure not past end  (last_time_point is the last accessible time-point, so go +1 on this)
+  if ( stop_tp > edf->timeline.last_time_point_tp )
+    stop_tp = edf->timeline.last_time_point_tp + 1LLU ;
+    
   //
   // For a continuous timeline, given time-points can
   // straightforwardly calculate record/sample
@@ -252,54 +277,53 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
   if ( edf->header.continuous )
     {
-      //std::cout << "EDF-C\n";
-      
-      // old version:  get initial records/samples, nb. use ceil() to get nearest sample *after* start of interval
-      
-      // now (v0.25+) for fractionally split things (i.e. if interval boundary does not align w/ a sample point exactly)
-      // for both start and end, take the point prior to the fractional point;  this should preserve the number of samples
-      // selected, i.e. in ALIGN
-      
+
+      // get start record 
       uint64_t start_record = interval.start / edf->header.record_duration_tp;
+      
+      // tp-offset into this record
       uint64_t start_offset = interval.start % edf->header.record_duration_tp;
 
-      // prior to v0.25
-      // uint64_t start_sample = 
-      // 	ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
-      
-      // change in v0.25 
-
+      // get sample point at or just prior (floor)
       uint64_t start_sample = 
        	floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
+
+      // if interval started after this sample (i.e. started between samples), then shift whole
+      // interval (including stop) back too)
+      uint64_t shift = start_offset - start_sample * sample_tp ; 
       
-      // std::cout << "othr = " << edf->header.record_duration_tp << " " << n_samples_per_record << "\n";
-      // std::cout << "start = " << start_record << " " << start_offset << " " << start_sample << "\n";
+      // for intervals starting between exact samples, shift whole interval back to start at the
+      // sample just before
+
+      // this should not happen, just in case
+      if ( shift > stop_tp )
+	Helper::halt( "internal error in interval2records(), with unaligned interval" );
+
+      stop_tp -= shift; 
       
-      // get final records/samples, nb. use floor() to get the nearest sample *prior* to end
+      // get final records/samples, nb. use floor() to get the sample at or just prior to the end
+      // record/sample selection returned is *inclusive of end* so base this on stop-1 rather than stop
       
       uint64_t stop_record = stop_tp / edf->header.record_duration_tp;
       uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
       uint64_t stop_sample = 
 	floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
-
-      uint64_t stop_plus1_record = stop_plus1_tp / edf->header.record_duration_tp;
-      uint64_t stop_plus1_offset = stop_plus1_tp % edf->header.record_duration_tp;
-      uint64_t stop_plus1_sample = 
-	floor( ( stop_plus1_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
-
-      // move one sample back (i.e. if the spanning interval did not exactly land on a sample point)
-      // fixed: added 'record' check in instance of SR == 1 Hz
-      if ( stop_sample == stop_plus1_sample && stop_record == stop_plus1_record )  
-	{	
-	  if ( stop_sample == 0 )
-	    {
-	      --stop_record;
-	      stop_sample = n_samples_per_record - 1;
-	    }
-	  else
-	    --stop_sample;	  
-	}
       
+      //
+      // Shift one sample backwards, i.e.
+      //   i.e.  1) only include "whole" sample-sample intervals spanned by the search interval
+      //         2) search interval stop is defined as 1-past end, and so we don't want to include the
+      //            final sample point in any case, if it lands exactly on a sample-point
+      //
+      
+      if ( stop_sample == 0 )                                                                                                                                                                           
+	{                                                                                                                                                                                               
+	  --stop_record;                                                                                                                                                                                
+	  stop_sample = n_samples_per_record - 1;                                                                                                                                                       
+	}                                                                                                                                                                                               
+      else                                                                                                                                                                                              
+	--stop_sample;                                                                                                                                                                                  
+                 
       // pass back to calling function
       
       *start_rec = (int)start_record;
@@ -307,7 +331,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       *stop_rec = (int)stop_record;
       *stop_smp = (int)stop_sample;
-
+      
     }
   else
     {
@@ -316,8 +340,6 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // For a discontinuous EDF+ we need to search 
       // explicitly across record timepoints
       //
-      
-      //      std::cout << " -- EDF-D \n";
       
       //
       // Get first record that is not less than start search point (i.e. equal to or greater than)
@@ -338,12 +360,12 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       if ( lwr != tp2rec.begin() ) 
 	{
-	  //	  std::cout << "lwr != begin\n";
+
 	  // go back one record
 	  --lwr;
 	  uint64_t previous_rec_start = lwr->first;
 	  uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1LLU;
-
+	  
 	  // does the start point fall within this previous record?
 	  if ( interval.start >= previous_rec_start && interval.start <= previous_rec_end ) 
 	    in_gap = false;
@@ -355,15 +377,13 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       else if ( lwr == tp2rec.begin() )
        	{
-	  //std::cout << "lwr = begin\n";
-	  // If the search point occurs before /all/ records, need to
-	  // indicate that we are in a gap also	  
+
+	  // interval start is before /all/ records?
+	  //   -> flag as a gap
 	  
 	  if ( interval.start < lwr->first ) 
-	    {
-	      in_gap = true;	      
-	      //std::cout << "start in gap\n";
-	    }
+	    in_gap = true;	      
+
 	}
       
       // problem? return empty record set
@@ -375,57 +395,71 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  *stop_smp = 0;
 	  return false;
 	}
-
       
       *start_rec = lwr->second;
+
+      // figure out start sample, and also whether we need to shift
+      // for fractional cases (starts between sample points)
+
+      uint64_t shift = 0LLU;
       
       if ( in_gap )
 	{
-	  //std::cout << "  getting start ... after gap\n";
-	  *start_smp = 0; // i.e. use start of this record, as it is after the 'true' start site
+	  // i.e. use start of this record, as it is after the 'true' start site
+	  *start_smp = 0; 
+	  // shift stays at 0
 	}
 	else
 	{	
-	  // OLD code: broken for EDF+D w/ gaps that are not multiples of the record size
-	  //uint64_t start_offset = interval.start % edf->header.record_duration_tp;
-
-
-	  // NEW version for EDF+D
+	  
 	  uint64_t start_offset = interval.start - lwr->first;
 	  
-	  //std::cout << "tp start = " << lwr->first << " " << interval.start << "\n";
-	  
-	  // nb: old code prior to v0.25
-	  // uint64_t start_sample = 
-	  //   ceil( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
-
-	  // nb: new version: floor() not ceil() , same behavior as for the end-points
 	  uint64_t start_sample = 
 	    floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
 	  
-	  //if ( start_sample >= n_samples_per_record ) start_sample = n_samples_per_record - 1LLU; 
 	  *start_smp = (int)start_sample;
+	  
+	  // any shift required?
+	  shift = start_offset - start_sample * sample_tp ;
+	  
 	}
       
+      //
+      // Is start misaligned with a sample point?   Even though this will not matter necessarily in a
+      // gapped case, for when we are working w/ contiguous intervals (the most common) scenario, we
+      // want to employ the same logic as above, i.e. to shift the interval implicitly back (including the
+      // stop) so that we always get a fixed number of samples (at a given SR) for a given search interval
+      // length. 
+      //
       
+      if ( shift > stop_tp )
+        Helper::halt( "internal error in interval2records(), with unaligned interval" );
+      
+      stop_tp -= shift;
+
 
       //
-      // for upper bound, find the record whose end is equal/greater *greater* 
-      // 
-      
-      std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( stop_tp ); 
+      // Now find stop record/sample
+      // For upper bound, find the record whose end is *greater* than the interval stop
+      //
 
-      //if ( upr == tp2rec.end() ) std::cout << " AT END\n";
-	
+      // nb: easier to base this on the last time-point in the interval, rather than +1
+      uint64_t stop_tp_m1 = stop_tp > 0 ? stop_tp - 1LLU : 0 ; 
+      
+      std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( stop_tp_m1 ); 
+      
+
+      
       //
       // this should have returned one past the one we are looking for 
-      // i.e. that starts *after* the search point
+      // i.e. that starts *after* the search point;  this handles the case of
+      // the search being past the last record, as we skip back one
+      // i.e. to last - 1, below
       //
-      
+
+      // special case; if the interval ends before the records even start:
       bool ends_before = upr == tp2rec.begin() ;
 
-      //std::cout << " ends before: " << ends_before << "\n";
-      
       if ( ! ends_before ) 
 	{
 	  --upr;  
@@ -433,10 +467,10 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       else
 	{
-	  *stop_rec  = -1; // i.e. flag as bad, to ensure that stop is before the start (which will also be rec 0)
+	  // i.e. flag as bad, to ensure that stop is before the start (which will also be rec 0)
+	  *stop_rec  = -1; 
 	}
 
-      //std::cout << "stop_rec = " << upr->second << "\n";
 
       //
       // get samples within (as above)      
@@ -447,63 +481,67 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 
       //
-      // Does this end point fall in a gap?
+      // Does this end point fall in a gap?   Note: stop_tp is +1 end 
       //
 
-      in_gap = ! ( stop_tp >= previous_rec_start && stop_tp <= previous_rec_end );
-
-      // std::cout << " previous_rec_start: " << previous_rec_start << "\n";
-      // std::cout << " previous_rec_end: " << previous_rec_end << "\n";
-
-      // if so, set to the last point
+      // assuming stop_tp inclusive
+      in_gap = ! ( stop_tp_m1 >= previous_rec_start && stop_tp_m1 <= previous_rec_end );
       
+      // assuming stop_tp is end+1
+      //in_gap = ! ( stop_tp > previous_rec_start && stop_tp < previous_rec_end );
+                      
       if ( in_gap )
-	*stop_smp = n_samples_per_record - 1; 
+	{
+	  // stop falls in gap, so set to last sample of the previous record
+	  *stop_smp = n_samples_per_record - 1;	  
+	}
       else
 	{
-
-	  // else, determine the offset into this record
-
-	  // std::cout << "stop tp: " << stop_tp << "\n";
-	  // std::cout << "edf->header.record_duration_tp: " << edf->header.record_duration_tp << "\n";
 	  
-	  // OLD code::: broken when EDF+D has gaps that are not multiples of record size...
-	  //uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
-
-	  // how far into this record (TP)?
+	  // else, determine the offset into the prior record for stop_tp
+	  
+	  // how far into this record (TP)? nb. here using end+1 time-point as above for continuous case
 	  uint64_t stop_offset = stop_tp - upr->first ; 
-
+	  
 	  // convert to sample points
 	  uint64_t stop_sample = 
 	    floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
 	  
-	  //if ( stop_sample >= n_samples_per_record ) stop_sample = n_samples_per_record - 1LLU;
 	  *stop_smp = (int)stop_sample;
 	}
+
+      //
+      // Shift one sample back, following the same logic as above for
+      // the continuous case
+      //
+
+      if ( *stop_smp == 0 )
+        {
+          *stop_rec = *stop_rec - 1;  
+          *stop_smp = n_samples_per_record - 1;
+        }
+      else
+	*stop_smp = *stop_smp - 1 ; 
       
     }
 
 
   //
-  // ?TODO: potentially, also require fix for the case of fractional spanning intervals in the case of an EDF+C?
+  // If the interval is entirely in a gap, we will not get any records
+  // here, and stop < start; so check for this
   //
   
-  
-  //
-  // If the interval is in a gap, we will not get any records here, and 
-  // stop < start;  so check for this and flag if so
-  //
-  // however, we may have an annotaiton of very small duration (i.e. at the extreme a 0-second annotation
-  // which falls between two sample points, and stop_rec may be 1 less than the start rec;  allow this scenario
-  // by adding the 1LLU to stop_smp when start_rec and stop_rec are the same
-  //
+  // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
+  // std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
 
-  
-  // allow for off-by-one (i.e. if 0-duration point falls between time-points)
 
+  // hmm... think the final part below is worth keeping, but otherrwise
+  // these first two things are no redundant / badly specified / should
+  // never happen.   keep for now, but please revisit at some point...
+  
   if ( *start_rec == *stop_rec && *start_smp == *stop_smp + 1LLU )
     {
-        *stop_smp = *start_smp;
+      *stop_smp = *start_smp;
     }
   
   else if ( *start_rec == *stop_rec + 1LLU
@@ -517,16 +555,15 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // otherwise, check for a gap/problem
   else if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
     {
+      //std::cout << " fixing...\n";
       *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
       return false;
     }
   
   //
-  // Otherwise, we're all good
+  // All done
   //
-  
-   // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
-   // std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
+
     
   return true;
   
