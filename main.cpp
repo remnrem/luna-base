@@ -2460,9 +2460,47 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       int fs;
       double s1, s2;
       std::cin >> fs >> s1 >> s2;
+      // nb. need to fix up nasty floating point issues. e.g. 2.01 --> 2.00999999999  etc
+      
+      //uint64_t start = s1 * globals::tp_1sec;
+      //uint64_t stop = s2 * globals::tp_1sec;
 
-      uint64_t start = s1 * globals::tp_1sec;
-      uint64_t stop = s2 * globals::tp_1sec;
+      // nb. use sec2tp() and not direct multiplicaiton...
+      // to handle floating point noise
+      uint64_t start = Helper::sec2tp( s1 );
+      uint64_t stop = Helper::sec2tp( s2 );
+
+      // Helper::sec2tp( "2.00" , &start ) ;
+      // Helper::sec2tp( "2.01" , &stop ) ;
+
+      std::cout << " start/stop = " << start <<" " << stop << "\n";
+
+
+      uint64_t tp1;
+      std::string st1 = "2.00";
+      if ( Helper::sec2tp( st1 , &tp1 ) ) std::cout << "[" << st1 << "] -> [" << tp1 << "]\n"; 	
+
+      st1 = "2.01";
+      if ( Helper::sec2tp( st1,  &tp1 ) ) std::cout << "[" << st1 << "] -> [" << tp1 << "]\n"; 	
+      else std::cout <<" prob w/ [" << st1 << "]\n";
+      
+      st1 = "202012.0192818721";
+      if ( Helper::sec2tp( st1,  &tp1 ) ) std::cout << "[" << st1 << "] -> [" << tp1 << "]\n"; 	
+      else std::cout <<" prob w/ [" << st1 << "]\n";
+      
+      st1 = "-1";
+      if ( Helper::sec2tp( st1 , &tp1 ) ) std::cout << "[" << st1 << "] -> [" << tp1 << "]\n"; 	
+      else std::cout <<" prob w/ [" << st1 << "]\n";
+      
+      st1 = "";
+      if ( Helper::sec2tp( st1 , &tp1 ) ) std::cout << "[" << st1 << "] -> [" << tp1 << "]\n"; 	
+      else std::cout <<" prob w/ [" << st1 << "]\n";
+
+      st1 = "A";
+      if ( Helper::sec2tp( st1 , &tp1 ) ) std::cout << "[" << st1 << "] -> [" << tp1 << "]\n"; 	
+      else std::cout <<" prob w/ [" << st1 << "]\n";
+      
+      interval_t interval( start , stop ) ;
 
       int start_record, start_sample;
       int stop_record, stop_sample;

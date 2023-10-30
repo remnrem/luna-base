@@ -248,10 +248,10 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // where we'd get one additional sample at the end depending on alignment as above; although not really a substantive
   // problem, this led to data-handling issues.
   
-  // std::cout << " search: " << interval.as_string() << "\n";
-  // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
-  // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
-  // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
+   // std::cout << " search: " << interval.as_string() << "\n";
+   // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
+   // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
+   // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
 
   //
   // badly-defined interval?
@@ -259,7 +259,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
   
   if ( interval.stop < interval.start ) 
     Helper::halt( "internal error: badly defined interval requested, with stop before start" );
-
+  
   //
   // 0-duration interval: i.e. an empty record set
   //
@@ -329,7 +329,9 @@ bool timeline_t::interval2records( const interval_t & interval ,
       uint64_t stop_offset = stop_tp % edf->header.record_duration_tp;
       uint64_t stop_sample = n_samples_per_record == 0 ? stop_offset : 
 	floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record  ) ;
-      
+
+
+      //      std::cout <<" provisional = " << stop_record << "\t" << stop_sample << " offset = " << stop_offset << "\n";
       //
       // Shift one sample backwards, i.e.
       //   i.e.  1) only include "whole" sample-sample intervals spanned by the search interval
@@ -337,18 +339,18 @@ bool timeline_t::interval2records( const interval_t & interval ,
       //            final sample point in any case, if it lands exactly on a sample-point
       //
       
-      if ( stop_sample == 0 )                                                                                                                                                                           
-	{                                                                                                                                                                                               
+      if ( stop_sample == 0 )
+	{
 	  --stop_record;
 
 	  // huh, special case in reverse...
 	  
-	  stop_sample = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU
-	    n_samples_per_record - 1LLU ;                                                                                                                                                       
-	}                                                                                                                                                                                               
-      else                                                                                                                                                                                              
-	--stop_sample;                                                                                                                                                                                  
-                 
+	  stop_sample = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU : 
+	    n_samples_per_record - 1LLU ;
+	}
+      else
+	--stop_sample;
+      
       // pass back to calling function
       
       *start_rec = (int)start_record;
@@ -439,7 +441,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  
 	  uint64_t start_offset = interval.start - lwr->first;
 		  
-	  uint64_t start_sample = n_samples_per_record == 0 ? start_offset 
+	  uint64_t start_sample = n_samples_per_record == 0 ? start_offset :
 	    floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
 	  
 	  *start_smp = (int)start_sample;
@@ -477,12 +479,13 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       //
       // this should have returned one past the one we are looking for 
-      // i.e. that starts *after* the search point;  this handles the case of
-      // the search being past the last record, as we skip back one
-      // i.e. to last - 1, below
+      // i.e. that starts *after* the search point, as we used stop rather than stop+1 as usual
+      //
+      // this handles the case of the search being past the last
+      // record, as we skip back one i.e. to last - 1, below
       //
 
-      // special case; if the interval ends before the records even start:
+      // special case; if the interval ends before the records even start
       bool ends_before = upr == tp2rec.begin() ;
 
       if ( ! ends_before ) 
@@ -493,32 +496,39 @@ bool timeline_t::interval2records( const interval_t & interval ,
       else
 	{
 	  // i.e. flag as bad, to ensure that stop is before the start (which will also be rec 0)
-	  *stop_rec  = -1; 
+	  //*stop_rec  = -1;
+
+	  // just return now, empty set:
+	  *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
+	  return false;	  
 	}
 
-
+    
       //
       // get samples within (as above)      
       //
 
       uint64_t previous_rec_start = upr->first;
-      uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1;
+      uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1; // inclusive defn.
 
 
       //
-      // Does this end point fall in a gap?   Note: stop_tp is +1 end 
+      // Does this end point fall in a gap? i.e. after the previous record ends
+      // Note: stop_tp_m1 is exact end (not +1 )
       //
-
-      // assuming stop_tp inclusive
+      
+      // assuming stop_tp_m1 == inclusive
       in_gap = ! ( stop_tp_m1 >= previous_rec_start && stop_tp_m1 <= previous_rec_end );
       
       // assuming stop_tp is end+1
       //in_gap = ! ( stop_tp > previous_rec_start && stop_tp < previous_rec_end );
       
+
       if ( in_gap )
 	{
 	  // stop falls in gap, so set to last sample of the previous record
-	  *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - LLU :
+	  // handling the special SR=0 case
+	  *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU :
 	    n_samples_per_record - 1LLU ;	  
 	}
       else
@@ -543,7 +553,14 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
       if ( *stop_smp == 0 )
         {
+	  if ( *stop_rec == 0 )
+	    {
+	      *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
+	      return false;
+	    }
+	  
           *stop_rec = *stop_rec - 1;  
+
           *stop_smp = n_samples_per_record ? globals::tp_1sec - 1LLU :
 	    n_samples_per_record - 1LLU;
         }
@@ -552,38 +569,43 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
     }
 
-  //  TODO .. change list n_samples_per_record below????
-
-  //
-  // If the interval is entirely in a gap, we will not get any records
-  // here, and stop < start; so check for this
-  //
   
   // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
   // std::cout << "smps = " << *start_smp << " " << *stop_smp << "\n";
 
+  //
+  // old code handling scenarios of short intervals (e.g. annotations)
+  // that might be 0-duration and/or fall between gaps.   Given new
+  // align-to-sample logic, not sure we need these any longer.  Thus,
+  // remove for now.
+  //
 
-  // hmm... think the final part below is worth keeping, but otherrwise
-  // these first two things are no redundant / badly specified / should
-  // never happen.   keep for now, but please revisit at some point...
+  // if ( *start_rec == *stop_rec && *start_smp == *stop_smp + 1 )
+  //   {
+  //     *stop_smp = *start_smp;
+  //   }
+
+  // NOTE - if revisiting this below, would need to change n_samples_per_record to
+  // handle the special case of 0
   
-  if ( *start_rec == *stop_rec && *start_smp == *stop_smp + 1LLU )
+  // else if ( *start_rec == *stop_rec + 1LLU
+  //  	    && *stop_smp == 0 // first point of new record
+  //  	    && *start_smp == n_samples_per_record - 1 ) // last point of previous record
+  //    {
+  //      *stop_rec = *start_rec;
+  //      *stop_smp = *start_smp;
+  //    }
+  
+
+  
+  //
+  // check for a gap/problem: the 'stop' might come before 'start' in this case,
+  // so just return as an empty set;   this can happen is the interval starts and
+  // stops entirely within a gap between two sample points
+  //
+  
+  if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
     {
-      *stop_smp = *start_smp;
-    }
-  
-  else if ( *start_rec == *stop_rec + 1LLU
-   	    && *stop_smp == 0 // first point of new record
-   	    && *start_smp == n_samples_per_record - 1 ) // last point of previous record
-     {
-       *stop_rec = *start_rec;
-       *stop_smp = *start_smp;
-     }
-  
-  // otherwise, check for a gap/problem
-  else if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
-    {
-      //std::cout << " fixing...\n";
       *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
       return false;
     }
@@ -638,13 +660,19 @@ std::set<int> timeline_t::records_in_interval( const interval_t & interval ) con
 
   //  const int srate = 100;  // will not matter, as we only consider whole records here
 
-  // set to 1tp-unit for loseless 
-  const uint64_t srate = edf->header.record_duration_tp;
+  // set to 1tp-unit for accurate lookups
+  // (we do only select whole records, but can be edge cases when using certain epoch
+  // offsets (only function that calls records_in_interval() ) if SR == 100 or
+  // some such, i.e. as the interval will align to sample points and be shifted, meaning
+  // that it was possible to miss the last record that would otherwise have been spanned by
+  // the interval.   Setting 'infinite' sample rate (i.e. 1e=9 = time-point resolution)
+  // fixes this.
+  
+  // const uint64_t srate = edf->header.record_duration_tp;
+  const uint64_t srate = 0LLU;  // setting SR implies the above for interval2records()
 
   std::set<int> recs;
 
-  std::cerr << "searching " << interval.as_string() << "\n";
-  
   bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
 
   if ( ! any ) return recs;

@@ -242,6 +242,10 @@ namespace Helper
   bool str2signed_int64(const std::string & , int64_t * );
   bool str2signed_int64(const std::string & , int64_t * ); 
 
+  // special case to handle inputs
+  bool sec2tp(const std::string & , uint64_t * , const int dp = 9 );
+
+  
   template <class T>
     bool from_string(T& t,
 		     const std::string& s,

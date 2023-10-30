@@ -402,6 +402,8 @@ uint64_t Helper::sec2tp( double s )
   // to avoid floating point errors, take 's' precision to 1/1000 of a second only, i.e. when reading 
   // input; internally, time-points have 1e-9 precision, so this avoids any floating point issues, 
   // i.e. with small inaccuracies in 's' being scaled up, as double float precision will be better than 1/1000 
+
+  // alternatively, we can use the string-based version below of sec2tp()
   
   if ( s < 0 ) 
     {
@@ -421,6 +423,69 @@ uint64_t Helper::sec2tp( double s )
 double Helper::tp2sec( uint64_t tp )
 {
   return (double)tp * globals::tp_duration;
+}
+
+
+// special case to handle inputs
+bool Helper::sec2tp(const std::string & s , uint64_t * tp , const int dp )
+{
+
+  // try to avoid floating point issues such as 2.01 ---> 2.00999999999999
+  // string-based conversion from double (as string) to tp, up to dp decimal places
+  
+  // must be a valid, positive double
+  double d;
+  if ( ! Helper::str2dbl( s , & d ) ) return false;
+  
+  std::vector<std::string> tok = Helper::parse( s , "." );
+
+  // easy case: only integer seconds
+  if ( tok.size() == 1 )
+    {
+      int i;
+      if ( Helper::str2int( tok[0] , &i ) ) return false;
+      *tp = i * globals::tp_1sec;
+      return true;
+    }
+
+  if ( tok.size() != 2 ) return false;
+  
+  // handle integer part
+  int i;
+  if ( ! Helper::str2int( tok[0] , &i ) ) return false;
+  // must be positive
+  if ( i < 0 ) return false;
+  *tp = i * globals::tp_1sec;
+  
+  // handle fractional part; leading zeros will be remove
+  //  only take 'dp' decimal places [ truncate after that ] 
+  //   9 by default, i.e. 1e-9 tp resolution
+  // pad zeros up to dp
+  std::string fs =  tok[1].substr( 0, dp );
+    
+  std::string app(  dp - fs.size() , '0' );  
+  fs += app;
+
+  int f;  
+  if ( ! Helper::str2int( fs , &f ) ) return false;
+  if ( f < 0 ) return false;
+  if (f == 0 ) return true;
+
+  uint64_t fi;
+  if ( ! Helper::str2int64( fs , &fi ) ) return false;
+  
+  *tp += fi;
+  return true;
+  
+  
+  // > 0.000000001     1
+  // [1] 1e-09
+
+  // x.1      ->   x.100000000
+  // x.01     ->   x.010000000
+  // x.001     etc
+  // x.0001
+    
 }
 
 

@@ -602,16 +602,15 @@ int timeline_t::reset_epochs()
   //  directly transfer epochs boundaries of all unmasked epochs;
   //  after a RE, all retained epochs should have a proper mapping
 
-  std::cout << " **** in reset_epochs() *** \n"; 
   std::vector<interval_t> new_epochs;
   std::vector<std::string> new_epoch_labels;
-
+  
   if ( mask.size() != epochs.size() )
     Helper::halt( "internal error in timeline_t::reset_epochs() - mask size does not match epoch size" );
-
+  
   for (int e=0; e<epochs.size(); e++)
     {
-      std::cout << " mask = " << mask[e] << "\n";
+  
       // only copy unmasked epochs
       if ( ! mask[e] )
 	{
@@ -628,11 +627,11 @@ int timeline_t::reset_epochs()
 
 
 	  
-	  logger << "e" << e << "\tM"
-	   	 << mask[e] << "\t start/end mapping = "
-	   	 << okay1 << okay2
-	   	 << "\t" << e1.as_string() << "\t" << e2.as_string() << "\t"
-	   	 << e2.start << " " << e2.stop << "\n";
+	  // logger << "e" << e << "\tM"
+	  //  	 << mask[e] << "\t start/end mapping = "
+	  //  	 << okay1 << okay2
+	  //  	 << "\t" << e1.as_string() << "\t" << e2.as_string() << "\t"
+	  //  	 << e2.start << " " << e2.stop << "\n";
 	  
 	  if ( okay1 && okay2 )
 	    {
@@ -670,7 +669,7 @@ int timeline_t::reset_epochs()
       // get the records in this epoch      
       std::set<int> records = records_in_interval( interval );
 
-      std::cout << " got " << records.size() << "  in epoch " << e << "\n";
+      //std::cout << " got " << records.size() << "  in epoch " << e << "\n";
       
       // get records
       std::set<int>::const_iterator rr = records.begin();
