@@ -136,7 +136,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   // -------------------- Analysis/window options -----------
   //
   
-  double half_window = by_epoch ? 0 : param.requires_dbl( "w" );
+  const double half_window = by_epoch ? 0 : param.requires_dbl( "w" );
   if ( (!by_epoch) && half_window <= 0 ) Helper::halt( "w must be a positive number" );
 
   
@@ -145,11 +145,16 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   // Normalisation: e.g. 0.2 means 20% + 20% of window, i.e. skip middle 60%
   //                defauly = 0 (or negative) -> no normalisation
   
-  double norm_pct = param.has( "np" ) ? param.requires_dbl( "np" ) : -1 ;
+  const double norm_pct = param.has( "np" ) ? param.requires_dbl( "np" ) : -1 ;
 
   if ( norm_pct > 0.5 )
     Helper::halt( "expecting np between 0 and 0.5" );
-    
+  
+  const bool zero_trace = param.has( "zero" ) ? param.yesno( "zero" ) : false ; 
+  
+  const double outlier_th = param.has( "th" ) ? param.requires_dbl( "th" ) : -1 ; 
+  
+  const double outlier_winsor = param.has( "win" ) ? param.requires_dbl( "win" ) : -1; 
   
   //
   // --------------- Spectrogram options --------------------------
@@ -199,6 +204,9 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       tlock.take_log = take_log;
       tlock.angle_bins = angle_bins;
       tlock.norm_pct = norm_pct;
+      tlock.zero_trace = zero_trace;
+      tlock.outlier_th = outlier_th;
+      tlock.outlier_winsor = outlier_winsor;
       tlock.emid = emid; // only epoch-mode
       
       //
@@ -545,7 +553,7 @@ void tlock_t::clearX()
 // }
 
 
-Data::Vector<double> tlock_t::average( ) const
+Data::Vector<double> tlock_t::average( const double th , const double winsor ) const 
 {  
 
   //
@@ -554,6 +562,10 @@ Data::Vector<double> tlock_t::average( ) const
   
   // return row means (transpose + col means ) 
   Data::Matrix<double> Xt = Statistics::transpose( X );
+  
+  if ( th > 0 || winsor > 0 )
+    Xt = remove_outliers( Xt , th , winsor );
+
   Data::Vector<double> means1 = Statistics::mean( Xt );
   
 
@@ -561,12 +573,63 @@ Data::Vector<double> tlock_t::average( ) const
   // normalize mean values by window edges (e.g. np=0.1 --> default 10% either side)?
   //
   
-  if ( norm_pct > 0 )
+  if ( norm_pct > 0 || zero_trace )
     edge_normalization( &means1 , norm_pct * np );
   
   
   return means1;
 }
+
+
+Data::Matrix<double> tlock_t::remove_outliers( const Data::Matrix<double> & Y , const double th , const double winsor ) const 
+{
+  
+  // std::vector<bool> exclude( ni , false );
+  
+
+  // for (int i=0; i<np; i++)
+  //   {
+  //     const std::vector<double> & 
+
+  // 	  int outliers( const std::vector<double> * x , double th , 
+  // 		std::vector<bool> * inc , const std::vector<bool> * prior = NULL );  
+
+
+  //   }
+  // // remove 
+  
+  return Y;
+}
+
+Data::Vector<double> tlock_t::median( const double th , const double winsor ) const
+{  
+
+  //
+  // get means
+  //
+  
+  // return row means (transpose + col means ) 
+  Data::Matrix<double> Xt = Statistics::transpose( X );
+
+  if ( th > 0 || winsor > 0 ) 
+    Xt = remove_outliers( Xt , th , winsor );
+  
+  Data::Vector<double> med1( np );
+  for (int i=0; i<np; i++) 
+    med1[i] = MiscMath::median( *Xt.col(i).data_pointer() );
+  
+
+  //
+  // normalize mean values by window edges (e.g. np=0.1 --> default 10% either side)?
+  //
+  
+  if ( norm_pct > 0 || zero_trace )
+    edge_normalization( &med1 , norm_pct * np );
+  
+  
+  return med1;
+}
+
 
 
 void tlock_t::edge_normalization( Data::Vector<double> * m , const int p ) const
@@ -577,23 +640,29 @@ void tlock_t::edge_normalization( Data::Vector<double> * m , const int p ) const
   if ( n == 0 || n < 2 * p ) return;
 
   // rescale to minimumm of 0.0  
-  double minval = (*m)[0];
-  for (int i=0; i<n; i++) 
-    if ( (*m)[i] < minval ) minval = (*m)[i];
-  for (int i=0; i<n; i++)
-    (*m)[i] -= minval;
-  
-  // normalize to get value of 1.0 for baseline, based on edges
-  
-  double norm = 0;
-  for (int i=0; i<p; i++)
+  if ( zero_trace ) 
     {
-      norm += (*m)[i];
-      norm += (*m)[n-(i+1)];
+      std::cout <<" zero-ing\n";
+      double minval = (*m)[0];
+      for (int i=0; i<n; i++) 
+	if ( (*m)[i] < minval ) minval = (*m)[i];
+      for (int i=0; i<n; i++)
+	(*m)[i] -= minval;
     }
-  norm /= 2.0 * p;
-  for (int i=0; i<n; i++)
-    (*m)[i] /= norm;
+
+  // normalize to get value of 1.0 for baseline, based on edges
+  if ( p > 0 ) 
+    { 
+      double norm = 0;
+      for (int i=0; i<p; i++)
+	{
+	  norm += (*m)[i];
+	  norm += (*m)[n-(i+1)];
+	}
+      norm /= 2.0 * p;
+      for (int i=0; i<n; i++)
+	(*m)[i] /= norm;
+    }
 
 }
 
@@ -667,24 +736,21 @@ void tlock_t::epoch_builder( const int slot )
 
       // we know this will be continuous, by definition of an 'epoch'
       std::vector<double> * d = slice.nonconst_pdata();
-      std::cout << " this is now a new epoch!\n";
 
       // set window 
       const int np1 = d->size();
 
-      std::cout << " xx np1 = " << np1 << "\t" << interval.duration() << "\n";
+      //      std::cout << " xx np1 = " << np1 << "\t" << interval.duration() << "\n";
       
       if ( np == 0 )
 	{
 	  np = np1;
 	  // set_window takes 
 	  set_window_epoch( np1 );
-	  std::cout << " setting np ---> " << np << "\n";
-	  
 	}
       else
 	{
-	  std::cout << " np = " << np << " np1 " << np1 << "\n";
+	  //std::cout << " np = " << np << " np1 " << np1 << "\n";
 	  if ( abs( np - np1 ) > 1 )
 	    Helper::halt( "cannot have variable-sized epochs in TLOCK" );
 	}
@@ -924,6 +990,8 @@ void tlock_t::add( const std::vector<double> * x ,
       else
 	X.add_col( d ) ;
       
+     
+
     } // end of regular value accumulator
   
 }
@@ -933,10 +1001,10 @@ void tlock_t::set_window_epoch( int np1 )
 {
   // np1 is total number of sample points (from epoch)
   np = np1;
-  std::cout << " set_window_epoch() setting np = " << np << "\n";
+  //  std::cout << " set_window_epoch() setting np = " << np << "\n";
   const double totsec = np1 / sr;
   const double half_window = totsec / 2.0 ; 
-  logger << "  window has " << np1 << " samples, " << totsec << " seconds\n";
+  //  logger << "  window has " << np1 << " samples, " << totsec << " seconds\n";
     
   t.clear();
   // nb. fudge for floating point issues (allowing tenth of inc for stop 'w')
@@ -980,8 +1048,13 @@ int tlock_t::set_window( int half_points )
 void tlock_t::outputs()
 {
   
+  std::cout << X.print() << "\n";
+
   // means
-  Data::Vector<double> m = average();
+  Data::Vector<double> m = average( outlier_th , outlier_winsor );
+
+  // medians
+  Data::Vector<double> md = median( outlier_th , outlier_winsor );
   
   if ( m.size() != np )
     {
@@ -989,10 +1062,13 @@ void tlock_t::outputs()
       Helper::halt( "internal error in tlock_t()" );
     }
   
+  writer.value( "N" , ni );
+
   for (int i=0; i<np; i++)
     {
       writer.level( t[i] , "SEC" );
       writer.value( "M" , m[i] );
+      writer.value( "MD" , md[i] );
     }  
   writer.unlevel( "SEC" );
 

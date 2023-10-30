@@ -285,6 +285,13 @@ void Helper::halt( const std::string & msg )
   std::exit(1);
 }
 
+void Helper::problem( const std::string & msg )
+{
+  // generic bail function (not using logger)
+  logger << "problem : " << msg << "\n";   
+  globals::problem = true;
+}
+
 void Helper::warn( const std::string & msg )
 {
   logger.warning( msg );

@@ -79,9 +79,14 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   for (int e=0;e<s.size();e++) stages[e] = globals::stage( s[e] );
   original_stages = stages;
   edit( t , param );
+  if ( empty() ) 
+    {
+      logger << " ** warning, no valid stage-annotated epochs, bailing...\n"; 
+      return false;
+    }
   calc_stats( verbose );
   return true;
-} 
+}
 
 bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel ) 
 {
@@ -324,13 +329,22 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 
   ne_gaps = stages.size();
   
-  
+
   //
   // edit hypnogram as needed (e.g. for lights-off, excessive WASO, etc)
   //
   
   edit( timeline , param ); 
   
+  //
+  // If empty, just bail
+  //
+  
+  if ( empty() ) 
+    {
+      logger << " ** warning, no valid stage-annotated epochs, bailing...\n"; 
+      return false;
+    }
 
   //
   // Report any conflicts
@@ -364,6 +378,7 @@ bool hypnogram_t::empty() const
   // as a valid hypnogram
   
   const int n = stages.size();
+
   for (int i=0; i<n; i++)
     {
       const sleep_stage_t & stg = stages[i];
@@ -377,7 +392,13 @@ bool hypnogram_t::empty() const
 
 void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 {
-  
+
+  // 
+  // special case; nothing to do if empty
+  //
+
+  if ( empty() ) return;
+   
   //
   // 1) Do we have any lights_on or lights_off annotations?
 
@@ -898,7 +919,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       if ( trim_lead_wake && trim_trail_wake ) logger << "leading/trailing";
       else if ( trim_lead_wake ) logger << "leading";
       else logger << "trailing";
-      logger << " wake epochs to ?\n";
+      logger << " wake epochs to '?'\n";
       
     }
   
@@ -4561,7 +4582,13 @@ void dummy_hypno()
 
   // make a copy of stages 
   h.original_stages = h.stages;
+  
   h.edit( h.timeline , param );
+  if ( h.empty() ) 
+    {
+      logger << " ** warning, no valid stage-annotated epochs, bailing...\n"; 
+      return; // bail if empty
+    }
   h.calc_stats( true );
   h.output( true , true , true ); // verbose mode == T 
 

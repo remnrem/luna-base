@@ -862,7 +862,7 @@ bool cmd_t::eval( edf_t & edf )
     {	        
       
       // was a problem flag raised when loading the EDF?
-      
+          
       if ( globals::problem ) return false;
       
       //
@@ -941,7 +941,13 @@ bool cmd_t::eval( edf_t & edf )
       if ( is( c, "ENDIF" ) || is( c, "FI" ) )
 	continue;
 
+      
+      //
+      // Quit?
+      //
 
+      if ( is( c, "EXIT" ) ) return true;
+      
       //
       // Is the current mask empty? if so, skip unless this is a THAW
       //
@@ -1004,7 +1010,6 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "VARS" ) )         proc_dump_vars( edf , param(c) );
       else if ( is( c, "STATS" ) )        proc_stats( edf , param(c) );
       else if ( is( c, "DUPES" ) )        proc_dupes( edf, param(c) ); 
-		           
       else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
       else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
 
@@ -1207,12 +1212,14 @@ bool cmd_t::eval( edf_t & edf )
       //
       // Was a problem flag set?
       //
-      
+    
       if ( globals::problem ) 
 	{
-
-	  logger << "**warning: the PROBLEM flag was set, skipping to next EDF...\n";
 	  
+	  logger << "**warning: the PROBLEM flag was set, skipping to next EDF...\n";
+
+	  writer.value( "PROBLEM" , 1 );
+
 	  if ( globals::write_naughty_list )
 	    {
 	      logger << "**writing ID " << edf.id << " to " <<  globals::naughty_list << "\n";
@@ -3236,12 +3243,14 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   if ( param.has( "file" ) )
     {
       std::vector<std::string> ss = Helper::file2strvector( param.value( "file" ) );
-      edf.timeline.hypnogram.construct( &edf.timeline , param , verbose , ss );
+      bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose , ss );
+      if ( ! okay ) return; // i.e. if no valid annotations found
     }
   else
     {      
-      edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
-      bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
+      bool okay = edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
+      if ( ! okay ) return; // e.g. overlapping stages
+      okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
       if ( ! okay ) return; // i.e. if no valid annotations found
     }
 

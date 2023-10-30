@@ -104,13 +104,20 @@ struct tlock_t {
 
   void outputs();
   
-  Data::Vector<double> average() const ;
+  Data::Vector<double> average( const double th , const double winsor ) const ;
+  
+  Data::Vector<double> median( const double th , const double winsor ) const ;
+  
+  Data::Matrix<double> remove_outliers( const Data::Matrix<double> & Y , const double th , const double winsor ) const;
   
   Data::Matrix<double> angles() const ;
   
 
   // normalisation points
   double norm_pct;
+  bool zero_trace;
+  double outlier_th;
+  double outlier_winsor;
   bool take_log;
   int angle_bins;
   double emid;
