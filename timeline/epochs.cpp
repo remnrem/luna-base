@@ -526,7 +526,7 @@ int timeline_t::calc_epochs()
   mask_set = false;
   mask_mode = 0; 
 
-  if ( 0 ) 
+  if ( 0 )
     debug_dump_epochs();
   
   // all done
@@ -602,6 +602,7 @@ int timeline_t::reset_epochs()
   //  directly transfer epochs boundaries of all unmasked epochs;
   //  after a RE, all retained epochs should have a proper mapping
 
+  std::cout << " **** in reset_epochs() *** \n"; 
   std::vector<interval_t> new_epochs;
   std::vector<std::string> new_epoch_labels;
 
@@ -623,12 +624,14 @@ int timeline_t::reset_epochs()
 	  
 	  bool okay2 = remap_timepoint( e1.stop - 1LLU , &(e2.stop) );
 	  ++e2.stop;
+
+
 	  
-	  // logger << "e" << e << "\tM"
-	  // 	 << mask[e] << "\t start/end mapping = "
-	  // 	 << okay1 << okay2
-	  // 	 << "\t" << e1.as_string() << "\t" << e2.as_string() << "\t"
-	  // 	 << e2.start << " " << e2.stop << "\n";
+	  logger << "e" << e << "\tM"
+	   	 << mask[e] << "\t start/end mapping = "
+	   	 << okay1 << okay2
+	   	 << "\t" << e1.as_string() << "\t" << e2.as_string() << "\t"
+	   	 << e2.start << " " << e2.stop << "\n";
 	  
 	  if ( okay1 && okay2 )
 	    {
@@ -665,6 +668,8 @@ int timeline_t::reset_epochs()
       
       // get the records in this epoch      
       std::set<int> records = records_in_interval( interval );
+
+      std::cout << " got " << records.size() << "  in epoch " << e << "\n";
       
       // get records
       std::set<int>::const_iterator rr = records.begin();
