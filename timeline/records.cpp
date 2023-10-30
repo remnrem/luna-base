@@ -63,22 +63,30 @@ interval_t timeline_t::record2interval( int r ) const
 
 bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 ) 
 {
+
+  
   // note - this should be called w/ all stop timepoints tp = tp--;
 
-  std::cout << "\n\n IN remap_timepoint() - to map tp = " << tp << "\n";
+  // std::cout << "\n\n IN remap_timepoint() - to map tp = " << tp << "\n";
 
-  std::map<uint64_t,int>::const_iterator qq = tp2rec.begin();
-  while ( qq != tp2rec.end() )
-    {
-      std::cout << "dets: " << qq->first << "\t"
-    		<< qq->second << "\t"
-    		<< rec2orig_rec[ qq->second ] << "\n";
-      ++qq;
-    }
+  // std::map<uint64_t,int>::const_iterator qq = tp2rec.begin();
+  // while ( qq != tp2rec.end() )
+  //   {
+  //     std::cout << "dets: " << qq->first << "\t"
+  //   		<< qq->second << "\t"
+  //   		<< rec2orig_rec[ qq->second ] << "\n";
+  //     ++qq;
+  //   }
   
   
+  //
   // find an exact mapping of a single timepoint
   // using tp2rec to count records
+  //
+
+  // note - this should be called w/ all stop timepoints tp = tp--;
+    
+  
 
   // degenerate case: nothing to do w/ a continuous recording
   if ( edf->header.continuous )
@@ -93,8 +101,9 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
   
   std::map<uint64_t,int>::const_iterator pp = tp2rec.lower_bound( tp ); 
 
-  if ( pp != tp2rec.end() )
-     std::cout << " initial = " << pp->first << " " << pp->second << "\n";
+
+  // if ( pp != tp2rec.end() )
+  //    std::cout << " initial = " << pp->first << " " << pp->second << "\n";
   
   int recnum = -1;
   uint64_t offset = 0LLU;
@@ -104,18 +113,18 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
     {
       // get the last record
       --pp;
-
-      std::cout << " after start of laste record...\n";
+      
+      //std::cout << " after start of last record...\n";
       
       // but is tp within the last record?
       if ( tp <= pp->first + edf->header.record_duration_tp )
 	{
-	  std::cout << " but wihin rec...\n";
+	  //std::cout << " but wihin rec...\n";
 	  if ( tp < pp->first ) Helper::halt( "internal logic error in remap_timepoint()" );	  
 	  offset = tp - pp->first ;
-	  std::cout << " offset into this rec = " << offset << "\n";
+	  //std::cout << " offset into this rec = " << offset << "\n";
 	  recnum = rec2orig_rec[ pp->second ];
-	  std::cout << "recnum = " << recnum << " given " << pp->second << "\n";
+	  //std::cout << "recnum = " << recnum << " given " << pp->second << "\n";
 	  *tp1 = recnum * edf->header.record_duration_tp + offset ;
 	  return true;
 	}
@@ -129,13 +138,16 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
   
   bool in_gap = false;
 
-  std::cout << " tp = " << tp << " " << pp->first << "\n";
+  //   std::cout << " tp = " << tp << " " << pp->first << "\n";
+
   // exact match?
   if ( tp == pp->first )
     {
       offset = 0LLU;
       recnum = rec2orig_rec[ pp->second ];
-      std::cout << " ex match recnum " << recnum << " " << offset << "\n";
+
+      // 	std::cout << " ex match recnum " << recnum << " " << offset << "\n";
+      
       // set tp1  
       *tp1 = recnum * edf->header.record_duration_tp ; 
       return true;
@@ -148,17 +160,17 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
       uint64_t previous_rec_start = pp->first;
       uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1LLU ;
       
-      std::cout << " previous_rec_start = " << previous_rec_start << " " << previous_rec_end << "\n";
+      // 	std::cout << " previous_rec_start = " << previous_rec_start << " " << previous_rec_end << "\n";
       
       // does the start point fall within this previous record?
       if ( tp >= previous_rec_start && tp <= previous_rec_end ) 
 	{
-	  std::cout << " not in GAP\n";
+	  //   std::cout << " not in GAP\n";
 	  in_gap = false;
 	}
       else
 	{
-	  //std::cout << "gapper\n";
+	  //	  if ( verb ) std::cout << "gapper\n";
 	  // is in a gap
 	  return false;
 	}
@@ -178,7 +190,7 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
 
   offset = tp - pp->first ;
   recnum = rec2orig_rec[ pp->second ];	  
-  std::cout << " recnum " << recnum << " " << offset << "\n";
+  //     std::cout << " recnum " << recnum << " " << offset << "\n";
   // set tp1
   *tp1 = recnum * edf->header.record_duration_tp + offset ;
   

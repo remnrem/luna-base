@@ -607,10 +607,11 @@ int timeline_t::reset_epochs()
   std::vector<std::string> new_epoch_labels;
 
   if ( mask.size() != epochs.size() )
-    Helper::halt( "internal error in timeline_t::reset_epochs()" );
+    Helper::halt( "internal error in timeline_t::reset_epochs() - mask size does not match epoch size" );
 
   for (int e=0; e<epochs.size(); e++)
     {
+      std::cout << " mask = " << mask[e] << "\n";
       // only copy unmasked epochs
       if ( ! mask[e] )
 	{

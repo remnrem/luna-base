@@ -163,6 +163,7 @@ namespace Helper
   gzifstream & zsafe_getline( gzifstream & is , std::string& t);
 
   void halt( const std::string & msg );
+  void problem( const std::string & msg );
   void warn( const std::string & msg );
   void debug( const std::string & msg );
   bool realnum(double d);
