@@ -3242,7 +3242,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   //
   
   if ( find( "SleepStage" ) != NULL )
-    return false; 
+    return true; 
   
    
   //
