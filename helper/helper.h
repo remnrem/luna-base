@@ -102,7 +102,7 @@ namespace Helper
 
   std::string search_replace( std::string s , const std::string & a , const std::string & b , const bool only_root = false );
   
-  void swap_in_variables( std::string * , std::map<std::string,std::string> * );
+  void swap_in_variables( std::string * , std::map<std::string,std::string> * , const bool allow_missing = false );
 
   bool swap_in_includes( std::string * , const std::string & delim = "," );
 			
