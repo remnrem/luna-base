@@ -287,7 +287,6 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
     Helper::halt( "internal error in hilbert_t::phase_events()" );
 
 
-
   //
   // Within-SO permutation schem (defined if a mask is given)
   //

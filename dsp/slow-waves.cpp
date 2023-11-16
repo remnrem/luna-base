@@ -118,9 +118,6 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   const std::string cache_name_pos = cache_pos ? param.value( "cache-pos" ) : "" ;
   const std::string cache_name_neg = cache_neg ? param.value( "cache-neg" ) : "" ;
   
-  // cache metrics? (SO_DUR, SO_AMP, etc)
-  cache_t<double> * cache_metrics = param.has( "cache-metrics" ) ?
-    edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
   
   
   //
@@ -183,7 +180,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       // verbose display
       //
       
-      display_slow_waves( param.has( "verbose" ) , &edf , cache_metrics );
+      display_slow_waves( param.has( "verbose" ) , &edf );
       
       
       //
@@ -264,7 +261,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
 }
 
 
-void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<double> * cache )
+void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
 {
 
   //
@@ -348,20 +345,7 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf , cache_t<doub
       
     }
   
-      
-  //
-  // Cache?
-  //
-  
-  if ( cache )
-    {
-      cache->add( ckey_t( "SO_RATE" , writer.faclvl() ) , num_waves() / ( signal_duration_sec / 60.0 ) ) ; 
-      cache->add( ckey_t( "SO_DUR" , writer.faclvl() ) , report_median_stats ? median_duration_sec : avg_duration_sec ) ;
-      cache->add( ckey_t( "SO_AMP" , writer.faclvl() ) , report_median_stats ? median_x : avg_x );
-      cache->add( ckey_t( "SO_SLOPE_NEG2" , writer.faclvl() ) , report_median_stats ? median_slope_n2 : avg_slope_n2 ) ;      
-    }
-  
-  
+       
   //
   // Save as annotation?
   //

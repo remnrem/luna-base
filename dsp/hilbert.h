@@ -62,6 +62,8 @@ struct emp_t {
 
 struct itpc_t {   
 
+  itpc_t() { } 
+
   itpc_t( const int ne , const int nbins = 20 ); 
 
   // for permutation-based results
