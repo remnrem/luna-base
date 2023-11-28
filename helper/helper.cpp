@@ -1227,7 +1227,7 @@ bool clocktime_t::midpoint( const clocktime_t & t1 , const clocktime_t & t2 )
 
 double clocktime_t::minutes( const int dr ) const 
 {
-  return (d-dr)*24*60 + h*60 + m + s/(double)60; 
+  return (double)(d-dr)*24.0*60.0 + h*60 + m + s/(double)60; 
 }
 
 double clocktime_t::hours( const int dr ) const
@@ -1237,7 +1237,9 @@ double clocktime_t::hours( const int dr ) const
 
 double clocktime_t::seconds( const int dr ) const
 {
-  return (d-dr)*24*60*60 + h*60*60 + m*60 + s ;
+  // std::cout << " sec " << d << " " << dr << "\t" << h << " " << m << " " << s << "\n";
+  // std::cout << " val = " << (double)(d-dr)*24.0*60.0*60.0 + h*60.0*60.0 + m*60.0 + s  << "\n";
+  return (double)(d-dr)*24.0*60.0*60.0 + h*60.0*60.0 + m*60.0 + s ;
 }
 
 int clocktime_t::rounded_seconds( const int dr ) const
@@ -1535,8 +1537,6 @@ double clocktime_t::ordered_difference_seconds( const clocktime_t & t1 , const c
   double t1s = t1.seconds();
   double t2s = t2.seconds();
 
-  //  std::cout << " t1, t2 = " << t1s << " " << t2s << "\n";
-  
   if ( t2s < t1s ) 
     {
       return 86400.0 - t1s + t2s;

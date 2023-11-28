@@ -979,7 +979,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  
 	  if ( spec_kurt && ! kurt_altdef )
 	    {
-	      
+
 	      //
 	      // output now?
 	      //
@@ -1023,7 +1023,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		  
 		  double spsk ,spcv ;
 		  double spku = kurt_altdef ? skurt.kurtosis( *bb , &spcv, &spsk ) : skurt.kurtosis2( ns1, *bb , &spcv, &spsk ) ;
-		  
+
 		  etrack_speckurt[ns1][bn].push_back( spku );
 		  etrack_speccv[ns1][bn].push_back( spcv );
 		  etrack_specskew[ns1][bn].push_back( spsk );
@@ -1232,12 +1232,12 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  writer.unlevel( globals::band_strat );
 	  
 	  //
-	  // spectral kurtsosis (avg over channels)
+	  // spectral kurtsosis (channel-specific version)
 	  //
-	  
-	  if ( spec_kurt )
+	
+	  if ( spec_kurt && ! kurt_altdef )
 	    {
-	      
+
 	      // initial dummy, to get bands (defined in constructor)
 	      spectral_kurtosis_t skurt;
 	      
@@ -1320,12 +1320,12 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
 
       //
-      // spectral kurtsosis (avg over channels)
+      // spectral kurtsosis (avg over channels variant alternate-speckurt)
       //
       
-      if ( spec_kurt )
+      if ( spec_kurt && kurt_altdef )
 	{
-	  
+
 	  // initial dummy, to get bands (defined in constructor)
 	  spectral_kurtosis_t skurt;
 	  

@@ -218,7 +218,8 @@ void cpt_wrapper( param_t & param )
   // Dump data files (DVs) as a matrix
   //
 
-  const std::string dump_dv_matrix = param.has( "dv-mat" ) ? Helper::expand( param.value( "dv-mat" ) ) : "" ; 
+  const std::string dump_dv_matrix = param.has( "dv-mat" ) ? Helper::expand( param.value( "dv-mat" ) ) : "" ;
+  const std::string dump_all_matrix = param.has( "all-mat" ) ? Helper::expand( param.value( "all-mat" ) ) : "" ; 
   
   //
   // Attach covariates, define main IV: note, this sets the total
@@ -278,7 +279,7 @@ void cpt_wrapper( param_t & param )
   while ( ! IN1.eof() )
     {
       std::string dline;
-      Helper::safe_getline( IN1 , dline );      
+      Helper::safe_getline( IN1 , dline );
       if ( IN1.eof() ) break;
       if ( dline == "" ) continue;
       if ( dline[0] == '%' || dline[0] == '#' ) continue; 
@@ -310,6 +311,11 @@ void cpt_wrapper( param_t & param )
       // skip if any missing data
       if ( missing_data )
 	continue;
+
+      // skip if not using this indiv?
+      const std::string this_id = tok[ id_col ] ;
+      if ( id_excludes.size() != 0 && id_excludes.find( this_id ) != id_excludes.end() ) continue;
+      if ( id_includes.size() != 0 && id_includes.find( this_id ) == id_includes.end() ) continue;
       
       // no missing IV data -- can add here
       ivdata[ iv ].push_back( iv_num );
@@ -318,15 +324,9 @@ void cpt_wrapper( param_t & param )
       for (int c=0; c<covar_col.size(); c++)
 	ivdata[ covar_label[c] ].push_back( cc[c] );
             
-      // add ID
-      const std::string this_id = tok[ id_col ] ;
-      if ( id_excludes.size() != 0 && id_excludes.find( this_id ) != id_excludes.end() ) continue;
-      if ( id_includes.size() != 0 && id_includes.find( this_id ) == id_includes.end() ) continue;
-
       const int this_idn = ids_map.size();
       ids.push_back( tok[ id_col ] );
       ids_map[ tok[ id_col ] ] = this_idn;
-
 
       // next row
       
@@ -902,7 +902,8 @@ void cpt_wrapper( param_t & param )
   for (int i=0; i<ni; i++)
     {
       const int idx = ids_map[ id[i] ];
-      
+      //      std::cout << "pulling " << id[i] << " : " << i << " -> " << idx << "\n";
+
       // main IV
       X[i] = ivdata[ iv ][ idx ];
 	
@@ -933,6 +934,39 @@ void cpt_wrapper( param_t & param )
       O1 << Y.format( fmt1 ) << "\n";
       O1.close();
     }
+
+  //
+  // Dump all
+  //
+
+   if ( dump_all_matrix != "" )
+    {
+      logger << "  writing DV,IV and covariate matrix to " << dump_all_matrix << "\n";
+      Eigen::IOFormat fmt1( Eigen::StreamPrecision, Eigen::DontAlignCols );
+      std::ofstream O1( dump_all_matrix.c_str() , std::ios::out );
+      if ( vname.size() != Y.cols() ) Helper::halt( "internal logic error" );
+
+      O1 << "ID" << "\t" << "IV";
+      for (int c=0; c<nz; c++) O1 << "\tC" << c+1 ;
+      for (int c=0; c<Y.cols(); c++) O1 << "\tDV" << c+1 ;
+      O1 << "\n";
+      
+      for (int i=0; i<ni; i++)
+	{
+	  const int idx = ids_map[ id[i] ];
+
+	  O1 << id[i] << "\t"
+	     << X[i] ;
+	  	 	
+	  // Covariates
+	  for (int c=0; c<nz; c++) O1 << "\t" << Z(i,c);
+	  // DVs
+	  for (int c=0; c<Y.cols(); c++) O1 << "\t" << Y(i,c);
+	  O1 << "\n";
+	}
+      O1.close();
+   }
+
   
   //
   // Perform CPT 

@@ -1677,13 +1677,22 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      // day information specified?
 	      
 	      if ( startdatetime.d != 0 && atime.d != 0 ) 
-		{		  
+		{
+
+		  // sanity check -- if annot is *years and years* past EDF start, will
+		  // get floating point issues... catch here (limit = 10years.... no idea why
+		  // somebody would specify this type of data, but to catch errors in formats, etc
+		  if ( abs( startdatetime.d - atime.d ) > 3650 )
+		    Helper::halt( "annotation start date > 10 years from EDF start... please check data" );		  
+				  
 		  int earlier = clocktime_t::earlier( startdatetime , atime );		  
-		  //std::cout << " earlier = " << earlier << "  " << startdatetime << " " << atime << "\n";
+
+		  
 		  if ( earlier == 2 )
 		    before_edf_start = true;
 		  else
 		    dbl_start = clocktime_t::ordered_difference_seconds( startdatetime , atime ) ;
+		  
 		}
 	      else if ( startdatetime.d == 0 && atime.d != 0 )
 		{
@@ -1778,13 +1787,13 @@ interval_t annot_t::get_interval( const std::string & line ,
       if ( dbl_start < 0 )
 	{
 	  //std::cout << " S1 " << dbl_start << "\n";
-	  Helper::halt( f + " contains row(s) with negative time points" ) ;
+	  Helper::halt( f + " contains row(s) with negative time points: " + start_str + "\n" + line ) ;
 	}
-
+    
       if ( ( !*readon ) && dbl_stop < 0 )
 	{
 	  //std::cout << " S2 " << dbl_start << "\n";
-	  Helper::halt( f + " contains row(s) with negative time points" ) ;
+	  Helper::halt( f + " contains row(s) with negative time points: " + stop_str + "\n" + line ) ;
 	}
       
       // annot(epoch)/record alignment (to the leftmost second)
@@ -1803,7 +1812,7 @@ interval_t annot_t::get_interval( const std::string & line ,
       // convert to uint64_t time-point units
       
       interval.start = Helper::sec2tp( dbl_start );
-      
+
       // assume stop is already specified as 1 past the end, e.g. 30 60
       // a zero-duration interval will therefore have start == stop (i.e. duration = 0)
       // which should be fine
