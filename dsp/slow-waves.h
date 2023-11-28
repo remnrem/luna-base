@@ -340,7 +340,7 @@ struct slow_waves_t
   
   // output
 
-  void display_slow_waves( const bool verbose = false , edf_t * edf = NULL , cache_t<double> * cache = NULL );
+  void display_slow_waves( const bool verbose = false , edf_t * edf = NULL );
 
   // analysis of slow waves
   

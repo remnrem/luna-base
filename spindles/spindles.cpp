@@ -397,8 +397,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool cache_peaks_sec             = param.has( "cache-peaks-sec" );
   const std::string cache_peaks_sec_name = cache_peaks_sec ? param.value( "cache-peaks-sec" ) : "";
 
-  cache_t<double> * cache_metrics = param.has( "cache-metrics" ) ? edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
-
   
   //
   // Spindle propagation
@@ -680,9 +678,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  p_sw->phase_slow_waves();
 	  
 
-	  // and display (& potentially cache)
+	  // and display 
 	  if ( sw_coupling ) 
-	    p_sw->display_slow_waves( param.has( "verbose" ) , &edf , cache_metrics );
+	    p_sw->display_slow_waves( param.has( "verbose" ) , &edf );
 	  
 	  
 	  //
@@ -1805,12 +1803,13 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      // default is to use mask in SO mode; in phase mode, do not
 		      bool use_mask = phase_coupling ? false : ! param.has( "all-spindles" );
 		      
-		      // if non-SO coupling, this is not needed
+		      // if non-SO coupling (i.e. other band phases specified, not detected SO) , this is not needed
 		      if ( phase_coupling ) use_mask = false;
-
+		      
 		      if ( use_mask ) 
 			so_mask = p_sw->sp_in_sw_vec();
 		      
+
 		      //
 		      // report coupling overlap by SO/external channel phase
 		      //
@@ -1854,11 +1853,27 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      //
 		      
 		      itpc_t itpc = p_hilbert->phase_events( valid_spindles_anchor , 
-							     use_mask ? &so_mask : NULL , nreps , 
+							     use_mask ? &so_mask : NULL , 
+							     nreps , 
 							     sr , 
 							     epoch_sec , // opt: within-epoch shuffle
 							     stratify_by_so_phase_bin // opt: overlap by SO-phase bin
 							     );
+		      
+		      //
+		      // Repeat for all spindles? - i.e. always run twice ratehr than use 'all-spindles' option
+		      //
+		      
+		      itpc_t itpc_all;
+		      if ( use_mask ) 
+			itpc_all = p_hilbert->phase_events( valid_spindles_anchor ,
+							    NULL ,  // i.e. same as above, but no mask
+							    nreps ,
+							    sr ,
+							    epoch_sec , // opt: within-epoch shuffle                               
+							    false      //  opt: overlap by SO-phase bin               
+							    );
+		      
 		      
 		      // n.b. these only include all valid spindles
 		      // i.e. not necessarily all spindles
@@ -1879,28 +1894,37 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      writer.value( "COUPL_ANCHOR" , (int)anchor_idx.size() );
 		      
 		      writer.value( "COUPL_MAG" , itpc.itpc.obs );
+		      
+		      
 
+		      //
+		      // gross overlap 
+		      //
+		      
 		      if ( use_mask )
 			{
 			  writer.value( "COUPL_OVERLAP" , itpc.ninc.obs );
 			  writer.value( "CDENS" , itpc.ninc.obs / t_minutes ) ;
 			  writer.value( "UDENS" , ( spindles.size() - itpc.ninc.obs ) / t_minutes ) ;
 			  
-			  // special one-off for age prediction model:
-			  if ( cache_metrics )
-			    {
-			      std::map<std::string,std::string> faclvl = writer.faclvl() ;
-			      cache_metrics->add( ckey_t( "COUPL_OVERLAP" ,  faclvl ) , itpc.ninc.obs );
-			    }
-			}		      
+			  // phase coupling stats based on all spindles (not just those overlapping a SO)
+			  writer.value( "COUPL_ALL_MAG" , itpc_all.itpc.obs );
+			  
+			}
 		      
+		      
+		      //
+		      // phase coupling
+		      //
+
 		      if ( nreps ) 
 			{
+			  
 			  writer.value( "COUPL_MAG_EMP" , itpc.itpc.p );
 			  writer.value( "COUPL_MAG_NULL" , itpc.itpc.mean );
 			  writer.value( "COUPL_MAG_Z" , ( itpc.itpc.obs - itpc.itpc.mean ) / itpc.itpc.sd );
 			  
-			  // proportion of spdinles that overlap a SO 
+			  // proportion of spindles that overlap a SO 
 			  // unless itpc-so was set, this will be meaningless
 			  // so only report is a 'mask' was set		  
 			  if ( use_mask ) 
@@ -1909,16 +1933,27 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			      writer.value( "COUPL_OVERLAP_NULL" , itpc.ninc.mean );
 			      if ( itpc.ninc.sd > 0 )  		    			
 				writer.value( "COUPL_OVERLAP_Z" , ( itpc.ninc.obs - itpc.ninc.mean ) / itpc.ninc.sd );
+
+			      // phase coupling based on all spindles (not just overlapping a SO)
+			      writer.value( "COUPL_ALL_MAG_EMP" , itpc_all.itpc.p );
+			      writer.value( "COUPL_ALL_MAG_NULL" , itpc_all.itpc.mean );
+			      writer.value( "COUPL_ALL_MAG_Z" , ( itpc_all.itpc.obs - itpc_all.itpc.mean ) / itpc_all.itpc.sd );
+			      
+			      
 			    }
 			}
-
+		      
 		      //
 		      // mean angle; no empirical test results; -9 means no events observed, so set to missing
 		      //
 		      
 		      if ( itpc.angle.obs > -9 ) 
-			 writer.value( "COUPL_ANGLE" , itpc.angle.obs );
+			writer.value( "COUPL_ANGLE" , itpc.angle.obs );
 		      
+		      if ( use_mask && itpc_all.angle.obs > -9 )
+			writer.value( "COUPL_ALL_ANGLE" , itpc_all.angle.obs );
+		      
+
 		      //
 		      // asymptotic significance of coupling test; under
 		      // the null, give mean rate of 'significant'
@@ -1926,13 +1961,19 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      //
 		      
 		      writer.value( "COUPL_PV" , itpc.pv.obs ) ;
+		      if ( use_mask ) 
+			writer.value( "COUPL_ALL_PV" , itpc_all.pv.obs ) ;
 		      
 		      if ( nreps ) 
-			writer.value( "COUPL_SIGPV_NULL" , itpc.sig.mean ) ; 
+			{
+			  writer.value( "COUPL_SIGPV_NULL" , itpc.sig.mean ) ; 
+			  if ( use_mask ) 
+			    writer.value( "COUPL_ALL_SIGPV_NULL" , itpc_all.sig.mean ) ; 
+			}
 		      
-		      
+
 		      //
-		      // phase-bin stratified overlap/counts
+		      // phase-bin stratified overlap/counts 
 		      //
 		      
 		      if ( nreps && 
@@ -2573,22 +2614,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  
 		  writer.unlevel( "SUBSET" );
 		}
-
-	    
-	      //
-	      // cache main metrics also?
-	      //
-
-	      if ( cache_metrics )
-		{
-		  std::map<std::string,std::string> faclvl = writer.faclvl() ;
-		  cache_metrics->add( ckey_t( "DENS" ,  faclvl ) , spindles.size() / t_minutes );
-		  cache_metrics->add( ckey_t( "AMP" ,   faclvl ) , means["AMP"]  );
-		  cache_metrics->add( ckey_t( "DUR" ,   faclvl ) , means["DUR"]  );
-		  cache_metrics->add( ckey_t( "ISA_S" , faclvl ) , means["ISA_PER_SPINDLE"] );
-		  cache_metrics->add( ckey_t( "CHIRP" , faclvl ) , means["CHIRP"]  );	      
-		}
-
+	      
 	      writer.value( "DISPERSION" , means[ "DISPERSION" ] );
 	      writer.value( "DISPERSION_P" , means[ "DISPERSION_P" ] );
 	      writer.value( "NE" , means[ "NE" ] );

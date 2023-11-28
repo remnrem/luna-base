@@ -38,8 +38,10 @@ extern logger_t logger;
 // training  <- "brief description of training population (N=XXXX)" 
 // data      <- "filepath for training data"
 
-void prediction_model_t::read( const std::string & f , const std::string & id )
+void prediction_model_t::read( const std::string & f , const std::string & id , const bool cacheless )
 {
+  
+  // if cacheless, allow variables in the file to not be specified (i.e. puts in a blank)
   
   const std::string filename = Helper::expand( f );
   if ( ! Helper::fileExists( filename ) )
@@ -50,7 +52,7 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
   
   // process any variable substitutions?
   std::map<std::string,std::string>  allvars = cmd_t::indiv_var_map( id );
-    
+  
   // build current term
 
   model_term_t term;
@@ -85,8 +87,11 @@ void prediction_model_t::read( const std::string & f , const std::string & id )
       // comments
       if ( line[0] == '%' ) continue; 
 
-      // variable substitution
-      Helper::swap_in_variables( &line , &allvars );
+      
+      // variable substitution : if cacheless == T, will allow variables to
+      // be missing (e.g. ${ch} , as we don't need this when reading from 
+      // the vars table (instead of the cache) 
+      Helper::swap_in_variables( &line , &allvars , cacheless );
 
       // parse on whitespace
       std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );

@@ -94,7 +94,7 @@ struct prediction_model_t {
     specials_str.clear();
   }
 
-  void read( const std::string & f , const std::string & id );
+  void read( const std::string & f , const std::string & id , const bool cacheless );
 
   int size() const { return terms.size(); }
 

@@ -1739,6 +1739,35 @@ void cmddefs_t::init()
   
   add_table( "MTM" , "CH,F" , "Whole-night, per-channel power" );
   add_var( "MTM" , "CH,F" , "MTM" , "Power" );
+  add_var( "MTM" , "CH,F" , "MTM_MD" , "Median power" );
+  add_var( "MTM" , "CH,F" , "MTM_SD" , "Power SD" );
+
+  add_table( "MTM" , "CH,B1,B2" , "Whole-night, per-channel bandpower ratios" );
+  add_var( "MTM" , "CH,B1,B2" , "RATIO" , "Band power ratio" );
+  add_var( "MTM" , "CH,B1,B2" , "RATIO_MD" , "Median band power ratio" );
+  add_var( "MTM" , "CH,B1,B2" , "RATIO_SD" , "Band power ratio SD" );
+
+  add_table( "MTM" , "CH,B" , "Whole-night, per-channel bandpower" );
+  add_var( "MTM" , "CH,B" , "MTM" , "Band power" ); 
+  add_var( "MTM" , "CH,B" , "MTM_MD" , "Median band power" ); 
+  add_var( "MTM" , "CH,B" , "MTM_SD" , "Band power SD" ); 
+  add_var( "MTM" , "CH,B" , "REL" , "Relative band power" ); 
+  add_var( "MTM" , "CH,B" , "REL_MD" , "Median relative band power" ); 
+  add_var( "MTM" , "CH,B" , "REL_SD" , "Relative band power SD" ); 
+  add_var( "MTM" , "CH,B" , "SPECCV" , "Spectral CV" );
+  add_var( "MTM" , "CH,B" , "SPECCV_MD" , "Median spectral CV" );
+  add_var( "MTM" , "CH,B" , "SPECKURT" , "Spectral kurtosis" );
+  add_var( "MTM" , "CH,B" , "SPECKURT_MD" , "Median spectral kurtosis" );
+  add_var( "MTM" , "CH,B" , "SPECSKEW" , "Spectral skewness" );
+  add_var( "MTM" , "CH,B" , "SPECSKEW_MD" , "Median spectral skewness" );
+
+  add_table( "MTM" , "B" , "Whole-night, misc channel-averaged band metrics" );
+  add_var( "MTM" , "B" , "SPECCV" , "Spectral CV" );
+  add_var( "MTM" , "B" , "SPECCV_MD" , "Median spectral CV" );
+  add_var( "MTM" , "B" , "SPECKURT" , "Spectral kurtosis" );
+  add_var( "MTM" , "B" , "SPECKURT_MD" , "Median spectral kurtosis" );
+  add_var( "MTM" , "B" , "SPECSKEW" , "Spectral skewness" );
+  add_var( "MTM" , "B" , "SPECSKEW_MD" , "Median spectral skewness" );
 
   add_table( "MTM" , "CH,SP,TAPER" , "Taper coefficients" );
   add_var( "MTM" , "CH,SP,TAPER" , "W" , "Weight" );

@@ -1953,7 +1953,7 @@ void Helper::expand_numerics( std::string * t )
   *t = s ; 
 }
 
-void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars )
+void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars , const bool allow_missing )
 {
 
   // variable must be in the form   ${var} 
@@ -2004,7 +2004,16 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  break;
 		}
   	      else if ( vars->find( varname ) == vars->end() )
-		Helper::halt( "variable ${" + varname + "} was not specified" );
+		{
+		  if ( ! allow_missing ) 
+		    Helper::halt( "variable ${" + varname + "} was not specified" );
+		  // otherwise, just continue -- i.e. as if we swap in a '.' char
+		  // this is used when reading PREDICT model files when not from the cache
+		  // for example - i.e. so we can use the same model file, but do not expect
+		  // e.g. channel variables to be defined...
+		  s += ".";
+		  break;
+		}
 	      else // swap in new text
 		{
 		  s += vars->find( varname )->second;
