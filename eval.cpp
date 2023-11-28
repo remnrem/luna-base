@@ -958,6 +958,7 @@ bool cmd_t::eval( edf_t & edf )
 	  // to reun - most importantly THAW...
 	  bool skip = true;
 	  if      ( is( c, "THAW" ) ) skip = false;
+          else if ( is( c, "TAG" ) ) skip = false; 
 	  else if ( is( c, "HEADERS" ) ) skip = false;
 	  else if ( is( c, "SET-VAR" ) ) skip = false;
 	  else if ( is( c, "SET-HEADERS" ) ) skip = false;
