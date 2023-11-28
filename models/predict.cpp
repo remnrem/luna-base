@@ -152,7 +152,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   std::set<model_term_t>::const_iterator tt = model.terms.begin();
   while ( tt != model.terms.end() )
     {
-
+	
       // dropped?
       if ( dropped.find( tt->label ) != dropped.end() )
 	{
@@ -245,7 +245,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 	
       if ( from_cache ) 
 	{
-	  
+
 	  // no channels specified
 	  if ( tt->chs.size() == 0 && tt->pairs.size() == 0 )
 	    {
@@ -269,11 +269,11 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
 		      missing[i] = true;
 		    }	    
 		}
-	      
-	      // add this feature 
-	      X[i] = x1;
-	      ++n_obs;
-	      
+	      else // add this feature 
+		{		  
+		  X[i] = x1;
+		  ++n_obs;
+		}
 	    }
 	  else 
 	    {
@@ -432,7 +432,7 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   // all features read now: check non-missing data requirements
   //
   // ------------------------------------------------------------
-
+  
   if ( n_obs < model.specials[ "minf" ] || n_obs == 0 )
     {
       logger << "  *** found " << n_obs << " non-missing features";
