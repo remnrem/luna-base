@@ -2909,7 +2909,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
   // need at least one channel specified
 
   if ( ns == 0 ) 
-    Helper::halt( "must specify sig={ ... }" );
+    return; //Helper::halt( "must specify sig={ ... }" );
     
   //
   // Create a new channel?
