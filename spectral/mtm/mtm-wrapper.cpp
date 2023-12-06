@@ -986,6 +986,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      
 	      if ( ( ! epochwise ) || epoch_level_output )
 		{
+		  
 		  std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
 		  while ( bb != skurt.bands.end() )
 		    {
@@ -995,14 +996,17 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		      // kurtosis2() is the 'primary' def
 		      double spsk , spcv ; 
 		      double spku = skurt.kurtosis2( ns1 , *bb , &spcv, &spsk ) ;
-		      
-		      writer.value( "SPECCV" , spcv );
-		      writer.value( "SPECSKEW" , spsk );
-		      writer.value( "SPECKURT" , spku );
+
+		      if ( spku > -900 ) { 
+			writer.value( "SPECCV" , spcv );
+			writer.value( "SPECSKEW" , spsk );
+			writer.value( "SPECKURT" , spku );
+		      }
 		      
 		      ++bb;
 		    }
 		  writer.unlevel( globals::band_strat );
+		  
 		}
 
 	      //
@@ -1011,27 +1015,27 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
               if ( epochwise && etrack_speckurt[ns1].size() == 0 )
 		{
+		  
 		  etrack_speckurt[ns1].resize( skurt.bands.size() );
 		  etrack_specskew[ns1].resize( skurt.bands.size() );
 		  etrack_speccv[ns1].resize( skurt.bands.size() );
+		  		
+		  int bn=0;
+		  std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
+		  while ( bb != skurt.bands.end() )
+		    {
+		      
+		      double spsk ,spcv ;
+		      double spku = kurt_altdef ? skurt.kurtosis( *bb , &spcv, &spsk ) : skurt.kurtosis2( ns1, *bb , &spcv, &spsk ) ;
+		      
+		      etrack_speckurt[ns1][bn].push_back( spku );
+		      etrack_speccv[ns1][bn].push_back( spcv );
+		      etrack_specskew[ns1][bn].push_back( spsk );
+		      
+		      ++bb;
+		      ++bn;
+		    }
 		}
-	      
-	      int bn=0;
-	      std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
-	      while ( bb != skurt.bands.end() )
-		{
-		  
-		  double spsk ,spcv ;
-		  double spku = kurt_altdef ? skurt.kurtosis( *bb , &spcv, &spsk ) : skurt.kurtosis2( ns1, *bb , &spcv, &spsk ) ;
-
-		  etrack_speckurt[ns1][bn].push_back( spku );
-		  etrack_speccv[ns1][bn].push_back( spcv );
-		  etrack_specskew[ns1][bn].push_back( spsk );
-		  
-		  ++bb;
-		  ++bn;
-		}
-	  	  
 	    }
 
 
@@ -1083,16 +1087,16 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       
       if ( spec_kurt )
 	{
-	  
 	  // average values over channels
 	  skurt.average_channels();
-	  
+
 	  //
 	  // output now?
 	  //
 
 	  if ( ( ! epochwise ) || epoch_level_output )
 	    {
+
 	      std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
 	      while ( bb != skurt.bands.end() )
 		{
@@ -1100,10 +1104,13 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		  
 		  double spsk , spcv ; 
 		  double spku = kurt_altdef ? skurt.kurtosis( *bb , &spcv, &spsk ) : skurt.kurtosis2( *bb , &spcv, &spsk ) ;
-		  
-		  writer.value( "SPECCV" , spcv );
-		  writer.value( "SPECSKEW" , spsk );
-		  writer.value( "SPECKURT" , spku );
+
+		  if ( spku > -900 )
+		    {
+		      writer.value( "SPECCV" , spcv );
+		      writer.value( "SPECSKEW" , spsk );
+		      writer.value( "SPECKURT" , spku );
+		    }
 		  
 		  ++bb;
 		}
@@ -1246,20 +1253,24 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      while ( bb != skurt.bands.end() )
 		{
 		  writer.level( globals::band( *bb ) , globals::band_strat  );
-		  
-		  writer.value( "SPECKURT" , MiscMath::mean( etrack_speckurt[ns1][bn] ) );
-		  writer.value( "SPECKURT_MD" , MiscMath::median( etrack_speckurt[ns1][bn] ) );
-		  
-		  writer.value( "SPECSKEW" ,  MiscMath::mean( etrack_specskew[ns1][bn] ) );
-		  writer.value( "SPECSKEW_MD" , MiscMath::median( etrack_specskew[ns1][bn] ) );
-		  
-		  writer.value( "SPECCV" ,    MiscMath::mean( etrack_speccv[ns1][bn] ) );
-		  writer.value( "SPECCV_MD" , MiscMath::median( etrack_speccv[ns1][bn] ) );
+
+		  if ( MiscMath::mean( etrack_speckurt[ns1][bn] )  > -900 )
+		    {
+		      writer.value( "SPECKURT" , MiscMath::mean( etrack_speckurt[ns1][bn] ) );
+		      writer.value( "SPECKURT_MD" , MiscMath::median( etrack_speckurt[ns1][bn] ) );
+		      
+		      writer.value( "SPECSKEW" ,  MiscMath::mean( etrack_specskew[ns1][bn] ) );
+		      writer.value( "SPECSKEW_MD" , MiscMath::median( etrack_specskew[ns1][bn] ) );
+		      
+		      writer.value( "SPECCV" ,    MiscMath::mean( etrack_speccv[ns1][bn] ) );
+		      writer.value( "SPECCV_MD" , MiscMath::median( etrack_speccv[ns1][bn] ) );
+		    }
 		  
 		  ++bb;
 		  ++bn;
 		}
 	      writer.unlevel( globals::band_strat );
+
 	    }
 	  
 	  
@@ -1334,16 +1345,19 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  while ( bb != skurt.bands.end() )
 	    {
 	      writer.level( globals::band( *bb ) , globals::band_strat  );
-	      	      	      
-	      writer.value( "SPECKURT" , MiscMath::mean( etrack_chavg_speckurt[bn] ) );
-	      writer.value( "SPECKURT_MD" , MiscMath::median( etrack_chavg_speckurt[bn] ) );
 
-	      writer.value( "SPECSKEW" ,  MiscMath::mean( etrack_chavg_specskew[bn] ) );
-	      writer.value( "SPECSKEW_MD" , MiscMath::median( etrack_chavg_specskew[bn] ) );
-
-	      writer.value( "SPECCV" ,    MiscMath::mean( etrack_chavg_speccv[bn] ) );
-	      writer.value( "SPECCV_MD" , MiscMath::median( etrack_chavg_speccv[bn] ) );
-	      	      
+	      if ( MiscMath::mean( etrack_chavg_speckurt[bn] ) > -900 )
+		{
+		  writer.value( "SPECKURT" , MiscMath::mean( etrack_chavg_speckurt[bn] ) );
+		  writer.value( "SPECKURT_MD" , MiscMath::median( etrack_chavg_speckurt[bn] ) );
+		  
+		  writer.value( "SPECSKEW" ,  MiscMath::mean( etrack_chavg_specskew[bn] ) );
+		  writer.value( "SPECSKEW_MD" , MiscMath::median( etrack_chavg_specskew[bn] ) );
+		  
+		  writer.value( "SPECCV" ,    MiscMath::mean( etrack_chavg_speccv[bn] ) );
+		  writer.value( "SPECCV_MD" , MiscMath::median( etrack_chavg_speccv[bn] ) );
+		}
+	      
 	      ++bb;
 	      ++bn;
 	    }

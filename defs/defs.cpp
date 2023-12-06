@@ -207,9 +207,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v1.0";
+  version = "v0.99";
   
-  date    = "18-Aug-2023";
+  date    = "05-Dec-2023";
 
   //
   // Return code

@@ -108,10 +108,15 @@ double spectral_kurtosis_t::kurtosis( frequency_band_t b , double * sd , double 
 	    xx.push_back( segxf[i][fi] );
 	}
     }
-  
-  if ( xx.size() < 2 )
-    return -999;
 
+  // require at least 3 segments
+  if ( xx.size() < 3 )
+    {
+      *sd = -999;
+      *skew = -999;
+      return -999;
+    }
+  
   double k = MiscMath::kurtosis( xx ) + ( kurt3 ? 3 : 0 ) ;
 
   if ( sd != NULL )
@@ -158,8 +163,12 @@ double spectral_kurtosis_t::kurtosis2( frequency_band_t b , double * sd, double 
       xx.push_back( b );
     }
   
-  if ( xx.size() < 2 )
-    return -999;
+  if ( xx.size() < 3 )
+    {
+      *sd = -999;
+      *skew = -999;
+      return -999;
+    }
   
   double k = MiscMath::kurtosis( xx ) + ( kurt3 ? 3 : 0 ) ;
   
@@ -214,9 +223,13 @@ double spectral_kurtosis_t::kurtosis2( const int ch, frequency_band_t b , double
       xx.push_back( b );
     }
   
-  if ( xx.size() < 2 )
-    return -999;
-  
+  if ( xx.size() < 3 )
+    {
+      *sd = -999;
+      *skew = -999;
+      return -999;
+    }
+
   double k = MiscMath::kurtosis( xx ) + ( kurt3 ? 3 : 0 ) ;
   
   if ( sd != NULL )
