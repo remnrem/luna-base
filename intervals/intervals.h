@@ -92,6 +92,18 @@ struct interval_t
     start += w;
     stop += w;
   }
+
+  void expand_left( uint64_t w )
+  {
+    if ( start >= w ) start -= w;
+    else start = 0;    
+  }
+  
+  void expand_right( uint64_t w )
+  {
+    stop += w;
+  }
+
   
   uint64_t start;
   

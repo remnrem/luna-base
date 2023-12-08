@@ -93,7 +93,7 @@ int timeline_t::calc_epochs()
   standard_epochs = true;
   epoch_generic_param_annots.clear();
   epoch_generic_param_w = 0;
-  epoch_generic_param_set_midpoint = false;
+  epoch_generic_param_set_point = 0;
   epoch_generic_param_min_epoch_size = 0.1;
 
   
@@ -1013,12 +1013,30 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   // downstream
   annot_t * else_annots = else_epochs ? annotations.add( else_epoch_label ) : NULL ; 
   
-  // add flanking / set mid-points?
-  epoch_generic_param_set_midpoint = param.has( "midpoint" );
-  epoch_generic_param_w = param.has( "w" ) ? param.requires_dbl( "w" ) : 0 ; 
-  if ( epoch_generic_param_w < 0 ) Helper::halt( "'w' cannot be negative" );
-  if ( epoch_generic_param_set_midpoint && ( (!param.has( "w" )) || fabs( epoch_generic_param_w ) < 0.001 ) ) 
-    Helper::halt( "epochs too small: need larger 'w' if using 'midpoint'" ); 
+  // add flanking / set mid-points or start/end points?
+  epoch_generic_param_set_point = 0;
+  if      ( param.has( "midpoint" ) ) epoch_generic_param_set_point = 2;
+  else if ( param.has( "start" ) ) epoch_generic_param_set_point = 1;
+  else if ( param.has( "stop" ) ) epoch_generic_param_set_point = 3;
+
+  const bool has_w = param.has( "w" );
+  const bool has_w_before = param.has( "w-before" );
+  const bool has_w_after = param.has( "w-after" );
+  const bool some_w = has_w || has_w_before || has_w_after;
+  if ( (int)has_w + (int)has_w_before + (int)has_w_after  > 1 )
+    Helper::halt( "can only specify one of w, w-before or w-after" );
+
+  epoch_generic_param_w = 0;
+  if ( has_w ) 
+    epoch_generic_param_w = param.requires_dbl( "w" );
+  else if ( has_w_before )
+    epoch_generic_param_w = param.requires_dbl( "w-before" );
+  else if ( has_w_after )
+    epoch_generic_param_w = param.requires_dbl( "w-after" );
+  
+  if ( epoch_generic_param_w < 0 ) Helper::halt( "'w' (or w-before/w-after) cannot be negative" );
+  if ( epoch_generic_param_set_point && ( (!some_w) || fabs( epoch_generic_param_w ) < 0.001 ) ) 
+    Helper::halt( "epochs too small: need larger 'w' (or w-before/w-after) if using 'midpoint/start/stop'" ); 
 
   // require a minimum epoch size: set to 1/10th of a second by default
   epoch_generic_param_min_epoch_size = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
@@ -1052,16 +1070,34 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	  interval_t interval = instance_idx.interval ;
 	  
 	  // adjustments?
-	  if ( epoch_generic_param_set_midpoint)
+	  if ( epoch_generic_param_set_point )
 	    {
-              uint64_t m = interval.mid();
-              // zero-duration midpoint marker
-	      interval.start = interval.stop = m;
+	      // zero-duration midpoint marker
+	      if ( epoch_generic_param_set_point == 1 )
+		{
+		  interval.stop = interval.start;
+		}
+	      else if ( epoch_generic_param_set_point == 3 )
+		{
+		  interval.start = interval.stop;
+		}
+	      else // 2 == midpoint
+		{
+		  uint64_t m = interval.mid();
+		  interval.start = interval.stop = m;
+		}
 	    }
 
 	  // exapand?
-	  if ( epoch_generic_param_w > 0 )
-	    interval.expand( epoch_generic_param_w * globals::tp_1sec );
+	  if ( some_w && epoch_generic_param_w > 0 )
+	    {
+	      if ( has_w ) 
+		interval.expand( epoch_generic_param_w * globals::tp_1sec );
+	      else if ( has_w_before )
+		interval.expand_left( epoch_generic_param_w * globals::tp_1sec ); 
+	      else if ( has_w_after )
+		interval.expand_right( epoch_generic_param_w * globals::tp_1sec );	      
+	    }
 	  
 	  // add as an epoch, if large enough
 	  if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 

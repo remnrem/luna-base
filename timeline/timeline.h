@@ -574,7 +574,7 @@ struct timeline_t
 
   std::set<std::string> epoch_generic_param_annots;
   double                epoch_generic_param_w;
-  bool                  epoch_generic_param_set_midpoint;
+  int                   epoch_generic_param_set_point; // 0 none, 1=start, 2=mid, 3=end
   double                epoch_generic_param_min_epoch_size;
   
   // epoch alignment

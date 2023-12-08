@@ -2777,6 +2777,7 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 	  annot_t * an = add( newannot + "_" + zeros + Helper::int2str( e1 ) );
 	  an->add( "." , edf.timeline.epoch( epoch ) , "." );
 	}
+
       // all done
       return;
     }
