@@ -208,4 +208,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           name: mac-silicon-luna.tar.gz
-        path: mac-silicon-luna.tar.gz
+          path: mac-silicon-luna.tar.gz
