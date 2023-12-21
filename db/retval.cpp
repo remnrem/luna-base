@@ -400,3 +400,466 @@ void retval_t::dump()
       // all done
 }
 
+
+
+
+//
+// return in tabular form
+//
+
+std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() 
+{
+
+  // list [ cmd ]
+  //    list [ strata ]  e.g..  F_CH
+  //            data.frame   :  cols = facs + vars  ; rows = lvls + values 
+  
+  // e.g.    F    CH   DENS  AMP
+  //         11   C3   1.23  0.23
+  //         16   C4   1.23  0.23
+  
+  // # of commands
+  const int nc = data.size();
+
+  // output
+  std::map<std::string,std::map<std::string,rtable_t> > tables;
+  
+  // iterate over each command
+  
+  retval_data_t::iterator cc = data.begin();
+  while ( cc != data.end() )
+    {      
+      
+      const retval_cmd_t & cmd = cc->first;
+      
+      // number of virtual tables/factors for this command 
+      
+      const int nt = cc->second.size();
+      
+      // factors/tables
+      
+      std::map<retval_factor_t,
+	       std::map<retval_var_t,
+	std::map<retval_strata_t,
+		 std::map<retval_indiv_t,
+	retval_value_t > > > >::iterator tt = cc->second.begin();
+
+      //
+      // iterate over each table
+      //
+
+      while ( tt != cc->second.end() )
+	{
+	  
+	  const retval_factor_t & table = tt->first; 
+	  
+	  //
+	  // for this particular cmd/fac combination, make a data-frame
+	  //
+	  
+	  //    cols = ID + factors + variables
+	  //    rows = levels
+	  //    items = values
+	  
+	  // in this table ( tt ):
+	  // how many factors (i.e. F CH == 2 )
+	  // how many variables
+
+	  // but we need to split these by type
+	  
+	  const int nf = table.factors.size();
+	  
+	  const int nv = tt->second.size();
+	  
+	  const int ncols = 1 + nf + nv;  // 1 for ID 
+
+	  //
+	  // quickly scan for the a) number of rows
+	  // and b) whether the factors are string, double or int
+	  //
+
+	  // str > dbl > int
+	  std::set<std::string> int_factor, str_factor, dbl_factor;
+	  
+	  //
+	  // to track rows, indiv/strata pairing
+	  //
+	  	  
+	  std::set<retval_indiv_strata_t> rows;
+	  
+	  std::map<retval_var_t,
+	    std::map<retval_strata_t,
+	    std::map<retval_indiv_t,
+	    retval_value_t > > >::iterator vv = tt->second.begin();
+
+	  while ( vv != tt->second.end() )
+	    {
+
+	      std::map<retval_strata_t, 
+		std::map<retval_indiv_t,retval_value_t > >::iterator ss = vv->second.begin();
+	   
+	      while ( ss != vv->second.end() )
+		{
+		  
+		  const retval_strata_t & s = ss->first;
+		  
+		  // get rows (+ indivs)
+		  std::map<retval_indiv_t,retval_value_t>::iterator ii = ss->second.begin();
+		  while ( ii != ss->second.end() )
+		    {
+		      rows.insert( retval_indiv_strata_t( ii->first , s )  );
+		      ++ii;
+		    }
+		      
+		  // get factor types 
+		  std::set<retval_factor_level_t>::iterator ll = s.factors.begin();
+		  while ( ll != s.factors.end() )
+		    {
+		      if      ( ll->is_str ) str_factor.insert( ll->factor );
+		      else if ( ll->is_dbl ) dbl_factor.insert( ll->factor );
+		      else if ( ll->is_int ) int_factor.insert( ll->factor );
+		      ++ll;
+		    }
+		      
+		  ++ss;
+		}
+	      ++vv; 
+	    }
+	  
+	  
+	  //
+	  // Now, we should know the number of rows, and whether a
+	  // given factor is string, double or int
+	  //
+	  
+	  const int nrows = rows.size();
+
+	  std::cout << " and found " << nrows << " rows\n";
+	  
+	  //
+	  // we now need to build a matrix of 'nrows' rows and 'ncols' colums (fac + vars)
+	  //
+	  
+	  rtable_t df; 
+	  
+	  // // set class attribute for df
+	  // PROTECT(cls = Rf_allocVector(STRSXP, 1)); // class attribute
+	  // protect();
+	  
+	  // SET_STRING_ELT(cls, 0, Rf_mkChar( "data.frame" ));
+	  // Rf_classgets(df, cls);
+	  
+	  // // col-names
+	  // PROTECT(nam = Rf_allocVector(STRSXP, ncols)); // names attribute (column names)
+	  // protect();
+	  
+
+
+	  //
+	  // Add ID as column 1 
+	  //
+
+	  std::vector<std::string> id_col( nrows , "." );
+	  
+	  // populate w/ IDs
+	  // consider all indiv/factor/level rows
+	  int r_cnt = 0;
+	  std::set<retval_indiv_strata_t>::iterator rr =  rows.begin();
+	  while ( rr != rows.end() )
+	    {	      	      
+	      id_col[ r_cnt ] = rr->indiv.name ;
+	      ++r_cnt;
+	      ++rr;
+	    }
+	  
+	  df.add( "ID" , id_col );
+	  
+
+	  //
+	  // Add factors
+	  //
+	  
+	  std::set<std::string>::const_iterator ff = table.factors.begin();
+	  while ( ff != table.factors.end() )
+	    {
+
+	      bool is_str_factor = false , is_dbl_factor = false , is_int_factor = false ;
+	      
+	      if ( str_factor.find( *ff ) != str_factor.end() )
+		is_str_factor = true; 
+	      else if ( dbl_factor.find( *ff ) != dbl_factor.end() )
+		is_dbl_factor = true;
+	      else
+		is_int_factor = true;
+		
+	      std::vector<std::string> strcol;
+	      std::vector<int> intcol;
+	      std::vector<double> dblcol;
+	      std::vector<bool> missing( nrows , false );
+		
+	      if ( is_str_factor ) 
+		strcol.resize( nrows );
+	      else if ( is_dbl_factor )
+		dblcol.resize( nrows );
+	      else
+		intcol.resize( nrows );
+	      
+	      // consider all indiv/factor/level rows
+	      int r_cnt = 0;
+	      std::set<retval_indiv_strata_t>::iterator rr =  rows.begin();
+	      while ( rr != rows.end() )
+		{
+		  
+		  //retval_indiv_t indiv = rr->indiv;
+		  const retval_strata_t & strata = rr->strata;
+		  const retval_factor_level_t & lvl = strata.find( *ff );
+		  
+		  // get value from 'fac', but bear in mind, it may
+		  // be of different type (would be v. strange, but
+		  // handle here just in case, w/ a cast)
+		  
+		  if ( is_str_factor )
+		    {
+		      if ( lvl.is_str )
+			strcol[ r_cnt ] = lvl.str_level;
+		      else if ( lvl.is_int )
+			strcol[ r_cnt ]	= Helper::int2str(lvl.int_level);
+		      else if ( lvl.is_dbl )
+			strcol[ r_cnt ] = Helper::dbl2str(lvl.dbl_level);
+		      else
+			missing[ r_cnt ] = true;
+		    }
+		  else if ( is_dbl_factor )
+		    {
+		      if ( lvl.is_dbl )
+			dblcol[ r_cnt ] = lvl.dbl_level;		      
+		      else if ( lvl.is_int )
+			dblcol[ r_cnt ] = lvl.int_level;
+		      else
+			missing[ r_cnt ] = true;
+		    }
+		  else if ( is_int_factor )
+		    {
+		      int i = lvl.int_level;
+		      if ( lvl.is_int )
+			intcol[ r_cnt ] = lvl.int_level;
+		      else if ( lvl.is_dbl )
+			intcol[ r_cnt ] = (int)lvl.dbl_level;
+		      else
+			missing[ r_cnt ] = true;
+		    }
+		  
+		  ++r_cnt;
+		  ++rr;
+		}
+
+	      if ( is_int_factor )
+		df.add( *ff , intcol );
+	      else if ( is_dbl_factor )
+		df.add( *ff , dblcol );
+	      else
+		df.add( *ff , strcol );
+
+	      // note -
+	      // actually factor/levels should not have any missing data...
+	      // but keep above as we use missing[] below
+	      
+	      ++ff;
+	    }
+	
+
+	  //
+	  // Repeat, as for factors, but now adding actual variables 
+	  //
+	  
+	  vv = tt->second.begin();
+	  
+	  while ( vv != tt->second.end() )
+	    {
+
+	      const retval_var_t & var = vv->first;
+		
+	      // what type of variable is this?
+	      // vv->is_string(), vv->is_double(), vv->is_int()
+	      
+	      bool var_is_string = var_has_strings.find( var.name ) != var_has_strings.end();
+	      bool var_is_double = var_has_doubles.find( var.name ) != var_has_doubles.end();	      
+	      
+	      std::vector<std::string> strcol;
+	      std::vector<double> dblcol;
+	      std::vector<int> intcol;
+	      std::vector<bool> missing;
+		
+	      // note - cases were we might have long long ints...
+	      //   make int -> int64_t ? 
+	      
+	      if      ( var_is_string )
+		strcol.resize( nrows );
+	      else if ( var_is_double )
+		dblcol.resize( nrows );
+	      else
+		intcol.resize( nrows );
+	      
+	      // consider all factor/level rows as before (based on same rows file)
+
+	      int r_cnt = 0;
+
+	      std::set<retval_indiv_strata_t>::iterator rr =  rows.begin();
+	      while ( rr != rows.end() )
+		{
+		  
+		  // i.e. we are ensuring that we are iterating in the
+		  // same order as we previously did for each
+		  // variable, so
+		  
+		  //
+		  // does this variable have a non-missing value for
+		  // this row/level, for this individual?
+		  //
+		  
+		  std::map<retval_strata_t, std::map<retval_indiv_t,retval_value_t> >::const_iterator
+		    yy = vv->second.find( rr->strata );
+		    
+
+	          // not present...
+	          if ( yy == vv->second.end() )
+		    {
+		      missing[ r_cnt ] = true;		      		      
+		    }
+		  else // ...is present as a strata... check for this individual
+		    {
+		      
+		      std::map<retval_indiv_t,retval_value_t>::const_iterator zz = yy->second.find( rr->indiv );
+		      
+		      // not present...
+		      if ( zz == yy->second.end() ) 
+			{
+			  missing[ r_cnt ] = true;			  
+			}
+		      else
+			{
+			  
+			  // because of how sqlite stores numeric values, a double may be cast as an int;
+			  // therefore, some values for a double variable may in fact be stored as value.i (i.e. if 1.0, etc)
+			  // therefore, we need to check for this special case, for data coming from db2retval at least
+			  // (this will all be fine if coming from a luna eval() 
+			  
+			  if      ( var_is_string ) 
+			    strcol[ r_cnt ] = zz->second.s ; 			  
+			  else if ( var_is_double ) 
+			    {
+			      // special case
+			      if ( zz->second.is_int )
+				dblcol[ r_cnt ] = zz->second.i ;
+			      else
+				dblcol[ r_cnt ] = zz->second.d ;			      
+			    }
+			  else
+			    intcol[ r_cnt ] = zz->second.i ;
+			}
+
+		    }
+	    
+		  // next row/lvl
+		  ++r_cnt;
+		  ++rr;
+   	       }
+	      
+	      // add this column to the df
+	      if ( var_is_string )
+		df.add( var.name , strcol , missing );
+	      else if ( var_is_double )
+		df.add( var.name , dblcol , missing );
+	      else
+		df.add( var.name , intcol , missing );
+
+	      // next variable
+	      ++vv;
+   	    }
+
+	  // add this data-frame to the t_list (i.e. all tables for this command)
+
+	  // command (key1)
+	  const std::string cmd_name = Helper::sanitize( cmd.name );
+
+	  // label (factors, with _ delim) (key2)
+	  std::string table_name = Helper::sanitize( Helper::stringize( table.factors , "_" ));
+	  if ( table_name == "" ) table_name = "BL";
+	  
+	  // add to the return set
+	  tables[ cmd_name ][ table_name ] = df;
+	  
+	  // Next virtual table
+	  ++tt;
+	}
+
+      // next command
+      ++cc;
+      
+    }
+
+  // all done
+  return tables;
+  
+}
+
+
+
+std::string rtable_t::dump()
+{
+  std::stringstream ss;
+
+  if ( ! check() ) return "";
+  
+  const int ncols = cols.size();
+
+  // 012 = str dbl int
+  std::map<std::string,int> ctype;
+  for (int j=0; j<ncols; j++)
+    {
+      if ( strcols.find( cols[j] ) != strcols.end() ) ctype[ cols[j] ] = 0;
+      else if ( dblcols.find( cols[j] ) != dblcols.end() ) ctype[ cols[j] ] = 1;
+      else ctype[ cols[j] ] = 2;
+    }
+  
+  // header
+  for (int j=0; j<ncols; j++)
+    {
+      if ( j ) ss << "\t";
+      ss << cols[j];
+    }
+  ss << "\n";
+  
+  // data
+  for (int i=0;i<nrows;i++)
+    {
+      for (int j=0; j<ncols; j++)
+	{
+	  if ( j ) ss << "\t";
+
+	  const std::string & col = cols[j];
+	  
+	  int ct = ctype[ col ];
+
+	  if ( ct == 0 )
+	    {
+	      if ( strmiss[ col ][ i ] ) ss << ".";
+	      else ss << strcols[ col ][ i ] ;
+	    }
+	  else if ( ct == 1 )
+	    {
+	      if ( dblmiss[ col ][ i ] ) ss << "NA";
+              else ss << dblcols[ col ][ i ] ;	      
+	    }
+	  else
+	    {
+	      if ( intmiss[ col ][ i ] ) ss << "NA";
+              else ss << intcols[ col ][ i ] ;	      
+	    }
+	}
+      ss << "\n";
+    }  
+  
+  return ss.str();
+  
+}

@@ -38,6 +38,7 @@ struct retval_factor_t;
 struct retval_strata_t;
 struct retval_indiv_t;
 struct retval_value_t;
+struct retval_indiv_strata_t;
 
 struct strata_t;
 struct timepoint_t;
@@ -145,6 +146,96 @@ struct retval_var_t {
 };
 
 
+struct rtable_t {
+  
+  rtable_t() { nrows = -1; }
+
+  std::string dump();
+
+  std::vector<std::string> cols;
+
+  bool check() const {
+    std::set<std::string> ucols;
+    for (int i=0;i<cols.size();i++) ucols.insert( cols[i] );
+    return ucols.size() == cols.size();
+  }
+  
+  // col name -> value 
+  std::map<std::string,std::vector<std::string> > strcols;
+  std::map<std::string,std::vector<double> > dblcols;
+  std::map<std::string,std::vector<int> > intcols;
+
+  // missing values
+  std::map<std::string,std::vector<bool> > strmiss;
+  std::map<std::string,std::vector<bool> > dblmiss;
+  std::map<std::string,std::vector<bool> > intmiss;
+
+  // must be of similar row count... (at input)
+  int nrows;
+  
+  void checkrows( int n )
+  {
+    if ( nrows == -1 )
+      nrows = n;
+    else if ( nrows != n )
+      Helper::halt( "internal problem building an rtable_t" );    
+  }
+  
+  void add( const std::string & v , const std::vector<std::string> & x )
+  {
+    checkrows( x.size() ); 
+    std::vector<bool> missing( nrows , false );
+    add( v, x , missing );
+  }
+  
+  void add( const std::string & v , const std::vector<std::string> & x , const std::vector<bool> & m )
+  {
+    cols.push_back(v);
+    checkrows( x.size() );
+    checkrows( m.size() );
+    strcols[ v ] = x;
+    strmiss[ v ] = m;
+  }
+
+  // doubles
+  
+  void add( const std::string & v , const std::vector<double> & x )
+  {
+    checkrows( x.size() ); 
+    std::vector<bool> missing( nrows , false );
+    add( v, x , missing );
+  }
+  
+  void add( const std::string & v , const std::vector<double> & x , const std::vector<bool> & m )
+  {
+    cols.push_back(v);
+    checkrows( x.size() );
+    checkrows( m.size() );
+    dblcols[ v ] = x;
+    dblmiss[ v ] = m;
+  }
+
+  // doubles
+  
+  void add( const std::string & v , const std::vector<int> & x )
+  {
+    checkrows( x.size() ); 
+    std::vector<bool> missing( nrows , false );
+    add( v, x , missing );
+  }
+  
+  void add( const std::string & v , const std::vector<int> & x , const std::vector<bool> & m )
+  {
+    cols.push_back(v);
+    checkrows( x.size() );
+    checkrows( m.size() );
+    intcols[ v ] = x;
+    intmiss[ v ] = m;
+  }
+    
+};
+
+
 struct retval_t { 
 
   // core datastore
@@ -156,6 +247,9 @@ struct retval_t {
   // to stdout
   void dump();
 
+  // output to tables
+  std::map<std::string,std::map<std::string,rtable_t> > make_tables();
+  
   // IGNORE THIS FOR NOW... was only going to be used for 
   // quikcly making luna-web sstores, but this probably
   // isn't the best route...  stick w/ destrat | prepss | loadss 
@@ -348,6 +442,23 @@ struct retval_strata_t {
     return false;
   }
 
+};
+
+
+
+struct retval_indiv_strata_t { 
+retval_indiv_strata_t( const retval_indiv_t & indiv , const retval_strata_t & strata ) 
+: indiv(indiv) , strata(strata) { } 
+  retval_indiv_t indiv;
+  retval_strata_t strata;
+  bool operator<( const retval_indiv_strata_t & rhs ) const 
+  {
+    // needs strata-first ordering to match the below
+    // can change this potentially
+    if ( strata < rhs.strata ) return true;
+    if ( rhs.strata < strata ) return false;
+    return indiv < rhs.indiv;
+  }
 };
 
 
