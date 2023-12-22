@@ -24,6 +24,8 @@
 #define __LUNAPI_H__
 
 #include "luna.h"
+#include "lunapi/rtables.h"
+#include "stats/Eigen/Dense"
 
 struct lunapi_t {
   
@@ -55,6 +57,7 @@ struct lunapi_t {
 
   bool attach_annot( const std::string & filename );
   
+
   //
   // individual variables
   //
@@ -65,10 +68,35 @@ struct lunapi_t {
 
 
   //
+  // basic reports
+  //
+
+  std::vector<std::string> channels();
+
+  std::vector<std::string> annots() const;
+
+  //
+  // data slices
+  //
+   
+  Eigen::MatrixXd slice_epochs( const std::vector<int> & e , 				
+				const std::string & chstr ,
+				const std::string & anstr ,
+				std::vector<std::string> * columns );
+  
+  Eigen::MatrixXd slice_intervals( const std::vector<double> & secint , 				   
+				   const std::string & chstr ,
+				   const std::string & anstr ,
+				   std::vector<std::string> * columns );
+
+  
+  
+  
+  //
   // commands
   //
   
-  retval_t eval( const std::string & );
+  rtables_t eval( const std::string & );
 
 
   //
@@ -88,6 +116,15 @@ private:
   std::string filename;
   
   edf_t edf;
+
+
+  // helper functions
+
+  Eigen::MatrixXd matrix_internal( const std::vector<interval_t> & intervals ,
+				   const std::vector<int> * epoch_numbers ,
+				   const signal_list_t & signals ,
+				   const std::map<std::string,int> & atype );
+
   
 };
 

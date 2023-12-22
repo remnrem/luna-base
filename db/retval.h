@@ -31,6 +31,9 @@
 #include <sstream>
 
 #include "helper/helper.h"
+#include "lunapi/rtables.h"
+
+struct rtable_t;
 
 struct retval_cmd_t;
 struct retval_var_t;
@@ -146,96 +149,6 @@ struct retval_var_t {
 };
 
 
-struct rtable_t {
-  
-  rtable_t() { nrows = -1; }
-
-  std::string dump();
-
-  std::vector<std::string> cols;
-
-  bool check() const {
-    std::set<std::string> ucols;
-    for (int i=0;i<cols.size();i++) ucols.insert( cols[i] );
-    return ucols.size() == cols.size();
-  }
-  
-  // col name -> value 
-  std::map<std::string,std::vector<std::string> > strcols;
-  std::map<std::string,std::vector<double> > dblcols;
-  std::map<std::string,std::vector<int> > intcols;
-
-  // missing values
-  std::map<std::string,std::vector<bool> > strmiss;
-  std::map<std::string,std::vector<bool> > dblmiss;
-  std::map<std::string,std::vector<bool> > intmiss;
-
-  // must be of similar row count... (at input)
-  int nrows;
-  
-  void checkrows( int n )
-  {
-    if ( nrows == -1 )
-      nrows = n;
-    else if ( nrows != n )
-      Helper::halt( "internal problem building an rtable_t" );    
-  }
-  
-  void add( const std::string & v , const std::vector<std::string> & x )
-  {
-    checkrows( x.size() ); 
-    std::vector<bool> missing( nrows , false );
-    add( v, x , missing );
-  }
-  
-  void add( const std::string & v , const std::vector<std::string> & x , const std::vector<bool> & m )
-  {
-    cols.push_back(v);
-    checkrows( x.size() );
-    checkrows( m.size() );
-    strcols[ v ] = x;
-    strmiss[ v ] = m;
-  }
-
-  // doubles
-  
-  void add( const std::string & v , const std::vector<double> & x )
-  {
-    checkrows( x.size() ); 
-    std::vector<bool> missing( nrows , false );
-    add( v, x , missing );
-  }
-  
-  void add( const std::string & v , const std::vector<double> & x , const std::vector<bool> & m )
-  {
-    cols.push_back(v);
-    checkrows( x.size() );
-    checkrows( m.size() );
-    dblcols[ v ] = x;
-    dblmiss[ v ] = m;
-  }
-
-  // doubles
-  
-  void add( const std::string & v , const std::vector<int> & x )
-  {
-    checkrows( x.size() ); 
-    std::vector<bool> missing( nrows , false );
-    add( v, x , missing );
-  }
-  
-  void add( const std::string & v , const std::vector<int> & x , const std::vector<bool> & m )
-  {
-    cols.push_back(v);
-    checkrows( x.size() );
-    checkrows( m.size() );
-    intcols[ v ] = x;
-    intmiss[ v ] = m;
-  }
-    
-};
-
-
 struct retval_t { 
 
   // core datastore
@@ -248,7 +161,7 @@ struct retval_t {
   void dump();
 
   // output to tables
-  std::map<std::string,std::map<std::string,rtable_t> > make_tables();
+  std::map<std::string,std::map<std::string,rtable_t> > make_tables() const ;
   
   // IGNORE THIS FOR NOW... was only going to be used for 
   // quikcly making luna-web sstores, but this probably

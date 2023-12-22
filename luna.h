@@ -119,6 +119,8 @@
 
 #include "models/predict.h"
 
+#include "lunapi/lunapi.h"
+
 #include <iostream>
 #include <unistd.h>
 #include <dirent.h>

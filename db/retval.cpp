@@ -407,7 +407,7 @@ void retval_t::dump()
 // return in tabular form
 //
 
-std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() 
+std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() const 
 {
 
   // list [ cmd ]
@@ -426,7 +426,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
   
   // iterate over each command
   
-  retval_data_t::iterator cc = data.begin();
+  retval_data_t::const_iterator cc = data.begin();
   while ( cc != data.end() )
     {      
       
@@ -442,7 +442,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 	       std::map<retval_var_t,
 	std::map<retval_strata_t,
 		 std::map<retval_indiv_t,
-	retval_value_t > > > >::iterator tt = cc->second.begin();
+	retval_value_t > > > >::const_iterator tt = cc->second.begin();
 
       //
       // iterate over each table
@@ -490,13 +490,13 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 	  std::map<retval_var_t,
 	    std::map<retval_strata_t,
 	    std::map<retval_indiv_t,
-	    retval_value_t > > >::iterator vv = tt->second.begin();
+	    retval_value_t > > >::const_iterator vv = tt->second.begin();
 
 	  while ( vv != tt->second.end() )
 	    {
 
 	      std::map<retval_strata_t, 
-		std::map<retval_indiv_t,retval_value_t > >::iterator ss = vv->second.begin();
+		std::map<retval_indiv_t,retval_value_t > >::const_iterator ss = vv->second.begin();
 	   
 	      while ( ss != vv->second.end() )
 		{
@@ -504,7 +504,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 		  const retval_strata_t & s = ss->first;
 		  
 		  // get rows (+ indivs)
-		  std::map<retval_indiv_t,retval_value_t>::iterator ii = ss->second.begin();
+		  std::map<retval_indiv_t,retval_value_t>::const_iterator ii = ss->second.begin();
 		  while ( ii != ss->second.end() )
 		    {
 		      rows.insert( retval_indiv_strata_t( ii->first , s )  );
@@ -512,7 +512,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 		    }
 		      
 		  // get factor types 
-		  std::set<retval_factor_level_t>::iterator ll = s.factors.begin();
+		  std::set<retval_factor_level_t>::const_iterator ll = s.factors.begin();
 		  while ( ll != s.factors.end() )
 		    {
 		      if      ( ll->is_str ) str_factor.insert( ll->factor );
@@ -534,8 +534,6 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 	  
 	  const int nrows = rows.size();
 
-	  std::cout << " and found " << nrows << " rows\n";
-	  
 	  //
 	  // we now need to build a matrix of 'nrows' rows and 'ncols' colums (fac + vars)
 	  //
@@ -564,16 +562,15 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 	  // populate w/ IDs
 	  // consider all indiv/factor/level rows
 	  int r_cnt = 0;
-	  std::set<retval_indiv_strata_t>::iterator rr =  rows.begin();
+	  std::set<retval_indiv_strata_t>::const_iterator rr =  rows.begin();
 	  while ( rr != rows.end() )
 	    {	      	      
 	      id_col[ r_cnt ] = rr->indiv.name ;
 	      ++r_cnt;
 	      ++rr;
 	    }
-	  
+
 	  df.add( "ID" , id_col );
-	  
 
 	  //
 	  // Add factors
@@ -606,7 +603,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 	      
 	      // consider all indiv/factor/level rows
 	      int r_cnt = 0;
-	      std::set<retval_indiv_strata_t>::iterator rr =  rows.begin();
+	      std::set<retval_indiv_strata_t>::const_iterator rr =  rows.begin();
 	      while ( rr != rows.end() )
 		{
 		  
@@ -653,6 +650,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 		  ++rr;
 		}
 
+
 	      if ( is_int_factor )
 		df.add( *ff , intcol );
 	      else if ( is_dbl_factor )
@@ -688,7 +686,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 	      std::vector<std::string> strcol;
 	      std::vector<double> dblcol;
 	      std::vector<int> intcol;
-	      std::vector<bool> missing;
+	      std::vector<bool> missing( nrows );
 		
 	      // note - cases were we might have long long ints...
 	      //   make int -> int64_t ? 
@@ -764,7 +762,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 		  ++r_cnt;
 		  ++rr;
    	       }
-	      
+
 	      // add this column to the df
 	      if ( var_is_string )
 		df.add( var.name , strcol , missing );
@@ -772,7 +770,8 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 		df.add( var.name , dblcol , missing );
 	      else
 		df.add( var.name , intcol , missing );
-
+	      
+	      
 	      // next variable
 	      ++vv;
    	    }
@@ -805,61 +804,3 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables()
 
 
 
-std::string rtable_t::dump()
-{
-  std::stringstream ss;
-
-  if ( ! check() ) return "";
-  
-  const int ncols = cols.size();
-
-  // 012 = str dbl int
-  std::map<std::string,int> ctype;
-  for (int j=0; j<ncols; j++)
-    {
-      if ( strcols.find( cols[j] ) != strcols.end() ) ctype[ cols[j] ] = 0;
-      else if ( dblcols.find( cols[j] ) != dblcols.end() ) ctype[ cols[j] ] = 1;
-      else ctype[ cols[j] ] = 2;
-    }
-  
-  // header
-  for (int j=0; j<ncols; j++)
-    {
-      if ( j ) ss << "\t";
-      ss << cols[j];
-    }
-  ss << "\n";
-  
-  // data
-  for (int i=0;i<nrows;i++)
-    {
-      for (int j=0; j<ncols; j++)
-	{
-	  if ( j ) ss << "\t";
-
-	  const std::string & col = cols[j];
-	  
-	  int ct = ctype[ col ];
-
-	  if ( ct == 0 )
-	    {
-	      if ( strmiss[ col ][ i ] ) ss << ".";
-	      else ss << strcols[ col ][ i ] ;
-	    }
-	  else if ( ct == 1 )
-	    {
-	      if ( dblmiss[ col ][ i ] ) ss << "NA";
-              else ss << dblcols[ col ][ i ] ;	      
-	    }
-	  else
-	    {
-	      if ( intmiss[ col ][ i ] ) ss << "NA";
-              else ss << intcols[ col ][ i ] ;	      
-	    }
-	}
-      ss << "\n";
-    }  
-  
-  return ss.str();
-  
-}
