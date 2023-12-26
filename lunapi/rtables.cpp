@@ -35,18 +35,7 @@ std::string rtable_t::dump()
   
   std::stringstream ss;
 
-  if ( ! check() ) return "";
-  
   const int ncols = cols.size();
-
-  // 012 = str dbl int
-  std::map<std::string,int> ctype;
-  for (int j=0; j<ncols; j++)
-    {
-      if ( strcols.find( cols[j] ) != strcols.end() ) ctype[ cols[j] ] = 0;
-      else if ( dblcols.find( cols[j] ) != dblcols.end() ) ctype[ cols[j] ] = 1;
-      else ctype[ cols[j] ] = 2;
-    }
   
   // header
   for (int j=0; j<ncols; j++)
@@ -63,40 +52,23 @@ std::string rtable_t::dump()
 	{
 	  if ( j ) ss << "\t";
 
-	  const std::string & col = cols[j];
-	  
-	  int ct = ctype[ col ];
+	  const rtable_elem_t & e = data[ j ][ i ];
 
-	  if ( ct == 0 )
-	    {
-	      if ( strmiss[ col ][ i ] ) ss << ".";
-	      else ss << strcols[ col ][ i ] ;
-	    }
-	  else if ( ct == 1 )
-	    {
-	      if ( dblmiss[ col ][ i ] ) ss << "NA";
-              else ss << dblcols[ col ][ i ] ;	      
-	    }
+	  if ( std::holds_alternative<double>( e ) )
+	    std::cout << std::get<double>( e ) ;
+	  else if ( std::holds_alternative<double>( e ) )
+	    std::cout << std::get<int>( e ) ;
+	  else if ( std::holds_alternative<std::string>( e ) )
+	    std::cout << std::get<std::string>( e ) ;
 	  else
-	    {
-	      if ( intmiss[ col ][ i ] ) ss << "NA";
-              else ss << intcols[ col ][ i ] ;	      
-	    }
+	    std::cout << ".";
+
 	}
       ss << "\n";
-    }  
+    } 
   
   return ss.str();
   
-}
-
-
-
-bool rtable_t::check() const
-{
-  std::set<std::string> ucols;
-  for (int i=0;i<cols.size();i++) ucols.insert( cols[i] );
-  return ucols.size() == cols.size();
 }
 
 
@@ -120,8 +92,10 @@ void rtable_t::add( const std::string & v , const std::vector<std::string> & x ,
   cols.push_back(v);
   checkrows( x.size() );
   checkrows( m.size() );
-  strcols[ v ] = x;
-  strmiss[ v ] = m;
+  std::vector<rtable_elem_t> d( nrows , std::monostate{} );
+  for (int i=0;i<nrows;i++)
+    if ( ! m[i] ) d[i] = x[i] ;
+  data.push_back( d );
 }
 
 // doubles
@@ -138,8 +112,10 @@ void rtable_t::add( const std::string & v , const std::vector<double> & x , cons
   cols.push_back(v);
   checkrows( x.size() );
   checkrows( m.size() );
-  dblcols[ v ] = x;
-  dblmiss[ v ] = m;
+  std::vector<rtable_elem_t> d( nrows , std::monostate{} );
+  for (int i=0;i<nrows;i++)
+    if ( ! m[i] ) d[i] = x[i] ;
+  data.push_back( d );
 }
 
 // doubles
@@ -156,9 +132,16 @@ void rtable_t::add( const std::string & v , const std::vector<int> & x , const s
   cols.push_back(v);
   checkrows( x.size() );
   checkrows( m.size() );
-  intcols[ v ] = x;
-  intmiss[ v ] = m;
+  std::vector<rtable_elem_t> d( nrows , std::monostate{} );
+  for (int i=0;i<nrows;i++)
+    if ( ! m[i] ) d[i] = x[i] ;
+  data.push_back( d );
 }
+
+
+//
+// rtables
+//
 
 rtables_t::rtables_t( const retval_t & retval )
 {
@@ -177,17 +160,16 @@ std::vector<std::string> rtables_t::commands() const
   return r;
 }
 
-std::vector<std::vector<std::string> > rtables_t::list() const
+std::vector<std::pair<std::string,std::string> > rtables_t::list() const
 {
-  std::vector<std::vector<std::string> > r(2);
+  std::vector<std::pair<std::string,std::string> > r;
   std::map<std::string,std::map<std::string,rtable_t> >::const_iterator tt = tables.begin();
   while ( tt != tables.end() )
     {
       std::map<std::string,rtable_t>::const_iterator ss = tt->second.begin();
       while ( ss != tt->second.end() )
 	{
-	  r[0].push_back( tt->first );
-	  r[1].push_back( ss->first );
+	  r.push_back( std::make_pair( tt->first , ss->first ) );
 	  ++ss;
 	}
       ++tt;
@@ -196,12 +178,21 @@ std::vector<std::vector<std::string> > rtables_t::list() const
 }
 
   
-rtable_t rtables_t::table( const std::string & cmd , const std::string & strata )
+rtable_t rtables_t::table( const std::string & cmd , const std::string & strata ) const
 {
   std::map<std::string,std::map<std::string,rtable_t> >::const_iterator tt = tables.find( cmd );
   if ( tt == tables.end() ) return rtable_t();
   std::map<std::string,rtable_t>::const_iterator ss = tt->second.find( strata );
   if ( ss == tt->second.end() ) return rtable_t();
   return ss->second;    
+}
+
+rtable_data_t rtables_t::data( const std::string & cmd , const std::string & strata ) const
+{
+  std::map<std::string,std::map<std::string,rtable_t> >::const_iterator tt = tables.find( cmd );
+  if ( tt == tables.end() ) return rtable_data_t();
+  std::map<std::string,rtable_t>::const_iterator ss = tt->second.find( strata );
+  if ( ss == tt->second.end() ) return rtable_data_t();
+  return ss->second.data;    
 }
 

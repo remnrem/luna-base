@@ -39,28 +39,22 @@
 
 struct retval_t;
 
+typedef std::variant<std::string,double,int,std::monostate> rtable_elem_t;
+typedef std::vector<std::vector<rtable_elem_t> >  rtable_data_t;
+
 struct rtable_t {
   
   rtable_t();
 
-  std::string dump();
-
   std::vector<std::string> cols;
-
-  bool check() const; 
   
-  // col name -> value 
-  std::map<std::string,std::vector<std::string> > strcols;
-  std::map<std::string,std::vector<double> > dblcols;
-  std::map<std::string,std::vector<int> > intcols;
-
-  // missing values
-  std::map<std::string,std::vector<bool> > strmiss;
-  std::map<std::string,std::vector<bool> > dblmiss;
-  std::map<std::string,std::vector<bool> > intmiss;
+  // col name -> value
+  rtable_data_t data;
 
   // must be of similar row count... (at input)
   int nrows;
+
+  std::string dump();
   
   void checkrows( int n );
   
@@ -85,13 +79,19 @@ struct rtable_t {
 
 struct rtables_t {
 
+  rtables_t() { };
+  
   rtables_t( const retval_t & retval );
 
+  void clear();
+  
   std::vector<std::string> commands() const;
   
-  std::vector<std::vector<std::string> > list() const;
+  std::vector<std::pair<std::string,std::string> > list() const;
     
-  rtable_t table( const std::string & cmd , const std::string & strata );
+  rtable_t table( const std::string & cmd , const std::string & strata ) const;
+
+  rtable_data_t data( const std::string & cmd , const std::string & strata ) const; 
   
   std::map<std::string,std::map<std::string,rtable_t> > tables;
   

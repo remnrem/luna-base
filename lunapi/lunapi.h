@@ -27,6 +27,12 @@
 #include "lunapi/rtables.h"
 #include "stats/Eigen/Dense"
 
+
+typedef std::tuple<Eigen::MatrixXd,std::vector<std::string> > ldat_t;
+typedef std::tuple<std::vector<Eigen::MatrixXd>,std::vector<std::string> > ldats_t;
+typedef std::vector<std::tuple<uint64_t,uint64_t> > lint_t;
+
+
 struct lunapi_t {
   
 
@@ -78,33 +84,52 @@ struct lunapi_t {
   //
   // data slices
   //
-   
-  Eigen::MatrixXd slice_epochs( const std::vector<int> & e , 				
-				const std::string & chstr ,
-				const std::string & anstr ,
-				std::vector<std::string> * columns );
   
-  Eigen::MatrixXd slice_intervals( const std::vector<double> & secint , 				   
-				   const std::string & chstr ,
-				   const std::string & anstr ,
-				   std::vector<std::string> * columns );
-
+  lint_t epochs2intervals( const std::vector<int> & e );
   
+  lint_t seconds2intervals( const std::vector<std::tuple<double,double> > & s );
   
+  ldat_t  slice( const lint_t & intervals , 
+		 const std::string & chstr ,
+		 const std::string & anstr );
+  
+  ldats_t  slices( const lint_t & intervals , 
+		   const std::string & chstr ,
+		   const std::string & anstr );
+    
   
   //
   // commands
   //
   
-  rtables_t eval( const std::string & );
+  bool eval( const std::string & );
 
+  //
+  // last output
+  //
+
+  rtables_t rtables;
+
+  std::vector<std::string> commands() const
+  { return rtables.commands(); } 
+    
+
+  std::vector<std::pair<std::string,std::string> > strata() const
+  { return rtables.list(); } 
+
+  rtable_t table( const std::string & cmd , const std::string & faclvl ) const;
+
+  rtable_data_t data( const std::string & cmd , const std::string & faclvl ) const; 
+  
 
   //
   // helpers
   //
 
   void reset();
-   
+
+  bool read_db( const std::string & filename );
+  
   
 private:
 
@@ -120,11 +145,17 @@ private:
 
   // helper functions
 
-  Eigen::MatrixXd matrix_internal( const std::vector<interval_t> & intervals ,
-				   const std::vector<int> * epoch_numbers ,
+  Eigen::MatrixXd matrix_internal( const lint_t & intervals ,				   
 				   const signal_list_t & signals ,
 				   const std::map<std::string,int> & atype );
 
+  bool proc_channots( const std::string & chstr ,
+		      const std::string & anstr ,
+		      std::vector<std::string> * channels ,
+		      signal_list_t * signals , 
+		      std::map<std::string,int> * atype );
+
+  
   
 };
 

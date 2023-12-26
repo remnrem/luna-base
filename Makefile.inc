@@ -47,8 +47,8 @@ else
 endif
 
 
-CXXFLAGS=-O2 -std=gnu++11 -MMD -MP -I. -I.. 
-#CXXFLAGS=-O0 -std=gnu++11 -MMD -MP -I. -I.. -pg
+CXXFLAGS=-O2 -std=gnu++17 -MMD -MP -I. -I.. 
+#CXXFLAGS=-O0 -std=gnu++17 -MMD -MP -I. -I.. -pg
 
 CXXFLAGS +=$(DEP_INCLUDES)
 
@@ -151,7 +151,13 @@ endif
 ## Shared library name
 ##
 
-SHARED_LIB=libluna.dylib
+ifeq ($(ARCH),LINUX)
+ SHARED_LIB=libluna.so
+endif
+
+ifeq ($(ARCH),MAC)
+ SHARED_LIB=libluna.dylib
+endif
 
 ##
 ## Misc
