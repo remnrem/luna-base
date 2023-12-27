@@ -32,11 +32,9 @@ extern writer_t writer;
 extern logger_t logger;
 
 
-  //
-  // Channel-specific epoch masks (ch/ep mask)
-  //
-  
-static void proc_chep( edf_t & edf , param_t & param );
+//
+// Channel-specific epoch masks (ch/ep mask)
+//
 
 bool timeline_t::is_chep_mask_set() const
 {

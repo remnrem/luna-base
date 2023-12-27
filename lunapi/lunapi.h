@@ -26,25 +26,37 @@
 #include "luna.h"
 #include "lunapi/rtables.h"
 #include "stats/Eigen/Dense"
+#include <variant>
 
 
 typedef std::tuple<Eigen::MatrixXd,std::vector<std::string> > ldat_t;
 typedef std::tuple<std::vector<Eigen::MatrixXd>,std::vector<std::string> > ldats_t;
 typedef std::vector<std::tuple<uint64_t,uint64_t> > lint_t;
-
+typedef std::variant<std::monostate, double , int , std::string, std::vector<double>, std::vector<int>, std::vector<std::string> > datum_t;
 
 struct lunapi_t {
+
+  //
+  // mandatory initialization
+  //
   
+  static void init(); 
 
   //
   // global variables 
   //
 
-  static void init(); 
-  
+  // set 
   static void var( const std::string & key , const std::string & value );
+  
+  // get
+  static std::variant<std::monostate,std::string> var( const std::string & key );
+  static std::map<std::string,std::variant<std::monostate,std::string> > vars( const std::vector<std::string> & keys );
 
-  static std::string var( const std::string & key );
+  // drop
+  static void dropvar( const std::string & key );
+  static void dropvars( const std::vector<std::string> & keys );
+
 
   //
   // new instance
@@ -62,20 +74,35 @@ struct lunapi_t {
   bool attach_edf( const std::string & filename );
 
   bool attach_annot( const std::string & filename );
+
+  //
+  // drop/reset 
+  //
   
+  // reload an EDF
+  void refresh();
+
+  // drop an EDF, all annotations, etc
+  void drop();
+  
+  // clear all variables
+  void clear();
+
 
   //
   // individual variables
   //
   
-  void ivar( const std::string & key , const std::string & value );
+  /* void ivar( const std::string & key , const std::string & value ); */
   
-  std::string ivar( const std::string & key ) const;
+  /* std::string ivar( const std::string & key ) const; */
 
 
   //
   // basic reports
   //
+
+  std::map<std::string,datum_t> status() const; 
 
   std::vector<std::string> channels();
 
@@ -99,10 +126,11 @@ struct lunapi_t {
     
   
   //
-  // commands
+  // Luna commands
   //
   
   bool eval( const std::string & );
+
 
   //
   // last output
@@ -125,9 +153,10 @@ struct lunapi_t {
   //
   // helpers
   //
-
+  
+  // reset problem/empty flags
   void reset();
-
+  
   bool read_db( const std::string & filename );
   
   
@@ -136,15 +165,18 @@ private:
   // 0 empty; +1 attached okay, -1 problem 
   int state;
   
+  // store so we can perform a refresh() if requested
   std::string id;
   
-  std::string filename;
-  
+  std::string edf_filename;
+
+  std::set<std::string> annot_filenames;
+
+  // the actual data store
   edf_t edf;
 
-
+  
   // helper functions
-
   Eigen::MatrixXd matrix_internal( const lint_t & intervals ,				   
 				   const signal_list_t & signals ,
 				   const std::map<std::string,int> & atype );

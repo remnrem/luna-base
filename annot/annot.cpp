@@ -3065,12 +3065,25 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   if ( a2 == NULL )
     logger << "  *** warning, could not find any annotation " << tok[1] << "\n";
 
-  // don't allow self except union/intersection
-  if ( tok[0] == tok[1] )
+
+  // handle null cases
+  if ( a1 == NULL || a2 == NULL ) 
     {
-      // i.e. pileup / flatten
-      if ( do_keepif || do_dropif )
-	Helper::halt( "expr in form A+A or A-A not allowed" );      
+
+      // special case: dropif but a2 NULL - just reutrn a1
+      
+      if ( do_dropif && a1 != NULL && a2 == NULL ) 
+	{
+	  const annot_map_t & events1 = a1->interval_events;
+	  annot_map_t::const_iterator jj = events1.begin();
+	  while ( jj != events1.end() )
+	    {
+	      an->add( "." , jj->first.interval , ch_label );
+	      ++jj;
+	    }
+	  logger << "  returned original annotations\n";
+	  return;
+	}
     }
   
   // use annotate_t::flatten( x )

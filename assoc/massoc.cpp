@@ -274,7 +274,7 @@ void massoc_t::load( const std::string & filename , const int force_destin )
 {
 
   // special case: in test mode, if no pool of test IDs specified, assume it is everybody
-  const bool all_test = mode == 2 && test_pool.size() == 0 ;
+  const bool all_test = mode == 2 && test_pool.size() == 0 && test_pool_iids.size() == 0; 
 
   if ( ! force_destin )
     {
@@ -335,19 +335,30 @@ void massoc_t::load( const std::string & filename , const int force_destin )
   // we want to be able to read in concatenated files
   // so just get IDs on first pass
   
+  int fcnt = -1;
+
   while ( 1 )
     {  
-
+      
       //
       // rows : observations in this set
       //
       
       const int nrow = Helper::bread_int( IN1 );
 
+      ++fcnt; // just for error reporting
+      
+      // empty?
+      if ( nrow == 0 ) 
+	{
+	  // skip col count (will be 0 too)
+	  int ncol = Helper::bread_int( IN1 );
+	  continue;
+	}
+
       // all done?
       if ( IN1.bad() || IN1.eof() ) break;
-      
-      
+            
       for (int i=0; i<nrow; i++)
 	{
 
@@ -359,6 +370,8 @@ void massoc_t::load( const std::string & filename , const int force_destin )
 
 	  // event-level ID (e.g. spindle count, within type)
 	  const std::string eid = Helper::bread_str( IN1 );
+	  
+	  //	  std::cout << " iid, id, eid = " << iid << " " << id << " " << eid << "\n";
 
 	  // fully-qualified ID1
 	  const std::string id1 = iid + "_" + id + "_" + eid;
@@ -421,8 +434,12 @@ void massoc_t::load( const std::string & filename , const int force_destin )
       else
 	{
 	  if ( vars.size() != 0 && vars.size() != ncol )
-	    Helper::halt( "mismatched # of columns in different subsets of " + filename );
-	  
+	    {
+	      logger << " previous = " << vars.size() << "\n"
+		     << " new line = " << ncol << "\n"
+		     << " for subset " << fcnt << "\n";
+	      Helper::halt( "mismatched # of columns in different subsets of " + filename );
+	    }
 	  for (int i=0; i<ncol; i++)
             if ( vars[i] != Helper::bread_str( IN1 ) )
 	      Helper::halt( "mismatched column header " + vars[i] );
@@ -484,6 +501,15 @@ void massoc_t::load( const std::string & filename , const int force_destin )
       const int nrow = Helper::bread_int( IN2 );      
 
       if ( IN2.bad() || IN2.eof() ) break;
+      
+      // empty?
+      if ( nrow == 0 ) 
+	{
+	  // skip col count (will be 0 too)
+	  int ncol = Helper::bread_int( IN1 );
+	  continue;
+	}
+
       
       for (int i=0; i<nrow; i++)
 	{
@@ -815,50 +841,24 @@ void massoc_t::save( const std::vector<std::string> & iids,
 
 // when called internally (e.g. from TLOCK, where we just have one big feature matrix)
 
-massoc_t::massoc_t( const std::string & iid,
-		    const std::vector<std::string> & rowids ,
-		    const std::vector<std::string> & eids ,
-		    const std::vector<std::string> & colids ,
-		    const Data::Matrix<double> & XX ,
-		    const std::string & filename )
-{
-
-  // yes, dumb copy, I know
-  // also note::: whilst coming from TLOCK, XX needs to be transposed --> X
-
-  const int nrow = XX.dim2();
-  const int ncol = XX.dim1();
-  
-  Eigen::MatrixXd X = Eigen::MatrixXd::Zero( nrow, ncol );
-  for (int i=0; i<nrow; i++)
-    for (int j=0; j<ncol; j++)
-      X(i,j) = XX(j,i); // nb. transpose
-  
-  save( iid, rowids, eids, colids, X , filename );
-  
-}
+// massoc_t::massoc_t( const std::string & iid,
+// 		    const std::vector<std::string> & rowids ,
+// 		    const std::vector<std::string> & eids ,
+// 		    const std::vector<std::string> & colids ,
+// 		    const Data::Matrix<double> & X ,
+// 		    const std::string & filename )
+// {
+//   save( iid, rowids, eids, colids, X , filename );
+// }
 
 massoc_t::massoc_t( const std::vector<std::string> & iids,
 		    const std::vector<std::string> & rowids ,
 		    const std::vector<std::string> & eids ,
 		    const std::vector<std::string> & colids ,
-		    const Data::Matrix<double> & XX ,
+		    const Eigen::MatrixXd & X ,
 		    const std::string & filename )
-{
-
-  // yes, dumb copy, I know
-  // also note::: whilst coming from TLOCK, XX needs to be transposed --> X
-
-  const int nrow = XX.dim2();
-  const int ncol = XX.dim1();
-  
-  Eigen::MatrixXd X = Eigen::MatrixXd::Zero( nrow, ncol );
-  for (int i=0; i<nrow; i++)
-    for (int j=0; j<ncol; j++)
-      X(i,j) = XX(j,i); // nb. transpose
-  
-  save( iids, rowids, eids, colids, X , filename );
-  
+{  
+  save( iids, rowids, eids, colids, X , filename );  
 }
 
   

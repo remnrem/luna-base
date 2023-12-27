@@ -32,11 +32,11 @@ void lunapi_bail_function( const std::string & msg )
   return;
 }
   
-void lunapi_msg_function( const std::string & msg )
-{
-  logger << "*** [lunapi] error: " << msg << "\n";
-  return;
-}
+// void lunapi_msg_function( const std::string & msg )
+// {
+//   std::cerr << " [lunapi] :: " << msg << "\n";
+//   return;
+// }
 
 void lunapi_t::init()
 {
@@ -44,26 +44,177 @@ void lunapi_t::init()
   global.init_defs();
 
   globals::bail_function = &lunapi_bail_function;
-
+  
   globals::bail_on_fail = false;
   
-  globals::logger_function = &lunapi_msg_function;
+  //  globals::logger_function = &lunapi_msg_function;
   
-  // turn off external output
-  global.api();
+  global.R( 0 ); // 0 means no log mirroring                                                                                                                                                       
   
-  logger << "** lunapi " 
-	 << globals::version 
-	 << " " << globals::date
-	 << "\n";
+  writer.nodb();
   
+  logger << "** luna " 
+   	 << globals::version 
+   	 << " " << globals::date
+   	 << "\n";
+  
+}
+
+
+void lunapi_t::var( const std::string & key , const std::string & value )
+{
+  
+  // special treatment for `sig`.   This will just append
+  // to an existing signallist;  as we don't always want to have
+  // to lreset(), make this one case so that sig clears signlist prior 
+  // to setting if the signal list is "." 
+  
+  if ( key == "sig" && value == "." )
+    cmd_t::signallist.clear();
+  else
+    cmd_t::parse_special( key , value );
+  
+}
+
+
+void lunapi_t::dropvars( const std::vector<std::string> & keys )
+{
+  for (int i=0; i<keys.size(); i++) dropvar( keys[i] );
+}
+
+void lunapi_t::dropvar( const std::string & key )
+{
+  std::map<std::string,std::string>::iterator ii = cmd_t::vars.find( key );
+  if ( ii != cmd_t::vars.end() )
+    cmd_t::vars.erase( ii );
+  return;  
+}
+
+std::map<std::string,std::variant<std::monostate,std::string> > lunapi_t::vars( const std::vector<std::string> & keys )
+{
+  std::map<std::string,std::variant<std::monostate,std::string> > r;
+  for (int i=0; i<keys.size(); i++) 
+    r[ keys[i] ] = var( keys[i] );
+  return r;
+}
+
+std::variant<std::monostate,std::string> lunapi_t::var( const std::string & key )
+{  
+  if ( cmd_t::vars.find( key ) == cmd_t::vars.end() ) return std::monostate{};
+  return cmd_t::vars[ key ];
 }
 
 
 void lunapi_t::reset()
 {
-  globals::problem = false;
-  globals::empty = false;
+  globals::problem = false;  
+  // globals::empty = false;
+}
+
+
+void lunapi_t::refresh()
+{
+  
+  if ( state != -1 ) 
+    {
+      Helper::halt( "lunapi_t::refresh(): no attached EDF" );
+      return;      
+    }
+    
+  // drop edf_t  
+  edf.init();
+  
+  // clear problem flags
+  reset();
+
+  // reattach EDF
+  attach_edf( edf_filename );
+  
+  if ( state != 1 ) 
+    {
+      Helper::halt( "lunapi_t::refresh(): problem reattaching EDF" );
+      return;
+    }
+  
+  // reload annotations
+  std::set<std::string>::const_iterator aa = annot_filenames.begin();
+  while ( aa != annot_filenames.end() )
+    {
+      edf.load_annotations( *aa );
+      ++aa;
+    }
+  
+}
+
+void lunapi_t::drop()
+{
+  edf.init();
+  state = 0;
+  edf_filename = "";
+  annot_filenames.clear();
+}
+
+void lunapi_t::clear()
+{
+  // clear all variables (both user-defined and special)
+  // but do not alter the EDF attachment
+
+  // clear all user-defined variables, signal lists and aliases  
+  cmd_t::clear_static_members();
+  
+  // also reset global variables that may have been changed since
+  global.init_defs();
+  
+  // but need to re-indicate that we are running inside R with no log as default
+  global.R( 0 ); // 0 means no log mirroring                                                                                                                        
+
+}
+
+std::map<std::string,datum_t> lunapi_t::status() const 
+{
+  // datum_t: std::variant<std::monostate{} , double , int , std::string, std::vector<double> , std::vector<int> , std::vector<std::string> >
+
+  std::map<std::string,datum_t> r;
+
+  r[ "state" ]  = state;
+  
+  if ( state != 1 ) return r;
+  
+  r[ "edf_file" ] = edf_filename;
+  
+  r[ "annotation_files" ] = Helper::set2vec( annot_filenames );
+
+  int n_data_channels = 0;
+  int n_annot_channels = 0;
+  for (int i=0;i<edf.header.ns;i++)
+    {
+      if ( edf.header.is_data_channel( i ) ) ++n_data_channels;
+      else ++n_annot_channels;
+    }
+
+  r[ "id" ] = edf.id;
+  r[ "ns" ] = n_data_channels;
+  r[ "nt" ] = edf.header.ns_all;
+  r[ "na" ] = (int)edf.timeline.annotations.names().size();
+  
+  // Record duration, as hh:mm:ss string                                                                                                                            
+  uint64_t duration_tp = globals::tp_1sec
+    * (uint64_t)edf.header.nr
+    * edf.header.record_duration;  
+  std::string total_duration_hms = Helper::timestring( duration_tp );
+  
+  r [ "duration" ] = total_duration_hms;
+
+  // epoch/mask info
+  if ( edf.timeline.epoched() )
+    {
+      r[ "ne" ] = edf.timeline.num_epochs();
+      r[ "elen" ] = edf.timeline.epoch_length();
+      r[ "nem" ] = edf.timeline.num_total_epochs() - edf.timeline.num_epochs();
+    }
+
+  return r;
+  
 }
 
 
@@ -74,12 +225,14 @@ bool lunapi_t::attach_edf( const std::string & filename )
     Helper::halt( "cannot find " + filename );
 
   bool okay = edf.attach( filename , id , NULL );
-
+  
   if ( ! okay )
     {
       state = -1;
       return false;
     }
+
+  edf_filename = filename;
 
   // EDF+ annotations?
   if ( edf.header.edfplus )
@@ -129,6 +282,7 @@ bool lunapi_t::attach_annot( const std::string & annotfile )
                    Helper::file_extension( fname , "annot" ) )
                 {
                   edf.load_annotations( annotfile + fname );
+		  annot_filenames.insert( annotfile + fname );
                 }
             }
           closedir (dir);
@@ -145,6 +299,7 @@ bool lunapi_t::attach_annot( const std::string & annotfile )
   else
     {
       edf.load_annotations( annotfile );
+      annot_filenames.insert( annotfile );        
     }
   
   return true;
@@ -168,7 +323,7 @@ bool lunapi_t::eval( const std::string & cmdstr )
   // set ID 
   //
 
-  writer.id( id , filename );
+  writer.id( id , edf_filename );
 
   logger << "evaluating...\n";
 
@@ -249,7 +404,11 @@ rtable_data_t lunapi_t::data( const std::string & cmd , const std::string & facl
 
 lint_t lunapi_t::epochs2intervals( const std::vector<int> & epochs )
 {
+
   lint_t r;
+
+  if ( state != 1 )
+    return r;
   
   edf.timeline.ensure_epoched();  
   
@@ -290,7 +449,10 @@ bool lunapi_t::proc_channots( const std::string & chstr ,
 			      signal_list_t * signals , 
 			      std::map<std::string,int> * atype )
 {
-    
+  
+  if ( state != 1 )
+    return false;
+
   // Annotations: 0 not found, 1 interval, 2 epoch
   //  do not support epoch-annots right now
   std::vector<std::string> ans = Helper::parse( anstr , "," );

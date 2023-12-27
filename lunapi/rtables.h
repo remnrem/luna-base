@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <variant>
 
 #include "helper/helper.h"
 #include "db/retval.h"

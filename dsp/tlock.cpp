@@ -1047,7 +1047,9 @@ int tlock_t::set_window( int half_points )
 
 void tlock_t::outputs()
 {
-  
+
+  logger << " outputs\n";
+
   std::cout << X.print() << "\n";
 
   // means

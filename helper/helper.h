@@ -263,11 +263,24 @@ namespace Helper
     return (T(0) < val) - (val < T(0));
   }
 
-  // vector --> string
+  // vector --> set
   template <class T> std::set<T> vec2set( const std::vector<T> & x )
   {
     std::set<T> s;
     for (int i=0; i<x.size(); i++) s.insert(x[i]);
+    return s;
+  }
+
+  // set --> vector
+  template <class T> std::vector<T> set2vec( const std::set<T> & x )
+  {
+    std::vector<T> s;
+    typename std::set<T>::const_iterator ii = x.begin();
+    while ( ii != x.end() )
+      {
+	s.push_back( *ii );
+	++ii;
+      }
     return s;
   }
 

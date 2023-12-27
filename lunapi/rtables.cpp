@@ -55,14 +55,14 @@ std::string rtable_t::dump()
 	  const rtable_elem_t & e = data[ j ][ i ];
 
 	  if ( std::holds_alternative<double>( e ) )
-	    std::cout << std::get<double>( e ) ;
+	    ss << std::get<double>( e ) ;
 	  else if ( std::holds_alternative<double>( e ) )
-	    std::cout << std::get<int>( e ) ;
+	    ss << std::get<int>( e ) ;
 	  else if ( std::holds_alternative<std::string>( e ) )
-	    std::cout << std::get<std::string>( e ) ;
+	    ss << std::get<std::string>( e ) ;
 	  else
-	    std::cout << ".";
-
+	    ss << ".";
+	  
 	}
       ss << "\n";
     } 

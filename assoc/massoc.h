@@ -34,6 +34,7 @@
 #include <limits>
 
 struct param_t;
+struct edf_t;
 
 // like assoc_t, but simplified for a matrix-import
 // which can be internally passed too.  Main use-case
@@ -50,21 +51,25 @@ struct massoc_t {
   
   // when called internally (e.g. from TLOCK, where we just have one big feature matrix
   
-  massoc_t( const std::string & id ,
-	    const std::vector<std::string> & rowids ,
-	    const std::vector<std::string> & eids ,
-	    const std::vector<std::string> & colids ,
-	    const Data::Matrix<double> & X ,
-	    const std::string & filename );
+  /* massoc_t( const std::string & id , */
+  /* 	    const std::vector<std::string> & rowids , */
+  /* 	    const std::vector<std::string> & eids , */
+  /* 	    const std::vector<std::string> & colids , */
+  /* 	    const Data::Matrix<double> & X , */
+  /* 	    const std::string & filename ); */
 
-  // also from TLOCK, but allowing unique indiv IDs
+  // from PREP-MASSOC
   //  i.e. to faciliate picking trainers, etc
   massoc_t( const std::vector<std::string> & ids ,
 	    const std::vector<std::string> & rowids ,
 	    const std::vector<std::string> & eids ,
 	    const std::vector<std::string> & colids ,
-	    const Data::Matrix<double> & X ,
+	    const Eigen::MatrixXd & X ,
 	    const std::string & filename );
+
+
+  // prep helper function
+  static void massoc_dumper( edf_t & edf , param_t & param );
 
 private:
 

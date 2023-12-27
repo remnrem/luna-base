@@ -1142,6 +1142,8 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "ASYMM" ) )        proc_asymm( edf , param(c) );
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
+      else if ( is( c, "PREP-MASSOC" ) )  massoc_t::massoc_dumper( edf , param(c) );
+
       else if ( is( c, "TCLST" ) )        proc_tclst( edf , param(c) );
       else if ( is( c, "PERI" ) )         proc_peri( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
