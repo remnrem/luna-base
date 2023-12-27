@@ -147,6 +147,8 @@ struct lunapi_t {
 
   rtable_t table( const std::string & cmd , const std::string & faclvl ) const;
 
+  std::vector<std::string> variables( const std::string & cmd , const std::string & faclvl ) const;
+  
   rtable_data_t data( const std::string & cmd , const std::string & faclvl ) const; 
   
 

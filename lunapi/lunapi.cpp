@@ -391,6 +391,11 @@ rtable_t lunapi_t::table( const std::string & cmd , const std::string & faclvl )
   return rtables.table( cmd , faclvl );
 }
 
+std::vector<std::string> lunapi_t::variables( const std::string & cmd , const std::string & faclvl ) const
+{
+  return rtables.table( cmd , faclvl ).cols;
+}
+
 rtable_data_t lunapi_t::data( const std::string & cmd , const std::string & faclvl ) const
 {
   return rtables.data( cmd , faclvl );
