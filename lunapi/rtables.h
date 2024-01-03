@@ -40,8 +40,17 @@
 
 struct retval_t;
 
+// internal elements
 typedef std::variant<std::string,double,int,std::monostate> rtable_elem_t;
-typedef std::vector<std::vector<rtable_elem_t> >  rtable_data_t;
+typedef std::vector<std::vector<rtable_elem_t> > rtable_data_t;
+
+// return elements:
+// data *plus column variables* in friendly format
+typedef std::tuple<std::vector<std::string>,rtable_data_t> rtable_return_t;
+
+// multiple return-tables
+typedef std::map<std::string,std::map<std::string,rtable_return_t> > rtables_return_t;
+
 
 struct rtable_t {
   
@@ -49,7 +58,7 @@ struct rtable_t {
 
   std::vector<std::string> cols;
   
-  // col name -> value
+  // ( col name , data matrix )-tuple
   rtable_data_t data;
 
   // must be of similar row count... (at input)
@@ -92,7 +101,9 @@ struct rtables_t {
     
   rtable_t table( const std::string & cmd , const std::string & strata ) const;
 
-  rtable_data_t data( const std::string & cmd , const std::string & strata ) const; 
+  rtable_return_t data( const std::string & cmd , const std::string & strata ) const; 
+  
+  rtables_return_t data() const;
   
   std::map<std::string,std::map<std::string,rtable_t> > tables;
   

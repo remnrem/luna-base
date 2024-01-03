@@ -114,7 +114,7 @@ class logger_t
 
     if ( globals::logger_function )
       (*globals::logger_function)( " ** warning: " + msg + " **" );
-    else if ( globals::Rmode && globals::Rdisp )
+    else if ( globals::cache_log )
       ss << " ** warning: " << msg << " ** " << std::endl;
     else
       _out_stream << " ** warning: " << msg << " ** " << std::endl;
@@ -132,7 +132,7 @@ class logger_t
 	  ss1 << data;
 	  (*globals::logger_function)( ss1.str() );
 	}
-      else if ( globals::Rmode && globals::Rdisp )
+      else if ( globals::cache_log )
 	ss << data;
       else if ( ! globals::silent ) 
 	_out_stream << data;

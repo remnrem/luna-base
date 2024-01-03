@@ -101,9 +101,9 @@ class cmd_t
   
  public:
   
-  cmd_t();
+  cmd_t( const bool silent = false );
 
-  cmd_t( const std::string & str );
+  cmd_t( const std::string & str , const bool silent = true );
 
   static void add_cmdline_cmd( const std::string & c ) ;
   

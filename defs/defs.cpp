@@ -158,8 +158,7 @@ void (*globals::logger_function) ( const std::string & );
 
 bool globals::silent;
 bool globals::verbose; 
-bool globals::Rmode;
-bool globals::Rdisp;
+bool globals::cache_log;
 bool globals::devel;
 
 std::string globals::epoch_strat;
@@ -193,10 +192,10 @@ void globals::api()
 
 void globals::R( bool disp )
 {
-  Rmode = true;
-  Rdisp = disp;
+  cache_log = disp;
   api();
 }
+
 
 
 void globals::init_defs()
@@ -207,9 +206,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v0.99";
+  version = "v0.99d";
   
-  date    = "05-Dec-2023";
+  date    = "02-Jan-2024";
 
   //
   // Return code
@@ -249,9 +248,7 @@ void globals::init_defs()
 
   silent = false;
   
-  Rmode = false;
-
-  Rdisp = false;
+  cache_log = false;
 
   verbose = false; 
 

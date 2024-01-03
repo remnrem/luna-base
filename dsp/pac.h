@@ -83,15 +83,15 @@ struct pac_t
 
   double zpac( int a = 0 , int b = 0 ) const 
   {
-    if ( a < 0 | a > na ) return -9;
-    if ( b < 0 | b > nb ) return -9;
+    if ( a < 0 || a > na ) return -9;
+    if ( b < 0 || b > nb ) return -9;
     return z[a][b];
   }
   
   double ppac( int a = 0 , int b = 0 ) const 
   {
-    if ( a < 0 | a > na ) return -9;
-    if ( b < 0 | b > nb ) return -9;
+    if ( a < 0 || a > na ) return -9;
+    if ( b < 0 || b > nb ) return -9;
     return pval[a][b];
   }
   

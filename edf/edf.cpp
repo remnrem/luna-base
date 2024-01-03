@@ -3134,7 +3134,11 @@ bool edf_t::load_annotations( const std::string & f0 )
   // allow wildcards
     
   if ( ! Helper::fileExists( f ) ) 
-    Helper::halt( "annotation file " + f + " does not exist for EDF " + filename );
+    {
+      Helper::halt( "annotation file " + f + " does not exist for EDF " + filename );
+      // add for lunapi (i.e. if non-stopping halt() implemented)
+      return false;
+    }
 
   //
   // store filename (if needed to be output in a WRITE to the sample-list)

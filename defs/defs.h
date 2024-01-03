@@ -304,15 +304,14 @@ struct globals
   // rediret logger?
   static void (*logger_function) ( const std::string & msg ); 
   
-  // in CGI mode, set this to T
+  // in API mode, set this to T
   static bool silent;
 
   // if LOG verbose?
   static bool verbose;
 
-  // is in R mode
-  static bool Rmode;
-  static bool Rdisp;
+  // cache console (e.g. for R/LunAPI mode)
+  static bool cache_log;
 
   // generic global parameters
   static param_t param;
@@ -333,7 +332,7 @@ struct globals
   void api();
 
   void R( bool );
-
+  
 
   // default annotation folder (i.e. added to each record in sample-list implicitly)
   //  static std::string annot_folder;

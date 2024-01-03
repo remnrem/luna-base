@@ -29,8 +29,8 @@
 #include <variant>
 
 
-typedef std::tuple<Eigen::MatrixXd,std::vector<std::string> > ldat_t;
-typedef std::tuple<std::vector<Eigen::MatrixXd>,std::vector<std::string> > ldats_t;
+typedef std::tuple<std::vector<std::string>,Eigen::MatrixXd> ldat_t;
+typedef std::tuple<std::vector<std::string>,std::vector<Eigen::MatrixXd> > ldats_t;
 typedef std::vector<std::tuple<uint64_t,uint64_t> > lint_t;
 typedef std::variant<std::monostate, double , int , std::string, std::vector<double>, std::vector<int>, std::vector<std::string> > datum_t;
 
@@ -97,6 +97,16 @@ struct lunapi_t {
   
   /* std::string ivar( const std::string & key ) const; */
 
+  //
+  // insert signals, annotations
+  //
+
+  bool insert_signal( const std::string & label , const std::vector<double> & x , const int sr );
+
+  bool update_signal( const std::string & label , const std::vector<double> & x );
+  
+  bool insert_annotation( const std::string & label , const std::vector<std::tuple<double,double> > & x , const bool durcol2 = false );
+    
 
   //
   // basic reports
@@ -115,22 +125,30 @@ struct lunapi_t {
   lint_t epochs2intervals( const std::vector<int> & e );
   
   lint_t seconds2intervals( const std::vector<std::tuple<double,double> > & s );
+
+  ldat_t  data( const std::vector<std::string> & chs , 
+		const std::vector<std::string> & anns ,
+		const bool time_track );
   
   ldat_t  slice( const lint_t & intervals , 
-		 const std::string & chstr ,
-		 const std::string & anstr );
+		 const std::vector<std::string> & chs ,
+		 const std::vector<std::string> & anns ,
+		 const bool time_track );
   
   ldats_t  slices( const lint_t & intervals , 
-		   const std::string & chstr ,
-		   const std::string & anstr );
-    
+		   const std::vector<std::string> & chs ,
+		   const std::vector<std::string> & anns ,
+		   const bool time_track );
+  
   
   //
   // Luna commands
   //
   
-  bool eval( const std::string & );
-
+  std::string eval( const std::string & );
+  
+  std::tuple<std::string,rtables_return_t > eval_return_data( const std::string & );
+  
 
   //
   // last output
@@ -149,8 +167,11 @@ struct lunapi_t {
 
   std::vector<std::string> variables( const std::string & cmd , const std::string & faclvl ) const;
   
-  rtable_data_t data( const std::string & cmd , const std::string & faclvl ) const; 
+  rtable_return_t results( const std::string & cmd , const std::string & faclvl ) const; 
+
+  rtables_return_t results() const;
   
+
 
   //
   // helpers
@@ -159,9 +180,20 @@ struct lunapi_t {
   // reset problem/empty flags
   void reset();
   
-  bool read_db( const std::string & filename );
-  
-  
+  std::vector<std::string> import_db( const std::string & filename );
+
+  std::vector<std::string> import_db( const std::string & filename , const std::set<std::string> & ids );
+
+  void silence( const bool b);
+
+  std::string get_id() const;
+
+  std::string get_edf_file() const;
+
+  std::string get_annot_files() const;
+
+  int get_state() const;
+
 private:
 
   // 0 empty; +1 attached okay, -1 problem 
@@ -173,15 +205,15 @@ private:
   std::string edf_filename;
 
   std::set<std::string> annot_filenames;
-
+  
   // the actual data store
   edf_t edf;
-
   
   // helper functions
   Eigen::MatrixXd matrix_internal( const lint_t & intervals ,				   
 				   const signal_list_t & signals ,
-				   const std::map<std::string,int> & atype );
+				   const std::map<std::string,int> & atype ,
+				   const bool time_track );
 
   bool proc_channots( const std::string & chstr ,
 		      const std::string & anstr ,

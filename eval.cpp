@@ -304,18 +304,18 @@ std::set<std::string> param_t::keys() const
 //
 
 
-cmd_t::cmd_t() 
+cmd_t::cmd_t( const bool silent ) 
 {
   register_specials();
   reset();
-  error = ! read();
+  error = ! read( NULL , silent );
 }
 
-cmd_t::cmd_t( const std::string & str ) 
+cmd_t::cmd_t( const std::string & str , const bool silent ) 
 {
   register_specials();
   reset();
-  error = ! read( &str , true ); 
+  error = ! read( &str , silent ); 
 }
 
 void cmd_t::add_cmdline_cmd( const std::string & c ) 
@@ -806,33 +806,35 @@ bool cmd_t::read( const std::string * str , bool silent )
   
   // summary
 
-  logger << "input(s): " << input << "\n";
-  logger << "output  : " << writer.name() 
-	 << ( cmd_t::plaintext_mode ? " [dir for text-tables]" : "" ) 
-	 << "\n";
-
-  if ( signallist.size() > 0 )
+  if ( ! silent )
     {
-      logger << "signals :";
-      for (std::set<std::string>::iterator s=signallist.begin();
-	   s!=signallist.end();s++) 
-	logger << " " << *s ;
-      logger << "\n";
-    }
-  
-  for (int i=0;i<cmds.size();i++)
-    {
-      if ( i==0 ) 
-	logger << "commands: ";
-      else
-	logger << "        : ";
-      
-      logger << "c" << i+1 
-	     << "\t" << cmds[i] << "\t"
-	     << params[i].dump("","|") 
+      logger << "input(s): " << input << "\n";
+      logger << "output  : " << writer.name() 
+	     << ( cmd_t::plaintext_mode ? " [dir for text-tables]" : "" ) 
 	     << "\n";
+      
+      if ( signallist.size() > 0 )
+	{
+	  logger << "signals :";
+	  for (std::set<std::string>::iterator s=signallist.begin();
+	       s!=signallist.end();s++) 
+	    logger << " " << *s ;
+	  logger << "\n";
+	}
+      
+      for (int i=0;i<cmds.size();i++)
+	{
+	  if ( i==0 ) 
+	    logger << "commands: ";
+	  else
+	    logger << "        : ";
+	  
+	  logger << "c" << i+1 
+		 << "\t" << cmds[i] << "\t"
+		 << params[i].dump("","|") 
+		 << "\n";
+	}
     }
-
 
   return true;
 }
@@ -1142,8 +1144,9 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "ASYMM" ) )        proc_asymm( edf , param(c) );
       else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
+#ifdef HAS_LGBM
       else if ( is( c, "PREP-MASSOC" ) )  massoc_t::massoc_dumper( edf , param(c) );
-
+#endif
       else if ( is( c, "TCLST" ) )        proc_tclst( edf , param(c) );
       else if ( is( c, "PERI" ) )         proc_peri( edf , param(c) );
       else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );

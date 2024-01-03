@@ -187,12 +187,32 @@ rtable_t rtables_t::table( const std::string & cmd , const std::string & strata 
   return ss->second;    
 }
 
-rtable_data_t rtables_t::data( const std::string & cmd , const std::string & strata ) const
+rtable_return_t rtables_t::data( const std::string & cmd , const std::string & strata ) const
 {
   std::map<std::string,std::map<std::string,rtable_t> >::const_iterator tt = tables.find( cmd );
-  if ( tt == tables.end() ) return rtable_data_t();
+  if ( tt == tables.end() ) return rtable_return_t();
   std::map<std::string,rtable_t>::const_iterator ss = tt->second.find( strata );
-  if ( ss == tt->second.end() ) return rtable_data_t();
-  return ss->second.data;    
+  if ( ss == tt->second.end() ) return rtable_return_t();
+  return std::make_tuple( table( cmd , strata ).cols , ss->second.data );    
+}
+
+
+rtables_return_t rtables_t::data() const
+{
+
+  std::map<std::string,std::map<std::string,rtable_return_t> > r;
+  
+  std::map<std::string,std::map<std::string,rtable_t> >::const_iterator tt = tables.begin();
+  while ( tt != tables.end() )
+    {
+      std::map<std::string,rtable_t>::const_iterator ss = tt->second.begin();
+      while ( ss != tt->second.end() )
+	{
+	  r[ tt->first ][ ss->first ] = std::make_tuple( table( tt->first , ss->first ).cols , ss->second.data );
+	  ++ss;
+	}
+      ++tt;
+    }  
+  return r;
 }
 

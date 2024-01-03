@@ -20,6 +20,11 @@
 //
 //    --------------------------------------------------------------------
 
+
+// 1) upload signal
+// 2) db -> rrtables 
+// 3) error/handling/checkpoints
+
 #include "lunapi/lunapi.h"
 
 extern logger_t logger;
@@ -32,11 +37,16 @@ void lunapi_bail_function( const std::string & msg )
   return;
 }
   
-// void lunapi_msg_function( const std::string & msg )
-// {
-//   std::cerr << " [lunapi] :: " << msg << "\n";
-//   return;
-// }
+void lunapi_msg_function( const std::string & msg )
+{
+  std::cerr << " [lunapi] :: " << msg << "\n";
+  return;
+}
+
+void lunapi_t::silence( const bool b)
+{
+  global.cache_log = b;
+}
 
 void lunapi_t::init()
 {
@@ -47,9 +57,7 @@ void lunapi_t::init()
   
   globals::bail_on_fail = false;
   
-  //  globals::logger_function = &lunapi_msg_function;
-  
-  global.R( 0 ); // 0 means no log mirroring                                                                                                                                                       
+  global.R( 1 ); // 1 means to cache the log
   
   writer.nodb();
   
@@ -57,9 +65,31 @@ void lunapi_t::init()
    	 << globals::version 
    	 << " " << globals::date
    	 << "\n";
+
+  logger.print_buffer();
   
 }
 
+std::string lunapi_t::get_id() const
+{
+  return id;
+}
+
+int lunapi_t::get_state() const
+{
+  // 0 empty; +1 attached okay, -1 problem
+  return state;
+}
+
+std::string lunapi_t::get_edf_file() const
+{
+  return edf_filename;
+}
+
+std::string lunapi_t::get_annot_files() const
+{
+  return Helper::stringize( annot_filenames );
+}
 
 void lunapi_t::var( const std::string & key , const std::string & value )
 {
@@ -182,7 +212,7 @@ std::map<std::string,datum_t> lunapi_t::status() const
   
   r[ "edf_file" ] = edf_filename;
   
-  r[ "annotation_files" ] = Helper::set2vec( annot_filenames );
+  r[ "annotation_files" ] = Helper::stringize( annot_filenames );
 
   int n_data_channels = 0;
   int n_annot_channels = 0;
@@ -290,6 +320,7 @@ bool lunapi_t::attach_annot( const std::string & annotfile )
       else
         {
           Helper::halt( "could not open folder " + annotfile );
+	  return false;
         }
     }
   
@@ -306,7 +337,18 @@ bool lunapi_t::attach_annot( const std::string & annotfile )
 
 }
 
-bool lunapi_t::eval( const std::string & cmdstr )
+
+// #1 eval returning all output to caller 
+std::tuple<std::string,rtables_return_t> lunapi_t::eval_return_data( const std::string & cmdstr )
+{  
+  const std::string s = eval( cmdstr );
+  return std::make_tuple( s , rtables.data() );
+}
+
+
+
+// #2: eval, but not returning outputs to caller (stores in lunapi_t::rtables)
+std::string lunapi_t::eval( const std::string & cmdstr )
 {
 
   //
@@ -325,12 +367,6 @@ bool lunapi_t::eval( const std::string & cmdstr )
 
   writer.id( id , edf_filename );
 
-  logger << "evaluating...\n";
-
-  // track errors? (for moonlight) 
-  // R_last_eval_failed = false;
-  // R_last_eval_errmsg = "";
-
   //
   // set command string
   //
@@ -343,12 +379,13 @@ bool lunapi_t::eval( const std::string & cmdstr )
   
   cmd.replace_wildcards( id );
 
+  
   //
   // eval on the current EDF
   //
-  
+
   cmd.eval( edf );
-  
+
   
   //
   // switch off the retval stream (which is local to this function and
@@ -379,9 +416,8 @@ bool lunapi_t::eval( const std::string & cmdstr )
   //
   // all done
   //
-
   
-  return true;
+  return logger.print_buffer();;
   
 }
 
@@ -396,9 +432,14 @@ std::vector<std::string> lunapi_t::variables( const std::string & cmd , const st
   return rtables.table( cmd , faclvl ).cols;
 }
 
-rtable_data_t lunapi_t::data( const std::string & cmd , const std::string & faclvl ) const
+rtable_return_t lunapi_t::results( const std::string & cmd , const std::string & faclvl ) const
 {
   return rtables.data( cmd , faclvl );
+}
+
+rtables_return_t lunapi_t::results() const
+{
+  return rtables.data() ;
 }
 
 //
@@ -493,57 +534,77 @@ bool lunapi_t::proc_channots( const std::string & chstr ,
 }
 
 
+ldat_t lunapi_t::data( const std::vector<std::string> & chs ,			
+		       const std::vector<std::string> & anns ,
+		       const bool time_track )
+{
+  const interval_t whole = edf.timeline.wholetrace();
+  lint_t w;
+  w.push_back( std::make_tuple( whole.start , whole.stop ) );  
+  return slice( w , chs , anns , time_track ); 
+}
+
 
 ldat_t lunapi_t::slice( const lint_t & intervals , 
-			const std::string & chstr ,			
-			const std::string & anstr )
+			const std::vector<std::string> & chs ,			
+			const std::vector<std::string> & anns ,
+			const bool time_track )
 {
   
   if ( state != 1 ) 
-    return std::make_tuple( Eigen::MatrixXd::Zero(0,0),std::vector<std::string>(0) );
+    return std::make_tuple( std::vector<std::string>(0), Eigen::MatrixXd::Zero(0,0) );
+
+  const std::string chstr = Helper::stringize( chs );
+  const std::string anstr = Helper::stringize( anns );
   
   // labels
-  std::vector<std::string> columns( 1 , "T" );  
+  std::vector<std::string> columns;
+  if ( time_track ) columns.push_back( "T" );  
   std::map<std::string,int> atype;     
   signal_list_t signals;
   
   // proc channels/annots
   if ( ! proc_channots( chstr , anstr , &columns , &signals, &atype ) )
-    return std::make_tuple( Eigen::MatrixXd::Zero(0,0),std::vector<std::string>(0) );
+    return std::make_tuple( std::vector<std::string>(0), Eigen::MatrixXd::Zero(0,0) );
   
   // pull data
-  return std::make_tuple( matrix_internal( intervals, signals, atype ) , columns );
+  return std::make_tuple( columns, matrix_internal( intervals, signals, atype , time_track ) );
   
 }
 
 
 ldats_t lunapi_t::slices( const lint_t & intervals , 
-			  const std::string & chstr ,
-			  const std::string & anstr )
+			  const std::vector<std::string> & chs ,
+			  const std::vector<std::string> & anns ,
+			  const bool time_track )
 {
   
-
-  if ( state != 1 ) 
-    return std::make_tuple( std::vector<Eigen::MatrixXd>(0),std::vector<std::string>(0) );
   
-  std::vector<std::string> columns( 1 , "T" );
+  if ( state != 1 ) 
+    return std::make_tuple( std::vector<std::string>(0), std::vector<Eigen::MatrixXd>(0) );
+
+  const std::string chstr = Helper::stringize( chs );
+  const std::string anstr = Helper::stringize( anns );
+
+  std::vector<std::string> columns;
+  if ( time_track ) columns.push_back( "T" );
   std::map<std::string,int> atype;
   signal_list_t signals;
   
   // get/check channel labels etc
   if ( ! proc_channots( chstr , anstr , &columns , &signals, &atype ) )
-    return std::make_tuple( std::vector<Eigen::MatrixXd>(0),std::vector<std::string>(0) );
+    return std::make_tuple( std::vector<std::string>(0), std::vector<Eigen::MatrixXd>(0) );
   
   // iterate over each interval
   std::vector<Eigen::MatrixXd> data;
   for ( int i=0; i<intervals.size(); i++)
     {
       lint_t i1( 1, intervals[i] );
-      data.push_back( matrix_internal( i1 , signals, atype ) );
+      data.push_back( matrix_internal( i1 , signals, atype , time_track ) );
     }
 
   // return all 
-  return std::make_tuple( data , columns );
+  return std::make_tuple( columns , data );
   
 }
 
@@ -551,7 +612,8 @@ ldats_t lunapi_t::slices( const lint_t & intervals ,
 
 Eigen::MatrixXd lunapi_t::matrix_internal( const lint_t & intervals , 
 					   const signal_list_t & signals , 
-					   const std::map<std::string,int> & atype )
+					   const std::map<std::string,int> & atype ,
+					   const bool time_track )
   
 
 {
@@ -567,8 +629,8 @@ Eigen::MatrixXd lunapi_t::matrix_internal( const lint_t & intervals ,
   if ( ns == 0 ) 
     Helper::halt( "requires at least one channel/data signal" );
     
-  // # of columns: T + NS + NA   
-  const int ncols = 1 + ns + na;
+  // # of columns: (T) + NS + NA   
+  const int ncols = (int)time_track + ns + na;
   
   // # of rows... pull records 
   int nrows = 0;    
@@ -586,8 +648,8 @@ Eigen::MatrixXd lunapi_t::matrix_internal( const lint_t & intervals ,
   // allocate matrix
   Eigen::MatrixXd X = Eigen::MatrixXd::Zero( nrows , ncols );  
 
-  // first signal starts after T and annotations
-  int s_col = 1 + na;
+  // first signal starts (after T and) annotations
+  int s_col = (int)time_track + na;
   bool first = true;
   
   // Iterate over signals
@@ -623,10 +685,12 @@ Eigen::MatrixXd lunapi_t::matrix_internal( const lint_t & intervals ,
 		{		    
 		  
 		  // elapsed time in seconds
-		  X(row,0) = (*tp)[r] * globals::tp_duration ;
+		  if (time_track) 
+		    X(row,0) = (*tp)[r] * globals::tp_duration ;
 		  
 		  // Annotations (0/1) E,S 		  
-		  int a_col = 1;		  
+		  int a_col = (int)time_track;	// start at 1 or 0
+		  
 		  std::map<std::string,int>::const_iterator aa = atype.begin();
 		  while ( aa != atype.end() )
 		    {		      
@@ -650,8 +714,7 @@ Eigen::MatrixXd lunapi_t::matrix_internal( const lint_t & intervals ,
 		    }
 		
 		} // end of special case (T/ANNOTS)
-	      
-	      
+	      	      
 	      // Signal data	      
 	      X(row,s_col) = (*data)[r];
 	      
@@ -696,3 +759,94 @@ std::vector<std::string> lunapi_t::annots() const
   return edf.timeline.annotations.names();
 }
 
+
+
+std::vector<std::string> lunapi_t::import_db( const std::string & dbfile )
+{
+  std::set<std::string> ids0;
+  return import_db( dbfile , ids0 );
+}
+
+
+std::vector<std::string> lunapi_t::import_db( const std::string & dbfile , const std::set<std::string> & ids )
+{
+
+  // this gets populated by the IDs actually read
+  std::vector<std::string> obs_ids;
+
+  if ( ! Helper::fileExists( dbfile ) ) return obs_ids;
+    
+  retval_t ret = writer_t::dump_to_retval( dbfile , &ids , &obs_ids );
+  
+  logger << "  read data on " << obs_ids.size() << " individuals from " << dbfile << "\n" ;
+
+  // store in the internal rtables cache
+  rtables = rtables_t( ret );
+  
+  return obs_ids;
+
+}
+
+
+//
+// Inserters 
+//
+
+bool lunapi_t::update_signal( const std::string & label , const std::vector<double> & x )
+{
+  if ( state != 1 ) return false;
+  if ( ! edf.header.has_signal( label ) ) return false;
+  const int slot = edf.header.signal( label );
+  
+  // void update_signal_retain_range( int s , const std::vector<double> * );
+
+  // void update_signal( int s , const std::vector<double> * , int16_t * dmin = NULL , int16_t * dmax = NULL , 
+  // 		      const double * pmin = NULL , const double * pmax = NULL );
+  
+  edf.update_signal( slot , &x ); 
+  
+  return true;
+}
+
+
+bool lunapi_t::insert_signal( const std::string & label , const std::vector<double> & x , const int sr )
+{
+  if ( state != 1 ) return false;
+
+  // edf.add_signal( const std::string & label , const int n_samples , const std::vector<double> & data ,
+  //                  double pmin = 0 , double pmax = 0 ,
+  //                  int16_t dmin = 0 , int16_t dmax = 0 );
+  
+  edf.add_signal( label , sr , x );
+    
+  return true;
+}
+
+
+bool lunapi_t::insert_annotation( const std::string & class_label , const std::vector<std::tuple<double,double > > & x , const bool durcol2 )
+{
+
+  if ( state != 1 ) return false;
+  if ( x.size() == 0 ) return false;
+  if ( class_label == "" ) return false;
+  
+  const int n = x.size();
+
+  // okay if class_label already exists, this will append new intervals
+  annot_t * annot = edf.timeline.annotations.add( class_label );
+  
+  for (int i=0; i<n; i++ )
+    {
+      // skip bad elements
+      if ( std::get<0>( x[i] ) < 0 || std::get<1>(x[i]) < 0 ) continue;
+      
+      const uint64_t start = std::get<0>(x[i]) * globals::tp_1sec ;
+      const uint64_t stop  = std::get<1>(x[i]) * globals::tp_1sec + ( durcol2 ? start : 0LLU ) ; 
+      
+      annot->add( "." , // dummy instance ID
+                  interval_t( start, stop ) ,
+		  "." );  // channel ID dummy
+    }
+
+  return true;
+}
