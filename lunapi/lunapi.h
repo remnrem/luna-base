@@ -27,46 +27,182 @@
 #include "lunapi/rtables.h"
 #include "stats/Eigen/Dense"
 #include <variant>
-
+#include <optional>
+#include <memory>
 
 typedef std::tuple<std::vector<std::string>,Eigen::MatrixXd> ldat_t;
 typedef std::tuple<std::vector<std::string>,std::vector<Eigen::MatrixXd> > ldats_t;
 typedef std::vector<std::tuple<uint64_t,uint64_t> > lint_t;
 typedef std::variant<std::monostate, double , int , std::string, std::vector<double>, std::vector<int>, std::vector<std::string> > datum_t;
+typedef std::vector<std::tuple<std::string,std::string,std::set<std::string> > > slist_t;
+
+struct lunapi_inst_t;
+typedef std::shared_ptr<lunapi_inst_t> lunapi_inst_ptr;
 
 struct lunapi_t {
 
-  //
-  // mandatory initialization
-  //
+public:
   
-  static void init(); 
+  lunapi_t( const lunapi_t & obs ) = delete ;
+  
+  static lunapi_t * inaugurate()
+  {
+    if ( p_instance == NULL )
+      {
+	p_instance = new lunapi_t();
+	std::cout << "initiated a new lunapi_t " << globals::version << " " << globals::date << "\n";
+	p_instance->init(); 	
+      }	
+    return p_instance;
+  }
+
+  static void retire()
+  {
+    if ( p_instance != NULL )
+      {
+	std::cout << "releasing lunapi_t\n";
+	delete p_instance;
+      }
+  }
+  
+private:
+
+  static lunapi_t * p_instance;
+  
+  lunapi_t() { } 
+
+  // set up Luna library
+  void init();
+  
+  // after importing a db
+  rtables_t rtables;
+
+public:
 
   //
-  // global variables 
+  // Accress store (e.g. after eval() or import_db()
   //
+
+  std::vector<std::string> commands() const
+  { return rtables.commands(); } 
+    
+  std::vector<std::pair<std::string,std::string> > strata() const
+  { return rtables.list(); } 
+
+  rtable_t table( const std::string & cmd , const std::string & faclvl ) const;
+
+  std::vector<std::string> variables( const std::string & cmd , const std::string & faclvl ) const;
+  
+  rtable_return_t results( const std::string & cmd , const std::string & faclvl ) const; 
+
+  rtables_return_t results() const;
+
+
+  //
+  // Import/read helper functions
+  //
+
+  static std::string cmdfile( const std::string & );
+
+  std::vector<std::string> import_db( const std::string & filename );
+
+  std::vector<std::string> import_db( const std::string & filename , const std::set<std::string> & ids );
+
+  
+  //
+  // Sample list functions
+  //
+  
+  int read_sample_list( const std::string & file );
+  
+  int build_sample_list( const std::vector<std::string> & toks );
+  
+  slist_t sample_list() const;
+  
+  void insert_inst( const std::string & id ,
+		    const std::string & edf ,
+		    const std::set<std::string> & annots );
+  
+  int nobs() const;
+  
+  void clear();
+
+  // generators for new instance types: will always return something (even if no attached EDF/annots)
+  lunapi_inst_ptr inst( const std::string & id = "id1" ) const;
+  lunapi_inst_ptr inst( const std::string & id , const std::string & edf ) const;
+  lunapi_inst_ptr inst( const std::string & id , const std::string & edf , const std::string & annot ) const;
+  lunapi_inst_ptr inst( const std::string & id , const std::string & edf , const std::set<std::string> & annots ) const;
+  
+  // from sample list - may return an empty type 
+  std::optional<lunapi_inst_ptr> inst( const int i ) const;
+
+  // working w/ the sample list
+  std::optional<int> get_n( const std::string & ) const;
+  std::optional<std::string> get_id( const int i ) const;
+  std::string get_edf( const int i ) const;
+  std::set<std::string> get_annot( const int i ) const;
+  
+  //
+  // Environment variables
+  //
+
+  void silence( const bool b);
 
   // set 
-  static void var( const std::string & key , const std::string & value );
+  void var( const std::string & key , const std::string & value );
   
   // get
-  static std::variant<std::monostate,std::string> var( const std::string & key );
-  static std::map<std::string,std::variant<std::monostate,std::string> > vars( const std::vector<std::string> & keys );
+  std::variant<std::monostate,std::string> var( const std::string & key );
+  std::map<std::string,std::variant<std::monostate,std::string> > vars( const std::vector<std::string> & keys );
 
   // drop
-  static void dropvar( const std::string & key );
-  static void dropvars( const std::vector<std::string> & keys );
+  void dropvar( const std::string & key );
+  void dropvars( const std::vector<std::string> & keys );
 
+  // includes resetting all prior attributes
+  void re_init();
+  
+  void clear_ivars();
+
+  // reset problem/empty flags
+  void reset();
+
+
+  //
+  // Command evaluation
+  //
+
+  rtables_return_t eval( const std::string & );
+  
+private:
+  
+  std::map<std::string,std::string> edfs;
+  std::map<std::string,std::set<std::string> > annots;
+  std::map<int,std::string> n2id;
+  std::map<std::string,int> id2n;
+
+};
+
+
+struct lunapi_inst_t {
+
+  //  ~lunapi_inst_t() { std::cout << "destructor lunapi_inst_t " << id << "\n"; }
+  ~lunapi_inst_t() { }
+
+  lunapi_inst_t(const lunapi_inst_t&) = delete;
 
   //
   // new instance
   //
 
-  lunapi_t( const std::string & id ) : id(id) 
-  {
-    reset();  
+private:
+  lunapi_inst_t( const std::string & id ) : id(id) 
+  {    
   }
 
+public:
+  friend lunapi_t;
+  
   //
   // attach data 
   //
@@ -85,17 +221,11 @@ struct lunapi_t {
   // drop an EDF, all annotations, etc
   void drop();
   
-  // clear all variables
-  void clear();
-
-
-  //
-  // individual variables
-  //
+  void ivar( const std::string & key , const std::string & value ); 
   
-  /* void ivar( const std::string & key , const std::string & value ); */
+  std::variant<std::monostate,std::string> ivar( const std::string & key ) const;
   
-  /* std::string ivar( const std::string & key ) const; */
+  void clear_ivar();
 
   //
   // insert signals, annotations
@@ -144,8 +274,10 @@ struct lunapi_t {
   //
   // Luna commands
   //
-  
+
   std::string eval( const std::string & );
+  std::string eval_project( const std::string & , retval_t * accumulator );
+  std::string eval1( const std::string & , retval_t * accumulator );
   
   std::tuple<std::string,rtables_return_t > eval_return_data( const std::string & );
   
@@ -171,21 +303,10 @@ struct lunapi_t {
 
   rtables_return_t results() const;
   
-
-
   //
   // helpers
   //
-  
-  // reset problem/empty flags
-  void reset();
-  
-  std::vector<std::string> import_db( const std::string & filename );
-
-  std::vector<std::string> import_db( const std::string & filename , const std::set<std::string> & ids );
-
-  void silence( const bool b);
-
+    
   std::string get_id() const;
 
   std::string get_edf_file() const;
@@ -206,7 +327,7 @@ private:
 
   std::set<std::string> annot_filenames;
   
-  // the actual data store
+  // pointer to the actual data store
   edf_t edf;
   
   // helper functions

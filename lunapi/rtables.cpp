@@ -28,7 +28,7 @@ rtable_t::rtable_t()
   nrows = -1;
 }
 
-std::string rtable_t::dump()
+std::string rtable_t::dump() const
 {
 
   if ( nrows == -1 ) return "<empty>";
@@ -201,7 +201,7 @@ rtables_return_t rtables_t::data() const
 {
 
   std::map<std::string,std::map<std::string,rtable_return_t> > r;
-  
+
   std::map<std::string,std::map<std::string,rtable_t> >::const_iterator tt = tables.begin();
   while ( tt != tables.end() )
     {
@@ -216,3 +216,20 @@ rtables_return_t rtables_t::data() const
   return r;
 }
 
+
+void rtables_t::dump() const
+{
+  std::map<std::string,std::map<std::string,rtable_t> >::const_iterator tt = tables.begin();
+  while ( tt != tables.end() )
+    {
+      std::map<std::string,rtable_t>::const_iterator ss = tt->second.begin();
+      while ( ss != tt->second.end() )
+	{
+	  std::cout << tt->first << "\t" << ss->first << "\n"
+		    << ss->second.dump() << "\n"
+		    << std::string( 80, '-' ) << "\n";
+	  ++ss;
+	}
+      ++tt;
+    }
+}

@@ -570,60 +570,12 @@ private:
 
 public:
   
+  edf_t();
+  ~edf_t();
 
-  edf_t() : timeline( this )
-  {
-    endian = determine_endian();    
-    file = NULL;
-    edfz = NULL;
-    init();
-  } 
-
-
-  ~edf_t() 
-  {
-    // std::cout <<" in ~edf_t::edft_()...\n";
-    // std::cout << " self addr " << this << "\n";
-    init();
-    //    std::cout << " )done(\n";
-  }
-
-  void closeout_inputs()
-  {
-    //    std::cerr << " closing out\n";
-    if ( file != NULL )
-      fclose(file);
-    file = NULL;
+  void closeout_inputs();
+  void init();
     
-    if ( edfz != NULL )
-      {
-        edfz->close();
-        delete edfz;
-      }
-    edfz = NULL;    
-  }
-  
-  
-  void init()
-  {
-    if ( file != NULL ) 
-      fclose(file);
-    file = NULL;
-
-    if ( edfz != NULL ) 
-      {
-	edfz->close();
-	delete edfz;
-      }
-    edfz = NULL;
-    
-    header.init();
-    records.clear();    
-    inp_signals_n.clear();
-    has_edf_annots = false;
-  }
-  
-  
   //
   // Primary read modes
   //

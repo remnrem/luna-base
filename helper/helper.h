@@ -41,6 +41,8 @@ struct interval_t;
 struct clocktime_t;
 class gzifstream;
 
+typedef std::vector<std::tuple<std::string,std::string,std::set<std::string> > > slist_t;
+
 namespace Helper 
 {
 
@@ -116,7 +118,7 @@ namespace Helper
   
   bool is_folder( const std::string & f );
 
-  void build_sample_list( const std::vector<std::string> & );
+  void build_sample_list( const std::vector<std::string> & , slist_t * sl = NULL );
 
   void merge_EDFs( const std::vector<std::string> & );
 

@@ -31,6 +31,8 @@ freezer_t freezer;
 
 logger_t logger( "+++ luna" );
 
+lunapi_t* lunapi_t::p_instance = NULL;
+
 std::set<std::string>              cmd_t::commands;
 std::string                        cmd_t::input = "";
 std::string                        cmd_t::cmdline_cmds = "";

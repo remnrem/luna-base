@@ -221,7 +221,7 @@ int fn_luna_slbuilder( const std::string & filename )
 }
 
 
-void Helper::build_sample_list( const std::vector<std::string> & tok0 )
+void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t * slist )
 {
   // write a sample list to stdout
   // use ftw() to recursively scan folders for .edf and related files
@@ -234,9 +234,14 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
   // if there are distinct EDFs/ANNOTs with the same name, but in
   // different paths, this will fail; but if EDFs and ANNOTs are in
   // different folders, then this needs to be set (the default)
+
+  // optionally save to slist is slist is non-NULL (and do not write to std::cout)
+  // (this is when called internally from lunapi_t)
+
+  const bool write_cout = slist == NULL;
   
   std::vector<std::string> tok;
-
+ 
   bool specified_extensions = false;
 
   bool show_path = true;
@@ -354,11 +359,28 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	  ++edfs; 
 	}
 
+      //
+      // output
+      //
+
+      std::string exp_id = "";
+      std::string exp_edf = "";
+      std::set<std::string> exp_annots;
+      
       if ( has_edf )
 	{
+
+	  //
 	  // ID
+	  //
+	  
 	  if ( allow_numeric_ids ) 
-	    std::cout << ii->second.id << "\t";
+	    {
+	      if ( write_cout )
+		std::cout << ii->second.id << "\t";
+	      else
+		exp_id = ii->second.id;
+	    }
 	  else
 	    {
 	      double num_test; // if this cases to a valiud number
@@ -372,20 +394,44 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	      else if ( ii->second.id.find( "+" ) != std::string::npos ) is_numeric = false;
 
 	      if ( is_numeric ) 
-		std::cout << id_prefix << ii->second.id << "\t";
+		{
+		  if ( write_cout )
+		    std::cout << id_prefix << ii->second.id << "\t";
+		  else
+		    exp_id = id_prefix + ii->second.id;
+		}
 	      else
-		std::cout << ii->second.id << "\t";
+		{
+		  if ( write_cout )
+		    std::cout << ii->second.id << "\t";
+		  else
+		    exp_id = ii->second.id;
+		}
 	    }
-	  
+
+	  //
 	  // EDF
-	  std::cout << Helper::quote_spaced( ii->second.edf )
-		    << "\t";
+	  //
+
+	  if ( write_cout )
+	    std::cout << Helper::quote_spaced( ii->second.edf )
+		      << "\t";
+	  else
+	    exp_edf = ii->second.edf;
 	}
-      
+
+      //
+      // Annots
+      //
+
       // new sl-format: can add '.' in third slot if no annots
       if ( ii->second.annots.size() == 0 )
-	std::cout << ".";
-      
+	{
+	  if ( write_cout )
+	    std::cout << ".";
+	  // else just return empty exp_annots set
+	}
+
       // new sl-format: can add comma (or globals::file_list_delimiter) separated values in one tab slot
       bool first = true;
       std::set<std::string>::const_iterator jj = ii->second.annots.begin();
@@ -393,8 +439,16 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	{	  
 	  if ( has_edf ) 
 	    {
-	      if ( ! first ) std::cout << globals::file_list_delimiter;
-	      std::cout << Helper::quote_spaced( *jj ) ;
+	      if ( write_cout )
+		{
+		  if ( ! first ) std::cout << globals::file_list_delimiter;
+		  std::cout << Helper::quote_spaced( *jj ) ;
+		}
+	      else
+		{
+		  exp_annots.insert( *jj );
+		}
+	      
 	      first = false;
 	      dumped_annot.insert( *jj );
 	    }
@@ -402,45 +456,72 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 )
 	    annot_wout_edf.push_back( *jj );	  
 	  ++jj;
 	}
-
+      
       if ( has_edf ) 
-	std::cout << "\n";
+	if ( write_cout )
+	  std::cout << "\n";
+      
+      
+      //
+      // save to slist?
+      //
+      
+      if ( ! write_cout ) 
+	{
+	  slist->push_back( std::make_tuple( exp_id , exp_edf , exp_annots ) );
+	}
+      
+
+      //
+      // Next 
+      //
 
       ++ii;
-    }  
-  
-  std::cerr << "\nwrote " << edfs << " EDFs to the sample list\n";
-
-  std::map<int,int>::const_iterator kk = edf_annot_count.begin();
-  while ( kk != edf_annot_count.end() )
-    {
-      std::cerr << "  " << kk->second << " of which had " << kk->first << " linked annotation files\n";
-      ++kk;
     }
+
+
+
+  //
+  // extra outputs?
+  //
   
-  if ( annot_wout_edf.size() > 0 ) 
+  if ( write_cout )
     {
-      // need to exclude e.g.
-      //     file.edf    file.eannot
-      //  --> this will think there is a   'file.e.edf'  w/out ?
-
-      std::vector<std::string> annot_wout_edf2;
-      for (int i=0;i<annot_wout_edf.size() ; i++)
-	if ( dumped_annot.find( annot_wout_edf[i] ) == dumped_annot.end() )
-	  annot_wout_edf2.push_back( annot_wout_edf[i] );
-
-      if ( annot_wout_edf2.size() > 0 )
+      std::cerr << "\nwrote " << edfs << " EDFs to the sample list\n";
+      
+      std::map<int,int>::const_iterator kk = edf_annot_count.begin();
+      while ( kk != edf_annot_count.end() )
 	{
-	  std::cerr << "\nWarning: also found " 
-		    << annot_wout_edf2.size() 
-		    << " annotation files without a matching EDF:\n";
-	  
-	  for (int i=0;i<annot_wout_edf2.size() ; i++) 
-	    std::cerr << annot_wout_edf2[i] << "\n";
+	  std::cerr << "  " << kk->second << " of which had " << kk->first << " linked annotation files\n";
+	  ++kk;
 	}
+      
+      if ( annot_wout_edf.size() > 0 ) 
+	{
+	  // need to exclude e.g.
+	  //     file.edf    file.eannot
+	  //  --> this will think there is a   'file.e.edf'  w/out ?
+	  
+	  std::vector<std::string> annot_wout_edf2;
+	  for (int i=0;i<annot_wout_edf.size() ; i++)
+	    if ( dumped_annot.find( annot_wout_edf[i] ) == dumped_annot.end() )
+	      annot_wout_edf2.push_back( annot_wout_edf[i] );
+	  
+	  if ( annot_wout_edf2.size() > 0 )
+	    {
+	      std::cerr << "\nWarning: also found " 
+			<< annot_wout_edf2.size() 
+			<< " annotation files without a matching EDF:\n";
+	      
+	      for (int i=0;i<annot_wout_edf2.size() ; i++) 
+		std::cerr << annot_wout_edf2[i] << "\n";
+	    }
+	}
+      
+      if ( dupes ) 
+	std::cerr << "\nWarning: duplicate IDs encountered\n";
     }
   
-  if ( dupes ) 
-    std::cerr << "\nWarning: duplicate IDs encountered\n";
+  
 }
 

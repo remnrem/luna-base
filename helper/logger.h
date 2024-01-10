@@ -126,16 +126,18 @@ class logger_t
     {
       if ( is_off ) return *this;      
       
+      if ( ! globals::silent ) 
+	_out_stream << data;
+      
+      if ( globals::cache_log )
+	ss << data;
+
       if ( globals::logger_function )
 	{
 	  std::stringstream ss1;
 	  ss1 << data;
 	  (*globals::logger_function)( ss1.str() );
 	}
-      else if ( globals::cache_log )
-	ss << data;
-      else if ( ! globals::silent ) 
-	_out_stream << data;
       
       return *this;
 

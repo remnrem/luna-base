@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -1597,11 +1596,14 @@ void proc_pops( edf_t & edf , param_t & param )
   if ( param.has( "features" ) )
     feature_file = param.value( "features" );
   else if ( pops_opt_t::pops_root != "" )
-    feature_file = pops_opt_t::pops_root + ".ftr";
+    feature_file = pops_opt_t::pops_root + ".ftr";  
   if ( feature_file != "." )
-    feature_file = pops_t::update_filepath( feature_file );
+    feature_file = pops_t::update_filepath( feature_file );  
   if ( feature_file == "." ) 
-    Helper::halt( "POPS requires a feature file, via lib or features args" );
+    {
+      Helper::halt( "POPS requires a feature file, via lib or features args" );
+      return; 
+    }
   
   pops_t::specs.read( feature_file );
  

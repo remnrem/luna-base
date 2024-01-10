@@ -64,7 +64,7 @@ struct rtable_t {
   // must be of similar row count... (at input)
   int nrows;
 
-  std::string dump();
+  std::string dump() const;
   
   void checkrows( int n );
   
@@ -104,6 +104,8 @@ struct rtables_t {
   rtable_return_t data( const std::string & cmd , const std::string & strata ) const; 
   
   rtables_return_t data() const;
+
+  void dump() const;
   
   std::map<std::string,std::map<std::string,rtable_t> > tables;
   

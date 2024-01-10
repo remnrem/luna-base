@@ -28,6 +28,13 @@
 
 #include <iostream>
 
+void retval_t::clear()
+{
+  data.clear();
+  var_has_strings.clear();
+  var_has_doubles.clear();
+}
+
 
 // add a double
 void retval_t::add( const retval_indiv_t & id, 

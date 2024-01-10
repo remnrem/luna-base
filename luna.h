@@ -125,5 +125,9 @@
 #include <unistd.h>
 #include <dirent.h>
 
+extern globals global;
+extern writer_t writer;
+extern logger_t logger;
+extern freezer_t freezer;
 
 #endif

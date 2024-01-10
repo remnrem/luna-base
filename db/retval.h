@@ -160,6 +160,9 @@ struct retval_t {
   // to stdout
   void dump();
 
+  // clear
+  void clear();
+  
   // output to tables
   std::map<std::string,std::map<std::string,rtable_t> > make_tables() const ;
   

@@ -43,6 +43,57 @@
 extern writer_t writer;
 extern logger_t logger;
 
+
+edf_t::edf_t() : timeline( this )
+{    
+  //  std::cout << " in edf_t::edft_(), making a new one: " << this << "\n";    
+  endian = determine_endian();    
+  file = NULL;
+  edfz = NULL;
+  init();
+} 
+
+edf_t::~edf_t() 
+{
+  //  std::cout <<" out ~edf_t::edft_()... " << id << "\t" << this << "\n";
+  init();    
+}
+
+void edf_t::closeout_inputs()
+{
+  //    std::cerr << " closing out\n";
+  if ( file != NULL )
+    fclose(file);
+  file = NULL;
+  
+  if ( edfz != NULL )
+    {
+      edfz->close();
+      delete edfz;
+    }
+  edfz = NULL;    
+}
+  
+void edf_t::init()
+{
+  if ( file != NULL ) 
+    fclose(file);
+  file = NULL;
+  
+  if ( edfz != NULL ) 
+    {
+      edfz->close();
+      delete edfz;
+    }
+  edfz = NULL;
+  
+  header.init();
+  records.clear();    
+  inp_signals_n.clear();
+  has_edf_annots = false;
+}
+
+
 void writestring( const std::string & s , int n , FILE * file )
 {
   std::string c = s;
