@@ -157,6 +157,7 @@ void (*globals::bail_function) ( const std::string & );
 void (*globals::logger_function) ( const std::string & );
 
 bool globals::silent;
+bool globals::api_mode;
 bool globals::verbose; 
 bool globals::cache_log;
 bool globals::devel;
@@ -187,6 +188,7 @@ std::string & globals::SQLITE_SCRATCH_FOLDER() { static std::string s = ""; retu
 void globals::api()
 {
   silent = true;
+  api_mode = true;
   writer.nodb();
 }
 
@@ -247,6 +249,8 @@ void globals::init_defs()
   //
 
   silent = false;
+
+  api_mode = false;
   
   cache_log = false;
 

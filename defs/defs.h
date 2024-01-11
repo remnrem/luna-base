@@ -307,6 +307,9 @@ struct globals
   // in API mode, set this to T
   static bool silent;
 
+  // API mode
+  static bool api_mode;
+  
   // if LOG verbose?
   static bool verbose;
 

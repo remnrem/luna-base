@@ -36,8 +36,15 @@ extern freezer_t freezer;
 void param_t::add( const std::string & option , const std::string & value ) 
 {
   
-  if ( opt.find( option ) != opt.end() ) 
-    Helper::halt( option + " parameter specified twice, only one value would be retained" );
+  // in API mode, allow this to not hold
+  // i.e. if we want to change 'path' etc
+
+  // otherwise, we're assuming this is on the same luna command line, which makes
+  // no sense to have multiple versions
+  
+  if ( ! globals::api_mode ) 
+    if ( opt.find( option ) != opt.end() ) 
+      Helper::halt( option + " parameter specified twice, only one value would be retained" );
   
     opt[ option ] = value; 
 }  
