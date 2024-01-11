@@ -20,6 +20,8 @@
 //
 //    --------------------------------------------------------------------
 
+#ifdef HAS_LGBM
+
 #include "assoc/massoc.h"
 
 #include "edf/edf.h"
@@ -181,6 +183,7 @@ void massoc_t::massoc_dumper( edf_t & edf , param_t & param )
 #endif
   
 
-
 }
 
+
+#endif
