@@ -55,11 +55,11 @@ std::string rtable_t::dump() const
 	  const rtable_elem_t & e = data[ j ][ i ];
 
 	  if ( std::holds_alternative<double>( e ) )
-	    ss << std::get<double>( e ) ;
+	    ss << *std::get_if<double>( &e ) ;
 	  else if ( std::holds_alternative<double>( e ) )
-	    ss << std::get<int>( e ) ;
+	    ss << *std::get_if<int>( &e ) ;
 	  else if ( std::holds_alternative<std::string>( e ) )
-	    ss << std::get<std::string>( e ) ;
+	    ss << *std::get_if<std::string>( &e ) ;
 	  else
 	    ss << ".";
 	  
