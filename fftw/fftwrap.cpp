@@ -22,6 +22,8 @@
 
 #include "fftwrap.h"
 
+#include "fftw3.h"                                                                                                                                                                       
+
 #include "edf/edf.h"
 #include "timeline/timeline.h"
 #include "miscmath/miscmath.h"
@@ -39,6 +41,21 @@ extern writer_t writer;
 //
 // Complex FFT
 //
+
+void FFT::reset() 
+{
+  fftw_destroy_plan(p);
+  fftw_free(in);
+  fftw_free(out);
+}
+
+FFT::~FFT() 
+{    
+  fftw_destroy_plan(p);
+  fftw_free(in);
+  fftw_free(out);
+}
+
 
 void FFT::init( int Ndata_, int Nfft_, int Fs_ , fft_t type_ , window_function_t window_ )
 {
@@ -297,6 +314,21 @@ double FFT::width( frequency_band_t band )
 //
 // --------------------------------------------------------------------------
 
+void real_FFT::reset() 
+{
+  fftw_destroy_plan(p);
+  fftw_free(in);
+  fftw_free(out);
+}
+
+real_FFT::~real_FFT() 
+{    
+  fftw_destroy_plan(p);
+  fftw_free(in);
+  fftw_free(out);
+}
+
+
 void real_FFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_ )
 {
   
@@ -318,7 +350,7 @@ void real_FFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_ 
   for (int i=0;i<Nfft;i++) { in[i] = 0; }
   
   // Generate plan: nb. r2c 1D plan
-  p = fftw_plan_dft_r2c_1d( Nfft, in, out , FFTW_ESTIMATE );
+  p = fftw_plan_dft_r2c_1d( Nfft, in, out , FFTW_ESTIMATE ) ;
 
   // We want to return only the positive spectrum, so set the cut-off  
   cutoff = Nfft % 2 == 0 ? Nfft/2+1 : (Nfft+1)/2 ;
@@ -491,6 +523,20 @@ double real_FFT::width( frequency_band_t band )
 //
 // --------------------------------------------------------------------------
 
+void real_iFFT::reset() 
+{
+  fftw_destroy_plan(p);
+  fftw_free(in);
+  fftw_free(out);
+}
+
+real_iFFT::~real_iFFT() 
+{    
+  fftw_destroy_plan(p);
+  fftw_free(in);
+  fftw_free(out);
+}
+
 void real_iFFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_ )
 {
   
@@ -511,7 +557,7 @@ void real_iFFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_
   // Initialise (probably not necessary, but do anyway)
   for (int i=0;i<Nfft;i++) { in[i][0] = in[i][1] = 0; }
   
-  // Generate plan: nb. c2r 1D plan
+  // Generate plan: nb. c2r 1D plan  
   p = fftw_plan_dft_c2r_1d( Nfft, in, out , FFTW_ESTIMATE );
 
   // We want to return only the positive spectrum, so set the cut-off  

@@ -36,6 +36,7 @@
 #include <stdint.h>
 #include <map>
 #include <cmath>
+#include <tuple>
 
 struct interval_t;
 struct clocktime_t;

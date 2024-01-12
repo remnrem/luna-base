@@ -20,7 +20,6 @@
 //
 //    --------------------------------------------------------------------
 
-
 #ifndef __FFTWRAP_H__
 #define __FFTWRAP_H__
 
@@ -94,20 +93,10 @@ class FFT
     }
 
   void init( int Ndata , int Nfft , int Fs , fft_t type = FFT_FORWARD , window_function_t window = WINDOW_NONE );
+
+  void reset();
   
-  void reset() 
-  {
-    fftw_destroy_plan(p);
-    fftw_free(in);
-    fftw_free(out);
-  }
-  
-  ~FFT() 
-    {    
-      fftw_destroy_plan(p);
-      fftw_free(in);
-      fftw_free(out);
-    }
+  ~FFT();
   
  private:
 
@@ -220,19 +209,9 @@ class real_FFT
   
   void init( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE );
   
-  void reset() 
-  {
-    fftw_destroy_plan(p);
-    fftw_free(in);
-    fftw_free(out);
-  }
+  void reset() ;
   
-  ~real_FFT() 
-    {    
-      fftw_destroy_plan(p);
-      fftw_free(in);
-      fftw_free(out);
-    }
+  ~real_FFT();
   
  private:
 
@@ -336,19 +315,9 @@ class real_iFFT
   
   void init( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE );
   
-  void reset() 
-  {
-    fftw_destroy_plan(p);
-    fftw_free(in);
-    fftw_free(out);
-  }
+  void reset();
   
-  ~real_iFFT() 
-  {    
-    fftw_destroy_plan(p);
-    fftw_free(in);
-    fftw_free(out);
-  }
+  ~real_iFFT();
 
  private:
   

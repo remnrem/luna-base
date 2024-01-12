@@ -24,7 +24,7 @@
 #ifndef __COHFFT_H__
 #define __COHFFT_H__
 
-#include "fftw3.h"
+//#include "fftw3.h"
 
 #include <iostream>
 #include <vector>

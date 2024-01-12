@@ -109,7 +109,8 @@ ifeq ($(LGBM),1)
 ifeq ($(ARCH),WINDOWS)
 LDFLAGS += -l:lib_lightgbm.dll 
 else
-LDFLAGS += -l_lightgbm -lomp
+#LDFLAGS += -l_lightgbm -lomp
+LDFLAGS += -l_lightgbm 
 endif
 endif
 
