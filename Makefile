@@ -41,12 +41,13 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard lgbm/*.cpp) \
         $(wildcard web/*.cpp) \
         $(wildcard models/*.cpp) \
-        $(wildcard lunapi/*.cpp)
+        $(wildcard lunapi/*.cpp) 
 
 
 CSRCS = $(wildcard db/*.c) \
         $(wildcard stats/*.c) \
         $(wildcard dsp/*.c) \
+        $(wildcard zlib-1.3/*.c) \
         $(wildcard dsp/libsamplerate/*.c)
 
 OBJS = $(SRCS:.cpp=.o) $(CSRCS:.c=.o) 
@@ -88,7 +89,7 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 	$(CXX) -static -static-libgcc -static-libstdc++ -o luna-static $^ 
 
 destrat: utils/reader.o libluna.a
-	$(CXX) -o $@ $^ -L. -lz  $(LDFLAGS)
+	$(CXX) -o $@ $^ -L. $(LDFLAGS)
 
 regional: utils/region-annotate.o 
 	$(CXX) -o $@ $^ 

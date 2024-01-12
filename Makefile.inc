@@ -88,12 +88,12 @@ LDFLAGS = $(DEP_LIB) -L. -L..
 # assuming mingw64 for windows build:
 
 ifeq ($(ARCH),WINDOWS)
- LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3 -lz -static -static-libgcc -static-libstdc++
+ LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3  -static -static-libgcc -static-libstdc++
 else
  ifeq ($(WASM),1)
   LDFLAGS += -L${WASM_DEPS} -lfftw3 -s USE_ZLIB=1
  else
-  LDFLAGS += -L/usr/local/lib -lfftw3 -lz
+  LDFLAGS += -L/usr/local/lib -lfftw3 
  endif
 endif
 
