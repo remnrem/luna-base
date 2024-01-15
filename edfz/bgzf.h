@@ -30,7 +30,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <zlib.h>
+#include "zlib-1.3/zlib.h"
 #include <sys/types.h>
 
 typedef unsigned char byte_t;
