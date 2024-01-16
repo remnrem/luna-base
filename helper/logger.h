@@ -57,7 +57,9 @@ class logger_t
   
   void flush() { _out_stream.flush(); } 
 
-  void off() { flush(); is_off = true; } 
+  void flush_cache() { ss.str(std::string()); }
+  
+  void off() { flush(); flush_cache(); is_off = true; } 
 
   void banner( const std::string & v , const std::string & bd ) 
   {

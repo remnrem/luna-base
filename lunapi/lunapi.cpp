@@ -66,7 +66,7 @@ void lunapi_t::init()
    	 << "\n";
 
   logger.print_buffer();
-  
+
 }
 
 void lunapi_t::silence( const bool b )
@@ -146,6 +146,11 @@ void lunapi_t::reset()
 {
   globals::problem = false;  
   //globals::empty = false;
+}
+
+void lunapi_t::flush()
+{
+  logger.flush_cache();
 }
 
 void lunapi_t::re_init()
@@ -653,7 +658,7 @@ bool lunapi_inst_t::attach_edf( const std::string & filename )
 
   cmd_t::define_channel_type_variables( edf );
 
-  state = 1 ; 
+  state = 1; 
   
   return true;
   
@@ -1186,10 +1191,90 @@ bool lunapi_inst_t::insert_signal( const std::string & label ,
   //                  int16_t dmin = 0 , int16_t dmax = 0 );
   
   edf.add_signal( label , sr , x );
-    
+  
   return true;
 }
 
+
+
+lannot_t lunapi_inst_t::fetch_annots( const std::vector<std::string> & anns ) const
+{
+  // typedef std::vector<std::tuple<std::string,double,double> > lannot_t;
+  lannot_t r;
+  if ( state != 1 ) return r;
+
+  const int na = anns.size();
+  for (int a=0; a<na; a++)
+    {
+      
+      annot_t * annot = edf.timeline.annotations.find( anns[a] );
+      if ( annot == NULL ) continue;      
+      if ( annot->interval_events.size() == 0 ) continue;
+
+      annot_map_t::const_iterator ii = annot->interval_events.begin();   
+      while ( ii != annot->interval_events.end() )
+	{
+	  const instance_idx_t & instance_idx = ii->first;      
+	  r.push_back( std::make_tuple( anns[a] ,
+					instance_idx.interval.start * globals::tp_duration,
+					instance_idx.interval.stop * globals::tp_duration ) );
+	  ++ii;
+	}
+    }  
+  
+  return r;
+}
+
+lannot_full_t lunapi_inst_t::fetch_full_annots( const std::vector<std::string> & anns ) const
+{
+  // typedef std::vector<std::tuple<std::string,std::string,std::string,std::string,double,double> > lannot_full_t;
+  lannot_full_t r;
+  if ( state != 1 ) return r;
+  
+  const int na = anns.size();
+  for (int a=0; a<na; a++)
+    {
+      
+      annot_t * annot = edf.timeline.annotations.find( anns[a] );    
+      if ( annot == NULL ) continue;      
+      if ( annot->interval_events.size() == 0 ) continue;
+
+      annot_map_t::const_iterator ii = annot->interval_events.begin();   
+      while ( ii != annot->interval_events.end() )
+	{
+	  const instance_idx_t & instance_idx = ii->first;
+
+	  const instance_t * inst = ii->second;
+	  
+	  std::string meta_data;
+	  if ( inst->data.size() == 0 ) meta_data = ".";
+	  else
+	    {
+	      std::stringstream ss;
+	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	      while ( dd != inst->data.end() )
+		{
+		  if ( dd != inst->data.begin() ) ss << "|";
+		  ss << *dd->second; // meta-data value
+		  ++dd;		  
+		}
+	      meta_data = ss.str();
+	    }
+
+	  // add to return list
+	  r.push_back( std::make_tuple( anns[a] ,
+					( instance_idx.id == "" ? "." : instance_idx.id ) ,
+					( instance_idx.ch_str == "" ? "." : instance_idx.ch_str ) ,
+					meta_data , 
+					instance_idx.interval.start * globals::tp_duration,
+					instance_idx.interval.stop * globals::tp_duration ) );
+	  ++ii;
+	}
+    }  
+  
+  return r;
+}
+				
 
 bool lunapi_inst_t::insert_annotation( const std::string & class_label ,
 				       const std::vector<std::tuple<double,double > > & x ,

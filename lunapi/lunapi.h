@@ -32,7 +32,11 @@
 
 typedef std::tuple<std::vector<std::string>,Eigen::MatrixXd> ldat_t;
 typedef std::tuple<std::vector<std::string>,std::vector<Eigen::MatrixXd> > ldats_t;
+
 typedef std::vector<std::tuple<uint64_t,uint64_t> > lint_t;
+typedef std::vector<std::tuple<std::string,double,double> > lannot_t;
+typedef std::vector<std::tuple<std::string,std::string,std::string,std::string,double,double> > lannot_full_t;
+
 typedef std::variant<std::monostate, double , int , std::string, std::vector<double>, std::vector<int>, std::vector<std::string> > datum_t;
 typedef std::vector<std::tuple<std::string,std::string,std::set<std::string> > > slist_t;
 
@@ -50,7 +54,7 @@ public:
     if ( p_instance == NULL )
       {
 	p_instance = new lunapi_t();
-	std::cout << "initiated a new lunapi_t " << globals::version << " " << globals::date << "\n";
+	std::cout << "initiated a new lunapi_t engine (" << globals::version << " " << globals::date << ")\n";
 	p_instance->init(); 	
       }	
     return p_instance;
@@ -167,6 +171,8 @@ public:
   // reset problem/empty flags
   void reset();
 
+  // flush any log bufer
+  void flush();
 
   //
   // Command evaluation
@@ -192,17 +198,21 @@ struct lunapi_inst_t {
   lunapi_inst_t(const lunapi_inst_t&) = delete;
 
   //
-  // new instance
+  // new instance (i.e. only from lunapi_t) w/ private ctor
   //
 
 private:
+
   lunapi_inst_t( const std::string & id ) : id(id) 
-  {    
+  {
+    state = 0;
   }
 
 public:
+
   friend lunapi_t;
   
+
   //
   // attach data 
   //
@@ -270,6 +280,14 @@ public:
 		   const std::vector<std::string> & anns ,
 		   const bool time_track );
   
+  //
+  // pull annotations
+  //
+
+  lannot_t fetch_annots( const std::vector<std::string> & anns ) const;
+
+  lannot_full_t fetch_full_annots( const std::vector<std::string> & anns ) const;
+
   
   //
   // Luna commands
