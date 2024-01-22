@@ -7,11 +7,13 @@
  * Email: adis@live.cn
  *  https://www.mathworks.com/matlabcentral/profile/authors/3734620-disi-a
  */
+
+#include "filter.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "filter.h"
 #include <stddef.h>
 
 #if DOUBLE_PRECISION
@@ -48,14 +50,14 @@ BWLowPass* create_bw_low_pass_filter(int order, FTR_PRECISION s, FTR_PRECISION f
         return NULL;
     }
 
-    FTR_PRECISION a = TAN((FTR_PRECISION)(M_PI * f / s));
+    FTR_PRECISION a = TAN((FTR_PRECISION)(MY_PI * f / s));
     FTR_PRECISION a2 = a * a;
     FTR_PRECISION r;
     
     int i;
     
     for(i=0; i < filter -> n; ++i){
-        r = SIN((FTR_PRECISION)(M_PI * (2.0 * i + 1.0) / (4.0 * filter->n)));
+        r = SIN((FTR_PRECISION)(MY_PI * (2.0 * i + 1.0) / (4.0 * filter->n)));
         s = (FTR_PRECISION) (a2 + 2.0 * a * r + 1.0);
         filter->A[i] = a2 / s;
         filter->d1[i] = (FTR_PRECISION) (2.0 * (1 - a2) / s);
@@ -116,14 +118,14 @@ BWBandPass* create_bw_band_pass_filter(int order, FTR_PRECISION s, FTR_PRECISION
     filter -> w4 = (FTR_PRECISION *)calloc(filter -> n, sizeof(FTR_PRECISION));
 
   
-    FTR_PRECISION a = COS(M_PI*(fu+fl)/s)/COS(M_PI*(fu-fl)/s);
+    FTR_PRECISION a = COS(MY_PI*(fu+fl)/s)/COS(MY_PI*(fu-fl)/s);
     FTR_PRECISION a2 = a*a;
-    FTR_PRECISION b = TAN(M_PI*(fu-fl)/s);
+    FTR_PRECISION b = TAN(MY_PI*(fu-fl)/s);
     FTR_PRECISION b2 = b*b;
     FTR_PRECISION r;
     int i;
     for(i=0; i<filter->n; ++i){
-        r = SIN( (FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / (4.0 * filter->n)));
+        r = SIN( (FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / (4.0 * filter->n)));
         s = (FTR_PRECISION)(b2 + 2.0 * b * r + 1.0);
         filter->A[i] = b2/s;
         filter->d1[i] = (FTR_PRECISION) (4.0 * a * (1.0 + b * r) / s);
@@ -154,15 +156,15 @@ BWBandStop* create_bw_band_stop_filter(int order, FTR_PRECISION s, FTR_PRECISION
     filter -> w3 = (FTR_PRECISION *)calloc(filter -> n, sizeof(FTR_PRECISION));
     filter -> w4 = (FTR_PRECISION *)calloc(filter -> n, sizeof(FTR_PRECISION));
 
-    FTR_PRECISION a = COS(M_PI*(fu+fl)/s)/COS(M_PI*(fu-fl)/s);
+    FTR_PRECISION a = COS(MY_PI*(fu+fl)/s)/COS(MY_PI*(fu-fl)/s);
     FTR_PRECISION a2 = a*a;
-    FTR_PRECISION b = TAN(M_PI*(fu-fl)/s);
+    FTR_PRECISION b = TAN(MY_PI*(fu-fl)/s);
     FTR_PRECISION b2 = b*b;
     FTR_PRECISION r;
 
     int i;
     for(i=0; i<filter->n; ++i){
-        r = SIN((FTR_PRECISION) (M_PI * (2.0 * i + 1.0 ) / ( 4.0 * filter->n)));
+        r = SIN((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0 ) / ( 4.0 * filter->n)));
         s = (FTR_PRECISION) (b2 + 2.0 * b * r + 1.0);
         filter->A[i] = (FTR_PRECISION) (1.0 / s);
         filter->d1[i] = (FTR_PRECISION) (4.0 * a * (1.0 + b * r ) / s);
@@ -191,7 +193,7 @@ CHELowPass* create_che_low_pass_filter(int n, FTR_PRECISION epsilon, FTR_PRECISI
         return NULL;
     }
 
-    FTR_PRECISION a = TAN((FTR_PRECISION) (M_PI * f/ s));
+    FTR_PRECISION a = TAN((FTR_PRECISION) (MY_PI * f/ s));
     FTR_PRECISION a2 = a * a;
     
     FTR_PRECISION u = LOG((FTR_PRECISION) (1.0 + SQRT((FTR_PRECISION) (1.0 + epsilon * epsilon)) / epsilon));
@@ -201,8 +203,8 @@ CHELowPass* create_che_low_pass_filter(int n, FTR_PRECISION epsilon, FTR_PRECISI
     
     int i;
     for(i=0; i<filter->m; ++i){
-        b = SIN((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / (2.0 * n))) * su;
-        c = COS((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / (2.0 * n))) * cu;
+        b = SIN((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / (2.0 * n))) * su;
+        c = COS((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / (2.0 * n))) * cu;
         c = b*b + c*c;
         s = (FTR_PRECISION) (a2 * c + 2.0 * a * b + 1.0);
         filter->A[i] = (FTR_PRECISION) (a2 / (4.0 * s));
@@ -230,7 +232,7 @@ CHEHighPass* create_che_high_pass_filter(int n, FTR_PRECISION epsilon, FTR_PRECI
         return NULL;
     }
 
-    FTR_PRECISION a = TAN((FTR_PRECISION) (M_PI * f/ s));
+    FTR_PRECISION a = TAN((FTR_PRECISION) (MY_PI * f/ s));
     FTR_PRECISION a2 = a * a;
 
     FTR_PRECISION u = LOG((FTR_PRECISION) (1.0 + SQRT((FTR_PRECISION) (1.0 + epsilon*epsilon))) / epsilon);
@@ -240,8 +242,8 @@ CHEHighPass* create_che_high_pass_filter(int n, FTR_PRECISION epsilon, FTR_PRECI
     
     int i;
     for(i=0; i<filter->m; ++i){
-        b = SIN((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / (2.0 * n))) * su;
-        c = COS((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / (2.0 * n))) * cu;
+        b = SIN((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / (2.0 * n))) * su;
+        c = COS((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / (2.0 * n))) * cu;
         c = b*b + c*c;
         s = (FTR_PRECISION) (a2 + 2.0 * a * b + c);
         filter->A[i] = (FTR_PRECISION) (1.0 / (4.0 * s));
@@ -267,9 +269,9 @@ CHEBandPass* create_che_band_pass_filter(int n, FTR_PRECISION epsilon, FTR_PRECI
     filter -> w3 = (FTR_PRECISION *)calloc(filter -> m, sizeof(FTR_PRECISION));
     filter -> w4 = (FTR_PRECISION *)calloc(filter -> m, sizeof(FTR_PRECISION));
 
-    FTR_PRECISION a = COS(M_PI*(f_lower+f_upper)/s)/COS(M_PI*(f_upper-f_lower)/s);
+    FTR_PRECISION a = COS(MY_PI*(f_lower+f_upper)/s)/COS(MY_PI*(f_upper-f_lower)/s);
     FTR_PRECISION a2 = a*a;
-    FTR_PRECISION b = TAN(M_PI*(f_upper-f_lower)/s);
+    FTR_PRECISION b = TAN(MY_PI*(f_upper-f_lower)/s);
     FTR_PRECISION b2 = b*b;
     FTR_PRECISION u = LOG((FTR_PRECISION) (1.0 + SQRT((FTR_PRECISION) (1.0 + epsilon * epsilon))) / epsilon);
     FTR_PRECISION su = SINH((FTR_PRECISION) (2.0 * u / (FTR_PRECISION)n));
@@ -278,8 +280,8 @@ CHEBandPass* create_che_band_pass_filter(int n, FTR_PRECISION epsilon, FTR_PRECI
 
     int i;
     for(i=0; i < filter->m; ++i){
-        r = SIN((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / n)) * su;
-        c = COS((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / n)) * cu;
+        r = SIN((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / n)) * su;
+        c = COS((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / n)) * cu;
         c = r*r + c*c;
         s = (FTR_PRECISION) (b2 * c + 2.0 * b * r + 1.0);
         filter->A[i] = (FTR_PRECISION) (b2 / (4.0 * s));
@@ -306,9 +308,9 @@ CHEBandStop* create_che_band_stop_filter(int n, FTR_PRECISION epsilon, FTR_PRECI
     filter -> w3 = (FTR_PRECISION *)calloc(filter -> m, sizeof(FTR_PRECISION));
     filter -> w4 = (FTR_PRECISION *)calloc(filter -> m, sizeof(FTR_PRECISION));
 
-    FTR_PRECISION a = COS(M_PI*(f_lower+f_upper)/s)/COS(M_PI*(f_upper-f_lower)/s);
+    FTR_PRECISION a = COS(MY_PI*(f_lower+f_upper)/s)/COS(MY_PI*(f_upper-f_lower)/s);
     FTR_PRECISION a2 = a*a;
-    FTR_PRECISION b = TAN(M_PI*(f_upper-f_lower)/s);
+    FTR_PRECISION b = TAN(MY_PI*(f_upper-f_lower)/s);
     FTR_PRECISION b2 = b*b;
     FTR_PRECISION u = LOG((FTR_PRECISION) (1.0 + SQRT((FTR_PRECISION) (1.0 + epsilon * epsilon))) / epsilon);
     FTR_PRECISION su = SINH((FTR_PRECISION) (2.0*u/(FTR_PRECISION)n));
@@ -316,8 +318,8 @@ CHEBandStop* create_che_band_stop_filter(int n, FTR_PRECISION epsilon, FTR_PRECI
     FTR_PRECISION r,c;
     int i;
     for(i=0; i < filter->m; ++i){
-        r = SIN((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / n)) * su;
-        c = COS((FTR_PRECISION) (M_PI * (2.0 * i + 1.0) / n))*cu;
+        r = SIN((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / n)) * su;
+        c = COS((FTR_PRECISION) (MY_PI * (2.0 * i + 1.0) / n))*cu;
         c = r*r + c*c;
         s = (FTR_PRECISION) (b2 + 2.0 * b * r + c);
         filter->A[i] = (FTR_PRECISION) (1.0 / (4.0 * s));

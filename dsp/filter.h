@@ -18,14 +18,14 @@ extern "C"{
 
 #if DOUBLE_PRECISION
 #define FTR_PRECISION double
-#if defined(_WIN32) || defined(__ZEPHYR__)
-#define M_PI 3.141592653589793238462643383279502884197163993751
-#endif
+//#if defined(_WIN32) || defined(__ZEPHYR__)
+#define MY_PI 3.141592653589793238462643383279502884197163993751
+//#endif
 #else
 #define FTR_PRECISION float
-#if defined(_WIN32) || defined(__ZEPHYR__)
-#define M_PI 3.1415927f
-#endif
+//#if defined(_WIN32) || defined(__ZEPHYR__)
+#define MY_PI 3.1415927f
+//#endif
 #endif
 
 typedef struct {
