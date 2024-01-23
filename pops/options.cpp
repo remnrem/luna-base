@@ -243,7 +243,10 @@ void pops_opt_t::set_options( param_t & param )
 	{
 	  std::vector<std::string> sec2 = Helper::parse( sec[i] , "=" );
 	  for (int j=0; j<sec2.size(); j++)
-	    aliases[ pri[i] ].insert( sec2[j] );
+	    {
+	      //	      std::cout << " mapping ALIASES in POPS " << pri[i] << " <-> " << sec2[j] << "\n";
+	      aliases[ pri[i] ].insert( sec2[j] );
+	    }
 	}
     }
   

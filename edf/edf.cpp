@@ -46,7 +46,7 @@ extern logger_t logger;
 
 edf_t::edf_t() : timeline( this )
 {    
-  //  std::cout << " in edf_t::edft_(), making a new one: " << this << "\n";    
+  //    std::cout << " in edf_t::edft_(), making a new one: " << this << "\n";    
   endian = determine_endian();    
   file = NULL;
   edfz = NULL;
@@ -88,6 +88,7 @@ void edf_t::init()
   edfz = NULL;
   
   header.init();
+  timeline = timeline_t( this );
   records.clear();    
   inp_signals_n.clear();
   has_edf_annots = false;

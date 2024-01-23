@@ -277,9 +277,16 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  //
 	  // get any staging (this should reset internals too, if repeating)
 	  //
+
+	  const bool no_problems = staging( edf , param );
+
+	  if ( ! no_problems )
+	    {
+	      logger << " *** problems with existing staging - cannot process gapped EDFs w/ existing staging currently ***\n";
+	      return;
+	    }
 	  
-	  staging( edf , param );
-	  
+
 	  //
 	  // build level 1 & 2 features
 	  //
@@ -520,7 +527,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 {
-
+  
   // calculate ne and staging, if present  
   ne = ne_total = edf.timeline.first_epoch();
   
@@ -529,7 +536,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 
   // valid?
   has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
-
+  
   bool emp = edf.timeline.hypnogram.empty();
   // valid, but empty?
   if ( has_staging && edf.timeline.hypnogram.empty() )
@@ -564,11 +571,11 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   // try to compute kappa, etc.   But rather than set to POPS_UNKNOWN, 
   // we will call everything POPS_WAKE, as POPS_UNKNOWN flag is used
   // to prune epochs (e.g. for being statistical outliers)
-
+  
   S.resize( ne , has_staging ? POPS_UNKNOWN : POPS_WAKE );
   E.resize( ne );
 
-  // for targets w/ no existing staging, all done
+   // for targets w/ no existing staging, all done
   if ( ! has_staging ) 
     {
       Sorig = S;
@@ -748,22 +755,18 @@ void pops_indiv_t::level1( edf_t & edf )
   std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin(); 
   while ( ss != pops_t::specs.chs.end() )
     {
-      
       // primary?
       int slot = edf.header.signal( ss->first , silent_signal_search );
       
       // match on an alias?
       if ( slot == -1 ) 
-	{
-	  
+	{	  
 	  const std::set<std::string> & aliases = ss->second.aliases;
-	  
 	  std::set<std::string>::const_iterator aa = aliases.begin();
 	  while ( aa != aliases.end() )
-	    {
-	  	      
+	    {	      
 	      slot = edf.header.signal( *aa , silent_signal_search );
-	      if ( slot != -1 ) break;
+	      if ( slot != -1 ) { ++aa; continue; }
 	      ++aa;
 	    }
 	}
@@ -778,7 +781,7 @@ void pops_indiv_t::level1( edf_t & edf )
       // need to resample?
       if ( edf.header.sampling_freq( slot ) != ss->second.sr )
         dsptools::resample_channel( edf, slot , ss->second.sr );
-      
+	    
       // need to rescale?
       if ( Helper::toupper( edf.header.phys_dimension[ slot ] ) != Helper::toupper( ss->second.unit ) )
 	{
@@ -791,13 +794,12 @@ void pops_indiv_t::level1( edf_t & edf )
 	      edf.rescale( slot , ss->second.unit ,true );
 	    }
 	}
-      
+	
       // build signal_list_t
       signals.add( slot , ss->first );
       
       ++ss;
     }
-  
 
   //
   // Get any indivi-level covariates (will be entered identically for every epoch)
@@ -927,7 +929,7 @@ void pops_indiv_t::level1( edf_t & edf )
 			 fft_segment_size , fft_segment_overlap , 
 			 WINDOW_TUKEY50 , false , false );
   
-  
+
   //
   // iterate over epochs
   //
@@ -938,7 +940,7 @@ void pops_indiv_t::level1( edf_t & edf )
     {
       
       int epoch = edf.timeline.next_epoch();      	  
-      //      std::cout << " epoch " << epoch << "\n";
+      //std::cout << " epoch " << epoch << "\n";
       if ( epoch == -1 ) break;
       
       if ( en == ne ) Helper::halt( "internal error: over-counted epochs" );
@@ -946,6 +948,9 @@ void pops_indiv_t::level1( edf_t & edf )
       //
       // skip?
       //
+
+      //      std::cout << " S " << S.size() << "\n" ;
+
       
       if ( S[ en ] == POPS_UNKNOWN )
    	{
@@ -965,7 +970,7 @@ void pops_indiv_t::level1( edf_t & edf )
       // Iterate over signals
       //
             
-      
+
       for (int s = 0 ; s < ns; s++ )
 	{
 
@@ -1006,7 +1011,7 @@ void pops_indiv_t::level1( edf_t & edf )
 	    slot1 = signals(s);
 	  
 	  //	  std::cout << "pops_opt_t::equiv_swapin = " << pops_opt_t::equiv_swapin << " " << slot1 << "\n";
-
+	  
 	  if ( slot1 == -1 )
 	    Helper::halt( "could not find equiv channel " + equiv->second );
 	  

@@ -278,6 +278,8 @@ void mtm::wrapper( edf_t & edf , param_t & param )
       srs.insert( Fs[s] );
     }
 
+  if ( ns_used == 0 ) return;
+  
   if ( spec_kurt && srs.size() != 1 )
     Helper::halt( "all SRs must be similar if using speckurt option" );
   

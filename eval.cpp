@@ -4794,7 +4794,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	   : Helper::trim( Helper::sanitize( tok1 , ' ' ) , '_' ) 
 	   )
 	: tok1 ; 
-      
+      std::cout << "setting alias XXX [" << str << "]\n";
       cmd_t::signal_alias( str );
       return;
     }

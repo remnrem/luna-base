@@ -85,8 +85,10 @@ void lunapi_t::var( const std::string & key , const std::string & value )
   if ( key == "sig" && value == "." )
     cmd_t::signallist.clear();
   else
+    {
+      std::cout << " parsing [" << key << "] -> [" << value << "]\n";
     cmd_t::parse_special( key , value );
-
+    }
   logger << "setting " << key << " = " << value << "\n";
 }
 
@@ -104,7 +106,12 @@ void lunapi_t::dropvar( const std::string & key )
   return;  
 }
 
-std::map<std::string,std::variant<std::monostate,std::string> > lunapi_t::vars( const std::vector<std::string> & keys )
+std::map<std::string,std::string> lunapi_t::vars() const
+{
+  return cmd_t::vars;
+}
+
+std::map<std::string,std::variant<std::monostate,std::string> > lunapi_t::vars( const std::vector<std::string> & keys ) const
 {
   std::map<std::string,std::variant<std::monostate,std::string> > r;
   for (int i=0; i<keys.size(); i++) 
@@ -112,7 +119,7 @@ std::map<std::string,std::variant<std::monostate,std::string> > lunapi_t::vars( 
   return r;
 }
 
-std::variant<std::monostate,std::string> lunapi_t::var( const std::string & key )
+std::variant<std::monostate,std::string> lunapi_t::var( const std::string & key ) const
 {  
   if ( cmd_t::vars.find( key ) == cmd_t::vars.end() ) return std::monostate{};
   return cmd_t::vars[ key ];
@@ -264,8 +271,10 @@ int lunapi_t::build_sample_list( const std::vector<std::string> & toks )
   
   // populate this class
   for (int i=0;i<sl.size();i++)
-    insert_inst( std::get<0>(sl[i]) , std::get<1>(sl[i]) , std::get<2>(sl[i]) );
-  
+    {
+      if ( std::get<0>(sl[i]) != "" && std::get<1>(sl[i]) != "" )
+	insert_inst( std::get<0>(sl[i]) , std::get<1>(sl[i]) , std::get<2>(sl[i]) );
+    }
   return nobs();
 }
 
@@ -543,17 +552,16 @@ std::string lunapi_inst_t::get_annot_files() const
 
 void lunapi_inst_t::refresh()
 {
-  
-  if ( state != -1 ) 
+  if ( state != 1 ) 
     {
       Helper::halt( "lunapi_inst_t::refresh(): no attached EDF" );
       return;      
     }
-    
+
   // drop edf_t  
   edf.init();
   
-  // reattach EDF
+  // reattach EDF (and this will remake the timeline too)
   attach_edf( edf_filename );
   
   if ( state != 1 ) 
@@ -574,8 +582,15 @@ void lunapi_inst_t::refresh()
 
 void lunapi_inst_t::drop()
 {
+  // clear out
   edf.init();
+  // set to empty
+  edf_t empty;
+  edf = empty;
+
+  // track meta-data
   state = 0;
+  id = "";
   edf_filename = "";
   annot_filenames.clear();
 }
@@ -630,8 +645,11 @@ std::map<std::string,datum_t> lunapi_inst_t::status() const
 
 
 
-bool lunapi_inst_t::attach_edf( const std::string & filename )
+bool lunapi_inst_t::attach_edf( const std::string & _filename )
 {
+
+  const std::string filename = Helper::expand( _filename );
+  
   if ( ! Helper::fileExists( filename ) ) 
     Helper::halt( "cannot find " + filename );
 
@@ -667,7 +685,7 @@ bool lunapi_inst_t::attach_edf( const std::string & filename )
 
 bool lunapi_inst_t::attach_annot( const std::string & annotfile )
 {
-
+  
   if ( annotfile.size() == 0 ) return false;
 
   // is 'annotfile' in fact a folder (i.e. ending in '/') ?
@@ -710,7 +728,7 @@ bool lunapi_inst_t::attach_annot( const std::string & annotfile )
   //
   else
     {
-      edf.load_annotations( annotfile );
+      edf.load_annotations( Helper::expand( annotfile ) );
       annot_filenames.insert( annotfile );        
     }
   

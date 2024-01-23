@@ -90,7 +90,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 
 bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel ) 
 {
-
+  
   // point to 'parent' timeline
   timeline = t ;
 
@@ -177,7 +177,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   ne = timeline->num_total_epochs();
   
   timeline->first_epoch();
-  
+
   // key measures populated here
   stages.clear();
   epoch_n.clear();
@@ -442,7 +442,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	    {
 	      std::vector<double> cx = cache->fetch( *ckeys_off.begin() );
 	      if ( cx.size() != 1 ) Helper::halt( "internal error - expecting single cache entry for LOFF" );
-	      
+ 	      
 	      lights_off = cx[0];
 
 	      logger << "  from TRIM cache, setting lights_off = "

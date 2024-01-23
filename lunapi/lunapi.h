@@ -54,8 +54,8 @@ public:
     if ( p_instance == NULL )
       {
 	p_instance = new lunapi_t();
-	std::cout << "initiated a new lunapi_t engine (" << globals::version << " " << globals::date << ")\n";
-	p_instance->init(); 	
+	p_instance->init();
+	//std::cout << "initiated a new lunapi_t engine (" << globals::version << " " << globals::date << ")\n";	
       }	
     return p_instance;
   }
@@ -64,10 +64,16 @@ public:
   {
     if ( p_instance != NULL )
       {
-	std::cout << "releasing lunapi_t\n";
+	std::cout << "retiring lunapi_t\n";
 	delete p_instance;
       }
   }
+
+  static std::string version()
+  {
+    return globals::version + " (" + globals::date + ")";
+  }
+  
   
 private:
 
@@ -156,9 +162,10 @@ public:
   void var( const std::string & key , const std::string & value );
   
   // get
-  std::variant<std::monostate,std::string> var( const std::string & key );
-  std::map<std::string,std::variant<std::monostate,std::string> > vars( const std::vector<std::string> & keys );
-
+  std::variant<std::monostate,std::string> var( const std::string & key ) const;
+  std::map<std::string,std::variant<std::monostate,std::string> > vars( const std::vector<std::string> & keys ) const;
+  std::map<std::string,std::string> vars( ) const;
+  
   // drop
   void dropvar( const std::string & key );
   void dropvars( const std::vector<std::string> & keys );
