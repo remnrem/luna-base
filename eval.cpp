@@ -543,7 +543,6 @@ void cmd_t::populate_commands()
 void cmd_t::replace_wildcards( const std::string & id )
 {
   
-  
   //
   // get copy of original script;  comments, newlines vesrus '&' will already have
   // been taken care of
@@ -564,12 +563,12 @@ void cmd_t::replace_wildcards( const std::string & id )
   //
   // Copy a set of variables, where any i-vars will overwrite an existing var
   //
-
+  
   std::map<std::string,std::string> allvars = vars;
   if ( ivars.find( id ) != ivars.end() )
     {
       const std::map<std::string,std::string> & newvars = ivars.find( id )->second;
-      std::map<std::string,std::string>::const_iterator vv = newvars.begin();
+      std::map<std::string,std::string>::const_iterator vv = newvars.begin();      
       while ( vv != newvars.end() )
 	{
 	  allvars[ vv->first ] = vv->second;
@@ -4794,7 +4793,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	   : Helper::trim( Helper::sanitize( tok1 , ' ' ) , '_' ) 
 	   )
 	: tok1 ; 
-      std::cout << "setting alias XXX [" << str << "]\n";
       cmd_t::signal_alias( str );
       return;
     }
@@ -5114,7 +5112,7 @@ void cmd_t::attach_ivars( const std::string & file )
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not find " + filename );
       
-      //std::cout << "reading from " << filename << "\n";
+      //      logger << "reading from " << filename << "\n";
       
       std::ifstream IN1( filename.c_str() , std::ios::in );
       bool header = true ; 
@@ -5161,7 +5159,7 @@ void cmd_t::attach_ivars( const std::string & file )
 		{
 		  if ( c == idcol ) continue;		  
 		  cmd_t::ivars[ tok[ idcol ] ][ head[ c ] ] = tok[c] ;		  
-		  //std::cout << "setting: " << tok[ idcol ] << " " << head[ c ]  << "  " << tok[c]  << "\n";
+		  //logger << "setting: " << tok[ idcol ] << " " << head[ c ]  << "  " << tok[c]  << "\n";
 		  
 		}
 	      
@@ -5171,8 +5169,8 @@ void cmd_t::attach_ivars( const std::string & file )
 	  header = false; 
 	}
       IN1.close();
-          
-      //      logger << "  attached " << ncols - 1 << " from " << filename << "\n";
+      
+      //logger << "  attached " << ncols - 1 << " from " << filename << "\n";
     }
 }
 

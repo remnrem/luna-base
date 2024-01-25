@@ -86,10 +86,10 @@ void lunapi_t::var( const std::string & key , const std::string & value )
     cmd_t::signallist.clear();
   else
     {
-      std::cout << " parsing [" << key << "] -> [" << value << "]\n";
-    cmd_t::parse_special( key , value );
+      //std::cout << " parsing [" << key << "] -> [" << value << "]\n";
+      cmd_t::parse_special( key , value );
     }
-  logger << "setting " << key << " = " << value << "\n";
+  //logger << "setting " << key << " = " << value << "\n";
 }
 
 
@@ -135,6 +135,21 @@ std::variant<std::monostate,std::string> lunapi_inst_t::ivar( const std::string 
 {
   if ( cmd_t::ivars[ id ].find( key ) == cmd_t::ivars[ id ].end() ) return std::monostate{};
   return cmd_t::ivars[ id ][ key ];
+}
+
+std::map<std::string,std::variant<std::monostate,std::string> > lunapi_inst_t::ivars() const
+{
+  std::map<std::string,std::variant<std::monostate,std::string> > r;
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ii = cmd_t::ivars.find( id );
+  if ( ii == cmd_t::ivars.end() ) return r;
+  const std::map<std::string,std::string> & v = ii->second;
+  std::map<std::string,std::string>::const_iterator vv = v.begin();
+  while ( vv != v.end() )
+    {
+      r[ vv->first ] = vv->second;
+      ++vv;
+    }
+  return r;
 }
 
 void lunapi_inst_t::clear_ivar()
@@ -647,7 +662,7 @@ std::map<std::string,datum_t> lunapi_inst_t::status() const
 
 bool lunapi_inst_t::attach_edf( const std::string & _filename )
 {
-
+  
   const std::string filename = Helper::expand( _filename );
   
   if ( ! Helper::fileExists( filename ) ) 
@@ -677,7 +692,7 @@ bool lunapi_inst_t::attach_edf( const std::string & _filename )
   cmd_t::define_channel_type_variables( edf );
 
   state = 1; 
-  
+    
   return true;
   
 }
@@ -787,7 +802,7 @@ std::string lunapi_inst_t::eval1( const std::string & cmdstr , retval_t * accumu
   //
   // replace any variables (or @includes, conditionals,etc) into command
   //
-  
+
   cmd.replace_wildcards( id );
 
   

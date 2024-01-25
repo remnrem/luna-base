@@ -241,7 +241,9 @@ public:
   void ivar( const std::string & key , const std::string & value ); 
   
   std::variant<std::monostate,std::string> ivar( const std::string & key ) const;
-  
+
+  std::map<std::string,std::variant<std::monostate,std::string> > ivars() const;
+
   void clear_ivar();
 
   //

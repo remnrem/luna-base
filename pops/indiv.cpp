@@ -293,7 +293,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	  level1( edf );
 	  
-	  level2( eq1 > 1 ? true : false ); // set to quiet mode, if repeating
+	  level2( pops_opt_t::verbose && eq1 == 1 ? false : true ); // set to quiet mode, if repeating or non-verbose
 	  
 	  logger << "  feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
 

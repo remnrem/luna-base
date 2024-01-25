@@ -1678,7 +1678,13 @@ bool edf_t::attach( const std::string & f ,
 
   if ( ! silent ) 
     {
+    
+      // if printing this info in API mode, we will not have shown the ID and a nice separator, so add here
       
+      if ( globals::api_mode )
+	logger << "___________________________________________________________________\n"
+	       << "Processing: " << id << " | " << filename << "\n";
+	  
       logger << " duration " << Helper::timestring( timeline.total_duration_tp , '.' , false )  // not fractional
 	     << ", " << timeline.total_duration_tp * globals::tp_duration << "s";
       

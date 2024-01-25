@@ -2101,6 +2101,8 @@ void Helper::process_block_conditionals( std::string * t , const std::map<std::s
 
     }
 
+  // include if var=1 (or is non-zero, i.e. defined) 
+  
   // 
   // [[var 
   //    ...
@@ -2108,7 +2110,14 @@ void Helper::process_block_conditionals( std::string * t , const std::map<std::s
   //    ...
   // ]]var
   //
-    
+
+  // include if var=0 (or is not defined) 
+  
+  // [[!var
+  //   ...
+  //   include ...
+  //   ...
+  // [[var
   
   std::string s;
   bool include = true;
@@ -2130,8 +2139,9 @@ void Helper::process_block_conditionals( std::string * t , const std::map<std::s
 	  while (1) 
 	    { 
 	      ++i;
+	      if ( (*t)[i] == ' ' ) continue; // allow to skip spaces
 	      if ( i == t->size() ) break; // can be EOF
-	      if ( (*t)[i] == ' ' || (*t)[i] == '\t' || (*t)[i] == '\n' ) break;
+	      if ( (*t)[i] == '\t' || (*t)[i] == '\n' ) break;
 	      h += (*t)[i];
 	    }	  
 
@@ -2168,16 +2178,27 @@ void Helper::process_block_conditionals( std::string * t , const std::map<std::s
 	  while (1) 
 	    { 
 	      ++i;
+	      // allow to skip spaces
+	      if (  (*t)[i] == ' ' ) continue;
 	      if ( i == t->size() ) Helper::halt( "badly formed inclusion block" );
-	      if ( (*t)[i] == ' ' || (*t)[i] == '\t' || (*t)[i] == '\n' ) break;
+	      if ( (*t)[i] == '\t' || (*t)[i] == '\n' ) break;
 	      h += (*t)[i];
 	    }
-	  
-	  bool v_inc = vars.find( h ) != vars.end() && vars.find( h )->second != "0";
-	  bool a_inc = adds.find( h ) != adds.end();
 
+	  if ( h.size() == 0 ) Helper::halt( "bad format for [[-inclusion block" );
+	  
+	  // include-if-not logic?    term starts w/ !
+	  const bool ifnot = h.size() > 1 && h[0] == '!';
+
+	  // remove optional '!' before searching
+	  const std::string h1 = ifnot ? h.substr(1) : h ; 	  
+	  bool v_inc = vars.find( h1 ) != vars.end() && vars.find( h1 )->second != "0";
+	  bool a_inc = adds.find( h1 ) != adds.end();
 	  include = v_inc || a_inc;
 
+	  if ( ifnot ) include = ! include ;
+
+	  // but track on term w/ or without '!'
 	  if ( includes.find( h ) != includes.end() || excludes.find(h) != excludes.end() )
 	    Helper::halt( "bad format for conditional block: [["+h + " already set" );
 	  
