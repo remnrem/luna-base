@@ -158,6 +158,8 @@ public:
 
   void silence( const bool b);
 
+  bool is_silenced() const;
+  
   // set 
   void var( const std::string & key , const std::string & value );
   
@@ -169,7 +171,8 @@ public:
   // drop
   void dropvar( const std::string & key );
   void dropvars( const std::vector<std::string> & keys );
-
+  void dropallvars();
+  
   // includes resetting all prior attributes
   void re_init();
   

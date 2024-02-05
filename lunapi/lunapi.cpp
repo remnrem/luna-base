@@ -74,6 +74,11 @@ void lunapi_t::silence( const bool b )
   globals::silent = b;
 }
 
+bool lunapi_t::is_silenced() const
+{
+  return globals::silent;
+}
+
 void lunapi_t::var( const std::string & key , const std::string & value )
 {
   
@@ -93,7 +98,12 @@ void lunapi_t::var( const std::string & key , const std::string & value )
 }
 
 
-void lunapi_t::dropvars( const std::vector<std::string> & keys )
+void lunapi_t::dropallvars()
+{
+  cmd_t::vars.clear();
+}
+
+  void lunapi_t::dropvars( const std::vector<std::string> & keys )
 {
   for (int i=0; i<keys.size(); i++) dropvar( keys[i] );
 }

@@ -755,9 +755,10 @@ void pops_indiv_t::level1( edf_t & edf )
   std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin(); 
   while ( ss != pops_t::specs.chs.end() )
     {
+      
       // primary?
       int slot = edf.header.signal( ss->first , silent_signal_search );
-      
+
       // match on an alias?
       if ( slot == -1 ) 
 	{	  
@@ -765,8 +766,9 @@ void pops_indiv_t::level1( edf_t & edf )
 	  std::set<std::string>::const_iterator aa = aliases.begin();
 	  while ( aa != aliases.end() )
 	    {	      
-	      slot = edf.header.signal( *aa , silent_signal_search );
-	      if ( slot != -1 ) { ++aa; continue; }
+	      slot = edf.header.signal( *aa , silent_signal_search );	      
+	      // if ( slot != -1 ) { ++aa; continue; }
+	      if ( slot != -1 ) { break; }
 	      ++aa;
 	    }
 	}
