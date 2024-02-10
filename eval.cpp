@@ -1281,7 +1281,7 @@ void proc_set_ivar( edf_t & edf , param_t & param )
 {
   std::string val;
   std::string var = param.single_pair( & val );
-  logger << "  setting individual-level variable " << var << " to " << val << "\n";
+  //logger << "  setting individual-level variable " << var << " to " << val << "\n";
   cmd_t::ivars[ edf.id ][ var ] = val;
 }
 

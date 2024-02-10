@@ -641,7 +641,11 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
     }
 
-    
+
+  // current limitation
+  if ( edfplus && inp_signals != NULL )
+    Helper::halt( "currently, cannot specify a subset of channels ('sig') with EDF+ (or using force-edf=T)" );
+  
   // Number and direction of records/signals
   
   nr                   = edf_t::get_int( &q , 8 );
@@ -752,9 +756,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       
       // this match function will change 'l' to match any primary aliase
       // it does a case-insensitive match, but returns the correct (preferred-case) version
+      // if inp_signals is defined, it will always include the annotaiton channel label
       
       bool include = inp_signals == NULL || signal_list_t::match( inp_signals , &l , slabels );
-      //std::cout << " l = " << include << " " << l << "\n";
+      //      std::cout << " l = " << include << " " << l << "\n";
 	    
       // imatch allows for case-insensitive match of 'edf annotation*'  (i.e. 14 chars)
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
@@ -764,7 +769,8 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       // we need to read the EDF+D time-track (but not other annots)
       
       if ( annotation )
-	{	  
+	{
+	  // ... unless explicitly told not too
 	  if ( globals::force_edf ) 
 	    include = false;
 
@@ -772,6 +778,9 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	  // for EDF+C, can skip the whole thing
 	  if ( globals::skip_edf_annots && continuous )
 	    include = false;
+
+	  //std::cout << " include = " << include << "\n";
+	  
 	}
     
       //
@@ -1521,9 +1530,20 @@ bool edf_t::attach( const std::string & f ,
       //
     }
 
+
   //
   // Read and parse the EDF header (from either EDF or EDFZ)
   //
+
+  // if inp_signals has been specified, then we need to make sure it includes
+  // annotation channels.   Easiest to just add here
+
+  // std::set<std::string> inp_signals2;
+  // if ( inp_signals != NULL )
+  //   {
+  //     inp_signals2 = *inp_signals;
+  //     inp_signals2.insert( "EDF Annotations" );
+  //   }
   
   // Parse the header and extract signal codes 
   // store so we know how to read records

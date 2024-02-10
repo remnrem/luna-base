@@ -176,6 +176,9 @@ struct spectral_kurtosis_t {
   
   // per channel
   double kurtosis2( const int, frequency_band_t , double * sd = NULL , double * skew = NULL );
+
+  // non-band variant
+  std::vector<double> kurtosis2_fbin( const bool logscale , const int ch, std::vector<double> * sd, std::vector<double> * skew );
   
   // alternate def
   double kurtosis( frequency_band_t , double * sd = NULL , double * skew = NULL );

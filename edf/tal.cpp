@@ -153,7 +153,7 @@ tal_t::tal_t( edf_t * edf , int signal , int r )
 void tal_t::decode( const std::string & str )
 {
   
-  //  std::cout << "DECODE [" << str << "]\n";
+  //std::cout << "DECODE [" << str << "]\n";
 
   // Onset { [\x15] Duration } [\x14] {text} [\x14 ] 
   // Onset { [\x15] Duration } [\x14] {text} [\x14 ] 
@@ -187,7 +187,7 @@ void tal_t::decode( const std::string & str )
       
       std::vector<std::string> subs = Helper::char_split( toks[t] , '\x14' , NO_EMPTIES );
       
-      //      std::cout << "subs size = " << subs.size() << "\n";
+      //std::cout << "subs size = " << subs.size() << "\n";
 
       // this should contain at least one field (time)
       if ( subs.size() < 1 ) continue;
@@ -195,7 +195,7 @@ void tal_t::decode( const std::string & str )
       // time can optionally have a duration
       std::vector<std::string> ts = Helper::char_split( subs[0] , '\x21' , NO_EMPTIES );
       
-      //      std::cout << "ts size = " << ts.size() << "\n";
+      //std::cout << "ts size = " << ts.size() << "\n";
 
       double onset = 0;
       double duration = 0;
@@ -211,15 +211,15 @@ void tal_t::decode( const std::string & str )
 	  if ( ! Helper::str2dbl( ts[0] , &onset ) )
 	    Helper::halt( "problem converting time-stamp, " + ts[0] );	  
 	}
-
+      
       // time-stamp?
-
+      //      std::cout << std::setprecision(12);
       if ( ! added_time_stamp )
 	{
 	  tal_element_t tae( onset , duration , globals::edf_timetrack_label );
 	  d.push_back( tae );
 	  added_time_stamp = true;	  
-	  //std::cout << "adding TS : " << tae << "\n";
+	  //  std::cout << "adding TS : " << tae << "\n";
 	}
 
       // textual label(s)?

@@ -252,3 +252,66 @@ double spectral_kurtosis_t::kurtosis2( const int ch, frequency_band_t b , double
   return k;
   
 }
+
+
+std::vector<double> spectral_kurtosis_t::kurtosis2_fbin( const bool logscale , const int ch, std::vector<double> * fsd, std::vector<double> * fskew )
+{
+  // within-channel version
+  
+  // only defined for 'alternate' (i.e. primary) version where we sum in the freq domain first
+  // and then kurtosis just for the e.g. 29 values
+
+  std::vector<double> fkurt;
+
+  std::map<int,std::vector<std::vector<double> > >::const_iterator ss = ch2segxf.find( ch );
+  if ( ss == ch2segxf.end() ) return fkurt;
+  
+  const std::vector<std::vector<double> > & X = ss->second;
+  
+  int nf=f.size();
+  int n_segs=X.size();
+
+  if ( n_segs < 3 ) return fkurt;
+  
+  fkurt.resize( nf );
+  fsd->resize( nf );
+  fskew->resize( nf );
+
+  for (int fi=0;fi<nf;fi++)
+    {
+      
+      std::vector<double> xx;
+      for (int i=0; i<n_segs; i++)
+	xx.push_back( X[i][fi] );
+      
+      std::vector<double> lntracker( xx.size() );
+      for (int i=0; i<xx.size(); i++)
+	lntracker[i] = log( xx[i] );
+      
+      if ( logscale ) // for KURT and SKEW
+	{
+	  xx = lntracker;
+	}      
+      
+      fkurt[fi] = MiscMath::kurtosis( xx ) + ( kurt3 ? 3 : 0 ) ;
+      
+      if ( fsd != NULL )
+	{
+	  // sd of natural log scaled
+	  const double xsd = MiscMath::sdev( lntracker );
+	  
+	  // CV, using formula for log-normal data                                             
+	  (*fsd)[fi] = sqrt( exp( xsd * xsd ) -1 );
+	  
+	}
+      
+      if ( fskew != NULL ) 
+	{
+	  (*fskew)[fi] = MiscMath::skewness( xx );
+	}
+      
+    }// next freq bin
+  
+  return fkurt;
+  
+}

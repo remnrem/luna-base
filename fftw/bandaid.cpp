@@ -219,7 +219,6 @@ double bandaid_t::psdsum( const std::vector<double> & f , const std::vector<doub
 
 void bandaid_t::calc_bandpower( const std::vector<double> & f , const std::vector<double> & x )
 {
-  
   slow = psdsum( f , x, globals::freq_band[ SLOW ] );
   delta = psdsum( f , x, globals::freq_band[ DELTA ] );
   theta = psdsum( f , x, globals::freq_band[ THETA ] );

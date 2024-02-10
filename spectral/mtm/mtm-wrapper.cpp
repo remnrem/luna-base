@@ -87,6 +87,9 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
   // 'excess' kurtosis, i.e. = 0 for N(0,1)
   const bool spec_kurt  = param.has( "speckurt" ) || param.has( "speckurt3" ) || param.has( "alternate-speckurt" );
+
+  // log-scale spec-kurt (for fbin only right nowe)
+  const bool sklog = param.has( "speckurt-fbin-log" );
   
   // 'alternative' definition of spectral kurtosis (i.e. kurt of both time and freq bins, within band)
   const bool kurt_altdef = param.has( "alternate-speckurt" );
@@ -340,6 +343,15 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   etrack_specskew.resize( ns_used );
   etrack_speccv.resize( ns_used );
 
+  // channel->freqbin->epoch->value
+  std::vector<std::vector<std::vector<double> > > etrack_fspeckurt;
+  std::vector<std::vector<std::vector<double> > > etrack_fspecskew;
+  std::vector<std::vector<std::vector<double> > > etrack_fspeccv;
+  etrack_fspeckurt.resize( ns_used );
+  etrack_fspecskew.resize( ns_used );
+  etrack_fspeccv.resize( ns_used );
+
+  
   if ( epochwise )
     logger << "  epochwise analysis, iterating over " << edf.timeline.num_epochs() << " epochs\n";
   else
@@ -662,7 +674,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
           if ( ( ! epochwise ) || ( epochwise && epoch_level_output ) )
 	    {
-	      bandaid.calc_bandpower( mtm.f , mtm.spec );
+	      bandaid.calc_bandpower( mtm.f , mtm.raw_spec );
 	      
 	      const double mean_total_power = bandaid.fetch( DENOM );
 	      
@@ -693,7 +705,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		}
 	      
 	      // add this epoch
-	      bandaid.calc_bandpower( mtm.f , mtm.spec );	      
+	      bandaid.calc_bandpower( mtm.f , mtm.raw_spec );
 
 	      const double mean_total_power = bandaid.fetch( DENOM );
 
@@ -702,7 +714,8 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      while ( bb != bandaid.bands.end() )
 		{
 		  double p = bandaid.fetch( *bb ) ;
-		  etrack_bandpower[ns1][bi].push_back( p );
+		  // dB? scaling (all bandaid_t storage is raw)
+		  etrack_bandpower[ns1][bi].push_back( dB ? 10*log10(p) : p  );
 		  etrack_relbandpower[ns1][bi].push_back( p / mean_total_power );
 		  ++bi;
 		  ++bb;
@@ -872,7 +885,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 			      // segment-level band-level output?
 			      //
 			      
-			      bandaid.calc_bandpower( mtm.f , mtm.espec[j] );
+			      bandaid.calc_bandpower( mtm.f , mtm.raw_espec[j] );
 			      
 			      const double mean_total_power = bandaid.fetch( DENOM );
 			      
@@ -1010,18 +1023,22 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		  writer.unlevel( globals::band_strat );
 		  
 		}
-
+	      
 	      //
 	      // track?
 	      //
-
-              if ( epochwise && etrack_speckurt[ns1].size() == 0 )
+	      
+              if ( epochwise )
 		{
 		  
-		  etrack_speckurt[ns1].resize( skurt.bands.size() );
-		  etrack_specskew[ns1].resize( skurt.bands.size() );
-		  etrack_speccv[ns1].resize( skurt.bands.size() );
-		  		
+		  // bandwise speckurt
+		  if ( etrack_speckurt[ns1].size() == 0 ) 
+		    {
+		      etrack_speckurt[ns1].resize( skurt.bands.size() );
+		      etrack_specskew[ns1].resize( skurt.bands.size() );
+		      etrack_speccv[ns1].resize( skurt.bands.size() );
+		    }
+		  
 		  int bn=0;
 		  std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
 		  while ( bb != skurt.bands.end() )
@@ -1038,8 +1055,35 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		      ++bn;
 		    }
 		}
-	    }
 
+	      // freqbin speckurt
+	      int nf = etrack_freqs[ns1].size();
+	      
+	      if ( etrack_fspeckurt[ns1].size() == 0 ) 
+		{
+		  etrack_fspeckurt[ns1].resize( nf );
+		  etrack_fspecskew[ns1].resize( nf );
+		  etrack_fspeccv[ns1].resize( nf );
+		}
+
+	      // calc spec kurt
+	      std::vector<double> fspsk ,fspcv ;
+	      std::vector<double> fspku = skurt.kurtosis2_fbin( sklog, ns1, &fspcv, &fspsk ) ;
+	      
+              int fidx = 0;
+              for ( int i = 0 ; i < mtm.f.size() ; i++ )
+                if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f )
+                  {
+                    // channel -> freq -> epoch/value 
+                    etrack_fspeckurt[ ns1 ][ fidx ].push_back( fspku[i] );
+		    etrack_fspecskew[ ns1 ][ fidx ].push_back( fspsk[i] );
+		    etrack_fspeccv[ ns1 ][ fidx ].push_back( fspcv[i] );
+		    ++fidx;
+                  }
+            
+	    }
+	  
+	  
 
 	  //
 	  // add new signals?
@@ -1273,6 +1317,30 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		}
 	      writer.unlevel( globals::band_strat );
 
+
+	      // freq-bin
+	      int fn = etrack_freqs[ns1].size();
+	      for (int fi=0; fi<fn; fi++)
+		{
+		  writer.level( etrack_freqs[ns1][fi]  , globals::freq_strat  );
+
+		  const double sk_mn = MiscMath::mean( etrack_fspeckurt[ns1][fi] );
+		  const double ss_mn = MiscMath::mean( etrack_fspecskew[ns1][fi] );
+		  const double sc_mn = MiscMath::mean( etrack_fspeccv[ns1][fi] );
+		  
+		  writer.value( "SPECKURT" , MiscMath::mean( etrack_fspeckurt[ns1][fi] ) );
+		  writer.value( "SPECSKEW" , MiscMath::mean( etrack_fspecskew[ns1][fi] ) );
+		  writer.value( "SPECCV" , MiscMath::mean( etrack_fspeccv[ns1][fi] ) );
+		  
+		  if ( etrack_power[ns1][fi].size() > 2 )
+		    {
+		      writer.value( "SPECKURT_MD" , MiscMath::median( etrack_fspeckurt[ns1][fi] ) );
+		      writer.value( "SPECSKEW_MD" , MiscMath::median( etrack_fspecskew[ns1][fi] ) );
+		      writer.value( "SPECCV_MD" , MiscMath::median( etrack_fspeccv[ns1][fi] ) );
+		    }
+		}
+	      writer.unlevel( globals::freq_strat );
+	      
 	    }
 	  
 	  
