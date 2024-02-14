@@ -2744,7 +2744,6 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   // epoch:             collapse-edges
   // flatten:
   // split:
-
   
   // special case: just add each epoch as a distinct annotation
   // (no flattening, etc, unlike below)
@@ -3238,6 +3237,22 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   logger << "  created " << nevs.size() << " instances of " << newannot << "\n";
 }
 
+
+bool annotation_set_t::dummy_sleep_stage( const timeline_t & tl ,
+					  const std::string & stg )
+{
+  // e.g. set to all wake
+  //   - it can be useful to set a valid, dummy hypnogram, if we want to apply lights off/on in POPS
+  //     but don't have any valid existing staging;   POPS will still ignore the W, but we get to use the
+  //     construct() hypnogram logic to set lights on/off flexibly
+  
+  interval_t interval( 0LLU , tl.last_time_point_tp + 1LLU );
+  clear( "SleepStage" );
+  annot_t * ss = add( "SleepStage" );
+  ss->description = "SleepStage";
+  ss->add( stg , interval , "." );
+  return true;
+}
 
 
 bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
@@ -4228,7 +4243,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
 	  if ( collapse_disc && ! edf.header.continuous ) 
 	    {
-	      //	      std::cout << " pre  " << interval.start << " -- " << interval.stop << "\n";
+	      //std::cout << " pre  " << interval.start << " -- " << interval.stop << "\t";
 	      interval = edf.timeline.collapse( interval );
 	      //std::cout << " post " << interval.start << " -- " << interval.stop << "\n";
 	      

@@ -79,7 +79,7 @@ struct pops_opt_t {
   static bool verbose;
   static int n_stages;
   static int trim_wake_epochs;
-
+  static bool ignore_obs_staging;  
   static double epoch_len;
   static double epoch_inc;
 

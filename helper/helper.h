@@ -385,9 +385,17 @@ struct date_t {
   static std::string datestring( int c ); 
 
 
-  std::string as_string() const
+  std::string as_string( char delim = '-' , const int ydigs = 4 ) const
   {
-    return Helper::int2str( d ) + "-" + Helper::int2str( m ) + "-" + Helper::int2str( y );
+    if ( ydigs == 4 ) 
+      return Helper::int2str( d ) + delim + Helper::int2str( m ) + delim + Helper::int2str( y );
+    else if ( ydigs == 2 ) // for EDF startdate formats (fixed char lengths)
+      return ( d < 10 ? "0" : "" ) + Helper::int2str( d )
+	+ delim + ( m < 10 ? "0" : "" ) + Helper::int2str( m )
+	+ delim + Helper::int2str( y ).substr(2,2);
+    else
+      Helper::halt( "internal error in date_t::as_string()" );
+    return "";
   }
   
   date_t( const int d = 1 , const int m = 1 , const int y = 1985 )
@@ -427,6 +435,43 @@ struct date_t {
     if ( m > rhs.m ) return false;
     return d < rhs.d;
   }
+
+  void next_day()
+  {
+    ++d;
+    if ( d > days_in_month( m , y ) )
+      {
+	d = 1;
+	++m;
+	if ( m > 12 )
+	  {
+	    m = 1;
+	    ++y;
+	    if ( y > 3000 )
+	      Helper::halt( "invalid date" );
+	  }
+      }
+  }
+  
+  void prev_day()
+  {
+    --d;
+
+    if ( d == 0 )
+      {
+	
+	--m;
+
+	if ( m > 0 )
+	  {
+	    --y;
+	    m = 12;
+	  }
+	
+	d = days_in_month( m , y );
+      }
+  }
+    
   
 };
 

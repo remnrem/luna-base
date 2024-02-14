@@ -470,12 +470,13 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       // (just to console, not other output tracked)
       //
 
-      if ( pops_opt_t::soap_results || 
-	   ( espriors_file != "." && pops_opt_t::if_root_apply_espriors ) ||
-	   pops_opt_t::soap_grid )
-	{
-	  print_confusion_matrix();
-	}
+      if ( has_staging )
+	if ( pops_opt_t::soap_results || 
+	     ( espriors_file != "." && pops_opt_t::if_root_apply_espriors ) ||
+	     pops_opt_t::soap_grid )
+	  {
+	    print_confusion_matrix();
+	  }
 	   
       //
       // Apply SOAP to the final solution?
@@ -530,18 +531,45 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   
   // calculate ne and staging, if present  
   ne = ne_total = edf.timeline.first_epoch();
-  
-  // get staging
-  edf.timeline.annotations.make_sleep_stage( edf.timeline );
 
-  // valid?
-  has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
-  
-  bool emp = edf.timeline.hypnogram.empty();
-  // valid, but empty?
-  if ( has_staging && edf.timeline.hypnogram.empty() )
-    has_staging = false;
+  // existing staging?
 
+  // but as we still might want to use lights off/on information here,
+  // call this function to define lights on/off.
+  //   here LightsOff --> L --> POPS missing
+  //   otherwise      --> W
+  //    (but do not report confusion matric, PRIOR, etc)
+
+  has_staging = false;
+  
+  if ( ! pops_opt_t::ignore_obs_staging )
+    {
+      // get staging
+      edf.timeline.annotations.make_sleep_stage( edf.timeline );
+      
+      // valid?
+      has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
+      
+      bool emp = edf.timeline.hypnogram.empty();
+      // valid, but empty?
+      if ( has_staging && edf.timeline.hypnogram.empty() )
+	has_staging = false;
+    }
+
+
+  if ( ! has_staging )
+    {
+      // get some dummy (all W) staging
+      edf.timeline.annotations.dummy_sleep_stage( edf.timeline );
+      
+      // this allow for lights off/on logic to be applied
+      has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
+
+      // but still note that we do not have valid staging
+      has_staging = false;
+    }
+
+  
   // prediction
   if ( (!trainer) )
     {
@@ -557,8 +585,10 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
       logger << "  *** no valid staging for trainer " <<  edf.id << "  ( -- skipping -- )\n";
       return false;
     }
+
   // check epochs line up, if staging present
-  if ( has_staging && ne != edf.timeline.hypnogram.stages.size() )    
+  if ( has_staging && ne != edf.timeline.hypnogram.stages.size() )
+    //if ( has_stagingne != edf.timeline.hypnogram.stages.size() )    
     {
       logger << "  *** problem extracting stage information for trainer: " <<  edf.id << "  ( -- skipping -- )\n";
       logger << "      (expecting " << ne << " epochs, observed " << edf.timeline.hypnogram.stages.size() << ")\n";
@@ -571,19 +601,33 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   // try to compute kappa, etc.   But rather than set to POPS_UNKNOWN, 
   // we will call everything POPS_WAKE, as POPS_UNKNOWN flag is used
   // to prune epochs (e.g. for being statistical outliers)
-  
-  S.resize( ne , has_staging ? POPS_UNKNOWN : POPS_WAKE );
+
+
+  // CHANGE ... remove this
+
+  // S.resize( ne , has_staging ? POPS_UNKNOWN : POPS_WAKE );
+  // E.resize( ne );
+
+  // // for targets w/ no existing staging, all done
+  // if ( ! has_staging ) 
+  //   {
+  //     Sorig = S;
+  //     for (int ss=0; ss < ne; ss++ )
+  // 	E[ss] = ss;
+  //     return true; // target always returns T
+  //   }
+
+
+  //
+  // We we've made a dummy staging set is ! has_staging, so treat the same
+  // here (i.e. to allow lights off logic
+  //
+
+  // CHANGE... we run below even if no staging present (as now we add it above) 
+  S.resize( ne , POPS_UNKNOWN );
   E.resize( ne );
 
-   // for targets w/ no existing staging, all done
-  if ( ! has_staging ) 
-    {
-      Sorig = S;
-      for (int ss=0; ss < ne; ss++ )
-	E[ss] = ss;
-      return true; // target always returns T
-    }
-
+  
   //
   // convert 
   //

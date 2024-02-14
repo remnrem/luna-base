@@ -1830,7 +1830,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      if ( eperm ) 
 			{
 			  if ( edf.timeline.generic_epochs() )
-			    Helper::halt( "cannot run within-epoch permutation with generic (differently-sized) epochs: add 'perm-whole-trace' " );
+			    {
+			      if ( param.has( "fixed-epoch-dur" ) )
+				epoch_sec = param.requires_dbl( "fixed-epoch-dur" );
+			      else
+				Helper::halt( "cannot run within-epoch permutation with generic (differently-sized) epochs: add 'perm-whole-trace' " );
+			    }
 			  
 			  if ( ! edf.timeline.epoched() ) edf.timeline.ensure_epoched();
 			  epoch_sec = edf.timeline.epoch_length();

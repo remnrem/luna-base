@@ -64,8 +64,9 @@ public:
   {
     if ( p_instance != NULL )
       {
-	std::cout << "retiring lunapi_t\n";
+	//std::cout << "retiring lunapi_t\n";
 	delete p_instance;
+	p_instance = NULL;
       }
   }
 

@@ -198,7 +198,8 @@ void lunapi_t::re_init()
   
   // but need to re-indicate that we are running inside API
   global.R( 1 ); // 1 means to cache
-  
+
+  reset();
 }
 
 
@@ -582,7 +583,7 @@ void lunapi_inst_t::refresh()
       Helper::halt( "lunapi_inst_t::refresh(): no attached EDF" );
       return;      
     }
-
+  
   // drop edf_t  
   edf.init();
   
