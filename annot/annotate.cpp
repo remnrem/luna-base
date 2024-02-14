@@ -308,6 +308,13 @@ void annotate_t::set_options( param_t & param )
 
   // verbose/debug mode
   debug_mode = param.has( "verbose" ) || param.has( "debug" );
+
+  // add shuffled annots (only in INDIV mode)
+  add_shuffled_annots = param.has( "add-shuffled-annots" );
+  if ( add_shuffled_annots && ! single_indiv_mode )
+    Helper::halt( "cannot add-shuffled-annots in multi-individual mode" );
+  shuffled_annots_names = param.strset( "add-shuffled-annots" );
+  shuffled_annots_tag = param.has( "shuffled-annots-tag" ) ? param.value( "shuffled-annots-tag" ) : "s_" ; 
   
   // reduce annotations to midpoints
   // midpoint     do all
@@ -1569,6 +1576,10 @@ annotate_stats_t annotate_t::loop()
       else
 	shuffle();
 
+      // save new annots? (first perm only)
+      if ( add_shuffled_annots && r == 0 )
+	add_permuted_annots();
+      
       // verbose output?
       if ( debug_mode )
 	{
@@ -1590,6 +1601,50 @@ annotate_stats_t annotate_t::loop()
   return s;
 }
 
+
+
+void annotate_t::add_permuted_annots()
+{
+  // std::set<std::string> shuffled_annots_names;
+  // std::string shuffled_annots_tag;
+  
+  std::map<uint64_t,std::map<std::string,std::set<interval_t> > >::const_iterator rr = events.begin();
+  while ( rr != events.end() )
+    {
+      // each annot
+
+      std::set<std::string>::const_iterator aa = shuffled_annots_names.begin();
+      while ( aa !=  shuffled_annots_names.end() )
+	{
+	  // valid annot
+	  if ( rr->second.find( *aa ) != rr->second.end() )
+	    {
+	      
+	      annot_t * a = edf->timeline.annotations.add( shuffled_annots_tag + *aa );
+
+	      const std::set<interval_t> & ints = rr->second.find( *aa )->second;
+
+	      std::set<interval_t>::const_iterator ii = ints.begin();
+	      while ( ii != ints.end() )
+		{
+		  a->add( "." , *ii , "." );
+		  
+		  // std::cout << "region = " << rr->first << "\t"
+		  // 	    << "annot = " << *aa << "\t"
+		  // 	    << "interval = " << ii->as_string() << "\t"
+		  // 	    << "dur = " << ii->duration_sec() << "\t"
+		  // 	    << ii->start << "\n";
+		  ++ii;
+		}
+	    }
+	  ++aa;
+	}
+      ++rr;
+    }
+
+  //  std::cout << "\n";
+  
+}
 
 
 void annotate_t::shuffle()

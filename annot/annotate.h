@@ -173,8 +173,10 @@ struct annotate_t {
   void event_permutation();
   
   void output(const annotate_stats_t & );
-  
 
+  void add_permuted_annots();
+  
+  
   //
   // param
   //
@@ -220,6 +222,7 @@ struct annotate_t {
   bool constrained_shuffle_dur;
 
 
+  
   // event-level permutation
   //  (including handling multi-indiv case, i.e. block permute only within person)
   //   does provide support for aligned annots
@@ -240,7 +243,15 @@ struct annotate_t {
   std::map<int,std::map<pinstance_t,std::set<pinstance_t> > > event2friends;
   std::map<int,std::map<pinstance_t,interval_t> > event2neighbourhood;;
   
-    
+
+  //
+  // add permuted annotations (on first permute) 
+  //
+
+  bool add_shuffled_annots;
+  std::set<std::string> shuffled_annots_names;
+  std::string shuffled_annots_tag;
+  
   // misc options
 
   std::vector<annot_contrast_t> contrasts;

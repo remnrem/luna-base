@@ -1355,6 +1355,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 
   any_sleep = ( mins[ "N1" ] + mins["N2"] + mins["N3"] + mins["N4"] + mins["R"] ) > 0 ;
 
+
   // lights out/on check
   // i.e. L can only be at start and end of recording
   // so illegal to have L flanked by non-L on both sides : 010
@@ -1362,12 +1363,17 @@ void hypnogram_t::calc_stats( const bool verbose )
   for (int e=1;e<ne-1;e++) 
     {
       // went from lights off to on again 
-      if ( stages[e-1] != LIGHTS_ON && stages[e]   == LIGHTS_ON ) lights_back_on = true;
+      if ( (!epoch_gap[e-1])
+	   && stages[e-1] != LIGHTS_ON
+	   && stages[e]   == LIGHTS_ON ) lights_back_on = true;
 
-      // if we previously have gone from OFF->ON, we cannot go back OFF again--- i.e. only allow 
-      // a single LIGHTS OFF interval
+      // if we previously have gone from OFF->ON, we cannot go back
+      // OFF again--- i.e. only allow a single LIGHTS OFF interval
       
-      if ( lights_back_on && stages[e] == LIGHTS_ON && stages[e+1] != LIGHTS_ON ) 
+      if ( lights_back_on
+	   && stages[e] == LIGHTS_ON
+	   && stages[e+1] != LIGHTS_ON
+	   && (!epoch_gap[e+1] ) )
 	Helper::halt( "LIGHTS_ON periods can only be at start and end of recording" );
     }
 
@@ -2115,14 +2121,28 @@ void hypnogram_t::calc_stats( const bool verbose )
 	      
 	      for (int i=0; i<n1; i++)
 		{
+		  double xx = elapsed_sleep[i];
+		  double yy = elapsed_all[i] ;
+		  
 		  elapsed_all[i] = ( elapsed_all[i] - min_all ) / ( max_all - min_all );
-		  elapsed_sleep[i] = ( elapsed_sleep[i] - min_sleep ) / ( max_sleep - min_sleep );		  		  		  
+		  elapsed_sleep[i] = ( elapsed_sleep[i] - min_sleep ) / ( max_sleep - min_sleep );
+
+		  if ( all_nrem ) 
+		    std::cout << " NR elapsed_sleep[i] = " << i << "\t" << xx << "\t" << yy << "\t" << elapsed_sleep[i] << "\t" << min_sleep << "\t" << max_sleep << "\n";
+		  if ( stage == REM )
+		    std::cout << " R elapsed_sleep[i] = " << i << "\t" << xx << "\t" << yy << "\t" << elapsed_sleep[i] << "\t" << min_sleep << "\t" << max_sleep << "\n";
+		  
 		}
 
 	      // get medians
 	      
 	      const double med_all = MiscMath::median( elapsed_all );
 	      const double med_sleep = MiscMath::median( elapsed_sleep );
+
+
+	      
+	      // const double med_all = MiscMath::mean( elapsed_all );
+	      // const double med_sleep = MiscMath::mean( elapsed_sleep );
 	      
 	      //std::cout << " stats med = " << med_all << " " << med_sleep << "\n";
 
@@ -2130,7 +2150,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 	      // store results
 	      stg_timing_all[ *qq ] = med_all;
 	      
-	      if ( stage == NREM1 || stage == NREM2 || stage == NREM3 || stage == NREM4 || stage == REM || n2a || n2d || n2f )
+	      if ( stage == NREM1 || stage == NREM2 || stage == NREM3 || stage == NREM4 || stage == REM || n2a || n2d || n2f || all_nrem )
 		stg_timing_sleep[ *qq ] = med_sleep;
 	      
 	    }

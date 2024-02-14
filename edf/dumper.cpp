@@ -1351,7 +1351,8 @@ void edf_t::seg_dumper( param_t & param )
     }
 
   const bool flag_largest_segment = param.has( "largest" ) && ! param.empty( "largest" );
-  
+  const double flag_largest_segment_req = param.has( "requires-min" ) ? param.requires_dbl( "requires-min" ) : -1 ;
+    
   annot_t * a_largest = NULL;
   std::map<uint64_t,interval_t> seg_sizes;
     
@@ -1374,8 +1375,11 @@ void edf_t::seg_dumper( param_t & param )
       // largest (only) seg
       writer.value( "LARGEST" , secs );
       if ( flag_largest_segment )
-	a_largest->add( Helper::dbl2str( secs ) , interval_t( 0LLU , (uint64_t)(secs * globals::tp_1sec) ) , "." );
-      
+	{
+	  if ( flag_largest_segment_req > 0 || secs >= flag_largest_segment_req * 60.0 ) 
+	    a_largest->add( "1" , interval_t( 0LLU , (uint64_t)(secs * globals::tp_1sec) ) , "." );
+	}
+
       writer.value( "DUR_SEC" , secs );
       writer.value( "DUR_MIN" , secs / 60.0);
       writer.value( "DUR_HR"  , secs/ 3600.0 );
@@ -1443,8 +1447,6 @@ void edf_t::seg_dumper( param_t & param )
 	  uint64_t dif = len > header.record_duration_tp ? len - header.record_duration_tp : header.record_duration_tp - len ;
           segend = dif > 10000LLU;
 	  
-	  //	  segend = tp - tp0 != header.record_duration_tp ;
-	  //std::cout << " segend = " << segend << "\t" << tp << "\t" << tp0 << "\t" << tp - tp0 << "\t" << header.record_duration_tp << "\n";
 	}
 
       // record this segment 
@@ -1527,14 +1529,26 @@ void edf_t::seg_dumper( param_t & param )
   writer.value( "NGAPS" , (int)gaps.size() );
 
   // largest
-  if ( num_segments > 1 )
+  if ( flag_largest_segment && num_segments > 0 )
     {
+      // start at end (largest)
       std::map<uint64_t,interval_t>::const_iterator ss = seg_sizes.end();
       --ss;
-      const double largest_sec = ss->first * globals::tp_duration;
-      writer.value( "LARGEST" , largest_sec );
-      if ( flag_largest_segment )
-	a_largest->add( Helper::dbl2str( largest_sec ) , ss->second , "." );
+      
+      int lidx = 1;
+      while ( 1 )
+	{      
+	  const double largest_sec = ss->first * globals::tp_duration;
+	  if ( lidx == 1 ) 
+	    writer.value( "LARGEST" , largest_sec );
+	  
+	  if ( flag_largest_segment_req > 0 || largest_sec >= flag_largest_segment_req * 60.0 )
+	    a_largest->add( Helper::int2str( lidx ) , ss->second , "." );
+	  
+	  if ( ss == seg_sizes.begin() ) break;
+	  ++lidx;
+	  --ss;	  
+	}      
     }
   
   // output any gaps

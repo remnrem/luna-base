@@ -75,6 +75,8 @@ double pops_opt_t::fft_inc_sec;
 double pops_opt_t::epoch_len;
 double pops_opt_t::epoch_inc;
 
+bool pops_opt_t::ignore_obs_staging;
+
 bool pops_opt_t::epoch_level_SHAP;
 
 std::vector<double> pops_opt_t::slope_range{ 30.0 , 45.0 } ;
@@ -123,6 +125,10 @@ void pops_opt_t::set_options( param_t & param )
   //        path/lib.ranges
   //        path/lib.priors
   //        path/(SVD files)
+
+
+  ignore_obs_staging = param.has( "ignore-obs-staging" );
+  
 
   // under root-specification, able to use/not use ranges, es-priors
   if_root_apply_ranges = param.has( "apply-ranges" ) ? param.yesno( "apply-ranges" ) : true ;

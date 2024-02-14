@@ -1111,7 +1111,9 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "FREEZE" ) )       proc_freeze( edf , param(c) );
       else if ( is( c, "THAW" ) )         proc_thaw( edf , param(c) );
+      else if ( is( c, "CLEAN-FREEZER"))  proc_clean_freezer( edf , param(c) );
       
+		    
       else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
       else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
       else if ( is( c, "ANNOT-MASK" ) )   proc_annot_mask( edf, param(c) );
@@ -2939,6 +2941,13 @@ void proc_freeze( edf_t & edf , param_t & param )
   
   freezer.freeze( freeze_name , edf );
 
+}
+
+// CLEAN : clean out entire freezer
+void proc_clean_freezer( edf_t & edf , param_t & param )
+{
+  logger << "  cleaning the freezer...\n";
+  freezer.clean( &edf );
 }
 
 // THAW : bring back and replace current EDF

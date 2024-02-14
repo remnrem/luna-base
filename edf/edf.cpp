@@ -441,17 +441,18 @@ void edf_t::terse_summary( param_t & param )
   writer.value( "REC_DUR" , header.record_duration );
 
   // duration in TP units
-  uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
-  std::string total_duration_hms = Helper::timestring( duration_tp , ':' , false );
+  const uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
+  const std::string total_duration_hms = Helper::timestring( duration_tp , ':' , false );
   writer.value( "REC_DUR_SEC" , header.nr * header.record_duration );
   writer.value( "REC_DUR_HMS" , total_duration_hms );
 
   // if EDF+ w/ gaps, the 'total'
-  double full_span_sec = ( timeline.last_time_point_tp+1LLU ) * globals::tp_duration ;
+  const double full_span_sec = ( timeline.last_time_point_tp+1LLU ) * globals::tp_duration ;
   writer.value( "TOT_DUR_SEC" , full_span_sec );
-  clocktime_t ot( "00.00.00" );
-  ot.advance_seconds( full_span_sec );
-  writer.value( "TOT_DUR_HMS" , ot.as_string() );
+  const std::string full_span_hms = Helper::timestring( timeline.last_time_point_tp+1LLU , ':' , false );
+  //clocktime_t ot( "00.00.00" );
+  //ot.advance_seconds( full_span_sec );
+  writer.value( "TOT_DUR_HMS" , full_span_hms );
   
   const std::string pat_id = Helper::trim( header.patient_id ) ;
   writer.value( "EDF_ID" , pat_id == "" ? "." : pat_id );
@@ -2045,14 +2046,11 @@ bool edf_record_t::write( FILE * file , const std::vector<int> & ch2slot )
       
       if ( edf->header.is_annotation_channel(s) )
 	{
-	  //std::cout << " ANNOT WRT ";
 	  for (int j=0;j< 2*nsamples;j++)
 	    {	  	      
 	      char a = j >= data[s].size() ? '\x00' : data[s][j];	      
-	      //std::cout << a ;
 	      fputc( a , file );
 	    }
-	  //std::cout << "\n";
 	}
     
     }
@@ -2203,15 +2201,19 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
 {
 
   // write_as_edf 0   -- no, do not force as EDF
-  //              1   -- yes, force as EDF but reset start time
+  //              1   -- yes, force as EDF but reset start time (and perhaps date)
   //              2   -- yes, force as EDF and set starttime to NULL (00.00.00) w/ message
   
   //
-  // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is set after any RESTRUCTURE
-  // We'll keep this as is here, but for the purpose of WRITE-ing an EDF+ (only), we'll first check 
-  // whether it is truly discontinuous (i.e. versus only the start/end was removed).
-  //  If always_edfd == T, do not make this change from EDF+D --> EDF+C when writing however.
-  //  i.e. this may be desirable if we want offset times always from the EDF+D start
+  // Is this EDF+ truly discontinuous?  i.e. a discontinuous flag is
+  // set after any RESTRUCTURE We'll keep this as is here, but for the
+  // purpose of WRITE-ing an EDF+ (only), we'll first check whether it
+  // is truly discontinuous (i.e. versus only the start/end was
+  // removed).
+  //
+  //  If always_edfd == T, do not make this change from EDF+D -->
+  //  EDF+C when writing however.  i.e. this may be desirable if we
+  //  want offset times always from the EDF+D start
   //
 
   bool actually_EDFD = is_actually_discontinuous();
@@ -2229,8 +2231,8 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
     logger << "  data are not truly discontinuous\n";
   
   //
-  // Reset start-time to NULL (i.e. to writing as standard EDF but is actually discontinuous, then)
-  // clocktimes will not make sense
+  // Reset start-time to NULL (i.e. to writing as standard EDF but is
+  // actually discontinuous, then) clocktimes will not make sense
   //
   
   bool null_starttime = write_as_edf == 2 && actually_EDFD; 
@@ -2459,11 +2461,6 @@ void edf_t::drop_signal( const int s )
 
   if ( s < 0 || s >= header.ns ) return;  
   --header.ns;
-
-  
-  // std::cout << "\n\n b4 dropping... " << header.t_track << "\n";
-  // for (int i=0; i<header.annotation_channel.size() ;i++)
-  //   std::cout << "header.annotation_channel[ " << i << " ] = " << header.annotation_channel[i] << "\t" << header.label[i] << "\n";
 
   // need to track whether this signal was in the list of signals to be read from the original file
   //  -- it needn't be, i.e. if a new channel has been created
@@ -4244,16 +4241,39 @@ void edf_t::reset_start_time()
   
   // interval for this record
   logger << "  setting EDF start time from " << header.starttime ;
-
+  
   clocktime_t et( header.starttime );
-  if ( et.valid )
+
+  if ( ! et.valid )
     {
-      double time_sec = ( interval.start * globals::tp_duration ) ; 
-      et.advance_seconds( time_sec );
+      logger << "  invalid EDF start time, setting to 00.00.00\n";
+      header.starttime = "00.00.00";
+      return;      
     }
 
+  
+  // time to advance in seconds
+  const double time_sec = ( interval.start * globals::tp_duration ) ; 
+
+  // set day to non-null so that we track the number of days wrapped, as needed
+  et.d = 1;
+  et.advance_seconds( time_sec );
+
+  // if day has moved forward, change the date
   header.starttime = et.as_string();
-  logger << " to " << header.starttime  << "\n"; 
+  logger << " to " << header.starttime  << "\n";
+
+  // adjust startdate?
+  if ( et.d != 1 )
+    {
+      date_t date1( header.startdate );
+      for (int dd=0; dd < et.d-1; dd++)
+	date1.next_day();
+      logger << "  setting EDF start date from " << header.startdate ;
+      header.startdate = date1.as_string( '.' , 2 );
+      logger << " to " << header.startdate << "\n";      
+    }
+  
 }
 
 

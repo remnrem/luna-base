@@ -629,8 +629,8 @@ interval_t timeline_t::collapse( const interval_t & interval ) const
   
   bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
 
-  // std::cout << " start rec smp = " << start_rec << " " << start_smp << "\n";
-  // std::cout << " stop rec smp = " << stop_rec << " " << stop_smp << "\n";
+  //  std::cout << " start rec smp = " << start_rec << " " << start_smp << "\n";
+  //std::cout << " stop rec smp = " << stop_rec << " " << stop_smp << "\n";
   // std::cout << " any = " << any << "\n";
   
   // interval has to fall completely in a valid area
@@ -647,6 +647,10 @@ interval_t timeline_t::collapse( const interval_t & interval ) const
   // nb + add one extra STOP smp here, +1 end
   uint64_t stop = stop_rec * edf->header.record_duration_tp + ( (stop_smp+1) / (double)srate ) * globals::tp_1sec ;
 
+  // std::cout << " start = " << interval.start / globals::tp_1sec  << " --> " << interval.stop / globals::tp_1sec << "\n";
+  // std::cout << " diff = " << ( interval.start - start ) / globals::tp_1sec << "\t" <<  ( interval.stop - stop ) /	globals::tp_1sec << "\n";
+  // std::cout << " XXart = " << start / globals::tp_1sec  << " --> " << stop / globals::tp_1sec << "\n";
+  
   return interval_t( start , stop );
     
 }
