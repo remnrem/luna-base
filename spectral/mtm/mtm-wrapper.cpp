@@ -991,17 +991,15 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  // (per-channel) Spectral kurtosis (calc'ed per epoch/interval but also here averaging channels
 	  //   -- only for 'primary' definiton (not alternate-speckurt) 
 	  //
-	  
+
 	  if ( spec_kurt && ! kurt_altdef )
 	    {
-
 	      //
 	      // output now?
 	      //
 	      
 	      if ( ( ! epochwise ) || epoch_level_output )
 		{
-		  
 		  std::set<frequency_band_t>::const_iterator bb = skurt.bands.begin();
 		  while ( bb != skurt.bands.end() )
 		    {
@@ -1030,7 +1028,6 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      
               if ( epochwise )
 		{
-		  
 		  // bandwise speckurt
 		  if ( etrack_speckurt[ns1].size() == 0 ) 
 		    {
@@ -1057,8 +1054,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		}
 
 	      // freqbin speckurt
-	      int nf = etrack_freqs[ns1].size();
-	      
+	      int nf = etrack_freqs[ns1].size();	      
 	      if ( etrack_fspeckurt[ns1].size() == 0 ) 
 		{
 		  etrack_fspeckurt[ns1].resize( nf );
