@@ -1,10 +1,4 @@
 
-// TODO
-//    - from cache points
-//   command check for working w/ generics
-//   luna-docs
-//   confirm that epoch < record size is okay...
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -1019,6 +1013,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   else if ( param.has( "start" ) ) epoch_generic_param_set_point = 1;
   else if ( param.has( "stop" ) ) epoch_generic_param_set_point = 3;
 
+  // window/flanking around points
   const bool has_w = param.has( "w" );
   const bool has_w_before = param.has( "w-before" );
   const bool has_w_after = param.has( "w-after" );
@@ -1037,6 +1032,12 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   if ( epoch_generic_param_w < 0 ) Helper::halt( "'w' (or w-before/w-after) cannot be negative" );
   if ( epoch_generic_param_set_point && ( (!some_w) || fabs( epoch_generic_param_w ) < 0.001 ) ) 
     Helper::halt( "epochs too small: need larger 'w' (or w-before/w-after) if using 'midpoint/start/stop'" ); 
+
+  // window shift
+  const bool has_shift = param.has( "shift" );
+  epoch_generic_param_shift = 0;
+  if ( has_shift ) 
+    epoch_generic_param_shift = param.requires_dbl( "shift" );
 
   // require a minimum epoch size: set to 1/10th of a second by default
   epoch_generic_param_min_epoch_size = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
@@ -1099,6 +1100,13 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 		interval.expand_right( epoch_generic_param_w * globals::tp_1sec );	      
 	    }
 	  
+	  // shift?
+	  if ( has_shift ) 
+	    {
+	      if ( epoch_generic_param_shift < 0 ) interval.shift_left( -epoch_generic_param_shift * globals::tp_1sec );
+	      else if ( epoch_generic_param_shift > 0 ) interval.shift_right( epoch_generic_param_shift * globals::tp_1sec );
+	    }
+
 	  // add as an epoch, if large enough
 	  if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 
 	    intervals[ interval ] = *aa;
