@@ -355,6 +355,9 @@ struct timeline_t
   // regional mask
   void regional_mask( int x , int y );
 
+  // unmask interior
+  void unmask_interior();
+
   // mask all after 'n' epochs
   void select_epoch_first( int n );
 

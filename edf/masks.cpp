@@ -371,6 +371,16 @@ void proc_mask( edf_t & edf , param_t & param )
       edf.timeline.regional_mask( r[0] , r[1] );
     }
 
+  if ( param.has( "unmask-interior" ) )
+    {
+      // unmask epochs that are flanked on both sides by a unmasked epoch
+      // i.e. only keep leading and trailing masked regions in, so that we
+      // have a contiguous stretch of 'good' data within.   Used in NAP 
+      // to avoid gaps in staging coverage
+      edf.timeline.unmask_interior();
+    }
+
+
   if ( param.has( "first" ) )
     {
       int n = param.requires_int( "first" );

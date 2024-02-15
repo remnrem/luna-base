@@ -880,7 +880,68 @@ void timeline_t::trim_epochs( std::string & label , int n )
 }
 
 
-  // regional mask
+void timeline_t::unmask_interior()
+{
+  // look back / forward y epochs;
+  // require that at least x of y are 'good' on at least one side
+  // if both sides fail criterion, set this epoch to be masked
+  // nb. out-of-range counts as 'bad'  (i.e. not a 'good' epoch)
+  
+  const int ne = epochs.size();
+  
+  // find first and last unmasked epochs
+  int first_masked = 0;
+  int last_masked = ne-1;
+  for (int e=0;e<ne;e++)
+    {
+      if ( ! mask[e] ) 
+	{
+	  first_masked = e;
+	  break;
+	}	
+    }
+
+  for (int e=ne-1;e>=0;e--)
+    {
+      if ( ! mask[e] )
+	{
+          last_masked = e;
+          break;
+        }
+    }
+  
+  std::set<int> tounmask;
+  for (int e=first_masked; e<=last_masked; e++)
+    {
+      if ( mask[e] ) 
+	{
+	  tounmask.insert(e);
+	}
+    }
+ 
+  //
+  // now we have list of epochs that need masking in 'tomask'
+  //
+  
+  std::set<int>::const_iterator ee = tounmask.begin();
+  while ( ee != tounmask.end() )
+    {
+      mask[*ee] = false; 
+      ++ee;
+    }
+  
+  int cnt_now_unmasked = 0;
+  for (int e=0;e<ne;e++)
+    if ( ! mask[e] ) ++cnt_now_unmasked; 
+  
+  logger << "  based on unmask-interior: ";
+  logger << tounmask.size() << " newly unmasked epochs\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+
+}
+
+
+// regional mask
 void timeline_t::regional_mask( int x , int y )
 {
 
