@@ -199,6 +199,26 @@ double MiscMath::mean( const std::vector<double> & x )
   return s/(double)n;
 }
 
+double MiscMath::weighted_mean( const std::vector<double> & x , const std::vector<double> & w )
+{
+
+  const int n = x.size();
+  if ( n != w.size() )
+    Helper::halt( "internal error in weighted_mean()" );
+  
+  if ( n == 0 ) return 0; // silently fail here...
+
+  double s = 0;
+  double wt = 0;
+  for (int i=0;i<n;i++)
+    {
+      s += w[i] * x[i];
+      wt += w[i];
+    }
+  return s/wt;
+}
+
+
 double MiscMath::mean( const std::vector<int> & x )
 {
   const int n = x.size();

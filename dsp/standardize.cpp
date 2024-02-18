@@ -48,6 +48,16 @@ void dsptools::standardize( edf_t & edf , param_t & param )
   // default = no
   const bool second_norm = param.has( "second-norm" ) ? param.yesno( "second-norm" ) : false ; 
 
+
+  if ( ! ( center || scale || winsor ) )
+    {
+      logger << "  nothing to do, leavning standardization\n";
+      return;
+    }
+
+  if ( winsor && ! ( center || scale ) ) 
+    logger << "  only winsorizing signals, not performing initial standardization\n";
+   
   // get signals
   signal_list_t signals = edf.header.signal_list( param.value( "sig" ) );
   edf.header.drop_annots_from_signal_list( &signals );

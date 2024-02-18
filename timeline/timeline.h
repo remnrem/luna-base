@@ -236,13 +236,15 @@ struct timeline_t
 
   double epoch_offset() const;
 
+  bool epoch_any_offset() const;
+
   std::string align_string() const;
   
   bool exactly_contiguous_epochs() const;
   
   double epoch_len_tp() const;
   
-  double epoch_increment_tp() const;
+  uint64_t epoch_increment_tp() const;
 
   uint64_t epoch_len_tp_uint64_t() const;
 

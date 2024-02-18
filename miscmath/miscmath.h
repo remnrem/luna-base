@@ -60,6 +60,8 @@ namespace MiscMath
   double mean( const std::vector<int> & x );
   std::complex<double> mean( const std::vector<std::complex<double> > & x );
 
+  double weighted_mean( const std::vector<double> & x , const std::vector<double> & w );
+  
   std::complex<double> max( const std::vector<std::complex<double> > & x );
   double empirical_pvalue( const double s , const std::vector<double> & x );
   

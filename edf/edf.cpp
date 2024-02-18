@@ -3381,6 +3381,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
   signal_list_t r;
   
   // wildcard means all signals '*'
+  // but XX* means match for XX prefix
   
   if ( s == "*" )
     {
@@ -4917,7 +4918,7 @@ bool edf_t::basic_stats( param_t & param )
 
 	      const int n = d->size();
 
-	      if ( n == 0 ) { continue; } 
+	      if ( n < 2 ) { continue; } 
 	      
 	      
 	      //

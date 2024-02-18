@@ -59,7 +59,9 @@ void dsptools::movavg( edf_t & edf , param_t & param )
       int sr = edf.header.sampling_freq( signals(s) );
       
       int hwin = hwin_sec * sr;
-      logger <<" hwin = " << hwin << " " << hwin_sec << " " << sr << "\n";
+
+      //      logger <<" hwin = " << hwin << " " << hwin_sec << " " << sr << "\n";
+
       if ( hwin == 0 )
 	{
 	  logger << "  skipping " << signals.label(s) << ", sample rate too low\n";

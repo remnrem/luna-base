@@ -46,11 +46,19 @@ annot_t * spectral_power( edf_t & edf ,
   // Report full spectrum as well as band power
   const bool show_spectrum = param.has( "spectrum" ) || param.has("epoch-spectrum" );
 
+  // do not report bands
+  const bool bands = param.has( "band" ) ? param.yesno( "band" ) : true ; 
+  
   // Report dB scale ?
   const bool dB = param.has( "dB" );
   
+  // Min required SR to report
+  const double min_sr = param.has( "min-sr" ) ? param.requires_dbl( "min-sr" ) : 50 ;
+
   // Mean center data first? 
-  const bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" );
+  const bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" )
+    || param.has( "mean-center" ) || param.has( "mean-centre" );
+    
   
   // Spectrum bin width (0 means no binning, default)
 
@@ -89,6 +97,61 @@ annot_t * spectral_power( edf_t & edf ,
 
   const bool show_epoch_spectrum = param.has( "epoch-spectrum" );
 
+
+  //
+  // add new signals
+  //  --> prefix_CH_N ... where N = 1,2,3, that correspond to Fs in range                                              
+  //  --> note, PSD analysis is always done epochwise, which means that this
+  //            should be run w/ small (e.g. 4 sec) epoch size and inc 2,
+  //    i.e. then the time-series will be "per-epoch" which means 0.5 Hz SR
+  //         for the new channel, etc
+  //
+
+  const bool new_sigs = param.has( "add" ) || param.has( "add-spectrum" );
+
+  const bool new_spec_sigs = param.has( "add-spectrum" );
+  
+  const std::string new_sig_prefix = ( new_sigs && param.empty("add" ) ) ? "" : param.value( "add" ) ;
+
+  // some extra requirements if adding a new signal
+  if ( new_sigs )
+    {
+
+      if ( ! edf.header.continuous )
+	Helper::halt( "currently, can only specify 'add' with continuous recordings" );
+      
+      if ( edf.timeline.generic_epochs() )
+	Helper::halt( "can not have generic epochs with 'add'" );
+      
+      if ( edf.timeline.epoch_any_offset() )
+	Helper::halt( "cannot use 'add' with any EPOCH offset (e.g. from align)" );
+
+      // to save the signal, the EDF record size must be consistent w/ the new SR of the signal
+      // i.e. to have same number of samples per EDF record, cannot have SR = 0.5 Hz with 1-second records, etc
+
+      // perhaps for now, enfore that EDF record size is 1 second, and always output at one-second intervals
+      if ( edf.header.record_duration_tp != globals::tp_1sec )
+	Helper::halt( "currently, must have 1-second EDF records (use RECORD-SIZE)" );
+      if ( edf.timeline.epoch_increment_tp() != globals::tp_1sec )
+	Helper::halt( "currently, must have 1-second epoch increment (use EPOCH inc=1 len=4)" );
+    }
+
+  
+  //
+  // for PSD, if adding a new signal (based on EPOCH-level outputs)
+  // we cannot have any gaps - i.e. to make life easier with uniform
+  // SR of the new signals ;  we can relax this later, but for now
+  // the work flow (for infraslow osc. analysis) would be to run
+  // round 1 on continuous signal, then epoch (e.g. by stage)
+  // then run second FFT; there, the EPOCH'ing will take care of
+  // the lengths of segments, if use e.g. EPOCH annot=N2 ... i.e.
+  // the epoch size will be extended as appropriate; note: we might want
+  // to add an option for weighed average by window /epoch length in that case
+  // as those will not all be equal
+  //
+
+  
+  
   // peak diagnostics
   const bool peak_diagnostics = param.has( "peaks" )
     || param.has( "epoch-peaks" ) || param.has( "peaks-epoch" )
@@ -176,9 +239,27 @@ annot_t * spectral_power( edf_t & edf ,
   double fft_segment_size = param.has( "segment-sec" ) 
     ? param.requires_dbl( "segment-sec" ) : 4 ;
 
-  double fft_segment_overlap = param.has( "segment-overlap" ) 
-     ? param.requires_dbl( "segment-overlap" ) : 2 ;
-       
+  // allow both versions for MTM and backwards compatibility
+  double fft_segment_overlap = 2;
+  if ( param.has( "segment-inc" ) )
+    fft_segment_overlap = param.requires_dbl( "segment-inc" );
+  else if ( param.has( "segment-overlap" ) )
+    fft_segment_overlap = param.has( "segment-overlap" ); 
+
+
+  //
+  // If adding a signal, require that we set segment size/inc to equal epoch size/inc
+  //
+
+  if ( new_sigs )
+    {
+
+      fft_segment_size = edf.timeline.epoch_length();
+      fft_segment_overlap = 0;
+      logger << "  with 'add', using epoch duration to set segment-sec=" << fft_segment_size << " and forcing segement-inc=0\n";
+    }  
+  
+  
   //
   // Option to average adjacent points in the power spectra (default = T)
   //
@@ -287,7 +368,7 @@ annot_t * spectral_power( edf_t & edf ,
       // bad SR ( require at least 50 Hz)
       //
 
-      if ( Fs[s] < 50 ) continue;
+      if ( Fs[s] < min_sr ) continue;
 
       //
       // reset bandaid
@@ -458,10 +539,10 @@ annot_t * spectral_power( edf_t & edf ,
 	   // Epoch-level output
 	   //
 
+	   
 	   if ( show_epoch || ( cache_epochs && cache_bands ) )
 	     {
-	       
-	       if ( bandaid.total > 0 )
+	       if ( bands && bandaid.total > 0 )
 		 {
 		   writer.level( globals::band( SLOW ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
@@ -502,7 +583,7 @@ annot_t * spectral_power( edf_t & edf ,
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.sigma ) : bandaid.sigma );
-
+		   
 		   writer.level( globals::band( BETA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( bandaid.beta ) : bandaid.beta  );
@@ -510,7 +591,7 @@ annot_t * spectral_power( edf_t & edf ,
 		   }
 		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.beta ) : bandaid.beta );
-
+		   
 		   writer.level( globals::band( GAMMA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {		     
 		     writer.value( "PSD" , dB ? 10*log10( bandaid.gamma ) : bandaid.gamma );
@@ -527,42 +608,41 @@ annot_t * spectral_power( edf_t & edf ,
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.total ) : bandaid.total );
 		   
 		   writer.unlevel( globals::band_strat );
-		   
 		 }
-	       else if ( cache_data && cache_epochs && cache_bands && ! dB )
+	       else if ( bands && cache_data && cache_epochs && cache_bands && ! dB )
 		 {
-		   // need to enter 0 in this case for cache
-		   //  nb. only doing this in non-dB mode (i.e. for ASYMM)
-		   writer.level( globals::band( SLOW ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-		   
-		   writer.level( globals::band( DELTA ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-		   
-		   writer.level( globals::band( THETA ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-		   
-		   writer.level( globals::band( ALPHA ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-		   
-		   writer.level( globals::band( SIGMA ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-
-		   writer.level( globals::band( BETA ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-
-		   writer.level( globals::band( GAMMA ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-		   
-		   writer.level( globals::band( DENOM ) , globals::band_strat );
-		   cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
-		   
-		   writer.unlevel( globals::band_strat );
-		   
-		 }
+	       // need to enter 0 in this case for cache
+	       //  nb. only doing this in non-dB mode (i.e. for ASYMM)
+	       writer.level( globals::band( SLOW ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.level( globals::band( DELTA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.level( globals::band( THETA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.level( globals::band( ALPHA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.level( globals::band( SIGMA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.level( globals::band( BETA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.level( globals::band( GAMMA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.level( globals::band( DENOM ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+	       
+	       writer.unlevel( globals::band_strat );
+	       
 	     }
-	   
-	   
+	}
+      
+    
 	   //
 	   // track over entire spectrum (track on first encounter)
 	   //
@@ -580,7 +660,7 @@ annot_t * spectral_power( edf_t & edf ,
 	       // accumulate for entire night means; store as dB and raw
 	       //
 	       
-	       if ( show_spectrum || spectral_slope )
+	       if ( show_spectrum || spectral_slope || new_sigs )
 		 for (int f=0;f<pwelch.psd.size();f++)
 		   {
 		     track_freq[ f ].push_back( pwelch.psd[f] );
@@ -974,29 +1054,31 @@ annot_t * spectral_power( edf_t & edf ,
       //
       // by band 
       //      
-      
-      std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
-      while ( bi != bandaid.bands.end() )
-	{	   
-	  
-	  if ( okay ) 
-	    {
-	      double p = MiscMath::mean( bandaid.track_band[ *bi ] );
-	      writer.level( globals::band( *bi ) , globals::band_strat );
+
+      if ( bands )
+	{
+	  std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
+	  while ( bi != bandaid.bands.end() )
+	    {	   
 	      
-	      if ( ! suppress_output ) {		
-		writer.value( "PSD" , dB ? 10*log10(p) : p  );
-		writer.value( "RELPSD" , p / mean_total_power );
-	      }
+	      if ( okay ) 
+		{
+		  double p = MiscMath::mean( bandaid.track_band[ *bi ] );
+		  writer.level( globals::band( *bi ) , globals::band_strat );
+		  
+		  if ( ! suppress_output ) {		
+		    writer.value( "PSD" , dB ? 10*log10(p) : p  );
+		    writer.value( "RELPSD" , p / mean_total_power );
+		  }
+		  
+		}
 	      
+	      ++bi;
 	    }
 	  
- 	  ++bi;
+	  writer.unlevel( globals::band_strat );
 	}
-      
-      writer.unlevel( globals::band_strat );
-
-
+          
       
       //
       // Dynamics?
@@ -1052,21 +1134,24 @@ annot_t * spectral_power( edf_t & edf ,
 	  // band power 
 	  //
 
-	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
-	  
-	  while ( ii != bandaid.track_band.end() )
-	    {	      
-	      writer.level( globals::band( ii->first ) , globals::band_strat );
+	  if ( bands )
+	    {
+	      std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
 	      
-	      if ( has_cycles )
-		dynam_report_with_log( ii->second , epochs , &cycle );
-	      else
-		dynam_report_with_log( ii->second , epochs );
+	      while ( ii != bandaid.track_band.end() )
+		{	      
+		  writer.level( globals::band( ii->first ) , globals::band_strat );
+		  
+		  if ( has_cycles )
+		    dynam_report_with_log( ii->second , epochs , &cycle );
+		  else
+		    dynam_report_with_log( ii->second , epochs );
+		  
+		  ++ii;
+		}
 	      
-	      ++ii;
+	      writer.unlevel( globals::band_strat ); 
 	    }
-	  
-	  writer.unlevel( globals::band_strat ); 
 	  
 
 	  //
@@ -1097,6 +1182,117 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      writer.unlevel( globals::freq_strat );
 	      
+	    }
+	  
+	}
+    
+      
+      //
+      // Output a new signal?
+      //
+
+      if ( new_sigs )
+	{
+	 
+	  
+	  // note cannot have gaps in recording if adding a new channel
+	  // (can be EDF+ but all epochs must be included)
+	  // with 4/2 overlap, we'll need to pad w/ a zero at the end,
+	  // so force the vector size to be the expected given the same rate
+	  // i.e. increment step
+
+	  const double psr = 1.0 / edf.timeline.epoch_inc() ; // e.g. 0.5 for 2s steps
+	  
+	  // expected
+	  const int expected = edf.header.nr * edf.header.record_duration * psr;
+	  
+	  // we have this many epochs
+	  const int obs = edf.timeline.num_epochs();
+
+	  // but given SR of 1/(epoch-inc), we will typically have fewer (i.e. at the end of the recording,
+	  // we might miss 1 sample with epoch len = 4s, epoch step = 2s
+	  // just zero-pad these final points
+	  
+	  //
+	  // band power
+	  //
+
+	  if ( bands )
+	    {
+	      if ( bandaid.bands.size() > 0 )
+		logger << "  for " << signals.label(s) << " adding " << track_freq.size() << " band signals"
+		       << ", padding " << obs << " samples to " << expected << "(adding " << ( expected - obs ) << " sample(s))\n";
+	      
+	      
+	      int bidx=1;
+	      
+	      std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
+	      while ( bi != bandaid.bands.end() )
+		{	   
+		  
+		  std::vector<double> vec = bandaid.track_band[ *bi ];
+		  
+		  if ( s == 0 )
+		    logger << "   - B" << bidx << " --> " << globals::band( *bi ) << "\n"; 
+		  
+		  // zero-pad as needed
+		  vec.resize( expected , 0 );
+		  
+		  if ( dB )
+		    for (int i=0; i<vec.size(); i++)
+		      vec[i] = vec[i] > 0 ? 10 * log10( vec[i] ) : -999;
+		  
+		  // label
+		  const std::string slab = new_sig_prefix + signals.label(s) + "_B" + Helper::int2str( bidx );
+		  
+		  // add signal (will always be 1 Hz)
+		  edf.add_signal( slab , 1 , vec );
+		  
+		  ++bidx;
+		  ++bi;
+		}
+	    }
+
+	  //
+	  // spectrum-based channels?
+	  //
+
+	  if ( new_spec_sigs )
+	    {
+	      
+	      // add channels
+	      std::map<int,std::vector<double> >::const_iterator ii = track_freq.begin();
+	      
+	      if ( track_freq.size() > 0 ) 
+		logger << "  and adding " << track_freq.size() << " signals (" << freqs[ ii->first ] << "Hz - " << max_power << "Hz)"
+		       << ", padding " << obs << " samples to " << expected << "(adding " << ( expected - obs ) << " sample(s))\n";
+	      
+	      while ( ii != track_freq.end() )
+		{
+		  
+		  if ( freqs[ ii->first ] > max_power )  { ++ii; continue; }
+		  
+		  if ( s == 0 )
+		    logger << "   - F" << ii->first << " --> " << freqs[ ii->first ] << "Hz\n";
+
+		  std::vector<double> vec = ii->second;
+		  
+		  // zero-pad as needed
+		  vec.resize( expected , 0 );
+		  
+		  if ( dB ) 
+		    for (int i=0; i<vec.size(); i++)
+		      vec[i] = vec[i] > 0 ? 10 * log10( vec[i] ) : -999;
+		  
+		  // label
+		  const std::string slab = new_sig_prefix + signals.label(s) + "_F" + Helper::int2str( ii->first ) ;
+		  
+		  // add signal (will always be 1 Hz
+		  edf.add_signal( slab , 1 , vec );
+		  
+		  ++ii;
+		  
+		}
 	    }
 	  
 	}
@@ -1145,8 +1341,8 @@ annot_t * spectral_power( edf_t & edf ,
       //
       // Band-power ratios 
       //
-
-      if ( calc_ratio )
+      
+      if ( bands && calc_ratio )
 	{
 	  // ratio=ALPHA/BETA,THETA/DELTA,...
 
@@ -1212,7 +1408,7 @@ annot_t * spectral_power( edf_t & edf ,
       // Band-power kurtosis  (redundant now...) 
       //
 
-      if ( calc_kurt )
+      if ( bands && calc_kurt )
 	{	  
 	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();	  
 	  while ( ii != bandaid.track_band.end() )

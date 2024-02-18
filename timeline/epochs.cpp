@@ -740,6 +740,11 @@ double timeline_t::epoch_offset() const
   return (double)epoch_offset_tp / globals::tp_1sec;
 }
 
+bool timeline_t::epoch_any_offset() const 
+{
+  return epoch_offset_tp != 0L;
+}
+
 std::string timeline_t::align_string() const 
 {
   return epoch_align_str;
@@ -760,7 +765,7 @@ double timeline_t::epoch_len_tp() const
 
 }
   
-double timeline_t::epoch_increment_tp() const 
+uint64_t timeline_t::epoch_increment_tp() const 
 {
   return epoch_inc_tp ;
 } 
