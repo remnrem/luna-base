@@ -1169,14 +1169,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  int this_stop_sp   = spindles1_stop[i];
 		  
 		  // merge? if both ends are within X seconds (default = 0.5 ) 
-		  // std::cout << " previous_ / this " << previous_start << " " << previous_stop << "\t"
-		  // 	    << this_start << " " << this_stop << "\n";
-		  
+		  // but if using a precomputed spindle list, take exactly as is
+		  // i.e. could have completely overlapping events, but that is fine
+
 		  // overlap?
-		  if ( this_start < previous_stop ) { extending = true; }
+		  if ( (!using_precomputed) && this_start < previous_stop ) { extending = true; }
 		  
 		  // too near?
-		  else if ( this_start - previous_stop < spindle_merge_tp ) { extending = true; }
+		  else if ( (!using_precomputed) && this_start - previous_stop < spindle_merge_tp ) { extending = true; }
 		  
 		  // this next spindle is sufficiently far away, so add the previous one
 		  else 

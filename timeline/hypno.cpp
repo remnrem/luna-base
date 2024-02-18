@@ -2121,16 +2121,16 @@ void hypnogram_t::calc_stats( const bool verbose )
 	      
 	      for (int i=0; i<n1; i++)
 		{
-		  double xx = elapsed_sleep[i];
-		  double yy = elapsed_all[i] ;
+		  // double xx = elapsed_sleep[i];
+		  // double yy = elapsed_all[i] ;
 		  
 		  elapsed_all[i] = ( elapsed_all[i] - min_all ) / ( max_all - min_all );
 		  elapsed_sleep[i] = ( elapsed_sleep[i] - min_sleep ) / ( max_sleep - min_sleep );
 
-		  if ( all_nrem ) 
-		    std::cout << " NR elapsed_sleep[i] = " << i << "\t" << xx << "\t" << yy << "\t" << elapsed_sleep[i] << "\t" << min_sleep << "\t" << max_sleep << "\n";
-		  if ( stage == REM )
-		    std::cout << " R elapsed_sleep[i] = " << i << "\t" << xx << "\t" << yy << "\t" << elapsed_sleep[i] << "\t" << min_sleep << "\t" << max_sleep << "\n";
+		  // if ( all_nrem ) 
+		  //   std::cout << " NR elapsed_sleep[i] = " << i << "\t" << xx << "\t" << yy << "\t" << elapsed_sleep[i] << "\t" << min_sleep << "\t" << max_sleep << "\n";
+		  // if ( stage == REM )
+		  //   std::cout << " R elapsed_sleep[i] = " << i << "\t" << xx << "\t" << yy << "\t" << elapsed_sleep[i] << "\t" << min_sleep << "\t" << max_sleep << "\n";
 		  
 		}
 

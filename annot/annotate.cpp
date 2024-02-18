@@ -1605,6 +1605,7 @@ annotate_stats_t annotate_t::loop()
 
 void annotate_t::add_permuted_annots()
 {
+
   // std::set<std::string> shuffled_annots_names;
   // std::string shuffled_annots_tag;
   
@@ -1612,7 +1613,9 @@ void annotate_t::add_permuted_annots()
   while ( rr != events.end() )
     {
       // each annot
-
+      
+      const uint64_t offset = rr->first;
+      
       std::set<std::string>::const_iterator aa = shuffled_annots_names.begin();
       while ( aa !=  shuffled_annots_names.end() )
 	{
@@ -1621,19 +1624,33 @@ void annotate_t::add_permuted_annots()
 	    {
 	      
 	      annot_t * a = edf->timeline.annotations.add( shuffled_annots_tag + *aa );
-
+	      
 	      const std::set<interval_t> & ints = rr->second.find( *aa )->second;
+	      
+	      logger << "  adding shuffled/permutation annotation class " << (shuffled_annots_tag + *aa)  << " (" << ints.size() << " events)\n";
 
 	      std::set<interval_t>::const_iterator ii = ints.begin();
 	      while ( ii != ints.end() )
 		{
-		  a->add( "." , *ii , "." );
-		  
+
+		  // nb. event-perm mode stores exact versions, 
+		  //     otherwise, we need to add the offset back in
+		  if ( event_perm )
+		    {		      
+		      a->add( "." , *ii , "." );
+		    }
+		  else // this will likely be the default anyway
+		    {
+		      interval_t pint( ii->start + offset , ii->stop + offset );
+                      a->add( "." , pint , "." );		      
+		    }
+
 		  // std::cout << "region = " << rr->first << "\t"
 		  // 	    << "annot = " << *aa << "\t"
 		  // 	    << "interval = " << ii->as_string() << "\t"
 		  // 	    << "dur = " << ii->duration_sec() << "\t"
 		  // 	    << ii->start << "\n";
+		  
 		  ++ii;
 		}
 	    }

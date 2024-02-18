@@ -357,6 +357,9 @@ struct timeline_t
   // regional mask
   void regional_mask( int x , int y );
 
+  // unmask interior
+  void unmask_interior();
+
   // mask all after 'n' epochs
   void select_epoch_first( int n );
 
@@ -579,6 +582,8 @@ struct timeline_t
   int                   epoch_generic_param_set_point; // 0 none, 1=start, 2=mid, 3=end
   double                epoch_generic_param_min_epoch_size;
   
+  double                epoch_generic_param_shift; // secs -/+
+
   // epoch alignment
   
   std::string epoch_align_str; // un-tokenized version of below, for quick check by EVAL when calling proc_epoch()
