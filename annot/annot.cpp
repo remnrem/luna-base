@@ -3083,16 +3083,18 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 	  logger << "  returned original annotations\n";
 	  return;
 	}
+      
     }
   
   // use annotate_t::flatten( x )
   // and annotate_t::overlaps_flattened_set(a,b)
 
   
-  const annot_map_t & events1 = a1->interval_events;
-  const annot_map_t & events2 = a2->interval_events;
-
-  logger << "  found " << events1.size() << " events for " << tok[0] << " and " << events2.size() << " events for " << tok[1] << "\n";
+  const annot_map_t & events1 = a1 != NULL ? a1->interval_events : annot_map_t();
+  const annot_map_t & events2 = a2 != NULL ? a2->interval_events : annot_map_t();
+  
+  logger << "  found " << events1.size() << " events for " << tok[0] 
+	 << " and " << events2.size() << " events for " << tok[1] << "\n";
   
   std::set<interval_t> nevs;
   

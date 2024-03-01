@@ -123,8 +123,8 @@ struct slow_wave_param_t {
 
     if ( param.has( "so-annot" ) )
       astr = param.value( "so-annot" );
-    else if ( param.has( "annot" ) )
-      astr = param.value( "annot" );
+    /* else if ( param.has( "annot" ) ) */
+    /*   astr = param.value( "annot" ); */
     
     // do not skip SO detection
     skip = false;

@@ -26,6 +26,7 @@
 #include "edf/slice.h"
 #include "db/db.h"
 #include "helper/logger.h"
+#include "annot/annotate.h"  // for root_match()
 
 extern writer_t writer;
 extern logger_t logger;
@@ -521,11 +522,12 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 	  
 	  // report
 	  writer.level( over_extended , globals::count_strat );
-
+	
 	  writer.value( "ANNOT" , aa->parent->name );
 	  writer.value( "INST" , aa->id );
 	  writer.value( "START" , interval.start_sec() );
 	  writer.value( "STOP" , interval.stop_sec() );
+	  writer.value( "DUR" , interval.stop_sec() - interval.start_sec() );
 	  writer.unlevel( globals::count_strat );
 	}
       
@@ -662,7 +664,12 @@ void timeline_t::list_all_annotations( const param_t & param )
 
   std::vector<std::string> names = annotations.names();
 
-
+  // restrict to a subset? (allow wildcards here)
+  std::set<std::string> req_annots;
+  if ( param.has( "annot" ) )
+    req_annots = annotate_t::root_match( param.strset( "annot" ) , names );
+  const bool restricted = req_annots.size();
+  
   //
   // Per epoch summary of all annotations
   //
@@ -686,6 +693,10 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  // get each annotations
 	  for (int a=0;a<names.size();a++)
 	    {
+	      
+	      // ignore this annot?
+	      if ( restricted && req_annots.find( names[a] ) == req_annots.end() )
+		continue;
 	      
 	      annot_t * annot = annotations.find( names[a] );
 
@@ -765,6 +776,10 @@ void timeline_t::list_all_annotations( const param_t & param )
   for (int a = 0 ; a < names.size() ; a++ ) 
     {
       
+      // ignore this annot?                                                                                                                           
+      if ( restricted && req_annots.find( names[a] ) == req_annots.end() )
+	continue;
+
       annot_t * annot = annotations.find( names[a] );
       
       if ( annot == NULL ) Helper::halt( "internal problem in list_all_annotations()" );
@@ -864,6 +879,8 @@ void timeline_t::list_all_annotations( const param_t & param )
       //writer.value( "STOP" , interval.stop_sec_exact() );
 
       writer.value( "STOP" , interval.stop_sec() );
+      
+      writer.value( "DUR" , interval.stop_sec() - interval.start_sec() );
 
       // channel label
       writer.value( "CH" , instance_idx.ch_str );

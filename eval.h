@@ -420,6 +420,7 @@ void proc_bpm( edf_t & , param_t & );
 void proc_spindles( edf_t & , param_t & );
 void proc_coupling( edf_t & , param_t & );
 void proc_ripples( edf_t & , param_t & );
+void proc_generic_coupling( edf_t & , param_t & );
 
 void proc_polarity( edf_t & , param_t & );
 void proc_slowwaves( edf_t & , param_t & );

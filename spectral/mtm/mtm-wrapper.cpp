@@ -336,6 +336,10 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   std::vector<std::vector<std::vector<double> > > etrack_power;
   etrack_power.resize( ns_used );
   
+  // channel->freq->epoch->rel-value  
+  std::vector<std::vector<std::vector<double> > > etrack_relpower;
+  etrack_relpower.resize( ns_used );
+
   // channel->epoch->value
   // std::vector<std::vector<double> > etrack_slope;
   // etrack_slope.resize( ns_used );
@@ -649,6 +653,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		  etrack_freqs[ns1].push_back( mtm.f[i] );
 	      // size power values slots
  	      etrack_power[ns1].resize( etrack_freqs[ns1].size() );
+	      etrack_relpower[ns1].resize( etrack_freqs[ns1].size() );
 	      
 	    }
 	  
@@ -658,14 +663,28 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  
 	  if ( epochwise )
 	    {
+	      double denom = 0;
 	      int fidx = 0;
 	      for ( int i = 0 ; i < mtm.f.size() ; i++ )
                 if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f )
                   {
 		    // channel -> freq -> epoch/value
 		    etrack_power[ ns1 ][ fidx ].push_back( mtm.spec[i] );
+		    
+		    // track raw power (non-log)
+		    denom += mtm.raw_spec[i] ;
 		    ++fidx;
 		  }
+	      
+	      // relative power
+	      fidx = 0;
+              for ( int i = 0 ; i < mtm.f.size() ; i++ )
+                if ( mtm.f[i] >= min_f && mtm.f[i] <= max_f )
+                  {
+                    // channel -> freq -> epoch/value
+                    etrack_relpower[ ns1 ][ fidx ].push_back( denom > 0 ? mtm.raw_spec[i] / denom : 0 );
+		    ++fidx;
+                  }
 	    }
 
 
@@ -1283,12 +1302,11 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
 	      
 	      const double pmean = MiscMath::mean( etrack_power[ns1][fi] );
-
 	      const double pmed  = MiscMath::median( etrack_power[ns1][fi] );
 	      const double psd   = MiscMath::sdev( etrack_power[ns1][fi] );
 	      
 	      writer.value( "MTM" , pmean );
-
+	      
 	      // allow for variable length epochs, so report weighted mean
 	      // -- TOOD - should add this for all outputs...  thus why for
 	      //           now we add WMTM as a reminder that this is incomplete...
@@ -1297,6 +1315,9 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		{
 		  const double wpmean = MiscMath::weighted_mean( etrack_power[ns1][fi] , etrack_length );
 		  writer.value( "WMTM" , wpmean );
+		  
+		  const double wrelpmean = MiscMath::weighted_mean( etrack_relpower[ns1][fi] , etrack_length );
+                  writer.value( "WREL" , wrelpmean );
 		}
 	      
 	      if ( etrack_power[ns1][fi].size() > 2 ) 

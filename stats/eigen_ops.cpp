@@ -183,13 +183,14 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
 	{
 	  double lwr = MiscMath::percentile( v , w );
 	  double upr = MiscMath::percentile( v , 1-w );
-	  if ( lwr >= upr ) 
-	    Helper::halt( "cannot robust_scale().. pls fix me" );
-
-	  for (int i=0; i<rows; i++)
-	    {	      
-	      if      ( m(i,c) < lwr ) m(i,c) = lwr;
-	      else if ( m(i,c) > upr ) m(i,c) = upr;
+	  
+	  if ( lwr < upr ) 
+	    {
+	      for (int i=0; i<rows; i++)
+		{	      
+		  if      ( m(i,c) < lwr ) m(i,c) = lwr;
+		  else if ( m(i,c) > upr ) m(i,c) = upr;
+		}
 	    }
 	}
 

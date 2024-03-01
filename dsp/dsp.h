@@ -57,6 +57,7 @@
 #include "coherence.h"
 #include "correl.h"
 #include "conncoupl.h"
+#include "pcoupl.h"
 #include "conv.h"
 #include "ecgsuppression.h"
 #include "pac.h"

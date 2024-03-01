@@ -46,8 +46,8 @@ void bandaid_t::init()
   bands.push_back( THETA );
   bands.push_back( ALPHA );
   bands.push_back( SIGMA );
-  //     bands.push_back( LOW_SIGMA );
-  //     bands.push_back( HIGH_SIGMA );
+  bands.push_back( LOW_SIGMA );
+  bands.push_back( HIGH_SIGMA );
   bands.push_back( BETA );
   bands.push_back( GAMMA );
   bands.push_back( DENOM );
@@ -100,6 +100,22 @@ void bandaid_t::define_bands( param_t & param )
       freq_band_settings( param.value( "sigma" ) , &f0, &f1 );
       globals::freq_band[ SIGMA ] =  freq_range_t( f0 , f1 ) ;
       logger << "  defining sigma as " << f0 << " to " << f1 << " Hz\n";
+    }
+
+  if ( param.has( "slow-sigma" ) )
+    {
+      double f0, f1;
+      freq_band_settings( param.value( "slow-sigma" ) , &f0, &f1 );
+      globals::freq_band[ LOW_SIGMA ] =  freq_range_t( f0 , f1 ) ;
+      logger << "  defining slow-sigma as " << f0 << " to " << f1 << " Hz\n";
+    }
+
+  if ( param.has( "fast-sigma" ) )
+    {
+      double f0, f1;
+      freq_band_settings( param.value( "fast-sigma" ) , &f0, &f1 );
+      globals::freq_band[ HIGH_SIGMA ] =  freq_range_t( f0 , f1 ) ;
+      logger << "  defining fast-sigma as " << f0 << " to " << f1 << " Hz\n";
     }
 
   if ( param.has( "beta" ) )
@@ -159,13 +175,13 @@ void bandaid_t::track()
   track_band[ DELTA ].push_back( delta );
   track_band[ THETA ].push_back( theta );
   track_band[ ALPHA ].push_back( alpha );
-  track_band[ SIGMA ].push_back( sigma );
+  track_band[ SIGMA ].push_back( sigma );  
   track_band[ BETA  ].push_back( beta );
   track_band[ GAMMA ].push_back( gamma );
   track_band[ DENOM ].push_back( denom );
   
-  // track_band[ LOW_SIGMA ].push_back( low_sigma );
-  // track_band[ HIGH_SIGMA ].push_back( high_sigma );
+  track_band[ LOW_SIGMA ].push_back( low_sigma );
+  track_band[ HIGH_SIGMA ].push_back( high_sigma );
     
 }
 
@@ -228,6 +244,9 @@ void bandaid_t::calc_bandpower( const std::vector<double> & f , const std::vecto
   gamma = psdsum( f , x, globals::freq_band[ GAMMA ] );
   denom = psdsum( f , x, globals::freq_band[ DENOM ] );
   total = psdsum( f , x, globals::freq_band[ TOTAL ] );
+
+  low_sigma = psdsum( f , x, globals::freq_band[ LOW_SIGMA ] );
+  high_sigma = psdsum( f , x, globals::freq_band[ HIGH_SIGMA ] );
   
 }
 

@@ -1200,7 +1200,9 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
       else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
       else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
-      else if ( is( c, "RIPPLES" ) )       proc_ripples( edf , param(c) );
+      else if ( is( c, "RIPPLES" ) )      proc_ripples( edf , param(c) );
+      
+      else if ( is( c, "PCOUPL" ) )       proc_generic_coupling( edf , param(c) );
       
       else if ( is( c, "POL" ) )          proc_polarity( edf, param(c) );	  
       else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
@@ -2314,6 +2316,15 @@ void proc_coupling( edf_t & edf , param_t & param )
 {
   // requires cached SPINDLES and SO results
   spindle_so_coupling( edf , param );
+}
+
+
+// PCOUPL : generic phase coupling
+
+void proc_generic_coupling( edf_t & edf , param_t & param )
+{
+  // requires cached SPINDLES and SO results
+  dsptools::phase_coupling( edf , param );
 }
 
 

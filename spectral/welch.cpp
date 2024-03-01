@@ -584,6 +584,23 @@ annot_t * spectral_power( edf_t & edf ,
 		   if ( cache_data && cache_epochs && cache_bands )
 		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.sigma ) : bandaid.sigma );
 		   
+		   writer.level( globals::band( LOW_SIGMA ) , globals::band_strat );
+		   if ( show_epoch && ! suppress_output ) {
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.low_sigma ) : bandaid.low_sigma );
+		     writer.value( "RELPSD" , bandaid.low_sigma / bandaid.total );
+		   }
+		   if ( cache_data && cache_epochs && cache_bands )
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.low_sigma ) : bandaid.low_sigma );
+		   
+		   writer.level( globals::band( HIGH_SIGMA ) , globals::band_strat );
+		   if ( show_epoch && ! suppress_output ) {
+		     writer.value( "PSD" , dB ? 10*log10( bandaid.high_sigma ) : bandaid.high_sigma );
+		     writer.value( "RELPSD" , bandaid.high_sigma / bandaid.total );
+		   }
+		   if ( cache_data && cache_epochs && cache_bands )
+		     cache->add( ckey_t( "PSD" , writer.faclvl() ) , dB ? 10*log10( bandaid.high_sigma ) : bandaid.high_sigma );
+		   
+
 		   writer.level( globals::band( BETA ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
 		     writer.value( "PSD" , dB ? 10*log10( bandaid.beta ) : bandaid.beta  );
@@ -628,6 +645,12 @@ annot_t * spectral_power( edf_t & edf ,
 	       writer.level( globals::band( SIGMA ) , globals::band_strat );
 	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
 	       
+	       writer.level( globals::band( LOW_SIGMA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+
+	       writer.level( globals::band( HIGH_SIGMA ) , globals::band_strat );
+	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
+
 	       writer.level( globals::band( BETA ) , globals::band_strat );
 	       cache->add( ckey_t( "PSD" , writer.faclvl() ) , 0 );
 	       
@@ -1220,8 +1243,8 @@ annot_t * spectral_power( edf_t & edf ,
 	  if ( bands )
 	    {
 	      if ( bandaid.bands.size() > 0 )
-		logger << "  for " << signals.label(s) << " adding " << track_freq.size() << " band signals"
-		       << ", padding " << obs << " samples to " << expected << "(adding " << ( expected - obs ) << " sample(s))\n";
+		logger << "  for " << signals.label(s) << " adding " << bandaid.bands.size() << " band signals"
+		       << ", padding " << obs << " samples to " << expected << " (adding " << ( expected - obs ) << " sample(s))\n";
 	      
 	      
 	      int bidx=1;
@@ -1265,7 +1288,7 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      if ( track_freq.size() > 0 ) 
 		logger << "  and adding " << track_freq.size() << " signals (" << freqs[ ii->first ] << "Hz - " << max_power << "Hz)"
-		       << ", padding " << obs << " samples to " << expected << "(adding " << ( expected - obs ) << " sample(s))\n";
+		       << ", padding " << obs << " samples to " << expected << " (adding " << ( expected - obs ) << " sample(s))\n";
 	      
 	      while ( ii != track_freq.end() )
 		{

@@ -1836,10 +1836,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			      else
 				Helper::halt( "cannot run within-epoch permutation with generic (differently-sized) epochs: add 'perm-whole-trace' " );
 			    }
-			  
-			  if ( ! edf.timeline.epoched() ) edf.timeline.ensure_epoched();
-			  epoch_sec = edf.timeline.epoch_length();
-			  
+			  else 
+			    {
+			      if ( ! edf.timeline.epoched() ) edf.timeline.ensure_epoched();
+			      epoch_sec = edf.timeline.epoch_length();
+			    }
 			}
 		      
 		      //
@@ -2682,6 +2683,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      logger << "  creating annotation class: " << aname 
 		     << ", instance: " << analysis_label 
 		     << ", channel: " << signals.label(s) << "\n";
+	      
 
 	      // use F_C as instance label
 	      for (int i=0;i<spindles.size();i++)
@@ -3097,7 +3099,7 @@ void characterize_spindles( edf_t & edf ,
        slice_t slice( edf , s , spindle->tp );
 
        // nb. we are going to mean-centre these data too
-       // for this particular spindle... avoids some weird cases
+       // for this particular spindle... avoids someo weird cases
        // where we have huge offsets in original signal amplitudes around
        // this spindle, meaning that even after BP filter, we can
        // have spindle intervals with no zero-crossings

@@ -341,8 +341,10 @@ void globals::init_defs()
   freq_band[ ALPHA ] = freq_range_t( 8   , 12   );
 
   freq_band[ SIGMA      ] = freq_range_t( 12  , 15   );
-  freq_band[ LOW_SIGMA  ] = freq_range_t( 12   ,  13.5 );
-  freq_band[ HIGH_SIGMA ] = freq_range_t( 13.5 ,  15   );
+
+  // note, defs of slow/sigma do not overlapp 100% with SIGMA (on purpose)
+  freq_band[ LOW_SIGMA  ] = freq_range_t( 10 , 13 );
+  freq_band[ HIGH_SIGMA ] = freq_range_t( 13 , 15 );
 
   freq_band[ BETA  ] = freq_range_t( 15  , 30   );
   freq_band[ GAMMA ] = freq_range_t( 30  , 50 );
