@@ -29,6 +29,7 @@ struct param_t;
 namespace dsptools
 {
   void simul( edf_t & edf , param_t & param );
+  void simul_cached( edf_t & edf , param_t & param );
 }
 
 

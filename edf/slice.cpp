@@ -49,7 +49,8 @@ slice_t::slice_t( edf_t & edf ,
 		  int signal ,
 		  const interval_t & interval ,
 		  int downsample , 
-		  bool digital )
+		  bool digital ,
+		  bool get_smps )
   : edf(edf) , signal(signal) , interval(interval) , downsample(downsample) 
 {
 
@@ -62,7 +63,8 @@ slice_t::slice_t( edf_t & edf ,
   time_points.clear();
   records.clear();
   dig_data.clear();
-
+  smps.clear();
+  
   //
   // Empty?
   //
@@ -97,7 +99,10 @@ slice_t::slice_t( edf_t & edf ,
 				 signal , 
 				 downsample , 
 				 &time_points , 
-				 &records );
+				 &records ,
+				 get_smps ? &smps : NULL , 
+				 NULL );
+  
   else
     data = edf.fixedrate_signal( interval.start , 
 				 interval.stop , 
@@ -105,6 +110,7 @@ slice_t::slice_t( edf_t & edf ,
 				 downsample , 
 				 &time_points , 
 				 &records , 
+				 get_smps ? &smps : NULL ,
 				 &dig_data ); // requests digital value; here 'data' will be empty   
   
 
@@ -165,9 +171,9 @@ matslice_t::matslice_t( edf_t & edf ,
   data.clear();
   
   time_points.clear();
-
+  
   labels.clear();
-
+  
   //
   // Empty?
   //
@@ -204,7 +210,9 @@ matslice_t::matslice_t( edf_t & edf ,
 				      signals(0) ,  // first channel
 				      1 ,  // no downsampling
 				      &time_points ,  // get TPs for first channel only
-				      NULL ) ); // no records
+				      NULL , // no recs
+				      NULL , // no smps
+				      NULL ) ); // not digital data
   
   
   //
@@ -212,7 +220,7 @@ matslice_t::matslice_t( edf_t & edf ,
   //
   
   for (int s=1;s<ns;s++) 
-    data.add_col( edf.fixedrate_signal( interval.start , interval.stop , signals(s) , 1 , NULL , NULL ) );  
+    data.add_col( edf.fixedrate_signal( interval.start , interval.stop , signals(s) , 1 , NULL , NULL , NULL , NULL ) );  
   
 }
   
@@ -273,7 +281,7 @@ eigen_matslice_t::eigen_matslice_t( edf_t & edf ,
 						  signals(0) ,    // first channel
 						  1 ,             // no downsampling
 						  &time_points ,  // get TPs for first channel only
-						  NULL ) ;        // no records
+						  NULL, NULL, NULL ) ;        // no records, smps or dig. data
 
   const int nr = ch1.size();
 
@@ -291,7 +299,7 @@ eigen_matslice_t::eigen_matslice_t( edf_t & edf ,
   for (int s=1;s<ns;s++) 
     {
       // TODO: add a version of fixedrate_signal() that directly outputs to Eigen matrix class
-      std::vector<double> tmp = edf.fixedrate_signal( interval.start , interval.stop , signals(s) , 1 , NULL , NULL ) ;
+      std::vector<double> tmp = edf.fixedrate_signal( interval.start , interval.stop , signals(s) , 1 , NULL , NULL , NULL , NULL ) ;
       data.col(s) = Eigen::VectorXd::Map( &tmp[0] , nr );
     }
   

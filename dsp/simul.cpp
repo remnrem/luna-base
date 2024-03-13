@@ -38,6 +38,17 @@ void dsptools::simul( edf_t & edf , param_t & param )
 {
 
   //
+  // Epochwise cache-based simulation? Use a different fn()
+  //
+  
+  if ( param.has( "cache" ) )
+    {
+      simul_cached( edf , param );
+      return;
+    }
+  
+  
+  //
   // Update or create a signal
   //
  
@@ -88,14 +99,13 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
   const bool from_file = param.has( "file" );
 
-  if ( from_file && ( functional || simple ) )
-    Helper::halt( "cannot specify alpha/frq as well as file" );
-
+  if ( from_file && ( functional || simple) )
+    Helper::halt( "cannot specify alpha/frq as well as file/cache" );
 
   //
   // impulses (i.e. for impulse and step functions)
   //
-
+  
   const bool impulses = param.has( "impulse" );
   
   //
@@ -249,7 +259,6 @@ void dsptools::simul( edf_t & edf , param_t & param )
 	      //std::cout << " up sampled " << frqs[i] << "\t" << psds[i] << "\n";
 	    }
 	}
-
     }
 
   
@@ -543,4 +552,261 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
   
 }
+
+
+void dsptools::simul_cached( edf_t & edf , param_t & param )
+{
+
+  //
+  // Channel to seed on (expecting epoch-level PSD (PSD/F/CH/E) in cache)
+  //
+  
+  std::string siglab = param.requires( "sig" );
+  
+  signal_list_t signals = edf.header.signal_list( siglab );
+  if ( signals.size() != 1 )
+    Helper::halt( "problem finding exactly one original signal with sig" );
+  
+  const int slot = signals(0);
+  
+  if ( edf.header.is_annotation_channel( slot ) )
+    Helper::halt( "cannot modify an EDF Annotation channel" );
+
+  // will use Fs of original signal to make new data
+  const int fs = edf.header.sampling_freq( slot );
+  
+  const double fmax = fs / 2.0;
+  
+  
+  //
+  // new random signal
+  //
+  
+  std::string newsiglab = param.requires( "new" );
+  
+  if ( newsiglab == "*" )
+    Helper::halt( "need to specify a single channel with 'new'" ) ;
+  
+  // (update or create a new signal?)
+  
+  const bool update_existing_channel = edf.header.has_signal( newsiglab );
+  
+  const int nslot = update_existing_channel ? edf.header.signal( newsiglab ) : -1;
+
+  //
+  // cache details: note expecting the same cache details
+  //
+
+  const std::string cname = param.requires( "cache" );
+
+  if ( ! edf.timeline.cache.has_num( cname ) )
+    Helper::halt( "cache not found: " + cname );
+  
+  cache_t<double> * cache = edf.timeline.cache.find_num( cname );
+
+  // build CH->F->EPOCH map
+  std::set<ckey_t> keys = cache->keys( "PSD:PSD" );
+
+  if ( keys.size() == 0 )
+    Helper::halt( "could not find any cached PSD:PSD values for this channel" );
+
+  // E-F = POW
+  std::map<std::string,std::map<std::string,double> > pow;
+  // order F (as str -> num)
+  std::map<double,std::string> frqs;
+
+  std::set<ckey_t>::const_iterator jj = keys.begin();
+  while ( jj != keys.end() )
+    {
+
+      std::map<std::string,std::string> strata = jj->stratum;
+      
+      if ( strata[ "CH" ] == siglab &&
+	   strata.find( "F" ) != strata.end() &&
+	   strata.find( "E" ) != strata.end() )
+	{
+	  double x1 = 0;
+	  if ( ! cache->fetch1( "PSD", "PSD", strata , &x1 ) )
+	    Helper::halt( "problem exracting information from cache" );
+	  
+	  pow[ strata["E"] ][ strata["F"] ] = x1;
+
+	  double f;
+	  if ( ! Helper::str2dbl(  strata["F"]  , &f ) )
+	    Helper::halt( "problem converting string F's" );	  
+	       
+	  frqs[ f ] = strata["F"];
+	  
+	}
+      
+      ++jj;
+    }
+
+
+  //
+  // Create / update signal
+  //
+
+  // get original signal either way
+  slice_t slice( edf ,
+		 slot ,
+		 edf.timeline.wholetrace() ,
+		 1 ,     // do not downsample
+		 false , // get physical (not digital) data
+ 		 true    // get sample-points
+		 );
+  
+  std::vector<double> nsig = *slice.pdata();  
+  const std::vector<int> * psmps = slice.psmps();
+  //const std::vector<int> * precs = slice.precords();
+  // for (int i=0; i<psmps->size() ; i++)
+  //   std::cout << (*precs)[i] << "\t" << (*psmps)[i] << "\n";
+  // std::cout << "\n";
+  
+  //
+  // iterate over epochs 
+  //
+
+  edf.timeline.ensure_epoched();
+  
+  int ne = edf.timeline.first_epoch();
+
+  while ( 1 )
+    {
+
+      int epoch = edf.timeline.next_epoch();
+      
+      if ( epoch == -1 ) break;
+
+      // get sample points for this epoch
+      interval_t interval = edf.timeline.epoch( epoch );
+      
+      slice_t slice( edf ,
+		     slot ,
+		     interval ,
+		     1 ,     // do not downsample		     
+		     false , // get physical (not digital) data
+		     true    // get sample-points [ only reason for calling here ]
+		     );
+      
+      const std::vector<int> * psmps = slice.psmps();
+
+      const int n = psmps->size();
+      
+      const int m = floor( n / 2 ) + 1;
+      
+      const double df = fmax / (double)(m-1) ;
+      
+      // nb. cache uses 1-based epoch counting
+      const std::string estr = Helper::int2str( epoch + 1 );
+      
+      if ( pow.find( estr ) == pow.end() )
+	Helper::halt( "could not find epoch " + estr + " from cache" );
+
+      // get values: F[str] -> POW[num]
+      std::map<std::string,double> cv = pow[ estr ];      
+
+      // make PSD vector
+      std::vector<double> psds;
+      std::vector<double> fx;      
+      std::map<double,std::string>::const_iterator ff = frqs.begin();
+      while ( ff != frqs.end() )
+	{
+	  fx.push_back( ff->first );
+	  psds.push_back( cv[ ff->second ] );	  
+	  ++ff;
+	}
+      
+      // scale PSD to correct size
+      
+      if ( fx.size() != m )
+	{
+	  std::vector<double> f0 = fx;
+	  std::vector<double> p0 = psds;
+	  
+	  tk::spline spline;
+	  spline.set_points( f0 , p0 );
+	  
+	  fx.resize( m );
+	  psds.resize( m );
+	  
+	  for (int i=0; i<m; i++)
+	    {
+	      double f = i * df;
+	      fx[ i ] = f ;
+	      psds[ i ] = spline( f );
+	      if ( psds[ i ] < 0 ) psds[i] = 0;	      
+	    }
+	}
+
+
+      // extract amplituds from PSD
+      std::vector<double> amps = psds;
+      for (int i=0; i<amps.size(); i++)
+	amps[i] = sqrt( 0.5 * psds[i] * n * fs );
+      
+      // randomise phases (uniform between 0 and 2PI)
+      // skip DC & Nyquist
+      
+      std::vector<double> phases( amps.size() );
+      for (int i=1; i<phases.size()-1; i++) 
+	phases[i] = 2 * M_PI * CRandom::rand();
+      
+      // make freq. domain signal Z = amp x e^(i phi), where i = sqrt(-1)      
+      std::vector<dcomp> z( amps.size() );
+      for (int i=0; i<z.size(); i++)
+	z[i] = amps[i] * exp( dcomp( 0 , phases[i] ) ); 
+      
+      // mirror negative freqs (complex conjugate)
+      const bool even = n % 2 == 0 ;
+      for (int p = even ? amps.size() - 2 : amps.size() - 1 ; p != 0;  p-- )
+	z.push_back( std::conj( z[p] ) );
+      
+      if ( z.size() != n )
+	Helper::halt( "internal error in dsptools::simul()" );
+  
+      // inverse FFT to get time-domain signal     
+      real_iFFT ifft( n , n , fs );
+      ifft.apply( z );
+      std::vector<double> rdat = ifft.inverse();
+      
+
+      if ( psmps->size() != rdat.size() )
+	{
+	  std::cout << " sz " << psmps->size() << " " << rdat.size() << "\n";
+	  Helper::halt( "intrenal prob in simul()" );	  
+	}
+      
+      // splice back
+      for (int i=0; i<rdat.size();i++)
+	nsig[ (*psmps)[i] ] = rdat[i] ;
+      
+      // for (int j=0;j<fft.frq.size();j++)
+      //   std::cout << " RET\t" << fft.frq[j] << "\t" << ft[j] << "\t z = " << z[j] << " PSD " << psds[j] << "  vs  " << fft.X[j] << "\n";
+      
+      //
+      // Next epoch
+      //
+    }
+  
+  //
+  // Create / update signal
+  //
+  
+  if ( update_existing_channel )
+    {
+      logger << "  updating " << newsiglab << "...\n";
+      edf.update_signal( nslot , &nsig );
+    }
+  else
+    {      
+      logger << "  creating new channel " << newsiglab << "...\n";
+      edf.add_signal( newsiglab , fs , nsig );
+    }
+  
+
+  
+}
+
+
 

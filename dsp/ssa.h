@@ -36,7 +36,8 @@ namespace dsptools {
 
 struct ssa_t {
   ssa_t( const std::vector<double> * x , const int l );
-  
+  ssa_t( const Eigen::VectorXd & x , const int l );
+  void fit( const Eigen::VectorXd & x , const int l );
   Eigen::MatrixXd X;
   
 };

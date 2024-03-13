@@ -418,8 +418,9 @@ public:
 					const int signal , 
 					const int downsample , 
 					std::vector<uint64_t> * tp , 
-					std::vector<int> * rec , 
-					std::vector<int16_t> * ddata = NULL );
+					std::vector<int> * rec ,
+					std::vector<int> * smp , 
+					std::vector<int16_t> * ddata );
   
   
   tal_t tal( const int signal , const int rec );

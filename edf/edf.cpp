@@ -1764,7 +1764,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					     const int signal , 
 					     const int downsample ,
 					     std::vector<uint64_t> * tp , 
-					     std::vector<int> * rec , 
+					     std::vector<int> * rec ,
+					     std::vector<int> * smp ,
 					     std::vector<int16_t> * ddata ) 
 {
   
@@ -1776,9 +1777,12 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   if ( rec != NULL ) 
     rec->clear();
 
+  if ( smp != NULL )
+    smp->clear();
+  
   if ( ddata != NULL )
     ddata->clear();
-
+  
   //
   // Ensure we are within bounds
   //
@@ -1866,13 +1870,15 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 	    tp->push_back( timeline.timepoint( r , s , n_samples_per_record ) );
 	  if ( rec != NULL ) 
 	    rec->push_back( r );
-
+	  if ( smp != NULL )
+	    smp->push_back( r * n_samples_per_record + s );
+	  
 	  // just return digital values...
 	  if ( ddata != NULL )
 	    ddata->push_back( record->data[ signal ][ s ] );
 	  else // ... or convert from digital to physical on-the-fly? (the default)
 	    ret.push_back( edf_record_t::dig2phys( record->data[ signal ][ s ] , bitvalue , offset ) );
-
+	  
 	}
       
       r = timeline.next_record(r);

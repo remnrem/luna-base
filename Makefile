@@ -41,7 +41,7 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard lgbm/*.cpp) \
         $(wildcard web/*.cpp) \
         $(wildcard models/*.cpp) \
-        $(wildcard lunapi/*.cpp) 
+        $(wildcard lunapi/*.cpp)
 
 
 CSRCS = $(wildcard db/*.c) \

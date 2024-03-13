@@ -46,7 +46,8 @@ class slice_t
 	   int signal , 
 	   const interval_t & interval , 
 	   int    downsample = 1 , 
-	   bool digital = false );
+	   bool digital = false ,
+	   bool get_smps = false );
   
   const std::vector<double> * pdata() const 
   { 
@@ -84,6 +85,17 @@ class slice_t
     return &records;
   }
 
+  const std::vector<int> * psmps() const
+  {
+    return &smps;
+  }
+
+  std::vector<int> * nonconst_psmps()
+  {
+    return &smps;
+  }
+
+  
   int size() const 
   { 
     return data.size(); 
@@ -96,6 +108,7 @@ class slice_t
     data.clear();
     dig_data.clear();
     time_points.clear();
+    smps.clear();
     records.clear();
     start = stop = 0;
   }
@@ -112,6 +125,7 @@ class slice_t
   std::vector<double> data; // unless digital == T 
   std::vector<int16_t> dig_data;// optional, if digital == T
   std::vector<uint64_t> time_points;
+  std::vector<int> smps; // unless get_smps = T 
   std::vector<int> records;
   
   double start, stop;
