@@ -735,7 +735,7 @@ void dsptools::apply_ngaus( edf_t & edf , int s , const double ngaus_f , const d
     
   slice_t slice( edf , s , interval );
 
-  std::cout << " got a slice\n";
+  //  std::cout << " got a slice\n";
   
   const std::vector<double> * d = slice.pdata();
   

@@ -583,7 +583,8 @@ struct timeline_t
   double                epoch_generic_param_min_epoch_size;
   
   double                epoch_generic_param_shift; // secs -/+
-
+  double                epoch_generic_param_trunc; // secs (+ve) from end
+  
   // epoch alignment
   
   std::string epoch_align_str; // un-tokenized version of below, for quick check by EVAL when calling proc_epoch()

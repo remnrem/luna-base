@@ -224,7 +224,8 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       
       // next signal
     }
-
+  writer.unlevel( globals::signal_strat );
+  
   // all done
 }
 
@@ -1048,10 +1049,18 @@ int tlock_t::set_window( int half_points )
 void tlock_t::outputs()
 {
 
-  logger << " outputs\n";
+  //  logger << " outputs\n";
 
-  std::cout << X.print() << "\n";
-
+  
+  // std::cout << "X = " << X.dim1() << " " << X.dim2() << "\n";
+  // for (int i=0;i<X.dim1();i++)
+  //   {
+  //     for (int j=0; j<X.dim2(); j++)
+  // 	std::cout << ( j ? "\t" : "" ) << X(i,j) ;
+  //     std::cout << "\n";
+  //   }
+  // std::cout << "\n";
+  
   // means
   Data::Vector<double> m = average( outlier_th , outlier_winsor );
 
@@ -1073,6 +1082,5 @@ void tlock_t::outputs()
       writer.value( "MD" , md[i] );
     }  
   writer.unlevel( "SEC" );
-
     
 }

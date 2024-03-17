@@ -89,7 +89,7 @@ int timeline_t::calc_epochs()
   epoch_generic_param_w = 0;
   epoch_generic_param_set_point = 0;
   epoch_generic_param_min_epoch_size = 0.1;
-
+  
   
   // Calculates EPOCH timings in the original EDF timescale
   // for both continuous and discontinuous EDFs
@@ -1025,7 +1025,9 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   const bool some_w = has_w || has_w_before || has_w_after;
   if ( (int)has_w + (int)has_w_before + (int)has_w_after  > 1 )
     Helper::halt( "can only specify one of w, w-before or w-after" );
-
+  
+  
+  
   epoch_generic_param_w = 0;
   if ( has_w ) 
     epoch_generic_param_w = param.requires_dbl( "w" );
@@ -1044,6 +1046,14 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   if ( has_shift ) 
     epoch_generic_param_shift = param.requires_dbl( "shift" );
 
+  // truncate last N seconds 
+  const bool has_trunc = param.has( "trunc" );
+  epoch_generic_param_trunc = 0;
+  if ( has_trunc )
+    epoch_generic_param_trunc = param.requires_dbl( "trunc" );
+  if ( epoch_generic_param_trunc < 0 )
+    Helper::halt( "trunc must be positive" );
+  
   // require a minimum epoch size: set to 1/10th of a second by default
   epoch_generic_param_min_epoch_size = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
   if ( epoch_generic_param_min_epoch_size < 0.001 ) Helper::halt( "'min' must be 0.001 or greater" );
@@ -1112,6 +1122,16 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	      else if ( epoch_generic_param_shift > 0 ) interval.shift_right( epoch_generic_param_shift * globals::tp_1sec );
 	    }
 
+	  // truncate last N seconds?
+	  if ( has_trunc )
+	    {
+	      // zero-dur event if truncating too much 
+	      if ( epoch_generic_param_trunc >= interval.duration_sec() )
+		interval.stop = interval.start;
+	      else
+		interval.stop -= epoch_generic_param_trunc * globals::tp_1sec;
+	    }
+	  
 	  // add as an epoch, if large enough
 	  if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 
 	    intervals[ interval ] = *aa;

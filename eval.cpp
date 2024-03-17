@@ -954,6 +954,8 @@ bool cmd_t::eval( edf_t & edf )
       //
 
       if ( is( c, "EXIT" ) ) return true;
+      if ( is( c, "STOP" ) ) return true;
+      if ( is( c, "QUIT" ) ) return true;
       
       //
       // Is the current mask empty? if so, skip unless this is a THAW

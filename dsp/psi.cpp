@@ -135,14 +135,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   
   logger << "  running PSI with " << eplen << " samples per epoch, " << seglen << " per segment\n";
 
-
-  //
-  // Cache?
-  //
-
-  cache_t<double> * cache = param.has( "cache-metrics" ) ? edf.timeline.cache.find_num( param.value( "cache-metrics" ) ) : NULL ;
-  
-  
+    
   //
   // Get data
   //
@@ -164,7 +157,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       psi.calc();
       
-      psi.report( signals , cache , by_epoch );
+      psi.report( signals , by_epoch );
 
       return; 
     }
@@ -200,7 +193,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       writer.epoch( edf.timeline.display_epoch( epoch ) );
       
-      psi.report( signals , cache , by_epoch );
+      psi.report( signals , by_epoch );
 
     }
 
@@ -210,7 +203,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
 
 
-void psi_t::report( const signal_list_t & signals , cache_t<double> * cache , bool by_epoch )
+void psi_t::report( const signal_list_t & signals , bool by_epoch )
 {
   const double EPS = 1e-8;
 
@@ -238,10 +231,14 @@ void psi_t::report( const signal_list_t & signals , cache_t<double> * cache , bo
 	  writer.level( signals.label(i) , globals::signal_strat );
 	  writer.value( "PSI_RAW" , psi_sum[m][i] );
 	  writer.value( "STD" , std_psi_sum[m][i] );
-
 	  double psi1 = psi_sum[m][i]  / ( EPS + std_psi_sum[m][i] );
 	  writer.value( "PSI" , psi1 );	  
-	  if ( cache ) cache->add( ckey_t( "PSI" , writer.faclvl() ) , psi1 );
+	  
+	  // abs values
+	  writer.value( "APSI_RAW" , apsi_sum[m][i] );
+	  writer.value( "ASTD" , std_apsi_sum[m][i] );
+	  double apsi1 = apsi_sum[m][i]  / ( EPS + std_apsi_sum[m][i] );
+	  writer.value( "APSI" , apsi1 );	  	  
 
 	}
       writer.unlevel( globals::signal_strat );
@@ -260,7 +257,6 @@ void psi_t::report( const signal_list_t & signals , cache_t<double> * cache , bo
 
 	      double psi2 = psi[m](i,j)  / ( EPS + std_psi[m](i,j) );
 	      writer.value( "PSI" , psi2 );
-	      if ( cache ) cache->add( ckey_t( "PSI" , writer.faclvl() ) , psi2 );
 
 	    }
 	  writer.unlevel(globals::signal2_strat);
@@ -326,8 +322,13 @@ void psi_t::calc()
 
   // pssumall=zeros(nchan,nm);
   std::vector<Data::Vector<double> > pssumall( nm );
-  for (int i=0;i<nm;i++) pssumall[i].resize( nchan );
-
+  std::vector<Data::Vector<double> > apssumall( nm );
+  for (int i=0;i<nm;i++)
+    {
+      pssumall[i].resize( nchan );
+      apssumall[i].resize( nchan );
+    }
+  
   for (int ii=0; ii<nm; ii++)
     {
       const int nf = freqbins[ii].size();
@@ -342,8 +343,10 @@ void psi_t::calc()
       // pssumall(:,ii)=sum(psall(:,:,ii),2);
       for (int i=0;i<nchan;i++)
 	for (int j=0;j<nchan;j++)
-	  pssumall[ii][i] += psall[ii](i,j);
-      
+	  {
+	    pssumall[ii][i] += psall[ii](i,j);
+	    apssumall[ii][i] += fabs( psall[ii](i,j) );
+	  }
     }
 
   
@@ -370,10 +373,16 @@ void psi_t::calc()
   
   //   pssumloc=zeros(nchan,nepochjack,nm);  
   std::vector<std::vector<Data::Vector<double> > > pssumloc( nepochjack );
+  std::vector<std::vector<Data::Vector<double> > > apssumloc( nepochjack );
   for (int b=0;b<nepochjack;b++)
     {
       pssumloc[b].resize( nm );
-      for (int ii=0; ii<nm; ii++) pssumloc[b][ii].resize( nchan );
+      apssumloc[b].resize( nm );
+      for (int ii=0; ii<nm; ii++)
+	{
+	  pssumloc[b][ii].resize( nchan );
+	  apssumloc[b][ii].resize( nchan );
+	}
     }
   
   //  if ( epjack > 0 )
@@ -397,7 +406,7 @@ void psi_t::calc()
 	}
       
       //      csloc=data2cs_event(dataloc,segleng,segshift,epleng,maxfreqbin,para);
-
+      
       std::vector<Data::Matrix<std::complex<double> > > csloc = data2cs_event( &dataloc , 
 									       maxfreqbin );
       
@@ -426,25 +435,29 @@ void psi_t::calc()
 	  //pssumloc(:,b,ii)=sum(psloc(:,:,b,ii),2);
 	  for (int i=0;i<nchan;i++)
 	    for (int j=0;j<nchan;j++)
-	      pssumloc[b][ii][i] += psloc[b][ii](i,j);
-	  
+	      {
+		pssumloc[b][ii][i] += psloc[b][ii](i,j);
+		apssumloc[b][ii][i] += fabs( psloc[b][ii](i,j) );
+	      }
 	  
 	}
     }
 
   
   // store results:
-  // vector of MxM PSI matrices [ freqbins / nm ] 
-  
+  // vector of MxM PSI matrices [ freqbins / nm ]   
   psi = psall;
 
   // vector of vectors of total flux [ M ] 
   psi_sum = pssumall;
-
-  // bootstreap SD deviations
   
+  // absolute PSIs
+  apsi_sum = apssumall;
+    
+  // bootstreap SD deviations  
   std_psi.clear();
   std_psi_sum.clear();
+  std_apsi_sum.clear();
   
   for (int ii=0;ii<nm;ii++)
     {
@@ -468,10 +481,24 @@ void psi_t::calc()
 	    {
 	      xx.push_back( pssumloc[b][ii](i) );	      
 	    }
-	      V(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
+	  V(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
 	}
-
+      
       std_psi_sum.push_back( V );
+
+      // ABS PSI SUM
+      Data::Vector<double> AV( nchan );
+      for (int i=0;i<nchan; i++)
+	{
+	  std::vector<double> xx;
+	  for (int b=0;b<nepochjack;b++)
+	    {
+	      xx.push_back( apssumloc[b][ii](i) );	      
+	    }
+	  AV(i) = MiscMath::sdev( xx ) * sqrt( nepochjack ) ;
+	}
+      
+      std_apsi_sum.push_back( AV );
       
     }
         
