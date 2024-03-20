@@ -49,6 +49,9 @@ mtm_t::mtm_t( const double npi , const int nwin ) : npi(npi) , nwin(nwin)
   
   // set to use 1/(N.Fs) weights (4)
   inorm = 4 ; 
+
+  // if not otherwise specified
+  dump_segment_times = false;
   
 }
 
@@ -140,6 +143,19 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	     << ( opt_remove_trend ? "detrend" : ( opt_remove_mean ? "constant" : "none" ) ) << "\n";
       
     }
+
+  //
+  // Verbose outputs
+  //
+
+  if ( dump_segment_times )
+    {
+      std::cout << "\n"
+		<< "total_npoints = " << total_npoints << "\t" << dt * total_npoints << "\n"
+		<< "total # of segments = " << n_segs << "\n" 
+		<< "seg size (samples) = " << seg_size << "\t" << dt * seg_size << "\n"
+		<< "seg inc (samples) = " << seg_step << "\t" << dt * seg_step << "\n";      
+    }
   
   //
   // Generate and store tapers
@@ -198,7 +214,14 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
       if ( p + seg_size > total_npoints ) break;
 
       // skip this segment?
-      if ( ( ! allsegs ) && restrict[sn] ) { ++sn; continue; }
+      if ( ( ! allsegs ) && restrict[sn] )
+	{
+	  if ( dump_segment_times )
+	    std::cout << "skipping this segment, starting " << p << " up until " << p + seg_size << "\n";
+	      
+	  ++sn;
+	  continue;
+	}
       
       // need to copy segment (i.e. if detrending)
       std::vector<double> segment( npoints );  // == seg_size
@@ -208,7 +231,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	segment[j] = (*d)[p2++];
       
       double * psegment = &(segment)[0];
-
+      
       //
       // remove mean or detrend?
       //
@@ -270,6 +293,14 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	  // but also track current --> into track_band[]
 	  bandaid->track();
 	}
+
+      //
+      // Verbose output
+      //
+      
+      if ( dump_segment_times )
+	std::cout << " segment " << sn << " starting " << p	<< " up until " << p + seg_size << "\n";
+      
       
       //
       // Next segment

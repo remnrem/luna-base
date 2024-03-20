@@ -3679,21 +3679,32 @@ void proc_copy_signal( edf_t & edf , param_t & param )
   
   signal_list_t originals = edf.header.signal_list( param.requires( "sig" ) );
 
-  std::string tag = param.requires( "tag" );
+  const bool newlab = param.has( "new" );
+  const bool pretag = param.has( "pretag" );
+  const bool posttag = param.has( "tag" );
+
+  if ( (int)newlab + (int)pretag + (int)posttag != 1 )
+    Helper::halt( "requires one of tag, pretag or new" );
+  
+  const std::string tag = posttag ? param.value( "tag" ) : ( pretag ? param.value( "pretag" ) : param.value( "new" ) );
+
+  if ( newlab && originals.size() > 1 ) Helper::halt( "cannot specify 'new' with more than one 'sig'" );
   
   for (int s=0;s<originals.size();s++)
     {
 
       if ( edf.header.is_data_channel( originals(s) ) )
 	{
-
-	  std::string new_label = originals.label( s ) + "_" + tag; 
+	  const std::string new_label = newlab ? tag :
+	    ( posttag ? originals.label( s ) + tag : tag + originals.label( s ) );
 	  
 	  if ( ! edf.header.has_signal( new_label ) )
 	    {
 	      logger << " copying " << originals.label(s) << " to " << new_label << "\n";
 	      edf.copy_signal( originals.label(s) , new_label );
 	    }
+	  else
+	    logger << "  *** " << new_label << " already exists, skipping copying operation\n";
 	}
     }
 }

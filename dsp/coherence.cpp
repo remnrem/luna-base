@@ -218,7 +218,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   const int total_sample_points = d1->size();  
 
   //
-  // nb. this assumes epochs have similar sizes
+  // nb. this assumes epochs have similar sizes (this will have been checked in eval.cpp before calling)
   //
 
   coherence_t coherence( total_sample_points, Fs, segment_sec, overlap_sec, window , average_adj , detrend );
@@ -563,6 +563,7 @@ void scoh_t::proc_and_output( const coherence_t & coherence ,
   // track output status
   bool any = false;
 
+    
   //
   // iterate over frequencies
   //

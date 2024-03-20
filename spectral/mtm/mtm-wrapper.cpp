@@ -415,6 +415,8 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
       //
       // Track epoch length (function works for standard & generic epochs)
+      //  - but in terms of number of segments that will be calculated, rather
+      //    than epoch length per se (i.e. if gaps at end, etc)
       //
       
       etrack_length.push_back( edf.timeline.epoch_length() );
@@ -573,7 +575,15 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  mtm.opt_remove_mean = mean_center;
 	  mtm.opt_remove_trend = remove_linear_trend;
 	  mtm.bandaid = &bandaid;
-		  
+	  mtm.dump_segment_times = param.has( "dump-segment-times" );
+
+	  if ( mtm.dump_segment_times && epochwise )
+	    {
+	      std::cout << "\n\n------------- epoch " << edf.timeline.display_epoch( epoch )
+			<< "  " << interval.as_string() << "\n";
+	    }
+	  
+	  
 	  // possibly restrict to a subset of segments?
 	  if ( restrict_start || restrict_stop )
 	    mtm.restrict = restrict;

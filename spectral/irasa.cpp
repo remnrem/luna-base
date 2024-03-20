@@ -296,7 +296,7 @@ irasa_t::irasa_t( edf_t & edf ,
       // implied number of segments                                                                                                                                        
       const int noverlap_segments = floor( ( total_points - noverlap_points)
 					   / (double)( segment_points - noverlap_points ) );
-      
+
       PWELCH pwelch( x ,
 		     sr, 
 		     segment_sec ,
@@ -313,7 +313,7 @@ irasa_t::irasa_t( edf_t & edf ,
       for (int hi=0; hi<h_cnt; hi++)
 	{
 	  const double h = h_min + hi * h_inc;
-	  
+
 	  const std::vector<double> & hup = up[ hi ];
 	  const std::vector<double> & hdown = down[ hi ];
 	      
@@ -331,6 +331,7 @@ irasa_t::irasa_t( edf_t & edf ,
 	  //
 	  // up
 	  //
+
 	  
 	  const int up_noverlap_segments = floor( ( up_smps - noverlap_points )
 						  / (double)( segment_points - noverlap_points ) );
@@ -348,7 +349,7 @@ irasa_t::irasa_t( edf_t & edf ,
 	  //
 	  // down
 	  //
-	  
+
 	  const int down_noverlap_segments = floor( ( down_smps - noverlap_points )
 						    / (double)( segment_points - noverlap_points ) );
 	  
@@ -361,7 +362,8 @@ irasa_t::irasa_t( edf_t & edf ,
 			      (window_function_t)window_function ,
 			      segment_median );
 	  
-	      
+	  
+
 	  //
 	  // collate geometric means (for freq range only)
 	  //
@@ -372,7 +374,7 @@ irasa_t::irasa_t( edf_t & edf ,
 	  updowns[ hi ] = ud;
 	  
 	}
-      
+
       //
       // track size of FFT
       //
@@ -416,7 +418,7 @@ irasa_t::irasa_t( edf_t & edf ,
 	      
 	      std::vector<double> du( h_cnt );
 	      for (int hi=0; hi<h_cnt; hi++) du[hi] = updowns[hi][i];
-	      
+
 	      double aper = MiscMath::median( du , true ) ;
 	      double per = pwelch.psd[ i ] - aper ;
 	      

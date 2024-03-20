@@ -80,6 +80,9 @@ struct mtm_t
 
   // dB output?
   bool dB;
+
+  // dump segment times ( MTM dump-segment-times )
+  bool dump_segment_times;
   
   // hold results here
   std::vector<double> f;
@@ -152,9 +155,9 @@ struct mtm_t
 	       double *rv4, double *rv5);
   int get_pow_2(int inum);  
   double remove_mean(double x[], int lx);
-  void rm_lintrend(double *x,  double *y, int length, double a, double b);
-  void get_abfit(double *x, double *y, int length, double *slope, double *intercept);
-  void rm_lin_sig_trend(double *y, int n, double dt);
+  static void rm_lintrend(double *x,  double *y, int length, double a, double b);
+  static void get_abfit(double *x, double *y, int length, double *slope, double *intercept);
+  static void rm_lin_sig_trend(double *y, int n, double dt);
   
 };
 

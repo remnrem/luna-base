@@ -38,6 +38,11 @@ bool timeline_t::generic_epochs() const
   return ! standard_epochs ; 
 }
 
+bool timeline_t::fixed_epoch_length() const
+{
+  return fixed_size_epochs;
+}
+
 bool timeline_t::check( const std::string & cmd ) const
 {
 
@@ -47,6 +52,7 @@ bool timeline_t::check( const std::string & cmd ) const
   // track list of commands that cannot be used w/ nonstandard epochs
   //   not present in xlist  -- no constraints
   //       present    xlist == 1   requires standard and non-overlapping epochs
+  //       present    xlist == 2   requires fixed duration epochs (i.e. no can overlapping or from epochs)
 
   // may want to update this w/ some commands that assume uniform AND contiguous epochs
   // e.g. IRASE, MOVING-AVERAGE, etc
@@ -62,7 +68,7 @@ bool timeline_t::check( const std::string & cmd ) const
   xlist[ "STAGE" ] = 1; 
   
   xlist[ "CC" ] = 1; 
-  xlist[ "COH" ] = 1; 
+  xlist[ "COH" ] = 2; 
   xlist[ "IRASA" ] = 1; 
   xlist[ "LINE-DENOISE" ] = 1; 
   xlist[ "MOVING-AVERAGE" ] = 1; 
@@ -74,17 +80,24 @@ bool timeline_t::check( const std::string & cmd ) const
   std::map<std::string,int>::const_iterator cc = xlist.find( cmd );
   if ( cc == xlist.end() ) return true;
 
-  // if on the list, not allowing generic epochs:
+  const int etype = cc->second;
+
+  // requires only fixed epoch durations
+  if ( etype == 2 ) return fixed_epoch_length();
+  
+  // more stringent, not allowing generic epochs of any kind
   if ( generic_epochs() ) return false;
   
   return true;
 }
+
 
 int timeline_t::calc_epochs()
 {
 
   // wipe any generic epoch params
   standard_epochs = true;
+  fixed_size_epochs = true;
   epoch_generic_param_annots.clear();
   epoch_generic_param_w = 0;
   epoch_generic_param_set_point = 0;
@@ -567,6 +580,7 @@ void timeline_t::unepoch()
 
   // assume will be standard epochs next set
   standard_epochs = true;
+  fixed_size_epochs = true;
   
   // Masks
   clear_epoch_mask();
@@ -701,6 +715,7 @@ int timeline_t::set_epoch(const double s, const double o , const uint64_t offset
   epoch_length_tp = s * globals::tp_1sec;
   epoch_inc_tp = o * globals::tp_1sec;
   standard_epochs = true;
+  fixed_size_epochs = true;
   
   // pass offset as uint64_t
   epoch_offset_tp = offset ; // * globals::tp_1sec;
@@ -986,6 +1001,29 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 
   // first time this is called, from EPOCH command
   standard_epochs = false;
+
+  // option must specify the fixed duration of these (from annot start)
+  fixed_size_epochs = param.has( "fixed" );
+  if ( fixed_size_epochs ) 
+    {
+      const double f = param.requires_dbl( "fixed" );
+      if ( f <= 0.001 ) Helper::halt( "fixed duration must be positive (secs)" );
+      epoch_length_tp = f * globals::tp_1sec;
+      epoch_inc_tp = 0LLU; // not defined/used
+    }
+
+  // if running with 'fixed', then 'only-one' means do not add multiple
+  // eppchs from the same annot, i.e. if they would fit
+  const bool add_all_fixed = ! param.has( "only-one" );
+  if (add_all_fixed && ! fixed_size_epochs ) Helper::halt( "can only add 'only-one' with 'fixed' "); 
+
+  //  ANNOT [-----------------------------]
+
+  // default
+  //  FIXED [12345][12345][12345][12345]--]
+  // with 'only-one'
+  //  FIXED [12345]-----------------------]
+  
   
   // main annotations to use, allowing wildcards
   epoch_generic_param_annots = annotate_t::root_match( param.strset( "annot" ) , annotations.names() );
@@ -1131,16 +1169,51 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	      else
 		interval.stop -= epoch_generic_param_trunc * globals::tp_1sec;
 	    }
+
+	  // handle fixed-size as special case, as we may add 1+ epochs per annot
+
+	  // general case:
+	  if ( ! fixed_size_epochs )
+	    {
+	      // add as an epoch, if large enough
+	      if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size )
+		intervals[ interval ] = *aa;
+	    }
+	  else // i.e. fixed_size_epochs == T  
+	    {
+	      // here, adding 1+ fixed size epochs from this single annot
+
+	      interval_t original = interval;
+
+	      while ( 1 )
+		{
+
+		  // adjust
+		  if ( interval.duration() >= epoch_length_tp )
+		    interval.stop = interval.start + epoch_length_tp; // enforce end
+		  else
+		    break;
+
+		  // add as an epoch, if large enough
+		  if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 
+		    intervals[ interval ] = *aa;
+		  
+		  // all done, or going back to try to add more?
+		  if ( ! add_all_fixed ) break;
+		  
+		  // update remaining interval
+		  interval = interval_t( interval.stop , original.stop );
+		}	      
+	    }
 	  
-	  // add as an epoch, if large enough
-	  if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 
-	    intervals[ interval ] = *aa;
-	  
+	  // next instance
           ++ii;
         }
+
+      // next annot class
       ++aa;
     }
-
+  
 
   //
   // Optionally, if adding 'else' annot, need to know
@@ -1381,7 +1454,12 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
     writer.value( "INC" , epoch_inc() );
     writer.value( "OFFSET" , epoch_offset() );
   }
+  else if ( fixed_size_epochs )
+    {
+      writer.value( "DUR" , epoch_length() );
+    }
   writer.value( "GENERIC" , (int)(!standard_epochs) );
+  writer.value( "FIXED_DUR" , (int)(fixed_size_epochs) );
   
 }
 

@@ -229,6 +229,8 @@ struct timeline_t
 		const std::vector<std::string> * align_annots = NULL );
 
   bool generic_epochs() const;
+
+  bool fixed_epoch_length() const;
   
   double epoch_length() const;
   
@@ -595,8 +597,12 @@ struct timeline_t
   // for generic-epoch (vs standard epoch) case:
   std::vector<std::string> epoch_labels;
 
+  // T if fully standard epochs
   bool standard_epochs;
 
+  // generic (nonstandard) but still fixed-size epochs?
+  bool fixed_size_epochs;
+  
   int current_epoch;
 
   std::vector<bool> mask;

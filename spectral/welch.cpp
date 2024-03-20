@@ -59,6 +59,12 @@ annot_t * spectral_power( edf_t & edf ,
   const bool mean_centre_epoch = param.has( "center" ) || param.has( "centre" )
     || param.has( "mean-center" ) || param.has( "mean-centre" );
     
+  // detrend signal first?
+  const bool remove_linear_trend = param.has( "detrend" );
+
+  if ( mean_centre_epoch && remove_linear_trend )
+    Helper::halt( "cannot specify both mean-center and detrend" );
+
   
   // Spectrum bin width (0 means no binning, default)
 
@@ -113,6 +119,10 @@ annot_t * spectral_power( edf_t & edf ,
   
   const std::string new_sig_prefix = ( new_sigs && param.empty("add" ) ) ? "" : param.value( "add" ) ;
 
+  std::set<std::string> new_sigs_skip_bands;
+  if ( new_sigs && param.has( "skip-bands" ) )
+    new_sigs_skip_bands = param.strset( "skip-bands" );
+  
   // some extra requirements if adding a new signal
   if ( new_sigs )
     {
@@ -470,6 +480,8 @@ annot_t * spectral_power( edf_t & edf ,
 
 	   if ( mean_centre_epoch ) 
 	     MiscMath::centre( d );
+	   else if ( remove_linear_trend )
+	     MiscMath::detrend( d );
 	   
 	   //
 	   // pwelch() to obtain full PSD
@@ -1242,11 +1254,7 @@ annot_t * spectral_power( edf_t & edf ,
 
 	  if ( bands )
 	    {
-	      if ( bandaid.bands.size() > 0 )
-		logger << "  for " << signals.label(s) << " adding " << bandaid.bands.size() << " band signals"
-		       << ", padding " << obs << " samples to " << expected << " (adding " << ( expected - obs ) << " sample(s))\n";
-	      
-	      
+	      	      
 	      int bidx=1;
 	      
 	      std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
@@ -1254,9 +1262,21 @@ annot_t * spectral_power( edf_t & edf ,
 		{	   
 		  
 		  std::vector<double> vec = bandaid.track_band[ *bi ];
+
+		  // skip?
+		  if ( new_sigs_skip_bands.find( globals::band( *bi ) ) != new_sigs_skip_bands.end() )
+		    {
+		      ++bi;
+		      continue;
+		    }
 		  
 		  if ( s == 0 )
-		    logger << "   - B" << bidx << " --> " << globals::band( *bi ) << "\n"; 
+		    {
+		      freq_range_t fr = globals::freq_band[ *bi ];
+		      logger << "   - B" << bidx << " --> " << globals::band( *bi )
+			     << " ( " << fr.first << " - " << fr.second << " Hz )"
+			     << "\n"; 
+		    }
 		  
 		  // zero-pad as needed
 		  vec.resize( expected , 0 );
@@ -1274,6 +1294,12 @@ annot_t * spectral_power( edf_t & edf ,
 		  ++bidx;
 		  ++bi;
 		}
+	      
+	      if ( bidx > 1 )
+		logger << "  for " << signals.label(s) << " added " << bidx-1 << " band signals"
+		       << ", padding " << obs << " samples to " << expected << " (adding " << ( expected - obs ) << " sample(s))\n";
+
+	      
 	    }
 
 	  //

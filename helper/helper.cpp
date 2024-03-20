@@ -1933,14 +1933,28 @@ void Helper::expand_numerics( std::string * t )
   while ( jj != splices.end() )
     {
       s += t->substr( p , jj->first - p ); 
-      int d = starts[ jj->first ] < stops[ jj->first ] ? 1 : -1 ; 
+      const bool forwards = starts[ jj->first ] <= stops[ jj->first ] ;
       bool first = true;
-      for (int a = starts[ jj->first ] ; a <= stops[ jj->first ] ; a += d ) 
-	{
-	  if ( ! first ) s += ",";
-	  s += root[ jj->first ] + Helper::int2str( a );
-	  first = false;
+      
+      if ( forwards )
+	{	
+	  for (int a = starts[ jj->first ] ; a <= stops[ jj->first ] ; a++ ) 
+	    {
+	      if ( ! first ) s += ",";
+	      s += root[ jj->first ] + Helper::int2str( a );
+	      first = false;
+	    }
 	}
+      else
+	{
+	  for (int a = starts[ jj->first ] ; a >= stops[ jj->first ] ; a-- ) 
+	    {
+	      if ( ! first ) s += ",";
+	      s += root[ jj->first ] + Helper::int2str( a );
+	      first = false;
+	    }	
+	}
+      
       // skip to end 
       p = splices[ jj->first ] + 1;
       ++jj;

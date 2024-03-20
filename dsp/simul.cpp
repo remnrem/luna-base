@@ -66,6 +66,23 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
   if ( add_to_existing && ! update_existing_channel )
     Helper::halt( "specified 'add' to modify an existing signal, but it does not exist" );
+
+  //
+  // special case: white noise
+  //
+
+  const bool white_noise = param.has( "white" );
+
+  if ( white_noise )
+    {      
+      const int fs = param.requires_int( "sr" );
+      const int n = edf.header.record_duration * edf.header.nr * fs ;
+      std::vector<double> rdat( n );
+      for (int i=0; i<n; i++) rdat[i] = Statistics::ltqnorm( CRandom::rand() );
+      logger << "  creating new channel " << siglab << " with white noise, SR = " << fs << "\n";
+      edf.add_signal( siglab , fs , rdat );
+      return;
+    }
   
   //
   // baseline signal from a specified PSD, either:
