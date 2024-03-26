@@ -266,7 +266,8 @@ void nsrr_t::init()
   add( "N1" , "NREM1 sleep" );
   add( "N1" , "N1 sleep" ); 
   add( "N1" , "Stage 1 sleep|1" ); 
-  add( "N1" , "Sleep stage N1" ); 
+  add( "N1" , "Sleep stage N1" );
+  add( "N1" , "Sleep stage 1" ); 
   add( "N1" , "Stage N1" );
   add( "N1" , "StageN1" );
   add( "N1" , "Stage 1" );
@@ -280,6 +281,7 @@ void nsrr_t::init()
   add( "N2" , "N2 sleep" );
   add( "N2" , "Stage 2 sleep|2" ); 
   add( "N2" , "Sleep stage N2" );
+  add( "N2" , "Sleep stage 2" );
   add( "N2" , "Stage N2" );
   add( "N2" , "StageN2" );
   add( "N2" , "Stage 2" );
@@ -292,7 +294,8 @@ void nsrr_t::init()
   add( "N3" , "NREM3 sleep" );
   add( "N3" , "N3 sleep" ); 
   add( "N3" , "Stage 3 sleep|3" ); 
-  add( "N3" , "Sleep stage N3" ); 
+  add( "N3" , "Sleep stage N3" );
+  add( "N3" , "Sleep stage 3" ); 
   add( "N3" , "Stage N3" );
   add( "N3" , "StageN3" );
   add( "N3" , "Stage 3" );
@@ -307,7 +310,8 @@ void nsrr_t::init()
   add( "N3" , "NREM4 sleep" );
   add( "N3" , "N4 sleep" ); 
   add( "N3" , "Stage 4 sleep|4" ); 
-  add( "N3" , "Sleep stage N4" ); 
+  add( "N3" , "Sleep stage N4" );
+  add( "N3" , "Sleep stage 4" ); 
   add( "N3" , "Stage N4" );
   add( "N3" , "StageN4" );
   add( "N3" , "Stage 4" );
@@ -318,6 +322,7 @@ void nsrr_t::init()
   add( "R" , "REM" );
   add( "R" , "REM sleep" ); 
   add( "R" , "REM sleep|5" ); 
+  add( "R" , "Sleep stage REM" );
   add( "R" , "Sleep stage R" ); 
   add( "R" , "Stage R" );
   add( "R" , "StageR" );
@@ -326,6 +331,7 @@ void nsrr_t::init()
   
   add( "W" , "Wake" ); 
   add( "W" , "Wake|0" ); 
+  add( "W" , "Sleep stage Wake" );
   add( "W" , "Sleep stage W" );
   add( "W" , "Stage W" );
   add( "W" , "StageW" );
@@ -334,7 +340,7 @@ void nsrr_t::init()
 
   add( "NR" , "Sleep stage N" ); 
   add( "NR" , "Sleep stage NR" ); 
-  add( "NR" , "Sleep stage NREM" ); 
+  add( "NR" , "Sleep stage NREM" );
   add( "NR" , "Stage N" ); 
   add( "NR" , "Stage NR" ); 
   add( "NR" , "Stage NREM" ); 
