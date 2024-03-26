@@ -3527,6 +3527,8 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   //
 
   interval_t prior;
+  sleep_stage_t prior_stage;
+  
   std::vector<interval_t> vec_intervals;
   std::vector<sleep_stage_t> vec_stages;
   
@@ -3535,26 +3537,39 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
     {
       
       interval_t curr = jj->first;
-
+      
       // ensure no overlaps
       if ( jj != stages.begin() )
 	{
 	  if ( curr.start < prior.stop )
 	    {
-	      std::cerr << " current interval : " << curr.start << " .. " << curr.stop << "  S = " << jj->second << "\n"
-			<< " prior            : " << prior.start << " .. " << prior.stop << "  S = " << "\n";
+
+	      logger << "\n*** overlapping stage annotations detected when compiling hypnogram:\n";
 	      
-	      Helper::problem( "bad, overlapping sleep stages" );
+	      logger << "   current interval : "
+		     << curr.start * globals::tp_duration << " .. "
+		     << curr.stop * globals::tp_duration
+		     << "  stage = " << globals::stage( jj->second ) << "\n";
+		
+	      
+	      logger << "   prior            : "
+		     << prior.start * globals::tp_duration << " .. "
+		     << prior.stop * globals::tp_duration 
+		     << "  stage = " << globals::stage( prior_stage ) << "\n";
+	      
+	      Helper::problem( "overlapping sleep stages not allowed: please check/revise annotations" );
+	      logger << "\n";
+	      
 	      return false;
 	    }
 	}
-          
+      
       vec_intervals.push_back( curr );
       vec_stages.push_back( jj->second );
       
       // save prior interval
       prior = curr;
-      
+      prior_stage = jj->second;
       ++jj;
     }
 

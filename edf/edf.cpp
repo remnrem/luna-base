@@ -5597,3 +5597,10 @@ void edf_t::update_edf_pointers( edf_t * p )
       records.find(r)->second.edf = p; 
     }
 }
+
+void edf_t::preread( param_t & param )
+{
+  logger << "  preloading all records...\n";
+  read_records( 0 , header.nr_all - 1 );
+}
+

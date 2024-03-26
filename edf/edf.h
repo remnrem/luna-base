@@ -439,6 +439,8 @@ public:
   
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
+  void preread( param_t & param );
+  
   void set_order( param_t & param );
 
   void set_headers( param_t & param );

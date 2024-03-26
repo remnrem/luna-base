@@ -1081,6 +1081,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "RENAME" ) )       proc_rename( edf, param(c) );
       else if ( is( c, "ENFORCE-SR" ) )   proc_enforce_signals( edf , param(c) );
       else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
+      else if ( is( c, "READ" ) )         proc_read_signal( edf , param(c) );
       else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
       else if ( is( c, "CONTAINS" ) )     proc_has_signals( edf , param(c) );
       
@@ -3673,12 +3674,20 @@ void proc_order_signals( edf_t & edf , param_t & param )
 }
 
 
+// READ: just read all data in, do nothing else
+//       (for timing)
+
+void proc_read_signal( edf_t & edf , param_t & param )
+{
+  edf.preread(param);
+}
+
 // COPY : mirror a signal
 void proc_copy_signal( edf_t & edf , param_t & param )
 {
   
   signal_list_t originals = edf.header.signal_list( param.requires( "sig" ) );
-
+  
   const bool newlab = param.has( "new" );
   const bool pretag = param.has( "pretag" );
   const bool posttag = param.has( "tag" );
