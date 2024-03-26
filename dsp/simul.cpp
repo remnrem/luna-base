@@ -23,11 +23,12 @@
 #include "simul.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
-
+#include "dsp/freqsampling.h"
 #include "eval.h"
 #include "fftw/fftwrap.h"
 #include "miscmath/crandom.h"
 #include "dsp/spline.h"
+#include "dsp/freqsampling.h"
 
 #include "db/db.h"
 
@@ -47,6 +48,16 @@ void dsptools::simul( edf_t & edf , param_t & param )
       return;
     }
   
+  //
+  // Similar, FFT-seeded sim (like above, but different methods)
+  //
+
+  if ( param.has( "fft" ) )
+    {
+      simul_fft( edf , param );
+      return;
+    }
+
   
   //
   // Update or create a signal
@@ -154,6 +165,13 @@ void dsptools::simul( edf_t & edf , param_t & param )
       fs = param.requires_int( "sr" );
       logger << "  using sample rate " << fs << "\n";
     }
+  
+  // zero out PSD above/below certain freqs?
+  const bool zero = param.has( "zero" );
+  std::vector<double> zf = { -99999 , 99999 };
+  if ( zero ) zf = param.dblvector( "zero" );
+  if ( zf.size() == 1 ) { zf.resize(2); zf[1] = 99999; } 
+  if ( zf.size() != 2 || zf[0] >= zf[1] ) Helper::halt( "expecting zero=lwr,{upr}" );
   
   const double fmax = fs / 2.0;      
   
@@ -277,7 +295,7 @@ void dsptools::simul( edf_t & edf , param_t & param )
 	    }
 	}
     }
-
+ 
   
   //
   // If functional form 
@@ -351,7 +369,17 @@ void dsptools::simul( edf_t & edf , param_t & param )
 	    }
 	}
     }
-  
+ 
+  //
+  // zero out freqs?
+  //
+
+  if ( zero ) 
+    {
+      for (int i=0; i < psds.size(); i++)
+	if ( frqs[i] < zf[0] || frqs[i] > zf[1] ) 
+	  psds[i] = 0;
+    }
   
   //
   // Nothing specified?
@@ -363,7 +391,6 @@ void dsptools::simul( edf_t & edf , param_t & param )
   //
   // Verbose report?
   //
-
 
   if ( param.has( "verbose" ) )
     {
@@ -574,10 +601,13 @@ void dsptools::simul( edf_t & edf , param_t & param )
 void dsptools::simul_cached( edf_t & edf , param_t & param )
 {
 
+  const bool verbose = param.has( "verbose" );
+
   //
   // Channel to seed on (expecting epoch-level PSD (PSD/F/CH/E) in cache)
   //
   
+
   std::string siglab = param.requires( "sig" );
   
   signal_list_t signals = edf.header.signal_list( siglab );
@@ -594,6 +624,13 @@ void dsptools::simul_cached( edf_t & edf , param_t & param )
   
   const double fmax = fs / 2.0;
   
+  // zero out PSD above/below certain freqs?                                                                                                                     
+  const bool zero = param.has( "zero" );
+  std::vector<double> zf = { -99999 , 99999 };
+  if ( zero ) zf = param.dblvector( "zero" );
+  if ( zf.size() == 1 ) { zf.resize(2); zf[1] = 99999; }
+  if ( zf.size() != 2 || zf[0] >= zf[1] ) Helper::halt( "expecting zero=lwr,{upr}" );
+
   
   //
   // new random signal
@@ -663,6 +700,10 @@ void dsptools::simul_cached( edf_t & edf , param_t & param )
   //
   // Create / update signal
   //
+
+  if ( verbose ) 
+    writer.level( newsiglab , globals::signal_strat );
+
 
   // get original signal either way
   slice_t slice( edf ,
@@ -755,8 +796,47 @@ void dsptools::simul_cached( edf_t & edf , param_t & param )
 	      if ( psds[ i ] < 0 ) psds[i] = 0;	      
 	    }
 	}
+      
+      //
+      // zero out freqs?
+      //
 
+      if ( zero )
+	{
+	  for (int i=0; i < psds.size(); i++)
+	    if ( fx[i] < zf[0] || fx[i] > zf[1] )
+	      psds[i] = 0;
+	}
+      
+      //
+      // Verbose report?
+      //
+      
+      if ( param.has( "verbose" ) )
+	{
+	  
+	  writer.epoch( edf.timeline.display_epoch( epoch ) );
+	  
 
+	  for (int i=0; i < psds.size(); i++)
+	    {
+	      writer.level( fx[i] , globals::freq_strat );
+	      
+	      if ( fx[i] > 0 )
+		writer.value( "LF" , log( fx[i] ) );
+	      
+	      writer.value( "P" , psds[i] );
+	      
+	      if ( psds[i] >= 0 ) 
+		{
+		  writer.value( "LP" , log( psds[i] ) );
+		  writer.value( "DB" , 10 * log10( psds[i] ) );
+		}
+	      
+	    }
+	  writer.unlevel( globals::freq_strat );
+	}
+ 
       // extract amplituds from PSD
       std::vector<double> amps = psds;
       for (int i=0; i<amps.size(); i++)
@@ -805,6 +885,9 @@ void dsptools::simul_cached( edf_t & edf , param_t & param )
       // Next epoch
       //
     }
+
+  if ( param.has( "verbose" ) )
+    writer.unepoch();
   
   //
   // Create / update signal
@@ -820,10 +903,146 @@ void dsptools::simul_cached( edf_t & edf , param_t & param )
       logger << "  creating new channel " << newsiglab << "...\n";
       edf.add_signal( newsiglab , fs , nsig );
     }
-  
 
+  
+  if ( verbose )
+    writer.unlevel( globals::signal_strat );
   
 }
 
 
 
+void dsptools::simul_fft( edf_t & edf , param_t & param )
+{
+  
+  
+  //
+  // Channel to seed on (expecting epoch-level PSD (PSD/F/CH/E) in cache)
+  //
+  
+
+  std::string siglab = param.requires( "sig" );
+
+  if ( siglab == "*" )
+    Helper::halt( "need to specify a single channel with 'sig'" ) ;
+
+  signal_list_t signals = edf.header.signal_list( siglab );
+  if ( signals.size() != 1 )
+    Helper::halt( "problem finding exactly one original signal with sig" );
+  
+  const int slot = signals(0);
+  
+  if ( edf.header.is_annotation_channel( slot ) )
+    Helper::halt( "cannot modify an EDF Annotation channel" );
+
+  // will use Fs of original signal to make new data
+  const int fs = edf.header.sampling_freq( slot );
+  
+  // zero out PSD above/below certain freqs? 
+  const bool zero = param.has( "zero" );
+  std::vector<double> zf = { -9 , -8 };
+  if ( zero ) zf = param.dblvector( "zero" );
+  if ( zf.size() == 1 ) { zf.resize(2); zf[1] = -8; }
+  if ( zf.size() != 2 || zf[0] >= zf[1] ) Helper::halt( "expecting zero=lwr,{upr}" );
+
+  
+  //
+  // new random signal
+  //
+  
+  std::string newsiglab = param.requires( "new" );
+  
+  if ( newsiglab == "*" )
+    Helper::halt( "need to specify a single channel with 'new'" ) ;
+  
+  // (update or create a new signal?)
+  
+  const bool update_existing_channel = edf.header.has_signal( newsiglab );
+  
+  const int nslot = update_existing_channel ? edf.header.signal( newsiglab ) : -1;
+
+
+  //
+  // Create / update signal
+  //
+
+
+  // get original signal either way
+  slice_t slice( edf ,
+		 slot ,
+		 edf.timeline.wholetrace() ,
+		 1 ,     // do not downsample
+		 false , // get physical (not digital) data
+ 		 true    // get sample-points
+		 );
+  
+  std::vector<double> nsig = *slice.pdata();  
+  const std::vector<int> * psmps = slice.psmps();
+  //const std::vector<int> * precs = slice.precords();
+  // for (int i=0; i<psmps->size() ; i++)
+  //   std::cout << (*precs)[i] << "\t" << (*psmps)[i] << "\n";
+  // std::cout << "\n";
+  
+  //
+  // iterate over epochs 
+  //
+
+  edf.timeline.ensure_epoched();
+  
+  int ne = edf.timeline.first_epoch();
+
+  while ( 1 )
+    {
+
+      int epoch = edf.timeline.next_epoch();
+      
+      if ( epoch == -1 ) break;
+
+      // get sample points for this epoch
+      interval_t interval = edf.timeline.epoch( epoch );
+      
+      slice_t slice( edf ,
+		     slot ,
+		     interval ,
+		     1 ,     // do not downsample		     
+		     false , // get physical (not digital) data
+		     true    // get sample-points [ only reason for calling here ]
+		     );
+      
+      const std::vector<int> * psmps = slice.psmps();
+      const std::vector<double> * d     = slice.pdata();
+      
+      const int n = psmps->size();
+      
+      // simulate signal
+      std::vector<double> rdat = freq_sampl_t::generate( *d , fs , zf[0] , zf[1] );
+	
+      // splice back
+      for (int i=0; i<rdat.size();i++)
+	nsig[ (*psmps)[i] ] = rdat[i] ;
+      
+      //
+      // Next epoch
+      //
+    }
+
+  
+  //
+  // Create / update signal
+  //
+  
+  if ( update_existing_channel )
+    {
+      logger << "  updating " << newsiglab << "...\n";
+      edf.update_signal( nslot , &nsig );
+    }
+  else
+    {      
+      logger << "  creating new channel " << newsiglab << "...\n";
+      edf.add_signal( newsiglab , fs , nsig );
+    }
+
+  
+
+
+}

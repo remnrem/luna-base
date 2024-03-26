@@ -92,6 +92,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
   bool show_epoch_spectrum = param.has( "epoch-spectrum" );
   
   double upper_freq = param.has( "max" ) ? param.requires_dbl( "max" ) : 20 ; 
+  double lower_freq = param.has( "min" ) ? param.requires_dbl( "min" ) : -1  ; 
 
   int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ;
 
@@ -330,7 +331,9 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 		{
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );
 		  
-		  scoh.proc_and_output( coherence , true, show_epoch_spectrum ? upper_freq : -1 );
+		  scoh.proc_and_output( coherence , true, 
+					show_epoch_spectrum ? upper_freq : -1 , 
+					lower_freq );
 		  
 		}
 	      
@@ -373,7 +376,7 @@ void dsptools::coherence( edf_t & edf , param_t & param )
 	  writer.level( signals2.label(jj->first) , "CH2" );
 	  
 	  // output (and calc stats averaged over epochs)	
-	  jj->second.calc_stats( coherence , show_spectrum ? upper_freq : -1 );
+	  jj->second.calc_stats( coherence , show_spectrum ? upper_freq : -1 , lower_freq );
 	  
 	  ++jj;
 	}
@@ -416,7 +419,7 @@ scoh_t dsptools::coherence_do( coherence_t * coherence , const int signal1 , con
 
 
 
-void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq ) 
+void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq , const double lower_freq ) 
 {
   
   
@@ -429,7 +432,7 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
   // if only a single epoch, then just use scoh_t to output
   if ( ne == 1 )
     {
-      epochs[0].proc_and_output( coherence , true , upper_freq );
+      epochs[0].proc_and_output( coherence , true , upper_freq , lower_freq );
       return;
    }
 
@@ -527,7 +530,7 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
   // Output
   //
   
-  scoh.proc_and_output( coherence , true, upper_freq );
+  scoh.proc_and_output( coherence , true, upper_freq , lower_freq );
   
   
 }
@@ -539,7 +542,8 @@ void coh_t::calc_stats( const coherence_t & coherence , const double upper_freq 
 
 void scoh_t::proc_and_output( const coherence_t & coherence , 
 			      const bool output , 
-			      const double upper_freq )
+			      const double upper_freq ,  // -1 means no epoch output
+			      const double lower_freq  )
 {
   
   //
@@ -623,11 +627,11 @@ void scoh_t::proc_and_output( const coherence_t & coherence ,
 
       
       //
-      // frequency-bin output
+      // frequency-bin output (uf = -1 setting turns off output , used for epoch-output)
       //
 
       if ( output ) 
-	if ( upper_freq > 0 && frq[k] <= upper_freq ) 
+	if ( frq[k] >= lower_freq && upper_freq > 0 && frq[k] <= upper_freq ) 
 	  {
 	    
 	    any = true;

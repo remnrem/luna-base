@@ -3381,7 +3381,9 @@ int  edf_header_t::original_signal( const std::string & s  )
 }
 
 
-signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotation_channels , bool show_warnings )
+signal_list_t edf_header_t::signal_list( const std::string & s , 
+					 bool no_annotation_channels , 
+					 bool show_warnings )
 {
 
   signal_list_t r;
@@ -3389,6 +3391,12 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
   // wildcard means all signals '*'
   // but XX* means match for XX prefix
   
+  // special new feature: a value in [str] means that
+  // all selected values must match [str] (case-insensitive)
+  
+  // a value [-str] means they must not include [str] 
+  
+
   if ( s == "*" )
     {
       for (int s=0;s<label.size();s++)
@@ -3420,17 +3428,73 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	}
     }
 
+
   //
   // comma-delimited; but within a single signal specification,
   // we allow a pipe-delimited list, where we pick the first that matches
   //  
   //  A,B|C,D|E|F,G  - mean A and ( B or C ) and ( D or E or F ) and G 
   //  
+  
+  
 
   std::vector<std::string> tok = Helper::quoted_parse( s , "," );    
+
+
+  //
+  // first identify any include/exclude rules
+  //
+
+  std::set<std::string> includes, excludes;
+  
+  for (int t=0;t<tok.size();t++)
+    {
+      // only match [x] or [-x]
+      if ( ! ( tok[t][0] == '[' && tok[t][ tok[t].size() -1 ] == ']' ) ) continue;
+      std::string str = tok[t].substr(1,tok[t].size() - 2 );
+      if ( str == "" ) continue;
+      bool exc = str[0] == '-';      
+      if ( exc ) excludes.insert( Helper::toupper( str.substr(1) ) );
+      else includes.insert( Helper::toupper( str ) );
+    }
+  
+  //
+  // now primary parsing
+  //
   
   for (int t=0;t<tok.size();t++)    
     {
+      
+      // now we can skip exclude rules
+      if ( tok[t][0] == '[' && tok[t][ tok[t].size() -1 ] == ']' ) continue;
+      
+      // apply any include/exclude rile: note - these only work on the
+      // raw input strings (currently), not on any alias terms
+      //  ... should be acceptable but note in docs
+      
+      if ( excludes.size() || includes.size() )
+	{
+	  std::string str = Helper::toupper( tok[t] );
+	  bool okay = true;
+	  std::set<std::string>::const_iterator ii = includes.begin();
+	  while ( ii != includes.end() )
+	    {
+	      if ( str.find( *ii ) == std::string::npos ) okay = false;
+	      ++ii;
+	    }
+	  
+	  std::set<std::string>::const_iterator xx = excludes.begin();
+          while( xx !=excludes.end() )
+            {
+              if ( str.find( *xx ) != std::string::npos ) okay = false;
+              ++xx;
+            }
+	  
+	  //skip this term?
+	  if ( ! okay ) continue;
+	}
+
+      // if still here, look for aliases
 
       std::vector<std::string> tok2_ = Helper::quoted_parse( tok[t] , "|" );    
       
@@ -3540,6 +3604,13 @@ signal_list_t edf_header_t::signal_list( const std::string & s , bool no_annotat
 	}
      
     }
+
+
+  //
+  // parse out any offenders based on [includes] and [-excludes]
+  //
+
+  
 
   return r;
 }

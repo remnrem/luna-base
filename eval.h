@@ -433,7 +433,7 @@ void proc_siggen( edf_t & , param_t & );
 void proc_simul( edf_t & , param_t & );
 void proc_spike( edf_t & , param_t & );
 void proc_shift( edf_t & , param_t & );
-
+void proc_scramble( edf_t & , param_t & );
 
 
 #endif

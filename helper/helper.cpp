@@ -1869,103 +1869,186 @@ std::string Helper::insert_indiv_id( const std::string & id , const std::string 
 
 void Helper::expand_numerics( std::string * t )
 {
-  // expand [SIG][1:4] to SIG1,SIG2,SIG3,SIG4  
-  // search for '][' 
+
+  // [seq][seq]
   
-  std::map<int,int> splices; // txt locations
-  // maps keyed on start position of 'splices'
-  std::map<int,int> starts, stops; // to-be-expanded numbers, e.g. 1 and 4
-  std::map<int,std::string> root; // e.g. SIG
+  // expand [SIG][1:4] to SIG1,SIG2,SIG3,SIG4  
+  // expand [a,b,c][1:4] to a1,a2,a3,a4,b1,b2,b3,b4,c1,c2,c3,c4
+
+  // [seq] can be numberic n:m or comma-delim list (or a variable)
+  //  or a single term
+  
+  // no nesting
+  // assumes one is a single (term), the second is [list]
+  // which will be expanded:
+  
+  // txt locations
+  std::map<int,int> splices;  
+
+  // sequences to be expanded into the new string
+  std::map<int,std::string> seq1, seq2; 
   
   for (int i=1;i<t->size();i++)
     {
-      if ( (*t)[i-1] == ']' && (*t)[i] == '[' ) 
+      
+      // '][' indicates a [seq][seq] pair
+      
+      const bool expr = (*t)[i-1] == ']' && (*t)[i] == '[' ;
+      
+      if ( expr )
 	{
+	  
+	  // earlier [
 	  int j=i-1;
 	  while ( 1 ) { 
 	    --j;
-	    if ( j < 0 ) Helper::halt( "bad format for [var][n:m]" );
+	    if ( j < 0 ) Helper::halt( "bad format for [seq][seq], opening '[' missing" );	      
 	    if ( (*t)[j] == '[' ) break;
 	  }
 	  
+	  // closing ]
 	  int k=i+1;
 	  while ( 1 ) { 
 	    ++k;
-	    if ( k == t->size() ) Helper::halt( "bad format for [var][n:m]" );
+	    if ( k == t->size() ) 
+	      Helper::halt( "bad format for [seq][seq], closing ']' missing " );    
 	    if ( (*t)[k] == ']' ) break;
 	  }
 	  
+	  // whole expression (root)[seq] or [seq](root)
 	  std::string s = t->substr( j , k - j + 1 );
-	  std::vector<std::string> tok = Helper::parse( s , "][" );
-	  if ( tok.size() != 2 ) Helper::halt( "bad format for [var][n:m]" );
 	  
-	  std::vector<std::string> tok2 = Helper::parse( tok[1] , ":" );
-	  if ( tok2.size() != 2 ) Helper::halt( "bad format for [var][n:m]" );
-	  int s1 , s2;
-	  if ( ! Helper::str2int( tok2[0] , &s1 ) ) Helper::halt( "bad format for [var][n:m]" );
-	  if ( ! Helper::str2int( tok2[1] , &s2 ) ) Helper::halt( "bad format for [var][n:m]" );
-	  starts[j] = s1;
-	  stops[j] = s2;
-	  root[j] = tok[0];
-	  splices[j] = k;
+	  // split into two tokens
+	  std::vector<std::string> tok = Helper::parse( s , "][" );
+	  if ( tok.size() != 2 ) 
+	    Helper::halt( "bad format for [seq][seq], not paired" );
+	  
+	  //
+	  // parse first seqs, then second
+	  //
+	  
+	  for (int seqn=0; seqn<=1; seqn++)
+	    {
+	  
+	      std::vector<std::string> num2 = Helper::parse( tok[ seqn ] , ":" );
+	      const bool numseq = num2.size() == 2;
+	  
+	      // this allows for single term (comma-delim list length = 1 )
+	      std::vector<std::string> com2 = Helper::parse( tok[ seqn ] , "," );
+	      const bool comseq = com2.size() > 1 || ( com2.size() == 1 && ! numseq );
+	      
+	      if ( numseq == comseq ) 
+		Helper::halt( "bad format for [seq] " + tok[ seqn ] );
+	      
+	      if ( numseq )
+		{
+		  int s1 , s2;
+		  if ( ! Helper::str2int( num2[0] , &s1 ) ) 
+		    Helper::halt( "bad format n:m" );
+		  if ( ! Helper::str2int( num2[1] , &s2 ) ) 
+		    Helper::halt( "bad format for n:m" );
+		  
+		  // expand out s1 -- s2		  
+		  if ( s1 > s2 ) 
+		    {
+		      int ss = s1;
+		      s1 = s2;
+		      s2 = ss;
+		    }
+		  
+		  std::string term;
+		  for (int a=s1; a <= s2 ; a++ ) 
+		    {
+		      if ( a != s1 ) term += ",";
+		      term += Helper::int2str( a ) ;
+		    }
+		  
+		  // add splice location
+		  splices[j] = k;
+		  
+		  // add to correct bin
+		  if ( seqn == 0 ) 
+		    seq1[ j ] = term;
+		  else
+		    seq2[ j ] = term;
+		  
+		}
+	      else
+		{
+		  // add a comma-delimited list
+		  // add splice location                                                                  
+                  splices[j] = k;
+
+                  // add to correct bin                                                                   
+                  if ( seqn == 0 )
+                    seq1[ j ] = tok[ seqn ];
+                  else
+                    seq2[ j ] = tok[ seqn ];
+
+		}
+	    }	  
 	}
     }
+  
+  // std::map<int,std::string>::const_iterator jj2 = root.begin();
+  // while ( jj2 != root.end() )
+  //   {
+  //     std::cout << "--> " 
+  // 		<< jj2->second << "\t"
+  // 		<< "[" << inserts[ jj2->first ] << "]\t"
+  // 		<< stops[ jj2->first ] << "\t"
+  // 		<< starts[ jj2->first ] << "\n";
+  //     ++jj2;
+  //    }
+    
 
-//   std::map<int,int>::const_iterator jj = starts.begin();
-//   while ( jj != starts.end() )
-//     {
-//       std::cout << "--> " 
-// 		<< jj->second << "\t"
-// 		<< stops[ jj->first ] << "\t"
-// 		<< root[ jj->first ] << "\n";
-//       ++jj;
-//     }
+  //
+  // nothing to do
+  //
+  
+  if ( splices.size() == 0 ) return;
 
   //
   // splice in...
   //
-  
-  if ( root.size() == 0 ) return;
   
   int p = 0;
   std::string s;
   std::map<int,int>::const_iterator jj = splices.begin();
   while ( jj != splices.end() )
     {
+      // copy up until this point
       s += t->substr( p , jj->first - p ); 
-      const bool forwards = starts[ jj->first ] <= stops[ jj->first ] ;
-      bool first = true;
       
-      if ( forwards )
-	{	
-	  for (int a = starts[ jj->first ] ; a <= stops[ jj->first ] ; a++ ) 
-	    {
-	      if ( ! first ) s += ",";
-	      s += root[ jj->first ] + Helper::int2str( a );
-	      first = false;
-	    }
-	}
-      else
-	{
-	  for (int a = starts[ jj->first ] ; a >= stops[ jj->first ] ; a-- ) 
-	    {
-	      if ( ! first ) s += ",";
-	      s += root[ jj->first ] + Helper::int2str( a );
-	      first = false;
-	    }	
-	}
+      // slice in comma list? [ seq1 x seq2 ]
+      std::vector<std::string> v1 = Helper::parse( seq1[ jj->first ] , "," );
+      std::vector<std::string> v2 = Helper::parse( seq2[ jj->first ] , "," );
+      
+      bool first = true;
+      for (int a=0;a<v1.size();a++)
+	for (int b=0;b<v2.size();b++)
+	  {
+	    if ( ! first ) s += ",";
+	    s += v1[a] + v2[b];
+	    first = false;
+	  }
       
       // skip to end 
       p = splices[ jj->first ] + 1;
       ++jj;
     }
+  
   // now add final part
   s += t->substr( p );
   
-  // std::cout << "s = [" << s << "]\n";
   // std::cout << "t = [" << *t << "]\n";
+  // std::cout << "s = [" << s << "]\n";
+
   *t = s ; 
 }
+
+
+
 
 void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars , const bool allow_missing )
 {
@@ -2013,8 +2096,12 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  // recursively swap in any existing variables in the defiinition
 		  // ${a=${b}} 
 		  Helper::swap_in_variables( &tok[1] , vars );
-		  logger << "  setting variable ${" << tok[0] << "} = " << tok[1] << "\n";
-		  (*vars)[ tok[0] ] = tok[1]; 
+		  
+		  // allow for expansions too
+		  std::string evalue = tok[1];
+		  Helper::expand_numerics( &evalue );
+		  logger << "  setting variable ${" << tok[0] << "} = " << evalue << "\n";
+		  (*vars)[ tok[0] ] = evalue;
 		  break;
 		}
   	      else if ( vars->find( varname ) == vars->end() )

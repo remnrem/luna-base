@@ -1015,7 +1015,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   // if running with 'fixed', then 'only-one' means do not add multiple
   // eppchs from the same annot, i.e. if they would fit
   const bool add_all_fixed = ! param.has( "only-one" );
-  if (add_all_fixed && ! fixed_size_epochs ) Helper::halt( "can only add 'only-one' with 'fixed' "); 
+  if ( (!add_all_fixed) && ! fixed_size_epochs ) Helper::halt( "can only add 'only-one' with 'fixed' "); 
 
   //  ANNOT [-----------------------------]
 
@@ -1091,7 +1091,22 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
     epoch_generic_param_trunc = param.requires_dbl( "trunc" );
   if ( epoch_generic_param_trunc < 0 )
     Helper::halt( "trunc must be positive" );
+
+
+
+  //
+  // for now, if using fixed size epochs
+  //
   
+  if ( fixed_size_epochs ) 
+    {
+      if ( else_epochs )
+	Helper::halt( "cannot use else with fixed" );
+
+      // trunc and windows okay, as the fixed size extraction/check happens AFTER those
+    }
+
+
   // require a minimum epoch size: set to 1/10th of a second by default
   epoch_generic_param_min_epoch_size = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
   if ( epoch_generic_param_min_epoch_size < 0.001 ) Helper::halt( "'min' must be 0.001 or greater" );
@@ -1459,7 +1474,7 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
       writer.value( "DUR" , epoch_length() );
     }
   writer.value( "GENERIC" , (int)(!standard_epochs) );
-  writer.value( "FIXED_DUR" , (int)(fixed_size_epochs) );
+  writer.value( "FIXED_DUR" , (int)(epoch_length() ) );
   
 }
 

@@ -114,7 +114,12 @@ annot_t * spectral_power( edf_t & edf ,
   //
 
   const bool new_sigs = param.has( "add" ) || param.has( "add-spectrum" );
+  
+  const bool new_sigs_relpow = param.has( "add-relpower" );
 
+  if ( new_sigs_relpow && dB ) 
+    Helper::halt( "cannot combine add-relpower and dB" );
+  
   const bool new_spec_sigs = param.has( "add-spectrum" );
   
   const std::string new_sig_prefix = ( new_sigs && param.empty("add" ) ) ? "" : param.value( "add" ) ;
@@ -1254,7 +1259,42 @@ annot_t * spectral_power( edf_t & edf ,
 
 	  if ( bands )
 	    {
-	      	      
+	      
+	      // are we storing relative power? 
+	      std::vector<double> denom( expected , 0 );  // total denom per interval
+
+	      if ( new_sigs_relpow )
+		{
+		  
+		  std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
+		  while ( bi != bandaid.bands.end() )
+		    {	   		  
+		      
+		      // skip?
+		      if ( new_sigs_skip_bands.find( globals::band( *bi ) ) != new_sigs_skip_bands.end() )
+			{
+			  ++bi;
+			  continue;
+			}
+		      
+		      std::vector<double> vec = bandaid.track_band[ *bi ];
+		      
+		      // zero-pad as needed
+		      vec.resize( expected , 0 );
+		  
+		      // accumulate: note, this ignores if bands are overlapping or incomplete
+		      for (int i=0; i<vec.size(); i++)
+			denom[i] += vec[i] ;
+		      
+		      ++bi;
+		    }
+
+		}
+	      
+	      //
+	      // construct and add channels
+	      //
+
 	      int bidx=1;
 	      
 	      std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
@@ -1281,9 +1321,18 @@ annot_t * spectral_power( edf_t & edf ,
 		  // zero-pad as needed
 		  vec.resize( expected , 0 );
 		  
+		  // log scale?
 		  if ( dB )
 		    for (int i=0; i<vec.size(); i++)
 		      vec[i] = vec[i] > 0 ? 10 * log10( vec[i] ) : -999;
+		  
+		  // use relpow?
+		  if ( new_sigs_relpow )
+		    {
+		      for (int i=0; i<vec.size(); i++)
+			if ( denom[i] > 0 ) 
+			  vec[i] /= denom[i];		      
+		    }
 		  
 		  // label
 		  const std::string slab = new_sig_prefix + signals.label(s) + "_B" + Helper::int2str( bidx );

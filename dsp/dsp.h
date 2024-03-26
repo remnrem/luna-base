@@ -80,7 +80,8 @@
 #include "ica-wrapper.h"
 #include "sl.h"
 #include "shift.h"
+#include "scramble.h"
 #include "linedenoiser.h"
 #include "detrend.h"
-
+#include "freqsampling.h"
 #endif

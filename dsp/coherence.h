@@ -54,7 +54,10 @@ struct scoh_t
     sxy.resize( n );    
   }
   
-  void proc_and_output( const coherence_t & , const bool output , const double upper_freq = -1 );
+  void proc_and_output( const coherence_t & , 
+			const bool output , 
+			const double upper_freq = -1 , 
+			const double lower_freq = 0 );
   
   // cross and auto spectra (vector over frequencies)
   std::vector<bool>   bad;
@@ -79,7 +82,9 @@ struct coh_t
   void add( const scoh_t & c ) { epochs.push_back( c ); } 
   
   // calculate and output final (averaged) connectivity stats, 
-  void calc_stats( const coherence_t & , const double upper_freq = -1 ) ;
+  void calc_stats( const coherence_t & , 
+		   const double upper_freq = -1 , 
+		   const double lower_freq = 0 );
     
   // data 
   std::vector<scoh_t> epochs;

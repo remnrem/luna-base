@@ -588,22 +588,39 @@ void cmd_t::replace_wildcards( const std::string & id )
   // ]]var1
   
   Helper::process_block_conditionals( &iline , allvars );
-
   
   //
-  // swap in any variables (and allows for them being defined on-the-fly)
+  // Now go line-by-line, to allow variables defined on-the-fly to feature in 
+  // expansions, i.e. to build up expansions
   //
 
-  Helper::swap_in_variables( &iline , &allvars );
+  std::vector<std::string> cline = Helper::parse( iline , "\n" );
+  
+  iline = "";
+  
+  for (int l=0; l<cline.size(); l++)
+    {
 
-  //
-  // expand [var][1:10] sequences
-  //
+      std::string currline = cline[l];
+  
+  
+      //
+      // swap in any variables (and allows for them being defined on-the-fly)
+      //
+      
+      Helper::swap_in_variables( &currline , &allvars );
 
-  Helper::expand_numerics( &iline );
+      //
+      // expand [term][1:10] [ == (term)[list] ] or [list](term) sequences
+      //
 
-
-  //  std::cerr << "final [" << iline << "]\n";
+      Helper::expand_numerics( &currline );
+     
+      iline += currline + "\n";
+      
+    }
+  
+  //std::cerr << "final [" << iline << "]\n";
   
   //
   // Parse into commands/options
@@ -1218,6 +1235,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SIMUL" ) )        proc_simul( edf , param(c) );
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
       else if ( is( c, "SHIFT" ) )        proc_shift( edf , param(c) );
+      else if ( is( c, "SCRAMBLE" ) )     proc_scramble( edf , param(c) );
       
       else 
 	{
@@ -3426,6 +3444,13 @@ void proc_conncoupl( edf_t & edf , param_t & param )
 void proc_shift( edf_t & edf , param_t & param )
 {
   dsptools::shift( edf , param );
+}
+
+// SCRAMBLE : randomly scramble a signal (complete perm)
+
+void proc_scramble( edf_t & edf , param_t & param )
+{
+  dsptools::scramble( edf , param );
 }
 
 
