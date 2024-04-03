@@ -75,10 +75,9 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	{
 	  if ( ! edf.timeline.epoched() ) 
 	    edf.timeline.ensure_epoched();
-	  epoch_sec = edf.timeline.epoch_length();	  
+	  epoch_sec = edf.timeline.epoch_length();	  	  
 	}
-
-      
+      logger << "  using epoch duration of " << epoch_sec << "s for within-epoch shuffling\n";
     }
   
 

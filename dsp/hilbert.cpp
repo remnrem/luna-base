@@ -1,4 +1,5 @@
 
+
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -390,7 +391,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
 	  // track phase and whether included for the observed data
 	  itpc.phase[i] = ph[ e[i] ];      
-
+  	  
 	  itpc.event_included[i] = true; 
 
 	  // phase bin
@@ -406,8 +407,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	}      
 
     }
+  
 
-
+  
   if ( counted == 0 ) 
     {
       // if no obs, set ITPC to 0, PV = 1 	  
@@ -483,9 +485,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  //
 	  // basic permutation
 	  //
-
-	  int pei = e[i] + pp ;
 	  
+	  int pei = e[i] + pp ;
+
 	  // check for wrapping
 
 	  if ( es == 0 ) // whole-signal shuffle
@@ -494,7 +496,10 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	    }
 	  else // within-epoch shuffle
 	    {
-	      if ( eoffset[i] + pp >= maxshuffle ) pei -= maxshuffle;
+	      if ( eoffset[i] + pp >= maxshuffle ) 
+		{
+		  pei -= maxshuffle;		  
+		}
 	    }
 	  
 	  //
@@ -535,7 +540,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 
 	  if ( mask != NULL && so_size[i] != 0 ) 
 	    {
-	      
+
 	      // different random shift for each event, based on the spanning SO
 	      int shift = CRandom::rand( so_size[ i ] );
 	      
@@ -566,6 +571,10 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  if ( mask == NULL || (*mask)[ e[i] ] ) 
 	    {
 	      
+	      if ( pei >= ph.size() ) Helper::halt( "internal error in hilbert_t phase: if running PCOUPL in epoch-mode, whole recording must be an integer number of epochs" );
+	      
+	      //std::cout << " shuff " << r << "  " << i << " --> " << pei << "  " << ph.size() << " " << ph[ pei ] << "\n";
+	      
 	      // accumulate ITPC
 	      s += exp( dcomp(0, ph[ pei ] ) );
 	      
@@ -584,14 +593,13 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
 	}
 
-
+      
       //
       // record stats
       //
             
 
       // overlap statistics
-      //      std::cerr << "po = " << overlap << "\n";
       
       itpc.ninc.perm.push_back( overlap );
       

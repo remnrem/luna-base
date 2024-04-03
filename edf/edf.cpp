@@ -1052,27 +1052,27 @@ bool edf_record_t::read( int r )
 	      data[s][j] = d;
 	      
 	      // physically-scaled data-point	  
-	      if ( false )
-		if ( d < edf->header.orig_digital_min[s] || d > edf->header.orig_digital_max[s] ) 
-		  {	
+	      // if ( false )
+	      // 	if ( d < edf->header.orig_digital_min[s] || d > edf->header.orig_digital_max[s] ) 
+	      // 	  {	
 		    
-		  std::cout << "OUT-OF-BOUNDS" << "\t"
-			    << edf->id << "\t"
-			    << "[" << globals::current_tag << "]\t"
-			    << edf->header.label[s] << "\t"
-			    << "digt: " << d << "\t"
-			    << edf->header.orig_digital_min[s] << " .. " 
-			    << edf->header.orig_digital_max[s] << "\t"
-			    << "phys: " << edf->header.bitvalue[s] * ( edf->header.offset[s] + d ) << "\t"
-			    << edf->header.orig_physical_min[s] << " .. " 
-			    << edf->header.orig_physical_max[s] << "\n"; 
+	      // 	  std::cout << "OUT-OF-BOUNDS" << "\t"
+	      // 		    << edf->id << "\t"
+	      // 		    << "[" << globals::current_tag << "]\t"
+	      // 		    << edf->header.label[s] << "\t"
+	      // 		    << "digt: " << d << "\t"
+	      // 		    << edf->header.orig_digital_min[s] << " .. " 
+	      // 		    << edf->header.orig_digital_max[s] << "\t"
+	      // 		    << "phys: " << edf->header.bitvalue[s] * ( edf->header.offset[s] + d ) << "\t"
+	      // 		    << edf->header.orig_physical_min[s] << " .. " 
+	      // 		    << edf->header.orig_physical_max[s] << "\n"; 
 
-		  if (  d < edf->header.orig_digital_min[s] ) 
-		    d = edf->header.orig_digital_min[s];
-		  else 
-		    d = edf->header.orig_digital_max[s];
+	      // 	  if (  d < edf->header.orig_digital_min[s] ) 
+	      // 	    d = edf->header.orig_digital_min[s];
+	      // 	  else 
+	      // 	    d = edf->header.orig_digital_max[s];
 		  
-		  }
+	      // 	  }
 	      
 	      // concert to physical scale
 	      //pdata[s][j] = edf->header.bitvalue[s] * ( edf->header.offset[s] + d );

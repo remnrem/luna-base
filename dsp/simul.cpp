@@ -917,7 +917,7 @@ void dsptools::simul_fft( edf_t & edf , param_t & param )
   
   
   //
-  // Channel to seed on (expecting epoch-level PSD (PSD/F/CH/E) in cache)
+  // Channel to seed on
   //
   
 

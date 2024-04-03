@@ -561,6 +561,8 @@ void scoh_t::proc_and_output( const coherence_t & coherence ,
   bands.push_back( THETA );
   bands.push_back( ALPHA );
   bands.push_back( SIGMA );
+  bands.push_back( LOW_SIGMA );
+  bands.push_back( HIGH_SIGMA );
   bands.push_back( BETA );
   bands.push_back( GAMMA );
 
