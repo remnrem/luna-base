@@ -114,7 +114,7 @@ void FFT::init( int Ndata_, int Nfft_, int Fs_ , fft_t type_ , window_function_t
   for (int i=0;i<Ndata;i++) normalisation_factor += w[i] * w[i];
   normalisation_factor *= Fs;  
   normalisation_factor = 1.0/normalisation_factor;
-    
+  //  std::cout << "normalisation_factor = " << normalisation_factor << "\n";
 } 
 
 bool FFT::apply( const std::vector<double> & x )
@@ -382,8 +382,8 @@ void real_FFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_ 
   for (int i=0;i<Ndata;i++) normalisation_factor += w[i] * w[i];
   normalisation_factor *= Fs;  
   normalisation_factor = 1.0/normalisation_factor;
-    
-} 
+  
+}
 
 bool real_FFT::apply( const std::vector<double> & x )
 {
@@ -405,7 +405,7 @@ bool real_FFT::apply( const double * x , const int n )
 
   // zero-padding
   for (int i=Ndata;i<Nfft;i++) in[i] = 0;  
-  
+
 
   //
   // Execute actual FFT
@@ -881,8 +881,8 @@ void PWELCH::process()
       
       ++segments;
       
-      //       std::cout << "seg " << segments << "\t" 
-      //        		<< p << " -- " << p + segment_size_points - 1 << "\n";
+      // std::cout << "seg " << segments << "\t" 
+      // 		<< p << " -- " << p + segment_size_points - 1 << "\n";
       
       // note -- this assumes no zero-padding will be applied, 
       // and all segments passed must be of exactly size segment_size_points
@@ -915,6 +915,8 @@ void PWELCH::process()
 	{
 	  fft0.apply( &(data[p]) , segment_size_points ); //wass fft.apply()
 	}
+
+      //      std::cout << " average_adj = " << average_adj << "\n";
       
       if ( average_adj )
 	fft0.average_adjacent(); //wass fft.apply()
@@ -923,7 +925,7 @@ void PWELCH::process()
       
       for (int i=0;i<fft0.cutoff;i++)
 	psd[i] += fft0.X[i];
-
+      
       if ( use_median ) 
 	{
 	  for (int i=0;i<fft0.cutoff;i++)
@@ -947,7 +949,7 @@ void PWELCH::process()
   for (int i=0;i<psd.size();i++)
     {
       const double mn = psd[i] / (double)segments;
-      
+      //      std::cout << " seg psd " << i << " " << mn << " " << 10*log10(mn) << "\n";
       if ( calc_seg_sd )
 	{	  
 	  // sd of natural log scaled

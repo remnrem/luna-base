@@ -382,7 +382,7 @@ struct date_t {
   }
 
   // given day count (past 1/1/85) return a printable datestring
-  static std::string datestring( int c ); 
+  static std::string datestring( int c , const std::string & delim = "/" , const int ydigs = 4 ); 
 
 
   std::string as_string( char delim = '-' , const int ydigs = 4 ) const
@@ -554,12 +554,21 @@ struct clocktime_t
   int m;
   double s;
 
+  // hh.mm.ss
   std::string as_string( const char tchar = '.' , bool fractional = false ) const
   {
     if ( ! valid ) return "NA";
     return Helper::timestring( h,m,s, tchar , fractional );
   }
 
+  // dd-mm-yy                                                                                                      
+  std::string as_date_string( const char tchar = '.' , const int ydigs = 4 ) const
+  {
+    if ( ! valid ) return "NA";    
+    return date_t::datestring( d , std::string(1,tchar) , ydigs ) ;
+  }
+
+  
   // dd-mm-yyyy-hh:mm:ss
   std::string as_datetime_string( const char tchar = '.' , bool fractional = false ) const
   {

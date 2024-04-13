@@ -3224,6 +3224,13 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
  
     }
 
+
+  //
+  // flatten new events (joins contiguous neighbours)
+  //
+
+  nevs = annotate_t::flatten( nevs );
+
   
   //
   // add new events
@@ -3847,7 +3854,9 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	 << filename << "\n";
 
   std::ofstream O1( filename.c_str() , std::ios::out );
-  
+
+  if ( O1.fail() ) Helper::halt( "could not write file " + filename + " - does the folder exist?");
+    
   if ( xml_format ) 
     {
       
@@ -5393,4 +5402,141 @@ int annotation_set_t::remap( const std::vector<std::string> & files , int remap_
   
   return mapped;
 }
+
+
+//
+// utility function
+//
+
+std::set<interval_t> annotate_t::apairs( const std::set<interval_t> & a0 ,
+					 const std::set<interval_t> & b0 ,
+					 const std::string & mode )
+{
+  
+  const bool do_union        = mode == "|" || mode == "union" ;
+  const bool do_intersection = mode == "*" || mode == "intersection";
+  const bool do_keepif       = mode == "+" || mode == "keep-if";
+  const bool do_dropif       = mode == "-" || mode == "drop-if";
+
+  if ( ! ( do_union || do_intersection || do_keepif || do_dropif ) )
+    Helper::halt( "expr requires A|B, A*B, A+B or A-B form" );
+  
+  // handle null cases
+  if ( a0.size() == 0 || b0.size() == 0 )
+    {
+      
+      // special case: dropif but b NULL - just reutrn a
+      if ( do_dropif && a0.size() != 0 && b0.size() == 0 )
+	return a0;
+      
+    }
+
+  // copy
+  std::set<interval_t> a = a0;
+  std::set<interval_t> b = b0;
+
+  
+  std::set<interval_t> nevs;
+  
+  // here, we always select from a
+  // but need to make a quick set of b
+  if ( do_keepif || do_dropif )
+    {
+      
+      // flatten b;
+      b = annotate_t::flatten( b );
+      
+      // now look at 'a', one at a time
+      std::set<interval_t>::const_iterator ii = a.begin();
+      while ( ii != a.end() )
+        {
+	  const bool overlaps = annotate_t::overlaps_flattened_set( *ii , b );
+	  // a keeper?
+	  const bool to_add = do_keepif ? overlaps : ! overlaps ; 
+	  if ( to_add ) nevs.insert( *ii );	    
+	  ++ii;
+        }      
+    }
+  
+  if ( do_union || do_intersection )
+    {
+      // flatten both lists
+      a = annotate_t::flatten( a );
+      b = annotate_t::flatten( b );
+      
+      // make new interval set, by going over both (flattened) lists
+      // and looking for overlap 
+      std::set<interval_t>::const_iterator aa = a.begin();
+      std::set<interval_t>::const_iterator bb = b.begin();
+      
+      while ( 1 )
+	{
+	  // empty sets
+	  if ( aa == a.end() || bb == b.end() ) break;
+	  
+	  // overlap?	  
+	  const bool overlaps = aa->overlaps( *bb );
+	  
+	  if ( overlaps )
+	    nevs.insert( do_union ?
+			 aa->union_with_overlapping_interval( *bb ) :
+			 aa->intersection_with_overlapping_interval( *bb ) ); 
+	  
+	  // advance whichever ends first (remember: these are flattened already)
+	  //   AAAA     AAAAA       AAA
+	  //   BB B             BBBB           <- would be missed
+	  //              BB
+	  //        BB
+	  
+	  if ( aa->stop < bb->stop )
+	    {
+	      ++aa;
+	      if ( aa == a.end() ) break;		
+	    }
+	  else
+	    {
+	      ++bb;
+	      if ( bb == b.end() ) break;	      
+	    }
+	  
+	}
+     
+      // for union mode only, also add any member of 'a' that does not overlap any member of (flattened) 'b'
+      // and vice versa
+      
+      if ( do_union )
+	{
+	  aa = a.begin();
+	  while ( aa != a.end() )
+	    {
+	      if ( ! annotate_t::overlaps_flattened_set( *aa , b ) )
+		nevs.insert( *aa );
+	      ++aa;
+	    }
+	  
+	  bb = b.begin();
+	  while ( bb != b.end() )
+	    {
+	      if ( ! annotate_t::overlaps_flattened_set( *bb , a ) )
+		nevs.insert( *bb );
+	      ++bb;
+	    }
+	}
+ 
+    }
+
+
+  //
+  // flatten new events (joins contiguous neighbours) and return
+  //
+
+  nevs = annotate_t::flatten( nevs );
+
+  return nevs;
+}
+
+
+
+
+
 

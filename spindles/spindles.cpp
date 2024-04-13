@@ -670,18 +670,17 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  p_hilbert = sw_coupling ? 
 	    new hilbert_t( *dslow , Fs[s] , sw_par.f_lwr , sw_par.f_upr , sw_par.fir_ripple , sw_par.fir_tw ) :
 	    new hilbert_t( *dslow , Fs[s] , phase_lwr , phase_upr , fir_ripple , fir_tw );
-	  
-	  // find slow-waves	      
+
+	  // find slow-waves (note: inefficient as filters slow channel twice; but if p_hilbert may
+	  // be pointing at a different channel, can't always use the same variant... but should fix
 	  p_sw = new slow_waves_t( *dslow , *tpslow , Fs[s] , sw_par ) ;
 	  
 	  // and phase
 	  p_sw->phase_slow_waves();
-	  
 
 	  // and display 
 	  if ( sw_coupling ) 
 	    p_sw->display_slow_waves( param.has( "verbose" ) , &edf );
-	  
 	  
 	  //
 	  // display SO characteristics 
@@ -879,6 +878,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // and so every value will be identical, but allow for the case where we have
 	  // e.g. a local sliding window average instead of the whole-night baseline
 	  const int sz = averaged.size();
+
+	  //	  std::cout << " averaged size = " << sz << "\n";
 	  
 	  // required core to be a spindle	  
 	  std::vector<double> threshold( sz , multiplicative_threshold * mean );

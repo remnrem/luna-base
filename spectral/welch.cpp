@@ -259,7 +259,7 @@ annot_t * spectral_power( edf_t & edf ,
   if ( param.has( "segment-inc" ) )
     fft_segment_overlap = param.requires_dbl( "segment-inc" );
   else if ( param.has( "segment-overlap" ) )
-    fft_segment_overlap = param.has( "segment-overlap" ); 
+    fft_segment_overlap = param.requires_dbl( "segment-overlap" ); 
 
 
   //
@@ -361,6 +361,7 @@ annot_t * spectral_power( edf_t & edf ,
   
 
   bool epoch_level_output = show_epoch || show_epoch_spectrum || peak_per_epoch || spectral_slope_show_epoch ;
+
   
   
   //
@@ -450,7 +451,8 @@ annot_t * spectral_power( edf_t & edf ,
 	    {
 	      // here, all epochs need to have the same segment length, so will skip here
 	      // if the epoch is too short
-	      if ( edf.timeline.epoch_length() <= ( fft_segment_size + fft_segment_overlap ) )
+	      //if ( edf.timeline.epoch_length() < ( fft_segment_size + fft_segment_overlap ) )
+	      if ( edf.timeline.epoch_length() < fft_segment_size )
 		{
 		  logger << "  *** skipping epoch " << interval.as_string() << ", too short given segment-sec\n";
 		  continue;
@@ -502,16 +504,12 @@ annot_t * spectral_power( edf_t & edf ,
 	   // implied number of segments
 	   int noverlap_segments = floor( ( total_points - noverlap_points) 
 					  / (double)( segment_points - noverlap_points ) );
-	   
-	   
-// 	   logger << "total_points = " << total_points << "\n";
-// 	   logger << "nooverlap_segments = " << noverlap_segments << "\n";
-// 	   logger << "noverlap_points = " << noverlap_points << "\n";
-// 	   logger << "segment_points = " << segment_points << "\n";
-	   
-// 	   std::cout << "about to fly...\n";
-// 	   std::cout << "Fs = " << Fs[s] << "\n";
-
+	   	   
+ 	   // logger << "total_points = " << total_points << "\n";
+ 	   // logger << "nooverlap_segments = " << noverlap_segments << "\n";
+ 	   // logger << "noverlap_points = " << noverlap_points << "\n";
+ 	   // logger << "segment_points = " << segment_points << "\n\n";
+	   	   
 	   PWELCH pwelch( *d , 
 			  Fs[s] , 
 			  segment_sec , 
@@ -940,10 +938,22 @@ annot_t * spectral_power( edf_t & edf ,
 		cv_bin_sds.bin( freqs , cv_sds );
 
 	    }
+	  
+	  //
+	  // Get total power
+	  //
 
+	  double tot_pow_denom = 0; 
+	  for ( int i = 0 ; i < bin.bfa.size() ; i++ )
+	    tot_pow_denom += dB ? pow( 10 , bin.bspec[i]/10.0) : bin.bspec[i] ;
 	  
+	  
+	  //
+	  // Output raw and relative power spectra
+	  //
+
 	  std::vector<double> f0;
-	  
+
 	  for ( int i = 0 ; i < bin.bfa.size() ; i++ ) 
 	    {
 	  
@@ -960,6 +970,7 @@ annot_t * spectral_power( edf_t & edf ,
 		  if ( ! suppress_output )
 		    {
 		      writer.value( "PSD" , x );
+		      writer.value( "RELPSD" , x / tot_pow_denom );
 		      
 		      if ( aggregate_psd_med && ne_min > 2 )
 			writer.value( "PSD_MD" , bin_med.bspec[i]  );
@@ -991,13 +1002,6 @@ annot_t * spectral_power( edf_t & edf ,
 			writer.value( "INT" , bin.nominal[i] );
 		    }
 		}
-
-	      //
-	      // Cache summary spectra?
-	      //
-
-	      // if ( cache_data && cache_spectrum )
-	      // 	cache->add( ckey_t( "PSD" , writer.faclvl() ) , x );
 	      
 	    }
 	  
@@ -1249,6 +1253,23 @@ annot_t * spectral_power( edf_t & edf ,
 	  // we have this many epochs
 	  const int obs = edf.timeline.num_epochs();
 
+	  const int diff = expected - obs;
+	  
+	  // if diff is even, pad at beginning and end
+	  // if odd, pad (N-1)/2+1 at start, (N-1)/2 at end
+	  int pad1 = 0 , pad2 = 0;
+	  if ( diff > 0 )
+	    {
+	      if ( diff % 2 == 0 )
+		pad1 = pad2 = diff / 2;
+	      else
+		{
+		  pad1 = ( diff-1 ) / 2 + 1 ;
+		  pad2 = pad1 - 1 ;
+		}	      
+	    }
+	  
+	  
 	  // but given SR of 1/(epoch-inc), we will typically have fewer (i.e. at the end of the recording,
 	  // we might miss 1 sample with epoch len = 4s, epoch step = 2s
 	  // just zero-pad these final points
@@ -1261,7 +1282,7 @@ annot_t * spectral_power( edf_t & edf ,
 	    {
 	      
 	      // are we storing relative power? 
-	      std::vector<double> denom( expected , 0 );  // total denom per interval
+	      std::vector<double> denom( obs , 0 );  // total denom per interval
 
 	      if ( new_sigs_relpow )
 		{
@@ -1278,13 +1299,11 @@ annot_t * spectral_power( edf_t & edf ,
 			}
 		      
 		      std::vector<double> vec = bandaid.track_band[ *bi ];
-		      
-		      // zero-pad as needed
-		      vec.resize( expected , 0 );
-		  
+		           	      
 		      // accumulate: note, this ignores if bands are overlapping or incomplete
+		      // no zero-padding here either - that is done last (jsut before insert into edf)
 		      for (int i=0; i<vec.size(); i++)
-			denom[i] += vec[i] ;
+			denom[ i ] += vec[i] ; 
 		      
 		      ++bi;
 		    }
@@ -1302,7 +1321,7 @@ annot_t * spectral_power( edf_t & edf ,
 		{	   
 		  
 		  std::vector<double> vec = bandaid.track_band[ *bi ];
-
+		  
 		  // skip?
 		  if ( new_sigs_skip_bands.find( globals::band( *bi ) ) != new_sigs_skip_bands.end() )
 		    {
@@ -1318,21 +1337,25 @@ annot_t * spectral_power( edf_t & edf ,
 			     << "\n"; 
 		    }
 		  
-		  // zero-pad as needed
-		  vec.resize( expected , 0 );
 		  
 		  // log scale?
 		  if ( dB )
 		    for (int i=0; i<vec.size(); i++)
 		      vec[i] = vec[i] > 0 ? 10 * log10( vec[i] ) : -999;
-		  
+
+		
 		  // use relpow?
 		  if ( new_sigs_relpow )
 		    {
 		      for (int i=0; i<vec.size(); i++)
-			if ( denom[i] > 0 ) 
-			  vec[i] /= denom[i];		      
+			if ( denom[ i ] > 0 ) 
+			  vec[i] /= denom[ i ];		      
 		    }
+
+		  
+		  // zero-pad as needed
+		  vec.insert( vec.begin(), pad1 , 0 );
+		  for (int j=0;j<pad2;j++) vec.push_back( 0 );
 		  
 		  // label
 		  const std::string slab = new_sig_prefix + signals.label(s) + "_B" + Helper::int2str( bidx );
@@ -1346,11 +1369,12 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      if ( bidx > 1 )
 		logger << "  for " << signals.label(s) << " added " << bidx-1 << " band signals"
-		       << ", padding " << obs << " samples to " << expected << " (adding " << ( expected - obs ) << " sample(s))\n";
-
+		       << ", padding " << obs << " samples to " << expected << " (adding " << pad1 << " leading and " << pad2 << " trailing 0s)\n";
+												
 	      
 	    }
 
+		  
 	  //
 	  // spectrum-based channels?
 	  //
@@ -1363,7 +1387,7 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      if ( track_freq.size() > 0 ) 
 		logger << "  and adding " << track_freq.size() << " signals (" << freqs[ ii->first ] << "Hz - " << max_power << "Hz)"
-		       << ", padding " << obs << " samples to " << expected << " (adding " << ( expected - obs ) << " sample(s))\n";
+		       << ", padding " << obs << " samples to " << expected << " (adding " << pad1 << " leading and " << pad2 << " trailing 0s)\n";
 	      
 	      while ( ii != track_freq.end() )
 		{
@@ -1375,12 +1399,13 @@ annot_t * spectral_power( edf_t & edf ,
 
 		  std::vector<double> vec = ii->second;
 		  
-		  // zero-pad as needed
-		  vec.resize( expected , 0 );
-		  
 		  if ( dB ) 
 		    for (int i=0; i<vec.size(); i++)
 		      vec[i] = vec[i] > 0 ? 10 * log10( vec[i] ) : -999;
+
+		  // zero-pad as needed
+		  vec.insert( vec.begin(), pad1 , 0 );
+		  for (int j=0;j<pad2;j++) vec.push_back( 0 );
 		  
 		  // label
 		  const std::string slab = new_sig_prefix + signals.label(s) + "_F" + Helper::int2str( ii->first ) ;

@@ -177,7 +177,31 @@ struct interval_t
     return metric;
   }
 
+  
+  uint64_t overlap( const interval_t & b , uint64_t * union_tp = NULL ) const 
+  {
+    
+    if ( ! overlaps( b ) )
+      {
+	if ( union_tp != NULL ) *union_tp = 0LLU;
+	return 0LLU;
+      }
+    
+    uint64_t min_start = start < b.start ? start  : b.start;
+    uint64_t max_start = start < b.start ? b.start : start ;  
+    
+    uint64_t min_stop = stop < b.stop ? stop  : b.stop ;
+    uint64_t max_stop = stop < b.stop ? b.stop : stop ; 
+    
+    uint64_t o_intersection = min_stop - max_start ;
+    uint64_t o_union        = max_stop - min_start ;
 
+    if ( union_tp != NULL ) *union_tp = o_union;
+    return o_intersection;
+    
+  }
+
+  
   bool is_after( const interval_t & b ) const 
   {
     // as stop is 1-point after the end, use <=
@@ -210,14 +234,14 @@ struct interval_t
     return stop == start ? start : start + ( stop - start ) / (uint64_t)2;
   }
 
-  std::string as_string( const int prec = 2 ) const 
+  std::string as_string( const int prec = 2 , const std::string & delim = "->" ) const 
   {
     std::stringstream ss;
     double start_sec = start / (double) globals::tp_1sec;
     double stop_sec  = stop  / (double) globals::tp_1sec;
     
     ss.precision( prec );
-    ss << std::fixed << start_sec << "->" << stop_sec;
+    ss << std::fixed << start_sec << delim << stop_sec;
     return ss.str();
   }
   

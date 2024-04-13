@@ -1093,6 +1093,9 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
     Helper::halt( "trunc must be positive" );
 
 
+  // verbose debug output
+  const bool debug = param.has( "debug" );
+  
 
   //
   // for now, if using fixed size epochs
@@ -1113,17 +1116,31 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 
   // below, pull all annots and populate epochs[] and epoch_labels[]
   // also need to populate rec2epoch[] and epoch2rec[]
-    
-  // make an ordered list
-  std::map<interval_t,std::string> intervals;
 
+
+  // step 1, segment based on the background (i.e.
+  //   EDF    -------------- [ GAP ] ------------
+  //   ANNOT            ----------------
+  //    --> becomes
+  //                    ----         ---
+  //
+
+  std::set<interval_t> background = segments();
+
+  if ( debug )
+    logger << "found " << background.size() << " background segments\n";
+  
+  // compile all intervals from annots first
+  std::set<interval_t> intervals0;
+    
+    
   // pull each annot class
   std::set<std::string>::const_iterator aa = epoch_generic_param_annots.begin();
   while ( aa != epoch_generic_param_annots.end() )
     {
       
       annot_t * annot = annotations.find( *aa );
-
+      
       if ( annot == NULL )
 	{
 	  logger << "  *** could not find annotation " << *aa << "\n";
@@ -1134,102 +1151,149 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
       annot_map_t::const_iterator ii = annot->interval_events.begin();
       while ( ii != annot->interval_events.end() )
         {
-          instance_idx_t instance_idx = ii->first;
-
-	  interval_t interval = instance_idx.interval ;
-	  
-	  // adjustments?
-	  if ( epoch_generic_param_set_point )
-	    {
-	      // zero-duration midpoint marker
-	      if ( epoch_generic_param_set_point == 1 )
-		{
-		  interval.stop = interval.start;
-		}
-	      else if ( epoch_generic_param_set_point == 3 )
-		{
-		  interval.start = interval.stop;
-		}
-	      else // 2 == midpoint
-		{
-		  uint64_t m = interval.mid();
-		  interval.start = interval.stop = m;
-		}
-	    }
-
-	  // exapand?
-	  if ( some_w && epoch_generic_param_w > 0 )
-	    {
-	      if ( has_w ) 
-		interval.expand( epoch_generic_param_w * globals::tp_1sec );
-	      else if ( has_w_before )
-		interval.expand_left( epoch_generic_param_w * globals::tp_1sec ); 
-	      else if ( has_w_after )
-		interval.expand_right( epoch_generic_param_w * globals::tp_1sec );	      
-	    }
-	  
-	  // shift?
-	  if ( has_shift ) 
-	    {
-	      if ( epoch_generic_param_shift < 0 ) interval.shift_left( -epoch_generic_param_shift * globals::tp_1sec );
-	      else if ( epoch_generic_param_shift > 0 ) interval.shift_right( epoch_generic_param_shift * globals::tp_1sec );
-	    }
-
-	  // truncate last N seconds?
-	  if ( has_trunc )
-	    {
-	      // zero-dur event if truncating too much 
-	      if ( epoch_generic_param_trunc >= interval.duration_sec() )
-		interval.stop = interval.start;
-	      else
-		interval.stop -= epoch_generic_param_trunc * globals::tp_1sec;
-	    }
-
-	  // handle fixed-size as special case, as we may add 1+ epochs per annot
-
-	  // general case:
-	  if ( ! fixed_size_epochs )
-	    {
-	      // add as an epoch, if large enough
-	      if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size )
-		intervals[ interval ] = *aa;
-	    }
-	  else // i.e. fixed_size_epochs == T  
-	    {
-	      // here, adding 1+ fixed size epochs from this single annot
-
-	      interval_t original = interval;
-
-	      while ( 1 )
-		{
-
-		  // adjust
-		  if ( interval.duration() >= epoch_length_tp )
-		    interval.stop = interval.start + epoch_length_tp; // enforce end
-		  else
-		    break;
-
-		  // add as an epoch, if large enough
-		  if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 
-		    intervals[ interval ] = *aa;
-		  
-		  // all done, or going back to try to add more?
-		  if ( ! add_all_fixed ) break;
-		  
-		  // update remaining interval
-		  interval = interval_t( interval.stop , original.stop );
-		}	      
-	    }
-	  
-	  // next instance
+	  intervals0.insert( ii->first.interval ) ;
           ++ii;
         }
 
-      // next annot class
       ++aa;
     }
-  
 
+  if ( debug )
+    logger << "  considering " << intervals0.size() << " initial intervals\n";
+
+  // split by background
+  intervals0 = annotate_t::apairs( intervals0 , background , "intersection" );
+  
+  if ( debug )
+    logger << "  given " << background.size()
+	   << " background segments, split intervals to "
+	   << intervals0.size() << " intervals\n";
+
+  
+  // make an ordered list
+  std::map<interval_t,std::string> intervals;
+
+  int aidx = 0;
+  
+  // pull each annot class
+  std::set<interval_t>::const_iterator ii2 = intervals0.begin();
+  while ( ii2 != intervals0.end() )
+    {
+      
+      interval_t interval = *ii2;
+
+      if ( debug )
+	logger << "\n  considering interval " << aidx++
+	       << "\t" << interval.as_string() << "\n";
+	  
+      // adjustments?
+      if ( epoch_generic_param_set_point )
+	{
+	  // zero-duration midpoint marker
+	  if ( epoch_generic_param_set_point == 1 )
+	    {
+	      interval.stop = interval.start;
+	    }
+	  else if ( epoch_generic_param_set_point == 3 )
+	    {
+	      interval.start = interval.stop;
+	    }
+	  else // 2 == midpoint
+	    {
+	      uint64_t m = interval.mid();
+	      interval.start = interval.stop = m;
+	    }
+	}
+      
+      // exapand?
+      if ( some_w && epoch_generic_param_w > 0 )
+	{
+	  if ( has_w ) 
+	    interval.expand( epoch_generic_param_w * globals::tp_1sec );
+	  else if ( has_w_before )
+	    interval.expand_left( epoch_generic_param_w * globals::tp_1sec ); 
+	  else if ( has_w_after )
+	    interval.expand_right( epoch_generic_param_w * globals::tp_1sec );	      
+	}
+      
+      // shift?
+      if ( has_shift ) 
+	{
+	  if ( epoch_generic_param_shift < 0 ) interval.shift_left( -epoch_generic_param_shift * globals::tp_1sec );
+	  else if ( epoch_generic_param_shift > 0 ) interval.shift_right( epoch_generic_param_shift * globals::tp_1sec );
+	}
+      
+      // truncate last N seconds?
+      if ( has_trunc )
+	{
+	  // zero-dur event if truncating too much 
+	  if ( epoch_generic_param_trunc >= interval.duration_sec() )
+	    interval.stop = interval.start;
+	  else
+	    interval.stop -= epoch_generic_param_trunc * globals::tp_1sec;
+	}
+      
+      // handle fixed-size as special case, as we may add 1+ epochs per annot
+      
+      // general case:
+      if ( ! fixed_size_epochs )
+	{
+	  // add as an epoch, if large enough
+	  if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size )
+	    {
+	      if ( debug )
+		logger << "  ++ adding (non-fixed size) as " << interval.as_string()
+		       << "\t" << interval.duration_sec() << " secs\n";
+	      intervals[ interval ] = *aa;
+	    }
+	  else
+	    {
+	      if ( debug )
+		logger << "  -- rejected (non-fixed size), not above "
+		       << epoch_generic_param_min_epoch_size
+		       << "\t (is only " << interval.duration_sec() << " secs)\n";
+	      
+	    }
+	}
+      else // i.e. fixed_size_epochs == T  
+	{
+	  // here, adding 1+ fixed size epochs from this single annot
+	  
+	  interval_t original = interval;
+	  
+	  while ( 1 )
+	    {
+	      
+	      // adjust
+	      if ( interval.duration() >= epoch_length_tp )
+		interval.stop = interval.start + epoch_length_tp; // enforce end
+	      else
+		break;
+	      
+	      // add as an epoch, if large enough
+	      if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 
+		intervals[ interval ] = *aa;
+	      
+	      // all done, or going back to try to add more?
+	      if ( ! add_all_fixed ) break;
+	      
+	      if ( debug )
+		logger << "  ++ adding, fixed size epoch "
+		       << interval_t( interval.stop , original.stop ).as_string() << "\n";
+	      
+	      // update remaining interval
+	      interval = interval_t( interval.stop , original.stop );
+	    }	      
+	}
+      
+      // next instance
+      ++ii2;
+    }
+
+  if ( debug )
+    logger << "\n---------------------------\n"
+	   << "*** found " << intervals.size() << " intervals that meet size criteria\n";
+  
   //
   // Optionally, if adding 'else' annot, need to know
   // breakpoints/gaps; add the new annot as well as the epochs
@@ -1336,10 +1400,13 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
     {
       
       const interval_t & interval = ii->first ; 
-
+      
       // check that the epoch is valid - i.e. does not span gaps
       uint64_t vtp = valid_tps( interval );
 
+      if ( debug )	
+	logger << "\n  checking interval gap spanning " << vtp << " vs " << interval.duration() << "\n";
+      
       if ( vtp != interval.duration() )
 	{
 	  logger << "  skipping interval that falls in a gap " << interval.as_string() << "\n";

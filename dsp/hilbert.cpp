@@ -103,7 +103,7 @@ hilbert_t::hilbert_t( const std::vector<double> & d , const int sr , double lwr 
 
 void hilbert_t::proc()
 {
-  
+
   int n = input.size();
 
   // 1) take FFT
@@ -343,7 +343,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	      so_offset.push_back( e[i] - start );
 
 	    }
-	  // next spindle
+	  // next event
 	}
     }
       
@@ -355,9 +355,16 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
   // shuffle only /within/ epoch, if epochs are defined?  If so, for
   // each event, we need to find the start and stop sp for that epoch,
   // and shuffle only within those bounds (with wrapping)
+
+  // nb - here, epochs do not necessarily align with actual defined epochs
+  //      rather, we only use one epoch duration to define the maximum
+  //      shuffle/wrap values;   that is, if 'true' epochs have an offset
+  //      or are generic (variable sized, w/ gaps, etc) then here we ignore that.
+  //      in other words, think of this as more of a locally-constrained shuffle
+  //      rather than 'within-epoch' permutations per se.   
   
   int es = sr * epoch_sec;
-  
+
   // from e[], also get eoffset[], which is the relative within-epoch position
   std::vector<int> eoffset( n ) ;
 
@@ -365,6 +372,23 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
     {
       for (int i=0; i<n; i++) 
 	eoffset[i] = e[i] % es;
+    }
+
+  //
+  // need to handle the case if the signal is not a multiple of the epoch:
+  //  i.e. the final epoch is shorter than expected;  if we try permuting there,
+  //       we will go off-grid...   so, just keep those points as is
+  //
+  
+  int n_full_epochs = mx / es;
+  int n_expected_points = n_full_epochs * es;
+
+  // logger << " details = " << mx << " " << es << " "
+  // 	 << n_expected_points << " " << n_full_epochs << " " << n_expected_points << "\n";
+  const bool run_over = es && mx > n_expected_points;
+  if ( run_over )
+    {
+      logger << "  fractional epochs found: within-epoch permutation will wrap whole signal\n";      
     }
   
   
@@ -488,18 +512,31 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
 	  int pei = e[i] + pp ;
 
-	  // check for wrapping
-
 	  if ( es == 0 ) // whole-signal shuffle
 	    {
-	      if ( pei >= maxshuffle ) pei -= maxshuffle;
+	      
+	      if ( pei >= maxshuffle ) 
+		pei -= maxshuffle;		
+	      
 	    }
 	  else // within-epoch shuffle
-	    {
+	    {	      
+
 	      if ( eoffset[i] + pp >= maxshuffle ) 
 		{
 		  pei -= maxshuffle;		  
+		  //std::cout << "  -- reset pei " << pei << "\n";				  
 		}
+
+	      // check edge case of unequal epochs, i.e. do not want to jump off the end...
+	      // wrap around to the front...
+	      if ( run_over && pei >= ph.size() )
+		{
+		  pei = ph.size() - pei ;
+		  // v. odd case, if v. short/zero signal? just set to original
+		  if ( pei >= ph.size() ) pei = e[i];
+		}
+	      
 	    }
 	  
 	  //
@@ -525,13 +562,6 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	      //	      if ( by_phase )
 	      //		bin( ph[ pei ] , binsize , &pbacc );
 	    }
-
-
-	  
-// 	  std::cerr << "pp " << i << "\t" << e[i] << " " << ( mask == NULL ? "noM" : "M" ) << " " 
-// 		    << ( mask == NULL || (*mask)[e[i]] ) 
-// 		    << " - "
-// 		    << pei << " " << ( mask == NULL || (*mask)[pei] ) ;
 	  
 	 
 	  //
@@ -554,8 +584,6 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 
 	    }
 
-// 	  std::cerr << " - "
-// 		    << pei << " " << ( mask == NULL || (*mask)[pei] )  << "\n";
 	  
 	  //
 	  // now, pei should be correctly set, *either* based on default permutation (unconstrained or within-epoch) *or* 
@@ -570,10 +598,6 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
 	  if ( mask == NULL || (*mask)[ e[i] ] ) 
 	    {
-	      
-	      if ( pei >= ph.size() ) Helper::halt( "internal error in hilbert_t phase: if running PCOUPL in epoch-mode, whole recording must be an integer number of epochs" );
-	      
-	      //std::cout << " shuff " << r << "  " << i << " --> " << pei << "  " << ph.size() << " " << ph[ pei ] << "\n";
 	      
 	      // accumulate ITPC
 	      s += exp( dcomp(0, ph[ pei ] ) );

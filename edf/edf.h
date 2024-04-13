@@ -692,7 +692,7 @@ public:
   // edf-minus & set-timestamps
   //
 
-  bool edf_minus();
+  bool edf_minus( param_t & );
 
   void set_timestamps( param_t & );
   

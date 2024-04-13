@@ -1080,7 +1080,7 @@ bool Helper::yesno( const std::string & s )
 
 
 
-std::string date_t::datestring( int c )
+std::string date_t::datestring( int c , const std::string & delim , const int ydigs )
 {
   // given a count (days past 1/1/85) return a date
 
@@ -1116,7 +1116,16 @@ std::string date_t::datestring( int c )
   // add days
   d += c;
 
-  return Helper::int2str( d ) + "-" + Helper::int2str( m ) + "-" + Helper::int2str( y );
+  // return string
+  if ( ydigs == 4 ) 
+    return Helper::int2str( d ) + delim + Helper::int2str( m ) + delim + Helper::int2str( y );
+  else if ( ydigs == 2 ) // for EDF startdate formats (fixed char lengths)
+    return ( d < 10 ? "0" : "" ) + Helper::int2str( d )
+      + delim + ( m < 10 ? "0" : "" ) + Helper::int2str( m )
+      + delim + Helper::int2str( y ).substr(2,2);
+  else
+    Helper::halt( "internal error in date_t::datestring()" );
+  return "";
   
 }
 
