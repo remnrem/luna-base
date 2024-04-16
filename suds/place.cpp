@@ -68,10 +68,14 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   //  by default, we assume the duration of the stage is the current epoch
   //  duration, e.g. 30 seconds
 
-  
+  // option to use 3-class analysis
+  const bool three_class = param.has( "3-class" ) || param.has( "nr" );
+  if ( three_class ) logger << "  pooling all NREM stages to a single class\n";
+    
   std::ifstream IN1( Helper::expand( stagefile ).c_str() , std::ios::in );
 
-  std::vector<std::string> allstages;
+  std::vector<std::string> allstages_orig; // keeps original NR staging (for annot output)
+  std::vector<std::string> allstages_proc; // pools NR
   while ( ! IN1.eof() )
     {
       std::string line;
@@ -87,11 +91,17 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       if ( line != "?" && line != "N1" && line != "N2" && line != "N3" && line != "R" && line != "W" )
 	Helper::halt( "stages=<file> lines can only be one of: N1, N2, N3, R, W, L or ?" );
       
-      allstages.push_back( line );
+      allstages_orig.push_back( line );
+      
+      if ( three_class )
+	if ( line == "N1" || line == "N2" || line == "N3" )
+	  line = "N2";
+      
+      allstages_proc.push_back( line );
     }
   IN1.close();
   
-  const int nstages = allstages.size();
+  const int nstages = allstages_proc.size();
 
   //
   // Output best fit .eannot file , i.e. that matches the original EDF
@@ -353,7 +363,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
 		  ++cnt;	      
 		  if ( p < mine ) mine = p;
 		  if ( p > maxe ) maxe = p;	      
-		  ftrial[p] = allstages[i];       	      
+		  ftrial[p] = allstages_proc[i];       	      
 		}
 	      ++p;
 	    }
@@ -612,7 +622,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
 	  if ( i < mina ) mina = i;
 	  if ( i > maxa ) maxa = i;	      
 
-	  trial[p1] = allstages[i];       	      
+	  trial[p1] = allstages_proc[i];       	      
 	}
       ++p1;
     }
@@ -640,9 +650,10 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   //
   
   const std::string prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "" ;
+
   annot_t * a_n1   = edf.timeline.annotations.add( prefix + "N1" );
   annot_t * a_n2   = edf.timeline.annotations.add( prefix + "N2" );
-  annot_t * a_n3   = edf.timeline.annotations.add( prefix + "N3" );
+  annot_t * a_n3   = edf.timeline.annotations.add( prefix + "N3" );  
   annot_t * a_rem  = edf.timeline.annotations.add( prefix + "R" );
   annot_t * a_wake = edf.timeline.annotations.add( prefix + "W" );
   
@@ -662,11 +673,11 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
       if ( p >= 0 && p < nedf )
 	{
 	  std::string inst_id = "orig:" + Helper::int2str( i+1 ) + "/" + Helper::int2str( nstages );
-	  if ( allstages[i] == "N1" ) a_n1->add( inst_id , etable[p] , "." );
-	  else if ( allstages[i] == "N2" ) a_n2->add( inst_id , etable[p] , "." );
-	  else if ( allstages[i] == "N3" ) a_n3->add( inst_id , etable[p] , "." );
-	  else if ( allstages[i] == "R" ) a_rem->add( inst_id , etable[p] , "." );
-	  else if ( allstages[i] == "W" ) a_wake->add( inst_id , etable[p] , "." );
+	  if      ( allstages_orig[i] == "N1" ) a_n1->add( inst_id , etable[p] , "." );
+	  else if ( allstages_orig[i] == "N2" ) a_n2->add( inst_id , etable[p] , "." );
+	  else if ( allstages_orig[i] == "N3" ) a_n3->add( inst_id , etable[p] , "." );
+	  else if ( allstages_orig[i] == "R" ) a_rem->add( inst_id , etable[p] , "." );
+	  else if ( allstages_orig[i] == "W" ) a_wake->add( inst_id , etable[p] , "." );
 	}
       ++p;
     }
@@ -688,7 +699,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
        	  if ( p >= 0 && p < nedf )
        	    {
 	      ++cnt;	      
-	      trial[p] = allstages[i];       	      
+	      trial[p] = allstages_orig[i];       	      
        	    }
        	  ++p;
        	}

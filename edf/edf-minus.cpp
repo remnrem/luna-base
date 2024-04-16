@@ -128,7 +128,7 @@ bool edf_t::edf_minus( param_t & param )
   
   const bool requirement_whole = param.has( "require-whole" );
   const bool requirement_min_dur = param.has( "require-dur" );
-  const uint64_t requirement_unit = requirement_min_dur ? param.requires_dbl( "require-dur" ) * globals::tp_1sec : 0LLU;  
+  const uint64_t requirement_unit = requirement_min_dur ? (uint64_t)(param.requires_dbl( "require-dur" ) * globals::tp_1sec) : 0LLU;  
   if ( requirement_unit % globals::tp_1sec )	
     logger << "  *** warning, advised that 'require-dur' is an integer numbr of records/seconds\n";
 
@@ -202,7 +202,7 @@ bool edf_t::edf_minus( param_t & param )
 	      int k;
 	      if ( Helper::str2int( tok[i] , &k ) )
 		if ( k >= 1 )
-		  keeps.insert( k-1 );
+		  keeps.insert( k );
 	    }
 	}
       if ( keeps.size() != 0 ) segment_policy = 2; // look-up in keeps
@@ -222,7 +222,7 @@ bool edf_t::edf_minus( param_t & param )
 	 << "       alignment duration unit (dur)        = " << alignment_unit / globals::tp_1sec << "s\n"
 	 << "     required annotations (require)         = " << Helper::stringize( requirements ) << "\n"
 	 << "       require whole annots (require-whole) = " << ( requirement_whole ? "T" : "F" ) << "\n"
-	 << "       require at least (require-dur)       = " << requirement_min_dur / globals::tp_1sec << "s\n"      	 
+	 << "       require at least (require-dur)       = " << requirement_unit / globals::tp_1sec << "s\n"      	 
 	 << "     annotation prefix (prefix)             = " << aprefix << "\n"
 	 << "     output file-root (out)                 = " << out_root << "\n";
     
@@ -231,17 +231,46 @@ bool edf_t::edf_minus( param_t & param )
   //
   // information on the current EDF
   //
-
-  std::set<interval_t> segments = timeline.segments();
   
-  const bool gapped = segments.size() != 1;
+  std::set<interval_t> segments1 = timeline.segments();
+  std::map<interval_t,int> seg2num;
+  
+  const bool gapped = segments1.size() != 1;
+
+  if ( gapped && header.continuous )
+    Helper::halt( "internal inconsistency: gapped EDF is marked as continuous" );
 
   const uint64_t rec_size_tp = header.record_duration_tp;
 
+  // --------------------------------------------------------------------------------  
+  //
+  // forcing selection of segments (i.e. if not all) - if so, do that first, so that
+  // gaps are properly defined (i.e. non-selected segments become part of gaps)
+  //
+
+  std::set<interval_t> segments;
+
+  if ( keeps.size() )
+    {
+      logger << "\n  initial segment retention:\n";
+      int segn = 1;
+      std::set<interval_t>::const_iterator kk = segments1.begin();
+      while ( kk != segments1.end() )
+	{
+	  const bool okay = keeps.find( segn ) != keeps.end() ;
+	  logger << "  seg #" << segn << ": " << kk->as_string(2,"-") << " " << ( okay ? "[retained]" : "[skipped]" ) << "\n";
+	  seg2num[ *kk ] = segn; // for output below
+	  if ( okay )
+	    segments.insert( *kk );
+	  ++segn;
+	  ++kk;
+	}
+    }
+  else
+    segments = segments1; // copy all
   
   
-  // --------------------------------------------------------------------------------
-  
+  // --------------------------------------------------------------------------------  
   //
   // store all signals
   //
@@ -378,7 +407,7 @@ bool edf_t::edf_minus( param_t & param )
       logger << "  specified " << requirements.size()
              << " required annotation classes ("
 	     << Helper::stringize( requirements )
-             << req_counts << " instances found)\n";
+             << " with " << req_counts << " instances found)\n";
       
       if ( nonstandard_alignment_annot_counts )
         logger << "  *** warning, " << nonstandard_alignment_annot_counts
@@ -426,6 +455,7 @@ bool edf_t::edf_minus( param_t & param )
 	{
 	  if ( ! edf_minus_helper_has_annot( events0 , seg , requirement_whole, requirement_unit, requirements ) )
 	    {
+	      logger << "  skipping segment " << sidx + 1 << " as it does not meet annotation requirements\n";
 	      ++ii;
 	      ++sidx;
 	      orig2edit[ seg0 ] = seg;
@@ -438,13 +468,20 @@ bool edf_t::edf_minus( param_t & param )
       // add this segment?
       //
       
-      if ( segment_policy == 0 || // all
-	   ( segment_policy == 2 && keeps.find( sidx ) != keeps.end() ) ) // requested
+      if ( segment_policy == 0 || segment_policy == 2 ) 
 	{
+	  // all (0) or requested (2 - already done filtering)
+	  
+	  interval_t original_seg = seg;
 	  
 	  // nudge start forward for any alignment?
 	  edf_minus_helper_align( events0 , seg, alignments, alignment_unit, &seg );
-	  
+
+	  if ( seg != original_seg ) 
+	    logger << "  aligned segment " << sidx + 1 << " : "
+		   << original_seg.as_string( 2, "-" ) << " --> "
+		   << seg.as_string( 2, "-" ) << "\n";
+	      
 	  // add to list
 	  retained.insert( seg );
 
@@ -456,9 +493,17 @@ bool edf_t::edf_minus( param_t & param )
       // retain only the largest
       if ( segment_policy == -1 )
 	{
+
+	  interval_t original_seg = seg;
+	  
 	  // edit first
           edf_minus_helper_align( events0 , seg, alignments, alignment_unit, &seg );
-	  
+
+	  if ( seg != original_seg ) 
+	    logger << "  aligned segment " << sidx + 1 << " : "
+		   << original_seg.as_string( 2, "-" ) << " --> "
+		   << seg.as_string( 2, "-" ) << "\n";
+
 	  // is this largest
 	  if ( seg.duration() > largest.duration() )
 	    largest = seg;
@@ -503,10 +548,7 @@ bool edf_t::edf_minus( param_t & param )
   //
   // Checks
   //
-  
-  if ( gapped && header.continuous )
-    Helper::halt( "internal inconsistency: gapped EDF is marked as continuous" );
-  
+    
   int nsigs = sdat.size();
   
   
@@ -801,7 +843,7 @@ bool edf_t::edf_minus( param_t & param )
 	  // do we need to shrink or stretch the gap to the
 	  // nearest number of whole (1-sec) records?
 	  int64_t diff = gap - ( (int64_t)nrecs * (int64_t)globals::tp_1sec );
-	  
+	  	  
 	  // e.g   2.22 seconds
 	  //    --> diff = 0.22; as < 0.5, we should shrink
 	  //       2.99
@@ -818,7 +860,9 @@ bool edf_t::edf_minus( param_t & param )
 	      ++nrecs;
 	      diff = (int64_t)nrecs * (int64_t)globals::tp_1sec - gap ; 
 	    }
-	  
+	  else
+	    diff = -diff; // for shrinking, store as a negative
+	   
 	  // if shrinking/stretching a segment, flag to console
 	  if ( diff )
 	    {
@@ -826,14 +870,14 @@ bool edf_t::edf_minus( param_t & param )
 	      if ( segn == 1 )
 		logger << "  aligned gap before first segment";
 	      else
-		logger << "  aligned gap between segments " << segn-1 << " and segn";
+		logger << "  aligned gap between segments " << segn-1 << " and " << segn;
 	      
 	      logger << " is not a multiple of 1s (EDF record size)";
 	      
 	      if ( stretch ) 
 		logger << ", so stretching by " << diff / (double)globals::tp_1sec << "s\n";
 	      else
-		logger << ", so shrinking by " << - diff / (double)globals::tp_1sec << "s\n";
+		logger << ", so shrinking by " << -diff / (double)globals::tp_1sec << "s\n";
 	      
 	      logger << "  subsequent annots will be shifted to align w/ signals (except alignment-annots)\n";
 	      logger << "\n"; 
@@ -905,10 +949,11 @@ bool edf_t::edf_minus( param_t & param )
 	  
 	  if ( ! aligment_annot )
 	    {
+	      //std::cout << " shifting " << evt->parent->name << " by " << offset << "\n";
 	      if ( offset < 0 )
-		e1.interval.shift_right( -offset ) ;
+		e1.interval.shift_left( -offset ) ;
 	      else if ( offset > 0 ) 
-		e1.interval.shift_left( offset );
+		e1.interval.shift_right( offset );
 	    }
 	  
 	  // store
@@ -1041,13 +1086,20 @@ bool edf_t::edf_minus( param_t & param )
   //
   
   logger << "\n  found " << segments.size() << " segment(s)\n";
-  logger << "    [ original segments, whole EDF records ] --> [ aligned, editted final segments ]\n";
+  if ( join_policy == 1 )
+    logger << "    [ original segments ] -> [ aligned, editted ] --> [ final segments ]\n";
+  else 
+    logger << "    [ original segments ] --> [ aligned, editted final segments ]\n";
+  
   double duration_secs0 = 0 , duration_secs1 = 0;
 
   std::map<interval_t,interval_t> gaps; // gap before this segment (w.r.t. original)
   std::map<interval_t,interval_t> gaps_edit; // gap before this segment (in final edit)
   std::map<interval_t,interval_t> spliced; // placed segment (in new EDF, if spliced)
 
+  // any initial zpad offsets?
+  int64_t offset = zpad_deltas[ ii->start ];
+    
   uint64_t last = 0LLU;
   uint64_t last_edit = 0LLU;
   uint64_t running = 0LLU;
@@ -1085,6 +1137,9 @@ bool edf_t::edf_minus( param_t & param )
 
       // gap first
       interval_t g = gaps[ orig ];
+
+      //offset += zpad_deltas[ ii->start ];
+
       if ( g.duration() ) { // don't call 0-dur gap before first seg a 'gap'                                                         
 	
 	logger << "    - gap #" << sidx << " : " << g.as_string( 2, "-" ) << " (" << g.duration_sec() << "s)";
@@ -1111,7 +1166,8 @@ bool edf_t::edf_minus( param_t & param )
 	
       
       // seg
-      logger << "   ++ seg #" << sidx << " : " << ss->as_string( 2 , "-") << " (" << orig.duration_sec() << "s)";
+      logger << "   " << ( included[ orig ] ? "+" : " " )
+	     << "+ seg #" << sidx << " : " << ss->as_string( 2 , "-") << " (" << orig.duration_sec() << "s)";
       
       if ( included[ orig ] )
 	{
@@ -1149,6 +1205,7 @@ bool edf_t::edf_minus( param_t & param )
     logger << " (" << duration_secs0 - duration_secs1 << "s shorter)\n" ;
   else if ( duration_secs1 > duration_secs0 )
     logger << " (" << duration_secs1 - duration_secs0 << "s longer)\n" ;
+
 
 
   
@@ -1340,6 +1397,13 @@ bool edf_t::edf_minus( param_t & param )
       
       interval_t orig = oo->first;
       interval_t edit = oo->second;
+
+      if ( ! included[ orig ] )
+	{
+	  ++oo;
+	  ++sidx;
+	  continue;
+	}
       
       // zpad-delta
       if ( join_policy == 0 )
@@ -1350,23 +1414,20 @@ bool edf_t::edf_minus( param_t & param )
 
 	  // zero-padded gap
 	  int grecs = zpad_recs[ edit.start ];
-	  if ( grecs ) { // don't call 0-dur gap before first seg a 'gap'
+	  int64_t g = zpad_deltas[ edit.start ];	  
+	  if ( grecs || g ) { // don't call 0-dur gap before first seg a 'gap'
+	    int64_t put_gap = edit.start - grecs * globals::tp_1sec + g;
+	    if ( put_gap < 0 ) Helper::halt( "internal error in writing annots, pls contact luna.remnrem@gmail.com" );
 	    // gap goes up until the start of this editted segment
-	    interval_t zgap( edit.start - grecs * globals::tp_1sec , edit.start );
+	    interval_t zgap( put_gap , edit.start );
 	    instance_t * g1 = annot_gaps->add( Helper::int2str( gidx ) , zgap , "." );            
-            g1->set( "dur" , zgap.duration_sec() );
-            ++gidx;
+            g1->set( "orig_dur" , grecs );
+	    g1->set( "adj" , (double)g / (double)globals::tp_1sec );
+	    ++gidx;
           }
 	  
-	  // additionally, if we had to sub-second stretch or shrink a gap to align with EDF
-	  // record structure, also indicate here (0-duration time-point at point of insertion)
-	  int64_t g = zpad_deltas[ edit.start ];
-	  if ( g != 0 ) { 
-	    instance_t * g1 = annot_gaps->add( Helper::int2str( sidx ) , interval_t( edit.start, edit.start ) , "." );
-	    g1->set( "gap" , (int)g );
-	  }	  
 	}
-
+      
       // splice-mode
       if ( join_policy == 1 )
 	{
@@ -1453,7 +1514,7 @@ bool edf_minus_helper_align( const std::set<instance_idx_t> & e ,
 {
 
   if ( e.size() == 0 || a.size() == 0 ) return false;
-
+  
   std::set<instance_idx_t>::const_iterator ee = e.begin();
   while ( ee != e.end() )
     {      

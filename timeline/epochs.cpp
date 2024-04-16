@@ -1466,7 +1466,10 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
   bool hms = starttime.valid;
   
   first_epoch();
-  
+
+  uint64_t total_epoched = 0LLU;
+  std::set<interval_t> fepochs; // --> flattened epochs
+
   while ( 1 ) 
     {
 
@@ -1498,6 +1501,9 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
       else
 	++n_unmasked;
 
+      total_epoched += interval.duration();
+      fepochs.insert( interval );
+      
       if ( verbose )
 	{
 	  writer.value( "LABEL" , epoch_labels[ epoch0 ] );
@@ -1507,7 +1513,7 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
 	  writer.value( "STOP"     , interval.stop_sec() );
 	  writer.value( "TP" , interval.as_tp_string() );
 	  writer.value( "DUR"      , interval.duration_sec() );
-	
+
 	  // original time-points
 	  
 	  if ( hms )
@@ -1542,7 +1548,30 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
     }
   writer.value( "GENERIC" , (int)(!standard_epochs) );
   writer.value( "FIXED_DUR" , (int)(epoch_length() ) );
+
+  // total duration of recording
+  //  a) spanned by an epoch  
+  //  b) not spanned
+
+  fepochs = annotate_t::flatten( fepochs );
+  uint64_t total_fepoched = 0LLU;
+  std::set<interval_t>::const_iterator ff = fepochs.begin();
+  while ( ff != fepochs.end() )
+    {
+      total_fepoched += ff->duration();
+      ++ff;
+    }
+
+  double p_spanned = (double)total_fepoched / (double)total_duration_tp;
   
+  writer.value( "TOT_DUR" , (double)total_epoched / (double)globals::tp_1sec );
+  writer.value( "TOT_SPANNED" , (double)total_fepoched / (double)globals::tp_1sec );
+  writer.value( "TOT_UNSPANNED" ,
+		(double)( total_duration_tp - total_fepoched ) / (double)globals::tp_1sec );
+  writer.value( "TOT_REC" , (double)total_duration_tp / (double)globals::tp_1sec );
+  writer.value( "TOT_PCT" , p_spanned );
+  
+ 
 }
 
 

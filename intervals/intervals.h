@@ -137,6 +137,16 @@ struct interval_t
     return start > rhs.start;
   }
 
+  bool operator==( const interval_t & rhs ) const 
+  {
+    return start == rhs.start && stop == rhs.stop;
+  }
+
+  bool operator!=( const interval_t & rhs ) const 
+  {
+    return start != rhs.start || stop != rhs.stop;
+  }
+
   interval_t union_with_overlapping_interval( const interval_t & b ) const
   {
     // this should only be called for overlapping intervals

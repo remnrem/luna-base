@@ -508,9 +508,9 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       //
 
       if ( has_staging ) 
-	logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW)\n";
+	logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW, p?)\n";
       else
-	logger << "  adding POPS annotations (N1, N2, N3, R, W)\n";
+	logger << "  adding POPS annotations (N1, N2, N3, R, W, ?)\n";
       
       add_annots( edf , has_staging ? "p" : "" );      
 
@@ -2591,18 +2591,21 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
   edf.timeline.annotations.clear( prefix + "N3" );
   edf.timeline.annotations.clear( prefix + "R" );
   edf.timeline.annotations.clear( prefix + "W" );
+  edf.timeline.annotations.clear( prefix + "?" );
   
   annot_t * aN1 = edf.timeline.annotations.add( prefix + "N1" );
   annot_t * aN2 = edf.timeline.annotations.add( prefix + "N2" );
   annot_t * aN3 = edf.timeline.annotations.add( prefix + "N3" );
   annot_t * aR = edf.timeline.annotations.add( prefix + "R" );
   annot_t * aW = edf.timeline.annotations.add( prefix + "W" );
+  annot_t * aU = edf.timeline.annotations.add( prefix + "?" );
   
   aN1->description = "N1, POPS prediction";
   aN2->description = "N2, POPS prediction";
   aN3->description = "N3, POPS prediction";
   aR->description = "R, POPS prediction";
   aW->description = "W, POPS prediction";
+  aU->description = "?, POPS prediction";
     
   int ne = E.size();
   
@@ -2614,6 +2617,8 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
       else if ( PS[e] == POPS_N1 )   aN1->add( "." , interval , "." );
       else if ( PS[e] == POPS_N2 )   aN2->add( "." , interval , "." );
       else if ( PS[e] == POPS_N3 )   aN3->add( "." , interval , "." );
+      else aU->add( "." , interval , "." );
+      
     }
       		  
 }

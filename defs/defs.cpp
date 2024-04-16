@@ -167,6 +167,7 @@ std::string globals::time_strat;
 std::string globals::freq_strat;
 std::string globals::sec_strat;
 std::string globals::segment_strat;
+std::string globals::edf_strat;
 std::string globals::signal_strat;
 std::string globals::signal1_strat;
 std::string globals::signal2_strat;
@@ -510,6 +511,7 @@ void globals::init_defs()
 
   freq_strat   = "F";
   segment_strat = "SEG";
+  edf_strat = "EDF";
   signal_strat = "CH";
   signal1_strat = "CH1";
   signal2_strat = "CH2";
