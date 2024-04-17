@@ -558,7 +558,8 @@ void suds_indiv_t::fit_qlda()
     }
   else
     {
-      lda_t lda( y , U );     
+      lda_t lda( y , U );
+      lda.silent = true;
       lda_model = lda.fit( suds_t::flat_priors );
     }
   

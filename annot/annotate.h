@@ -450,6 +450,10 @@ struct annotate_t {
   // if join_neighbours, then contiguous intervals also merged
   static std::set<interval_t> flatten( const std::set<interval_t> & x , const bool join_neighbours = true );
 
+  static std::set<interval_t> apairs( const std::set<interval_t> & a ,
+				      const std::set<interval_t> & b ,
+				      const std::string & mode );
+  
   static bool overlaps_flattened_set(  const interval_t & a , const std::set<interval_t> & b );
 
   static std::set<std::string> root_match( const std::string & , const std::vector<std::string> & );

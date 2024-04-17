@@ -326,8 +326,8 @@ uint64_t timeline_t::valid_tps(  const interval_t & interval )
 	  // make +1 encoding for record (same as interval)
 	  ++rec.stop;
 	  
-	  // std::cout << " rec " << rec.start << " " << rec.stop
-	  // 	    << "  int " << interval.start << " " << interval.stop << "\n";
+	  // std::cout << " rec " << *rr << "  --> " << rec.start << " " << rec.stop
+	  //  	    << "  int " << interval.start << " " << interval.stop << "\n";
 
 	  // REC     |-----------------------|
 	  // INT   |-------------------------------|

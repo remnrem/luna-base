@@ -460,6 +460,8 @@ void MiscMath::hjorth( const std::vector<double> * data , double * activity , do
   if ( ! Helper::realnum( *activity ) ) *activity = 0;
   if ( ! Helper::realnum( *mobility ) ) *mobility = 0;
   if ( ! Helper::realnum( *complexity ) ) *complexity = 0;
+
+  //  *activity = log( *activity + 0.00001 );
   
 }
 

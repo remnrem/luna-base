@@ -1393,3 +1393,88 @@ void timeline_t::signal_means_by_annot( const param_t & param )
   
   // all done
 }
+
+
+
+std::set<interval_t> timeline_t::segments() 
+{
+  // return a list of current segments, i.e. mirroring the internal EDF+
+  // same logic/code as for SEGMENTS command (edf/dumper.cpp)
+
+  std::set<interval_t> segs;
+  
+  // we only need to consider this for discontinuous EDF+ 
+  
+  if ( edf->header.continuous || ! edf->header.edfplus )
+    {
+      segs.insert( interval_t( 0 , total_duration_tp ) );
+      return segs;
+    }
+
+  
+  // need to query the time-tracks
+    
+  int r = first_record();
+  
+  uint64_t tp0 = rec2tp[r];
+  
+  uint64_t tp_start = tp0;
+
+  while ( r != -1 )
+    {
+      
+      // next record
+      r = next_record( r );
+      
+      // start of this next record
+      uint64_t tp;
+      
+      bool segend = false;
+      
+      // end?
+      if ( r == -1 )
+	{
+	  // make this the 'previous'
+	  tp0 = tp;
+	  segend = true;
+	}
+      else
+	{
+	  tp = rec2tp[r] ;
+	  
+	  // discontinuity / end of segment?
+	  // allow for minor round, must be within
+	  // 1/10,000th of a second
+	  // 0.0001 * 1e9 =  1e+05 tps
+	  
+          uint64_t len = tp - tp0;
+	  uint64_t dif = len > edf->header.record_duration_tp ? len - edf->header.record_duration_tp : edf->header.record_duration_tp - len ;
+          segend = dif > 10000LLU;
+	  
+	}
+      
+      // record this segment 
+      
+      if ( segend )
+	{
+	  
+	  double secs1 = tp_start * globals::tp_duration ; 	  
+	  double secs2 = tp0 * globals::tp_duration + edf->header.record_duration; 
+
+	  // start = tp_start
+	  // end   = tp0 + header.record_duration_tp  (i.e. up to and +1 past end of record)
+	  segs.insert( interval_t( tp_start , tp0 + edf->header.record_duration_tp ) );
+	  
+	  // current point becomes start of the next segment
+	  tp_start = tp;
+	  
+	}
+      
+      // current point becomes the last one, for next lookup
+      tp0 = tp;
+      
+    }
+
+  return segs;
+  
+}

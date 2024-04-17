@@ -76,6 +76,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  else if ( tok2[0] == "edf" ) filename = tok2[1];
 	  else if ( tok2[0] == "sample-list" ) slist = tok2[1];
 	  else if ( tok2[0] == "fixed" ) use_fixed_order = Helper::yesno( tok2[1] );
+	  logger << "  setting option: " << tok2[0] << " = " << tok2[1] << "\n";
 	  continue;
 	}
       
@@ -105,11 +106,10 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	Helper::halt( "cannot merged EDF+ files : " + fname
 		      + "\n (this constraint can be relaxed in future)");
       
-      logger << "  attached component EDF " << fname << "\n";
+      logger << "\n attached component EDF: " << fname << "\n";
 
       edfs.push_back( edf ) ;
 
-      logger << "\n";
     }
 
   const int nf = edfs.size();
@@ -120,13 +120,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   //
 
   logger << "------------------------------------------------------------\n"
-	 << "\n  attached " << nf << " EDFs\n";  
-
-  // for (int i=0; i<nf; i++)
-  //   logger << "  EDF " << i+1 << "\t"
-  // 	   << edfs[i]->id << "\t"
-  // 	   << edfs[i]->header.startdate << "\t"
-  // 	   << edfs[i]->header.starttime << "\n";
+	 << "  in total, attached " << nf << " EDFs\n";  
 
   logger  << "  writing merged data:\n"
 	  << "     ID           : " << id << "\n"
@@ -150,7 +144,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   if ( ! use_fixed_order )
     {
       logger << " ------------------------------------------------------------\n"
-	     << " extracting start times from EDFs --> seconds since 1/1/85 00:00\n";
+	     << "  extracting start times from EDFs --> seconds since 1/1/85 00:00\n";
       
       for (int i=0; i<nf; i++)
 	{
@@ -161,7 +155,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  uint64_t days = date_t::count( date );
 	  uint64_t secs = days * 24 * 60 * 60 + clock.rounded_seconds();
 	  
-	  logger << "  EDF " << i 
+	  logger << "   EDF " << i 
 		 << "  date: " << edfs[i]->header.startdate
 		 << " time: " << edfs[i]->header.starttime
 		 << " days: " << days
@@ -169,7 +163,8 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  
 	  // check this time does not already exist
 	  if ( time2edf.find( secs ) != time2edf.end() )
-	    Helper::halt( "EDFs with identical start times specified: " + edfs[i]->header.startdate + " " + edfs[i]->header.starttime );
+	    Helper::halt( "EDFs with identical start times specified: "
+			  + edfs[i]->header.startdate + " " + edfs[i]->header.starttime );
 	  
 	  // track
 	  time2edf[ secs ] = i;
@@ -179,7 +174,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
       //
       // go through order and figure out whether we have a) overlap and/or b) gaps
       //
-
+      
       bool overlap = false;
       
       // currently, only allow merging of standard EDFs (i.e. simple integer start times)
@@ -188,6 +183,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
       std::map<uint64_t,int>::const_iterator pp = ss;
       ++ss;
 
+      int sidx = 1;
       
       logger << "------------------------------------------------------------\n"
 	     << "  ordered EDFs (seconds past 1/1/1985 00:00:00)\n";
@@ -203,9 +199,9 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  // implied duration of previous
 	  double dur = edfs[ pp->second ]->header.nr * edfs[ pp->second ]->header.record_duration;
 	  
-	  logger << "  ordered EDFs : prev start = " << pp->first << " ; this start = " << ss->first << "\n"; 
-	  logger << "    implied duration of previous based on # records         = " << diff << "\n";
-	  logger << "    implied duration of previous based on current EDF start = " << dur << "\n"; 
+	  logger << "  for EDF " << sidx-1 << ", start = " << pp->first << " and next EDF start = " << ss->first << "\n";
+	  logger << "    implied duration based on # records      = " << diff << "\n";
+	  logger << "    implied duration based on next EDF start = " << dur << "\n"; 
 	  
 	  if ( dur - diff > 0.5 )
 	    {
@@ -215,13 +211,14 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  else if ( diff - dur > 0.5 )
 	    {
 	      gapped = true;
-	      logger << "  implies gap between previous and current - will output an EDF+D\n";
+	      logger << "  --> implies gap between previous and current\n";
 	    }
 	  else
-	    logger << "   implies exactly contiguous EDFs\n";
+	    logger << "  --> implies exactly contiguous EDFs\n";
 	  
 	  logger << "\n";
-	  
+
+	  ++sidx;
 	  ++ss;
 	  ++pp;
 	}
@@ -230,9 +227,9 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  Helper::halt( "found overlapping EDFs -- bailing, cannot merge" );
 	
 	if ( gapped )
-	  logger << " found gaps between EDFs - will generate an EDF+D\n";
+	  logger << "  found gaps between EDFs - will generate an EDF+D\n";
 	else
-	  logger << " no gaps found between EDFs - will generate an EDF (or EDF+C)\n";
+	  logger << "  no gaps found between EDFs - will generate a stabdard EDF (or EDF+C)\n";
 	
     }
   
@@ -259,7 +256,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   for (int i=0; i<nf; i++)
     nr += edfs[i]->header.nr;
   
-  logger  << "  expecting " << nr
+  logger  << "\n  expecting " << nr
 	  << " records (each of "
 	  << edfs[0]->header.record_duration << " sec) in the new EDF\n";
   
@@ -276,6 +273,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // Set header
   //
 
+  medf.id = id;
   medf.header.version = edfs[ first_edf ]->header.version;
   medf.header.patient_id = id;
   medf.header.recording_info = edfs[ first_edf ]->header.recording_info;
@@ -293,7 +291,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // create a (continuous/discontinuous) timeline  
   //
 
-  logger << "  adding timeline\n";
+  logger << "  adding timeline; ";
 
   // initially, create the new dataset as a standard EDF
   // i.e. which assumes that all component files are also all EDF
@@ -307,7 +305,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // resize data[][], by adding empty records 
   //
 
-  logger << "  adding " << nr << " empty records...\n";
+  logger << "adding " << nr << " empty records...\n";
 
   for (int r=0;r<nr;r++)
     {
@@ -321,14 +319,16 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   //
 
   const int ns = edfs[0]->header.ns ;
-  
+
+  logger << "  compiling channels:";
+    
   for (int s=0; s<ns; s++)
     {
 
       // skip annotations
       if ( edfs[0]->header.is_annotation_channel( s ) ) continue;
       
-      logger << "  compiling channel " << edfs[0]->header.label[s] << "\n";
+      logger << " " << edfs[0]->header.label[s];
 
       std::vector<double> dt;
 
@@ -345,7 +345,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  for (int k=0; k<d->size(); k++) dt.push_back( (*d)[k] ) ;
 	  
 	} // next EDF
-
+      
       const int np_obs = dt.size();
       const int np_exp = nr * edfs[0]->header.sampling_freq(s);
       
@@ -357,6 +357,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
             
     } // next channel
   
+  logger << "\n";
 
   
 
@@ -409,18 +410,21 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
       //
       // Output tidy table w/ information for annotation offsets      
       //
-
+      logger << "\n";
+      int sidx = 0;
       ss = time2edf.begin();
       while ( ss != time2edf.end() )
         {
           int e = ss->second;
-          double sec_past_edf_start = ss->first - first_edf_secs;
-
-	  std::cout << "ANNOT-OFFSET" << "\t"
-		    << edfs[e]->filename << "\t"  
-		    << sec_past_edf_start << "\n";
-          ++ss;
-        }
+          double sec_past_edf_start = ss->first - first_edf_secs;	  
+	  
+	  logger << "  EDF " << sidx
+		 << " offset from new EDF start (secs) " << sec_past_edf_start << " (" 
+		 << edfs[e]->filename << ")\n";
+	  
+	  ++sidx;
+	  ++ss;
+	}
       
     }
   
@@ -428,7 +432,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // Save this merged EDF
   //
 
-  logger << "  writing merged EDF as " << filename << "\n";
+  logger << "\n  writing merged EDF as " << filename << "\n";
   
   bool saved = medf.write( filename );
   
@@ -440,7 +444,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 
   if ( slist != "" )
     {	  
-      logger << " appending " << filename << " to sample-list " << slist << "\n";
+      logger << "  appending " << filename << " to sample-list " << slist << "\n";
       std::ofstream FL( slist.c_str() , std::ios_base::app );
       FL << medf.id << "\t" << filename << "\n";
       FL.close();

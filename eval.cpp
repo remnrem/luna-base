@@ -2389,7 +2389,7 @@ void proc_slowwaves( edf_t & edf , param_t & param )
 
 void proc_edf_minus( edf_t & edf , param_t & param )
 {
-  edf.edf_minus();
+  edf.edf_minus( param );
 }
 
 // SET-TIMESTAMPS

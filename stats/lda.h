@@ -128,6 +128,8 @@ class lda_t {
 
     missing = "?";
 
+    silent = false;
+    
   }
   
   lda_model_t fit( const bool flat_priors = false , const  std::vector<std::string> * pr = NULL );
@@ -150,6 +152,8 @@ class lda_t {
     return predict( model , XX );
   }
 
+  bool silent ; 
+  
  private:
   
   std::vector<std::string> y;
