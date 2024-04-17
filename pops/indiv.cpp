@@ -128,12 +128,12 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
     {
       // get any staging
       bool has_valid_staging = staging( edf , param );
-      
+
       // nothing to do if no staging data for this trainer
       if ( ! has_valid_staging ) return; 
-      
+
       level1( edf );
-      
+
       save1( edf.id , param.requires( "data" ) );      
     }
 
@@ -555,7 +555,6 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
       if ( has_staging && edf.timeline.hypnogram.empty() )
 	has_staging = false;
     }
-
 
   if ( ! has_staging )
     {

@@ -90,7 +90,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 
 bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel ) 
 {
-  
+
   // point to 'parent' timeline
   timeline = t ;
 
@@ -333,7 +333,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   //
   // edit hypnogram as needed (e.g. for lights-off, excessive WASO, etc)
   //
-  
+
   edit( timeline , param ); 
   
   //
@@ -356,12 +356,12 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 	   << "  *** see EPOCH 'align' or 'offset' options\n"; 
   
   
+  
   //
   // finally, calculate hypno stats
   //
   
   calc_stats( verbose );
-
 
   //
   // If all missing, return false
@@ -923,7 +923,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       
     }
   
-  
+
   //
   // Recode any leading/trailing "?" as "L"; an exception to this is if 
   // there are not any wake/sleep epochs found (i.e. all is '?' or 'GAP')
@@ -1000,6 +1000,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   
   if ( param.has( "anchor" ) )
     constrain_anchor = param.value( "anchor" );
+
 
   //
   // Constrain to first N mins 
@@ -1263,6 +1264,8 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // Specify sliding window on epoch-level data?
   //
 
+  sliding_window = false;
+
   if ( param.has( "slide" ) )
     {
     
@@ -1300,14 +1303,14 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       window_anchor = slide_anchor;
 
     }
-  
+
   //
   // Output ascending/descending N2? 
   //
 
   output_n2_asc_desc = param.has( "n2-asc-desc" ) ? param.yesno( "n2-asc-desc" ) : false ;
   n2_asc_desc_th = param.has( "n2-asc-desc-th" ) ? param.requires_dbl( "n2-asc-desc-th" ) : 0.25;
-    
+
 }
 
 void hypnogram_t::calc_stats( const bool verbose )
@@ -1322,8 +1325,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   // this includes gaps
   const int ne = stages.size();
 
-  //  std::cout << "ne (gaps?) = " << ne << "\n";
-  
   //
   // Basic summary statistics per-individual/night
   //
@@ -1346,8 +1347,7 @@ void hypnogram_t::calc_stats( const bool verbose )
       else if ( stages[e] == NREM4 ) mins[ "N4" ] += epoch_mins;
       else if ( stages[e] == REM   ) mins[ "R" ] += epoch_mins;
       else if ( stages[e] == LIGHTS_ON ) mins[ "L" ] += epoch_mins;
-      
-      
+           
       else mins[ "?" ] += epoch_mins; // movement, artifact, unscored or GAP 
     }
 
@@ -1377,7 +1377,6 @@ void hypnogram_t::calc_stats( const bool verbose )
 	Helper::halt( "LIGHTS_ON periods can only be at start and end of recording" );
     }
 
-  
   // lights out/on
   lights_out_epoch = 0;
   for (int e=0;e<ne;e++) 
@@ -1403,7 +1402,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   // For cycle calculations below, etc,  use TRT which is [ lights_out_epoch ,  lights_on_epoch )  
   // rather than [ 0 , ne ) 
   //
-
 
   //
   // First wake epoch of final bout of wake (i.e. so this can be subtracted off WASO)
@@ -1546,7 +1544,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   slp_eff2_pct = ( TST / SPT_actual ) * 100;
 
 
-
   //
   // Ascending/descending N2 
   //
@@ -1639,7 +1636,8 @@ void hypnogram_t::calc_stats( const bool verbose )
       n2_ascdesc[e] = ( left_wgt + right_wgt ) / 2.0;
       //std::cout << " n2 AD = " << e << "  " << stages[e] << " " << n2_ascdesc[e] << "\n";
     }
-  
+
+
 
   //
   // Track duration of N2 class
@@ -1743,7 +1741,6 @@ void hypnogram_t::calc_stats( const bool verbose )
     }
 
 
-
   //
   // Runs test on stages;;; collapse 
   //
@@ -1792,7 +1789,7 @@ void hypnogram_t::calc_stats( const bool verbose )
   //
   // Sliding window for stage density?
   //
-  
+
   if ( sliding_window ) do_slide();
 
   //
@@ -1815,7 +1812,8 @@ void hypnogram_t::calc_stats( const bool verbose )
   // Get bout stats
   //
 
-  
+
+
   std::vector<std::string>::const_iterator qq = these_stages.begin();
   while ( qq != these_stages.end() )
     {
@@ -1962,7 +1960,6 @@ void hypnogram_t::calc_stats( const bool verbose )
       
       ++qq;
     }
-
 
 
   //
@@ -2698,8 +2695,6 @@ void hypnogram_t::calc_stats( const bool verbose )
   // preset duration of any combination of NREM or wake.  the user may
   // define whether stage N1 can define the onset of a new NREM phase.
  
-   
-  
   
   //
   // Flanking epochs 
