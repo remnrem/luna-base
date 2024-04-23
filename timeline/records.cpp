@@ -678,7 +678,8 @@ std::set<int> timeline_t::records_in_interval( const interval_t & interval ) con
   std::set<int> recs;
 
   bool any = interval2records( interval , srate , &start_rec , &start_smp , &stop_rec , &stop_smp );
-
+  
+  
   if ( ! any ) return recs;
   
   int r = start_rec;

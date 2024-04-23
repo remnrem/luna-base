@@ -1155,7 +1155,8 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
   
   // if all_masked,   returns T if /all/ of interval falls within masked regions
   // if not,          returns T if interval falls in at least one masked region
-
+  // allow 0-duration intervals
+  
   if ( start_masked != NULL ) *start_masked = false;  
 
   
@@ -1172,7 +1173,7 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
       // end of interval is one past end of region:
       int eright = MiscMath::position2rightepoch( interval.stop-1LLU , epoch_length_tp, epoch_inc_tp , mask.size() );
       
-      //std::cout << "e1e2 = " << eleft << "  " << eright << "\n";
+      //      std::cout << "e1e2 = " << eleft << "  " << eright << "\n";
       
       if ( start_masked != NULL )
 	{
@@ -1203,7 +1204,7 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 
           
       std::set<int> records = records_in_interval( interval );
-
+            
       // falls off edge of the map
       if ( records.size() == 0 ) return true;
       

@@ -408,6 +408,13 @@ bool real_FFT::apply( const double * x , const int n )
 
 
   //
+  // Temp output
+  //
+
+  // if ( 1 )
+  //   for (int i=0;i<Ndata; i++) std::cout << w[i] << "\n";
+
+  //
   // Execute actual FFT
   // 
   
