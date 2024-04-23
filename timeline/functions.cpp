@@ -819,10 +819,22 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  
 	  bool keep_this = false;
 
-	  if      ( keep_mode == 0 ) keep_this = interval_overlaps_unmasked_region( instance_idx.interval );
-	  else if ( keep_mode == 1 ) keep_this = interval_is_completely_unmasked( instance_idx.interval );
-	  else if ( keep_mode == 2 ) keep_this = ! interval_start_is_masked( instance_idx.interval ) ;
+	  // allow for 0-duration annots: in EDF+D mode, these
+	  // functions (interval_overlaps_unmasked_region() etc) will
+	  // not return anything, as they end up calling a function to determine
+	  // directly the record count spanned.   As we don't want to mess w/ those
+	  // deep functions for now, just make a fix here
+	  // all other uses of masked_interval() etc are based on epochs, which
+	  // will never have zero-duration
 	  
+	  // 0-duration time-stamps changed to have an arbitrary 1LLU duration:
+	  interval_t search = instance_idx.interval;
+	  if ( search.duration() == 0LLU ) search.stop += 1LLU;
+	  
+	  if      ( keep_mode == 0 ) keep_this = interval_overlaps_unmasked_region( search );
+	  else if ( keep_mode == 1 ) keep_this = interval_is_completely_unmasked( search );
+	  else if ( keep_mode == 2 ) keep_this = ! interval_start_is_masked( search );
+
 	  if ( keep_this )
 	    {      
 	     
