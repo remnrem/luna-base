@@ -3899,10 +3899,10 @@ void proc_rename( edf_t & edf , param_t & param )
 	Helper::halt( "'new' signal labels cannot already exist in the EDF" );
       newset.insert( new_signals[s] );
     }
-
+  
   if ( newset.size() != new_signals.size() )
     Helper::halt( "cannot have duplicate labels in new" );
-      
+  
   for (int s=0; s<ns; s++)
     {
       logger << "  renaming [" << signals.label(s) << "] as [" << new_signals[s]  << "]\n";
@@ -5274,7 +5274,6 @@ void cmd_t::attach_idmapper( const std::string & file )
 }
 
 
-
 void cmd_t::register_specials()
 {
 
@@ -5510,15 +5509,15 @@ bool cmd_t::pull_ivar_bool( const std::string & id , const std::string & phe )
 void proc_has_signals( edf_t & edf , param_t & param )
 {
 
-  // operates in two modes:  
+  // operates in different modes:  
   //    - alters return code (default)
   //    - skips to next EDF (if skip option is given) 
+  //    - or set a variable
 
   const bool skip = param.has( "skip" ) || param.has( "skip-if-none" ) ;
   
   const bool skip_if_none = param.has( "skip-if-none" );
-  
-  
+   
   // check this EDF has the signals OR annots OR stage information
   
   const bool check_stages = param.has( "stages" );

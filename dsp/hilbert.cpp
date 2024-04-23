@@ -302,10 +302,10 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
   
   std::vector<int> so_size;
   std::vector<int> so_offset;
-  
+
   if ( mask != NULL )
     {
-      
+
       for (int i=0;i<n;i++) // for each spindle
 	{	  
 	  if ( ! (*mask)[ e[i] ] ) 
@@ -346,8 +346,8 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  // next event
 	}
     }
+
       
-  
   //
   // Within-epoch permutation
   //
@@ -362,7 +362,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
   //      or are generic (variable sized, w/ gaps, etc) then here we ignore that.
   //      in other words, think of this as more of a locally-constrained shuffle
   //      rather than 'within-epoch' permutations per se.   
-  
+
   int es = sr * epoch_sec;
 
   // from e[], also get eoffset[], which is the relative within-epoch position
@@ -373,18 +373,20 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
       for (int i=0; i<n; i++) 
 	eoffset[i] = e[i] % es;
     }
-
+  
+  
   //
   // need to handle the case if the signal is not a multiple of the epoch:
   //  i.e. the final epoch is shorter than expected;  if we try permuting there,
   //       we will go off-grid...   so, just keep those points as is
   //
   
-  int n_full_epochs = mx / es;
-  int n_expected_points = n_full_epochs * es;
+  int n_full_epochs = es ? mx / es : 0 ;
+  int n_expected_points = es ? n_full_epochs * es : 0 ;
 
-  // logger << " details = " << mx << " " << es << " "
-  // 	 << n_expected_points << " " << n_full_epochs << " " << n_expected_points << "\n";
+  // std::cout << " details = " << mx << " " << es << " "
+  // 	    << n_expected_points << " " << n_full_epochs << " " << n_expected_points << "\n";
+  
   const bool run_over = es && mx > n_expected_points;
   if ( run_over )
     {
@@ -505,7 +507,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 
       for (int i=0;i<n;i++)
 	{  
-	  
+
 	  //
 	  // basic permutation
 	  //
@@ -563,7 +565,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	      //		bin( ph[ pei ] , binsize , &pbacc );
 	    }
 	  
-	 
+
 	  //
 	  // within-SO permutation, optionally modifies 'pei' for spindles that are originally in a SO (so_size>0)
 	  //
@@ -614,7 +616,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  //
 	  // next spindle
 	  //
-	  
+
 	}
 
       
@@ -670,7 +672,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
   // get empirical p-values
   itpc.itpc.calc_stats();
   itpc.ninc.calc_stats();
-
+  
   //  std::cerr << "SD = " << itpc.itpc.sd << " " << itpc.ninc.sd << "\n";
 
   itpc.sig.calc_stats(); // only for the mean under the null

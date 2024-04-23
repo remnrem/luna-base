@@ -201,7 +201,7 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	  //
 	  // coupling analysis
 	  //
-	  
+
 	  itpc_t itpc = hilbert.phase_events( evt_sp , 
 					      NULL , // no mask
 					      nreps ,

@@ -1904,6 +1904,9 @@ void process_edfs( cmd_t & cmd )
 	  rootname = tok[0];
 	  edffile  = tok[1];
 	  
+	  // swap in new ID?
+	  rootname = cmd_t::remap_id( rootname );
+
 	  // else, do we have an 'ID' check?
 	  if ( globals::sample_list_id != "" )
 	    {	      
