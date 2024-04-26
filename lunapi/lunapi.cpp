@@ -1193,14 +1193,51 @@ std::vector<std::string> lunapi_inst_t::channels()
   return chs; 
 }  
 
+
+std::vector<bool> lunapi_inst_t::has_channels( const std::vector<std::string> & chs )
+{
+  std::vector<bool> res;
+  if ( state != 1 ) return res;
+  res.resize( chs.size() );  
+  const int ns = chs.size();
+  for (int s=0;s<ns;s++)
+    res[s] = edf.header.has_signal( chs[s] );
+  return res;
+}
+
+
+std::vector<bool> lunapi_inst_t::has_annots( const std::vector<std::string> & anns )
+{
+  std::vector<bool> res;
+  if ( state != 1 ) return res;
+  res.resize( anns.size() );
+  const int ns = anns.size();
+  for (int s=0;s<ns;s++)
+    res[s] = edf.timeline.annotations.find( anns[s] ) != NULL;
+  return res;  
+}
+
+bool lunapi_inst_t::has_staging() 
+{
+  // get staging                                                                                                             
+  edf.timeline.annotations.make_sleep_stage( edf.timeline );
+
+  // valid?                                                                                                                  
+  param_t empty_param;
+  bool has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , empty_param , false );
+  
+  // valid, but empty?                                                                                                       
+  if ( has_staging && edf.timeline.hypnogram.empty() )
+    has_staging = false;
+  
+  return has_staging;
+}
+
 std::vector<std::string> lunapi_inst_t::annots() const
 {
   if ( state != 1 ) return std::vector<std::string>(0);
   return edf.timeline.annotations.names();
 }
-
-
-
 
 
 //

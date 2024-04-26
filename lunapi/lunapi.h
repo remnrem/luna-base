@@ -269,7 +269,14 @@ public:
 
   std::vector<std::string> channels();
 
+  std::vector<bool> has_channels( const std::vector<std::string> & );
+  
   std::vector<std::string> annots() const;
+
+  std::vector<bool> has_annots( const std::vector<std::string> & );
+
+  bool has_staging();
+  
 
   //
   // data slices
