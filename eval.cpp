@@ -4406,7 +4406,54 @@ void proc_reverse( edf_t & edf , param_t & param  )
 void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 {
 
+  // record as a standard variable also (i.e. for lookup in lunapi, etc)
+  // n.b. previously, we'd skip this and only add non-special vars
 
+  // except handle the special case of 'sig' which _appends_ to an existing list unless '.'
+
+  if ( tok0 == "sig" )
+    {
+      std::string curr = cmd_t::vars[ tok0 ];
+      // wipe?
+      if ( tok1 == "." || tok1 == "" )
+	cmd_t::vars.erase( cmd_t::vars.find( "sig" ) );
+      else // add to list
+	{
+	  if ( curr == "." || curr == "" )
+	    cmd_t::vars[ tok0 ] = tok1 ;
+	  else
+	    cmd_t::vars[ tok0 ] = curr + "," + tok1 ;
+	}
+    }
+  else // just add as usual
+    cmd_t::vars[ tok0 ] = tok1;
+
+  //
+  // now process sig opt via cmd_t::signallist
+  //
+  
+  if ( Helper::iequals( tok0 , "sig" ) )
+    {
+      // wipe?
+      if ( tok1 == "." || tok1 == "" )
+	cmd_t::signallist.clear();
+      else // or append to list?
+	{
+	  std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );		        
+	  for (int s=0;s<tok2.size();s++) 
+	    cmd_t::signallist.insert( globals::sanitize_everything ?
+				      Helper::sanitize( Helper::unquote(tok2[s] ) ) :				  
+				      Helper::unquote(tok2[s]) );
+	}
+      return;
+    }
+  
+
+  //
+  // now handle processing of all other special variables
+  //
+
+  
   // no console logging?
   if ( Helper::iequals( tok0 , "silent" ) ) 
     {
@@ -4499,17 +4546,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
     
-  // add signals?
-  if ( Helper::iequals( tok0 , "sig" ) )
-    {		  
-      std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );		        
-      for (int s=0;s<tok2.size();s++) 
-	cmd_t::signallist.insert( globals::sanitize_everything ?
-				  Helper::sanitize( Helper::unquote(tok2[s] ) ) :				  
-				  Helper::unquote(tok2[s]) );
-      return;
-    }
-
   // swap spaces
   if ( Helper::iequals( tok0 , "spaces" ) )
     {
@@ -5051,9 +5087,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   
-  // else a standard variable
-
-  cmd_t::vars[ tok0 ] = tok1;
 
   
 }
