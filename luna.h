@@ -120,6 +120,7 @@
 #include "models/predict.h"
 
 #include "lunapi/lunapi.h"
+#include "lunapi/segsrv.h"
 
 #include <iostream>
 #include <unistd.h>

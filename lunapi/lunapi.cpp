@@ -741,6 +741,12 @@ int lunapi_inst_t::get_state() const
   return state;
 }
 
+double lunapi_inst_t::last_sec() const
+{
+  // last addressable timepoint (in current internal EDF)
+  return ( edf.timeline.last_time_point_tp + 1LLU ) * globals::tp_duration;
+}
+
 std::string lunapi_inst_t::get_edf_file() const
 {
   return edf_filename;

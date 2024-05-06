@@ -559,7 +559,9 @@ struct timeline_t
   static bool discontinuity( const std::vector<uint64_t> & t , int sr, int sp1, int sp2 );
   
   std::set<interval_t> segments();
-  
+
+  std::set<interval_t> gaps( const std::set<interval_t> & segs );
+
  private:
 
   

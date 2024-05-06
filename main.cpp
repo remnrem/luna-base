@@ -3196,6 +3196,69 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       std::exit(1);
     }
+
+  //
+  // Test lunapi_t
+  //
+
+  if ( p == "lunapi" )
+    {
+      lunapi_t * lp = lunapi_t::inaugurate();
+      lunapi_inst_ptr p = lp->inst( "id1" );
+      p->attach_edf( "~/shhs1-200167.edf" );
+
+      std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n";
+
+      std::vector<std::string> d = p->desc();
+      for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
+
+      // introduce some gaps
+      p->eval( "EPOCH & MASK epoch=5 & MASK flip & RE" );
+
+      std::cout << " post mask...\n";
+      d = p->desc();
+      for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
+
+      std::cout <<"\n\n";
+      segsrv_t segsrv( p );
+      std::vector<std::string> chs = { "EEG" , "SaO2", "AIRFLOW" } ;
+      std::vector<std::string> anns ;
+      segsrv.populate( chs , anns ) ;
+      
+      for (int t=0; t<180; t+= 10 )
+	{
+	  std::cout <<"\n\n";
+	  bool okay = segsrv.set_window( t, t+30 );
+	  	  
+	  std::set<std::pair<double,double> > g = segsrv.get_gaps();
+
+	  std::cout << " n gaps = " << g.size() << "\n";
+	  std::set<std::pair<double,double> >::const_iterator gg = g.begin();
+	  while ( gg != g.end() )
+	    {
+	      std::cout << " gap = " << gg->first << " .. " << gg->second << "\n";
+	      ++gg;
+	    }
+	    
+	  Eigen::VectorXf X1 = segsrv.get_signal( "EEG" );
+	  Eigen::VectorXf X2 = segsrv.get_signal( "SaO2" );
+	  Eigen::VectorXf X3 = segsrv.get_signal( "AIRFLOW" );
+	  
+	  Eigen::VectorXf T1 = segsrv.get_timetrack( "EEG" );
+	  Eigen::VectorXf T2 = segsrv.get_timetrack( "SaO2" );
+	  Eigen::VectorXf T3 = segsrv.get_timetrack( "AIRFLOW" );
+	  
+	  std::cout << " cols = " << X1.size() << " " <<  X2.size() << " " << X3.size() << " ";
+	  std::cout << " times  = " << T1.size() << " " <<  T2.size() << " " << T3.size() << "\n";
+	  
+	  // for (int i=0; i<X1.size(); i++)
+	  //   std::cout << i << "\t" << T1[i] << "\t" << X1[i] << "\n";
+	  std::cout << "\n----------------------------------------\n\n";
+	}
+      
+      std::exit(0);
+    }
+
   
   //
   // Straight FFT of stdin

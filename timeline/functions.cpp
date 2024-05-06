@@ -1407,6 +1407,37 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 }
 
 
+std::set<interval_t> timeline_t::gaps( const std::set<interval_t> & segs )
+{
+  std::set<interval_t> g;
+
+  // no segs - implies one big gap
+  if ( segs.size() == 0 )
+    {
+      g.insert( interval_t( 0LLU , last_time_point_tp + 1LLU  ) );
+      return g;
+    }
+
+  // start/end?
+  std::set<interval_t>::const_iterator ss = segs.begin();
+  if ( ss->start != 0LLU ) g.insert( interval_t( 0LLU , ss->start ) );
+  
+  std::set<interval_t>::const_iterator ss1 = segs.begin();
+  ++ss1;
+  
+  while ( ss1 != segs.end() )
+    {
+      g.insert( interval_t( ss->stop , ss1->start ) );
+      ++ss1;
+      ++ss;
+    }
+
+  // end? back up one
+  --ss1;
+  if ( ss1->stop != last_time_point_tp + 1LLU )
+    g.insert( interval_t( ss1->stop , last_time_point_tp + 1LLU ) );
+  return g;
+}
 
 std::set<interval_t> timeline_t::segments() 
 {

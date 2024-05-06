@@ -30,6 +30,8 @@
 #include <optional>
 #include <memory>
 
+struct segsrv_t;
+
 typedef std::tuple<std::vector<std::string>,Eigen::MatrixXd> ldat_t;
 typedef std::tuple<std::vector<std::string>,std::vector<Eigen::MatrixXd> > ldats_t;
 
@@ -230,7 +232,7 @@ private:
 public:
 
   friend lunapi_t;
-  
+  friend segsrv_t;
 
   //
   // attach data 
@@ -365,6 +367,8 @@ public:
 
   int get_state() const;
 
+  double last_sec() const;
+  
 private:
 
   // 0 empty; +1 attached okay, -1 problem 
