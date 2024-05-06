@@ -39,10 +39,14 @@ public:
   // initialize (or reset) to current internal state
   int populate( const std::vector<std::string> & chs ,
 		const std::vector<std::string> & anns );
-  
+
+  // get overall scale
+  std::vector<std::pair<double,double> > get_scale() const;
+
   // set window
   bool set_window( double a , double b );
 
+  
   // get signals
   Eigen::VectorXf get_signal( const std::string & ch ) const;
 

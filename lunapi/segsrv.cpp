@@ -65,6 +65,52 @@ int segsrv_t::populate( const std::vector<std::string> & chs , const std::vector
 }
 
 
+// get overall scale
+std::vector<std::pair<double,double> > segsrv_t::get_scale() const
+{
+  std::vector<std::pair<double,double> > r;
+
+  // 0..1 : viz dist (i.e. plots)
+  // 0..1 : clock dist (i.e. time)
+  
+  uint64_t viz_min = 0LLU, viz_max = 0LLU;
+  uint64_t clk_min = 0LLU, clk_max = 0LLU;
+
+  std::set<interval_t>::const_iterator ss = segments.begin();
+
+  viz_min = 0LLU;
+  clk_min = ss->start;
+  
+  while ( ss != segments.end() )
+    {
+      viz_max += ss->duration();
+      clk_max = ss->stop;
+      ++ss;
+    }
+
+  uint64_t curr = 0LLU;
+  ss = segments.begin();
+  while	( ss != segments.end() )
+    {
+      // first point
+      double pviz = curr / (double)viz_max;
+      double pclk = ss->start / (double)clk_max;
+      r.push_back( std::pair<double,double>( pviz , pclk ) );
+
+      // end point
+      curr += ss->duration();
+      pviz = curr / (double)viz_max;
+      pclk = ss->stop / (double)clk_max;
+      r.push_back( std::pair<double,double>( pviz , pclk ) );
+      
+      ++ss;
+    }
+    
+  return r;
+}
+
+
+
 std::set<std::pair<double,double> > segsrv_t::get_gaps() const
 {
 
