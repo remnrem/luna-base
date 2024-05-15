@@ -526,7 +526,7 @@ public:
 
   void report_aliases() const;
   
-  void description( const param_t & );
+  void description( const param_t & , std::vector<std::string> * d = NULL );
   
 
   //

@@ -292,10 +292,15 @@ std::string edf_header_t::summary() const
   return ss.str();
 }
 
-void edf_t::description( const param_t & param ) 
+void edf_t::description( const param_t & param , std::vector<std::string> * r )
 {
-  signal_list_t signals = header.signal_list( param.requires( "sig" ) );
   
+  signal_list_t signals = header.signal_list( param.requires( "sig" ) );
+
+  //
+  // special case of simple channel-list 
+  //
+
   bool channel_list = param.has( "channels" );
   
   if ( channel_list )
@@ -307,7 +312,12 @@ void edf_t::description( const param_t & param )
 	}
       return;
     }
-    
+  
+  //
+  // if 'r' is non-NULL, then instead of writing to std::cout, return a map
+  // (used in lunapi)
+  //
+  
   uint64_t duration_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
 
   int n_data_channels = 0 , n_annot_channels = 0;
@@ -337,59 +347,125 @@ void edf_t::description( const param_t & param )
       et.advance_seconds( time_sec );
     }
   
-  std::cout << "EDF filename      : " << filename << "\n"
-	    << "ID                : " << id << "\n";
+  //
+  // write to stdout
+  //
 
-  if ( header.edfplus ) 
-    std::cout << "Header start time : " << header.starttime << "\n"
-	      << "Last observed time: " << et.as_string() << "\n";
-  else 
-    std::cout << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n";
-
-  std::cout << "Duration          : "
-	    << Helper::timestring( duration_tp , ':' , false )
-	    << "  " 
-	    << header.nr * header.record_duration << " sec" 
+  if ( r == NULL )
+    {
+      
+      std::cout << "EDF filename      : " << filename << "\n"
+		<< "ID                : " << id << "\n";
+      
+      if ( header.edfplus ) 
+	std::cout << "Header start time : " << header.starttime << "\n"
+		  << "Last observed time: " << et.as_string() << "\n";
+      else 
+	std::cout << "Clock time        : " << header.starttime << " - " << et.as_string() << "\n";
+      
+      std::cout << "Duration          : "
+		<< Helper::timestring( duration_tp , ':' , false )
+		<< "  " 
+		<< header.nr * header.record_duration << " sec" 
 	    << "\n"; // not fractional 
+      
+      if ( header.edfplus && ! header.continuous )
+	{
+	  clocktime_t st( header.startdate , header.starttime ); // include dates
+	  double diff_secs = clocktime_t::ordered_difference_seconds( st , et );
+	  clocktime_t ot( "00.00.00" );
+	  ot.advance_seconds( diff_secs );
+	  std::cout << "Duration (w/ gaps): "
+		    << ot.as_string() << "  " << diff_secs << " sec\n";
+	}
+      
+      if ( n_data_channels_sel < n_data_channels )
+	std::cout << "# signals         : " << n_data_channels_sel << " selected (of " << n_data_channels << ")\n";
+      else
+	std::cout << "# signals         : " << n_data_channels << "\n";
+      
+      if ( n_annot_channels > 0 )
+	{
+	  if ( n_annot_channels_sel < n_annot_channels )
+	    std::cout << "# EDF annotations : " << n_annot_channels_sel << " selected (of " << n_annot_channels << ")\n";
+	  else
+	    std::cout << "# EDF annotations : " << n_annot_channels << "\n";
+	}
+      
+      std::cout << "Signals           :";
+      
+      int cnt=0;
+      for (int s=0;s<signals.size();s++) 
+	{
+	  if ( header.is_data_channel( signals(s) ) )
+	    std::cout << " " 
+		      << signals.label(s) 
+		      << "[" << header.sampling_freq( signals(s) ) << "]";
+	  if ( ++cnt >= 6 ) { cnt=0; std::cout << "\n                   "; } 
+	}
+      std::cout << "\n\n";
+      
+      return;
+    }
+  
+  
+  //
+  // else, populate map
+  //
 
+  // ID GAP DATE START STOP DUR_HMS DUR_SEC NS_SEL/NS NA_SEL/NA  CHS
+  
+  r->clear();
+  r->push_back( id );
+  r->push_back( header.edfplus && ! header.continuous ? "Y" : "N" );
+
+  // DATE START STOP
+  r->push_back( header.startdate );
+  r->push_back( header.starttime );
+  r->push_back( et.as_string() );
+
+  // DUR_HMS DUR_SEC
   if ( header.edfplus && ! header.continuous )
     {
       clocktime_t st( header.startdate , header.starttime ); // include dates
       double diff_secs = clocktime_t::ordered_difference_seconds( st , et );
       clocktime_t ot( "00.00.00" );
       ot.advance_seconds( diff_secs );
-      std::cout << "Duration (w/ gaps): "
-		<< ot.as_string() << "  " << diff_secs << " sec\n";
-    }
-  
-  if ( n_data_channels_sel < n_data_channels )
-    std::cout << "# signals         : " << n_data_channels_sel << " selected (of " << n_data_channels << ")\n";
-  else
-    std::cout << "# signals         : " << n_data_channels << "\n";
-    
-  if ( n_annot_channels > 0 )
-    {
-      if ( n_annot_channels_sel < n_annot_channels )
-	std::cout << "# EDF annotations : " << n_annot_channels_sel << " selected (of " << n_annot_channels << ")\n";
-      else
-	std::cout << "# EDF annotations : " << n_annot_channels << "\n";
-    }
-  
-  std::cout << "Signals           :";
+      
+      r->push_back( Helper::timestring( duration_tp , ':' , false ) + " (" + ot.as_string() + ")" );
+      r->push_back( Helper::dbl2str( header.nr * header.record_duration ) + " (" + Helper::dbl2str( diff_secs ) + ")" );
 
+    }
+  else
+    {
+      r->push_back( Helper::timestring( duration_tp , ':' , false ) );
+      r->push_back( Helper::dbl2str( header.nr * header.record_duration ) );
+    }
+
+  // NS_SEL/NS
+  r->push_back( Helper::int2str( n_data_channels_sel ) + "/" + Helper::int2str( n_data_channels ) );
+
+  // NA_SEL/NA
+  int na = timeline.annotations.names().size();
+  r->push_back( Helper::int2str( na ) );
+
+  // SIGS
+  std::stringstream ss;
   int cnt=0;
   for (int s=0;s<signals.size();s++) 
     {
       if ( header.is_data_channel( signals(s) ) )
-	std::cout << " " 
-		  << signals.label(s) 
-		  << "[" << header.sampling_freq( signals(s) ) << "]";
-      if ( ++cnt >= 6 ) { cnt=0; std::cout << "\n                   "; } 
+	ss << (cnt ? " " : "" ) << signals.label(s) << "[" << header.sampling_freq( signals(s) ) << "]";      
+      ++cnt;
+      //if ( ++cnt >= 10 ) { cnt=0; ss << "\n"; }
     }
-  std::cout << "\n\n";
-  
+
+  r->push_back( ss.str() );
+
+  // all done
   
 }
+
 
 
 void edf_t::report_aliases() const

@@ -1524,15 +1524,33 @@ bool edf_minus_helper_align( const std::set<instance_idx_t> & e ,
 	{
 	  if ( ee->parent != NULL && a.find( ee->parent->name ) != a.end() )
 	    {
+
 	      // set start
+	      logger << "\n  aligning segment " << s.as_string() << " start to " 
+		     << ee->interval.start / globals::tp_1sec << " secs"
+		     << " based on annotation " << ee->parent->name 
+		     << " = " << ee->interval.as_string() << "\n";
+	      
 	      t->start = ee->interval.start;
+	      
 	      // also impose a fixed/whole numbr of epochs?
 	      if ( d != 0 )
 		{
 		  // new implied segment duration (now we've aligned w/ start of first annot)
 		  uint64_t td = t->duration();
 		  int ne = td / d;
+		  
 		  t->stop = t->start + ne * d;
+		  
+		  logger << "  & aligning segment end to "
+			 << t->stop / globals::tp_1sec  
+			 << " based " << ne << " whole intervals of "
+			 << d / globals::tp_1sec << "s from aligned start at "
+			 << t->start / globals::tp_1sec << "s\n";
+
+			 
+		  
+		  
 		}
 	      return true;
 	    }

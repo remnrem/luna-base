@@ -33,6 +33,8 @@ extern logger_t logger;
 
 extern globals global;
 
+extern cmd_t cmd;
+
 // --------------------------------------------------------------------------------
 // global singleton class functions
 
@@ -103,7 +105,7 @@ void lunapi_t::dropallvars()
   cmd_t::vars.clear();
 }
 
-  void lunapi_t::dropvars( const std::vector<std::string> & keys )
+void lunapi_t::dropvars( const std::vector<std::string> & keys )
 {
   for (int i=0; i<keys.size(); i++) dropvar( keys[i] );
 }
@@ -162,6 +164,32 @@ std::map<std::string,std::variant<std::monostate,std::string> > lunapi_inst_t::i
   return r;
 }
 
+
+void lunapi_inst_t::clear_selected_ivar( const std::set<std::string> & keys )
+{
+
+  // only for this indiv
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ii = cmd_t::ivars.find( id );
+  if ( ii == cmd_t::ivars.end() ) return;
+
+  // copy over non-cleared parts
+  std::map<std::string,std::string> cp ;
+  
+  // iterate over values
+  const std::map<std::string,std::string> & v = ii->second;
+  std::map<std::string,std::string>::const_iterator vv = v.begin();
+  while ( vv != v.end() )
+    {
+      if ( keys.find( vv->first ) == keys.end() )
+	cp[ vv->first ] = vv->second;
+      ++vv;
+    }
+
+  // update
+  cmd_t::ivars[ id ] = cp;
+  
+}
+
 void lunapi_inst_t::clear_ivar()
 {
   if ( cmd_t::ivars.find( id ) == cmd_t::ivars.end() ) return;
@@ -174,10 +202,16 @@ void lunapi_t::clear_ivars()
   cmd_t::ivars.clear();
 }
 
-void lunapi_t::reset()
+void lunapi_t::reset() const
 {
+  // status flags: note - a fundamental problem that we now allow multiple EDFs
+  // to be attached but are still working with global status flags
+  
+  // -- for typical workflows this should not be a problem... but we should
+  //    fix at some point (i.e. make empty a property of edf_t at least
+  
   globals::problem = false;  
-  //globals::empty = false;
+  globals::empty = false;
 }
 
 void lunapi_t::flush()
@@ -200,6 +234,90 @@ void lunapi_t::re_init()
   global.R( 1 ); // 1 means to cache
 
   reset();
+}
+
+// read a Luna @include file and set variables
+int lunapi_t::includefile( const std::string & f )
+{
+  const std::string filename = Helper::expand( f );
+  
+  if ( ! Helper::fileExists( filename ) )
+    Helper::halt( "cannot open " + filename );
+  
+  // nb. - should make this a single function to share w/ main()
+
+  int tokens = 0;
+
+  bool parse_line = true;
+  std::string last_grp = "";
+
+  std::ifstream INC( filename.c_str() , std::ios::in );
+  if ( INC.bad() ) Helper::halt("could not open file: " + filename );
+  while ( ! INC.eof() )
+    {
+      
+      std::string line;
+      
+      //std::getline( INC , line);		  
+      Helper::safe_getline( INC , line );
+      
+      if ( INC.eof() || line == "" ) continue;
+      
+      // skip % comments
+      if ( line[0] == '%' ) continue;
+      
+      // is this an include/exclude section
+      // +group  include only if matches group, otherwise skip
+      // -group  exclude if matches group, otherwise parse
+      
+      if ( line[0] == '+' || line[0] == '-' )
+	{
+	  const std::string grp = line.substr(1);
+	  
+	  if ( grp == "" ) continue;
+	  
+	  if ( last_grp == "" ) last_grp = line;
+	  else if ( last_grp != line )
+	    Helper::halt( "cannot nest +group/-group lines" );
+	  else last_grp = "";
+	  
+	  bool has_grp =
+	    cmd_t::vars.find( grp ) != cmd_t::vars.end() ?
+	    Helper::yesno( cmd_t::vars[ grp ] ) : false ;
+	  
+	  if ( line[0] == '-' &&   has_grp ) parse_line = ! parse_line;
+	  if ( line[0] == '+' && ! has_grp ) parse_line = ! parse_line;
+	  
+	  // skip to next line now
+	  continue;
+	}
+      else
+	{
+	  // if not a control line +grp or -grp, and if we are not parsing, then skip
+	  if ( ! parse_line ) continue;
+	}
+      
+      
+      // otherwise parse as a normal line: i.e. two tab-delim cols		      
+      std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
+      if ( tok.size() != 2 )
+	{
+	  Helper::halt("badly formatted line ( # tabs != 2 ) in " + filename + "\n" + line );
+	  return tokens;
+	}
+      
+      ++tokens;
+
+      logger << "  setting " << tok[0] << " = " << tok[1] << "\n";
+
+      cmd_t::parse_special( tok[0] , tok[1] );
+      
+    }
+  
+  INC.close();
+
+  return tokens;
+  
 }
 
 
@@ -248,6 +366,36 @@ std::string lunapi_t::cmdfile( const std::string & f )
   IN1.close();
 
   return cmdstr;
+}
+
+
+// aliases/remap table
+
+std::vector<std::vector<std::string> > lunapi_t::aliases() const
+{
+  std::vector<std::vector<std::string> > t;
+
+  // channels
+  // mapped --> alias
+  std::map<std::string,std::string>::const_iterator ss = cmd_t::label_aliases.begin();
+  while ( ss != cmd_t::label_aliases.end() )
+    {
+      std::vector<std::string> line = { "CH" , ss->second , ss->first };
+      t.push_back(line);
+      ++ss;
+    }
+
+  // annotations
+  // alias --> orig
+  std::map<std::string,std::string>::const_iterator aa = nsrr_t::amap.begin();
+  while ( aa != nsrr_t::amap.end() )
+    {
+      std::vector<std::string> line = { "ANNOT" , aa->second , aa->first };
+      t.push_back(line);
+      ++aa;
+    }
+
+  return t;
 }
 
 
@@ -429,12 +577,14 @@ std::optional<int> lunapi_t::get_n( const std::string & id ) const
 
 lunapi_inst_ptr lunapi_t::inst( const std::string & id ) const
 {
+  reset();
   lunapi_inst_ptr p( new lunapi_inst_t( id ) );
   return p;
 }
   
 lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf ) const
 {
+  reset();
   lunapi_inst_ptr p( new lunapi_inst_t( id ) );
   p->attach_edf( edf );
   return p;
@@ -442,6 +592,7 @@ lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf
 
 lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf , const std::string & annot ) const
 {
+  reset();
   lunapi_inst_ptr p( new lunapi_inst_t( id ) );
   p->attach_edf( edf );
   p->attach_annot( annot );
@@ -450,6 +601,7 @@ lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf
 
 lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf , const std::set<std::string> & annots ) const
 {
+  reset();
   lunapi_inst_ptr p( new lunapi_inst_t( id ) );
   p->attach_edf( edf );
   std::set<std::string>::const_iterator aa = annots.begin();
@@ -463,6 +615,7 @@ lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf
 
 std::optional<lunapi_inst_ptr> lunapi_t::inst( const int i ) const
 {
+  reset();
   std::optional<std::string> id = get_id( i );
   if ( ! id ) return std::nullopt;
   
@@ -484,6 +637,26 @@ std::optional<lunapi_inst_ptr> lunapi_t::inst( const int i ) const
 }
 
 
+//
+// --------------------------------------------------------------------------------
+// project level desc() convenience function
+
+
+std::vector<std::vector<std::string> > lunapi_t::desc()
+{
+  std::vector<std::vector<std::string> > r;
+  for (int i=0; i<nobs(); i++)
+    {
+      std::optional<lunapi_inst_ptr> l1 = inst( i );
+      if ( l1 )
+        {
+          lunapi_inst_ptr p1 = *l1;
+	  r.push_back( p1->desc() );
+        }
+    }  
+  return r;
+}
+
 
 //
 // --------------------------------------------------------------------------------
@@ -504,8 +677,10 @@ rtables_return_t lunapi_t::eval( const std::string & cmdstr )
       std::optional<lunapi_inst_ptr> l1 = inst( i );
       if ( l1 ) 
 	{
+	  // clear any problem flags
+	  reset();
 	  lunapi_inst_ptr p1 = *l1;
-	  p1->eval_project( cmdstr , &accumulator );	  	  
+	  p1->eval_project( cmdstr , &accumulator );
 	}
     }
 
@@ -621,6 +796,15 @@ void lunapi_inst_t::drop()
   annot_filenames.clear();
 }
 
+std::vector<std::string> lunapi_inst_t::desc()
+{
+  std::vector<std::string> ret;
+  param_t p0;
+  p0.add( "sig" , "*" );
+  edf.description( p0, &ret ); 
+  return ret;  
+}
+
 
 std::map<std::string,datum_t> lunapi_inst_t::status() const 
 {
@@ -679,8 +863,12 @@ bool lunapi_inst_t::attach_edf( const std::string & _filename )
   if ( ! Helper::fileExists( filename ) ) 
     Helper::halt( "cannot find " + filename );
 
-  bool okay = edf.attach( filename , id , NULL );
+  // restrict to limited set of input signals?
+  const std::set<std::string> * inp_signals = cmd.signals().size() > 0 ? &cmd.signals() : NULL;
   
+  // load EDF
+  bool okay = edf.attach( filename , id , inp_signals );
+
   if ( ! okay )
     {
       state = -1;
@@ -1193,14 +1381,51 @@ std::vector<std::string> lunapi_inst_t::channels()
   return chs; 
 }  
 
+
+std::vector<bool> lunapi_inst_t::has_channels( const std::vector<std::string> & chs )
+{
+  std::vector<bool> res;
+  if ( state != 1 ) return res;
+  res.resize( chs.size() );  
+  const int ns = chs.size();
+  for (int s=0;s<ns;s++)
+    res[s] = edf.header.has_signal( chs[s] );
+  return res;
+}
+
+
+std::vector<bool> lunapi_inst_t::has_annots( const std::vector<std::string> & anns )
+{
+  std::vector<bool> res;
+  if ( state != 1 ) return res;
+  res.resize( anns.size() );
+  const int ns = anns.size();
+  for (int s=0;s<ns;s++)
+    res[s] = edf.timeline.annotations.find( anns[s] ) != NULL;
+  return res;  
+}
+
+bool lunapi_inst_t::has_staging() 
+{
+  // get staging                                                                                                             
+  edf.timeline.annotations.make_sleep_stage( edf.timeline );
+
+  // valid?                                                                                                                  
+  param_t empty_param;
+  bool has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , empty_param , false );
+  
+  // valid, but empty?                                                                                                       
+  if ( has_staging && edf.timeline.hypnogram.empty() )
+    has_staging = false;
+  
+  return has_staging;
+}
+
 std::vector<std::string> lunapi_inst_t::annots() const
 {
   if ( state != 1 ) return std::vector<std::string>(0);
   return edf.timeline.annotations.names();
 }
-
-
-
 
 
 //

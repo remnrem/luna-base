@@ -91,7 +91,7 @@ private:
 public:
 
   //
-  // Accress store (e.g. after eval() or import_db()
+  // Access store (e.g. after eval() or import_db()
   //
 
   std::vector<std::string> commands() const
@@ -115,10 +115,13 @@ public:
 
   static std::string cmdfile( const std::string & );
 
+  int includefile( const std::string & );
+  
   std::vector<std::string> import_db( const std::string & filename );
 
   std::vector<std::string> import_db( const std::string & filename , const std::set<std::string> & ids );
 
+  std::vector<std::vector<std::string> > aliases() const;
   
   //
   // Sample list functions
@@ -177,14 +180,19 @@ public:
   // includes resetting all prior attributes
   void re_init();
   
-  void clear_ivars();
+  void clear_ivars(); // clear all ivars for all indivs
 
-  // reset problem/empty flags
-  void reset();
+  // reset (global) problem/empty flags
+  void reset() const;
 
   // flush any log bufer
   void flush();
 
+  // desc table
+  std::vector<std::vector<std::string> > desc();
+
+
+  
   //
   // Command evaluation
   //
@@ -248,8 +256,11 @@ public:
 
   std::map<std::string,std::variant<std::monostate,std::string> > ivars() const;
 
-  void clear_ivar();
+  void clear_ivar(); // clear for this indiv
 
+  void clear_selected_ivar( const std::set<std::string> & keys ); // selected vars for this indiv
+  
+    
   //
   // insert signals, annotations
   //
@@ -269,8 +280,16 @@ public:
 
   std::vector<std::string> channels();
 
+  std::vector<bool> has_channels( const std::vector<std::string> & );
+  
   std::vector<std::string> annots() const;
 
+  std::vector<bool> has_annots( const std::vector<std::string> & );
+
+  bool has_staging();
+  
+  std::vector<std::string> desc();
+  
   //
   // data slices
   //
