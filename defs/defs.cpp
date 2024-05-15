@@ -104,6 +104,10 @@ std::string globals::txt_table_append;
 bool globals::assume_pm_starttime;
 int globals::assume_pm_starttime_hour;
 
+bool globals::read_mdy_annot_dates;
+bool globals::write_mdy_annot_dates;
+bool globals::read_mdy_edf_dates;
+
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
 
@@ -580,6 +584,13 @@ void globals::init_defs()
   assume_pm_starttime = false;
   assume_pm_starttime_hour = 4; // i.e. if 04:00 given or later (up to & including 12:00) assume +12 hours
   
+  // Euro dates by default
+  // but always write EDF dates as dd.mm.yy
+  read_mdy_annot_dates = false; 
+  write_mdy_annot_dates = false; 
+  read_mdy_edf_dates = false; 
+  
+
   // otherwise, leave as is
   //  00:00 -> 00:00 (as is)
   //  01:00 -> 01:00 (as is)

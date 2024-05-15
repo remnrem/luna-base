@@ -1096,6 +1096,9 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   // verbose debug output
   const bool debug = param.has( "debug" );
   
+  // handling merging of contiguous/overlapping epochs
+  const bool flatten = param.has( "flatten" ) ? param.yesno( "flatten" ) : true; 
+
 
   //
   // for now, if using fixed size epochs
@@ -1161,14 +1164,19 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   if ( debug )
     logger << "  considering " << intervals0.size() << " initial intervals\n";
 
-  // split by background
-  intervals0 = annotate_t::apairs( intervals0 , background , "intersection" );
-  
+  // split by background?
+  if ( flatten ) 
+    intervals0 = annotate_t::apairs( intervals0 , background , "intersection" );
+  else
+    {
+      // do not use that as we don't want to flatten; means we also don't have a background splicing
+      // .. (nothing currently) ..
+    }
+
   if ( debug )
     logger << "  given " << background.size()
 	   << " background segments, split intervals to "
 	   << intervals0.size() << " intervals\n";
-
   
   // make an ordered list
   std::map<interval_t,std::string> intervals;

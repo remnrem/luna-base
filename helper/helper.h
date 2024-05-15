@@ -324,21 +324,28 @@ namespace Helper
 
 struct date_t {
 
-  date_t( const std::string & dt )
+  date_t( const std::string & dt , const bool is_mdy = false )
   {
-    // assumes European dd/mm/yy encoding [ or dd.mm.yy or dd-mm-yy ]
+
+    // by default, assumes European dd/mm/yy encoding [ or dd.mm.yy or dd-mm-yy ]
+    // unles is_mdy is true
+    
     // also, yy can be yyyy
     // mm can be jan/feb etc or 1/2 etc
     std::vector<std::string> tok = Helper::parse( dt , "./-" );
     if ( tok.size() != 3 ) Helper::halt( "invalid date string: " + dt );
 
     d=m=y=0;
-    
-    if ( ! Helper::str2int( tok[0] , &d ) )
+
+    const std::string & s_day = is_mdy ? tok[1] : tok[0];
+    const std::string & s_mon = is_mdy ? tok[0] : tok[1];
+    const std::string & s_yr  = tok[2];
+
+    if ( ! Helper::str2int( s_day , &d ) )
       Helper::halt( "invalid day value: " + dt );
-    if ( ! Helper::str2int( tok[1] , &m ) )
+    if ( ! Helper::str2int( s_mon , &m ) )
       {
-	std::string mm = Helper::toupper( tok[1] );
+	std::string mm = Helper::toupper( s_mon );
 	if ( mm.size() == 3 )
 	  {
 	    if      ( mm == "JAN" ) m = 1;
@@ -358,7 +365,8 @@ struct date_t {
 
     if ( m == 0 )
       Helper::halt( "invalid month value: " + dt );
-    if ( ! Helper::str2int( tok[2] , &y ) )
+
+    if ( ! Helper::str2int( s_yr , &y ) )
       Helper::halt( "invalid year value: " + dt );
     
     init();
@@ -502,12 +510,12 @@ struct clocktime_t
   }
   
   // convert time-string to internal 
-  clocktime_t( const std::string & t );
+  clocktime_t( const std::string & tm, const bool is_mdy = false );
 
   // convert date-string and time-string to internal
-  clocktime_t( const std::string & dt , const std::string & tm );
+  clocktime_t( const std::string & dt , const std::string & tm , const bool is_mdy = false );
 
-  void parse_string( const std::string & t ); 
+  void parse_string( const std::string & t , const bool is_mdy = false ); 
   
   // assume from hours, fractional
   //  clocktime_t( double ); 
