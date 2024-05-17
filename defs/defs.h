@@ -166,6 +166,10 @@ struct globals
   static bool assume_pm_starttime;
   static int assume_pm_starttime_hour;
   
+  static bool read_mdy_annot_dates;
+  static bool read_mdy_edf_dates;
+  static bool write_mdy_annot_dates;
+
   static std::set<std::string> annot_alignment;
 
   static bool force_edf;

@@ -2043,6 +2043,7 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
 				      double threshold2 , int mindur2 , 
 				      bool noneg , 
 				      std::vector<interval_t> * regions , 
+				      std::vector<int> * top_peaks, 
 				      bool verbose )
 {
   const int n = x.size();
@@ -2058,9 +2059,13 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
   double global_iqr = MiscMath::iqr( x );
   double global_robust_sd = 0.7413 * global_iqr;
   const double sd_eps = global_robust_sd * 1e-3;
-
+  
   std::vector<int> s( n , 0 );
   
+  // optionally, put a single sample as the max of each peak
+  if ( top_peaks != NULL ) 
+    top_peaks->clear();
+
   if ( n <= 2 * lag + 1 ) return s;
   
   std::vector<double> y = x;
@@ -2368,6 +2373,63 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
       if ( in )
 	regions->push_back( interval_t( start , n ) );
       
+    }
+
+
+  //
+  // Get max values in each region?
+  //
+
+  if ( top_peaks ) 
+    {
+      
+      std::vector<double> curr;
+      
+      // nb, goes up to one past end
+      for (int i=0; i<(n+1); i++)
+        {
+	  
+	  // end of a run?
+	  if ( curr.size() && ( i == n || s[i] == 0 ) ) 
+	    {
+	      // find max
+	      //         0  0  1  1   1   1  1  0 
+	      //                                i
+	      //    curr       0  1  [2]  3  4   
+	      //         0  1  2  3  [4]  5  6  7 
+	      // 
+	      // if mx = curr[2]
+	      //  p = 7 - 5 + 2 = idx = 4
+	      //    = i - curr.size() + mxi
+
+	      int mxj = 0;
+	      double mx = curr[0];
+	      for (int j=1;j<curr.size();j++)
+		{
+		  if ( curr[j] > mx ) 
+		    {
+		      mx = curr[j];
+		      mxj = j;
+		    }
+		}
+	      
+	      int p = i - curr.size() + mxj;
+	      // store
+	      top_peaks->push_back( p );
+	      
+	      // wipe curr
+	      curr.clear();
+	    }
+	  
+	  // all done? 
+	  if ( i == n ) break;
+	  
+	  // in peak? 
+          if ( s[i] != 0 )
+	    curr.push_back( fabs( x[i] ) );
+	  
+	}
+
     }
 
   return s;

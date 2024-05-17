@@ -1652,8 +1652,9 @@ interval_t annot_t::get_interval( const std::string & line ,
       if ( is_hms1 )
 	{
 
-	  clocktime_t atime( start_str );
-
+	  // allow optional mm-dd-yy if date-string
+	  clocktime_t atime( start_str , globals::read_mdy_annot_dates );
+	  
 	  // 0+hh:mm:ss format
 	  if ( is_elapsed_hhmmss_start )
 	    {
@@ -1728,7 +1729,8 @@ interval_t annot_t::get_interval( const std::string & line ,
       if ( is_hms2 )
 	{
 	  
-	  clocktime_t btime( stop_str );
+	  // allow reading mm-dd-yy (read-mdy-annot=T)
+	  clocktime_t btime( stop_str , globals::read_mdy_annot_dates );
 	  
 	  if ( is_elapsed_hhmmss_stop )
 	    {

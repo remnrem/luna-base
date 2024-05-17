@@ -970,10 +970,28 @@ bool cmd_t::eval( edf_t & edf )
       // Quit?
       //
 
-      if ( is( c, "EXIT" ) ) return true;
-      if ( is( c, "STOP" ) ) return true;
-      if ( is( c, "QUIT" ) ) return true;
-      
+      if ( is( c, "EXIT" ) || 
+	   is( c, "STOP" ) || 
+	   is( c, "QUIT" ) ) 
+	{
+	  param_t p = param(c);
+	  const bool req_problem = p.has( "if-problem" ) || p.has( "problem" );
+	  const bool req_empty = p.has( "if-empty" ) || p.has( "empty" );
+	  	  	  
+	  // just quit?
+	  if ( ! ( req_problem || req_empty ) )
+	    return true;
+
+	  // else, only quit if we match a problem
+	  if ( req_problem && globals::problem ) return true;
+	  if ( req_empty && globals::empty ) return true;
+	  
+	  // otherwise, carry on
+	  logger << "  not quitting as no problem flag has been set\n";
+	  continue;
+	}
+
+
       //
       // Is the current mask empty? if so, skip unless this is a THAW
       //
@@ -981,10 +999,10 @@ bool cmd_t::eval( edf_t & edf )
       if ( globals::empty )
 	{
 	  // not systematic, but some commands that do not access the EDF are okay 
-	  // to reun - most importantly THAW...
+	  // to rerun - most importantly THAW... 
 	  bool skip = true;
 	  if      ( is( c, "THAW" ) ) skip = false;
-          else if ( is( c, "TAG" ) ) skip = false; 
+	  else if ( is( c, "TAG" ) ) skip = false; 
 	  else if ( is( c, "HEADERS" ) ) skip = false;
 	  else if ( is( c, "SET-VAR" ) ) skip = false;
 	  else if ( is( c, "SET-HEADERS" ) ) skip = false;
@@ -1237,7 +1255,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
       else if ( is( c, "SHIFT" ) )        proc_shift( edf , param(c) );
       else if ( is( c, "SCRAMBLE" ) )     proc_scramble( edf , param(c) );
-      
+
       else 
 	{
 	  Helper::halt( "did not recognize command: " + cmd(c) );
@@ -4498,6 +4516,28 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::anon = Helper::yesno( tok1 );
       return;
     }
+
+  // read in US style annot dates (mm-dd-yy)
+  if ( Helper::iequals( tok0 , "read-mdy-annot" ) )
+    {
+      globals::read_mdy_annot_dates = Helper::yesno( tok1 );
+      return;
+    } 
+
+  // write in US style annot dates (mm-dd-yy)
+  if ( Helper::iequals( tok0 , "write-mdy-annot" ) )
+    {
+      globals::write_mdy_annot_dates = Helper::yesno( tok1 );
+      return;
+    } 
+  
+  // read in US style EDF dates (mm-dd-yy)
+  if ( Helper::iequals( tok0 , "read-mdy-edf" ) )
+    {
+      globals::read_mdy_edf_dates = Helper::yesno( tok1 );
+      return;
+    } 
+
 
   // force start time/dates
   if ( Helper::iequals( tok0 , "starttime" ) )
