@@ -275,7 +275,9 @@ namespace MiscMath
 			      int mindur = 0 , double max = 0 , 
 			      double threshold2 = 0 , int mindur2 = 0 , 
 			      bool noneg = false , 
-			      std::vector<interval_t> * regions = NULL , bool verbose = false );
+			      std::vector<interval_t> * regions = NULL , 
+			      std::vector<int> * top_pks = NULL , 
+			      bool verbose = false );
 
    
   // Moving average

@@ -104,6 +104,10 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   if ( channel_postfix != "" && ! same_channel )
     Helper::halt( "cannot specify channel-postfix without same-channel=T" );
 
+  const std::string seed_postfix = param.has( "seed-postfix" ) ? param.value( "seed-postfix" ) : ""; 
+  if ( seed_postfix != "" && ! same_channel )
+    Helper::halt( "cannot specify seed-postfix without same-channel=T" );
+
 
   //
   // -------------------- Input options --------------------
@@ -126,6 +130,8 @@ void dsptools::tlock( edf_t & edf , param_t & param )
   // 
   
   bool verbose = param.has( "verbose" );
+
+  bool calc_sd = param.has( "sd" );
   
   bool to_massoc = param.has( "export" );
   
@@ -220,7 +226,7 @@ void dsptools::tlock( edf_t & edf , param_t & param )
 	tlock.epoch_builder( signals(s) );
       else
 	tlock.cache_builder( cache , half_window ,
-			     signals(s) , signals.label(s) , same_channel, channel_postfix );
+			     signals(s) , signals.label(s) , same_channel, channel_postfix , seed_postfix );
       
       // next signal
     }
@@ -554,7 +560,7 @@ void tlock_t::clearX()
 // }
 
 
-Data::Vector<double> tlock_t::average( const double th , const double winsor ) const 
+Data::Vector<double> tlock_t::average( const double th , const double winsor , Data::Vector<double> * sd ) const 
 {  
 
   //
@@ -566,8 +572,10 @@ Data::Vector<double> tlock_t::average( const double th , const double winsor ) c
   
   if ( th > 0 || winsor > 0 )
     Xt = remove_outliers( Xt , th , winsor );
-
+  
   Data::Vector<double> means1 = Statistics::mean( Xt );
+  
+  *sd = Statistics::sdev( Xt , means1 );
   
 
   //
@@ -632,7 +640,6 @@ Data::Vector<double> tlock_t::median( const double th , const double winsor ) co
 }
 
 
-
 void tlock_t::edge_normalization( Data::Vector<double> * m , const int p ) const
 {
 
@@ -643,7 +650,7 @@ void tlock_t::edge_normalization( Data::Vector<double> * m , const int p ) const
   // rescale to minimumm of 0.0  
   if ( zero_trace ) 
     {
-      std::cout <<" zero-ing\n";
+      //      std::cout <<" zero-ing\n";
       double minval = (*m)[0];
       for (int i=0; i<n; i++) 
 	if ( (*m)[i] < minval ) minval = (*m)[i];
@@ -769,11 +776,12 @@ void tlock_t::epoch_builder( const int slot )
 
 
 void tlock_t::cache_builder( cache_t<int> * cache ,
-			    const double half_window ,
-			    const int slot , 
-			    const std::string label ,
-			    const bool same_channel ,
-			    const std::string channel_postfix )
+			     const double half_window ,
+			     const int slot , 
+			     const std::string label ,
+			     const bool same_channel ,
+			     const std::string channel_postfix ,
+			     const std::string seed_postfix )
 {
 
   // build np x nw matrix  [ samples x windows ] 
@@ -791,12 +799,12 @@ void tlock_t::cache_builder( cache_t<int> * cache ,
   std::set<ckey_t> ckeys = cache->keys( "points" );
   
   std::set<ckey_t>::const_iterator cc = ckeys.begin();
-  
+
   while ( cc != ckeys.end() )
     {
       
       std::vector<int> cx = cache->fetch( *cc );
-      
+
       //
       // any intervals? if not, skip
       // 
@@ -822,11 +830,17 @@ void tlock_t::cache_builder( cache_t<int> * cache ,
       
       if ( same_channel && seed_channel != "" )
 	{
-	  if ( seed_channel != label &&
-	       seed_channel + channel_postfix != label )
-	    continue;
+	  if ( seed_channel                   != label                 &&
+	       seed_channel + channel_postfix != label                 && 
+	       seed_channel                   != label + seed_postfix  &&
+	       seed_channel + channel_postfix != label + seed_postfix )
+	    {
+	      ++cc;
+	      continue;
+	    }
+
 	}
-      
+
       // add output stratifiers based on this key
       
       std::stringstream sstr;
@@ -859,7 +873,6 @@ void tlock_t::cache_builder( cache_t<int> * cache ,
       
       for ( int i=0; i<cx.size(); i++)
 	{
-	  
 	  int lower = cx[i] - half_points;
 	  int upper = cx[i] + half_points;
 	  
@@ -1062,8 +1075,10 @@ void tlock_t::outputs()
   // std::cout << "\n";
   
   // means
-  Data::Vector<double> m = average( outlier_th , outlier_winsor );
 
+  Data::Vector<double> sd;
+  Data::Vector<double> m = average( outlier_th , outlier_winsor , &sd );
+  
   // medians
   Data::Vector<double> md = median( outlier_th , outlier_winsor );
   
@@ -1079,6 +1094,7 @@ void tlock_t::outputs()
     {
       writer.level( t[i] , "SEC" );
       writer.value( "M" , m[i] );
+      writer.value( "SD" , sd[i] );
       writer.value( "MD" , md[i] );
     }  
   writer.unlevel( "SEC" );

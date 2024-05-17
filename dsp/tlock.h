@@ -53,7 +53,8 @@ struct tlock_t {
 		      const int slot , 
 		      const std::string siglabel , 
 		      const bool same_channel = false , 
-		      const std::string channel_postfix = "" );
+		      const std::string channel_postfix = "" , 
+		      const std::string seed_postfix = "" );
   
   
   // normalizations
@@ -104,7 +105,7 @@ struct tlock_t {
 
   void outputs();
   
-  Data::Vector<double> average( const double th , const double winsor ) const ;
+  Data::Vector<double> average( const double th , const double winsor , Data::Vector<double> * sd = NULL ) const ;
   
   Data::Vector<double> median( const double th , const double winsor ) const ;
   

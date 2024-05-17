@@ -24,11 +24,13 @@
 
 #include "edf/edf.h"
 #include "edf/slice.h"
-
+#include "timeline/cache.h"
+#include "db/db.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
 
 extern logger_t logger;
+extern writer_t writer;
 
 //
 // Implmentation and minor extension of peak finding heuristic :
@@ -42,7 +44,7 @@ extern logger_t logger;
 //  -- primary code in MiscMath::smoothedZ()
 
 
-// lag: higher = more smoothing / more adaptive to long term average
+// lag: higher = more smoothing / more adaptive to long term average (--> window, 'w')
 //      for stationary series, use a higher lag
 //      to capture time-varying trends, use a lower lag
 
@@ -54,6 +56,8 @@ extern logger_t logger;
 // threshold: number of SD units above moving mean; set based on expected rate
 //   i.e. 3.5 --> p = 0.00047 --> 1/p = 1 in 2128
 
+
+// place in annot and/or cache
 
 void dsptools::zpeaks( edf_t & edf , param_t & param )
 {
@@ -90,13 +94,18 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
   //
   
   const std::string annot = param.has( "annot" ) ? param.value( "annot" ) : "";
-
+  
   const double add_flank_sec = param.has( "add-flanking" ) ? param.requires_dbl( "add-flanking" ) : 0 ;  
 
   if ( annot != "" ) 
     logger << "  writing peaks to annotation " << annot
 	   << " with " << add_flank_sec
 	   << " seconds added each side\n" ;
+  
+  const bool to_cache = param.has( "cache" );
+  const std::string cname = to_cache ? param.requires( "cache" ) : "";
+  cache_t<int> * cache = to_cache ? edf.timeline.cache.find_int( cname ) : NULL ;
+  if ( to_cache ) logger << "  writing peaks to cache " << cname << "\n" ;
   
   //
   // signals to process
@@ -119,12 +128,20 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
       slice_t slice( edf , signals(s) , edf.timeline.wholetrace() );
       
       std::vector<double> * d = slice.nonconst_pdata();
-
+      
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       
       const int n = d->size();
 
       const int Fs = edf.header.sampling_freq( signals(s) ) ;
+      
+      //
+      // outputs
+      //
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      std::map<std::string,std::string> faclvl = writer.faclvl();
+      
       
       //
       // find peaks
@@ -140,6 +157,8 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
 
       const bool verbose = false;
       
+      std::vector<int> mxpks; // for caching - these are the top points within each detected peak (sample-point values)
+
       std::vector<int> pks = MiscMath::smoothedZ( *d, lag_sp,
 						  threshold, influence, 
 						  min_dur_sp,
@@ -148,6 +167,7 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
 						  min_dur2_sp,
 						  ignore_negatives, 
 						  &peaks,
+						  &mxpks, 
 						  verbose );
       //
       // report
@@ -155,6 +175,8 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
 
       const int na = peaks.size();
 
+      if ( mxpks.size() != na ) Helper::halt( "internal prob in zpeaks, from smoothedZ()" );
+      
       // ignore if a peak spans a discontinuity
 
       std::vector<bool> okay( na , true );
@@ -222,8 +244,34 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
 	    }
 	  
 	}
+  
+
+      //
+      // to cache (points --> for TLOCK)
+      //
+
+      if ( to_cache )
+	{
+	  
+	  if ( na == valid ) 
+	    cache->add( ckey_t( "points" , faclvl ) , mxpks );
+	  else
+	    {
+	      std::vector<int> mxpks2(valid);
+	      int idx = 0;
+	      for (int i=0;i<na;i++) 
+		if ( okay[i] ) mxpks2[ idx++ ] = mxpks[i]; 
+	      cache->add( ckey_t( "points" , faclvl ) , mxpks2 );
+
+	    }
+
+	  // for (int i=0; i<na; i++)
+	  //   cache->add( ckey_t( "points" , faclvl ) , mxpks[i] );	  
+	}
       
+    
       // next signal
     }
-  
+
+  writer.unlevel( globals::signal_strat);
 }
