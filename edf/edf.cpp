@@ -1770,6 +1770,12 @@ bool edf_t::attach( const std::string & f ,
 
 
   //
+  // Store original last point
+  //
+
+  header.last_time_point_tp_orig = timeline.last_time_point_tp;
+  
+  //
   // Output some basic information
   //
 

@@ -137,7 +137,10 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 
   bool no_filter = ! ( use_kaiser || use_file || use_fixed );
 
-  std::vector<double> frqs = param.dblvector( "f" );
+  if ( ! ( param.has( "f" ) || param.has( "bandpass" ) ) )
+    Helper::halt( "requires 'f' or 'bandpass'" );
+  
+  std::vector<double> frqs = param.dblvector( param.has( "f" ) ? "f" : "bandpass" );
 
   double ripple = use_kaiser ? param.requires_dbl( "ripple" ) : 0 ;
 

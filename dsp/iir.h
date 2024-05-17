@@ -67,6 +67,9 @@ struct iir_t {
   
   // special internal case; quick BP-filter for ALIGN-EPOCHS
   Eigen::VectorXd apply( const Eigen::VectorXd & x );
+
+  // special internal case; quick BP-filter for sigserv_t
+  Eigen::VectorXf apply_bwlp_f( const Eigen::VectorXf & x );
     
 private:
 

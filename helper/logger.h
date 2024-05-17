@@ -86,7 +86,7 @@ class logger_t
   ~logger_t()
     {
       
-      if ( is_off || globals::silent ) return;
+      if ( is_off || globals::silent || globals::api_mode ) return;
       
       if ( ! globals::silent ) 
 	{

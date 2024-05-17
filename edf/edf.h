@@ -77,6 +77,14 @@ struct edf_header_t
   // Duration in seconds in EDF / in tp (time-point) intervals internally| char[8]
   double          record_duration;
   uint64_t        record_duration_tp;
+
+  // store when first attaching a study
+  //  i.e. mirrors timeline_t::last_time_point_tp but
+  //       this is not impacted by MASK, etc;;;
+  //       this is set only once on attaching EDF
+  
+  uint64_t  last_time_point_tp_orig;
+
   
   // Number of signals | char[8]
   int            ns;       // number finally selected and input

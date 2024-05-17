@@ -3205,27 +3205,121 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     {
       lunapi_t * lp = lunapi_t::inaugurate();
       lunapi_inst_ptr p = lp->inst( "id1" );
-      p->attach_edf( "~/shhs1-200167.edf" );
-
+      p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
+      p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
+      
       std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n";
-
+      
       std::vector<std::string> d = p->desc();
       for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
 
       // introduce some gaps
-      p->eval( "EPOCH & MASK epoch=5 & MASK flip & RE" );
+      //p->eval( "EPOCH & MASK epoch=5-50,500-600,800-850 & MASK flip & RE" );
+      //p->eval( "MASK ifnot=N2 & RE" );
 
-      std::cout << " post mask...\n";
-      d = p->desc();
-      for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
-
-      std::cout <<"\n\n";
-      segsrv_t segsrv( p );
-      std::vector<std::string> chs = { "EEG" , "SaO2", "AIRFLOW" } ;
-      std::vector<std::string> anns ;
-      segsrv.populate( chs , anns ) ;
+      //std::cout << " post mask...\n";
+      //d = p->desc();
+      //for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
       
-      for (int t=0; t<180; t+= 10 )
+      std::cout << "S1\n";
+      segsrv_t segsrv( p );
+
+      std::cout << "S2\n";
+      std::vector<std::string> chs = { "EEG" , "SaO2", "AIRFLOW" } ;
+      std::vector<std::string> anns = {  "Arousal", "Hypopnea", "N1", "N2", "N3", "Obstructive_Apnea", "R", "SpO2_artifact","SpO2_desaturation","W"  };
+
+      
+      std::vector<std::string> chs_b = { "EEG" };
+      std::vector<std::string> chs_h = { "EEG" , "AIRFLOW" };
+      std::cout << "S3\n";
+      
+      // bands, hjorth
+      segsrv.calc_bands( chs_b );
+      //      segsrv.calc_hjorths( chs_h );
+      std::cout << "S4\n";
+      
+      segsrv.populate( chs , anns ) ;
+      std::cout << "S5\n";
+
+      //std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
+      // segsrv.set_window( 3000, 5000 );
+      // segsrv.compile_evts( anns );
+      //      std::exit(0);
+      
+      int a1 = 0, b1 = 30;
+      bool okay;
+
+      std::cout << "\n-------\n test " << a1 << " " << b1 << "\n";
+      std::cout << segsrv.set_window( a1, b1 ) << "\n" << segsrv.is_window_valid() << "\n";
+
+      a1=0; b1 = 3000;
+      std::cout << "\n-------\n test " << a1 << " " << b1 << "\n";
+      std::cout << segsrv.set_window( a1, b1 ) << "\n" << segsrv.is_window_valid() << "\n";
+
+      a1=3000; b1 = 3300;
+      std::cout << "\n-------\n test " << a1 << " " << b1 << "\n";
+      std::cout << segsrv.set_window( a1, b1 ) << "\n" << segsrv.is_window_valid() << "\n";
+
+      a1=3200; b1 = 3200;
+      std::cout << "\n-------\n test " << a1 << " " << b1 << "\n";
+      std::cout << segsrv.set_window( a1, b1 ) << "\n" << segsrv.is_window_valid() << "\n";
+
+
+
+      std::exit(1);
+      
+      std::set<std::pair<double,double> > gaps = segsrv.get_gaps();
+      std::cout << " found gaps in seg sz = " << gaps.size() << "\n";
+      std::set<std::pair<double,double> >::const_iterator ww = gaps.begin();
+      while ( ww != gaps.end() )
+	{
+	  std::cout << " gapped in seg " << ww->first << " " << ww->second << "\n";
+	  ++ww;
+	}
+      
+      std::cout << "S5.5\n";
+	    
+      Eigen::VectorXf X1 = segsrv.get_signal( "EEG" );
+      std::cout << "X1 = \n" << X1 << "\n";
+      
+      std::exit(1);
+      std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
+
+      std::cout << "EEG H " << segsrv.get_hjorths( "EEG" ) << "\n\n";
+      
+      // void set_scaling( const int nchs , const int nanns ,
+      // 			const double yscale , const double ygroup ,
+      // 			const double yheader , const double yfooter ,
+      // 			const double scaling_fixed_annot );
+
+      if ( 0 )
+	{
+	  segsrv.set_scaling( 2 , 1 ,
+			      1 , 0 ,
+			      0.1 , 0.15 , 0.1 );
+	  
+	  // check yscaling 
+	  for (int i = 0 ; i < 3; i++)
+	    {
+	      double lwr, upr;
+	      bool okay = segsrv.get_yscale_signal( i , &lwr, &upr );
+	      std::cout << "yparam " << i << " " << okay << " " ;
+	      if ( okay ) std::cout << lwr <<  " -- " << upr ;
+	      std::cout << "\n";
+	    }
+	  std::exit(1);
+	}
+      
+      std::vector<std::pair<double,double> > r = segsrv.get_time_scale();
+      std::cout << " viz/clok = " << r.size() << "\n";
+      for (int i=0; i<r.size(); i++)
+	std::cout << r[i].first << "\t" << r[i].second << "\n";
+
+      //std::exit(1);
+
+      segsrv.fix_physical_scale( "EEG" , -50 , 50 );
+	      
+      for (int t=0; t<10; t+= 10 )
 	{
 	  std::cout <<"\n\n";
 	  bool okay = segsrv.set_window( t, t+30 );
@@ -3244,6 +3338,10 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 	  Eigen::VectorXf X2 = segsrv.get_signal( "SaO2" );
 	  Eigen::VectorXf X3 = segsrv.get_signal( "AIRFLOW" );
 	  
+	  Eigen::VectorXf Z1 = segsrv.get_scaled_signal( "EEG" , 0 );
+	  Eigen::VectorXf Z2 = segsrv.get_scaled_signal( "SaO2" , 1 );
+	  Eigen::VectorXf Z3 = segsrv.get_scaled_signal( "AIRFLOW" , 2 );
+
 	  Eigen::VectorXf T1 = segsrv.get_timetrack( "EEG" );
 	  Eigen::VectorXf T2 = segsrv.get_timetrack( "SaO2" );
 	  Eigen::VectorXf T3 = segsrv.get_timetrack( "AIRFLOW" );
@@ -3251,9 +3349,18 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 	  std::cout << " cols = " << X1.size() << " " <<  X2.size() << " " << X3.size() << " ";
 	  std::cout << " times  = " << T1.size() << " " <<  T2.size() << " " << T3.size() << "\n";
 	  
-	  // for (int i=0; i<X1.size(); i++)
-	  //   std::cout << i << "\t" << T1[i] << "\t" << X1[i] << "\n";
+	  for (int i=0; i<X1.size(); i++)
+	    std::cout << i << "\t" << T1[i] << "\t" << X1[i] << "\t" << Z1[i] << "\n";
 	  std::cout << "\n----------------------------------------\n\n";
+
+	  for (int i=0; i<X2.size(); i++)
+	    std::cout << i << "\t" << T2[i] << "\t" << X2[i] << "\t" << Z2[i] << "\n";
+	  std::cout << "\n----------------------------------------\n\n";
+	  
+	  for (int i=0; i<X3.size(); i++)
+	    std::cout << i << "\t" << T3[i] << "\t" << X3[i] << "\t" << Z3[i] << "\n";
+	  std::cout << "\n----------------------------------------\n\n";
+
 	}
       
       std::exit(0);
@@ -3267,7 +3374,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   std::vector<double> x;
   
 
-  if ( p == "fir" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" || p == "cwt" 
+  if ( p == "fir" || p == "decimate" || p == "fft" || p == "dfa" || p == "fft-test" || p == "mtm" || p == "tv" || p == "psi" || p == "cwt" 
        || p == "dynam" || p == "ica" || p == "robust" || p == "fip" || p == "sl" || p == "acf" || p == "otsu"
        || p == "desats" || p == "zpks" || p == "gc" || p == "detrend" || p == "emd" || p == "tri" || p == "ngaus" || p == "ssa" || p == "xcorr" ) 
     {
@@ -3629,6 +3736,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(1);
     }
 
+  
 
   if ( p == "fft-test" )
     {
@@ -3767,7 +3875,19 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       
     }
   
+  if ( p == "decimate" )
+    {
+      int q = 8;
+      int sr = 200;
+      const int n = x.size();
+      Eigen::VectorXf X = Eigen::VectorXf::Zero( n );
+      for (int i=0; i<n; i++) X[i] = x[i];
+      
+      Eigen::VectorXf Y = segsrv_t::decimate( X , sr , q );
 
+      std::cout << Y << "\n";
+      std::exit(0);
+    }
   
   if ( p == "fft" )
     {

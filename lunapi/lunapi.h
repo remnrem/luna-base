@@ -368,6 +368,8 @@ public:
   int get_state() const;
 
   double last_sec() const;
+
+  double last_sec_original() const;
   
 private:
 

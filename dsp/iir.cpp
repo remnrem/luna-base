@@ -334,3 +334,21 @@ Eigen::VectorXd iir_t::apply( const Eigen::VectorXd & x )
   return y;
   
 }
+
+Eigen::VectorXf iir_t::apply_bwlp_f( const Eigen::VectorXf & x )
+{
+  const int n = x.size();
+  
+  Eigen::VectorXf y = Eigen::VectorXf::Zero( n );
+  
+  if ( bwlp != NULL )
+    {
+      for (int i=0; i<n; i++) y[i] = bw_low_pass( bwlp , x[i] );
+      return y;
+    }
+  else
+    Helper::halt( "internal Eigen BWLP error" );
+  
+  return y;
+  
+}
