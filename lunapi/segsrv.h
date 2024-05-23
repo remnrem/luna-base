@@ -148,6 +148,7 @@ public:
   std::string get_window_left_hms() const; 
   std::string get_window_right_hms() const; 
   std::string get_hms( const double s ) const;
+  std::map<double,std::string> get_clock_ticks(const int n) const;
   
   clocktime_t edf_start;
   
@@ -173,6 +174,11 @@ public:
     return ss->second;
   }
 
+  double get_ylabel( const int idx ) const {
+    if ( idx < 0 || idx > scaling_upr.size() ) return -1;
+    return scaling_upr[idx];
+  }
+  
   bool serve_raw_signals() const { return bwin - awin > summary_threshold_secs ; } 
 
   

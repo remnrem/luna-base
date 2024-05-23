@@ -3241,10 +3241,10 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       segsrv.populate( chs , anns ) ;
       std::cout << "S5\n";
 
-      //std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
+      std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
       // segsrv.set_window( 3000, 5000 );
       // segsrv.compile_evts( anns );
-      //      std::exit(0);
+      std::exit(0);
       
       int a1 = 0, b1 = 30;
       bool okay;

@@ -304,7 +304,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
   // Normalize over epochs (Z-score, winsorized)
   //
   
-  const double max_z = 1;
+  const float max_z = 2;
   
   if ( do_band )
     {
@@ -327,17 +327,17 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 
        	  X.col(j) = T; 
        	}
-
+      
       // winsorize
-      X.unaryExpr([&max_z](double x) { return x < -max_z ? -max_z : ( x > max_z ? max_z : x ); } );                                       
+      X = X.unaryExpr([&max_z](float x) { return x < -max_z ? -max_z : ( x > max_z ? max_z : x ); } );    
 
       // second-round norm (whole X)      
       double meanx = X.mean();
       double std_devx = sqrt((X.array() - meanx).square().sum() / (X.size() - 1));
       int nx = X.size() ;      
       X = ( X.array() - meanx ) / std_devx ; 
-      X.unaryExpr([&max_z](double x) { return x < -max_z ? -max_z : ( x > max_z ? max_z : x ); } );
-
+      X = X.unaryExpr([&max_z](float x) { return x < -max_z ? -max_z : ( x > max_z ? max_z : x ); } );
+      
     }
        
   if ( do_hjorth )
@@ -353,7 +353,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 	  for (int i=0; i<n; i++)
 	    if ( T[i] < -max_z ) T[i] = -max_z;
 	    else if ( T[i] > max_z ) T[i] = max_z;
-
+	  
 	  // second round norm
 	  // mean = T.mean();
 	  // std_dev = sqrt((T.array() - mean).square().sum() / (n - 1));
@@ -758,6 +758,42 @@ std::string segsrv_t::get_hms( const double s ) const
   return t1.as_string( ':' );
 }
 
+
+std::map<double,std::string> segsrv_t::get_clock_ticks(const int n) const
+{
+  std::map<double,std::string> t;
+  //  if ( ! valid_window ) return t;
+  if ( n < 1 || n > 100 ) return t;
+  
+  // for the current window  
+  // try to get up to than 'n' ticks at sensible values,
+  // key = seconds (within curr window) 
+
+  // determine size
+  double sz = bwin - awin;
+
+  // use this per-second count, starting at 0
+  int per = sz / n;
+  int aint = awin;
+  if ( aint < awin ) ++aint;
+  
+  // start at (awin)  
+  clocktime_t t1 = edf_start;
+  t1.advance_seconds( aint );  
+  t[ aint ] = "| " + t1.as_string( ':' );
+
+  for (int p=1;p<n;p++)
+    {
+      aint += per;      
+      t1.advance_seconds( per );
+      t[ aint ] = "| " + t1.as_string( ':' );
+    }
+
+  return t;
+  
+}
+
+
 Eigen::VectorXf segsrv_t::get_timetrack( const std::string & ch ) const
 {
   std::map<std::string,int>::const_iterator ss = srmap.find( ch );
@@ -934,6 +970,7 @@ bool segsrv_t::get_yscale_signal( const int n1 , double * lwr, double * upr ) co
   return true;
 }
 
+			    
 // get scaled signals (0-1 give other annots)                                
 Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int n1 )
 {
@@ -985,7 +1022,6 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
 
       // store (observed values)
       window_phys_range[ ch ] = std::pair<double,double>( fix_lwr ? smin : omin , fix_upr ? smax : omax );
-      
     }
   
   const double srange = smax - smin;
@@ -998,7 +1034,7 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   // rescale to display units
   double lwr = 0,  upr = 1;
   const bool okay = get_yscale_signal( n1 , &lwr, &upr );
-  
+
   if ( okay )
     s = s.array() * ( upr - lwr ) + lwr;
   
