@@ -3205,9 +3205,12 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     {
       lunapi_t * lp = lunapi_t::inaugurate();
       lunapi_inst_ptr p = lp->inst( "id1" );
-      p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
-      p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
-      
+      //p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
+      //p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
+
+      p->attach_edf( "~/luna-api-notebooks/pats-800227-baseline.edf" );
+      p->attach_annot( "~/luna-api-notebooks/pats-800227-baseline.annot" );
+
       std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n";
       
       std::vector<std::string> d = p->desc();
@@ -3215,7 +3218,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       // introduce some gaps
       //p->eval( "EPOCH & MASK epoch=5-50,500-600,800-850 & MASK flip & RE" );
-      //p->eval( "MASK ifnot=N2 & RE" );
+      p->eval( "MASK ifnot=N2 & RE" );
 
       //std::cout << " post mask...\n";
       //d = p->desc();
