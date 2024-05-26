@@ -1044,24 +1044,24 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
 bool segsrv_t::get_tidx( double a, double b , int sr , int * aa, int *bb ) const
 {
 
-  std::cerr << "C: get_tidx()\n";
+  //  std::cerr << "C: get_tidx()\n";
   
   if ( tidx.find( sr ) == tidx.end() ) return false;
 
   const std::map<double,int> & ts = tidx.find( sr )->second ;
 
-  std::cerr << "C: get_tidx() - checking lower/a\n";
+  //  std::cerr << "C: get_tidx() - checking lower/a\n";
   // iterator equal/greater than start
   std::map<double,int>::const_iterator abound = ts.lower_bound( a );
   if ( abound == ts.end() ) return false;
  
-  std::cerr << "C: get_tidx() - checking lower/a (DONE)\n";
+  //  std::cerr << "C: get_tidx() - checking lower/a (DONE)\n";
  
   // one-past the end
   std::map<double,int>::const_iterator bbound = ts.lower_bound( b );
   if ( bbound == ts.end() ) return false;
   
-  std::cerr << "C: get_tidx() - checking upper/b (DONE)\n";
+  //  std::cerr << "C: get_tidx() - checking upper/b (DONE)\n";
     
   // if we are in a gap, then both abound and bbound will point to the
   // same element (i.e. if not end(), then both the same next segment
@@ -1069,8 +1069,8 @@ bool segsrv_t::get_tidx( double a, double b , int sr , int * aa, int *bb ) const
 
   if ( abound == bbound ) return false;
   
-  std::cerr  << "C: good, setting window " << abound->first << " " << bbound->first
-    	     << " --> " << abound->second << " " << bbound->second << "\n";
+  // std::cerr  << "C: good, setting window " << abound->first << " " << bbound->first
+  //   	     << " --> " << abound->second << " " << bbound->second << "\n";
   
   *aa = abound->second;
   *bb = bbound->second;

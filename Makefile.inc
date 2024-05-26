@@ -47,7 +47,7 @@ else
 endif
 
 
-CXXFLAGS=-O2 -std=gnu++17 -MMD -MP -I. -I.. -Wno-psabi 
+CXXFLAGS=-O2 -std=gnu++17 -MMD -MP -I. -I.. -Wno-psabi -Wno-unused-result
 #CXXFLAGS=-O0 -std=gnu++17 -MMD -MP -I. -I.. -pg
 
 CXXFLAGS +=$(DEP_INCLUDES)
