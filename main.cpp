@@ -3218,7 +3218,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
       // introduce some gaps
       //p->eval( "EPOCH & MASK epoch=5-50,500-600,800-850 & MASK flip & RE" );
-      p->eval( "MASK ifnot=N2 & RE" );
+      //p->eval( "MASK ifnot=N2 & RE" );
 
       //std::cout << " post mask...\n";
       //d = p->desc();

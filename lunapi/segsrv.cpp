@@ -97,7 +97,7 @@ void segsrv_t::init()
       uint64_t e2tp = etp + epoch_tp;
       
       // past end?
-      if ( etp > max_tp ) break;
+      if ( e2tp > max_tp ) break;
             
       // is this a valid & full epoch? (--> sets valid_window F if all missing)
       set_window(  esec , esec + epoch_sec );
@@ -197,7 +197,11 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 	  
 	  // copy part (can check later, but this should always fit in data[])
 	  if ( idx + total_points > data->size() )
-	    Helper::halt( "internal error in do_summaries()");
+	    {
+	      std::cout << " data->size()  = " << data->size()  << "\n"
+			<< " idx " << idx << " " << total_points << " " << idx + total_points << "\n";
+	      Helper::halt( "internal error in do_summaries()");
+	    }
 	  
 	  std::vector<double> edata( total_points , 0 );
 	  for (int i=0; i<total_points; i++)
