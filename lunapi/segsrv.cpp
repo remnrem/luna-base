@@ -20,22 +20,13 @@
 //
 //    --------------------------------------------------------------------
 
-// TODOs
-//   define viz-epochs
-//   define viz-clock mappings (on 0..1 scale) 
-//   spectral / Hjorth epoch-level summaries
-//   decimation on-the-fly and/or summaries at higher time-scales
-//   bandpass filtering on-the-fly? (or at creation?)
-//   sleep stages
-
 #include "lunapi/segsrv.h"
 #include "lunapi/lunapi.h"
 
 segsrv_t::segsrv_t( lunapi_inst_ptr inst ) : p( inst ) 
 {
   awin = bwin = 0;
-  //  cumul_sec = 0;
-
+  
   max_samples_in = 200; // default input throttling
   max_samples_out = 0;  // no output throttling by default
 
@@ -62,21 +53,9 @@ void segsrv_t::init()
     }
   else
     edf_start = etime;
-
-  // make gaps_ungapped()
-  // gaps_ungapped.clear();
-  // std::set<interval_t>::const_iterator qq = segments.begin();
-  // double gsec = 0;
-  // while ( qq != segments.end() )
-  //   {
-  //     if ( qq != segments.begin() )
-  // 	gaps_ungapped.insert( gsec );
-  //     gsec += qq->duration_sec();
-  //     ++qq;
-  //   }
   
   valid_window = false; // this is set by set_window()
-
+  
   // epoch_sec is 30 by default, but could have been changed (min 4s)
   // prior to init() being called
 
@@ -87,39 +66,8 @@ void segsrv_t::init()
   epoch_num = 0;
   clock_epoch_num = 0;
   epoch_sec_starts.clear();
-  //  cumul_sec = 0;
   clk2sig_emap.clear();
 
-
-  //
-  // -------------------- OLD ---------------------------
-
-  
-  // std::set<interval_t>::const_iterator ss = segments.begin();
-  // while ( ss != segments.end() )
-  //   {
-  //     // count whole epochs in each bin
-  //     const int whole_epochs_in_segment = (int)( ss->duration_sec() / epoch_sec );
-  //     epoch_num += whole_epochs_in_segment;
-      
-  //     // add these in, counting only in observed signal (skip gaps)
-  //     // i.e. adding from cumul_sec
-  //     for (int e=0; e<whole_epochs_in_segment; e++)
-  // 	epoch_sec_starts.push_back( cumul_sec + e * epoch_sec );
-
-  //     // now update cumul_sec w/ the entire segment (i.e. including any
-  //     // paritial <30 part - i.e. this will be used to get the sample index
-  //     // (translated given a SR) for each epoch in the 'collapsed' signal
-  //     // from wholetrace()
-  //     cumul_sec += ss->duration_sec();
-  //     // next segment
-  //     ++ss;
-  //   }
-
-
-  //
-  // -------------------- NEW -----------------------------
-  //
 
   double cumul_sec = 0;
   double last_sec = 0;
@@ -156,14 +104,6 @@ void segsrv_t::init()
             
       const bool okay = valid_window &&  ( ! gapped ) && ( esec < last_sec );; 
       
-      // std::cerr << "e " << clk_idx << "\t" << okay << "/" << valid_window << "/" << !gapped << "\t"
-      //  		<< sig_idx << "\t"
-      // 		<< good_tps << "\t"
-      //  		<< cumul_esec << "\t"
-      //  		<< esec << "\t"
-      // 		<< cumul_sec << "\t"
-      // 		<< last_sec << " ";
-
       // will be calculating epoch-level stats for this epoch
       if ( okay )
 	{
@@ -174,8 +114,6 @@ void segsrv_t::init()
 	  // counts as a signal epoch
 	  ++sig_idx;
 	}
-      // else
-      // 	std::cerr << " did not map epoch " << clk_idx << "\n";
       
       // advance 
       ++clk_idx;
@@ -188,10 +126,8 @@ void segsrv_t::init()
   
   // define epochs based on simple clock time, inc. by epoch_sec, but
   // then flag the epochs that map (fully) into selected signal space
-  //  -->  std::map<int,int> clock2signal_emap;
+  
   epoch_num = epoch_sec_starts.size();
-
-  //  std::cerr << " clock_epoch_num = " << clock_epoch_num << " " << " epoch_num = " << epoch_num << "\n";
   
   // reset
   awin = bwin = 0;
@@ -217,8 +153,6 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 			     const bool do_band, const bool do_hjorth )
 {
 
-  //std::cerr << " ch do_band do_hjorth " << ch << " " << sr << " " << do_band << " " << do_hjorth << "\n";
-
   if ( ! ( do_band || do_hjorth ) ) return ;
 
   // this is called per-epoch from populate() only 
@@ -239,8 +173,8 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
   
   Eigen::MatrixXf X = Eigen::MatrixXf::Zero( epoch_num , 6 );
   Eigen::MatrixXf H = Eigen::MatrixXf::Zero( epoch_num , 3 );
+  Eigen::MatrixXf HH = Eigen::MatrixXf::Constant( epoch_num , 101 , std::numeric_limits<float>::quiet_NaN() );
 
-  
   // for each clock-epoch
   for (int e=0; e<clock_epoch_num; e++)
     {
@@ -275,7 +209,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 			     noverlap_segments , 
 			     window_function ,
 			     true , // use median
-			     false ); // so SD calculated
+			     false ); // no SD calculated
 	      
 	      X(e2,0) = log10( pwelch.psdsum( SLOW ) + 0.00001 );
 	      X(e2,1) = log10( pwelch.psdsum( DELTA ) + 0.00001);
@@ -318,13 +252,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 	  
        	  double mean = T.mean();
        	  double std_dev = sqrt((T.array() - mean).square().sum() / (n - 1));	  
-       	  T = ( T.array() - mean ) / std_dev ;
-	  	  
-       	  // second-round norm
-       	  // mean = T.mean();
-       	  // std_dev = sqrt((T.array() - mean).square().sum() / (n - 1));	  
-       	  // T = ( T.array() - mean ) / std_dev ;
-
+       	  T = ( T.array() - mean ) / std_dev ;	  	  
        	  X.col(j) = T; 
        	}
       
@@ -339,9 +267,13 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
       X = X.unaryExpr([&max_z](float x) { return x < -max_z ? -max_z : ( x > max_z ? max_z : x ); } );
       
     }
-       
+  
+
   if ( do_hjorth )
     {
+      // --> populate HH
+      
+      // normalize H2 and H3 only
       for (int j=0;j<3;j++)
 	{
 	  Eigen::VectorXf T = H.col(j);
@@ -354,26 +286,43 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 	    if ( T[i] < -max_z ) T[i] = -max_z;
 	    else if ( T[i] > max_z ) T[i] = max_z;
 	  
-	  // second round norm
-	  // mean = T.mean();
-	  // std_dev = sqrt((T.array() - mean).square().sum() / (n - 1));
-	  // T = ( T.array() - mean ) / std_dev ;
- 
 	  H.col(j) = T; 
 	}
-    }
+      
+      float amin = H.col(0).minCoeff();
+      float amax = H.col(0).maxCoeff();
+      Eigen::VectorXf A = H.col(0);
+      float arng = amax - amin;
 
+      if ( arng <= 0 ) arng = 1;
+      A = ( A.array() - amin ) / ( amax - amin );
+      A = A.array() * 50;
+      
+      for (int e=0; e<A.size(); e++)
+	{
+	  int h = A[e] ;
+	  for (int y=1;y<h;y++)
+	    {
+	      HH(e, 50 + y ) = H(e,1);
+	      HH(e, 50 - y ) = H(e,2);
+	    }
+	}
+            
+    }
+  
+
+  
   //
   // Splice into full epoch set 
   //
 
-  Eigen::MatrixXf X2 = Eigen::MatrixXf::Constant( clock_epoch_num , 6 , std::numeric_limits<float>::quiet_NaN() );
-  Eigen::MatrixXf H2 = Eigen::MatrixXf::Zero( clock_epoch_num , 3 ).array() - 999 ;
+  Eigen::MatrixXf X2 = Eigen::MatrixXf::Constant( clock_epoch_num , 6   , std::numeric_limits<float>::quiet_NaN() );
+  Eigen::MatrixXf H2 = Eigen::MatrixXf::Constant( clock_epoch_num , 101 , std::numeric_limits<float>::quiet_NaN() );
   
   if ( clock_epoch_num == epoch_num )
     {
       X2 = X;
-      H2 = H;
+      H2 = HH;
     }
   else
     {
@@ -383,7 +332,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 	  {	    
 	    const int e2 = clk2sig_emap[ e ];
 	    X2.row(e) = X.row(e2);
-	    H2.row(e) = H.row(e2);
+	    H2.row(e) = HH.row(e2);
 	  }
 
     }
@@ -434,10 +383,19 @@ int segsrv_t::populate( const std::vector<std::string> & chs , const std::vector
   init();
   
   int count = 0;
+
+  // add channels
+
   for (int i=0; i<chs.size(); i++)
     if ( add_channel( chs[i] ) ) ++count;
+  
+  // add annotations
+  
+  for (int i=0; i<anns.size(); i++)
+    if ( add_annot( anns[i] ) ) ++count;
 
   // make sure we have some sensible default scaling
+  
   set_scaling( count ,
 	       anns.size() ,
 	       1 , // yscale
@@ -445,11 +403,6 @@ int segsrv_t::populate( const std::vector<std::string> & chs , const std::vector
 	       0.05, // yheader
 	       0.05, // yfooter
 	       0.10 ); // scaling_fixed_annot
-
-
-  for (int i=0; i<anns.size(); i++)
-    if ( add_annot( anns[i] ) ) ++count;
-
   
   return count;
 }
@@ -462,6 +415,7 @@ int segsrv_t::populate( const std::vector<std::string> & chs , const std::vector
 
 std::vector<std::pair<double,double> > segsrv_t::get_time_scale() const
 {
+
   std::vector<std::pair<double,double> > r;
 
   // 0..1 : viz dist (i.e. plots)    max = segsrv_t::get_ungapped_total_sec()
@@ -581,6 +535,8 @@ double segsrv_t::get_total_sec_original() const
 
 Eigen::VectorXf segsrv_t::decimate( const Eigen::VectorXf & x0 , const int sr, const int q )
 {
+  if ( x0.size() == 0 ) return x0;
+  
   // new sample rate
   const int sr2 = sr / q ;
   const double fc = sr2 * 0.5 ;
@@ -626,13 +582,10 @@ bool segsrv_t::add_channel( const std::string & ch )
   Eigen::VectorXf d = Eigen::VectorXf::Zero( n );
   for (int i=0; i<n; i++) d[i] = (*data)[i];
 
-  //  std::cerr << " ch " << decimation_fac << " "<< sr << "\n";
   // decimate?
   if ( decimation_fac > 1 )
-    {
-      //std::cerr << " ** throttling input " << ch << " " << decimation_fac << "\n";
-      d = decimate( d , sr , decimation_fac );  
-    }
+    d = decimate( d , sr , decimation_fac );  
+
   // store
   sigmap[ ch ] = d;
 
@@ -685,7 +638,7 @@ bool segsrv_t::add_channel( const std::string & ch )
 bool segsrv_t::set_window( double a , double b )
 {
 
-  //  std::cerr << "set_windows " << a << " " << b << "\n";
+  //  std::cerr << "C: set_windows " << a << " " << b << "\n";
   
   // max time (seconds, 1-tp-unit past end) 
   const double tmax = p->last_sec();
@@ -715,7 +668,7 @@ bool segsrv_t::set_window( double a , double b )
   std::set<int>::const_iterator ss = srs.begin();
   while ( ss != srs.end() )
     {
-      
+      //      std::cerr << " C: sig " << *ss << "\n";
       int aa = 0, bb = 0;
       const bool okay = get_tidx( awin, bwin , *ss , &aa , &bb );
       
@@ -723,11 +676,13 @@ bool segsrv_t::set_window( double a , double b )
 	{
 	  aidx[ *ss ] = aa;
 	  bidx[ *ss ] = bb;
-	  //std::cerr << " set win " << awin << " " << bwin << " --> " << aa << " " << bb << "\n";
+	  //std::cerr << " C; okay, set win " << awin << " " << bwin << " --> " << aa << " " << bb << "\n";
 	}
       else
-	all_okay = false;
-      
+	{
+	  //std::cerr << " C; PROBLEM!\n";
+	  all_okay = false;
+	}
       ++ss;
     }
   
@@ -799,7 +754,7 @@ Eigen::VectorXf segsrv_t::get_timetrack( const std::string & ch ) const
   std::map<std::string,int>::const_iterator ss = srmap.find( ch );
   if ( ss == srmap.end() || ! valid_window )
     {
-      Eigen::VectorXf empty;
+      Eigen::VectorXf empty = Eigen::VectorXf::Zero(0);
       return empty;
     }
   int sr = ss->second;
@@ -1052,7 +1007,7 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
 
   if ( ss == srmap.end() || ! valid_window )
     {
-      Eigen::VectorXf empty;
+      Eigen::VectorXf empty = Eigen::VectorXf::Zero(0);
       return empty;
     }
   
@@ -1069,20 +1024,14 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
       const int original_length = bb - aa;
       const int reduction_factor = original_length / max_samples_out;
 
-      // when reading in we do anti-aliasing prior to decimation
-      // here, which will only kick in for very zoomed-out views
-
-      // NEW: use proper decimation here on second level - but note that the
-      // SR may have been adjusted from initial decimation; note also
-      // that SR is cast to an int here, but for this single purpose
-      // (of designing a low-pass anti-aliasing filter) this should
-      // not matter.
+      // decimation here on second level - but note that the SR may
+      // have been adjusted from initial decimation; note also that SR
+      // is cast to an int here, but for this single purpose (of
+      // designing a low-pass anti-aliasing filter) this should not
+      // matter.
       
       return decimate( data.segment( aa , bb - aa ) , decimated_srmap.find( sr )->second , reduction_factor );
       
-      // OLD: try first w/out anti-aliasing, i.e. simply decimate here
-      // Eigen::VectorXf f1 = data.segment( aa , bb - aa );
-      // return f1( Eigen::seq( 0 , Eigen::last , reduction_factor ) );
     }
   
   // else return full
@@ -1094,43 +1043,51 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
 // given two times and a sample rate, get indices
 bool segsrv_t::get_tidx( double a, double b , int sr , int * aa, int *bb ) const
 {
+
+  std::cerr << "C: get_tidx()\n";
   
   if ( tidx.find( sr ) == tidx.end() ) return false;
 
   const std::map<double,int> & ts = tidx.find( sr )->second ;
-  
+
+  std::cerr << "C: get_tidx() - checking lower/a\n";
   // iterator equal/greater than start
   std::map<double,int>::const_iterator abound = ts.lower_bound( a );
   if ( abound == ts.end() ) return false;
-  
+ 
+  std::cerr << "C: get_tidx() - checking lower/a (DONE)\n";
+ 
   // one-past the end
   std::map<double,int>::const_iterator bbound = ts.lower_bound( b );
   if ( bbound == ts.end() ) return false;
-
+  
+  std::cerr << "C: get_tidx() - checking upper/b (DONE)\n";
+    
   // if we are in a gap, then both abound and bbound will point to the
   // same element (i.e. if not end(), then both the same next segment
   // index;  this means the window is not valid
 
   if ( abound == bbound ) return false;
   
-  // std::cout  << "window " << abound->first << " " << bbound->first
-  //  	     << " --> " << abound->second << " " << bbound->second << "\n";
+  std::cerr  << "C: good, setting window " << abound->first << " " << bbound->first
+    	     << " --> " << abound->second << " " << bbound->second << "\n";
   
   *aa = abound->second;
   *bb = bbound->second;
+
   return true;
     
 }
 
 Eigen::MatrixXf segsrv_t::get_summary_stats( const std::string & ch )
 {
-  Eigen::MatrixXf r;
+  Eigen::MatrixXf r = Eigen::MatrixXf::Zero(0,0);
   return r;
 }
 
 Eigen::VectorXf segsrv_t::get_summary_timetrack( const std::string & ch ) const
 {
-  Eigen::VectorXf t;
+  Eigen::VectorXf t = Eigen::MatrixXf::Zero(0,0);
   return t;
 }
 
@@ -1200,9 +1157,6 @@ std::map<std::string,std::vector<std::pair<double,double> > > segsrv_t::fetch_ev
       
   return r;
 }
-
-
- 
 
 
 // for selection window
@@ -1394,7 +1348,3 @@ std::vector<float> segsrv_t::get_evnts_yaxes( const std::string & ann ) const
   std::vector<float> empty;
   return empty;	
 }
-
- 
-
-
