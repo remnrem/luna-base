@@ -3205,11 +3205,11 @@ void proc_dummy( const std::string & p , const std::string & p2 )
     {
       lunapi_t * lp = lunapi_t::inaugurate();
       lunapi_inst_ptr p = lp->inst( "id1" );
-      //p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
-      //p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
+      p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
+      p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
 
-      p->attach_edf( "~/luna-api-notebooks/pats-800227-baseline.edf" );
-      p->attach_annot( "~/luna-api-notebooks/pats-800227-baseline.annot" );
+      //p->attach_edf( "~/luna-api-notebooks/pats-800227-baseline.edf" );
+      //p->attach_annot( "~/luna-api-notebooks/pats-800227-baseline.annot" );
 
       std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n";
       

@@ -565,10 +565,11 @@ Eigen::VectorXf segsrv_t::decimate( const Eigen::VectorXf & x0 , const int sr, c
 
 bool segsrv_t::add_channel( const std::string & ch )
 {
-  
+  std::cerr << "add ch " << ch << "\n";
   const int slot = p->edf.header.signal( ch );
+  std::cerr << " slot = " << slot << "\n";
   if ( slot == -1 ) return false;
-
+    
   // (original) sample rate
   int sr = p->edf.header.sampling_freq( slot );
   
@@ -581,14 +582,18 @@ bool segsrv_t::add_channel( const std::string & ch )
   slice_t slice( p->edf , slot , p->edf.timeline.wholetrace() );
   const std::vector<double> * data = slice.pdata();
   const int n = data->size();
-  
+
+  std::cerr << " n = " << n << " " << sr << "\n";
+
   // do means, min/max & SD, as well as spectral/hjorth summaries? (on original data)
   do_summaries( ch, sr, data , bands.find( ch ) != bands.end() , hjorth.find( ch ) != hjorth.end() );  
-  
+
   // get signal (copying nfull samples, so may contain zero-padded partial last records)
   // bur only copy n smaples over into the nfull space
   Eigen::VectorXf d = Eigen::VectorXf::Zero( n );
   for (int i=0; i<n; i++) d[i] = (*data)[i];
+
+  std::cerr << " done summs\n";
 
   // decimate?
   if ( decimation_fac > 1 )
@@ -603,28 +608,32 @@ bool segsrv_t::add_channel( const std::string & ch )
 
   // store new SR post any decimation
   decimated_srmap[ sr ] = sr / (double)decimation_fac;
-    
+
   // do we already have a time-track?
   if ( tidx.find( sr ) == tidx.end() )
     {      
       // get time-stampls
       const std::vector<uint64_t> * tp = slice.ptimepoints();
-            
+      
       // clock
       Eigen::VectorXf ts = Eigen::VectorXf::Zero( n );
       
       // for quick lookup: map of time-in-sec --> idx-int
+      // scan original non-decimated tp-vector (length n)
       for (int i=0; i<n; i++)
 	ts[ i ] = (*tp)[i] * globals::tp_duration;
-      
+
+      std::cerr << " - " << decimation_fac << "\n";
+
       // decimate?
       if ( decimation_fac > 1 )
-	ts = ts( Eigen::seq(0,Eigen::last,decimation_fac) ); 
-
-      // lookup index
+      	ts = ts( Eigen::seq(0,Eigen::last,decimation_fac) ); 
+      
+      // lookup index - note, here ts.size() as we may have decimtaed
       std::map<double,int> tt;
-      for (int i=0; i<n; i++)
+      for (int i=0; i<ts.size(); i++)
 	tt[ ts[i] ] = i;
+
       
       // store lookup index (time->sample #)
       tidx[ sr ] = tt;
