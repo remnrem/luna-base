@@ -110,7 +110,6 @@ void segsrv_t::init()
       // will be calculating epoch-level stats for this epoch
       if ( okay )
 	{
-	  //	  std::cerr << " mapping epoch " << clk_idx << " --> " << sig_idx << "\n";
 	  clk2sig_emap[ clk_idx ] = sig_idx;
 	  epoch_sec_starts.push_back( cumul_esec );
 	  
@@ -565,9 +564,8 @@ Eigen::VectorXf segsrv_t::decimate( const Eigen::VectorXf & x0 , const int sr, c
 
 bool segsrv_t::add_channel( const std::string & ch )
 {
-  std::cerr << "add ch " << ch << "\n";
+
   const int slot = p->edf.header.signal( ch );
-  std::cerr << " slot = " << slot << "\n";
   if ( slot == -1 ) return false;
     
   // (original) sample rate
@@ -583,8 +581,6 @@ bool segsrv_t::add_channel( const std::string & ch )
   const std::vector<double> * data = slice.pdata();
   const int n = data->size();
 
-  std::cerr << " n = " << n << " " << sr << "\n";
-
   // do means, min/max & SD, as well as spectral/hjorth summaries? (on original data)
   do_summaries( ch, sr, data , bands.find( ch ) != bands.end() , hjorth.find( ch ) != hjorth.end() );  
 
@@ -592,8 +588,6 @@ bool segsrv_t::add_channel( const std::string & ch )
   // bur only copy n smaples over into the nfull space
   Eigen::VectorXf d = Eigen::VectorXf::Zero( n );
   for (int i=0; i<n; i++) d[i] = (*data)[i];
-
-  std::cerr << " done summs\n";
 
   // decimate?
   if ( decimation_fac > 1 )
@@ -623,11 +617,9 @@ bool segsrv_t::add_channel( const std::string & ch )
       for (int i=0; i<n; i++)
 	ts[ i ] = (*tp)[i] * globals::tp_duration;
 
-      std::cerr << " - " << decimation_fac << "\n";
-
-      // decimate?
+      // decimate? (nb. need eval() to avoid aliasing issues)
       if ( decimation_fac > 1 )
-      	ts = ts( Eigen::seq(0,Eigen::last,decimation_fac) ); 
+      	ts = ts( Eigen::seq(0,Eigen::last,decimation_fac) ).eval(); 
       
       // lookup index - note, here ts.size() as we may have decimtaed
       std::map<double,int> tt;
@@ -653,8 +645,6 @@ bool segsrv_t::add_channel( const std::string & ch )
 bool segsrv_t::set_window( double a , double b )
 {
 
-  //  std::cerr << "C: set_windows " << a << " " << b << "\n";
-  
   // max time (seconds, 1-tp-unit past end) 
   const double tmax = p->last_sec();
 
@@ -683,7 +673,6 @@ bool segsrv_t::set_window( double a , double b )
   std::set<int>::const_iterator ss = srs.begin();
   while ( ss != srs.end() )
     {
-      //      std::cerr << " C: sig " << *ss << "\n";
       int aa = 0, bb = 0;
       const bool okay = get_tidx( awin, bwin , *ss , &aa , &bb );
       
@@ -691,11 +680,9 @@ bool segsrv_t::set_window( double a , double b )
 	{
 	  aidx[ *ss ] = aa;
 	  bidx[ *ss ] = bb;
-	  //std::cerr << " C; okay, set win " << awin << " " << bwin << " --> " << aa << " " << bb << "\n";
 	}
       else
 	{
-	  //std::cerr << " C; PROBLEM!\n";
 	  all_okay = false;
 	}
       ++ss;
@@ -1059,33 +1046,23 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
 bool segsrv_t::get_tidx( double a, double b , int sr , int * aa, int *bb ) const
 {
 
-  //  std::cerr << "C: get_tidx()\n";
-  
   if ( tidx.find( sr ) == tidx.end() ) return false;
 
   const std::map<double,int> & ts = tidx.find( sr )->second ;
 
-  //  std::cerr << "C: get_tidx() - checking lower/a\n";
   // iterator equal/greater than start
   std::map<double,int>::const_iterator abound = ts.lower_bound( a );
   if ( abound == ts.end() ) return false;
- 
-  //  std::cerr << "C: get_tidx() - checking lower/a (DONE)\n";
  
   // one-past the end
   std::map<double,int>::const_iterator bbound = ts.lower_bound( b );
   if ( bbound == ts.end() ) return false;
   
-  //  std::cerr << "C: get_tidx() - checking upper/b (DONE)\n";
-    
   // if we are in a gap, then both abound and bbound will point to the
   // same element (i.e. if not end(), then both the same next segment
   // index;  this means the window is not valid
 
   if ( abound == bbound ) return false;
-  
-  // std::cerr  << "C: good, setting window " << abound->first << " " << bbound->first
-  //   	     << " --> " << abound->second << " " << bbound->second << "\n";
   
   *aa = abound->second;
   *bb = bbound->second;

@@ -3247,9 +3247,9 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       segsrv.populate( chs , anns ) ;
 
 
-      std::cout << "EEG H " << segsrv.get_hjorths( "EEG" ) << "\n\n";
+      //      std::cout << "EEG H " << segsrv.get_hjorths( "EEG" ) << "\n\n";
 
-      std::exit(1);
+      //std::exit(1);
       
       std::cout << "S5\n";
 
@@ -3259,7 +3259,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       //     std::exit(0);
 
       std::cout << "\n---------------------------------\n";
-      float a = 0 , b = 30;
+      float a = 0 , b = 61440;
       std::cout	<< "\n--------------------------------- (SET WINDOW)\n";
 
       segsrv.set_window( a, b );
@@ -3269,11 +3269,14 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       for (int s=0;s<chs.size();s++)
 	{
 	  std::cout << " --> " << chs[s] << "\n";
+	  
 	  Eigen::VectorXf XX = segsrv.get_scaled_signal( chs[s] , s );
 							 
-	  Eigen::VectorXf TT = segsrv.get_timetrack( chs[s]);
+	  //Eigen::VectorXf TT = segsrv.get_timetrack( chs[s]);
+	  std::cout << XX << "\n";
 	}
-
+      std::exit(0);
+      
       a += 30.0;
       b += 30.0;
       std::cout	<< "\n--------------------------------- (SET WINDOW)\n";
