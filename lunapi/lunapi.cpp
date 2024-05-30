@@ -1478,8 +1478,13 @@ bool lunapi_inst_t::insert_signal( const std::string & label ,
 
 
 
-lannot_t lunapi_inst_t::fetch_annots( const std::vector<std::string> & anns ) const
+lannot_t lunapi_inst_t::fetch_annots( const std::vector<std::string> & anns , const double interp ) const
 {
+
+  // interp is a special fix for scope - to chop stage annotations into units of no greater than 30
+  // seconds, to make the plotting of hypnograms easier...  if -1 then ignore
+  const bool do_interp = interp > 0 ;
+  
   // typedef std::vector<std::tuple<std::string,double,double> > lannot_t;
   lannot_t r;
   if ( state != 1 ) return r;
@@ -1495,10 +1500,34 @@ lannot_t lunapi_inst_t::fetch_annots( const std::vector<std::string> & anns ) co
       annot_map_t::const_iterator ii = annot->interval_events.begin();   
       while ( ii != annot->interval_events.end() )
 	{
-	  const instance_idx_t & instance_idx = ii->first;      
-	  r.push_back( std::make_tuple( anns[a] ,
-					instance_idx.interval.start * globals::tp_duration,
-					instance_idx.interval.stop * globals::tp_duration ) );
+	  const instance_idx_t & instance_idx = ii->first;
+
+	  if ( do_interp )
+	    {
+	      
+	      uint64_t s = instance_idx.interval.start;
+	      uint64_t w = interp * globals::tp_1sec;
+	      
+	      while ( 1 )
+		{
+		  // all done
+		  if ( s >= instance_idx.interval.stop ) break;
+
+		  // add right length (not past end)
+		  const uint64_t s2 = s + w > instance_idx.interval.stop ? instance_idx.interval.stop : s + w ; 
+
+		  // add
+		  r.push_back( std::make_tuple( anns[a] , s * globals::tp_duration , s2 * globals::tp_duration ) );
+		  
+		  // next chunk
+		  s += w;
+		}
+	      
+	    }
+	  else // add as a simple one
+	    r.push_back( std::make_tuple( anns[a] ,
+					  instance_idx.interval.start * globals::tp_duration,
+					  instance_idx.interval.stop * globals::tp_duration ) );
 	  ++ii;
 	}
     }  

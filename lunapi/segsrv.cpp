@@ -171,7 +171,6 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
   // implied number of segments
   int noverlap_segments = floor( ( total_points - noverlap_points) 
 				 / (double)( segment_points - noverlap_points ) );
-
   
   Eigen::MatrixXf X = Eigen::MatrixXf::Zero( epoch_num , 6 );
   Eigen::MatrixXf H = Eigen::MatrixXf::Zero( epoch_num , 3 );
