@@ -16,29 +16,22 @@ jobs:
       - uses: actions/checkout@v2  
       - name: Install dependencies
         run: |
+          cd ${HOME}
           brew install cmake gcc boost
       
       - name: Clone and build LightGBM
         run: |
+          cd ${HOME}
           git clone --recursive https://github.com/microsoft/LightGBM
           cd LightGBM
           mkdir build
           cd build
           cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON ..
           make -j4
-
-      - name: Verify c_api.h exists in LightGBM
-        run: |
-          FILE=/Users/runner/work/luna-base/luna-base/LightGBM/include/LightGBM/c_api.h
-          if [ -f "$FILE" ]; then
-            echo "$FILE exists."
-          else
-            echo "$FILE does not exist."
-            exit 1  # Causes the workflow to fail if the file does not exist
-          fi
           
       - name: Build FFTW
         run: |
+          cd ${HOME}
           wget http://www.fftw.org/fftw-3.3.10.tar.gz
           tar -xzvf fftw-3.3.10.tar.gz
           cd fftw-3.3.10
@@ -48,7 +41,7 @@ jobs:
     
       - name: Final Build
         run: |
-          make ARCH=MAC LGBM=1 LGBM_PATH=$HOME/LightGBM FFTW=$HOME/fftw-3.3.10
+          make ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-3.3.10
           ref='refs/tags/v'
           if [[ ${{ github.ref }} == *${ref}* ]]; then
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
