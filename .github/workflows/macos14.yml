@@ -29,7 +29,7 @@ jobs:
 
       - name: Verify c_api.h exists in LightGBM
         run: |
-          FILE=$HOME/LightGBM/include/LightGBM/c_api.h
+          FILE=/Users/runner/work/luna-base/luna-base/LightGBM/include/LightGBM/c_api.h
           if [ -f "$FILE" ]; then
             echo "$FILE exists."
           else
