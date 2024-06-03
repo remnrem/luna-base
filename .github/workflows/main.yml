@@ -105,7 +105,7 @@ jobs:
     - uses: actions/checkout@v2  
     - name: Install dependencies
       run: |
-        brew install cmake libomp
+        brew install cmake gcc boost
     
     - name: Clone and build LightGBM
       run: |
@@ -113,7 +113,7 @@ jobs:
         cd LightGBM
         mkdir build
         cd build
-        cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON -DINCLUDE_DIRECTORIES=${GITHUB_WORKSPACE}/LightGBM/include ..
+        cmake -DCMAKE_OSX_ARCHITECTURES=arm64 -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON -DINCLUDE_DIRECTORIES=${GITHUB_WORKSPACE}/LightGBM/include ..
         make -j4
 
     - name: Verify c_api.h exists in LightGBM
