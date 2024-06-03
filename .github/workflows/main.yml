@@ -95,14 +95,7 @@ jobs:
           path: mac-luna.tar.gz
           
   macos-arm64-build:
-      runs-on: ${{ matrix.os }}
-      strategy:
-        matrix:
-          include:
-            - os: macos-14
-              arch: arm64
-              job_name: "macos 14 ARM64 Build"
-              
+      runs-on: macos-14              
       steps:
       - uses: actions/checkout@v2  
       - name: Install dependencies
