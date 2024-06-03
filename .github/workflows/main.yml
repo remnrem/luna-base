@@ -115,7 +115,17 @@ jobs:
         cd build
         cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON -DINCLUDE_DIRECTORIES=${GITHUB_WORKSPACE}/LightGBM/include ..
         make -j4
-  
+
+    - name: Verify c_api.h exists in LightGBM
+      run: |
+        FILE=$HOME/LightGBM/include/LightGBM/c_api.h
+        if [ -f "$FILE" ]; then
+          echo "$FILE exists."
+        else
+          echo "$FILE does not exist."
+          exit 1  # Causes the workflow to fail if the file does not exist
+        fi
+        
     - name: Build FFTW
       run: |
         wget http://www.fftw.org/fftw-3.3.10.tar.gz
