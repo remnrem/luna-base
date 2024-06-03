@@ -140,7 +140,7 @@ jobs:
       - uses: actions/upload-artifact@v2
         if: startsWith(github.ref, 'refs/tags/v')
         with:
-          name: macos-arm64-binary
+          name: macos-arm64-luna.tar.gz
           path: macos-arm64-luna.tar.gz
           
   linux-build:
@@ -171,7 +171,7 @@ jobs:
           make FFTW=${HOME}/fftw-3.3.8 LGBM=1 LGBM_PATH=${HOME}/LightGBM
   release:
     runs-on: ubuntu-latest
-    needs: [linux-build, macos-build, windows-build]
+    needs: [linux-build, macos-build, windows-build, macos-arm64-build]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v2
@@ -194,6 +194,7 @@ jobs:
           cd ${{steps.download.outputs.download-path}}
           mv mac-luna.tar.gz/mac-luna.tar.gz mac_luna.tar.gz
           mv win-luna.zip/win-luna.zip win_luna.zip
+          mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos-arm64-luna.tar.gz
       - name: Upload Release Asset Mac
         id: upload-release-asset-mac
         uses: actions/upload-release-asset@v1
@@ -203,6 +204,16 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: mac_luna.tar.gz
           asset_name: mac_luna.tar.gz
+          asset_content_type: application/gzip
+      - name: Upload Release Asset Mac arm64
+        id: upload-release-asset-mac-arm64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: macos-arm64-luna.tar.gz
+          asset_name: macos-arm64-luna.tar.gz
           asset_content_type: application/gzip
       - name: Upload Release Asset Win
         id: upload-release-asset-win
