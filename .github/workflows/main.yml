@@ -94,10 +94,13 @@ jobs:
           name: mac-luna.tar.gz
           path: mac-luna.tar.gz
   macos-arm64-build:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        arch: [arm64]
+        include:
+          - os: macos-14
+            arch: arm64
+            job_name: "macos 14 ARM64 Build"
     steps:
     - uses: actions/checkout@v2  
     - name: Install dependencies
@@ -124,7 +127,8 @@ jobs:
   
     - name: Final Build
       run: |
-        make FFTW=$HOME/fftw-3.3.10 LGBM=1 LGBM_PATH=$HOME/LightGBM
+        make ARCH=MAC LGBM=1 LGBM_PATH=$HOME/LightGBM FFTW=$HOME/fftw-3.3.10
+        ref='refs/tags/v'
         if [[ ${{ github.ref }} == *${ref}* ]]; then
           v=$(echo ${{ github.ref }} | cut -d'/' -f3)
           mkdir luna-${v}
