@@ -178,14 +178,14 @@ jobs:
       - name: Create Release
         id: create_release
         uses: ncipollo/release-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Luna_Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-          allowUpdates: true
+          tag: ${{ github.ref }}
+          name: Luna_Release ${{ github.ref }}
+          draft: "false"
+          prerelease: "false"
+          allowUpdates: "true"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/download-artifact@v2
         id: download
         with:
@@ -205,6 +205,7 @@ jobs:
           name: "mac_luna.tar.gz"
           artifactContentType: "application/gzip"
           token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: "true"
           
       - name: Upload Release Asset Mac arm64
         id: upload-release-asset-mac-arm64
@@ -214,6 +215,7 @@ jobs:
           name: "macos_arm64_luna.tar.gz"
           artifactContentType: "application/gzip"
           token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: "true"
           
       - name: Upload Release Asset Win
         id: upload-release-asset-win
@@ -223,3 +225,4 @@ jobs:
           name: "win_luna.zip"
           artifactContentType: "application/gzip"
           token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: "true"
