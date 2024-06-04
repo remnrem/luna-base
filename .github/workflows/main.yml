@@ -195,7 +195,7 @@ jobs:
           cd ${{steps.download.outputs.download-path}}
           mv mac-luna.tar.gz/mac-luna.tar.gz mac_luna.tar.gz
           mv win-luna.zip/win-luna.zip win_luna.zip
-          mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos-arm64-luna.tar.gz
+          mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos_arm64_luna.tar.gz
       - name: Upload Release Asset Mac
         id: upload-release-asset-mac
         uses: ncipollo/release-action@v1
@@ -213,8 +213,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: macos-arm64-luna.tar.gz
-          asset_name: macos-arm64-luna.tar.gz
+          asset_path: macos_arm64_luna.tar.gz
+          asset_name: macos_arm64_luna.tar.gz
           asset_content_type: application/gzip
       - name: Upload Release Asset Win
         id: upload-release-asset-win
