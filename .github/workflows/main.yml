@@ -201,7 +201,6 @@ jobs:
         id: upload-release-asset-mac
         uses: ncipollo/release-action@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
           artifacts: mac_luna.tar.gz
           name: mac_luna.tar.gz
           artifactContentType: application/gzip
@@ -211,7 +210,6 @@ jobs:
         id: upload-release-asset-mac-arm64
         uses: ncipollo/release-action@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
           artifacts: macos_arm64_luna.tar.gz
           name: macos_arm64_luna.tar.gz
           artifactContentType: application/gzip
@@ -221,7 +219,6 @@ jobs:
         id: upload-release-asset-win
         uses: ncipollo/release-action@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
           artifacts: win_luna.zip
           name: win_luna.zip
           artifactContentType: application/gzip
