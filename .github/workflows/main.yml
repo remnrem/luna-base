@@ -177,7 +177,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -198,7 +198,7 @@ jobs:
           mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos-arm64-luna.tar.gz
       - name: Upload Release Asset Mac
         id: upload-release-asset-mac
-        uses: actions/upload-release-asset@v1
+        uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -208,7 +208,7 @@ jobs:
           asset_content_type: application/gzip
       - name: Upload Release Asset Mac arm64
         id: upload-release-asset-mac-arm64
-        uses: actions/upload-release-asset@v1
+        uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -218,7 +218,7 @@ jobs:
           asset_content_type: application/gzip
       - name: Upload Release Asset Win
         id: upload-release-asset-win
-        uses: actions/upload-release-asset@v1
+        uses: ncipollo/release-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
