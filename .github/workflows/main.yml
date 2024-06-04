@@ -201,25 +201,25 @@ jobs:
         id: upload-release-asset-mac
         uses: ncipollo/release-action@v1
         with:
-          artifacts: mac_luna.tar.gz
-          name: mac_luna.tar.gz
-          artifactContentType: application/gzip
+          artifacts: "mac_luna.tar.gz"
+          name: "mac_luna.tar.gz"
+          artifactContentType: "application/gzip"
           token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Upload Release Asset Mac arm64
         id: upload-release-asset-mac-arm64
         uses: ncipollo/release-action@v1
         with:
-          artifacts: macos_arm64_luna.tar.gz
-          name: macos_arm64_luna.tar.gz
-          artifactContentType: application/gzip
+          artifacts: "macos_arm64_luna.tar.gz"
+          name: "macos_arm64_luna.tar.gz"
+          artifactContentType: "application/gzip"
           token: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Upload Release Asset Win
         id: upload-release-asset-win
         uses: ncipollo/release-action@v1
         with:
-          artifacts: win_luna.zip
-          name: win_luna.zip
-          artifactContentType: application/gzip
+          artifacts: "win_luna.zip"
+          name: "win_luna.zip"
+          artifactContentType: "application/gzip"
           token: ${{ secrets.GITHUB_TOKEN }}
