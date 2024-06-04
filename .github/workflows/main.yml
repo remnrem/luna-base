@@ -196,33 +196,33 @@ jobs:
           mv mac-luna.tar.gz/mac-luna.tar.gz mac_luna.tar.gz
           mv win-luna.zip/win-luna.zip win_luna.zip
           mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos_arm64_luna.tar.gz
+          
       - name: Upload Release Asset Mac
         id: upload-release-asset-mac
         uses: ncipollo/release-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: mac_luna.tar.gz
-          asset_name: mac_luna.tar.gz
-          asset_content_type: application/gzip
+          artifacts: mac_luna.tar.gz
+          name: mac_luna.tar.gz
+          artifactContentType: application/gzip
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Upload Release Asset Mac arm64
         id: upload-release-asset-mac-arm64
         uses: ncipollo/release-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: macos_arm64_luna.tar.gz
-          asset_name: macos_arm64_luna.tar.gz
-          asset_content_type: application/gzip
+          artifacts: macos_arm64_luna.tar.gz
+          name: macos_arm64_luna.tar.gz
+          artifactContentType: application/gzip
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Upload Release Asset Win
         id: upload-release-asset-win
         uses: ncipollo/release-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: win_luna.zip
-          asset_name: win_luna.zip
-          asset_content_type: application/zip
+          artifacts: win_luna.zip
+          name: win_luna.zip
+          artifactContentType: application/gzip
+          token: ${{ secrets.GITHUB_TOKEN }}
