@@ -3234,16 +3234,27 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::cout << "S3\n";
       
       // bands, hjorth
-      segsrv.calc_bands( chs_b );
+      //      segsrv.calc_bands( chs_b );
       //      segsrv.calc_hjorths( chs_h );
       std::cout << "S4\n";
       
       segsrv.populate( chs , anns ) ;
       std::cout << "S5\n";
+      
+      //std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
+      segsrv.set_window( 0 , 30 );
+      segsrv.compile_evts( anns );
+      Eigen::VectorXf XX1 = segsrv.get_signal( "EEG" );
 
-      std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
-      // segsrv.set_window( 3000, 5000 );
-      // segsrv.compile_evts( anns );
+      segsrv.set_window( 30 , 60  );
+      segsrv.compile_evts( anns );
+      XX1 = segsrv.get_signal( "EEG" );
+      
+      segsrv.set_window( 0 , 30 );
+      segsrv.compile_evts( anns );
+      XX1 = segsrv.get_signal( "EEG" );
+      
+
       std::exit(0);
       
       int a1 = 0, b1 = 30;
