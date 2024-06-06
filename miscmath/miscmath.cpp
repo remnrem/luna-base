@@ -24,15 +24,15 @@
 #include "helper/helper.h"
 #include "stats/statistics.h"
 #include "miscmath/dynam.h"
+#include "edf/edf.h"
 
 #include <cmath>
 #include <vector>
 
 #include <iostream>
 
-//
+
 // Find next largest power of 2
-//
 
 long int MiscMath::nextpow2( const int a )
 {
@@ -771,13 +771,17 @@ std::vector<double> MiscMath::remove_median_filter( const std::vector<double> & 
 std::vector<double> MiscMath::median_filter( const std::vector<double> & x , int n )
 {
 
+  if ( n < 2 ) return x;
+    
   bool odd = n % 2 ; 
   
   // For N odd, Y(k) is the median of X( k-(N-1)/2 : k+(N-1)/2 ).
   // For N even, Y(k) is the median of X( k-N/2 : k+N/2-1 ).
 
   const int t = x.size();
-
+  
+  if ( t <= n ) return x;
+  
   std::vector<double> ret( t , 0 );
   
   int v1 = odd ? (n-1)/2 : n/2;

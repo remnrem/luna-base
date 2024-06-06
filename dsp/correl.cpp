@@ -73,6 +73,13 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   
   int sr = param.has( "sr" ) ? param.requires_int( "sr" ) : 0 ;
 
+
+  //
+  // write both r(b,a) and r(a,b) 
+  //
+
+  const bool output_both = param.has( "output-both" );
+  std::map<std::string,std::map<std::string,double> > rba, clocsba;
   
   writer.var( "R" , "Channel correlation (-1..1)" );
 
@@ -356,9 +363,17 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 		  {
 		    writer.value( "R" , r );
 
+		    // save in all-by-all whole channel mode (if output-both set)
+		    if ( (! epoched) && all_by_all )
+		      {
+			rba[ signals2.label(j) ][ signals1.label(i) ] = -r ;
+			if ( has_clocs )
+			  clocsba[ signals2.label(j) ][ signals1.label(i) ] = S(i,j) ;
+			
+		      }
 		    if ( has_clocs ) // actually similarities...
 		      writer.value( "S" , S(i,j) );
-
+		    
 		  }
 	      
 	      
@@ -368,7 +383,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	      
 	      if ( (!epoched) && ch_summaries )
 		{
-
+		  
 		  bool include = true;
 		  
 		  // exclude based on spatial distance?
@@ -444,6 +459,44 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
     writer.unepoch();
 
 
+
+  //
+  // If all-by-all whole channel, optionally output reversed values
+  //  (i.e. to get full matrix, not just triangular) 
+  //
+
+  if ( all_by_all && rba.size() )
+    {
+      
+      for (int i=0;i<ns1;i++)
+	{	  
+	  if ( edf.header.is_annotation_channel( signals1(i) ) ) continue;
+	  for (int j=0;j<ns2;j++)
+	    {
+	      if ( edf.header.is_annotation_channel( signals2(j) ) ) continue;	      
+	      if ( ! ( j <= i ) ) continue;
+
+	      const std::string s1 = signals1.label(i);
+	      const std::string s2 = signals2.label(j);
+
+	      // should not happen... 
+	      if ( rba.find( s1 ) == rba.end() ) continue;
+	      if ( rba[ s1 ].find( s2 ) == rba[ s1 ].end() ) continue;
+	      
+	      // output r(b,a)	      
+	      writer.level( s1 , globals::signal1_strat );
+	      writer.level( s2 , globals::signal2_strat );
+	      
+	      writer.value( "R" , rba[ s1 ][ s2 ] );
+
+	      if ( has_clocs )
+		writer.value( "S" , clocsba[ s1 ][ s2 ] );
+	    }
+	}
+      writer.unlevel( globals::signal2_strat );
+      writer.unlevel( globals::signal1_strat );      
+    }
+
   //
   // Summaries over epochs
   //
@@ -468,7 +521,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	      
 	      writer.value( "R_MEAN" , mean_r );   
 	      writer.value( "R_MEDIAN" , median_r );
-
+	      
 	      //
 	      // Spatial similarity?
 	      //

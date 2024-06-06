@@ -3207,7 +3207,10 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       lunapi_inst_ptr p = lp->inst( "id1" );
       p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
       p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
-      
+
+      //p->attach_edf( "~/luna-api-notebooks/pats-800227-baseline.edf" );
+      //p->attach_annot( "~/luna-api-notebooks/pats-800227-baseline.annot" );
+
       std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n";
       
       std::vector<std::string> d = p->desc();
@@ -3225,7 +3228,10 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       segsrv_t segsrv( p );
 
       std::cout << "S2\n";
-      std::vector<std::string> chs = { "EEG" , "SaO2", "AIRFLOW" } ;
+      std::vector<std::string> chs = { "SaO2" , "PR" , "EEG", "EEG_sec" , "ECG" , "EMG" ,  "EOG_L" , "EOG_R" , "EEG",
+				       "AIRFLOW" , "THOR_RES" , "ABDO_RES" , "POSITION" , "LIGHT" , "OX_STAT"   };
+
+
       std::vector<std::string> anns = {  "Arousal", "Hypopnea", "N1", "N2", "N3", "Obstructive_Apnea", "R", "SpO2_artifact","SpO2_desaturation","W"  };
 
       
@@ -3236,9 +3242,19 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       // bands, hjorth
       //      segsrv.calc_bands( chs_b );
       //      segsrv.calc_hjorths( chs_h );
+
+      segsrv.calc_bands( chs_b );
+      segsrv.calc_hjorths( chs_h );
+
       std::cout << "S4\n";
       
       segsrv.populate( chs , anns ) ;
+
+
+      //      std::cout << "EEG H " << segsrv.get_hjorths( "EEG" ) << "\n\n";
+
+      //std::exit(1);
+      
       std::cout << "S5\n";
       
       //std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
@@ -3254,9 +3270,57 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       segsrv.compile_evts( anns );
       XX1 = segsrv.get_signal( "EEG" );
       
+      //      std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
+      // segsrv.set_window( 3000, 5000 );
+      // segsrv.compile_evts( anns );
+      //     std::exit(0);
+
+      std::cout << "\n---------------------------------\n";
+      float a = 0 , b = 61440;
+      std::cout	<< "\n--------------------------------- (SET WINDOW)\n";
+
+      segsrv.set_window( a, b );
+      std::cout	<< "\n--------------------------------- (DONE)\n";
+      segsrv.compile_evts( anns );
+
+      for (int s=0;s<chs.size();s++)
+	{
+	  std::cout << " --> " << chs[s] << "\n";
+	  
+	  Eigen::VectorXf XX = segsrv.get_scaled_signal( chs[s] , s );
+							 
+	  //Eigen::VectorXf TT = segsrv.get_timetrack( chs[s]);
+	  std::cout << XX << "\n";
+	}
 
       std::exit(0);
       
+      a += 30.0;
+      b += 30.0;
+      std::cout	<< "\n--------------------------------- (SET WINDOW)\n";
+      segsrv.set_window( a, b );
+      std::cout	<< "\n--------------------------------- (DONE)\n";
+      segsrv.compile_evts( anns );
+      for (int s=0;s<chs.size();s++)
+	{
+	  Eigen::VectorXf XX = segsrv.get_scaled_signal( chs[s] , s);
+	  Eigen::VectorXf TT = segsrv.get_timetrack( chs[s]);
+	}
+      a -= 30.001;
+      b -= 30.001;
+      std::cout	<< "\n--------------------------------- (SET WINDOW)\n";
+      segsrv.set_window( a, b );
+      std::cout	<< "\n--------------------------------- (DONE)\n";
+      segsrv.compile_evts( anns );
+      for (int s=0;s<chs.size();s++)
+	{
+	  Eigen::VectorXf XX = segsrv.get_scaled_signal( chs[s], s);
+	  Eigen::VectorXf TT = segsrv.get_timetrack( chs[s]);
+	}
+      std::exit(0);
+
+
+
       int a1 = 0, b1 = 30;
       bool okay;
 
@@ -3295,8 +3359,8 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       
       std::exit(1);
       std::cout << "EEG B " << segsrv.get_bands( "EEG" ) << "\n\n";
+      
 
-      std::cout << "EEG H " << segsrv.get_hjorths( "EEG" ) << "\n\n";
       
       // void set_scaling( const int nchs , const int nanns ,
       // 			const double yscale , const double ygroup ,

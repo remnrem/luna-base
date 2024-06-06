@@ -1209,6 +1209,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "GP" ) )           gc_wrapper( edf , param(c) ); 
       else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
 
+      else if ( is( c, "SVD" ) )          proc_svd( edf, param(c) );
       else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
       else if ( is( c, "ADJUST" ) )       proc_adjust( edf , param(c) ); 
 
@@ -3421,6 +3422,13 @@ void proc_dfa( edf_t & edf , param_t & param )
 void proc_ica( edf_t & edf , param_t & param )
 {
   dsptools::ica_wrapper( edf , param );
+}
+
+// SVD : singular value decomposition on signals
+
+void proc_svd( edf_t & edf , param_t & param )
+{
+  dsptools::svd_wrapper( edf , param );
 }
 
 // COH : calculate cross spectral coherence, using new/default code
