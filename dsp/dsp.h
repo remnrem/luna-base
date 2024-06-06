@@ -78,6 +78,7 @@
 #include "reduce.h"
 #include "wrappers.h"
 #include "ica-wrapper.h"
+#include "svd.h"
 #include "sl.h"
 #include "shift.h"
 #include "scramble.h"

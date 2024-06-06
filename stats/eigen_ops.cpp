@@ -157,7 +157,7 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
 			      const bool ignore_invariants , std::vector<int> * zeros )
 {
   // 1) winsorize at +/- w 
-
+  
   const int rows = m.rows();
   const int cols = m.cols();
   for (int c=0;c<cols;c++)

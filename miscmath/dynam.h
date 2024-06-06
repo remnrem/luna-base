@@ -28,12 +28,21 @@
 #include <set>
 #include <string>
 
+// helper function
+
+struct edf_t;
+struct param_t;
+
+bool dynam_compile_cycles( edf_t & edf , std::vector<std::string> * , std::vector<int> * );
+
 // wrapper
-void dynam_report( const std::vector<double> & y , 
+void dynam_report( param_t & param,
+		   const std::vector<double> & y , 
 		   const std::vector<double> & t , 
 		   const std::vector<std::string> * g = NULL ); 
 
-void dynam_report_with_log( const std::vector<double> & y , 
+void dynam_report_with_log( param_t & param,
+			    const std::vector<double> & y , 
 			    const std::vector<double> & t , 
 			    const std::vector<std::string> * g = NULL ); 
 
@@ -125,6 +134,108 @@ struct dissipation_t
   
   std::vector<double> s;
 
+};
+
+
+// separate class for quantitative differences
+
+struct qdynam_results_t
+{
+
+  qdynam_results_t()
+  {
+    sd = 0;
+    mean = 0;
+    cv = 0;
+    tstat1 = tstat2 = 0;
+    ne = 0;
+
+    tmax = amax = lmax = rmax = 0;
+    tmin = amin = lmin = rmin = 0;
+    tminmax = aminmax = lminmax = rminmax = 0;
+  }
+
+  double sd;
+  double mean;
+  double cv;
+  double tstat1; // based on simple epoch count
+  double tstat2; // uses 'actual' (not clock) epoch count
+
+  double tmax; // time from start to max (post smoothing) (epochs)
+  double amax; // max amplitude (expressed as max - min) 
+  double lmax; // amax * tmax (i.e. how sustained and large the increase)
+  double rmax; // amax / tmax (i.e. how quick to max) 
+
+  // as above, but for mins
+  double tmin; // time from start to max (post smoothing) (epochs)
+  double amin; // max amplitude (expressed as max - min) 
+  double lmin; // amax * tmax (i.e. how sustained and large the increase)
+  double rmin; // amax / tmax (i.e. how quick to max) 
+
+  // min vs max
+  double tminmax; // time from start to max (post smoothing) (epochs)
+  double aminmax; // max amplitude (expressed as max - min) 
+  double lminmax; // amax * tmax (i.e. how sustained and large the increase)
+  double rminmax; // amax / tmax (i.e. how quick to max) 
+
+  int ne; // number of epochs included  
+  
+};
+
+struct qdynam_t
+{
+  
+  qdynam_t( const int ne , const std::vector<std::string> * cycles = NULL ) ;
+
+  void winsorize( const double p );
+  void log_transform( const bool b ) { logscale = b; }
+  void set_smoothing_median_window( const int w ) { median_window = w; } 
+  void set_smoothing_mean_window( const int w ) { mean_window = w; } 
+  void include( const std::vector<int> & );
+  void include( const std::vector<bool> & );
+  void set_epochs(  const std::vector<int> & );
+  void set_min_ne( const int x ) { min_ne = x ; } 
+  void proc( const std::vector<double> & x );
+      
+  std::vector<double> results() const;
+  
+  std::map<std::string,std::vector<double> > stratified_results() const;
+
+  qdynam_results_t r1; // all
+  qdynam_results_t rb; // between cycle
+  qdynam_results_t rwa; // average of within-cycle results
+  std::map<std::string,qdynam_results_t> rw; // within cycle
+  
+  std::vector<double> r1_smoothed_series; // copy for TOT
+  std::map<std::string,std::vector<double> > rw_smoothed_series; // within cycle
+   
+private:
+  
+  std::vector<std::string> cycles;  
+  bool has_cycles;  
+  int ne; 
+  int min_ne; // to include an cycle in the within-mean
+  int median_window;
+  int mean_window;
+
+  std::vector<double> ss; // smoothed series
+  
+  std::vector<bool> incl;
+  std::vector<int> epochs;
+
+  double winsor;
+  bool logscale;
+  
+  // results
+  
+  // main calc function
+  qdynam_results_t calc( const std::vector<double> & xx ,
+			 const std::vector<int> & ee ,
+			 const bool skip_smoothing = false );
+public:
+  static void output_helper( const qdynam_results_t & res , const bool verbose );
+
+  
 };
 
 

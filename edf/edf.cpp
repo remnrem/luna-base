@@ -1076,7 +1076,7 @@ bool edf_record_t::read( int r )
     {
       
       if ( ! edf->edfz->read_record( r , p , edf->record_size ) ) 
-	Helper::halt( "corrupt .edfz or .idx" );      
+	Helper::halt( "corrupt .edfz or .idx" );
 
     }
 

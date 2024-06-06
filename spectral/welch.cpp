@@ -97,7 +97,7 @@ annot_t * spectral_power( edf_t & edf ,
   // Hjorth stats just consider all points concatenated
   // trend lines are based on observed E numbers 
 
-  const bool calc_dynamics = param.has( "dynamics" );
+  const bool calc_dynamics = param.has( "dynamics" ) || param.has( "dynam" );
   
   // Verbose output: full spectrum per epoch
 
@@ -545,10 +545,10 @@ annot_t * spectral_power( edf_t & edf ,
 	   
 	   
 	   //
-	   // track epoch numbers (for dynam_t)
+	   // track epoch numbers (for dynam_t) -- use display number -1 (so 0-based)
 	   //
 	   
-	   epochs.push_back( epoch );
+	   epochs.push_back(  edf.timeline.display_epoch( epoch ) - 1  );
 
 	   //
 	   // Epoch-level output
@@ -1157,16 +1157,16 @@ annot_t * spectral_power( edf_t & edf ,
 		  
 		  // nb. uses current epoch encoding
 		  // take up to 10 cycles
-		  if      ( edf.timeline.epoch_annotation( "_NREMC_1" , epochs[e] ) ) c = "C1";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_2" , epochs[e] ) ) c = "C2";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_3" , epochs[e] ) ) c = "C3";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_4" , epochs[e] ) ) c = "C4";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_5" , epochs[e] ) ) c = "C5";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_6" , epochs[e] ) ) c = "C6";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_7" , epochs[e] ) ) c = "C7";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_8" , epochs[e] ) ) c = "C8";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_9" , epochs[e] ) ) c = "C9";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_10" , epochs[e] ) ) c = "C10";
+		  if      ( edf.timeline.epoch_annotation( "_NREMC_1" ,  e ) ) c = "C1";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_2" ,  e ) ) c = "C2";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_3" ,  e ) ) c = "C3";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_4" ,  e ) ) c = "C4";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_5" ,  e ) ) c = "C5";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_6" ,  e ) ) c = "C6";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_7" ,  e ) ) c = "C7";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_8" ,  e ) ) c = "C8";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_9" ,  e ) ) c = "C9";
+		  else if ( edf.timeline.epoch_annotation( "_NREMC_10" , e ) ) c = "C10";
 		  
 		  cycle.push_back( c );
 		  
@@ -1177,19 +1177,20 @@ annot_t * spectral_power( edf_t & edf ,
 	  //
 	  // band power 
 	  //
-
+	  
 	  if ( bands )
 	    {
 	      std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
-	      
+
+
 	      while ( ii != bandaid.track_band.end() )
 		{	      
 		  writer.level( globals::band( ii->first ) , globals::band_strat );
-		  
+
 		  if ( has_cycles )
-		    dynam_report_with_log( ii->second , epochs , &cycle );
+		    dynam_report_with_log( param, ii->second , epochs , &cycle );
 		  else
-		    dynam_report_with_log( ii->second , epochs );
+		    dynam_report_with_log( param, ii->second , epochs ); 		  
 		  
 		  ++ii;
 		}
@@ -1216,9 +1217,9 @@ annot_t * spectral_power( edf_t & edf ,
 		  writer.level( freqs[ ii->first ] , globals::freq_strat );		  
 		  
 		  if ( has_cycles )
-		    dynam_report_with_log( ii->second , epochs , &cycle );
+		    dynam_report_with_log( param, ii->second , epochs , &cycle );
 		  else
-		    dynam_report_with_log( ii->second , epochs );
+		    dynam_report_with_log( param, ii->second , epochs );
 		  
 		  ++ii;
 		  

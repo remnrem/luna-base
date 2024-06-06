@@ -3594,7 +3594,7 @@ void hypnogram_t::output( const bool verbose ,
   // Epoch-level annotation of NREM cycles also (both STAGE and HYPNO)
   //   (really, special legacy case, used by PSD dynamics...
   //    can likely retire over time)
-
+  
   for (int e=0;e<timeline->num_epochs() ;e++)
     if ( sleep_cycle_number[e] ) 
       {	
