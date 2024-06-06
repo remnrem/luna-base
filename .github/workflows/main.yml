@@ -93,6 +93,56 @@ jobs:
         with:
           name: mac-luna.tar.gz
           path: mac-luna.tar.gz
+          
+  macos-arm64-build:
+      runs-on: macos-14              
+      steps:
+      - uses: actions/checkout@v2  
+      - name: Install dependencies
+        run: |
+          cd ${HOME}
+          brew install cmake gcc boost
+      
+      - name: Clone and build LightGBM
+        run: |
+          cd ${HOME}
+          git clone --recursive https://github.com/microsoft/LightGBM
+          cd LightGBM
+          mkdir build
+          cd build
+          cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON ..
+          make -j4
+          
+      - name: Build FFTW
+        run: |
+          cd ${HOME}
+          wget http://www.fftw.org/fftw-3.3.10.tar.gz
+          tar -xzvf fftw-3.3.10.tar.gz
+          cd fftw-3.3.10
+          ./configure --prefix=$HOME/fftw-3.3.10 CFLAGS="-arch arm64"
+          make
+          make install
+    
+      - name: Final Build
+        run: |
+          make ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-3.3.10
+          ref='refs/tags/v'
+          if [[ ${{ github.ref }} == *${ref}* ]]; then
+            v=$(echo ${{ github.ref }} | cut -d'/' -f3)
+            mkdir luna-${v}
+            cp luna destrat behead luna-${v}/
+            cd luna-${v}/
+            otool -L ./luna
+            cd ..
+            tar cvzf macos-arm64-luna.tar.gz luna-${v}/
+          fi
+    
+      - uses: actions/upload-artifact@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: macos-arm64-luna.tar.gz
+          path: macos-arm64-luna.tar.gz
+          
   linux-build:
     runs-on: ubuntu-latest
     steps:
@@ -121,20 +171,21 @@ jobs:
           make FFTW=${HOME}/fftw-3.3.8 LGBM=1 LGBM_PATH=${HOME}/LightGBM
   release:
     runs-on: ubuntu-latest
-    needs: [linux-build, macos-build, windows-build]
+    needs: [linux-build, macos-build, windows-build, macos-arm64-build]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v2
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Luna_Release ${{ github.ref }}
-          draft: false
-          prerelease: false
+          tag: ${{ github.ref }}
+          name: Luna_Release ${{ github.ref }}
+          draft: "false"
+          prerelease: "false"
+          allowUpdates: "true"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/download-artifact@v2
         id: download
         with:
@@ -144,23 +195,34 @@ jobs:
           cd ${{steps.download.outputs.download-path}}
           mv mac-luna.tar.gz/mac-luna.tar.gz mac_luna.tar.gz
           mv win-luna.zip/win-luna.zip win_luna.zip
+          mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos_arm64_luna.tar.gz
+          
       - name: Upload Release Asset Mac
         id: upload-release-asset-mac
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: mac_luna.tar.gz
-          asset_name: mac_luna.tar.gz
-          asset_content_type: application/gzip
+          artifacts: "mac_luna.tar.gz"
+          name: "mac_luna.tar.gz"
+          artifactContentType: "application/gzip"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: "true"
+          
+      - name: Upload Release Asset Mac arm64
+        id: upload-release-asset-mac-arm64
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "macos_arm64_luna.tar.gz"
+          name: "macos_arm64_luna.tar.gz"
+          artifactContentType: "application/gzip"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: "true"
+          
       - name: Upload Release Asset Win
         id: upload-release-asset-win
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@v1
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: win_luna.zip
-          asset_name: win_luna.zip
-          asset_content_type: application/zip
+          artifacts: "win_luna.zip"
+          name: "win_luna.zip"
+          artifactContentType: "application/gzip"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: "true"
