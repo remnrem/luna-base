@@ -827,7 +827,8 @@ void qdynam_t::proc( const std::vector<double> & x )
   std::set<std::string> uniq_cycles; 
   if ( has_cycles ) 
     for (int i=0;i<nie; i++)
-      uniq_cycles.insert( c1[i] ) ;
+      if ( c1[i] != "." && c1[i] != "" )
+	uniq_cycles.insert( c1[i] ) ;
   
   // winsorize?
   if ( winsor > 0 )
