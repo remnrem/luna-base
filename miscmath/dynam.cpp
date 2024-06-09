@@ -110,7 +110,7 @@ void dynam_report_with_log( param_t & param,
 			    const std::vector<std::string> * g )
 {
   std::vector<double> yl( y.size() );
-  for (int i=0;i<y.size();i++) yl[i] = log( y[i] );
+  for (int i=0;i<y.size();i++) yl[i] = 10 * log10( y[i] );
   dynam_report( param, yl , t , g );
 }
 
@@ -151,7 +151,7 @@ void dynam_report( param_t & param,
   const bool verbose = param.has( "dynam-verbose" );
   const bool epoch_output = param.has( "dynam-epoch" );
   
-  const double qd_winsor = param.has( "dynam-winsor" ) ? param.requires_dbl( "dynam-winsor" ) : 0.02 ;  
+  const double qd_winsor = param.has( "dynam-winsor" ) ? param.requires_dbl( "dynam-winsor" ) : 0.05 ;  
   qd.winsorize( qd_winsor );
 
   if ( param.has( "dynam-median-window" ) )
@@ -199,6 +199,56 @@ void dynam_report( param_t & param,
   writer.unlevel( "QD" );
 
   //
+  // q10 outputs  
+  //
+
+
+  // overall
+  const std::vector<double> & ss = qd.r1_q10;
+  const std::vector<double> & os = qd.r1_os_q10;
+  
+  // epochs contains nq(=10) quantiles
+  
+  writer.level( "TOT" , "QD" );
+  for (int i=0; i< ss.size(); i++)
+    {
+      writer.level(i+1,"Q");
+      writer.value( "SS" , ss[i] );
+      writer.value( "OS" , os[i] );
+    }
+  writer.unlevel( "Q" );
+  
+  
+  // cycles
+  if ( has_cycles )
+    {
+      
+      std::map<std::string,std::vector<double> > & cycs = qd.rw_q10;
+      std::map<std::string,std::vector<double> >::const_iterator cc = cycs.begin();
+      
+      while ( cc != cycs.end() )
+	{
+	  writer.level( "W_" + cc->first , "QD" );
+	  
+	  const std::vector<double> & ss = cc->second;
+	  const std::vector<double> & os = qd.rw_os_q10[ cc->first ];
+		    
+	  for (int i=0; i<ss.size(); i++)
+	    {
+	      writer.level( i + 1 , "Q" ); 
+	      writer.value( "SS" , ss[i] );
+	      writer.value( "OS" , os[i] );
+	    }
+	  writer.unlevel( "Q" );
+	  
+	  ++cc;
+	}
+    }
+  
+  writer.unlevel( "QD" );
+
+      
+  //
   // optional outputs
   //
 
@@ -234,10 +284,11 @@ void dynam_report( param_t & param,
 	      writer.level( "W_" + cc->first , "QD" );
 	      
 	      const std::vector<double> & ss = cc->second;
+	      const std::vector<int> & ee = qd.rw_epochs[ cc->first ];
 	      
 	      for (int i=0; i<ss.size(); i++)
 		{
-		  writer.epoch( i + 1 ); // 1-based outputs     
+		  writer.epoch( ee[i] + 1 ); // 1-based outputs
 		  writer.value( "SS" , ss[i] );
 		}
 	      writer.unepoch();
@@ -721,6 +772,9 @@ qdynam_t::qdynam_t( const int ne , const std::vector<std::string> * pcycles )
   min_ne = 10;  // default limit (10 epochs, 5 mins)
   median_window = 19; // ~10 mins
   mean_window = 9;
+  norm01 = false;
+  wcycles = false;
+  nq = 10;
 }
 
 
@@ -822,7 +876,7 @@ void qdynam_t::proc( const std::vector<double> & x )
   if ( logscale )
     for (int i=0;i<nie; i++)
       x1[i] = log1p( x1[i] );
-
+  
   // delineate cycles
   std::set<std::string> uniq_cycles; 
   if ( has_cycles ) 
@@ -834,23 +888,30 @@ void qdynam_t::proc( const std::vector<double> & x )
   if ( winsor > 0 )
     MiscMath::winsorize( &x1 , winsor );
 
+  // copy before norming (for original nq) 
+  std::vector<double> ox1 = x1;
+  
   // normalize x1 to be positive
   double xmin = x1[0];
-
+  double xmax = x1[0];
+  
   for (int i=1;i<nie;i++)
     if ( x1[i] < xmin ) xmin = x1[i];
-  
-  for (int i=0;i<nie; i++)
-    x1[i] -= xmin;
-  
-  // std::cout << "\n\n----\n";
 
-  // for (int i=0;i<nie; i++)
-  //   std::cout << "det\t" 
-  //  	      << x1[i] << "\t"
-  //  	      << c1[i] << "\t"
-  //  	      << e1[i] << "\n";
-  
+  if ( norm01 )
+    for (int i=1;i<nie;i++)
+      if ( x1[i] > xmax ) xmax = x1[i];
+
+  if ( norm01 ) // full 0..1 norming
+    {
+      for (int i=0;i<nie; i++)
+	x1[i] = ( x1[i] - xmin ) / ( xmax - xmin );
+    }
+  else // just shift so that min == 0 
+    {
+      for (int i=0;i<nie; i++)
+	x1[i] -= xmin;
+    }
   
   //
   // stats
@@ -858,23 +919,30 @@ void qdynam_t::proc( const std::vector<double> & x )
 
   // 1) overall
 
-  r1 = calc( x1 , e1 );
+  r1 = calc( x1 , ox1, e1 );
 
   // store here for TOT, in case we want to output the
   // total smoothed series later
-  r1_smoothed_series = ss;
+  r1_smoothed_series = ss;  
+  r1_q10 = qnt( ss , nq );
+  r1_os_q10 = qnt( os , nq ); 
+  
   
   if ( ! has_cycles ) return;
     
   // 2) stratified by 'cycle' 
 
   std::vector<double> xc;
+  std::vector<double> oxc; // original
   std::vector<int> ec;
 
+  int wtote = 0;
+  
   std::set<std::string>::const_iterator cc = uniq_cycles.begin();
   while ( cc != uniq_cycles.end() )
     {
       std::vector<double> x2;
+      std::vector<double> ox2;
       std::vector<int> e2;
 
       for (int i=0; i<nie; i++)
@@ -882,46 +950,60 @@ void qdynam_t::proc( const std::vector<double> & x )
 	  if ( c1[i] == *cc )
 	    {
 	      x2.push_back( x1[i] );
+	      ox2.push_back( ox1[i] );
 	      e2.push_back( e1[i] );
 	    }
 	}
 
-      // do calces
-      rw[ *cc ] = calc( x2 , e2 ); 
-
-      // store
-      rw_smoothed_series[ *cc ] = ss;
       
-      // save means (for between-cycle stats)
-      // if big enough
+      // only do if big enough
       if ( x2.size() >= min_ne )
 	{
+
+	  // do calcs (sets 'os' and 'ss')
+	  rw[ *cc ] = calc( x2 , ox2, e2 ); 
+	  
+	  // store
+	  rw_smoothed_series[ *cc ] = ss;
+	  rw_epochs[ *cc ] = e2;
+	  
+	  rw_q10[ *cc ] = qnt( ss , nq );
+	  
+	  rw_os_q10[ *cc ] = qnt( os , nq );
+	  
+	  // save means (for between-cycle stats)
 	  // for between -cycle stats (based on means)
 	  xc.push_back( rw[ *cc ].mean );
+	  oxc.push_back( rw[ *cc ].omean );
 	  ec.push_back( MiscMath::mean( e2 ) );
 	  
 	  // for calculating average of within-cycle effects
 	  rwa.ne++;
-	  rwa.sd += rw[ *cc ].sd;
-	  rwa.mean += rw[ *cc ].mean;
-	  rwa.cv += rw[ *cc ].cv;
-	  rwa.tstat1 += rw[ *cc ].tstat1;
-	  rwa.tstat2 += rw[ *cc ].tstat2;
+	  
+	  int w = wcycles ? x2.size() : 1 ; // i.e. 1= no weighting
 
-	  rwa.tmax += rw[ *cc ].tmax;
-	  rwa.amax += rw[ *cc ].amax;
-	  rwa.lmax += rw[ *cc ].lmax;
-	  rwa.rmax += rw[ *cc ].rmax;
+	  wtote += x2.size();
+	  
+	  rwa.sd     += w * rw[ *cc ].sd  ;
+	  rwa.mean   += w * rw[ *cc ].mean ;
+	  rwa.cv     += w * rw[ *cc ].cv;
+	  rwa.tstat1 += w * rw[ *cc ].tstat1;
+	  rwa.tstat2 += w * rw[ *cc ].tstat2;
 
-	  rwa.tmin += rw[ *cc ].tmin;
-	  rwa.amin += rw[ *cc ].amin;
-	  rwa.lmin += rw[ *cc ].lmin;
-	  rwa.rmin += rw[ *cc ].rmin;
+	  rwa.tmax += w * rw[ *cc ].tmax;
+	  rwa.amax += w * rw[ *cc ].amax;
+	  rwa.lmax += w * rw[ *cc ].lmax;
+	  rwa.rmax += w * rw[ *cc ].rmax;
 
-	  rwa.tminmax += rw[ *cc ].tminmax;
-	  rwa.aminmax += rw[ *cc ].aminmax;
-	  rwa.lminmax += rw[ *cc ].lminmax;
-	  rwa.rminmax += rw[ *cc ].rminmax;
+	  rwa.tmin += w * rw[ *cc ].tmin;
+	  rwa.amin += w * rw[ *cc ].amin;
+	  rwa.lmin += w * rw[ *cc ].lmin;
+	  rwa.rmin += w * rw[ *cc ].rmin;
+
+	  rwa.tminmax += w * rw[ *cc ].tminmax;
+	  rwa.aminmax += w * rw[ *cc ].aminmax;
+	  rwa.lminmax += w * rw[ *cc ].lminmax;
+	  rwa.rminmax += w * rw[ *cc ].rminmax;
 
 	}
       ++cc;
@@ -931,38 +1013,45 @@ void qdynam_t::proc( const std::vector<double> & x )
   if ( xc.size() > 1 )
     {
       const bool SKIP_SMOOTHING = true;
-      rb = calc( xc , ec , SKIP_SMOOTHING );
+      rb = calc( xc , oxc , ec , SKIP_SMOOTHING ); 
     }
 
   // average within cycle
   if ( rwa.ne > 1 ) 
     {
-      rwa.sd /= (double) rwa.ne ;
-      rwa.mean /= (double) rwa.ne ;
-      rwa.cv /= (double) rwa.ne ;
-      rwa.tstat1 /= (double) rwa.ne ;
-      rwa.tstat2 /= (double) rwa.ne ;
 
-      rwa.tmax /= (double) rwa.ne ;
-      rwa.amax /= (double) rwa.ne ;
-      rwa.lmax /= (double) rwa.ne ;
-      rwa.rmax /= (double) rwa.ne ;
+      // either total number of epochs ( in weighted case)
+      // or # of cycles (in unweighted case)
+      
+      double denom = wcycles ? wtote : rwa.ne ; 
 
-      rwa.tmin /= (double) rwa.ne ;
-      rwa.amin /= (double) rwa.ne ;
-      rwa.lmin /= (double) rwa.ne ;
-      rwa.rmin /= (double) rwa.ne ;
+      rwa.sd /= denom ;
+      rwa.mean /= denom ;
+      rwa.cv /= denom ;
+      rwa.tstat1 /= denom ;
+      rwa.tstat2 /= denom ;
 
-      rwa.tminmax /= (double) rwa.ne ;
-      rwa.aminmax /= (double) rwa.ne ;
-      rwa.lminmax /= (double) rwa.ne ;
-      rwa.rminmax /= (double) rwa.ne ;
+      rwa.tmax /= denom ;
+      rwa.amax /= denom ;
+      rwa.lmax /= denom ;
+      rwa.rmax /= denom ;
+
+      rwa.tmin /= denom ;
+      rwa.amin /= denom ;
+      rwa.lmin /= denom ;
+      rwa.rmin /= denom ;
+
+      rwa.tminmax /= denom ;
+      rwa.aminmax /= denom ;
+      rwa.lminmax /= denom ;
+      rwa.rminmax /= denom ;
 
     }
   
 }
 
 qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
+				 const std::vector<double> & ox , // original (unnormed)
 				 const std::vector<int> & ee ,
 				 const bool skip_smoothing )
 {
@@ -978,16 +1067,13 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   // don't want to smooth again, thus the option to skip
   
   ss = xx;
-  
+  os = ox;
+
   if ( ! skip_smoothing )
-    {
-      // initial median filter
-      if ( median_window > 1 ) 
-	ss = MiscMath::median_filter( ss , median_window );
+    ss = qdynam_t::smooth( ss , median_window , mean_window );
+
+  //os = qdynam_t::smooth( ss , median_window , mean_window );
       
-      // secondary moving average filter
-      ss = MiscMath::moving_average( ss , mean_window );
-    }
   
   // 1) scale: min = 0, max = whatever
   // 2) t : either scale 0..(ne-1)
@@ -1045,10 +1131,12 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   // basics
   //
 
+  r.omean = MiscMath::mean( os );
+
   r.sd = MiscMath::sdev( ss );
   r.mean = MiscMath::mean( ss );
   r.cv = r.sd / r.mean;
-
+  
   //
   // max/min stats
   //
@@ -1108,6 +1196,8 @@ void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose 
 {
 
   writer.value( "N" , res.ne );
+  writer.value( "OMEAN" , res.omean ); // unnormed, unsmoothed original (e.g. PSD) score
+
   writer.value( "MEAN" , res.mean );
   writer.value( "SD" , res.sd );
   writer.value( "T" , res.tstat2 );
@@ -1141,4 +1231,82 @@ void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose 
 	  writer.value( "MINMAX_RATIO" , res.rminmax );
 	}
     }
+}
+
+std::vector<double> qdynam_t::qnt( const std::vector<double> & x , const int nq )
+{
+  std::vector<double> q( nq );
+  const int n = x.size();
+  const double s = n / (double)nq;
+
+  double w = 0;
+
+  for (int i=0;i<nq; i++)
+    {
+
+      // span from 'w' to 'w+s'
+      //  if 'w' is fractional, include 1 - f of w
+      double w2 = w + s;
+      double t = 0 ;
+
+      //std::cout << " going " << w << " to " << w2 << "\n";
+      
+      while ( 1 )
+	{
+	  int w1 = w;
+	  double f = w - w1;
+	  
+	  // (fractional) part of first block 
+	  t += x[w1] * ( 1 - f );
+
+	  //std::cout << " adding " << w1 << " wgt " << (1-f) << "\n";
+
+	  // next 
+	  // (fractional, potentially zero, part of next)
+	  w += ( 1 - f );
+	  	  
+	  if ( w2 - w > 1 ) f = 1 - f;
+	  else f = w2 - w; 
+
+	  if ( f > 0 && w1  < n )
+	    {
+	      t += x[ w1 ] * f;	      
+	      //std::cout << " a(2nd) " << w1+1 << " wgt " << f << "\n";
+	    }
+	  
+	  // slide one however much chunked off
+	  w += f;
+	  
+	  // done
+	  if ( w >= w2 || fabs( w - w2 ) < 1e-4 ) break;
+	}
+      //std::cout << " done\n";
+      
+      q[ i ] = t / (double) s;
+      
+    }
+  
+  return q;
+}
+
+
+std::vector<double> qdynam_t::smooth( const std::vector<double> & x , const int w1, const int w2 )
+{
+  
+  // initial median filter
+  if ( w1 > 1 )
+    {
+      if ( w2 > 1 )
+	return MiscMath::moving_average( MiscMath::median_filter( x , w1 ) , w2 );
+      else
+	return MiscMath::median_filter( x , w1 );
+    }
+  else
+    {
+      if ( w2 > 1 )
+	return MiscMath::moving_average( x , w2 );
+      else
+        return x;
+    }
+  
 }

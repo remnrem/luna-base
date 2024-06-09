@@ -145,7 +145,7 @@ struct qdynam_results_t
   qdynam_results_t()
   {
     sd = 0;
-    mean = 0;
+    omean = mean = 0;
     cv = 0;
     tstat1 = tstat2 = 0;
     ne = 0;
@@ -154,7 +154,9 @@ struct qdynam_results_t
     tmin = amin = lmin = rmin = 0;
     tminmax = aminmax = lminmax = rminmax = 0;
   }
-
+  
+  double omean; // original input mean (post winsor/log)
+  
   double sd;
   double mean;
   double cv;
@@ -196,19 +198,32 @@ struct qdynam_t
   void set_epochs(  const std::vector<int> & );
   void set_min_ne( const int x ) { min_ne = x ; } 
   void proc( const std::vector<double> & x );
-      
+  void norm( const bool b ) { norm01 = b; }
+  void weight_cycles( const bool b ) { wcycles = b; } 
+  void set_nq ( const int x ) { nq = x; } 
   std::vector<double> results() const;
   
   std::map<std::string,std::vector<double> > stratified_results() const;
-
+  
   qdynam_results_t r1; // all
   qdynam_results_t rb; // between cycle
   qdynam_results_t rwa; // average of within-cycle results
   std::map<std::string,qdynam_results_t> rw; // within cycle
-  
+
+  // smoothed & normed series
   std::vector<double> r1_smoothed_series; // copy for TOT
   std::map<std::string,std::vector<double> > rw_smoothed_series; // within cycle
-   
+  std::map<std::string,std::vector<int> > rw_epochs; // within cycle
+
+  // quantile traces (ss)
+  std::vector<double> r1_q10; 
+  std::map<std::string,std::vector<double> > rw_q10; // within cycle  
+
+  // quantile traces (os)
+  // repeats, for original (smoothed) series
+  std::vector<double> r1_os_q10; 
+  std::map<std::string,std::vector<double> > rw_os_q10; // within cycle  
+  
 private:
   
   std::vector<std::string> cycles;  
@@ -217,8 +232,12 @@ private:
   int min_ne; // to include an cycle in the within-mean
   int median_window;
   int mean_window;
-
-  std::vector<double> ss; // smoothed series
+  bool norm01;
+  bool wcycles;
+  int nq;
+  
+  std::vector<double> ss; // smoothed series (normed)
+  std::vector<double> os; // original series (unnormed - but smoothed)
   
   std::vector<bool> incl;
   std::vector<int> epochs;
@@ -230,11 +249,15 @@ private:
   
   // main calc function
   qdynam_results_t calc( const std::vector<double> & xx ,
+			 const std::vector<double> & ox ,
 			 const std::vector<int> & ee ,
 			 const bool skip_smoothing = false );
 public:
   static void output_helper( const qdynam_results_t & res , const bool verbose );
 
+  static std::vector<double> qnt( const std::vector<double> & x , const int nq = 10 );
+
+  static std::vector<double> smooth( const std::vector<double> & x , const int w1, const int w2 );
   
 };
 
