@@ -198,7 +198,10 @@ struct qdynam_t
   void set_epochs(  const std::vector<int> & );
   void set_min_ne( const int x ) { min_ne = x ; } 
   void proc( const std::vector<double> & x );
-  void norm( const bool b ) { norm01 = b; }
+  void set_norm_max( const bool b ) { norm01 = b; }
+  void set_norm_mean( const bool b ) { norm_mean = b; }
+  void set_norm_cycles( const bool b ) { norm_each_section = b; }
+  bool norm_cycles() const { return norm_each_section; }
   void weight_cycles( const bool b ) { wcycles = b; } 
   void set_nq ( const int x ) { nq = x; } 
   std::vector<double> results() const;
@@ -232,8 +235,13 @@ private:
   int min_ne; // to include an cycle in the within-mean
   int median_window;
   int mean_window;
-  bool norm01;
-  bool wcycles;
+
+  bool norm01; // scale min-max to range 1.0 
+  bool norm_mean; // mean-center each trace
+  bool norm_each_section; // repeat norm for each cycle
+
+  bool wcycles; // weight each cycle by # epochs for BETWEEN
+
   int nq;
   
   std::vector<double> ss; // smoothed series (normed)
@@ -249,15 +257,17 @@ private:
   
   // main calc function
   qdynam_results_t calc( const std::vector<double> & xx ,
-			 const std::vector<double> & ox ,
 			 const std::vector<int> & ee ,
-			 const bool skip_smoothing = false );
+			 const bool do_smoothing ,  
+			 const bool do_norming );
 public:
-  static void output_helper( const qdynam_results_t & res , const bool verbose );
+  static void output_helper( const qdynam_results_t & res , const bool verbose , const bool between = false );
 
   static std::vector<double> qnt( const std::vector<double> & x , const int nq = 10 );
 
   static std::vector<double> smooth( const std::vector<double> & x , const int w1, const int w2 );
+
+  static void norm( std::vector<double> * x , const bool do_max , const bool do_mean );
   
 };
 

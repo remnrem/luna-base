@@ -159,7 +159,11 @@ void dynam_report( param_t & param,
   
   if ( param.has( "dynam-mean-window" ) )
     qd.set_smoothing_mean_window( param.requires_int( "dynam-mean-window" ) );
-
+  
+  if ( param.has( "norm-mean" ) ) qd.set_norm_mean( param.yesno( "norm-mean" ) );
+  else if ( param.has( "norm-max" ) ) qd.set_norm_max( param.yesno( "norm-max" ) );
+  
+  if ( param.has( "norm-cycles" ) ) qd.set_norm_cycles( param.yesno( "norm-cycles" ) );
   
   //
   // process
@@ -177,10 +181,13 @@ void dynam_report( param_t & param,
 
   if ( has_cycles )
     {
-      // between 
-      writer.level( "BETWEEN" , "QD" );
-      qdynam_t::output_helper( qd.rb , verbose );
-      
+      // between (only if not norming within each cycle)
+      if ( ! qd.norm_cycles() ) 
+	{
+	  writer.level( "BETWEEN" , "QD" );
+	  qdynam_t::output_helper( qd.rb , verbose , true );
+	}
+
       // average within
       writer.level( "WITHIN" , "QD" );
       qdynam_t::output_helper( qd.rwa , verbose );
@@ -237,7 +244,11 @@ void dynam_report( param_t & param,
 	    {
 	      writer.level( i + 1 , "Q" ); 
 	      writer.value( "SS" , ss[i] );
-	      writer.value( "OS" , os[i] );
+
+	      // do not show if not norming each section
+	      // (just the way things are calculated internally, we don't get this)
+	      if ( qd.norm_cycles() )
+		writer.value( "OS" , os[i] );
 	    }
 	  writer.unlevel( "Q" );
 	  
@@ -303,10 +314,16 @@ void dynam_report( param_t & param,
       
   
   
+
   //
-  // (original) method 2
+  // (original) method 2 (now requires dynam-ols flag)
   //
+
+
+  if ( ! param.has( "dynam-ols" ) ) return;
+  if ( ! param.yesno( "dynam-ols" ) ) return;
   
+
   //
   // Remove 'y' outliers
   //
@@ -770,11 +787,21 @@ qdynam_t::qdynam_t( const int ne , const std::vector<std::string> * pcycles )
   winsor = -1;
   logscale = false;
   min_ne = 10;  // default limit (10 epochs, 5 mins)
+  
+  
+  // default norm: only by min (set to 0) 
+  norm01 = false; // norm by min + max
+  norm_mean = false;  // offset by mean (not min) --> mean set at 100 
+  
+  norm_each_section = true;  // for each within-section, do a separate norm
+  
+  // smoothing
   median_window = 19; // ~10 mins
   mean_window = 9;
-  norm01 = false;
-  wcycles = false;
-  nq = 10;
+  
+  wcycles = false; // weight cycles by # epochs for BETWEEN  
+  
+  nq = 10; // default to 10 quantiles in Q strata
 }
 
 
@@ -891,35 +918,19 @@ void qdynam_t::proc( const std::vector<double> & x )
   // copy before norming (for original nq) 
   std::vector<double> ox1 = x1;
   
-  // normalize x1 to be positive
-  double xmin = x1[0];
-  double xmax = x1[0];
-  
-  for (int i=1;i<nie;i++)
-    if ( x1[i] < xmin ) xmin = x1[i];
-
-  if ( norm01 )
-    for (int i=1;i<nie;i++)
-      if ( x1[i] > xmax ) xmax = x1[i];
-
-  if ( norm01 ) // full 0..1 norming
-    {
-      for (int i=0;i<nie; i++)
-	x1[i] = ( x1[i] - xmin ) / ( xmax - xmin );
-    }
-  else // just shift so that min == 0 
-    {
-      for (int i=0;i<nie; i++)
-	x1[i] -= xmin;
-    }
   
   //
   // stats
   //  
 
-  // 1) overall
+  //
+  // 1) overall (QD = TOT)
+  //
 
-  r1 = calc( x1 , ox1, e1 );
+  const bool DO_SMOOTHING = true;
+  const bool DO_NORMING = true;
+
+  r1 = calc( x1 , e1 , DO_SMOOTHING, DO_NORMING );
 
   // store here for TOT, in case we want to output the
   // total smoothed series later
@@ -929,11 +940,12 @@ void qdynam_t::proc( const std::vector<double> & x )
   
   
   if ( ! has_cycles ) return;
-    
+
+  //
   // 2) stratified by 'cycle' 
+  //
 
   std::vector<double> xc;
-  std::vector<double> oxc; // original
   std::vector<int> ec;
 
   int wtote = 0;
@@ -942,15 +954,14 @@ void qdynam_t::proc( const std::vector<double> & x )
   while ( cc != uniq_cycles.end() )
     {
       std::vector<double> x2;
-      std::vector<double> ox2;
       std::vector<int> e2;
 
       for (int i=0; i<nie; i++)
 	{
 	  if ( c1[i] == *cc )
 	    {
-	      x2.push_back( x1[i] );
-	      ox2.push_back( ox1[i] );
+	      // use previously normed and smoothed values?
+	      x2.push_back( norm_each_section ? ox1[i] : r1_smoothed_series[i] );
 	      e2.push_back( e1[i] );
 	    }
 	}
@@ -959,22 +970,24 @@ void qdynam_t::proc( const std::vector<double> & x )
       // only do if big enough
       if ( x2.size() >= min_ne )
 	{
-
+	  	  
 	  // do calcs (sets 'os' and 'ss')
-	  rw[ *cc ] = calc( x2 , ox2, e2 ); 
-	  
+	  if ( norm_each_section ) 
+	    rw[ *cc ] = calc( x2 , e2 , DO_SMOOTHING, DO_NORMING); 
+	  else
+	    rw[ *cc ] = calc( x2 , e2 , false , false );
+
 	  // store
 	  rw_smoothed_series[ *cc ] = ss;
 	  rw_epochs[ *cc ] = e2;
-	  
-	  rw_q10[ *cc ] = qnt( ss , nq );
-	  
+
+	  // quantiles
+	  rw_q10[ *cc ] = qnt( ss , nq );	  
 	  rw_os_q10[ *cc ] = qnt( os , nq );
 	  
 	  // save means (for between-cycle stats)
 	  // for between -cycle stats (based on means)
-	  xc.push_back( rw[ *cc ].mean );
-	  oxc.push_back( rw[ *cc ].omean );
+	  xc.push_back( rw[ *cc ].mean );	  
 	  ec.push_back( MiscMath::mean( e2 ) );
 	  
 	  // for calculating average of within-cycle effects
@@ -985,6 +998,7 @@ void qdynam_t::proc( const std::vector<double> & x )
 	  wtote += x2.size();
 	  
 	  rwa.sd     += w * rw[ *cc ].sd  ;
+	  rwa.omean  += w * rw[ *cc ].omean ;
 	  rwa.mean   += w * rw[ *cc ].mean ;
 	  rwa.cv     += w * rw[ *cc ].cv;
 	  rwa.tstat1 += w * rw[ *cc ].tstat1;
@@ -1009,14 +1023,19 @@ void qdynam_t::proc( const std::vector<double> & x )
       ++cc;
     }
   
-  // between cycles
-  if ( xc.size() > 1 )
+  // between cycles (only makes sense if not norming within )
+  if ( xc.size() > 1 && ! norm_each_section )
     {
-      const bool SKIP_SMOOTHING = true;
-      rb = calc( xc , oxc , ec , SKIP_SMOOTHING ); 
+      // no re-smoothing/norming needed here: (e.g. only a few data points, one per cycle)
+      const bool NO_SMOOTHING = false; // i.e. F means do not do
+      const bool NO_NORMING = false;
+      rb = calc( xc , ec , NO_SMOOTHING , NO_SMOOTHING); 
     }
 
+  //
   // average within cycle
+  //
+  
   if ( rwa.ne > 1 ) 
     {
 
@@ -1027,6 +1046,7 @@ void qdynam_t::proc( const std::vector<double> & x )
 
       rwa.sd /= denom ;
       rwa.mean /= denom ;
+      rwa.omean /= denom ;
       rwa.cv /= denom ;
       rwa.tstat1 /= denom ;
       rwa.tstat2 /= denom ;
@@ -1050,34 +1070,35 @@ void qdynam_t::proc( const std::vector<double> & x )
   
 }
 
+
 qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
-				 const std::vector<double> & ox , // original (unnormed)
 				 const std::vector<int> & ee ,
-				 const bool skip_smoothing )
+				 const bool do_smoothing , 
+				 const bool do_norming )
 {
-
-  // all analysis/stats are reported for the smoothed time-series
-  //  note - this does not respect discontinuities, but general
-  //         principals should be fine (e.g. these are done on winsorized
-  //         time series, and within-cycle analyses and between-cycle analysis
-  //         should be quite robust, i.e. not many large gaps) 
-
-
-  // if we're passing in the between-cycle series (e.g. may only have 5-6 elements) we naturally
-  // don't want to smooth again, thus the option to skip
   
-  ss = xx;
-  os = ox;
+  // original (will be left as is)
+  os = xx;
 
-  if ( ! skip_smoothing )
+  // copy to smooth/norm and calculate all stats for
+  ss = xx;
+  
+  
+  // smooth? (if we're passing in the between-cycle series (e.g. may
+  // only have 5-6 elements) we naturally don't want to smooth again,
+  // thus the option to skip)
+  
+  if ( do_smoothing )
     ss = qdynam_t::smooth( ss , median_window , mean_window );
 
-  //os = qdynam_t::smooth( ss , median_window , mean_window );
-      
   
-  // 1) scale: min = 0, max = whatever
-  // 2) t : either scale 0..(ne-1)
-  //        or (first_incl)..(last_incl)
+  // norm?
+
+  if ( do_norming )
+    qdynam_t::norm( &ss , norm01 , norm_mean );
+
+
+  // calculate T stat
 
   const int nn = ss.size();
     
@@ -1091,11 +1112,11 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   
   for (int i=0; i<nn; i++)
     {
-      sct  += ss[i]   * ee[i] ;
+      sct += ss[i] * ee[i] ;
       set += ss[i] * i;
       sk  += ss[i];
 
-      sct1 += mss     * ee[i] ;
+      sct1 += mss * ee[i] ;
       sk1 += mss;
       
     }
@@ -1127,19 +1148,20 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   // collapsed value
   r.tstat2 = 100 * (  ( stat_et * 2.0 ) - 1.0 ) ; 
   
+
   //
   // basics
   //
 
+  // mean of original (unnormed) time-series
   r.omean = MiscMath::mean( os );
-
+  
+  // stats for smoothed, normed series
   r.sd = MiscMath::sdev( ss );
   r.mean = MiscMath::mean( ss );
   r.cv = r.sd / r.mean;
   
-  //
-  // max/min stats
-  //
+  // max/min slope stats
  
   double ss_min = ss[0];
   double ss_max = ss[0];
@@ -1176,28 +1198,20 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   r.tminmax = ee[ ss_min_i ] - ee[ ss_max_i ];
   r.lminmax = r.aminmax * r.tminmax ;
   r.rminmax = r.aminmax / r.tminmax ;
-
-  // std::cout << " ss_min_i = " << ss_min_i << "\n"
-  // 	    << " ee[ ss_min_i ] = " << ee[ ss_min_i ] << "\n"
-  // 	    << " ee[ 0 ] = " << ee[ 0 ] << "\n"
-  // 	    << " ss_min = " << ss_min << "\n"
-  // 	    << " ss[ 0 ] = " << ss[ 0 ] <<  "\n"
-  // 	    << " r.amin = " << r.amin << "\n"
-  // 	    << " r.tmin = " << r.tmin << "\n";
-  // for (int i=0;i<nn;i++)
-  //   std::cout << "det " << i << " " << ss[i] << "\n";
-  // std::cout << "\n\n";
   
   return r;
 }    
 
 
-void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose )
+
+void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose , const bool between )
 {
 
   writer.value( "N" , res.ne );
-  writer.value( "OMEAN" , res.omean ); // unnormed, unsmoothed original (e.g. PSD) score
-
+  
+  if ( ! between ) 
+    writer.value( "OMEAN" , res.omean ); 
+  
   writer.value( "MEAN" , res.mean );
   writer.value( "SD" , res.sd );
   writer.value( "T" , res.tstat2 );
@@ -1210,25 +1224,28 @@ void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose 
 
   if ( res.ne > 10 )
     {
-      writer.value( "MAX_T" , res.tmax );
-      writer.value( "MAX_A" , res.amax );
       
-      writer.value( "MIN_T" , res.tmin );
-      writer.value( "MIN_A" , res.amin );
-
-      writer.value( "MINMAX_T" , res.tminmax );
-      writer.value( "MINMAX_A" , res.aminmax );
+      writer.value( "MAX_T" , res.tminmax );
+      writer.value( "MAX_A" , res.aminmax );
 
       if ( verbose )
 	{
-	  writer.value( "MAX_PROD" , res.lmax );
-	  writer.value( "MAX_RATIO" , res.rmax );
+	  
+	  writer.value( "MAX_PROD" , res.lminmax );
+	  writer.value( "MAX_RATIO" , res.rminmax );
+
+	  writer.value( "MAX0_T" , res.tmax );
+	  writer.value( "MAX0_A" , res.amax );
+	  
+	  writer.value( "MIN0_T" , res.tmin );
+	  writer.value( "MIN0_A" , res.amin );
+	  
+	  writer.value( "MAX0_PROD" , res.lmax );
+	  writer.value( "MAX0_RATIO" , res.rmax );
       
-	  writer.value( "MIN_PROD" , res.lmin );
-	  writer.value( "MIN_RATIO" , res.rmin );
+	  writer.value( "MIN0_PROD" , res.lmin );
+	  writer.value( "MIN0_RATIO" , res.rmin );
       
-	  writer.value( "MINMAX_PROD" , res.lminmax );
-	  writer.value( "MINMAX_RATIO" , res.rminmax );
 	}
     }
 }
@@ -1309,4 +1326,44 @@ std::vector<double> qdynam_t::smooth( const std::vector<double> & x , const int 
         return x;
     }
   
+}
+
+void qdynam_t::norm( std::vector<double> * x , const bool do_max , const bool do_mean )
+{
+  
+  const int n = x->size();
+  
+  // 1) always constrain x to be positive
+  // 2)  do_max = F , do_mean = F  : leave rest of signal as is
+  //     do_max = T , do_mean = F  : scale so max = 1 
+  //     do_max = F , do_mean = T  : scale so mean = 1 
+
+  double xmin = (*x)[0];
+  double xmax = (*x)[0];
+
+  // get min/max
+  for (int i=1;i<n;i++)
+    {
+      if ( (*x)[i] < xmin ) xmin = (*x)[i];
+      if ( do_max && (*x)[i] > xmax ) xmax = (*x)[i];
+    }
+  
+  // set min to 0.0
+  for (int i=0;i<n; i++)
+    (*x)[i] -= xmin;
+
+  // set 1.0 == max
+  if ( do_max ) 
+    {
+      xmax -= xmin;
+      for (int i=0;i<n;i++) (*x)[i] /= xmax;	
+    }
+
+  // set 1.0 == mean
+  else if ( do_mean )
+    {
+      const double xmean = MiscMath::mean( *x );
+      for (int i=0;i<n;i++) (*x)[i] /= xmean;
+    }
+
 }
