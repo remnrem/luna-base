@@ -30,6 +30,13 @@
 #include <optional>
 #include <memory>
 
+// if providing pybind11 headers, allow for ctrl-C to be
+// handled when looping over eval/proc() commands
+#ifdef HAS_LUNAPI
+#include "pybind11/pybind11.h"
+namespace py = pybind11;
+#endif
+
 struct segsrv_t;
 
 typedef std::tuple<std::vector<std::string>,Eigen::MatrixXd> ldat_t;

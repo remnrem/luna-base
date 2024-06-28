@@ -674,6 +674,13 @@ rtables_return_t lunapi_t::eval( const std::string & cmdstr )
     
   for (int i=0; i<nobs(); i++)
     {
+
+      // check for ctrl-C from python
+#ifdef HAS_LUNAPI
+      if ( PyErr_CheckSignals() != 0 )
+	throw py::error_already_set();
+#endif
+
       std::optional<lunapi_inst_ptr> l1 = inst( i );
       if ( l1 ) 
 	{

@@ -47,6 +47,7 @@ void spectral_kurtosis_t::setf( const std::vector<double> & f_ )
 
 void spectral_kurtosis_t::add( int ch , const std::vector<std::vector<double> > & x )
 {
+
   // x rows = seg x bins
 
   if ( x.size() == 0 ) return; // empty

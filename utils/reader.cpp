@@ -1157,7 +1157,7 @@ void get_matching_strata( bool show_table)
 	      w += 1 + vv->size();
 	      if ( w > 30 ) 
 		{
-		  std::cout << "\n" 
+		  std::cerr << "\n" 
 			    << "                :                   :               :";
 		  w = 0;
 		}

@@ -71,6 +71,18 @@ endif
 
 CFLAGS=-O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
 
+##
+## Python (lunapi) flags
+##
+
+ifdef PYBIND11_PATH
+DEP_INCLUDES +=-I$(PYBIND11_PATH)/include
+CXXFLAGS+=-DHAS_LUNAPI
+endif
+
+ifdef PYTHON_PATH
+DEP_INCLUDES += -I$(PYTHON_PATH)
+endif
 
 ##
 ## Linker flags

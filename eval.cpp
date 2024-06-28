@@ -1991,6 +1991,14 @@ void proc_tclst( edf_t & edf  , param_t & param )
   dsptools::tclst( edf , param );
 }
 
+// KMEANS - apply K-means to time-series
+//  - assumes will be applied in low sample count context, e.g.
+//    on 1 Hz signals, etc 
+void proc_kmeans( edf_t & edf , param_t & param )
+{
+  dsptools::kmeans( edf , param );
+}
+
 // PEAKS
 void proc_peaks( edf_t & edf , param_t & param )
 {
