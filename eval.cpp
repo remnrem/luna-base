@@ -1996,7 +1996,7 @@ void proc_tclst( edf_t & edf  , param_t & param )
 //    on 1 Hz signals, etc 
 void proc_kmeans( edf_t & edf , param_t & param )
 {
-  dsptools::kmeans( edf , param );
+  //  dsptools::kmeans( edf , param );
 }
 
 // PEAKS
