@@ -287,6 +287,19 @@ namespace Helper
     return s;
   }
 
+  // logical set matches: how many of 'x' are in 'y'?
+  template <class T> int nmatches( const std::set<T> & x , const std::set<T> & y )
+  {
+    int m = 0;
+    typename std::set<T>::const_iterator ii = x.begin();
+    while ( ii != x.end() )
+      {
+        if ( y.find( *ii ) != y.end() ) ++m;
+	++ii;
+      }
+    return m;
+  }
+  
   std::vector<std::string> parse(const std::string & item, const std::string & s = " \t\n" , bool empty = false );
   std::vector<std::string> parse(const std::string & item, const char s , bool empty = false );
   

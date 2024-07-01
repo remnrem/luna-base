@@ -50,6 +50,7 @@
 #include "stats/kmeans.h"
 #include "stats/cpt.h"
 #include "stats/nmf.h"
+#include "stats/gpa.h"
 
 #include "miscmath/miscmath.h"
 #include "miscmath/dynam.h"

@@ -168,18 +168,21 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
       
       double iqr = normalize ? MiscMath::iqr( v ) : 0 ;
 
+      bool is_variable = true;
+      
       // if no variation, set SD to one
       if ( normalize && iqr <= 1e-8  )
 	{
-	  normalize = false;
+	  is_variable = false;
 	  if ( ! ignore_invariants ) return false;
 	  if ( zeros != NULL ) zeros->push_back( c );
 	}
-      double robust_sd = normalize ? 0.7413 * iqr : 1 ; 
+
+      double robust_sd = ( normalize && is_variable ) ? 0.7413 * iqr : 1 ; 
       
       // winsorize?
 
-      if ( w > 0 )
+      if ( w > 0 && is_variable )
 	{
 	  double lwr = MiscMath::percentile( v , w );
 	  double upr = MiscMath::percentile( v , 1-w );
@@ -195,17 +198,17 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
 	}
 
       // median / IQR normalize
-      if ( center && normalize )  
+      if ( center && normalize && is_variable )  
 	{
 	  for (int i=0; i<rows; i++)	
 	    m(i,c) = ( m(i,c) - median ) / robust_sd;
 	}
-      else if ( normalize )
+      else if ( normalize && is_variable )
 	{
 	  for (int i=0; i<rows; i++)	
 	    m(i,c) = m(i,c) / robust_sd;
 	}
-      else if ( center )
+      else if ( center && is_variable )
 	{
 	  for (int i=0; i<rows; i++)	
 	    m(i,c) = m(i,c) - median ;

@@ -53,7 +53,7 @@ class CRandom
   static double rand();
   static int rand (int);
   static uint64_t rand (uint64_t);
-
+  
   static void random_draw( std::vector<int> & );
 
   

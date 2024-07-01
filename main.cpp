@@ -308,7 +308,9 @@ int main(int argc , char ** argv )
   bool cmdline_proc_otsu          = false;
   bool cmdline_proc_fft           = false;
   bool cmdline_proc_overlap       = false;
-
+  bool cmdline_proc_gpa_prep      = false;
+  bool cmdline_proc_gpa_run       = false;
+  
   //
   // use standard input versus command line for
   // command-line options (e.g. --massoc, --psc, etc)
@@ -370,6 +372,10 @@ int main(int argc , char ** argv )
 	    cmdline_proc_cwt_design = true;
 	  else if ( strcmp( argv[1] , "--psc" ) == 0 )
 	    cmdline_proc_psc = true;
+	  else if ( strcmp( argv[1] , "--gpa-prep" ) == 0 )
+	    cmdline_proc_gpa_prep = true;
+	  else if ( strcmp( argv[1] , "--gpa" ) == 0 )
+	    cmdline_proc_gpa_run = true;
 	  else if ( strcmp( argv[1] , "--nmf" ) == 0 )
 	    cmdline_proc_nmf = true;
 	  else if ( strcmp( argv[1] , "--cpt" ) == 0 )
@@ -713,6 +719,32 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
+
+  //
+  // GPA
+  //
+
+  if ( cmdline_proc_gpa_prep || cmdline_proc_gpa_run )
+    {
+      if ( cmdline_proc_gpa_prep && cmdline_proc_gpa_run )
+	Helper::halt( "cannot specify both --prep-gpa and --gpa" );
+      
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+            
+      writer.begin();
+      writer.id( "." , "." );
+      const std::string clab = "GPA";      
+      writer.cmd( clab , 1 , "" );
+      writer.level( clab, "_" + clab );
+
+      // run GPA (prep or run)
+      gpa_t gpa( param , cmdline_proc_gpa_prep ); 
+    
+      writer.unlevel( "_" + clab );
+      writer.commit();
+      std::exit(0);
+    }
 
   //
   // POPS
