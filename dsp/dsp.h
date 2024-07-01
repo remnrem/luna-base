@@ -23,7 +23,6 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
-#include "kmeans-wrapper.h"
 #include "peri.h"
 #include "xcorr.h"
 #include "trim.h"
