@@ -26,6 +26,9 @@
 #include "db/db.h"
 #include "stats/eigen_ops.h"
 #include "miscmath/crandom.h"
+#include "helper/json.h"
+
+using json = nlohmann::json;
 
 extern logger_t logger;
 extern writer_t writer;
@@ -39,6 +42,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   //   2) apply associaiton models    [ --gpa ]
 
   // prep:
+  //   spec=file1.json
   //   inputs=file1|grp|X|Y|Z,file2|grp,file|grp|CH|F , i.e. always group name, then any factors
   //   dat=<bfile name>
   //   vars=<set of vars to include only>
@@ -47,7 +51,6 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   bfile = param.requires( "dat" );
 
   infiles.clear();
-
   incvars.clear();
   excvars.clear();
   incfacs.clear();
@@ -63,9 +66,34 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   if ( prep_mode )
     {
 
-      std::set<std::string> files = param.strset( "inputs" );
-      if ( files.size() == 0 ) return;
+      //
+      // spec from JSON file? (allow both spec= and specs= forms)
+      //
       
+      if ( param.has( "spec" ) )
+	{
+	  std::vector<std::string> specs = param.strvector( "spec" );
+	  for (int i=0; i<specs.size(); i++) parse( specs[i] );
+	}
+      
+      if ( param.has( "specs" ) )
+	{
+	  std::vector<std::string> specs = param.strvector( "specs" );
+	  for (int i=0; i<specs.size(); i++) parse( specs[i] );
+	}
+
+
+      //
+      // additional, from command line:
+      //
+
+      std::set<std::string> files;
+      if ( param.has( "inputs" ) )
+	{
+	  files = param.strset( "inputs" );
+	  if ( files.size() == 0 ) return;
+	}
+
       std::set<std::string>::const_iterator ff = files.begin();
       while ( ff != files.end() )
 	{
@@ -88,25 +116,26 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  ++ff;
 	}
     }
-
+  
+  
   
   //
-  // include/exclude vars
+  // include/exclude vars (allow for partial population during spec JSON stage
   //
-
+  
   if ( param.has( "vars" ) )
-    incvars = param.strset( "vars" );
+    incvars = Helper::combine( incvars , param.strset( "vars" ) );
   if ( param.has( "xvars" ) )
-    excvars = param.strset( "xvars" );
+    excvars = Helper::combine( excvars , param.strset( "xvars" ) );
 
   //
   // include vars based on presence/absence of a factor
   //
 
   if ( param.has( "facs" ) )
-    incfacs = param.strset( "facs" );
+    incfacs = Helper::combine( incfacs, param.strset( "facs" ) );
   if ( param.has( "xfacs" ) )
-    excfacs = param.strset( "xfacs" );
+    excfacs = Helper::combine( excfacs, param.strset( "xfacs" ) );
 
 
   //
@@ -114,20 +143,23 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   //
   
   if ( param.has( "grps" ) )
-    incgrps = param.strset( "grps" );
+    incgrps = Helper::combine( incgrps, param.strset( "grps" ) );
   if ( param.has( "xgrps" ) )
-    excgrps = param.strset( "xgrps" );
+    excgrps = Helper::combine( excgrps, param.strset( "xgrps" ) );
+
 
   //
-  // inc/exc based on fac/lvl pairs (for now, can only do on read)
+  // other options not supported in prep-mode (nvars & faclvls)
+  //
+  
+  //
+  // fac/lvl pairs (for now, can only do on read)
   //
 
   if ( prep_mode )
     {
       if (  param.has( "faclvls" ) ||  param.has( "xfaclvls" ) )
         Helper::halt( "cannot specify faclvls/xfaclvls with --gpa-prep" );
-      if (  param.has( "grps" ) ||  param.has( "xgrps" ) )
-        Helper::halt( "cannot specify grps/xgrps with --gpa-prep" );
     }
 
   
@@ -225,20 +257,45 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	}
     }
 
+  //
+  // criteria to drop bad/empty cols (default, at least 5 non-missing, at least 5% of obs w/ values)
+  //  (used in dump_
+
+  n_req = param.has( "n-req" ) ? param.requires_int( "n-req" ) : 5 ;
+  n_prop = param.has( "n-prop" ) ? param.requires_dbl( "n-prop" ) : 0.05 ; 
+  
+  retain_cols = param.has( "retain-cols" ); 
+  retain_rows = param.has( "retain-rows" );
+  if ( prep_mode && retain_rows ) Helper::halt( "cannot use retain-rows in --gpa-prep" );
+
   
   //
   // read data / make binary file? 
   //
 
+  
   if ( prep_mode )
     prep();
   else
     {
-      logger << "  reading binary data from " << bfile << "\n";
+      // we'll typically perform association, but this command might also be used for
+      // dumping outputs (e.g. post-filtering).  In that case, we want to allow for missing
+      // values, etc, and we do not want to perform case-wise deletion necessarily
 
+      // intention to perform association is denoted by the presence of X=
+
+      const bool request_assoc = param.has( "X" );
+      
+      if ( request_assoc && ( param.has( "retain-cols" ) || param.has( "retain-rows" ) ) )
+	Helper::halt( "can only use retain-cols or retain-rows when not running association (no X)" );
+
+      
+      
+      logger << "  reading binary data from " << bfile << "\n";
+      
       // read data in  ( and this does filtering of columns) 
       read();
-
+      
       // secondarily, subset to a smaller # of rows (e.g. case-only analysis)
       if ( param.has( "subset" ) || param.has( "ids" ) )
 	{
@@ -342,6 +399,15 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	     << ivs.size() << " X vars & "
 	     << cvs.size() << " Z vars, implying "
 	     << dvs.size() << " Y vars\n";
+
+      
+      //
+      // drop any null cols in this (potentially subsetted) dataset
+      //
+
+      if ( ! retain_cols ) 
+	drop_null_columns();
+      
       
       //
       // now do QC (on DVs only) - i.e. keeps 
@@ -355,14 +421,14 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       if ( ( ! param.has( "qc" ) ) || param.yesno( "qc" ) )
 	qc( winsor_th );
       
-
+      
       //
       // optionally dump variables and/or manifest?
       //
-      
+
       if ( param.has( "dump" ) )
 	dump();
-      
+
       if ( param.has( "manifest" ) )
 	manifest();
 
@@ -370,15 +436,26 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       // run association tests
       //
 
-      if ( dvs.size() != 0 && ivs.size() != 0 )
+      const bool run_assoc =  dvs.size() != 0 && ivs.size() != 0 ; 
+      
+      if ( run_assoc )
 	{	  
+
+	  if ( X.rows() <= 2 )
+	    {
+	      logger << "  *** only " << X.rows() << " left, cannot fit linear models\n";
+	      return ;
+	    }
+	  
 	  // options
 	  nreps = param.requires_int( "nreps" ) ;
 	  if ( nreps < 0 ) Helper::halt( "nreps must be positive" );
 
+	  // output thresholds
 	  pthresh = param.has( "p" ) ? param.requires_dbl( "p" ) : 99 ;
 	  pthresh_adj = param.has( "padj" ) ? param.requires_dbl( "padj" ) : 99 ;
 
+	  // level of multiple-test correction
 	  correct_all_X = param.has( "correct-all-X" ) ? param.yesno( "correct-all-X" ) : false;
 
 	  if ( correct_all_X ) 
@@ -425,12 +502,35 @@ void gpa_t::prep()
   while ( ff != infiles.end() )
     {
 
+      // was this group excluded?
+      if ( incgrps.size() && incgrps.find( file2group[ ff->first ] ) == incgrps.end() )
+	{
+	  logger << "  skipping " << ff->first << " due to grps requirement\n";
+	  ++ff;
+	  continue;
+	}
+
+      if ( excgrps.find( file2group[ ff->first ] ) != excgrps.end() )
+	{
+	  logger << "  skipping " << ff->first << " due to xgrps requirement\n";
+	  ++ff;
+	  continue;
+	}
+
+      
       // file-specific counts
       std::set<std::string> file_ids, file_bvars, file_evars;
             
       // named factors for this file
       const std::set<std::string> & facs = ff->second;
 
+      // any file-specific variable inc/exc lists
+      const std::set<std::string> & fincvars = file2incvars[ ff->first ];
+      const std::set<std::string> & fexcvars = file2excvars[ ff->first ];
+
+      // any file-specific aliasing?
+      const std::map<std::string,std::string> & aliases = file2var2alias[ ff->first ];
+      
       //
       // if including/excluding based on presence of factors, we can
       // decide here whether to skip the entire file or no
@@ -494,6 +594,10 @@ void gpa_t::prep()
       std::vector<std::string> tok2;
       for (int j=0; j<tok.size(); j++)
 	{
+	  
+	  // aliases?
+	  if ( aliases.find( tok[j] ) != aliases.end() )
+	    tok[j] = aliases.find( tok[j] )->second;
 
 	  // ID col?
 	  if ( tok[j] == "ID" )
@@ -509,13 +613,16 @@ void gpa_t::prep()
 	      allfacs.insert( tok[j] );
 	      continue;
 	    }
-	      
-	  // skip?
+	  
+	  // skip? (global options)
 	  if ( incvars.size() != 0 && incvars.find( tok[j] ) == incvars.end() ) continue;
 	  if ( excvars.find( tok[j] ) != excvars.end() ) continue;
+
+	  // skip? (file-local options)
+          if ( fincvars.size() != 0 && fincvars.find( tok[j] ) == fincvars.end() ) continue;
+          if ( fexcvars.find( tok[j] ) != fexcvars.end() ) continue;
 	  
-	  
-	  // read this var
+	  // if still here, means we want to read this var
 	  tok2.push_back( tok[j] );
 	  col[j] = true;
 	  file_bvars.insert( tok[j] );
@@ -617,9 +724,8 @@ void gpa_t::prep()
 		    basevar[ expand_vname ] = tok[j];
 		    var2group[ expand_vname ] = file2group[ ff->first ];
 		  }
-		
-		
-		// store actual value
+				
+		// store actual (numeric, non-NaN) value
 		double val;
 		if ( Helper::str2dbl( dtok[j] , &val ) ) 
 		  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = val;
@@ -708,6 +814,12 @@ void gpa_t::prep()
       ++ii;
     }
 
+  //
+  // -------- drop any completely empty cols
+  //
+  
+  if ( ! retain_cols ) 
+    drop_null_columns();
   
   //
   // -------- write to binary file
@@ -1412,9 +1524,13 @@ void gpa_t::manifest()
   // vars
   for (int j=0; j<nv; j++)
     {
+      int na = 0;
+      const Eigen::VectorXd & col = X.col(j);
+      for (int i=0; i<ni; i++) if ( std::isnan( col[i] ) ) ++na;
+      
       std::cout << j+1 << "\t"
 		<< vars[j] << "\t"
-		<< ni - X.col(j).array().isNaN().sum() << "\t"
+		<< ni - na << "\t"
 		<< var2group[ vars[j] ] << "\t"
 		<< basevar[ vars[j] ] ;
 		
@@ -1504,37 +1620,125 @@ void gpa_t::subset( const std::set<int> & rows , const std::map<int,bool> & cols
   logger << "  subsetted X from " << ni << " to " << X.rows() << " indivs\n";
 }
 
+// drop bad cols
+void gpa_t::drop_null_columns()
+{
+
+  logger << "  checking for vars w/ too much/all missing data\n";
+
+  // uses n_req and n_prop
+  // nothing to do
+  if ( n_req == 0 || n_prop < 1e-6 ) return; 
+  
+  std::vector<int> good_cols;
+
+  const int ni = X.rows();
+  const int nv = X.cols();
+
+  for (int j=0; j<nv; j++)
+    {
+      int na = 0;
+      for (int i=0; i<ni; i++) if ( std::isnan( X(i,j) ) ) ++na;
+      int ng = ni - na;
+      if ( ng >= n_req && ng / (double)(ni) >= n_prop )
+	good_cols.push_back( j );
+      else
+	logger << "  *** will drop " << vars[j] << " due to too many missing values\n";
+    }
+
+  // any to remove? 
+  if ( good_cols.size() < nv )
+    {
+      
+      Eigen::MatrixXd X1 = X( Eigen::all , good_cols );
+      X = X1;
+      
+      // now need to update vars, var2group, basevar
+      // okay to keep faclvl as is
+
+      // var labels
+      std::vector<std::string> vars2 = vars;
+      std::map<std::string,std::map<std::string,std::map<int,std::string> > > faclvl2 = faclvl;
+      std::map<std::string,std::string> basevar2 = basevar;
+      std::map<std::string,std::string> var2group2 = var2group;;
+
+      std::set<int> dvs2 = Helper::vec2set( dvs );
+      std::set<int> ivs2 = Helper::vec2set( ivs );
+      std::set<int> cvs2 = Helper::vec2set( cvs );
+      
+      vars.clear();
+      faclvl.clear();
+      basevar.clear();
+      var2group.clear();
+      dvs.clear();
+      ivs.clear();
+      cvs.clear();
+
+      for (int j=0; j<good_cols.size(); j++)
+	{	  
+	  const std::string & v = vars2[ good_cols[j] ];	  
+	  vars.push_back( v );
+	  basevar[ v ] = basevar2[ v ];
+	  var2group[ v ] = var2group2[ v ];
+	  faclvl[ v ] = faclvl2[ v ];
+
+	  if ( dvs2.find( good_cols[j] ) != dvs2.end() )
+	    dvs.push_back( j );
+	  if ( ivs2.find( good_cols[j] ) != ivs2.end() )
+	    ivs.push_back( j );
+	  if ( cvs2.find( good_cols[j] ) != cvs2.end() )
+	    cvs.push_back( j );
+	  
+	}
+
+      logger << "  dropped " << nv - good_cols.size()  << " vars with too many NA values\n";
+    }
+    
+}
+
+
 // QC matrix
 void gpa_t::qc( const double winsor )
 {
 
   // 1) case-wise deletion
+
   std::vector<int> retained;
   const int ni = X.rows();
-  for (int i=0;i<ni;i++)
-    {
-      const int num_missing = X.row(i).array().isNaN().sum();
-      if ( num_missing == 0 ) retained.push_back( i );
-    }
+  const int nv = X.cols();
 
-  if ( retained.size() < ni )
+  if ( ! retain_rows )
     {
-      Eigen::MatrixXd X1 = X( retained, Eigen::all );
-      X = X1;
+      for (int i=0;i<ni;i++)
+	{
+	  int num_missing = 0;
+	  const Eigen::VectorXd & row = X.row(i);
+	  for (int j=0; j<nv; j++) if ( std::isnan( row[j] ) ) ++num_missing;
+	  if ( num_missing == 0 ) retained.push_back( i );
+	}
       
-      std::vector<std::string> ids2 = ids;
-      ids.clear();
-      for (int i=0;i<retained.size();i++)
-	ids.push_back( ids2[retained[i]] );
-     
-      logger << "  case-wise deletion subsetted X from " << ni << " to " << X.rows() << " indivs\n";
-
+      if ( retained.size() < ni )
+	{
+	  Eigen::MatrixXd X1 = X( retained, Eigen::all );
+	  X = X1;
+	  
+	  std::vector<std::string> ids2 = ids;
+	  ids.clear();
+	  for (int i=0;i<retained.size();i++)
+	    ids.push_back( ids2[retained[i]] );
+	  
+	  logger << "  case-wise deletion subsetted X from " << ni << " to " << X.rows() << " indivs\n";
+	  
+	}
     }
 
+  // nothing left?
+  if ( X.rows() == 0 ) return;
+  
   
   // 2) robust norm & winsorize
   //    but only for DVs
-
+  
   std::set<int> s1 = Helper::vec2set( ivs );
   std::set<int> s2 = Helper::vec2set( cvs );
   s1.insert( s2.begin(), s2.end() );
@@ -1561,7 +1765,7 @@ void gpa_t::qc( const double winsor )
     X.col( v1[j] ) = XZ.col(j);
 
   // remove any dead cols
-  if ( zeros.size() )
+  if ( zeros.size() && ! retain_rows )
     {
       std::set<int> z = Helper::vec2set( zeros );
       std::vector<int> nonzeros;
@@ -1579,7 +1783,6 @@ void gpa_t::qc( const double winsor )
 
       // now need to update vars, var2group, basevar
       // okay to keep faclvl as is
-
 
       // var labels
       std::vector<std::string> vars2 = vars;
@@ -1619,9 +1822,8 @@ void gpa_t::qc( const double winsor )
 	}
 
       logger << "  reduced data from " << nv << " to " << X.cols() << " vars\n"; 
+
     }
-  
-  
   
 }
 
@@ -1900,4 +2102,206 @@ Eigen::VectorXd linmod_t::get_tstats( const Eigen::VectorXd & B ,
   return T;
 }
 
+
+void gpa_t::parse( const std::string & pfile )
+{
+  std::string pfile1 = Helper::expand( pfile );
+  if ( ! Helper::fileExists( pfile1 ) ) Helper::halt( "could not open " + pfile );
+
+  std::ifstream IN1( pfile1.c_str() , std::ios::in );
+  
+  json doc{json::parse(IN1)};
+  
+  bool has_inputs = doc.count( "inputs" ); 
+
+  bool has_specs  = doc.count( "specs" );
+
+  // general specs: only supports a limited set on prep-mode
+
+  // vars -> incvars
+  // xvars -> excvars  
+  // facs -> incfacs
+  // xfacs -> excfacs
+  // grps -> incgrps
+  // xgrps -> excgrps
+
+
+  // ** these not supported in prep-mode (or JSON input)  
+  // nvars -> incnums
+  // xnvars -> excnums
+  // faclvls -> incfaclvls
+  // xfaclvls -> excfaclvls.clear();
+
+  if ( has_specs )
+    {
+      
+      json s = doc[ "specs" ];
+
+      std::vector<std::string> tok;
+      
+      if ( s.contains( "vars" ) && s[ "vars" ].is_array() )
+	incvars = Helper::vec2set( s[ "vars" ].get<std::vector<std::string>>() );
+      
+      if ( s.contains( "xvars" ) && s[ "xvars" ].is_array() )
+	excvars = Helper::vec2set( s[ "xvars" ].get<std::vector<std::string>>() );
+
+      if ( s.contains( "facs" ) && s[ "facs" ].is_array() )
+	incfacs = Helper::vec2set( s[ "facs" ].get<std::vector<std::string>>() );
+      
+      if ( s.contains( "xfacs" ) && s[ "xfacs" ].is_array() )
+	excfacs = Helper::vec2set( s[ "xfacs" ].get<std::vector<std::string>>() );
+
+      if ( s.contains( "grps" ) && s[ "grps" ].is_array() )
+	incgrps = Helper::vec2set( s[ "grps" ].get<std::vector<std::string>>() );
+      
+      if ( s.contains( "xgrps" ) && s[ "xgrps" ].is_array() )
+	excgrps = Helper::vec2set( s[ "xgrps" ].get<std::vector<std::string>>() );
+
+      
+    }
+
+  
+  //
+  // parse inputs
+  //
+
+  if ( has_inputs )
+    {
+
+      for (auto & item : doc[ "inputs" ] ) {
+
+	// expect minimally, group and file
+	if ( ! item.contains( "group" ) ) Helper::halt( "expecting 'group' key for all inputs in " + pfile );
+	if ( ! item.contains( "file" ) ) Helper::halt( "expecting 'file' key for all inputs in " + pfile );
+	
+	std::string file_name = item[ "file" ];
+	std::string file_group = item[ "group" ];
+	
+	//
+	// and also
+	//   1) define factors for this file 
+	//      (mirroring command line form: inputs=file|group|fac1|fac2
+	//
+	//   2) allow for vars, xvars ( --> file specific versions) for prep only
+	//
+	
+	//
+	// vars
+	//
+
+	if ( item.contains( "vars" ) )
+	  {
+	    
+	    json x = item[ "vars" ] ;
+	    if ( ! x.is_array() )
+	      {
+		if ( ! x.is_null() ) 
+		  logger << "  *** expecting vars: [ array ] in " << pfile << ", skipping...\n";
+	      }
+	    else
+	      {		
+		for (auto v : x )
+		  {
+		    if ( v.is_string() )
+		      {
+			std::string var = v;
+			file2incvars[ file_name ].insert( var );
+		      }
+		    else if ( v.is_object() )
+		      {
+			for ( auto & vv : v.items() )
+			  {
+			    std::string var = vv.key();
+			    std::string val = vv.value();
+			    file2var2alias[ file_name ][ var ] = val;
+			    file2incvars[ file_name ].insert( val ); // nb. is new, aliased name
+			  }
+		      }
+		  }
+		
+	      }
+	  }
+	
+	
+	//
+	// xvars (no aliasing)
+	//
+	
+	if ( item.contains( "xvars" ) )
+	  {
+	    
+	    json x = item[ "xvars" ] ;
+	    if ( ! x.is_array() )
+	      logger << "  *** expecting xvars: [ array ] in " << pfile << ", skipping...\n";
+	    else
+	      {		
+		for (auto v : x )
+		  {
+		    if ( v.is_string() )
+		      {
+			std::string var = v;
+			file2excvars[ file_name ].insert( var );
+		      }
+		  }
+	      }		
+	  }
+	
+	
+	//
+	// specify facs (i.e. matching inputs=[] --> infiles
+	//   ;;; and allow aliasing here too
+	
+	std::set<std::string> file_facs;
+	
+	if ( item.contains( "facs" ) )
+	  {
+	    json x = item[ "facs" ] ;
+	    if ( ! x.is_array() )
+	      {
+		if ( ! x.is_null() )
+		  logger << "  *** expecting facs: [ array ] in " << pfile << ", skipping...\n";
+	      }
+	    else
+	      {		
+		for (auto v : x )
+		  {
+		    if ( v.is_string() )
+		      {
+			std::string var = v;
+			file_facs.insert( var );
+		      }
+                    else if ( v.is_object() )
+                      {
+                        for ( auto & vv : v.items() )
+                          {
+                            std::string var = vv.key();
+                            std::string val = vv.value();
+                            file2var2alias[ file_name ][ var ] = val; // add generic alias
+                            file_facs.insert( val ); // nb. is new, aliased name to be searched for                                                              
+                          }
+			
+		      }		
+		    
+		  }
+	      }
+	  }
+	
+	//
+	// add in
+	//
+
+	infiles[ file_name ] = file_facs;
+	file2group[ file_name ] = file_group;
+
+	logger << "  expecting input " << file_name << " (group " << file_group << ", with " << file_facs.size() << " factors";
+	if ( file2incvars.size() ) logger << ", extracting " << file2incvars.size() << " vars";
+	if ( file2excvars.size() ) logger << ", ignoring " << file2excvars.size() << " vars";
+	logger << ")\n";
+	
+	
+      }
+	
+    }
+  
+}
 

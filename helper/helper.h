@@ -274,6 +274,14 @@ namespace Helper
     return s;
   }
 
+  // combine sets
+  template <class T> std::set<T> combine( const std::set<T> & x ,  const std::set<T> & y )
+  {
+    std::set<T> m = x;
+    m.insert( y.begin(), y.end() );
+    return m;
+  }
+  
   // set --> vector
   template <class T> std::vector<T> set2vec( const std::set<T> & x )
   {

@@ -137,11 +137,17 @@ struct gpa_t {
   // prep (write bfile)
   void prep();
 
+  // read inputs spec from file
+  void parse( const std::string & pfile );
+	     
   // read bfile
   void read();
 
   // subset rows
   void subset( const std::set<int> & , const std::map<int,bool> & );
+
+  // drop NA cols
+  void drop_null_columns();
   
   // QC matrix
   void qc( const double winsor );
@@ -194,10 +200,20 @@ private:
   // [prep] input files (and stratifying factors)
   std::map<std::string,std::set<std::string> > infiles;
 
+  // file vars (if defined, restrict to only these basevars from a file) 
+  std::map<std::string,std::string> file2basevars;
+
+  // aliases
+  std::map<std::string,std::map<std::string,std::string> > file2var2alias;
+  
   // [prep/read] variables in included/exclude [on base vars] 
   std::set<std::string> incvars, excvars;
   std::set<std::string> incfacs, excfacs;
   std::set<std::string> incgrps, excgrps;
+
+  // file-specific incvars
+  std::map<std::string,std::set<std::string> > file2incvars;
+  std::map<std::string,std::set<std::string> > file2excvars;
   
   // inc/exc bsed on FAC/LVL pairs
   std::map<std::string,std::set<std::string> > incfaclvls;
@@ -213,6 +229,14 @@ private:
   double pthresh;
   double pthresh_adj;
 
+  // require at least N non-missing obs
+  int n_req;
+  double n_prop;
+
+  // retain invariants (for dump/manifest mode only)
+  bool retain_rows;
+  bool retain_cols;
+  
   // do perm-corrections independently for each X
   bool correct_all_X;
   
