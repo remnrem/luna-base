@@ -828,10 +828,15 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	      // new unique label?
 	      if ( slabels.find( uc_l + "." + Helper::int2str( inc )  ) == slabels.end() )
 		{
-		  logger << " uniquifying " << l ;
+		  if ( ! globals::validation_mode )
+		    logger << " uniquifying " << l ;
+		  
 		  l = l + "." + Helper::int2str( inc );
 		  uc_l = uc_l + "." + Helper::int2str( inc );
-		  logger << " to " << l << "\n";
+
+                  if ( ! globals::validation_mode )		    
+		    logger << " to " << l << "\n";
+
 		  break;
 		}
 	      else // keep trying
