@@ -3260,8 +3260,8 @@ bool edf_t::load_annotations( const std::string & f0 )
     
   if ( ! Helper::fileExists( f ) ) 
     {
-      Helper::halt( "annotation file " + f + " does not exist for EDF " + filename );
-      // add for lunapi (i.e. if non-stopping halt() implemented)
+      Helper::vmode_halt( "annotation file " + f + " does not exist for EDF " + filename );
+      // add for lunapi (i.e. if non-stopping halt() implemented) and also --validate
       return false;
     }
 
@@ -3285,8 +3285,7 @@ bool edf_t::load_annotations( const std::string & f0 )
   
   if ( xml_mode ) 
     {
-      annot_t::loadxml( f , this );
-      return true;
+      return annot_t::loadxml( f , this );
     }
   
 
@@ -3305,10 +3304,10 @@ bool edf_t::load_annotations( const std::string & f0 )
       int pos = file_name.find( "_feature_" );
       
       if ( pos == std::string::npos || file_name.substr(0,3) != "id_" )  
-	Helper::halt( "bad format for feature list file name: id_<ID>_feature_<FEATURE>.ftr" );
+	return Helper::vmode_halt( "bad format for feature list file name: id_<ID>_feature_<FEATURE>.ftr" );
       
       std::string id_name = file_name.substr(3,pos-3);
-
+      
       if ( id_name != id )
 	{
 	  Helper::warn( ".ftr file id_{ID} does not match EDF ID : [" + id_name + "] vs [" + id + "]" );

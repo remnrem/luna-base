@@ -54,6 +54,14 @@ void Helper::validate_slist( param_t & param )
 
   std::ifstream IN1( slist.c_str() , std::ios::in );
 
+
+  //
+  // trackers
+  //
+
+  std::set<std::string> exclude_edf;
+  std::map<std::string,std::set<std::string>> exclude_annots;
+  std::set<std::string> exclude;  
   
   //
   // set up 
@@ -182,8 +190,12 @@ void Helper::validate_slist( param_t & param )
       bool edf_okay = edf.attach( edffile , rootname , NULL , true );
 
       if ( edf_okay ) ++goodn;
-      else ++badn;
-      
+      else
+	{
+	  ++badn;
+	  exclude_edf.insert( rootname );
+	  exclude.insert( rootname );	  
+	}
       writer.value( "EDF" , edf_okay );
       
       
@@ -197,7 +209,7 @@ void Helper::validate_slist( param_t & param )
       // init an empty EDF in case the above was left in a weird state
       //
       
-      const int nr = 12 * 60 ; // default = 12 hr empty EDF, although this should not matter
+      const int nr = 24 * 60 ; // default = 24 hr empty EDF, although this should not matter
       const int rs = 60 ;
       const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
       const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;      
@@ -210,13 +222,7 @@ void Helper::validate_slist( param_t & param )
       if ( ! empty_okay )
 	Helper::halt( "internal error constructing an empty EDF to evaluate annotations" );
       
-
-      //
-      // track bad annots
-      //
-
-      std::map<std::string,std::string> badannots;
-      
+     
       // some basic set-up
 
       dummy.timeline.annotations.set( &dummy );
@@ -234,7 +240,7 @@ void Helper::validate_slist( param_t & param )
 	    tok.push_back( globals::project_path + globals::annot_files[i] );
 	}
 
-      
+     
       //
       // Attach annotations
       //
@@ -270,13 +276,22 @@ void Helper::validate_slist( param_t & param )
 			    {
 			      
 			      bool okay = dummy.load_annotations( fname + fname2 );
-			      // xxxx
+
+			      if ( ! okay )
+				{
+				  exclude_annots[ rootname ].insert( fname + fname2 );
+				  exclude.insert( rootname );
+				}
 			    }			 
 			}
 		      closedir (dir);
 		    }
-		  else 
-		    Helper::halt( "could not open folder " + fname );
+		  else
+		    {
+		      Helper::vmode_halt( "could not open folder " + fname );
+		      exclude_annots[ rootname ].insert( fname );		      
+		      exclude.insert( rootname );
+		    }
 		}
 	      else
 		{
@@ -293,35 +308,59 @@ void Helper::validate_slist( param_t & param )
 		       Helper::file_extension( fname , "eannot" ) )
 		    {
 		      bool okay = dummy.load_annotations( fname );
-		      // xxxx
+		      std::cout << " annot " << fname << " " << okay << "\n";
+		      if ( ! okay )
+			{
+			  exclude_annots[ rootname ].insert( fname );
+			  exclude.insert( rootname );
+			}
 		    }
 		  else
-		    Helper::halt( "did not recognize annotation file extension: " + fname );
-		} 
-	      
+		    {
+		      Helper::vmode_halt( "did not recognize annotation file extension: " + fname );
+		      exclude_annots[ rootname ].insert( fname );
+		      exclude.insert( rootname );
+		    } 
+		}
 	    }
 	}
 
+
+      if ( exclude_annots.find( rootname ) == exclude_annots.end() )
+	writer.value( "ANNOTS" , 1 );
+      else
+	writer.value( "ANNOTS" , 0 );
       
+
       //
-      // Attach EDF Annotations, potentially (only if EDF was not corrupt) 
-      //  --> skip for now, not sure this can throw an error?
+      // Final outputs
       //
+
       
-      if ( false && edf.header.edfplus )
+      std::map<std::string,std::set<std::string>>::const_iterator ii = exclude_annots.find( rootname );
+      if ( ii != exclude_annots.end() )
 	{
-	  // must read if EDF+D (but only the time-track will be taken in)
-	  // if EDF+C, then look at 'skip-edf-annots' flag
-	  
-	  if ( edf.header.continuous && ! globals::skip_edf_annots )
-	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
-	  else if ( ! edf.header.continuous )
-	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
-	  
+	  const std::set<std::string> & f = ii->second;
+	  std::set<std::string>::const_iterator ff = f.begin();
+	  while ( ff != f.end() )
+	    {
+	      writer.level( *ff , "FILE" );
+	      writer.value( "EXC" , 1 );
+	      ++ff;
+	    }
+	  writer.unlevel( "FILE" );
+	}
+
+      std::set<std::string>::const_iterator jj = exclude_edf.find( rootname );
+      if ( jj != exclude_edf.end() )
+	{
+	  writer.level( edffile , "FILE" );
+	  writer.value( "EXC" , 1 );
+	  writer.unlevel( "FILE" );
+	  ++jj;
 	}
       
-            
-
+      
       //
       // Next individual
       //
@@ -334,10 +373,62 @@ void Helper::validate_slist( param_t & param )
     logger << "  all good, no problems detected in " << goodn << " observations scanned\n";
     
   IN1.close();
-
-  // all done
-
-  globals::validation_mode = false;
   
+
+  
+  
+  //
+  // write exclude lists?
+  //
+
+  // any?
+  if ( param.has( "exclude-list" ) && exclude.size() != 0 )
+    {
+      logger << "  writing exclude list (based on either EDF or annotation issues) to " << param.value( "exclude-list" ) << "\n";
+      std::ofstream O1( Helper::expand( param.requires( "exclude-list" ) ).c_str() , std::ios::out );
+      std::set<std::string>::const_iterator ii = exclude.begin();
+      while ( ii != exclude.end() )
+	{
+	  O1 << *ii << "\n";
+	  ++ii;
+	}      
+      O1.close();
+    }
+
+  // EDF only
+  if ( param.has( "edf-exclude-list" ) && exclude_edf.size() != 0 )
+    {
+      logger << "  writing exclude list (based on EDF issues only) to " << param.value( "edf-exclude-list" ) << "\n";
+      std::ofstream O1( Helper::expand( param.requires( "edf-exclude-list" ) ).c_str() , std::ios::out );      
+      std::set<std::string>::const_iterator ii = exclude_edf.begin();
+      while ( ii != exclude_edf.end() )
+	{
+	  O1 << *ii << "\n";
+	  ++ii;
+	}      
+      O1.close();
+    }
+
+  // annots only
+  if ( param.has( "annot-exclude-list" ) && exclude_annots.size() != 0 )
+    {
+      logger << "  writing exclude list (based on annotation EDF issues only) to " << param.value( "edf-exclude-list" ) << "\n";
+      std::ofstream O1( Helper::expand( param.requires( "annot-exclude-list" ) ).c_str() , std::ios::out );
+      std::map<std::string,std::set<std::string>>::const_iterator ii = exclude_annots.begin();
+      while ( ii != exclude_annots.end() )
+        {
+          O1 << ii->first << "\n";
+          ++ii;
+        }
+      O1.close();
+    }
+
+  
+  //
+  // all done
+  //
+  
+  globals::validation_mode = false;
+
 }
 
