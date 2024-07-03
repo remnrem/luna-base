@@ -205,6 +205,10 @@ private:
 
   // aliases
   std::map<std::string,std::map<std::string,std::string> > file2var2alias;
+
+  // re-mappings ( file -> var -> level -> num-value )
+  std::map<std::string,std::map<std::string,std::map<std::string,double> > > file2var2mapping;
+
   
   // [prep/read] variables in included/exclude [on base vars] 
   std::set<std::string> incvars, excvars;
@@ -225,6 +229,8 @@ private:
   // [run] number of permutations
   int nreps; 
 
+  bool dump_file; // in prep-mode, instead of manifest
+  
   // [run] threshold for output
   double pthresh;
   double pthresh_adj;

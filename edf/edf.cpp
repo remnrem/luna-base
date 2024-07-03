@@ -133,7 +133,7 @@ int edf_t::get_int( byte_t ** p , int sz )
   std::string s = edf_t::get_string( p , sz );
   int t = 0;
   if ( ! Helper::str2int( s , &t ) ) 
-    Helper::halt( "problem converting to an integer value: [" + s + "]"  );
+    Helper::vmode_halt( "problem converting to an integer value: [" + s + "]"  );
   return t;
 }
 
@@ -145,8 +145,9 @@ double edf_t::get_double( byte_t ** p , int sz )
   if ( s == "" ) return -1;
   
   if ( ! Helper::from_string<double>( t , s , std::dec ) ) 
-    {     
-      logger << "returning -1: [" << s << "] is not a valid real number\n";
+    {
+      Helper::vmode_halt( "problem converting to a float:" + s );
+      //      logger << "returning -1: [" << s << "] is not a valid real number\n";
       return -1;
     }
   return t;
@@ -608,7 +609,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
     Helper::halt( "internal error in edf_header_t::read(), unclear whether EDF or EDFZ" );
   
   // Fixed buffer size for header
-  // Total header = 256 + ns*256
+  // Total header = 256 + ns * 256
  
   const int hdrSz = 256; 
   
@@ -627,6 +628,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   } else {
     rdsz = edfz->read( q , hdrSz );
   }
+
+  //
+  // okay, now read initial header section
+  //
   
   std::set<int> channels;
   
@@ -750,6 +755,21 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   delete [] q0;
 
 
+
+  //
+  // at this point, we now know the number of signals: check that the file is
+  // large enough to contain the full (expected) header: 256 + ns * 256 
+  //
+
+  uint64_t expected_header_size = 256 + ns_all * 256;
+  
+  if ( expected_header_size > edf_t::get_filesize( file ) )
+    {
+      Helper::vmode_halt( "corrupt EDF header" );
+      return channels;
+    }
+  
+  
   //
   // Per-signal header information
   //
@@ -1076,8 +1096,7 @@ bool edf_record_t::read( int r )
     {
       
       if ( ! edf->edfz->read_record( r , p , edf->record_size ) ) 
-	Helper::halt( "corrupt .edfz or .idx" );
-
+	return Helper::vmode_halt( "corrupt .edfz or .idx" );
     }
 
   // which signals/channels do we actually want to read?
@@ -1134,39 +1153,12 @@ bool edf_record_t::read( int r )
 	      // store digital data-point
 	      data[s][j] = d;
 	      
-	      // physically-scaled data-point	  
-	      // if ( false )
-	      // 	if ( d < edf->header.orig_digital_min[s] || d > edf->header.orig_digital_max[s] ) 
-	      // 	  {	
-		    
-	      // 	  std::cout << "OUT-OF-BOUNDS" << "\t"
-	      // 		    << edf->id << "\t"
-	      // 		    << "[" << globals::current_tag << "]\t"
-	      // 		    << edf->header.label[s] << "\t"
-	      // 		    << "digt: " << d << "\t"
-	      // 		    << edf->header.orig_digital_min[s] << " .. " 
-	      // 		    << edf->header.orig_digital_max[s] << "\t"
-	      // 		    << "phys: " << edf->header.bitvalue[s] * ( edf->header.offset[s] + d ) << "\t"
-	      // 		    << edf->header.orig_physical_min[s] << " .. " 
-	      // 		    << edf->header.orig_physical_max[s] << "\n"; 
-
-	      // 	  if (  d < edf->header.orig_digital_min[s] ) 
-	      // 	    d = edf->header.orig_digital_min[s];
-	      // 	  else 
-	      // 	    d = edf->header.orig_digital_max[s];
-		  
-	      // 	  }
-	      
-	      // concert to physical scale
-	      //pdata[s][j] = edf->header.bitvalue[s] * ( edf->header.offset[s] + d );
-	      //pdata[s][j] = dig2phys( d , s ) ;
-	      
 	    }
 	}
       else // read as a ANNOTATION
 	{
 	  
-	  // Note, because for a normal signal, each sample takes 2 bytes,
+	  // because for a normal signal, each sample takes 2 bytes,
 	  // here we read twice the number of datapoints
 	  
 	  for (int j=0; j < 2 * nsamples; j++)
@@ -1182,9 +1174,7 @@ bool edf_record_t::read( int r )
 	  
 	}
       
-
       // next signal
-
       ++s;
 
     }
@@ -1227,7 +1217,7 @@ bool edf_t::read_records( int r1 , int r2 )
 	  if ( ! loaded( r ) ) 
 	    {
 	      edf_record_t record( this ); 
-	      record.read( r );
+	      if ( ! record.read( r ) ) return false;
 	      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
 	    }
 	}
@@ -1275,6 +1265,14 @@ bool edf_t::init_empty( const std::string & i ,
 
 
   //
+  // if and only if running in --validation mode, we can quit now
+  // (this is just being used to load/check annots)
+  //
+
+  if ( globals::validation_mode ) return true;
+
+  
+  //
   // resize data[][], by adding empty records
   //
 
@@ -1313,8 +1311,8 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   if ( has_arg_labels ) labels = labels0;
 
   if ( ! Helper::fileExists( filename ) ) 
-    Helper::halt( "could not read " + filename );
-
+    Helper::vmode_halt( "could not read " + filename );
+  
   bool compressed = Helper::file_extension( filename , "gz" );
   
   std::ifstream IN1( filename.c_str() , std::ios::in );
@@ -1567,9 +1565,7 @@ bool edf_t::attach( const std::string & f ,
       if ( ( file = fopen( filename.c_str() , "rb" ) ) == NULL )
 	{      
 	  file = NULL;
-	  logger << " PROBLEM: could not open specified EDF: " << filename << "\n";
-	  globals::problem = true;
-	  return false;
+	  return Helper::vmode_halt( "could not open specified EDF: " + filename );
 	}
     }
   else
@@ -1581,11 +1577,9 @@ bool edf_t::attach( const std::string & f ,
 	{
 	  delete edfz;
 	  edfz = NULL;
-	  logger << " PROBLEM: could not open specified .edfz (or .edfz.idx) " << filename << "\n";
-	  globals::problem = true;
-	  return false;
+	  return Helper::vmode_halt( "could not open specified EDFZ (for .idx file): " + filename );
 	}
-
+      
     }
 
   
@@ -1602,39 +1596,27 @@ bool edf_t::attach( const std::string & f ,
       fileSize = edf_t::get_filesize( file );
       
       if ( fileSize < 256 ) 
-	{
-	  logger << " PROBLEM: corrupt EDF, file < header size (256 bytes): " << filename << "\n";
-	  globals::problem = true;
-	  return false;
-	}
+	return Helper::vmode_halt( "corrupt EDF, file < header size (256 bytes): " + filename );
     }
   else
     {
       // TODO... need to check EDFZ file. e.g. try reading the last record?
-      //
     }
 
 
   //
-  // Read and parse the EDF header (from either EDF or EDFZ)
+  // Read and parse the EDF header (from either EDF or EDFZ) extract
+  // signal codes store so we know how to read records
   //
-
-  // if inp_signals has been specified, then we need to make sure it includes
-  // annotation channels.   Easiest to just add here
-
-  // std::set<std::string> inp_signals2;
-  // if ( inp_signals != NULL )
-  //   {
-  //     inp_signals2 = *inp_signals;
-  //     inp_signals2.insert( "EDF Annotations" );
-  //   }
-  
-  // Parse the header and extract signal codes 
-  // store so we know how to read records
   
   inp_signals_n = header.read( file , edfz , inp_signals );
-  
 
+  //
+  // check that a problem was not detected when reading header (i.e. if truncated)
+  //
+  
+  if ( globals::problem ) return false; 
+  
   //
   // anon header info?
   //
@@ -1676,7 +1658,7 @@ bool edf_t::attach( const std::string & f ,
   if ( header.edfplus && header.time_track() == -1 ) 
     {
       if ( !header.continuous ) 
-	Helper::halt( "EDF+D with no time track" );
+	return Helper::vmode_halt( "EDF+D with no time track" );
       
       logger << " EDF+C [" << filename << "] did not contain any time-track: adding...\n";
 
@@ -1703,7 +1685,7 @@ bool edf_t::attach( const std::string & f ,
 	{
 	  logger << "  EDFZ idx record size = " << edfz->record_size << "\n"
 		 << "  EDF record size = " << record_size << "\n";
-	  Helper::halt( "internal error, different record size in EDFZ header versus index" );
+	  return Helper::vmode_halt( "internal error, different record size in EDFZ header versus index" );
 	}
     }
   
@@ -1716,20 +1698,25 @@ bool edf_t::attach( const std::string & f ,
   if ( file ) 
     {
       uint64_t implied = (uint64_t)header_size + (uint64_t)header.nr_all * record_size;
-      
+
       if ( fileSize != implied ) 
 	{
-
+	  
 	  std::stringstream msg;
 
-	  msg << "details:\n"
+	  if ( globals::validation_mode )
+	    return Helper::vmode_halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
+				       + " but observed " + Helper::int2str( fileSize) + " bytes: " + filename  );
+
+	  // else give more verbose output (and a chance to fix) 
+
+	  msg << "\ndetails:\n"
 	      << "  header size ( = 256 + # signals * 256 ) = " << header_size << "\n"
 	      << "  num signals = " << header.ns_all << "\n"	      
 	      << "  record size = " << record_size << "\n"
 	      << "  number of records = " << header.nr_all << "\n"
 	      << "  implied EDF size from header = "
-	      << header_size << " + " << record_size << " * " << header.nr_all << " = " << implied << "\n\n"
-
+	      << header_size << " + " << record_size << " * " << header.nr_all << " = " << implied << "\n\n"	      
 	      << "  assuming header correct, implies the file has "
 	      <<  (double)(fileSize-header_size)/(double)record_size - (double)(implied-header_size)/(double)record_size 
 	      << " records too many\n"
@@ -1744,9 +1731,9 @@ bool edf_t::attach( const std::string & f ,
 		  << "  information is incorrect (e.g. number of signals, sample rates), then you'll be\n"
 		  << "  dealing with GIGO... so be sure to carefully check all signals for expected properties;\n"
 		  << "  really you should try to determine why the EDF was invalid in the first instance, though\n";
-
+	      
 	      Helper::halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
-			    + " but observed " + Helper::int2str( fileSize) + " bytes" + "\n" + msg.str() );
+			    + " but observed " + Helper::int2str( fileSize) + " bytes: " + filename +  msg.str() );
 	    }
 	  else
 	    {
@@ -1880,28 +1867,21 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
     stop = timeline.last_time_point_tp + 1 ;      
   
   //
-  // First, determine which records are being requested?
+  // First, determine which records are being requested
   //
   
   const uint64_t n_samples_per_record = header.n_samples[signal];
-  
-  // std::cerr << "signal = " << signal << "\t" << header.n_samples.size() << "\t" << header.n_samples_all.size() << "\n";
-  // std::cerr << "SR " << n_samples_per_record << "\n";
- 
+   
   int start_record, stop_record;
   int start_sample, stop_sample;
 
-  //  std::cerr << "looking for " << start << " to " << stop << "\n";
   
   bool okay = timeline.interval2records( interval_t( start , stop ) , 
 					 n_samples_per_record , 
 					 &start_record, &start_sample , 
 					 &stop_record, &stop_sample );
   
-  
-  // std::cout << "records start = " << start_record << " .. " << start_sample << "\n";
-  // std::cout << "records stop  = " << stop_record << " .. " << stop_sample << "\n";
-  
+    
   //
   // If the interval is too small (or is applied to a signal with a low sampling rate)
   // we might not find any sample-points in this region.   Not an error per se, but flag
@@ -1919,8 +1899,15 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   // Ensure that these records are loaded into memory
   // (if they are already, they will not be re-read)
   //
+  
+  bool successful_read = read_records( start_record , stop_record );
 
-  bool retval = read_records( start_record , stop_record );
+  // sets problem flag
+  if ( ! successful_read )
+    {
+      bool retval = Helper::vmode_halt( "problem reading EDF records" );
+      return ret; // empty
+    }
   
   //
   // Copy data into a single vector
@@ -1933,24 +1920,11 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 
   while ( r <= stop_record )
     {
-      //std::cerr << "rec " << r << "\n";
-
-      // std::cout << records.size() << " is REC SIZE\n";
-      // std::cout << "foudn " << ( records.find( r ) != records.end() ? " FOUND " : "NOWHERE" ) << "\n";
 
       const edf_record_t * record = &(records.find( r )->second);
-
-      //std::cerr << " test for NULL " << ( record == NULL ? "NULL" : "OK" ) << "\n";
       
       const int start = r == start_record ? start_sample : 0 ;
       const int stop  = r == stop_record  ? stop_sample  : n_samples_per_record - 1;
-
-      // std::cerr << " start, stop = " << start << "   " << stop << "\n";
-      
-      // std::cerr << "OUT\t"
-      // 		<< record->data.size() << " "
-      // 		<< signal << " " 
-      // 		<< header.ns << "\n";
       
       for (int s=start;s<=stop;s+=downsample)
 	{
@@ -1965,7 +1939,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 	  // just return digital values...
 	  if ( ddata != NULL )
 	    ddata->push_back( record->data[ signal ][ s ] );
-	  else // ... or convert from digital to physical on-the-fly? (the default)
+	  else // ... or convert from digital to physical on-the-fly?
 	    ret.push_back( edf_record_t::dig2phys( record->data[ signal ][ s ] , bitvalue , offset ) );
 	  
 	}
@@ -2626,11 +2600,7 @@ void edf_t::drop_signal( const int s )
 	    break;
 	  }
     }
-  
-  // std::cout << " after dropping... " ;
-  // for (int i=0; i<header.annotation_channel.size() ;i++)
-  //   std::cout << "header.annotation_channel[ " << i << " ] = " << header.annotation_channel[i] << "\t" << header.label[i] << "\n";
-  
+    
 }
 
 void edf_record_t::drop( const int s )
@@ -2666,7 +2636,6 @@ void edf_t::add_signal( const std::string & label ,
       return;
     }
 
-  //  std::cout << "nd = " << ndata << " " << header.nr << " " << n_samples << "\n";
 
   // sanity check -- ie. require that the data is an appropriate length
   if ( ndata != header.nr * n_samples ) 
@@ -2809,21 +2778,6 @@ void edf_record_t::add_annot( const std::string & str , const int signal )
 
 }
 
-// now redundant
-// void edf_record_t::calc_data( double bitvalue , double offset  )
-// {
-  
-//   // convert to physical scale
-//   // pdata[s][j] = header->bitvalue[s] * ( header->offset[s] + d );
-  
-//   const std::vector<double> & pd = pdata[ pdata.size() - 1 ];
-//   const int n = pd.size();
-//   std::vector<int> d( n );
-//   for (int i=0;i<n;i++) d[i] = pd[i]/bitvalue - offset;      
-  
-//   // create data given min/max etc
-//   data.push_back( d );
-// }
 
 
 void edf_t::reset_record_size( const double new_record_duration )
@@ -2923,11 +2877,7 @@ void edf_t::reset_record_size( const double new_record_duration )
 		  std::map<int,edf_record_t>::iterator rr = new_records.find( new_rec_cnt[s] );
 		  if ( rr == new_records.end() ) Helper::halt( "internal error" );
 		  edf_record_t & new_record = rr->second;
-
-//  		  std::cout << "setting " << new_rec_cnt[s] << "\t" << new_smp_cnt[s] << " = " << r << " " << i << "\n";
-//  		  std::cout << " sz = " << new_record.data[ s ].size() << " " << record.data[ s ].size() << "\n";
-		  new_record.data[ s ][ new_smp_cnt[ s ] ] = record.data[ s ][ i ];
-		  
+		  new_record.data[ s ][ new_smp_cnt[ s ] ] = record.data[ s ][ i ];		  
 		  ++new_smp_cnt[ s ];
 		}
 

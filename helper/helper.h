@@ -165,6 +165,7 @@ namespace Helper
   std::istream& safe_getline(std::istream& is, std::string& t);
   gzifstream & zsafe_getline( gzifstream & is , std::string& t);
 
+  bool vmode_halt( const std::string & msg );
   void halt( const std::string & msg );
   void problem( const std::string & msg );
   void warn( const std::string & msg );

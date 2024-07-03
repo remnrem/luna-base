@@ -263,7 +263,17 @@ bool Helper::file_extension( const std::string & f, const std::string & ext , bo
 }
 
 
+bool Helper::vmode_halt( const std::string & msg )
+{
+  // normal halt
+  if ( ! globals::validation_mode ) halt( msg );
 
+  // set problem flag
+  problem( msg );
+  
+  // caller then responsible to returning
+  return false;
+}
 
 void Helper::halt( const std::string & msg )
 {

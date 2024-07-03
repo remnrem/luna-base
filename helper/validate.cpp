@@ -1,0 +1,343 @@
+
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
+#include "helper/validate.h"
+
+#include "defs/defs.h"
+#include "edf/edf.h"
+#include "db/db.h"
+#include "helper/logger.h"
+#include "helper/helper.h"
+
+#include <fstream>
+#include <cstdio>
+#include <dirent.h>
+
+extern writer_t writer;
+extern logger_t logger;
+
+void Helper::validate_slist( param_t & param )
+{
+
+  
+  // take an existing sample list
+  // check each EDF and all annotations
+  // output if we cannot read
+  // generate an exclude list
+
+  globals::validation_mode = true;
+    
+  const std::string slist = Helper::expand( param.requires( "slist" ) );
+
+  logger << "  validating files in sample list " << slist << "\n\n";  
+
+  if ( ! Helper::fileExists( slist ) ) Helper::halt( "could not open sample-list " + slist );
+
+  std::ifstream IN1( slist.c_str() , std::ios::in );
+
+  
+  //
+  // set up 
+  //
+  
+  const bool has_project_path = globals::param.has( "path" );
+  
+  int goodn = 0 , badn = 0;
+  
+  while ( 1 )
+    {
+
+      //
+      // clear any flags      
+      //
+
+      globals::problem = false;
+
+      //
+      // read SL
+      //
+
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+
+      // all done?
+      if ( IN1.eof() || IN1.bad() ) break;
+
+      if ( line == "" ) continue;
+
+
+      //
+      // get SL line
+      //
+      
+      std::vector<std::string> tok = Helper::parse( line , "\t" );
+
+      if ( tok.size() < 2 ) 
+	Helper::halt( "requires (ID) | EDF file | (optional ANNOT files)" );
+
+      // allow '.' missing value for annots?
+
+      if ( tok.size() == 3 && tok[2] == "." ) tok.resize(2);
+      
+      // ignore SL annots?
+      
+      if ( globals::skip_sl_annots ) tok.resize(2);
+      
+      // allow annot field to be comma delimited? expand out here
+      
+      if ( tok.size() == 3 )
+	{
+	  std::vector<std::string> annot_fields = Helper::parse( tok[2] , globals::file_list_delimiter );
+	  if ( annot_fields.size() > 1 )
+	    {
+	      tok.resize( 2 + annot_fields.size() );
+	      for (int a=0; a<annot_fields.size();a++)
+		tok[a+2] = annot_fields[a];
+	    }
+	}
+		
+      // add in project path to relative paths?
+      // (but keep absolute paths as they are)
+      
+      if ( has_project_path )
+	{
+	  for (int t=1;t<tok.size();t++)
+	    {
+	      if ( tok[t][0] != globals::folder_delimiter )
+		tok[t] = globals::project_path + tok[t];
+	    }
+	}
+
+      //
+      // extract main items (ID, signal EDF)
+      //
+      
+      std::string rootname = tok[0];
+      std::string edffile  = tok[1];
+
+      //
+      // swap in new ID?
+      //
+
+      rootname = cmd_t::remap_id( rootname );
+      
+      
+      //
+      // File in exclude list? (or not in an include list?)
+      //
+
+      bool include = true;
+
+      if ( globals::id_excludes.find( rootname ) != globals::id_excludes.end() )
+	include = false;
+      
+      if ( globals::id_includes.size() != 0
+	   && globals::id_includes.find( rootname ) == globals::id_includes.end() )
+	include = false;
+      
+      if ( ! include )	
+	{
+	  logger << "\n"
+		 << "___________________________________________________________________\n"
+		 << "  **********************************\n"
+		 << "  * Skipping EDF " << rootname << "\n"
+		 << "  **********************************\n"
+		 << "\n";
+	  
+	  continue; // to the next EDF in the list
+	}
+
+
+      //
+      // set up writer      
+      //
+      
+      writer.id( rootname , "." );
+
+      //
+      // try to load 
+      //
+
+      edf_t edf;
+
+      bool edf_okay = edf.attach( edffile , rootname , NULL , true );
+
+      if ( edf_okay ) ++goodn;
+      else ++badn;
+      
+      writer.value( "EDF" , edf_okay );
+      
+      
+      // ------------------------------------------------------------
+      //
+      // try to load annotations
+      //
+      // ------------------------------------------------------------                                                             
+
+      //
+      // init an empty EDF in case the above was left in a weird state
+      //
+      
+      const int nr = 12 * 60 ; // default = 12 hr empty EDF, although this should not matter
+      const int rs = 60 ;
+      const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
+      const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;      
+      const std::string id = rootname ;
+
+      edf_t dummy;
+
+      bool empty_okay = dummy.init_empty( id , nr , rs , startdate , starttime );
+
+      if ( ! empty_okay )
+	Helper::halt( "internal error constructing an empty EDF to evaluate annotations" );
+      
+
+      //
+      // track bad annots
+      //
+
+      std::map<std::string,std::string> badannots;
+      
+      // some basic set-up
+
+      dummy.timeline.annotations.set( &dummy );
+      
+
+      // Add additional annotations? (outside of slist)
+      // not sure this is needed here
+
+      for (int i=0;i<globals::annot_files.size();i++)
+	{
+	  // if absolute path given, add in as in  /home/joe/etc
+	  if ( globals::annot_files[i][0] == globals::folder_delimiter ) 
+	    tok.push_back( globals::annot_files[i] );
+	  else  // project path may be "" if not set; but if set, will end in /
+	    tok.push_back( globals::project_path + globals::annot_files[i] );
+	}
+
+      
+      //
+      // Attach annotations
+      //
+      
+      if ( ! globals::skip_nonedf_annots ) 
+	{
+
+	  for (int i=2;i<tok.size();i++) 
+	    {
+	      
+	      std::string fname = Helper::expand( tok[i] );
+	      
+	      if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
+		{
+		  // this means we are specifying a folder, in which case search for all files that 
+		  // start id_<ID>_* and attach thoses
+		  DIR * dir;		  
+		  struct dirent *ent;
+		  if ( (dir = opendir ( fname.c_str() ) ) != NULL )
+		    {
+		      /* print all the files and directories within directory */
+		      while ((ent = readdir (dir)) != NULL)
+			{
+			  std::string fname2 = ent->d_name;
+			  // only annot files (.xml, .ftr, .annot, .eannot)
+			  if ( Helper::file_extension( fname2 , "annot" ) ||
+			       Helper::file_extension( fname2 , "txt" ) ||
+			       Helper::file_extension( fname2 , "tsv" ) ||
+			       Helper::file_extension( fname2 , "xml" ) ||
+			       Helper::file_extension( fname2 , "ameta" ) ||
+			       Helper::file_extension( fname2 , "stages" ) ||
+			       Helper::file_extension( fname2 , "eannot" ) )   
+			    {
+			      
+			      bool okay = dummy.load_annotations( fname + fname2 );
+			      // xxxx
+			    }			 
+			}
+		      closedir (dir);
+		    }
+		  else 
+		    Helper::halt( "could not open folder " + fname );
+		}
+	      else
+		{
+		  
+		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
+		  // i.e. skip .sedf files that might also be specified as 
+		  // attached to this EDF
+		  if ( Helper::file_extension( fname , "annot" ) ||
+		       Helper::file_extension( fname , "txt" ) ||
+		       Helper::file_extension( fname , "tsv" ) ||
+		       Helper::file_extension( fname , "xml" ) ||
+		       Helper::file_extension( fname , "ameta" ) ||
+		       Helper::file_extension( fname , "stages" ) ||
+		       Helper::file_extension( fname , "eannot" ) )
+		    {
+		      bool okay = dummy.load_annotations( fname );
+		      // xxxx
+		    }
+		  else
+		    Helper::halt( "did not recognize annotation file extension: " + fname );
+		} 
+	      
+	    }
+	}
+
+      
+      //
+      // Attach EDF Annotations, potentially (only if EDF was not corrupt) 
+      //  --> skip for now, not sure this can throw an error?
+      //
+      
+      if ( false && edf.header.edfplus )
+	{
+	  // must read if EDF+D (but only the time-track will be taken in)
+	  // if EDF+C, then look at 'skip-edf-annots' flag
+	  
+	  if ( edf.header.continuous && ! globals::skip_edf_annots )
+	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
+	  else if ( ! edf.header.continuous )
+	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
+	  
+	}
+      
+            
+
+      //
+      // Next individual
+      //
+      
+    }
+
+  if ( badn ) 
+    logger << "\n  " << badn << " of " <<  goodn + badn << " observations scanned had corrupt/missing EDF/annotation files\n";
+  else
+    logger << "  all good, no problems detected in " << goodn << " observations scanned\n";
+    
+  IN1.close();
+
+  // all done
+
+  globals::validation_mode = false;
+  
+}
+

@@ -20,20 +20,16 @@
 //
 //    --------------------------------------------------------------------
 
-#ifndef __LUNA_MAPPER_H__
-#define __LUNA_MAPPER_H__
+#ifndef __VALIDATE_H__
+#define __VALIDATE_H__
 
 #include "defs/defs.h"
 #include "edf/edf.h"
 
-#include <map>
-#include <vector>
-
-extern globals global;
 
 namespace Helper
 {
-  void channel_annot_mapper( const std::vector<std::string> & tok , bool html );
+  void validate_slist( param_t & );
 }
 
 #endif

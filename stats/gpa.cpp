@@ -50,6 +50,8 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 
   bfile = param.requires( "dat" );
 
+  dump_file = param.has( "dump" );
+  
   infiles.clear();
   incvars.clear();
   excvars.clear();
@@ -289,8 +291,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       if ( request_assoc && ( param.has( "retain-cols" ) || param.has( "retain-rows" ) ) )
 	Helper::halt( "can only use retain-cols or retain-rows when not running association (no X)" );
 
-      
-      
+            
       logger << "  reading binary data from " << bfile << "\n";
       
       // read data in  ( and this does filtering of columns) 
@@ -530,6 +531,10 @@ void gpa_t::prep()
 
       // any file-specific aliasing?
       const std::map<std::string,std::string> & aliases = file2var2alias[ ff->first ];
+
+      // any file-specific/variable-specific mapping of strings -> numeric
+      const std::map<std::string,std::map<std::string,double> > & mappings = file2var2mapping[ ff->first ];
+      
       
       //
       // if including/excluding based on presence of factors, we can
@@ -729,7 +734,28 @@ void gpa_t::prep()
 		double val;
 		if ( Helper::str2dbl( dtok[j] , &val ) ) 
 		  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = val;
-		  
+		else
+		  {
+		    // do we have a mapping object for this file/var?
+		    std::map<std::string,std::map<std::string,double> >::const_iterator mm = mappings.find( tok[j] );
+		    if ( mm != mappings.end() )
+		      {
+			const std::map<std::string,double> & mp = mm->second;
+			std::map<std::string,double>::const_iterator kk = mp.find( dtok[j] );
+			if ( kk != mp.end() )
+			  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = kk->second ;
+		      }
+		    else // try default T/F and Y/N mappings
+		      {
+			
+			char f1 = std::toupper( dtok[j][0] );
+			if ( f1 == 'F' || f1 == 'N' )
+			  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 0;
+			else if ( f1 == 'T' || f1 == 'Y' )
+			  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 1;
+		      }
+		  }
+		
 	      }
 	  
 	  // next data row
@@ -832,10 +858,14 @@ void gpa_t::prep()
   logger << "  ...done\n";
 
   //
-  // --------- show manifest
+  // --------- show manifest (or dump)
   //
-
-  manifest();
+  
+  if ( ! dump_file )
+    manifest();
+  else
+    dump();
+  
   
   
 }
@@ -2184,7 +2214,8 @@ void gpa_t::parse( const std::string & pfile )
 	//
 	//   2) allow for vars, xvars ( --> file specific versions) for prep only
 	//
-	
+	//   3) mappings (for a given variable, label --> numeric) 
+
 	//
 	// vars
 	//
@@ -2285,6 +2316,53 @@ void gpa_t::parse( const std::string & pfile )
 		  }
 	      }
 	  }
+
+	//
+	// mappings
+	//
+
+	if ( item.contains( "mappings" ) )
+	  {
+	    
+	    json x = item[ "mappings" ] ;
+	    if ( ! x.is_array() )
+	      {
+		if ( ! x.is_null() ) 
+		  logger << "  *** expecting mappings: [ array ] in " << pfile << ", skipping...\n";
+	      }
+	    else
+	      {		
+		for (auto v : x )
+		  {
+		    // expecting [ {  var : { str , num } } , ... ]
+		    
+		    // if using aliases, should be in new alias form
+		    if ( v.is_object() )
+		      {			
+			for ( auto & vv : v.items() )
+			  {
+			    std::string var = vv.key();
+
+			    if ( vv.value().is_object() && vv.value().size() == 2 )
+			      {
+				for ( auto & vvv : vv.value().items() )
+				  {
+				    std::string str = vvv.key();
+				    double num = vvv.value();
+
+				    // store
+				    file2var2mapping[ file_name ][ var ][ str ] = num; 
+				    
+				  }
+			      }
+			  }
+		      }
+		  }
+		
+	      }
+	  }
+
+	
 	
 	//
 	// add in

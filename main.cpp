@@ -222,7 +222,7 @@ int main(int argc , char ** argv )
       std::exit(0);
     }
 
-  
+
   //
   // change paths
   //
@@ -310,6 +310,7 @@ int main(int argc , char ** argv )
   bool cmdline_proc_overlap       = false;
   bool cmdline_proc_gpa_prep      = false;
   bool cmdline_proc_gpa_run       = false;
+  bool cmdline_proc_validate      = false;
   
   //
   // use standard input versus command line for
@@ -410,6 +411,8 @@ int main(int argc , char ** argv )
 	    cmdline_proc_fft = true;
 	  else if ( strcmp( argv[1] , "--overlap" ) == 0 )
 	    cmdline_proc_overlap = true;
+	  else if ( strcmp( argv[1] , "--validate" ) == 0 )
+	    cmdline_proc_validate = true;
 	}
       
       // otherwise, first element will be treated as a file list
@@ -913,6 +916,26 @@ int main(int argc , char ** argv )
     }
 
 
+  //
+  // --validate sample list
+  //
+
+  if ( cmdline_proc_validate )
+    {
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+      
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "VALIDATE" , 1 , "" );
+      writer.level( "VALIDATE", "_VALIDATE" );
+      Helper::validate_slist( param );
+      writer.unlevel( "_VALIDATE" );
+      writer.commit();
+      std::exit(0);
+    }
+
+  
   //
   // OVERLAP enrichment (multi-sample case)
   //

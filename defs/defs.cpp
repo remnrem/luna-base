@@ -61,6 +61,7 @@ bool globals::sanitize_everything = true;
 
 std::set<std::string> globals::annot_alignment;
 bool globals::autofix_edf;
+bool globals::validation_mode;
 
 int globals::time_format_dp;
 
@@ -313,6 +314,11 @@ void globals::init_defs()
 
   autofix_edf = false;
 
+  //
+  // used with --validate to handle errors
+  //
+
+  validation_mode = false;
   
   //
   // Automatically remap stage annotations; 

@@ -39,6 +39,7 @@
 #include "helper/xml-parser.h"
 #include "helper/json.h"
 #include "helper/mapper.h"
+#include "helper/validate.h"
 
 #include "tinyxml/tinyxml.h"
 //#include "lwprep/lwprep.h"
