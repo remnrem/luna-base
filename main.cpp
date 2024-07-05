@@ -2509,14 +2509,25 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
   if ( p == "json" )
+<<<<<<< HEAD
     {      
       std::ifstream ifs( p2 );
       nlohmann::json j = nlohmann::json::parse(ifs);
+=======
+    {
+      std::ifstream ifs( p2 );
+      //      nlohmann::json j = nlohmann::json::parse(ifs);
+      nlohmann::json j{nlohmann::json::parse(ifs)};
+>>>>>>> 21f5743879d0e7bfcc7242985fac7da5dd3bdbaa
       std::cout << j.dump(4) << "\n";
       std::exit(0);
     }
 
+<<<<<<< HEAD
   
+=======
+
+>>>>>>> 21f5743879d0e7bfcc7242985fac7da5dd3bdbaa
   if ( p == "tps" )
     {
 

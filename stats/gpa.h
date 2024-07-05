@@ -93,9 +93,12 @@ private:
   {
     uint8_t len;
     I.read( (char*)( &len ), sizeof(uint8_t) );
+    int ll = len;
+    std::cout << " hmm len = " << ll << " " << ( ll == 0 ? "ZZZ" : "" ) << " ";
     std::vector<char> b( len );
     I.read( &b[0] , len );
     std::string s( b.begin() , b.end() );
+    std::cout << " s[" << s << "]\n";
     return s;
   }
   
