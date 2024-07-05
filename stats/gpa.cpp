@@ -2140,7 +2140,8 @@ void gpa_t::parse( const std::string & pfile )
 
   std::ifstream IN1( pfile1.c_str() , std::ios::in );
   
-  json doc{json::parse(IN1)};
+  //json doc{json::parse(IN1)};
+  json doc = json::parse(IN1);
   
   bool has_inputs = doc.count( "inputs" ); 
 
