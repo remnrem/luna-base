@@ -2508,6 +2508,16 @@ void proc_eval_tester( const bool verbose )
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  if ( p == "json" )
+    {
+      std::ifstream ifs( p2 );
+      //      nlohmann::json j = nlohmann::json::parse(ifs);
+      nlohmann::json j{nlohmann::json::parse(ifs)};
+      std::cout << j.dump(4) << "\n";
+      std::exit(0);
+    }
+
+
   if ( p == "tps" )
     {
 

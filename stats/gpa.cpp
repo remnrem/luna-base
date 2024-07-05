@@ -494,15 +494,15 @@ void gpa_t::prep()
   std::set<std::string> allfacs;
   
   std::map<int,std::map<int,double> > D; // nb. D[ var ][ ind ] --> value
-
-  // track lvl order over all files
+  
+  // track lvl-order over all files/variables:  FAC -> LVL -> numeric encoding (order)
   std::map<std::string,std::map<std::string,int> >  faclvlcnt;
-	
+  
   // iterate over all files
   std::map<std::string,std::set<std::string> >::const_iterator ff = infiles.begin();
   while ( ff != infiles.end() )
     {
-
+      
       // was this group excluded?
       if ( incgrps.size() && incgrps.find( file2group[ ff->first ] ) == incgrps.end() )
 	{
@@ -772,7 +772,24 @@ void gpa_t::prep()
       ++ff;
     }
 
+ 
+  //
+  // tmp - show faclvlcnt
+  //
+  std::map<std::string,std::map<std::string,int>>::const_iterator ffcc = faclvlcnt.begin();
+  while ( ffcc != faclvlcnt.end() ) 
+    {
+      const std::map<std::string,int> & g = ffcc->second;
+      std::map<std::string,int>::const_iterator qq = g.begin();
+      while ( qq != g.end() ) 
+	{
+	  std::cout << " ffcc->first " << ffcc->first << " " << qq->first << " " << qq->second << "\n";
+	  ++qq;
+	}
+      ++ffcc;
+    }
 
+  
   //
   // ------- all inputs read now
   //
@@ -1087,8 +1104,14 @@ bool bfile_t::write( const std::vector<std::string> & ids ,
 	      if ( ll != vv->second.end() )
 		vl = ll->second;
 	    }
-	  
-	  bwrite( OUT1, vl.begin()->second ) ;
+
+	  std::cout << " writing " << vars[i] << " " << vv->first << " " << *ff << " " <<  vl.size() << "\n";
+	  if (  vl.size() == 1 ) std::cout << "   ---> " << vl.begin()->second << "\n";
+
+	  if ( vl.size() == 1 ) 
+	    bwrite( OUT1, vl.begin()->second ) ;
+	  else 
+	    bwrite( OUT1, "." ) ;
 	}
 
       // next factor
@@ -1142,11 +1165,10 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
     (*ids)[i] = bread_str( IN1 );
   
     
-  // variables (which may be subsetted)
+  // variables read in (which may be subsetted)
   std::vector<std::string> all_vars( nv );
   std::vector<std::string> all_groups( nv );
   std::vector<std::string> all_basevars( nv );
-  
   std::map<std::string,std::map<std::string,std::map<int,std::string> > > all_faclvl;
   
   // variables (expanded)
@@ -1170,13 +1192,15 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
       for (int j=0; j<nv; j++)
 	{
 	  const std::string lvl = bread_str( IN1 );
-	  if ( lvl != "" )
+	  std::cout << " reading  " << all_vars[j]  << " " << all_basevars[j] << " " << facs[k] << " --> [" << lvl << "]\n";
+
+	  if ( lvl != "." )
 	    {
-	      // i.e. keep ordering as per file
-	      std::map<int,std::string> dt;
-	      const int nl = (*faclvl)[ all_vars[j] ][ facs[k] ].size();
-	      dt[ nl ] = lvl;
-	      all_faclvl[ all_vars[j] ][ facs[k] ] = dt;
+	      
+	      // i.e. keep ordering as per file	      
+	      const int nl = all_faclvl[ all_vars[j] ][ facs[k] ].size();
+	      all_faclvl[ all_basevars[j] ][ facs[k] ][ nl ] = lvl;
+	      std::cout << " adding " << all_vars[j]  << " " << all_basevars[j] << " " << facs[k] << " " << nl << " --> [" << lvl << "]\n";
 	    }
 	}
     }
@@ -1514,12 +1538,12 @@ void gpa_t::manifest()
       std::map<std::string,std::map<int,std::string> >::const_iterator ff = xx.begin();
       while ( ff != xx.end() )
 	{
+	  std::cout << " adding " << ii->first << " " << ff->first << "\n";
 	  allfacs.insert( ff->first );
 	  ++ff;
 	}      
       ++ii;
     }
-
   
   std::cout << "NV\t"
 	    << "VAR\t"
@@ -1563,6 +1587,7 @@ void gpa_t::manifest()
 		<< ni - na << "\t"
 		<< var2group[ vars[j] ] << "\t"
 		<< basevar[ vars[j] ] ;
+      std::cout << " | \n-->";
 		
       std::set<std::string>::const_iterator gg = allfacs.begin();
       while ( gg != allfacs.end() )
@@ -1573,7 +1598,9 @@ void gpa_t::manifest()
 	    {
 	      if ( kk->second.find( *gg ) != kk->second.end() )
 		{
+		  
 		  std::map<int,std::string> dt = kk->second.find( *gg )->second;
+		  std::cout << " dt sz = " << dt.size() << "\n";
 		  x = dt.begin()->second; // should always be exactly one value 
 		}
 	    }
@@ -1660,10 +1687,15 @@ void gpa_t::drop_null_columns()
   // nothing to do
   if ( n_req == 0 || n_prop < 1e-6 ) return; 
   
+  
+
   std::vector<int> good_cols;
 
   const int ni = X.rows();
   const int nv = X.cols();
+
+  // n_req cannot be larger than ni
+  if ( n_req > ni ) n_req = ni;
 
   for (int j=0; j<nv; j++)
     {
@@ -1673,7 +1705,9 @@ void gpa_t::drop_null_columns()
       if ( ng >= n_req && ng / (double)(ni) >= n_prop )
 	good_cols.push_back( j );
       else
-	logger << "  *** will drop " << vars[j] << " due to too many missing values\n";
+	logger << "  *** dropping " << vars[j] 
+	       << " due to missing values: " << ng << "/" << ni << " = " << ng / (double)(ni) 
+	       << " good values, given n-req=" << n_req << " and n-prop=" << n_prop << " required\n";
     }
 
   // any to remove? 
@@ -2135,12 +2169,15 @@ Eigen::VectorXd linmod_t::get_tstats( const Eigen::VectorXd & B ,
 
 void gpa_t::parse( const std::string & pfile )
 {
-  std::string pfile1 = Helper::expand( pfile );
-  if ( ! Helper::fileExists( pfile1 ) ) Helper::halt( "could not open " + pfile );
 
+  std::string pfile1 = Helper::expand( pfile );
+  logger << "  parsing " << pfile1 << "\n";
+
+  if ( ! Helper::fileExists( pfile1 ) ) Helper::halt( "could not open " + pfile );
+  
   std::ifstream IN1( pfile1.c_str() , std::ios::in );
   
-  json doc{json::parse(IN1)};
+  json doc = json::parse(IN1);
   
   bool has_inputs = doc.count( "inputs" ); 
 
@@ -2165,8 +2202,10 @@ void gpa_t::parse( const std::string & pfile )
   if ( has_specs )
     {
       
-      json s = doc[ "specs" ];
+      logger << "  reading general specificaitons ('specs') from " << pfile << "\n";
 
+      json s = doc[ "specs" ];
+      
       std::vector<std::string> tok;
       
       if ( s.contains( "vars" ) && s[ "vars" ].is_array() )
@@ -2194,12 +2233,12 @@ void gpa_t::parse( const std::string & pfile )
   //
   // parse inputs
   //
-
+  
   if ( has_inputs )
     {
-
+      
       for (auto & item : doc[ "inputs" ] ) {
-
+	
 	// expect minimally, group and file
 	if ( ! item.contains( "group" ) ) Helper::halt( "expecting 'group' key for all inputs in " + pfile );
 	if ( ! item.contains( "file" ) ) Helper::halt( "expecting 'file' key for all inputs in " + pfile );
@@ -2207,6 +2246,8 @@ void gpa_t::parse( const std::string & pfile )
 	std::string file_name = item[ "file" ];
 	std::string file_group = item[ "group" ];
 	
+	logger << "  reading file-specifications for " << file_name << " ( group = " << file_group << " )\n";
+
 	//
 	// and also
 	//   1) define factors for this file 
@@ -2371,10 +2412,10 @@ void gpa_t::parse( const std::string & pfile )
 	infiles[ file_name ] = file_facs;
 	file2group[ file_name ] = file_group;
 
-	logger << "  expecting input " << file_name << " (group " << file_group << ", with " << file_facs.size() << " factors";
+	logger << "  expecting " << file_facs.size() << " factors";
 	if ( file2incvars.size() ) logger << ", extracting " << file2incvars.size() << " vars";
 	if ( file2excvars.size() ) logger << ", ignoring " << file2excvars.size() << " vars";
-	logger << ")\n";
+	logger << "\n\n";
 	
 	
       }
