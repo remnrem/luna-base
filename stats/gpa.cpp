@@ -270,11 +270,18 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   retain_rows = param.has( "retain-rows" );
   if ( prep_mode && retain_rows ) Helper::halt( "cannot use retain-rows in --gpa-prep" );
 
+
+
+  //
+  // misc options
+  //
+
+  verbose = param.has( "verbose" ) ? param.yesno( "verbose" ) : false;
   
   //
   // read data / make binary file? 
   //
-
+  
   
   if ( prep_mode )
     prep();
@@ -490,14 +497,9 @@ void gpa_t::prep()
   faclvl.clear();
   basevar.clear();
   var2group.clear();
-  
-  std::set<std::string> allfacs;
-  
+    
   std::map<int,std::map<int,double> > D; // nb. D[ var ][ ind ] --> value
-  
-  // track lvl-order over all files/variables:  FAC -> LVL -> numeric encoding (order)
-  std::map<std::string,std::map<std::string,int> >  faclvlcnt;
-  
+    
   // iterate over all files
   std::map<std::string,std::set<std::string> >::const_iterator ff = infiles.begin();
   while ( ff != infiles.end() )
@@ -615,7 +617,7 @@ void gpa_t::prep()
 	  if ( facs.find( tok[j] ) != facs.end() )
 	    {
 	      fac2slot[ tok[j] ] = j;
-	      allfacs.insert( tok[j] );
+	      //allfacs.insert( tok[j] );
 	      continue;
 	    }
 	  
@@ -681,10 +683,10 @@ void gpa_t::prep()
 	      const int n1 = id2slot.size(); 
 	      id2slot[ id ] = n1;
 	    }
-
-	  // new faclvl?
+	  
+	  // construct the faclvl for this row
 	  std::string fl = "";
-	  std::map<std::string,std::map<int, std::string> > ffll;
+	  std::map<std::string,std::string> ffll;
 	  if ( facs.size() )
 	    {
 	      // at least one faclvl
@@ -692,24 +694,12 @@ void gpa_t::prep()
 	      while ( ff != fac2slot.end() )
 		{
 		  fl += "_" + tok[ ff->second ] + "_" + dtok[ ff->second ];
-		  
-		  // count how many unique levels for this factor (in this file at least...)
-		  if ( faclvlcnt[ tok[ ff->second ] ].find( dtok[ ff->second ] ) == faclvlcnt[ tok[ ff->second ] ].end() )
-		    {
-		      int n1 = faclvlcnt[ tok[ ff->second ] ].size();
-		      faclvlcnt[ tok[ ff->second ] ][ dtok[ ff->second ] ] = n1;
-		    }
-
-		  // curr number of levels for this factor
-		  std::map<int,std::string> dt;
-		  int nl = faclvlcnt[ tok[ ff->second ] ][ dtok[ ff->second ] ];
-		  dt[ nl ] = dtok[ ff->second ];
-		  //std::cout << " nl = " << nl << " " << dtok[ ff->second ] << "\n";
-		  ffll[ tok[ ff->second ] ] = dt; 
+		  // store in fac->lvl map  
+		  ffll[ tok[ ff->second ] ] = dtok[ ff->second ]; 
 		  ++ff;
 		}	      
 	    }
-
+	  
 
 	  // register each var (w/ unique faclvl if specified)
 	  // and add values
@@ -776,18 +766,18 @@ void gpa_t::prep()
   //
   // tmp - show faclvlcnt
   //
-  std::map<std::string,std::map<std::string,int>>::const_iterator ffcc = faclvlcnt.begin();
-  while ( ffcc != faclvlcnt.end() ) 
-    {
-      const std::map<std::string,int> & g = ffcc->second;
-      std::map<std::string,int>::const_iterator qq = g.begin();
-      while ( qq != g.end() ) 
-	{
-	  std::cout << " ffcc->first " << ffcc->first << " " << qq->first << " " << qq->second << "\n";
-	  ++qq;
-	}
-      ++ffcc;
-    }
+  // std::map<std::string,std::map<std::string,int>>::const_iterator ffcc = faclvlcnt.begin();
+  // while ( ffcc != faclvlcnt.end() ) 
+  //   {
+  //     const std::map<std::string,int> & g = ffcc->second;
+  //     std::map<std::string,int>::const_iterator qq = g.begin();
+  //     while ( qq != g.end() ) 
+  // 	{
+  // 	  std::cout << " ffcc->first " << ffcc->first << " " << qq->first << " " << qq->second << "\n";
+  // 	  ++qq;
+  // 	}
+  //     ++ffcc;
+  //   }
 
   
   //
@@ -921,11 +911,30 @@ void gpa_t::run()
 
   // run
   linmod_results_t results = lm.run( nreps );
-
+  
   // outputs
 
+  // manifest details
+  const int ni = X.rows();
+  const int nv = X.cols();
+  std::set<std::string> allfacs;  
+  // var -> fac -> lvl  
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ii = faclvl.begin();
+  while ( ii != faclvl.end() )
+    {
+      const std::map<std::string,std::string> & xx = ii->second;
+      std::map<std::string,std::string>::const_iterator ff = xx.begin();
+      while ( ff != xx.end() )
+	{
+	  allfacs.insert( ff->first );
+	  ++ff;
+	}      
+      ++ii;
+    }
+ 
+  
   // iterate over X
-
+  
   for (int j=0; j<ivs.size(); j++)
     {
       
@@ -945,17 +954,35 @@ void gpa_t::run()
 	      writer.value( "B"  , results.beta[ xvar ][ var ] );
 	      writer.value( "T"  , results.t[xvar][ var ] );
 	      writer.value( "P" , results.emp[xvar][ var ] );
-	      writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );	  
+	      writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
+	     
+	      // manifest details
+	      writer.value( "GROUP" ,  var2group[ var ] );
+	      writer.value( "YBASE"  , basevar[ var ] );
+	      
+	      std::set<std::string>::const_iterator gg = allfacs.begin();
+	      while ( gg != allfacs.end() )
+		{
+		  std::string x = ".";
+		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( vars[j] );
+		  if ( kk != faclvl.end() )
+		    {
+		      if ( kk->second.find( *gg ) != kk->second.end() )
+			x = kk->second.find( *gg )->second;
+		    }
+		  
+		  writer.value( *gg , x );
+		  ++gg;
+		}
 	    }
 	}
       if ( shown_y )
 	writer.unlevel( "Y" );
-            
+      
     }
   
-    writer.unlevel( "X" );
-
-  
+  writer.unlevel( "X" );
+    
 }
 
 
@@ -1029,7 +1056,7 @@ bool bfile_t::write( const std::vector<std::string> & ids ,
 		     const std::vector<std::string> & vars ,
 		     const std::map<std::string,std::string> & var2group,
 		     const std::map<std::string,std::string> & basevar,		     
-		     const std::map<std::string,std::map<std::string,std::map<int,std::string> > > & faclvl ,
+		     const std::map<std::string,std::map<std::string,std::string> > & faclvl ,
 		     const Eigen::MatrixXd & X )
 {
   ni = X.rows();
@@ -1047,11 +1074,11 @@ bool bfile_t::write( const std::vector<std::string> & ids ,
   std::set<std::string> facs;
   
   // var -> fac -> lvl  
-  std::map<std::string,std::map<std::string,std::map<int,std::string> > >::const_iterator ii = faclvl.begin();
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ii = faclvl.begin();
   while ( ii != faclvl.end() )
     {
-      const std::map<std::string,std::map<int,std::string> > & xx = ii->second;
-      std::map<std::string,std::map<int,std::string> >::const_iterator ff = xx.begin();
+      const std::map<std::string,std::string> & xx = ii->second;
+      std::map<std::string,std::string>::const_iterator ff = xx.begin();
       while ( ff != xx.end() )
 	{
 	  facs.insert( ff->first );
@@ -1093,25 +1120,33 @@ bool bfile_t::write( const std::vector<std::string> & ids ,
       // name of factors
       bwrite( OUT1, *ff ) ;
       
-      // and then value for each variable
+      // and then value for each variable (or '.' if N/A)
+      
       for (int i=0; i<nv; i++)
 	{
-	  std::map<int,std::string> vl;
-	  std::map<std::string,std::map<std::string,std::map<int,std::string> > >::const_iterator vv = faclvl.find( vars[i] );
+	  
+	  // defailt (-->N/A)
+	  std::string lvl = ".";
+	  
+	  // check var is in the faclvl map 
+	  std::map<std::string,std::map<std::string,std::string> >::const_iterator vv = faclvl.find( vars[i] );
+	  
 	  if ( vv != faclvl.end() )
 	    {
-	      std::map<std::string,std::map<int,std::string> >::const_iterator ll = vv->second.find( *ff );
+	      // does this var have this factor associated?
+	      std::map<std::string,std::string>::const_iterator ll = vv->second.find( *ff );
 	      if ( ll != vv->second.end() )
-		vl = ll->second;
+		lvl = ll->second;
+	    }
+	  	  
+	  if ( lvl != "." )
+	    {
+	      std::cout << " writing " << vars[i] << " " << vv->first << " " << *ff << " " <<  lvl << "\n";
 	    }
 
-	  std::cout << " writing " << vars[i] << " " << vv->first << " " << *ff << " " <<  vl.size() << "\n";
-	  if (  vl.size() == 1 ) std::cout << "   ---> " << vl.begin()->second << "\n";
+	  // may be '.' still
+	  bwrite( OUT1, lvl );
 
-	  if ( vl.size() == 1 ) 
-	    bwrite( OUT1, vl.begin()->second ) ;
-	  else 
-	    bwrite( OUT1, "." ) ;
 	}
 
       // next factor
@@ -1144,7 +1179,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		    std::vector<std::string> * vars ,
 		    std::map<std::string,std::string> * var2group ,
 		    std::map<std::string,std::string> * basevar,		    
-		    std::map<std::string,std::map<std::string,std::map<int,std::string> > > * faclvl ,
+		    std::map<std::string,std::map<std::string,std::string> > * faclvl ,
 		    Eigen::MatrixXd * X )
 {
   
@@ -1169,7 +1204,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
   std::vector<std::string> all_vars( nv );
   std::vector<std::string> all_groups( nv );
   std::vector<std::string> all_basevars( nv );
-  std::map<std::string,std::map<std::string,std::map<int,std::string> > > all_faclvl;
+  std::map<std::string,std::map<std::string,std::string > > all_faclvl;
   
   // variables (expanded)
   for (int j=0; j<nv; j++)
@@ -1192,16 +1227,8 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
       for (int j=0; j<nv; j++)
 	{
 	  const std::string lvl = bread_str( IN1 );
-	  std::cout << " reading  " << all_vars[j]  << " " << all_basevars[j] << " " << facs[k] << " --> [" << lvl << "]\n";
-
 	  if ( lvl != "." )
-	    {
-	      
-	      // i.e. keep ordering as per file	      
-	      const int nl = all_faclvl[ all_vars[j] ][ facs[k] ].size();
-	      all_faclvl[ all_basevars[j] ][ facs[k] ][ nl ] = lvl;
-	      std::cout << " adding " << all_vars[j]  << " " << all_basevars[j] << " " << facs[k] << " " << nl << " --> [" << lvl << "]\n";
-	    }
+	    all_faclvl[ all_vars[j] ][ facs[k] ] = lvl;
 	}
     }
 
@@ -1303,7 +1330,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 	    {
 	      if ( readvar[j] )
 		{
-		  const std::map<std::string,std::map<int,std::string> > & fl = all_faclvl[ all_vars[j] ];
+		  const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];
 
 		  // incfacs || excfacs
 
@@ -1361,7 +1388,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 	      if ( readvar[j] )
 		{
 		  
-		  const std::map<std::string,std::map<int,std::string> > & fl = all_faclvl[ all_vars[j] ];
+		  const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];
 
 		  // incfaclvls
 		  if ( incfaclvls.size() )
@@ -1378,7 +1405,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 			  if ( fl.find( ll->first ) != fl.end() )
 			    {
 			      // ... do we have an acceptable level?
-			      const std::string & lvl = fl.find( ll->first )->second.begin()->second;
+			      const std::string & lvl = fl.find( ll->first )->second;
 
 			      if ( ll->second.find( lvl ) == ll->second.end() ) // no
 				{
@@ -1412,7 +1439,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 			  if ( fl.find( ll->first ) != fl.end() )
 			    {
 			      // ... do we have an unacceptable level?
-			      const std::string & lvl = fl.find( ll->first )->second.begin()->second;
+			      const std::string & lvl = fl.find( ll->first )->second;
 
 			      if ( ll->second.find( lvl ) != ll->second.end() ) // yes
 				{
@@ -1432,7 +1459,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		}
 	    }
 	}
-
+      
 
       
     }
@@ -1458,14 +1485,19 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 
   logger << "  reading " << nv2 << " of " << nv << " vars on " << ni << " indivs\n";
     
-  // factors
+  // copy selected factors over
   faclvl->clear();
-  for (int k=0; k<nf; k++)
-    {
-      for (int j=0; j<nv; j++)
-	if ( readvar[j] )
-	  (*faclvl)[ all_vars[j] ][ facs[k] ] = all_faclvl[ all_vars[j] ][ facs[k] ];
-    }
+  // for (int k=0; k<nf; k++)
+  //   {
+  //     for (int j=0; j<nv; j++)
+  // 	if ( readvar[j] )
+  // 	  (*faclvl)[ all_vars[j] ][ facs[k] ] = all_faclvl[ all_vars[j] ][ facs[k] ];
+  //   }
+  
+  for (int j=0; j<nv; j++)
+    if ( readvar[j] )
+      (*faclvl)[ all_vars[j] ] = all_faclvl[ all_vars[j] ];
+  
   
   
   // data [ var x ind ] --> X[ ind x var ] 
@@ -1531,14 +1563,14 @@ void gpa_t::manifest()
   std::set<std::string> allfacs;
   
   // var -> fac -> lvl  
-  std::map<std::string,std::map<std::string,std::map<int,std::string> > >::const_iterator ii = faclvl.begin();
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ii = faclvl.begin();
   while ( ii != faclvl.end() )
     {
-      const std::map<std::string,std::map<int,std::string> > & xx = ii->second;
-      std::map<std::string,std::map<int,std::string> >::const_iterator ff = xx.begin();
+      const std::map<std::string,std::string> & xx = ii->second;
+      std::map<std::string,std::string>::const_iterator ff = xx.begin();
       while ( ff != xx.end() )
 	{
-	  std::cout << " adding " << ii->first << " " << ff->first << "\n";
+	  //std::cout << " adding " << ii->first << " " << ff->first << "\n";
 	  allfacs.insert( ff->first );
 	  ++ff;
 	}      
@@ -1587,21 +1619,20 @@ void gpa_t::manifest()
 		<< ni - na << "\t"
 		<< var2group[ vars[j] ] << "\t"
 		<< basevar[ vars[j] ] ;
-      std::cout << " | \n-->";
+
+      //std::cout << " | \n-->";
 		
       std::set<std::string>::const_iterator gg = allfacs.begin();
       while ( gg != allfacs.end() )
 	{
 	  std::string x = ".";
-	  std::map<std::string,std::map<std::string,std::map<int,std::string> > >::const_iterator kk = faclvl.find( vars[j] );
+	  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( vars[j] );
 	  if ( kk != faclvl.end() )
 	    {
 	      if ( kk->second.find( *gg ) != kk->second.end() )
 		{
-		  
-		  std::map<int,std::string> dt = kk->second.find( *gg )->second;
-		  std::cout << " dt sz = " << dt.size() << "\n";
-		  x = dt.begin()->second; // should always be exactly one value 
+		  x = kk->second.find( *gg )->second;
+		  //std::cout << " *gg " << *gg << " x = " << x << "\n";		  
 		}
 	    }
 	  std::cout << "\t" << x ;
@@ -1704,7 +1735,7 @@ void gpa_t::drop_null_columns()
       int ng = ni - na;
       if ( ng >= n_req && ng / (double)(ni) >= n_prop )
 	good_cols.push_back( j );
-      else
+      else if ( verbose ) 
 	logger << "  *** dropping " << vars[j] 
 	       << " due to missing values: " << ng << "/" << ni << " = " << ng / (double)(ni) 
 	       << " good values, given n-req=" << n_req << " and n-prop=" << n_prop << " required\n";
@@ -1722,7 +1753,7 @@ void gpa_t::drop_null_columns()
 
       // var labels
       std::vector<std::string> vars2 = vars;
-      std::map<std::string,std::map<std::string,std::map<int,std::string> > > faclvl2 = faclvl;
+      std::map<std::string,std::map<std::string,std::string> > faclvl2 = faclvl;
       std::map<std::string,std::string> basevar2 = basevar;
       std::map<std::string,std::string> var2group2 = var2group;;
 
@@ -1755,7 +1786,7 @@ void gpa_t::drop_null_columns()
 	  
 	}
 
-      logger << "  dropped " << nv - good_cols.size()  << " vars with too many NA values\n";
+      logger << "  dropped " << nv - good_cols.size()  << " vars with too many NA values (add 'verbose' to list)\n";
     }
     
 }
@@ -1771,14 +1802,17 @@ void gpa_t::qc( const double winsor )
   const int ni = X.rows();
   const int nv = X.cols();
 
+  
   if ( ! retain_rows )
     {
       for (int i=0;i<ni;i++)
 	{
 	  int num_missing = 0;
 	  const Eigen::VectorXd & row = X.row(i);
-	  for (int j=0; j<nv; j++) if ( std::isnan( row[j] ) ) ++num_missing;
+	  for (int j=0; j<nv; j++)
+	    if ( std::isnan( row[j] ) ) ++num_missing;
 	  if ( num_missing == 0 ) retained.push_back( i );
+	  else if ( verbose ) logger << "  dropping indiv. " << ids[i] << " due to missing values (case-wise deletion)\n";
 	}
       
       if ( retained.size() < ni )
@@ -1791,7 +1825,7 @@ void gpa_t::qc( const double winsor )
 	  for (int i=0;i<retained.size();i++)
 	    ids.push_back( ids2[retained[i]] );
 	  
-	  logger << "  case-wise deletion subsetted X from " << ni << " to " << X.rows() << " indivs\n";
+	  logger << "  case-wise deletion subsetted X from " << ni << " to " << X.rows() << " indivs (add 'verbose' to list)\n";
 	  
 	}
     }
@@ -1850,7 +1884,7 @@ void gpa_t::qc( const double winsor )
 
       // var labels
       std::vector<std::string> vars2 = vars;
-      std::map<std::string,std::map<std::string,std::map<int,std::string> > > faclvl2 = faclvl;
+      std::map<std::string,std::map<std::string,std::string> > faclvl2 = faclvl;
       std::map<std::string,std::string> basevar2 = basevar;
       std::map<std::string,std::string> var2group2 = var2group;;
 

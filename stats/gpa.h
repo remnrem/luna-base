@@ -42,7 +42,7 @@ struct bfile_t {
 	      const std::vector<std::string> & vars ,
 	      const std::map<std::string,std::string> & vargroup,
 	      const std::map<std::string,std::string> & basevar,	      
-	      const std::map<std::string,std::map<std::string,std::map<int,std::string> > > & faclvl , 
+	      const std::map<std::string,std::map<std::string,std::string> > & faclvl , 
 	      const Eigen::MatrixXd & X ) ; 
   
   bool read( const std::set<std::string> & incvars ,
@@ -59,7 +59,7 @@ struct bfile_t {
 	     std::vector<std::string> * vars ,
 	     std::map<std::string,std::string> * grps ,
 	     std::map<std::string,std::string> * basevar,	     
-	     std::map<std::string,std::map<std::string,std::map<int,std::string> > > * faclvl ,
+	     std::map<std::string,std::map<std::string,std::string> > * faclvl ,
 	     Eigen::MatrixXd * X );
 
   int rows() const { return ni; }
@@ -74,9 +74,9 @@ private:
 
   inline static void bwrite( std::ofstream & O , const std::string & s ) 
   {
-    uint8_t l = s.size();
+    uint8_t l = s.size();    
     O.write( (char*)( &l ), sizeof(uint8_t) );
-    O.write( s.c_str(), l );
+    if ( l ) O.write( s.c_str(), l );      
   }
 
   inline static void bwrite( std::ofstream & O , int i ) 
@@ -93,12 +93,10 @@ private:
   {
     uint8_t len;
     I.read( (char*)( &len ), sizeof(uint8_t) );
-    int ll = len;
-    std::cout << " hmm len = " << ll << " " << ( ll == 0 ? "ZZZ" : "" ) << " ";
+    if ( len == 0 ) return "";
     std::vector<char> b( len );
     I.read( &b[0] , len );
     std::string s( b.begin() , b.end() );
-    std::cout << " s[" << s << "]\n";
     return s;
   }
   
@@ -174,8 +172,8 @@ private:
   // var labels
   std::vector<std::string> vars;
   
-  // track factors: var -> factor -> level[n] -> level[str] (for keep original order of levels)
-  std::map<std::string,std::map<std::string,std::map<int,std::string> > > faclvl;
+  // track factors: var -> factor -> level[str] 
+  std::map<std::string,std::map<std::string,std::string> > faclvl;
   
   // track base var
   std::map<std::string,std::string> basevar;
@@ -228,6 +226,9 @@ private:
   
   // [read/run] nums (on full manifest) 
   std::vector<std::pair<int,int> > incnums, excnums;
+
+  // opts
+  bool verbose;
   
   // [run] number of permutations
   int nreps; 

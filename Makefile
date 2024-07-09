@@ -1,11 +1,11 @@
 include Makefile.inc
 ifeq ($(ARCH),WINDOWS)
-  TARGETS = luna destrat behead tocol
-else	
+  TARGETS = luna destrat behead
+else
   ifdef WASM
     TARGETS=luna libluna destrat
   else
-    TARGETS = luna libluna destrat regional behead dmerge tocol fixrows cgi-mapper simassoc
+    TARGETS = luna libluna destrat behead fixrows 
   endif
 endif
 
@@ -58,11 +58,10 @@ DEPS := $(OBJS:.o=.d)
 # targets
 #
 
-all : $(TARGETS)
+all: $(TARGETS)
 
 luna: main.o $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
-
 
 libluna: libluna.a $(SHARED_LIB)
 
