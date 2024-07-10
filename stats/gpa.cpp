@@ -277,6 +277,8 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   //
 
   verbose = param.has( "verbose" ) ? param.yesno( "verbose" ) : false;
+
+  show_xfacs = param.has( "X-factors" ) ? param.yesno( "X-factors" ) : false; 
   
   //
   // read data / make binary file? 
@@ -345,6 +347,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       
       if ( param.has( "X" ) )
 	{
+
 	  std::set<std::string> v = param.strset( "X" );
 	  std::set<std::string> found;
 	  const int nv = vars.size();
@@ -366,6 +369,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 		}
 	    }		  
 	}
+
       
       if ( param.has( "Z" ) )
 	{
@@ -392,21 +396,50 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 		}
 	    }
 	}
-      
+
+
       // Y is everything else that is left
       //  (i.e. post any prior col selection)
+      // if 'all-by-all' added, then also set X == Y
+      
+      const bool all_by_all = param.has( "all-by-all" );
+
+      if ( all_by_all && param.has( "X" ) )
+	Helper::halt( "cannot specify X and all-by-all together" );
+
       std::set<int> v1 = Helper::vec2set( ivs );
-      std::set<int> v2 = Helper::vec2set( cvs );      
+      std::set<int> v2 = Helper::vec2set( cvs );
       
       const int nv = vars.size();      
-      for (int j=0; j<vars.size(); j++)
-	if ( v1.find( j ) == v1.end() && v2.find( j ) == v2.end() )
-	  dvs.push_back( j );
 
-      logger << "  selected " 
-	     << ivs.size() << " X vars & "
-	     << cvs.size() << " Z vars, implying "
-	     << dvs.size() << " Y vars\n";
+      if ( all_by_all )
+	{
+	  for (int j=0; j<vars.size(); j++)
+            if ( v2.find( j ) == v2.end() )
+              {
+		ivs.push_back( j );
+		dvs.push_back( j );
+	      }
+
+	  logger << "  selected " 
+		 << cvs.size() << " Z vars, implying "
+		 << dvs.size() << " X and Y vars (given 'all-by-all')\n";
+	  
+	}
+      
+      else // standard, assuming that X has been specified (and is now in v1)
+	{
+	  for (int j=0; j<vars.size(); j++)
+	    if ( v1.find( j ) == v1.end() && v2.find( j ) == v2.end() )
+	      dvs.push_back( j );
+
+	  logger << "  selected " 
+		 << ivs.size() << " X vars & "
+		 << cvs.size() << " Z vars, implying "
+		 << dvs.size() << " Y vars\n";
+	  
+	}
+      
 
       
       //
@@ -445,6 +478,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       //
 
       const bool run_assoc =  dvs.size() != 0 && ivs.size() != 0 ; 
+
+      if ( ! run_assoc ) 
+	logger << "  not fitting any association models, as no dependent, or no predictor vars specified\n";
       
       if ( run_assoc )
 	{	  
@@ -466,6 +502,15 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  // level of multiple-test correction
 	  correct_all_X = param.has( "correct-all-X" ) ? param.yesno( "correct-all-X" ) : false;
 
+	  // # tests requested
+	  int ntests = 0;
+	  for (int i=0; i<ivs.size(); i++)
+	    for (int j=0; j<dvs.size(); j++)
+	      if ( ivs[i] != dvs[j] ) ++ntests;
+	  
+	  logger << "  " << ntests << " total tests specified\n";
+
+	  // do the actual work 	  
 	  if ( correct_all_X ) 
 	    {
 	      logger << "  adjusting for multiple tests across all X variables\n";
@@ -497,7 +542,9 @@ void gpa_t::prep()
   faclvl.clear();
   basevar.clear();
   var2group.clear();
-    
+
+  logger << "\n  preparing inputs...\n";
+  
   std::map<int,std::map<int,double> > D; // nb. D[ var ][ ind ] --> value
     
   // iterate over all files
@@ -508,14 +555,14 @@ void gpa_t::prep()
       // was this group excluded?
       if ( incgrps.size() && incgrps.find( file2group[ ff->first ] ) == incgrps.end() )
 	{
-	  logger << "  skipping " << ff->first << " due to grps requirement\n";
+	  logger << "  ** " << ff->first << ": skipping due to grps requirement\n";
 	  ++ff;
 	  continue;
 	}
 
       if ( excgrps.find( file2group[ ff->first ] ) != excgrps.end() )
 	{
-	  logger << "  skipping " << ff->first << " due to xgrps requirement\n";
+	  logger << "  ** " << ff->first << " skipping due to xgrps requirement\n";
 	  ++ff;
 	  continue;
 	}
@@ -550,7 +597,7 @@ void gpa_t::prep()
 	  const int obs_matched =  Helper::nmatches( facs , incfacs );
 	  if ( req_matched != facs.size() || req_matched != obs_matched || req_matched != incfacs.size() )
 	    {
-	      logger << "  skipping " << ff->first << " due to facs requirement\n";
+	      logger << "  ** " << ff->first << ": skipping due to facs requirement\n";
 	      ++ff;
 	      continue;
 	    }
@@ -561,7 +608,7 @@ void gpa_t::prep()
           const int req_matched =  Helper::nmatches( excfacs , facs );
           if ( req_matched == excfacs.size() && req_matched == facs.size() )
             {
-	      logger <<	"  skipping " << ff->first << " due to xfacs requirement\n";
+	      logger <<	"  ** " << ff->first << ": skipping due to xfacs requirement\n";
               ++ff;
               continue;
             }
@@ -571,6 +618,14 @@ void gpa_t::prep()
       //
       // read int
       //
+
+      if ( ! Helper::fileExists( Helper::expand( ff->first ) ) )
+	{
+	  logger << "  ** " << ff->first << ": skipping, could not open file\n";
+	  ++ff;
+	  continue;
+	}
+      
       
       std::ifstream IN1( Helper::expand( ff->first ).c_str() , std::ios::in );
 
@@ -585,7 +640,7 @@ void gpa_t::prep()
       if ( IN1.eof() || hdr == "" )
         {
           IN1.close();
-	  logger << "  *** skipping " << ff->first << " ... empty file\n";
+	  logger << "  ** " << ff->first << ": skipping, bad/empty file\n";
 	  ++ff;
 	  continue;
         }
@@ -643,7 +698,7 @@ void gpa_t::prep()
       if ( tok2.size() == 0 )
 	{
 	  ++ff;
-	  logger << "  *** skipping " << ff->first << ", no selected (non-factor) variables\n";
+	  logger << "  ** " << ff->first << ": skipping, no selected (non-factor) variables\n";
 	  continue;
 	}
       
@@ -754,31 +809,15 @@ void gpa_t::prep()
       // all done with this file      
       IN1.close();
 
-      logger << "  read " << file_ids.size() << " indivs, "
-	     << file_bvars.size() << " base vars & "
-	     << file_evars.size() << " expanded vars from "
-	     << ff->first << "\n";
-      
+      logger << "  ++ " << ff->first << ": "
+	     << "read " << file_ids.size() << " indivs, "
+	     << file_bvars.size() << " base vars --> "
+	     << file_evars.size() << " expanded vars\n";
+	           
       ++ff;
     }
 
- 
-  //
-  // tmp - show faclvlcnt
-  //
-  // std::map<std::string,std::map<std::string,int>>::const_iterator ffcc = faclvlcnt.begin();
-  // while ( ffcc != faclvlcnt.end() ) 
-  //   {
-  //     const std::map<std::string,int> & g = ffcc->second;
-  //     std::map<std::string,int>::const_iterator qq = g.begin();
-  //     while ( qq != g.end() ) 
-  // 	{
-  // 	  std::cout << " ffcc->first " << ffcc->first << " " << qq->first << " " << qq->second << "\n";
-  // 	  ++qq;
-  // 	}
-  //     ++ffcc;
-  //   }
-
+  logger << "\n";
   
   //
   // ------- all inputs read now
@@ -949,22 +988,28 @@ void gpa_t::run()
 	  
 	  if ( results.emp[xvar][ var ] < pthresh && results.emp_corrected[xvar][ var ] < pthresh_adj )
 	    {
+
+	      const bool self = xvar == var; 
+
 	      shown_y = true; 
 	      writer.level( var , "Y" );
-	      writer.value( "B"  , results.beta[ xvar ][ var ] );
-	      writer.value( "T"  , results.t[xvar][ var ] );
-	      writer.value( "P" , results.emp[xvar][ var ] );
-	      writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
-	     
+	      
+	      if ( ! self ) // keep as NA if self (Y == X)
+		{
+		  writer.value( "B"  , results.beta[ xvar ][ var ] );
+		  writer.value( "T"  , results.t[xvar][ var ] );
+		  writer.value( "P" , results.emp[xvar][ var ] );
+		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
+		}
+	      
 	      // manifest details
 	      writer.value( "GROUP" ,  var2group[ var ] );
-	      writer.value( "YBASE"  , basevar[ var ] );
-	      
+	      writer.value( "BASE"  , basevar[ var ] );
 	      std::set<std::string>::const_iterator gg = allfacs.begin();
 	      while ( gg != allfacs.end() )
 		{
 		  std::string x = ".";
-		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( vars[j] );
+		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
 		  if ( kk != faclvl.end() )
 		    {
 		      if ( kk->second.find( *gg ) != kk->second.end() )
@@ -973,6 +1018,27 @@ void gpa_t::run()
 		  
 		  writer.value( *gg , x );
 		  ++gg;
+		}
+
+	      // optional X-variable details too?
+	      if ( show_xfacs )
+		{
+		  writer.value( "XGROUP" ,  var2group[ xvar ] );
+		  writer.value( "XBASE"  , basevar[ xvar ] );
+		  std::set<std::string>::const_iterator gg = allfacs.begin();
+		  while ( gg != allfacs.end() )
+		    {
+		      std::string x = ".";
+		      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
+		      if ( kk != faclvl.end() )
+			{
+			  if ( kk->second.find( *gg ) != kk->second.end() )
+			    x = kk->second.find( *gg )->second;
+			}
+		      
+		      writer.value( "X" + *gg , x );
+		      ++gg;
+		    }		  
 		}
 	    }
 	}
@@ -1006,7 +1072,26 @@ void gpa_t::run1X() // correction within X
 	       X( Eigen::all , ivs ), xvars,  // X
 	       X( Eigen::all , cvs ) );       // Z
 
-    // iterate over X
+  // manifest details
+  const int ni = X.rows();
+  const int nv = X.cols();
+
+  std::set<std::string> allfacs;  
+  // var -> fac -> lvl  
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ii = faclvl.begin();
+  while ( ii != faclvl.end() )
+    {
+      const std::map<std::string,std::string> & xx = ii->second;
+      std::map<std::string,std::string>::const_iterator ff = xx.begin();
+      while ( ff != xx.end() )
+	{
+	  allfacs.insert( ff->first );
+	  ++ff;
+	}      
+      ++ii;
+    }
+
+  // iterate over X
 
   for (int j=0; j<ivs.size(); j++)
     {
@@ -1028,12 +1113,60 @@ void gpa_t::run1X() // correction within X
 	  
 	  if ( results.emp[xvar][ var ] < pthresh && results.emp_corrected[xvar][ var ] < pthresh_adj )
 	    {
+	      const bool self = xvar == var;
 	      shown_y = true; 
 	      writer.level( var , "Y" );
-	      writer.value( "B"  , results.beta[ xvar ][ var ] );
-	      writer.value( "T"  , results.t[xvar][ var ] );
-	      writer.value( "P" , results.emp[xvar][ var ] );
-	      writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );	  
+
+	      if ( ! self )
+		{
+		  writer.value( "B"  , results.beta[ xvar ][ var ] );
+		  writer.value( "T"  , results.t[xvar][ var ] );
+		  writer.value( "P" , results.emp[xvar][ var ] );
+		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
+		}
+
+	      
+	      // manifest details
+	      writer.value( "GROUP" ,  var2group[ var ] );
+	      writer.value( "BASE"  , basevar[ var ] );
+	      
+	      std::set<std::string>::const_iterator gg = allfacs.begin();
+	      while ( gg != allfacs.end() )
+		{
+		  std::string x = ".";
+		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
+		  if ( kk != faclvl.end() )
+		    {
+		      if ( kk->second.find( *gg ) != kk->second.end() )
+			x = kk->second.find( *gg )->second;
+		    }
+		  
+		  writer.value( *gg , x );
+		  ++gg;
+		}
+
+	      // optional X var manifest
+	      if ( show_xfacs )
+		{
+		  writer.value( "XGROUP" ,  var2group[ xvar ] );
+		  writer.value( "XBASE"  , basevar[ xvar ] );
+		  std::set<std::string>::const_iterator gg = allfacs.begin();
+                  while ( gg != allfacs.end() )
+                    {
+                      std::string x = ".";
+                      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
+                      if ( kk != faclvl.end() )
+                        {
+                          if ( kk->second.find( *gg ) != kk->second.end() )
+                            x = kk->second.find( *gg )->second;
+                        }
+		      
+                      writer.value( "X" + *gg , x );
+                      ++gg;
+                    }
+		}
+	      
+	      
 	    }
 	}
       if ( shown_y )
@@ -1139,11 +1272,6 @@ bool bfile_t::write( const std::vector<std::string> & ids ,
 		lvl = ll->second;
 	    }
 	  	  
-	  if ( lvl != "." )
-	    {
-	      std::cout << " writing " << vars[i] << " " << vv->first << " " << *ff << " " <<  lvl << "\n";
-	    }
-
 	  // may be '.' still
 	  bwrite( OUT1, lvl );
 
@@ -1712,14 +1840,20 @@ void gpa_t::subset( const std::set<int> & rows , const std::map<int,bool> & cols
 void gpa_t::drop_null_columns()
 {
 
-  logger << "  checking for vars w/ too much/all missing data\n";
+  logger << "  checking for too much missing data ('retain-cols' to skip; 'verbose' to list dropped vars)\n";
 
-  // uses n_req and n_prop
   // nothing to do
-  if ( n_req == 0 || n_prop < 1e-6 ) return; 
-  
-  
+  if ( n_req == 0 && n_prop < 1e-6 )
+    {
+      logger << "  nothing to check (n-rep and n-prop set to 0)\n";
+      return; 
+    }
 
+  logger << "  requiring at least n-req=" << n_req << " non-missing obs "
+	 << "(as a proportion, at least n-prop=" << n_prop << " non-missing obs)\n";
+    
+  // uses n_req and n_prop
+  
   std::vector<int> good_cols;
 
   const int ni = X.rows();
@@ -1786,15 +1920,18 @@ void gpa_t::drop_null_columns()
 	  
 	}
 
-      logger << "  dropped " << nv - good_cols.size()  << " vars with too many NA values (add 'verbose' to list)\n";
+      logger << "  dropped " << nv - good_cols.size()  << " vars with too many NA values\n";
     }
-    
+  else
+    logger << "  no vars dropped based on missing-value requirements\n";
 }
 
 
 // QC matrix
 void gpa_t::qc( const double winsor )
 {
+
+  logger << "  running QC (add 'qc=F' to skip) with winsor=" << winsor << "\n";
 
   // 1) case-wise deletion
 
@@ -1812,7 +1949,8 @@ void gpa_t::qc( const double winsor )
 	  for (int j=0; j<nv; j++)
 	    if ( std::isnan( row[j] ) ) ++num_missing;
 	  if ( num_missing == 0 ) retained.push_back( i );
-	  else if ( verbose ) logger << "  dropping indiv. " << ids[i] << " due to missing values (case-wise deletion)\n";
+	  else if ( verbose )
+	    logger << "  dropping indiv. " << ids[i] << " due to missing values (case-wise deletion)\n";
 	}
       
       if ( retained.size() < ni )
@@ -1825,11 +1963,14 @@ void gpa_t::qc( const double winsor )
 	  for (int i=0;i<retained.size();i++)
 	    ids.push_back( ids2[retained[i]] );
 	  
-	  logger << "  case-wise deletion subsetted X from " << ni << " to " << X.rows() << " indivs (add 'verbose' to list)\n";
+	  logger << "  case-wise deletion subsetted X from " << ni
+		 << " to " << X.rows() << " indivs (add 'verbose' to list)\n";
 	  
 	}
+      else
+	logger << "  retained all observations following case-wise deletion screen\n";
     }
-
+  
   // nothing left?
   if ( X.rows() == 0 ) return;
   
@@ -1918,10 +2059,12 @@ void gpa_t::qc( const double winsor )
 	    cvs.push_back( j );
 	  
 	}
-
-      logger << "  reduced data from " << nv << " to " << X.cols() << " vars\n"; 
-
+      
+      logger << "  reduced data from " << nv << " to " << X.cols() << " vars ('retain-rows' to skip) \n"; 
+      
     }
+  
+  logger << "  standardized and winsorized all Y variables\n";
   
 }
 
@@ -2122,10 +2265,16 @@ linmod_results_t linmod_t::run( int nreps )
 	  for (int y=0; y<ny; y++)
 	    {
 	      double abs_t = fabs( T_perm[y] );
+
 	      // store point-wise emp-P now
 	      if ( abs_t >= fabs( T[y] ) ) ++U[y];
+
 	      // and track max per repl. for family-wise correction when done all X
-	      if ( abs_t > max_t[r] ) max_t[r] = abs_t ;
+	      // unless is a self-test (Y==X), i.e. ignoring here means we do not
+	      // pay price for extra tests (that are never reported)
+	      if ( abs_t > max_t[r] )
+		if ( xname[x] != vname[y] )
+		  max_t[r] = abs_t ;
 	    }
 	  
 	  
@@ -2146,11 +2295,13 @@ linmod_results_t linmod_t::run( int nreps )
       //
       
       for (int y=0; y<ny; y++)
-	{      
-	  results.beta[ xname[x] ][ vname[y] ] = R(y,0);
-	  results.t[ xname[x] ][ vname[y] ] = R(y,1); 
-	  results.emp[ xname[x] ][ vname[y] ] = R(y,2);
-	  //	  results.emp_corrected[ xname[x] ][ vname[y] ] = R(y,3);
+	{
+	  if (  xname[x] != vname[y] ) // ignore any self (Y == X) tests
+	    {
+	      results.beta[ xname[x] ][ vname[y] ] = R(y,0);
+	      results.t[ xname[x] ][ vname[y] ] = R(y,1); 
+	      results.emp[ xname[x] ][ vname[y] ] = R(y,2);
+	    }
 	}
             
       // next X
@@ -2170,7 +2321,8 @@ linmod_results_t linmod_t::run( int nreps )
   
   for (int x=0; x<nx; x++)
     for (int y=0; y<ny; y++)
-      results.emp_corrected[ xname[x] ][ vname[y] ] = F(x,y);
+      if (  xname[x] != vname[y] ) // ignore self tests
+	results.emp_corrected[ xname[x] ][ vname[y] ] = F(x,y);
   
   return results;
 }
@@ -2242,27 +2394,50 @@ void gpa_t::parse( const std::string & pfile )
       
       std::vector<std::string> tok;
       
-      if ( s.contains( "vars" ) && s[ "vars" ].is_array() )
-	incvars = Helper::vec2set( s[ "vars" ].get<std::vector<std::string>>() );
-      
-      if ( s.contains( "xvars" ) && s[ "xvars" ].is_array() )
-	excvars = Helper::vec2set( s[ "xvars" ].get<std::vector<std::string>>() );
+      if ( s.contains( "vars" ) )
+	{
+	  json x = s[ "vars" ];
+	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	  if ( x.is_array() ) incvars = Helper::vec2set( x.get<std::vector<std::string>>() );
+	}
 
-      if ( s.contains( "facs" ) && s[ "facs" ].is_array() )
-	incfacs = Helper::vec2set( s[ "facs" ].get<std::vector<std::string>>() );
-      
-      if ( s.contains( "xfacs" ) && s[ "xfacs" ].is_array() )
-	excfacs = Helper::vec2set( s[ "xfacs" ].get<std::vector<std::string>>() );
+      if ( s.contains( "xvars" ) )
+	{
+	  json x = s[ "xvars" ];
+	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	  if ( x.is_array() ) excvars = Helper::vec2set( x.get<std::vector<std::string>>() );
+	}
 
-      if ( s.contains( "grps" ) && s[ "grps" ].is_array() )
-	incgrps = Helper::vec2set( s[ "grps" ].get<std::vector<std::string>>() );
-      
-      if ( s.contains( "xgrps" ) && s[ "xgrps" ].is_array() )
-	excgrps = Helper::vec2set( s[ "xgrps" ].get<std::vector<std::string>>() );
+      if ( s.contains( "facs" ) )
+	{
+	  json x = s[ "facs" ];
+	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	  if ( x.is_array() ) incfacs = Helper::vec2set( x.get<std::vector<std::string>>() );
+	}
 
+      if ( s.contains( "xfacs" ) )
+	{
+	  json x = s[ "xfacs" ];
+	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	  if ( x.is_array() ) excfacs = Helper::vec2set( x.get<std::vector<std::string>>() );
+	}
+
+      if ( s.contains( "grps" ) )
+	{
+	  json x = s[ "grps" ];
+	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	  if ( x.is_array() ) incgrps = Helper::vec2set( x.get<std::vector<std::string>>() );
+	}
+
+      if ( s.contains( "xgrps" ) )
+	{
+	  json x = s[ "xgrps" ];
+	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	  if ( x.is_array() ) excgrps = Helper::vec2set( x.get<std::vector<std::string>>() );
+	}
       
     }
-
+  
   
   //
   // parse inputs
@@ -2270,6 +2445,8 @@ void gpa_t::parse( const std::string & pfile )
   
   if ( has_inputs )
     {
+
+      logger << "  reading file specifications ('inputs') for " << doc[ "inputs" ].size() << " files:\n";
       
       for (auto & item : doc[ "inputs" ] ) {
 	
@@ -2280,7 +2457,7 @@ void gpa_t::parse( const std::string & pfile )
 	std::string file_name = item[ "file" ];
 	std::string file_group = item[ "group" ];
 	
-	logger << "  reading file-specifications for " << file_name << " ( group = " << file_group << " )\n";
+	logger << "   " << file_name << " ( group = " << file_group << " ): ";
 
 	//
 	// and also
@@ -2299,6 +2476,10 @@ void gpa_t::parse( const std::string & pfile )
 	  {
 	    
 	    json x = item[ "vars" ] ;
+
+            if ( x.is_string() )
+              x = std::vector<std::string>( 1 , x );
+
 	    if ( ! x.is_array() )
 	      {
 		if ( ! x.is_null() ) 
@@ -2337,8 +2518,14 @@ void gpa_t::parse( const std::string & pfile )
 	  {
 	    
 	    json x = item[ "xvars" ] ;
+	    if ( x.is_string() )
+	      x = std::vector<std::string>( 1 , x );
+	    
 	    if ( ! x.is_array() )
-	      logger << "  *** expecting xvars: [ array ] in " << pfile << ", skipping...\n";
+	      {
+		if ( ! x.is_null() )
+		  logger << "  *** expecting xvars: [ array ] in " << pfile << ", skipping...\n";
+	      }
 	    else
 	      {		
 		for (auto v : x )
@@ -2362,6 +2549,9 @@ void gpa_t::parse( const std::string & pfile )
 	if ( item.contains( "facs" ) )
 	  {
 	    json x = item[ "facs" ] ;
+	    if ( x.is_string() )
+              x = std::vector<std::string>( 1 , x );
+	    
 	    if ( ! x.is_array() )
 	      {
 		if ( ! x.is_null() )
@@ -2400,6 +2590,9 @@ void gpa_t::parse( const std::string & pfile )
 	  {
 	    
 	    json x = item[ "mappings" ] ;
+	    if ( x.is_string() )
+              x = std::vector<std::string>( 1 , x );
+
 	    if ( ! x.is_array() )
 	      {
 		if ( ! x.is_null() ) 
@@ -2445,11 +2638,11 @@ void gpa_t::parse( const std::string & pfile )
 
 	infiles[ file_name ] = file_facs;
 	file2group[ file_name ] = file_group;
-
-	logger << "  expecting " << file_facs.size() << " factors";
-	if ( file2incvars.size() ) logger << ", extracting " << file2incvars.size() << " vars";
-	if ( file2excvars.size() ) logger << ", ignoring " << file2excvars.size() << " vars";
-	logger << "\n\n";
+	
+	logger << "\n    expecting " << file_facs.size() << " factors";
+	if ( file2incvars.size() ) logger << ", extracting " << file2incvars.size() << " var(s)";
+	if ( file2excvars.size() ) logger << ", ignoring " << file2excvars.size() << " var(s)";
+	logger << "\n";
 	
 	
       }

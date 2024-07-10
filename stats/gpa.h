@@ -229,6 +229,7 @@ private:
 
   // opts
   bool verbose;
+  bool show_xfacs;
   
   // [run] number of permutations
   int nreps; 
