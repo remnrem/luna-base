@@ -150,9 +150,9 @@ struct qdynam_results_t
     tstat1 = tstat2 = 0;
     ne = 0;
 
-    tmax = amax = lmax = rmax = 0;
-    tmin = amin = lmin = rmin = 0;
-    tminmax = aminmax = lminmax = rminmax = 0;
+    tmax = amax = rmax = 0;
+    tmin = amin = rmin = 0;
+    tminmax = aminmax = rminmax = 0;
   }
   
   double omean; // original input mean (post winsor/log)
@@ -163,23 +163,22 @@ struct qdynam_results_t
   double tstat1; // based on simple epoch count
   double tstat2; // uses 'actual' (not clock) epoch count
 
+  // max stats
   double tmax; // time from start to max (post smoothing) (epochs)
   double amax; // max amplitude (expressed as max - min) 
-  double lmax; // amax * tmax (i.e. how sustained and large the increase)
-  double rmax; // amax / tmax (i.e. how quick to max) 
+  double rmax; // amax / tmax (i.e. how steep the slope to max)
+  // could also consider the product? (i.e. how sustained and large the increase?)
 
-  // as above, but for mins
-  double tmin; // time from start to max (post smoothing) (epochs)
-  double amin; // max amplitude (expressed as max - min) 
-  double lmin; // amax * tmax (i.e. how sustained and large the increase)
-  double rmin; // amax / tmax (i.e. how quick to max) 
+  // same for local min
+  double tmin; 
+  double amin; 
+  double rmin; 
 
-  // min vs max
-  double tminmax; // time from start to max (post smoothing) (epochs)
-  double aminmax; // max amplitude (expressed as max - min) 
-  double lminmax; // amax * tmax (i.e. how sustained and large the increase)
-  double rminmax; // amax / tmax (i.e. how quick to max) 
-
+  // min vs max stats (i.e. two above relative to 0/start)
+  double tminmax; 
+  double aminmax; 
+  double rminmax; 
+  
   int ne; // number of epochs included  
   
 };
@@ -204,6 +203,9 @@ struct qdynam_t
   bool norm_cycles() const { return norm_each_section; }
   void weight_cycles( const bool b ) { wcycles = b; } 
   void set_nq ( const int x ) { nq = x; } 
+  void set_max_cycles( const int n );
+  void set_cycles( const std::vector<int> n );
+  
   std::vector<double> results() const;
   
   std::map<std::string,std::vector<double> > stratified_results() const;
@@ -241,7 +243,9 @@ private:
   bool norm_each_section; // repeat norm for each cycle
 
   bool wcycles; // weight each cycle by # epochs for BETWEEN
-
+  
+  std::set<std::string> incl_cycles;
+  
   int nq;
   
   std::vector<double> ss; // smoothed series (normed)
@@ -265,7 +269,8 @@ public:
 
   static std::vector<double> qnt( const std::vector<double> & x , const int nq = 10 );
 
-  static std::vector<double> smooth( const std::vector<double> & x , const int w1, const int w2 );
+  static std::vector<double> smooth( const std::vector<double> & x , const std::vector<int> & e ,
+				     const int w1, const int w2 );
 
   static void norm( std::vector<double> * x , const bool do_max , const bool do_mean );
   

@@ -160,10 +160,13 @@ void dynam_report( param_t & param,
   if ( param.has( "dynam-mean-window" ) )
     qd.set_smoothing_mean_window( param.requires_int( "dynam-mean-window" ) );
   
-  if ( param.has( "norm-mean" ) ) qd.set_norm_mean( param.yesno( "norm-mean" ) );
-  else if ( param.has( "norm-max" ) ) qd.set_norm_max( param.yesno( "norm-max" ) );
+  if ( param.has( "dynam-norm-mean" ) ) qd.set_norm_mean( param.yesno( "dynam-norm-mean" ) );
+  else if ( param.has( "dynam-norm-max" ) ) qd.set_norm_max( param.yesno( "dynam-norm-max" ) );
   
-  if ( param.has( "norm-cycles" ) ) qd.set_norm_cycles( param.yesno( "norm-cycles" ) );
+  if ( param.has( "dynam-norm-cycles" ) ) qd.set_norm_cycles( param.yesno( "dynam-norm-cycles" ) );
+  
+  if ( param.has( "dynam-max-cycle" ) ) qd.set_max_cycles( param.requires_int( "dynam-max-cycle" ) );
+  else if ( param.has( "dynam-cycles" ) ) qd.set_cycles( param.intvector( "dynam-cycles" ) );
   
   //
   // process
@@ -790,8 +793,9 @@ qdynam_t::qdynam_t( const int ne , const std::vector<std::string> * pcycles )
   
   
   // default norm: only by min (set to 0) 
-  norm01 = false; // norm by min + max
-  norm_mean = false;  // offset by mean (not min) --> mean set at 100 
+  norm01 = false;   // norm by min + max (dynam-norm-max=T)
+  norm_mean = true; // default           (dynam-norm-mean=T) 
+  // to only norm by min set dynam-norm-mean=F
   
   norm_each_section = true;  // for each within-section, do a separate norm
   
@@ -833,6 +837,27 @@ void qdynam_t::set_epochs( const std::vector<int> & e )
   // std::cerr << "e1 = " << epochs[0] << "\n";
 }
 
+
+void qdynam_t::set_max_cycles( const int n )
+{
+  if ( n < 1 ) return;
+  // have max of 8 cycles for now
+  incl_cycles.clear();
+  for (int i=1; i<= (n > 8 ? 8 : n ) ; i++)
+    incl_cycles.insert( "C" + Helper::int2str( i ) );
+}
+
+void qdynam_t::set_cycles( const std::vector<int> n )
+{
+  incl_cycles.clear();
+  std::vector<int>::const_iterator ii = n.begin();
+  while ( ii != n.end() )
+    {
+      if ( *ii >= 1 && *ii <= 8 ) 
+	incl_cycles.insert( "C" + Helper::int2str( *ii ) );
+      ++ii;
+    }
+}
 
 void qdynam_t::winsorize( const double p )
 {
@@ -953,6 +978,20 @@ void qdynam_t::proc( const std::vector<double> & x )
   std::set<std::string>::const_iterator cc = uniq_cycles.begin();
   while ( cc != uniq_cycles.end() )
     {
+
+      // not including this cycle?
+
+      if ( incl_cycles.size() != 0 )
+	{
+	  if ( incl_cycles.find( *cc ) == incl_cycles.end() )
+	    {
+	      ++cc;
+	      continue;
+	    }
+	}
+
+      // process
+      
       std::vector<double> x2;
       std::vector<int> e2;
 
@@ -1006,17 +1045,14 @@ void qdynam_t::proc( const std::vector<double> & x )
 
 	  rwa.tmax += w * rw[ *cc ].tmax;
 	  rwa.amax += w * rw[ *cc ].amax;
-	  rwa.lmax += w * rw[ *cc ].lmax;
 	  rwa.rmax += w * rw[ *cc ].rmax;
 
 	  rwa.tmin += w * rw[ *cc ].tmin;
 	  rwa.amin += w * rw[ *cc ].amin;
-	  rwa.lmin += w * rw[ *cc ].lmin;
 	  rwa.rmin += w * rw[ *cc ].rmin;
 
 	  rwa.tminmax += w * rw[ *cc ].tminmax;
 	  rwa.aminmax += w * rw[ *cc ].aminmax;
-	  rwa.lminmax += w * rw[ *cc ].lminmax;
 	  rwa.rminmax += w * rw[ *cc ].rminmax;
 
 	}
@@ -1052,20 +1088,22 @@ void qdynam_t::proc( const std::vector<double> & x )
       rwa.tstat2 /= denom ;
 
       rwa.tmax /= denom ;
-      rwa.amax /= denom ;
-      rwa.lmax /= denom ;
+      rwa.amax /= denom ;      
       rwa.rmax /= denom ;
 
       rwa.tmin /= denom ;
-      rwa.amin /= denom ;
-      rwa.lmin /= denom ;
+      rwa.amin /= denom ;      
       rwa.rmin /= denom ;
 
       rwa.tminmax /= denom ;
       rwa.aminmax /= denom ;
-      rwa.lminmax /= denom ;
       rwa.rminmax /= denom ;
 
+      // set to -ve so we know it is # cycles, not # epochs
+      // in output (otherwise we ignore some stats)
+      // given we have 2+ cycles (i.e. something to avg over)
+      rwa.ne = - rwa.ne; 
+      
     }
   
 }
@@ -1089,7 +1127,7 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   // thus the option to skip)
   
   if ( do_smoothing )
-    ss = qdynam_t::smooth( ss , median_window , mean_window );
+    ss = qdynam_t::smooth( ss , ee, median_window , mean_window );
 
   
   // norm?
@@ -1099,55 +1137,78 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
 
 
   // calculate T stat
-
+  
   const int nn = ss.size();
-    
+  
+  // grand total of time series
+  double s_tot = 0; 
+
+  // mean
+  double s_mean = MiscMath::mean( ss );
+
   double sct = 0 , set = 0;
-  double sk = 0;
 
+   
   double sct1 = 0 ;
-  double sk1 = 0;
-
-  double mss = MiscMath::mean( ss );
   
   for (int i=0; i<nn; i++)
     {
-      sct += ss[i] * ee[i] ;
-      set += ss[i] * i;
-      sk  += ss[i];
-
-      sct1 += mss * ee[i] ;
-      sk1 += mss;
       
+      // sum signal, weighted by epoch numbera
+      sct += ss[i] * ee[i] ;
+      
+      // same statistic, but if signal were completely uniform/flat 
+      sct1 += s_mean * ee[i] ;      
+
+      // same statistic, but weight by epoch order/rank rather than clock position
+      set += ss[i] * i;
+	          
+      // get total 
+      s_tot  += ss[i];
+
     }
 
-  const double sct_max = ee[nn-1] * sk;
-  const double sct_min = ee[0] * sk ;
+  // 'clock-time' statistic (ct)
+  const double sct_max = ee[nn-1] * s_tot;
+  const double sct_min = ee[0] * s_tot ;
   const double stat_ct = ( sct - sct_min ) / ( sct_max - sct_min );
-  
-  const double sct1_max = ee[nn-1] * sk1;
-  const double sct1_min = ee[0] * sk1 ;
+
+  // 'flat clock-time' statistic (ct1)
+  const double sct1_max = ee[nn-1] * s_tot;
+  const double sct1_min = ee[0] * s_tot ;
   const double stat_ct1 = ( sct1 - sct1_min ) / ( sct1_max - sct1_min );
-  
-  const double set_max = (nn-1) * sk;
-  const double set_min = 0 * sk ;
+
+  // epoch order/rank statistic (et)
+  const double set_max = (nn-1) * s_tot;
+  const double set_min = 0 * s_tot ;
   const double stat_et = ( set - set_min ) / ( set_max - set_min );
 
+  // all above statistics scaled between min/max and so [ 0 , 1 ] range
+  // scale to [ -100 , +100 ] when returning
+
+  // clock-time statistic is adjusted by the 'expectation' under a completely flat
+  // set of data-points
+
+  // for rank-based statistic, we don't need to do this, as we know that would be 0
+  // by definition
   
-  // return [0.1] --> [-100 , +100]
-  
+  // return   100 * ( (2S)-1 ) 
+
   qdynam_results_t r;
   r.ne = nn;
 
+  // clock time statistic
   r.tstat1 = 100 * ( ( stat_ct * 2.0 ) - 1.0 ) ;
-
-  double tstat11 = 100 * ( ( stat_ct1 * 2.0 ) - 1.0 ) ;
-  // adust clock-time by expectation under flat data
-  r.tstat1 -= tstat11;
 
   // collapsed value
   r.tstat2 = 100 * (  ( stat_et * 2.0 ) - 1.0 ) ; 
-  
+
+  // adjust clock-time stat by expectation under flatness 
+  double tstat11 = 100 * ( ( stat_ct1 * 2.0 ) - 1.0 ) ;
+
+  // adust clock-time by expectation under flat data
+  r.tstat1 -= tstat11;
+
 
   //
   // basics
@@ -1186,18 +1247,15 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   
   r.tmax = ee[ ss_max_i ] - ee[ 0 ] ; // use real epoch counts
   r.amax = ss_max - ss[ 0 ] ; 
-  r.lmax = r.amax * r.tmax;
   r.rmax = r.amax / ( r.tmax + 1 ); // i.e. if max is epoch 0
 
   r.tmin = ee[ ss_min_i ] - ee[ 0 ] ; // use real epoch counts
   r.amin = ss_min - ss[ 0 ] ; // as above, just make -ve
-  r.lmin = r.amin * r.tmin;
   r.rmin = r.amin / ( r.tmin + 1 ); // i.e. if max is epoch 0
 
   r.aminmax = ss_max - ss_min ;
-  r.tminmax = ee[ ss_min_i ] - ee[ ss_max_i ];
-  r.lminmax = r.aminmax * r.tminmax ;
-  r.rminmax = r.aminmax / r.tminmax ;
+  r.tminmax = ee[ ss_max_i ] - ee[ ss_min_i ];  // define as max-to-min (+ve, max last)
+  r.rminmax = r.aminmax / ( r.tminmax == 0 ? 1 : r.tminmax ) ; // in case flat sig
   
   return r;
 }    
@@ -1207,7 +1265,8 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
 void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose , const bool between )
 {
 
-  writer.value( "N" , res.ne );
+  // handle WITHIN case where -ve means # cycles
+  writer.value( "N" , res.ne < 0 ? - res.ne : res.ne );
   
   if ( ! between ) 
     writer.value( "OMEAN" , res.omean ); 
@@ -1222,29 +1281,24 @@ void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose 
       writer.value( "T1" , res.tstat1 );
     }
 
-  if ( res.ne > 10 )
+  if ( res.ne > 10 || res.ne < 0 ) // if -ve means WITHIN, # cycles
     {
       
-      writer.value( "MAX_T" , res.tminmax );
-      writer.value( "MAX_A" , res.aminmax );
-
+      writer.value( "T_P2P" , res.tminmax );
+      writer.value( "A_P2P" , res.aminmax );
+      
       if ( verbose )
 	{
 	  
-	  writer.value( "MAX_PROD" , res.lminmax );
-	  writer.value( "MAX_RATIO" , res.rminmax );
-
-	  writer.value( "MAX0_T" , res.tmax );
-	  writer.value( "MAX0_A" , res.amax );
+	  writer.value( "AT_P2P" , res.rminmax );	  
 	  
-	  writer.value( "MIN0_T" , res.tmin );
-	  writer.value( "MIN0_A" , res.amin );
+	  writer.value( "T_MX" , res.tmax );
+	  writer.value( "A_MX" , res.amax );	  
+	  writer.value( "AT_MX" , res.rmax );
 	  
-	  writer.value( "MAX0_PROD" , res.lmax );
-	  writer.value( "MAX0_RATIO" , res.rmax );
-      
-	  writer.value( "MIN0_PROD" , res.lmin );
-	  writer.value( "MIN0_RATIO" , res.rmin );
+	  writer.value( "T_MN" , res.tmin );
+	  writer.value( "A_MN" , res.amin );
+	  writer.value( "AT_MN" , res.rmin );
       
 	}
     }
@@ -1307,24 +1361,245 @@ std::vector<double> qdynam_t::qnt( const std::vector<double> & x , const int nq 
 }
 
 
-std::vector<double> qdynam_t::smooth( const std::vector<double> & x , const int w1, const int w2 )
+std::vector<double> qdynam_t::smooth( const std::vector<double> & x ,
+				      const std::vector<int> & e ,
+				      const int w1, const int w2 )
 {
+
+  // nothing to do?
+  if ( ! ( w1 > 1 || w2 > 1 ) ) return x;
+
+
+  
+  // to avoid bad smoothing over gaps, here we take the epoch count
+  // as well and expand the series first, linear interpolation between
+  // first and last (N) points, then smooth, then splice out the
+  // desired components... should help to reduce edge effects
+  
+  if ( x.size() != e.size() ) Helper::halt( "internal logic error (1) in smooth()" );  
+  const int n = x.size();
+
+  // too small
+  if ( n < w1 || n < w2 ) return x;
+  
+  const bool debug = false;
+
+  if ( debug )
+    for (int i=0; i<n; i++)
+      std::cout << " ---> " << i << "\t" << e[i] << "\t" << x[i] << "\n";
+  
+  // *assume* sorted; +1 as e[] is 0-based  
+  // all epochs from first observed to last observed
+  int n2 = e[n-1] - e[0] + 1;
+
+  int e0 = e[0]; // first element
+  
+  if ( debug ) 
+    std::cout << " n = " << n << "\n"
+	      << " e0 = " << e0 << "\n"
+	      << " en = " << e[n-1] << "\n"
+	      << " n2 = " << n2 << "\n";
+  
+  
+  // create full time-series : which goes from e0 to e[n-1] (incl) w/ n2 elements
+  std::vector<double> x2( n2 , 0 );
+  std::vector<double> e2( n2 , 0 );
+  std::vector<bool> fill( n2 , true );
+  
+  // nb. here we need to adjust for e0
+  for (int i=0; i<n; i++)
+    {
+      x2[ e[i] - e0 ] = x[i] ;
+      e2[ e[i] - e0 ] = e[i] ; 
+      fill[ e[i] - e0 ] = false ;
+    }
+
+  // track original gaps
+  std::vector<bool> fill_orig = fill;
+  
+  if ( debug )
+    {
+      for (int i=0; i<n2; i++)
+	{
+	  std::cout << "orig" << i << "\t"
+		    << fill[i] << "\t"
+		    << e2[i] << "\t"
+		    << x2[i] << "\n";
+	}
+      std::cout << "\n\n";
+    }
+  
+  // linear interpolate over gaps  
+  for (int i=0; i<n2; i++)
+    {
+      
+      // have we come across a new gap?
+      // nb. here want to use fill[] which gets modified as we go
+      if ( fill[i] )
+	{
+	  
+	  if ( debug )
+	    std::cout << " found gap starting " << i << "\n";
+	  
+	  std::vector<double> earlier;
+	  std::vector<double> later;
+
+	  // go back until data
+	  int p = i;
+	  while ( 1 )
+	    {
+	      // unlikely, but check in case
+	      if ( p == 0 ) break; 
+	      
+	      // go back
+	      --p;
+	      
+	      // if encounter another gap, stop
+	      // n.b. need to look up original gap status here
+	      // only want to fill w/ observed vals
+	      if ( fill_orig[p] && earlier.size() != 0 ) break;
+	      
+	      // if non-gap, take values, up to mx of 3
+	      if ( ! fill_orig[p] ) {
+
+		if ( debug )
+		  std::cout << "  adding earlier point " << p << "\n";
+
+		earlier.push_back( x2[p] );
+	      }
+	      if ( earlier.size() == 3 ) break;	  
+	    }
+	  
+	  // go forward 
+	  p = i;	  
+	  while ( 1 )
+	    {
+	      ++p;
+	      
+	      // unlikely, but check in case
+	      if ( p == n2 ) break; 
+	      
+	      // if encounter another gap, stop
+	      if ( fill_orig[p] && later.size() != 0 ) break;
+	      
+	      // if non-gap, take values, up to mx of 3
+	      if ( ! fill_orig[p] )
+		{
+		  if ( debug ) std::cout << "  adding later point " << p << "\n";
+		  later.push_back( x2[p] );
+		}
+	      if ( later.size() == 3 ) break; 
+	    }
+
+	  // should always have /something/ in earlier[] and later[]
+	  
+	  if ( earlier.size() == 0 || later.size() == 0 )
+	    Helper::halt( "internal logic error (2) in smooth() interpolation" );
+	  
+	  const double emean = MiscMath::mean( earlier );
+	  const double lmean = MiscMath::mean( later );
+
+	  if ( debug )
+	    std::cout << " el = " << earlier.size() << " " << later.size() << " " << emean << " " << lmean << "\n";
+	  
+	  // we'll be hitting this the first epoch of a gap;
+	  // fill all here
+	  // i.e. should always be the case the i-1 is a non-gap
+	  if ( i == 0 || fill[i-1] ) Helper::halt( "internal logic error (3) in smooth()" );
+
+	  // find size of gap
+	  p = i;
+	  while ( 1 )
+	    {
+	      ++p;
+	      if ( p == n2 ) break;
+	      if ( ! fill[p] ) break;
+	    }
+	  // i is start of gap
+	  // p is now one past
+	  int gap_size = p - i; 
+	  
+	  if ( debug ) std::cout << " gap size = " << gap_size << "\n";
+	  
+	  const double gradient = ( lmean - emean ) / (double)(gap_size+1);
+	  
+	  p = i;
+	  for (int j=1; j<=gap_size; j++)
+	    {
+
+	      if ( debug ) std::cout << " p = " << p << " " << fill[p] << "\n";
+
+	      // should not already be filled
+	      if ( ! fill[p] ) Helper::halt( "internal logic error (4) in smooth()");
+
+	      // fill the gap now
+	      x2[p] = emean + j * gradient;
+
+	      // note that we've filled this, so won't be considered
+	      fill[p] = false; 
+	      
+	      ++p;
+	    }	  
+	}
+    }
+
+  std::vector<double> r2;
   
   // initial median filter
   if ( w1 > 1 )
     {
       if ( w2 > 1 )
-	return MiscMath::moving_average( MiscMath::median_filter( x , w1 ) , w2 );
+	r2 = MiscMath::moving_average( MiscMath::median_filter( x2 , w1 ) , w2 );
       else
-	return MiscMath::median_filter( x , w1 );
+	r2 = MiscMath::median_filter( x2 , w1 );
     }
   else
     {
       if ( w2 > 1 )
-	return MiscMath::moving_average( x , w2 );
+	r2 = MiscMath::moving_average( x2 , w2 );
       else
-        return x;
+        r2 = x2 ; // should have been dealt w/ above 
     }
+
+
+  //
+  // unsplice
+  //
+  
+  std::vector<double> r( n );
+
+  int p = 0;
+  for (int i=0; i<n2; i++)
+    {
+      if ( ! fill_orig[i] ) // based on the original fill tracking
+	{
+	  if ( p == n ) Helper::halt( "internal logic error (5) in smooth()" );
+	  r[p] = r2[i];
+	  ++p;	  
+	}
+    }
+
+
+  if ( debug ) 
+    {
+      std::cout << " FINAL\n";
+      for (int i=0; i<n2; i++)
+	{
+	  std::cout << i << "\t"
+		    << fill_orig[i] << "\t"
+		    << fill[i] << "\t"
+	     		<< x2[i] << "\t"
+		    << r2[i] << "\n";
+	}
+      std::cout << "DONE\n\n";
+    }
+  
+  
+  //
+  // all done, return;
+  //
+
+  return r;
   
 }
 

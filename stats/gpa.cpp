@@ -307,21 +307,32 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       read();
       
       // secondarily, subset to a smaller # of rows (e.g. case-only analysis)
-      if ( param.has( "subset" ) || param.has( "ids" ) )
+      if ( param.has( "subset" ) || param.has( "inc-ids" ) || param.has( "ex-ids")  )
 	{
-	  std::set<std::string> sub_ids, sub_cols;
+	  std::set<std::string> sub_ids, exc_ids, sub_cols;
 	  
-	  if ( param.has( "ids" ) ) sub_ids = param.strset( "ids" );
+	  if ( param.has( "inc-ids" ) ) sub_ids = param.strset( "inc-ids" );
+	  if ( param.has( "ex-ids" ) ) exc_ids = param.strset( "ex-ids" );
 	  if ( param.has( "subset" ) ) sub_cols = param.strset( "subset" );
 	  std::set<int> rows;
 	  std::map<int,bool> cols;
 	  const int ni = X.rows();
 	  const int nv = X.cols();
+
+	  const bool has_inc = sub_ids.size(); // only include these
+	  const bool has_exc = exc_ids.size(); // do not include these
+	  	  
 	  // build ID rows
 	  for (int i=0; i<ni; i++)
-	    if ( sub_ids.find( ids[i] ) != sub_ids.end() )
-	      rows.insert( i );
+	    {
+	      if ( ( ! has_inc) || sub_ids.find( ids[i] ) != sub_ids.end() ) 
+		{
+		  if ( ( ! has_exc ) || exc_ids.find( ids[i] ) == exc_ids.end() )
+		    rows.insert( i );
+		}	      
+	    }
 
+	  
 	  // build cols (i.e. searching for non-null value to include, not NaN or missing)
 	  // allows for each term to be a pos or neg match subset=-MALE implies MALE == 0 (-->F)
 	  //  where subset=MALE or subset=+MALE implies --> M
@@ -555,14 +566,14 @@ void gpa_t::prep()
       // was this group excluded?
       if ( incgrps.size() && incgrps.find( file2group[ ff->first ] ) == incgrps.end() )
 	{
-	  logger << "  ** " << ff->first << ": skipping due to grps requirement\n";
+	  logger << "  -- " << ff->first << ": skipping due to grps requirement\n";
 	  ++ff;
 	  continue;
 	}
 
       if ( excgrps.find( file2group[ ff->first ] ) != excgrps.end() )
 	{
-	  logger << "  ** " << ff->first << " skipping due to xgrps requirement\n";
+	  logger << "  -- " << ff->first << " skipping due to xgrps requirement\n";
 	  ++ff;
 	  continue;
 	}
@@ -597,7 +608,7 @@ void gpa_t::prep()
 	  const int obs_matched =  Helper::nmatches( facs , incfacs );
 	  if ( req_matched != facs.size() || req_matched != obs_matched || req_matched != incfacs.size() )
 	    {
-	      logger << "  ** " << ff->first << ": skipping due to facs requirement\n";
+	      logger << "  -- " << ff->first << ": skipping due to facs requirement\n";
 	      ++ff;
 	      continue;
 	    }
@@ -608,7 +619,7 @@ void gpa_t::prep()
           const int req_matched =  Helper::nmatches( excfacs , facs );
           if ( req_matched == excfacs.size() && req_matched == facs.size() )
             {
-	      logger <<	"  ** " << ff->first << ": skipping due to xfacs requirement\n";
+	      logger <<	"  -- " << ff->first << ": skipping due to xfacs requirement\n";
               ++ff;
               continue;
             }
@@ -621,7 +632,7 @@ void gpa_t::prep()
 
       if ( ! Helper::fileExists( Helper::expand( ff->first ) ) )
 	{
-	  logger << "  ** " << ff->first << ": skipping, could not open file\n";
+	  logger << "  -- " << ff->first << ": skipping, could not open file\n";
 	  ++ff;
 	  continue;
 	}
@@ -640,7 +651,7 @@ void gpa_t::prep()
       if ( IN1.eof() || hdr == "" )
         {
           IN1.close();
-	  logger << "  ** " << ff->first << ": skipping, bad/empty file\n";
+	  logger << "  -- " << ff->first << ": skipping, bad/empty file\n";
 	  ++ff;
 	  continue;
         }
@@ -698,7 +709,7 @@ void gpa_t::prep()
       if ( tok2.size() == 0 )
 	{
 	  ++ff;
-	  logger << "  ** " << ff->first << ": skipping, no selected (non-factor) variables\n";
+	  logger << "  -- " << ff->first << ": skipping, no selected (non-factor) variables\n";
 	  continue;
 	}
       
