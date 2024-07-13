@@ -2539,7 +2539,7 @@ void MiscMath::winsorize( std::vector<double> * x , double p )
   double lwr = MiscMath::percentile( *x , p );
   double upr = MiscMath::percentile( *x , 1-p );
   
-  if ( lwr >= upr )
+  if ( lwr > upr )
     Helper::halt( "should not happen...pls fix me" );
   
   for (int i=0; i<x->size(); i++)

@@ -39,11 +39,12 @@ extern writer_t writer;
 // helper functions
 //
 
-bool dynam_compile_cycles( edf_t & edf , std::vector<std::string> * cycles, std::vector<int> * epochs  )
+bool dynam_compile_cycles( edf_t & edf , const std::vector<int> & epochs, std::vector<std::string> * cycles )
 {
 
   // data must be epoched already (i.e. will be if cycles done)
-  if ( !edf.timeline.epoched() ) return false;
+  if ( ! edf.timeline.epoched() ) return false;
+  if ( cycles == NULL ) return false;
   
   // do we have any cycles? 
   const bool has_cycles = edf.timeline.epoch_annotation( "_NREMC_1" ) 
@@ -59,51 +60,59 @@ bool dynam_compile_cycles( edf_t & edf , std::vector<std::string> * cycles, std:
   
   // construct by iterating over current epoch set
   
-  std::vector<int> _epochs;
-  std::vector<std::string> _cycles;
+  cycles->clear();
   
-  edf.timeline.first_epoch();
-
-  while ( 1 ) 
+  for (int e=0;e<epochs.size(); e++)
     {
       
-      int epoch = edf.timeline.next_epoch();      
-      
-      if ( epoch == -1 ) break;
-      
-      // cycle annot
-      
-      std::string c = "."; // null
-      
-      // nb. uses legacy epoch-annotation encoding
-      // take up to 10 cycles
-      
-      if      ( edf.timeline.epoch_annotation( "_NREMC_1" , epoch ) ) c = "C1";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_2" , epoch ) ) c = "C2";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_3" , epoch ) ) c = "C3";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_4" , epoch ) ) c = "C4";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_5" , epoch ) ) c = "C5";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_6" , epoch ) ) c = "C6";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_7" , epoch ) ) c = "C7";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_8" , epoch ) ) c = "C8";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_9" , epoch ) ) c = "C9";
-      else if ( edf.timeline.epoch_annotation( "_NREMC_10" , epoch ) ) c = "C10";
-      
-      _cycles.push_back( c );
-      _epochs.push_back( epoch );
+      std::string c = "."; // null                                                                                                                     
 
+      // nb. uses legacy epoch-annotation encoding
+      // take up to 8 cycles
+      // nb. epoch_annot() takes 0..ne current epoch encoding (will map as needed)
+      if      ( edf.timeline.epoch_annotation( "_NREMC_1" , e ) ) c = "C1";
+      else if ( edf.timeline.epoch_annotation( "_NREMC_2" , e ) ) c = "C2";
+      else if ( edf.timeline.epoch_annotation( "_NREMC_3" , e ) ) c = "C3";
+      else if ( edf.timeline.epoch_annotation( "_NREMC_4" , e ) ) c = "C4";
+      else if ( edf.timeline.epoch_annotation( "_NREMC_5" , e ) ) c = "C5";
+      else if ( edf.timeline.epoch_annotation( "_NREMC_6" , e ) ) c = "C6";
+      else if ( edf.timeline.epoch_annotation( "_NREMC_7" , e ) ) c = "C7";
+      else if ( edf.timeline.epoch_annotation( "_NREMC_8" , e ) ) c = "C8";
+      
+      cycles->push_back( c );
+      
       // next epoch
     }
-
-  if ( cycles ) *cycles = _cycles;
-  if ( epochs ) *epochs = _epochs;
-
+  
   return true;
 }
 
 
 // wrapper(s)
 
+void dynam_report_with_log( param_t & param,
+                            const std::vector<double> & y ,
+                            const std::vector<int> & t ,
+                            const std::vector<std::string> * g )
+{
+  std::vector<double> tl( t.size() );
+  for (int i=0;i<t.size();i++) tl[i] = t[i];
+  dynam_report_with_log( param, y , tl , g );
+}
+
+
+
+void dynam_report( param_t & param,
+                   const std::vector<double> & y ,
+                   const std::vector<int> & t ,
+                   const std::vector<std::string> * g )
+{
+  std::vector<double> tl( t.size() );
+  for (int i=0;i<t.size();i++) tl[i] = t[i];
+  dynam_report( param, y , tl , g ); 
+}
+
+  
 void dynam_report_with_log( param_t & param,
 			    const std::vector<double> & y , 
 			    const std::vector<double> & t , 
@@ -150,6 +159,8 @@ void dynam_report( param_t & param,
 
   const bool verbose = param.has( "dynam-verbose" );
   const bool epoch_output = param.has( "dynam-epoch" );
+
+  if ( param.has( "dynam-min-ne" ) ) qd.set_min_ne( param.requires_int( "dynam-min-ne" ) );
   
   const double qd_winsor = param.has( "dynam-winsor" ) ? param.requires_dbl( "dynam-winsor" ) : 0.05 ;  
   qd.winsorize( qd_winsor );
@@ -167,6 +178,10 @@ void dynam_report( param_t & param,
   
   if ( param.has( "dynam-max-cycle" ) ) qd.set_max_cycles( param.requires_int( "dynam-max-cycle" ) );
   else if ( param.has( "dynam-cycles" ) ) qd.set_cycles( param.intvector( "dynam-cycles" ) );
+
+  // default false
+  if ( param.has( "dynam-weight-cycles" ) )
+    qd.set_weight_cycles( param.yesno( "dynam-weight-cycles" ) );
   
   //
   // process
@@ -1043,6 +1058,9 @@ void qdynam_t::proc( const std::vector<double> & x )
 	  rwa.tstat1 += w * rw[ *cc ].tstat1;
 	  rwa.tstat2 += w * rw[ *cc ].tstat2;
 
+	  rwa.corr1 += w * rw[ *cc ].corr1;
+          rwa.corr2 += w * rw[ *cc ].corr2;
+
 	  rwa.tmax += w * rw[ *cc ].tmax;
 	  rwa.amax += w * rw[ *cc ].amax;
 	  rwa.rmax += w * rw[ *cc ].rmax;
@@ -1086,6 +1104,9 @@ void qdynam_t::proc( const std::vector<double> & x )
       rwa.cv /= denom ;
       rwa.tstat1 /= denom ;
       rwa.tstat2 /= denom ;
+
+      rwa.corr1 /= denom ;
+      rwa.corr2 /= denom ;
 
       rwa.tmax /= denom ;
       rwa.amax /= denom ;      
@@ -1209,7 +1230,15 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   // adust clock-time by expectation under flat data
   r.tstat1 -= tstat11;
 
-
+  //
+  // simple corrs (duh...)
+  //
+  std::vector<double> e1( nn ), e2( nn );;
+  for (int i=0; i<nn; i++) { e1[i] = i; e2[i] = ee[i]; }  
+  r.corr1 = Statistics::correlation( ss , e1 );
+  r.corr2 = Statistics::correlation( ss , e2 );
+  
+  
   //
   // basics
   //
@@ -1273,12 +1302,14 @@ void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose 
   
   writer.value( "MEAN" , res.mean );
   writer.value( "SD" , res.sd );
-  writer.value( "T" , res.tstat2 );
-  
+  writer.value( "T" , res.tstat1 );
+  writer.value( "R" , res.corr1 );
+    
   if ( verbose )
     {
       writer.value( "CV" , res.cv );
-      writer.value( "T1" , res.tstat1 );
+      writer.value( "TR" , res.tstat2 );
+      writer.value( "RR" , res.corr2 );
     }
 
   if ( res.ne > 10 || res.ne < 0 ) // if -ve means WITHIN, # cycles

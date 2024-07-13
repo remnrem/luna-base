@@ -33,12 +33,17 @@
 struct edf_t;
 struct param_t;
 
-bool dynam_compile_cycles( edf_t & edf , std::vector<std::string> * , std::vector<int> * );
+bool dynam_compile_cycles( edf_t & edf , const std::vector<int> & , std::vector<std::string> * );
 
-// wrapper
+// wrappers
+void dynam_report_with_log( param_t & param,
+			    const std::vector<double> & y , 
+			    const std::vector<int> & t , 
+			    const std::vector<std::string> * g = NULL ); 
+
 void dynam_report( param_t & param,
 		   const std::vector<double> & y , 
-		   const std::vector<double> & t , 
+		   const std::vector<int> & t , 
 		   const std::vector<std::string> * g = NULL ); 
 
 void dynam_report_with_log( param_t & param,
@@ -46,6 +51,11 @@ void dynam_report_with_log( param_t & param,
 			    const std::vector<double> & t , 
 			    const std::vector<std::string> * g = NULL ); 
 
+// main
+void dynam_report( param_t & param,
+		   const std::vector<double> & y , 
+		   const std::vector<double> & t , 
+		   const std::vector<std::string> * g = NULL ); 
 
 struct dynam_t { 
 
@@ -147,6 +157,7 @@ struct qdynam_results_t
     sd = 0;
     omean = mean = 0;
     cv = 0;
+    corr1 = corr2 = 0;
     tstat1 = tstat2 = 0;
     ne = 0;
 
@@ -163,6 +174,9 @@ struct qdynam_results_t
   double tstat1; // based on simple epoch count
   double tstat2; // uses 'actual' (not clock) epoch count
 
+  double corr1; // rank-order corr
+  double corr2; // as tstat2
+  
   // max stats
   double tmax; // time from start to max (post smoothing) (epochs)
   double amax; // max amplitude (expressed as max - min) 
@@ -201,7 +215,7 @@ struct qdynam_t
   void set_norm_mean( const bool b ) { norm_mean = b; }
   void set_norm_cycles( const bool b ) { norm_each_section = b; }
   bool norm_cycles() const { return norm_each_section; }
-  void weight_cycles( const bool b ) { wcycles = b; } 
+  void set_weight_cycles( const bool b ) { wcycles = b; } 
   void set_nq ( const int x ) { nq = x; } 
   void set_max_cycles( const int n );
   void set_cycles( const std::vector<int> n );

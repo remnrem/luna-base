@@ -408,7 +408,7 @@ annot_t * spectral_power( edf_t & edf ,
       // store frequencies from epoch-level analysis
       std::vector<double> freqs;
 
-      std::vector<double> epochs;
+      std::vector<int> epochs;
 
       // track F results      
       std::map<int,std::vector<double> > track_freq;
@@ -1128,65 +1128,31 @@ annot_t * spectral_power( edf_t & edf ,
       // Dynamics?
       //
       
-
+      
       if ( calc_dynamics )
 	{
-	  
-	  // do we have any _CYCLE epoch-annotations ?
-	  
-	  bool has_cycles = edf.timeline.epoch_annotation( "_NREMC_1" ) 
-	    || edf.timeline.epoch_annotation( "_NREMC_2" )
-	    || edf.timeline.epoch_annotation( "_NREMC_3" )
-	    || edf.timeline.epoch_annotation( "_NREMC_4" )
-	    || edf.timeline.epoch_annotation( "_NREMC_5" )
-	    || edf.timeline.epoch_annotation( "_NREMC_6" )
-	    || edf.timeline.epoch_annotation( "_NREMC_7" )
-	    || edf.timeline.epoch_annotation( "_NREMC_8" )
-	    || edf.timeline.epoch_annotation( "_NREMC_9" )
-	    || edf.timeline.epoch_annotation( "_NREMC_10" );
-	  
+
+	  //
+	  // get cycles info 
+	  //
+
 	  std::vector<std::string> cycle;
 	  
-	  if ( has_cycles )
-	    {
-	      
-	      for (int e=0;e<epochs.size(); e++)
-		{
-		  
-		  std::string c = "."; // null
-		  
-		  // nb. uses current epoch encoding
-		  // take up to 10 cycles
-		  if      ( edf.timeline.epoch_annotation( "_NREMC_1" ,  e ) ) c = "C1";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_2" ,  e ) ) c = "C2";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_3" ,  e ) ) c = "C3";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_4" ,  e ) ) c = "C4";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_5" ,  e ) ) c = "C5";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_6" ,  e ) ) c = "C6";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_7" ,  e ) ) c = "C7";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_8" ,  e ) ) c = "C8";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_9" ,  e ) ) c = "C9";
-		  else if ( edf.timeline.epoch_annotation( "_NREMC_10" , e ) ) c = "C10";
-		  
-		  cycle.push_back( c );
-		  
-		}
-	    }
+	  bool has_cycles = dynam_compile_cycles( edf , epochs , &cycle );
 	  
-
 	  //
 	  // band power 
 	  //
 	  
 	  if ( bands )
 	    {
+
 	      std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
-
-
+	      
 	      while ( ii != bandaid.track_band.end() )
 		{	      
 		  writer.level( globals::band( ii->first ) , globals::band_strat );
-
+		  
 		  if ( has_cycles )
 		    dynam_report_with_log( param, ii->second , epochs , &cycle );
 		  else
@@ -1230,7 +1196,7 @@ annot_t * spectral_power( edf_t & edf ,
 	    }
 	  
 	}
-    
+      
       
       //
       // Output a new signal?
