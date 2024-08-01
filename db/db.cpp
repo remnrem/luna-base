@@ -185,6 +185,30 @@ std::map<std::string,std::string> writer_t::faclvl() const
   return r;
 }
 
+
+std::map<std::string,std::string> writer_t::faclvl_notime() const
+{
+  // as above, but skip "E" or "T" factors
+  // (only used when passing info to qdynam_t currently)
+  std::map<std::string,std::string> r;
+
+  std::map<factor_t,level_t>::const_iterator aa = curr_strata.levels.begin();
+  while ( aa != curr_strata.levels.end() )
+    {
+      // skip commands
+      if ( aa->first.factor_name[0] == '_' ) { ++aa; continue; } 
+      
+      // ignore epoch/time
+      if ( ! ( aa->first.factor_name == globals::epoch_strat || 
+	       aa->first.factor_name == globals::time_strat ) )
+	r[ aa->first.factor_name ] = aa->second.level_name ; 
+
+      ++aa;
+    }
+  return r;
+}
+
+
 std::string strata_t::print_zfile_tag() const
 {
 

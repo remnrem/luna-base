@@ -63,15 +63,14 @@ void proc_trans( edf_t & edf , param_t & param )
   //      
   
   std::string siglab = param.requires( "sig" );
-
+  
   //
   // create/update a channel?
   //
   
   const bool channel_mode = siglab != "*" ; 
   
-  const bool update_existing_channel = channel_mode && edf.header.has_signal( siglab ); 
-
+  const bool update_existing_channel = channel_mode && edf.header.has_signal( siglab );  
 
   //
   // annotation mode: create an annotation track based on true values

@@ -189,32 +189,32 @@ void Helper::validate_slist( param_t & param )
 
       bool edf_okay = edf.attach( edffile , rootname , NULL , true );
 
-      if ( edf_okay ) ++goodn;
-      else
-	{
-	  ++badn;
-	  exclude_edf.insert( rootname );
-	  exclude.insert( rootname );	  
-	}
-      writer.value( "EDF" , edf_okay );
-      
+      if ( ! edf_okay )
+	exclude_edf.insert( rootname );
+	    
       
       // ------------------------------------------------------------
       //
-      // try to load annotations
+      // try to load annotations, but only for good annots
       //
-      // ------------------------------------------------------------                                                             
+      // ------------------------------------------------------------
 
       //
       // init an empty EDF in case the above was left in a weird state
       //
-      
-      const int nr = 24 * 60 ; // default = 24 hr empty EDF, although this should not matter
-      const int rs = 60 ;
-      const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
-      const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;      
-      const std::string id = rootname ;
 
+      // if attaching an .eannot, we need the right number of records, etc
+      // to get impllied epoch length, however
+
+      // if bad EDF< default = 24 hr empty EDF, although this should not matter
+      // (other than for .eannots)
+      
+      const int nr = edf_okay ? edf.header.nr : 24 * 60 ; 
+      const int rs = edf_okay ? edf.header.record_duration : 60 ;
+      const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
+      const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;
+      const std::string id = edf_okay ? rootname : "__bad_EDF__";
+      
       edf_t dummy;
 
       bool empty_okay = dummy.init_empty( id , nr , rs , startdate , starttime );
@@ -308,7 +308,6 @@ void Helper::validate_slist( param_t & param )
 		       Helper::file_extension( fname , "eannot" ) )
 		    {
 		      bool okay = dummy.load_annotations( fname );
-		      std::cout << " annot " << fname << " " << okay << "\n";
 		      if ( ! okay )
 			{
 			  exclude_annots[ rootname ].insert( fname );
@@ -324,13 +323,25 @@ void Helper::validate_slist( param_t & param )
 		}
 	    }
 	}
-
-
-      if ( exclude_annots.find( rootname ) == exclude_annots.end() )
-	writer.value( "ANNOTS" , 1 );
-      else
-	writer.value( "ANNOTS" , 0 );
       
+      const bool annots_okay = exclude_annots.find( rootname ) == exclude_annots.end();
+      
+      writer.value( "ANNOTS" , (int)annots_okay );
+
+
+      //
+      // track
+      //
+
+      if ( edf_okay && annots_okay ) ++goodn;
+      else // if either EDF or annots bad:
+	{
+	  ++badn;	  
+	  exclude.insert( rootname );	  
+	}
+      writer.value( "EDF" , edf_okay );
+
+
 
       //
       // Final outputs
@@ -360,6 +371,7 @@ void Helper::validate_slist( param_t & param )
 	  ++jj;
 	}
       
+
       
       //
       // Next individual

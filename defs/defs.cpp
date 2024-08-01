@@ -62,6 +62,7 @@ bool globals::sanitize_everything = true;
 std::set<std::string> globals::annot_alignment;
 bool globals::autofix_edf;
 bool globals::validation_mode;
+bool globals::read_digital_values;
 
 int globals::time_format_dp;
 
@@ -89,6 +90,7 @@ bool globals::sleep_stage_assume_epoch_duration;
 
 bool globals::replace_channel_spaces;
 bool globals::uppercase_channels;
+bool globals::retain_alias_case;
 bool globals::replace_annot_spaces;
 char globals::space_replacement;
 bool globals::set_0dur_as_ellipsis;
@@ -131,7 +133,8 @@ bool globals::sl_link_across_folders;
 
 int globals::sample_list_min;
 int globals::sample_list_max;
-std::string globals::sample_list_id;
+std::set<std::string> globals::sample_list_ids;
+std::set<std::string> globals::sample_list_ids_skips;
 
 bool globals::anon; 
 std::string globals::force_starttime;
@@ -280,9 +283,11 @@ void globals::init_defs()
   // Spaces in channel names
   //
 
-  replace_channel_spaces = true;
+  replace_channel_spaces = true; 
 
-  uppercase_channels = false;
+  uppercase_channels = false; // upper
+
+  retain_alias_case = false; // retain-case
   
   replace_annot_spaces = true;
    
@@ -319,6 +324,12 @@ void globals::init_defs()
   //
 
   validation_mode = false;
+
+  //
+  // debug mode: read digitial values from EDF
+  //
+
+  read_digital_values = false;
   
   //
   // Automatically remap stage annotations; 
@@ -577,7 +588,8 @@ void globals::init_defs()
     
   sample_list_min = -1;
   sample_list_max = -1;
-  sample_list_id = "";
+  sample_list_ids.clear();
+  sample_list_ids_skips.clear();
 
   anon = false; 
 

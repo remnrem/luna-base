@@ -583,8 +583,7 @@ int main(int argc , char ** argv )
 	      if ( ! Helper::str2int( argv[i] , &x ) )
 		{
 		  // assume this is an ID (i.e. must be a string)
-		  globals::sample_list_id = argv[i];		  
-		  //logger << "  restricting analysis to ID [" << globals::sample_list_id << "]\n";
+		  globals::sample_list_ids.insert( argv[i] );
 		  specified = 2;// i.e. done selecting
 		}
 	      else if ( specified == 0 )
@@ -1960,16 +1959,27 @@ void process_edfs( cmd_t & cmd )
 	  
 	  // swap in new ID?
 	  rootname = cmd_t::remap_id( rootname );
-
-	  // else, do we have an 'ID' check?
-	  if ( globals::sample_list_id != "" )
+	  
+	  // else, do we have an 'ID' check? (id=ID does not match so skip)
+	  if ( globals::sample_list_ids.size() )
 	    {	      
-	      if ( rootname != globals::sample_list_id )
+	      if ( globals::sample_list_ids.find( rootname ) == globals::sample_list_ids.end() )
 		{
 		  ++processed;
 		  continue;
 		}
 	    }
+
+	  // skip=ID matches
+	  if ( globals::sample_list_ids_skips.size() )
+	    {	      
+	      if ( globals::sample_list_ids_skips.find( rootname ) != globals::sample_list_ids_skips.end() )
+		{
+		  ++processed;
+		  continue;
+		}
+	    }
+	  
 	}
       else 
 	{

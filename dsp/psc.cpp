@@ -427,7 +427,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       ++ii1;
     }
 
-  logger << "  found " << rows.size() << " rows (individuals) and " << cols.size() << " columns (features)\n";
+  logger << "  found " << rows.size() << " rows (observations) and " << cols.size() << " columns (features)\n";
 
   if ( rows.size() == 0 || cols.size() == 0 ) 
     return;
@@ -461,7 +461,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 			  drop_indivs.insert( *ii );
 			  ++ii; continue; 
 			}
-		      Helper::halt( "no channel " + ss1->first + " for individual " + *ii );
+		      Helper::halt( "no channel " + ss1->first + " for observation " + *ii );
 		    }
 
 		  // find frequency?
@@ -473,7 +473,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 			  drop_indivs.insert( *ii );
 			  ++ii; continue; 
 			}
-		      Helper::halt( "no frequency " + ss2->first + " for individual " + *ii );
+		      Helper::halt( "no frequency " + ss2->first + " for observation " + *ii );
 		    }
 
 		  // find variable?
@@ -485,7 +485,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 			  drop_indivs.insert( *ii );
 			  ++ii; continue; 
 			}
-		      Helper::halt( "no variable " + ss3->first + " for individual " + *ii );
+		      Helper::halt( "no variable " + ss3->first + " for observation " + *ii );
 		    }
 		  
 		  ++ii;
@@ -500,7 +500,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 
 
   if ( drop_incomplete_rows )
-    logger << "  identified " << drop_indivs.size() << " of " << rows.size() << " individuals with at least some missing data\n";
+    logger << "  identified " << drop_indivs.size() << " of " << rows.size() << " observations with at least some missing data\n";
   
   if ( rows.size() - drop_indivs.size() <= 2 ) 
     Helper::halt( "not enough observationns for PSC analysis" );
@@ -574,7 +574,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       ++ss1;
     }
 
-  logger << "  finished making regular data matrix on " << rows.size()  << " individuals\n";
+  logger << "  finished making regular data matrix on " << rows.size()  << " observations\n";
 
 
 
@@ -649,7 +649,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
   for (int i=0;i<inc.size();i++)
     if ( inc[i] ) ++ni;
   
-  logger << "  after outlier removal, " << ni << " individuals remaining\n";
+  logger << "  after outlier removal, " << ni << " observations remaining\n";
   
   U.resize( ni , nv );
   id.resize( ni );
@@ -1598,7 +1598,7 @@ void psc_t::project( edf_t & edf , param_t & param )
   std::string cache_name = param.requires( "cache" );
 
   if ( ! edf.timeline.cache.has_num( cache_name ) )
-    Helper::halt( "cache not found for this individual: " + cache_name );
+    Helper::halt( "cache not found for this observation: " + cache_name );
 
   cache_t<double> * cache = edf.timeline.cache.find_num( cache_name );
   

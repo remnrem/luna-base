@@ -305,6 +305,7 @@ void proc_resoap( edf_t & , param_t & );
 void proc_rebase_soap( edf_t & , param_t & );
 void proc_place_soap( edf_t & , param_t & );
 
+void proc_runpops( edf_t & , param_t & );
 void proc_pops( edf_t & , param_t & );
 void proc_eval_stages( edf_t & , param_t & );
 
@@ -380,6 +381,7 @@ void proc_hilbert( edf_t & , param_t & );
 void proc_sync(edf_t & , param_t & );
 void proc_tsync(edf_t & , param_t & );
 void proc_xcorr(edf_t & , param_t & );
+void proc_qdynam(edf_t & , param_t & );
 
 void proc_predict( edf_t & , param_t & );
 void proc_psc( edf_t & , param_t & );

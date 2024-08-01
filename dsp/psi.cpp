@@ -26,6 +26,7 @@
 #include "defs/defs.h"
 #include "stats/matrix.h"
 #include "stats/statistics.h"
+#include "miscmath/qdynam.h"
 
 #include "db/db.h"
 #include "helper/logger.h"
@@ -73,8 +74,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
   bool by_epoch = param.has( "epoch" );
   
-  int ne = edf.timeline.first_epoch();
-
+   
 
   //
   // Frequency bins?
@@ -121,8 +121,20 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   
 
   bool has_freqs = lwr.size() > 0 ;
-  
 
+
+  //
+  // dynamics
+  //
+
+  const bool calc_dynamics = param.has( "dynam" );
+  qdynam_t qd;
+  if ( calc_dynamics )
+    {
+      by_epoch = true; // implies 'epoch'
+      qd.init( edf , param );
+    }
+  
   //
   // PSI epoch/segment lengths 
   //
@@ -167,11 +179,12 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   // By epoch
   //
 
-  logger << "  running within " << ne << " " << edf.timeline.epoch_length() << " second epochs\n";
+  int ne = edf.timeline.first_epoch();
   
+  logger << "  running within " << ne << " " << edf.timeline.epoch_length() << " second epochs\n"; 
+
   while ( 1 ) 
     {
-
       
       int epoch = edf.timeline.next_epoch();      
       
@@ -193,20 +206,28 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       writer.epoch( edf.timeline.display_epoch( epoch ) );
       
-      psi.report( signals , by_epoch );
+      psi.report( signals , by_epoch,
+		  calc_dynamics ? &qd : NULL ,
+		  calc_dynamics ? edf.timeline.display_epoch( epoch ) - 1 : -1 );
+      
 
     }
 
   writer.unepoch();
-    
+
+  // dynamics report?
+  if ( calc_dynamics )
+    qd.proc_all();
+  
 }
 
 
 
-void psi_t::report( const signal_list_t & signals , bool by_epoch )
+void psi_t::report( const signal_list_t & signals , bool by_epoch ,
+		    qdynam_t * qd , const int qe )
 {
   const double EPS = 1e-8;
-
+  
   // note: need to tidy for text-table output
 
   if ( n_models == 0 ) return;
@@ -233,6 +254,10 @@ void psi_t::report( const signal_list_t & signals , bool by_epoch )
 	  writer.value( "STD" , std_psi_sum[m][i] );
 	  double psi1 = psi_sum[m][i]  / ( EPS + std_psi_sum[m][i] );
 	  writer.value( "PSI" , psi1 );	  
+
+	  // track for dynamics
+	  if ( qd != NULL )
+	    qd->add( writer.faclvl_notime() , "PSI" , qe , psi1 );
 	  
 	  // abs values
 	  writer.value( "APSI_RAW" , apsi_sum[m][i] );
@@ -258,6 +283,10 @@ void psi_t::report( const signal_list_t & signals , bool by_epoch )
 	      double psi2 = psi[m](i,j)  / ( EPS + std_psi[m](i,j) );
 	      writer.value( "PSI" , psi2 );
 
+	      // track for dynamics
+	      if ( qd != NULL )
+		qd->add( writer.faclvl_notime() , "PSI" , qe , psi2 );
+	      
 	    }
 	  writer.unlevel(globals::signal2_strat);
 	}

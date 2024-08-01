@@ -160,6 +160,8 @@ struct globals
   static bool autofix_edf;
 
   static bool validation_mode;
+
+  static bool read_digital_values;
   
   // in -t output mode:   folder/indiv-id/{value}COMMAND-F{value}.txt{.gz}
   static std::string txt_table_prepend;
@@ -184,6 +186,7 @@ struct globals
 
   static bool replace_channel_spaces;
   static bool uppercase_channels;
+  static bool retain_alias_case;
   static bool replace_annot_spaces;
   static char space_replacement;
 
@@ -263,7 +266,8 @@ struct globals
   
   static int sample_list_min;
   static int sample_list_max;
-  static std::string sample_list_id;
+  static std::set<std::string> sample_list_ids;
+  static std::set<std::string> sample_list_ids_skips;
 
   static bool anon;
   static std::string force_starttime;

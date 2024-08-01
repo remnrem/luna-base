@@ -99,6 +99,9 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
   int cnt_masked = 0 , cnt_noaction = 0;
   int cnt_interpolated_epochs = 0 , cnt_interpolated_cheps = 0 ; 
 
+  // track channels
+  std::map<std::string,int> cnt_interpolated_chs;
+  
   while ( 1 ) 
     {
       
@@ -190,8 +193,11 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       //std::cerr << " epoch UPDTE = " << epoch << " --> " << a << " " << b << "\n";
 
       for (int s=0;s<bad_signals.size();s++)	
-	edf.update_records( a , b , bad_signals(s) , I.col(s).data_pointer() );      
-      
+	{
+	  edf.update_records( a , b , bad_signals(s) , I.col(s).data_pointer() );
+	  cnt_interpolated_chs[ bad_signals.label(s) ]++;
+	}
+
       cnt_interpolated_epochs++;
 
       cnt_interpolated_cheps += bad_signals.size();
@@ -217,6 +223,18 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
   logger << " skipped " << cnt_noaction << " epochs without any bad channels\n";
   logger << " interpolated " << cnt_interpolated_epochs << " epochs, for " << cnt_interpolated_cheps << " ch/epoch pairs\n";
 
+  writer.value( "NE_MASKED" , cnt_masked );
+  writer.value( "NE_NONE" ,  cnt_noaction );
+  writer.value( "NE_INTERPOLATED" , cnt_interpolated_epochs );
+  writer.value( "NCHEP_INTERPOLATED" , cnt_interpolated_cheps );
+
+  for (int s=0;s<signals.size();s++)
+    {
+      writer.level( signals.label(s) , globals::signal_strat );
+      writer.value( "NE_INTERPOLATED" , cnt_interpolated_chs[ signals.label(s) ] );
+      writer.value( "PCT_INTERPOLATED" , cnt_interpolated_chs[ signals.label(s) ] / (double)ne );
+    }
+  writer.unlevel( globals::signal_strat );
 }
 
 

@@ -28,6 +28,7 @@
 #include "db/db.h"
 #include "edfz/edfz.h"
 #include "dsp/resample.h"
+#include "miscmath/qdynam.h"
 
 #include "slice.h"
 #include "tal.h"
@@ -856,6 +857,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   
   // for each signal, does it match?
   // (and if so, change this to "standard" form)
+
+  // by default, if matches primary alias then retain case of query
+  // if special variable retain-case=F  ( --> globals::retrain_alias_case ) 
+  // then swap in the case-specific primary 
   
   for (int s=0;s<ns_all;s++)
     {
@@ -864,11 +869,11 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       std::string l = tlabels[s];
       
       // this match function will change 'l' to match any primary aliase
-      // it does a case-insensitive match, but returns the correct (preferred-case) version
-      // if inp_signals is defined, it will always include the annotaiton channel label
-      
+      // it does a case-insensitive match, but returns the correct (preferred-case)
+      // version (unless retain-case=F is set)
+      // if inp_signals is defined, it will always include the annotation channel label
+
       bool include = inp_signals == NULL || signal_list_t::match( inp_signals , &l , slabels );
-      //      std::cout << " l = " << include << " " << l << "\n";
 	    
       // imatch allows for case-insensitive match of 'edf annotation*'  (i.e. 14 chars)
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
@@ -1940,13 +1945,14 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 	    rec->push_back( r );
 	  if ( smp != NULL )
 	    smp->push_back( r * n_samples_per_record + s );
-	  
-	  // just return digital values...
+	
+	  // just return digital values separately...
 	  if ( ddata != NULL )
 	    ddata->push_back( record->data[ signal ][ s ] );
-	  else // ... or convert from digital to physical on-the-fly?
-	    ret.push_back( edf_record_t::dig2phys( record->data[ signal ][ s ] , bitvalue , offset ) );
-	  
+	  else if ( globals::read_digital_values ) // return digital to standard vector
+	    ret.push_back( record->data[ signal ][ s ] );
+	  else // ... or convert from digital to physical on-the-fly
+	    ret.push_back( edf_record_t::dig2phys( record->data[ signal ][ s ] , bitvalue , offset ) );	  
 	}
       
       r = timeline.next_record(r);
@@ -2685,7 +2691,7 @@ void edf_t::add_signal( const std::string & label ,
       dmax = 32767;
       dmin = -32768;
     }
-  
+
   double bv = ( pmax - pmin ) / (double)( dmax - dmin );
   double os = ( pmax / bv ) - dmax;
 
@@ -3453,6 +3459,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
 	  std::string lb = label[s];
 	  
 	  std::string uppercase_lb = Helper::toupper( lb );
+	  //	  std::cout << " search uppercase_lb [ " << uppercase_lb << " | lb = " << lb << "\n" ;
 	  
 	  // swap in alias? [ aliases are always stored as UPPERCASE ]
 	  if ( cmd_t::label_aliases.find( uppercase_lb ) != cmd_t::label_aliases.end() ) 
@@ -3461,10 +3468,26 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
 	      aliasing[ cmd_t::label_aliases[ uppercase_lb ] ] = lb;
 	      
 	      // swap in the primary
+	      //std::cout << " setting " << uppercase_lb << " " << lb << " " << cmd_t::label_aliases[ uppercase_lb ] << "\n";
 	      lb = cmd_t::label_aliases[ uppercase_lb ];
 	      label2header[ Helper::toupper( lb ) ] = s;
 	      label[s] = lb;
 	      
+	    }
+
+	  // special case, if matches the primary but is of different case ( and not retaining case of query)
+	  if ( ! globals::retain_alias_case )
+	    {	      
+	      if ( cmd_t::primary_upper2orig.find( uppercase_lb ) != cmd_t::primary_upper2orig.end() )
+		{
+		  if ( cmd_t::primary_upper2orig[ uppercase_lb ] != lb ) // case mismatch?
+		    {
+		      aliasing[ cmd_t::primary_upper2orig[ uppercase_lb ] ] = lb;
+		      lb = cmd_t::primary_upper2orig[ uppercase_lb ];
+		      label2header[ Helper::toupper( lb ) ] = s;
+		      label[s] = lb;
+		    }
+		}
 	    }
 	  
 	  r.add( s, lb );
@@ -3749,7 +3772,7 @@ bool edf_t::restructure( const bool force , const bool verbose , const bool pres
 	  
 	  writer.value( "DUR1" , header.nr * header.record_duration );
 	  writer.value( "DUR2" , header.nr * header.record_duration );
-	  
+
 	  return false;
 	}
     }
@@ -3779,7 +3802,11 @@ bool edf_t::restructure( const bool force , const bool verbose , const bool pres
 	  
 	  writer.value( "DUR1" , cnt * header.record_duration );
 	  writer.value( "DUR2" , cnt * header.record_duration );
-	  
+
+	  // as mask if empty, remove it (i.e. so that subsequent commands
+	  // know this is not a masked record
+ 	  timeline.clear_epoch_mask( false );  // clears all epoch masks
+
 	  return false;
 	}
     }
@@ -4171,10 +4198,14 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
 
   const int points_per_record = header.n_samples[s];
   const int n = d->size();
-
+  
   if ( n != header.nr * points_per_record )
-    Helper::halt( "internal error in update_signal()" );
-
+    {
+      logger << " obs N = " << n << "\n"
+	     << " exp N = " << header.nr << " * " << points_per_record << " = " << header.nr * points_per_record << "\n";
+	
+      Helper::halt( "internal error in update_signal()" );
+    }
   if ( debug ) std::cout << " n = " << n << "\n";
   
   bool set_dminmax = dmin_ != NULL ; 
@@ -4972,6 +5003,14 @@ bool edf_t::basic_stats( param_t & param )
   // kurtosis() returns 'excess kurtosis - normal has 0, so +3 back, if require original)
   const double kurt_adj = param.has( "kurt3" ) ? 3 : 0 ; 
   
+  // dynamics?
+  const bool calc_dynamics = param.has( "dynam" );
+  if ( calc_dynamics ) by_epoch = true; // implies 'epoch'
+  qdynam_t qd;
+  if ( calc_dynamics )
+    qd.init( *this , param );
+  
+  
   for (int s=0; s<ns; s++)
     {
       
@@ -5115,7 +5154,25 @@ bool edf_t::basic_stats( param_t & param )
 			}
 		    }
 		}
-	      
+
+	      //
+	      // Dynamics?
+	      //
+
+	      if ( calc_dynamics )
+		{
+		  const int e = timeline.display_epoch( epoch ) - 1;
+		  qd.add( writer.faclvl_notime() , "MEAN" , e  , mean );
+		  if ( calc_median )
+		    qd.add( writer.faclvl_notime() , "MEDIAN" , e  , mean );
+		  if ( ! minimal )
+		    {
+		      qd.add( writer.faclvl_notime() , "SD" , e  , sd );
+		      qd.add( writer.faclvl_notime() , "SKEW" , e  , skew );
+		      qd.add( writer.faclvl_notime() , "KURT" , e  , kurt );
+		    }
+		}
+
 	      
 	      //
 	      // Record
@@ -5148,7 +5205,13 @@ bool edf_t::basic_stats( param_t & param )
 	  
 	  
 	}
-      
+
+      //
+      // report dynamics
+      //
+
+      if ( calc_dynamics )
+	qd.proc_all();
       
       //
       // Whole-signal level output
@@ -5319,8 +5382,11 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
   //  std::cout << " IN signal_list_t::match() \n";
   
   // inp_signals : list of input signals (EDF or subset of) / any-CASE
-  // l           : label to match : any-case, and we want to preserve this, but matching is done in case-insensitive manner
-  // slabels     : 
+
+  // l : label to match : any-case, and we usually want to preserve
+  // this, but matching is done in case-insensitive manner
+
+  // slabels :
   
   // exact match? (i.e. no "|" alternatives specified)
   // old:   if ( inp_signals->find(*l) != inp_signals->end() ) return true; 
@@ -5328,7 +5394,12 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
   std::set<std::string>::const_iterator cc = inp_signals->begin();
   while ( cc != inp_signals->end() )
     {
-      if ( Helper::iequals( *l , *cc ) ) return true;
+      if ( Helper::iequals( *l , *cc ) )
+	{
+	  // optionally, change case to match primary if exact match
+	  if ( ! globals::retain_alias_case ) *l = *cc;
+	  return true;
+	}
       ++cc;
     }
   
@@ -5336,7 +5407,7 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
   if ( cmd_t::label_aliases.find( Helper::toupper( *l ) ) != cmd_t::label_aliases.end() )
     {
       *l = cmd_t::label_aliases[ Helper::toupper( *l ) ];
-      // now, does this matc
+      // now, does this match?
       // old: return inp_signals->find(*l) != inp_signals->end() ;
       // new: loop over each (as above)
       std::set<std::string>::const_iterator cc = inp_signals->begin();
@@ -5364,8 +5435,8 @@ bool signal_list_t::match( const std::set<std::string> * inp_signals ,
 	    
 	  if ( *l == tok[i] ) 
 	    {
-	      // swap in 'preferred' name
-	      if ( i>0 ) *l = tok[0];
+	      // swap in 'preferred' name (2nd, optionally change case to match primary)	      
+	      if ( i>0 || ! globals::retain_alias_case ) *l = tok[0];
 	      return true;
 	    }
 	}

@@ -44,11 +44,13 @@ void dsptools::dupes( edf_t & edf , param_t & param )
 
   const int ns = signals.size();
   
-  const bool physical_check = param.has( "physical" );
-  
-  const double peps = param.has( "eps" ) ? param.requires_dbl( "eps" ) : 0.001 ;  
+  const bool physical_check = param.yesno( "physical" );
 
-  const double pdur = param.has( "prop" ) ? param.requires_dbl( "prop" ) : 0 ; 
+  // for physical checks
+  const double peps = param.has( "eps" ) ? param.requires_dbl( "eps" ) : 0.01 ;  
+
+  // to be different, at least 10% of epoch must be discordant at 'eps'
+  const double pdur = param.has( "prop" ) ? param.requires_dbl( "prop" ) : 0.1 ; 
 
   const bool pdur0 = pdur == 0 ;   
   

@@ -111,6 +111,8 @@ namespace Helper
 			
   void expand_numerics( std::string * );
 
+  std::string xsigs( const std::string & );
+
   void process_block_conditionals( std::string * , const std::map<std::string,std::string> & );
 
   std::string insert_indiv_id( const std::string & id , const std::string & str );

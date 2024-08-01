@@ -765,7 +765,7 @@ void conncoupl_t::calc()
 		  double mean = MiscMath::mean( null_stats );
 		  double sd   = MiscMath::sdev( null_stats , mean );
 		  results[ "dPAC" ].emp_z( e , t ) = ( obs_dPAC - mean ) / sd;
-		  std::cout << "xx " << e << " " << s1[t] << " " << s2[t] << " " << flabel1 << " " << flabel2 << " obs " << obs_dPAC << "\t" << mean << "\t" << sd << "\t" << ( obs_dPAC - mean ) / sd << "\n";
+		  //std::cout << "xx " << e << " " << s1[t] << " " << s2[t] << " " << flabel1 << " " << flabel2 << " obs " << obs_dPAC << "\t" << mean << "\t" << sd << "\t" << ( obs_dPAC - mean ) / sd << "\n";
 		  // mean = MiscMath::mean( null_stats2 );
 		  // sd   = MiscMath::sdev( null_stats2 , mean );
 		  // results[ "dPAC_PHASE" ].emp_z( e , t ) = ( obs_dPAC_PHASE - mean ) / sd;

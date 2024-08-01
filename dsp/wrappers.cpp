@@ -27,6 +27,7 @@
 #include "cwt/cwt.h"
 #include "dsp/hilbert.h"
 #include "fftw/fftwrap.h"
+#include "miscmath/qdynam.h"
 
 #include "db/db.h"
 #include "helper/logger.h"
@@ -625,3 +626,164 @@ void dsptools::run_otsu( const std::vector<double> & x , const int k )
 }
   
 
+//
+// qdynam
+//
+
+void dsptools::qdynam( edf_t & edf , param_t & param )
+{
+  
+  qdynam_t qd;
+
+  qd.init( edf , param );
+  
+  const int ne = edf.timeline.first_epoch();
+
+  // assume an ID field to select rows
+  const bool ignore_id = param.has( "no-id" ) ? param.yesno( "no-id" ) : false ; 
+  
+  // get input(s)
+  // match on ID
+  // look for 'E'
+  // pull all vars
+  
+  const std::set<std::string> vars = param.strset( "vars" );
+
+  // facs must be the same across all input files (although vars can be different)
+  const std::set<std::string> facs = param.strset( "facs" );
+  
+  std::vector<std::string> inputs = param.strvector( "inputs" );
+  
+  for (int i=0; i<inputs.size(); i++)
+    {
+
+      const std::string filename = Helper::expand( inputs[i] );
+      if ( ! Helper::fileExists( filename ) )
+	{
+	  logger << "  *** could not open " << inputs[i] << "\n";
+	  continue;
+	}
+      
+      int n = -1;
+      int slot_e = -1;
+      int slot_id = -1;
+      
+      std::map<std::string,int> var2slot;
+      std::map<std::string,int> fac2slot;
+      
+      std::ifstream IN1( filename.c_str() , std::ios::in );
+
+      //
+      // header 
+      //
+      
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.eof() ) break;
+      if ( line == "" ) continue;
+      std::vector<std::string> hdr = Helper::parse( line , "\t" );
+      n = hdr.size();
+      for (int j=0; j<n; j++)
+	{
+	  if ( hdr[j] == "E" ) slot_e = j;
+	  else if ( hdr[j] == "ID" ) slot_id = j;
+	  else if ( vars.size() == 0 || vars.find( hdr[j] ) != vars.end() )
+	    var2slot[ hdr[j] ] = j;
+	  else if ( facs.find( hdr[j] ) != facs.end() )
+	    fac2slot[ hdr[j] ] = j;
+	  
+	}
+      
+      if ( slot_e == -1 )
+	{
+	  logger << "  ** no E column in " << inputs[i] << "\n";
+	  break;
+	}
+
+      if ( slot_id == -1 && ! ignore_id )
+	{
+	  logger << "  ** no ID column in " << inputs[i] << "\n";
+	  break;
+	}
+
+      if ( fac2slot.size() != facs.size() )
+	{
+	  logger << "  ** not all specified factors found in " << inputs[i] << "\n";
+          break;
+	}
+      
+
+      //
+      // data rows
+      //
+
+      bool processed = false;
+      
+      while ( 1 )
+	{
+	  
+	  std::string line;
+	  Helper::safe_getline( IN1 , line );
+	  if ( IN1.eof() ) break;
+	  if ( line == "" ) continue;
+	  std::vector<std::string> row = Helper::parse( line , "\t" );
+	  if ( n != row.size() ) Helper::halt( "bad format in " + inputs[i] + " - variable # of cols" );
+
+	  // row does match required ID?
+	  if ( ( ! ignore_id ) && row[ slot_id ] != edf.id ) continue;
+	  
+	  // expecting 1-based in input; but qdynam wants display epoch # -1 
+	  int epoch;
+	  if ( ! Helper::str2int( row[slot_e] , &epoch ) )
+	    Helper::halt( "bad format in " + inputs[i] + " - invalid epoch code" );	  
+	  
+	  processed = true;
+	  
+	  // get fac/lvl pairs
+	  std::map<std::string,int>::const_iterator ff = fac2slot.begin();
+          while ( ff != fac2slot.end() )
+	    {
+	      std::cout << " setting " << ff->second << " " << row[ff->second ] << "\n";
+	      writer.level( row[ff->second], ff->first );
+	      ++ff;
+	    }
+	  
+	  // store values
+	  std::map<std::string,int>::const_iterator ii = var2slot.begin();
+	  while ( ii != var2slot.end() )
+	    {
+	      double x;
+	      if ( ! Helper::str2dbl( row[ ii->second ] , &x ) )
+		Helper::halt( "bad numeric format for " + inputs[i] + "\n" + line );
+	      qd.add( writer.faclvl_notime() , ii->first , epoch - 1  , x );
+	      ++ii;
+	    }
+	  
+	}
+      IN1.close();
+
+      // undo factors
+      if ( processed )
+	{
+	  std::map<std::string,int>::const_iterator ff = fac2slot.begin();
+	  while ( ff != fac2slot.end() )
+	    {
+	      writer.unlevel( ff->first );
+	      ++ff;
+	    }
+	}
+      
+
+      //
+      // report
+      //
+
+      qd.proc_all();
+
+      // next dataset
+    }
+  
+  
+  
+  
+}

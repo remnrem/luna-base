@@ -1226,7 +1226,7 @@ void annotate_t::prep()
 	  
 	  bool okay = segment( interval , &offset );
 	  
-	  //std::cout << " ii->f " << aid << " " << okay << "\n";
+	  //std::cout << " ii->f " << aid << " " << okay << "\t" << interval.as_string() << "\n";
 	  
 	  if ( ! okay ) { ++ii; off_target++; continue; } 
 

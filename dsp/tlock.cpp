@@ -1015,10 +1015,10 @@ void tlock_t::set_window_epoch( int np1 )
 {
   // np1 is total number of sample points (from epoch)
   np = np1;
-  //  std::cout << " set_window_epoch() setting np = " << np << "\n";
+  //std::cout << " set_window_epoch() setting np = " << np << "\n";
   const double totsec = np1 / sr;
   const double half_window = totsec / 2.0 ; 
-  //  logger << "  window has " << np1 << " samples, " << totsec << " seconds\n";
+  //logger << "  window has " << np1 << " samples, " << totsec << " seconds\n";
     
   t.clear();
   // nb. fudge for floating point issues (allowing tenth of inc for stop 'w')

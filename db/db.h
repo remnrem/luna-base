@@ -811,6 +811,8 @@ class writer_t
 
   // Current individual
 
+  std::string curr_id() const { return curr_indiv.indiv_name; } 
+  
   bool id( const std::string & indiv_name , const std::string & file_name )
   {
     if ( individuals_idmap.find( indiv_name ) != individuals_idmap.end() )
@@ -1018,7 +1020,9 @@ class writer_t
 
   void update_plaintext_curr_strata();
  
-  std::map<std::string,std::string> faclvl() const; 
+  std::map<std::string,std::string> faclvl() const;
+
+  std::map<std::string,std::string> faclvl_notime() const; 
 
   //
   // Value (to DB or stdout)

@@ -39,6 +39,7 @@ namespace dsptools
 
   void hilbert( edf_t & , param_t & );
 
+  void qdynam( edf_t & , param_t & );
    
   void run_cwt( const std::vector<double> & data , const int ,
 		const double fc , const int num_cycles , 

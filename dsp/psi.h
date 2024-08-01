@@ -31,6 +31,7 @@ struct signal_list_t;
 #include "fftw/fftwrap.h"
 #include <complex>
 #include <vector>
+#include "miscmath/qdynam.h"
 
 namespace dsptools
 {
@@ -39,7 +40,7 @@ namespace dsptools
 
   
 struct psi_t {
-  
+
   psi_t( const Data::Matrix<double> * data , int eplen , int seglen , const int fs )
     : data(data) , eplen( eplen ) , seglen( seglen ) , fs(fs)
   {
@@ -85,7 +86,9 @@ struct psi_t {
 
   void calc();
 
-  void report( const signal_list_t & ,  bool by_epoch = false );
+  void report( const signal_list_t & ,  bool by_epoch = false ,
+	       qdynam_t * qd = NULL ,
+	       const int e = -1 );
   
   std::vector<Data::Matrix<std::complex<double> > > data2cs_event( const Data::Matrix<double> * , int maxfreqbin );
 
@@ -116,6 +119,9 @@ struct psi_t {
 
   real_FFT fftseg;
   
+  qdynam_t * qd;
+  int qe; // this epoch (as psi_t() is called per epoch)
+
   //
   // Outputs
   //

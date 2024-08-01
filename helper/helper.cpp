@@ -23,6 +23,7 @@
 
 #include "helper.h"
 #include "logger.h"
+#include "db/db.h"
 
 #include "defs/defs.h"
 #include "intervals/intervals.h"
@@ -42,6 +43,7 @@
 #endif
 
 extern logger_t logger;
+extern writer_t writer;
 
 int fn_luna_slbuilder(const char * fpath, const struct stat *ptr, int type );
 
@@ -176,7 +178,7 @@ std::string Helper::sanitize( const std::string & s ,
       if ( j[i] == '(' ) j[i] = '_';
       if ( j[i] == ')' ) j[i] = '_';
     }
-  return j;  
+  return j;
 }
 
 std::string Helper::search_replace( const std::string & s , char a , char b )
@@ -265,11 +267,12 @@ bool Helper::file_extension( const std::string & f, const std::string & ext , bo
 
 bool Helper::vmode_halt( const std::string & msg )
 {
+
   // normal halt
   if ( ! globals::validation_mode ) halt( msg );
 
-  // set problem flag
-  problem( msg );
+  // set problem flag (including curr indiv ID, which should always be set)
+  problem( "[" + writer.curr_id() + "] " + msg );
   
   // caller then responsible to returning
   return false;
@@ -1892,6 +1895,11 @@ std::string Helper::insert_indiv_id( const std::string & id , const std::string 
 
 void Helper::expand_numerics( std::string * t )
 {
+  *t = Helper::xsigs( *t );
+}
+
+std::string Helper::xsigs( const std::string & t )
+{
 
   // [seq][seq]
   
@@ -1911,12 +1919,12 @@ void Helper::expand_numerics( std::string * t )
   // sequences to be expanded into the new string
   std::map<int,std::string> seq1, seq2; 
   
-  for (int i=1;i<t->size();i++)
+  for (int i=1;i<t.size();i++)
     {
       
       // '][' indicates a [seq][seq] pair
       
-      const bool expr = (*t)[i-1] == ']' && (*t)[i] == '[' ;
+      const bool expr = t[i-1] == ']' && t[i] == '[' ;
       
       if ( expr )
 	{
@@ -1926,20 +1934,20 @@ void Helper::expand_numerics( std::string * t )
 	  while ( 1 ) { 
 	    --j;
 	    if ( j < 0 ) Helper::halt( "bad format for [seq][seq], opening '[' missing" );	      
-	    if ( (*t)[j] == '[' ) break;
+	    if ( t[j] == '[' ) break;
 	  }
 	  
 	  // closing ]
 	  int k=i+1;
 	  while ( 1 ) { 
 	    ++k;
-	    if ( k == t->size() ) 
+	    if ( k == t.size() ) 
 	      Helper::halt( "bad format for [seq][seq], closing ']' missing " );    
-	    if ( (*t)[k] == ']' ) break;
+	    if ( t[k] == ']' ) break;
 	  }
 	  
 	  // whole expression (root)[seq] or [seq](root)
-	  std::string s = t->substr( j , k - j + 1 );
+	  std::string s = t.substr( j , k - j + 1 );
 	  
 	  // split into two tokens
 	  std::vector<std::string> tok = Helper::parse( s , "][" );
@@ -2029,7 +2037,7 @@ void Helper::expand_numerics( std::string * t )
   // nothing to do
   //
   
-  if ( splices.size() == 0 ) return;
+  if ( splices.size() == 0 ) return t;
 
   //
   // splice in...
@@ -2041,7 +2049,7 @@ void Helper::expand_numerics( std::string * t )
   while ( jj != splices.end() )
     {
       // copy up until this point
-      s += t->substr( p , jj->first - p ); 
+      s += t.substr( p , jj->first - p ); 
       
       // slice in comma list? [ seq1 x seq2 ]
       std::vector<std::string> v1 = Helper::parse( seq1[ jj->first ] , "," );
@@ -2062,12 +2070,13 @@ void Helper::expand_numerics( std::string * t )
     }
   
   // now add final part
-  s += t->substr( p );
+  s += t.substr( p );
   
   // std::cout << "t = [" << *t << "]\n";
   // std::cout << "s = [" << s << "]\n";
 
-  *t = s ; 
+  return s;
+
 }
 
 

@@ -1135,6 +1135,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
       else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
 
+      else if ( is( c, "RUN-POPS" ) )    proc_runpops( edf , param(c) ); // wrapper
       else if ( is( c, "POPS" ) )        proc_pops( edf , param(c) );
       else if ( is( c, "EVAL-STAGES" ) ) proc_eval_stages( edf , param(c) );
 
@@ -1183,6 +1184,8 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "IRASA" ) )        proc_irasa( edf, param(c) );
       else if ( is( c, "1FNORM" ) )       proc_1overf_norm( edf, param(c) );
 
+      else if ( is( c, "DYNAM" ) )        proc_qdynam( edf , param(c) );
+      
       else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
       
       else if ( is( c, "MS" ) )           proc_microstates( edf , param(c) );
@@ -1615,6 +1618,232 @@ void proc_eval_stages( edf_t & edf , param_t & param )
 }
 
 
+// RUN-POPS : wrapper to run POPS
+void proc_runpops( edf_t & edf , param_t & param )
+{
+#ifdef HAS_LGBM
+
+  // use same syntax as lunapi 
+  // sig=S1 or sig=S1,S2
+  // ref=R1 or sig=R1,R2 --> do_reref
+  
+  // edger=Y/N  (default Y)
+  // filter=Y/N (default Y)
+ 
+
+  // main signal (currently, either 1 or 2) 
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+  if ( signals.size() == 0 ) Helper::halt( "no signals found matching " + param.value( "sig" ) );
+  
+  const int ns = signals.size();
+  // use [x][y] format for sig specification
+  
+  const std::string slab = Helper::stringize( signals.signal_labels , "," );
+  
+  // reference channels?
+  const bool do_reref = param.has( "ref" );
+
+  // use vec instead of signal_list_t, as we may want to same ref for mult channels
+  // means this will not respect aliases
+  std::vector<std::string> refs;
+  if ( do_reref )
+    {
+      refs = param.strvector( "ref" );    
+      if (refs.size() != signals.size() )
+	Helper::halt( "if specified, ref must match sig length" );
+    }
+  
+  //
+  // (removed for now) set LON and LOFF? (as ivars)
+  //
+  
+  // if ( param.has( "lights-on" ) )
+  //   cmd_t::ivars[ edf.id ][ "LON" ] = param.value( "lights-on" );
+  
+  // if ( param.has( "lights-off" ) )
+  //   cmd_t::ivars[ edf.id ][ "LOFF" ] = param.value( "lights-off" );
+  
+
+  // other optional POPS args to pass in  ' args="op1=val1 op2=val2" ' 
+  const std::string opt_args = param.has( "args" ) ? param.value( "args" ) : "";
+    
+  // ignore extant staging?
+  const bool ignore_obs_staging = param.has( "ignore-obs" ) ? param.yesno( "ignore-obs" ) : false ;
+  
+  // required POPS library (defaults to s2)
+  const std::string pops_lib = param.has( "lib" ) ? param.requires( "lib" ) : "s2";
+  
+  // optional path
+  const std::string pops_path = param.has( "path" ) ? param.value( "path" ) : "." ; 
+
+  // other options
+  const bool do_filter = param.has( "filter" ) ? param.yesno( "filter" ) : true ;
+
+  const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : true;  
+
+
+  // xsigs handles
+  
+  std::string allsigs = Helper::xsigs( "[" + slab + "][_F]" );
+  std::string allzigs = Helper::xsigs( "[" + slab + "][_F_N]" );				      
+  
+  //
+  // copy signal (do not alter original)
+  //
+  
+  logger << "  ------------------------------------------------------------\n"
+	 << "  making copies of original signals (appending _F)\n";
+
+  param_t copy_param;
+  copy_param.add( "sig" , slab );
+  copy_param.add( "tag" , "_F" );
+  proc_copy_signal( edf , copy_param );
+
+    
+  //
+  // referencing?
+  //
+
+  if ( do_reref )
+    {
+      logger << "  ------------------------------------------------------------\n"
+	     << "  re-rereferncing signals\n";
+
+      for (int s=0; s<ns; s++)
+	{
+	  param_t reref_param;
+	  reref_param.add( "sig" , signals.label(s) + "_F" );
+	  reref_param.add( "ref" , refs[s] );
+	  proc_reference( edf , reref_param );
+	}
+    }
+
+  //
+  // resample if needed (fixed 128 Hz)
+  //
+
+  logger << "  ------------------------------------------------------------\n"
+	 << "  resampling " << allsigs << " to 128 Hz if needed\n";
+  
+  param_t resample_param;
+  resample_param.add( "sig" , allsigs );
+  resample_param.add( "sr" , "128" );
+  proc_resample( edf , resample_param );
+  
+  //
+  // filter
+  //
+
+  if ( do_filter )
+    {
+      logger << "  ------------------------------------------------------------\n"
+	     << "  bandpass filtering signals\n";
+      
+      param_t filter_param;
+      filter_param.add( "sig" , allsigs );
+      filter_param.add( "bandpass" , "0.3,35" );
+      filter_param.add( "tw" , "0.2" );
+      filter_param.add( "ripple" , "0.01" );
+      proc_filter( edf , filter_param );
+
+    }
+
+  //
+  // copy signal
+  //
+  
+  logger << "  ------------------------------------------------------------\n"
+	 << "  making time-domain normalized signals\n";
+  
+  param_t copy2_param;
+  copy2_param.add( "sig" , allsigs );
+  copy2_param.add( "tag" , "_N" );
+  proc_copy_signal( edf , copy2_param );
+  
+  //
+  // normalize 
+  //
+
+  param_t norm_param;
+  norm_param.add( "sig" , allzigs );
+  norm_param.add( "epoch" );
+  norm_param.add( "winsor" , "0.002" );
+  proc_standardize( edf , norm_param );
+  
+  //
+  // optional edger tool (on filtered signal only)
+  //
+
+  if ( do_edger )
+    {
+      logger << "  ------------------------------------------------------------\n"
+	     << "  scanning to trim excess leading/trailing wake/artifact\n";
+      
+      param_t edger_param;
+      edger_param.add( "sig" , allsigs );
+      edger_param.add( "cache" , "ec1" );
+
+      if ( ignore_obs_staging )
+        edger_param.add( "all" );
+
+      proc_trim( edf , edger_param );
+    }
+      
+
+  //
+  // run POPS
+  //
+
+  logger << "  ------------------------------------------------------------\n"
+	 << "  running POPS\n";
+      
+  param_t pops_param;
+  pops_param.add( "force-reload" );
+  pops_param.add( "path" , pops_path );
+  pops_param.add( "lib" , pops_lib );
+  pops_param.add( "cache" , "ec1" );
+  pops_param.add( "alias" , "CEN,ZEN|" + signals.label(0) + "_F," + signals.label(0) + "_F_N" );
+  // equiv channels
+  if ( ns > 1 )
+    {
+      std::string eq = "CEN,ZEN";
+      
+      for (int s=1; s<ns; s++)
+	eq += "|" + signals.label(s) + "_F," + signals.label(s) + "_F_N";
+      
+      pops_param.add( "equiv" , eq );
+    }
+
+  if ( ignore_obs_staging )
+    pops_param.add( "ignore-obs-staging" );
+
+  if ( opt_args != "" )
+    {
+      logger << "  adding additional args to POPS: " << opt_args << "\n";
+      pops_param.parse( opt_args );
+    }
+
+  proc_pops( edf , pops_param );
+
+  
+  //
+  // drop signals
+  //
+
+  logger << "  ------------------------------------------------------------\n"
+	 << "  cleaning up temporary signals\n";
+  
+  param_t drop_param;
+  drop_param.add( "sig" , allsigs + "," + allzigs );
+  drop_param.add( "drop" );
+  proc_drop_signals( edf , drop_param );
+
+    
+#else
+  Helper::halt( "no LGBM support compiled in" );
+#endif
+
+}
 
 // POPS : population-level staging
 void proc_pops( edf_t & edf , param_t & param )
@@ -2057,6 +2286,19 @@ void proc_psc( edf_t & edf , param_t & param )
   psc.project( edf , param );
 
 }
+
+// DYNAM : take arbitrary inputs (files/ signals)
+//         and run qdynam_t
+
+void proc_qdynam( edf_t & edf , param_t & param )
+{
+  // assumes a) has HYPNO done
+  //         b) inputs will match current epoching
+  
+  dsptools::qdynam( edf , param );
+  
+}
+
 
 // PSD : calculate PSD via Welch
 
@@ -3768,7 +4010,7 @@ void proc_copy_signal( edf_t & edf , param_t & param )
 	  
 	  if ( ! edf.header.has_signal( new_label ) )
 	    {
-	      logger << " copying " << originals.label(s) << " to " << new_label << "\n";
+	      logger << "  copying " << originals.label(s) << " to " << new_label << "\n";
 	      edf.copy_signal( originals.label(s) , new_label );
 	    }
 	  else
@@ -4519,10 +4761,26 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  // specify indiv (i.e. can be used if ID is numeric)
+  // debug mode: read digital values from EDF (i.e. do not translate
+  // to physical values)
+
+  if ( Helper::iequals( tok0 , "digital" ) )
+    {
+      globals::read_digital_values = Helper::yesno( tok1 );
+      return;
+    }
+  
+  // specify indiv(s) (i.e. can be used if ID is numeric)
   if ( Helper::iequals( tok0 , "id" ) )
     {
-      globals::sample_list_id = tok1;
+      globals::sample_list_ids = Helper::vec2set( Helper::parse( tok1 , "," ) );
+      return;
+    }
+
+  // specify indiv(s) to skip (i.e. can be used if ID is numeric)
+  if ( Helper::iequals( tok0 , "skip" ) )
+    {
+      globals::sample_list_ids_skips = Helper::vec2set( Helper::parse( tok1 , "," ) );
       return;
     }
 
@@ -4617,6 +4875,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "upper" ) )
     {
       globals::uppercase_channels = Helper::yesno( tok1 );
+      return;
+    }
+  
+  // if mapping to primary, retain original channel case (default=T)
+  if ( Helper::iequals( tok0 , "retain-case" ) )
+    {
+      globals::retain_alias_case = Helper::yesno( tok1 );
       return;
     }
 

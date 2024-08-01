@@ -30,7 +30,7 @@
 #include "db/db.h"
 #include "fftw/fftwrap.h"
 #include "dsp/mse.h"
-#include "miscmath/dynam.h"
+#include "miscmath/qdynam.h"
 #include "fftw/bandaid.h"
 
 extern writer_t writer;
@@ -97,8 +97,11 @@ annot_t * spectral_power( edf_t & edf ,
   // Hjorth stats just consider all points concatenated
   // trend lines are based on observed E numbers 
 
-  const bool calc_dynamics = param.has( "dynamics" ) || param.has( "dynam" );
-  
+  const bool calc_dynamics = param.has( "dynamics" ) || param.has( "dynam" );  
+  qdynam_t qd;
+  if ( calc_dynamics ) qd.init( edf , param );
+
+    
   // Verbose output: full spectrum per epoch
 
   const bool show_epoch_spectrum = param.has( "epoch-spectrum" );
@@ -200,7 +203,7 @@ annot_t * spectral_power( edf_t & edf ,
 
   // threshold to reove epochs when summarizing slopes over all epochs 
   const double slope_th2     = param.has( "slope-th2" ) ? param.requires_dbl( "slope-th2" ) : 3 ;
-  
+             
   // truncate spectra
   double min_power = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.5 ;
   double max_power = param.has( "max" ) ? param.requires_dbl( "max" ) : 25 ;
@@ -408,6 +411,9 @@ annot_t * spectral_power( edf_t & edf ,
       // store frequencies from epoch-level analysis
       std::vector<double> freqs;
 
+      // for calc dynam (old version; can be refactored out
+      // but still used for now as we add PSD epoch-pow
+      // at end) 
       std::vector<int> epochs;
 
       // track F results      
@@ -420,7 +426,6 @@ annot_t * spectral_power( edf_t & edf ,
       std::vector<double> slopes;
       std::vector<double> slopes_intercept;
       std::vector<double> slopes_rsq;
-      
       
       //
       // Set first epoch
@@ -677,8 +682,8 @@ annot_t * spectral_power( edf_t & edf ,
 	       
 	       writer.unlevel( globals::band_strat );
 	       
+		 }
 	     }
-	}
       
     
 	   //
@@ -797,6 +802,15 @@ annot_t * spectral_power( edf_t & edf ,
 		       slopes.push_back( es1 );
 		       slopes_intercept.push_back( intercept );
 		       slopes_rsq.push_back( rsq );
+
+		       // store for dynamics?
+		       if ( calc_dynamics )
+			 {
+			   // here, last entry in epochs[] will contain the correct (disp-epoch -1 )
+			   // value, so add
+			   qd.add( writer.faclvl_notime() , "SPEC_SLOPE" , epochs[ epochs.size() - 1 ] , es1 );
+			   qd.add( writer.faclvl_notime() , "SPEC_INTERCEPT" , epochs[ epochs.size() - 1 ] , intercept );
+			 }
 		     }
 		 }
 	       
@@ -1125,20 +1139,13 @@ annot_t * spectral_power( edf_t & edf ,
           
       
       //
-      // Dynamics?
+      // Dynamics? here, given we've stored the epoch-level results anyway,
+      // just do all here
       //
       
       
       if ( calc_dynamics )
 	{
-
-	  //
-	  // get cycles info 
-	  //
-
-	  std::vector<std::string> cycle;
-	  
-	  bool has_cycles = dynam_compile_cycles( edf , epochs , &cycle );
 	  
 	  //
 	  // band power 
@@ -1146,17 +1153,19 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	  if ( bands )
 	    {
-
+	      
 	      std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
 	      
 	      while ( ii != bandaid.track_band.end() )
 		{	      
 		  writer.level( globals::band( ii->first ) , globals::band_strat );
 		  
-		  if ( has_cycles )
-		    dynam_report_with_log( param, ii->second , epochs , &cycle );
-		  else
-		    dynam_report_with_log( param, ii->second , epochs ); 		  
+		  const std::vector<double> & edata = ii->second;
+
+		  const std::map<std::string,std::string> faclvl = writer.faclvl_notime();
+		  
+		  for (int i=0; i<edata.size(); i++)
+		    qd.add( faclvl , "PSD" , epochs[i] , 10 * log10( edata[i] ) ); 
 		  
 		  ++ii;
 		}
@@ -1177,15 +1186,18 @@ annot_t * spectral_power( edf_t & edf ,
 	      
 	      while ( ii != track_freq.end() )
 		{
-		  
+
+		  if ( freqs[ ii->first ] < min_power )  { ++ii; continue; } 
 		  if ( freqs[ ii->first ] > max_power )  { ++ii; continue; } 
 		  
 		  writer.level( freqs[ ii->first ] , globals::freq_strat );		  
 		  
-		  if ( has_cycles )
-		    dynam_report_with_log( param, ii->second , epochs , &cycle );
-		  else
-		    dynam_report_with_log( param, ii->second , epochs );
+		  const std::vector<double> & edata = ii->second;
+		  
+                  const std::map<std::string,std::string> faclvl = writer.faclvl_notime();
+		  
+                  for (int i=0; i<edata.size(); i++)
+                    qd.add( faclvl , "PSD" , epochs[i] , 10 * log10( edata[i] ) );
 		  
 		  ++ii;
 		  
@@ -1521,9 +1533,17 @@ annot_t * spectral_power( edf_t & edf ,
     } 
 
 
-  writer.unlevel( globals::signal_strat );	   
+  writer.unlevel( globals::signal_strat ); 
       
+
+  //
+  // report on all/any dynamics that we've accumulated above
+  //
+
+  if ( calc_dynamics )
+    qd.proc_all();
   
+
   // ignore return annot_t * 
   return NULL;
 

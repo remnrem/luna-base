@@ -35,6 +35,7 @@ void irasa_wrapper( edf_t & edf , param_t & param );
 struct irasa_t { 
   
   irasa_t( edf_t & edf ,
+	   param_t & param,
 	   const std::vector<double> & x ,
 	   const int sr ,
 	   const double epoch_sec,
@@ -56,7 +57,8 @@ struct irasa_t {
 	   const bool epoch_median , 
 	   cache_t<double> * cache , 
 	   const bool cache_epochs ,
-	   const bool silent
+	   const bool silent ,
+	   const bool calc_dynamcs 
 	   );
 
   

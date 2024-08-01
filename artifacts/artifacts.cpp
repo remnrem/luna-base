@@ -26,6 +26,7 @@
 #include "edf/slice.h"
 #include "annot/annot.h"
 #include "pdc/pdc.h"
+#include "miscmath/qdynam.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"
@@ -347,6 +348,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   int required_sr = param.has( "sr-over" ) ? param.requires_int( "sr-over" ) : 0 ; 
 
   bool calc_pfd = param.has( "pfd" ) ;
+
+  bool calc_dynamics = param.has( "dynam" );
   
   bool calc_pe = param.has( "pe" ) || param.has( "pe-m" ) || param.has( "pe-t" );
   std::vector<int> pe_m = { 3,4,5,6,7 };
@@ -432,6 +435,16 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<double> mean_mobility( ns , 0 );
   std::vector<double> mean_complexity( ns , 0 );
   //  std::vector<double> mean_turning_rate( ns , 0 ); // nb. this is based on turning-rate epoch size
+
+  //
+  // dynamics
+  //
+
+  qdynam_t qd;
+
+  if ( calc_dynamics )
+    qd.init( edf , param ) ;
+
   
   //
   // Point to first epoch 
@@ -474,7 +487,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       // also be written)
       //
 
-      if ( verbose ) 
+      if ( verbose || calc_dynamics ) 
 	writer.level( signals.label(s) , globals::signal_strat );
 
       //
@@ -593,7 +606,18 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // 	e_tr[s].push_back( subepoch_tr[i] );
 	  //   }
 
+	  //
+	  // Store for dynamics
+	  //
 
+	  if ( calc_dynamics )
+	    {
+	      const int e = edf.timeline.display_epoch( epoch ) - 1;
+	      qd.add( writer.faclvl_notime() , "H1" , e  , log1p( activity ) );
+	      qd.add( writer.faclvl_notime() , "H2" , e  , mobility );
+	      qd.add( writer.faclvl_notime() , "H3" , e  , complexity );	      
+	    }
+	  
 	  //
 	  // Verbose output
 	  //
@@ -688,8 +712,16 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       
     }
 
-  if ( verbose )
+  if ( verbose || calc_dynamics )
     writer.unlevel( globals::signal_strat );
+
+
+  //
+  // dynamics
+  //
+
+  if ( calc_dynamics )
+    qd.proc_all();
 
       
   //

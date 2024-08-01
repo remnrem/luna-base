@@ -314,14 +314,25 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
   // static function that will create multiple annotations (one per class label)
   // no associated channel labels
 
-  bool unepoched = elen == 0 ;
+  // special case: in --validate, if EDF could not be attached, the ID will be
+  // set accordingly; in this case, we cannot attempt to load the .eannot
+
+  if ( parent_edf.id == "__bad_EDF__" )
+    return Helper::vmode_halt( "cannot attach .eannot with bad EDF" );
+
+  // otherwise, try to load
   
+  bool unepoched = elen == 0 ;
+
   if ( unepoched )  
     {
       elen = Helper::sec2tp( globals::default_epoch_len );
       einc = Helper::sec2tp( globals::default_epoch_len );
     }
 
+  // std::cout << " EDF recs  = " << parent_edf.header.nr << " " << parent_edf.header.record_duration << "\n";
+  // std::cout << " epoch = " << unepoched << " " << globals::default_epoch_len <<" " << elen << "\n";
+  
   // get implied number of epochs
   double seconds = (uint64_t)parent_edf.header.nr * parent_edf.header.record_duration ;      
   const int ne = seconds / ( unepoched ? globals::default_epoch_len : elen / globals::tp_1sec );

@@ -26,6 +26,7 @@
 #include "edf/slice.h"
 #include "dsp/resample.h"
 #include "fftw/fftwrap.h"
+#include "miscmath/qdynam.h"
 
 #include "helper/helper.h"
 #include "db/db.h"
@@ -66,6 +67,8 @@ void irasa_wrapper( edf_t & edf , param_t & param )
   const double segment_sec = param.has( "segment-sec" ) ? param.requires_dbl( "segment-sec" ) : 4 ;
   const double overlap_sec = param.has( "segment-overlap" ) ?  param.requires_dbl( "segment-overlap" ) : 2 ;
 
+  const bool calc_dynamics = param.has( "dynam" );
+  
   const bool logout = param.has( "dB" );
   const bool epoch_lvl_output = param.has( "epoch" );
   
@@ -155,9 +158,9 @@ void irasa_wrapper( edf_t & edf , param_t & param )
       // analysis 
       //
 
-      irasa_t irasa( edf , *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
+      irasa_t irasa( edf , param, *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
 		     segment_sec , overlap_sec , converter , epoch_lvl_output , logout , slope_range , slope_outlier ,
-		     window_function , segment_median , epoch_median , cache , cache_epochs , silent );
+		     window_function , segment_median , epoch_median , cache , cache_epochs , silent , calc_dynamics );
       
 
       //
@@ -205,6 +208,7 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 
 
 irasa_t::irasa_t( edf_t & edf ,
+		  param_t & param , 
 		  const std::vector<double> & d ,
 		  const int sr ,
 		  const double epoch_sec,
@@ -226,7 +230,8 @@ irasa_t::irasa_t( edf_t & edf ,
 		  const bool epoch_median , 
 		  cache_t<double> * cache , 
 		  const bool cache_epochs , 
-		  const bool silent  )
+		  const bool silent ,
+		  const bool calc_dynamics )
 {
   
   const double h_inc = ( h_max - h_min ) / (double)(h_cnt-1);
@@ -267,7 +272,14 @@ irasa_t::irasa_t( edf_t & edf ,
   
   std::vector<std::vector<double> > apers, apers_raw, pers;
 
+  //
+  // dynamics?
+  //
 
+  qdynam_t qd;
+  if ( calc_dynamics )
+    qd.init( edf , param ); 
+    
   //
   // Process epoch-wise
   //
@@ -426,19 +438,19 @@ irasa_t::irasa_t( edf_t & edf ,
 
 	      double log_aper, log_per;
 	      
-	      if ( logout && okay )
+	      if ( ( calc_dynamics || logout ) && okay )
 		{
 		  log_aper = 10 * log10( aper );
                   log_per = 10 * log10( pwelch.psd[ i ] ) - log_aper;
 		}
 	      
-	      // verbose, epoch level output?
-	      if ( epoch_lvl_output || cache_epochs )
+	      // verbose, epoch level output? (or pass to qdynam_t?)
+	      if ( epoch_lvl_output || cache_epochs || calc_dynamics )
 		{		            
 		  
 		  writer.level( pwelch.freq[ i ] , globals::freq_strat );
 		  
-		  if ( epoch_lvl_output) 
+		  if ( epoch_lvl_output ) 
 		    {
 		      
 		      // for epoch-level slope (below) [ always raw PSD ]
@@ -463,10 +475,21 @@ irasa_t::irasa_t( edf_t & edf ,
 			}
 		    }
 
+		  //
+		  // dynamics?
+		  //
+
+		  if ( calc_dynamics && okay )
+		    {
+		      const int e = edf.timeline.display_epoch( epoch ) - 1;
+		      qd.add( writer.faclvl_notime() , "APER" , e  , log_aper );
+		      qd.add( writer.faclvl_notime() , "PER" , e  , log_per );
+		    }
 		  
 		  //
 		  // add epoch level data to cache 
 		  //
+
 		  if ( cache_epochs ) 
 		    {
 		      cache->add( ckey_t( "APER" , writer.faclvl() ) , aper );
@@ -501,7 +524,7 @@ irasa_t::irasa_t( edf_t & edf ,
 	}
       
       
-      if ( epoch_lvl_output || cache_epochs )
+      if ( epoch_lvl_output || cache_epochs || calc_dynamics )
 	writer.unlevel( globals::freq_strat );
       
 
@@ -534,7 +557,14 @@ irasa_t::irasa_t( edf_t & edf ,
       aperiodic[i] = epoch_median ? MiscMath::median( apers[i] ) : MiscMath::mean( apers[i] );
       aperiodic_raw[i] = epoch_median ? MiscMath::median( apers_raw[i] ) : MiscMath::mean( apers_raw[i] );
     }
-      
+
+  //
+  // dynamics?
+  //
+
+  if ( calc_dynamics )
+    qd.proc_all();
+  
 }
 
 
