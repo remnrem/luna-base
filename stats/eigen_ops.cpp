@@ -167,22 +167,45 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
       double median = center ? MiscMath::median( v ) : 0 ;
       
       double iqr = normalize ? MiscMath::iqr( v ) : 0 ;
-
+      
       bool is_variable = true;
       
+      bool invariant = iqr <= 1e-8;
+      bool lowvar_binary = invariant; 
+
+      if ( invariant ) 
+	{
+	  // may have e.g. binary 0/1 variable with a lowish prevalance, then IQR may be 0
+	  // we don't want to conclude the variable is truly invariant, and so do a more explicit check
+	  // and set IQR to 1 i.e. to not standardize
+	  if ( MiscMath::invariant( v ) ) 
+	    {
+	      iqr = 1.0; 
+	      is_variable = false;
+	    }
+	  else
+	    {
+	      iqr = 1;
+	      invariant = false;
+	    }
+	}
+      
       // if no variation, set SD to one
-      if ( normalize && iqr <= 1e-8  )
+      if ( normalize && invariant )
 	{
 	  is_variable = false;
-	  if ( ! ignore_invariants ) return false;
-	  if ( zeros != NULL ) zeros->push_back( c );
+	  if ( ! ignore_invariants ) 
+	    return false;
+	  if ( zeros != NULL ) 
+	    zeros->push_back( c );
 	}
 
       double robust_sd = ( normalize && is_variable ) ? 0.7413 * iqr : 1 ; 
       
       // winsorize?
+      // (but leave variables flagged with IQR == 0 but otherwise variable (lowvar_binary == T ) 
 
-      if ( w > 0 && is_variable )
+      if ( w > 0 && is_variable && ! lowvar_binary )
 	{
 	  double lwr = MiscMath::percentile( v , w );
 	  double upr = MiscMath::percentile( v , 1-w );

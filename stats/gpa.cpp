@@ -64,7 +64,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   incgrps.clear();
   excgrps.clear();
   file2group.clear();
-  
+  file2fixed.clear();
+ 
+
   if ( prep_mode )
     {
 
@@ -126,7 +128,13 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   //
   
   if ( param.has( "vars" ) )
-    incvars = Helper::combine( incvars , param.strset( "vars" ) );
+    {
+      incvars = Helper::combine( incvars , param.strset( "vars" ) );
+      // and automatically add any X or Z vars
+      if ( param.has( "X" ) ) incvars = Helper::combine( incvars , param.strset( "X" ) );
+      if ( param.has( "Z" ) ) incvars = Helper::combine( incvars , param.strset( "Z" ) );
+    }
+      
   if ( param.has( "xvars" ) )
     excvars = Helper::combine( excvars , param.strset( "xvars" ) );
 
@@ -353,7 +361,8 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       
       //
       // select predictors (X) and covariates (Z) - assume everything else is
-      // a DV (i.e. sleep metric) unless explicitly told so
+      // a DV (i.e. sleep metric) unless explicitly told so; allow these to be 
+      // specified either as variables (X,Z) or groups (Xg, Zg)
       //
       
       if ( param.has( "X" ) )
@@ -408,16 +417,27 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	    }
 	}
 
-
+      
+      //
       // Y is everything else that is left
       //  (i.e. post any prior col selection)
-      // if 'all-by-all' added, then also set X == Y
+      //  unless Yg is specified too: (to select Y 
+      //  based on groups
+      //
       
+      const std::set<std::string> ygroups = param.strset( "Yg" );
+      
+
+      //
+      // if 'all-by-all' added, then also set X == Y
+      //
+
       const bool all_by_all = param.has( "all-by-all" );
 
       if ( all_by_all && param.has( "X" ) )
 	Helper::halt( "cannot specify X and all-by-all together" );
 
+      
       std::set<int> v1 = Helper::vec2set( ivs );
       std::set<int> v2 = Helper::vec2set( cvs );
       
@@ -426,12 +446,13 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       if ( all_by_all )
 	{
 	  for (int j=0; j<vars.size(); j++)
-            if ( v2.find( j ) == v2.end() )
-              {
-		ivs.push_back( j );
-		dvs.push_back( j );
-	      }
-
+            if ( v2.find( j ) == v2.end() ) // not a covariate
+	      if ( ygroups.size() == 0 || ygroups.find( var2group[ vars[j] ] ) != ygroups.end() )
+		{
+		  ivs.push_back( j );
+		  dvs.push_back( j );
+		}
+	  
 	  logger << "  selected " 
 		 << cvs.size() << " Z vars, implying "
 		 << dvs.size() << " X and Y vars (given 'all-by-all')\n";
@@ -442,8 +463,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	{
 	  for (int j=0; j<vars.size(); j++)
 	    if ( v1.find( j ) == v1.end() && v2.find( j ) == v2.end() )
-	      dvs.push_back( j );
-
+	      if ( ygroups.size() == 0 || ygroups.find( var2group[ vars[j] ] ) != ygroups.end() )
+		dvs.push_back( j );
+	  
 	  logger << "  selected " 
 		 << ivs.size() << " X vars & "
 		 << cvs.size() << " Z vars, implying "
@@ -589,6 +611,9 @@ void gpa_t::prep()
       const std::set<std::string> & fincvars = file2incvars[ ff->first ];
       const std::set<std::string> & fexcvars = file2excvars[ ff->first ];
 
+      // any file-specific fixed fac/lvls?
+      const std::map<std::string,std::string> & fixed = file2fixed[ ff->first ];
+
       // any file-specific aliasing?
       const std::map<std::string,std::string> & aliases = file2var2alias[ ff->first ];
 
@@ -707,9 +732,9 @@ void gpa_t::prep()
 
       // no vars to read?
       if ( tok2.size() == 0 )
-	{
-	  ++ff;
+	{	  
 	  logger << "  -- " << ff->first << ": skipping, no selected (non-factor) variables\n";
+	  ++ff;
 	  continue;
 	}
       
@@ -717,6 +742,17 @@ void gpa_t::prep()
       if ( facs.size() != fac2slot.size() )
 	Helper::halt( "not all factors found for " + ff->first );
 
+      //
+      // build any fixed faclvl string once
+      //
+
+      std::string fixed_str;
+      std::map<std::string,std::string>::const_iterator xx = fixed.begin();
+      while ( xx != fixed.end() )
+	{
+	  fixed_str += "_" + xx->first + "_" + xx->second;
+	  ++xx;
+	}
       
       //
       // read rows ( to find unique IDs and unique VAR+FACLVL combos
@@ -750,9 +786,9 @@ void gpa_t::prep()
 	      id2slot[ id ] = n1;
 	    }
 	  
-	  // construct the faclvl for this row
-	  std::string fl = "";
-	  std::map<std::string,std::string> ffll;
+	  // construct the faclvl for this row, initiating w/ any fixed fac/lvls
+	  std::string fl = fixed_str;
+	  std::map<std::string,std::string> ffll = fixed;
 	  if ( facs.size() )
 	    {
 	      // at least one faclvl
@@ -765,7 +801,6 @@ void gpa_t::prep()
 		  ++ff;
 		}	      
 	    }
-	  
 
 	  // register each var (w/ unique faclvl if specified)
 	  // and add values
@@ -999,9 +1034,9 @@ void gpa_t::run()
 	  
 	  if ( results.emp[xvar][ var ] < pthresh && results.emp_corrected[xvar][ var ] < pthresh_adj )
 	    {
-
+	      
 	      const bool self = xvar == var; 
-
+	      
 	      shown_y = true; 
 	      writer.level( var , "Y" );
 	      
@@ -1016,40 +1051,45 @@ void gpa_t::run()
 	      // manifest details
 	      writer.value( "GROUP" ,  var2group[ var ] );
 	      writer.value( "BASE"  , basevar[ var ] );
+	      
+	      std::string x;
 	      std::set<std::string>::const_iterator gg = allfacs.begin();
 	      while ( gg != allfacs.end() )
 		{
-		  std::string x = ".";
 		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
 		  if ( kk != faclvl.end() )
 		    {
 		      if ( kk->second.find( *gg ) != kk->second.end() )
-			x = kk->second.find( *gg )->second;
+			{
+			  if ( x != "" ) x += ";";
+			  x += *gg + "=" + kk->second.find( *gg )->second;
+			}
 		    }
-		  
-		  writer.value( *gg , x );
 		  ++gg;
 		}
-
+	      writer.value( "STRAT" , x );
+	      
 	      // optional X-variable details too?
 	      if ( show_xfacs )
 		{
 		  writer.value( "XGROUP" ,  var2group[ xvar ] );
 		  writer.value( "XBASE"  , basevar[ xvar ] );
+		  std::string x;
 		  std::set<std::string>::const_iterator gg = allfacs.begin();
 		  while ( gg != allfacs.end() )
-		    {
-		      std::string x = ".";
+		    {		      
 		      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
 		      if ( kk != faclvl.end() )
 			{
 			  if ( kk->second.find( *gg ) != kk->second.end() )
-			    x = kk->second.find( *gg )->second;
-			}
-		      
-		      writer.value( "X" + *gg , x );
+			    {
+			      if ( x != "" ) x += ";";
+			      x += *gg + "=" + kk->second.find( *gg )->second;
+			    }
+			}		      
 		      ++gg;
-		    }		  
+		    }	  
+		  writer.value( "XSTRAT" , x );
 		}
 	    }
 	}
@@ -1141,40 +1181,45 @@ void gpa_t::run1X() // correction within X
 	      writer.value( "GROUP" ,  var2group[ var ] );
 	      writer.value( "BASE"  , basevar[ var ] );
 	      
+	      std::string x;
 	      std::set<std::string>::const_iterator gg = allfacs.begin();
 	      while ( gg != allfacs.end() )
 		{
-		  std::string x = ".";
 		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
 		  if ( kk != faclvl.end() )
 		    {
 		      if ( kk->second.find( *gg ) != kk->second.end() )
-			x = kk->second.find( *gg )->second;
-		    }
-		  
-		  writer.value( *gg , x );
+			{			  
+			  if ( x != "" ) x += ";";
+			  x += *gg + "=" + kk->second.find( *gg )->second;
+			}
+		    }		  
 		  ++gg;
 		}
+	      writer.value( "STRAT" , x );
 
 	      // optional X var manifest
 	      if ( show_xfacs )
 		{
 		  writer.value( "XGROUP" ,  var2group[ xvar ] );
 		  writer.value( "XBASE"  , basevar[ xvar ] );
+		  
+		  std::string x;
 		  std::set<std::string>::const_iterator gg = allfacs.begin();
                   while ( gg != allfacs.end() )
-                    {
-                      std::string x = ".";
+                    {	      
                       std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
                       if ( kk != faclvl.end() )
                         {
                           if ( kk->second.find( *gg ) != kk->second.end() )
-                            x = kk->second.find( *gg )->second;
+                            {
+                              if ( x != "" ) x += ";";
+                              x += *gg + "=" + kk->second.find( *gg )->second;
+			    }
                         }
-		      
-                      writer.value( "X" + *gg , x );
                       ++gg;
                     }
+		  writer.value( "XSTRAT" , x );
 		}
 	      
 	      
@@ -2009,10 +2054,10 @@ void gpa_t::qc( const double winsor )
 			   true , // ignore invariants
 			   & zeros ); // but track them here
 
-  
   // swap X and Z values back
   for (int j=0; j<v1.size(); j++)
     X.col( v1[j] ) = XZ.col(j);
+  
 
   // remove any dead cols
   if ( zeros.size() && ! retain_rows )
@@ -2375,290 +2420,352 @@ void gpa_t::parse( const std::string & pfile )
   std::ifstream IN1( pfile1.c_str() , std::ios::in );
     
   //json doc{json::parse(IN1)};
-  json doc = json::parse(IN1);
-  
-  bool has_inputs = doc.count( "inputs" ); 
-  bool has_specs  = doc.count( "specs" );
 
-  // general specs: only supports a limited set on prep-mode
-
-  // vars -> incvars
-  // xvars -> excvars  
-  // facs -> incfacs
-  // xfacs -> excfacs
-  // grps -> incgrps
-  // xgrps -> excgrps
-
-
-  // ** these not supported in prep-mode (or JSON input)  
-  // nvars -> incnums
-  // xnvars -> excnums
-  // faclvls -> incfaclvls
-  // xfaclvls -> excfaclvls.clear();
-
-  if ( has_specs )
+  try 
     {
+      json doc = json::parse(IN1);
       
-      logger << "  reading general specificaitons ('specs') from " << pfile << "\n";
-
-      json s = doc[ "specs" ];
+      bool has_inputs = doc.count( "inputs" ); 
+      bool has_specs  = doc.count( "specs" );
       
-      std::vector<std::string> tok;
+      // general specs: only supports a limited set on prep-mode
       
-      if ( s.contains( "vars" ) )
+      // vars -> incvars
+      // xvars -> excvars  
+      // facs -> incfacs
+      // xfacs -> excfacs
+      // grps -> incgrps
+      // xgrps -> excgrps
+      
+      
+      // ** these not supported in prep-mode (or JSON input)  
+      // nvars -> incnums
+      // xnvars -> excnums
+      // faclvls -> incfaclvls
+      // xfaclvls -> excfaclvls.clear();
+      
+      if ( has_specs )
 	{
-	  json x = s[ "vars" ];
-	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
-	  if ( x.is_array() ) incvars = Helper::vec2set( x.get<std::vector<std::string>>() );
-	}
-
-      if ( s.contains( "xvars" ) )
-	{
-	  json x = s[ "xvars" ];
-	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
-	  if ( x.is_array() ) excvars = Helper::vec2set( x.get<std::vector<std::string>>() );
-	}
-
-      if ( s.contains( "facs" ) )
-	{
-	  json x = s[ "facs" ];
-	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
-	  if ( x.is_array() ) incfacs = Helper::vec2set( x.get<std::vector<std::string>>() );
-	}
-
-      if ( s.contains( "xfacs" ) )
-	{
-	  json x = s[ "xfacs" ];
-	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
-	  if ( x.is_array() ) excfacs = Helper::vec2set( x.get<std::vector<std::string>>() );
-	}
-
-      if ( s.contains( "grps" ) )
-	{
-	  json x = s[ "grps" ];
-	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
-	  if ( x.is_array() ) incgrps = Helper::vec2set( x.get<std::vector<std::string>>() );
-	}
-
-      if ( s.contains( "xgrps" ) )
-	{
-	  json x = s[ "xgrps" ];
-	  if ( x.is_string() ) x = std::vector<std::string>(1,x);
-	  if ( x.is_array() ) excgrps = Helper::vec2set( x.get<std::vector<std::string>>() );
+	  
+	  logger << "  reading general specificaitons ('specs') from " << pfile << "\n";
+	  
+	  json s = doc[ "specs" ];
+	  
+	  std::vector<std::string> tok;
+	  
+	  if ( s.contains( "vars" ) )
+	    {
+	      json x = s[ "vars" ];
+	      if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	      if ( x.is_array() ) incvars = Helper::vec2set( x.get<std::vector<std::string>>() );
+	    }
+	  
+	  if ( s.contains( "xvars" ) )
+	    {
+	      json x = s[ "xvars" ];
+	      if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	      if ( x.is_array() ) excvars = Helper::vec2set( x.get<std::vector<std::string>>() );
+	    }
+	  
+	  if ( s.contains( "facs" ) )
+	    {
+	      json x = s[ "facs" ];
+	      if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	      if ( x.is_array() ) incfacs = Helper::vec2set( x.get<std::vector<std::string>>() );
+	    }
+	  
+	  if ( s.contains( "xfacs" ) )
+	    {
+	      json x = s[ "xfacs" ];
+	      if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	      if ( x.is_array() ) excfacs = Helper::vec2set( x.get<std::vector<std::string>>() );
+	    }
+	  
+	  if ( s.contains( "grps" ) )
+	    {
+	      json x = s[ "grps" ];
+	      if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	      if ( x.is_array() ) incgrps = Helper::vec2set( x.get<std::vector<std::string>>() );
+	    }
+	  
+	  if ( s.contains( "xgrps" ) )
+	    {
+	      json x = s[ "xgrps" ];
+	      if ( x.is_string() ) x = std::vector<std::string>(1,x);
+	      if ( x.is_array() ) excgrps = Helper::vec2set( x.get<std::vector<std::string>>() );
+	    }
+	  
 	}
       
-    }
-  
-  
-  //
-  // parse inputs
-  //
-  
-  if ( has_inputs )
-    {
-
-      logger << "  reading file specifications ('inputs') for " << doc[ "inputs" ].size() << " files:\n";
       
-      for (auto & item : doc[ "inputs" ] ) {
-	
-	// expect minimally, group and file
-	if ( ! item.contains( "group" ) ) Helper::halt( "expecting 'group' key for all inputs in " + pfile );
-	if ( ! item.contains( "file" ) ) Helper::halt( "expecting 'file' key for all inputs in " + pfile );
-	
-	std::string file_name = item[ "file" ];
-	std::string file_group = item[ "group" ];
-	
-	logger << "   " << file_name << " ( group = " << file_group << " ): ";
-
-	//
-	// and also
-	//   1) define factors for this file 
-	//      (mirroring command line form: inputs=file|group|fac1|fac2
-	//
-	//   2) allow for vars, xvars ( --> file specific versions) for prep only
-	//
-	//   3) mappings (for a given variable, label --> numeric) 
-
-	//
-	// vars
-	//
-
-	if ( item.contains( "vars" ) )
-	  {
+      //
+      // parse inputs
+      //
+      
+      if ( has_inputs )
+	{
+	  
+	  logger << "  reading file specifications ('inputs') for " << doc[ "inputs" ].size() << " files:\n";
+	  
+	  for (auto & item : doc[ "inputs" ] ) {
 	    
-	    json x = item[ "vars" ] ;
-
-            if ( x.is_string() )
-              x = std::vector<std::string>( 1 , x );
-
-	    if ( ! x.is_array() )
+	    // expect minimally, group and file
+	    if ( ! item.contains( "group" ) ) Helper::halt( "expecting 'group' key for all inputs in " + pfile );
+	    if ( ! item.contains( "file" ) ) Helper::halt( "expecting 'file' key for all inputs in " + pfile );
+	    
+	    std::string file_name = item[ "file" ];
+	    std::string file_group = item[ "group" ];
+	    
+	    logger << "   " << file_name << " ( group = " << file_group << " ): ";
+	    
+	    //
+	    // and also
+	    //   1) define factors for this file 
+	    //      (mirroring command line form: inputs=file|group|fac1|fac2
+	    //
+	    //   2) allow for vars, xvars ( --> file specific versions) for prep only
+	    //
+	    //   3) mappings (for a given variable, label --> numeric) 
+	    //
+	    //   4) allowing a fixed faclvl to be added to a file
+	    //
+	    //   5) allowing a file to be designated as IV only (i.e. will not be added as a DV by default) 
+	    //
+	    
+	    //
+	    // vars
+	    //
+	    
+	    if ( item.contains( "vars" ) )
 	      {
-		if ( ! x.is_null() ) 
-		  logger << "  *** expecting vars: [ array ] in " << pfile << ", skipping...\n";
-	      }
-	    else
-	      {		
-		for (auto v : x )
+		
+		json x = item[ "vars" ] ;
+		
+		if ( x.is_string() )
+		  x = std::vector<std::string>( 1 , x );
+		
+		if ( ! x.is_array() )
 		  {
-		    if ( v.is_string() )
+		    if ( ! x.is_null() ) 
+		      logger << "  *** expecting vars: [ array ] in " << pfile << ", skipping...\n";
+		  }
+		else
+		  {		
+		    for (auto v : x )
 		      {
-			std::string var = v;
-			file2incvars[ file_name ].insert( var );
-		      }
-		    else if ( v.is_object() )
-		      {
-			for ( auto & vv : v.items() )
+			if ( v.is_string() )
 			  {
-			    std::string var = vv.key();
-			    std::string val = vv.value();
-			    file2var2alias[ file_name ][ var ] = val;
-			    file2incvars[ file_name ].insert( val ); // nb. is new, aliased name
+			    std::string var = v;
+			    file2incvars[ file_name ].insert( var );
+			  }
+			else if ( v.is_object() )
+			  {
+			    for ( auto & vv : v.items() )
+			      {
+				std::string var = vv.key();
+				std::string val = vv.value();
+				file2var2alias[ file_name ][ var ] = val;
+				file2incvars[ file_name ].insert( val ); // nb. is new, aliased name
+			      }
 			  }
 		      }
+		    
 		  }
+	      }
+	    
+	    
+	    //
+	    // xvars (no aliasing)
+	    //
+	    
+	    if ( item.contains( "xvars" ) )
+	      {
 		
-	      }
-	  }
-	
-	
-	//
-	// xvars (no aliasing)
-	//
-	
-	if ( item.contains( "xvars" ) )
-	  {
-	    
-	    json x = item[ "xvars" ] ;
-	    if ( x.is_string() )
-	      x = std::vector<std::string>( 1 , x );
-	    
-	    if ( ! x.is_array() )
-	      {
-		if ( ! x.is_null() )
-		  logger << "  *** expecting xvars: [ array ] in " << pfile << ", skipping...\n";
-	      }
-	    else
-	      {		
-		for (auto v : x )
+		json x = item[ "xvars" ] ;
+		if ( x.is_string() )
+		  x = std::vector<std::string>( 1 , x );
+		
+		if ( ! x.is_array() )
 		  {
-		    if ( v.is_string() )
-		      {
-			std::string var = v;
-			file2excvars[ file_name ].insert( var );
-		      }
+		    if ( ! x.is_null() )
+		      logger << "  *** expecting xvars: [ array ] in " << pfile << ", skipping...\n";
 		  }
-	      }		
-	  }
-	
-	
-	//
-	// specify facs (i.e. matching inputs=[] --> infiles
-	//   ;;; and allow aliasing here too
-	
-	std::set<std::string> file_facs;
-	
-	if ( item.contains( "facs" ) )
-	  {
-	    json x = item[ "facs" ] ;
-	    if ( x.is_string() )
-              x = std::vector<std::string>( 1 , x );
-	    
-	    if ( ! x.is_array() )
-	      {
-		if ( ! x.is_null() )
-		  logger << "  *** expecting facs: [ array ] in " << pfile << ", skipping...\n";
-	      }
-	    else
-	      {		
-		for (auto v : x )
-		  {
-		    if ( v.is_string() )
+		else
+		  {		
+		    for (auto v : x )
 		      {
-			std::string var = v;
-			file_facs.insert( var );
-		      }
-                    else if ( v.is_object() )
-                      {
-                        for ( auto & vv : v.items() )
-                          {
-                            std::string var = vv.key();
-                            std::string val = vv.value();
-                            file2var2alias[ file_name ][ var ] = val; // add generic alias
-                            file_facs.insert( val ); // nb. is new, aliased name to be searched for                                                              
-                          }
-			
-		      }		
-		    
-		  }
-	      }
-	  }
-
-	//
-	// mappings
-	//
-
-	if ( item.contains( "mappings" ) )
-	  {
-	    
-	    json x = item[ "mappings" ] ;
-	    if ( x.is_string() )
-              x = std::vector<std::string>( 1 , x );
-
-	    if ( ! x.is_array() )
-	      {
-		if ( ! x.is_null() ) 
-		  logger << "  *** expecting mappings: [ array ] in " << pfile << ", skipping...\n";
-	      }
-	    else
-	      {		
-		for (auto v : x )
-		  {
-		    // expecting [ {  var : { str , num } } , ... ]
-		    
-		    // if using aliases, should be in new alias form
-		    if ( v.is_object() )
-		      {			
-			for ( auto & vv : v.items() )
+			if ( v.is_string() )
 			  {
-			    std::string var = vv.key();
-
-			    if ( vv.value().is_object() && vv.value().size() == 2 )
+			    std::string var = v;
+			    file2excvars[ file_name ].insert( var );
+			  }
+		      }
+		  }		
+	      }
+	    
+	    
+	    //
+	    // specify facs (i.e. matching inputs=[] --> infiles
+	    //   ;;; and allow aliasing here too
+	    
+	    std::set<std::string> file_facs;
+	    
+	    if ( item.contains( "facs" ) )
+	      {
+		json x = item[ "facs" ] ;
+		if ( x.is_string() )
+		  x = std::vector<std::string>( 1 , x );
+		
+		if ( ! x.is_array() )
+		  {
+		    if ( ! x.is_null() )
+		      logger << "  *** expecting facs: [ array ] in " << pfile << ", skipping...\n";
+		  }
+		else
+		  {		
+		    for (auto v : x )
+		      {
+			if ( v.is_string() )
+			  {
+			    std::string var = v;
+			    file_facs.insert( var );
+			  }
+			else if ( v.is_object() )
+			  {
+			    for ( auto & vv : v.items() )
 			      {
-				for ( auto & vvv : vv.value().items() )
-				  {
-				    std::string str = vvv.key();
-				    double num = vvv.value();
+				std::string var = vv.key();
+				std::string val = vv.value();
+				file2var2alias[ file_name ][ var ] = val; // add generic alias
+				file_facs.insert( val ); // nb. is new, aliased name to be searched for                                                              
+			      }
+			    
+			  }		
+			
+		      }
+		  }
+	      }
+	    
+	    
+	    //
+	    // fixed faclvls
+	    //
+	    
+	    std::map<std::string,std::string> file_fixed;
+	    
+	    if ( item.contains( "fixed" ) )
+	      {
 
-				    // store
-				    file2var2mapping[ file_name ][ var ][ str ] = num; 
-				    
+		json x = item[ "fixed" ] ;
+		if ( x.is_string() )
+		  x = std::vector<std::string>( 1 , x );
+		
+		if ( ! x.is_array() )
+		  {
+		    if ( ! x.is_null() ) 
+		      logger << "  *** expecting fixed: [ array ] in " << pfile << ", skipping...\n";
+		  }
+		else
+		  {		
+		    for (auto v : x )
+		      {
+			// expecting [ {  str : str } , ... ]
+			
+			if ( v.is_object() )
+			  {			
+			    for ( auto & vv : v.items() )
+			      {
+				std::string fac = vv.key();
+				std::string lvl = vv.value();				
+				if ( file_facs.find( fac ) != file_facs.end() )
+				  Helper::halt( "cannot specify a fixed factor that is also a named factor in the file" );
+				
+				// store
+				file_fixed[ fac ] = lvl; 
+			      
+			      }
+			  }
+		      }
+		    
+		  }
+	      }
+	    
+		    
+	    //
+	    // mappings
+	    //
+	    
+	    if ( item.contains( "mappings" ) )
+	      {
+		
+		json x = item[ "mappings" ] ;
+		if ( x.is_string() )
+		  x = std::vector<std::string>( 1 , x );
+		
+		if ( ! x.is_array() )
+		  {
+		    if ( ! x.is_null() ) 
+		      logger << "  *** expecting mappings: [ array ] in " << pfile << ", skipping...\n";
+		  }
+		else
+		  {		
+		    for (auto v : x )
+		      {
+			// expecting [ {  var : { str , num } } , ... ]
+			
+			// if using aliases, should be in new alias form
+			if ( v.is_object() )
+			  {			
+			    for ( auto & vv : v.items() )
+			      {
+				std::string var = vv.key();
+				
+				if ( vv.value().is_object() && vv.value().size() == 2 )
+				  {
+				    for ( auto & vvv : vv.value().items() )
+				      {
+					std::string str = vvv.key();
+					double num = vvv.value();
+					
+					// store
+					file2var2mapping[ file_name ][ var ][ str ] = num; 
+					
+				      }
 				  }
 			      }
 			  }
 		      }
+		    
 		  }
-		
 	      }
+	    
+	
+	    
+	    //
+	    // add in
+	    //
+	    
+	    infiles[ file_name ] = file_facs;
+	    file2group[ file_name ] = file_group;
+	    file2fixed[ file_name ] = file_fixed;
+	    
+	    logger << "\n    expecting " << file_facs.size() << " factors";
+	    if  (file_fixed.size() ) logger << " and " << file_fixed.size() << " fixed factors";
+	    if ( file2incvars.size() ) logger << ", extracting " << file2incvars.size() << " var(s)";
+	    if ( file2excvars.size() ) logger << ", ignoring " << file2excvars.size() << " var(s)";	
+	    if ( file2incvars.size() == 0 && file2excvars.size() == 0 ) logger << ", reading all var(s)";
+	    logger << "\n";
+	
+	
 	  }
-
 	
-	
-	//
-	// add in
-	//
-
-	infiles[ file_name ] = file_facs;
-	file2group[ file_name ] = file_group;
-	
-	logger << "\n    expecting " << file_facs.size() << " factors";
-	if ( file2incvars.size() ) logger << ", extracting " << file2incvars.size() << " var(s)";
-	if ( file2excvars.size() ) logger << ", ignoring " << file2excvars.size() << " var(s)";
-	logger << "\n";
-	
-	
-      }
-	
-    }
+	}
   
+    }
+  catch(const std::exception& e)
+    {
+      Helper::halt( "problem parsing JSON file " + pfile1 + ":\n --> " + e.what() );
+    }
+
 }
 

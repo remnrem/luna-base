@@ -358,6 +358,17 @@ double MiscMath::iqr( const std::vector<double> & x )
   return quartiles[1] - quartiles[0];
 }
 
+bool MiscMath::invariant( const std::vector<double> & x )
+{
+  const double eps = 1e-4;
+  if ( x.size() < 2 ) return true;
+  double x0 = x[0];
+  for (int i=1; i<x.size();i++)
+    if ( fabs( x[i] - x0 ) > eps ) 
+      return false;
+  return true;
+}
+
 double MiscMath::percentile( const std::vector<double> & x , double p )
 {
   

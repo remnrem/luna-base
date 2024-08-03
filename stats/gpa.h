@@ -220,6 +220,9 @@ private:
   std::map<std::string,std::set<std::string> > file2incvars;
   std::map<std::string,std::set<std::string> > file2excvars;
   
+  // file-specific fixed-factors ("fix" in JSON)
+  std::map<std::string,std::map<std::string,std::string> > file2fixed;
+
   // inc/exc bsed on FAC/LVL pairs
   std::map<std::string,std::set<std::string> > incfaclvls;
   std::map<std::string,std::set<std::string> > excfaclvls;
