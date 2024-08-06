@@ -133,6 +133,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       // and automatically add any X or Z vars
       if ( param.has( "X" ) ) incvars = Helper::combine( incvars , param.strset( "X" ) );
       if ( param.has( "Z" ) ) incvars = Helper::combine( incvars , param.strset( "Z" ) );
+      if ( param.has( "Y" ) ) incvars = Helper::combine( incvars , param.strset( "Y" ) );
     }
       
   if ( param.has( "xvars" ) )
@@ -153,7 +154,11 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   //
   
   if ( param.has( "grps" ) )
-    incgrps = Helper::combine( incgrps, param.strset( "grps" ) );
+    {
+      incgrps = Helper::combine( incgrps, param.strset( "grps" ) );
+      if ( param.has( "Yg" ) ) incgrps = Helper::combine( incgrps , param.strset( "Yg" ) );
+    }
+  
   if ( param.has( "xgrps" ) )
     excgrps = Helper::combine( excgrps, param.strset( "xgrps" ) );
 
@@ -303,7 +308,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 
       // intention to perform association is denoted by the presence of X=
 
-      const bool request_assoc = param.has( "X" );
+      const bool request_assoc = param.has( "nreps" );
       
       if ( request_assoc && ( param.has( "retain-cols" ) || param.has( "retain-rows" ) ) )
 	Helper::halt( "can only use retain-cols or retain-rows when not running association (no X)" );
@@ -426,8 +431,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       //
       
       const std::set<std::string> ygroups = param.strset( "Yg" );
+      const std::set<std::string> yvars = param.strset( "Y" );
+      const bool has_yspecified = ygroups.size() != 0 || yvars.size() != 0;
       
-
       //
       // if 'all-by-all' added, then also set X == Y
       //
@@ -447,11 +453,15 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	{
 	  for (int j=0; j<vars.size(); j++)
             if ( v2.find( j ) == v2.end() ) // not a covariate
-	      if ( ygroups.size() == 0 || ygroups.find( var2group[ vars[j] ] ) != ygroups.end() )
-		{
-		  ivs.push_back( j );
-		  dvs.push_back( j );
-		}
+	      {
+		if ( ( ! has_yspecified )
+		     || yvars.find( vars[j] ) != yvars.end()
+		     || ygroups.find( var2group[ vars[j] ] ) != ygroups.end() )
+		  {
+		    ivs.push_back( j );
+		    dvs.push_back( j );
+		  }
+	      }
 	  
 	  logger << "  selected " 
 		 << cvs.size() << " Z vars, implying "
@@ -463,9 +473,14 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	{
 	  for (int j=0; j<vars.size(); j++)
 	    if ( v1.find( j ) == v1.end() && v2.find( j ) == v2.end() )
-	      if ( ygroups.size() == 0 || ygroups.find( var2group[ vars[j] ] ) != ygroups.end() )
-		dvs.push_back( j );
-	  
+	      {
+		if ( ( ! has_yspecified )
+                     ||	yvars.find( vars[j] ) != yvars.end()
+                     ||	ygroups.find( var2group[ vars[j] ] ) !=	ygroups.end() )
+		  {
+		    dvs.push_back( j );
+		  }
+	      }
 	  logger << "  selected " 
 		 << ivs.size() << " X vars & "
 		 << cvs.size() << " Z vars, implying "
@@ -487,14 +502,22 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       // now do QC (on DVs only) - i.e. keeps 
       //
 
-      double winsor_th = param.has( "winsor" ) ? param.requires_dbl( "winsor" ) : 0.01 ; 
-      if ( winsor_th < 0 || winsor_th > 0.2 )
-	Helper::halt( "winsor must be set between 0 and 0.2" ); 
-
+      double winsor_th = -9; // default = N
+      if ( param.has( "winsor" ) )
+	{
+	  if ( param.value( "winsor" ) == "F" || param.value( "winsor" ) == "N" || param.value( "winsor" ) == "0" ) 
+	    winsor_th = -9; // i.e. none
+	  else
+	    {
+	      winsor_th = param.requires_dbl( "winsor" ) ;
+	      if ( winsor_th < 0 || winsor_th > 0.2 )
+		Helper::halt( "winsor must be set between 0 and 0.2" ); 
+	    }
+	}
+      
       // can skip QC with qc=F option
       if ( ( ! param.has( "qc" ) ) || param.yesno( "qc" ) )
-	qc( winsor_th );
-      
+	qc( winsor_th );      
       
       //
       // optionally dump variables and/or manifest?
@@ -533,7 +556,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  pthresh_adj = param.has( "padj" ) ? param.requires_dbl( "padj" ) : 99 ;
 
 	  // level of multiple-test correction
-	  correct_all_X = param.has( "correct-all-X" ) ? param.yesno( "correct-all-X" ) : false;
+	  correct_all_X = param.has( "adj-all-X" ) ? param.yesno( "adj-all-X" ) : false;
 
 	  // # tests requested
 	  int ntests = 0;
@@ -1366,7 +1389,11 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		    std::map<std::string,std::map<std::string,std::string> > * faclvl ,
 		    Eigen::MatrixXd * X )
 {
-  
+
+
+  if ( ! Helper::fileExists( Helper::expand( name ) ) )
+    Helper::halt( "could not open " + name );
+      
   std::ifstream IN1( Helper::expand( name ).c_str() , std::ios::binary | std::ios::in );
   
   // size of data (in file) 
@@ -1987,7 +2014,9 @@ void gpa_t::drop_null_columns()
 void gpa_t::qc( const double winsor )
 {
 
-  logger << "  running QC (add 'qc=F' to skip) with winsor=" << winsor << "\n";
+  logger << "  running QC (add 'qc=F' to skip)";
+  if ( winsor > 0 ) logger << " with winsor=" << winsor << "\n";
+  else logger << " without winsorization (to set, e.g. 'winsor=0.05')\n";
 
   // 1) case-wise deletion
 

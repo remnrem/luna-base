@@ -371,11 +371,11 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
 Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_t & signals1 , 
 							      const signal_list_t & signals2 ) const
 {
-  
+
   for (int s=0;s<signals1.size();s++)
     if ( ! has(signals1.label(s) ) ) 
       Helper::halt( "could not find cloc for: " + signals1.label(s) + "\navailable clocs: " + print() );
-
+  
   for (int s=0;s<signals2.size();s++)
     if ( ! has(signals2.label(s) ) ) 
       Helper::halt( "could not find cloc for: " + signals2.label(s) + "\navailable clocs: " + print() );

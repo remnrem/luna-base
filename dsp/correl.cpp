@@ -36,6 +36,7 @@
 
 #include "helper/helper.h"
 #include "helper/logger.h"
+#include "miscmath/qdynam.h"
 
 #include "clocs/clocs.h"
 
@@ -174,7 +175,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
     {
       edf.clocs.convert_to_unit_sphere();
       // inter-electrode cosine similarity matrix
-      S = edf.clocs.interelectrode_distance_matrix( signals );      
+      S = edf.clocs.interelectrode_distance_matrix( signals ); 
       if ( S.dim1() != ns )
 	Helper::halt( "internal problem mapping clocs to CORREL channels" ); 
     }
@@ -188,6 +189,18 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 
   // actually show epoch-level correlations too?
   const bool show_epoched = param.has( "epoch" );
+
+  //
+  // Epoch-level dynamics?
+  //
+
+  const bool calc_dynamics = param.has( "dynam" );
+  if ( calc_dynamics && ! epoched ) Helper::halt( "dynam requires epoch or ch-epoch" );
+
+  qdynam_t qd;
+  if ( calc_dynamics )
+    qd.init( edf , param );
+
   
   //
   // Number of pairwise comparisons
@@ -353,7 +366,15 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 		  
 		  if ( r > -5 ) 
 		    epoch_r[i][j].push_back( r );
+
+		  if ( calc_dynamics && r > -5 )
+		    {
+		      const int e = edf.timeline.display_epoch( epoch ) - 1;
+		      qd.add( writer.faclvl_notime() , "R" , e  , r );
+		    }
+		  
 		}
+
 
 	      // display correlation?  Y is whole signal (not epoched)
 	      // otherwise, this is an epoch level corr, which we only
@@ -366,7 +387,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 		    // save in all-by-all whole channel mode (if output-both set)
 		    if ( (! epoched) && all_by_all )
 		      {
-			rba[ signals2.label(j) ][ signals1.label(i) ] = -r ;
+			rba[ signals2.label(j) ][ signals1.label(i) ] = r ;
 			if ( has_clocs )
 			  clocsba[ signals2.label(j) ][ signals1.label(i) ] = S(i,j) ;
 			
@@ -461,7 +482,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 
 
   //
-  // If all-by-all whole channel, optionally output reversed values
+  // If all-by-all whole channel, optionally output opposite diagnoal values
   //  (i.e. to get full matrix, not just triangular) 
   //
 
@@ -594,6 +615,14 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 
     }
   
+
+  //
+  // Dyanmics report
+  //
+
+  if ( calc_dynamics )
+    qd.proc_all();
+
   
   //
   // Write channel-level summaries (min/max/mean/median/# channels over t1/# channels under t2)

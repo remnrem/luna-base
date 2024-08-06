@@ -707,8 +707,8 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       // skip annotation channels
       //
       
-      if ( edf.header.is_annotation_channel(s) ) continue;
-
+      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+      
       logger << " " << signals.label(s);
 
       if ( ngaus )

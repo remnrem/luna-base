@@ -25,17 +25,47 @@
 
 struct signal_list_t
 {
-    
+
+  //
+  // data members
+  //
+  
   std::vector<int> signals;  
 
   std::vector<std::string> signal_labels;  
   
   // OZ -> Oz ; for case-insensitive matching
   std::map<std::string,std::string> upper2orig;
+
+
+  //
+  // functions
+  //
   
   int size() const { return signals.size(); } 
   
   int operator()(int i) const { return signals[i]; } 
+
+  void sort()
+  {
+    if ( signal_labels.size() != signals.size() )
+      Helper::halt( "internal error in sognal_list_t::sort()" );
+    
+    std::map<std::string,int> label2slot;
+    for (int j=0;j<signal_labels.size();j++)
+      label2slot[ signal_labels[j] ] = signals[j];
+
+    int idx = 0;
+    std::map<std::string,int>::const_iterator ss = label2slot.begin();
+    while ( ss != label2slot.end() )
+      {
+	signals[ idx ] = ss->second;
+	signal_labels[ idx ] = ss->first;
+	++idx;
+	++ss;
+      }
+
+  }
   
   std::string label(const int i) const { return signal_labels[i]; } 
    

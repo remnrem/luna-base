@@ -151,7 +151,7 @@ void cpt_wrapper( param_t & param )
   if ( param.has( "ch" ) )    
     {
       chs = param.strset( "ch" );
-      logger << "  expecting to retrain only " << chs.size() << " channels\n";
+      logger << "  expecting to retain only " << chs.size() << " channels\n";
     }
   
   
@@ -189,6 +189,16 @@ void cpt_wrapper( param_t & param )
 
   std::set<std::string> tolog;
   if ( param.has( "dB" ) ) tolog = param.strset( "dB" );
+
+  //
+  // Double enter ch-pairwise stats (w/ or w/out sign change)
+  //
+  // ---> redundant, not needed as we test for adjacancy both ways,
+  // and enter values CH1 < CH2
+  // const bool double_chs_signed = param.has( "double-enter-signed" );
+  // const bool double_chs_abs = param.has( "double-enter-abs" );
+  // if ( double_chs_signed && double_chs_abs )
+  //   Helper::halt( "cannot specifiy both 'double-enter-signed' and 'double-enter-abs'" );
 
   //
   // Outliers / normalization
@@ -333,7 +343,7 @@ void cpt_wrapper( param_t & param )
     }
   IN1.close();
 
-  logger << "  read " << ids.size() << " people from " << iv_file << " (of total " << row_cnt << " data rows)\n";
+  logger << "  read " << ids.size() << " observations from " << iv_file << " (of total " << row_cnt << " data rows)\n";
 
   //
   // Number of people in the IV file (might be > than for the sleep metrics) 
@@ -348,7 +358,7 @@ void cpt_wrapper( param_t & param )
   //
 
   // can stratify by channel, frequency (columns), and time
-  // can also have coherence (CH1/CH2) values too
+  // can also have coherence (CH1/CH2) values too [ which can optionally be double-entered here ] 
   // expect file to contain multiple individuals
   
   // in output, one row per individual; columns are CH x F x T  or (xCH1/CH2)
@@ -471,7 +481,15 @@ void cpt_wrapper( param_t & param )
 	  if ( ch_slot != -1 )
 	    ch = tok[ ch_slot ];
 	  else if ( ch1_slot != -1 && ch2_slot != -1 )
-	    ch = tok[ ch1_slot ] + "." + tok[ ch2_slot ];
+	    {
+	      // make CH1.CH2 --> A.B (i.e. order alphabetically, which
+	      // helps if some people have C3-F4 but others have F3-C3, for
+	      // example, i.e. this way mapped to the same thing
+	      if ( tok[ ch1_slot ] < tok[ ch2_slot ] )
+		ch = tok[ ch1_slot ] + "." + tok[ ch2_slot ];
+	      else
+		ch = tok[ ch2_slot ] + "." + tok[ ch1_slot ];
+	    }
 	  else
 	    ch = "-"; // or '-' if no CH vars
 
@@ -529,6 +547,16 @@ void cpt_wrapper( param_t & param )
 
 	      // save
 	      i2c2f2t2v[ id ][ ch ][ f ][ tstr ][ ii->second ] = x;
+
+	      // // double enter CH1-CH2 pairs? 
+	      // if ( double_chs_signed || double_chs_abs )
+	      // 	if ( ch1_slot != -1 && ch2_slot != -1 )
+	      // 	  {
+	      // 	    const std::string hc = tok[ ch2_slot ] + "." + tok[ ch1_slot ];
+	      // 	    i2c2f2t2v[ id ][ hc ][ f ][ tstr ][ ii->second ] = double_chs_signed ? -x : x;		    
+	      // 	  }
+	      
+	      // next
 	      ++ii;
 	    }
 	  
@@ -643,7 +671,7 @@ void cpt_wrapper( param_t & param )
 		  while ( ii != rows.end() )
 		    {
 		 
-		      // qfind channel?
+		      // find channel?
 		      const std::map<std::string,std::map<std::string,std::map<std::string,std::map<std::string,double> > > > & dat = i2c2f2t2v.find( *ii )->second;
 		      if ( dat.find( ss1->first ) == dat.end() ) 
 			{
@@ -1216,10 +1244,13 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
     }
  
 
-  // pre-calculate distance matrix
+
+  // pre-calculate distance matrix, and get some stats
   std::map<std::string,std::map<std::string,double> > dist_matrix;
   if ( clocs != NULL )
     {
+      std::vector<double> dsts;
+      
       std::set<std::string>::const_iterator cc1 = chs.begin();
       while ( cc1 != chs.end() )
 	{
@@ -1229,13 +1260,31 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 	      while ( cc2 != chs.end() )
 		{
 		  if ( *cc2 != "." )
-		    dist_matrix[ *cc1 ][ *cc2 ] = clocs->distance( *cc1 , *cc2 , 2 );		      
-
+		    {
+		      const double d = clocs->distance( *cc1 , *cc2 , 2 );
+		      dist_matrix[ *cc1 ][ *cc2 ] = d;
+		      if ( *cc1 != *cc2 ) 
+			dsts.push_back( d );
+		    }
+		  
 		  ++cc2;
 		}
 	    }
 	  ++cc1;
 	}
+
+      const double dst_mean = MiscMath::mean( dsts );
+      double dst_min, dst_max;
+      MiscMath::minmax( dsts, &dst_min , &dst_max );
+      const double dst_p01  = MiscMath::percentile( dsts , 0.01 );
+      const double dst_p05  = MiscMath::percentile( dsts , 0.05 );
+      const double dst_p10  = MiscMath::percentile( dsts , 0.10 );
+      const double dst_p20  = MiscMath::percentile( dsts , 0.20 );
+      const double dst_p50  = MiscMath::percentile( dsts , 0.50 );
+
+      logger << "  of " << dsts.size() << " spatial distances, mean (median) = " << dst_mean << " (" << dst_p50 << "); min/max = " << dst_min << " / " << dst_max << "\n";
+      logger << "  spatial dist. percentiles (1,5,10,20%) = " << dst_p01 << " " << dst_p05 << " " << dst_p10 << " " << dst_p20 << "\n";
+      
     }
   
 

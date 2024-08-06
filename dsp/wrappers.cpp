@@ -687,11 +687,8 @@ void dsptools::qdynam( edf_t & edf , param_t & param )
 	{
 	  if ( hdr[j] == "E" ) slot_e = j;
 	  else if ( hdr[j] == "ID" ) slot_id = j;
-	  else if ( vars.size() == 0 || vars.find( hdr[j] ) != vars.end() )
-	    var2slot[ hdr[j] ] = j;
-	  else if ( facs.find( hdr[j] ) != facs.end() )
-	    fac2slot[ hdr[j] ] = j;
-	  
+	  else if ( facs.find( hdr[j] ) != facs.end() ) fac2slot[ hdr[j] ] = j;	    
+	  else if ( vars.size() == 0 || vars.find( hdr[j] ) != vars.end() ) var2slot[ hdr[j] ] = j;
 	}
       
       if ( slot_e == -1 )
@@ -743,7 +740,6 @@ void dsptools::qdynam( edf_t & edf , param_t & param )
 	  std::map<std::string,int>::const_iterator ff = fac2slot.begin();
           while ( ff != fac2slot.end() )
 	    {
-	      std::cout << " setting " << ff->second << " " << row[ff->second ] << "\n";
 	      writer.level( row[ff->second], ff->first );
 	      ++ff;
 	    }

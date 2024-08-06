@@ -82,8 +82,10 @@ void cmddefs_t::init()
   add_domain( "cfc"        , "Cross-frequency" , "Phase-amplitude coupling" );
   add_domain( "misc"       , "Misc"            , "Misc. commands" );
   add_domain( "exp"        , "Experimental"    , "Experimental features: under heavy development, for internal use only" );
-  add_domain( "cmdline"    , "Command-line"    , "Functions that do not operate on EDFs" );  
-
+  add_domain( "cmdline"    , "Command-line"    , "Functions that do not operate on EDFs" );
+  add_domain( "assoc"      , "Association"     , "Association models" );
+  add_domain( "predict"    , "Prediction"      , "Prediction models" );
+  
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1855,6 +1857,166 @@ void cmddefs_t::init()
   add_var( "LZW" , "CH,E" , "LZW" , "Compression index" );
 
 
+  ////////////////////////////////////////////////////////////////////////////////// 
+  //
+  // ASSOC
+  //
+  ////////////////////////////////////////////////////////////////////////////////// 
+
+  //
+  // GPA-PREP
+  //
+
+  add_cmd( "assoc" , "GPA-PREP" , "Generic permutation-based association prep (--gpa-prep)" );
+  add_url( "--gpa-prep" , "assoc/#gpa" );
+
+  add_param( "--gpa-prep" , "dat" , "b.1" , "Write to this binary data file" );
+  add_param( "--gpa-prep" , "specs" , "specs.json" , "Read from this JSON specification file" );
+  add_param( "--gpa-prep" , "inputs" , "b.1" , "Read these input text files" );
+  
+//   vars
+//   xvars
+
+//   facs
+//   xfacs
+
+//   grps
+//   xgrps
+
+//   n-req
+//   n-prop
+//   retain-cols
+// verbose
+
+  //
+  // GPA
+  //
+
+  add_cmd( "assoc" , "GPA" , "Generic permutation-based association" );
+  add_url( "GPA" , "assoc/#gpa" );
+
+  add_param( "GPA" , "dat" , "b.1" , "Read from this binary data file (created by --gpa-prep)" );
+
+  
+  add_param( "GPA" , "vars" , "A,B,C" , "Include these variables" );
+
+  add_param( "GPA" , "X" , "TST" , "Predictor variable(s)" );
+  add_param( "GPA" , "Z" , "AGE,SEX" , "Covariates (nuissance variables)" );
+  add_param( "GPA" , "nreps" , "1000" , "Number of permutations" );
+  add_param( "GPA" , "nreps" , "1000" , "Number of permutations" );
+  add_param( "GPA" , "dump" , "" , "Dump data matrix to stdout" );
+  add_param( "GPA" , "manifest" , "" , "Dump variable maifest to stdout" );
+    
+  add_table( "GPA" , "X,Y" , "GPA results per pair of predictor (X) and outcome (Y)" );
+  add_var( "GPA" , "X,Y" , "B" , "Regression coefficient" );
+  add_var( "GPA" , "X,Y" , "B" , "Regression coefficient" );
+  add_var( "GPA" , "X,Y" , "T" , "t-statistic" );
+  add_var( "GPA" , "X,Y" , "P" , "Empirical p-value" );
+  add_var( "GPA" , "X,Y" , "PADJ" , "Adjusted empirical p-value" );
+  add_var( "GPA" , "X,Y" , "STRAT" , "DV stratum" );
+  add_var( "GPA" , "X,Y" , "XSTRAT" , "IV stratum (if X-factors)" );
+  
+  add_param( "GPA", "verbose" , "" , "Verbose output" );
+  add_param( "GPA", "X-factors" , "" , "Add X variables strata in output (XSTRATA)" );
+  
+  add_param( "GPA", "facs" , "F,CH" , "Include only variables stratified by this set of factors" );
+  add_param( "GPA", "xfacs" , "F,CH" , "Exclude variables stratified by this set of factors" );
+  
+  add_param( "GPA", "grps" , "spindles,slow" , "Include variables assigned to these groups" );
+  add_param( "GPA", "xgrps" , "spindles,slow" , "Exclude variables assigned to these groups" );
+  
+  
+  add_param( "GPA", "n-req" , "10", "Drop columns with fewer than this many non-missing values" );
+  add_param( "GPA", "n-prop" , "0.1" , "Drop columns with more than this proportion of missing values" );
+  add_param( "GPA", "retain-cols" , "" , "Retain columns with missing values, or invariant" );
+    
+  add_param( "GPA", "faclvls" , "B/SIGMA|BETA,CH/CZ" , "Include only F-CH-stratified variables with these levels" );
+  add_param( "GPA", "xfaclvls" , "B/SIGMA|BETA,CH/CZ" , "Exclude variables F-CH-stratified  with these levels" );
+  
+  add_param( "GPA", "nvars" , "10,100-200,200" , "Include these variables (based on manifest #)" );
+  add_param( "GPA", "xnvars" , "10,100-200,200" , "Exclude only these variables (based on manifest #)" );
+  
+  add_param( "GPA", "retain-rows" , "" , "Retain rows with missing values" );
+  
+  add_param( "GPA", "subset" , "+MALE" , "Include only individuals positive (>0) for this variable(s)" );
+  add_param( "GPA", "inc-ids" , "id1,id2" , "Include only these individuals" );
+  add_param( "GPA", "ex-ids" , "id1,id2", "Exclude these individuals" );
+  
+  add_param( "GPA", "Yg" , "spindles,slow" , "Explicitly set dependent variables by group" );
+  add_param( "GPA", "Y" , "V1,V2" , "Explicitly set dependent variables" );
+  
+  add_param( "GPA", "all-by-all" , "" , "Set all X to be all Y" );
+  
+  add_param( "GPA", "winsor" , "0.05" , "Winsorize all variables at this threshold" );
+  add_param( "GPA", "qc" , "F" , "Turn off QC checks (if set to F)");
+	     
+  add_param( "GPA", "p" , "0.01" , "Only output results below this significance" );
+  add_param( "GPA", "padj" , "0.05" , "Only output results below this adjusted significance" );
+  
+  add_param( "GPA", "adj-all-X" , "" , "PADJ adjusts for test burden across all X" );
+
+
+  //
+  // CPT
+  //
+
+  add_cmd( "assoc" , "CPT" , "Cluster-based association" );
+  add_url( "CPT" , "assoc/#cpt" );
+
+  // inputs
+  add_param( "CPT" , "iv-file" , "demo.txt" , "Single, tab-delimited text file containing the primary independent variable and other covariates" );
+  add_param( "CPT" , "iv" , "DIS" , "Primary IV (assumed to be a column in the iv-file)" );
+  add_param( "CPT" , "covar" , "AGE,SEX" , "Covariates, coded numerically (binary 0/1 or real-valued, assumed to be columns in iv-file)" );
+  add_param( "CPT" , "dv-file" , "spec.txt,psd.txt" , "One or more dependent variable files, in long-format (see below)" );  
+  add_param( "CPT" , "dv" , "DENS,AMP" , "one or more DVs (assumed to be columns in the dv-file set)" );
+  add_param( "CPT" , "all-dvs" , "" , "Use all DVs from the DV files (equivalent to dv=*)" );  
+  add_param( "CPT" , "th" , "5" , "SD units for individual-level DV outlier removal (note: case-wise deletion)" );
+  add_param( "CPT" , "winsor" , "0.02" , "Threshold for winsorization of DVs" );
+  add_param( "CPT" , "clocs" , "clocs.txt" , "File containing channel location information" );
+  add_param( "CPT" , "nreps" , "1000" , "Number of permutations to perform" );
+  add_param( "CPT" , "th-spatial" , "0.5" , "Threshold for defining adjacent channels (Euclidean distance, 0 to 2)" );
+  add_param( "CPT" , "th-freq" , "1" , "Threshold for defining adjacent frequencies (Hz)" );
+  add_param( "CPT" , "th-time" , "0.5" , "Threshold for defining adjacent time-points (seconds)" );
+  add_param( "CPT" , "th-cluster" , "2" , "Absolute value of t-statistic for inclusion in a cluster" );
+  add_param( "CPT" , "dB", "", "Take the log of all DVs" );
+  add_param( "CPT" , "abs", "", "Take the absolute value of all DVs" );
+  add_param( "CPT" , "f-lwr", "0.5", "Ignore values for frequencies below 0.5 Hz" );
+  add_param( "CPT" , "f-upr", "25", "Ignore values for frequencies above 25 Hz" );
+  add_param( "CPT" , "complete-obs", "", "Instead of case-wise dropping individuals with missing data, flag an error" );
+  add_param( "CPT" , "ex-ids", "id001,id002 ", "Individual IDs to exclude" );
+  add_param( "CPT" , "inc-ids", "@{include.txt}", "Individual IDs to include (as ex-ids, can @{include} vales from a file" );
+  add_param( "CPT" , "1-sided", "", "Assume a 1-sided test (that B > 0)" );
+  
+  // outputs
+  add_table( "CPT" , "VAR" , "Variable-level output" );
+  add_var( "CPT" , "VAR", "CH" , "Channel name" );
+  add_var( "CPT" , "VAR", "CH1" , "First channel (for variables stratified by channel-pairs)" );
+  add_var( "CPT" , "VAR", "CH2" , "Second channel (for variables stratified by channel-pairs)" );  
+  add_var( "CPT" , "VAR", "F" , "Frequency (Hz) (for variables stratified by frequency)" );
+  add_var( "CPT" , "VAR", "T" , "Time (e.g seconds) (for variables stratified by time)" );    
+  add_var( "CPT" , "VAR", "B" , "Beta from linear regression" );
+  add_var( "CPT" , "VAR", "STAT" , "t-statistic" );
+  add_var( "CPT" , "VAR", "PU" , "Uncorrected empirical significance value" );
+  add_var( "CPT" , "VAR", "PC" , "Family-wise corrected empirical significance value" );
+  add_var( "CPT" , "VAR", "CLST" , "For variables assigned (P<0.05) to a cluster, the cluster number K (else 0)" );
+
+  add_table( "CPT" , "K" , "Cluster-level association output" );
+  add_var( "CPT" , "K" , "N" , "Number of variables in this cluster" );
+  add_var( "CPT" , "K" , "P" , "Empirical significance value" );
+  add_var( "CPT" , "K" , "SEED" , "Seed variable (most significant)" );
+  
+  // K x M (cluster member ouput
+  add_table( "CPT" , "K,M" , "Cluster membership outputs" );
+  add_var( "CPT", "K,M" , "VAR" , "Variable name, i.e. member M of cluster K" );
+
+
+
+  //////////////////////////////////////////////////////////////
+  //
+  // T/F analysis 
+  //
+  //////////////////////////////////////////////////////////////
+  
   //
   // HILBERT 
   //
@@ -2877,20 +3039,20 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		continue;
 	      }
 	    
-	    ss << "  " << std::left << std::setw( 12 ) << jj->first;
+	    ss << "  " << std::left << std::setw( 14 ) << jj->first;
 	    
   	    // example (if any)
 	    std::string ex = px.find( cmd )->second.find( jj->first )->second ; 
 	    if ( ex != "" )
 	      {
 		std::string msg = jj->first + "=" + ex;
-		ss << std::left << std::setw( 20 ) << msg;
+		ss << std::left << std::setw( 28 ) << msg;
 	      }
  	    else
- 	      ss << std::left << std::setw(20) << " ";;
+ 	      ss << std::left << std::setw(28) << " ";;
 	    
 	    // description
-	    ss << std::left << std::setw( 12 ) << jj->second ;
+	    ss << std::left << std::setw( 18 ) << jj->second ;
 	    
 	    // requirements?
 	    std::string req = preq.find( cmd )->second.find( jj->first )->second ; 

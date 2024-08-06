@@ -152,6 +152,8 @@ struct globals
   
   static std::string mkdir_command;
 
+  static bool order_signal_list_alphabetically;
+  
   // number of decimal places for seconds (e.g. output to .annot)
   static int time_format_dp; 
 

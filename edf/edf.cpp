@@ -3444,8 +3444,9 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
   // all selected values must match [str] (case-insensitive)
   
   // a value [-str] means they must not include [str] 
-  
 
+  // order_signal_list_alphabetically = true then sort channels alpha before returning
+  
   if ( s == "*" )
     {
       for (int s=0;s<label.size();s++)
@@ -3675,9 +3676,15 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
   //
   // parse out any offenders based on [includes] and [-excludes]
   //
-
   
 
+  //
+  // optionally, sort
+  //
+
+  if ( globals::order_signal_list_alphabetically )
+    r.sort();
+  
   return r;
 }
 

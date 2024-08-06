@@ -99,6 +99,7 @@ char globals::folder_delimiter;
 std::string globals::project_path;
 char globals::file_list_delimiter;
 
+bool globals::order_signal_list_alphabetically;
 std::string globals::mkdir_command;
 
 std::string globals::txt_table_prepend;
@@ -568,7 +569,9 @@ void globals::init_defs()
 #endif  
 
   file_list_delimiter = ',';
-  
+
+  order_signal_list_alphabetically = false;
+    
   txt_table_prepend = "";
   txt_table_append = "";
 

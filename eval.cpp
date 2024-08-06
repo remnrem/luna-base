@@ -4729,6 +4729,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // now handle processing of all other special variables
   //
 
+  // return signals alphabetically
+  if ( Helper::iequals( tok0 , "order-signals" ) )
+    {
+      globals::order_signal_list_alphabetically = Helper::yesno( tok1 );
+      return;
+    }
   
   // no console logging?
   if ( Helper::iequals( tok0 , "silent" ) ) 
