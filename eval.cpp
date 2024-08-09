@@ -1443,26 +1443,63 @@ void proc_lzw( edf_t & edf , param_t & param )
 void proc_self_suds( edf_t & edf , param_t & param  )
 {
 
-  // set options
-  suds_t::set_options( param );  
+  // two modes:
+  //    - if using the default model, and multiple signals, run once
+  //      for each
+  //    - otherwise, force signal 
+
+  // if multiple channels specified, run once for each
+  signal_list_t signals = edf.header.signal_list( param.value( "sig" ) );
   
+  if ( signals.size() == 0 )
+    Helper::halt( "no signals found matching " + param.value( "sig" ) );
+
   // force a reload (used in moonlight/R mode)
   if ( param.has( "force-reload" ) )
     suds_t::model.init();
   
-  // load model, if not already done
-  //  or, in R mode, force load each time...
-  
-  if ( ! suds_t::model.loaded() )
+  // set options
+  suds_t::set_options( param );  
+
+  const int ns = signals.size();
+
+  for (int s=0; s<ns; s++)
     {
+      
+      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+
+      logger << "  ------------------------------------------------------------\n"
+	     << "  fitting SOAP model for single channel " << signals.label(s) << "\n";
+      
+      writer.level( signals.label(s) , globals::signal_strat );
+      
+      // force reload either way
+      suds_t::model.init();
+      
+      // load model, if not already done
+      //  or, in R mode, force load each time...      
+      // if ( ! suds_t::model.loaded() )
+      // 	{
+
+      // suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
+      // 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
+      // 			  param.has( "write-weights" ) ? param.value( "write-weights" ) : "" ,  
+      // 			  param.has( "sig" ) && param.value( "sig" ) != "*" ? param.value( "sig") : "C4_M1" ) ;
+      
       suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
 			  param.has( "write-weights" ) ? param.value( "write-weights" ) : "" ,  
-			  param.has( "sig" ) && param.value( "sig" ) != "*" ? param.value( "sig") : "C4_M1" ) ;
+			  signals.label(s) );
+      
+      suds_indiv_t self;
+
+      self.evaluate( edf , param );
+      
+      // next channel
     }
-  
-  suds_indiv_t self;
-  self.evaluate( edf , param );  
+
+  writer.unlevel( globals::signal_strat );
+    
 }
 
 

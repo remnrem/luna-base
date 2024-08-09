@@ -130,6 +130,16 @@ void qdynam_t::proc_all()
 {
 
   logger << "  running dynam submodule for " << osequences.size() << " distinct strata\n";
+
+  // save current fac/lvl state so we can return to it
+  //  i.e. here we will iterate over different faclvls (as saved in osequences)
+  //       and so we have to level()/unlevel() each;
+
+  //  but we don't want to unlevel any faclvl that was still present at the start of this
+  //  call (e.g. if a TAG was set);  thus save these now to make sure we can return
+  //  everything as expected at the end
+
+  std::map<std::string,std::string> curr_faclvl = writer.faclvl_notime();
   
   // iterate over each fac/lvl/var in the store
   
@@ -355,7 +365,17 @@ void qdynam_t::proc_all()
               ++fff;
             }
 
-	  
+
+	  //
+	  // return to original (e.g. any TAGs or CHs that might be present) 
+	  //
+
+	  std::map<std::string,std::string>::const_iterator oo = curr_faclvl.begin();
+	  while ( oo != curr_faclvl.end() )
+	    {
+	      writer.level( oo->second , oo->first );	      
+	      ++oo;
+	    }
 	  
 	  //
 	  // next varaiable

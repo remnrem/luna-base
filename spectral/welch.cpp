@@ -984,8 +984,13 @@ annot_t * spectral_power( edf_t & edf ,
 		  if ( ! suppress_output )
 		    {
 		      writer.value( "PSD" , x );
-		      writer.value( "RELPSD" , x / tot_pow_denom );
 		      
+		      // if dB scaled, return difference between logs
+		      // if ( dB ) 
+		      // 	writer.value( "RELPSD" , pow(10, x/10) / tot_pow_denom );
+		      // else
+		      // 	writer.value( "RELPSD" , x / tot_pow_denom );
+  
 		      if ( aggregate_psd_med && ne_min > 2 )
 			writer.value( "PSD_MD" , bin_med.bspec[i]  );
 		      

@@ -43,10 +43,11 @@ struct options_t {
   bool print_cmd_name;   // -n  
   bool long_format;      // -l
   double prec; // -p 
+  std::string prepend; // -a
   bool full;   // -f
   bool show_progress; // -
   bool cmd_hash;
-
+  
   char strata_delim;
   char faclvl_delim;
   
@@ -55,7 +56,8 @@ struct options_t {
     print_empty_rows( false ) , 
     print_cmd_name( false ) ,
     long_format( false ) ,
-    prec(3) , 
+    prec(3) ,
+    prepend( "" ), 
     full( true ) ,
     cmd_hash( false ) ,
     strata_delim( '.' ) ,
@@ -300,6 +302,7 @@ int main(int argc , char ** argv )
       else if ( strcmp( argv[i] , "-e" ) == 0 ) { options.print_empty_rows = true; mode = '0'; }
 
       else if ( strcmp( argv[i] , "-f" ) == 0 ) mode = 'D'; // database
+      else if ( strcmp( argv[i] , "-a" ) == 0 ) mode = 'A'; // add prepend
       else if ( strcmp( argv[i] , "-s" ) == 0 ) { any_opt = true; mode = 'S'; } // luna statement
       else if ( strcmp( argv[i] , "-r" ) == 0 ) { any_opt = true; mode = 'R'; } // row-stratifier
       else if ( strcmp( argv[i] , "-c" ) == 0 ) { any_opt = true; mode = 'C'; } // col-stratifier
@@ -352,7 +355,11 @@ int main(int argc , char ** argv )
 	      mode = '0';
 	      
 	    }
-	  
+
+	  if ( mode == 'A' )
+	    {
+	      options.prepend = argv[i];
+	    }
 	  
 	  if ( mode == 'D' ) 
 	    {
@@ -1662,7 +1669,7 @@ void display()
   while ( vv != o_var.end() )
     {
       
-      const std::string & var_name = *vv;
+      const std::string & var_name = options.prepend + *vv;
       
       if ( o_col.size() == 0 ) 
 	std::cout << "\t" << var_name;
