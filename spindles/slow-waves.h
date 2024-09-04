@@ -27,6 +27,7 @@
 #include "intervals/intervals.h"
 #include "timeline/cache.h"
 #include "annot/annot.h"
+#include "miscmath/qdynam.h"
 
 #include <vector>
 #include <iostream>
@@ -197,6 +198,7 @@ struct slow_wave_param_t {
 
   // skip SO detection per se
   bool skip;
+
   
 };
   
@@ -342,6 +344,10 @@ struct slow_waves_t
 
   void display_slow_waves( const bool verbose = false , edf_t * edf = NULL );
 
+  // SO dynamics
+
+  void epoch_dynamics( edf_t * );
+  
   // analysis of slow waves
   
   void phase_slow_waves();
@@ -443,6 +449,18 @@ private:
 
   int Fs;
 
+  // output options
+  bool out_idx;  // for SO-level outputs
+  bool out_all_slopes;  // SLOPE -->  SLOPE_POS1  POS2 NEG1 NEG2 (def = NEG2)
+
+
+  // other key options
+  bool using_rel;
+  
+  // dynamics (optional)
+  qdynam_t qd;
+  bool calc_dynamics;
+  
   
   // helper function
   int getbin( double x , const std::vector<double> & th , int last_bin , int nb ) const; 

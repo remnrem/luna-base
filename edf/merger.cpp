@@ -33,9 +33,12 @@
 extern writer_t writer;
 
 bool identical_headers( const edf_header_t & h1 , const edf_header_t & h2 ) ;
+bool identical_headers_cbind( const edf_header_t & h1 , const edf_header_t & h2 ) ;
 
 void Helper::merge_EDFs( const std::vector<std::string> & tok )
 {
+
+  // rbind() for EDFs
 
   // by default, get start times from each EDF:
   //  a) check they line up,
@@ -492,4 +495,261 @@ bool identical_headers( const edf_header_t & h1 , const edf_header_t & h2 )
   
   return true;
   
+}
+
+
+
+
+void Helper::bind_EDFs( const std::vector<std::string> & tok )
+{
+
+  // cbind() for EDFs
+  
+  // by default, get start times from the first EDF:
+  //  - check same # records
+  //  - can be different sample rates
+  //  - must be standard EDF for now  
+  
+  std::vector<edf_t*> edfs;
+  
+  std::string id = "merged1";
+  std::string filename = "merged.edf";
+  std::string slist = "";
+  
+  // expecting a list of file names 
+  // but can also include key=value pairs, with keys:
+  //   id
+  //   edf
+  //   sample-list
+  
+  for (int i=0; i<tok.size(); i++)
+    {
+
+      logger << "------------------------------------------------------------\n"
+	     << "processing [" << tok[i] << "]\n";
+      
+      std::vector<std::string> tok2 = Helper::quoted_parse( tok[i] , "=" );
+      if ( tok2.size() == 2 )
+	{
+	  if ( tok2[0] == "id" ) id = tok2[1];
+	  else if ( tok2[0] == "edf" ) filename = tok2[1];
+	  else if ( tok2[0] == "sample-list" ) slist = tok2[1];	  
+	  logger << "  setting option: " << tok2[0] << " = " << tok2[1] << "\n";
+	  continue;
+	}
+      
+      const std::string fname = Helper::expand( tok[i] );
+      
+      if ( ! Helper::fileExists( fname ) )
+	{
+	  logger << "  ** warning: could not attach " << fname << "\n";
+	  continue;
+	}
+      
+      edf_t * edf = new edf_t;
+      
+      const std::string id = "id" + Helper::int2str( (int)( edfs.size() + 1 ) ) ;
+      
+      bool okay = edf->attach( fname , id );
+      
+      if ( ! okay )
+	{
+	  logger << " ** could not attach " << filename	<< "\n";
+          continue;	  
+	}
+
+      // only allow starndard EDFs to be merged right now
+
+      if ( edf->header.edfplus ) 
+	Helper::halt( "cannot merged EDF+ files : " + fname
+		      + "\n (this constraint can be relaxed in future)");
+      
+      logger << "\n attached component EDF: " << fname << "\n";
+
+      edfs.push_back( edf ) ;
+
+    }
+
+  const int nf = edfs.size();
+
+  if ( nf < 2 ) Helper::halt( "nothing to do, fewer than two EDFs specified" );
+    
+   
+  //
+  // Some outputs
+  //
+
+  logger << "------------------------------------------------------------\n"
+	 << "  in total, attached " << nf << " EDFs\n";  
+
+  logger  << "  writing bound data:\n"
+	  << "     ID           : " << id << "\n"
+	  << "     EDF filename : " << filename << "\n";
+
+  if ( slist != "" )
+   logger << "     sample-list  : " << slist << "\n"; 
+  
+
+  
+  
+  //
+  // Check that all headers are compatible
+  //   -- initially, must have same # and size of records
+  //   -- this can be relaxed in the future.
+  //
+
+  for (int i=1; i<nf; i++)
+    if ( ! identical_headers_cbind( edfs[0]->header , edfs[i]->header ) )
+      Helper::halt( "headers incompatible:" + edfs[0]->filename + " " + edfs[i]->filename );
+  
+  logger  << "  good, all EDFs have bind-compatible headers\n";
+  
+
+  //
+  // Get total implied NS for new EDF
+  //
+  
+  int ns = 0;
+  for (int i=0; i<nf; i++)
+    ns += edfs[i]->header.ns;
+
+  int nr = edfs[0]->header.nr;
+  
+  logger  << "\n  expecting " << ns
+	  << " signals (each of " << nr << " records of " 
+	  << edfs[0]->header.record_duration << " sec) in the new EDF\n";
+  
+    
+  //
+  // Create the new merged EDF
+  //
+  
+  edf_t medf;
+  
+  //
+  // Set header
+  //
+
+  medf.id = id;
+  medf.header.version = edfs[ 0 ]->header.version;
+  medf.header.patient_id = id;
+  medf.header.recording_info = edfs[ 0 ]->header.recording_info;
+  medf.header.startdate = edfs[ 0 ]->header.startdate;
+  medf.header.starttime = edfs[ 0 ]->header.starttime;
+  medf.header.nbytes_header = edfs[ 0 ]->header.nbytes_header;
+  medf.header.ns = 0; // this is populated by edf_t::add_signal()
+  medf.header.ns_all = 0; // this is populated by edf_t::add_signal()
+  medf.header.nr = medf.header.nr_all = nr; // this is set above
+  medf.header.record_duration = edfs[ 0 ]->header.record_duration;
+  medf.header.record_duration_tp = edfs[ 0 ]->header.record_duration_tp;
+
+  
+  //
+  // create a (continuous/discontinuous) timeline  
+  //
+
+  logger << "  adding timeline; ";
+
+  // initially, create the new dataset as a standard EDF
+  // i.e. which assumes that all component files are also all EDF
+  
+  medf.set_edf();
+  medf.set_continuous();
+  medf.timeline.init_timeline();
+
+ 
+  //
+  // resize data[][], by adding empty records 
+  //
+
+  logger << "adding " << nr << " empty records...\n";
+
+  for (int r=0;r<nr;r++)
+    {
+      edf_record_t record( &medf ); 
+      medf.records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
+    }
+  
+  
+  //
+  // iterate over EDFs
+  //
+  
+  for (int j=0; j<nf; j++)
+    {
+      
+      edf_t & edf = *(edfs[j]);
+
+      //
+      // iterate over signals
+      //
+      
+      const int ns = edfs[j]->header.ns ;
+
+      logger << "  compiling channels from EDF #" << j+1 << ":";
+      
+      for (int s=0; s<ns; s++)
+	{
+	  
+	  // skip annotations
+	  if ( edfs[j]->header.is_annotation_channel( s ) ) continue;
+	  
+	  logger << " " << edfs[j]->header.label[s];
+	  
+	  // get whole signal
+	  slice_t slice( edf , s , edf.timeline.wholetrace() );
+	  
+	  const std::vector<double> * d = slice.pdata();
+	  
+	  // add the signal to the merged EDF
+	  medf.add_signal( edfs[j]->header.label[ s ] , edfs[ j ]->header.sampling_freq( s ) , *d );
+	  
+	} // next signal
+
+      logger << "\n";
+    } // next EDF
+  
+  
+  //
+  // Save this merged EDF
+  //
+  
+  logger << "\n  writing merged EDF as " << filename << "\n";
+  
+  bool saved = medf.write( filename );
+  
+  if ( ! saved ) Helper::halt( "problem trying to write " + filename );
+  
+
+  //
+  // Sample list?
+  //
+
+  if ( slist != "" )
+    {	  
+      logger << "  appending " << filename << " to sample-list " << slist << "\n";
+      std::ofstream FL( slist.c_str() , std::ios_base::app );
+      FL << medf.id << "\t" << filename << "\n";
+      FL.close();
+    }
+  
+
+  //
+  // Clean up
+  //
+  
+  for (int i=0; i<nf; i++)
+    delete edfs[i];      
+
+  
+}
+
+
+bool identical_headers_cbind( const edf_header_t & h1 , const edf_header_t & h2 )
+{
+  // compatible for cbinding?
+  if ( h1.version != h2.version ) return false;
+  if ( h1.nr != h2.nr ) return false;  
+  if ( h1.record_duration_tp != h2.record_duration_tp ) return false;  
+  return true;  
 }

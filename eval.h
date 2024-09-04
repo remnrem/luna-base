@@ -77,9 +77,13 @@ struct param_t
   std::string dump( const std::string & indent = "  ", const std::string & delim = "\n" ) const;
 
   std::set<std::string> strset( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
+
+  std::set<std::string> strset_xsigs( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
   
   std::vector<std::string> strvector( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
-
+  
+  std::vector<std::string> strvector_xsigs( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
+  
   std::vector<double> dblvector( const std::string & k , const std::string delim = "," ) const;
 
   std::vector<int> intvector( const std::string & k , const std::string delim = "," ) const;

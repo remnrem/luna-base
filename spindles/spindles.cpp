@@ -25,6 +25,7 @@
 #include "mspindles.h"
 #include "plot-spindles.h"
 #include "propag.h"
+#include "miscmath/qdynam.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -41,7 +42,7 @@
 #include "dsp/fir.h"
 #include "dsp/hilbert.h"
 #include "dsp/spline.h"
-#include "dsp/slow-waves.h"
+#include "spindles/slow-waves.h"
 #include "defs/defs.h"
 #include "db/db.h"
 
@@ -250,14 +251,19 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const uint64_t min0_dur_tp = min0_dur_sec * globals::tp_1sec;
   const uint64_t min_dur_tp  = min_dur_sec * globals::tp_1sec;
   const uint64_t max_dur_tp  = max_dur_sec * globals::tp_1sec;
-  
 
+  //
+  // Epoch-level dynamics?
+  //
+  
+  const bool calc_dynamics = param.has( "dynam" );
+  
   //
   // Analysis/output parameters
   //
 
   // epoch-level output
-  const bool     show_epoch_level         = param.has( "epoch" );
+  const bool     show_epoch_level         = calc_dynamics || param.has( "epoch" );
 
   // spindle-level output
   const bool     show_spindle_level       = param.has( "per-spindle" );
@@ -577,7 +583,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       //
       
       writer.level( signals.label(s) , globals::signal_strat );
+
+      //
+      // track epoch-level dynamics?
+      //
       
+      qdynam_t qd;
+      if ( calc_dynamics )
+	qd.init( edf , param );
 
       //
       // Pull all data
@@ -2427,6 +2440,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  edf.timeline.first_epoch();
 	      
 	  std::vector<int> epoch_counts;
+
+	  const bool has_coupling = param.has( "so" );
 	  
 	  while ( 1 ) 
 	    {
@@ -2441,6 +2456,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      const int nsp = spindles.size();
 	      
 	      int sp_epoch = 0;
+
+	      // 'average' spindle_t for epoch-level stats
+	      spindle_t avg(0,0,0,0);
+	      avg.amp = avg.dur = avg.frq = avg.nosc = avg.isa = 0;
+	      avg.symm = avg.symm2 = avg.chirp = avg.frq_h1 = avg.frq_h2 = 0;
+	      avg.so_nearest = 0;
 	      
 	      for (int i=0 ; i<nsp; i++)
 		{
@@ -2456,7 +2477,24 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  interval_t spstart( spindles[i].tp.start , spindles[i].tp.start );
 		  
 		  if ( interval.overlaps( spstart ) )
-		    ++sp_epoch;
+		    {
+		      ++sp_epoch;
+
+		      avg.amp += spindles[i].amp;
+		      avg.dur += spindles[i].dur;
+		      avg.frq += spindles[i].frq;
+		      avg.nosc += spindles[i].nosc;
+		      avg.isa += spindles[i].isa;
+		      avg.symm += spindles[i].symm;
+		      avg.symm2 += spindles[i].symm2;
+		      avg.chirp += spindles[i].chirp;
+		      avg.frq_h1 += spindles[i].frq_h1;
+		      avg.frq_h2 += spindles[i].frq_h2;
+
+		      if ( has_coupling )
+			avg.so_nearest += spindles[i].so_nearest <= 1e-6; // i.e. PROP SO OVERLAP
+					      
+		    }
 		  else if ( spstart.is_after( interval ) )
 		    break; // spindles are in order, so can skip
 		}
@@ -2474,6 +2512,68 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  writer.epoch( edf.timeline.display_epoch( epoch ) );		  
 		  // per-epoch spindle count
 		  writer.value( "N" , sp_epoch );
+
+		  if ( sp_epoch )
+		    {
+		      
+		      avg.amp /= (double)sp_epoch ;
+		      avg.dur /= (double)sp_epoch ;
+		      avg.frq /= (double)sp_epoch ;
+		      avg.nosc /= (double)sp_epoch ;
+		      avg.isa /= (double)sp_epoch ;
+		      avg.symm /= (double)sp_epoch ;
+		      avg.symm2 /= (double)sp_epoch;
+		      avg.chirp /= (double)sp_epoch ;
+		      avg.frq_h1 /= (double)sp_epoch ;
+		      avg.frq_h2 /= (double)sp_epoch ;
+		      avg.so_nearest /= (double)sp_epoch ;
+		      
+		      writer.value( "AMP" , avg.amp  );
+		      writer.value( "DUR" , avg.dur  );
+		      writer.value( "FRQ" , avg.frq  );
+		      writer.value( "NOSC" , avg.nosc );
+		      writer.value( "ISA" , avg.isa );
+		      writer.value( "SYMM" , avg.symm  );
+		      writer.value( "SYMM2" , avg.symm2 );
+		      writer.value( "CHIRP" , avg.chirp  );
+		      writer.value( "FRQ1" , avg.frq_h1  );
+		      writer.value( "FRQ2" , avg.frq_h2  );		      
+		      if ( has_coupling	)
+			writer.value( "COUPL_OVERLAP" , avg.so_nearest );
+
+		      //
+		      // track metrics dynamics (if observed 1+ spindle)
+		      //
+
+		      if ( calc_dynamics )
+			{
+			  const int e = edf.timeline.display_epoch( epoch ) - 1;
+			  
+			  qd.add( writer.faclvl_notime() , "AMP" , e  , avg.amp );
+			  qd.add( writer.faclvl_notime() , "DUR" , e  , avg.dur );
+			  qd.add( writer.faclvl_notime() , "FRQ" , e  , avg.frq );
+			  qd.add( writer.faclvl_notime() , "NOSC" , e  , avg.nosc );
+			  qd.add( writer.faclvl_notime() , "ISA" , e  , avg.isa );
+			  qd.add( writer.faclvl_notime() , "SYMM" , e  , avg.symm );
+			  qd.add( writer.faclvl_notime() , "SYMM2" , e  , avg.symm2 );
+			  qd.add( writer.faclvl_notime() , "CHIRP" , e  , avg.chirp );
+			  qd.add( writer.faclvl_notime() , "FRQ1" , e  , avg.frq_h1 );
+			  qd.add( writer.faclvl_notime() , "FRQ2" , e  , avg.frq_h2 );
+			  if ( has_coupling ) 
+			    qd.add( writer.faclvl_notime() , "COUPL_OVERLAP" , e  , avg.so_nearest );
+			  
+			}
+		      
+		    }
+		  
+
+		  // N can be tracked if 0 
+		  if ( calc_dynamics )
+		    {
+		      const int e = edf.timeline.display_epoch( epoch ) - 1;
+		      qd.add( writer.faclvl_notime() , "N" , e  , sp_epoch );		      
+		    }
+		  
 		}
 	      
 	    }
@@ -2483,7 +2583,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  if ( show_epoch_level )
 	    writer.unepoch();
 	  
-	      
+
+
 	  // 
 	  // Test for over-dispersion of spindle counts
 	  //
@@ -2753,6 +2854,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  p_sw = NULL;
 	  p_hilbert = NULL;
 	}
+
+
+      //
+      // report dynamics for this signal
+      //
+      
+      if ( calc_dynamics )
+	qd.proc_all();
 
       
       //
@@ -4157,8 +4266,11 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
   const bool enrich_output = param.has( "enrich" );
 
   const int n = spindles->size();
+
+  const bool has_coupling = param.has( "so" );
+  const bool has_if = param.has( "if" );
   
-   //
+  //
    // Per-spindle output
    //
   
@@ -4256,7 +4368,7 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        writer.value( "MAXSTAT" , spindle->max_stat );
        writer.value( "MEANSTAT" , spindle->mean_stat );
        
-       if ( param.has( "so" ) )
+       if ( has_coupling )
 	 {
 	   // if no valid anchor, make NA in output
 	   if ( spindle->anchor_sec >= 0 )
@@ -4272,7 +4384,7 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	     writer.value( "SO_PHASE_ANCHOR" , spindle->so_phase_anchor );
 	 }
 
-       if ( param.has( "if" ) )
+       if ( has_if )
 	 writer.value( "IF" , spindle->if_spindle );
        
       

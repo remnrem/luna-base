@@ -3921,7 +3921,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   // either for all annots, or just a subset
   //
 
-  std::set<std::string> annots2write = param.strset( "annot" );
+  std::set<std::string> annots2write = param.strset_xsigs( "annot" );
 
   //
   // potentially allow for prefix matching here too
@@ -5309,7 +5309,7 @@ void annotation_set_t::extend( param_t & param )
 
   if ( ! param.has( "annots" ) )
     Helper::halt( "requires annots argument" ) ;
-  std::set<std::string> a = param.strset( "annots" );
+  std::set<std::string> a = param.strset_xsigs( "annots" );
 
   
 }

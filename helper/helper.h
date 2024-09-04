@@ -125,6 +125,8 @@ namespace Helper
 
   void merge_EDFs( const std::vector<std::string> & );
 
+  void bind_EDFs( const std::vector<std::string> & );
+
   void repath_SL( const std::vector<std::string> & );
   
   void compile_txttabs( const std::string & );

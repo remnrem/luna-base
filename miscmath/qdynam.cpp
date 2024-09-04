@@ -407,7 +407,7 @@ void qdynam_t::proc_all()
 //
 
 
-void qdynam_t::init( edf_t & edf , param_t & param )
+void qdynam_t::init( edf_t & edf , const param_t & param )
 {
 
   //
@@ -429,6 +429,9 @@ void qdynam_t::init( edf_t & edf , param_t & param )
 
   // for each within-section, do a separate norm
   norm_each_section = true;  
+
+  // use time rather than rank by default
+  rank_based = false;
   
   // smoothing
   median_window = 19; // ~10 mins
@@ -449,6 +452,9 @@ void qdynam_t::init( edf_t & edf , param_t & param )
 
   epoch_output = param.has( "dynam-epoch" );
 
+  if ( param.has( "dynam-use-ranks" ) )
+       set_rank_based( param.yesno( "dynam-use-ranks" ) );
+  
   if ( param.has( "dynam-min-ne" ) )
     set_min_ne( param.requires_int( "dynam-min-ne" ) );
 
@@ -465,9 +471,10 @@ void qdynam_t::init( edf_t & edf , param_t & param )
 	set_trim_epochs( x );
     }
   
-  const double qd_winsor = param.has( "dynam-winsor" ) ? param.requires_dbl( "dynam-winsor" ) : 0.05 ;  
+  const double qd_winsor = param.has( "dynam-winsor" ) ?
+    ( ! param.yesno( "dynam-winsor" ) ? -1 : param.requires_dbl( "dynam-winsor" ) ) : 0.05  ;  
   winsorize( qd_winsor );
-
+  
   if ( param.has( "dynam-median-window" ) )
     set_smoothing_median_window( param.requires_int( "dynam-median-window" ) );
   
@@ -476,27 +483,61 @@ void qdynam_t::init( edf_t & edf , param_t & param )
   
   if ( param.has( "dynam-norm-mean" ) )
     set_norm_mean( param.yesno( "dynam-norm-mean" ) );
-  else if ( param.has( "dynam-norm-max" ) )
+
+  if ( param.has( "dynam-norm-max" ) )
     set_norm_max( param.yesno( "dynam-norm-max" ) );
+
+  if ( norm01 && norm_mean && param.has( "dynam-norm-mean" ) )
+    Helper::halt( "cannot set both dynam-norm-mean=T and dynam-norm-max=T" );
+  if ( norm01 ) norm_mean = false;
   
   if ( param.has( "dynam-norm-cycles" ) )
     set_norm_cycles( param.yesno( "dynam-norm-cycles" ) );
   
   if ( param.has( "dynam-max-cycle" ) )
-    set_max_cycles( param.requires_int( "dynam-max-cycle" ) );
-  else if ( param.has( "dynam-cycles" ) )
-    set_cycles( param.intvector( "dynam-cycles" ) );
+    {
+      set_max_cycles( param.requires_int( "dynam-max-cycle" ) );
+      if ( param.has( "dynam-cycles" ) )
+	Helper::halt( "cannot specify both dynam-cycles and dynam-max-cycle" );
+    }
 
+  if ( param.has( "dynam-cycles" ) )
+    set_cycles( param.intvector( "dynam-cycles" ) );
+  
   // default false
   if ( param.has( "dynam-weight-cycles" ) )
     set_weight_cycles( param.yesno( "dynam-weight-cycles" ) );
-
-
+  
+  
   //
   // compile cycles
   //
-
+  
   has_cycles = dynam_compile_cycles( edf );
+  
+  //
+  // outputs
+  //
+
+  logger << "  dynam options:\n"
+	 << "    dynam-norm-cycles   = " << ( norm_each_section ? "T" : "F" ) << "\n"
+	 << "    dynam-norm-mean     = " << ( norm_mean ? "T" : "F" ) << "\n"
+	 << "    dynam-norm-max      = " << ( norm01 ? "T" : "F" ) << "\n"
+         << "    dynam-max-cycle     = " << ( param.has( "dynam-max-cycle" ) ? param.value( "dynam-max-cycle" ) : "." ) << "\n"
+	 << "    dynam-cycles        = " << ( param.has( "dynam-cycles" ) ? Helper::stringize( incl_cycles ) : "." ) << "\n";
+
+  if ( qd_winsor > 0 ) 
+    logger << "    dynam-winsor        = " << qd_winsor << "\n";
+  else
+    logger << "    dynam-winsor        = " << "." << "\n";
+
+  logger << "    dynam-use-ranks     = " << ( rank_based ? "T" : "F" ) << "\n"
+	 << "    dynam-weight-cycles = " << ( wcycles ? "T" : "F" ) << "\n"
+	 << "    dynam-median_window = " << median_window << "\n"
+	 << "    dynam-mean-windows  = " << mean_window << "\n"
+	 << "    dynam-trim-epochs   = " << ( trim_epochs.size() == 2 ? Helper::stringize(trim_epochs) : "." ) << "\n"
+	 << "    dynam-epoch         = " << ( epoch_output ? "T" : "F" ) << "\n"
+	 << "    dynam-min-ne        = " << min_ne << "\n";
   
   
 }
@@ -711,19 +752,16 @@ void qdynam_t::proc( const std::vector<double> & x ,
 	  rwa.sd     += w * rw[ *cc ].sd  ;
 	  rwa.omean  += w * rw[ *cc ].omean ;
 	  rwa.mean   += w * rw[ *cc ].mean ;
-	  rwa.cv     += w * rw[ *cc ].cv;
-
-	  rwa.tstat1 += w * rw[ *cc ].tstat1;
-	  rwa.tstat2 += w * rw[ *cc ].tstat2;
-
-	  rwa.corr1 += w * rw[ *cc ].corr1;
-          rwa.corr2 += w * rw[ *cc ].corr2;
-
-	  rwa.lma1 += w * rw[ *cc ].lma1;
+	  
+	  rwa.corr += w * rw[ *cc ].corr;
           rwa.lmb2 += w * rw[ *cc ].lmb2;
-	  rwa.r_lma1 += w * rw[ *cc ].r_lma1;
-          rwa.r_lmb2 += w * rw[ *cc ].r_lmb2;
 
+	  if ( verbose )
+	    {
+	      rwa.tstat += w * rw[ *cc ].tstat;
+	      rwa.cv    += w * rw[ *cc ].cv;
+	    }
+	  
 	  rwa.tmax += w * rw[ *cc ].tmax;
 	  rwa.amax += w * rw[ *cc ].amax;
 	  rwa.rmax += w * rw[ *cc ].rmax;
@@ -740,8 +778,8 @@ void qdynam_t::proc( const std::vector<double> & x ,
       ++cc;
     }
   
-  // between cycles (only makes sense if not norming within )
-  if ( xc.size() > 1 && ! norm_each_section )
+  // between cycles (only makes sense if not norming within, and if at least 3 cycles )
+  if ( xc.size() > 2 && ! norm_each_section )
     {
       // no re-smoothing/norming needed here: (e.g. only a few data points, one per cycle)
       const bool NO_SMOOTHING = false; // i.e. F means do not do
@@ -764,18 +802,12 @@ void qdynam_t::proc( const std::vector<double> & x ,
       rwa.sd /= denom ;
       rwa.mean /= denom ;
       rwa.omean /= denom ;
-      rwa.cv /= denom ;
 
-      rwa.tstat1 /= denom ;
-      rwa.tstat2 /= denom ;
-
-      rwa.corr1 /= denom ;
-      rwa.corr2 /= denom ;
-      
-      rwa.lma1 /= denom ;
+      rwa.corr /= denom ;
       rwa.lmb2 /= denom ;
-      rwa.r_lma1 /= denom ;
-      rwa.r_lmb2 /= denom ;
+
+      rwa.cv /= denom ;      
+      rwa.tstat /= denom ;      
 
       rwa.tmax /= denom ;
       rwa.amax /= denom ;      
@@ -826,138 +858,137 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
     qdynam_t::norm( &ss , norm01 , norm_mean );
 
 
-  // calculate T stat
-  
+  //
+  // compile stats here
+  //
+
+  qdynam_results_t r;
+
   const int nn = ss.size();
+
+  r.ne = nn;
+
+  //
+  // calculate UT stat
+  //
   
   // grand total of time series
   double s_tot = 0; 
-
+  
   // mean
   double s_mean = MiscMath::mean( ss );
 
-  double sct = 0 , set = 0;
 
-   
-  double sct1 = 0 ;
-  
-  for (int i=0; i<nn; i++)
+  // either based on clock-time or ranks
+
+  if ( rank_based )
     {
-      
-      // sum signal, weighted by epoch numbera
-      sct += ss[i] * ee[i] ;
-      
-      // same statistic, but if signal were completely uniform/flat 
-      sct1 += s_mean * ee[i] ;      
 
-      // same statistic, but weight by epoch order/rank rather than clock position
-      set += ss[i] * i;
-	          
-      // get total 
-      s_tot  += ss[i];
+      double set = 0;
+      
+      for (int i=0; i<nn; i++)
+	{
+	  
+	  // same statistic, but weight by epoch order/rank rather than clock position
+	  set += ss[i] * i;
+	  
+	  // get total 
+	  s_tot  += ss[i];
+	}
+
+      // epoch order/rank statistic (et)
+      const double set_max = (nn-1) * s_tot;
+      const double set_min = 0 * s_tot ;
+      const double stat_et = ( set - set_min ) / ( set_max - set_min );
+      
+      // collapsed value
+      r.tstat = 100 * (  ( stat_et * 2.0 ) - 1.0 ) ; 
+  
+    }
+  else
+    {
+
+      double sct = 0 , sct1 = 0 ;
+      
+      for (int i=0; i<nn; i++)
+	{
+	  
+	  // sum signal, weighted by epoch number
+	  sct += ss[i] * ee[i] ;
+	  
+	  // same statistic, but if signal were completely uniform/flat 
+	  sct1 += s_mean * ee[i] ;      
+
+	  // get total 
+	  s_tot  += ss[i];
+	  
+	}
+      
+      // 'clock-time' statistic (ct)
+      const double sct_max = ee[nn-1] * s_tot;
+      const double sct_min = ee[0] * s_tot ;
+      const double stat_ct = ( sct - sct_min ) / ( sct_max - sct_min );
+
+      // 'flat clock-time' statistic (ct1)
+      const double sct1_max = ee[nn-1] * s_tot;
+      const double sct1_min = ee[0] * s_tot ;
+      const double stat_ct1 = ( sct1 - sct1_min ) / ( sct1_max - sct1_min );
+
+      // all above statistics scaled between min/max and so [ 0 , 1 ] range
+      // scale to [ -100 , +100 ] when returning
+      
+      // clock-time statistic is adjusted by the 'expectation' under a completely flat
+      // set of data-points
+      // for rank-based statistic, we don't need to do this, as we know that would be 0
+      // by definition
+      
+      // clock time statistic
+      r.tstat = 100 * ( ( stat_ct * 2.0 ) - 1.0 ) ;
+
+      // adjust clock-time stat by expectation under flatness 
+      double t = 100 * ( ( stat_ct1 * 2.0 ) - 1.0 ) ;
+
+      // adust clock-time by expectation under flat data
+      r.tstat -= t;
 
     }
-
-  // 'clock-time' statistic (ct)
-  const double sct_max = ee[nn-1] * s_tot;
-  const double sct_min = ee[0] * s_tot ;
-  const double stat_ct = ( sct - sct_min ) / ( sct_max - sct_min );
-
-  // 'flat clock-time' statistic (ct1)
-  const double sct1_max = ee[nn-1] * s_tot;
-  const double sct1_min = ee[0] * s_tot ;
-  const double stat_ct1 = ( sct1 - sct1_min ) / ( sct1_max - sct1_min );
-
-  // epoch order/rank statistic (et)
-  const double set_max = (nn-1) * s_tot;
-  const double set_min = 0 * s_tot ;
-  const double stat_et = ( set - set_min ) / ( set_max - set_min );
-
-  // all above statistics scaled between min/max and so [ 0 , 1 ] range
-  // scale to [ -100 , +100 ] when returning
-
-  // clock-time statistic is adjusted by the 'expectation' under a completely flat
-  // set of data-points
-
-  // for rank-based statistic, we don't need to do this, as we know that would be 0
-  // by definition
-  
-  // return   100 * ( (2S)-1 ) 
-
-  qdynam_results_t r;
-  r.ne = nn;
-
-  // clock time statistic
-  r.tstat1 = 100 * ( ( stat_ct * 2.0 ) - 1.0 ) ;
-
-  // collapsed value
-  r.tstat2 = 100 * (  ( stat_et * 2.0 ) - 1.0 ) ; 
-
-  // adjust clock-time stat by expectation under flatness 
-  double tstat11 = 100 * ( ( stat_ct1 * 2.0 ) - 1.0 ) ;
-
-  // adust clock-time by expectation under flat data
-  r.tstat1 -= tstat11;
-
-  //
-  // simple corrs (duh...)
-  //
-
-  std::vector<double> e1( nn ), e2( nn );;
-  for (int i=0; i<nn; i++) { e1[i] = i; e2[i] = ee[i]; }  
-  r.corr1 = Statistics::correlation( ss , e1 );
-  r.corr2 = Statistics::correlation( ss , e2 );  
+     
   
   //
-  // linear model (w/ non-linear/interaction terms)
+  // simple corrs
+  //
+  
+  std::vector<double> et( nn );
+  for (int i=0; i<nn; i++)  et[i] = rank_based ? i : ee[i] ;
+  r.corr = Statistics::correlation( ss , et );   
+  
+  //
+  // linear model w/ non-linear term
   //
 
   Eigen::VectorXd Y  = Eigen::VectorXd::Zero( nn );
-  Eigen::MatrixXd X  = Eigen::MatrixXd::Zero( nn , 2 ); // ee, ee^2
-  Eigen::MatrixXd Xr = Eigen::MatrixXd::Zero( nn , 2 ); // ee, ee^2 based on rank
+  Eigen::MatrixXd X  = Eigen::MatrixXd::Zero( nn , 2 ); 
   Eigen::MatrixXd Z  = Eigen::MatrixXd::Zero( nn , 0 ); // no covariates
-
-  const double ee_mean = MiscMath::mean( ee );  
-  const double er_mean = MiscMath::mean( e1 );
-
+  
+  const double et_mean = MiscMath::mean( et );  
+  
   for (int i=0; i<nn; i++)
     {
       Y[i] = ss[i];
-      X(i,0) = ee[i] - ee_mean;
-      X(i,1) = X(i,0) * X(i,0);
-      
-      Xr(i,0) = i - er_mean;
-      Xr(i,1) = Xr(i,0) * Xr(i,0);
+      X(i,0) = et[i] - et_mean; // is either rank or epoch
+      X(i,1) = X(i,0) * X(i,0);      
     }  
   
   eigen_ops::scale( Y , true , true );
   eigen_ops::scale( X , true , true );
-  eigen_ops::scale( Xr , true , true );
-    
-  const std::vector<std::string> yvars = { "Y" };
-  const std::vector<std::string> xvars1 = { "X1" };
-  const std::vector<std::string> xvars2 = { "X1","X2" };
   
-  // linear term only
-  linmod_t lm1( Y, yvars, X.col(0), xvars1, Z );  
-  linmod_results_t results1 = lm1.run( 0 ); // i.e. ignore perms
-  r.lma1 = results1.beta[ "X1" ][ "Y" ];
-
-  // U term
-  linmod_t lm2( Y, yvars, X, xvars2, Z );
+  const std::vector<std::string> yvars = { "Y" };
+  const std::vector<std::string> xvars = { "X1","X2" };
+  
+  // U term (X2)
+  linmod_t lm2( Y, yvars, X, xvars, Z );
   linmod_results_t results2 = lm2.run( 0 ); // i.e. ignore perms  
   r.lmb2 = results2.beta[ "X2" ][ "Y" ];
-
-  // repeat, but w/ rank-based
-  // linear term only
-  linmod_t r_lm1( Y, yvars, Xr.col(0), xvars1, Z );  
-  linmod_results_t r_results1 = r_lm1.run( 0 ); // i.e. ignore perms
-  r.r_lma1 = r_results1.beta[ "X1" ][ "Y" ];
-
-  // U term
-  linmod_t r_lm2( Y, yvars, X, xvars2, Z );
-  linmod_results_t r_results2 = r_lm2.run( 0 ); // i.e. ignore perms  
-  r.r_lmb2 = r_results2.beta[ "X2" ][ "Y" ];
 
   //
   // basics
@@ -1014,6 +1045,9 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
 void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose , const bool between )
 {
 
+  // e.g. if BETWEEN and < 3 cycles
+  if ( res.ne == 0 ) return;
+
   // handle WITHIN case where -ve means # cycles
   writer.value( "N" , res.ne < 0 ? - res.ne : res.ne );
   
@@ -1022,22 +1056,17 @@ void qdynam_t::output_helper( const qdynam_results_t & res , const bool verbose 
   
   writer.value( "MEAN" , res.mean );
   writer.value( "SD" , res.sd );
-  writer.value( "T" , res.tstat1 );
-  writer.value( "R" , res.corr1 );
 
-  writer.value( "LM1" , res.lma1 );
-  writer.value( "LM2" , res.lmb2 );
-
-  writer.value( "LM1R" , res.r_lma1 );
-  writer.value( "LM2R" , res.r_lmb2 );
-
+  // defaults: linear term (r) and X^2 term
+  writer.value( "U" , res.corr );
+  writer.value( "U2" , res.lmb2 );
+  
   if ( verbose )
     {
+      writer.value( "UT" , res.tstat );
       writer.value( "CV" , res.cv );
-      writer.value( "TR" , res.tstat2 );
-      writer.value( "RR" , res.corr2 );
     }
-
+  
   if ( res.ne > 10 || res.ne < 0 ) // if -ve means WITHIN, # cycles
     {
       

@@ -31,6 +31,7 @@
 #include "db/db.h"
 #include "miscmath/crandom.h"
 #include "eval.h"
+#include "miscmath/qdynam.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"
@@ -118,7 +119,12 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   const std::string cache_name_pos = cache_pos ? param.value( "cache-pos" ) : "" ;
   const std::string cache_name_neg = cache_neg ? param.value( "cache-neg" ) : "" ;
   
-  
+  // do dynamics?
+  calc_dynamics = param.has( "dynam" );
+
+  if ( calc_dynamics )
+    qd.init( edf , param );
+
   
   //
   // iterate over signals
@@ -177,10 +183,22 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       
       
       //
-      // verbose display
+      // verbose display? (epoch/event level)
+      //
+
+      out_all_slopes = param.has( "out-all-slopes" ) ? param.yesno( "out-all-slopes" ) : false;
+      out_idx        = param.has( "out-idx" ) ? param.yesno( "out-idx" ) : false; 
+
+      const bool per_event = param.has( "verbose" ) || param.has( "so-verbose" ) || param.has( "per-so" ) || calc_dynamics; 
+      
+      display_slow_waves( per_event , &edf );
+      
+      //
+      // report dynamics for this signal
       //
       
-      display_slow_waves( param.has( "verbose" ) , &edf );
+      if ( calc_dynamics ) 	
+	qd.proc_all();
       
       
       //
@@ -268,16 +286,16 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
   // Output 
   //
   
-
+  
   writer.value( "SO" , num_waves() );
   writer.value( "SO_RATE" , num_waves() / ( signal_duration_sec / 60.0 ) );
-
-  if ( th_x > 0 ) 
+  
+  if ( using_rel )
     {
       writer.value( "SO_TH_NEG" , th_x );
       writer.value( "SO_TH_P2P" , th_yminusx );
     }
-
+  
   //
   // nothing to do?
   //
@@ -291,18 +309,18 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
   if ( ! report_median_stats )
     {
       writer.value( "SO_DUR" , avg_duration_sec );    
-      writer.value( "SO_NEG_DUR" , avg_negative_duration_sec );    
-      writer.value( "SO_POS_DUR" , avg_positive_duration_sec );    
+      writer.value( "SO_DUR_NEG" , avg_negative_duration_sec );    
+      writer.value( "SO_DUR_POS" , avg_positive_duration_sec );    
       
       writer.value( "SO_TRANS" , avg_trans );
       writer.value( "SO_TRANS_FREQ" , avg_trans_freq );
       
-      writer.value( "SO_NEG_AMP" , avg_x );
-      writer.value( "SO_POS_AMP" , avg_y );
-      writer.value( "SO_P2P" , avg_yminusx );
+      writer.value( "SO_AMP_NEG" , avg_x );
+      writer.value( "SO_AMP_POS" , avg_y );
+      writer.value( "SO_AMP_P2P" , avg_yminusx );
       
       // may not be calculated, i.e.  if looking at half-waves  
-      if ( verbose )
+      if ( out_all_slopes )
 	{
 	  if ( avg_slope_n1 != 0 ) writer.value( "SO_SLOPE_NEG1" , avg_slope_n1 );  
 	  if ( avg_slope_n2 != 0 ) writer.value( "SO_SLOPE_NEG2" , avg_slope_n2 );
@@ -322,18 +340,18 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
   if ( report_median_stats )
     {
       writer.value( "SO_DUR" , median_duration_sec );    
-      writer.value( "SO_NEG_DUR" , median_negative_duration_sec );    
-      writer.value( "SO_POS_DUR" , median_positive_duration_sec );    
+      writer.value( "SO_DUR_NEG" , median_negative_duration_sec );    
+      writer.value( "SO_DUR_POS" , median_positive_duration_sec );    
       
       writer.value( "SO_TRANS" , median_trans );
       writer.value( "SO_TRANS_FREQ" , median_trans_frq );
       
       writer.value( "SO_AMP" , median_x );
-      writer.value( "SO_P2P" , median_yminusx );
+      writer.value( "SO_AMP_P2P" , median_yminusx );
       
       // may not be calculated, i.e.  if looking at half-waves  
 
-      if ( verbose )
+      if ( out_all_slopes )
 	{
 	  if ( median_slope_n1 != 0 ) writer.value( "SO_SLOPE_NEG1" , median_slope_n1 );  
 	  if ( median_slope_n2 != 0 ) writer.value( "SO_SLOPE_NEG2" , median_slope_n2 );
@@ -410,17 +428,20 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
       const slow_wave_t & w = sw[i];
       
       writer.level( i+1 , globals::count_strat );
-      
-      writer.value( "START_IDX" , static_cast<int>(w.interval.start) );
-      writer.value( "STOP_IDX"  , static_cast<int>(w.interval.stop ) );
+
+      if ( out_idx )
+	{
+	  writer.value( "START_IDX" , static_cast<int>(w.interval.start) );
+	  writer.value( "STOP_IDX"  , static_cast<int>(w.interval.stop ) );
+	}
       
       writer.value( "START" , w.interval_tp.start * globals::tp_duration );
       writer.value( "STOP"  , w.interval_tp.stop * globals::tp_duration );
       
       writer.value( "DUR"  , w.interval_tp.duration_sec() );
-      writer.value( "DUR_CHK"  , w.dur() );
-      writer.value( "DUR1"  , w.dur1() );
-      writer.value( "DUR2"  , w.dur2() );
+      //      writer.value( "DUR"  , w.dur() );
+      writer.value( "DUR_NEG"  , w.dur1() );
+      writer.value( "DUR_POS"  , w.dur2() );
       
       if ( w.SO_delta != 0 )
 	{
@@ -431,12 +452,16 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
       writer.value( "TRANS" , w.trans() );
       writer.value( "TRANS_FREQ" , w.trans_freq() );
 	  
-      writer.value( "UP_AMP" , w.up_amplitude );
-      writer.value( "DOWN_AMP" , w.down_amplitude );
-      writer.value( "P2P_AMP" , w.amplitude() );
-      
-      writer.value( "UP_IDX" , w.up_peak_sp );
-      writer.value( "DOWN_IDX" , w.down_peak_sp );
+      writer.value( "AMP_POS" , w.up_amplitude );
+      writer.value( "AMP_NEG" , w.down_amplitude );
+      writer.value( "AMP_P2P" , w.amplitude() );
+
+      if ( out_idx )
+	{
+	  writer.value( "IDX_POS" , w.up_peak_sp );
+	  writer.value( "IDX_NEG" , w.down_peak_sp );
+	}
+
       
       if ( w.type == SO_FULL || w.type == SO_NEGATIVE_HALF )
 	{
@@ -452,18 +477,18 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
       //   }
 	
       
-      if ( false && verbose )
-	{
-	  int pos = 0;
-	  for (uint64_t j = w.interval.start ; j <= w.interval.stop ; j++ ) 
-	    {
-	      writer.level( pos , globals::sample_strat );
-	      writer.value( "FLT" , filtered[ j ] );
-	      writer.value( "PH" , phase[ j ] ); 
-	      ++pos;
-	    }
-	  writer.unlevel( globals::sample_strat );
-	}
+      // if ( false && verbose )
+      // 	{
+      // 	  int pos = 0;
+      // 	  for (uint64_t j = w.interval.start ; j <= w.interval.stop ; j++ ) 
+      // 	    {
+      // 	      writer.level( pos , globals::sample_strat );
+      // 	      writer.value( "FLT" , filtered[ j ] );
+      // 	      writer.value( "PH" , phase[ j ] ); 
+      // 	      ++pos;
+      // 	    }
+      // 	  writer.unlevel( globals::sample_strat );
+      // 	}
     }
   writer.unlevel( globals::count_strat );
   
@@ -536,9 +561,10 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
 	  // and mean statistics
 	  //
 	  
-	  double mean_dur = 0 , mean_up_amp = 0 , mean_down_amp = 0 , mean_p2p_amp = 0;
-	  
+	  double mean_dur = 0 , mean_pos_dur = 0 , mean_neg_dur = 0;
+	  double mean_up_amp = 0 , mean_down_amp = 0 , mean_p2p_amp = 0;
 	  double mean_slope_n1 = 0 , mean_slope_n2 = 0 , mean_slope_p1 = 0  , mean_slope_p2 = 0;
+	  double mean_trans = 0 , mean_trans_freq = 0;
 	  int n_pos = 0 , n_neg = 0;
 	      
 	  std::set<int>::const_iterator jj = sw_in_epoch.begin();
@@ -548,6 +574,12 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
 	      const slow_wave_t & w = sw[ *jj ];
 	      
 	      mean_dur += w.interval_tp.duration_sec() ;
+	      mean_neg_dur += w.dur1();
+	      mean_pos_dur += w.dur2();
+
+	      mean_trans += w.trans();
+	      mean_trans_freq += w.trans_freq();
+	      
 	      mean_up_amp += w.up_amplitude ;
 	      mean_down_amp += w.down_amplitude ;
 	      mean_p2p_amp += w.amplitude() ;	      
@@ -574,24 +606,54 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
 	  if ( sw_in_epoch.size() > 0 ) 
 	    {
 	      writer.value( "DUR"  , mean_dur / (double)sw_in_epoch.size() );
+	      writer.value( "DUR_NEG"  , mean_neg_dur / (double)sw_in_epoch.size() );
+	      writer.value( "DUR_POS"  , mean_pos_dur / (double)sw_in_epoch.size() );
 	      
-	      writer.value( "UP_AMP" , mean_up_amp / (double)sw_in_epoch.size() );
-	      writer.value( "DOWN_AMP" , mean_down_amp / (double)sw_in_epoch.size() );
-	      writer.value( "P2P_AMP" , mean_p2p_amp / (double)sw_in_epoch.size() );
-	      
-	      if ( n_neg > 0 ) 
+	      writer.value( "TRANS"  , mean_trans / (double)sw_in_epoch.size() );
+	      writer.value( "TRANS_FREQ"  , mean_trans_freq / (double)sw_in_epoch.size() );
+
+	      writer.value( "AMP_POS" , mean_up_amp / (double)sw_in_epoch.size() );
+	      writer.value( "AMP_NEG" , mean_down_amp / (double)sw_in_epoch.size() );
+	      writer.value( "AMP_P2P" , mean_p2p_amp / (double)sw_in_epoch.size() );
+
+	      if ( out_all_slopes )
 		{
-		  writer.value( "SLOPE_NEG1" , mean_slope_n1 / (double)n_neg );
-		  writer.value( "SLOPE_NEG2" , mean_slope_n2 / (double)n_neg );
+		  if ( n_neg > 0 ) 
+		    {
+		      writer.value( "SLOPE_NEG1" , mean_slope_n1 / (double)n_neg );
+		      writer.value( "SLOPE_NEG2" , mean_slope_n2 / (double)n_neg );
+		    }
+		  
+		  if ( n_pos > 0 ) 
+		    {
+		      writer.value( "SLOPE_POS1" , mean_slope_p1 / (double)n_pos );
+		      writer.value( "SLOPE_POS2" , mean_slope_p2 / (double)n_pos );
+		    }
+		}
+	      else
+		{
+		  if ( n_neg > 0 ) 
+		    writer.value( "SLOPE" , mean_slope_n2 / (double)n_neg );
+		}
+
+
+	      if ( calc_dynamics )
+		{
+		  // epoch code for qdynam
+		  const int e = edf->timeline.display_epoch( epoch ) - 1;		  
+		  if ( sw_in_epoch.size() > 0 )
+		    {
+		      qd.add( writer.faclvl_notime() , "DUR" , e  , mean_dur / (double)sw_in_epoch.size() );
+		      qd.add( writer.faclvl_notime() , "TRANS" , e  , mean_trans / (double)sw_in_epoch.size() );
+		      qd.add( writer.faclvl_notime() , "AMP_P2P" , e  , mean_p2p_amp / (double)sw_in_epoch.size() );
+		      qd.add( writer.faclvl_notime() , "N" , e  , so_epoch );
+		    }
+		  if ( n_neg > 0 ) 
+		    qd.add( writer.faclvl_notime() , "SLOPE" , e  , mean_slope_n2 / (double)n_neg );		  
 		}
 	      
-	      if ( n_pos > 0 ) 
-		{
-		  writer.value( "SLOPE_POS1" , mean_slope_p1 / (double)n_pos );
-		  writer.value( "SLOPE_POS2" , mean_slope_p2 / (double)n_pos );
-		}
 	    }
-	  
+	  	  
 	}
       
 	  
@@ -633,7 +695,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
   // helpers
 
-  const bool using_rel = par.using_rel;
+  using_rel = par.using_rel;
   
   const bool using_pct_pos = par.pct_pos > 0;
   const bool using_pct_neg = par.pct_neg > 0;
@@ -1376,3 +1438,8 @@ std::vector<double> slow_waves_t::time_locked_averaging( const std::vector<doubl
   
 }
 
+
+void slow_waves_t::epoch_dynamics( edf_t * edf )
+{
+  /// can remove
+}

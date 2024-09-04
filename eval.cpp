@@ -250,11 +250,36 @@ std::set<std::string> param_t::strset( const std::string & k , const std::string
   return s;
 }
 
+std::set<std::string> param_t::strset_xsigs( const std::string & k , const std::string delim , const bool uppercase ) const
+{
+  std::set<std::string> s;
+  if ( ! has(k) ) return s;
+  const std::string t = Helper::xsigs( value(k,uppercase) );
+  std::vector<std::string> tok = Helper::quoted_parse( t , delim );
+  for (int i=0;i<tok.size();i++)
+    s.insert( Helper::unquote( tok[i]) );
+  return s;
+}
+
 std::vector<std::string> param_t::strvector( const std::string & k , const std::string delim , const bool uppercase ) const
 {
   std::vector<std::string> s;
   if ( ! has(k) ) return s;
   std::vector<std::string> tok = Helper::quoted_parse( value(k,uppercase) , delim );
+  for (int i=0;i<tok.size();i++)
+    s.push_back( Helper::unquote( tok[i]) );
+  return s;
+}
+
+// embed [x][y] expansion in strvector
+std::vector<std::string> param_t::strvector_xsigs( const std::string & k , const std::string delim , const bool uppercase ) const
+{  
+  std::vector<std::string> s;
+  if ( ! has(k) ) return s;
+
+  // first get string and process for xsigs, then tokenize
+  const std::string t = Helper::xsigs( value(k,uppercase) );
+  std::vector<std::string> tok = Helper::quoted_parse( t , delim );
   for (int i=0;i<tok.size();i++)
     s.push_back( Helper::unquote( tok[i]) );
   return s;
@@ -2975,9 +3000,9 @@ void proc_epoch( edf_t & edf , param_t & param )
       logger << "  set " << ne << " generic epochs, based on annotations [ " << param.value( "annot" ) << " ]";
       if ( param.has( "else" ) ) logger << " and [ " << param.value( "else" ) << " ]";
       logger << "\n";
-      
+
       edf.timeline.output_epoch_info( param.has( "verbose" ) );
-      
+
       return;
     }
 
@@ -6058,7 +6083,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
     {
 
       std::vector<std::string> annots = param.has( "annot" ) ? 
-	param.strvector( "annot" ) : param.strvector( "annots" );
+	param.strvector_xsigs( "annot" ) : param.strvector_xsigs( "annots" );
 
       const int na = annots.size();
 
