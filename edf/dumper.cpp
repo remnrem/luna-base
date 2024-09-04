@@ -1388,8 +1388,8 @@ void edf_t::seg_dumper( param_t & param )
 	{
 	  clocktime_t stoptime = starttime;
 	  stoptime.advance_seconds( secs );
-	  writer.value( "START_HMS" , starttime.as_string() );
-	  writer.value( "STOP_HMS" ,  stoptime.as_string() );
+	  writer.value( "START_HMS" , starttime.as_string( ':' , true) ); // T, add fractional seconds
+	  writer.value( "STOP_HMS" ,  stoptime.as_string( ':' , true) );
 	}
       
       writer.unlevel( "SEG" );
@@ -1467,11 +1467,11 @@ void edf_t::seg_dumper( param_t & param )
 	      
 	      clocktime_t starttime2 = starttime;
 	      starttime2.advance_seconds( secs1 );
-	      writer.value( "START_HMS" , starttime2.as_string() );
+	      writer.value( "START_HMS" , starttime2.as_string( ':' , true ) );
 
 	      clocktime_t stoptime = starttime;
 	      stoptime.advance_seconds( secs2 );
-	      writer.value( "STOP_HMS" ,  stoptime.as_string() );
+	      writer.value( "STOP_HMS" ,  stoptime.as_string(':' , true ) );
 	      
 	    }
 	  
@@ -1569,11 +1569,11 @@ void edf_t::seg_dumper( param_t & param )
 	  
 	  clocktime_t starttime2 = starttime;
 	  starttime2.advance_seconds( secs1 );
-	  writer.value( "START_HMS" , starttime2.as_string() );
+	  writer.value( "START_HMS" , starttime2.as_string(':', true) );
 
 	  clocktime_t stoptime = starttime;
 	  stoptime.advance_seconds( secs2 );
-	  writer.value( "STOP_HMS" ,  stoptime.as_string() );
+	  writer.value( "STOP_HMS" ,  stoptime.as_string(':', true) );
 
 	}
 

@@ -4617,8 +4617,8 @@ int edf_t::add_time_track( const std::vector<uint64_t> * tps )
       // either EDF+C or EDF+D times
       double tsec = contin ? onset : ( (*tps)[rc] / (double)globals::tp_1sec ) ;
       
-      std::string ts = "+" + Helper::dbl2str( tsec ) + "\x14\x14\x00";
-
+      std::string ts = "+" + Helper::dbl2str( tsec , globals::time_format_dp ) + "\x14\x14\x00";
+      
       // need to make sure that the record (i.e. other signals) 
       // are first loaded into memory...
       
@@ -5018,7 +5018,8 @@ bool edf_t::basic_stats( param_t & param )
   if ( calc_dynamics )
     qd.init( *this , param );
   
-  
+  logger << "  processing:";
+    
   for (int s=0; s<ns; s++)
     {
       
@@ -5050,7 +5051,7 @@ bool edf_t::basic_stats( param_t & param )
       
       double t_min = 0 , t_max = 0;
       
-      logger << " processing " << header.label[ signals(s) ] << " ...\n";
+      logger << " " << header.label[ signals(s) ] ;
       
       
       //
@@ -5172,7 +5173,7 @@ bool edf_t::basic_stats( param_t & param )
 		  const int e = timeline.display_epoch( epoch ) - 1;
 		  qd.add( writer.faclvl_notime() , "MEAN" , e  , mean );
 		  if ( calc_median )
-		    qd.add( writer.faclvl_notime() , "MEDIAN" , e  , mean );
+		    qd.add( writer.faclvl_notime() , "MEDIAN" , e  , median );
 		  if ( ! minimal )
 		    {
 		      qd.add( writer.faclvl_notime() , "SD" , e  , sd );
@@ -5368,6 +5369,9 @@ bool edf_t::basic_stats( param_t & param )
       //
             
     }
+
+  logger << "\n";
+  
 
   //
   // All done

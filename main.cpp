@@ -238,7 +238,7 @@ int main(int argc , char ** argv )
 
 
   //
-  // merge EDfs  
+  // merge EDFs (rbind)  
   //
 
   if ( argc >=2 && strcmp( argv[1] , "--merge" ) == 0 )
@@ -251,6 +251,19 @@ int main(int argc , char ** argv )
     }
 
   
+  //
+  // bind EDFs (cbind)  
+  //
+
+  if ( argc >=2 && strcmp( argv[1] , "--bind" ) == 0 )
+    {
+      //global.api();
+      std::vector<std::string> tok;
+      for (int i=2;i<argc;i++) tok.push_back( argv[i] );
+      Helper::bind_EDFs( tok );
+      std::exit(0);
+    }
+
   //
   // map channels/ annots
   //

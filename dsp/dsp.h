@@ -62,7 +62,6 @@
 #include "pac.h"
 #include "hilbert.h"
 #include "fiplot.h"
-#include "slow-waves.h"
 #include "mse.h"
 #include "ed.h"
 #include "interpolate.h"

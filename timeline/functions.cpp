@@ -49,7 +49,7 @@ void timeline_t::annot2signal( const param_t & param )
 {
   // create a new signal based on one or more annotations
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
-  std::vector<std::string> anames = param.strvector( "annot" );
+  std::vector<std::string> anames = param.strvector_xsigs( "annot" );
 
   // SR of new signals
   const int sr = param.requires_int( "sr" );
@@ -175,22 +175,34 @@ void timeline_t::signal2annot( const param_t & param )
   // encoding=LABEL,lwr,upr
   // encoding=label,val,+win
   // bins=min,max,n
-
+  // q=N
+  
   //  VALUE :  X    // --> X+EPS
   //           X-Y
   //           X+Y  // eps
 
-  if ( ! ( param.has( "encoding" ) || param.has( "encoding2" ) || param.has( "bins" ) ) )
-    Helper::halt( "no encoding=label,value,... or encoding2=label,value1,value2,... or bins=min,max,n" );
+  if ( ! ( param.has( "encoding" ) || param.has( "encoding2" ) || param.has( "bins" ) || param.has( "q") ) )
+    Helper::halt( "no encoding=label,value,... or encoding2=label,value1,value2,... or bins=min,max,n or q=n" );
 
   bool e2 = param.has( "encoding" );
   bool e3 = param.has( "encoding2" );
   bool eb = param.has( "bins" );
-  if ( e2 + e3 + eb > 1 ) Helper::halt( "must either specify encoding or encoding2 or bins");
-  const std::string bin_label = param.has( "bin-label" ) ? param.value( "bin-label" ) : "B" ; 
-
+  bool eq = param.has( "q" );
+  
+  if ( e2 + e3 + eb + eq > 1 ) Helper::halt( "must either specify encoding or encoding2 or bins or q");
+  const std::string bin_label = param.has( "bin-label" ) ? param.value( "bin-label" ) : ( eq ? "Q" : "B" ) ; 
+    
   std::vector<std::string> enc; 
   int nxy = -1;
+
+  const int nq = eq ? param.requires_int( "q" ) : 0 ; 
+
+  if ( eq && ( nq < 1 || nq > 200 ) )
+    Helper::halt( "q value must be between 2 and 200" );
+  
+  //
+  // get encodings (although Q-encodings are signal specific, so do below)
+  //
 
   if ( e2 ) 
     {
@@ -202,7 +214,7 @@ void timeline_t::signal2annot( const param_t & param )
       enc = param.strvector( "encoding2" );
       nxy = 3;
     }
-  else
+  else if ( ! eq ) // bins
     {
       // make 'encoding2' style string
       std::vector<double> b = param.dblvector("bins");
@@ -290,9 +302,10 @@ void timeline_t::signal2annot( const param_t & param )
       e[ label ] = std::make_pair( ex , ey );
 
     }
+  
+  logger << "  encoding " << ( eq ? nq : e.size() ) << " annotation instances\n";
 
-  logger << "  encoding " << e.size() << " annotation instances\n";
-
+  
   //
   // For each signal
   //
@@ -300,8 +313,10 @@ void timeline_t::signal2annot( const param_t & param )
   for (int s=0; s<ns; s++)
     {
 
+      
       if ( edf->header.is_annotation_channel( signals(s) ) )
-	Helper::halt( "can only use S2A for data channels" );
+	continue;
+      //Helper::halt( "can only use S2A for data channels" );
       
       //
       // get signal data
@@ -312,6 +327,27 @@ void timeline_t::signal2annot( const param_t & param )
       std::vector<double> * d = slice.nonconst_pdata();  
       
       const std::vector<uint64_t> * tp = slice.ptimepoints();
+
+      //
+      // Get quantiles?
+      //
+
+      if ( eq )
+	{
+	  // wipe any current encoding
+	  e.clear();
+
+	  const double pi = 1 / (double)nq;
+	  double p = 0;
+	  for (int i=0; i<nq; i++)
+	    {
+	      const double lwr = MiscMath::percentile( *d , p );
+	      const double upr = MiscMath::percentile( *d , i == nq-1 ? 1.0 : p + pi );
+	      e[ bin_label + Helper::int2str(i+1) ] = std::make_pair( lwr , upr );
+	      p += pi;	      
+	    }
+	}
+      
       
       //
       // Add annot class?
@@ -423,7 +459,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   //
 
   std::vector<std::string> requested = param.has( "annot" ) 
-    ? param.strvector( "annot" ) 
+    ? param.strvector_xsigs( "annot" ) 
     : annotations.names() ;
   
 
@@ -664,10 +700,10 @@ void timeline_t::list_all_annotations( const param_t & param )
 
   std::vector<std::string> names = annotations.names();
 
-  // restrict to a subset? (allow wildcards here)
+  // restrict to a subset? (allow wildcards here as well as xsigs )
   std::set<std::string> req_annots;
   if ( param.has( "annot" ) )
-    req_annots = annotate_t::root_match( param.strset( "annot" ) , names );
+    req_annots = annotate_t::root_match( param.strset_xsigs( "annot" ) , names );
   const bool restricted = req_annots.size();
   
   //
@@ -1231,7 +1267,7 @@ void timeline_t::signal_means_by_annot( const param_t & param )
   //
 
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
-  std::vector<std::string> anames = param.strvector( "annot" );
+  std::vector<std::string> anames = param.strvector_xsigs( "annot" );
 
   //
   // ignore annotation instannce IDs?
@@ -1378,14 +1414,15 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 
 	      // main mean
 	      writer.value( "M" , kk->second / (double)jj->second );
-
+	      writer.value( "S" , jj->second / (double)Fs ); // span in seconds
+			    
 	      // flanking regions?
 	      if ( flanking )
 		{
 		  writer.value( "L" , left_ax[ ii->first ][ jj->first ][ kk->first ] / (double)left_an[ ii->first ][ jj->first ] ) ;
 		  writer.value( "R" , right_ax[ ii->first ][ jj->first ][ kk->first ] / (double)right_an[ ii->first ][ jj->first ] ) ;
 		}
-
+	      
 	      // next signal
 	      ++kk;
 	    }

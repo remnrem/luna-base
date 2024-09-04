@@ -48,11 +48,11 @@ struct qdynam_results_t
     sd = 0;
     omean = mean = 0;
     cv = 0;
-    corr1 = corr2 = 0;
 
-    lma1 = 0; lmb2 = 0; // time-based                                                                                                                        
-    r_lma1 = 0; r_lmb2 = 0; // rank-based                                                                                                                    
-    tstat1 = tstat2 = 0;
+    corr = 0; // X
+    lmb2 = 0; // X^2
+    
+    tstat = 0; // alternate linear stat
     ne = 0;
 
     tmax = amax = rmax = 0;
@@ -66,14 +66,10 @@ struct qdynam_results_t
   double sd;
   double mean;
   double cv;
-  double tstat1; // based on simple epoch count
-  double tstat2; // uses 'actual' (not clock) epoch count
+  double tstat; 
 
-  double corr1; // rank-order corr
-  double corr2; // as tstat2
-
-  double lma1, lmb2;
-  double r_lma1, r_lmb2; 
+  double corr; // X
+  double lmb2; // X^2   
   
   // max stats
   double tmax; // time from start to max (post smoothing) (epochs)
@@ -102,7 +98,7 @@ struct qdynam_t
 
   // ctr, init
   qdynam_t( ) { } ;
-  void init( edf_t & , param_t & );
+  void init( edf_t & , const param_t & );
     
   //   loop over channels, freqs, etc,
   //   add stratified epoch-level metrics at time of compute)
@@ -146,7 +142,7 @@ private:
   void set_nq ( const int x ) { nq = x; } 
   void set_max_cycles( const int n );
   void set_cycles( const std::vector<int> n );
-  
+  void set_rank_based( const bool b ) { rank_based = b; } 
 
   //
   // cache results
@@ -189,7 +185,8 @@ private:
   bool norm01; // scale min-max to range 1.0 
   bool norm_mean; // mean-center each trace
   bool norm_each_section; // repeat norm for each cycle
-
+  bool rank_based; // use i rather than e[i] as time (default F)
+  
   bool wcycles; // weight each cycle by # epochs for BETWEEN
   
   std::set<std::string> incl_cycles; // uniq cycles to include

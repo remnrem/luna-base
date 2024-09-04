@@ -88,6 +88,7 @@
 #include "ica/ica.h"
 
 #include "spindles/spindles.h"
+#include "spindles/slow-waves.h"
 
 #include "artifacts/artifacts.h"
 #include "artifacts/correct.h"

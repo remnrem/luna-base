@@ -376,8 +376,14 @@ double MiscMath::percentile( const std::vector<double> & x , double p )
   if ( n == 0 ) Helper::halt( "internal problem, taking percentile of 0 elements");
   if ( n == 1 ) return x[0];
   if ( p < 0 || p > 1 ) Helper::halt( "internal problem, invalid percentile specified" );
-  int pn = n*p;
-  return MiscMath::kth_smallest_preserve(x,pn);
+
+  // special case for min/max
+  if ( fabs( p ) < 1e-8 )
+    return min( x );
+  else if ( fabs( 1 - p ) < 1e-8 )
+    return max( x );
+
+  return MiscMath::kth_smallest_preserve(x, n * p );
 }
 
 

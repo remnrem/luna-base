@@ -734,7 +734,7 @@ double timeline_t::epoch_length() const
 {
   if ( standard_epochs ) 
     return (double)epoch_length_tp / globals::tp_1sec;
-  if ( current_epoch != -1 )
+  if ( current_epoch != -1 && epochs.size() > current_epoch )
     return epochs[ current_epoch ].duration_sec();
   return 0;
 }
@@ -1519,7 +1519,7 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
 	  writer.value( "START"    , interval.start_sec() );
 	  writer.value( "MID"      , interval.mid_sec() );
 	  writer.value( "STOP"     , interval.stop_sec() );
-	  writer.value( "TP" , interval.as_tp_string() );
+	  writer.value( "TP"       , interval.as_tp_string() );
 	  writer.value( "DUR"      , interval.duration_sec() );
 
 	  // original time-points
@@ -1529,7 +1529,7 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
 	      const double sec0 = interval.start * globals::tp_duration;
 	      clocktime_t present = starttime;
 	      present.advance_seconds( sec0 );
-	      std::string clocktime = present.as_string( ':' );
+	      std::string clocktime = present.as_string( ':' , true ); // disp. fractional seconds
 	      writer.value( "HMS" , clocktime );
 	    }
 	}
