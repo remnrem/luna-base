@@ -4804,16 +4804,17 @@ void edf_t::rescale( const int s , const std::string & sc , const bool quietly )
   
   if ( header.is_annotation_channel(s) ) return;
 
-  bool is_mV = header.phys_dimension[s] == "mV";
-  bool is_uV = header.phys_dimension[s] == "uV";
-  bool is_V  = header.phys_dimension[s] == "V";
+  // allow case-insensitive matching
+  bool is_mV = Helper::imatch( header.phys_dimension[s] , "mV" );
+  bool is_uV = Helper::imatch( header.phys_dimension[s] , "uV" );
+  bool is_V  = Helper::imatch( header.phys_dimension[s] , "V" );  
 
   bool rescale_from_mV_to_uV = is_mV && sc == "uV"; // *1000
   bool rescale_from_uV_to_mV = is_uV && sc == "mV"; // /1000
   
   bool rescale_from_V_to_uV = is_V && sc == "uV"; // * 1e6
   bool rescale_from_V_to_mV = is_V && sc == "mV"; // * 1e3
-
+  
   if ( ! ( rescale_from_mV_to_uV || rescale_from_uV_to_mV 
 	   || rescale_from_V_to_uV || rescale_from_V_to_mV ) ) 
     {
