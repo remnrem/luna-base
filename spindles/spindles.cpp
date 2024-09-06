@@ -25,7 +25,7 @@
 #include "mspindles.h"
 #include "plot-spindles.h"
 #include "propag.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"

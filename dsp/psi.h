@@ -31,7 +31,7 @@ struct signal_list_t;
 #include "fftw/fftwrap.h"
 #include <complex>
 #include <vector>
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 namespace dsptools
 {

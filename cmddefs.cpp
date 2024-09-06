@@ -3314,6 +3314,7 @@ void cmddefs_t::add_var( const std::string & cmd , const std::string & factors ,
   tfac_t tfac( factors );
   ovars[ cmd ][ tfac ][ var ] = desc;
   vhide[ cmd ][ tfac ][ var ] = hide;
+  otout[ cmd ][ tfac ][ var ] = true;  
 }
 
 // add hidden variable
@@ -3322,6 +3323,12 @@ void cmddefs_t::hide_var( const std::string & cmd , const std::string & factors 
   add_var( cmd , factors , var , desc , true );
 }
 
+// register (new) var for output
+void cmddefs_t::register_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool value )
+{
+  tfac_t tfac( factors );
+  otout[ cmd ][ tfac ][ var ] = value;  
+}
 
 
 void cmddefs_t::all_compressed( bool b ) { allz = b; } 

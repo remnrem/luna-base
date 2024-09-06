@@ -128,8 +128,9 @@ class cmddefs_t
 
   // add hidden variable
   void hide_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc );
-  
-  
+
+  // register extra col for output (controlled by caller)
+  void register_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool value = true );
   //
   // check parameters
   //
@@ -236,6 +237,8 @@ class cmddefs_t
   // cmd->table->var->desc
   std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > > ovars;
 
+  // cmd->table->var->tout
+  std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > > otout;
 
   //
   // hidden status (i.e. not reported in help output)

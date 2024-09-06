@@ -30,7 +30,7 @@
 #include "db/db.h"
 #include "fftw/fftwrap.h"
 #include "dsp/mse.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 #include "fftw/bandaid.h"
 
 extern writer_t writer;

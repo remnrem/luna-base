@@ -36,7 +36,7 @@
 
 #include "helper/helper.h"
 #include "helper/logger.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "clocs/clocs.h"
 

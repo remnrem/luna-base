@@ -23,6 +23,7 @@ SRCS = globals.cpp eval.cpp cmddefs.cpp \
         $(wildcard spectral/*.cpp) \
         $(wildcard spectral/mtm/*.cpp) \
         $(wildcard spindles/*.cpp) \
+	$(wildcard dynamics/*.cpp) \
         $(wildcard intervals/*.cpp) \
         $(wildcard resp/*.cpp) \
         $(wildcard fftw/*.cpp) \

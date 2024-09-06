@@ -26,7 +26,7 @@
 #include "edf/slice.h"
 #include "dsp/resample.h"
 #include "fftw/fftwrap.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "helper/helper.h"
 #include "db/db.h"

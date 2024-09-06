@@ -27,7 +27,7 @@
 #include "intervals/intervals.h"
 #include "timeline/cache.h"
 #include "annot/annot.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include <vector>
 #include <iostream>

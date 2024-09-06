@@ -28,7 +28,7 @@
 #include "db/db.h"
 #include "edfz/edfz.h"
 #include "dsp/resample.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "slice.h"
 #include "tal.h"
@@ -5801,3 +5801,84 @@ void edf_t::preread( param_t & param )
   read_records( 0 , header.nr_all - 1 );
 }
 
+
+void edf_t::combine( param_t & param )
+{
+  bool make_sum = param.has( "sum" );
+  bool make_median = param.has( "median" );
+  bool make_mean = param.has( "mean" ) || ! ( make_sum || make_median ) ;
+  if ( make_sum + make_median + make_mean != 1 ) Helper::halt( "can only specify one of sum, median or (the default) mean" );
+
+  // new channel is the term
+  const std::string newch = param.requires( make_sum ? "sum" : ( make_median ? "median" : "mean" ) );
+
+  // must be unique
+  if ( header.has_signal( newch ) )
+    Helper::halt( newch + " already exists in the EDF" );
+       
+  // requires 1+ signals
+  signal_list_t signals = header.signal_list( param.requires( "sig" ) );
+
+  const int ns = signals.size();
+  if ( ns < 1 ) Helper::halt( "no selected channels found" );
+  if ( ns == 1 ) { make_sum = true; make_mean = make_median = false; }
+  if ( ns == 2 && make_median ) { make_mean = true; make_median = false; } 
+  
+  logger << "  creating new channel " << newch << " as the "
+	 << ( make_mean ? "mean" : ( make_median ? "median" : "sum" ) )
+	 << " of " << ns << " channels:";
+  for (int s=0; s<ns; s++) logger << " " << signals.label(s);
+  logger << "\n";
+    
+  //
+  // check SR for all channels  
+  //
+  
+  const int sr = (int)header.sampling_freq( signals(0) );
+  
+  for (int s=1;s<ns;s++) 
+    if ( header.n_samples[ signals(s) ] != header.n_samples[ signals(0) ] )
+      Helper::halt( "all signals must have similar sampling rates" );
+  
+  // build new channel
+  //
+  
+  std::vector<double> x;
+  
+  // number of samples points per record for reference
+  const int np = header.n_samples[ signals(0) ];
+  
+  int rec = timeline.first_record();
+  while ( rec != -1 )
+    {
+      ensure_loaded( rec );
+
+      edf_record_t & record = records.find(rec)->second;
+
+      // points (rows) by signals (cols)
+      std::vector<std::vector<double> > sigdata( np );
+      for ( int i=0; i<np; i++) sigdata[i].resize(ns,0);
+      
+      // get data
+      for (int s=0;s<ns;s++) 		
+	{
+	  std::vector<double> y = record.get_pdata( signals(s) );
+	  for (int i=0; i<np; i++) sigdata[i][s] = y[i];
+	}
+
+      // combine
+      if ( make_mean )
+	for (int i=0; i<np; i++) x.push_back( MiscMath::mean( sigdata[i] ) );
+      else if ( make_median )
+	for (int i=0; i<np; i++) x.push_back( MiscMath::median( sigdata[i] ) );
+      else if ( make_sum )
+	for (int i=0; i<np; i++) x.push_back( MiscMath::sum( sigdata[i] ) );
+      
+      // next record
+      rec = timeline.next_record(rec);       
+    }
+  
+  // add signal
+  add_signal( newch , sr , x );
+  
+}

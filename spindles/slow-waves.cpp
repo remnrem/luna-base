@@ -31,7 +31,7 @@
 #include "db/db.h"
 #include "miscmath/crandom.h"
 #include "eval.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"
