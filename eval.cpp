@@ -1132,7 +1132,7 @@ bool cmd_t::eval( edf_t & edf )
       //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
       else if ( is( c, "MEANS" ) )        proc_sig_annot_mean( edf, param(c) );
       else if ( is( c, "TABULATE" ) )     proc_sig_tabulate( edf, param(c) );
-
+      
       else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
       else if ( is( c, "HEAD" ) )         proc_head_matrix( edf , param(c) );
 
@@ -1172,7 +1172,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
-
+      else if ( is( c, "COMBINE" ) )      proc_combine( edf , param(c) );
       else if ( is( c, "FREEZE" ) )       proc_freeze( edf , param(c) );
       else if ( is( c, "THAW" ) )         proc_thaw( edf , param(c) );
       else if ( is( c, "CLEAN-FREEZER"))  proc_clean_freezer( edf , param(c) );
@@ -2028,6 +2028,12 @@ void proc_zratio( edf_t & edf , param_t & param )
 void proc_correct( edf_t & edf , param_t & param )
 {
   dsptools::artifact_correction( edf , param );
+}
+
+// COMBINE : make a new signal
+void proc_combine( edf_t & edf , param_t & param )
+{
+  edf.combine( param );
 }
 
 // TRIM : empircal heuristic to set lights off/on times based on signals

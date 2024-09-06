@@ -26,7 +26,7 @@
 #include "edf/slice.h"
 #include "annot/annot.h"
 #include "pdc/pdc.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"

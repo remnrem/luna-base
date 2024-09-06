@@ -40,14 +40,6 @@
 extern logger_t logger;
 extern writer_t writer;
 
-// - what people know
-//  - different modalities / ways to study sleep
-//  - applications
-//  - brain,
-//  - heart
-//  - lung
-
-
   
 pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    param_t & param )

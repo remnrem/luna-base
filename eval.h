@@ -349,6 +349,7 @@ void proc_thaw( edf_t & , param_t & );
 void proc_clean_freezer( edf_t & , param_t & );
 
 void proc_trans( edf_t & , param_t & );
+void proc_combine( edf_t & , param_t & );
 
 void proc_timetrack( edf_t & , param_t & );
 void proc_continuous( edf_t & , param_t & );

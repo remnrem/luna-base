@@ -26,7 +26,7 @@
 #include "defs/defs.h"
 #include "stats/matrix.h"
 #include "stats/statistics.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "db/db.h"
 #include "helper/logger.h"

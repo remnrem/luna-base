@@ -20,7 +20,7 @@
 //
 //    --------------------------------------------------------------------
 
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 #include "miscmath/miscmath.h"
 #include "helper/helper.h"
 #include "dsp/tv.h"
@@ -454,7 +454,11 @@ void qdynam_t::init( edf_t & edf , const param_t & param )
 
   if ( param.has( "dynam-use-ranks" ) )
        set_rank_based( param.yesno( "dynam-use-ranks" ) );
-  
+
+  if ( param.has( "dynam-nq" ) )
+    nq = param.requires_int( "dynam-nq" ) ;
+  if ( nq < 2 || nq > 100 ) Helper::halt( "dynam-nq must be between 2 and 100" );
+
   if ( param.has( "dynam-min-ne" ) )
     set_min_ne( param.requires_int( "dynam-min-ne" ) );
 
@@ -537,6 +541,7 @@ void qdynam_t::init( edf_t & edf , const param_t & param )
 	 << "    dynam-mean-windows  = " << mean_window << "\n"
 	 << "    dynam-trim-epochs   = " << ( trim_epochs.size() == 2 ? Helper::stringize(trim_epochs) : "." ) << "\n"
 	 << "    dynam-epoch         = " << ( epoch_output ? "T" : "F" ) << "\n"
+	 << "    dynam-nq            = " << nq << "\n"
 	 << "    dynam-min-ne        = " << min_ne << "\n";
   
   

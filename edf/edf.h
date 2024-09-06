@@ -497,6 +497,7 @@ public:
 		  const bool dereference = false ,
 		  const bool verbose = true );
 
+  void combine( param_t & param );
   
   void guess_canonicals( param_t & , bool make_signals );
 

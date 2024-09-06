@@ -27,7 +27,7 @@
 #include "cwt/cwt.h"
 #include "dsp/hilbert.h"
 #include "fftw/fftwrap.h"
-#include "miscmath/qdynam.h"
+#include "dynamics/qdynam.h"
 
 #include "db/db.h"
 #include "helper/logger.h"
