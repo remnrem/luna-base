@@ -69,7 +69,10 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
 
   // assume that we have manual staging ('true') 
   int n_unique_stages = proc( edf , param , true );
-  
+
+  // report
+  writer.value( "NSS" , n_unique_stages );
+
   //
   // Cache for RESOAP?
   //
@@ -80,6 +83,16 @@ void suds_indiv_t::evaluate( edf_t & edf , param_t & param )
       suds_t::cached = *this;
     }
 
+
+  //
+  // no components found?
+  //
+
+  if ( n_unique_stages == -1 )
+    {
+      logger << "  *** fewer than 2 non-missing stages for this individual, cannot complete SOAP\n";      
+      return;
+    }
 
   //
   // No observed stages?
@@ -374,7 +387,7 @@ void suds_indiv_t::summarize_transitions( const Eigen::MatrixXd & pp , // poster
   
   // re-process file
   int n_unique_stages = proc( edf , param , true ); 
-
+  
   // true means has staging (i.e. not a 'target' in the SUDS sense, but 
   // but the suds_t::ignore_target_priors means this is ignored (i.e. we do 
   // not try to reference the staging (which presumably no longer matches the epoch 

@@ -1882,7 +1882,9 @@ void proc_runpops( edf_t & edf , param_t & param )
   if ( opt_args != "" )
     {
       logger << "  adding additional args to POPS: " << opt_args << "\n";
-      pops_param.parse( opt_args );
+      std::vector<std::string>  tok = Helper::parse( opt_args , " \t" );
+      for (int i=0; i<tok.size(); i++)
+	pops_param.parse( tok[i] );
     }
 
   proc_pops( edf , pops_param );
