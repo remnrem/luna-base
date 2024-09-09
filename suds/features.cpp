@@ -78,8 +78,11 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   
   nc = suds_t::nc;
 
-  int rc = 0;
+  // return code/value: if success, then unique # of valid stages
+  // otherwise, 0/-ve for flagging modes
 
+  int rc = 0;
+  
 
   //
   // Check required signals
@@ -146,7 +149,7 @@ int suds_indiv_t::proc( edf_t & edf , param_t & param , bool is_trainer )
   //
   
   rc = proc_prune_cols( &helper );
-  if ( rc == 0 ) return 0;
+  if ( rc == 0 ) return -1; // code for not enough components
  
 
   //
@@ -1570,7 +1573,7 @@ int suds_indiv_t::proc_prune_cols( suds_helper_t * helper )
        
        nc = incl_comp.size();
        
-     }
+    }
 
 
    
