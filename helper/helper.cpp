@@ -1070,7 +1070,11 @@ bool Helper::imatch(const std::string& a, const std::string& b , unsigned int mi
   //     E
   //     EDF Annotations
   // will match, so  
- 
+
+  // edge cases:
+  if ( a == "" && b == "" ) return true;
+  if ( a == "" || b == "" ) return false;
+  
   unsigned int sz = a.size() < b.size() ? a.size() : b.size() ;
   // if specified, require up to 'min' characters
   if ( min != 0 ) sz = min;
@@ -1910,8 +1914,9 @@ std::string Helper::xsigs( const std::string & t )
   //  or a single term
   
   // no nesting
-  // assumes one is a single (term), the second is [list]
-  // which will be expanded:
+
+  // three-way concatenation [a][b][c] 
+  //    [[a][b]][c]
   
   // txt locations
   std::map<int,int> splices;  
@@ -2021,16 +2026,16 @@ std::string Helper::xsigs( const std::string & t )
 	}
     }
   
-  // std::map<int,std::string>::const_iterator jj2 = root.begin();
-  // while ( jj2 != root.end() )
-  //   {
-  //     std::cout << "--> " 
-  // 		<< jj2->second << "\t"
-  // 		<< "[" << inserts[ jj2->first ] << "]\t"
-  // 		<< stops[ jj2->first ] << "\t"
-  // 		<< starts[ jj2->first ] << "\n";
-  //     ++jj2;
-  //    }
+   // std::map<int,std::string>::const_iterator jj2 = root.begin();
+   // while ( jj2 != root.end() )
+   //   {
+   //     std::cout << "--> " 
+   // 		<< jj2->second << "\t"
+   // 		<< "[" << inserts[ jj2->first ] << "]\t"
+   // 		<< stops[ jj2->first ] << "\t"
+   // 		<< starts[ jj2->first ] << "\n";
+   //     ++jj2;
+   //    }
     
 
   //
@@ -2118,6 +2123,24 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 	      if ( cmd_t::is_special( varname ) )
 		{
 		  Helper::halt( varname + " is a reserved variable and cannot be used in a script" );
+		}
+	      // append definition?
+	      else if ( varname.find( "+=" ) != std::string::npos )
+		{
+		  std::vector<std::string> tok = Helper::parse( varname , "=" );
+		  
+		  if ( tok.size() != 2 ) Helper::halt( "bad format for ${var+=value} definition" );
+		  // recursively swap in any existing variables in the defiinition
+		  // ${a+=${b}} 
+		  Helper::swap_in_variables( &tok[1] , vars );
+		  
+		  // allow for expansions too
+		  std::string lvalue = tok[0].substr( 0 , tok[0].size() - 1 ); // skip "+" of "+=" 
+		  std::string evalue = (*vars)[ lvalue ] == "" ? tok[1] : ( "," + tok[1] )  ;
+		  Helper::expand_numerics( &evalue );		  
+		  logger << "  appending variable ${" << lvalue << "} = " << (*vars)[ lvalue ] << evalue << "\n";
+		  (*vars)[ lvalue ] += evalue;
+		  break;
 		}
 	      // definition?
 	      else if ( varname.find( "=" ) != std::string::npos )

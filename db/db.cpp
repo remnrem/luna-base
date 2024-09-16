@@ -1499,6 +1499,7 @@ void writer_t::set_types()
   //  std::cout << "SETTING_TYPES()\n";
   
   numeric_factor( globals::epoch_strat );
+  numeric_factor( globals::comp_strat ); 
   numeric_factor( globals::sample_strat );
   numeric_factor( globals::freq_strat );
   numeric_factor( globals::sec_strat );

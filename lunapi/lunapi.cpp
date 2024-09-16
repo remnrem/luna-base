@@ -453,6 +453,15 @@ int lunapi_t::build_sample_list( const std::vector<std::string> & toks )
 }
 
 
+
+std::vector<std::tuple<std::string,std::string,bool> > lunapi_t::validate_sample_list()
+{
+  // ID EDF set(annot)
+  std::vector<std::tuple<std::string,std::string,std::set<std::string> > > sl = sample_list();  
+  return Helper::validate_slist_lunapi_mode( sl ); 
+}
+
+
 int lunapi_t::read_sample_list( const std::string & file )
 {
   const std::string filename = Helper::expand( file );
@@ -684,6 +693,30 @@ rtables_return_t lunapi_t::eval( const std::string & cmdstr )
       std::optional<lunapi_inst_ptr> l1 = inst( i );
       if ( l1 ) 
 	{
+
+	  // skip this indiv?
+	  const std::string rootname = (*l1)->get_id();
+
+	  bool include = true;
+      
+	  if ( globals::id_excludes.find( rootname ) != globals::id_excludes.end() )
+	    include = false;	  
+	  if ( globals::id_includes.size() != 0
+	       && globals::id_includes.find( rootname ) == globals::id_includes.end() )
+	    include = false;
+	  if ( ! include ) continue; 
+      
+	  // else, do we have an 'ID' check? (id=ID does not match so skip)
+	  if ( globals::sample_list_ids.size()
+	       && globals::sample_list_ids.find( rootname ) == globals::sample_list_ids.end() )
+	    continue;
+	  
+	  // skip=ID matches
+	  if ( globals::sample_list_ids_skips.size() && 
+	       globals::sample_list_ids_skips.find( rootname ) != globals::sample_list_ids_skips.end() )
+	    continue;
+	  
+	  
 	  // clear any problem flags
 	  reset();
 	  lunapi_inst_ptr p1 = *l1;

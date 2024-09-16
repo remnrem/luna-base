@@ -60,6 +60,9 @@
 #include "stats/lda.h"
 #include "stats/qda.h"
 
+#include "dynamics/qdynam.h"
+#include "dynamics/e-cycles.h"
+
 #include "annot/annot.h"
 #include "annot/annotate.h"
 #include "annot/align-annots.h"

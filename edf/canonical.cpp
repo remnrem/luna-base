@@ -37,7 +37,6 @@ extern writer_t writer;
 extern logger_t logger;
 
 std::vector<canon_rule_t> canonical_t::rules;
-std::map<std::string,std::string> canonical_t::aliases;
 std::map<int,std::string> canonical_t::scale_codes;
 
 // special case: single label means 'close out'
@@ -84,12 +83,13 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
       // no indentation: new canonical label
       //  -- which might also use the canon <- alias1 alias2 ... syntax
       // will only have one of these
+      
       if ( line[0] != ' ' )
 	{
 	  
 	  // special case 1: (handled below)
 	  //  canon 
-
+	  
 	  // equals
 
 	  //  canon
@@ -116,24 +116,19 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	  //  When loading back into Luna, they will automatically be uniquified
 	  
 	  std::vector<std::string> t1 = Helper::quoted_parse( line , ", \t" );
-
+	  
+	  // "<-" rule
 	  if ( t1.size() > 2 && t1[1] == "<-" )
 	    {	      
 	      canonical_label = t1[0];
+
 	      std::vector<std::string> tfin;
 	      for (int j=2; j<t1.size(); j++) // skips canon <-
-		{
-		  std::vector<std::string> t2 =
-		    Helper::quoted_parse( canonical_t::swap_in_alias( t1[j] ) , ", \t" );
-		  for (int k=0; k < t2.size(); k++)
-		    tfin.push_back( t2[k] );
-		}
-
+		tfin.push_back( t1[j] );
+	      
 	      // add as req_sigs...
 	      for (int j=0; j<tfin.size(); j++)
-		{
-		  req_sig.push_back( Helper::unquote( Helper::toupper( tfin[j] ) ) );		  
-		}
+		req_sig.push_back( Helper::unquote( Helper::toupper( tfin[j] ) ) );		  
 	      
 	      // also add canonical label itself
 	      req_sig.push_back( Helper::unquote( Helper::toupper( canonical_label ) ) );
@@ -194,14 +189,14 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	      if ( current_rule == "" )
 		Helper::halt( "no current rule type (group:, req:, unless: or set:) specified:\n" + line );
 
-	      // values here -- allow aliases to be swapped in for all cases
+	      // values here 
 
 	      if ( current_rule == "group" )
 		{
 		  std::vector<std::string> tokb = Helper::quoted_parse( line , "," );
 		  for (int j=0; j<tokb.size(); j++)
 		    {
-		      std::vector<std::string> tokc = Helper::quoted_parse( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) , "," );
+		      std::vector<std::string> tokc = Helper::quoted_parse( Helper::trim( tokb[j] ) , "," );
 		      for (int k=0; k<tokc.size(); k++)
 			group.insert( Helper::trim( tokc[k] )) ;
 		    }
@@ -211,7 +206,7 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		  std::vector<std::string> tokb = Helper::quoted_parse( line , "," );
 		  for (int j=0; j<tokb.size(); j++)
 		    {
-		      std::vector<std::string> tokc = Helper::quoted_parse( canonical_t::swap_in_alias( Helper::trim( tokb[j] ) ) , "," );
+		      std::vector<std::string> tokc = Helper::quoted_parse( Helper::trim( tokb[j] ) , "," );
 		      for (int k=0; k<tokc.size(); k++)
                         unless.insert( Helper::trim( tokc[k] ) );		      
 		    }
@@ -219,27 +214,14 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 	      else if ( current_rule == "req" )
 		{
 		  std::vector<std::string> tok = Helper::quoted_parse( line , "=" );
+		  
 		  if ( tok.size() != 2 )
 		    Helper::halt( "expecting key = value format:\n" + line );
 		  
 		  std::string key = Helper::trim( Helper::toupper( tok[0] ) , ' ', '\t' );
 		  std::string value = Helper::trim( tok[1] , ' ', '\t' );
-		  std::vector<std::string> tokb = Helper::quoted_parse( value , "," );
-		  std::vector<std::string> tok2;
-
-		  // swap in aliases?
-		  if ( key == "SIG" || key == "REF" || key == "TRANS" || key == "UNIT" )
-		    for (int j=0; j<tokb.size(); j++)
-		      {
-			std::vector<std::string> tokc =
-			  Helper::quoted_parse( canonical_t::swap_in_alias( tokb[j] ) , "," );
-			for (int k=0; k<tokc.size(); k++)
-			  {
-			    tok2.push_back( tokc[k] );
-			    //std::cout << " addding [" << tokc[k] << "]\n";
-			  }
-		      }
-		    
+		  std::vector<std::string> tok2 = Helper::quoted_parse( value , "," );
+		  
 		  // SIG, REF, TRANS, SR-MIN, SR-MAX, UNIT, SCALE
 		  // n.b. signals/references are vectors, as order is important
 		  
@@ -284,7 +266,9 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
 		      // as above, cannot specify a value multiple times
 		      // allow '*' as a pref str too 
 
-		      std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) , '*' );
+		      // change: take pref. unit 'as is' (although we still match on the sanitized version, etc) 
+		      //std::string pref_str = Helper::sanitize( Helper::trim( Helper::unquote( Helper::toupper( tok2[0] ) ) ) , '*' );
+		      std::string pref_str = tok2[0];
 		      
 		      for (int j=0; j<tok2.size(); j++)
 			{
@@ -425,8 +409,49 @@ canon_edf_signal_t::canon_edf_signal_t( const std::string & label ,
 }
 
 
-int canonical_t::read( const std::string & filename )
+
+std::vector<std::string> canonical_t::preprocess( const std::string & filename )
 {
+  
+  // allow 1: normal luna variables
+  //       2: define: and apply: statements to generate rules
+
+
+  // C4_M1
+  //  req:
+  //   sig = C4_M1,C4_A1,EEG_C4_M1,EEG_C4_A1
+  //   unit = uvolt
+  //   unit = mvolt
+  //   unit = volt
+  // set:
+  //   unit = uV
+  //   sr = 128
+
+  // C4_M1
+  //  req:
+  //   sig = C4,EEG_C4,C4_REF,EEG_C4_REF
+  //   ref = A1,M1,EEG_A1,EEG_M1,
+  //   ref = A1_REF,M1_REF,EEG_A1_REF,EEG_M1_REF
+  //   unit = uvolt
+  //   unit = mvolt
+  //   unit = volt
+  //  set:
+  //   unit = uV
+  //   sr = 128
+
+
+  // define: EEG_rule1
+  //  req:
+  //   sig = ^_M1,^_A1,EEG_^_M1,EEG_^_A1
+  //   unit = uvolt
+  //   unit = mvolt
+  //   unit = volt
+  // set:
+  //   unit = uV
+  //   sr = 128
+
+  // apply: EEG_rule1 C3 C4 F3 F4 
+  
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not open " + filename );
   
@@ -434,56 +459,170 @@ int canonical_t::read( const std::string & filename )
 
   std::vector<std::string> lines;
 
+  std::map<std::string,std::string> file_vars;
+
+  // built by 'define:' 
+  std::map<std::string,std::vector<std::string> > templates;
+  std::map<std::string,std::string> template_target_forms;
+    
+  bool define_templates = false;
+  std::string curr_template;
+  
   while ( 1 )
     {
       std::string line;
-
+      
       Helper::safe_getline( IN1 , line );
       if ( IN1.eof() ) break;
+
+      // save original
+      std::string original_line = line;
+      
+      // comment line (in which case, do not set variables even)
+      if ( line.size() != 0 && ( line[0] == '%'  || line[0] == '#' ) )
+	{	  
+	  lines.push_back( line );
+	  continue;
+	}
+
+      // allow $${v} to remain as ${v} in the applied template::
+      line = Helper::search_replace( line , "$${" , "__tmp_retain__" );
+	        
+      // using Luna's generic variable library, define ${v=xyz} and swap in ${v} 
+      Helper::swap_in_variables( &line , &file_vars );
+
+      // swap back: $${v} --> ${v}
+      line = Helper::search_replace( line , "__tmp_retain__" , "${" );
+      
+      // end of a define block? 
+      if ( line == "" ) 
+	{
+	  if ( define_templates ) define_templates = false;
+	  else lines.push_back( "% " + original_line ); // retain blank otherwise and skip
+	  // retain 
+	  continue;
+	}
+            
+      // define: template-label [target-form]
+      if ( Helper::imatch( line , "define:" ) )
+	{
+	  // if [target] is blank, then set applied target to ^, i.e.
+	  //  otherwise, requires ^ in it somewhere	  
+	  std::vector<std::string> tok = Helper::parse( line , " \t" );
+	  if ( ! ( tok.size() == 2 || tok.size() == 3 ))
+	    Helper::halt( "expecting template define: label [target-form] \n[" + line + "]" );
+	  define_templates = true;
+	  curr_template = Helper::toupper( tok[1] );
+	  if ( tok.size() == 2 ) template_target_forms[ curr_template ] = "^";
+	  else template_target_forms[ curr_template ] = tok[2];;
+	  logger << "  defining template '" << tok[1] << "' with target form '" << template_target_forms[ curr_template ] << "'\n";
+	  // add commented-out version of template
+	  lines.push_back( "% " + line );
+	  continue;
+	}
+
+      // build up a template?
+      if ( define_templates )
+	{
+	  templates[ curr_template ].push_back( line );
+	  // add commented-out version of template
+	  lines.push_back( "% " + line );
+	  continue;
+	}  
+      
+      // apply: a template?
+      if ( Helper::imatch( line , "apply:" ) )
+	{
+	  std::vector<std::string> tok = Helper::quoted_parse( line , ", \t" );
+          if ( tok.size() == 1 ) Helper::halt( "expecting template apply: label\n" + line );
+	  const std::string templ = Helper::toupper( tok[1] );
+	  
+	  if ( templates.find( templ ) == templates.end() )
+	    Helper::halt( "apply: " + tok[1] + " but no prior define: " + tok[1] + " found" );
+	  
+	  // swaps-ins
+	  if ( tok.size() < 3 ) Helper::halt( "no swap-ins specified for template " + tok[1] );
+
+	  logger << "  expanding template '" << tok[1] << "' for " << tok.size() - 2 << " channels\n";
+
+	  // add commented-out version of apply:
+	  lines.push_back( "% " + line + "\n" );
+	  
+	  for (int j=2; j<tok.size(); j++)
+	    {
+	      // label 
+	      const std::string lab = tok[j];
+
+	      // add label from target-form
+	      std::string target_lab = Helper::search_replace( template_target_forms[ templ ] , globals::indiv_wildcard , lab );
+	      // also swap in any $${m} (now ${m}) variables at this point
+	      Helper::swap_in_variables( &target_lab , &file_vars );
+	      // then write it
+	      lines.push_back( target_lab );
+
+	      // then rule
+	      const std::vector<std::string> & tlines = templates[ templ ];
+	      for (int i=0; i<tlines.size(); i++)
+		{
+		  // swap out ^ --> lab
+		  // use indiv wildcard (which allows changing of this if needed from ^)
+		  std::string aline = Helper::insert_indiv_id( lab , tlines[i] );
+
+		  // also swap in any $${m} (now ${m}) variables at this point
+		  Helper::swap_in_variables( &aline , &file_vars );
+
+		  // construct the 2nd level script
+		  lines.push_back( aline );
+		}
+	      // space at end (for dump readability)
+	      lines.push_back( "" );
+	      
+	    }
+	  // and done for this apply: line
+	  continue;
+	}
+      
+      // else just add as a regular line
+      lines.push_back( line );
+            
+    }
+  
+  IN1.close();
+
+  // debug mode ( dump opt added )  
+  if ( dump_definition_file )
+    for (int l=0; l<lines.size(); l++)
+      std::cout << lines[l] << "\n";
+
+  // else return standard list for continued processing
+  return lines;
+}
+
+
+int canonical_t::read( const std::string & filename )
+{
+
+  // initial pre-processing step (better variables, generic rules)
+  std::vector<std::string> input_lines = preprocess( filename );
+
+  // build up for a particular rule
+  std::vector<std::string> lines; 
+
+  // traditional processing
+  for (int l=0; l<input_lines.size(); l++) 
+    {
+      // get pre-processed line
+      std::string line = input_lines[l];
+
+      // skip / end conditions
       if ( line == "" ) continue;
       if ( line == "_quit" ) break;
       if ( line[0] == '%' ) continue;
       if ( line[0] == '#' ) continue;
 
-      // process any aliases separately
       std::vector<std::string> tok = Helper::quoted_parse( line , "\t " );
-
-      //
-      // Variable assignment:
-      //   let XX=A,B,C,D
-      //
+      if ( tok.size() == 0 ) continue;
       
-      if ( line.size() >= 4
-	   && tok.size() >= 2
-	   && Helper::toupper( line.substr(0,4) ) == "LET " 
-	   && line.find( "=" ) != std::string::npos )
-	{
-	  // comma or space delimited for the second set
-	  std::vector<std::string> str = Helper::quoted_parse( line.substr(4) , " ,=" );
-
-	  if ( str.size() < 2 ) Helper::halt( "requires A=X or A=X,Y,Z or X = X Y Z" ); 
-	  
-	  // build up a single command-delimited list
-	  // (i.e. do not replace if the same key used)
-	  // let s = x,y,z
-	  // let s = a b c
-	  //  s --> is swapped in for 'x,y,z,a,b,c'
-
-	  const std::string & key = str[0];
-	  
-	  for (int i=1; i<str.size(); i++)
-	    {
-	      if ( aliases[ key ] != "" )
-		aliases[ key ] = aliases[ key ] + "," + str[i] ;
-	      else
-		aliases[ key ] = str[i] ;
-	    }
-	  
-	  // this is not needed to be part of a rule now -- aliases are generic across all rules
-	  continue;
-	}
-
-
       //
       // one-line close rule (i.e. for group-specific rules, to stop generics from being run)
       //
@@ -530,7 +669,6 @@ int canonical_t::read( const std::string & filename )
   if ( lines.size() != 0 )
     rules.push_back( canon_rule_t( lines ) );
   
-  IN1.close();
   
   return rules.size();
 }
@@ -575,6 +713,10 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
   const bool has_prefix = param.has( "prefix" );
   const std::string prefix = has_prefix ? Helper::expand( param.value( "prefix" ) ) : "" ;
 
+  // dump templates (debug)
+  dump_definition_file = param.has( "dump" );
+  
+    
   if ( rules.size() == 0 )
     {
       
@@ -598,10 +740,9 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
 	  
 	}
       
-
       
-      logger << "  in total, read " << rules.size()
-	     << " rules and " << aliases.size() << " variables\n";
+      logger << "  in total, read " << rules.size() << " rules\n";
+	     
       
       // number that will actually be applied
       if ( canins.size() != 0 || canouts.size() != 0 )
@@ -618,7 +759,12 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
       logger << "\n";
     }
   
-  
+  if ( dump_definition_file )
+    {
+      logger << "  running with 'dump' option, will not attempt to apply rules\n";
+      return;
+    }
+    
   //
   // Other options
   //
@@ -660,14 +806,6 @@ canonical_t::canonical_t( edf_t & edf , param_t & param )
   
   proc();
 
-  return;
-}
-
-
-void canonical_t::add_alias( const std::string & primary , const std::string & terms )
-{
-  std::vector<std::string> tok = Helper::quoted_parse( terms , "," );
-  for (int i=0; i<tok.size(); i++) aliases[ Helper::toupper( tok[i] ) ] = primary;
   return;
 }
 

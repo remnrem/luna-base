@@ -30,6 +30,7 @@
 namespace Helper
 {
   void validate_slist( param_t & );
+  std::vector<std::tuple<std::string,std::string,bool> > validate_slist_lunapi_mode( const std::vector<std::tuple<std::string,std::string,std::set<std::string> > > & );
 }
 
 #endif

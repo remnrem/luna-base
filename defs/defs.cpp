@@ -174,6 +174,7 @@ bool globals::devel;
 std::string globals::epoch_strat;
 std::string globals::time_strat;
 std::string globals::freq_strat;
+std::string globals::comp_strat;
 std::string globals::sec_strat;
 std::string globals::segment_strat;
 std::string globals::edf_strat;
@@ -553,6 +554,7 @@ void globals::init_defs()
   value_strat   = "VAL";
   feature_strat     = "FTR";
   sec_strat = "SEC";
+  comp_strat = "COMP";
   
   //
   // Misc.
