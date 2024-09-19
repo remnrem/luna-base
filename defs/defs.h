@@ -287,6 +287,7 @@ struct globals
   static std::string epoch_strat;
   static std::string time_strat;
   static std::string freq_strat;
+  static std::string comp_strat;
   static std::string sec_strat;
   static std::string segment_strat;
   static std::string signal_strat;

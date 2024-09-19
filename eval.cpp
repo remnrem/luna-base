@@ -1104,6 +1104,7 @@ bool cmd_t::eval( edf_t & edf )
 
       else if ( is( c, "STAGE" ) )        proc_sleep_stage( edf , param(c) , false );
       else if ( is( c, "HYPNO" ) )        proc_sleep_stage( edf , param(c) , true );
+      else if ( is( c, "SIG-CYCLES") )    proc_ecycle( edf , param(c) );
       
       else if ( is( c, "TSLIB" ) )        pdc_t::construct_tslib( edf , param(c) );
       else if ( is( c, "SSS" ) )          pdc_t::simple_sleep_scorer( edf , param(c) );
@@ -1679,6 +1680,17 @@ void proc_eval_stages( edf_t & edf , param_t & param )
 
 }
 
+// E-CYCLE : empircal NREM cycles
+void proc_ecycle(  edf_t & edf , param_t & param )
+{
+  // note: can relax the LGBM dependency here most likely...
+#ifdef HAS_LGBM
+  ecycles_t ecycles = ecycles_t( edf , param );
+#else
+  Helper::halt( "no LGBM support compiled in" );
+#endif
+
+}
 
 // RUN-POPS : wrapper to run POPS
 void proc_runpops( edf_t & edf , param_t & param )

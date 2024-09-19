@@ -139,6 +139,8 @@ public:
   int read_sample_list( const std::string & file );
   
   int build_sample_list( const std::vector<std::string> & toks );
+
+  std::vector<std::tuple<std::string,std::string,bool> > validate_sample_list();
   
   slist_t sample_list() const;
   

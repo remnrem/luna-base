@@ -444,3 +444,205 @@ void Helper::validate_slist( param_t & param )
 
 }
 
+
+//
+// because of the different interfaces, probably cleaner to split off this functionality (but keep here rather than lunapi/)
+//
+
+
+std::vector<std::tuple<std::string,std::string,bool> > Helper::validate_slist_lunapi_mode( const std::vector<std::tuple<std::string,std::string,std::set<std::string> > > & sl )
+{
+  
+  
+  std::vector<std::tuple<std::string,std::string,bool> > r ;
+
+  globals::validation_mode = true;
+  
+  std::vector<std::tuple<std::string,std::string,std::set<std::string> > >::const_iterator ss = sl.begin();
+  while ( ss != sl.end() )
+    {
+	
+      //
+      // get ID (possibly remapping) and file names
+      //
+
+      //const std::string rootname = cmd_t::remap_id( std::get<0>(*ss) );
+      const std::string rootname = std::get<0>(*ss) ;
+      const std::string edffile = std::get<1>(*ss);
+      const std::set<std::string> annots = std::get<2>(*ss);
+
+      
+      //
+      // clear any problem flags
+      //
+
+      globals::problem = false;
+
+      //
+      // include/exclude?
+      //
+      
+      bool include = true;
+      
+      if ( globals::id_excludes.find( rootname ) != globals::id_excludes.end() )
+        include = false;
+      
+      if ( globals::id_includes.size() != 0
+           && globals::id_includes.find( rootname ) == globals::id_includes.end() )
+        include = false;
+
+      if ( ! include ) { ++ss; continue; }
+      
+      // else, do we have an 'ID' check? (id=ID does not match so skip)                                                                                                                             
+      if ( globals::sample_list_ids.size() )
+	{
+	  if ( globals::sample_list_ids.find( rootname ) == globals::sample_list_ids.end() )
+	    {
+	      ++ss;
+	      continue;
+	    }
+	}
+
+      // skip=ID matches                                                                                                                                                                            
+      if ( globals::sample_list_ids_skips.size() )
+	{
+	  if ( globals::sample_list_ids_skips.find( rootname ) != globals::sample_list_ids_skips.end() )
+	    {
+	      ++ss;
+	      continue;
+	    }
+	}
+      
+      
+      //
+      // try EDF
+      //
+
+      edf_t edf;
+      
+      bool edf_okay = edf.attach( edffile , rootname , NULL , true );
+
+      r.push_back( std::make_tuple( rootname , edffile , edf_okay ) );
+      
+
+      //
+      // try to load annotations, but only for good annots
+      //   -- see above for logic
+      //
+      
+      const int nr = edf_okay ? edf.header.nr : 24 * 60 ; 
+      const int rs = edf_okay ? edf.header.record_duration : 60 ;
+      const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
+      const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;
+      const std::string id = edf_okay ? rootname : "__bad_EDF__";
+      
+      edf_t dummy;
+      
+      bool empty_okay = dummy.init_empty( id , nr , rs , startdate , starttime );
+      
+      if ( ! empty_okay )
+	Helper::halt( "internal error constructing an empty EDF to evaluate annotations" );
+      
+     
+      // some basic set-up
+
+      dummy.timeline.annotations.set( &dummy );
+
+     
+      //
+      // try anntatioons
+      //
+      
+      if ( ! globals::skip_nonedf_annots ) 
+	{
+
+	  std::set<std::string>::const_iterator aa = annots.begin();
+
+	  while ( aa != annots.end() )
+	    {
+	      
+	      std::string fname = Helper::expand( *aa );
+	      
+	      if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
+		{
+		  // this means we are specifying a folder, in which case search for all files that 
+		  // start id_<ID>_* and attach thoses
+		  DIR * dir;		  
+		  struct dirent *ent;
+		  if ( (dir = opendir ( fname.c_str() ) ) != NULL )
+		    {
+		      /* print all the files and directories within directory */
+		      while ((ent = readdir (dir)) != NULL)
+			{
+			  std::string fname2 = ent->d_name;
+			  // only annot files (.xml, .ftr, .annot, .eannot)
+			  if ( Helper::file_extension( fname2 , "annot" ) ||
+			       Helper::file_extension( fname2 , "txt" ) ||
+			       Helper::file_extension( fname2 , "tsv" ) ||
+			       Helper::file_extension( fname2 , "xml" ) ||
+			       Helper::file_extension( fname2 , "ameta" ) ||
+			       Helper::file_extension( fname2 , "stages" ) ||
+			       Helper::file_extension( fname2 , "eannot" ) )   
+			    {
+			      
+			      bool okay = dummy.load_annotations( fname + fname2 );
+
+			      // track
+			      r.push_back( std::make_tuple( rootname , fname + fname2 , okay ) );
+
+			    }			 
+			}
+		      closedir (dir);
+		    }
+		  else
+		    {
+		      Helper::vmode_halt( "could not open folder " + fname );
+
+		      // track                                                                                                                                                                  
+		      r.push_back( std::make_tuple( rootname , fname , false ) );
+		    }
+		}
+	      else
+		{
+		  
+		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
+		  // i.e. skip .sedf files that might also be specified as 
+		  // attached to this EDF
+		  if ( Helper::file_extension( fname , "annot" ) ||
+		       Helper::file_extension( fname , "txt" ) ||
+		       Helper::file_extension( fname , "tsv" ) ||
+		       Helper::file_extension( fname , "xml" ) ||
+		       Helper::file_extension( fname , "ameta" ) ||
+		       Helper::file_extension( fname , "stages" ) ||
+		       Helper::file_extension( fname , "eannot" ) )
+		    {
+		      bool okay = dummy.load_annotations( fname );
+
+		      // track
+		      r.push_back( std::make_tuple( rootname , fname , okay ) );
+
+		    }
+		  else
+		    {
+		      Helper::vmode_halt( "did not recognize annotation file extension: " + fname );
+		      // track 
+                      r.push_back( std::make_tuple( rootname , fname , false ) );
+		    } 
+		}
+
+	      // next annotation
+	      ++aa;
+	    }
+	}
+      
+      //
+      // Next individual
+      //
+
+      ++ss;
+    }
+
+  globals::validation_mode = false;
+  
+  return r;
+}

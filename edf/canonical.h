@@ -115,25 +115,17 @@ struct canonical_t
   
   canonical_t( edf_t & edf , param_t & param );
 
+  std::vector<std::string> preprocess( const std::string & filename );
+  
   int read( const std::string & filename );
 
   bool apply_this( const std::string & );
-  
-  void add_alias( const std::string & , const std::string & ); 
   
   void proc( );
 
   // general (static) rules
 
   static std::vector<canon_rule_t> rules;
-
-  static std::map<std::string,std::string> aliases;
-  
-  static std::string swap_in_alias( const std::string & s )
-  {
-    if ( aliases.find( s ) == aliases.end() ) return s;
-    return aliases[ s ]; 
-  }
 
   static std::map<int,std::string> scale_codes;
   
@@ -149,6 +141,8 @@ struct canonical_t
   bool only_check_labels; // no output (for use w/ the mapper utility)
   bool verbose;
   bool retain_prefiltering;
+  bool dump_definition_file; // if using templates, show the actual thing (debug mode)
+   
   // output class used in mapper-cgi-util mode
   cansigs_t retval;
 

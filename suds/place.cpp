@@ -164,14 +164,13 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
 	 << " of supplied stages overlap\n\n";
   
   // force alignment even for equal epochs sizes?
-  const bool force_align = param.has( "force" );
+  // const bool force_align = param.has( "force" );  
+  // if ( nstages == nedf && ! force_align ) 
+  //   {
+  //     logger << "  nothing to do, epoch and EDF epoch counts are equal\n"; 
+  //     return;
+  //   }
   
-  if ( nstages == nedf && ! force_align ) 
-    {
-      logger << "  nothing to do, epoch and EDF epoch counts are equal\n"; 
-      return;
-    }
-
   
   //
   // Track outputs
