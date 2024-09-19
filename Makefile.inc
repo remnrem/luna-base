@@ -28,34 +28,27 @@ DEP_LIB	+= -Wl,-rpath,$(FFTW)/lib
 endif
 endif
 
+DEP_LIB += -lfftw3
+
 ifdef LGBM_PATH
 DEP_INCLUDES +=-I$(LGBM_PATH)/include
 DEP_LIB +=-L$(LGBM_PATH)/lib -L$(LGBM_PATH)
 endif
 
 
+
+
+
 ##
 ## Compiler flags
 ##
 
-ifeq ($(WASM),1)
- CXX = em++
- CC = emcc
-else
- CXX = g++
- CC = gcc
-endif
-
+CXX = g++
+CC = gcc
 
 CXXFLAGS=-O2 -std=gnu++17 -MMD -MP -I. -I.. -Wno-psabi -Wno-unused-result
-#CXXFLAGS=-O0 -std=gnu++17 -MMD -MP -I. -I.. -pg
 
 CXXFLAGS +=$(DEP_INCLUDES)
-
-ifeq ($(WASM),1)
- CXXFLAGS+=-DWASM -s USE_ZLIB=1
-endif
-
 
 ifeq ($(ARCH),MAC)
 CXXFLAGS+=-I/usr/local/include
@@ -88,40 +81,31 @@ endif
 ## Linker flags
 ##
 
-ifeq ($(WASM),1)
- LD = em++
-else
- LD = g++
-endif
+LD = g++
 
-
-LDFLAGS = $(DEP_LIB) -L. -L..
+LDFLAGS = -L. -L..
 
 # assuming mingw64 for windows build:
 
 ifeq ($(ARCH),WINDOWS)
- LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -lfftw3  -static -static-libgcc -static-libstdc++
+ LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/  -static -static-libgcc -static-libstdc++
 else
- ifeq ($(WASM),1)
-  LDFLAGS += -L${WASM_DEPS} -lfftw3 -s USE_ZLIB=1
- else
-  LDFLAGS += -L/usr/local/lib -lfftw3 
- endif
+ LDFLAGS += -L/usr/local/lib 
 endif
 
 ifdef LGBM_PATH
 ifeq ($(ARCH),WINDOWS)
-LDFLAGS += -L/mingw64/bin/
+ DEP_LIB += -L/mingw64/bin/
 else
-LDFLAGS += -Wl,-rpath,${LGBM_PATH}/lib/ -Wl,-rpath,${LGBM_PATH}/
+ DEP_LIB += -Wl,-rpath,${LGBM_PATH}/lib/ -Wl,-rpath,${LGBM_PATH}/
 endif
 endif
 
 ifeq ($(LGBM),1)
 ifeq ($(ARCH),WINDOWS)
-LDFLAGS += -l:lib_lightgbm.dll 
+ DEP_LIB += -l:lib_lightgbm.dll 
 else
-LDFLAGS += -l_lightgbm 
+ DEP_LIB += -l_lightgbm 
 endif
 endif
 
@@ -130,19 +114,8 @@ endif
 ##
 
 ifeq ($(LIBOMP),1)
-LDFLAGS += -lomp
+ DEP_LIB += -lomp
 endif
-
-
-##
-## WASM flags
-##
-
-ifdef WASM
-#LDFLAGS += -s LINKABLE=1 -s EXPORT_ALL=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -sALLOW_MEMORY_GROWTH -sFORCE_FILESYSTEM  --preload-file tutorial/
- LDFLAGS += -s LINKABLE=1 -s EXPORT_ALL=1 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -sALLOW_MEMORY_GROWTH -sFORCE_FILESYSTEM
-endif
-
 
 ##
 ## Static binary: 'make static STATIC=1', otherwise set PIC code
@@ -188,18 +161,11 @@ export CXXFLAGS
 export CFLAGS
 export LD
 export LDFLAGS
+export LDFLAGS_UTILS
 
-
-ifdef WASM
- AR = emar
- ARFLAGS = rv
- RANLIB= emranlib
-else
- AR = ar
- ARFLAGS = rv
- RANLIB= ranlib
-endif
-
+AR = ar
+ARFLAGS = rv
+RANLIB= ranlib
 RM = rm -f
 ECHO = echo
 SHELL = /bin/sh

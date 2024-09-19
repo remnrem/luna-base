@@ -62,7 +62,7 @@ DEPS := $(OBJS:.o=.d)
 all: $(TARGETS)
 
 luna: main.o $(OBJS)
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ $^ $(DEP_LIB) $(LDFLAGS)
 
 libluna: libluna.a $(SHARED_LIB)
 
@@ -74,10 +74,10 @@ libluna: libluna.a $(SHARED_LIB)
 
 ifeq ($(ARCH),MAC)
 $(SHARED_LIB) : $(OBJS)
-	$(LD) -dynamiclib $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
+	$(LD) -dynamiclib $(DEP_LIB) $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
 else ifeq ($(ARCH),LINUX)
 $(SHARED_LIB) : $(OBJS)
-	$(LD) -shared $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
+	$(LD) -shared $(DEP_LIB) $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
 endif
 
 # objects

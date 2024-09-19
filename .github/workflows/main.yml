@@ -40,7 +40,7 @@ jobs:
             cp *.exe /mingw64/bin/libfftw3-3.dll /mingw64/bin/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
             zip -r win-luna.zip luna-${v}
           fi
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           name: win-luna.zip
@@ -88,7 +88,7 @@ jobs:
             cd ..
             tar cvzf mac-luna.tar.gz luna-${v}/
           fi
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           name: mac-luna.tar.gz
@@ -137,7 +137,7 @@ jobs:
             tar cvzf macos-arm64-luna.tar.gz luna-${v}/
           fi
     
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: startsWith(github.ref, 'refs/tags/v')
         with:
           name: macos-arm64-luna.tar.gz
@@ -186,7 +186,7 @@ jobs:
           allowUpdates: "true"
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         id: download
         with:
           path: .
