@@ -152,6 +152,9 @@ struct gpa_t {
   
   // QC matrix
   void qc( const double winsor );
+
+  // kNN imputation of missing points
+  void knn_imputation( param_t & );
   
   // dump binary as text (to stdout)
   void dump();
@@ -190,7 +193,7 @@ private:
   std::vector<int> ivs; // X
   std::vector<int> cvs; // Z
 
-
+      
   //
   // options  
   //

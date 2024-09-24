@@ -4880,25 +4880,34 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // read in US style annot dates (mm-dd-yy)
-  if ( Helper::iequals( tok0 , "read-mdy-annot" ) )
+  if ( Helper::iequals( tok0 , "date-format" ) )
     {
-      globals::read_mdy_annot_dates = Helper::yesno( tok1 );
-      return;
-    } 
-
-  // write in US style annot dates (mm-dd-yy)
-  if ( Helper::iequals( tok0 , "write-mdy-annot" ) )
-    {
-      globals::write_mdy_annot_dates = Helper::yesno( tok1 );
+      const std::string v = Helper::toupper( tok1 );
+      if ( v == "MDY" ) globals::read_annot_date_format = MDY;
+      else if ( v == "DMY" ) globals::read_annot_date_format = DMY;
+      else if ( v == "YMD" ) globals::read_annot_date_format = YMD;
       return;
     } 
   
-  // read in US style EDF dates (mm-dd-yy)
-  if ( Helper::iequals( tok0 , "read-mdy-edf" ) )
+  // write in different date format
+  if ( Helper::iequals( tok0 , "write-date-format" ) )
     {
-      globals::read_mdy_edf_dates = Helper::yesno( tok1 );
+      const std::string v = Helper::toupper( tok1 );
+      if ( v == "MDY" )	globals::write_annot_date_format = MDY;
+      else if ( v == "DMY" ) globals::write_annot_date_format = DMY;
+      else if ( v == "YMD" ) globals::write_annot_date_format = YMD;
       return;
-    } 
+    }
+
+  // read different format from EDF header
+  if ( Helper::iequals( tok0 , "edf-date-format" ) )
+    {
+      const std::string v = Helper::toupper( tok1 );
+      if ( v == "MDY" )	globals::read_edf_date_format = MDY;
+      else if ( v == "DMY" ) globals::read_edf_date_format = DMY;
+      else if ( v == "YMD" ) globals::read_edf_date_format = YMD;
+      return;
+    }
 
 
   // force start time/dates

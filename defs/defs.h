@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "cmddefs.h"
+#include "helper/helper.h"
 
 struct param_t; 
 struct signal_list_t;
@@ -119,6 +120,7 @@ enum channel_type_t
   };
 
 
+
 // look-up table to guess channel type (or can be supplied)
 typedef std::map<channel_type_t,std::set<std::string> > channel_map_t;
 
@@ -172,10 +174,10 @@ struct globals
   static bool assume_pm_starttime;
   static int assume_pm_starttime_hour;
   
-  static bool read_mdy_annot_dates;
-  static bool read_mdy_edf_dates;
-  static bool write_mdy_annot_dates;
-
+  static date_format_t read_annot_date_format;
+  static date_format_t write_annot_date_format;
+  static date_format_t read_edf_date_format;
+  
   static std::set<std::string> annot_alignment;
 
   static bool force_edf;

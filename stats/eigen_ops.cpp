@@ -104,7 +104,7 @@ bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const
   const int N = M.rows();
   
   Eigen::Array<double, 1, Eigen::Dynamic> means = M.colwise().mean();
-
+ 
   if ( normalize )
     {
       Eigen::Array<double, 1, Eigen::Dynamic> sds = ((M.array().rowwise() - means ).square().colwise().sum()/(N-1)).sqrt();
@@ -127,7 +127,7 @@ bool eigen_ops::scale( Eigen::Ref<Eigen::MatrixXd> M , const bool center , const
     {
       M.array().rowwise() -= means;
     }
-  
+
   return true;
 }
 

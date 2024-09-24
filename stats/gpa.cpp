@@ -33,7 +33,6 @@ using json = nlohmann::json;
 extern logger_t logger;
 extern writer_t writer;
 
-
 gpa_t::gpa_t( param_t & param , const bool prep_mode )
 {
 
@@ -283,8 +282,8 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   retain_rows = param.has( "retain-rows" );
   if ( prep_mode && retain_rows ) Helper::halt( "cannot use retain-rows in --gpa-prep" );
 
-
-
+ 
+  
   //
   // misc options
   //
@@ -489,6 +488,12 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	}
       
 
+      //
+      // kNN imputation of missing points (for DVs only)? 
+      //
+      
+      if ( param.has( "knn" ) )
+	knn_imputation( param );
       
       //
       // drop any null cols in this (potentially subsetted) dataset
@@ -1039,7 +1044,8 @@ void gpa_t::run()
 	}      
       ++ii;
     }
- 
+  
+  int count_p05 = 0 , count_padj05 = 0 , count_all = 0;
   
   // iterate over X
   
@@ -1069,6 +1075,10 @@ void gpa_t::run()
 		  writer.value( "T"  , results.t[xvar][ var ] );
 		  writer.value( "P" , results.emp[xvar][ var ] );
 		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
+
+		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
+		  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
+		  count_all++;
 		}
 	      
 	      // manifest details
@@ -1122,7 +1132,15 @@ void gpa_t::run()
     }
   
   writer.unlevel( "X" );
-    
+
+  if ( pthresh > 1 )
+    {
+      logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
+	     << "significant at nominal p < 0.05\n";
+
+      logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
+	     << "significant at adjusted p < 0.05\n";
+    }
 }
 
 
@@ -1165,6 +1183,9 @@ void gpa_t::run1X() // correction within X
       ++ii;
     }
 
+
+  int count_p05 = 0 , count_padj05 = 0 , count_all = 0;
+
   // iterate over X
 
   for (int j=0; j<ivs.size(); j++)
@@ -1197,6 +1218,11 @@ void gpa_t::run1X() // correction within X
 		  writer.value( "T"  , results.t[xvar][ var ] );
 		  writer.value( "P" , results.emp[xvar][ var ] );
 		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
+		  
+		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
+                  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
+                  count_all++;
+		  
 		}
 
 	      
@@ -1254,6 +1280,15 @@ void gpa_t::run1X() // correction within X
     }  
   writer.unlevel( "X" );
   
+  if ( pthresh > 1 )
+    {
+      logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
+             << "significant at nominal p < 0.05\n";
+
+      logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
+             << "significant at adjusted p < 0.05\n";
+    }
+
 }
 
 
@@ -2798,3 +2833,181 @@ void gpa_t::parse( const std::string & pfile )
 
 }
 
+// kNN imputation of missing points
+void gpa_t::knn_imputation( param_t & param )
+{
+  
+  int k = param.requires_int( "knn" );
+  
+  if ( k == 0 ) return;
+  
+  // only do this for DVs; but copy whole X (all vars) for simplicity;
+  // but only do updates for dvs[]
+  
+  const int ni = X.rows();
+  const int nv = X.cols();
+  const int ndv = dvs.size();
+  
+  //
+  // count missing data per indiv.
+  //
+
+  std::vector< std::set<int> > nmissing( ni );
+  
+  for (int i=0; i<ni; i++)
+    {
+      for (int j=0; j<ndv; j++)
+	{
+	  if ( std::isnan( X(i,dvs[j]) ) )
+	    nmissing[i].insert(dvs[j]);
+	}
+    }
+
+
+  //
+  // Get a normalized version of X (special case handling existing NaNs)
+  //   --> must be room for improvement here, but brief searching around
+  //       suggests something like this needed for Eigen
+
+  
+  // extract only DVs (no missingness in IV or covariates allowed)
+  // so just have all non-DV variables as 0, i.e. so they won't feature
+  // in the neighbour calcs
+  
+  Eigen::MatrixXd Z = Eigen::MatrixXd::Zero( ni , nv ); 
+  
+  for (int j0=0; j0<ndv; j0++)
+    {
+      
+      // get X index
+      const int j = dvs[j0];
+
+      // add column in (otherwise we leave it blank)
+      Z.col(j) = X.col(j);
+
+      // normalize
+      Eigen::VectorXd col = Z.col(j);
+      
+      // get indices of missing elements
+      Eigen::ArrayXi idx = col.array().isNaN().cast<int>();
+      
+      const int non_missing = ni - idx.count() ;
+
+      if ( non_missing > 1 )
+	{
+	  
+	  // make a std::vector<int> mask      
+	  std::vector<int> mask( non_missing );	  
+	  int zi = 0;
+	  for (int z = 0; z < ni; z++ ) 
+	    if (!idx(z)) mask[zi++] = z;
+	  
+	  // normalize non-NaN values
+	  double mean = Z.col(j)(mask).mean();
+	  double sd = eigen_ops::sdev( Z.col(j)(mask) );
+
+	  Z.col(j)(mask)= (Z.col(j)(mask).array() - mean ) / ( sd > 0 ? sd : 1 );;
+
+	}
+
+    }
+   
+  //
+  // process each indiv
+  //
+
+
+  int nans_imputed = 0 , nans_remaining = 0;
+  std::set<int> indivs_with_nans;
+  
+  for (int i=0; i<ni; i++)
+    {
+
+      int m = nmissing[i].size();
+      
+      if ( m == 0 ) continue;
+
+      // require at least 50% of variables to be present
+      // or else leave missing vars as is
+      if ( m >= nv / 2 ) continue;
+      
+      // get data (each col is normalized)
+      const Eigen::VectorXd & f1 = Z.row(i);
+
+      // rank by Euclidean distance to all others
+      std::map<double,int> nearest;
+      for (int k=0; k<ni; k++)
+	{
+	  if ( k == i ) continue;
+	  
+	  const Eigen::VectorXd & f2 = Z.row(k);	  
+	  double dst = (f1 - f2).array().isNaN().select(0,f1-f2).squaredNorm();
+	  int n = ni - (f1 - f2).array().isNaN().count() - 1;
+	  // weighted Euclidean distance
+	  nearest[ sqrt( n / (double)(ni-1) * dst ) ] = k;
+	}
+
+      // now impute each missing spot
+
+      const std::set<int> & mvars = nmissing[i];
+
+      std::set<int>::const_iterator mm = mvars.begin();
+      while ( mm != mvars.end() )
+	{
+	  // get 'k' people to fill this
+	  // may have to skip some if missing
+	  int c = 0;
+
+	  double imp = 0;
+	  
+	  // X(i,*mm) should be NaN -- check
+	  //std::cout << " X(i,*mm) should be missing = " << X(i,*mm)  << "\n";
+	  
+	  std::map<double,int>::const_iterator nn = nearest.begin();
+	  while ( nn != nearest.end() )
+	    {
+
+	      // neighbour missing
+	      if ( std::isnan( X( nn->second , *mm ) ) )
+		{
+		  ++nn;
+		  continue;
+		}
+
+	      // addup
+	      imp += X( nn->second , *mm );
+	      
+	      // done?
+	      if ( ++c == k ) break;
+
+	      ++nn;
+	    }
+
+	  // update, if possible
+	  if ( c > 0 ) 
+	    {
+	      nans_imputed++;
+	      X(i,*mm) = imp / (double)c ; 
+	    }
+	  else
+	    {
+	      nans_remaining++;
+	      indivs_with_nans.insert( i );
+	    }
+	  // next variable for this person
+	  ++mm;
+	}
+      
+      // next person
+    }
+
+  logger << "  finished kNN imputation: imputed " << nans_imputed << " missing values\n";
+
+  if ( nans_remaining )
+    logger << "  " << nans_remaining << " missing values remaining, from "
+	   << "  " << indivs_with_nans.size() << " individuals\n";
+  else
+    logger << "  all missing values imputed\n";
+
+}
+  

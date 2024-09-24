@@ -108,9 +108,9 @@ std::string globals::txt_table_append;
 bool globals::assume_pm_starttime;
 int globals::assume_pm_starttime_hour;
 
-bool globals::read_mdy_annot_dates;
-bool globals::write_mdy_annot_dates;
-bool globals::read_mdy_edf_dates;
+date_format_t globals::read_annot_date_format;
+date_format_t globals::write_annot_date_format;
+date_format_t globals::read_edf_date_format;
 
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
@@ -497,7 +497,6 @@ void globals::init_defs()
   sleep_stage_labels[ "NREM3" ]    = NREM3;  
   sleep_stage_labels[ "NREM4" ]    = NREM4;  
   sleep_stage_labels[ "REM" ]      = REM;
-  sleep_stage_labels[ "Movement" ] = MOVEMENT;
   sleep_stage_labels[ "Unscored" ] = UNSCORED;
 
   
@@ -609,10 +608,10 @@ void globals::init_defs()
   
   // Euro dates by default
   // but always write EDF dates as dd.mm.yy
-  read_mdy_annot_dates = false; 
-  write_mdy_annot_dates = false; 
-  read_mdy_edf_dates = false; 
+  read_annot_date_format = DMY; // default European
+  write_annot_date_format = DMY; // same
   
+  read_edf_date_format = DMY; // default European (but allow MDY too)
 
   // otherwise, leave as is
   //  00:00 -> 00:00 (as is)

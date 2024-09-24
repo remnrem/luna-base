@@ -34,7 +34,8 @@ void model_knn_t::clear()
 {
   X = Eigen::MatrixXd::Zero(0,0);
 }
-  
+
+
 void model_knn_t::load( const std::string & f ,
 			const std::vector<std::string> & header , 
 			int * rows , int * cols )
@@ -133,7 +134,9 @@ void model_knn_t::load( const std::string & f ,
   
 }
   
-  
+
+
+
 Eigen::VectorXd model_knn_t::impute( const Eigen::VectorXd & f ,
 				     const std::vector<bool> & missing )
 

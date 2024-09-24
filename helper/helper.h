@@ -44,6 +44,13 @@ class gzifstream;
 
 typedef std::vector<std::tuple<std::string,std::string,std::set<std::string> > > slist_t;
 
+enum date_format_t
+  {
+    DMY , // default European style
+    MDY , // US style
+    YMD   // ISO 8601 (YYYY-MM-DD)
+  };
+
 namespace Helper 
 {
 
@@ -350,22 +357,30 @@ namespace Helper
 
 struct date_t {
 
-  date_t( const std::string & dt , const bool is_mdy = false )
+  date_t( const std::string & dt , const date_format_t format = DMY )
   {
 
     // by default, assumes European dd/mm/yy encoding [ or dd.mm.yy or dd-mm-yy ]
-    // unles is_mdy is true
+    // unles format is MDY or YMD
     
     // also, yy can be yyyy
     // mm can be jan/feb etc or 1/2 etc
+
+    // note: for (partial) ISO 8601 support, could parse on T or space YYYY-MM-DDThh-mm-ss  YYYY-MM-DD hh-mm-ss
+    //   (where - can be either / or . too for dates )
+    
     std::vector<std::string> tok = Helper::parse( dt , "./-" );
     if ( tok.size() != 3 ) Helper::halt( "invalid date string: " + dt );
 
     d=m=y=0;
 
-    const std::string & s_day = is_mdy ? tok[1] : tok[0];
+    //   default                  DMY
+    const bool is_mdy = format == MDY;
+    const bool is_ymd = format == YMD;
+    
+    const std::string & s_day = is_mdy ? tok[1] : ( is_ymd ? tok[2] : tok[0] );
     const std::string & s_mon = is_mdy ? tok[0] : tok[1];
-    const std::string & s_yr  = tok[2];
+    const std::string & s_yr  = is_ymd ? tok[0] : tok[2];
 
     if ( ! Helper::str2int( s_day , &d ) )
       Helper::halt( "invalid day value: " + dt );
@@ -536,12 +551,12 @@ struct clocktime_t
   }
   
   // convert time-string to internal 
-  clocktime_t( const std::string & tm, const bool is_mdy = false );
+  clocktime_t( const std::string & tm, const date_format_t format = DMY );
 
   // convert date-string and time-string to internal
-  clocktime_t( const std::string & dt , const std::string & tm , const bool is_mdy = false );
+  clocktime_t( const std::string & dt , const std::string & tm , const date_format_t format = DMY );
 
-  void parse_string( const std::string & t , const bool is_mdy = false ); 
+  void parse_string( const std::string & t , const date_format_t format = DMY); 
   
   // assume from hours, fractional
   //  clocktime_t( double ); 

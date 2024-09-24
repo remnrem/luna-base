@@ -1174,30 +1174,32 @@ int date_t::diff( const date_t & rhs ) const
   return count(*this) - count( rhs );
 }
 
-clocktime_t::clocktime_t( const std::string & dt ,  const std::string & tm , const bool is_mdy )
+clocktime_t::clocktime_t( const std::string & dt ,  const std::string & tm , const date_format_t format )
 {
   // this allow parsing by three chars: . / -
-  // also allows for optional mm-dd-yy format
-  date_t date( dt , is_mdy );
-
+  // also allows for optional mm-dd-yy or yyyy-mm-dd formats
+  date_t date( dt , format );
+  
   // make a combined date-time string (--> outputs dd-mm-yy)
   const std::string datetime = date.as_string() + "-" + tm;
-
+  
   // but then we enfore - delimiters, so that the datetime-string reads okay
   // this will always be dd-mm-yy at this point
   parse_string( datetime );
 }
 
-clocktime_t::clocktime_t( const std::string & t , const bool is_mdy )
+clocktime_t::clocktime_t( const std::string & t , const date_format_t format )
 {
-  parse_string( t , is_mdy );
+  parse_string( t , format );
 }
 
-void clocktime_t::parse_string( const std::string & t , const bool is_mdy )
+void clocktime_t::parse_string( const std::string & t , const date_format_t format )
 {
   valid = false;
+
   // dates? (sep = '/' or '-' only)
-  std::vector<std::string> tok = Helper::parse( t , "-/" );
+  // also replace any spaces with '-' (i.e. for YYYY-MM-DD HH:MM:SS.SSSS format) 
+  std::vector<std::string> tok = Helper::parse( Helper::search_replace(t , ' ', '-' ) , "-/" );
   if ( tok.size() == 1 )
     {
       d=0;
@@ -1207,8 +1209,8 @@ void clocktime_t::parse_string( const std::string & t , const bool is_mdy )
     }
   else if ( tok.size() == 4 )
     {
-      // allow optional mdy date format
-      date_t dt( tok[0] + "-" + tok[1] + "-" + tok[2] , is_mdy );
+      // allow optional mdy or ymd date formats
+      date_t dt( tok[0] + "-" + tok[1] + "-" + tok[2] , format );
       d = date_t::count( dt );
       valid = Helper::timestring( tok[3] , &h, &m, &s );      
       if ( h < 0 || m < 0 || s < 0 ) valid = false;

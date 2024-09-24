@@ -635,22 +635,29 @@ prediction_t::prediction_t( edf_t & edf , param_t & param )
   if ( apply_bias_correction )
     {
       logger << "  bias-corrected predicted value (Y1) = " << y1 << "\n";
-      writer.value( "Y1" , y1 );
+      writer.value( "Y1" , y1 );      
     }
+
+  double yobs = -999999;
   
   // observed, if supplied
   if ( model.specials.find( "observed" ) != model.specials.end() )
     {
-      writer.value( "YOBS" , model.specials["observed"] );
-      logger << "  observed value (YOBS) = " << model.specials["observed"] << "\n";
+      yobs = model.specials["observed"] ;
+      writer.value( "YOBS" , yobs );
+      logger << "  observed value (YOBS) = " << yobs << "\n";
     }
   else if ( model.specials.find( "bias_correction_term" ) != model.specials.end() )
     {
-      logger << "  observed value (YOBS) = " << model.specials["bias_correction_term"] << "\n";
-      writer.value( "YOBS" , model.specials["bias_correction_term"] );                                                                             
+      yobs = model.specials["bias_correction_term"];
+      logger << "  observed value (YOBS) = " << yobs << "\n";
+      writer.value( "YOBS" , yobs );          
     }
   
-    
+  // output DIFF (e.g. PAD)
+  if ( yobs > -999998 )
+    writer.value( "DIFF" , apply_bias_correction ? y1 - yobs : y - yobs );
+  
   // feature level output (by FTR)
   
   output();

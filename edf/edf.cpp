@@ -644,11 +644,18 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   nbytes_header  = edf_t::get_int( &q , 8 );  
   reserved       = edf_t::get_bytes( &q , 44 );
 
-  // allow US mm-dd-yy EDF field?  if so, change immediately (i.e. internally, it always dd-mm-yy
-  if ( globals::read_mdy_edf_dates )
+  // allow US mm-dd-yy EDF field?  if so, change immediately (i.e. internally, it always dd-mm-yy)
+  if ( globals::read_edf_date_format == MDY )
     {
-      // 01.34.67 --> 34.01.67
+      // 0  3  6
+      // 01.31.07 --> 31.01.07
       startdate = startdate.substr(3,2) + "." + startdate.substr(0,2) + "." + startdate.substr(6,2);
+    }
+  else if (  globals::read_edf_date_format == YMD ) // unlikely, but incase YY.MM.DD?? 
+    {
+      // 0  3  6
+      // 07.01.31 --> 31.01.07
+      startdate = startdate.substr(6,2) + "." + startdate.substr(3,2) + "." + startdate.substr(0,2);
     }
 
   // enforce check that reserevd field contains only US-ASCII characters 32-126
