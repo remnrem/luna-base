@@ -75,7 +75,15 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
   bool by_epoch = param.has( "epoch" );
   
    
+  //
+  // Output settings
+  //
 
+  const bool verbose = param.has( "verbose" );
+
+  const bool double_entry = param.has( "double-entry" ) ? param.yesno( "double-entry" ) : true ; 
+  
+  
   //
   // Frequency bins?
   //
@@ -168,6 +176,9 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 	  psi.add_freqbin( lwr[i] , upr[i] );
       
       psi.calc();
+
+
+      psi.output_settings( double_entry , verbose );
       
       psi.report( signals , by_epoch );
 
@@ -205,6 +216,8 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       psi.calc();
       
       writer.epoch( edf.timeline.display_epoch( epoch ) );
+
+      psi.output_settings( double_entry , verbose );
       
       psi.report( signals , by_epoch,
 		  calc_dynamics ? &qd : NULL ,
@@ -250,21 +263,29 @@ void psi_t::report( const signal_list_t & signals , bool by_epoch ,
       for (int i=0;i<nchan;i++)
 	{
 	  writer.level( signals.label(i) , globals::signal_strat );
-	  writer.value( "PSI_RAW" , psi_sum[m][i] );
-	  writer.value( "STD" , std_psi_sum[m][i] );
+
+	  if ( verbose )
+	    {
+	      writer.value( "PSI_RAW" , psi_sum[m][i] );
+	      writer.value( "STD" , std_psi_sum[m][i] );
+	    }
+	  
 	  double psi1 = psi_sum[m][i]  / ( EPS + std_psi_sum[m][i] );
 	  writer.value( "PSI" , psi1 );	  
-
+	  
 	  // track for dynamics
 	  if ( qd != NULL )
 	    qd->add( writer.faclvl_notime() , "PSI" , qe , psi1 );
 	  
 	  // abs values
-	  writer.value( "APSI_RAW" , apsi_sum[m][i] );
-	  writer.value( "ASTD" , std_apsi_sum[m][i] );
-	  double apsi1 = apsi_sum[m][i]  / ( EPS + std_apsi_sum[m][i] );
-	  writer.value( "APSI" , apsi1 );	  	  
-
+	  if ( verbose )
+	    {
+	      writer.value( "APSI_RAW" , apsi_sum[m][i] );
+	      writer.value( "ASTD" , std_apsi_sum[m][i] );
+	      double apsi1 = apsi_sum[m][i]  / ( EPS + std_apsi_sum[m][i] );
+	      writer.value( "APSI" , apsi1 );	  	  
+	    }
+	  
 	}
       writer.unlevel( globals::signal_strat );
       
@@ -275,14 +296,25 @@ void psi_t::report( const signal_list_t & signals , bool by_epoch ,
 		    
 	  for (int j=0;j<nchan;j++)
 	    {
-	      if ( i >= j ) continue;
-	      writer.level( signals.label(j) , globals::signal2_strat);	      
-	      writer.value( "PSI_RAW" , psi[m](i,j) );
-	      writer.value( "STD" , std_psi[m](i,j) );
 
+	      if ( i == j ) continue;
+	      
+	      if ( i > j && ! double_entry ) continue;
+	      
+	      writer.level( signals.label(j) , globals::signal2_strat);	      
+	      
+	      if ( verbose )
+		{
+		  writer.value( "PSI_RAW" , psi[m](i,j) );
+		  writer.value( "STD" , std_psi[m](i,j) );
+		}
+	      
 	      double psi2 = psi[m](i,j)  / ( EPS + std_psi[m](i,j) );
 	      writer.value( "PSI" , psi2 );
-
+	      
+	      // for dynam only track singles
+	      if ( i > j ) continue;
+	      
 	      // track for dynamics
 	      if ( qd != NULL )
 		qd->add( writer.faclvl_notime() , "PSI" , qe , psi2 );

@@ -1157,7 +1157,7 @@ Token Token::operator+(const Token & rhs) const
   if ( is_vector() && rhs.is_vector() ) 
     {
 
-      if ( size() != rhs.size() ) return Token();
+      if ( size() != rhs.size() ) return Token(); 
       const int sz = size();      
       
       // concatenate strings

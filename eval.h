@@ -343,6 +343,7 @@ void proc_head_matrix( edf_t & , param_t & );
 void proc_epoch_mask( edf_t & , param_t & );
 void proc_mask( edf_t & , param_t & );
 void proc_eval( edf_t & , param_t & );
+void proc_derive( edf_t & , param_t & );
 void proc_epoch( edf_t & , param_t & );
 void proc_slice( edf_t & , param_t & , int );
 

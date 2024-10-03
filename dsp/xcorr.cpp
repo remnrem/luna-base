@@ -309,7 +309,7 @@ xcorr_t::xcorr_t( std::vector<double> a ,
   
   // iFFT
   //  FFT ifft( n_conv_pow2 , n_conv_pow2 , 1 , FFT_INVERSE );
-  //  std::cout << " I sx " << I.size() << " " << np2 << "\n";
+  //std::cout << " I sx " << I.size() << " " << np2 << "\n";
   FFT ifft( np2, np2 , Fs , FFT_INVERSE );
   ifft.apply( I );
   
@@ -326,7 +326,7 @@ xcorr_t::xcorr_t( std::vector<double> a ,
   const int nl = maxlag * 2 + 1 ;
   const int nc = C0.size();
 
-  //std::cout << " maxlag nl nm nc " << maxlag << " " << nl << " " << nm << " " << nc << "\n";
+  //  std::cout << " maxlag nl nm nc " << maxlag << " " << nl << " " << nm << " " << nc << "\n";
 
   // reorder
   C.resize( nl );
@@ -378,5 +378,5 @@ xcorr_t::xcorr_t( std::vector<double> a ,
       ++idx;
     }
   
-  //  std::cout << " mx " << mx << " " << lags[mx] << " " << C[mx] << "\n";
+  //    std::cout << " mx " << mx << " " << lags[mx] << " " << C[mx] << "\n";
 }

@@ -56,6 +56,11 @@ void proc_eval( edf_t & edf , param_t & param )
   //   expr=# expression #
   //   globals=J,K,L
 
+  // or
+  //  derive= J,K  which is similar to 'globals' except runs in derive mode (no annot created, does whole TL)
+  //  expr= 
+
+  
   // create a new annotation 'name' 
   // EITHER epoch-by-epoch (i.e. evaluate the expression once per epoch) 
   // OR for each unqiue set of annotations, i.e. whereby the new annotation may span several sets)
@@ -409,4 +414,437 @@ void proc_eval( edf_t & edf , param_t & param )
   return;
   
 }
+
+
+
+//
+// Implement the DERIVE command
+//
+
+
+bool derive_helper_satisfies_reqs( const std::string & aname ,
+				   const instance_t * instance ,
+				   const std::map<std::string,std::set<std::string> > & reqs ,
+				   int * req_cnt )
+{
+
+  // no reqs at all
+  if ( reqs.size() == 0 ) return true;
+
+  // no reqs for this annot class
+  std::map<std::string,std::set<std::string> >::const_iterator rr = reqs.find( aname );
+  if ( rr== reqs.end() ) return true;
+  
+  bool req = true;
+  
+  const std::map<std::string,avar_t*> & data = instance->data;
+  
+  const std::set<std::string> & rq = rr->second;  
+  std::set<std::string>::const_iterator qq = rq.begin();
+  while ( qq != rq.end() )
+    {
+
+      std::map<std::string,avar_t*>::const_iterator mm = data.find( *qq ) ;
+      if ( mm == data.end() )
+	{
+	  req = false;
+	  break;
+	}
+
+      if ( mm->second->is_missing() )
+	{
+	  req = false;
+	  break;
+	}
+
+      // also required to be numeric
+      globals::atype_t type = mm->second->atype();
+      const bool is_numeric = type == globals::A_DBL_T || type == globals::A_INT_T || type == globals::A_BOOL_T;
+      
+      if ( ! is_numeric )
+	{
+	  req = false;
+          break;
+	}
+
+      ++qq;
+    }
+
+  // track # of failures given reqs
+  if ( ! req ) (*req_cnt)++;
+  
+  return req;
+}
+
+
+void proc_derive( edf_t & edf , param_t & param )
+{
+  
+
+  //  derive= J,K  which is similar to 'globals' except runs in derive mode (no annot created, does whole TL)
+  //  expr= 
+
+  // 1) works on entire (unmasked) timeline
+  // 2) pulls all annotations
+  // 3) checks meta-data and summarizes (incl types and missing values) 
+  // 4) does a single EVAL
+  // 5) global variables get saved as outputs in out.db (per indiv)
+
+  // i.e. a tool for making per-obs level metrics 
+
+
+  //
+  // primary expression 
+  //
+
+  const std::string expression = Helper::unquote( param.requires( "expr" ) , '#' );
+
+  if ( expression == "__null__" ) 
+    Helper::halt( "malformed 'expr', expecting form expr=\" ... \"   (n.b. no space allowed between '=' and '\"')" ); 
+
+  //
+  // required meta data fieleds?
+  //
+
+  std::map<std::string,std::set<std::string> > reqs;
+  if ( param.has( "req" ) )
+    {
+      std::vector<std::string> tok = param.strvector( "req" );
+      for (int i=0; i<tok.size(); i++)
+	{
+	  // class.meta
+	  std::vector<std::string> tok2 = Helper::parse( tok[i] , "." );
+	  if ( tok2.size() != 2 ) Helper::halt( "expecting list class.meta for req" );
+	  reqs[ tok2[0] ].insert( tok2[1] );
+	}     
+    }
+
+  const bool has_reqs = reqs.size();
+
+  int req_cnt = 0;  // track for this indiv.
+  
+  //
+  // slots for aggregating variables
+  //
+
+  if ( ! param.has( "derive" ) )
+    Helper::halt( "requires a 'derive' option" );
+  
+  std::set<std::string> acc_vars = param.strset( "derive" );
+  
+  logger << "  evaluating expression           : " << expression << "\n";
+
+  
+  //
+  // Get all existing annotations
+  //
+  
+  std::vector<std::string> names = edf.timeline.annotations.names();
+
+
+ 
+  // 
+  // Make global annotation an entirely separate class of annotation (internal '__global' )
+  //  --> this will be dropped after perhaps?
+  //
+  
+  annot_t * global_annot = edf.timeline.annotations.add( "__global" );
+  
+  instance_t * accumulator = global_annot->add( "." , edf.timeline.wholetrace( true ) , "." ) ;
+  
+
+  //
+  // initialize global variables appearing in the main expression
+  //  ( --> assume all floats for now, and that they'll have the form _var )
+  //
+  
+  std::set<std::string>::const_iterator ii = acc_vars.begin();
+  while ( ii != acc_vars.end() ) 
+    {
+      accumulator->set( *ii , 0 );
+      ++ii;
+    }
+
+  
+  //
+  // Iterate over epochs? Or Intervals?
+  //
+
+  int acc_total = 0 , acc_retval = 0 , acc_valid = 0; 
+  int added_intervals = 0; // post concatenation
+
+
+  //
+  // collate all inputs 
+  //
+
+  std::map<std::string,annot_map_t> inputs;
+  
+  //typedef std::map<instance_idx_t,instance_t*> annot_map_t;
+
+  //
+  // do we have some type of epoch-mask set? 
+  //
+  
+  if ( edf.timeline.is_epoch_mask_set() )
+    {
+      
+
+      // how to decide whether an interval overlaps a mask or not?
+      //  start  -- keep annotations that start in an unmasked region
+      //  any    -- keep annotations that have any overlap in an unmasked region
+      //  all    -- only keep annotations that are completely within unmasked regions
+  
+      int keep_mode = 0; 
+      if ( param.has( "any" ) ) keep_mode = 0;
+      if ( param.has( "all" ) ) keep_mode = 1;
+      if ( param.has( "start" ) ) keep_mode = 2;  
+      
+      logger << "  keeping annotations based on ";
+      if ( keep_mode == 0 )      logger << "any overlap with";
+      else if ( keep_mode == 1 ) logger << "complete (all) overlap with";
+      else if ( keep_mode == 2 ) logger << "starting in";
+      logger << " an unmasked region\n";
+  
+
+      //
+      // start iterating over epochs
+      //
+      
+      edf.timeline.first_epoch();
+      
+      while ( 1 ) 
+	{
+
+	  //
+	  // get next unmasked epoch
+	  //
+
+	  int e = edf.timeline.next_epoch();
+	  
+	  if ( e == -1 ) break;
+	  
+	  interval_t interval = edf.timeline.epoch( e );
+
+	  // get each annotations
+	  for (int a=0;a<names.size();a++)
+	    {
+	      
+	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      
+	      // get overlapping annotations for this epoch
+	      annot_map_t events = annot->extract( interval );
+
+	      // process overlaps
+	      annot_map_t::const_iterator ii = events.begin();
+	      while ( ii != events.end() )
+		{	  
+		  
+		  const instance_idx_t & instance_idx = ii->first;
+		  instance_t * instance = ii->second;
+		  const interval_t & interval = instance_idx.interval;
+		  
+		  bool is_masked = false;
+		  
+		  // keep if any part of A overlaps any unmasked region
+		  if      ( keep_mode == 0 ) is_masked = ! edf.timeline.interval_overlaps_unmasked_region( interval );
+		  
+		  // ...or, only if entire A is in unmasked region
+		  else if ( keep_mode == 1 ) is_masked = ! edf.timeline.interval_is_completely_unmasked( interval );
+		  
+		  // ...or, if start of A is in an unmasked region
+		  else if ( keep_mode == 2 ) is_masked = edf.timeline.interval_start_is_masked( interval ) ;
+		  
+		  // add...?
+		  if ( ! is_masked )
+		    {		      
+		      // ... if it also satisfies any reqs (non-missing meta-values)
+		      if ( ( ! has_reqs ) || derive_helper_satisfies_reqs( names[a] , instance , reqs , &req_cnt) )
+			inputs[ names[a] ][ instance_idx ] = instance ; 
+		    }
+		  
+		  // next event
+		  ++ii;
+		}      
+	      
+	    }
+	}
+      
+    }
+  else
+    {
+
+      interval_t interval = edf.timeline.wholetrace( true ); // T --> silent                                                                          
+
+      if ( ! has_reqs ) 
+	{
+	  
+	  //
+	  // no epoch masks, and no reqs: just add everything
+	  //
+	  
+	  // get each annotation
+	  for (int a=0;a<names.size();a++)
+	    {
+	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      
+	      // get overlapping annotations for this epoch (should be able to drop this
+	      // and just pull all)
+	      annot_map_t events = annot->extract( interval );
+	      
+	      // store
+	      inputs[ names[a] ] = events;
+	    }      
+	  
+	}
+      else
+	{
+
+	  //
+	  // no epoch masks, but  reqs: need to parse each event
+	  //
+
+	  // get each annotation
+	  for (int a=0;a<names.size();a++)
+	    {
+	      
+	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      
+	      // get overlapping annotations for this epoch
+	      annot_map_t events = annot->extract( interval );
+	      
+	      // process overlaps
+	      annot_map_t::const_iterator ii = events.begin();
+	      while ( ii != events.end() )
+		{	  
+		  
+		  const instance_idx_t & instance_idx = ii->first;
+		  instance_t * instance = ii->second;
+		  const interval_t & interval = instance_idx.interval;
+		  
+		  // ... if it also satisfies any reqs (non-missing meta-values)
+		  if ( derive_helper_satisfies_reqs( names[a] , instance , reqs , &req_cnt) )
+		    inputs[ names[a] ][ instance_idx ] = instance ;
+		  
+		  // next event
+		  ++ii;
+		}      
+	    }
+	}
+    }
+  
+  
+  //
+  // summarize
+  //
+  
+  std::map<std::string,std::map<std::string,int> > md_cnts;
+    
+  int n_tot = 0;
+  std::map<std::string,annot_map_t>::const_iterator aa = inputs.begin();
+  while ( aa != inputs.end() )
+    {
+      const annot_map_t & amap = aa->second;
+
+      annot_map_t::const_iterator ii = amap.begin();
+      while ( ii != amap.end() )
+	{
+	  const std::map<std::string,avar_t*> & data = ii->second->data;
+
+	  std::map<std::string,avar_t*>::const_iterator mm = data.begin();
+	  while ( mm != data.end() )
+	    {
+	      const std::string mdvar = mm->first;
+	      const bool missing = mm->second->is_missing();
+	      globals::atype_t type = mm->second->atype();
+	      const bool is_numeric = type == globals::A_DBL_T || type == globals::A_INT_T || type == globals::A_BOOL_T;
+	      double value = is_numeric && ! missing ? mm->second->double_value() : 0;
+
+	      logger << " mdvar " << mdvar << " " << missing <<" " << type << " " << is_numeric << " " << value << "\n";
+	      
+	      ++mm;
+	    }
+	  	  
+	  
+	  ++ii;
+	}
+      
+      logger << "  " << aa->first << " --> " << amap.size() << " intervals\n";
+      n_tot += aa->second.size();
+            
+      ++aa;
+    }
+    
+  logger << "  found " << n_tot << " total intervals\n";
+  
+  
+  //
+  // processes
+  //
+  
+	  
+  //
+  // create new annotation (although we'll ignore thia
+  //
+
+  annot_t * new_annot = edf.timeline.annotations.add( "__ignore_me" );
+  instance_t * new_instance = new_annot->add( "." , edf.timeline.wholetrace( true ) , "." );
+	  
+  //
+  // evaluate the expression
+  //
+	  
+  Eval tok( expression );
+  
+  tok.bind( inputs , new_instance , accumulator , &acc_vars );
+	  
+  bool is_valid = tok.evaluate();
+
+  // we don't care about any return variable here
+  
+  //
+  // Output
+  //
+
+  //  logger << " accum = " << accumulator->print( "\n" , "\t" )  << "\n";
+  
+  const std::map<std::string,avar_t*> & data = accumulator->data;
+  
+  std::map<std::string,avar_t*>::const_iterator mm = data.begin();
+  while ( mm != data.end() )
+    {
+      const std::string var = mm->first;
+      const bool missing = mm->second->is_missing();
+      globals::atype_t type = mm->second->atype();
+      const bool is_numeric = type == globals::A_DBL_T || type == globals::A_INT_T || type == globals::A_BOOL_T;
+      double value = is_numeric && ! missing ? mm->second->double_value() : 0;
+      
+      if ( is_numeric && ! missing )
+	writer.value( var , value );
+      
+      ++mm;
+    }
+
+
+  //
+  // report # of events (across all classes) that matched any requirements
+  //
+
+  if ( has_reqs ) 
+    writer.value( "REQN" , req_cnt );
+  
+  
+  //
+  // clear up 
+  //
+
+  edf.timeline.annotations.clear( "__global" );
+  edf.timeline.annotations.clear( "__ignore_me" );
+  
+}
+
+
+
+
+
 

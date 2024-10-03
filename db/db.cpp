@@ -1516,6 +1516,7 @@ void writer_t::set_types()
 
   numeric_factor( "EID" );
   numeric_factor( "IC" );
+  numeric_factor( "I" ); // from PSC
   numeric_factor( "TAP" );
   numeric_factor( "TH" );
   numeric_factor( "SPINDLE" );

@@ -47,6 +47,8 @@ struct bfile_t {
   
   bool read( const std::set<std::string> & incvars ,
 	     const std::set<std::string> & excvars ,
+	     const std::set<std::string> & inclvars,
+	     const std::set<std::string> & exclvars,
 	     const std::vector<std::pair<int,int> > & incnums,
 	     const std::vector<std::pair<int,int> > & excnums, 
 	     const std::set<std::string> & incfacs,
@@ -161,6 +163,9 @@ struct gpa_t {
 
   // info on faclvl
   void manifest();  
+
+  // summary of manifest
+  void summarize();
   
   // run
   void run();   // correct for all X considered
@@ -232,6 +237,9 @@ private:
   
   // [read/run] nums (on full manifest) 
   std::vector<std::pair<int,int> > incnums, excnums;
+
+  // [read/run] long-vars (on full manifest) e.g. for dump
+  std::set<std::string> inclvars, exclvars;  
 
   // opts
   bool verbose;

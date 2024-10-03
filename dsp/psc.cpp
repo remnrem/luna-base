@@ -32,6 +32,7 @@
 std::vector<std::string> psc_t::vname;
 Eigen::Array<double, 1, Eigen::Dynamic> psc_t::means;
 Eigen::Array<double, 1, Eigen::Dynamic> psc_t::sds;
+Eigen::Array<double, 1, Eigen::Dynamic> psc_t::scales;
 Eigen::VectorXd psc_t::W;
 Eigen::MatrixXd psc_t::V;   
 
@@ -147,6 +148,23 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
   
   if ( q < 0 || q > 10 ) 
     Helper::halt( "q should be between 1 and 10" );
+  
+
+  //
+  // var/command mappings?
+  //
+
+  var2cmd.clear();
+  if ( param.has( "cmd-var" ) )
+    {
+      // even N,  cmd,var,cmd,var,etc
+      // cmd-var=SPINDLES,DENS,SPINDLES,AMP
+      std::vector<std::string> tok = param.strvector( "cmd-var" );
+      if ( tok.size() % 2 == 1 ) Helper::halt( "expecting even number of cmd,var,cmd,var pairs" );
+      for (int i=0; i<tok.size(); i+=2)
+	var2cmd[ tok[i+1] ] = tok[i];
+    }
+	       
   
   
   //
@@ -295,9 +313,9 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 	  std::string ch = "";
 	  
 	  if ( ch_slot != -1 )
-	    ch = tok[ ch_slot ];
+	    ch = Helper::toupper( tok[ ch_slot ] ) ;
 	  else if ( ch1_slot != -1 && ch2_slot != -1 )
-	    ch = tok[ ch1_slot ] + "." + tok[ ch2_slot ];
+	    ch = Helper::toupper( tok[ ch1_slot ] ) + "." + Helper::toupper( tok[ ch2_slot ] ) ;
 	  else
 	    ch = "-"; // or '-' if no CH vars
 
@@ -415,7 +433,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 		  if ( cols.find( col_name ) == cols.end() )
 		    {
 		      cols.insert( col_name );
-		      vname.push_back( col_name );
+		      vname.push_back( Helper::toupper( col_name ) );
 		      slot[ ii2->first ][ ii3->first ][ ii4->first ] = cols.size() - 1 ;
 		    }
 		  ++ii4;
@@ -585,6 +603,64 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
   i2c2f2v.clear();
   
 
+  //
+  // Scaling factors?
+  //
+
+  swgt.clear();
+
+
+  if ( param.has( "scale" ) )
+    {
+      const std::string scaling_file = param.value( "scale" );
+      if ( ! Helper::fileExists( scaling_file ) )
+	Helper::halt( "could not open scale file: " + scaling_file );
+
+      // CH F VAR W
+      // CH1 CH2 F VAR W
+      //  also enter CH2.CH1
+
+      std::ifstream SIN1 ( scaling_file.c_str() , std::ios::in );
+      while ( 1 )
+	{
+	  std::string line;
+	  Helper::safe_getline( SIN1 , line );
+	  
+	  if ( SIN1.eof() ) break;
+	  if ( line == "" ) continue;
+	  
+	  std::vector<std::string> tok = Helper::parse( line , "\t" );
+	  if ( ! ( tok.size() == 4 || tok.size() == 5 ) )
+	    Helper::halt( "bad row in " + scaling_file + ":\n" + line + "\n expecting 4 or 5 tab-delim cols" );
+
+	  const bool two_chs = tok.size() == 5 ;
+
+	  // get weight
+	  double w;
+	  if ( ! Helper::str2dbl( tok[ two_chs ? 4 : 3 ] , &w ) )
+	    Helper::halt( "bad numeric value in " + scaling_file + ":\n" + line );
+	  
+	  // does this need double entering?
+	  if ( two_chs )
+	    {
+	      swgt[ Helper::toupper( tok[0] ) + "." + Helper::toupper( tok[1] ) + "~" + tok[2] + "~" + tok[3]  ] = w;
+	      swgt[ Helper::toupper( tok[1] ) + "." + Helper::toupper( tok[0] ) + "~" + tok[2] + "~" + tok[3]  ] = w;
+	    }
+	  else
+	    {
+	      swgt[ Helper::toupper( tok[0] ) + "~" + tok[1] + "~" + tok[2] ] = w;
+	    }
+	  
+	}
+      
+      SIN1.close();
+
+      logger << "  read " << swgt.size() << " weights from " << scaling_file << " (including double-entering any 2-channel weights)\n";
+      
+    }
+
+  
+  
   //
   // Check for invariant columns
   //
@@ -811,6 +887,38 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
     }
 
 
+  //
+  // Scaled PCA?
+  //
+
+  scales = Eigen::ArrayXd::Ones( sds.size() );
+
+  const bool show_missing_weights = param.has( "verbose" );
+  
+  if ( swgt.size() )
+    {      
+      
+      int scaled = 0;
+      for (int i=0;i<nv;i++)
+	{
+	  if ( swgt.find( vname[i] ) != swgt.end() )
+	    {
+	      ++scaled;
+	      scales[i] = swgt[ vname[i] ];
+	    }
+	  else if ( show_missing_weights )
+	    {
+	      std::cout << vname[i] << "\n";
+	    }
+	}
+
+      // do scaling
+      U.array().rowwise() *= scales;      
+      logger << "  scales found for " << scaled << " of " << nv << " variables\n";
+      
+    }
+
+  
   //
   // need to change 'nc' ? 
   //
@@ -1282,9 +1390,10 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 	  // freq
 	  V1 << "\t" << col2f[ vname[k] ];
 	  
-	  // means / SD from raw data 
+	  // means / SD / scale from raw data 
 	  V1 << "\t" << means[ k ]
-	     << "\t" << sds[ k ];
+	     << "\t" << sds[ k ]
+	     << "\t" << scales[ k ];
 	  
 	  // V coefficients
 	  for (int c=0;c<nc; c++ )
@@ -1415,15 +1524,19 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       
       std::ofstream OUT1( projection.c_str() , std::ios::out );
 
+      // file format marker
+      OUT1 << "__PSC_PROJ_V1\n";
+      
       // variables (with mean/SD in reference population)
       OUT1 << "NV: " << nv ;
       for (int j=0;j<nv;j++)
 	OUT1 << " " << vname[j]
 	     << " " << means[j]
-	     << " " << sds[j];
+	     << " " << sds[j]
+	     << " " << scales[j];
       OUT1 << "\n";
 
-      // means/SDs in reference population
+      // means/SDs/scales in reference population
       
       // components
       OUT1 << "NC: " << nc << "\n";
@@ -1459,7 +1572,7 @@ void psc_t::attach( param_t & param )
   //
 
   std::string infile = param.requires( "proj" );
-
+  
   if ( ! Helper::fileExists( infile ) )
     Helper::halt( "could not find " + infile );
   
@@ -1475,23 +1588,28 @@ void psc_t::attach( param_t & param )
 
   std::string dummy;
   int nv;
+
+  IN1 >> dummy;
+  if ( dummy != "__PSC_PROJ_V1" )
+    Helper::halt( "bad format for projection file" );
   
   IN1 >> dummy >> nv;
   vname.resize( nv );
   means.resize( nv );
   sds.resize( nv );
+  scales.resize( nv );
   
   for (int j=0;j<nv;j++)
-    IN1 >> vname[j] >> means(j) >> sds(j);
+    IN1 >> vname[j] >> means(j) >> sds(j) >> scales[j];
   
   // make all VNAMES upper case
 
   for (int j=0;j<nv;j++)
     vname[j] = Helper::toupper( vname[j] );
-
+  
   // components
   IN1 >> dummy >> nc;
-        
+  
   W.resize( nc );
   V.resize( nv , nc );
       
@@ -1634,8 +1752,37 @@ void psc_t::project( edf_t & edf , param_t & param )
 
       // variable =  tok[2]
 
-      ckey_t key( tok[2] );
-      ckey_t key_flipped( tok[2] ); // for CH1-CH2 pairs only
+      // hmm
+      //   CACHE record adds command:var format
+      //   Projection nstores as UPPER
+      
+      std::string varname = Helper::toupper( tok[2] );
+
+      // need to add feature to map arbitrary values, e.g. DENS --> SPINDLES
+      // etc
+
+      // append user-defined label, e.g.  cmd-var=SPINDLES,DENS
+      //   means DENS ->  SPINDLES:DENS   (which will be the CACHE record value) 
+      if ( var2cmd.find( varname ) != var2cmd.end() )
+	varname = var2cmd[ varname ] + ":" + varname ; 
+
+      
+      // otherwise, do some generic mappings if (likely needed)
+      // currently, this only works with:
+      //  PSC PSI MTM COH
+
+      if ( var2cmd.size() == 0 )
+	{
+	  if ( varname == "PSD" ) varname = "PSD:PSD";
+	  else if ( varname == "MTM" ) varname = "MTM:MTM";
+	  else if ( varname == "PSI" ) varname = "PSI:PSI";
+	  else if ( varname == "COH" || varname == "ICOH" || varname == "LCOH" || varname == "CSPEC" )
+	    varname = "COH:" + varname;
+	}
+
+      
+      ckey_t key( varname );
+      ckey_t key_flipped( varname ); // for CH1-CH2 pairs only
 
       // channel(s) = tok[0]
       
@@ -1685,11 +1832,12 @@ void psc_t::project( edf_t & edf , param_t & param )
 	      
 	      if ( cx.size() != 1 )
 		Helper::halt( "could not find cached variable (or flipped pair): " + vname[i] );
-
+	      
 	      // signed?  i.e.  if so, flip sign
 	      if ( signed_pairs ) cx[0] *= -1; 
 	    }
-	  Helper::halt( "could not find cached variable: " + vname[i] );
+	  else
+	    Helper::halt( "could not find cached variable: " + vname[i] );
 	}
 
       X(i) = cx[0];
@@ -1710,6 +1858,10 @@ void psc_t::project( edf_t & edf , param_t & param )
 
   if ( norm ) 
     X.array() /= sds;
+
+
+  // scale?
+  X.array() *= scales;
 
     
   //

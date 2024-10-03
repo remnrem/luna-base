@@ -1337,11 +1337,13 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //if ( cols[a].size() == 0 ) continue;
 	  
 	  //
-	  // Otherwise, parse |-delimited values, that should match the header
+	  // Otherwise, parse ;-delimited or |-delimited values, that should match the header
 	  //   - nb. still allow for quoted `|` characters in meta-data
 	  //
-	  
-	  std::vector<std::string> vartok = Helper::quoted_parse( tok[5] , "|" );
+
+	  // n.b. append both char delims and make a std::string
+	  std::string delim = std::string() + globals::annot_meta_delim + globals::annot_meta_delim2 ;
+	  std::vector<std::string> vartok = Helper::quoted_parse( tok[5] , delim );
 	  
 	  const int nobs = vartok.size();
 	  const int nexp = cols[a].size();
@@ -1352,7 +1354,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  
 	  bool key_value = Helper::quoted_parse( vartok[0] , std::string(1,globals::annot_keyval_delim ) ).size() == 2 ;
-
+	  
 	  // vartok[0][0] != '"' && vartok[0].find( globals::annot_keyval_delim ) != std::string::npos; 
 
 	  //
@@ -1362,7 +1364,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( nobs > nexp && ! key_value )
 	    return Helper::vmode_halt( "expecting at most "
 				       + Helper::int2str( nexp )
-				       + " |-delimited fields for " + aname + "\n" + line );
+				       + " " + globals::annot_meta_delim + "-delimited or "
+				       + globals::annot_meta_delim2 + "-delimited fields for " + aname + "\n" + line );
 	  
 	  // 
 	  // Read expected fields, with specified types
@@ -1389,10 +1392,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      // get label
 	      const std::string & label = key_value ? kv[0] : cols[a][j];	      
 	      
-	      // if this key not declare or previously seen, add now as TXT
+	      // if this key not declare or previously seen, add now as either TXT or numeric
 	      if ( key_value && a->types.find( label ) == a->types.end() )
 		{
-		  a->types[ label ] = globals::A_TXT_T;
+		  a->types[ label ] = globals::annot_default_meta_num_type ? globals::A_DBL_T : globals::A_TXT_T;
 		  //Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
 		}
 	      
@@ -1428,7 +1431,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  if ( Helper::str2dbl( key_value ? kv[1] : vartok[j] , &value ) )
 		    instance->set( label , value );
 		  else
-		    if ( vartok[j] != "NA" )
+		    if ( ! ( vartok[j] == "NA" || vartok[j] == "." ) )
 		      return Helper::vmode_halt( "invalid line, bad numeric value:\n" + line );
 		}
 
@@ -4472,8 +4475,8 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	      
 	      while ( dd != inst->data.end() )
 		{
-		  // pipe-delimiter
-		  if ( dd != inst->data.begin() ) O1 << "|";
+		  // semi-colon or pipe-delimiter
+		  if ( dd != inst->data.begin() ) O1 << globals::annot_meta_delim;
 		  
 		  // meta-data value, always key/value pairing
 		  // as there may be missing data
@@ -4483,7 +4486,11 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		  std::stringstream ss;
 		  ss << *dd->second;
 
-		  O1 << dd->first << "=" << Helper::quote_spaced( Helper::quote_if( ss.str() , '|' , '=' ) );
+		  O1 << dd->first << "="
+		     << Helper::quote_spaced( Helper::quote_if( ss.str() ,
+								globals::annot_meta_delim,
+								globals::annot_meta_delim2 ,
+								'=' ) );
 		  ++dd;
 		}
 	    }
@@ -5143,7 +5150,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 		      // adding ellipsis, i.e. here change points
 		      // might not map to even epochs... 30, 90, 30,
 		      // 180, etc... )
-		      
+
 		      if ( globals::sleep_stage_assume_epoch_duration
 			   && globals::is_stage_annotation( aname )
 			   && ( ! globals::set_0dur_as_ellipsis )

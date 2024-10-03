@@ -64,7 +64,7 @@ struct ckey_t {
   
   void add( const std::string & key , const std::string & val )
   {
-    stratum[key] = val;
+    stratum[ key] = val;
   }
   
   void add( const std::string & key , const int & val )
@@ -85,6 +85,17 @@ struct ckey_t {
   std::string name;
 
   std::map<std::string,std::string> stratum;
+
+  ckey_t toupper() const {
+    std::map<std::string,std::string> uc_stratum;
+    std::map<std::string,std::string>::const_iterator ss = stratum.begin();
+    while ( ss != stratum.end() )
+      {
+	uc_stratum[ Helper::toupper( ss->first ) ] = Helper::toupper( ss->second ) ;
+	++ss;
+      }
+    return ckey_t( Helper::toupper( name ) , uc_stratum );
+  }
   
   bool operator<(const ckey_t & rhs ) const {
     if ( name < rhs.name ) return true;
@@ -113,17 +124,19 @@ struct cache_t {
 
   //  cache_t() { } 
 
-  cache_t( const std::string & name ) : name(name) { }   
+  cache_t( const std::string & name ) : name(name) , uppercase_keys(false) { }   
 
   std::string name;
 
   std::map<ckey_t,std::vector<T> > store;
 
+  bool uppercase_keys;
+  
   // member functions
   
   void add( const ckey_t & key , const std::vector<T> & value )
   {
-    store[key] = value;
+    store[ uppercase_keys ? key.toupper() : key ] = value;
   }
 
   void add( const ckey_t & key , const T & value )
@@ -138,6 +151,11 @@ struct cache_t {
     store.clear();
   }
 
+  void set_uppercase_keys( const bool x = false )
+  {
+    uppercase_keys = x; 
+  }
+  
   // get all keys matching a particular label
   std::set<ckey_t> keys( const std::string & n ) const {
     std::set<ckey_t> k;
@@ -209,6 +227,9 @@ struct cache_t {
 	  oo << "value: " << ss->first.name << "=" << ss->second[0] << "\n";
 	else
 	  oo << "value: (" << ss->second.size() << " element vector)\n";
+
+	oo << "\n";
+	
 	++ss;
       }
     return oo.str();

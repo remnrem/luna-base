@@ -53,9 +53,12 @@ char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = ':';
 char globals::annot_keyval_delim = '=' ; 
+char globals::annot_meta_delim  = ';';
+char globals::annot_meta_delim2 = '|';
 std::string globals::annot_disc_segment = "segment";
 std::string globals::annot_disc_gap = "gap";
 bool globals::annot_disc_drop_spanning = true;
+bool globals::annot_default_meta_num_type = false;
 
 bool globals::sanitize_everything = true;
 

@@ -110,6 +110,21 @@ std::string Helper::quote_if( const std::string & s , char q , char p )
   return "\"" + s + "\"";
 }
 
+std::string Helper::quote_if( const std::string & s , char q , char p , char r)
+{
+  // empty strings stay as is
+  if ( s == "" ) return s;
+
+  // already quoted?
+  if ( s[0] == '"' && s[ s.size() - 1 ] == '"' ) return s;
+
+  // does not contain either flagged character: return as is
+  if ( s.find( q ) == std::string::npos && s.find( p ) == std::string::npos && s.find( r ) == std::string::npos ) return s;
+
+  // otherwise, place quotes
+  return "\"" + s + "\"";
+}
+
 std::set<std::string> Helper::sanitize( const std::set<std::string> & s ,
 					const char except )
 {

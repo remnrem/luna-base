@@ -1172,6 +1172,7 @@ bool cmd_t::eval( edf_t & edf )
       
       else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
       else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
+      else if ( is( c, "DERIVE" ) )       proc_derive( edf, param(c) );
       else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
       else if ( is( c, "COMBINE" ) )      proc_combine( edf , param(c) );
       else if ( is( c, "FREEZE" ) )       proc_freeze( edf , param(c) );
@@ -3849,6 +3850,7 @@ void proc_dump_cache( edf_t & edf , param_t & param )
 	  cache_t<std::string> * cache = edf.timeline.cache.find_str( cname );
 	  writer.cache( cache );
 	  writer.cache_string( cmd_name , var_name, fac );
+	  if ( param.has( "uppercase-keys" ) ) cache->set_uppercase_keys( true ); 
 	}
       // else if ( is_int )
       // 	{
@@ -3861,6 +3863,7 @@ void proc_dump_cache( edf_t & edf , param_t & param )
 	  cache_t<double> * cache = edf.timeline.cache.find_num( cname );
 	  writer.cache( cache );
 	  writer.cache_numeric( cmd_name , var_name , fac );
+	  if ( param.has( "uppercase-keys" ) ) cache->set_uppercase_keys( true ); 
 	}
       
       logger << "  caching output from " << cmd_name << ", variable = " << var_name ;
@@ -5290,12 +5293,35 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // delimiter char for annot key=value pairs (default '=')
-  if ( Helper::iequals( tok0 , "annot-keyval" ) || Helper::iequals( tok0 , "annots-keyval" ) )
+  if ( Helper::iequals( tok0 , "annot-keyval" ) )
     {
       globals::annot_keyval_delim = tok1[0];
       return;
     }
 
+
+  // alternate char for default (primary) annot meta delims (default |)
+  if ( Helper::iequals( tok0 , "annot-meta-delim1" ) )
+    {
+      globals::annot_meta_delim = tok1[0];
+      return;
+    }
+  
+  // char for annot meta delims (default ; )
+  if ( Helper::iequals( tok0 , "annot-meta-delim2" ) )
+    {
+      // i.e. setting this by default means | or this value
+      globals::annot_meta_delim2 = tok1[0];
+      return;
+    }
+  
+  // default type if numeric if meta-data type of not otherwise defined
+  if ( Helper::iequals( tok0 , "annot-meta-default-num" ) )
+    {
+      globals::annot_default_meta_num_type = Helper::yesno( tok1 );
+      return;
+    }
+  
   // annotation alignment
   if ( Helper::iequals( tok0 , "align-annots" ) )
     {

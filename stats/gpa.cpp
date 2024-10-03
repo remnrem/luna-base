@@ -127,13 +127,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   //
   
   if ( param.has( "vars" ) )
-    {
-      incvars = Helper::combine( incvars , param.strset( "vars" ) );
-      // and automatically add any X or Z vars
-      if ( param.has( "X" ) ) incvars = Helper::combine( incvars , param.strset( "X" ) );
-      if ( param.has( "Z" ) ) incvars = Helper::combine( incvars , param.strset( "Z" ) );
-      if ( param.has( "Y" ) ) incvars = Helper::combine( incvars , param.strset( "Y" ) );
-    }
+    incvars = Helper::combine( incvars , param.strset( "vars" ) );
       
   if ( param.has( "xvars" ) )
     excvars = Helper::combine( excvars , param.strset( "xvars" ) );
@@ -200,15 +194,30 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  excfaclvls[ tok2[0] ] = Helper::vec2set( Helper::parse( tok2[1] , "|" ) );
 	}
     }
-  
-  
+
+
+  // lvars/xlvars only allowed in read/run mode
   // nvars/xnvars only allowed in read/run mode
   if ( prep_mode )
     {
       if (  param.has( "nvars" ) ||  param.has( "xnvars" ) )
 	Helper::halt( "cannot specify nvars/xnvars with --gpa-prep" );
+
+      if (  param.has( "lvars" ) ||  param.has( "lnvars" ) )
+	Helper::halt( "cannot specify lvars/xlvars with --gpa-prep" );	    
     }
 
+
+  
+  //
+  // include/exclude vars (allow for partial population during spec JSON stage
+  //
+  
+  if ( param.has( "lvars" ) )
+    inclvars = param.strset( "lvars" );
+  
+  if ( param.has( "xlvars" ) )
+    exclvars = param.strset( "xvars" );  
   
   if ( param.has( "nvars" ) )
     {
@@ -271,6 +280,24 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	}
     }
 
+
+  //
+  // any other X, Y, Z vars?
+  //
+
+  // **if** we added some type of "include" statement (by vars, lvars, nvars, grps, facs or faclvls)
+  // then, if we also have X, Z vars specified separately, make sure they are included in the include
+  // list;  likewise for Y variables
+
+  if ( param.has( "vars" ) || param.has( "lvars" ) || param.has( "nvars" ) || param.has( "grps" ) || param.has( "facs" ) || param.has( "faclvls" ) )
+    {
+      // and automatically add any X or Z vars to incvars
+      if ( param.has( "X" ) ) incvars = Helper::combine( incvars , param.strset( "X" ) );
+      if ( param.has( "Z" ) ) incvars = Helper::combine( incvars , param.strset( "Z" ) );
+      if ( param.has( "Y" ) ) incvars = Helper::combine( incvars , param.strset( "Y" ) );
+    }
+  
+  
   //
   // criteria to drop bad/empty cols (default, at least 5 non-missing, at least 5% of obs w/ values)
   //  (used in dump_
@@ -529,11 +556,23 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       //
 
       if ( param.has( "dump" ) )
-	dump();
-
+	{
+	  dump();
+	  return;
+	}
+      
       if ( param.has( "manifest" ) )
-	manifest();
-
+	{
+	  manifest();
+	  return;
+	}
+	  
+      if ( param.has( "summary" ) || param.has( "summarize" ) || param.has( "desc" ) )
+	{
+	  summarize();
+	  return;
+	}
+	  
       //
       // run association tests
       //
@@ -985,16 +1024,16 @@ void gpa_t::prep()
     manifest();
   else
     dump();
-  
-  
-  
+   
 }
 
 
 void gpa_t::read()
 {
   bfile_t bf( bfile );
-  bf.read( incvars , excvars, incnums, excnums,
+  bf.read( incvars , excvars,
+	   inclvars, exclvars,
+	   incnums, excnums,
 	   incfacs, excfacs, incfaclvls, excfaclvls,
 	   incgrps, excgrps, 
 	   &ids, &vars , &var2group, &basevar, &faclvl , &X );
@@ -1409,6 +1448,8 @@ bool bfile_t::write( const std::vector<std::string> & ids ,
  
 bool bfile_t::read( const std::set<std::string> & incvars ,
 		    const std::set<std::string> & excvars ,
+		    const std::set<std::string> & inclvars,
+		    const std::set<std::string> & exclvars,
 		    const std::vector<std::pair<int,int> > & incnums,
 		    const std::vector<std::pair<int,int> > & excnums, 
 		    const std::set<std::string> & incfacs,
@@ -1486,6 +1527,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
   std::vector<bool> readvar( nv , true );
   
   if ( incvars.size() || excvars.size()
+       || inclvars.size() || exclvars.size() 
        || incnums.size() || excnums.size()
        || incgrps.size() || excgrps.size() 
        || incfacs.size() || excfacs.size()
@@ -1493,223 +1535,266 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
     {
 
       const bool has_incvars = incvars.size();
+      const bool has_inclvars = inclvars.size();
       const bool has_incnums = incnums.size();
       const bool has_incgrps = incgrps.size();
+      const bool has_incfacs   = incfacs.size();
+      const bool has_incfaclvls = incfaclvls.size();
+
       
-      // if include lists specified, then set all to F initially
-      if ( has_incvars || has_incnums || has_incgrps )
+      // if *any* include lists specified, then set all to F initially
+      if ( has_incvars || has_incnums || has_inclvars || has_incgrps || has_incfacs || has_incfaclvls )
 	{
 	  readvar.clear();
 	  readvar.resize( nv , false );
-	  
-	  for (int i=0; i<incnums.size(); i++  )
-	    {
-	      int s1 = incnums[i].first < incnums[i].second ? incnums[i].first : incnums[i].second ;
-	      int s2 = incnums[i].first < incnums[i].second ? incnums[i].second : incnums[i].first ;
-	      for (int j=s1; j<=s2; j++)
-		readvar[j] = true;
-	    }
-
-	  // base-var inc?
-	  if ( has_incvars ) 
-	    for (int j=0; j<nv; j++)
-	      {
-		if ( incvars.find( all_basevars[j] ) != incvars.end() )
-		  readvar[j] = true;
-	      }
-
-	  // var-group inc?
-	  if ( has_incgrps )
-	    for (int j=0; j<nv; j++)
-              {
-                if ( incgrps.find( all_groups[j] ) != incgrps.end() )
-                  readvar[j] = true;
-              }
 	}
 
-      // now do any exclusions
-      const bool has_excvars = excvars.size();
-      const bool has_excnums = excnums.size();
-      const bool has_excgrps = excgrps.size();
 
-      // if include lists specified, then set all to F initially
-      if ( has_excvars || has_excnums || has_excgrps )
+      //
+      // first, process includes
+      //      
+      
+      for (int i=0; i<incnums.size(); i++  )
 	{
-	  
-	  for (int i=0; i<excnums.size(); i++ )
-	    {
-	      int s1 = excnums[i].first < excnums[i].second ? excnums[i].first : excnums[i].second ;
-	      int s2 = excnums[i].first < excnums[i].second ? excnums[i].second : excnums[i].first ;
-	      for (int j=s1; j<=s2; j++)
-		readvar[j] = false;
-	    }
-
-	  // base-var exc?
-	  if ( has_excvars ) 
-	    for (int j=0; j<nv; j++)
-	      {
-		if ( excvars.find( all_basevars[j] ) != excvars.end() )
-		  readvar[j] = false;
-	      }
-
-	  // var-group exc?
-	  if ( has_excgrps ) 
-	    for (int j=0; j<nv; j++)
-	      {
-		if ( excgrps.find( all_groups[j] ) != excgrps.end() )
-		  readvar[j] = false;
-	      }
-	  
+	  int s1 = incnums[i].first < incnums[i].second ? incnums[i].first : incnums[i].second ;
+	  int s2 = incnums[i].first < incnums[i].second ? incnums[i].second : incnums[i].first ;
+	  for (int j=s1; j<=s2; j++)
+	    readvar[j] = true;
 	}
-
-
-      //
-      // finally, inc/exc based on facs or faclvls
-      //
-
+      
+      // base-var inc?
+      if ( has_incvars ) 
+	for (int j=0; j<nv; j++)
+	  {
+	    if ( incvars.find( all_basevars[j] ) != incvars.end() )
+	      readvar[j] = true;
+	  }
+      
+      // l-var inc?
+      if ( has_inclvars ) 
+	for (int j=0; j<nv; j++)
+	  {
+	    if ( inclvars.find( all_vars[j] ) != inclvars.end() )
+	      readvar[j] = true;
+	  }
+      
+      // var-group inc?
+      if ( has_incgrps )
+	for (int j=0; j<nv; j++)
+	  {
+	    if ( incgrps.find( all_groups[j] ) != incgrps.end() )
+	      readvar[j] = true;
+	  }
+      
+      
       // infacs
-
-      if ( incfacs.size() || excfacs.size() )
+      if ( incfacs.size() )
 	{
 	  // exclude if does not contain all these factors
 	  for (int j=0; j<nv; j++)
 	    {
-	      if ( readvar[j] )
+	      
+	      bool consistent = true;
+	      
+	      // infacs: include if has all these factors
+	      const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];
+
+	      if ( fl.size() != incfacs.size() )
+		consistent = false;
+	      else
 		{
-		  const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];
-
-		  // incfacs || excfacs
-
-		  if ( incfacs.size() )
+		  std::set<std::string>::const_iterator kk = incfacs.begin();
+		  while ( kk != incfacs.end() )
 		    {
-		      if ( fl.size() != incfacs.size() ) readvar[j] = false;
-		      else
+		      if ( fl.find( *kk ) == fl.end() )
 			{
-			  std::set<std::string>::const_iterator kk = incfacs.begin();
-			  while ( kk != incfacs.end() )
-			    {
-			      if ( fl.find( *kk ) == fl.end() )
-				{
-				  readvar[j] = false;
-				  break;
-				}
-			      ++kk;
-			    }
+			  consistent = false;
+			  break;
 			}
-		    }
-
-		  if ( excfacs.size() )
-		    {
-		      int c=0;
-		      std::set<std::string>::const_iterator kk = excfacs.begin();
-		      while ( kk != excfacs.end() )
-			{
-			  if ( fl.find( *kk ) != fl.end() ) ++c;
-			  ++kk;
-			}
-		      if ( c == excfacs.size() && c == fl.size() ) readvar[j] = false;
+		      ++kk;
 		    }
 		}
+	      // matched?
+	      if ( consistent ) readvar[j] = true;
 	    }
 	}
-    
       
-      // infaclvls | excfaclvls
+     
+      // infaclvls 
       
-      if ( incfaclvls.size() || excfaclvls.size() )
+      if ( incfaclvls.size() )
 	{
-
+	  
 	  // only include/exclude based on factor levels
 	  // irrespective of whether the full fac-set for that
 	  // variable matches;
 	  //  i.e. if faclvls=CH/CZ|FZ,B=SIGMA|GAMMA
 	  //       then only pull CH==CZ whether fac is just CH, or CH+B, or CH+F, etc
 	  //  do includes first, then excludes
-
+	  
 	  // the above, has an AND logic between CH and B
 	  // but an OR logic between CZ vs FZ, or SIGMA vs GAMMA
+	  
+	  for (int j=0; j<nv; j++)
+	    {
+	      
+	      const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];
+		  
+	      bool consistent = true; 
+	      
+	      // consider each factor;  okay for it not to exist, but if it does, then
+	      // we must match one of the listed factors
+	      std::map<std::string,std::set<std::string> >::const_iterator ll = incfaclvls.begin();
+	      while ( ll != incfaclvls.end() )
+		{
+		  // we have this factor...
+		  if ( fl.find( ll->first ) != fl.end() )
+		    {
+		      // ... do we have an acceptable level?
+		      const std::string & lvl = fl.find( ll->first )->second;
+		      
+		      if ( ll->second.find( lvl ) == ll->second.end() ) // no
+			{
+			  // no... then we are a no-go
+			  consistent = false;
+			  break;
+			}
+		    }
+		  ++ll;
+		}
+	      
+	      if ( consistent )
+		readvar[j] = true;
+	      
+	    }
 
+	}
+      
+	  
+      //
+      // second, any exclusions
+      //
+      
+	  
+      // now do any exclusions
+      const bool has_excvars = excvars.size();
+      const bool has_exclvars = exclvars.size();
+      const bool has_excnums = excnums.size();
+      const bool has_excgrps = excgrps.size();
+      
+      // xnvars
+      for (int i=0; i<excnums.size(); i++ )
+	{
+	  int s1 = excnums[i].first < excnums[i].second ? excnums[i].first : excnums[i].second ;
+	  int s2 = excnums[i].first < excnums[i].second ? excnums[i].second : excnums[i].first ;
+	  for (int j=s1; j<=s2; j++)
+	    readvar[j] = false;
+	}
+	  
+      // base-var exc?
+      if ( has_excvars ) 
+	for (int j=0; j<nv; j++)
+	  {
+	    if ( excvars.find( all_basevars[j] ) != excvars.end() )
+	      readvar[j] = false;
+	  }
+      
+      // base-var exc?
+      if ( has_exclvars ) 
+	for (int j=0; j<nv; j++)
+	  {
+	    if ( exclvars.find( all_vars[j] ) != exclvars.end() )
+	      readvar[j] = false;
+	  }
+      
+      // var-group exc?
+      if ( has_excgrps ) 
+	for (int j=0; j<nv; j++)
+	  {
+	    if ( excgrps.find( all_groups[j] ) != excgrps.end() )
+	      readvar[j] = false;
+	  }
+      
+    
+      // excfacs: exclude if has /all/ these factors
+      if ( excfacs.size() )
+	{
 	  for (int j=0; j<nv; j++)
 	    {
 	      if ( readvar[j] )
 		{
-		  
+		  		  
 		  const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];
-
-		  // incfaclvls
-		  if ( incfaclvls.size() )
+		  
+		  int c=0;
+		  std::set<std::string>::const_iterator kk = excfacs.begin();
+		  while ( kk != excfacs.end() )
 		    {
-
-		      bool match = true; 
-
-		      // consider each factor;  okay for it not to exist, but if it does, then
-		      // we must match one of the listed factors
-		      std::map<std::string,std::set<std::string> >::const_iterator ll = incfaclvls.begin();
-		      while ( ll != incfaclvls.end() )
-			{
-			  // we have this factor...
-			  if ( fl.find( ll->first ) != fl.end() )
-			    {
-			      // ... do we have an acceptable level?
-			      const std::string & lvl = fl.find( ll->first )->second;
-
-			      if ( ll->second.find( lvl ) == ll->second.end() ) // no
-				{
-				  // no... then we are a no-go
-				  match = false;
-				  break;
-				}
-			    }
-			  ++ll;
-			}
-
-		      if ( ! match )
-			readvar[j] = false;
-
-		    }
-
-
-
-		  // excfaclvls
-		  if ( excfaclvls.size() )
-		    {
-		      
-		      bool match = true; 
-		      
-		      // consider each factor;  okay for it not to exist, but if it does, then
-		      // we must *NOT* match one of the listed factors
-		      std::map<std::string,std::set<std::string> >::const_iterator ll = excfaclvls.begin();
-		      while ( ll != excfaclvls.end() )
-			{
-			  // we have this factor...
-			  if ( fl.find( ll->first ) != fl.end() )
-			    {
-			      // ... do we have an unacceptable level?
-			      const std::string & lvl = fl.find( ll->first )->second;
-
-			      if ( ll->second.find( lvl ) != ll->second.end() ) // yes
-				{
-				  // then we are a no-go
-				  match = false;
-				  break;
-				}
-			    }
-			  ++ll;
-			}
-
-		      if ( ! match )
-			readvar[j] = false;
-
+		      if ( fl.find( *kk ) != fl.end() ) ++c;
+		      ++kk;
 		    }
 		  
+		  if ( c == excfacs.size() && c == fl.size() ) readvar[j] = false;
 		}
 	    }
 	}
       
 
+      // excfaclvls      
+      if ( excfaclvls.size() )
+	{
+	  
+	  // only include/exclude based on factor levels
+	  // irrespective of whether the full fac-set for that
+	  // variable matches;
+	  //  i.e. if faclvls=CH/CZ|FZ,B=SIGMA|GAMMA
+	  //       then only pull CH==CZ whether fac is just CH, or CH+B, or CH+F, etc
+	  //  do includes first, then excludes
+	  
+	  // the above, has an AND logic between CH and B
+	  // but an OR logic between CZ vs FZ, or SIGMA vs GAMMA
+	  
+	  for (int j=0; j<nv; j++)
+	    {
+	      if ( readvar[j] )
+		{
+		  
+		  const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];				  
+		  
+		  bool consistent = true;
+		      
+		  // consider each factor;  okay for it not to exist, but if it does, then
+		  // we must *NOT* match one of the listed factors
+		  std::map<std::string,std::set<std::string> >::const_iterator ll = excfaclvls.begin();
+		  while ( ll != excfaclvls.end() )
+		    {
+		      // we have this factor...
+		      if ( fl.find( ll->first ) != fl.end() )
+			{
+			  // ... do we have an unacceptable level?
+			  const std::string & lvl = fl.find( ll->first )->second;
+			  
+			  if ( ll->second.find( lvl ) != ll->second.end() ) // yes
+			    {
+			      // then we are a no-go
+			      consistent = false;
+			      break;
+			    }
+			}
+		      ++ll;
+		    }
+		  
+		  if ( ! consistent )
+		    readvar[j] = false;		    
+		  
+		}
+	      
+	    }
+	}
       
-    }
+    } // end of inclusions/exclusions
   
+ 
   
   //
   // copy subset into file return values
@@ -1792,6 +1877,165 @@ void gpa_t::dump()
 }
 
 
+void gpa_t::summarize()
+{
+
+  const int ni = X.rows();
+  const int nv = X.cols();
+
+
+  logger << "\n"
+	 << "  ------------------------------------------------------------\n"
+	 << "  Summary for (the selected subset of) " << bfile << "\n\n";
+
+  logger << "  # individuals (rows)  = " << ni << "\n"
+	 << "  # variables (columns) = " << nv << "\n";
+
+  // get all factors left in 
+  std::set<std::string> allfacs;  
+  // var -> fac -> lvl  
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator aa = faclvl.begin();
+  while ( aa != faclvl.end() )
+    {
+      const std::map<std::string,std::string> & xx = aa->second;
+      std::map<std::string,std::string>::const_iterator ff = xx.begin();
+      while ( ff != xx.end() )
+	{
+	  allfacs.insert( ff->first );
+	  ++ff;
+	}      
+      ++aa;
+    }
+  
+  // grp -> # of vars
+  std::map<std::string,int> grp2vars;
+  
+  // grp -> base-vars
+  std::map<std::string,std::set<std::string> > grp2basevars;
+  
+  // grp -> # fac -> lvls -> # vars
+  std::map<std::string,std::map<std::string,std::map<std::string,int> > > grp2fac2lvl2vars;
+  
+  // basevar -> # of vars
+  std::map<std::string,int> basevar2vars;
+  
+
+  // vars
+  for (int j=0; j<nv; j++)
+    {
+
+      const std::string g = var2group[ vars[j] ];
+
+      grp2vars[ g ]++;
+      grp2basevars[ g ].insert( basevar[ vars[j] ] );
+      basevar2vars[ basevar[ vars[j] ] ]++;
+
+      std::set<std::string>::const_iterator gg = allfacs.begin();
+      while ( gg != allfacs.end() )
+	{
+	  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( vars[j] );
+	  if ( kk != faclvl.end() )
+	    {
+	      if ( kk->second.find( *gg ) != kk->second.end() )
+		grp2fac2lvl2vars[ g ][ *gg ][ kk->second.find( *gg )->second ]++;
+	    }
+	  ++gg;
+	}
+
+    }  
+
+
+  //
+  // summary by basevars
+  // 
+  
+  logger << "\n"
+	 << "  ------------------------------------------------------------\n"
+	 << "  " << basevar2vars.size() << " base variable(s):\n\n";
+  
+  std::map<std::string,int>::const_iterator bb =  basevar2vars.begin();
+  while ( bb != basevar2vars.end() )
+    {
+      logger << "    " << bb->first << " --> " << bb->second << " expanded variable(s)\n";
+      ++bb;
+    }
+
+  
+  //
+  // summary by groups
+  //
+  
+  logger << "\n"
+	 << "  ------------------------------------------------------------\n"
+         << "  " << grp2vars.size() << " variable groups:\n\n";
+
+  std::map<std::string,int>::const_iterator ii =  grp2vars.begin();
+  while	( ii != grp2vars.end() )
+    {
+
+      const std::set<std::string> & ref = grp2basevars[ ii->first ];
+
+      logger << "    " << ii->first << ":\n"
+	     << "         " << ref.size() << " base variable(s) (";
+      
+      int c = 0;
+      std::set<std::string>::const_iterator rr = ref.begin();
+      while ( rr != ref.end() ) {
+	logger << " " << *rr;
+	++rr;
+
+	// enough?
+	++c;	
+	if ( c == 6 && ref.size() > 5 )
+	  {
+	    logger << " ...";
+	    break;
+	  }
+      }
+      logger << " )\n";
+
+      logger << "         " << ii->second << " expanded variable(s)\n";
+
+
+      // grp -> # faclvls
+      const std::map<std::string,std::map<std::string,int> > & ref2 = grp2fac2lvl2vars[ ii->first ];
+
+      if ( ref2.size() == 0 )
+	logger << "         " << "no stratifying factors\n";
+      else
+	logger << "         " << ref2.size() << " unique factors:\n";
+
+      std::map<std::string,std::map<std::string,int> >::const_iterator ff = ref2.begin();
+      while ( ff != ref2.end() )
+	{
+	  const std::map<std::string,int> & ref3 = ff->second;
+	  logger << "           " << ff->first << " -> " << ref3.size() << " level(s):\n";
+	  std::map<std::string,int>::const_iterator rr = ref3.begin();
+
+	  int c = 0;
+	  while ( rr != ref3.end() )
+	    {
+	      logger << "             " << ff->first << " = " << rr->first << " --> " << rr->second << " expanded variable(s)\n";	      
+	      ++rr;
+
+	      // enough?
+	      ++c;
+	      if ( c == 6 && ref3.size() > 5 )
+		{
+		  logger << "             ...\n";
+		  break;
+		}
+	    }
+	  ++ff;
+	}
+      logger << "\n";
+      
+      ++ii;
+    }
+
+  logger << "  ------------------------------------------------------------\n\n";
+  
+}
 
 
 void gpa_t::manifest()
@@ -2505,6 +2749,8 @@ void gpa_t::parse( const std::string & pfile )
       // ** these not supported in prep-mode (or JSON input)  
       // nvars -> incnums
       // xnvars -> excnums
+      // lvars -> inclvars (long var names)
+      // xlvars -> exclvars 
       // faclvls -> incfaclvls
       // xfaclvls -> excfaclvls.clear();
       
@@ -2815,9 +3061,9 @@ void gpa_t::parse( const std::string & pfile )
 	    
 	    logger << "\n    expecting " << file_facs.size() << " factors";
 	    if  (file_fixed.size() ) logger << " and " << file_fixed.size() << " fixed factors";
-	    if ( file2incvars.size() ) logger << ", extracting " << file2incvars.size() << " var(s)";
-	    if ( file2excvars.size() ) logger << ", ignoring " << file2excvars.size() << " var(s)";	
-	    if ( file2incvars.size() == 0 && file2excvars.size() == 0 ) logger << ", reading all var(s)";
+	    if ( file2incvars[ file_name ].size() ) logger << ", extracting " << file2incvars[ file_name ].size() << " var(s)";
+	    if ( file2excvars[ file_name ].size() ) logger << ", ignoring " << file2excvars[ file_name ].size() << " var(s)";	
+	    if ( file2incvars[ file_name ].size() == 0 && file2excvars[ file_name ].size() == 0 ) logger << ", reading all var(s)";
 	    logger << "\n";
 	
 	

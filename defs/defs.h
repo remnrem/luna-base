@@ -232,7 +232,10 @@ struct globals
   
   static char annot_keyval_delim;
   
+  static char annot_meta_delim;
+  static char annot_meta_delim2;
 
+  static bool annot_default_meta_num_type;
   
   //
   // Channel types

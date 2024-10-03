@@ -45,6 +45,7 @@ struct psc_t {
     vname.clear();
     means.resize(0);
     sds.resize(0);
+    scales.resize(0);
     W.resize(0);
     V.resize(0,0);    
   }
@@ -53,6 +54,7 @@ struct psc_t {
   static std::vector<std::string> vname;  
   static Eigen::Array<double, 1, Eigen::Dynamic> means;
   static Eigen::Array<double, 1, Eigen::Dynamic> sds;
+  static Eigen::Array<double, 1, Eigen::Dynamic> scales;
 
   int nc;
   
@@ -63,6 +65,12 @@ struct psc_t {
   
   // NMF mode
   const int maxiter = 500;  
+
+  // scaling
+  std::map<std::string,double> swgt;
+  
+  // var->cmd mappings (i.e. if other than PSI:PSI etc)
+  std::map<std::string,std::string> var2cmd;
   
 };
 

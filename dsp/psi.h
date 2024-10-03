@@ -86,6 +86,12 @@ struct psi_t {
 
   void calc();
 
+  void output_settings( const bool de , const double v )
+  {
+    double_entry = de;
+    verbose = v;
+  }
+  
   void report( const signal_list_t & ,  bool by_epoch = false ,
 	       qdynam_t * qd = NULL ,
 	       const int e = -1 );
@@ -125,7 +131,10 @@ struct psi_t {
   //
   // Outputs
   //
-
+  
+  bool double_entry;
+  bool verbose;
+  
   int n_models;
 
   std::vector<Data::Matrix<double> > psi;

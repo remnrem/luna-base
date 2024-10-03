@@ -41,6 +41,8 @@ enum slow_wave_type { SO_FULL , SO_HALF, SO_NEGATIVE_HALF , SO_POSITIVE_HALF } ;
 
 struct slow_wave_param_t {
 
+  slow_wave_param_t() { } ;
+  
   slow_wave_param_t( const param_t & param )
   {
     
@@ -129,6 +131,11 @@ struct slow_wave_param_t {
     
     // do not skip SO detection
     skip = false;
+
+    // verbose display? (epoch/event level)    
+    out_all_slopes = param.has( "out-all-slopes" ) ? param.yesno( "out-all-slopes" ) : false;
+    out_idx        = param.has( "out-idx" ) ? param.yesno( "out-idx" ) : false; 
+    
   }
   
   // relative threshold based on mean of 
@@ -195,6 +202,10 @@ struct slow_wave_param_t {
   
   // current channel
   std::string ch;
+
+  // output options
+  bool out_idx;  // for SO-level outputs
+  bool out_all_slopes;  // SLOPE -->  SLOPE_POS1  POS2 NEG1 NEG2 (def = NEG2)
 
   // skip SO detection per se
   bool skip;
@@ -385,6 +396,9 @@ struct slow_waves_t
   
 private:
 
+  // copy of parameters/options
+  slow_wave_param_t par;
+  
   // store all individual slow waves
   std::vector<slow_wave_t> sw;
   
@@ -448,10 +462,6 @@ private:
   double median_trans, median_trans_frq; 
 
   int Fs;
-
-  // output options
-  bool out_idx;  // for SO-level outputs
-  bool out_all_slopes;  // SLOPE -->  SLOPE_POS1  POS2 NEG1 NEG2 (def = NEG2)
 
 
   // other key options

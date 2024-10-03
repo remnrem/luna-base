@@ -100,6 +100,7 @@ namespace Helper
 
   std::string quote_if( const std::string & s , char q );
   std::string quote_if( const std::string & s , char q , char p );
+  std::string quote_if( const std::string & s , char q , char p , char r ); // oh dear...
 
   std::string sanitize( const std::string & , const char except );
   std::set<std::string> sanitize( const std::set<std::string> & , const char except  ); 

@@ -234,14 +234,14 @@ void timeline_t::create_discontinuous_timeline( const std::vector<uint64_t> & tp
 }
 
 
-interval_t timeline_t::wholetrace() const
+interval_t timeline_t::wholetrace( const bool silent ) const
 {  
   //std::cout << "LTP = " << last_time_point_tp + 1LLU << "\n";
   // end is defined as 1 past the last time point
-
+  
   // check that we don't have a mask set::: if we do, give a warning to the console
 
-  if ( mask_set )
+  if ( mask_set && ! silent )
     logger << "\n"
 	   << "  *** warning - running a command that pulls the whole trace\n"
 	   << "  ***           but currently an epoch mask set has been set;\n"

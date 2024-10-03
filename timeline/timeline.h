@@ -554,7 +554,7 @@ struct timeline_t
 
   bool check( const std::string & cmd ) const;
 
-  interval_t wholetrace() const; 
+  interval_t wholetrace( const bool silent = false ) const; 
   
   static bool discontinuity( const std::vector<uint64_t> & t , int sr, int sp1, int sp2 );
   
