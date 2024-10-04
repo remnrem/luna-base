@@ -650,6 +650,7 @@ struct clocktime_t
   void advance_tp( uint64_t tp );
   void advance_hrs( double hrs );
   void advance_seconds( double secs );
+  void advance_days( int days );
   void advance( const clocktime_t & t );
   
   static int earlier( const clocktime_t & t1 , const clocktime_t & t2 );

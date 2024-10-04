@@ -141,7 +141,7 @@ struct annot_t
   static bool load( const std::string & , edf_t & edf );  
 
   static interval_t get_interval( const std::string & ,
-				  const std::vector<std::string> & ,
+				  std::vector<std::string> & ,
 				  std::string * , 
 				  bool * , 
 				  const edf_t & ,

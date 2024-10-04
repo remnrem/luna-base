@@ -1349,6 +1349,21 @@ void clocktime_t::advance_tp( uint64_t tp )
   advance_seconds( sec );
 }
 
+void clocktime_t::advance_days( int days )
+{
+
+  if ( days == 0 )
+    return;
+
+  if ( days < 0 )
+    Helper::halt( "internal error, can only advance days forward for clocktime_t" );
+
+  // only change valid dates
+  if ( valid )
+    d += days;
+  
+}
+
 
 void clocktime_t::advance_hrs( double hrs ) 
 {

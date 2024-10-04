@@ -1471,7 +1471,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 
 interval_t annot_t::get_interval( const std::string & line ,
-				  const std::vector<std::string> & tok ,
+				  std::vector<std::string> & tok ,
 				  std::string * ch , 
 				  bool * readon , 
 				  const edf_t & parent_edf , 
@@ -1536,6 +1536,29 @@ interval_t annot_t::get_interval( const std::string & line ,
           
   bool before_edf_start = false;
 
+  //
+  // special case: if find 'd1-', 'd2-' etc in a time file, replace with start-date (+1, +2) etc  
+  //
+
+  for ( int dd=3; dd<=4; dd++)
+    if ( tok[dd].size() > 1 && tok[dd][0] == 'd' )
+      {
+	// expect d1-hh:mm:ss etc or d1 hh:mm:ss etc
+	// expect d2-hh:mm:ss etc
+	std::vector<std::string> dtok = Helper::parse( tok[dd] , "- " );
+	if ( dtok.size() != 2 ) Helper::halt( "bad format: " + tok[dd] );
+	int day = 0;
+	if ( ! Helper::str2int( dtok[0].substr(1) , &day ) )
+	  Helper::halt( "bad format: " + tok[dd] );
+	if ( day < 1 || day > 100 )
+	  Helper::halt( "expecting d1, d2, ... (up to d100): " + tok[dd] );      
+	clocktime_t edate = startdatetime;
+	edate.advance_days( day - 1 );
+	// reconstruct
+	//std::cout << " tok[x] " << tok[dd] << " --> " << edate.as_date_string( '/' ) + "-" + dtok[1] << "\n";
+	tok[dd] = edate.as_date_string( '/' ) + "-" + dtok[1];
+      }
+  
   //
   // for special annotations, can use thisL just insert at start of recording
   //
