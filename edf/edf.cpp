@@ -4806,6 +4806,66 @@ void edf_t::reverse( const int s )
 
 
 
+void edf_t::set_scale( const int s , double * min , double * max , double * clip_min , double * clip_max )
+{
+  if ( header.is_annotation_channel(s) ) return;
+
+  interval_t interval = timeline.wholetrace();
+  slice_t slice( *this , s , interval );
+  const std::vector<double> * d = slice.pdata();
+  std::vector<double> rescaled( d->size() );
+
+  const bool do_minmax = min != NULL && max != NULL ; 
+  
+  double rng = do_minmax ? *max - *min : 0 ; 
+
+  double emin , emax;
+  // rescale
+  for (int i=0;i<d->size();i++) 
+    {
+      rescaled[i] = (*d)[i];
+      
+      if ( clip_min && rescaled[i] < *clip_min ) rescaled[i] = *clip_min;
+      if ( clip_max && rescaled[i] > *clip_max ) rescaled[i] = *clip_max;
+
+      if ( do_minmax )
+	{
+	  if ( i == 0 )
+	    {
+	      emin = rescaled[i];
+	      emax = rescaled[i];
+	    }      
+	  else if ( rescaled[i] < emin ) emin = rescaled[i];
+	  else if ( rescaled[i] > emax ) emax = rescaled[i];
+	}
+    }
+  
+  // scale
+  if ( do_minmax )
+    {
+      const bool not_flat = emax > emin;
+      double erng = emax - emin; 
+      if ( not_flat )
+	for (int i=0;i<d->size();i++)
+	  rescaled[i] = *min + rng * ( ( rescaled[i] - emin ) / erng  );  
+      else
+	for (int i=0;i<d->size();i++)
+	  rescaled[i] = ( *min + *max ) / 2.0;
+
+    }
+  
+  // update signal (and min/max in header)
+  update_signal( s , &rescaled );
+
+  // update headers
+  logger << "  scaled " << header.label[s] ;
+  if ( clip_min != NULL ) logger << " | clipped min = " << *clip_min;
+  if ( clip_max != NULL ) logger << " | clipped max = " << *clip_max;
+  if ( do_minmax ) logger << " | scaled between " << *min << " and " << *max ;
+  logger << "\n";
+
+}
+
 void edf_t::rescale( const int s , const std::string & sc , const bool quietly )
 {
   

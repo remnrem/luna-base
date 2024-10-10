@@ -221,6 +221,8 @@ struct globals
   static std::map<atype_t,std::string> type_name;
 
   static std::map<std::string,atype_t> name_type;
+
+  static std::map<std::string,atype_t> atypes;
   
   static bool read_ftr;
 

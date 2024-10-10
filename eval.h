@@ -282,6 +282,7 @@ void proc_copy_signal( edf_t & , param_t & );
 void proc_read_signal( edf_t & , param_t & );
 void proc_order_signals( edf_t & , param_t & );
 void proc_scale( edf_t & , param_t & , const std::string & s );
+void proc_setscale( edf_t & , param_t & );
 void proc_minmax( edf_t & , param_t & );
 void proc_standardize( edf_t & , param_t & );
 void proc_flip( edf_t & , param_t & );
@@ -293,7 +294,8 @@ void proc_adjust( edf_t & , param_t & );
 void proc_rerecord( edf_t & edf , param_t & param );
 void proc_canonical( edf_t & edf , param_t & param );
 void proc_remap_annots( edf_t & edf , param_t & param );
-
+     
+void proc_set_annot_metadata( edf_t & , param_t & );
 void proc_dump( edf_t & , param_t & );
 void proc_dump_mask( edf_t & , param_t & );
 void proc_annot_mask( edf_t & , param_t & );

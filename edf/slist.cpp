@@ -265,7 +265,6 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
 	  // allow numeric IDs?
 	  if ( tok0[t].substr(1) == "allow-numeric-ids" ) allow_numeric_ids = true;
 	  
-	  
 	  // special case for -nsrr.xml extensions
 	  if ( tok0[t].substr(1) == "nsrr" ) {	    
 	    globals::sl_annot_extensions.insert( "-nsrr.xml" ); 

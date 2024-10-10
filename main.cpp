@@ -1850,6 +1850,7 @@ void process_edfs( cmd_t & cmd )
   if ( single_txt ) single_edf = true;
   
   // use presence of '.' name to indicate an empty EDF
+  // also (below) allow '.' from SLIST, i.e. incase we have annot-only datasets
   bool empty_edf = f == "." ;
   if ( empty_edf ) single_edf = true;
     
@@ -2126,10 +2127,10 @@ void process_edfs( cmd_t & cmd )
 				      startdate , starttime );
 
 	}
-      else if ( empty_edf )
+      else if ( empty_edf || edffile == "." ) // i.e. sample-list empty EDF called for
 	{	  
-	  const int nr = globals::param.requires_int( "-nr" );
-	  const int rs = globals::param.requires_int( "-rs" ); // in full seconds (integer)
+	  const int nr = globals::param.has( "-nr" ) ? globals::param.requires_int( "-nr" ) : 60 * 60 * 6 ; // 6 hr default
+	  const int rs = globals::param.has( "-rs" ) ? globals::param.requires_int( "-rs" ) : 1 ; // in full seconds (integer)
 	  const std::string startdate = globals::param.has("-date") ? globals::param.value( "-date" ) : "01.01.00" ;
           const std::string starttime = globals::param.has("-time") ? globals::param.value( "-time" ) : "00.00.00" ;
           const std::string id = globals::param.has("-id") ? globals::param.value( "-id" ) : rootname ;

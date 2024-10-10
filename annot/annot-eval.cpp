@@ -56,8 +56,8 @@ void proc_eval( edf_t & edf , param_t & param )
   //   expr=# expression #
   //   globals=J,K,L
 
-  // or
-  //  derive= J,K  which is similar to 'globals' except runs in derive mode (no annot created, does whole TL)
+  // or (see proc() below) 
+  //  var= J,K  which is similar to 'globals' except runs in derive mode (no annot created, does whole TL)
   //  expr= 
 
   
@@ -481,7 +481,7 @@ void proc_derive( edf_t & edf , param_t & param )
 {
   
 
-  //  derive= J,K  which is similar to 'globals' except runs in derive mode (no annot created, does whole TL)
+  //  var= J,K  which is similar to 'globals' except runs in derive mode (no annot created, does whole TL)
   //  expr= 
 
   // 1) works on entire (unmasked) timeline
@@ -527,10 +527,10 @@ void proc_derive( edf_t & edf , param_t & param )
   // slots for aggregating variables
   //
 
-  if ( ! param.has( "derive" ) )
-    Helper::halt( "requires a 'derive' option" );
+  if ( ! param.has( "var" ) )
+    Helper::halt( "requires a 'var' option" );
   
-  std::set<std::string> acc_vars = param.strset( "derive" );
+  std::set<std::string> acc_vars = param.strset( "var" );
   
   logger << "  evaluating expression           : " << expression << "\n";
 
@@ -687,11 +687,10 @@ void proc_derive( edf_t & edf , param_t & param )
 	  for (int a=0;a<names.size();a++)
 	    {
 	      annot_t * annot = edf.timeline.annotations.find( names[a] );
-	      
 	      // get overlapping annotations for this epoch (should be able to drop this
 	      // and just pull all)
 	      annot_map_t events = annot->extract( interval );
-	      
+
 	      // store
 	      inputs[ names[a] ] = events;
 	    }      
@@ -760,8 +759,15 @@ void proc_derive( edf_t & edf , param_t & param )
 	      const bool is_numeric = type == globals::A_DBL_T || type == globals::A_INT_T || type == globals::A_BOOL_T;
 	      double value = is_numeric && ! missing ? mm->second->double_value() : 0;
 
-	      logger << " mdvar " << mdvar << " " << missing <<" " << type << " " << is_numeric << " " << value << "\n";
 	      
+						
+	      std::cout  << " mdvar " << mdvar << " " << missing <<" " << type << " " << is_numeric << " " << value << "\n";
+	      if ( type == globals::A_DBL_T ) std::cout << " is num\n";
+	      if ( type == globals::A_BOOL_T ) std::cout << " is bool\n";
+	      if ( type == globals::A_INT_T ) std::cout << " is int\n";
+	      if ( type == globals::A_TXT_T ) std::cout << " is txt\n";
+	      
+	      std::cout << "\n";
 	      ++mm;
 	    }
 	  	  
@@ -806,7 +812,7 @@ void proc_derive( edf_t & edf , param_t & param )
   // Output
   //
 
-  //  logger << " accum = " << accumulator->print( "\n" , "\t" )  << "\n";
+    logger << " accum = " << accumulator->print( "\n" , "\t" )  << "\n";
   
   const std::map<std::string,avar_t*> & data = accumulator->data;
   

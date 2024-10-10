@@ -1139,7 +1139,7 @@ void annotate_t::prep()
 	    std::make_pair( instance_idx.parent->name ,
 			    pool ? "." : instance_idx.ch_str );
 	  
-
+	  
 	  // count as an original
 
 	  orig_counts[ aid ]++;
@@ -3089,12 +3089,37 @@ void annotate_t::output( const annotate_stats_t & s )
       //      std::cout << " sa obs2 " << sa->first << "\n";
       
       writer.level( sa->first , "SEED" );
+      
+
       const std::map<std::string,double> & p = sa->second;
       std::map<std::string,double>::const_iterator pp = p.begin();
       while ( pp != p.end() )
 	{
 	  writer.level( pp->first , "OTHER" );
 
+
+	  //
+	  // write out name/channel details	  
+	  //
+	  
+	  const std::string aname1 = achs_name_ch[ sa->first ].first;
+	  const std::string chname1 = achs_name_ch[ sa->first ].second;
+	  
+	  if ( chname1 != "." )	
+	    {
+	      writer.value( "SEED_ANNOT" , aname1 );
+	      writer.value( "SEED_CH" , chname1 );
+	    }
+      
+	  const std::string aname = achs_name_ch[ pp->first ].first;
+	  const std::string chname = achs_name_ch[ pp->first ].second;
+	  
+	  if ( chname != "." ) 
+	    {
+	      writer.value( "OTHER_ANNOT" , aname );
+	      writer.value( "OTHER_CH" , chname );	      
+	    }
+	    
 	  //
 	  // seed-annot overlap: count
 	  //

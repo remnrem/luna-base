@@ -1390,18 +1390,27 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		}
 
 	      // get label
-	      const std::string & label = key_value ? kv[0] : cols[a][j];	      
+	      const std::string & label = key_value ? kv[0] : cols[a][j];
 	      
 	      // if this key not declare or previously seen, add now as either TXT or numeric
 	      if ( key_value && a->types.find( label ) == a->types.end() )
 		{
-		  a->types[ label ] = globals::annot_default_meta_num_type ? globals::A_DBL_T : globals::A_TXT_T;
-		  //Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
+		  // did we have a default specified?
+		  if ( globals::atypes.find( label ) != globals::atypes.end() )
+		    a->types[ label ] = globals::atypes[ label ];
+		  else
+		    {
+		      std::cout << "read " << label << " " << globals::annot_default_meta_num_type << "\n";
+		      a->types[ label ] = globals::annot_default_meta_num_type ? globals::A_DBL_T : globals::A_TXT_T;
+		      //Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
+		    }
 		}
 	      
 	      // get type
 	      globals::atype_t t = a->types[label];
-	      
+
+	      //	      std::cout << " label type " << label << " " << globals::type_name[ t ] << "\n";
+
 	      if ( t == globals::A_MASK_T )
 		{
 		  // accepts F and T as well as long forms (false, true)
@@ -1429,12 +1438,18 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  double value = 0;
 		  
 		  if ( Helper::str2dbl( key_value ? kv[1] : vartok[j] , &value ) )
-		    instance->set( label , value );
+		    {
+		      //std::cout << "set as " << label << " " << value << "\n";
+		      instance->set( label , value );
+		    }
 		  else
-		    if ( ! ( vartok[j] == "NA" || vartok[j] == "." ) )
-		      return Helper::vmode_halt( "invalid line, bad numeric value:\n" + line );
+		    {
+		      //std::cout << "prb " << vartok[j] << "\n";
+		      if ( ! ( vartok[j] == "NA" || vartok[j] == "." ) )
+			return Helper::vmode_halt( "invalid line, bad numeric value:\n" + line );
+		    }
 		}
-
+	      
 	      else if ( t == globals::A_TXT_T )
 		{		  
 		  instance->set( label , key_value ? kv[1] : Helper::unquote( vartok[j] ) );

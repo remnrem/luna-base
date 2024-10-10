@@ -41,6 +41,7 @@ extern logger_t logger;
 //  SPANNING
 //  ANNOTS
 //  MEANS
+//  META
 
 // also:
 //  internal annot2sp() function (used by spindles analysis)
@@ -1558,3 +1559,523 @@ std::set<interval_t> timeline_t::segments()
   return segs;
   
 }
+
+
+void timeline_t::set_annot_metadata( const param_t & param )
+{
+
+  //  annot  : annotations to add MD to
+  //  md     : key name of meta-data
+  //  w     : specify a window +/- x seconds around each
+  //  w-left / w-right : window only to left or right
+  
+  //  sig   : name of signal(s)
+  //          implies signal mode;
+  //          should be a single signal 
+  //                   
+  
+  //  other : other annots
+  //          cannot include self
+  //          can be multiple (in which case, all annots are effectively pooled)
+  
+  //
+  // functions: 
+  //   signal-mode functions: mean, min, max, range, sd
+  //     
+  //   annot-mode functions:
+  //        overlap (0/1) : is this key annot spanned by 1+ other annot?
+  //        complete-overlap (0/1)  : is key annot completely spanned by (1+) of other annots?
+  //        count (N) : count number of instances of all others
+  //        nearest : distance to nearestN (in seconds) [ 0 ]
+  //        nearest-midpoint : similar, but based on annot midpoints
+  
+  
+  //
+  // annot(s) to add MD to 
+  //
+
+  if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
+  std::vector<std::string> anames = param.strvector_xsigs( "annot" );
+
+	  
+  //
+  // flanking windows
+  //
+
+  const bool flanking = param.has( "w" );
+  const double flanking_tp = flanking ? param.requires_dbl( "w" ) * globals::tp_1sec : 0 ;
+
+  const bool left_flanking = param.has( "w-left" );
+  const double left_flanking_tp = flanking ? param.requires_dbl( "w-left" ) * globals::tp_1sec : 0 ;
+
+  const bool right_flanking = param.has( "w-right" );
+  const double right_flanking_tp = flanking ? param.requires_dbl( "w-right" ) * globals::tp_1sec : 0 ;
+
+  if ( flanking && ( left_flanking || right_flanking ) )
+    Helper::halt( "cannot specify both 'w' and 'left-w' or 'right-w'" );
+
+  //
+  // flatten other annots (i.e. to define complete-overlap, etc,  we ignore that we have N2-N2 epoch boundary
+  //   but for other contexts, e.g. count, we need to have option to not flatten
+  //
+
+  const bool flatten = param.has( "flatten" );
+  
+  //
+  // signals
+  //
+  
+  const bool no_annotations = true;
+  signal_list_t signals = edf->header.signal_list( param.value( "sig" ) , no_annotations );  
+  const int ns = signals.size() ;
+  // if ns > 1 then the channel label gets added to mdtag;
+
+  const bool signal_mode = param.value("sig") != "*" && ns > 0 ; 
+  
+  if ( signal_mode )
+    {
+      if ( ns == 0 ) Helper::halt( "no valid signals found" );
+      const int Fs = edf->header.sampling_freq( signals(0) );      
+      for (int s=1; s<ns; s++)
+	if ( edf->header.sampling_freq( signals(s) ) != Fs )
+	  Helper::halt( "signals must have similar sampling rates" );
+    }
+
+  //
+  // special case: add metadata for duration of event
+  //
+
+  const bool dur_mode = param.has( "dur" ) ;
+  
+  //
+  // other annots
+  //
+
+  const bool other_mode = param.has( "other" ) ;
+  
+  std::vector<std::string> oanames;
+  if ( other_mode ) 
+    oanames = param.strvector_xsigs( "other" );      
+
+  
+  //
+  // can only be in a single mode
+  //
+
+  if ( dur_mode + other_mode + signal_mode != 1 )
+    Helper::halt( "exactly one of 'other', 'sig' or 'dur' must be specified" );
+
+  //
+  // functions
+  //
+
+  std::string fn = "";
+  
+  if ( signal_mode )
+    {
+      int fc = 0;
+      if ( param.has( "mean" ) ) { fn = "mean"; ++fc; } 
+      if ( param.has( "min" ) ) { fn = "min"; ++fc; } 
+      if ( param.has( "max" ) ) { fn = "max"; ++fc; }
+      if ( param.has( "range" ) ) { fn = "range"; ++fc; }
+      if ( fc != 1 ) Helper::halt( "must specify exactly one of: mean, min, max, range" );
+    }
+  else if ( other_mode )
+    {
+      int fc = 0; 
+      if ( param.has( "overlap" ) ) {fn = "overlap"; ++fc; }
+      if ( param.has( "complete-overlap" ) ) {fn = "complete-overlap"; ++fc; } // A is completely spanned by O
+      if ( param.has( "whole-other" ) ) {fn = "whole-other" ; ++fc; } // O is completely spanned by A 
+      if ( param.has( "count" ) ) {fn = "count"; ++fc; }
+      if ( param.has( "nearest" )) {fn = "nearest"; ++fc; }
+      if ( param.has( "nearest-start" )) {fn = "nearest-start"; ++fc; }
+      if ( param.has( "nearest-stop" )) {fn = "nearest-stop"; ++fc; }
+      if ( param.has( "nearest-midpoint" )) {fn = "nearest-midpoint"; ++fc; }
+
+      if ( fc != 1 ) Helper::halt( "must specify exactly one of: count, overlap, complete-overlap, whole-other, nearest, nearest-midpoint, nearest-start, nearest-stop" ); 
+    }
+
+
+  //
+  // search window for nearest comparisons (1 minute by default) 
+  //
+
+  double nearest_search_sec = 60;
+
+  if ( fn == "nearest" && ! param.empty( "nearest" ) )
+    nearest_search_sec = param.requires_dbl( "nearest" );
+
+  if ( fn == "nearest-start" && ! param.empty( "nearest-start" ) )
+    nearest_search_sec = param.requires_dbl( "nearest-start" );
+  
+  if ( fn == "nearest-stop" && ! param.empty( "nearest-stop" ) )
+    nearest_search_sec = param.requires_dbl( "nearest-stop" );
+
+  if ( fn == "nearest-midpoint" && ! param.empty( "nearest-midpoint" ) )
+    nearest_search_sec = param.requires_dbl( "nearest-midpoint" );
+  
+  if ( nearest_search_sec < 0 ) nearest_search_sec = fabs( nearest_search_sec );
+  
+  uint64_t nearest_search_tp = nearest_search_sec * globals::tp_1sec;
+
+  const bool nearest_mode = fn.substr(0,7) == "nearest";
+
+  if ( nearest_mode )
+    logger << "  using " << fn << " search window of " << nearest_search_sec << " seconds\n";
+
+  //
+  // MD tag 
+  //
+
+  std::string mdtag = param.requires( "md" );
+  
+  //
+  // general other table (for nearest functions)
+  //
+  
+  std::map<interval_t,std::string> allevs;  
+
+  if ( nearest_mode )
+    {
+      for (int a=0; a<oanames.size(); a++)
+	{      
+	  annot_t * a1 = annotations.find( oanames[a] );
+	  if ( a1 == NULL ) continue;
+	  
+	  // get /all/ annotations
+	  const annot_map_t & events = a1->interval_events;
+	  
+	  // list events in this epoch (any span)
+	  annot_map_t::const_iterator ii = events.begin();
+	  while ( ii != events.end() )
+	    {	  	      
+	      const instance_idx_t & instance_idx = ii->first;	      
+	      const interval_t & an_interval = instance_idx.interval;	  
+	      if ( fn == "nearest-midpoint" ) 
+		allevs[ interval_t( an_interval.mid() , an_interval.mid() ) ] = oanames[a];
+	      else if ( fn == "nearest-start" )
+		allevs[ interval_t( an_interval.start , an_interval.start ) ] = oanames[a];
+	      else if ( fn == "nearest-stop" )
+		allevs[ interval_t( an_interval.stop , an_interval.stop ) ] = oanames[a];
+	      else if ( fn == "nearest" )
+		allevs[ an_interval ] = oanames[a];
+	      ++ii;
+	    }
+	}
+      
+      logger << "  built a table of " << allevs.size() << " other events for nearest lookups\n";
+      
+    }
+
+  
+  //
+  // iterate over annots
+  //
+
+  for (int a=0; a<anames.size(); a++)
+    {
+      
+      // does annot exist?
+      annot_t * annot = edf->timeline.annotations( anames[a] );
+      if ( annot == NULL ) continue;
+      const std::string & class_name = anames[a];
+      
+      // get all events
+      const annot_map_t & events = annot->interval_events;
+
+      annot_map_t::const_iterator aa = events.begin();
+      while ( aa != events.end() )
+	{
+
+	  const instance_idx_t & idx = aa->first;
+	  instance_t * instance = aa->second;
+
+	  // copy main interval
+	  interval_t interval = idx.interval;
+
+
+	  //
+	  // special case: dur 
+	  //
+
+	  if ( dur_mode )
+	    {
+	      // use original interval, i.e. this is done pre-expansions
+	      instance->set( mdtag , interval.duration_sec() );
+
+	      // all done now --> to next event
+	      ++aa;
+	      continue;
+	    }
+	
+
+	  //
+	  // expand?
+	  //
+	  
+	  if ( flanking ) interval.expand( flanking_tp );
+	  else if ( left_flanking ) interval.expand_left( left_flanking_tp );
+	  else if ( right_flanking ) interval.expand_right( right_flanking_tp );
+
+	  //
+	  // signal mode
+	  //
+	  
+	  if ( signal_mode )
+	    {	      	      
+	      eigen_matslice_t mslice( *edf , signals , interval );	  
+	      
+	      const Eigen::MatrixXd & X = mslice.data_ref();
+	      
+	      Eigen::ArrayXd stat;
+
+	      if ( fn == "mean" ) stat = X.array().colwise().mean();
+	      else if ( fn == "min" ) stat = X.array().colwise().minCoeff();
+	      else if ( fn == "max" ) stat = X.array().colwise().maxCoeff();	  
+	      else if ( fn == "range" ) stat = X.array().colwise().maxCoeff() - X.array().colwise().minCoeff();
+	      
+	      // add as meta-data
+	      if ( ns == 1 ) instance->set( mdtag , stat[0] );
+	      else for (int s=0; s<ns; s++) instance->set( mdtag + "_" + signals.label(s) , stat[s] );
+	    }
+
+	  
+	  //
+	  // annot-mode
+	  //
+
+	  if ( other_mode )
+	    {
+	      	      
+	      
+	      //
+	      // count/overlap/etc
+	      //
+	      
+	      if ( ! nearest_mode )
+		{
+	      
+		  // build up new, epoch-based annotation map
+		  std::set<interval_t> nevs;
+		  
+		  for (int a=0; a<oanames.size(); a++)
+		    {
+		      annot_t * a1 = annotations.find( oanames[a] );
+		      
+		      if ( a1 == NULL ) continue;
+	      
+		      // get overlapping annotations (spanning this this window) 
+		      annot_map_t events = a1->extract( interval );
+		      
+		      // list events in this epoch (any span)
+		      annot_map_t::const_iterator ii = events.begin();
+		      while ( ii != events.end() )
+			{	  	      
+			  const instance_idx_t & instance_idx = ii->first;	      
+			  const instance_t * instance = ii->second;
+			  const interval_t & an_interval = instance_idx.interval;
+			  
+			  //std::cout << " an_interval = " << instance_idx.id << "\t" << an_interval.as_string() << "\n";
+			  
+			  // keep intersection w/ this spanning epoch	      
+			  nevs.insert( an_interval );
+			  ++ii;
+			}
+		      
+		    }
+
+		  //
+		  // flatten other events? (i.e. for better def. of complete-overlap and whole-other ) 
+		  //
+				
+		  if ( flatten )
+		    nevs = annotate_t::flatten( nevs );
+		  
+		  
+		  //
+		  // we now have a list of all potential events in nevs;  do processing
+		  //
+		  
+		  if ( fn == "count" )
+		    {
+		      // number of other annots overlapping this 
+		      instance->set( mdtag , (int)nevs.size() );
+		    }
+		  else if ( fn == "overlap" )
+		    {
+		      // similar to count, but reduced to 0/1
+		      instance->set( mdtag , (int)( nevs.size() != 0 ) );
+		    }
+		  else if ( fn == "complete-overlap" )
+		    {
+		      // 0 vs 1 : is A completely spanned by at least one O?
+		      int x = 0;
+		      std::set<interval_t>::const_iterator ii = nevs.begin();
+		      while ( ii != nevs.end() )
+			{
+			  if ( interval.is_completely_spanned_by( *ii ) )
+			    {
+			      x = 1; 
+			      break;
+			    }
+			  ++ii;
+			}
+		      instance->set( mdtag ,x );
+		    }
+		  else if ( fn == "whole-other" )
+		    {
+		      // 0 vs 1 : is at least one O completely spanned by
+		      int x = 0;
+		      std::set<interval_t>::const_iterator ii = nevs.begin();
+		      while ( ii != nevs.end() )
+			{
+			  if ( ii->is_completely_spanned_by( interval ) )
+			    {
+			      x = 1; 
+			      break;
+			    }
+			  ++ii;
+			}
+		      instance->set( mdtag ,x );
+		    }
+		}
+
+	      
+	      //
+	      // nearest search (uses allevs, not nevs)
+	      //
+	      
+	      if ( nearest_mode )
+		{
+
+		  // default nearest:  0 if overlaps, else  STOP --> START (-ve)   or STOP-->START (+ve)
+		  //   others: point-based , as is
+		  
+		  // do search: set target 
+		  interval_t nidx = interval;
+		  if ( fn == "nearest-midpoint" )
+		    nidx.start = nidx.stop = interval.mid();
+		  else if ( fn == "nearest-start" )
+		    nidx.start = nidx.stop = interval.start;
+		  else if ( fn == "nearest-stop" )
+		    nidx.start = nidx.stop = interval.stop;
+
+		  std::cout << " nidx = " << nidx.as_string() << "\n";
+		  // do general lookup:: first event /after/ the query (upper-bound)
+		  //  (and above, the allevs set will have been constructed w/ the a
+		  //   appropriate type (whole, midpoint, start or stop)
+		  std::map<interval_t,std::string>::const_iterator bb = allevs.upper_bound( nidx );
+		  
+		  // we might not find /any/ other events
+		  bool any = false;
+		  bool first_comp = true;
+		  uint64_t dist = 0;
+		  int dsign = 0;
+		  std::string matched = ".";
+		  const bool full_mode = fn == "nearest" ;
+		  
+		  std::cout << " going into loop " << allevs.size() << "\n";
+		  
+		  if ( allevs.size() )
+		    {
+		      
+		      while ( 1 )
+			{
+			  
+			  // past end?
+			  if ( bb == allevs.end() )
+			    {
+			      std::cout << " hit the end...\n";
+			      --bb;
+			      continue;
+			    }
+			  
+			  std::cout << " considering " << bb->first.as_string() << " " << bb->second << "\n";
+			  
+			  // found at least one contender?
+			  any = true ;
+			  
+			  if ( full_mode )
+			    {
+			      
+			      // don't think we'll have any actual overlap here (would have been
+			      // caught above... but doen't hurt to add here in any case)
+			      
+			      const bool before = bb->first.stop  <= nidx.start ;
+			      const bool after  = bb->first.start >= nidx.stop ;
+			      
+			      uint64_t d1 = before ? nidx.start - bb->first.stop :
+				( after ? bb->first.start - nidx.stop : 0 ) ;
+			      
+			      if ( d1 < dist || first_comp )
+				{
+				  dist = d1;
+				  dsign = before ? -1 : ( after ? 1 : 0 ) ;
+				  matched = bb->second;
+				  first_comp = false;
+				}
+			      
+			    }
+			  else
+			    {
+			      // can use start in all cases, all 0-tp points
+			      const bool after = bb->first.start > nidx.start ;
+			      uint64_t d1 = after ? bb->first.start - nidx.start : nidx.start - bb->first.start ;
+			      if ( d1 < dist || first_comp )
+				{				  
+				  dist = d1;
+				  dsign = d1 == 0 ? 0 : ( after ? 1 : -1 ) ;
+				  matched = bb->second;
+				  first_comp = false;
+				}
+			    }
+
+			  // best possible match?
+			  if ( dist == 0 ) break;
+			      
+			  // all done? (nb. the window means the /whole/ event must be in the window
+			  //  i.e. as we may have the case of something starting a long, long time before
+			  //       but persisting right up to the actual event...
+
+			  if ( nidx.start > bb->first.start && nidx.start - bb->first.start > nearest_search_tp ) break;
+			  if ( nidx.start < bb->first.start &&  bb->first.start - nidx.start > nearest_search_tp ) break;
+			  
+			  // all done?
+			  if ( bb == allevs.begin() ) break;
+			  
+			  // step back in time
+			  --bb;
+			}
+		      
+		      // check that the nearest event matches criteria (i.e. if was upper bound
+		      // but that came a long time after , and we had no other matches)
+		      
+		      if ( dist > nearest_search_tp ) any = false;
+			  
+		      // report
+		      if ( any )
+			{
+			  double sec = dist / (double)globals::tp_1sec;
+			  instance->set( mdtag , dsign * sec );
+			  instance->set( mdtag + "_id"  , matched );
+			}
+		      else 
+			{
+			  //instance->set( mdtag , "NA" ); // missing
+			  std::string lab1 = "."; // use so correct type w/ set()
+			  instance->set( mdtag + "_id"  , lab1 );
+			}
+		    }
+		} // end of nearest mode
+	    }  // end of other mode
+	  
+	  // next event
+	  ++aa;
+	}
+      
+    } // next annotation class
+    
+  // all done
+}
+
+

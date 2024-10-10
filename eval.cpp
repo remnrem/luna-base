@@ -1092,6 +1092,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
       else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
       else if ( is( c, "MINMAX" ) )       proc_minmax( edf , param(c) );
+      else if ( is( c, "SCALE" ) )        proc_setscale( edf , param(c) );
       
       else if ( is( c, "ROBUST-NORM" ) )  proc_standardize( edf , param(c) );
 
@@ -1122,6 +1123,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
       else if ( is( c, "MAKE-ANNOTS" ) )  proc_make_annots( edf , param(c) );
       else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
+      else if ( is( c, "META" ) )         proc_set_annot_metadata( edf, param(c) ); 
       else if ( is( c, "OVERLAP") )       proc_annotate( edf, param(c) );
       else if ( is( c, "EXTEND" ) )       proc_extend_annots( edf, param(c) );
       else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
@@ -3475,6 +3477,14 @@ void proc_make_annots( edf_t & edf , param_t & param )
   edf.timeline.annotations.make( param , edf );
 }
 
+
+// META : set annotation meta-data
+
+void proc_set_annot_metadata( edf_t & edf , param_t & param )
+{
+  edf.timeline.set_annot_metadata( param );
+}
+
 // WRITE-ANNOTS : write all annots to disk
 
 void proc_write_annots( edf_t & edf , param_t & param )
@@ -4623,6 +4633,60 @@ void proc_rerecord( edf_t & edf , param_t & param )
   globals::problem = true;
 }
 
+
+// SCALE
+
+void proc_setscale( edf_t & edf , param_t & param )
+{
+  
+  const bool NO_ANNOTS = true;
+  signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , NO_ANNOTS );
+
+
+  // expects min,max
+  std::vector<double> minmax ;
+  const bool do_minmax = param.has( "min-max" ) ;
+  if ( do_minmax )
+    {
+      minmax = param.dblvector( "min-max" );
+      if ( minmax.size() != 2 || minmax[0] >= minmax[1] )
+	Helper::halt( "expecting two valies max-max=a,b  where a is lower than b" );
+    }
+  
+  // clip also?
+  double clip_min , clip_max;
+  bool   do_clip_min = false , do_clip_max = false;
+
+  if ( param.has( "clip-min" ) ) 
+    {
+      do_clip_min = true;
+      clip_min = param.requires_dbl( "clip-min" );      
+    }
+
+  if ( param.has( "clip-max" ) ) 
+    {
+      do_clip_max = true;
+      clip_max = param.requires_dbl( "clip-max" );      
+    }
+  
+  if ( ! ( do_minmax | do_clip_min | do_clip_max ) ) 
+    {
+      logger << "  nothing to do, returning\n";
+      return;
+    }
+  
+  const int ns = signals.size();
+  for (int s=0;s<ns;s++)
+    {
+      if ( minmax.size() == 2 ) 
+	edf.set_scale( signals(s) , &(minmax[0]) , &(minmax[1]) , do_clip_min ? &clip_min : NULL , do_clip_max ? &clip_max : NULL );
+      else
+	edf.set_scale( signals(s) , NULL , NULL, do_clip_min ? &clip_min : NULL , do_clip_max ? &clip_max : NULL );
+    }  
+  
+}
+
+
 // uV or mV : set units for tracks
 
 void proc_scale( edf_t & edf , param_t & param , const std::string & sc )
@@ -5316,12 +5380,47 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
   
   // default type if numeric if meta-data type of not otherwise defined
+  // true by default - will give error for text, in which case need to specify
+  
   if ( Helper::iequals( tok0 , "annot-meta-default-num" ) )
     {
       globals::annot_default_meta_num_type = Helper::yesno( tok1 );
       return;
     }
+
+  // default type for an annot meta data (all .annots)
+  if ( Helper::iequals( tok0 , "num-atype" ) )
+    {
+      std::vector<std::string> toka = Helper::parse( tok1 , "," );
+      for (int i=0; i<toka.size(); i++)
+	globals::atypes[ toka[i] ] = globals::A_DBL_T;
+      return;
+    }
   
+  if ( Helper::iequals( tok0 , "txt-atype" ) || Helper::iequals( tok0 , "str-atype" ) )
+    {
+      std::vector<std::string> toka = Helper::parse( tok1 , "," );
+      for (int i=0; i<toka.size(); i++)
+	globals::atypes[ toka[i] ] = globals::A_TXT_T;
+      return;
+    }
+  
+  if ( Helper::iequals( tok0 , "int-atype" ) )
+    {
+      std::vector<std::string> toka = Helper::parse( tok1 , "," );
+      for (int i=0; i<toka.size(); i++)
+	globals::atypes[ toka[i] ] = globals::A_INT_T;
+      return;
+    }
+  
+  if ( Helper::iequals( tok0 , "bool-atype" ) )
+    {
+      std::vector<std::string> toka = Helper::parse( tok1 , "," );
+      for (int i=0; i<toka.size(); i++)
+	globals::atypes[ toka[i] ] = globals::A_BOOL_T;
+      return;
+    }
+
   // annotation alignment
   if ( Helper::iequals( tok0 , "align-annots" ) )
     {

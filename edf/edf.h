@@ -544,6 +544,8 @@ public:
 
   void rescale( const int s , const std::string & sc , const bool quietly = false );
 
+  void set_scale( const int s , double * min , double * max , double * clip_min , double * clip_max );
+  
 private:
   
   //

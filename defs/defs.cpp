@@ -58,7 +58,7 @@ char globals::annot_meta_delim2 = '|';
 std::string globals::annot_disc_segment = "segment";
 std::string globals::annot_disc_gap = "gap";
 bool globals::annot_disc_drop_spanning = true;
-bool globals::annot_default_meta_num_type = false;
+bool globals::annot_default_meta_num_type = true;
 
 bool globals::sanitize_everything = true;
 
@@ -74,6 +74,8 @@ std::set<std::string> globals::specified_annots;
 
 std::map<globals::atype_t,std::string> globals::type_name;
 std::map<std::string,globals::atype_t> globals::name_type;
+std::map<std::string,globals::atype_t> globals::atypes;
+
 
 channel_map_t globals::chmap1; 
 channel_map_t globals::chmap2; 

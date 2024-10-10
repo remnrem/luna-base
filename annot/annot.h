@@ -423,7 +423,7 @@ struct avar_t
   bool has_value;
   
   bool is_missing() const { return ! has_value; } 
-  
+
   friend std::ostream & operator<<( std::ostream & out , const avar_t & e );
   
 };
