@@ -24,7 +24,7 @@
 
 #include "fftw3.h"
 #include <cstdlib>
-#include <string>
+#include <cstring>
 #include <cmath>
 
 #define PI 3.1415926535897931
@@ -70,7 +70,7 @@ void gft_shift(double *sig, int N, int amount) {
   int i,j;
   
   temp = (double *) malloc(N*2*sizeof(double));
-  memcpy(temp, sig, N*2*sizeof(double));
+  std::memcpy(temp, sig, N*2*sizeof(double));
   for (i=0; i<N; i++) {
     j = i - amount;
     if (j < 0) j = N-j;
@@ -187,7 +187,7 @@ double *gft_windows(int N, gft_windowFunction *window){
   
   win = (double *)malloc((N)*sizeof(double)*2);
   temp = (double *)malloc((N)*sizeof(double)*2);
-  memset(win, 0, N*sizeof(double)*2);
+  std::memset(win, 0, N*sizeof(double)*2);
   
   // For each of the GFT frequency bands.  Using a dyadic scale.
 
@@ -236,7 +236,7 @@ double *gft_windowsFromPars(int N, gft_windowFunction *window, int *pars){
   
   win = (double *)malloc((N)*sizeof(double)*2);
   temp = (double *)malloc((N)*sizeof(double)*2);
-  memset(win, 0, N*sizeof(double)*2);
+  std::memset(win, 0, N*sizeof(double)*2);
   
   // For each of the GFT frequency bands.  Using a dyadic scale.
   
@@ -327,7 +327,7 @@ void gft_1d_shift(double *signal, unsigned int N, unsigned int shiftBy) {
   int i,shiftTo;
   
   temp = (double *)malloc(N*2*sizeof(double));
-  memcpy(temp,signal,N*2*sizeof(double));
+  std::memcpy(temp,signal,N*2*sizeof(double));
   for (i = 0; i < N; i++) {
     shiftTo = i+shiftBy;
     if (shiftTo >= N) shiftTo -= N;
