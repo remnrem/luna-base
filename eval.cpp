@@ -703,6 +703,9 @@ bool cmd_t::read( const std::string * str , bool silent )
   // OR          from a string (e.g. lunaR)
   
   // Commands are delimited by & symbols (i.e. multi-line statements allowed)
+
+  // for can have \ which means a continuation on the next line
+  //  i.e replace \\n with space
   
   std::istringstream allinput;
   
@@ -781,9 +784,13 @@ bool cmd_t::read( const std::string * str , bool silent )
     }
 
   // read from -s string
-  else 
-    allinput.str( cmd_t::cmdline_cmds );
-      
+  else
+    {
+      // allow multi-line commands via \ at end
+      allinput.str( Helper::search_replace( cmd_t::cmdline_cmds , "\\\n", " " ) );
+    }
+
+  
   // take everything
   line = allinput.str();
   

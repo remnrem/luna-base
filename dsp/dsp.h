@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "gft.h"
 #include "peri.h"
 #include "xcorr.h"
 #include "trim.h"

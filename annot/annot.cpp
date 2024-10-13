@@ -1400,7 +1400,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		    a->types[ label ] = globals::atypes[ label ];
 		  else
 		    {
-		      std::cout << "read " << label << " " << globals::annot_default_meta_num_type << "\n";
+		      //		      std::cout << "read " << label << " " << globals::annot_default_meta_num_type << "\n";
 		      a->types[ label ] = globals::annot_default_meta_num_type ? globals::A_DBL_T : globals::A_TXT_T;
 		      //Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
 		    }

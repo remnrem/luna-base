@@ -153,7 +153,7 @@ struct gpa_t {
   void drop_null_columns();
   
   // QC matrix
-  void qc( const double winsor );
+  void qc( const double winsor , const bool stats_mode );
 
   // kNN imputation of missing points
   void knn_imputation( param_t & );
@@ -166,6 +166,9 @@ struct gpa_t {
 
   // summary of manifest
   void summarize();
+
+  // dump means/SDs/Ns
+  void stats();
   
   // run
   void run();   // correct for all X considered

@@ -549,7 +549,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       
       // can skip QC with qc=F option
       if ( ( ! param.has( "qc" ) ) || param.yesno( "qc" ) )
-	qc( winsor_th );      
+	qc( winsor_th , param.has( "stats" ) );
       
       //
       // optionally dump variables and/or manifest?
@@ -566,7 +566,13 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  manifest();
 	  return;
 	}
-	  
+
+      if ( param.has( "stats" ) )
+	{
+	  stats();
+	  return;
+	}
+      
       if ( param.has( "summary" ) || param.has( "summarize" ) || param.has( "desc" ) )
 	{
 	  summarize();
@@ -1634,6 +1640,8 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 	  
 	  // the above, has an AND logic between CH and B
 	  // but an OR logic between CZ vs FZ, or SIGMA vs GAMMA
+
+	  // if the variable doesn't have /any/ relevant factors, then we leave as is
 	  
 	  for (int j=0; j<nv; j++)
 	    {
@@ -1641,6 +1649,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 	      const std::map<std::string,std::string> & fl = all_faclvl[ all_vars[j] ];
 		  
 	      bool consistent = true; 
+	      bool has_facs = false;
 	      
 	      // consider each factor;  okay for it not to exist, but if it does, then
 	      // we must match one of the listed factors
@@ -1650,6 +1659,9 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		  // we have this factor...
 		  if ( fl.find( ll->first ) != fl.end() )
 		    {
+		      
+		      has_facs = true;
+		      
 		      // ... do we have an acceptable level?
 		      const std::string & lvl = fl.find( ll->first )->second;
 		      
@@ -1663,7 +1675,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		  ++ll;
 		}
 	      
-	      if ( consistent )
+	      if ( has_facs && consistent )
 		readvar[j] = true;
 	      
 	    }
@@ -1874,6 +1886,28 @@ void gpa_t::dump()
       std::cout << "\n";
     }
   
+}
+
+
+void gpa_t::stats()
+{
+  const int ni = X.rows();
+  const int nv = X.cols();
+
+  for (int j=0; j<nv; j++)
+    {
+      writer.level( vars[j] , globals::var_strat );      
+      int na = 0;
+      const Eigen::VectorXd & col = X.col(j);
+      for (int i=0; i<ni; i++) if ( std::isnan( col[i] ) ) ++na;
+      const double mean = col.mean();
+      const double sd = eigen_ops::sdev( col );
+      writer.value( "MEAN" , mean );
+      writer.value( "SD" , sd );
+      writer.value( "NOBS" , ni - na );
+    }
+  writer.unlevel( globals::var_strat );
+    
 }
 
 
@@ -2290,7 +2324,7 @@ void gpa_t::drop_null_columns()
 
 
 // QC matrix
-void gpa_t::qc( const double winsor )
+void gpa_t::qc( const double winsor , const bool stats_mode )
 {
 
   logger << "  running QC (add 'qc=F' to skip)";
@@ -2337,7 +2371,9 @@ void gpa_t::qc( const double winsor )
   
   // nothing left?
   if ( X.rows() == 0 ) return;
-  
+
+  // if dumping means/SDs, then we don't want to normalize
+  if ( stats_mode ) return;
   
   // 2) robust norm & winsorize
   //    but only for DVs
@@ -2757,7 +2793,7 @@ void gpa_t::parse( const std::string & pfile )
       if ( has_specs )
 	{
 	  
-	  logger << "  reading general specificaitons ('specs') from " << pfile << "\n";
+	  logger << "  reading general specifications ('specs') from " << pfile << "\n";
 	  
 	  json s = doc[ "specs" ];
 	  
