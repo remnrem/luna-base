@@ -759,15 +759,12 @@ void proc_derive( edf_t & edf , param_t & param )
 	      const bool is_numeric = type == globals::A_DBL_T || type == globals::A_INT_T || type == globals::A_BOOL_T;
 	      double value = is_numeric && ! missing ? mm->second->double_value() : 0;
 
-	      
-						
-	      std::cout  << " mdvar " << mdvar << " " << missing <<" " << type << " " << is_numeric << " " << value << "\n";
-	      if ( type == globals::A_DBL_T ) std::cout << " is num\n";
-	      if ( type == globals::A_BOOL_T ) std::cout << " is bool\n";
-	      if ( type == globals::A_INT_T ) std::cout << " is int\n";
-	      if ( type == globals::A_TXT_T ) std::cout << " is txt\n";
-	      
-	      std::cout << "\n";
+	      // std::cout  << " mdvar " << mdvar << " " << missing <<" " << type << " " << is_numeric << " " << value << "\n";
+	      // if ( type == globals::A_DBL_T ) std::cout << " is num\n";
+	      // if ( type == globals::A_BOOL_T ) std::cout << " is bool\n";
+	      // if ( type == globals::A_INT_T ) std::cout << " is int\n";
+	      // if ( type == globals::A_TXT_T ) std::cout << " is txt\n";
+	      // std::cout << "\n";
 	      ++mm;
 	    }
 	  	  

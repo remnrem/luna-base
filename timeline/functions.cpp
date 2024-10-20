@@ -1606,10 +1606,10 @@ void timeline_t::set_annot_metadata( const param_t & param )
   const double flanking_tp = flanking ? param.requires_dbl( "w" ) * globals::tp_1sec : 0 ;
 
   const bool left_flanking = param.has( "w-left" );
-  const double left_flanking_tp = flanking ? param.requires_dbl( "w-left" ) * globals::tp_1sec : 0 ;
+  const double left_flanking_tp = left_flanking ? param.requires_dbl( "w-left" ) * globals::tp_1sec : 0 ;
 
   const bool right_flanking = param.has( "w-right" );
-  const double right_flanking_tp = flanking ? param.requires_dbl( "w-right" ) * globals::tp_1sec : 0 ;
+  const double right_flanking_tp = right_flanking ? param.requires_dbl( "w-right" ) * globals::tp_1sec : 0 ;
 
   if ( flanking && ( left_flanking || right_flanking ) )
     Helper::halt( "cannot specify both 'w' and 'left-w' or 'right-w'" );

@@ -20,9 +20,6 @@
 //
 //    --------------------------------------------------------------------
 
-
-#ifdef HAS_LGBM
-
 #ifndef __LUNA_ECYCLE_H__
 #define __LUNA_ECYCLE_H__
 
@@ -32,11 +29,9 @@ struct param_t;
 #include "pops/pops.h"
 
 struct ecycles_t {
-
+  
   ecycles_t( edf_t & , param_t & ) ;
   
 };
 
 #endif
-#endif
-
