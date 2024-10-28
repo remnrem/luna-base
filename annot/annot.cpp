@@ -666,9 +666,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // # name2 | description | col1(str)
   // # name3 | description                              [ just means a bool ] 
   
-  // then rows are either interval or epoch-based, but must **always** have 6 tab-delim columns 
-  // exception: if we find 4 (old format, make channel and meta missing)
-
+  // then rows are either interval or epoch-based, but must **always** have 6(+) tab-delim columns 
+  // exception: if we find 4 ( class inst start stop )
+  // exception: if we find 3 ( class start stop )
+  // exception: if >6, then assume 6 col + additional cols are meta (hdr = key, data = value) 
+  
   // name  id1  ch  sec1  sec2  { vars }
   // name  id   .   e:1   {e:2} { vars } 
   // name  id   ch  hh:mm:ss  hh:mm:ss { vars }
@@ -704,7 +706,9 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   std::map<std::string,annot_t*> annot_map;
   
   std::map<annot_t*,std::vector<std::string> > cols;
-
+  
+  std::vector<std::string> mhdr; // for tabular meta-data (if present in hdr)  
+  
   // to allow '...' in the second line, we need to read ahead
   // and so store the read line here
   std::string buffer = "";
@@ -726,12 +730,12 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	Helper::safe_getline( FIN , line );      
 
       if ( FIN.eof() || line == "" ) continue;
-
+      
       
       //
       // header or data row? , or type header (optionally, this is skipped)  
       //
-
+      
       if ( line[0] == '#' ) 
 	{
 	  
@@ -886,7 +890,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
       else if ( line_count == 0 && (! has_class_class) && line.size() > 5 && Helper::iequals( line.substr(0,5) , "class" ) )
 	{
 	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
-	  if ( tok.size() ==6 ) 
+	  if ( tok.size() >= 6 ) 
 	    {
 	      if ( ! Helper::iequals( tok[0] , "class" ) ) return Helper::vmode_halt( "expecting column 1 to be 'class':\n" + line );
 	      if ( ! Helper::iequals( tok[1] , "instance" ) ) return Helper::vmode_halt( "expecting column 2 to be 'instance':\n" + line );
@@ -910,6 +914,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	    }
 	  else
 	    return Helper::vmode_halt( "invalid header line:\n" + line );
+
+	  // any additional (>6) headers --> meta data
+	  for (int i=6; i<tok.size(); i++)
+	    mhdr.push_back( tok[i] );
 	  
 	}
 
@@ -1078,7 +1086,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // Check size
 	  //
 
-	  if ( tok.size() != 6 ) 
+	  if ( tok.size() < 6 ) 
 	    {
 	      
 	      // exception #1 : allow old 4-col formatting
@@ -1109,7 +1117,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  tok[1] = ".";
 		}
 	      else
-		return Helper::vmode_halt ( "expecting 6/4/3 columns, but found " 
+		return Helper::vmode_halt ( "expecting 6+/4/3 columns, but found " 
 					    + Helper::int2str( (int) tok.size() ) 
 					    + "\n  (hint: use the 'tab-only' option to ignore space delimiters)\n"
 					    + "line [ " + line + "]" );
@@ -1163,7 +1171,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 					      starttime , startdatetime, 
 					      f ,
 					      align_annots );
-
+					      
+	  
 	  //
 	  // did we encounter an issue when parsing a line?
 	  //
@@ -1215,7 +1224,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		    return Helper::vmode_halt( "invalid line following '...' end timepoint" );
 
 		  // allow diff formats
-		  if ( ntok.size() != 6 ) 
+		  if ( ntok.size() < 6 ) 
 		    {
 		      if ( ntok.size() == 4 ) 
 			{
@@ -1235,7 +1244,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 			  ntok[1] = ".";
 			}
 		      else
-			return Helper::vmode_halt ( "expecting 6/4/3 columns, but found " 
+			return Helper::vmode_halt ( "expecting 6+/4/3 columns, but found " 
 						    + Helper::int2str( (int) ntok.size() ) 
 						    + "\n  (hint: use the 'tab-only' option to ignore space delimiters)\n"
 						    + "line [ " + buffer + "]" );
@@ -1253,6 +1262,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 						       starttime , startdatetime, 
 						       f ,
 						       align_annots );
+						       
 		  
 
 		  //
@@ -1309,8 +1319,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // We've now fixed to 6 columns
 	  //
 
-	  if ( n != 6 ) 
-	    return Helper::vmode_halt( f + " has a non-blank row with other than 6 tab-delimited fields:\n" + line );
+	  if ( n < 6 ) 
+	    return Helper::vmode_halt( f + " has a non-blank row with fewer than 6 tab-delimited fields:\n" + line );
 
 	  //
 	  // Special case: if we split a class/inst ID, put any old
@@ -1326,148 +1336,236 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 
 	  //
-	  // If var column is '.' we can skip ahead to next line now (or if
-	  // we are not expecting any variables)
+	  // If var column is '.' we can skip ahead to next line unless
+	  // we may have some tabular metadata coming
 	  //
 	  
-	  if ( tok[5] == "." ) continue;
-
+	  if ( tok[5] == "." && tok.size() == 6 ) continue;
+	  
 	  // relax this assumption for now, i.e. if we let key=value
 	  // pairs be defined on the command line
 	  //if ( cols[a].size() == 0 ) continue;
+
+
 	  
 	  //
 	  // Otherwise, parse ;-delimited or |-delimited values, that should match the header
 	  //   - nb. still allow for quoted `|` characters in meta-data
 	  //
 
-	  // n.b. append both char delims and make a std::string
-	  std::string delim = std::string() + globals::annot_meta_delim + globals::annot_meta_delim2 ;
-	  std::vector<std::string> vartok = Helper::quoted_parse( tok[5] , delim );
-	  
-	  const int nobs = vartok.size();
-	  const int nexp = cols[a].size();
-	  
-	  //
-	  // Are meta-data in key=value pair mode? Look at the first |- delimited element, do it contain key=value
-	  // ( Can escape this by quoting the element ) 
-	  //
-	  
-	  bool key_value = Helper::quoted_parse( vartok[0] , std::string(1,globals::annot_keyval_delim ) ).size() == 2 ;
-	  
-	  // vartok[0][0] != '"' && vartok[0].find( globals::annot_keyval_delim ) != std::string::npos; 
-
-	  //
-	  // need at least this many fields, i.e. if we've pre-specifed above	  
-	  //
-	  
-	  if ( nobs > nexp && ! key_value )
-	    return Helper::vmode_halt( "expecting at most "
-				       + Helper::int2str( nexp )
-				       + " " + globals::annot_meta_delim + "-delimited or "
-				       + globals::annot_meta_delim2 + "-delimited fields for " + aname + "\n" + line );
-	  
-	  // 
-	  // Read expected fields, with specified types
-	  //
-	  
-	  for (int j=0; j<nobs; j++)
+	  if ( tok[5] != "." )
 	    {
 	      
-	      // skip missing values
-	      if ( vartok[j] == "." ) continue;
+	      // n.b. append both char delims and make a std::string
+	      std::string delim = std::string() + globals::annot_meta_delim + globals::annot_meta_delim2 ;
+	      std::vector<std::string> vartok = Helper::quoted_parse( tok[5] , delim );
 	      
-	      // key=value pair?
-	      std::vector<std::string> kv;
-	      if ( key_value ) 
+	      const int nobs = vartok.size();
+	      const int nexp = cols[a].size();
+	      
+	      //
+	      // Are meta-data in key=value pair mode? Look at the first |- delimited element, do it contain key=value
+	      // ( Can escape this by quoting the element ) 
+	      //
+	      
+	      bool key_value = Helper::quoted_parse( vartok[0] , std::string(1,globals::annot_keyval_delim ) ).size() == 2 ;
+	      
+	      // vartok[0][0] != '"' && vartok[0].find( globals::annot_keyval_delim ) != std::string::npos; 
+	      
+	      //
+	      // need at least this many fields, i.e. if we've pre-specifed above	  
+	      //
+	      
+	      if ( nobs > nexp && ! key_value )
+		return Helper::vmode_halt( "expecting at most "
+					   + Helper::int2str( nexp )
+					   + " " + globals::annot_meta_delim + "-delimited or "
+					   + globals::annot_meta_delim2 + "-delimited fields for " + aname + "\n" + line );
+	      
+	      // 
+	      // Read expected fields, with specified types
+	      //
+	      
+	      for (int j=0; j<nobs; j++)
 		{
-		  kv = Helper::quoted_parse( vartok[j] , std::string(1,globals::annot_keyval_delim ) );
 		  
-		  if ( kv.size() != 2 ) 
-		    return Helper::vmode_halt( "expecting key"
-					       + std::string(1,globals::annot_keyval_delim)
-					       + "value pair: " + vartok[j] );
+		  // skip missing values
+		  if ( vartok[j] == "." ) continue;
+		  
+		  // key=value pair?
+		  std::vector<std::string> kv;
+		  if ( key_value ) 
+		    {
+		      kv = Helper::quoted_parse( vartok[j] , std::string(1,globals::annot_keyval_delim ) );
+		      
+		      if ( kv.size() != 2 ) 
+			return Helper::vmode_halt( "expecting key"
+						   + std::string(1,globals::annot_keyval_delim)
+						   + "value pair: " + vartok[j] );
+		    }
+		  
+		  // get label
+		  const std::string & label = key_value ? kv[0] : cols[a][j];
+		  
+		  // if this key not declare or previously seen, add now as either TXT or numeric
+		  if ( key_value && a->types.find( label ) == a->types.end() )
+		    {
+		      // did we have a default specified?
+		      if ( globals::atypes.find( label ) != globals::atypes.end() )
+			a->types[ label ] = globals::atypes[ label ];
+		      else
+			{
+			  //		      std::cout << "read " << label << " " << globals::annot_default_meta_num_type << "\n";
+			  a->types[ label ] = globals::annot_default_meta_num_type ? globals::A_DBL_T : globals::A_TXT_T;
+			  //Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
+			}
+		    }
+		  
+		  // get type
+		  globals::atype_t t = a->types[label];
+		  
+		  //	      std::cout << " label type " << label << " " << globals::type_name[ t ] << "\n";
+		  
+		  if ( t == globals::A_MASK_T )
+		    {
+		      // accepts F and T as well as long forms (false, true)
+		      bool value = Helper::yesno( key_value ? kv[1] : vartok[j] );
+		      instance->set_mask( label , value );		
+		    }
+		  
+		  else if ( t == globals::A_BOOL_T )
+		    {
+		      // accepts F and T as well as long forms (false, true)
+		      bool value = Helper::yesno( key_value ? kv[1] : vartok[j] );
+		      instance->set( label , value );
+		    }
+		  
+		  else if ( t == globals::A_INT_T )
+		    {
+		      int value = 0;
+		      if ( ! Helper::str2int( key_value ? kv[1] : vartok[j] , &value ) )
+			return Helper::vmode_halt( "invalid E line, bad numeric value" );
+		      instance->set( label , value );
+		    }
+		  
+		  else if ( t == globals::A_DBL_T )
+		    {
+		      double value = 0;
+		      
+		      if ( Helper::str2dbl( key_value ? kv[1] : vartok[j] , &value ) )
+			{
+			  //std::cout << "set as " << label << " " << value << "\n";
+			  instance->set( label , value );
+			}
+		      else
+			{
+			  //std::cout << "prb " << vartok[j] << "\n";
+			  if ( ! ( vartok[j] == "NA" || vartok[j] == "." ) )
+			    return Helper::vmode_halt( "invalid line, bad numeric value:\n" + line );
+			}
+		    }
+		
+		  else if ( t == globals::A_TXT_T )
+		    {		  
+		      instance->set( label , key_value ? kv[1] : Helper::unquote( vartok[j] ) );
+		    }
+		  
+		  //
+		  // TODO.. add vector readers; for now, they can be encoded as, e.g. comma-delimited strings
+		  //
+		  
+		  else
+		    logger << "could not read undefined type from annotation file for " << label << "\n";
+		  
+		  //
+		  // next value
+		  //
 		}
 
+	    } // stop parsing col 6
+
+
+	  //
+	  // additional tabular meta-data cols (sorry, but just gonna have to copy-paste code above)
+	  //
+
+	  if ( tok.size() != 6 + mhdr.size() )
+	    Helper::halt( "bad line, wrong number of columns\n" + line );
+	  
+	  for (int i=6; i<tok.size(); i++)
+	    {
+	      
 	      // get label
-	      const std::string & label = key_value ? kv[0] : cols[a][j];
+	      const std::string & label = mhdr[ i - 6 ];
+	      const std::string & datum = tok[ i ];
 	      
 	      // if this key not declare or previously seen, add now as either TXT or numeric
-	      if ( key_value && a->types.find( label ) == a->types.end() )
+	      if ( a->types.find( label ) == a->types.end() )
 		{
 		  // did we have a default specified?
 		  if ( globals::atypes.find( label ) != globals::atypes.end() )
 		    a->types[ label ] = globals::atypes[ label ];
 		  else
-		    {
-		      //		      std::cout << "read " << label << " " << globals::annot_default_meta_num_type << "\n";
-		      a->types[ label ] = globals::annot_default_meta_num_type ? globals::A_DBL_T : globals::A_TXT_T;
-		      //Helper::halt( "could not read undefined type from annotation file for " + label + "\n" + line );
-		    }
+		    a->types[ label ] = globals::annot_default_meta_num_type ? globals::A_DBL_T : globals::A_TXT_T;
 		}
 	      
 	      // get type
 	      globals::atype_t t = a->types[label];
-
-	      //	      std::cout << " label type " << label << " " << globals::type_name[ t ] << "\n";
-
+	      
 	      if ( t == globals::A_MASK_T )
 		{
 		  // accepts F and T as well as long forms (false, true)
-		  bool value = Helper::yesno( key_value ? kv[1] : vartok[j] );
+		  bool value = Helper::yesno( datum );
 		  instance->set_mask( label , value );		
 		}
-	      
-	      else if ( t == globals::A_BOOL_T )
-		{
-		  // accepts F and T as well as long forms (false, true)
-		  bool value = Helper::yesno( key_value ? kv[1] : vartok[j] );
-		  instance->set( label , value );
-		}
-
-	      else if ( t == globals::A_INT_T )
-		{
-		  int value = 0;
-		  if ( ! Helper::str2int( key_value ? kv[1] : vartok[j] , &value ) )
-		    return Helper::vmode_halt( "invalid E line, bad numeric value" );
-		  instance->set( label , value );
-		}
-
-	      else if ( t == globals::A_DBL_T )
-		{
-		  double value = 0;
 		  
-		  if ( Helper::str2dbl( key_value ? kv[1] : vartok[j] , &value ) )
+		  else if ( t == globals::A_BOOL_T )
 		    {
-		      //std::cout << "set as " << label << " " << value << "\n";
+		      // accepts F and T as well as long forms (false, true)
+		      bool value = Helper::yesno( datum );
 		      instance->set( label , value );
 		    }
-		  else
+		  
+		  else if ( t == globals::A_INT_T )
 		    {
-		      //std::cout << "prb " << vartok[j] << "\n";
-		      if ( ! ( vartok[j] == "NA" || vartok[j] == "." ) )
-			return Helper::vmode_halt( "invalid line, bad numeric value:\n" + line );
+		      int value = 0;
+		      if ( ! Helper::str2int( datum , &value ) )
+			return Helper::vmode_halt( "invalid E line, bad numeric value" );
+		      instance->set( label , value );
 		    }
-		}
+		  
+		  else if ( t == globals::A_DBL_T )
+		    {
+		      double value = 0;
+		      
+		      if ( Helper::str2dbl( datum , &value ) )
+			{
+			  //std::cout << "set as " << label << " " << value << "\n";
+			  instance->set( label , value );
+			}
+		      else
+			{
+			  //std::cout << "prb " << vartok[j] << "\n";
+			  if ( ! ( datum == "NA" || datum == "." ) )
+			    return Helper::vmode_halt( "invalid line, bad numeric value:\n" + line );
+			}
+		    }
 	      
-	      else if ( t == globals::A_TXT_T )
-		{		  
-		  instance->set( label , key_value ? kv[1] : Helper::unquote( vartok[j] ) );
-		}
+		  else if ( t == globals::A_TXT_T )
+		    {		  
+		      instance->set( label , datum );
+		    }
+		  
+		  //
+		  // TODO.. add vector readers; for now, they can be encoded as, e.g. comma-delimited strings
+		  //
+		  
+		  else
+		    logger << "could not read undefined type from annotation file for " << label << "\n";
 	      
-	      //
-	      // TODO.. add vector readers; for now, they can be encoded as, e.g. comma-delimited strings
-	      //
-	      
-	      else
-		logger << "could not read undefined type from annotation file for " << label << "\n";
-	      
-	      //
-	      // next value
-	      //
 	    }
-
-
+	  
+	  
 	  //
 	  // Done processing this line
 	  //
@@ -1494,7 +1592,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 				  const clocktime_t & starttime ,
 				  const clocktime_t & startdatetime , 
 				  const std::string & f ,
-				  const bool align_annots 
+				  const bool align_annots 				  
 				  )
 {
 
@@ -1506,10 +1604,11 @@ interval_t annot_t::get_interval( const std::string & line ,
   // 3 start
   // 4 stop
   // 5 meta
-
+  // 6+ (tabular-meta data (opt)
+  
   // epoch (single or range) or an interval (range)? 
   
-  if ( tok.size() != 6 ) 
+  if ( tok.size() < 6 ) 
     {
       Helper::vmode_halt( "bad line format, need exactly 6 columns:\n" + line );
       return interval_t( 123456789, 987654321 ); // special fail code
@@ -1518,7 +1617,7 @@ interval_t annot_t::get_interval( const std::string & line ,
   // specification in terms of one (or two) epochs?  
   bool eline  = tok[3][0] == 'e' ;
   bool eline2 = tok[4][0] == 'e' ;
-
+  
   if ( eline2 && ! eline ) 
     {
       Helper::vmode_halt( "not a valid epoch row if only second field has e:N encoding");
@@ -3914,6 +4013,21 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   const bool has_min_dur = param.has( "min-dur" ) && param.requires_dbl( "min-dur" ) > 0 ;
   
   const double min_dur = has_min_dur ?  param.requires_dbl("min-dur" )  : 0 ;
+
+  //
+  // tabular meta (instead of key=value in col6, implies meta in cols 7, 8, etc... (and . in 6 if nothing else) 
+  //
+
+  const bool tabular_meta = param.has( "tab-meta" ) ? param.yesno( "tab-meta" ) : false ; 
+
+  if ( xml_format && tabular_meta )
+    Helper::halt( "cannot specify xml and tab-meta" );
+  
+  //
+  // drop meta-data? (col 6)
+  //
+
+  const bool write_meta = param.has( "meta" ) ? param.yesno( "meta" ) : true ;
   
   //
   // for complete XML compatibility
@@ -4169,18 +4283,22 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  // name : instance_idx.id
 	  // start : instance_idx.interval.start_sec()
 	  // duration : instance_idx.interval.duration_sec()
-	  
-	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
-	  
-	  while ( dd != inst->data.end() )
+
+	  if ( write_meta )
 	    {
-	      // var-name : dd->first
-	      // value : 
 	      
-	      O1 << " <Value name=\"" << dd->first << "\">" 
-		 << *dd->second 
-		 << "</Value>\n"; 
-	      ++dd;
+	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	      
+	      while ( dd != inst->data.end() )
+		{
+		  // var-name : dd->first
+		  // value : 
+		  
+		  O1 << " <Value name=\"" << dd->first << "\">" 
+		     << *dd->second 
+		     << "</Value>\n"; 
+		  ++dd;
+		}
 	    }
 	  
 	  O1 << "</Instance>\n\n";
@@ -4320,13 +4438,73 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	   << "channel" << "\t"
 	   << "start" << "\t"
 	   << "stop" << "\t"
-	   << "meta" << "\n";
+	   << "meta" ;
+
+      
+      //
+      // tabular meta?
+      //
+
+      std::set<std::string> mhdr;
+      
+      if ( tabular_meta )
+	{
+	  // need to get all meta keys in this file
+	  std::set<instance_idx_t>::const_iterator ee = events.begin();
+	  while ( ee != events.end() )
+	    {
+	      
+	      const instance_idx_t & instance_idx = *ee;	      
+	      const annot_t * annot = instance_idx.parent;
+	      if ( annot == NULL ) { ++ee; continue; }
+
+	      if ( annots2write.size()
+		   && annots2write.find( annot->name ) == annots2write.end() )
+		continue;
+
+	      annot_map_t::const_iterator ii = annot->interval_events.find( instance_idx );
+	      if ( ii == annot->interval_events.end() )  { ++ee; continue; }
+	      instance_t * inst = ii->second;
+	      
+	      // skip special variables
+	      //  (should not need to do this, as they won't have meta-data)
+	      
+	      // if ( annot->name == "start_hms" ) { ++ee; continue; }
+	      // if ( annot->name == "duration_hms" ) { ++ee; continue; }
+	      // if ( annot->name == "duration_sec" ) { ++ee; continue; }
+	      // if ( annot->name == "epoch_sec" ) { ++ee; continue; }
+	      	      
+	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	      while ( dd != inst->data.end() )
+		{
+		  mhdr.insert( dd->first );
+		  ++dd;
+		}
+	      
+	      ++ee;
+	    }
+
+	  //
+	  // now need to write out any meta keys
+	  //
+
+	  std::set<std::string>::const_iterator mm = mhdr.begin();
+	  while ( mm != mhdr.end() )
+	    {
+	      O1 << "\t" << *mm;
+	      ++mm;	      
+	    }
+	  
+	}
+      
+      O1 << "\n";
+
       
       //
       // Now, the data rows
       //
 
-      // ensure 6-col format for .annot output
+      // ensure 6+-col format for .annot output
 
       if ( add_specials )
 	{
@@ -4356,8 +4534,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
 	  if ( annots2write.size()
 	       && annots2write.find( annot->name ) == annots2write.end() )
-	    continue;
-	  
+	    continue;	  
 	  
 	  annot_map_t::const_iterator ii = annot->interval_events.find( instance_idx );
           if ( ii == annot->interval_events.end() )  { ++ee; continue; } 
@@ -4370,7 +4547,6 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  if ( annot->name == "duration_sec" ) { ++ee; continue; } 
 	  if ( annot->name == "epoch_sec" ) { ++ee; continue; } 
 	  
-
 
 	  //
 	  // Get interval
@@ -4503,7 +4679,12 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		 << ( add_ellipsis ? "..." : Helper::dbl2str( interval.stop_sec() , globals::time_format_dp ) ) ;
 	    }
 
-	  if ( inst->data.size() == 0 ) 
+
+	  //
+	  // meta-data (col 6)
+	  //
+
+	  if ( inst->data.size() == 0 || ! write_meta ) 
 	    O1 << "\t.";
 	  else
 	    {
@@ -4523,7 +4704,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		  
 		  std::stringstream ss;
 		  ss << *dd->second;
-
+		  
 		  O1 << dd->first << "="
 		     << Helper::quote_spaced( Helper::quote_if( ss.str() ,
 								globals::annot_meta_delim,
@@ -4533,6 +4714,35 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 		}
 	    }
 
+
+	  //
+	  // tabular meta?
+	  //
+
+	  if ( tabular_meta )
+	    {
+
+	      std::set<std::string>::const_iterator mm = mhdr.begin();
+	      while ( mm != mhdr.end() )
+		{
+		  std::map<std::string,avar_t*>::const_iterator dd = inst->data.find( *mm );
+		  if ( dd != inst->data.end() )
+		    {
+		      std::stringstream ss;
+		      ss << *dd->second;
+		      O1 << "\t"
+			 << ss.str();
+		    }
+		  else
+		    O1 << "\t.";
+		  ++mm;
+		}	      
+	    }
+
+	  //
+	  // all done
+	  //
+	  
 	  O1 << "\n";
 
 	  //
