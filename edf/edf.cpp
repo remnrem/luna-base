@@ -4702,6 +4702,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
   if ( file == NULL )
     return edfz->get_tindex( r );
 
+    
   //
   // Read this is called when constructing a time-series for 
   // an existing EDF+D, only
@@ -4758,8 +4759,8 @@ uint64_t edf_t::timepoint_from_EDF( int r )
       else tp += 10LLU - div10;
       //      std::cout << tp << "\n";
     }
-
-  //  std::cout << " READ [ " << tt.substr(0,e) << " ]\t" << tt_sec << "\t" << tp << "\n";
+  
+  //std::cout << " READ [ " << tt.substr(0,e) << " ]\t" << tt_sec << "\t" << tp << "\n";
   
   return tp; 
   

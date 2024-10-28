@@ -971,6 +971,50 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
 	  const std::string cls_root = aname;
 
+
+	  //
+	  // Allow for reduced column counts
+	  //
+
+	  if ( tok.size() < 6 ) 
+	    {
+	      
+	      // exception #1 : allow old 4-col formatting
+	      //   class inst start stop
+	      if ( tok.size() == 4 ) 
+		{
+		  tok.resize( 6 );
+		  // 0  1  2  3  4  5
+		  // cl in ch bg ed mt
+		  // cl in    bg ed    	  
+		  tok[5] = ".";
+		  tok[4] = tok[3];
+		  tok[3] = tok[2];
+		  tok[2] = ".";		  
+		}
+	      else if (  tok.size() == 3 )
+		{
+		  // exception #2: 3-col format
+		  //   class start stop		  
+		  tok.resize( 6 );
+		  // 0  1  2  3  4  5
+		  // cl in ch bg ed mt
+		  // cl       bg ed		  
+                  tok[5] = ".";
+                  tok[4] = tok[2];
+                  tok[3] = tok[1];
+                  tok[2] = ".";
+		  tok[1] = ".";
+		}
+	      else
+		return Helper::vmode_halt ( "expecting 6+/4/3 columns, but found " 
+					    + Helper::int2str( (int) tok.size() ) 
+					    + "\n  (hint: use the 'tab-only' option to ignore space delimiters)\n"
+					    + "line [ " + line + "]" );
+	    }
+	  
+
+	  
 	  //
 	  // Instance label
 	  //
@@ -1081,47 +1125,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( cls_root  != tok[0] )
 	    parent_edf.timeline.annotations.aliasing[ cls_root ] = tok[0];
 	  
-
-	  //
-	  // Check size
-	  //
-
-	  if ( tok.size() < 6 ) 
-	    {
-	      
-	      // exception #1 : allow old 4-col formatting
-	      //   class inst start stop
-	      if ( tok.size() == 4 ) 
-		{
-		  tok.resize( 6 );
-		  // 0  1  2  3  4  5
-		  // cl in ch bg ed mt
-		  // cl in    bg ed    	  
-		  tok[5] = ".";
-		  tok[4] = tok[3];
-		  tok[3] = tok[2];
-		  tok[2] = ".";		  
-		}
-	      else if (  tok.size() == 3 )
-		{
-		  // exception #2: 3-col format
-		  //   class start stop		  
-		  tok.resize( 6 );
-		  // 0  1  2  3  4  5
-		  // cl in ch bg ed mt
-		  // cl       bg ed		  
-                  tok[5] = ".";
-                  tok[4] = tok[2];
-                  tok[3] = tok[1];
-                  tok[2] = ".";
-		  tok[1] = ".";
-		}
-	      else
-		return Helper::vmode_halt ( "expecting 6+/4/3 columns, but found " 
-					    + Helper::int2str( (int) tok.size() ) 
-					    + "\n  (hint: use the 'tab-only' option to ignore space delimiters)\n"
-					    + "line [ " + line + "]" );
-	    }
 
 	  //
 	  // Update instance ID if needed
@@ -5349,6 +5352,9 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 		      
 		      // track that this has actual EDF Annotations 
 		      edf.has_edf_annots = true;
+
+		      if ( te.onset < 0 || te.duration < 0 )
+			logger << "  *** warning: EDF+ annotation with negative onset and/or duration: " << te.name << " : " << te.onset << " " << te.duration << "\n";
 		      
 		      uint64_t start_tp = Helper::sec2tp( te.onset );
 		      

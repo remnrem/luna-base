@@ -656,7 +656,41 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       SIN1.close();
 
       logger << "  read " << swgt.size() << " weights from " << scaling_file << " (including double-entering any 2-channel weights)\n";
-      
+
+      // by default, scale 0 .. 1 based on abs
+      // -1  scale 0 .. 1 based on signed value (i.e.  min(X) .. max(X) )
+      //  0  no scaling      (leave as is - assumes no negative values here) 
+      // +1  scale 0 .. 1 based on abs value (i.e. min(|X|) .. max(|X|) 
+      const int scale_mode = param.has( "scale-mode" ) ? param.requires_int( "scale-mode" ) : 1 ;
+      if ( scale_mode != 0 && swgt.size() )
+	{
+	  logger << "  rescaling weights to ";
+	  if ( scale_mode == 1 ) logger << " min(|W|)..max(|W|) --> 0..1\n";
+	  else logger << " min(W)..max(W) --> 0..1\n";
+	     
+	  double smin = swgt.begin()->second;
+	  double smax = swgt.begin()->second;
+	  std::map<std::string,double>::iterator ss = swgt.begin();
+	  while ( ss != swgt.end() )
+	    {
+	      const double val = scale_mode == 1 ? fabs( ss->second ) : ss->second;
+	      if ( val < smin ) smin = val;
+	      else if ( val > smax ) smax = val;
+	      ++ss;
+	    }
+
+	  const double rng = smax - smin;
+
+	  if ( rng > 0 )
+	    {
+	      std::map<std::string,double>::iterator ss = swgt.begin();
+	      while ( ss != swgt.end() )
+		{
+		  ss->second = ( ( scale_mode == 1 ? fabs( ss->second ) : ss->second ) - smin ) / rng;
+		  ++ss;
+		}	      
+	    }
+	}      
     }
 
   

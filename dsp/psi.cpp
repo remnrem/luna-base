@@ -81,7 +81,7 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
 
   const bool verbose = param.has( "verbose" );
 
-  const bool double_entry = param.has( "double-entry" ) ? param.yesno( "double-entry" ) : true ; 
+  const bool double_entry = param.has( "double-entry" ) ? param.yesno( "double-entry" ) : false ; 
   
   
   //
