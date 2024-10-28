@@ -2943,6 +2943,7 @@ void proc_write( edf_t & edf , param_t & param )
       write_as_edf = 2;
     }  
   
+  
   //
   // Do not write 'quasi-discontinuous' (i.e. single-segment EDF+D) as EDF+D
   // Rather, write as EDF+C
@@ -5464,6 +5465,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::force_edf = Helper::yesno( tok1 );      
       return;
     }
+
+
+  // pre-read whole EDF(+D) rather than random access reads
+  //  (to avoid slow fseek() implementations) 
+  if ( Helper::iequals( tok0, "preload" ) ) 
+    {
+      globals::edf_stream_read = Helper::yesno( tok1 );
+      return;
+    }
+  
 
   // skip anyt EDF Annotations from EDF+
   if ( Helper::iequals( tok0 , "skip-edf-annots" ) )

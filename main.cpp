@@ -2267,12 +2267,12 @@ void process_edfs( cmd_t & cmd )
 	{
 	  // must read if EDF+D (but only the time-track will be taken in)
 	  // if EDF+C, then look at 'skip-edf-annots' flag
-	  
+	    
 	  if ( edf.header.continuous && ! globals::skip_edf_annots )
 	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
 	  else if ( ! edf.header.continuous )
 	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
-	  
+
 	}
       
       

@@ -111,16 +111,20 @@ void timeline_t::init_timeline( bool okay_to_reinit )
   else  
     {      
       
+
       total_duration_tp = 
 	(uint64_t)edf->header.nr * edf->header.record_duration_tp;
-
+      
       // okay to use header.nr here, as this will only be called
       // once, on first loading the EDF (i.e. so nr==nr_all as
       // no records have yet been removed)
       
       for (int r = 0;r < edf->header.nr;r++)
 	{	  
+	  
+	  // this will be cached if we've done a 'preload'
 	  uint64_t tp = edf->timepoint_from_EDF(r);
+	  
 	  tp2rec[tp] = r;
 	  rec2tp[r] = tp;
 	  rec2orig_rec[ r ] = r; // 1-to-1 mapping before any RE

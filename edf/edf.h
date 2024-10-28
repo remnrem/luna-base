@@ -371,6 +371,14 @@ public:
 
   uint64_t timepoint_from_EDF( int r );
 
+  std::map<int,uint64_t> cached_EDF_timepoints;
+  
+  //
+  // Stream read
+  //
+  
+  bool stream_read();
+
 
   //
   // Channel location data 

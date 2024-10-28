@@ -128,6 +128,8 @@ bool globals::skip_nonedf_annots;
 bool globals::set_annot_inst2hms;
 bool globals::set_annot_inst2hms_force;
 bool globals::skip_sl_annots;
+bool globals::edf_stream_read;
+
 
 std::set<std::string> globals::id_excludes;
 std::set<std::string> globals::id_includes;
@@ -585,6 +587,8 @@ void globals::init_defs()
   skip_edf_annots = false;
   skip_nonedf_annots = false;
   skip_sl_annots = false;
+  edf_stream_read = false;
+
   
   set_annot_inst2hms = false;
   set_annot_inst2hms_force = false;
