@@ -72,7 +72,10 @@ void edf_t::closeout_inputs()
       edfz->close();
       delete edfz;
     }
-  edfz = NULL;    
+  edfz = NULL;   
+
+  cached_EDF_timepoints.clear();
+ 
 }
   
 void edf_t::init()
@@ -93,6 +96,7 @@ void edf_t::init()
   records.clear();    
   inp_signals_n.clear();
   has_edf_annots = false;
+  cached_EDF_timepoints.clear();
 }
 
 
@@ -1625,7 +1629,7 @@ bool edf_t::attach( const std::string & f ,
   // Read and parse the EDF header (from either EDF or EDFZ) extract
   // signal codes store so we know how to read records
   //
-  
+
   inp_signals_n = header.read( file , edfz , inp_signals );
 
   //
@@ -1662,12 +1666,13 @@ bool edf_t::attach( const std::string & f ,
       logger << "  forced start-date to " << header.startdate << "\n";
     }
 
+
   //
   // Swap out any signal label aliases at this point
   //
   
   swap_in_aliases();
-  
+
   //
   // EDF+ requires a time-track
   //
@@ -1678,12 +1683,11 @@ bool edf_t::attach( const std::string & f ,
 	return Helper::vmode_halt( "EDF+D with no time track" );
       
       logger << " EDF+C [" << filename << "] did not contain any time-track: adding...\n";
-
+      
       add_time_track();
 
     }
 
-  
   //
   // Record details about byte-size of header/records
   //
@@ -1714,6 +1718,7 @@ bool edf_t::attach( const std::string & f ,
   
   if ( file ) 
     {
+
       uint64_t implied = (uint64_t)header_size + (uint64_t)header.nr_all * record_size;
 
       if ( fileSize != implied ) 
@@ -1770,6 +1775,20 @@ bool edf_t::attach( const std::string & f ,
 	  
 	}
     }
+
+
+
+  //
+  // pre-load?  this will also read EDF+D timestamps (and so init_timeline() will 
+  // use cached record timestamps when calling timepoint_from_EDF() 
+  //
+  
+  if ( globals::edf_stream_read ) 
+    {
+      if ( edfz ) Helper::halt( "cannot preload EDFZ files currently" );
+      stream_read();
+    }
+  
   
   //
   // Create timeline (relates time-points to records and vice-versa)
@@ -1778,7 +1797,6 @@ bool edf_t::attach( const std::string & f ,
   //
 
   timeline.init_timeline();
-
 
   //
   // Store original last point
@@ -4694,7 +4712,15 @@ int edf_t::add_time_track( const std::vector<uint64_t> * tps )
 
 uint64_t edf_t::timepoint_from_EDF( int r )
 {
-
+  
+  //
+  // cached? (i.e. if done prior stream-read)
+  //
+  
+  if ( cached_EDF_timepoints.find( r ) != cached_EDF_timepoints.end() )
+    return cached_EDF_timepoints[ r ];
+  
+  
   //
   // for EDFZ, this will be stored in the .idx
   //
@@ -4738,7 +4764,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
       ++p;
       ++e;
     }
-  
+
   double tt_sec = 0;
 
   if ( ! Helper::str2dbl( tt.substr(0,e) , &tt_sec ) ) 
@@ -4761,7 +4787,10 @@ uint64_t edf_t::timepoint_from_EDF( int r )
     }
   
   //std::cout << " READ [ " << tt.substr(0,e) << " ]\t" << tt_sec << "\t" << tp << "\n";
-  
+
+  // cache in case recalled 
+  cached_EDF_timepoints[ r ] = tp;
+
   return tp; 
   
 }
@@ -5949,4 +5978,197 @@ void edf_t::combine( param_t & param )
   // add signal
   add_signal( newch , sr , x );
   
+}
+
+
+bool edf_t::stream_read()
+{
+  
+  // header will be attached;  load entire file w/out any 
+  // fseek(), i.e. stream through the whole thing; 
+  // for EDF+, this will get the timeline 
+
+  logger << " preloading all " << header.nr_all << " records...\n";
+
+  //read_records( 0 , header.nr_all - 1 );
+
+  // this will only ever be called
+  //  1) just after reading the edf header
+  //  2) before any other records have been read
+  // i.e. we can *assume* we are positioned to go ahead and
+  // read all nr_all records as is, storing the signals wee
+  // care about, and optionally (for EDF+) populating the
+  // EDF timepoints too
+
+  
+  // allocate buffer for a single record  
+  byte_t * p = new byte_t[ record_size ];
+
+  byte_t * p0 = p; // for 'free' after reading all
+
+  
+  // expecting an EDF+D timestamps? (first annot of first EDF Annotations channel)
+  const bool edfd = header.edfplus && ! header.continuous;
+  
+  int ttsize = edfd ? 2 * globals::edf_timetrack_size : 0 ; 
+  
+  
+  // read every record
+  for (int r = 0; r < header.nr_all; r++)
+    {      
+      
+      // only needed for EDF+
+      bool got_time = edfd ? false : true; 
+      
+      edf_record_t record( this ); 
+      
+      // point to the start of the buffer
+      p = p0;
+      
+      // read record into buffer
+      size_t rdsz = fread( p , 1, record_size , file );
+      
+      //std::cout << " read " << r << " / " << header.nr_all << " --> " << rdsz << "\n";
+      
+      if ( rdsz != record_size ) Helper::halt( "problem preload EDF - truncated file" );
+      
+      // which signals/channels do we actually want to read?
+      // header : 0..(ns-1)
+      // from record data : 0..(ns_all-1), from which we pick the 'ns' entries is 'channels'
+      // data[] is already created for 'ns' signals
+  
+      // for convenience, use name 'channels' below
+      std::set<int> & channels = inp_signals_n;
+      
+      int s = 0;
+
+      for (int s0=0; s0 < header.ns_all; s0++)
+	{
+	  
+	  // need to EDF-based header, i.e. if skipped signal still need size to skip
+	  const int nsamples = header.n_samples_all[s0];
+	  
+	  //
+	  // skip this signal?
+	  //
+	  
+	  if ( channels.find( s0 ) == channels.end() )
+	    {	  
+	      p += 2 * nsamples;
+	      continue;
+	    }
+      
+	  
+	  //
+	  // Data or annotation channel? (note: lookup is based on 's' not
+	  // 's0', i.w. loaded channels, not all EDF channels
+	  //
+	  
+	  bool annotation = header.is_annotation_channel( s );
+	  
+	  //
+	  // s0 : actual signal in EDF
+	  // s  : where this signal will land in edf_t
+	  //
+	  
+	  if ( ! annotation ) 
+	    {
+	      
+	      for (int j=0; j < nsamples ; j++)
+		{
+		  int16_t d = edf_record_t::tc2dec( *p ,  *(p+1)  ); 
+		  p += 2;
+		  record.data[s][j] = d;	      
+		}
+	    }
+	  else // read as a ANNOTATION
+	    {
+
+	      // expecing a TAL EDF+D timestamp?
+	      if ( edfd && ! got_time ) 
+		{
+		  byte_t * pt = p;
+		  
+		  // extract tt
+		  std::string tt( ttsize , '\x00' );
+		  
+		  int e = 0;
+		  for (int j=0; j < ttsize; j++)
+		    {      
+		      tt[j] = *pt;
+		      if ( tt[j] == '\x14' || tt[j] == '\x15' ) break;
+		      ++pt;
+		      ++e;
+		    }
+		  
+		  double tt_sec = 0;
+	  
+		  if ( ! Helper::str2dbl( tt.substr(0,e) , &tt_sec ) ) 
+		    Helper::halt( "problem converting time-track in EDF+" );
+
+		  uint64_t tp = globals::tp_1sec * tt_sec;
+	  
+		  // to handle floating point issues -- enforce that
+		  // the last few digits of an EDF+ specified
+		  // time-point should be zeros
+		  
+		  uint64_t div10 = tp % 10LLU ; 
+	  
+		  if ( div10 != 0 )
+		    {
+		      //      std::cout << " fixin " << tp << "\t" << div100 << "\t";
+		      // round down, or up
+		      if ( div10 < 5 ) tp -= div10 ;
+		      else tp += 10LLU - div10;
+		      //      std::cout << tp << "\n";
+		    }
+	  
+		  //std::cout << " READ [ " << tt.substr(0,e) << " ]\t" << tt_sec << "\t" << tp << "\n";
+		  
+		  // cache (so that timepoint_from_EDF() doesn't try to revisit the EDF+D)	  
+		  cached_EDF_timepoints[ r ] = tp;
+
+		  // indicate, for this record, that we've got the timestamp
+		  got_time = true;
+		}
+
+	      
+	      // because for a normal signal, each sample takes 2 bytes,
+	      // here we read twice the number of datapoints
+	      
+	      for (int j=0; j < 2 * nsamples; j++)
+		{
+		  record.data[s][j] = *p;
+		  p++;		  
+		}	  
+	      
+	    }
+	  
+	  // next signal
+	  ++s;
+	  
+	}
+     
+
+      //
+      // Add record
+      //      
+      
+      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
+      
+      
+      //
+      // Next record
+      //
+    }
+  
+  //
+  // Clean up
+  //
+  
+  delete [] p0;
+  
+  return true;
+
+
 }
