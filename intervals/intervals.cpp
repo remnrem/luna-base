@@ -45,6 +45,19 @@ std::string feature_t::as_string( const std::string & delim ) const
 }
 
 
+uint64_t interval_t::sum( const std::set<interval_t> & a )
+{
+  uint64_t s = 0LLU;
+  
+  std::set<interval_t>::const_iterator aa = a.begin();
+  while ( aa != a.end() )
+    {
+      s += aa->duration();
+      ++aa;
+    }
+  return s;  
+}
+
 
 int interval_t::intersect( const std::set<interval_t> & a, 
 			   const std::set<interval_t> & b, 

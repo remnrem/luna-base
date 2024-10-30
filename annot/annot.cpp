@@ -5903,5 +5903,118 @@ std::set<interval_t> annotate_t::apairs( const std::set<interval_t> & a0 ,
 
 
 
+void annotation_set_t::espan( edf_t & edf , param_t & param )
+{
+  
+  // get annotations to list
+  std::set<std::string> annots = param.strset_xsigs( "annot" );
+  
+  // ensure epoched data
+  edf.timeline.ensure_epoched();
+  
+  // verbose mode: list all individual annots (original and curtailed)
+  const bool verbose = param.has( "verbose" );
+
+  // iterate over epochs
+  int ne = edf.timeline.first_epoch();
+  
+  while ( 1 ) 
+    {
+
+      int e = edf.timeline.next_epoch();
+      
+      if ( e == -1 ) break;
+      
+      // display epoch
+      writer.epoch( edf.timeline.display_epoch( e ) );
+      
+      const interval_t epoch = edf.timeline.epoch( e );
+      
+      const uint64_t epoch_tp = epoch.duration();
+
+      // track events (across all listed annots)
+      std::set<interval_t> allevs; 
+      
+      // iterate over annotations
+      std::set<std::string>::const_iterator aa = annots.begin();
+      while ( aa != annots.end() )
+	{
+	  
+	  // get this annotation class
+	  annot_t * a1 = find( *aa );
+	  if ( a1 == NULL ) { ++aa; continue; } 
+	 
+	  writer.level( *aa , globals::annot_strat );
+	  
+	  // track events (within this annot class)
+	  std::set<interval_t> evs;
+
+	  // get overlapping annotations for this epoch
+	  annot_map_t events = a1->extract( epoch );
+	  
+	  // extract events
+	  if ( events.size() != 0 )
+	    {
+	      
+	      annot_map_t::const_iterator ii = events.begin();
+	      
+	      int ac = 0;
+	      
+	      while ( ii != events.end() )
+		{
+		  
+		  // as we're guaranteed at least some overlap, can use this function:
+		  const interval_t a = epoch.intersection_with_overlapping_interval( ii->first.interval );
+		  
+		  if ( verbose ) 
+		    {
+		      writer.level( ++ac , globals::annot_instance_strat );
+		      writer.value( "START" , ii->first.interval.start_sec() );
+		      writer.value( "STOP" , ii->first.interval.stop_sec() );		      
+		      writer.value( "DUR" , ii->first.interval.duration_sec() );		      
+		      
+		      writer.value( "XSTART" , a.start_sec() );
+		      writer.value( "XSTOP" , a.stop_sec() );		      
+		      writer.value( "XDUR" , a.duration_sec() );		      
+		    }
+
+		  allevs.insert( a );
+		  evs.insert( a );
+		  
+		  ++ii;
+		}
+	      
+	      if ( verbose ) 
+		writer.unlevel( globals::annot_instance_strat );
+	    }
+	  
+
+	  // flatten
+	  evs = annotate_t::flatten( evs );
+	  
+	  uint64_t span_tp = interval_t::sum( evs );	  
+	  writer.value( "PCT" , span_tp / (double)epoch_tp );
+	  writer.value( "SEC" , span_tp * globals::tp_duration );
+	  
+	  // next annot class
+	  ++aa;
+	}
+
+      writer.unlevel( globals::annot_strat );
+      
+      // flatten global tracker
+      allevs = annotate_t::flatten( allevs );
+      
+      uint64_t span_tp = interval_t::sum( allevs );	  
+      writer.value( "PCT" , span_tp / (double)epoch_tp );
+      writer.value( "SEC" , span_tp * globals::tp_duration );
+      
+      // next epoch
+    }  
+
+  writer.unepoch();
+  
+}
+
 
 

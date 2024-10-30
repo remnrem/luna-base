@@ -271,6 +271,10 @@ struct interval_t
 			std::set<interval_t> * onlya,
 			std::set<interval_t> * onlyb, 
 			double th = 0.5 , uint64_t win = 0 );
+
+  
+  static uint64_t sum( const std::set<interval_t> & a );
+  
   
   
 };

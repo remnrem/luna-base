@@ -881,6 +881,8 @@ struct annotation_set_t
   
   void extend( param_t & param );
   
+  void espan( edf_t & edf , param_t & param );
+  
   // Attempt to create a single SLEEP STAGE annotation from multiple
   // other annotations
   
