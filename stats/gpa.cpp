@@ -698,7 +698,7 @@ void gpa_t::prep()
       // if including/excluding based on presence of factors, we can
       // decide here whether to skip the entire file or no
       //
-
+      
       // if requiring factors, they must all be present
       if ( incfacs.size() )
 	{
@@ -722,7 +722,7 @@ void gpa_t::prep()
               continue;
             }
         }
-
+      
       
       //
       // read int
@@ -893,30 +893,42 @@ void gpa_t::prep()
 		    basevar[ expand_vname ] = tok[j];
 		    var2group[ expand_vname ] = file2group[ ff->first ];
 		  }
-				
+		
+		
 		// store actual (numeric, non-NaN) value
 		double val;
 		if ( Helper::str2dbl( dtok[j] , &val ) ) 
-		  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = val;
+		  {		    
+		    D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = val;
+		  }
 		else
 		  {
 		    // do we have a mapping object for this file/var?
 		    std::map<std::string,std::map<std::string,double> >::const_iterator mm = mappings.find( tok[j] );
 		    if ( mm != mappings.end() )
-		      {
+		      {			
 			const std::map<std::string,double> & mp = mm->second;
 			std::map<std::string,double>::const_iterator kk = mp.find( dtok[j] );
 			if ( kk != mp.end() )
-			  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = kk->second ;
+			  {			   
+			    D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = kk->second ;
+			  }
 		      }
 		    else // try default T/F and Y/N mappings
 		      {
-			
-			char f1 = std::toupper( dtok[j][0] );
+			char f1 = std::toupper( dtok[j][0] );			
 			if ( f1 == 'F' || f1 == 'N' )
-			  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 0;
+			  {
+			    // check doesn't match NA or NAN
+			    std::string nn = Helper::toupper( dtok[j] );
+			    if ( nn != "NA" && nn != "NAN" ) 
+			      D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 0;
+			  }
 			else if ( f1 == 'T' || f1 == 'Y' )
-			  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 1;
+			  {			   
+			    D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 1;
+			  }
+			
 		      }
 		  }
 		

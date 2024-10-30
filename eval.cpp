@@ -1128,6 +1128,7 @@ bool cmd_t::eval( edf_t & edf )
       else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
 
       else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
+      else if ( is( c, "ESPAN" ) )        proc_espan( edf , param(c) );
       else if ( is( c, "MAKE-ANNOTS" ) )  proc_make_annots( edf , param(c) );
       else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
       else if ( is( c, "META" ) )         proc_set_annot_metadata( edf, param(c) ); 
@@ -3477,6 +3478,12 @@ void proc_list_annots( edf_t & edf , param_t & param )
 }
 
 
+// ESPAN : per epoch, give # secs/proportion spanned by annotations
+
+void proc_espan(  edf_t & edf , param_t & param )
+{
+  edf.timeline.annotations.espan( edf, param );
+}
 
 // MAKE-ANNOTS : make new annotations based on pairwse intersection,union, overlap, etc
 
