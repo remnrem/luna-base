@@ -133,7 +133,7 @@ lat_t::lat_t( edf_t & edf , param_t & param )
   if ( nreps ) 
     {
       trans_level_output = true;
-      logger << "  applying " << nreps << " shuffles to derive empirical expecations for TR_NR2R and TR_R2NR\n";
+      logger << "  applying " << nreps << " shuffles to derive empirical expectations for TR_NR2R and TR_R2NR\n";
     }
   
 

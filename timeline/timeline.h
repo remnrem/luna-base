@@ -357,6 +357,9 @@ struct timeline_t
 
   // trim leading and trailing epochs (allow only n)
   void trim_epochs( std::string & , int );
+  
+  // retain around a core set of annots (kind of inverse of trim, but specify what to keep)
+  void retain_epochs( const std::set<std::string> & labels );
 
   // regional mask
   void regional_mask( int x , int y );
