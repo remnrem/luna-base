@@ -253,16 +253,23 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
       if ( has_staging && helper->edf.timeline.hypnogram.empty() )
 	has_staging = false;
       
+      // exclude gaps from stages epoch count      
+      int ne_ss = 0;
+      for (int i=0; i<helper->edf.timeline.hypnogram.stages.size(); i++)
+	if ( helper->edf.timeline.hypnogram.stages[i] != GAP ) ++ne_ss;
+      
       if ( ! has_staging  )
 	{
 	  if ( suds_t::soap_mode ) return 0; // okay to skip for SOAP
 	  // but flag as major prob if a trainer
-	  Helper::halt( "problem extracting stage information for trainer" );
+	  Helper::halt( "problem extracting stage information for trainer: no staging info" );
 	}
       
       // total number of epochs does not match?
-      if ( helper->ne != helper->edf.timeline.hypnogram.stages.size() )
-	Helper::halt( "problem extracting stage information for trainer" );
+      if ( helper->ne != ne_ss )
+	Helper::halt( "problem extracting stage information for trainer: have " 
+		      + Helper::int2str( helper->ne ) + " epochs but found stage info for " 
+		      + Helper::int2str( ne_ss ) );
       
       helper->has_prior_staging = true;
       
@@ -279,8 +286,14 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
       
       if ( helper->has_prior_staging )
 	{
+	  
+	  // exclude gaps from stages epoch count      
+	  int ne_ss = 0;
+	  for (int i=0; i<helper->edf.timeline.hypnogram.stages.size(); i++)
+	    if ( helper->edf.timeline.hypnogram.stages[i] != GAP ) ++ne_ss;
+	  
 	  // total number of epochs does not match?
-	  if ( helper->ne != helper->edf.timeline.hypnogram.stages.size() )
+	  if ( helper->ne != ne_ss )
 	    Helper::halt( "problem extracting stage information for trainer" );
 	}
       
@@ -288,6 +301,14 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
 
   // nb. overkill to have two staging classifications, but keep for now,
   // i.e. we may want to extend one type only
+
+  // drop any gaps
+  // exclude gaps from stages epoch count      
+  std::vector<sleep_stage_t> stages;
+  for (int i=0; i<helper->edf.timeline.hypnogram.stages.size(); i++)
+    if ( helper->edf.timeline.hypnogram.stages[i] != GAP ) 
+      stages.push_back( helper->edf.timeline.hypnogram.stages[i] );
+
 
   //
   // number of good (retained) epochs
@@ -302,28 +323,28 @@ int suds_indiv_t::proc_extract_observed_stages( suds_helper_t * helper )
       
       for (int ss=0; ss < helper->ne ; ss++ )
 	{
-	  if ( helper->edf.timeline.hypnogram.stages[ ss ] == UNSCORED
-	       || helper->edf.timeline.hypnogram.stages[ ss ] == MOVEMENT
-	       || helper->edf.timeline.hypnogram.stages[ ss ] == UNKNOWN )
+	  if ( stages[ ss ] == UNSCORED
+	       || stages[ ss ] == MOVEMENT
+	       || stages[ ss ] == UNKNOWN )
 	    obs_stage[ss] = SUDS_UNKNOWN;
 	  
-	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == LIGHTS_ON )
+	  else if ( stages[ ss ] == LIGHTS_ON )
 	    obs_stage[ss] = SUDS_LIGHTS;
 	  
-	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == WAKE )
+	  else if ( stages[ ss ] == WAKE )
 	    obs_stage[ss] = SUDS_WAKE;
 
-	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == NREM1 )
+	  else if ( stages[ ss ] == NREM1 )
 	    obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N1;
 
-	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == NREM2 )
+	  else if ( stages[ ss ] == NREM2 )
 	    obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N2;
 
-	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == NREM3
-		    || helper->edf.timeline.hypnogram.stages[ ss ] == NREM4 )
+	  else if ( stages[ ss ] == NREM3
+		    || stages[ ss ] == NREM4 )
 	    obs_stage[ss] = suds_t::n_stages == 3 ? SUDS_NR : SUDS_N3;
 	  
-	  else if ( helper->edf.timeline.hypnogram.stages[ ss ] == REM )
+	  else if ( stages[ ss ] == REM )
 	    obs_stage[ss] = SUDS_REM;
 
 	  

@@ -774,7 +774,7 @@ void timeline_t::select_epoch_randomly( int n )
 }
 
 
-  // trim leading and trailing epochs (allow only n)
+// trim leading and trailing epochs (allow only n)
 void timeline_t::trim_epochs( std::string & label , int n )
 {
 
@@ -878,6 +878,152 @@ void timeline_t::trim_epochs( std::string & label , int n )
   writer.unlevel( "EMASK" );
 
 }
+
+
+// retain contiguous stretch of epochs that include these (+/- n epochs on both sides)
+void timeline_t::retain_epochs( const std::set<std::string> & labels )
+{
+
+  // find first and last examples epochs w/ one of these labels (e.g. a sleep label)
+  // expand outwards n epochs (if possible) 
+  // mask leading and trailing gaps
+  //  if no matches, then blank all
+  
+  // if one label is +int then interpret as n epoch border, not as a label
+  int n = 0;
+
+  int first = -1;
+  int last = -1;
+  
+  const int ne = epochs.size();
+
+  std::set<std::string>::const_iterator aa = labels.begin();
+  while ( aa != labels.end() )
+    {
+      
+      // matches +n ?
+      if ( aa->substr(0,1) == "+" )
+	{
+	  if ( Helper::str2int( aa->substr(1) , &n ) ) 
+	    {
+	      ++aa;
+	      continue;
+	    }
+	}
+      
+      // treat as annot
+      annot_t * annot = annotations( Helper::unquote( *aa ) );
+  
+      if ( annot == NULL ) { ++aa; continue; }
+      
+      // find first match
+      // -1 if no leading matches                                                                                                                       
+      int leading_end = -1;
+      for (int e=0;e<ne;e++)
+	{
+	  // already gone past a prior mark?
+	  if ( e >= first && first != -1 ) break;
+	  
+	  interval_t interval = epoch( e );
+	  annot_map_t events = annot->extract( interval );
+	  if ( events.size() > 0 ) 
+	    {
+	      first = e; 
+	      break;
+	    }
+	}
+      
+      // find final match
+      int trailing_start = ne;      
+      for (int e=ne-1;e>=0;e--)
+	{      
+	  // already gone past a prior mark?                                                                                                       
+          if ( e <= last && last != -1 ) break;
+	  interval_t interval = epoch( e );
+          annot_map_t events = annot->extract( interval );
+          if ( events.size() > 0 )
+            {
+              last = e;
+              break;
+            }
+	}
+
+      // look to next annotation now
+      ++aa;
+    }
+  
+  //
+  // any matches? if not, mask all epochs
+  //
+
+  const bool no_matches = first == -1;
+
+  
+  // else mark up to 'first' (not including) and after 'last' (not including)
+  
+  mask_set = true;
+  
+  // adjust by up to 'n' epochs
+  
+  first = first > n ? first - n : 0 ; 
+  last = (last + n ) < ne ? last + ne : ne - 1 ;
+
+  if ( no_matches ) logger << "  did not find any matching epochs, masking all epochs\n";
+  else logger << "  retaining from epoch " << first 
+	      << " to " << last 
+	      << " ( " << last - first + 1 << " epochs ), given up to " << n << " epoch border\n";
+  
+  int cnt_mask_set = 0;
+  int cnt_mask_unset = 0;
+  int cnt_unchanged = 0;
+  int cnt_now_unmasked = 0;
+  int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not                                                                                
+  // blank out any ones needed
+  for ( int e=0; e<ne; e++)
+    {
+      if ( no_matches || e < first || e > last )
+	{
+	  ++cnt_basic_match;
+	  
+	  // set new potential mask, depending on match_mode
+	  
+	  bool new_mask = true;
+	  
+	  int mc = set_epoch_mask( e , new_mask );
+	  
+	  if      ( mc == +1 ) ++cnt_mask_set;
+	  else if ( mc == -1 ) ++cnt_mask_unset;
+	  else                 ++cnt_unchanged;
+	}
+      
+      if ( !mask[e] ) ++cnt_now_unmasked;
+    
+    }
+  
+  std::string lstr = Helper::stringize( labels );
+
+  logger << "  based on retained region " << lstr << " (w/ up to " << n << " epochs) " 
+	 << cnt_basic_match << " epochs match; ";
+  
+  logger << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  
+  // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
+  
+  writer.level( lstr , "EMASK" );
+  writer.value( "N_MATCHES"    , cnt_basic_match  );
+  writer.value( "N_MASK_SET"   , cnt_mask_set     );
+  writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
+  writer.value( "N_UNCHANGED"  , cnt_unchanged    );
+  writer.value( "N_RETAINED"   , cnt_now_unmasked );
+  writer.value( "N_TOTAL"      , (int)epochs.size()    );
+
+  writer.unlevel( "EMASK" );
+
+}
+
 
 
 void timeline_t::unmask_interior()

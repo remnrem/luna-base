@@ -1394,7 +1394,7 @@ void clocktime_t::advance_seconds( double secs )
   double t_sec = seconds( d );
   
   t_sec += secs;
-  
+    
   // need to wrap? (86400 seconds in a day)
   // (adjusting 'd' if appropriate)
   while ( 1 )
@@ -1414,7 +1414,7 @@ void clocktime_t::advance_seconds( double secs )
 	  if ( d ) ++d;
 	} 
     }    
-  
+
   // update this time back to usual format
   convert_seconds( t_sec );
 }

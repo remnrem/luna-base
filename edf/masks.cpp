@@ -406,6 +406,11 @@ void proc_mask( edf_t & edf , param_t & param )
       edf.timeline.trim_epochs( label , n );
     }
   
+  if ( param.has( "retain" ) )
+    {
+      edf.timeline.retain_epochs( param.strset( "retain" ) );
+    }
+
   if ( param.has( "epoch" ) || param.has( "mask-epoch" ) )
     {
       // epoch --> 'force' mode (i.e. set all)

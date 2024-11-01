@@ -265,7 +265,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
 
       if ( conflict ) 
 	{
-	  std::cout << " conflict interval " << interval.start << " " << interval.stop << "\n";
+	  std::cout << " conflict (>1 stage overlaps this epoch): " << interval.start << " " << interval.stop << "\n";
 	}
       
       //
@@ -3079,6 +3079,9 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   //  WASO   waso
   //  Pre-sleep wake     pre_sleep_wake
   //  Post-sleep wake    post_sleep_wake
+
+  //  Pre-sleep          pre_sleep (any epoch whether wake or not, before SO)
+  //  Post-sleep         post_sleep
   
   // Cumulative elapsed durations
   //   Clock-time (by 24-hour) 
@@ -3478,23 +3481,24 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   //
   // Transitions: hyp_tr:W_NR   hyp_tr:W_NR  etc
   // Ascending/descending N2: hyp_N2:asc hyp_N2:dsc
-  // WASO : waso, pre_sleep_wake, post_sleep_wake
+  // WASO : waso, pre_sleep_wake, post_sleep_wake, pre_sleep, post_sleep
   //
 
   // get final wake
   int final_sleep_epoch = ne-1;
-  for (int e=0; e<ne; e++)
-    
-  
+
   for (int e=0; e<ne; e++)
     {
 
       interval_t interval = timeline->epoch( e );
       
-      bool is_wake = stages[e] == WAKE ;
-      bool is_pre_sleep_wake = stages[e] == WAKE && e <= first_sleep_epoch ;
-      bool is_post_sleep_wake = stages[e] == WAKE && e >= final_wake_epoch ;
-      
+      const bool is_wake = stages[e] == WAKE ;
+
+      const bool is_pre_sleep = e < first_sleep_epoch ;
+      const bool is_post_sleep = e >= final_wake_epoch ;
+
+      const bool is_pre_sleep_wake = is_wake && is_pre_sleep ; 
+      const bool is_post_sleep_wake = is_wake && is_post_sleep ;      
       
       // transition var of '1' means at *end* of that
       // epoch there is a transition
@@ -3545,6 +3549,20 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       if ( is_post_sleep_wake )
 	{
 	  annot_t * a = timeline->annotations.add( prefix + "post_sleep_wake" );
+          instance_t * instance = a->add( "." , interval , "." );
+	}
+
+      // pre-sleep?
+      if ( is_pre_sleep )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "pre_sleep" );
+          instance_t * instance = a->add( "." , interval , "." );
+	}
+      
+      // post-sleep?
+      if ( is_post_sleep )
+	{
+	  annot_t * a = timeline->annotations.add( prefix + "post_sleep" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
 

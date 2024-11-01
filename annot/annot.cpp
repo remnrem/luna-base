@@ -5914,6 +5914,12 @@ void annotation_set_t::espan( edf_t & edf , param_t & param )
   
   // verbose mode: list all individual annots (original and curtailed)
   const bool verbose = param.has( "verbose" );
+  
+  // outputs:  sec  pct  has (bool,0/1) cnt (of unflattened)
+  const bool show_sec = param.has( "sec" ) ? param.yesno( "sec" ) : true ; 
+  const bool show_pct = param.has( "pct" ) ? param.yesno( "pct" ) : false ; 
+  const bool show_cnt = param.has( "cnt" ) ? param.yesno( "cnt" ) : false ; 
+  const bool show_has = param.has( "has" ) ? param.yesno( "has" ) : false ;
 
   // iterate over epochs
   int ne = edf.timeline.first_epoch();
@@ -5969,6 +5975,7 @@ void annotation_set_t::espan( edf_t & edf , param_t & param )
 		  if ( verbose ) 
 		    {
 		      writer.level( ++ac , globals::annot_instance_strat );
+
 		      writer.value( "START" , ii->first.interval.start_sec() );
 		      writer.value( "STOP" , ii->first.interval.stop_sec() );		      
 		      writer.value( "DUR" , ii->first.interval.duration_sec() );		      
@@ -5993,22 +6000,46 @@ void annotation_set_t::espan( edf_t & edf , param_t & param )
 	  evs = annotate_t::flatten( evs );
 	  
 	  uint64_t span_tp = interval_t::sum( evs );	  
-	  writer.value( "PCT" , span_tp / (double)epoch_tp );
-	  writer.value( "SEC" , span_tp * globals::tp_duration );
+
+	  // epoch data
 	  
+	  if ( show_pct ) 
+	    writer.value( "PCT" , span_tp / (double)epoch_tp );
+
+	  if ( show_sec )
+	    writer.value( "SEC" , span_tp * globals::tp_duration );
+	  
+	  if ( show_has ) 
+	    writer.value( "HAS" , (int)( span_tp != 0 ) ) ;
+	  
+	  if ( show_cnt ) 
+	    writer.value( "CNT" , (int)events.size() );
+
 	  // next annot class
 	  ++aa;
 	}
 
       writer.unlevel( globals::annot_strat );
       
-      // flatten global tracker
+      const int n0 = allevs.size();
+
+      // flatten global tracker      
       allevs = annotate_t::flatten( allevs );
       
       uint64_t span_tp = interval_t::sum( allevs );	  
-      writer.value( "PCT" , span_tp / (double)epoch_tp );
-      writer.value( "SEC" , span_tp * globals::tp_duration );
+
+      if ( show_pct )
+	writer.value( "PCT" , span_tp / (double)epoch_tp );
       
+      if ( show_sec )
+	writer.value( "SEC" , span_tp * globals::tp_duration );
+      
+      if ( show_has )
+	writer.value( "HAS" , (int)( span_tp != 0 ));
+
+      if ( show_cnt )
+	writer.value( "CNT" , n0 );
+
       // next epoch
     }  
 
