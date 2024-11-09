@@ -64,6 +64,9 @@ bool globals::sanitize_everything = true;
 
 std::set<std::string> globals::annot_alignment;
 bool globals::autofix_edf;
+bool globals::force_digital_minmax;
+int  globals::force_digital_min;
+int  globals::force_digital_max;
 bool globals::validation_mode;
 bool globals::read_digital_values;
 
@@ -328,6 +331,15 @@ void globals::init_defs()
 
   autofix_edf = false;
 
+  //
+  // force digital mins to these values
+  //
+
+  force_digital_minmax = false;
+  force_digital_min = -32768;
+  force_digital_max = 32767;
+
+  
   //
   // used with --validate to handle errors
   //

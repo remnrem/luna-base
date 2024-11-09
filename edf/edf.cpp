@@ -1057,6 +1057,26 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
     }
 
   //
+  // check/enforce digital min/max
+  //
+
+  for (int s=0; s<ns_all; s++)
+    {
+      if ( digital_min[s] >= digital_max[s] )
+	{
+	  logger << "  *** invalid digital min/max for " << tlabels[s]
+		 << " : " << digital_min[s] << " / " << digital_max[s] << "\n";
+	  if ( globals::force_digital_minmax )
+	    {
+	      logger << "  ---> forcing digital min/max for " << tlabels[s] << " to "
+		     << globals::force_digital_min << " / " << globals::force_digital_max << "\n";
+	      digital_min[s] = globals::force_digital_min;
+	      digital_max[s] = globals::force_digital_max;	      
+	    }
+	}
+    }
+      
+  //
   // derived values: note, here 'ns' not 'ns_all'
   //
 
@@ -5903,12 +5923,14 @@ void edf_t::combine( param_t & param )
 {
   bool make_sum = param.has( "sum" );
   bool make_median = param.has( "median" );
-  bool make_mean = param.has( "mean" ) || ! ( make_sum || make_median ) ;
-  if ( make_sum + make_median + make_mean != 1 ) Helper::halt( "can only specify one of sum, median or (the default) mean" );
+  bool make_mean = param.has( "mean" ) ;
+  if ( make_sum + make_median + make_mean != 1 )
+    Helper::halt( "can only specify one of sum, median or mean" );
 
   // new channel is the term
-  const std::string newch = param.requires( make_sum ? "sum" : ( make_median ? "median" : "mean" ) );
-
+  const std::string newch = param.requires( make_sum ? "sum"
+					    : ( make_median ? "median" : "mean" ) );
+  
   // must be unique
   if ( header.has_signal( newch ) )
     Helper::halt( newch + " already exists in the EDF" );
@@ -5917,9 +5939,27 @@ void edf_t::combine( param_t & param )
   signal_list_t signals = header.signal_list( param.requires( "sig" ) );
 
   const int ns = signals.size();
+  
   if ( ns < 1 ) Helper::halt( "no selected channels found" );
   if ( ns == 1 ) { make_sum = true; make_mean = make_median = false; }
   if ( ns == 2 && make_median ) { make_mean = true; make_median = false; } 
+
+  // check against the # of channels specified
+  // should always match is sig is '*' but ensure we don't count as N=1
+  int ns_req = 0;
+  if ( param.value( "sig" ) == "*" ) ns_req = header.ns;
+  else ns_req = param.strvector( "sig" ).size();
+
+  if ( ns != ns_req )
+    {
+      if ( param.has( "allow-missing" ) )
+	logger << "  *** only found " << ns << " of " << ns_req << " requested signals (allowing due to 'allow-missing')\n";
+      else
+	Helper::halt( "expecting " + Helper::int2str( ns_req )
+		      + " but only found " + Helper::int2str( ns )
+		      + " channels; add 'allow-missing' option to allow this" );
+    }
+
   
   logger << "  creating new channel " << newch << " as the "
 	 << ( make_mean ? "mean" : ( make_median ? "median" : "sum" ) )

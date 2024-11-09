@@ -590,7 +590,21 @@ lunapi_inst_ptr lunapi_t::inst( const std::string & id ) const
   lunapi_inst_ptr p( new lunapi_inst_t( id ) );
   return p;
 }
-  
+
+
+lunapi_inst_ptr lunapi_t::inst( const std::string & id ,
+				const int nr ,
+				const int rs ,
+				const std::string & startdate ,
+				const std::string & starttime ) const
+{
+  reset();
+  lunapi_inst_ptr p( new lunapi_inst_t( id ) );
+  p->empty_edf( id, nr, rs, startdate , starttime );
+  return p;
+}
+
+
 lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf ) const
 {
   reset();
@@ -906,6 +920,23 @@ std::map<std::string,datum_t> lunapi_inst_t::status() const
 }
 
 
+bool lunapi_inst_t::empty_edf( const std::string & id,
+			       const int nr, const int rs,
+			       const std::string & startdate ,
+			       const std::string & starttime )
+{
+
+  // make an empty EDF
+  bool okay = edf.init_empty( id , nr , rs , startdate , starttime );
+  
+  edf_filename = "";
+  
+  state = okay ? 1 : -1;
+  
+  return okay;
+  
+}
+
 
 bool lunapi_inst_t::attach_edf( const std::string & _filename )
 {
@@ -947,6 +978,7 @@ bool lunapi_inst_t::attach_edf( const std::string & _filename )
   return true;
   
 }
+
 
 
 bool lunapi_inst_t::attach_annot( const std::string & annotfile )

@@ -941,7 +941,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 
 	  //
-	  // Sanitize class name, but keep '/' and '.' symbol 
+	  // Sanitize class name, but keep class-inst delimiter
 	  //
 	  
 	  // std::string aname = globals::sanitize_everything
@@ -1046,14 +1046,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  
 	  if ( split_annot ) 
 	    {
-	      // old : class=A/B inst=X
+	      // old : class=A:B inst=X
 	      // new : class=A   inst=B    meta:inst=X
 	      // if original inst is null, ignore
 	      
 	      std::vector<std::string> toks =
 		Helper::parse( aname , std::string( 1 , globals::class_inst_delimiter ) );
 
-	      if ( toks.size() != 2 ) return Helper::vmode_halt( "bad format for class/inst pairing: " + aname ); 
+	      if ( toks.size() != 2 ) return Helper::vmode_halt( "bad format for class-inst pairing: " + aname ); 
 
 	      // update class ID now; update meta-data (if needed) below
 	      // any exclusions are based on that / also any meta-data look up 

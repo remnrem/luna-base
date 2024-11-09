@@ -959,7 +959,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
       rip.wgt = th + th2 * ( t / (double)nt );
       
     }
-  
+
   
   // nb...
   

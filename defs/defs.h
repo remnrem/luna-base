@@ -163,6 +163,11 @@ struct globals
 
   static bool autofix_edf;
 
+  static bool force_digital_minmax;
+  static int  force_digital_min;
+  static int  force_digital_max;
+
+  
   static bool validation_mode;
 
   static bool read_digital_values;

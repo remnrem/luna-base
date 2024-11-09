@@ -1479,8 +1479,8 @@ void hypnogram_t::calc_stats( const bool verbose )
   // final wake time (until lights on)
   FWT = ( lights_on_epoch - final_wake_epoch ) * epoch_mins; 
 
-  // post-sleep time (until recording end) 
-  t_postsleep = ( ne - 1 - final_wake_epoch ) * epoch_mins;
+  // post-sleep time (until recording end)    
+  t_postsleep = ( ne - final_wake_epoch ) * epoch_mins;
   
   // REM latency
   rem_lat_mins = ( first_rem_epoch - first_sleep_epoch ) * epoch_mins;

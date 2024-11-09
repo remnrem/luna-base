@@ -154,6 +154,9 @@ public:
 
   // generators for new instance types: will always return something (even if no attached EDF/annots)
   lunapi_inst_ptr inst( const std::string & id = "id1" ) const;
+  lunapi_inst_ptr inst( const std::string & id , const int nr , const int ,
+			const std::string & startdate = "01.01.00" ,
+			const std::string & starttime = "00.00.00" ) const;
   lunapi_inst_ptr inst( const std::string & id , const std::string & edf ) const;
   lunapi_inst_ptr inst( const std::string & id , const std::string & edf , const std::string & annot ) const;
   lunapi_inst_ptr inst( const std::string & id , const std::string & edf , const std::set<std::string> & annots ) const;
@@ -248,9 +251,15 @@ public:
   //
 
   bool attach_edf( const std::string & filename );
-
+  
   bool attach_annot( const std::string & filename );
 
+  bool empty_edf( const std::string & id,
+		  const int nr, const int rs,
+		  const std::string & startdate ,
+		  const std::string & starttime );
+
+  
   //
   // drop/reset 
   //

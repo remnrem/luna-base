@@ -5030,7 +5030,30 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::autofix_edf = Helper::yesno( tok1 );
       return;
     }
+
+  // force dig min/max (if it is invalid)
+  if ( Helper::iequals( tok0 , "force-digital-minmax" ) )
+    {
+      globals::force_digital_minmax = Helper::yesno( tok1 );
+      return;
+    }
   
+  // force dig min/max (if it is invalid)
+  if ( Helper::iequals( tok0 , "force-digital-min" ) )
+    {
+      if ( ! Helper::str2int( tok1 , &globals::force_digital_min ) )
+	Helper::halt( "expecting integer for force-digital-min=N" );
+      return;
+    }
+  
+  // force dig min/max (if it is invalid)
+  if ( Helper::iequals( tok0 , "force-digital-max" ) )
+    {
+      if ( ! Helper::str2int( tok1 , &globals::force_digital_max ) )
+	Helper::halt( "expecting integer for force-digital-max=N" );
+      return;
+    }
+
   // dp for time output
   if ( Helper::iequals( tok0, "sec-dp" ) )
     {
