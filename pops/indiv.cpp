@@ -262,7 +262,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      
 	      writer.level( pops_opt_t::equiv_label , "CHEQ" );
 	      
-	      logger << "  processing equivalent channel set " << pops_opt_t::equiv_label << "\n";
+	      logger << "\n  processing equivalent channel set " << pops_opt_t::equiv_label << "\n";
 		     	      
 	    }
 	
@@ -555,7 +555,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
       
       // this allow for lights off/on logic to be applied
       has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
-
+      
       // but still note that we do not have valid staging
       has_staging = false;
     }
@@ -574,6 +574,10 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   if ( trainer && ! has_staging )
     {
       logger << "  *** no valid staging for trainer " <<  edf.id << "  ( -- skipping -- )\n";
+
+      // as we added dummy W staging above
+      edf.timeline.annotations.clear_sleep_stage();
+
       return false;
     }
 
@@ -654,6 +658,14 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
           
     } // next epoch 
 
+  //
+  // clear up dummy staging
+  //
+
+  if ( ! has_staging ) 
+    edf.timeline.annotations.clear_sleep_stage();
+  
+  
   //
   // copy original staging  (i.e. as S is set to POPS_UNKNOWN for bad signals, trimming etc)
   //

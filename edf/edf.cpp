@@ -626,6 +626,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   // Read start of header into the buffer
   //
 
+  
   size_t rdsz;
 
   if ( file ) {
@@ -648,6 +649,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   nbytes_header  = edf_t::get_int( &q , 8 );  
   reserved       = edf_t::get_bytes( &q , 44 );
 
+  
   // allow US mm-dd-yy EDF field?  if so, change immediately (i.e. internally, it always dd-mm-yy)
   if ( globals::read_edf_date_format == MDY )
     {
@@ -726,6 +728,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       edfplus = false;
       continuous = true;
     }
+
   
   // check whether we are forcing EDF format
   if ( globals::force_edf )
@@ -767,15 +770,15 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   delete [] q0;
 
 
-
   //
   // at this point, we now know the number of signals: check that the file is
   // large enough to contain the full (expected) header: 256 + ns * 256 
   //
 
   uint64_t expected_header_size = 256 + ns_all * 256;
-  
-  if ( expected_header_size > edf_t::get_filesize( file ) )
+
+  // notimplemented for EDFZ
+  if ( file && expected_header_size > edf_t::get_filesize( file ) )
     {
       Helper::vmode_halt( "corrupt EDF header" );
       return channels;
@@ -785,7 +788,6 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   //
   // Per-signal header information
   //
-
   
   // read next 256 bytes per signal, i.e. overwriting existing buffer
   byte_t * p = new byte_t[ hdrSz * ns_all ]; 
@@ -1576,7 +1578,7 @@ bool edf_t::attach( const std::string & f ,
 		    const std::set<std::string> * inp_signals ,
 		    const bool silent )
 {
-  
+
   //
   // Store filename and ID
   //
@@ -1611,6 +1613,7 @@ bool edf_t::attach( const std::string & f ,
     }
   else
     {
+
       edfz = new edfz_t;
       
       // this also looks for the .idx, which sets the record size
@@ -1627,7 +1630,7 @@ bool edf_t::attach( const std::string & f ,
   //
   // Does this look like a valid EDF (i.e. at least contains a header?)
   //
-
+  
   uint64_t fileSize = 0 ; 
 
   // for EDF
@@ -1651,6 +1654,7 @@ bool edf_t::attach( const std::string & f ,
   //
 
   inp_signals_n = header.read( file , edfz , inp_signals );
+
 
   //
   // check that a problem was not detected when reading header (i.e. if truncated)

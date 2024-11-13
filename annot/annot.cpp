@@ -3511,6 +3511,11 @@ bool annotation_set_t::dummy_sleep_stage( const timeline_t & tl ,
 }
 
 
+void annotation_set_t::clear_sleep_stage()
+{
+  clear( "SleepStage" );
+}
+
 bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 					 const bool force_remake , 
 					 const std::string & a_wake , 

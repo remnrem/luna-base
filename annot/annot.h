@@ -899,7 +899,8 @@ struct annotation_set_t
 
   bool dummy_sleep_stage( const timeline_t & tl ,
 			  const std::string & stg = "W" );
-
+  
+  void clear_sleep_stage();
   
 };
 
