@@ -745,14 +745,148 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
     }
   
   
+
+  //
+  // Further hypnogram edits:
+  //
+  //   1) end-wake/end-sleep : if few sleep epochs but a large gap until
+  //   1b) alternative trimming, see below
+  //
+  //   2) trim-wake / trim-leading-wake / trim-trailing-wake
+  //       set any W to ?
+  //
+  //   3) recode any leading/trailing ? as L (unless whole record is ?) 
+  //
+  //   4) contrained analyses (e.g. first) 
   
   //
-  // Clean up edge cases - if we have a long W period and then only a few sleep epochs
-  // set those to missing
+  // Clean up edge cases - if we have a long W period and then only a
+  // few sleep epochs set those to missing
   //
 
-  const double end_wake = param.has( "end-wake" ) ? param.requires_dbl( "end-wake" ) : 120 ; 
-  const double end_sleep =  param.has( "end-sleep" ) ? param.requires_dbl( "end-sleep" ) : 5 ; 
+  //
+  // trim method 1b
+  //   -- trie to allow for scenario of   wwwwwwSwwwwwwwwwwwSSwSSwwwwwwwwSSSSSSSSwSSSwSSSSSSSSSSwww
+  //   method 1 a would only trim to      wwwwww?wwwwwwwwwwwSSwSSwwwwwwwwSSSSSSSSwSSSwSSSSSSSSSSwww
+  //    i.e. if sewcond period of W is long (as may happen in 24 recordings w/ a nap etc) 
+  //   we want                            wwwwww?wwwwwwwwwww??w??wwwwwwwwSSSSSSSSwSSSwSSSSSSSSSSwww
+  //  method 1b: 
+  //    - make contigous blobs of sleep, connecting all periods w/in (e.g.) 10 epochs 
+  //    - add border to each blob, e.g. of 10 epochs; these are the 'main sleep periods'
+  //          wwwwwwSwwwwwwwwwwwSSwSSwwwwwwwwSSSSSSSSwSSSwSSSSSSSSSSwww
+  //              XXXX        XXXXXXXXX    XXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //              XXXX        XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX   (drop W < 1hr between S) 
+  //   - calculate cumulate ratio of S/W per epoch moving forward (then back)
+  // note::: this won't work well w/ GAPPED EDF+D
+  
+  const bool trim1b = param.has( "trim" );
+  
+  if ( trim1b ) 
+    {
+      std::vector<double> p = param.dblvector( "trim" );
+      if ( p.size() != 3 ) Helper::halt( "expecting trim=gap,flank,th" );
+      const int egap =   p[0];
+      const int eflnk = p[1];
+      const double th  = p[2];
+      
+      // major sleep period = msp
+      std::vector<bool> msp( ne_gaps , false );      
+      for (int e=0; e<ne_gaps; e++ )
+	msp[e] = is_sleep( stages[e] );
+
+      // extend blobs (from second epoch)      
+      for (int e=1; e<ne_gaps; e++ )
+	{
+	  if ( msp[e-1] && ! msp[e] )  // S->W transition? 
+	    {
+	      // do we find 
+	      int q = e;
+	      bool fill = false;
+	      while ( 1 ) { 
+		++q;
+		if ( q == ne_gaps ) break;
+		if ( q - e > egap ) break;
+		if ( msp[q] ) { fill = true; break; }
+	      }
+	      if ( fill ) 
+		for (int j=e; j<q; j++) msp[j] = true;
+	      // skip ahead
+	      e = q;
+	    }
+	}
+      
+      // add left flankers? 
+      for (int e=1; e<ne_gaps; e++ )
+	{
+	  if ( (!msp[e-1] ) && msp[e] )  // W->S transition? 
+	    {
+	      int q=e;
+	      while (1)  {
+		--q;
+		if ( q == -1 ) break;
+		if ( e - q > eflnk ) break;
+		msp[q] = true;
+	      }
+	    }
+	}
+
+      // add right flankers? 
+      for (int e=0; e<ne_gaps-1; e++ )
+	{
+	  std::cerr << "testing " << e << "\n";
+	  if ( msp[e] && ! msp[e+1] )  // S->W transition? 
+	    {
+	      std::cerr << " at trans\n";
+	      int q=e;
+	      while (1)  {
+		++q;
+		if ( q == ne_gaps ) break;
+		if ( q - e > eflnk ) break;
+		std::cerr << " right F ing from " << e << " to " << q << "\n";
+		msp[q] = true;
+	      }
+	      e = q; // skip ahead
+	      std::cerr << " done, moving onto next...\n";
+	    }
+	}
+      
+      // get prob: leading
+      std::vector<double> clead( ne_gaps , 0 );
+      int cntS = 0 , cntW = 0;
+      for (int e=0; e<ne_gaps; e++)
+	{
+	  if ( msp[e] ) cntS++;
+	  else cntW++;
+	  clead[e] = cntS / (double)(cntS + cntW);
+	}
+      
+      // get prob: trailing 
+      std::vector<double> ctrail( ne_gaps , 0 );
+      cntS = 0; cntW = 0;
+      for (int e=ne_gaps-1; e>=0; e--)
+	{
+	  if ( msp[e] ) cntS++;
+	  else cntW++;
+	  ctrail[e] = cntS / (double)(cntS + cntW);
+	}
+
+      // verbose dump 
+      for (int e=0; e<ne_gaps; e++)
+	{
+	  std::cout << "tb\t" << e+1 << "\t"
+		    << is_sleep( stages[e] ) << "\t"
+		    << msp[e] << "\t" 
+		    << clead[e] << "\t" 
+		    << ctrail[e] << "\n";
+	}
+
+    }
+
+  // trimming method 1a
+  
+  
+  const double end_wake = param.has( "end-wake" ) ? param.requires_dbl( "end-wake" ) : ( trim1b ? 0 : 120 ) ; 
+  const double end_sleep =  param.has( "end-sleep" ) ? param.requires_dbl( "end-sleep" ) : ( trim1b ? 0 : 5 ) ; 
   
   n_fixed = 0;
 

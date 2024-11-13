@@ -60,6 +60,7 @@ struct slow_wave_param_t {
 
     t_pos_lwr = param.has( "t-pos-lwr" ) ? param.requires_dbl( "t-pos-lwr" ) : 0;
     t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 0;
+    
 
     // amplitude thresholds
 
@@ -80,7 +81,23 @@ struct slow_wave_param_t {
     uV_p2p = param.has("uV-p2p" ) ? param.requires_dbl( "uV-p2p" ) : 0 ; 
     if ( uV_p2p < 0 ) Helper::halt( "uV-p2p should be positive" ) ;
 
+    //
+    // FS/SS distinction
+    //
 
+    fast_slow_switcher_th = -9 ; 
+    do_fast_slow = 0;
+    if ( param.has( "so-fast-trans" ) )
+      {
+	fast_slow_switcher_th = param.requires_dbl( "so-fast-trans" );
+	do_fast_slow = 1 ; 
+      }
+    else if ( param.has( "so-slow-trans" ) ) 
+      {
+	fast_slow_switcher_th =param.requires_dbl( "so-slow-trans" );
+	do_fast_slow = -1;
+      }
+    
     //
     // SO/delta distinctions
     //
@@ -166,7 +183,7 @@ struct slow_wave_param_t {
   // duration thresholds for entire SW
   double t_lwr = 0.8;
   double t_upr = 2; 
-  
+ 
   // duration of negative deflection only
   // probably not used if using the above
   // total wave criteria
@@ -176,6 +193,10 @@ struct slow_wave_param_t {
   // as above, but positive half-wave
   double t_pos_lwr; // = 0 ,  
   double t_pos_upr; // = 0 ,  
+
+  // fast/slow switcher based on transition freq
+  double fast_slow_switcher_th;
+  int do_fast_slow;
 
   // based on SO/delta distinction
   double pct_neg ; // = 0 ,  // DOWN percentile

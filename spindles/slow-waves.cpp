@@ -757,6 +757,11 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 	logger << "  - all negative half waves\n";
       else if ( par.type == SO_POSITIVE_HALF ) 
 	logger << "  - all positive half waves\n";
+
+      if ( par.do_fast_slow != 0 ) 
+	logger << "  - only detecting events with " << ( par.do_fast_slow == 1 ? "fast" : "slow" ) 
+	       << " transition frequencies based on fs-th = " << par.fast_slow_switcher_th << " Hz\n";
+
     }
 
     
@@ -1071,7 +1076,14 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       // fixed peak-to-peak threshold
       if ( par.uV_p2p > 0 && w.up_amplitude - w.down_amplitude < par.uV_p2p ) accepted = false;
 
-      
+      // fast-slow switcher defn?
+      if ( par.do_fast_slow != 0 ) 
+	{
+	  const double tf = w.trans_freq();
+	  if ( par.do_fast_slow == 1 && tf < par.fast_slow_switcher_th ) accepted = false;
+	  else if ( par.do_fast_slow == -1 && tf > par.fast_slow_switcher_th ) accepted = false;
+	}
+
       // make percentile-based SO/delta distinction?
       w.SO_delta = 0; // not defined
 
