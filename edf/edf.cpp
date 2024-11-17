@@ -1644,7 +1644,7 @@ bool edf_t::attach( const std::string & f ,
     }
   else
     {
-      // TODO... need to check EDFZ file. e.g. try reading the last record?
+      // TODO: check EDFZ file. e.g. try reading the last record?
     }
 
 
@@ -2246,12 +2246,6 @@ bool  edf_t::is_actually_standard_edf()
   
   // EDF Annotations (other than time track)?
   if ( has_edf_annots ) return false;
-
-  // for (int s=0;s<header.ns;s++)
-  //   {
-  //     if ( ! header.is_data_channel(s) )
-  // 	if ( s != header.t_track ) return false;
-  //   }
 
   // discontinuous?
   if ( is_actually_discontinuous() ) return false;
@@ -3634,11 +3628,9 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
 	    {
 	      if ( cmd_t::primary_alias.find( cmd_t::primary_upper2orig[ uc_lb ] ) != cmd_t::primary_alias.end() )
 		{
-		  //std::cout << "tok2_ " << tok2_[t2] << "and alias ["<<alias<< "]\n";
-		  if ( alias == "" ) alias = cmd_t::primary_upper2orig[ uc_lb ] ;  //  OLD = tok2_[t2];
+		  if ( alias == "" ) alias = cmd_t::primary_upper2orig[ uc_lb ] ;  
 		  else if ( ! Helper::iequals( alias , uc_lb ) )
-		    Helper::halt( "more than one alias implied" );
-		  //std::cout << "tok2_ " << tok2_[t2] << "and alias ["<<alias<< "]\n";
+		    Helper::halt( "more than one alias implied" );		  
 		}
 	    }
 	  else if ( cmd_t::label_aliases.find( uc_lb ) != cmd_t::label_aliases.end() ) 
@@ -3653,8 +3645,6 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
       //
       // update list if needed
       //
-      // std::cout << " alias = [" << alias << "]\n";
-      // std::cout << " primary alias size = " <<  cmd_t::primary_alias.size() << "\n";
       
       std::vector<std::string> tok2;
       if ( alias != "" ) 
@@ -3681,15 +3671,10 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
       
       //
       // proceed as before
-      //
-
-      //      std::cout << " tok2 = " << tok2.size() << "\n";
+      // 
 
       for (int t2=0;t2<tok2.size();t2++)    
 	{
-	  
-	  // std::cout << "t2 = " << t2 << "\t" << tok2[t2] << "\n";
-	  // std::cout << "label2header.find size " << label2header.size() << "\n";
 	  
 	  // add first match found 
 	  if ( label2header.find( Helper::toupper( tok2[t2] ) )  != label2header.end() ) 
@@ -3697,15 +3682,10 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
 	      
 	      const int l = label2header[ Helper::toupper( tok2[t2] ) ];
 	      
-	      //	      std::cout << "found match " << l << "\n";
-	      
 	      if ( t2 > 0 ) // relabel if wasn't first choice?
 		{
-		  label2header[ Helper::toupper( tok2[0] ) ] = l;
-		  //label[l] = tok2[0];
+		  label2header[ Helper::toupper( tok2[0] ) ] = l;		  
 		}	  
-	      
-	      //std::cout << "adding N " << label2header[ Helper::toupper( tok2[0] ) ]  << "\n";
 	      
 	      const int l0 = label2header[ Helper::toupper( tok2[0] ) ] ;
 	      
@@ -4217,9 +4197,6 @@ void edf_t::update_records( int a , int b , int s , const std::vector<double> * 
 	  if ( x < pmin ) x = pmin;
 	  else if ( x > pmax ) x = pmax;
 
-// 	  std::cout << "edit\t" << edf_record_t::dig2phys( data[p] , bv , os ) 
-// 		    << "\t"
-// 		    << (*d)[cnt] << "\n";
 	  data[p] = edf_record_t::phys2dig( (*d)[cnt] , bv , os );
 	  ++cnt;	  
 	}
@@ -4724,10 +4701,6 @@ int edf_t::add_time_track( const std::vector<uint64_t> * tps )
       r = timeline.next_record(r);
     }
 
-//   std::cout << "DET1 " << records.begin()->second.pdata.size() << "\t"
-// 	    << records.begin()->second.data.size() << "\n";
-
-
   return header.time_track();
 
 }
@@ -4803,15 +4776,11 @@ uint64_t edf_t::timepoint_from_EDF( int r )
 
   if ( div10 != 0 )
     {
-      //      std::cout << " fixin " << tp << "\t" << div100 << "\t";
       // round down, or up
       if ( div10 < 5 ) tp -= div10 ;
       else tp += 10LLU - div10;
-      //      std::cout << tp << "\n";
     }
   
-  //std::cout << " READ [ " << tt.substr(0,e) << " ]\t" << tt_sec << "\t" << tp << "\n";
-
   // cache in case recalled 
   cached_EDF_timepoints[ r ] = tp;
 
@@ -4851,10 +4820,7 @@ void edf_t::reverse( const int s )
   const int np = d->size();
   std::vector<double> reversed( np );
   for (int i=0;i<np;i++)
-    {
-      reversed[i] = (*d)[np-i-1];
-      //      std::cout << " reversed[i]  = " << i << "\t" << reversed[i]  << "\n";
-    } 
+    reversed[i] = (*d)[np-i-1];
   update_signal_retain_range( s , &reversed );  
 }
 

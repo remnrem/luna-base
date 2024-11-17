@@ -776,25 +776,31 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   //          wwwwwwSwwwwwwwwwwwSSwSSwwwwwwwwSSSSSSSSwSSSwSSSSSSSSSSwww
   //              XXXX        XXXXXXXXX    XXXXXXXXXXXXXXXXXXXXXXXXXXX
   //              XXXX        XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX   (drop W < 1hr between S) 
-  //   - calculate cumulate ratio of S/W per epoch moving forward (then back)
-  // note::: this won't work well w/ GAPPED EDF+D
+
   
-  const bool trim1b = param.has( "trim" );
+  const bool trim1b = param.has( "cut" );
+  const bool verbose = param.has( "verbose" );
   
   if ( trim1b ) 
     {
-      std::vector<double> p = param.dblvector( "trim" );
-      if ( p.size() != 3 ) Helper::halt( "expecting trim=gap,flank,th" );
-      const int egap =   p[0];
-      const int eflnk = p[1];
-      const double th  = p[2];
+
+      std::vector<double> p;
+      if ( ! param.empty( "cut" ) ) p = param.dblvector( "cut" );
+
+      if ( p.size() > 4 )
+	Helper::halt( "expecting 0 to 4 params: cut=th,fac,gap,flank" );
+      
+      const double th      = p.size() > 0 ? p[0] : 50;  // diff (W vs weighted-S)
+      const double fac     = p.size() > 1 ? p[1] : 3;    // S vs W weighting  
+      const int egap       = p.size() > 2 ? p[2] : 10;   // 5 mins
+      const int eflnk      = p.size() > 3 ? p[3] : 10;   // 5 mins
       
       // major sleep period = msp
       std::vector<bool> msp( ne_gaps , false );      
       for (int e=0; e<ne_gaps; e++ )
 	msp[e] = is_sleep( stages[e] );
-
-      // extend blobs (from second epoch)      
+      
+      // extend blobs (from second epoch) based on egap     
       for (int e=1; e<ne_gaps; e++ )
 	{
 	  if ( msp[e-1] && ! msp[e] )  // S->W transition? 
@@ -814,8 +820,11 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	      e = q;
 	    }
 	}
+
+      // make a copy so we can ignore flankers when getting the prop W/S
+      std::vector<bool> msp0 = msp;
       
-      // add left flankers? 
+      // add left flankers? (based on eflnk)
       for (int e=1; e<ne_gaps; e++ )
 	{
 	  if ( (!msp[e-1] ) && msp[e] )  // W->S transition? 
@@ -832,54 +841,91 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 
       // add right flankers? 
       for (int e=0; e<ne_gaps-1; e++ )
-	{
-	  std::cerr << "testing " << e << "\n";
+	{	  
 	  if ( msp[e] && ! msp[e+1] )  // S->W transition? 
-	    {
-	      std::cerr << " at trans\n";
+	    {	      
 	      int q=e;
 	      while (1)  {
 		++q;
 		if ( q == ne_gaps ) break;
-		if ( q - e > eflnk ) break;
-		std::cerr << " right F ing from " << e << " to " << q << "\n";
+		if ( q - e > eflnk ) break;		
 		msp[q] = true;
 	      }
-	      e = q; // skip ahead
-	      std::cerr << " done, moving onto next...\n";
+	      e = q; // skip ahead	      
 	    }
 	}
       
-      // get prob: leading
-      std::vector<double> clead( ne_gaps , 0 );
-      int cntS = 0 , cntW = 0;
+      // forward scoring
+      std::vector<double> scr( ne_gaps , 0 );
+      int s = 0;
       for (int e=0; e<ne_gaps; e++)
 	{
-	  if ( msp[e] ) cntS++;
-	  else cntW++;
-	  clead[e] = cntS / (double)(cntS + cntW);
+	  if ( msp0[e] ) s -= fac; else s++;
+	  scr[e] = s;
 	}
       
-      // get prob: trailing 
-      std::vector<double> ctrail( ne_gaps , 0 );
-      cntS = 0; cntW = 0;
+      // reverse scoring
+      std::vector<double> rscr( ne_gaps , 0 );
+      s = 0;
       for (int e=ne_gaps-1; e>=0; e--)
 	{
-	  if ( msp[e] ) cntS++;
-	  else cntW++;
-	  ctrail[e] = cntS / (double)(cntS + cntW);
+	  if ( msp0[e] ) s -= fac; else s++;
+	  rscr[e] = s;
 	}
 
-      // verbose dump 
+      // get cut-points (not allow in msp[])
+      int cut = -1 , rcut = -1;
+      double mx = 0;
+      double rmx = 0;
+      double mx0 = 0 , rmx0 = 0;
+      
       for (int e=0; e<ne_gaps; e++)
 	{
-	  std::cout << "tb\t" << e+1 << "\t"
-		    << is_sleep( stages[e] ) << "\t"
-		    << msp[e] << "\t" 
-		    << clead[e] << "\t" 
-		    << ctrail[e] << "\n";
+	  if ( msp[e] ) scr[e] = 0;
+	  else if ( scr[e] > mx && scr[e] > 0 && scr[e] >= th ) { mx = scr[e] ; cut = e; }
+	  if ( scr[e] > mx0 ) mx0 = scr[e];
+	}
+      
+      for (int e=ne_gaps-1; e>0; e--)
+	{
+	  if ( msp[e] ) rscr[e] = 0;
+	  if ( rscr[e] > rmx && rscr[e] > 0 && rscr[e] >= th ) { rmx = rscr[e] ; rcut = e; }
+	  if ( rscr[e] > rmx0 ) rmx0 = rscr[e];
+	}
+      
+      // verbose dump
+      if ( verbose )
+	{
+	  for (int e=0; e<ne_gaps; e++)
+	    {
+	      std::cout << "tb\t" << e+1 << "\t"
+			<< is_sleep( stages[e] ) << "\t"
+			<< msp[e] << "\t" 
+			<< ( scr[e] > 0 ? scr[e] : 0 ) << "\t"
+			<< ( rscr[e] > 0 ? rscr[e] : 0 )<< "\n";	  
+	    }
 	}
 
+      logger << "  maximum left-cut and right-scores are " << mx0 << " and " << rmx0 << " (th = " << th << ")\n";
+      
+      if ( cut != -1 && rcut != -1 )   
+	logger << "  placing left-cut at epoch " << cut + 1 << " and right-cut at " << rcut + 1 << "\n";
+      else if ( cut != -1  )
+	logger << "  placing left-cut at epoch " << cut + 1 << "\n";
+      else if ( rcut != - 1 )
+	logger << "  placing right-cut at epoch " << rcut + 1 << "\n";
+      else
+	logger << "  no cuts placed\n";
+      
+      // check we haven't spliced out everything
+      if ( cut != 1 && rcut != -1 )
+	if ( cut >= rcut ) logger << "  *** cut isn't leaving any sleep epochs\n";
+
+      if ( cut != -1 ) 
+	for (int e=0; e<=cut; e++) stages[e] = UNKNOWN;
+      if ( rcut != -1 )
+	for (int e=ne_gaps-1; e>= rcut ; e-- ) stages[e] = UNKNOWN;
+      			   
     }
 
   // trimming method 1a

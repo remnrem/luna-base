@@ -844,21 +844,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // redundant code, but fine to leave as is for now...
 	      double t_mean = MiscMath::mean( averaged );
 	      double t_median = MiscMath::median( averaged );
-	      // std::vector<double> mean_adj_vals(  averaged.size() );
-	      // std::vector<double> median_adj_vals(  averaged.size() );
-	      // for (int i=0;i<adj_vals.size();i++) mean_adj_vals[i] = averaged[i] / t_mean; 
-	      // for (int i=0;i<adj_vals.size();i++) median_adj_vals[i] = averaged[i] / t_median; 
 	      
 	      if ( t_median > 0 ) 
 		writer.value( "MEAN_OVER_MEDIAN" , t_mean / t_median );
 	      
-	      // writer.value( "ADJMEAN_MEAN" , MiscMath::mean( mean_adj_vals ) );
-	      // writer.value( "ADJMEAN_MEDIAN" , MiscMath::median( mean_adj_vals ) );
-	      
-	      // writer.value( "ADJMEDIAN_MEAN" , MiscMath::mean( median_adj_vals ) );
-	      // writer.value( "ADJMEDIAN_MEDIAN" , MiscMath::median( median_adj_vals ) );
-
-
 	      std::map<double,double>::const_iterator tt = tvals.begin();
 	      while ( tt != tvals.end() ) 
 		{
@@ -892,8 +881,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // e.g. a local sliding window average instead of the whole-night baseline
 	  const int sz = averaged.size();
 
-	  //	  std::cout << " averaged size = " << sz << "\n";
-	  
 	  // required core to be a spindle	  
 	  std::vector<double> threshold( sz , multiplicative_threshold * mean );
 
@@ -2103,23 +2090,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  std::vector<double> so_angle( nbins );
 
 
-		  // // ----------------------------------dumm
-		  // std::vector<double> dumm_x( p_chirp_if->size() , 22 );
-
-		  // std::vector<int> dumm_n ; 
-		  // std::vector<bool> dumm_b( in_spindle.size() , true );
-		  // std::vector<double> dumm_dumm = p_sw->phase_locked_averaging( &dumm_x , nbins , 
-		  // 							       &dumm_b , &dumm_n );
-		  // if ( dumm_dumm.size() == nbins )
-		  //   {
-		  //     for (int j=0;j<nbins;j++)
-		  // 	{
-		  // 	  std::cout << " DUM PH " << ph << "\t" << dumm_dumm[j] << "\t" << dumm_n[j] << "\n";
-		  // 	  ph += inc;
-		  // 	}
-		  //   }
-		  // //duumy ---------------------------------
-		      
 		  std::vector<int> pl_chirp_n ; 
 		  std::vector<double> pl_chirp = p_sw->phase_locked_averaging( p_chirp_if , nbins , 
 									       &in_spindle , &pl_chirp_n );
