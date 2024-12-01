@@ -51,6 +51,7 @@ struct spindle_t
   
   // spindle properties
   double amp, dur, fwhm, nosc, frq, fft, symm, symm2, isa;
+  double norm_amp_max, norm_amp_mean; 
   double chirp, frq_h1, frq_h2, frq_range; 
 
   // neg/pos defined by HW
@@ -95,19 +96,68 @@ struct spindle_t
 };
 
 
-annot_t * spindle_bandpass( edf_t & , param_t & );
+
+struct spindle_qc_t {
+
+  spindle_qc_t( param_t & param )
+  {
+
+    qc_qmin = 0;
+    qc_qmax = -1;
+    
+    // cwt
+    ofc.clear();
+    
+    // get params
+    proc( param );
+    
+  }
+  
+  bool qc_q;
+    
+  double qc_qmin, qc_qmax;
+
+  // original time-series (for verbose outputs)
+  const std::vector<double> * ts;
+  int Fs;
+  
+  // CWT : non-spindle bands
+  int nob; // number of other-Fcs [ ofc.size() ] 
+  std::vector<double> ofc;
+  std::vector<double> ocycles;
+  std::vector<std::vector<double> > ocwt;
+
+  // spindle stats
+  std::vector<double> scwt; // varies for each Fc
+
+  // verbose output
+  bool verbose_failed;
+  bool verbose_all; 
+  
+  // functions
+  void proc( param_t & );
+  void init( const std::vector<double> * ts , int Fs );
+  void init_spindle( const std::vector<double> & scwt );
+  double qual( spindle_t * spindle ); 
+
+  // verbose output
+  void output( spindle_t * spindle , const int n );
+  
+};
+
+
 
 annot_t * spindle_wavelet( edf_t & , param_t & );
 
-
 // helper function for FFT
-void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_t,double> * fft );
-
+void do_fft( const std::vector<double> * d , const int Fs , spindle_qc_t * q , bool baseline );
+void do_fft( const std::vector<double> * d , const int Fs , const int np, spindle_qc_t * q , bool baseline );
+  
 // helper to get spindle stats
 void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & ) ;
 
 // helper
-void write_if_exists( const std::string & s , const std::map<std::string,double> & means ) ;
+//void write_if_exists( const std::string & s , const std::map<std::string,double> & means ) ;
 
 void characterize_spindles( edf_t & edf , 
 			    param_t & param , 
@@ -115,11 +165,11 @@ void characterize_spindles( edf_t & edf ,
 			    bool bandpass_filtered , 
 			    const double target_f, 
 			    const std::string & label, 			    
-			    const std::vector<double> * averaged , 
+			    const std::vector<double> * averaged ,			    
 			    const std::vector<double> * original_signal , 
 			    std::vector<spindle_t>    * spindles , 			    
-			    clocktime_t * starttime , 
-			    std::map<freq_range_t,double> * baseline = NULL , 
+			    clocktime_t * starttime ,
+			    spindle_qc_t * q = NULL ,  
 			    std::map<double,double> * locked = NULL , 
 			    std::vector<bool> * in_pos_hw = NULL , 
 			    std::vector<bool> * in_neg_hw = NULL , 
@@ -130,13 +180,8 @@ void characterize_spindles( edf_t & edf ,
 
 void per_spindle_output( std::vector<spindle_t>    * spindles ,
 			 param_t & param , 
-			 clocktime_t               * starttime , 
-			 std::map<freq_range_t,double> * baseline );
-
-
-
-
-
+			 clocktime_t               * starttime ,
+			 spindle_qc_t              & q );
 
 
 //

@@ -105,7 +105,7 @@ void FFT::init( int Ndata_, int Nfft_, int Fs_ , fft_t type_ , window_function_t
   //
 
   w.resize( Ndata , 1 ); // i.e. default of no window
-  
+
   normalisation_factor = 0;  
   if      ( window == WINDOW_TUKEY50 ) w = MiscMath::tukey_window(Ndata,0.5);
   else if ( window == WINDOW_HANN )    w = MiscMath::hann_window(Ndata);
@@ -114,7 +114,8 @@ void FFT::init( int Ndata_, int Nfft_, int Fs_ , fft_t type_ , window_function_t
   for (int i=0;i<Ndata;i++) normalisation_factor += w[i] * w[i];
   normalisation_factor *= Fs;  
   normalisation_factor = 1.0/normalisation_factor;
-  //  std::cout << "normalisation_factor = " << normalisation_factor << "\n";
+  //std::cout << "normalisation_factor = " << normalisation_factor << "\n";
+    
 } 
 
 bool FFT::apply( const std::vector<double> & x )
@@ -833,6 +834,9 @@ void PWELCH::process()
   if ( average_adj ) 
     fft0.average_adjacent();
 
+  if ( ! do_normalization )
+    fft0.norm_fac( 1.0 );
+  
   psd.resize( fft0.cutoff , 0 );
   N = fft0.cutoff;
   
@@ -1003,17 +1007,20 @@ void PWELCH::psdmean( std::map<freq_range_t,double> * f )
       
       const double & lwr = ii->first.first;
       const double & upr = ii->first.second; 
-
+      //      std::cout << " searching " << lwr << " " << upr << "\n";
+      
       // add is l <= x < y 
       double r = 0;
       int c = 0;
       for (int i=0;i<N;i++) 
 	{
 	  if ( freq[i] >= upr ) break;
-	  if ( freq[i] >= lwr ) { ++c; r += psd[i]; }	  
+	  if ( freq[i] >= lwr ) { ++c; r += psd[i]; }
 	}
       
-      ii->second = r / (double) c;
+      if ( c != 0 ) 
+	ii->second = r / (double) c;
+      
       ++ii;
     }
 }

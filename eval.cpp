@@ -2686,9 +2686,8 @@ void proc_spindles( edf_t & edf , param_t & param )
   std::string method = param.has( "method" ) ? param.value( "method" ) : "wavelet" ; 
   
   annot_t * a = NULL;
-
-  if      ( method == "bandpass" ) a = spindle_bandpass( edf , param );
-  else if ( method == "wavelet" ) a = spindle_wavelet( edf , param );
+  
+  if ( method == "wavelet" ) a = spindle_wavelet( edf , param );
   else Helper::halt( "SPINDLE method not recognized; should be 'bandpass' or 'wavelet'" );
 
 }

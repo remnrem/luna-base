@@ -223,6 +223,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   // (optional) upper bound for core amplitude threshold, e.g. 4.5 < x < 10  if th-max=10
   double   maximal_threshold        = param.has( "th-max" ) ? param.requires_dbl( "th-max" ) : -9 ;
+
+  // winsorize cwt-amplitude
+  const bool winsorize              = param.has( "winsor" );
+  const double winsorize_th         = winsorize ? param.requires_dbl( "winsor" ) : 0;
   
   // minimum spindle core duration (relates to 'th')
   const double   min0_dur_sec              = param.has( "min0" ) ? param.requires_dbl( "min0" ) : 0.3; 
@@ -403,6 +407,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool cache_peaks_sec             = param.has( "cache-peaks-sec" );
   const std::string cache_peaks_sec_name = cache_peaks_sec ? param.value( "cache-peaks-sec" ) : "";
 
+
+  //
+  // Spindle-level QC filters 
+  //
+
+  spindle_qc_t q( param );
   
   //
   // Spindle propagation
@@ -623,11 +633,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       //
       // Run CWT 
       //
-
+      
       CWT cwt;
       
       cwt.set_sampling_rate( Fs[s] );
-
       
       for (int fi=0;fi<frq.size();fi++)
 	{
@@ -640,15 +649,13 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       cwt.load( d );
 
       cwt.run();
-
-
-      //
-      // Run baseline FFT on the entire signal 
-      //
       
-      std::map<freq_range_t,double> baseline_fft;
       
-      do_fft( d , Fs[s] , &baseline_fft );
+      //
+      // Baseline CWT on signal
+      //
+            
+      q.init( d , Fs[s] );
 
 
       //
@@ -788,10 +795,26 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // Get results for this F_C
 	  //
 
-	  const std::vector<double> & results = cwt.results(fi);
-      
+	  std::vector<double> results = cwt.results(fi);
 
 
+	  //
+	  // Add to Q-filter (before any winsorizing or smoothing, etc)
+	  //
+
+	  q.init_spindle( results );
+	  
+	  
+	  //
+	  // Optionally winsorize
+	  //
+
+	  if ( winsorize )
+	    {
+	      logger << "  winsorizing at " << winsorize_th << "\n";
+	      MiscMath::winsorize( &results , winsorize_th );
+	    }
+	  
 	  //
 	  // Get a moving average of the result, 0.1 windows, and get mean
 	  //
@@ -928,36 +951,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  threshold_max[p] = maximal_threshold * reaveraged[p];
 	    }
 	  
-	
-
-	  //
-	  // Verbose signal display with thresholds
-	  //
-
-	  if ( show_cwt_coeff )
-	    {
-	      
-	      writer.var( "RAWCWT" , "Raw CWT coefficient" );
-	      writer.var( "CWT" , "CWT coefficient" );
-	      writer.var( "CWT_TH" , "CWT primary threshold" );
-	      writer.var( "CWT_TH2" , "CWT secondary threshold" );
-	      writer.var( "CWT_THMAX" , "CWT maximum threshold" );
-	      
-	      int np = cwt.points();
-	      int nf = cwt.freqs();      
-	      if ( np != np0 ) Helper::halt( "internal problem in cwt()" );
-	      
-	      for (int ti=0;ti<np;ti++)
-		{		  
-		  writer.interval( interval_t( (*tp)[ti] , (*tp)[ti] ) );
-		  writer.value( "RAWCWT" , cwt.raw_result(fi,ti)  );
-		  writer.value( "CWT" , cwt.result(fi,ti) );
-		  writer.value( "CWT_TH" , threshold[ti] );
-		  writer.value( "CWT_TH2" , threshold2[ti] );
-		  writer.value( "CWT_THMAX" , threshold_max[ti] );
-		}
-	      writer.uninterval();
-	    }
+	  
 	  
  		  	  
 	  //
@@ -1290,9 +1284,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  //
 	  
 	  std::vector<double> averaged_corr = averaged;
-	  for ( int i=0;i<averaged_corr.size();i++) averaged_corr[i] /= threshold[i];
+	  for ( int i=0;i<averaged_corr.size();i++)
+	    averaged_corr[i] /= threshold[i];
 	  
-
 
 	  //
 	  // Track some CH/F level output (i.e. so can all be sent together, given new -t demands...)
@@ -1310,10 +1304,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  //	  
 	  
 	  std::map<double,double> locked;
-
+	  
 	  if ( characterize && some_data ) 
 	    {	  
-	      	      
+	      
 	      characterize_spindles( edf , param , signals(s) , 
 				     bandpass_filtered_status , 				     
 				     frq[fi] ,
@@ -1322,21 +1316,103 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 				     d ,                 // original EEG signal 
 				     &spindles ,         // this will be annotated/reduced   
 				     ( hms ? &starttime : NULL) , 
-				     &baseline_fft, 
+				     &q, 
 				     tlocking ? &locked : NULL ,     // mean signal around spindle troughs
 				     p_in_pos_hw , p_in_neg_hw , p_in_pos_slope , p_in_neg_slope  
-				     );
-	      
+				     );	      
 	      
 	    }
-
+	  
 
 	  //
 	  // Get mean spindle parameters for this channel/frequency 
 	  //
-	  	  
+
 	  if ( characterize ) 
 	    spindle_stats( spindles , means );
+	  
+	  //
+	  // Verbose signal display with thresholds
+	  //
+
+	  if ( show_cwt_coeff )
+	    {
+	      
+	      int np = cwt.points();
+	      int nf = cwt.freqs();      
+	      if ( np != np0 ) Helper::halt( "internal problem in cwt()" );
+	      
+	      // add spindle track for initial/putative spindles (pre-merge, QC)
+	      std::vector<bool> sputative(np, false);
+	      if ( spindles1.size() != 0 )
+		{
+		  
+		  interval_t curr = spindles1[0];
+		  int si = 0;
+		  int ti = 0;
+		  int ns = spindles1.size();
+		  while ( ti < np )
+		    {
+		      // skip to next event? 
+		      if ( (*tp)[ti] >= curr.stop )
+			{
+			  ++si;
+			  if ( si == ns ) break;
+			  curr = spindles1[si];
+			}
+
+		      if ( (*tp)[ti] >= curr.start && (*tp)[ti] < curr.stop )
+			sputative[ti] = true;
+
+		      ++ti;		      
+		    }
+		}
+	      
+	      std::vector<bool> sfinal(np, false);
+	      if ( spindles.size() != 0 )
+		{
+		  
+		  interval_t curr = spindles[0].tp;
+		  int si = 0;
+		  int ti = 0;
+		  int ns = spindles.size();
+		  while ( ti < np )
+		    {
+		      // skip to next event? 
+		      if ( (*tp)[ti] >= curr.stop )
+			{
+			  ++si;
+			  if ( si == ns ) break;
+			  curr = spindles[si].tp;
+			}
+
+		      if ( (*tp)[ti] >= curr.start && (*tp)[ti] < curr.stop )
+			sfinal[ti] = true;
+
+		      ++ti;		      
+		    }
+		}
+	      
+	      
+	      for (int ti=0;ti<np;ti++)
+		{		  
+		  writer.interval( interval_t( (*tp)[ti] , (*tp)[ti] ) );
+		  writer.value( "SEC" , (*tp)[ti] * globals::tp_duration );
+		  writer.value( "RAWCWT" , cwt.raw_result(fi,ti)  );
+		  writer.value( "CWT" , cwt.result(fi,ti)  );
+		  writer.value( "AVG" , averaged[ti] );
+		  writer.value( "AVG_CORR" , averaged_corr[ti] );
+		  writer.value( "CWT_TH" , threshold[ti] );
+		  writer.value( "CWT_TH2" , threshold2[ti] );
+		  writer.value( "CWT_THMAX" , threshold_max[ti] );
+		  writer.value( "PUTATIVE" , (int)sputative[ti] );
+		  writer.value( "SPINDLE" , (int)sfinal[ti] );
+		}
+	      writer.uninterval();
+	    }
+	  
+
+
 	  
 	  //
 	  // If we're doing CHIRP analyses, get the mean observed spindle frequency (which we will
@@ -2309,8 +2385,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  //
 
 	  if ( show_spindle_level )
-	    per_spindle_output( &spindles , param , ( hms ? &starttime : NULL) , &baseline_fft );
-
+	    per_spindle_output( &spindles ,
+				param ,
+				( hms ? &starttime : NULL) , 
+				q );
+				
 
 
 	  //
@@ -2332,14 +2411,12 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // output: time-locked signal averaging 
 	  //
 	  
-	  if ( characterize & tlocking && spindles.size() > 0 )
+	  if ( characterize && tlocking && spindles.size() > 0 )
 	    {
 	      
 	      double tlock_min = locked.begin()->first;
-	      double tlock_max = (--locked.end())->first;
-	      
-	      writer.var( "TLOCK" , "Average EEG amplitude time-locked to spindle peak" );
-	      
+	      double tlock_max = (--locked.end())->first;		  
+		  
 	      std::map<double,double>::const_iterator ll = locked.begin();
 	      while ( ll != locked.end() )
 		{
@@ -2348,10 +2425,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  ++ll;
 		}
 	      writer.unlevel( "MSEC" );
-
 	    }
 	
-
 	  //
 	  // Estiamte of spindle density to console
 	  //
@@ -2499,6 +2574,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      avg.so_nearest /= (double)sp_epoch ;
 		      
 		      writer.value( "AMP" , avg.amp  );
+		      writer.value( "ACT_MX" , avg.norm_amp_max  );
+		      writer.value( "ACT_MN" , avg.norm_amp_mean  );
 		      writer.value( "DUR" , avg.dur  );
 		      writer.value( "FRQ" , avg.frq  );
 		      writer.value( "NOSC" , avg.nosc );
@@ -2520,6 +2597,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			  const int e = edf.timeline.display_epoch( epoch ) - 1;
 			  
 			  qd.add( writer.faclvl_notime() , "AMP" , e  , avg.amp );
+			  qd.add( writer.faclvl_notime() , "ACT_MX" , e  , avg.norm_amp_max );
+			  qd.add( writer.faclvl_notime() , "ACT_MN" , e  , avg.norm_amp_mean );
 			  qd.add( writer.faclvl_notime() , "DUR" , e  , avg.dur );
 			  qd.add( writer.faclvl_notime() , "FRQ" , e  , avg.frq );
 			  qd.add( writer.faclvl_notime() , "NOSC" , e  , avg.nosc );
@@ -2595,6 +2674,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.var( "MINS"  , "Number of minutes for spindle detection" );	      
 	      writer.var( "DENS"  , "Spindle density (per minute)" );
 	      writer.var( "AMP"   , "Mean spindle amplitude" );
+	      writer.var( "AMP"   , "Mean spindle amplitude" );
 	      writer.var( "DUR"   , "Mean spindle duration" );
 	      writer.var( "FWHM"  , "Mean spindle FWHM" );
 	      writer.var( "NOSC"  , "Mean spindle number of oscillations" );
@@ -2607,6 +2687,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "N01" , nspindles_premerge );  // original
 	      writer.value( "N02" , nspindles_postmerge ); // post merging
 	      writer.value( "N" ,  (int)spindles.size()  ) ;    // post merging and QC	    
+
+	      writer.value( "P01" , (int)spindles.size() / (double)nspindles_premerge ); // relative final vs orig (impact of merge)
+	      writer.value( "P02" , (int)spindles.size() / (double)nspindles_postmerge ); // reltive final vs post-merge (impact of Q)
+	      
 	      writer.value( "MINS" , t_minutes );
 	      writer.value( "DENS" , spindles.size() / t_minutes );
 	      
@@ -2616,6 +2700,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "Q"     , means[ "Q" ] );
 	     	      
 	      writer.value( "AMP" , means["AMP"] );
+	      writer.value( "ACT_MX" , means["ACT_MX"] );
+	      writer.value( "ACT_MN" , means["ACT_MN"] );
 	      writer.value( "DUR" , means["DUR"] );
 	      writer.value( "FWHM" , means["FWHM"] );
 	      writer.value( "NOSC" , means["NOSC"] );
@@ -2995,8 +3081,8 @@ void characterize_spindles( edf_t & edf ,
 			    const std::vector<double> * original_signal , 
 			    std::vector<spindle_t>    * spindles ,
 			    clocktime_t               * starttime , 
-			    std::map<freq_range_t,double> * baseline ,
-			    std::map<double,double> * locked ,
+			    spindle_qc_t * q , 
+			    std::map<double,double>   * locked ,
 			    std::vector<bool> * p_in_pos_hw , 
 			    std::vector<bool> * p_in_neg_hw , 
 			    std::vector<bool> * p_in_pos_slope , 
@@ -3106,46 +3192,15 @@ void characterize_spindles( edf_t & edf ,
       
     }
   
-
   const int s = edf.header.signal( new_label );
+  
+  //
+  // Output
+  //
+  
+  const int n = spindles->size();
 
-   //
-   // Output
-   //
-   
-   const int n = spindles->size();
-
-   //
-   // Spindle-level QC filters (set default at 0, i.e spindle-activity must be more likely)
-   //
-
-   bool qc_q = param.has( "noq" ) ? false : true;
-   double qc_qmin = 0 , qc_qmax = -1;
-   if ( qc_q )
-     {
-       if ( param.has( "q" ) ) { qc_q = true; qc_qmin = param.requires_dbl( "q" ); } 
-       if ( param.has( "q-max" ) ) { qc_q = true; qc_qmax = param.requires_dbl( "q-max" ); }
-       if ( qc_qmin < 0 ) qc_q = false;
-     }
-
-   if ( qc_q && ( target_f < 10 || target_f > 16 ) )
-     {
-       Helper::halt( "spindle fc is outside of 10-16 Hz range, but 'q' is set\n   add q=-9 to remove freq-based QC filter" );
-     }
-   
-   // if ( 1 ) 
-   //   {
-   //     std::cout << " INT = " <<  edf.timeline.wholetrace() << "\n";
-   //     slice_t slice( edf , s , edf.timeline.wholetrace() );
-   //     const std::vector<double> * d = slice.pdata();
-   //     std::cout << "N = " << d->size() << "\n";
-   //     std::cout << std::setprecision(12); 
-   //     for ( int ii=0; ii < d->size(); ii++ )
-   // 	 {
-   // 	   std::cout << "FXX\t" << ii << "\t" << (*d)[ii] << "\n";
-   // 	 }
-   //   }
-   
+  
    //
    // track if we QC any spindles out at this step
    //
@@ -3179,7 +3234,7 @@ void characterize_spindles( edf_t & edf ,
        slice_t slice( edf , s , spindle->tp );
 
        // nb. we are going to mean-centre these data too
-       // for this particular spindle... avoids someo weird cases
+       // for this particular spindle... avoids some weird cases
        // where we have huge offsets in original signal amplitudes around
        // this spindle, meaning that even after BP filter, we can
        // have spindle intervals with no zero-crossings
@@ -3202,6 +3257,7 @@ void characterize_spindles( edf_t & edf ,
        //
        
        spindle->isa = 0;
+       spindle->norm_amp_max = 0;
        
        if ( averaged != NULL )
 	 {
@@ -3210,10 +3266,22 @@ void characterize_spindles( edf_t & edf ,
 	   int stop  = spindle->stop_sp;
 	   
 	   for (int s=start;s<=stop;s++)
-	     spindle->isa += (*averaged)[s] ;
+	     {
+	       spindle->isa += (*averaged)[s] ;
+	       
+	       // track max (ACT_MX)
+	       if ( (*averaged)[s] > spindle->norm_amp_max )
+		 spindle->norm_amp_max = (*averaged)[s];
+	     }
+
+	   // ACT_MN (i.e. simple mean, no duration info) 
+	   spindle->norm_amp_mean = spindle->isa / (double)(stop-start+1);
+	   
+	   // ISA_S (i.e. includes duration info as norm by Fs only
+	   spindle->isa /= (double)Fs;
+
 	 }
-       
-       spindle->isa /= (double)Fs;
+
        
      
        //
@@ -4029,89 +4097,27 @@ void characterize_spindles( edf_t & edf ,
       spindle->frq  = spindle->nosc / (double)spindle->dur;
       
       //
-      // FFT on original data, compared to baseline
+      // Q stats? 
       //
-
-     
-      if ( baseline )
-	{  
+      
+      if ( q->qc_q ) 
+	{
 	  
-	  slice_t slice0( edf , s0 , spindle->tp );
-
-	  // copy over for ranges
-	  std::map<freq_range_t,double> spindle_fft = *baseline;	  
+	  // get Q-score
+	  spindle->qual = q->qual( spindle );
 	  
-	  // fixed at:
-	  // 0.5..4
-	  // 4..8
-
-	  // 10..13.5  <slow spindles> 
-	  // 13.5..16  <fast spindles>
+	  // failed?
+	  if ( spindle->qual < q->qc_qmin ) spindle->include = false;
+	  if ( q->qc_qmax > 0 && spindle->qual > q->qc_qmax ) spindle->include = false;
 	  
-	  // 20..30
-	  
-	  do_fft( slice0.nonconst_pdata() , Fs , &spindle_fft );
-	  
-	  // calculate enrichment (log10-scale), so set min to v. low...
-	  double q_spindle = -999 , q_baseline = -999;
-	  
-	  std::map<freq_range_t,double>::const_iterator ff = spindle_fft.begin();
-	  while ( ff != spindle_fft.end() )
-	    {
-	      
-	      const double & baseline_band_power = (*baseline)[ ff->first ] ;
-	      const double & spindle_band_power = ff->second;
-	      const freq_range_t & band = ff->first;
-	      
-	      // relative enrichment (to baseline)  [ log scale ]
-	      double re = spindle_band_power - baseline_band_power;
-	      
-	      // relative enrichment (to baseline)
-	      //double re = spindle_band_power / baseline_band_power;
-	      
-	      // store
-	      spindle->enrich[ ff->first ] = re;
-	      
-	      // calculate overall q score
-	      // take 'spindle' as the two middle categories
-
-	      // quality score: 10..16 is spindle range
-	      // 
-	      if ( band.first <= 16 && band.second >= 10 )
-		{
-		  // i.e. get largest of slow and fast bands
-		  if ( re > q_spindle ) q_spindle = re;
-		}
-	      else
-		{
-		  // i.e. get largest of non-spindle bands
-		  if ( re > q_baseline) q_baseline = re;
-		}
-	      ++ff;
-	    }
-	  
-	  // relative relative enrichment [ log scale ]
-	  spindle->qual = q_spindle - q_baseline ;
-
-	  // relative relative enrichment [ log scale ]
-	  //spindle->qual = q_spindle / q_baseline ;
-
-	  // i.e. max( B_S / B_S_0 ) / max( B_NS / B_NS_0 ) 
-	  // or logs
-	  
-	  // QUAL filter? 
-	  
-	  if ( qc_q ) 
-	    {
-	      if ( spindle->qual < qc_qmin ) spindle->include = false;
-	      if ( qc_qmax > 0 && spindle->qual > qc_qmax ) spindle->include = false;
-	    }
-
+	  if ( q->verbose_all || ( q->verbose_failed && ! spindle->include ) ) 
+	    q->output( spindle , i  );
 	}
-
+     
+          
       
       //
-      // [ REMOVE ] Optional, time-locked analysis?  [ for QC+ spindles only ] 
+      // [ REMOVE - i.e. do generically ] Optional, time-locked analysis?  [ for QC+ spindles only ] 
       //
       
       if ( locked && spindle->include )
@@ -4123,10 +4129,7 @@ void characterize_spindles( edf_t & edf ,
 	  const double window_left = - ( window_sec / 2.0 );
 
 	  // start point (left of window) for peak minus half window
-	  int orig_sp = spindle->start_sp + lowest_idx - ( window_sec / 2.0 ) * Fs ;
-	  
-	  //	  logger << "os = " <<orig_sp << "\n";
-	  
+	  int orig_sp = spindle->start_sp + lowest_idx - ( window_sec / 2.0 ) * Fs ;	  
 	  uint64_t centre = tp[ lowest_idx ];
 
 	  interval_t i0;
@@ -4147,19 +4150,6 @@ void characterize_spindles( edf_t & edf ,
 		  const uint64_t pos = (*tp0)[l] - (*tp0)[0];
 		  const int      bin = pos / step_tp ; 
 		  const double   fbin = window_left + bin * step_sec ; 
-		  
-		  // weight by CWT for spindle...
-		  
-		  // if ( 0 ) 
-		  //   std::cout << "TL\t" 
-		  // 	      << edf.id << "\t"  
-		  // 	      << target_f << "\t"
-		  // 	      << orig_sp << "\t"
-		  // 	      << i << "\t"
-		  // 	      << l << "\t" 
-		  // 	      << (*averaged)[orig_sp] << "\t"
-		  // 	      << (*d0)[l] << "\t"
-		  // 	      << (*averaged)[orig_sp] * (*d0)[l] << "\n";
 		  
 		  ++orig_sp;
 		  
@@ -4192,9 +4182,10 @@ void characterize_spindles( edf_t & edf ,
        spindles->clear();
        for (int i=0;i<copy_spindles.size();i++)
 	 if ( copy_spindles[i].include ) spindles->push_back( copy_spindles[i] );
-       logger << "  QC'ed spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
+       logger << "  Q-score pruned spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
      }
-
+   else
+     logger << "  no spindles removed based on Q-scores\n";
 
    
    //
@@ -4211,7 +4202,6 @@ void characterize_spindles( edf_t & edf ,
 	 }
      }
 
-   
    //
    // Remove tmp channel we created
    //
@@ -4221,20 +4211,16 @@ void characterize_spindles( edf_t & edf ,
        int s = edf.header.signal( new_label );
        edf.drop_signal( s );	  
      }
-
-
-   
+      
 }
 
 
 void per_spindle_output( std::vector<spindle_t>    * spindles ,
 			 param_t & param , 
-			 clocktime_t               * starttime , 
-			 std::map<freq_range_t,double> * baseline )
+			 clocktime_t               * starttime ,
+			 spindle_qc_t & q )
 {
  
-  const bool enrich_output = param.has( "enrich" );
-
   const int n = spindles->size();
 
   const bool has_coupling = param.has( "so" );
@@ -4284,6 +4270,8 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	 }
        
        writer.value( "AMP"    , spindle->amp      );
+       writer.value( "ACT_MX" , spindle->norm_amp_max      );
+       writer.value( "ACT_MN" , spindle->norm_amp_mean      );
        writer.value( "DUR"    , spindle->dur      );
        writer.value( "FWHM"   , spindle->fwhm     );
        writer.value( "NOSC"   , spindle->nosc     );
@@ -4357,30 +4345,13 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
        if ( has_if )
 	 writer.value( "IF" , spindle->if_spindle );
        
-      
-       //
-       // Enrichment relative to the baseline
-       //
-       
-       if ( baseline ) 
-	 {
-	   
+       // Q-score
+       if ( q.qc_q )
+	 {	   
 	   writer.value( "Q"      , spindle->qual     );
 	   writer.value( "PASS"   , spindle->include  );
-	   
-	   if ( enrich_output )
-	     {
-	       std::map<freq_range_t,double>::const_iterator bb = spindle->enrich.begin();
-	       while ( bb != spindle->enrich.end() )
-		 {
-		   writer.level( globals::print( bb->first ) , globals::band_strat );
-		   writer.value( "ENRICH" , bb->second );
-		   ++bb;
-		 }
-	       writer.unlevel( globals::band_strat );
-	     }
 	 }
-
+       
      }
 
    // end of per-spindle output
@@ -4390,69 +4361,160 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 
 
 
+void spindle_qc_t::proc( param_t & param )
+{
+  
+  if ( param.has( "noq" ) )
+    {
+      qc_q = false;
+      return;
+    }
 
+  qc_q = true;
+  
+  // thresholds
+  
+  if ( param.has( "q" ) )
+    qc_qmin = param.requires_dbl( "q" );
+  else
+    qc_qmin = 0;
+  
+  if ( qc_qmin <= -9 )
+    {
+      qc_q = false;
+      return;
+    }
+  
+  if ( param.has( "q-max" ) )
+    qc_qmax = param.requires_dbl( "q-max" );
 
+  // outputs
+  verbose_failed = param.has( "q-verbose" );
+  verbose_all = param.has( "q-verbose-all" );
+  
+  // defaults : 6 Hz  (5 cycles)
+  //          : 30 Hz (7 cycles)
+  // OR??     : 35 Hz ( 7 cycles) 
 
-void do_fft( const std::vector<double> * d , const int Fs , std::map<freq_range_t,double> * freqs )
+  ofc.clear();
+  ofc.push_back( 6 );
+  ofc.push_back( 35 );
+  ocycles.clear();
+  ocycles.push_back( 5 );
+  ocycles.push_back( 7 );
+  
+  // target fcs
+  if ( param.has( "q-frq" ) )
+    {
+      ofc.clear();
+      ocycles.clear();
+      std::vector<double> pp = param.dblvector( "q-frq" );
+      if ( pp.size() % 2 != 0 )
+	Helper::halt( "expecting q-frq=fc,cycles(,fc,cycles,...}" );
+      for (int i=0; i<pp.size(); i++)
+	{
+	  if ( pp[i] < 0 ) Helper::halt( "expecting q-frq F_cvalues above 0 Hz" );
+	  if ( pp[i+1] < 3 ) Helper::halt( "expecting q-frq cycles values 3+ " );
+	  ofc.push_back( pp[i] );
+	  ocycles.push_back( pp[i+1] );
+	}
+    }
+
+  // store
+  nob = ofc.size();
+  
+}
+
+void spindle_qc_t::init( const std::vector<double> * _ts , int _Fs )
 {
 
-  // Fixed parameters:: use 4-sec segments with 2-second
-  // overlaps and Hanning window
-  
-  double overlap_sec  = 2;
-  double segment_sec  = 4;
-  double length_sec = d->size() / (double)Fs;
+  // keep a copy of the original time-series
+  // (this is *assumed* to still be in scope whenever q.output() is called) 
 
-  // check length
-  if ( length_sec <= ( segment_sec + overlap_sec ) )
+  ts = _ts;
+  Fs = _Fs;
+  
+  ocwt.resize( nob );
+  
+  CWT cwt;
+  cwt.set_sampling_rate( Fs );
+  for (int fi=0; fi<nob; fi++)
+    cwt.add_wavelet( ofc[fi] , ocycles[fi] );  // f( Fc , number of cycles )
+  cwt.load( ts );
+  cwt.run();
+  
+  for (int fi=0; fi<nob; fi++)
     {
-      overlap_sec = 0;
-      segment_sec = length_sec;
+      ocwt[fi] = cwt.results(fi);
+      const double om = MiscMath::mean( ocwt[fi] );
+      for (int i=0; i<ocwt[fi].size(); i++)
+	ocwt[fi][i] /= om;
     }
-  
-  const int total_points = d->size();
-  const int segment_points = segment_sec * Fs;
-  const int noverlap_points  = overlap_sec * Fs;
-	   
-  int noverlap_segments = floor( ( total_points - noverlap_points) 
-				 / (double)( segment_points - noverlap_points ) );
-  
-  //  std::cout << "total_points " << total_points << " " << segment_points << " " << noverlap_points << " " << noverlap_segments << "\n";
+}
 
-  PWELCH pwelch( *d , 
-		 Fs , 
-		 segment_sec , 
-		 noverlap_segments , 
-		 WINDOW_HANN );
-  
-  freqs->clear();
 
-  // 1 .. 25 
-  // for (double f=0.5 ; f <= 25.5 ; f++ )
-  //   (*freqs)[ freq_range_t( f , f+1 ) ] = 0;
+void spindle_qc_t::init_spindle( const std::vector<double> & s )
+{
+  scwt = s;
+  double sm = MiscMath::mean( scwt );
+  for (int i=0; i<scwt.size(); i++)
+    scwt[i] /= sm;
+}
+
+
+double spindle_qc_t::qual( spindle_t * spindle )
+{
   
-  (*freqs)[ freq_range_t( 0.5   , 4    ) ] = 0 ;
-  (*freqs)[ freq_range_t( 4     , 8    ) ] = 0 ;
-  (*freqs)[ freq_range_t( 10    , 13.5 ) ] = 0 ;
-  (*freqs)[ freq_range_t( 13.5  , 16 )   ] = 0 ;
-  (*freqs)[ freq_range_t( 20    ,  30 ) ] = 0 ;
+  double s = 0;
+  std::vector<double> o( nob , 0 );
+  const int np = spindle->stop_sp - spindle->start_sp + 1;
   
-  // populate
-  pwelch.psdmean( freqs );
-  
-  // log-scale
-  std::map<freq_range_t,double>::iterator ff = freqs->begin();
-  while ( ff != freqs->end() )
+  for (int i=spindle->start_sp; i<= spindle->stop_sp; i++)
     {
-      ff->second = log10( ff->second ); 
-      //ff->second =  ff->second ; 
-      ++ff;
+      s += scwt[i];
+      for (int j=0; j<nob; j++)
+	o[j] += ocwt[j][i];
     }
 
-
+  // means
+  s /= (double)np;
+  for (int j=0; j<nob; j++)
+    o[j] /= (double)np;
+  
+  // get max
+  double omx = o[0];
+  for (int j=1; j<nob; j++)
+    if ( o[j] > omx ) omx = o[j];
+  if ( omx <= 0 ) omx = 1e-12;
+  
+  return log2( s ) - log2( omx );
 
 }
 
+void spindle_qc_t::output( spindle_t * spindle , const int n )
+{
+  // verbose outputs
+  const int np = spindle->stop_sp - spindle->start_sp + 1;
+
+  int s1 = spindle->start_sp - 2 * Fs; 
+  int s2 = spindle->stop_sp + 2 * Fs;
+  if ( s1 < 0 ) s1 = 0;
+  if ( s2 >= ts->size() ) s2 = ts->size() - 1 ;
+  
+  for (int i=s1; i<=s2; i++)
+    {
+      const bool in_spindle = i >= spindle->start_sp && i <= spindle->stop_sp;
+      
+      std::cout << "QS\t"
+		<< n << "\t"	
+		<< in_spindle << "\t"
+		<< (*ts)[i] << "\t"
+		<< scwt[i] ;
+      for (int j=0; j<nob; j++)
+	std::cout << "\t" << ocwt[j][i];
+      std::cout << "\n";
+    }
+}
 
 
 void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & results ) 
@@ -4460,6 +4522,8 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , isa = 0 , qual = 0 ;
 
+  double norm_amp_max = 0 , norm_amp_mean = 0;
+  
   // relative measures of spindle "peaks" (0..1)
   double symm = 0 , symm2 = 0, symm_amp = 0 , symm_max_trough = 0;
   
@@ -4481,8 +4545,6 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 
   int denom = 0;
 
-  std::map<freq_range_t,double> enrich; // versus baseline
-  
   std::vector<spindle_t>::const_iterator ii = spindles.begin();
   while ( ii != spindles.end() )
     {
@@ -4538,25 +4600,24 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       isa += ii->isa;
       posisa += ii->posisa;
       negisa += ii->negisa;
+
+      norm_amp_max += ii->norm_amp_max;
+      norm_amp_mean += ii->norm_amp_mean;
       
       possp += ii->possp;
       negsp += ii->negsp;
       
       qual += ii->qual;
       
-      // relative enrichment compared to baseline
-      std::map<freq_range_t,double>::const_iterator ss = ii->enrich.begin();
-      while ( ss != ii->enrich.end() )
-	{
-	  enrich[ ss->first ] += ss->second;
-	  ++ss;
-	}
-
       ++ii;
     }
   
 
   results[ "AMP" ]      = amp /(double)denom;
+
+  results[ "ACT_MX" ]      = norm_amp_max /(double)denom;
+  results[ "ACT_MN" ]      = norm_amp_mean /(double)denom;
+
   results[ "TOTDUR" ]   = dur;
   results[ "DUR" ]      = dur / (double)denom;
   results[ "FWHM" ]     = fwhm / (double)denom;
@@ -4608,307 +4669,7 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 
   results[ "NEGISA_PER_SP" ] = negisa / (double)denom;
   results[ "NEGSP" ] = negsp / (double)denom;
-  
-  // relative enrichment compared to baseline
-  std::map<freq_range_t,double>::iterator ee = enrich.begin();
-  while ( ee != enrich.end() )
-    {
-      results[ "E" + globals::print( ee->first ) ] = ee->second / (double)denom;
-      ++ee;
-    }
-  
-
-}
-
-
-
-annot_t * spindle_bandpass( edf_t & edf , param_t & param )
-{
-
-
-  //
-  // Attach signals
-  // 
-
-  std::string signal_label = param.requires( "sig" );   
-
-  signal_list_t signals = edf.header.signal_list( signal_label );  
-  
-  const int ns = signals.size();
-  
-  //
-  // Obtain sampling freqs (Hz)
-  //
-  
-  std::vector<double> Fs = edf.header.sampling_freq( signals );
-
-  
-  //
-  // Annotations to save
-  //
-  
-  annot_t * a = edf.timeline.annotations.add( "spindles-v2" );
-  a->description = "Martin et al. spindles" ;
-  
-
-  //
-  // For each signal
-  //
- 
-  for (int s = 0 ; s < ns ; s++ ) 
-    {
-
-      if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
-
-      //
-      // Based on: Martin et al. "Topography of age-related changes in
-      // sleep spindles", Neurobio Aging 34(2), 2013, pp 468-476
-      //
-      // Method 'A4' from Warby et al.
-      //
-      
-      // [# Band-pass filter EEG, calculate RMS in sliding windows and apply a
-      // constant threshold. Detect a spindle if the RMS exceeds a constant
-      // threshold for 0.3-3 s.]
-      
-      // Parameters
-
-      const double p_resolution    = 0.25;
-      const double p_percentile    = 95;
-      const double p_window_length = Fs[s] * p_resolution; 
-      
-      // 1. Bandpass filter signal from C3-M2 in the 11-15 Hz band
-      // 2. Calculate the RMS of the bandpass filtered signal with a time
-      //    resolution of 25 ms using a time window of 25 ms [# no overlap]
-      // 3. threshold <- 95th percentile of RMS signal [# only S2+S3+S4]
-      // 4. if ( RMS > threshold  &&  0.3s <= duration above threshold <= 3s )
-      //    then [Detect spindle]
-
-      
-      //
-      // Filter entire signal
-      //
-
-      std::vector<double> fripple( 1, 0.01 );
-      std::vector<double> ftw( 1, 0.5 );
-      
-      // ripple = 0.005 , transition width (Hz) = 0.5 Hz 
-      dsptools::apply_fir( edf , signals(s) , fir_t::BAND_PASS ,
-			   1 , // Kaiser window
-			   fripple, ftw, // ripple , TW
-			   10 , 16			   
-			   );
-
-      //
-      // Get windows of 0.25seconds, no overlap (i.e. advance by 0.25)
-      //
-
-      int ne = edf.timeline.set_epoch( p_resolution , p_resolution );
-
-      //
-      // Aggregate RMS per window 
-      //
-
-      std::vector<double> rms;
-
-            
-      //
-      // Get data
-      //
-      
-      while ( 1 ) 
-	{
-	  
-	  int epoch = edf.timeline.next_epoch();      
-	  
-	  if ( epoch == -1 ) break;
-	  
-	  interval_t interval = edf.timeline.epoch( epoch );
-	  
-	  //
-	  // Get data
-	  //
-
-	  slice_t slice( edf , signals(s) , interval );
-	  
-	  const std::vector<double> * signal = slice.pdata();
-	  
-	  //
-	  // Calculate RMS for window
-	  //
-
-	  double t = MiscMath::rms( *signal );
-	  
-	  rms.push_back(t);
-	  
-	} // next 0.25 window
-
-      
-      //
-      // Get threshold (95th percentile)
-      //
-      
-      const int n_bins = rms.size();
-      
-      const int t95 = n_bins * ( p_percentile / 100.0 );
-      
-      const double threshold = MiscMath::kth_smallest_preserve( rms , t95 );
-      
-      const uint64_t bin_ms = p_resolution * globals::tp_1sec;
-      
-      std::vector<spindle_t> spindles;
-      
-      uint64_t start = 0 , stop = 0;
-
-      // count of current spindle 'length' (in 0.25s windows
-      int scnt = 0;
-      
-      // for 0.3 to 3s duration, means at least 2 bins,
-      // but not more than 12
-      
-      for (int i=0;i<n_bins;i++)
-	{
-	  
-	  if ( rms[i] >= threshold )
-	    {
-	      if ( scnt == 0 ) // start of putative spindle
-		{
-		  scnt = 1;
-		  start = i * bin_ms;
-		}
-	      else // continue a window
-		{
-		  ++scnt;
-		  stop = (i+1) * bin_ms - 1;
-		}
-	    }
-	  else
-	    {
-	      
-	      if ( scnt ) // close a window?
-		{
-		  if ( scnt >= 2 && scnt <= 12 ) 
-		    {
-		      spindles.push_back( spindle_t( start , stop , 0 , 0 ) );
-		    }
-		}
-	      scnt = 0; // reset scnt in any case
-	    }
-	}
     
-      //
-      // Characterisation of each spindle
-      //
-      
-      bool bandpass_filtered = true;
-      
-      characterize_spindles( edf , param , signals(s) , bandpass_filtered ,  13 , 
-			     "bandpass" ,
-			     NULL , NULL , &spindles , NULL , NULL , NULL , NULL , NULL , NULL );
-      
-      std::map<std::string,double> means;
 
-      spindle_stats( spindles , means );
-
-      //
-      // Save in the annotation class
-      //
-      
-      std::vector<spindle_t>::const_iterator ii = spindles.begin();
-      while ( ii != spindles.end() )
-	{	  
-	  const interval_t & spindle = ii->tp;
-
-	  instance_t * instance = a->add(  signals.label(s)  , spindle , signals.label(s) );
-	  
-	  //instance->set( "mid", (double)(tp_mid * globals::tp_duration ) );
-	  
-	  ++ii;
-	}
-
-
-      //
-      // Per-spindle level output 
-      //
-      
-      if ( false ) 
-	{
-	  
-	  std::vector<spindle_t>::const_iterator ii = spindles.begin();
-	  int cnt = 0;
-	  
-	  while ( ii != spindles.end() )
-	    {	  
-	      
-	      const spindle_t & spindle = *ii;	  
-	      
-	      writer.level( ++cnt , "SPINDLE" );
-	      writer.var( "SINGLE_SP_START" , "Single spindle start time-point" );
-	      writer.var( "SINGLE_SP_STOP" , "Single spindle stop time-point" );
-	      writer.var( "SINGLE_SP_DUR" , "Single spindle stop time-point" );
-
-	      writer.value( "SINGLE_SP_START" , spindle.tp.start * globals::tp_duration );
-	      writer.value( "SINGLE_SP_STOP" , spindle.tp.stop * globals::tp_duration );
-	      writer.value( "SINGLE_SP_DUR" , (spindle.tp.stop-spindle.tp.start+1)/(double)globals::tp_1sec );
-	      
-	      ++ii;
-	    }
-	  writer.unlevel( "SPINDLE" );
-	}
-      
-      const double t_minutes = ( n_bins * p_resolution ) / 60.0 ; 
-
-      bool empty = spindles.size() == 0; 
-
-      if ( empty ) 
-	std::cout << "INDIV" << "\t"
-		  << edf.id << "\t" 
-		  << "[" << globals::current_tag << "]\t"
-		  << signals.label(s) << "\t"
-		  << 0 << "\t"
-		  << t_minutes << "\t"
-		  << 0 << "\t"
-		  << 0 << "\t" 
-		  << "NA\t"
-		  << "NA\t"
-		  << "NA\t"
-		  << "NA\t"
-		  << "NA\t"
-		  << "NA\n";     
-      else
-	std::cout << "INDIV" << "\t"
-		  << edf.id << "\t" 
-		  << "[" << globals::current_tag << "]\t"
-		  << signals.label(s) << "\t"
-		  << spindles.size() << "\t"
-		  << t_minutes << "\t"
-		  << spindles.size() / t_minutes << "\t"
-		  << means["TOTDUR"] << "\t" 
-		  << means["AMP"] << "\t"
-		  << means["DUR"] << "\t"
-		  << means["NOSC"] << "\t"
-		  << means["FRQ"] << "\t"
-		  << means["FFT"] << "\t"
-// 		  << means["TREND"] << "\t"
-// 		  << means["ABSTREND"] << "\t"
-		  << means["SYMM"] << "\t"
-		  << means["SYMM2"] << "\n"; 
-      
-
-    } // Next signal
-
-  
-  //  a->save( "spindle.annot" );
-  
-  return a;
-  
 }
-
-// helper function
-void write_if_exists( const std::string & s , const std::map<std::string,double> & means ) 
-{ 
-  std::map<std::string,double>::const_iterator ss = means.find( s );
-  if ( ss != means.end() ) writer.value( s , ss->second );
-}
-
 

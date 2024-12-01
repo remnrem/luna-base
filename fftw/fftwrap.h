@@ -208,7 +208,9 @@ class real_FFT
     }
   
   void init( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE );
-  
+
+  void norm_fac( const double f ) { normalisation_factor = f; } 
+
   void reset() ;
   
   ~real_FFT();
@@ -420,11 +422,12 @@ class PWELCH
 	 bool use_median = false ,
 	 bool calc_seg_sd = false , 
 	 bool average_adj = false ,
-	 bool use_nextpow2 = false ) 
+	 bool use_nextpow2 = false ,
+	 bool do_normalization = true ) 
    : data(data) , Fs(Fs) , M(M) , noverlap_segments(noverlap_segments) , 
      window(W),
      use_median(use_median), calc_seg_sd(calc_seg_sd),
-     average_adj(average_adj) , use_nextpow2( use_nextpow2 )
+     average_adj(average_adj) , use_nextpow2( use_nextpow2)  , do_normalization(do_normalization) 
   {
 
     // calculate implied overlap in actual data-points the above
@@ -533,6 +536,9 @@ class PWELCH
 
   // always set NFFT to the next power of 2
   bool use_nextpow2;
+
+  // do 1/N^2 norm (incl. window)
+  bool do_normalization;
 
 };
 

@@ -2141,6 +2141,8 @@ void cmddefs_t::init()
   add_table( "SPINDLES" , "CH,F" , "Individual-level output" );
   add_var( "SPINDLES" , "CH,F" , "DENS" , "Spindle density (count per minute)" );
   add_var( "SPINDLES" , "CH,F" , "AMP" , "Mean spindle amplitude (uV or mV units)" );
+  add_var( "SPINDLES" , "CH,F" , "ACT_MX" , "Mean max spindle activity (normed CWT)" );
+  add_var( "SPINDLES" , "CH,F" , "ACT_MN" , "Mean average spindle activity (normed CWT)" );
   add_var( "SPINDLES" , "CH,F" , "DUR" , "Mean spindle duration (core+flanking region)" );
   add_var( "SPINDLES" , "CH,F" , "NOSC" , "Mean number of oscillations per spindle" );
   add_var( "SPINDLES" , "CH,F" , "FWHM" , "Mean spindle FWHM (full width at half maximum)" );
@@ -2172,6 +2174,8 @@ void cmddefs_t::init()
 
   add_table( "SPINDLES" , "CH,F,SPINDLE" , "Spindle-level output [per-spindle]" ); 
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "AMP" , "Spindle amplitude (uV or mV units)" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ACT_MX" , "Max spindle activity (normed CWT)" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ACT_MN" , "Average spindle activity (normed CWT)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "CHIRP" , "Spindle chirp (-1 to +1)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "DUR" , "Spindle duration (seconds)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "FWHM" , "Spindle FWHM (seconds)" );
@@ -2192,6 +2196,9 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM" , "Symmetry index (relative position of peak)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM2" , "Folded symmetry index (0=symmetrical, 1=asymmetrical)" );
   hide_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration [if]" );
+
+  add_table( "SPINDLES" , "CH,F,B,SPINDLE" , "Band enrichment (per-spindle)" );
+  add_var( "SPINDLES" , "CH,F,B,SPINDLE" , "ENRICH" , "Spindle enrichment" );
   
   hide_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
   hide_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
@@ -2274,13 +2281,17 @@ void cmddefs_t::init()
   // show-coef verbose output
 
   add_table( "SPINDLES" , "F,CH,T" , "Verbose threshold/coefficient output [show-coeff]" );
+  add_var( "SPINDLES" , "F,CH,T" , "SEC" , "Time (sec)" );
   add_var( "SPINDLES" , "F,CH,T" , "RAWCWT" , "Raw CWT coefficient" );
   add_var( "SPINDLES" , "F,CH,T" ,"CWT" , "CWT coefficient" );
+  add_var( "SPINDLES" , "F,CH,T" ,"AVG" , "Averaged CWT coefficient" );
+  add_var( "SPINDLES" , "F,CH,T" ,"AVG_CORR" , "Averaged baseline-corrected CWT coefficient" );
   add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH" , "CWT primary threshold" );
   add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH2" , "CWT secondary threshold" );
   add_var( "SPINDLES" , "F,CH,T" ,"CWT_THMAX" , "CWT maximum threshold" );
+  add_var( "SPINDLES" , "F,CH,T" ,"PUTATIVE" , "Pre-QC spindle" );
+  add_var( "SPINDLES" , "F,CH,T" ,"SPINDLE" , "Post-QC spindle" );
   
-
 
   //
   // SO (duplicated from SO command below)
