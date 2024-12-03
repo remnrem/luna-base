@@ -47,8 +47,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   //   vars=<set of vars to include only>
   //   xvars=<set of vars to exclude from inputs>
 
-  bfile = param.requires( "dat" );
-
+  if ( ! param.has( "make-specs" ) )
+    bfile = param.requires( "dat" );
+  
   dump_file = param.has( "dump" );
   
   infiles.clear();
@@ -65,7 +66,6 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   file2group.clear();
   file2fixed.clear();
  
-
   if ( prep_mode )
     {
 
@@ -120,7 +120,162 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	}
     }
   
-  
+
+  //
+  // make JSON? (and then quit) 
+  //
+
+  if ( param.has( "make-specs" ) )
+    {
+      if ( file2group.size() == 0 )
+	Helper::halt( "no inputs specified" );
+      if ( param.has( "spec" ) || param.has( "specs" ) )
+	Helper::halt( "cannot combine make-specs and specs" );
+
+      logger << "  writing .json specification (from inputs) to standard output\n";
+      
+      //std::set<std::string>::const_iterator ff = files.begin();
+      //               file2group[ tok[0] ] = tok[1];
+      //                 infiles[ tok[0] ].insert( tok[j] );
+
+      // JSON: inputs
+      //       specs
+
+      // fle
+      // grps
+      // facs
+      // vars
+
+      // start JSON
+      std::cout << "{\n";
+
+      // inputs
+      std::cout << "  \"inputs\": [\n";
+      
+      // iterate over files
+      int idx = 0;
+      std::map<std::string,std::string>::const_iterator ff = file2group.begin(); 
+      while ( ff != file2group.end() )
+	{
+
+	  //
+	  // get vars from header row
+	  //
+
+	  if ( ! Helper::fileExists( ff->first ) )
+	    Helper::halt( "could not open " + ff->first );
+	  
+	  std::ifstream IN1( ff->first.c_str() , std::ios::in );
+	  std::string hdr;
+	  Helper::safe_getline( IN1 , hdr );
+
+	  // bad/empty file?
+	  if ( IN1.eof() || hdr == "" )
+	    {
+	      IN1.close();
+	      Helper::halt( ff->first + " is a bad/empty file" );
+	    }
+
+	  IN1.close();
+	  
+	  // assume tab-delimited
+	  std::vector<std::string> tok = Helper::parse( hdr , "\t" );
+	  if ( tok.size() == 0 )
+	    Helper::halt( ff->first + " is a bad/empty file" );
+
+	  if ( tok[0] != "ID" )
+	    Helper::halt( "column 1 of " + ff->first + " is not ID" );
+	  
+	  int nfac = 0;
+	  std::vector<std::string> labs;
+	  
+	  const std::set<std::string> & facs = infiles.find( ff->first )->second;
+
+	  for (int i=1; i<tok.size(); i++)
+	    {
+	      if ( facs.find( tok[i] ) != facs.end() )
+		++nfac;
+	      else
+		labs.push_back( tok[i] );	      
+	    }
+
+	  if ( labs.size() == 0 )
+	    Helper::halt( "no non-factor variables in " + ff->first );
+
+	  if ( nfac != facs.size() )
+	    Helper::halt( "found " + Helper::int2str( nfac )
+			  + " but expecting " + Helper::int2str( (int)facs.size() )
+			  + " factors in " + ff->first );
+
+	  
+	  
+	  logger << "  found " << labs.size() << " variables and " << nfac  << " factors from " << ff->first << "\n";
+	    
+	  //
+	  // write JSON
+	  //
+	  
+	  std::cout << "    {\n";
+	  
+	  // group
+	  std::cout << "      \"group\": \"" << ff->second << "\",\n";
+
+	  // file
+	  std::cout << "      \"file\": \"" << ff->first << "\",\n";
+	  
+	  // facs
+	  // [prep] input files (and stratifying factors)	  
+	  if ( facs.size() != 0 )
+	    {
+	      std::cout << "      \"facs\": [";
+	      std::set<std::string>::const_iterator ss = facs.begin();
+	      while ( ss != facs.end() )
+		{
+		  int idx2 = 0;
+		  while ( ss != facs.end() )
+		    {
+		      std::cout << " \"" << *ss << "\"";
+		      if ( ++idx2 != facs.size() ) std::cout << ",";
+		      ++ss;
+		    }
+		  std::cout << " ],\n";
+		}
+	    }
+
+	  // vars
+	  std::cout << "      \"vars\": [";   
+	  
+	  std::vector<std::string>::const_iterator vv = labs.begin();
+	  int idx2 = 0;
+	  while ( vv != labs.end() )
+	    {
+	      std::cout << " \"" << *vv << "\"";
+	      if ( ++idx2 != labs.size() ) std::cout << ",";
+	      ++vv;
+	    }
+	  std::cout << " ]\n";
+	  
+	  // close out
+	  std::cout << "    }";
+	  if ( ++idx < file2group.size() ) std::cout << ",";
+	  
+	  // next file
+	  std::cout << "\n";
+	  
+	  ++ff;
+	}
+      
+      
+      // end-inputs
+      std::cout << "  ]\n";
+
+      // close out
+      std::cout << "}\n";
+
+      // all done
+      return;
+      
+    }
   
   //
   // include/exclude vars (allow for partial population during spec JSON stage
@@ -828,7 +983,7 @@ void gpa_t::prep()
 	}
       
       //
-      // read rows ( to find unique IDs and unique VAR+FACLVL combos
+      // read rows ( to find unique IDs and unique VAR+FACLVL combos )
       //
 
       

@@ -35,18 +35,37 @@ extern freezer_t freezer;
 
 void param_t::add( const std::string & option , const std::string & value ) 
 {
-  
-  // in API mode, allow this to not hold
-  // i.e. if we want to change 'path' etc
+  // set key=value pairs to opt[]
 
-  // otherwise, we're assuming this is on the same luna command line, which makes
-  // no sense to have multiple versions
+  if ( option == "" ) return;
   
+  // we're assuming this is on the same luna command line, which makes
+  // no sense to have multiple versions
+
+  // two special cases:
+  //  1) if key+=value, then ","-append to any exists list
+  //  2) in API mode, allow key to already exist
+
+  const bool append_mode = option[ option.size() - 1 ] == '+';
+
+  if ( append_mode )
+    {
+      const std::string option1 = option.substr( 0 , option.size() - 1 );
+      if ( option1 == "" ) return;
+      if ( opt.find( option1 ) == opt.end() )
+	opt[ option1 ] = value;
+      else
+	opt[ option1 ] = opt[ option1 ] + "," + value;
+      return;
+    }
+
+  // else check no doubles unless in API mode
   if ( ! globals::api_mode ) 
     if ( opt.find( option ) != opt.end() ) 
       Helper::halt( option + " parameter specified twice, only one value would be retained" );
+
+  opt[ option ] = value; 
   
-    opt[ option ] = value; 
 }  
 
 
