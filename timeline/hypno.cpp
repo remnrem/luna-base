@@ -776,14 +776,14 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   //          wwwwwwSwwwwwwwwwwwSSwSSwwwwwwwwSSSSSSSSwSSSwSSSSSSSSSSwww
   //              XXXX        XXXXXXXXX    XXXXXXXXXXXXXXXXXXXXXXXXXXX
   //              XXXX        XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX   (drop W < 1hr between S) 
-
+  // but do not allow cut past median sleep epoch
   
   const bool trim1b = param.has( "cut" );
   const bool verbose = param.has( "verbose" );
   
   if ( trim1b ) 
     {
-
+      
       std::vector<double> p;
       if ( ! param.empty( "cut" ) ) p = param.dblvector( "cut" );
 
@@ -795,11 +795,26 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       const int egap       = p.size() > 2 ? p[2] : 10;   // 5 mins
       const int eflnk      = p.size() > 3 ? p[3] : 10;   // 5 mins
       
+      // get median sleep epoch
+      int n50 = 0;
       // major sleep period = msp
       std::vector<bool> msp( ne_gaps , false );      
       for (int e=0; e<ne_gaps; e++ )
-	msp[e] = is_sleep( stages[e] );
+	{
+	  msp[e] = is_sleep( stages[e] );
+	  if ( msp[e] ) ++n50;	    
+	}
       
+      n50 /= 2;
+      int ns = 0;
+      for (int e=0; e<ne_gaps; e++ )	
+	{
+	  if ( msp[e] ) ++ns;
+	  if ( ns == n50 ) { n50 = e; break; } 
+	}
+
+
+
       // extend blobs (from second epoch) based on egap     
       for (int e=1; e<ne_gaps; e++ )
 	{
@@ -873,7 +888,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	  rscr[e] = s;
 	}
 
-      // get cut-points (not allow in msp[])
+      // get cut-points (not allow in msp[] or past median sleep epoch #)
       int cut = -1 , rcut = -1;
       double mx = 0;
       double rmx = 0;
@@ -881,6 +896,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       
       for (int e=0; e<ne_gaps; e++)
 	{
+	  if ( e > n50 ) break;
 	  if ( msp[e] ) scr[e] = 0;
 	  else if ( scr[e] > mx && scr[e] > 0 && scr[e] >= th ) { mx = scr[e] ; cut = e; }
 	  if ( scr[e] > mx0 ) mx0 = scr[e];
@@ -888,6 +904,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
       
       for (int e=ne_gaps-1; e>0; e--)
 	{
+	  if ( e < n50 ) break;
 	  if ( msp[e] ) rscr[e] = 0;
 	  if ( rscr[e] > rmx && rscr[e] > 0 && rscr[e] >= th ) { rmx = rscr[e] ; rcut = e; }
 	  if ( rscr[e] > rmx0 ) rmx0 = rscr[e];
