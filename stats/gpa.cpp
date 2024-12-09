@@ -1003,7 +1003,12 @@ void gpa_t::prep()
 
 	  std::vector<std::string> dtok = Helper::parse( dat , "\t" );
 	  if ( dtok.size() != tok.size() )
-	    Helper::halt( "bad line - col # doesn't match header" );
+	    {
+	      logger << "  *** reading file " << ff->first << "\n";
+	      logger << "  *** expecting " << tok.size() << " fields, but found " << dtok.size() << "\n";
+	      logger << "  *** line [" << dat << "]\n";
+	      Helper::halt( "bad line - col # doesn't match header" );
+	    }
 
 	  // a new ID?
 	  const std::string & id = dtok[ id_col ] ;
@@ -1287,6 +1292,7 @@ void gpa_t::run()
 		  writer.value( "T"  , results.t[xvar][ var ] );
 		  writer.value( "P" , results.emp[xvar][ var ] );
 		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
+		  writer.value( "N" , (int)X.rows() );
 
 		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
 		  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
@@ -1430,6 +1436,7 @@ void gpa_t::run1X() // correction within X
 		  writer.value( "T"  , results.t[xvar][ var ] );
 		  writer.value( "P" , results.emp[xvar][ var ] );
 		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
+		  writer.value( "N" , (int)X.rows() );
 		  
 		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
                   if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;

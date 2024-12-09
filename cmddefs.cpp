@@ -1913,6 +1913,7 @@ void cmddefs_t::init()
   add_var( "GPA" , "X,Y" , "T" , "t-statistic" );
   add_var( "GPA" , "X,Y" , "P" , "Empirical p-value" );
   add_var( "GPA" , "X,Y" , "PADJ" , "Adjusted empirical p-value" );
+  add_var( "GPA" , "X,Y" , "N" , "Number of observations" );
   add_var( "GPA" , "X,Y" , "STRAT" , "DV stratum" );
   add_var( "GPA" , "X,Y" , "XSTRAT" , "IV stratum (if X-factors)" );
   
