@@ -345,6 +345,10 @@ struct globals
   // cache console (e.g. for R/LunAPI mode)
   static bool cache_log;
 
+  // write log
+  static bool write_log;
+  static std::string log_file;
+  
   // generic global parameters
   static param_t param;
 

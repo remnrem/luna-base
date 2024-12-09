@@ -413,7 +413,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   //
 
   spindle_qc_t q( param );
-  
+
   //
   // Spindle propagation
   //
@@ -654,9 +654,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       //
       // Baseline CWT on signal
       //
-            
-      q.init( d , Fs[s] );
 
+      q.init( d , Fs[s] );
 
       //
       // This is only populated if we are considering multiple frequencies
@@ -779,11 +778,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  logger << "\n  detecting spindles around F_C " << frq[fi] << "Hz for " << signals.label(s) << "\n";
 	  
 	  if ( alt_spec ) 
-	    logger << "  wavelet with FWHM(T) " << fwhm[fi] << "\n";       
+	    logger << "  wavelet with FWHM(T) " << fwhm[fi];       
 	  else
-	    logger << "  wavelet with " << num_cycles << " cycles\n";       
+	    logger << "  wavelet with " << num_cycles << " cycles";       
 
-	  logger << "  smoothing window = " << moving_window_sec << "s\n";
+	  logger << ", smoothing window " << moving_window_sec << "s\n";
 
 	  //
 	  // Output stratifier: F_C
@@ -4182,10 +4181,10 @@ void characterize_spindles( edf_t & edf ,
        spindles->clear();
        for (int i=0;i<copy_spindles.size();i++)
 	 if ( copy_spindles[i].include ) spindles->push_back( copy_spindles[i] );
-       logger << "  Q-score pruned spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
+       logger << "  Q-filtered spindle list from " << copy_spindles.size() << " to " << spindles->size() << "\n";
      }
    else
-     logger << "  no spindles removed based on Q-scores\n";
+     logger << "  no spindles removed based on Q-filtering\n";
 
    
    //
@@ -4363,28 +4362,32 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 
 void spindle_qc_t::proc( param_t & param )
 {
-  
-  if ( param.has( "noq" ) )
-    {
-      qc_q = false;
-      return;
-    }
 
   qc_q = true;
+
+  if ( param.has( "noq" ) )
+    qc_q = false;
   
   // thresholds
-  
-  if ( param.has( "q" ) )
-    qc_qmin = param.requires_dbl( "q" );
-  else
-    qc_qmin = 0;
-  
-  if ( qc_qmin <= -9 )
+
+  if ( qc_q )
     {
-      qc_q = false;
-      return;
+      if ( param.has( "q" ) )
+	qc_qmin = param.requires_dbl( "q" );
+      else
+	qc_qmin = 0;
+      
+      if ( qc_qmin <= -9 )
+	qc_q = false;
     }
-  
+
+  // nothing to do?
+  if ( ! qc_q )
+    {
+      logger << "  no Q-score filtering will be applied\n";
+      return;      
+    }
+       
   if ( param.has( "q-max" ) )
     qc_qmax = param.requires_dbl( "q-max" );
 
@@ -4393,8 +4396,7 @@ void spindle_qc_t::proc( param_t & param )
   verbose_all = param.has( "q-verbose-all" );
   
   // defaults : 6 Hz  (5 cycles)
-  //          : 30 Hz (7 cycles)
-  // OR??     : 35 Hz ( 7 cycles) 
+  //          : 35 Hz ( 7 cycles) 
 
   ofc.clear();
   ofc.push_back( 6 );
@@ -4422,12 +4424,19 @@ void spindle_qc_t::proc( param_t & param )
 
   // store
   nob = ofc.size();
+
+  logger << "  Q-filtering q<" << qc_qmin ;
+  for (int i=0; i<nob; i++)
+    logger << ", " << ofc[i] << "Hz (" << ocycles[i] << " cyc)";
+  logger << "\n";
   
 }
 
 void spindle_qc_t::init( const std::vector<double> * _ts , int _Fs )
 {
 
+  if ( ! qc_q ) return;       
+  
   // keep a copy of the original time-series
   // (this is *assumed* to still be in scope whenever q.output() is called) 
 
@@ -4455,6 +4464,8 @@ void spindle_qc_t::init( const std::vector<double> * _ts , int _Fs )
 
 void spindle_qc_t::init_spindle( const std::vector<double> & s )
 {
+  if ( ! qc_q ) return;
+
   scwt = s;
   double sm = MiscMath::mean( scwt );
   for (int i=0; i<scwt.size(); i++)

@@ -248,15 +248,19 @@ private:
   bool verbose;
   bool show_xfacs;
   
-  // [run] number of permutations
+  // [run] number of permutations;
+  //       can be 0, means asymptotic only
   int nreps; 
 
+  // adjustments
+  bool adj_any;
+  bool adj_bonf;
+  bool adj_holm;
+  bool adj_fdr_bh;
+  bool adj_fdr_by;
+  
   bool dump_file; // in prep-mode, instead of manifest
   
-  // [run] threshold for output
-  double pthresh;
-  double pthresh_adj;
-
   // require at least N non-missing obs
   int n_req;
   double n_prop;
@@ -272,12 +276,32 @@ private:
 
 
 struct linmod_results_t {  
-  // point-wise empirical p-values
+  // point-wise (empirical) p-values
   std::map<std::string,std::map<std::string,double> > beta;
   std::map<std::string,std::map<std::string,double> > t;
+  std::map<std::string,std::map<std::string,double> > p;  
   std::map<std::string,std::map<std::string,double> > emp;
   std::map<std::string,std::map<std::string,double> > emp_corrected;    
+
+  // corrected results
+  Eigen::MatrixXd corr;
+
+  // index
+  std::map<std::string,std::map<std::string,int> > index;
+
+  // generate corrected results
+  void make_corrected( const std::vector<std::string> & xvars ,
+		       const std::vector<std::string> & yvars );
+		       
+
+  // return corrected results
+  double fdr_bh(const std::string & , const std::string & );
+  double fdr_by(const std::string & , const std::string & );
+  double holm(const std::string & , const std::string & );
+  double bonf(const std::string & , const std::string & );
+
 };
+
 
 
 struct linmod_t {
@@ -315,7 +339,8 @@ struct linmod_t {
   Eigen::VectorXd get_tstats( const Eigen::VectorXd & B ,
 			      const Eigen::MatrixXd & Yres ,
 			      const double vx ,
-			      const int denom );
+			      const int denom ,
+			      Eigen::VectorXd * pvalues = NULL );
   			      
   //
   // Main members
@@ -347,7 +372,14 @@ struct linmod_t {
   
   // permutation matrix
   Eigen::MatrixXi P;
-    
+
+  //
+  // helper
+  //
+
+  static Eigen::MatrixXd correct( const Eigen::VectorXd & );
+
+  
 };
 
 

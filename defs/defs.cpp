@@ -179,6 +179,8 @@ bool globals::silent;
 bool globals::api_mode;
 bool globals::verbose; 
 bool globals::cache_log;
+bool globals::write_log;
+std::string globals::log_file;
 bool globals::devel;
 
 std::string globals::epoch_strat;
@@ -232,7 +234,7 @@ void globals::init_defs()
   
   version = "v1.1.0 ";
   
-  date    = "11-Oct-2024";
+  date    = "05-Dec-2024";
 
   //
   // Return code
@@ -276,6 +278,10 @@ void globals::init_defs()
   
   cache_log = false;
 
+  write_log = false;
+
+  log_file = "luna.log";
+  
   verbose = false; 
 
   devel = false;

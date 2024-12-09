@@ -27,6 +27,7 @@
 #include "stats/eigen_ops.h"
 #include "miscmath/crandom.h"
 #include "helper/json.h"
+#include "miscmath/miscmath.h"
 
 using json = nlohmann::json;
 
@@ -37,16 +38,14 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 {
 
   // invoked in one of two modes:
-  //   1) prepare a binary data file  [ --prep-gpa ] --> prep_mode == T 
+  //   1) prepare a binary data file  [ --gpa-prep ] --> prep_mode == T 
   //   2) apply associaiton models    [ --gpa ]
 
-  // prep:
-  //   spec=file1.json
-  //   inputs=file1|grp|X|Y|Z,file2|grp,file|grp|CH|F , i.e. always group name, then any factors
-  //   dat=<bfile name>
-  //   vars=<set of vars to include only>
-  //   xvars=<set of vars to exclude from inputs>
-
+  // --gpa-prep can either make inputs or take (or make) a JSON specs file
+  //    inputs=x,y  dat=z
+  //    specs=x     day=z
+  //    inputs=x,y  make-specs > specs.json
+  
   if ( ! param.has( "make-specs" ) )
     bfile = param.requires( "dat" );
   
@@ -134,18 +133,6 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 
       logger << "  writing .json specification (from inputs) to standard output\n";
       
-      //std::set<std::string>::const_iterator ff = files.begin();
-      //               file2group[ tok[0] ] = tok[1];
-      //                 infiles[ tok[0] ].insert( tok[j] );
-
-      // JSON: inputs
-      //       specs
-
-      // fle
-      // grps
-      // facs
-      // vars
-
       // start JSON
       std::cout << "{\n";
 
@@ -209,7 +196,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 
 	  
 	  
-	  logger << "  found " << labs.size() << " variables and " << nfac  << " factors from " << ff->first << "\n";
+	  logger << "  found " << labs.size()
+		 << " variables and " << nfac
+		 << " factors from " << ff->first << "\n";
 	    
 	  //
 	  // write JSON
@@ -305,6 +294,8 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
     {
       incgrps = Helper::combine( incgrps, param.strset( "grps" ) );
       if ( param.has( "Yg" ) ) incgrps = Helper::combine( incgrps , param.strset( "Yg" ) );
+      if ( param.has( "Xg" ) ) incgrps = Helper::combine( incgrps , param.strset( "Xg" ) );
+      if ( param.has( "Zg" ) ) incgrps = Helper::combine( incgrps , param.strset( "Zg" ) );
     }
   
   if ( param.has( "xgrps" ) )
@@ -440,11 +431,14 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   // any other X, Y, Z vars?
   //
 
-  // **if** we added some type of "include" statement (by vars, lvars, nvars, grps, facs or faclvls)
-  // then, if we also have X, Z vars specified separately, make sure they are included in the include
-  // list;  likewise for Y variables
+  // **if** we added some type of "include" statement (by vars, lvars,
+  // nvars, grps, facs or faclvls) then, if we also have X, Z vars
+  // specified separately, make sure they are included in the include
+  // list; likewise for Y variables
 
-  if ( param.has( "vars" ) || param.has( "lvars" ) || param.has( "nvars" ) || param.has( "grps" ) || param.has( "facs" ) || param.has( "faclvls" ) )
+  if ( param.has( "vars" ) || param.has( "lvars" )
+       || param.has( "nvars" ) || param.has( "grps" )
+       || param.has( "facs" ) || param.has( "faclvls" ) )
     {
       // and automatically add any X or Z vars to incvars
       if ( param.has( "X" ) ) incvars = Helper::combine( incvars , param.strset( "X" ) );
@@ -454,11 +448,13 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   
   
   //
-  // criteria to drop bad/empty cols (default, at least 5 non-missing, at least 5% of obs w/ values)
-  //  (used in dump_
+  // criteria to drop bad/empty cols (default, at least 5 non-missing,
+  //   at least 5% of obs w/ values), although in --gpa-prep mode, we
+  //   take everything by default
+  //
 
-  n_req = param.has( "n-req" ) ? param.requires_int( "n-req" ) : 5 ;
-  n_prop = param.has( "n-prop" ) ? param.requires_dbl( "n-prop" ) : 0.05 ; 
+  n_req = param.has( "n-req" ) ? param.requires_int( "n-req" ) : ( prep_mode ? 0 : 5 ) ;
+  n_prop = param.has( "n-prop" ) ? param.requires_dbl( "n-prop" ) : ( prep_mode ? 0 : 0.05 ) ; 
   
   retain_cols = param.has( "retain-cols" ); 
   retain_rows = param.has( "retain-rows" );
@@ -483,24 +479,25 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
     prep();
   else
     {
-      // we'll typically perform association, but this command might also be used for
-      // dumping outputs (e.g. post-filtering).  In that case, we want to allow for missing
-      // values, etc, and we do not want to perform case-wise deletion necessarily
-
-      // intention to perform association is denoted by the presence of X=
-
-      const bool request_assoc = param.has( "nreps" );
       
-      if ( request_assoc && ( param.has( "retain-cols" ) || param.has( "retain-rows" ) ) )
+      // intention to perform association is denoted by the presence
+      // of X or request for perms
+      
+      const bool request_assoc = param.has( "nreps" )
+	|| param.has( "X" ) || param.has( "all-by-all" );
+      
+      if ( request_assoc
+	   && ( param.has( "retain-cols" ) || param.has( "retain-rows" ) ) )
 	Helper::halt( "can only use retain-cols or retain-rows when not running association (no X)" );
 
-            
-      logger << "  reading binary data from " << bfile << "\n";
+      // read data in  ( and this does filtering of columns)
       
-      // read data in  ( and this does filtering of columns) 
+      logger << "  reading binary data from " << bfile << "\n";
+
       read();
       
       // secondarily, subset to a smaller # of rows (e.g. case-only analysis)
+
       if ( param.has( "subset" ) || param.has( "inc-ids" ) || param.has( "ex-ids")  )
 	{
 	  std::set<std::string> sub_ids, exc_ids, sub_cols;
@@ -550,57 +547,85 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       // a DV (i.e. sleep metric) unless explicitly told so; allow these to be 
       // specified either as variables (X,Z) or groups (Xg, Zg)
       //
-      
-      if ( param.has( "X" ) )
-	{
 
-	  std::set<std::string> v = param.strset( "X" );
-	  std::set<std::string> found;
-	  const int nv = vars.size();
+	
+      if ( param.has( "X" ) || param.has( "Xg" ) )
+	{	  
 	  ivs.clear();
-	  for (int j=0; j<nv; j++)
-	    if ( v.find( vars[j] ) != v.end() )
-	      {
-		ivs.push_back( j );
-		found.insert( vars[j] );
+	  std::set<std::string> v     = param.strset( "X" );
+	  std::set<std::string> vgrps = param.strset( "Xg" );
+	  std::set<std::string> found;
+	  std::set<std::string> gfound;
+	  const int nv = vars.size();
+	  for (int j=0; j<nv; j++) {
+	    if ( v.find( vars[j] ) != v.end() ) {
+	      ivs.push_back( j );
+	      found.insert( vars[j] );
+	    }	      
+	    if ( vgrps.find( var2group[ vars[j] ] ) != vgrps.end() ) {
+	      ivs.push_back( j );
+	      gfound.insert( vars[j] );
+	    }	      
+	  }
+	  
+	  if ( found.size() < v.size() ) {
+	    std::set<std::string>::const_iterator vv = v.begin();
+	    while ( vv != v.end() ) {
+	      if ( found.find( *vv ) == found.end() )
+		logger << "  *** warning, could not find " << *vv << "\n";
+	      ++vv;
+	    }
+	  }		  
+	  
+	  if ( gfound.size() < vgrps.size() ) {
+	      std::set<std::string>::const_iterator vv = vgrps.begin();
+	      while ( vv != vgrps.end() ) {
+		if ( gfound.find( *vv ) == gfound.end() )
+		  logger << "  *** warning, could not find " << *vv << "\n";
+		++vv;
 	      }
-	  if ( found.size() < v.size() )
-	    {
-	      std::set<std::string>::const_iterator vv = v.begin();
-	      while ( vv != v.end() )
-		{
-		  if ( found.find( *vv ) == found.end() )
-		    logger << "  *** warning, could not find " << *vv << "\n";
-		  ++vv;
-		}
-	    }		  
+	  }		  	  
 	}
 
-      
-      if ( param.has( "Z" ) )
-	{
-	  std::set<std::string> v = param.strset( "Z" );
-	  std::set<std::string> found;
-	  const int nv = vars.size();
+
+      if ( param.has( "Z" ) || param.has( "Zg" ) )
+	{	  
 	  cvs.clear();
-	  for (int j=0; j<nv; j++)
-	    {
-	      if ( v.find( vars[j] ) != v.end() )
-		{
-		  cvs.push_back( j );
-		  found.insert( vars[j] );
-		}
+	  std::set<std::string> v     = param.strset( "Z" );
+	  std::set<std::string> vgrps = param.strset( "Zg" );
+	  std::set<std::string> found;
+	  std::set<std::string> gfound;
+	  const int nv = vars.size();
+	  for (int j=0; j<nv; j++) {
+	    if ( v.find( vars[j] ) != v.end() ) {
+	      cvs.push_back( j );
+	      found.insert( vars[j] );
 	    }
-	  if ( found.size() < v.size() )
-	    {
-	      std::set<std::string>::const_iterator vv = v.begin();
-	      while ( vv != v.end() )
-		{
-		  if ( found.find( *vv ) == found.end() )
-		    logger << "  *** warning, could not find " << *vv << "\n";
-		  ++vv;
-		}
+	    
+	    if ( vgrps.find( var2group[ vars[j] ] ) != vgrps.end() ) {
+	      cvs.push_back( j );
+	      gfound.insert( vars[j] );
 	    }
+	  }
+	  
+	  if ( found.size() < v.size() ) {
+	    std::set<std::string>::const_iterator vv = v.begin();
+	    while ( vv != v.end() ) {
+	      if ( found.find( *vv ) == found.end() )
+		logger << "  *** warning, could not find " << *vv << "\n";
+	      ++vv;
+	    }
+	  }		  
+	  
+	  if ( gfound.size() < vgrps.size() ) {
+	    std::set<std::string>::const_iterator vv = vgrps.begin();
+	    while ( vv != vgrps.end() ) {
+	      if ( gfound.find( *vv ) == gfound.end() )
+		logger << "  *** warning, could not find " << *vv << "\n";
+	      ++vv;
+	    }
+	  }		  
+	  
 	}
 
       
@@ -618,11 +643,11 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       //
       // if 'all-by-all' added, then also set X == Y
       //
-
+      
       const bool all_by_all = param.has( "all-by-all" );
-
-      if ( all_by_all && param.has( "X" ) )
-	Helper::halt( "cannot specify X and all-by-all together" );
+      
+      if ( all_by_all && ( param.has( "X" ) || param.has( "Xg" ) ) )
+	Helper::halt( "cannot specify X (Xg) and all-by-all together" );
 
       
       std::set<int> v1 = Helper::vec2set( ivs );
@@ -692,7 +717,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       double winsor_th = -9; // default = N
       if ( param.has( "winsor" ) )
 	{
-	  if ( param.value( "winsor" ) == "F" || param.value( "winsor" ) == "N" || param.value( "winsor" ) == "0" ) 
+	  if ( param.value( "winsor" ) == "F"
+	       || param.value( "winsor" ) == "N"
+	       || param.value( "winsor" ) == "0" ) 
 	    winsor_th = -9; // i.e. none
 	  else
 	    {
@@ -733,7 +760,8 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  summarize();
 	  return;
 	}
-	  
+
+      
       //
       // run association tests
       //
@@ -752,17 +780,29 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	      return ;
 	    }
 	  
-	  // options
-	  nreps = param.requires_int( "nreps" ) ;
+	  // options: permutations?
+	  nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 0 ;
 	  if ( nreps < 0 ) Helper::halt( "nreps must be positive" );
 
-	  // output thresholds
-	  pthresh = param.has( "p" ) ? param.requires_dbl( "p" ) : 99 ;
-	  pthresh_adj = param.has( "padj" ) ? param.requires_dbl( "padj" ) : 99 ;
-
+	  
 	  // level of multiple-test correction
 	  correct_all_X = param.has( "adj-all-X" ) ? param.yesno( "adj-all-X" ) : false;
 
+	  // adjustments
+	  // BONF (=Bonferroni single-step adjusted p-values),
+	  // HOLM (=Holm (1979) step-down adjusted p-values),
+	  // FDR_BH (=Benjamini & Hochberg (1995) step-up FDR control),
+	  // FDR_BY (=Benjamini & Yekutieli (2001) step-up FDR control).
+
+	  // for B&H FDR by default
+	  adj_fdr_bh = param.has( "fdr" ) ? param.yesno( "fdr" ) : true; 
+	  adj_holm = param.has( "holm" );
+	  adj_bonf = param.has( "bonf" );
+	  adj_fdr_by = param.has( "fdr-by" );
+	  if ( param.has( "adj") )
+	    adj_fdr_bh = adj_bonf = adj_holm = adj_fdr_by = true;	  
+	  adj_any = adj_holm || adj_fdr_bh || adj_bonf || adj_fdr_by ;
+	  
 	  // # tests requested
 	  int ntests = 0;
 	  for (int i=0; i<ivs.size(); i++)
@@ -770,18 +810,24 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	      if ( ivs[i] != dvs[j] ) ++ntests;
 	  
 	  logger << "  " << ntests << " total tests specified\n";
-
+	  
 	  // do the actual work 	  
 	  if ( correct_all_X ) 
 	    {
 	      logger << "  adjusting for multiple tests across all X variables\n";
-	      logger << "  performing association tests w/ " << nreps << " permutations... (may take a while)\n"; 
+	      if ( nreps ) 
+		logger << "  performing association tests w/ "
+		       << nreps << " permutations... (may take a while)\n"; 
 	      run();
 	    }
 	  else
 	    {
-	      logger << "  adjusting for multiple tests only within each X variable\n";
-	      logger << "  performing association tests w/ " << nreps << " permutations... (may take a while)\n";	  
+
+	      logger << "  adjusting for multiple tests only within each X variable ('adj-all-X' to adjust across all X)\n";
+
+	      if ( nreps ) 
+		logger << "  performing association tests w/ "
+		       << nreps << " permutations... (may take a while)\n";	  
 	      run1X();
 	    }
 	  
@@ -1054,6 +1100,16 @@ void gpa_t::prep()
 		    var2group[ expand_vname ] = file2group[ ff->first ];
 		  }
 		
+
+		// check we haven't already seen this:		
+		std::map<int,std::map<int,double> >::const_iterator dd = D.find( var2slot[ expand_vname ] );
+		if ( dd != D.end() )
+		  {
+		    const std::map<int,double> & D2 = dd->second;
+		    if ( D2.find( id2slot[ id ] ) != D2.end() )
+		      logger << "  *** warning *** repeated instances of " << expand_vname << " for " << id
+			     << " (" << D2.find( id2slot[ id ] )->second << " and " << dtok[j] << ")\n";
+		  }
 		
 		// store actual (numeric, non-NaN) value
 		double val;
@@ -1128,7 +1184,7 @@ void gpa_t::prep()
       gbvars.insert( std::make_pair( var2group[ bb->first ] , bb->second ) );
       ++bb;
     }
-
+  
   // make final, ordered vars list
   
   vars.clear();
@@ -1170,8 +1226,9 @@ void gpa_t::prep()
 	{
 	  int final_slot = final_var2slot[ vars[j] ];
 	  int slot = var2slot[ vars[j] ];
+
 	  if ( D[ slot  ].find( ii->second ) != D[ slot ].end() )
-	    X( ii->second , final_slot ) = D[ slot ][ ii->second ];
+	    X( ii->second , final_slot ) = D[ slot ][ ii->second ];	    
 	}
       
       ++ii;
@@ -1278,36 +1335,75 @@ void gpa_t::run()
 	{
 	  const std::string & var = vars[ dvs[y] ];
 	  
-	  if ( results.emp[xvar][ var ] < pthresh && results.emp_corrected[xvar][ var ] < pthresh_adj )
+	  const bool self = xvar == var; 
+	  
+	  shown_y = true; 
+	  writer.level( var , "Y" );
+	  
+	  if ( ! self ) // keep as NA if self (Y == X)
 	    {
-	      
-	      const bool self = xvar == var; 
-	      
-	      shown_y = true; 
-	      writer.level( var , "Y" );
-	      
-	      if ( ! self ) // keep as NA if self (Y == X)
-		{
-		  writer.value( "B"  , results.beta[ xvar ][ var ] );
-		  writer.value( "T"  , results.t[xvar][ var ] );
-		  writer.value( "P" , results.emp[xvar][ var ] );
-		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
-		  writer.value( "N" , (int)X.rows() );
 
+	      writer.value( "B"  , results.beta[ xvar ][ var ] );
+	      writer.value( "T"  , results.t[xvar][ var ] );
+
+	      writer.value( "P" , results.p[xvar][ var ] );
+	      writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
+	      
+	      if ( nreps != 0 )
+		{
+		  writer.value( "EMP" , results.emp[xvar][ var ] );
+		  writer.value( "EMPADJ" , results.emp_corrected[xvar][ var ] );
 		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
 		  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
-		  count_all++;
 		}
+	      else // else summaary based on asymptotic & FDR  
+		{
+		  if ( results.p[xvar][ var ] < 0.05 ) count_p05++;
+		  if ( results.fdr_bh( xvar , var ) < 0.05 ) count_padj05++;
+		}
+	      	      
+
+	      if ( adj_fdr_by)
+                writer.value( "P_FDR_BY"  , results.fdr_by( xvar , var ) );
+              if ( adj_bonf )
+                writer.value( "P_BONF"  , results.bonf( xvar , var ) );
+              if ( adj_holm )
+		writer.value( "P_HOLM"  , results.holm( xvar , var ) );
 	      
-	      // manifest details
-	      writer.value( "GROUP" ,  var2group[ var ] );
-	      writer.value( "BASE"  , basevar[ var ] );
-	      
+	      count_all++;
+	    }
+	  
+	  // manifest details
+	  writer.value( "GROUP" ,  var2group[ var ] );
+	  writer.value( "BASE"  , basevar[ var ] );
+	  
+	  std::string x;
+	  std::set<std::string>::const_iterator gg = allfacs.begin();
+	  while ( gg != allfacs.end() )
+	    {
+	      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
+	      if ( kk != faclvl.end() )
+		{
+		  if ( kk->second.find( *gg ) != kk->second.end() )
+		    {
+		      if ( x != "" ) x += ";";
+		      x += *gg + "=" + kk->second.find( *gg )->second;
+		    }
+		}
+	      ++gg;
+	    }
+	  writer.value( "STRAT" , x );
+	  
+	  // optional X-variable details too?
+	  if ( show_xfacs )
+	    {
+	      writer.value( "XGROUP" ,  var2group[ xvar ] );
+	      writer.value( "XBASE"  , basevar[ xvar ] );
 	      std::string x;
 	      std::set<std::string>::const_iterator gg = allfacs.begin();
 	      while ( gg != allfacs.end() )
-		{
-		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
+		{		      
+		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
 		  if ( kk != faclvl.end() )
 		    {
 		      if ( kk->second.find( *gg ) != kk->second.end() )
@@ -1315,33 +1411,10 @@ void gpa_t::run()
 			  if ( x != "" ) x += ";";
 			  x += *gg + "=" + kk->second.find( *gg )->second;
 			}
-		    }
+		    }		      
 		  ++gg;
-		}
-	      writer.value( "STRAT" , x );
-	      
-	      // optional X-variable details too?
-	      if ( show_xfacs )
-		{
-		  writer.value( "XGROUP" ,  var2group[ xvar ] );
-		  writer.value( "XBASE"  , basevar[ xvar ] );
-		  std::string x;
-		  std::set<std::string>::const_iterator gg = allfacs.begin();
-		  while ( gg != allfacs.end() )
-		    {		      
-		      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
-		      if ( kk != faclvl.end() )
-			{
-			  if ( kk->second.find( *gg ) != kk->second.end() )
-			    {
-			      if ( x != "" ) x += ";";
-			      x += *gg + "=" + kk->second.find( *gg )->second;
-			    }
-			}		      
-		      ++gg;
-		    }	  
-		  writer.value( "XSTRAT" , x );
-		}
+		}	  
+	      writer.value( "XSTRAT" , x );
 	    }
 	}
       if ( shown_y )
@@ -1350,15 +1423,13 @@ void gpa_t::run()
     }
   
   writer.unlevel( "X" );
+  
+  logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
+	 << "significant at nominal p < 0.05\n";
+  
+  logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
+	 << "significant at adjusted p < 0.05\n";
 
-  if ( pthresh > 1 )
-    {
-      logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
-	     << "significant at nominal p < 0.05\n";
-
-      logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
-	     << "significant at adjusted p < 0.05\n";
-    }
 }
 
 
@@ -1424,90 +1495,103 @@ void gpa_t::run1X() // correction within X
 	{
 	  const std::string & var = vars[ dvs[y] ];
 	  
-	  if ( results.emp[xvar][ var ] < pthresh && results.emp_corrected[xvar][ var ] < pthresh_adj )
+	  const bool self = xvar == var;
+	  shown_y = true; 
+	  writer.level( var , "Y" );
+	  
+	  if ( ! self )
 	    {
-	      const bool self = xvar == var;
-	      shown_y = true; 
-	      writer.level( var , "Y" );
+	      writer.value( "B"  , results.beta[ xvar ][ var ] );
+	      writer.value( "T"  , results.t[ xvar ][ var ] );
 
-	      if ( ! self )
-		{
-		  writer.value( "B"  , results.beta[ xvar ][ var ] );
-		  writer.value( "T"  , results.t[xvar][ var ] );
-		  writer.value( "P" , results.emp[xvar][ var ] );
-		  writer.value( "PADJ" , results.emp_corrected[xvar][ var ] );
-		  writer.value( "N" , (int)X.rows() );
-		  
-		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
-                  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
-                  count_all++;
-		  
-		}
-
+	      writer.value( "P" , results.p[xvar][ var ] );
+	      writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
 	      
-	      // manifest details
-	      writer.value( "GROUP" ,  var2group[ var ] );
-	      writer.value( "BASE"  , basevar[ var ] );
+	      if ( nreps != 0 )
+		{
+		  writer.value( "EMP" , results.emp[xvar][ var ] );
+		  writer.value( "EMPADJ" , results.emp_corrected[xvar][ var ] );
+
+		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
+		  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
+		}
+	      else // else summaary based on asymptotic & FDR  
+		{
+		  if ( results.p[xvar][ var ] < 0.05 ) count_p05++;
+		  if ( results.fdr_bh( xvar , var ) < 0.05 ) count_padj05++;
+		}	      	      
+
+	      if ( adj_fdr_by)
+                writer.value( "P_FDR_BY"  , results.fdr_by( xvar , var ) );
+              if ( adj_bonf )
+                writer.value( "P_BONF"  , results.bonf( xvar , var ) );
+              if ( adj_holm )
+		writer.value( "P_HOLM"  , results.holm( xvar , var ) );
+
+	      count_all++;
+	      
+	    }
+
+	  
+	  // manifest details
+	  writer.value( "GROUP" ,  var2group[ var ] );
+	  writer.value( "BASE"  , basevar[ var ] );
+	  
+	  std::string x;
+	  std::set<std::string>::const_iterator gg = allfacs.begin();
+	  while ( gg != allfacs.end() )
+	    {
+	      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
+	      if ( kk != faclvl.end() )
+		{
+		  if ( kk->second.find( *gg ) != kk->second.end() )
+		    {			  
+		      if ( x != "" ) x += ";";
+		      x += *gg + "=" + kk->second.find( *gg )->second;
+		    }
+		}		  
+	      ++gg;
+	    }
+	  writer.value( "STRAT" , x );
+	  
+	  // optional X var manifest
+	  if ( show_xfacs )
+	    {
+	      writer.value( "XGROUP" ,  var2group[ xvar ] );
+	      writer.value( "XBASE"  , basevar[ xvar ] );
 	      
 	      std::string x;
 	      std::set<std::string>::const_iterator gg = allfacs.begin();
 	      while ( gg != allfacs.end() )
-		{
-		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
+		{	      
+		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
 		  if ( kk != faclvl.end() )
 		    {
 		      if ( kk->second.find( *gg ) != kk->second.end() )
-			{			  
+			{
 			  if ( x != "" ) x += ";";
 			  x += *gg + "=" + kk->second.find( *gg )->second;
 			}
-		    }		  
+		    }
 		  ++gg;
 		}
-	      writer.value( "STRAT" , x );
-
-	      // optional X var manifest
-	      if ( show_xfacs )
-		{
-		  writer.value( "XGROUP" ,  var2group[ xvar ] );
-		  writer.value( "XBASE"  , basevar[ xvar ] );
-		  
-		  std::string x;
-		  std::set<std::string>::const_iterator gg = allfacs.begin();
-                  while ( gg != allfacs.end() )
-                    {	      
-                      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
-                      if ( kk != faclvl.end() )
-                        {
-                          if ( kk->second.find( *gg ) != kk->second.end() )
-                            {
-                              if ( x != "" ) x += ";";
-                              x += *gg + "=" + kk->second.find( *gg )->second;
-			    }
-                        }
-                      ++gg;
-                    }
-		  writer.value( "XSTRAT" , x );
-		}
-	      
-	      
-	    }
+	      writer.value( "XSTRAT" , x );
+	    }	  
 	}
       if ( shown_y )
 	writer.unlevel( "Y" );
-            
+      
     }  
   writer.unlevel( "X" );
   
-  if ( pthresh > 1 )
-    {
-      logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
-             << "significant at nominal p < 0.05\n";
-
-      logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
-             << "significant at adjusted p < 0.05\n";
-    }
-
+  logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
+	 << "significant at nominal p < 0.05\n";
+  
+  logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
+	 << "significant at adjusted p < 0.05";
+  if ( nreps != 0 ) logger << " based on empirical family-wise correction\n";
+  else logger << " based on FDR\n";
+  
 }
 
 
@@ -2803,8 +2887,10 @@ linmod_results_t linmod_t::run( int nreps )
       Eigen::MatrixXd VX = ( MM.transpose() * MM ).inverse() ;
       const int nterms = 1 + nz + 1 ; // intercept + covariates + single IV 
       const int idx = nterms - 1;
-      Eigen::VectorXd T = get_tstats( B.row(idx) , Yres , VX(idx,idx) , ni - nterms );
-
+      
+      // also get asymptotic p-values from the original
+      Eigen::VectorXd Pasym;
+      Eigen::VectorXd T = get_tstats( B.row(idx) , Yres , VX(idx,idx) , ni - nterms , &Pasym );
       Eigen::ArrayXd U = Eigen::ArrayXd::Ones( ny );
                   
       //logger << "  ";
@@ -2860,9 +2946,9 @@ linmod_results_t linmod_t::run( int nreps )
       
       U /= (double)(nreps+1);
 
-      Eigen::MatrixXd R( ny , 3 );
+      Eigen::MatrixXd R( ny , 4 );
 
-      R << B.row(idx).transpose() , T , U ;
+      R << B.row(idx).transpose() , T , U , Pasym;
       
       //
       // Point-wise results
@@ -2873,8 +2959,9 @@ linmod_results_t linmod_t::run( int nreps )
 	  if (  xname[x] != vname[y] ) // ignore any self (Y == X) tests
 	    {
 	      results.beta[ xname[x] ][ vname[y] ] = R(y,0);
-	      results.t[ xname[x] ][ vname[y] ] = R(y,1); 
+	      results.t[ xname[x] ][ vname[y] ] = R(y,1);
 	      results.emp[ xname[x] ][ vname[y] ] = R(y,2);
+	      results.p[ xname[x] ][ vname[y] ] = R(y,3);
 	    }
 	}
             
@@ -2897,7 +2984,11 @@ linmod_results_t linmod_t::run( int nreps )
     for (int y=0; y<ny; y++)
       if (  xname[x] != vname[y] ) // ignore self tests
 	results.emp_corrected[ xname[x] ][ vname[y] ] = F(x,y);
-  
+
+  // and make other adjusted stats
+  results.make_corrected( xname , vname );
+
+  // all done
   return results;
 }
 
@@ -2906,9 +2997,10 @@ linmod_results_t linmod_t::run( int nreps )
 Eigen::VectorXd linmod_t::get_tstats( const Eigen::VectorXd & B ,
 				      const Eigen::MatrixXd & Yres ,
 				      const double vx ,
-				      const int denom )
+				      const int denom ,
+				      Eigen::VectorXd * pvalues )
 {
-  
+
   const int n = B.rows();
   
   Eigen::VectorXd T = Eigen::VectorXd::Zero( n );
@@ -2920,8 +3012,20 @@ Eigen::VectorXd linmod_t::get_tstats( const Eigen::VectorXd & B ,
   for (int i=0; i<n; i++)
     T[i] = B[i] / sqrt( vx * T[i] / (double)denom ) ;
   
+  // residual degrees of freedom = ni - 2 - nz  = denom
+  
   // double sigmaSq =  ee[0]  / ( ni - 1 - 1 - nz ) ;
   // double se = sqrt( sigmaSq * vx );
+
+  // for (int i=0; i<n; i++)
+  //   std::cout << " p = " << T[i] << " " << MiscMath::pT( T[i] , denom ) << "\n";
+
+  if ( pvalues != NULL )
+    {
+      *pvalues = Eigen::VectorXd::Zero( n );
+      for (int i=0; i<n; i++)
+	(*pvalues)[i] = MiscMath::pT( T[i] , denom );
+    }
   
   return T;
 }
@@ -3221,7 +3325,7 @@ void gpa_t::parse( const std::string & pfile )
 		json x = item[ "mappings" ] ;
 		if ( x.is_string() )
 		  x = std::vector<std::string>( 1 , x );
-		
+
 		if ( ! x.is_array() )
 		  {
 		    if ( ! x.is_null() ) 
@@ -3239,17 +3343,14 @@ void gpa_t::parse( const std::string & pfile )
 			    for ( auto & vv : v.items() )
 			      {
 				std::string var = vv.key();
-				
-				if ( vv.value().is_object() && vv.value().size() == 2 )
+				if ( vv.value().is_object() && vv.value().size() == 1 )
 				  {
 				    for ( auto & vvv : vv.value().items() )
 				      {
 					std::string str = vvv.key();
-					double num = vvv.value();
-					
+					double num = vvv.value();					
 					// store
-					file2var2mapping[ file_name ][ var ][ str ] = num; 
-					
+					file2var2mapping[ file_name ][ var ][ str ] = num;
 				      }
 				  }
 			      }
@@ -3467,3 +3568,165 @@ void gpa_t::knn_imputation( param_t & param )
 
 }
   
+Eigen::MatrixXd linmod_t::correct( const Eigen::VectorXd & p )
+{
+
+  // 4 corrected values: Bonf, Holm, BH, BY
+
+  // Benjamini, Y., and Hochberg, Y. (1995). Controlling the false
+  // discovery rate: a practical and powerful approach to multiple
+  // testing. Journal of the Royal Statistical Society Series B, 57,
+  // 289–300.
+
+  // Benjamini, Y., and Yekutieli, D. (2001). The control of the false
+  // discovery rate in multiple testing under dependency. Annals of
+  // Statistics 29, 1165–1188.
+
+  //  Yekutieli and Benjamini (1999) developed another FDR controlling
+  //  procedure, which can be used under general dependence by
+  //  resampling the null distribution.
+  
+  if ( p.size() == 0 )
+    return Eigen::MatrixXd::Zero(0,4);
+  
+  struct pair_t {
+    double p;
+    int l;
+    bool operator< (const pair_t & p2) const { return ( p < p2.p ); }
+  };
+
+  std::vector<pair_t> sp;
+
+  const int npv = p.size();
+  
+  for (int l=0; l<npv; l++)
+    {      
+      if ( p[l] > -1) 
+	{
+	  pair_t pt;
+	  pt.p = p[l];
+	  pt.l = l;      
+	  sp.push_back(pt);
+	}      
+    }
+
+  // sort p-values
+  double t = (double)sp.size();
+  int ti = sp.size();
+  std::sort(sp.begin(),sp.end());
+  
+  // Consider each test
+  Eigen::VectorXd pv_holm = Eigen::VectorXd::Zero( ti );
+  Eigen::VectorXd pv_BH = Eigen::VectorXd::Zero( ti );
+  Eigen::VectorXd pv_BY = Eigen::VectorXd::Zero( ti );
+  
+  // Holm 
+  pv_holm[0] = sp[0].p*t > 1 ? 1 : sp[0].p*t;
+  for (int i=1;i<ti;i++)
+    {
+      double x = (ti-i)*sp[i].p < 1 ? (ti-i)*sp[i].p : 1;
+      pv_holm[i] = pv_holm[i-1] > x ? pv_holm[i-1] : x;
+    }
+  
+  // // Sidak SS
+  // for (int i=0;i<ti;i++)
+  //   pv_sidakSS[i] = 1 - pow( 1 - sp[i].p , t );
+  
+  
+  // // Sidak SD
+  // pv_sidakSD[0] = 1 - pow( 1 - sp[0].p , t );
+  // for (int i=1;i<ti;i++)
+  //   {
+  //     double x = 1 - pow( 1 - sp[i].p , t - i  );
+  //     pv_sidakSD[i] = pv_sidakSD[i-1] > x ? pv_sidakSD[i-1] : x ; 
+  //   }
+  
+  // BH
+  pv_BH[ti-1] = sp[ti-1].p;
+  for (int i=ti-2;i>=0;i--)
+    {
+      double x = (t/(double)(i+1))*sp[i].p < 1 ? (t/(double)(i+1))*sp[i].p : 1 ;
+      pv_BH[i] = pv_BH[i+1] < x ? pv_BH[i+1] : x;
+    }
+  
+  // BY
+  double a = 0;
+  for (double i=1; i<=t; i++)
+    a += 1/i;
+  
+  pv_BY[ti-1] = a * sp[ti-1].p < 1 ? a * sp[ti-1].p : 1 ; 
+  
+  for (int i=ti-2;i>=0;i--)
+    {      
+      double x = ((t*a)/(double)(i+1))*sp[i].p < 1 ? ((t*a)/(double)(i+1))*sp[i].p : 1 ;
+      pv_BY[i] = pv_BY[i+1] < x ? pv_BY[i+1] : x;
+    }
+
+
+  Eigen::MatrixXd res = Eigen::MatrixXd::Constant( npv , 4 , -9 );
+
+  for (int l=0; l<ti; l++)
+    {
+      const int idx = sp[l].l;
+
+      // bonferroni
+      res(idx,0) = sp[l].p*t > 1 ? 1 : sp[l].p*t;
+      // others
+      res(idx,1) = pv_holm[l];
+      res(idx,2) = pv_BH[l]; // fdr
+      res(idx,3) = pv_BY[l];
+
+    }
+
+  return res;
+}
+
+
+
+// generate corrected results
+void linmod_results_t::make_corrected( const std::vector<std::string> & xvars ,
+				       const std::vector<std::string> & yvars )
+  
+{
+  
+  // index results (will always be all-by-all)
+  int nx = xvars.size();
+  int ny = yvars.size();
+  
+  index.clear();
+  int cnt = 0;
+  
+  for (int i=0; i<xvars.size(); i++)
+    for (int j=0; j<yvars.size(); j++)
+      index[ xvars[i] ][ yvars[j] ] = cnt++;
+    
+  // make vector of asymptotic p-values
+  
+  Eigen::VectorXd P = Eigen::VectorXd::Zero( cnt );
+
+  cnt = 0;
+  for (int i=0; i<xvars.size(); i++)
+    for	(int j=0; j<yvars.size(); j++)
+      P[ cnt++ ] = p[ xvars[i] ][ yvars[j] ];
+    
+  corr = linmod_t::correct( P );
+  
+}
+
+double linmod_results_t::bonf(const std::string & x , const std::string & y )
+  { return corr( index[ x ][ y ] , 0 ); }
+
+// double linmod_results_t::sidak_ss(const std::string & x , const std::string & y )
+//   { return corr( index[ x ][ y ] , 1 ); }
+
+// double linmod_results_t::sidak_sd(const std::string & x , const std::string & y )
+//   { return corr( index[ x ][ y ] , 2 ); }
+
+double linmod_results_t::holm(const std::string & x , const std::string & y )
+  { return corr( index[ x ][ y ] , 1 ); }
+
+double linmod_results_t::fdr_bh(const std::string & x , const std::string & y )
+  { return corr( index[ x ][ y ] , 2 ); }
+
+double linmod_results_t::fdr_by(const std::string & x , const std::string & y )
+  { return corr( index[ x ][ y ] , 3 ); }

@@ -30,6 +30,7 @@
 #include <ctime>
 #include <string>
 #include <iomanip>
+#include <fstream>
 
 #include "defs/defs.h"
 
@@ -40,7 +41,11 @@ class logger_t
 
   const std::string _log_header;
 
-  std::ostream& _out_stream;
+  std::ostream & _out_stream;
+
+  bool           save_log;
+  
+  std::ofstream  _log_file;
   
   std::stringstream ss;
   
@@ -52,14 +57,52 @@ class logger_t
 	  std::ostream& out_stream = std::cerr)
    : _log_header( log_header ) , _out_stream( out_stream ) 
   {
-    is_off = false;      
+    is_off = false;
+    save_log = false;
+  }
+
+  void write_log( const std::string & log_file )
+  {
+
+    // do not allow this in non-standard logging modes
+    if ( is_off || globals::silent || globals::api_mode ) return;
+    
+    // close any existing stream?
+    if ( save_log )
+      stop_writing_log();
+    
+    _log_file.open( log_file.c_str() );
+    save_log = true;
+  }
+
+  void print_to_file( const std::string & str )
+  {
+
+    // special option to write *only* to file, not standard logger
+    // this is used only for the '--log' option, i.e. to parse and
+    // dump the luna command line, as that is done *before* any options
+    // are parsed (e.g. log turned off, etc)
+    
+    if ( ! save_log ) return;    
+    _log_file << str ; 
+    
+  }
+
+  
+  void stop_writing_log()
+  {
+    if ( save_log )
+      {
+	_log_file.close();
+	save_log = false;
+      }
   }
   
   void flush() { _out_stream.flush(); } 
 
   void flush_cache() { ss.str(std::string()); }
   
-  void off() { flush(); flush_cache(); is_off = true; } 
+  void off() { flush(); flush_cache(); stop_writing_log(); is_off = true; } 
 
   void banner( const std::string & v , const std::string & bd ) 
   {
@@ -79,13 +122,20 @@ class logger_t
 		<< _log_header
 		<< " | " << v << ", " << bd << " | starting " << BUFFER  << " +++\n"
 		<< "===================================================================" << std::endl;
+
+    if ( save_log )
+      _log_file << "===================================================================" << "\n"
+		<< _log_header
+		<< " | " << v << ", " << bd << " | starting " << BUFFER  << " +++\n"
+		<< "===================================================================" << std::endl;
+    
   }
 
                          
    
   ~logger_t()
     {
-      
+
       if ( is_off || globals::silent || globals::api_mode ) return;
       
       if ( ! globals::silent ) 
@@ -105,21 +155,40 @@ class logger_t
 		      << "                       +++\n"
 		      << "==================================================================="
 		      << std::endl;
-	}
 
+	  if ( save_log )
+	    {
+
+	      _log_file << "-------------------------------------------------------------------"
+			<< "\n"
+			<< "+++ luna | finishing "
+			<< BUFFER
+			<< "                       +++\n"
+			<< "==================================================================="
+			<< std::endl;
+
+	      stop_writing_log();
+	    }
+	  	      
+	}
+      
     }
 
 
   void warning( const std::string & msg )
   {
     if ( is_off ) return ;
-
+    
     if ( globals::logger_function )
       (*globals::logger_function)( " ** warning: " + msg + " **" );
     else if ( globals::cache_log )
       ss << " ** warning: " << msg << " ** " << std::endl;
     else
-      _out_stream << " ** warning: " << msg << " ** " << std::endl;
+      {
+	_out_stream << " ** warning: " << msg << " ** " << std::endl;
+	if ( save_log )
+	  _log_file << " ** warning: " << msg << " ** " << std::endl;
+      }
   }
   
   
@@ -129,7 +198,11 @@ class logger_t
       if ( is_off ) return *this;      
       
       if ( ! globals::silent ) 
-	_out_stream << data;
+	{
+	  _out_stream << data;
+	  if ( save_log )	
+	    _log_file << data;
+	}
       
       if ( globals::cache_log )
 	ss << data;
