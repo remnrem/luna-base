@@ -4925,6 +4925,21 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;      
     }
 
+  // save console logging
+  if ( Helper::iequals( tok0 , "log" ) )
+    {
+      globals::write_log = true;
+      globals::log_file = Helper::expand( tok1 );
+      return;
+    }
+
+  // allow to turn off log saving (e.g. via API)
+  if ( Helper::iequals( tok0 , "write-log" ) )
+    {
+      globals::write_log = Helper::yesno( tok1 );      
+      return;
+    }
+  
   if ( Helper::iequals( tok0 , "verbose" ) )
     {
       globals::verbose = Helper::yesno( tok1 );

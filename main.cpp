@@ -36,16 +36,17 @@ extern logger_t logger;
 
 extern freezer_t freezer;
 
-void log_commands( int argc , char ** argv );
+std::string log_commands( int argc , char ** argv );
 
 int main(int argc , char ** argv )
 {
   
   //
-  // initial check for display of all commands
+  // initial check for display of all commands 
+  //  (and save, if writing to log=luna.log also
   //
   
-  log_commands( argc , argv );
+  std::string cmd_dump = log_commands( argc , argv );
   
   //
   // display version info?
@@ -657,9 +658,25 @@ int main(int argc , char ** argv )
 
 
   //
-  // banner
+  // mirror log to file?
   //
 
+  if ( globals::write_log )
+    {
+      logger.write_log( Helper::expand( globals::log_file ) );
+
+      // if we previously did a command-line dump (w/ --log) then
+      // write that out now - it will already have been sent to std::cerr
+      // before the logger was started properly
+
+      if ( cmd_dump != "" ) logger.print_to_file( cmd_dump );
+
+    }
+  
+  //
+  // banner
+  //
+  
   logger.banner( globals::version , globals::date );
 
 
@@ -4799,10 +4816,13 @@ void NoMem()
 }
 
 
-void log_commands( int argc , char ** argv )
+std::string log_commands( int argc , char ** argv )
 {
-  bool dump = false; 
 
+  std::stringstream ss;
+  
+  bool dump = false; 
+  
   for (int i=0; i<argc; i++)
     {
       if ( strcmp( argv[i] ,"--log" ) == 0 )
@@ -4812,10 +4832,10 @@ void log_commands( int argc , char ** argv )
 	}
     }
   
-  if ( ! dump ) return;
+  if ( ! dump ) return "";
 
   bool has_s = false;
-
+  
   // note - anything in ' ' quotes is read as a single item; need to parse out first;
   std::string str ;
   for (int i=0; i<argc; i++)
@@ -4832,10 +4852,10 @@ void log_commands( int argc , char ** argv )
 
   const int n = tok.size();
   
-  std::cerr << "\n"
-	    << "# " << std::string( 78 , '=' ) << "\n"
-	    << "\n";
-
+  ss << "\n"
+     << "# " << std::string( 78 , '=' ) << "\n"
+     << "\n";
+  
   for (int i=0; i<n; i++)
     {
       std::string s = tok[i] ;
@@ -4848,16 +4868,21 @@ void log_commands( int argc , char ** argv )
       // now in command string?
       if ( s == "-s" ) { s = "-s '"; has_s = true; }
       
-      std::cerr << spc << s ;
+      ss << spc << s ;
       
     }
+  
+  if ( has_s ) ss << " '";
 
-  if ( has_s ) std::cerr << "'";
+  ss << "\n\n"
+     << "# " << std::string( 78 , '-' ) << "\n"
+     << "\n";
 
-  std::cerr << "\n\n"
-	    << "# " << std::string( 78 , '-' ) << "\n"
-	    << "\n";
-
+  // send to std::cerr
+  std::cerr << ss.str();
+  
+  // & return string (if want to save to file later, via log=file.log)
+  return ss.str();
   
 }
 

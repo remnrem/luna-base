@@ -188,6 +188,9 @@ namespace MiscMath
   double pF(const double F, const int df1, const int df2);
   double betai(const double a, const double b, const double x);
   double betacf(const double a, const double b, const double x);
+
+  // pvalues for t-test
+  double pT(double T, double df );
   
   // covariance
   double covariance( const std::vector<double> & x ,

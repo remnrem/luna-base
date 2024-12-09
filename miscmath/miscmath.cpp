@@ -25,6 +25,7 @@
 #include "stats/statistics.h"
 #include "miscmath/dynam.h"
 #include "edf/edf.h"
+#include "stats/dcdflib.h"
 
 #include <cmath>
 #include <vector>
@@ -1873,6 +1874,29 @@ int MiscMath::nearest_idx( const std::vector<double> & x , double value , int lw
 	}	
     }
   return nidx;
+}
+
+double MiscMath::pT( double T, double df )
+{
+  
+  if ( std::isnan( T ) )
+    return -9;
+
+  T = abs( T );
+  double p, q;  
+  int st = 0;      // error variable
+  int w = 1;       // function variable
+  double bnd = 1;  // boundary function
+  
+  // NCP is set to 0
+  cdft(&w,&p,&q,&T,&df,&st,&bnd);
+  
+  // Check status
+  if ( st != 0 ) return -9;
+  
+  // Return two-sided p-value
+  return 2*q;
+  
 }
 
 
