@@ -1903,17 +1903,26 @@ void cmddefs_t::init()
   add_param( "GPA" , "X" , "TST" , "Predictor variable(s)" );
   add_param( "GPA" , "Z" , "AGE,SEX" , "Covariates (nuissance variables)" );
   add_param( "GPA" , "nreps" , "1000" , "Number of permutations" );
-  add_param( "GPA" , "nreps" , "1000" , "Number of permutations" );
+  add_param( "GPA" , "adj" , "" , "Run all adjusted p-value corrections" );
+  add_param( "GPA" , "bonf" , "" , "Add Bonferroni-adjusted p-values" );
+  add_param( "GPA" , "holm" , "" , "Add Holm-adjusted p-values" );
+  add_param( "GPA" , "fdr-by" , "" , "Add FDR(B&Y)-adjusted p-values" );
+  add_param( "GPA" , "fdr" , "F" , "Turn off default FDR(B&H) adjusted p-values" );
+
   add_param( "GPA" , "dump" , "" , "Dump data matrix to stdout" );
   add_param( "GPA" , "manifest" , "" , "Dump variable maifest to stdout" );
     
   add_table( "GPA" , "X,Y" , "GPA results per pair of predictor (X) and outcome (Y)" );
   add_var( "GPA" , "X,Y" , "B" , "Regression coefficient" );
-  add_var( "GPA" , "X,Y" , "B" , "Regression coefficient" );
   add_var( "GPA" , "X,Y" , "T" , "t-statistic" );
-  add_var( "GPA" , "X,Y" , "P" , "Empirical p-value" );
-  add_var( "GPA" , "X,Y" , "PADJ" , "Adjusted empirical p-value" );
   add_var( "GPA" , "X,Y" , "N" , "Number of observations" );
+  add_var( "GPA" , "X,Y" , "P" , "Asymptotic p-value" );
+  add_var( "GPA" , "X,Y" , "P_FDR" , "FDR-adjusted p-value" );
+  add_var( "GPA" , "X,Y" , "P_FDR_BY" , "FDR(B&Y)-adjusted p-value" );
+  add_var( "GPA" , "X,Y" , "P_HOLM" , "Holm-adjusted p-value" );
+  add_var( "GPA" , "X,Y" , "P_BONF" , "Bonferroni-adjusted p-value" );
+  add_var( "GPA" , "X,Y" , "EMP" , "Empircal p-value" );
+  add_var( "GPA" , "X,Y" , "EMPADJ" , "Adjusted empirical p-value" );
   add_var( "GPA" , "X,Y" , "STRAT" , "DV stratum" );
   add_var( "GPA" , "X,Y" , "XSTRAT" , "IV stratum (if X-factors)" );
   

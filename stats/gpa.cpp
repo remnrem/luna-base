@@ -1345,10 +1345,10 @@ void gpa_t::run()
 
 	      writer.value( "B"  , results.beta[ xvar ][ var ] );
 	      writer.value( "T"  , results.t[xvar][ var ] );
-
+	      writer.value( "N" , (int)X.rows() );
 	      writer.value( "P" , results.p[xvar][ var ] );
 	      writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
-	      
+
 	      if ( nreps != 0 )
 		{
 		  writer.value( "EMP" , results.emp[xvar][ var ] );
@@ -1503,7 +1503,7 @@ void gpa_t::run1X() // correction within X
 	    {
 	      writer.value( "B"  , results.beta[ xvar ][ var ] );
 	      writer.value( "T"  , results.t[ xvar ][ var ] );
-
+	      writer.value( "N" , (int)X.rows() );
 	      writer.value( "P" , results.p[xvar][ var ] );
 	      writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
 	      
