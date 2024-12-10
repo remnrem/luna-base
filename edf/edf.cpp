@@ -1064,19 +1064,27 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
   for (int s=0; s<ns_all; s++)
     {
-      if ( digital_min[s] >= digital_max[s] )
+      if ( channels.find(s) != channels.end() )
 	{
-	  logger << "  *** invalid digital min/max for " << tlabels[s]
-		 << " : " << digital_min[s] << " / " << digital_max[s] << "\n";
-	  if ( globals::force_digital_minmax )
+	  const bool annotation = Helper::imatch( tlabels[s] , "EDF Annotation" , 14 ) ;
+	  if ( ! annotation )
 	    {
-	      logger << "  ---> forcing digital min/max for " << tlabels[s] << " to "
-		     << globals::force_digital_min << " / " << globals::force_digital_max << "\n";
-	      digital_min[s] = globals::force_digital_min;
-	      digital_max[s] = globals::force_digital_max;	      
+	      if ( digital_min[s] >= digital_max[s] )
+		{
+		  logger << "  *** invalid digital min/max for " << tlabels[s]
+			 << " : " << digital_min[s] << " / " << digital_max[s] << "\n";
+		  if ( globals::force_digital_minmax )
+		    {
+		      logger << "  ---> forcing digital min/max for " << tlabels[s] << " to "
+			     << globals::force_digital_min << " / " << globals::force_digital_max << "\n";
+		      digital_min[s] = globals::force_digital_min;
+		      digital_max[s] = globals::force_digital_max;	      
+		    }
+		}
 	    }
 	}
     }
+
       
   //
   // derived values: note, here 'ns' not 'ns_all'
