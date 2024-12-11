@@ -19,8 +19,11 @@
 //
 //    --------------------------------------------------------------------
 
-// This library downloaded from https://people.sc.fsu.edu/~jburkardt/cpp_src/legendre_polynomial/legendre_polynomial.html
-// The computer code and data files described and made available on this web page are distributed under the GNU LGPL license.
+// This library downloaded from
+// https://people.sc.fsu.edu/~jburkardt/cpp_src/legendre_polynomial/legendre_polynomial.html
+
+// The computer code and data files described and made available on
+// this web page are distributed under the GNU LGPL license.
 
 #include <cmath>
 #include <cstdlib>
@@ -37,20 +40,21 @@ using namespace std;
 
 
 
-std::vector<double> legendre( const int N , double x )
+Eigen::VectorXd legendre( const int N , double x )
 {
 
-  // hmm... not sure why this is structured this way... need to check
-  // originally, did not free allocated memory from pm_polynomial_value()
-  // 
+  // note: not sure why this is structured this way... need to check
+  // originally, this did not free allocated memory from
+  // pm_polynomial_value()
 
   // returns N+1 vector 
   const int NP1 = N+1;
   
-  std::vector<double> L( NP1 );
+  Eigen::VectorXd L = Eigen::VectorXd::Zero( NP1 );
   
   for (int M=0;M<=N;M++)
     {
+
       // std::vector<double> ans( NP1 );
       // double * pl = &(ans)[0];      
       // pl = pm_polynomial_value( 1 , N , M , &x );
@@ -71,25 +75,19 @@ std::vector<double> legendre( const int N , double x )
 	delete [] pl_orig;
     }
   return L;  
-
+  
 }
 
 
-
-// Note used::: and note -- needs fixing.... i.e. allocated memory from pm_polynomial_value() 
-// is not freed
-
+// Redundant:: original version that did not free up allocated memory
 // std::vector<std::vector<double> > legendre( const int N , const std::vector<double> & x )
 // {
-  
 //   // returns N+1 by x.size() matrix 
 //   const int MM = x.size();
 //   const int NP1 = N+1;
 //   double * px = (double*)&(x[0]);
-  
 //   std::vector<std::vector<double> > L( NP1 );
 //   for (int i=0;i<NP1;i++) L[i].resize( MM );
-  
 //   for (int M=0;M<=N;M++)
 //     {
 //       std::vector<double> ans( MM * NP1 );
@@ -106,26 +104,25 @@ std::vector<double> legendre( const int N , double x )
 
 
 
-
-
-std::vector<Data::Matrix<double> > legendre( const int N , const Data::Matrix<double> & D )
+std::vector<Eigen::MatrixXd> legendre( const int N , const Eigen::MatrixXd & D )
 {
-
+  
   // return N vector, each element mirrors the original input matrix
   
-  const int nr = D.dim1();
-  const int nc = D.dim2();
+  const int nr = D.rows();
+  const int nc = D.cols();
 
-  std::vector<Data::Matrix<double> > R(N);
-  for (int n=0;n<N;n++) R[n].resize( nr,nc );
+  std::vector<Eigen::MatrixXd> R(N);
+  for (int n=0;n<N;n++) 
+    R[n] = Eigen::MatrixXd::Zero( nr,nc );
   
   // for each datapoint
   for (int n=1;n<=N;n++)
     for (int r=0;r<nr;r++)
       for (int c=0;c<nc;c++)
 	{
-	  std::vector<double> y = legendre( n , D(r,c) );
-	  R[n-1][r][c] = y[0];
+	  Eigen::VectorXd y = legendre( n , D(r,c) );
+	  R[n-1](r,c) = y[0];
 	}
   
   return R;  
@@ -1771,6 +1768,7 @@ double *pm_polynomial_value ( int mm, int n, int m, double x[] )
       v[i+j*mm] = 0.0;
     }
   }
+
 //
 //  J = M is the first nonzero function.
 //
@@ -1791,6 +1789,7 @@ double *pm_polynomial_value ( int mm, int n, int m, double x[] )
       fact = fact + 2.0;
     }
   }
+
 //
 //  J = M + 1 is the second nonzero function.
 //
@@ -1801,6 +1800,7 @@ double *pm_polynomial_value ( int mm, int n, int m, double x[] )
       v[i+(m+1)*mm] = x[i] * ( double ) ( 2 * m + 1 ) * v[i+m*mm];
     }
   }
+
 //
 //  Now we use a three term recurrence.
 //
@@ -1816,6 +1816,7 @@ double *pm_polynomial_value ( int mm, int n, int m, double x[] )
 
   return v;
 }
+
 //****************************************************************************80
 
 void pm_polynomial_values ( int &n_data, int &n, int &m, double &x, double &fx )

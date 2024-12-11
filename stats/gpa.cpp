@@ -2891,6 +2891,7 @@ linmod_results_t linmod_t::run( int nreps )
       // also get asymptotic p-values from the original
       Eigen::VectorXd Pasym;
       Eigen::VectorXd T = get_tstats( B.row(idx) , Yres , VX(idx,idx) , ni - nterms , &Pasym );
+
       Eigen::ArrayXd U = Eigen::ArrayXd::Ones( ny );
                   
       //logger << "  ";
@@ -2953,9 +2954,10 @@ linmod_results_t linmod_t::run( int nreps )
       //
       // Point-wise results
       //
-      
+
       for (int y=0; y<ny; y++)
 	{
+
 	  if (  xname[x] != vname[y] ) // ignore any self (Y == X) tests
 	    {
 	      results.beta[ xname[x] ][ vname[y] ] = R(y,0);
@@ -2984,6 +2986,7 @@ linmod_results_t linmod_t::run( int nreps )
     for (int y=0; y<ny; y++)
       if (  xname[x] != vname[y] ) // ignore self tests
 	results.emp_corrected[ xname[x] ][ vname[y] ] = F(x,y);
+
 
   // and make other adjusted stats
   results.make_corrected( xname , vname );
@@ -3589,6 +3592,13 @@ Eigen::MatrixXd linmod_t::correct( const Eigen::VectorXd & p )
   if ( p.size() == 0 )
     return Eigen::MatrixXd::Zero(0,4);
   
+  if ( p.size() == 1 ) 
+    {
+      Eigen::MatrixXd R = Eigen::MatrixXd::Zero(1,4);
+      R(0,0) = R(0,1) = R(0,2) = R(0,3) = p[0];
+      return R;
+    }
+
   struct pair_t {
     double p;
     int l;
@@ -3609,7 +3619,7 @@ Eigen::MatrixXd linmod_t::correct( const Eigen::VectorXd & p )
 	  sp.push_back(pt);
 	}      
     }
-
+  
   // sort p-values
   double t = (double)sp.size();
   int ti = sp.size();
@@ -3620,6 +3630,7 @@ Eigen::MatrixXd linmod_t::correct( const Eigen::VectorXd & p )
   Eigen::VectorXd pv_BH = Eigen::VectorXd::Zero( ti );
   Eigen::VectorXd pv_BY = Eigen::VectorXd::Zero( ti );
   
+
   // Holm 
   pv_holm[0] = sp[0].p*t > 1 ? 1 : sp[0].p*t;
   for (int i=1;i<ti;i++)
@@ -3641,6 +3652,7 @@ Eigen::MatrixXd linmod_t::correct( const Eigen::VectorXd & p )
   //     pv_sidakSD[i] = pv_sidakSD[i-1] > x ? pv_sidakSD[i-1] : x ; 
   //   }
   
+
   // BH
   pv_BH[ti-1] = sp[ti-1].p;
   for (int i=ti-2;i>=0;i--)
@@ -3648,7 +3660,7 @@ Eigen::MatrixXd linmod_t::correct( const Eigen::VectorXd & p )
       double x = (t/(double)(i+1))*sp[i].p < 1 ? (t/(double)(i+1))*sp[i].p : 1 ;
       pv_BH[i] = pv_BH[i+1] < x ? pv_BH[i+1] : x;
     }
-  
+
   // BY
   double a = 0;
   for (double i=1; i<=t; i++)

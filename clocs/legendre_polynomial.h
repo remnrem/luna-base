@@ -24,12 +24,10 @@
 #define __LEGENDRE_H__
 
 #include <vector>
-#include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 
-//std::vector<std::vector<double> > legendre( const int , const std::vector<double> & );
-std::vector<double> legendre( const int N , double x );
-std::vector<Data::Matrix<double> > legendre( const int , const Data::Matrix<double> & );
-
+Eigen::VectorXd legendre( const int N , double x );
+std::vector<Eigen::MatrixXd> legendre( const int , const Eigen::MatrixXd & );
 
 char digit_to_ch ( int i );
 /* int i4_log_10 ( int i ); */

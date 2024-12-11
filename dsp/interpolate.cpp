@@ -29,6 +29,7 @@
 #include "clocs/topo.h"
 #include "stats/statistics.h"
 #include "pwl_interp_2d_scattered.h"
+#include "stats/eigen_ops.h"
 
 #include "eval.h"
 #include "db/db.h"
@@ -83,7 +84,14 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
     }
 
 
+  //
+  // other parameters
+  //
 
+  const int    m      = param.has( "m" ) ? param.requires_int( "m" ) : 2 ;
+  const int    order  = param.has( "order" ) ? param.requires_int( "order" ) : 10;
+  const double lambda = param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 1e-5;
+ 
   //
   // Step through each epoch/channel
   //
@@ -92,7 +100,10 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
   int ne = edf.timeline.first_epoch();
 
   logger << " now interpolating " << ne << " epochs\n";
-
+  logger << "   m = " << m << ", " 
+	 << " order = " << order << ", "
+	 << " lambda = " << lambda << "\n";
+ 
   int cnt = 0;
 
   // if no good signals, set epoch-level mask
@@ -122,11 +133,9 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       // get signal data 
       //
 
-      mslice_t mslice( edf , signals , interval );
-      
-      Data::Matrix<double> D = mslice.extract();
-
-
+      eigen_matslice_t mslice( edf , signals , interval );
+           
+      Eigen::MatrixXd & D = mslice.nonconst_data_ref();
 
       //
       // Get good/bad channel lists from chep
@@ -143,10 +152,8 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       for (int s=0;s<signals.size();s++) 
 	if ( ! edf.timeline.masked( epoch , signals.label(s) ) ) 
 	  good_signals_idx.push_back( s ); // i.e. different encoding, relative to signals()
-
-      //std::cerr << "epoch e " << epoch << " " << good_signals.size() << " " << bad_signals.size() << "\n";
       
-
+      
       // nothing to do
       if ( bad_signals.size() == 0 ) 
 	{
@@ -166,19 +173,20 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       //
       // Construct interpolation matrices
       //
-
-      Data::Matrix<double> invG;
       
-      Data::Matrix<double> Gi;
+      Eigen::MatrixXd invG;
+      Eigen::MatrixXd Gi;
       
-      edf.clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
+      edf.clocs.make_interpolation_matrices( good_signals , bad_signals , 
+					     &invG , &Gi , 
+					     m , order, lambda );
       
       
       //
       // interpolate
       //
       
-      Data::Matrix<double> I = edf.clocs.interpolate( D , good_signals_idx , invG, Gi );
+      Eigen::MatrixXd I = edf.clocs.interpolate( D , good_signals_idx , invG, Gi );
 
 
       //
@@ -194,10 +202,11 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 
       for (int s=0;s<bad_signals.size();s++)	
 	{
-	  edf.update_records( a , b , bad_signals(s) , I.col(s).data_pointer() );
+	  std::vector<double> p = eigen_ops::copy_vector( I.col(s) );
+	  edf.update_records( a , b , bad_signals(s) , &p );
 	  cnt_interpolated_chs[ bad_signals.label(s) ]++;
 	}
-
+      
       cnt_interpolated_epochs++;
 
       cnt_interpolated_cheps += bad_signals.size();
@@ -274,8 +283,8 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
   // for each channel, assume it is bad, and calculate G and Gi based on all other channels
   //
   
-  std::vector<Data::Matrix<double> > invG;
-  std::vector<Data::Matrix<double> > Gi;
+  std::vector<Eigen::MatrixXd> invG;
+  std::vector<Eigen::MatrixXd> Gi;
   std::vector<std::vector<int> > good_channels;
   
   logger << " generating leave-one-out G matrices for " << signals.size() << " signals\n";
@@ -302,11 +311,11 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
 	}
       
       //
-      // make matrices
+      // make matrices (edf.clocs.make_interpolation_matrices() allocates space to both G and invG)
       //
-
-      Data::Matrix<double> _invG;
-      Data::Matrix<double> _Gi;
+      
+      Eigen::MatrixXd _invG;
+      Eigen::MatrixXd _Gi;
       
       edf.clocs.make_interpolation_matrices( good_signals , bad_signals , &_invG , &_Gi );
       
@@ -341,51 +350,48 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
 
       interval_t interval = edf.timeline.epoch( epoch );
       
-      mslice_t mslice( edf , signals , interval );
+      eigen_matslice_t mslice( edf , signals , interval );
       
-      Data::Matrix<double> D = mslice.extract();
- 
+      const Eigen::MatrixXd & D = mslice.data_ref();
+      
       //
       // interpole for each channel
       //
       
       for (int s=0;s<ns;s++)
 	{
-
-	  Data::Matrix<double> & _invG = invG[s];
-	  Data::Matrix<double> & _Gi = Gi[s];
+	  Eigen::MatrixXd & _invG = invG[s];
+	  Eigen::MatrixXd & _Gi   = Gi[s];	  
 	  std::vector<int> & _good_channels = good_channels[s];
 
 	  // interpolate
-	  Data::Matrix<double> I = edf.clocs.interpolate( D , _good_channels , _invG, _Gi );
+	  Eigen::MatrixXd I = edf.clocs.interpolate( D , _good_channels , _invG, _Gi );
 	  
 	  // calculate error 
 // 	  logger << "X " << s << "\t" 
 // 		    << signals.label(s) << "\t" ;
 	  
-// 	  double error = 0;
-	  
+// 	  double error = 0;	  
 // 	  const int nr = I.dim1();
-
 // 	  for (int i=0;i<nr;i++)
 // 	    {
 // // 	      std::cout << s << "\t"
 // // 			<< epoch << "\t"
 // // 			<< I[i][0] << "\t"
 // // 			<< D[i][s] << "\n";
-
 // 	      error += ( I[i][0] - D[i][s] ) * ( I[i][0] - D[i][s] ) ;
 // 	    }
 	  // normalize
 	  //	  error /= (double)nr;
-
-
 	  
-	  // correlation
-	  double r = Statistics::correlation( *I.col_pointer(0)->data_pointer() , 
-					      *D.col_pointer(s)->data_pointer() );
+	  // correlation (FIXME.. use eigen ops instead...)
+	  std::vector<double> x1 = eigen_ops::copy_vector( I.col(0) );
+	  std::vector<double> x2 = eigen_ops::copy_vector( D.col(s) );
+	  double r = Statistics::correlation( x1, x2 );
 
-	  
+	    // *I.col_pointer(0)->data_pointer() , 
+	    // *D.col_pointer(s)->data_pointer() );
+	    
 	  // write
 	  writer.level( signals.label(s) , globals::signal_strat );
 	  writer.value( "R" , r ); 
@@ -406,15 +412,15 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
 
 
 
-Data::Matrix<double> dsptools::interpolate2D( const std::vector<double> & x , 
-					      const std::vector<double> & y , 
-					      const std::vector<double> & z , // values 
-					      const double xmin , 
-					      const double xmax ,
-					      const int    nx , 
-					      const double ymin , 
-					      const double ymax ,
-					      const int    ny ) 
+Eigen::MatrixXd dsptools::interpolate2D( const std::vector<double> & x , 
+					 const std::vector<double> & y , 
+					 const std::vector<double> & z , // values 
+					 const double xmin , 
+					 const double xmax ,
+					 const int    nx , 
+					 const double ymin , 
+					 const double ymax ,
+					 const int    ny ) 
 {
 
   // 2D interpolation of scattered points to a uniform 2d grid, i.e. for topoplot()
@@ -496,14 +502,14 @@ Data::Matrix<double> dsptools::interpolate2D( const std::vector<double> & x ,
 						nxy,                  // number of points to interpolate
 						&(xyi[0]) );          // co-ords for interpolation points (2*ni)
 
-  Data::Matrix<double> Z( nx, ny );
+  Eigen::MatrixXd Z = Eigen::MatrixXd::Zero( nx, ny );
   int k = 0;
   for ( int i = 0; i < nx; i++ )      
     for ( int j = 0; j < ny; j++ )
-      Z[i][j] = zi[k++];
+      Z(i,j) = zi[k++];
 
   delete [] zi ;
-
+  
   return Z;
   
 }

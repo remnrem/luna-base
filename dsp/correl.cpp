@@ -30,6 +30,7 @@
 #include "eval.h"
 
 #include "stats/statistics.h"
+#include "stats/Eigen/Dense"
 
 #include "db/db.h"
 #include "dsp/resample.h"
@@ -89,7 +90,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
   //
 
   const bool has_clocs = edf.clocs.attached();
-  Data::Matrix<double> S;
+  Eigen::MatrixXd S;
   // get all signals (for S matrix call)
   const std::string signals_label =   param.has( "sig1" ) ? signal_label1 + "," + signal_label2 : signal_label1 ; 
   signal_list_t signals  = edf.header.signal_list( signals_label );  
@@ -144,25 +145,17 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
       for (int s=0;s<ns;s++)
 	{
 	  if ( edf.header.sampling_freq( sigs[s] ) != sr ) 
-	    {
-	      // logger << "resampling channel " << sigset[ sigs[s] ]
-	      // 	     << " from " << edf.header.sampling_freq( sigs[s] )
-	      // 	     << " to " << sr << "\n";
-	      resample_channel( edf, sigs[s] , sr );
-	    }
-	}
+	    resample_channel( edf, sigs[s] , sr );	  
+	}    
     }
   else
     {
       // check SR
       std::set<int> srs;
       for (int s=0;s<ns;s++)
-	{
-	  // std::cerr << "sigs " << sigs.size() << " " << s << " " << "\n";
-	  // std::cerr << " sr = " << edf.header.sampling_freq( sigs[s] )  << "\n";
-	  srs.insert( edf.header.sampling_freq( sigs[s] ) );
-	}
-      if ( srs.size() > 1 ) Helper::halt( "all sampling rates must be similar, use 'sr'" );
+	srs.insert( edf.header.sampling_freq( sigs[s] ) );	
+      if ( srs.size() > 1 ) 
+	Helper::halt( "all sampling rates must be similar, use 'sr'" );
     }
 
 
@@ -176,7 +169,7 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
       edf.clocs.convert_to_unit_sphere();
       // inter-electrode cosine similarity matrix
       S = edf.clocs.interelectrode_distance_matrix( signals ); 
-      if ( S.dim1() != ns )
+      if ( S.rows() != ns )
 	Helper::halt( "internal problem mapping clocs to CORREL channels" ); 
     }
   

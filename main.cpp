@@ -4148,14 +4148,14 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       // assume 64 channels; rows = channels; cols = time-points
       const int ns = 64;
       const int np = x.size() / ns;
-      Data::Matrix<double> X( np , ns );
-
+      Eigen::MatrixXd X = Eigen::MatrixXd::Zero( np , ns );
+      
       i = 0;
       for (int c=0;c<ns;c++)
 	for (int t=0;t<np;t++) 
-	  X[t][c] = x[i++];
+	  X(t,c) = x[i++];
       
-      Data::Matrix<double> O;
+      Eigen::MatrixXd O;
 
       sl.apply( X , O );
       
@@ -4475,7 +4475,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       int ns = 64;
       int np = 63360;
       
-      Data::Matrix<double> X( ns , np );
+      Eigen::MatrixXd X = Eigen::MatrixXd::Zero( ns , np );
       
       for (int c=0;c<ns;c++) // channel by data points
 	for (int r=0;r<np;r++)
@@ -4529,13 +4529,13 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       IN2.close();
       
       
-      Data::Matrix<double> invG;
-      Data::Matrix<double> Gi;
+      Eigen::MatrixXd invG;
+      Eigen::MatrixXd Gi;
       clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
       std::vector<int> gi;
       for (int i=11;i<=64;i++) gi.push_back(i-1);
 
-      Data::Matrix<double> interp = clocs.interpolate( X , gi , invG , Gi );
+      Eigen::MatrixXd interp = clocs.interpolate( X , gi , invG , Gi );
       
       std::exit(1);
       

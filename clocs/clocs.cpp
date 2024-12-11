@@ -29,6 +29,7 @@
 
 #include <fstream>
 #include <cmath>
+#include <stats/Eigen/QR>    
 
 extern writer_t writer;
 
@@ -166,9 +167,9 @@ int clocs_t::load_cart( const std::string & f0 , bool verbose )
 	signals.add( i , channels[i] );
 
       // mode = 1 , 2 : returns difference distance / similarity measures
-      Data::Matrix<double> D1 = interelectrode_distance_matrix( signals , 1 );
-      Data::Matrix<double> D2 = interelectrode_distance_matrix( signals , 2 );
-
+      Eigen::MatrixXd D1 = interelectrode_distance_matrix( signals , 1 );
+      Eigen::MatrixXd D2 = interelectrode_distance_matrix( signals , 2 );
+      
       for (int i=0; i<channels.size(); i++)
 	{
 	  writer.level( channels[i] , globals::signal1_strat );
@@ -323,7 +324,7 @@ double clocs_t::distance( const std::string & ch1 , const std::string & ch2 , co
 }
 
 
-Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_t & signals , const int mode ) const
+Eigen::MatrixXd clocs_t::interelectrode_distance_matrix( const signal_list_t & signals , const int mode ) const
 {
   
   for (int s=0;s<signals.size();s++)
@@ -334,9 +335,9 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
       
 
   const int ns = signals.size();
-  
-  Data::Matrix<double> D(ns,ns);
-  
+
+  Eigen::MatrixXd D = Eigen::MatrixXd::Zero( ns, ns );  
+    
   for (int s1=0;s1<ns;s1++)
     {      
 
@@ -352,12 +353,12 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
 	      double d = 1 - ( ( (c1.x-c2.x)*(c1.x-c2.x) +
 				 (c1.y-c2.y)*(c1.y-c2.y) +
 				 (c1.z-c2.z)*(c1.z-c2.z) ) / 2.0 );	      
-	      D[s1][s2] = D[s2][s1] = d;
+	      D(s1,s2) = D(s2,s1) = d;
 	    }
 	  else
 	    {
 	      double d = sqrt( (c1.x-c2.x)*(c1.x-c2.x) + (c1.y-c2.y)*(c1.y-c2.y) + (c1.z-c2.z)*(c1.z-c2.z) );
-	      D[s1][s2] = D[s2][s1] = d;
+	      D(s1,s2) = D(s2,s1) = d;
 	    }
 	}
       
@@ -367,11 +368,10 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
 }
 
 
-
-Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_t & signals1 , 
-							      const signal_list_t & signals2 ) const
+Eigen::MatrixXd clocs_t::interelectrode_distance_matrix( const signal_list_t & signals1 , 
+							 const signal_list_t & signals2 ) const
 {
-
+  
   for (int s=0;s<signals1.size();s++)
     if ( ! has(signals1.label(s) ) ) 
       Helper::halt( "could not find cloc for: " + signals1.label(s) + "\navailable clocs: " + print() );
@@ -384,21 +384,22 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
 
   const int ns2 = signals2.size();
   
-  Data::Matrix<double> D(ns1,ns2);
+  Eigen::MatrixXd D = Eigen::MatrixXd::Zero( ns1, ns2 );
+  
   for (int s1=0;s1<ns1;s1++)
     {      
-
+      
       cart_t c1 = cart( signals1.label(s1) );
-
+      
       for (int s2=0;s2<ns2;s2++)
 	{
-
+	  
 	  cart_t c2 = cart( signals2.label( s2 ) ); 
 
 	  double d = 1 - ( ( (c1.x-c2.x)*(c1.x-c2.x) +
 			     (c1.y-c2.y)*(c1.y-c2.y) +
 			     (c1.z-c2.z)*(c1.z-c2.z) ) / 2.0 );
-	  D[s1][s2] = d;
+	  D(s1,s2) = d;
 	}
       
     }
@@ -408,19 +409,28 @@ Data::Matrix<double> clocs_t::interelectrode_distance_matrix( const signal_list_
 
 bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals , 
 					   const signal_list_t & bad_signals , 
-					   Data::Matrix<double> * G , 
-					   Data::Matrix<double> * Gi )
+					   Eigen::MatrixXd * G , 
+					   Eigen::MatrixXd * Gi , 
+					   const int m , 
+					   const int N , 
+					   const double smoothing )
 {
-    
-  // 'm' parameter (Perrin et al, m = 4, otherwise m = 2..6 reasonable
-  const int m = 2;   // m=2 in interpolate_perrinX
-
-  // order of Legendre polynomials; 7 also suggested Perry et al.
-  const int N = 10;
-
-  // smoothing parameter/ 1e-5 suggested for 64 electrodes
-  // for > 64 electrodes, 1e-6 or 5e-6
-  const double smoothing = 1e-5;
+  
+  // spherical spline interpolation 
+  //  implements Perrin, Pernier, Bertrand, and Echallier (1989). PubMed #2464490 
+  //  based on MX Cohen's interpolate_perrinX.m
+  
+  // parameter defaults:
+  
+  //   'm'  exponent for gdenom (default 2)
+  //        (m = 4, otherwise m = 2..6 reasonable)
+  
+  //   'N'   order of Legendre polynomials (default 10); 
+  //         7 also suggested Perry et al.
+  
+  //   'smoothing' parameter for diagonal of G (default 1e-5)
+  //       for up to 64 electrodes, 1e-5 suggested 
+  //       for > 64 electrodes, 1e-6 or 5e-6
   
   convert_to_unit_sphere();
   
@@ -428,13 +438,10 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
   int nsi = bad_signals.size();
   
   // get interelectrode distance matrix
-  Data::Matrix<double> D = interelectrode_distance_matrix( good_signals , good_signals );
+  Eigen::MatrixXd D = interelectrode_distance_matrix( good_signals , good_signals );
   
-  // std::cout << "cosdist\n\n";
-  // std::cout << D.print() << "\n";
-
   // Evaluate Legendre polynomials
-  std::vector<Data::Matrix<double> > L = legendre( N , D );
+  std::vector<Eigen::MatrixXd> L = legendre( N , D );
 
   // given signals in the signal-list, make a matching G matrix  
   //  const int ns = signals.size();
@@ -447,10 +454,10 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
       twoN1.push_back( ( 2 * i ) + 1 ) ; 
       gdenom.push_back( pow( i*(i+1)  , m ) ) ; 
     }
-
+  
   
   // compute G (for all good x all good electrodes)  
-  G->resize( ns , ns , 0 );
+  *G = Eigen::MatrixXd::Zero( ns , ns );
   
   // for each pair of good x good electrodes, get element of G
   for (int i=0;i<ns;i++)
@@ -458,9 +465,8 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
       {
 	double g = 0;
 	for (int n=0;n<N;n++)
-	  {
-	    g += (twoN1[n] * L[n](i,j) ) / gdenom[n];
-	  }
+	  g += (twoN1[n] * L[n](i,j) ) / gdenom[n];
+
 	(*G)(i,j) = g / ( 4.0 * M_PI );
 	(*G)(j,i) = (*G)(i,j);
       }
@@ -469,22 +475,21 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
   // 
   // Optionally, add smoothing to each diagonal element
   //
-
-  if ( 0 ) 
-    {
-      for (int i=0;i<ns;i++) (*G)(i,i) = (*G)(i,i) + smoothing ; 
-    }
-
+  
+  if ( smoothing > 0 ) 
+    for (int i=0;i<ns;i++) 
+      (*G)(i,i) = (*G)(i,i) + smoothing ; 
+  
   //
   // G for the to-be-interpolated electrodes
   //
 
-  Gi->resize( nsi, ns , 0 );
+  *Gi = Eigen::MatrixXd::Zero( nsi, ns );
   
-  Data::Matrix<double> Di = interelectrode_distance_matrix( bad_signals , good_signals );
+  Eigen::MatrixXd Di = interelectrode_distance_matrix( bad_signals , good_signals );
   
   // Evaluate Legendre polynomials
-  std::vector<Data::Matrix<double> > Li = legendre( N , Di );
+  std::vector<Eigen::MatrixXd> Li = legendre( N , Di );
 
   // for each bad x good pair, compute element of Gi
 
@@ -493,17 +498,14 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
       {
 	double g = 0;
 	for (int n=0;n<N;n++)
-	  {
-	    g += (twoN1[n] * Li[n](i,j) ) / gdenom[n];
-	  }
+	  g += (twoN1[n] * Li[n](i,j) ) / gdenom[n];
 	(*Gi)(i,j) = g / ( 4.0 * M_PI );
       }
 
-  // return inverse of G
-  bool okay = true;
-  Data::Matrix<double> invG = Statistics::inverse( *G , &okay );
-  if ( ! okay ) Helper::halt( "problem inverting G" );
-  //  std::cout << "invG\n\n" << invG.print() << "\n\n";
+  // return psuedo inverse of G
+  Eigen::MatrixXd invG = G->completeOrthogonalDecomposition().pseudoInverse();
+  
+  std::cout << "invG\n\n" << invG << "\n\n";
   *G = invG;
 
   return true;
@@ -512,52 +514,44 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
 
 
 
-Data::Matrix<double> clocs_t::interpolate( const Data::Matrix<double> & data , 
-					   const std::vector<int> & good_channels , 
-					   const Data::Matrix<double> & invG , 
-					   const Data::Matrix<double> & Gi )
+Eigen::MatrixXd clocs_t::interpolate( const Eigen::MatrixXd & data , 
+				      const std::vector<int> & good_channels , 
+				      const Eigen::MatrixXd & invG , 
+				      const Eigen::MatrixXd & Gi )
 {
 
   
-  const int nrows = data.dim1();
-  const int nbad  = Gi.dim1();
-  const int ngood = Gi.dim2();
-
-//    for (int i = 0 ; i < nrows ; i++) 
-//      {
-//        for (int j = 0 ; j < good_channels.size()  ; j++) 
-// 	 {
-// 	   std::cout << data( i , good_channels[j] ) << " ";
-// 	 }
-//        std::cout << "\n";
-//      }
-//    std::cout << "\n";
+  const int nrows = data.rows();
+  const int nbad  = Gi.rows();
+  const int ngood = Gi.cols();
  
   // sanity check
-  if ( invG.dim1() != ngood || invG.dim2() != invG.dim1() || good_channels.size() != ngood ) 
+  if ( invG.rows() != ngood || invG.cols() != invG.rows() || good_channels.size() != ngood ) 
     Helper::halt( "internal problem in interpolate" );
   
-
-  
+    
   // IMPUTED (BxR)  =    BxG * ( GxG * GxR ) 
   //                     Gi  * ( invG * data' )
   
-  // as we need to transpose data for noral mat mult, just do by hand here
+  // as we need to transpose data for normal mat mult, just do by hand here
   // swapping rows and cols
+  
+  // TODO: revisit this code using standard Eigen matrix ops...
+  
 
-  Data::Matrix<double> t( ngood , nrows );
-
+  Eigen::MatrixXd t = Eigen::MatrixXd::Zero( ngood , nrows );
+  
   for (int i=0;i<ngood; i++)
     for (int j=0;j<nrows;j++)
       for (int k=0;k<ngood;k++)
 	t(i,j) += invG(i,k) * data(j,good_channels[k]);
 
   
-//   Data::Matrix<double> tt = Statistics::transpose( t );
-//   std::cout << "t\n\n" << tt.print() << "\n";
+  //   Data::Matrix<double> tt = Statistics::transpose( t );
+  //   std::cout << "t\n\n" << tt.print() << "\n";
   
-  Data::Matrix<double> y( nrows , nbad );
-
+  Eigen::MatrixXd y = Eigen::MatrixXd::Zero( nrows , nbad );
+  
   // IMPUTED (BxR)  =    BxG * ( GxG * GxR ) 
   // this is also implicilty transposed back into y
   // i.e. RxB rather than BxR

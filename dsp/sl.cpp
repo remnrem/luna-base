@@ -25,6 +25,7 @@
 #include "edf/slice.h"
 #include "clocs/clocs.h"
 #include "clocs/legendre_polynomial.h"
+#include "stats/eigen_ops.h"
 
 void dsptools::surface_laplacian_wrapper( edf_t & edf , param_t & param )
 {
@@ -91,16 +92,16 @@ void dsptools::surface_laplacian_wrapper( edf_t & edf , param_t & param )
 
   interval_t interval = edf.timeline.wholetrace();
   
-  matslice_t mslice( edf , signals , interval );
+  eigen_matslice_t mslice( edf , signals , interval );
   
-  const Data::Matrix<double> & X = mslice.data_ref();
-
-
+  const Eigen::MatrixXd & X = mslice.data_ref();
+  
+  
   //
   // apply to all signals
   //
   
-  Data::Matrix<double> L;
+  Eigen::MatrixXd L;
   
   sl.apply( X , L );
 
@@ -112,8 +113,10 @@ void dsptools::surface_laplacian_wrapper( edf_t & edf , param_t & param )
   logger << "  updating with spatially-filtered signals\n";
   
   for (int s=0; s<signals.size(); s++)	
-    edf.update_signal( signals(s) , L.col(s).data_pointer() );      
-  
+    {
+      std::vector<double> y = eigen_ops::copy_vector( L.col(s) );
+      edf.update_signal( signals(s) , &y );
+    }
 
   //
   // all done
@@ -153,28 +156,21 @@ sl_t::sl_t( const clocs_t & orig_clocs , const signal_list_t & signals , int m_ 
 
   clocs.convert_to_unit_sphere();
 
-//    std::map<std::string,cart_t>::const_iterator cc = clocs.cloc.begin();
-//    while ( cc != clocs.cloc.end() )
-//      {
-//        std::cout << cc->first << "\t" << cc->second.x << "\t" << cc->second.y << "\t" <<cc->second.z << "\n";
-//        ++cc;
-//      }
 
   //
   // inter-electrode cosdistance matrix
   //
+    
+  Eigen::MatrixXd D = clocs.interelectrode_distance_matrix( signals );
   
-
-  Data::Matrix<double> D = clocs.interelectrode_distance_matrix( signals );
-
 
   //
   // Evaluate Legendre polynomials
   //
   
-  std::vector<Data::Matrix<double> > L = legendre( order , D );
-
-
+  std::vector<Eigen::MatrixXd> L = legendre( order , D );
+  
+  
   //
   // precompute electrode-independent variables
   //
@@ -188,16 +184,15 @@ sl_t::sl_t( const clocs_t & orig_clocs , const signal_list_t & signals , int m_ 
       twoN1.push_back( ( 2 * i ) + 1 ) ; 
       gdenom.push_back( pow( i*(i+1)  , m ) ) ;
       hdenom.push_back( pow( i*(i+1)  , m-1 ) ) ;
-
     }
   
 
   //
   // compute G and H
   //
-
-  G.resize( ns , ns , 0 );
-  H.resize( ns , ns , 0 );
+  
+  G = Eigen::MatrixXd::Zero( ns , ns );
+  H = Eigen::MatrixXd::Zero( ns , ns );
   
   for (int i=0;i<ns;i++)
     for (int j=i;j<ns;j++)
@@ -220,29 +215,18 @@ sl_t::sl_t( const clocs_t & orig_clocs , const signal_list_t & signals , int m_ 
   // Add lambda to each diagonal element
   //
 
-  for (int i=0;i<ns;i++) G(i,i) = G(i,i) + lambda ; 
+  for (int i=0;i<ns;i++) 
+    G(i,i) = G(i,i) + lambda ; 
   
-  //
-  // Display
-  //
-  
-  //std::cout << G.print() << "\n";
-
-  //   std::cout << H.print( "H" , 8 , 8  ) << "\n";
   
   //
   // Inverse of G
   //
 
-  bool okay = true;
-
-  invG = Statistics::inverse( G , &okay );
+  invG = G.inverse();
+  // GsinvS = sum(inv(Gs));
   
-  if ( ! okay ) Helper::halt( "problem in sl_t::sl_t() inverting G" );
-  
-  //  std::cout << std::fixed << std::setprecision(12) << invG.print() << "\n";
-  // GsinvS = sum(inv(Gs));                                                                                                                                                                                                                                       
-  GsinvS.resize( ns , 0 );
+  GsinvS = Eigen::VectorXd::Zero( ns );
   sumGsinvS = 0;
   for (int i=0;i<ns;i++)
     for (int j=0;j<ns;j++)
@@ -256,26 +240,30 @@ sl_t::sl_t( const clocs_t & orig_clocs , const signal_list_t & signals , int m_ 
  
 }
   
-bool sl_t::apply( const Data::Matrix<double> & data , Data::Matrix<double> & output )
+bool sl_t::apply( const Eigen::MatrixXd & data , Eigen::MatrixXd & output )
 {
+  
+  const int np = data.rows();  
 
-  const int np = data.dim1();  
-
-  const int ns = data.dim2();  
+  const int ns = data.cols();  
 
   logger << "  applying surface Laplacian for " << ns << " signals to " << np << " sample points\n";
 
+  // FIXME: update w/ standard Eigen matrix ops
+  
   // dataGs = data'/Gs   [ ( np x ns )  =  (np x ns ) * ( ns x ns )
   // -->  data' * inv(Gs)
 
-  Data::Matrix<double> dataGs( np , ns );
+  //Data::Matrix<double> dataGs( np , ns );
+  Eigen::MatrixXd dataGs = Eigen::MatrixXd::Zero( np , ns );
   for (int i=0;i<np;i++)
     for (int j=0;j<ns;j++)
       for (int k=0;k<ns;k++)
 	dataGs(i,j) += data(i,k) * invG(k,j);
 
   // C = dataGs - (sum(dataGs,2)/sum(GsinvS))*GsinvS;
-  std::vector<double> sumdataGs( np );
+  //std::vector<double> sumdataGs( np );
+  Eigen::VectorXd sumdataGs = Eigen::VectorXd::Zero( np );
   for (int i=0;i<np;i++)
     {
       for(int j=0;j<ns;j++)
@@ -285,19 +273,22 @@ bool sl_t::apply( const Data::Matrix<double> & data , Data::Matrix<double> & out
 
   // sum(dataGs,2) is vector length(tp)
   //  np x 1  *  1 x ns   
-  Data::Matrix<double> C( np , ns );
+  //Data::Matrix<double> C( np , ns );
+  Eigen::MatrixXd C = Eigen::MatrixXd::Zero( np , ns );
   for (int i=0;i<np;i++)
     for(int j=0;j<ns;j++)
       C(i,j) = dataGs(i,j) - sumdataGs[i] * GsinvS[j];
-
+  
   
   // (C*H')'
-  output.resize( np , ns );
+  //output.resize( np , ns );
+  output = Eigen::MatrixXd::Zero( np, ns );
+  
   for (int i=0;i<np;i++)
     for(int j=0;j<ns;j++)
       for (int k=0;k<ns;k++)
 	output(i,j) += C(i,k) * H(k,j);
-    
+  
   return true;
 }
 

@@ -193,7 +193,7 @@ void qdynam_t::proc_all()
 	  //
 
 	  proc( data1 , epochs1 , cycles1 );	  
-	  
+
 
 	  // ------------------------------------------------------------
 	  //
@@ -606,7 +606,7 @@ void qdynam_t::proc( const std::vector<double> & x ,
 		     const std::vector<int> & e1 ,
 		     const std::vector<std::string> & c1 )
 {
-  
+
   // ensure we wipe any previous results  
   reinit();
   
@@ -644,7 +644,6 @@ void qdynam_t::proc( const std::vector<double> & x ,
 
   // copy before norming (for original nq) 
   std::vector<double> ox1 = x1;
-  
   
   //
   // stats
@@ -852,16 +851,14 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   // smooth? (if we're passing in the between-cycle series (e.g. may
   // only have 5-6 elements) we naturally don't want to smooth again,
   // thus the option to skip)
-  
+
   if ( do_smoothing )
     ss = qdynam_t::smooth( ss , ee, median_window , mean_window );
 
-  
   // norm?
 
   if ( do_norming )
     qdynam_t::norm( &ss , norm01 , norm_mean );
-
 
   //
   // compile stats here
@@ -958,7 +955,7 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
 
     }
      
-  
+
   //
   // simple corrs
   //
@@ -967,28 +964,30 @@ qdynam_results_t qdynam_t::calc( const std::vector<double> & xx ,
   for (int i=0; i<nn; i++)  et[i] = rank_based ? i : ee[i] ;
   r.corr = Statistics::correlation( ss , et );   
   
+  
   //
   // linear model w/ non-linear term
   //
 
   Eigen::VectorXd Y  = Eigen::VectorXd::Zero( nn );
-  Eigen::MatrixXd X  = Eigen::MatrixXd::Zero( nn , 2 ); 
-  Eigen::MatrixXd Z  = Eigen::MatrixXd::Zero( nn , 0 ); // no covariates
+  Eigen::MatrixXd X  = Eigen::MatrixXd::Zero( nn , 1 ); // is X^2
+  Eigen::MatrixXd Z  = Eigen::MatrixXd::Zero( nn , 1 ); // is X
   
   const double et_mean = MiscMath::mean( et );  
   
   for (int i=0; i<nn; i++)
-    {
+    {      
       Y[i] = ss[i];
-      X(i,0) = et[i] - et_mean; // is either rank or epoch
-      X(i,1) = X(i,0) * X(i,0);      
+      Z(i,0) = et[i] - et_mean; // is either rank or epoch      
+      X(i,0) = Z(i,0) * Z(i,0); // quadratic term (X, i.e. one tested)      
     }  
-  
+
   eigen_ops::scale( Y , true , true );
   eigen_ops::scale( X , true , true );
-  
+  eigen_ops::scale( Z , true , true );
+
   const std::vector<std::string> yvars = { "Y" };
-  const std::vector<std::string> xvars = { "X1","X2" };
+  const std::vector<std::string> xvars = { "X2" };
   
   // U term (X2)
   linmod_t lm2( Y, yvars, X, xvars, Z );

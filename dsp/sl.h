@@ -30,7 +30,7 @@ struct signal_list_t;
 
 #include <vector>
 
-#include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 
 
 struct sl_t { 
@@ -38,7 +38,7 @@ struct sl_t {
   sl_t( const clocs_t & clocs , const signal_list_t & signals , 
 	int m_ = 4 , int order_ = 10 , double lambda_ = 1e-5 ); 
   
-  bool apply( const Data::Matrix<double> & inp , Data::Matrix<double> & out );
+  bool apply( const Eigen::MatrixXd & inp , Eigen::MatrixXd & out );
 
  private:
   
@@ -48,13 +48,13 @@ struct sl_t {
   
   double lambda;
 
-  Data::Matrix<double> G;
+  Eigen::MatrixXd G;
   
-  Data::Matrix<double> invG;
+  Eigen::MatrixXd invG;
 
-  Data::Matrix<double> H;
-
-  std::vector<double> GsinvS;
+  Eigen::MatrixXd H;
+  
+  Eigen::VectorXd GsinvS;
   
   double sumGsinvS;
   

@@ -2506,7 +2506,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      avg.amp = avg.dur = avg.frq = avg.nosc = avg.isa = 0;
 	      avg.symm = avg.symm2 = avg.chirp = avg.frq_h1 = avg.frq_h2 = 0;
 	      avg.so_nearest = 0;
-	      
+	      avg.norm_amp_max = avg.norm_amp_mean = 0;
+
 	      for (int i=0 ; i<nsp; i++)
 		{
 		  
@@ -2534,7 +2535,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      avg.chirp += spindles[i].chirp;
 		      avg.frq_h1 += spindles[i].frq_h1;
 		      avg.frq_h2 += spindles[i].frq_h2;
-
+		      avg.norm_amp_max += spindles[i].norm_amp_max;
+		      avg.norm_amp_mean += spindles[i].norm_amp_mean;
+		      
 		      if ( has_coupling )
 			avg.so_nearest += spindles[i].so_nearest <= 1e-6; // i.e. PROP SO OVERLAP
 					      
@@ -2571,7 +2574,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      avg.frq_h1 /= (double)sp_epoch ;
 		      avg.frq_h2 /= (double)sp_epoch ;
 		      avg.so_nearest /= (double)sp_epoch ;
-		      
+		      avg.norm_amp_max /= (double)sp_epoch ;
+		      avg.norm_amp_mean /= (double)sp_epoch ;
+
 		      writer.value( "AMP" , avg.amp  );
 		      writer.value( "ACT_MX" , avg.norm_amp_max  );
 		      writer.value( "ACT_MN" , avg.norm_amp_mean  );

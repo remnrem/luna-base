@@ -989,7 +989,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       else
 	edf_t::skip( &p , 8 );      
     }
-
+  
   // digital max
   for (int s=0;s<ns_all;s++)
     {
@@ -1062,23 +1062,31 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   // check/enforce digital min/max
   //
 
+  int idx = -1;  // i.e. as may have subset
+  // need to be careful in section below... either using full or restricted
+  //   restricted: idx ->  label idx digital_m*
+  //   full:       s   ->  channel tlabels
+
   for (int s=0; s<ns_all; s++)
     {
       if ( channels.find(s) != channels.end() )
 	{
+	  // add one , as this was selected
+	  ++idx; 
+
 	  const bool annotation = Helper::imatch( tlabels[s] , "EDF Annotation" , 14 ) ;
 	  if ( ! annotation )
 	    {
-	      if ( digital_min[s] >= digital_max[s] )
+	      if ( digital_min[idx] >= digital_max[idx] )
 		{
 		  logger << "  *** invalid digital min/max for " << tlabels[s]
-			 << " : " << digital_min[s] << " / " << digital_max[s] << "\n";
+			 << " : " << digital_min[idx] << " / " << digital_max[idx] << "\n";
 		  if ( globals::force_digital_minmax )
 		    {
 		      logger << "  ---> forcing digital min/max for " << tlabels[s] << " to "
 			     << globals::force_digital_min << " / " << globals::force_digital_max << "\n";
-		      digital_min[s] = globals::force_digital_min;
-		      digital_max[s] = globals::force_digital_max;	      
+		      digital_min[idx] = globals::force_digital_min;
+		      digital_max[idx] = globals::force_digital_max;	      
 		    }
 		}
 	    }

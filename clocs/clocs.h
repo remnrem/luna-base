@@ -90,25 +90,27 @@ struct clocs_t {
 
   void convert_to_unit_sphere();
 
-  Data::Matrix<double> interelectrode_distance_matrix( const signal_list_t & signals , const int mode = 1 ) const; 
-						       
-  Data::Matrix<double> interelectrode_distance_matrix( const signal_list_t & signals1 , 
-						       const signal_list_t & signals2 ) const;
+  Eigen::MatrixXd interelectrode_distance_matrix( const signal_list_t & signals , const int mode = 1 ) const; 
+  
+  Eigen::MatrixXd interelectrode_distance_matrix( const signal_list_t & signals1 , 
+						  const signal_list_t & signals2 ) const;
 
   double distance( const std::string & ch1 , const std::string & ch2 , const int mode = 1 ) const ; 
   
   bool make_interpolation_matrices( const signal_list_t & good_signals , 
 				    const signal_list_t & bad_signals , 
-				    Data::Matrix<double> * G , 
-				    Data::Matrix<double> * Gi );
+				    Eigen::MatrixXd * G , 
+				    Eigen::MatrixXd * Gi , 
+				    const int m = 2 , 
+				    const int N = 10 , 
+				    const double smoothing = 1e-5 );
   
-  
-  Data::Matrix<double> interpolate( const Data::Matrix<double> & data , 
-				    const std::vector<int> & good_channels , 
-				    const Data::Matrix<double> & G , 
-				    const Data::Matrix<double> & Gi );
+  Eigen::MatrixXd interpolate( const Eigen::MatrixXd & data , 
+			       const std::vector<int> & good_channels , 
+			       const Eigen::MatrixXd & G , 
+			       const Eigen::MatrixXd & Gi );
 
-    
+  
   void attach( edf_t * edf_p ) 
   {
     edf = edf_p;

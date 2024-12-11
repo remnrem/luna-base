@@ -29,7 +29,7 @@ struct topo_t;
 
 #include <vector>
 
-#include "stats/matrix.h"
+#include "stats/Eigen/Dense"
 
 namespace dsptools
 {
@@ -38,15 +38,15 @@ namespace dsptools
 
   void chep_based_interpolation( edf_t & edf , param_t & param );
 
-  Data::Matrix<double> interpolate2D( const std::vector<double> & x , 
-				      const std::vector<double> & y , 
-				      const std::vector<double> & z , // values 
-				      const double xmin , 
-				      const double xmax ,
-				      const int    nx , 
-				      const double ymin , 
-				      const double ymax ,
-				      const int    ny ) ;
+  Eigen::MatrixXd interpolate2D( const std::vector<double> & x , 
+				 const std::vector<double> & y , 
+				 const std::vector<double> & z , // values 
+				 const double xmin , 
+				 const double xmax ,
+				 const int    nx , 
+				 const double ymin , 
+				 const double ymax ,
+				 const int    ny ) ;
   
   void interpolate2D( topo_t * topo , const std::vector<double> & );
   
