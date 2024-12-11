@@ -88,10 +88,18 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
   // other parameters
   //
 
-  const int    m      = param.has( "m" ) ? param.requires_int( "m" ) : 2 ;
+  const int    m      = param.has( "m" ) ? param.requires_int( "m" ) : 4 ;
   const int    order  = param.has( "order" ) ? param.requires_int( "order" ) : 10;
   const double lambda = param.has( "lambda" ) ? param.requires_dbl( "lambda" ) : 1e-5;
- 
+
+  //
+  // require this proportion of channels to be present (globally)
+  //
+  
+  const double req_ch_cnt  = param.has( "req-chs" ) ? param.requires_int( "req-chs" ) : -1;
+  const double req_ch_prop = param.has( "req-chs-prop" ) ? param.requires_dbl( "req-chs-prop" ) : -1;
+
+  
   //
   // Step through each epoch/channel
   //
@@ -99,10 +107,10 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
   
   int ne = edf.timeline.first_epoch();
 
-  logger << " now interpolating " << ne << " epochs\n";
-  logger << "   m = " << m << ", " 
-	 << " order = " << order << ", "
-	 << " lambda = " << lambda << "\n";
+  logger << "  now interpolating " << ne << " epochs: ";
+  logger << "m = " << m << ", " 
+	 << "order = " << order << ", "
+	 << "lambda = " << lambda << "\n";
  
   int cnt = 0;
 
@@ -162,14 +170,23 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 	}
 
       // hopeless case: set epoch mask
-      if ( good_signals.size() == 0 ) 
+      
+      bool hopeless = good_signals.size() == 0 ;
+
+      if ( good_signals.size() < req_ch_cnt )
+	hopeless = true;
+      
+      if ( good_signals.size() / (double)( good_signals.size() + bad_signals.size() ) < req_ch_prop )
+	hopeless = true;
+	  
+      if ( hopeless )
 	{
 	  int mc = edf.timeline.set_epoch_mask( epoch );
 	  if ( mc == 1 ) ++cnt_masked;
 	  continue;
 	}
 
-      
+            
       //
       // Construct interpolation matrices
       //
@@ -228,7 +245,7 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
   
   logger << " all done\n";
 
-  logger << " set mask for " << cnt_masked << " epochs without any good channels\n";
+  logger << " set mask for " << cnt_masked << " epochs without sufficient good channels\n";
   logger << " skipped " << cnt_noaction << " epochs without any bad channels\n";
   logger << " interpolated " << cnt_interpolated_epochs << " epochs, for " << cnt_interpolated_cheps << " ch/epoch pairs\n";
 

@@ -923,7 +923,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	    }
 	}
 
-      logger << "  maximum left-cut and right-scores are " << mx0 << " and " << rmx0 << " (th = " << th << ")\n";
+      logger << "  maximum left- and right-scores are " << mx0 << " and " << rmx0 << " (th = " << th << ")\n";
       
       if ( cut != -1 && rcut != -1 )   
 	logger << "  placing left-cut at epoch " << cut + 1 << " and right-cut at " << rcut + 1 << "\n";

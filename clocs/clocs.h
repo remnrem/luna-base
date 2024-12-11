@@ -101,7 +101,7 @@ struct clocs_t {
 				    const signal_list_t & bad_signals , 
 				    Eigen::MatrixXd * G , 
 				    Eigen::MatrixXd * Gi , 
-				    const int m = 2 , 
+				    const int m = 4 , 
 				    const int N = 10 , 
 				    const double smoothing = 1e-5 );
   

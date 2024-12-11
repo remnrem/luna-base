@@ -422,11 +422,11 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
   
   // parameter defaults:
   
-  //   'm'  exponent for gdenom (default 2)
-  //        (m = 4, otherwise m = 2..6 reasonable)
+  //   'm'  exponent for gdenom (default 4)
+  //        (otherwise m = 2..6 reasonable)
   
   //   'N'   order of Legendre polynomials (default 10); 
-  //         7 also suggested Perry et al.
+  //         7 also suggested Perry et al., could be -> 30 
   
   //   'smoothing' parameter for diagonal of G (default 1e-5)
   //       for up to 64 electrodes, 1e-5 suggested 
@@ -501,13 +501,13 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
 	  g += (twoN1[n] * Li[n](i,j) ) / gdenom[n];
 	(*Gi)(i,j) = g / ( 4.0 * M_PI );
       }
-
+  
   // return psuedo inverse of G
   Eigen::MatrixXd invG = G->completeOrthogonalDecomposition().pseudoInverse();
-  
-  std::cout << "invG\n\n" << invG << "\n\n";
+  //  std::cout << " invG = " << invG.rows() << " x " << invG.cols() << "\n";
+  //  std::cout << "invG\n\n" << invG << "\n\n";
   *G = invG;
-
+  
   return true;
 }
 
