@@ -208,6 +208,7 @@ void ged_runmode1( edf_t & edf , param_t & param, Eigen::MatrixXd & Rd , int sr 
   ged.covar( S, R );
   ged.calc();
 
+  
   // ged.W = eigenvectors
   // ged.L = eigenvalues
   // ged.largest_idx = idx of largest eigenvalue

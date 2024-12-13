@@ -2963,13 +2963,15 @@ linmod_results_t linmod_t::run( int nreps )
 
       Eigen::ArrayXd U = Eigen::ArrayXd::Ones( ny );
                   
-      //logger << "  ";
+      logger << "  ";
+
       for (int r=0; r<nreps; r++)
 	{
-	  // logger << ".";
-	  // if ( (r+1) % 10 == 0 ) logger << " ";
-	  // if ( (r+1) % 50 == 0 ) logger << " " << r+1 << " perms\n" << ( r+1 == nreps ? "" : "  " ) ;
 
+	  logger << ".";
+	  if ( (r+1) % 10 == 0 ) logger << " ";
+	  if ( (r+1) % 50 == 0 ) logger << " " << r+1 << " perms\n" << ( r+1 == nreps ? "" : "  " ) ;
+	  
 	  // shuffle
 	  // std::vector<int> pord( ni );
 	  // CRandom::random_draw( pord );
@@ -3009,6 +3011,8 @@ linmod_results_t linmod_t::run( int nreps )
 	  
 	  
 	} // next replicate
+
+      logger << "\n";
       
       //
       // Get point-wise p-values
@@ -3039,15 +3043,18 @@ linmod_results_t linmod_t::run( int nreps )
       // next X
     }
 
-
+  
   //
   // family-wise corrected P
   //
   
-  for (int r=0; r<nreps; r++)
-    for (int x=0; x<nx; x++)
-      for (int y=0; y<ny; y++)
-	if ( max_t[r] >= fabs( results.t[ xname[x] ][ vname[y] ] ) ) ++F(x,y);
+  for (int x=0; x<nx; x++)
+    for (int y=0; y<ny; y++)
+      {
+	const double t = fabs( results.t[ xname[x] ][ vname[y] ] );
+	for (int r=0; r<nreps; r++)
+	  if ( max_t[r] >= t ) ++F(x,y);
+      }
   
   F /= (double)(nreps+1);
   
@@ -3055,11 +3062,10 @@ linmod_results_t linmod_t::run( int nreps )
     for (int y=0; y<ny; y++)
       if (  xname[x] != vname[y] ) // ignore self tests
 	results.emp_corrected[ xname[x] ][ vname[y] ] = F(x,y);
-
-
+  
   // and make other adjusted stats
   results.make_corrected( xname , vname );
-
+  
   // all done
   return results;
 }
