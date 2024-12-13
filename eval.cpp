@@ -5228,15 +5228,38 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::sleep_stage_assume_epoch_duration = Helper::yesno( tok1 );
       return;
     }
-
       
+  if (  Helper::iequals( tok0 , "default-starttime" ) )
+    {
+      globals::use_default_starttime = true; //default anyway
+      globals::default_starttime = tok1;
+      return;
+    }
+  
+  if (  Helper::iequals( tok0 , "no-default-starttime" ) )
+    {
+      globals::use_default_starttime = ! Helper::yesno( tok1 ); 
+      return;
+    }
 
-      
+  if (  Helper::iequals( tok0 , "default-startdate" ) )
+    {
+      globals::use_default_startdate = true; //default anyway
+      globals::default_startdate = tok1;
+      return;
+    }
+  
+  if (  Helper::iequals( tok0 , "no-default-startdate" ) )
+    {
+      globals::use_default_startdate = ! Helper::yesno( tok1 ); 
+      return;
+    }
+
   // individual-specific variables
   if ( Helper::iequals( tok0 , "vars" ) ) 
     {
       cmd_t::attach_ivars( tok1 );
-      return;      
+      return;
     }
 
   // ID re-mapper?

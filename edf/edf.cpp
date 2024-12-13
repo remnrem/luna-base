@@ -352,7 +352,7 @@ void edf_t::description( const param_t & param , std::vector<std::string> * r )
       double time_sec = ( timeline.last_time_point_tp+1LLU ) * globals::tp_duration ; 
       et.advance_seconds( time_sec );
     }
-  
+
   //
   // write to stdout
   //
@@ -650,6 +650,23 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   reserved       = edf_t::get_bytes( &q , 44 );
 
   
+  //
+  // check/put default start times/dates if needed
+  //
+
+  clocktime_t st( starttime );
+  if ( globals::use_default_starttime && ! st.valid )
+    {
+      starttime = globals::default_starttime;
+      clocktime_t st2( starttime );
+      if ( ! st2.valid ) 
+	{
+	  starttime = "00.00.00";
+	}
+      logger << "  *** setting invalid starttime to " << starttime << "\n";
+    }
+  
+
   // allow US mm-dd-yy EDF field?  if so, change immediately (i.e. internally, it always dd-mm-yy)
   if ( globals::read_edf_date_format == MDY )
     {
@@ -663,6 +680,15 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       // 07.01.31 --> 31.01.07
       startdate = startdate.substr(6,2) + "." + startdate.substr(3,2) + "." + startdate.substr(0,2);
     }
+
+  // check date 
+
+  if ( globals::use_default_startdate && ! date_t::is_valid( startdate , DMY ) )
+    {
+      logger << "  *** setting invalid startdate to " << globals::default_startdate << "\n";
+      startdate = globals::default_startdate;
+    }
+
 
   // enforce check that reserevd field contains only US-ASCII characters 32-126
   // not clear this is needed, but other software seems to prefer this

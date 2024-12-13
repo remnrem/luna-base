@@ -115,6 +115,10 @@ std::string globals::txt_table_append;
 
 bool globals::assume_pm_starttime;
 int globals::assume_pm_starttime_hour;
+std::string globals::default_starttime;
+bool globals::use_default_starttime;
+std::string globals::default_startdate;
+bool globals::use_default_startdate;
 
 date_format_t globals::read_annot_date_format;
 date_format_t globals::write_annot_date_format;
@@ -633,6 +637,13 @@ void globals::init_defs()
   assume_pm_starttime = false;
   assume_pm_starttime_hour = 4; // i.e. if 04:00 given or later (up to & including 12:00) assume +12 hours
   
+  default_starttime = "00.00.00";
+  use_default_starttime = true; // is start-time is invalid, insert this
+
+  default_startdate = "01.01.85";
+  use_default_startdate = true; // is start-time is invalid, insert this
+
+
   // Euro dates by default
   // but always write EDF dates as dd.mm.yy
   read_annot_date_format = DMY; // default European

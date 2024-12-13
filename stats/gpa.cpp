@@ -496,6 +496,13 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 
       read();
       
+      //
+      // store original N 
+      //
+
+      const int ni_orig1 = X.rows();
+
+
       // secondarily, subset to a smaller # of rows (e.g. case-only analysis)
 
       if ( param.has( "subset" ) || param.has( "inc-ids" ) || param.has( "ex-ids")  )
@@ -540,8 +547,15 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	    }
 	  subset( rows, cols );
 	}
-
       
+ 
+      //
+      // store original N (post any selection 
+      //
+
+      const int ni_orig2 = X.rows();
+
+     
       //
       // select predictors (X) and covariates (Z) - assume everything else is
       // a DV (i.e. sleep metric) unless explicitly told so; allow these to be 
@@ -572,7 +586,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	    std::set<std::string>::const_iterator vv = v.begin();
 	    while ( vv != v.end() ) {
 	      if ( found.find( *vv ) == found.end() )
-		logger << "  *** warning, could not find " << *vv << "\n";
+		logger << "  *** warning - could not find " << *vv << "\n";
 	      ++vv;
 	    }
 	  }		  
@@ -581,7 +595,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	      std::set<std::string>::const_iterator vv = vgrps.begin();
 	      while ( vv != vgrps.end() ) {
 		if ( gfound.find( *vv ) == gfound.end() )
-		  logger << "  *** warning, could not find " << *vv << "\n";
+		  logger << "  *** warning - could not find " << *vv << "\n";
 		++vv;
 	      }
 	  }		  	  
@@ -612,7 +626,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	    std::set<std::string>::const_iterator vv = v.begin();
 	    while ( vv != v.end() ) {
 	      if ( found.find( *vv ) == found.end() )
-		logger << "  *** warning, could not find " << *vv << "\n";
+		logger << "  *** warning -  could not find " << *vv << "\n";
 	      ++vv;
 	    }
 	  }		  
@@ -621,7 +635,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	    std::set<std::string>::const_iterator vv = vgrps.begin();
 	    while ( vv != vgrps.end() ) {
 	      if ( gfound.find( *vv ) == gfound.end() )
-		logger << "  *** warning, could not find " << *vv << "\n";
+		logger << "  *** warning - could not find " << *vv << "\n";
 	      ++vv;
 	    }
 	  }		  
@@ -808,10 +822,32 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  for (int i=0; i<ivs.size(); i++)
 	    for (int j=0; j<dvs.size(); j++)
 	      if ( ivs[i] != dvs[j] ) ++ntests;
+
+	  //
+	  // report tests/Ns (and flag potential problems)
+	  //
 	  
 	  logger << "  " << ntests << " total tests specified\n";
 	  
+	  if ( ni_orig2 != ni_orig1 )
+	    {
+	      logger << "  analysis of " << X.rows() << " from " << ni_orig2 << " selected from " << ni_orig1 << " original individuals\n";
+	      if ( X.rows() < ni_orig2 / 2 ) logger << "  *** warning - dropping over half of selected individuals\n"; 
+	    }
+	  else
+	    {
+	      logger << "  analysis of " << X.rows() << " of " << ni_orig1 << " individuals\n";
+	      if ( X.rows() < ni_orig1 / 2 ) logger << "  *** warning - dropping over half of all individuals\n"; 
+	    }
+	  
+	  if ( X.rows() < 10 ) 
+	    logger << "  *** warning - running w/ a very small case N - perhaps check for missing values?\n";
+	  
+
+	  //
 	  // do the actual work 	  
+	  //
+	  
 	  if ( correct_all_X ) 
 	    {
 	      logger << "  adjusting for multiple tests across all X variables\n";
@@ -1107,7 +1143,7 @@ void gpa_t::prep()
 		  {
 		    const std::map<int,double> & D2 = dd->second;
 		    if ( D2.find( id2slot[ id ] ) != D2.end() )
-		      logger << "  *** warning *** repeated instances of " << expand_vname << " for " << id
+		      logger << "  *** warning - repeated instances of " << expand_vname << " for " << id
 			     << " (" << D2.find( id2slot[ id ] )->second << " and " << dtok[j] << ")\n";
 		  }
 		
@@ -1319,7 +1355,7 @@ void gpa_t::run()
       ++ii;
     }
   
-  int count_p05 = 0 , count_padj05 = 0 , count_all = 0;
+  int count_p05 = 0 , count_padj05 = 0 , count_fdr05 = 0, count_all = 0;
   
   // iterate over X
   
@@ -1346,8 +1382,14 @@ void gpa_t::run()
 	      writer.value( "B"  , results.beta[ xvar ][ var ] );
 	      writer.value( "T"  , results.t[xvar][ var ] );
 	      writer.value( "N" , (int)X.rows() );
-	      writer.value( "P" , results.p[xvar][ var ] );
-	      writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
+	      
+	      const bool valid_test = results.p[xvar][ var ] > -1 ; // -9 code means not valid
+	      
+	      if ( valid_test ) 
+		{
+		  writer.value( "P" , results.p[xvar][ var ] );
+		  writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
+		}
 
 	      if ( nreps != 0 )
 		{
@@ -1355,21 +1397,27 @@ void gpa_t::run()
 		  writer.value( "EMPADJ" , results.emp_corrected[xvar][ var ] );
 		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
 		  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
+		  if ( valid_test && results.fdr_bh( xvar , var ) < 0.05 ) count_fdr05++;
 		}
 	      else // else summaary based on asymptotic & FDR  
 		{
-		  if ( results.p[xvar][ var ] < 0.05 ) count_p05++;
-		  if ( results.fdr_bh( xvar , var ) < 0.05 ) count_padj05++;
+		  if ( valid_test )
+		    {
+		      if ( results.p[xvar][ var ] < 0.05 ) count_p05++;
+		      if ( results.fdr_bh( xvar , var ) < 0.05 ) count_fdr05++;
+		    }
 		}
-	      	      
-
-	      if ( adj_fdr_by)
-                writer.value( "P_FDR_BY"  , results.fdr_by( xvar , var ) );
-              if ( adj_bonf )
-                writer.value( "P_BONF"  , results.bonf( xvar , var ) );
-              if ( adj_holm )
-		writer.value( "P_HOLM"  , results.holm( xvar , var ) );
 	      
+	      if ( valid_test )
+		{
+		  if ( adj_fdr_by )
+		    writer.value( "P_FDR_BY"  , results.fdr_by( xvar , var ) );
+		  if ( adj_bonf )
+		    writer.value( "P_BONF"  , results.bonf( xvar , var ) );
+		  if ( adj_holm )
+		    writer.value( "P_HOLM"  , results.holm( xvar , var ) );
+		}
+
 	      count_all++;
 	    }
 	  
@@ -1427,8 +1475,12 @@ void gpa_t::run()
   logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
 	 << "significant at nominal p < 0.05\n";
   
-  logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
-	 << "significant at adjusted p < 0.05\n";
+  logger << "  " << count_fdr05 << " (prop = " << count_fdr05 / (double)count_all << ") "
+	 << "significant at FDR p < 0.05\n";
+  
+  if ( nreps != 0 ) 
+    logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
+	   << "significant after empirical family-wise type I error control p < 0.05\n";
 
 }
 
@@ -1473,7 +1525,7 @@ void gpa_t::run1X() // correction within X
     }
 
 
-  int count_p05 = 0 , count_padj05 = 0 , count_all = 0;
+  int count_p05 = 0 , count_padj05 = 0 , count_fdr05 = 0, count_all = 0;
 
   // iterate over X
 
@@ -1504,9 +1556,15 @@ void gpa_t::run1X() // correction within X
 	      writer.value( "B"  , results.beta[ xvar ][ var ] );
 	      writer.value( "T"  , results.t[ xvar ][ var ] );
 	      writer.value( "N" , (int)X.rows() );
-	      writer.value( "P" , results.p[xvar][ var ] );
-	      writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
 	      
+	      const bool valid_test = results.p[xvar][ var ] > -1; // valid p-value?
+	      
+	      if ( valid_test )
+		{
+		  writer.value( "P" , results.p[xvar][ var ] );
+		  writer.value( "P_FDR"  , results.fdr_bh( xvar , var ) );
+		}
+
 	      if ( nreps != 0 )
 		{
 		  writer.value( "EMP" , results.emp[xvar][ var ] );
@@ -1514,19 +1572,26 @@ void gpa_t::run1X() // correction within X
 
 		  if ( results.emp[xvar][ var ] < 0.05 ) count_p05++;
 		  if ( results.emp_corrected[xvar][ var ] < 0.05 ) count_padj05++;
+		  if ( valid_test && results.fdr_bh( xvar , var ) < 0.05 ) count_fdr05++;
 		}
 	      else // else summaary based on asymptotic & FDR  
 		{
-		  if ( results.p[xvar][ var ] < 0.05 ) count_p05++;
-		  if ( results.fdr_bh( xvar , var ) < 0.05 ) count_padj05++;
-		}	      	      
-
-	      if ( adj_fdr_by)
-                writer.value( "P_FDR_BY"  , results.fdr_by( xvar , var ) );
-              if ( adj_bonf )
-                writer.value( "P_BONF"  , results.bonf( xvar , var ) );
-              if ( adj_holm )
-		writer.value( "P_HOLM"  , results.holm( xvar , var ) );
+		  if ( valid_test )
+		    {
+		      if ( results.p[xvar][ var ] < 0.05 ) count_p05++;
+		      if ( results.fdr_bh( xvar , var ) < 0.05 ) count_fdr05++;
+		    }	   
+		}   	      
+	      
+	      if ( valid_test )
+		{
+		  if ( adj_fdr_by)
+		    writer.value( "P_FDR_BY"  , results.fdr_by( xvar , var ) );
+		  if ( adj_bonf )
+		    writer.value( "P_BONF"  , results.bonf( xvar , var ) );
+		  if ( adj_holm )
+		    writer.value( "P_HOLM"  , results.holm( xvar , var ) );
+		}
 
 	      count_all++;
 	      
@@ -1584,13 +1649,17 @@ void gpa_t::run1X() // correction within X
     }  
   writer.unlevel( "X" );
   
+
   logger << "  " << count_p05 << " (prop = " << count_p05 / (double)count_all << ") "
 	 << "significant at nominal p < 0.05\n";
   
-  logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
-	 << "significant at adjusted p < 0.05";
-  if ( nreps != 0 ) logger << " based on empirical family-wise correction\n";
-  else logger << " based on FDR\n";
+  logger << "  " << count_fdr05 << " (prop = " << count_fdr05 / (double)count_all << ") "
+	 << "significant at FDR p < 0.05\n";
+  
+  if ( nreps != 0 ) 
+    logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
+	   << "significant after empirical family-wise type I error control p < 0.05\n";
+
   
 }
 
@@ -3621,73 +3690,81 @@ Eigen::MatrixXd linmod_t::correct( const Eigen::VectorXd & p )
     }
   
   // sort p-values
+  std::sort(sp.begin(),sp.end());
+
   double t = (double)sp.size();
   int ti = sp.size();
-  std::sort(sp.begin(),sp.end());
   
   // Consider each test
   Eigen::VectorXd pv_holm = Eigen::VectorXd::Zero( ti );
   Eigen::VectorXd pv_BH = Eigen::VectorXd::Zero( ti );
   Eigen::VectorXd pv_BY = Eigen::VectorXd::Zero( ti );
   
-
-  // Holm 
-  pv_holm[0] = sp[0].p*t > 1 ? 1 : sp[0].p*t;
-  for (int i=1;i<ti;i++)
+  // check that we have >1 valid p-value
+  if ( ti == 1 )
     {
-      double x = (ti-i)*sp[i].p < 1 ? (ti-i)*sp[i].p : 1;
-      pv_holm[i] = pv_holm[i-1] > x ? pv_holm[i-1] : x;
+      pv_holm[0] = pv_BH[0] = pv_BY[0] = sp[0].p;
+    } 
+  else if ( ti > 1 )
+    {  
+      // Holm 
+      pv_holm[0] = sp[0].p*t > 1 ? 1 : sp[0].p*t;
+      for (int i=1;i<ti;i++)
+	{
+	  double x = (ti-i)*sp[i].p < 1 ? (ti-i)*sp[i].p : 1;
+	  pv_holm[i] = pv_holm[i-1] > x ? pv_holm[i-1] : x;
+	}
+  
+      // // Sidak SS
+      // for (int i=0;i<ti;i++)
+      //   pv_sidakSS[i] = 1 - pow( 1 - sp[i].p , t );
+      //
+      // // Sidak SD
+      // pv_sidakSD[0] = 1 - pow( 1 - sp[0].p , t );
+      // for (int i=1;i<ti;i++)
+      //   {
+      //     double x = 1 - pow( 1 - sp[i].p , t - i  );
+      //     pv_sidakSD[i] = pv_sidakSD[i-1] > x ? pv_sidakSD[i-1] : x ; 
+      //   }
+  
+      // BH
+      pv_BH[ti-1] = sp[ti-1].p;
+      for (int i=ti-2;i>=0;i--)
+	{
+	  double x = (t/(double)(i+1))*sp[i].p < 1 ? (t/(double)(i+1))*sp[i].p : 1 ;
+	  pv_BH[i] = pv_BH[i+1] < x ? pv_BH[i+1] : x;
+	}
+      
+      // BY
+      double a = 0;
+      for (double i=1; i<=t; i++)
+	a += 1/i;
+      pv_BY[ti-1] = a * sp[ti-1].p < 1 ? a * sp[ti-1].p : 1 ; 
+      for (int i=ti-2;i>=0;i--)
+	{      
+	  double x = ((t*a)/(double)(i+1))*sp[i].p < 1 ? ((t*a)/(double)(i+1))*sp[i].p : 1 ;
+	  pv_BY[i] = pv_BY[i+1] < x ? pv_BY[i+1] : x;
+	}
+      
     }
   
-  // // Sidak SS
-  // for (int i=0;i<ti;i++)
-  //   pv_sidakSS[i] = 1 - pow( 1 - sp[i].p , t );
+  // 
+  // update original p-value list
+  //
   
-  
-  // // Sidak SD
-  // pv_sidakSD[0] = 1 - pow( 1 - sp[0].p , t );
-  // for (int i=1;i<ti;i++)
-  //   {
-  //     double x = 1 - pow( 1 - sp[i].p , t - i  );
-  //     pv_sidakSD[i] = pv_sidakSD[i-1] > x ? pv_sidakSD[i-1] : x ; 
-  //   }
-  
-
-  // BH
-  pv_BH[ti-1] = sp[ti-1].p;
-  for (int i=ti-2;i>=0;i--)
-    {
-      double x = (t/(double)(i+1))*sp[i].p < 1 ? (t/(double)(i+1))*sp[i].p : 1 ;
-      pv_BH[i] = pv_BH[i+1] < x ? pv_BH[i+1] : x;
-    }
-
-  // BY
-  double a = 0;
-  for (double i=1; i<=t; i++)
-    a += 1/i;
-  
-  pv_BY[ti-1] = a * sp[ti-1].p < 1 ? a * sp[ti-1].p : 1 ; 
-  
-  for (int i=ti-2;i>=0;i--)
-    {      
-      double x = ((t*a)/(double)(i+1))*sp[i].p < 1 ? ((t*a)/(double)(i+1))*sp[i].p : 1 ;
-      pv_BY[i] = pv_BY[i+1] < x ? pv_BY[i+1] : x;
-    }
-
-
   Eigen::MatrixXd res = Eigen::MatrixXd::Constant( npv , 4 , -9 );
-
+  
   for (int l=0; l<ti; l++)
     {
       const int idx = sp[l].l;
-
+      
       // bonferroni
       res(idx,0) = sp[l].p*t > 1 ? 1 : sp[l].p*t;
       // others
       res(idx,1) = pv_holm[l];
       res(idx,2) = pv_BH[l]; // fdr
       res(idx,3) = pv_BY[l];
-
+      
     }
 
   return res;

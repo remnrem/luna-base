@@ -1112,6 +1112,52 @@ bool Helper::yesno( const std::string & s )
 
 
 
+bool date_t::is_valid( const std::string & dt , const date_format_t format )
+{
+  
+  std::vector<std::string> tok = Helper::parse( dt , "./-" );
+  if ( tok.size() != 3 ) return false;
+  
+  int d1 = 0 , m1 = 0 , y1 = 0;
+  
+  const bool is_mdy = format == MDY;
+  const bool is_ymd = format == YMD;
+  
+  const std::string & s_day = is_mdy ? tok[1] : ( is_ymd ? tok[2] : tok[0] );
+  const std::string & s_mon = is_mdy ? tok[0] : tok[1];
+  const std::string & s_yr  = is_ymd ? tok[0] : tok[2];
+  
+  if ( ! Helper::str2int( s_day , &d1 ) ) return false;
+  if ( ! Helper::str2int( s_mon , &m1 ) )
+    {
+      std::string mm = Helper::toupper( s_mon );
+      if ( mm.size() == 3 )
+	{
+	  if      ( mm == "JAN" ) m1 = 1;
+	  else if ( mm == "FEB" ) m1 = 2;
+	  else if ( mm == "MAR" ) m1 = 3;
+	  else if ( mm == "APR" ) m1 = 4;
+	  else if ( mm == "MAY" ) m1 = 5;
+	  else if ( mm == "JUN" ) m1 = 6;
+	  else if ( mm == "JUL" ) m1 = 7;
+	  else if ( mm == "AUG" ) m1 = 8;
+	  else if ( mm == "SEP" ) m1 = 9;
+	  else if ( mm == "OCT" ) m1 = 10;
+	  else if ( mm == "NOV" ) m1 = 11;
+	  else if ( mm == "DEC" ) m1 = 12;
+	}
+    }
+  
+  if ( ! Helper::str2int( s_yr , &y1 ) ) return false;
+ 
+  if ( d1 < 1 || d1 > 31 ) return false;
+  if ( m1 < 1 || m1 > 12 ) return false;    
+  if ( y1 < 0 || y1 >= 100 ) return false;
+
+  return true;
+}
+
+
 std::string date_t::datestring( int c , const std::string & delim , const int ydigs )
 {
   // given a count (days past 1/1/85) return a date
@@ -1160,6 +1206,8 @@ std::string date_t::datestring( int c , const std::string & delim , const int yd
   return "";
   
 }
+
+
 
 
 int date_t::count( const date_t & dt ) 

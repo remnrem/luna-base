@@ -179,6 +179,11 @@ struct globals
   static bool assume_pm_starttime;
   static int assume_pm_starttime_hour;
   
+  static std::string default_starttime;
+  static bool use_default_starttime;
+  static std::string default_startdate;
+  static bool use_default_startdate;
+  
   static date_format_t read_annot_date_format;
   static date_format_t write_annot_date_format;
   static date_format_t read_edf_date_format;

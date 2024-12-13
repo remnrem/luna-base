@@ -357,6 +357,8 @@ namespace Helper
 
 
 struct date_t {
+  
+  static bool is_valid( const std::string & dt , const date_format_t format = DMY );
 
   date_t( const std::string & dt , const date_format_t format = DMY )
   {
