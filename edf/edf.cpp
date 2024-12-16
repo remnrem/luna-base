@@ -4090,7 +4090,7 @@ void edf_t::shift( int s , int shift_sp , bool wrap )
   
   const int np = d->size();
 
-  if ( np <= shift_sp ) return;
+  if ( np <= fabs(shift_sp) ) return;
   
   std::vector<double> d2( np , 0 );
   

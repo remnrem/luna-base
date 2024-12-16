@@ -99,6 +99,7 @@ struct clocs_t {
   
   bool make_interpolation_matrices( const signal_list_t & good_signals , 
 				    const signal_list_t & bad_signals , 
+				    const Eigen::MatrixXd & Dst , 
 				    Eigen::MatrixXd * G , 
 				    Eigen::MatrixXd * Gi , 
 				    const int m = 4 , 

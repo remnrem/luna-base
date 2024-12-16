@@ -99,6 +99,13 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
   const double req_ch_cnt  = param.has( "req-chs" ) ? param.requires_int( "req-chs" ) : -1;
   const double req_ch_prop = param.has( "req-chs-prop" ) ? param.requires_dbl( "req-chs-prop" ) : -1;
 
+
+  //
+  // Get full inter-electrode distance matrix
+  //
+
+  Eigen::MatrixXd Dst = edf.clocs.interelectrode_distance_matrix( signals , signals );
+  
   
   //
   // Step through each epoch/channel
@@ -125,8 +132,6 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
     {
       
       int epoch = edf.timeline.next_epoch();      
-
-      //std::cout << "eee = " << epoch << "\n";
 
       if ( epoch == -1 ) break;
       
@@ -194,9 +199,10 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       Eigen::MatrixXd invG;
       Eigen::MatrixXd Gi;
       
-      edf.clocs.make_interpolation_matrices( good_signals , bad_signals , 
-					     &invG , &Gi , 
-					     m , order, lambda );
+      edf.clocs.make_interpolation_matrices( good_signals , bad_signals ,
+					     Dst, 
+       					     &invG , &Gi , 
+       					     m , order, lambda );
       
       
       //
@@ -204,7 +210,7 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
       //
       
       Eigen::MatrixXd I = edf.clocs.interpolate( D , good_signals_idx , invG, Gi );
-
+      
 
       //
       // Update original signal
@@ -267,6 +273,8 @@ void dsptools::chep_based_interpolation( edf_t & edf , param_t & param )
 
 void dsptools::leave_one_out( edf_t & edf , param_t & param )
 {
+
+  // add m , order , lambda param
   
   // requires ome clocs to be attached
   if ( ! edf.clocs.attached() ) 
@@ -305,6 +313,12 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
   std::vector<std::vector<int> > good_channels;
   
   logger << " generating leave-one-out G matrices for " << signals.size() << " signals\n";
+
+  //
+  // Get full inter-electrode distance matrix
+  //
+
+  Eigen::MatrixXd Dst = edf.clocs.interelectrode_distance_matrix( signals , signals );
   
   for (int s=0;s<ns;s++)
     {
@@ -334,7 +348,7 @@ void dsptools::leave_one_out( edf_t & edf , param_t & param )
       Eigen::MatrixXd _invG;
       Eigen::MatrixXd _Gi;
       
-      edf.clocs.make_interpolation_matrices( good_signals , bad_signals , &_invG , &_Gi );
+      edf.clocs.make_interpolation_matrices( good_signals , bad_signals , Dst, &_invG , &_Gi );
       
       //
       // save all

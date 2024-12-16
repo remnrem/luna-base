@@ -409,6 +409,7 @@ Eigen::MatrixXd clocs_t::interelectrode_distance_matrix( const signal_list_t & s
 
 bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals , 
 					   const signal_list_t & bad_signals , 
+					   const Eigen::MatrixXd & Dst ,
 					   Eigen::MatrixXd * G , 
 					   Eigen::MatrixXd * Gi , 
 					   const int m , 
@@ -438,11 +439,15 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
   int nsi = bad_signals.size();
   
   // get interelectrode distance matrix
-  Eigen::MatrixXd D = interelectrode_distance_matrix( good_signals , good_signals );
+  // Eigen::MatrixXd D = interelectrode_distance_matrix( good_signals , good_signals );
+  // ---> Dst( good_signals , good_signals );
+
   
   // Evaluate Legendre polynomials
-  std::vector<Eigen::MatrixXd> L = legendre( N , D );
-
+  //std::vector<Eigen::MatrixXd> L = legendre( N , D );
+  std::vector<Eigen::MatrixXd> L = legendre( N , Dst( good_signals.signals, good_signals.signals ) );
+  
+  
   // given signals in the signal-list, make a matching G matrix  
   //  const int ns = signals.size();
   
@@ -486,10 +491,11 @@ bool clocs_t::make_interpolation_matrices( const signal_list_t & good_signals ,
 
   *Gi = Eigen::MatrixXd::Zero( nsi, ns );
   
-  Eigen::MatrixXd Di = interelectrode_distance_matrix( bad_signals , good_signals );
+  //Eigen::MatrixXd Di = interelectrode_distance_matrix( bad_signals , good_signals );
   
   // Evaluate Legendre polynomials
-  std::vector<Eigen::MatrixXd> Li = legendre( N , Di );
+  //std::vector<Eigen::MatrixXd> Li = legendre( N , Di );
+  std::vector<Eigen::MatrixXd> Li = legendre( N , Dst( bad_signals.signals, good_signals.signals ) );
 
   // for each bad x good pair, compute element of Gi
 
@@ -528,42 +534,40 @@ Eigen::MatrixXd clocs_t::interpolate( const Eigen::MatrixXd & data ,
   // sanity check
   if ( invG.rows() != ngood || invG.cols() != invG.rows() || good_channels.size() != ngood ) 
     Helper::halt( "internal problem in interpolate" );
-  
-    
+
   // IMPUTED (BxR)  =    BxG * ( GxG * GxR ) 
   //                     Gi  * ( invG * data' )
+  
+  return ( Gi * ( invG * data(Eigen::all,good_channels).transpose() ) ).transpose();
+  
+
+  //
+  // old
+  //
   
   // as we need to transpose data for normal mat mult, just do by hand here
   // swapping rows and cols
   
-  // TODO: revisit this code using standard Eigen matrix ops...
-  
+  // Eigen::MatrixXd t = Eigen::MatrixXd::Zero( ngood , nrows );
+  // for (int i=0;i<ngood; i++)
+  //   for (int j=0;j<nrows;j++)
+  //     for (int k=0;k<ngood;k++)
+  // 	t(i,j) += invG(i,k) * data(j,good_channels[k]);
 
-  Eigen::MatrixXd t = Eigen::MatrixXd::Zero( ngood , nrows );
+  // Eigen::MatrixXd y = Eigen::MatrixXd::Zero( nrows , nbad );
   
-  for (int i=0;i<ngood; i++)
-    for (int j=0;j<nrows;j++)
-      for (int k=0;k<ngood;k++)
-	t(i,j) += invG(i,k) * data(j,good_channels[k]);
+  // // IMPUTED (BxR)  =    BxG * ( GxG * GxR ) 
+  // // this is also implicilty transposed back into y
+  // // i.e. RxB rather than BxR
+  
+  // for (int i=0;i<nbad; i++)
+  //   for (int j=0;j<nrows;j++)
+  //     for (int k=0;k<ngood;k++)
+  // 	y(j,i) += Gi(i,k) * t(k,j);
 
-  
-  //   Data::Matrix<double> tt = Statistics::transpose( t );
-  //   std::cout << "t\n\n" << tt.print() << "\n";
-  
-  Eigen::MatrixXd y = Eigen::MatrixXd::Zero( nrows , nbad );
-  
-  // IMPUTED (BxR)  =    BxG * ( GxG * GxR ) 
-  // this is also implicilty transposed back into y
-  // i.e. RxB rather than BxR
-  
-  for (int i=0;i<nbad; i++)
-    for (int j=0;j<nrows;j++)
-      for (int k=0;k<ngood;k++)
-	y(j,i) += Gi(i,k) * t(k,j);
-
-  //  std::cout << "y = \n" << y.print() << "\n";
-  
-  return y;
+  // //  std::cout << "y = \n" << y.print() << "\n";
+     
+  // return y;
   
 }
 

@@ -4531,7 +4531,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       
       Eigen::MatrixXd invG;
       Eigen::MatrixXd Gi;
-      clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
+      //      clocs.make_interpolation_matrices( good_signals , bad_signals , &invG , &Gi );
       std::vector<int> gi;
       for (int i=11;i<=64;i++) gi.push_back(i-1);
 

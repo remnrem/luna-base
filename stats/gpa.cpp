@@ -867,7 +867,6 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	      run1X();
 	    }
 	  
-	  logger << "  ...done\n";
 	}
     
     }
