@@ -1090,233 +1090,190 @@ bool cmd_t::eval( edf_t & edf )
       //
       // Now process the command
       //
+      bool fnd = false;
       
-      if      ( is( c, "WRITE" ) )        proc_write( edf, param(c) );
-      else if ( is( c, "EDF" ) )          proc_force_edf( edf , param(c) );
-      else if ( is( c, "EDF-" ) )         proc_edf_minus( edf , param(c) );
-      else if ( is( c, "EDF-MINUS" ) )    proc_edf_minus( edf , param(c) );
-      else if ( is( c, "SET-TIMESTAMPS" ) ) proc_set_timestamps( edf , param(c) );
-      else if ( is( c, "SUMMARY" ) )      proc_summaries( edf , param(c) );
-      else if ( is( c, "HEADERS" ) )      proc_headers( edf , param(c) );
-      else if ( is( c, "ALIASES" ) )      proc_aliases( edf , param(c) );
-      else if ( is( c, "SET-HEADERS" ) )  proc_set_headers( edf , param(c) );
-      else if ( is( c, "SET-VAR" ) )      proc_set_ivar( edf, param(c) );
-      else if ( is( c, "DESC" ) )         proc_desc( edf , param(c) );
-      else if ( is( c, "TYPES" ) )        proc_show_channel_map();
-      else if ( is( c, "VARS" ) )         proc_dump_vars( edf , param(c) );
-      else if ( is( c, "STATS" ) )        proc_stats( edf , param(c) );
-      else if ( is( c, "DUPES" ) )        proc_dupes( edf, param(c) ); 
-      else if ( is( c, "REFERENCE" ) )    proc_reference( edf , param(c) );
-      else if ( is( c, "DEREFERENCE" ) )  proc_dereference( edf , param(c) );
-
+      if ( (!fnd) && is( c, "WRITE" ) )          { fnd = true; proc_write( edf, param(c) ); }
+	if ( (!fnd) && is( c, "EDF" ) )          { fnd = true; proc_force_edf( edf , param(c) ); }
+	if ( (!fnd) && is( c, "EDF-" ) )         { fnd = true; proc_edf_minus( edf , param(c) ); }
+	if ( (!fnd) && is( c, "EDF-MINUS" ) )    { fnd = true; proc_edf_minus( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SET-TIMESTAMPS" ) ) { fnd = true; proc_set_timestamps( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SUMMARY" ) )      { fnd = true; proc_summaries( edf , param(c) ); }
+	if ( (!fnd) && is( c, "HEADERS" ) )      { fnd = true; proc_headers( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ALIASES" ) )      { fnd = true; proc_aliases( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SET-HEADERS" ) )  { fnd = true; proc_set_headers( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SET-VAR" ) )      { fnd = true; proc_set_ivar( edf, param(c) ); }
+	if ( (!fnd) && is( c, "DESC" ) )         { fnd = true; proc_desc( edf , param(c) ); }
+	if ( (!fnd) && is( c, "TYPES" ) )        { fnd = true; proc_show_channel_map(); }
+	if ( (!fnd) && is( c, "VARS" ) )         { fnd = true; proc_dump_vars( edf , param(c) ); }
+	if ( (!fnd) && is( c, "STATS" ) )        { fnd = true; proc_stats( edf , param(c) ); }
+	if ( (!fnd) && is( c, "DUPES" ) )        { fnd = true; proc_dupes( edf, param(c) );  }
+	if ( (!fnd) && is( c, "REFERENCE" ) )    { fnd = true; proc_reference( edf , param(c) ); }
+	if ( (!fnd) && is( c, "DEREFERENCE" ) )  { fnd = true; proc_dereference( edf , param(c) ); }      
+	if ( (!fnd) && is( c, "FLIP" ) )         { fnd = true; proc_flip( edf , param(c) ); }
+	if ( (!fnd) && is( c, "RECTIFY" ) )      { fnd = true; proc_rectify( edf , param(c) ); }
+	if ( (!fnd) && is( c, "REVERSE" ) )      { fnd = true; proc_reverse( edf , param(c) ); }
+	if ( (!fnd) && is( c, "CANONICAL" ) )    { fnd = true; proc_canonical( edf , param(c) ); }
+	if ( (!fnd) && is( c, "REMAP" ) )        { fnd = true; proc_remap_annots( edf , param(c) ); }
+	if ( (!fnd) && is( c, "uV" ) )           { fnd = true; proc_scale( edf , param(c) , "uV" ); }
+	if ( (!fnd) && is( c, "mV" ) )           { fnd = true; proc_scale( edf , param(c) , "mV" ); }
+	if ( (!fnd) && is( c, "MINMAX" ) )       { fnd = true; proc_minmax( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SCALE" ) )        { fnd = true; proc_setscale( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ROBUST-NORM" ) )  { fnd = true; proc_standardize( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ALTER" ) )        { fnd = true; proc_correct( edf , param(c) ); }
+	if ( (!fnd) && is( c, "RECORD-SIZE" ) )  { fnd = true; proc_rerecord( edf , param(c) ); }  
+	if ( (!fnd) && is( c, "TIME-TRACK" ) )   { fnd = true; proc_timetrack( edf, param(c) ); }
+	if ( (!fnd) && is( c, "STAGE" ) )        { fnd = true; proc_sleep_stage( edf , param(c) , false ); }
+	if ( (!fnd) && is( c, "HYPNO" ) )        { fnd = true; proc_sleep_stage( edf , param(c) , true ); }
+	if ( (!fnd) && is( c, "SIG-CYCLES") )    { fnd = true; proc_ecycle( edf , param(c) ); }
+	if ( (!fnd) && is( c, "TSLIB" ) )        { fnd = true; pdc_t::construct_tslib( edf , param(c) ); }
+        if ( (!fnd) && is( c, "SSS" ) )          { fnd = true; pdc_t::simple_sleep_scorer( edf , param(c) ); }
+        if ( (!fnd) && is( c, "EXE" ) )          { fnd = true; pdc_t::similarity_matrix( edf , param(c) ); }
+        if ( (!fnd) && is( c, "DUMP" ) )         { fnd = true; proc_dump( edf, param(c) );  }
+	if ( (!fnd) && is( c, "DUMP-RECORDS" ) ) { fnd = true; proc_record_dump( edf , param(c) ); }
+	if ( (!fnd) && is( c, "RECS" ) )         { fnd = true; proc_record_table( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SEGMENTS" ) )     { fnd = true; proc_dump_segs( edf , param(c) ); }
+	if ( (!fnd) && is( c, "DUMP-EPOCHS" ) )  { fnd = true; proc_epoch_dump( edf, param(c) ); } // REDUNDANT; use ANNOTS epoch instead
+	if ( (!fnd) && is( c, "ANNOTS" ) )       { fnd = true; proc_list_all_annots( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ESPAN" ) )        { fnd = true; proc_espan( edf , param(c) ); }
+	if ( (!fnd) && is( c, "MAKE-ANNOTS" ) )  { fnd = true; proc_make_annots( edf , param(c) ); }
+	if ( (!fnd) && is( c, "WRITE-ANNOTS" ) ) { fnd = true; proc_write_annots( edf, param(c) ); }
+	if ( (!fnd) && is( c, "META" ) )         { fnd = true; proc_set_annot_metadata( edf, param(c) );  }
+	if ( (!fnd) && is( c, "OVERLAP") )       { fnd = true; proc_annotate( edf, param(c) ); }
+	if ( (!fnd) && is( c, "EXTEND" ) )       { fnd = true; proc_extend_annots( edf, param(c) ); }
+	if ( (!fnd) && is( c, "A2S" ) )          { fnd = true; proc_annot2signal( edf, param(c) ); }
+	if ( (!fnd) && is( c, "S2A" ) )          { fnd = true; proc_signal2annot( edf, param(c) ); }
+	if ( (!fnd) && is( c, "A2C" ) )          { fnd = true; proc_annot2cache( edf , param(c) ); }
+	if ( (!fnd) && is( c, "C2A" ) )          { fnd = true; proc_cache2annot( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SPANNING" ) )     { fnd = true; proc_list_spanning_annots( edf, param(c) ); }
+	if ( (!fnd) && is( c, "MEANS" ) )        { fnd = true; proc_sig_annot_mean( edf, param(c) ); }
+	if ( (!fnd) && is( c, "TABULATE" ) )     { fnd = true; proc_sig_tabulate( edf, param(c) ); }
+	if ( (!fnd) && is( c, "MATRIX" ) )       { fnd = true; proc_epoch_matrix( edf , param(c) ); }
+	if ( (!fnd) && is( c, "HEAD" ) )         { fnd = true; proc_head_matrix( edf , param(c) ); }
+	if ( (!fnd) && ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) ) )  { fnd = true; proc_restructure( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SIGNALS" ) )      { fnd = true; proc_drop_signals( edf , param(c) ); }
+	if ( (!fnd) && is( c, "RENAME" ) )       { fnd = true; proc_rename( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ENFORCE-SR" ) )   { fnd = true; proc_enforce_signals( edf , param(c) ); }
+	if ( (!fnd) && is( c, "COPY" ) )         { fnd = true; proc_copy_signal( edf , param(c) ); }
+	if ( (!fnd) && is( c, "READ" ) )         { fnd = true; proc_read_signal( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ORDER" ) )        { fnd = true; proc_order_signals( edf , param(c) ); }
+	if ( (!fnd) && is( c, "CONTAINS" ) )     { fnd = true; proc_has_signals( edf , param(c) ); }
+	if ( (!fnd) && ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) ) { fnd = true; proc_rms( edf, param(c) ); }
+	if ( (!fnd) && is( c, "MSE" ) )          { fnd = true; proc_mse( edf, param(c) ); }
+	if ( (!fnd) && is( c, "LZW" ) )          { fnd = true; proc_lzw( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ZR" ) )           { fnd = true; proc_zratio( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ANON" ) )         { fnd = true; proc_anon( edf , param(c) ); }
+	if ( (!fnd) && is( c, "EPOCH" ) )        { fnd = true; proc_epoch( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ALIGN" ) )        { fnd = true; proc_align( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SLICE" ) )        { fnd = true; proc_slice( edf , param(c) , 1 ); }
+	if ( (!fnd) && is( c, "ALIGN-EPOCHS" ) ) { fnd = true; proc_align_epochs( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ALIGN-ANNOTS" ) ) { fnd = true; proc_align_annots( edf , param(c) ); }
+	if ( (!fnd) && is( c, "INSERT" ) )       { fnd = true; proc_insert( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SUDS" ) )         { fnd = true; proc_suds( edf , param(c) ); }
+	if ( (!fnd) && is( c, "MAKE-SUDS" ) )    { fnd = true; proc_make_suds( edf , param(c) ); }
+	if ( (!fnd) && is( c, "RUN-POPS" ) )     { fnd = true; proc_runpops( edf , param(c) ); } // wrapper
+	if ( (!fnd) && is( c, "POPS" ) )         { fnd = true; proc_pops( edf , param(c) ); }
+	if ( (!fnd) && is( c, "EVAL-STAGES" ) )  { fnd = true; proc_eval_stages( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SOAP" ) )         { fnd = true; proc_self_suds( edf , param(c) ); }
+	if ( (!fnd) && is( c, "COMPLETE" ) )     { fnd = true; proc_resoap( edf , param(c) ); }
+	if ( (!fnd) && is( c, "REBASE" ) )       { fnd = true; proc_rebase_soap( edf , param(c) ); } // e.g. 20->30s epochs using SOAP
+	if ( (!fnd) && is( c, "PLACE" ) )        { fnd = true; proc_place_soap( edf , param(c) ); } // e.g. find where should go
+	if ( (!fnd) && is( c, "TRANS" ) )        { fnd = true; proc_trans( edf , param(c) ); }
+	if ( (!fnd) && is( c, "EVAL" ) )         { fnd = true; proc_eval( edf, param(c) ); }
+	if ( (!fnd) && is( c, "DERIVE" ) )       { fnd = true; proc_derive( edf, param(c) ); }
+	if ( (!fnd) && is( c, "MASK" ) )         { fnd = true; proc_mask( edf, param(c) ); }
+	if ( (!fnd) && is( c, "COMBINE" ) )      { fnd = true; proc_combine( edf , param(c) ); }
+	if ( (!fnd) && is( c, "FREEZE" ) )       { fnd = true; proc_freeze( edf , param(c) ); }
+	if ( (!fnd) && is( c, "THAW" ) )         { fnd = true; proc_thaw( edf , param(c) ); }
+	if ( (!fnd) && is( c, "CLEAN-FREEZER"))  { fnd = true; proc_clean_freezer( edf , param(c) ); }
+	if ( (!fnd) && is( c, "FILE-MASK" ) )    { fnd = true; proc_file_mask( edf , param(c) ); } // not supported/implemented
+	if ( (!fnd) && is( c, "DUMP-MASK" ) )    { fnd = true; proc_dump_mask( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ANNOT-MASK" ) )   { fnd = true; proc_annot_mask( edf, param(c) ); }
+	if ( (!fnd) && is( c, "CHEP" ) )         { fnd = true; timeline_t::proc_chep( edf, param(c) ); }
+        if ( (!fnd) && is( c, "CHEP-MASK" ) )    { fnd = true; proc_chep_mask( edf, param(c) ); }
+	if ( (!fnd) && is( c, "EPOCH-ANNOT" ) )  { fnd = true; proc_file_annot( edf , param(c) ); }
+	if ( (!fnd) && is( c, "EPOCH-MASK" ) )   { fnd = true; proc_epoch_mask( edf, param(c) ); }
+	if ( (!fnd) && is( c, "HB" ) )           { fnd = true; proc_hypoxic_burden( edf, param(c) ); }
+	if ( (!fnd) && is( c, "FILTER" ) )       { fnd = true; proc_filter( edf, param(c) ); }
+	if ( (!fnd) && is( c, "FILTER-DESIGN" )) { fnd = true; proc_filter_design( edf, param(c) ); }
+	if ( (!fnd) && is( c, "MOVING-AVERAGE" )) { fnd = true; proc_moving_average( edf, param(c) ); }
+	if ( (!fnd) && is( c, "CWT-DESIGN" ) )   { fnd = true; proc_cwt_design( edf , param(c) ); }
+	if ( (!fnd) && is( c, "CWT" ) )          { fnd = true; proc_cwt( edf , param(c) ); }
+	if ( (!fnd) && is( c, "HILBERT" ) )      { fnd = true; proc_hilbert( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SYNC" ) )         { fnd = true; proc_sync( edf , param(c) ); }
+	if ( (!fnd) && is( c, "TSYNC" ) )        { fnd = true; proc_tsync( edf , param(c) ); }
+	if ( (!fnd) && is( c, "XCORR" ) )        { fnd = true; proc_xcorr( edf, param(c) ); }
+	if ( (!fnd) && is( c, "TV" ) )           { fnd = true; proc_tv_denoise( edf , param(c) ); }
+	if ( (!fnd) && is( c, "OTSU" ) )         { fnd = true; proc_otsu( edf, param(c) ); }
+	if ( (!fnd) && is( c, "COVAR" ) )        { fnd = true; proc_covar( edf, param(c) ); }
+	if ( (!fnd) && is( c, "PSD" ) )          { fnd = true; proc_psd( edf, param(c) ); }
+	if ( (!fnd) && is( c, "FFT" ) )          { fnd = true; proc_fft( edf , param(c) ); }
+	if ( (!fnd) && is( c, "MTM" ) )          { fnd = true; proc_mtm( edf, param(c) ); }
+	if ( (!fnd) && is( c, "IRASA" ) )        { fnd = true; proc_irasa( edf, param(c) ); }
+	if ( (!fnd) && is( c, "1FNORM" ) )       { fnd = true; proc_1overf_norm( edf, param(c) ); }
+	if ( (!fnd) && is( c, "DYNAM" ) )        { fnd = true; proc_qdynam( edf , param(c) ); }
+	if ( (!fnd) && is( c, "PSC" ) )          { fnd = true; proc_psc( edf , param(c) ); }
+	if ( (!fnd) && is( c, "MS" ) )           { fnd = true; proc_microstates( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ASYMM" ) )        { fnd = true; proc_asymm( edf , param(c) ); }
+	if ( (!fnd) && is( c, "TLOCK" ) )        { fnd = true; proc_tlock( edf , param(c) ); }
+	if ( (!fnd) && is( c, "TCLST" ) )        { fnd = true; proc_tclst( edf , param(c) ); }
+	if ( (!fnd) && is( c, "PERI" ) )         { fnd = true; proc_peri( edf , param(c) ); }
+	if ( (!fnd) && is( c, "PEAKS" ) )        { fnd = true; proc_peaks( edf , param(c) ); } 
+	if ( (!fnd) && is( c, "Z-PEAKS" ) )      { fnd = true; proc_zpeaks( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SEDF" ) )         { fnd = true; proc_sedf( edf , param(c) ); }
+	if ( (!fnd) && is( c, "FIP" ) )          { fnd = true; proc_fiplot( edf , param(c) ); }
+	if ( (!fnd) && is( c, "COH" ) )          { fnd = true; proc_coh( edf , param(c) ); }
+	if ( (!fnd) && is( c, "CC" ) )           { fnd = true; proc_conncoupl( edf , param(c) ); }
+	if ( (!fnd) && is( c, "CORREL" ) )       { fnd = true; proc_correl( edf , param(c) ); }
+	if ( (!fnd) && is( c, "PSI" ) )          { fnd = true; proc_psi( edf , param(c) ); }
+	if ( (!fnd) && is( c, "ACF" ) )          { fnd = true; proc_acf( edf , param(c) ); }
+	if ( (!fnd) && is( c, "GP" ) )           { fnd = true; gc_wrapper( edf , param(c) );  }
+        if ( (!fnd) && is( c, "ED" ) )           { fnd = true; proc_elec_distance( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SVD" ) )          { fnd = true; proc_svd( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ICA" ) )          { fnd = true; proc_ica( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ADJUST" ) )       { fnd = true; proc_adjust( edf , param(c) );  }
+	if ( (!fnd) && is( c, "CLOCS" ) )        { fnd = true; proc_attach_clocs( edf , param(c) ); }
+	if ( (!fnd) && is( c, "L1OUT" ) )        { fnd = true; proc_leave_one_out( edf , param(c) ); }
+	if ( (!fnd) && is( c, "INTERPOLATE" ) )  { fnd = true; proc_chep_based_interpolation( edf, param(c) ); }
+	if ( (!fnd) && is( c, "SL" ) )           { fnd = true; proc_surface_laplacian( edf , param(c) ); }
+	if ( (!fnd) && is( c, "EMD" ) )          { fnd = true; proc_emd( edf , param(c) ); }
+	if ( (!fnd) && is( c, "DFA" ) )          { fnd = true; proc_dfa( edf , param(c) ); }
+	if ( (!fnd) && is( c, "MI" ) )           { fnd = true; proc_mi( edf, param(c) ); }
+	if ( (!fnd) && is( c, "HR" ) )           { fnd = true; proc_bpm( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SUPPRESS-ECG" ) ) { fnd = true; proc_ecgsuppression( edf , param(c) ); }
+	if ( (!fnd) && is( c, "PAC" ) )          { fnd = true; proc_pac( edf , param(c) ); }
+	if ( (!fnd) && is( c, "CFC" ) )          { fnd = true; proc_cfc( edf , param(c) ); }
+	if ( (!fnd) && is( c, "GED" ) )          { fnd = true; proc_ged( edf , param(c) ); }
+	if ( (!fnd) && is( c, "PREDICT" ) )      { fnd = true; proc_predict( edf , param(c) ); }
+	if ( (!fnd) && is( c, "TAG" ) )          { fnd = true; proc_tag( param(c) ); }
+	if ( (!fnd) && is( c, "RESAMPLE" ) )     { fnd = true; proc_resample( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ZOH" ) )          { fnd = true; proc_zoh( edf, param(c) ); }
+	if ( (!fnd) && is( c, "LINE-DENOISE" ) ) { fnd = true; dsptools::line_denoiser( edf, param(c) ); }
+        if ( (!fnd) && is( c, "ZC" ) )           { fnd = true; dsptools::detrend( edf, param(c) ); }
+        if ( (!fnd) && is( c, "SPINDLES" ) )     { fnd = true; proc_spindles( edf, param(c) ); } 
+	if ( (!fnd) && is( c, "SO" ) )           { fnd = true; proc_slowwaves( edf, param(c) ); }
+	if ( (!fnd) && is( c, "COUPL" ) )        { fnd = true; proc_coupling( edf , param(c) ); }
+	if ( (!fnd) && is( c, "RIPPLES" ) )      { fnd = true; proc_ripples( edf , param(c) ); }
+	if ( (!fnd) && is( c, "PCOUPL" ) )       { fnd = true; proc_generic_coupling( edf , param(c) ); }
+	if ( (!fnd) && is( c, "POL" ) )          { fnd = true; proc_polarity( edf, param(c) ); }	  
+	if ( (!fnd) && is( c, "REMS" ) )         { fnd = true; proc_rems( edf, param(c) ); }
+	if ( (!fnd) && is( c, "ARTIFACTS" ) )    { fnd = true; proc_artifacts( edf, param(c) ); }
+	if ( (!fnd) && is( c, "EDGER" ) )        { fnd = true; proc_trim( edf, param(c) ) ; }
+	if ( (!fnd) && is( c, "CACHE" ) )        { fnd = true; proc_dump_cache( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SIGGEN" ) )       { fnd = true; proc_siggen( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SIMUL" ) )        { fnd = true; proc_simul( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SPIKE" ) )        { fnd = true; proc_spike( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SHIFT" ) )        { fnd = true; proc_shift( edf , param(c) ); }
+	if ( (!fnd) && is( c, "SCRAMBLE" ) )     { fnd = true; proc_scramble( edf , param(c) ); }
       
-      else if ( is( c, "FLIP" ) )         proc_flip( edf , param(c) );
-      else if ( is( c, "RECTIFY" ) )      proc_rectify( edf , param(c) );
-      else if ( is( c, "REVERSE" ) )      proc_reverse( edf , param(c) );
-      else if ( is( c, "CANONICAL" ) )    proc_canonical( edf , param(c) );
-      else if ( is( c, "REMAP" ) )        proc_remap_annots( edf , param(c) );
-      else if ( is( c, "uV" ) )           proc_scale( edf , param(c) , "uV" ); 
-      else if ( is( c, "mV" ) )           proc_scale( edf , param(c) , "mV" );
-      else if ( is( c, "MINMAX" ) )       proc_minmax( edf , param(c) );
-      else if ( is( c, "SCALE" ) )        proc_setscale( edf , param(c) );
-      
-      else if ( is( c, "ROBUST-NORM" ) )  proc_standardize( edf , param(c) );
-
-      else if ( is( c, "ALTER" ) )      proc_correct( edf , param(c) );
-      
-      else if ( is( c, "RECORD-SIZE" ) )  proc_rerecord( edf , param(c) );
-      
-      else if ( is( c, "TIME-TRACK" ) )   proc_timetrack( edf, param(c) );
-      //      else if ( is( c, "CONTIN" ) )       proc_continuous( edf, param(c) ); // not allowed....
-
-      else if ( is( c, "STAGE" ) )        proc_sleep_stage( edf , param(c) , false );
-      else if ( is( c, "HYPNO" ) )        proc_sleep_stage( edf , param(c) , true );
-      else if ( is( c, "SIG-CYCLES") )    proc_ecycle( edf , param(c) );
-      
-      else if ( is( c, "TSLIB" ) )        pdc_t::construct_tslib( edf , param(c) );
-      else if ( is( c, "SSS" ) )          pdc_t::simple_sleep_scorer( edf , param(c) );
-      else if ( is( c, "EXE" ) )          pdc_t::similarity_matrix( edf , param(c) );
-      //      else if ( is( c, "CHCHK" ) )        pdc_t::channel_checker( edf , param(c) );
-
-      //      else if ( is( c, "LW" ) )           lw_prep_t( edf , param(c) );
-      
-      else if ( is( c, "DUMP" ) )         proc_dump( edf, param(c) );      
-      else if ( is( c, "DUMP-RECORDS" ) ) proc_record_dump( edf , param(c) );
-      else if ( is( c, "RECS" ) )         proc_record_table( edf , param(c) );
-      else if ( is( c, "SEGMENTS" ) )     proc_dump_segs( edf , param(c) );
-      else if ( is( c, "DUMP-EPOCHS" ) )  proc_epoch_dump( edf, param(c) ); // REDUNDANT; use ANNOTS epoch instead
-
-      else if ( is( c, "ANNOTS" ) )       proc_list_all_annots( edf, param(c) );
-      else if ( is( c, "ESPAN" ) )        proc_espan( edf , param(c) );
-      else if ( is( c, "MAKE-ANNOTS" ) )  proc_make_annots( edf , param(c) );
-      else if ( is( c, "WRITE-ANNOTS" ) ) proc_write_annots( edf, param(c) );
-      else if ( is( c, "META" ) )         proc_set_annot_metadata( edf, param(c) ); 
-      else if ( is( c, "OVERLAP") )       proc_annotate( edf, param(c) );
-      else if ( is( c, "EXTEND" ) )       proc_extend_annots( edf, param(c) );
-      else if ( is( c, "A2S" ) )          proc_annot2signal( edf, param(c) );
-      else if ( is( c, "S2A" ) )          proc_signal2annot( edf, param(c) );
-      else if ( is( c, "A2C" ) )          proc_annot2cache( edf , param(c) );
-      else if ( is( c, "C2A" ) )          proc_cache2annot( edf , param(c) );
-      
-      else if ( is( c, "SPANNING" ) ) proc_list_spanning_annots( edf, param(c) );
-      //else if ( is( c, "COUNT-ANNOTS" ) ) proc_list_annots( edf , param(c) ); // REDUNDANT; use ANNOTS epoch instead
-      else if ( is( c, "MEANS" ) )        proc_sig_annot_mean( edf, param(c) );
-      else if ( is( c, "TABULATE" ) )     proc_sig_tabulate( edf, param(c) );
-      
-      else if ( is( c, "MATRIX" ) )       proc_epoch_matrix( edf , param(c) );
-      else if ( is( c, "HEAD" ) )         proc_head_matrix( edf , param(c) );
-
-      else if ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) )  proc_restructure( edf , param(c) );
-      else if ( is( c, "SIGNALS" ) )      proc_drop_signals( edf , param(c) );
-      else if ( is( c, "RENAME" ) )       proc_rename( edf, param(c) );
-      else if ( is( c, "ENFORCE-SR" ) )   proc_enforce_signals( edf , param(c) );
-      else if ( is( c, "COPY" ) )         proc_copy_signal( edf , param(c) );
-      else if ( is( c, "READ" ) )         proc_read_signal( edf , param(c) );
-      else if ( is( c, "ORDER" ) )        proc_order_signals( edf , param(c) );
-      else if ( is( c, "CONTAINS" ) )     proc_has_signals( edf , param(c) );
-      
-      else if ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) proc_rms( edf, param(c) );
-      else if ( is( c, "MSE" ) )          proc_mse( edf, param(c) );
-      else if ( is( c, "LZW" ) )          proc_lzw( edf, param(c) );
-      else if ( is( c, "ZR" ) )           proc_zratio( edf , param(c) );
-      else if ( is( c, "ANON" ) )         proc_anon( edf , param(c) );
-      else if ( is( c, "EPOCH" ) )        proc_epoch( edf, param(c) );
-      else if ( is( c, "ALIGN" ) )        proc_align( edf , param(c) );
-      else if ( is( c, "SLICE" ) )        proc_slice( edf , param(c) , 1 );
-      else if ( is( c, "ALIGN-EPOCHS" ) ) proc_align_epochs( edf , param(c) );
-      else if ( is( c, "ALIGN-ANNOTS" ) ) proc_align_annots( edf , param(c) );
-      else if ( is( c, "INSERT" ) )       proc_insert( edf , param(c) );
-      
-      else if ( is( c, "SUDS" ) )        proc_suds( edf , param(c) );
-      else if ( is( c, "MAKE-SUDS" ) )   proc_make_suds( edf , param(c) );
-
-      else if ( is( c, "RUN-POPS" ) )    proc_runpops( edf , param(c) ); // wrapper
-      else if ( is( c, "POPS" ) )        proc_pops( edf , param(c) );
-      else if ( is( c, "EVAL-STAGES" ) ) proc_eval_stages( edf , param(c) );
-
-      else if ( is( c, "SOAP" ) )        proc_self_suds( edf , param(c) );
-      else if ( is( c, "COMPLETE" ) )    proc_resoap( edf , param(c) );
-      else if ( is( c, "REBASE" ) )      proc_rebase_soap( edf , param(c) ); // e.g. 20->30s epochs using SOAP
-      else if ( is( c, "PLACE" ) )       proc_place_soap( edf , param(c) ); // e.g. find where should go
-      
-      else if ( is( c, "TRANS" ) )        proc_trans( edf , param(c) );
-      else if ( is( c, "EVAL" ) )         proc_eval( edf, param(c) );
-      else if ( is( c, "DERIVE" ) )       proc_derive( edf, param(c) );
-      else if ( is( c, "MASK" ) )         proc_mask( edf, param(c) );
-      else if ( is( c, "COMBINE" ) )      proc_combine( edf , param(c) );
-      else if ( is( c, "FREEZE" ) )       proc_freeze( edf , param(c) );
-      else if ( is( c, "THAW" ) )         proc_thaw( edf , param(c) );
-      else if ( is( c, "CLEAN-FREEZER"))  proc_clean_freezer( edf , param(c) );
-      
-		    
-      else if ( is( c, "FILE-MASK" ) )    proc_file_mask( edf , param(c) ); // not supported/implemented
-      else if ( is( c, "DUMP-MASK" ) )    proc_dump_mask( edf, param(c) );
-      else if ( is( c, "ANNOT-MASK" ) )   proc_annot_mask( edf, param(c) );
-      else if ( is( c, "CHEP" ) )         timeline_t::proc_chep( edf, param(c) );
-      else if ( is( c, "CHEP-MASK" ) )    proc_chep_mask( edf, param(c) );
-      
-      else if ( is( c, "EPOCH-ANNOT" ) )  proc_file_annot( edf , param(c) );
-      else if ( is( c, "EPOCH-MASK" ) )   proc_epoch_mask( edf, param(c) );
-      
-      else if ( is( c, "HB" ) )           proc_hypoxic_burden( edf, param(c) );
-      
-      else if ( is( c, "FILTER" ) )       proc_filter( edf, param(c) );      
-      else if ( is( c, "FILTER-DESIGN" )) proc_filter_design( edf, param(c) );
-      else if ( is( c, "MOVING-AVERAGE" )) proc_moving_average( edf, param(c) );
-      else if ( is( c, "CWT-DESIGN" ) )   proc_cwt_design( edf , param(c) );
-      else if ( is( c, "CWT" ) )          proc_cwt( edf , param(c) );
-      else if ( is( c, "HILBERT" ) )      proc_hilbert( edf , param(c) );
-      else if ( is( c, "SYNC" ) )         proc_sync( edf , param(c) ); 
-      else if ( is( c, "TSYNC" ) )        proc_tsync( edf , param(c) );
-      else if ( is( c, "XCORR" ) )        proc_xcorr( edf, param(c) );
-      
-      else if ( is( c, "TV" ) )           proc_tv_denoise( edf , param(c) );
-      else if ( is( c, "OTSU" ) )         proc_otsu( edf, param(c) );
-      
-      else if ( is( c, "COVAR" ) )        proc_covar( edf, param(c) );
-      else if ( is( c, "PSD" ) )          proc_psd( edf, param(c) );	  
-      else if ( is( c, "FFT" ) )          proc_fft( edf , param(c) );
-      else if ( is( c, "MTM" ) )          proc_mtm( edf, param(c) );
-      else if ( is( c, "IRASA" ) )        proc_irasa( edf, param(c) );
-      else if ( is( c, "1FNORM" ) )       proc_1overf_norm( edf, param(c) );
-
-      else if ( is( c, "DYNAM" ) )        proc_qdynam( edf , param(c) );
-      
-      else if ( is( c, "PSC" ) )          proc_psc( edf , param(c) );
-      
-      else if ( is( c, "MS" ) )           proc_microstates( edf , param(c) );
-
-      else if ( is( c, "ASYMM" ) )        proc_asymm( edf , param(c) );
-      else if ( is( c, "TLOCK" ) )        proc_tlock( edf , param(c) );
 #ifdef HAS_LGBM
-      else if ( is( c, "PREP-MASSOC" ) )  massoc_t::massoc_dumper( edf , param(c) );
+	if ( (!fnd) && is( c, "PREP-MASSOC" ) )  { fnd = true; massoc_t::massoc_dumper( edf , param(c) ); }
 #endif
-      else if ( is( c, "TCLST" ) )        proc_tclst( edf , param(c) );
-      else if ( is( c, "PERI" ) )         proc_peri( edf , param(c) );
-      else if ( is( c, "PEAKS" ) )        proc_peaks( edf , param(c) );
-      else if ( is( c, "Z-PEAKS" ) )      proc_zpeaks( edf , param(c) );
-
-      else if ( is( c, "SEDF" ) )         proc_sedf( edf , param(c) );
-
-      else if ( is( c, "FIP" ) )          proc_fiplot( edf , param(c) );
       
-      else if ( is( c, "COH" ) )          proc_coh( edf , param(c) );
-      else if ( is( c, "CC" ) )           proc_conncoupl( edf , param(c) );
-      else if ( is( c, "CORREL" ) )       proc_correl( edf , param(c) );
-      else if ( is( c, "PSI" ) )          proc_psi( edf , param(c) );
-      else if ( is( c, "ACF" ) )          proc_acf( edf , param(c) );
-      else if ( is( c, "GP" ) )           gc_wrapper( edf , param(c) ); 
-      else if ( is( c, "ED" ) )           proc_elec_distance( edf , param(c) );
+      //
+      // we don't recognize this command
+      //
 
-      else if ( is( c, "SVD" ) )          proc_svd( edf, param(c) );
-      else if ( is( c, "ICA" ) )          proc_ica( edf, param(c) );
-      else if ( is( c, "ADJUST" ) )       proc_adjust( edf , param(c) ); 
-
-      else if ( is( c, "CLOCS" ) )        proc_attach_clocs( edf , param(c) );
-      else if ( is( c, "L1OUT" ) )        proc_leave_one_out( edf , param(c) );
-      else if ( is( c, "INTERPOLATE" ) )  proc_chep_based_interpolation( edf, param(c) );
-      else if ( is( c, "SL" ) )           proc_surface_laplacian( edf , param(c) );
-      else if ( is( c, "EMD" ) )          proc_emd( edf , param(c) );
-
-      else if ( is( c, "DFA" ) )          proc_dfa( edf , param(c) );
-      
-      else if ( is( c, "MI" ) )           proc_mi( edf, param(c) );
-      else if ( is( c, "HR" ) )           proc_bpm( edf , param(c) );
-      else if ( is( c, "SUPPRESS-ECG" ) ) proc_ecgsuppression( edf , param(c) );
-      else if ( is( c, "PAC" ) )          proc_pac( edf , param(c) );
-      else if ( is( c, "CFC" ) )          proc_cfc( edf , param(c) );
-      else if ( is( c, "GED" ) )          proc_ged( edf , param(c) );
-
-      else if ( is( c, "PREDICT" ) )      proc_predict( edf , param(c) );
-      
-      else if ( is( c, "TAG" ) )          proc_tag( param(c) );
-      else if ( is( c, "RESAMPLE" ) )     proc_resample( edf, param(c) );
-      else if ( is( c, "ZOH" ) )          proc_zoh( edf, param(c) );
-      else if ( is( c, "LINE-DENOISE" ) ) dsptools::line_denoiser( edf, param(c) );
-      else if ( is( c, "ZC" ) )           dsptools::detrend( edf, param(c) );
-
-      else if ( is( c, "SPINDLES" ) )     proc_spindles( edf, param(c) );	  
-      else if ( is( c, "SO" ) )           proc_slowwaves( edf, param(c) );
-      else if ( is( c, "COUPL" ) )        proc_coupling( edf , param(c) );
-      else if ( is( c, "RIPPLES" ) )      proc_ripples( edf , param(c) );
-      
-      else if ( is( c, "PCOUPL" ) )       proc_generic_coupling( edf , param(c) );
-      
-      else if ( is( c, "POL" ) )          proc_polarity( edf, param(c) );	  
-      else if ( is( c, "REMS" ) )         proc_rems( edf, param(c) );
-      
-      else if ( is( c, "ARTIFACTS" ) )    proc_artifacts( edf, param(c) );
-      else if ( is( c, "EDGER" ) )        proc_trim( edf, param(c) ) ;
-
-      else if ( is( c, "CACHE" ) )        proc_dump_cache( edf , param(c) );
-
-      else if ( is( c, "SIGGEN" ) )       proc_siggen( edf , param(c) );
-      else if ( is( c, "SIMUL" ) )        proc_simul( edf , param(c) );
-      else if ( is( c, "SPIKE" ) )        proc_spike( edf , param(c) );
-      else if ( is( c, "SHIFT" ) )        proc_shift( edf , param(c) );
-      else if ( is( c, "SCRAMBLE" ) )     proc_scramble( edf , param(c) );
-
-      else 
+      if ( ! fnd ) 
 	{
 	  Helper::halt( "did not recognize command: " + cmd(c) );
 	  return false; 
@@ -5792,7 +5749,7 @@ void cmd_t::define_channel_type_variables( edf_t & edf )
   std::string hr = globals::list_channels( HR , edf.header.label );
   cmd_t::ivars[ edf.id ][ "hr" ] = hr;
   
-  std::string ignore = globals::list_channels( IGNORE , edf.header.label );
+  std::string ignore = globals::list_channels( IGNORE_SIGNAL , edf.header.label );
   cmd_t::ivars[ edf.id ][ "ignore" ] = ignore;
 
   

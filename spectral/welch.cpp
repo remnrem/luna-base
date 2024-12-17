@@ -1547,7 +1547,6 @@ annot_t * spectral_power( edf_t & edf ,
 
   if ( calc_dynamics )
     qd.proc_all();
-  
 
   // ignore return annot_t * 
   return NULL;

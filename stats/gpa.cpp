@@ -2959,11 +2959,12 @@ linmod_results_t linmod_t::run( int nreps )
       // also get asymptotic p-values from the original
       Eigen::VectorXd Pasym;
       Eigen::VectorXd T = get_tstats( B.row(idx) , Yres , VX(idx,idx) , ni - nterms , &Pasym );
-
+      
       Eigen::ArrayXd U = Eigen::ArrayXd::Ones( ny );
-                  
-      logger << "  ";
 
+      if ( nreps != 0 ) 
+	logger << "  ";
+      
       for (int r=0; r<nreps; r++)
 	{
 
@@ -3008,10 +3009,11 @@ linmod_results_t linmod_t::run( int nreps )
 		  max_t[r] = abs_t ;
 	    }
 	  
-	  
+		  
 	} // next replicate
 
-      logger << "\n";
+      if ( nreps != 0 ) 
+	logger << "\n";
       
       //
       // Get point-wise p-values

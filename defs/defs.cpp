@@ -854,14 +854,14 @@ channel_type_t globals::map_channel( const std::string & s )
   const std::string s2 = Helper::toupper( s );
   
   // special case: for IGNORE first (i.e. for OFF and Status channels)  
-  if ( chmap2[ IGNORE ].find( s ) != chmap2[ IGNORE ].end() ) return IGNORE;
+  if ( chmap2[ IGNORE_SIGNAL ].find( s ) != chmap2[ IGNORE_SIGNAL ].end() ) return IGNORE_SIGNAL;
   // wildcard match for IGNORE
-  const std::set<std::string> & ss = chmap1[ IGNORE ];
+  const std::set<std::string> & ss = chmap1[ IGNORE_SIGNAL ];
   std::set<std::string>::const_iterator jj = ss.begin();
   while ( jj != ss.end() )
     {
       if ( s2.find( *jj ) != std::string::npos ) // any match?
-	return IGNORE;
+	return IGNORE_SIGNAL;
       ++jj;
     }
 
@@ -997,12 +997,12 @@ void globals::init_channel_types()
   channel_type( "LIGHT" , LIGHT );
   channel_type( "SNORE" , SNORE );
   channel_type( "HR" , HR );
-  channel_type( "IGNORE" , IGNORE );
+  channel_type( "IGNORE" , IGNORE_SIGNAL );
 
   // wild-cards (any partial match/case-insensitive)
 
-  add_channel_map( "OFF" , IGNORE );
-  add_channel_map( "STATUS" , IGNORE );
+  add_channel_map( "OFF" , IGNORE_SIGNAL );
+  add_channel_map( "STATUS" , IGNORE_SIGNAL );
 
   // canonical/base signals
 

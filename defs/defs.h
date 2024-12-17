@@ -99,7 +99,7 @@ typedef std::pair<double,double> freq_range_t;
 
 enum channel_type_t
   {
-    IGNORE ,  // drop these signals
+    IGNORE_SIGNAL ,  // drop these signals
     EOG ,
     ECG , 
     EMG ,       // only chin

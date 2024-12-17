@@ -88,7 +88,7 @@ sedf_t::sedf_t( edf_t & edf , param_t & param )
 
       channel_type_t ctype = globals::map_channel( signals.label(s) );
       
-      if ( ctype == IGNORE ) continue;
+      if ( ctype == IGNORE_SIGNAL ) continue;
       
       // only for these channel types should we write Hjorth parameters, otherwise just means
       bool hjorth = ctype == EEG || ctype == REF || ctype == EMG || ctype == EOG || ctype == ECG;
