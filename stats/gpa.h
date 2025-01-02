@@ -57,6 +57,10 @@ struct bfile_t {
 	     const std::map<std::string,std::set<std::string> > & excfaclvls,
 	     const std::set<std::string> & incgrps,
              const std::set<std::string> & excgrps,	     
+	     const std::set<std::string> & xz_incvars,
+             const std::set<std::string> & xz_incgrps,	     
+	     const std::set<std::string> & y_incvars,
+             const std::set<std::string> & y_incgrps,	     
 	     std::vector<std::string> * ids ,
 	     std::vector<std::string> * vars ,
 	     std::map<std::string,std::string> * grps ,
@@ -227,6 +231,10 @@ private:
   std::set<std::string> incfacs, excfacs;
   std::set<std::string> incgrps, excgrps;
 
+  // XYZ specific includes
+  std::set<std::string> xz_incvars, xz_incgrps;
+  std::set<std::string> y_incvars, y_incgrps;
+
   // file-specific incvars
   std::map<std::string,std::set<std::string> > file2incvars;
   std::map<std::string,std::set<std::string> > file2excvars;
@@ -251,7 +259,8 @@ private:
   // [run] number of permutations;
   //       can be 0, means asymptotic only
   int nreps; 
-
+  bool show_progress;
+  
   // adjustments
   bool adj_any;
   bool adj_bonf;
@@ -271,6 +280,8 @@ private:
   
   // do perm-corrections independently for each X
   bool correct_all_X;
+
+  
   
 };
 
@@ -334,7 +345,7 @@ struct linmod_t {
   // Do the work 
   //
 
-  linmod_results_t run( int ) ;
+  linmod_results_t run( const int , const bool show_progress = true ) ;
 
   Eigen::VectorXd get_tstats( const Eigen::VectorXd & B ,
 			      const Eigen::MatrixXd & Yres ,

@@ -52,9 +52,9 @@ struct mspindle_t {
     std::vector<double> wgt( ns );
     
     for (int i=0;i<ns;i++) 
-      stat += spindles[i]->mean_stat;
+      stat += spindles[i]->norm_amp_mean; // --> mean_stat;
 
-    for (int i=0;i<ns;i++) wgt[i] = spindles[i]->mean_stat / stat;
+    for (int i=0;i<ns;i++) wgt[i] = spindles[i]->norm_amp_mean / stat;
     
     stat /= (double)ns;
 

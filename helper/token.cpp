@@ -1134,11 +1134,11 @@ Token Token::operator==(const Token & rhs) const
   if ( is_string() && rhs.is_string() )  return Token( sval == rhs.sval ); 
 
   // also allow int / bool and  int / float comparisons
-  if ( is_int()   && rhs.is_bool()    )  return Token( ival == rhs.bval );
-  if ( is_bool()  && rhs.is_int()     )  return Token( bval == rhs.ival );
+  if ( is_int()   && rhs.is_bool()    )  return Token( ival == (int)rhs.bval );
+  if ( is_bool()  && rhs.is_int()     )  return Token( (int)bval == rhs.ival );
 
-  if ( is_float() && rhs.is_bool()    )  return Token( fval == rhs.bval );
-  if ( is_bool()  && rhs.is_float()   )  return Token( bval == rhs.fval );
+  if ( is_float() && rhs.is_bool()    )  return Token( (bool)fval == rhs.bval );
+  if ( is_bool()  && rhs.is_float()   )  return Token( bval == (bool)rhs.fval );
 
   if ( is_float() && rhs.is_int()     )  return Token( fval == rhs.ival );
   if ( is_int()   && rhs.is_float()   )  return Token( ival == rhs.fval );
@@ -1692,8 +1692,8 @@ Token Token::operator/(const Token & rhs) const
       else if ( is_bool_vector() )
 	{
 	  std::vector<double> ans( sz );      
-	  if      ( rhs.is_int_vector() )   for (int i=0; i<sz; i++) ans[i] = bvec[ve[i]] / (double)rhs.ivec[rhs.ve[i]];
-	  else if ( rhs.is_float_vector() ) for (int i=0; i<sz; i++) ans[i] = bvec[ve[i]] / rhs.fvec[rhs.ve[i]];	  
+	  if      ( rhs.is_int_vector() )   for (int i=0; i<sz; i++) ans[i] = (int)bvec[ve[i]] / (double)rhs.ivec[rhs.ve[i]];
+	  else if ( rhs.is_float_vector() ) for (int i=0; i<sz; i++) ans[i] = (int)bvec[ve[i]] / rhs.fvec[rhs.ve[i]];	  
 	  return Token( ans );                  
 	}
 
@@ -1719,7 +1719,7 @@ Token Token::operator/(const Token & rhs) const
       std::vector<double> ans( sz );
       if      ( is_int() )   for (int i=0; i<sz; i++) ans[i] = ival / (double)rhs.ivec[rhs.ve[i]];
       else if ( is_float() ) for (int i=0; i<sz; i++) ans[i] = fval / (double)rhs.ivec[rhs.ve[i]];
-      else if ( is_bool() )  for (int i=0; i<sz; i++) ans[i] = bval / (double)rhs.ivec[rhs.ve[i]];
+      else if ( is_bool() )  for (int i=0; i<sz; i++) ans[i] = (int)bval / (double)rhs.ivec[rhs.ve[i]];
       return Token( ans );
     }
 

@@ -2569,26 +2569,46 @@ std::map<int,std::set<int> > MiscMath::get_sets( std::vector<int> const &univers
     // print_sets(universe, ds);
  
 
-void MiscMath::winsorize( std::vector<double> * x , double p )
+void MiscMath::winsorize( std::vector<double> * x , double p , const int side ,
+			  double * plwr, double * pupr ,
+			  std::vector<bool> * winsp )
 {
+
+  // side:  0 winsorize both sides
+  //       -1 only lower values
+  //       +1 only upper values
+  
   // assume 'p' between 0 and 0.5
   if ( p < 0 || p > 0.5 ) 
     Helper::halt( "MiscMath::winsorize() with invalid p" );
 
   if ( p == 0 ) return;
   
-  double lwr = MiscMath::percentile( *x , p );
-  double upr = MiscMath::percentile( *x , 1-p );
+  double lwr = side != 1  ? MiscMath::percentile( *x , p ) : 0 ; 
+  double upr = side != -1 ? MiscMath::percentile( *x , 1-p ) : 0;
   
-  if ( lwr > upr )
+  if ( side == 0 && lwr > upr )
     Helper::halt( "should not happen...pls fix me" );
   
-  for (int i=0; i<x->size(); i++)
-    {
-      if      ( (*x)[i] < lwr ) (*x)[i] = lwr;
-      else if ( (*x)[i] > upr ) (*x)[i] = upr;
-    }
-
+  if ( side <= 0 )
+    for (int i=0; i<x->size(); i++)
+      if ( (*x)[i] < lwr )
+	{
+	  (*x)[i] = lwr;
+	  if ( winsp != NULL ) (*winsp)[i] = true;
+	}
+  
+  if ( side >= 0 )
+    for (int i=0; i<x->size(); i++)
+      if ( (*x)[i] > upr )
+	{
+	  (*x)[i] = upr;
+	  if ( winsp != NULL ) (*winsp)[i] = true;
+	}
+  
+  if ( plwr != NULL ) *plwr = lwr;
+  if ( pupr != NULL ) *pupr = upr;
+  
 }
 
 std::vector<double> MiscMath::dB( const std::vector<double> & x )

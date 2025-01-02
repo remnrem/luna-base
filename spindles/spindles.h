@@ -61,17 +61,13 @@ struct spindle_t
 
   // neg/pos defined by slope
   double pos2f, neg2f, pos2b, neg2b, pos2v, neg2v;
-    
 
-  // relative enrichment per frequency range compared to whole trace baseline
-  std::map<freq_range_t,double> enrich;
-
+  // winsorized? (count of samples)
+  int winsor;
+  
   // quality score based on enrichments
   double qual;
-  
-  // detection
-  double max_stat, mean_stat;
-  
+    
   // flag not to be included in analyis
   bool include;
 
@@ -174,7 +170,8 @@ void characterize_spindles( edf_t & edf ,
 			    std::vector<bool> * in_pos_hw = NULL , 
 			    std::vector<bool> * in_neg_hw = NULL , 
 			    std::vector<bool> * in_pos_slope = NULL , 
-			    std::vector<bool> * in_neg_slope = NULL  
+			    std::vector<bool> * in_neg_slope = NULL ,
+			    std::vector<bool> * p_winsp = NULL 
 			    );
 
 

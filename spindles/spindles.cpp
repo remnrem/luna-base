@@ -227,7 +227,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // winsorize cwt-amplitude
   const bool winsorize              = param.has( "winsor" );
   const double winsorize_th         = winsorize ? param.requires_dbl( "winsor" ) : 0;
-  
+
   // minimum spindle core duration (relates to 'th')
   const double   min0_dur_sec              = param.has( "min0" ) ? param.requires_dbl( "min0" ) : 0.3; 
   
@@ -380,12 +380,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
   // generate a feature file of spindles
   const bool     save_annots                = param.has( "annot" );
-  //const bool     full_annot_inst_ids        = param.yesno( "annot-ids" );
+ 
   
-  
-  // show verbose ENRICH output
-  const bool     enrich_output            = param.has( "enrich" );
-
 
   //
   // Caches:
@@ -808,10 +804,18 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // Optionally winsorize
 	  //
 
+	  double emp_winsorize = 0;
+	  std::vector<bool> winsorized_sp;
 	  if ( winsorize )
 	    {
 	      logger << "  winsorizing at " << winsorize_th << "\n";
-	      MiscMath::winsorize( &results , winsorize_th );
+	      winsorized_sp.resize( results.size() , false );
+	      MiscMath::winsorize( &results , winsorize_th ,
+				   1 ,  // 1 = one-sided, not that it should matter
+				   NULL , // ignore lower
+				   &emp_winsorize , // save upper winsor-th
+				   &winsorized_sp // store which samples winsorized
+				   );  
 	    }
 	  
 	  //
@@ -824,7 +828,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  
 	  const std::vector<double> averaged 
 	    = MiscMath::moving_average( results , window_points );
-
+	  
 	  const double mean = use_median ? MiscMath::median( averaged ) : MiscMath::mean( averaged );
 
 	  
@@ -890,13 +894,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	
 	  // report thresholds
 
-	  logger << "  detection thresholds (core, flank, max)  = " << multiplicative_threshold << ", "
-		    << boundary_threshold;
+	  logger << "  detection thresholds (core, flank, max)  = "
+		 << multiplicative_threshold << ", "
+		 << boundary_threshold;
 	  if ( maximal_threshold > 0 ) 	 
 	    logger << ", " << maximal_threshold;
 	  logger << "x" << "\n";
 	  
-	  logger << "  core duration threshold (core, min, max) = " << min0_dur_sec << ", " << min_dur_sec << ", " << max_dur_sec << "s" << "\n";	  
+	  logger << "  core duration threshold (core, min, max) = " << min0_dur_sec << ", "
+		 << min_dur_sec << ", " << max_dur_sec << "s" << "\n";	  
 
 	  // Set up threshold values as a matrix;  typically, these will use the same mean, 
 	  // and so every value will be identical, but allow for the case where we have
@@ -1287,6 +1293,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	    averaged_corr[i] /= threshold[i];
 	  
 
+	  
+	  
+	  
 	  //
 	  // Track some CH/F level output (i.e. so can all be sent together, given new -t demands...)
 	  //
@@ -1317,19 +1326,22 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 				     ( hms ? &starttime : NULL) , 
 				     &q, 
 				     tlocking ? &locked : NULL ,     // mean signal around spindle troughs
-				     p_in_pos_hw , p_in_neg_hw , p_in_pos_slope , p_in_neg_slope  
+				     p_in_pos_hw , p_in_neg_hw , p_in_pos_slope , p_in_neg_slope , 
+				     winsorize ? &winsorized_sp : NULL 
 				     );	      
 	      
 	    }
 	  
 
+	  
 	  //
 	  // Get mean spindle parameters for this channel/frequency 
 	  //
 
 	  if ( characterize ) 
 	    spindle_stats( spindles , means );
-	  
+
+		  
 	  //
 	  // Verbose signal display with thresholds
 	  //
@@ -2507,7 +2519,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      avg.symm = avg.symm2 = avg.chirp = avg.frq_h1 = avg.frq_h2 = 0;
 	      avg.so_nearest = 0;
 	      avg.norm_amp_max = avg.norm_amp_mean = 0;
-
+	      	      
 	      for (int i=0 ; i<nsp; i++)
 		{
 		  
@@ -2537,7 +2549,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      avg.frq_h2 += spindles[i].frq_h2;
 		      avg.norm_amp_max += spindles[i].norm_amp_max;
 		      avg.norm_amp_mean += spindles[i].norm_amp_mean;
-		      
+
 		      if ( has_coupling )
 			avg.so_nearest += spindles[i].so_nearest <= 1e-6; // i.e. PROP SO OVERLAP
 					      
@@ -2647,7 +2659,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      double pval = 0;
 	      double stat = MiscMath::overdispersion( epoch_counts , &pval );
 	      
-	      writer.var( "DSPERSION" ,"Spindle epoch-dispersion index" );
+	      writer.var( "DISPERSION" ,"Spindle epoch-dispersion index" );
 	      writer.var( "DISPERSION_P" , "Spindle epoch-dispersion index p-value" );
 	      writer.var( "NE" , "Number of epochs for spindle detection" );
 	      
@@ -2687,7 +2699,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.var( "SYMM"  , "Mean spindle symmetry index" );
 	      writer.var( "SYMM2"  , "Mean spindle folded symmetry index" );
 	      writer.var( "CHIRP" , "Mean spindle chirp index" );
-	      	      
+
+	      writer.value( "CWT_TH" , mean ); // mean or median
+	      if ( winsorize ) 
+		{
+		  writer.value( "WIN_TH" , emp_winsorize ); // 
+		  writer.value( "WIN1" , means[ "W_ANY" ] );
+		  writer.value( "WIN" , means[ "W" ] );
+		}
+	      
 	      writer.value( "N01" , nspindles_premerge );  // original
 	      writer.value( "N02" , nspindles_postmerge ); // post merging
 	      writer.value( "N" ,  (int)spindles.size()  ) ;    // post merging and QC	    
@@ -2702,7 +2722,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "ISA_M" , means[ "ISA_TOTAL" ] / t_minutes );
 	      writer.value( "ISA_T" , means[ "ISA_TOTAL" ] );
 	      writer.value( "Q"     , means[ "Q" ] );
-	     	      
+
+	      
 	      writer.value( "AMP" , means["AMP"] );
 	      writer.value( "ACT_MX" , means["ACT_MX"] );
 	      writer.value( "ACT_MN" , means["ACT_MN"] );
@@ -3090,15 +3111,17 @@ void characterize_spindles( edf_t & edf ,
 			    std::vector<bool> * p_in_pos_hw , 
 			    std::vector<bool> * p_in_neg_hw , 
 			    std::vector<bool> * p_in_pos_slope , 
-			    std::vector<bool> * p_in_neg_slope 
+			    std::vector<bool> * p_in_neg_slope ,
+			    std::vector<bool> * p_winsp 
 			    )   // input, is 
 {
  
+
   //
   // Filtering parameters
   //
 
-
+  
   // default, bandpass width 4 Hz (i.e. +/- 2 Hz around the peak frequency
   const double window_f = param.has( "char-bp" ) ? param.requires_dbl( "char-bp" ) : 4 ;
 
@@ -3109,13 +3132,8 @@ void characterize_spindles( edf_t & edf ,
 
   std::vector<double> window_ripple_vec( 1 , window_ripple );
   std::vector<double> window_tw_vec( 1 , window_tw );
+
   
-  //
-  // Copy key output modes
-  //
-
-  const bool enrich_output = param.has( "enrich" );
-
   //
   // Create a copy of this signal, if it does not already exist
   //
@@ -3198,38 +3216,21 @@ void characterize_spindles( edf_t & edf ,
   
   const int s = edf.header.signal( new_label );
   
+ 
   //
-  // Output
+  // Iterate over each spindle
   //
-  
+
   const int n = spindles->size();
-
   
-   //
-   // track if we QC any spindles out at this step
-   //
+  // track if we QC any spindles out at this step
+  bool removed_some = false;
 
-   bool removed_some = false;
-
-
-   //
-   // Iterate over each spindle
-   //
-   
    for (int i=0;i<n;i++)
      {
 
        spindle_t * spindle = &(*spindles)[ i ];
        
-       // std::cout << " spindle-> " << spindle->tp.start << " " << spindle->tp.stop << " --- " 
-       // 		 << spindle->start_sp << " " << spindle->stop_sp << "\n";
-	
-       //
-       // duration
-       //
-       
-       spindle->dur = (spindle->tp.stop - spindle->tp.start ) / (double)globals::tp_1sec;
-      
        
        //
        // pull out band-pass filtered data for actual spindle
@@ -3256,12 +3257,26 @@ void characterize_spindles( edf_t & edf ,
        const int npoints = d.size();
 
 
+       // Sanity check --> next spindle
+       if ( npoints < 2 ) 
+	 continue;	   
+	 
+
        //
-       // ISA (scale by SR)
+       // duration
+       //
+       
+       spindle->dur = (spindle->tp.stop - spindle->tp.start ) / (double)globals::tp_1sec;
+      
+
+       //
+       // ISA (scale by SR) and normalized ACT and peak ampl position (sp-offset)
        //
        
        spindle->isa = 0;
        spindle->norm_amp_max = 0;
+       spindle->peak_amp_sp = 0;
+       spindle->peak_amp_rel = -1;
        
        if ( averaged != NULL )
 	 {
@@ -3272,10 +3287,13 @@ void characterize_spindles( edf_t & edf ,
 	   for (int s=start;s<=stop;s++)
 	     {
 	       spindle->isa += (*averaged)[s] ;
-	       
+
 	       // track max (ACT_MX)
 	       if ( (*averaged)[s] > spindle->norm_amp_max )
-		 spindle->norm_amp_max = (*averaged)[s];
+		 {
+		   spindle->norm_amp_max = (*averaged)[s];
+		   spindle->peak_amp_sp = s - start ; // 0-based sp offset                    
+       		 }
 	     }
 
 	   // ACT_MN (i.e. simple mean, no duration info) 
@@ -3284,22 +3302,11 @@ void characterize_spindles( edf_t & edf ,
 	   // ISA_S (i.e. includes duration info as norm by Fs only
 	   spindle->isa /= (double)Fs;
 
+	   // relative position of peak-amp
+	   spindle->peak_amp_rel = spindle->peak_amp_sp / (double)( stop - start );
 	 }
+       
 
-       
-     
-       //
-       // Sanity check
-       //
-       
-       if ( npoints < 2 ) 
-	 {
-	   // next spindle
-	   continue;	   
-	 }
-
-       
-       
        //
        // FWHM estimate of duration
        //
@@ -3347,42 +3354,26 @@ void characterize_spindles( edf_t & edf ,
 	  
 	}
       
-
-      //
-      // Get max/avarage of the statistic (and track sp-offset of the max)
-      //
        
-      spindle->max_stat = 0;
-      spindle->mean_stat = 0;
-      spindle->peak_amp_sp = 0;
-      spindle->peak_amp_rel = -1;
-            
-      if ( averaged != NULL )
-	{
-	  
-	  int start = spindle->start_sp;
-	  int stop  = spindle->stop_sp;
-	  
-	  // get max (CWT are all positive) 
-	  
-	  double sum = 0;
-	  
-	  for (int s=start;s<=stop;s++)
-	    {
-	      double x = (*averaged)[s] ; 
-	      if ( x > spindle->max_stat ) 
-		{
-		  spindle->max_stat = x ;
-		  spindle->peak_amp_sp = s - start ; // 0-based sp offset
-		}
-	      sum += x ;	      
-	    }
+       //
+       // spindle winsorization status
+       //
+       
+       int start = spindle->start_sp;
+       int stop  = spindle->stop_sp;
 
-	  spindle->peak_amp_rel = spindle->peak_amp_sp / (double)( stop - start );
-	  spindle->mean_stat = sum / (double)(stop - start + 1);
-	}
-            
+       // marker for no winsorization done = -1
+       spindle->winsor = -1; 
 
+       if ( p_winsp != NULL )
+	 {
+	   spindle->winsor = 0;	   
+	   for (int s=start;s<=stop;s++)
+	     if ( (*p_winsp)[s] ) spindle->winsor++; 
+	 }
+     
+
+       
       //
       // Find largest peak-to-peak amplitude
       //
@@ -3471,13 +3462,14 @@ void characterize_spindles( edf_t & edf ,
 
       if ( ht_verb ) 
 	{
-	  std::cout << "\n\nSPIDLE " << i+1 << " npoints = " << npoints << " ::: " <<  spindle->start_sp << " " <<  spindle->stop_sp << "\n";
+	  std::cout << "\n\nSPINDLE " << i+1 << " npoints = "
+		    << npoints << " ::: " <<  spindle->start_sp << " " <<  spindle->stop_sp << "\n";
 	  for (int p=0;p<npoints;p++)
 	    std::cout << p << "\t" <<  p * period_sec << "\t" << d[p] << "\t" << (*original_signal)[ spindle->start_sp + p] << "\n";	  
 	}
 
 
-
+     
       
       //
       // Zero-crossings, in seconds, with linear interpolation between points
@@ -3512,7 +3504,7 @@ void characterize_spindles( edf_t & edf ,
       if ( zc.size() == 0 )
         {
           logger << " *** warning: spindle w/out any zero-crossings... bailing on this spindle\n";
-
+	  
 
 	  // slice_t slice( edf , s0 , spindle->tp );
 	  // std::vector<double> d2 = *slice.pdata();
@@ -3532,6 +3524,7 @@ void characterize_spindles( edf_t & edf ,
 	    std::cout << zz << "\t" << zc[zz] << "\t" << ( zcp[zz] ? "P2N" : "N2P" ) << " nearest prior SP " << zcs[zz] << "\n"; 	      
 	}
       
+
       //
       // Positive peaks, with cubic interpolation at arbitrary temporal resolution
       //
@@ -3800,8 +3793,6 @@ void characterize_spindles( edf_t & edf ,
 
 	  // is the spanned peak sufficient?
 	  bool okay = false;
-
-	  
 	  
 	  for (int p=zcs[z]; p <= zcs[z+1]; p++)
 	    {	      
@@ -3859,6 +3850,7 @@ void characterize_spindles( edf_t & edf ,
 	}
       
       spindle->frq_range = fmax - fmin;
+
 
       //
       // Durations/freqs of slopes -- no need to check things here
@@ -4030,6 +4022,7 @@ void characterize_spindles( edf_t & edf ,
       double max_p2p = 0;
       double max_p2p_idx = 0;
 
+      
       //
       // Lowest trough (i.e. index of location of spindle 'peak')
       //
@@ -4219,59 +4212,63 @@ void characterize_spindles( edf_t & edf ,
 }
 
 
-void per_spindle_output( std::vector<spindle_t>    * spindles ,
+void per_spindle_output( std::vector<spindle_t> * spindles ,
 			 param_t & param , 
-			 clocktime_t               * starttime ,
+			 clocktime_t * starttime ,
 			 spindle_qc_t & q )
 {
  
   const int n = spindles->size();
 
   const bool has_coupling = param.has( "so" );
+
   const bool has_if = param.has( "if" );
   
   //
-   // Per-spindle output
-   //
+  // Per-spindle output
+  //
   
-   for (int i = 0 ; i < spindles->size(); i++ ) 
-     {
-       
-       spindle_t * spindle = &(*spindles)[i];
-       
-       writer.level( i+1 , "SPINDLE" );  // 1-based spindle count
+  for (int i = 0 ; i < spindles->size(); i++ ) 
+    {
+      
+      spindle_t * spindle = &(*spindles)[i];
+      
+      writer.level( i+1 , "SPINDLE" );  // 1-based spindle count
  
       
-       writer.value( "START"   , spindle->tp.start * globals::tp_duration );
-       double peak_amp_sec = spindle->peak_amp_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
-       peak_amp_sec = spindle->tp.start + peak_amp_sec * ( spindle->tp.stop - spindle->tp.start ) ;  
-       writer.value( "PEAK"    ,  peak_amp_sec * globals::tp_duration );
-       writer.value( "TROUGH"  ,  spindle->tp_mid * globals::tp_duration );
-       writer.value( "STOP"    , spindle->tp.stop * globals::tp_duration );
+      writer.value( "START"   , spindle->tp.start * globals::tp_duration );
+      double peak_amp_sec = spindle->peak_amp_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;
+      peak_amp_sec = spindle->tp.start + peak_amp_sec * ( spindle->tp.stop - spindle->tp.start ) ;  
+      writer.value( "PEAK"    ,  peak_amp_sec * globals::tp_duration );
+      writer.value( "TROUGH"  ,  spindle->tp_mid * globals::tp_duration );
+      writer.value( "STOP"    , spindle->tp.stop * globals::tp_duration );
+      
+      writer.value( "START_SP"   , spindle->start_sp );
+      writer.value( "PEAK_SP"    ,  spindle->start_sp + spindle->peak_amp_sp );
+      writer.value( "TROUGH_SP"  ,  spindle->start_sp + spindle->max_trough_sp );
+      writer.value( "STOP_SP"    , spindle->stop_sp  );
+      
+      if ( spindle->winsor != -1 )
+	writer.value( "WINSOR"    , spindle->winsor / (double)( spindle->stop_sp - spindle->start_sp + 1 )  );
        
-       writer.value( "START_SP"   , spindle->start_sp );
-       writer.value( "PEAK_SP"    ,  spindle->start_sp + spindle->peak_amp_sp );
-       writer.value( "TROUGH_SP"  ,  spindle->start_sp + spindle->max_trough_sp );
-       writer.value( "STOP_SP"    , spindle->stop_sp  );
-       
-       if ( starttime != NULL )
-	 {
-	   
-	   double tp1_sec =  spindle->tp.start / (double)globals::tp_1sec;
-	   clocktime_t present1 = *starttime;
-	   present1.advance_seconds( tp1_sec );
-	   // add down to 1/100th of a second
-	   double tp1_extra = tp1_sec - (long)tp1_sec;
-	   
-	   double tp2_sec =  spindle->tp.stop / (double)globals::tp_1sec;
-	   clocktime_t present2 = *starttime;
-	   present2.advance_seconds( tp2_sec );
-	   double tp2_extra = tp2_sec - (long)tp2_sec;
-	   
-	   writer.value( "START_HMS"  , present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
-	   writer.value( "STOP_HMS"   , present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
-	   
-	 }
+      if ( starttime != NULL )
+	{
+	  
+	  double tp1_sec =  spindle->tp.start / (double)globals::tp_1sec;
+	  clocktime_t present1 = *starttime;
+	  present1.advance_seconds( tp1_sec );
+	  // add down to 1/100th of a second
+	  double tp1_extra = tp1_sec - (long)tp1_sec;
+	  
+	  double tp2_sec =  spindle->tp.stop / (double)globals::tp_1sec;
+	  clocktime_t present2 = *starttime;
+	  present2.advance_seconds( tp2_sec );
+	  double tp2_extra = tp2_sec - (long)tp2_sec;
+	  
+	  writer.value( "START_HMS"  , present1.as_string() +  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
+	  writer.value( "STOP_HMS"   , present2.as_string() +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
+	  
+	}
        
        writer.value( "AMP"    , spindle->amp      );
        writer.value( "ACT_MX" , spindle->norm_amp_max      );
@@ -4326,9 +4323,6 @@ void per_spindle_output( std::vector<spindle_t>    * spindles ,
 	   writer.value( "FRQ1"  , spindle->frq_h1 );
 	   writer.value( "FRQ2"  , spindle->frq_h2 );	   
 	 }
-
-       writer.value( "MAXSTAT" , spindle->max_stat );
-       writer.value( "MEANSTAT" , spindle->mean_stat );
        
        if ( has_coupling )
 	 {
@@ -4539,6 +4533,8 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , isa = 0 , qual = 0 ;
 
   double norm_amp_max = 0 , norm_amp_mean = 0;
+
+  double winsor1 = 0 , winsor2 = 0;
   
   // relative measures of spindle "peaks" (0..1)
   double symm = 0 , symm2 = 0, symm_amp = 0 , symm_max_trough = 0;
@@ -4585,6 +4581,10 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       symm_sec += ii->symm * ii->dur ;
       symm_amp_sec += ii->peak_amp_rel * ii->dur;
       symm_max_trough_sec += ii->max_trough_rel * ii->dur;
+
+      // winsorization
+      winsor1 += ii->winsor > 0 ; // any clipping for this spindle?
+      winsor2 += ii->winsor / (double)(ii->stop_sp - ii->start_sp + 1 );
       
       // freq
       frq += ii->frq;
@@ -4676,6 +4676,8 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   results[ "BSPOS" ]    = pos2b / (double)denom;
 
   results[ "Q" ]        = qual / (double)denom;
+  results[ "W_ANY" ]    = winsor1 / (double)denom;
+  results[ "W" ]        = winsor2 / (double)denom;
   
   results[ "ISA_PER_SPINDLE" ] = isa / (double)denom;
   results[ "ISA_TOTAL" ] = isa;
