@@ -117,8 +117,31 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  else if ( tok.size() > 2 )
 	    {
 	      file2group[ tok[0] ] = tok[1];
-	      for (int j=2;j<tok.size(); j++) 
-		infiles[ tok[0] ].insert( tok[j] );
+
+	      // to ensure that infiles gets populated, even if empty (i.e. if only fixed fac)
+	      // so it gets loaded downstream
+	      
+	      const std::set<std::string> empty;
+	      infiles[ tok[0] ] = empty;
+
+	      for (int j=2;j<tok.size(); j++)
+		{
+		  
+		  // add as fixed factor (if starting with inputs=res/spec.n2|spec|F|CH|SS/N2
+		  // else, means to look for this col in the input
+		  const bool is_fixed = tok[j].find( "/" ) != std::string::npos ;
+		  
+		  if ( is_fixed ) {
+		    std::vector<std::string> tok2 = Helper::parse( tok[j] , "/" );
+		    if ( tok2.size() == 2 ) 
+		      file2fixed[ tok[0] ][ tok2[0] ] = tok2[1];
+		    else
+		      Helper::halt( "bad format for factor specification: " + *ff );
+		  } else { 
+		    infiles[ tok[0] ].insert( tok[j] );
+		  }
+		  
+		}
 	    }
 	  
 	  ++ff;
@@ -218,8 +241,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  // file
 	  std::cout << "      \"file\": \"" << ff->first << "\",\n";
 	  
-	  // facs
-	  // [prep] input files (and stratifying factors)	  
+	  // (opt) facs
 	  if ( facs.size() != 0 )
 	    {
 	      std::cout << "      \"facs\": [";
@@ -236,7 +258,27 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 		  std::cout << " ],\n";
 		}
 	    }
-
+	  
+	  // (opt) fixed-factors?
+	  const std::map<std::string,std::string> & fixed = file2fixed.find( ff->first )->second;
+	  if ( fixed.size() != 0 )
+	    {
+              std::cout << "      \"fixed\": [";
+              std::map<std::string,std::string>::const_iterator ss = fixed.begin();
+              while ( ss != fixed.end() )
+                {
+                  int idx2 = 0;
+                  while ( ss != fixed.end() )
+                    {
+                      std::cout << " {\"" << ss->first << "\""
+				<< ": \"" << ss->second << "\" }";
+                      if ( ++idx2 != fixed.size() ) std::cout << ",";
+                      ++ss;
+                    }
+                  std::cout << " ],\n";
+                }
+            }
+	  
 	  // vars
 	  std::cout << "      \"vars\": [";   
 	  
@@ -702,7 +744,17 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 		 << dvs.size() << " Y vars\n";
 	  
 	}
-      
+
+      //
+      // internal/debug option: set all NA variables to 0? (e.g. in test mode) 
+      //
+
+      if ( param.has( "force-zeros" ) )
+	{
+	  for (int i=0; i<X.rows(); i++)
+	    for (int j=0; j<X.cols(); j++)
+	      if ( std::isnan( X(i,j) ) ) X(i,j) = 0;	  	  
+	}
 
       //
       // kNN imputation of missing points (for DVs only)? 
@@ -1058,7 +1110,8 @@ void gpa_t::prep()
 	  fixed_str += "_" + xx->first + "_" + xx->second;
 	  ++xx;
 	}
-      
+
+
       //
       // read rows ( to find unique IDs and unique VAR+FACLVL combos )
       //
@@ -1161,24 +1214,35 @@ void gpa_t::prep()
 			    D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = kk->second ;
 			  }
 		      }
-		    else // try default T/F and Y/N mappings
+		    else
 		      {
-			char f1 = std::toupper( dtok[j][0] );			
-			if ( f1 == 'F' || f1 == 'N' )
+			// special case of sex M/F? -> 1/0
+			// otherwise, **assume** T/F or Y/N -> 1/0 
+
+			char f1 = std::toupper( dtok[j][0] );
+
+			if ( Helper::iequals( "sex" , expand_vname ) || Helper::iequals( "gender" , expand_vname ) ) 
 			  {
-			    // check doesn't match NA or NAN
-			    std::string nn = Helper::toupper( dtok[j] );
-			    if ( nn != "NA" && nn != "NAN" ) 
-			      D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 0;
+			    if ( f1 == 'F' ) D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 0;
+			    else if ( f1 == 'M' ) D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 1;
 			  }
-			else if ( f1 == 'T' || f1 == 'Y' )
-			  {			   
-			    D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 1;
+			else // try default T/F and Y/N mappings
+			  {
+
+			    if ( f1 == 'F' || f1 == 'N' )
+			      {
+				// check doesn't match NA or NAN
+				std::string nn = Helper::toupper( dtok[j] );
+				if ( nn != "NA" && nn != "NAN" ) 
+				  D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 0;
+			      }
+			    else if ( f1 == 'T' || f1 == 'Y' )
+			      {			   
+				D[ var2slot[ expand_vname ] ][ id2slot[ id ] ] = 1;
+			      }
 			  }
-			
 		      }
 		  }
-		
 	      }
 	  
 	  // next data row

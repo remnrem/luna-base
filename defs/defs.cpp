@@ -236,7 +236,7 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v1.2.0 ";
+  version = "v1.2.1 ";
   
   date    = "03-Jan-2025";
 

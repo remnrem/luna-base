@@ -935,7 +935,10 @@ void PWELCH::process()
       int cutoff = fft0.cutoff;
       
       for (int i=0;i<fft0.cutoff;i++)
-	psd[i] += fft0.X[i];
+	{
+	  //	  std::cout << "\n seg " << p << " " << i << " " << " " << fft0.frq[i] << " " << fft0.X[i] << "\n";
+	  psd[i] += fft0.X[i];
+	}
       
       if ( use_median ) 
 	{

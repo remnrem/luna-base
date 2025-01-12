@@ -772,7 +772,7 @@ void proc_derive( edf_t & edf , param_t & param )
 	  ++ii;
 	}
       
-      logger << "  " << aa->first << " --> " << amap.size() << " intervals\n";
+      //logger << "  " << aa->first << " --> " << amap.size() << " intervals\n";
       n_tot += aa->second.size();
             
       ++aa;
@@ -809,7 +809,7 @@ void proc_derive( edf_t & edf , param_t & param )
   // Output
   //
 
-    logger << " accum = " << accumulator->print( "\n" , "\t" )  << "\n";
+  // logger << " accum = " << accumulator->print( "\n" , "\t" )  << "\n";
   
   const std::map<std::string,avar_t*> & data = accumulator->data;
   
