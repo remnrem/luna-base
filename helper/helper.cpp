@@ -1260,9 +1260,13 @@ void clocktime_t::parse_string( const std::string & t , const date_format_t form
 {
   valid = false;
 
+  // but need to take care of AM/PM if they have a space beforehand
+  std::string t1 = Helper::search_replace( Helper::search_replace(t , " AM" , "AM" ) , " PM" , "PM" ) ;
+  
   // dates? (sep = '/' or '-' only)
-  // also replace any spaces with '-' (i.e. for YYYY-MM-DD HH:MM:SS.SSSS format) 
-  std::vector<std::string> tok = Helper::parse( Helper::search_replace(t , ' ', '-' ) , "-/" );
+  // also replace any spaces with '-' (i.e. for YYYY-MM-DD HH:MM:SS.SSSS format)
+
+  std::vector<std::string> tok = Helper::parse( Helper::search_replace(t1 , ' ', '-' ) , "-/" );
   if ( tok.size() == 1 )
     {
       d=0;
@@ -1279,7 +1283,9 @@ void clocktime_t::parse_string( const std::string & t , const date_format_t form
       if ( h < 0 || m < 0 || s < 0 ) valid = false;
       if ( h > 23 || m > 59 || s > 60.0 ) valid = false;
     }
-
+  else
+    logger << "  *** bad format date/time string encountered: " << t << "\n";
+  
 }
 
 bool clocktime_t::midpoint( const clocktime_t & t1 , const clocktime_t & t2 )
@@ -1855,6 +1861,8 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
 	  t += t0[c];	  
 	}
     }
+
+  //std::cout << "t [" << t << "] " << am << " "<< pm << "\n";
   
   //
   // is this colon-delimited, or period-delimited?
@@ -1882,11 +1890,16 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
 	  if ( ! Helper::str2int( tokc[0] , h ) ) return false;
 	  if ( ! Helper::str2int( tokc[1] , m ) ) return false;
 	  if ( ! Helper::str2dbl( tokc[2] , s ) ) return false;
+
+	  // A A A A A A A A A A  A   P   P  P  P  P  P  P  P  P  P  P  P   A  
+	  // 1 2 3 4 5 6 7 8 9 10 11  12  1  2  3  4  5  6  7  8  9  10 11  12
+	  // 1 2 3 4 5 6 7 8 9 10 11  12  13 14 15 16 17 18 19 20 21 22 23  0
+
 	  if ( am || pm )
 	    {
-	      if ( *h < 1 || *h > 12 ) return false;
-	      if ( pm ) *h += 12;
-	      if ( *h == 24 ) *h = 0;
+	      if ( *h < 1 || *h > 12 ) return false;	      
+	      if ( am && *h == 12 ) *h = 0;
+	      else if ( pm ) *h += 12;
 	    }
 	  return true;
 	}
@@ -1900,9 +1913,9 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
 
 	  if ( am || pm )
 	    {
-	      if ( *h < 1 || *h > 12 ) return false;
-	      if ( pm ) *h += 12;
-	      if ( *h == 24 ) *h = 0;
+              if ( *h < 1 || *h > 12 ) return false;
+	      if ( am && *h == 12 ) *h = 0;
+	      else if ( pm ) *h += 12;
 	    }
 
 	  // adjust by day
@@ -1910,7 +1923,7 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
 	  return true;
 	}
       else 
-	return false;      
+	return false;
     }
   
 
@@ -1927,8 +1940,8 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
       if ( am || pm )
 	{
 	  if ( *h < 1 || *h > 12 ) return false;
-	  if ( pm ) *h += 12;
-	  if ( *h == 24 ) *h = 0;
+	  if ( am && *h == 12 ) *h = 0;
+	  else if ( pm ) *h += 12;
 	}
       return true;
     }
@@ -1940,8 +1953,8 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
       if ( am || pm )
 	{
 	  if ( *h < 1 || *h > 12 ) return false;
-	  if ( pm ) *h += 12;
-	  if ( *h == 24 ) *h = 0;
+	  if ( am && *h == 12 ) *h = 0;
+	  else if ( pm ) *h += 12;
 	}      
       return true;
     }
@@ -1953,8 +1966,8 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
       if ( am || pm )
 	{
 	  if ( *h < 1 || *h > 12 ) return false;
-	  if ( pm ) *h += 12;
-	  if ( *h == 24 ) *h = 0;
+	  if ( am && *h == 12 ) *h = 0;
+	  else if ( pm ) *h += 12;
 	}
       return true;
     }

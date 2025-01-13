@@ -1361,7 +1361,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      
 	      // n.b. append both char delims and make a std::string
 	      std::string delim = std::string() + globals::annot_meta_delim + globals::annot_meta_delim2 ;
-	      std::vector<std::string> vartok = Helper::quoted_parse( tok[5] , delim );
+	      std::vector<std::string> vartok2 = Helper::quoted_parse( tok[5] , delim );
+
+	      // splice out any '.' entries
+	      std::vector<std::string> vartok;
+	      for (int i=0; i<vartok2.size(); i++) if ( vartok2[i] != "." ) vartok.push_back( vartok2[i] ) ;
 	      
 	      const int nobs = vartok.size();
 	      const int nexp = cols[a].size();
@@ -1848,11 +1852,15 @@ interval_t annot_t::get_interval( const std::string & line ,
       std::vector<std::string> tok_stop_hms;
       if ( ! ( *readon || col2dur ) ) 
 	tok_stop_hms = Helper::parse( stop_str  , ":" );
+
+      //      std::cout << " s [" << start_str << "] \n";
       
       // does this look like hh:mm:ss or dd:hh:mm:ss?   (nb can be hh:mm:ss.ssss) 
       bool is_hms1 = tok_start_hms.size() == 3 || tok_start_hms.size() == 4; 
       bool is_hms2 = ( *readon || col2dur ) ? false : ( tok_stop_hms.size() == 3 || tok_stop_hms.size() == 4 );
 
+      //      std::cout << " is hms = " << is_hms1 << " " << is_hms2 << "\n";
+      
       // if so, check that there is a valid EDF header starttime
       if ( is_hms1 && (!is_elapsed_hhmmss_start) && ( !starttime.valid) )
 	{	  
@@ -1874,9 +1882,11 @@ interval_t annot_t::get_interval( const std::string & line ,
       
       if ( is_hms1 )
 	{
-
+	  
 	  // allow optional mm-dd-yy if date-string
 	  clocktime_t atime( start_str , globals::read_annot_date_format );
+	  
+	  //	  std::cout << " atime = " << atime.valid << " " << atime.as_string() << "\n";
 	  
 	  // 0+hh:mm:ss format
 	  if ( is_elapsed_hhmmss_start )
@@ -1901,6 +1911,8 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      
 	      // if start is before EDF start, flag that ( special flag interval interval_t(1,0)   
 
+	      //	      std::cout << " atime.d " << atime.valid << " " << atime.d << "\n";
+	      
 	      // day information specified?
 	      
 	      if ( startdatetime.d != 0 && atime.d != 0 ) 
@@ -1932,6 +1944,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 		}
 	      else
 		{
+		  //		  std::cout << " am ehre!\n";
 		  
 		  // otherwise, no date information for the annotation, so
 		  //  a) ignore date of EDF start and
