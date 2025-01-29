@@ -952,8 +952,10 @@ Eigen::MatrixXd eigen_ops::covariance( const Eigen::MatrixXd & X , const int min
 
 Eigen::MatrixXd eigen_ops::subset_rows( Eigen::MatrixXd & m , const std::vector<uint64_t> * tp , annot_t * annot , const double w, const bool exclude )
 {
-  // if 'exclude==T' then remove rows in annot; otherwise, remove if not in annot
 
+  // default :: exclude is F  -->  retain rows in annot
+  //            exclude is T  -->  retain rows *not* in annot
+  
   const uint64_t w_tp = w > 0 ? w * globals::tp_1sec : 0;
   
   const int n = m.rows();
@@ -968,8 +970,10 @@ Eigen::MatrixXd eigen_ops::subset_rows( Eigen::MatrixXd & m , const std::vector<
 	return Eigen::MatrixXd::Zero( 0 , m.cols() );
     }
 
-  // get events
-  std::vector<bool> f( n , ! exclude );
+  // get events: under deafult (exclude==F), start
+  // off not including anything
+  std::vector<bool> f( n , exclude );
+
   int p = 0;
   annot_map_t::const_iterator ii = annot->interval_events.begin();
   while ( ii != annot->interval_events.end() )
@@ -977,21 +981,21 @@ Eigen::MatrixXd eigen_ops::subset_rows( Eigen::MatrixXd & m , const std::vector<
       const instance_idx_t & instance_idx = ii->first;
       uint64_t astart = instance_idx.interval.start;
       uint64_t astop = instance_idx.interval.stop;
-
+      
       // add flanking window
       if ( w_tp != 0 )
 	{
 	  if ( astart > w_tp ) astart -= w_tp;
 	  astop += w_tp;
 	}
-
+      
       // catch up?
       while ( (*tp)[p] < astart )
 	{
 	  if ( p == n - 1 ) break;
 	  ++p;	  
 	}
-      
+
       // wind back until the start (or just before)
       while ( (*tp)[p] > astart )
 	{
@@ -1002,10 +1006,11 @@ Eigen::MatrixXd eigen_ops::subset_rows( Eigen::MatrixXd & m , const std::vector<
       // now step over each time-point until the end of this annot
       while ( (*tp)[p] < astop )
 	{
-	  f[p] = exclude;
+	  f[p] = ! exclude;
+	  if ( p == n - 1 ) break;
 	  ++p;
 	}
-      
+
       // next annotation
       ++ii;
     }

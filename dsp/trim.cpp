@@ -73,6 +73,9 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
   // outputs
   const bool verbose = param.has( "epoch" ) || param.has( "verbose" );
   
+  // set mask?
+  const bool set_mask = param.has( "mask" ) ;
+
   // which signals?
   const bool NO_ANNOTS = true;
 
@@ -96,7 +99,7 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
   // get stages, if present
 
   std::vector<bool> use( ne , true );
-
+    
   if ( anchor_on_sleep || anchor_on_wake )
     {
       // get staging
@@ -451,6 +454,38 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
   
 
   //
+  // set MASK
+  //
+
+  if ( set_mask )
+    {
+      
+      int cnt = lights_off ;
+      if ( set_on ) cnt += ne - lights_on;
+      
+      if ( cnt )
+	{
+	  logger << "\n  masking " << cnt << " epochs\n";
+	  
+	  // set to EXCLUDE
+	  bool include_mode = false;
+	  
+	  // expects 1-based terms in 'epochs'
+	  std::set<int> epochs;
+	  
+	  for (int e=0; e<lights_off; e++)
+	    epochs.insert( e+1 );
+	  
+	  for (int e=lights_on; e<ne; e++)
+	    epochs.insert( e+1 );
+	  
+	  // expects 1-based terms in 'epochs'
+	  edf.timeline.select_epoch_range( epochs , include_mode );	      
+	
+	}
+    }
+  
+  //
   // use cache to remember LON and LOFF values? [ will enable hypno to understand these ]
   //
 
@@ -481,7 +516,7 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
       
       if ( set_on )
 	{
-	  logger << "  lights-on=" << clock_lights_on.as_string() << " (skipping " << ne - lights_on - 1 << " epochs from end)\n";
+	  logger << "  lights-on=" << clock_lights_on.as_string() << " (skipping " << ne - lights_on << " epochs from end)\n";
 	  if ( cache ) cache->add( ckey_t( "LON" , writer.faclvl() ) , edf.timeline.epoch_length() * lights_on );
 	}
       

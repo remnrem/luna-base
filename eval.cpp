@@ -1061,6 +1061,7 @@ bool cmd_t::eval( edf_t & edf )
 	  else if ( is( c, "ALIASES" ) ) skip = false;
 	  else if ( is( c, "TYPES" ) ) skip = false;
 	  else if ( is( c, "PREDICT" ) ) skip = false;
+	  else if ( is( c, "REPORT" ) ) skip = false;
 	  if ( skip )
 	    {
 	      logger << "  ** skipping " << cmd(c) << " as there are no unmasked records\n"; 
@@ -1100,6 +1101,7 @@ bool cmd_t::eval( edf_t & edf )
 	if ( (!fnd) && is( c, "SUMMARY" ) )      { fnd = true; proc_summaries( edf , param(c) ); }
 	if ( (!fnd) && is( c, "HEADERS" ) )      { fnd = true; proc_headers( edf , param(c) ); }
 	if ( (!fnd) && is( c, "ALIASES" ) )      { fnd = true; proc_aliases( edf , param(c) ); }
+	if ( (!fnd) && is( c, "REPORT" ) )       { fnd = true; proc_report( edf , param(c) ); }
 	if ( (!fnd) && is( c, "SET-HEADERS" ) )  { fnd = true; proc_set_headers( edf , param(c) ); }
 	if ( (!fnd) && is( c, "SET-VAR" ) )      { fnd = true; proc_set_ivar( edf, param(c) ); }
 	if ( (!fnd) && is( c, "DESC" ) )         { fnd = true; proc_desc( edf , param(c) ); }
@@ -1357,6 +1359,25 @@ void proc_set_headers( edf_t & edf , param_t & param )
 void proc_aliases( edf_t & edf , param_t & param )
 {
   edf.report_aliases();
+}
+  
+  
+// REPORT : ensure VAR is added in output
+void proc_report( edf_t & edf , param_t & param )
+{
+ 
+  std::vector<std::string> vars = param.strvector( "vars" );
+  const std::string cmd = param.requires( "cmd" );
+  const std::string fac = param.has( "fac" ) ? param.value( "fac" ) : "" ; 
+
+  for (int v=0; v<vars.size(); v++)
+    {
+      logger << "  logging " << vars[v]
+	     << " for " << cmd << ( fac != "" ? ": " + fac : "" ) << "\n";
+
+      globals::cmddefs().ensure_table( cmd , fac );
+      globals::cmddefs().add_var( cmd , fac , vars[v] , "." );
+    }
 }
 
 // SUMMARY : summarize EDF files (verbose, human-readable)  
@@ -6322,6 +6343,21 @@ void proc_has_signals( edf_t & edf , param_t & param )
 
 
       //
+      // setting a variable?, or adjust return code
+      //
+      
+      if ( param.has( "var" ) )
+	{
+	  // T = all
+	  // F = ! all
+
+	  std::string var = param.value( "var" );
+	  cmd_t::ivars[ edf.id ][ var ] = count == na ? "T" : "F" ;
+	  logger << "  setting ${" << var << "} <- " << ( count == na ? "T" : "F" ) << "\n";
+	}
+
+      
+      //
       // in skip mode, bail if none present
       //
 
@@ -6394,6 +6430,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
       
     }
 
+
   //
   // setting a variable?, or adjust return code
   //
@@ -6404,7 +6441,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
       // F = ! all
       std::string var = param.value( "var" );      
       cmd_t::ivars[ edf.id ][ var ] = count == ns ? "T" : "F" ;
-      logger << "  setting " << var << " = " << ( count == ns ? "T" : "F" ) << "\n";
+      logger << "  setting ${" << var << "} <- " << ( count == ns ? "T" : "F" ) << "\n";
     }
   else
     {

@@ -3590,9 +3590,48 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
   
   
 
-  std::vector<std::string> tok = Helper::quoted_parse( s , "," );    
+  std::vector<std::string> tok0 = Helper::quoted_parse( s , "," );    
 
+  //
+  // add wildcards XX*
+  //
 
+  std::vector<std::string> tok;
+  for (int t=0; t<tok0.size(); t++)
+    {
+      const int lt = tok0[t].size();
+      if ( lt == 0 ) continue; // should not happen, but in case
+
+      if ( lt > 1 && tok0[t][lt-1] != '*' )
+	tok.push_back(tok0[t]);
+      else // find all matches (based on raw, unaliased) 
+	{
+	  
+	  const std::string rootlabel = Helper::toupper( tok0[t].substr(0,lt-1) );
+	  
+	  for (int s=0;s<label.size();s++)
+	    {
+	      // not a signal
+	      if ( no_annotation_channels  && 
+		   is_annotation_channel( s ) ) continue;
+	      
+	      // get putative match
+	      const std::string lb = Helper::toupper( label[s] );
+
+	      // too short?
+	      if ( lb.size() < rootlabel.size() ) continue;
+
+	      //	      std::cout << " lb root [" << lb << "] [" << rootlabel << "] " << Helper::imatch( lb, rootlabel ) << "\n";
+
+	      // matches, add to list
+	      if ( Helper::imatch( lb, rootlabel ) ) 
+		tok.push_back( label[s] );
+	      
+	    }
+	}
+    }
+
+  
   //
   // first identify any include/exclude rules
   //

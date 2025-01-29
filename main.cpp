@@ -38,6 +38,8 @@ extern freezer_t freezer;
 
 std::string log_commands( int argc , char ** argv );
 
+bool luna_helper_sl_slicer( const std::string & f , int n , int m , int * s1 , int * s2 );
+
 int main(int argc , char ** argv )
 {
   
@@ -594,11 +596,39 @@ int main(int argc , char ** argv )
 	  else
 	    {
 	      int x;
-	      if ( ! Helper::str2int( argv[i] , &x ) )
-		{
-		  // assume this is an ID (i.e. must be a string)
-		  globals::sample_list_ids.insert( argv[i] );
-		  specified = 2;// i.e. done selecting
+	      std::string term(argv[i]);
+	      const bool nm_slice = term.find( "/" ) != std::string::npos; 
+
+	      if ( nm_slice || ! Helper::str2int( term , &x ) )
+		{		  
+		  // if this is in n/m format, then set slice mode to fix globals::sample_list_min
+		  // and globals::sample_list_max		  
+		  if ( nm_slice )
+		    {
+		      
+		      std::vector<std::string> tok = Helper::parse( term , "/" );
+		      if ( tok.size() != 2 )
+			Helper::halt( "expecting n/m format ID specification: use id= if the ID contains '/'" );
+		      
+		      int n = 0 , m = 0;
+		      if ( ! Helper::str2int( tok[0] , &n ) )
+			Helper::halt( "expecting integer n/m format for sample specification" );
+		      if ( ! Helper::str2int( tok[1] , &m ) )
+			Helper::halt( "expecting integer n/m format for sample specification" );
+		      if ( n < 1 || m < 1 || n > m )
+			Helper::halt( "expecting integer n/m format for sample specification, n & m >= 1 and n <= m" );
+		      
+		      int s1 = 0, s2 = 0;
+		      bool okay = luna_helper_sl_slicer( cmd_t::input , n , m , &s1, &s2 );
+		      if ( ! okay ) Helper::halt( "problem setting n/m sample slice" );
+		      globals::sample_list_min = s1;
+		      globals::sample_list_max = s2;
+		    }
+		  else // else assume this is an ID (i.e. must be a string)
+		    globals::sample_list_ids.insert( term );
+		  
+		  // either way, we're now done selecting
+		  specified = 2;
 		}
 	      else if ( specified == 0 )
 		{
@@ -1898,6 +1928,26 @@ void process_edfs( cmd_t & cmd )
       
       logger << "path    : " << globals::project_path << "\n";
                  
+    }
+  
+
+  //
+  // Report on any slices
+  //
+
+  if ( ! single_edf )
+    {
+      if ( globals::sample_list_min != -1 || globals::sample_list_max != -1 )
+	{
+	  if ( globals::sample_list_min == globals::sample_list_max ) 
+	    logger << "row(s)  : #" << globals::sample_list_min << " ( n = 1 )\n";
+	  else
+	    logger << "row(s)  : #" << globals::sample_list_min << " -> #" << globals::sample_list_max << " ( n = " << globals::sample_list_max - globals::sample_list_min + 1 << " )\n";
+	}
+      else if ( globals::sample_list_ids.size() )
+	logger << "rows(s) : #'s from id arg ( n = " << globals::sample_list_ids.size() << " )\n";
+      else	
+	logger << "row(s)  : all\n";
     }
   
 
@@ -4886,3 +4936,59 @@ std::string log_commands( int argc , char ** argv )
   
 }
 
+
+// helper to set start/stop based on n/m specification
+bool luna_helper_sl_slicer( const std::string & f , int n , int m , int * s1 , int * s2 )
+{
+
+  // check if not an .edf
+  if ( Helper::file_extension( f , "edf" )
+       || Helper::file_extension( f , "edfz" )
+       || Helper::file_extension( f , "edf.gz" ) )
+    Helper::halt( "cannot use n/m slicing with EDF inputs" );
+  
+  std::ifstream IN1( f.c_str() , std::ios::in );
+  int cnt = 0;
+  *s1 = *s2 = 0;
+  
+  if ( IN1.bad() )
+    {
+      IN1.close();
+      return false;
+    }
+
+  int nlines = 0;
+  while ( ! IN1.eof() )
+    {      
+      std::string line;
+      Helper::safe_getline( IN1 , line );
+      if ( IN1.eof() || line == "" ) continue;
+      ++nlines;
+    }
+  IN1.close();
+
+  // nothing to do?
+  if ( nlines == 0 ) return false;
+  
+  if ( nlines < m )
+    Helper::halt( "requesting more slices ( m = " + Helper::int2str(m)+ " ) than individual entries in " + f + " ( n = " + Helper::int2str(nlines) + " )" );
+
+  // get bin size
+  int n_per_batch = nlines / m;
+  int n_extra = nlines - n_per_batch * m ;
+
+  // make bins (w/ extras) 
+  std::vector<int> nb( m , n_per_batch );
+  for (int i=0; i<n_extra; i++) nb[i]++;
+    
+  // count to get rows for this slice
+  *s1 = 1;
+  *s2 = *s1 + nb[0] - 1;
+  for (int i=1; i<n; i++)
+    {
+      *s1 += nb[i-1];
+      *s2 += nb[i] ;
+    }
+    
+  return true;
+}

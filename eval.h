@@ -249,6 +249,7 @@ class cmd_t
 
 void proc_summaries( edf_t & , param_t & );
 void proc_aliases( edf_t & , param_t & );
+void proc_report( edf_t & , param_t & );
 void proc_headers( edf_t & , param_t & );
 void proc_set_headers( edf_t & , param_t & );
 void proc_set_ivar( edf_t & , param_t & );

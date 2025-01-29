@@ -289,7 +289,10 @@ struct globals
   static int sample_list_max;
   static std::set<std::string> sample_list_ids;
   static std::set<std::string> sample_list_ids_skips;
-
+  // do n of m slice from SL
+  static int sample_list_slice_n;
+  static int sample_list_slice_m;
+  
   static bool anon;
   static std::string force_starttime;
   static std::string force_startdate;

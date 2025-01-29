@@ -123,6 +123,9 @@ class cmddefs_t
 
   void hide_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false );
 
+  // ensure table (from REPORT)
+  void ensure_table( const std::string & cmd , const std::string & factors );
+
   // add variable
   void add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide = false );
 

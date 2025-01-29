@@ -150,6 +150,8 @@ int globals::sample_list_min;
 int globals::sample_list_max;
 std::set<std::string> globals::sample_list_ids;
 std::set<std::string> globals::sample_list_ids_skips;
+int globals::sample_list_slice_n;
+int globals::sample_list_slice_m;
 
 bool globals::anon; 
 std::string globals::force_starttime;
@@ -236,9 +238,9 @@ void globals::init_defs()
   // Version
   //
   
-  version = "v1.2.1 ";
+  version = "v1.2.2 ";
   
-  date    = "03-Jan-2025";
+  date    = "29-Jan-2025";
 
   //
   // Return code
@@ -625,7 +627,9 @@ void globals::init_defs()
   sample_list_max = -1;
   sample_list_ids.clear();
   sample_list_ids_skips.clear();
-
+  sample_list_slice_n = 0;
+  sample_list_slice_m = 0;
+  
   anon = false; 
 
   force_starttime = "";

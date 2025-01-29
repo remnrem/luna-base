@@ -63,7 +63,7 @@ void ged_wrapper( edf_t & edf , param_t & param )
   //     
 
   
-  int run_mode = 1;
+  int run_mode = 2;
   
   if ( run_mode == 1 ) 
     {
@@ -118,6 +118,7 @@ void ged_runmode2( edf_t & edf , param_t & param, Eigen::MatrixXd & Rd , const s
 
   Eigen::MatrixXd Sd = eigen_ops::subset_rows( Rd , tp , annot1 , w1 , x1 );
   logger << "  reduced S matrix to " <<	Sd.rows() << " from " << Rd.rows() << "\n";
+
   Eigen::MatrixXd S = eigen_ops::covariance( Sd );
 
   // R covariance
@@ -145,19 +146,39 @@ void ged_runmode2( edf_t & edf , param_t & param, Eigen::MatrixXd & Rd , const s
   //
   // Spatial map for S
   //
-
+  
   int mxch;
-  
-  Eigen::VectorXd map1 = ged.map( ged.largest_idx , S , &mxch );
+  Eigen::VectorXd spatialMap = ged.map( ged.largest_idx , S , &mxch );
 
-  std::cout << "map\n" << map1 << "\n";
-  
   //
   // New time series
   //
 
   const std::string new_ts = param.has( "ts" ) ? param.value( "ts" ) : "" ;
   
+  if ( new_ts != "" )
+    {
+      // S/R-optimized time series component
+      // mxch used to flip polarity of time series (to +ve corr w/ that channel) 
+      Eigen::VectorXd ts = ged.time_series( ged.largest_idx, Rd , mxch );
+      
+      std::vector<double> copy( ts.size() );
+      Eigen::VectorXd::Map( &copy[0], ts.size() ) = ts;
+      logger << "  adding channel " << new_ts << "\n";
+      edf.add_signal( new_ts, sr, copy );
+    }
+
+  // output map
+  const bool NO_ANNOTS = true;
+  signal_list_t signals = edf.header.signal_list(  param.requires( "sig" ) , NO_ANNOTS );
+  const int ns = signals.size();
+  for (int s=0;s<ns; s++)
+    {
+      writer.level( signals.label(s) , globals::signal_strat );
+      writer.value( "W" , spatialMap[s] );
+    }
+  writer.unlevel( globals::signal_strat );
+
   
 }
 
@@ -208,7 +229,6 @@ void ged_runmode1( edf_t & edf , param_t & param, Eigen::MatrixXd & Rd , int sr 
   ged.covar( S, R );
   ged.calc();
 
-  
   // ged.W = eigenvectors
   // ged.L = eigenvalues
   // ged.largest_idx = idx of largest eigenvalue

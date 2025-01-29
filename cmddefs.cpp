@@ -65,26 +65,36 @@ void cmddefs_t::init()
   // Domains
   //
 
-  add_domain( "summ"       , "Summaries"       , "Basic summary commands" );
-  add_domain( "annot"      , "Annotations"     , "Adding and displaying annotations" );
-  add_domain( "expr"       , "Expressions"     , "Evaluating more advanced annotation-based expressions" );
-  add_domain( "epoch"      , "Epochs"          , "Epoching signals and epoch-level annotations" );
-  add_domain( "mask"       , "Masks"           , "Masking epochs based on annotations and other criteria" );
-  add_domain( "manip"      , "Manipulations"   , "Manipulating signal data" );
-  add_domain( "output"     , "Outputs"         , "Commands to output signals in different formats" );
-  add_domain( "filter"     , "FIR filters"     , "FIR filter design and application" );
-  add_domain( "artifact"   , "Artifacts"       , "Artifacts detection/correction routines" );
-  add_domain( "hypno"      , "Hypnograms"      , "Characterizations of hypnograms" );
-  add_domain( "staging"    , "Staging"         , "Automated staging/stage evaluation" );
-  add_domain( "power"      , "Power spectra"   , "Power spectral density estimation" );
-  add_domain( "transients" , "Spindles and SO" , "Spindles and slow oscillations" );
-  add_domain( "topo"       , "Cross-signal"    , "Coherence and other topographical analyses" );
-  add_domain( "cfc"        , "Cross-frequency" , "Phase-amplitude coupling" );
-  add_domain( "misc"       , "Misc"            , "Misc. commands" );
-  add_domain( "exp"        , "Experimental"    , "Experimental features: under heavy development, for internal use only" );
-  add_domain( "cmdline"    , "Command-line"    , "Functions that do not operate on EDFs" );
-  add_domain( "assoc"      , "Association"     , "Association models" );
-  add_domain( "predict"    , "Prediction"      , "Prediction models" );
+  add_domain( "summ"       , "Summaries"        , "Basic summary commands" );
+  add_domain( "annot"      , "Annotations"      , "Adding and displaying annotations" );
+  add_domain( "expr"       , "Expressions"      , "Evaluating more advanced annotation-based expressions" );
+  add_domain( "epoch"      , "Epochs"           , "Epoching signals and epoch-level annotations" );
+  add_domain( "mask"       , "Masks"            , "Masking epochs based on annotations and other criteria" );
+  add_domain( "manip"      , "Manipulations"    , "Manipulating signal data" );
+  add_domain( "output"     , "Outputs"          , "Commands to output signals in different formats" );
+  add_domain( "filter"     , "FIR filters"      , "FIR filter design and application" );
+  add_domain( "artifact"   , "Artifacts"        , "Artifacts detection/correction routines" );
+  add_domain( "hypno"      , "Hypnograms"       , "Characterizations of hypnograms" );
+  add_domain( "stage"      , "Staging"          , "Automated staging/stage evaluation" );
+  add_domain( "timefreq"   , "Time/frequency analysis" , "TF including power spectral density estimation" );
+  add_domain( "trans"      , "Spindles and SO"  , "Spindles and slow oscillations" );
+  add_domain( "cc"         , "Coupling/connectvitiy" , "Coherence and other topographical analyses" );
+  add_domain( "interval"   , "Interval-based analysis" , "Analyses and summaries based on time-domain intervals" );
+  add_domain( "cfc"        , "Cross-frequency"  , "Phase-amplitude coupling" );
+  add_domain( "misc"       , "Misc"             , "Misc. commands" );
+  add_domain( "exp"        , "Experimental"     , "Experimental features: under heavy development, for internal use only" );
+  add_domain( "cmdline"    , "Command-line"     , "Functions that do not operate on EDFs" );
+  add_domain( "assoc"      , "Association"      , "Association models" );
+  add_domain( "pred"       , "Prediction"       , "Prediction models" );
+  add_domain( "simul"      , "Simulation"       , "Basic signal simulation" );
+  add_domain( "freeze"     , "Freezes & caches" , "EDF freezes and cache mechanisms" ); 
+  add_domain( "canon"      , "Canonoical signals" , "Canonical signal mapping" );
+  add_domain( "align"      , "Record alignment" , "Signal/annotation alignment" );
+  add_domain( "psc"        , "Principal spectral components" , "PSC command" );
+  add_domain( "spatial"    , "Topographical analysis" , "EEG channel locations, interpolation and surface Laplacian" );
+  add_domain( "multi"      , "Multi-channel analysis" , "ICA and PCA" );
+  add_domain( "ms"         , "EEG microstate analysis" , "Segmentation, backfitting and sequence analysis" );
+  add_domain( "cluster"    , "Clustering"  , "PDC-based epoch/channel clustering " ); 
   
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -93,20 +103,32 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
     
+  add_cmd( "cmdline" , "-h" , "Help functions" );
+
+  add_cmd( "cmdline" , "--version" , "Show version (or -v)" );
+
   add_cmd( "cmdline" , "--build" , "Scan folders recursively to geneate a sample list" );
   add_param( "--build" , "-edfid" , "" , "Use filename as ID, instead of looking in each EDF header" );
   add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
   add_param( "--build" , "-ext" , "-ext=txt,eannot,annot" , "Consider these extensions as annotation files" );
+
+  add_cmd( "cmdline" , "--validate" , "Validate EDFs/annotation files in a sample list" );
+  add_param( "--validate" , "slist" , "slist=s.lst" , "Specficy the sample list" );
   
   add_cmd( "cmdline" , "--xml" , "Dump annotations from an XML annotation file (to console)" );
+
   add_cmd( "cmdline" , "--xml2" , "Dump entire XML tree (to console)" );
+
+  // expression evaluation
   add_cmd( "cmdline" , "--eval" , "" );
-  add_cmd( "cmdline" , "--pdlib" , "" );
+  add_cmd( "cmdline" , "--eval-verbose" , "" );
+ 
   add_cmd( "cmdline" , "--fir" , " Or --fir-design" );
   add_cmd( "cmdline" , "--cwt" , "Or --cwt-design" );
-  add_cmd( "cmdline" , "--eval-verbose" , "" );
-  add_cmd( "cmdline" , "-h" , "Help functions" );
-  add_cmd( "cmdline" , "--version" , "Show version (or -v)" );
+  
+
+
+  //  add_cmd( "cmdline" , "--pdlib" , "" );
 
 
   // -o
@@ -158,19 +180,23 @@ void cmddefs_t::init()
   add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Total duration of EDF (seconds)" );
   add_var( "HEADERS" , "" , "TOT_DUR_HMS" , "Total duration of EDF (hh:mm:ss string)" );
 
-  add_table( "HEADERS" , "CH" , "Per-channel header information" );
-  add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
-  add_var( "HEADERS" , "CH" , "DMIN" , "Digital min" );
-  add_var( "HEADERS" , "CH" , "PDIM", "Physical dimension" );
-  add_var( "HEADERS" , "CH" , "PMAX", "Physical min" );
-  add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
-  add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
-  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-  add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" );
+  // add_table( "HEADERS" , "CH" , "Per-channel header information" );
+  // add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
+  // add_var( "HEADERS" , "CH" , "DMIN" , "Digital min" );
+  // add_var( "HEADERS" , "CH" , "PDIM", "Physical dimension" );
+  // add_var( "HEADERS" , "CH" , "PMAX", "Physical min" );
+  // add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
+  // add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
+  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  // add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" );
 
-  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+
+
+
+  
 
   
   //
@@ -263,6 +289,16 @@ void cmddefs_t::init()
   add_var( "STATS" , "CH,E" , "P99" , "99th percentile" );
 
 
+  // xxx TODO
+  // 
+  // CONTAINS
+  // TYPES
+  // VARS
+  // STATS
+  // SIGSTATS
+  // TABULATE
+  // DUPES
+  //  move TLOCK --> elsewhere
 
   //
   // TLOCK  
@@ -416,6 +452,18 @@ void cmddefs_t::init()
   add_var( "SPANNING" , "" , "UNSPANNED_HMS" , "Duration of EDF unspanned by 1+ of these annotations (hh:mm:ss)" );
 
 
+  // xxx TO ADD
+  // REMAP
+  // ANNOTS
+  // MAKE-ANNOTS
+  // WRITE-ANNOTS
+  // META
+  // SPANNING
+  // ESPAN
+  // A2S
+  // S2A
+  // ALIGN-ANNOTS
+  
   /////////////////////////////////////////////////////////////////////////////////
   //
   // EPOCHS
@@ -3328,6 +3376,31 @@ void cmddefs_t::hide_table( const std::string & cmd , const std::string & factor
 {
   add_table( cmd , factors , desc , isz , true );
 }
+
+// ensure table exists
+void cmddefs_t::ensure_table( const std::string & cmd , const std::string & factors )
+{
+
+  std::map<std::string,std::map<tfac_t,std::string> >::const_iterator ff = otables.find( cmd );
+  // first need to ensure command exists
+  if ( ff == otables.end() )
+    {
+      // will add a dummy domain '.' but that should not matter
+      add_cmd( "." , cmd , "." );
+    }
+  
+  tfac_t tfac( factors );
+
+  // only add if doesn't already exist
+  if ( ff->second.find( tfac ) == ff->second.end() )
+    {
+      otables[ cmd ][ tfac ] = "." ;
+      ofacs[ cmd ][ tfac ] = false ; 
+      ohide[ cmd ][ tfac ] = false ;
+    }
+
+}
+
 
 // add variable
 void cmddefs_t::add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide )

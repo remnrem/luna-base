@@ -244,6 +244,22 @@ struct interval_t
     return stop == start ? start : start + ( stop - start ) / (uint64_t)2;
   }
 
+  interval_t make_midpoint() const
+  {
+    uint64_t m = mid();
+    return interval_t( m , m );
+  }
+  
+  interval_t make_start() const
+  {
+    return interval_t( start , start );
+  }
+
+  interval_t make_stop() const
+  {
+    return interval_t( stop , stop );
+  }
+
   std::string as_string( const int prec = 2 , const std::string & delim = "->" ) const 
   {
     std::stringstream ss;

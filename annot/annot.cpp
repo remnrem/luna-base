@@ -3004,7 +3004,12 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   // epoch:             collapse-edges
   // flatten:
   // split:
+  // w: add window  (also w-left and w-right)
+  // midpoint: reduce to midpoint / start / stop
+  // pool : combine multiple annots
+  // complement : make annot that equals not annot X
   
+    
   // special case: just add each epoch as a distinct annotation
   // (no flattening, etc, unlike below)
   if ( param.has( "epoch-num" ) )
@@ -3145,6 +3150,8 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
     }
 
 
+  
+
   //
   // split - i.e. the opposite of flatten, but assuming at an epoch level
   //
@@ -3270,6 +3277,263 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       return;
     }
 
+
+  //
+  // make complement of annotation X or more
+  //
+
+  if ( param.has( "complement" ) )
+    {
+
+      const std::string newannot = param.requires( "annot" );
+      const std::vector<std::string> annots = param.strvector_xsigs( "complement" );
+
+      // get last timepoint
+      uint64_t last_tp = edf.timeline.last_time_point_tp + 1LLU ;
+      
+      std::set<interval_t> nevs;
+      
+      if ( annots.size() == 0 )
+	{
+	  logger << "  *** warning, could not find any annotations " << param.value( "orig-annot" ) << "\n";
+          return;
+	}
+      
+      annot_t * an = add( newannot );
+      
+      for (int a=0; a<annots.size(); a++)
+	{
+	  
+	  annot_t * a1 = find( annots[a] );
+	  if ( a1 == NULL )
+	    {
+	      logger << "  *** warning, could not find any annotation " << annots[a] << "\n";
+	      continue;
+	    }
+	  
+	  // get events
+	  const annot_map_t & events1 = a1->interval_events;
+	  
+	  annot_map_t::const_iterator jj = events1.begin();
+	  while ( jj != events1.end() )
+	    {
+	      const instance_idx_t & instance_idx = jj->first;
+	      interval_t interval = instance_idx.interval;
+	      nevs.insert( interval );
+	      ++jj;
+	    }
+	}
+
+      // now make complement
+      std::set<interval_t> cevs;
+
+      uint64_t marker = 0LLU;
+      
+      std::set<interval_t>::const_iterator nn = nevs.begin();
+      while ( nn != nevs.end() )
+	{
+	  if ( nn->start > marker )
+	    cevs.insert( interval_t( marker , nn->start ) );
+	  marker = nn->stop;
+	  ++nn;
+	}
+      if ( last_tp > marker )
+	cevs.insert( interval_t( marker , last_tp ) );
+      
+      
+      // add
+      std::set<interval_t>::const_iterator cc = cevs.begin();
+      while ( cc != cevs.end() )
+        {
+          an->add( "." , *cc , "." );
+          ++cc;
+        }
+
+      logger << "  created " << cevs.size() << " complement annotations based " << annots.size() << " existing annotation classes\n";
+      
+      // all done                                                                                                                       
+      return;
+	
+    }
+
+  
+  //
+  // pool 1+ annotationss
+  //
+
+  if ( param.has( "pool" ) )
+    {
+
+      const std::string newannot = param.requires( "annot" );
+      const std::vector<std::string> annots = param.strvector_xsigs( "pool" );
+
+      std::set<interval_t> nevs;
+
+      if ( annots.size() == 0 )
+	{
+	  logger << "  *** warning, could not find any annotations " << param.value( "orig-annot" ) << "\n";
+          return;
+	}
+
+      annot_t * an = add( newannot );
+      
+      for (int a=0; a<annots.size(); a++)
+	{
+	  
+	  annot_t * a1 = find( annots[a] );
+	  if ( a1 == NULL )
+	    {
+	      logger << "  *** warning, could not find any annotation " << annots[a] << "\n";
+	      continue;
+	    }
+	  
+	  // get events
+	  const annot_map_t & events1 = a1->interval_events;
+	  
+	  annot_map_t::const_iterator jj = events1.begin();
+	  while ( jj != events1.end() )
+	    {
+	      const instance_idx_t & instance_idx = jj->first;
+	      interval_t interval = instance_idx.interval;
+	      nevs.insert( interval );
+	      ++jj;
+	    }
+	}
+
+      // add
+      std::set<interval_t>::const_iterator nn = nevs.begin();
+      while ( nn != nevs.end() )
+        {
+          an->add( "." , *nn , "." );
+          ++nn;
+        }
+
+      logger << "  created " << nevs.size() << " pooling across " << annots.size() << " existing annotations\n";
+      
+      // all done                                                                                                                       
+      return;
+	
+    }
+  
+  
+  //
+  // windows/midpoints
+  //
+
+  if ( param.has( "w" ) || param.has( "w-left" ) || param.has( "w-right" ) )
+    {
+      
+      const double wleft = param.has( "w" ) ?
+	param.requires_dbl( "w" ) :
+	( param.has( "w-left" ) ? param.requires_dbl( "w-left" ) : 0 ) ;
+      const double wright = param.has( "w" ) ?
+	param.requires_dbl( "w" ) :
+	( param.has( "w-right" ) ? param.requires_dbl( "w-right" ) : 0 ) ;
+      
+      if ( wleft < 0 || wright < 0 )
+	Helper::halt( "w, w-left and w-right must be non-negative" );
+      
+      const std::string newannot = param.requires( "annot" );
+      const std::string oldannot = param.requires( "orig-annot" );
+
+      uint64_t tp_left  = wleft  * globals::tp_1sec;
+      uint64_t tp_right = wright * globals::tp_1sec;
+      
+      annot_t * a1 = find( oldannot );
+      if ( a1 == NULL )
+	{
+	  logger << "  *** warning, could not find any annotation " << oldannot << "\n";
+          return;
+	}
+
+      annot_t * an = add( newannot );
+
+      // get events
+      const annot_map_t & events1 = a1->interval_events;
+      
+      std::set<interval_t> nevs;
+  
+      annot_map_t::const_iterator jj = events1.begin();
+      while ( jj != events1.end() )
+	{
+	  const instance_idx_t & instance_idx = jj->first;
+	  interval_t interval = instance_idx.interval;
+	  if ( tp_left != 0LLU ) interval.expand_left( tp_left );
+	  if ( tp_right != 0LLU ) interval.expand_right( tp_right );
+	  nevs.insert( interval );
+	  ++jj;
+	}
+
+      // add
+      std::set<interval_t>::const_iterator nn = nevs.begin();
+      while ( nn != nevs.end() )
+        {
+          an->add( "." , *nn , "." );
+          ++nn;
+        }
+
+      logger << "  created " << nevs.size() << " windowed instances of " << newannot << " from " << oldannot << "\n";
+
+      // all done                                                                                                                       
+      return;
+
+    }
+
+  if ( param.has( "midpoint" ) || param.has( "start" ) || param.has( "stop" ) )
+    {
+
+      const std::string newannot = param.requires( "annot" );
+      
+      const bool do_midpoint = param.has( "midpoint" );
+      const bool do_start = param.has( "start" );
+      const bool do_stop = param.has( "stop" );
+
+      const std::string oldannot = param.requires( "orig-annot" );
+      
+      if ( (int)do_midpoint + (int)do_start + (int)do_stop != 1 )
+	Helper::halt( "can only specify one of midpoint, start or stop" );
+      
+      annot_t * a1 = find( oldannot );
+      if ( a1 == NULL )
+	{
+	  logger << "  *** warning, could not find any annotation " << oldannot << "\n";
+          return;
+	}
+
+      annot_t * an = add( newannot );
+
+      // get events
+      const annot_map_t & events1 = a1->interval_events;
+      
+      std::set<interval_t> nevs;
+  
+      annot_map_t::const_iterator jj = events1.begin();
+      while ( jj != events1.end() )
+	{
+	  const instance_idx_t & instance_idx = jj->first;
+	  interval_t interval = instance_idx.interval;
+	  if ( do_midpoint ) interval = interval.make_midpoint();
+	  if ( do_start ) interval = interval.make_start();
+	  if ( do_start ) interval = interval.make_stop();
+	  nevs.insert( interval );
+	  ++jj;
+	}
+      
+      // add
+      std::set<interval_t>::const_iterator nn = nevs.begin();
+      while ( nn != nevs.end() )
+        {
+          an->add( "." , *nn , "." );
+          ++nn;
+        }
+      
+      logger << "  created " << nevs.size() << " reduced zero-tp instances of " << newannot << " from " << oldannot << "\n";
+
+      // all done                                                                                                                       
+      return;
+
+    }
+  
   
   //
   // process rest
