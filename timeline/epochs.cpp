@@ -99,7 +99,7 @@ int timeline_t::calc_epochs()
   standard_epochs = true;
   fixed_size_epochs = true;
   epoch_generic_param_annots.clear();
-  epoch_generic_param_w = 0;
+  epoch_generic_param_w1 = epoch_generic_param_w2 = 0;
   epoch_generic_param_set_point = 0;
   epoch_generic_param_min_epoch_size = 0.1;
   
@@ -1061,21 +1061,26 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   const bool has_w_before = param.has( "w-before" );
   const bool has_w_after = param.has( "w-after" );
   const bool some_w = has_w || has_w_before || has_w_after;
-  if ( (int)has_w + (int)has_w_before + (int)has_w_after  > 1 )
-    Helper::halt( "can only specify one of w, w-before or w-after" );
-  
-  
-  
-  epoch_generic_param_w = 0;
+  if ( has_w && ( has_w_before || has_w_after ) )
+    Helper::halt( "can only specify w or ( w-before and/or w-after )" );
+    
+  epoch_generic_param_w1 = epoch_generic_param_w2 = 0;
   if ( has_w ) 
-    epoch_generic_param_w = param.requires_dbl( "w" );
-  else if ( has_w_before )
-    epoch_generic_param_w = param.requires_dbl( "w-before" );
-  else if ( has_w_after )
-    epoch_generic_param_w = param.requires_dbl( "w-after" );
+    epoch_generic_param_w1 = epoch_generic_param_w2 = param.requires_dbl( "w" );
+  else
+    {
+      if ( has_w_before )
+	epoch_generic_param_w1 = param.requires_dbl( "w-before" );
+      
+      if ( has_w_after )
+	epoch_generic_param_w2 = param.requires_dbl( "w-after" );
+    }
   
-  if ( epoch_generic_param_w < 0 ) Helper::halt( "'w' (or w-before/w-after) cannot be negative" );
-  if ( epoch_generic_param_set_point && ( (!some_w) || fabs( epoch_generic_param_w ) < 0.001 ) ) 
+  if ( epoch_generic_param_w1 < 0 ) Helper::halt( "'w' (or w-before/w-after) cannot be negative" );
+  if ( epoch_generic_param_w2 < 0 ) Helper::halt( "'w' (or w-before/w-after) cannot be negative" );
+  if ( epoch_generic_param_set_point && ( (!some_w) || fabs( epoch_generic_param_w1 ) < 0.001 ) ) 
+    Helper::halt( "epochs too small: need larger 'w' (or w-before/w-after) if using 'midpoint/start/stop'" ); 
+  if ( epoch_generic_param_set_point && ( (!some_w) || fabs( epoch_generic_param_w2 ) < 0.001 ) ) 
     Helper::halt( "epochs too small: need larger 'w' (or w-before/w-after) if using 'midpoint/start/stop'" ); 
 
   // window shift
@@ -1214,14 +1219,25 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	}
       
       // exapand?
-      if ( some_w && epoch_generic_param_w > 0 )
+      if ( some_w && ( epoch_generic_param_w1 > 0 || epoch_generic_param_w2 > 0 ) )
 	{
+
 	  if ( has_w ) 
-	    interval.expand( epoch_generic_param_w * globals::tp_1sec );
-	  else if ( has_w_before )
-	    interval.expand_left( epoch_generic_param_w * globals::tp_1sec ); 
-	  else if ( has_w_after )
-	    interval.expand_right( epoch_generic_param_w * globals::tp_1sec );	      
+	    {
+	      if ( epoch_generic_param_w1 == epoch_generic_param_w2 )
+		interval.expand( epoch_generic_param_w1 * globals::tp_1sec );
+	      else
+		{
+		  interval.expand_left( epoch_generic_param_w1 * globals::tp_1sec );
+		  interval.expand_right( epoch_generic_param_w2 * globals::tp_1sec ); 
+		}
+	    }
+	  
+	  if ( has_w_before )
+	    interval.expand_left( epoch_generic_param_w1 * globals::tp_1sec ); 
+
+	  if ( has_w_after )
+	    interval.expand_right( epoch_generic_param_w2 * globals::tp_1sec );	      
 	}
       
       // shift?

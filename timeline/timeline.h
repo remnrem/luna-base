@@ -587,7 +587,8 @@ struct timeline_t
   // generic epochs
 
   std::set<std::string> epoch_generic_param_annots;
-  double                epoch_generic_param_w;
+  double                epoch_generic_param_w1; // left
+  double                epoch_generic_param_w2; // right
   int                   epoch_generic_param_set_point; // 0 none, 1=start, 2=mid, 3=end
   double                epoch_generic_param_min_epoch_size;
   

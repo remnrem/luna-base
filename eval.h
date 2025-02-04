@@ -433,6 +433,7 @@ void proc_ged( edf_t & , param_t & );
 void proc_ecgsuppression( edf_t & , param_t & );
 void proc_bpm( edf_t & , param_t & );
 
+void proc_arousals( edf_t & , param_t & );
 void proc_spindles( edf_t & , param_t & );
 void proc_coupling( edf_t & , param_t & );
 void proc_ripples( edf_t & , param_t & );

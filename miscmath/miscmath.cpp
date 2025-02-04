@@ -2082,6 +2082,47 @@ int MiscMath::outliers( const std::vector<double> * x , double th ,
 }
 
 
+std::vector<int> MiscMath::batched_smoothedZ( const std::vector<double> & x , 
+					      const std::vector<int> & gaps , 
+					      int lag , double threshold , double influence ,
+					      int mindur , double max  ,
+					      double threshold2 , int mindur2 , 
+					      bool noneg ,
+					      std::vector<double> * save )
+{
+
+  // do not span gaps
+  const int ntot = x.size();
+  std::vector<int> pks;
+
+  if ( save != NULL )
+    save->clear();
+  
+  for (int r=0; r<gaps.size(); r++)
+    {
+      const int s1 = r == 0 ? 0 : gaps[r-1] + 1 ; 
+      const int s2 = gaps[r];      
+      const int np = s2 - s1 + 1;
+      
+      std::vector<double> xx( np );
+      int idx = 0;
+      for (int p=s1; p<=s2; p++) xx[ idx++ ] = x[p];
+      std::vector<int> p2 = MiscMath::smoothedZ( xx , lag, threshold, influence, mindur, max , threshold2, mindur2 , noneg ,
+						 NULL, NULL, false , save );
+      for (int p=0; p<p2.size(); p++) pks.push_back( p2[p] );
+      
+    }
+  
+  
+  if ( pks.size() != ntot )
+    Helper::halt( "internal error in batched_smoothedZ()" );
+  
+  return pks;
+  
+  
+}
+
+
 std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x , 
 				      int lag , double threshold , double influence ,
 				      int mindur , double max  ,
@@ -2089,7 +2130,8 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
 				      bool noneg , 
 				      std::vector<interval_t> * regions , 
 				      std::vector<int> * top_peaks, 
-				      bool verbose )
+				      bool verbose ,
+				      std::vector<double> * save )
 {
   const int n = x.size();
 
@@ -2104,15 +2146,21 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
   double global_iqr = MiscMath::iqr( x );
   double global_robust_sd = 0.7413 * global_iqr;
   const double sd_eps = global_robust_sd * 1e-3;
-  
+
   std::vector<int> s( n , 0 );
   
   // optionally, put a single sample as the max of each peak
   if ( top_peaks != NULL ) 
     top_peaks->clear();
 
-  if ( n <= 2 * lag + 1 ) return s;
+  if ( n <= 2 * lag + 1 )
+    {
+      if ( save )
+	for (int i=0; i<n; i++) save->push_back( 0 );
+      return s;
+    }
   
+
   std::vector<double> y = x;
   double sum = 0 , sumsq = 0; 
 
@@ -2130,16 +2178,18 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
   
   double avg = sum / (double)lag;
   double sd = sqrt( ( lag * sumsq - sum * sum ) / ( (double)((lag-1)*lag) ) );
-  if ( sd < sd_eps ) sd = global_robust_sd;
-
+  if ( sd < sd_eps || ! Helper::realnum( sd ) ) sd = global_robust_sd;
+  
   // starts at 0 now
   for (int i=0; i<n; i++)
     {
 
       // value in |SD units|
-      const double value = std::abs( x[i] - avg ) / sd; 
+      const double signed_value = ( x[i] - avg ) / sd; 
+      const double value = std::abs( signed_value );
       
-      if ( value > 10000 ) std::cerr << "  warning: large " << i << "  " << x[i] << " " << avg << " " << sd << " " << sd_eps << " " << global_robust_sd << "\n";
+      if ( sd == 0 || value > 10000 )
+	std::cerr << "  warning: large " << i << "  " << x[i] << " " << avg << " " << sd << " " << sd_eps << " " << global_robust_sd << "\n";
 
       // save scaled value? (for any second round of max/expanded thresholding)
       if ( rec_values ) scaled[i] = value;
@@ -2163,10 +2213,14 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
 
       // if the window has no variation, copy over the previous
       if ( sd < sd_eps ) sd = global_robust_sd;
+      else if ( ! Helper::realnum( sd ) ) sd = global_robust_sd;
 
       if ( verbose ) 
 	   std::cout << x[i] << "\t" << value << "\t" << s[i] << "\t" << avg - threshold * sd << "\t" << avg + threshold * sd << "\n";
-      
+
+      // pushback, as this way will be built when doing batched smooths
+      if ( save != NULL )
+	save->push_back( signed_value ) ;
     }
 
   // 

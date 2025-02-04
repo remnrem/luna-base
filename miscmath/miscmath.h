@@ -285,7 +285,19 @@ namespace MiscMath
 			      bool noneg = false , 
 			      std::vector<interval_t> * regions = NULL , 
 			      std::vector<int> * top_pks = NULL , 
-			      bool verbose = false );
+			      bool verbose = false ,
+			      std::vector<double> * save = NULL );
+
+  // run the above in batches (i.e. separately for contig) but splice outputs together  
+  
+  std::vector<int> batched_smoothedZ( const std::vector<double> & x ,
+				      const std::vector<int> & gaps, // in sp
+				      int lag , double threshold , double influence = 0 , 
+				      int mindur = 0 , double max = 0 , 
+				      double threshold2 = 0 , int mindur2 = 0 , 
+				      bool noneg = false ,
+				      std::vector<double> * save = NULL );
+				      
 
    
   // Moving average

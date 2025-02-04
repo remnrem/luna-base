@@ -1251,7 +1251,8 @@ bool cmd_t::eval( edf_t & edf )
 	if ( (!fnd) && is( c, "ZOH" ) )          { fnd = true; proc_zoh( edf, param(c) ); }
 	if ( (!fnd) && is( c, "LINE-DENOISE" ) ) { fnd = true; dsptools::line_denoiser( edf, param(c) ); }
         if ( (!fnd) && is( c, "ZC" ) )           { fnd = true; dsptools::detrend( edf, param(c) ); }
-        if ( (!fnd) && is( c, "SPINDLES" ) )     { fnd = true; proc_spindles( edf, param(c) ); } 
+        if ( (!fnd) && is( c, "SPINDLES" ) )     { fnd = true; proc_spindles( edf, param(c) ); }
+	if ( (!fnd) && is( c, "AROUSALS" ) )     { fnd = true; proc_arousals( edf, param(c) ); } 
 	if ( (!fnd) && is( c, "SO" ) )           { fnd = true; proc_slowwaves( edf, param(c) ); }
 	if ( (!fnd) && is( c, "COUPL" ) )        { fnd = true; proc_coupling( edf , param(c) ); }
 	if ( (!fnd) && is( c, "RIPPLES" ) )      { fnd = true; proc_ripples( edf , param(c) ); }
@@ -2673,6 +2674,12 @@ void proc_covar( edf_t & edf , param_t & param )
   edf.covar(signals1,signals2);
 }
 
+// AROUSALS : detect micro-arousals during sleep 
+
+void proc_arousals( edf_t & edf , param_t & param )
+{
+  arousals_t arousals( edf , param );  
+}
 
 // SPINDLES : spindle detection using CWT or bandpass/RMS
 
