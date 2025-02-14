@@ -497,6 +497,11 @@ bool annot_t::process_special( const std::string & , const std::string & )
 bool annot_t::load( const std::string & f , edf_t & parent_edf )
 {
 
+  //
+  // degenerate cases
+  //
+
+  if ( f == "" || f == "." ) return false;
   
   //
   // static annot_t function, which will create multiple annot_t for each new 'name'

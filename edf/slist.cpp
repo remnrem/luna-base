@@ -413,7 +413,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
 	  //
 
 	  if ( write_cout )
-	    std::cout << Helper::quote_spaced( ii->second.edf )
+	    std::cout << ii->second.edf   // was Helper::quote_spaced( ii->second.edf )
 		      << "\t";
 	  else
 	    exp_edf = ii->second.edf;
@@ -441,7 +441,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
 	      if ( write_cout )
 		{
 		  if ( ! first ) std::cout << globals::file_list_delimiter;
-		  std::cout << Helper::quote_spaced( *jj ) ;
+		  std::cout << *jj ; // was  Helper::quote_spaced( *jj ) ;
 		}
 	      else
 		{

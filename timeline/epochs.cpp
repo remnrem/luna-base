@@ -1258,7 +1258,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	  else
 	    interval.stop -= epoch_generic_param_trunc * globals::tp_1sec;
 	}
-      
+
       // handle fixed-size as special case, as we may add 1+ epochs per annot
       
       // general case:
@@ -1269,8 +1269,8 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	    {
 	      if ( debug )
 		logger << "  ++ adding (non-fixed size) as " << interval.as_string()
-		       << "\t" << interval.duration_sec() << " secs\n";	      
-	      intervals[ interval ] = egen_label;	      
+		       << "\t" << interval.duration_sec() << " secs\n";
+	      intervals[ interval ] = egen_label;
 	    }
 	  else
 	    {
