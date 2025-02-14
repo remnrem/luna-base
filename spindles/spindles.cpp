@@ -21,6 +21,14 @@
 //    --------------------------------------------------------------------
 
 
+// tmp hack:
+bool  prune;
+double prune_rate;
+
+bool  prune_fixed;
+int  prune_n;
+
+
 #include "spindles.h"
 #include "mspindles.h"
 #include "plot-spindles.h"
@@ -33,8 +41,9 @@
 
 #include "annot/annot.h"
 #include "intervals/intervals.h"
-
+#include "miscmath/crandom.h"
 #include "miscmath/dynam.h"
+
 #include "cwt/cwt.h"
 #include "fftw/fftwrap.h"
 #include "miscmath/miscmath.h"
@@ -277,7 +286,19 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool     show_cwt_coeff           = param.has( "show-coef" );
 
 
+  //
+  // Misc
+  //
 
+  prune = param.has( "prune" );
+  prune_rate  = prune ? param.requires_dbl( "prune" ) : 0 ;
+
+  prune_fixed = param.has( "fixed" ) ;
+  prune_n     = prune_fixed ? param.requires_int( "fixed" ) : 0 ;
+
+  if ( prune && prune_fixed ) Helper::halt( "cannot specify both prune and fixed" );
+  
+  
   //
   // Coupling
   //
@@ -1230,8 +1251,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		 << spindles1.size() << " to " 
 		 << spindles.size() << " unique events\n";
 	  
-	  
-	  
+
+
 	  
 
 	  // ------------------------------------------------------------
@@ -4170,7 +4191,7 @@ void characterize_spindles( edf_t & edf ,
 
 
    //
-   // Prune spindle list?
+   // Prune spindle list based on Q ?
    //
 
    if ( removed_some ) 
@@ -4183,6 +4204,57 @@ void characterize_spindles( edf_t & edf ,
      }
    else
      logger << "  no spindles removed based on Q-filtering\n";
+
+
+
+   //
+   // Random pruning (debug) 
+   //
+   
+   if ( prune ) 
+     {
+       const int n = spindles->size();
+       std::vector<spindle_t> spindles0 = *spindles;
+       spindles->clear();
+       for (int i=0; i<n; i++)
+	 {
+	   if ( CRandom::rand() <= prune_rate )
+	     spindles->push_back( spindles0[i] );
+	 }
+       
+       logger << "  randomly selected " << spindles->size() << " spindles\n";
+       
+     }
+   
+   
+   if ( prune_fixed )	
+     {
+       // select a fixed N - if we can't then set to 0
+       //  i.e. so we have either exactly N spindles, or none
+
+       const int n = spindles->size();
+       
+       if ( n < prune_n )
+	 {
+	   spindles->clear();
+	   logger << "  did not achieve " << prune_n << " spindles - removing all\n";
+	 }
+       else if ( n > prune_n )
+	 {
+	   
+	   std::vector<spindle_t> spindles0 = *spindles;
+	   spindles->clear();
+	   
+	   // take N at random
+	   std::vector<int> a( n );
+	   CRandom::random_draw( a );
+	   for (int i=0; i<prune_n; i++)
+	     spindles->push_back( spindles0[ a[i] ] );
+	   
+	   logger << "  randomly selected fixed value of " << prune_n << " spindles\n";
+	   
+	 }
+     }
 
    
    //

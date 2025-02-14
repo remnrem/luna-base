@@ -1140,8 +1140,10 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   
   // compile all intervals from annots first
   std::set<interval_t> intervals0;
-    
-    
+  
+  // label for generic annots
+  std::string egen_label = Helper::stringize( epoch_generic_param_annots );
+  
   // pull each annot class
   std::set<std::string>::const_iterator aa = epoch_generic_param_annots.begin();
   while ( aa != epoch_generic_param_annots.end() )
@@ -1256,7 +1258,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	  else
 	    interval.stop -= epoch_generic_param_trunc * globals::tp_1sec;
 	}
-      
+
       // handle fixed-size as special case, as we may add 1+ epochs per annot
       
       // general case:
@@ -1268,7 +1270,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	      if ( debug )
 		logger << "  ++ adding (non-fixed size) as " << interval.as_string()
 		       << "\t" << interval.duration_sec() << " secs\n";
-	      intervals[ interval ] = *aa;
+	      intervals[ interval ] = egen_label;
 	    }
 	  else
 	    {
@@ -1296,7 +1298,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 	      
 	      // add as an epoch, if large enough
 	      if ( interval.duration_sec() >= epoch_generic_param_min_epoch_size ) 
-		intervals[ interval ] = *aa;
+		intervals[ interval ] = egen_label;
 	      
 	      // all done, or going back to try to add more?
 	      if ( ! add_all_fixed ) break;
