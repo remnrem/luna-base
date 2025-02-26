@@ -28,6 +28,36 @@
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  // circular SD calcs
+
+  if ( p == "circ" )
+    {
+
+      MiscMath::running_stats_calc_t cs(5);
+
+      std::vector<double> sourceValues = { 1000000,22.2,33.3,44.4,55.5,66.6,77.7,88.8,0.0,100.1 };
+      const int n = sourceValues.size();
+      
+      for (int i=0; i<n; i++) { 
+	cs.update( sourceValues[i] );
+
+	std::cout << i << "\t" << cs.mean() << "\t" << cs.sampleStdev() << "\n";
+      }
+      
+      std::exit(0);
+    }
+
+  if ( p == "circ2" )
+    {
+      Eigen::VectorXd X = Eigen::VectorXd::Zero( 8 );
+      X << 0, 1 , 2, 3, 4, 5, 6, 7;
+      const int sr = 1;
+      Eigen::VectorXd Z = eigen_ops::rolling_norm( X , 5 );
+      std::cout << Z << "\n";
+      std::exit(0);
+    }
+
+  
   // quantify peaks in a power spectrum
   
   if ( p == "peaks" )

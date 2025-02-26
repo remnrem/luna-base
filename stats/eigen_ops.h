@@ -64,6 +64,8 @@ namespace eigen_ops {
   
   Eigen::VectorXd moving_average( const Eigen::VectorXd & x , int s );
   
+  Eigen::VectorXd rolling_norm( const Eigen::VectorXd & x , int w );
+
   Eigen::VectorXd unit_scale( const Eigen::VectorXd & x , double xmin , double xmax );
 
   Eigen::VectorXd unit_scale( const Eigen::VectorXd & x );
