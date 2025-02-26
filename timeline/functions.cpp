@@ -435,9 +435,10 @@ void timeline_t::signal2annot( const param_t & param )
       //
       // Add annot class? (but not adding a channel label)
       //
-            
-      int sr = edf->header.sampling_freq( signals(s) );
       
+      int sr = edf->header.sampling_freq( signals(s) );
+      uint64_t dt = globals::tp_1sec / sr ;
+	
       std::map<std::string,std::pair<double,double> >::const_iterator ee = e.begin();
       
       while ( ee != e.end() )
@@ -476,6 +477,9 @@ void timeline_t::signal2annot( const param_t & param )
 	    {
 	      // did we just cross a gap, or is this the last data-point?
 	      bool gap = span_disc ? false : ( i != 0 ? discontinuity( *tp , sr , i-1 , i ) : false ) ; 
+
+	      // if ( gap )
+	      // 	std::cout << " GAP " << i << " of " << n << "\n";
 	      
 	      // last observed sample?
 	      bool end = i == n - 1;
@@ -489,8 +493,17 @@ void timeline_t::signal2annot( const param_t & param )
 	      // end of an interval? 
 	      if ( in && ( gap || end || ! in1 ) ) 
 		{	      
+
 		  // 1-past-end encoding
 		  uint64_t stop = end ? last_time_point_tp + 1LLU : (*tp)[i] ;
+
+		  // but adjust for gap (i.e. one sample point from prior point) 
+		  if ( gap )
+		    {
+		      stop = (*tp)[i-1] + dt;
+		      //std::cout << "adjusting " << start << " --> " << (*tp)[i] << " becomes " << stop << "\n";
+		    }
+
 		  a->add( inst_label , interval_t( start , stop ) , ch_label );
 		  
 		  // update status (i.e. may still be a new interval after a gap)
@@ -1445,19 +1458,32 @@ void timeline_t::signal_means_by_annot( const param_t & param )
       // get all events
       const annot_map_t & events = annot->interval_events;
 
+      // std::cout << " considering " << events.size() << "\n";
+      // int idx = 0;
+      
       annot_map_t::const_iterator aa = events.begin();
       while ( aa != events.end() )
 	{
 	  // instance ID (or not)
 	  const std::string inst_id = ignore_instance_ids ? "." : aa->first.id ;
-	  
+
+	  // ++idx;
+	  // std::cout << " idx " << idx << " class_name = " << class_name <<  " " << inst_id << "\n";
+
+
 	  // get main interval
 	  const interval_t & interval = aa->first.interval;
+
+	  //	  std::cout << " pulling " << interval.as_string() << "\n";
+	  
 	  eigen_matslice_t mslice( *edf , signals , interval );	  
           const Eigen::MatrixXd & X = mslice.data_ref();
           const int rows = X.rows();
           const int cols = X.cols();
 
+	  //	  std::cout << "  --> got " << rows << " " << cols << " "  << "\n";
+
+	  
 	  // add to count, accumulate mean
 	  an[ class_name ][ inst_id ] += rows;	  
 	  Eigen::ArrayXd sum = X.array().colwise().sum();	  
@@ -1495,6 +1521,8 @@ void timeline_t::signal_means_by_annot( const param_t & param )
     } // next annotation
 
 
+  std::cout << " ---------------- done here\n";
+  
   //
   // Report means
   //

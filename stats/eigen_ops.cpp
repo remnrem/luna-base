@@ -1022,3 +1022,70 @@ Eigen::MatrixXd eigen_ops::subset_rows( Eigen::MatrixXd & m , const std::vector<
   return m( rows , Eigen::all ) ;
 
 }
+
+Eigen::VectorXd eigen_ops::rolling_norm( const Eigen::VectorXd & X , int w )
+{
+
+  MiscMath::running_stats_calc_t cs( w );
+
+  const int n = X.size();
+
+  Eigen::VectorXd Z = Eigen::VectorXd::Zero( n );
+
+  // ensure w is odd
+  if ( w % 2 == 0 ) ++w; 
+
+  // half window
+  int hw = (w-1)/2;
+
+  // burn-in w/ initial sequence (of 2nd, 3rd, 4th, etc)
+  // so that initial seq. is e.g.   2/3/4 - 1st - 2/3/4
+  //                                3/4/1 - 2   - 3/4/5
+  //                                4/1/2 - 3   - 4/5/6
+  //                  now okay      1/2/3 - 4   - 5/6/7 ... etc
+  // simiarly, at the end , burn out w/ the n-3, n-2, n-1, etc for a hw=3 window
+
+  // burn-in: left flank
+  for (int i=0; i<hw; i++)
+    cs.update( X[i+1] );
+
+  // continue burn-in: initial point
+  cs.update( X[0] );
+
+  // burn-in: right flank
+  for (int i=0; i<hw; i++)
+    cs.update( X[i+1] );
+
+  // we now have an appropriate window for the first element of X
+  // so start by normalizing, then move on to the next element
+  
+  for (int i=0; i<n; i++)
+    {
+      // normalize given current window
+      Z[i] = ( X[i] - cs.mean() ) / cs.sampleStdev();
+
+      // add next point
+      int nx = i + hw + 1 ;
+
+      //      std::cout << "\n-------\n";
+      //       cs.dump_buffer();
+
+      // but check this doesn't go out of scope, i.e.
+      // don't advance by full half window (so repeating the inputs)
+      // to mirror how we burn in
+      if ( nx >= n )
+	{
+	  //	  std::cout << " adjusting " << nx  << " to " << i << "\n";
+	  nx = i ;  
+	}
+
+      //      std::cout << " i = " << i << " X[" << i << "] = " << X[i] << "( next = " << nx << "/" << n << " = " << X[nx] << ")\n";
+
+      // update buffer
+      cs.update( X[nx] );
+
+      //      std::cout << "\n";
+      
+    }
+  return Z;
+}

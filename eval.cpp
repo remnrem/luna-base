@@ -793,6 +793,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "MINMAX" ) )       { fnd = true; proc_minmax( edf , param(c) ); }
       if ( (!fnd) && is( c, "SCALE" ) )        { fnd = true; proc_setscale( edf , param(c) ); }
       if ( (!fnd) && is( c, "ROBUST-NORM" ) )  { fnd = true; proc_standardize( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ROLLING-NORM" ) ) { fnd = true; proc_rolling_norm( edf, param(c) ); }
       if ( (!fnd) && is( c, "ALTER" ) )        { fnd = true; proc_correct( edf , param(c) ); }
       if ( (!fnd) && is( c, "RECORD-SIZE" ) )  { fnd = true; proc_rerecord( edf , param(c) ); }  
       if ( (!fnd) && is( c, "TIME-TRACK" ) )   { fnd = true; proc_timetrack( edf, param(c) ); }
@@ -4248,6 +4249,12 @@ void proc_minmax( edf_t & edf , param_t & param )
       const double pmax = clip_max ? param.requires_dbl( "max" ) : 0 ;      
       edf.minmax( signals , clip_min ? &pmin : NULL , clip_max ? &pmax : NULL , force );      
     }
+}
+
+// ROLLING-NORM
+void proc_rolling_norm( edf_t & edf , param_t & param )
+{
+  dsptools::rolling_standardize( edf, param );
 }
 
 // STANDARDIZE : robust winsorization and norming for each signal (done per whole signal or epoch) 

@@ -2679,3 +2679,156 @@ void MiscMath::dB( std::vector<double> * x )
     (*x)[i] = 10 * log10( (*x)[i] );
 }
 
+
+
+//
+// iterative variance calculated over a sliding window
+//  e.g. : https://nestedsoftware.com/2019/09/26/incremental-average-and-standard-deviation-with-sliding-window-470k.176143.html
+//         https://github.com/nestedsoftware/iterative_stats
+
+
+
+MiscMath::circ_buffer_t::circ_buffer_t(int s )
+{
+  bufferSize = s;
+  index = 0;
+  buffer.clear();
+}
+
+bool MiscMath::circ_buffer_t::append( const double value , double * popped_value )
+{
+  const bool popped = length() == bufferSize;
+  
+  if ( popped ) 
+    {
+      *popped_value = buffer[ index ];
+      buffer[ index ] = value;
+    }
+  else // expand buffer
+    buffer.push_back( value );
+
+  // update index, w/ circular shift 
+  index = (index+1) % bufferSize;
+  
+  return popped;
+}
+
+int MiscMath::circ_buffer_t::length() const {
+  return buffer.size();
+}
+
+std::vector<double> MiscMath::circ_buffer_t::items() const {
+  return buffer;
+}
+
+
+MiscMath::running_stats_calc_t::running_stats_calc_t( const int s )
+{
+  circularBuffer = new circ_buffer_t( s );
+  _mean = 0;
+  _dSquared = 0;
+}
+
+void MiscMath::running_stats_calc_t::dump_buffer() const
+{
+  std::cout << "buf N=" << count() << " [";
+  std::vector<double> b = circularBuffer->items();
+  for (int i=0; i<count(); i++)
+    std::cout << " " << b[i] ;
+  std::cout << " ]\n";  
+}
+
+MiscMath::running_stats_calc_t::~running_stats_calc_t()
+{  
+  delete circularBuffer;
+}
+
+int MiscMath::running_stats_calc_t::count() const {
+  return circularBuffer->length();
+}
+
+void MiscMath::running_stats_calc_t::update(const double newValue) {
+  
+  double poppedValue = 0;
+  
+  bool popped = circularBuffer->append(newValue, &poppedValue );
+
+  // std::cout << " running_stats_calc_t : new Value = " << " " << newValue << " [ buf N = " << count() ;
+  // if ( popped ) std::cout << " , popped " << poppedValue ;
+  // std::cout << " ]\n";
+  
+  if ( count() == 1 && ! popped )
+    { 
+      // initialize when the first value is added
+      _mean = newValue;
+      _dSquared = 0;
+    }
+  else if ( ! popped )
+    { 
+      // if the buffer is not full yet, use standard Welford method
+      const double meanIncrement = (newValue - _mean) / (double)count();
+
+      const double newMean = _mean + meanIncrement;
+      
+      const double dSquaredIncrement = ((newValue - newMean)
+					* (newValue - _mean));
+      
+      const double newDSquared = _dSquared + dSquaredIncrement;
+      
+      _mean = newMean;
+
+      _dSquared = newDSquared;
+      
+    }
+  else
+    {
+      // once the buffer is full, adjust Welford Method for window size
+      const double meanIncrement = (newValue - poppedValue) / (double)count();
+
+      const double newMean = _mean + meanIncrement;
+    
+      const double dSquaredIncrement = ((newValue - poppedValue)
+					* (newValue - newMean + poppedValue - _mean));
+
+      const double newDSquared = _dSquared + dSquaredIncrement;
+      
+      _mean = newMean;
+
+      _dSquared = newDSquared;
+    }
+  
+}
+
+double MiscMath::running_stats_calc_t::mean() const {
+  validate();
+  return _mean;
+}
+
+double MiscMath::running_stats_calc_t::dSquared() const {
+  validate();
+  return _dSquared;
+}
+
+double MiscMath::running_stats_calc_t::populationVariance() const {
+  return dSquared() / (double)count();
+}
+
+double MiscMath::running_stats_calc_t::populationStdev() const {
+  return sqrt( populationVariance() );
+}
+
+double MiscMath::running_stats_calc_t::sampleVariance() const {
+  return count() > 1 ? dSquared() / (count() - 1) : 0;
+}
+
+double MiscMath::running_stats_calc_t::sampleStdev() const {
+  return sqrt( sampleVariance() );
+}
+
+void MiscMath::running_stats_calc_t::validate() const {
+  if ( count() == 0 ) Helper::halt( "mean if undefined" );
+}
+
+
+
+

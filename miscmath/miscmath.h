@@ -304,6 +304,43 @@ namespace MiscMath
   
   std::vector<double> moving_average( const std::vector<double> & x , int n );
   std::vector<double> moving_average_filter( const std::vector<double> & x , int n );
+
+  // Moving SD
+  struct circ_buffer_t {
+    circ_buffer_t(int s );
+    bool append( const double value , double * popped_value );
+    int length() const;
+    std::vector<double> items() const;
+
+  private:
+    int bufferSize;
+    int index;
+    std::vector<double> buffer;
+  };
+  
+  struct running_stats_calc_t {
+
+    running_stats_calc_t( const int s );
+    ~running_stats_calc_t();
+
+    void update(const double newValue);
+    void dump_buffer() const;
+    int count() const;
+    double mean() const;
+    double dSquared() const;  
+    double populationVariance() const;
+    double populationStdev() const;  
+    double sampleVariance() const;
+    double sampleStdev() const;
+
+  private:
+    void validate() const;
+
+    circ_buffer_t * circularBuffer;
+    double _mean;
+    double _dSquared;
+  };
+  
   
   // Median filter
 

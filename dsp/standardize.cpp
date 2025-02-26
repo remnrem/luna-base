@@ -150,3 +150,35 @@ void dsptools::standardize( edf_t & edf , param_t & param )
    
 }
 
+
+void dsptools::rolling_standardize( edf_t & edf , param_t & param )
+{
+  // window size ( seconds )
+  const double w = param.requires_dbl( "w" );
+
+  if ( w < 1 )
+    Helper::halt( "w must be at least 1 second" );
+  
+  // get signals
+  signal_list_t signals = edf.header.signal_list( param.value( "sig" ) );
+  edf.header.drop_annots_from_signal_list( &signals );
+  const int ns = signals.size();
+      
+  // whole trace?
+  interval_t interval = edf.timeline.wholetrace();
+  
+  // get data (yes, dupes effort...)
+  eigen_matslice_t mslice( edf , signals , interval );
+  Eigen::MatrixXd & T = mslice.nonconst_data_ref();      
+  
+  // update all signals  
+  for (int s=0; s<ns; s++)
+    {
+      const int sr = edf.header.sampling_freq( signals(s) );
+      Eigen::VectorXd Z = eigen_ops::rolling_norm( T.col(s) , sr * w );
+      std::vector<double> nsig = eigen_ops::copy_vector( Z );
+      edf.update_signal( signals(s) , &nsig );
+    }
+   
+}
+

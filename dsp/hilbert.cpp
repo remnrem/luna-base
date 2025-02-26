@@ -239,7 +239,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 				const double epoch_sec , 
 				const bool by_phase ) const
 {
-  
+
   // given a set of 'events' (i.e. spindles) in 'e' defined by sample-point
   // calculate ITPC mangitude and angle, with an asymptotic test
   
@@ -386,11 +386,12 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 
   // std::cout << " details = " << mx << " " << es << " "
   // 	    << n_expected_points << " " << n_full_epochs << " " << n_expected_points << "\n";
-  
+
+ 
   const bool run_over = es && mx > n_expected_points;
   if ( run_over )
     {
-      logger << "  fractional epochs found: within-epoch permutation will wrap whole signal\n";      
+      logger << "  fractional epochs: some shuffles may wrap over segment end/start (not a major issue)\n";
     }
   
   

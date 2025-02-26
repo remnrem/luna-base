@@ -29,6 +29,8 @@ struct param_t;
 namespace dsptools
 {
   void standardize( edf_t & edf , param_t & param );
+
+  void rolling_standardize( edf_t & edf , param_t & param );
 }
 
 
